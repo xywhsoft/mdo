@@ -103,11 +103,14 @@ bool MdoMcpManagerGetStatus(const char* id, MdoMcpServerStatus* status) {
 }
 bool MdoMcpManagerRefresh(const char* id, xcancel* cancel, uint64 deadline,
     xwork_error* error) {
-    (void)deadline; (void)error;
+    (void)deadline;
     if (strcmp(id, "mock") != 0 || xrtCancelRequested(cancel)) return false;
     xrtAtomic32FetchAdd(&McpCalls, 1u, XMEMORY_RELAXED);
     if (xrtAtomic32Load(&FailMcp, XMEMORY_ACQUIRE) != 0u) {
         xrtAtomic32Store(&FailMcp, 0u, XMEMORY_RELEASE);
+        error->eCode = XWORK_ERROR_IO;
+        snprintf(error->sMessage, sizeof(error->sMessage),
+            "failed to start MCP stdio server");
         return false;
     }
     ++McpSchema;
@@ -116,6 +119,45 @@ bool MdoMcpManagerRefresh(const char* id, xcancel* cancel, uint64 deadline,
 }
 
 #include "src/operations/manager.c"
+
+static bool CheckMcpFailureClassification(void) {
+    static const struct {
+        xwork_error_code code;
+        const char* message;
+        const char* expected;
+        uint32 status;
+    } cases[] = {
+        { XWORK_ERROR_IO, "failed to start MCP stdio server", "mcp_start_failed", 0u },
+        { XWORK_ERROR_IO, "MCP HTTP request returned status 401", "mcp_http_error", 401u },
+        { XWORK_ERROR_IO, "MCP HTTP request returned status 429", "mcp_http_error", 429u },
+        { XWORK_ERROR_IO, "MCP HTTP request returned status 600", "mcp_io", 0u },
+        { XWORK_ERROR_IO, "MCP HTTP request returned status 401 private-marker", "mcp_io", 0u },
+        { XWORK_ERROR_TOOL, "MCP protocol error: MCP HTTP request returned status 401 private-marker", "mcp_remote_error", 0u },
+        { XWORK_ERROR_TOOL, "MCP server selected an unsupported protocol version", "mcp_protocol_version", 0u },
+        { XWORK_ERROR_TOOL, "MCP stdout contained a non-object JSON-RPC message", "mcp_invalid_response", 0u },
+        { XWORK_ERROR_IO, "MCP HTTP session expired; reconnect is required", "mcp_session_expired", 0u },
+        { XWORK_ERROR_TIMEOUT, "private-marker", "mcp_timeout", 0u },
+        { XWORK_ERROR_LIMIT, "private-marker", "mcp_limit", 0u },
+        { XWORK_ERROR_POLICY, "MCP server is disabled", "mcp_disabled", 0u },
+        { XWORK_ERROR_CONTEXT, "MCP client already has an active request", "mcp_busy", 0u },
+        { XWORK_ERROR_OUT_OF_MEMORY, "private-marker", "mcp_memory", 0u },
+        { XWORK_ERROR_INVALID_ARGUMENT, "private-marker", "mcp_configuration", 0u },
+        { XWORK_ERROR_NONE, "MCP HTTP request returned status 401", "mcp_failed", 0u },
+    };
+    size_t i;
+    for (i = 0u; i < sizeof(cases) / sizeof(cases[0]); ++i) {
+        xwork_error error;
+        uint32 status = 999u;
+        const char* code;
+        memset(&error, 0, sizeof(error)); error.eCode = cases[i].code;
+        snprintf(error.sMessage, sizeof(error.sMessage), "%s", cases[i].message);
+        code = MdoOperationMcpErrorCode(&error, &status);
+        if (strcmp(code, cases[i].expected) != 0 || status != cases[i].status ||
+            strstr(code, "private-marker") != NULL) return false;
+    }
+    printf("mcp_classification=cases:%zu passed:1\n", sizeof(cases) / sizeof(cases[0]));
+    return true;
+}
 
 static bool WaitTerminal(const char* id, MdoOperationInfo* info) {
     unsigned i;
@@ -148,6 +190,7 @@ void ServiceInit(XS_HostInfo* host) {
     unsigned i;
     (void)host;
 
+    if (!CheckMcpFailureClassification()) { printf("classification_error=1\n"); goto done; }
     xrtAtomic32Init(&BlockReload, 0u);
     xrtAtomic32Init(&ReloadEntered, 0u);
     xrtAtomic32Init(&FailReload, 0u);
@@ -208,8 +251,8 @@ void ServiceInit(XS_HostInfo* host) {
     if (!WaitTerminal(mcp_id, &current)) {
         printf("wait_error=mcp_failure\n"); goto done;
     }
-    printf("mcp_failure=state:%d message:%s\n", (int)current.State,
-        current.Message);
+    printf("mcp_failure=state:%d code:%s http:%u message:%s\n", (int)current.State,
+        current.ErrorCode, (unsigned)current.HttpStatus, current.Message);
 
     xrtAtomic32Store(&ReloadEntered, 0u, XMEMORY_RELEASE);
     xrtAtomic32Store(&BlockReload, 1u, XMEMORY_RELEASE);
@@ -340,7 +383,8 @@ def main() -> int:
         assert "failure=state:3 message:Module reload failed" in output, output
         assert "cancel=state:4 requested:1" in output, output
         assert "mcp_success=state:2 target:mock catalog:7 schema:1 tools:4 connected:1" in output, output
-        assert "mcp_failure=state:3 message:MCP refresh failed" in output, output
+        assert "mcp_failure=state:3 code:mcp_start_failed http:0 message:MCP connection test failed" in output, output
+        assert "mcp_classification=cases:16 passed:1" in output, output
         assert "list=count:6 first_sequence:6 last_sequence:1" in output, output
         assert "calls=module:3 mcp:2" in output, output
         assert "probe_done=1" in output, output

@@ -42,6 +42,9 @@ typedef struct MdoOperationInfo {
     char Id[MDO_OPERATION_ID_CAPACITY];
     char Target[128];
     char Message[MDO_OPERATION_MESSAGE_CAPACITY];
+    /* Host-owned classification only; never a provider's error body. */
+    char ErrorCode[40];
+    uint32 HttpStatus;
 } MdoOperationInfo;
 
 /* The operation manager is process-scoped and thread-safe. It retains a

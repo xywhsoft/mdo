@@ -65,6 +65,8 @@ static bool MdoApiOperationValue(const MdoOperationInfo* Info,
             Info->CancelRequested) &&
         MdoApiValueSetString(Item, "target", Info->Target) &&
         MdoApiValueSetString(Item, "message", Info->Message) &&
+        MdoApiValueSetString(Item, "error_code", Info->ErrorCode) &&
+        MdoApiValueSetUInt(Item, "http_status", Info->HttpStatus) &&
         MdoApiValueSetUInt(Result, "catalog_generation", Info->Generation);
     if ( Ok && Info->Kind == MDO_OPERATION_MODULE_RELOAD ) Ok =
         MdoApiValueSetUInt(Result, "modules", Info->ItemCount) &&

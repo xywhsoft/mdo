@@ -140,8 +140,62 @@ static void MdoOperationFinish(cstr Id, MdoOperationState State,
     (void)xrtMutexUnlock(g_MdoOperations.Lock);
 }
 
+/* xwork can include arbitrary JSON-RPC provider text in sMessage. Classify
+ * only its enum and exact host-generated diagnostics; never publish that text
+ * or infer an HTTP status from a remote protocol-error message. */
+static cstr MdoOperationMcpErrorCode(const xwork_error* Error,
+    uint32* HttpStatus)
+{
+    static const char HttpPrefix[] = "MCP HTTP request returned status ";
+    cstr Message = Error->sMessage;
+    *HttpStatus = 0u;
+    if ( Error->eCode == XWORK_ERROR_IO ) {
+        size_t PrefixSize = sizeof(HttpPrefix) - 1u;
+        if ( strcmp(Message, "failed to start MCP stdio server") == 0 )
+            return "mcp_start_failed";
+        if ( strcmp(Message, "MCP HTTP session expired; reconnect is required") == 0 )
+            return "mcp_session_expired";
+        if ( strncmp(Message, HttpPrefix, PrefixSize) == 0 &&
+             strlen(Message) == PrefixSize + 3u &&
+             Message[PrefixSize] >= '1' && Message[PrefixSize] <= '5' &&
+             Message[PrefixSize + 1u] >= '0' && Message[PrefixSize + 1u] <= '9' &&
+             Message[PrefixSize + 2u] >= '0' && Message[PrefixSize + 2u] <= '9' ) {
+            *HttpStatus = (uint32)(Message[PrefixSize] - '0') * 100u +
+                (uint32)(Message[PrefixSize + 1u] - '0') * 10u +
+                (uint32)(Message[PrefixSize + 2u] - '0');
+            return "mcp_http_error";
+        }
+        return "mcp_io";
+    }
+    if ( Error->eCode == XWORK_ERROR_TOOL ) {
+        if ( strcmp(Message, "MCP server selected an unsupported protocol version") == 0 ||
+             strcmp(Message, "modern MCP server does not support the configured revision") == 0 )
+            return "mcp_protocol_version";
+        if ( strncmp(Message, "MCP protocol error: ", 20u) == 0 )
+            return "mcp_remote_error";
+        if ( strcmp(Message, "MCP message exceeds configured byte limit") == 0 ||
+             strcmp(Message, "MCP tool count exceeds configured limit") == 0 )
+            return "mcp_limit";
+        return "mcp_invalid_response";
+    }
+    if ( Error->eCode == XWORK_ERROR_CONTEXT &&
+         strcmp(Message, "MCP client already has an active request") == 0 )
+        return "mcp_busy";
+    if ( Error->eCode == XWORK_ERROR_POLICY &&
+         strcmp(Message, "MCP server is disabled") == 0 )
+        return "mcp_disabled";
+    switch ( Error->eCode ) {
+    case XWORK_ERROR_TIMEOUT: return "mcp_timeout";
+    case XWORK_ERROR_LIMIT: return "mcp_limit";
+    case XWORK_ERROR_OUT_OF_MEMORY: return "mcp_memory";
+    case XWORK_ERROR_INVALID_ARGUMENT: return "mcp_configuration";
+    default: return "mcp_failed";
+    }
+}
+
 static void MdoOperationFinishMcp(cstr Id, MdoOperationState State,
-    const MdoMcpServerStatus* Status, cstr Message)
+    const MdoMcpServerStatus* Status, cstr Message, cstr ErrorCode,
+    uint32 HttpStatus)
 {
     MdoOperationEntry* Entry;
     if ( !xrtMutexLock(g_MdoOperations.Lock) ) return;
@@ -149,6 +203,9 @@ static void MdoOperationFinishMcp(cstr Id, MdoOperationState State,
     if ( Entry != NULL && !MdoOperationTerminal(Entry->Info.State) ) {
         Entry->Info.State = State;
         Entry->Info.EndedAt = xrtNow();
+        snprintf(Entry->Info.ErrorCode, sizeof(Entry->Info.ErrorCode),
+            "%s", ErrorCode != NULL ? ErrorCode : "");
+        Entry->Info.HttpStatus = HttpStatus;
         if ( Status != NULL ) {
             Entry->Info.Generation = Status->CatalogGeneration;
             Entry->Info.AuxiliaryGeneration = Status->SchemaGeneration;
@@ -252,7 +309,8 @@ static xtaskoutcome MdoOperationRun(xcancel* Cancel, ptr Data,
              !MdoMcpCatalogFind(Catalog, Job->Target, &Server) ) {
             MdoMcpCatalogRelease(Catalog);
             MdoOperationFinishMcp(Job->Id, MDO_OPERATION_FAILED, NULL,
-                "MCP server does not exist in the active catalog");
+                "MCP server does not exist in the active catalog",
+                "mcp_not_found", 0u);
             MdoOperationError("MCP refresh target does not exist");
             return XTASK_FAILED;
         }
@@ -261,26 +319,31 @@ static xtaskoutcome MdoOperationRun(xcancel* Cancel, ptr Data,
         Ok = MdoMcpManagerRefresh(Job->Target, Cancel,
             xrtDeadlineAfter(Timeout), &Error);
         if ( !Ok ) {
-            if ( xrtCancelRequested(Cancel) ) {
+            uint32 HttpStatus;
+            cstr ErrorCode;
+            if ( xrtCancelRequested(Cancel) ||
+                 Error.eCode == XWORK_ERROR_CANCELLED ) {
                 MdoOperationFinishMcp(Job->Id, MDO_OPERATION_CANCELLED,
-                    NULL, "MCP refresh was cancelled");
+                    NULL, "MCP refresh was cancelled", "mcp_cancelled", 0u);
                 return XTASK_CANCELLED;
             }
+            ErrorCode = MdoOperationMcpErrorCode(&Error, &HttpStatus);
             Ok = MdoMcpManagerGetStatus(Job->Target, &Status);
             MdoOperationFinishMcp(Job->Id, MDO_OPERATION_FAILED,
                 Ok ? &Status : NULL,
-                "MCP refresh failed; the server remains available for retry");
+                "MCP connection test failed", ErrorCode, HttpStatus);
             MdoOperationError("MCP refresh operation failed");
             return XTASK_FAILED;
         }
         if ( !MdoMcpManagerGetStatus(Job->Target, &Status) ) {
             MdoOperationFinishMcp(Job->Id, MDO_OPERATION_FAILED, NULL,
-                "MCP refresh completed but its status is unavailable");
+                "MCP refresh completed but its status is unavailable",
+                "mcp_status_unavailable", 0u);
             MdoOperationError("MCP refresh status unavailable");
             return XTASK_FAILED;
         }
         MdoOperationFinishMcp(Job->Id, MDO_OPERATION_SUCCEEDED, &Status,
-            "MCP server connected and tool discovery completed");
+            "MCP server connected and tool discovery completed", NULL, 0u);
         return XTASK_SUCCESS;
     }
     MdoOperationFinish(Job->Id, MDO_OPERATION_FAILED, 0u, 0u, 0u, 0u, 0u,
