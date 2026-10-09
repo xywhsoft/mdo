@@ -40,3 +40,10 @@ Responses uses EasyInputMessage without an explicit message discriminator.
 Strict servers otherwise parse it as an output message and reject follow-ups
 with HTTP 400. Structured content and function call/output pairing are retained;
 existing session snapshots need no migration.
+
+The Android shell now defers saved-page navigation until the host is ready.
+When the host port changes, the last local path/query/fragment follows the new
+origin, retaining the selected conversation. An unchanged live origin can
+restore WebView history. Lost-renderer callbacks wait for Activity recreation.
+The source bundle includes the route resolver's JVM checks and compilation
+test; actual WebView input and lifecycle verification still require a device.
