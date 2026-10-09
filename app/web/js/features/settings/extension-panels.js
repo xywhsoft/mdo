@@ -195,7 +195,7 @@ export function createExtensionPanels() {
         tools: builtinView ? "内建工具由 mdo 维护。能否调用取决于登录、功能设置和当前任务权限。" : "C 文件保存在 mdo-home/tools。保存后自动编译注册；C 代码在本机进程执行，请审阅来源。",
         subagents: "独立委派任务；模型默认跟随主 Agent。子任务仍受父任务权限限制。",
         skills: "按需读取 SKILL.md 和参考文件；安装 Skill 不会自动执行脚本。",
-        mcp: "保存配置不会启动程序。测试连接或模型调用时才建立连接；HTTP 使用 HTTPS。",
+        mcp: "保存配置不会启动程序。测试连接或模型调用时才建立连接；远程服务使用 HTTPS，本机服务也可使用 HTTP。",
         commands: "在输入框键入 / 选择命令；$ARGUMENTS 代表参数，展开后确认发送。",
       })[kind]) }),
       state.error ? element("p", { className: "extension-error", attrs: { role: "alert" }, text: state.error }) : "", list);

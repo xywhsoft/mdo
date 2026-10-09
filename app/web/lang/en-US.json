@@ -1626,7 +1626,7 @@
   "ecosystem.deleteConfirm": "Delete {name}?",
   "ecosystem.subagentsHelp": "Delegate independent tasks. Models follow the main Agent by default; parent permissions still apply.",
   "ecosystem.skillsHelp": "Read SKILL.md and reference files on demand. Installing a Skill never executes its scripts.",
-  "ecosystem.mcpHelp": "Saving never starts a program. Connection begins on test or tool use; HTTP endpoints use HTTPS.",
+  "ecosystem.mcpHelp": "Saving never starts a program. Connection begins on test or tool use. Remote services require HTTPS; local services may also use HTTP.",
   "ecosystem.commandsHelp": "Type / to select a command. $ARGUMENTS represents arguments; review the expanded text before sending.",
   "ecosystem.discardConfirm": "Discard unsaved edits?",
   "ecosystem.name": "Name",

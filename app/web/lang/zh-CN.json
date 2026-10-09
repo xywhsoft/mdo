@@ -1630,7 +1630,7 @@
   "ecosystem.deleteConfirm": "删除 {name}？",
   "ecosystem.subagentsHelp": "独立委派任务；模型默认跟随主 Agent。子任务仍受父任务权限限制。",
   "ecosystem.skillsHelp": "按需读取 SKILL.md 和参考文件；安装 Skill 不会自动执行脚本。",
-  "ecosystem.mcpHelp": "保存配置不会启动程序。测试连接或模型调用时才建立连接；HTTP 使用 HTTPS。",
+  "ecosystem.mcpHelp": "保存配置不会启动程序。测试连接或模型调用时才建立连接；远程服务使用 HTTPS，本机服务也可使用 HTTP。",
   "ecosystem.commandsHelp": "在输入框键入 / 选择命令；$ARGUMENTS 代表参数，展开后确认发送。",
   "ecosystem.discardConfirm": "放弃未保存的编辑？",
   "ecosystem.name": "名称",
