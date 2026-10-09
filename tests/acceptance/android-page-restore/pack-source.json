@@ -1,0 +1,37 @@
+[
+  {
+    "path": "src/api/state.c",
+    "equal": true,
+    "sha256": "d060f273c7a6417d425b825a8706b94f9579f0536a4d799eadd5585ff3d5b37b"
+  },
+  {
+    "path": "web/js/app.js",
+    "equal": true,
+    "sha256": "00d0d1b4c944dc5a8d72fd430ab2ed9206ba9e0c6160775505d857f7690c5b8c"
+  },
+  {
+    "path": "web/js/features/chat/timeline.js",
+    "equal": true,
+    "sha256": "bd8915167e49661f89d0b1c5fc4360143946f737c69e5137c71842e6fdcb1acd"
+  },
+  {
+    "path": "web/lang/en-US.json",
+    "equal": true,
+    "sha256": "1fc3825ab4823335ff83db17d3cdbfe8ff07c00d40863c38b1811d8caec52541"
+  },
+  {
+    "path": "web/lang/ru-RU.json",
+    "equal": true,
+    "sha256": "c5e32b278c09c35541e048e50d4866eea200cb5cc596735280f0775b94dcf58f"
+  },
+  {
+    "path": "web/lang/zh-CN.json",
+    "equal": true,
+    "sha256": "0573d12e4956f7d518a8bae027712cf892753af3cbd368de0f3665b7fe22d8f8"
+  },
+  {
+    "path": "generated/deps.lock",
+    "equal": true,
+    "sha256": "72128345f0fd924f645537eddbf490139b2f8998b19be9a3c1b6f9fedcf788c1"
+  }
+]

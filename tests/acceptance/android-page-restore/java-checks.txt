@@ -1,0 +1,6 @@
+PageLocation: 22 checks passed
+warning: [options] bootstrap class path not set in conjunction with -source 8
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+1 warning
+Production Android shell compiled

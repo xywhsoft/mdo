@@ -1,0 +1,37 @@
+{
+  "passed": true,
+  "mdo_source_commit": "d2731af1ffd9145d04983474031d4c66a4abb2e9",
+  "xs_commit": "f47b0de5037f458f6289483d1323dee417d99434",
+  "exe": {
+    "bytes": 4520712,
+    "sha256": "751a12a71b87e75928d16492a6dc47932e36df210a833a3847c9102a1699843e",
+    "clean_source": true
+  },
+  "apk": {
+    "bytes": 4150509,
+    "sha256": "4a4915154b20900bda887194d285e6f1499bd097c5e006b26791530b8fab4136",
+    "package": "org.xleaves.mdo.qa.page_restore",
+    "build_id": 30000031,
+    "edition": "lite",
+    "debuggable": true,
+    "route_resolver_in_dex": true,
+    "native_zip_and_elf_alignment_16k": true,
+    "exact_pack_from_exe": true
+  },
+  "native": {
+    "revision": "f47b0de5037f458f6289483d1323dee417d99434",
+    "profile_sha256": "893b7863bf7768b125dfa9ca8af27550f8fdddccca70070fcfc5d8aac4a5bc04",
+    "binary_sha256": "fa871724d51f4e75c0baa59457f7dc106922b9c039de707ededb16a6174c4e96",
+    "extensions": [
+      "xllm",
+      "xllm-session",
+      "xwork",
+      "webview",
+      "image"
+    ]
+  },
+  "pack_sha256": "7681839272c01aa9cacd2c28bd6ee441e8ed7c9a0b930a659d2806ea66255e20",
+  "device_connected": false,
+  "native_webview_tested": false,
+  "daily_app_overwritten": false
+}
