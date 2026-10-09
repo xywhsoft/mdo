@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<title>mdo 恢复面板草稿复制兼容检查</title>
+<style>
+body { max-width: 900px; margin: 30px auto; font: 16px system-ui; }
+button, textarea { font: inherit; margin: 8px; }
+textarea { width: 90%; min-height: 120px; }
+dialog { max-width: 700px; }
+.toast { padding: 12px; background: #eee; }
+</style>
+<h1>恢复面板草稿复制兼容检查</h1>
+<p>隔离来源组件测试，不调用模型或产品服务。此页面模拟没有异步 Clipboard API 的 WebView。</p>
+<div id="notice"><span></span><button type="button">打开恢复面板</button></div>
+<dialog id="dialog"><section id="panel">
+<h3 tabindex="-1"></h3>
+<p data-purge-field="description"></p><p data-purge-field="status"></p>
+<dl><dt data-purge-label="name"></dt><dd data-purge-field="name"></dd>
+<dt data-purge-label="project_id"></dt><dd data-purge-field="project_id"></dd>
+<dt data-purge-label="revision"></dt><dd data-purge-field="revision"></dd>
+<dt data-purge-label="purge_request_id"></dt><dd data-purge-field="purge_request_id"></dd></dl>
+<p data-purge-field="error"></p>
+<button data-purge-action="query">重新检查</button>
+<button data-purge-action="cancel">取消</button>
+<button data-purge-action="acknowledge">确认</button>
+<button data-purge-action="reload">重新载入</button>
+<button data-purge-action="copy">复制草稿</button>
+<button data-purge-action="review">查看</button>
+<button data-purge-action="complete">完成</button>
+<button id="project-purge-recovery-close">关闭</button>
+</section></dialog>
+<div id="toast-region" role="status"></div>
+<label for="paste">复制后粘贴核对</label><textarea id="paste"></textarea>
+<p id="result" role="status">尚未核对</p>
+<script type="module">
+import { createProjectPurgeRecoveryPanel } from "/app/web/js/features/projects/project-purge-recovery-panel.js";
+import { loadLocale } from "/app/web/js/i18n.js";
+await loadLocale("zh-CN");
+const snapshots = [{ project_id: "copy-fixture", session_id: "unsent-fixture",
+  text: "中文草稿\nEnglish draft\nРусский черновик", attachments: [] }];
+const state = { checked: true, busy: false, intent: null,
+  writeConflict: true, writeConflictReason: "restart", error: { code: "service_restarted" } };
+// Source fixture only. Never installed in an application pack.
+Object.defineProperty(navigator, "clipboard", { configurable: true, value: undefined });
+const recovery = { get: () => state, isPaused: () => true, requiresReview: () => true,
+  subscribe(fn) { fn(state); }, refresh: async () => {}, cancel: async () => {},
+  acknowledgeAbort: async () => {}, completeCommitted: async () => {}, reload() {} };
+const navigation = { get: () => ({ view: "workspace" }), subscribe() {} };
+createProjectPurgeRecoveryPanel({ panel: document.querySelector("#panel"),
+  notice: document.querySelector("#notice"), dialog: document.querySelector("#dialog"),
+  recovery, navigation, unsentSnapshots: () => snapshots });
+document.querySelector("#paste").addEventListener("input", event => {
+  const passed = event.target.value === JSON.stringify(snapshots, null, 2);
+  const result = document.querySelector("#result");
+  result.dataset.passed = String(passed);
+  result.textContent = passed ? "三种语言、换行及草稿字段完全一致" : "粘贴内容不匹配";
+});
+</script>
+</html>

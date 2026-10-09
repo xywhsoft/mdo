@@ -1,5 +1,6 @@
 import { subscribeLocale, t } from "../../i18n.js";
 import { errorMessage, toast } from "../../utils/dom.js";
+import { copyText } from "../../utils/clipboard.js";
 
 function statusCopy(state) {
   if (state.writeConflictReason === "restart" && !state.intent) return t("shell.serviceRestarted");
@@ -113,7 +114,7 @@ export function createProjectPurgeRecoveryPanel({ panel, notice, recovery, navig
   complete.addEventListener("click", () => { void act(complete, recovery.completeCommitted); });
   copy.addEventListener("click", async () => {
     try {
-      await navigator.clipboard.writeText(JSON.stringify(unsentSnapshots(), null, 2));
+      await copyText(JSON.stringify(unsentSnapshots(), null, 2));
       toast(t("purgeRecovery.copiedDrafts"));
     } catch (cause) { toast(errorMessage(cause), "error"); }
   });
