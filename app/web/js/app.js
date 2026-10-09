@@ -940,6 +940,11 @@ export async function boot() {
       if (composerError.dataset.code === "image_model_unsupported" &&
           composerImages?.supportsCurrentModel()) hideComposerError();
     },
+    onProfileUpdated() {
+      // A new model can unblock an interrupted session. Reinspect immediately
+      // so a rejected old profile does not leave a stale recovery error card.
+      void loadRecovery({ retry: true });
+    },
   });
   newTaskController = createNewTaskController({
     isWritePaused: purgeRecovery.isPaused,

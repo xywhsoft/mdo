@@ -42,6 +42,7 @@ class Button extends EventTarget {
 }
 
 globalThis.document = {
+  querySelector() { return null; },
   createElement() {
     return { value: "", textContent: "", setAttribute(name, value) {
       this[name] = value;
@@ -125,7 +126,7 @@ test("blank task follows the default Agent until the user chooses overrides", ()
 
 function savingProfile(updateProfile) {
   let route = { view: "workspace", projectId: "qa", sessionId: "first" };
-  const listeners = new Set(), busy = [];
+  const listeners = new Set(), busy = [], refreshed = [];
   const modelSelect = new Select(), reasoningSelect = new Select();
   const session = (id, revision = 1, model = "text") => ({ id, project_id: "qa", revision,
     status: "active", title: id, model_id: model, reasoning_effort: "medium", permission_profile: "balanced" });
@@ -136,8 +137,9 @@ function savingProfile(updateProfile) {
     permissionSelect: new Select(["read-only", "balanced", "full-access"]), navigation, sessionStore,
     modelsStore: createResourceStore({ models }), projectsStore: createResourceStore({ items: [] }),
     agentsStore: createResourceStore({ items: [] }), isRunActive: () => false,
-    onBusyChange(value) { busy.push(value); }, updateProfile });
-  return { profile, navigation, sessionStore, modelSelect, session, busy,
+    onBusyChange(value) { busy.push(value); },
+    onProfileUpdated(value) { refreshed.push({ value, current: sessionStore.get().data }); }, updateProfile });
+  return { profile, navigation, sessionStore, modelSelect, session, busy, refreshed,
     choose() { modelSelect.value = "code"; modelSelect.dispatchEvent(new Event("change")); } };
 }
 
@@ -153,6 +155,7 @@ test("leaving a model save cancels its confirmation and ignores the late setting
   assert.equal(env.sessionStore.get().data.id, "second");
   assert.equal(env.profile.selection().model_id, "text");
   assert.equal(env.profile.hasInFlight(), false); assert.deepEqual(env.busy, [true, false]);
+  assert.deepEqual(env.refreshed, []);
   env.profile.destroy();
 });
 
@@ -163,6 +166,7 @@ test("newer model metadata wins over a late confirmed save", async () => {
   finish(env.session("first", 2, "code")); await new Promise(resolve => setImmediate(resolve));
   assert.equal(env.sessionStore.get().data.revision, 3);
   assert.equal(env.profile.selection().model_id, "text"); assert.equal(env.profile.isBusy(), false);
+  assert.deepEqual(env.refreshed, []);
   env.profile.destroy();
 });
 
@@ -174,6 +178,19 @@ test("destroying the profile view cancels an outstanding confirmation", async ()
   env.choose(); env.profile.destroy(); assert.ok(signal.aborted);
   finish(env.session("first", 2, "code")); await new Promise(resolve => setImmediate(resolve));
   assert.equal(env.sessionStore.get().data.revision, 1); assert.equal(env.profile.hasInFlight(), false);
+  assert.deepEqual(env.refreshed, []);
+});
+
+test("a confirmed current model change refreshes recovery after updating session metadata", async () => {
+  const env = savingProfile(async () => env.session("first", 2, "code"));
+  env.choose(); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(env.refreshed.length, 1);
+  assert.equal(env.refreshed[0].current, env.refreshed[0].value);
+  assert.equal(env.refreshed[0].value.model_id, "code");
+  assert.equal(env.refreshed[0].value.revision, 2);
+  assert.equal(env.profile.isBusy(), false);
+  env.profile.sync(); assert.equal(env.refreshed.length, 1);
+  env.profile.destroy();
 });
 
 test("global permission changes affect blank tasks, preserve chat overrides, and never rewrite existing sessions", () => {

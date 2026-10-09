@@ -34,7 +34,7 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
   permissionSelect, navigation, sessionStore, modelsStore, agentsStore,
   projectsStore, settingsStore, draftStore, status, resetButton, isRunActive,
   hasPendingSubmission = () => false, onBusyChange,
-  onSelectionChange, updateProfile = updateSessionProfile }) {
+  onSelectionChange, onProfileUpdated, updateProfile = updateSessionProfile }) {
   // Blank tasks have no session metadata. Keep manual choices per project, but
   // continue following its configured default until the user picks a model.
   const drafts = new Map();
@@ -266,7 +266,10 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
       // Never roll its model/permission back or announce that older choice.
       if (latest?.revision > updated.revision) return;
       if (selected.projectId === updated.project_id &&
-          selected.sessionId === updated.id) sessionStore.setData(updated);
+          selected.sessionId === updated.id) {
+        sessionStore.setData(updated);
+        onProfileUpdated?.(updated);
+      }
       if (draftStore?.composerProfile(key)) {
         draftStore.setComposerProfile(key, null);
         if (!await draftStore.flush(key))
