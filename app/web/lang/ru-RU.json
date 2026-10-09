@@ -1960,5 +1960,15 @@
   "sessionLoad.historyUnavailable": "Временно не удаётся прочитать историю диалога. Проверьте соединение и повторите попытку; показанные сообщения и черновики сохранятся.",
   "error.sessionProfileUnconfirmed": "Настройки сеанса пока не подтверждены. Восстановите соединение и проверьте их или выберите настройки снова.",
   "error.sessionProfileUnavailable": "Сейчас не удалось сохранить настройки сеанса. Повторите попытку позже.",
-  "error.sessionProfileConflict": "Настройки сеанса изменены в другом окне. Выберите их снова."
+  "error.sessionProfileConflict": "Настройки сеанса изменены в другом окне. Выберите их снова.",
+  "ecosystem.required": "Обязательно",
+  "ecosystem.fieldRequired": "Заполните поле «{field}».",
+  "ecosystem.fieldJson": "Поле «{field}» содержит неверный JSON. Проверьте скобки, кавычки и запятые.",
+  "ecosystem.fieldStringArray": "Поле «{field}» должно содержать массив строк JSON, например [\"-y\", \"package\"].",
+  "ecosystem.fieldCredentials": "Поле «{field}» должно содержать объект JSON со строковыми значениями или массив ссылок secret_ref. Значения не могут быть пустыми.",
+  "ecosystem.fieldHttps": "Укажите корректный адрес сервера HTTPS.",
+  "ecosystem.fieldTransport": "MCP требует stdio или Streamable HTTP. Проверьте transport в исходном файле.",
+  "ecosystem.fieldLength": "Поле «{field}» превышает {limit} байт. Некоторые символы занимают несколько байт.",
+  "ecosystem.fieldText": "Поле «{field}» содержит нулевой символ. Удалите его и повторите попытку.",
+  "ecosystem.commandReserved": "Это имя занято встроенной командой. Выберите другой ID файла."
 }

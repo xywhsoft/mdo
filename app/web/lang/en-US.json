@@ -1960,5 +1960,15 @@
   "error.decisionsUnavailable": "Confirmation is temporarily busy. No new decision was applied; keep your input and try again later.",
   "error.sessionProfileUnconfirmed": "The session settings are not yet confirmed. Reconnect and check them, or select the settings again.",
   "error.sessionProfileUnavailable": "The session settings could not be saved right now. Try again later.",
-  "error.sessionProfileConflict": "The session settings changed in another window. Please select them again."
+  "error.sessionProfileConflict": "The session settings changed in another window. Please select them again.",
+  "ecosystem.required": "Required",
+  "ecosystem.fieldRequired": "Enter {field}.",
+  "ecosystem.fieldJson": "{field} is not valid JSON. Check brackets, quotes and commas.",
+  "ecosystem.fieldStringArray": "{field} must be a JSON array of strings, for example [\"-y\", \"package\"].",
+  "ecosystem.fieldCredentials": "{field} must be a JSON object with string values or an array of secret_ref references. Credentials cannot be empty.",
+  "ecosystem.fieldHttps": "Enter a valid HTTPS server address.",
+  "ecosystem.fieldTransport": "MCP requires stdio or Streamable HTTP. Check transport in the source file.",
+  "ecosystem.fieldLength": "{field} exceeds {limit} bytes. Some characters use more than one byte.",
+  "ecosystem.fieldText": "{field} contains a null character. Remove it and try again.",
+  "ecosystem.commandReserved": "This name belongs to a built-in command. Choose another file ID."
 }

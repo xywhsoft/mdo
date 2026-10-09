@@ -9,6 +9,7 @@ import { EXTENSION_KINDS, portableId, promptFields, editPrompt, newMcp, prepareM
 import { resourceOwner, receiptKey } from "./store-formats.js";
 import { saveBlobFile } from "../../utils/file-download.js";
 import { createExtensionReads } from "./extension-reads.js";
+import { extensionFieldError, validateExtensionId, requiredExtensionFields, validateExtensionForm, parseExtensionJson } from "./extension-validation.js";
 
 const label = (key, fallback, args = {}) => t(`ecosystem.${key}`, args, fallback);
 const title = kind => ({ agents: "Agent", tools: label("toolTitle", "工具"), subagents: "SubAgent", skills: "Skill", mcp: "MCP", commands: label("commands", "命令") })[kind];
@@ -25,12 +26,13 @@ function button(text, handler, primary = false) {
 function download(name, value) {
   saveBlobFile({ blob: new Blob([value], { type: "application/octet-stream" }), filename: name });
 }
-function inputField(form, name, text, value = "", { area = false, type = "text", hint = "" } = {}) {
+function inputField(form, name, text, value = "", { area = false, type = "text", hint = "", required = false } = {}) {
   const control = element(area ? "textarea" : "input", { attrs: { name, type: area ? null : type,
-    autocomplete: "off", spellcheck: "false", maxlength: area ? 131072 : 4096 } });
+    autocomplete: "off", spellcheck: "false", maxlength: area ? 131072 : 4096,
+    required: required ? "" : null, "data-field-label": text } });
   if (type === "checkbox") control.checked = Boolean(value); else control.value = value;
   const row = element("label", { className: type === "checkbox" ? "extension-check" : "extension-field" }, [
-    element("span", { text }), control, hint ? element("small", { text: hint }) : null]);
+    element("span", { text: required ? `${text} · ${label("required", "必填")}` : text }), control, hint ? element("small", { text: hint }) : null]);
   form.append(row); return control;
 }
 
@@ -245,15 +247,15 @@ export function createExtensionPanels() {
     if (editing.sourceMode) return editing.source.value;
     const values = fieldValues();
     if (editing.kind === "mcp") {
-      const doc = JSON.parse(editing.source.value);
+      const doc = parseExtensionJson(editing.source.value);
       doc.id = editing.id.value; doc.name = values.name; doc.description = values.description;
       doc.enabled = values.enabled;
       const old = doc.transport;
       doc.transport = values.transport === "stdio" ? {
-        type: "stdio", program: values.program, arguments: JSON.parse(values.arguments || "[]"),
+        type: "stdio", program: values.program, arguments: parseExtensionJson(values.arguments || "[]", "arguments"),
         working_directory: values.working_directory || null, inherit_environment: true,
-        environment: JSON.parse(values.environment || "[]"),
-      } : { type: "streamable-http", endpoint: values.endpoint, headers: JSON.parse(values.headers || "[]") };
+        environment: parseExtensionJson(values.environment || "[]", "environment"),
+      } : { type: "streamable-http", endpoint: values.endpoint, headers: parseExtensionJson(values.headers || "[]", "headers") };
       if (old?.type === "stdio" && doc.transport.type === "stdio") doc.transport.inherit_environment = old.inherit_environment ?? true;
       return JSON.stringify(doc, null, 2);
     }
@@ -273,10 +275,13 @@ export function createExtensionPanels() {
   function fillForm(source) {
     clear(editing.form);
     const kind = editing.kind;
+    editing.syncTransport = null;
+    const required = name => requiredExtensionFields(kind).includes(name);
     if (kind === "mcp") {
-      const doc = JSON.parse(source), transport = doc.transport;
-      inputField(editing.form, "name", label("name", "名称"), doc.name);
-      inputField(editing.form, "description", label("description", "说明"), doc.description);
+      const doc = parseExtensionJson(source), transport = doc?.transport;
+      if (!transport || !["stdio", "streamable-http"].includes(transport.type)) throw extensionFieldError("fieldTransport", "source");
+      inputField(editing.form, "name", label("name", "名称"), doc.name, { required: true });
+      inputField(editing.form, "description", label("description", "说明"), doc.description, { required: true });
       inputField(editing.form, "enabled", label("enable", "启用"), doc.enabled, { type: "checkbox" });
       const select = element("select", { attrs: { name: "transport" } }, [
         element("option", { text: "stdio", attrs: { value: "stdio" } }),
@@ -284,20 +289,24 @@ export function createExtensionPanels() {
       ]); select.value = transport.type;
       editing.form.append(element("label", { className: "extension-field" }, [element("span", { text: label("transport", "连接方式") }), select]));
       const stdio = element("div", { className: "extension-transport" });
-      inputField(stdio, "program", label("program", "程序"), transport.program || "", { hint: label("programHint", "填写目标设备上已安装的程序路径或名称，例如 npx、uvx；Android 通常使用 HTTP MCP。") });
+      inputField(stdio, "program", label("program", "程序"), transport.program || "", { required: true, hint: label("programHint", "填写目标设备上已安装的程序路径或名称，例如 npx、uvx；Android 通常使用 HTTP MCP。") });
       inputField(stdio, "arguments", label("arguments", "参数（JSON 数组）"), JSON.stringify(transport.arguments || []));
       inputField(stdio, "working_directory", label("workingDirectory", "工作目录（可选）"), transport.working_directory || "");
       inputField(stdio, "environment", label("environment", "环境变量（JSON）"), JSON.stringify(transport.environment || [], null, 2), { area: true, hint: label("secretHint", "使用 secret_ref 引用 env:、file: 或已保存的 vault: 凭据。导入普通配置中的凭据会自动加密保存。") });
       const http = element("div", { className: "extension-transport" });
-      inputField(http, "endpoint", label("endpoint", "服务器地址"), transport.endpoint || "", { type: "url" });
+      inputField(http, "endpoint", label("endpoint", "服务器地址"), transport.endpoint || "", { type: "url", required: true });
       inputField(http, "headers", label("headers", "请求头（JSON）"), JSON.stringify(transport.headers || [], null, 2), { area: true, hint: label("secretHint", "普通 JSON 对象的值会自动加密保存；原生数组使用 secret_ref 引用 env:、file: 或 vault: 凭据。") });
       editing.form.append(stdio, http);
-      const sync = () => { stdio.hidden = select.value !== "stdio"; http.hidden = !stdio.hidden; };
+      const sync = () => {
+        stdio.hidden = select.value !== "stdio"; http.hidden = !stdio.hidden;
+        for (const group of [stdio, http]) group.querySelectorAll("input,textarea").forEach(node => { node.disabled = group.hidden; });
+      };
+      editing.syncTransport = sync;
       select.addEventListener("change", sync); sync(); return;
     }
     const values = promptFields(source);
-    if (kind !== "commands") inputField(editing.form, "name", label("name", "名称"), values.name || "");
-    inputField(editing.form, "description", label("description", "说明"), values.description || "");
+    if (kind !== "commands") inputField(editing.form, "name", label("name", "名称"), values.name || "", { required: required("name") });
+    inputField(editing.form, "description", label("description", "说明"), values.description || "", { required: required("description") });
     if (["agents", "subagents"].includes(kind)) {
       inputField(editing.form, "model", label("model", "模型"), values.model || "inherit", { hint: label("modelHint", "inherit 跟随主 Agent；或填写模型 ID。") });
       inputField(editing.form, "reasoning_effort", label("effort", "思考强度（可选）"), values.reasoning_effort || values.thoughtLevel || "");
@@ -307,7 +316,7 @@ export function createExtensionPanels() {
       inputField(editing.form, "allow_delegation", label("delegation", "允许再次委派"), values.allow_delegation === true || values.allow_delegation === "true", { type: "checkbox" });
     }
     if (kind === "commands") inputField(editing.form, "argument_hint", label("argumentHint", "参数提示（可选）"), values["argument-hint"] || "");
-    inputField(editing.form, "prompt", label(kind === "agents" ? "agentInstructions" : "instructions", kind === "agents" ? "系统提示词（留空使用默认规则）" : "指令"), values.prompt || "", { area: true });
+    inputField(editing.form, "prompt", label(kind === "agents" ? "agentInstructions" : "instructions", kind === "agents" ? "系统提示词（留空使用默认规则）" : "指令"), values.prompt || "", { area: true, required: required("prompt") });
   }
   function openEditor(kind, item = null, imported = null, packageKey = null) {
     reads.cancel("editor");
@@ -315,10 +324,10 @@ export function createExtensionPanels() {
     const initial = imported?.content ?? item?.content ?? (kind === "tools" ? newTool() : kind === "mcp" ? JSON.stringify(newMcp(), null, 2) :
       editPrompt("", { name: kind === "commands" ? undefined : "", description: "", prompt: "" }));
     const dialog = element("dialog", { className: "extension-editor", attrs: { "aria-labelledby": "extension-editor-title" } });
-    const id = element("input", { attrs: { name: "extension_id", maxlength: 64, autocomplete: "off", spellcheck: "false", required: "", placeholder: "my-resource" } });
+    const id = element("input", { attrs: { name: "extension_id", maxlength: 64, autocomplete: "off", spellcheck: "false", required: "", placeholder: "my-resource", "data-field-label": label("id", "文件 ID") } });
     id.value = imported?.id ?? item?.id ?? ""; id.disabled = Boolean(item);
-    const form = element("form", { className: "extension-form" });
-    const source = element("textarea", { className: "extension-source", attrs: { spellcheck: "false", "aria-label": label("source", "源文件"), maxlength: 131072 } });
+    const form = element("form", { className: "extension-form", attrs: { novalidate: "" } });
+    const source = element("textarea", { className: "extension-source", attrs: { spellcheck: "false", "aria-label": label("source", "源文件"), "data-field-label": label("source", "源文件"), maxlength: 131072 } });
     source.value = initial; source.hidden = true;
     const status = element("p", { className: "extension-editor-status", attrs: { role: "status" } });
     const formMode = button(label("form", "表单"), () => changeMode(false));
@@ -342,12 +351,17 @@ export function createExtensionPanels() {
     // Imported files should keep their literal source until the user chooses a form.
     if (imported) { editing.sourceMode = true; source.hidden = false; form.hidden = true; }
     if (!imported && !editing.sourceMode) editing.baseline = currentSource();
-    dialog.append(heading, element("label", { className: "extension-field" }, [element("span", { text: label("id", "文件 ID") }), id,
+    dialog.append(heading, element("label", { className: "extension-field" }, [element("span", { text: `${label("id", "文件 ID")} · ${label("required", "必填")}` }), id,
       element("small", { text: label("idHint", "小写字母、数字、点、短横线或下划线；创建后不改名。") })]),
       element("div", { className: "extension-toolbar" }, [formMode, sourceMode]), form, source,
       imported?.files?.length ? element("p", { text: label("fileCount", "包含 {count} 个附属文件", { count: imported.files.length }) }) : "",
       status, element("div", { className: "extension-editor-footer" }, [save]));
     form.addEventListener("submit", event => { event.preventDefault(); void saveEditor(); });
+    const clearValidation = () => {
+      dialog.querySelectorAll('[aria-invalid="true"]').forEach(node => node.removeAttribute("aria-invalid"));
+      if (editing?.dialog === dialog && editing.validationError) { editing.validationError = false; status.textContent = ""; }
+    };
+    dialog.addEventListener("input", clearValidation); dialog.addEventListener("change", clearValidation);
     dialog.addEventListener("cancel", event => { event.preventDefault(); closeEditor(); });
     document.body.append(dialog); dialog.showModal(); (id.disabled ? form.querySelector("input") || source : id).focus();
   }
@@ -359,18 +373,31 @@ export function createExtensionPanels() {
       editing.source.value = current; editing.sourceMode = sourceMode;
       editing.form.hidden = sourceMode; editing.source.hidden = !sourceMode; editing.status.textContent = "";
       (sourceMode ? editing.source : editing.form.querySelector("input,textarea"))?.focus();
-    } catch (error) { editing.status.textContent = errorMessage(error); }
+    } catch (error) { showEditorError(editing, error); }
+  }
+  function showEditorError(editor, error) {
+    if (!error?.extensionValidation) { editor.status.textContent = errorMessage(error); return; }
+    const control = error.field === "source" || editor.sourceMode && error.field !== "extension_id" ? editor.source :
+      error.field === "extension_id" ? editor.id : editor.form.elements.namedItem(error.field);
+    editor.validationError = true;
+    editor.status.textContent = label(error.extensionValidation, undefined, { ...error.args, field: control?.dataset.fieldLabel || error.field });
+    control?.setAttribute("aria-invalid", "true"); control?.focus();
   }
   async function saveEditor() {
     const editor = editing;
     if (!editor || editor.saving) return;
     try {
       const id = editor.id.value.trim();
-      if (!portableId(id)) throw new Error(label("idInvalid", "请填写有效的文件 ID。"));
+      validateExtensionId(editor.kind, id);
+      if (!editor.sourceMode) validateExtensionForm(editor.kind, fieldValues());
+      if (editor.kind === "tools" && !editor.source.value.trim()) throw extensionFieldError("fieldRequired", "source");
       let content = currentSource();
       let secrets = editor.secrets;
       if (editor.kind === "mcp") {
-        const doc = JSON.parse(content); doc.id = id;
+        const doc = parseExtensionJson(content);
+        if (!doc || typeof doc !== "object" || Array.isArray(doc) || !doc.transport)
+          throw extensionFieldError("fieldTransport", "source");
+        doc.id = id;
         ({ content, secrets } = prepareMcpCredentials(doc, secrets));
       }
       const body = { content };
@@ -385,7 +412,9 @@ export function createExtensionPanels() {
     } catch (error) {
       editor.saving = false; editor.dialog.querySelectorAll("input,textarea,select,button").forEach(node => { node.disabled = false; }); editor.id.disabled = Boolean(editor.item);
       if (editor.inheritTools?.checked) editor.toolList.querySelectorAll("input").forEach(node => { node.disabled = true; });
-      editor.status.textContent = error?.status === 412 ? label("conflict", "文件已被其他操作修改。请复制当前内容，重新载入后再保存。") : errorMessage(error);
+      editor.syncTransport?.();
+      if (error?.status === 412) editor.status.textContent = label("conflict", "文件已被其他操作修改。请复制当前内容，重新载入后再保存。");
+      else showEditorError(editor, error);
     }
   }
   async function importFile(kind, file) {

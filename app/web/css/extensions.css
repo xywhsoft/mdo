@@ -13,6 +13,7 @@
 .extension-editor input:not([type="checkbox"]), .extension-editor select, .extension-editor textarea, .extension-search { border: 1px solid var(--border); border-radius: 7px; padding: 9px 11px; background: var(--surface); color: inherit; box-sizing: border-box; min-width: 0; font: inherit; }
 .extension-field { display: grid; gap: 6px; margin-bottom: 14px; font-size: 13px; }
 .extension-field small { color: var(--muted); font-size: 11px; line-height: 1.6; }
+.extension-editor [aria-invalid="true"] { border-color: var(--danger, #c94343); }
 .extension-check { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
 .extension-check small { flex-basis: 100%; color: var(--muted); font-size: 11px; line-height: 1.6; }
 .extension-form textarea[name="prompt"] { min-height: 180px; resize: vertical; line-height: 1.6; }
