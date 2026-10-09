@@ -540,10 +540,20 @@ bool MdoApiProjectPurgePreviewRoute(MdoApiContext* Context)
     for ( Index = 0u; Index < ReferenceCount; ++Index )
         Candidates[InventoryInfo.Targets + Index] = ReferenceTargets[Index];
     qsort(Candidates, InventoryInfo.Targets + ReferenceCount, sizeof(*Candidates), MdoApiProjectPreviewTargetCompare);
+    {
+        bool MarkdownPresent = false;
+        if ( !MdoApiProjectPreviewPath("memory/projects/%s", Id,
+                true, &MarkdownPresent) ) goto done;
+        MemoryPresent = MarkdownPresent;
+    }
+    {
+        bool LegacyPresent = false;
+        if ( !MdoApiProjectPreviewPath("memory/projects/%s.json", Id,
+                false, &LegacyPresent) ) goto done;
+        MemoryPresent = MemoryPresent || LegacyPresent;
+    }
     if ( !MdoApiProjectPreviewPath("projects/%s.json.bak", Id,
             false, &ProjectBackupPresent) ||
-         !MdoApiProjectPreviewPath("memory/projects/%s.json", Id,
-            false, &MemoryPresent) ||
          !MdoApiProjectPreviewPath("memory/projects/%s.json.bak", Id,
             false, &MemoryBackupPresent) ||
          !MdoApiProjectPreviewPath("sessions/%s", Id,
@@ -556,7 +566,7 @@ bool MdoApiProjectPurgePreviewRoute(MdoApiContext* Context)
     if ( Schedules == NULL ) goto done;
     Runs = MdoRunSnapshotCreate(&Error);
     if ( Runs == NULL ) goto done;
-    Memory = MdoMemorySnapshotCreate(MDO_MEMORY_PROJECT, Id, &Error);
+    Memory = MdoMemoryFileSnapshotCreate(MDO_MEMORY_PROJECT, Id, &Error);
     if ( Memory == NULL ) goto done;
     memset(&Executor, 0, sizeof(Executor)); Executor.Size = sizeof(Executor);
     if ( !MdoScheduleExecutorGetSnapshot(&Executor) ) goto done;

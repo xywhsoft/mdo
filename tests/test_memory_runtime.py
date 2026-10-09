@@ -29,6 +29,10 @@ PROBE_SOURCE = r'''
 #include "src/projects/lifecycle.c"
 #include "src/config/config.c"
 static bool MemoryProbePublish(const char *path);
+static bool probe_file_marker_failure;
+static bool MemoryProbeFileMarker(const char *path) {
+    return !probe_file_marker_failure && MdoHomeAtomicWrite(path, "1\n", 2u, false);
+}
 #include "src/memory/manager.c"
 #include "src/memory/transfer.c"
 
@@ -225,6 +229,8 @@ void ServiceInit(XS_HostInfo *host) {
     char *prompt = NULL;
     size_t prompt_bytes = 0u;
     uint64 prompt_generation = 0u;
+    uint64 preview_revision = 0u;
+    uint64 global_preview_revision = 0u;
     bool result;
     (void)host;
     memset(&tool_probe, 0, sizeof(tool_probe));
@@ -238,6 +244,16 @@ void ServiceInit(XS_HostInfo *host) {
         printf("init_error=runtime\n"); goto done;
     }
     PrintSnapshot("global_empty", MDO_MEMORY_GLOBAL, NULL);
+    {
+        MdoMemorySnapshot* files = MdoMemoryFileSnapshotCreate(MDO_MEMORY_GLOBAL, NULL, &error);
+        MdoHomeSnapshot home = {0}; home.Size = sizeof(home);
+        if ( files == NULL || MdoMemorySnapshotCount(files) != 0u ||
+             !MdoHomeGetSnapshot(&home) || home.Persistence != MDO_PERSISTENCE_LAZY ) {
+            MdoMemorySnapshotRelease(files); goto done;
+        }
+        MdoMemorySnapshotRelease(files);
+        printf("file_memory_empty_read_only=1\n");
+    }
     if (!MemoryLeaseProbe()) goto done;
 
     MdoMemoryWriteOptionsInit(&write);
@@ -255,6 +271,16 @@ void ServiceInit(XS_HostInfo *host) {
         printf("write_error=%s\n", error.sMessage); goto done;
     }
     PrintSnapshot("global_written", MDO_MEMORY_GLOBAL, NULL);
+    {
+        MdoMemorySnapshot* files = MdoMemoryFileSnapshotCreate(MDO_MEMORY_GLOBAL, NULL, &error);
+        bool exists = false;
+        if ( files == NULL || MdoMemorySnapshotCount(files) != 2u ||
+             !MdoHomeExternalStat("memory/global", &exists, NULL) || exists ) {
+            MdoMemorySnapshotRelease(files); goto done;
+        }
+        global_preview_revision = MdoMemorySnapshotRevision(files);
+        MdoMemorySnapshotRelease(files);
+    }
 
     write.ExpectedRevision = 0u;
     result = MdoMemoryUpsert(&write, &error);
@@ -276,6 +302,42 @@ void ServiceInit(XS_HostInfo *host) {
     if (!MdoMemoryUpsert(&write, &error)) goto done;
     PrintSnapshot("project_written", MDO_MEMORY_PROJECT, "project-alpha");
 
+    {
+        static const char maintained[] = "User-maintained Markdown takes precedence.\n";
+        MdoMemorySnapshot* files;
+        MdoMemoryEntryInfo info = {0};
+        bool exists = false, preserved = false;
+        size_t index;
+        if ( !MdoHomeAtomicWrite("memory/projects/project-alpha/build-command.md",
+                maintained, sizeof(maintained) - 1u, false) ) goto done;
+        files = MdoMemoryFileSnapshotCreate(MDO_MEMORY_PROJECT, "project-alpha", &error);
+        if ( files == NULL || MdoMemorySnapshotCount(files) != 2u ) {
+            MdoMemorySnapshotRelease(files); goto done;
+        }
+        preview_revision = MdoMemorySnapshotRevision(files);
+        for ( index = 0u; index < MdoMemorySnapshotCount(files); ++index ) {
+            info.Size = sizeof(info);
+            if ( !MdoMemorySnapshotAt(files, index, &info) ) break;
+            if ( !strcmp(info.Id, "build-command") && !strcmp(info.Content, maintained) ) preserved = true;
+        }
+        MdoMemorySnapshotRelease(files);
+        if ( !preserved ||
+             !MdoHomeExternalStat("memory/projects/project-alpha/MEMORY.md", &exists, NULL) || exists ||
+             MdoMemoryFileWrite(MDO_MEMORY_PROJECT, "project-alpha", "build-command", "stale",
+                false, preview_revision - 1u, NULL, &error) || error.eCode != XWORK_ERROR_CONTEXT ||
+             !MdoHomeExternalStat("memory/projects/project-alpha/.legacy-imported", &exists, NULL) || exists ) goto done;
+        printf("file_memory_legacy_read_only=1\n");
+    }
+
+    /* Fail the conversion checkpoint after its first body and index have
+     * actually been published. This must report failure, remain readable,
+     * and recover without changing the preview fingerprint or legacy JSON. */
+    probe_file_marker_failure = true;
+    prompt = MdoMemoryBuildPrompt("project-alpha", &prompt_bytes,
+        &prompt_generation, &error);
+    if ( prompt != NULL || error.eCode == XWORK_ERROR_NONE ) goto done;
+    probe_file_marker_failure = false;
+    printf("file_memory_partial_conversion_failure=1\n");
     prompt = MdoMemoryBuildPrompt("project-alpha", &prompt_bytes,
         &prompt_generation, &error);
     printf("prompt=ok:%d bytes:%zu generation:%llu global:%d project:%d untrusted:%d\n",
@@ -285,6 +347,17 @@ void ServiceInit(XS_HostInfo *host) {
         prompt != NULL && strstr(prompt, "build-command") != NULL,
         prompt != NULL && strstr(prompt, "untrusted reference data") != NULL);
     xrtFree(prompt); prompt = NULL;
+    {
+        MdoMemorySnapshot* files = MdoMemoryFileSnapshotCreate(MDO_MEMORY_PROJECT, "project-alpha", &error);
+        bool same = files != NULL && MdoMemorySnapshotRevision(files) == preview_revision;
+        MdoMemorySnapshotRelease(files);
+        if ( !same ) goto done;
+        files = MdoMemoryFileSnapshotCreate(MDO_MEMORY_GLOBAL, NULL, &error);
+        same = files != NULL && MdoMemorySnapshotRevision(files) == global_preview_revision;
+        MdoMemorySnapshotRelease(files);
+        if ( !same ) goto done;
+        printf("file_memory_conversion_etag_stable=1\n");
+    }
 
     MdoMemoryManagerUnit();
     if (!MdoMemoryManagerInit(runtime)) goto done;
@@ -551,6 +624,12 @@ def write_site(site: Path) -> None:
         "    Ok = MemoryProbePublish(Path) &&\n"
         "        MdoHomeAtomicWrite(Path, Json, Size, true);", 1),
         encoding="utf-8", newline="\n")
+    file_memory = site / "src/memory/file_memory.inc.c"
+    text = file_memory.read_text(encoding="utf-8")
+    checkpoint = 'MdoHomeAtomicWrite(Marker, "1\\n", 2u, false)'
+    assert text.count(checkpoint) == 1
+    file_memory.write_text(text.replace(checkpoint, "MemoryProbeFileMarker(Marker)"),
+        encoding="utf-8", newline="\n")
     (site / "probe.c").write_text(PROBE_SOURCE, encoding="utf-8")
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))
@@ -641,6 +720,9 @@ def main() -> int:
         assert "project_recovered=ok:1 revision:1 count:1 generation:1 code:0" in output, output
         assert "file_memory_tools=1" in output, output
         assert "file_memory_ui_and_refresh=1" in output, output
+        for label in ("empty_read_only", "legacy_read_only", "conversion_etag_stable",
+                      "partial_conversion_failure"):
+            assert f"file_memory_{label}=1" in output, output
         assert "tool_write=infra:1 success:1" in output, output
         assert "tool_write=infra:1 success:0" in output, output
         assert "@memory-project/tool-note.md" in output, output

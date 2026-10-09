@@ -126,7 +126,9 @@ bool MdoMemoryConfigureFileTools(xwork_agent* Agent, const char* ProjectId,
 
 /* The UI edits the same Markdown files as the Agent. Content is the complete
  * file, including optional frontmatter. Snapshot revisions fingerprint the
- * files, so direct file-tool edits invalidate stale UI saves. */
+ * files, so direct file-tool edits invalidate stale UI saves. Reading never
+ * creates Home or converts legacy stores; legacy entries are previewed as
+ * Markdown until a write or an Agent's first use accepts the conversion. */
 MdoMemorySnapshot* MdoMemoryFileSnapshotCreate(MdoMemoryScope Scope,
     const char* ProjectId, xwork_error* Error);
 bool MdoMemoryFileWrite(MdoMemoryScope Scope, const char* ProjectId,

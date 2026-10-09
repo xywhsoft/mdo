@@ -135,7 +135,7 @@ static bool MdoPurgeFixtureControl(XS_HttpReq* Request)
     } else if ( strcmp(Mode, "retain-snapshots") == 0 ) {
         g_MdoPurgeOldSessions = MdoSessionCatalogSnapshot(&Error);
         g_MdoPurgeOldSchedules = MdoScheduleCatalogSnapshot(&Error);
-        g_MdoPurgeOldMemory = MdoMemorySnapshotCreate(MDO_MEMORY_PROJECT, "purge-probe", &Error);
+        g_MdoPurgeOldMemory = MdoMemoryFileSnapshotCreate(MDO_MEMORY_PROJECT, "purge-probe", &Error);
         Ok = g_MdoPurgeOldSessions != NULL && g_MdoPurgeOldSchedules != NULL && g_MdoPurgeOldMemory != NULL;
     } else if ( strcmp(Mode, "native-start") == 0 || strcmp(Mode, "trigger-removed") == 0 ) {
         xwork_schedule_claim Claim;

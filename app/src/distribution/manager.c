@@ -233,7 +233,12 @@ static bool MdoDistFetch(void)
         xrtValueType(xrtValueObjectGet(Root,XRT_STR_LITERAL("toolpacks")))==XVALUE_ARRAY &&
         xrtValueCount(xrtValueObjectGet(Root,XRT_STR_LITERAL("toolpacks")))<=16;
     if(Ok) {
-        MdoDistSave("data/notifications/catalog.json",Root);
+        bool ImportAvailable = false, PreserveCache = false;
+        /* Passive notices must not create Home or make a cache-only Home
+         * ineligible for legacy import. Keep the catalog in memory until
+         * user data has already made Home persistent. */
+        if (MdoHomeImportInspect(&ImportAvailable, &PreserveCache) && !ImportAvailable)
+            MdoDistSave("data/notifications/catalog.json",Root);
         xrtMutexLock(g_MdoDistribution.Lock); xrtValueRelease(g_MdoDistribution.Catalog); g_MdoDistribution.Catalog=Root; Root=NULL; xrtMutexUnlock(g_MdoDistribution.Lock);
     }
     if(Ok)MdoApiLiveChanged(NULL);

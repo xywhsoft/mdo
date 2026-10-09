@@ -145,6 +145,13 @@ class Probe:
         self.api("PUT", memory, {"id": "local-note", "title": "Local note",
             "content": "Purge this owned memory", "tags": [], "pinned": False},
             extra={"If-Match": headers["etag"]})
+        assert (self.home / "memory/projects/purge-probe/local-note.md").read_text() == (
+            "Purge this owned memory")
+        # Exercise cleanup of retained pre-conversion records as well as the
+        # current Markdown directory. The UI no longer writes JSON records.
+        (self.home / "memory/projects/purge-probe.json").write_text(json.dumps({
+            "schema_version": 1, "revision": 1, "updated_at_us": 0,
+            "entries": []}), encoding="utf-8")
         project_draft = "/api/v1/projects/purge-probe/draft"
         revision = self.api("GET", project_draft)["revision"]
         self.api("PUT", project_draft, {"revision": revision, "text": "Owned project input"})
@@ -180,6 +187,8 @@ class Probe:
         # The API returns generated candidate roots; no test constructs a
         # deletion path or supplies a client path to the production core.
         targets = {target["path"] for target in preview["targets"]}
+        assert "memory/projects/purge-probe" in targets, preview
+        assert preview["project_memory_present"] and preview["project_memory_entry_count"] == 2, preview
         if own_references:
             targets |= {"data/draft.json", "data/workspace-state.json"}
         return targets
@@ -252,7 +261,7 @@ def run_probe(host: Path) -> None:
             assert current["native_owned"] == current["cached_owned"] == 0 and current["native_total"] == 1, current
             assert current["exclusive_available"] and not current["restart_required"], current
             assert current["repeat_violations"] == 0 and current["unregister_calls"] == 2, current
-            assert current["old_sessions"] == 2 and current["old_schedules"] == 3 and current["old_memory"] == 1, current
+            assert current["old_sessions"] == 2 and current["old_schedules"] == 3 and current["old_memory"] == 2, current
             for key in ("session_generation", "memory_generation", "schedule_generation"):
                 assert current[key] == state[key] + 1, (key, state, current)
             probe.control("trigger-removed")

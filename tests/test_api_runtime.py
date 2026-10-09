@@ -203,6 +203,22 @@ def write_site(base: Path, port: int) -> Path:
     # application layout directly so /app/default-home has identical meaning
     # in the development and single-file paths.
     shutil.copytree(ROOT / "app", base, dirs_exist_ok=True)
+    # General API fixtures must not depend on publication timing or contact
+    # the public site. Successful passive catalogs have a separate local test.
+    unity = base / "generated/mdo_unity.c"
+    unity.write_text('#define MDO_DISTRIBUTION_ORIGIN "http://127.0.0.1:9"\n'
+        '#define MDO_DISTRIBUTION_HOST "127.0.0.1"\n'
+        '#define MDO_DISTRIBUTION_PORT 9\n'
+        '#define MDO_DISTRIBUTION_SECURE false\n' + unity.read_text(encoding="utf-8"),
+        encoding="utf-8")
+    # This broad fixture exercises locally configured provider calls, not the
+    # signed-in model gateway. The latter has its own account/auth-retry gate.
+    account = base / "src/account/session.c"
+    account_source = account.read_text(encoding="utf-8")
+    authority_hook = "MdoModelManagerSetOnlineAuthority(&authority);"
+    assert account_source.count(authority_hook) == 1
+    account.write_text(account_source.replace(authority_hook,
+        "(void)authority; MdoModelManagerSetOnlineAuthority(NULL);"), encoding="utf-8")
     # This API fixture deliberately uses a text-only built-in to keep testing
     # capability rejection. Image-specific derived fixtures enable it again;
     # the actual provisioned packed Ornith model is tested separately.
@@ -1088,6 +1104,7 @@ def purge_inventory_probe(port: int, home: Path, workspace: Path) -> None:
             "projects/ui-workspace.json", "projects/ui-workspace.json.bak",
             "data/project-drafts/ui-workspace.json", "data/project-drafts/ui-workspace.json.bak",
             "memory/projects/ui-workspace.json", "memory/projects/ui-workspace.json.bak",
+            "memory/projects/ui-workspace",
             "sessions/ui-workspace", "migration/session-prompts/ui-workspace",
             "schedules/purge-preview-schedule.json", "schedules/purge-preview-schedule.json.bak",
             "schedules/history/purge-preview-schedule.jsonl",
@@ -1331,8 +1348,12 @@ def scheduled_questions_probe(port: int, home: Path, definition: dict) -> None:
         status, _, body = request(port, "PUT", answer_path,
             body=json.dumps({"answer": answer}).encode(), headers=json_headers)
         assert status == 200 and json.loads(body)["data"]["answer"] == answer, body
-        assert request(port, "PUT", answer_path, body=b'{"answer":"again"}',
-                       headers=json_headers)[0] == 404
+        status, _, body = request(port, "PUT", answer_path,
+            body=json.dumps({"answer": answer}).encode(), headers=json_headers)
+        assert status == 200 and json.loads(body)["data"]["answer"] == answer, body
+        status, _, body = request(port, "PUT", answer_path, body=b'{"answer":"again"}',
+            headers=json_headers)
+        assert status == 409 and json.loads(body)["error"]["code"] == "decision_conflict", body
         if index == 1:
             still_pending = json.loads(request(port, "GET", tasks[0] + "/asks")[2])["data"]
             assert still_pending["items"][0]["id"] == questions[0]["id"], still_pending
@@ -1742,12 +1763,16 @@ def run_probe(host: Path) -> None:
                 saved_tag = headers["etag"]
                 status, _, body = request(port, "GET", memory_path)
                 listing = json.loads(body)["data"]
-                assert status == 200 and len(listing["items"]) == 1, listing
-                assert "content" not in listing["items"][0], listing
+                # Memory is Markdown now: the ordinary index is editable too;
+                # old structured-store metadata is no longer synthesized.
+                assert status == 200 and {item["id"] for item in listing["items"]} == {
+                    "MEMORY", "style"}, listing
+                assert all("content" not in item for item in listing["items"]), listing
                 status, _, body = request(port, "GET", memory_path + "/style")
                 entry = json.loads(body)["data"]
                 assert status == 200 and entry["content"] == "Keep code readable.", entry
-                assert entry["tags"] == ["code"] and entry["pinned"], entry
+                assert entry["title"] == "style.md" and entry["tags"] == [] and not entry["pinned"], entry
+                assert (home / "memory/projects/api-project/style.md").read_text() == entry["content"]
                 status, _, body = request(port, "PUT", memory_path,
                     body=payload, headers={"Content-Type": "application/json",
                                            "If-Match": initial_tag})
@@ -1896,7 +1921,9 @@ def run_probe(host: Path) -> None:
                 assert preview["advisory"] is True, preview
                 assert preview["session_count"] == 1, preview
                 assert preview["schedule_count"] == 0, preview
-                assert preview["project_memory_present"] is False, preview
+                # Opening this session prepared its ordinary Markdown index.
+                assert preview["project_memory_present"] is True and (
+                    preview["project_memory_entry_count"] == 1), preview
                 assert preview["project_definition_backup_present"] is False, preview
                 assert preview["project_memory_backup_present"] is False, preview
                 assert preview["session_directory_present"] is True, preview
@@ -1938,9 +1965,13 @@ def run_probe(host: Path) -> None:
                     status, body)
                 assert preview["schedule_count"] == 1, preview
                 assert preview["project_memory_present"] is True and (
-                    preview["project_memory_entry_count"] == 1), preview
+                    preview["project_memory_entry_count"] == 2), preview
                 project_file = home / "projects/ui-workspace.json"
                 memory_file = home / "memory/projects/ui-workspace.json"
+                # Retained legacy JSON and its backup must still be inventoried
+                # alongside the live Markdown directory, even after conversion.
+                memory_file.write_text(json.dumps({"schema_version": 1,
+                    "revision": 1, "updated_at_us": 0, "entries": []}), encoding="utf-8")
                 (home / "projects/ui-workspace.json.bak").write_bytes(
                     project_file.read_bytes())
                 (home / "memory/projects/ui-workspace.json.bak").write_bytes(
@@ -2084,8 +2115,14 @@ def run_probe(host: Path) -> None:
                 status, _, body = request(
                     port, "PUT", "/api/v1/approvals/7001",
                     body=b'{"decision":"allow"}', headers=decision_headers)
-                assert status == 404, (status, body)
-                assert json.loads(body)["error"]["code"] == "approval_not_found"
+                assert status == 200 and json.loads(body)["data"] == {
+                    "id": 7001, "decision": "allow"}, (status, body)
+                # Repeating an acknowledged choice is safe; a changed choice
+                # must not be applied to the already completed permission.
+                status, _, body = request(port, "PUT", "/api/v1/approvals/7001",
+                    body=b'{"decision":"deny"}', headers=decision_headers)
+                assert status == 409 and json.loads(body)["error"]["code"] == (
+                    "decision_conflict"), (status, body)
 
                 approval_deadline = time.monotonic() + 3.0
                 approval = None

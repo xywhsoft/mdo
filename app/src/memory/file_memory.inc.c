@@ -11,6 +11,42 @@ static bool MdoMemoryFileDirectory(const char* ProjectId, char Path[256])
     return true;
 }
 
+/* Preview and first-use conversion share the exact Markdown bytes, so an
+ * ETag obtained before conversion remains meaningful after conversion. */
+static char* MdoMemoryFileLegacyText(const MdoMemoryEntry* Entry,
+    const char* ProjectId)
+{
+    size_t Capacity = strlen(Entry->Content) + strlen(Entry->Title) + 512u;
+    char* Text = (char*)xrtMalloc(Capacity);
+    int Written;
+    if ( Text == NULL ) return NULL;
+    Written = snprintf(Text, Capacity,
+        "---\nname: %s\nmetadata:\n  type: %s\n---\n\n# %s\n\n%s\n",
+        Entry->Id, ProjectId != NULL && ProjectId[0] != '\0' ? "project" : "user",
+        Entry->Title, Entry->Content);
+    if ( Written < 0 || (size_t)Written >= Capacity ) {
+        xrtFree(Text); return NULL;
+    }
+    return Text;
+}
+
+static char* MdoMemoryFileLegacyIndex(const MdoMemorySnapshot* Legacy)
+{
+    char* Text = (char*)xrtMalloc(MDO_MEMORY_PROMPT_LIMIT + 1u);
+    size_t Used = 10u, i;
+    if ( Text == NULL ) return NULL;
+    memcpy(Text, "# Memory\n\n", Used); Text[Used] = '\0';
+    for ( i = 0u; i < Legacy->Count; ++i ) {
+        int Written = snprintf(Text + Used, MDO_MEMORY_PROMPT_LIMIT + 1u - Used,
+            "- [%s](%s.md)\n", Legacy->Entries[i].Title, Legacy->Entries[i].Id);
+        if ( Written < 0 || (size_t)Written > MDO_MEMORY_PROMPT_LIMIT - Used ) {
+            xrtFree(Text); return NULL;
+        }
+        Used += (size_t)Written;
+    }
+    return Text;
+}
+
 static bool MdoMemoryFilePrepareUnlocked(const char* ProjectId, xwork_error* Error)
 {
     char Directory[256], Marker[320], Index[320];
@@ -18,7 +54,7 @@ static bool MdoMemoryFilePrepareUnlocked(const char* ProjectId, xwork_error* Err
     MdoMemorySnapshot* Legacy = NULL;
     bool Exists = false;
     char* IndexText = NULL;
-    size_t Used = 0u, i;
+    size_t i;
     bool Ok = false;
     if ( !MdoMemoryFileDirectory(ProjectId, Directory) ) return false;
     Root = MdoHomeOpenStorageDirectory(Directory);
@@ -31,36 +67,25 @@ static bool MdoMemoryFilePrepareUnlocked(const char* ProjectId, xwork_error* Err
     Legacy = MdoMemorySnapshotCreate(ProjectId != NULL && ProjectId[0] != '\0'
         ? MDO_MEMORY_PROJECT : MDO_MEMORY_GLOBAL, ProjectId, Error);
     if ( Legacy == NULL ) goto done;
-    IndexText = (char*)xrtMalloc(MDO_MEMORY_PROMPT_LIMIT + 1u);
+    IndexText = MdoMemoryFileLegacyIndex(Legacy);
     if ( IndexText == NULL ) goto done;
-    memcpy(IndexText, "# Memory\n\n", 10u); Used = 10u;
     for ( i = 0u; i < Legacy->Count; ++i ) {
         const MdoMemoryEntry* Entry = &Legacy->Entries[i];
         char File[384];
         char* Text;
-        size_t Capacity = strlen(Entry->Content) + strlen(Entry->Title) + 512u;
-        int Written;
         snprintf(File, sizeof(File), "%s/%s.md", Directory, Entry->Id);
         if ( !MdoHomeExternalStat(File, &Exists, NULL) ) goto done;
         if ( !Exists ) {
-            Text = (char*)xrtMalloc(Capacity);
+            bool Written;
+            Text = MdoMemoryFileLegacyText(Entry, ProjectId);
             if ( Text == NULL ) goto done;
-            Written = snprintf(Text, Capacity,
-                "---\nname: %s\nmetadata:\n  type: %s\n---\n\n# %s\n\n%s\n",
-                Entry->Id, ProjectId != NULL && ProjectId[0] != '\0' ? "project" : "user",
-                Entry->Title, Entry->Content);
-            Ok = Written >= 0 && (size_t)Written < Capacity &&
-                MdoHomeAtomicWrite(File, Text, (size_t)Written, false);
+            Written = MdoHomeAtomicWrite(File, Text, strlen(Text), false);
             xrtFree(Text);
-            if ( !Ok ) goto done;
+            if ( !Written ) goto done;
         }
-        Written = snprintf(IndexText + Used, MDO_MEMORY_PROMPT_LIMIT + 1u - Used,
-            "- [%s](%s.md)\n", Entry->Title, Entry->Id);
-        if ( Written < 0 || (size_t)Written > MDO_MEMORY_PROMPT_LIMIT - Used ) goto done;
-        Used += (size_t)Written;
     }
     if ( !MdoHomeExternalStat(Index, &Exists, NULL) ||
-         (!Exists && !MdoHomeAtomicWrite(Index, IndexText, Used, false)) ||
+         (!Exists && !MdoHomeAtomicWrite(Index, IndexText, strlen(IndexText), false)) ||
          !MdoHomeAtomicWrite(Marker, "1\n", 2u, false) ) goto done;
     Ok = true;
 done:
@@ -198,6 +223,36 @@ static uint64 MdoMemoryFileHash(uint64 Hash, const char* Text)
     return (Hash ^ 0xffu) * UINT64_C(1099511628211);
 }
 
+/* A legacy entry is visible before its first-use conversion, without writing
+ * during GET/HEAD or overriding Markdown already maintained by the user. */
+static bool MdoMemoryFilePreviewEntry(MdoMemorySnapshot* Snapshot,
+    const char* Id, char* Content, xwork_error* Error)
+{
+    size_t i;
+    MdoMemoryEntry* Item;
+    char Name[72];
+    if ( Content == NULL ) {
+        MdoMemoryError(Error, XWORK_ERROR_OUT_OF_MEMORY, "cannot preview legacy memory");
+        return false;
+    }
+    for ( i = 0u; i < Snapshot->Count; ++i ) {
+        if ( strcmp(Snapshot->Entries[i].Id, Id) == 0 ) {
+            xrtFree(Content); return true;
+        }
+    }
+    if ( Snapshot->Count == MDO_MEMORY_MAX_ENTRIES ) {
+        xrtFree(Content);
+        MdoMemoryError(Error, XWORK_ERROR_LIMIT, "too many Markdown memory files");
+        return false;
+    }
+    snprintf(Name, sizeof(Name), "%s.md", Id);
+    Item = &Snapshot->Entries[Snapshot->Count++];
+    Item->Id = xrtStrDup(Id); Item->Title = xrtStrDup(Name); Item->Content = Content;
+    if ( Item->Id != NULL && Item->Title != NULL ) return true;
+    MdoMemoryError(Error, XWORK_ERROR_OUT_OF_MEMORY, "cannot preview legacy memory");
+    return false;
+}
+
 /* FileLock serializes host UI writes and conversion. File-tool writers use
  * atomic replacement; snapshots read complete files, and a fresh fingerprint
  * catches changes observed before a UI save. This is not an OS transaction
@@ -210,19 +265,22 @@ static MdoMemorySnapshot* MdoMemoryFileSnapshotUnlocked(MdoMemoryScope Scope,
     xdirentry Entry;
     xdirnext Next;
     MdoMemorySnapshot* Snapshot = NULL;
+    MdoMemorySnapshot* Legacy = NULL;
     uint64 Hash = UINT64_C(14695981039346656037);
+    bool Exists = false;
     size_t i;
     if ( (Scope != MDO_MEMORY_GLOBAL && Scope != MDO_MEMORY_PROJECT) ||
          (Scope == MDO_MEMORY_PROJECT && (!ProjectId || !ProjectId[0])) ||
-         !MdoMemoryFileDirectory(Scope == MDO_MEMORY_PROJECT ? ProjectId : NULL, Directory) ||
-         !MdoMemoryFilePrepareUnlocked(Scope == MDO_MEMORY_PROJECT ? ProjectId : NULL, Error) )
+         !MdoMemoryFileDirectory(Scope == MDO_MEMORY_PROJECT ? ProjectId : NULL, Directory) )
         return NULL;
     Snapshot = MdoMemorySnapshotEmpty(Scope, ProjectId);
     if ( !Snapshot ) goto failed;
     Snapshot->Entries = (MdoMemoryEntry*)xrtCalloc(MDO_MEMORY_MAX_ENTRIES,
         sizeof(*Snapshot->Entries));
+    if ( !Snapshot->Entries || !MdoHomeExternalStat(Directory, &Exists, NULL) ) goto failed;
+    if ( !Exists ) goto legacy;
     Dir = MdoHomeOpenDirectory(Directory, XDIR_STAT);
-    if ( !Snapshot->Entries || !Dir ) goto failed;
+    if ( !Dir ) goto failed;
     while ( (Next = xrtDirNext(Dir, &Entry)) == XDIR_NEXT_ITEM ) {
         char Path[384], Id[MDO_MEMORY_ID_CAPACITY], Name[72];
         size_t Length = Entry.Name.Size, Bytes = 0u;
@@ -254,6 +312,24 @@ static MdoMemorySnapshot* MdoMemoryFileSnapshotUnlocked(MdoMemoryScope Scope,
         if ( Next != XDIR_NEXT_END || !Closed ) goto failed;
     }
     Dir = NULL;
+legacy:
+    {
+        char Marker[320];
+        snprintf(Marker, sizeof(Marker), "%s/.legacy-imported", Directory);
+        if ( !MdoHomeExternalStat(Marker, &Exists, NULL) ) goto failed;
+        if ( !Exists ) {
+            Legacy = MdoMemorySnapshotCreate(Scope, ProjectId, Error);
+            if ( Legacy == NULL ) goto failed;
+            for ( i = 0u; i < Legacy->Count; ++i ) {
+                if ( !MdoMemoryFilePreviewEntry(Snapshot, Legacy->Entries[i].Id,
+                        MdoMemoryFileLegacyText(&Legacy->Entries[i], ProjectId), Error) ) goto failed;
+            }
+            if ( Legacy->Count != 0u &&
+                 !MdoMemoryFilePreviewEntry(Snapshot, "MEMORY",
+                    MdoMemoryFileLegacyIndex(Legacy), Error) ) goto failed;
+            MdoMemorySnapshotRelease(Legacy); Legacy = NULL;
+        }
+    }
     qsort(Snapshot->Entries, Snapshot->Count, sizeof(*Snapshot->Entries), MdoMemoryFileCompare);
     for ( i = 0u; i < Snapshot->Count; ++i ) {
         Hash = MdoMemoryFileHash(Hash, Snapshot->Entries[i].Id);
@@ -265,6 +341,7 @@ static MdoMemorySnapshot* MdoMemoryFileSnapshotUnlocked(MdoMemoryScope Scope,
     return Snapshot;
 failed:
     if ( Dir ) xrtDirClose(Dir);
+    MdoMemorySnapshotRelease(Legacy);
     MdoMemorySnapshotRelease(Snapshot);
     if ( !Error || Error->eCode == XWORK_ERROR_NONE )
         MdoMemoryXrtError(Error, "cannot read Markdown memory files");
@@ -302,6 +379,9 @@ bool MdoMemoryFileWrite(MdoMemoryScope Scope, const char* ProjectId,
         MdoMemoryError(Error, XWORK_ERROR_CONTEXT, "memory files changed; reload before saving"); goto done;
     }
     MdoMemorySnapshotRelease(Snapshot); Snapshot = NULL;
+    /* Only an accepted mutation creates the directory and imports legacy
+     * entries. Reads and rejected preconditions leave Home untouched. */
+    if ( !MdoMemoryFilePrepareUnlocked(Scope == MDO_MEMORY_PROJECT ? ProjectId : NULL, Error) ) goto done;
     if ( !MdoMemoryFileDirectory(Scope == MDO_MEMORY_PROJECT ? ProjectId : NULL, Directory) ) goto done;
     snprintf(Path, sizeof(Path), "%s/%s.md", Directory, Id);
     if ( Remove ? !MdoHomeRemove(Path, false) :
