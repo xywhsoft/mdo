@@ -1,0 +1,7 @@
+{"target": "auth", "method": "initialize", "status": 401}
+{"target": "limit", "method": "initialize", "status": 429}
+{"target": "permission", "method": "initialize", "status": 403}
+{"target": "service", "method": "initialize", "status": 503}
+{"target": "auth", "method": "initialize", "status": 200}
+{"target": "auth", "method": "notifications/initialized", "status": 202}
+{"target": "auth", "method": "tools/list", "status": 200}

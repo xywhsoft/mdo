@@ -20,6 +20,10 @@ class Peer(BaseHTTPRequestHandler):
 
     def log_message(self, *_args): pass
 
+    def handle(self):
+        try: super().handle()
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError): pass
+
     def reply(self, status, body=b"", content_type="application/json"):
         if isinstance(body, dict): body = json.dumps(body).encode("utf-8")
         self.send_response(status)

@@ -1,0 +1,24 @@
+Traceback (most recent call last):
+  File "D:\GIT\mdo\tests\test_operation_runtime.py", line 411, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "D:\GIT\mdo\tests\test_operation_runtime.py", line 400, in main
+    assert "mcp_success=state:2 target:mock catalog:7 schema:1 tools:4 connected:1" in output, output
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: [xs] XServer 1.0.0 (commit 93ef1f61e3203cfd71868ae1c4d8a4743d96d9c8, 2026-10-10, windows)
+[xs] extensions (5): xllm, xllm-session, xwork, webview, image
+[xs] config loaded: D:\GIT\mdo\.build\operation-runtime-e__oob4v\site\xs.json (1 servers)
+[xs] server 'operation-probe' class=http 127.0.0.1:53118 tls=off enabled
+[xs]   default-host 'probe' path=D:\GIT\mdo\.build\operation-runtime-e__oob4v\site\web devfile=D:\GIT\mdo\.build\operation-runtime-e__oob4v\site\probe.c
+[xs] engine started, workers=12
+[xs] script loaded: D:\GIT\mdo\.build\operation-runtime-e__oob4v\site\probe.c (12.7 KB gen 1)
+mcp_classification=cases:21 passed:1
+success=state:2 generation:2 modules:2 tools:3 agents:1
+failure=state:3 message:Module reload failed; the previous generation remains active
+mcp_success=state:3 target:mock catalog:7 schema:0 tools:0 connected:0
+mcp_failure=state:3 code:mcp_timeout http:0 message:MCP connection test failed
+cancel=state:4 requested:1
+list=count:6 first_sequence:6 last_sequence:1
+calls=module:3 mcp:2
+probe_done=1
+[xs] http server 'operation-probe' static-only mode

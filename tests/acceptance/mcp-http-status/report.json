@@ -1,0 +1,30 @@
+{
+  "production_commit": "ae74a1530bf771225a67a2e2722ff8fd178118f0",
+  "size": 4551134,
+  "sha256": "26268006b047c0ec371b22fb9ae2dc729ba77099976d2512c25a0385b13a1d0b",
+  "host_size": 3182080,
+  "host_sha256": "934281c062fe64f0432566ad6698c06bfc1cab2991a638c74b5c9023566bd83a",
+  "stress_tests": false,
+  "external_services": false,
+  "owned_fixture_shutdown": "exit 0",
+  "native_http_cases": 12,
+  "native_explicit_recoveries": 12,
+  "rejected_replay_signals": 3,
+  "frontend_pass": 952,
+  "contracts_pass": 124,
+  "passed": true,
+  "initialization_wait_seconds": 18.953,
+  "embedded_sources": {
+    "src/operations/manager.c": "9ca7dea099b41c061c37022f9481b002cc5ae6be252efa459a09e2b89fd6a536",
+    "src/mcp/manager.c": "59143a1783ecee9642bb686f5b28b451608399fefd56b1f8c64308fd95fc4df8",
+    "web/js/features/settings/extension-panels.js": "15de0d3b4db74d8634f44d8061709ed9fb82abcbe63f083bbc660893bb2c0eed",
+    "web/js/features/settings/extension-formats.js": "4691b3a7724257332cb36babc05d067b74754fdb08f48e236e9e9bed5a58355a",
+    "web/js/features/settings/extension-validation.js": "17a954a359d37a5bf1defecf8ceca32d1089796c7823f867a15d9bf9bd4c3491",
+    "web/js/state/resource-operation.js": "697aeca267647920c0176095a2c94944ea7aadf1ad93ccd41911b9cd45132ac5",
+    "web/lang/zh-CN.json": "434872203ab5bb046a8e3aeddc16e7e3bdd69312a45e33f278f6558c9c7bdbae",
+    "web/lang/en-US.json": "c04c76a2723443c8acfc0417a26d621b953f4b3b02e805b4551bde727cea3e0b",
+    "web/lang/ru-RU.json": "6ca916579e3de50a76bfcc80494ed39a87a3a953fd4a4048c6177a2d30cd0a43"
+  },
+  "page_model_requests": 1,
+  "page_model_errors": 0
+}

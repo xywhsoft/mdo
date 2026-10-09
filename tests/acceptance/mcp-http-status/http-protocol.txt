@@ -1,0 +1,15 @@
+xwork MCP Streamable HTTP probe
+  HTTP probe creates an isolated runtime                         PASS
+  non-loopback cleartext HTTP endpoint is rejected               PASS
+  transport-owned HTTP headers cannot be overridden              PASS
+  HTTP definitions reject stdio-only process fields              PASS
+  HTTP source registration remains cold and copies its definition PASS
+  modern HTTP discovery completes on first explicit refresh      PASS
+  modern HTTP diagnostics expose one valid routed tool           PASS
+  modern HTTP call sends routing and schema-derived parameter headers PASS
+  unchanged HTTP definitions retain connection and schema state  PASS
+  credential changes retire the live HTTP definition atomically  PASS
+  legacy HTTP session initializes and resumes an SSE response    PASS
+  legacy HTTP tool call carries the negotiated session id        PASS
+  legacy HTTP disconnect terminates and clears its server session PASS
+xwork MCP Streamable HTTP: PASS (0 failures)

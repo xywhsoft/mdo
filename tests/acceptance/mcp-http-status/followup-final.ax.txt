@@ -1,0 +1,20 @@
+Browser tab: 37, Title: "墨斗", URL: "http://127.0.0.1:53410/#/projects/default/sessions/V-OSQCYzzztuZJFBCi9UG5I3hoKGphIh".
+The following is a diff from the previous accessibility tree with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
+Removed element IDs: 31, 80-81, 88-98
+~								27 button 对话恢复浏览器验收 3分钟前, Help: 对话恢复浏览器验收 default · conversation-fixture
++			101 text 本地服务 0.1.0
++				102 text 就绪
++					103 container
++						104 text Agent
++						105 text 02:55
++						106 text FIXTURE_OK: MCP_HTTP_STATUS_FOLLOWUP
++						107 button Description: 复制消息, Help: 复制
++						108 button Description: 从此回复分叉会话, Help: 分叉
++						109 button Description: 重试此回合, Help: 重试
++						110 text 10 输入 / 4 输出 tokens · LLM <0.1 秒 · 225.1 tok/s
+~							73 button (collapsed) Description: 查看 token 用量, Help: 上次 Conversation fixture 输入 10 / 上下文上限 240,128 tokens, ID: context-meter-trigger, Secondary Actions: Expand
++								111 text Conversation fixture
++								112 text 无思考
++							113 text Enter 发送 · Shift Enter 换行
+~							78 button Description: 发送任务, ID: send
+The focused UI element is 67 text entry area (settable) 向 Agent 描述任务, ID: prompt

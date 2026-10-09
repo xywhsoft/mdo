@@ -1,0 +1,5 @@
+Browser tab: 37, Title: "墨斗", URL: "http://127.0.0.1:53410/#/settings/mcp".
+The following is a diff from the previous accessibility tree with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
+~				38 text 保存配置不会启动程序。测试连接或模型调用时才建立连接；远程服务使用 HTTPS，本机服务也可使用 HTTP。 当前凭据没有访问 MCP 服务器的权限，请检查授权。
+~				63 text 已启用 连接失败 0 个工具
+The focused UI element is 0 AXWebArea 墨斗, URL: 127.0.0.1:53410/#/settings/mcp

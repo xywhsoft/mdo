@@ -1,0 +1,9 @@
+Browser tab: 37, Title: "墨斗", URL: "http://127.0.0.1:53410/#/projects/default/sessions/V-OSQCYzzztuZJFBCi9UG5I3hoKGphIh".
+The following is a diff from the previous accessibility tree with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
+Removed element IDs: 42, 72, 75-77
++				80 text 就绪
++							81 text 输入 ~6 tok
++								82 text Conversation fixture
++								83 text 无思考
++							84 text Enter 发送 · Shift Enter 换行
+The focused UI element is 67 text entry area (settable) 向 Agent 描述任务, Value: MCP_HTTP_STATUS_FOLLOWUP, ID: prompt

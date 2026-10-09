@@ -1,0 +1,53 @@
+✖ MCP form accepts explicit loopback HTTP and rejects remote or ambiguous authorities (1.5394ms)
+✖ MCP server import uses the same loopback transport rule as the form (0.6125ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 0
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 76.8989
+
+✖ failing tests:
+
+test at .build\mcp-http-status\loopback-baseline\tests\test_extension_loopback.mjs:13:1
+✖ MCP form accepts explicit loopback HTTP and rejects remote or ambiguous authorities (1.5394ms)
+  AssertionError [ERR_ASSERTION]: Got unwanted exception: HTTP://LOCALHOST:3000/mcp
+  Actual message: "fieldHttps"
+      at TestContext.<anonymous> (file:///D:/GIT/mdo/.build/mcp-http-status/loopback-baseline/tests/test_extension_loopback.mjs:16:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.start (node:internal/test_runner/test:1242:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: Error: fieldHttps
+        at extensionFieldError (file:///D:/GIT/mdo/.build/mcp-http-status/loopback-baseline/app/web/js/features/settings/extension-validation.js:6:17)
+        at validateExtensionForm (file:///D:/GIT/mdo/.build/mcp-http-status/loopback-baseline/app/web/js/features/settings/extension-validation.js:53:48)
+        at file:///D:/GIT/mdo/.build/mcp-http-status/loopback-baseline/tests/test_extension_loopback.mjs:16:31
+        at getActual (node:assert:611:5)
+        at strict.doesNotThrow (node:assert:779:32)
+        at TestContext.<anonymous> (file:///D:/GIT/mdo/.build/mcp-http-status/loopback-baseline/tests/test_extension_loopback.mjs:16:12)
+        at Test.runInAsyncScope (node:async_hooks:227:14)
+        at Test.run (node:internal/test_runner/test:1382:25)
+        at Test.start (node:internal/test_runner/test:1242:17)
+        at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17),
+    expected: undefined,
+    operator: 'doesNotThrow',
+    diff: 'simple'
+  }
+
+test at .build\mcp-http-status\loopback-baseline\tests\test_extension_loopback.mjs:22:1
+✖ MCP server import uses the same loopback transport rule as the form (0.6125ms)
+  Error: MCP HTTP endpoint must use HTTPS
+      at file:///D:/GIT/mdo/.build/mcp-http-status/loopback-baseline/app/web/js/features/settings/extension-formats.js:98:60
+      at Array.map (<anonymous>)
+      at mcpImportDocuments (file:///D:/GIT/mdo/.build/mcp-http-status/loopback-baseline/app/web/js/features/settings/extension-formats.js:88:18)
+      at TestContext.<anonymous> (file:///D:/GIT/mdo/.build/mcp-http-status/loopback-baseline/tests/test_extension_loopback.mjs:25:21)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3)

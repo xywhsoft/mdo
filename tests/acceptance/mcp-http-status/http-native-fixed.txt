@@ -1,0 +1,68 @@
+  HTTP failure fixture registration succeeds                     PASS
+http_error=auth status:401 code:6 connected:0
+  failed HTTP response retains status without remote text or model metadata PASS
+  an HTTP error never publishes successful discovery             PASS
+  explicit retry clears stale HTTP error and discovers tools     PASS
+  HTTP failure fixture registration succeeds                     PASS
+http_error=payment status:402 code:6 connected:0
+  failed HTTP response retains status without remote text or model metadata PASS
+  an HTTP error never publishes successful discovery             PASS
+  explicit retry clears stale HTTP error and discovers tools     PASS
+  HTTP failure fixture registration succeeds                     PASS
+http_error=permission status:403 code:6 connected:0
+  failed HTTP response retains status without remote text or model metadata PASS
+  an HTTP error never publishes successful discovery             PASS
+  explicit retry clears stale HTTP error and discovers tools     PASS
+  HTTP failure fixture registration succeeds                     PASS
+http_error=limit status:429 code:6 connected:0
+  failed HTTP response retains status without remote text or model metadata PASS
+  an HTTP error never publishes successful discovery             PASS
+  explicit retry clears stale HTTP error and discovers tools     PASS
+  HTTP failure fixture registration succeeds                     PASS
+http_error=malformed status:503 code:6 connected:0
+  failed HTTP response retains status without remote text or model metadata PASS
+  an HTTP error never publishes successful discovery             PASS
+  explicit retry clears stale HTTP error and discovers tools     PASS
+  HTTP failure fixture registration succeeds                     PASS
+http_error=missing status:404 code:6 connected:0
+  failed HTTP response retains status without remote text or model metadata PASS
+  an HTTP error never publishes successful discovery             PASS
+  explicit retry clears stale HTTP error and discovers tools     PASS
+  HTTP failure fixture registration succeeds                     PASS
+http_error=method status:405 code:6 connected:0
+  failed HTTP response retains status without remote text or model metadata PASS
+  an HTTP error never publishes successful discovery             PASS
+  explicit retry clears stale HTTP error and discovers tools     PASS
+  HTTP failure fixture registration succeeds                     PASS
+http_error=false-success status:401 code:6 connected:0
+  failed HTTP response retains status without remote text or model metadata PASS
+  an HTTP error never publishes successful discovery             PASS
+  explicit retry clears stale HTTP error and discovers tools     PASS
+  HTTP failure fixture registration succeeds                     PASS
+http_error=wrong-id status:429 code:6 connected:0
+  failed HTTP response retains status without remote text or model metadata PASS
+  an HTTP error never publishes successful discovery             PASS
+  explicit retry clears stale HTTP error and discovers tools     PASS
+  HTTP failure fixture registration succeeds                     PASS
+http_error=notification status:401 code:6 connected:0
+  failed HTTP response retains status without remote text or model metadata PASS
+  an HTTP error never publishes successful discovery             PASS
+  explicit retry clears stale HTTP error and discovers tools     PASS
+  HTTP failure fixture registration succeeds                     PASS
+http_error=listing status:503 code:6 connected:0
+  failed HTTP response retains status without remote text or model metadata PASS
+  an HTTP error never publishes successful discovery             PASS
+  explicit retry clears stale HTTP error and discovers tools     PASS
+  HTTP failure fixture registration succeeds                     PASS
+http_error=expired status:404 code:6 connected:0
+  failed HTTP response retains status without remote text or model metadata PASS
+  an HTTP error never publishes successful discovery             PASS
+  explicit retry clears stale HTTP error and discovers tools     PASS
+  modern failure probe initializes                               PASS
+  untrusted rejection remains one safe tool failure without replay PASS
+  modern failure probe initializes                               PASS
+  untrusted rejection remains one safe tool failure without replay PASS
+  modern failure probe initializes                               PASS
+  untrusted rejection remains one safe tool failure without replay PASS
+xwork MCP HTTP errors: PASS (0 failures)
+PASS 12 HTTP failures, 12 explicit recoveries, 3 rejected replay signals

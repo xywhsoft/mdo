@@ -1,0 +1,75 @@
+  HTTP failure fixture registration succeeds                     PASS
+http_error=auth status:0 code:4 connected:0
+  failed HTTP response retains status without remote text or model metadata FAIL
+  an HTTP error never publishes successful discovery             PASS
+  explicit retry clears stale HTTP error and discovers tools     PASS
+  HTTP failure fixture registration succeeds                     PASS
+http_error=payment status:0 code:4 connected:0
+  failed HTTP response retains status without remote text or model metadata FAIL
+  an HTTP error never publishes successful discovery             PASS
+  explicit retry clears stale HTTP error and discovers tools     PASS
+  HTTP failure fixture registration succeeds                     PASS
+http_error=permission status:0 code:4 connected:0
+  failed HTTP response retains status without remote text or model metadata FAIL
+  an HTTP error never publishes successful discovery             PASS
+  explicit retry clears stale HTTP error and discovers tools     PASS
+  HTTP failure fixture registration succeeds                     PASS
+http_error=limit status:0 code:4 connected:0
+  failed HTTP response retains status without remote text or model metadata FAIL
+  an HTTP error never publishes successful discovery             PASS
+  explicit retry clears stale HTTP error and discovers tools     PASS
+  HTTP failure fixture registration succeeds                     PASS
+http_error=malformed status:0 code:4 connected:0
+  failed HTTP response retains status without remote text or model metadata FAIL
+  an HTTP error never publishes successful discovery             PASS
+  explicit retry clears stale HTTP error and discovers tools     PASS
+  HTTP failure fixture registration succeeds                     PASS
+http_error=missing status:0 code:6 connected:0
+  failed HTTP response retains status without remote text or model metadata FAIL
+  an HTTP error never publishes successful discovery             PASS
+  explicit retry clears stale HTTP error and discovers tools     PASS
+  HTTP failure fixture registration succeeds                     PASS
+http_error=method status:0 code:6 connected:0
+  failed HTTP response retains status without remote text or model metadata FAIL
+  an HTTP error never publishes successful discovery             PASS
+  explicit retry clears stale HTTP error and discovers tools     PASS
+  HTTP failure fixture registration succeeds                     PASS
+http_error=false-success status:0 code:0 connected:1
+  failed HTTP response retains status without remote text or model metadata FAIL
+  an HTTP error never publishes successful discovery             FAIL
+  explicit retry clears stale HTTP error and discovers tools     PASS
+  HTTP failure fixture registration succeeds                     PASS
+http_error=wrong-id status:0 code:4 connected:0
+  failed HTTP response retains status without remote text or model metadata FAIL
+  an HTTP error never publishes successful discovery             PASS
+  explicit retry clears stale HTTP error and discovers tools     PASS
+  HTTP failure fixture registration succeeds                     PASS
+http_error=notification status:0 code:6 connected:0
+  failed HTTP response retains status without remote text or model metadata FAIL
+  an HTTP error never publishes successful discovery             PASS
+  explicit retry clears stale HTTP error and discovers tools     PASS
+  HTTP failure fixture registration succeeds                     PASS
+http_error=listing status:0 code:4 connected:0
+  failed HTTP response retains status without remote text or model metadata FAIL
+  an HTTP error never publishes successful discovery             PASS
+  explicit retry clears stale HTTP error and discovers tools     PASS
+  HTTP failure fixture registration succeeds                     PASS
+http_error=expired status:0 code:6 connected:0
+  failed HTTP response retains status without remote text or model metadata FAIL
+  an HTTP error never publishes successful discovery             PASS
+  explicit retry clears stale HTTP error and discovers tools     PASS
+  modern failure probe initializes                               PASS
+  untrusted rejection remains one safe tool failure without replay FAIL
+  modern failure probe initializes                               PASS
+  untrusted rejection remains one safe tool failure without replay PASS
+  modern failure probe initializes                               PASS
+  untrusted rejection remains one safe tool failure without replay FAIL
+xwork MCP HTTP errors: FAIL (15 failures)
+Traceback (most recent call last):
+  File "D:\GIT\mdo\.build\xrt-request-tokens\extlibs\xwork\tests\test_mcp_http_errors.py", line 148, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "D:\GIT\mdo\.build\xrt-request-tokens\extlibs\xwork\tests\test_mcp_http_errors.py", line 119, in main
+    assert result.returncode == 0, f"probe exited with {result.returncode}"
+           ^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: probe exited with 1
