@@ -1,0 +1,48 @@
+{
+  "before_patch": {
+    "revision": 2,
+    "transactions": 1,
+    "counts": {
+      "GET /api/v1/settings": 4,
+      "PATCH /api/v1/settings/settings": 1
+    }
+  },
+  "after_patch": {
+    "revision": 3,
+    "transactions": 2,
+    "theme": "dark",
+    "counts": {
+      "GET /api/v1/settings": 5,
+      "PATCH /api/v1/settings/settings": 3,
+      "PATCH /api/v1/settings/settings/preview": 1
+    }
+  },
+  "patch_feedback": "设置已保存。",
+  "before_reset": {
+    "revision": 3,
+    "transactions": 2,
+    "theme": "dark",
+    "counts": {
+      "GET /api/v1/settings": 5,
+      "PATCH /api/v1/settings/settings": 3,
+      "PATCH /api/v1/settings/settings/preview": 1
+    }
+  },
+  "after_reset": {
+    "revision": 4,
+    "transactions": 3,
+    "theme": "system",
+    "locale": "auto",
+    "user_patch": false,
+    "counts": {
+      "GET /api/v1/settings": 6,
+      "PATCH /api/v1/settings/settings": 3,
+      "PATCH /api/v1/settings/settings/preview": 1,
+      "DELETE /api/v1/settings/settings": 2
+    }
+  },
+  "reset_feedback": "设置已保存。",
+  "model_calls": 0,
+  "production_commit": "3b2507d75205935e5c2935f268e95fd05abda2e8",
+  "scope": "clean Windows pack; isolated Home and local response-dropping HTTP proxy; CUA actions"
+}

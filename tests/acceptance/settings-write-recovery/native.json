@@ -1,0 +1,9 @@
+{
+  "snapshot_boundary": 425,
+  "preview_boundary": 425,
+  "matching_patch_changes": false,
+  "replacement_credential_changes": true,
+  "cleared_credential_changes": true,
+  "credential_reference_exposed": false,
+  "reset_user_patch": false
+}

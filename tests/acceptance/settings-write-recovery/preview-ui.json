@@ -1,0 +1,21 @@
+{
+  "scope": "preview pack; clean candidate has a separate UI record",
+  "counts": {
+    "GET /api/v1/settings": 15,
+    "PATCH /api/v1/settings/settings": 8,
+    "PATCH /api/v1/settings/settings/preview": 3
+  },
+  "final_revision": 6,
+  "transactions": 5,
+  "appearance": {
+    "theme": "light",
+    "font_size": "normal",
+    "density": "comfortable"
+  },
+  "observed_cases": [
+    "lost accepted network acknowledgement then confirmed save",
+    "held acknowledgement returned 503; newer font edit saved in order",
+    "five failed confirmation reads; one final unconfirmed feedback; explicit retry confirmed existing intent"
+  ],
+  "model_calls": 0
+}

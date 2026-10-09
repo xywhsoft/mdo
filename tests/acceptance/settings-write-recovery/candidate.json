@@ -1,0 +1,51 @@
+{
+  "mdo_commit": "3b2507d75205935e5c2935f268e95fd05abda2e8",
+  "xs_commit": "f47b0de5037f458f6289483d1323dee417d99434",
+  "sha256": "19703f48a7ad5569b71a383296c495087b905c6acd0668c4492bd127ee434b81",
+  "bytes": 4538503,
+  "mdo_worktree_dirty": false,
+  "packaged_app_sha256": "e2e2c747ca09a97c6c2ff4df6700265082ac7eb71e26df7b3f185de4caa299c6",
+  "sources": {
+    "src/api/state.c": {
+      "sha256": "79dd70c73733659106ec830b591d18c8b851fa53d7e4071f4f71aba0cf432659",
+      "matches": true
+    },
+    "src/api/mutations.c": {
+      "sha256": "db4b2a73d88b6ba6af2a9b1ed72b3fa146d36a9c4427da4d08cb7b2b8dd6320f",
+      "matches": true
+    },
+    "web/js/state/settings.js": {
+      "sha256": "b51d88db908c8e948880440b113f1e20d6e93ed995669e87abf9d5fd8ee99be5",
+      "matches": true
+    },
+    "web/js/state/settings-write.js": {
+      "sha256": "82ff87989fa5acf530a1eb64ac3e57d766eb1be357002f081cb461b4d7f65fcf",
+      "matches": true
+    },
+    "web/js/features/settings/settings-autosave.js": {
+      "sha256": "834c84c0ae2d15c84066d9dda92f90b2c0260c397e648f7a1d6e779c3412900e",
+      "matches": true
+    },
+    "web/js/features/settings/settings-view.js": {
+      "sha256": "8d7cae4950f79926a0055b54eefbc8aaca18bc981126496c0d3a3ba12659305b",
+      "matches": true
+    },
+    "web/js/utils/dom.js": {
+      "sha256": "439dd60837def19050a6b18369cf7b3893addd41d3507615cef2f2392f760bb3",
+      "matches": true
+    },
+    "web/lang/zh-CN.json": {
+      "sha256": "64ef2f2d6d4cd4c237c0c33c934a7dcb0f7f9972c22abc89aefefa9fe109bebb",
+      "matches": true
+    },
+    "web/lang/en-US.json": {
+      "sha256": "ea5c2eee59bf8a0654767620d72109bc815201d0f9f6fce3402f97e5be08aaa1",
+      "matches": true
+    },
+    "web/lang/ru-RU.json": {
+      "sha256": "ce9a2c5a73ee34478eae5bc78b4d6b550c5953b61a2f801c58d62325edf6d391",
+      "matches": true
+    }
+  },
+  "passed": true
+}
