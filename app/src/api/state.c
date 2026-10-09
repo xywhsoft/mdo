@@ -467,6 +467,7 @@ static bool MdoApiSessionArtifactPath(char Output[MDO_SESSION_PATH_CAPACITY],
     size_t FileStart;
     size_t RunStart;
     size_t FileLength;
+    size_t ExtensionLength;
     size_t Index;
     char Run[25];
     char Prefix[22];
@@ -489,10 +490,16 @@ static bool MdoApiSessionArtifactPath(char Output[MDO_SESSION_PATH_CAPACITY],
     snprintf(Prefix, sizeof(Prefix), "%020llu-",
         (unsigned long long)Event->ArtifactId);
     FileLength = Length - FileStart;
-    if ( FileLength < 26u || FileLength > 153u ||
-         memcmp(Saved + FileStart, Prefix, 21u) != 0 ||
-         memcmp(Saved + Length - 4u, ".txt", 4u) != 0 ) return false;
-    for ( Index = FileStart + 21u; Index < Length - 4u; ++Index ) {
+    if ( FileLength < 25u || FileLength > 153u ||
+         memcmp(Saved + FileStart, Prefix, 21u) != 0 ) return false;
+    /* xwork publishes text/plain as .txt and text/markdown as .md. Keep the
+     * same strict stem and ID checks for both; arbitrary suffixes stay invalid. */
+    if ( FileLength >= 26u && memcmp(Saved + Length - 4u, ".txt", 4u) == 0 )
+        ExtensionLength = 4u;
+    else if ( memcmp(Saved + Length - 3u, ".md", 3u) == 0 )
+        ExtensionLength = 3u;
+    else return false;
+    for ( Index = FileStart + 21u; Index < Length - ExtensionLength; ++Index ) {
         unsigned char Ch = (unsigned char)Saved[Index];
         if ( (Ch >= 'a' && Ch <= 'z') ||
              (Ch >= 'A' && Ch <= 'Z') ||
@@ -571,6 +578,7 @@ bool MdoApiSessionArtifactRoute(MdoApiContext* Context)
     static const char Digits[] = "0123456789abcdef";
     size_t Index;
     str Encoded;
+    const char* MediaType;
     xvalue* Data;
     bool Ok;
     if ( Context->ParamCount != 3u ||
@@ -626,6 +634,8 @@ bool MdoApiSessionArtifactRoute(MdoApiContext* Context)
     Hex[64] = '\0';
     Encoded = xrtBase64EncodeNew(Bytes + (size_t)Offset, Count, NULL);
     xrtFree(Bytes);
+    MediaType = strcmp(Path + strlen(Path) - 3u, ".md") == 0
+        ? "text/markdown; charset=utf-8" : "text/plain; charset=utf-8";
     Data = xrtValueObject();
     Ok = Encoded != NULL && Data != NULL &&
         MdoApiValueSetUInt(Data, "event_id", EventId) &&
@@ -637,8 +647,7 @@ bool MdoApiSessionArtifactRoute(MdoApiContext* Context)
         MdoApiValueSetUInt(Data, "bytes", Count) &&
         MdoApiValueSetBool(Data, "eof", Offset + Count == Size) &&
         MdoApiValueSetString(Data, "sha256", Hex) &&
-        MdoApiValueSetString(Data, "media_type",
-            "text/plain; charset=utf-8") &&
+        MdoApiValueSetString(Data, "media_type", MediaType) &&
         MdoApiValueSetString(Data, "data", Encoded);
     xrtFree(Encoded);
     if ( !Ok ) { xrtValueRelease(Data); Data = NULL; }

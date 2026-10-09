@@ -82,9 +82,25 @@ def run_probe(host: Path) -> None:
         }
         bad_event = {**event, "event_id": 2,
                      "artifact_path": str(artifact_file) + ".bak"}
+        markdown_file = artifact_dir / "00000000000000000010-web_search.md"
+        markdown = "# Search results\n\n测试标题\nhttps://example.com/1\n".encode()
+        markdown_file.write_bytes(markdown)
+        markdown_event = {**event, "event_id": 3, "artifact_id": 10,
+            "artifact_path": str(markdown_file), "tool_name": "web_search"}
+        rejected = [
+            str(markdown_file) + ".bak",
+            str(markdown_file).replace("run-00000000000000000007", "run-00000000000000000008"),
+            str(markdown_file).replace("00000000000000000010-web_search", "00000000000000000011-web_search"),
+            str(artifact_dir / "00000000000000000010-.md"),
+            str(artifact_dir / "00000000000000000010-web_search.html"),
+            str(artifact_dir / "00000000000000000010-web.search.md"),
+            str(artifact_dir / "00000000000000000010-web_search.md" / ".." / artifact_file.name),
+        ]
+        bad_markdown = [{**markdown_event, "event_id": i + 4, "artifact_path": path}
+                        for i, path in enumerate(rejected)]
         (session_dir / "ui-events.jsonl").write_text(
             "".join(json.dumps(item, separators=(",", ":")) + "\n"
-                    for item in (event, bad_event)), encoding="utf-8")
+                    for item in (event, bad_event, markdown_event, *bad_markdown)), encoding="utf-8")
 
         # The journal retains the old absolute path. The endpoint must bind
         # its validated final components to the moved, current Home root.
@@ -105,10 +121,21 @@ def run_probe(host: Path) -> None:
             assert data["total_size"] == len(content) and not data["eof"], data
             assert base64.b64decode(data["data"]) == content[:65536], data
             assert data["sha256"] == hashlib.sha256(content).hexdigest(), data
+            assert data["media_type"] == "text/plain; charset=utf-8", data
             assert request(port, "GET", path + f"?offset={len(content)+1}")[0] == 416
             assert request(port, "GET", path + "?limit=65537")[0] == 400
             assert request(port, "GET", path[:-1] + "2")[0] == 404
-            assert request(port, "GET", path[:-1] + "3")[0] == 404
+            markdown_path = path[:-1] + "3"
+            status, body = request(port, "GET", markdown_path)
+            assert status == 200, (status, body)
+            data = body["data"]
+            assert base64.b64decode(data["data"]) == markdown, data
+            assert data["event_id"] == 3 and data["artifact_id"] == 10 and data["eof"], data
+            assert data["sha256"] == hashlib.sha256(markdown).hexdigest(), data
+            assert data["media_type"] == "text/markdown; charset=utf-8", data
+            for index in range(4, 4 + len(rejected)):
+                assert request(port, "GET", path[:-1] + str(index))[0] == 404, rejected[index - 4]
+            assert request(port, "GET", path[:-1] + "99")[0] == 404
             other_path = (f"/api/v1/projects/default/sessions/{other_id}"
                           "/artifacts/1")
             assert request(port, "GET", other_path)[0] == 404
