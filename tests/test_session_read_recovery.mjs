@@ -49,8 +49,17 @@ test("an accepted profile or session write finishes before a stalled sidebar rea
     () => trashSession(session()), () => restoreSession(session()), () => clearSession(session())];
   for (const operation of operations) {
     let writes = 0, finishRead;
-    context.mock.method(globalThis, "fetch", async (_path, options) => {
-      if (options.method !== "GET") { writes++; return ok(session("one", 2)); }
+    context.mock.method(globalThis, "fetch", async (path, options) => {
+      if (options.method !== "GET") {
+        writes++;
+        if (path.endsWith("/fork")) {
+          const body = JSON.parse(options.body);
+          return Response.json({ ok: true, data: { ...session(body.client_session_id, 2),
+            parent_session_id: "one", forked_through_sequence: body.through_sequence } },
+            { headers: { ETag: `"mdo-session-${body.client_session_id}-2"` } });
+        }
+        return ok(session("one", 2));
+      }
       return new Promise(resolve => { finishRead = resolve; });
     });
     const pending = operation(); let settled = false; void pending.then(() => { settled = true; });
@@ -58,6 +67,28 @@ test("an accepted profile or session write finishes before a stalled sidebar rea
     assert.equal((await pending).revision, 2); assert.equal(writes, 1);
     finishRead(ok({ generation: 2, items: [] })); await flush(); sessionsStore.reset();
   }
+});
+
+test("cancelling a fork confirmation quietly refreshes its already-created child in the sidebar", async context => {
+  let child, writes = 0, reads = 0;
+  const controller = new AbortController();
+  context.mock.method(globalThis, "fetch", async (path, options) => {
+    if (options.method === "POST") {
+      writes++; const body = JSON.parse(options.body);
+      child = { ...session(body.client_session_id), parent_session_id: "one",
+        forked_through_sequence: body.through_sequence };
+      return new Promise(() => {});
+    }
+    assert.equal(path, "/api/v1/sessions"); reads++;
+    return ok({ generation: 2, items: [child] });
+  });
+  const action = forkSession(session(), { through_sequence: 1 }, { signal: controller.signal });
+  await flush(); controller.abort();
+  await assert.rejects(action, { name: "AbortError" }); await flush();
+  assert.equal(writes, 1); assert.equal(reads, 1);
+  assert.equal(sessionsStore.get().data.items[0].id, child.id);
+  assert.equal(sessionsStore.get().error, null);
+  assert.equal(timers.size, 0);
 });
 
 test("session detail recovery never leaks a previous session into the new selection", async context => {

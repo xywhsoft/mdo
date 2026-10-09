@@ -127,9 +127,12 @@ function sequence(value) {
 }
 
 export async function forkSession(session, input, options) {
-  const result = await runSessionFork(session, input, options);
-  void loadSessions({ retry: true });
-  return result;
+  try { return await runSessionFork(session, input, options); }
+  finally {
+    // A cancelled or uncertain acknowledgement may already have created the
+    // child. Keep it discoverable without treating cancellation as a success.
+    void loadSessions({ retry: true });
+  }
 }
 
 export async function truncateSession(session, throughSequence, sourceEventId, options = {}) {

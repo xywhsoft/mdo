@@ -2,7 +2,9 @@
 
 CUA/manual browser actions use the printed URL. The ordinary editable model
 answers locally; the candidate's embedded sources and native APIs are unchanged.
-Modes: recover (two 503s), hold (one stalled body), refuse (503 until healthy).
+Read modes: recover (two 503s), hold (one stalled body), refuse (503 until healthy).
+Write modes: fork_drop (lost ACK), fork_hold (stalled ACK), fork_refuse (lost
+ACK and unavailable child reads until healthy). Fork POSTs always reach native.
 Create healthy/release/stop files in the printed isolated directory as needed.
 """
 import argparse
@@ -13,6 +15,7 @@ import http.client
 import json
 import os
 from pathlib import Path
+import socket
 import threading
 import time
 
@@ -57,9 +60,10 @@ class Proxy(BaseHTTPRequestHandler):
         body = self.rfile.read(int(self.headers.get('Content-Length', '0')))
         is_history = self.command == 'GET' and self.path == self.session_path + '/history'
         is_fork = self.command == 'POST' and self.path == self.session_path + '/fork'
+        is_confirmation = self.command == 'GET' and self.fork_id and self.path == '/api/v1/projects/default/sessions/' + self.fork_id
         key = self.command + ' ' + self.path
         with self.lock:
-            if is_history or is_fork:
+            if is_history or is_fork or is_confirmation:
                 self.attempts[key] += 1
             attempt = self.attempts[key]
         fault = None
@@ -68,6 +72,13 @@ class Proxy(BaseHTTPRequestHandler):
                 fault = 'refusal'
             elif self.mode == 'hold' and attempt == 1:
                 fault = 'stall_body'
+        if is_fork and attempt == 1:
+            if self.mode in ('fork_drop', 'fork_refuse'):
+                fault = 'drop_ack'
+            elif self.mode == 'fork_hold':
+                fault = 'stall_body'
+        if is_confirmation and self.mode == 'fork_refuse' and not (self.base / 'healthy').exists():
+            fault = 'refusal'
         if fault == 'refusal':
             status, headers = 503, [('Content-Type', 'application/json')]
             raw = json.dumps({'ok': False, 'error': {'code': 'session_history_unavailable',
@@ -84,16 +95,28 @@ class Proxy(BaseHTTPRequestHandler):
             finally:
                 connection.close()
         record = None
-        if is_history or is_fork:
+        if is_fork and status in (200, 201):
+            type(self).fork_id = json.loads(raw)['data']['id']
+        if is_history or is_fork or is_confirmation:
             record = {'method': self.command, 'path': self.path, 'attempt': attempt,
                 'status': status, 'seconds': round(time.monotonic() - self.started, 3),
                 'fault': fault, 'response': json.loads(raw)}
+            record['kind'] = 'history' if is_history else 'fork' if is_fork else 'child_read'
             if body:
                 record['body'] = json.loads(body)
             with self.lock:
                 self.proof.append(record)
             # An observation marker, never a product fault seam.
             (self.base / 'observed.json').write_text(json.dumps(list(self.proof), indent=2), encoding='utf-8')
+        if fault == 'drop_ack':
+            assert status in (200, 201), raw
+            self.close_connection = True
+            try:
+                self.connection.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+            record['finished_seconds'] = round(time.monotonic() - self.started, 3)
+            return
         self.send_response(status)
         for key, value in headers:
             if key.lower() not in ('connection', 'content-length', 'transfer-encoding'):
@@ -123,7 +146,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--packed', required=True, type=Path)
     parser.add_argument('--directory', required=True, type=Path)
-    parser.add_argument('--mode', required=True, choices=('recover', 'hold', 'refuse'))
+    parser.add_argument('--mode', required=True, choices=('recover', 'hold', 'refuse',
+        'fork_drop', 'fork_hold', 'fork_refuse'))
     args = parser.parse_args()
     base, packed = args.directory.resolve(), args.packed.resolve()
     assert not base.exists(), 'Choose a new isolated directory'
@@ -162,6 +186,7 @@ def main():
         Proxy.base, Proxy.native_port, Proxy.mode = base, port, args.mode
         Proxy.session_path = '/api/v1' + path
         Proxy.started = time.monotonic()
+        Proxy.fork_id = ''
         Proxy.proof = []; Proxy.attempts = Counter(); Proxy.stopping.clear()
         proxy = ThreadingHTTPServer(('127.0.0.1', 0), Proxy)
         worker = threading.Thread(target=proxy.serve_forever, daemon=True); worker.start()
@@ -185,7 +210,7 @@ def main():
             'event_kinds': dict(Counter(e['kind'] for e in events))}
         (base / 'proof.json').write_text(json.dumps(proof, indent=2) + '\n', encoding='utf-8')
         print(json.dumps({'saved': str(base / 'proof.json'), 'history_attempts':
-            sum(item['method'] == 'GET' for item in proof['transport']), 'forks': len(forks),
+            sum(item['kind'] == 'history' for item in proof['transport']), 'forks': len(forks),
             'source_snapshot_unchanged': proof['source_snapshot_unchanged']}), flush=True)
     finally:
         Proxy.stopping.set()
