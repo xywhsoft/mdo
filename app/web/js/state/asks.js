@@ -2,6 +2,7 @@ import { api, resourceId } from "../api/client.js";
 import { createResourceStore } from "./store.js";
 import { t } from "../i18n.js";
 import { isTransientReadError } from "../api/read-recovery.js";
+import { runDecisionAction } from "./decision-action.js";
 
 const EMPTY = Object.freeze({
   projectId: "", sessionId: "", total: 0, items: [], loaded: false,
@@ -58,11 +59,11 @@ export async function answerAsk(projectId, sessionId, id, answer) {
   const project = resourceId(projectId, "project");
   const session = resourceId(sessionId, "session");
   const validated = validateAskAnswer(id, answer);
-  const reply = await api.put(`/projects/${project}/sessions/${session}/asks/${validated.id}`,
-    { answer: validated.answer });
+  const reply = await runDecisionAction({ path: `/projects/${project}/sessions/${session}/asks/${validated.id}`,
+    id: validated.id, field: "answer", value: validated.answer });
   // Lock the accepted answer before any secondary read can stall or fail.
   // A fresh read supersedes pre-answer snapshots without repeating the PUT.
   if (selection.projectId === project && selection.sessionId === session)
     void refreshSelectedAsks({ retry: true });
-  return reply.data;
+  return reply;
 }

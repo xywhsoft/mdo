@@ -4,6 +4,7 @@ import { validateAskAnswer } from "./asks.js";
 import { t } from "../i18n.js";
 import { runTaskStopAction } from "./task-stop-action.js";
 import { isTransientReadError } from "../api/read-recovery.js";
+import { runDecisionAction } from "./decision-action.js";
 
 const OUTPUT_PAGE_BYTES = 32 * 1024;
 const OUTPUT_RETAINED_BYTES = 256 * 1024;
@@ -128,8 +129,8 @@ export async function answerTaskAsk(value, askId, answer) {
   const validated = validateAskAnswer(askId, answer);
   // Return the acknowledgement before reading again so the card can lock an
   // accepted answer even when the following snapshot cannot be retrieved.
-  return (await api.put(`/tasks/${id}/asks/${validated.id}`,
-    { answer: validated.answer })).data;
+  return runDecisionAction({ path: `/tasks/${id}/asks/${validated.id}`,
+    id: validated.id, field: "answer", value: validated.answer });
 }
 
 export function readArtifactPreview(artifact) {

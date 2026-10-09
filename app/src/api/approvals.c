@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "internal.h"
+#include "decision_cache.h"
 #include "../../include/mdo/approvals.h"
 
 static const char* MdoApiApprovalRisk(xwork_risk_level Risk)
@@ -198,6 +199,8 @@ bool MdoApiApprovalRoute(MdoApiContext* Context)
     xvalue* Data;
     uint64 RequestId;
     const char* DecisionName;
+    MdoApiDecisionAttempt Attempt;
+    MdoApiDecisionStatus DecisionStatus;
     if ( !MdoApiApprovalId(Context, &RequestId) )
         return MdoApiReplyError(Context, 400u, "invalid_approval_id",
             "The approval ID must be a nonzero decimal integer", NULL);
@@ -232,8 +235,14 @@ bool MdoApiApprovalRoute(MdoApiContext* Context)
             "The request must contain only an allow, allow_run, or deny decision", NULL);
     }
     MdoApiJsonBodyUnit(&Body);
+    DecisionStatus = MdoApiDecisionBegin(Context, DecisionName, &Attempt);
+    if ( DecisionStatus == MDO_API_DECISION_CONFLICT || DecisionStatus == MDO_API_DECISION_UNAVAILABLE )
+        return MdoApiDecisionReplyError(Context, DecisionStatus);
     memset(&Error, 0, sizeof(Error));
-    if ( !MdoApprovalDecide(RequestId, Decision, AllowRun, &Error) )
+    bool Applied = DecisionStatus == MDO_API_DECISION_REPLAY ||
+        MdoApprovalDecide(RequestId, Decision, AllowRun, &Error);
+    MdoApiDecisionEnd(&Attempt, Applied);
+    if ( !Applied )
         return MdoApiReplyError(Context,
             Error.eCode == XWORK_ERROR_POLICY ? 404u : 503u,
             Error.eCode == XWORK_ERROR_POLICY ? "approval_not_found" :

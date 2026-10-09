@@ -140,8 +140,9 @@ function approvalCard(item, argumentsOpen, onChanged, onExpand) {
         if (!await decideApproval(item.id, decision)) return;
         await onChanged();
       } catch (error) {
-        toast(approvalDecisionStatus(key) === "submitted"
-          ? t("dock.approval.refreshPending") : errorMessage(error), "error");
+        if (card.isConnected && error?.name !== "AbortError")
+          toast(approvalDecisionStatus(key) === "submitted"
+            ? t("dock.approval.refreshPending") : errorMessage(error), "error");
       }
     });
   }

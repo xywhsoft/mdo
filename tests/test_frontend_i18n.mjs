@@ -15,6 +15,10 @@ const packs = Object.fromEntries(supportedLocales.map((name) => [
   name, JSON.parse(readFileSync(new URL(`lang/${name}.json`, root), "utf8")),
 ]));
 const localizedApiErrors = [
+  ["ask_answer_unconfirmed", "error.askAnswerUnconfirmed"],
+  ["approval_decision_unconfirmed", "error.approvalDecisionUnconfirmed"],
+  ["decision_conflict", "error.decisionConflict"],
+  ["decisions_unavailable", "error.decisionsUnavailable"],
   ["backup_upload_timeout", "error.backupUploadTimeout"],
   ["backup_preview_failed", "error.backupPreviewFailed"],
   ["backup_preview_invalid", "error.backupPreviewInvalid"],

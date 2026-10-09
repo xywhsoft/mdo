@@ -2,6 +2,7 @@ import { api } from "../api/client.js";
 import { createResourceStore } from "./store.js";
 import { isTransientReadError } from "../api/read-recovery.js";
 import { t } from "../i18n.js";
+import { runDecisionAction } from "./decision-action.js";
 
 export const approvalsStore = createResourceStore({ total: 0, limit: 4, truncated: false, items: [] },
   { recoverRead: isTransientReadError, retainDataOnError: isTransientReadError });
@@ -50,7 +51,7 @@ export async function decideApproval(value, decision) {
   pending.add(id);
   publishDecisions();
   try {
-    await api.put(`/approvals/${id}`, { decision });
+    await runDecisionAction({ path: `/approvals/${id}`, id, field: "decision", value: decision });
     submitted.add(id);
     publishDecisions();
     // Acknowledgement completes the decision. Readback has its own quiet

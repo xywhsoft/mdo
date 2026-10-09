@@ -421,7 +421,7 @@ bool MdoApiInit(void)
         MdoApiSessionsUnit();
         return false;
     }
-    if ( !MdoApiBackupUploadsInit() || !MdoApiBackupPreviewsInit() || !MdoApiBackupRestoresInit() || !MdoApiDownloadsInit() ||
+    if ( !MdoApiDecisionsInit() || !MdoApiBackupUploadsInit() || !MdoApiBackupPreviewsInit() || !MdoApiBackupRestoresInit() || !MdoApiDownloadsInit() ||
          !MdoApiImageDownloadsInit() || !MdoApiLiveInit() || !MdoApiEcosystemInit() || !MdoApiExtensionsInit() || !MdoApiModelProbesInit() ) {
         MdoApiModelProbesUnit();
         MdoApiExtensionsUnit();
@@ -430,6 +430,7 @@ bool MdoApiInit(void)
         MdoApiBackupRestoresUnit();
         MdoApiBackupPreviewsUnit();
         MdoApiBackupUploadsUnit();
+        MdoApiDecisionsUnit();
         MdoApiWriteUnit(); MdoApiPurgeIntentUnit(); MdoApiAttachmentsUnit();
         MdoApiWorkspaceStateUnit(); MdoApiQueueUnit(); MdoApiDraftUnit();
         MdoApiSessionsUnit();
@@ -452,6 +453,7 @@ void MdoApiUnit(void)
     MdoApiBackupRestoresUnit();
     MdoApiBackupPreviewsUnit();
     MdoApiBackupUploadsUnit();
+    MdoApiDecisionsUnit();
     MdoApiWriteUnit();
     MdoApiPurgeIntentUnit();
     MdoApiWorkspaceStateUnit();

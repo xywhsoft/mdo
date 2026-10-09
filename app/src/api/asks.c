@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "internal.h"
+#include "decision_cache.h"
 #include "../../include/mdo/asks.h"
 #include "../../include/mdo/bootstrap.h"
 #include "../../include/mdo/schedules.h"
@@ -182,17 +183,16 @@ static bool MdoApiAskApplyRoute(MdoApiContext* Context, bool TaskScope)
     uint64 TaskId = 0u;
     bool Terminal = false;
     bool Applied;
+    MdoApiDecisionAttempt Attempt;
+    MdoApiDecisionStatus DecisionStatus;
     if ( Context->ParamCount != (TaskScope ? 2u : 3u) ||
          !MdoApiAskNumber(Context->Params[TaskScope ? 1u : 2u], &Id) )
         return MdoApiReplyError(Context, 400u, "invalid_ask_id",
             "The question ID must be a nonzero decimal integer", NULL);
     if ( TaskScope ) {
-        uint32 TaskStatus;
         if ( !MdoApiAskNumber(Context->Params[0], &TaskId) )
             return MdoApiReplyError(Context, 400u, "invalid_path",
                 "The task identifier must be a nonzero decimal integer", NULL);
-        TaskStatus = MdoApiAskTaskStatus(TaskId, &Terminal);
-        if ( TaskStatus != 200u ) return MdoApiAskTaskError(Context, TaskStatus);
     } else if ( !MdoApiAskSession(Context, ProjectId, SessionId) )
         return MdoApiReplyError(Context, 404u, "session_not_found",
             "The requested session does not exist", NULL);
@@ -215,11 +215,22 @@ static bool MdoApiAskApplyRoute(MdoApiContext* Context, bool TaskScope)
     memcpy(Answer, AnswerText.Data, AnswerText.Size);
     Answer[AnswerText.Size] = '\0';
     MdoApiJsonBodyUnit(&Body);
+    DecisionStatus = MdoApiDecisionBegin(Context, Answer, &Attempt);
+    if ( DecisionStatus == MDO_API_DECISION_CONFLICT || DecisionStatus == MDO_API_DECISION_UNAVAILABLE )
+        return MdoApiDecisionReplyError(Context, DecisionStatus);
     memset(&Error, 0, sizeof(Error));
+    if ( DecisionStatus == MDO_API_DECISION_NEW && TaskScope ) {
+        uint32 TaskStatus = MdoApiAskTaskStatus(TaskId, &Terminal);
+        if ( TaskStatus != 200u ) {
+            MdoApiDecisionEnd(&Attempt, false);
+            return MdoApiAskTaskError(Context, TaskStatus);
+        }
+    }
     if ( TaskScope && Terminal ) Error.eCode = XWORK_ERROR_POLICY;
-    Applied = TaskScope ? (!Terminal && MdoScheduleExecutorAnswerTaskAsk(
+    Applied = DecisionStatus == MDO_API_DECISION_REPLAY || (TaskScope ? (!Terminal && MdoScheduleExecutorAnswerTaskAsk(
         TaskId, Id, Answer, &Error)) :
-        MdoAskAnswer(ProjectId, SessionId, Id, Answer, &Error);
+        MdoAskAnswer(ProjectId, SessionId, Id, Answer, &Error));
+    MdoApiDecisionEnd(&Attempt, Applied);
     if ( !Applied )
         return MdoApiReplyError(Context,
             Error.eCode == XWORK_ERROR_POLICY ? 404u : 503u,

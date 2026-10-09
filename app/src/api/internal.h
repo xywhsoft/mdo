@@ -31,6 +31,8 @@ typedef struct MdoApiContext {
 
 struct MdoSessionEventInfo;
 bool MdoApiLiveInit(void);
+bool MdoApiDecisionsInit(void);
+void MdoApiDecisionsUnit(void);
 void MdoApiLiveUnit(void);
 void MdoApiLiveRelease(void);
 void MdoApiLiveChanged(void* Data);

@@ -21,7 +21,7 @@ test("both approval surfaces share one in-flight submission", async () => {
       puts += 1;
       entered.resolve();
       await release.promise;
-      return Response.json({ ok: true, data: { decision: "allow" } });
+      return Response.json({ ok: true, data: { id: 1, decision: "allow" } });
     }
     assert.equal(options.method, "GET");
     return Response.json({ ok: true, data: { total: 0, items: [] } });
@@ -50,7 +50,7 @@ test("a committed decision stays locked when the refresh fails", async () => {
   globalThis.fetch = async (_path, options) => {
     if (options.method === "PUT") {
       puts += 1;
-      return Response.json({ ok: true, data: { decision: "deny" } });
+      return Response.json({ ok: true, data: { id: 2, decision: "deny" } });
     }
     refreshes += 1;
     if (refreshes === 1)
@@ -82,7 +82,7 @@ test("run grant shares the one-shot lock across both approval surfaces", async (
       decisions.push(JSON.parse(options.body).decision);
       entered.resolve();
       await release.promise;
-      return Response.json({ ok: true, data: { decision: "allow_run" } });
+      return Response.json({ ok: true, data: { id: 3, decision: "allow_run" } });
     }
     return Response.json({ ok: true, data: { total: 0, items: [] } });
   };

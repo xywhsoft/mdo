@@ -1934,5 +1934,9 @@
   "sessionList.invalidResponse": "The session list response is invalid. Please read it again.",
   "sessionLoad.invalidDetail": "The session response does not match this task. Please read it again.",
   "sessionLoad.detailUnavailable": "Unable to read task details for now. Check the connection and retry. Your conversation and draft are preserved.",
-  "sessionLoad.historyUnavailable": "Conversation history is temporarily unavailable. Check the connection and retry; visible messages and drafts will be kept."
+  "sessionLoad.historyUnavailable": "Conversation history is temporarily unavailable. Check the connection and retry; visible messages and drafts will be kept.",
+  "error.askAnswerUnconfirmed": "Unable to confirm whether your answer was received. Your input is preserved; reconnect and check the conversation before retrying.",
+  "error.approvalDecisionUnconfirmed": "Unable to confirm whether your permission decision was received. Reconnect and check execution before retrying.",
+  "error.decisionConflict": "A different answer or permission decision was already accepted. Check the conversation; this change was not applied.",
+  "error.decisionsUnavailable": "Confirmation is temporarily busy. No new decision was applied; keep your input and try again later."
 }

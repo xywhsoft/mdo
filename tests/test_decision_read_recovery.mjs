@@ -56,7 +56,7 @@ test("an accepted answer is not delayed by a hanging secondary read", async () =
   globalThis.fetch = async () => ok(question);
   await selectAsks("qa", "first");
   globalThis.fetch = async (_path, options) => {
-    if (options.method === "PUT") { puts++; return ok({ accepted: true }); }
+    if (options.method === "PUT") { puts++; return ok({ id: 7, answer: "continue" }); }
     readSignal = options.signal;
     return new Promise((_resolve, reject) => options.signal?.addEventListener("abort", () =>
       reject(new DOMException("cancelled", "AbortError")), { once: true }));
@@ -73,7 +73,7 @@ test("an accepted approval keeps its one-shot guard while failed refreshes recov
   const original = globalThis.fetch; let puts = 0, reads = 0;
   approvalsStore.reset();
   globalThis.fetch = async (_path, options) => {
-    if (options.method === "PUT") { puts++; return ok({ decision: "allow" }); }
+    if (options.method === "PUT") { puts++; return ok({ id: 701, decision: "allow" }); }
     reads++; return reads === 1 ? failed() : ok({ total: 0, items: [] });
   };
   try {
@@ -91,7 +91,7 @@ test("a malformed approval snapshot cannot release an already accepted decision"
   const original = globalThis.fetch; let reads = 0, puts = 0;
   approvalsStore.reset();
   globalThis.fetch = async (_path, options) => {
-    if (options.method === "PUT") { puts++; return ok({ decision: "deny" }); }
+    if (options.method === "PUT") { puts++; return ok({ id: 702, decision: "deny" }); }
     return ok(++reads === 1 ? {} : { items: [], total: 0 });
   };
   try {

@@ -48,8 +48,9 @@ export function createAskCard({ item, key, deciding, answered, drafts,
       drafts.delete(key);
       await onChanged();
     } catch (error) {
-      toast(answered.has(key) ? t("dock.ask.refreshPending") :
-        errorMessage(error), "error");
+      if (input.isConnected && error?.name !== "AbortError")
+        toast(answered.has(key) ? t("dock.ask.refreshPending") :
+          errorMessage(error), "error");
     } finally {
       deciding.delete(key);
       if (input.isConnected) updateValidity();

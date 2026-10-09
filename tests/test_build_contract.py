@@ -271,6 +271,7 @@ class BuildContractTests(unittest.TestCase):
             "src/api/backup_preview.c",
             "src/api/backup_restore.c",
             "src/api/write_admission.c",
+            "src/api/decision_cache.c",
             "src/api/body.c",
             "src/api/attachments.c",
             "src/api/value.c",
