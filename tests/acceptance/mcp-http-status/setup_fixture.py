@@ -3,6 +3,7 @@ import argparse
 import json
 from pathlib import Path
 import urllib.request
+import urllib.error
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--directory', type=Path, required=True)
@@ -23,7 +24,10 @@ for name in ('auth', 'permission', 'limit', 'service'):
     request = urllib.request.Request(url + '/extensions/mcp/' + name,
         data=json.dumps(dict(content=json.dumps(doc))).encode(), method='PUT',
         headers={'Content-Type': 'application/json', 'If-Match': '"new"', 'X-Mdo-Write-Token': token})
-    with urllib.request.urlopen(request, timeout=5) as response: raw = response.read()
+    try:
+        with urllib.request.urlopen(request, timeout=5) as response: raw = response.read()
+    except urllib.error.HTTPError as error:
+        raise RuntimeError(error.read().decode('utf-8')) from error
     (base / ('setup-' + name + '.json')).write_bytes(raw)
     assert json.loads(raw)['data']['valid']
 print('PASS four HTTP definitions; setup did not start a connection')

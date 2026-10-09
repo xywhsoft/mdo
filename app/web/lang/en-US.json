@@ -1966,7 +1966,7 @@
   "ecosystem.fieldJson": "{field} is not valid JSON. Check brackets, quotes and commas.",
   "ecosystem.fieldStringArray": "{field} must be a JSON array of strings, for example [\"-y\", \"package\"].",
   "ecosystem.fieldCredentials": "{field} must be a JSON object with string values or an array of secret_ref references. Credentials cannot be empty.",
-  "ecosystem.fieldHttps": "Enter a valid HTTPS server address.",
+  "ecosystem.fieldHttps": "Enter a valid HTTPS address. Localhost, 127.0.0.1 and ::1 services may also use HTTP.",
   "ecosystem.fieldTransport": "MCP requires stdio or Streamable HTTP. Check transport in the source file.",
   "ecosystem.fieldLength": "{field} exceeds {limit} bytes. Some characters use more than one byte.",
   "ecosystem.fieldText": "{field} contains a null character. Remove it and try again.",

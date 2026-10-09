@@ -1966,7 +1966,7 @@
   "ecosystem.fieldJson": "{field}不是有效的 JSON，请检查括号、引号和逗号。",
   "ecosystem.fieldStringArray": "{field}应为 JSON 字符串数组，例如 [\"-y\", \"package\"]。",
   "ecosystem.fieldCredentials": "{field}应为字符串值的 JSON 对象，或带 secret_ref 的引用数组。凭据不能为空。",
-  "ecosystem.fieldHttps": "服务器地址必须是有效的 HTTPS 地址。",
+  "ecosystem.fieldHttps": "请输入有效的 HTTPS 地址；本机 localhost、127.0.0.1 或 ::1 服务也可使用 HTTP。",
   "ecosystem.fieldTransport": "MCP 必须配置 stdio 或 Streamable HTTP 连接方式。请检查源文件中的 transport。",
   "ecosystem.fieldLength": "{field}过长，最多支持 {limit} 字节；中文等字符会占用多个字节。",
   "ecosystem.fieldText": "{field}含有无效的空字符，请删除后重试。",

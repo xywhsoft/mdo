@@ -2,6 +2,20 @@
 // not a YAML engine: native validation remains authoritative for imported files.
 export const EXTENSION_KINDS = Object.freeze(["agents", "subagents", "tools", "skills", "mcp", "commands"]);
 export const BUILTIN_COMMAND_NAMES = Object.freeze(["new", "model", "fork", "export", "clear", "stop", "settings", "theme", "help"]);
+export function mcpHttpEndpointValid(value) {
+  const text = String(value ?? "");
+  if (!text || text.length > 4096 || /[\x00-\x20\x7f\\]/.test(text) || text.includes("#")) return false;
+  let url;
+  try { url = new URL(text); } catch { return false; }
+  if (!url.hostname || url.username || url.password || url.port === "0") return false;
+  const authority = text.match(/^https?:\/\/([^/?#]+)/i)?.[1];
+  if (!authority || authority.includes("@") || /[^\x21-\x7e]/.test(authority)) return false;
+  if (url.protocol === "https:") return true;
+  if (url.protocol !== "http:") return false;
+  // Inspect the original authority: URL() canonicalizes e.g. 127.1 and integer
+  // IPv4 hosts. Accept only the same explicit loopback spellings as the host.
+  return /^(?:localhost|127\.0\.0\.1|\[::1\])(?::[0-9]+)?$/i.test(authority ?? "");
+}
 export function portableId(id) {
   return /^[a-z0-9_-][a-z0-9._-]{0,63}$/.test(id) && !id.endsWith(".") && !id.includes("..") &&
     !/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/.test(id);
@@ -95,7 +109,7 @@ export function mcpImportDocuments(text) {
     };
     if (server.url) {
       if (server.type === "sse") throw new Error("Legacy SSE is unsupported; use Streamable HTTP");
-      if (new URL(server.url).protocol !== "https:") throw new Error("MCP HTTP endpoint must use HTTPS");
+      if (!mcpHttpEndpointValid(server.url)) throw new Error("MCP endpoint requires HTTPS or explicit loopback HTTP");
       doc.transport = { type: "streamable-http", endpoint: server.url,
         headers: Object.entries(server.headers ?? {}).map(([name, value]) => ({ name, secret_ref: reference(value) })) };
     } else {

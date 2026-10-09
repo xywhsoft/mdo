@@ -860,17 +860,22 @@ static bool MdoMcpHttpEndpointValid(cstr Endpoint)
     const unsigned char* HostEnd;
     const unsigned char* Port = NULL;
     uint32 PortValue = 0u;
+    bool Secure = false;
     size_t Size = Endpoint != NULL ? strlen(Endpoint) : 0u;
     size_t i;
     if ( Size == 0u || Size > MDO_MCP_STRING_LIMIT ||
          strchr(Endpoint, '\r') != NULL || strchr(Endpoint, '\n') != NULL )
         return false;
-    if ( Size < 9u || MdoMcpAsciiLower(p[0]) != 'h' ||
+    if ( Size < 8u || MdoMcpAsciiLower(p[0]) != 'h' ||
          MdoMcpAsciiLower(p[1]) != 't' || MdoMcpAsciiLower(p[2]) != 't' ||
-         MdoMcpAsciiLower(p[3]) != 'p' || MdoMcpAsciiLower(p[4]) != 's' ||
-         p[5] != ':' || p[6] != '/' || p[7] != '/' ||
+         MdoMcpAsciiLower(p[3]) != 'p' ||
          strchr(Endpoint, '#') != NULL ) return false;
-    Authority = p + 8u;
+    if ( Size >= 9u && MdoMcpAsciiLower(p[4]) == 's' &&
+         p[5] == ':' && p[6] == '/' && p[7] == '/' ) {
+        Secure = true; Authority = p + 8u;
+    } else if ( p[4] == ':' && p[5] == '/' && p[6] == '/' ) {
+        Authority = p + 7u;
+    } else return false;
     AuthorityEnd = Authority;
     while ( *AuthorityEnd != 0u && *AuthorityEnd != '/' &&
             *AuthorityEnd != '?' ) ++AuthorityEnd;
@@ -916,7 +921,22 @@ static bool MdoMcpHttpEndpointValid(cstr Endpoint)
         }
         if ( PortValue == 0u ) return false;
     }
-    return true;
+    if ( Secure ) return true;
+    /* Match xwork's loopback exception using the literal authority, avoiding
+     * browser URL normalization of shorthand, encoded or integer IPv4 hosts. */
+    {
+        static const char* const Hosts[] = { "localhost", "127.0.0.1", "[::1]" };
+        size_t HostSize = (size_t)(HostEnd - Authority);
+        size_t h;
+        for ( h = 0u; h < sizeof(Hosts) / sizeof(Hosts[0]); ++h ) {
+            size_t j;
+            if ( HostSize != strlen(Hosts[h]) ) continue;
+            for ( j = 0u; j < HostSize; ++j )
+                if ( MdoMcpAsciiLower(Authority[j]) != (unsigned char)Hosts[h][j] ) break;
+            if ( j == HostSize ) return true;
+        }
+    }
+    return false;
 }
 
 static bool MdoMcpSecretReferenceSyntaxValid(xstrview Reference)
@@ -1157,7 +1177,7 @@ static bool MdoMcpParseHttp(const xvalue* pTransport,
          xrtValueCount(pHeaders) > MDO_MCP_ENVIRONMENT_LIMIT ) {
         if ( Error[0] == '\0' ) MdoMcpFormatError(Error,
             MDO_MCP_ERROR_LIMIT,
-            "streamable-http requires an https endpoint and bounded headers");
+            "streamable-http requires HTTPS (HTTP is allowed only on loopback) and bounded headers");
         return false;
     }
     Count = xrtValueCount(pHeaders);

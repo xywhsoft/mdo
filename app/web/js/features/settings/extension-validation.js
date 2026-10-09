@@ -1,4 +1,4 @@
-import { portableId, BUILTIN_COMMAND_NAMES } from "./extension-formats.js";
+import { portableId, BUILTIN_COMMAND_NAMES, mcpHttpEndpointValid } from "./extension-formats.js";
 
 // Catch common form mistakes before writing. Native validation remains the
 // authority for advanced source metadata, resource paths and transport policy.
@@ -48,9 +48,7 @@ export function validateExtensionForm(kind, values) {
       throw extensionFieldError("fieldStringArray", "arguments");
     credentialCollection(values.environment, "environment");
   } else {
-    let endpoint;
-    try { endpoint = new URL(values.endpoint); } catch { /* report without copying the URL */ }
-    if (endpoint?.protocol !== "https:") throw extensionFieldError("fieldHttps", "endpoint");
+    if (!mcpHttpEndpointValid(values.endpoint)) throw extensionFieldError("fieldHttps", "endpoint");
     credentialCollection(values.headers, "headers");
   }
 }

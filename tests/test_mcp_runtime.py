@@ -199,6 +199,20 @@ void ServiceInit(XS_HostInfo *host) {{
     const char *manual_args[2];
     uint64 generation;
     (void)host;
+    {{
+        const char* valid[] = {{ "HTTP://LOCALHOST:3000/mcp", "http://127.0.0.1:3000/mcp", "http://[::1]:3000/mcp" }};
+        const char* invalid[] = {{ "http://example.com/mcp", "http://192.168.1.1/mcp",
+            "http://127.1/mcp", "http://2130706433/mcp", "http://0x7f000001/mcp",
+            "http://localhost.evil/mcp", "http://127.0.0.1.evil/mcp", "http://user@localhost/mcp",
+            "http://localhost:0/mcp", "http://localhost:65536/mcp",
+            "http://localhost/mcp#fragment", "http://localhost\n/mcp" }};
+        unsigned i, accepted = 0u, rejected = 0u;
+        for (i = 0u; i < sizeof(valid) / sizeof(valid[0]); ++i)
+            if (MdoMcpHttpEndpointValid(valid[i])) ++accepted;
+        for (i = 0u; i < sizeof(invalid) / sizeof(invalid[0]); ++i)
+            if (!MdoMcpHttpEndpointValid(invalid[i])) ++rejected;
+        printf("loopback_validation=valid:%u invalid:%u\n", accepted, rejected);
+    }}
     printf("endpoint_validation=valid:%d http:%d userinfo:%d fragment:%d port0:%d overflow:%d\n",
         MdoMcpHttpEndpointValid("HTTPS://example.com:443/mcp?mode=1") ? 1 : 0,
         MdoMcpHttpEndpointValid("http://example.com/mcp") ? 1 : 0,
@@ -436,6 +450,7 @@ def main() -> int:
         output = run_probe(host, site, base / "home")
         assert "manager_init_failed=" not in output, output
         assert "endpoint_validation=valid:1 http:0 userinfo:0 fragment:0 port0:0 overflow:0" in output, output
+        assert "loopback_validation=valid:3 invalid:12" in output, output
         assert "header_validation=authorization:0 accept:1 mcp:1 safe:1 newline:0" in output, output
         assert "initial_catalog=generation:1 count:1 id:mock external:1 args:2 env:1 hash:64" in output, output
         assert "initial_status=state:0 enabled:1 connected:0 discovered:0 tools:0 requests:0" in output, output

@@ -1966,7 +1966,7 @@
   "ecosystem.fieldJson": "Поле «{field}» содержит неверный JSON. Проверьте скобки, кавычки и запятые.",
   "ecosystem.fieldStringArray": "Поле «{field}» должно содержать массив строк JSON, например [\"-y\", \"package\"].",
   "ecosystem.fieldCredentials": "Поле «{field}» должно содержать объект JSON со строковыми значениями или массив ссылок secret_ref. Значения не могут быть пустыми.",
-  "ecosystem.fieldHttps": "Укажите корректный адрес сервера HTTPS.",
+  "ecosystem.fieldHttps": "Укажите корректный адрес HTTPS. Локальные серверы localhost, 127.0.0.1 и ::1 могут использовать HTTP.",
   "ecosystem.fieldTransport": "MCP требует stdio или Streamable HTTP. Проверьте transport в исходном файле.",
   "ecosystem.fieldLength": "Поле «{field}» превышает {limit} байт. Некоторые символы занимают несколько байт.",
   "ecosystem.fieldText": "Поле «{field}» содержит нулевой символ. Удалите его и повторите попытку.",
