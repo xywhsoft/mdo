@@ -268,5 +268,14 @@
       }
     }
   ],
-  "publication_note": "Original common source fingerprint applies to the seven unchanged products; Windows server is repacked and has its own packaged_app_sha256."
+  "publication_note": "Original common source fingerprint applies to the seven unchanged products; Windows server is repacked and has its own packaged_app_sha256.",
+  "publication": {
+    "date": "2026-10-09",
+    "download_page": "https://mdo.xywhsoft.com/download/index.html",
+    "website_commit": "fb7bd21c460e5e6f896310ec008fc432023b8952",
+    "catalog_revision": 13,
+    "update_channels": 8,
+    "required": false,
+    "verification_record": "docs/releases/eight-products-2026-10-09.json"
+  }
 }

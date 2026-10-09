@@ -1,0 +1,236 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-09",
+  "status": "published",
+  "download_page": "https://mdo.xywhsoft.com/download/index.html",
+  "update_origin": "https://ai.xywhsoft.com",
+  "website_commit": "fb7bd21c460e5e6f896310ec008fc432023b8952",
+  "client_feature_commit": "424ffa61",
+  "catalog_revision": 13,
+  "required": false,
+  "releases": [
+    {
+      "id": "desktop",
+      "platform": "windows-x86_64",
+      "edition": "desktop",
+      "build_id": 30000047,
+      "sha256": "90873258d0164f8d4e94ece3734d02c454cd4ad5a4e1220e45570a2c1be9d013",
+      "size": 4510545,
+      "notes": "2026-10-09：同步最新 xs；优化会话与远程同步；支持八种发行版独立在线更新。",
+      "required": false,
+      "status": "published",
+      "filename": "mdo.exe"
+    },
+    {
+      "id": "windows-server",
+      "platform": "windows-x86_64",
+      "edition": "server",
+      "build_id": 30000054,
+      "sha256": "545d9674131775998c0c3a9eaf16abedea0188a3ec7e188ca466b3b3530cbf72",
+      "size": 4318363,
+      "notes": "2026-10-09：同步最新 xs；优化会话与远程同步；支持八种发行版独立在线更新。",
+      "required": false,
+      "status": "published",
+      "filename": "mdo-server.exe"
+    },
+    {
+      "id": "linux-glibc-gui",
+      "platform": "linux-x86_64-glibc",
+      "edition": "desktop",
+      "build_id": 30000048,
+      "sha256": "000e244369e9e08748d11b84672173ab2424f26698cb706f8b1fb145c88a6e1d",
+      "size": 4057372,
+      "notes": "2026-10-09：同步最新 xs；优化会话与远程同步；支持八种发行版独立在线更新。",
+      "required": false,
+      "status": "published",
+      "filename": "mdo-linux-x86_64-glibc"
+    },
+    {
+      "id": "linux-glibc-server",
+      "platform": "linux-x86_64-glibc",
+      "edition": "server",
+      "build_id": 30000049,
+      "sha256": "1c4d81ccb9fedd0aeeaad2752b2daae7aafa0fdff4e25fab0e7853d833efe5a8",
+      "size": 4028465,
+      "notes": "2026-10-09：同步最新 xs；优化会话与远程同步；支持八种发行版独立在线更新。",
+      "required": false,
+      "status": "published",
+      "filename": "mdo-server-linux-x86_64-glibc"
+    },
+    {
+      "id": "linux-musl-gui",
+      "platform": "linux-x86_64-musl",
+      "edition": "desktop",
+      "build_id": 30000050,
+      "sha256": "ce7f4234cad63e0992d40afd785ad339671e7abe08b4f9600d667f702997975d",
+      "size": 5899027,
+      "notes": "2026-10-09：同步最新 xs；优化会话与远程同步；支持八种发行版独立在线更新。",
+      "required": false,
+      "status": "published",
+      "filename": "mdo-linux-x86_64-musl"
+    },
+    {
+      "id": "linux-musl-server",
+      "platform": "linux-x86_64-musl",
+      "edition": "server",
+      "build_id": 30000051,
+      "sha256": "d81f8600f3b8ee6cd1d55a089e41663ffaeaaebb29d0d2746884ce17fc09a2d3",
+      "size": 5870185,
+      "notes": "2026-10-09：同步最新 xs；优化会话与远程同步；支持八种发行版独立在线更新。",
+      "required": false,
+      "status": "published",
+      "filename": "mdo-server-linux-x86_64-musl"
+    },
+    {
+      "id": "lite",
+      "platform": "android-arm64-v8a",
+      "edition": "lite",
+      "build_id": 30000052,
+      "sha256": "bbb9ab14249a85e9de2f4cb02705645b91860eb3cd3fa78dd6e5c171f3e1f84a",
+      "size": 4138221,
+      "notes": "2026-10-09：同步最新 xs；优化会话与远程同步；支持八种发行版独立在线更新。",
+      "required": false,
+      "status": "published",
+      "filename": "mdo-arm64-v8a.apk"
+    },
+    {
+      "id": "full",
+      "platform": "android-arm64-v8a",
+      "edition": "full",
+      "build_id": 30000053,
+      "sha256": "21e38c0fe23c61ba916d30ee7ee829bba3db5d6b189301075f838ef7185f5102",
+      "size": 60891982,
+      "notes": "2026-10-09：同步最新 xs；优化会话与远程同步；支持八种发行版独立在线更新。",
+      "required": false,
+      "status": "published",
+      "toolpack_revision": 2,
+      "filename": "mdo-full-arm64-v8a.apk"
+    }
+  ],
+  "verification": {
+    "website_and_updates": {
+      "passed": true,
+      "origin": "https://mdo.xywhsoft.com",
+      "api_origin": "https://ai.xywhsoft.com",
+      "checked": [
+        "download/index.html",
+        "en/download/index.html",
+        "ru/download/index.html",
+        {
+          "id": "desktop",
+          "build_id": 30000047,
+          "sha256": "90873258d0164f8d4e94ece3734d02c454cd4ad5a4e1220e45570a2c1be9d013"
+        },
+        {
+          "id": "windows-server",
+          "build_id": 30000054,
+          "sha256": "545d9674131775998c0c3a9eaf16abedea0188a3ec7e188ca466b3b3530cbf72"
+        },
+        {
+          "id": "linux-glibc-gui",
+          "build_id": 30000048,
+          "sha256": "000e244369e9e08748d11b84672173ab2424f26698cb706f8b1fb145c88a6e1d"
+        },
+        {
+          "id": "linux-glibc-server",
+          "build_id": 30000049,
+          "sha256": "1c4d81ccb9fedd0aeeaad2752b2daae7aafa0fdff4e25fab0e7853d833efe5a8"
+        },
+        {
+          "id": "linux-musl-gui",
+          "build_id": 30000050,
+          "sha256": "ce7f4234cad63e0992d40afd785ad339671e7abe08b4f9600d667f702997975d"
+        },
+        {
+          "id": "linux-musl-server",
+          "build_id": 30000051,
+          "sha256": "d81f8600f3b8ee6cd1d55a089e41663ffaeaaebb29d0d2746884ce17fc09a2d3"
+        },
+        {
+          "id": "lite",
+          "build_id": 30000052,
+          "sha256": "bbb9ab14249a85e9de2f4cb02705645b91860eb3cd3fa78dd6e5c171f3e1f84a"
+        },
+        {
+          "id": "full",
+          "build_id": 30000053,
+          "sha256": "21e38c0fe23c61ba916d30ee7ee829bba3db5d6b189301075f838ef7185f5102"
+        }
+      ],
+      "invalid_combinations": 4,
+      "legacy_windows_default": "desktop"
+    },
+    "website_layout": {
+      "passed": true,
+      "checks": [
+        {
+          "language": "zh",
+          "width": 1280,
+          "height": 2741,
+          "scroll": 0,
+          "cardTop": 1215,
+          "links": 8,
+          "overflow": 0
+        },
+        {
+          "language": "zh",
+          "width": 390,
+          "height": 5364,
+          "scroll": 0,
+          "cardTop": 2507,
+          "links": 8,
+          "overflow": 0
+        },
+        {
+          "language": "en",
+          "width": 1280,
+          "height": 2911,
+          "scroll": 0,
+          "cardTop": 1314,
+          "links": 8,
+          "overflow": 0
+        },
+        {
+          "language": "en",
+          "width": 390,
+          "height": 5963,
+          "scroll": 0,
+          "cardTop": 2786,
+          "links": 8,
+          "overflow": 0
+        },
+        {
+          "language": "ru",
+          "width": 1280,
+          "height": 3077,
+          "scroll": 0,
+          "cardTop": 1406,
+          "links": 8,
+          "overflow": 0
+        },
+        {
+          "language": "ru",
+          "width": 390,
+          "height": 6405,
+          "scroll": 0,
+          "cardTop": 3059,
+          "links": 8,
+          "overflow": 0
+        }
+      ]
+    },
+    "windows_server_web_update": true,
+    "windows_installer_cases": [
+      "replacement",
+      "original_arguments",
+      "locked_rollback",
+      "hash_rejection",
+      "process_identity_rejection"
+    ],
+    "native_site_eight_product_test": true,
+    "strict_c11_compile": true,
+    "windows_scm_live_test": false,
+    "local_website_catalog_mirrored": true,
+    "stress_tests": false
+  }
+}
