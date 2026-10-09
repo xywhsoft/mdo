@@ -1,0 +1,19 @@
+Browser tab: 46, Title: "墨斗", URL: "http://127.0.0.1:63181/#/schedules".
+0 AXWebArea 墨斗, URL: 127.0.0.1:63181/#/schedules
+	1 container 计划额度不足验收 · 执行历史, ID: schedule-history-dialog
+		2 container
+			3 heading 计划额度不足验收 · 执行历史, Value: 3, ID: schedule-history-title
+				4 text 计划额度不足验收 · 执行历史
+			5 button Description: 关闭执行历史, ID: schedule-history-close
+		6 text 2 条记录
+		7 container schedule-history-list
+			8 container
+				9 text 失败
+				10 text 2026年10月10日 04:35
+				11 text 任务 #1 · 运行 #1 今日模型额度已用完，或被尚未结束的请求预占。请查看账号用量；额度于北京时间 00:00 重置。
+			12 container
+				13 text 失败
+				14 text 2026年10月10日 04:23
+				15 text 任务 #1 · 运行 #1 Today's model token allowance is exhausted or reserved by unfinished requests. Check account usage; it resets at 00:00 Asia/Shanghai.
+
+The focused UI element is 5 button Description: 关闭执行历史, ID: schedule-history-close

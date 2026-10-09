@@ -1,0 +1,33 @@
+{
+  "passed": true,
+  "source_commit": "b9f42347aa095b97498580a2e3ed2445cbefd258",
+  "sha256": "6cc10d6f72391b237ea53a9505e53545de03f8cf2a80e80dc34c6149750a2361",
+  "bytes": 4559374,
+  "embedded_sources": {
+    "include/mdo/schedules.h": "cd8eb419300a8fe0b38d12621cc58c51b7ee9e97f82bfc173033d3ea80e76fef",
+    "src/schedules/manager.c": "b24f884e90db4ef85d4fb2ec5cb7c9775780789dc203125ae6dd1905f9953970",
+    "src/schedules/executor.c": "539351020d03d127b84852a5dd0d5b34e2d0e7ceb21ec361bb0b9725d12c36e8",
+    "src/api/schedules.c": "39f133286f9b5c2b5f7e9e16c36cd42e11231626f9c07b94688259c1fb142453",
+    "web/js/features/schedules/schedule-panel.js": "9387bd1717626b54075e48288e9ec9e6335a9e23fbf28b045a994ccda60f7bf9",
+    "web/js/utils/model-errors.js": "8c6574ed07d5029de2a559668fdab9da87c044109ddef1f797aa9759e830b43f",
+    "web/lang/en-US.json": "9591679669181bbef59d904bc1f056ed99df36bf9807318ed997b799eb99c01e",
+    "web/lang/ru-RU.json": "ee2e116859da7c1ec5a8d892dda90dd997a0353fa93165513a62fa28765dc04a",
+    "web/lang/zh-CN.json": "1e37119e69c32d7efce37c46488d907df7f80e4e7c37faa111eda35838f43573"
+  },
+  "frontend_pass": 981,
+  "contracts_pass": 124,
+  "native_metadata_boundaries": 8,
+  "model_requests": 3,
+  "deliberate_schedule_failures": 1,
+  "successful_scheduled_runs": 1,
+  "normal_chat_runs": 1,
+  "normal_chat_final_errors": 0,
+  "ui_languages": [
+    "zh-CN",
+    "en-US",
+    "ru-RU"
+  ],
+  "legacy_line_preserved": true,
+  "restart_verified": true,
+  "stress_or_high_load": false
+}

@@ -1,0 +1,19 @@
+Browser tab: 46, Title: "Mdo", URL: "http://127.0.0.1:63181/#/schedules".
+0 AXWebArea Mdo, URL: 127.0.0.1:63181/#/schedules
+	1 container 计划额度不足验收 · Run history, ID: schedule-history-dialog
+		2 container
+			3 heading 计划额度不足验收 · Run history, Value: 3, ID: schedule-history-title
+				4 text 计划额度不足验收 · Run history
+			5 button Description: Close run history, ID: schedule-history-close
+		6 text 2 records
+		7 container schedule-history-list
+			8 container
+				9 text Failed
+				10 text Oct 10, 2026, 4:35 AM
+				11 text Task #1 · Run #1 Today's model allowance is exhausted or reserved by unfinished requests. Check account usage; it resets at 00:00 Beijing time.
+			12 container
+				13 text Failed
+				14 text Oct 10, 2026, 4:23 AM
+				15 text Task #1 · Run #1 Today's model token allowance is exhausted or reserved by unfinished requests. Check account usage; it resets at 00:00 Asia/Shanghai.
+
+The focused UI element is 5 button Description: Close run history, ID: schedule-history-close

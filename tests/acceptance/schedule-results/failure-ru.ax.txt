@@ -1,0 +1,19 @@
+Browser tab: 46, Title: "Mdo", URL: "http://127.0.0.1:63181/#/schedules".
+0 AXWebArea Mdo, URL: 127.0.0.1:63181/#/schedules
+	1 container 计划额度不足验收 · История запусков, ID: schedule-history-dialog
+		2 container
+			3 heading 计划额度不足验收 · История запусков, Value: 3, ID: schedule-history-title
+				4 text 计划额度不足验收 · История запусков
+			5 button Description: Закрыть историю запусков, ID: schedule-history-close
+		6 text Записей: 2
+		7 container schedule-history-list
+			8 container
+				9 text Ошибка
+				10 text 10 окт. 2026 г., 04:35
+				11 text Задача №1 · Запуск №1 Дневной лимит модели исчерпан или зарезервирован незавершёнными запросами. Проверьте расход; лимит обновляется в 00:00 по пекинскому времени.
+			12 container
+				13 text Ошибка
+				14 text 10 окт. 2026 г., 04:23
+				15 text Задача №1 · Запуск №1 Today's model token allowance is exhausted or reserved by unfinished requests. Check account usage; it resets at 00:00 Asia/Shanghai.
+
+The focused UI element is 5 button Description: Закрыть историю запусков, ID: schedule-history-close

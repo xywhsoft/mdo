@@ -1,0 +1,10 @@
+[
+  {
+    "event": "stopped",
+    "pid": 25988
+  },
+  {
+    "event": "restarted",
+    "pid": 3196
+  }
+]

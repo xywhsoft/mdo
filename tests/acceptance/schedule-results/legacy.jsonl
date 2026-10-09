@@ -1,0 +1,1 @@
+{"schema_version":1,"task_id":1,"agent_run_id":1,"schedule_id":"qa-schedule-quota","scheduled_at_us":1791577421312444,"finished_at_us":1791577421499972,"result":-1,"text":"Today's model token allowance is exhausted or reserved by unfinished requests. Check account usage; it resets at 00:00 Asia/Shanghai."}
