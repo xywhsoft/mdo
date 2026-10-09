@@ -437,6 +437,7 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
     const controller = new AbortController();
     pendingWrite = controller;
     setActionFeedback("");
+    if (!listAction) setFeedback("");
     busy = true;
     render(schedulesStore.get());
     if (visible() && (deletion || listTarget))
@@ -465,7 +466,6 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
       const message = errorMessage(error);
       if (listAction) setActionFeedback(message, true, (deletion || listTarget)?.id);
       else setFeedback(message, true);
-      if (!listAction) toast(message, "error");
       if (active && error?.status === 412) await loadSchedules();
     } finally {
       if (pendingWrite === controller) pendingWrite = null;
