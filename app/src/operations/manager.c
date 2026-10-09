@@ -422,15 +422,9 @@ static bool MdoOperationStart(MdoOperationKind Kind, cstr Target,
     if ( Info == NULL || Info->Size < sizeof(*Info) ||
          g_MdoOperations.Lock == NULL ||
          (RequestedId != NULL && !MdoOperationRequestIdValid(RequestedId)) ) return false;
-    Job = (MdoOperationJob*)xrtCalloc(1u, sizeof(*Job));
-    if ( Job == NULL ) return false;
-    if ( !xrtMutexLock(g_MdoOperations.Lock) ) {
-        xrtFree(Job);
-        return false;
-    }
+    if ( !xrtMutexLock(g_MdoOperations.Lock) ) return false;
     if ( !g_MdoOperations.Initialized || g_MdoOperations.Stopping ) {
         (void)xrtMutexUnlock(g_MdoOperations.Lock);
-        xrtFree(Job);
         return false;
     }
     if ( RequestedId != NULL ) {
@@ -440,14 +434,25 @@ static bool MdoOperationStart(MdoOperationKind Kind, cstr Target,
                 strcmp(Entry->Info.Target, Target != NULL ? Target : "") == 0 &&
                 MdoOperationCopyInfo(Info, &Entry->Info);
             (void)xrtMutexUnlock(g_MdoOperations.Lock);
-            xrtFree(Job);
             return Copied;
+        }
+    }
+    if ( Kind == MDO_OPERATION_MCP_REFRESH ) {
+        MdoMcpServerStatus Status;
+        memset(&Status, 0, sizeof(Status)); Status.Size = sizeof(Status);
+        if ( !MdoMcpManagerGetStatus(Target, &Status) ) {
+            (void)xrtMutexUnlock(g_MdoOperations.Lock);
+            return false;
         }
     }
     if ( g_MdoOperations.NextSequence == UINT64_MAX ) {
         (void)xrtMutexUnlock(g_MdoOperations.Lock);
-        xrtFree(Job);
         MdoOperationError("Operation sequence is exhausted");
+        return false;
+    }
+    Job = (MdoOperationJob*)xrtCalloc(1u, sizeof(*Job));
+    if ( Job == NULL ) {
+        (void)xrtMutexUnlock(g_MdoOperations.Lock);
         return false;
     }
     Entry = MdoOperationSlotLocked();
@@ -508,12 +513,9 @@ bool MdoOperationStartMcpRefresh(cstr ServerId, MdoOperationInfo* Info)
 bool MdoOperationStartMcpRefreshIdentified(cstr ServerId, cstr Id,
     MdoOperationInfo* Info)
 {
-    MdoMcpServerStatus Status;
     if ( ServerId == NULL || ServerId[0] == '\0' ||
          strlen(ServerId) >= sizeof(((MdoOperationInfo*)0)->Target) )
         return false;
-    memset(&Status, 0, sizeof(Status)); Status.Size = sizeof(Status);
-    if ( !MdoMcpManagerGetStatus(ServerId, &Status) ) return false;
     return MdoOperationStart(MDO_OPERATION_MCP_REFRESH, ServerId, Id, Info);
 }
 

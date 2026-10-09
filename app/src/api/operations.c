@@ -132,14 +132,41 @@ static bool MdoApiOperationRequestId(MdoApiContext* Context,
     return Ok;
 }
 
+/* A browser may retry a connection before receiving response headers. Check
+ * the admitted identity before probing a runtime busy with that same job. */
+static bool MdoApiOperationExisting(MdoApiContext* Context, cstr Id,
+    MdoOperationKind Kind, cstr Target, bool* Found)
+{
+    MdoOperationInfo Info;
+    xvalue* Data = NULL;
+    *Found = false;
+    if ( Id[0] == '\0' ) return true;
+    memset(&Info, 0, sizeof(Info)); Info.Size = sizeof(Info);
+    if ( !MdoOperationGet(Id, &Info) ) return true;
+    *Found = true;
+    if ( Info.Kind != Kind || strcmp(Info.Target, Target) != 0 )
+        return MdoApiReplyError(Context, 409u, "operation_id_conflict",
+            "The operation ID belongs to a different request", NULL);
+    if ( !MdoApiOperationValue(&Info, &Data) )
+        return MdoApiReplyError(Context, 500u, "operation_result_unavailable",
+            "The admitted operation result is unavailable", NULL);
+    return MdoApiReplySuccessTake(Context, 202u, Data, NULL);
+}
+
 bool MdoApiModulesReloadRoute(MdoApiContext* Context)
 {
     char RequestedId[MDO_OPERATION_ID_CAPACITY];
     MdoOperationInfo Info;
     xvalue* Data = NULL;
+    bool Existing;
     memset(&Info, 0, sizeof(Info));
     Info.Size = sizeof(Info);
     if ( !MdoApiOperationRequestId(Context, RequestedId) ) return false;
+    {
+        bool Result = MdoApiOperationExisting(Context, RequestedId,
+            MDO_OPERATION_MODULE_RELOAD, "", &Existing);
+        if ( Existing || !Result ) return Result;
+    }
     if ( !MdoOperationStartModuleReloadIdentified(RequestedId[0] != '\0' ? RequestedId : NULL, &Info) ) {
         return MdoApiReplyError(Context, 503u, "operation_unavailable",
             "The module reload operation could not be queued", NULL);
@@ -353,10 +380,17 @@ bool MdoApiMcpRefreshRoute(MdoApiContext* Context)
     MdoMcpServerStatus Status;
     MdoOperationInfo Info;
     xvalue* Data = NULL;
+    bool Existing;
 
     if ( !MdoApiMcpServerId(Context, ServerId) )
         return MdoApiReplyError(Context, 400u, "invalid_mcp_server_id",
             "The MCP server ID is invalid", NULL);
+    if ( !MdoApiOperationRequestId(Context, RequestedId) ) return false;
+    {
+        bool Result = MdoApiOperationExisting(Context, RequestedId,
+            MDO_OPERATION_MCP_REFRESH, ServerId, &Existing);
+        if ( Existing || !Result ) return Result;
+    }
     memset(&Status, 0, sizeof(Status)); Status.Size = sizeof(Status);
     if ( !MdoMcpManagerGetStatus(ServerId, &Status) )
         return MdoApiReplyError(Context, 404u, "mcp_server_not_found",
@@ -364,7 +398,6 @@ bool MdoApiMcpRefreshRoute(MdoApiContext* Context)
     if ( !Status.Enabled )
         return MdoApiReplyError(Context, 409u, "mcp_server_disabled",
             "Enable the MCP server before refreshing it", NULL);
-    if ( !MdoApiOperationRequestId(Context, RequestedId) ) return false;
     memset(&Info, 0, sizeof(Info)); Info.Size = sizeof(Info);
     if ( !MdoOperationStartMcpRefreshIdentified(ServerId,
             RequestedId[0] != '\0' ? RequestedId : NULL, &Info) )

@@ -2622,6 +2622,9 @@ def run_probe(host: Path) -> None:
                 status, _, body = request(port, "POST", "/api/v1/modules/reload",
                     body=identified_body, headers={"Content-Type": "application/json"})
                 assert status == 202 and json.loads(body)["data"] == identified, (status, body)
+                status, _, body = request(port, "POST", "/api/v1/mcp/api-mock/refresh",
+                    body=identified_body, headers={"Content-Type": "application/json"})
+                assert status == 409 and json.loads(body)["error"]["code"] == "operation_id_conflict", (status, body)
                 count_before = json.loads(request(port, "GET", "/api/v1/operations")[2])["data"]["total"]
                 for bad in ({}, {"operation_id": requested_id, "extra": True}, [],
                             {"operation_id": "op-c-" + "A" * 32}, {"operation_id": "op-c-short"},
