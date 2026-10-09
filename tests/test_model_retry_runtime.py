@@ -97,6 +97,23 @@ void ServiceInit(XS_HostInfo* Host) {
         if (O.Cancel) xrtCancelDestroy(O.Cancel);
     }
     xllmClientDestroy(Client); MdoModelCatalogRelease(Catalog);
+    const char* LocalKinds[]={"profile_model_missing", "profile_protocol_unsupported",
+        "profile_reasoning_unsupported", "profile_output_limit", "profile_context_limit",
+        "profile_credential_unavailable", "profile_proxy_unavailable", "profile_ca_unavailable",
+        "profile_endpoint_invalid"};
+    for (size_t i=0;i<sizeof(LocalKinds)/sizeof(LocalKinds[0]);++i) {
+        MdoModelProfileErrorInit(&Error, LocalKinds[i], "private diagnostic");
+        printf("local_kind=%s safe=%u retry=%u\n", MdoModelErrorKind(&Error),
+            strcmp(MdoModelErrorMessage(&Error), "private diagnostic") != 0,
+            MdoModelsRetryable(&Error));
+    }
+    MdoModelProfileErrorInit(&Error, "profile_credential_unavailable", "private diagnostic");
+    Error.eCode=XLLM_ERROR_AUTH; Error.iHttpStatus=401;
+    printf("upstream_kind=%s\n", MdoModelErrorKind(&Error));
+    Error.iHttpStatus=0; Error.eCode=XLLM_ERROR_OUT_OF_MEMORY;
+    printf("resource_kind=%s\n", MdoModelErrorKind(&Error));
+    Error.eCode=XLLM_ERROR_CANCELLED;
+    printf("cancelled_kind=%s\n", MdoModelErrorKind(&Error));
     MdoModelManagerUnit(); MdoConfigUnit(); MdoHomeUnit();
     printf("probe_done=1\n");
 }
@@ -261,6 +278,14 @@ def main():
             assert 'daily_message=accurate' in output, output
             assert 'response_attempts_mismatch' not in output, output
             assert 'request_mutated' not in output, output
+            for kind in ('profile_model_missing', 'profile_protocol_unsupported',
+                         'profile_reasoning_unsupported', 'profile_output_limit', 'profile_context_limit',
+                         'profile_credential_unavailable', 'profile_proxy_unavailable',
+                         'profile_ca_unavailable', 'profile_endpoint_invalid'):
+                assert f'local_kind={kind} safe=1 retry=0' in output, output
+            assert 'upstream_kind=authentication_failed' in output, output
+            assert 'resource_kind=unknown' in output, output
+            assert 'cancelled_kind=cancelled' in output, output
             after = next(line for line in output.splitlines() if line.startswith('case=retry-after '))
             assert int(after.split('ms=')[1]) >= 80, output
             cancelled = next(line for line in output.splitlines() if line.startswith('case=cancel '))

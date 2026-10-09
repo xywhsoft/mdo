@@ -109,6 +109,10 @@ xllm_result MdoModelCompleteRestartable(xllm_client*, const xllm_request*,
     const xllm_stream_callbacks*, xllm_response**, xllm_error*);
 const char* MdoModelErrorKind(const xllm_error*);
 const char* MdoModelErrorMessage(const xllm_error*);
+/* Local profile validation keeps a stable kind without parsing diagnostic
+ * prose. The diagnostic is private; HTTP/provider failures never use this tag. */
+void MdoModelProfileErrorInit(xllm_error*, const char* Kind,
+    const char* Diagnostic);
 
 bool MdoModelManagerInit(void);
 void MdoModelManagerUnit(void);

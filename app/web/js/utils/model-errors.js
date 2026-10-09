@@ -8,6 +8,9 @@ const kinds = new Set([
   "timeout", "network", "service_unavailable", "invalid_response", "invalid_request",
   "output_limit", "context_compaction",
   "service_quota_exceeded", "service_configuration", "request_configuration",
+  "profile_model_missing", "profile_protocol_unsupported", "profile_reasoning_unsupported",
+  "profile_output_limit", "profile_context_limit", "profile_credential_unavailable",
+  "profile_proxy_unavailable", "profile_ca_unavailable", "profile_endpoint_invalid",
 ]);
 
 // Classifications come from the server; unknown/older records retain their
@@ -27,6 +30,11 @@ const titles = {
   context_compaction: "compaction",
   model_changed: "configuration", model_unavailable: "configuration",
   invalid_request: "configuration", request_configuration: "configuration",
+  profile_model_missing: "configuration", profile_protocol_unsupported: "configuration",
+  profile_reasoning_unsupported: "configuration", profile_output_limit: "configuration",
+  profile_context_limit: "configuration", profile_credential_unavailable: "configuration",
+  profile_proxy_unavailable: "configuration", profile_ca_unavailable: "configuration",
+  profile_endpoint_invalid: "configuration",
 };
 
 export function modelErrorTitle(kind, fallback) {

@@ -83,6 +83,9 @@ bool MdoApiReplySuccessTakeRevision(MdoApiContext* pContext, uint16 Status,
     xvalue* pData, uint64 Revision);
 bool MdoApiReplyError(MdoApiContext* pContext, uint16 Status, cstr Code,
     cstr Message, cstr Allow);
+struct xllm_error;
+bool MdoApiReplyModelProfileFailure(MdoApiContext* Context,
+    const struct xllm_error* Error, cstr UnavailableCode);
 /* Takes optional structured facts even on failure (e.g. committed deletion
  * with pending cleanup). Clients must not infer rollback from HTTP status. */
 bool MdoApiReplyErrorDetailsTake(MdoApiContext* pContext, uint16 Status,

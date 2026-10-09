@@ -112,8 +112,10 @@ void ServiceInit(XS_HostInfo* host)
             ok ? (int)profile.eProvider : -1);
     }
     memset(&error, 0, sizeof(error));
-    printf("profile_bad=%d\n", MdoModelCatalogProfile(first, model.Id,
-        (MdoModelProtocol)99, &profile, &error) ? 1 : 0);
+    bool profile_bad = MdoModelCatalogProfile(first, model.Id,
+        (MdoModelProtocol)99, &profile, &error);
+    printf("profile_bad=%d kind=%s\n", profile_bad ? 1 : 0,
+        MdoModelErrorKind(&error));
     MdoModelClientOptionsInit(&client_options);
     for ( protocol = MDO_MODEL_PROTOCOL_OPENAI_CHAT_COMPLETIONS;
           protocol <= MDO_MODEL_PROTOCOL_ANTHROPIC_MESSAGES; ++protocol ) {
@@ -124,11 +126,12 @@ void ServiceInit(XS_HostInfo* host)
         memset(&error, 0, sizeof(error));
         client = MdoModelClientCreate(first, &client_options, &client_info,
             &error);
-        printf("client_%u=%d generation=%llu output=%u error=%s\n",
+        printf("client_%u=%d generation=%llu output=%u error=%s kind=%s\n",
             protocol, client != NULL ? 1 : 0,
             (unsigned long long)client_info.ModelGeneration,
             (unsigned)client_info.MaxOutputTokens,
-            error.sMessage[0] != '\0' ? error.sMessage : "none");
+            error.sMessage[0] != '\0' ? error.sMessage : "none",
+            MdoModelErrorKind(&error));
         if ( client != NULL ) xllmClientDestroy(client);
     }
     client_options.Protocol = MDO_MODEL_PROTOCOL_OPENAI_RESPONSES;
@@ -137,7 +140,8 @@ void ServiceInit(XS_HostInfo* host)
     {
         xllm_client* client = MdoModelClientCreate(first, &client_options,
             NULL, &error);
-        printf("client_bad_reasoning=%d\n", client != NULL ? 1 : 0);
+        printf("client_bad_reasoning=%d kind=%s\n", client != NULL ? 1 : 0,
+            MdoModelErrorKind(&error));
         if ( client != NULL ) xllmClientDestroy(client);
     }
     client_options.ReasoningEffort = NULL;
@@ -146,7 +150,8 @@ void ServiceInit(XS_HostInfo* host)
     {
         xllm_client* client = MdoModelClientCreate(first, &client_options,
             NULL, &error);
-        printf("client_bad_output=%d\n", client != NULL ? 1 : 0);
+        printf("client_bad_output=%d kind=%s\n", client != NULL ? 1 : 0,
+            MdoModelErrorKind(&error));
         if ( client != NULL ) xllmClientDestroy(client);
     }
     printf("reload=%d\n", MdoModelManagerReload() ? 1 : 0);
@@ -298,9 +303,11 @@ def main() -> int:
         (valid_home / "certs/test.pem").write_text("invalid PEM", encoding="utf-8")
         invalid = run_probe(host, site, valid_home)
         assert "client_1=0" in invalid and "no valid PEM certificates" in invalid, invalid
+        assert "kind=profile_ca_unavailable" in invalid, invalid
         (valid_home / "certs/test.pem").unlink()
         absent = run_probe(host, site, valid_home)
         assert "client_1=0" in absent and "unavailable in the portable Home" in absent, absent
+        assert "kind=profile_ca_unavailable" in absent, absent
         for proxy_kind in ("http-connect", "socks5"):
             proxy_home = base / proxy_kind
             (proxy_home / "config").mkdir(parents=True)
@@ -324,6 +331,12 @@ def main() -> int:
             })
             assert "client_1=0" in missing_password, missing_password
             assert "model proxy password reference is unavailable" in missing_password, missing_password
+            assert "kind=profile_proxy_unavailable" in missing_password, missing_password
+        invalid_endpoint = run_probe(host, site, base / "invalid-endpoint", {
+            "MDO_ORNITH_CHAT_COMPLETIONS_URL": "https://example.invalid/\n",
+            "MDO_ORNITH_API_KEY": "bounded-runtime-probe-key",
+        })
+        assert "client_1=0" in invalid_endpoint and "kind=profile_endpoint_invalid" in invalid_endpoint, invalid_endpoint
         output = run_probe(host, site, base / "state", {
             "MDO_ORNITH_CHAT_COMPLETIONS_URL": "https://example.invalid/v1",
             "MDO_ORNITH_RESPONSES_URL": "https://example.invalid/v1",
@@ -340,12 +353,12 @@ def main() -> int:
         assert "profile_1=1 provider=0" in output, output
         assert "profile_2=1 provider=2" in output, output
         assert "profile_3=1 provider=3" in output, output
-        assert "profile_bad=0" in output, output
+        assert "profile_bad=0 kind=profile_protocol_unsupported" in output, output
         assert "client_1=1 generation=1 output=16384 error=none" in output, output
         assert "client_2=1 generation=1 output=16384 error=none" in output, output
         assert "client_3=1 generation=1 output=16384 error=none" in output, output
-        assert "client_bad_reasoning=0" in output, output
-        assert "client_bad_output=0" in output, output
+        assert "client_bad_reasoning=0 kind=profile_reasoning_unsupported" in output, output
+        assert "client_bad_output=0 kind=profile_output_limit" in output, output
         assert "reload=1" in output, output
         assert "catalog_two=2 old_default=1 new_default=1" in output, output
         assert "probe_done=1" in output, output
@@ -378,10 +391,12 @@ def main() -> int:
         key.unlink()
         unavailable = run_probe(host, site, base / "without-key")
         assert "client_1=0" in unavailable and "credential is unavailable" in unavailable, unavailable
+        assert "kind=profile_credential_unavailable" in unavailable, unavailable
         assert not (base / "without-key").exists()
         key.write_bytes(b"bad\x00credential")
         invalid = run_probe(host, site, base / "invalid-key")
         assert "client_1=0" in invalid and "bad\x00credential" not in invalid, invalid
+        assert "kind=profile_credential_unavailable" in invalid, invalid
         assert not (base / "invalid-key").exists()
     print("model runtime probe: PASS")
     return 0

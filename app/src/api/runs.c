@@ -249,14 +249,9 @@ static bool MdoApiRunStartFailure(MdoApiContext* Context,
     if ( Error != NULL && Error->eCode == XWORK_ERROR_IO )
         return MdoApiReplyError(Context, 500u, "session_read_failed",
             "The session could not be opened", NULL);
-    if ( Error != NULL && Error->eCode == XWORK_ERROR_MODEL &&
-         (Error->tModelError.eCode == XLLM_ERROR_AUTH ||
-          Error->tModelError.eCode == XLLM_ERROR_OUT_OF_MEMORY) )
-        return MdoApiReplyError(Context, 503u, "run_service_unavailable",
-            "The session model service is not configured", NULL);
     if ( Error != NULL && Error->eCode == XWORK_ERROR_MODEL )
-        return MdoApiReplyError(Context, 422u, "session_profile_invalid",
-            "The session model profile is invalid", NULL);
+        return MdoApiReplyModelProfileFailure(Context, &Error->tModelError,
+            "run_service_unavailable");
     return MdoApiReplyError(Context, 503u, "run_service_unavailable",
         "The interactive run service is unavailable", NULL);
 }

@@ -829,7 +829,7 @@ xx509store* MdoModelsLoadCaStore(cstr Path, xllm_error* Error)
     File = MdoHomeOpenRead(Path);
     if ( File == NULL ) {
         xrtClearError();
-        MdoModelsProfileError(Error,
+        MdoModelProfileErrorInit(Error, "profile_ca_unavailable",
             "custom CA file is unavailable in the portable Home");
         return NULL;
     }
@@ -837,7 +837,7 @@ xx509store* MdoModelsLoadCaStore(cstr Path, xllm_error* Error)
     if ( !xrtFileStat(File, &Info) ||
          (Info.Available & XFILE_INFO_SIZE) == 0u ||
          Info.Size == 0u || Info.Size > 1024u * 1024u ) {
-        MdoModelsProfileError(Error,
+        MdoModelProfileErrorInit(Error, "profile_ca_unavailable",
             "custom CA file must be a nonempty PEM file below 1 MiB");
         goto done;
     }
@@ -848,12 +848,12 @@ xx509store* MdoModelsLoadCaStore(cstr Path, xllm_error* Error)
         goto done;
     }
     if ( !xrtReadFull(File, Pem, (size_t)Info.Size, NULL) ) {
-        MdoModelsProfileError(Error, "cannot read custom CA file");
+        MdoModelProfileErrorInit(Error, "profile_ca_unavailable", "cannot read custom CA file");
         goto done;
     }
     Pem[Info.Size] = '\0';
     if ( memchr(Pem, '\0', (size_t)Info.Size) != NULL ) {
-        MdoModelsProfileError(Error,
+        MdoModelProfileErrorInit(Error, "profile_ca_unavailable",
             "custom CA file contains no valid PEM certificates");
         goto done;
     }
@@ -865,7 +865,7 @@ xx509store* MdoModelsLoadCaStore(cstr Path, xllm_error* Error)
     }
     if ( !xrtX509StoreAddPem(Validation, Pem, (size_t)Info.Size, &Added) ||
          Added == 0u ) {
-        MdoModelsProfileError(Error,
+        MdoModelProfileErrorInit(Error, "profile_ca_unavailable",
             "custom CA file contains no valid PEM certificates");
         goto done;
     }
@@ -878,7 +878,7 @@ xx509store* MdoModelsLoadCaStore(cstr Path, xllm_error* Error)
     }
     if ( Store == NULL ||
          !xrtX509StoreAddPem(Store, Pem, (size_t)Info.Size, NULL) ) {
-        MdoModelsProfileError(Error,
+        MdoModelProfileErrorInit(Error, "profile_ca_unavailable",
             "cannot combine system and custom CA certificates");
         goto done;
     }
@@ -888,7 +888,7 @@ done:
     xrtX509StoreFree(Validation);
     if ( !xrtClose(File) ) {
         Ok = false;
-        MdoModelsProfileError(Error, "cannot close custom CA file");
+        MdoModelProfileErrorInit(Error, "profile_ca_unavailable", "cannot close custom CA file");
     }
     xrtFree(Pem);
     if ( !Ok ) { xrtClearError(); xrtX509StoreFree(Store); Store = NULL; }
@@ -912,13 +912,13 @@ bool MdoModelCatalogProfile(const MdoModelCatalog* pCatalog,
         pModel = MdoModelsLookup(pCatalog, ModelId);
     }
     if ( pModel == NULL ) {
-        MdoModelsProfileError(pError, "model was not found");
+        MdoModelProfileErrorInit(pError, "profile_model_missing", "model was not found");
         return false;
     }
     if ( Protocol == 0 ) Protocol = pModel->DefaultProtocol;
     Flag = MdoModelsProtocolFlag(Protocol);
     if ( Flag == 0u || (pModel->Protocols & Flag) == 0u ) {
-        MdoModelsProfileError(pError, "model does not support the selected protocol");
+        MdoModelProfileErrorInit(pError, "profile_protocol_unsupported", "model does not support the selected protocol");
         return false;
     }
     xllmModelProfileInit(pProfile);
@@ -994,12 +994,12 @@ static char* MdoModelsResolveEndpoint(cstr Endpoint,
     char* Result = NULL;
     size_t Length;
     if ( Endpoint == NULL || !MdoModelsEndpointIndex(Protocol, &Index) ) {
-        MdoModelsProfileError(pError, "model endpoint is unavailable");
+        MdoModelProfileErrorInit(pError, "profile_endpoint_invalid", "model endpoint is unavailable");
         return NULL;
     }
     if ( strncmp(Endpoint, "builtin:", 8u) == 0 ) {
         if ( strcmp(Endpoint, BuiltinEndpoints[Index]) != 0 ) {
-            MdoModelsProfileError(pError, "built-in model endpoint is invalid");
+            MdoModelProfileErrorInit(pError, "profile_endpoint_invalid", "built-in model endpoint is invalid");
             return NULL;
         }
         if ( !xrtEnvLookup(EnvironmentNames[Index], &Result) ||
@@ -1026,7 +1026,7 @@ static char* MdoModelsResolveEndpoint(cstr Endpoint,
     if ( Length == 0u || Length > 2048u || strchr(Result, '\r') != NULL ||
          strchr(Result, '\n') != NULL ) {
         xrtFree(Result);
-        MdoModelsProfileError(pError, "model endpoint is invalid");
+        MdoModelProfileErrorInit(pError, "profile_endpoint_invalid", "model endpoint is invalid");
         return NULL;
     }
     return Result;
@@ -1061,7 +1061,7 @@ done:
     if ( !Ok ) {
         if ( Secret != NULL ) { xrtSecureZero(Secret, (size_t)Info.Size); xrtFree(Secret); }
         xrtClearError();
-        MdoModelsProfileError(Error, "Built-in model credential is unavailable; configure MDO_ORNITH_API_KEY or the portable Home key file");
+        MdoModelProfileErrorInit(Error, "profile_credential_unavailable", "Built-in model credential is unavailable; configure MDO_ORNITH_API_KEY or the portable Home key file");
         if ( Error != NULL ) Error->eCode = XLLM_ERROR_AUTH;
         Secret = NULL;
     }
@@ -1095,7 +1095,7 @@ static char* MdoModelsResolveCredential(const MdoProviderEntry* pProvider,
             64u * 1024u, &Secret) ) return Secret;
     pRuntimeError = xrtGetError();
     Message = pRuntimeError != NULL ? xrtErrorMessage(pRuntimeError) : NULL;
-    MdoModelsProfileError(pError, Message != NULL ? Message :
+    MdoModelProfileErrorInit(pError, "profile_credential_unavailable", Message != NULL ? Message :
         "model credential is unavailable");
     if ( pError != NULL ) pError->eCode = XLLM_ERROR_AUTH;
     xrtClearError();
@@ -1146,7 +1146,7 @@ static xllm_client* MdoModelClientCreateAuth(const MdoModelCatalog* pCatalog,
         pModel = MdoModelsLookup(pCatalog, pOptions->ModelId);
     }
     if ( pModel == NULL ) {
-        MdoModelsProfileError(pError, "model was not found");
+        MdoModelProfileErrorInit(pError, "profile_model_missing", "model was not found");
         return NULL;
     }
     pProvider = NULL;
@@ -1166,7 +1166,7 @@ static xllm_client* MdoModelClientCreateAuth(const MdoModelCatalog* pCatalog,
          (pModel->Protocols & ProtocolFlag) == 0u ||
          (pProvider->Protocols & ProtocolFlag) == 0u ||
          !MdoModelsEndpointIndex(Protocol, &EndpointIndex) ) {
-        MdoModelsProfileError(pError,
+        MdoModelProfileErrorInit(pError, "profile_protocol_unsupported",
             "model or provider does not support the selected protocol");
         return NULL;
     }
@@ -1174,7 +1174,7 @@ static xllm_client* MdoModelClientCreateAuth(const MdoModelCatalog* pCatalog,
         pOptions->ReasoningEffort[0] != '\0' ? pOptions->ReasoningEffort :
         pModel->DefaultReasoningEffort;
     if ( !MdoModelsReasoningSupported(pModel, ReasoningEffort) ) {
-        MdoModelsProfileError(pError,
+        MdoModelProfileErrorInit(pError, "profile_reasoning_unsupported",
             "model does not support the selected reasoning effort");
         return NULL;
     }
@@ -1182,7 +1182,7 @@ static xllm_client* MdoModelClientCreateAuth(const MdoModelCatalog* pCatalog,
         pOptions->MaxOutputTokens : pModel->MaxOutputTokens;
     if ( MaxOutputTokens == 0u ||
          MaxOutputTokens > pModel->MaxOutputTokens ) {
-        MdoModelsProfileError(pError,
+        MdoModelProfileErrorInit(pError, "profile_output_limit",
             "model output override exceeds the profile limit");
         return NULL;
     }
@@ -1209,7 +1209,7 @@ static xllm_client* MdoModelClientCreateAuth(const MdoModelCatalog* pCatalog,
          Transport.ProxySecretRef[0] != '\0' &&
          !MdoSecretResolve(xrtStrView(Transport.ProxySecretRef), 4096u,
             &ProxyPassword) ) {
-        MdoModelsProfileError(pError,
+        MdoModelProfileErrorInit(pError, "profile_proxy_unavailable",
             "model proxy password reference is unavailable");
         if ( pError != NULL ) pError->eCode = XLLM_ERROR_AUTH;
         xrtClearError();

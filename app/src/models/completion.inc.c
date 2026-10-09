@@ -16,6 +16,46 @@ static bool MdoModelsCode(const xllm_error* Error, const char* Code)
         strcmp(Error->sProviderType, Code) == 0);
 }
 
+static const struct {
+    const char* Kind;
+    const char* Message;
+} MdoModelsProfileErrors[] = {
+    { "profile_model_missing", "The selected model is no longer in the model list. Refresh the list or choose another model." },
+    { "profile_protocol_unsupported", "The selected model does not support this API protocol. Check the model protocol or choose another model." },
+    { "profile_reasoning_unsupported", "The selected model does not support this reasoning level. Choose a supported level." },
+    { "profile_output_limit", "The configured output limit exceeds this model's limit. Lower the output limit in the Agent or model settings." },
+    { "profile_context_limit", "The Agent's context or input limit exceeds this model's limit. Adjust the Agent limits or choose a model with a larger context window." },
+    { "profile_credential_unavailable", "The configured model credential is unavailable locally. Check the provider key or its secret reference in model settings." },
+    { "profile_proxy_unavailable", "The configured proxy credential is unavailable locally. Check the proxy settings and its secret reference." },
+    { "profile_ca_unavailable", "The configured CA certificate could not be loaded. Check the certificate file in network settings." },
+    { "profile_endpoint_invalid", "The configured model endpoint is invalid. Check the provider API address in model settings." },
+};
+
+void MdoModelProfileErrorInit(xllm_error* Error, const char* Kind,
+    const char* Diagnostic)
+{
+    if (!Error) return;
+    xllmErrorInit(Error);
+    Error->eCode = XLLM_ERROR_INVALID_ARGUMENT;
+    snprintf(Error->sProviderCode, sizeof(Error->sProviderCode), "%s", Kind ? Kind : "");
+    snprintf(Error->sMessage, sizeof(Error->sMessage), "%s", Diagnostic ? Diagnostic : "");
+}
+
+static size_t MdoModelsProfileErrorIndex(const xllm_error* Error)
+{
+    size_t i;
+    /* xwork's error events retain the code, HTTP status and model error enum.
+     * Reserved local codes must survive that replay without an ABI change;
+     * actual HTTP responses and resource/cancellation failures keep theirs. */
+    if (Error && Error->iHttpStatus == 0 &&
+        (Error->eCode == XLLM_ERROR_INVALID_ARGUMENT || Error->eCode == XLLM_ERROR_AUTH))
+        for (i = 0u; i < sizeof(MdoModelsProfileErrors) /
+                sizeof(MdoModelsProfileErrors[0]); ++i)
+            if (!strcmp(Error->sProviderCode, MdoModelsProfileErrors[i].Kind))
+                return i;
+    return SIZE_MAX;
+}
+
 /* Stable product classifications; provider prose is not a user-facing API.
  * Specific business codes take precedence over ambiguous HTTP statuses. */
 const char* MdoModelErrorKind(const xllm_error* Error)
@@ -25,6 +65,8 @@ const char* MdoModelErrorKind(const xllm_error* Error)
     if (Error->eCode == XLLM_ERROR_CANCELLED) return "cancelled";
     if (Error->eCode == XLLM_ERROR_TIMEOUT) return "timeout";
     if (Error->eCode == XLLM_ERROR_OUTPUT_LIMIT) return "output_limit";
+    size_t Profile = MdoModelsProfileErrorIndex(Error);
+    if (Profile != SIZE_MAX) return MdoModelsProfileErrors[Profile].Kind;
     if (MdoModelsCode(Error, "upstream_quota_exceeded")) return "service_quota_exceeded";
     if (MdoModelsCode(Error, "upstream_configuration_error")) return "service_configuration";
     if (MdoModelsCode(Error, "daily_token_limit")) return "daily_token_limit";
@@ -69,6 +111,9 @@ const char* MdoModelErrorKind(const xllm_error* Error)
 const char* MdoModelErrorMessage(const xllm_error* Error)
 {
     const char* Kind = MdoModelErrorKind(Error);
+    size_t Profile = MdoModelsProfileErrorIndex(Error);
+    if (Profile != SIZE_MAX && !strcmp(Kind, MdoModelsProfileErrors[Profile].Kind))
+        return MdoModelsProfileErrors[Profile].Message;
     if (!strcmp(Kind, "daily_token_limit")) return
         "Today's model token allowance is exhausted or reserved by unfinished requests. Check account usage; it resets at 00:00 Asia/Shanghai.";
     if (!strcmp(Kind, "insufficient_balance")) return

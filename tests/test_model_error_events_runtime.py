@@ -37,6 +37,17 @@ void ServiceInit(XS_HostInfo* Host) {
     Json=xrtJsonStringify(Root,false,&Size);
     printf("missing_error_metadata_rejected=%u\n",!MdoEventsParse(Bridge.ProjectId,Bridge.SessionId,xrtStrViewN(Json,Size),&Parsed));
     MdoEventsOwnedUnit(&Parsed); xrtFree(Json); xrtValueRelease(Root);
+    Event.eModelErrorCode=XLLM_ERROR_AUTH; Event.uHttpStatus=0u;
+    Event.sProviderCode="profile_credential_unavailable";
+    Json=MdoEventsRecord(&Bridge,3,&Event,"",0,&Size);
+    Good=MdoEventsParse(Bridge.ProjectId,Bridge.SessionId,xrtStrViewN(Json,Size),&Parsed);
+    printf("local_profile=%u kind=%s\n",Good,Parsed.Info.ModelErrorKind);
+    MdoEventsOwnedUnit(&Parsed); xrtFree(Json);
+    Event.uHttpStatus=401u;
+    Json=MdoEventsRecord(&Bridge,3,&Event,"",0,&Size);
+    Good=MdoEventsParse(Bridge.ProjectId,Bridge.SessionId,xrtStrViewN(Json,Size),&Parsed);
+    printf("upstream_profile_code=%u kind=%s\n",Good,Parsed.Info.ModelErrorKind);
+    MdoEventsOwnedUnit(&Parsed); xrtFree(Json);
     Event.eKind=XWORK_EVENT_MODEL_START; Event.eModelErrorCode=XLLM_ERROR_NONE;
     Json=MdoEventsRecord(&Bridge,2,&Event,"",0,&Size);
     Good=MdoEventsParse(Bridge.ProjectId,Bridge.SessionId,xrtStrViewN(Json,Size),&Parsed);
@@ -102,6 +113,8 @@ def main():
         (site / 'probe.c').write_text(PROBE, encoding='utf-8')
         output = run_probe(host, site, base / 'home')
         for expected in ('current=1 schema=6 kind=daily_token_limit status=429 attempts=1',
+                         'local_profile=1 kind=profile_credential_unavailable',
+                         'upstream_profile_code=1 kind=authentication_failed',
                          'legacy=1 schema=5 empty_kind=1',
                          'missing_error_metadata_rejected=1', 'ordinary=1 empty_kind=1',
                          'child_isolation=1', 'unrelated_run=1',

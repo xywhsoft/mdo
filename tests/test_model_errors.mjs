@@ -33,6 +33,17 @@ test("final model errors use the UI language and preserve unknown explanations",
       assert.equal(localTimeline.text, localConfiguration);
       assert.equal(localTimeline.role, locale === "zh-CN" ? "模型配置不可用" :
         locale === "ru-RU" ? "Настройки модели недоступны" : "Model settings unavailable");
+      for (const kind of ["profile_model_missing", "profile_protocol_unsupported",
+        "profile_reasoning_unsupported", "profile_output_limit", "profile_context_limit",
+        "profile_credential_unavailable", "profile_proxy_unavailable", "profile_ca_unavailable",
+        "profile_endpoint_invalid"]) {
+        const explanation = errorMessage({ code: `model_${kind}`, message: "private diagnostic" });
+        assert.notEqual(explanation, "private diagnostic");
+        const final = eventsToTimeline([{ kind: "error", event_id: 30, run_id: kind,
+          model_error_kind: kind, model_http_status: 0, text: "private diagnostic" }])[0];
+        assert.equal(final.text, explanation);
+        assert.equal(final.role, localTimeline.role);
+      }
       const limit = errorMessage({ code: "model_output_limit", message: "raw" });
       assert.notEqual(limit, "raw");
       assert.match(limit, locale === "zh-CN" ? /输出上限/ :

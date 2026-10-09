@@ -352,14 +352,11 @@ static bool MdoApiSessionActiveFailure(MdoApiContext* Context,
           Error->eCode == XWORK_ERROR_LIMIT) )
         return MdoApiReplyError(Context, 409u, "session_state_conflict",
             "The session must be active and idle for this operation", NULL);
-    if ( Error != NULL && Error->eCode == XWORK_ERROR_MODEL &&
-         Error->tModelError.eCode != XLLM_ERROR_AUTH &&
-         Error->tModelError.eCode != XLLM_ERROR_OUT_OF_MEMORY )
-        return MdoApiReplyError(Context, 422u, "session_profile_invalid",
-            "The session model profile is invalid", NULL);
+    if ( Error != NULL && Error->eCode == XWORK_ERROR_MODEL )
+        return MdoApiReplyModelProfileFailure(Context, &Error->tModelError,
+            "session_service_unavailable");
     if ( Error != NULL &&
-         (Error->eCode == XWORK_ERROR_OUT_OF_MEMORY ||
-          Error->eCode == XWORK_ERROR_MODEL) )
+         Error->eCode == XWORK_ERROR_OUT_OF_MEMORY )
         return MdoApiReplyError(Context, 503u,
             "session_service_unavailable",
             "The session service is not ready for this operation", NULL);
@@ -450,18 +447,17 @@ static bool MdoApiSessionCreateFailure(MdoApiContext* Context,
     if ( Error != NULL && Error->eCode == XWORK_ERROR_IO )
         return MdoApiReplyError(Context, 500u, "session_persistence_failed",
             "The session could not be persisted", NULL);
+    if ( Error != NULL && Error->eCode == XWORK_ERROR_MODEL )
+        return MdoApiReplyModelProfileFailure(Context, &Error->tModelError,
+            "session_service_unavailable");
     if ( Error != NULL &&
          (Error->eCode == XWORK_ERROR_OUT_OF_MEMORY ||
-          Error->eCode == XWORK_ERROR_CONTEXT ||
-          (Error->eCode == XWORK_ERROR_MODEL &&
-           (Error->tModelError.eCode == XLLM_ERROR_AUTH ||
-            Error->tModelError.eCode == XLLM_ERROR_OUT_OF_MEMORY))) ) {
+          Error->eCode == XWORK_ERROR_CONTEXT) ) {
         return MdoApiReplyError(Context, 503u, "session_service_unavailable",
             "The session service is not ready for this request", NULL);
     }
     if ( Error != NULL &&
          (Error->eCode == XWORK_ERROR_INVALID_ARGUMENT ||
-          Error->eCode == XWORK_ERROR_MODEL ||
           Error->eCode == XWORK_ERROR_POLICY ||
           Error->eCode == XWORK_ERROR_LIMIT) ) {
         return MdoApiReplyError(Context, 422u, "session_profile_invalid",
@@ -597,8 +593,10 @@ bool MdoApiSessionProfileRoute(MdoApiContext* Context)
     if ( !MdoSessionSetProfile(Session, Model, Reasoning, Permission,
             NULL, &Error) ) {
         MdoSessionRelease(Session);
-        if ( Error.eCode == XWORK_ERROR_MODEL ||
-             Error.eCode == XWORK_ERROR_INVALID_ARGUMENT )
+        if ( Error.eCode == XWORK_ERROR_MODEL )
+            return MdoApiReplyModelProfileFailure(Context, &Error.tModelError,
+                "session_service_unavailable");
+        if ( Error.eCode == XWORK_ERROR_INVALID_ARGUMENT )
             return MdoApiReplyError(Context, 422u,
                 "session_profile_invalid",
                 "The requested session profile is invalid", NULL);

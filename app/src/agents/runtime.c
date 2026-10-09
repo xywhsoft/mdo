@@ -110,6 +110,14 @@ static void MdoAgentsModelError(xwork_error* Error, const xllm_error* Model,
     if ( Error != NULL && Model != NULL ) Error->tModelError = *Model;
 }
 
+static void MdoAgentsProfileError(xwork_error* Error, const char* Kind,
+    const char* Diagnostic)
+{
+    xllm_error Model;
+    MdoModelProfileErrorInit(&Model, Kind, Diagnostic);
+    MdoAgentsModelError(Error, &Model, Diagnostic);
+}
+
 static bool MdoAgentsGrow(void** Items, size_t* Capacity, size_t Count,
     size_t ItemSize)
 {
@@ -166,14 +174,14 @@ static bool MdoAgentsResolveModel(const MdoModelCatalog* Catalog,
     if ( !((ModelId != NULL && ModelId[0] != '\0') ?
             MdoModelCatalogModelFind(Catalog, ModelId, &Result->Info) :
             MdoModelCatalogDefault(Catalog, &Result->Info)) ) {
-        MdoAgentsError(Error, XWORK_ERROR_MODEL,
+        MdoAgentsProfileError(Error, "profile_model_missing",
             "selected model was not found");
         return false;
     }
     Result->Protocol = Protocol != 0 ? Protocol : Result->Info.DefaultProtocol;
     Flag = MdoAgentsProtocolFlag(Result->Protocol);
     if ( Flag == 0u || (Result->Info.Protocols & Flag) == 0u ) {
-        MdoAgentsError(Error, XWORK_ERROR_MODEL,
+        MdoAgentsProfileError(Error, "profile_protocol_unsupported",
             "selected model does not support the requested wire protocol");
         return false;
     }
@@ -184,7 +192,7 @@ static bool MdoAgentsResolveModel(const MdoModelCatalog* Catalog,
     if ( Result->Info.ReasoningEffortCount == 0u ) Result->ReasoningEffort = "";
     if ( !MdoAgentsReasoningSupported(&Result->Info,
             Result->ReasoningEffort) ) {
-        MdoAgentsError(Error, XWORK_ERROR_MODEL,
+        MdoAgentsProfileError(Error, "profile_reasoning_unsupported",
             "selected model does not support the requested reasoning effort");
         return false;
     }
@@ -192,7 +200,7 @@ static bool MdoAgentsResolveModel(const MdoModelCatalog* Catalog,
         Result->Info.MaxOutputTokens;
     if ( Result->MaxOutputTokens == 0u ||
          Result->MaxOutputTokens > Result->Info.MaxOutputTokens ) {
-        MdoAgentsError(Error, XWORK_ERROR_MODEL,
+        MdoAgentsProfileError(Error, "profile_output_limit",
             "Agent output limit exceeds the selected model profile");
         return false;
     }
@@ -1106,7 +1114,7 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
          !MdoAgentOwnerEnsureRoute(Owner, &Model, Error) ) goto fail;
     if ( AgentInfo.ContextWindowTokens > Model.Info.ContextWindowTokens ||
          AgentInfo.MaxInputTokens > Model.Info.MaxInputTokens ) {
-        MdoAgentsError(Error, XWORK_ERROR_INVALID_ARGUMENT,
+        MdoAgentsProfileError(Error, "profile_context_limit",
             "Agent context override exceeds the selected model profile");
         goto fail;
     }

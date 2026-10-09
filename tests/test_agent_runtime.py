@@ -262,9 +262,10 @@ static xllm_result Complete(void *data, const xllm_request *request,
 }}
 
 static void PrintRuntimeError(const char *label, const xwork_error *error) {{
-    printf("%s=code:%d message:%s\n", label,
+    printf("%s=code:%d message:%s kind:%s\n", label,
         error != NULL ? (int)error->eCode : -1,
-        error != NULL && error->sMessage[0] != '\0' ? error->sMessage : "none");
+        error != NULL && error->sMessage[0] != '\0' ? error->sMessage : "none",
+        error != NULL ? MdoModelErrorKind(&error->tModelError) : "unknown");
 }}
 
 typedef struct CheckpointReaderProbe {{
@@ -406,8 +407,8 @@ void ServiceInit(XS_HostInfo *host) {{
     options.OnModelComplete = Complete;
     options.ModelUserData = &owner;
     invalid = MdoAgentSessionCreateWithRuntime(runtime, &options, &error);
-    printf("invalid_reasoning=%d code:%d\n", invalid != NULL ? 1 : 0,
-        (int)error.eCode);
+    printf("invalid_reasoning=%d code:%d kind:%s\n", invalid != NULL ? 1 : 0,
+        (int)error.eCode, MdoModelErrorKind(&error.tModelError));
     MdoAgentSessionRelease(invalid); invalid = NULL;
 
     MdoAgentSessionOptionsInit(&options);
@@ -740,6 +741,7 @@ def main() -> int:
         assert "memory_tools=search:0 write:0 delete:0" in output, output
         assert "reloaded=modules:2 skills:2 pinned:1/1" in output, output
         assert "invalid_reasoning=0" in output, output
+        assert "kind:profile_reasoning_unsupported" in output, output
         assert "invalid_skill_tools=0" in output, output
         assert "selected Skill requires a tool unavailable to its Agent" in output, output
         assert "owner_after_session_release=refs:2 releases:0" in output, output
@@ -777,6 +779,15 @@ def main() -> int:
         assert "prompt_after_truncate=old:1 new:0" in disabled, disabled
         assert "prompt_new=old:0 new:1" in disabled, disabled
         assert "probe_done=1" in disabled, disabled
+        context_site = base / "site-context-limit"
+        write_site(context_site)
+        too_large = MODULE_V1.replace(".MaxOutputTokens = 4096u, .MaxTurns = 4u,",
+            ".ContextWindowTokens = 999999u, .MaxOutputTokens = 4096u, .MaxTurns = 4u,")
+        (context_site / "probe.c").write_text(PROBE_SOURCE.replace(
+            c_literal(MODULE_V1), c_literal(too_large)), encoding="utf-8")
+        context = run_probe(host, context_site, base / "home-context-limit")
+        assert "init_error=" not in context, context
+        assert "session_error=" in context and "kind:profile_context_limit" in context, context
     print("agent runtime probe: PASS")
     return 0
 

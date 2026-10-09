@@ -1548,7 +1548,9 @@ def run_probe(host: Path) -> None:
                 assert_common(headers, document)
                 assert document["ok"] is True, document
                 data = document["data"]
-                assert data["version"] == "0.1.0-dev", data
+                expected_version = json.loads((ROOT / "app/release.json").read_text(
+                    encoding="utf-8"))["version_name"]
+                assert data["version"] == expected_version, data
                 assert data["ready"] is True and data["stage"] == "ready", data
                 assert data["config"]["schema_version"] == 1, data
                 assert data["resources"]["models"]["models"] >= 1, data
@@ -5319,7 +5321,7 @@ def run_probe(host: Path) -> None:
                     "prompt": "prestart retry QA", "queue_item_id": retry_id,
                 })
                 assert status == 422 and json.loads(body)["error"][
-                    "code"] == "session_profile_invalid", (status, body)
+                    "code"] == "model_profile_model_missing", (status, body)
                 retry_receipt = queue_file.parent / "queue-receipts" / (
                     retry_id + ".json")
                 assert not retry_receipt.exists(), retry_receipt
@@ -5444,7 +5446,7 @@ def run_probe(host: Path) -> None:
                     "queue_item_id": invalid_profile_id,
                 })
                 assert status == 422 and json.loads(body)["error"][
-                    "code"] == "session_profile_invalid", (status, body)
+                    "code"] == "model_profile_model_missing", (status, body)
                 assert not (queue_file.parent / "queue-receipts" /
                     (invalid_profile_id + ".json")).exists()
                 assert json.loads(meta_path.read_text(encoding="utf-8")) == (
@@ -5690,14 +5692,14 @@ def run_unconfigured_model_probe(host: Path) -> None:
                              "If-Match": headers["etag"]})
                 assert status == 422, (status, response)
                 assert json.loads(response)["error"]["code"] == (
-                    "session_profile_invalid")
+                    "model_profile_model_missing")
                 status, _, response = request(
                     port, "POST", "/api/v1/sessions",
                     body=b'{"project_id":"default","model_id":"unknown"}',
                     headers={"Content-Type": "application/json"})
                 document = json.loads(response)
                 assert status == 422, (status, document)
-                assert document["error"]["code"] == "session_profile_invalid", document
+                assert document["error"]["code"] == "model_profile_model_missing", document
 
                 # The model editor uses a complete, versioned configuration
                 # document; built-in Ling stays protected by the transaction.
