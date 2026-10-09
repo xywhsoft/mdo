@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo viewport history pagination</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<style>
+body { padding: 16px; }
+.conversation { width: min(820px, 100%); height: 65vh; }
+#result { display: block; white-space: pre-wrap; font-size: 11px; min-height: 82px; }
+</style>
+<button id="prefetch" type="button">验证上滚预加载</button>
+<button id="resize" type="button">验证扩大视口</button>
+<output id="result" role="status">准备中</output>
+<div class="conversation"><p id="welcome"></p><ol id="timeline" class="timeline"></ol></div>
+<button id="to-bottom" type="button" hidden>回到底部</button>
+<div id="toast-region"></div>
+<script type="module">
+import { createTimelineView } from "/app/web/js/features/chat/timeline.js";
+import { createResourceStore } from "/app/web/js/state/store.js";
+const store = createResourceStore();
+const container = document.querySelector("#timeline"), scroller = container.parentElement;
+const result = document.querySelector("#result");
+const paint = async () => { await new Promise(requestAnimationFrame); await new Promise(requestAnimationFrame); };
+let first = 40, calls = 0, active = 0, concurrent = 0;
+const group = n => {
+  const e = (offset, kind, extra = {}) => ({ schema_version: 6, run_id: 1, agent_id: 1,
+    agent_depth: 0, agent_turn: n, event_id: n * 10 + offset, kind,
+    time: (n * 10 + offset) * 1000000, ...extra });
+  return [e(1, "model_start"), e(2, "model_reasoning_delta", { text: `思考 ${n}` }),
+    e(3, "model_text_delta", { text: `### 完整回复 ${n}\n\n这是保留在正文中的一段信息。\n\n第二段信息和上一段属于同一次回复，历史分页会一起加载。` }),
+    e(4, "model_done", { success: true, input_tokens: 100, output_tokens: 60 })];
+};
+let events = group(first);
+function publish() { store.setData({ projectId: "qa", sessionId: "history-window", epoch: "a",
+  events, firstLoadedTurn: first * 10 + 1, hasOlder: first > 1, loadingHistory: active > 0 }); }
+const view = createTimelineView({ container, welcome: document.querySelector("#welcome"),
+  toBottom: document.querySelector("#to-bottom"), store,
+  async onLoadOlder() {
+    ++calls; ++active; concurrent = Math.max(concurrent, active); publish();
+    await paint();
+    events = [...group(--first), ...events]; --active; publish();
+  } });
+async function idle() { for (let i = 0; i < 60; ++i) { await paint(); if (!active &&
+  container.clientHeight >= scroller.clientHeight * 2.5) { await paint(); if (!active) return; } } }
+const projection = () => container.querySelectorAll(":scope > [data-kind='tool'], :scope > [data-kind='reasoning']").length === 0;
+publish(); await idle();
+const initial = { bufferScreens: +(container.clientHeight / scroller.clientHeight).toFixed(2),
+  completeBodies: container.querySelectorAll("[data-kind='assistant']").length === calls + 1,
+  grouped: projection(), concurrent };
+result.textContent = JSON.stringify({ phase: "initial", ...initial, calls }, null, 2);
+result.dataset.passed = String(initial.bufferScreens >= 2.5 && initial.completeBodies && initial.grouped && concurrent === 1);
+
+document.querySelector("#prefetch").addEventListener("click", async () => {
+  scroller.scrollTop = scroller.clientHeight * .8;
+  const top = scroller.getBoundingClientRect().top;
+  const anchor = [...container.children].find(node => node.getBoundingClientRect().bottom > top + 8);
+  const key = anchor.dataset.timelineRow, before = anchor.getBoundingClientRect().top;
+  const oldCalls = calls, oldHeight = container.clientHeight, viewport = scroller.clientHeight;
+  // Wait for the queued batch to settle; page additions are intentionally delayed.
+  for (let i = 0; i < 60; ++i) {
+    await paint();
+    if (!active && container.clientHeight - oldHeight >= viewport * 2.5) {
+      const completed = calls; await paint();
+      if (!active && calls === completed) break;
+    }
+  }
+  const retained = [...container.children].find(node => node.dataset.timelineRow === key);
+  const delta = Math.abs(retained.getBoundingClientRect().top - before);
+  const added = (container.clientHeight - oldHeight) / viewport;
+  const passed = delta < 2 && added >= 2.5 && projection() && concurrent === 1;
+  result.dataset.passed = String(passed);
+  result.textContent = JSON.stringify({ phase: "prefetched", passed,
+    anchorShift: +delta.toFixed(2), addedScreens: +added.toFixed(2), calls, concurrent, grouped: projection() }, null, 2);
+});
+document.querySelector("#resize").addEventListener("click", async () => {
+  scroller.style.height = "90vh"; await idle();
+  const passed = container.clientHeight >= scroller.clientHeight * 2.5 && projection();
+  result.dataset.passed = String(passed);
+  result.textContent = JSON.stringify({ phase: "resized", passed, calls,
+    bufferScreens: +(container.clientHeight / scroller.clientHeight).toFixed(2) }, null, 2);
+});
+window.addEventListener("pagehide", () => view.destroy(), { once: true });
+</script>
+</html>

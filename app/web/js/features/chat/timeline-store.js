@@ -278,7 +278,7 @@ function loadInitialTimeline(token) {
       const current = timelineStore.get().data;
       if (snapshotAvailable) {
         try {
-          const page = await readConversation(current, "limit=4", selectionAbort.signal);
+          const page = await readConversation(current, "limit=1", selectionAbort.signal);
           if (token !== generation) return;
           timelineStore.setData(snapshotData(current, page));
           subscribeLiveTimeline();
@@ -344,7 +344,7 @@ export function loadOlderTimeline() {
   const request = (async () => {
     try {
       if (data.epoch) {
-        const page = await readConversation(data, `before=${data.firstLoadedTurn}&limit=4`);
+        const page = await readConversation(data, `before=${data.firstLoadedTurn}&limit=1`);
         if (token !== generation) return;
         if (page.epoch !== data.epoch) { await reloadSelectedTimeline(); return; }
         const current = timelineStore.get().data;

@@ -1,11 +1,15 @@
 /* Display projection, not model context. Recent content is read in one file
  * view instead of replaying 32 events per network round trip. Each operation
- * has bounded retained memory and scan work; very long turns have continuations.
+ * has bounded retained memory and scan work. Display history pages finish a
+ * reply and its preceding execution before crossing a page boundary.
  * No sidecar, migration or write is needed to browse an old conversation. */
 #define MDO_VIEW_EVENTS 96u
 #define MDO_VIEW_BYTES (96u * 1024u)
 #define MDO_VIEW_SCAN (16u * 1024u * 1024u)
 #define MDO_VIEW_TEXT 8192u
+#define MDO_VIEW_REPLY_TEXT (1024u * 1024u)
+#define MDO_VIEW_HARD_BYTES (4u * 1024u * 1024u)
+#define MDO_VIEW_HARD_EVENTS 4096u
 
 static bool MdoViewEpoch(MdoEventReader* Reader, char Output[65])
 {
@@ -67,16 +71,20 @@ static size_t MdoViewPrefix(const char* Text, size_t Limit)
     return Length;
 }
 
-MdoSessionEventSnapshot* MdoSessionConversationPage(const char* Project,
+static MdoSessionEventSnapshot* MdoReadConversationPage(const char* Project,
     const char* Session, uint64 Before, uint64 After, const char* Epoch,
-    size_t Turns, MdoConversationPageInfo* Page, xwork_error* Error)
+    size_t Turns, bool ReplyGroups, MdoConversationPageInfo* Page, xwork_error* Error)
 {
     char Path[MDO_SESSION_PATH_CAPACITY];
     MdoSessionEventSnapshot* Snapshot = NULL;
     MdoEventReader* Reader = NULL;
     xstrview Record; uint64 End, Scanned = 0u, Previous = 0u;
-    size_t Bytes = 0u, Starts = 0u, Streams[MDO_VIEW_EVENTS], StreamCount = 0u;
-    bool Delta;
+    size_t Bytes = 0u, Starts = 0u, Replies = 0u, Streams[MDO_VIEW_HARD_EVENTS], StreamCount = 0u;
+    uint64 ReplyRun = 0u, ReplyAgent = 0u, ReplyTurn = 0u;
+    size_t BoundaryCount = 0u, BoundaryBytes = 0u;
+    uint64 BoundaryEnd = 0u, BoundaryRun = 0u, BoundaryAgent = 0u, BoundaryTurn = 0u;
+    bool HaveBoundary = false;
+    bool Delta, HaveReply = false;
     xworkErrorInit(Error);
     if (!Page || !Turns || Turns > 4u || (Before && After) ||
         !MdoEventsIdValid(Project, MDO_PROJECT_ID_CAPACITY) ||
@@ -106,8 +114,10 @@ MdoSessionEventSnapshot* MdoSessionConversationPage(const char* Project,
         }
     } else if (Delta) MdoEventReaderAfter(Reader, Project, Session, After);
 
-    while (Scanned < MDO_VIEW_SCAN && (Delta ? MdoEventReaderNext(Reader, &Record) :
-            MdoEventReaderPrevious(Reader, &End, &Record))) {
+    while (Scanned < MDO_VIEW_SCAN) {
+        uint64 RecordEnd = End;
+        if (!(Delta ? MdoEventReaderNext(Reader, &Record) :
+                MdoEventReaderPrevious(Reader, &End, &Record))) break;
         MdoSessionEventOwned Event; size_t Merge = SIZE_MAX;
         Scanned += Record.Size + 1u;
         if (!MdoEventsParse(Project, Session, Record, &Event)) {
@@ -116,12 +126,48 @@ MdoSessionEventSnapshot* MdoSessionConversationPage(const char* Project,
         if (Delta && Event.Info.EventId <= After) { MdoEventsOwnedUnit(&Event); continue; }
         if ((Previous && (Delta ? Event.Info.EventId <= Previous : Event.Info.EventId >= Previous)) ||
             Event.Info.EventId > Snapshot->LatestId) { MdoEventsOwnedUnit(&Event); goto changed; }
+        /* A history group contains one public reply and the execution before
+         * it. Byte/event budgets are soft targets: finish the group before
+         * paging, so no stream prefix or half execution becomes a new layout. */
+        bool AtomicReplies = ReplyGroups && !Delta;
+        if (!AtomicReplies && Snapshot->Count && Bytes >= MDO_VIEW_BYTES) {
+            MdoEventsOwnedUnit(&Event); break;
+        }
+        bool Main = Event.Info.AgentDepth == 0u;
+        bool RootStart = Main && Event.Info.Kind == XWORK_EVENT_AGENT_START;
+        bool SameReply = HaveReply && Event.Info.RunId == ReplyRun &&
+            Event.Info.AgentId == ReplyAgent && Event.Info.AgentTurn == ReplyTurn;
+        bool Filled = Replies >= Turns || Bytes >= MDO_VIEW_BYTES || Snapshot->Count >= MDO_VIEW_EVENTS;
+        if (AtomicReplies && Main && Event.Info.Kind == XWORK_EVENT_MODEL_DONE) {
+            /* Tool-only model calls belong to the same process. Remember the
+             * boundary, but use it only when that call has a public reply. */
+            HaveBoundary = true; BoundaryCount = Snapshot->Count; BoundaryBytes = Bytes;
+            BoundaryEnd = RecordEnd; BoundaryRun = Event.Info.RunId;
+            BoundaryAgent = Event.Info.AgentId; BoundaryTurn = Event.Info.AgentTurn;
+        }
+        if (AtomicReplies && Main && Event.Info.Kind == XWORK_EVENT_MODEL_TEXT_DELTA && !SameReply) {
+            if (HaveReply && Filled && HaveBoundary && Event.Info.RunId == BoundaryRun &&
+                Event.Info.AgentId == BoundaryAgent && Event.Info.AgentTurn == BoundaryTurn) {
+                MdoEventsOwnedUnit(&Event);
+                while (Snapshot->Count > BoundaryCount)
+                    MdoEventsOwnedUnit(&Snapshot->Events[--Snapshot->Count]);
+                Bytes = BoundaryBytes; End = BoundaryEnd;
+                break;
+            }
+            ++Replies; HaveReply = true;
+            ReplyRun = Event.Info.RunId; ReplyAgent = Event.Info.AgentId; ReplyTurn = Event.Info.AgentTurn;
+        }
         if (Event.Info.Kind == XWORK_EVENT_AGENT_START || Event.Info.Kind == XWORK_EVENT_MODEL_START ||
             Event.Info.Kind == XWORK_EVENT_MODEL_DONE) StreamCount = 0u;
         bool Start = Event.Info.Kind == XWORK_EVENT_AGENT_START && Event.Info.AgentDepth == 0u &&
             (Event.Info.UserMessageSequence || Event.Info.SchemaVersion < 3u);
         if (Delta && Start && Starts == Turns) { MdoEventsOwnedUnit(&Event); break; }
-        size_t Prefix = MdoViewPrefix(Event.Text, MdoViewDelta(&Event.Info) ? MDO_VIEW_TEXT : 4096u);
+        size_t TextLimit = ReplyGroups && Main &&
+            (Event.Info.Kind == XWORK_EVENT_MODEL_TEXT_DELTA || Event.Info.Kind == XWORK_EVENT_AGENT_START)
+            ? MDO_VIEW_REPLY_TEXT : MdoViewDelta(&Event.Info) ? MDO_VIEW_TEXT : 4096u;
+        size_t Prefix = MdoViewPrefix(Event.Text, TextLimit);
+        if (AtomicReplies && Main && Event.Text[Prefix] &&
+            Event.Info.Kind == XWORK_EVENT_MODEL_TEXT_DELTA) { MdoEventsOwnedUnit(&Event); goto oversized; }
         if (Event.Text[Prefix]) { Event.Text[Prefix] = '\0'; Event.Info.TextTruncated = true; }
         if (MdoViewDelta(&Event.Info)) {
             for (size_t i = 0u; i < StreamCount; ++i) {
@@ -134,16 +180,24 @@ MdoSessionEventSnapshot* MdoSessionConversationPage(const char* Project,
         if (Merge != SIZE_MAX) {
             MdoSessionEventOwned* Other = &Snapshot->Events[Merge];
             size_t A = strlen(Other->Text), B = strlen(Event.Text);
-            char Combined[MDO_VIEW_TEXT * 2u + 1u];
+            if (A > MDO_VIEW_REPLY_TEXT || B > MDO_VIEW_REPLY_TEXT - A) {
+                MdoEventsOwnedUnit(&Event); goto oversized;
+            }
+            char* Combined = (char*)xrtMalloc(A + B + 1u);
+            if (!Combined) { MdoEventsOwnedUnit(&Event); goto memory; }
             if (Delta) { memcpy(Combined, Other->Text, A); memcpy(Combined + A, Event.Text, B + 1u); }
             else { memcpy(Combined, Event.Text, B); memcpy(Combined + B, Other->Text, A + 1u); }
-            size_t Keep = MdoViewPrefix(Combined, MDO_VIEW_TEXT);
-            char* Text = MdoEventsCopy(xrtStrViewN(Combined, Keep), MDO_VIEW_TEXT);
+            size_t Keep = MdoViewPrefix(Combined, TextLimit);
+            char* Text = MdoEventsCopy(xrtStrViewN(Combined, Keep), TextLimit);
+            xrtFree(Combined);
             if (!Text) { MdoEventsOwnedUnit(&Event); goto memory; }
             MdoSessionEventOwned Candidate = *Other; Candidate.Text = Text;
             size_t OldCost = MdoViewCost(Other), NewCost = MdoViewCost(&Candidate);
-            if (NewCost > MDO_VIEW_BYTES - Bytes + OldCost) {
-                xrtFree(Text); MdoEventsOwnedUnit(&Event); break;
+            size_t ByteLimit = AtomicReplies ? MDO_VIEW_HARD_BYTES : MDO_VIEW_BYTES;
+            if (NewCost > ByteLimit - Bytes + OldCost) {
+                xrtFree(Text); MdoEventsOwnedUnit(&Event);
+                if (AtomicReplies) goto oversized;
+                break;
             }
             Bytes = Bytes - OldCost + NewCost;
             xrtFree(Other->Text); Other->Text = Text; Other->Info.Text = Text;
@@ -156,7 +210,10 @@ MdoSessionEventSnapshot* MdoSessionConversationPage(const char* Project,
             MdoEventsOwnedUnit(&Event);
         } else {
             size_t Cost = MdoViewCost(&Event);
-            if (Snapshot->Count >= MDO_VIEW_EVENTS || (Snapshot->Count && Cost > MDO_VIEW_BYTES - Bytes)) {
+            size_t ByteLimit = AtomicReplies || !Snapshot->Count ? MDO_VIEW_HARD_BYTES : MDO_VIEW_BYTES;
+            size_t EventLimit = AtomicReplies ? MDO_VIEW_HARD_EVENTS : MDO_VIEW_EVENTS;
+            if (Snapshot->Count >= EventLimit || Cost > ByteLimit - Bytes) {
+                if (AtomicReplies) { MdoEventsOwnedUnit(&Event); goto oversized; }
                 MdoEventsOwnedUnit(&Event); break;
             }
             if (!MdoEventsSnapshotGrow(Snapshot)) { MdoEventsOwnedUnit(&Event); goto memory; }
@@ -165,8 +222,13 @@ MdoSessionEventSnapshot* MdoSessionConversationPage(const char* Project,
             if (MdoViewDelta(&Event.Info)) Streams[StreamCount++] = Snapshot->Count;
             Snapshot->Events[Snapshot->Count++] = Event; Bytes += Cost;
         }
-        if (Start && ++Starts == Turns && !Delta) break;
+        if (AtomicReplies && RootStart) {
+            if (Replies >= Turns || Bytes >= MDO_VIEW_BYTES || Snapshot->Count >= MDO_VIEW_EVENTS) break;
+            HaveReply = false; /* A resumed/reused run starts a distinct reply. */
+        }
+        if (!ReplyGroups && Start && ++Starts == Turns && !Delta) break;
     }
+    if (ReplyGroups && !Delta && Scanned >= MDO_VIEW_SCAN && End) goto oversized;
     if (Reader->Failed) goto io;
     if (!MdoViewCurrent(Path, Reader)) goto changed;
     if (!Delta) {
@@ -191,6 +253,19 @@ memory:
     MdoEventsError(Error, XWORK_ERROR_OUT_OF_MEMORY, "cannot allocate conversation snapshot"); goto fail;
 io:
     MdoEventsError(Error, XWORK_ERROR_IO, "cannot read conversation snapshot");
+    goto fail;
+oversized:
+    MdoEventsError(Error, XWORK_ERROR_INVALID_ARGUMENT, "conversation group exceeds view limits");
 fail:
     MdoEventReaderClose(Reader); MdoSessionEventSnapshotRelease(Snapshot); return NULL;
 }
+
+MdoSessionEventSnapshot* MdoSessionConversationPage(const char* Project,
+    const char* Session, uint64 Before, uint64 After, const char* Epoch,
+    size_t Turns, MdoConversationPageInfo* Page, xwork_error* Error)
+{ return MdoReadConversationPage(Project, Session, Before, After, Epoch, Turns, false, Page, Error); }
+
+MdoSessionEventSnapshot* MdoSessionConversationReplyPage(const char* Project,
+    const char* Session, uint64 Before, uint64 After, const char* Epoch,
+    size_t Replies, MdoConversationPageInfo* Page, xwork_error* Error)
+{ return MdoReadConversationPage(Project, Session, Before, After, Epoch, Replies, true, Page, Error); }

@@ -129,19 +129,22 @@ def probe(host: Path | None, packed: Path | None = None):
             assert len(epoch) == 64 and snapshot["delta"] is False
             assert hashlib.sha256(snapshot["items_json"].encode()).hexdigest() == snapshot["items_hash"]
             compact = json.loads(snapshot["items_json"])
-            assert len(compact) == 12, compact
-            assert [e["text"] for e in compact if e["kind"] == "agent_start"] == [f"Question {i}" for i in range(66,70)]
-            assert len(snapshot["items_json"].encode()) < 96 * 1024
+            # Large replies exceed the soft byte target, but the display page
+            # retains the complete reply rather than returning four prefixes.
+            assert len(compact) == 3, compact
+            assert [e["text"] for e in compact if e["kind"] == "agent_start"] == ["Question 69"]
+            assert len(snapshot["items_json"].encode()) < 4 * 1024 * 1024
             assert all(e["node_id"] == f"{session}:{epoch}:{e['event_id']}" for e in compact)
             answer = next(e for e in compact if e["kind"] == "model_text_delta")
-            assert answer["text_truncated"] and answer["aggregate_end_id"] == answer["event_id"] + 3
+            assert not answer["text_truncated"] and answer["aggregate_end_id"] == answer["event_id"] + 3
+            assert answer["text"] == ("Answer 69 " + "x" * 62000) * 4
             status, headers, wire = raw_request(port, "GET", path + "/conversation?limit=4",
                 headers={"Accept-Encoding":"gzip"})
             assert status == 200 and headers.get("content-encoding") == "gzip", headers
             decoded = json.loads(gzip.decompress(wire))["data"]
             assert decoded["items_hash"] == snapshot["items_hash"]
             assert len(wire) < len(snapshot["items_json"].encode()) // 2
-            print(f"history fixture: 4 turns, compact {len(snapshot['items_json'].encode())} bytes, gzip {len(wire)} bytes")
+            print(f"history fixture: complete reply, {len(snapshot['items_json'].encode())} bytes, gzip {len(wire)} bytes")
             status, headers, wire = raw_request(port, "GET", path + "/conversation?limit=4",
                 headers={"Accept-Encoding":"gzip;q=0"})
             assert status == 200 and "content-encoding" not in headers
@@ -149,7 +152,7 @@ def probe(host: Path | None, packed: Path | None = None):
             assert doc["data"]["delta"] and json.loads(doc["data"]["items_json"]) == []
             _, doc = request(port, "GET", path + f"/conversation?before={snapshot['next_before']}&limit=4")
             assert doc["data"]["epoch"] == epoch
-            assert json.loads(doc["data"]["items_json"])[0]["text"] == "Question 62"
+            assert json.loads(doc["data"]["items_json"])[0]["text"] == "Question 68"
             _, doc = request(port, "GET", path + "/turns?limit=4")
             page = doc["data"]
             assert [item["question"] for item in page["items"]] == [f"Question {i}" for i in range(66, 70)]

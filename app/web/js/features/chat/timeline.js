@@ -11,6 +11,7 @@ import { currentLocale, subscribeLocale, t } from "../../i18n.js";
 import { labelImageName } from "./image-names.js";
 import { toolCallSummary, toolSectionNode } from "./tool-content.js";
 import { conversationGroups } from "./conversation-history.js";
+import { createHistoryWindow } from "./history-window.js";
 import { createConversationNavigation } from "./conversation-navigation.js";
 import { modelErrorMessage, modelErrorTitle } from "../../utils/model-errors.js";
 
@@ -836,6 +837,8 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
   let pendingState = store.get();
   let frame = 0;
   let followTail = true;
+  let anchorRemainder = 0;
+  let adjustedScrollTop = NaN;
   const positions = new Map();
   let searchQuery = "";
   let revealFirstSearchMatch = false;
@@ -847,6 +850,14 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
   const processStates = new Map();
   const manualProcesses = new Set();
   const scroller = container.closest(".conversation");
+  const historyWindow = onLoadOlder ? createHistoryWindow({
+    read: () => ({ ...store.get(), enabled: !searchQuery && !document.hidden && store.get().status !== "error",
+      followTail }),
+    measure: () => ({ viewport: scroller.clientHeight,
+      height: container.getBoundingClientRect().height, top: scroller.scrollTop }),
+    load: onLoadOlder,
+    afterPaint: () => new Promise(resolve => requestAnimationFrame(resolve)),
+  }) : null;
   const historyButton = onLoadOlder ? element("button", { className: "conversation-history-load",
     attrs: { type: "button" } }) : null;
   if (historyButton) {
@@ -854,7 +865,8 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
     historyButton.addEventListener("click", () => {
       followTail = false;
       if (store.get().status === "error" && store.get().data?.initializing) void onReload?.();
-      else void onLoadOlder();
+      else if (searchQuery) void onLoadOlder();
+      else void historyWindow.load();
     });
   }
   let jumpVersion = 0;
@@ -888,6 +900,8 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
           previewExpanded.get(`${item.key}/preview`) ?? false,
           previewScroll.get(`${item.key}/preview`) ?? 0, toolTextCache);
         node.dataset.timelineRow = item.key;
+        const source = item.sourceEventId ?? item.items?.[0]?.sourceEventId;
+        if (source) node.dataset.sourceEventId = source;
         if (item.kind === "user") node.dataset.turnId = item.sourceEventId;
         mountIcons(node);
         row = { node, signature };
@@ -920,13 +934,16 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
     frame = 0;
     const state = pendingState;
     const data = state.data;
+    if (scroller.scrollTop !== adjustedScrollTop) anchorRemainder = 0;
     const sessionKey = `${data?.projectId ?? ""}/${data?.sessionId ?? ""}`;
     let anchor = null;
     let anchorTop = 0;
+    let anchorSource = "";
     if (sessionKey === renderedSession && !followTail && !searchQuery) {
       const top = scroller.getBoundingClientRect().top;
       anchor = [...container.children].find(node => node.getBoundingClientRect().bottom > top + 8);
       anchorTop = anchor?.getBoundingClientRect().top ?? 0;
+      anchorSource = anchor?.dataset.sourceEventId ?? "";
     }
     let focusedKey = "";
     let focusedAction = "";
@@ -967,6 +984,7 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
       renderedRows.clear();
       clear(container);
       renderedSession = sessionKey;
+      anchorRemainder = 0;
       // A history position belongs to the previous session. New tasks start
       // at the welcome heading; existing sessions open on their latest turn.
       const position = data?.cached ? positions.get(sessionKey) : null;
@@ -1069,9 +1087,22 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
         scroller.scrollTop += target - bottom;
       } else scroller.scrollTop = 0;
     } else if (followTail && !searchQuery) scroller.scrollTop = scroller.scrollHeight;
-    else if (anchor?.isConnected) scroller.scrollTop += anchor.getBoundingClientRect().top - anchorTop;
+    else if (anchor) {
+      const retained = anchor.isConnected ? anchor : anchorSource
+        ? container.querySelector(`[data-source-event-id="${anchorSource}"]`) : null;
+      if (retained) {
+        const target = scroller.scrollTop + retained.getBoundingClientRect().top - anchorTop + anchorRemainder;
+        scroller.scrollTop = target;
+        // Some WebViews round scrollTop to physical pixels. Carry the residual
+        // across a batch so several prepends cannot accumulate a visible drift.
+        anchorRemainder = Math.abs(target - scroller.scrollTop) < 1
+          ? target - scroller.scrollTop : 0;
+      }
+    }
     else if (data?.cached && positions.has(sessionKey)) scroller.scrollTop = positions.get(sessionKey).top;
+    adjustedScrollTop = scroller.scrollTop;
     updateBottomButton();
+    historyWindow?.consider();
   }
 
   function queueRender(state) {
@@ -1091,12 +1122,15 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
   }
   container.addEventListener("click", rememberProcessToggle);
 
-  scroller.addEventListener("scroll", () => {
+  function onScroll() {
     followTail = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 100;
     updateBottomButton();
-    if (!searchQuery && scroller.scrollTop < 100 && pendingState.data?.hasOlder &&
-        !pendingState.data?.loadingHistory && !followTail) void onLoadOlder?.();
-  }, { passive: true });
+    historyWindow?.consider();
+  }
+  scroller.addEventListener("scroll", onScroll, { passive: true });
+  const viewportObserver = historyWindow && typeof ResizeObserver !== "undefined"
+    ? new ResizeObserver(() => historyWindow.resize()) : null;
+  viewportObserver?.observe(scroller);
   container.addEventListener("scroll", (event) => {
     const content = event.target;
     if (!content.classList?.contains("timeline-artifact-content") ||
@@ -1133,6 +1167,8 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
       queueRender(store.get());
     },
     destroy() {
+      historyWindow?.destroy(); viewportObserver?.disconnect();
+      scroller.removeEventListener("scroll", onScroll);
       container.removeEventListener("click", rememberProcessToggle);
       unsubscribe(); unsubscribeSession?.(); unsubscribeLocale();
       historyNavigation?.destroy(); historyButton?.remove();

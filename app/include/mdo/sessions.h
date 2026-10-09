@@ -276,6 +276,11 @@ typedef struct MdoConversationPageInfo {
 MdoSessionEventSnapshot* MdoSessionConversationPage(const char* ProjectId,
     const char* SessionId, uint64 Before, uint64 After, const char* Epoch,
     size_t Turns, MdoConversationPageInfo* Page, xwork_error* Error);
+/* Display pages preserve complete public replies and the execution preceding
+ * them; the UI chooses how many pages fill its viewport. */
+MdoSessionEventSnapshot* MdoSessionConversationReplyPage(const char* ProjectId,
+    const char* SessionId, uint64 Before, uint64 After, const char* Epoch,
+    size_t Replies, MdoConversationPageInfo* Page, xwork_error* Error);
 MdoSessionEventSnapshot* MdoSessionEventSnapshotRef(
     MdoSessionEventSnapshot* Snapshot);
 void MdoSessionEventSnapshotRelease(MdoSessionEventSnapshot* Snapshot);

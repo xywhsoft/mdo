@@ -150,8 +150,8 @@ static bool MdoApiCaptureId(MdoApiContext* Context, size_t Index,
     return true;
 }
 
-bool MdoApiSessionEventValue(const MdoSessionEventInfo* Event,
-    const char* ProjectId, const char* SessionId, bool FullText,
+static bool MdoApiSessionEventValueLimit(const MdoSessionEventInfo* Event,
+    const char* ProjectId, const char* SessionId, size_t TextLimit,
     xvalue** pValue)
 {
     xvalue* Item = xrtValueObject();
@@ -160,7 +160,7 @@ bool MdoApiSessionEventValue(const MdoSessionEventInfo* Event,
     size_t TextSize = Event->Text != NULL ? strlen(Event->Text) : 0u;
     bool Truncated = Event->TextTruncated;
     xstrview Text = MdoApiEventText(Event->Text, TextSize,
-        FullText ? MDO_API_EVENT_SINGLE_TEXT_BYTES : MDO_API_EVENT_TEXT_BYTES,
+        TextLimit,
         &Truncated);
     bool Ok = Item != NULL &&
         MdoApiValueSetUInt(Item, "schema_version", Event->SchemaVersion) &&
@@ -341,6 +341,13 @@ static bool MdoApiConversationHash(xstrview Bytes, char Hex[65])
     return true;
 }
 
+bool MdoApiSessionEventValue(const MdoSessionEventInfo* Event,
+    const char* ProjectId, const char* SessionId, bool FullText, xvalue** pValue)
+{
+    return MdoApiSessionEventValueLimit(Event, ProjectId, SessionId,
+        FullText ? MDO_API_EVENT_SINGLE_TEXT_BYTES : MDO_API_EVENT_TEXT_BYTES, pValue);
+}
+
 bool MdoApiSessionConversationRoute(MdoApiContext* Context)
 {
     char Project[MDO_PROJECT_ID_CAPACITY], Session[MDO_SESSION_ID_CAPACITY], Epoch[65] = "", Hash[65];
@@ -384,8 +391,11 @@ bool MdoApiSessionConversationRoute(MdoApiContext* Context)
     if (Before && After) goto invalid;
     Loaded = MdoSessionLoad(Project, Session, &Error);
     if (!Loaded) return MdoApiReplyError(Context, 404u, "session_not_found", "The requested session does not exist", NULL);
-    Snapshot = MdoSessionConversationPage(Project, Session, Before, After, Epoch, (size_t)Limit, &Page, &Error);
+    Snapshot = MdoSessionConversationReplyPage(Project, Session, Before, After, Epoch, (size_t)Limit, &Page, &Error);
     MdoSessionRelease(Loaded);
+    if (!Snapshot && Error.eCode == XWORK_ERROR_INVALID_ARGUMENT)
+        return MdoApiReplyError(Context, 413u, "conversation_group_too_large",
+            "A complete conversation group exceeds display limits", NULL);
     if (!Snapshot) return MdoApiReplyError(Context, Error.eCode == XWORK_ERROR_CONTEXT ? 409u : 503u,
         "conversation_changed", "Conversation changed while reading; retry the snapshot", NULL);
     Items = xrtValueArray(); Data = xrtValueObject();
@@ -393,9 +403,11 @@ bool MdoApiSessionConversationRoute(MdoApiContext* Context)
     for (size_t i = 0u; i < MdoSessionEventSnapshotCount(Snapshot); ++i) {
         MdoSessionEventInfo Event; xvalue* Item = NULL; char Node[256];
         Event.Size = sizeof(Event);
-        if (!MdoSessionEventSnapshotAt(Snapshot, i, &Event) ||
-            !MdoApiSessionEventValue(&Event, Project, Session,
-                Event.Kind == XWORK_EVENT_MODEL_TEXT_DELTA || Event.Kind == XWORK_EVENT_MODEL_REASONING_DELTA, &Item)) goto fail;
+        if (!MdoSessionEventSnapshotAt(Snapshot, i, &Event)) goto fail;
+        size_t TextLimit = Event.AgentDepth == 0u &&
+            (Event.Kind == XWORK_EVENT_MODEL_TEXT_DELTA || Event.Kind == XWORK_EVENT_AGENT_START)
+            ? 1024u * 1024u : MDO_API_EVENT_SINGLE_TEXT_BYTES;
+        if (!MdoApiSessionEventValueLimit(&Event, Project, Session, TextLimit, &Item)) goto fail;
         if (!MdoApiValueSetString(Item, "projection_epoch", Page.Epoch)) { xrtValueRelease(Item); goto fail; }
         snprintf(Node, sizeof(Node), "%s:%s:%llu", Session, Page.Epoch, (unsigned long long)Event.EventId);
         size_t Size = 0u; char* Encoded = xrtJsonStringify(Item, false, &Size);

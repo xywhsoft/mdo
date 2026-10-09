@@ -37,6 +37,16 @@ test("snapshot hashes, order, ownership and aggregate ranges are checked before 
   p.items_json=JSON.stringify(items); p.items_hash=sha(p.items_json);
   assert.throws(() => decodeConversationPage(p,owner),{code:"conversation_invalid"});
 });
+test("a complete reply can exceed the old byte and event preview limits", () => {
+  const p = page(Array.from({length: 110}, (_, i) => i + 1));
+  const items = JSON.parse(p.items_json);
+  items[0].text = "完整段落。".repeat(20_000);
+  p.items_json = JSON.stringify(items); p.items_hash = sha(p.items_json);
+  assert.ok(Buffer.byteLength(p.items_json) > 256 * 1024);
+  assert.equal(decodeConversationPage(p, owner).items[0].text, items[0].text);
+  const tooMany = page(Array.from({length: 4097}, (_, i) => i + 1));
+  assert.throws(() => decodeConversationPage(tooMany, owner), {code: "conversation_invalid"});
+});
 test("cold history uses one compact snapshot and cursor-only revalidation", async () => {
   const calls=[];
   fetcher = async url => { calls.push(url); return reply(url.includes("after=")
