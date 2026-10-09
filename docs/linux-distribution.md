@@ -66,4 +66,12 @@ xs 的 `xsAppRequestRestart()` 在关闭窗口、排空任务及释放 Home 后�
 启动及窗口关闭通过。发布清单和验收记录见
 [`releases/linux-distribution-2026-10-08.json`](releases/linux-distribution-2026-10-08.json)。
 本轮仅覆盖 x86_64；尚未实测 ARM64、物理 Wayland 桌面或真实 systemd 单元。
-musl GUI 的程序核心为静态链接，窗口仍通过系统 GTK3／WebKitGTK 4.1 运行。
+musl GUI 的程序核心为静态链接，窗口仍通过系统 GTK3／WebKitGTK 运行。
+
+2026-10-09 已更新四种程序（30000043～30000046），固定 glibc 2.28 编译基线，
+并支持 WebKitGTK 4.1／4.0 自动选择。官网直接提供可执行文件，用户选择
+glibc 或 musl 后下载运行；应用内更新按相同身份发布。两个版本的旧、新
+运行环境均通过启动、持久化、工具包安装、原子更新、原 PID 重启及公网
+接口检查；两套 WebKit ABI 均通过原生窗口验证。旧环境使用更新的系统 CA
+证书包，内核为 WSL，不能据此推断旧内核或所有发行版均已实测。
+验收记录见 [`releases/linux-baseline-2026-10-09.json`](releases/linux-baseline-2026-10-09.json)。

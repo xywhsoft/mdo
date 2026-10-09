@@ -1,0 +1,409 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-09",
+  "architecture": "x86_64",
+  "compiler_baseline": {
+    "distribution": "Debian 10.13",
+    "compiler": "GCC 8.3.0",
+    "glibc": "2.28",
+    "musl": "1.1.21"
+  },
+  "xs_commit": "a57d24e9f86bd21355225ef51280951f95a5ea1b",
+  "source_bundle_sha256": "e5152e0fe551317b3c67fcece61c846a9aabda073f9c1a720ca925204264d063",
+  "website_commit": "a698f360610a45058926579838f6a3916126cbdb",
+  "products": [
+    {
+      "product": "linux-x86_64-glibc-gui",
+      "bytes": 4030994,
+      "sha256": "5185b2877b84dfeb79ec43577a8c26106e11556811a16155114e47bad7b16bae",
+      "build_id": 30000043,
+      "url": "https://mdo.xywhsoft.com/download/files/mdo-linux-x86_64-glibc?build=30000043",
+      "static_core": false,
+      "glibc_required": "2.28",
+      "host_abi": {
+        "elf_needed": [
+          "libdl.so.2",
+          "libpthread.so.0",
+          "libm.so.6",
+          "libc.so.6"
+        ],
+        "elf_interpreter": "/lib64/ld-linux-x86-64.so.2",
+        "glibc_required": "2.28",
+        "glibc_versions": [
+          "2.2.5",
+          "2.3",
+          "2.3.2",
+          "2.3.3",
+          "2.4",
+          "2.6",
+          "2.7",
+          "2.9",
+          "2.12",
+          "2.14",
+          "2.15",
+          "2.17",
+          "2.25",
+          "2.28"
+        ],
+        "glibc_max": "2.28",
+        "static_core": false
+      },
+      "gui_abi": {
+        "elf_needed": [
+          "libgtk-3.so.0",
+          "libgdk-3.so.0",
+          "libpangocairo-1.0.so.0",
+          "libpango-1.0.so.0",
+          "libatk-1.0.so.0",
+          "libcairo-gobject.so.2",
+          "libcairo.so.2",
+          "libgdk_pixbuf-2.0.so.0",
+          "libgio-2.0.so.0",
+          "libgobject-2.0.so.0",
+          "libglib-2.0.so.0",
+          "libX11.so.6",
+          "libdl.so.2",
+          "libpthread.so.0",
+          "libc.so.6"
+        ],
+        "elf_interpreter": "/lib64/ld-linux-x86-64.so.2",
+        "glibc_required": "2.2.5",
+        "glibc_versions": [
+          "2.2.5"
+        ],
+        "glibc_max": "2.28",
+        "static_core": false
+      },
+      "source_commit_at_packaging": "743abff40deaaebeb2b44c6f755051df86607b9a",
+      "source_worktree_dirty": true,
+      "packaged_app_sha256": "9d676907353379cc7a1dba2ee656e967d4155b2ec7930a25d2711fd91494a1e1"
+    },
+    {
+      "product": "linux-x86_64-glibc-server",
+      "bytes": 4002094,
+      "sha256": "00abc02e97dbff7f068100ba4d68ddd19f7d8bd1af121a887ece6ec61e3add30",
+      "build_id": 30000044,
+      "url": "https://mdo.xywhsoft.com/download/files/mdo-server-linux-x86_64-glibc?build=30000044",
+      "static_core": false,
+      "glibc_required": "2.28",
+      "host_abi": {
+        "elf_needed": [
+          "libdl.so.2",
+          "libpthread.so.0",
+          "libm.so.6",
+          "libc.so.6"
+        ],
+        "elf_interpreter": "/lib64/ld-linux-x86-64.so.2",
+        "glibc_required": "2.28",
+        "glibc_versions": [
+          "2.2.5",
+          "2.3",
+          "2.3.2",
+          "2.3.3",
+          "2.4",
+          "2.6",
+          "2.7",
+          "2.9",
+          "2.12",
+          "2.14",
+          "2.17",
+          "2.25",
+          "2.28"
+        ],
+        "glibc_max": "2.28",
+        "static_core": false
+      },
+      "gui_abi": null,
+      "source_commit_at_packaging": "743abff40deaaebeb2b44c6f755051df86607b9a",
+      "source_worktree_dirty": true,
+      "packaged_app_sha256": "602daf3baba330f649fa1cd1d8d8199c1fbf35352ec172e50785270a0ebb3a6b"
+    },
+    {
+      "product": "linux-x86_64-musl-gui",
+      "bytes": 5872649,
+      "sha256": "a823be64c95ea30127dd25b77408bdeb096d4b4fb47a7b73ec2a40ff6712a259",
+      "build_id": 30000045,
+      "url": "https://mdo.xywhsoft.com/download/files/mdo-linux-x86_64-musl?build=30000045",
+      "static_core": true,
+      "glibc_required": null,
+      "host_abi": {
+        "elf_needed": [],
+        "elf_interpreter": null,
+        "glibc_required": null,
+        "glibc_versions": [],
+        "glibc_max": "2.28",
+        "static_core": true
+      },
+      "gui_abi": {
+        "elf_needed": [
+          "libgtk-3.so.0",
+          "libgdk-3.so.0",
+          "libpangocairo-1.0.so.0",
+          "libpango-1.0.so.0",
+          "libatk-1.0.so.0",
+          "libcairo-gobject.so.2",
+          "libcairo.so.2",
+          "libgdk_pixbuf-2.0.so.0",
+          "libgio-2.0.so.0",
+          "libgobject-2.0.so.0",
+          "libglib-2.0.so.0",
+          "libX11.so.6",
+          "libdl.so.2",
+          "libpthread.so.0",
+          "libc.so.6"
+        ],
+        "elf_interpreter": "/lib64/ld-linux-x86-64.so.2",
+        "glibc_required": "2.2.5",
+        "glibc_versions": [
+          "2.2.5"
+        ],
+        "glibc_max": "2.28",
+        "static_core": false
+      },
+      "source_commit_at_packaging": "743abff40deaaebeb2b44c6f755051df86607b9a",
+      "source_worktree_dirty": true,
+      "packaged_app_sha256": "9e2048359659aea4faa2921234635fa27806f391498d1e205fcc993882c57c9a"
+    },
+    {
+      "product": "linux-x86_64-musl-server",
+      "bytes": 5843806,
+      "sha256": "1d373766c0a9eed96738596044728cb87e6fbe08f97e58ccdb5f2e9ac930f92d",
+      "build_id": 30000046,
+      "url": "https://mdo.xywhsoft.com/download/files/mdo-server-linux-x86_64-musl?build=30000046",
+      "static_core": true,
+      "glibc_required": null,
+      "host_abi": {
+        "elf_needed": [],
+        "elf_interpreter": null,
+        "glibc_required": null,
+        "glibc_versions": [],
+        "glibc_max": "2.28",
+        "static_core": true
+      },
+      "gui_abi": null,
+      "source_commit_at_packaging": "743abff40deaaebeb2b44c6f755051df86607b9a",
+      "source_worktree_dirty": true,
+      "packaged_app_sha256": "7396484f1f21a259cb76523f3d6bd9c31d0c3df343437fd145d24417e756c01a"
+    }
+  ],
+  "checks": [
+    {
+      "environment": "buster",
+      "product": "linux-x86_64-glibc-gui",
+      "checks": [
+        "packed TCC startup",
+        "bootstrap/write token",
+        "projects API",
+        "project persistence",
+        "SIGTERM/console stop",
+        "restart"
+      ]
+    },
+    {
+      "environment": "buster",
+      "product": "linux-x86_64-glibc-gui",
+      "checks": [
+        "packed native startup",
+        "real frontend screenshot",
+        "portable window cache",
+        "native window close stops service"
+      ]
+    },
+    {
+      "environment": "modern",
+      "product": "linux-x86_64-glibc-gui",
+      "checks": [
+        "packed TCC startup",
+        "bootstrap/write token",
+        "projects API",
+        "project persistence",
+        "SIGTERM/console stop",
+        "restart"
+      ]
+    },
+    {
+      "environment": "modern",
+      "product": "linux-x86_64-glibc-gui",
+      "checks": [
+        "packed native startup",
+        "real frontend screenshot",
+        "portable window cache",
+        "native window close stops service"
+      ]
+    },
+    {
+      "environment": "buster",
+      "product": "linux-x86_64-glibc-server",
+      "checks": [
+        "packed TCC startup",
+        "bootstrap/write token",
+        "projects API",
+        "project persistence",
+        "SIGTERM/console stop",
+        "restart"
+      ]
+    },
+    {
+      "environment": "buster",
+      "product": "linux-x86_64-glibc-server",
+      "checks": [
+        "core+Python SHA256 extraction",
+        "POSIX modes",
+        "10 functional probes",
+        "edition mismatch rejected",
+        "damaged update rejected",
+        "atomic executable replacement",
+        "previous binary retained",
+        "PID-preserving restart",
+        "offline tool persistence",
+        "SIGTERM"
+      ]
+    },
+    {
+      "environment": "modern",
+      "product": "linux-x86_64-glibc-server",
+      "checks": [
+        "packed TCC startup",
+        "bootstrap/write token",
+        "projects API",
+        "project persistence",
+        "SIGTERM/console stop",
+        "restart"
+      ]
+    },
+    {
+      "environment": "modern",
+      "product": "linux-x86_64-glibc-server",
+      "checks": [
+        "core+Python SHA256 extraction",
+        "POSIX modes",
+        "10 functional probes",
+        "edition mismatch rejected",
+        "damaged update rejected",
+        "atomic executable replacement",
+        "previous binary retained",
+        "PID-preserving restart",
+        "offline tool persistence",
+        "SIGTERM"
+      ]
+    },
+    {
+      "environment": "buster",
+      "product": "linux-x86_64-musl-gui",
+      "checks": [
+        "packed TCC startup",
+        "bootstrap/write token",
+        "projects API",
+        "project persistence",
+        "SIGTERM/console stop",
+        "restart"
+      ]
+    },
+    {
+      "environment": "buster",
+      "product": "linux-x86_64-musl-gui",
+      "checks": [
+        "packed native startup",
+        "real frontend screenshot",
+        "portable window cache",
+        "native window close stops service"
+      ]
+    },
+    {
+      "environment": "modern",
+      "product": "linux-x86_64-musl-gui",
+      "checks": [
+        "packed TCC startup",
+        "bootstrap/write token",
+        "projects API",
+        "project persistence",
+        "SIGTERM/console stop",
+        "restart"
+      ]
+    },
+    {
+      "environment": "modern",
+      "product": "linux-x86_64-musl-gui",
+      "checks": [
+        "packed native startup",
+        "real frontend screenshot",
+        "portable window cache",
+        "native window close stops service"
+      ]
+    },
+    {
+      "environment": "buster",
+      "product": "linux-x86_64-musl-server",
+      "checks": [
+        "packed TCC startup",
+        "bootstrap/write token",
+        "projects API",
+        "project persistence",
+        "SIGTERM/console stop",
+        "restart"
+      ]
+    },
+    {
+      "environment": "buster",
+      "product": "linux-x86_64-musl-server",
+      "checks": [
+        "core+Python SHA256 extraction",
+        "POSIX modes",
+        "10 functional probes",
+        "edition mismatch rejected",
+        "damaged update rejected",
+        "atomic executable replacement",
+        "previous binary retained",
+        "PID-preserving restart",
+        "offline tool persistence",
+        "SIGTERM"
+      ]
+    },
+    {
+      "environment": "modern",
+      "product": "linux-x86_64-musl-server",
+      "checks": [
+        "packed TCC startup",
+        "bootstrap/write token",
+        "projects API",
+        "project persistence",
+        "SIGTERM/console stop",
+        "restart"
+      ]
+    },
+    {
+      "environment": "modern",
+      "product": "linux-x86_64-musl-server",
+      "checks": [
+        "core+Python SHA256 extraction",
+        "POSIX modes",
+        "10 functional probes",
+        "edition mismatch rejected",
+        "damaged update rejected",
+        "atomic executable replacement",
+        "previous binary retained",
+        "PID-preserving restart",
+        "offline tool persistence",
+        "SIGTERM"
+      ]
+    }
+  ],
+  "public_update_checks": [
+    "glibc and musl packed server HTTPS checks on both environments",
+    "four update entries and four complete object downloads verified",
+    "three download pages and four raw HTTPS downloads verified"
+  ],
+  "gui_runtime": "GTK3 + WebKitGTK 4.1 or 4.0 >= 2.30; 4.1 preferred",
+  "environments": [
+    "Debian 10.13 userspace with maintained current CA certificates, WebKitGTK 4.0 (2.36.4)",
+    "Ubuntu 26.04.1 userspace, WebKitGTK 4.1"
+  ],
+  "limitations": [
+    "Both userspaces share the WSL Linux kernel; old kernels were not tested.",
+    "ARM64 and physical Wayland desktops were not tested.",
+    "musl desktop includes a separate glibc GTK window; only the core is static.",
+    "Historical Debian CA bundles can fail strict NameConstraints parsing; maintain current system CA certificates.",
+    "Linux persistent account login remains disabled until a desktop keyring is integrated.",
+    "Products were packaged from a working tree with concurrent unrelated development; exact application digest is recorded."
+  ]
+}
