@@ -1,0 +1,3 @@
+Browser tab: 39, Title: "墨斗", URL: "http://127.0.0.1:62701/#/settings/extensions".
+There has been no change in the accessibility tree.
+The focused UI element is 40 button (disabled) 重新编译

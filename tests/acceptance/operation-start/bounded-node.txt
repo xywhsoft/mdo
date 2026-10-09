@@ -1,0 +1,31 @@
+✔ accepted MCP operation quietly survives two 503 reads without another POST (29.4465ms)
+✔ already terminal failures and cancellations are never reported as success (4.4016ms)
+✔ a different operation ID or server cannot satisfy the original request (2.6392ms)
+✔ catalog reload returns the confirmed terminal result rather than its queued snapshot (1.3067ms)
+✔ normal pending states use progressively slower polls and preserve one accepted ID (1.9432ms)
+✔ cancellation releases an abort-ignoring body without cancelling the native operation (1.4683ms)
+✔ page exit cancels a retry wait without another request (1.0972ms)
+✔ hanging status bodies end within the shared minute as unconfirmed, not failed (2.413ms)
+✔ an unaccepted failing POST is never automatically replayed (0.8127ms)
+✔ target changes while accepting an operation cannot read a different device (1.2436ms)
+✔ an accepted reply must also identify the server that was actually requested (0.7721ms)
+✔ a permanent status refusal is final after one GET (0.9491ms)
+✔ a lost startup reply is recovered by its requested ID with no repeated POST (1.663ms)
+✔ a hanging startup body is bounded and its late result cannot replace confirmation (0.9764ms)
+✔ unknown acceptance ends accurately and retains a GET-only recheck identity (1.9227ms)
+✔ startup and subsequent observation share one minute (1.5908ms)
+✔ leaving during an uncertain startup preserves the identity for GET-only recheck (1.2556ms)
+✔ malformed acknowledgement recovers module reload through the same identity (1.505ms)
+✔ unrelated 404 after acceptance is final rather than evidence of a late submission (1.0339ms)
+✔ terminal MCP failure reasons are localized and never reflect provider text (57.6955ms)
+✔ HTTP authentication, permission, limit and service failures have distinct final advice (2.0731ms)
+✔ legacy or unknown error codes remain safe and do not start a retry (1.0706ms)
+✔ malformed optional diagnostic metadata cannot become final advice (1.4899ms)
+ℹ tests 23
+ℹ suites 0
+ℹ pass 23
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 162.11

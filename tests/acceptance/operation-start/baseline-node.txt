@@ -1,0 +1,174 @@
+✖ accepted MCP operation quietly survives two 503 reads without another POST (26.0419ms)
+✔ already terminal failures and cancellations are never reported as success (2.3762ms)
+✔ a different operation ID or server cannot satisfy the original request (2.6598ms)
+✖ catalog reload returns the confirmed terminal result rather than its queued snapshot (0.9574ms)
+✖ normal pending states use progressively slower polls and preserve one accepted ID (1.1142ms)
+✔ cancellation releases an abort-ignoring body without cancelling the native operation (1.4917ms)
+✔ page exit cancels a retry wait without another request (1.0571ms)
+✖ hanging status bodies end within the shared minute as unconfirmed, not failed (1.8804ms)
+✔ an unaccepted failing POST is never automatically replayed (0.8494ms)
+✔ target changes while accepting an operation cannot read a different device (0.6927ms)
+✔ an accepted reply must also identify the server that was actually requested (1.1631ms)
+✔ a permanent status refusal is final after one GET (0.6809ms)
+✖ a lost startup reply is recovered by its requested ID with no repeated POST (0.4986ms)
+✖ a hanging startup body is bounded and its late result cannot replace confirmation (0.629ms)
+✖ unknown acceptance ends accurately and retains a GET-only recheck identity (0.6985ms)
+✖ startup and subsequent observation share one minute (1.2031ms)
+ℹ tests 16
+ℹ suites 0
+ℹ pass 8
+ℹ fail 8
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 114.3909
+
+✖ failing tests:
+
+test at tests\test_resource_operation.mjs:13:29
+✖ accepted MCP operation quietly survives two 503 reads without another POST (26.0419ms)
+  Error [ApiError]: 操作状态响应不符，请重新读取状态。
+      at invalid (file:///D:/GIT/mdo/app/web/js/state/resource-operation.js:9:23)
+      at validate (file:///D:/GIT/mdo/app/web/js/state/resource-operation.js:55:81)
+      at file:///D:/GIT/mdo/app/web/js/state/resource-operation.js:89:24
+      at async attempt (file:///D:/GIT/mdo/app/web/js/api/request-recovery.js:34:22)
+      at async Object.request (file:///D:/GIT/mdo/app/web/js/api/request-recovery.js:56:22)
+      at async awaitResourceOperation (file:///D:/GIT/mdo/app/web/js/state/resource-operation.js:86:17) {
+    status: 0,
+    code: 'resource_operation_invalid',
+    requestId: '',
+    details: null,
+    operation: { id: 'job-1', kind: 'mcp_refresh', target: 'local', state: 'running', terminal: false, message: '' }
+  }
+
+test at tests\test_resource_operation.mjs:13:29
+✖ catalog reload returns the confirmed terminal result rather than its queued snapshot (0.9574ms)
+  Error [ApiError]: 操作状态响应不符，请重新读取状态。
+      at invalid (file:///D:/GIT/mdo/app/web/js/state/resource-operation.js:9:23)
+      at validate (file:///D:/GIT/mdo/app/web/js/state/resource-operation.js:55:81)
+      at file:///D:/GIT/mdo/app/web/js/state/resource-operation.js:89:24
+      at async attempt (file:///D:/GIT/mdo/app/web/js/api/request-recovery.js:34:22)
+      at async Object.request (file:///D:/GIT/mdo/app/web/js/api/request-recovery.js:56:22)
+      at async awaitResourceOperation (file:///D:/GIT/mdo/app/web/js/state/resource-operation.js:86:17) {
+    status: 0,
+    code: 'resource_operation_invalid',
+    requestId: '',
+    details: null,
+    operation: { id: 'job-1', kind: 'module_reload', target: '', state: 'running', terminal: false, message: '' }
+  }
+
+test at tests\test_resource_operation.mjs:13:29
+✖ normal pending states use progressively slower polls and preserve one accepted ID (1.1142ms)
+  Error [ApiError]: 操作状态响应不符，请重新读取状态。
+      at invalid (file:///D:/GIT/mdo/app/web/js/state/resource-operation.js:9:23)
+      at validate (file:///D:/GIT/mdo/app/web/js/state/resource-operation.js:55:81)
+      at file:///D:/GIT/mdo/app/web/js/state/resource-operation.js:89:24
+      at async attempt (file:///D:/GIT/mdo/app/web/js/api/request-recovery.js:34:22)
+      at async Object.request (file:///D:/GIT/mdo/app/web/js/api/request-recovery.js:56:22)
+      at async awaitResourceOperation (file:///D:/GIT/mdo/app/web/js/state/resource-operation.js:86:17) {
+    status: 0,
+    code: 'resource_operation_invalid',
+    requestId: '',
+    details: null,
+    operation: { id: 'job-1', kind: 'mcp_refresh', target: 'local', state: 'running', terminal: false, message: '' }
+  }
+
+test at tests\test_resource_operation.mjs:13:29
+✖ hanging status bodies end within the shared minute as unconfirmed, not failed (1.8804ms)
+  AssertionError [ERR_ASSERTION]: The validation function is expected to return "true". Received false
+
+  Caught error:
+
+  ApiError: 状态暂未确认，操作可能仍在后台执行。恢复连接后可重新读取状态；没有重新执行。
+      at async TestContext.<anonymous> (file:///D:/GIT/mdo/tests/test_resource_operation.mjs:117:3)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: ApiError: 状态暂未确认，操作可能仍在后台执行。恢复连接后可重新读取状态；没有重新执行。
+        at awaitResourceOperation (file:///D:/GIT/mdo/app/web/js/state/resource-operation.js:100:21) {
+      [cause]: ApiError: Request timed out
+          at timeoutError (file:///D:/GIT/mdo/app/web/js/api/request-recovery.js:11:24)
+          at Object.fn (file:///D:/GIT/mdo/app/web/js/api/request-recovery.js:30:39)
+          at Object.settle (file:///D:/GIT/mdo/tests/test_resource_operation.mjs:31:51)
+          at async waitForActual (node:assert:646:5)
+          at async strict.rejects (node:assert:769:25)
+          at async TestContext.<anonymous> (file:///D:/GIT/mdo/tests/test_resource_operation.mjs:117:3)
+          at async Test.run (node:internal/test_runner/test:1389:7)
+          at async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+    },
+    operator: 'rejects',
+    diff: 'simple'
+  }
+
+test at tests\test_resource_operation.mjs:13:29
+✖ a lost startup reply is recovered by its requested ID with no repeated POST (0.4986ms)
+  Error [ApiError]: 无法连接本地 mdo 服务
+      at sendJson (file:///D:/GIT/mdo/app/web/js/api/client.js:169:11) {
+    status: 0,
+    code: 'network_error',
+    requestId: '',
+    details: null
+  }
+
+test at tests\test_resource_operation.mjs:13:29
+✖ a hanging startup body is bounded and its late result cannot replace confirmation (0.629ms)
+  AssertionError [ERR_ASSERTION]: pending observations must own a finite deadline
+      at Object.settle (file:///D:/GIT/mdo/tests/test_resource_operation.mjs:29:16)
+      at async TestContext.<anonymous> (file:///D:/GIT/mdo/tests/test_resource_operation.mjs:165:17)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 0,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at tests\test_resource_operation.mjs:13:29
+✖ unknown acceptance ends accurately and retains a GET-only recheck identity (0.6985ms)
+  AssertionError [ERR_ASSERTION]: The validation function is expected to return "true". Received false
+
+  Caught error:
+
+  ApiError: temporary
+      at async TestContext.<anonymous> (file:///D:/GIT/mdo/tests/test_resource_operation.mjs:175:3)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: ApiError: temporary
+        at readEnvelope (file:///D:/GIT/mdo/app/web/js/api/client.js:113:19)
+        at async trackWrite (file:///D:/GIT/mdo/app/web/js/api/client.js:13:16)
+        at async refreshMcp (file:///D:/GIT/mdo/app/web/js/state/resources.js:76:22),
+    operator: 'rejects',
+    diff: 'simple'
+  }
+
+test at tests\test_resource_operation.mjs:13:29
+✖ startup and subsequent observation share one minute (1.2031ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+    Comparison {
+  +   code: 'ERR_ASSERTION'
+  -   code: 'resource_operation_unconfirmed'
+    }
+
+      at async TestContext.<anonymous> (file:///D:/GIT/mdo/tests/test_resource_operation.mjs:187:3)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: AssertionError [ERR_ASSERTION]: pending observations must own a finite deadline
+        at Object.settle (file:///D:/GIT/mdo/tests/test_resource_operation.mjs:29:16)
+        at async waitForActual (node:assert:646:5)
+        at async strict.rejects (node:assert:769:25)
+        at async TestContext.<anonymous> (file:///D:/GIT/mdo/tests/test_resource_operation.mjs:187:3)
+        at async Test.run (node:internal/test_runner/test:1389:7)
+        at async Test.processPendingSubtests (node:internal/test_runner/test:960:7),
+    expected: { code: 'resource_operation_unconfirmed' },
+    operator: 'rejects',
+    diff: 'simple'
+  }

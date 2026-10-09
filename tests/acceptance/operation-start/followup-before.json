@@ -1,0 +1,6 @@
+{
+  "body": "跳到对话\n墨斗\n◉\n登录账号\n本机\n▾\n新建任务\nCtrl N\n计划任务\n项目\n\n添加项目，让任务按工作区分组。\n\n任务\n对话恢复浏览器验收\n4分钟前\n本地服务 0.1.0\n默认项目\n▾\n/\n对话恢复浏览器验收\n\nmdo.default · conversation-fixture\n\n就绪\n今天要做什么？\n\n描述一个目标。墨斗会分析代码、调用工具，并把过程留在可恢复的会话中。\n\n分析当前项目\n技术栈、目录结构与改进建议\n跑测试并修复失败\n定位失败、修复并复测\n做一个小工具\n先明确需求，再交互式开发\n建个定时任务\n日报、巡检与周期整理\n向 Agent 描述任务\n输入 ~6 tok\nConversation fixture\n无思考\nEnter 发送 · Shift Enter 换行",
+  "draft": "OPERATION_START_FOLLOWUP",
+  "errors": [],
+  "recheck": false
+}

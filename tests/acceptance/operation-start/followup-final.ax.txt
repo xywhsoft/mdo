@@ -1,0 +1,3 @@
+Browser tab: 39, Title: "墨斗", URL: "http://127.0.0.1:62701/#/projects/default/sessions/V-OSQIfcvpgHQF5SAhwm_gcgPaYJ_yvw".
+There has been no change in the accessibility tree.
+The focused UI element is 67 text entry area (settable) 向 Agent 描述任务, ID: prompt

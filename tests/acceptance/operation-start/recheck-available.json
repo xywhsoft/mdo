@@ -1,0 +1,6 @@
+{
+  "body": "跳到设置内容\nMCP\n查看快捷键\n\n基础设置\n\n常规 Agent 行为 模型管理 记忆管理 网络 诊断与存储\n\n扩展能力\n\nAgent 扩展中心 SubAgent 工具 Skill MCP 命令 C 模块 扩展工具包 权限\n\n账号与统计\n\n账号 远程控制\nMCP\n新建\n导入\n刷新\n重新读取状态\n\n保存配置不会启动程序。测试连接或模型调用时才建立连接；远程服务使用 HTTPS，本机服务也可使用 HTTP。\n\nlocal\n\nDisposable local MCP acceptance\n\nmcp/local.json\n已启用\n就绪\n1 个工具\n编辑\n停用\n导出\n测试连接\n断开\n删除\nmissing\n\nDisposable local MCP acceptance\n\nmcp/missing.json\n已启用\n未连接\n0 个工具\n编辑\n停用\n导出\n测试连接\n删除",
+  "draft": "OPERATION_START_FOLLOWUP",
+  "errors": [],
+  "recheck": true
+}

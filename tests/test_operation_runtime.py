@@ -39,6 +39,7 @@ static xatomic32 FailReload;
 static xatomic32 ReloadCalls;
 static xatomic32 FailMcp;
 static xatomic32 McpCalls;
+static xatomic32 StatusBusy;
 static uint64 Generation = 1u;
 static uint64 McpSchema;
 static uint64 McpRequests;
@@ -89,6 +90,7 @@ bool MdoMcpCatalogFind(const MdoMcpCatalog* catalog, const char* id,
     return true;
 }
 bool MdoMcpManagerGetStatus(const char* id, MdoMcpServerStatus* status) {
+    if (xrtAtomic32Load(&StatusBusy, XMEMORY_ACQUIRE)) return false;
     if (strcmp(id, "mock") != 0 || status == NULL ||
         status->Size < sizeof(*status)) return false;
     status->CatalogGeneration = 7u;
@@ -212,6 +214,7 @@ void ServiceInit(XS_HostInfo* host) {
     xrtAtomic32Init(&ReloadCalls, 0u);
     xrtAtomic32Init(&FailMcp, 0u);
     xrtAtomic32Init(&McpCalls, 0u);
+    xrtAtomic32Init(&StatusBusy, 0u);
     if (!MdoOperationManagerInit()) { printf("init_error=1\n"); goto done; }
 
     memset(&success, 0, sizeof(success)); success.Size = sizeof(success);
@@ -251,7 +254,7 @@ void ServiceInit(XS_HostInfo* host) {
 
     memset(&mcp_success, 0, sizeof(mcp_success));
     mcp_success.Size = sizeof(mcp_success);
-    if (!MdoOperationStartMcpRefresh("mock", &mcp_success)) {
+    if (!MdoOperationStartMcpRefreshIdentified("mock", "op-c-11111111111111111111111111111111", &mcp_success)) {
         printf("start_error=mcp_success\n"); goto done;
     }
     snprintf(mcp_id, sizeof(mcp_id), "%s", mcp_success.Id);
@@ -264,6 +267,13 @@ void ServiceInit(XS_HostInfo* host) {
         (unsigned long long)current.AuxiliaryGeneration,
         (unsigned long long)current.ItemCount,
         current.Connected ? 1 : 0);
+    xrtAtomic32Store(&StatusBusy, 1u, XMEMORY_RELEASE);
+    if (!MdoOperationStartMcpRefreshIdentified("mock", mcp_id, &current) ||
+        current.Sequence != mcp_success.Sequence || current.State != MDO_OPERATION_SUCCEEDED) {
+        printf("identity_error=busy_mcp\n"); goto done;
+    }
+    xrtAtomic32Store(&StatusBusy, 0u, XMEMORY_RELEASE);
+    printf("identity=busy_status_does_not_hide_admitted_mcp\n");
 
     xrtAtomic32Store(&FailMcp, 1u, XMEMORY_RELEASE);
     memset(&mcp_failure, 0, sizeof(mcp_failure));
@@ -414,6 +424,7 @@ def main() -> int:
         assert "cancel_error=" not in output, output
         assert "identity_error=" not in output, output
         assert "identity=terminal_pending_cancelled_same_job invalid_and_conflict_rejected" in output, output
+        assert "identity=busy_status_does_not_hide_admitted_mcp" in output, output
         assert "success=state:2 generation:2 modules:2 tools:3 agents:1" in output, output
         assert "failure=state:3 message:Module reload failed" in output, output
         assert "cancel=state:4 requested:1" in output, output

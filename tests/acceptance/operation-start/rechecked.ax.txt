@@ -1,0 +1,17 @@
+Browser tab: 39, Title: "墨斗", URL: "http://127.0.0.1:62701/#/settings/mcp".
+The following is a diff from the previous accessibility tree with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
+~				36 button 新建
+~				37 button 导入
+~				38 button 刷新
+~				46 button 编辑
+~				47 button 停用
+~				48 button 导出
+~				49 button 测试连接
+~				50 button 断开
+~				51 button 删除
+~				57 button 编辑
+~				58 button 停用
+~				59 button 导出
+~				60 button 测试连接
+~				61 button 删除
+The focused UI element is 0 AXWebArea 墨斗, URL: 127.0.0.1:62701/#/settings/mcp

@@ -1,0 +1,23 @@
+{
+  "passed": true,
+  "frontend_pass": 959,
+  "contracts_pass": 124,
+  "source_commit": "f932b658fd6efdc18325974eea81dc38bfaa9b88",
+  "sha256": "e2779f7539ffa697248f3b6349249d30384c2928c8c8c01f678753dcbe8cadf4",
+  "bytes": 4553471,
+  "embedded_sources": {
+    "include/mdo/operations.h": "2d270dbc8bf32ebe08e3c5fca77bfeb34824c5082c511e6e88f235e80afaa565",
+    "src/api/operations.c": "b2a6dc07566086dffe72a393b35291a12fe424fe2ffc7639270188446ef1af9b",
+    "src/operations/manager.c": "f90c9457e13ae6a9dbc6ae496db556fc1a97c7c73d4103eb1c141aaadc3b0196",
+    "web/js/state/resource-operation-start.js": "175b537d6bdb630ff72aad1c39eac5cc39ebe330d271d6e02fc9d8677001113a",
+    "web/js/state/resource-operation.js": "a6d9c2a2e93d05396b7370fb8f454e645895241495e8dfa020b53d24bdb4b1e5",
+    "web/js/state/resources.js": "01d1b37b2c67ad8280f247eb3fdfb30f53033adc47757a19d7ded27abf945d8d",
+    "web/js/features/settings/extension-panels.js": "15de0d3b4db74d8634f44d8061709ed9fb82abcbe63f083bbc660893bb2c0eed"
+  },
+  "browser_transport_posts": 5,
+  "native_jobs": 4,
+  "model_requests": 1,
+  "model_errors": 0,
+  "startup_body_wait_seconds": 8.25,
+  "stress_or_high_load": false
+}

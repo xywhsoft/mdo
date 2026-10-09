@@ -1,0 +1,14 @@
+[xs] XServer 1.0.0 (commit 93ef1f61e3203cfd71868ae1c4d8a4743d96d9c8, 2026-10-10, windows)
+[xs] extensions (5): xllm, xllm-session, xwork, webview, image
+[xs] config loaded: D:\GIT\mdo\.build\operation-identity-1nrm76wh\site\xs.json (1 servers)
+[xs] server 'operation-probe' class=http 127.0.0.1:65507 tls=off enabled
+[xs]   default-host 'probe' path=D:\GIT\mdo\.build\operation-identity-1nrm76wh\site\web devfile=D:\GIT\mdo\.build\operation-identity-1nrm76wh\site\probe.c
+[xs] engine started, workers=12
+[xs] script loaded: D:\GIT\mdo\.build\operation-identity-1nrm76wh\site\probe.c (14.5 KB gen 1)
+mcp_classification=cases:21 passed:1
+success=state:2 generation:2 modules:2 tools:3 agents:1
+failure=state:3 message:Module reload failed; the previous generation remains active
+mcp_success=state:2 target:mock catalog:7 schema:1 tools:4 connected:1
+identity_error=busy_mcp
+probe_done=1
+[xs] http server 'operation-probe' static-only mode
