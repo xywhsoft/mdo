@@ -1,0 +1,7 @@
+{
+  "errorToasts": [],
+  "id": "qa-new-intent",
+  "idDisabled": false,
+  "prompt": "Keep the new editor and its instructions.",
+  "title": "新建 Agent"
+}

@@ -1,0 +1,19 @@
+{
+  "passed": true,
+  "mdo_commit": "b242ca6611d2c0a9b082a89a49658005e873594e",
+  "sha256": "0b0316c4676a8ae56237a4796d3f68cc7e62c46bac123651b4023d0dd8b6b95a",
+  "baseline_sha256": "a1f8da520a0f2c40dfc6cc0215bfc28bc0a36a45feee7e5e9f83a05c1e7b0dee",
+  "bytes": 4541013,
+  "embedded_sources": {
+    "web/js/app.js": "7ae3dbd35b75d3988d828f889be16bd416ef4dabeaebdf808831fd49f36d58ab",
+    "web/js/features/settings/extension-panels.js": "95fcf0614b80a51deba946d89f25d97b6cda98e88b393dcab71d6d12d9c07655",
+    "web/js/features/settings/extension-reads.js": "8a90bf2b21903d3238700ec19995c528aefbf946780d69209fb1954389fb3745"
+  },
+  "page_model_requests": 1,
+  "native_extension_model_requests": 16,
+  "final_model_errors": 0,
+  "catalog_final_notices": 1,
+  "external_provider_requests": 0,
+  "android_device_tested": false,
+  "daily_app_overwritten": false
+}
