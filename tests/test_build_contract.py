@@ -3,9 +3,14 @@
 from __future__ import annotations
 
 import importlib.util
+import argparse
+import contextlib
 import hashlib
+import io
 import json
 import re
+import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -19,9 +24,61 @@ BUILD = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(BUILD)
 
 
+def load_driver(name: str, filename: str):
+    spec = importlib.util.spec_from_file_location(name, ROOT / "tools" / filename)
+    module = importlib.util.module_from_spec(spec)
+    with patch.dict(sys.modules, {"build_mdo": BUILD}):
+        spec.loader.exec_module(module)
+    return module
+
+
+ANDROID_BUILD = load_driver("mdo_android_build", "build_android.py")
+ALL_BUILD = load_driver("mdo_all_build", "build.py")
+
+
 class BuildContractTests(unittest.TestCase):
     def setUp(self) -> None:
         self.lock = json.loads((ROOT / "deps.lock").read_text(encoding="utf-8"))
+
+    def test_android_editions_keep_distinct_outputs_and_build_ids(self) -> None:
+        release = json.loads((ROOT / "app/release.json").read_text(encoding="utf-8"))
+        args = argparse.Namespace(edition="both", output=None, version_code=None)
+        outputs = ANDROID_BUILD.edition_outputs(args, release)
+        self.assertEqual(outputs, [
+            ("lite", ROOT / "mdo-arm64-v8a.apk", release["android_lite_build_id"]),
+            ("full", ROOT / "mdo-full-arm64-v8a.apk", release["android_full_build_id"]),
+        ])
+        with tempfile.TemporaryDirectory() as raw:
+            args.edition = "full"
+            args.output = Path(raw) / "qa.apk"
+            args.version_code = 30000099
+            self.assertEqual(ANDROID_BUILD.edition_outputs(args, release), [("full", args.output.resolve(), 30000099)])
+            args.edition = "both"
+            with self.assertRaises(BUILD.BuildError):
+                ANDROID_BUILD.edition_outputs(args, release)
+
+    def test_unified_build_runs_both_editions_and_reuses_desktop_host(self) -> None:
+        toolchain = ["--sdk", "/sdk", "--java-home", "/java", "--wsl"]
+        with patch.object(ALL_BUILD, "android_toolchain", return_value=toolchain), \
+             patch.object(BUILD, "find_xserver", return_value=ROOT / ".build/implementation-xs"), \
+             patch.object(BUILD, "run") as run:
+            self.assertEqual(ALL_BUILD.main(["--skip-host-build", "--skip-native-build"]), 0)
+        self.assertEqual(run.call_count, 2)
+        desktop, android = [call.args[0] for call in run.call_args_list]
+        self.assertEqual(Path(desktop[1]).name, "build_mdo.py")
+        self.assertEqual(Path(android[1]).name, "build_android.py")
+        self.assertEqual(android[android.index("--edition") + 1], "both")
+        self.assertIn("--skip-host-build", android)
+        self.assertIn("--skip-native-build", android)
+        self.assertNotIn("--output", android)
+
+    def test_unified_build_failure_does_not_continue_or_report_success(self) -> None:
+        with patch.object(ALL_BUILD, "android_toolchain", return_value=["--sdk", "/sdk", "--java-home", "/java"]), \
+             patch.object(BUILD, "find_xserver", return_value=ROOT / ".build/implementation-xs"), \
+             patch.object(BUILD, "run", side_effect=subprocess.CalledProcessError(1, "build")) as run, \
+             contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(ALL_BUILD.main([]), 1)
+        self.assertEqual(run.call_count, 1)
 
     def test_reused_host_requires_matching_profile_revision_icon_and_bytes(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -30,7 +87,8 @@ class BuildContractTests(unittest.TestCase):
             host.write_bytes(b"fixture-host")
             app = base / "app"
             app.mkdir()
-            (app / "entry.c").write_text("void f(void) { xrtFree(0); }", encoding="utf-8")
+            (app / "entry.c").write_text('const char* text = "https://example.test/xrtTextOnly()"; void f(void) { xrtFree(0); }', encoding="utf-8")
+            (app / "sdk.h").write_text("XRT_API str xrtHeaderOnly(void);", encoding="utf-8")
             receipt = {"schema_version": 1, "profile_sha256": BUILD.host_profile_digest(False),
                        "revision": self.lock["xserver"]["commit"],
                        "extensions": self.lock["xserver"]["required_extensions"],
@@ -158,6 +216,7 @@ class BuildContractTests(unittest.TestCase):
             "src/remote/loopback.c",
             "src/remote/receipts.c",
             "src/remote/bridge.c",
+            "src/remote/lan.c",
             "src/remote/manager.c",
             "src/web/manager.c",
             "src/mcp/manager.c",

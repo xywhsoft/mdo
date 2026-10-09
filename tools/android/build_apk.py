@@ -27,7 +27,8 @@ def build(sdk: Path, java: Path, library: Path, pack: Path, output: Path,
           package: str, label: str, version: str, code: int, keystore: Path,
           debuggable: bool = False, home_name: str = "app-home",
           resources: Path | None = None, app_links: list[str] | None = None,
-          package_install: bool = False) -> None:
+          package_install: bool = False, key_alias: str = "xs-development",
+          store_password_env: str | None = None, key_password_env: str | None = None) -> None:
     if not re.fullmatch(r"[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+", package):
         raise ValueError("invalid Android application ID")
     if code < 1 or code > 2100000000:
@@ -36,6 +37,14 @@ def build(sdk: Path, java: Path, library: Path, pack: Path, output: Path,
         raise ValueError("home must be a simple directory name")
     if not pack.is_file() or not library.is_file():
         raise ValueError("missing application pack or native library")
+    development = keystore.resolve() == (MDO_ROOT / ".build/android-signing/development.p12").resolve()
+    if not development and (not keystore.is_file() or not store_password_env):
+        raise ValueError("release signing requires an existing keystore and --store-password-env")
+    for name in (store_password_env,key_password_env):
+        if name and (not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*",name) or not os.environ.get(name)):
+            raise ValueError("signing password environment variable is missing or invalid")
+    store_password = "env:"+store_password_env if store_password_env else "pass:android"
+    key_password = "env:"+key_password_env if key_password_env else store_password
     if resources is not None and not resources.is_dir():
         raise ValueError("Android resources directory does not exist")
     app_links = app_links or []
@@ -133,8 +142,8 @@ def build(sdk: Path, java: Path, library: Path, pack: Path, output: Path,
         aligned = directory / "aligned.apk"
         run([str(tools / ("zipalign" + suffix)), "-P", "16", "-f", "4", str(unsigned), str(aligned)])
         signed = directory / "signed.apk"
-        run([*signer, "sign", "--ks", str(keystore), "--ks-key-alias", "xs-development", "--ks-pass", "pass:android",
-             "--key-pass", "pass:android", "--out", str(signed), str(aligned)])
+        run([*signer, "sign", "--ks", str(keystore), "--ks-key-alias", key_alias, "--ks-pass", store_password,
+             "--key-pass", key_password, "--out", str(signed), str(aligned)])
         run([*signer, "verify", "--verbose", str(signed)])
         run([str(tools / ("zipalign" + suffix)), "-c", "-P", "16", "4", str(signed)])
         signed.replace(output)
@@ -153,6 +162,9 @@ if __name__ == "__main__":
     parser.add_argument("--version", default="0.1.0")
     parser.add_argument("--version-code", type=int, default=1)
     parser.add_argument("--keystore", type=Path, required=True)
+    parser.add_argument("--key-alias", default="xs-development")
+    parser.add_argument("--store-password-env")
+    parser.add_argument("--key-password-env")
     parser.add_argument("--debuggable", action="store_true")
     parser.add_argument("--home-name", default="app-home")
     parser.add_argument("--resources", type=Path,
@@ -163,4 +175,5 @@ if __name__ == "__main__":
     build(args.sdk.resolve(), args.java_home.resolve(), args.library.resolve(), args.pack.resolve(),
           args.output.resolve(), args.package, args.label, args.version, args.version_code,
           args.keystore.resolve(), args.debuggable, args.home_name,
-          args.resources.resolve() if args.resources is not None else None, args.app_link, args.package_install)
+          args.resources.resolve() if args.resources is not None else None, args.app_link, args.package_install,
+          args.key_alias,args.store_password_env,args.key_password_env)

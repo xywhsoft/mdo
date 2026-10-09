@@ -827,7 +827,7 @@ static bool MdoAgentsPublishSubagents(MdoAgentOwner* Owner,
             Error);
         if ( Prompts[Count] == NULL ) goto done;
         ++PromptCount;
-        if ( !MdoAgentsReplyLanguage(&Prompts[Count], Error) ) goto done;
+        if ( !MdoAgentsReplyLanguage(&Prompts[Count], Error) || !MdoToolPrompt(&Prompts[Count]) ) goto done;
         ModelId = Subagent.Model != NULL && Subagent.Model[0] != '\0' ?
             Subagent.Model : MainModel->Info.Id;
         Reasoning = Subagent.ReasoningEffort != NULL &&

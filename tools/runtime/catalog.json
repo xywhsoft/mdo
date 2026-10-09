@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "release": "2026-10-06",
+  "release": "2026-10-07",
   "status": "prepared-local",
   "deployment_base_url": null,
   "archive_layout": "<tool>/<relative-file>",
@@ -26,6 +26,39 @@
         "url": "https://frippery.org/files/busybox/busybox-w32-FRP-6075-g169694ebd.tgz",
         "size": 3690927,
         "sha256": "44401413c86a839deeec3eba088af244a1594f18ff9fd0622811100e4cc2e7b4"
+      }
+    },
+    {
+      "path": "sources/aria2-1.37.0.tar.xz",
+      "bytes": 1705256,
+      "sha256": "60a420ad7085eb616cb6e2bdf0a7206d68ff3d37fb5a956dc44242eb2f79b66b",
+      "upstream": {
+        "file": "aria2-1.37.0.tar.xz",
+        "url": "https://github.com/aria2/aria2/releases/download/release-1.37.0/aria2-1.37.0.tar.xz",
+        "size": 1705256,
+        "sha256": "60a420ad7085eb616cb6e2bdf0a7206d68ff3d37fb5a956dc44242eb2f79b66b"
+      }
+    },
+    {
+      "path": "sources/ripgrep-15.2.0.tar.gz",
+      "bytes": 606519,
+      "sha256": "7605249d3eb0d5f170e3414498e3344e26b1e7a147aec518b57090b80036a562",
+      "upstream": {
+        "file": "ripgrep-15.2.0.tar.gz",
+        "url": "https://github.com/BurntSushi/ripgrep/archive/refs/tags/15.2.0.tar.gz",
+        "size": 606519,
+        "sha256": "7605249d3eb0d5f170e3414498e3344e26b1e7a147aec518b57090b80036a562"
+      }
+    },
+    {
+      "path": "sources/7z2604-src.7z",
+      "bytes": 1547607,
+      "sha256": "6bcfd2679d178174df06d09d50147dd7b5980d7beac896136689dfc9d51e0fd9",
+      "upstream": {
+        "file": "7z2604-src.7z",
+        "url": "https://www.7-zip.org/a/7z2604-src.7z",
+        "size": 1547607,
+        "sha256": "6bcfd2679d178174df06d09d50147dd7b5980d7beac896136689dfc9d51e0fd9"
       }
     }
   ],
@@ -399,6 +432,168 @@
       "sources": [],
       "provenance": "Matching Git for Windows 2.55.0 installation, clients plus recursively resolved MSYS DLL dependencies.",
       "source_url": "https://github.com/git-for-windows/MSYS2-packages"
+    },
+    {
+      "id": "aria2",
+      "platform": "windows-x86_64",
+      "version": "1.37.0",
+      "group": "core",
+      "directory": "windows-x86_64/aria2",
+      "entrypoints": [
+        "aria2c.exe"
+      ],
+      "unpacked_bytes": 5675699,
+      "files": [
+        {
+          "path": "aria2c.exe",
+          "bytes": 5649408,
+          "sha256": "be2099c214f63a3cb4954b09a0becd6e2e34660b886d4c898d260febfe9d70c2",
+          "mode": "0o755"
+        },
+        {
+          "path": "AUTHORS",
+          "bytes": 1231,
+          "sha256": "674f3d71beaed6015a9fc189fb28835e3bc538aa30dd5c9b4c7effd7024250c1",
+          "mode": "0o644"
+        },
+        {
+          "path": "COPYING",
+          "bytes": 18092,
+          "sha256": "8177f97513213526df2cf6184d8ff986c675afb514d4e68a404010521b880643",
+          "mode": "0o644"
+        },
+        {
+          "path": "LICENSE.OpenSSL",
+          "bytes": 6968,
+          "sha256": "8bf8790acc763bbae4e03f90fd28ee25acdf6daadd3b2adc90101365a403ed07",
+          "mode": "0o644"
+        }
+      ],
+      "archive": {
+        "path": "packages/aria2-1.37.0-windows-x86_64.zip",
+        "bytes": 2450837,
+        "sha256": "7f7d158e378af7a15258cde4e2b25200ccc318e29e8a2d9caddc0a22504e85ac"
+      },
+      "sources": [
+        {
+          "file": "aria2-1.37.0-win-64bit-build1.zip",
+          "url": "https://github.com/aria2/aria2/releases/download/release-1.37.0/aria2-1.37.0-win-64bit-build1.zip",
+          "size": 2475379,
+          "sha256": "67d015301eef0b612191212d564c5bb0a14b5b9c4796b76454276a4d28d9b288"
+        },
+        {
+          "file": "aria2-1.37.0.tar.xz",
+          "url": "https://github.com/aria2/aria2/releases/download/release-1.37.0/aria2-1.37.0.tar.xz",
+          "size": 1705256,
+          "sha256": "60a420ad7085eb616cb6e2bdf0a7206d68ff3d37fb5a956dc44242eb2f79b66b"
+        }
+      ]
+    },
+    {
+      "id": "ripgrep",
+      "platform": "windows-x86_64",
+      "version": "15.2.0",
+      "group": "core",
+      "directory": "windows-x86_64/ripgrep",
+      "entrypoints": [
+        "rg.exe"
+      ],
+      "unpacked_bytes": 4221346,
+      "files": [
+        {
+          "path": "COPYING",
+          "bytes": 129,
+          "sha256": "dfe7d0a6134a17d3de7409762e08dc02133303912875cab40a74ba07a390f85a",
+          "mode": "0o644"
+        },
+        {
+          "path": "LICENSE-MIT",
+          "bytes": 1102,
+          "sha256": "970813655a1bf777d2ead189cef71ab73ab92ce04dc864027d61a45de03e6728",
+          "mode": "0o644"
+        },
+        {
+          "path": "rg.exe",
+          "bytes": 4218880,
+          "sha256": "14231169855ec5205cf5a1b6f1db358ff4aed4247c86b69ce8aae647c77f6680",
+          "mode": "0o755"
+        },
+        {
+          "path": "UNLICENSE",
+          "bytes": 1235,
+          "sha256": "640514163b17f977adc997cb16f51871122cfb0555ebad1a3f01e167b7ba8857",
+          "mode": "0o644"
+        }
+      ],
+      "archive": {
+        "path": "packages/ripgrep-15.2.0-windows-x86_64.zip",
+        "bytes": 1730072,
+        "sha256": "95e97185aa7b8fbad354c1d4006facc09524e73861be7e687a5fd1ac41ba8091"
+      },
+      "sources": [
+        {
+          "file": "ripgrep-15.2.0-x86_64-pc-windows-msvc.zip",
+          "url": "https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-x86_64-pc-windows-msvc.zip",
+          "size": 1789611,
+          "sha256": "71b2fef860abe467217a538ff31de02f5258807c0129f771846f87bd029aafc5"
+        },
+        {
+          "file": "ripgrep-15.2.0.tar.gz",
+          "url": "https://github.com/BurntSushi/ripgrep/archive/refs/tags/15.2.0.tar.gz",
+          "size": 606519,
+          "sha256": "7605249d3eb0d5f170e3414498e3344e26b1e7a147aec518b57090b80036a562"
+        }
+      ]
+    },
+    {
+      "id": "7zip",
+      "platform": "windows-x86_64",
+      "version": "26.04",
+      "group": "core",
+      "directory": "windows-x86_64/7zip",
+      "entrypoints": [
+        "7z.exe"
+      ],
+      "unpacked_bytes": 2491279,
+      "files": [
+        {
+          "path": "7z.dll",
+          "bytes": 1907712,
+          "sha256": "899cd73d7fc60e1c1c35c7de0f5bed3dc69bfe2cecbd48014d868a347970a0b1",
+          "mode": "0o755"
+        },
+        {
+          "path": "7z.exe",
+          "bytes": 577536,
+          "sha256": "95fff19b73eff77c87c0d7bd32822e43fb90dd2932459f962eb532d8dfb6ba53",
+          "mode": "0o755"
+        },
+        {
+          "path": "License.txt",
+          "bytes": 6031,
+          "sha256": "519ac0a4bded9c18ea02e0afb71f663d8c47373bd9facd3ac96a79f51d77765d",
+          "mode": "0o644"
+        }
+      ],
+      "archive": {
+        "path": "packages/7zip-26.04-windows-x86_64.zip",
+        "bytes": 1117547,
+        "sha256": "5fc0fe1f74dcf9830c3fe61e6c6ecbb64518ccdd3139d2739d7ecbbf837ed9fe"
+      },
+      "sources": [
+        {
+          "file": "7z2604-x64.exe",
+          "url": "https://www.7-zip.org/a/7z2604-x64.exe",
+          "size": 1664082,
+          "sha256": "d54bf805f9f3704d1e8db2fa3498ae7ef2df0312b40b558e7c71c734430a665d"
+        },
+        {
+          "file": "7z2604-src.7z",
+          "url": "https://www.7-zip.org/a/7z2604-src.7z",
+          "size": 1547607,
+          "sha256": "6bcfd2679d178174df06d09d50147dd7b5980d7beac896136689dfc9d51e0fd9"
+        }
+      ]
     },
     {
       "id": "python",
@@ -3126,6 +3321,186 @@
         "security-key-helper",
         "ssh-agent"
       ]
+    },
+    {
+      "id": "aria2",
+      "platform": "android-arm64-v8a",
+      "version": "1.37.0",
+      "group": "core",
+      "directory": "android-arm64-v8a/aria2",
+      "entrypoints": [
+        "aria2c"
+      ],
+      "unpacked_bytes": 7387660,
+      "files": [
+        {
+          "path": "aria2c",
+          "bytes": 7165176,
+          "sha256": "e334c2b46e7b05bc9e64f5967f2d28bc0c60d548fd80b672cff87ca621e99a7d",
+          "mode": "0o755"
+        },
+        {
+          "path": "cacert.pem",
+          "bytes": 188900,
+          "sha256": "a41b5d356aea97a529fe27e0f7316d2f9d946d75927476cf9cf1b90637d00505",
+          "mode": "0o644"
+        },
+        {
+          "path": "LICENSE",
+          "bytes": 18092,
+          "sha256": "8177f97513213526df2cf6184d8ff986c675afb514d4e68a404010521b880643",
+          "mode": "0o644"
+        },
+        {
+          "path": "OpenSSL-LICENSE.txt",
+          "bytes": 10175,
+          "sha256": "7d5450cb2d142651b8afa315b5f238efc805dad827d91ba367d8516bc9d49e7a",
+          "mode": "0o644"
+        },
+        {
+          "path": "zlib-README.txt",
+          "bytes": 5317,
+          "sha256": "d106dcdb2a0b3087cb3a2380b9f00a0bbadc7eb835cd80408f94a2d78d69727d",
+          "mode": "0o644"
+        }
+      ],
+      "archive": {
+        "path": "packages/aria2-1.37.0-android-arm64-v8a.zip",
+        "bytes": 3202747,
+        "sha256": "4b2e10aacbc367697d3abd581351f0e522b37fdd2e26b98c7cd3a1132e8cac62"
+      },
+      "sources": [
+        {
+          "file": "aria2-1.37.0.tar.xz",
+          "url": "https://github.com/aria2/aria2/releases/download/release-1.37.0/aria2-1.37.0.tar.xz",
+          "size": 1705256,
+          "sha256": "60a420ad7085eb616cb6e2bdf0a7206d68ff3d37fb5a956dc44242eb2f79b66b"
+        },
+        {
+          "file": "openssl-3.5.9.tar.gz",
+          "url": "https://github.com/openssl/openssl/releases/download/openssl-3.5.9/openssl-3.5.9.tar.gz",
+          "size": 53279637,
+          "sha256": "603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a"
+        },
+        {
+          "file": "zlib-1.3.1.tar.gz",
+          "url": "https://zlib.net/fossils/zlib-1.3.1.tar.gz",
+          "size": 1512791,
+          "sha256": "9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23"
+        },
+        {
+          "file": "cacert.pem",
+          "url": "https://curl.se/ca/cacert.pem",
+          "size": 188900,
+          "sha256": "a41b5d356aea97a529fe27e0f7316d2f9d946d75927476cf9cf1b90637d00505"
+        }
+      ],
+      "build_api": 26,
+      "tested_api": [
+        36
+      ],
+      "minimum_api_verified": false,
+      "linkage": "dynamic-bionic-static-third-party"
+    },
+    {
+      "id": "ripgrep",
+      "platform": "android-arm64-v8a",
+      "version": "15.2.0",
+      "group": "core",
+      "directory": "android-arm64-v8a/ripgrep",
+      "entrypoints": [
+        "rg"
+      ],
+      "unpacked_bytes": 3911282,
+      "files": [
+        {
+          "path": "COPYING",
+          "bytes": 126,
+          "sha256": "01c266bced4a434da0051174d6bee16a4c82cf634e2679b6155d40d75012390f",
+          "mode": "0o644"
+        },
+        {
+          "path": "LICENSE-MIT",
+          "bytes": 1081,
+          "sha256": "0f96a83840e146e43c0ec96a22ec1f392e0680e6c1226e6f3ba87e0740af850f",
+          "mode": "0o644"
+        },
+        {
+          "path": "rg",
+          "bytes": 3908864,
+          "sha256": "fe52db70deb4a69d2b7a103508f3a44747ac188464e1cdcb3e16153f079c5633",
+          "mode": "0o755"
+        },
+        {
+          "path": "UNLICENSE",
+          "bytes": 1211,
+          "sha256": "7e12e5df4bae12cb21581ba157ced20e1986a0508dd10d0e8a4ab9a4cf94e85c",
+          "mode": "0o644"
+        }
+      ],
+      "archive": {
+        "path": "packages/ripgrep-15.2.0-android-arm64-v8a.zip",
+        "bytes": 1539411,
+        "sha256": "08bd1fd919058738f5d87e5d3cd086e5069dce607bc2950369c318172c389f5c"
+      },
+      "sources": [
+        {
+          "file": "ripgrep-15.2.0.tar.gz",
+          "url": "https://github.com/BurntSushi/ripgrep/archive/refs/tags/15.2.0.tar.gz",
+          "size": 606519,
+          "sha256": "7605249d3eb0d5f170e3414498e3344e26b1e7a147aec518b57090b80036a562"
+        }
+      ],
+      "build_api": 26,
+      "tested_api": [
+        36
+      ],
+      "minimum_api_verified": false,
+      "linkage": "dynamic-bionic-static-third-party"
+    },
+    {
+      "id": "7zip",
+      "platform": "android-arm64-v8a",
+      "version": "26.04",
+      "group": "core",
+      "directory": "android-arm64-v8a/7zip",
+      "entrypoints": [
+        "7zz"
+      ],
+      "unpacked_bytes": 2630117,
+      "files": [
+        {
+          "path": "7zz",
+          "bytes": 2623776,
+          "sha256": "703b821046907d7a28c92a9f03109759b577d00d9b6ccf6ce30ad55efea3c8b2",
+          "mode": "0o755"
+        },
+        {
+          "path": "LICENSE",
+          "bytes": 6341,
+          "sha256": "9ac2b4a97ab5d523965534d8b2d5868e511b39096d51fff458ab72c38b80fccc",
+          "mode": "0o644"
+        }
+      ],
+      "archive": {
+        "path": "packages/7zip-26.04-android-arm64-v8a.zip",
+        "bytes": 1182538,
+        "sha256": "aa66a9f815639da9a02e0cf83a8c38997d696eefd5bda741e545a1cd3c956fb3"
+      },
+      "sources": [
+        {
+          "file": "7z2604-src.7z",
+          "url": "https://www.7-zip.org/a/7z2604-src.7z",
+          "size": 1547607,
+          "sha256": "6bcfd2679d178174df06d09d50147dd7b5980d7beac896136689dfc9d51e0fd9"
+        }
+      ],
+      "build_api": 26,
+      "tested_api": [
+        36
+      ],
+      "minimum_api_verified": false,
+      "linkage": "dynamic-bionic-static-third-party"
     },
     {
       "id": "python",

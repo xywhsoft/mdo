@@ -16,18 +16,23 @@ mdo 是基于 xrt、xs、xllm、xllm-session 与 xwork 的便携式 Agent 工作
 前端发布检查也会拒绝缺失的导入与无法从页面入口到达的模块：
 
 ```powershell
-python tools/build_mdo.py
+python tools/build.py
 ```
 
 默认在仓库同级目录中寻找与锁文件提交完全匹配的 `xserver` 工作树。也可以
 显式指定：
 
 ```powershell
-python tools/build_mdo.py --xserver-root D:\GIT\xserver-mdo-refactor
+python tools/build.py --xserver-root D:\GIT\xserver-mdo-refactor
 ```
 
-Windows 可直接运行 `生成程序.bat`。Linux 使用同一个 Python 入口，输出文件名
-自动为 `mdo`。首次构建需要 xserver 支持的 Python、GCC/Clang 和平台链接工具；
+Windows 可直接运行 `生成程序.bat`，也可向它传递同样的构建参数。默认同时生成根目录
+`mdo.exe`、精简版 `mdo-arm64-v8a.apk` 和完整版 `mdo-full-arm64-v8a.apk`；Linux 的
+桌面产物名为 `mdo`。Android 构建需要已有 SDK 与 JDK 17+，统一入口优先使用
+`--sdk` / `--java-home` 或 `MDO_ANDROID_SDK` / `MDO_ANDROID_JAVA_HOME`，然后检查本地
+工具链与 Windows 上的 WSL 工具链缓存。WSL 路径需配合 `--wsl`；安装方法见
+[Android 构建说明](docs/android.md)。工具链缺失会明确失败，不会只生成桌面版。
+单独构建桌面版使用 `python tools/build_mdo.py`。首次构建需要 xserver 支持的 Python、GCC/Clang 和平台链接工具；
 构建不依赖仓库根目录中预先存在的 `xs.exe` 或 `xsw.exe`。
 
 发布候选使用统一的低负载门禁：
@@ -63,6 +68,7 @@ app/
 include/mdo/         版本化外接模块 ABI（MDO-3）
 deps.lock            跨仓库依赖与格式版本锁
 tools/build_mdo.py   验证、生成、宿主构建与打包入口
+tools/build.py       桌面版与 Android 精简版、完整版统一构建入口
 ```
 
 发布物可以只有 `mdo.exe`。运行时持久化数据只允许进入可执行文件旁的

@@ -130,7 +130,7 @@ export function createUpdatePanel({ root, dialog, entries = [], transport = api 
       if (kind === "cancel") await transport.delete("/update/download");
       else if (kind === "exit" && status.platform === "android-arm64-v8a" && window.XsPlatform?.requestExit)
         window.XsPlatform.requestExit();
-      else await transport.post(kind === "check" ? "/update" : "/update/" + kind, {});
+      else { await transport.post(kind === "check" ? "/update" : "/update/" + kind, {}); if(kind==="check")await toolManager?.check(); }
     } catch (error) { if (!destroyed) failure = text().failed + " · " + error.message; }
     finally { pending = false; if (!destroyed) await refresh(); }
   }

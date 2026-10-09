@@ -20,6 +20,17 @@ static bool MdoDistCompatible(xvalue* Package,xvalue* Active)
 }
 static bool MdoDistGeneration(cstr Path)
 {return MdoDistValidRelative(Path)&&(!strncmp(Path,"data/toolpacks/core/",20)||!strncmp(Path,"data/toolpacks/python/",22));}
+static xvalue* MdoDistMetadata(xvalue* Package)
+{
+    /* Retain compatibility and declared versions without repeated descriptions. */
+    xvalue* Metadata=xrtValueObject();const cstr Keys[]={"id","revision","min_build","max_build","dependencies","tool_versions"};
+    for(size_t i=0;i<6;i++){xvalue* Value=xrtValueObjectGet(Package,xrtStrView(Keys[i]));if(Value)xrtValueObjectSetNew(Metadata,xrtStrView(Keys[i]),xrtValueClone(Value));}
+    xvalue* Rows=xrtValueObjectGet(Package,XRT_STR_LITERAL("tools"));
+    if(xrtValueType(Rows)==XVALUE_ARRAY){xvalue* Versions=xrtValueObject();for(size_t i=0;i<xrtValueCount(Rows);i++){xvalue* Tool=xrtValueArrayGet(Rows,i);MdoDistSet(Versions,MdoDistText(Tool,"id"),MdoDistText(Tool,"version"));}xrtValueObjectSetNew(Metadata,XRT_STR_LITERAL("tool_versions"),Versions);}
+    return Metadata;
+}
+static bool MdoDistInstalledCompatible(xvalue* Active)
+{const cstr Ids[]={"core","python"};for(size_t i=0;i<2;i++)if(MdoDistText(Active,Ids[i])[0]){char Key[32];snprintf(Key,sizeof(Key),"%s_metadata",Ids[i]);xvalue* Metadata=xrtValueObjectGet(Active,xrtStrView(Key));if(Metadata&&!MdoDistCompatible(Metadata,Active))return false;}return true;}
 static void MdoDistRetire(xvalue* Active,cstr Id)
 {
     cstr Path=MdoDistText(Active,Id);if(!Path[0]||!MdoDistGeneration(Path))return;
@@ -28,6 +39,7 @@ static void MdoDistRetire(xvalue* Active,cstr Id)
     for(size_t i=0;i<xrtValueCount(Rows);i++)if(!strcmp(Path,MdoDistText(xrtValueArrayGet(Rows,i),"path")))return;
     xvalue* Row=xrtValueObject();char Key[32];snprintf(Key,sizeof(Key),"%s_revision",Id);
     MdoDistSet(Row,"id",Id);MdoDistSet(Row,"path",Path);xrtValueObjectSetNew(Row,XRT_STR_LITERAL("revision"),xrtValueUInt(MdoDistNumber(Active,Key)));xrtValueArrayAppendNew(Rows,Row);
+    snprintf(Key,sizeof(Key),"%s_metadata",Id);xvalue* Metadata=xrtValueObjectGet(Active,xrtStrView(Key));if(Metadata)xrtValueObjectSetNew(Row,XRT_STR_LITERAL("metadata"),MdoDistMetadata(Metadata));
 }
 static bool MdoDistReceipt(cstr Path)
 {
@@ -59,13 +71,13 @@ static bool MdoDistMaintain(unsigned Command,cstr Id)
     bool Ok=false;char Key[32];snprintf(Key,sizeof(Key),"%s_revision",Id);xvalue* Retired=xrtValueObjectGet(Active,XRT_STR_LITERAL("retired"));
     if(Command==3) {
         /* Uninstall deactivates atomically. Existing runs retain their immutable paths. */
-        MdoDistRetire(Active,Id);xrtValueObjectRemove(Active,xrtStrView(Id));xrtValueObjectRemove(Active,xrtStrView(Key));Ok=true;
+        MdoDistRetire(Active,Id);xrtValueObjectRemove(Active,xrtStrView(Id));xrtValueObjectRemove(Active,xrtStrView(Key));snprintf(Key,sizeof(Key),"%s_metadata",Id);xrtValueObjectRemove(Active,xrtStrView(Key));Ok=MdoDistInstalledCompatible(Active);
     }else if(Command==4) {
         xvalue* Chosen=NULL;
         for(size_t i=0;i<xrtValueCount(Retired);i++)if(!strcmp(Id,MdoDistText(xrtValueArrayGet(Retired,i),"id")))Chosen=xrtValueArrayGet(Retired,i);
-        if(Chosen&&MdoDistReceipt(MdoDistText(Chosen,"path"))){str Path=xrtStrDup(MdoDistText(Chosen,"path"));uint64 Revision=MdoDistNumber(Chosen,"revision");xvalue* Keep=xrtValueArray();
+        if(Chosen&&MdoDistReceipt(MdoDistText(Chosen,"path"))){str Path=xrtStrDup(MdoDistText(Chosen,"path"));uint64 Revision=MdoDistNumber(Chosen,"revision");xvalue* Metadata=xrtValueClone(xrtValueObjectGet(Chosen,XRT_STR_LITERAL("metadata")));xvalue* Keep=xrtValueArray();
             for(size_t i=0;i<xrtValueCount(Retired);i++)if(strcmp(Path,MdoDistText(xrtValueArrayGet(Retired,i),"path")))xrtValueArrayAppendNew(Keep,xrtValueClone(xrtValueArrayGet(Retired,i)));
-            xrtValueObjectSetNew(Active,XRT_STR_LITERAL("retired"),Keep);MdoDistRetire(Active,Id);MdoDistSet(Active,Id,Path);xrtValueObjectSetNew(Active,xrtStrView(Key),xrtValueUInt(Revision));xrtFree(Path);Ok=true;}
+            xrtValueObjectSetNew(Active,XRT_STR_LITERAL("retired"),Keep);MdoDistRetire(Active,Id);MdoDistSet(Active,Id,Path);xrtValueObjectSetNew(Active,xrtStrView(Key),xrtValueUInt(Revision));snprintf(Key,sizeof(Key),"%s_metadata",Id);if(Metadata)xrtValueObjectSetNew(Active,xrtStrView(Key),Metadata);else xrtValueObjectRemove(Active,xrtStrView(Key));xrtFree(Path);Ok=MdoDistInstalledCompatible(Active);}
     }else if(Command==5) {
         xvalue* Keep=xrtValueArray();Ok=true;MdoDistProgress(0,xrtValueCount(Retired),"cleaning");
         for(size_t i=0;i<xrtValueCount(Retired);i++){xvalue* Row=xrtValueArrayGet(Retired,i);cstr Path=MdoDistText(Row,"path");bool Allowed=false;
@@ -78,12 +90,12 @@ static bool MdoDistMaintain(unsigned Command,cstr Id)
         xrtValueObjectSetNew(Active,XRT_STR_LITERAL("retired"),Keep);
         /* Persist any successful removals even when a later directory could not be removed. */
         bool Saved=MdoDistSave("data/toolpacks/active.json",Active);Ok=Saved&&Ok;
-        if(Saved){xrtMutexLock(g_MdoDistribution.Lock);xrtValueRelease(g_MdoDistribution.Active);g_MdoDistribution.Active=xrtValueClone(Active);xrtValueRelease(g_MdoDistribution.CleanupEligible);g_MdoDistribution.CleanupEligible=xrtValueClone(Keep);xrtMutexUnlock(g_MdoDistribution.Lock);}
+        if(Saved){xvalue* Remaining=xrtValueArray();for(size_t i=0;i<xrtValueCount(Keep);i++)for(size_t j=0;j<xrtValueCount(Eligible);j++)if(!strcmp(MdoDistText(xrtValueArrayGet(Keep,i),"path"),MdoDistText(xrtValueArrayGet(Eligible,j),"path")))xrtValueArrayAppendNew(Remaining,xrtValueClone(xrtValueArrayGet(Keep,i)));
+            xrtMutexLock(g_MdoDistribution.Lock);xrtValueRelease(g_MdoDistribution.Active);g_MdoDistribution.Active=xrtValueClone(Active);xrtValueRelease(g_MdoDistribution.CleanupEligible);g_MdoDistribution.CleanupEligible=Remaining;xrtMutexUnlock(g_MdoDistribution.Lock);}
     }
-    if(Ok&&Command!=5){MdoDistProgress(0,1,"probing");xvalue* Tools=MdoDistDetect(Active);size_t Expected=(!strcmp(Id,"core")?6:1),Found=0;
-        for(size_t i=0;i<xrtValueCount(Tools);i++)if((!strcmp(Id,"python"))==(!strcmp(MdoDistText(xrtValueArrayGet(Tools,i),"id"),"python")))Found++;
+    if(Ok&&Command!=5){MdoDistProgress(0,1,"activating");xvalue* Tools=MdoDistInventory(Active);
         xrtValueObjectSetNew(Active,XRT_STR_LITERAL("capability_revision"),xrtValueUInt(MdoDistNumber(Active,"capability_revision")+1));
-        Ok=(Command==3||Found>=Expected)&&!xrtCancelRequested(g_MdoDistribution.Operation)&&MdoDistSave("data/toolpacks/active.json",Active);
+        Ok=Tools&&!xrtCancelRequested(g_MdoDistribution.Operation)&&MdoDistSave("data/toolpacks/active.json",Active);
         if(Ok){xrtMutexLock(g_MdoDistribution.Lock);xrtValueRelease(g_MdoDistribution.Active);g_MdoDistribution.Active=Active;Active=NULL;xrtValueRelease(g_MdoDistribution.Tools);g_MdoDistribution.Tools=Tools;Tools=NULL;xrtMutexUnlock(g_MdoDistribution.Lock);}xrtValueRelease(Tools);
     }
     xrtValueRelease(Active);xrtValueRelease(Eligible);return Ok;

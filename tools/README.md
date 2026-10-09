@@ -5,8 +5,9 @@
 
 | 脚本 | 用途 |
 |------|------|
+| `build.py` | 默认生成根目录桌面版及 Android 精简版、完整版；批处理调用此入口 |
 | `build_mdo.py` | 验证依赖、检查 C 源码引用、生成 unity、构建宿主与打包 |
-| `build_android.py` | 构建 ARM64 Android 应用，复用相同应用源码与默认 Home |
+| `build_android.py` | 默认同时构建 ARM64 精简版与完整版，复用宿主、原生库和默认 Home |
 | `build_toolpacks.py` | 构建 Windows 常用工具包与可选 Python 包 |
 | `prepare_release.py` | 校验三个客户端产物并生成本地发布清单 |
 | `host-profile.json` | mdo 专用 xrt 根与 Windows SDK 选择；默认启用精简宿主 |
@@ -26,10 +27,11 @@ Windows/Android 构建默认使用精简配置；完整扩展 SDK 可加 `--full
 可选外部工具统一放在 [`runtime/`](runtime/README.md)，按 Windows x64 和
 Android arm64-v8a 分类。原有 `git/`、`python313/`、`curl.exe` 已分别归入
 `runtime/windows-x86_64/` 的 `git/`、`python/`、`curl/`，另补充 BusyBox、jq、
-OpenSSH 客户端及对应 Android 工具。Python、Git 保持可选。
+OpenSSH、aria2c、ripgrep、7-Zip 及对应 Android 工具。Windows Python、Git 保持可选。
 
-Windows 常用工具及 Python 支持通过“设置 → 常规 → 扩展工具包”安装；Android
-使用 `--edition lite` / `--edition full` 构建精简版与带工具完整版。Git 仍是可选
+Windows 常用工具及 Python 支持通过“设置 → 扩展能力 → 扩展工具包”安装；Android
+默认同时构建两版，根目录产物为 `mdo-arm64-v8a.apk` 和 `mdo-full-arm64-v8a.apk`；
+需要单版或自定义输出时使用 `--edition lite` / `--edition full`。Git 仍是可选
 发布素材。安装不会修改系统 PATH，模型提示词使用已探测工具的绝对路径。
 通知、打包与网站发布流程见 `docs/distribution.md`；网站插件只维护在 home 仓库
 对应 vhost。来源哈希、构建方法与此前真机 Shell 验证见 runtime 文档。这里不存放

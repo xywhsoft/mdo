@@ -110,7 +110,7 @@ class FrontendContractTests(unittest.TestCase):
             self.assertNotIn("innerHTML", self.scripts[path], path)
         self.assertIn("node.textContent", self.scripts["js/utils/dom.js"])
         self.assertNotIn("innerHTML", self.scripts["js/features/chat/markdown.js"])
-        self.assertIn("renderMarkdown(item.text)", self.scripts["js/features/chat/timeline.js"])
+        self.assertIn("body.append(renderMarkdown(", self.scripts["js/features/chat/timeline.js"])
         for source in self.scripts.values():
             self.assertNotIn("eval(", source)
             self.assertNotIn("new Function", source)
@@ -174,8 +174,9 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn('api.post(`/${name}/reload`)', resources)
         self.assertIn("attempt < 100", resources)
         self.assertNotIn("innerHTML", panels)
-        self.assertIn("setMcpEnabled", panels)
-        self.assertIn("refreshMcp", panels)
+        self.assertIn("setMcpEnabled", resources)
+        self.assertIn("createExtensionPanels", panels)
+        self.assertIn("refreshMcp", self.scripts["js/features/settings/extension-panels.js"])
 
     def test_legacy_migration_requires_preview_and_second_confirmation(self) -> None:
         resources = self.scripts["js/state/resources.js"]

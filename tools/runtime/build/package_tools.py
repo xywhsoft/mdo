@@ -13,6 +13,9 @@ TOOLS = {
         'curl': ('8.13.0', 'core', ['curl.exe'], ['cacert.pem', 'curl-windows-COPYING']),
         'jq': ('1.8.2', 'core', ['jq.exe'], ['jq-windows-amd64.exe', 'jq-1.8.2.tar.gz']),
         'openssh': ('10.3p1', 'core', ['ssh.exe', 'scp.exe', 'sftp.exe', 'ssh-keygen.exe', 'ssh-keyscan.exe', 'ssh-agent.exe', 'ssh-add.exe'], []),
+        'aria2': ('1.37.0', 'core', ['aria2c.exe'], ['aria2-1.37.0-win-64bit-build1.zip','aria2-1.37.0.tar.xz']),
+        'ripgrep': ('15.2.0', 'core', ['rg.exe'], ['ripgrep-15.2.0-x86_64-pc-windows-msvc.zip','ripgrep-15.2.0.tar.gz']),
+        '7zip': ('26.04', 'core', ['7z.exe'], ['7z2604-x64.exe','7z2604-src.7z']),
         'python': ('3.13.7', 'optional', ['python.exe'], []),
         'git': ('2.55.0.windows.3', 'optional', ['cmd/git.exe'], []),
     },
@@ -21,6 +24,9 @@ TOOLS = {
         'curl': ('8.22.0', 'core', ['curl'], ['curl-8.22.0.tar.xz', 'openssl-3.5.9.tar.gz', 'zlib-1.3.1.tar.gz', 'cacert.pem']),
         'jq': ('1.8.2', 'core', ['jq'], ['jq-1.8.2.tar.gz']),
         'openssh': ('10.3p1', 'core', ['ssh', 'scp', 'sftp', 'ssh-keygen', 'ssh-keyscan'], ['openssh-10.3p1.tar.gz', 'openssl-3.5.9.tar.gz', 'zlib-1.3.1.tar.gz']),
+        'aria2': ('1.37.0', 'core', ['aria2c'], ['aria2-1.37.0.tar.xz','openssl-3.5.9.tar.gz','zlib-1.3.1.tar.gz','cacert.pem']),
+        'ripgrep': ('15.2.0', 'core', ['rg'], ['ripgrep-15.2.0.tar.gz']),
+        '7zip': ('26.04', 'core', ['7zz'], ['7z2604-src.7z']),
         'python': ('3.14.8', 'optional', ['bin/python3'], ['python-3.14.8-aarch64-linux-android.tar.gz', 'cacert.pem']),
     },
 }
@@ -37,11 +43,11 @@ def executable(path, entrypoints):
 
 packages = ROOT / 'packages'
 packages.mkdir(exist_ok=True)
-catalog = {'schema_version': 1, 'release': '2026-10-06', 'status': 'prepared-local',
+catalog = {'schema_version': 1, 'release': '2026-10-07', 'status': 'prepared-local',
            'deployment_base_url': None, 'archive_layout': '<tool>/<relative-file>',
            'android_execution': 'APK-installed native executables required for app UID; ZIPs are staging artifacts.',
            'source_archives': [], 'tools': []}
-for name in ('busybox-1.38.0.tar.bz2', 'busybox-w32-FRP-6075-g169694ebd.tgz'):
+for name in ('busybox-1.38.0.tar.bz2', 'busybox-w32-FRP-6075-g169694ebd.tgz','aria2-1.37.0.tar.xz','ripgrep-15.2.0.tar.gz','7z2604-src.7z'):
     path = ROOT / 'sources' / name
     if not path.is_file():
         raise FileNotFoundError(path)

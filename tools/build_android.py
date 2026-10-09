@@ -38,7 +38,21 @@ def extract_pack(packed: Path, output: Path) -> None:
     output.write_bytes(archive)
 
 
-def main() -> int:
+def edition_outputs(args: argparse.Namespace, release: dict) -> list[tuple[str, Path, int]]:
+    editions = ("lite", "full") if args.edition == "both" else (args.edition,)
+    if len(editions) > 1 and (args.output is not None or args.version_code is not None):
+        raise build_mdo.BuildError("--output and --version-code require --edition lite or --edition full")
+    result = []
+    for edition in editions:
+        code = args.version_code if args.version_code is not None else release[f"android_{edition}_build_id"]
+        if type(code) is not int or not 10000000 <= code <= 99999999:
+            raise build_mdo.BuildError("version-code must be an eight-digit build ID")
+        name = "mdo-arm64-v8a.apk" if edition == "lite" else "mdo-full-arm64-v8a.apk"
+        result.append((edition, (args.output or ROOT / name).resolve(), code))
+    return result
+
+
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--xserver-root", type=Path)
     parser.add_argument("--sdk", required=True, help="verified Android SDK root")
@@ -49,17 +63,20 @@ def main() -> int:
     parser.add_argument("--skip-native-build", action="store_true", help="reuse this build directory's libxs.so")
     parser.add_argument("--full-host", action="store_true", help="build the complete xs/xrt SDK instead of the mdo compact profile")
     parser.add_argument("--builtin-connection", type=Path)
-    parser.add_argument("--output", type=Path, default=ROOT / "mdo-arm64-v8a.apk")
+    parser.add_argument("--output", type=Path, help="single-edition APK output path")
     parser.add_argument("--build-dir", type=Path, default=ROOT / ".build/android")
     parser.add_argument("--keystore", type=Path, default=ROOT / ".build/android-signing/development.p12")
+    parser.add_argument("--key-alias", default="xs-development")
+    parser.add_argument("--store-password-env", help="runtime environment variable containing the release keystore password")
+    parser.add_argument("--key-password-env", help="runtime environment variable containing the release key password")
     parser.add_argument("--version-code", type=int, default=None)
     parser.add_argument("--debuggable", action="store_true")
-    parser.add_argument("--edition", choices=("lite", "full"), default="lite")
-    args = parser.parse_args()
-    release = build_mdo.load_object(ROOT / "app/release.json")
-    if args.version_code is None: args.version_code = release["android_" + args.edition + "_build_id"]
-    if not 10000000 <= args.version_code <= 99999999: parser.error("version-code must be an eight-digit build ID")
+    parser.add_argument("--edition", choices=("both", "lite", "full"), default="both",
+                        help="build both editions by default; select one for a custom output or build ID")
+    args = parser.parse_args(argv)
     try:
+        release = build_mdo.load_object(ROOT / "app/release.json")
+        outputs = edition_outputs(args, release)
         if args.wsl and os.name != "nt":
             raise build_mdo.BuildError("--wsl is a Windows driver option")
         lock = build_mdo.load_object(build_mdo.LOCK_PATH)
@@ -83,13 +100,18 @@ def main() -> int:
         native = directory / "native"
         revision = lock["xserver"]["commit"]
 
-        def target_run(script: Path, arguments: list[str]) -> None:
+        def target_run(script: Path, arguments: list[str], edition: str = "full") -> None:
+            environment = dict(os.environ)
+            secret_names = [name for name in (args.store_password_env, args.key_password_env) if name]
+            if any(not environment.get(name) for name in secret_names):
+                raise build_mdo.BuildError("release signing password environment variable is missing")
             if args.wsl:
-                command = ["wsl", "-e", "env", "XS_BUILD_COMMIT=" + revision, "MDO_ANDROID_XSERVER_ROOT=" + linux_path(sdk_source), "MDO_ANDROID_EDITION=" + args.edition, "python3", linux_path(script), *arguments]
-                subprocess.run(command, cwd=ROOT, check=True)
+                environment["WSLENV"] = ":".join(filter(None,[environment.get("WSLENV", ""), *secret_names]))
+                command = ["wsl", "-e", "env", "XS_BUILD_COMMIT=" + revision, "MDO_ANDROID_XSERVER_ROOT=" + linux_path(sdk_source), "MDO_ANDROID_EDITION=" + edition, "python3", linux_path(script), *arguments]
+                subprocess.run(command, cwd=ROOT, check=True, env=environment)
             else:
                 subprocess.run([sys.executable, str(script), *arguments], cwd=ROOT, check=True,
-                               env={**os.environ, "XS_BUILD_COMMIT": revision, "MDO_ANDROID_XSERVER_ROOT": str(sdk_source), "MDO_ANDROID_EDITION": args.edition})
+                               env={**os.environ, "XS_BUILD_COMMIT": revision, "MDO_ANDROID_XSERVER_ROOT": str(sdk_source), "MDO_ANDROID_EDITION": edition})
 
         path = linux_path if args.wsl else lambda p: str(p.resolve())
         if not args.skip_native_build:
@@ -97,15 +119,19 @@ def main() -> int:
                 "--sdk", args.sdk, "--out", path(native), "--cc", args.cc,
                 *([] if args.full_host else ["--profile", path(build_mdo.HOST_PROFILE_PATH)])])
         build_mdo.verify_host_receipt(native / "libxs.so", lock, args.full_host)
-        target_run(ROOT / "tools/android/build_apk.py", ["--sdk", args.sdk, "--java-home", args.java_home,
-            "--library", path(native / "libxs.so"), "--pack", path(pack), "--output", path(args.output),
-            "--app-link", "https://ai.xywhsoft.com/app/mdo/callback",
-            "--package", "org.xleaves.mdo", "--label", "@string/app_name", "--home-name", "mdo-home",
-            "--resources", path(ROOT / "assets/branding/android/res"),
-            "--package-install",
-            "--version", release["version_name"], "--version-code", str(args.version_code), "--keystore", path(args.keystore),
-            *(["--debuggable"] if args.debuggable else [])])
-        print("[mdo] APK SHA256 " + hashlib.sha256(args.output.read_bytes()).hexdigest())
+        for edition, output, code in outputs:
+            target_run(ROOT / "tools/android/build_apk.py", ["--sdk", args.sdk, "--java-home", args.java_home,
+                "--library", path(native / "libxs.so"), "--pack", path(pack), "--output", path(output),
+                "--app-link", "https://ai.xywhsoft.com/app/mdo/callback",
+                "--package", "org.xleaves.mdo", "--label", "@string/app_name", "--home-name", "mdo-home",
+                "--resources", path(ROOT / "assets/branding/android/res"),
+                "--package-install",
+                "--version", release["version_name"], "--version-code", str(code), "--keystore", path(args.keystore),
+                "--key-alias", args.key_alias,
+                *(["--store-password-env",args.store_password_env] if args.store_password_env else []),
+                *(["--key-password-env",args.key_password_env] if args.key_password_env else []),
+                *(["--debuggable"] if args.debuggable else [])], edition)
+            print(f"[mdo] {edition} APK {output} SHA256 " + hashlib.sha256(output.read_bytes()).hexdigest())
         return 0
     except (OSError, ValueError, build_mdo.BuildError, subprocess.CalledProcessError) as error:
         print("[mdo] Android build failed: " + str(error), file=sys.stderr)

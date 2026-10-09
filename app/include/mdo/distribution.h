@@ -14,6 +14,12 @@ cstr MdoEdition(void);
 cstr MdoToolPlatform(void);
 bool MdoTransferDownload(xnetengine* Engine,cstr Path,cstr Relative,uint64 Size,cstr Hash,xcancel* Cancel);
 typedef void (*MdoTransferProgress)(uint64 Done,uint64 Total,void* Data);
+typedef struct MdoTransferReport {
+    char Code[32],Detail[256],ActualHash[65];
+    uint64 Bytes;
+} MdoTransferReport;
+/* With a report, preserve failed bytes for diagnosis; never activate them. */
+bool MdoTransferDownloadReport(xnetengine* Engine,cstr Path,cstr Relative,uint64 Size,cstr Hash,xcancel* Cancel,MdoTransferProgress Progress,void* Data,MdoTransferReport* Report);
 bool MdoTransferDownloadProgress(xnetengine* Engine,cstr Path,cstr Relative,uint64 Size,cstr Hash,xcancel* Cancel,MdoTransferProgress Progress,void* Data);
 bool MdoDistributionInit(XS_ServerInfo* Server);
 void MdoDistributionUnit(void);

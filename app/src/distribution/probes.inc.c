@@ -3,7 +3,6 @@ static bool MdoDistToolProbe(size_t Index,cstr Path,char Version[257])
 {
     const cstr VersionArgs[]={Index==0?"--help":Index==3?"-V":Index==5||Index==6?"-h":Index==9?"i":"--version"};
     if(!MdoDistRun(Path,VersionArgs,1,NULL,Index==5||Index==6?1:0,Version))return false;
-#if defined(__linux__) && !defined(__ANDROID__)
     if(Index==7)return MdoDistRunCheck(Path,VersionArgs,1,NULL,0,NULL,"HTTPS");
     if(Index==8||Index==9) {
         char Relative[128],Input[160],Archive[160],Output[160],Directory[160];
@@ -22,7 +21,6 @@ static bool MdoDistToolProbe(size_t Index,cstr Path,char Version[257])
         }
         MdoHomeRemove(Output,false);MdoHomeRemoveEmptyDirectory(Directory);MdoHomeRemove(Archive,false);MdoHomeRemove(Input,false);MdoHomeRemoveEmptyDirectory(Relative);xrtFree(Work);return Ok;
     }
-#endif
     if(Index==0) {const cstr Args[]={"sh","-c","printf mdo_probe | cat"};char Out[257]={0};return MdoDistRun(Path,Args,3,NULL,0,Out)&&!strcmp(Out,"mdo_probe");}
     if(Index==1)return MdoDistRunCheck(Path,VersionArgs,1,NULL,0,NULL,"https");
     if(Index==2) {const cstr Args[]={"-n","-e","{verified:true}.verified"};char Out[257]={0};return MdoDistRun(Path,Args,3,NULL,0,Out)&&!strcmp(Out,"true");}
@@ -41,7 +39,23 @@ static bool MdoDistToolProbe(size_t Index,cstr Path,char Version[257])
         Ok=File&&xrtRead(File,Buffer,sizeof(Buffer),&Got)&&Got==14&&!memcmp(Buffer,"mdo_copy_probe",14);
         xrtClose(File);MdoHomeRemove(Input,false);MdoHomeRemove(Output,false);MdoHomeRemoveEmptyDirectory(Relative);xrtFree(Work);if(!Ok)return false;
     }
-    if(Index==6&&!strstr(Version,"usage:"))return false;
+    if(Index==6) {
+        if(!strstr(Version,"usage:"))return false;
+        str SshDir=xrtPathParent(Path),Root=SshDir?xrtPathParent(SshDir):NULL;
+#if defined(__ANDROID__) || defined(__linux__)
+        str Busybox=Root?xrtPathJoin(Root,"busybox/busybox"):NULL;
+#else
+        str Busybox=Root?xrtPathJoin(Root,"busybox/busybox.exe"):NULL;
+#endif
+        char Relative[128],Script[160],Batch[160],Command[1024];snprintf(Relative,sizeof(Relative),"data/toolpacks/sftp-probe-%llu",(unsigned long long)xrtClock());
+        bool Ok=Busybox&&MdoHomeCreateDirectory(Relative);snprintf(Script,sizeof(Script),"%s/probe.sh",Relative);snprintf(Batch,sizeof(Batch),"%s/batch",Relative);
+        /* Tiny local SFTP v3 peer: INIT, VERSION, REALPATH and NAME. No network/authentication. */
+        cstr Body="\"$1\" dd bs=1 count=9 >/dev/null 2>/dev/null\nprintf '\\000\\000\\000\\005\\002\\000\\000\\000\\003'\n\"$1\" dd bs=1 count=14 >/dev/null 2>/dev/null\nprintf '\\000\\000\\000\\027\\150\\000\\000\\000\\001\\000\\000\\000\\001\\000\\000\\000\\001.\\000\\000\\000\\001.\\000\\000\\000\\000'\n\"$1\" cat >/dev/null\n";
+        if(Busybox)for(char* p=Busybox;*p;p++)if(*p=='\\')*p='/';
+        snprintf(Command,sizeof(Command),"\"%s\" sh probe.sh \"%s\"",Busybox?Busybox:"",Busybox?Busybox:"");str Work=MdoHomeExternalPath(Relative);
+        const cstr Args[]={"-D",Command,"-b","batch"};Ok=Ok&&MdoHomeAtomicWrite(Script,Body,strlen(Body),false)&&MdoHomeAtomicWrite(Batch,"quit\n",5,false)&&MdoDistRun(Path,Args,4,Work,0,NULL);
+        MdoHomeRemove(Script,false);MdoHomeRemove(Batch,false);MdoHomeRemoveEmptyDirectory(Relative);xrtFree(Work);xrtFree(Busybox);xrtFree(Root);xrtFree(SshDir);if(!Ok)return false;
+    }
     str Parent=xrtPathParent(Path);
 #if defined(__ANDROID__) || defined(__linux__)
     str Ssh=Parent?xrtPathJoin(Parent,"ssh"):NULL;

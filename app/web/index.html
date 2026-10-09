@@ -373,6 +373,7 @@
               <button type="button" data-settings-section="mcp">MCP</button>
               <button type="button" data-settings-section="commands" data-i18n="ecosystem.commands">命令</button>
               <button type="button" data-settings-section="extensions" data-i18n="settings.extensions">C 模块</button>
+              <button type="button" data-settings-section="toolpacks" data-i18n="settings.toolpacks">扩展工具包</button>
               <button type="button" data-settings-section="permissions" data-i18n="settings.permissions">权限</button>
             </div>
             <div data-settings-group>
@@ -416,7 +417,6 @@
                   <select id="setting-open-mode" name="open_mode"><option value="last" data-i18n="settings.openLast">上次会话</option><option value="new" data-i18n="settings.openNew">新任务</option><option value="ask" data-i18n="settings.openAsk">每次询问</option></select>
                 </div>
                 <label class="setting-switch"><span><strong data-i18n="settings.confirmExternal">外部写入前确认</strong><small data-i18n="settings.confirmExternalDescription">工作区之外的文件写入始终要求确认。</small></span><input name="confirm_external_write" type="checkbox"><span class="switch-control" aria-hidden="true"></span></label>
-                <button class="secondary-button" type="button" data-toolpacks-open>扩展工具包</button>
                 <div id="update-settings" class="update-card">
                   <h3 data-update-label="title">应用更新</h3>
                   <p data-update-label="description"></p>
@@ -501,6 +501,7 @@
               <section class="settings-section resource-section" data-settings-panel="mcp" hidden><div class="settings-section-heading"><h2>MCP</h2></div><div data-extension-manager="mcp"></div></section>
               <section class="settings-section resource-section" data-settings-panel="commands" hidden><div class="settings-section-heading"><h2 data-i18n="ecosystem.commands">命令</h2></div><div data-extension-manager="commands"></div></section>
               <section class="settings-section resource-section" data-settings-panel="extensions" hidden><div class="settings-section-heading"><h2 data-i18n="settings.extensions">C 模块</h2><p data-i18n="resource.extensionsDescription">查看和重新编译高级 C 模块；Agent、SubAgent、工具等在各自的管理页配置。</p></div><div id="settings-extensions-list"></div></section>
+              <section class="settings-section resource-section" data-settings-panel="toolpacks" hidden><div class="settings-section-heading"><h2 data-i18n="settings.toolpacks">扩展工具包</h2><p data-i18n="settings.toolpacksDescription">查看当前设备的命令行工具和安装方式。</p></div><div data-settings-toolpacks></div></section>
               <section class="settings-section resource-section" data-settings-panel="permissions" hidden><div class="settings-section-heading"><h2 data-i18n="settings.permissions">权限</h2><p data-i18n="resource.permissionsDescription">查看服务端生效的权限方案；运行时审批仍由 Agent 策略执行。</p></div><div id="settings-permissions-list"></div></section>
               <section class="settings-section resource-section" data-settings-panel="diagnostics" hidden><div class="settings-section-heading"><h2 data-i18n="settings.diagnostics">诊断与存储</h2><p data-i18n="resource.diagnosticsDescription">检查便携 Home、运行状态和可操作诊断。</p></div><div id="settings-diagnostics-list"></div></section>
             <section class="settings-section resource-section" id="remote-panel" data-settings-panel="remote" hidden>
@@ -987,6 +988,7 @@
     <p id="update-dialog-description" data-update-description></p>
     <p data-update-status role="status" aria-live="polite"></p>
     <p data-update-notes hidden></p>
+    <div data-update-toolpacks></div>
     <div class="update-dialog-actions">
       <button class="secondary-button" id="update-target" type="button" aria-haspopup="dialog" aria-controls="devices-dialog" hidden>切换设备</button>
       <button class="secondary-button" type="button" data-update-later>稍后</button>
@@ -1014,7 +1016,6 @@
       <button class="secondary-button" type="button" data-account-action="cancel" data-i18n="account.cancel">取消</button>
     </div>
   </dialog>
-<dialog id="notifications-dialog" class="notification-dialog"><header><h2>通知</h2><button class="secondary-button" data-notifications-close type="button">关闭</button></header><div data-notification-body></div></dialog>
-  <dialog id="toolpacks-dialog" class="notification-dialog"><header><h2>扩展工具包</h2><button class="secondary-button" data-toolpacks-close type="button">关闭</button></header><div data-toolpacks-body></div></dialog>
+<dialog id="notifications-dialog" class="notification-dialog" aria-labelledby="notifications-title"><header><h2 id="notifications-title">通知</h2><button class="icon-button notification-close" data-notifications-close type="button" aria-label="关闭" title="关闭"><span class="icon" data-icon="close" aria-hidden="true"></span></button></header><div data-notification-body></div></dialog>
 </body>
 </html>

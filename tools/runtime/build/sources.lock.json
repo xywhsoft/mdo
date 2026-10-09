@@ -88,5 +88,47 @@
     "url": "https://zlib.net/fossils/zlib-1.3.1.tar.gz",
     "size": 1512791,
     "sha256": "9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23"
+  },
+  {
+    "file": "aria2-1.37.0-win-64bit-build1.zip",
+    "url": "https://github.com/aria2/aria2/releases/download/release-1.37.0/aria2-1.37.0-win-64bit-build1.zip",
+    "size": 2475379,
+    "sha256": "67d015301eef0b612191212d564c5bb0a14b5b9c4796b76454276a4d28d9b288"
+  },
+  {
+    "file": "aria2-1.37.0.tar.xz",
+    "url": "https://github.com/aria2/aria2/releases/download/release-1.37.0/aria2-1.37.0.tar.xz",
+    "size": 1705256,
+    "sha256": "60a420ad7085eb616cb6e2bdf0a7206d68ff3d37fb5a956dc44242eb2f79b66b"
+  },
+  {
+    "file": "ripgrep-15.2.0-x86_64-pc-windows-msvc.zip",
+    "url": "https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-x86_64-pc-windows-msvc.zip",
+    "size": 1789611,
+    "sha256": "71b2fef860abe467217a538ff31de02f5258807c0129f771846f87bd029aafc5"
+  },
+  {
+    "file": "ripgrep-15.2.0.tar.gz",
+    "url": "https://github.com/BurntSushi/ripgrep/archive/refs/tags/15.2.0.tar.gz",
+    "size": 606519,
+    "sha256": "7605249d3eb0d5f170e3414498e3344e26b1e7a147aec518b57090b80036a562"
+  },
+  {
+    "file": "7z2604-x64.exe",
+    "url": "https://www.7-zip.org/a/7z2604-x64.exe",
+    "size": 1664082,
+    "sha256": "d54bf805f9f3704d1e8db2fa3498ae7ef2df0312b40b558e7c71c734430a665d"
+  },
+  {
+    "file": "7z2604-src.7z",
+    "url": "https://www.7-zip.org/a/7z2604-src.7z",
+    "size": 1547607,
+    "sha256": "6bcfd2679d178174df06d09d50147dd7b5980d7beac896136689dfc9d51e0fd9"
+  },
+  {
+    "file": "7zr.exe",
+    "url": "https://www.7-zip.org/a/7zr.exe",
+    "size": 602624,
+    "sha256": "256feca8e274e5da655e2a284fabafd9f554365eb164862089dacd4e8276d282"
   }
 ]

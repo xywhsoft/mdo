@@ -1,5 +1,5 @@
 {
-  "release": "2026-10-06",
+  "release": "2026-10-07",
   "windows": {
     "passed_checks": 13,
     "checks": [
@@ -173,8 +173,8 @@
   },
   "packages": {
     "passed": true,
-    "packages": 11,
-    "verified_files": 529,
+    "packages": 17,
+    "verified_files": 551,
     "android_elf": [
       {
         "file": "android-arm64-v8a/busybox/busybox",
@@ -213,6 +213,21 @@
       },
       {
         "file": "android-arm64-v8a/openssh/ssh-keyscan",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/aria2/aria2c",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/ripgrep/rg",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/7zip/7zz",
         "machine": "AArch64",
         "minimum_load_alignment": 16384
       },
@@ -533,5 +548,44 @@
       }
     ]
   },
-  "scope": "Standalone runtime preparation; mdo app UID/APK integration and ai.xywhsoft.com deployment were not performed."
+  "scope": "Standalone runtime preparation; mdo app UID/APK integration and ai.xywhsoft.com deployment were not performed.",
+  "extra_tools": {
+    "windows": {
+      "parallel_download_sha256": true,
+      "parallel_ranges": 3,
+      "resume_sha256": true,
+      "unicode_json_ignore": true,
+      "archive_unicode_roundtrip": true,
+      "verified_tls": true,
+      "context": "Windows bundled executables"
+    },
+    "android_staging": {
+      "parallel_download_sha256": true,
+      "parallel_ranges": 4,
+      "resume_sha256": true,
+      "unicode_json_ignore": true,
+      "archive_unicode_roundtrip": true,
+      "verified_tls": true,
+      "context": "ADB isolated staging"
+    },
+    "android_app_uid": {
+      "parallel_download_sha256": true,
+      "parallel_ranges": 4,
+      "resume_sha256": true,
+      "unicode_json_ignore": true,
+      "archive_unicode_roundtrip": true,
+      "verified_tls": true,
+      "context": "Android app UID installed code"
+    },
+    "passed": true,
+    "build_contract_tests": 16,
+    "release_builds": {
+      "desktop": 30000006,
+      "lite": 30000007,
+      "full": 30000009
+    },
+    "toolpack_revision": 2,
+    "release_runtime_identical_to_app_uid_test": true,
+    "normal_final_app_startup": "pending manual opening"
+  }
 }
