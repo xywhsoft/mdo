@@ -1,0 +1,77 @@
+{
+  "source_session_files": 96,
+  "source_bytes": 29504294,
+  "original_files_content_unchanged": true,
+  "copied_sessions": 7,
+  "checks": [
+    {
+      "project_is_home": false,
+      "session_status": 200,
+      "history_status": 409,
+      "last_sequence": 0,
+      "events_status": 200,
+      "event_page_count": 32,
+      "draft_status": 200
+    },
+    {
+      "project_is_home": false,
+      "session_status": 200,
+      "history_status": 422,
+      "last_sequence": 0,
+      "events_status": 200,
+      "event_page_count": 32,
+      "draft_status": 200
+    },
+    {
+      "project_is_home": false,
+      "session_status": 200,
+      "history_status": 422,
+      "last_sequence": 0,
+      "events_status": 200,
+      "event_page_count": 32,
+      "draft_status": 200
+    },
+    {
+      "project_is_home": false,
+      "session_status": 200,
+      "history_status": 422,
+      "last_sequence": 0,
+      "events_status": 200,
+      "event_page_count": 32,
+      "draft_status": 200
+    },
+    {
+      "project_is_home": false,
+      "session_status": 200,
+      "history_status": 200,
+      "last_sequence": 7,
+      "events_status": 200,
+      "event_page_count": 32,
+      "draft_status": 200
+    },
+    {
+      "project_is_home": false,
+      "session_status": 200,
+      "history_status": 422,
+      "last_sequence": 0,
+      "events_status": 200,
+      "event_page_count": 32,
+      "draft_status": 200
+    },
+    {
+      "project_is_home": true,
+      "session_status": 200,
+      "history_status": 422,
+      "last_sequence": 0,
+      "events_status": 200,
+      "event_page_count": 32,
+      "draft_status": 200
+    }
+  ],
+  "source_executable_sha256": "6cc10d6f72391b237ea53a9505e53545de03f8cf2a80e80dc34c6149750a2361",
+  "model_runs_started": 0,
+  "account_credentials_copied": false,
+  "raw_user_data_in_report": false,
+  "phone_tested": false,
+  "stress_or_high_load": false
+}

@@ -1,0 +1,27 @@
+{
+  "mdo_source_commit": "f5e5507200411b9be3c7b339a961dc6a5724f839",
+  "updates": [
+    {
+      "path": "D:\\GIT\\mdo\\mdo.exe",
+      "previous_sha256": "6cc10d6f72391b237ea53a9505e53545de03f8cf2a80e80dc34c6149750a2361",
+      "sha256": "dfbfb94ae09fad2917e16577ca9574f7fe1d9b3d6b2f0e63d7bcc2190c90a096",
+      "bytes": 4559669,
+      "backup": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\interrupted-profile\\install-before\\workspace.exe",
+      "home_inventory_files": 12351,
+      "home_inventory_unchanged": true,
+      "app_launched": false
+    },
+    {
+      "path": "E:\\software\\mdo\\mdo.exe",
+      "previous_sha256": "6cc10d6f72391b237ea53a9505e53545de03f8cf2a80e80dc34c6149750a2361",
+      "sha256": "dfbfb94ae09fad2917e16577ca9574f7fe1d9b3d6b2f0e63d7bcc2190c90a096",
+      "bytes": 4559669,
+      "backup": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\interrupted-profile\\install-before\\e-install.exe",
+      "home_inventory_files": 3000,
+      "home_inventory_unchanged": true,
+      "app_launched": false
+    }
+  ],
+  "website_published": false,
+  "phone_installed": false
+}

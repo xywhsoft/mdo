@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | 模型调用 | 临时 429/503、未交付内容的网络错误有界退避，遵守 Retry-After；取消停止等待。每日额度、余额、账号权限和配置拒绝有准确最终提示。 | [对话页面](../tests/acceptance/conversation-ui/README.md)、[本地配置错误](../tests/acceptance/model-request-configuration/README.md) |
 | 流式与上下文 | 缺少结束标记的流不冒报成功；失败草稿替换恢复；无效或额度不足的摘要保留原历史，取消和继续可用。 | [摘要失败与恢复](../tests/acceptance/conversation-compaction-failure/README.md)、[连续完成状态](../tests/acceptance/conversation-completion/README.md) |
-| 中断、队列与重启 | 真实执行期间停止宿主，原输入和队列保留；明确继续后完成，不重复原输入。普通断网保留输入，宿主重启后重新载入原会话可续聊。 | [执行中断](../tests/acceptance/conversation-queue-interruption/README.md)、[断网与重启](../tests/acceptance/conversation-network/README.md) |
+| 中断、队列与重启 | 真实执行期间停止宿主，原输入和队列保留；明确继续后完成，不重复原输入。普通断网保留输入，宿主重启后重新载入原会话可续聊；原模型不可用时可先更换模型，保留中断调用并自动刷新恢复界面。 | [执行中断](../tests/acceptance/conversation-queue-interruption/README.md)、[断网与重启](../tests/acceptance/conversation-network/README.md)、[中断后换模型](../tests/acceptance/interrupted-profile/README.md) |
 | 真实开发能力 | mdo 使用 xge 公共 API 编写并修正 32×32 像素编辑器，画笔、橡皮、调色板、缩放及 PNG 导出通过编译、自测和实际窗口检查；72 次模型、80 次工具。 | [编辑器源码及记录](../tests/acceptance/xge-pixel-editor/README.md) |
 | 项目与会话 | 目录选择、创建、重命名、置顶、归档、回收站恢复、搜索和独立草稿；原会话目录绑定与新默认目录分离；重启后续聊。 | [日常操作](../tests/acceptance/projects-sessions-ui/README.md) |
 | 账号、搜索与远程 | 登录/续期、账号切换、额度/余额、会员模型及模型切换；已完成的搜索响应丢失可用原编号确认，重启恢复不重复扣减；远程消息、附件、决策及重载。 | [账号](../tests/acceptance/account-and-http-mcp/README.md)、[续期](../tests/acceptance/conversation-auth-renewal/README.md)、[搜索](../tests/acceptance/search-ui-recovery/README.md)、[远程](../tests/acceptance/remote-search-regression/README.md) |
@@ -21,9 +21,9 @@
 
 ## 当前可使用和待实测的程序
 
-- 工作区 `D:\GIT\mdo\mdo.exe` 已更新为实际验收的 b9f42347 应用，4,559,374 字节。旧文件及其回执保留在 `.build/conversation-acceptance/schedule-results/workspace-before`。没有改动用户数据。更新摘要见 [记录](../tests/acceptance/schedule-results/workspace-update.json)。
-- 最新独立 ARM64 精简测试包在 `.build/conversation-acceptance/stability-final/android/mdo-stability-qa.apk`，4,191,469 字节；重新编译宿主 xs 93ef1f61、xwork ABI 8，内置 VFS 与已验收 Windows 包完全相同。v2/v3 签名、ZIP/ELF 16 KB 对齐和宿主/SDK 摘要通过。它使用独立 `org.xleaves.mdo.qa.stability` 包，不是旧日用包的升级安装器。
-- 随后补验了四次真实 Windows 原生窗口启动、移动 Home 后重启、环境/命令 Home 路径及 20 秒打包启动检查，全部通过。`E:\software\mdo\mdo.exe` 原来与工作区更新前的旧程序逐字节一致，现已同步为上述候选并保留旧程序备份；更新前后的 3,000 个 Home 文件清单、大小和修改时间未变，没有启动日用 Home。未更新官网或手机日用包。原生启动不代表复制/文件保存已验证，构建检查也不代表 Android WebView 可用。产物证据见 [stability-final](../tests/acceptance/stability-final/README.md)。
+- 工作区 `D:\GIT\mdo\mdo.exe` 和 `E:\software\mdo\mdo.exe` 当前为实际页面验收的 f5e55072 应用，4,559,669 字节，包括最新中断换模型及恢复状态自动刷新修复。两处上一版备份在 `.build/conversation-acceptance/interrupted-profile/install-before`，Home 的文件清单、大小和修改时间未变，没有启动日用 Home。更新摘要见 [记录](../tests/acceptance/interrupted-profile/install-update.json)。
+- 最新独立 ARM64 精简测试包在 `.build/conversation-acceptance/interrupted-profile/android/mdo-stability-qa.apk`，4,191,469 字节；沿用重新编译的宿主 xs 93ef1f61、xwork ABI 8，内置 VFS 与最新已验收 Windows 包完全相同。实际 v2/v3 签名、ZIP 对齐和宿主/SDK 摘要通过，原生 ELF 16 KB 对齐沿用同一字节的先前记录。它使用独立 `org.xleaves.mdo.qa.stability` 包，不是旧日用包的升级安装器。
+- 此前 b9f42347 已补验四次真实 Windows 原生窗口启动、移动 Home 后重启、环境/命令 Home 路径及 20 秒打包启动，全部通过；阶段产物证据见 [stability-final](../tests/acceptance/stability-final/README.md)。最新原生/页面/旧数据复核、982 项前端和 142 项 Python 检查（3 项环境跳过）见 [interrupted-profile](../tests/acceptance/interrupted-profile/README.md)。没有更新官网或手机日用包。原生启动不代表复制/文件保存已验证，构建检查也不代表 Android WebView 可用。
 
 ## 剩余实际检查
 

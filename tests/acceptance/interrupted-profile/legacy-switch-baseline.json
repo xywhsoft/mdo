@@ -1,0 +1,83 @@
+{
+  "checks": [
+    {
+      "project_is_home": false,
+      "state": "trash",
+      "session_status": 200,
+      "original_history_status": 409,
+      "original_error_code": "session_state_conflict",
+      "original_model_error_kind": ""
+    },
+    {
+      "project_is_home": false,
+      "state": "active",
+      "session_status": 200,
+      "original_history_status": 422,
+      "original_error_code": "model_profile_model_missing",
+      "original_model_error_kind": "",
+      "model_switch_status": 200,
+      "model_switch_error": "",
+      "final_history_status": 200,
+      "last_sequence": 26
+    },
+    {
+      "project_is_home": false,
+      "state": "active",
+      "session_status": 200,
+      "original_history_status": 422,
+      "original_error_code": "model_profile_model_missing",
+      "original_model_error_kind": "",
+      "model_switch_status": 200,
+      "model_switch_error": "",
+      "final_history_status": 200,
+      "last_sequence": 79
+    },
+    {
+      "project_is_home": false,
+      "state": "active",
+      "session_status": 200,
+      "original_history_status": 422,
+      "original_error_code": "model_profile_model_missing",
+      "original_model_error_kind": "",
+      "model_switch_status": 409,
+      "model_switch_error": "session_state_conflict",
+      "final_history_status": 422,
+      "last_sequence": 0
+    },
+    {
+      "project_is_home": false,
+      "state": "active",
+      "session_status": 200,
+      "original_history_status": 200,
+      "original_error_code": "",
+      "original_model_error_kind": ""
+    },
+    {
+      "project_is_home": false,
+      "state": "active",
+      "session_status": 200,
+      "original_history_status": 422,
+      "original_error_code": "model_profile_model_missing",
+      "original_model_error_kind": "",
+      "model_switch_status": 200,
+      "model_switch_error": "",
+      "final_history_status": 200,
+      "last_sequence": 5
+    },
+    {
+      "project_is_home": true,
+      "state": "active",
+      "session_status": 200,
+      "original_history_status": 422,
+      "original_error_code": "model_profile_model_missing",
+      "original_model_error_kind": "",
+      "model_switch_status": 200,
+      "model_switch_error": "",
+      "final_history_status": 200,
+      "last_sequence": 194
+    }
+  ],
+  "model_generation_requests": 0,
+  "raw_user_data_in_report": false,
+  "isolated_copy_only": true
+}

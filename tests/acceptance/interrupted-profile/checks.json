@@ -1,0 +1,17 @@
+{
+  "passed": true,
+  "mdo_source_commit": "f5e5507200411b9be3c7b339a961dc6a5724f839",
+  "windows_bytes": 4559669,
+  "windows_sha256": "dfbfb94ae09fad2917e16577ca9574f7fe1d9b3d6b2f0e63d7bcc2190c90a096",
+  "pack_sha256": "9fc3a73fde54c80fd43ef4d673b2559d4a59a08a9eeabbe5089dbb030973ebfb",
+  "embedded_production_files_equal": 4,
+  "legacy_sessions_read": 6,
+  "personal_history_sent_to_model": false,
+  "original_files_content_unchanged": true,
+  "apk_bytes": 4191469,
+  "apk_sha256": "eefa8067d6466675bb144b0e27821300871e3c1b23f9e8359c058e5e2abaae6b",
+  "apk_exact_windows_pack": true,
+  "phone_installed_or_tested": false,
+  "website_published": false,
+  "stress_or_high_load": false
+}

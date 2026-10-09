@@ -1,0 +1,26 @@
+[xs] XServer 1.0.0 (commit 93ef1f61e3203cfd71868ae1c4d8a4743d96d9c8, 2026-10-10, windows)
+[xs] extensions (5): xllm, xllm-session, xwork, webview, image
+[xs] config loaded: D:\GIT\mdo\.build\interrupted-profile-t8xxsedw\site\xs.json (1 servers)
+[xs] server 'recovery-history' class=http 127.0.0.1:51975 tls=off enabled
+[xs]   default-host 'mdo' path=D:\GIT\mdo\.build\interrupted-profile-t8xxsedw\site\web devfile=D:\GIT\mdo\.build\interrupted-profile-t8xxsedw\site\probe.c
+[xs] root custom:{"engine":{}}
+[xs] engine started, workers=1
+[xs] script loaded: D:\GIT\mdo\.build\interrupted-profile-t8xxsedw\site\probe.c (0.4 KB gen 1)
+[mdo] bootstrap ready: version=0.1.0 home=D:\GIT\mdo\.build\interrupted-profile-t8xxsedw\home mode=lazy defaults=2223 providers=1 models=1 skills=1 memory=0 web=0 mcp=0 modules=3 tools=1 schedules=0
+recovery_history_seed=1 error=6:session event persistence failed; completed tool results remain available for recovery
+[xs] server 'recovery-history' http bound on 127.0.0.1:51975
+Traceback (most recent call last):
+[xs] running, press Ctrl+C to stop
+
+  File "D:\GIT\mdo\tests\test_interrupted_profile_runtime.py", line 126, in <module>
+    run(args.host.resolve(), args.output)
+  File "D:\GIT\mdo\tests\test_interrupted_profile_runtime.py", line 72, in run
+    first = switch("queue-fixture")
+            ^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\GIT\mdo\tests\test_interrupted_profile_runtime.py", line 55, in switch
+    return call("PUT", path + "/profile", {"model_id": model_id,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\GIT\mdo\tests\test_interrupted_profile_runtime.py", line 50, in call
+    assert status == expected, (status, document)
+           ^^^^^^^^^^^^^^^^^^
+AssertionError: (409, {'schema_version': 1, 'ok': False, 'request_id': 'mdo-b765c039abbb1e8ab44a5b6a', 'error': {'code': 'session_state_conflict', 'message': 'The session state does not allow this update'}})

@@ -1,0 +1,23 @@
+[apk] javac -version
+javac 17.0.20.1
+[apk] javac -encoding UTF-8
+warning: [options] bootstrap class path not set in conjunction with -source 8
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+1 warning
+[apk] java -cp /home/ubuntu/.cache/mdo-android-toolchain/sdk/build-tools/36.0.0/lib/d8.jar
+[apk] aapt2 compile --dir
+[apk] aapt2 link -I
+[apk] zipalign -P 16
+[apk] java -jar /home/ubuntu/.cache/mdo-android-toolchain/sdk/build-tools/36.0.0/lib/apksigner.jar
+[apk] java -jar /home/ubuntu/.cache/mdo-android-toolchain/sdk/build-tools/36.0.0/lib/apksigner.jar
+Verifies
+Verified using v1 scheme (JAR signing): false
+Verified using v2 scheme (APK Signature Scheme v2): true
+Verified using v3 scheme (APK Signature Scheme v3): true
+Verified using v3.1 scheme (APK Signature Scheme v3.1): false
+Verified using v4 scheme (APK Signature Scheme v4): false
+Verified for SourceStamp: false
+Number of signers: 1
+[apk] zipalign -c -P
+[apk] Built /mnt/d/GIT/mdo/.build/conversation-acceptance/interrupted-profile/android/mdo-stability-qa.apk

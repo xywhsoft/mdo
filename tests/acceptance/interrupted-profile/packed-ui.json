@@ -1,0 +1,19 @@
+{
+  "calls": {
+    "streaming": 2,
+    "continue": 1
+  },
+  "final_errors": 0,
+  "run_states": [
+    "succeeded",
+    "succeeded",
+    "cancelled"
+  ],
+  "selected_model": "replacement-fixture",
+  "resume_required": false,
+  "model_selection_in_browser": true,
+  "manual_read_after_selection": false,
+  "continue_and_followup_in_browser": true,
+  "completion_events": 3,
+  "successful_runs": 2
+}

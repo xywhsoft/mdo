@@ -1,0 +1,96 @@
+{
+  "checks": [
+    {
+      "ordinal": 0,
+      "project_is_home": false,
+      "state": "trash",
+      "initial_history_status": 409,
+      "final_history_status": 409
+    },
+    {
+      "ordinal": 1,
+      "project_is_home": false,
+      "state": "active",
+      "initial_history_status": 422,
+      "initial_recovery_status": 422,
+      "initial_recovery_error": "model_profile_model_missing",
+      "model_switch_status": 200,
+      "final_history_status": 200,
+      "last_sequence": 26,
+      "resume_required": false,
+      "pending_calls": 0
+    },
+    {
+      "ordinal": 2,
+      "project_is_home": false,
+      "state": "active",
+      "initial_history_status": 422,
+      "initial_recovery_status": 422,
+      "initial_recovery_error": "model_profile_model_missing",
+      "model_switch_status": 200,
+      "final_history_status": 200,
+      "last_sequence": 79,
+      "resume_required": false,
+      "pending_calls": 0
+    },
+    {
+      "ordinal": 3,
+      "project_is_home": false,
+      "state": "active",
+      "initial_history_status": 422,
+      "initial_recovery_status": 422,
+      "initial_recovery_error": "model_profile_model_missing",
+      "model_switch_status": 200,
+      "final_history_status": 200,
+      "last_sequence": 5,
+      "resume_required": true,
+      "pending_calls": 2
+    },
+    {
+      "ordinal": 4,
+      "project_is_home": false,
+      "state": "active",
+      "initial_history_status": 200,
+      "final_history_status": 200,
+      "last_sequence": 7,
+      "resume_required": false,
+      "pending_calls": 0
+    },
+    {
+      "ordinal": 5,
+      "project_is_home": false,
+      "state": "active",
+      "initial_history_status": 422,
+      "initial_recovery_status": 422,
+      "initial_recovery_error": "model_profile_model_missing",
+      "model_switch_status": 200,
+      "final_history_status": 200,
+      "last_sequence": 5,
+      "resume_required": false,
+      "pending_calls": 0
+    },
+    {
+      "ordinal": 6,
+      "project_is_home": true,
+      "state": "active",
+      "initial_history_status": 422,
+      "initial_recovery_status": 422,
+      "initial_recovery_error": "model_profile_model_missing",
+      "model_switch_status": 200,
+      "final_history_status": 200,
+      "last_sequence": 194,
+      "resume_required": false,
+      "pending_calls": 0
+    }
+  ],
+  "copied_sessions": 7,
+  "source_files": 96,
+  "original_files_content_unchanged": true,
+  "account_credentials_copied": false,
+  "model_generation_requests": 0,
+  "tools_executed": 0,
+  "resume_requests": 0,
+  "raw_user_data_in_report": false,
+  "isolated_copy_only": true,
+  "candidate_sha256": "a2c6c8be4b979b6c0fbf3ef4d20fcc541e18ced98d1c15844b0a2c22d1573f5e"
+}
