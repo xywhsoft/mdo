@@ -1,0 +1,10 @@
+{
+  "app": {
+    "bundleName": "com.xywhsoft.mdoprobe",
+    "vendor": "mdo platform assessment",
+    "versionCode": 1,
+    "versionName": "0.0.1",
+    "icon": "$media:probe",
+    "label": "$string:app_name"
+  }
+}

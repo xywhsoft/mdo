@@ -1,0 +1,15 @@
+{
+  "module": {
+    "name":"entry", "type":"entry", "mainElement":"EntryAbility",
+    "deviceTypes":["phone"], "deliveryWithInstall":true,
+    "installationFree":false, "pages":"$profile:main_pages",
+    "abilities":[{
+      "name":"EntryAbility", "srcEntry":"./ets/entryability/EntryAbility.ets",
+      "label":"$string:app_name", "icon":"$media:probe",
+      "startWindowIcon":"$media:probe", "startWindowBackground":"$color:probe_background",
+      "exported":true,
+      "skills":[{"entities":["entity.system.home"],"actions":["ohos.want.action.home"]}]
+    }],
+    "requestPermissions":[{"name":"ohos.permission.INTERNET"}]
+  }
+}

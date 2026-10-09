@@ -1,0 +1,10 @@
+hap/.hvigor/
+hap/oh_modules/
+hap/entry/oh_modules/
+hap/build/
+hap/entry/build/
+hap/entry/.cxx/
+hap/local.properties
+hap/oh-package-lock.json5
+hap/entry/oh-package-lock.json5
+hap/.idea/

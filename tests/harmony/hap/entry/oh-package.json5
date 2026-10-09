@@ -1,0 +1,1 @@
+{"name":"entry","version":"0.0.1","dependencies":{"libmdoprobe.so":"file:./src/main/cpp/types/libmdoprobe"}}

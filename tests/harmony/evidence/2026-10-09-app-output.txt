@@ -1,0 +1,14 @@
+10-09 17:30:02.341  3010  3010 I A00000/MdoProbe: native_child_supported=0 start_result=16010003 pid=-1
+10-09 17:30:02.341  3010  3010 I A00000/MdoProbe: file_result=0 spawn_result=13
+10-09 17:30:02.341  3010  3010 I A00000/MdoProbe: native_child_result=16010003
+10-09 17:30:03.963  3010  3010 I A00000/MdoProbe: aot_value=42
+10-09 17:30:03.963  3010  3010 I A00000/MdoProbe: stage=tcc_new
+10-09 17:30:03.964  3010  3010 I A00000/MdoProbe: stage=compile
+10-09 17:30:03.965  3010  3010 I A00000/MdoProbe: stage=relocate
+10-09 17:30:03.965  3010  3010 I A00000/MdoProbe: stage=lookup
+10-09 17:30:03.965  3010  3010 I A00000/MdoProbe: stage=invoke
+10-09 17:30:03.965  3010  3010 I A00000/MdoProbe: stage=delete
+10-09 17:30:03.965  3010  3010 I A00000/MdoProbe: tcc_result=通过
+10-09 17:30:05.534  3010  3010 I A00000/MdoProbe: web=bridge_value=42
+10-09 17:30:05.621  3010  3010 I A00000/MdoProbe: web=http_value=42
+10-09 17:30:05.624  3010  3010 I A00000/MdoProbe: web=ws_value=42

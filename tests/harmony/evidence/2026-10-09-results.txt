@@ -1,0 +1,45 @@
+Recorded: 2026-10-09, Asia/Shanghai
+Scope: feasibility probe in an installed debug HAP, not a full mdo product.
+
+DevEco Studio: 26.0.0.851
+Emulator: 26.0.0.402
+Native SDK: 26.0.0.105 / API 26.0.0
+Native Clang: 15.0.4
+Hvigor: 6.26.8
+Image catalog: HarmonyOS 7.0.0(26.0.0), softwareVersion 7.0.0.107
+Guest const.ohos.fullname: OpenHarmony-7.0.0.105
+Guest uname -m: x86_64
+Instance: mdoProbe7lite, phone, 2048 MiB RAM, 6144 MiB data partition
+HDC target: 127.0.0.1:5555
+
+Final xs source: f47b0de5037f458f6289483d1323dee417d99434
+Locked xrt source: 6040abda647bd947bd561cd185f37a3751f122f4
+Final unsigned HAP: 3706853 bytes
+HAP SHA-256: 04d1b295836617e6ca10b1d2ef2d70709c942f428b4c77a8db14207d4fca4114
+HAP contains libmdoprobe.so and libmdochildprobe.so for arm64-v8a and x86_64.
+HAP INTERNET permission only; no special execution permission.
+Main app PID/UID during final run: 3010 / 20020063
+Main app SELinux context: o:r:debug_hap:s0:x95,x334,x512,x868,x1024
+
+Application log: 2026-10-09-app-output.txt
+Actual screenshot: 2026-10-09-emulator.png
+Precompiled native result: 42
+ArkWeb bridge result: 42
+Local HTTP result: 42
+Local WebSocket result: 42
+Private file write/read/delete: errno=0
+TCC compile/relocate/resolve/invoke-native-callback: PASS, expected value 42
+Windows TCC control: PASS, value=42
+ARM64 TCC/native libraries and xrt module closure: compile/link PASS; NOT run
+x86_64 TCC/native libraries and xrt module closure: compile/link PASS
+
+posix_spawn /system/bin/sh -c 'exit 0': EACCES=13
+/system/bin/sh and /system/bin/toybox: exist, mode 0755, root:shell
+OH_Ability_IsNativeChildProcessSupported: false
+OH_Ability_StartNativeChildProcess: 16010003 (NCP_ERR_SERVICE_ERROR), pid=-1
+Native child library entry: NOT reached
+These failures do not establish behavior on every device or signing profile.
+
+No root, smode, SELinux changes, signature bypass, Windows security changes,
+or high-load testing. Emulator stopped after validation; files retained on D:.
+ARM64 runtime, release signing, full xs/mdo backend and CLI parity: NOT verified.

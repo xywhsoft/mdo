@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>body{font:16px system-ui;padding:16px;background:#202020;color:#eee}strong{color:#7bc896}</style>
+<h2>ArkWeb 探测</h2><p>HTML 已加载</p><p id="bridge">等待网页与原生 C 桥接……</p>
+<p id="http">等待本机 HTTP……</p><p id="ws">等待本机 WebSocket……</p>
+<script>
+try {
+  const value = window.nativeProbe.aotValue();
+  document.querySelector('#bridge').textContent = '网页 → ArkTS → C：' + value + (value === 42 ? '，通过' : '，失败');
+  console.log('bridge_value=' + value);
+  const port = window.nativeProbe.port();
+  fetch('http://127.0.0.1:' + port + '/value').then(response => response.text()).then(text => {
+    document.querySelector('#http').textContent = 'HTTP：' + text + (text === '42' ? '，通过' : '，失败');
+    console.log('http_value=' + text);
+  }).catch(error => {
+    document.querySelector('#http').textContent = 'HTTP：' + String(error);
+    console.error('http_error=' + String(error));
+  });
+  const socket = new WebSocket('ws://127.0.0.1:' + port + '/ws');
+  socket.onmessage = event => {
+    document.querySelector('#ws').textContent = 'WebSocket：' + event.data + (event.data === '42' ? '，通过' : '，失败');
+    console.log('ws_value=' + event.data);
+  };
+  socket.onerror = () => {
+    document.querySelector('#ws').textContent = 'WebSocket：失败';
+    console.error('ws_error');
+  };
+} catch (error) {
+  document.querySelector('#bridge').textContent = '桥接失败：' + String(error);
+  console.error(String(error));
+}
+</script></html>
