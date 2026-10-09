@@ -1,0 +1,20 @@
+[
+  {
+    "method": "PATCH",
+    "path": "/api/v1/settings/settings",
+    "status": 200,
+    "started": 77577.546
+  },
+  {
+    "method": "PUT",
+    "path": "/api/v1/workspace-state",
+    "status": 200,
+    "started": 77577.546
+  },
+  {
+    "method": "PUT",
+    "path": "/api/v1/projects/default/sessions/V-OSPmnG2daVK2Y_7BGVXLOni5LdS_iT/draft",
+    "status": 200,
+    "started": 77602.203
+  }
+]

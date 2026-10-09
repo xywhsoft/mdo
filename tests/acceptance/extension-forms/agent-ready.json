@@ -1,0 +1,81 @@
+{
+  "dialog": "新建 Agent",
+  "errorToasts": [],
+  "fields": [
+    {
+      "disabled": false,
+      "invalid": null,
+      "name": "extension_id",
+      "required": true,
+      "value": "qa-empty-prompt",
+      "visible": true
+    },
+    {
+      "disabled": false,
+      "invalid": null,
+      "name": "name",
+      "required": true,
+      "value": "QA default instructions",
+      "visible": true
+    },
+    {
+      "disabled": false,
+      "invalid": null,
+      "name": "description",
+      "required": true,
+      "value": "Use default instructions with no custom prompt.",
+      "visible": true
+    },
+    {
+      "disabled": false,
+      "invalid": null,
+      "name": "model",
+      "required": false,
+      "value": "inherit",
+      "visible": true
+    },
+    {
+      "disabled": false,
+      "invalid": null,
+      "name": "reasoning_effort",
+      "required": false,
+      "value": "",
+      "visible": true
+    },
+    {
+      "disabled": false,
+      "invalid": null,
+      "name": "code",
+      "required": false,
+      "value": false,
+      "visible": true
+    },
+    {
+      "disabled": false,
+      "invalid": null,
+      "name": "read_only",
+      "required": false,
+      "value": false,
+      "visible": true
+    },
+    {
+      "disabled": false,
+      "invalid": null,
+      "name": "allow_delegation",
+      "required": false,
+      "value": false,
+      "visible": true
+    },
+    {
+      "disabled": false,
+      "invalid": null,
+      "name": "prompt",
+      "required": false,
+      "value": "",
+      "visible": true
+    }
+  ],
+  "focus": "description",
+  "source": "---\n\n---\n",
+  "status": ""
+}

@@ -1,0 +1,97 @@
+{
+  "dialog": "编辑 MCP",
+  "errorToasts": [],
+  "fields": [
+    {
+      "disabled": true,
+      "invalid": null,
+      "name": "extension_id",
+      "required": true,
+      "value": "qa-form-server",
+      "visible": true
+    },
+    {
+      "disabled": false,
+      "invalid": null,
+      "name": "name",
+      "required": true,
+      "value": "server",
+      "visible": false
+    },
+    {
+      "disabled": false,
+      "invalid": null,
+      "name": "description",
+      "required": true,
+      "value": "MCP server",
+      "visible": false
+    },
+    {
+      "disabled": false,
+      "invalid": null,
+      "name": "enabled",
+      "required": false,
+      "value": false,
+      "visible": false
+    },
+    {
+      "disabled": false,
+      "invalid": null,
+      "name": "transport",
+      "required": false,
+      "value": "streamable-http",
+      "visible": false
+    },
+    {
+      "disabled": true,
+      "invalid": null,
+      "name": "program",
+      "required": true,
+      "value": "",
+      "visible": false
+    },
+    {
+      "disabled": true,
+      "invalid": null,
+      "name": "arguments",
+      "required": false,
+      "value": "[]",
+      "visible": false
+    },
+    {
+      "disabled": true,
+      "invalid": null,
+      "name": "working_directory",
+      "required": false,
+      "value": "",
+      "visible": false
+    },
+    {
+      "disabled": true,
+      "invalid": null,
+      "name": "environment",
+      "required": false,
+      "value": "[]",
+      "visible": false
+    },
+    {
+      "disabled": false,
+      "invalid": null,
+      "name": "endpoint",
+      "required": true,
+      "value": "https://example.invalid/mcp",
+      "visible": false
+    },
+    {
+      "disabled": false,
+      "invalid": null,
+      "name": "headers",
+      "required": false,
+      "value": "[]",
+      "visible": false
+    }
+  ],
+  "focus": null,
+  "source": "{\"Authorization\":\"qa-sensitive-placeholder\" trailing}",
+  "status": "源文件不是有效的 JSON，请检查括号、引号和逗号。"
+}

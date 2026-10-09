@@ -1,0 +1,44 @@
+[
+  {
+    "method": "PATCH",
+    "path": "/api/v1/settings/settings",
+    "status": 200,
+    "started": 77577.546
+  },
+  {
+    "method": "PUT",
+    "path": "/api/v1/workspace-state",
+    "status": 200,
+    "started": 77577.546
+  },
+  {
+    "method": "PUT",
+    "path": "/api/v1/projects/default/sessions/V-OSPmnG2daVK2Y_7BGVXLOni5LdS_iT/draft",
+    "status": 200,
+    "started": 77602.203
+  },
+  {
+    "method": "PUT",
+    "path": "/api/v1/extensions/subagents/qa-form-helper",
+    "status": 200,
+    "started": 77673.765
+  },
+  {
+    "method": "PUT",
+    "path": "/api/v1/extensions/agents/qa-empty-prompt",
+    "status": 200,
+    "started": 77681.921
+  },
+  {
+    "method": "PUT",
+    "path": "/api/v1/extensions/skills/qa-empty-skill",
+    "status": 200,
+    "started": 77710.359
+  },
+  {
+    "method": "PUT",
+    "path": "/api/v1/extensions/commands/qa-review",
+    "status": 200,
+    "started": 77720.187
+  }
+]

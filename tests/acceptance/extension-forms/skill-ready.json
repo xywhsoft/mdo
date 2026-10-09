@@ -1,0 +1,41 @@
+{
+  "dialog": "新建 Skill",
+  "errorToasts": [],
+  "fields": [
+    {
+      "disabled": false,
+      "invalid": null,
+      "name": "extension_id",
+      "required": true,
+      "value": "qa-empty-skill",
+      "visible": true
+    },
+    {
+      "disabled": false,
+      "invalid": null,
+      "name": "name",
+      "required": true,
+      "value": "QA metadata skill",
+      "visible": true
+    },
+    {
+      "disabled": false,
+      "invalid": null,
+      "name": "description",
+      "required": true,
+      "value": "Metadata-only Skill for validation.",
+      "visible": true
+    },
+    {
+      "disabled": false,
+      "invalid": null,
+      "name": "prompt",
+      "required": false,
+      "value": "",
+      "visible": true
+    }
+  ],
+  "focus": "description",
+  "source": "---\n\n---\n",
+  "status": ""
+}

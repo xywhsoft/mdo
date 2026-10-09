@@ -1,0 +1,73 @@
+{
+  "dialog": "新建 SubAgent",
+  "errorToasts": [],
+  "fields": [
+    {
+      "disabled": false,
+      "invalid": null,
+      "name": "extension_id",
+      "required": true,
+      "value": "qa-form-helper",
+      "visible": true
+    },
+    {
+      "disabled": false,
+      "invalid": null,
+      "name": "name",
+      "required": true,
+      "value": "QA form helper",
+      "visible": true
+    },
+    {
+      "disabled": false,
+      "invalid": "true",
+      "name": "description",
+      "required": true,
+      "value": "   ",
+      "visible": true
+    },
+    {
+      "disabled": false,
+      "invalid": null,
+      "name": "model",
+      "required": false,
+      "value": "inherit",
+      "visible": true
+    },
+    {
+      "disabled": false,
+      "invalid": null,
+      "name": "reasoning_effort",
+      "required": false,
+      "value": "",
+      "visible": true
+    },
+    {
+      "disabled": false,
+      "invalid": null,
+      "name": "read_only",
+      "required": false,
+      "value": false,
+      "visible": true
+    },
+    {
+      "disabled": false,
+      "invalid": null,
+      "name": "allow_delegation",
+      "required": false,
+      "value": false,
+      "visible": true
+    },
+    {
+      "disabled": false,
+      "invalid": null,
+      "name": "prompt",
+      "required": true,
+      "value": "Inspect files and return a concise result.",
+      "visible": true
+    }
+  ],
+  "focus": "description",
+  "source": "---\n\n---\n",
+  "status": "请填写说明。"
+}

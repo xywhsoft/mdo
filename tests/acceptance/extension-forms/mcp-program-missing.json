@@ -1,0 +1,97 @@
+{
+  "dialog": "新建 MCP",
+  "errorToasts": [],
+  "fields": [
+    {
+      "disabled": false,
+      "invalid": null,
+      "name": "extension_id",
+      "required": true,
+      "value": "qa-form-server",
+      "visible": true
+    },
+    {
+      "disabled": false,
+      "invalid": null,
+      "name": "name",
+      "required": true,
+      "value": "server",
+      "visible": true
+    },
+    {
+      "disabled": false,
+      "invalid": null,
+      "name": "description",
+      "required": true,
+      "value": "MCP server",
+      "visible": true
+    },
+    {
+      "disabled": false,
+      "invalid": null,
+      "name": "enabled",
+      "required": false,
+      "value": false,
+      "visible": true
+    },
+    {
+      "disabled": false,
+      "invalid": null,
+      "name": "transport",
+      "required": false,
+      "value": "stdio",
+      "visible": true
+    },
+    {
+      "disabled": false,
+      "invalid": "true",
+      "name": "program",
+      "required": true,
+      "value": "",
+      "visible": true
+    },
+    {
+      "disabled": false,
+      "invalid": null,
+      "name": "arguments",
+      "required": false,
+      "value": "[]",
+      "visible": true
+    },
+    {
+      "disabled": false,
+      "invalid": null,
+      "name": "working_directory",
+      "required": false,
+      "value": "",
+      "visible": true
+    },
+    {
+      "disabled": false,
+      "invalid": null,
+      "name": "environment",
+      "required": false,
+      "value": "[]",
+      "visible": true
+    },
+    {
+      "disabled": true,
+      "invalid": null,
+      "name": "endpoint",
+      "required": true,
+      "value": "",
+      "visible": false
+    },
+    {
+      "disabled": true,
+      "invalid": null,
+      "name": "headers",
+      "required": false,
+      "value": "[]",
+      "visible": false
+    }
+  ],
+  "focus": "program",
+  "source": "{\n  \"schema_version\": 1,\n  \"id\": \"server\",\n  \"name\": \"server\",\n  \"description\": \"MCP server\",\n  \"enabled\": true,\n  \"transport\": {\n    \"type\": \"stdio\",\n    \"program\": \"\",\n    \"arguments\": [],\n    \"working_directory\": null,\n    \"inherit_environment\": true,\n    \"environment\": []\n  },\n  \"protocol_version\": \"2025-11-25\",\n  \"startup_timeout_ms\": 10000,\n  \"request_timeout_ms\": 60000,\n  \"limits\": {\n    \"message_bytes\": 1048576,\n    \"tools\": 128\n  },\n  \"tools\": {\n    \"allow\": [],\n    \"deny\": []\n  },\n  \"security\": {\n    \"default_effects\": [\n      \"external-service\"\n    ],\n    \"permission_profile\": \"balanced\",\n    \"trust_read_only_annotations\": false\n  },\n  \"auto_reconnect\": true\n}",
+  "status": "请填写程序。"
+}

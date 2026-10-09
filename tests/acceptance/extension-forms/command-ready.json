@@ -1,0 +1,41 @@
+{
+  "dialog": "新建 命令",
+  "errorToasts": [],
+  "fields": [
+    {
+      "disabled": false,
+      "invalid": null,
+      "name": "extension_id",
+      "required": true,
+      "value": "qa-review",
+      "visible": true
+    },
+    {
+      "disabled": false,
+      "invalid": null,
+      "name": "description",
+      "required": false,
+      "value": "",
+      "visible": true
+    },
+    {
+      "disabled": false,
+      "invalid": null,
+      "name": "argument_hint",
+      "required": false,
+      "value": "",
+      "visible": true
+    },
+    {
+      "disabled": false,
+      "invalid": null,
+      "name": "prompt",
+      "required": true,
+      "value": "Review $ARGUMENTS and return a concise result.",
+      "visible": true
+    }
+  ],
+  "focus": "prompt",
+  "source": "---\n\n---\n",
+  "status": ""
+}
