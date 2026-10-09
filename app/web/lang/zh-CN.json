@@ -112,6 +112,8 @@
   "timeline.compactionRejected": "上下文整理未应用",
   "timeline.recoveryRequired": "会话需要恢复",
   "timeline.recoveryResolved": "会话已恢复",
+  "timeline.toolRecoveryCompleted": "已处理上次未完成的工具调用。",
+  "timeline.toolRecoveryUncertain": "上次工具执行的结果无法确认，已交给 Agent 继续处理。",
   "timeline.runError": "运行错误",
   "timeline.agentFailed": "Agent 运行失败",
   "timeline.history": "历史",

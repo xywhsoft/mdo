@@ -44,6 +44,25 @@ function historyBoundaryText(event) {
   return event.text;
 }
 
+function recoveryResolvedText(event) {
+  // Translate xwork's canonical markers, never imported or tool-authored text.
+  if (event.text === "Pending tool call was retried after explicit recovery preflight.")
+    return t("timeline.toolRecoveryCompleted", {}, "已处理上次未完成的工具调用。");
+  if (event.text === "Pending tool call was not retried and was recorded as uncertain.")
+    return t("timeline.toolRecoveryUncertain", {}, "上次工具执行的结果无法确认，已交给 Agent 继续处理。");
+  return event.text || t("timeline.recoveryResolved", {}, "会话已恢复");
+}
+
+function durableToolKey(event, prompt) {
+  if (event.agent_depth !== 0 || !(Number(event.schema_version) >= 3) ||
+      !Number.isSafeInteger(prompt?.sequence) || prompt.sequence <= 0 ||
+      !Number.isSafeInteger(prompt.sourceEventId) || prompt.sourceEventId <= 0 ||
+      !Number.isSafeInteger(Number(event.agent_turn)) || Number(event.agent_turn) <= 0 ||
+      !event.tool_name || !event.tool_call_id) return null;
+  return JSON.stringify([prompt.sourceEventId, prompt.sequence, Number(event.agent_turn),
+    event.tool_name, event.tool_call_id]);
+}
+
 function completeTextSpan(event, start = 0, end = (event.text || "").length) {
   return { eventId: event.event_id, kind: event.kind, start, end,
     ...(event.projection_epoch ? { epoch: event.projection_epoch } : {}),
@@ -75,6 +94,8 @@ export function eventsToTimeline(events, historyLost = false,
   const runUsages = new Map();
   const streams = new Map();
   const promptsByRun = new Map();
+  const resumableTools = new Map();
+  const resumedEpochs = new Set();
   let latestMainPrompt = null;
   const runEpochs = new Map();
   const terminalRuns = new Map();
@@ -131,6 +152,7 @@ export function eventsToTimeline(events, historyLost = false,
             state: "running", time: event.time, meta: `depth ${event.agent_depth}` });
         } else if (Number(event.schema_version) >= 3 &&
                    Number(event.user_message_sequence || 0) === 0) {
+          resumedEpochs.add(`${runKey}:${Number(event.event_id) || 0}`);
           // A resumed run has no new user message. Older event schemas did not
           // carry a durable message sequence, so keep their original projection.
           items.push({ key: `resume-${event.event_id}`, kind: "system",
@@ -204,8 +226,27 @@ export function eventsToTimeline(events, historyLost = false,
         break;
       }
       case "tool_start": {
-        const item = {
-          key: `tool-${event.event_id}`,
+        const durableKey = durableToolKey(event, promptsByRun.get(runKey));
+        const previous = durableKey ? resumableTools.get(durableKey) : null;
+        // A resumed journal may restart the same pending call under a new run
+        // ID. Keep one card only with the original input, round, name, call ID
+        // and complete arguments retained. A completed/failed call is history.
+        const reuse = resumedEpochs.has(`${runKey}:${epoch}`) && previous &&
+          (previous.runKey !== runKey || previous.runEpoch !== epoch) &&
+          ["running", "cancelled"].includes(previous.state) &&
+          previous.outputEventId == null && !previous.inputTruncated &&
+          event.text_truncated !== true && previous.inputText === (event.text || "");
+        if (reuse) {
+          tools.delete(`${previous.runKey}:${previous.runEpoch}:${event.tool_call_id}`);
+          // A shutdown before any reply leaves only an empty stopped marker.
+          // Once its pending call resumes, the recovery marker explains it.
+          const stopped = items.findIndex(item => item.kind === "assistant" &&
+            item.state === "cancelled" && !item.text &&
+            item.runKey === previous.runKey && item.runEpoch === previous.runEpoch);
+          if (stopped !== -1) items.splice(stopped, 1);
+        }
+        const item = reuse ? previous : { key: `tool-${event.event_id}` };
+        Object.assign(item, {
           kind: "tool",
           role: event.tool_name || t("timeline.tool", {}, "工具"),
           text: event.text || t("timeline.executing", {}, "正在执行…"),
@@ -218,10 +259,11 @@ export function eventsToTimeline(events, historyLost = false,
           state: "running",
           time: event.time,
           meta: event.tool_call_id || "",
-        };
+        });
         if (event.tool_call_id)
           tools.set(`${runKey}:${epoch}:${event.tool_call_id}`, item);
-        items.push(item);
+        if (durableKey) resumableTools.set(durableKey, item);
+        if (!reuse) items.push(item);
         break;
       }
       case "tool_done": {
@@ -293,9 +335,8 @@ export function eventsToTimeline(events, historyLost = false,
       case "recovery_resolved":
         items.push({ key: `recovery-${event.event_id}`, kind: "system",
           role: t("timeline.recovery", {}, "恢复"),
-          text: event.text || (event.kind === "recovery_required"
-            ? t("timeline.recoveryRequired", {}, "会话需要恢复")
-            : t("timeline.recoveryResolved", {}, "会话已恢复")),
+          text: event.kind === "recovery_resolved" ? recoveryResolvedText(event)
+            : event.text || t("timeline.recoveryRequired", {}, "会话需要恢复"),
           state: event.kind === "recovery_required" ? "failed" : "done", time: event.time });
         break;
       case "error": {
@@ -375,6 +416,8 @@ export function eventsToTimeline(events, historyLost = false,
         break;
       }
       case "history_truncated": {
+        // A boundary can remove the evidence required to match a pending call.
+        resumableTools.clear();
         // Editing/retrying records the removed event range for replay. Keep
         // those markers in exports, but avoid adding a chat card per retry.
         // Clears, imported notes and unrecognized boundaries remain visible.

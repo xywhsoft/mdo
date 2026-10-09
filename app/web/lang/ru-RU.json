@@ -113,6 +113,8 @@
   "timeline.compactionRejected": "Сжатие контекста не применено",
   "timeline.recoveryRequired": "Сеанс требует восстановления",
   "timeline.recoveryResolved": "Сеанс восстановлен",
+  "timeline.toolRecoveryCompleted": "Ранее незавершённый вызов инструмента обработан.",
+  "timeline.toolRecoveryUncertain": "Результат предыдущего вызова инструмента не удалось подтвердить. Агент продолжит с учётом этого.",
   "timeline.runError": "Ошибка запуска",
   "timeline.agentFailed": "Ошибка работы агента",
   "timeline.history": "История",

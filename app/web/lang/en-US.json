@@ -112,6 +112,8 @@
   "timeline.compactionRejected": "Context compaction not applied",
   "timeline.recoveryRequired": "Session requires recovery",
   "timeline.recoveryResolved": "Session recovered",
+  "timeline.toolRecoveryCompleted": "The previously unfinished tool call has been handled.",
+  "timeline.toolRecoveryUncertain": "The previous tool result could not be confirmed. The Agent will continue with this information.",
   "timeline.runError": "Run error",
   "timeline.agentFailed": "Agent run failed",
   "timeline.history": "History",
