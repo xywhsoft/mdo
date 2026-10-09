@@ -1,0 +1,11 @@
+{
+  "path": "D:\\GIT\\mdo\\mdo.exe",
+  "bytes": 4559374,
+  "sha256": "6cc10d6f72391b237ea53a9505e53545de03f8cf2a80e80dc34c6149750a2361",
+  "source_commit": "b9f42347aa095b97498580a2e3ed2445cbefd258",
+  "previous_sha256": "e611803eb496b9843162dcfb3f84f6f411af9892e8ab47301902e1e24252b172",
+  "backup": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\schedule-results\\workspace-before\\mdo.exe",
+  "app_data_modified": false,
+  "website_published": false,
+  "phone_installed": false
+}

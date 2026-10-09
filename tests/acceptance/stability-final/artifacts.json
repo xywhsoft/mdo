@@ -1,0 +1,30 @@
+{
+  "passed": true,
+  "mdo_source_commit": "b9f42347aa095b97498580a2e3ed2445cbefd258",
+  "xs_commit": "93ef1f61e3203cfd71868ae1c4d8a4743d96d9c8",
+  "windows": {
+    "path": "D:\\GIT\\mdo\\mdo.exe",
+    "bytes": 4559374,
+    "sha256": "6cc10d6f72391b237ea53a9505e53545de03f8cf2a80e80dc34c6149750a2361",
+    "workspace_updated": true
+  },
+  "android": {
+    "path": ".build\\conversation-acceptance\\stability-final\\android\\mdo-stability-qa.apk",
+    "bytes": 4191469,
+    "sha256": "af37974eeee348ed37f3de866f7e934e88b8e834c6114141b7302b494044eef4",
+    "package": "org.xleaves.mdo.qa.stability",
+    "edition": "lite",
+    "build_id": 30000047,
+    "signature_v2": true,
+    "signature_v3": true,
+    "native_zip_and_elf_alignment_16k": true,
+    "page_resolver_in_dex": true,
+    "native_sha256": "9baa4515c93fd1f0760b7dc74a3f96fbdbacd3172bf0fb74b1cfcfd51b83b2c5",
+    "exact_pack_from_windows": true,
+    "installed": false,
+    "webview_tested": false
+  },
+  "pack_sha256": "ff2d8fb7f3ddd98c8f526431260c95b43203563432b6696a27a181a26f7634db",
+  "website_published": false,
+  "stress_or_high_load": false
+}
