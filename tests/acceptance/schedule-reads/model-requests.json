@@ -1,0 +1,14 @@
+[
+  {
+    "prompt": "SCHEDULE_READ_RUN",
+    "image_parts": 0,
+    "user_messages": 1,
+    "tool_results": 0
+  },
+  {
+    "prompt": "SCHEDULE_READ_FOLLOWUP",
+    "image_parts": 0,
+    "user_messages": 1,
+    "tool_results": 0
+  }
+]

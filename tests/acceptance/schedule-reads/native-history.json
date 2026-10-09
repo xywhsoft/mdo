@@ -1,0 +1,1 @@
+{"schema_version":1,"ok":true,"request_id":"mdo-7d1cc5551318cfbb6f81696a","data":{"schedule_id":"qa-schedule-read","count":1,"limit":32,"has_more":false,"items":[{"task_id":1,"agent_run_id":1,"scheduled_at":1791574897627819,"finished_at":1791574897809476,"result":"succeeded","text":"FIXTURE_OK: SCHEDULE_READ_RUN","text_truncated":false}]}}

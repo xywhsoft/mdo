@@ -1,0 +1,13 @@
+Browser tab: 41, Title: "墨斗", URL: "http://127.0.0.1:51509/#/schedules".
+0 AXWebArea 墨斗, URL: 127.0.0.1:51509/#/schedules
+	1 container 编辑：读取恢复验收, ID: schedule-editor-dialog
+		2 container
+			3 heading 编辑：读取恢复验收, Value: 3, ID: schedule-editor-title
+				4 text 编辑：读取恢复验收
+			5 button Description: 关闭计划编辑器, ID: schedule-editor-close
+		6 container
+			7 text 正在读取计划…
+			8 button 取消, ID: schedule-editor-cancel
+			9 button (disabled) 创建计划, ID: schedule-save
+
+The focused UI element is 5 button Description: 关闭计划编辑器, ID: schedule-editor-close

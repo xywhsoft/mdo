@@ -1,0 +1,13 @@
+{"phase": "baseline-list", "path": "/api/v1/schedules", "attempt": 1, "started": 87371.859, "status": 503}
+{"phase": "baseline-list", "path": "/api/v1/schedules", "attempt": 2, "started": 87379.109, "forwarded": true}
+{"phase": "baseline-list", "path": "/api/v1/schedules", "attempt": 3, "started": 87394.14, "forwarded": true}
+{"phase": "baseline-list", "path": "/api/v1/schedules", "attempt": 4, "started": 87409.156, "forwarded": true}
+{"phase": "baseline-list", "path": "/api/v1/schedules", "attempt": 5, "started": 87424.156, "forwarded": true}
+{"phase": "baseline-list", "path": "/api/v1/schedules", "attempt": 6, "started": 87439.171, "forwarded": true}
+{"phase": "baseline-list", "path": "/api/v1/schedules", "attempt": 7, "started": 87454.187, "forwarded": true}
+{"phase": "baseline-list", "path": "/api/v1/schedules", "attempt": 8, "started": 87469.203, "forwarded": true}
+{"phase": "baseline-list", "path": "/api/v1/schedules", "attempt": 9, "started": 87484.218, "forwarded": true}
+{"phase": "baseline-list", "path": "/api/v1/schedules", "attempt": 10, "started": 87499.218, "forwarded": true}
+{"phase": "baseline-list", "path": "/api/v1/schedules", "attempt": 11, "started": 87514.25, "forwarded": true}
+{"phase": "baseline-list", "path": "/api/v1/schedules", "attempt": 12, "started": 87529.265, "forwarded": true}
+{"phase": "baseline-editor", "path": "/api/v1/schedules/qa-schedule-read", "attempt": 1, "started": 87534.875, "status": 503}

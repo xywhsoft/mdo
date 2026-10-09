@@ -1,0 +1,71 @@
+Browser tab: 41, Title: "墨斗", URL: "http://127.0.0.1:51509/#/schedules".
+0 AXWebArea 墨斗, URL: 127.0.0.1:51509/#/schedules
+	1 link Description: 跳到计划任务, Value: 127.0.0.1:51509/#schedules-content
+	2 container app-shell
+		3 container Description: 会话导航, ID: sidebar
+			4 link Description: 墨斗主页, Value: 127.0.0.1:51509/#/
+			5 container 通知 · 2
+				6 pop up button 扩展工具包安装
+				7 pop up button 登录账号
+			8 button Description: 关闭会话导航, ID: close-sidebar
+			9 button 登录账号, ID: open-account
+			10 pop up button 本机, Help: 选择设备, ID: open-devices
+			11 checkbox 新建任务 Ctrl N, Value: 0, ID: new-session
+				12 text 新建任务
+				13 text Ctrl N
+			14 checkbox 计划任务, Value: 1, ID: open-schedules
+			15 container 会话
+				16 container session-list
+					68 container 项目
+						69 button (expanded) Description: 折叠 项目, Secondary Actions: Collapse
+						70 pop up button (collapsed) Description: 列表选项, Secondary Actions: Expand
+						71 button 添加项目
+						72 text 添加项目，让任务按工作区分组。
+					73 container 任务
+						74 button (expanded) Description: 折叠 任务, Secondary Actions: Collapse
+						75 button 在默认项目新建任务
+						76 content list
+							77 container
+								78 button 对话恢复浏览器验收 3分钟前, Help: 对话恢复浏览器验收 default · conversation-fixture
+									79 text 对话恢复浏览器验收
+									80 text 3分钟前
+								81 pop up button (collapsed) Description: 对话恢复浏览器验收 的操作, Secondary Actions: Expand
+			82 text 本地服务 0.1.0
+			32 pop up button (collapsed) Description: 搜索会话, Help: 搜索会话（/）, ID: open-session-search, Secondary Actions: Expand
+			33 button Description: 切换为深色主题, ID: toggle-theme
+			34 button Description: 设置, ID: open-settings
+		35 container Agent 工作区
+			83 container 计划任务, ID: schedules-workspace
+				84 container
+					85 button Description: 返回对话, ID: close-schedules
+					86 heading 计划任务, Value: 1, ID: schedules-title
+						87 text 计划任务
+					88 button Description: 刷新, ID: schedules-refresh
+					89 button 新建计划, ID: schedule-new
+				90 container schedules-content
+					91 text 1 项计划
+					92 container 读取恢复验收
+						93 text 读取恢复验收
+						94 text 已启用
+						95 text 仅一次 · default · mdo.default
+						96 definition list
+							97 container 下次运行
+								98 text 下次运行
+							99 text 2026年10月11日 03:40
+							100 container 触发次数
+								101 text 触发次数
+							102 text 1
+							103 container 最近触发
+								104 text 最近触发
+							105 text 2026年10月10日 03:41
+							106 container 正在运行
+								107 text 正在运行
+							108 text 0
+						109 button 编辑
+						110 button 暂停
+						111 button 立即运行
+						112 button 历史
+						113 button 删除
+		67 splitter Description: 调整会话导航宽度, Value: 272, ID: sidebar-resize
+
+The focused UI element is 86 heading 计划任务, Value: 1, ID: schedules-title

@@ -1,0 +1,21 @@
+{
+  "passed": true,
+  "source_commit": "471f21e90de0d552e1b86747da9edf8a1be82fdc",
+  "sha256": "ec1aa98fdff3ab21129a58171de18b38bc6ed1b2d1d9c856d0d6b65641adc7c1",
+  "bytes": 4554148,
+  "embedded_sources": {
+    "web/js/api/read-intents.js": "4da60cb71fc42b5a87c41cbb60fae29c75c18475498ba2e17ee4147f866a704a",
+    "web/js/state/schedules.js": "f5582ce0330057ce1e15ba9788224531675015981159b2bac9622f60f8337de3",
+    "web/js/features/schedules/schedule-panel.js": "29b617c767ce14bde6fdb7df5651e749d2eac60583667c4a16577190c0994f0a",
+    "web/js/features/settings/extension-reads.js": "52890aeca7cd3e36b9456258af8df6f16e4564a302149246b9ce25bf6e596ae0"
+  },
+  "frontend_pass": 965,
+  "contracts_pass": 124,
+  "native_scheduled_runs": 1,
+  "model_requests": 2,
+  "final_model_errors": 0,
+  "cancelled_native_reads": 3,
+  "final_read_notices": 1,
+  "retry_exhaustion_seconds": 16.687,
+  "stress_or_high_load": false
+}

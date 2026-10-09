@@ -1,0 +1,13 @@
+{"method": "PATCH", "path": "/api/v1/settings/settings", "status": 200, "started": 87635.765}
+{"method": "PUT", "path": "/api/v1/workspace-state", "status": 200, "started": 87635.843}
+{"method": "PUT", "path": "/api/v1/projects/default/sessions/V-OSQNBQs3vaZ3ohQxEDg7UKJsOgV2Iq/draft", "status": 200, "started": 87668.328}
+{"method": "POST", "path": "/api/v1/schedules/qa-schedule-read/run", "status": 202, "started": 87700.296}
+{"method": "PUT", "path": "/api/v1/projects/default/sessions/V-OSQNBQs3vaZ3ohQxEDg7UKJsOgV2Iq/draft", "status": 200, "started": 87843.687}
+{"method": "PUT", "path": "/api/v1/projects/default/sessions/V-OSQNBQs3vaZ3ohQxEDg7UKJsOgV2Iq/draft", "status": 200, "started": 87843.703}
+{"method": "PUT", "path": "/api/v1/projects/default/sessions/V-OSQNBQs3vaZ3ohQxEDg7UKJsOgV2Iq/draft/submissions/25525a87ca7432f42eb9ff01b0aa6b12", "status": 200, "started": 87843.734}
+{"method": "POST", "path": "/api/v1/projects/default/sessions/V-OSQNBQs3vaZ3ohQxEDg7UKJsOgV2Iq/queue", "status": 201, "started": 87843.734}
+{"method": "DELETE", "path": "/api/v1/projects/default/sessions/V-OSQNBQs3vaZ3ohQxEDg7UKJsOgV2Iq/draft/submissions/25525a87ca7432f42eb9ff01b0aa6b12", "status": 200, "started": 87843.75}
+{"method": "PUT", "path": "/api/v1/projects/default/sessions/V-OSQNBQs3vaZ3ohQxEDg7UKJsOgV2Iq/queue/25525a87ca7432f42eb9ff01b0aa6b12", "status": 200, "started": 87843.765}
+{"method": "PUT", "path": "/api/v1/projects/default/sessions/V-OSQNBQs3vaZ3ohQxEDg7UKJsOgV2Iq/queue/25525a87ca7432f42eb9ff01b0aa6b12", "status": 200, "started": 87843.781}
+{"method": "POST", "path": "/api/v1/projects/default/sessions/V-OSQNBQs3vaZ3ohQxEDg7UKJsOgV2Iq/runs", "status": 202, "started": 87843.781}
+{"method": "DELETE", "path": "/api/v1/projects/default/sessions/V-OSQNBQs3vaZ3ohQxEDg7UKJsOgV2Iq/queue/25525a87ca7432f42eb9ff01b0aa6b12", "status": 200, "started": 87843.812}

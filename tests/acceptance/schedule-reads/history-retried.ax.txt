@@ -1,0 +1,14 @@
+Browser tab: 41, Title: "墨斗", URL: "http://127.0.0.1:51509/#/schedules".
+0 AXWebArea 墨斗, URL: 127.0.0.1:51509/#/schedules
+	1 container 读取恢复验收 · 执行历史, ID: schedule-history-dialog
+		2 container
+			3 heading 读取恢复验收 · 执行历史, Value: 3, ID: schedule-history-title
+				6 text 读取恢复验收 · 执行历史
+			5 button Description: 关闭执行历史, ID: schedule-history-close
+		7 text 1 条记录
+		8 container
+			9 text 已完成
+			10 text 2026年10月10日 03:41
+			11 text 任务 #1 · 运行 #1 FIXTURE_OK: SCHEDULE_READ_RUN
+
+The focused UI element is 5 button Description: 关闭执行历史, ID: schedule-history-close

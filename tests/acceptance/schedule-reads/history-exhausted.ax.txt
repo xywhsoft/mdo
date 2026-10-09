@@ -1,0 +1,11 @@
+Browser tab: 41, Title: "墨斗", URL: "http://127.0.0.1:51509/#/schedules".
+0 AXWebArea 墨斗, URL: 127.0.0.1:51509/#/schedules
+	1 container 读取恢复验收 · 执行历史, ID: schedule-history-dialog
+		2 container
+			3 heading 读取恢复验收 · 执行历史, Value: 3, ID: schedule-history-title
+				4 text 读取恢复验收 · 执行历史
+			5 button Description: 关闭执行历史, ID: schedule-history-close
+		6 text 读取失败：Temporary extension read unavailable
+		7 button 重试读取, ID: schedule-history-retry
+
+The focused UI element is 7 button 重试读取, ID: schedule-history-retry

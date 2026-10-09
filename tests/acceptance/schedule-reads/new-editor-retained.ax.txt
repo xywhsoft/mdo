@@ -1,0 +1,81 @@
+Browser tab: 41, Title: "墨斗", URL: "http://127.0.0.1:51509/#/schedules".
+0 AXWebArea 墨斗, URL: 127.0.0.1:51509/#/schedules
+	1 container 新建计划, ID: schedule-editor-dialog
+		2 container
+			3 heading 新建计划, Value: 3, ID: schedule-editor-title
+				4 text 新建计划
+			5 button Description: 关闭计划编辑器, ID: schedule-editor-close
+		6 container schedule-form
+			7 container schedule-editor-fields
+				8 container
+					9 text 名称
+					10 text field (settable) 名称, Value: 不应被旧读取覆盖
+				11 container
+					12 text 任务内容
+					13 text entry area (settable) 任务内容
+				14 container
+					15 text 开始时间
+					16 date field (settable) 开始时间, Value: 2026-10-10T04:42
+						17 container
+							18 stepper
+							19 stepper
+							20 stepper
+							21 stepper
+							22 stepper
+						23 pop up button 显示当地日期和时间选择器 显示当地日期和时间选择器
+				24 container
+					25 text 重复方式
+					26 pop up button (collapsed, settable) 重复方式, Value: 仅一次, Secondary Actions: Expand
+						27 menu
+							28 (selected) 仅一次
+							29 每 N 分钟
+							30 每 N 小时
+							31 每 N 天
+							32 每 N 周
+				33 container
+					34 text 项目
+					35 pop up button (collapsed, settable) 项目, Value: 任务项目, Secondary Actions: Expand
+						36 menu
+							37 (selected) 任务项目
+							38 default
+				39 container
+					40 text Agent
+					41 pop up button (collapsed, settable) Agent, Value: 默认 Agent, Secondary Actions: Expand
+						42 menu
+							43 (selected) 默认 Agent
+				44 container
+					45 text 模型
+					46 pop up button (collapsed, settable) 模型, Value: Agent 默认模型, Secondary Actions: Expand
+						47 menu
+							48 (selected) Agent 默认模型
+							49 ornith-1.5-35b
+							50 Conversation fixture
+				51 container
+					52 text 思考强度
+					53 pop up button (collapsed, settable) 思考强度, Value: 模型默认, Secondary Actions: Expand
+						54 menu
+							55 (selected) 模型默认
+							56 无
+							57 极低
+							58 低
+							59 中
+							60 高
+							61 极高
+							62 最大
+				63 container
+					64 text 时区
+					65 pop up button (collapsed, settable) 时区, Value: 设备本地时间, Secondary Actions: Expand
+						66 menu
+							67 (selected) 设备本地时间
+							68 UTC
+							69 固定偏移
+				70 container
+					71 text 完成提示（可选）
+					72 text field (settable) 完成提示（可选）
+				73 button (collapsed) 高级选项, Secondary Actions: Expand
+					74 text 高级选项
+			75 container
+				76 button 取消, ID: schedule-editor-cancel
+				77 button 创建计划, ID: schedule-save
+
+The focused UI element is 10 text field (settable) 名称, Value: 不应被旧读取覆盖

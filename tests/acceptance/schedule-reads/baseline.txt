@@ -1,0 +1,91 @@
+✖ schedule list quietly recovers two temporary failures (49.6782ms)
+✖ background polls preserve old cards and share ongoing recovery (5.5173ms)
+✖ final temporary failures do not let polling restart six attempts (1.5768ms)
+✖ a hanging schedule response releases within the shared minute (5.2345ms)
+✖ leaving cancels a held list, preserves its snapshot and rejects late replacement (1.621ms)
+✔ permanent read denials and run writes are never retried (3.1949ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 1
+ℹ fail 5
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 140.4053
+
+✖ failing tests:
+
+test at tests\test_schedule_reads.mjs:38:1
+✖ schedule list quietly recovers two temporary failures (49.6782ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'error'
+  - 'refreshing'
+  
+      at TestContext.<anonymous> (file:///D:/GIT/mdo/tests/test_schedule_reads.mjs:47:10)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'error',
+    expected: 'refreshing',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\test_schedule_reads.mjs:54:1
+✖ background polls preserve old cards and share ongoing recovery (5.5173ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  2 !== 1
+  
+      at TestContext.<anonymous> (file:///D:/GIT/mdo/tests/test_schedule_reads.mjs:60:10)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 2,
+    expected: 1,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\test_schedule_reads.mjs:65:1
+✖ final temporary failures do not let polling restart six attempts (1.5768ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  1 !== 6
+  
+      at TestContext.<anonymous> (file:///D:/GIT/mdo/tests/test_schedule_reads.mjs:70:10)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 6,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\test_schedule_reads.mjs:76:1
+✖ a hanging schedule response releases within the shared minute (5.2345ms)
+  AssertionError [ERR_ASSERTION]: pending schedule reads own a finite deadline
+      at Object.advance (file:///D:/GIT/mdo/tests/test_schedule_reads.mjs:26:14)
+      at async TestContext.<anonymous> (file:///D:/GIT/mdo/tests/test_schedule_reads.mjs:83:18)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 0,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at tests\test_schedule_reads.mjs:90:1
+✖ leaving cancels a held list, preserves its snapshot and rejects late replacement (1.621ms)
+  TypeError: env.cancelScheduleReads is not a function
+      at TestContext.<anonymous> (file:///D:/GIT/mdo/tests/test_schedule_reads.mjs:97:7)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
