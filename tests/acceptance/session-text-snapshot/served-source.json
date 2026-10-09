@@ -1,0 +1,18 @@
+{
+  "js/state/sessions.js": {
+    "sha256": "9f844cfa5bb29e36612ce188fa2ccc0c96b26a3e00abd3aad5856c25710bd034",
+    "matches_clean_build_source": true
+  },
+  "js/features/chat/timeline.js": {
+    "sha256": "2e57c54d7c3b36b494457836fed18d56ec547faa60ac81c5b4edee13ba60837b",
+    "matches_clean_build_source": true
+  },
+  "js/features/chat/tool-content.js": {
+    "sha256": "a9c0b807354365d02418252ae1af0239ac4b012c973f11bdcb1d6cc002e6e27f",
+    "matches_clean_build_source": true
+  },
+  "js/api/request-recovery.js": {
+    "sha256": "5d70df9f3c8cc077cfe06f27edf1b96b5c26540bb2c3146fd314be8df1e70be8",
+    "matches_clean_build_source": true
+  }
+}

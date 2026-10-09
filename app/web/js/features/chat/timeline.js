@@ -43,6 +43,12 @@ function historyBoundaryText(event) {
   return event.text;
 }
 
+function completeTextSpan(event, start = 0, end = (event.text || "").length) {
+  return { eventId: event.event_id, kind: event.kind, start, end,
+    ...(event.projection_epoch ? { epoch: event.projection_epoch } : {}),
+    ...(event.aggregate_end_id ? { endEventId: event.aggregate_end_id } : {}) };
+}
+
 function appendOrCreate(items, streams, event, kind, role, key) {
   let item = streams.get(key);
   if (!item) {
@@ -54,9 +60,7 @@ function appendOrCreate(items, streams, event, kind, role, key) {
   item.text += event.text ?? "";
   if (event.text_truncated) {
     item.textTruncated = true;
-    (item.copySpans ??= []).push({ eventId: event.event_id,
-      kind: event.kind, start, end: item.text.length,
-      ...(event.aggregate_end_id ? { endEventId: event.aggregate_end_id, epoch: event.projection_epoch } : {}) });
+    (item.copySpans ??= []).push(completeTextSpan(event, start, item.text.length));
   }
   return item;
 }
@@ -106,8 +110,7 @@ export function eventsToTimeline(events, historyLost = false,
             sequence: Number(event.user_message_sequence),
             text: event.text || "",
             textTruncated: Boolean(event.text_truncated),
-            copySpans: event.text_truncated ? [{ eventId: event.event_id,
-              kind: event.kind, start: 0, end: (event.text || "").length }] : [],
+            copySpans: event.text_truncated ? [completeTextSpan(event)] : [],
             attachments: event.attachments || [],
           };
           promptsByRun.set(runKey, latestMainPrompt);
@@ -140,8 +143,7 @@ export function eventsToTimeline(events, historyLost = false,
             userMessageSequence: Number(event.user_message_sequence || 0),
             sourceEventId: Number(event.event_id),
             textTruncated: Boolean(event.text_truncated),
-            copySpans: event.text_truncated ? [{ eventId: event.event_id,
-              kind: event.kind, start: 0, end: (event.text || "").length }] : [] });
+            copySpans: event.text_truncated ? [completeTextSpan(event)] : [] });
         }
         break;
       case "model_reasoning_delta": {
@@ -337,8 +339,7 @@ export function eventsToTimeline(events, historyLost = false,
             state: terminalState, time: event.time,
             runKey, runEpoch: epoch, retryPrompt: promptsByRun.get(runKey),
             textTruncated: Boolean(event.text_truncated),
-            copySpans: event.text_truncated ? [{ eventId: event.event_id,
-              kind: event.kind, start: 0, end: (event.text || "").length }] : [],
+            copySpans: event.text_truncated ? [completeTextSpan(event)] : [],
           };
           items.push(answer);
         }

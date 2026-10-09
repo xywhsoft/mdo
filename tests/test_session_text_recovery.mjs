@@ -9,7 +9,7 @@ const session = { project_id: "default", id: "text" };
 const owner = { projectId: session.project_id, sessionId: session.id };
 const epoch = "a".repeat(64);
 const flush = () => new Promise(resolve => setImmediate(resolve));
-const envelope = data => Response.json({ ok: true, data });
+const envelope = data => Response.json({ ok: true, data: { epoch, ...data } });
 const temporary = () => Response.json({ ok: false, error: { code: "temporary_unavailable" } }, { status: 503 });
 const event = (id, text, truncated = false) => ({ event_id: id, kind: "model_text_delta",
   run_id: 1, agent_id: 1, agent_turn: 1, agent_depth: 0, text, text_truncated: truncated });
@@ -148,4 +148,23 @@ test("hung tool artifacts return the visible section within the common deadline"
   assert.deepEqual(result, { text: "summary", complete: false });
   assert.equal(env.elapsed(), 60000); assert.equal(env.owners(), 1);
   assert(env.calls.every(row => row.signal.aborted));
+});
+
+test("a quiet history restart cannot reset the export's one-minute deadline", async context => {
+  let reads = 0, replaced = false;
+  const nextEpoch = "b".repeat(64);
+  const env = environment(context, async url => {
+    if (!url.searchParams.has("full_text")) return envelope({
+      epoch: replaced ? nextEpoch : epoch, latest_event_id: 1, next_cursor: 1,
+      items: [event(1, replaced ? "new preview" : "old preview", true)] });
+    if (replaced || ++reads < 5) return new Promise(() => {});
+    replaced = true;
+    return Response.json({ ok: false, error: { code: "conversation_changed" } }, { status: 409 });
+  });
+  const result = await env.finish(loadSessionTranscript(session, env.options));
+  assert.equal(result.textTruncated, true);
+  assert.equal(result.events[0].text, "new preview");
+  assert.equal(env.elapsed(), 60000);
+  assert.equal(env.owners(), 1);
+  assert.equal(env.calls.filter(row => !row.url.searchParams.has("full_text")).length, 2);
 });

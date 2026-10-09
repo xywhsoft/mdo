@@ -1,0 +1,478 @@
+TAP version 13
+# Subtest: tool results expose their artifact even without a separate artifact event
+ok 1 - tool results expose their artifact even without a separate artifact event
+  ---
+  duration_ms: 2.0067
+  type: 'test'
+  ...
+# Subtest: unpaired tool results still expose their artifact
+ok 2 - unpaired tool results still expose their artifact
+  ---
+  duration_ms: 0.2946
+  type: 'test'
+  ...
+# Subtest: an explicit first history boundary replaces the generic gap notice
+ok 3 - an explicit first history boundary replaces the generic gap notice
+  ---
+  duration_ms: 0.3157
+  type: 'test'
+  ...
+# Subtest: timeline marks incomplete user and assistant text before copy
+ok 4 - timeline marks incomplete user and assistant text before copy
+  ---
+  duration_ms: 1.1389
+  type: 'test'
+  ...
+# Subtest: copy resolves a truncated user event without changing the visible timeline
+ok 5 - copy resolves a truncated user event without changing the visible timeline
+  ---
+  duration_ms: 0.9572
+  type: 'test'
+  ...
+# Subtest: copy restores only truncated assistant chunks in their original order
+ok 6 - copy restores only truncated assistant chunks in their original order
+  ---
+  duration_ms: 0.3625
+  type: 'test'
+  ...
+# Subtest: long-message edit and retry require the original prompt before changing history
+ok 7 - long-message edit and retry require the original prompt before changing history
+  ---
+  duration_ms: 1.001
+  type: 'test'
+  ...
+# Subtest: snapshot hashes, order, ownership and aggregate ranges are checked before use
+ok 8 - snapshot hashes, order, ownership and aggregate ranges are checked before use
+  ---
+  duration_ms: 11.5451
+  type: 'test'
+  ...
+# Subtest: cold history uses one compact snapshot and cursor-only revalidation
+ok 9 - cold history uses one compact snapshot and cursor-only revalidation
+  ---
+  duration_ms: 38.057
+  type: 'test'
+  ...
+# Subtest: switching back paints cached content while a single delta request is pending
+ok 10 - switching back paints cached content while a single delta request is pending
+  ---
+  duration_ms: 11.0904
+  type: 'test'
+  ...
+# Subtest: a replaced journal discards cached nodes instead of combining two histories
+ok 11 - a replaced journal discards cached nodes instead of combining two histories
+  ---
+  duration_ms: 2.1055
+  type: 'test'
+  ...
+# Subtest: an older history response preserves pushes that arrived while it was in flight
+ok 12 - an older history response preserves pushes that arrived while it was in flight
+  ---
+  duration_ms: 2.3932
+  type: 'test'
+  ...
+# Subtest: a superseded response cannot overwrite the newly selected session
+ok 13 - a superseded response cannot overwrite the newly selected session
+  ---
+  duration_ms: 1.4286
+  type: 'test'
+  ...
+# Subtest: Markdown export restores long user and assistant events before formatting
+ok 14 - Markdown export restores long user and assistant events before formatting
+  ---
+  duration_ms: 89.1678
+  type: 'test'
+  ...
+# Subtest: Markdown export keeps an honest warning when an exact event is unavailable
+ok 15 - Markdown export keeps an honest warning when an exact event is unavailable
+  ---
+  duration_ms: 2.6374
+  type: 'test'
+  ...
+# Subtest: Markdown session export follows the selected language and keeps transcript data
+ok 16 - Markdown session export follows the selected language and keeps transcript data
+  ---
+  duration_ms: 85.3057
+  type: 'test'
+  ...
+# Subtest: temporary image metadata errors recover quietly before adding an incomplete warning
+ok 17 - temporary image metadata errors recover quietly before adding an incomplete warning
+  ---
+  duration_ms: 52.9066
+  type: 'test'
+  ...
+# Subtest: temporary binary image failures retry the same read without consuming a second reservation
+ok 18 - temporary binary image failures retry the same read without consuming a second reservation
+  ---
+  duration_ms: 15
+  type: 'test'
+  ...
+# Subtest: a disconnected fetch or image stream recovers before reporting an incomplete export
+ok 19 - a disconnected fetch or image stream recovers before reporting an incomplete export
+  ---
+  duration_ms: 4.6653
+  type: 'test'
+  ...
+# Subtest: an image fetch ignoring abort returns an honest partial export at the shared deadline
+ok 20 - an image fetch ignoring abort returns an honest partial export at the shared deadline
+  ---
+  duration_ms: 1.2756
+  type: 'test'
+  ...
+# Subtest: a response reader and its cancel promise cannot hold export beyond the deadline
+ok 21 - a response reader and its cancel promise cannot hold export beyond the deadline
+  ---
+  duration_ms: 1.2408
+  type: 'test'
+  ...
+# Subtest: leaving the page cancels image recovery without creating a partial download
+ok 22 - leaving the page cancels image recovery without creating a partial download
+  ---
+  duration_ms: 1.9544
+  type: 'test'
+  ...
+# Subtest: a late image response cannot add a payload after export settled
+ok 23 - a late image response cannot add a payload after export settled
+  ---
+  duration_ms: 1.4286
+  type: 'test'
+  ...
+# Subtest: pure-image Markdown keeps original bytes/names and deduplicates repeated image payloads
+ok 24 - pure-image Markdown keeps original bytes/names and deduplicates repeated image payloads
+  ---
+  duration_ms: 74.8067
+  type: 'test'
+  ...
+# Subtest: a missing image does not prevent later images, and partial Markdown retains its traceable ID
+ok 25 - a missing image does not prevent later images, and partial Markdown retains its traceable ID
+  ---
+  duration_ms: 3.4561
+  type: 'test'
+  ...
+# Subtest: image export rejects wrong identities, unsafe names, oversized metadata and mismatched streams
+ok 26 - image export rejects wrong identities, unsafe names, oversized metadata and mismatched streams
+  ---
+  duration_ms: 7.1829
+  type: 'test'
+  ...
+# Subtest: image count and transfer budgets fence further payload reads, including failed reservations
+ok 27 - image count and transfer budgets fence further payload reads, including failed reservations
+  ---
+  duration_ms: 2.2182
+  type: 'test'
+  ...
+# Subtest: the export deadline cancels an outstanding image and never starts later image reads
+ok 28 - the export deadline cancels an outstanding image and never starts later image reads
+  ---
+  duration_ms: 11.9241
+  type: 'test'
+  ...
+# Subtest: transcript pages and full bodies quietly retry transient reads within one owner
+ok 29 - transcript pages and full bodies quietly retry transient reads within one owner
+  ---
+  duration_ms: 53.8554
+  type: 'test'
+  ...
+# Subtest: multi-event originals share their deadline with recursive full-text reads
+ok 30 - multi-event originals share their deadline with recursive full-text reads
+  ---
+  duration_ms: 2.887
+  type: 'test'
+  ...
+# Subtest: copying several spans cannot restart the one-minute budget for every span
+ok 31 - copying several spans cannot restart the one-minute budget for every span
+  ---
+  duration_ms: 4.19
+  type: 'test'
+  ...
+# Subtest: hung event pages end export with a final read error rather than a partial success
+ok 32 - hung event pages end export with a final read error rather than a partial success
+  ---
+  duration_ms: 2.6105
+  type: 'test'
+  ...
+# Subtest: hung full bodies produce an honest preview export without holding later reads
+ok 33 - hung full bodies produce an honest preview export without holding later reads
+  ---
+  duration_ms: 2.1039
+  type: 'test'
+  ...
+# Subtest: leaving the page cancels export and copy instead of completing an old action
+ok 34 - leaving the page cancels export and copy instead of completing an old action
+  ---
+  duration_ms: 1.5819
+  type: 'test'
+  ...
+# Subtest: history edit/retry does not accept a visible prefix after recovery is exhausted
+ok 35 - history edit/retry does not accept a visible prefix after recovery is exhausted
+  ---
+  duration_ms: 2.5512
+  type: 'test'
+  ...
+# Subtest: tool artifact bodies recover quietly and then return complete UTF-8 text
+ok 36 - tool artifact bodies recover quietly and then return complete UTF-8 text
+  ---
+  duration_ms: 2.0677
+  type: 'test'
+  ...
+# Subtest: hung tool artifacts return the visible section within the common deadline
+ok 37 - hung tool artifacts return the visible section within the common deadline
+  ---
+  duration_ms: 1.5591
+  type: 'test'
+  ...
+# Subtest: a quiet history restart cannot reset the export's one-minute deadline
+ok 38 - a quiet history restart cannot reset the export's one-minute deadline
+  ---
+  duration_ms: 3.5745
+  type: 'test'
+  ...
+# Subtest: export quietly restarts once if history is replaced between pages
+ok 39 - export quietly restarts once if history is replaced between pages
+  ---
+  duration_ms: 57.9588
+  type: 'test'
+  ...
+# Subtest: full-body history replacement cannot upgrade an old preview into another reply
+ok 40 - full-body history replacement cannot upgrade an old preview into another reply
+  ---
+  duration_ms: 3.5236
+  type: 'test'
+  ...
+# Subtest: an inconsistent full-text response preserves the original export preview
+ok 41 - an inconsistent full-text response preserves the original export preview
+  ---
+  duration_ms: 1.7772
+  type: 'test'
+  ...
+# Subtest: repeated history replacement ends with one accurate failure and no transcript
+ok 42 - repeated history replacement ends with one accurate failure and no transcript
+  ---
+  duration_ms: 2.9169
+  type: 'test'
+  ...
+# Subtest: single-event full text verifies the supplied history epoch too
+ok 43 - single-event full text verifies the supplied history epoch too
+  ---
+  duration_ms: 0.8033
+  type: 'test'
+  ...
+# Subtest: projected user, assistant and final messages keep their epoch for copy and edit
+ok 44 - projected user, assistant and final messages keep their epoch for copy and edit
+  ---
+  duration_ms: 5.4428
+  type: 'test'
+  ...
+# Subtest: export rejects missing or malformed history identities
+ok 45 - export rejects missing or malformed history identities
+  ---
+  duration_ms: 1.2401
+  type: 'test'
+  ...
+# Subtest: append within the same history keeps the original export boundary
+ok 46 - append within the same history keeps the original export boundary
+  ---
+  duration_ms: 0.7968
+  type: 'test'
+  ...
+# Subtest: accepted live replay releases an ignored-abort refresh immediately without retry
+ok 47 - accepted live replay releases an ignored-abort refresh immediately without retry
+  ---
+  duration_ms: 48.926
+  type: 'test'
+  ...
+# Subtest: accepted live replay cancels the old refresh backoff without another HTTP read
+ok 48 - accepted live replay cancels the old refresh backoff without another HTTP read
+  ---
+  duration_ms: 11.9655
+  type: 'test'
+  ...
+# Subtest: a newer refresh releases its predecessor and a late denial cannot affect the new result
+ok 49 - a newer refresh releases its predecessor and a late denial cannot affect the new result
+  ---
+  duration_ms: 5.8337
+  type: 'test'
+  ...
+# Subtest: resubscribing on a healthy live connection releases a stale HTTP fallback
+ok 50 - resubscribing on a healthy live connection releases a stale HTTP fallback
+  ---
+  duration_ms: 3.319
+  type: 'test'
+  ...
+# Subtest: wrong-owner and malformed live packets cannot cancel a valid refresh
+ok 51 - wrong-owner and malformed live packets cannot cancel a valid refresh
+  ---
+  duration_ms: 2.6066
+  type: 'test'
+  ...
+# Subtest: live replay cancels current refresh while preserving an independent older-page retry
+ok 52 - live replay cancels current refresh while preserving an independent older-page retry
+  ---
+  duration_ms: 3.1221
+  type: 'test'
+  ...
+# Subtest: cancel before the transport microtask starts performs no ghost HTTP read
+ok 53 - cancel before the transport microtask starts performs no ghost HTTP read
+  ---
+  duration_ms: 1.3864
+  type: 'test'
+  ...
+# Subtest: legacy event fallback also releases immediately when superseded by live replay
+ok 54 - legacy event fallback also releases immediately when superseded by live replay
+  ---
+  duration_ms: 3.5092
+  type: 'test'
+  ...
+# Subtest: truncate removes its cached ID range while retaining prefix, marker and reused-sequence replacement
+ok 55 - truncate removes its cached ID range while retaining prefix, marker and reused-sequence replacement
+  ---
+  duration_ms: 2.7832
+  type: 'test'
+  ...
+# Subtest: history notes without valid ID ranges remain literal and never remove cached records
+ok 56 - history notes without valid ID ranges remain literal and never remove cached records
+  ---
+  duration_ms: 0.4206
+  type: 'test'
+  ...
+# Subtest: polling honors an intentional clear without reporting an unexplained history gap
+ok 57 - polling honors an intentional clear without reporting an unexplained history gap
+  ---
+  duration_ms: 37.5817
+  type: 'test'
+  ...
+# Subtest: a delayed older replay cannot resurrect discarded events or rewind the cursor
+ok 58 - a delayed older replay cannot resurrect discarded events or rewind the cursor
+  ---
+  duration_ms: 5.9875
+  type: 'test'
+  ...
+# Subtest: history clear drops an obsolete plan and invalidates its pending read
+ok 59 - history clear drops an obsolete plan and invalidates its pending read
+  ---
+  duration_ms: 3.9133
+  type: 'test'
+  ...
+# Subtest: truncate may restore an earlier plan, and later todo calls still advance it
+ok 60 - truncate may restore an earlier plan, and later todo calls still advance it
+  ---
+  duration_ms: 1.6577
+  type: 'test'
+  ...
+# Subtest: a post-boundary todo response inside the discarded range is retried rather than displayed
+ok 61 - a post-boundary todo response inside the discarded range is retried rather than displayed
+  ---
+  duration_ms: 1.9979
+  type: 'test'
+  ...
+# Subtest: a resumed reply retains the original durable input for retry and fork
+ok 62 - a resumed reply retains the original durable input for retry and fork
+  ---
+  duration_ms: 4.1532
+  type: 'test'
+  ...
+# Subtest: multiple resumes and reused run IDs retain the same input until a new user turn
+ok 63 - multiple resumes and reused run IDs retain the same input until a new user turn
+  ---
+  duration_ms: 1.6552
+  type: 'test'
+  ...
+# Subtest: subagent prompts cannot become the original input of a resumed main Agent
+ok 64 - subagent prompts cannot become the original input of a resumed main Agent
+  ---
+  duration_ms: 0.6779
+  type: 'test'
+  ...
+# Subtest: missing original history and legacy zero-sequence starts never invent action targets
+ok 65 - missing original history and legacy zero-sequence starts never invent action targets
+  ---
+  duration_ms: 0.39
+  type: 'test'
+  ...
+# Subtest: a history boundary invalidates discarded action targets even when a run ID is reused
+ok 66 - a history boundary invalidates discarded action targets even when a run ID is reused
+  ---
+  duration_ms: 0.4831
+  type: 'test'
+  ...
+# Subtest: a retained original input survives a later history boundary
+ok 67 - a retained original input survives a later history boundary
+  ---
+  duration_ms: 0.7351
+  type: 'test'
+  ...
+# Subtest: a fatal stream error ends partial reply, reasoning and tool cards without losing content
+ok 68 - a fatal stream error ends partial reply, reasoning and tool cards without losing content
+  ---
+  duration_ms: 2.7679
+  type: 'test'
+  ...
+# Subtest: failure settles only its run and current epoch when runs interleave or IDs are reused
+ok 69 - failure settles only its run and current epoch when runs interleave or IDs are reused
+  ---
+  duration_ms: 1.4412
+  type: 'test'
+  ...
+# Subtest: failure after completed model turns changes only the final answer and pending work
+ok 70 - failure after completed model turns changes only the final answer and pending work
+  ---
+  duration_ms: 0.4991
+  type: 'test'
+  ...
+# Subtest: failure before model output keeps the original error without inventing an empty answer
+ok 71 - failure before model output keeps the original error without inventing an empty answer
+  ---
+  duration_ms: 0.1929
+  type: 'test'
+  ...
+# Subtest: the library cancellation event remains stopped while partial content and retry input survive
+ok 72 - the library cancellation event remains stopped while partial content and retry input survive
+  ---
+  duration_ms: 0.3264
+  type: 'test'
+  ...
+# Subtest: file/search/process/task summaries preserve the old tool-specific reading mode
+ok 73 - file/search/process/task summaries preserve the old tool-specific reading mode
+  ---
+  duration_ms: 2.5133
+  type: 'test'
+  ...
+# Subtest: call formatting changes only the display, malformed and non-object text stays literal
+ok 74 - call formatting changes only the display, malformed and non-object text stays literal
+  ---
+  duration_ms: 0.9322
+  type: 'test'
+  ...
+# Subtest: write/edit previews show requested text safely without claiming a whole-file diff
+ok 75 - write/edit previews show requested text safely without claiming a whole-file diff
+  ---
+  duration_ms: 0.6596
+  type: 'test'
+  ...
+# Subtest: tool projection retains independent full-text event identities and truncation flags
+ok 76 - tool projection retains independent full-text event identities and truncation flags
+  ---
+  duration_ms: 1.124
+  type: 'test'
+  ...
+# Subtest: section copy reads only its original event, preserving raw arguments and visible-prefix agreement
+ok 77 - section copy reads only its original event, preserving raw arguments and visible-prefix agreement
+  ---
+  duration_ms: 0.7868
+  type: 'test'
+  ...
+# Subtest: spilled tool output reads its session artifact on demand, not the model-facing summary
+ok 78 - spilled tool output reads its session artifact on demand, not the model-facing summary
+  ---
+  duration_ms: 0.4008
+  type: 'test'
+  ...
+1..78
+# tests 78
+# suites 0
+# pass 78
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 381.0558

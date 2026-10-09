@@ -1,4 +1,4 @@
-import { api, resourceId } from "../api/client.js";
+import { ApiError, api, resourceId } from "../api/client.js";
 import { createResourceStore } from "./store.js";
 import { withSessionRuntime } from "./session-runtime.js";
 import { t } from "../i18n.js";
@@ -147,6 +147,11 @@ export async function readCompleteSessionEventText(projectId, sessionId,
   finally { if (!recovery) reader.dispose(); }
 }
 
+function historyChanged() {
+  return new ApiError(t("messageAction.historyChanged", {},
+    "消息已不在当前会话历史中，请刷新会话"), { code: "conversation_changed", status: 409 });
+}
+
 async function readCompleteEventText(projectId, sessionId,
   eventId, kind, { endEventId = eventId, epoch = "" }, recovery) {
   if (!Number.isSafeInteger(eventId) || eventId < 1 || typeof kind !== "string")
@@ -178,6 +183,7 @@ async function readCompleteEventText(projectId, sessionId,
   }
   const data = (await recovery.request(signal =>
     api.get(`${path}?after=${eventId - 1}&limit=1&full_text=1${fence}`, { signal }))).data;
+  if (epoch && data?.epoch !== epoch) throw historyChanged();
   const [event] = data?.items ?? [];
   if (data?.items?.length !== 1 || event?.event_id !== eventId ||
       event?.kind !== kind || event?.text_truncated !== false ||
@@ -195,7 +201,17 @@ const TRANSCRIPT_MAX_FULL_TEXT_BYTES = 2 * 1024 * 1024;
 export async function loadSessionTranscript(session, { createRecovery = createRequestRecovery } = {}) {
   // Pages and complete bodies belong to one export, not one deadline per GET.
   const recovery = createRecovery();
-  try { return await readSessionTranscript(session, recovery); }
+  try {
+    // A history edit may race an export. Discard that whole snapshot and read
+    // once more quietly, sharing the existing deadline rather than mixing pages.
+    for (let attempt = 0; ; attempt++) {
+      try { return await readSessionTranscript(session, recovery); }
+      catch (error) {
+        if (error?.code !== "conversation_changed") throw error;
+        if (attempt) throw historyChanged();
+      }
+    }
+  }
   finally { recovery.dispose(); }
 }
 
@@ -203,11 +219,16 @@ async function readSessionTranscript(session, recovery) {
   let cursor = 0;
   let latestEventId = null;
   let historyLost = false;
+  let epoch = "";
   const events = [];
   const path = `${endpoint(session)}/events`;
   while (events.length < TRANSCRIPT_MAX_EVENTS) {
     const replay = (await recovery.request(signal =>
-      api.get(`${path}?after=${cursor}&limit=${TRANSCRIPT_PAGE_SIZE}`, { signal }))).data;
+      api.get(`${path}?after=${cursor}&limit=${TRANSCRIPT_PAGE_SIZE}${epoch ? `&epoch=${epoch}` : ""}`, { signal }))).data;
+    if (!/^[0-9a-f]{64}$/.test(replay?.epoch))
+      throw new ApiError("Invalid conversation history identity", { code: "invalid_response" });
+    if (epoch && replay.epoch !== epoch) throw historyChanged();
+    epoch = replay.epoch;
     const latest = Number(replay.latest_event_id);
     const next = Number(replay.next_cursor);
     if (!Number.isSafeInteger(latest) || !Number.isSafeInteger(next) ||
@@ -240,14 +261,14 @@ async function readSessionTranscript(session, recovery) {
     fullTextReads += 1;
     try {
       const full = await readCompleteSessionEventText(session.project_id,
-        session.id, Number(event.event_id), event.kind, { recovery });
-      if (full === null) continue;
+        session.id, Number(event.event_id), event.kind, { epoch, recovery });
+      if (full === null || !full.startsWith(event.text ?? "")) continue;
       const bytes = new TextEncoder().encode(full).length;
       if (bytes > TRANSCRIPT_MAX_FULL_TEXT_BYTES - fullTextBytes) continue;
       fullTextBytes += bytes;
       events[index] = { ...event, text: full, text_truncated: false };
     } catch (error) {
-      if (error?.name === "AbortError") throw error;
+      if (error?.name === "AbortError" || error?.code === "conversation_changed") throw error;
       // Preserve the visible preview and report an incomplete export.
     }
   }

@@ -1,0 +1,198 @@
+TAP version 13
+# Subtest: export quietly restarts once if history is replaced between pages
+not ok 1 - export quietly restarts once if history is replaced between pages
+  ---
+  duration_ms: 50.1298
+  type: 'test'
+  location: 'C:\\Users\\Administrator\\.codex\\worktrees\\conversation-text-snapshot-qa\\mdo\\tests\\test_session_text_snapshot.mjs:17:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+
+      [
+    +   'discarded turn',
+    -   'replacement turn',
+        'new reply'
+      ]
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    0: 'replacement turn'
+    1: 'new reply'
+  actual:
+    0: 'discarded turn'
+    1: 'new reply'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///C:/Users/Administrator/.codex/worktrees/conversation-text-snapshot-qa/mdo/tests/test_session_text_snapshot.mjs:29:10)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3)
+  ...
+# Subtest: full-body history replacement cannot upgrade an old preview into another reply
+not ok 2 - full-body history replacement cannot upgrade an old preview into another reply
+  ---
+  duration_ms: 1.8405
+  type: 'test'
+  location: 'C:\\Users\\Administrator\\.codex\\worktrees\\conversation-text-snapshot-qa\\mdo\\tests\\test_session_text_snapshot.mjs:33:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+
+      [
+    +   'old prefix but another reply'
+    -   'replacement only'
+      ]
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    0: 'replacement only'
+  actual:
+    0: 'old prefix but another reply'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///C:/Users/Administrator/.codex/worktrees/conversation-text-snapshot-qa/mdo/tests/test_session_text_snapshot.mjs:47:10)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: an inconsistent full-text response preserves the original export preview
+not ok 3 - an inconsistent full-text response preserves the original export preview
+  ---
+  duration_ms: 1.4536
+  type: 'test'
+  location: 'C:\\Users\\Administrator\\.codex\\worktrees\\conversation-text-snapshot-qa\\mdo\\tests\\test_session_text_snapshot.mjs:50:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    false !== true
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///C:/Users/Administrator/.codex/worktrees/conversation-text-snapshot-qa/mdo/tests/test_session_text_snapshot.mjs:55:10)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: repeated history replacement ends with one accurate failure and no transcript
+not ok 4 - repeated history replacement ends with one accurate failure and no transcript
+  ---
+  duration_ms: 1.7583
+  type: 'test'
+  location: 'C:\\Users\\Administrator\\.codex\\worktrees\\conversation-text-snapshot-qa\\mdo\\tests\\test_session_text_snapshot.mjs:59:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The validation function is expected to return "true". Received false
+
+    Caught error:
+
+    ApiError: Conversation history changed
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  stack: |-
+    async TestContext.<anonymous> (file:///C:/Users/Administrator/.codex/worktrees/conversation-text-snapshot-qa/mdo/tests/test_session_text_snapshot.mjs:66:3)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: single-event full text verifies the supplied history epoch too
+not ok 5 - single-event full text verifies the supplied history epoch too
+  ---
+  duration_ms: 0.7033
+  type: 'test'
+  location: 'C:\\Users\\Administrator\\.codex\\worktrees\\conversation-text-snapshot-qa\\mdo\\tests\\test_session_text_snapshot.mjs:71:1'
+  failureType: 'testCodeFailure'
+  error: 'Missing expected rejection.'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    code: 'conversation_changed'
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (file:///C:/Users/Administrator/.codex/worktrees/conversation-text-snapshot-qa/mdo/tests/test_session_text_snapshot.mjs:73:3)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: projected user, assistant and final messages keep their epoch for copy and edit
+not ok 6 - projected user, assistant and final messages keep their epoch for copy and edit
+  ---
+  duration_ms: 1.4183
+  type: 'test'
+  location: 'C:\\Users\\Administrator\\.codex\\worktrees\\conversation-text-snapshot-qa\\mdo\\tests\\test_session_text_snapshot.mjs:77:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+
+    + undefined
+    - 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///C:/Users/Administrator/.codex/worktrees/conversation-text-snapshot-qa/mdo/tests/test_session_text_snapshot.mjs:92:12)
+    Test.runInAsyncScope (node:async_hooks:227:14)
+    Test.run (node:internal/test_runner/test:1382:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+    Test.postRun (node:internal/test_runner/test:1522:19)
+    Test.run (node:internal/test_runner/test:1447:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: export rejects missing or malformed history identities
+not ok 7 - export rejects missing or malformed history identities
+  ---
+  duration_ms: 0.5943
+  type: 'test'
+  location: 'C:\\Users\\Administrator\\.codex\\worktrees\\conversation-text-snapshot-qa\\mdo\\tests\\test_session_text_snapshot.mjs:98:1'
+  failureType: 'testCodeFailure'
+  error: 'Missing expected rejection.'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    code: 'invalid_response'
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (file:///C:/Users/Administrator/.codex/worktrees/conversation-text-snapshot-qa/mdo/tests/test_session_text_snapshot.mjs:101:5)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: append within the same history keeps the original export boundary
+not ok 8 - append within the same history keeps the original export boundary
+  ---
+  duration_ms: 0.9557
+  type: 'test'
+  location: 'C:\\Users\\Administrator\\.codex\\worktrees\\conversation-text-snapshot-qa\\mdo\\tests\\test_session_text_snapshot.mjs:106:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+
+    + '?after=1&limit=32'
+    - '?after=1&limit=32&epoch=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: '?after=1&limit=32&epoch=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+  actual: '?after=1&limit=32'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///C:/Users/Administrator/.codex/worktrees/conversation-text-snapshot-qa/mdo/tests/test_session_text_snapshot.mjs:115:10)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+1..8
+# tests 8
+# suites 0
+# pass 0
+# fail 8
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 391.1484

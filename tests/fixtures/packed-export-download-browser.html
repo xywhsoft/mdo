@@ -77,6 +77,7 @@ frame.addEventListener("load", () => {
           capture.imagesIncomplete = text.includes("部分图片未包含");
           capture.textIncomplete = text.includes("部分事件正文未能完整导出");
           capture.hasLongReplyTail = text.includes("MDO_LONG_REPLY_END");
+          capture.snapshotVersions = [...new Set(text.match(/SNAPSHOT_REPLY_\d+/g) || [])];
         }
         if (document) {
           capture.keys = Object.keys(document);

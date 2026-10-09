@@ -1,0 +1,16 @@
+{
+  "baseline": {
+    "failed": 8
+  },
+  "fixed_related_node": {
+    "passed": 78,
+    "failed": 0
+  },
+  "clean_frontend_contracts": {
+    "passed": 2
+  },
+  "actual_model_calls": 5,
+  "final_model_errors": 0,
+  "download_landing_verified": false,
+  "online_native_refresh_verified": false
+}

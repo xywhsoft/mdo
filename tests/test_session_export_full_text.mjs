@@ -6,8 +6,9 @@ import { formatSessionMarkdown } from
   "../app/web/js/features/sessions/session-export.js";
 
 const session = { project_id: "default", id: "S1", title: "Long transcript" };
+const epoch = "a".repeat(64);
 
-function envelope(data) { return Response.json({ ok: true, data }); }
+function envelope(data) { return Response.json({ ok: true, data: { epoch, ...data } }); }
 
 test("Markdown export restores long user and assistant events before formatting", async () => {
   const previousFetch = globalThis.fetch;
@@ -38,7 +39,7 @@ test("Markdown export restores long user and assistant events before formatting"
     const transcript = await loadSessionTranscript(session);
     assert.equal(transcript.textTruncated, false);
     assert.deepEqual(requests, ["?after=0&limit=32",
-      "?after=0&limit=1&full_text=1", "?after=1&limit=1&full_text=1"]);
+      `?after=0&limit=1&full_text=1&epoch=${epoch}`, `?after=1&limit=1&full_text=1&epoch=${epoch}`]);
     const markdown = formatSessionMarkdown(session, transcript);
     assert.match(markdown, /full user/);
     assert.match(markdown, /full answer/);

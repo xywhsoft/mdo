@@ -1,0 +1,13 @@
+{
+  "capture": "[\n  {\n    \"type\": \"text/markdown;charset=utf-8\",\n    \"bytes\": 11160,\n    \"capturedAt\": 1791491885391,\n    \"hasSyntheticPrompt\": false,\n    \"hasSyntheticPng\": false,\n    \"markdownImageReferences\": 0,\n    \"markdownEmbeddedImages\": 0,\n    \"embeddedImageBytes\": [],\n    \"embeddedImageSha256\": [],\n    \"hasOriginalImageName\": false,\n    \"hasLongOriginalImageName\": false,\n    \"imagesIncomplete\": false,\n    \"textIncomplete\": false,\n    \"hasLongReplyTail\": false,\n    \"snapshotVersions\": [\n      \"SNAPSHOT_REPLY_1\"\n    ]\n  }\n]",
+  "input": "历史更新期间保留我的输入",
+  "toasts": "正在整理 Markdown 会话记录…\n消息已不在当前会话历史中，请刷新会话",
+  "errorToasts": 1,
+  "logs": [
+    {
+      "level": "error",
+      "message": "Uncaught TypeError: Failed to execute 'observe' on 'MutationObserver': parameter 1 is not of type 'Node'.",
+      "timestamp": "2026-10-08T20:37:39.041Z"
+    }
+  ]
+}
