@@ -12,7 +12,7 @@
 #define MDO_VERSION_MINOR 1
 #define MDO_VERSION_PATCH 0
 #ifndef MDO_VERSION_TEXT
-#define MDO_VERSION_TEXT "0.1.0-dev"
+#define MDO_VERSION_TEXT "0.1.0"
 #endif
 
 #define MDO_CONFIG_SCHEMA_VERSION 1u

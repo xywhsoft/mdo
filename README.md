@@ -46,7 +46,7 @@ python tools/qa_release.py --xserver-root D:\GIT\xserver-mdo-refactor
 以及 Windows 无窗口只读启动零写、原生窗口便携 Home 和打包启动回归。构建命令不依赖 Node.js，
 发布门禁运行前端检查时需要 Node.js。
 门禁范围和 Linux 文件系统要求见[发布门禁](docs/release-gate.md)，
-当前功能和限制见[0.1.0-dev 发布说明](docs/release-notes-0.1.0-dev.md)。
+当前版本为 `0.1.0`。首个重构基线的功能与限制见[开发阶段发布说明](docs/release-notes-0.1.0-dev.md)。
 
 开发前先生成入口，再启动构建出的宿主：
 
