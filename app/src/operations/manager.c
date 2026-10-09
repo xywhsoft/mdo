@@ -140,29 +140,23 @@ static void MdoOperationFinish(cstr Id, MdoOperationState State,
     (void)xrtMutexUnlock(g_MdoOperations.Lock);
 }
 
-/* xwork can include arbitrary JSON-RPC provider text in sMessage. Classify
- * only its enum and exact host-generated diagnostics; never publish that text
- * or infer an HTTP status from a remote protocol-error message. */
+/* xwork can include arbitrary JSON-RPC provider text in sMessage. HTTP status
+ * comes only from transport metadata; other reasons use the enum and exact
+ * host diagnostics. Never publish or parse remote text as an HTTP status. */
 static cstr MdoOperationMcpErrorCode(const xwork_error* Error,
     uint32* HttpStatus)
 {
-    static const char HttpPrefix[] = "MCP HTTP request returned status ";
     cstr Message = Error->sMessage;
     *HttpStatus = 0u;
     if ( Error->eCode == XWORK_ERROR_IO ) {
-        size_t PrefixSize = sizeof(HttpPrefix) - 1u;
         if ( strcmp(Message, "failed to start MCP stdio server") == 0 )
             return "mcp_start_failed";
-        if ( strcmp(Message, "MCP HTTP session expired; reconnect is required") == 0 )
+        if ( strcmp(Message, "MCP HTTP session expired; reconnect is required") == 0 ) {
+            if ( Error->uHttpStatus == 404u ) *HttpStatus = 404u;
             return "mcp_session_expired";
-        if ( strncmp(Message, HttpPrefix, PrefixSize) == 0 &&
-             strlen(Message) == PrefixSize + 3u &&
-             Message[PrefixSize] >= '1' && Message[PrefixSize] <= '5' &&
-             Message[PrefixSize + 1u] >= '0' && Message[PrefixSize + 1u] <= '9' &&
-             Message[PrefixSize + 2u] >= '0' && Message[PrefixSize + 2u] <= '9' ) {
-            *HttpStatus = (uint32)(Message[PrefixSize] - '0') * 100u +
-                (uint32)(Message[PrefixSize + 1u] - '0') * 10u +
-                (uint32)(Message[PrefixSize + 2u] - '0');
+        }
+        if ( Error->uHttpStatus >= 100u && Error->uHttpStatus <= 599u ) {
+            *HttpStatus = Error->uHttpStatus;
             return "mcp_http_error";
         }
         return "mcp_io";

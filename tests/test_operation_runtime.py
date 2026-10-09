@@ -124,25 +124,31 @@ static bool CheckMcpFailureClassification(void) {
     static const struct {
         xwork_error_code code;
         const char* message;
+        uint32 transport_status;
         const char* expected;
         uint32 status;
     } cases[] = {
-        { XWORK_ERROR_IO, "failed to start MCP stdio server", "mcp_start_failed", 0u },
-        { XWORK_ERROR_IO, "MCP HTTP request returned status 401", "mcp_http_error", 401u },
-        { XWORK_ERROR_IO, "MCP HTTP request returned status 429", "mcp_http_error", 429u },
-        { XWORK_ERROR_IO, "MCP HTTP request returned status 600", "mcp_io", 0u },
-        { XWORK_ERROR_IO, "MCP HTTP request returned status 401 private-marker", "mcp_io", 0u },
-        { XWORK_ERROR_TOOL, "MCP protocol error: MCP HTTP request returned status 401 private-marker", "mcp_remote_error", 0u },
-        { XWORK_ERROR_TOOL, "MCP server selected an unsupported protocol version", "mcp_protocol_version", 0u },
-        { XWORK_ERROR_TOOL, "MCP stdout contained a non-object JSON-RPC message", "mcp_invalid_response", 0u },
-        { XWORK_ERROR_IO, "MCP HTTP session expired; reconnect is required", "mcp_session_expired", 0u },
-        { XWORK_ERROR_TIMEOUT, "private-marker", "mcp_timeout", 0u },
-        { XWORK_ERROR_LIMIT, "private-marker", "mcp_limit", 0u },
-        { XWORK_ERROR_POLICY, "MCP server is disabled", "mcp_disabled", 0u },
-        { XWORK_ERROR_CONTEXT, "MCP client already has an active request", "mcp_busy", 0u },
-        { XWORK_ERROR_OUT_OF_MEMORY, "private-marker", "mcp_memory", 0u },
-        { XWORK_ERROR_INVALID_ARGUMENT, "private-marker", "mcp_configuration", 0u },
-        { XWORK_ERROR_NONE, "MCP HTTP request returned status 401", "mcp_failed", 0u },
+        { XWORK_ERROR_IO, "failed to start MCP stdio server", 0u, "mcp_start_failed", 0u },
+        { XWORK_ERROR_IO, "private-marker", 401u, "mcp_http_error", 401u },
+        { XWORK_ERROR_IO, "private-marker", 429u, "mcp_http_error", 429u },
+        { XWORK_ERROR_IO, "private-marker", 503u, "mcp_http_error", 503u },
+        { XWORK_ERROR_IO, "private-marker", 599u, "mcp_http_error", 599u },
+        { XWORK_ERROR_IO, "private-marker", 600u, "mcp_io", 0u },
+        { XWORK_ERROR_IO, "private-marker", 99u, "mcp_io", 0u },
+        { XWORK_ERROR_IO, "MCP HTTP request returned status 401", 0u, "mcp_io", 0u },
+        { XWORK_ERROR_IO, "MCP HTTP request returned status 401 private-marker", 0u, "mcp_io", 0u },
+        { XWORK_ERROR_TOOL, "MCP protocol error: MCP HTTP request returned status 401 private-marker", 0u, "mcp_remote_error", 0u },
+        { XWORK_ERROR_TOOL, "MCP protocol error: private-marker", 401u, "mcp_remote_error", 0u },
+        { XWORK_ERROR_TOOL, "MCP server selected an unsupported protocol version", 0u, "mcp_protocol_version", 0u },
+        { XWORK_ERROR_TOOL, "MCP stdout contained a non-object JSON-RPC message", 0u, "mcp_invalid_response", 0u },
+        { XWORK_ERROR_IO, "MCP HTTP session expired; reconnect is required", 404u, "mcp_session_expired", 404u },
+        { XWORK_ERROR_TIMEOUT, "private-marker", 0u, "mcp_timeout", 0u },
+        { XWORK_ERROR_LIMIT, "private-marker", 0u, "mcp_limit", 0u },
+        { XWORK_ERROR_POLICY, "MCP server is disabled", 0u, "mcp_disabled", 0u },
+        { XWORK_ERROR_CONTEXT, "MCP client already has an active request", 0u, "mcp_busy", 0u },
+        { XWORK_ERROR_OUT_OF_MEMORY, "private-marker", 0u, "mcp_memory", 0u },
+        { XWORK_ERROR_INVALID_ARGUMENT, "private-marker", 0u, "mcp_configuration", 0u },
+        { XWORK_ERROR_NONE, "private-marker", 401u, "mcp_failed", 0u },
     };
     size_t i;
     for (i = 0u; i < sizeof(cases) / sizeof(cases[0]); ++i) {
@@ -150,6 +156,7 @@ static bool CheckMcpFailureClassification(void) {
         uint32 status = 999u;
         const char* code;
         memset(&error, 0, sizeof(error)); error.eCode = cases[i].code;
+        error.uHttpStatus = cases[i].transport_status;
         snprintf(error.sMessage, sizeof(error.sMessage), "%s", cases[i].message);
         code = MdoOperationMcpErrorCode(&error, &status);
         if (strcmp(code, cases[i].expected) != 0 || status != cases[i].status ||
@@ -384,7 +391,7 @@ def main() -> int:
         assert "cancel=state:4 requested:1" in output, output
         assert "mcp_success=state:2 target:mock catalog:7 schema:1 tools:4 connected:1" in output, output
         assert "mcp_failure=state:3 code:mcp_start_failed http:0 message:MCP connection test failed" in output, output
-        assert "mcp_classification=cases:16 passed:1" in output, output
+        assert "mcp_classification=cases:21 passed:1" in output, output
         assert "list=count:6 first_sequence:6 last_sequence:1" in output, output
         assert "calls=module:3 mcp:2" in output, output
         assert "probe_done=1" in output, output

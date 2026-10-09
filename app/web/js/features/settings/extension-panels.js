@@ -92,7 +92,7 @@ export function createExtensionPanels() {
     const target = targetKey();
     const controller = new AbortController(); actions.set(kind, controller);
     const scope = { signal: controller.signal, isCurrent: () => current(kind, target) && !controller.signal.aborted };
-    state.loaded = false; state.operation = null;
+    state.loaded = false; state.operation = null; state.error = "";
     state.busy = true; render(kind);
     try { await action(scope); if (!scope.isCurrent()) return; announceChange(kind); await load(kind); }
     catch (error) {
