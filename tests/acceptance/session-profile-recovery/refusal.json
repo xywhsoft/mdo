@@ -1,0 +1,559 @@
+{
+  "mode": "profile_refuse",
+  "source_id": "V-OSOhkj5s3Fu_KLStszNNgJ5hEd7JHJ",
+  "other_id": "V-OSOhkjS8-SQ4koiqH-hcMAm_HAg1jo",
+  "model_calls": 2,
+  "transport": [
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSOhkj5s3Fu_KLStszNNgJ5hEd7JHJ/profile",
+      "attempt": 1,
+      "status": 200,
+      "seconds": 149.984,
+      "fault": "drop_ack",
+      "response": {
+        "schema_version": 1,
+        "ok": true,
+        "request_id": "mdo-dab8f1b9ce11e37e20ff2840",
+        "data": {
+          "id": "V-OSOhkj5s3Fu_KLStszNNgJ5hEd7JHJ",
+          "project_id": "default",
+          "parent_session_id": "",
+          "title": "History recovery source",
+          "agent_id": "mdo.default",
+          "model_id": "profile-alternative",
+          "protocol": "openai-chat-completions",
+          "reasoning_effort": "medium",
+          "permission_profile": "balanced",
+          "workspace_root": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\profile-recovery\\ui-refuse",
+          "status": "active",
+          "revision": 2,
+          "created_at": 1791546222405541,
+          "updated_at": 1791546372458114,
+          "pinned": false,
+          "runtime_open": false,
+          "config_revision": 3,
+          "model_generation": 3,
+          "module_generation": 1,
+          "skill_generation": 1,
+          "max_output_tokens": 16384,
+          "forked_through_sequence": 0
+        }
+      },
+      "kind": "profile",
+      "body": {
+        "model_id": "profile-alternative",
+        "reasoning_effort": "medium",
+        "permission_profile": "balanced"
+      },
+      "finished_seconds": 149.984
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/projects/default/sessions/V-OSOhkj5s3Fu_KLStszNNgJ5hEd7JHJ",
+      "attempt": 1,
+      "status": 503,
+      "seconds": 150.578,
+      "fault": "refusal",
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "session_history_unavailable",
+          "message": "Fixture read unavailable; no write applied"
+        }
+      },
+      "kind": "profile_read",
+      "finished_seconds": 150.578
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/projects/default/sessions/V-OSOhkj5s3Fu_KLStszNNgJ5hEd7JHJ",
+      "attempt": 2,
+      "status": 503,
+      "seconds": 151.609,
+      "fault": "refusal",
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "session_history_unavailable",
+          "message": "Fixture read unavailable; no write applied"
+        }
+      },
+      "kind": "profile_read",
+      "finished_seconds": 151.609
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/projects/default/sessions/V-OSOhkj5s3Fu_KLStszNNgJ5hEd7JHJ",
+      "attempt": 3,
+      "status": 503,
+      "seconds": 152.625,
+      "fault": "refusal",
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "session_history_unavailable",
+          "message": "Fixture read unavailable; no write applied"
+        }
+      },
+      "kind": "profile_read",
+      "finished_seconds": 152.625
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/projects/default/sessions/V-OSOhkj5s3Fu_KLStszNNgJ5hEd7JHJ",
+      "attempt": 4,
+      "status": 503,
+      "seconds": 153.14,
+      "fault": "refusal",
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "session_history_unavailable",
+          "message": "Fixture read unavailable; no write applied"
+        }
+      },
+      "kind": "profile_read",
+      "finished_seconds": 153.14
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/projects/default/sessions/V-OSOhkj5s3Fu_KLStszNNgJ5hEd7JHJ",
+      "attempt": 5,
+      "status": 503,
+      "seconds": 153.687,
+      "fault": "refusal",
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "session_history_unavailable",
+          "message": "Fixture read unavailable; no write applied"
+        }
+      },
+      "kind": "profile_read",
+      "finished_seconds": 153.687
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/projects/default/sessions/V-OSOhkj5s3Fu_KLStszNNgJ5hEd7JHJ",
+      "attempt": 6,
+      "status": 503,
+      "seconds": 154.312,
+      "fault": "refusal",
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "session_history_unavailable",
+          "message": "Fixture read unavailable; no write applied"
+        }
+      },
+      "kind": "profile_read",
+      "finished_seconds": 154.312
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/projects/default/sessions/V-OSOhkj5s3Fu_KLStszNNgJ5hEd7JHJ",
+      "attempt": 7,
+      "status": 503,
+      "seconds": 156.609,
+      "fault": "refusal",
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "session_history_unavailable",
+          "message": "Fixture read unavailable; no write applied"
+        }
+      },
+      "kind": "profile_read",
+      "finished_seconds": 156.609
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/projects/default/sessions/V-OSOhkj5s3Fu_KLStszNNgJ5hEd7JHJ",
+      "attempt": 8,
+      "status": 503,
+      "seconds": 157.75,
+      "fault": "refusal",
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "session_history_unavailable",
+          "message": "Fixture read unavailable; no write applied"
+        }
+      },
+      "kind": "profile_read",
+      "finished_seconds": 157.75
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/projects/default/sessions/V-OSOhkj5s3Fu_KLStszNNgJ5hEd7JHJ",
+      "attempt": 9,
+      "status": 503,
+      "seconds": 160.625,
+      "fault": "refusal",
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "session_history_unavailable",
+          "message": "Fixture read unavailable; no write applied"
+        }
+      },
+      "kind": "profile_read",
+      "finished_seconds": 160.625
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/projects/default/sessions/V-OSOhkj5s3Fu_KLStszNNgJ5hEd7JHJ",
+      "attempt": 10,
+      "status": 503,
+      "seconds": 166.078,
+      "fault": "refusal",
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "session_history_unavailable",
+          "message": "Fixture read unavailable; no write applied"
+        }
+      },
+      "kind": "profile_read",
+      "finished_seconds": 166.078
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/projects/default/sessions/V-OSOhkj5s3Fu_KLStszNNgJ5hEd7JHJ",
+      "attempt": 11,
+      "status": 503,
+      "seconds": 169.156,
+      "fault": "refusal",
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "session_history_unavailable",
+          "message": "Fixture read unavailable; no write applied"
+        }
+      },
+      "kind": "profile_read",
+      "finished_seconds": 169.156
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSOhkj5s3Fu_KLStszNNgJ5hEd7JHJ/profile",
+      "attempt": 2,
+      "status": 412,
+      "seconds": 199.14,
+      "fault": null,
+      "response": {
+        "schema_version": 1,
+        "ok": false,
+        "request_id": "mdo-72110277d36a21a00b1e7487",
+        "error": {
+          "code": "revision_conflict",
+          "message": "The session changed; reload it before updating"
+        }
+      },
+      "kind": "profile",
+      "body": {
+        "model_id": "profile-alternative",
+        "reasoning_effort": "medium",
+        "permission_profile": "balanced"
+      },
+      "finished_seconds": 199.14
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/projects/default/sessions/V-OSOhkj5s3Fu_KLStszNNgJ5hEd7JHJ",
+      "attempt": 12,
+      "status": 200,
+      "seconds": 199.703,
+      "fault": null,
+      "response": {
+        "schema_version": 1,
+        "ok": true,
+        "request_id": "mdo-bd55e50d8dd01f89a121c437",
+        "data": {
+          "id": "V-OSOhkj5s3Fu_KLStszNNgJ5hEd7JHJ",
+          "project_id": "default",
+          "parent_session_id": "",
+          "title": "History recovery source",
+          "agent_id": "mdo.default",
+          "model_id": "profile-alternative",
+          "protocol": "openai-chat-completions",
+          "reasoning_effort": "medium",
+          "permission_profile": "balanced",
+          "workspace_root": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\profile-recovery\\ui-refuse",
+          "status": "active",
+          "revision": 2,
+          "created_at": 1791546222405541,
+          "updated_at": 1791546372458114,
+          "pinned": false,
+          "runtime_open": false,
+          "config_revision": 3,
+          "model_generation": 3,
+          "module_generation": 1,
+          "skill_generation": 1,
+          "max_output_tokens": 16384,
+          "forked_through_sequence": 0
+        }
+      },
+      "kind": "profile_read",
+      "finished_seconds": 199.703
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/projects/default/sessions/V-OSOhkj5s3Fu_KLStszNNgJ5hEd7JHJ",
+      "attempt": 13,
+      "status": 200,
+      "seconds": 201.187,
+      "fault": null,
+      "response": {
+        "schema_version": 1,
+        "ok": true,
+        "request_id": "mdo-a41651ae64a904460ec0e069",
+        "data": {
+          "id": "V-OSOhkj5s3Fu_KLStszNNgJ5hEd7JHJ",
+          "project_id": "default",
+          "parent_session_id": "",
+          "title": "History recovery source",
+          "agent_id": "mdo.default",
+          "model_id": "profile-alternative",
+          "protocol": "openai-chat-completions",
+          "reasoning_effort": "medium",
+          "permission_profile": "balanced",
+          "workspace_root": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\profile-recovery\\ui-refuse",
+          "status": "active",
+          "revision": 2,
+          "created_at": 1791546222405541,
+          "updated_at": 1791546372458114,
+          "pinned": false,
+          "runtime_open": false,
+          "config_revision": 3,
+          "model_generation": 3,
+          "module_generation": 1,
+          "skill_generation": 1,
+          "max_output_tokens": 16384,
+          "forked_through_sequence": 0
+        }
+      },
+      "kind": "profile_read",
+      "finished_seconds": 201.187
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/projects/default/sessions/V-OSOhkj5s3Fu_KLStszNNgJ5hEd7JHJ",
+      "attempt": 14,
+      "status": 200,
+      "seconds": 209.203,
+      "fault": null,
+      "response": {
+        "schema_version": 1,
+        "ok": true,
+        "request_id": "mdo-7eb5433ec35448c619976c6b",
+        "data": {
+          "id": "V-OSOhkj5s3Fu_KLStszNNgJ5hEd7JHJ",
+          "project_id": "default",
+          "parent_session_id": "",
+          "title": "History recovery source",
+          "agent_id": "mdo.default",
+          "model_id": "profile-alternative",
+          "protocol": "openai-chat-completions",
+          "reasoning_effort": "medium",
+          "permission_profile": "balanced",
+          "workspace_root": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\profile-recovery\\ui-refuse",
+          "status": "active",
+          "revision": 2,
+          "created_at": 1791546222405541,
+          "updated_at": 1791546372458114,
+          "pinned": false,
+          "runtime_open": false,
+          "config_revision": 3,
+          "model_generation": 3,
+          "module_generation": 1,
+          "skill_generation": 1,
+          "max_output_tokens": 16384,
+          "forked_through_sequence": 0
+        }
+      },
+      "kind": "profile_read",
+      "finished_seconds": 209.203
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/projects/default/sessions/V-OSOhkj5s3Fu_KLStszNNgJ5hEd7JHJ",
+      "attempt": 15,
+      "status": 200,
+      "seconds": 217.234,
+      "fault": null,
+      "response": {
+        "schema_version": 1,
+        "ok": true,
+        "request_id": "mdo-854a5001f5c4d32e3158f6da",
+        "data": {
+          "id": "V-OSOhkj5s3Fu_KLStszNNgJ5hEd7JHJ",
+          "project_id": "default",
+          "parent_session_id": "",
+          "title": "History recovery source",
+          "agent_id": "mdo.default",
+          "model_id": "profile-alternative",
+          "protocol": "openai-chat-completions",
+          "reasoning_effort": "medium",
+          "permission_profile": "balanced",
+          "workspace_root": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\profile-recovery\\ui-refuse",
+          "status": "active",
+          "revision": 2,
+          "created_at": 1791546222405541,
+          "updated_at": 1791546372458114,
+          "pinned": false,
+          "runtime_open": false,
+          "config_revision": 3,
+          "model_generation": 3,
+          "module_generation": 1,
+          "skill_generation": 1,
+          "max_output_tokens": 16384,
+          "forked_through_sequence": 0
+        }
+      },
+      "kind": "profile_read",
+      "finished_seconds": 217.234
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/projects/default/sessions/V-OSOhkj5s3Fu_KLStszNNgJ5hEd7JHJ",
+      "attempt": 16,
+      "status": 200,
+      "seconds": 225.25,
+      "fault": null,
+      "response": {
+        "schema_version": 1,
+        "ok": true,
+        "request_id": "mdo-6dad1ec40be559cbb05ba0be",
+        "data": {
+          "id": "V-OSOhkj5s3Fu_KLStszNNgJ5hEd7JHJ",
+          "project_id": "default",
+          "parent_session_id": "",
+          "title": "History recovery source",
+          "agent_id": "mdo.default",
+          "model_id": "profile-alternative",
+          "protocol": "openai-chat-completions",
+          "reasoning_effort": "medium",
+          "permission_profile": "balanced",
+          "workspace_root": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\profile-recovery\\ui-refuse",
+          "status": "active",
+          "revision": 2,
+          "created_at": 1791546222405541,
+          "updated_at": 1791546372458114,
+          "pinned": false,
+          "runtime_open": false,
+          "config_revision": 3,
+          "model_generation": 3,
+          "module_generation": 1,
+          "skill_generation": 1,
+          "max_output_tokens": 16384,
+          "forked_through_sequence": 0
+        }
+      },
+      "kind": "profile_read",
+      "finished_seconds": 225.25
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/projects/default/sessions/V-OSOhkj5s3Fu_KLStszNNgJ5hEd7JHJ",
+      "attempt": 17,
+      "status": 200,
+      "seconds": 233.265,
+      "fault": null,
+      "response": {
+        "schema_version": 1,
+        "ok": true,
+        "request_id": "mdo-e165ec5951d562b69da8e8fc",
+        "data": {
+          "id": "V-OSOhkj5s3Fu_KLStszNNgJ5hEd7JHJ",
+          "project_id": "default",
+          "parent_session_id": "",
+          "title": "History recovery source",
+          "agent_id": "mdo.default",
+          "model_id": "profile-alternative",
+          "protocol": "openai-chat-completions",
+          "reasoning_effort": "medium",
+          "permission_profile": "balanced",
+          "workspace_root": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\profile-recovery\\ui-refuse",
+          "status": "active",
+          "revision": 2,
+          "created_at": 1791546222405541,
+          "updated_at": 1791546372458114,
+          "pinned": false,
+          "runtime_open": false,
+          "config_revision": 3,
+          "model_generation": 3,
+          "module_generation": 1,
+          "skill_generation": 1,
+          "max_output_tokens": 16384,
+          "forked_through_sequence": 0
+        }
+      },
+      "kind": "profile_read",
+      "finished_seconds": 233.265
+    }
+  ],
+  "forks": [],
+  "model_requests": [
+    "ornith-1.5-35b",
+    "ornith-1.5-35b"
+  ],
+  "metadata_before": {
+    "id": "V-OSOhkj5s3Fu_KLStszNNgJ5hEd7JHJ",
+    "project_id": "default",
+    "parent_session_id": "",
+    "title": "History recovery source",
+    "agent_id": "mdo.default",
+    "model_id": "queue-fixture",
+    "protocol": "openai-chat-completions",
+    "reasoning_effort": "none",
+    "permission_profile": "balanced",
+    "workspace_root": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\profile-recovery\\ui-refuse",
+    "status": "active",
+    "revision": 1,
+    "created_at": 1791546222405541,
+    "updated_at": 1791546222405541,
+    "pinned": false,
+    "runtime_open": false,
+    "config_revision": 3,
+    "model_generation": 3,
+    "module_generation": 1,
+    "skill_generation": 1,
+    "max_output_tokens": 16384,
+    "forked_through_sequence": 0
+  },
+  "metadata_after": {
+    "id": "V-OSOhkj5s3Fu_KLStszNNgJ5hEd7JHJ",
+    "project_id": "default",
+    "parent_session_id": "",
+    "title": "History recovery source",
+    "agent_id": "mdo.default",
+    "model_id": "profile-alternative",
+    "protocol": "openai-chat-completions",
+    "reasoning_effort": "medium",
+    "permission_profile": "balanced",
+    "workspace_root": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\profile-recovery\\ui-refuse",
+    "status": "active",
+    "revision": 2,
+    "created_at": 1791546222405541,
+    "updated_at": 1791546372458114,
+    "pinned": false,
+    "runtime_open": false,
+    "config_revision": 3,
+    "model_generation": 3,
+    "module_generation": 1,
+    "skill_generation": 1,
+    "max_output_tokens": 16384,
+    "forked_through_sequence": 0
+  },
+  "source_snapshot_unchanged": false,
+  "final_errors": 0,
+  "event_kinds": {
+    "agent_start": 2,
+    "model_start": 2,
+    "model_text_delta": 2,
+    "model_done": 2,
+    "agent_done": 2
+  }
+}

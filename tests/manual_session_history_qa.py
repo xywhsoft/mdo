@@ -193,7 +193,7 @@ def main():
             assert status == 200, raw
             config = json.loads(raw)['data']
             alternative = dict(next(item for item in config['items'] if item['id'] == 'queue-fixture'))
-            alternative.update(id='profile-alternative', name='Profile alternative', model='profile-alternative')
+            alternative.update(id='profile-alternative', name='Profile alternative', wire_model='profile-alternative')
             config['items'].append(alternative)
             config.pop('runtime_override', None)
             status, _, raw = request(port, 'PUT', '/api/v1/settings/models',

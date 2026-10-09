@@ -83,6 +83,7 @@ async function until(predicate) {
 try {
   modelSelect.value = "image";
   modelSelect.dispatchEvent(new Event("change"));
+  await until(() => requests[0]?.id === "first");
   const firstLocked = profile.isBusy() && modelSelect.disabled &&
     requests[0]?.id === "first";
 

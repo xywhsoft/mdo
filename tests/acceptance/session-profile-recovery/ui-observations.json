@@ -1,0 +1,89 @@
+{
+  "baseline": {
+    "disabled": false,
+    "draft": "Preserve the draft while switching models.",
+    "model": "queue-fixture",
+    "notices": [
+      "无法连接本地服务，请确认 mdo 仍在运行。"
+    ]
+  },
+  "baseline_retry": {
+    "draft": "Preserve the draft while switching models.",
+    "model": "profile-alternative",
+    "notices": []
+  },
+  "recovery": {
+    "intermediate": {
+      "draft": "Preserve the draft while switching models.",
+      "notices": []
+    },
+    "confirmed": {
+      "disabled": false,
+      "draft": "Preserve the draft while switching models.",
+      "model": "profile-alternative",
+      "notices": []
+    },
+    "continuation": {
+      "notices": [],
+      "timeline": "19:43Seed the history recovery check.Agent19:43Ready to continue.10 输入 / 5 输出 tokens · LLM <0.1 秒 · 576.2 tok/s19:45Preserve the draft while switching models.Agent19:45Ready to continue.10 输入 / 5 输出 tokens · LLM <0.1 秒 · 581.5 tok/s"
+    }
+  },
+  "refusal": {
+    "intermediate": {
+      "draft": "Retain the draft after uncertain model settings.",
+      "notices": []
+    },
+    "final_seen": true,
+    "final": {
+      "disabled": false,
+      "draft": "Retain the draft after uncertain model settings.",
+      "model": "queue-fixture",
+      "notices": [
+        "会话配置暂未确认，请恢复连接后检查，或重新选择配置。"
+      ]
+    },
+    "manual_recovered": {
+      "disabled": false,
+      "draft": "Retain the draft after uncertain model settings.",
+      "model": "profile-alternative",
+      "notices": []
+    },
+    "continuation": {
+      "notices": [],
+      "timeline": "19:43Seed the history recovery check.Agent19:43Ready to continue.10 输入 / 5 输出 tokens · LLM <0.1 秒 · 579.6 tok/s19:47Retain the draft after uncertain model settings.Agent19:47Ready to continue.10 输入 / 5 输出 tokens · LLM <0.1 秒 · 217.1 tok/s"
+    }
+  },
+  "route": {
+    "cancelled": {
+      "heading": "设置",
+      "notices": [],
+      "openDialogs": 0
+    },
+    "returned": {
+      "disabled": false,
+      "draft": "Keep model settings route draft.",
+      "model": "profile-alternative",
+      "notices": []
+    },
+    "permission": {
+      "draft": "Keep model settings route draft.",
+      "notices": [],
+      "permission": "read-only"
+    }
+  },
+  "wire_model": {
+    "intermediate": {
+      "notices": []
+    },
+    "confirmed": {
+      "disabled": false,
+      "draft": "Use the recovered alternative wire model.",
+      "model": "profile-alternative",
+      "notices": []
+    },
+    "continuation": {
+      "notices": [],
+      "timeline": "19:52Seed the history recovery check.Agent19:52Ready to continue.10 输入 / 5 输出 tokens · LLM <0.1 秒 · 610.2 tok/s19:53Use the recovered alternative wire model.Agent19:53Ready to continue.10 输入 / 5 输出 tokens · LLM <0.1 秒 · 226.3 tok/s"
+    }
+  }
+}

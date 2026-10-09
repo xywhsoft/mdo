@@ -1,0 +1,47 @@
+{
+  "mdo_commit": "27262bad588531e27d39c8fa88307b29d84526fb",
+  "xs_commit": "f47b0de5037f458f6289483d1323dee417d99434",
+  "mdo_worktree_dirty": false,
+  "sha256": "bd87caf46bf247c1977fea4ab03216823dde8ba85f94f98f68266c9dbb837ecc",
+  "bytes": 4532060,
+  "packaged_app_sha256": "26320f465ad3c86468e307090ee1167c910b5019d74d2b857a39f3f39c5c862e",
+  "pack_sha256": "28422ba30162dd6fb58a5456821363c759b97e18783bb6c3af5a88428f911ffe",
+  "sources": {
+    "web/js/api/request-recovery.js": {
+      "sha256": "577430926152bfdcdec203a5f8a8160e8885daea53d6d903f64bb6e69dccc790",
+      "matches": true
+    },
+    "web/js/state/session-profile.js": {
+      "sha256": "e6338ebb35fc8ef262642f16abe7198cc89ceed143e328fb7199192c397ca222",
+      "matches": true
+    },
+    "web/js/state/sessions.js": {
+      "sha256": "10dd4983190efc83ba842feb71eecae6f4fdf88f068490d40f374ffdb3171ab6",
+      "matches": true
+    },
+    "web/js/features/chat/composer-profile.js": {
+      "sha256": "0c35f957cc10ddd6ec42879b20d908ee45679f57eb47a920aba9ee97fde7dd7b",
+      "matches": true
+    },
+    "web/js/utils/dom.js": {
+      "sha256": "e340d04262de8dd12b3d3a1d65225fe2cad527b5bc0bb60795521829860c37f8",
+      "matches": true
+    },
+    "web/lang/zh-CN.json": {
+      "sha256": "e2001e03600d8859668dbab9746a6d87e1778f31ce49b7329e27d1fff982ecb2",
+      "matches": true
+    },
+    "web/lang/en-US.json": {
+      "sha256": "2d750bba93c058f220b1daa6dfebec75882928ea840bd0c28b8a43e671d78035",
+      "matches": true
+    },
+    "web/lang/ru-RU.json": {
+      "sha256": "36bab6daad981c35b1ae3551fa7b8f27604e5f69fac935299c8b358b2a5b5f1f",
+      "matches": true
+    }
+  },
+  "passed": true,
+  "daily_app_overwritten": false,
+  "android_device_tested": false,
+  "external_provider_tested": false
+}
