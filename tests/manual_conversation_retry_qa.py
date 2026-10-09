@@ -5,6 +5,8 @@ leave loopback; the fixture uses a normal editable model and a separate Home.
 Prompts: retry (two 429s), partial (one interrupted draft), quota (daily limit),
 stop (long Retry-After), continue (successful next turn). The editable fixture
 model accepts images, so attachment/edit/fork checks use the same environment.
+Creating the fixture's allow-quota marker makes a subsequent explicit resume
+of quota succeed; removing it restores the daily-limit response.
 streaming and stream-stop flush a first chunk, then wait for the disposable
 release-streaming-N / release-stream-stop-N marker (request number N), or
 --stream-wait (at most 60s). Each marker owns one request, including after stop.
@@ -66,7 +68,8 @@ class Model(BaseHTTPRequestHandler):
                 pending = self.workspace / (name + '.pending')
                 pending.write_text(json.dumps(data, indent=2), encoding='utf-8')
                 pending.replace(self.workspace / name)
-        if prompt in ('quota','stop') or (prompt=='retry' and attempt<=2):
+        quota = prompt == 'quota' and not (self.workspace / 'allow-quota').exists()
+        if quota or prompt=='stop' or (prompt=='retry' and attempt<=2):
             self.send_response(429)
             self.send_header('Content-Type','application/json')
             self.send_header('Retry-After','10' if prompt=='stop' else '1')

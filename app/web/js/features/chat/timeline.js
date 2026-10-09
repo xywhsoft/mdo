@@ -94,6 +94,8 @@ export function eventsToTimeline(events, historyLost = false,
   const runUsages = new Map();
   const streams = new Map();
   const promptsByRun = new Map();
+  const promptsByEpoch = new Map();
+  const recoveryStarts = new Map();
   const resumableTools = new Map();
   const resumedEpochs = new Set();
   let latestMainPrompt = null;
@@ -145,6 +147,11 @@ export function eventsToTimeline(events, historyLost = false,
           if (latestMainPrompt) promptsByRun.set(runKey, latestMainPrompt);
           else promptsByRun.delete(runKey);
         }
+        // A run ID can be reused. Keep the input of each execution separately
+        // so a later question cannot resolve an earlier question's failure.
+        if (!(event.agent_depth > 0))
+          promptsByEpoch.set(`${runKey}:${Number(event.event_id) || 0}`,
+            promptsByRun.get(runKey));
         if (event.agent_depth > 0) {
           items.push({ key: `subagent-${event.event_id}`, kind: "task",
             role: t("timeline.subagent", {}, "子 Agent"),
@@ -152,10 +159,21 @@ export function eventsToTimeline(events, historyLost = false,
             state: "running", time: event.time, meta: `depth ${event.agent_depth}` });
         } else if (Number(event.schema_version) >= 3 &&
                    Number(event.user_message_sequence || 0) === 0) {
-          resumedEpochs.add(`${runKey}:${Number(event.event_id) || 0}`);
+          const start = Number(event.event_id);
+          resumedEpochs.add(`${runKey}:${start || 0}`);
+          // The durable start admits a new attempt for the same input. Older
+          // failures stay in its execution details; a new final error remains
+          // public. An HTTP acknowledgement or a child run is not this proof.
+          const prompt = promptsByRun.get(runKey);
+          if (event.user_message_sequence === 0 &&
+              Number.isSafeInteger(prompt?.sequence) && prompt.sequence > 0 &&
+              Number.isSafeInteger(prompt.sourceEventId) && prompt.sourceEventId > 0 &&
+              Number.isSafeInteger(start) && start > prompt.sourceEventId)
+            recoveryStarts.set(prompt, start);
           // A resumed run has no new user message. Older event schemas did not
           // carry a durable message sequence, so keep their original projection.
           items.push({ key: `resume-${event.event_id}`, kind: "system",
+            recoveryRecord: true,
             role: t("timeline.recovery", {}, "恢复"),
             text: t("timeline.resumed", {}, "从上次中断处继续运行"), state: "done",
             time: event.time });
@@ -334,6 +352,7 @@ export function eventsToTimeline(events, historyLost = false,
       case "recovery_required":
       case "recovery_resolved":
         items.push({ key: `recovery-${event.event_id}`, kind: "system",
+          recoveryRecord: true,
           role: t("timeline.recovery", {}, "恢复"),
           text: event.kind === "recovery_resolved" ? recoveryResolvedText(event)
             : event.text || t("timeline.recoveryRequired", {}, "会话需要恢复"),
@@ -469,8 +488,14 @@ export function eventsToTimeline(events, historyLost = false,
       items[index].agentDepth ??= event.agent_depth || 0;
     }
   }
-  for (const item of items)
+  for (const item of items) {
     item.turnState = terminalRuns.get(`${item.runKey}:${item.runEpoch}`) ?? "running";
+    const start = recoveryStarts.get(promptsByEpoch.get(`${item.runKey}:${item.runEpoch}`));
+    if (!(item.agentDepth > 0) && start &&
+        Number.isSafeInteger(item.sourceEventId) && item.sourceEventId > 0 &&
+        (item.recoveryRecord || (item.kind === "error" && item.sourceEventId < start)))
+      item.executionDetail = true;
+  }
   let nextUserSequence = null;
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const item = items[index];

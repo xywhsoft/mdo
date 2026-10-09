@@ -55,7 +55,8 @@ export function conversationGroups(items) {
       if (!(item.agentDepth > 0)) turn.state = item.turnState ?? "running";
       // Normal main-Agent text is public conversation, even when tools or
       // another reply follow it. Only explicit execution records are folded.
-      if (item.agentDepth > 0 || ["reasoning", "tool", "task"].includes(item.kind)) {
+      if (item.executionDetail || item.agentDepth > 0 ||
+          ["reasoning", "tool", "task"].includes(item.kind)) {
         let process = turn.entries.at(-1);
         if (process?.kind !== "process") {
           process = { key: `process-${item.sourceEventId ?? item.key}`,
