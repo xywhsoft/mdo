@@ -1,6 +1,6 @@
 import { api, resourceId } from "../api/client.js";
 import { createResourceStore } from "./store.js";
-import { awaitResourceOperation, resourceOperationEpoch } from "./resource-operation.js";
+import { startResourceOperation } from "./resource-operation-start.js";
 
 export const modulesStore = createResourceStore({ modules: [], tools: [] });
 export const skillsStore = createResourceStore({ items: [] });
@@ -55,9 +55,8 @@ export function ensureSettingsResources(section) {
 
 export async function reloadCatalog(name, options = {}) {
   if (!["models", "skills", "modules", "mcp"].includes(name)) throw new TypeError("resource cannot be reloaded");
-  const originalEpoch = (options.epoch || resourceOperationEpoch)();
-  const result = (await api.post(`/${name}/reload`)).data;
-  return result?.id ? awaitResourceOperation(result, { ...options, originalEpoch, expected: { kind: "module_reload", target: "" } }) : result;
+  if (name === "modules") return startResourceOperation("/modules/reload", { kind: "module_reload", target: "" }, options);
+  return (await api.post(`/${name}/reload`)).data;
 }
 
 export async function setMcpEnabled(serverId, enabled) {
@@ -72,9 +71,7 @@ export async function disconnectMcp(serverId) {
 
 export async function refreshMcp(serverId, options = {}) {
   const server = resourceId(serverId, "MCP server");
-  const originalEpoch = (options.epoch || resourceOperationEpoch)();
-  const operation = (await api.post(`/mcp/${server}/refresh`)).data;
-  return awaitResourceOperation(operation, { ...options, originalEpoch, expected: { kind: "mcp_refresh", target: server } });
+  return startResourceOperation(`/mcp/${server}/refresh`, { kind: "mcp_refresh", target: server }, options);
 }
 
 export async function applyLegacyMigration(sourceId, previewToken) {

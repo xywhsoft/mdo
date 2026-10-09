@@ -53,6 +53,13 @@ bool MdoOperationManagerInit(void);
 void MdoOperationManagerUnit(void);
 bool MdoOperationStartModuleReload(MdoOperationInfo* Info);
 bool MdoOperationStartMcpRefresh(const char* ServerId, MdoOperationInfo* Info);
+/* Optional client identity is op-c- followed by 32 lowercase hex digits.
+ * Equal retained requests return the same job; differing kind/target fails.
+ * This is process-scoped discovery, not durable replay after eviction/restart. */
+bool MdoOperationRequestIdValid(const char* Id);
+bool MdoOperationStartModuleReloadIdentified(const char* Id, MdoOperationInfo* Info);
+bool MdoOperationStartMcpRefreshIdentified(const char* ServerId, const char* Id,
+    MdoOperationInfo* Info);
 bool MdoOperationGet(const char* Id, MdoOperationInfo* Info);
 size_t MdoOperationList(MdoOperationInfo* Items, size_t Capacity);
 bool MdoOperationCancel(const char* Id, MdoOperationInfo* Info);

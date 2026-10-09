@@ -397,8 +397,21 @@ void MdoOperationManagerUnit(void)
     (void)xrtMutexDestroy(Lock);
 }
 
+bool MdoOperationRequestIdValid(cstr Id)
+{
+    size_t Index;
+    if ( Id == NULL || strlen(Id) != 37u || strncmp(Id, "op-c-", 5u) != 0 )
+        return false;
+    for ( Index = 5u; Index < 37u; Index++ ) {
+        char Byte = Id[Index];
+        if ( !(Byte >= '0' && Byte <= '9') && !(Byte >= 'a' && Byte <= 'f') )
+            return false;
+    }
+    return true;
+}
+
 static bool MdoOperationStart(MdoOperationKind Kind, cstr Target,
-    MdoOperationInfo* Info)
+    cstr RequestedId, MdoOperationInfo* Info)
 {
     MdoOperationEntry* Entry;
     MdoOperationJob* Job;
@@ -407,7 +420,8 @@ static bool MdoOperationStart(MdoOperationKind Kind, cstr Target,
     bool Copied;
 
     if ( Info == NULL || Info->Size < sizeof(*Info) ||
-         g_MdoOperations.Lock == NULL ) return false;
+         g_MdoOperations.Lock == NULL ||
+         (RequestedId != NULL && !MdoOperationRequestIdValid(RequestedId)) ) return false;
     Job = (MdoOperationJob*)xrtCalloc(1u, sizeof(*Job));
     if ( Job == NULL ) return false;
     if ( !xrtMutexLock(g_MdoOperations.Lock) ) {
@@ -419,6 +433,17 @@ static bool MdoOperationStart(MdoOperationKind Kind, cstr Target,
         xrtFree(Job);
         return false;
     }
+    if ( RequestedId != NULL ) {
+        Entry = MdoOperationFindLocked(RequestedId);
+        if ( Entry != NULL ) {
+            Copied = Entry->Info.Kind == Kind &&
+                strcmp(Entry->Info.Target, Target != NULL ? Target : "") == 0 &&
+                MdoOperationCopyInfo(Info, &Entry->Info);
+            (void)xrtMutexUnlock(g_MdoOperations.Lock);
+            xrtFree(Job);
+            return Copied;
+        }
+    }
     if ( g_MdoOperations.NextSequence == UINT64_MAX ) {
         (void)xrtMutexUnlock(g_MdoOperations.Lock);
         xrtFree(Job);
@@ -426,12 +451,13 @@ static bool MdoOperationStart(MdoOperationKind Kind, cstr Target,
         return false;
     }
     Entry = MdoOperationSlotLocked();
-    if ( Entry == NULL || !MdoOperationId(Job->Id) ) {
+    if ( Entry == NULL || (RequestedId == NULL && !MdoOperationId(Job->Id)) ) {
         (void)xrtMutexUnlock(g_MdoOperations.Lock);
         xrtFree(Job);
         MdoOperationError("Operation capacity is exhausted");
         return false;
     }
+    if ( RequestedId != NULL ) snprintf(Job->Id, sizeof(Job->Id), "%s", RequestedId);
     memset(Entry, 0, sizeof(*Entry));
     Entry->Occupied = true;
     Entry->Info.Size = sizeof(Entry->Info);
@@ -466,10 +492,21 @@ static bool MdoOperationStart(MdoOperationKind Kind, cstr Target,
 
 bool MdoOperationStartModuleReload(MdoOperationInfo* Info)
 {
-    return MdoOperationStart(MDO_OPERATION_MODULE_RELOAD, NULL, Info);
+    return MdoOperationStartModuleReloadIdentified(NULL, Info);
+}
+
+bool MdoOperationStartModuleReloadIdentified(cstr Id, MdoOperationInfo* Info)
+{
+    return MdoOperationStart(MDO_OPERATION_MODULE_RELOAD, NULL, Id, Info);
 }
 
 bool MdoOperationStartMcpRefresh(cstr ServerId, MdoOperationInfo* Info)
+{
+    return MdoOperationStartMcpRefreshIdentified(ServerId, NULL, Info);
+}
+
+bool MdoOperationStartMcpRefreshIdentified(cstr ServerId, cstr Id,
+    MdoOperationInfo* Info)
 {
     MdoMcpServerStatus Status;
     if ( ServerId == NULL || ServerId[0] == '\0' ||
@@ -477,7 +514,7 @@ bool MdoOperationStartMcpRefresh(cstr ServerId, MdoOperationInfo* Info)
         return false;
     memset(&Status, 0, sizeof(Status)); Status.Size = sizeof(Status);
     if ( !MdoMcpManagerGetStatus(ServerId, &Status) ) return false;
-    return MdoOperationStart(MDO_OPERATION_MCP_REFRESH, ServerId, Info);
+    return MdoOperationStart(MDO_OPERATION_MCP_REFRESH, ServerId, Id, Info);
 }
 
 bool MdoOperationGet(const char* Id, MdoOperationInfo* Info)

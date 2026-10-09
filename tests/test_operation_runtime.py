@@ -215,7 +215,7 @@ void ServiceInit(XS_HostInfo* host) {
     if (!MdoOperationManagerInit()) { printf("init_error=1\n"); goto done; }
 
     memset(&success, 0, sizeof(success)); success.Size = sizeof(success);
-    if (!MdoOperationStartModuleReload(&success)) {
+    if (!MdoOperationStartModuleReloadIdentified("op-c-0123456789abcdef0123456789abcdef", &success)) {
         printf("start_error=success\n"); goto done;
     }
     snprintf(success_id, sizeof(success_id), "%s", success.Id);
@@ -227,6 +227,15 @@ void ServiceInit(XS_HostInfo* host) {
         (unsigned long long)current.ItemCount,
         (unsigned long long)current.SecondaryCount,
         (unsigned long long)current.TertiaryCount);
+    memset(&current, 0, sizeof(current)); current.Size = sizeof(current);
+    if (!MdoOperationStartModuleReloadIdentified(success_id, &current) ||
+        current.State != MDO_OPERATION_SUCCEEDED || current.Sequence != success.Sequence ||
+        strcmp(current.Id, success_id) != 0 ||
+        MdoOperationStartMcpRefreshIdentified("mock", success_id, &current) ||
+        MdoOperationStartModuleReloadIdentified("op-c-ABCDEF0123456789abcdef0123456789", &current) ||
+        MdoOperationStartModuleReloadIdentified("op-c-1234", &current)) {
+        printf("identity_error=terminal\n"); goto done;
+    }
 
     xrtAtomic32Store(&FailReload, 1u, XMEMORY_RELEASE);
     memset(&failure, 0, sizeof(failure)); failure.Size = sizeof(failure);
@@ -284,16 +293,25 @@ void ServiceInit(XS_HostInfo* host) {
     }
 
     memset(&queued, 0, sizeof(queued)); queued.Size = sizeof(queued);
-    if (!MdoOperationStartModuleReload(&queued)) {
+    if (!MdoOperationStartModuleReloadIdentified("op-c-fedcba9876543210fedcba9876543210", &queued)) {
         printf("start_error=queued\n"); goto done;
     }
     snprintf(queued_id, sizeof(queued_id), "%s", queued.Id);
     memset(&current, 0, sizeof(current)); current.Size = sizeof(current);
+    if (!MdoOperationStartModuleReloadIdentified(queued_id, &current) ||
+        current.State != MDO_OPERATION_PENDING || current.Sequence != queued.Sequence) {
+        printf("identity_error=pending\n"); goto done;
+    }
     if (!MdoOperationCancel(queued_id, &current)) {
         printf("cancel_error=1\n"); goto done;
     }
     printf("cancel=state:%d requested:%d\n", (int)current.State,
         current.CancelRequested ? 1 : 0);
+    if (!MdoOperationStartModuleReloadIdentified(queued_id, &current) ||
+        current.State != MDO_OPERATION_CANCELLED || current.Sequence != queued.Sequence) {
+        printf("identity_error=cancelled\n"); goto done;
+    }
+    printf("identity=terminal_pending_cancelled_same_job invalid_and_conflict_rejected\n");
     xrtAtomic32Store(&BlockReload, 0u, XMEMORY_RELEASE);
     if (!WaitTerminal(blocker_id, &current)) {
         printf("wait_error=blocker\n"); goto done;
@@ -394,6 +412,8 @@ def main() -> int:
         assert "wait_error=" not in output, output
         assert "enter_error=" not in output, output
         assert "cancel_error=" not in output, output
+        assert "identity_error=" not in output, output
+        assert "identity=terminal_pending_cancelled_same_job invalid_and_conflict_rejected" in output, output
         assert "success=state:2 generation:2 modules:2 tools:3 agents:1" in output, output
         assert "failure=state:3 message:Module reload failed" in output, output
         assert "cancel=state:4 requested:1" in output, output

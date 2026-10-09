@@ -96,13 +96,51 @@ static bool MdoApiOperationValue(const MdoOperationInfo* Info,
     return true;
 }
 
+/* Legacy clients may omit the body. New clients know the identity before
+ * submitting, so an uncertain acknowledgement needs only a status GET. */
+static bool MdoApiOperationRequestId(MdoApiContext* Context,
+    char Id[MDO_OPERATION_ID_CAPACITY])
+{
+    const xhttp1head* Head = Context->Request->head;
+    MdoApiJsonBody Body;
+    MdoApiBodyStatus Status;
+    xstrview Text;
+    const xvalue* Value;
+    bool Ok;
+    Id[0] = '\0';
+    if ( (Head->Flags & (uint32)XHTTP1_TRANSFER_ENCODING) == 0u &&
+         ((Head->Flags & (uint32)XHTTP1_CONTENT_LENGTH) == 0u ||
+          Head->ContentLength == 0u) ) return true;
+    Status = MdoApiJsonBodyRead(Context, &Body);
+    if ( Status != MDO_API_BODY_OK ) {
+        (void)MdoApiReplyBodyError(Context, Status);
+        return false;
+    }
+    Value = xrtValueObjectGet(Body.Value, XRT_STR_LITERAL("operation_id"));
+    Ok = xrtValueType(Body.Value) == XVALUE_OBJECT && xrtValueCount(Body.Value) == 1u &&
+        xrtValueGetString(Value, &Text) && Text.Size == 37u &&
+        memchr(Text.Data, '\0', Text.Size) == NULL;
+    if ( Ok ) {
+        memcpy(Id, Text.Data, Text.Size); Id[Text.Size] = '\0';
+        Ok = MdoOperationRequestIdValid(Id);
+    }
+    MdoApiJsonBodyUnit(&Body);
+    if ( !Ok ) {
+        (void)MdoApiReplyError(Context, 400u, "invalid_operation_id",
+            "operation_id must be op-c- followed by 32 lowercase hex digits", NULL);
+    }
+    return Ok;
+}
+
 bool MdoApiModulesReloadRoute(MdoApiContext* Context)
 {
+    char RequestedId[MDO_OPERATION_ID_CAPACITY];
     MdoOperationInfo Info;
     xvalue* Data = NULL;
     memset(&Info, 0, sizeof(Info));
     Info.Size = sizeof(Info);
-    if ( !MdoOperationStartModuleReload(&Info) ) {
+    if ( !MdoApiOperationRequestId(Context, RequestedId) ) return false;
+    if ( !MdoOperationStartModuleReloadIdentified(RequestedId[0] != '\0' ? RequestedId : NULL, &Info) ) {
         return MdoApiReplyError(Context, 503u, "operation_unavailable",
             "The module reload operation could not be queued", NULL);
     }
@@ -311,6 +349,7 @@ bool MdoApiMcpDisconnectRoute(MdoApiContext* Context)
 bool MdoApiMcpRefreshRoute(MdoApiContext* Context)
 {
     char ServerId[128];
+    char RequestedId[MDO_OPERATION_ID_CAPACITY];
     MdoMcpServerStatus Status;
     MdoOperationInfo Info;
     xvalue* Data = NULL;
@@ -325,11 +364,10 @@ bool MdoApiMcpRefreshRoute(MdoApiContext* Context)
     if ( !Status.Enabled )
         return MdoApiReplyError(Context, 409u, "mcp_server_disabled",
             "Enable the MCP server before refreshing it", NULL);
-    if ( !MdoApiMcpNoBody(Context) )
-        return MdoApiReplyError(Context, 400u, "body_not_allowed",
-            "MCP refresh requests do not accept a body", NULL);
+    if ( !MdoApiOperationRequestId(Context, RequestedId) ) return false;
     memset(&Info, 0, sizeof(Info)); Info.Size = sizeof(Info);
-    if ( !MdoOperationStartMcpRefresh(ServerId, &Info) )
+    if ( !MdoOperationStartMcpRefreshIdentified(ServerId,
+            RequestedId[0] != '\0' ? RequestedId : NULL, &Info) )
         return MdoApiReplyError(Context, 503u, "operation_unavailable",
             "The MCP refresh operation could not be queued", NULL);
     if ( !MdoApiOperationValue(&Info, &Data) )

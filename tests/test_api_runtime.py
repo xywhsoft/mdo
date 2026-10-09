@@ -2498,7 +2498,7 @@ def run_probe(host: Path) -> None:
                     body=b"{}", headers={"Content-Type": "application/json"})
                 document = json.loads(body)
                 assert status == 400, (status, body)
-                assert document["error"]["code"] == "body_not_allowed", document
+                assert document["error"]["code"] == "invalid_operation_id", document
 
                 status, headers, body = request(
                     port, "POST", "/api/v1/mcp/api-mock/refresh")
@@ -2607,6 +2607,29 @@ def run_probe(host: Path) -> None:
                 document = json.loads(body)
                 assert status == 200, (status, body)
                 assert document["data"]["state"] == "succeeded", document
+                requested_id = "op-c-0123456789abcdef0123456789abcdef"
+                identified_body = json.dumps({"operation_id": requested_id}).encode()
+                status, _, body = request(port, "POST", "/api/v1/modules/reload",
+                    body=identified_body, headers={"Content-Type": "application/json"})
+                assert status == 202, (status, body)
+                identified = json.loads(body)["data"]
+                assert identified["id"] == requested_id, identified
+                deadline = time.monotonic() + 5
+                while not identified["terminal"] and time.monotonic() < deadline:
+                    time.sleep(.01)
+                    identified = json.loads(request(port, "GET", f"/api/v1/operations/{requested_id}")[2])["data"]
+                assert identified["state"] == "succeeded", identified
+                status, _, body = request(port, "POST", "/api/v1/modules/reload",
+                    body=identified_body, headers={"Content-Type": "application/json"})
+                assert status == 202 and json.loads(body)["data"] == identified, (status, body)
+                count_before = json.loads(request(port, "GET", "/api/v1/operations")[2])["data"]["total"]
+                for bad in ({}, {"operation_id": requested_id, "extra": True}, [],
+                            {"operation_id": "op-c-" + "A" * 32}, {"operation_id": "op-c-short"},
+                            {"operation_id": requested_id + "\u0000"}, {"operation_id": None}):
+                    status, _, body = request(port, "POST", "/api/v1/modules/reload",
+                        body=json.dumps(bad).encode(), headers={"Content-Type": "application/json"})
+                    assert status == 400 and json.loads(body)["error"]["code"] == "invalid_operation_id", (status, body)
+                assert json.loads(request(port, "GET", "/api/v1/operations")[2])["data"]["total"] == count_before
                 status, headers, body = request(
                     port, "GET", "/api/v1/operations/op-does-not-exist")
                 document = json.loads(body)

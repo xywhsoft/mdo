@@ -60,9 +60,9 @@ function validate(value, original) {
 // uncertainty so the page can explicitly recheck without repeating the POST.
 export async function awaitResourceOperation(operation, { signal, isCurrent = () => true,
   epoch = resourceOperationEpoch, originalEpoch = epoch(), get = api.get,
-  recoveryOptions = {}, expected = null } = {}) {
+  recoveryOptions = {}, recovery: sharedRecovery = null, expected = null } = {}) {
   let current = operation, polls = 0, accepted = false;
-  const recovery = createRequestRecovery(recoveryOptions);
+  const recovery = sharedRecovery || createRequestRecovery(recoveryOptions);
   const cancel = () => recovery.dispose();
   const unsubscribe = subscribeTarget(() => { if (epoch() !== originalEpoch) cancel(); });
   signal?.addEventListener("abort", cancel, { once: true });
@@ -87,7 +87,8 @@ export async function awaitResourceOperation(operation, { signal, isCurrent = ()
         assertOwner(); await wait(delay, requestSignal); assertOwner();
         const data = (await get(`/operations/${resourceId(operation.id, "operation")}`, { signal: requestSignal })).data;
         assertOwner(); validate(data, operation); return data;
-      });
+      }, { retryable: error => isTransientReadError(error) ||
+        current.acceptance_unknown === true && error?.status === 404 && error?.code === "operation_not_found" });
     }
     assertOwner();
     if (current.state === "cancelled") throw new ApiError(t("resource.operationCancelled", {}, "操作已取消。"), { code: "resource_operation_cancelled" });
@@ -96,7 +97,8 @@ export async function awaitResourceOperation(operation, { signal, isCurrent = ()
     }
     return current;
   } catch (error) {
-    if (isTransientReadError(error) || error?.code === "invalid_response") {
+    if (isTransientReadError(error) || error?.code === "invalid_response" ||
+        current.acceptance_unknown === true && error?.status === 404 && error?.code === "operation_not_found") {
       const final = new ApiError(t("resource.operationUnconfirmed", {}, "状态暂未确认，操作可能仍在后台执行。恢复连接后可重新读取状态；没有重新执行。"), { code: "resource_operation_unconfirmed" });
       final.cause = error; error = final;
     }

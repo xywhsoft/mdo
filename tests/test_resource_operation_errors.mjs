@@ -15,7 +15,7 @@ function environment(context) {
   context.mock.method(globalThis, "fetch", async (url, options = {}) => {
     if (url.startsWith("/lang/")) return Response.json(packs[url.split("/").at(-1).slice(0, -5)]);
     requests.push({ url, method: options.method });
-    return Response.json({ ok: true, data: result });
+    return Response.json({ ok: true, data: { ...result, id: JSON.parse(options.body).operation_id } });
   });
   return { requests, result(value) { result = { ...operation, ...value }; } };
 }

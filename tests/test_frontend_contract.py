@@ -177,7 +177,7 @@ class FrontendContractTests(unittest.TestCase):
                      "diagnostics", "migrations"):
             self.assertIn(f"{name}Store", resources)
         self.assertIn('api.post(`/${name}/reload`)', resources)
-        self.assertIn("awaitResourceOperation", resources)
+        self.assertIn("startResourceOperation", resources)
         observation = self.scripts["js/state/resource-operation.js"]
         self.assertIn("createRequestRecovery", observation)
         self.assertNotIn("api.post(", observation)
