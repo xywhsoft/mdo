@@ -1717,6 +1717,7 @@ export async function boot() {
       window.clearTimeout(runMonitor); runMonitor = 0;
     }
     if (schedulesActive) {
+      resourcePanels.selectSection("");
       settingsWorkspace.hidden = true;
       for (const region of agentWorkspaceRegions) region.hidden = true;
       settingsView.setActive(false);
@@ -1748,6 +1749,7 @@ export async function boot() {
     const focusWasInSettings = settingsActive &&
       settingsWorkspace.contains(document.activeElement);
     memoryManagement.setActive(false);
+    resourcePanels.selectSection("");
     settingsWorkspace.hidden = true;
     for (const region of agentWorkspaceRegions) region.hidden = false;
     if (settingsActive) settingsView.setActive(false);

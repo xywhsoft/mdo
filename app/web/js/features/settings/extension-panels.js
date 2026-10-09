@@ -8,6 +8,7 @@ import { refreshMcp, disconnectMcp, reloadCatalog } from "../../state/resources.
 import { EXTENSION_KINDS, portableId, promptFields, editPrompt, newMcp, prepareMcpCredentials, mcpImportDocuments, bytesToBase64 } from "./extension-formats.js";
 import { resourceOwner, receiptKey } from "./store-formats.js";
 import { saveBlobFile } from "../../utils/file-download.js";
+import { createExtensionReads } from "./extension-reads.js";
 
 const label = (key, fallback, args = {}) => t(`ecosystem.${key}`, args, fallback);
 const title = kind => ({ agents: "Agent", tools: label("toolTitle", "工具"), subagents: "SubAgent", skills: "Skill", mcp: "MCP", commands: label("commands", "命令") })[kind];
@@ -34,31 +35,50 @@ function inputField(form, name, text, value = "", { area = false, type = "text",
 }
 
 export function createExtensionPanels() {
-  const states = new Map(EXTENSION_KINDS.map(kind => [kind, { loaded: false, serial: 0, items: [], catalog: [], view: "builtin", error: "", busy: false, filter: "" }]));
+  const states = new Map(EXTENSION_KINDS.map(kind => [kind, { loaded: false, serial: 0, items: [], catalog: [], view: "builtin", error: "", busy: false, reading: false, filter: "" }]));
   const roots = new Map(EXTENSION_KINDS.map(kind => [kind, document.querySelector(`[data-extension-manager="${kind}"]`)]));
   let selected = "", editing = null, activeTarget = targetKey(), pendingResource = null;
+  let disposed = false, paused = false;
+  const reads = createExtensionReads();
+  const current = (kind, target) => !disposed && !paused && selected === kind && target === targetKey();
+  function cancelReads() {
+    reads.cancel();
+    for (const state of states.values()) {
+      ++state.serial;
+      if (state.reading) { state.reading = false; state.busy = false; }
+    }
+  }
 
   function announceChange(kind) {
     window.dispatchEvent(new CustomEvent("mdo-extensions-changed", { detail: { kind } }));
     if (["agents", "subagents", "tools"].includes(kind)) void loadAgents();
   }
   async function load(kind) {
+    if (!current(kind, targetKey())) return;
     const state = states.get(kind), serial = ++state.serial, target = targetKey();
-    state.busy = true; state.error = ""; render(kind);
+    const isCurrent = () => current(kind, target) && serial === state.serial;
+    state.busy = state.reading = true; state.error = ""; render(kind);
     try {
-      const [response, catalog, packages] = await Promise.all([api.get(path(kind)), kind === "tools" ? api.get("/tools") : null,api.get("/ecosystem").catch(()=>null)]);
-      if (serial !== state.serial || target !== targetKey()) return;
+      const [response, catalog, packages] = await Promise.all([
+        reads.read("catalog", path(kind), { isCurrent }),
+        kind === "tools" ? reads.read("catalog-tools", "/tools", { isCurrent }) : null,
+        reads.read("packages", "/ecosystem", { isCurrent, retry: false }).catch(() => null),
+      ]);
+      if (!isCurrent()) return;
       state.catalog = catalog?.data.items ?? [];
       state.packages = packages?.data || {};
       state.items = (response.data.items ?? []).sort((a, b) => a.id.localeCompare(b.id)); state.loaded = true;
-    } catch (error) { if (serial === state.serial && target === targetKey()) state.error = errorMessage(error); }
-    finally { if (serial === state.serial) { state.busy = false; render(kind);if(pendingResource?.kind===kind&&selected===kind)void openLinkedResource(); } }
+    } catch (error) { if (isCurrent() && error?.name !== "AbortError") { state.loaded = false; state.error = errorMessage(error); } }
+    finally { if (isCurrent()) {
+      for (const key of ["catalog", "catalog-tools", "packages"]) reads.cancel(key);
+      state.busy = state.reading = false; render(kind);if(pendingResource?.kind===kind)void openLinkedResource();
+    } }
   }
   async function openLinkedResource() {
     const ref=pendingResource;if(!ref||states.get(ref.kind)?.busy)return;pendingResource=null;
-    const target=targetKey();
-    try{const data=(await api.get(path(ref.kind,ref.id))).data;if(target===targetKey())openEditor(ref.kind,data,null,ref.packageKey);}
-    catch(e){toast(errorMessage(e),"error");}
+    const target=targetKey(), isCurrent=()=>current(ref.kind,target);
+    try{const data=(await reads.read("editor",path(ref.kind,ref.id),{isCurrent})).data;if(isCurrent())openEditor(ref.kind,data,null,ref.packageKey);}
+    catch(e){if(isCurrent()&&e?.name!=="AbortError")toast(errorMessage(e),"error");}
   }
   function returnToPackage(key) { window.dispatchEvent(new CustomEvent("mdo-open-package",{detail:{key}}));location.hash="#/settings/store"; }
   async function act(kind, action) {
@@ -126,9 +146,9 @@ export function createExtensionPanels() {
         const owner=resourceOwner(state.packages,item.path);
         if(owner)meta.append(button(`${owner.name} · ${owner.version} · ${owner.source==="local"?label("localImport","本地导入"):owner.author}`,()=>returnToPackage(receiptKey(owner))));
         const edit = button(label("edit", "编辑"), async () => {
-          const target = targetKey();
-          try { const data = (await api.get(path(kind, item.id))).data; if (target === targetKey()) openEditor(kind, data,null,owner?receiptKey(owner):null); }
-          catch (error) { toast(errorMessage(error), "error"); }
+          const target = targetKey(), isCurrent = () => current(kind, target);
+          try { const data = (await reads.read("editor", path(kind, item.id), { isCurrent })).data; if (isCurrent()) openEditor(kind, data,null,owner?receiptKey(owner):null); }
+          catch (error) { if (isCurrent() && error?.name !== "AbortError") toast(errorMessage(error), "error"); }
         });
         const toggle = button(item.enabled ? label("disable", "停用") : label("enable", "启用"), () => act(kind, async () => {
           await api.post(`${path(kind, item.id)}/enabled`, { enabled: !item.enabled }, revision(item));
@@ -172,6 +192,7 @@ export function createExtensionPanels() {
   function closeEditor(force = false) {
     if (!editing || editing.saving) return false;
     if (!force && dirty() && !window.confirm(label("discardConfirm", "放弃未保存的编辑？"))) return false;
+    reads.cancel("tool-picker");
     const state = editing; editing = null;
     state.dialog.close(); state.dialog.remove(); state.returnFocus?.focus(); return true;
   }
@@ -210,11 +231,15 @@ export function createExtensionPanels() {
     };
     inherit.addEventListener("change", render); filter.addEventListener("input", render); render();
     if (editor.toolCatalog) return;
-    status.textContent = label("loading", "正在载入…");
-    void api.get("/tools").then(response => {
-      if (editing !== editor || target !== targetKey() || editor.toolList !== list) return;
-      editor.toolCatalog = response.data.items || []; status.textContent = ""; render();
-    }).catch(error => { if (editing === editor && editor.toolList === list) status.textContent = errorMessage(error); });
+    editor.loadTools = () => {
+      status.textContent = label("loading", "正在载入…");
+      void reads.read("tool-picker", "/tools", { isCurrent: () =>
+        current(editor.kind, target) && editing === editor && editor.toolList === list }).then(response => {
+        if (editing !== editor || target !== targetKey() || editor.toolList !== list) return;
+        editor.toolCatalog = response.data.items || []; status.textContent = ""; render();
+      }).catch(error => { if (current(editor.kind, target) && editing === editor && editor.toolList === list && error?.name !== "AbortError") status.textContent = errorMessage(error); });
+    };
+    editor.loadTools();
   }
   function currentSource() {
     if (editing.sourceMode) return editing.source.value;
@@ -285,6 +310,7 @@ export function createExtensionPanels() {
     inputField(editing.form, "prompt", label(kind === "agents" ? "agentInstructions" : "instructions", kind === "agents" ? "系统提示词（留空使用默认规则）" : "指令"), values.prompt || "", { area: true });
   }
   function openEditor(kind, item = null, imported = null, packageKey = null) {
+    reads.cancel("editor");
     if (editing && !closeEditor()) return;
     const initial = imported?.content ?? item?.content ?? (kind === "tools" ? newTool() : kind === "mcp" ? JSON.stringify(newMcp(), null, 2) :
       editPrompt("", { name: kind === "commands" ? undefined : "", description: "", prompt: "" }));
@@ -415,14 +441,14 @@ export function createExtensionPanels() {
     } catch (error) { toast(errorMessage(error), "error"); }
   }
   async function exportItem(kind, item) {
-    const target = targetKey();
+    const target = targetKey(), isCurrent = () => current(kind, target);
     try {
-      const data = (await api.get(`${path(kind, item.id)}${kind === "skills" ? "/bundle" : ""}`)).data;
-      if (target !== targetKey()) return;
+      const data = (await reads.read(`export:${kind}/${item.id}`, `${path(kind, item.id)}${kind === "skills" ? "/bundle" : ""}`, { isCurrent })).data;
+      if (!isCurrent()) return;
       if (kind === "skills") download(`${item.id}.skill.json`, JSON.stringify({ kind, id: item.id, content: data.content, files: data.files }, null, 2));
       else download(`${item.id}${kind === "tools" ? ".c" : kind === "mcp" ? ".json" : ".md"}`, data.content);
       if (kind === "mcp") toast(label("exportSecrets", "凭据不会导出。换设备导入后，请重新配置凭据。"));
-    } catch (error) { toast(errorMessage(error), "error"); }
+    } catch (error) { if (isCurrent() && error?.name !== "AbortError") toast(errorMessage(error), "error"); }
   }
   const unsubscribeLocale = subscribeLocale(() => { for (const kind of EXTENSION_KINDS) render(kind); });
   const invalidate = event => { const state = states.get(event.detail?.kind);if (state) state.loaded = false; };
@@ -431,14 +457,29 @@ export function createExtensionPanels() {
   window.addEventListener("mdo-open-resource",openResource);
   const unsubscribeTarget = subscribeTarget(() => {
     if (activeTarget === targetKey()) return;
+    cancelReads();
     activeTarget = targetKey(); closeEditor(true);
     pendingResource=null;
     for (const state of states.values()) { ++state.serial; state.loaded = false; state.busy = false; state.items = []; state.catalog = []; state.error = ""; }
     if (selected) void load(selected);
   });
+  const onHide = () => { paused = true; cancelReads(); };
+  const onShow = () => {
+    if (!paused || disposed) return;
+    paused = false; if (selected) void load(selected);
+    if (editing && !editing.toolCatalog) editing.loadTools?.();
+  };
+  window.addEventListener("pagehide", onHide);
+  window.addEventListener("pageshow", onShow);
   return Object.freeze({
-    selectSection(kind) { selected = EXTENSION_KINDS.includes(kind) ? kind : ""; if (selected && (!states.get(kind).loaded || kind === "tools") && !states.get(kind).busy) void load(kind);else if(pendingResource?.kind===selected)void openLinkedResource(); },
+    selectSection(kind) {
+      const next = EXTENSION_KINDS.includes(kind) ? kind : "";
+      if (selected !== next) { cancelReads(); if(pendingResource?.kind!==next)pendingResource=null; }
+      selected = next;
+      if (selected && (!states.get(kind).loaded || kind === "tools") && !states.get(kind).busy) void load(kind);
+      else if(pendingResource?.kind===selected)void openLinkedResource();
+    },
     hasPendingChanges: dirty,
-    destroy() { closeEditor(true); unsubscribeLocale(); unsubscribeTarget();window.removeEventListener("mdo-extensions-changed", invalidate);window.removeEventListener("mdo-open-resource",openResource); },
+    destroy() { disposed = true; cancelReads(); closeEditor(true); unsubscribeLocale(); unsubscribeTarget();window.removeEventListener("mdo-extensions-changed", invalidate);window.removeEventListener("mdo-open-resource",openResource);window.removeEventListener("pagehide",onHide);window.removeEventListener("pageshow",onShow); },
   });
 }
