@@ -1,0 +1,28 @@
+{
+  "body": "跳到对话\n墨斗\n◉\n登录账号\n本机\n▾\n新建任务\nCtrl N\n计划任务\n项目\n\n添加项目，让任务按工作区分组。\n\n任务\n对话恢复浏览器验收\n4分钟前\n本地服务 0.1.0\n默认项目\n▾\n/\n对话恢复浏览器验收\n\nmdo.default · conversation-fixture\n\n就绪\n02:10\nMCP_FAILURE_HINT_FOLLOWUP\nAgent\n02:10\n\nFIXTURE_OK: MCP_FAILURE_HINT_FOLLOWUP\n\n10 输入 / 4 输出 tokens · LLM <0.1 秒 · 237.7 tok/s\n向 Agent 描述任务\nConversation fixture\n无思考\nEnter 发送 · Shift Enter 换行",
+  "draft": "",
+  "errors": [],
+  "hasRecheck": false,
+  "testButtons": [
+    {
+      "disabled": false
+    },
+    {
+      "disabled": false
+    },
+    {
+      "disabled": false
+    },
+    {
+      "disabled": false
+    },
+    {
+      "disabled": false
+    },
+    {
+      "disabled": false
+    }
+  ],
+  "timeline": "02:10MCP_FAILURE_HINT_FOLLOWUPAgent02:10FIXTURE_OK: MCP_FAILURE_HINT_FOLLOWUP10 输入 / 4 输出 tokens · LLM <0.1 秒 · 237.7 tok/s",
+  "url": "http://127.0.0.1:59269/#/projects/default/sessions/V-OSQ2RHRoqNxANVFmSmeK_9YepBchSp"
+}

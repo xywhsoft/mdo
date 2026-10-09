@@ -1,0 +1,23 @@
+{
+  "passed": true,
+  "mdo_commit": "fde30c2c9def67fdd9b71f00b44cf3632281ec35",
+  "sha256": "22a6033ed58463a0d8e3dbb73788be9f7449314df94cd137f239db8efefde53a",
+  "bytes": 4549870,
+  "embedded_sources": {
+    "include/mdo/operations.h": "01baaf60f698ca470ef9c31718e91d8105c95ff3c3dea6b7d46851a802818052",
+    "src/api/operations.c": "9f0c8ec634ac1f7c27f5292c3add6a6f141d92ef97fea465ec0db04aeef95245",
+    "src/operations/manager.c": "f3f1f07c15fb543e2f6d92f954ba745867b27b68a410fd5889bfef84f2bc9554",
+    "web/js/state/resource-operation.js": "697aeca267647920c0176095a2c94944ea7aadf1ad93ccd41911b9cd45132ac5",
+    "web/lang/zh-CN.json": "d1fe0179e55280d427571d0cd58082a042168f2fc4a56ae4b13745f1b982ace2",
+    "web/lang/en-US.json": "7d86adad3be1961158cfea8df42b70090c976794bd8dddf7a952a1ff8d2b94d7",
+    "web/lang/ru-RU.json": "36778e320078906f498410d3b497b7503080b5083b058233453fd2978e8a0ff0"
+  },
+  "native_mcp_operations": 6,
+  "page_model_requests": 1,
+  "native_extension_model_requests": 16,
+  "final_model_errors": 0,
+  "external_provider_requests": 0,
+  "real_http_mcp_failure_tested": false,
+  "android_device_tested": false,
+  "daily_app_overwritten": false
+}

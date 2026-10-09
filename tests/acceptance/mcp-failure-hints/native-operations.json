@@ -1,0 +1,161 @@
+{
+  "schema_version": 1,
+  "ok": true,
+  "request_id": "mdo-fc3b594d69d5e0beb060bab9",
+  "data": {
+    "total": 6,
+    "limit": 64,
+    "items": [
+      {
+        "id": "op-39d1db71f1ab51679021a32a",
+        "sequence": 6,
+        "kind": "mcp_refresh",
+        "state": "succeeded",
+        "created_at": 1791569412727574,
+        "started_at": 1791569412727589,
+        "ended_at": 1791569412807492,
+        "terminal": true,
+        "cancel_requested": false,
+        "target": "working",
+        "message": "MCP server connected and tool discovery completed",
+        "error_code": "",
+        "http_status": 0,
+        "result": {
+          "catalog_generation": 7,
+          "schema_generation": 1,
+          "discovered_tools": 1,
+          "requests_completed": 2,
+          "server_state": "ready",
+          "enabled": true,
+          "connected": true,
+          "tools_discovered": true
+        }
+      },
+      {
+        "id": "op-75a7b93b34f4afb54dc6bcb4",
+        "sequence": 5,
+        "kind": "mcp_refresh",
+        "state": "failed",
+        "created_at": 1791569404973481,
+        "started_at": 1791569404973498,
+        "ended_at": 1791569405581493,
+        "terminal": true,
+        "cancel_requested": false,
+        "target": "timeout",
+        "message": "MCP connection test failed",
+        "error_code": "mcp_timeout",
+        "http_status": 0,
+        "result": {
+          "catalog_generation": 7,
+          "schema_generation": 0,
+          "discovered_tools": 0,
+          "requests_completed": 0,
+          "server_state": "failed",
+          "enabled": true,
+          "connected": false,
+          "tools_discovered": false
+        }
+      },
+      {
+        "id": "op-45cabacecb982b24307b7f76",
+        "sequence": 4,
+        "kind": "mcp_refresh",
+        "state": "failed",
+        "created_at": 1791569397333628,
+        "started_at": 1791569397333643,
+        "ended_at": 1791569397398857,
+        "terminal": true,
+        "cancel_requested": false,
+        "target": "remote",
+        "message": "MCP connection test failed",
+        "error_code": "mcp_remote_error",
+        "http_status": 0,
+        "result": {
+          "catalog_generation": 7,
+          "schema_generation": 0,
+          "discovered_tools": 0,
+          "requests_completed": 0,
+          "server_state": "failed",
+          "enabled": true,
+          "connected": false,
+          "tools_discovered": false
+        }
+      },
+      {
+        "id": "op-47beec0f9109d2cf6b97b200",
+        "sequence": 3,
+        "kind": "mcp_refresh",
+        "state": "failed",
+        "created_at": 1791569386950169,
+        "started_at": 1791569386950183,
+        "ended_at": 1791569387004947,
+        "terminal": true,
+        "cancel_requested": false,
+        "target": "response",
+        "message": "MCP connection test failed",
+        "error_code": "mcp_invalid_response",
+        "http_status": 0,
+        "result": {
+          "catalog_generation": 7,
+          "schema_generation": 0,
+          "discovered_tools": 0,
+          "requests_completed": 0,
+          "server_state": "failed",
+          "enabled": true,
+          "connected": false,
+          "tools_discovered": false
+        }
+      },
+      {
+        "id": "op-0121dee1cc522f88c883336a",
+        "sequence": 2,
+        "kind": "mcp_refresh",
+        "state": "failed",
+        "created_at": 1791569336937704,
+        "started_at": 1791569336937719,
+        "ended_at": 1791569337014707,
+        "terminal": true,
+        "cancel_requested": false,
+        "target": "protocol",
+        "message": "MCP connection test failed",
+        "error_code": "mcp_protocol_version",
+        "http_status": 0,
+        "result": {
+          "catalog_generation": 7,
+          "schema_generation": 0,
+          "discovered_tools": 0,
+          "requests_completed": 1,
+          "server_state": "failed",
+          "enabled": true,
+          "connected": false,
+          "tools_discovered": false
+        }
+      },
+      {
+        "id": "op-cdc24e1bffb99e6fe701cfbc",
+        "sequence": 1,
+        "kind": "mcp_refresh",
+        "state": "failed",
+        "created_at": 1791569306923291,
+        "started_at": 1791569306923307,
+        "ended_at": 1791569306924555,
+        "terminal": true,
+        "cancel_requested": false,
+        "target": "missing",
+        "message": "MCP connection test failed",
+        "error_code": "mcp_start_failed",
+        "http_status": 0,
+        "result": {
+          "catalog_generation": 7,
+          "schema_generation": 0,
+          "discovered_tools": 0,
+          "requests_completed": 0,
+          "server_state": "failed",
+          "enabled": true,
+          "connected": false,
+          "tools_discovered": false
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "frontend_passed": 950,
+  "reachable_modules": 161,
+  "contracts_passed": 124,
+  "operation_classification_cases": 16,
+  "strict_compile_passed": true,
+  "api_runtime_passed": true,
+  "fixture_exit_code": 0
+}

@@ -1,0 +1,102 @@
+Browser tab: 34, Title: "墨斗", URL: "http://127.0.0.1:59269/#/settings/mcp".
+0 AXWebArea 墨斗, URL: 127.0.0.1:59269/#/settings/mcp
+	1 link Description: 跳到设置内容, Value: 127.0.0.1:59269/#settings-content
+	2 container Agent 工作区
+		3 container MCP, ID: settings-workspace
+			4 container
+				5 button Description: 返回 Agent 工作区, ID: close-settings
+				6 heading MCP, Value: 1, ID: settings-title
+					7 text MCP
+				8 pop up button Description: 查看快捷键, ID: open-shortcuts
+			9 container 设置分类
+				10 text 基础设置
+				11 button 常规
+				12 button Agent 行为
+				13 button 模型管理
+				14 button 记忆管理
+				15 button 网络
+				16 button 诊断与存储
+				17 text 扩展能力
+				18 button Agent
+				19 button 扩展中心
+				20 button SubAgent
+				21 button 工具
+				22 button Skill
+				23 button MCP
+				24 button 命令
+				25 button C 模块
+				26 button 扩展工具包
+				27 button 权限
+				28 text 账号与统计
+				29 button 账号
+				30 button 远程控制
+			31 container
+				32 heading MCP, Value: 2
+					33 text MCP
+				34 button 新建
+				35 button 导入
+				36 button 刷新
+				37 search text field (settable) 按名称或说明筛选
+				38 text 保存配置不会启动程序。测试连接或模型调用时才建立连接；HTTP 使用 HTTPS。 MCP 服务器拒绝了初始化或工具发现请求，请检查服务器配置及日志。
+				39 heading missing, Value: 3
+					40 text missing
+				41 text Disposable MCP failure advice acceptance
+				42 text mcp/missing.json
+				43 text 已启用 连接失败 0 个工具
+				44 button 编辑
+				45 button 停用
+				46 button 导出
+				47 button 测试连接
+				48 button 删除
+				49 heading protocol, Value: 3
+					50 text protocol
+				51 text Disposable MCP failure advice acceptance
+				52 text mcp/protocol.json
+				53 text 已启用 连接失败 0 个工具
+				54 button 编辑
+				55 button 停用
+				56 button 导出
+				57 button 测试连接
+				58 button 删除
+				59 heading remote, Value: 3
+					60 text remote
+				61 text Disposable MCP failure advice acceptance
+				62 text mcp/remote.json
+				63 text 已启用 连接失败 0 个工具
+				64 button 编辑
+				65 button 停用
+				66 button 导出
+				67 button 测试连接
+				68 button 删除
+				69 heading response, Value: 3
+					70 text response
+				71 text Disposable MCP failure advice acceptance
+				72 text mcp/response.json
+				73 text 已启用 连接失败 0 个工具
+				74 button 编辑
+				75 button 停用
+				76 button 导出
+				77 button 测试连接
+				78 button 删除
+				79 heading timeout, Value: 3
+					80 text timeout
+				81 text Disposable MCP failure advice acceptance
+				82 text mcp/timeout.json
+				83 text 已启用 未连接 0 个工具
+				84 button 编辑
+				85 button 停用
+				86 button 导出
+				87 button 测试连接
+				88 button 删除
+				89 heading working, Value: 3
+					90 text working
+				91 text Disposable MCP failure advice acceptance
+				92 text mcp/working.json
+				93 text 已启用 未连接 0 个工具
+				94 button 编辑
+				95 button 停用
+				96 button 导出
+				97 button 测试连接
+				98 button 删除
+
+The focused UI element is 0 AXWebArea 墨斗, URL: 127.0.0.1:59269/#/settings/mcp

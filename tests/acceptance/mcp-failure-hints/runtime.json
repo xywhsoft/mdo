@@ -1,0 +1,19 @@
+{
+  "passed": true,
+  "model_requests": {
+    "custom_tool": 2,
+    "skill": 4,
+    "delegation": 3,
+    "profiles": 3,
+    "mcp": 4
+  },
+  "final_model_errors": 0,
+  "mcp_2025_methods": [
+    "initialize",
+    "notifications/initialized",
+    "tools/list",
+    "tools/call"
+  ],
+  "mcp_schemas_lazy": true,
+  "packed_sha256": "22a6033ed58463a0d8e3dbb73788be9f7449314df94cd137f239db8efefde53a"
+}

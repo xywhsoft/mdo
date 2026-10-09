@@ -1,0 +1,109 @@
+✖ terminal MCP failure reasons are localized and never reflect provider text (26.1882ms)
+✖ HTTP authentication, permission, limit and service failures have distinct final advice (0.8062ms)
+✖ legacy or unknown error codes remain safe and do not start a retry (0.6022ms)
+✖ malformed optional diagnostic metadata cannot become final advice (1.0869ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 0
+ℹ fail 4
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 107.279
+
+✖ failing tests:
+
+test at .build\conversation-acceptance\mcp-failure-hints\baseline-observer\tests\test_resource_operation_errors.mjs:23:1
+✖ terminal MCP failure reasons are localized and never reflect provider text (26.1882ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+
+  + '连接测试失败，请检查服务器配置。 MCP protocol error: qa-private-credential-must-not-appear'
+  - '无法启动 MCP 程序，请检查程序路径、工作目录和环境配置。'
+
+      at Object.<anonymous> (file:///D:/GIT/mdo/.build/conversation-acceptance/mcp-failure-hints/baseline-observer/tests/test_resource_operation_errors.mjs:36:16)
+      at expectedException (node:assert:578:17)
+      at expectsError (node:assert:703:21)
+      at strict.rejects (node:assert:769:3)
+      at async TestContext.<anonymous> (file:///D:/GIT/mdo/.build/conversation-acceptance/mcp-failure-hints/baseline-observer/tests/test_resource_operation_errors.mjs:34:7)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '连接测试失败，请检查服务器配置。 MCP protocol error: qa-private-credential-must-not-appear',
+    expected: '无法启动 MCP 程序，请检查程序路径、工作目录和环境配置。',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at .build\conversation-acceptance\mcp-failure-hints\baseline-observer\tests\test_resource_operation_errors.mjs:44:1
+✖ HTTP authentication, permission, limit and service failures have distinct final advice (0.8062ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /凭据/. Input:
+
+  '连接测试失败，请检查服务器配置。 MCP protocol error: qa-private-credential-must-not-appear'
+
+      at Object.<anonymous> (file:///D:/GIT/mdo/.build/conversation-acceptance/mcp-failure-hints/baseline-observer/tests/test_resource_operation_errors.mjs:50:14)
+      at expectedException (node:assert:578:17)
+      at expectsError (node:assert:703:21)
+      at strict.rejects (node:assert:769:3)
+      at async TestContext.<anonymous> (file:///D:/GIT/mdo/.build/conversation-acceptance/mcp-failure-hints/baseline-observer/tests/test_resource_operation_errors.mjs:49:5)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '连接测试失败，请检查服务器配置。 MCP protocol error: qa-private-credential-must-not-appear',
+    expected: /凭据/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at .build\conversation-acceptance\mcp-failure-hints\baseline-observer\tests\test_resource_operation_errors.mjs:56:1
+✖ legacy or unknown error codes remain safe and do not start a retry (0.6022ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+
+  + '连接测试失败，请检查服务器配置。 MCP protocol error: qa-private-credential-must-not-appear'
+  - '连接测试失败，请检查服务器配置。'
+
+      at Object.<anonymous> (file:///D:/GIT/mdo/.build/conversation-acceptance/mcp-failure-hints/baseline-observer/tests/test_resource_operation_errors.mjs:61:14)
+      at expectedException (node:assert:578:17)
+      at expectsError (node:assert:703:21)
+      at strict.rejects (node:assert:769:3)
+      at async TestContext.<anonymous> (file:///D:/GIT/mdo/.build/conversation-acceptance/mcp-failure-hints/baseline-observer/tests/test_resource_operation_errors.mjs:60:5)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '连接测试失败，请检查服务器配置。 MCP protocol error: qa-private-credential-must-not-appear',
+    expected: '连接测试失败，请检查服务器配置。',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at .build\conversation-acceptance\mcp-failure-hints\baseline-observer\tests\test_resource_operation_errors.mjs:68:1
+✖ malformed optional diagnostic metadata cannot become final advice (1.0869ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+    Comparison {
+  +   code: 'resource_operation_failed'
+  -   code: 'resource_operation_invalid'
+    }
+
+      at async TestContext.<anonymous> (file:///D:/GIT/mdo/.build/conversation-acceptance/mcp-failure-hints/baseline-observer/tests/test_resource_operation_errors.mjs:73:5)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: ApiError: 连接测试失败，请检查服务器配置。 MCP protocol error: qa-private-credential-must-not-appear
+        at awaitResourceOperation (file:///D:/GIT/mdo/.build/conversation-acceptance/mcp-failure-hints/baseline-observer/app/web/js/state/resource-operation.js:58:13)
+        at refreshMcp (file:///D:/GIT/mdo/.build/conversation-acceptance/mcp-failure-hints/baseline-observer/app/web/js/state/resources.js:77:10)
+        at async waitForActual (node:assert:646:5)
+        at async strict.rejects (node:assert:769:25)
+        at async TestContext.<anonymous> (file:///D:/GIT/mdo/.build/conversation-acceptance/mcp-failure-hints/baseline-observer/tests/test_resource_operation_errors.mjs:73:5)
+        at async Test.run (node:internal/test_runner/test:1389:7)
+        at async Test.processPendingSubtests (node:internal/test_runner/test:960:7),
+    expected: { code: 'resource_operation_invalid' },
+    operator: 'rejects',
+    diff: 'simple'
+  }
