@@ -1,0 +1,27 @@
+{
+  "mdo_source_commit": "c9d0809d2f252d7de12d76e9b591fe65f67aaabe",
+  "updates": [
+    {
+      "path": "D:\\GIT\\mdo\\mdo.exe",
+      "previous_sha256": "dfbfb94ae09fad2917e16577ca9574f7fe1d9b3d6b2f0e63d7bcc2190c90a096",
+      "sha256": "5d509b0ecce14ec19f60d10acee0e80d920846f2ea5b3f53e181da62c6df96e1",
+      "bytes": 4559672,
+      "backup": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\recovery-draft-copy\\install-before\\workspace.exe",
+      "home_inventory_files": 12351,
+      "home_metadata_inventory_unchanged": true,
+      "app_launched": false
+    },
+    {
+      "path": "E:\\software\\mdo\\mdo.exe",
+      "previous_sha256": "dfbfb94ae09fad2917e16577ca9574f7fe1d9b3d6b2f0e63d7bcc2190c90a096",
+      "sha256": "5d509b0ecce14ec19f60d10acee0e80d920846f2ea5b3f53e181da62c6df96e1",
+      "bytes": 4559672,
+      "backup": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\recovery-draft-copy\\install-before\\e-install.exe",
+      "home_inventory_files": 3000,
+      "home_metadata_inventory_unchanged": true,
+      "app_launched": false
+    }
+  ],
+  "website_published": false,
+  "phone_installed": false
+}

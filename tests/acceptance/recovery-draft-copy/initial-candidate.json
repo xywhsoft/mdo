@@ -1,0 +1,28 @@
+{
+  "mdo_source_commit": "c9d0809d2f252d7de12d76e9b591fe65f67aaabe",
+  "bytes": 4559672,
+  "sha256": "5d509b0ecce14ec19f60d10acee0e80d920846f2ea5b3f53e181da62c6df96e1",
+  "source_worktree_clean": true,
+  "xs_commit": "93ef1f61e3203cfd71868ae1c4d8a4743d96d9c8",
+  "pack_sha256": "df1dfb09ac79f7812f756fadfc39be803663e66b2628f1655f5fe9ed4f057a20",
+  "production_files": {
+    "web/js/features/projects/project-purge-recovery-panel.js": "477e8282d4ed4b4c6ca09ee42fa154b2c9e19c6d20f22176e19f27017f734ffc",
+    "web/js/utils/clipboard.js": "f046a89fb5a7d52cc088d0997c8f088d26ab02ed58a34f607694afd54bb2f56f"
+  },
+  "fixture_in_pack": false,
+  "source_component_check": "success toast, system clipboard not verified",
+  "related_node_tests": 39,
+  "frontend_modules": 164,
+  "android": {
+    "bytes": 4191469,
+    "sha256": "65e6693053cdebc8f3c8a6d905a255316da085a78ec0cffd3abd2d10d2b7a6ba",
+    "package": "org.xleaves.mdo.qa.stability",
+    "exact_windows_pack": true,
+    "exact_previously_aligned_native": true,
+    "native_sha256": "9baa4515c93fd1f0760b7dc74a3f96fbdbacd3172bf0fb74b1cfcfd51b83b2c5",
+    "native_sdk_receipt_matches": true,
+    "signing_v2_v3": true,
+    "zip_alignment_16kb": true,
+    "phone_installed_or_tested": false
+  }
+}

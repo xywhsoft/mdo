@@ -32,7 +32,10 @@ export async function copyText(value) {
   input.readOnly = true;
   input.style.position = "fixed";
   input.style.opacity = "0";
-  document.body.append(input);
+  // A modal dialog makes the rest of the document inert. The temporary
+  // field must stay inside the focused dialog to receive its selection.
+  const container = previousFocus?.closest?.("dialog[open]") ?? document.body;
+  container.append(input);
   let copied = false;
   try {
     input.select();

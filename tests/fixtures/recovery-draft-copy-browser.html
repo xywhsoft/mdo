@@ -30,6 +30,7 @@ dialog { max-width: 700px; }
 <button id="project-purge-recovery-close">关闭</button>
 </section></dialog>
 <div id="toast-region" role="status"></div>
+<p id="copy-selection" role="status">尚未观察兼容复制事件</p>
 <label for="paste">复制后粘贴核对</label><textarea id="paste"></textarea>
 <p id="result" role="status">尚未核对</p>
 <script type="module">
@@ -49,6 +50,20 @@ const navigation = { get: () => ({ view: "workspace" }), subscribe() {} };
 createProjectPurgeRecoveryPanel({ panel: document.querySelector("#panel"),
   notice: document.querySelector("#notice"), dialog: document.querySelector("#dialog"),
   recovery, navigation, unsentSnapshots: () => snapshots });
+
+// Observe the browser's copy event without supplying clipboard data. A modal
+// dialog must not leave the temporary text field outside its inert subtree.
+document.addEventListener("copy", () => {
+  const field = document.activeElement;
+  const selected = field?.tagName === "TEXTAREA"
+    ? field.value.slice(field.selectionStart, field.selectionEnd)
+    : document.getSelection()?.toString();
+  const result = document.querySelector("#copy-selection");
+  const passed = selected === JSON.stringify(snapshots, null, 2);
+  result.dataset.passed = String(passed);
+  result.textContent = passed ? "复制事件选中的完整草稿一致；系统粘贴仍待核对"
+    : "复制事件没有选中完整草稿";
+});
 document.querySelector("#paste").addEventListener("input", event => {
   const passed = event.target.value === JSON.stringify(snapshots, null, 2);
   const result = document.querySelector("#result");
