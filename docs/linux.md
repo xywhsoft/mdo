@@ -12,7 +12,7 @@ ARM64 设备测试。Windows 使用 MinGW GCC；musl 是 Linux 的 libc，不适
 软件包签名及 Python 源码 SHA-256，不替换宿主系统的 libc：
 
 ```sh
-sudo apt install python3 debootstrap debian-archive-keyring
+sudo apt install python3 debootstrap
 sudo sh tools/linux/bootstrap_baseline.sh /var/cache/mdo-linux-buster
 sudo python3 tools/build_linux.py --baseline-root /var/cache/mdo-linux-buster
 ```

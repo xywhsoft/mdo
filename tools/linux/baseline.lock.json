@@ -4,6 +4,12 @@
   "suite": "buster",
   "mirror": "https://archive.debian.org/debian",
   "glibc_max": "2.28",
+  "keyring": {
+    "package": "debian-archive-keyring",
+    "version": "2023.3+deb12u2",
+    "source": "https://deb.debian.org/debian/pool/main/d/debian-archive-keyring/",
+    "sha256": "506b815cbb32d9b6066b4a2aa524071e071761e7e7f68c3ac74f3061ba852017"
+  },
   "python": {
     "version": "3.12.12",
     "url": "https://www.python.org/ftp/python/3.12.12/Python-3.12.12.tar.xz",

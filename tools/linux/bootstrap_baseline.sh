@@ -17,13 +17,17 @@ root=$(realpath -m "$root")
 case "$root" in /|/usr|/usr/*|/etc|/etc/*|/bin|/lib|/lib64|/opt)
     printf '%s\n' 'Use a dedicated build cache directory, not a system directory.' >&2; exit 1 ;;
 esac
-keyring=${2:-/usr/share/keyrings/debian-archive-keyring.gpg}
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+keyring=${2:-$script_dir/debian-archive-keyring.gpg}
 if [ ! -f "$keyring" ]; then
-    printf '%s\n' 'Install debootstrap and debian-archive-keyring, or pass the archive keyring path.' >&2
+    printf '%s\n' 'Bundled Debian archive keyring is missing; restore it or pass an archive keyring path.' >&2
     exit 1
 fi
-script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 lock="$script_dir/baseline.lock.json"
+if [ "$#" -lt 2 ]; then
+    key_digest=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["keyring"]["sha256"])' "$lock")
+    printf '%s  %s\n' "$key_digest" "$keyring" | sha256sum --check -
+fi
 version=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["python"]["version"])' "$lock")
 url=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["python"]["url"])' "$lock")
 digest=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["python"]["sha256"])' "$lock")

@@ -119,7 +119,7 @@ def main(argv: list[str] | None = None) -> int:
         if os.name == "nt":
             if not args.wsl:
                 raise build_mdo.BuildError("Linux builds require Linux; on Windows pass --wsl")
-            command = ["wsl", "-e", "python3", wsl_path(Path(__file__)),
+            command = ["wsl", *(["--user", "root"] if args.baseline_root else []), "-e", "python3", wsl_path(Path(__file__)),
                        "--xserver-root", wsl_path(source), "--output-dir", wsl_path(args.output_dir),
                        "--edition", args.edition, "--libc", args.libc,
                        "--cc", args.cc, "--musl-cc", args.musl_cc, "--gui-cc", args.gui_cc]
