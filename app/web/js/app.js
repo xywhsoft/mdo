@@ -33,6 +33,7 @@ import { navigation } from "./state/navigation.js";
 import { createSessionList } from "./features/sessions/session-list.js";
 import { createSessionSearch } from "./features/sessions/session-search.js";
 import { createSessionActionMenu } from "./features/sessions/session-action-menu.js";
+import { createSessionHistoryRead } from "./features/sessions/session-history-read.js";
 import { rememberSessionActionFocus } from "./features/sessions/session-action-focus.js";
 import { sessionActionDialogCopy, sessionActionToast, sessionForkTitle } from "./features/sessions/session-actions.js";
 import { SESSION_TITLE_UTF8_LIMIT, sessionTitleUtf8Bytes } from "./features/sessions/session-title.js";
@@ -552,6 +553,7 @@ export async function boot() {
     }
   }
 
+  const sessionHistoryRead = createSessionHistoryRead({ navigation, readHistory: loadSessionHistory });
   let conversationSearch;
   function isCurrentMessageOwner(owner, version = routeVersion) {
     const route = navigation.get();
@@ -578,7 +580,8 @@ export async function boot() {
         throw new Error(t("sessionAction.forkWaitForRun", {}, "请在当前运行结束后分叉会话"));
       if (session.status !== "active")
         throw new Error(t("composer.readOnly", {}, "该会话不可运行；请先恢复到进行中"));
-      const history = await loadSessionHistory(session);
+      const history = await sessionHistoryRead.read(session, {
+        isCurrent: () => isCurrentMessageOwner(owner, version) });
       if (!isCurrentMessageOwner(owner, version))
         throw new Error(t("messageAction.ownerChanged", {}, "会话已切换，请重新选择消息"));
       if (sessionDetailStore.get().data?.status !== "active")
@@ -2285,7 +2288,7 @@ export async function boot() {
     }
     if (!["rename", "trash", "fork", "truncate", "clear"].includes(action)) return applySessionAction(action, session);
     let history = null;
-    if (action === "fork" || action === "truncate") history = await loadSessionHistory(session);
+    if (action === "fork" || action === "truncate") history = await sessionHistoryRead.read(session);
     pendingSessionAction = { action, session: history ? { ...session, etag: history.etag, revision: history.revision } : session };
     const hasTitle = action === "rename" || action === "fork";
     const hasSequence = action === "fork" || action === "truncate";

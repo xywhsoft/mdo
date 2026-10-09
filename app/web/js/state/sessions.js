@@ -92,9 +92,31 @@ export async function restoreSession(session) {
   return refreshAfter(await api.post(`${endpoint(session)}/restore`, undefined, { ifMatch: etag(session) }));
 }
 
-export async function loadSessionHistory(session, options = {}) {
-  const response = await api.get(`${endpoint(session)}/history`, options);
-  return { ...response.data, etag: response.etag };
+export async function loadSessionHistory(session, { signal,
+  createRecovery = createRequestRecovery } = {}) {
+  const project = resourceId(session.project_id, "project"), id = resourceId(session.id, "session");
+  const path = `${endpoint({ project_id: project, id })}/history`;
+  const read = async signal => {
+    const response = await api.get(path, { signal });
+    const data = response.data;
+    if (data?.project_id !== project || data?.session_id !== id ||
+        !Number.isSafeInteger(data.revision) || data.revision < 1 ||
+        !Number.isSafeInteger(data.last_sequence) || data.last_sequence < 0 ||
+        response.etag !== `"mdo-session-${id}-${data.revision}"`)
+      throw new ApiError("Invalid session history boundary", { code: "session_history_unavailable" });
+    return { ...data, etag: response.etag };
+  };
+  // Edit/retry already owns a shared deadline. Its supplied signal requests
+  // one attempt, avoiding nested recovery budgets around the same history GET.
+  if (signal) return read(signal);
+  const recovery = createRecovery();
+  try { return await recovery.request(read); }
+  catch (error) {
+    if (!isTransientReadError(error)) throw error;
+    const final = new ApiError("The session history boundary could not be read", {
+      code: "session_history_unavailable", status: error.status });
+    final.cause = error; throw final;
+  } finally { recovery.dispose(); }
 }
 
 function sequence(value) {

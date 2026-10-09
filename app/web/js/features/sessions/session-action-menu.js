@@ -50,7 +50,7 @@ export function createSessionActionMenu({ control, button, menu, navigation,
         close();
         button.focus({ preventScroll: true });
         try { await onAction(action.name, selected); }
-        catch (error) { toast(errorMessage(error), "error"); }
+        catch (error) { if (error?.name !== "AbortError") toast(errorMessage(error), "error"); }
       });
       menu.append(item);
     }

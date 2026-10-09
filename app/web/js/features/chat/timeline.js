@@ -873,7 +873,7 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
       busySessions.add(key);
       syncBusy();
       try { await action(); }
-      catch (error) { toast(errorMessage(error), "error"); }
+      catch (error) { if (error?.name !== "AbortError") toast(errorMessage(error), "error"); }
       finally { busySessions.delete(key); syncBusy(); }
     },
   };

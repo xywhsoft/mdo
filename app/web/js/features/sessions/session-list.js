@@ -156,7 +156,7 @@ export function createSessionList({ container, count, filter, searchButton, stor
       const current = currentSession(sessionKey(session));
       if (!current) return;
       try { await onAction(action.name, current); }
-      catch (error) { toast(errorMessage(error), "error"); }
+      catch (error) { if (error?.name !== "AbortError") toast(errorMessage(error), "error"); }
     });
     return button;
   }

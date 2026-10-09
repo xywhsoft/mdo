@@ -97,7 +97,7 @@ export function createSlashCommands({ composer, input, onExecute, contextKey = (
     input.value = "";
     input.dispatchEvent(new Event("input", { bubbles: true }));
     try { await onExecute(command.name); }
-    catch (error) { toast(errorMessage(error), "error"); }
+    catch (error) { if (error?.name !== "AbortError") toast(errorMessage(error), "error"); }
   }
 
   function update(fetch = true) {
