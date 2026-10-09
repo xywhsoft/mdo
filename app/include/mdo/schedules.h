@@ -126,7 +126,19 @@ typedef struct MdoScheduleHistoryEntry {
     xwork_result Result;
     bool TextTruncated;
     char Text[MDO_SCHEDULE_HISTORY_PREVIEW_CAPACITY];
+    char ModelErrorKind[48];
+    uint32 ModelHttpStatus;
+    uint32 ModelAttempts;
 } MdoScheduleHistoryEntry;
+
+/* Optional final cause, independent of provider prose. Existing history and
+ * callers without structured model errors remain readable. */
+typedef struct MdoScheduleResultDetails {
+    uint32 Size;
+    char ModelErrorKind[48];
+    uint32 ModelHttpStatus;
+    uint32 ModelAttempts;
+} MdoScheduleResultDetails;
 
 typedef struct MdoScheduleExecutorOptions {
     uint32 Size;
@@ -198,6 +210,9 @@ bool MdoScheduleFinishTask(uint64 TaskId, xwork_result Result,
  * A task already cancelled through xwork is recorded as cancelled. */
 bool MdoScheduleFinishTaskWithRun(uint64 TaskId, uint64 AgentRunId,
     xwork_result Result, const char* ResultText, xwork_error* Error);
+bool MdoScheduleFinishTaskWithRunDetails(uint64 TaskId, uint64 AgentRunId,
+    xwork_result Result, const char* ResultText,
+    const MdoScheduleResultDetails* Details, xwork_error* Error);
 bool MdoScheduleHistoryRecent(const char* ScheduleId,
     MdoScheduleHistoryEntry* Items, size_t Capacity, size_t* Count,
     bool* HasMore, xwork_error* Error);

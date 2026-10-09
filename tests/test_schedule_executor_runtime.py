@@ -438,6 +438,79 @@ done:
     return ok;
 }
 
+static unsigned FailureCalls;
+static xllm_result FailureComplete(void *data, const xllm_request *request,
+    const xllm_stream_callbacks *callbacks, xllm_response **response, xllm_error *error) {
+    (void)data; (void)request; (void)callbacks;
+    ++FailureCalls; *response = NULL;
+    xllmErrorInit(error);
+    error->eCode = XLLM_ERROR_RATE_LIMIT;
+    error->iHttpStatus = 429;
+    error->tDiagnostics.uAttemptCount = 1u;
+    snprintf(error->sProviderCode, sizeof(error->sProviderCode), "%s", "daily_token_limit");
+    snprintf(error->sMessage, sizeof(error->sMessage), "%s", "private provider detail");
+    return XLLM_RESULT_ERROR;
+}
+
+static bool ExecutorErrorHistoryProbe(xwork_runtime *runtime) {
+    MdoScheduleCreateOptions create;
+    MdoScheduleExecutorOptions options;
+    MdoScheduleHistoryEntry entry[1];
+    xwork_error error;
+    size_t started = 0u, completed = 0u, count = 0u;
+    bool more = false;
+    unsigned i;
+    const int64 now = 1700000000000000LL;
+    MdoScheduleCreateOptionsInit(&create);
+    create.Id = "model-failure"; create.Label = "Quota failure";
+    create.ProjectId = "project-alpha"; create.AgentId = "mdo.default";
+    create.ModelId = "ornith-1.5-35b"; create.Input = "execute scheduled review";
+    create.StartAt = now; create.WorkspaceRoot = ".";
+    if (!MdoScheduleCreate(&create, NULL, &error)) return false;
+    MdoScheduleExecutorOptionsInit(&options);
+    options.Automatic = false; options.OnModelComplete = FailureComplete;
+    if (!MdoScheduleExecutorInit(runtime, &options, &error) ||
+        !MdoScheduleExecutorPump(now, &started, &completed, &error)) return false;
+    for (i = 0u; i < 200u && completed == 0u; ++i) {
+        xrtSleep(5u);
+        if (!MdoScheduleExecutorPump(now, &started, &completed, &error)) return false;
+    }
+    if (completed != 1u || FailureCalls != 1u ||
+        !MdoScheduleHistoryRecent("model-failure", entry, 1u, &count, &more, &error) ||
+        count != 1u || entry[0].Result != XWORK_RESULT_ERROR ||
+        strcmp(entry[0].ModelErrorKind, "daily_token_limit") ||
+        entry[0].ModelHttpStatus != 429u || entry[0].ModelAttempts != 1u ||
+        strstr(entry[0].Text, "private provider") != NULL) return false;
+    MdoScheduleExecutorUnit();
+    MdoScheduleManagerUnit();
+    if (!MdoScheduleManagerInit(runtime) ||
+        !MdoScheduleHistoryRecent("model-failure", entry, 1u, &count, &more, &error) ||
+        count != 1u || strcmp(entry[0].ModelErrorKind, "daily_token_limit")) return false;
+    const char *details[] = {
+        "",
+        ",\"model_error_kind\":\"daily_token_limit\",\"model_http_status\":429,\"model_attempts\":1",
+        ",\"model_error_kind\":\"daily_token_limit\"",
+        ",\"model_error_kind\":\"daily_token_limit\",\"model_http_status\":700,\"model_attempts\":1",
+        ",\"model_error_kind\":\"daily_token_limit\",\"model_http_status\":429,\"model_attempts\":4294967296",
+        ",\"model_error_kind\":\"daily_token_limit\\u0000other\",\"model_http_status\":429,\"model_attempts\":1",
+        ",\"model_error_kind\":\"Provider prose\",\"model_http_status\":429,\"model_attempts\":1",
+        ",\"model_error_kind\":\"future_failure\",\"model_http_status\":0,\"model_attempts\":0",
+    };
+    for (i = 0u; i < sizeof(details) / sizeof(details[0]); ++i) {
+        char line[1024];
+        snprintf(line, sizeof(line), "{\"schema_version\":1,\"task_id\":1,\"agent_run_id\":1,"
+            "\"schedule_id\":\"model-failure\",\"scheduled_at_us\":1,\"finished_at_us\":2,"
+            "\"result\":-1,\"text\":\"legacy result\"%s}", details[i]);
+        memset(entry, 0, sizeof(entry));
+        bool parsed = MdoSchedulesHistoryParse("model-failure", xrtStrView(line), entry);
+        if (parsed != (i == 0u || i == 1u || i == 7u)) return false;
+        if (i == 0u && (entry[0].ModelErrorKind[0] || entry[0].ModelHttpStatus || entry[0].ModelAttempts)) return false;
+    }
+    printf("schedule_error_history=1\n");
+    printf("schedule_error_metadata_boundaries=8\n");
+    return true;
+}
+
 void ServiceInit(XS_HostInfo *host) {
     const int64 start = 1700000000000000LL;
     xwork_runtime_config runtime_config;
@@ -475,6 +548,10 @@ void ServiceInit(XS_HostInfo *host) {
     }
     if (getenv("MDO_SCHEDULE_CANCEL_ONLY") != NULL) {
         if (!ExecutorCancellationProbe(runtime)) printf("cancel_error=1\n");
+        printf("probe_done=1\n"); goto done;
+    }
+    if (getenv("MDO_SCHEDULE_ERROR_ONLY") != NULL) {
+        if (!ExecutorErrorHistoryProbe(runtime)) printf("error_history_failure=1\n");
         printf("probe_done=1\n"); goto done;
     }
     MdoScheduleCreateOptionsInit(&create);
@@ -642,7 +719,8 @@ def write_site(site: Path, memory_enabled: bool = True) -> None:
 
 
 def run_probe(host: Path, site: Path, home: Path, owner_only: bool = False,
-              cancel_only: bool = False, workspace_only: bool = False) -> str:
+              cancel_only: bool = False, workspace_only: bool = False,
+              error_only: bool = False) -> str:
     env = os.environ.copy()
     if owner_only:
         env["MDO_SCHEDULE_OWNER_ONLY"] = "1"
@@ -650,6 +728,8 @@ def run_probe(host: Path, site: Path, home: Path, owner_only: bool = False,
         env["MDO_SCHEDULE_CANCEL_ONLY"] = "1"
     if workspace_only:
         env["MDO_SCHEDULE_WORKSPACE_ONLY"] = "1"
+    if error_only:
+        env["MDO_SCHEDULE_ERROR_ONLY"] = "1"
     process = subprocess.Popen(
         [str(host), "xs.json", "--", "--home", str(home)], cwd=site,
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
@@ -703,6 +783,18 @@ def main() -> int:
         workspace_output = run_probe(host, site, workspace_home, workspace_only=True)
         assert "schedule_default_workspace=1" in workspace_output, workspace_output
         assert (workspace_home / "workspace").is_dir()
+        error_home = base / "error-home"
+        error_output = run_probe(host, site, error_home, error_only=True)
+        assert "error_history_failure" not in error_output, error_output
+        assert "schedule_error_history=1" in error_output, error_output
+        assert "schedule_error_metadata_boundaries=8" in error_output, error_output
+        failure_history = [json.loads(line) for line in
+            (error_home / "schedules/history/model-failure.jsonl").read_text(encoding="utf-8").splitlines()]
+        assert len(failure_history) == 1, failure_history
+        assert failure_history[0]["model_error_kind"] == "daily_token_limit", failure_history
+        assert failure_history[0]["model_http_status"] == 429, failure_history
+        assert failure_history[0]["model_attempts"] == 1, failure_history
+        print("schedule error history, reload and 8 metadata boundaries: PASS")
         cancel_home = base / "cancel-home"
         cancel_output = run_probe(host, site, cancel_home, cancel_only=True)
         assert "cancel_error=" not in cancel_output, cancel_output
@@ -716,6 +808,8 @@ def main() -> int:
                     encoding="utf-8").splitlines()]
             assert len(records) == 1 and records[0]["result"] == result, records
             assert records[0]["agent_run_id"] > 0, records
+            assert not any(key in records[0] for key in
+                ("model_error_kind", "model_http_status", "model_attempts")), records
         owner_output = run_probe(host, owner_site, owner_home, owner_only=True)
         assert "owner_lease_error=" not in owner_output, owner_output
         for label in ("creation", "failed_start", "retained", "released", "shutdown"):

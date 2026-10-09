@@ -2176,9 +2176,27 @@ done:
     return Ok;
 }
 
+static bool MdoSchedulesResultDetailsValid(const MdoScheduleResultDetails* Details)
+{
+    size_t i;
+    if ( Details == NULL ) return true;
+    if ( Details->Size < sizeof(*Details) ||
+         !MdoSchedulesText(Details->ModelErrorKind, sizeof(Details->ModelErrorKind), true) ||
+         (Details->ModelHttpStatus != 0u && (Details->ModelHttpStatus < 100u ||
+          Details->ModelHttpStatus > 599u)) ) return false;
+    if ( !Details->ModelErrorKind[0] )
+        return Details->ModelHttpStatus == 0u && Details->ModelAttempts == 0u;
+    for ( i = 0u; Details->ModelErrorKind[i]; ++i ) {
+        char Value = Details->ModelErrorKind[i];
+        if ( (Value < 'a' || Value > 'z') && (Value < '0' || Value > '9') &&
+             Value != '_' ) return false;
+    }
+    return true;
+}
+
 static bool MdoSchedulesHistory(uint64 TaskId, uint64 AgentRunId,
     const xwork_task_info* Task, xwork_result Result, const char* ResultText,
-    xwork_error* Error)
+    const MdoScheduleResultDetails* Details, xwork_error* Error)
 {
     xvalue* Root = xrtValueObject();
     char Path[MDO_SCHEDULE_PATH_CAPACITY];
@@ -2197,6 +2215,11 @@ static bool MdoSchedulesHistory(uint64 TaskId, uint64 AgentRunId,
          !MdoSchedulesObjectTake(Root, "result", xrtValueInt(Result)) ||
          !MdoSchedulesObjectString(Root, "text",
             ResultText != NULL ? ResultText : "") ) goto memory;
+    if ( Result != XWORK_RESULT_OK && Result != XWORK_RESULT_CANCELLED &&
+         Details != NULL && Details->ModelErrorKind[0] &&
+         (!MdoSchedulesObjectString(Root, "model_error_kind", Details->ModelErrorKind) ||
+          !MdoSchedulesObjectTake(Root, "model_http_status", xrtValueUInt(Details->ModelHttpStatus)) ||
+          !MdoSchedulesObjectTake(Root, "model_attempts", xrtValueUInt(Details->ModelAttempts))) ) goto memory;
     Json = xrtJsonStringify(Root, false, &Size);
     if ( Json == NULL || Size > MDO_SCHEDULE_RESULT_LIMIT + 4096u ) goto memory;
     Ok = MdoSchedulesAppendBounded(Path, Json, Size, Error);
@@ -2210,8 +2233,9 @@ done:
     return Ok;
 }
 
-bool MdoScheduleFinishTaskWithRun(uint64 TaskId, uint64 AgentRunId,
-    xwork_result Result, const char* ResultText, xwork_error* Error)
+bool MdoScheduleFinishTaskWithRunDetails(uint64 TaskId, uint64 AgentRunId,
+    xwork_result Result, const char* ResultText,
+    const MdoScheduleResultDetails* Details, xwork_error* Error)
 {
     xwork_task_snapshot* Snapshot = NULL;
     xwork_task_info Task;
@@ -2224,6 +2248,7 @@ bool MdoScheduleFinishTaskWithRun(uint64 TaskId, uint64 AgentRunId,
          (Result != XWORK_RESULT_OK && Result != XWORK_RESULT_ERROR &&
           Result != XWORK_RESULT_CANCELLED && Result != XWORK_RESULT_LIMIT &&
           Result != XWORK_RESULT_TIMEOUT) ||
+         !MdoSchedulesResultDetailsValid(Details) ||
          !MdoSchedulesText(ResultText != NULL ? ResultText : "",
             MDO_SCHEDULE_RESULT_LIMIT + 1u, true) ) {
         MdoSchedulesError(Error, XWORK_ERROR_INVALID_ARGUMENT,
@@ -2273,7 +2298,7 @@ bool MdoScheduleFinishTaskWithRun(uint64 TaskId, uint64 AgentRunId,
             Result, ResultText, Error) ) goto done;
     Pin->RuntimeFinished = true;
     if ( !MdoSchedulesHistory(TaskId, AgentRunId, &Task, Result, ResultText,
-            Error) ) {
+            Details, Error) ) {
         g_MdoSchedules.PersistenceFault = true;
         goto done;
     }
@@ -2287,6 +2312,13 @@ done:
     MdoSchedulesTaskLeaseFree(Removed);
     MdoProjectLeaseRelease(Lease);
     return Ok;
+}
+
+bool MdoScheduleFinishTaskWithRun(uint64 TaskId, uint64 AgentRunId,
+    xwork_result Result, const char* ResultText, xwork_error* Error)
+{
+    return MdoScheduleFinishTaskWithRunDetails(TaskId, AgentRunId, Result,
+        ResultText, NULL, Error);
 }
 
 bool MdoScheduleFinishTask(uint64 TaskId, xwork_result Result,
@@ -2325,6 +2357,30 @@ static bool MdoSchedulesHistoryParse(const char* ScheduleId, xstrview Line,
         Text.Size <= MDO_SCHEDULE_RESULT_LIMIT &&
         xrtUtf8Valid(Text, NULL);
     if ( Ok ) {
+        MdoScheduleResultDetails Details = {0};
+        xstrview Kind;
+        uint64 Status = 0u, Attempts = 0u;
+        Details.Size = sizeof(Details);
+        if ( xrtValueObjectGet(Root, XRT_STR_LITERAL("model_error_kind")) != NULL ||
+             xrtValueObjectGet(Root, XRT_STR_LITERAL("model_http_status")) != NULL ||
+             xrtValueObjectGet(Root, XRT_STR_LITERAL("model_attempts")) != NULL ) {
+            Ok = Result != XWORK_RESULT_OK && Result != XWORK_RESULT_CANCELLED &&
+                MdoSchedulesValueString(Root, "model_error_kind", &Kind) &&
+                Kind.Size != 0u && Kind.Size < sizeof(Details.ModelErrorKind) &&
+                MdoSchedulesValueUInt(Root, "model_http_status", &Status) && Status <= UINT32_MAX &&
+                MdoSchedulesValueUInt(Root, "model_attempts", &Attempts) && Attempts <= UINT32_MAX;
+            if ( Ok ) {
+                memcpy(Details.ModelErrorKind, Kind.Data, Kind.Size);
+                Details.ModelHttpStatus = (uint32)Status;
+                Details.ModelAttempts = (uint32)Attempts;
+                Ok = strlen(Details.ModelErrorKind) == Kind.Size &&
+                    MdoSchedulesResultDetailsValid(&Details);
+            }
+        }
+        if ( !Ok ) { xrtValueRelease(Root); return false; }
+        memcpy(Entry->ModelErrorKind, Details.ModelErrorKind, sizeof(Entry->ModelErrorKind));
+        Entry->ModelHttpStatus = Details.ModelHttpStatus;
+        Entry->ModelAttempts = Details.ModelAttempts;
         Preview = Text.Size < sizeof(Entry->Text) ? Text.Size :
             sizeof(Entry->Text) - 1u;
         while ( Preview != 0u &&

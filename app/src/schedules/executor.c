@@ -99,6 +99,21 @@ static char* MdoScheduleExecutorResultText(const char* Text)
     return Result;
 }
 
+static MdoScheduleResultDetails MdoScheduleExecutorResultDetails(const xwork_error* Error)
+{
+    MdoScheduleResultDetails Details = {0};
+    Details.Size = sizeof(Details);
+    if ( Error != NULL && Error->tModelError.eCode != XLLM_ERROR_NONE &&
+         Error->tModelError.eCode != XLLM_ERROR_CANCELLED ) {
+        snprintf(Details.ModelErrorKind, sizeof(Details.ModelErrorKind), "%s",
+            MdoModelErrorKind(&Error->tModelError));
+        int32 Status = Error->tModelError.iHttpStatus;
+        Details.ModelHttpStatus = Status >= 100 && Status <= 599 ? (uint32)Status : 0u;
+        Details.ModelAttempts = Error->tModelError.tDiagnostics.uAttemptCount;
+    }
+    return Details;
+}
+
 static bool MdoScheduleExecutorFinishAt(size_t Index, size_t* Completed,
     xwork_error* Error)
 {
@@ -107,6 +122,7 @@ static bool MdoScheduleExecutorFinishAt(size_t Index, size_t* Completed,
     xwork_run_result Result;
     xwork_error WaitError;
     xwork_result Code;
+    MdoScheduleResultDetails Details;
     char* Text;
     bool Stored;
     memset(&Info, 0, sizeof(Info));
@@ -122,17 +138,22 @@ static bool MdoScheduleExecutorFinishAt(size_t Index, size_t* Completed,
     xworkErrorInit(&WaitError);
     Code = MdoAgentRunWait(Execution.Run, XRT_DEADLINE_NEVER, &Result,
         &WaitError);
-    Text = MdoScheduleExecutorResultText(Result.sFinalText != NULL ?
-        Result.sFinalText : (WaitError.sMessage[0] != '\0' ?
-        WaitError.sMessage : "scheduled Agent run completed without text"));
+    Details = MdoScheduleExecutorResultDetails(&WaitError);
+    /* A previous reply is not the cause of a failed run. Prefer the typed
+     * final cause; successful output is preserved verbatim. */
+    const char* FinalText = Code != XWORK_RESULT_OK && Details.ModelErrorKind[0] ?
+        MdoModelErrorMessage(&WaitError.tModelError) :
+        Code != XWORK_RESULT_OK && WaitError.sMessage[0] ? WaitError.sMessage :
+        Result.sFinalText != NULL ? Result.sFinalText : "scheduled Agent run completed without text";
+    Text = MdoScheduleExecutorResultText(FinalText);
     if ( Text == NULL ) {
         xworkRunResultUnit(&Result);
         MdoScheduleExecutorError(Error, XWORK_ERROR_OUT_OF_MEMORY,
             "cannot allocate a scheduled Agent result");
         return false;
     }
-    Stored = MdoScheduleFinishTaskWithRun(Execution.TaskId,
-        Execution.AgentRunId, Code, Text, Error);
+    Stored = MdoScheduleFinishTaskWithRunDetails(Execution.TaskId,
+        Execution.AgentRunId, Code, Text, &Details, Error);
     xrtFree(Text);
     xworkRunResultUnit(&Result);
     MdoAgentRunDestroy(Execution.Run);
@@ -197,8 +218,10 @@ static bool MdoScheduleExecutorFailClaim(uint64 TaskId, const char* Message,
     xwork_error FinishError;
     const char* Text = Message != NULL && Message[0] != '\0' ? Message :
         "scheduled Agent run could not start";
-    if ( MdoScheduleFinishTaskWithRun(TaskId, 0u, XWORK_RESULT_ERROR,
-            Text, &FinishError) ) return true;
+    MdoScheduleResultDetails Details = MdoScheduleExecutorResultDetails(Error);
+    if ( Details.ModelErrorKind[0] ) Text = MdoModelErrorMessage(&Error->tModelError);
+    if ( MdoScheduleFinishTaskWithRunDetails(TaskId, 0u, XWORK_RESULT_ERROR,
+            Text, &Details, &FinishError) ) return true;
     if ( Error != NULL ) *Error = FinishError;
     MdoScheduleExecutorRemember(&FinishError,
         "cannot persist a failed schedule claim");

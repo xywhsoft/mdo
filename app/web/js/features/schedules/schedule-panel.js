@@ -9,6 +9,13 @@ import { resourceOperationEpoch } from "../../state/resource-operation.js";
 import { clientActionId } from "../../api/request-recovery.js";
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
 import { currentLocale, subscribeLocale, t } from "../../i18n.js";
+import { modelErrorMessage } from "../../utils/model-errors.js";
+
+export function scheduleHistoryText(entry) {
+  const text = typeof entry.text === "string" ? entry.text + (entry.text_truncated ? "…" : "") : "";
+  return ["failed", "limit", "timed_out"].includes(entry.result)
+    ? modelErrorMessage(entry.model_error_kind, text) : text;
+}
 
 const FREQUENCY_KEY = {
   once: "schedule.frequency.once", minutely: "schedule.frequency.minutely",
@@ -539,8 +546,8 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
           element("p", { text: t("schedule.historyTask", { id: entry.task_id }, `任务 #${entry.task_id}`) +
             (entry.agent_run_id ? t("schedule.historyRun", { id: entry.agent_run_id },
               ` · 运行 #${entry.agent_run_id}`) : "") }));
-        if (entry.text) card.append(element("p", { text: entry.text +
-          (entry.text_truncated ? "…" : "") }));
+        const text = scheduleHistoryText(entry);
+        if (text) card.append(element("p", { text }));
         historyList.append(card);
       }
       if (retrying) panel.querySelector("#schedule-history-close").focus({ preventScroll: true });

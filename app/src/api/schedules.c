@@ -805,6 +805,9 @@ bool MdoApiScheduleHistoryRoute(MdoApiContext* Context)
                 MdoApiScheduleResultText(Entry->Result)) &&
             MdoApiValueSetString(Item, "text", Entry->Text) &&
             MdoApiValueSetBool(Item, "text_truncated", Entry->TextTruncated) &&
+            MdoApiValueSetString(Item, "model_error_kind", Entry->ModelErrorKind) &&
+            MdoApiValueSetUInt(Item, "model_http_status", Entry->ModelHttpStatus) &&
+            MdoApiValueSetUInt(Item, "model_attempts", Entry->ModelAttempts) &&
             MdoApiValueAppendTake(Items, &Item);
         xrtValueRelease(Item);
     }
