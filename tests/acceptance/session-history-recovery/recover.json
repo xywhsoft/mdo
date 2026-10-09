@@ -1,0 +1,132 @@
+{
+  "mode": "recover",
+  "source_id": "V-OSOUCvLSjGjdAK21yNWyZd4ipks-dd",
+  "other_id": "V-OSOUCwqOxxjVBh1SaoQZWjgodz00we",
+  "model_calls": 2,
+  "transport": [
+    {
+      "method": "GET",
+      "path": "/api/v1/projects/default/sessions/V-OSOUCvLSjGjdAK21yNWyZd4ipks-dd/history",
+      "attempt": 1,
+      "status": 503,
+      "seconds": 33.344,
+      "fault": "refusal",
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "session_history_unavailable",
+          "message": "Fixture read unavailable; no write applied"
+        }
+      },
+      "finished_seconds": 33.344
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/projects/default/sessions/V-OSOUCvLSjGjdAK21yNWyZd4ipks-dd/history",
+      "attempt": 2,
+      "status": 503,
+      "seconds": 33.938,
+      "fault": "refusal",
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "session_history_unavailable",
+          "message": "Fixture read unavailable; no write applied"
+        }
+      },
+      "finished_seconds": 33.938
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/projects/default/sessions/V-OSOUCvLSjGjdAK21yNWyZd4ipks-dd/history",
+      "attempt": 3,
+      "status": 200,
+      "seconds": 35.078,
+      "fault": null,
+      "response": {
+        "schema_version": 1,
+        "ok": true,
+        "request_id": "mdo-9577c9cfc894eb011430375b",
+        "data": {
+          "project_id": "default",
+          "session_id": "V-OSOUCvLSjGjdAK21yNWyZd4ipks-dd",
+          "revision": 1,
+          "last_sequence": 3
+        }
+      },
+      "finished_seconds": 35.078
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/projects/default/sessions/V-OSOUCvLSjGjdAK21yNWyZd4ipks-dd/fork",
+      "attempt": 1,
+      "status": 201,
+      "seconds": 35.11,
+      "fault": null,
+      "response": {
+        "schema_version": 1,
+        "ok": true,
+        "request_id": "mdo-790d59bebfdb39070e2a4e77",
+        "data": {
+          "id": "V-OSOULKFE86hEEgfEZPkQboMgKpBOE2",
+          "project_id": "default",
+          "parent_session_id": "V-OSOUCvLSjGjdAK21yNWyZd4ipks-dd",
+          "title": "History recovery source\uff08\u5206\u652f\uff09",
+          "agent_id": "mdo.default",
+          "model_id": "queue-fixture",
+          "protocol": "openai-chat-completions",
+          "reasoning_effort": "none",
+          "permission_profile": "balanced",
+          "workspace_root": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\history-preparation\\ui-recover",
+          "status": "active",
+          "revision": 1,
+          "created_at": 1791542353569557,
+          "updated_at": 1791542353569557,
+          "pinned": false,
+          "runtime_open": true,
+          "config_revision": 2,
+          "model_generation": 2,
+          "module_generation": 1,
+          "skill_generation": 1,
+          "max_output_tokens": 16384,
+          "forked_through_sequence": 3
+        }
+      },
+      "body": {
+        "through_sequence": 3,
+        "title": "History recovery source\uff08\u5206\u652f\uff09"
+      },
+      "finished_seconds": 35.11
+    }
+  ],
+  "forks": [
+    {
+      "id": "V-OSOULKFE86hEEgfEZPkQboMgKpBOE2",
+      "project_id": "default",
+      "parent_session_id": "V-OSOUCvLSjGjdAK21yNWyZd4ipks-dd",
+      "title": "History recovery source\uff08\u5206\u652f\uff09",
+      "agent_id": "mdo.default",
+      "model_id": "queue-fixture",
+      "protocol": "openai-chat-completions",
+      "reasoning_effort": "none",
+      "workspace_root": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\history-preparation\\ui-recover",
+      "status": "active",
+      "revision": 1,
+      "created_at": 1791542353569557,
+      "updated_at": 1791542353569557,
+      "pinned": false,
+      "runtime_open": false,
+      "max_output_tokens": 16384,
+      "forked_through_sequence": 3
+    }
+  ],
+  "source_snapshot_unchanged": true,
+  "final_errors": 0,
+  "event_kinds": {
+    "agent_start": 3,
+    "model_start": 3,
+    "model_text_delta": 3,
+    "model_done": 3,
+    "agent_done": 3
+  }
+}

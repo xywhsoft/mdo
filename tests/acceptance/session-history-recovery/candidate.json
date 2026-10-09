@@ -1,0 +1,43 @@
+{
+  "mdo_commit": "61a9027a9841bfee9db547a3d049070df59edc2f",
+  "xs_commit": "f47b0de5037f458f6289483d1323dee417d99434",
+  "mdo_worktree_dirty": false,
+  "sha256": "65ffd225a40b1457f1c5a939f79d9486597632d90606c65a195ce904cfb8ae5f",
+  "bytes": 4526258,
+  "packaged_app_sha256": "eed4edaf02e8a8e4f6d39751e33e36dea43ad6cac9994156f6738fb4374defcc",
+  "pack_sha256": "802da46a0fd37644bd35203f28e8bbd8854982c904f15d0cd183ddd0716d2de0",
+  "sources": {
+    "web/js/state/sessions.js": {
+      "sha256": "1123bac70324946dbdea9c25d572e64e0a36e86879bfda4c89ccfcb69c54cbe8",
+      "matches": true
+    },
+    "web/js/features/sessions/session-history-read.js": {
+      "sha256": "6a0ffd2eba24fa2359be64ab98fe38b22186d812c6066d7d6650d506a13d5dce",
+      "matches": true
+    },
+    "web/js/app.js": {
+      "sha256": "552ded061aacc73cfa62fe1a1293242c0f91f162b0ebcfa440ce5b70b134669b",
+      "matches": true
+    },
+    "web/js/features/chat/timeline.js": {
+      "sha256": "ae5c76265c0c807cc7a1340cae46e68b9384bc8164173e64266e5fbed9328fdc",
+      "matches": true
+    },
+    "web/js/features/sessions/session-action-menu.js": {
+      "sha256": "334040ae6af73e8da369612e82e0682a33b5434ede94084990c3b1fcb16f4eb8",
+      "matches": true
+    },
+    "web/js/features/sessions/session-list.js": {
+      "sha256": "305e273f0746ed37ea2ae3e3cd88ff6d11d0b7edf9305b6571b325e9a15ddb5c",
+      "matches": true
+    },
+    "web/js/features/chat/slash-commands.js": {
+      "sha256": "8e743bedc7f07a0cc0a619eb1144cd0ea04e64800507aa689c6a362be55cb9f9",
+      "matches": true
+    }
+  },
+  "passed": true,
+  "daily_app_overwritten": false,
+  "android_device_tested": false,
+  "external_provider_tested": false
+}

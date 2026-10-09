@@ -1,0 +1,196 @@
+{
+  "mode": "refuse",
+  "source_id": "V-OSOUwnPbp5UclqRKo0yjaYgFkQnOis",
+  "other_id": "V-OSOUwoUmnwxdrtI0ycjjsBN6ASIEFf",
+  "model_calls": 2,
+  "transport": [
+    {
+      "method": "GET",
+      "path": "/api/v1/projects/default/sessions/V-OSOUwnPbp5UclqRKo0yjaYgFkQnOis/history",
+      "attempt": 1,
+      "status": 503,
+      "seconds": 39.844,
+      "fault": "refusal",
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "session_history_unavailable",
+          "message": "Fixture read unavailable; no write applied"
+        }
+      },
+      "finished_seconds": 39.844
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/projects/default/sessions/V-OSOUwnPbp5UclqRKo0yjaYgFkQnOis/history",
+      "attempt": 2,
+      "status": 503,
+      "seconds": 40.406,
+      "fault": "refusal",
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "session_history_unavailable",
+          "message": "Fixture read unavailable; no write applied"
+        }
+      },
+      "finished_seconds": 40.406
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/projects/default/sessions/V-OSOUwnPbp5UclqRKo0yjaYgFkQnOis/history",
+      "attempt": 3,
+      "status": 503,
+      "seconds": 41.609,
+      "fault": "refusal",
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "session_history_unavailable",
+          "message": "Fixture read unavailable; no write applied"
+        }
+      },
+      "finished_seconds": 41.609
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/projects/default/sessions/V-OSOUwnPbp5UclqRKo0yjaYgFkQnOis/history",
+      "attempt": 4,
+      "status": 503,
+      "seconds": 43.781,
+      "fault": "refusal",
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "session_history_unavailable",
+          "message": "Fixture read unavailable; no write applied"
+        }
+      },
+      "finished_seconds": 43.781
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/projects/default/sessions/V-OSOUwnPbp5UclqRKo0yjaYgFkQnOis/history",
+      "attempt": 5,
+      "status": 503,
+      "seconds": 48.203,
+      "fault": "refusal",
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "session_history_unavailable",
+          "message": "Fixture read unavailable; no write applied"
+        }
+      },
+      "finished_seconds": 48.203
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/projects/default/sessions/V-OSOUwnPbp5UclqRKo0yjaYgFkQnOis/history",
+      "attempt": 6,
+      "status": 503,
+      "seconds": 57.641,
+      "fault": "refusal",
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "session_history_unavailable",
+          "message": "Fixture read unavailable; no write applied"
+        }
+      },
+      "finished_seconds": 57.641
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/projects/default/sessions/V-OSOUwnPbp5UclqRKo0yjaYgFkQnOis/history",
+      "attempt": 7,
+      "status": 200,
+      "seconds": 78.875,
+      "fault": null,
+      "response": {
+        "schema_version": 1,
+        "ok": true,
+        "request_id": "mdo-ecac4d07c441430592c859f8",
+        "data": {
+          "project_id": "default",
+          "session_id": "V-OSOUwnPbp5UclqRKo0yjaYgFkQnOis",
+          "revision": 1,
+          "last_sequence": 3
+        }
+      },
+      "finished_seconds": 78.875
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/projects/default/sessions/V-OSOUwnPbp5UclqRKo0yjaYgFkQnOis/fork",
+      "attempt": 1,
+      "status": 201,
+      "seconds": 78.953,
+      "fault": null,
+      "response": {
+        "schema_version": 1,
+        "ok": true,
+        "request_id": "mdo-a88cf00bdeb3588218ece3c7",
+        "data": {
+          "id": "V-OSOVEdpwie6lQdoR7xaMjx3v391tl2",
+          "project_id": "default",
+          "parent_session_id": "V-OSOUwnPbp5UclqRKo0yjaYgFkQnOis",
+          "title": "History recovery source\uff08\u5206\u652f\uff09",
+          "agent_id": "mdo.default",
+          "model_id": "queue-fixture",
+          "protocol": "openai-chat-completions",
+          "reasoning_effort": "none",
+          "permission_profile": "balanced",
+          "workspace_root": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\history-preparation\\ui-refuse",
+          "status": "active",
+          "revision": 1,
+          "created_at": 1791542594003902,
+          "updated_at": 1791542594003902,
+          "pinned": false,
+          "runtime_open": true,
+          "config_revision": 2,
+          "model_generation": 2,
+          "module_generation": 1,
+          "skill_generation": 1,
+          "max_output_tokens": 16384,
+          "forked_through_sequence": 3
+        }
+      },
+      "body": {
+        "through_sequence": 3,
+        "title": "History recovery source\uff08\u5206\u652f\uff09"
+      },
+      "finished_seconds": 78.953
+    }
+  ],
+  "forks": [
+    {
+      "id": "V-OSOVEdpwie6lQdoR7xaMjx3v391tl2",
+      "project_id": "default",
+      "parent_session_id": "V-OSOUwnPbp5UclqRKo0yjaYgFkQnOis",
+      "title": "History recovery source\uff08\u5206\u652f\uff09",
+      "agent_id": "mdo.default",
+      "model_id": "queue-fixture",
+      "protocol": "openai-chat-completions",
+      "reasoning_effort": "none",
+      "workspace_root": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\history-preparation\\ui-refuse",
+      "status": "active",
+      "revision": 1,
+      "created_at": 1791542594003902,
+      "updated_at": 1791542594003902,
+      "pinned": false,
+      "runtime_open": false,
+      "max_output_tokens": 16384,
+      "forked_through_sequence": 3
+    }
+  ],
+  "source_snapshot_unchanged": true,
+  "final_errors": 0,
+  "event_kinds": {
+    "agent_start": 3,
+    "model_start": 3,
+    "model_text_delta": 3,
+    "model_done": 3,
+    "agent_done": 3
+  }
+}

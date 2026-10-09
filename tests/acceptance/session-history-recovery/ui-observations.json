@@ -1,0 +1,21 @@
+{
+  "recovery": {
+    "source_draft": "History draft must stay.",
+    "intermediate_error_visible": false,
+    "branch_title": "History recovery source（分支）",
+    "continuation_reply": "Ready to continue."
+  },
+  "cancel": {
+    "notices": [],
+    "openDialogs": [],
+    "url": "http://127.0.0.1:57452/#/settings/general"
+  },
+  "refusal": {
+    "draft": "Retain the draft after a final history refusal.",
+    "forkButtonEnabled": true,
+    "notices": [
+      "暂时无法读取会话历史，请稍后重试。"
+    ],
+    "url": "http://127.0.0.1:58491/#/projects/default/sessions/V-OSOUwnPbp5UclqRKo0yjaYgFkQnOis"
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "mode": "recover",
+  "source_id": "V-OSOTzwZqgn21f_d2ZYYfiS0D_thorc",
+  "other_id": "V-OSOTzxzlD5Iao9GRYmTIx5hGsQMzB2",
+  "model_calls": 1,
+  "transport": [
+    {
+      "method": "GET",
+      "path": "/api/v1/projects/default/sessions/V-OSOTzwZqgn21f_d2ZYYfiS0D_thorc/history",
+      "attempt": 1,
+      "status": 503,
+      "seconds": 44.328,
+      "fault": "refusal",
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "session_history_unavailable",
+          "message": "Fixture read unavailable; no write applied"
+        }
+      },
+      "finished_seconds": 44.344
+    }
+  ],
+  "forks": [],
+  "source_snapshot_unchanged": true,
+  "final_errors": 0,
+  "event_kinds": {
+    "agent_start": 1,
+    "model_start": 1,
+    "model_text_delta": 1,
+    "model_done": 1,
+    "agent_done": 1
+  }
+}
