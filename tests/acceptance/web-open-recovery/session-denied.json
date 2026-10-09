@@ -1,0 +1,13 @@
+{
+  "mode": "denied",
+  "page_requests": 1,
+  "search_requests": 0,
+  "tool_completions": [
+    {
+      "kind": 6,
+      "success": false
+    }
+  ],
+  "agent_completed_successfully": true,
+  "artifacts": []
+}

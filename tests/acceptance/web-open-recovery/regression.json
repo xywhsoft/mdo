@@ -1,0 +1,94 @@
+[
+  {
+    "command": [
+      "python",
+      "tests/test_web_result_session_runtime.py",
+      "--host",
+      "D:/GIT/mdo/.build/conversation-acceptance/web-open/host-153315/xs.exe",
+      "--page-recovery",
+      "--output",
+      "D:\\GIT\\mdo\\.build\\conversation-acceptance\\web-open\\session-recovery.json"
+    ],
+    "exit_code": 0,
+    "output": "PASS real page retry/read/model ledger/one completion/no intermediate failures\n"
+  },
+  {
+    "command": [
+      "python",
+      "tests/test_web_result_session_runtime.py",
+      "--host",
+      "D:/GIT/mdo/.build/conversation-acceptance/web-open/host-153315/xs.exe",
+      "--page-denied",
+      "--output",
+      "D:\\GIT\\mdo\\.build\\conversation-acceptance\\web-open\\session-denied.json"
+    ],
+    "exit_code": 0,
+    "output": "PASS denied page returned once; agent continued and completed\n"
+  },
+  {
+    "command": [
+      "python",
+      "tests/test_web_result_session_runtime.py",
+      "--host",
+      "D:/GIT/mdo/.build/conversation-acceptance/web-open/host-153315/xs.exe",
+      "--output",
+      "D:\\GIT\\mdo\\.build\\conversation-acceptance\\web-open\\session-search.json"
+    ],
+    "exit_code": 0,
+    "output": "PASS real search/read/model ledger/UI completion/recovery pipeline\n"
+  },
+  {
+    "command": [
+      "python",
+      "tests/test_search_packed.py",
+      "--packed",
+      "D:\\GIT\\mdo\\.build\\conversation-acceptance\\web-open\\package\\mdo.exe"
+    ],
+    "exit_code": 0,
+    "output": "PASS packed VFS startup/legacy flag removal/login-gated preference/save\n"
+  },
+  {
+    "command": [
+      "python",
+      "tests/test_web_result_files_runtime.py",
+      "--host",
+      "D:/GIT/mdo/.build/conversation-acceptance/web-open/host-153315/xs.exe"
+    ],
+    "exit_code": 0,
+    "output": "PASS 1 search files: bounded index/pages, read-only paths, receipts, UTF-8, hashes\n"
+  },
+  {
+    "command": [
+      "python",
+      "tests/test_search_api_runtime.py",
+      "--host",
+      "D:/GIT/mdo/.build/conversation-acceptance/web-open/host-153315/xs.exe"
+    ],
+    "exit_code": 0,
+    "output": "PASS search API POST/auth/UTF-8/results/empty/errors/no-redirect/no-retry/limits\n"
+  },
+  {
+    "command": [
+      "python",
+      "tests/test_web_runtime.py",
+      "--host",
+      "D:/GIT/mdo/.build/conversation-acceptance/web-open/host-153315/xs.exe"
+    ],
+    "exit_code": 0,
+    "output": "PASS bounded Web search/open/find runtime\n"
+  },
+  {
+    "command": [
+      "python",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "tests",
+      "-p",
+      "test_web_contract.py"
+    ],
+    "exit_code": 0,
+    "output": "....\n----------------------------------------------------------------------\nRan 4 tests in 0.002s\n\nOK\n"
+  }
+]

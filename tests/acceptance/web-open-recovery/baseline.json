@@ -1,0 +1,24 @@
+{
+  "baseline": true,
+  "native_output": "[xs] XServer 1.0.0 (commit a57d24e9f86bd21355225ef51280951f95a5ea1b, 2026-10-09, windows)\n[xs] extensions (5): xllm, xllm-session, xwork, webview, image\n[xs] config loaded: D:\\GIT\\mdo\\.build\\web-open-recovery-2dcgp26m\\site\\xs.json (1 servers)\n[xs] server 'mdo-web-probe' class=http 127.0.0.1:60052 tls=off enabled\n[xs]   default-host 'probe' path=D:\\GIT\\mdo\\.build\\web-open-recovery-2dcgp26m\\site\\web devfile=D:\\GIT\\mdo\\.build\\web-open-recovery-2dcgp26m\\site\\probe.c\n[xs] engine started, workers=12\n[xs] script loaded: D:\\GIT\\mdo\\.build\\web-open-recovery-2dcgp26m\\site\\probe.c (10.0 KB gen 1)\ncatalog_count=3\ntool=web_search effects:57 source:mdo.web permissions:1\ntool=web_open effects:9 source:mdo.web permissions:1\ntool=web_find effects:1 source:mdo.web permissions:0\nopen_resource=http://127.0.0.1:60051/recover\nexecute_web_open=infra:1 success:0 text:status: error\ntool: web_open\nweb_open returned a non-success status\ncase=recover success:0 fetches:1 elapsed_ms:7\nopen_resource=http://127.0.0.1:60051/disconnect\nexecute_web_open=infra:1 success:0 text:status: error\ntool: web_open\nbounded HTTP GET failed: HTTP response ended before completion: HTTP/1 response ended before Exchange completion: HTTP/1 response ended before a complete Header\ncase=disconnect success:0 fetches:1 elapsed_ms:5\nopen_resource=http://127.0.0.1:60051/denied\nexecute_web_open=infra:1 success:0 text:status: error\ntool: web_open\nweb_open returned a non-success status\ncase=denied success:0 fetches:1 elapsed_ms:5\nopen_resource=http://127.0.0.1:60051/missing\nexecute_web_open=infra:1 success:0 text:status: error\ntool: web_open\nweb_open returned a non-success status\ncase=missing success:0 fetches:1 elapsed_ms:4\nopen_resource=http://127.0.0.1:60051/deadline\nexecute_web_open=infra:1 success:0 text:status: error\ntool: web_open\nweb_open returned a non-success status\ncase=deadline success:0 fetches:1 elapsed_ms:5\nopen_resource=http://127.0.0.1:60051/cancel\nexecute_web_open=infra:1 success:0 text:status: error\ntool: web_open\nweb_open returned a non-success status\ncase=cancel success:0 fetches:1 elapsed_ms:7\nprobe_done=1\n",
+  "requests": {
+    "/recover": [
+      0.0
+    ],
+    "/disconnect": [
+      0.0
+    ],
+    "/denied": [
+      0.0
+    ],
+    "/missing": [
+      0.0
+    ],
+    "/deadline": [
+      0.0
+    ],
+    "/cancel": [
+      0.0
+    ]
+  }
+}

@@ -1,0 +1,79 @@
+{
+  "baseline": false,
+  "native_output": "[xs] XServer 1.0.0 (commit 153315a092b8c37d9d79f090122f81ed2bcc139d, 2026-10-09, windows)\n[xs] extensions (5): xllm, xllm-session, xwork, webview, image\n[xs] config loaded: C:\\Users\\Administrator\\.codex\\worktrees\\conversation-web-open-qa\\mdo\\.build\\web-open-recovery-cj7wwunl\\site\\xs.json (1 servers)\n[xs] server 'mdo-web-probe' class=http 127.0.0.1:64588 tls=off enabled\n[xs]   default-host 'probe' path=C:\\Users\\Administrator\\.codex\\worktrees\\conversation-web-open-qa\\mdo\\.build\\web-open-recovery-cj7wwunl\\site\\web devfile=C:\\Users\\Administrator\\.codex\\worktrees\\conversation-web-open-qa\\mdo\\.build\\web-open-recovery-cj7wwunl\\site\\probe.c\n[xs] engine started, workers=12\n[xs] script loaded: C:\\Users\\Administrator\\.codex\\worktrees\\conversation-web-open-qa\\mdo\\.build\\web-open-recovery-cj7wwunl\\site\\probe.c (21.3 KB gen 1)\ncatalog_count=3\ntool=web_search effects:57 source:mdo.web permissions:1\ntool=web_open effects:9 source:mdo.web permissions:1\ntool=web_find effects:1 source:mdo.web permissions:0\nopen_resource=http://127.0.0.1:64584/recover\nexecute_web_open=infra:1 success:1 text:status: success\ntool: web_open\n{\"type\":\"web_document\",\"document_id\":\"doc-0000000000000001\",\"url\":\"http://127.0.0.1:64584/recover\",\"title\":\"\",\"content_type\":\"text/plain; charset=utf-8\",\"source\":\"web_open\",\"fetched_at\":1791524023610971,\"truncated\":false,\"untrusted\":true,\"content\":\"recovered page\",\"file\":{\"path\":\"@results/run-00000000000000000000/00000000000000000001-web_open.md\",\"bytes\":168,\"lines\":10,\"sha256\":\"fd3fe17be226a137cf57ac6a8bb034f194225663dcfa5ac3917280c492b2b18f\"}}\ncase=recover success:1 fetches:3 elapsed_ms:1683\nopen_resource=http://127.0.0.1:64584/disconnect\nexecute_web_open=infra:1 success:1 text:status: success\ntool: web_open\n{\"type\":\"web_document\",\"document_id\":\"doc-0000000000000002\",\"url\":\"http://127.0.0.1:64584/disconnect\",\"title\":\"\",\"content_type\":\"text/plain; charset=utf-8\",\"source\":\"web_open\",\"fetched_at\":1791524025430039,\"truncated\":false,\"untrusted\":true,\"content\":\"recovered page\",\"file\":{\"path\":\"@results/run-00000000000000000000/00000000000000000002-web_open.md\",\"bytes\":171,\"lines\":10,\"sha256\":\"fbf12ddc5f6181204c2b188ee082c68766db7103a72192019496179dc5df4a7a\"}}\ncase=disconnect success:1 fetches:3 elapsed_ms:1818\nopen_resource=http://127.0.0.1:64584/denied\nexecute_web_open=infra:1 success:0 text:status: error\ntool: web_open\nweb_open HTTP 403: The website denied access, possibly requiring login or browser verification.\ncase=denied success:0 fetches:1 elapsed_ms:7\nopen_resource=http://127.0.0.1:64584/missing\nexecute_web_open=infra:1 success:0 text:status: error\ntool: web_open\nweb_open HTTP 404: The page was not found or has been removed; check the URL or use another source.\ncase=missing success:0 fetches:1 elapsed_ms:7\nopen_resource=http://127.0.0.1:64584/deadline\nexecute_web_open=infra:1 success:0 text:status: error\ntool: web_open\nweb_open HTTP 503: The remote website is temporarily unavailable. The required retry delay exceeds this call's remaining time; no early retry was sent.\ncase=deadline success:0 fetches:1 elapsed_ms:6\nopen_resource=http://127.0.0.1:64584/cancel\nexecute_web_open=infra:0 success:0 text:null\ncase=cancel success:0 fetches:1 elapsed_ms:4\nopen_resource=http://127.0.0.1:64584/partial\nexecute_web_open=infra:1 success:1 text:status: success\ntool: web_open\n{\"type\":\"web_document\",\"document_id\":\"doc-0000000000000003\",\"url\":\"http://127.0.0.1:64584/partial\",\"title\":\"\",\"content_type\":\"text/plain; charset=utf-8\",\"source\":\"web_open\",\"fetched_at\":1791524027011061,\"truncated\":false,\"untrusted\":true,\"content\":\"recovered page\",\"file\":{\"path\":\"@results/run-00000000000000000000/00000000000000000003-web_open.md\",\"bytes\":168,\"lines\":10,\"sha256\":\"a7f9cf2bfa57013c67f86267e2555037cb23d7530cb2f1e20d7519017bf3b230\"}}\ncase=partial success:1 fetches:3 elapsed_ms:1554\nopen_resource=http://127.0.0.1:64584/malformed\nexecute_web_open=infra:1 success:0 text:status: error\ntool: web_open\nThe website response or secure connection failed protocol validation; use another source.\ncase=malformed success:0 fetches:1 elapsed_ms:6\nopen_resource=http://127.0.0.1:64584/policy\nexecute_web_open=infra:1 success:0 text:status: error\ntool: web_open\nNetwork or certificate policy denied this page; a permitted public address and valid certificate are required.\ncase=policy success:0 fetches:1 elapsed_ms:0\nopen_resource=http://127.0.0.1:64584/large\nexecute_web_open=infra:1 success:0 text:status: error\ntool: web_open\nWeb page exceeds the configured response size limit; use another source.\ncase=large success:0 fetches:1 elapsed_ms:5\nopen_resource=http://127.0.0.1:64584/limited\nexecute_web_open=infra:1 success:1 text:status: success\ntool: web_open\n{\"type\":\"web_document\",\"document_id\":\"doc-0000000000000004\",\"url\":\"http://127.0.0.1:64584/limited\",\"title\":\"\",\"content_type\":\"text/plain; charset=utf-8\",\"source\":\"web_open\",\"fetched_at\":1791524029044978,\"truncated\":false,\"untrusted\":true,\"content\":\"recovered page\",\"file\":{\"path\":\"@results/run-00000000000000000000/00000000000000000004-web_open.md\",\"bytes\":168,\"lines\":10,\"sha256\":\"d24bbc471e99a313bdfa4dc713bdc28471a838530e27fbbcd727655d243c7fa6\"}}\ncase=limited success:1 fetches:2 elapsed_ms:2025\nopen_resource=http://127.0.0.1:64584/date\nexecute_web_open=infra:1 success:1 text:status: success\ntool: web_open\n{\"type\":\"web_document\",\"document_id\":\"doc-0000000000000005\",\"url\":\"http://127.0.0.1:64584/date\",\"title\":\"\",\"content_type\":\"text/plain; charset=utf-8\",\"source\":\"web_open\",\"fetched_at\":1791524032016825,\"truncated\":false,\"untrusted\":true,\"content\":\"recovered page\",\"file\":{\"path\":\"@results/run-00000000000000000000/00000000000000000005-web_open.md\",\"bytes\":165,\"lines\":10,\"sha256\":\"250df45648008fa8e25a40bce92c78e07a1174b3f9a0d50537d62deb4af3237a\"}}\ncase=date success:1 fetches:2 elapsed_ms:2967\nopen_resource=http://127.0.0.1:64584/limited-long\nexecute_web_open=infra:1 success:0 text:status: error\ntool: web_open\nweb_open HTTP 429: The website rate-limited page reading; wait before trying this source again. The required retry delay exceeds this call's remaining time; no early retry was sent.\ncase=limited-long success:0 fetches:1 elapsed_ms:9\nopen_resource=http://127.0.0.1:64584/limited-overflow\nexecute_web_open=infra:1 success:0 text:status: error\ntool: web_open\nweb_open HTTP 429: The website rate-limited page reading; wait before trying this source again. The required retry delay exceeds this call's remaining time; no early retry was sent.\ncase=limited-overflow success:0 fetches:1 elapsed_ms:5\nopen_resource=http://127.0.0.1:64584/limited-invalid\nexecute_web_open=infra:1 success:1 text:status: success\ntool: web_open\n{\"type\":\"web_document\",\"document_id\":\"doc-0000000000000006\",\"url\":\"http://127.0.0.1:64584/limited-invalid\",\"title\":\"\",\"content_type\":\"text/plain; charset=utf-8\",\"source\":\"web_open\",\"fetched_at\":1791524032557236,\"truncated\":false,\"untrusted\":true,\"content\":\"recovered page\",\"file\":{\"path\":\"@results/run-00000000000000000000/00000000000000000006-web_open.md\",\"bytes\":176,\"lines\":10,\"sha256\":\"bbba47034f5513dc84b897151d7e4731738357707344198030455b40efe98fec\"}}\ncase=limited-invalid success:1 fetches:2 elapsed_ms:526\nopen_resource=http://127.0.0.1:64584/limited-duplicate\nexecute_web_open=infra:1 success:1 text:status: success\ntool: web_open\n{\"type\":\"web_document\",\"document_id\":\"doc-0000000000000007\",\"url\":\"http://127.0.0.1:64584/limited-duplicate\",\"title\":\"\",\"content_type\":\"text/plain; charset=utf-8\",\"source\":\"web_open\",\"fetched_at\":1791524034589530,\"truncated\":false,\"untrusted\":true,\"content\":\"recovered page\",\"file\":{\"path\":\"@results/run-00000000000000000000/00000000000000000007-web_open.md\",\"bytes\":178,\"lines\":10,\"sha256\":\"19a5f752edb25a90f37f35bd8793ef1b7f1e56230ad8290c93930bdc58b6c420\"}}\ncase=limited-duplicate success:1 fetches:2 elapsed_ms:2032\nopen_resource=http://127.0.0.1:64584/deadline-late\nexecute_web_open=infra:0 success:0 text:null\ncase=deadline-late success:0 fetches:2 elapsed_ms:813\nopen_resource=http://127.0.0.1:64584/short-network\nexecute_web_open=infra:1 success:0 text:status: error\ntool: web_open\nWeb page could not be reached (1 attempt). The next retry would exceed the remaining time. The connection or remote server is still unavailable; try another source or retry later.\ncase=short-network success:0 fetches:1 elapsed_ms:6\nopen_resource=http://127.0.0.1:64584/cancel-wait\nexecute_web_open=infra:0 success:0 text:null\ncase=cancel-wait success:0 fetches:1 elapsed_ms:131\nopen_resource=http://127.0.0.1:64584/exhausted\nexecute_web_open=infra:1 success:0 text:status: error\ntool: web_open\nweb_open HTTP 502: The remote website is temporarily unavailable. Automatic retries were exhausted; try another source or retry later.\ncase=exhausted success:0 fetches:6 elapsed_ms:16015\nsummary=permissions:20 docs:7 completed:7 failed:13\nprobe_done=1\n",
+  "requests": {
+    "/recover": [
+      0.0,
+      0.609,
+      1.672
+    ],
+    "/disconnect": [
+      0.0,
+      0.579,
+      1.813
+    ],
+    "/denied": [
+      0.0
+    ],
+    "/missing": [
+      0.0
+    ],
+    "/deadline": [
+      0.0
+    ],
+    "/cancel": [
+      0.0
+    ],
+    "/partial": [
+      0.0,
+      0.516,
+      1.547
+    ],
+    "/malformed": [
+      0.0
+    ],
+    "/large": [
+      0.0
+    ],
+    "/limited": [
+      0.0,
+      2.015
+    ],
+    "/date": [
+      0.0,
+      2.953
+    ],
+    "/limited-long": [
+      0.0
+    ],
+    "/limited-overflow": [
+      0.0
+    ],
+    "/limited-invalid": [
+      0.0,
+      0.516
+    ],
+    "/limited-duplicate": [
+      0.0,
+      2.031
+    ],
+    "/deadline-late": [
+      0.0,
+      0.578
+    ],
+    "/short-network": [
+      0.0
+    ],
+    "/cancel-wait": [
+      0.0
+    ],
+    "/exhausted": [
+      0.0,
+      0.578,
+      1.641,
+      3.703,
+      8.0,
+      16.016
+    ]
+  }
+}
