@@ -144,6 +144,7 @@ bool MdoApiSettingsPreviewRoute(MdoApiContext* Context)
     MdoApiBodyStatus BodyStatus;
     MdoConfigDomain Domain;
     MdoConfigPreview Preview;
+    MdoConfigSnapshot Before;
     MdoConfigSnapshot Snapshot;
     cstr DomainName;
     str Document = NULL;
@@ -162,6 +163,13 @@ bool MdoApiSettingsPreviewRoute(MdoApiContext* Context)
         return MdoApiReplyBodyError(Context, BodyStatus);
     memset(&Preview, 0, sizeof(Preview));
     Preview.Size = sizeof(Preview);
+    memset(&Before, 0, sizeof(Before));
+    Before.Size = sizeof(Before);
+    if ( !MdoConfigGetSnapshot(&Before) ) {
+        MdoApiJsonBodyUnit(&Body);
+        return MdoApiReplyError(Context, 503u, "preview_unavailable",
+            "The current configuration could not be read", NULL);
+    }
     if ( !MdoApiConfigInputPreview(Domain, &Body, Merge, &Preview,
             &Document, &DocumentSize) ) {
         bool MergeUnavailable = Merge && Document == NULL &&
@@ -179,8 +187,16 @@ bool MdoApiSettingsPreviewRoute(MdoApiContext* Context)
     MdoApiJsonBodyUnit(&Body);
     memset(&Snapshot, 0, sizeof(Snapshot));
     Snapshot.Size = sizeof(Snapshot);
+    if ( !MdoConfigGetSnapshot(&Snapshot) )
+        return MdoApiReplyError(Context, 503u, "preview_unavailable",
+            "The current configuration could not be read", NULL);
+    /* Merge and validation use separate configuration reads. A revision that
+     * crossed either read cannot describe Preview.Changes reliably. */
+    if ( Before.Revision != Snapshot.Revision )
+        return MdoApiReplyError(Context, 425u, "configuration_preview_pending",
+            "Configuration changed during the preview; read it again", NULL);
     Data = xrtValueObject();
-    Ok = Data != NULL && MdoConfigGetSnapshot(&Snapshot) &&
+    Ok = Data != NULL &&
         MdoApiValueSetString(Data, "domain", DomainName) &&
         MdoApiValueSetBool(Data, "valid", Preview.Valid) &&
         MdoApiValueSetBool(Data, "changes", Preview.Changes) &&

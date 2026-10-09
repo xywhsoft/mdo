@@ -8,16 +8,21 @@ function fixture(context) {
   let allowed = false, locale = "auto", revision = 1;
   const reads = [], writes = [], warnings = [];
   context.mock.method(console, "warn", (...args) => warnings.push(args));
-  const snapshot = () => ({ data: { locale, revision, appearance: { theme: "dark" } },
-    etag: `"settings-${revision}"` });
+  const snapshot = () => ({ data: { locale, revision, user_patches: { settings: locale !== "auto" },
+    transaction_service: { runtime_consistent: true }, appearance: { theme: "dark" } },
+    etag: `"mdo-config-${revision}"` });
   const client = {
     async get(_path, options) { reads.push(options.signal); return snapshot(); },
     async patch(_path, document, options) {
       writes.push({ patch: document.patch, etag: options.ifMatch });
       if (!allowed) throw Object.assign(new Error("gate closed"), { code: "purge_review_required" });
-      locale = document.patch.locale; revision++; return { data: { changed: true } };
+      const previous = revision; locale = document.patch.locale; revision++;
+      return { etag: `"mdo-config-${revision}"`, data: { domain: "settings", previous_revision: previous,
+        revision, changed: true, restored: false } };
     },
-    async delete() { locale = "auto"; revision++; return { data: { restored: true } }; },
+    async delete() { const previous = revision; locale = "auto"; revision++;
+      return { etag: `"mdo-config-${revision}"`, data: { domain: "settings", previous_revision: previous,
+        revision, changed: true, restored: true } }; },
   };
   const settings = createSettingsState({ client, resolveLanguage: () => "zh-CN",
     canInitializeLocale: () => allowed });
@@ -34,7 +39,7 @@ test("initial locale displays promptly and waits for continuity before saving", 
   assert.equal(f.reads.length, 1);
   f.allow(); f.change("auto");
   await f.settings.resumeLocaleInitialization();
-  assert.deepEqual(f.writes, [{ patch: { locale: "zh-CN" }, etag: '"settings-2"' }]);
+  assert.deepEqual(f.writes, [{ patch: { locale: "zh-CN" }, etag: '"mdo-config-2"' }]);
   assert.equal(f.reads.length, 3); assert.equal(f.settings.store.get().data.locale, "zh-CN");
   await f.settings.resumeLocaleInitialization(); assert.equal(f.reads.length, 3);
 });
@@ -64,11 +69,12 @@ test("manual selection cancels an initializer even before the manual write compl
   f.client.patch = async (_path, document, options) => {
     f.writes.push({ patch: document.patch, etag: options.ifMatch });
     if (document.patch.locale === "en-US") return new Promise(resolve => {
-      finishWrite = () => { f.change("en-US"); resolve({ data: { changed: true } }); };
+      finishWrite = () => { f.change("en-US"); resolve({ etag: '"mdo-config-2"', data: {
+        domain: "settings", previous_revision: 1, revision: 2, changed: true, restored: false } }); };
     });
     return { data: { changed: true } };
   };
-  const manual = f.settings.apply({ locale: "en-US" }, '"settings-1"');
+  const manual = f.settings.apply({ locale: "en-US" }, '"mdo-config-1"');
   await turn(); finishRead(); await automatic;
   assert.equal(f.writes.length, 1);
   finishWrite(); await manual;
@@ -108,7 +114,7 @@ test("a lost initialization acknowledgement never turns into another automatic w
 
 test("restoring defaults supersedes a deferred automatic locale save", async context => {
   const f = fixture(context);
-  await f.settings.load(); f.allow(); await f.settings.restore('"settings-1"');
+  await f.settings.load(); f.allow(); await f.settings.restore('"mdo-config-1"');
   await f.settings.resumeLocaleInitialization();
   assert.equal(f.writes.length, 0); assert.equal(f.reads.length, 2);
   assert.equal(f.settings.store.get().data.locale, "zh-CN");
@@ -124,7 +130,7 @@ test("the public API guard defers initialization without sending a rejected PATC
       locale = JSON.parse(options.body).patch.locale;
       return Response.json({ ok: true, data: { changed: true } });
     }
-    return Response.json({ ok: true, data: { locale } }, { headers: { ETag: '"settings-1"' } });
+    return Response.json({ ok: true, data: { locale } }, { headers: { ETag: '"mdo-config-1"' } });
   };
   const warnings = []; context.mock.method(console, "warn", (...args) => warnings.push(args));
   try {

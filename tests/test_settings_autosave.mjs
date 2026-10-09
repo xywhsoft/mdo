@@ -100,3 +100,17 @@ test("a server echo rebases submitted fields while retaining newer text, select 
   });
   assert.deepEqual(changedSettingsValues(current, current), {});
 });
+
+test("destroy aborts an in-flight save and removes its recovery owner", async () => {
+  let signal, settled = 0;
+  const autosave = createSettingsAutosave({ timers: { clearTimeout() {} },
+    capture: () => ({ patch: {} }), onStart() {}, onSettled() { settled++; },
+    write: (_submitted, options) => new Promise((_resolve, reject) => {
+      signal = options.signal;
+      signal.addEventListener("abort", () => reject(new DOMException("cancelled", "AbortError")), { once: true });
+    }),
+  });
+  const operation = autosave.flush(); assert.equal(signal.aborted, false);
+  autosave.destroy(); assert.equal(await operation, false);
+  assert.equal(signal.aborted, true); assert.equal(settled, 0);
+});

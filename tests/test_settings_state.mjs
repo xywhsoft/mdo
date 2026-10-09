@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { applySettings, restoreSettings, settingsStore, createSettingsState } from
   "../app/web/js/state/settings.js";
+import { createRequestRecovery } from "../app/web/js/api/request-recovery.js";
 import { createResourceStore } from "../app/web/js/state/store.js";
 import { isTransientReadError } from "../app/web/js/api/read-recovery.js";
 import { api } from "../app/web/js/api/client.js";
@@ -10,10 +11,16 @@ import { loadLocale } from "../app/web/js/i18n.js";
 import { errorMessage } from "../app/web/js/utils/dom.js";
 
 const network = () => Object.assign(new Error("read offline"), { code: "network_error" });
-const snapshot = (locale = "ru-RU", etag = '"new"') => ({
-  data: { revision: 8, locale, appearance: { theme: "dark" },
+const snapshot = (locale = "ru-RU", etag = '"mdo-config-8"') => ({
+  data: { revision: Number(etag.match(/-(\d+)"$/)?.[1] ?? 8), locale,
+    user_patches: { settings: false }, transaction_service: { runtime_consistent: true }, appearance: { theme: "dark" },
     composer: { submit_mode: "guide" } }, etag,
 });
+const accepted = (restored = false) => ({ etag: '"mdo-config-8"', data: {
+  domain: "settings", previous_revision: 7, revision: 8, changed: true, restored,
+} });
+const acceptedResponse = (restored = false) => Response.json({ ok: true, data: accepted(restored).data },
+  { headers: { ETag: accepted(restored).etag } });
 const flush = async () => { for (let i = 0; i < 40; ++i) await Promise.resolve(); };
 function fixture(client) {
   let time = 1000, next = 1; const timers = new Map();
@@ -23,7 +30,11 @@ function fixture(client) {
     clearTimer(id) { timers.delete(id); },
   });
   const states = []; store.subscribe(state => states.push(state.status));
-  const settings = createSettingsState({ store, client, resolveLanguage: () => "ru-RU" });
+  const settings = createSettingsState({ store, client, resolveLanguage: () => "ru-RU",
+    writeOptions: { createRecovery: () => createRequestRecovery({ now: () => time, random: () => 0,
+      setTimer(callback, delay) { const id = next++; timers.set(id, { callback, at: time + delay }); return id; },
+      clearTimer(id) { timers.delete(id); }, eventTarget: null }) },
+  });
   return { store, settings, states, get elapsed() { return time - 1000; }, get pending() { return timers.size; },
     async step() {
       await flush();
@@ -43,12 +54,12 @@ test("a committed save distinguishes a failed confirmation and never repeats the
   const calls = [];
   globalThis.fetch = async (_url, options) => {
     calls.push(options.method);
-    if (options.method === "PATCH") return Response.json({ ok: true, data: { changed: true } });
+    if (options.method === "PATCH") return acceptedResponse();
     throw new Error("read offline");
   };
   try {
     const env = fixture(api);
-    const failed = assert.rejects(env.settings.apply({ appearance: { theme: "dark" } }, '"old"'),
+    const failed = assert.rejects(env.settings.apply({ appearance: { theme: "dark" } }, '"mdo-config-7"'),
       (error) => error.code === "settings_confirmation_failed" &&
         error.details.read_error === "network_error");
     await env.drain(); await failed;
@@ -61,9 +72,9 @@ test("a committed save distinguishes a failed confirmation and never repeats the
 test("an accepted write with a permanently denied confirmation is identified accurately", async () => {
   const denied = Object.assign(new Error("denied"), { status: 403, code: "permission_denied" });
   let reads = 0, writes = 0;
-  const env = fixture({ patch: async () => { writes++; return { data: {} }; },
+  const env = fixture({ patch: async () => { writes++; return accepted(); },
     get: async () => { reads++; throw denied; } });
-  await assert.rejects(env.settings.apply({}, '"old"'), error =>
+  await assert.rejects(env.settings.apply({}, '"mdo-config-7"'), error =>
     error.code === "settings_confirmation_failed" && error.status === 403 &&
     error.details.read_error === "permission_denied");
   assert.equal(reads, 1); assert.equal(writes, 1); assert.equal(env.elapsed, 0);
@@ -89,14 +100,14 @@ test("restoring defaults requires a fresh readable snapshot", async () => {
   const calls = [];
   globalThis.fetch = async (_url, options) => {
     calls.push(options.method);
-    if (options.method === "DELETE") return Response.json({ ok: true, data: { restored: true } });
-    return Response.json({ ok: true, data: { revision: 8 } }, { headers: { ETag: '"new"' } });
+    if (options.method === "DELETE") return acceptedResponse(true);
+    return Response.json({ ok: true, data: snapshot().data }, { headers: { ETag: '"mdo-config-8"' } });
   };
   try {
     settingsStore.reset();
-    assert.equal((await restoreSettings('"old"')).restored, true);
+    assert.equal((await restoreSettings('"mdo-config-7"')).restored, true);
     assert.deepEqual(calls, ["DELETE", "GET"]);
-    assert.equal(settingsStore.get().data.etag, '"new"');
+    assert.equal(settingsStore.get().data.etag, '"mdo-config-8"');
   } finally { globalThis.fetch = original; settingsStore.reset(); }
 });
 
@@ -119,28 +130,28 @@ test("an accepted save waits for readback recovery through the actual API", asyn
   const original = globalThis.fetch; const calls = []; let reads = 0;
   globalThis.fetch = async (_url, options) => {
     calls.push(options.method);
-    if (options.method === "PATCH") return Response.json({ ok: true, data: { changed: true } });
+    if (options.method === "PATCH") return acceptedResponse();
     if (++reads === 1) throw new Error("echo lost");
     const value = snapshot();
     return Response.json({ ok: true, data: value.data }, { headers: { ETag: value.etag } });
   };
   try {
     const env = fixture(api); let settled = false;
-    const operation = env.settings.apply({ appearance: { theme: "dark" } }, '"old"')
+    const operation = env.settings.apply({ appearance: { theme: "dark" } }, '"mdo-config-7"')
       .then(result => { settled = true; return result; });
     await flush(); assert.equal(settled, false); assert.equal(env.store.get().error, null);
     await env.drain(); assert.equal((await operation).changed, true);
     assert.deepEqual(calls, ["PATCH", "GET", "GET"]);
-    assert.equal(env.store.get().data.etag, '"new"');
+    assert.equal(env.store.get().data.etag, '"mdo-config-8"');
     assert.equal(env.store.get().status, "ready"); assert.ok(!env.states.includes("error"));
   } finally { globalThis.fetch = original; }
 });
 
 test("restoring defaults retries confirmation reads, never DELETE", async () => {
   let reads = 0, writes = 0;
-  const env = fixture({ delete: async () => { writes++; return { data: { restored: true } }; },
+  const env = fixture({ delete: async () => { writes++; return accepted(true); },
     get: async () => { if (++reads === 1) throw network(); return snapshot(); } });
-  const operation = env.settings.restore('"old"'); await env.drain();
+  const operation = env.settings.restore('"mdo-config-7"'); await env.drain();
   assert.equal((await operation).restored, true); assert.equal(writes, 1); assert.equal(reads, 2);
 });
 
@@ -150,18 +161,18 @@ test("locale initialization is attempted once even when its acknowledgement and 
     const env = fixture({
       get: async () => {
         reads++;
-        if (reads === 1) return snapshot("auto", '"old"');
+        if (reads === 1) return snapshot("auto", '"mdo-config-7"');
         if (reads === 2) throw network();
         return snapshot(confirmedLocale);
       },
       patch: async (_path, body, options) => {
-        writes++; assert.equal(body.patch.locale, "ru-RU"); assert.equal(options.ifMatch, '"old"');
+        writes++; assert.equal(body.patch.locale, "ru-RU"); assert.equal(options.ifMatch, '"mdo-config-7"');
         assert.ok(options.signal instanceof AbortSignal); throw network();
       },
     });
     await env.settings.load(); await env.drain();
     assert.equal(reads, 3); assert.equal(writes, 1);
-    assert.equal(env.store.get().data.etag, '"new"');
+    assert.equal(env.store.get().data.etag, '"mdo-config-8"');
     assert.equal(env.store.get().data.locale, "ru-RU"); assert.ok(!env.states.includes("error"));
   }
 });
@@ -171,7 +182,7 @@ test("an obsolete auto-locale response cannot write after a newer read", async (
   const env = fixture({ get: async (_path, options) => {
     if (++reads === 1) { signal = options.signal; return new Promise(resolve => { finish = resolve; }); }
     return snapshot("en-US");
-  }, patch: async () => { writes++; return { data: {} }; } });
+  }, patch: async () => { writes++; return accepted(); } });
   const old = env.settings.load(); await flush();
   await env.settings.load(); assert.equal(signal.aborted, true);
   finish(snapshot("auto", '"obsolete"')); await old; await env.drain();
@@ -185,15 +196,15 @@ test("permanent read and write failures never retry", async () => {
     patch: async () => { writes++; throw denied; } });
   assert.equal((await env.settings.load()).error, denied);
   await env.settings.recover(); await env.drain(); assert.equal(reads, 1);
-  await assert.rejects(env.settings.apply({}, '"old"'), error => error === denied);
+  await assert.rejects(env.settings.apply({}, '"mdo-config-7"'), error => error === denied);
   assert.equal(writes, 1); assert.equal(reads, 1); assert.equal(env.elapsed, 0);
 });
 
 test("reset cancels a pending confirmation and removes its retries", async () => {
   let writes = 0;
-  const env = fixture({ patch: async () => { writes++; return { data: {} }; },
+  const env = fixture({ patch: async () => { writes++; return accepted(); },
     get: async () => { throw network(); } });
-  const cancelled = assert.rejects(env.settings.apply({}, '"old"'), { name: "AbortError" });
+  const cancelled = assert.rejects(env.settings.apply({}, '"mdo-config-7"'), { name: "AbortError" });
   await flush(); env.store.reset(); await cancelled; await env.drain();
   assert.equal(writes, 1); assert.equal(env.pending, 0); assert.equal(env.store.get().status, "idle");
 });
@@ -201,24 +212,24 @@ test("reset cancels a pending confirmation and removes its retries", async () =>
 test("foreground recovery reads an exhausted snapshot without auto-locale writes", async () => {
   let reads = 0, writes = 0;
   const env = fixture({ get: async () => { reads++; return snapshot("auto"); },
-    patch: async () => { writes++; return { data: {} }; } });
+    patch: async () => { writes++; return accepted(); } });
   env.store.setError(network()); await env.settings.recover(); await env.settings.recover();
   assert.equal(reads, 1); assert.equal(writes, 0); assert.equal(env.store.get().data.locale, "ru-RU");
 });
 
 test("a newer snapshot wins a locale-initialization revision conflict", async () => {
   let reads = 0, writes = 0;
-  const env = fixture({ get: async () => ++reads === 1 ? snapshot("auto", '"old"') : snapshot("en-US"),
+  const env = fixture({ get: async () => ++reads === 1 ? snapshot("auto", '"mdo-config-7"') : snapshot("en-US"),
     patch: async () => { writes++; throw Object.assign(new Error("revision conflict"), { status: 412 }); } });
   await env.settings.load(); assert.equal(writes, 1); assert.equal(reads, 2);
-  assert.equal(env.store.get().data.locale, "en-US"); assert.equal(env.store.get().data.etag, '"new"');
+  assert.equal(env.store.get().data.locale, "en-US"); assert.equal(env.store.get().data.etag, '"mdo-config-8"');
 });
 
 test("explicit save confirmation of auto locale is read-only", async () => {
   let reads = 0, writes = 0;
   const env = fixture({ get: async () => { reads++; return snapshot("auto"); },
-    patch: async () => { writes++; return { data: { changed: true } }; } });
-  assert.equal((await env.settings.apply({ locale: "auto" }, '"old"')).changed, true);
+    patch: async () => { writes++; return accepted(); } });
+  assert.equal((await env.settings.apply({ locale: "auto" }, '"mdo-config-7"')).changed, true);
   assert.equal(writes, 1); assert.equal(reads, 1); assert.equal(env.store.get().data.locale, "ru-RU");
 });
 
@@ -227,11 +238,11 @@ test("public settings exports still confirm an ordinary successful save", async 
   globalThis.fetch = async (_url, options) => {
     calls.push(options.method);
     return options.method === "PATCH"
-      ? Response.json({ ok: true, data: { changed: true } })
-      : Response.json({ ok: true, data: snapshot().data }, { headers: { ETag: '"new"' } });
+      ? acceptedResponse()
+      : Response.json({ ok: true, data: snapshot().data }, { headers: { ETag: '"mdo-config-8"' } });
   };
   try {
-    settingsStore.reset(); assert.equal((await applySettings({}, '"old"')).changed, true);
-    assert.deepEqual(calls, ["PATCH", "GET"]); assert.equal(settingsStore.get().data.etag, '"new"');
+    settingsStore.reset(); assert.equal((await applySettings({}, '"mdo-config-7"')).changed, true);
+    assert.deepEqual(calls, ["PATCH", "GET"]); assert.equal(settingsStore.get().data.etag, '"mdo-config-8"');
   } finally { globalThis.fetch = original; settingsStore.reset(); }
 });

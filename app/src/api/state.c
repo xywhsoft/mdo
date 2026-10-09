@@ -56,6 +56,7 @@ static bool MdoApiSettingsBoolField(xvalue* Target, cstr TargetName,
 bool MdoApiSettingsRoute(MdoApiContext* Context)
 {
     MdoSettingsServiceSnapshot Service;
+    MdoConfigSnapshot After;
     MdoConfigTransportSettings Transport;
     MdoPowerManagerStatus PowerRuntime;
     str EffectiveJson;
@@ -81,12 +82,16 @@ bool MdoApiSettingsRoute(MdoApiContext* Context)
     xvalue* WorkspaceValue = xrtValueObject();
     xvalue* ServiceValue = xrtValueObject();
     bool Ok;
+    bool ServiceAvailable;
 
     memset(&Service, 0, sizeof(Service)); Service.Size = sizeof(Service);
     memset(&Transport, 0, sizeof(Transport));
     Transport.Size = sizeof(Transport);
     memset(&PowerRuntime, 0, sizeof(PowerRuntime));
     PowerRuntime.Size = sizeof(PowerRuntime);
+    /* Wait for an in-flight transaction before reading its effective fields.
+     * The final revision check prevents mixed old fields/new ETag snapshots. */
+    ServiceAvailable = MdoSettingsServiceGetSnapshot(&Service);
     EffectiveJson = MdoConfigEffectiveJson(&EffectiveSize);
     Effective = EffectiveJson != NULL ?
         xrtJsonParse(xrtStrViewN(EffectiveJson, EffectiveSize)) : NULL;
@@ -115,7 +120,7 @@ bool MdoApiSettingsRoute(MdoApiContext* Context)
         AgentValue != NULL && TransportValue != NULL && ProxyValue != NULL &&
         WorkspaceValue != NULL &&
         ServiceValue != NULL && EffectiveSettings != NULL &&
-        MdoSettingsServiceGetSnapshot(&Service) &&
+        ServiceAvailable &&
         MdoConfigGetTransportSettings(&Transport) &&
         MdoPowerManagerGetStatus(&PowerRuntime);
     if ( Ok ) Ok =
@@ -220,6 +225,17 @@ bool MdoApiSettingsRoute(MdoApiContext* Context)
     xrtValueRelease(Effective);
     if ( !Ok ) { xrtValueRelease(Data); Data = NULL; }
     if ( Data == NULL ) return MdoApiStateReply(Context, NULL);
+    memset(&After, 0, sizeof(After)); After.Size = sizeof(After);
+    if ( !MdoConfigGetSnapshot(&After) ) {
+        xrtValueRelease(Data);
+        return MdoApiReplyError(Context, 503u, "settings_snapshot_unavailable",
+            "The current settings could not be read", NULL);
+    }
+    if ( After.Revision != Service.Config.Revision ) {
+        xrtValueRelease(Data);
+        return MdoApiReplyError(Context, 425u, "settings_snapshot_pending",
+            "Settings changed while reading; read them again", NULL);
+    }
     return MdoApiReplySuccessTakeRevision(Context, 200u, Data,
         Service.Config.Revision);
 }

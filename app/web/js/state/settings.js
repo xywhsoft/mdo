@@ -1,7 +1,8 @@
-import { api, ApiError, allowsApiWrite } from "../api/client.js";
+import { api, allowsApiWrite } from "../api/client.js";
 import { createResourceStore } from "./store.js";
 import { resolveLocale } from "../i18n.js";
 import { isTransientReadError } from "../api/read-recovery.js";
+import { createSettingsWriter } from "./settings-write.js";
 
 function documentFor(patch) {
   return { schema_version: 1, patch };
@@ -29,8 +30,11 @@ export function createSettingsState({
   store = createResourceStore(null, { recoverRead: isTransientReadError }),
   client = api, resolveLanguage = resolveLocale,
   canInitializeLocale = () => allowsApiWrite("/settings/settings", { method: "PATCH" }),
+  writeOptions = {},
 } = {}) {
   let localePending = false, localeGeneration = 0;
+  const write = createSettingsWriter({ client, ...writeOptions });
+  let cancelWrite = null;
   async function readSettings(signal) {
     const response = await client.get("/settings", { signal });
     if (signal?.aborted) throw new DOMException("Settings read cancelled", "AbortError");
@@ -77,13 +81,35 @@ export function createSettingsState({
     });
     return waitForRecovery ? waitForSettingsRead(store) : store.get();
   }
-  async function confirmRead() {
-    const loaded = await load({ waitForRecovery: true, initializeLocale: false });
-    if (loaded.status !== "ready")
-      throw new ApiError("Settings were saved, but the latest snapshot could not be read", {
-        code: "settings_confirmation_failed", status: loaded.error?.status,
-        details: { read_error: loaded.error?.code ?? "request_failed" },
-      });
+  async function save(patch, etag, { restore = false, signal } = {}) {
+    localePending = false; localeGeneration++;
+    cancelWrite?.();
+    const controller = new AbortController(), cancel = () => controller.abort();
+    cancelWrite = cancel;
+    signal?.addEventListener("abort", cancel, { once: true });
+    if (signal?.aborted) cancel();
+    let initial = true;
+    const unsubscribe = store.subscribe(state => {
+      if (!initial && state.status === "idle") cancel();
+      initial = false;
+    });
+    try {
+      const completed = await write(patch, etag, { restore, signal: controller.signal });
+      if (controller.signal.aborted) throw new DOMException("Settings write cancelled", "AbortError");
+      // A newer read may have completed on another view while saving. Never
+      // replace that snapshot with an older echo, or initialize locale here.
+      if (!(store.get().data?.revision > completed.snapshot.revision)) {
+        const fresh = completed.snapshot;
+        store.setData(fresh.locale === "auto" ? { ...fresh, locale: resolveLanguage() } : fresh);
+      }
+      return completed.result;
+    } catch (error) {
+      if (error?.code === "settings_confirmation_failed") store.setError(error.cause);
+      throw error;
+    } finally {
+      unsubscribe(); signal?.removeEventListener("abort", cancel);
+      if (cancelWrite === cancel) cancelWrite = null;
+    }
   }
   return Object.freeze({
     store, load,
@@ -103,18 +129,8 @@ export function createSettingsState({
     async preview(patch) {
       return (await client.patch("/settings/settings/preview", documentFor(patch))).data;
     },
-    async apply(patch, etag) {
-      localePending = false; localeGeneration++;
-      const result = (await client.patch("/settings/settings", documentFor(patch), { ifMatch: etag })).data;
-      await confirmRead();
-      return result;
-    },
-    async restore(etag) {
-      localePending = false; localeGeneration++;
-      const result = (await client.delete("/settings/settings", { ifMatch: etag })).data;
-      await confirmRead();
-      return result;
-    },
+    apply: save,
+    restore: (etag, options = {}) => save(null, etag, { ...options, restore: true }),
   });
 }
 

@@ -62,6 +62,7 @@ export function applyAppearance(settings) {
 }
 
 export function createSettingsView({ form, store, navigation, onApplied }) {
+  const lifetime = new AbortController();
   const revision = document.querySelector("#settings-revision");
   const feedback = document.querySelector("#settings-feedback");
   const actions = document.querySelector("#settings-actions");
@@ -379,7 +380,7 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
         return null;
       return { patch: settingsPatch(form), etag: snapshot.etag, values: values() };
     },
-    write: (submitted) => applySettings(submitted.patch, submitted.etag),
+    write: (submitted, options) => applySettings(submitted.patch, submitted.etag, options),
     onStart(submitted) {
       saveFailure = "";
       submittedValues = submitted.values;
@@ -391,7 +392,14 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
       const saveConflict = error?.status === 412 && error?.code !== "settings_confirmation_failed";
       if (saveConflict) saveFailure = t("settings.saveConflict", {},
         "设置已在其他窗口更新。你的修改仍保留，可点击保存重试。");
-      else if (error?.code === "settings_confirmation_failed") saveFailure = errorMessage(error);
+      else if (["settings_confirmation_failed", "settings_save_unconfirmed", "settings_save_unavailable"].includes(error?.code))
+        saveFailure = errorMessage(error);
+      else if (error?.name === "AbortError") {
+        submittedValues = null;
+        setBusy(false);
+        markDirty();
+        return;
+      }
       else if (error) saveFailure = t("settings.saveFailed", { error: errorMessage(error) },
         `保存失败：${errorMessage(error)}。更改已保留，可点击保存重试。`);
       submittedValues = null;
@@ -464,27 +472,30 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
     setBusy(true);
     let restored = false;
     try {
-      await restoreSettings(snapshot.etag);
+      await restoreSettings(snapshot.etag, { signal: lifetime.signal });
       restored = true;
       restoreConfirm.hidden = true;
       feedbackText(t("settings.restored", {}, "已恢复默认设置。"), "success");
       toast(t("settings.restoreToast", {}, "已恢复默认设置"));
       onApplied?.();
     } catch (error) {
+      if (error?.name === "AbortError") return;
       if (error?.code === "settings_confirmation_failed") {
         restoreConfirm.hidden = true;
         saveFailure = errorMessage(error);
       }
       feedbackText(errorMessage(error), "error");
     } finally {
-      busy = false;
-      submittedValues = null;
-      setBusy(false);
-      cancelRestoreButton.disabled = false;
-      confirmRestoreButton.disabled = false;
-      focusAfterAction(
-        restoreConfirm.hidden ? feedback : confirmRestoreButton);
-      if (restored) autosave.schedule();
+      if (!lifetime.signal.aborted) {
+        busy = false;
+        submittedValues = null;
+        setBusy(false);
+        cancelRestoreButton.disabled = false;
+        confirmRestoreButton.disabled = false;
+        focusAfterAction(
+          restoreConfirm.hidden ? feedback : confirmRestoreButton);
+        if (restored) autosave.schedule();
+      }
     }
   });
 
@@ -535,6 +546,7 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
       return selectedSection;
     },
     destroy() {
+      lifetime.abort();
       autosave.destroy();
       unsubscribe();
       pages.destroy();

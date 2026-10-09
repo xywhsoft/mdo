@@ -1,7 +1,10 @@
 """Run an isolated packed settings page with one delayed/failed request.
 
-POST /__qa/arm?mode=hold, hold-fail, fail, or conflict affects one bounded request.
+POST /__qa/arm?mode=hold, hold-fail, fail, conflict, drop, drop-before, or
+unconfirmed affects one bounded request. method=DELETE selects settings reset.
 hold-fail releases a delayed 503 instead of the captured upstream response.
+drop loses an accepted acknowledgement; drop-before does not forward it.
+unconfirmed loses the acknowledgement and fails the next five settings reads.
 An optional path= selects a catalog GET, models PUT, or models preview POST.
 GET /__qa/control reports its arrival and bounded request counts.
 GET /__qa/session-menu serves the bounded menu/indicator component fixture with
@@ -17,6 +20,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import socket
 import subprocess
 import tempfile
 import threading
@@ -28,7 +32,7 @@ from test_interrupt_runtime import stop_host
 SETTINGS = "/api/v1/settings/settings"
 READ_PATHS = {"/api/v1/" + name for name in (
     "models/config", "modules", "skills", "mcp", "permissions", "storage",
-    "diagnostics", "migrations/legacy")}
+    "diagnostics", "migrations/legacy", "settings")}
 
 
 WRITE_PATHS = {"/api/v1/settings/models": "PUT",
@@ -86,16 +90,19 @@ class SettingsProxy(BaseHTTPRequestHandler):
         if target.path == "/__qa/arm" and self.command == "POST":
             query = parse_qs(target.query)
             mode = query.get("mode", [""])[0]
-            assert mode in ("hold", "hold-fail", "fail", "conflict")
+            assert mode in ("hold", "hold-fail", "fail", "conflict", "drop", "drop-before", "unconfirmed")
             path = query.get("path", [SETTINGS])[0]
             assert path == SETTINGS or path in READ_PATHS or path in WRITE_PATHS
             with self.server.lock:
                 self.server.release.set()
                 self.server.release = threading.Event()
                 self.server.mode = mode
-                self.server.target = ("PATCH" if path == SETTINGS else
+                method = query.get("method", ["PATCH"])[0]
+                assert method in ("PATCH", "DELETE")
+                self.server.target = (method if path == SETTINGS else
                                       WRITE_PATHS.get(path, "GET"), path)
                 self.server.arrived = False
+                self.server.read_failures = 0
             return self.reply({"armed": mode})
         if target.path == "/__qa/release" and self.command == "POST":
             self.server.release.set()
@@ -116,6 +123,11 @@ class SettingsProxy(BaseHTTPRequestHandler):
                 if mode:
                     self.server.arrived = True
                     gate = self.server.release
+            if self.command == "GET" and target.path == "/api/v1/settings" and self.server.read_failures:
+                self.server.read_failures -= 1
+                mode = "fail"
+        if mode == "drop-before":
+            return self.drop_reply()
         if mode in ("fail", "conflict"):
             return self.reply({"ok": False, "error": {"code": "qa_save_failed",
                 "message": "Bounded fixture request failure"}},
@@ -130,6 +142,11 @@ class SettingsProxy(BaseHTTPRequestHandler):
             status, result_headers = response.status, response.getheaders()
         finally:
             connection.close()
+        if mode in ("drop", "unconfirmed"):
+            if mode == "unconfirmed":
+                with self.server.lock:
+                    self.server.read_failures = 5
+            return self.drop_reply()
         if mode in ("hold", "hold-fail") and not gate.wait(40):
             print("Settings reply gate reached its bounded timeout", flush=True)
         if mode == "hold-fail":
@@ -145,6 +162,16 @@ class SettingsProxy(BaseHTTPRequestHandler):
             self.wfile.write(payload)
         except (BrokenPipeError, ConnectionResetError):
             pass
+
+    def drop_reply(self):
+        # Forwarded mutations have completed before this connection disappears.
+        # Dropping a response exercises fetch's real network-error path.
+        self.close_connection = True
+        try:
+            self.connection.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            pass
+        self.connection.close()
 
 
 def main():
@@ -178,6 +205,7 @@ def main():
         proxy.lock = threading.Lock()
         proxy.release = threading.Event()
         proxy.mode, proxy.arrived = "", False
+        proxy.read_failures = 0
         proxy.target = ("PATCH", SETTINGS)
         proxy.counts, proxy.patches = {}, []
         threading.Thread(target=proxy.serve_forever, daemon=True).start()

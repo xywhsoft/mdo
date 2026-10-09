@@ -15,6 +15,10 @@ const packs = Object.fromEntries(supportedLocales.map((name) => [
   name, JSON.parse(readFileSync(new URL(`lang/${name}.json`, root), "utf8")),
 ]));
 const localizedApiErrors = [
+  ["settings_save_unconfirmed", "error.settingsSaveUnconfirmed"],
+  ["settings_save_unavailable", "error.settingsSaveUnavailable"],
+  ["runtime_rejected", "error.settingsRuntimeRejected"],
+  ["runtime_inconsistent", "error.settingsRestartRequired"],
   ["ask_answer_unconfirmed", "error.askAnswerUnconfirmed"],
   ["approval_decision_unconfirmed", "error.approvalDecisionUnconfirmed"],
   ["decision_conflict", "error.decisionConflict"],

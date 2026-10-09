@@ -7,6 +7,7 @@ export function createSettingsAutosave({ capture, write, onStart, onSettled,
   let saving = false;
   let composing = false;
   let disposed = false;
+  let controller = null;
 
   function cancel() {
     timers.clearTimeout(timer);
@@ -25,13 +26,15 @@ export function createSettingsAutosave({ capture, write, onStart, onSettled,
     const submitted = capture();
     if (!submitted) return false;
     saving = true;
+    controller = new AbortController();
     onStart(submitted);
     let result;
     let failure = null;
-    try { result = await write(submitted); }
+    try { result = await write(submitted, { signal: controller.signal }); }
     catch (cause) { failure = cause; }
     finally {
       saving = false;
+      controller = null;
       cancel();
       if (!disposed) {
         onSettled(failure, result);
@@ -47,7 +50,7 @@ export function createSettingsAutosave({ capture, write, onStart, onSettled,
       if (composing) cancel();
       else schedule();
     },
-    destroy() { disposed = true; cancel(); },
+    destroy() { disposed = true; cancel(); controller?.abort(); },
   });
 }
 

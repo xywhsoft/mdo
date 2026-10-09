@@ -149,11 +149,13 @@ class FrontendContractTests(unittest.TestCase):
 
     def test_settings_autosave_uses_etag_and_server_side_merge(self) -> None:
         state = self.scripts["js/state/settings.js"]
+        writer = self.scripts["js/state/settings-write.js"]
         view = self.scripts["js/features/settings/settings-view.js"]
         navigation = self.scripts["js/state/navigation.js"]
         self.assertIn('client.patch("/settings/settings/preview"', state)
         self.assertIn('client.patch("/settings/settings"', state)
-        self.assertIn("{ ifMatch: etag }", state)
+        self.assertIn("createSettingsWriter", state)
+        self.assertIn("{ ifMatch: etag, signal: attemptSignal }", writer)
         self.assertIn("createSettingsAutosave", view)
         self.assertIn("changedSettingsValues", view)
         self.assertIn("invalid.reportValidity()", view)
