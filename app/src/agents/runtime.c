@@ -1519,19 +1519,21 @@ static bool MdoAgentRecoveryHashString(xsha256* Hash, const char* Text)
 }
 
 bool MdoAgentRecoverySnapshotToken(const xwork_recovery_snapshot* Snapshot,
-    bool ResumeRequired, uint64 LastSequence,
+    bool ResumeRequired, uint64 LastSequence, const char* HistoryEpoch,
     char Token[MDO_AGENT_RECOVERY_TOKEN_CAPACITY])
 {
-    static const char Domain[] = "mdo-recovery-view-v2";
+    static const char Domain[] = "mdo-recovery-view-v3";
     static const char Hex[] = "0123456789abcdef";
     xsha256 Hash;
     uint8 Digest[XRT_SHA256_SIZE];
     size_t Count;
     size_t Index;
-    if ( Snapshot == NULL || Token == NULL ) return false;
+    if ( Snapshot == NULL || Token == NULL || HistoryEpoch == NULL ||
+         (strlen(HistoryEpoch) != 64u && (ResumeRequired || HistoryEpoch[0])) ) return false;
     Count = xworkRecoverySnapshotCount(Snapshot);
     xrtSha256Init(&Hash);
     if ( !xrtSha256Update(&Hash, Domain, sizeof(Domain) - 1u) ||
+         !MdoAgentRecoveryHashString(&Hash, HistoryEpoch) ||
          !MdoAgentRecoveryHashUInt64(&Hash, ResumeRequired ? 1u : 0u) ||
          !MdoAgentRecoveryHashUInt64(&Hash, LastSequence) ||
          !MdoAgentRecoveryHashUInt64(&Hash, (uint64)Count) ) return false;

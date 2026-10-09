@@ -266,6 +266,9 @@ xvalue* MdoSessionConversationTurns(const char* ProjectId, const char* SessionId
     uint64 Before, size_t Limit, xwork_error* Error);
 typedef struct MdoConversationPageInfo {
     char Epoch[65];
+    /* False when the filesystem needs mtime for identity; append can then
+     * change Epoch. Such a view cannot identify a one-time recovery attempt. */
+    bool StableEpoch;
     uint64 NextBefore;
     bool HasMore;
     bool Delta;

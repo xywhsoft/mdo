@@ -112,3 +112,14 @@ test("a failed resumed run can be retried after a fresh idle inspection with the
   state.select({ ...fresh, inspection_id: 3 });
   assert.ok(state.begin({ ...fresh, inspection_id: 3 }));
 });
+
+test("history editing cannot transfer a reviewed retry to a reused call and token", () => {
+  const state = createRecoveryDecisions();
+  const old = { ...pending(), history_epoch: "a".repeat(64) };
+  const fresh = { ...old, history_epoch: "b".repeat(64) };
+  state.select(old); choose(state, old);
+  state.select(fresh);
+  assert.equal(state.choice("same-id"), "record_uncertain");
+  assert.equal(choose(state, old), false);
+  assert.equal(choose(state, fresh), true);
+});

@@ -42,7 +42,8 @@ class RunManagerContractTests(unittest.TestCase):
         self.assertIn("const xwork_resume_options* ResumeOptions", self.header)
         self.assertIn("MdoAgentSessionRecoverySnapshot", self.source)
         self.assertIn("MdoAgentRecoverySnapshotToken", self.source)
-        self.assertIn("strcmp(CurrentToken, ExpectedToken)", self.source)
+        self.assertIn("strcmp(CurrentToken, Options->RecoveryToken)", self.source)
+        self.assertIn("ResumeRequired, LastSequence, Page.Epoch, CurrentToken", self.source)
         self.assertLess(
             self.source.index("MdoRunsRecoveryTokenValid(Agent"),
             self.source.index("MdoAgentRunCreate(Agent"),

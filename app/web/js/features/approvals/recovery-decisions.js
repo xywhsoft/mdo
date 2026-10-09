@@ -3,7 +3,8 @@ function sessionKey(data) {
 }
 
 function bindingKey(data) {
-  return JSON.stringify([data?.project_id ?? "", data?.session_id ?? "", data?.recovery_token ?? ""]);
+  return JSON.stringify([data?.project_id ?? "", data?.session_id ?? "",
+    data?.history_epoch ?? "", data?.recovery_token ?? ""]);
 }
 
 export function defaultRecoveryAction(item) {

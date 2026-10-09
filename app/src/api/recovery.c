@@ -127,7 +127,8 @@ static bool MdoApiRecoveryItemValue(const xwork_recovery_call_info* Info,
 
 /* Absence of a terminal event is positive evidence of an interrupted runtime,
  * not of a user stop. A recorded stop or ordinary model error remains manual. */
-static bool MdoApiRecoveryMayContinue(const MdoSessionInfo* Session, bool MeteredSearch)
+static bool MdoApiRecoveryMayContinue(const MdoSessionInfo* Session,
+    bool MeteredSearch, char Epoch[65])
 {
     MdoConversationPageInfo Page;
     MdoSessionEventSnapshot* Events;
@@ -154,6 +155,10 @@ static bool MdoApiRecoveryMayContinue(const MdoSessionInfo* Session, bool Metere
         }
     }
     MdoSessionEventSnapshotRelease(Events);
+    /* Append must not reset the client's one-attempt limit. History editing
+     * atomically replaces this journal and can reuse the old turn numbers. */
+    memcpy(Epoch, Page.Epoch, sizeof(Page.Epoch));
+    if (!Page.StableEpoch) return false;
     /* A paid request lost before its receipt is not provably unbilled. Until
      * the service supports idempotency, ask for one Continue click in that
      * ambiguous crash window rather than automatically resubmitting it. */
@@ -170,13 +175,13 @@ static bool MdoApiRecoveryReply(MdoApiContext* Context,
     size_t ArgumentTotal = 0u;
     uint64 CatalogGeneration = 0u;
     char RecoveryToken[MDO_AGENT_RECOVERY_TOKEN_CAPACITY];
+    char HistoryEpoch[65] = {0};
     size_t Index;
     bool AllRead = Count != 0u;
     bool MeteredSearch = false;
+    bool Automatic = false;
     bool Ok = Data != NULL && Items != NULL &&
-        Count <= MDO_API_RECOVERY_CALL_MAX &&
-        MdoAgentRecoverySnapshotToken(Snapshot, ResumeRequired, LastSequence,
-            RecoveryToken);
+        Count <= MDO_API_RECOVERY_CALL_MAX;
 
     for ( Index = 0u; Ok && Index < Count; ++Index ) {
         xwork_recovery_call_info Info;
@@ -213,6 +218,17 @@ static bool MdoApiRecoveryReply(MdoApiContext* Context,
             MdoApiValueAppendTake(Items, &Item);
         xrtValueRelease(Item);
     }
+    if ( Ok ) {
+        if (ResumeRequired)
+            Automatic = MdoApiRecoveryMayContinue(SessionInfo, MeteredSearch, HistoryEpoch);
+        if (ResumeRequired && !HistoryEpoch[0]) {
+            xrtValueRelease(Data); xrtValueRelease(Items);
+            return MdoApiReplyError(Context, 503u, "recovery_result_unavailable",
+                "The session history could not be inspected for recovery", NULL);
+        }
+        Ok = MdoAgentRecoverySnapshotToken(Snapshot, ResumeRequired, LastSequence,
+            HistoryEpoch, RecoveryToken);
+    }
     if ( Ok ) Ok =
         MdoApiValueSetString(Data, "project_id", SessionInfo->ProjectId) &&
         MdoApiValueSetString(Data, "session_id", SessionInfo->Id) &&
@@ -221,8 +237,8 @@ static bool MdoApiRecoveryReply(MdoApiContext* Context,
         MdoApiValueSetUInt(Data, "catalog_generation", CatalogGeneration) &&
         MdoApiValueSetString(Data, "recovery_token", RecoveryToken) &&
         MdoApiValueSetBool(Data, "resume_required", ResumeRequired) &&
-        MdoApiValueSetBool(Data, "automatic_resume", ResumeRequired && AllRead &&
-            MdoApiRecoveryMayContinue(SessionInfo, MeteredSearch)) &&
+        MdoApiValueSetBool(Data, "automatic_resume", ResumeRequired && AllRead && Automatic) &&
+        MdoApiValueSetString(Data, "history_epoch", HistoryEpoch) &&
         MdoApiValueSetUInt(Data, "total", Count) &&
         MdoApiValueSetTake(Data, "items", &Items);
     xrtValueRelease(Items);

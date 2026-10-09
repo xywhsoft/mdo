@@ -45,6 +45,8 @@ AI 回复语言或记忆上下文不会让未完成会话被误判为已完成�
 
 `features/approvals/tool-preview.js` 提供权限和恢复卡片共用的操作预览。
 `features/approvals/recovery-decisions.js` 管理恢复默认值、快照绑定和提交锁。
+恢复选择和令牌绑定历史文件生成标识，清空/裁剪后不继承旧选择；自动继续还等待启动
+写入检查与连接就绪，同一历史中的中断回合最多自动尝试一次。用户主动停止保持手动继续。
 `features/asks/ask-card.js` 负责选项及自由回答。
 
 ```powershell

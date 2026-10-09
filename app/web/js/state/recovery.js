@@ -28,6 +28,8 @@ export async function readRecovery(projectId, sessionId, { signal,
     const data = (await api.get(`/projects/${project}/sessions/${session}/recovery`, { signal })).data;
     if (data?.project_id !== project || data.session_id !== session ||
         typeof data.resume_required !== "boolean" || !Array.isArray(data.items) ||
+        (data.history_epoch !== undefined &&
+          (typeof data.history_epoch !== "string" || !/^(?:[0-9a-f]{64})?$/.test(data.history_epoch))) ||
         !Number.isSafeInteger(data.revision) || data.revision < 1 ||
         !Number.isSafeInteger(data.last_sequence) || data.last_sequence < 0 ||
         !Number.isSafeInteger(data.total) || data.total !== data.items.length)

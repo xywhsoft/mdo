@@ -1,0 +1,114 @@
+{
+  "first_completed": {
+    "ok": true,
+    "reads": 1
+  },
+  "after_clear_pending": {
+    "project_id": "default",
+    "session_id": "history-recovery",
+    "revision": 2,
+    "last_sequence": 3,
+    "catalog_generation": 221,
+    "recovery_token": "f202bce195552d21054bad3f776131c23400f77cdefe8529b910ab7662f92fc7",
+    "resume_required": true,
+    "automatic_resume": true,
+    "history_epoch": "55154bd8b546b09b27895ebd408eefe8392a729abc6b427265fc0d521804e0fd",
+    "total": 1,
+    "items": [
+      {
+        "turn": 1,
+        "catalog_generation": 221,
+        "tool_call_id": "interrupted-read",
+        "tool": "read",
+        "arguments_json": "{\"path\":\"input.txt\"}",
+        "effect_mask": 1,
+        "effects": [
+          "read"
+        ],
+        "tool_available": true,
+        "automatic_retry_safe": true
+      }
+    ]
+  },
+  "provider_requests": 0,
+  "copied_source_fixture": true,
+  "clear_completed": {
+    "ok": true,
+    "reads": 2
+  },
+  "after_truncate_pending": {
+    "project_id": "default",
+    "session_id": "history-recovery",
+    "revision": 3,
+    "last_sequence": 3,
+    "catalog_generation": 365,
+    "recovery_token": "72cb35bb758dd18c22bd63bbef7e08cb88485820057de3ecf90d3cc79cf4dab9",
+    "resume_required": true,
+    "automatic_resume": true,
+    "history_epoch": "2139de1664f86d12e42ae0a0e8dfc6580cf48e8285c530249cf93a2288c8c6c6",
+    "total": 1,
+    "items": [
+      {
+        "turn": 1,
+        "catalog_generation": 365,
+        "tool_call_id": "interrupted-read",
+        "tool": "read",
+        "arguments_json": "{\"path\":\"input.txt\"}",
+        "effect_mask": 1,
+        "effects": [
+          "read"
+        ],
+        "tool_available": true,
+        "automatic_retry_safe": true
+      }
+    ]
+  },
+  "truncate_completed": {
+    "ok": true,
+    "reads": 3
+  },
+  "after_truncate_ui": {
+    "draft": "下一步继续：保留我的输入 🌱",
+    "recovery_visible": false,
+    "reply_complete": true,
+    "unrelated_purge_error": false
+  },
+  "stopped_pending": {
+    "project_id": "default",
+    "session_id": "history-recovery",
+    "revision": 4,
+    "last_sequence": 3,
+    "catalog_generation": 533,
+    "recovery_token": "6df6dc478e2f4d6020d40927053cadd01bc1af9b820a22c51448b14b6487a056",
+    "resume_required": true,
+    "automatic_resume": false,
+    "history_epoch": "a7937325054765885989d50f077e146555a41e4f5d840403eb04340834219489",
+    "total": 1,
+    "items": [
+      {
+        "turn": 1,
+        "catalog_generation": 533,
+        "tool_call_id": "interrupted-read",
+        "tool": "read",
+        "arguments_json": "{\"path\":\"input.txt\"}",
+        "effect_mask": 1,
+        "effects": [
+          "read"
+        ],
+        "tool_available": true,
+        "automatic_retry_safe": true
+      }
+    ]
+  },
+  "manual_completed": {
+    "ok": true,
+    "reads": 4
+  },
+  "stopped_automatic_reads": 0,
+  "manual_continue_clicks": 1,
+  "manual_after_ui": {
+    "draft": "下一步继续：保留我的输入 🌱",
+    "recovery_visible": false,
+    "reply_complete": true
+  }
+}

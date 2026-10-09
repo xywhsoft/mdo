@@ -471,6 +471,9 @@ session. It returns:
 - `resume_required`, which is true for a pending tool batch or an interrupted
   model continuation;
 - a stable `recovery_token` for the exact current recovery state;
+- `history_epoch`, a 64-character generation identifier when recovery is
+  required, or an empty string otherwise;
+- `automatic_resume`, positive evidence of an eligible interrupted read;
 - at most 32 pending calls, each with the original call ID, tool, arguments,
   effects, tool availability, and whether automatic retry would be safe;
 - the session revision and the current diagnostic catalog generation.
@@ -479,8 +482,16 @@ The recovery view limits each argument document to 16 KiB and the whole batch
 to 128 KiB. It fails closed when the durable state cannot be represented within
 those limits. Catalog generation is diagnostic only: a reopened equivalent
 catalog may receive a new process-local generation, while the token is derived
-from the durable call identities, arguments, effects, availability, retry
-safety, and continuation state.
+from the history generation, durable call identities, arguments, effects,
+availability, retry safety, and continuation state. Atomic history editing
+changes the generation even when turn numbers, call IDs and ledger sequences
+are reused. An older token cannot authorize the replacement history.
+
+Automatic continuation requires an active writable view, completed startup
+checks, and a stable filesystem identity. The page permits one attempt per
+history generation and interrupted turn. Polling and ordinary appends do not
+reset that allowance. A user stop, uncertain side effects, or an unsupported
+file identity remains manual; manual continuation still uses the exact token.
 
 `POST /projects/{project}/sessions/{session}/resume` accepts the current token
 and one explicit decision for every pending call:

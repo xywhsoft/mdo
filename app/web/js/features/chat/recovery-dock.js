@@ -14,6 +14,7 @@ export function createRecoveryDock({ container, summary, store, onResume, onAban
   const automatic = createAutomaticRecovery();
   let automaticFailure = "";
   let failureOwner = "";
+  const historyOwner = data => JSON.stringify([data?.project_id, data?.session_id, data?.history_epoch]);
 
   function choose(data, item, action) {
     if (decisions.choose(data, item.tool_call_id, action)) render();
@@ -37,7 +38,7 @@ export function createRecoveryDock({ container, summary, store, onResume, onAban
       if (error?.name !== "AbortError" && decisions.isCurrent(data)) {
         if (auto) {
           automaticFailure = errorMessage(error);
-          failureOwner = `${data.project_id}/${data.session_id}`;
+          failureOwner = historyOwner(data);
         }
         else toast(errorMessage(error), "error");
         if (error?.code === "recovery_state_conflict") await loadRecovery({ retry: true });
@@ -178,7 +179,7 @@ export function createRecoveryDock({ container, summary, store, onResume, onAban
       (defaultRecoveryAction(item) === "retry" ? safeCalls : uncertainCalls).push(item);
     summary.textContent = t(uncertainCalls.length ? "recovery.pendingSummary" :
       safeCalls.length ? "recovery.safeSummary" : "recovery.noPendingCalls", { count: items.length });
-    if (automaticFailure && failureOwner === `${data.project_id}/${data.session_id}` &&
+    if (automaticFailure && failureOwner === historyOwner(data) &&
         safeCalls.length && !uncertainCalls.length)
       container.append(element("p", { className: "resource-error", text: automaticFailure }));
     if (state.status === "ready" && !decisions.isBusy(data) &&

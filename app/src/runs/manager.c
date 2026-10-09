@@ -132,12 +132,19 @@ static bool MdoRunsClientResumeIdValid(const char* Id)
 }
 
 static bool MdoRunsRecoveryTokenValid(MdoAgentSession* Agent,
-    const char* ExpectedToken, xwork_error* Error)
+    const MdoRunStartOptions* Options, xwork_error* Error)
 {
     xwork_recovery_snapshot* Snapshot;
     char CurrentToken[MDO_AGENT_RECOVERY_TOKEN_CAPACITY];
     bool ResumeRequired = false;
     uint64 LastSequence = 0u;
+    MdoConversationPageInfo Page = {0};
+    MdoSessionEventSnapshot* Events;
+
+    Events = MdoSessionConversationPage(Options->ProjectId, Options->SessionId,
+        0u, 0u, NULL, 1u, &Page, Error);
+    if (Events == NULL) return false;
+    MdoSessionEventSnapshotRelease(Events);
 
     Snapshot = MdoAgentSessionRecoverySnapshot(Agent, Error);
     if ( Snapshot == NULL ) return false;
@@ -147,7 +154,7 @@ static bool MdoRunsRecoveryTokenValid(MdoAgentSession* Agent,
         return false;
     }
     if ( !ResumeRequired || !MdoAgentRecoverySnapshotToken(Snapshot,
-            ResumeRequired, LastSequence, CurrentToken) ) {
+            ResumeRequired, LastSequence, Page.Epoch, CurrentToken) ) {
         xworkRecoverySnapshotRelease(Snapshot);
         MdoRunsError(Error, ResumeRequired ? XWORK_ERROR_CONTEXT :
             XWORK_ERROR_POLICY, ResumeRequired ?
@@ -156,7 +163,7 @@ static bool MdoRunsRecoveryTokenValid(MdoAgentSession* Agent,
         return false;
     }
     xworkRecoverySnapshotRelease(Snapshot);
-    if ( ExpectedToken == NULL || strcmp(CurrentToken, ExpectedToken) != 0 ) {
+    if ( Options->RecoveryToken == NULL || strcmp(CurrentToken, Options->RecoveryToken) != 0 ) {
         MdoRunsError(Error, XWORK_ERROR_POLICY,
             "recovery state changed after it was inspected");
         return false;
@@ -724,7 +731,7 @@ bool MdoRunStartWithOutcome(const MdoRunStartOptions* Options,
         goto publish;
     }
     if ( Options->Resume && !MdoRunsRecoveryTokenValid(Agent,
-            Options->RecoveryToken, Error) ) goto publish;
+            Options, Error) ) goto publish;
     MdoAgentRunOptionsInit(&RunOptions);
     RunOptions.Prompt = Options->Prompt;
     RunOptions.UserMessage = Options->UserMessage;

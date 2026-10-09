@@ -96,6 +96,8 @@ static MdoSessionEventSnapshot* MdoReadConversationPage(const char* Project,
     xrtAtomic32Init(&Snapshot->Refs, 1u);
     Reader = MdoEventReaderOpen(Path);
     if (!Reader || !MdoViewEpoch(Reader, Page->Epoch)) goto io;
+    Page->StableEpoch = Reader->File != NULL &&
+        (Reader->Info.Available & XFILE_INFO_IDENTITY) != 0u;
     memcpy(Snapshot->Epoch, Page->Epoch, sizeof(Snapshot->Epoch));
     Snapshot->LatestId = MdoEventReaderLatest(Reader, Project, Session, &Snapshot->HistoryLost);
     Delta = !Before && Epoch && *Epoch && !strcmp(Epoch, Page->Epoch) && After <= Snapshot->LatestId;

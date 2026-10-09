@@ -1061,7 +1061,9 @@ export async function boot() {
   createRecoveryDock({
     ...conversationDocks.recovery,
     store: recoveryStore,
-    canAutoResume: data => !activeRun && !submittingCurrent() &&
+    canAutoResume: data => !purgeRecovery.isPaused() && !localServiceReconnecting &&
+      (!isRemoteTarget() || (targetState().connected && !targetState().runtimeChanged &&
+        targetState().selected.mode === "control")) && !activeRun && !submittingCurrent() &&
       recoveryMatchesWorkspace(data, navigation.get()),
     onResume: (run, owner) => {
       const ownsView = recoveryMatchesWorkspace(owner, navigation.get());
@@ -1275,6 +1277,9 @@ export async function boot() {
       void projectDraftSelection.restoreLegacy();
       void newTaskController.reconcile();
       if (selectedKey) void submissionController.reconcile(selectedKey);
+      // An early recovery inspection can finish before startup's write gate.
+      // Admit it only now; waiting for permission must not consume its attempt.
+      void loadRecovery();
     }
     purgeWasPaused = paused;
   });

@@ -1,0 +1,171 @@
+{
+  "histories": [
+    {
+      "project_id": "default",
+      "session_id": "history-recovery",
+      "revision": 1,
+      "last_sequence": 3,
+      "catalog_generation": 52,
+      "recovery_token": "bb621958fcaec6bb0d6549c6700f6be71ba597bce59ba270436a85e33fb07241",
+      "resume_required": true,
+      "automatic_resume": true,
+      "history_epoch": "27efd0dafc76b7c87d3a0f2930d7596246978e41d13b0265b92ed981cd3e3bc6",
+      "total": 1,
+      "items": [
+        {
+          "turn": 2,
+          "catalog_generation": 52,
+          "tool_call_id": "interrupted-read",
+          "tool": "read",
+          "arguments_json": "{\"path\":\"input.txt\"}",
+          "effect_mask": 1,
+          "effects": [
+            "read"
+          ],
+          "tool_available": true,
+          "automatic_retry_safe": true
+        }
+      ]
+    },
+    {
+      "project_id": "default",
+      "session_id": "history-recovery",
+      "revision": 2,
+      "last_sequence": 3,
+      "catalog_generation": 172,
+      "recovery_token": "f45f8dd91854c8fdf3a072bacab6a7b08d1c2f1212cb2813239c0dee1d0bdd5f",
+      "resume_required": true,
+      "automatic_resume": true,
+      "history_epoch": "d6322eef03837bf1bc87eb433d4a6843108dd745bc2ee49a3668ea655b474f8f",
+      "total": 1,
+      "items": [
+        {
+          "turn": 1,
+          "catalog_generation": 172,
+          "tool_call_id": "interrupted-read",
+          "tool": "read",
+          "arguments_json": "{\"path\":\"input.txt\"}",
+          "effect_mask": 1,
+          "effects": [
+            "read"
+          ],
+          "tool_available": true,
+          "automatic_retry_safe": true
+        }
+      ]
+    },
+    {
+      "project_id": "default",
+      "session_id": "history-recovery",
+      "revision": 3,
+      "last_sequence": 3,
+      "catalog_generation": 292,
+      "recovery_token": "85c85a8855e786fffa57d8a857b0eb3bb571712086c24f19bf6b53f53eba7a29",
+      "resume_required": true,
+      "automatic_resume": true,
+      "history_epoch": "f7a6bfa09ba2db1a5327380ed4f32ee0c12cd2d22da83d0d6cf4331538e4f11b",
+      "total": 1,
+      "items": [
+        {
+          "turn": 1,
+          "catalog_generation": 292,
+          "tool_call_id": "interrupted-read",
+          "tool": "read",
+          "arguments_json": "{\"path\":\"input.txt\"}",
+          "effect_mask": 1,
+          "effects": [
+            "read"
+          ],
+          "tool_available": true,
+          "automatic_retry_safe": true
+        }
+      ]
+    }
+  ],
+  "stopped": {
+    "project_id": "default",
+    "session_id": "history-recovery",
+    "revision": 4,
+    "last_sequence": 3,
+    "catalog_generation": 436,
+    "recovery_token": "da1ba3acc780c47f1b71d1ab6eadf31d2462f14cea8b3ab45e2d4c5dc4fc9989",
+    "resume_required": true,
+    "automatic_resume": false,
+    "history_epoch": "c356d05bc6857e6ed1eb206f456853741243c79dfc5eac4a6329bab792dbef51",
+    "total": 1,
+    "items": [
+      {
+        "turn": 1,
+        "catalog_generation": 436,
+        "tool_call_id": "interrupted-read",
+        "tool": "read",
+        "arguments_json": "{\"path\":\"input.txt\"}",
+        "effect_mask": 1,
+        "effects": [
+          "read"
+        ],
+        "tool_available": true,
+        "automatic_retry_safe": true
+      }
+    ]
+  },
+  "stable_identity_control": {
+    "project_id": "default",
+    "session_id": "history-recovery",
+    "revision": 6,
+    "last_sequence": 3,
+    "catalog_generation": 508,
+    "recovery_token": "454dc1d36c17c6c5704d4e9e30d73d271798a4176d15f271a24e3578531de60b",
+    "resume_required": true,
+    "automatic_resume": true,
+    "history_epoch": "cde33cf6337fd1834efaf243b5757f00a7119d12d55f9967af0bc4988d98ff79",
+    "total": 1,
+    "items": [
+      {
+        "turn": 1,
+        "catalog_generation": 508,
+        "tool_call_id": "interrupted-read",
+        "tool": "read",
+        "arguments_json": "{\"path\":\"input.txt\"}",
+        "effect_mask": 1,
+        "effects": [
+          "read"
+        ],
+        "tool_available": true,
+        "automatic_retry_safe": true
+      }
+    ]
+  },
+  "unsupported_identity": {
+    "project_id": "default",
+    "session_id": "history-recovery",
+    "revision": 6,
+    "last_sequence": 3,
+    "catalog_generation": 532,
+    "recovery_token": "8bfb2ad5eab5747d92f57527f0e0449a6b3de390e149067cba2775ea7f77dea1",
+    "resume_required": true,
+    "automatic_resume": false,
+    "history_epoch": "66d7a217b4563e239c74c52f7a02a772b7367f7aa9198f48eba86ca985d2d2fb",
+    "total": 1,
+    "items": [
+      {
+        "turn": 1,
+        "catalog_generation": 532,
+        "tool_call_id": "interrupted-read",
+        "tool": "read",
+        "arguments_json": "{\"path\":\"input.txt\"}",
+        "effect_mask": 1,
+        "effects": [
+          "read"
+        ],
+        "tool_available": true,
+        "automatic_retry_safe": true
+      }
+    ]
+  },
+  "completed_reads": 4,
+  "stale_history_token_status": 409,
+  "stale_history_token_changed_ledger": false,
+  "unsupported_identity_manual_resume": true,
+  "fixture": "serial native model/event callbacks; no model network requests"
+}
