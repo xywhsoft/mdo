@@ -1,0 +1,70 @@
+{
+  "firstFailure": {
+    "draft": "\u4fdd\u7559\u8fd9\u4efd\u8349\u7a3f\uff1a\u7ee7\u7eed\u68c0\u67e5 \ud83c\udf31",
+    "errors": [
+      "\u6a21\u578b\u989d\u5ea6\u4e0d\u8db323:07\u4eca\u65e5\u6a21\u578b\u989d\u5ea6\u5df2\u7528\u5b8c\uff0c\u6216\u88ab\u5c1a\u672a\u7ed3\u675f\u7684\u8bf7\u6c42\u9884\u5360\u3002\u8bf7\u67e5\u770b\u8d26\u53f7\u7528\u91cf\uff1b\u989d\u5ea6\u4e8e\u5317\u4eac\u65f6\u95f4 00:00 \u91cd\u7f6e\u3002"
+    ],
+    "publicRecovery": []
+  },
+  "secondFailure": {
+    "collapsedProcesses": [
+      true
+    ],
+    "draft": "\u4fdd\u7559\u8fd9\u4efd\u8349\u7a3f\uff1a\u7ee7\u7eed\u68c0\u67e5 \ud83c\udf31",
+    "errors": [
+      "\u6a21\u578b\u989d\u5ea6\u4e0d\u8db323:07\u4eca\u65e5\u6a21\u578b\u989d\u5ea6\u5df2\u7528\u5b8c\uff0c\u6216\u88ab\u5c1a\u672a\u7ed3\u675f\u7684\u8bf7\u6c42\u9884\u5360\u3002\u8bf7\u67e5\u770b\u8d26\u53f7\u7528\u91cf\uff1b\u989d\u5ea6\u4e8e\u5317\u4eac\u65f6\u95f4 00:00 \u91cd\u7f6e\u3002"
+    ],
+    "publicRecovery": []
+  },
+  "success": {
+    "collapsedProcesses": [
+      true
+    ],
+    "draft": "\u4fdd\u7559\u8fd9\u4efd\u8349\u7a3f\uff1a\u7ee7\u7eed\u68c0\u67e5 \ud83c\udf31",
+    "errors": [],
+    "publicRecovery": [],
+    "recoveryVisible": false,
+    "reply": "FIXTURE_OK: quota"
+  },
+  "details": {
+    "errors": [
+      "\u6a21\u578b\u989d\u5ea6\u4e0d\u8db323:07\u4eca\u65e5\u6a21\u578b\u989d\u5ea6\u5df2\u7528\u5b8c\uff0c\u6216\u88ab\u5c1a\u672a\u7ed3\u675f\u7684\u8bf7\u6c42\u9884\u5360\u3002\u8bf7\u67e5\u770b\u8d26\u53f7\u7528\u91cf\uff1b\u989d\u5ea6\u4e8e\u5317\u4eac\u65f6\u95f4 00:00 \u91cd\u7f6e\u3002",
+      "\u6a21\u578b\u989d\u5ea6\u4e0d\u8db323:07\u4eca\u65e5\u6a21\u578b\u989d\u5ea6\u5df2\u7528\u5b8c\uff0c\u6216\u88ab\u5c1a\u672a\u7ed3\u675f\u7684\u8bf7\u6c42\u9884\u5360\u3002\u8bf7\u67e5\u770b\u8d26\u53f7\u7528\u91cf\uff1b\u989d\u5ea6\u4e8e\u5317\u4eac\u65f6\u95f4 00:00 \u91cd\u7f6e\u3002"
+    ],
+    "processOpen": true,
+    "publicErrors": 0
+  },
+  "search": {
+    "results": 2,
+    "status": "2 \u5904 \u00b7 \u5df2\u52a0\u8f7d\u8bb0\u5f55",
+    "draft": "\u4fdd\u7559\u8fd9\u4efd\u8349\u7a3f\uff1a\u7ee7\u7eed\u68c0\u67e5 \ud83c\udf31"
+  },
+  "reload": {
+    "collapsedProcesses": [
+      true
+    ],
+    "draft": "\u4fdd\u7559\u8fd9\u4efd\u8349\u7a3f\uff1a\u7ee7\u7eed\u68c0\u67e5 \ud83c\udf31",
+    "errors": [],
+    "publicRecovery": [],
+    "reply": "FIXTURE_OK: quota"
+  },
+  "followup": {
+    "collapsedProcesses": [
+      true
+    ],
+    "draft": "",
+    "errors": [],
+    "replies": [
+      "FIXTURE_OK: quota",
+      "FIXTURE_OK: \u4fdd\u7559\u8fd9\u4efd\u8349\u7a3f\uff1a\u7ee7\u7eed\u68c0\u67e5 \ud83c\udf31"
+    ],
+    "users": [
+      "quota",
+      "\u4fdd\u7559\u8fd9\u4efd\u8349\u7a3f\uff1a\u7ee7\u7eed\u68c0\u67e5 \ud83c\udf31"
+    ]
+  },
+  "unchanged_packed_application": true,
+  "explicit_resume_clicks": 2,
+  "external_provider_requests": 0,
+  "packed_sha256": "a7c12dfa6960fc2e5b871139552112597711b3d6d719b9514ec5c6a62cc0d61b"
+}

@@ -1,0 +1,22 @@
+{
+  "recovered": {
+    "collapsedProcesses": [
+      true
+    ],
+    "publicErrors": [],
+    "recoveryLabels": [],
+    "reply": "Recovered read complete"
+  },
+  "expanded": {
+    "errorText": "session event persistence failed; completed tool results remain available for recovery",
+    "processOpen": true,
+    "publicErrors": 0
+  },
+  "source_fixture": true,
+  "model_network_requests": 0,
+  "completed_reads": 1,
+  "frontend_sha256": {
+    "web/js/features/chat/timeline.js": "912cab12640b8992e588cda3e7323ee25265c1cc83af28a9ffe7ba015b6a11f5",
+    "web/js/features/chat/conversation-history.js": "6f9d2553bffae0bf61fd84e92f87ceed7f1a555c97e36d5721e3ba41aaa9620a"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "mdo_commit": "f491e797aba9ee28419d951c3d4559ac8a6df4eb",
+  "xs_commit": "f47b0de5037f458f6289483d1323dee417d99434",
+  "sha256": "a7c12dfa6960fc2e5b871139552112597711b3d6d719b9514ec5c6a62cc0d61b",
+  "bytes": 4539560,
+  "mdo_worktree_dirty": false,
+  "packaged_app_sha256": "1f3c016d7d5a90d690f8dbd2b4760d60ec7406f2a77bb30ca032dcd0d765877f",
+  "sources": {
+    "web/js/features/chat/timeline.js": {
+      "sha256": "912cab12640b8992e588cda3e7323ee25265c1cc83af28a9ffe7ba015b6a11f5",
+      "matches": true
+    },
+    "web/js/features/chat/conversation-history.js": {
+      "sha256": "6f9d2553bffae0bf61fd84e92f87ceed7f1a555c97e36d5721e3ba41aaa9620a",
+      "matches": true
+    }
+  },
+  "passed": true,
+  "external_provider_tested": false,
+  "android_device_tested": false,
+  "daily_app_overwritten": false
+}
