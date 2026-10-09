@@ -64,7 +64,7 @@ test at tests\test_resource_operation.mjs:12:29
 ✖ catalog reload returns the confirmed terminal result rather than its queued snapshot (2.4678ms)
   AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
   + actual - expected
-  
+
     {
       id: 'job-1',
       kind: 'module_reload',
@@ -75,7 +75,7 @@ test at tests\test_resource_operation.mjs:12:29
   +   terminal: false
   -   terminal: true
     }
-  
+
       at TestContext.<anonymous> (file:///D:/GIT/mdo/tests/test_resource_operation.mjs:72:10)
       at async Test.run (node:internal/test_runner/test:1389:7)
       at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
@@ -91,14 +91,14 @@ test at tests\test_resource_operation.mjs:12:29
 ✖ normal pending states use progressively slower polls and preserve one accepted ID (2.6112ms)
   AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
   + actual - expected
-  
+
     [
       250,
   +   500,
       750,
   -   1750
     ]
-  
+
       at TestContext.<anonymous> (file:///D:/GIT/mdo/tests/test_resource_operation.mjs:79:10)
       at async Test.run (node:internal/test_runner/test:1389:7)
       at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
@@ -118,7 +118,7 @@ test at tests\test_resource_operation.mjs:12:29
 ✖ page exit cancels a retry wait without another request (1.6186ms)
   [AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
   + actual - expected
-  
+
     Comparison {
   +   name: 'ApiError'
   -   name: 'AbortError'
@@ -139,9 +139,9 @@ test at tests\test_resource_operation.mjs:12:29
 test at tests\test_resource_operation.mjs:12:29
 ✖ hanging status bodies end within the shared minute as unconfirmed, not failed (10.1253ms)
   AssertionError [ERR_ASSERTION]: The validation function is expected to return "true". Received false
-  
+
   Caught error:
-  
+
   AssertionError [ERR_ASSERTION]: pending observations must own a finite deadline
       at async TestContext.<anonymous> (file:///D:/GIT/mdo/tests/test_resource_operation.mjs:106:3)
       at async Test.run (node:internal/test_runner/test:1389:7)
