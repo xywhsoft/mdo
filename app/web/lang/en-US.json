@@ -1995,5 +1995,21 @@
   "resource.mcpRateLimited": "The MCP server is temporarily rate limited. Retry the connection later.",
   "resource.mcpServiceUnavailable": "The MCP server is temporarily unavailable. Retry the connection later.",
   "resource.mcpEndpoint": "The MCP endpoint is unavailable. Check that the address points to the correct MCP endpoint.",
-  "resource.mcpHttpError": "The MCP server did not accept the request (HTTP {status}). Check the server configuration."
+  "resource.mcpHttpError": "The MCP server did not accept the request (HTTP {status}). Check the server configuration.",
+  "error.scheduleUnavailable": "The schedule service is temporarily unavailable. Try again later.",
+  "error.scheduleNotFound": "This schedule no longer exists. Refresh the schedule list.",
+  "error.scheduleConflict": "This schedule ID is already in use. Check the existing schedule.",
+  "error.scheduleInvalid": "The schedule is invalid. Check its name, task and execution time.",
+  "error.scheduleLimit": "The schedule limit has been reached. Remove schedules you no longer need.",
+  "error.schedulePersistence": "The schedule could not be saved reliably. Check storage space and directory permissions, then review the schedule list.",
+  "error.scheduleRevisionExhausted": "The schedule revision limit has been reached. Review it before creating a replacement.",
+  "error.scheduleUpdateFailed": "The schedule was not updated. Refresh and check it before trying again.",
+  "error.scheduleHistoryUnavailable": "Execution history is temporarily unavailable. Read it again later.",
+  "error.scheduleRunLimit": "The schedule has reached its concurrent run limit. Wait for the current tasks to finish.",
+  "error.scheduleRunUnavailable": "The schedule could not be started. Try again later.",
+  "error.scheduleResultUnconfirmed": "The result is not confirmed. Refresh the schedule and execution history before deciding whether to retry.",
+  "error.scheduleRunUnconfirmed": "The run could not be confirmed. Check execution history first; do not start it again yet.",
+  "error.scheduleSaveUnconfirmed": "The save could not be confirmed. Your form is preserved. Check the list or retry reading the original result.",
+  "error.scheduleSavePendingChanged": "The previous save is still unconfirmed. Check the schedule list before changing or creating a schedule.",
+  "error.scheduleSavePendingLimit": "Too many schedule operations are unconfirmed. Review the existing schedules, then reload the page."
 }

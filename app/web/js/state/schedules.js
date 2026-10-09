@@ -1,6 +1,7 @@
-import { api, resourceId } from "../api/client.js";
+import { api } from "../api/client.js";
 import { createResourceStore } from "./store.js";
 import { isTransientReadError } from "../api/read-recovery.js";
+import { createScheduleWriter } from "./schedule-write.js";
 
 export const schedulesStore = createResourceStore({ items: [], total: 0 }, {
   recoverRead: isTransientReadError,
@@ -15,24 +16,9 @@ export function loadSchedules({ background = false } = {}) {
 // Keep the last catalog; the next visit reads a fresh version before editing.
 export function cancelScheduleReads() { schedulesStore.reset(schedulesStore.get().data); }
 
-function path(id) { return `/schedules/${resourceId(id, "schedule")}`; }
-
-export function runSchedule(id, revision) {
-  return api.post(`${path(id)}/run`, undefined, {
-    ifMatch: `"mdo-schedule-${id}-${revision}"`,
-  });
-}
-export function createSchedule(body) { return api.post("/schedules", body); }
-export function replaceSchedule(id, etag, body) {
-  return api.put(path(id), body, { ifMatch: etag });
-}
-export function setScheduleEnabled(id, revision, enabled) {
-  return api.put(`${path(id)}/enabled`, { enabled }, {
-    ifMatch: `"mdo-schedule-${id}-${revision}"`,
-  });
-}
-export function removeSchedule(id, revision) {
-  return api.delete(path(id), {
-    ifMatch: `"mdo-schedule-${id}-${revision}"`,
-  });
-}
+const writer = createScheduleWriter();
+export const runSchedule = writer.run;
+export const createSchedule = writer.create;
+export const replaceSchedule = writer.replace;
+export const setScheduleEnabled = writer.enabled;
+export const removeSchedule = writer.remove;

@@ -1995,5 +1995,21 @@
   "resource.mcpRateLimited": "MCP 服务器暂时限流，请稍后重试连接。",
   "resource.mcpServiceUnavailable": "MCP 服务器暂不可用，请稍后重试连接。",
   "resource.mcpEndpoint": "MCP 服务地址不可用，请检查是否填写了正确的 MCP 接口地址。",
-  "resource.mcpHttpError": "MCP 服务器未接受请求（HTTP {status}），请检查服务器配置。"
+  "resource.mcpHttpError": "MCP 服务器未接受请求（HTTP {status}），请检查服务器配置。",
+  "error.scheduleUnavailable": "计划任务服务暂时不可用，请稍后重试。",
+  "error.scheduleNotFound": "这个计划已不存在，请刷新计划列表。",
+  "error.scheduleConflict": "这个计划编号已被使用，请核对已有计划。",
+  "error.scheduleInvalid": "计划内容无效，请检查名称、任务内容和执行时间。",
+  "error.scheduleLimit": "计划数量已达到上限，请先移除不再需要的计划。",
+  "error.schedulePersistence": "计划无法可靠保存，请检查存储空间和目录权限，再核对计划列表。",
+  "error.scheduleRevisionExhausted": "计划版本已达到上限，请核对后重新创建计划。",
+  "error.scheduleUpdateFailed": "计划修改未完成，请刷新核对后再试。",
+  "error.scheduleHistoryUnavailable": "执行历史暂时不可读，请稍后重新读取。",
+  "error.scheduleRunLimit": "计划已达到同时运行上限，请等待正在执行的任务结束。",
+  "error.scheduleRunUnavailable": "计划未能启动，请稍后重试。",
+  "error.scheduleResultUnconfirmed": "操作结果尚未确认，请刷新计划及执行历史后再决定是否重试。",
+  "error.scheduleRunUnconfirmed": "暂时无法确认计划是否已运行，请先查看执行历史，勿重复启动。",
+  "error.scheduleSaveUnconfirmed": "暂时无法确认计划是否已保存。内容仍保留；请核对列表，或重试读取原结果。",
+  "error.scheduleSavePendingChanged": "上一次保存尚未确认。请先核对计划列表，再修改或新建计划。",
+  "error.scheduleSavePendingLimit": "尚未确认的计划操作过多。请先核对已有计划，再重新载入页面。"
 }

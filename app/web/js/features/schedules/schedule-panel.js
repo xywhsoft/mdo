@@ -6,6 +6,7 @@ import { createReadIntents } from "../../api/read-intents.js";
 import { isTransientReadError } from "../../api/read-recovery.js";
 import { subscribeTarget } from "../../api/target.js";
 import { resourceOperationEpoch } from "../../state/resource-operation.js";
+import { clientActionId } from "../../api/request-recovery.js";
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
 import { currentLocale, subscribeLocale, t } from "../../i18n.js";
 
@@ -77,6 +78,7 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
   let activeRefresh = 0;
   let active = false;
   let actionFeedback = { message: "", id: "" };
+  let createId = "", pendingWrite = null;
   const reads = createReadIntents();
   let targetEpoch = resourceOperationEpoch();
 
@@ -168,6 +170,7 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
 
   function newSchedule() {
     original = null;
+    createId = `sc-c-${clientActionId()}`;
     etag = "";
     form.reset();
     fields.start_at.value = localInput((Date.now() + 60 * 60 * 1000) * 1000);
@@ -424,13 +427,15 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
         protocol: original.protocol, max_output_tokens: original.max_output_tokens,
         workspace_root: original.workspace_root, fold_policy: original.fold_policy,
         misfire_grace_seconds: original.misfire_grace_seconds, enabled: original.enabled,
-      } : {}),
+      } : { id: createId }),
     };
   }
 
   async function mutate(operation, success, resetEditor = false,
                         { listAction = false, deletion = null, listTarget = null } = {}) {
     if (busy) return;
+    const controller = new AbortController();
+    pendingWrite = controller;
     setActionFeedback("");
     busy = true;
     render(schedulesStore.get());
@@ -440,7 +445,8 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
     let savedId = "";
     let succeeded = false;
     try {
-      const result = await operation();
+      const result = await operation({ signal: controller.signal });
+      if (controller.signal.aborted || !active) return;
       succeeded = true;
       toast(success);
       if (resetEditor) {
@@ -455,15 +461,18 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
         newSchedule();
       if (active) await loadSchedules();
     } catch (error) {
+      if (controller.signal.aborted || !active || error?.name === "AbortError") return;
       const message = errorMessage(error);
       if (listAction) setActionFeedback(message, true, (deletion || listTarget)?.id);
       else setFeedback(message, true);
       if (!listAction) toast(message, "error");
       if (active && error?.status === 412) await loadSchedules();
     } finally {
+      if (pendingWrite === controller) pendingWrite = null;
       busy = false;
       syncEditorState();
       render(schedulesStore.get());
+      if (!active && editorDialog.open) editorDialog.close();
       if (savedId && visible()) {
         if (!focusSchedule(savedId, "", true)) refreshButton.focus();
       } else if (deletion) focusAfterDelete(deletion, succeeded);
@@ -556,11 +565,11 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
     if (button.dataset.scheduleAction === "edit") void openEditor(item, button);
     if (button.dataset.scheduleAction === "history") void openHistory(item);
     if (button.dataset.scheduleAction === "run")
-      void mutate(() => runSchedule(item.id, item.revision),
+      void mutate(options => runSchedule(item.id, item.revision, options),
         t("schedule.started", {}, "计划已开始运行"), false,
         { listAction: true, listTarget: { id: item.id, action: "run" } });
     if (button.dataset.scheduleAction === "enabled")
-      void mutate(() => setScheduleEnabled(item.id, item.revision, !item.enabled),
+      void mutate(options => setScheduleEnabled(item.id, item.revision, !item.enabled, options),
         item.enabled ? t("schedule.pausedSuccess", {}, "计划已暂停") :
           t("schedule.enabledSuccess", {}, "计划已启用"), false,
           { listAction: true, listTarget: { id: item.id, action: "enabled" } });
@@ -576,7 +585,7 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
     const target = deleteTarget;
     deleteTarget = null;
     if (deleteDialog.returnValue === "delete" && target)
-      void mutate(() => removeSchedule(target.item.id, target.item.revision),
+      void mutate(options => removeSchedule(target.item.id, target.item.revision, options),
         t("schedule.deleted", {}, "计划已删除"), false,
         { listAction: true, deletion: { id: target.item.id, index: target.index } });
   });
@@ -598,8 +607,8 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
     try { definition = body(); }
     catch (error) { setFeedback(errorMessage(error), true); return; }
     const editing = original;
-    void mutate(() => editing
-      ? replaceSchedule(editing.id, etag, definition) : createSchedule(definition),
+    void mutate(options => editing
+      ? replaceSchedule(editing.id, etag, definition, options) : createSchedule(definition, options),
     editing ? t("schedule.updated", {}, "计划已更新") :
       t("schedule.created", {}, "计划已创建"), true);
   });
@@ -640,11 +649,12 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
       void loadSchedules({ background: true });
     }
   });
-  window.addEventListener("pagehide", cancelPanelReads);
+  window.addEventListener("pagehide", () => { pendingWrite?.abort(); cancelPanelReads(); });
   subscribeTarget(() => {
     const epoch = resourceOperationEpoch();
     if (epoch === targetEpoch) return;
     targetEpoch = epoch;
+    pendingWrite?.abort();
     cancelPanelReads();
     if (active) void loadSchedules();
   });
@@ -665,6 +675,7 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
       active = value;
       if (active) void loadSchedules();
       else {
+        pendingWrite?.abort();
         if (activeRefresh) { clearTimeout(activeRefresh); activeRefresh = 0; }
         cancelPanelReads();
       }
