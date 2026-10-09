@@ -419,6 +419,7 @@ export function eventsToTimeline(events, historyLost = false,
           state: event.terminal ? "done" : "running", time: event.time });
     }
     for (let index = itemCount; index < items.length; index += 1) {
+      items[index].sourceEventId ??= Number(event.event_id);
       items[index].runKey ??= runKey;
       items[index].runEpoch ??= event.kind === "agent_start" ? Number(event.event_id) || 0 : epoch;
       items[index].agentDepth ??= event.agent_depth || 0;
@@ -983,13 +984,12 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
     const projected = [];
     let previousTurn = 0;
     for (const group of groups) {
-      if (group.standalone) { projected.push(group.standalone); continue; }
       const skipped = (data?.turns ?? []).filter(turn => turn.first_event_id > previousTurn &&
         turn.first_event_id < group.firstEventId && !groups.some(loaded => loaded.firstEventId === turn.first_event_id));
       if (previousTurn && skipped.length) projected.push({ key: `gap-${group.firstEventId}`,
         kind: "history-more", turnId: skipped.at(-1).first_event_id });
       previousTurn = group.firstEventId;
-      projected.push(group.user);
+      if (group.user) projected.push(group.user);
       for (const entry of group.entries) {
         if (entry.kind === "process") {
           if (!manualProcesses.has(entry.key) && processStates.has(entry.key) &&

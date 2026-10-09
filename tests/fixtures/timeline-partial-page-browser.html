@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo partial conversation projection</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<style>
+  body { padding: 16px; }
+  .conversation { width: min(820px, 100%); height: 75vh; }
+  #result { display: block; white-space: pre-wrap; font-size: 11px; }
+</style>
+<button id="older" type="button">加载更早历史</button>
+<output id="result" role="status">准备中</output>
+<div class="conversation"><p id="welcome"></p><ol id="timeline" class="timeline"></ol></div>
+<button id="to-bottom" type="button" hidden>回到底部</button>
+<div id="toast-region"></div>
+<script type="module">
+import { createTimelineView } from "/app/web/js/features/chat/timeline.js";
+import { createResourceStore } from "/app/web/js/state/store.js";
+
+const e = (event_id, kind, extra = {}) => ({ schema_version: 6, run_id: 1,
+  agent_depth: 0, agent_turn: 1, event_id, kind, time: event_id * 1000000, ...extra });
+let full = [e(1, "agent_start", { user_message_sequence: 1, text: "搜集模型资料" }),
+  e(2, "model_text_delta", { text: "核心调研摘要：这段正文应始终显示。" }),
+  e(3, "model_done", { success: true }),
+  e(4, "tool_start", { agent_turn: 2, tool_call_id: "check", tool_name: "exec", text: "检查报告" }),
+  e(5, "tool_done", { agent_turn: 2, tool_call_id: "check", success: true, text: "OK" }),
+  e(6, "model_reasoning_delta", { agent_turn: 2, text: "补充验证说明" }),
+  e(7, "model_done", { agent_turn: 2, success: true }),
+  e(8, "model_text_delta", { agent_turn: 3, text: "报告已验证。" }),
+  e(9, "agent_done", { agent_turn: 3, success: true })];
+let cold = full.slice(1);
+let older = [];
+if (new URL(location.href).searchParams.has("replay")) {
+  [cold, older, full] = await Promise.all(["cold-events", "older-events", "full-events"]
+    .map(name => fetch(`/${name}.json`).then(response => response.json())));
+}
+const store = createResourceStore();
+const container = document.querySelector("#timeline");
+const result = document.querySelector("#result");
+createTimelineView({ container, welcome: document.querySelector("#welcome"),
+  toBottom: document.querySelector("#to-bottom"), store, onFork() {}, onEdit() {}, onRetry() {} });
+const paint = async () => { await new Promise(requestAnimationFrame); await new Promise(requestAnimationFrame); };
+const publish = async events => {
+  store.setData({ projectId: "qa", sessionId: "partial-page", events });
+  await paint();
+};
+const replies = () => [...container.querySelectorAll(":scope > [data-kind='assistant'] .timeline-body")]
+  .map(node => node.textContent);
+const flatExecution = () => container.querySelectorAll(":scope > [data-kind='tool'], :scope > [data-kind='reasoning'], :scope > [data-kind='task']").length;
+await publish(cold);
+const initial = { noFlatExecution: flatExecution() === 0,
+  replies: replies().length,
+  closedProcesses: [...container.querySelectorAll(".conversation-process")].every(node => !node.open) };
+result.textContent = JSON.stringify({ phase: "cold", ...initial }, null, 2);
+// Use the same passage as the reported screenshots without touching the journal.
+[...container.children].find(node => node.textContent.includes("三份官方文档副本验证通过"))
+  ?.scrollIntoView({ block: "start" });
+document.querySelector("#older").addEventListener("click", async () => {
+  const text = replies();
+  const manuallyOpened = [...container.querySelectorAll(".conversation-process")]
+    .filter(node => node.open).map(node => node.dataset.timelineKey);
+  if (older.length) await publish([...older, ...cold]);
+  const pagedSameProjection = flatExecution() === 0;
+  await publish(full);
+  const noFlatExecution = flatExecution() === 0;
+  const publicRepliesKept = text.every(value => replies().some(reply => reply.includes(value)));
+  const manualKept = manuallyOpened.every(key => [...container.querySelectorAll(".conversation-process")]
+    .some(node => node.dataset.timelineKey === key && node.open));
+  const processKeys = [...container.querySelectorAll(".conversation-process")].map(node => node.dataset.timelineKey);
+  const uniqueKeys = new Set(processKeys).size === processKeys.length;
+  const passed = initial.noFlatExecution && initial.closedProcesses &&
+    pagedSameProjection && noFlatExecution && publicRepliesKept && manualKept && uniqueKeys;
+  result.dataset.passed = String(passed);
+  result.textContent = JSON.stringify({ phase: "history-loaded", passed,
+    pagedSameProjection, noFlatExecution, publicRepliesKept, manualKept, uniqueKeys }, null, 2);
+  [...container.children].find(node => node.textContent.includes("三份官方文档副本验证通过"))
+    ?.scrollIntoView({ block: "start" });
+  document.querySelector("#older").disabled = true;
+});
+</script>
+</html>

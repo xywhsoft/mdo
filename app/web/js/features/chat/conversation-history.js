@@ -44,15 +44,21 @@ export function conversationGroups(items) {
       turn = { key: `turn-${item.sourceEventId}`, firstEventId: item.sourceEventId,
         user: item, entries: [], state: item.turnState ?? "running" };
       groups.push(turn);
-    } else if (!turn) groups.push({ key: item.key, standalone: item });
-    else {
+    } else {
+      // A bounded history page may begin in the middle of a user turn. Its
+      // replies and execution records use the same projection as a full turn.
+      if (!turn) {
+        turn = { key: `fragment-${item.key}`, firstEventId: 0,
+          user: null, entries: [], state: item.turnState ?? "running" };
+        groups.push(turn);
+      }
       if (!(item.agentDepth > 0)) turn.state = item.turnState ?? "running";
       // Normal main-Agent text is public conversation, even when tools or
       // another reply follow it. Only explicit execution records are folded.
       if (item.agentDepth > 0 || ["reasoning", "tool", "task"].includes(item.kind)) {
         let process = turn.entries.at(-1);
         if (process?.kind !== "process") {
-          process = { key: `process-${turn.firstEventId}-${item.key}`,
+          process = { key: `process-${item.sourceEventId ?? item.key}`,
             kind: "process", items: [], state: "running" };
           turn.entries.push(process);
         }
@@ -61,7 +67,6 @@ export function conversationGroups(items) {
     }
   }
   for (const group of groups) {
-    if (group.standalone) continue;
     for (const entry of group.entries) {
       if (entry.kind === "process") entry.state = group.state === "running" &&
         entry.items.some(item => item.state === "running") ? "running" : "done";

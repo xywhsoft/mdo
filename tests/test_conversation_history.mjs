@@ -217,3 +217,43 @@ test("resuming without a new user input summarizes only the last run's answer ev
     .filter(item => item.kind === "assistant");
   assert.deepEqual(replies.map(item => item.text), ["Earlier partial answer", "Continuation"]);
 });
+
+test("a cold history fragment and its completed turn share one reply/process projection", () => {
+  const events = [e(1, "agent_start", { user_message_sequence: 1, text: "Research" }),
+    e(2, "model_text_delta", { agent_turn: 1, text: "Core report" }),
+    e(3, "model_done", { agent_turn: 1, success: true }),
+    e(4, "tool_start", { agent_turn: 2, tool_call_id: "check", tool_name: "exec" }),
+    e(5, "tool_done", { agent_turn: 2, tool_call_id: "check", success: true }),
+    e(6, "model_reasoning_delta", { agent_turn: 2, text: "Verification notes" }),
+    e(7, "model_done", { agent_turn: 2, success: true }),
+    e(8, "model_text_delta", { agent_turn: 3, text: "Verification complete" }),
+    e(9, "agent_done", { success: true })];
+  const [full] = conversationGroups(eventsToTimeline(events));
+  const shape = entries => entries.map(item => item.kind === "process"
+    ? { kind: item.kind, state: item.state, children: item.items.map(child => child.kind) }
+    : { kind: item.kind, text: item.text });
+  for (const offset of [1, 3]) {
+    const [fragment] = conversationGroups(eventsToTimeline(events.slice(offset)));
+    assert.equal(fragment.user, null);
+    assert.equal(fragment.state, "done");
+    assert.equal("standalone" in fragment, false);
+    assert.deepEqual(shape(fragment.entries), shape(full.entries.slice(offset === 1 ? 0 : 1)));
+    assert.equal(fragment.entries.find(item => item.kind === "process").key,
+      full.entries.find(item => item.kind === "process").key);
+  }
+});
+
+test("a live fragment folds execution without inventing a user or hiding public output", () => {
+  const [fragment] = conversationGroups(eventsToTimeline([
+    e(100, "model_text_delta", { text: "Visible progress" }),
+    e(101, "model_done", { success: true }),
+    e(102, "tool_start", { tool_call_id: "read", tool_name: "read" }),
+    e(103, "model_reasoning_delta", { agent_depth: 1, run_id: 2, text: "Child notes" }),
+  ]));
+  assert.equal(fragment.user, null);
+  assert.equal(fragment.state, "running");
+  assert.deepEqual(fragment.entries.map(item => item.kind), ["assistant", "process"]);
+  assert.equal(fragment.entries[0].text, "Visible progress");
+  assert.equal(fragment.entries[1].state, "running");
+  assert.deepEqual(fragment.entries[1].items.map(item => item.kind), ["tool", "reasoning"]);
+});
