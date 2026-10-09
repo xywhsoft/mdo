@@ -6,6 +6,36 @@ $utf8 = New-Object System.Text.UTF8Encoding($false)
 $targetPath = $null
 $originalSaved = $false
 $parentExited = $false
+$service = $null
+$restartArgs = $null
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class MdoInstallerNative {
+    [DllImport("shell32.dll", CharSet=CharSet.Unicode, SetLastError=true)]
+    static extern IntPtr CommandLineToArgvW(string command, out int count);
+    [DllImport("kernel32.dll")] static extern IntPtr LocalFree(IntPtr memory);
+    [DllImport("advapi32.dll", CharSet=CharSet.Unicode, SetLastError=true)]
+    static extern IntPtr OpenSCManagerW(string machine, string database, uint access);
+    [DllImport("advapi32.dll", CharSet=CharSet.Unicode, SetLastError=true)]
+    static extern IntPtr OpenServiceW(IntPtr manager, string name, uint access);
+    [DllImport("advapi32.dll")] static extern bool CloseServiceHandle(IntPtr handle);
+    public static string[] Arguments(string command) {
+        int count; IntPtr memory=CommandLineToArgvW(command,out count);
+        if(memory==IntPtr.Zero) throw new System.ComponentModel.Win32Exception();
+        try { var args=new string[count]; for(int i=0;i<count;i++)
+            args[i]=Marshal.PtrToStringUni(Marshal.ReadIntPtr(memory,i*IntPtr.Size));
+            return args; } finally { LocalFree(memory); }
+    }
+    public static void CheckServiceStart(string name) {
+        IntPtr manager=OpenSCManagerW(null,null,1); // SC_MANAGER_CONNECT
+        if(manager==IntPtr.Zero) throw new System.ComponentModel.Win32Exception();
+        try { IntPtr service=OpenServiceW(manager,name,0x14); // START | QUERY_STATUS
+            if(service==IntPtr.Zero) throw new System.ComponentModel.Win32Exception();
+            CloseServiceHandle(service); } finally { CloseServiceHandle(manager); }
+    }
+}
+'@
 function Write-Result([string]$state, [string]$message) {
     $text = @{status=$state; message=$message} | ConvertTo-Json -Compress
     [IO.File]::WriteAllText($resultPath + '.tmp', $text, $utf8)
@@ -19,11 +49,19 @@ function Quote-Argument([string]$argument) {
     return '"' + $value + '"'
 }
 function Restart-App {
+    if ($null -ne $service) {
+        # Restart through SCM to retain the service account, arguments and policy.
+        $service.WaitForStatus([ServiceProcess.ServiceControllerStatus]::Stopped,[TimeSpan]::FromSeconds(30))
+        $service.Start()
+        $service.WaitForStatus([ServiceProcess.ServiceControllerStatus]::Running,[TimeSpan]::FromSeconds(60))
+        return
+    }
     $start = New-Object Diagnostics.ProcessStartInfo
     $start.FileName = $targetPath
     $start.WorkingDirectory = [string]$parametersData.work_dir
     $start.UseShellExecute = $false
-    $start.Arguments = (($parametersData.args | ForEach-Object { Quote-Argument ([string]$_) }) -join ' ')
+    $start.CreateNoWindow = $true
+    $start.Arguments = (($restartArgs | ForEach-Object { Quote-Argument ([string]$_) }) -join ' ')
     $process = [Diagnostics.Process]::Start($start)
     if ($null -eq $process) { throw 'Unable to restart mdo' }
     $process.Dispose()
@@ -51,6 +89,25 @@ try {
     if ($parent.StartTime.ToUniversalTime().ToFileTimeUtc().ToString() -cne [string]$parametersData.identity) {
         throw 'The original process identity no longer matches'
     }
+    $restartArgs = @($parametersData.args)
+    if ($parametersData.restart_mode -eq 'original') {
+        # xsAppArgument contains only app arguments; retain native --port etc. too.
+        $record = Get-CimInstance Win32_Process -Filter ("ProcessId=" + $parent.Id)
+        if (-not $record.CommandLine) { throw 'Unable to preserve the original startup arguments' }
+        $arguments = [MdoInstallerNative]::Arguments($record.CommandLine)
+        $restartArgs = @($arguments | Select-Object -Skip 1)
+    }
+    $services = @(Get-CimInstance Win32_Service -Filter ("ProcessId=" + $parent.Id))
+    if ($services.Count) {
+        if ($services.Count -ne 1 -or $services[0].ServiceType -ne 'Own Process') {
+            throw 'Update requires a dedicated mdo Windows service'
+        }
+        # Verify the matching registration; never accept a service name from a request.
+        $registered = [MdoInstallerNative]::Arguments([string]$services[0].PathName)
+        if ([IO.Path]::GetFullPath($registered[0]) -ine $targetPath) { throw 'Service executable path mismatch' }
+        [MdoInstallerNative]::CheckServiceStart([string]$services[0].Name)
+        $service = New-Object ServiceProcess.ServiceController([string]$services[0].Name)
+    }
     [IO.File]::WriteAllText((Join-Path $folder 'install.ready'),$expected,$utf8)
     $goPath = Join-Path $folder 'install.go'
     $deadline = [DateTime]::UtcNow.AddSeconds(15)
@@ -75,8 +132,8 @@ try {
         throw 'Replacement copy checksum failed'
     }
     [IO.File]::Replace($swapPath,$targetPath,[NullString]::Value)
-    Write-Result 'success' ''
     Restart-App
+    Write-Result 'success' ''
     foreach ($name in @('new.exe','install.ready','install.go','install.json')) {
         Remove-Item -LiteralPath (Join-Path $folder $name) -Force -ErrorAction SilentlyContinue
     }

@@ -23,6 +23,7 @@ bool MdoUpdateWindowsInstall(cstr Source,cstr Hash)
     snprintf(Pid,sizeof(Pid),"%lu",GetCurrentProcessId());
     Ok = MdoUpdateWinPut(Params,"target",Source) && MdoUpdateWinPut(Params,"sha256",Hash) &&
         MdoUpdateWinPut(Params,"pid",Pid) && MdoUpdateWinPut(Params,"identity",Identity) &&
+        MdoUpdateWinPut(Params,"restart_mode","original") &&
         MdoUpdateWinPut(Params,"home",Home.Path) && MdoUpdateWinPut(Params,"work_dir",xsAppPath());
     Ok = Ok && xrtValueArrayAppendNew(Args,xrtValueString(XRT_STR_LITERAL("--"))) &&
         xrtValueArrayAppendNew(Args,xrtValueString(XRT_STR_LITERAL("--home"))) &&
@@ -55,7 +56,7 @@ bool MdoUpdateWindowsInstall(cstr Source,cstr Hash)
     Config.NewGroup = false; /* helper must survive the old host's exit */
     Config.Stdin.Mode = Config.Stdout.Mode = Config.Stderr.Mode = XPROCESS_IO_NULL;
     Process = xrtProcessSpawn(&Config); Ok = Process != NULL;
-    xdeadline Deadline = xrtDeadlineAfter(UINT64_C(10000000));
+    xdeadline Deadline = xrtDeadlineAfter(UINT64_C(20000000));
     bool Ready = false;
     while (Ok && !xrtDeadlineExpired(Deadline) && !xrtThreadStopping()) {
         bool Exists = false; xfileinfo Info;

@@ -191,9 +191,11 @@ static void MdoUpdateDoInstall(MdoUpdateStatus* Status)
         MdoUpdateComplete(Status,"ready","Finish active tasks before installing the update"); return;
     }
     if (!strcmp(Status->Platform,"windows-x86_64")) {
+#if !defined(MDO_SERVER_BUILD)
         if (!xsAppConfirm("更新包已校验。墨斗将关闭、替换程序并重新打开，配置和会话会保留。\n\n是否继续？")) {
             MdoUpdateComplete(Status,"ready","Installation cancelled or native window unavailable"); return;
         }
+#endif
         Ok = MdoUpdateWindowsInstall(g_MdoUpdate.Source,Status->Hash);
     } else if (!strncmp(Status->Platform,"linux-",6)) {
         Ok = MdoUpdateLinuxInstall(g_MdoUpdate.Source,Status->Hash);
@@ -320,7 +322,7 @@ bool MdoUpdateInit(void)
         g_MdoUpdate.Source = xrtStrDup(Source);
         snprintf(g_MdoUpdate.Status.Platform,sizeof(g_MdoUpdate.Status.Platform),"android-arm64-v8a");
     }
-#elif (defined(_WIN32) || defined(_WIN64)) && !defined(MDO_SERVER_BUILD)
+#elif defined(_WIN32) || defined(_WIN64)
     g_MdoUpdate.Source = xrtPathExecutable();
     xfile File = g_MdoUpdate.Source ? xrtOpen(g_MdoUpdate.Source,XFILE_READ) : NULL;
     char Tail[8]; size_t Got = 0;

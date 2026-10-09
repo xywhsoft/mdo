@@ -1,6 +1,7 @@
 {
   "version_name": "0.1.0-dev",
   "windows_build_id": 30000047,
+  "windows_server_build_id": 30000054,
   "android_lite_build_id": 30000052,
   "android_full_build_id": 30000053,
   "toolpack_revision": 2,

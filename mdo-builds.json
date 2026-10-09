@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-10-09T06:14:54.534386+00:00",
+  "generated_at": "2026-10-09T06:38:25.101377+00:00",
   "version_name": "0.1.0-dev",
   "source_head_at_recording": "3b852b7d1849b7c06f73e41dd0cf1d42dda2194d",
   "includes_uncommitted_application_changes": true,
@@ -42,11 +42,11 @@
       "architecture": "x86_64",
       "edition": "server",
       "libc": "mingw",
-      "build_id": 30000047,
-      "bytes": 4316325,
-      "sha256": "c5eea8ac1cf24bdf07d2c6bf9bc78808ecb1886fa8f1a604f650a4747122c192",
+      "build_id": 30000054,
+      "bytes": 4318363,
+      "sha256": "545d9674131775998c0c3a9eaf16abedea0188a3ec7e188ca466b3b3530cbf72",
       "xs_commit": "153315a092b8c37d9d79f090122f81ed2bcc139d",
-      "packaged_app_sha256": "5f683a3ffe10ec796526951f2612ae07ef54c2a226c7bc4a6ac2bbb95d73b933",
+      "packaged_app_sha256": "2c72d07791672d66313fb3c6d4b40e9b7c1d5b5eb02da3be2bf4f74e81967f61",
       "app_files": 418,
       "host_sha256": "9d4db9a1d9d37ac0c5d22a850c90b5432c7586741187216d0c894c860eba60a5",
       "label": "Windows 服务",
@@ -59,9 +59,15 @@
           "projects API",
           "project persistence",
           "SIGTERM/console stop",
-          "restart"
-        ]
-      }
+          "restart",
+          "reject desktop update manifest",
+          "web update/download/install",
+          "atomic replacement and backup",
+          "restart preserves native port and Home"
+        ],
+        "web_update": true
+      },
+      "source_snapshot_note": "Repacked after the other seven products to enable Windows server updates and allocate distinct ID 30000054."
     },
     {
       "filename": "mdo-linux-x86_64-glibc",
@@ -261,5 +267,6 @@
         "device_tested": false
       }
     }
-  ]
+  ],
+  "publication_note": "Original common source fingerprint applies to the seven unchanged products; Windows server is repacked and has its own packaged_app_sha256."
 }

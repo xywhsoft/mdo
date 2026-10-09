@@ -5,7 +5,7 @@ static bool MdoUpdatePolicyParse(xvalue* Root,MdoUpdateStatus* Status)
     char Platform[32], Download[160], Expected[160]; uint64 Size = 0; int64 Signed;
     xvalue* Number = xrtValueObjectGet(Root,XRT_STR_LITERAL("size"));
     xvalue* Required = xrtValueObjectGet(Root,XRT_STR_LITERAL("required"));
-    if(!strncmp(Status->Platform,"linux-",6) &&
+    if((!strncmp(Status->Platform,"linux-",6)||(!strcmp(Status->Platform,"windows-x86_64")&&!strcmp(Status->Edition,"server"))) &&
        (!xrtValueObjectGet(Root,XRT_STR_LITERAL("edition")) || !xrtValueObjectGet(Root,XRT_STR_LITERAL("build_id"))))return false;
     bool Force = false;
     bool Ok = xrtValueGetUInt(Number,&Size) ||
@@ -29,7 +29,7 @@ static bool MdoUpdatePolicyParse(xvalue* Root,MdoUpdateStatus* Status)
     char Edition[16];
     if(xrtValueObjectGet(Root,XRT_STR_LITERAL("edition"))) {
         if(!MdoUpdateText(Root,"edition",Edition,sizeof(Edition)) ||
-           (!strncmp(Status->Platform,"linux-",6)?strcmp(Edition,Status->Edition):!strcmp(Status->Platform,"windows-x86_64")?strcmp(Edition,"desktop"):(strcmp(Edition,"lite")&&strcmp(Edition,"full"))))return false;
+           ((!strncmp(Status->Platform,"linux-",6)||!strcmp(Status->Platform,"windows-x86_64"))?strcmp(Edition,Status->Edition):(strcmp(Edition,"lite")&&strcmp(Edition,"full"))))return false;
         snprintf(Status->Edition,sizeof(Status->Edition),"%s",Edition);
     }
     Status->Required = Force; Status->Bytes = Size; return true;

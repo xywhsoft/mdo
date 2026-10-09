@@ -53,7 +53,7 @@ def run():
             executable=base/(version+".exe")
             subprocess.run(["gcc","-municode",str(code),'-DVERSION="'+version+'"',"-o",str(executable)],check=True)
             versions[version]=executable
-        for failure in ("", "locked", "hash", "identity"):
+        for failure in ("", "arguments", "locked", "hash", "identity"):
             directory=base/("墨斗 [测试] $&' " + (failure or "success")); directory.mkdir()
             cache=directory/"mdo-home/data/update"; cache.mkdir(parents=True)
             target=directory/"墨斗 '$&.exe"; shutil.copy2(versions["old"],target)
@@ -67,11 +67,14 @@ def run():
                                           ctypes.byref(system),ctypes.byref(user))
             identity=(created.dwHighDateTime<<32)|created.dwLowDateTime
             args=["has spaces","中文参数",'quote"inside', "tail\\", ""]
+            preserve=failure=="arguments"
+            restart_args=["--wait",str(stop)] if preserve else args
             expected=hashlib.sha256(new.read_bytes()).hexdigest()
             parameters=cache/"install.json"
             parameters.write_text(json.dumps(dict(target=str(target),sha256="0"*64 if failure=="hash" else expected,
                 pid=str(parent.pid),identity=str(identity+1 if failure=="identity" else identity),
-                home=str(directory/"mdo-home"),work_dir=str(directory),args=args)),encoding="utf-8")
+                home=str(directory/"mdo-home"),work_dir=str(directory),args=args,
+                restart_mode="original" if preserve else "explicit")),encoding="utf-8")
             lock=None; helper=None
             try:
                 if failure=="locked":
@@ -98,7 +101,7 @@ def run():
                     stop.touch(); parent.wait(timeout=10)
                     out,err=helper.communicate(timeout=15)
                     result=json.loads((cache/"install-result.json").read_text(encoding="utf-8"))
-                    if failure:
+                    if failure=="locked":
                         assert result["status"]=="failed", (result,out,err)
                         assert target.read_bytes()==versions["old"].read_bytes()
                     else:
@@ -106,7 +109,10 @@ def run():
                         assert target.read_bytes()==versions["new"].read_bytes()
                         assert (cache/"old.exe").read_bytes()==versions["old"].read_bytes()
                         wait_for(directory/"started.txt")
-                        assert (directory/"started.txt").read_text(encoding="utf-8").splitlines()==["new",*args]
+                        deadline=time.monotonic()+5
+                        while (directory/"started.txt").read_text(encoding="utf-8").splitlines()!=["new",*restart_args]:
+                            assert time.monotonic()<deadline,"Restart arguments changed"
+                            time.sleep(.05)
                 print("PASS Windows installer " + (failure or "replace, backup, restart and Unicode argument quoting"))
             finally:
                 if lock: kernel.CloseHandle(lock)

@@ -337,8 +337,9 @@ def source_list() -> list[str]:
 
 def generated_unity(lock: dict, sources: list[str]) -> str:
     release=load_object(APP / "release.json")
-    ids=[release[key] for key in ("windows_build_id","android_lite_build_id","android_full_build_id")]
-    if any(type(i) is not int or not 10000000 <= i <= 99999999 for i in ids) or len(set(ids))!=3:
+    ids=[release[key] for key in ("windows_build_id","windows_server_build_id","android_lite_build_id","android_full_build_id",
+        "linux_glibc_gui_build_id","linux_glibc_server_build_id","linux_musl_gui_build_id","linux_musl_server_build_id")]
+    if any(type(i) is not int or not 10000000 <= i <= 99999999 for i in ids) or len(set(ids))!=len(ids):
         raise BuildError("release build IDs must be distinct eight-digit integers")
     lines = [
         f'#define MDO_VERSION_TEXT {json.dumps(release["version_name"])}',
@@ -533,6 +534,9 @@ def build(args: argparse.Namespace, xserver: Path, lock: dict) -> None:
         if os.name != "nt":
             build_id = load_object(APP / "release.json")["linux_" + libc + "_" + edition + "_build_id"]
             linux_defines = f'#define MDO_PRODUCT_LIBC "{libc}"\n#define MDO_BUILD_ID {build_id}u\n'
+        elif edition == "server":
+            build_id = load_object(APP / "release.json")["windows_server_build_id"]
+            linux_defines = f'#define MDO_BUILD_ID {build_id}u\n'
         unity.write_text(linux_defines + ("#define MDO_SERVER_BUILD 1\n" if edition == "server" else "") + '#define MDO_PRODUCT_EDITION "' + ("server" if edition == "server" else "desktop") + '"\n' + unity.read_text(encoding="utf-8"), encoding="utf-8")
     run([str(packer), "pack", str(package), "-o", str(output)], ROOT, args.dry_run)
     if not args.dry_run:
