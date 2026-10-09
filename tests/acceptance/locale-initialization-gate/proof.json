@@ -1,0 +1,232 @@
+{
+  "phases": [
+    {
+      "mode": "hold",
+      "started": 30035.265,
+      "reads": [
+        {
+          "started": 30035.687,
+          "fault": "hold",
+          "status": 200,
+          "sha256": "7811d1fd6b259c7ebf1792e3320fcd89e86dcd74d29c76dbb251c1ce4d093da2",
+          "ended": 30047.687
+        },
+        {
+          "started": 30044.25,
+          "fault": null,
+          "status": 200,
+          "sha256": "ca6d4a891ad9f8b1ee70d97c703fbf8c54a33bf8b0e8a6737ca54d4e10576288",
+          "ended": 30044.25
+        }
+      ],
+      "left": 0
+    },
+    {
+      "mode": "hold",
+      "started": 30162.218,
+      "reads": [
+        {
+          "started": 30162.531,
+          "fault": "hold",
+          "status": 200,
+          "sha256": "bb53394d07d9bcd84f24fb492e7fd69b80a46848776a4d81d52e347282729ec3",
+          "ended": 30174.531
+        },
+        {
+          "started": 30171.109,
+          "fault": null,
+          "status": 200,
+          "sha256": "19004d688673f13ad47bde9a5972ab1dbf1214d0ab2b91d8a680c48f9436070a",
+          "ended": 30171.109
+        }
+      ],
+      "left": 0
+    }
+  ],
+  "reads": [
+    {
+      "started": 30035.687,
+      "fault": "hold",
+      "status": 200,
+      "sha256": "7811d1fd6b259c7ebf1792e3320fcd89e86dcd74d29c76dbb251c1ce4d093da2",
+      "ended": 30047.687
+    },
+    {
+      "started": 30044.25,
+      "fault": null,
+      "status": 200,
+      "sha256": "ca6d4a891ad9f8b1ee70d97c703fbf8c54a33bf8b0e8a6737ca54d4e10576288",
+      "ended": 30044.25
+    },
+    {
+      "started": 30162.531,
+      "fault": "hold",
+      "status": 200,
+      "sha256": "bb53394d07d9bcd84f24fb492e7fd69b80a46848776a4d81d52e347282729ec3",
+      "ended": 30174.531
+    },
+    {
+      "started": 30171.109,
+      "fault": null,
+      "status": 200,
+      "sha256": "19004d688673f13ad47bde9a5972ab1dbf1214d0ab2b91d8a680c48f9436070a",
+      "ended": 30171.109
+    }
+  ],
+  "writes": [
+    {
+      "method": "PUT",
+      "path": "/api/v1/workspace-state",
+      "started": 30044.265
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/settings/settings",
+      "started": 30044.281
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSN0Hima_HRBwjdFdOfxf_yKmn35Bo/draft",
+      "started": 30100.921
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSN0Hima_HRBwjdFdOfxf_yKmn35Bo/draft",
+      "started": 30100.953
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSN0Hima_HRBwjdFdOfxf_yKmn35Bo/draft/submissions/7fdd70de1043399ec8cd4423e03d2dee",
+      "started": 30100.968
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/projects/default/sessions/V-OSN0Hima_HRBwjdFdOfxf_yKmn35Bo/queue",
+      "started": 30100.968
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/projects/default/sessions/V-OSN0Hima_HRBwjdFdOfxf_yKmn35Bo/draft/submissions/7fdd70de1043399ec8cd4423e03d2dee",
+      "started": 30100.984
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSN0Hima_HRBwjdFdOfxf_yKmn35Bo/queue/7fdd70de1043399ec8cd4423e03d2dee",
+      "started": 30101.0
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSN0Hima_HRBwjdFdOfxf_yKmn35Bo/queue/7fdd70de1043399ec8cd4423e03d2dee",
+      "started": 30101.031
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/projects/default/sessions/V-OSN0Hima_HRBwjdFdOfxf_yKmn35Bo/runs",
+      "started": 30101.062
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/projects/default/sessions/V-OSN0Hima_HRBwjdFdOfxf_yKmn35Bo/queue/7fdd70de1043399ec8cd4423e03d2dee",
+      "started": 30101.109
+    }
+  ],
+  "websockets": [
+    {
+      "started": 30044.281,
+      "status": 101,
+      "upstream_bytes": 556,
+      "downstream_bytes": 2410,
+      "opened": 30044.281,
+      "closed": 30162.125
+    },
+    {
+      "started": 30171.125,
+      "status": 101,
+      "upstream_bytes": 290,
+      "downstream_bytes": 489,
+      "opened": 30171.125,
+      "closed": 30216.187
+    }
+  ],
+  "model_calls": {
+    "语言设置恢复后继续对话": 1
+  },
+  "served_sources": {
+    "js/app.js": "99b5d1be69eef403a0a34adc62664d3a0e58f394e196d1a401726b245d6f4756",
+    "js/features/settings/project-purge-recovery.js": "6352ceebecfe6a788428af670e39c1118ca100a7e67b4c5ff78e48ee1de911a4",
+    "js/features/projects/project-purge-recovery-panel.js": "7c6aadef9924a6959f852b4b8d628431b22ae41eeff636dd1ef5c18ecf722c97",
+    "js/api/request-recovery.js": "5d70df9f3c8cc077cfe06f27edf1b96b5c26540bb2c3146fd314be8df1e70be8",
+    "js/features/shell/workspace-startup.js": "1c201d38865cd8a60de7fc04d38f2eca6bc13d3898fd39637e23c70c87432388",
+    "lang/zh-CN.json": "3314c0b3372e9db6ddf370d0a322938c9ed66e06ddd95a7ef90b4df275b80c12",
+    "lang/en-US.json": "31c5888359da5aa0d17ac691be91165c7067e7787cf66bd3bbf64943b77a17a8",
+    "lang/ru-RU.json": "d08ac18626a3739a5bca997bd31d6976325a7cb8f701e9b010d89fe67e7d13ed"
+  },
+  "user_inputs": [
+    "语言设置恢复后继续对话"
+  ],
+  "final_model_errors": 0,
+  "event_kinds": {
+    "agent_start": 1,
+    "model_start": 1,
+    "model_text_delta": 1,
+    "model_done": 1,
+    "agent_done": 1
+  },
+  "draft": {
+    "revision": 5,
+    "text": "",
+    "attachments": [],
+    "run_admission_uncertain": false,
+    "submission": null,
+    "submissions": []
+  },
+  "queue": {
+    "items": [],
+    "discard_images": []
+  },
+  "runs": {
+    "automatic": true,
+    "active_runs": 0,
+    "starting_runs": 0,
+    "retained_runs": 1,
+    "max_active": 8,
+    "max_retained": 64,
+    "runs_started": 1,
+    "runs_completed": 1,
+    "runs_failed": 0,
+    "items": [
+      {
+        "id": "run-V-OSN1-iMRpxLVaYKygIcvvHK3WnAEzb",
+        "project_id": "default",
+        "session_id": "V-OSN0Hima_HRBwjdFdOfxf_yKmn35Bo",
+        "agent_run_id": 1,
+        "agent_id": "mdo.default",
+        "model_id": "queue-fixture",
+        "protocol": "openai-chat-completions",
+        "reasoning_effort": "none",
+        "state": "succeeded",
+        "result": "ok",
+        "error_code": "none",
+        "terminal": true,
+        "cancel_requested": false,
+        "resume": false,
+        "client_resume_id": "",
+        "created_at": 1791517298417095,
+        "started_at": 1791517298425258,
+        "ended_at": 1791517298465608,
+        "config_revision": 3,
+        "model_generation": 2,
+        "module_generation": 1,
+        "skill_generation": 1,
+        "memory_generation": 1,
+        "agent_turns": 1,
+        "model_calls": 1,
+        "tool_calls": 0,
+        "compactions": 0,
+        "final_text_available": true,
+        "final_text_truncated": false,
+        "final_text_bytes": 57
+      }
+    ]
+  }
+}

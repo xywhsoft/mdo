@@ -1,0 +1,136 @@
+TAP version 13
+# Subtest: initial locale displays promptly and waits for continuity before saving
+not ok 1 - initial locale displays promptly and waits for continuity before saving
+  ---
+  duration_ms: 2.9131
+  type: 'test'
+  location: 'D:\\GIT\\mdo\\tests\\test_locale_initialization_gate.mjs:28:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    2 !== 1
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 1
+  actual: 2
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///D:/GIT/mdo/tests/test_locale_initialization_gate.mjs:32:10)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3)
+  ...
+# Subtest: a language selected by another page wins over deferred initialization
+not ok 2 - a language selected by another page wins over deferred initialization
+  ---
+  duration_ms: 1.3013
+  type: 'test'
+  location: 'D:\\GIT\\mdo\\tests\\test_locale_initialization_gate.mjs:42:1'
+  failureType: 'testCodeFailure'
+  error: 'f.settings.resumeLocaleInitialization is not a function'
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (file:///D:/GIT/mdo/tests/test_locale_initialization_gate.mjs:45:20)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: manual selection cancels an initializer even before the manual write completes
+not ok 3 - manual selection cancels an initializer even before the manual write completes
+  ---
+  duration_ms: 0.5119
+  type: 'test'
+  location: 'D:\\GIT\\mdo\\tests\\test_locale_initialization_gate.mjs:51:1'
+  failureType: 'testCodeFailure'
+  error: 'f.settings.resumeLocaleInitialization is not a function'
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (file:///D:/GIT/mdo/tests/test_locale_initialization_gate.mjs:63:32)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: repeated writable notifications do not duplicate an initialization read or write
+not ok 4 - repeated writable notifications do not duplicate an initialization read or write
+  ---
+  duration_ms: 0.4959
+  type: 'test'
+  location: 'D:\\GIT\\mdo\\tests\\test_locale_initialization_gate.mjs:79:1'
+  failureType: 'testCodeFailure'
+  error: 'f.settings.resumeLocaleInitialization is not a function'
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (file:///D:/GIT/mdo/tests/test_locale_initialization_gate.mjs:91:28)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: a lost initialization acknowledgement never turns into another automatic write
+not ok 5 - a lost initialization acknowledgement never turns into another automatic write
+  ---
+  duration_ms: 0.7457
+  type: 'test'
+  location: 'D:\\GIT\\mdo\\tests\\test_locale_initialization_gate.mjs:97:1'
+  failureType: 'testCodeFailure'
+  error: 'f.settings.resumeLocaleInitialization is not a function'
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (file:///D:/GIT/mdo/tests/test_locale_initialization_gate.mjs:104:20)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: restoring defaults supersedes a deferred automatic locale save
+not ok 6 - restoring defaults supersedes a deferred automatic locale save
+  ---
+  duration_ms: 0.9597
+  type: 'test'
+  location: 'D:\\GIT\\mdo\\tests\\test_locale_initialization_gate.mjs:109:1'
+  failureType: 'testCodeFailure'
+  error: 'f.settings.resumeLocaleInitialization is not a function'
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (file:///D:/GIT/mdo/tests/test_locale_initialization_gate.mjs:112:20)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: the public API guard defers initialization without sending a rejected PATCH
+not ok 7 - the public API guard defers initialization without sending a rejected PATCH
+  ---
+  duration_ms: 52.1046
+  type: 'test'
+  location: 'D:\\GIT\\mdo\\tests\\test_locale_initialization_gate.mjs:117:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+
+      [
+        'GET',
+    +   'GET'
+      ]
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    0: 'GET'
+  actual:
+    0: 'GET'
+    1: 'GET'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///D:/GIT/mdo/tests/test_locale_initialization_gate.mjs:132:35)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+1..7
+# tests 7
+# suites 0
+# pass 0
+# fail 7
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 158.4011

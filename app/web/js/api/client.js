@@ -43,10 +43,14 @@ async function withSignal(signal, operation) {
   finally { signal.removeEventListener("abort", cancel); }
 }
 
-function checkWrite(path, options) {
+export function allowsApiWrite(path, options = {}) {
   const method = (options.method ?? "GET").toUpperCase();
-  if (!["GET", "HEAD", "OPTIONS"].includes(method) && writeGuard &&
-      !writeGuard({ ...options, path, method }))
+  return ["GET", "HEAD", "OPTIONS"].includes(method) || !writeGuard ||
+    writeGuard({ ...options, path, method });
+}
+
+function checkWrite(path, options) {
+  if (!allowsApiWrite(path, options))
     throw new ApiError("Review the saved project purge request before writing", {
       code: "purge_review_required",
     });

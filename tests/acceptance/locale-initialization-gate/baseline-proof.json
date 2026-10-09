@@ -1,0 +1,105 @@
+{
+  "phases": [
+    {
+      "mode": "hold",
+      "started": 29939.234,
+      "reads": [
+        {
+          "started": 29939.671,
+          "fault": "hold",
+          "status": 200,
+          "sha256": "e7e4042ae8f45401601fc89b84cb1392f4ad205de16a658450e71e749ea39be1",
+          "ended": 29951.703
+        },
+        {
+          "started": 29948.234,
+          "fault": null,
+          "status": 200,
+          "sha256": "82c4a2d46c32ff7430baf48cd141e68f789b9892d485ae2839368752cec27726",
+          "ended": 29948.25
+        }
+      ],
+      "left": 0
+    }
+  ],
+  "reads": [
+    {
+      "started": 29939.671,
+      "fault": "hold",
+      "status": 200,
+      "sha256": "e7e4042ae8f45401601fc89b84cb1392f4ad205de16a658450e71e749ea39be1",
+      "ended": 29951.703
+    },
+    {
+      "started": 29948.234,
+      "fault": null,
+      "status": 200,
+      "sha256": "82c4a2d46c32ff7430baf48cd141e68f789b9892d485ae2839368752cec27726",
+      "ended": 29948.25
+    }
+  ],
+  "writes": [
+    {
+      "method": "PUT",
+      "path": "/api/v1/workspace-state",
+      "started": 29948.265
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSN0HhjbIGUkX7KD8jOL3ID9-xA-RI/draft",
+      "started": 29948.593
+    }
+  ],
+  "websockets": [
+    {
+      "started": 29948.281,
+      "status": 101,
+      "upstream_bytes": 395,
+      "downstream_bytes": 634,
+      "opened": 29948.281,
+      "closed": 30100.828
+    }
+  ],
+  "model_calls": {},
+  "served_sources": {
+    "js/app.js": "e7cd59e043dbee0a27a6298d8a20c0d22cf7b43b01b1fbde6aec4b6d400022b6",
+    "js/features/settings/project-purge-recovery.js": "57902a12f71454c000c8cc0d7ac4715338bd784c7a8954551d8fdd758ea598c6",
+    "js/features/projects/project-purge-recovery-panel.js": "d28f80bb1d1b4f18d41543b1539927d0aba4d4bfe2e000a85831ceb7647edb95",
+    "js/api/request-recovery.js": "5d70df9f3c8cc077cfe06f27edf1b96b5c26540bb2c3146fd314be8df1e70be8",
+    "js/features/shell/workspace-startup.js": "514099059f01e6d3d938f1b40fd47d6949e9a1b9e19b91ac34303d320cdcc537",
+    "lang/zh-CN.json": "3314c0b3372e9db6ddf370d0a322938c9ed66e06ddd95a7ef90b4df275b80c12",
+    "lang/en-US.json": "31c5888359da5aa0d17ac691be91165c7067e7787cf66bd3bbf64943b77a17a8",
+    "lang/ru-RU.json": "d08ac18626a3739a5bca997bd31d6976325a7cb8f701e9b010d89fe67e7d13ed"
+  },
+  "user_inputs": [],
+  "final_model_errors": 0,
+  "event_kinds": {},
+  "draft": {
+    "revision": 2,
+    "text": "[retained in isolated Home]",
+    "attachments": [],
+    "run_admission_uncertain": false,
+    "submission": null,
+    "submissions": []
+  },
+  "queue": {
+    "items": [],
+    "discard_images": []
+  },
+  "runs": {
+    "automatic": true,
+    "active_runs": 0,
+    "starting_runs": 0,
+    "retained_runs": 0,
+    "max_active": 8,
+    "max_retained": 64,
+    "runs_started": 0,
+    "runs_completed": 0,
+    "runs_failed": 0,
+    "items": []
+  },
+  "unplanned_input": {
+    "length": 45,
+    "sha256": "7dac0f90b158f7082a27f0de5d4592ac89366094af9ee429bbd09cc54a723739"
+  }
+}

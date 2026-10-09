@@ -1,0 +1,158 @@
+{
+  "observations": [
+    {
+      "seconds": 7.4,
+      "input": "",
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "notice": "",
+      "dialog": "",
+      "hint": "Enter 发送 · Shift Enter 换行",
+      "errors": []
+    },
+    {
+      "seconds": 7.8,
+      "input": "",
+      "inputDisabled": true,
+      "sendDisabled": true,
+      "notice": "purgeRecovery.checkingServicedevices.retry",
+      "dialog": "",
+      "hint": "purgeRecovery.checkingService",
+      "errors": []
+    },
+    {
+      "seconds": 7.9,
+      "input": "[retained in isolated Home]",
+      "inputDisabled": false,
+      "sendDisabled": true,
+      "notice": "正在检查服务状态…重新连接",
+      "dialog": "",
+      "hint": "正在检查服务状态…",
+      "errors": [],
+      "unplanned_input": {
+        "length": 42,
+        "sha256": "20d07a9791abbf95efbe5eb25cd3f577d38542dde5d52be29c58f126e947ccf4"
+      }
+    },
+    {
+      "seconds": 8,
+      "input": "[retained in isolated Home]",
+      "inputDisabled": false,
+      "sendDisabled": true,
+      "notice": "正在检查服务状态…重新连接",
+      "dialog": "",
+      "hint": "正在检查服务状态…",
+      "errors": [],
+      "unplanned_input": {
+        "length": 43,
+        "sha256": "567b66b4436c3db405fd7f97d18c65276c5990939f9027dc57c66628cc9ef78e"
+      }
+    },
+    {
+      "seconds": 8.2,
+      "input": "[retained in isolated Home]",
+      "inputDisabled": false,
+      "sendDisabled": true,
+      "notice": "正在检查服务状态…重新连接",
+      "dialog": "",
+      "hint": "正在检查服务状态…",
+      "errors": [],
+      "unplanned_input": {
+        "length": 44,
+        "sha256": "4d3f1885e2bd51d22de91b80a2e0ab5d0eaea5e1bc0fcf80389930e73c3ca6a6"
+      }
+    },
+    {
+      "seconds": 8.3,
+      "input": "[retained in isolated Home]",
+      "inputDisabled": false,
+      "sendDisabled": true,
+      "notice": "正在检查服务状态…重新连接",
+      "dialog": "",
+      "hint": "正在检查服务状态…",
+      "errors": [],
+      "unplanned_input": {
+        "length": 43,
+        "sha256": "3ba87de56d48b1f07546e65d3f1ffeb94469de6d104fc034f21a1c89f1e3f762"
+      }
+    },
+    {
+      "seconds": 8.5,
+      "input": "[retained in isolated Home]",
+      "inputDisabled": false,
+      "sendDisabled": true,
+      "notice": "正在检查服务状态…重新连接",
+      "dialog": "",
+      "hint": "正在检查服务状态…",
+      "errors": [],
+      "unplanned_input": {
+        "length": 44,
+        "sha256": "34bbf0b34e9014c146f56c5a25821e40ced2809dca891c17ff5bc525a0b883b2"
+      }
+    },
+    {
+      "seconds": 8.6,
+      "input": "[retained in isolated Home]",
+      "inputDisabled": false,
+      "sendDisabled": true,
+      "notice": "正在检查服务状态…重新连接",
+      "dialog": "",
+      "hint": "正在检查服务状态…",
+      "errors": [],
+      "unplanned_input": {
+        "length": 45,
+        "sha256": "7dac0f90b158f7082a27f0de5d4592ac89366094af9ee429bbd09cc54a723739"
+      }
+    },
+    {
+      "seconds": 8.7,
+      "input": "[retained in isolated Home]",
+      "inputDisabled": false,
+      "sendDisabled": true,
+      "notice": "正在检查服务状态…重新连接",
+      "dialog": "",
+      "hint": "正在检查服务状态…",
+      "errors": [],
+      "unplanned_input": {
+        "length": 46,
+        "sha256": "3e39716047d9dae1a6d2ef76ab25006e5f3e39f8f2dddd778a9550ee05f7c81f"
+      }
+    },
+    {
+      "seconds": 9.8,
+      "input": "[retained in isolated Home]",
+      "inputDisabled": false,
+      "sendDisabled": true,
+      "notice": "正在检查服务状态…重新连接",
+      "dialog": "",
+      "hint": "正在检查服务状态…",
+      "errors": [],
+      "unplanned_input": {
+        "length": 45,
+        "sha256": "7dac0f90b158f7082a27f0de5d4592ac89366094af9ee429bbd09cc54a723739"
+      }
+    },
+    {
+      "seconds": 16.4,
+      "input": "[retained in isolated Home]",
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "notice": "",
+      "dialog": "",
+      "hint": "Enter 发送 · Shift Enter 换行",
+      "errors": [],
+      "unplanned_input": {
+        "length": 45,
+        "sha256": "7dac0f90b158f7082a27f0de5d4592ac89366094af9ee429bbd09cc54a723739"
+      }
+    }
+  ],
+  "logs": [
+    {
+      "level": "warn",
+      "message": "Initial language preference could not be saved ApiError: Review the saved project purge request before writing\n    at checkWrite (http://127.0.0.1:59029/js/api/client.js:50:11)\n    at apiRequest (http://127.0.0.1:59029/js/api/client.js:135:3)\n    at Object.patch (http://127.0.0.1:59029/js/api/client.js:233:40)\n    at http://127.0.0.1:59029/js/state/settings.js:48:24\n    at async read (http://127.0.0.1:59029/js/state/store.js:85:33)\n    at async load (http://127.0.0.1:59029/js/state/settings.js:39:5)",
+      "timestamp": "2026-10-09T03:38:57.063Z",
+      "url": "http://127.0.0.1:59029/js/state/settings.js"
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+[
+  {
+    "locale": "auto",
+    "etag": "\"mdo-config-2\"",
+    "writes": [],
+    "continuity_reads": [
+      {
+        "started": 29939.671,
+        "fault": "hold",
+        "status": 200,
+        "sha256": "e7e4042ae8f45401601fc89b84cb1392f4ad205de16a658450e71e749ea39be1",
+        "ended": 29951.703
+      },
+      {
+        "started": 29948.234,
+        "fault": null,
+        "status": 200,
+        "sha256": "82c4a2d46c32ff7430baf48cd141e68f789b9892d485ae2839368752cec27726",
+        "ended": 29948.25
+      }
+    ],
+    "sources": {
+      "js/state/settings.js": "b177aba3c1032eb58c27eb8dc6cc89ef45ea098fa8e87553f1996593132bd621",
+      "js/api/client.js": "dc0858f7bf942975e3ccc67c0fd836e3c5d5d7046489d4f5e606455914249701",
+      "js/app.js": "e7cd59e043dbee0a27a6298d8a20c0d22cf7b43b01b1fbde6aec4b6d400022b6"
+    }
+  }
+]

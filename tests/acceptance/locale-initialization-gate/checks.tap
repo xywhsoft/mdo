@@ -1,0 +1,346 @@
+TAP version 13
+# Subtest: JSON read releases an uncooperative body on abort and ignores late conflict feedback
+ok 1 - JSON read releases an uncooperative body on abort and ignores late conflict feedback
+  ---
+  duration_ms: 24.0049
+  type: 'test'
+  ...
+# Subtest: JSON write releases an uncooperative body on abort and ignores late conflict feedback
+ok 2 - JSON write releases an uncooperative body on abort and ignores late conflict feedback
+  ---
+  duration_ms: 0.8551
+  type: 'test'
+  ...
+# Subtest: image write releases an uncooperative body on abort and ignores late conflict feedback
+ok 3 - image write releases an uncooperative body on abort and ignores late conflict feedback
+  ---
+  duration_ms: 11.8336
+  type: 'test'
+  ...
+# Subtest: backup chunk releases an uncooperative body on abort and ignores late conflict feedback
+ok 4 - backup chunk releases an uncooperative body on abort and ignores late conflict feedback
+  ---
+  duration_ms: 0.7462
+  type: 'test'
+  ...
+# Subtest: abort releases an uncooperative fetch and suppresses its late network notification
+ok 5 - abort releases an uncooperative fetch and suppresses its late network notification
+  ---
+  duration_ms: 0.6643
+  type: 'test'
+  ...
+# Subtest: an already cancelled request starts neither its transport nor write tracking
+ok 6 - an already cancelled request starts neither its transport nor write tracking
+  ---
+  duration_ms: 0.5056
+  type: 'test'
+  ...
+# Subtest: a cancelled startup read cannot adopt a late write token
+ok 7 - a cancelled startup read cannot adopt a late write token
+  ---
+  duration_ms: 0.6451
+  type: 'test'
+  ...
+# Subtest: first-use language follows the primary system language, with English fallback
+ok 8 - first-use language follows the primary system language, with English fallback
+  ---
+  duration_ms: 22.9471
+  type: 'test'
+  ...
+# Subtest: native Android language wins over WebView's browser language
+ok 9 - native Android language wins over WebView's browser language
+  ---
+  duration_ms: 0.2259
+  type: 'test'
+  ...
+# Subtest: an unavailable native bridge falls back to the browser language
+ok 10 - an unavailable native bridge falls back to the browser language
+  ---
+  duration_ms: 0.3375
+  type: 'test'
+  ...
+# Subtest: initial language is saved once and survives a later system language change
+ok 11 - initial language is saved once and survives a later system language change
+  ---
+  duration_ms: 26.4062
+  type: 'test'
+  ...
+# Subtest: upgrading an existing saved language never rewrites it
+ok 12 - upgrading an existing saved language never rewrites it
+  ---
+  duration_ms: 1.5201
+  type: 'test'
+  ...
+# Subtest: unsupported system language is persisted as English even with secondary Chinese
+ok 13 - unsupported system language is persisted as English even with secondary Chinese
+  ---
+  duration_ms: 1.2751
+  type: 'test'
+  ...
+# Subtest: a concurrent accepted language wins over first-use detection
+ok 14 - a concurrent accepted language wins over first-use detection
+  ---
+  duration_ms: 0.7757
+  type: 'test'
+  ...
+# Subtest: a lost write reply is confirmed by reading, without repeating the write
+ok 15 - a lost write reply is confirmed by reading, without repeating the write
+  ---
+  duration_ms: 0.8117
+  type: 'test'
+  ...
+# Subtest: an unreadable write confirmation keeps the first-use UI usable
+ok 16 - an unreadable write confirmation keeps the first-use UI usable
+  ---
+  duration_ms: 0.6596
+  type: 'test'
+  ...
+# Subtest: read-only recovery uses the detected language without bypassing the write guard
+ok 17 - read-only recovery uses the detected language without bypassing the write guard
+  ---
+  duration_ms: 0.5446
+  type: 'test'
+  ...
+# Subtest: initial locale displays promptly and waits for continuity before saving
+ok 18 - initial locale displays promptly and waits for continuity before saving
+  ---
+  duration_ms: 3.0454
+  type: 'test'
+  ...
+# Subtest: a language selected by another page wins over deferred initialization
+ok 19 - a language selected by another page wins over deferred initialization
+  ---
+  duration_ms: 0.3402
+  type: 'test'
+  ...
+# Subtest: manual selection cancels an initializer even before the manual write completes
+ok 20 - manual selection cancels an initializer even before the manual write completes
+  ---
+  duration_ms: 3.5528
+  type: 'test'
+  ...
+# Subtest: repeated writable notifications do not duplicate an initialization read or write
+ok 21 - repeated writable notifications do not duplicate an initialization read or write
+  ---
+  duration_ms: 1.1523
+  type: 'test'
+  ...
+# Subtest: a lost initialization acknowledgement never turns into another automatic write
+ok 22 - a lost initialization acknowledgement never turns into another automatic write
+  ---
+  duration_ms: 0.6773
+  type: 'test'
+  ...
+# Subtest: restoring defaults supersedes a deferred automatic locale save
+ok 23 - restoring defaults supersedes a deferred automatic locale save
+  ---
+  duration_ms: 0.4415
+  type: 'test'
+  ...
+# Subtest: the public API guard defers initialization without sending a rejected PATCH
+ok 24 - the public API guard defers initialization without sending a rejected PATCH
+  ---
+  duration_ms: 25.2997
+  type: 'test'
+  ...
+# Subtest: service continuity checks recover quietly from two transient read failures
+ok 25 - service continuity checks recover quietly from two transient read failures
+  ---
+  duration_ms: 4.4499
+  type: 'test'
+  ...
+# Subtest: ignored aborts end service checks within one minute without inventing a purge
+ok 26 - ignored aborts end service checks within one minute without inventing a purge
+  ---
+  duration_ms: 1.5042
+  type: 'test'
+  ...
+# Subtest: a reachable connection resumes a failed check once without replaying a mutation
+ok 27 - a reachable connection resumes a failed check once without replaying a mutation
+  ---
+  duration_ms: 1.1282
+  type: 'test'
+  ...
+# Subtest: permanent denial is final and connection events do not retry it
+ok 28 - permanent denial is final and connection events do not retry it
+  ---
+  duration_ms: 0.5429
+  type: 'test'
+  ...
+# Subtest: a verified service restart keeps review and never automatically releases stale writes
+ok 29 - a verified service restart keeps review and never automatically releases stale writes
+  ---
+  duration_ms: 0.5403
+  type: 'test'
+  ...
+# Subtest: page departure cancels a pending read and a late empty result cannot unlock it
+ok 30 - page departure cancels a pending read and a late empty result cannot unlock it
+  ---
+  duration_ms: 0.5242
+  type: 'test'
+  ...
+# Subtest: a cold exhausted check recovers in the background without another click
+ok 31 - a cold exhausted check recovers in the background without another click
+  ---
+  duration_ms: 0.8537
+  type: 'test'
+  ...
+# Subtest: hiding the page cancels its cooldown and showing it resumes only the read
+ok 32 - hiding the page cancels its cooldown and showing it resumes only the read
+  ---
+  duration_ms: 1.1196
+  type: 'test'
+  ...
+# Subtest: returning to the page resumes a cancelled read
+ok 33 - returning to the page resumes a cancelled read
+  ---
+  duration_ms: 1.1247
+  type: 'test'
+  ...
+# Subtest: returning to the page resumes a cancelled read before cancellation settles
+ok 34 - returning to the page resumes a cancelled read before cancellation settles
+  ---
+  duration_ms: 2.0225
+  type: 'test'
+  ...
+# Subtest: a hung cancellation stays single attempt and retains its original request
+ok 35 - a hung cancellation stays single attempt and retains its original request
+  ---
+  duration_ms: 2.1807
+  type: 'test'
+  ...
+# Subtest: quick edits coalesce; invalid and discarded input make no requests
+ok 36 - quick edits coalesce; invalid and discarded input make no requests
+  ---
+  duration_ms: 4.6205
+  type: 'test'
+  ...
+# Subtest: edits during a pending save stay editable and save after it with their latest value
+ok 37 - edits during a pending save stay editable and save after it with their latest value
+  ---
+  duration_ms: 0.8211
+  type: 'test'
+  ...
+# Subtest: a failure keeps edits and stops automatic retries; Save retries once
+ok 38 - a failure keeps edits and stops automatic retries; Save retries once
+  ---
+  duration_ms: 0.6839
+  type: 'test'
+  ...
+# Subtest: composition pauses pending saves and resumes only when the text is complete
+ok 39 - composition pauses pending saves and resumes only when the text is complete
+  ---
+  duration_ms: 0.6514
+  type: 'test'
+  ...
+# Subtest: teardown cancels delayed writes and does not act on a later response
+ok 40 - teardown cancels delayed writes and does not act on a later response
+  ---
+  duration_ms: 1.2086
+  type: 'test'
+  ...
+# Subtest: a server echo rebases submitted fields while retaining newer text, select and switch values
+ok 41 - a server echo rebases submitted fields while retaining newer text, select and switch values
+  ---
+  duration_ms: 0.3467
+  type: 'test'
+  ...
+# Subtest: a committed save distinguishes a failed confirmation and never repeats the write
+ok 42 - a committed save distinguishes a failed confirmation and never repeats the write
+  ---
+  duration_ms: 27.0272
+  type: 'test'
+  ...
+# Subtest: an accepted write with a permanently denied confirmation is identified accurately
+ok 43 - an accepted write with a permanently denied confirmation is identified accurately
+  ---
+  duration_ms: 0.2997
+  type: 'test'
+  ...
+# Subtest: confirmed-write errors explain the saved result in all UI languages
+ok 44 - confirmed-write errors explain the saved result in all UI languages
+  ---
+  duration_ms: 30.7137
+  type: 'test'
+  ...
+# Subtest: restoring defaults requires a fresh readable snapshot
+ok 45 - restoring defaults requires a fresh readable snapshot
+  ---
+  duration_ms: 1.021
+  type: 'test'
+  ...
+# Subtest: startup releases its first failed read and quietly restores saved preferences
+ok 46 - startup releases its first failed read and quietly restores saved preferences
+  ---
+  duration_ms: 0.5957
+  type: 'test'
+  ...
+# Subtest: an accepted save waits for readback recovery through the actual API
+ok 47 - an accepted save waits for readback recovery through the actual API
+  ---
+  duration_ms: 1.0531
+  type: 'test'
+  ...
+# Subtest: restoring defaults retries confirmation reads, never DELETE
+ok 48 - restoring defaults retries confirmation reads, never DELETE
+  ---
+  duration_ms: 0.511
+  type: 'test'
+  ...
+# Subtest: locale initialization is attempted once even when its acknowledgement and echo are lost
+ok 49 - locale initialization is attempted once even when its acknowledgement and echo are lost
+  ---
+  duration_ms: 0.8113
+  type: 'test'
+  ...
+# Subtest: an obsolete auto-locale response cannot write after a newer read
+ok 50 - an obsolete auto-locale response cannot write after a newer read
+  ---
+  duration_ms: 0.5296
+  type: 'test'
+  ...
+# Subtest: permanent read and write failures never retry
+ok 51 - permanent read and write failures never retry
+  ---
+  duration_ms: 1.5945
+  type: 'test'
+  ...
+# Subtest: reset cancels a pending confirmation and removes its retries
+ok 52 - reset cancels a pending confirmation and removes its retries
+  ---
+  duration_ms: 0.4404
+  type: 'test'
+  ...
+# Subtest: foreground recovery reads an exhausted snapshot without auto-locale writes
+ok 53 - foreground recovery reads an exhausted snapshot without auto-locale writes
+  ---
+  duration_ms: 0.249
+  type: 'test'
+  ...
+# Subtest: a newer snapshot wins a locale-initialization revision conflict
+ok 54 - a newer snapshot wins a locale-initialization revision conflict
+  ---
+  duration_ms: 0.2171
+  type: 'test'
+  ...
+# Subtest: explicit save confirmation of auto locale is read-only
+ok 55 - explicit save confirmation of auto locale is read-only
+  ---
+  duration_ms: 0.1745
+  type: 'test'
+  ...
+# Subtest: public settings exports still confirm an ordinary successful save
+ok 56 - public settings exports still confirm an ordinary successful save
+  ---
+  duration_ms: 0.684
+  type: 'test'
+  ...
+1..56
+# tests 56
+# suites 0
+# pass 56
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 420.887

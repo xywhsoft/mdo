@@ -1,0 +1,13 @@
+{
+  "baseline_new_checks_failed": 7,
+  "related_node_passed": 56,
+  "scoped_frontend_contracts_passed": 2,
+  "actual_model_calls": 1,
+  "final_model_errors": 0,
+  "locale_after_cold_recovery": "zh-CN",
+  "locale_after_reload": "zh-CN",
+  "initialization_writes": 1,
+  "initialized_after_continuity_verified": true,
+  "fixed_browser_warnings_or_errors": 0,
+  "input_origin_verified": false
+}

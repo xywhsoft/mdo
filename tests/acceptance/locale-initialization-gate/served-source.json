@@ -1,0 +1,14 @@
+{
+  "js/state/settings.js": {
+    "sha256": "c2f2ebcad882b707e523c8609ea8c658074da65674c6c4b5dcefc90b2d6fc11b",
+    "matches_clean_build_source": true
+  },
+  "js/api/client.js": {
+    "sha256": "204268a0667575858fd2789968090d03b5a75b48331fe37d40446de5dc31b470",
+    "matches_clean_build_source": true
+  },
+  "js/app.js": {
+    "sha256": "99b5d1be69eef403a0a34adc62664d3a0e58f394e196d1a401726b245d6f4756",
+    "matches_clean_build_source": true
+  }
+}

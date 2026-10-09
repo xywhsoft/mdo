@@ -1,0 +1,112 @@
+[
+  {
+    "locale": "zh-CN",
+    "etag": "\"mdo-config-3\"",
+    "writes": [
+      {
+        "method": "PATCH",
+        "path": "/api/v1/settings/settings",
+        "started": 30044.281
+      }
+    ],
+    "continuity_reads": [
+      {
+        "started": 30035.687,
+        "fault": "hold",
+        "status": 200,
+        "sha256": "7811d1fd6b259c7ebf1792e3320fcd89e86dcd74d29c76dbb251c1ce4d093da2",
+        "ended": 30047.687
+      },
+      {
+        "started": 30044.25,
+        "fault": null,
+        "status": 200,
+        "sha256": "ca6d4a891ad9f8b1ee70d97c703fbf8c54a33bf8b0e8a6737ca54d4e10576288",
+        "ended": 30044.25
+      }
+    ],
+    "sources": {
+      "js/state/settings.js": "c2f2ebcad882b707e523c8609ea8c658074da65674c6c4b5dcefc90b2d6fc11b",
+      "js/api/client.js": "204268a0667575858fd2789968090d03b5a75b48331fe37d40446de5dc31b470",
+      "js/app.js": "99b5d1be69eef403a0a34adc62664d3a0e58f394e196d1a401726b245d6f4756"
+    }
+  },
+  {
+    "locale": "zh-CN",
+    "etag": "\"mdo-config-3\"",
+    "writes": [
+      {
+        "method": "PATCH",
+        "path": "/api/v1/settings/settings",
+        "started": 30044.281
+      }
+    ],
+    "continuity_reads": [
+      {
+        "started": 30035.687,
+        "fault": "hold",
+        "status": 200,
+        "sha256": "7811d1fd6b259c7ebf1792e3320fcd89e86dcd74d29c76dbb251c1ce4d093da2",
+        "ended": 30047.687
+      },
+      {
+        "started": 30044.25,
+        "fault": null,
+        "status": 200,
+        "sha256": "ca6d4a891ad9f8b1ee70d97c703fbf8c54a33bf8b0e8a6737ca54d4e10576288",
+        "ended": 30044.25
+      }
+    ],
+    "sources": {
+      "js/state/settings.js": "c2f2ebcad882b707e523c8609ea8c658074da65674c6c4b5dcefc90b2d6fc11b",
+      "js/api/client.js": "204268a0667575858fd2789968090d03b5a75b48331fe37d40446de5dc31b470",
+      "js/app.js": "99b5d1be69eef403a0a34adc62664d3a0e58f394e196d1a401726b245d6f4756"
+    }
+  },
+  {
+    "locale": "zh-CN",
+    "etag": "\"mdo-config-3\"",
+    "writes": [
+      {
+        "method": "PATCH",
+        "path": "/api/v1/settings/settings",
+        "started": 30044.281
+      }
+    ],
+    "continuity_reads": [
+      {
+        "started": 30035.687,
+        "fault": "hold",
+        "status": 200,
+        "sha256": "7811d1fd6b259c7ebf1792e3320fcd89e86dcd74d29c76dbb251c1ce4d093da2",
+        "ended": 30047.687
+      },
+      {
+        "started": 30044.25,
+        "fault": null,
+        "status": 200,
+        "sha256": "ca6d4a891ad9f8b1ee70d97c703fbf8c54a33bf8b0e8a6737ca54d4e10576288",
+        "ended": 30044.25
+      },
+      {
+        "started": 30162.531,
+        "fault": "hold",
+        "status": 200,
+        "sha256": "bb53394d07d9bcd84f24fb492e7fd69b80a46848776a4d81d52e347282729ec3",
+        "ended": 30174.531
+      },
+      {
+        "started": 30171.109,
+        "fault": null,
+        "status": 200,
+        "sha256": "19004d688673f13ad47bde9a5972ab1dbf1214d0ab2b91d8a680c48f9436070a",
+        "ended": 30171.109
+      }
+    ],
+    "sources": {
+      "js/state/settings.js": "c2f2ebcad882b707e523c8609ea8c658074da65674c6c4b5dcefc90b2d6fc11b",
+      "js/api/client.js": "204268a0667575858fd2789968090d03b5a75b48331fe37d40446de5dc31b470",
+      "js/app.js": "99b5d1be69eef403a0a34adc62664d3a0e58f394e196d1a401726b245d6f4756"
+    }
+  }
+]

@@ -15,6 +15,7 @@ import {
 import { modelsStore, agentsStore, projectsStore, loadCatalogs, loadModels, loadAgents, loadProjects, recoverCatalogs } from "./state/catalogs.js";
 import {
   settingsStore, loadSettings, recoverSettings, previewSettings, applySettings,
+  resumeSettingsLocaleInitialization,
 } from "./state/settings.js";
 import {
   modulesStore, skillsStore, mcpStore, permissionsStore, storageStore,
@@ -1220,7 +1221,10 @@ export async function boot() {
       : t("composer.shortcutControlQueue", {}, "中断当前运行，优先发送输入");
     mobileActivity.hidden = !activeRun && !creatingNewTask;
   }
-  settingsStore.subscribe(() => setRun(activeRun));
+  settingsStore.subscribe(state => {
+    setRun(activeRun);
+    if (state.status === "ready") void resumeSettingsLocaleInitialization();
+  });
   modelsStore.subscribe(() => setRun(activeRun));
   agentsStore.subscribe(() => setRun(activeRun));
   let purgeWasPaused = purgeRecovery.isPaused();
@@ -1229,6 +1233,7 @@ export async function boot() {
     setRun(activeRun);
     if (purgeWasPaused && !paused) {
       if (!isRemoteTarget()) liveConnection.start(currentPageWriteToken());
+      void resumeSettingsLocaleInitialization();
       draftStore.resumeSaves();
       void projectDraftSelection.restoreLegacy();
       void newTaskController.reconcile();
