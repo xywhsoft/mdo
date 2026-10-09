@@ -65,6 +65,8 @@ class Proxy(BaseHTTPRequestHandler):
         is_history = self.command == 'GET' and self.path == self.session_path + '/history'
         is_fork = self.command == 'POST' and self.path == self.session_path + '/fork'
         is_profile = self.command == 'PUT' and self.path == self.session_path + '/profile'
+        if is_profile and self.mode == 'profile_reject':
+            self.before_profile(body)
         is_profile_read = (self.command == 'GET' and self.path == self.session_path and
             self.mode.startswith('profile_') and self.attempts['PUT ' + self.session_path + '/profile'])
         is_confirmation = self.command == 'GET' and self.fork_id and self.path == '/api/v1/projects/default/sessions/' + self.fork_id

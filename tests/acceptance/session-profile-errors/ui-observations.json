@@ -1,0 +1,28 @@
+{
+  "synchronized": {
+    "disabled": false,
+    "draft": "保留这段输入，修复模型配置后继续对话。",
+    "selected": "profile-alternative",
+    "toasts": []
+  },
+  "rejected": {
+    "disabled": false,
+    "draft": "保留这段输入，修正思考强度后继续对话。",
+    "selected": "queue-fixture",
+    "toasts": [
+      "所选模型不支持此思考强度，请选择支持的强度。"
+    ]
+  },
+  "confirmed": {
+    "disabled": false,
+    "draft": "保留这段输入，修正思考强度后继续对话。",
+    "selected": "profile-alternative",
+    "toasts": []
+  },
+  "continued": {
+    "draft": "",
+    "errors": [],
+    "timeline": "20:26Seed the profile error check.Agent20:26Ready to continue.10 输入 / 5 输出 tokens · LLM <0.1 秒 · 215.3 tok/s20:28保留这段输入，修正思考强度后继续对话。Agent20:28Ready to continue.10 输入 / 5 输出 tokens · LLM <0.1 秒 · 626.4 tok/s",
+    "trigger": "\n                Profile alternative无思考\n              "
+  }
+}

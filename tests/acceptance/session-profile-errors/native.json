@@ -1,0 +1,175 @@
+{
+  "source_id": "V-OSOqfVVH_gmqkDxn4LkPKxTPJT3ztH",
+  "rejections": [
+    {
+      "method": "POST",
+      "path": "/sessions",
+      "body": {
+        "project_id": "default",
+        "model_id": "missing-profile-model",
+        "reasoning_effort": "none",
+        "permission_profile": "balanced",
+        "workspace_root": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\profile-errors\\clean-native"
+      },
+      "status": 422,
+      "error": {
+        "code": "model_profile_model_missing",
+        "message": "The selected model is no longer in the model list. Refresh the list or choose another model."
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/sessions",
+      "body": {
+        "project_id": "default",
+        "model_id": "queue-fixture",
+        "reasoning_effort": "none",
+        "permission_profile": "balanced",
+        "workspace_root": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\profile-errors\\clean-native",
+        "protocol": "openai-responses"
+      },
+      "status": 422,
+      "error": {
+        "code": "model_profile_protocol_unsupported",
+        "message": "The selected model does not support this API protocol. Check the model protocol or choose another model."
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/sessions",
+      "body": {
+        "project_id": "default",
+        "model_id": "queue-fixture",
+        "reasoning_effort": "unsupported",
+        "permission_profile": "balanced",
+        "workspace_root": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\profile-errors\\clean-native"
+      },
+      "status": 422,
+      "error": {
+        "code": "model_profile_reasoning_unsupported",
+        "message": "The selected model does not support this reasoning level. Choose a supported level."
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/sessions",
+      "body": {
+        "project_id": "default",
+        "model_id": "queue-fixture",
+        "reasoning_effort": "none",
+        "permission_profile": "balanced",
+        "workspace_root": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\profile-errors\\clean-native",
+        "max_output_tokens": 4294967295
+      },
+      "status": 422,
+      "error": {
+        "code": "model_profile_output_limit",
+        "message": "The configured output limit exceeds this model's limit. Lower the output limit in the Agent or model settings."
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/projects/default/sessions/V-OSOqfVVH_gmqkDxn4LkPKxTPJT3ztH/profile",
+      "body": {
+        "model_id": "missing-profile-model",
+        "reasoning_effort": "none",
+        "permission_profile": "balanced"
+      },
+      "status": 422,
+      "error": {
+        "code": "model_profile_model_missing",
+        "message": "The selected model is no longer in the model list. Refresh the list or choose another model."
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/projects/default/sessions/V-OSOqfVVH_gmqkDxn4LkPKxTPJT3ztH/profile",
+      "body": {
+        "model_id": "queue-fixture",
+        "reasoning_effort": "unsupported",
+        "permission_profile": "balanced"
+      },
+      "status": 422,
+      "error": {
+        "code": "model_profile_reasoning_unsupported",
+        "message": "The selected model does not support this reasoning level. Choose a supported level."
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/projects/default/sessions/V-OSOqfVVH_gmqkDxn4LkPKxTPJT3ztH/runs",
+      "body": {
+        "prompt": "Missing model must not start",
+        "queue_item_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "status": 422,
+      "error": {
+        "code": "model_profile_model_missing",
+        "message": "The selected model is no longer in the model list. Refresh the list or choose another model."
+      }
+    }
+  ],
+  "rejected_snapshot_unchanged": true,
+  "metadata_before": {
+    "id": "V-OSOqfVVH_gmqkDxn4LkPKxTPJT3ztH",
+    "project_id": "default",
+    "parent_session_id": "",
+    "title": "Profile errors source",
+    "agent_id": "mdo.default",
+    "model_id": "queue-fixture",
+    "protocol": "openai-chat-completions",
+    "reasoning_effort": "none",
+    "permission_profile": "balanced",
+    "workspace_root": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\profile-errors\\clean-native",
+    "status": "active",
+    "revision": 1,
+    "created_at": 1791548616438742,
+    "updated_at": 1791548616438742,
+    "pinned": false,
+    "runtime_open": false,
+    "config_revision": 3,
+    "model_generation": 3,
+    "module_generation": 1,
+    "skill_generation": 1,
+    "max_output_tokens": 16384,
+    "forked_through_sequence": 0
+  },
+  "metadata_after": {
+    "id": "V-OSOqfVVH_gmqkDxn4LkPKxTPJT3ztH",
+    "project_id": "default",
+    "parent_session_id": "",
+    "title": "Profile errors source",
+    "agent_id": "mdo.default",
+    "model_id": "profile-alternative",
+    "protocol": "openai-chat-completions",
+    "reasoning_effort": "medium",
+    "permission_profile": "balanced",
+    "workspace_root": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\profile-errors\\clean-native",
+    "status": "active",
+    "revision": 2,
+    "created_at": 1791548616438742,
+    "updated_at": 1791548616671938,
+    "pinned": false,
+    "runtime_open": false,
+    "config_revision": 3,
+    "model_generation": 3,
+    "module_generation": 1,
+    "skill_generation": 1,
+    "max_output_tokens": 16384,
+    "forked_through_sequence": 0
+  },
+  "model_calls": 2,
+  "model_requests": [
+    "ornith-1.5-35b",
+    "profile-alternative"
+  ],
+  "final_errors": 0,
+  "event_kinds": {
+    "agent_start": 2,
+    "model_start": 2,
+    "model_text_delta": 2,
+    "model_done": 2,
+    "agent_done": 2
+  },
+  "transport": []
+}

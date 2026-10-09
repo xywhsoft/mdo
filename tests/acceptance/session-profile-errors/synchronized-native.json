@@ -1,0 +1,648 @@
+{
+  "source_id": "V-OSOqf_-JfvTLf7fYLMFcnEpBOtFE6X",
+  "rejections": [
+    {
+      "method": "POST",
+      "path": "/sessions",
+      "body": {
+        "project_id": "default",
+        "model_id": "missing-profile-model",
+        "reasoning_effort": "none",
+        "permission_profile": "balanced",
+        "workspace_root": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\profile-errors\\ui"
+      },
+      "status": 422,
+      "error": {
+        "code": "model_profile_model_missing",
+        "message": "The selected model is no longer in the model list. Refresh the list or choose another model."
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/sessions",
+      "body": {
+        "project_id": "default",
+        "model_id": "queue-fixture",
+        "reasoning_effort": "none",
+        "permission_profile": "balanced",
+        "workspace_root": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\profile-errors\\ui",
+        "protocol": "openai-responses"
+      },
+      "status": 422,
+      "error": {
+        "code": "model_profile_protocol_unsupported",
+        "message": "The selected model does not support this API protocol. Check the model protocol or choose another model."
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/sessions",
+      "body": {
+        "project_id": "default",
+        "model_id": "queue-fixture",
+        "reasoning_effort": "unsupported",
+        "permission_profile": "balanced",
+        "workspace_root": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\profile-errors\\ui"
+      },
+      "status": 422,
+      "error": {
+        "code": "model_profile_reasoning_unsupported",
+        "message": "The selected model does not support this reasoning level. Choose a supported level."
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/sessions",
+      "body": {
+        "project_id": "default",
+        "model_id": "queue-fixture",
+        "reasoning_effort": "none",
+        "permission_profile": "balanced",
+        "workspace_root": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\profile-errors\\ui",
+        "max_output_tokens": 4294967295
+      },
+      "status": 422,
+      "error": {
+        "code": "model_profile_output_limit",
+        "message": "The configured output limit exceeds this model's limit. Lower the output limit in the Agent or model settings."
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/projects/default/sessions/V-OSOqf_-JfvTLf7fYLMFcnEpBOtFE6X/profile",
+      "body": {
+        "model_id": "missing-profile-model",
+        "reasoning_effort": "none",
+        "permission_profile": "balanced"
+      },
+      "status": 422,
+      "error": {
+        "code": "model_profile_model_missing",
+        "message": "The selected model is no longer in the model list. Refresh the list or choose another model."
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/projects/default/sessions/V-OSOqf_-JfvTLf7fYLMFcnEpBOtFE6X/profile",
+      "body": {
+        "model_id": "queue-fixture",
+        "reasoning_effort": "unsupported",
+        "permission_profile": "balanced"
+      },
+      "status": 422,
+      "error": {
+        "code": "model_profile_reasoning_unsupported",
+        "message": "The selected model does not support this reasoning level. Choose a supported level."
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/projects/default/sessions/V-OSOqf_-JfvTLf7fYLMFcnEpBOtFE6X/runs",
+      "body": {
+        "prompt": "Missing model must not start",
+        "queue_item_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "status": 422,
+      "error": {
+        "code": "model_profile_model_missing",
+        "message": "The selected model is no longer in the model list. Refresh the list or choose another model."
+      }
+    }
+  ],
+  "rejected_snapshot_unchanged": true,
+  "metadata_before": {
+    "id": "V-OSOqf_-JfvTLf7fYLMFcnEpBOtFE6X",
+    "project_id": "default",
+    "parent_session_id": "",
+    "title": "Profile errors source",
+    "agent_id": "mdo.default",
+    "model_id": "queue-fixture",
+    "protocol": "openai-chat-completions",
+    "reasoning_effort": "none",
+    "permission_profile": "balanced",
+    "workspace_root": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\profile-errors\\ui",
+    "status": "active",
+    "revision": 1,
+    "created_at": 1791548616780637,
+    "updated_at": 1791548616780637,
+    "pinned": false,
+    "runtime_open": false,
+    "config_revision": 3,
+    "model_generation": 3,
+    "module_generation": 1,
+    "skill_generation": 1,
+    "max_output_tokens": 16384,
+    "forked_through_sequence": 0
+  },
+  "metadata_after": {
+    "id": "V-OSOqf_-JfvTLf7fYLMFcnEpBOtFE6X",
+    "project_id": "default",
+    "parent_session_id": "",
+    "title": "Profile errors source",
+    "agent_id": "mdo.default",
+    "model_id": "profile-alternative",
+    "protocol": "openai-chat-completions",
+    "reasoning_effort": "low",
+    "permission_profile": "balanced",
+    "workspace_root": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\profile-errors\\ui",
+    "status": "active",
+    "revision": 2,
+    "created_at": 1791548616780637,
+    "updated_at": 1791548682902585,
+    "pinned": false,
+    "runtime_open": false,
+    "config_revision": 4,
+    "model_generation": 4,
+    "module_generation": 1,
+    "skill_generation": 1,
+    "max_output_tokens": 16384,
+    "forked_through_sequence": 0
+  },
+  "model_calls": 1,
+  "model_requests": [
+    "ornith-1.5-35b"
+  ],
+  "final_errors": 0,
+  "event_kinds": {
+    "agent_start": 1,
+    "model_start": 1,
+    "model_text_delta": 1,
+    "model_done": 1,
+    "agent_done": 1
+  },
+  "transport": [
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSOqf_-JfvTLf7fYLMFcnEpBOtFE6X/profile",
+      "attempt": 1,
+      "status": 200,
+      "seconds": 65.985,
+      "fault": null,
+      "response": {
+        "schema_version": 1,
+        "ok": true,
+        "request_id": "mdo-e6edc867108ec8a34917b88f",
+        "data": {
+          "id": "V-OSOqf_-JfvTLf7fYLMFcnEpBOtFE6X",
+          "project_id": "default",
+          "parent_session_id": "",
+          "title": "Profile errors source",
+          "agent_id": "mdo.default",
+          "model_id": "profile-alternative",
+          "protocol": "openai-chat-completions",
+          "reasoning_effort": "low",
+          "permission_profile": "balanced",
+          "workspace_root": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\profile-errors\\ui",
+          "status": "active",
+          "revision": 2,
+          "created_at": 1791548616780637,
+          "updated_at": 1791548682902585,
+          "pinned": false,
+          "runtime_open": false,
+          "config_revision": 4,
+          "model_generation": 4,
+          "module_generation": 1,
+          "skill_generation": 1,
+          "max_output_tokens": 16384,
+          "forked_through_sequence": 0
+        }
+      },
+      "kind": "profile",
+      "body": {
+        "model_id": "profile-alternative",
+        "reasoning_effort": "low",
+        "permission_profile": "balanced"
+      },
+      "finished_seconds": 66.0
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/projects/default/sessions/V-OSOqf_-JfvTLf7fYLMFcnEpBOtFE6X",
+      "attempt": 1,
+      "status": 200,
+      "seconds": 69.266,
+      "fault": null,
+      "response": {
+        "schema_version": 1,
+        "ok": true,
+        "request_id": "mdo-463c4f56e11c72ec673e431d",
+        "data": {
+          "id": "V-OSOqf_-JfvTLf7fYLMFcnEpBOtFE6X",
+          "project_id": "default",
+          "parent_session_id": "",
+          "title": "Profile errors source",
+          "agent_id": "mdo.default",
+          "model_id": "profile-alternative",
+          "protocol": "openai-chat-completions",
+          "reasoning_effort": "low",
+          "permission_profile": "balanced",
+          "workspace_root": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\profile-errors\\ui",
+          "status": "active",
+          "revision": 2,
+          "created_at": 1791548616780637,
+          "updated_at": 1791548682902585,
+          "pinned": false,
+          "runtime_open": false,
+          "config_revision": 4,
+          "model_generation": 4,
+          "module_generation": 1,
+          "skill_generation": 1,
+          "max_output_tokens": 16384,
+          "forked_through_sequence": 0
+        }
+      },
+      "kind": "profile_read",
+      "finished_seconds": 69.266
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/projects/default/sessions/V-OSOqf_-JfvTLf7fYLMFcnEpBOtFE6X",
+      "attempt": 2,
+      "status": 200,
+      "seconds": 77.282,
+      "fault": null,
+      "response": {
+        "schema_version": 1,
+        "ok": true,
+        "request_id": "mdo-4e379bc64902860ed5644ecd",
+        "data": {
+          "id": "V-OSOqf_-JfvTLf7fYLMFcnEpBOtFE6X",
+          "project_id": "default",
+          "parent_session_id": "",
+          "title": "Profile errors source",
+          "agent_id": "mdo.default",
+          "model_id": "profile-alternative",
+          "protocol": "openai-chat-completions",
+          "reasoning_effort": "low",
+          "permission_profile": "balanced",
+          "workspace_root": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\profile-errors\\ui",
+          "status": "active",
+          "revision": 2,
+          "created_at": 1791548616780637,
+          "updated_at": 1791548682902585,
+          "pinned": false,
+          "runtime_open": false,
+          "config_revision": 4,
+          "model_generation": 4,
+          "module_generation": 1,
+          "skill_generation": 1,
+          "max_output_tokens": 16384,
+          "forked_through_sequence": 0
+        }
+      },
+      "kind": "profile_read",
+      "finished_seconds": 77.282
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/projects/default/sessions/V-OSOqf_-JfvTLf7fYLMFcnEpBOtFE6X",
+      "attempt": 3,
+      "status": 200,
+      "seconds": 85.282,
+      "fault": null,
+      "response": {
+        "schema_version": 1,
+        "ok": true,
+        "request_id": "mdo-943ddb94b1fdd3e88ce63d0a",
+        "data": {
+          "id": "V-OSOqf_-JfvTLf7fYLMFcnEpBOtFE6X",
+          "project_id": "default",
+          "parent_session_id": "",
+          "title": "Profile errors source",
+          "agent_id": "mdo.default",
+          "model_id": "profile-alternative",
+          "protocol": "openai-chat-completions",
+          "reasoning_effort": "low",
+          "permission_profile": "balanced",
+          "workspace_root": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\profile-errors\\ui",
+          "status": "active",
+          "revision": 2,
+          "created_at": 1791548616780637,
+          "updated_at": 1791548682902585,
+          "pinned": false,
+          "runtime_open": false,
+          "config_revision": 4,
+          "model_generation": 4,
+          "module_generation": 1,
+          "skill_generation": 1,
+          "max_output_tokens": 16384,
+          "forked_through_sequence": 0
+        }
+      },
+      "kind": "profile_read",
+      "finished_seconds": 85.282
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/projects/default/sessions/V-OSOqf_-JfvTLf7fYLMFcnEpBOtFE6X",
+      "attempt": 4,
+      "status": 200,
+      "seconds": 93.313,
+      "fault": null,
+      "response": {
+        "schema_version": 1,
+        "ok": true,
+        "request_id": "mdo-b94090698684eb40ffab30ef",
+        "data": {
+          "id": "V-OSOqf_-JfvTLf7fYLMFcnEpBOtFE6X",
+          "project_id": "default",
+          "parent_session_id": "",
+          "title": "Profile errors source",
+          "agent_id": "mdo.default",
+          "model_id": "profile-alternative",
+          "protocol": "openai-chat-completions",
+          "reasoning_effort": "low",
+          "permission_profile": "balanced",
+          "workspace_root": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\profile-errors\\ui",
+          "status": "active",
+          "revision": 2,
+          "created_at": 1791548616780637,
+          "updated_at": 1791548682902585,
+          "pinned": false,
+          "runtime_open": false,
+          "config_revision": 4,
+          "model_generation": 4,
+          "module_generation": 1,
+          "skill_generation": 1,
+          "max_output_tokens": 16384,
+          "forked_through_sequence": 0
+        }
+      },
+      "kind": "profile_read",
+      "finished_seconds": 93.313
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/projects/default/sessions/V-OSOqf_-JfvTLf7fYLMFcnEpBOtFE6X",
+      "attempt": 5,
+      "status": 200,
+      "seconds": 101.328,
+      "fault": null,
+      "response": {
+        "schema_version": 1,
+        "ok": true,
+        "request_id": "mdo-2b9ce6033651158b059fa175",
+        "data": {
+          "id": "V-OSOqf_-JfvTLf7fYLMFcnEpBOtFE6X",
+          "project_id": "default",
+          "parent_session_id": "",
+          "title": "Profile errors source",
+          "agent_id": "mdo.default",
+          "model_id": "profile-alternative",
+          "protocol": "openai-chat-completions",
+          "reasoning_effort": "low",
+          "permission_profile": "balanced",
+          "workspace_root": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\profile-errors\\ui",
+          "status": "active",
+          "revision": 2,
+          "created_at": 1791548616780637,
+          "updated_at": 1791548682902585,
+          "pinned": false,
+          "runtime_open": false,
+          "config_revision": 4,
+          "model_generation": 4,
+          "module_generation": 1,
+          "skill_generation": 1,
+          "max_output_tokens": 16384,
+          "forked_through_sequence": 0
+        }
+      },
+      "kind": "profile_read",
+      "finished_seconds": 101.328
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/projects/default/sessions/V-OSOqf_-JfvTLf7fYLMFcnEpBOtFE6X",
+      "attempt": 6,
+      "status": 200,
+      "seconds": 109.344,
+      "fault": null,
+      "response": {
+        "schema_version": 1,
+        "ok": true,
+        "request_id": "mdo-f6e6df4f953d6775a1d6a951",
+        "data": {
+          "id": "V-OSOqf_-JfvTLf7fYLMFcnEpBOtFE6X",
+          "project_id": "default",
+          "parent_session_id": "",
+          "title": "Profile errors source",
+          "agent_id": "mdo.default",
+          "model_id": "profile-alternative",
+          "protocol": "openai-chat-completions",
+          "reasoning_effort": "low",
+          "permission_profile": "balanced",
+          "workspace_root": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\profile-errors\\ui",
+          "status": "active",
+          "revision": 2,
+          "created_at": 1791548616780637,
+          "updated_at": 1791548682902585,
+          "pinned": false,
+          "runtime_open": false,
+          "config_revision": 4,
+          "model_generation": 4,
+          "module_generation": 1,
+          "skill_generation": 1,
+          "max_output_tokens": 16384,
+          "forked_through_sequence": 0
+        }
+      },
+      "kind": "profile_read",
+      "finished_seconds": 109.344
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/projects/default/sessions/V-OSOqf_-JfvTLf7fYLMFcnEpBOtFE6X",
+      "attempt": 7,
+      "status": 200,
+      "seconds": 117.36,
+      "fault": null,
+      "response": {
+        "schema_version": 1,
+        "ok": true,
+        "request_id": "mdo-9f237d5b57f0ca8d49353beb",
+        "data": {
+          "id": "V-OSOqf_-JfvTLf7fYLMFcnEpBOtFE6X",
+          "project_id": "default",
+          "parent_session_id": "",
+          "title": "Profile errors source",
+          "agent_id": "mdo.default",
+          "model_id": "profile-alternative",
+          "protocol": "openai-chat-completions",
+          "reasoning_effort": "low",
+          "permission_profile": "balanced",
+          "workspace_root": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\profile-errors\\ui",
+          "status": "active",
+          "revision": 2,
+          "created_at": 1791548616780637,
+          "updated_at": 1791548682902585,
+          "pinned": false,
+          "runtime_open": false,
+          "config_revision": 4,
+          "model_generation": 4,
+          "module_generation": 1,
+          "skill_generation": 1,
+          "max_output_tokens": 16384,
+          "forked_through_sequence": 0
+        }
+      },
+      "kind": "profile_read",
+      "finished_seconds": 117.36
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/projects/default/sessions/V-OSOqf_-JfvTLf7fYLMFcnEpBOtFE6X",
+      "attempt": 8,
+      "status": 200,
+      "seconds": 125.375,
+      "fault": null,
+      "response": {
+        "schema_version": 1,
+        "ok": true,
+        "request_id": "mdo-e6bcb82ba922bf3522e7f1a1",
+        "data": {
+          "id": "V-OSOqf_-JfvTLf7fYLMFcnEpBOtFE6X",
+          "project_id": "default",
+          "parent_session_id": "",
+          "title": "Profile errors source",
+          "agent_id": "mdo.default",
+          "model_id": "profile-alternative",
+          "protocol": "openai-chat-completions",
+          "reasoning_effort": "low",
+          "permission_profile": "balanced",
+          "workspace_root": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\profile-errors\\ui",
+          "status": "active",
+          "revision": 2,
+          "created_at": 1791548616780637,
+          "updated_at": 1791548682902585,
+          "pinned": false,
+          "runtime_open": false,
+          "config_revision": 4,
+          "model_generation": 4,
+          "module_generation": 1,
+          "skill_generation": 1,
+          "max_output_tokens": 16384,
+          "forked_through_sequence": 0
+        }
+      },
+      "kind": "profile_read",
+      "finished_seconds": 125.375
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/projects/default/sessions/V-OSOqf_-JfvTLf7fYLMFcnEpBOtFE6X",
+      "attempt": 9,
+      "status": 200,
+      "seconds": 133.391,
+      "fault": null,
+      "response": {
+        "schema_version": 1,
+        "ok": true,
+        "request_id": "mdo-115bf018346df6f13def6a62",
+        "data": {
+          "id": "V-OSOqf_-JfvTLf7fYLMFcnEpBOtFE6X",
+          "project_id": "default",
+          "parent_session_id": "",
+          "title": "Profile errors source",
+          "agent_id": "mdo.default",
+          "model_id": "profile-alternative",
+          "protocol": "openai-chat-completions",
+          "reasoning_effort": "low",
+          "permission_profile": "balanced",
+          "workspace_root": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\profile-errors\\ui",
+          "status": "active",
+          "revision": 2,
+          "created_at": 1791548616780637,
+          "updated_at": 1791548682902585,
+          "pinned": false,
+          "runtime_open": false,
+          "config_revision": 4,
+          "model_generation": 4,
+          "module_generation": 1,
+          "skill_generation": 1,
+          "max_output_tokens": 16384,
+          "forked_through_sequence": 0
+        }
+      },
+      "kind": "profile_read",
+      "finished_seconds": 133.391
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/projects/default/sessions/V-OSOqf_-JfvTLf7fYLMFcnEpBOtFE6X",
+      "attempt": 10,
+      "status": 200,
+      "seconds": 141.407,
+      "fault": null,
+      "response": {
+        "schema_version": 1,
+        "ok": true,
+        "request_id": "mdo-5f68d55fae95de5c4b4d87a0",
+        "data": {
+          "id": "V-OSOqf_-JfvTLf7fYLMFcnEpBOtFE6X",
+          "project_id": "default",
+          "parent_session_id": "",
+          "title": "Profile errors source",
+          "agent_id": "mdo.default",
+          "model_id": "profile-alternative",
+          "protocol": "openai-chat-completions",
+          "reasoning_effort": "low",
+          "permission_profile": "balanced",
+          "workspace_root": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\profile-errors\\ui",
+          "status": "active",
+          "revision": 2,
+          "created_at": 1791548616780637,
+          "updated_at": 1791548682902585,
+          "pinned": false,
+          "runtime_open": false,
+          "config_revision": 4,
+          "model_generation": 4,
+          "module_generation": 1,
+          "skill_generation": 1,
+          "max_output_tokens": 16384,
+          "forked_through_sequence": 0
+        }
+      },
+      "kind": "profile_read",
+      "finished_seconds": 141.407
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/projects/default/sessions/V-OSOqf_-JfvTLf7fYLMFcnEpBOtFE6X",
+      "attempt": 11,
+      "status": 200,
+      "seconds": 149.422,
+      "fault": null,
+      "response": {
+        "schema_version": 1,
+        "ok": true,
+        "request_id": "mdo-9ede0672ebfa06058fa50802",
+        "data": {
+          "id": "V-OSOqf_-JfvTLf7fYLMFcnEpBOtFE6X",
+          "project_id": "default",
+          "parent_session_id": "",
+          "title": "Profile errors source",
+          "agent_id": "mdo.default",
+          "model_id": "profile-alternative",
+          "protocol": "openai-chat-completions",
+          "reasoning_effort": "low",
+          "permission_profile": "balanced",
+          "workspace_root": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\profile-errors\\ui",
+          "status": "active",
+          "revision": 2,
+          "created_at": 1791548616780637,
+          "updated_at": 1791548682902585,
+          "pinned": false,
+          "runtime_open": false,
+          "config_revision": 4,
+          "model_generation": 4,
+          "module_generation": 1,
+          "skill_generation": 1,
+          "max_output_tokens": 16384,
+          "forked_through_sequence": 0
+        }
+      },
+      "kind": "profile_read",
+      "finished_seconds": 149.422
+    }
+  ]
+}

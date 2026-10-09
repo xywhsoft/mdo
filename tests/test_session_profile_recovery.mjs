@@ -102,7 +102,9 @@ test("known refusal retries quietly while preserving any earlier uncertain deliv
 
 test("permanent refusals are not retried; known and unknown exhaustion are distinct", async () => {
   for (const [error, final, count] of [[new ApiError("Denied", { status: 403, code: "permission_denied" }),
-      "permission_denied", 1], [unavailable(), "session_profile_unavailable", 6],
+      "permission_denied", 1], [new ApiError("Unsupported reasoning", {
+        status: 422, code: "model_profile_reasoning_unsupported" }),
+        "model_profile_reasoning_unsupported", 1], [unavailable(), "session_profile_unavailable", 6],
     [network(), "session_profile_unconfirmed", 6]]) {
     let attempts = 0;
     const env = environment({ send: async () => { attempts++; throw error; },

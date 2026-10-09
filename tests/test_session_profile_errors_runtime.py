@@ -53,10 +53,10 @@ def check(packed: Path, base: Path, interactive: bool = False) -> dict:
         rejections.append({"method": method, "path": path, "body": body,
             "status": 422, "error": document["error"]})
 
-    def reasoning_options(efforts):
+    def reasoning_options(efforts, model_id="profile-alternative"):
         config, headers = call("GET", "/models/config")
         config.pop("runtime_override", None)
-        alternative = next(item for item in config["items"] if item["id"] == "profile-alternative")
+        alternative = next(item for item in config["items"] if item["id"] == model_id)
         alternative.update(reasoning_efforts=efforts, default_reasoning_effort=efforts[0])
         call("PUT", "/settings/models", {"schema_version": 1, "patch": config}, tag=headers["etag"])
 
@@ -112,6 +112,13 @@ def check(packed: Path, base: Path, interactive: bool = False) -> dict:
         rejected_snapshot_unchanged = True
 
         if interactive:
+            def before_profile(raw):
+                if not (base / "reject-next").exists() or (base / "rejection-prepared").exists():
+                    return
+                desired = json.loads(raw)
+                reasoning_options(["low" if desired["reasoning_effort"] != "low" else "high"], desired["model_id"])
+                (base / "rejection-prepared").touch()
+            Proxy.before_profile = staticmethod(before_profile)
             Proxy.base, Proxy.native_port, Proxy.mode = base, port, "profile_reject"
             Proxy.session_path = "/api/v1" + path
             Proxy.started, Proxy.fork_id = time.monotonic(), ""
@@ -130,6 +137,8 @@ def check(packed: Path, base: Path, interactive: bool = False) -> dict:
                     reasoning_options(["low"])
                     restricted = True
                     (base / "restricted").touch()
+                if (base / "rejection-prepared").exists():
+                    restricted = True
                 if (base / "healthy").exists() and restricted and not restored:
                     reasoning_options(["none", "low", "medium", "high"])
                     restored = True

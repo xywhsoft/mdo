@@ -1,0 +1,62 @@
+{
+  "mdo_commit": "b66a734e5f0cbf9b34531779bd2436d5e48c4bd7",
+  "xs_commit": "f47b0de5037f458f6289483d1323dee417d99434",
+  "mdo_worktree_dirty": false,
+  "sha256": "0f16a405cf3645d28d3796d3af50a578f487ba42de362e08ae0dfe09d5c5c491",
+  "bytes": 4534113,
+  "packaged_app_sha256": "e99d285819cf37d3ea7fdc9274dac1624273c5849a26c7ba14ddac40d6a9a5a8",
+  "sources": {
+    "include/mdo/models.h": {
+      "sha256": "f58680982816faddfade3018caf6f91803885f2dbfad58b443c7ef96648cc810",
+      "matches": true
+    },
+    "src/agents/runtime.c": {
+      "sha256": "56cfadfe703cd398af886f5796598a5123eca20585163194aeeefeaf503ae828",
+      "matches": true
+    },
+    "src/api/internal.h": {
+      "sha256": "f60741abaf0a8a92b507336347f3fdff042bf6684d8990e3e7ad02120a021962",
+      "matches": true
+    },
+    "src/api/profile.c": {
+      "sha256": "8c3bf438be58cf7df640e1b98046b164953072105b984f4e83aa6acf969bf0bc",
+      "matches": true
+    },
+    "src/api/runs.c": {
+      "sha256": "7c0c9da25c3da32c9677c76c555ee9038db487ca78f371a793d9024c14a56053",
+      "matches": true
+    },
+    "src/api/sessions.c": {
+      "sha256": "bda30287cbd440a9ca6d29177d82bfb208508b8dd13a6c8f1097823caf46e692",
+      "matches": true
+    },
+    "src/models/catalog.c": {
+      "sha256": "959cb44a34a98319b967e4155e602d7e717ba46057fc5b3aef7a1057c56873d1",
+      "matches": true
+    },
+    "src/models/completion.inc.c": {
+      "sha256": "9a5f2f60bb35b6d1b88a1870d17c9f154b1e58494cb6ea1b0f8770b5b41af5ab",
+      "matches": true
+    },
+    "web/js/utils/model-errors.js": {
+      "sha256": "8c6574ed07d5029de2a559668fdab9da87c044109ddef1f797aa9759e830b43f",
+      "matches": true
+    },
+    "web/lang/zh-CN.json": {
+      "sha256": "5159757026c5327b3ee35134473df014686e56059b582c9b94d2a2b915b3979a",
+      "matches": true
+    },
+    "web/lang/en-US.json": {
+      "sha256": "d31ffc2ff16640599b52bfdff09822b6afe1757b179ea58e1a0283c3e8570f9f",
+      "matches": true
+    },
+    "web/lang/ru-RU.json": {
+      "sha256": "3686325bcef1ab68d6af515ece9f2f27fd13c503a3bc5261ead71b10dcfebcb2",
+      "matches": true
+    }
+  },
+  "passed": true,
+  "daily_app_overwritten": false,
+  "android_device_tested": false,
+  "external_provider_tested": false
+}
