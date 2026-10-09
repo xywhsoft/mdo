@@ -34,3 +34,9 @@ The callback exposes borrowed views only after a complete fetch, preserving
 Retry-After without making xhttp response types part of the SDK contract.
 Premature response EOF has a distinct SDK error code, so mdo can recover safe
 page reads without retrying malformed HTTP or replaying billed search POSTs.
+
+The xllm snapshot also backports `xrt@7449e55e`: string assistant history in
+Responses uses EasyInputMessage without an explicit message discriminator.
+Strict servers otherwise parse it as an output message and reject follow-ups
+with HTTP 400. Structured content and function call/output pairing are retained;
+existing session snapshots need no migration.

@@ -7,7 +7,7 @@
     "single_header_sha256": "1ea16b21f968d09e5084162f3919b7e6ae2412f9e13c3bbbdd4b322bcd5a26d2"
   },
   "xserver": {
-    "commit": "b9f344731531655a7d6e651a1475faf4ee294c9e",
+    "commit": "153315a092b8c37d9d79f090122f81ed2bcc139d",
     "version": "1.0.0",
     "required_extensions": [
       "xwork",
@@ -22,15 +22,15 @@
     },
     "source_bundle": {
       "path": "tools/dependencies/xs-linux-products.bundle",
-      "sha256": "474fdd1b429eac4f9262d18cecc1777c46a017f38da04fc3b1f3204589d86dac",
-      "ref": "refs/heads/codex/linux-glibc-baseline"
+      "sha256": "af93e450be2e019cfd06e40b3b63bd53a9bf2cd3f5b5080721c3ca4883d96167",
+      "ref": "refs/heads/codex/followup-responses"
     }
   },
   "libraries": {
     "xllm": {
       "version": "3.1.0",
       "source_commit": "5d16ece2b049fd73eee1d8e79551d6d70c6be216",
-      "production_tree_sha256": "9440111d52c9c7f7178efd632e0d09efa32280a59deba6c97b8c195d9624dceb"
+      "production_tree_sha256": "2387b4268b36be01b52eb9733c0a2f5ebf42c8573794cd600bace8e064fc96e5"
     },
     "xllm-session": {
       "version": "3.0.0-dev",
