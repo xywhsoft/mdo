@@ -1,0 +1,25 @@
+{
+  "candidate_sha256": "ae8f69ce8292e73c532d8683418e25a495a26ebb1d2e9e2a31c77b4189a283b9",
+  "base_production_ref": "c204fd86",
+  "served_app_matches_committed_source_crlf": true,
+  "documents": 2,
+  "cold_same_text_restore_preserved_selection": [
+    0,
+    1
+  ],
+  "chinese_multiline_fill_exact": true,
+  "second_document_input_events": 1,
+  "second_document_input_trusted": false,
+  "second_document_keyboard_trusted": true,
+  "composition_events": 0,
+  "composition_protocol_available": false,
+  "composition_protocol_attempt": "Input.imeSetComposition not supported by IAB",
+  "model_calls": 1,
+  "model_input_copies": 1,
+  "final_model_errors": 0,
+  "first_hold_exceeded_minute_read_deadline": true,
+  "first_hold_final_draft_notice_observed": true,
+  "browser_warn_or_error": 0,
+  "production_logic_changed": false,
+  "scope": "two bounded packed browser pages; no physical IME, native WebView or Android claim"
+}

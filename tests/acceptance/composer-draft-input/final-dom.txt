@@ -1,0 +1,89 @@
+- banner:
+  - button "冷启动，暂扣草稿读取"
+  - button "放回草稿响应"
+  - button "正常启动"
+- generic: "{\"route\":\"#/projects/default/sessions/V-OSNFgpOjAQqmbtyBzn2mIpM1eNdSiz\",\"title\":\"Service read recovery\",\"length\":0,\"cursor\":0,\"disabled\":false,\"errors\":[]}"
+- iframe [active] [id="mdo"]:
+  - link "跳到对话":
+    - /url: "#timeline"
+  - complementary "会话导航":
+    - link "墨斗主页":
+      - /url: "#/"
+      - generic: 墨斗
+    - group "通知 · 2":
+      - button "扩展工具包安装":
+      - button "登录账号":
+    - button "关闭会话导航":
+    - button "登录账号":
+      - generic: ◉
+      - generic: 登录账号
+    - button "本机":
+      - generic: 本机
+      - generic: ▾
+    - button "新建任务 Ctrl N":
+      - generic: 新建任务
+      - generic: Ctrl N
+    - button "计划任务":
+      - generic: 计划任务
+    - searchbox "搜索会话"
+    - generic: /
+    - navigation "会话":
+      - region "项目":
+        - button "折叠 项目" [expanded]:
+          - generic: 项目
+        - button "列表选项":
+        - button "添加项目":
+        - paragraph: 添加项目，让任务按工作区分组。
+      - region "任务":
+        - button "折叠 任务" [expanded]:
+          - generic: 任务
+        - button "在默认项目新建任务":
+        - list:
+          - button "Service read recovery 4分钟前":
+            - generic: Service read recovery
+            - time: 4分钟前
+          - button "Service read recovery 的操作":
+    - button "设置":
+      - generic: 设置
+    - status:
+      - generic: 本地服务 0.1.0-dev
+    - button "切换为深色主题":
+  - main "Agent 工作区":
+    - button "切换项目，当前 默认项目":
+      - generic: 默认项目
+      - generic: ▾
+    - generic: /
+    - heading "Service read recovery" [level=1]
+    - paragraph: mdo.default · queue-fixture
+    - generic: 就绪
+    - button "搜索当前会话":
+    - button "导出当前会话 Markdown":
+    - button "更多会话操作":
+    - region "当前会话":
+      - list:
+        - time: 12:51
+        - generic: COLD_DRAFT_TYPED_ONCE
+        - button "复制消息":
+        - button "编辑此消息并重新发送":
+        - generic: Agent
+        - time: 12:51
+        - paragraph: ADMISSION_CONFIRMED — COLD_DRAFT_TYPED_ONCE
+        - button "复制消息":
+        - button "从此回复分叉会话":
+        - button "重试此回合":
+        - generic: 50 输入 / 20 输出 tokens · LLM <0.1 秒 · 1635.2 tok/s
+    - region "发送消息":
+      - generic: 向 Agent 描述任务
+      - textbox "向 Agent 描述任务" [active]:
+        - /placeholder: 向墨斗描述任务…
+      - button "添加图片":
+      - button "权限：询问":
+      - button "查看 token 用量"
+      - button "模型与思考深度：Queue fixture · 无思考":
+        - generic: Queue fixture
+        - generic: 无思考
+      - generic: Enter 发送 · Shift Enter 换行
+      - button "发送任务":
+    - navigation "对话历史导航":
+      - button "COLD_DRAFT_TYPED_ONCE"
+  - separator "调整会话导航宽度"

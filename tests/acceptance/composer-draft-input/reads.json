@@ -1,0 +1,122 @@
+[
+  {
+    "started": 0.0,
+    "held": true,
+    "native_status": 200,
+    "released": 69.625
+  },
+  {
+    "started": 8.547,
+    "held": true,
+    "native_status": 200,
+    "released": 69.625
+  },
+  {
+    "started": 17.562,
+    "held": true,
+    "native_status": 200,
+    "released": 69.625
+  },
+  {
+    "started": 27.844,
+    "held": true,
+    "native_status": 200,
+    "released": 69.625
+  },
+  {
+    "started": 40.328,
+    "held": true,
+    "native_status": 200,
+    "released": 69.625
+  },
+  {
+    "started": 56.75,
+    "held": true,
+    "native_status": 200,
+    "released": 69.625
+  },
+  {
+    "started": 61.031,
+    "held": true,
+    "native_status": 200,
+    "released": 69.625
+  },
+  {
+    "started": 69.609,
+    "held": true,
+    "native_status": 200,
+    "released": 69.625
+  },
+  {
+    "started": 69.828,
+    "held": false,
+    "native_status": 200,
+    "released": 69.828
+  },
+  {
+    "started": 102.016,
+    "held": false,
+    "native_status": 200,
+    "released": 102.016
+  },
+  {
+    "started": 180.719,
+    "held": true,
+    "native_status": 200,
+    "released": 190.078
+  },
+  {
+    "started": 189.266,
+    "held": true,
+    "native_status": 200,
+    "released": 190.078
+  },
+  {
+    "started": 190.125,
+    "held": false,
+    "native_status": 200,
+    "released": 190.125
+  },
+  {
+    "started": 190.125,
+    "held": false,
+    "native_status": 200,
+    "released": 190.125
+  },
+  {
+    "started": 190.125,
+    "held": false,
+    "native_status": 200,
+    "released": 190.125
+  },
+  {
+    "started": 190.125,
+    "held": false,
+    "native_status": 200,
+    "released": 190.125
+  },
+  {
+    "started": 190.281,
+    "held": false,
+    "native_status": 200,
+    "released": 190.281
+  },
+  {
+    "started": 218.203,
+    "held": false,
+    "native_status": 200,
+    "released": 218.203
+  },
+  {
+    "started": 218.344,
+    "held": false,
+    "native_status": 200,
+    "released": 218.344
+  },
+  {
+    "started": 218.516,
+    "held": false,
+    "native_status": 200,
+    "released": 218.516
+  }
+]

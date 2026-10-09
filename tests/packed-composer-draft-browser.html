@@ -1,0 +1,41 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Composer draft input QA</title>
+<style>
+body { margin:0; font:13px system-ui; background:#202020; color:#ddd }
+header { display:flex; gap:8px; padding:8px }
+button { padding:5px } iframe { width:100%; height:calc(100vh - 95px); border:0 }
+#summary { margin:3px 8px; white-space:pre-wrap }
+</style>
+<header>
+  <button id="hold">冷启动，暂扣草稿读取</button>
+  <button id="release">放回草稿响应</button>
+  <button id="normal">正常启动</button>
+</header>
+<pre id="summary">仅观察实际页面，不替换访问器或合成输入。</pre>
+<script type="application/json" id="input-events">[]</script>
+<iframe id="mdo" title="Actual packed mdo"></iframe>
+<script>
+const frame = document.querySelector('#mdo');
+const route = new URLSearchParams(location.search).get('route');
+const documents = new Map();
+async function open(mode) {
+  await fetch('/__qa/composer-arm/' + mode);
+  frame.src = '/?qa_reload=' + Date.now() + '#' + route;
+}
+document.querySelector('#hold').addEventListener('click', () => open('hold'));
+document.querySelector('#normal').addEventListener('click', () => open('normal'));
+document.querySelector('#release').addEventListener('click', () => fetch('/__qa/composer-release'));
+const timer = setInterval(() => {
+  const doc = frame.contentDocument, prompt = doc?.querySelector('#prompt');
+  if (!prompt) return;
+  const events = doc.querySelector('#qa-input-events');
+  if (events) documents.set(doc.URL.split('#')[0], JSON.parse(events.textContent));
+  document.querySelector('#input-events').textContent = JSON.stringify([...documents]);
+  document.querySelector('#summary').textContent = JSON.stringify({route:frame.contentWindow.location.hash,
+    title:doc.querySelector('#session-title')?.textContent, length:prompt.value.length,
+    cursor:prompt.selectionStart, disabled:prompt.disabled,
+    errors:[...doc.querySelectorAll('#toast-region [data-tone="error"]')].map(e=>e.textContent)});
+}, 100);
+window.addEventListener('pagehide', () => clearInterval(timer));
+</script>

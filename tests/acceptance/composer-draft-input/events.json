@@ -1,0 +1,723 @@
+[
+  [
+    "http://127.0.0.1:57066/?qa_reload=1791521256228",
+    [
+      {
+        "milliseconds": 0,
+        "type": "observer-start",
+        "value": {
+          "length": 0,
+          "fingerprint": "811c9dc5"
+        },
+        "focused": false,
+        "visibility": "visible"
+      },
+      {
+        "milliseconds": 133,
+        "type": "observed-value",
+        "value": {
+          "length": 0,
+          "fingerprint": "811c9dc5"
+        },
+        "selectionStart": 0,
+        "selectionEnd": 0,
+        "focused": false,
+        "active": "BODY",
+        "visibility": "visible"
+      },
+      {
+        "milliseconds": 151,
+        "type": "window-pageshow",
+        "value": {
+          "length": 0,
+          "fingerprint": "811c9dc5"
+        },
+        "selectionStart": 0,
+        "selectionEnd": 0,
+        "focused": false,
+        "active": "BODY",
+        "visibility": "visible",
+        "trusted": true,
+        "persisted": false
+      },
+      {
+        "milliseconds": 334,
+        "type": "product-assignment",
+        "value": {
+          "length": 0,
+          "fingerprint": "811c9dc5"
+        },
+        "selectionStart": 0,
+        "selectionEnd": 0,
+        "focused": false,
+        "active": "BODY",
+        "visibility": "visible",
+        "nextValue": {
+          "length": 0,
+          "fingerprint": "811c9dc5"
+        },
+        "stack": [
+          "    at onRestore (http://127.0.0.1:57066/js/app.js:786:102)",
+          "    at Object.select (http://127.0.0.1:57066/js/features/chat/draft-store.js:448:5)",
+          "    at boot (http://127.0.0.1:57066/js/app.js:878:14)",
+          "    at start (http://127.0.0.1:57066/js/main.js:14:10)"
+        ]
+      },
+      {
+        "milliseconds": 383,
+        "type": "product-assignment",
+        "value": {
+          "length": 0,
+          "fingerprint": "811c9dc5"
+        },
+        "selectionStart": 0,
+        "selectionEnd": 0,
+        "focused": false,
+        "active": "BODY",
+        "visibility": "visible",
+        "nextValue": {
+          "length": 0,
+          "fingerprint": "811c9dc5"
+        },
+        "stack": [
+          "    at onRestore (http://127.0.0.1:57066/js/app.js:786:102)",
+          "    at Object.select (http://127.0.0.1:57066/js/features/chat/draft-store.js:448:5)",
+          "    at navigation.subscribe.refresh (http://127.0.0.1:57066/js/app.js:1791:16)",
+          "    at Object.subscribe (http://127.0.0.1:57066/js/state/navigation.js:98:5)"
+        ]
+      },
+      {
+        "milliseconds": 525,
+        "type": "window-focus",
+        "value": {
+          "length": 0,
+          "fingerprint": "811c9dc5"
+        },
+        "selectionStart": 0,
+        "selectionEnd": 0,
+        "focused": true,
+        "active": "BODY",
+        "visibility": "visible",
+        "trusted": true
+      },
+      {
+        "milliseconds": 527,
+        "type": "focus",
+        "value": {
+          "length": 0,
+          "fingerprint": "811c9dc5"
+        },
+        "selectionStart": 0,
+        "selectionEnd": 0,
+        "focused": true,
+        "active": "prompt",
+        "visibility": "visible",
+        "trusted": true
+      },
+      {
+        "milliseconds": 60543,
+        "type": "paste",
+        "value": {
+          "length": 0,
+          "fingerprint": "811c9dc5"
+        },
+        "selectionStart": 0,
+        "selectionEnd": 0,
+        "focused": true,
+        "active": "prompt",
+        "visibility": "visible",
+        "trusted": false
+      },
+      {
+        "milliseconds": 60544,
+        "type": "input",
+        "value": {
+          "length": 24,
+          "fingerprint": "5f86d7cf"
+        },
+        "selectionStart": 24,
+        "selectionEnd": 24,
+        "focused": true,
+        "active": "prompt",
+        "visibility": "visible",
+        "trusted": false,
+        "inputType": "",
+        "composing": false
+      },
+      {
+        "milliseconds": 60556,
+        "type": "observed-value",
+        "value": {
+          "length": 24,
+          "fingerprint": "5f86d7cf"
+        },
+        "selectionStart": 24,
+        "selectionEnd": 24,
+        "focused": true,
+        "active": "prompt",
+        "visibility": "visible"
+      },
+      {
+        "milliseconds": 60565,
+        "type": "keydown",
+        "value": {
+          "length": 24,
+          "fingerprint": "5f86d7cf"
+        },
+        "selectionStart": 24,
+        "selectionEnd": 24,
+        "focused": true,
+        "active": "prompt",
+        "visibility": "visible",
+        "trusted": true,
+        "composing": false,
+        "key": "Home",
+        "keyCode": 36,
+        "ctrl": false,
+        "alt": false,
+        "shift": false,
+        "meta": false
+      },
+      {
+        "milliseconds": 60567,
+        "type": "keyup",
+        "value": {
+          "length": 24,
+          "fingerprint": "5f86d7cf"
+        },
+        "selectionStart": 0,
+        "selectionEnd": 0,
+        "focused": true,
+        "active": "prompt",
+        "visibility": "visible",
+        "trusted": true,
+        "composing": false,
+        "key": "Home",
+        "keyCode": 36,
+        "ctrl": false,
+        "alt": false,
+        "shift": false,
+        "meta": false
+      },
+      {
+        "milliseconds": 60583,
+        "type": "keydown",
+        "value": {
+          "length": 24,
+          "fingerprint": "5f86d7cf"
+        },
+        "selectionStart": 0,
+        "selectionEnd": 0,
+        "focused": true,
+        "active": "prompt",
+        "visibility": "visible",
+        "trusted": true,
+        "composing": false,
+        "key": "Shift",
+        "keyCode": 16,
+        "ctrl": false,
+        "alt": false,
+        "shift": true,
+        "meta": false
+      },
+      {
+        "milliseconds": 60591,
+        "type": "keydown",
+        "value": {
+          "length": 24,
+          "fingerprint": "5f86d7cf"
+        },
+        "selectionStart": 0,
+        "selectionEnd": 0,
+        "focused": true,
+        "active": "prompt",
+        "visibility": "visible",
+        "trusted": true,
+        "composing": false,
+        "key": "ArrowRight",
+        "keyCode": 39,
+        "ctrl": false,
+        "alt": false,
+        "shift": true,
+        "meta": false
+      },
+      {
+        "milliseconds": 60592,
+        "type": "keyup",
+        "value": {
+          "length": 24,
+          "fingerprint": "5f86d7cf"
+        },
+        "selectionStart": 0,
+        "selectionEnd": 1,
+        "focused": true,
+        "active": "prompt",
+        "visibility": "visible",
+        "trusted": true,
+        "composing": false,
+        "key": "ArrowRight",
+        "keyCode": 39,
+        "ctrl": false,
+        "alt": false,
+        "shift": true,
+        "meta": false
+      },
+      {
+        "milliseconds": 60593,
+        "type": "keyup",
+        "value": {
+          "length": 24,
+          "fingerprint": "5f86d7cf"
+        },
+        "selectionStart": 0,
+        "selectionEnd": 1,
+        "focused": true,
+        "active": "prompt",
+        "visibility": "visible",
+        "trusted": true,
+        "composing": false,
+        "key": "Shift",
+        "keyCode": 16,
+        "ctrl": false,
+        "alt": false,
+        "shift": false,
+        "meta": false
+      },
+      {
+        "milliseconds": 70067,
+        "type": "product-assignment",
+        "value": {
+          "length": 24,
+          "fingerprint": "5f86d7cf"
+        },
+        "selectionStart": 0,
+        "selectionEnd": 1,
+        "focused": true,
+        "active": "prompt",
+        "visibility": "visible",
+        "nextValue": {
+          "length": 24,
+          "fingerprint": "5f86d7cf"
+        },
+        "stack": [
+          "    at onRestore (http://127.0.0.1:57066/js/app.js:786:102)",
+          "    at http://127.0.0.1:57066/js/features/chat/draft-store.js:234:31"
+        ]
+      },
+      {
+        "milliseconds": 101971,
+        "type": "paste",
+        "value": {
+          "length": 24,
+          "fingerprint": "5f86d7cf"
+        },
+        "selectionStart": 0,
+        "selectionEnd": 24,
+        "focused": true,
+        "active": "prompt",
+        "visibility": "visible",
+        "trusted": false
+      },
+      {
+        "milliseconds": 101972,
+        "type": "input",
+        "value": {
+          "length": 22,
+          "fingerprint": "f2e0cd74"
+        },
+        "selectionStart": 22,
+        "selectionEnd": 22,
+        "focused": true,
+        "active": "prompt",
+        "visibility": "visible",
+        "trusted": false,
+        "inputType": "",
+        "composing": false
+      },
+      {
+        "milliseconds": 102005,
+        "type": "observed-value",
+        "value": {
+          "length": 22,
+          "fingerprint": "f2e0cd74"
+        },
+        "selectionStart": 22,
+        "selectionEnd": 22,
+        "focused": true,
+        "active": "prompt",
+        "visibility": "visible"
+      }
+    ]
+  ],
+  [
+    "http://127.0.0.1:57066/?qa_reload=1791521437088",
+    [
+      {
+        "milliseconds": 0,
+        "type": "observer-start",
+        "value": {
+          "length": 0,
+          "fingerprint": "811c9dc5"
+        },
+        "focused": false,
+        "visibility": "visible"
+      },
+      {
+        "milliseconds": 20,
+        "type": "window-pageshow",
+        "value": {
+          "length": 0,
+          "fingerprint": "811c9dc5"
+        },
+        "selectionStart": 0,
+        "selectionEnd": 0,
+        "focused": false,
+        "active": "BODY",
+        "visibility": "visible",
+        "trusted": true,
+        "persisted": false
+      },
+      {
+        "milliseconds": 50,
+        "type": "observed-value",
+        "value": {
+          "length": 0,
+          "fingerprint": "811c9dc5"
+        },
+        "selectionStart": 0,
+        "selectionEnd": 0,
+        "focused": false,
+        "active": "BODY",
+        "visibility": "visible"
+      },
+      {
+        "milliseconds": 261,
+        "type": "product-assignment",
+        "value": {
+          "length": 0,
+          "fingerprint": "811c9dc5"
+        },
+        "selectionStart": 0,
+        "selectionEnd": 0,
+        "focused": false,
+        "active": "BODY",
+        "visibility": "visible",
+        "nextValue": {
+          "length": 0,
+          "fingerprint": "811c9dc5"
+        },
+        "stack": [
+          "    at onRestore (http://127.0.0.1:57066/js/app.js:786:102)",
+          "    at Object.select (http://127.0.0.1:57066/js/features/chat/draft-store.js:448:5)",
+          "    at boot (http://127.0.0.1:57066/js/app.js:878:14)",
+          "    at start (http://127.0.0.1:57066/js/main.js:14:10)"
+        ]
+      },
+      {
+        "milliseconds": 275,
+        "type": "product-assignment",
+        "value": {
+          "length": 0,
+          "fingerprint": "811c9dc5"
+        },
+        "selectionStart": 0,
+        "selectionEnd": 0,
+        "focused": false,
+        "active": "BODY",
+        "visibility": "visible",
+        "nextValue": {
+          "length": 0,
+          "fingerprint": "811c9dc5"
+        },
+        "stack": [
+          "    at onRestore (http://127.0.0.1:57066/js/app.js:786:102)",
+          "    at Object.select (http://127.0.0.1:57066/js/features/chat/draft-store.js:448:5)",
+          "    at navigation.subscribe.refresh (http://127.0.0.1:57066/js/app.js:1791:16)",
+          "    at Object.subscribe (http://127.0.0.1:57066/js/state/navigation.js:98:5)"
+        ]
+      },
+      {
+        "milliseconds": 363,
+        "type": "window-focus",
+        "value": {
+          "length": 0,
+          "fingerprint": "811c9dc5"
+        },
+        "selectionStart": 0,
+        "selectionEnd": 0,
+        "focused": true,
+        "active": "BODY",
+        "visibility": "visible",
+        "trusted": true
+      },
+      {
+        "milliseconds": 364,
+        "type": "focus",
+        "value": {
+          "length": 0,
+          "fingerprint": "811c9dc5"
+        },
+        "selectionStart": 0,
+        "selectionEnd": 0,
+        "focused": true,
+        "active": "prompt",
+        "visibility": "visible",
+        "trusted": true
+      },
+      {
+        "milliseconds": 2991,
+        "type": "paste",
+        "value": {
+          "length": 0,
+          "fingerprint": "811c9dc5"
+        },
+        "selectionStart": 0,
+        "selectionEnd": 0,
+        "focused": true,
+        "active": "prompt",
+        "visibility": "visible",
+        "trusted": false
+      },
+      {
+        "milliseconds": 2991,
+        "type": "input",
+        "value": {
+          "length": 21,
+          "fingerprint": "9010d6c4"
+        },
+        "selectionStart": 21,
+        "selectionEnd": 21,
+        "focused": true,
+        "active": "prompt",
+        "visibility": "visible",
+        "trusted": false,
+        "inputType": "",
+        "composing": false
+      },
+      {
+        "milliseconds": 3002,
+        "type": "observed-value",
+        "value": {
+          "length": 21,
+          "fingerprint": "9010d6c4"
+        },
+        "selectionStart": 21,
+        "selectionEnd": 21,
+        "focused": true,
+        "active": "prompt",
+        "visibility": "visible"
+      },
+      {
+        "milliseconds": 3013,
+        "type": "keydown",
+        "value": {
+          "length": 21,
+          "fingerprint": "9010d6c4"
+        },
+        "selectionStart": 21,
+        "selectionEnd": 21,
+        "focused": true,
+        "active": "prompt",
+        "visibility": "visible",
+        "trusted": true,
+        "composing": false,
+        "key": "Home",
+        "keyCode": 36,
+        "ctrl": false,
+        "alt": false,
+        "shift": false,
+        "meta": false
+      },
+      {
+        "milliseconds": 3014,
+        "type": "keyup",
+        "value": {
+          "length": 21,
+          "fingerprint": "9010d6c4"
+        },
+        "selectionStart": 0,
+        "selectionEnd": 0,
+        "focused": true,
+        "active": "prompt",
+        "visibility": "visible",
+        "trusted": true,
+        "composing": false,
+        "key": "Home",
+        "keyCode": 36,
+        "ctrl": false,
+        "alt": false,
+        "shift": false,
+        "meta": false
+      },
+      {
+        "milliseconds": 3033,
+        "type": "keydown",
+        "value": {
+          "length": 21,
+          "fingerprint": "9010d6c4"
+        },
+        "selectionStart": 0,
+        "selectionEnd": 0,
+        "focused": true,
+        "active": "prompt",
+        "visibility": "visible",
+        "trusted": true,
+        "composing": false,
+        "key": "Shift",
+        "keyCode": 16,
+        "ctrl": false,
+        "alt": false,
+        "shift": true,
+        "meta": false
+      },
+      {
+        "milliseconds": 3040,
+        "type": "keydown",
+        "value": {
+          "length": 21,
+          "fingerprint": "9010d6c4"
+        },
+        "selectionStart": 0,
+        "selectionEnd": 0,
+        "focused": true,
+        "active": "prompt",
+        "visibility": "visible",
+        "trusted": true,
+        "composing": false,
+        "key": "ArrowRight",
+        "keyCode": 39,
+        "ctrl": false,
+        "alt": false,
+        "shift": true,
+        "meta": false
+      },
+      {
+        "milliseconds": 3042,
+        "type": "keyup",
+        "value": {
+          "length": 21,
+          "fingerprint": "9010d6c4"
+        },
+        "selectionStart": 0,
+        "selectionEnd": 1,
+        "focused": true,
+        "active": "prompt",
+        "visibility": "visible",
+        "trusted": true,
+        "composing": false,
+        "key": "ArrowRight",
+        "keyCode": 39,
+        "ctrl": false,
+        "alt": false,
+        "shift": true,
+        "meta": false
+      },
+      {
+        "milliseconds": 3043,
+        "type": "keyup",
+        "value": {
+          "length": 21,
+          "fingerprint": "9010d6c4"
+        },
+        "selectionStart": 0,
+        "selectionEnd": 1,
+        "focused": true,
+        "active": "prompt",
+        "visibility": "visible",
+        "trusted": true,
+        "composing": false,
+        "key": "Shift",
+        "keyCode": 16,
+        "ctrl": false,
+        "alt": false,
+        "shift": false,
+        "meta": false
+      },
+      {
+        "milliseconds": 9652,
+        "type": "product-assignment",
+        "value": {
+          "length": 21,
+          "fingerprint": "9010d6c4"
+        },
+        "selectionStart": 0,
+        "selectionEnd": 1,
+        "focused": true,
+        "active": "prompt",
+        "visibility": "visible",
+        "nextValue": {
+          "length": 21,
+          "fingerprint": "9010d6c4"
+        },
+        "stack": [
+          "    at onRestore (http://127.0.0.1:57066/js/app.js:786:102)",
+          "    at http://127.0.0.1:57066/js/features/chat/draft-store.js:234:31"
+        ]
+      },
+      {
+        "milliseconds": 37718,
+        "type": "blur",
+        "value": {
+          "length": 21,
+          "fingerprint": "9010d6c4"
+        },
+        "selectionStart": 0,
+        "selectionEnd": 1,
+        "focused": true,
+        "active": "BODY",
+        "visibility": "visible",
+        "trusted": true
+      },
+      {
+        "milliseconds": 37760,
+        "type": "product-assignment",
+        "value": {
+          "length": 21,
+          "fingerprint": "9010d6c4"
+        },
+        "selectionStart": 0,
+        "selectionEnd": 1,
+        "focused": true,
+        "active": "send",
+        "visibility": "visible",
+        "nextValue": {
+          "length": 0,
+          "fingerprint": "811c9dc5"
+        },
+        "stack": [
+          "    at clearSubmittedComposer (http://127.0.0.1:57066/js/app.js:2045:98)",
+          "    at onPersisted (http://127.0.0.1:57066/js/app.js:832:7)",
+          "    at acknowledge (http://127.0.0.1:57066/js/features/chat/submission-controller.js:36:5)",
+          "    at Object.submit (http://127.0.0.1:57066/js/features/chat/submission-controller.js:253:7)"
+        ]
+      },
+      {
+        "milliseconds": 37761,
+        "type": "focus",
+        "value": {
+          "length": 0,
+          "fingerprint": "811c9dc5"
+        },
+        "selectionStart": 0,
+        "selectionEnd": 0,
+        "focused": true,
+        "active": "prompt",
+        "visibility": "visible",
+        "trusted": true
+      },
+      {
+        "milliseconds": 37801,
+        "type": "observed-value",
+        "value": {
+          "length": 0,
+          "fingerprint": "811c9dc5"
+        },
+        "selectionStart": 0,
+        "selectionEnd": 0,
+        "focused": true,
+        "active": "prompt",
+        "visibility": "visible"
+      }
+    ]
+  ]
+]
