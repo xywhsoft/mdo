@@ -5,6 +5,8 @@ answers locally; the candidate's embedded sources and native APIs are unchanged.
 Read modes: recover (two 503s), hold (one stalled body), refuse (503 until healthy).
 Write modes: fork_drop (lost ACK), fork_hold (stalled ACK), fork_refuse (lost
 ACK and unavailable child reads until healthy). Fork POSTs always reach native.
+Profile modes: profile_drop/profile_hold/profile_refuse exercise the existing
+guarded PUT and source metadata reads. No test changes the packaged application.
 Create healthy/release/stop files in the printed isolated directory as needed.
 """
 import argparse
@@ -27,6 +29,7 @@ from test_packed_queue_start_recovery import configure_model
 
 class Model(BaseHTTPRequestHandler):
     calls = 0
+    requests = []
 
     def log_message(self, *_):
         pass
@@ -34,6 +37,7 @@ class Model(BaseHTTPRequestHandler):
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
         type(self).calls += 1
+        type(self).requests.append(body['model'])
         raw = json.dumps({'id': 'history-fixture', 'model': body['model'],
             'choices': [{'index': 0, 'message': {'role': 'assistant',
                 'content': 'Ready to continue.'}, 'finish_reason': 'stop'}],
@@ -60,10 +64,13 @@ class Proxy(BaseHTTPRequestHandler):
         body = self.rfile.read(int(self.headers.get('Content-Length', '0')))
         is_history = self.command == 'GET' and self.path == self.session_path + '/history'
         is_fork = self.command == 'POST' and self.path == self.session_path + '/fork'
+        is_profile = self.command == 'PUT' and self.path == self.session_path + '/profile'
+        is_profile_read = (self.command == 'GET' and self.path == self.session_path and
+            self.mode.startswith('profile_') and self.attempts['PUT ' + self.session_path + '/profile'])
         is_confirmation = self.command == 'GET' and self.fork_id and self.path == '/api/v1/projects/default/sessions/' + self.fork_id
         key = self.command + ' ' + self.path
         with self.lock:
-            if is_history or is_fork or is_confirmation:
+            if is_history or is_fork or is_confirmation or is_profile or is_profile_read:
                 self.attempts[key] += 1
             attempt = self.attempts[key]
         fault = None
@@ -78,6 +85,13 @@ class Proxy(BaseHTTPRequestHandler):
             elif self.mode == 'fork_hold':
                 fault = 'stall_body'
         if is_confirmation and self.mode == 'fork_refuse' and not (self.base / 'healthy').exists():
+            fault = 'refusal'
+        if is_profile and attempt == 1:
+            if self.mode in ('profile_drop', 'profile_refuse'):
+                fault = 'drop_ack'
+            elif self.mode == 'profile_hold':
+                fault = 'stall_body'
+        if is_profile_read and self.mode == 'profile_refuse' and not (self.base / 'healthy').exists():
             fault = 'refusal'
         if fault == 'refusal':
             status, headers = 503, [('Content-Type', 'application/json')]
@@ -97,11 +111,12 @@ class Proxy(BaseHTTPRequestHandler):
         record = None
         if is_fork and status in (200, 201):
             type(self).fork_id = json.loads(raw)['data']['id']
-        if is_history or is_fork or is_confirmation:
+        if is_history or is_fork or is_confirmation or is_profile or is_profile_read:
             record = {'method': self.command, 'path': self.path, 'attempt': attempt,
                 'status': status, 'seconds': round(time.monotonic() - self.started, 3),
                 'fault': fault, 'response': json.loads(raw)}
-            record['kind'] = 'history' if is_history else 'fork' if is_fork else 'child_read'
+            record['kind'] = ('history' if is_history else 'fork' if is_fork else
+                'profile' if is_profile else 'profile_read' if is_profile_read else 'child_read')
             if body:
                 record['body'] = json.loads(body)
             with self.lock:
@@ -147,7 +162,7 @@ def main():
     parser.add_argument('--packed', required=True, type=Path)
     parser.add_argument('--directory', required=True, type=Path)
     parser.add_argument('--mode', required=True, choices=('recover', 'hold', 'refuse',
-        'fork_drop', 'fork_hold', 'fork_refuse'))
+        'fork_drop', 'fork_hold', 'fork_refuse', 'profile_drop', 'profile_hold', 'profile_refuse'))
     args = parser.parse_args()
     base, packed = args.directory.resolve(), args.packed.resolve()
     assert not base.exists(), 'Choose a new isolated directory'
@@ -155,6 +170,7 @@ def main():
     native, port = site(base, 'native', packed)
     model = ThreadingHTTPServer(('127.0.0.1', 0), Model)
     Model.calls = 0
+    Model.requests = []
     model_worker = threading.Thread(target=model.serve_forever, daemon=True)
     model_worker.start()
     process = start(native, packed, base / 'home',
@@ -172,6 +188,18 @@ def main():
         status, bootstrap = wait_bootstrap(process, port, native / 'packed.log')
         assert status == 200 and bootstrap['data']['ready'], bootstrap
         configure_model(port, f'http://127.0.0.1:{model.server_port}/v1')
+        if args.mode.startswith('profile_'):
+            status, headers, raw = request(port, 'GET', '/api/v1/models/config')
+            assert status == 200, raw
+            config = json.loads(raw)['data']
+            alternative = dict(next(item for item in config['items'] if item['id'] == 'queue-fixture'))
+            alternative.update(id='profile-alternative', name='Profile alternative', model='profile-alternative')
+            config['items'].append(alternative)
+            config.pop('runtime_override', None)
+            status, _, raw = request(port, 'PUT', '/api/v1/settings/models',
+                body=json.dumps({'schema_version': 1, 'patch': config}).encode(),
+                headers={'Content-Type': 'application/json', 'If-Match': headers['etag']})
+            assert status == 200, raw
         def create(title):
             return call('POST', '/sessions', {'project_id': 'default', 'title': title,
                 'model_id': 'queue-fixture', 'reasoning_effort': 'none', 'permission_profile': 'balanced',
@@ -183,6 +211,7 @@ def main():
         assert result['state'] == 'succeeded', result
         snapshot = base / 'home/sessions/default' / source['id'] / 'snapshot.json'
         before = hashlib.sha256(snapshot.read_bytes()).hexdigest()
+        metadata_before = call('GET', path)
         Proxy.base, Proxy.native_port, Proxy.mode = base, port, args.mode
         Proxy.session_path = '/api/v1' + path
         Proxy.started = time.monotonic()
@@ -205,6 +234,8 @@ def main():
             events += session_events(port, '/api/v1/projects/default/sessions/' + fork['id'])
         proof = {'mode': args.mode, 'source_id': source['id'], 'other_id': other['id'],
             'model_calls': Model.calls, 'transport': list(Proxy.proof), 'forks': forks,
+            'model_requests': Model.requests, 'metadata_before': metadata_before,
+            'metadata_after': call('GET', path),
             'source_snapshot_unchanged': before == hashlib.sha256(snapshot.read_bytes()).hexdigest(),
             'final_errors': sum(e['kind'] == 'error' for e in events),
             'event_kinds': dict(Counter(e['kind'] for e in events))}

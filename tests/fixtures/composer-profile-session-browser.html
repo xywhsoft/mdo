@@ -19,9 +19,10 @@ function store(initial) {
   };
 }
 
-const session = (id, model = "text") => ({
+const session = (id, model = "text", revision = 1) => ({
   id, project_id: "qa", title: id, status: "active", model_id: model,
-  reasoning_effort: "medium", permission_profile: "balanced", etag: `"${id}"`,
+  reasoning_effort: "medium", permission_profile: "balanced", revision,
+  etag: `"mdo-session-${id}-${revision}"`,
 });
 const modelsStore = store({ default_model_id: "text", models: [
   { id: "text", name: "Text", reasoning_efforts: ["medium"],
@@ -55,7 +56,8 @@ window.fetch = (url, options = {}) => {
     const id = /\/sessions\/([^/]+)\/profile$/.exec(path)?.[1];
     requests.push({ id, body: JSON.parse(options.body) });
     const reply = () => new Response(JSON.stringify({ ok: true,
-      data: session(id, "image") }), { status: 200 });
+      data: session(id, "image", 2) }), { status: 200,
+        headers: { ETag: `"mdo-session-${id}-2"` } });
     return id === "first" ? new Promise((resolve) => {
       finishFirst = () => resolve(reply());
     }) : Promise.resolve(reply());

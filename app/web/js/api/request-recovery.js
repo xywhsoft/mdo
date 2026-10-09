@@ -1,7 +1,7 @@
 import { ApiError } from "./client.js";
 import { isTransientReadError } from "./read-recovery.js";
 
-// Only reads and an explicitly keyed, guarded mutation may be repeated.
+// Only reads and explicitly guarded mutations may be repeated.
 // New runs and draft writes use retry:false. All phases share
 // one minute by default; leaving the page cancels requests and backoff waits.
 // Larger file transfers can keep their existing deadline and error category.

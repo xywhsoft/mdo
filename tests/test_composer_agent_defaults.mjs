@@ -123,6 +123,59 @@ test("blank task follows the default Agent until the user chooses overrides", ()
   profile.destroy();
 });
 
+function savingProfile(updateProfile) {
+  let route = { view: "workspace", projectId: "qa", sessionId: "first" };
+  const listeners = new Set(), busy = [];
+  const modelSelect = new Select(), reasoningSelect = new Select();
+  const session = (id, revision = 1, model = "text") => ({ id, project_id: "qa", revision,
+    status: "active", title: id, model_id: model, reasoning_effort: "medium", permission_profile: "balanced" });
+  const sessionStore = createResourceStore(session("first"));
+  const navigation = { get: () => route, subscribe(fn) { listeners.add(fn); fn(route); return () => listeners.delete(fn); },
+    select(id) { route = { ...route, sessionId: id }; for (const fn of listeners) fn(route); } };
+  const profile = createComposerProfile({ modelSelect, reasoningSelect,
+    permissionSelect: new Select(["read-only", "balanced", "full-access"]), navigation, sessionStore,
+    modelsStore: createResourceStore({ models }), projectsStore: createResourceStore({ items: [] }),
+    agentsStore: createResourceStore({ items: [] }), isRunActive: () => false,
+    onBusyChange(value) { busy.push(value); }, updateProfile });
+  return { profile, navigation, sessionStore, modelSelect, session, busy,
+    choose() { modelSelect.value = "code"; modelSelect.dispatchEvent(new Event("change")); } };
+}
+
+test("leaving a model save cancels its confirmation and ignores the late settings", async () => {
+  let signal, finish;
+  const env = savingProfile((_session, _profile, options) => {
+    signal = options.signal; return new Promise(resolve => { finish = resolve; });
+  });
+  env.choose(); assert.ok(env.profile.isBusy());
+  env.navigation.select("second"); env.sessionStore.setData(env.session("second"));
+  assert.ok(signal.aborted); assert.equal(env.profile.isBusy(), false);
+  finish(env.session("first", 2, "code")); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(env.sessionStore.get().data.id, "second");
+  assert.equal(env.profile.selection().model_id, "text");
+  assert.equal(env.profile.hasInFlight(), false); assert.deepEqual(env.busy, [true, false]);
+  env.profile.destroy();
+});
+
+test("newer model metadata wins over a late confirmed save", async () => {
+  let finish;
+  const env = savingProfile(() => new Promise(resolve => { finish = resolve; }));
+  env.choose(); env.sessionStore.setData(env.session("first", 3));
+  finish(env.session("first", 2, "code")); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(env.sessionStore.get().data.revision, 3);
+  assert.equal(env.profile.selection().model_id, "text"); assert.equal(env.profile.isBusy(), false);
+  env.profile.destroy();
+});
+
+test("destroying the profile view cancels an outstanding confirmation", async () => {
+  let signal, finish;
+  const env = savingProfile((_session, _profile, options) => {
+    signal = options.signal; return new Promise(resolve => { finish = resolve; });
+  });
+  env.choose(); env.profile.destroy(); assert.ok(signal.aborted);
+  finish(env.session("first", 2, "code")); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(env.sessionStore.get().data.revision, 1); assert.equal(env.profile.hasInFlight(), false);
+});
+
 test("global permission changes affect blank tasks, preserve chat overrides, and never rewrite existing sessions", () => {
   const route = { projectId: "default", sessionId: "" };
   const navigation = { get: () => route, subscribe: () => () => {} };

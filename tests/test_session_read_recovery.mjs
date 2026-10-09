@@ -52,6 +52,10 @@ test("an accepted profile or session write finishes before a stalled sidebar rea
     context.mock.method(globalThis, "fetch", async (path, options) => {
       if (options.method !== "GET") {
         writes++;
+        if (path.endsWith("/profile")) {
+          return Response.json({ ok: true, data: { ...session("one", 2), ...JSON.parse(options.body) } },
+            { headers: { ETag: '"mdo-session-one-2"' } });
+        }
         if (path.endsWith("/fork")) {
           const body = JSON.parse(options.body);
           return Response.json({ ok: true, data: { ...session(body.client_session_id, 2),

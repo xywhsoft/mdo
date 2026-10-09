@@ -1,11 +1,11 @@
 import { ApiError, api, resourceId } from "../api/client.js";
 import { createResourceStore } from "./store.js";
-import { withSessionRuntime } from "./session-runtime.js";
 import { t } from "../i18n.js";
 import { downloadSessionBackup } from "../api/backup-download.js";
 import { isTransientReadError } from "../api/read-recovery.js";
 import { createRequestRecovery } from "../api/request-recovery.js";
 import { runSessionFork } from "./session-fork.js";
+import { runSessionProfileUpdate } from "./session-profile.js";
 
 const readRecovery = { recoverRead: isTransientReadError,
   retainDataOnError: isTransientReadError };
@@ -73,16 +73,9 @@ export async function patchSession(session, patch) {
   return refreshAfter(await api.patch(endpoint(session), patch, { ifMatch: etag(session) }));
 }
 
-export async function updateSessionProfile(session, profile) {
-  const body = {
-    model_id: profile.model_id,
-    reasoning_effort: profile.reasoning_effort,
-    permission_profile: profile.permission_profile,
-  };
-  const response = await withSessionRuntime(session.project_id, session.id,
-    () => api.put(`${endpoint(session)}/profile`, body,
-      { ifMatch: etag(session) }));
-  return refreshAfter(response);
+export async function updateSessionProfile(session, profile, options) {
+  try { return await runSessionProfileUpdate(session, profile, options); }
+  finally { void loadSessions({ retry: true }); }
 }
 
 export async function trashSession(session) {

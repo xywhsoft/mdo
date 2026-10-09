@@ -135,13 +135,16 @@ class FrontendContractTests(unittest.TestCase):
         app = self.scripts["js/app.js"]
         profile = self.scripts["js/features/chat/composer-profile.js"]
         sessions = self.scripts["js/state/sessions.js"]
+        profile_update = self.scripts["js/state/session-profile.js"]
         self.assertIn("const profile = composerProfile.selection()", app)
         self.assertIn("await submissionController.submit(key, rawInput, attachments, interrupt,", app)
         self.assertIn("newTaskController.createForAttachment", app)
-        self.assertIn("updateSessionProfile(session, profile)", profile)
+        self.assertIn("updateProfile = updateSessionProfile", profile)
+        self.assertIn("updateProfile(session, profile, { signal: controller.signal })", profile)
         self.assertIn("isRunActive()", profile)
         self.assertIn("draftStore.setComposerProfile(key,", profile)
-        self.assertIn("/profile", sessions)
+        self.assertIn("runSessionProfileUpdate(session, profile, options)", sessions)
+        self.assertIn('send(path + "/profile", body, { ifMatch: tag, signal: attemptSignal })', profile_update)
         self.assertIn("ifMatch: etag(session)", sessions)
 
     def test_settings_autosave_uses_etag_and_server_side_merge(self) -> None:

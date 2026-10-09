@@ -1944,5 +1944,8 @@
   "error.askAnswerUnconfirmed": "Unable to confirm whether your answer was received. Your input is preserved; reconnect and check the conversation before retrying.",
   "error.approvalDecisionUnconfirmed": "Unable to confirm whether your permission decision was received. Reconnect and check execution before retrying.",
   "error.decisionConflict": "A different answer or permission decision was already accepted. Check the conversation; this change was not applied.",
-  "error.decisionsUnavailable": "Confirmation is temporarily busy. No new decision was applied; keep your input and try again later."
+  "error.decisionsUnavailable": "Confirmation is temporarily busy. No new decision was applied; keep your input and try again later.",
+  "error.sessionProfileUnconfirmed": "The session settings are not yet confirmed. Reconnect and check them, or select the settings again.",
+  "error.sessionProfileUnavailable": "The session settings could not be saved right now. Try again later.",
+  "error.sessionProfileConflict": "The session settings changed in another window. Please select them again."
 }

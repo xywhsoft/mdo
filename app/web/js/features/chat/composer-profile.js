@@ -34,12 +34,13 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
   permissionSelect, navigation, sessionStore, modelsStore, agentsStore,
   projectsStore, settingsStore, draftStore, status, resetButton, isRunActive,
   hasPendingSubmission = () => false, onBusyChange,
-  onSelectionChange }) {
+  onSelectionChange, updateProfile = updateSessionProfile }) {
   // Blank tasks have no session metadata. Keep manual choices per project, but
   // continue following its configured default until the user picks a model.
   const drafts = new Map();
   const busy = new Set();
   const changing = new Map();
+  const saving = new Map();
   const resetting = new Set();
   const draftVersions = new Map();
   let runActive = false;
@@ -222,6 +223,7 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
     }
     busy.add(key);
     onBusyChange(true);
+    let stopSaving = () => {};
     try {
       if (runActive || isRunActive() || hasPendingSubmission(session)) {
         // A queued submission already froze its profile. Do not change the
@@ -246,8 +248,23 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
       }
       changing.set(key, profile);
       sync();
-      const updated = await updateSessionProfile(session, profile);
+      const controller = new AbortController();
+      const originalRoute = JSON.stringify(navigation.get());
+      saving.set(key, controller);
+      const unsubscribe = navigation.subscribe?.(() => {
+        if (JSON.stringify(navigation.get()) !== originalRoute) controller.abort();
+      });
+      stopSaving = () => {
+        unsubscribe?.();
+        if (saving.get(key) === controller) saving.delete(key);
+      };
+      const updated = await updateProfile(session, profile, { signal: controller.signal });
+      if (controller.signal.aborted) return;
       const selected = navigation.get();
+      const latest = current();
+      // A newer metadata event can win while the confirmed result is returning.
+      // Never roll its model/permission back or announce that older choice.
+      if (latest?.revision > updated.revision) return;
       if (selected.projectId === updated.project_id &&
           selected.sessionId === updated.id) sessionStore.setData(updated);
       if (draftStore?.composerProfile(key)) {
@@ -261,7 +278,12 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
         t("profile.backgroundUpdated", { title: session.title },
           `后台会话“${session.title}”配置已更新`));
     } catch (error) {
+      if (error?.name === "AbortError") return;
       const selected = navigation.get();
+      if (error.currentSession?.project_id === selected.projectId &&
+          error.currentSession.id === selected.sessionId &&
+          error.currentSession.revision >= (current()?.revision ?? 0))
+        sessionStore.setData(error.currentSession);
       toast(selected.projectId === session.project_id &&
         selected.sessionId === session.id ? errorMessage(error) :
         t("profile.backgroundFailed", { title: session.title, error: errorMessage(error) },
@@ -269,6 +291,7 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
       if (selected.projectId === session.project_id &&
           selected.sessionId === session.id) sync();
     } finally {
+      stopSaving();
       changing.delete(key);
       busy.delete(key);
       onBusyChange(false);
@@ -341,6 +364,9 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
     isBusy: () => busy.has(selectedKey()),
     hasInFlight: () => busy.size !== 0,
     sync,
-    destroy: () => unsubscribers.forEach((unsubscribe) => unsubscribe()),
+    destroy() {
+      for (const controller of saving.values()) controller.abort();
+      unsubscribers.forEach((unsubscribe) => unsubscribe());
+    },
   });
 }
