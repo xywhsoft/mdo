@@ -17,12 +17,12 @@
 | 计划任务 | 读取临时失败安静恢复；创建确认丢失不重复计划，修改不盲目重放；无法确认运行时提示核查历史；准确最终模型原因、三语言页面和重启历史通过。 | [读取](../tests/acceptance/schedule-reads/README.md)、[写入](../tests/acceptance/schedule-write/README.md)、[执行原因](../tests/acceptance/schedule-results/README.md) |
 | 备份与导出数据 | 备份/Markdown 内容和图片完整，导入确认后独立会话可续聊；Android 保存桥接上限在交接前准确提示。 | [备份恢复](../tests/acceptance/conversation-backups/README.md)、[导出平台边界](../tests/acceptance/export-platform/README.md) |
 
-表中包含不同阶段的实际程序和宿主，不能将较早打包记录说成最终二进制重跑了每个案例。最新 Windows 对计划执行、重启和正常对话进行了实际页面检查，981 项完整前端及 124 项契约通过，原生/API、严格编译门禁通过。近期未改动的功能沿用其明确的先前证据；如改动涉及该路径，应重新做相关检查。
+表中包含不同阶段的实际程序和宿主，不能将较早打包记录说成最终二进制重跑了每个案例。完整对话、计划和中断换模型检查见各阶段记录。最新修复的来源组件完成真实复制事件前后对照，39 项已有相关检查和 164 模块检查通过，见 [恢复草稿复制](../tests/acceptance/recovery-draft-copy/README.md)。近期未改动的功能沿用其明确的先前证据；如改动涉及该路径，应重新做相关检查。
 
 ## 当前可使用和待实测的程序
 
-- 工作区 `D:\GIT\mdo\mdo.exe` 和 `E:\software\mdo\mdo.exe` 当前为实际页面验收的 f5e55072 应用，4,559,669 字节，包括最新中断换模型及恢复状态自动刷新修复。两处上一版备份在 `.build/conversation-acceptance/interrupted-profile/install-before`，Home 的文件清单、大小和修改时间未变，没有启动日用 Home。更新摘要见 [记录](../tests/acceptance/interrupted-profile/install-update.json)。
-- 最新独立 ARM64 精简测试包在 `.build/conversation-acceptance/interrupted-profile/android/mdo-stability-qa.apk`，4,191,469 字节；沿用重新编译的宿主 xs 93ef1f61、xwork ABI 8，内置 VFS 与最新已验收 Windows 包完全相同。实际 v2/v3 签名、ZIP 对齐和宿主/SDK 摘要通过，原生 ELF 16 KB 对齐沿用同一字节的先前记录。它使用独立 `org.xleaves.mdo.qa.stability` 包，不是旧日用包的升级安装器。
+- 工作区 `D:\GIT\mdo\mdo.exe` 和 `E:\software\mdo\mdo.exe` 当前为 630556a0 应用，4,559,767 字节，包括中断换模型、恢复状态自动刷新，以及弹层草稿复制兼容修复。原生宿主沿用前阶段，最新复制修复做了来源组件页面检查；没有把它说成重新完成所有原生检查。两处上一版备份在 `.build/conversation-acceptance/recovery-draft-copy/install-before-modal`，Home 的文件清单、大小和修改时间未变，没有启动日用 Home。更新摘要见 [记录](../tests/acceptance/recovery-draft-copy/install-update.json)。
+- 最新独立 ARM64 精简测试包在 `.build/conversation-acceptance/recovery-draft-copy/android-modal/mdo-stability-qa.apk`，4,191,469 字节；沿用重新编译的宿主 xs 93ef1f61、xwork ABI 8，内置 VFS 与最新 Windows 包完全相同。实际 v2/v3 签名、ZIP 对齐和宿主/SDK 摘要通过，原生 ELF 16 KB 对齐沿用同一字节的先前记录。它使用独立 `org.xleaves.mdo.qa.stability` 包，不是旧日用包的升级安装器，尚未安装或实测。
 - 此前 b9f42347 已补验四次真实 Windows 原生窗口启动、移动 Home 后重启、环境/命令 Home 路径及 20 秒打包启动，全部通过；阶段产物证据见 [stability-final](../tests/acceptance/stability-final/README.md)。最新原生/页面/旧数据复核、982 项前端和 142 项 Python 检查（3 项环境跳过）见 [interrupted-profile](../tests/acceptance/interrupted-profile/README.md)。没有更新官网或手机日用包。原生启动不代表复制/文件保存已验证，构建检查也不代表 Android WebView 可用。
 
 ## 剩余实际检查

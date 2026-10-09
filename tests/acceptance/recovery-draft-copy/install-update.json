@@ -1,0 +1,27 @@
+{
+  "mdo_source_commit": "630556a0dcb180ead6a2323ddc489aae8073c0ff",
+  "updates": [
+    {
+      "path": "D:\\GIT\\mdo\\mdo.exe",
+      "previous_sha256": "5d509b0ecce14ec19f60d10acee0e80d920846f2ea5b3f53e181da62c6df96e1",
+      "sha256": "898452113382f7448ca0d2df8bffdaaf5803bd224521490858a0fe709494dca8",
+      "bytes": 4559767,
+      "backup": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\recovery-draft-copy\\install-before-modal\\workspace.exe",
+      "home_inventory_files": 12351,
+      "home_metadata_inventory_unchanged": true,
+      "app_launched": false
+    },
+    {
+      "path": "E:\\software\\mdo\\mdo.exe",
+      "previous_sha256": "5d509b0ecce14ec19f60d10acee0e80d920846f2ea5b3f53e181da62c6df96e1",
+      "sha256": "898452113382f7448ca0d2df8bffdaaf5803bd224521490858a0fe709494dca8",
+      "bytes": 4559767,
+      "backup": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\recovery-draft-copy\\install-before-modal\\e-install.exe",
+      "home_inventory_files": 3000,
+      "home_metadata_inventory_unchanged": true,
+      "app_launched": false
+    }
+  ],
+  "website_published": false,
+  "phone_installed": false
+}
