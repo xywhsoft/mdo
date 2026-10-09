@@ -1,0 +1,42 @@
+[
+  {
+    "mode": "fresh",
+    "catalog_revision": 2,
+    "source_file_count": 1,
+    "source_valid": true,
+    "importable": true,
+    "catalog_persisted": false,
+    "memory_directory_created": false,
+    "source_bytes_unchanged": true
+  },
+  {
+    "mode": "browser-cache",
+    "catalog_revision": 2,
+    "source_file_count": 1,
+    "source_valid": true,
+    "importable": true,
+    "catalog_persisted": false,
+    "memory_directory_created": false,
+    "source_bytes_unchanged": true
+  },
+  {
+    "mode": "inside-source",
+    "catalog_revision": 2,
+    "source_file_count": 1,
+    "source_valid": true,
+    "importable": false,
+    "catalog_persisted": false,
+    "memory_directory_created": false,
+    "source_bytes_unchanged": true
+  },
+  {
+    "mode": "user-data",
+    "catalog_revision": 2,
+    "source_file_count": 1,
+    "source_valid": true,
+    "importable": false,
+    "catalog_persisted": true,
+    "memory_directory_created": false,
+    "source_bytes_unchanged": true
+  }
+]

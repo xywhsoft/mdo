@@ -1,0 +1,27 @@
+{
+  "mdo_commit": "2d863e85219cf2b1bc39b5544ab08e36f5632818",
+  "xs_commit": "f47b0de5037f458f6289483d1323dee417d99434",
+  "sha256": "9285008ec058e6f3484f8724464cecaea8ec9ce9633324458a094b42d734c084",
+  "bytes": 4534910,
+  "mdo_worktree_dirty": false,
+  "packaged_app_sha256": "c175de0b3c3925bed1b5eef060dece63bf3cabf11f8172e350d67f9824c613a0",
+  "sources": {
+    "include/mdo/memory.h": {
+      "sha256": "c7f50363674f8f98af986275187de81b69d076df4bb6e20603c1191596641b28",
+      "matches": true
+    },
+    "src/api/inventory.c": {
+      "sha256": "98d29064909124e4cc3dc2f145900bff32a5c3b3727ea814775b7dafba079c65",
+      "matches": true
+    },
+    "src/distribution/manager.c": {
+      "sha256": "8b15818423697e6b8c247f1083b01fdd65073bed3907e990335e85e70a244fca",
+      "matches": true
+    },
+    "src/memory/file_memory.inc.c": {
+      "sha256": "fa1483e77bc7bd19e6f976163da27d583c7d54fe6d09bbb8f43450be7d737d23",
+      "matches": true
+    }
+  },
+  "passed": true
+}
