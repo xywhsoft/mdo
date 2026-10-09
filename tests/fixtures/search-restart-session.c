@@ -16,19 +16,25 @@ static xllm_result RestartModel(void* Data, const xllm_request* Request,
 {
     (void)Data; (void)Callbacks; (void)Error;
     *Response=NULL; ++g_RestartModelCalls;
+    unsigned UserMessages=0u;
     for (size_t i=0u;i<Request->iMessageCount;++i) {
         const xllm_message* Message=&Request->pMessages[i];
+        if (Message->eRole==XLLM_ROLE_USER && Message->sContent &&
+            !strcmp(Message->sContent,"Search once and continue after interruptions")) ++UserMessages;
         if (Message->eRole==XLLM_ROLE_TOOL && Message->sContent) {
             g_RestartToolSeen=true;
             g_RestartToolSuccess=strstr(Message->sContent,"web_search_results")!=NULL;
             printf("restart_tool_result=%s\n",Message->sContent); fflush(stdout);
         }
     }
+    printf("restart_user_messages=%u\n",UserMessages);fflush(stdout);
+    if (UserMessages!=1u) return XLLM_RESULT_ERROR;
     if ((g_RestartResume && !g_RestartToolSeen) || g_RestartModelCalls>2u) return XLLM_RESULT_ERROR;
     xllm_response* Reply=(xllm_response*)calloc(1u,sizeof(*Reply));
     if (!Reply) return XLLM_RESULT_ERROR;
     Reply->sModel=RestartCopy("offline-restart-fixture");
-    Reply->sContent=RestartCopy(g_RestartToolSeen ? "Recovered search; continue the conversation" : "");
+    Reply->sContent=RestartCopy(!g_RestartToolSeen ? "" : g_RestartToolSuccess ?
+        "Recovered search; continue the conversation" : "Search could not be safely recovered; continue without repeating it");
     Reply->sFinishReason=RestartCopy(g_RestartToolSeen ? "stop" : "tool_calls");
     Reply->eFinish=g_RestartToolSeen ? XLLM_FINISH_STOP : XLLM_FINISH_TOOL_CALLS;
     if (!Reply->sModel || !Reply->sContent || !Reply->sFinishReason) goto failed;

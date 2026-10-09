@@ -119,6 +119,7 @@ def scenario(ctx, baseline=False):
                     success=mode in ('lost','before_submission')
                     events=[json.loads(line) for line in (session/'ui-events.jsonl').read_text(encoding='utf-8').splitlines()]
                     assert f'tool_seen:1 tool_success:{int(success)} model_calls:1 error:0:' in output,(output,Handler.requests,events[-5:])
+                    assert output.count('restart_user_messages=1')==2 and 'restart_user_messages=2' not in output,output
                     assert 'test-bocha-secret' not in output and ctx['token'] not in output,output
                     if mode=='legacy':assert 'Search API was not found' in output,output
                     if mode=='account_changed':assert 'another service or account' in output,output
@@ -132,7 +133,9 @@ def scenario(ctx, baseline=False):
                     assert len(list((session/'artifacts/completed').glob('*.json')))==1
                     posts=Handler.requests
                     assert len(posts)==(3 if mode=='legacy' else 2 if success else 1),posts
-                    if mode=='legacy':assert [p for p,_ in posts]==['/api/v1/search/requests','/api/v1/search','/api/v1/search/requests']
+                    if mode=='legacy':
+                        assert [p for p,_ in posts]==['/api/v1/search/requests','/api/v1/search','/api/v1/search/requests']
+                        assert posts[0][1]==posts[2][1],posts
                     elif baseline:assert json.loads(posts[1][1])['request_id']!=original,posts
                     else:assert all(json.loads(b)['request_id']==original for _,b in posts)
                     if success and not baseline:assert posts[0][1]==posts[1][1],posts
@@ -140,7 +143,8 @@ def scenario(ctx, baseline=False):
                     assert ctx['state']()['calls']==before+dispatches and ctx['used']()==quota+dispatches,(mode,ctx['state'](),ctx['used'](),quota)
                     records[mode]={'actual_client_processes':2,'http_requests':len(posts),'provider_dispatches':dispatches,
                         'quota':dispatches,'tool_success':success,'tool_completions':1,'agent_completed':True,
-                        'same_id':not baseline,'artifacts':len(artifacts),'body_sha256':hashlib.sha256(posts[0][1]).hexdigest()}
+                        'same_id':not baseline,'user_prompt_preserved_once':True,
+                        'artifacts':len(artifacts),'body_sha256':hashlib.sha256(posts[0][1]).hexdigest()}
                 finally:
                     stop_host(process);release.set()
         return records
