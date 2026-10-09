@@ -87,6 +87,20 @@ try {
   const activityRunningShown = document.querySelector(".session-item-row")
     .dataset.runState === "running" && document.querySelector(".session-item-activity")
     .textContent.includes("运行中");
+  // Run with both reduced-motion preferences: progress must keep moving through polls.
+  const indicator = document.querySelector(".session-run-indicator");
+  const animation = indicator.getAnimations().find((item) => item.animationName === "sidebar-spin");
+  const animationStart = animation?.currentTime ?? 0;
+  const transformStart = getComputedStyle(indicator).transform;
+  const sampleStart = performance.now();
+  while (performance.now() - sampleStart < 250) await new Promise(requestAnimationFrame);
+  publishRuns(runsState);
+  publishSessions(state);
+  const activityAnimationContinues = indicator === document.querySelector(".session-run-indicator") &&
+    animation?.playState === "running" && animation.currentTime > animationStart &&
+    indicator.getAnimations().includes(animation) &&
+    getComputedStyle(indicator).transform !== transformStart;
+  const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
   list.setUnread(new Set(["default/test"]));
   const indicatorsKeepSelection = titleNode === document.querySelector(".session-item-title") &&
     selection.toString() === "Clipped session" &&
@@ -252,7 +266,7 @@ try {
     groupBody().querySelectorAll(".session-item").length === 6 &&
     document.activeElement.dataset.sessionKey === "alpha/tree0";
   const passed = withinViewport && noUnnecessaryScroll && outsideClippingParent && firstFocused &&
-    menuReadingStable && activityRunningShown && indicatorsKeepSelection &&
+    menuReadingStable && activityRunningShown && activityAnimationContinues && indicatorsKeepSelection &&
     activityStoppingShown && activityReadErrorKept && activityFinishedCleared && activityMenuStable &&
     sidebarComposingKept && sidebarCandidateKept && escapeRestored &&
     lastReachable && actionWorked && headerComposingKept &&
@@ -267,7 +281,7 @@ try {
     titleSelectionStable, titleNodeStable, nodeAfterRefreshing, nodeAfterReady,
     selectedTitleText, timestampUpdated,
     firstFocused, menuReadingStable, sidebarComposingKept, sidebarCandidateKept, escapeRestored,
-    activityRunningShown, indicatorsKeepSelection, activityStoppingShown,
+    activityRunningShown, activityAnimationContinues, reducedMotion, indicatorsKeepSelection, activityStoppingShown,
     activityReadErrorKept, activityFinishedCleared, activityMenuStable,
     lastReachable, actionWorked, actionRevision, headerComposingKept, headerCandidateKept,
     headerEscapeRestored, headerEndFocused, headerEndVisible, headerEndScrolled,

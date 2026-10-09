@@ -525,10 +525,6 @@ select:focus-visible,
   .session-group-main, .sidebar-section-toggle, .session-show-more { min-height: 40px; }
   .session-group-main > .session-group-chevron { opacity: 1; }
 }
-@media (prefers-reduced-motion: reduce) {
-  .session-run-indicator { animation: none !important; }
-}
-
 .empty-state,
 .resource-error {
   margin: 8px;
@@ -1964,6 +1960,10 @@ select:focus-visible,
     animation-duration: .01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: .01ms !important;
+  }
+  /* Keep essential progress visible; reduce its speed without animating the layout. */
+  .session-item-row[data-run-state="running"] .session-run-indicator {
+    animation: sidebar-spin 2s linear infinite !important;
   }
 }
 
