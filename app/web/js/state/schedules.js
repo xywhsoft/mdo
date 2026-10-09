@@ -1,16 +1,22 @@
 import { api, resourceId } from "../api/client.js";
 import { createResourceStore } from "./store.js";
+import { isTransientReadError } from "../api/read-recovery.js";
 
-export const schedulesStore = createResourceStore({ items: [], total: 0 });
+export const schedulesStore = createResourceStore({ items: [], total: 0 }, {
+  recoverRead: isTransientReadError,
+});
 
-export function loadSchedules() {
-  return schedulesStore.load(async () => (await api.get("/schedules")).data);
+export function loadSchedules({ background = false } = {}) {
+  return schedulesStore.load(async signal => (await api.get("/schedules", { signal })).data,
+    { background });
 }
+
+// Leaving the panel releases both an in-flight GET and its backoff timers.
+// Keep the last catalog; the next visit reads a fresh version before editing.
+export function cancelScheduleReads() { schedulesStore.reset(schedulesStore.get().data); }
 
 function path(id) { return `/schedules/${resourceId(id, "schedule")}`; }
 
-export function readSchedule(id) { return api.get(path(id)); }
-export function readScheduleHistory(id) { return api.get(`${path(id)}/history`); }
 export function runSchedule(id, revision) {
   return api.post(`${path(id)}/run`, undefined, {
     ifMatch: `"mdo-schedule-${id}-${revision}"`,

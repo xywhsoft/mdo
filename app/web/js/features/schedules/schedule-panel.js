@@ -1,7 +1,11 @@
 import { resourceId } from "../../api/client.js";
-import { createSchedule, loadSchedules, readSchedule, removeSchedule,
-  readScheduleHistory, replaceSchedule, runSchedule, schedulesStore,
+import { createSchedule, loadSchedules, cancelScheduleReads, removeSchedule,
+  replaceSchedule, runSchedule, schedulesStore,
   setScheduleEnabled } from "../../state/schedules.js";
+import { createReadIntents } from "../../api/read-intents.js";
+import { isTransientReadError } from "../../api/read-recovery.js";
+import { subscribeTarget } from "../../api/target.js";
+import { resourceOperationEpoch } from "../../state/resource-operation.js";
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
 import { currentLocale, subscribeLocale, t } from "../../i18n.js";
 
@@ -73,6 +77,16 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
   let activeRefresh = 0;
   let active = false;
   let actionFeedback = { message: "", id: "" };
+  const reads = createReadIntents();
+  let targetEpoch = resourceOperationEpoch();
+
+  function cancelPanelReads() {
+    ++loadGeneration; ++historyGeneration;
+    reads.cancel();
+    cancelScheduleReads();
+    if (!busy && editorDialog.open) editorDialog.close();
+    if (historyDialog.open) historyDialog.close();
+  }
 
   function renderEditorHeader() {
     if (editorLoading) return;
@@ -300,11 +314,13 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
     const items = data.items ?? [];
     const feedbackInCard = items.some((item) => item.id === actionFeedback.id);
     actionStatus.textContent = feedbackInCard ? "" : actionFeedback.message;
-    if (state.status !== "error" && visible() && items.length)
+    if (visible() && (state.status === "error"
+        ? isTransientReadError(state.error) : items.length))
       activeRefresh = setTimeout(() => {
         activeRefresh = 0;
-        if (visible()) void loadSchedules();
-      }, items.some((item) => item.active_runs > 0) ? 1000 : 15000);
+        if (visible()) void loadSchedules({ background: true });
+      }, state.status === "error" ? 30000 :
+        items.some((item) => item.active_runs > 0) ? 1000 : 15000);
     if (state.status !== "error")
       status.textContent = t("schedule.count", { count: data.total ?? items.length },
         `${data.total ?? items.length} 项计划`) +
@@ -437,13 +453,13 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
         etag = result.etag;
       } else if (result?.data?.removed && result.data.id === original?.id)
         newSchedule();
-      await loadSchedules();
+      if (active) await loadSchedules();
     } catch (error) {
       const message = errorMessage(error);
       if (listAction) setActionFeedback(message, true, (deletion || listTarget)?.id);
       else setFeedback(message, true);
       if (!listAction) toast(message, "error");
-      if (error?.status === 412) await loadSchedules();
+      if (active && error?.status === 412) await loadSchedules();
     } finally {
       busy = false;
       syncEditorState();
@@ -457,19 +473,22 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
 
   async function openEditor(item, origin) {
     const generation = ++loadGeneration;
+    const epoch = resourceOperationEpoch();
+    const isCurrent = () => active && generation === loadGeneration &&
+      editorDialog.open && epoch === resourceOperationEpoch();
     newSchedule();
     editorLoading = true;
     title.textContent = t("schedule.editTitle", { label: item.label }, `编辑：${item.label}`);
     setFeedback(t("schedule.loadingOne", {}, "正在读取计划…"));
     showEditor(origin);
     try {
-      const result = await readSchedule(item.id);
-      if (generation !== loadGeneration || !editorDialog.open) return;
+      const result = await reads.read("editor", `/schedules/${resourceId(item.id)}`, { isCurrent });
+      if (!isCurrent()) return;
       editorLoading = false;
       syncEditorState();
       editSchedule(result.data, result.etag);
     } catch (error) {
-      if (generation !== loadGeneration || !editorDialog.open) return;
+      if (!isCurrent() || error?.name === "AbortError") return;
       editorDialog.close();
       setActionFeedback(errorMessage(error), true, item.id);
       render(schedulesStore.get());
@@ -479,6 +498,9 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
   async function openHistory(item) {
     if (historyLoading) return;
     const generation = ++historyGeneration;
+    const epoch = resourceOperationEpoch();
+    const isCurrent = () => active && generation === historyGeneration &&
+      historyDialog.open && epoch === resourceOperationEpoch();
     const retrying = historyDialog.open;
     historyItem = item;
     historyLoading = true;
@@ -490,8 +512,8 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
     clear(historyList);
     if (!retrying) historyDialog.showModal();
     try {
-      const { data } = await readScheduleHistory(item.id);
-      if (generation !== historyGeneration || !historyDialog.open) return;
+      const { data } = await reads.read("history", `/schedules/${resourceId(item.id)}/history`, { isCurrent });
+      if (!isCurrent()) return;
       historyRetry.hidden = true;
       historyRetry.removeAttribute("aria-disabled");
       historyStatus.textContent = data.items.length
@@ -514,7 +536,7 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
       }
       if (retrying) panel.querySelector("#schedule-history-close").focus({ preventScroll: true });
     } catch (error) {
-      if (generation === historyGeneration && historyDialog.open) {
+      if (isCurrent() && error?.name !== "AbortError") {
         historyStatus.textContent = t("schedule.loadFailed", { error: errorMessage(error) },
           `读取失败：${errorMessage(error)}`);
         historyRetry.hidden = false;
@@ -560,6 +582,7 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
   });
   historyDialog.addEventListener("close", () => {
     ++historyGeneration;
+    reads.cancel("history");
     historyItem = null;
     historyLoading = false;
     historyRetry.hidden = true;
@@ -585,6 +608,7 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
   newButton.addEventListener("click", () => {
     if (busy) return;
     ++loadGeneration;
+    reads.cancel("editor");
     editorLoading = false;
     newSchedule();
     showEditor(newButton);
@@ -598,6 +622,7 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
     // Closing during a read invalidates its response; it must not refill a
     // different editor opened before that request finishes.
     ++loadGeneration;
+    reads.cancel("editor");
     editorLoading = false;
     newSchedule();
     syncEditorState();
@@ -610,7 +635,18 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
   });
   document.addEventListener("visibilitychange", () => {
     if (activeRefresh) { clearTimeout(activeRefresh); activeRefresh = 0; }
-    if (visible()) void loadSchedules();
+    if (visible()) {
+      render(schedulesStore.get());
+      void loadSchedules({ background: true });
+    }
+  });
+  window.addEventListener("pagehide", cancelPanelReads);
+  subscribeTarget(() => {
+    const epoch = resourceOperationEpoch();
+    if (epoch === targetEpoch) return;
+    targetEpoch = epoch;
+    cancelPanelReads();
+    if (active) void loadSchedules();
   });
   projectsStore.subscribe(fillCatalogs);
   agentsStore.subscribe(fillCatalogs);
@@ -628,7 +664,10 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
       if (active === value) return;
       active = value;
       if (active) void loadSchedules();
-      else if (activeRefresh) { clearTimeout(activeRefresh); activeRefresh = 0; }
+      else {
+        if (activeRefresh) { clearTimeout(activeRefresh); activeRefresh = 0; }
+        cancelPanelReads();
+      }
     },
   });
 }
