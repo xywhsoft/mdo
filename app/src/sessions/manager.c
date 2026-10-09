@@ -1529,7 +1529,6 @@ bool MdoSessionSetProfile(MdoSession* Session, const char* ModelId,
     char* Journal = NULL;
     char* Artifacts = NULL;
     bool Reserved = false;
-    bool RecoveryRequired = false;
     bool Ok = false;
 
     xworkErrorInit(Error);
@@ -1630,13 +1629,11 @@ bool MdoSessionSetProfile(MdoSession* Session, const char* ModelId,
     Agent = MdoAgentSessionCreateWithRuntime(g_MdoSessions.Runtime,
         &Options, Error);
     if ( Agent == NULL ) goto done;
-    if ( !MdoAgentSessionRecoveryRequired(Agent, &RecoveryRequired,
-            Error) ) goto done;
-    if ( RecoveryRequired ) {
-        MdoSessionsError(Error, XWORK_ERROR_CONTEXT,
-            "resolve interrupted Agent calls before changing the profile");
-        goto done;
-    }
+    /* Selecting an idle session's next profile does not execute or resolve its
+     * pending calls. Keep the recovered ledger intact so recovery can inspect
+     * them using the new profile. Requiring recovery first would trap sessions
+     * whose original model has been removed or is no longer available. Runtime
+     * reservation above still excludes a running or concurrently opened Agent. */
     memset(&AgentInfo, 0, sizeof(AgentInfo));
     AgentInfo.Size = sizeof(AgentInfo);
     if ( !MdoAgentSessionGetInfo(Agent, &AgentInfo) ) {

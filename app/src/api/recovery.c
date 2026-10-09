@@ -49,6 +49,9 @@ static bool MdoApiRecoveryFailure(MdoApiContext* Context,
     if ( Kind == XERR_NOT_FOUND )
         return MdoApiReplyError(Context, 404u, "session_not_found",
             "The requested session does not exist", NULL);
+    if ( Error != NULL && Error->eCode == XWORK_ERROR_MODEL )
+        return MdoApiReplyModelProfileFailure(Context, &Error->tModelError,
+            "recovery_service_unavailable");
     if ( Error != NULL &&
          (Error->eCode == XWORK_ERROR_CONTEXT ||
           Error->eCode == XWORK_ERROR_POLICY ||
