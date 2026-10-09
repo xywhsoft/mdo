@@ -1,0 +1,6 @@
+PASS latest native portable window: four launches, Home move and overrides
+[qa] C:\Users\Administrator\.cache\codex-runtimes\codex-primary-runtime\dependencies\native\powershell\pwsh.EXE -NoProfile -File D:\GIT\mdo\tests\packed-startup-smoke.ps1 -Xsw D:\GIT\mdo\.build\conversation-acceptance\mcp-http-status\host\xsw.exe -App D:\GIT\mdo\tests\fixtures\packed-startup-app -ObserveSeconds 20
+PASS: packed service initialized and survived 20s
+host: D:\GIT\mdo\.build\conversation-acceptance\mcp-http-status\host\xsw.exe
+artifacts: cleaned
+PASS latest native packed startup path

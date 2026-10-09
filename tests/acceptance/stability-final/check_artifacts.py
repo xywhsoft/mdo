@@ -33,6 +33,14 @@ def main():
     assert sha(exe) == receipt['sha256'] and len(exe) == receipt['bytes']
     assert (ROOT / 'mdo.exe').read_bytes() == exe
     assert json.loads((ROOT / '.build/product-receipts/mdo.exe.json').read_text(encoding='utf-8')) == receipt
+    installed = json.loads((HERE / 'e-install-update.json').read_text(encoding='utf-8'))
+    assert Path(installed['path']).read_bytes() == exe
+    assert sha(Path(installed['backup']).read_bytes()) == installed['previous_sha256']
+    assert installed['sha256'] == sha(exe) and installed['home_inventory_unchanged']
+    windows_gate = (HERE / 'windows-native.txt').read_text(encoding='utf-8')
+    assert 'PASS latest native portable window: four launches, Home move and overrides' in windows_gate
+    assert 'PASS: packed service initialized and survived 20s' in windows_gate
+    assert 'PASS latest native packed startup path' in windows_gate
     assert receipt['xs_commit'] == native_receipt['revision'] == json.loads((ROOT / 'deps.lock').read_text())['xserver']['commit']
     badging = (HERE / 'apk-badging.txt').read_text(encoding='utf-8')
     assert "package: name='org.xleaves.mdo.qa.stability' versionCode='30000047'" in badging
@@ -80,7 +88,10 @@ def main():
             library.with_name('libxs.so.build.json').write_text(json.dumps(native_receipt), encoding='utf-8')
             build_mdo.verify_host_receipt(library, json.loads((ROOT / 'deps.lock').read_text()), False)
         report = dict(passed=True, mdo_source_commit=receipt['mdo_commit'], xs_commit=native_receipt['revision'],
-            windows=dict(path=str(ROOT / 'mdo.exe'), bytes=len(exe), sha256=sha(exe), workspace_updated=True),
+            windows=dict(path=str(ROOT / 'mdo.exe'), bytes=len(exe), sha256=sha(exe), workspace_updated=True,
+                installation_path=installed['path'], installation_updated=True,
+                native_portable_startup_passed=True, packed_startup_seconds=20,
+                system_clipboard_tested=False, actual_export_save_tested=False),
             android=dict(path=str(args.apk), bytes=args.apk.stat().st_size, sha256=sha(args.apk.read_bytes()),
                 package='org.xleaves.mdo.qa.stability', edition='lite', build_id=30000047,
                 signature_v2=True, signature_v3=True, native_zip_and_elf_alignment_16k=True,
@@ -88,7 +99,7 @@ def main():
                 installed=False, webview_tested=False), pack_sha256=sha(pack.read_bytes()),
             website_published=False, stress_or_high_load=False)
     (HERE / 'artifacts.json').write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
-    print('PASS workspace executable, isolated ARM64 APK, signatures, 16 KB alignment and exact VFS/SDK')
+    print('PASS workspace/installed executable, native startup, isolated ARM64 APK, signatures, 16 KB alignment and exact VFS/SDK')
 
 
 if __name__ == '__main__':

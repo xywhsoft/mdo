@@ -1,0 +1,13 @@
+{
+  "path": "E:\\software\\mdo\\mdo.exe",
+  "bytes": 4559374,
+  "sha256": "6cc10d6f72391b237ea53a9505e53545de03f8cf2a80e80dc34c6149750a2361",
+  "source_commit": "b9f42347aa095b97498580a2e3ed2445cbefd258",
+  "previous_sha256": "e611803eb496b9843162dcfb3f84f6f411af9892e8ab47301902e1e24252b172",
+  "backup": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\stability-final\\e-install-before\\mdo.exe",
+  "home_inventory_files": 3000,
+  "home_inventory_sha256": "b13d51c6da6a507015ae4fa815e3390fbfa508a9fd5173b6bfd1bd02aa691b42",
+  "home_inventory_unchanged": true,
+  "app_launched": false,
+  "website_published": false
+}

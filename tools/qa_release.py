@@ -198,12 +198,19 @@ def windows_single_file(executable: Path, observe_seconds: int) -> None:
         # Move exactly the executable and its Home, then open the same profile.
         second = root / "portable-moved"
         second.mkdir()
-        target.replace(second / name)
+        # Validate both ends before moving the executable or its complete Home.
+        # In particular, an unexpected Home junction must never move data from
+        # outside this gate's disposable directory.
         source_home = first / "mdo-home"
+        destination_home = second / "mdo-home"
+        move_paths = (target, second / name, source_home, destination_home)
+        if any(not path.resolve().is_relative_to(root.resolve()) for path in move_paths):
+            raise GateError("portable move escaped the disposable gate directory")
+        target.replace(second / name)
         deadline = time.monotonic() + 5
         while True:
             try:
-                source_home.replace(second / "mdo-home")
+                source_home.replace(destination_home)
                 break
             except PermissionError as error:
                 if time.monotonic() >= deadline:

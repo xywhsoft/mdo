@@ -23,7 +23,7 @@
 
 - 工作区 `D:\GIT\mdo\mdo.exe` 已更新为实际验收的 b9f42347 应用，4,559,374 字节。旧文件及其回执保留在 `.build/conversation-acceptance/schedule-results/workspace-before`。没有改动用户数据。更新摘要见 [记录](../tests/acceptance/schedule-results/workspace-update.json)。
 - 最新独立 ARM64 精简测试包在 `.build/conversation-acceptance/stability-final/android/mdo-stability-qa.apk`，4,191,469 字节；重新编译宿主 xs 93ef1f61、xwork ABI 8，内置 VFS 与已验收 Windows 包完全相同。v2/v3 签名、ZIP/ELF 16 KB 对齐和宿主/SDK 摘要通过。它使用独立 `org.xleaves.mdo.qa.stability` 包，不是旧日用包的升级安装器。
-- 此次未更新官网、E 盘安装或手机日用包。构建检查不能代表 Android WebView 实际可用。产物证据见 [stability-final](../tests/acceptance/stability-final/README.md)。
+- 随后补验了四次真实 Windows 原生窗口启动、移动 Home 后重启、环境/命令 Home 路径及 20 秒打包启动检查，全部通过。`E:\software\mdo\mdo.exe` 原来与工作区更新前的旧程序逐字节一致，现已同步为上述候选并保留旧程序备份；更新前后的 3,000 个 Home 文件清单、大小和修改时间未变，没有启动日用 Home。未更新官网或手机日用包。原生启动不代表复制/文件保存已验证，构建检查也不代表 Android WebView 可用。产物证据见 [stability-final](../tests/acceptance/stability-final/README.md)。
 
 ## 剩余实际检查
 

@@ -6,7 +6,13 @@
     "path": "D:\\GIT\\mdo\\mdo.exe",
     "bytes": 4559374,
     "sha256": "6cc10d6f72391b237ea53a9505e53545de03f8cf2a80e80dc34c6149750a2361",
-    "workspace_updated": true
+    "workspace_updated": true,
+    "installation_path": "E:\\software\\mdo\\mdo.exe",
+    "installation_updated": true,
+    "native_portable_startup_passed": true,
+    "packed_startup_seconds": 20,
+    "system_clipboard_tested": false,
+    "actual_export_save_tested": false
   },
   "android": {
     "path": ".build\\conversation-acceptance\\stability-final\\android\\mdo-stability-qa.apk",
