@@ -660,14 +660,15 @@ select:focus-visible,
 .conversation-history-load[hidden], .conversation-history-rail[hidden] { display: none; }
 .conversation-history-load:disabled { cursor: wait; }
 .conversation-process { color: var(--muted); }
-.conversation-process > summary { display: flex; align-items: center; gap: 7px; width: fit-content; max-width: 100%; min-height: 32px; padding: 4px 8px 4px 0; list-style: none; font-size: 12px; cursor: pointer; }
+.conversation-process > summary { display: flex; align-items: center; gap: 7px; width: fit-content; max-width: 100%; min-height: 24px; padding: 2px 8px 2px 0; list-style: none; font-size: 12px; line-height: 20px; cursor: pointer; }
 .conversation-process > summary::-webkit-details-marker { display: none; }
 .conversation-process > summary:hover { color: var(--ink); }
 .conversation-process > summary .icon { width: 14px; height: 14px; transform: rotate(-90deg); transition: transform .12s; }
 .conversation-process[open] > summary .icon { transform: none; }
 .conversation-process-count { color: var(--faint); font-size: 11px; }
-.conversation-process-items { list-style: none; padding: 12px 0 0 12px; margin: 0; border-left: 1px solid var(--border); }
-.conversation-process-items .timeline-item { margin-bottom: 14px; }
+.conversation-process-items { list-style: none; padding: 8px 0 0 12px; margin: 0; border-left: 1px solid var(--border); }
+.conversation-process-items .timeline-item { margin-bottom: 8px; }
+.conversation-process-items .timeline-item:last-child { margin-bottom: 0; }
 .conversation-gap { display: block; width: 100%; padding: 8px; border: 1px dashed var(--border); border-radius: 8px; background: transparent; color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; }
 .conversation-history-rail { position: absolute; z-index: 11; left: 10px; display: flex; flex-direction: column; width: 32px; pointer-events: none; }
 .conversation-history-marks { display: flex; flex: 1; flex-direction: column; min-height: 0; align-items: flex-start; overflow-y: auto; scrollbar-width: none; pointer-events: auto; }
@@ -694,6 +695,9 @@ select:focus-visible,
   .conversation-history-mark > span { transition: none; }
 }
 .timeline-item { margin: 0 0 24px; }
+/* Execution rows separate replies without the spacing of a full message. */
+.timeline > .timeline-item[data-kind="process"],
+.timeline > .timeline-item:has(+ .timeline-item[data-kind="process"]) { margin-bottom: 12px; }
 .timeline-item-header { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; color: var(--muted); font-size: 11px; }
 .timeline-role { color: var(--ink); font-size: 12px; font-weight: 650; }
 .timeline-time { margin-left: auto; color: var(--faint); }
