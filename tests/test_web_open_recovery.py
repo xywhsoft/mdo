@@ -141,7 +141,19 @@ static bool Fetch(void* data, const XS_FetchRequest* request,
             snapshot.DocumentCount, (unsigned long long)snapshot.RequestsCompleted,
             (unsigned long long)snapshot.RequestsFailed);
 '''
-    text = text[:start] + "".join(calls) + summary + text[end:]
+    preflight = "" if baseline else r'''
+    {
+        xwork_tool_context expired = {0}; XS_FetchResponse unused = {0};
+        expired.uDeadline = xrtDeadlineAfter(1u); xrtSleep(2u);
+        xrtSetErrorKind(XERR_PERMISSION);
+        if (MdoWebFetchRequest(g_MdoWeb.Current, &expired, "https://example.com/", NULL, 0u,
+                false, NULL, 0u, &unused, NULL) || xrtGetError() == NULL ||
+            xrtErrorKind(xrtGetError()) != XERR_TIMEOUT || probe.Fetches != 0u)
+            printf("expired_preflight_failed=1\n");
+        xrtClearError();
+    }
+'''
+    text = text[:start] + preflight + "".join(calls) + summary + text[end:]
     # ServiceInit fixtures terminate after their finite assertions; no server
     # remains running and the runner never interprets a timeout as completion.
     return text.replace('    MdoHomeUnit();', '    MdoHomeUnit(); fflush(stdout); exit(0);')
@@ -180,6 +192,7 @@ def run(host: Path, baseline: bool, output_file: Path | None) -> None:
             output = proc.stdout + proc.stderr
             assert proc.returncode == 0 and "probe_done=1" in output, output
             assert "init_error=" not in output, output
+            assert "expired_preflight_failed=" not in output, output
             assert "HOSTILE_UPSTREAM_BODY_DO_NOT_SHOW" not in output, output
             for name in ("recover", "disconnect"):
                 expected = 0 if baseline else 1

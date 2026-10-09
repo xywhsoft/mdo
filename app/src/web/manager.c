@@ -663,7 +663,10 @@ static bool MdoWebFetchRequest(MdoWebState* pState,
         (uint64)pState->Settings.IdleTimeoutMilliseconds * 1000u;
     if ( pContext->uDeadline != XRT_DEADLINE_NEVER ) {
         uint64 Remaining = xrtDeadlineRemaining(pContext->uDeadline);
-        if ( Remaining == 0u ) return false;
+        if ( Remaining == 0u ) {
+            xrtSetErrorKind(XERR_TIMEOUT);
+            return false;
+        }
         if ( Timeout > Remaining ) Timeout = Remaining;
         if ( IdleTimeout > Remaining ) IdleTimeout = Remaining;
     }
