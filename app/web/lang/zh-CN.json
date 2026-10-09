@@ -1970,5 +1970,10 @@
   "ecosystem.fieldTransport": "MCP 必须配置 stdio 或 Streamable HTTP 连接方式。请检查源文件中的 transport。",
   "ecosystem.fieldLength": "{field}过长，最多支持 {limit} 字节；中文等字符会占用多个字节。",
   "ecosystem.fieldText": "{field}含有无效的空字符，请删除后重试。",
-  "ecosystem.commandReserved": "此名称已被内建命令使用，请换一个文件 ID。"
+  "ecosystem.commandReserved": "此名称已被内建命令使用，请换一个文件 ID。",
+  "resource.operationInvalid": "操作状态响应不符，请重新读取状态。",
+  "resource.operationCancelled": "操作已取消。",
+  "resource.connectionFailed": "连接测试失败，请检查服务器配置。",
+  "resource.operationUnconfirmed": "状态暂未确认，操作可能仍在后台执行。恢复连接后可重新读取状态；没有重新执行。",
+  "resource.recheckOperation": "重新读取状态"
 }

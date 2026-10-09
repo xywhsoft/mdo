@@ -9,6 +9,7 @@ import { EXTENSION_KINDS, portableId, promptFields, editPrompt, newMcp, prepareM
 import { resourceOwner, receiptKey } from "./store-formats.js";
 import { saveBlobFile } from "../../utils/file-download.js";
 import { createExtensionReads } from "./extension-reads.js";
+import { awaitResourceOperation } from "../../state/resource-operation.js";
 import { extensionFieldError, validateExtensionId, requiredExtensionFields, validateExtensionForm, parseExtensionJson } from "./extension-validation.js";
 
 const label = (key, fallback, args = {}) => t(`ecosystem.${key}`, args, fallback);
@@ -42,9 +43,11 @@ export function createExtensionPanels() {
   let selected = "", editing = null, activeTarget = targetKey(), pendingResource = null;
   let disposed = false, paused = false;
   const reads = createExtensionReads();
+  const actions = new Map();
   const current = (kind, target) => !disposed && !paused && selected === kind && target === targetKey();
   function cancelReads() {
     reads.cancel();
+    for (const controller of actions.values()) controller.abort();
     for (const state of states.values()) {
       ++state.serial;
       if (state.reading) { state.reading = false; state.busy = false; }
@@ -87,14 +90,22 @@ export function createExtensionPanels() {
     const state = states.get(kind);
     if (state.busy || editing?.saving) return;
     const target = targetKey();
+    const controller = new AbortController(); actions.set(kind, controller);
+    const scope = { signal: controller.signal, isCurrent: () => current(kind, target) && !controller.signal.aborted };
+    state.loaded = false; state.operation = null;
     state.busy = true; render(kind);
-    try { await action(); if (target !== targetKey()) return; announceChange(kind); await load(kind); }
+    try { await action(scope); if (!scope.isCurrent()) return; announceChange(kind); await load(kind); }
     catch (error) {
       // A multi-server import can have completed earlier saves before a failure.
       if (target !== targetKey()) return;
+      if (error?.operation) state.operation = error.operation;
+      if (!scope.isCurrent() || error?.name === "AbortError") return;
       announceChange(kind); await load(kind); state.error = errorMessage(error);
     }
-    finally { if (target === targetKey()) { state.busy = false; render(kind); } }
+    finally { if (actions.get(kind) === controller) {
+      actions.delete(kind);
+      if (target === targetKey()) { state.busy = false; render(kind); if (current(kind, target) && !state.loaded) void load(kind); }
+    } }
   }
   function render(kind) {
     const root = roots.get(kind), state = states.get(kind);
@@ -104,17 +115,21 @@ export function createExtensionPanels() {
     const file = element("input", { attrs: { type: "file", accept: kind === "tools" ? ".c" : kind === "mcp" ? ".json" : ".md,.json", "aria-label": label("import", "导入") } });
     file.hidden = true; file.addEventListener("change", () => { void importFile(kind, file.files?.[0]); });
     const pick = button(label("import", "导入"), () => file.click());
-    const actions = [add, pick, button(label("refresh", "刷新"), () => act(kind, async () => {
+    const actions = [add, pick, button(label("refresh", "刷新"), () => act(kind, async scope => {
       const catalog = ({ agents: "modules", tools: "modules", subagents: "modules", skills: "skills", mcp: "mcp" })[kind];
-      if (catalog && !(kind === "tools" && state.view === "builtin")) await reloadCatalog(catalog);
+      if (catalog && !(kind === "tools" && state.view === "builtin")) await reloadCatalog(catalog, scope);
     })), file];
+    if (state.operation) {
+      const operation = state.operation;
+      actions.splice(3, 0, button(t("resource.recheckOperation", {}, "重新读取状态"), () => act(kind, scope => awaitResourceOperation(operation, scope))));
+    }
     if (kind === "skills") {
       const folder = element("input", { attrs: { type: "file", webkitdirectory: "", multiple: "", "aria-label": label("importFolder", "导入文件夹") } });
       folder.hidden = true; folder.addEventListener("change", () => { void importFolder([...folder.files]); });
       actions.splice(2, 0, button(label("importFolder", "导入文件夹"), () => folder.click()), folder);
     }
     const builtinView = kind === "tools" && state.view === "builtin";
-    const toolbar = element("div", { className: "extension-toolbar" }, builtinView ? [actions[2]] : actions);
+    const toolbar = element("div", { className: "extension-toolbar" }, builtinView ? [actions[2], ...(state.operation ? [actions[3]] : [])] : actions);
     const categories = kind === "tools" ? element("div", { className: "extension-toolbar tool-categories" }, ["builtin", "custom"].map(view => {
       const control = button(label(view === "builtin" ? "builtinTools" : "customTools", view === "builtin" ? "mdo 内建工具" : "自定义工具"), () => { state.view = view; render(kind); });
       control.setAttribute("aria-pressed", String(state.view === view)); return control;
@@ -156,9 +171,9 @@ export function createExtensionPanels() {
           await api.post(`${path(kind, item.id)}/enabled`, { enabled: !item.enabled }, revision(item));
         }));
         const controls = [edit, ...(kind === "agents" && item.id === "default" ? [] : [toggle]), button(label("export", "导出"), () => exportItem(kind, item))];
-        if (kind === "mcp") controls.push(button(label("test", "测试连接"), () => act(kind, async () => {
-          const result = await refreshMcp(item.id);
-          toast(result?.message || label("testOk", "连接测试完成"), "success");
+        if (kind === "mcp") controls.push(button(label("test", "测试连接"), () => act(kind, async scope => {
+          await refreshMcp(item.id, scope);
+          if (scope.isCurrent()) toast(label("testOk", "连接测试完成"), "success");
         })));
         if (kind === "mcp" && item.connected) controls.push(button(t("resource.disconnect"), () => act(kind, () => disconnectMcp(item.id))));
         if (item.external) controls.push(button(label(kind === "agents" && item.id === "default" ? "resetAgent" : "delete", kind === "agents" && item.id === "default" ? "恢复默认" : "删除"), () => act(kind, async () => {
@@ -358,8 +373,7 @@ export function createExtensionPanels() {
       status, element("div", { className: "extension-editor-footer" }, [save]));
     form.addEventListener("submit", event => { event.preventDefault(); void saveEditor(); });
     const clearValidation = () => {
-      dialog.querySelectorAll('[aria-invalid="true"]').forEach(node => node.removeAttribute("aria-invalid"));
-      if (editing?.dialog === dialog && editing.validationError) { editing.validationError = false; status.textContent = ""; }
+      if (editing?.dialog === dialog) clearEditorValidation(editing);
     };
     dialog.addEventListener("input", clearValidation); dialog.addEventListener("change", clearValidation);
     dialog.addEventListener("cancel", event => { event.preventDefault(); closeEditor(); });
@@ -372,15 +386,28 @@ export function createExtensionPanels() {
       if (!sourceMode) fillForm(current);
       editing.source.value = current; editing.sourceMode = sourceMode;
       editing.form.hidden = sourceMode; editing.source.hidden = !sourceMode; editing.status.textContent = "";
+      clearEditorValidation(editing);
       (sourceMode ? editing.source : editing.form.querySelector("input,textarea"))?.focus();
     } catch (error) { showEditorError(editing, error); }
   }
+  function clearEditorValidation(editor) {
+    editor.dialog.querySelectorAll('[aria-invalid="true"]').forEach(node => node.removeAttribute("aria-invalid"));
+    editor.dialog.querySelectorAll('[aria-describedby="extension-field-error"]').forEach(node => node.removeAttribute("aria-describedby"));
+    editor.dialog.querySelector("#extension-field-error")?.remove();
+    if (editor.validationError) { editor.validationError = false; editor.status.textContent = ""; }
+  }
   function showEditorError(editor, error) {
+    clearEditorValidation(editor);
     if (!error?.extensionValidation) { editor.status.textContent = errorMessage(error); return; }
     const control = error.field === "source" || editor.sourceMode && error.field !== "extension_id" ? editor.source :
       error.field === "extension_id" ? editor.id : editor.form.elements.namedItem(error.field);
     editor.validationError = true;
-    editor.status.textContent = label(error.extensionValidation, undefined, { ...error.args, field: control?.dataset.fieldLabel || error.field });
+    const message = label(error.extensionValidation, undefined, { ...error.args, field: control?.dataset.fieldLabel || error.field });
+    editor.status.textContent = control ? "" : message;
+    if (control) {
+      const hint = element("small", { className: "extension-field-error", text: message, attrs: { id: "extension-field-error", role: "alert" } });
+      control.insertAdjacentElement("afterend", hint); control.setAttribute("aria-describedby", "extension-field-error");
+    }
     control?.setAttribute("aria-invalid", "true"); control?.focus();
   }
   async function saveEditor() {
@@ -489,7 +516,7 @@ export function createExtensionPanels() {
     cancelReads();
     activeTarget = targetKey(); closeEditor(true);
     pendingResource=null;
-    for (const state of states.values()) { ++state.serial; state.loaded = false; state.busy = false; state.items = []; state.catalog = []; state.error = ""; }
+    for (const state of states.values()) { ++state.serial; state.loaded = false; state.busy = false; state.items = []; state.catalog = []; state.error = ""; state.operation = null; }
     if (selected) void load(selected);
   });
   const onHide = () => { paused = true; cancelReads(); };

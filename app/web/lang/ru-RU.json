@@ -1970,5 +1970,10 @@
   "ecosystem.fieldTransport": "MCP требует stdio или Streamable HTTP. Проверьте transport в исходном файле.",
   "ecosystem.fieldLength": "Поле «{field}» превышает {limit} байт. Некоторые символы занимают несколько байт.",
   "ecosystem.fieldText": "Поле «{field}» содержит нулевой символ. Удалите его и повторите попытку.",
-  "ecosystem.commandReserved": "Это имя занято встроенной командой. Выберите другой ID файла."
+  "ecosystem.commandReserved": "Это имя занято встроенной командой. Выберите другой ID файла.",
+  "resource.operationInvalid": "Ответ не соответствует операции. Снова прочитайте её состояние.",
+  "resource.operationCancelled": "Операция отменена.",
+  "resource.connectionFailed": "Проверка соединения не удалась. Проверьте настройки сервера.",
+  "resource.operationUnconfirmed": "Состояние не подтверждено. Операция может ещё выполняться. Восстановите соединение и снова прочитайте состояние; операция не запускалась повторно.",
+  "resource.recheckOperation": "Прочитать состояние снова"
 }

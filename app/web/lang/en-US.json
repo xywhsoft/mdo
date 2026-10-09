@@ -1970,5 +1970,10 @@
   "ecosystem.fieldTransport": "MCP requires stdio or Streamable HTTP. Check transport in the source file.",
   "ecosystem.fieldLength": "{field} exceeds {limit} bytes. Some characters use more than one byte.",
   "ecosystem.fieldText": "{field} contains a null character. Remove it and try again.",
-  "ecosystem.commandReserved": "This name belongs to a built-in command. Choose another file ID."
+  "ecosystem.commandReserved": "This name belongs to a built-in command. Choose another file ID.",
+  "resource.operationInvalid": "The operation status does not match. Read its status again.",
+  "resource.operationCancelled": "The operation was cancelled.",
+  "resource.connectionFailed": "Connection test failed. Check the server configuration.",
+  "resource.operationUnconfirmed": "The status is not confirmed. The operation may still be running. Reconnect and read its status again; it has not been restarted.",
+  "resource.recheckOperation": "Read status again"
 }

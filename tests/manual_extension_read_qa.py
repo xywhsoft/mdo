@@ -10,9 +10,10 @@ import time
 from urllib.parse import urlsplit
 
 import manual_timeline_history_qa as fixture
+from manual_extension_form_qa import FormProxy
 
 
-class ExtensionProxy(fixture.Proxy):
+class ExtensionProxy(FormProxy):
     counts = {}
 
     def record(self, value):
@@ -23,7 +24,9 @@ class ExtensionProxy(fixture.Proxy):
     def forward(self):
         control_path = self.root / "control.json"
         control = json.loads(control_path.read_text(encoding="utf-8")) if control_path.exists() else {}
-        if self.command != "GET" or urlsplit(self.path).path != control.get("path"):
+        selected = urlsplit(self.path).path
+        matches = selected == control.get("path") or control.get("operation_reads") and selected.startswith("/api/v1/operations/")
+        if self.command != "GET" or not matches:
             return super().forward()
         phase = control["phase"]
         with self.lock:

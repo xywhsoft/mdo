@@ -177,7 +177,11 @@ class FrontendContractTests(unittest.TestCase):
                      "diagnostics", "migrations"):
             self.assertIn(f"{name}Store", resources)
         self.assertIn('api.post(`/${name}/reload`)', resources)
-        self.assertIn("attempt < 100", resources)
+        self.assertIn("awaitResourceOperation", resources)
+        observation = self.scripts["js/state/resource-operation.js"]
+        self.assertIn("createRequestRecovery", observation)
+        self.assertNotIn("api.post(", observation)
+        self.assertNotIn("api.delete(", observation)
         self.assertNotIn("innerHTML", panels)
         self.assertIn("setMcpEnabled", resources)
         self.assertIn("createExtensionPanels", panels)

@@ -15,6 +15,7 @@ class FormProxy(fixture.Proxy):
         super().send_response(code, message)
 
     def forward(self):
+        self.response_status = None;
         started = time.monotonic()
         try:
             return super().forward()

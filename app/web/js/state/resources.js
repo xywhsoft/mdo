@@ -1,6 +1,6 @@
 import { api, resourceId } from "../api/client.js";
 import { createResourceStore } from "./store.js";
-import { t } from "../i18n.js";
+import { awaitResourceOperation, resourceOperationEpoch } from "./resource-operation.js";
 
 export const modulesStore = createResourceStore({ modules: [], tools: [] });
 export const skillsStore = createResourceStore({ items: [] });
@@ -53,24 +53,11 @@ export function ensureSettingsResources(section) {
   }));
 }
 
-async function awaitOperation(operation) {
-  let current = operation;
-  for (let attempt = 0; !current.terminal && attempt < 100; attempt += 1) {
-    await new Promise((resolve) => window.setTimeout(resolve, 250));
-    current = (await api.get(`/operations/${resourceId(current.id, "operation")}`)).data;
-  }
-  if (!current.terminal) throw new Error(t("resource.operationRunning", {},
-    "操作仍在后台运行，请稍后刷新。"));
-  if (current.state !== "succeeded") throw new Error(current.message ||
-    t("resource.reloadFailed", {}, "目录刷新失败"));
-  return current;
-}
-
-export async function reloadCatalog(name) {
+export async function reloadCatalog(name, options = {}) {
   if (!["models", "skills", "modules", "mcp"].includes(name)) throw new TypeError("resource cannot be reloaded");
+  const originalEpoch = (options.epoch || resourceOperationEpoch)();
   const result = (await api.post(`/${name}/reload`)).data;
-  if (result?.id && !result.terminal) await awaitOperation(result);
-  return result;
+  return result?.id ? awaitResourceOperation(result, { ...options, originalEpoch, expected: { kind: "module_reload", target: "" } }) : result;
 }
 
 export async function setMcpEnabled(serverId, enabled) {
@@ -83,10 +70,11 @@ export async function disconnectMcp(serverId) {
   return (await api.post(`/mcp/${server}/disconnect`)).data;
 }
 
-export async function refreshMcp(serverId) {
+export async function refreshMcp(serverId, options = {}) {
   const server = resourceId(serverId, "MCP server");
+  const originalEpoch = (options.epoch || resourceOperationEpoch)();
   const operation = (await api.post(`/mcp/${server}/refresh`)).data;
-  return operation?.id && !operation.terminal ? awaitOperation(operation) : operation;
+  return awaitResourceOperation(operation, { ...options, originalEpoch, expected: { kind: "mcp_refresh", target: server } });
 }
 
 export async function applyLegacyMigration(sourceId, previewToken) {

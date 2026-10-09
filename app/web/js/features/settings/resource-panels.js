@@ -7,6 +7,8 @@ import {
 import { createModelConfigPanel } from "./model-config-panel.js";
 import { createExtensionPanels } from "./extension-panels.js";
 import { createStorePanel } from "./store-panel.js";
+import { awaitResourceOperation, resourceOperationEpoch } from "../../state/resource-operation.js";
+import { subscribeTarget } from "../../api/target.js";
 
 function card(title, description, meta = [], actions = []) {
   const body = [element("h3", { text: title }), element("p", {
@@ -24,7 +26,7 @@ function action(label, handler, tone = "neutral") {
   button.addEventListener("click", async () => {
     button.disabled = true;
     try { await handler(); }
-    catch (error) { toast(errorMessage(error), "error"); }
+    catch (error) { if (error?.name !== "AbortError") toast(errorMessage(error), "error"); }
     finally { button.disabled = false; }
   });
   return button;
@@ -46,7 +48,7 @@ function trackedActions(container, attribute) {
       pending.add(key);
       button.setAttribute("aria-disabled", "true");
       try { await handler(); }
-      catch (error) { toast(errorMessage(error), "error"); }
+      catch (error) { if (error?.name !== "AbortError") toast(errorMessage(error), "error"); }
       finally {
         pending.delete(key);
         const next = find(key);
@@ -154,6 +156,8 @@ export function createResourcePanels({ agentsStore, stores, reload }) {
   let confirmingSource = "";
   let migrationResult = null;
   let migrationBusy = false;
+  let activeSection = "", moduleController = null, moduleOperation = null;
+  let operationTarget = resourceOperationEpoch();
 
   async function reloadChecked(name) {
     await reload(name);
@@ -162,9 +166,20 @@ export function createResourcePanels({ agentsStore, stores, reload }) {
   }
 
   async function refreshCatalog(name) {
-    await reloadCatalog(name);
-    await reloadChecked(name);
-    toast(t("resource.catalogRefreshed", { name }, `${name} 目录已刷新`));
+    const controller = new AbortController(), section = activeSection, owner = resourceOperationEpoch();
+    moduleController?.abort(); moduleController = controller;
+    const scope = { signal: controller.signal, isCurrent: () => !controller.signal.aborted && section === activeSection && owner === resourceOperationEpoch() };
+    const operation = moduleOperation; moduleOperation = null;
+    try {
+      if (operation) await awaitResourceOperation(operation, scope);
+      else await reloadCatalog(name, scope);
+      if (!scope.isCurrent()) return;
+      await reloadChecked(name);
+      if (scope.isCurrent()) toast(t("resource.catalogRefreshed", { name }, `${name} 目录已刷新`));
+    } catch (error) {
+      if (owner === resourceOperationEpoch() && error?.operation) moduleOperation = error.operation;
+      if (scope.isCurrent() && error?.name !== "AbortError") throw error;
+    } finally { if (moduleController === controller) { moduleController = null; renderExtensions(); } }
   }
 
   const modelPanel = createModelConfigPanel(modelsContainer);
@@ -192,7 +207,7 @@ export function createResourcePanels({ agentsStore, stores, reload }) {
     clear(extensionsContainer);
     const modules = stores.modules.get();
     extensionsContainer.append(heading("Module", extensionActions.create("modules-reload",
-      t("resource.rebuild", {}, "重新编译"), () => refreshCatalog("modules"))));
+      moduleOperation ? t("resource.recheckOperation", {}, "重新读取状态") : t("resource.rebuild", {}, "重新编译"), () => refreshCatalog("modules"))));
     const modulesReady = showReadState(extensionsContainer, modules, extensionActions, "modules");
     for (const module of modulesReady ? modules.data?.modules ?? [] : []) {
       if (!module.source_path?.endsWith(".c")) continue;
@@ -357,16 +372,23 @@ export function createResourcePanels({ agentsStore, stores, reload }) {
     renderPermissions(stores.permissions.get());
     renderDiagnostics();
   }));
+  unsubscribers.push(subscribeTarget(() => {
+    const next = resourceOperationEpoch(); if (next === operationTarget) return;
+    operationTarget = next; moduleOperation = null; moduleController?.abort(); renderExtensions();
+  }));
 
   return Object.freeze({
     hasPendingChanges: () => extensionPanels.hasPendingChanges() || storePanel.hasPendingChanges(),
     selectSection(section) {
+      if (section !== activeSection) moduleController?.abort();
+      activeSection = section;
       extensionPanels.selectSection(section);
       storePanel.selectSection(section);
       if (section === "models") void modelPanel.ensureLoaded();
       else void ensureSettingsResources(section);
     },
     destroy() {
+      moduleController?.abort();
       extensionPanels.destroy();
       storePanel.destroy();
       modelPanel.destroy();
