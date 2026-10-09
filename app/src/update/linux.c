@@ -19,7 +19,12 @@ static bool MdoUpdateLinuxCopy(cstr From,cstr To,uint32 Mode,bool Exclusive,bool
         size_t Written=0;Ok=xrtWriteFull(Output,Buffer,Count,&Written)&&Written==Count;
     }
     Ok=Ok&&xrtFlush(Output);xrtClose(Input);if(!xrtClose(Output))Ok=false;
-    return Ok&&xrtPathSetMode(To,false,Mode);
+    /* Old glibc fchmodat rejects AT_SYMLINK_NOFOLLOW even for a regular file.
+     * The root API opens the leaf without following links and uses fchmod. */
+    str Parent=xrtPathParent(To),Name=xrtPathName(To);
+    xroot Directory=Ok&&Parent?xrtRootOpen(Parent):NULL;
+    Ok=Directory&&Name&&xrtRootSetMode(Directory,Name,false,Mode);
+    xrtRootClose(Directory);xrtFree(Parent);xrtFree(Name);return Ok;
 }
 static bool MdoUpdateLinuxSame(const xfileinfo* A,const xfileinfo* B)
 {return (A->Available&B->Available&XFILE_INFO_IDENTITY)&&A->Device==B->Device&&A->Identity==B->Identity;}

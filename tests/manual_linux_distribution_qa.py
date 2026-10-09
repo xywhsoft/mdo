@@ -23,11 +23,13 @@ ROOT=Path(__file__).resolve().parents[1]
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("binary",type=Path);parser.add_argument("--libc",choices=("glibc","musl"),required=True)
-    parser.add_argument("--output",type=Path);args=parser.parse_args()
+    parser.add_argument("--output",type=Path)
+    parser.add_argument("--catalog",type=Path,default=ROOT/".build/releases/linux-toolpacks/catalog.json")
+    args=parser.parse_args()
     binary=args.binary.resolve();original=binary.read_bytes();changed=bytearray(original);changed[15]^=1;replacement=bytes(changed)
     build_id=json.loads((ROOT/"app/release.json").read_text(encoding="utf-8"))["linux_"+args.libc+"_server_build_id"]
     expected=hashlib.sha256(replacement).hexdigest()
-    rows=json.loads((ROOT/".build/releases/linux-toolpacks/catalog.json").read_text(encoding="utf-8"))["toolpacks"]
+    rows=json.loads(args.catalog.read_text(encoding="utf-8"))["toolpacks"]
     state={"corrupt":False,"mismatch":False}
     class Publisher(BaseHTTPRequestHandler):
         def log_message(self,*_):pass
@@ -43,7 +45,7 @@ def main():
             elif self.path.startswith("/mdo/blob/"):
                 row=next((r for r in rows if self.path.endswith(r["sha256"])),None)
                 if not row:self.send_error(404);return
-                payload=(ROOT/".build/releases/linux-toolpacks"/row["file"]).read_bytes()
+                payload=(args.catalog.parent/row["file"]).read_bytes()
             else:self.send_error(404);return
             self.send_response(200);self.send_header("Content-Length",str(len(payload)));self.end_headers()
             self.wfile.write(payload)
@@ -108,7 +110,7 @@ def main():
         assert (home/"data/update/previous.bin").read_bytes()==original
         assert len(call("distribution")["tools"])==10,"installed tools survive update/restart"
         process.send_signal(signal.SIGTERM);process.wait(30);assert process.returncode==0;process=None
-        receipt=dict(passed=True,libc=args.libc,binary=str(binary),home=str(home),log=str(log_path),
+        receipt=dict(passed=True,libc=args.libc,binary=str(binary),binary_sha256=hashlib.sha256(original).hexdigest(),home=str(home),log=str(log_path),
             checks=["core+Python SHA256 extraction", "POSIX modes", "10 functional probes", "edition mismatch rejected",
                     "damaged update rejected", "atomic executable replacement", "previous binary retained", "PID-preserving restart", "offline tool persistence", "SIGTERM"])
         if args.output:args.output.write_text(json.dumps(receipt,indent=2)+"\n",encoding="utf-8")

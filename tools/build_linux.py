@@ -176,9 +176,9 @@ def main(argv: list[str] | None = None) -> int:
                 build_mdo.run(command, ROOT, False)
                 return 0
             finally:
-                if owned_proc:
+                if owned_proc and os.path.ismount(baseline / 'proc'):
                     subprocess.run(['umount', str(baseline / 'proc')], check=True)
-                if owned:
+                if owned and os.path.ismount(target):
                     subprocess.run(['umount', str(target)], check=True)
         machine = platform.machine()
         architecture = {"x86_64": "x86_64", "aarch64": "arm64"}.get(machine)
