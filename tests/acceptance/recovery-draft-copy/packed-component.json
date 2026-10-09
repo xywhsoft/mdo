@@ -1,0 +1,45 @@
+{
+  "url": "http://127.0.0.1:59705/qa-clipboard.html",
+  "pid": 22492,
+  "exe_sha256": "898452113382f7448ca0d2df8bffdaaf5803bd224521490858a0fe709494dca8",
+  "production_modules_loaded_from_packed_program": {
+    "features/projects/project-purge-recovery-panel.js": "477e8282d4ed4b4c6ca09ee42fa154b2c9e19c6d20f22176e19f27017f734ffc",
+    "utils/clipboard.js": "a20989bdcfc664781d6aee1aa43e64aefe19da6558d713cf5fb5a3f8250b5c10"
+  },
+  "external_fixture_only": [
+    "web/qa-clipboard.html",
+    "xs.json"
+  ],
+  "isolated_home": true,
+  "models_configured": false,
+  "system_paste_verified": false,
+  "phone_tested": false,
+  "copy_event_exact_draft_selection": true,
+  "copy_button_focus_restored": true,
+  "clipboard_observer_wrote_data": false,
+  "http_fixture_exited": true,
+  "native_retry": {
+    "window_unique": true,
+    "errors": [
+      "FrameArrived timed out: timed out waiting on channel",
+      "window capture timed out: timed out waiting on channel"
+    ],
+    "reselected_and_activated_once": true,
+    "native_input_attempted": false,
+    "fixture_exited": true
+  },
+  "website_published": false,
+  "phone_installed": false,
+  "stress_or_high_load": false,
+  "native_desktop_ax": {
+    "controls_readable": true,
+    "synthetic_prompt_value_changed_via_accessibility": true,
+    "keyboard_tab_focus_change_confirmed": false,
+    "pointer_input_error": "coordinate input geometry is unavailable",
+    "screenshot_error": "window capture timed out: timed out waiting on channel",
+    "copy_or_export_attempted": false,
+    "model_calls": 0,
+    "session_events": 0,
+    "fixture_exited": true
+  }
+}

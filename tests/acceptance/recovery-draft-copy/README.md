@@ -18,3 +18,7 @@ node --experimental-vm-modules tools/check_web_modules.mjs
 手动复查时，以仓库根提供 HTTP 文件，并将 `/lang/` 映射到 `app/web/lang/`；打开上述页面，复制后关闭弹层，在核对框执行真实系统粘贴。仅在三种语言、换行及草稿字段完全一致时确认。页面不放入产品 VFS。Android WebView 和 Windows WebView2 的实际复制仍列于 [剩余验收](../../../docs/conversation-stability-acceptance.md)。没有压力或高负载测试。
 
 最终 630556a0 干净应用包为 4,559,767 字节；实际包内两个生产文件与源码相同，来源夹具不在 VFS 中。工作区和 E 盘程序已更新、旧版已备份，没有启动日用 Home，其文件清单、大小和修改时间未变。独立 ARM64 QA 包为 4,191,469 字节，Windows VFS 完全相同，原生宿主字节/SDK、v2/v3 签名、ZIP 16 KB 对齐通过；没有手机安装、系统粘贴或官网发布。摘要见 [最终候选](candidate.json) 和 [安装记录](install-update.json)，初次入口修复的记录保留为 `initial-*.json`。
+
+同日补验实际打包宿主：只将合成来源页面放在隔离站点，两个生产模块均由 630556a0 包内 VFS 返回，HTTP 正文 SHA-256 与源码相同。实际浏览器点击弹层复制，完整草稿选区和复制按钮焦点恢复通过，见 [实包截图](packed-modal.png) 和 [记录](packed-component.json)。仍不把浏览器虚拟剪贴板当作系统粘贴证据。
+
+通过 computer-use 官方 Windows 入口选中唯一的独立原生 WebView2 窗口，首次 `FrameArrived timed out`，重选并激活后 `window capture timed out`。完整桌面夹具的无截图控件树可读，合成输入也可由控件值接口填写，但指针操作返回 `coordinate input geometry is unavailable`，Tab 未能确认焦点变化，显示窗口后截图仍超时。没有执行复制、发送或导出；夹具最终确认零模型调用、零会话事件，两类宿主均已结束。该结果只证明工具能力限制，不能证明产品复制或保存失败。实际原生验收改用 [手工入口](../desktop-copy-export/README.md)，Android 仍无设备。

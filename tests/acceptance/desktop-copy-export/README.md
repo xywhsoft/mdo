@@ -17,3 +17,15 @@ python tests/manual_desktop_export_qa.py --packed <独立 Windows 候选> --dire
 窗口标题为 `mdo · 桌面导出验收`。在原生窗口发送 `copy and export`，复制模型回复并通过实际 Ctrl+V 粘贴到主输入框，核对中文、英文、俄文、换行及 Markdown 原文；保持粘贴内容不发送。正常导出会话 Markdown 和完整备份，确认实际文件及其内容。模型回复的原文在脚本 `REPLY` 中，测试结束的 `proof.json` 保存实际会话事件与模型调用次数。
 
 使用工具返回的程序路径及窗口对象选择该独立窗口；不得按“墨斗”标题直接选择用户日常窗口。创建脚本打印的 stop 文件结束实例，最长八分钟。没有压力、高负载测试或公开发布。
+
+## 2026-10-10 复核与当前手工入口
+
+630556a0 打包程序已再次启动独立原生窗口。本轮官方 Windows 控制入口能读取控件树和填写合成输入，但窗口截屏持续超时，指针操作缺少几何信息，键盘焦点变化没有确认。没有发送、复制或导出；夹具已退出，模型调用及会话事件均为零。详细记录见 [复制兼容验收](../recovery-draft-copy/README.md)，不把这些工具失败视为 mdo 功能失败。
+
+在 `D:\GIT\mdo` 运行以下命令可建立当前程序的独立手工测试窗口。目录必须首次使用；重复测试需换新的目录名：
+
+```powershell
+python tests/manual_desktop_export_qa.py --packed .build/conversation-acceptance/recovery-draft-copy/final-modal/mdo.exe --directory .build/manual-desktop-20261010
+```
+
+按上方流程发送 `copy and export`，复制后真实 Ctrl+V，核对原文，保持粘贴内容不发送；再正常保存 Markdown 和完整备份并检查实际文件。请分别记录复制、Markdown 保存、备份保存是否通过及具体失败现象，不提供个人数据或账号凭据。此入口没有模拟系统剪贴板或保存对话框，也不接触日常 Home。
