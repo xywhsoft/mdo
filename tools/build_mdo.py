@@ -442,6 +442,24 @@ def verify_host_receipt(host: Path, lock: dict, full_host: bool, *, icon: bool =
             raise BuildError("compact host is missing application APIs: " + ", ".join(missing) + "; extend tools/host-profile.json")
 
 
+def verify_linux_host_abi(receipt: dict, libc: str, frontend: str, maximum: str) -> None:
+    """A cached host must satisfy the same release ceiling as a fresh build."""
+    if maximum != "native" and not re.fullmatch(r"[0-9]+\.[0-9]+(?:\.[0-9]+)?", maximum):
+        raise BuildError("invalid --glibc-max: " + maximum)
+    for key in ("linux_abi", "gui_linux_abi") if frontend == "native" else ("linux_abi",):
+        value = receipt.get(key)
+        if not isinstance(value, dict):
+            raise BuildError("host ABI receipt is missing; rebuild without --skip-host-build")
+        required = value.get("glibc_required")
+        if key == "linux_abi" and bool(value.get("static_core")) != (libc == "musl"):
+            raise BuildError("host ABI receipt does not match the requested libc")
+        if required is not None:
+            if not isinstance(required, str) or not re.fullmatch(r"[0-9]+\.[0-9]+(?:\.[0-9]+)?", required):
+                raise BuildError("host ABI receipt has an invalid glibc version")
+            if maximum != "native" and tuple(map(int, required.split('.'))) > tuple(map(int, maximum.split('.'))):
+                raise BuildError(f"cached {key} requires glibc {required}, maximum is {maximum}; rebuild in the baseline root")
+
+
 def build(args: argparse.Namespace, xserver: Path, lock: dict) -> None:
     edition = getattr(args, "edition", "gui")
     libc = getattr(args, "libc", "glibc")
@@ -472,6 +490,7 @@ def build(args: argparse.Namespace, xserver: Path, lock: dict) -> None:
             "--cc", args.cc,
             "--frontend", frontend,
             "--gui-cc", getattr(args, "gui_cc", "gcc"),
+            *(["--glibc-max", getattr(args, "glibc_max", "2.28")] if os.name != "nt" else []),
             *(["--sysroot", str(args.sysroot), "--compile-extra", "-idirafter " + shlex.quote(str(args.sysroot / "include")), "--link-extra=-static"] if libc == "musl" else []),
             *host_profile_arguments(args.full_host),
             *(["--icon", str(ICON_PATH)] if os.name == "nt" else []),
@@ -488,6 +507,8 @@ def build(args: argparse.Namespace, xserver: Path, lock: dict) -> None:
         receipt = load_object(host.with_name(host.name + ".build.json"))
         if receipt.get("frontend") != frontend or (libc == "musl" and "-static" not in receipt.get("link_extra", "")):
             raise BuildError("host frontend/libc does not match this product; rebuild the host")
+        if sys.platform == "linux":
+            verify_linux_host_abi(receipt, libc, frontend, getattr(args, "glibc_max", "2.28"))
     package = ROOT / ".build/packages" / (output.stem + "-" + host_dir.name if getattr(args, "host_dir", None) is not None
                                           else ("windows" if os.name == "nt" else "linux") + "-" + edition + "-" + libc)
     if not args.dry_run:
@@ -542,6 +563,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--libc", choices=("glibc", "musl"), default="glibc", help="Linux libc (Windows uses MinGW)")
     parser.add_argument("--sysroot", type=Path, help="musl target CRT to embed in the TCC VFS")
     parser.add_argument("--gui-cc", default="gcc", help="glibc compiler for Linux GTK helper")
+    parser.add_argument("--glibc-max", default="2.28", help="maximum Linux GLIBC import version; native for development only")
     parser.add_argument("--cc", default="gcc", help="C/C++ compiler used by xserver")
     parser.add_argument("--builtin-connection", type=Path,
                         help="obsolete compatibility argument; online provider keys are never bundled")

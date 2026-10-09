@@ -78,7 +78,7 @@ def _copy_musl_sysroot(output: Path, include: Path | None, library: Path | None)
     return output.resolve()
 
 
-def inspect_elf(path: Path, static: bool) -> dict:
+def inspect_elf(path: Path, static: bool, maximum: str | None = "2.28") -> dict:
     headers = subprocess.check_output(["readelf", "-l", str(path)], text=True)
     dynamic = subprocess.check_output(["readelf", "-d", str(path)], text=True)
     import re
@@ -87,7 +87,13 @@ def inspect_elf(path: Path, static: bool) -> dict:
         raise build_mdo.BuildError("musl core is not static: " + str(path))
     if any(any(token in name.lower() for token in ("gtk", "webkit", "gdk", "x11", "wayland")) for name in needed):
         raise build_mdo.BuildError("Linux core unexpectedly links the GUI runtime")
-    return {"static_core": static, "elf_needed": needed}
+    symbols = subprocess.check_output(["readelf", "-W", "--version-info", str(path)], text=True, env=dict(os.environ, LC_ALL="C"))
+    imports = symbols.split("Version needs section", 1)[-1] if "Version needs section" in symbols else ""
+    versions = sorted(set(re.findall(r"Name:\s+GLIBC_([0-9]+\.[0-9]+(?:\.[0-9]+)?)\b", imports)), key=lambda v: tuple(int(n) for n in v.split('.')))
+    required = versions[-1] if versions else None
+    if maximum is not None and required and tuple(map(int, required.split('.'))) > tuple(map(int, maximum.split('.'))):
+        raise build_mdo.BuildError(f"{path} requires glibc {required}, maximum is {maximum}; use the baseline builder")
+    return {"static_core": static, "elf_needed": needed, "glibc_required": required, "glibc_max": maximum}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -98,10 +104,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--cc", default="gcc")
     parser.add_argument("--musl-cc", default="musl-gcc")
     parser.add_argument("--gui-cc", default="gcc")
+    parser.add_argument("--glibc-max", default="2.28", help="release ABI maximum (native disables the limit for development)")
+    parser.add_argument("--baseline-root", help="prepared Debian 10 build root; bootstrap with tools/linux/bootstrap_baseline.sh")
     parser.add_argument("--sysroot", type=Path, help="musl target root with include/ and lib/libc.a")
     parser.add_argument("--output-dir", type=Path, default=ROOT / "dist")
     parser.add_argument("--wsl", action="store_true", help="build using Windows Subsystem for Linux")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--skip-host-build", action="store_true", help="repack using verified cached xs hosts")
     args = parser.parse_args(argv)
     try:
         lock = build_mdo.load_object(build_mdo.LOCK_PATH)
@@ -114,14 +123,63 @@ def main(argv: list[str] | None = None) -> int:
                        "--xserver-root", wsl_path(source), "--output-dir", wsl_path(args.output_dir),
                        "--edition", args.edition, "--libc", args.libc,
                        "--cc", args.cc, "--musl-cc", args.musl_cc, "--gui-cc", args.gui_cc]
+            command += ["--glibc-max", args.glibc_max]
+            if args.baseline_root:
+                command += ["--baseline-root", args.baseline_root]
             if args.sysroot:
                 command += ["--sysroot", wsl_path(args.sysroot)]
             if args.dry_run:
                 command.append("--dry-run")
+            if args.skip_host_build:
+                command.append("--skip-host-build")
             build_mdo.run(command, ROOT, args.dry_run)
             return 0
         if sys.platform != 'linux':
             raise build_mdo.BuildError('Linux products require a Linux build environment')
+        if args.baseline_root:
+            # The root contains its own modern Python, compiler, headers and
+            # libraries. Only a workspace bind is owned here; do not unmount a
+            # mount provided by the caller/bootstrapper.
+            baseline = Path(args.baseline_root).resolve()
+            interpreter = baseline / "opt/mdo-build-python/bin/python3.12"
+            if baseline == Path('/') or not interpreter.is_file():
+                raise build_mdo.BuildError("baseline build root is not prepared; run tools/linux/bootstrap_baseline.sh")
+            if os.geteuid() != 0:
+                raise build_mdo.BuildError("--baseline-root requires root for chroot; run this build with sudo")
+            target = baseline / ROOT.parent.relative_to('/')
+            marker = target / ROOT.name / 'deps.lock'
+            existing = marker.is_file() and marker.samefile(ROOT / 'deps.lock')
+            owned = False
+            owned_proc = False
+            try:
+                if not existing:
+                    target.mkdir(parents=True, exist_ok=True)
+                    if os.path.ismount(target):
+                        raise build_mdo.BuildError("baseline workspace mount belongs to another directory")
+                    subprocess.run(['mount', '--bind', str(ROOT.parent), str(target)], check=True)
+                    owned = True
+                proc = baseline / 'proc'
+                if not os.path.ismount(proc):
+                    proc.mkdir(exist_ok=True)
+                    subprocess.run(['mount', '-t', 'proc', 'proc', str(proc)], check=True)
+                    owned_proc = True
+                command = ['chroot', str(baseline), '/opt/mdo-build-python/bin/python3.12', str(Path(__file__)),
+                    '--xserver-root', str(source), '--output-dir', str(args.output_dir.resolve()),
+                    '--edition', args.edition, '--libc', args.libc, '--cc', args.cc,
+                    '--musl-cc', args.musl_cc, '--gui-cc', args.gui_cc, '--glibc-max', args.glibc_max]
+                if args.sysroot:
+                    command += ['--sysroot', str(args.sysroot.resolve())]
+                if args.dry_run:
+                    command.append('--dry-run')
+                if args.skip_host_build:
+                    command.append('--skip-host-build')
+                build_mdo.run(command, ROOT, False)
+                return 0
+            finally:
+                if owned_proc:
+                    subprocess.run(['umount', str(baseline / 'proc')], check=True)
+                if owned:
+                    subprocess.run(['umount', str(target)], check=True)
         machine = platform.machine()
         architecture = {"x86_64": "x86_64", "aarch64": "arm64"}.get(machine)
         if architecture is None:
@@ -139,6 +197,9 @@ def main(argv: list[str] | None = None) -> int:
                            "--xserver-root", str(source), "--edition", edition,
                            "--libc", libc, "--cc", args.musl_cc if libc == "musl" else args.cc,
                            "--gui-cc", args.gui_cc, "--output", str(binary)]
+                command += ["--glibc-max", args.glibc_max]
+                if args.skip_host_build:
+                    command.append("--skip-host-build")
                 if libc == "musl":
                     command += ["--sysroot", str(sysroot or ROOT / ".build/linux-sysroot")]
                 build_mdo.run(command, ROOT, args.dry_run)
@@ -148,8 +209,8 @@ def main(argv: list[str] | None = None) -> int:
                            "edition": edition, "libc": libc, "xs_commit": lock["xserver"]["commit"],
                            "mdo_commit": build_mdo.git_head(ROOT), "sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
                            "bytes": binary.stat().st_size,
-                           "gui_runtime": "GTK3 + WebKitGTK 4.1 (system libraries)" if edition == "gui" else None,
-                           **inspect_elf(binary, libc == "musl")}
+                           "gui_runtime": "GTK3 + WebKitGTK 4.1 or 4.0 (>= 2.30)" if edition == "gui" else None,
+                           **inspect_elf(binary, libc == "musl", None if args.glibc_max == "native" else args.glibc_max)}
                 (directory / "build.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
                 shutil.copyfile(ROOT / "docs/linux.md", directory / "README.md")
         return 0

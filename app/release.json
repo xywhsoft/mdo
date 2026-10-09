@@ -4,8 +4,8 @@
   "android_lite_build_id": 30000041,
   "android_full_build_id": 30000042,
   "toolpack_revision": 2,
-  "linux_glibc_gui_build_id": 30000037,
-  "linux_glibc_server_build_id": 30000038,
-  "linux_musl_gui_build_id": 30000039,
-  "linux_musl_server_build_id": 30000040
+  "linux_glibc_gui_build_id": 30000043,
+  "linux_glibc_server_build_id": 30000044,
+  "linux_musl_gui_build_id": 30000045,
+  "linux_musl_server_build_id": 30000046
 }

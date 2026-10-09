@@ -605,6 +605,23 @@ bool MdoHomeExternalStat(cstr Path, bool* pExists, xfileinfo* pInfo)
     return false;
 }
 
+bool MdoHomeSetMode(cstr Path, uint32 Mode)
+{
+    bool Ok = false;
+    if ( !MdoHomePathValid(Path) || !g_MdoHome.Initialized || (Mode & ~07777u) ) {
+        MdoHomeErrorSet(XERR_ARGUMENT, MDO_HOME_ERROR_ARGUMENT,
+            "invalid external Home mode request");
+        return false;
+    }
+    xrtMutexLock(g_MdoHome.Lock);
+    if ( g_MdoHome.Root != NULL )
+        Ok = xrtRootSetMode(g_MdoHome.Root, Path, false, Mode);
+    else MdoHomeErrorSet(XERR_NOT_FOUND, MDO_HOME_ERROR_STORAGE,
+        "external Home does not exist");
+    xrtMutexUnlock(g_MdoHome.Lock);
+    return Ok;
+}
+
 xdir MdoHomeOpenDirectory(cstr Path, uint32 Flags)
 {
     const uint32 Known = XDIR_STAT | XDIR_FOLLOW_LINKS | XDIR_INCLUDE_DOTS;

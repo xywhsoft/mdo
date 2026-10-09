@@ -170,9 +170,7 @@ static bool MdoDistExtract(cstr Id,xvalue* Package,char Target[128])
         /* XRTPACK has no native mode metadata. Honor only the two permitted
          * manifest modes after byte verification, before any functional probe. */
         uint64 Mode=MdoDistNumber(xrtValueArrayGet(Files,i),"mode");
-        str Native=MdoHomeExternalPath(Relative);
-        bool ModeOk=(Mode==0644 || Mode==0755) && Native && xrtPathSetMode(Native,false,(uint32)Mode);
-        xrtFree(Native);
+        bool ModeOk=(Mode==0644 || Mode==0755) && MdoHomeSetMode(Relative,(uint32)Mode);
         if(!ModeOk){Code="file_mode";Detail="Invalid or unwritable Linux file permissions";goto done;}
 #endif
         MdoDistProgress(i+1,xrtValueCount(Files),"extracting");

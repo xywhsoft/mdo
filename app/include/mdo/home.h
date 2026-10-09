@@ -46,6 +46,10 @@ xfile MdoHomeOpenRead(cstr Path);
  * built-in resource. Missing paths return true with Exists=false. */
 bool MdoHomeExternalStat(cstr Path, bool* pExists, xfileinfo* pInfo);
 
+/* Changes a mode on an existing external object through the anchored root.
+ * Never follows a symlink, creates Home, or modifies a packaged resource. */
+bool MdoHomeSetMode(cstr Path, uint32 Mode);
+
 /* Opens an already-existing external Home directory through the anchored
  * root. It never creates Home and never falls back to packaged resources. */
 xdir MdoHomeOpenDirectory(cstr Path, uint32 Flags);

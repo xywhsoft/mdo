@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "distribution": "debian",
+  "suite": "buster",
+  "mirror": "https://archive.debian.org/debian",
+  "glibc_max": "2.28",
+  "python": {
+    "version": "3.12.12",
+    "url": "https://www.python.org/ftp/python/3.12.12/Python-3.12.12.tar.xz",
+    "sha256": "fb85a13414b028c49ba18bbd523c2d055a30b56b18b92ce454ea2c51edc656c4"
+  }
+}

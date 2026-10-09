@@ -55,6 +55,8 @@ tools/runtime/**
 !tools/service/
 !tools/service/**
 !tools/package_products.py
+!tools/linux/
+!tools/linux/**
 
 !tools/runtime/build/linux.lock.json
 !tools/build_linux_toolpacks.py

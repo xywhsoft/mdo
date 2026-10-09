@@ -15,6 +15,18 @@ import build_mdo
 
 
 class LinuxBuildTests(unittest.TestCase):
+    def test_reused_host_cannot_bypass_the_release_baseline(self):
+        receipt = {"linux_abi": {"static_core": True, "glibc_required": None},
+                   "gui_linux_abi": {"static_core": False, "glibc_required": "2.34"}}
+        with self.assertRaises(build_mdo.BuildError):
+            build_mdo.verify_linux_host_abi(receipt, "musl", "native", "2.28")
+        build_mdo.verify_linux_host_abi(receipt, "musl", "native", "native")
+        build_mdo.verify_linux_host_abi(receipt, "musl", "headless", "2.28")
+        with self.assertRaises(build_mdo.BuildError):
+            build_mdo.verify_linux_host_abi(receipt, "glibc", "headless", "2.28")
+        with self.assertRaises(build_mdo.BuildError):
+            build_mdo.verify_linux_host_abi({}, "glibc", "headless", "2.28")
+
     def test_missing_musl_target_is_rejected(self):
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary)
@@ -41,7 +53,7 @@ class LinuxBuildTests(unittest.TestCase):
             source = path / "main.c"; binary = path / "probe"
             source.write_text("int main(void){return 0;}\n")
             subprocess.run(["gcc", str(source), "-o", str(binary)], check=True)
-            self.assertIn("libc.so.6", build_linux.inspect_elf(binary, False)["elf_needed"])
+            self.assertIn("libc.so.6", build_linux.inspect_elf(binary, False, None)["elf_needed"])
             with self.assertRaises(build_mdo.BuildError):
                 build_linux.inspect_elf(binary, True)
 
@@ -52,7 +64,22 @@ class LinuxBuildTests(unittest.TestCase):
             source = path / "main.c"; binary = path / "probe"
             source.write_text("int main(void){return 0;}\n")
             subprocess.run(["musl-gcc", "-static", str(source), "-o", str(binary)], check=True)
-            self.assertEqual(build_linux.inspect_elf(binary, True), {"static_core": True, "elf_needed": []})
+            value = build_linux.inspect_elf(binary, True)
+            self.assertTrue(value["static_core"])
+            self.assertEqual(value["elf_needed"], [])
+            self.assertIsNone(value["glibc_required"])
+
+    @unittest.skipUnless(os.name != "nt" and shutil.which("gcc") and shutil.which("readelf"), "ELF toolchain required")
+    def test_glibc_baseline_is_checked_against_actual_imports(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary)
+            source, binary = path / "main.c", path / "probe"
+            source.write_text("int main(void){return 0;}\n")
+            subprocess.run(["gcc", str(source), "-o", str(binary)], check=True)
+            required = build_linux.inspect_elf(binary, False, None)["glibc_required"]
+            self.assertIsNotNone(required)
+            with self.assertRaises(build_mdo.BuildError):
+                build_linux.inspect_elf(binary, False, "2.0")
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
-# xs conversation recovery source
+# Locked xs host source
 
-`xs-conversation-recovery.bundle` carries the compatibility commits from
+`xs-linux-products.bundle` carries the compatibility commits from
 `bd7831704482cc7dd418260281a37c6bdb222b23` to the xs revision in `deps.lock`.
 It contains the upstream xllm stream termination/output-limit fixes and xwork
 draft restart markers, configured compaction summary formatting and accepted
@@ -8,10 +8,15 @@ task stop snapshots, preserving
 mdo's currently locked xrt ABI. The compaction format fix is also committed in
 the current xrt mainline and synced into current xs.
 
-The task snapshot query is additive in the locked xwork 3.8.1 API (ABI 7).
+The task snapshot query is additive in the locked xwork API (ABI 7).
 It captures the accepted stop flag with task metadata without changing the
 public task-info layout. Current xs mainline uses a different xwork API; this
 bundle keeps the compatible source reproducible until that migration.
+
+It also includes the Linux desktop/server hosts, target-matched TCC CRT,
+streamed tool-result file handling, the glibc 2.28 release build guard and
+runtime selection of WebKitGTK 4.1 or 4.0 (>= 2.30). Linux release compilation
+uses the isolated baseline described in `docs/linux.md`.
 
 The bundle is source history, not an executable. Its exact SHA-256, branch ref
 and destination commit are locked. When a normal xs clone has the base but is
