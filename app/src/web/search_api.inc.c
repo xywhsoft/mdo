@@ -4,6 +4,9 @@
  * is used only after a definitive route 404 and never blindly replayed. */
 #define MDO_WEB_SEARCH_MAX_RESULTS 10u
 #define MDO_WEB_SEARCH_TOKEN_REF "account:search-access-token"
+/* Server request keys live for 24 hours. Leave five minutes for clock skew and
+ * the bounded recovery call; an old identity must never become a fresh debit. */
+#define MDO_WEB_SEARCH_REQUEST_MAX_AGE INT64_C(86100)
 
 static bool MdoWebSearchQueryValid(xstrview Query)
 {
@@ -116,11 +119,13 @@ static xwork_result MdoWebSearchExecute(void* pUserData,
     bool Registered = true;
     bool UncertainSubmission = false;
     char RequestKey[33] = {0}, Endpoint[1024];
+    xwork_tool_request_token RequestToken;
     bool AccountAcquired = false;
     uint64 MemberId = 0u;
     xwork_tool_context AccountContext;
     if ( !Jitter ) Jitter = 1u;
     xwork_result Result = XWORK_RESULT_ERROR;
+    xworkToolRequestTokenInit(&RequestToken);
     memset(&Response, 0, sizeof(Response));
     if ( !MdoWebArguments(ArgumentsJson, &Arguments) ||
          !MdoWebAllowedKeys(Arguments, Keys, 2u) ||
@@ -136,13 +141,6 @@ static xwork_result MdoWebSearchExecute(void* pUserData,
         Result = MdoWebToolFail(pWriter, pError, "web_search count must be an integer from 1 to 10");
         goto done;
     }
-    unsigned char Random[16];
-    if ( !xrtSecureRandom(Random,sizeof(Random)) ) {
-        Result=MdoWebToolFail(pWriter,pError,"Cannot create a safe search request ID. No search was submitted.");goto done;
-    }
-    for (i=0u;i<sizeof(Random);++i) snprintf(RequestKey+i*2u,3u,"%02x",Random[i]);
-    xrtSecureZero(Random,sizeof(Random));
-    if ( !MdoWebObjectString(Arguments,"request_id",RequestKey,32u) ) goto memory_failed;
     if (snprintf(Endpoint,sizeof(Endpoint),"%s/requests",MdoAccountSearchEndpoint()) >= (int)sizeof(Endpoint)) {
         Result=MdoWebToolFail(pWriter,pError,"Search service address exceeds the supported size.");goto done;
     }
@@ -161,6 +159,29 @@ acquire_account:
         Result=MdoWebFail(pError,XWORK_ERROR_CANCELLED,"Account changed while recovering search; no request was sent for the new account.");goto done;
     }
     MemberId=Lease.MemberId;AccountAcquired=true;
+    if (!RequestKey[0]) {
+        char Scope[257], Message[512];
+        if (snprintf(Scope,sizeof(Scope),"%s:member:%llu",MdoAccountSearchEndpoint(),
+                (unsigned long long)MemberId) >= (int)sizeof(Scope)) {
+            Result=MdoWebToolFail(pWriter,pError,"Search service address is too long to safely retain this request. No search was sent.");goto done;
+        }
+        if (!xworkToolResultWriterPrepareRequest(pWriter,pContext,Scope,&RequestToken,pError)) {
+            snprintf(Message,sizeof(Message),"%s",pError && pError->sMessage[0] ? pError->sMessage :
+                "Cannot safely retain the search request before submission. No search was sent.");
+            Result=MdoWebToolFail(pWriter,pError,Message);goto done;
+        }
+        int64 Now=xrtNow()/INT64_C(1000000);
+        if (Now <= 0 || RequestToken.iCreatedAt > Now ||
+            Now-RequestToken.iCreatedAt >= MDO_WEB_SEARCH_REQUEST_MAX_AGE) {
+            Result=MdoWebToolFail(pWriter,pError,
+                "The saved search request is outside its safe recovery period, or the system clock changed. It was not submitted again. Start a new search if needed.");goto done;
+        }
+        memcpy(RequestKey,RequestToken.sId,sizeof(RequestKey));
+        /* A previous process may have used the legacy POST. Even a route 404
+         * cannot prove that request was never submitted before the restart. */
+        UncertainSubmission=RequestToken.bRecovered;
+        if (!MdoWebObjectString(Arguments,"request_id",RequestKey,32u)) goto memory_failed;
+    }
     FetchContext = *pContext;
     if (Lease.Cancel) FetchContext.pCancel = Lease.Cancel;
     if ( End == XRT_DEADLINE_NEVER ) {

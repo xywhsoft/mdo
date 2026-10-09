@@ -7,7 +7,7 @@
     "single_header_sha256": "1ea16b21f968d09e5084162f3919b7e6ae2412f9e13c3bbbdd4b322bcd5a26d2"
   },
   "xserver": {
-    "commit": "153315a092b8c37d9d79f090122f81ed2bcc139d",
+    "commit": "9a0f5f6fa7b4aec52945985d607b5f09237b1035",
     "version": "1.0.0",
     "required_extensions": [
       "xwork",
@@ -22,8 +22,8 @@
     },
     "source_bundle": {
       "path": "tools/dependencies/xs-linux-products.bundle",
-      "sha256": "af93e450be2e019cfd06e40b3b63bd53a9bf2cd3f5b5080721c3ca4883d96167",
-      "ref": "refs/heads/codex/followup-responses"
+      "sha256": "6f7130c7f77f3be4c1ed64850fdbbdcf9e26baf78c0c2d937b7633dfc9da74ba",
+      "ref": "refs/heads/codex/search-request-tokens"
     }
   },
   "libraries": {
@@ -39,9 +39,9 @@
       "persistence_schema_version": 4
     },
     "xwork": {
-      "version": "3.9.0",
-      "source_commit": "915c2f2d0a20b84d112c6239b5cc9d9e619b1225",
-      "production_tree_sha256": "e7a8d7b5dcec54d807f2111faec55903feac06e118fcff8fe5e1dd4bae1df396",
+      "version": "3.10.0",
+      "source_commit": "90e4dc0f41bf6dddab829d6ce2f744aded5b23dc",
+      "production_tree_sha256": "0780641405c2b0c634f3bb0e86c210bcab89b8034bf01ba124fa45836184736a",
       "abi_version": 7,
       "event_schema_version": 3
     }
