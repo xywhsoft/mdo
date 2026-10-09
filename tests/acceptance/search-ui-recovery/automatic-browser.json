@@ -1,0 +1,75 @@
+{
+  "draft": "",
+  "rows": [
+    {
+      "kind": "user",
+      "state": "done",
+      "text": "16:40search-retry"
+    },
+    {
+      "kind": "process",
+      "state": null,
+      "text": "查看思考与执行过程1 次工具调用web_searchsearch-retry总历时 2.2 秒16:40"
+    },
+    {
+      "kind": "tool",
+      "state": "done",
+      "text": "web_searchsearch-retry总历时 2.2 秒16:40"
+    },
+    {
+      "kind": "assistant",
+      "state": "done",
+      "text": "Agent16:40SEARCH_UI_OK: search-retry本轮 2 次模型调用 · 40 输入 / 20 输出 tokens · LLM <0.1 秒 · 工具和等待合计 2.2 秒 · 722.5 tok/s"
+    },
+    {
+      "kind": "user",
+      "state": "done",
+      "text": "16:40search-lost"
+    },
+    {
+      "kind": "process",
+      "state": null,
+      "text": "查看思考与执行过程1 次工具调用web_searchsearch-lost总历时 0.6 秒16:40"
+    },
+    {
+      "kind": "tool",
+      "state": "done",
+      "text": "web_searchsearch-lost总历时 0.6 秒16:40"
+    },
+    {
+      "kind": "assistant",
+      "state": "done",
+      "text": "Agent16:40SEARCH_UI_OK: search-lost本轮 2 次模型调用 · 40 输入 / 20 输出 tokens · LLM <0.1 秒 · 工具和等待合计 0.6 秒 · 1101.9 tok/s"
+    },
+    {
+      "kind": "user",
+      "state": "done",
+      "text": "16:41search-quota"
+    },
+    {
+      "kind": "process",
+      "state": null,
+      "text": "查看思考与执行过程1 次工具调用web_searchsearch-quota失败 · 总历时 0.0 秒16:41"
+    },
+    {
+      "kind": "tool",
+      "state": "failed",
+      "text": "web_searchsearch-quota失败 · 总历时 0.0 秒16:41"
+    },
+    {
+      "kind": "assistant",
+      "state": "done",
+      "text": "Agent16:41今日搜索额度不足，请在额度重置后再试。可以继续其他任务。本轮 2 次模型调用 · 40 输入 / 20 输出 tokens · LLM <0.1 秒 · 工具和等待合计 <0.1 秒 · 1072.4 tok/s"
+    },
+    {
+      "kind": "user",
+      "state": "done",
+      "text": "16:41continue"
+    },
+    {
+      "kind": "assistant",
+      "state": "done",
+      "text": "Agent16:41SEARCH_UI_OK: continue20 输入 / 10 输出 tokens · LLM <0.1 秒 · 790.7 tok/s"
+    }
+  ]
+}

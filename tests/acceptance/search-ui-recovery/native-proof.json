@@ -1,0 +1,330 @@
+{
+  "model_calls": {
+    "search-retry": 2,
+    "search-lost": 2,
+    "search-quota": 2,
+    "continue": 2,
+    "search-restart": 2
+  },
+  "model_requests": [
+    {
+      "prompt": "search-retry",
+      "user_messages": 1,
+      "tool_results": 0,
+      "tools": [
+        "skill",
+        "mdo.todo",
+        "web_search",
+        "web_open",
+        "web_find",
+        "read",
+        "ls",
+        "glob",
+        "grep",
+        "write",
+        "edit",
+        "spawn",
+        "poll",
+        "wait",
+        "stdin",
+        "stop",
+        "exec",
+        "ask_user"
+      ]
+    },
+    {
+      "prompt": "search-retry",
+      "user_messages": 1,
+      "tool_results": 1,
+      "tools": [
+        "skill",
+        "mdo.todo",
+        "web_search",
+        "web_open",
+        "web_find",
+        "read",
+        "ls",
+        "glob",
+        "grep",
+        "write",
+        "edit",
+        "spawn",
+        "poll",
+        "wait",
+        "stdin",
+        "stop",
+        "exec",
+        "ask_user"
+      ]
+    },
+    {
+      "prompt": "search-lost",
+      "user_messages": 2,
+      "tool_results": 0,
+      "tools": [
+        "skill",
+        "mdo.todo",
+        "web_search",
+        "web_open",
+        "web_find",
+        "read",
+        "ls",
+        "glob",
+        "grep",
+        "write",
+        "edit",
+        "spawn",
+        "poll",
+        "wait",
+        "stdin",
+        "stop",
+        "exec",
+        "ask_user"
+      ]
+    },
+    {
+      "prompt": "search-lost",
+      "user_messages": 2,
+      "tool_results": 1,
+      "tools": [
+        "skill",
+        "mdo.todo",
+        "web_search",
+        "web_open",
+        "web_find",
+        "read",
+        "ls",
+        "glob",
+        "grep",
+        "write",
+        "edit",
+        "spawn",
+        "poll",
+        "wait",
+        "stdin",
+        "stop",
+        "exec",
+        "ask_user"
+      ]
+    },
+    {
+      "prompt": "search-quota",
+      "user_messages": 3,
+      "tool_results": 0,
+      "tools": [
+        "skill",
+        "mdo.todo",
+        "web_search",
+        "web_open",
+        "web_find",
+        "read",
+        "ls",
+        "glob",
+        "grep",
+        "write",
+        "edit",
+        "spawn",
+        "poll",
+        "wait",
+        "stdin",
+        "stop",
+        "exec",
+        "ask_user"
+      ]
+    },
+    {
+      "prompt": "search-quota",
+      "user_messages": 3,
+      "tool_results": 1,
+      "tools": [
+        "skill",
+        "mdo.todo",
+        "web_search",
+        "web_open",
+        "web_find",
+        "read",
+        "ls",
+        "glob",
+        "grep",
+        "write",
+        "edit",
+        "spawn",
+        "poll",
+        "wait",
+        "stdin",
+        "stop",
+        "exec",
+        "ask_user"
+      ]
+    },
+    {
+      "prompt": "continue",
+      "user_messages": 4,
+      "tool_results": 0,
+      "tools": [
+        "skill",
+        "mdo.todo",
+        "web_search",
+        "web_open",
+        "web_find",
+        "read",
+        "ls",
+        "glob",
+        "grep",
+        "write",
+        "edit",
+        "spawn",
+        "poll",
+        "wait",
+        "stdin",
+        "stop",
+        "exec",
+        "ask_user"
+      ]
+    },
+    {
+      "prompt": "search-restart",
+      "user_messages": 1,
+      "tool_results": 0,
+      "tools": [
+        "skill",
+        "mdo.todo",
+        "web_search",
+        "web_open",
+        "web_find",
+        "read",
+        "ls",
+        "glob",
+        "grep",
+        "write",
+        "edit",
+        "spawn",
+        "poll",
+        "wait",
+        "stdin",
+        "stop",
+        "exec",
+        "ask_user"
+      ]
+    },
+    {
+      "prompt": "search-restart",
+      "user_messages": 1,
+      "tool_results": 1,
+      "tools": [
+        "skill",
+        "mdo.todo",
+        "web_search",
+        "web_open",
+        "web_find",
+        "read",
+        "ls",
+        "glob",
+        "grep",
+        "write",
+        "edit",
+        "spawn",
+        "poll",
+        "wait",
+        "stdin",
+        "stop",
+        "exec",
+        "ask_user"
+      ]
+    },
+    {
+      "prompt": "continue",
+      "user_messages": 2,
+      "tool_results": 0,
+      "tools": [
+        "skill",
+        "mdo.todo",
+        "web_search",
+        "web_open",
+        "web_find",
+        "read",
+        "ls",
+        "glob",
+        "grep",
+        "write",
+        "edit",
+        "spawn",
+        "poll",
+        "wait",
+        "stdin",
+        "stop",
+        "exec",
+        "ask_user"
+      ]
+    }
+  ],
+  "search_calls": {
+    "search-retry": 3,
+    "search-lost": 2,
+    "search-quota": 1,
+    "search-restart": 2
+  },
+  "search_requests": [
+    {
+      "query": "search-retry",
+      "id": "14298b4af90219b23f51d3fd40b939a3",
+      "attempt": 1,
+      "body": "{\"query\":\"search-retry\",\"count\":2,\"request_id\":\"14298b4af90219b23f51d3fd40b939a3\"}"
+    },
+    {
+      "query": "search-retry",
+      "id": "14298b4af90219b23f51d3fd40b939a3",
+      "attempt": 2,
+      "body": "{\"query\":\"search-retry\",\"count\":2,\"request_id\":\"14298b4af90219b23f51d3fd40b939a3\"}"
+    },
+    {
+      "query": "search-retry",
+      "id": "14298b4af90219b23f51d3fd40b939a3",
+      "attempt": 3,
+      "body": "{\"query\":\"search-retry\",\"count\":2,\"request_id\":\"14298b4af90219b23f51d3fd40b939a3\"}"
+    },
+    {
+      "query": "search-lost",
+      "id": "ca19656b30f487a719b317800aeb4e33",
+      "attempt": 1,
+      "body": "{\"query\":\"search-lost\",\"count\":2,\"request_id\":\"ca19656b30f487a719b317800aeb4e33\"}"
+    },
+    {
+      "query": "search-lost",
+      "id": "ca19656b30f487a719b317800aeb4e33",
+      "attempt": 2,
+      "body": "{\"query\":\"search-lost\",\"count\":2,\"request_id\":\"ca19656b30f487a719b317800aeb4e33\"}"
+    },
+    {
+      "query": "search-quota",
+      "id": "461775fd0e3f88ebe9c9016395591a18",
+      "attempt": 1,
+      "body": "{\"query\":\"search-quota\",\"count\":2,\"request_id\":\"461775fd0e3f88ebe9c9016395591a18\"}"
+    },
+    {
+      "query": "search-restart",
+      "id": "fbacc6aae65346d6373865e7b3671f28",
+      "attempt": 1,
+      "body": "{\"query\":\"search-restart\",\"count\":2,\"request_id\":\"fbacc6aae65346d6373865e7b3671f28\"}"
+    },
+    {
+      "query": "search-restart",
+      "id": "fbacc6aae65346d6373865e7b3671f28",
+      "attempt": 2,
+      "body": "{\"query\":\"search-restart\",\"count\":2,\"request_id\":\"fbacc6aae65346d6373865e7b3671f28\"}"
+    }
+  ],
+  "holding": true,
+  "provider_dispatches": 3,
+  "quota": 3,
+  "lifecycle": [
+    {
+      "event": "stopped",
+      "pid": 18576
+    },
+    {
+      "event": "restarted",
+      "pid": 23140
+    }
+  ]
+}

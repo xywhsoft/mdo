@@ -1,0 +1,12 @@
+{
+  "automatic": {
+    "items": [],
+    "discard_images": [],
+    "schema_version": 7
+  },
+  "restart": {
+    "items": [],
+    "discard_images": [],
+    "schema_version": 7
+  }
+}

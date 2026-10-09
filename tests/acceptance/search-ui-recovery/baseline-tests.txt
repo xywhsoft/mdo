@@ -1,0 +1,102 @@
+✖ explicit recovery completes the original unfinished tool card under a new process run ID (2.523ms)
+✖ a pending card stays running across repeated explicit resumes and reused run IDs (0.2884ms)
+✖ recovery retains partial stopped replies and does not invent a terminal event for an abrupt exit (0.8945ms)
+✔ completed, failed and normally settled calls remain distinct history (0.4159ms)
+✔ matching requires durable original input, round, tool identity and complete identical arguments (0.8828ms)
+✔ history boundaries and a new user turn prevent matching an older pending call (0.2202ms)
+✖ canonical recovery explanations follow all UI languages while custom notes remain verbatim (5.7688ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 3
+ℹ fail 4
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 95.8372
+
+✖ failing tests:
+
+test at .build\conversation-acceptance\search-ui\first\baseline-test.mjs:28:1
+✖ explicit recovery completes the original unfinished tool card under a new process run ID (2.523ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  2 !== 1
+  
+      at TestContext.<anonymous> (file:///D:/GIT/mdo/.build/conversation-acceptance/search-ui/first/baseline-test.mjs:33:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.start (node:internal/test_runner/test:1242:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 2,
+    expected: 1,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at .build\conversation-acceptance\search-ui\first\baseline-test.mjs:52:1
+✖ a pending card stays running across repeated explicit resumes and reused run IDs (0.2884ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  2 !== 1
+  
+      at TestContext.<anonymous> (file:///D:/GIT/mdo/.build/conversation-acceptance/search-ui/first/baseline-test.mjs:55:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 2,
+    expected: 1,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at .build\conversation-acceptance\search-ui\first\baseline-test.mjs:68:1
+✖ recovery retains partial stopped replies and does not invent a terminal event for an abrupt exit (0.8945ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  2 !== 1
+  
+      at TestContext.<anonymous> (file:///D:/GIT/mdo/.build/conversation-acceptance/search-ui/first/baseline-test.mjs:73:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 2,
+    expected: 1,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at .build\conversation-acceptance\search-ui\first\baseline-test.mjs:122:1
+✖ canonical recovery explanations follow all UI languages while custom notes remain verbatim (5.7688ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    [
+  +   'Pending tool call was retried after explicit recovery preflight.',
+  +   'Pending tool call was not retried and was recorded as uncertain.',
+  -   '已处理上次未完成的工具调用。',
+  -   '上次工具执行的结果无法确认，已交给 Agent 继续处理。',
+      ' Pending tool call was retried after explicit recovery preflight.'
+    ]
+  
+      at TestContext.<anonymous> (file:///D:/GIT/mdo/.build/conversation-acceptance/search-ui/first/baseline-test.mjs:132:12)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [ 'Pending tool call was retried after explicit recovery preflight.', 'Pending tool call was not retried and was recorded as uncertain.', ' Pending tool call was retried after explicit recovery preflight.' ],
+    expected: [ '已处理上次未完成的工具调用。', '上次工具执行的结果无法确认，已交给 Agent 继续处理。', ' Pending tool call was retried after explicit recovery preflight.' ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }

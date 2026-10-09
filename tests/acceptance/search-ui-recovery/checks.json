@@ -1,0 +1,15 @@
+{
+  "passed": true,
+  "website_dispatches": 3,
+  "quota_used": 3,
+  "actual_process_restart": true,
+  "original_prompt_once_after_restart": true,
+  "recovered_tool_cards": 1,
+  "recovered_tool_completions": 1,
+  "recovered_markdown_preview": true,
+  "continued_after_quota_and_restart": true,
+  "final_queues_empty": true,
+  "final_error_events": 0,
+  "final_browser_error_cards": 0,
+  "scope": "Offline packed UI, native mdo HTTP/xwork and real unified website JWT/SQLite; model and provider HTTP are local fixtures."
+}
