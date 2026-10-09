@@ -83,7 +83,7 @@ export function createConversationNavigation({ scroller, container, onReveal, on
     button.disabled = true;
     rail.setAttribute("aria-busy", "true");
     try { await onReveal(turn.first_event_id); }
-    catch (error) { toast(errorMessage(error), "error"); }
+    catch (error) { if (error?.name !== "AbortError") toast(errorMessage(error), "error"); }
     finally { button.disabled = false; rail.removeAttribute("aria-busy"); syncActive(); }
   }
   function layout() {
@@ -159,7 +159,7 @@ export function createConversationNavigation({ scroller, container, onReveal, on
       await new Promise(resolve => requestAnimationFrame(resolve));
       marks.scrollTop = 0;
     }
-    catch (error) { toast(errorMessage(error), "error"); }
+    catch (error) { if (error?.name !== "AbortError") toast(errorMessage(error), "error"); }
     finally { older.disabled = false; }
   });
   preview.addEventListener("pointerenter", () => window.clearTimeout(hideTimer));

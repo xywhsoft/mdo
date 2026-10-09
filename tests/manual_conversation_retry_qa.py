@@ -7,6 +7,7 @@ stop (long Retry-After), continue (successful next turn). The editable fixture
 model accepts images, so attachment/edit/fork checks use the same environment.
 Creating the fixture's allow-quota marker makes a subsequent explicit resume
 of quota succeed; removing it restores the daily-limit response.
+history-one / history-two return a bounded long reply for history paging QA.
 streaming and stream-stop flush a first chunk, then wait for the disposable
 release-streaming-N / release-stream-stop-N marker (request number N), or
 --stream-wait (at most 60s). Each marker owns one request, including after stop.
@@ -86,6 +87,9 @@ class Model(BaseHTTPRequestHandler):
             release.unlink(missing_ok=True)
         text = ('DISCARDED_FIXTURE_DRAFT' if partial else
             'FIXTURE_STREAM: '+prompt if streaming else 'FIXTURE_OK: '+prompt)
+        if prompt in ('history-one', 'history-two'):
+            text += '\n\n' + '\n\n'.join(f'History paragraph {n}: ' + 'bounded detail ' * 20
+                for n in range(1, 26))
         self.send_response(200)
         self.send_header('Content-Type','text/event-stream')
         self.end_headers()

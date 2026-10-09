@@ -118,6 +118,30 @@ function cancelRefresh() {
   refreshAbort = null;
 }
 
+function resetHistoryReads() {
+  selectionAbort?.abort();
+  selectionAbort = new AbortController();
+  historyRequest = indexRequest = null;
+}
+
+function historyCurrent(token, data, signal) {
+  const current = timelineStore.get().data;
+  return token === generation && !paused && !signal?.aborted &&
+    current?.projectId === data.projectId && current?.sessionId === data.sessionId &&
+    current?.epoch === data.epoch;
+}
+
+function earlierCursor(current, incoming) {
+  return current && incoming ? Math.min(current, incoming) : current || incoming || 0;
+}
+
+function indexProgress(current, before, hasMore) {
+  // Text pages and compact index pages can overlap and arrive in either order.
+  // A known prefix never shrinks; proof of its beginning cannot be undone.
+  return { indexBefore: earlierCursor(current.indexBefore, before),
+    indexHasMore: Boolean(current.indexHasMore && hasMore) };
+}
+
 function schedulePoll(token) {
   stopTimer();
   const current = timelineStore.get().data;
@@ -199,7 +223,8 @@ function snapshotData(current, page) {
     cursor: page.next_cursor, latestEventId: page.latest_event_id, historyLost: page.history_lost,
     syncing: Boolean(page.delta && page.has_more), syncError: null,
     ...(page.delta ? {} : { firstLoadedTurn: page.next_before, hasOlder: page.has_more,
-      indexHasMore: page.has_more, indexBefore: turns[0]?.first_event_id || page.next_before }) };
+      indexHasMore: page.has_more, indexBefore: turns[0]?.first_event_id || page.next_before,
+      loadingHistory: false, historyError: null }) };
 }
 
 async function refreshSnapshot(token) {
@@ -214,6 +239,7 @@ async function refreshSnapshot(token) {
       const page = await readConversation(current, `after=${current.cursor}&epoch=${current.epoch}&limit=4`, controller.signal);
       if (!isCurrent()) return;
       if (page.delta && page.next_cursor < current.cursor) throw new Error("Conversation cursor moved backwards");
+      if (!page.delta) resetHistoryReads();
       timelineStore.setData(snapshotData(current, page));
       if (!page.delta || !page.has_more) break;
       if (page.next_cursor === current.cursor) throw new Error("Conversation cursor did not advance");
@@ -239,9 +265,7 @@ async function reloadTimeline(projectId, sessionId, force = false) {
   generation += 1;
   const token = generation;
   cancelRefresh();
-  selectionAbort?.abort();
-  selectionAbort = new AbortController();
-  historyRequest = indexRequest = null;
+  resetHistoryReads();
   initialRequest = null;
   liveConnection.select("", "");
   stopTimer();
@@ -320,13 +344,13 @@ function loadInitialTimeline(token) {
 
 // Historical pages never advance the live cursor. New pushes may arrive while
 // older pages load; merge into the current state at commit, not its old copy.
-async function readHistoryRange(data, first, end, token) {
+async function readHistoryRange(data, first, end, token, signal = selectionAbort?.signal) {
   let cursor = first - 1;
   const events = [];
-  while (cursor < end && token === generation) {
-    const page = (await readTimeline(`${endpoint(data)}/events?after=${cursor}&limit=32${data.epoch ? `&epoch=${data.epoch}` : ""}`)).data;
-    if (token !== generation) return [];
-      const next = Number(page.next_cursor);
+  while (cursor < end && historyCurrent(token, data, signal)) {
+    const page = (await readTimeline(`${endpoint(data)}/events?after=${cursor}&limit=32${data.epoch ? `&epoch=${data.epoch}` : ""}`, signal)).data;
+    if (!historyCurrent(token, data, signal)) return [];
+    const next = Number(page.next_cursor);
     if (!Number.isSafeInteger(next) || next <= cursor)
       throw new Error(t("messageAction.historyChanged", {}, "消息已不在当前会话历史中，请刷新会话"));
     events.push(...(page.items ?? []).filter(event => event.event_id >= first && event.event_id <= end));
@@ -340,34 +364,41 @@ export function loadOlderTimeline() {
   if (!data?.sessionId || !data.hasOlder || data.initializing || paused) return Promise.resolve();
   if (historyRequest) return historyRequest;
   const token = generation;
+  const signal = selectionAbort?.signal;
   timelineStore.setData({ ...data, loadingHistory: true, historyError: null });
   const request = (async () => {
     try {
       if (data.epoch) {
-        const page = await readConversation(data, `before=${data.firstLoadedTurn}&limit=1`);
-        if (token !== generation) return;
+        const page = await readConversation(data, `before=${data.firstLoadedTurn}&limit=1`, signal);
+        if (!historyCurrent(token, data, signal)) return;
         if (page.epoch !== data.epoch) { await reloadSelectedTimeline(); return; }
         const current = timelineStore.get().data;
         const events = mergeTimelineEvents(current.events, page.items).events;
         timelineStore.setData({ ...current, events, turns: updateTurns(current, events),
-          firstLoadedTurn: page.next_before || current.firstLoadedTurn, hasOlder: page.has_more, loadingHistory: false });
+          firstLoadedTurn: earlierCursor(current.firstLoadedTurn, page.next_before),
+          hasOlder: page.next_before > current.firstLoadedTurn ? current.hasOlder : page.has_more,
+          ...(page.next_before <= current.indexBefore
+            ? indexProgress(current, page.next_before, page.has_more) : {}), loadingHistory: false });
         return;
       }
-      const page = (await readTimeline(`${endpoint(data)}/turns?before=${data.firstLoadedTurn}&limit=4`)).data;
-      if (token !== generation) return;
+      const page = (await readTimeline(`${endpoint(data)}/turns?before=${data.firstLoadedTurn}&limit=4`, signal)).data;
+      if (!historyCurrent(token, data, signal)) return;
       const events = page.items.length ? await readHistoryRange(data,
-        page.items[0].first_event_id, data.firstLoadedTurn - 1, token) : [];
-      if (token !== generation) return;
+        page.items[0].first_event_id, data.firstLoadedTurn - 1, token, signal) : [];
+      if (!historyCurrent(token, data, signal)) return;
       const current = timelineStore.get().data;
       const merged = mergeTimelineEvents(current.events, events).events;
       const turns = updateTurns(current, merged, page.items);
       const valid = page.items.filter(item => turns.some(turn => turn.first_event_id === item.first_event_id));
+      const before = valid[0]?.first_event_id ?? page.next_before ?? current.firstLoadedTurn;
+      const stale = page.items.length && !valid.length;
       timelineStore.setData({ ...current, events: merged, turns,
-        firstLoadedTurn: valid[0]?.first_event_id ?? current.firstLoadedTurn,
-        hasOlder: page.items.length && !valid.length ? current.hasOlder : Boolean(page.has_more),
+        firstLoadedTurn: earlierCursor(current.firstLoadedTurn, before),
+        hasOlder: stale || before > current.firstLoadedTurn ? current.hasOlder : Boolean(page.has_more),
+        ...(!stale && before <= current.indexBefore ? indexProgress(current, before, page.has_more) : {}),
         loadingHistory: false });
     } catch (error) {
-      if (token === generation && error.name !== "AbortError")
+      if (historyCurrent(token, data, signal) && error.name !== "AbortError")
         timelineStore.setData({ ...timelineStore.get().data, loadingHistory: false, historyError: error });
     } finally { if (historyRequest === request) historyRequest = null; }
   })();
@@ -379,18 +410,18 @@ export function loadOlderConversationIndex() {
   const data = timelineStore.get().data;
   if (!data?.indexHasMore || indexRequest || paused) return indexRequest ?? Promise.resolve();
   const token = generation;
+  const signal = selectionAbort?.signal;
   const request = (async () => {
     try {
-      const page = (await readTimeline(`${endpoint(data)}/turns?before=${data.indexBefore}&limit=64`)).data;
-      if (token !== generation) return;
+      const page = (await readTimeline(`${endpoint(data)}/turns?before=${data.indexBefore}&limit=64`, signal)).data;
+      if (!historyCurrent(token, data, signal)) return;
       if (data.epoch && page.epoch !== data.epoch) { await reloadSelectedTimeline(); return; }
       const current = timelineStore.get().data;
       const turns = updateTurns(current, current.events, page.items);
       const stale = page.items.length && !page.items.some(item => turns.some(turn =>
         turn.first_event_id === item.first_event_id));
       timelineStore.setData({ ...current, turns,
-        indexHasMore: stale ? current.indexHasMore : page.has_more,
-        indexBefore: stale ? current.indexBefore : page.next_before });
+        ...(stale ? {} : indexProgress(current, page.next_before, page.has_more)) });
     } finally { if (indexRequest === request) indexRequest = null; }
   })();
   indexRequest = request;
@@ -403,8 +434,9 @@ export async function revealConversationTurn(id) {
   if (!turn || paused) return;
   if (data.events.some(event => event.event_id === id)) return;
   const token = generation;
-  const events = await readHistoryRange(data, id, turn.end_event_id, token);
-  if (token !== generation) return;
+  const signal = selectionAbort?.signal;
+  const events = await readHistoryRange(data, id, turn.end_event_id, token, signal);
+  if (!historyCurrent(token, data, signal)) return;
   const current = timelineStore.get().data;
   const merged = mergeTimelineEvents(current.events, events).events;
   const first = Math.min(current.firstLoadedTurn || id, id);
