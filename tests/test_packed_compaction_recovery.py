@@ -5,6 +5,7 @@ summary, then a valid summary. Restart the runtime and continue once more.
 Only synthetic loopback data is used.
 """
 import argparse
+import hashlib
 from collections import Counter
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -151,6 +152,7 @@ def main():
                 assert sum(e['kind']=='model_done' and e['success'] for e in events)==6,record
                 assert all(r['has_marker'] for r in Model.requests) and all(r['tool_count']==0 for r in Model.requests if r['kind']=='summary'),record
                 record['passed']=True
+                record['packed_sha256']=hashlib.sha256(args.packed.read_bytes()).hexdigest()
                 if args.record:args.record.parent.mkdir(parents=True,exist_ok=True);args.record.write_text(json.dumps(record,indent=2)+'\n')
                 print(json.dumps(record,indent=2),flush=True)
                 if args.serve_ui:

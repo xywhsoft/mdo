@@ -1,0 +1,60 @@
+{
+  "mdo_commit": "14cff4e696f8f6a6040ea060ef0169d7edc6e3e3",
+  "xs_commit": "f47b0de5037f458f6289483d1323dee417d99434",
+  "sha256": "6fb891968d84fe35ce8e6f4677afe93efac89dc00bb28d84c48a995d4148c02f",
+  "bytes": 4539227,
+  "mdo_worktree_dirty": false,
+  "packaged_app_sha256": "725fdfff00c58e0660e6d25dd1885f0b63bc58d4e489cc21ab9af8141fc5e07c",
+  "sources": {
+    "include/mdo/agents.h": {
+      "sha256": "fef5d3084ed8b8e07567b65d3adf39630348bb8b24a9d19a66e289cb5855d8bc",
+      "matches": true
+    },
+    "include/mdo/sessions.h": {
+      "sha256": "857e69783d1ebf42fb2aafa1b199c288792ab56f922e30634d2292173f70457a",
+      "matches": true
+    },
+    "src/agents/runtime.c": {
+      "sha256": "e069e65e67afdf30f636e3257346a48b8ab7acaef946f82783f4a66fbe55254f",
+      "matches": true
+    },
+    "src/api/recovery.c": {
+      "sha256": "b0fa386139c6f276dcd7985350f6e31419f958bb75e4b9c71b97ca871ec8e3cd",
+      "matches": true
+    },
+    "src/runs/manager.c": {
+      "sha256": "942523fccefae7ba6d2d418998d585b8271f571aefe058dad120e8cadf33a531",
+      "matches": true
+    },
+    "src/sessions/conversation_page.inc.c": {
+      "sha256": "a81e67c61ac729740b6d1f1c65b0b111c68b85a14c65bf78de6bbfcb31ad8715",
+      "matches": true
+    },
+    "web/js/app.js": {
+      "sha256": "8bb5a2f0e630b28441ac7e173497e4c11593b750e47d341c7fbfe3ca764adeab",
+      "matches": true
+    },
+    "web/js/features/approvals/recovery-decisions.js": {
+      "sha256": "1fbacceb529529e43272a86372238bdedf0e00618f293d142412e7a4ccbb2e97",
+      "matches": true
+    },
+    "web/js/features/chat/automatic-recovery.js": {
+      "sha256": "c1b98a08eb9a2cafe1ef7ecf4257cb2137429de2190f71a36b4332e5b30952f6",
+      "matches": true
+    },
+    "web/js/features/chat/recovery-dock.js": {
+      "sha256": "d652a4998ca7756f3da0cb12d3bc3bea76873e69dc1f966aae9a516402a54901",
+      "matches": true
+    },
+    "web/js/state/recovery.js": {
+      "sha256": "86c9d2ea8660b5518804616d7a161fb6f6e843d69b865d0dc5aa93389003f446",
+      "matches": true
+    }
+  },
+  "passed": true,
+  "ui_is_source_fixture": true,
+  "daily_app_overwritten": false,
+  "android_device_tested": false,
+  "source_fixture_model_network_requests": 0,
+  "external_provider_tested": false
+}

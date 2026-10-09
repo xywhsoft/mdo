@@ -67,8 +67,11 @@ def main():
         "recovery_visible": False, "reply_complete": True, "unrelated_purge_error": False}
     assert ui["stopped_automatic_reads"] == 0 and ui["manual_continue_clicks"] == 1
     assert ui["copied_source_fixture"] and ui["provider_requests"] == 0
-    assert read("candidate.json")["passed"]
-    print("PASS native/UI recovery after editing, stale-token refusal, user stop, and eleven clean packed sources")
+    pack = read("candidate.json"); assert pack["passed"]
+    for name in ("packed-recovery.json", "packed-edit.json", "packed-compaction.json"):
+        record = read(name)
+        assert record["passed"] and record["packed_sha256"] == pack["sha256"], name
+    print("PASS native/UI recovery, stale-token refusal, user stop, eleven packed sources, and three clean runtime probes")
 
 
 if __name__ == "__main__": main()

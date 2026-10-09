@@ -20,6 +20,8 @@
 
 `candidate.json` 独立核对干净候选的构建来源、体积、SHA-256 及十一项包内生产源码。打包恢复确认、消息编辑和压缩等使用未修改的候选及独立 Home 另行验证。日常程序、Android 和官网本阶段未更新，没有压力或高负载测试。
 
+生产提交 `14cff4e6`，候选 4,539,227 字节（增加 724 字节），SHA-256 `6fb891968d84fe35ce8e6f4677afe93efac89dc00bb28d84c48a995d4148c02f`。三组打包运行记录分别为 `packed-recovery.json`、`packed-edit.json` 和 `packed-compaction.json`，对应 3、2、12 次回环模型请求。故意拒绝的总结恢复成功，压缩检查最终模型错误为零；所有记录绑定同一候选 SHA。临时服务及本轮浏览器页已关闭。
+
 ## 复查
 
 ```powershell
