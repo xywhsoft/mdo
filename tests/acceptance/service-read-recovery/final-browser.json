@@ -1,0 +1,123 @@
+{
+  "observations": [
+    {
+      "seconds": 8.7,
+      "input": "",
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "notice": "",
+      "dialog": "",
+      "hint": "Enter 发送 · Shift Enter 换行",
+      "errors": []
+    },
+    {
+      "seconds": 9.1,
+      "input": "",
+      "inputDisabled": true,
+      "sendDisabled": true,
+      "notice": "purgeRecovery.checkingServicedevices.retry",
+      "dialog": "",
+      "hint": "purgeRecovery.checkingService",
+      "errors": []
+    },
+    {
+      "seconds": 9.2,
+      "input": "SERVICE_READ_SAVED_DRAFT",
+      "inputDisabled": false,
+      "sendDisabled": true,
+      "notice": "正在检查服务状态…重新连接",
+      "dialog": "",
+      "hint": "正在检查服务状态…",
+      "errors": []
+    },
+    {
+      "seconds": 11.6,
+      "input": "切回页面后继续",
+      "inputDisabled": false,
+      "sendDisabled": true,
+      "notice": "正在检查服务状态…重新连接",
+      "dialog": "",
+      "hint": "正在检查服务状态…",
+      "errors": []
+    },
+    {
+      "seconds": 11.7,
+      "input": "切回页面后继续",
+      "inputDisabled": false,
+      "sendDisabled": true,
+      "notice": "",
+      "dialog": "关闭\n检查服务连接\n\n确认服务状态前暂停保存和发送。已有对话和未发送输入会保留，仍可编辑文字。\n\n正在检查服务状态…\n\n正在检查服务状态…",
+      "hint": "正在检查服务状态…",
+      "errors": []
+    },
+    {
+      "seconds": 17.7,
+      "input": "切回页面后继续",
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "notice": "",
+      "dialog": "",
+      "hint": "Enter 发送 · Shift Enter 换行",
+      "errors": []
+    },
+    {
+      "seconds": 39.3,
+      "input": "切回页面后继续",
+      "inputDisabled": false,
+      "sendDisabled": true,
+      "notice": "",
+      "dialog": "",
+      "hint": "正在连接本地服务…",
+      "errors": []
+    },
+    {
+      "seconds": 39.9,
+      "input": "切回页面后继续",
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "notice": "",
+      "dialog": "",
+      "hint": "Enter 发送 · Shift Enter 换行",
+      "errors": []
+    },
+    {
+      "seconds": 58.3,
+      "input": "切回页面后继续",
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "notice": "",
+      "dialog": "",
+      "hint": "正在保存发送意图 · 可继续编辑下一条",
+      "errors": []
+    },
+    {
+      "seconds": 58.4,
+      "input": "",
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "notice": "",
+      "dialog": "",
+      "hint": "正在保存发送意图 · 可继续编辑下一条",
+      "errors": []
+    },
+    {
+      "seconds": 58.5,
+      "input": "",
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "notice": "",
+      "dialog": "",
+      "hint": "Enter 发送 · Shift Enter 换行",
+      "errors": []
+    }
+  ],
+  "timeline": "11:17\n切回页面后继续\nAgent\n11:17\n\nADMISSION_CONFIRMED — 切回页面后继续\n\n50 输入 / 20 输出 tokens · LLM <0.1 秒 · 1706.5 tok/s",
+  "logs": [
+    {
+      "level": "warn",
+      "message": "Initial language preference could not be saved ApiError: Review the saved project purge request before writing\n    at checkWrite (http://127.0.0.1:54558/js/api/client.js:50:11)\n    at apiRequest (http://127.0.0.1:54558/js/api/client.js:135:3)\n    at Object.patch (http://127.0.0.1:54558/js/api/client.js:233:40)\n    at http://127.0.0.1:54558/js/state/settings.js:48:24\n    at async read (http://127.0.0.1:54558/js/state/store.js:85:33)\n    at async load (http://127.0.0.1:54558/js/state/settings.js:39:5)",
+      "timestamp": "2026-10-09T03:16:42.613Z",
+      "url": "http://127.0.0.1:54558/js/state/settings.js"
+    }
+  ]
+}

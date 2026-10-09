@@ -1,0 +1,165 @@
+{
+  "observations": [
+    {
+      "seconds": 0.1,
+      "input": "",
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "notice": "",
+      "dialog": "",
+      "hint": "Enter 发送 · Shift Enter 换行",
+      "errors": []
+    },
+    {
+      "seconds": 0.4,
+      "input": "",
+      "inputDisabled": true,
+      "sendDisabled": true,
+      "notice": "purgeRecovery.checkingServicedevices.retry",
+      "dialog": "",
+      "hint": "purgeRecovery.checkingService",
+      "errors": []
+    },
+    {
+      "seconds": 0.5,
+      "input": "慢读期间编辑的输入",
+      "inputDisabled": false,
+      "sendDisabled": true,
+      "notice": "正在检查服务状态…重新连接",
+      "dialog": "",
+      "hint": "正在检查服务状态…",
+      "errors": []
+    },
+    {
+      "seconds": 3.1,
+      "input": "网络恢复后继续这段输入",
+      "inputDisabled": false,
+      "sendDisabled": true,
+      "notice": "正在检查服务状态…重新连接",
+      "dialog": "",
+      "hint": "正在检查服务状态…",
+      "errors": []
+    },
+    {
+      "seconds": 9,
+      "input": "网络恢复后继续这段输入",
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "notice": "",
+      "dialog": "",
+      "hint": "Enter 发送 · Shift Enter 换行",
+      "errors": []
+    },
+    {
+      "seconds": 120.3,
+      "input": "网络恢复后继续这段输入",
+      "inputDisabled": false,
+      "sendDisabled": true,
+      "notice": "暂时无法核对服务状态，输入会保留；连接恢复后将自动重试。重新连接",
+      "dialog": "",
+      "hint": "无法连接本地服务，请确认 mdo 仍在运行。",
+      "errors": []
+    },
+    {
+      "seconds": 139.1,
+      "input": "网络恢复后继续这段输入",
+      "inputDisabled": false,
+      "sendDisabled": true,
+      "notice": "",
+      "dialog": "关闭\n  \n    检查服务连接\n    确认服务状态前暂停保存和发送。已有对话和未发送输入会保留，仍可编辑文字。\n    \n      项目名称\n      项目编号\n      核对版本\n      原请求编号\n    \n    正在检查服务状态…\n    无法连接本地服务，请确认 mdo 仍在运行。\n    \n      正在检查服务状态…\n      取消原清除请求\n      确认取消结果并继续\n      复制未发送草稿\n      重新载入页面\n      继续核对清除\n      确认完成并重新载入",
+      "hint": "正在检查服务状态…",
+      "errors": []
+    },
+    {
+      "seconds": 139.2,
+      "input": "网络恢复后继续这段输入",
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "notice": "",
+      "dialog": "",
+      "hint": "Enter 发送 · Shift Enter 换行",
+      "errors": []
+    },
+    {
+      "seconds": 190,
+      "input": "网络恢复后继续这段输入",
+      "inputDisabled": false,
+      "sendDisabled": true,
+      "notice": "暂时无法核对服务状态，输入会保留；连接恢复后将自动重试。重新连接",
+      "dialog": "",
+      "hint": "无法连接本地服务，请确认 mdo 仍在运行。",
+      "errors": []
+    },
+    {
+      "seconds": 220,
+      "input": "网络恢复后继续这段输入",
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "notice": "",
+      "dialog": "",
+      "hint": "Enter 发送 · Shift Enter 换行",
+      "errors": []
+    },
+    {
+      "seconds": 238.9,
+      "input": "",
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "notice": "",
+      "dialog": "",
+      "hint": "正在保存发送意图 · 可继续编辑下一条",
+      "errors": []
+    },
+    {
+      "seconds": 239,
+      "input": "",
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "notice": "",
+      "dialog": "",
+      "hint": "Enter 发送 · Shift Enter 换行",
+      "errors": []
+    },
+    {
+      "seconds": 259.6,
+      "input": "恢复后第二轮对话",
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "notice": "",
+      "dialog": "",
+      "hint": "Enter 发送 · Shift Enter 换行",
+      "errors": []
+    },
+    {
+      "seconds": 259.7,
+      "input": "",
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "notice": "",
+      "dialog": "",
+      "hint": "Enter 发送 · Shift Enter 换行",
+      "errors": []
+    }
+  ],
+  "timeline": "11:13\n网络恢复后继续这段输入\nAgent\n11:13\n\nADMISSION_CONFIRMED — 网络恢复后继续这段输入\n\n50 输入 / 20 输出 tokens · LLM <0.1 秒 · 1561.9 tok/s\n11:13\n恢复后第二轮对话\nAgent\n11:13\n\nADMISSION_CONFIRMED — 恢复后第二轮对话\n\n50 输入 / 20 输出 tokens · LLM <0.1 秒 · 1717.5 tok/s",
+  "logs": [
+    {
+      "level": "warn",
+      "message": "Initial language preference could not be saved ApiError: Review the saved project purge request before writing\n    at checkWrite (http://127.0.0.1:51999/js/api/client.js:50:11)\n    at apiRequest (http://127.0.0.1:51999/js/api/client.js:135:3)\n    at Object.patch (http://127.0.0.1:51999/js/api/client.js:233:40)\n    at http://127.0.0.1:51999/js/state/settings.js:48:24\n    at async read (http://127.0.0.1:51999/js/state/store.js:85:33)\n    at async load (http://127.0.0.1:51999/js/state/settings.js:39:5)",
+      "timestamp": "2026-10-09T03:06:24.964Z",
+      "url": "http://127.0.0.1:51999/js/state/settings.js"
+    },
+    {
+      "level": "warn",
+      "message": "Initial language preference could not be saved ApiError: Review the saved project purge request before writing\n    at checkWrite (http://127.0.0.1:51999/js/api/client.js:50:11)\n    at apiRequest (http://127.0.0.1:51999/js/api/client.js:135:3)\n    at Object.patch (http://127.0.0.1:51999/js/api/client.js:233:40)\n    at http://127.0.0.1:51999/js/state/settings.js:48:24\n    at async read (http://127.0.0.1:51999/js/state/store.js:85:33)\n    at async load (http://127.0.0.1:51999/js/state/settings.js:39:5)",
+      "timestamp": "2026-10-09T03:08:10.954Z",
+      "url": "http://127.0.0.1:51999/js/state/settings.js"
+    },
+    {
+      "level": "warn",
+      "message": "Initial language preference could not be saved ApiError: Review the saved project purge request before writing\n    at checkWrite (http://127.0.0.1:51999/js/api/client.js:50:11)\n    at apiRequest (http://127.0.0.1:51999/js/api/client.js:135:3)\n    at Object.patch (http://127.0.0.1:51999/js/api/client.js:233:40)\n    at http://127.0.0.1:51999/js/state/settings.js:48:24\n    at async read (http://127.0.0.1:51999/js/state/store.js:85:33)\n    at async load (http://127.0.0.1:51999/js/state/settings.js:39:5)",
+      "timestamp": "2026-10-09T03:09:13.019Z",
+      "url": "http://127.0.0.1:51999/js/state/settings.js"
+    }
+  ]
+}

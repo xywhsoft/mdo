@@ -1,0 +1,11 @@
+{
+  "scoped_passed": 2,
+  "full_passed": 17,
+  "full_failed": 3,
+  "preexisting_failures_match_baseline": [
+    "test_permission_decisions_are_visible_bounded_and_one_shot",
+    "test_resource_management_is_split_into_bounded_stores",
+    "test_untrusted_api_text_uses_dom_text_nodes"
+  ],
+  "baseline_new_selection_failed": 1
+}

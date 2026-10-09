@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "platform": "windows",
+  "edition": "gui",
+  "libc": "mingw",
+  "xs_commit": "7e4eb8a090cae67f33f0e1afa2b24dea66781efa",
+  "mdo_commit": "78dec5787f5b5890f740f6b4c834be9f8fcbe392",
+  "packaged_app_sha256": "65bfeef84d9db08c5ee14fa38fd328c7b5f4555fc2712ef90c68c0bed53aef82",
+  "mdo_worktree_dirty": true,
+  "sha256": "1a8590e52b1ba634b25592ad268b708925c112d9f3430673868cbf98034e0ebb",
+  "bytes": 4476097,
+  "host": {
+    "schema_version": 1,
+    "profile_sha256": "2829d871dac1a12a70503f9b6116adaa2aa9556a53ea139df60aaa81cbb7a19b",
+    "revision": "7e4eb8a090cae67f33f0e1afa2b24dea66781efa",
+    "extensions": [
+      "xllm",
+      "xllm-session",
+      "xwork",
+      "webview",
+      "image"
+    ],
+    "icon_sha256": "f54b7fb936f5e15f9b7d10842c294d3c4c5c4de7fff17acaa0fa29d04f0070f2",
+    "binary_sha256": "08cc34e5d2bdbd617d211650dcc0b2bd63832e034c24da2ac3a02b56abe32304",
+    "binary_bytes": 3162112,
+    "frontend": "native",
+    "compiler": "gcc",
+    "compile_extra": "",
+    "link_extra": ""
+  }
+}

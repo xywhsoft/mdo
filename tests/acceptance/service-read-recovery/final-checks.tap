@@ -1,0 +1,418 @@
+TAP version 13
+# Subtest: same-origin token and ready gate protect a single connection
+ok 1 - same-origin token and ready gate protect a single connection
+  ---
+  duration_ms: 2.5743
+  type: 'test'
+  ...
+# Subtest: restart renews only the read socket and announces the stale page before connecting
+ok 2 - restart renews only the read socket and announces the stale page before connecting
+  ---
+  duration_ms: 2.8304
+  type: 'test'
+  ...
+# Subtest: unreachable read-token probe backs off without opening stale sockets
+ok 3 - unreachable read-token probe backs off without opening stale sockets
+  ---
+  duration_ms: 0.8811
+  type: 'test'
+  ...
+# Subtest: an HTTP transport failure rechecks a seemingly open socket only once
+ok 4 - an HTTP transport failure rechecks a seemingly open socket only once
+  ---
+  duration_ms: 0.8787
+  type: 'test'
+  ...
+# Subtest: pause or stop invalidates delayed token probes and never reconnects in the background
+ok 5 - pause or stop invalidates delayed token probes and never reconnects in the background
+  ---
+  duration_ms: 0.9127
+  type: 'test'
+  ...
+# Subtest: reconnect reads the latest offline cursor and ignores the old socket
+ok 6 - reconnect reads the latest offline cursor and ignores the old socket
+  ---
+  duration_ms: 0.3469
+  type: 'test'
+  ...
+# Subtest: selection generation rejects delayed packets even when returning to the same session
+ok 7 - selection generation rejects delayed packets even when returning to the same session
+  ---
+  duration_ms: 0.2655
+  type: 'test'
+  ...
+# Subtest: heartbeat failure reconnects, and hidden pages release connections and timers
+ok 8 - heartbeat failure reconnects, and hidden pages release connections and timers
+  ---
+  duration_ms: 0.252
+  type: 'test'
+  ...
+# Subtest: failed handshakes use bounded exponential backoff and stop cancels retries
+ok 9 - failed handshakes use bounded exponential backoff and stop cancels retries
+  ---
+  duration_ms: 0.2719
+  type: 'test'
+  ...
+# Subtest: a probe ignoring abort times out and reconnects without adopting its late token
+ok 10 - a probe ignoring abort times out and reconnects without adopting its late token
+  ---
+  duration_ms: 7.0138
+  type: 'test'
+  ...
+# Subtest: pause and stop abort hanging probes and release their deadline immediately
+ok 11 - pause and stop abort hanging probes and release their deadline immediately
+  ---
+  duration_ms: 1.2012
+  type: 'test'
+  ...
+# Subtest: a replacement connection cancels its old probe without clearing the new watchdog
+ok 12 - a replacement connection cancels its old probe without clearing the new watchdog
+  ---
+  duration_ms: 0.831
+  type: 'test'
+  ...
+# Subtest: cancellation before a probe's HTTP turn sends no ghost read
+ok 13 - cancellation before a probe's HTTP turn sends no ghost read
+  ---
+  duration_ms: 0.5814
+  type: 'test'
+  ...
+# Subtest: a timed-out probe's late rejection cannot disturb its healthy successor
+ok 14 - a timed-out probe's late rejection cannot disturb its healthy successor
+  ---
+  duration_ms: 0.6074
+  type: 'test'
+  ...
+# Subtest: repeated hung probes retain the existing capped exponential reconnect pace
+ok 15 - repeated hung probes retain the existing capped exponential reconnect pace
+  ---
+  duration_ms: 1.2543
+  type: 'test'
+  ...
+# Subtest: stopping from a runtime-change observer never reports a stale reachable state
+ok 16 - stopping from a runtime-change observer never reports a stale reachable state
+  ---
+  duration_ms: 0.6927
+  type: 'test'
+  ...
+# Subtest: the exported live connection bounds real API JSON and retains the page's mutation fence
+ok 17 - the exported live connection bounds real API JSON and retains the page's mutation fence
+  ---
+  duration_ms: 31.256
+  type: 'test'
+  ...
+# Subtest: explicit confirmation drains, saves one binding, executes it and ACKs without unlocking old memory
+ok 18 - explicit confirmation drains, saves one binding, executes it and ACKs without unlocking old memory
+  ---
+  duration_ms: 6.163
+  type: 'test'
+  ...
+# Subtest: an in-flight or failed draft drain creates no ID or saved request
+ok 19 - an in-flight or failed draft drain creates no ID or saved request
+  ---
+  duration_ms: 1.0207
+  type: 'test'
+  ...
+# Subtest: a lost preparation keeps its original proposed ID and cannot execute until publication is read back
+ok 20 - a lost preparation keeps its original proposed ID and cannot execute until publication is read back
+  ---
+  duration_ms: 1.4453
+  type: 'test'
+  ...
+# Subtest: lost execution replies query the same original receipt and preserve verified commit facts
+ok 21 - lost execution replies query the same original receipt and preserve verified commit facts
+  ---
+  duration_ms: 0.8338
+  type: 'test'
+  ...
+# Subtest: reloaded saved intent may be explicitly reviewed, but revision/incarnation changes never execute
+ok 22 - reloaded saved intent may be explicitly reviewed, but revision/incarnation changes never execute
+  ---
+  duration_ms: 0.9506
+  type: 'test'
+  ...
+# Subtest: a missing/different portable intent cannot authorize execution from cached review
+ok 23 - a missing/different portable intent cannot authorize execution from cached review
+  ---
+  duration_ms: 0.658
+  type: 'test'
+  ...
+# Subtest: lost ACK validates absence/new ownership, never erases known commit facts and reloads only explicitly
+ok 24 - lost ACK validates absence/new ownership, never erases known commit facts and reloads only explicitly
+  ---
+  duration_ms: 1.3333
+  type: 'test'
+  ...
+# Subtest: unsaved local edits, pending results and restart requirements cannot ACK a committed request
+ok 25 - unsaved local edits, pending results and restart requirements cannot ACK a committed request
+  ---
+  duration_ms: 0.8389
+  type: 'test'
+  ...
+# Subtest: advisory inventory rejects invalid headers, paths, unsafe numbers and active/diagnostic counts
+ok 26 - advisory inventory rejects invalid headers, paths, unsafe numbers and active/diagnostic counts
+  ---
+  duration_ms: 0.6744
+  type: 'test'
+  ...
+# Subtest: API activity counts mutations through envelope parsing and releases on invalid response or upload failure
+ok 27 - API activity counts mutations through envelope parsing and releases on invalid response or upload failure
+  ---
+  duration_ms: 31.713
+  type: 'test'
+  ...
+# Subtest: draining drafts saves existing edits across owners without creating untouched empty drafts
+ok 28 - draining drafts saves existing edits across owners without creating untouched empty drafts
+  ---
+  duration_ms: 4.8548
+  type: 'test'
+  ...
+# Subtest: cold empty reads unlock without creating or executing a request
+ok 29 - cold empty reads unlock without creating or executing a request
+  ---
+  duration_ms: 3.0591
+  type: 'test'
+  ...
+# Subtest: abort acknowledgement on a stale page does not resume saves or discard unsent input via automatic reload
+ok 30 - abort acknowledgement on a stale page does not resume saves or discard unsent input via automatic reload
+  ---
+  duration_ms: 1.1419
+  type: 'test'
+  ...
+# Subtest: unknown saved requests cancel with the original binding and need explicit abort acknowledgement
+ok 31 - unknown saved requests cancel with the original binding and need explicit abort acknowledgement
+  ---
+  duration_ms: 1.1909
+  type: 'test'
+  ...
+# Subtest: lost cancellation responses inspect the same ID without a new cancellation
+ok 32 - lost cancellation responses inspect the same ID without a new cancellation
+  ---
+  duration_ms: 0.931
+  type: 'test'
+  ...
+# Subtest: an HTTP failure carrying committed facts never becomes cancelled or acknowledged
+ok 33 - an HTTP failure carrying committed facts never becomes cancelled or acknowledged
+  ---
+  duration_ms: 0.5294
+  type: 'test'
+  ...
+# Subtest: pending/committed results cannot trigger cancel or acknowledgement
+ok 34 - pending/committed results cannot trigger cancel or acknowledgement
+  ---
+  duration_ms: 0.6281
+  type: 'test'
+  ...
+# Subtest: lost acknowledgement verifies portable absence before releasing the gate
+ok 35 - lost acknowledgement verifies portable absence before releasing the gate
+  ---
+  duration_ms: 0.67
+  type: 'test'
+  ...
+# Subtest: a failed acknowledgement preserves the same abort and can be retried
+ok 36 - a failed acknowledgement preserves the same abort and can be retried
+  ---
+  duration_ms: 0.6768
+  type: 'test'
+  ...
+# Subtest: other-page acknowledgement never drops a known committed request
+ok 37 - other-page acknowledgement never drops a known committed request
+  ---
+  duration_ms: 0.5435
+  type: 'test'
+  ...
+# Subtest: a verified abort can hand over to another page's subsequent intent
+ok 38 - a verified abort can hand over to another page's subsequent intent
+  ---
+  duration_ms: 0.9882
+  type: 'test'
+  ...
+# Subtest: corrupt intent/ETag/unsafe numbers fail closed without a mutation
+ok 39 - corrupt intent/ETag/unsafe numbers fail closed without a mutation
+  ---
+  duration_ms: 1.1252
+  type: 'test'
+  ...
+# Subtest: mismatched receipts and contradictory commit facts keep the original binding
+ok 40 - mismatched receipts and contradictory commit facts keep the original binding
+  ---
+  duration_ms: 3.4172
+  type: 'test'
+  ...
+# Subtest: later contradictory results do not erase a known committed fact
+ok 41 - later contradictory results do not erase a known committed fact
+  ---
+  duration_ms: 0.2886
+  type: 'test'
+  ...
+# Subtest: repeated clicks coalesce; a failed initial read remains paused during retry
+ok 42 - repeated clicks coalesce; a failed initial read remains paused during retry
+  ---
+  duration_ms: 5.6293
+  type: 'test'
+  ...
+# Subtest: page write guard covers JSON writes and raw uploads, but permits reads and stopping a run
+ok 43 - page write guard covers JSON writes and raw uploads, but permits reads and stopping a run
+  ---
+  duration_ms: 32.6436
+  type: 'test'
+  ...
+# Subtest: paused drafts retain local edits without retry loops or pagehide writes, then resume
+ok 44 - paused drafts retain local edits without retry loops or pagehide writes, then resume
+  ---
+  duration_ms: 2.695
+  type: 'test'
+  ...
+# Subtest: a pause during an in-flight save stops later dirty iterations without losing edits
+ok 45 - a pause during an in-flight save stops later dirty iterations without losing edits
+  ---
+  duration_ms: 0.828
+  type: 'test'
+  ...
+# Subtest: new-task and submission recovery do not touch restored state while paused
+ok 46 - new-task and submission recovery do not touch restored state while paused
+  ---
+  duration_ms: 0.6202
+  type: 'test'
+  ...
+# Subtest: a failed recheck of a formerly empty Home does not unlock writes while retrying
+ok 47 - a failed recheck of a formerly empty Home does not unlock writes while retrying
+  ---
+  duration_ms: 2.3746
+  type: 'test'
+  ...
+# Subtest: a bounded read timeout preserves the startup recovery gate
+ok 48 - a bounded read timeout preserves the startup recovery gate
+  ---
+  duration_ms: 11.2242
+  type: 'test'
+  ...
+# Subtest: service continuity checks recover quietly from two transient read failures
+ok 49 - service continuity checks recover quietly from two transient read failures
+  ---
+  duration_ms: 6.5242
+  type: 'test'
+  ...
+# Subtest: ignored aborts end service checks within one minute without inventing a purge
+ok 50 - ignored aborts end service checks within one minute without inventing a purge
+  ---
+  duration_ms: 2.3651
+  type: 'test'
+  ...
+# Subtest: a reachable connection resumes a failed check once without replaying a mutation
+ok 51 - a reachable connection resumes a failed check once without replaying a mutation
+  ---
+  duration_ms: 1.4763
+  type: 'test'
+  ...
+# Subtest: permanent denial is final and connection events do not retry it
+ok 52 - permanent denial is final and connection events do not retry it
+  ---
+  duration_ms: 0.8977
+  type: 'test'
+  ...
+# Subtest: a verified service restart keeps review and never automatically releases stale writes
+ok 53 - a verified service restart keeps review and never automatically releases stale writes
+  ---
+  duration_ms: 0.8316
+  type: 'test'
+  ...
+# Subtest: page departure cancels a pending read and a late empty result cannot unlock it
+ok 54 - page departure cancels a pending read and a late empty result cannot unlock it
+  ---
+  duration_ms: 0.8208
+  type: 'test'
+  ...
+# Subtest: a cold exhausted check recovers in the background without another click
+ok 55 - a cold exhausted check recovers in the background without another click
+  ---
+  duration_ms: 2.0264
+  type: 'test'
+  ...
+# Subtest: hiding the page cancels its cooldown and showing it resumes only the read
+ok 56 - hiding the page cancels its cooldown and showing it resumes only the read
+  ---
+  duration_ms: 1.3392
+  type: 'test'
+  ...
+# Subtest: returning to the page resumes a cancelled read
+ok 57 - returning to the page resumes a cancelled read
+  ---
+  duration_ms: 0.912
+  type: 'test'
+  ...
+# Subtest: returning to the page resumes a cancelled read before cancellation settles
+ok 58 - returning to the page resumes a cancelled read before cancellation settles
+  ---
+  duration_ms: 1.8408
+  type: 'test'
+  ...
+# Subtest: a hung cancellation stays single attempt and retains its original request
+ok 59 - a hung cancellation stays single attempt and retains its original request
+  ---
+  duration_ms: 1.9774
+  type: 'test'
+  ...
+# Subtest: continuity verification defers selection saves and resumes only the latest destination
+ok 60 - continuity verification defers selection saves and resumes only the latest destination
+  ---
+  duration_ms: 30.3088
+  type: 'test'
+  ...
+# Subtest: read-only or unavailable targets browse sessions without persisting selection
+ok 61 - read-only or unavailable targets browse sessions without persisting selection
+  ---
+  duration_ms: 0.9606
+  type: 'test'
+  ...
+# Subtest: startup focuses a ready composer without stealing focus after navigation
+ok 62 - startup focuses a ready composer without stealing focus after navigation
+  ---
+  duration_ms: 1.8803
+  type: 'test'
+  ...
+# Subtest: late saved selection never overrides a newer route in any startup mode
+ok 63 - late saved selection never overrides a newer route in any startup mode
+  ---
+  duration_ms: 0.9356
+  type: 'test'
+  ...
+# Subtest: typing or opening a drawer during a candidate read cancels fallback without a route change
+ok 64 - typing or opening a drawer during a candidate read cancels fallback without a route change
+  ---
+  duration_ms: 2.2444
+  type: 'test'
+  ...
+# Subtest: restoring a session does not steal focus from a control used while its detail loads
+ok 65 - restoring a session does not steal focus from a control used while its detail loads
+  ---
+  duration_ms: 0.8135
+  type: 'test'
+  ...
+# Subtest: an explicit session URL focuses after loading without stealing a newer focus
+ok 66 - an explicit session URL focuses after loading without stealing a newer focus
+  ---
+  duration_ms: 0.9094
+  type: 'test'
+  ...
+# Subtest: an explicit session opens before the saved selection responds
+ok 67 - an explicit session opens before the saved selection responds
+  ---
+  duration_ms: 1.5545
+  type: 'test'
+  ...
+# Subtest: last startup resumes a live session before an idle saved session
+ok 68 - last startup resumes a live session before an idle saved session
+  ---
+  duration_ms: 1.5256
+  type: 'test'
+  ...
+1..68
+# tests 68
+# suites 0
+# pass 68
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 318.4286

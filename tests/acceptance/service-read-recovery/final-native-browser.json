@@ -1,0 +1,31 @@
+{
+  "state": {
+    "input": "[unplanned input retained in isolated Home]",
+    "inputDisabled": false,
+    "noticeHidden": true,
+    "queueHidden": true,
+    "sendDisabled": false,
+    "toasts": []
+  },
+  "timeline": "11:17\n切回页面后继续\nAgent\n11:17\n\nADMISSION_CONFIRMED — 切回页面后继续\n\n50 输入 / 20 输出 tokens · LLM <0.1 秒 · 1706.5 tok/s\n11:18\n在线刷新后继续对话\nAgent\n11:18\n\nADMISSION_CONFIRMED — 在线刷新后继续对话\n\n50 输入 / 20 输出 tokens · LLM <0.1 秒 · 938.1 tok/s",
+  "events": {
+    "cursor": 75,
+    "events": [],
+    "hasMore": false,
+    "truncated": false
+  },
+  "logs": [
+    {
+      "level": "warn",
+      "message": "Initial language preference could not be saved ApiError: Review the saved project purge request before writing\n    at checkWrite (http://127.0.0.1:54556/js/api/client.js:50:11)\n    at apiRequest (http://127.0.0.1:54556/js/api/client.js:135:3)\n    at Object.patch (http://127.0.0.1:54556/js/api/client.js:233:40)\n    at http://127.0.0.1:54556/js/state/settings.js:48:24\n    at async read (http://127.0.0.1:54556/js/state/store.js:85:33)\n    at async load (http://127.0.0.1:54556/js/state/settings.js:39:5)",
+      "timestamp": "2026-10-09T03:18:02.440Z",
+      "url": "http://127.0.0.1:54556/js/state/settings.js"
+    },
+    {
+      "level": "warn",
+      "message": "Initial language preference could not be saved ApiError: Review the saved project purge request before writing\n    at checkWrite (http://127.0.0.1:54556/js/api/client.js:50:11)\n    at apiRequest (http://127.0.0.1:54556/js/api/client.js:135:3)\n    at Object.patch (http://127.0.0.1:54556/js/api/client.js:233:40)\n    at http://127.0.0.1:54556/js/state/settings.js:48:24\n    at async read (http://127.0.0.1:54556/js/state/store.js:85:33)\n    at async load (http://127.0.0.1:54556/js/state/settings.js:39:5)",
+      "timestamp": "2026-10-09T03:18:29.496Z",
+      "url": "http://127.0.0.1:54556/js/state/settings.js"
+    }
+  ]
+}

@@ -209,7 +209,7 @@ test("repeated clicks coalesce; a failed initial read remains paused during retr
   const second = f.recovery.refresh();
   assert.equal(first, second);
   assert.equal(f.recovery.isPaused(), true);
-  await Promise.resolve(); resolve(empty); await first;
+  await new Promise(done => setImmediate(done)); resolve(empty); await first;
   assert.equal(f.recovery.isPaused(), false);
 });
 
@@ -302,14 +302,14 @@ test("a failed recheck of a formerly empty Home does not unlock writes while ret
   await f.recovery.refresh(); assert.equal(f.recovery.isPaused(), true);
   let finish;
   f.transport.get = () => new Promise((done) => { finish = done; });
-  const retry = f.recovery.refresh(); await Promise.resolve();
+  const retry = f.recovery.refresh(); await new Promise(done => setImmediate(done));
   assert.equal(f.recovery.isPaused(), true);
   finish(empty); await retry;
   assert.equal(f.recovery.isPaused(), false);
 });
 
 test("a bounded read timeout preserves the startup recovery gate", async () => {
-  const recovery = createProjectPurgeRecovery({ timeoutMs: 5, transport: {
+  const recovery = createProjectPurgeRecovery({ timeoutMs: 5, recoveryMs: 5, transport: {
     get(_path, options) {
       return new Promise((_resolve, reject) => options.signal.addEventListener("abort",
         () => reject(new ApiError("timeout", { code: "network_error" })), { once: true }));

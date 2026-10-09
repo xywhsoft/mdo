@@ -1,0 +1,54 @@
+TAP version 13
+# Subtest: returning to the page resumes a cancelled read
+not ok 1 - returning to the page resumes a cancelled read
+  ---
+  duration_ms: 6.1909
+  type: 'test'
+  location: 'D:\\GIT\\mdo\\tests\\test_purge_service_read_recovery.mjs:151:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    1 !== 2
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 2
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///D:/GIT/mdo/tests/test_purge_service_read_recovery.mjs:162:12)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3)
+  ...
+# Subtest: returning to the page resumes a cancelled read before cancellation settles
+not ok 2 - returning to the page resumes a cancelled read before cancellation settles
+  ---
+  duration_ms: 1.9905
+  type: 'test'
+  location: 'D:\\GIT\\mdo\\tests\\test_purge_service_read_recovery.mjs:151:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    1 !== 2
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 2
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///D:/GIT/mdo/tests/test_purge_service_read_recovery.mjs:162:12)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 0
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 98.4485

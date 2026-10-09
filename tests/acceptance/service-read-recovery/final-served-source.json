@@ -1,0 +1,34 @@
+{
+  "js/app.js": {
+    "sha256": "e7cd59e043dbee0a27a6298d8a20c0d22cf7b43b01b1fbde6aec4b6d400022b6",
+    "matches_clean_build_source": true
+  },
+  "js/features/settings/project-purge-recovery.js": {
+    "sha256": "57902a12f71454c000c8cc0d7ac4715338bd784c7a8954551d8fdd758ea598c6",
+    "matches_clean_build_source": true
+  },
+  "js/features/projects/project-purge-recovery-panel.js": {
+    "sha256": "d28f80bb1d1b4f18d41543b1539927d0aba4d4bfe2e000a85831ceb7647edb95",
+    "matches_clean_build_source": true
+  },
+  "js/api/request-recovery.js": {
+    "sha256": "5d70df9f3c8cc077cfe06f27edf1b96b5c26540bb2c3146fd314be8df1e70be8",
+    "matches_clean_build_source": true
+  },
+  "js/features/shell/workspace-startup.js": {
+    "sha256": "514099059f01e6d3d938f1b40fd47d6949e9a1b9e19b91ac34303d320cdcc537",
+    "matches_clean_build_source": true
+  },
+  "lang/zh-CN.json": {
+    "sha256": "3314c0b3372e9db6ddf370d0a322938c9ed66e06ddd95a7ef90b4df275b80c12",
+    "matches_clean_build_source": true
+  },
+  "lang/en-US.json": {
+    "sha256": "31c5888359da5aa0d17ac691be91165c7067e7787cf66bd3bbf64943b77a17a8",
+    "matches_clean_build_source": true
+  },
+  "lang/ru-RU.json": {
+    "sha256": "d08ac18626a3739a5bca997bd31d6976325a7cb8f701e9b010d89fe67e7d13ed",
+    "matches_clean_build_source": true
+  }
+}

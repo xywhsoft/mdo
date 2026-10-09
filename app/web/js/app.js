@@ -154,8 +154,9 @@ export async function boot() {
   setApiWriteGuard((request) => /^\/update(?:\/(?:download|install|exit))?$/.test(request.path) ||
     purgeRecovery.allowsWrite(request));
   // Check portable recovery before restored drafts migrate or dispatch.
-  // A failed read leaves a visible retry gate; read-only views still load.
-  await purgeRecovery.refresh();
+  // Keep writes gated, but let history and local input initialize while this
+  // bounded continuity read recovers. It never executes a removal request.
+  void purgeRecovery.refresh();
 
   const shell = $("#app-shell");
   const mobileLayout = window.matchMedia("(max-width: 760px)");
@@ -1159,7 +1160,7 @@ export async function boot() {
     if (newTaskController?.isPreparing() || migratingNewTask)
       newTaskComposerFocus.capture();
     // Keep keyboard focus while a newly created session loads its detail.
-    prompt.disabled = serviceFailed || targetBlocked || messageActionBusy || purgeRecovery.isPaused() ||
+    prompt.disabled = serviceFailed || targetBlocked || messageActionBusy || purgeRecovery.requiresReview() ||
       selectingProjectDraft ||
       projectDraftSelection?.isMigrating() ||
       newTaskController?.isPreparing() ||
@@ -1185,7 +1186,10 @@ export async function boot() {
       ? t("composer.queue", {}, "加入待发送队列")
       : t("shell.send", {}, "发送任务"));
     composerHint.textContent = purgeRecovery.isPaused()
-      ? t(purgeRecovery.get().writeConflictReason === "restart" ? "shell.serviceRestartedTitle" : "error.purgeReviewRequired")
+      ? !purgeRecovery.requiresReview()
+        ? purgeRecovery.get().error && !purgeRecovery.get().busy ? errorMessage(purgeRecovery.get().error)
+          : t("purgeRecovery.checkingService")
+        : t(purgeRecovery.get().writeConflictReason === "restart" ? "shell.serviceRestartedTitle" : "error.purgeReviewRequired")
       : localServiceReconnecting ? t("shell.connecting", {}, "正在连接本地服务…") : messageActionBusy
       ? t("messageAction.busy", {}, "请等待当前消息操作完成")
       : pendingCatalog ? pendingCatalog.status === "error"
@@ -1224,6 +1228,7 @@ export async function boot() {
     const paused = purgeRecovery.isPaused();
     setRun(activeRun);
     if (purgeWasPaused && !paused) {
+      if (!isRemoteTarget()) liveConnection.start(currentPageWriteToken());
       draftStore.resumeSaves();
       void projectDraftSelection.restoreLegacy();
       void newTaskController.reconcile();
@@ -2528,6 +2533,7 @@ export async function boot() {
     if (composerErrorState?.error?.code === "network_error" &&
         !composerErrorState.error.runAdmissionUncertain) hideComposerError();
     syncRuntimeLabel(); setRun(activeRun); renderDraftStatus();
+    if (connected) void purgeRecovery.resumeReads();
     if (connected && !purgeRecovery.isPaused())
       draftStore.resumeSaves({ retryReads: recovering });
     if (recovering && !purgeRecovery.isPaused())
@@ -2663,8 +2669,10 @@ export async function boot() {
     continueButton: $("#startup-continue"),
     newButton: $("#startup-new"), prompt, entryHash,
     shouldRestore: startupIntent.allowsRestore,
-    canPersistSelection: () => !isRemoteTarget() || (targetState().connected &&
-      !targetState().runtimeChanged && targetState().selected.mode !== "view") }).catch(() => {
+    subscribeWritable: purgeRecovery.subscribe,
+    canPersistSelection: () => !purgeRecovery.isPaused() && (!isRemoteTarget() ||
+      (targetState().connected && !targetState().runtimeChanged &&
+        targetState().selected.mode !== "view")) }).catch(() => {
       toast(t("startup.readFailed", {},
         "无法读取上次会话，将使用当前会话列表。"), "error");
     }).finally(() => startupIntent.destroy());

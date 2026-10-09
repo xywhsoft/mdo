@@ -29,6 +29,43 @@ function fakeNavigation() {
   };
 }
 
+test("continuity verification defers selection saves and resumes only the latest destination", async () => {
+  const previous = { fetch: globalThis.fetch, location: globalThis.location, document: globalThis.document };
+  const requests = [], listeners = new Set();
+  const body = { isConnected: true };
+  globalThis.document = { body, activeElement: body };
+  globalThis.location = { hash: "#/projects/default/sessions/first" };
+  let writable = false;
+  globalThis.fetch = async (url, options) => {
+    requests.push({ path: String(url), method: options.method, body: options.body });
+    return Response.json({ ok: true, data: { project_id: "default", session_id: "saved" } });
+  };
+  try {
+    const navigation = fakeNavigation();
+    navigation.select("default", "first");
+    await startWorkspaceNavigation({ navigation,
+      settingsStore: { get: () => ({ data: {} }) },
+      sessionsStore: { get: () => ({ data: { items: [] } }) },
+      sessionDetailStore: createResourceStore(), dialog: {}, title: {},
+      continueButton: {}, newButton: {}, prompt: { disabled: true },
+      entryHash: globalThis.location.hash, canPersistSelection: () => writable,
+      subscribeWritable(listener) { listeners.add(listener); listener(); } });
+    navigation.select("default", "second");
+    navigation.select("default", "latest");
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(requests.filter(row => row.method === "PUT").length, 0);
+    writable = true;
+    for (const listener of listeners) listener();
+    await new Promise(resolve => setImmediate(resolve));
+    const writes = requests.filter(row => row.method === "PUT");
+    assert.equal(writes.length, 1);
+    assert.deepEqual(JSON.parse(writes[0].body), { project_id: "default", session_id: "latest" });
+    for (const listener of listeners) listener();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(requests.filter(row => row.method === "PUT").length, 1);
+  } finally { Object.assign(globalThis, previous); }
+});
+
 test("read-only or unavailable targets browse sessions without persisting selection", async () => {
   const previous = { fetch: globalThis.fetch, location: globalThis.location, document: globalThis.document };
   const requests = [];

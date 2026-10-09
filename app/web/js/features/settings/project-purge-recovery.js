@@ -1,4 +1,6 @@
 import { ApiError } from "../../api/client.js";
+import { createRequestRecovery } from "../../api/request-recovery.js";
+import { isTransientReadError } from "../../api/read-recovery.js";
 
 import { invalidPurge as invalid, purgeBindingsMatch as matches,
   readPurgeIntent as readIntent, readPurgeResult as readResult,
@@ -7,13 +9,15 @@ import { invalidPurge as invalid, purgeBindingsMatch as matches,
 // Reads never execute a purge. A missing receipt is not proof that a delayed
 // execution cannot arrive: only a durable abort permits dismissal.
 // Keep a locally known binding even if another page acknowledges its intent.
-export function createProjectPurgeRecovery({ transport, timeoutMs = 8000,
+export function createProjectPurgeRecovery({ transport, timeoutMs = 8000, recoveryMs = 60000,
+  createRecovery = createRequestRecovery, eventTarget = globalThis.window,
   getWriteToken = () => null, onReload = () => {}, newId = newPurgeRequestId,
   beforePrepare = async () => {}, canComplete = () => true }) {
   let state = Object.freeze({ checked: false, intent: null, result: null,
     busy: false, error: null, writeConflict: false, intentSaved: false });
   let flight = null;
   let acknowledgingCommit = false;
+  let readRetry = 0, readPaused = false, activeRead = null;
   const listeners = new Set();
 
   function publish(patch) {
@@ -25,18 +29,26 @@ export function createProjectPurgeRecovery({ transport, timeoutMs = 8000,
   }
 
   async function request(method, path, body, options = {}) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    // Mutations remain single attempt. Their lost acknowledgements are still
+    // reconciled by existing receipt reads, never by replaying the write.
+    const recovery = createRecovery({ requestMs: timeoutMs, recoveryMs: timeoutMs });
     try {
-      const params = { ...options, signal: controller.signal };
-      return await (method === "post" ? transport.post(path, body, params)
-        : transport[method](path, params));
-    } finally { clearTimeout(timer); }
+      return await recovery.request(signal => {
+        const params = { ...options, signal };
+        return method === "post" ? transport.post(path, body, params)
+          : transport[method](path, params);
+      }, { retry: false });
+    } finally { recovery.dispose(); }
   }
 
-  async function query(intent) {
+  function read(path, recovery) {
+    return recovery ? recovery.request(signal => transport.get(path, { signal }))
+      : request("get", path);
+  }
+
+  async function query(intent, recovery) {
     try {
-      const response = await request("get", `/project-purges/${intent.purge_request_id}`);
+      const response = await read(`/project-purges/${intent.purge_request_id}`, recovery);
       return readResult(response.data, intent);
     } catch (error) {
       if (error?.status === 404 && error.code === "purge_request_not_found")
@@ -51,8 +63,8 @@ export function createProjectPurgeRecovery({ transport, timeoutMs = 8000,
       result.committed === false;
   }
 
-  async function inspect() {
-    const response = await request("get", "/project-purge-intent");
+  async function inspect(recovery) {
+    const response = await read("/project-purge-intent", recovery);
     const remote = readIntent(response);
     if (getWriteToken() && response.writeToken && response.writeToken !== getWriteToken())
       publish({ writeConflict: true, writeConflictReason:
@@ -61,16 +73,16 @@ export function createProjectPurgeRecovery({ transport, timeoutMs = 8000,
     if (known && !matches(known, remote)) {
       // An immutable abort may safely retire this page's old binding. A
       // committed/pending/unknown result must first settle local page state.
-      const result = await query(known);
+      const result = await query(known, recovery);
       publish({ result, checked: true, intentSaved: false });
       if (!aborted(result)) return;
     }
     publish({ checked: true, intent: remote, intentSaved: Boolean(remote),
       result: matches(known, remote) ? state.result : null });
-    if (remote) publish({ result: await query(remote) });
+    if (remote) publish({ result: await query(remote, recovery) });
   }
 
-  function singleFlight(operation) {
+  function singleFlight(operation, recoveringRead = false) {
     if (flight) return flight;
     publish({ busy: true });
     flight = Promise.resolve().then(operation).then((result) => {
@@ -79,11 +91,44 @@ export function createProjectPurgeRecovery({ transport, timeoutMs = 8000,
     }).catch((error) => {
       publish({ error });
       return false;
-    }).finally(() => { flight = null; publish({ busy: false }); });
+    }).finally(() => {
+      flight = null; publish({ busy: false });
+      if (recoveringRead && eventTarget && !readPaused &&
+          !state.writeConflict && isTransientReadError(state.error))
+        readRetry = setTimeout(() => { readRetry = 0; void resumeReads(); }, 30000);
+    });
     return flight;
   }
 
-  function refresh() { return singleFlight(inspect); }
+  function refresh() {
+    if (flight) return flight;
+    if (readPaused) return Promise.resolve(false);
+    clearTimeout(readRetry); readRetry = 0;
+    return singleFlight(async () => {
+      activeRead = createRecovery({ requestMs: timeoutMs, recoveryMs });
+      try { return await inspect(activeRead); }
+      finally { activeRead.dispose(); activeRead = null; }
+    }, true);
+  }
+
+  function resumeReads() {
+    // A restored connection only reads continuity/receipts. A verified restart
+    // or purge token conflict still needs review before any stale writes resume.
+    if (!readPaused && !state.writeConflict && (isTransientReadError(state.error) ||
+        state.error?.name === "AbortError"))
+      return refresh();
+    return flight ?? Promise.resolve(false);
+  }
+  eventTarget?.addEventListener("pagehide", () => {
+    readPaused = true; clearTimeout(readRetry); readRetry = 0; activeRead?.dispose();
+  });
+  eventTarget?.addEventListener("pageshow", () => {
+    readPaused = false;
+    // BFCache can return before the cancelled request's rejection is published.
+    // Let that old owner settle before starting its replacement read.
+    if (flight) void flight.then(() => resumeReads());
+    else void resumeReads();
+  });
 
   function tokenChanged(response) {
     if (getWriteToken() && response.writeToken && response.writeToken !== getWriteToken())
@@ -221,7 +266,8 @@ export function createProjectPurgeRecovery({ transport, timeoutMs = 8000,
   }
 
   return Object.freeze({
-    get: () => state, refresh, cancel, acknowledgeAbort, prepare, execute, completeCommitted,
+    get: () => state, refresh, resumeReads, cancel, acknowledgeAbort, prepare, execute, completeCommitted,
+    requiresReview: () => Boolean(state.intent || state.writeConflict),
     markWriteConflict(error) { publish({ writeConflict: true, error,
       ...(error?.code === "service_restarted" ? { writeConflictReason: "restart" } : {}) }); },
     reload() { onReload(state.intent?.project_id ?? null); },

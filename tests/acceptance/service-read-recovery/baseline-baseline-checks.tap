@@ -1,0 +1,113 @@
+TAP version 13
+# Subtest: service continuity checks recover quietly from two transient read failures
+not ok 1 - service continuity checks recover quietly from two transient read failures
+  ---
+  duration_ms: 5.8378
+  type: 'test'
+  location: 'C:\\Users\\Administrator\\.codex\\worktrees\\conversation-service-read-qa\\mdo\\tests\\test_purge_service_read_recovery.mjs:49:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    true !== false
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: false
+  actual: true
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///C:/Users/Administrator/.codex/worktrees/conversation-service-read-qa/mdo/tests/test_purge_service_read_recovery.mjs:53:10)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3)
+  ...
+# Subtest: ignored aborts end service checks within one minute without inventing a purge
+not ok 2 - ignored aborts end service checks within one minute without inventing a purge
+  ---
+  duration_ms: 1.527
+  type: 'test'
+  location: 'C:\\Users\\Administrator\\.codex\\worktrees\\conversation-service-read-qa\\mdo\\tests\\test_purge_service_read_recovery.mjs:60:1'
+  failureType: 'testCodeFailure'
+  error: 'service continuity check stayed pending without a deadline'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  operator: '=='
+  stack: |-
+    Object.finish (file:///C:/Users/Administrator/.codex/worktrees/conversation-service-read-qa/mdo/tests/test_purge_service_read_recovery.mjs:39:9)
+    async TestContext.<anonymous> (file:///C:/Users/Administrator/.codex/worktrees/conversation-service-read-qa/mdo/tests/test_purge_service_read_recovery.mjs:62:16)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: a reachable connection resumes a failed check once without replaying a mutation
+not ok 3 - a reachable connection resumes a failed check once without replaying a mutation
+  ---
+  duration_ms: 1.1041
+  type: 'test'
+  location: 'C:\\Users\\Administrator\\.codex\\worktrees\\conversation-service-read-qa\\mdo\\tests\\test_purge_service_read_recovery.mjs:74:1'
+  failureType: 'testCodeFailure'
+  error: 'f.recovery.resumeReads is not a function'
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (file:///C:/Users/Administrator/.codex/worktrees/conversation-service-read-qa/mdo/tests/test_purge_service_read_recovery.mjs:79:28)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: permanent denial is final and connection events do not retry it
+not ok 4 - permanent denial is final and connection events do not retry it
+  ---
+  duration_ms: 0.8069
+  type: 'test'
+  location: 'C:\\Users\\Administrator\\.codex\\worktrees\\conversation-service-read-qa\\mdo\\tests\\test_purge_service_read_recovery.mjs:91:1'
+  failureType: 'testCodeFailure'
+  error: 'f.recovery.resumeReads is not a function'
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (file:///C:/Users/Administrator/.codex/worktrees/conversation-service-read-qa/mdo/tests/test_purge_service_read_recovery.mjs:94:29)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: a verified service restart keeps review and never automatically releases stale writes
+not ok 5 - a verified service restart keeps review and never automatically releases stale writes
+  ---
+  duration_ms: 1.278
+  type: 'test'
+  location: 'C:\\Users\\Administrator\\.codex\\worktrees\\conversation-service-read-qa\\mdo\\tests\\test_purge_service_read_recovery.mjs:101:1'
+  failureType: 'testCodeFailure'
+  error: 'f.recovery.requiresReview is not a function'
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (file:///C:/Users/Administrator/.codex/worktrees/conversation-service-read-qa/mdo/tests/test_purge_service_read_recovery.mjs:105:27)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: page departure cancels a pending read and a late empty result cannot unlock it
+not ok 6 - page departure cancels a pending read and a late empty result cannot unlock it
+  ---
+  duration_ms: 0.9199
+  type: 'test'
+  location: 'C:\\Users\\Administrator\\.codex\\worktrees\\conversation-service-read-qa\\mdo\\tests\\test_purge_service_read_recovery.mjs:112:1'
+  failureType: 'testCodeFailure'
+  error: 'service continuity check stayed pending without a deadline'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  operator: '=='
+  stack: |-
+    Object.finish (file:///C:/Users/Administrator/.codex/worktrees/conversation-service-read-qa/mdo/tests/test_purge_service_read_recovery.mjs:39:9)
+    async TestContext.<anonymous> (file:///C:/Users/Administrator/.codex/worktrees/conversation-service-read-qa/mdo/tests/test_purge_service_read_recovery.mjs:117:16)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+1..6
+# tests 6
+# suites 0
+# pass 0
+# fail 6
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 107.4368

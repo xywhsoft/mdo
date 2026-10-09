@@ -1,0 +1,643 @@
+{
+  "phases": [
+    {
+      "mode": "hold",
+      "started": 27987.171,
+      "reads": [
+        {
+          "started": 27987.578,
+          "fault": "hold",
+          "status": 200,
+          "sha256": "0611945468854ad1d203360e5f3b38518351cb1aa75d957f4819b6f524394458",
+          "ended": 27999.593
+        },
+        {
+          "started": 27996.14,
+          "fault": null,
+          "status": 200,
+          "sha256": "a7f6421a0dcc07482202bfb2560ee46d4aeb4f1aa1e6a0103a6dc748d2c46e72",
+          "ended": 27996.14
+        }
+      ],
+      "left": 0
+    },
+    {
+      "mode": "hold",
+      "started": 28031.531,
+      "reads": [
+        {
+          "started": 28034.562,
+          "fault": "hold",
+          "status": 200,
+          "sha256": "cd53b2a189773a4fb0800c51fa3343681c14bdac983574add6ea75d87ccf8886",
+          "ended": 28046.578
+        },
+        {
+          "started": 28043.125,
+          "fault": null,
+          "status": 200,
+          "sha256": "912348a9b59792d5c821806118c9699b47593c570d0281466b65661fb1e17d26",
+          "ended": 28043.125
+        }
+      ],
+      "left": 0
+    },
+    {
+      "mode": "hold",
+      "started": 28093.25,
+      "reads": [
+        {
+          "started": 28093.578,
+          "fault": "hold",
+          "status": 200,
+          "sha256": "dcb390e62b4a799909c8d6cc8b110e5037c7e304cdbff6b111071ec13021ba0f",
+          "ended": 28105.578
+        },
+        {
+          "started": 28102.093,
+          "fault": null,
+          "status": 200,
+          "sha256": "4de393b80169873932e9c980f2265f0e0b2d9a638ed1556a8b9aa5503bcf1905",
+          "ended": 28102.093
+        }
+      ],
+      "left": 0
+    },
+    {
+      "mode": "hold",
+      "started": 28155.375,
+      "reads": [
+        {
+          "started": 28155.656,
+          "fault": "hold",
+          "status": 200,
+          "sha256": "e5dc8e62781175ce54d05847d5201aff8af8e424fb90710d6cbc22655e287cb0",
+          "ended": 28167.671
+        },
+        {
+          "started": 28164.265,
+          "fault": null,
+          "status": 200,
+          "sha256": "a6029bc074e88b9af1f13618c7c3c46c7d33b11fc90c959efd7eae4910ae2e26",
+          "ended": 28164.265
+        }
+      ],
+      "left": 0
+    },
+    {
+      "mode": "temporary",
+      "started": 28201.421,
+      "reads": [
+        {
+          "started": 28201.421,
+          "fault": "temporary",
+          "status": 503,
+          "ended": 28201.421
+        },
+        {
+          "started": 28202.0,
+          "fault": "temporary",
+          "status": 503,
+          "ended": 28202.0
+        },
+        {
+          "started": 28203.109,
+          "fault": null,
+          "status": 200,
+          "sha256": "2768c2747422b9b98dba2b016eb09fd68409c51516c5c74017c2ef1094e4d119",
+          "ended": 28203.109
+        }
+      ],
+      "left": 0
+    },
+    {
+      "mode": "exhaust",
+      "started": 28258.328,
+      "reads": [
+        {
+          "started": 28258.343,
+          "fault": "exhaust",
+          "status": 503,
+          "ended": 28258.343
+        },
+        {
+          "started": 28258.953,
+          "fault": "exhaust",
+          "status": 503,
+          "ended": 28258.953
+        },
+        {
+          "started": 28260.062,
+          "fault": "exhaust",
+          "status": 503,
+          "ended": 28260.062
+        },
+        {
+          "started": 28262.265,
+          "fault": "exhaust",
+          "status": 503,
+          "ended": 28262.265
+        },
+        {
+          "started": 28266.562,
+          "fault": "exhaust",
+          "status": 503,
+          "ended": 28266.562
+        },
+        {
+          "started": 28275.578,
+          "fault": "exhaust",
+          "status": 503,
+          "ended": 28275.578
+        },
+        {
+          "started": 28294.39,
+          "fault": null,
+          "status": 200,
+          "sha256": "9ccfefb1aa946c9be3243120899fbf7e042f21e22253819e2adff204f4b3e314",
+          "ended": 28294.39
+        }
+      ],
+      "left": 0
+    },
+    {
+      "mode": "exhaust",
+      "started": 28327.906,
+      "reads": [
+        {
+          "started": 28327.906,
+          "fault": "exhaust",
+          "status": 503,
+          "ended": 28327.906
+        },
+        {
+          "started": 28328.484,
+          "fault": "exhaust",
+          "status": 503,
+          "ended": 28328.484
+        },
+        {
+          "started": 28329.562,
+          "fault": "exhaust",
+          "status": 503,
+          "ended": 28329.562
+        },
+        {
+          "started": 28331.625,
+          "fault": "exhaust",
+          "status": 503,
+          "ended": 28331.625
+        },
+        {
+          "started": 28336.234,
+          "fault": "exhaust",
+          "status": 503,
+          "ended": 28336.234
+        },
+        {
+          "started": 28345.281,
+          "fault": "exhaust",
+          "status": 503,
+          "ended": 28345.281
+        },
+        {
+          "started": 28375.296,
+          "fault": null,
+          "status": 200,
+          "sha256": "f3cca1d22648e17f4dbe7b9b85e5ae10bc1a0e9ba3b0fd8cea1896c08433537f",
+          "ended": 28375.296
+        },
+        {
+          "started": 28394.156,
+          "fault": null,
+          "status": 200,
+          "sha256": "827c7f2562aafa203eac1a4fa27838b1ae23d3ee7fa9abfbedc791aa3a87d097",
+          "ended": 28394.171
+        }
+      ],
+      "left": 0
+    }
+  ],
+  "reads": [
+    {
+      "started": 27987.578,
+      "fault": "hold",
+      "status": 200,
+      "sha256": "0611945468854ad1d203360e5f3b38518351cb1aa75d957f4819b6f524394458",
+      "ended": 27999.593
+    },
+    {
+      "started": 27996.14,
+      "fault": null,
+      "status": 200,
+      "sha256": "a7f6421a0dcc07482202bfb2560ee46d4aeb4f1aa1e6a0103a6dc748d2c46e72",
+      "ended": 27996.14
+    },
+    {
+      "started": 28034.562,
+      "fault": "hold",
+      "status": 200,
+      "sha256": "cd53b2a189773a4fb0800c51fa3343681c14bdac983574add6ea75d87ccf8886",
+      "ended": 28046.578
+    },
+    {
+      "started": 28043.125,
+      "fault": null,
+      "status": 200,
+      "sha256": "912348a9b59792d5c821806118c9699b47593c570d0281466b65661fb1e17d26",
+      "ended": 28043.125
+    },
+    {
+      "started": 28093.578,
+      "fault": "hold",
+      "status": 200,
+      "sha256": "dcb390e62b4a799909c8d6cc8b110e5037c7e304cdbff6b111071ec13021ba0f",
+      "ended": 28105.578
+    },
+    {
+      "started": 28102.093,
+      "fault": null,
+      "status": 200,
+      "sha256": "4de393b80169873932e9c980f2265f0e0b2d9a638ed1556a8b9aa5503bcf1905",
+      "ended": 28102.093
+    },
+    {
+      "started": 28155.656,
+      "fault": "hold",
+      "status": 200,
+      "sha256": "e5dc8e62781175ce54d05847d5201aff8af8e424fb90710d6cbc22655e287cb0",
+      "ended": 28167.671
+    },
+    {
+      "started": 28164.265,
+      "fault": null,
+      "status": 200,
+      "sha256": "a6029bc074e88b9af1f13618c7c3c46c7d33b11fc90c959efd7eae4910ae2e26",
+      "ended": 28164.265
+    },
+    {
+      "started": 28201.421,
+      "fault": "temporary",
+      "status": 503,
+      "ended": 28201.421
+    },
+    {
+      "started": 28202.0,
+      "fault": "temporary",
+      "status": 503,
+      "ended": 28202.0
+    },
+    {
+      "started": 28203.109,
+      "fault": null,
+      "status": 200,
+      "sha256": "2768c2747422b9b98dba2b016eb09fd68409c51516c5c74017c2ef1094e4d119",
+      "ended": 28203.109
+    },
+    {
+      "started": 28258.343,
+      "fault": "exhaust",
+      "status": 503,
+      "ended": 28258.343
+    },
+    {
+      "started": 28258.953,
+      "fault": "exhaust",
+      "status": 503,
+      "ended": 28258.953
+    },
+    {
+      "started": 28260.062,
+      "fault": "exhaust",
+      "status": 503,
+      "ended": 28260.062
+    },
+    {
+      "started": 28262.265,
+      "fault": "exhaust",
+      "status": 503,
+      "ended": 28262.265
+    },
+    {
+      "started": 28266.562,
+      "fault": "exhaust",
+      "status": 503,
+      "ended": 28266.562
+    },
+    {
+      "started": 28275.578,
+      "fault": "exhaust",
+      "status": 503,
+      "ended": 28275.578
+    },
+    {
+      "started": 28294.39,
+      "fault": null,
+      "status": 200,
+      "sha256": "9ccfefb1aa946c9be3243120899fbf7e042f21e22253819e2adff204f4b3e314",
+      "ended": 28294.39
+    },
+    {
+      "started": 28327.906,
+      "fault": "exhaust",
+      "status": 503,
+      "ended": 28327.906
+    },
+    {
+      "started": 28328.484,
+      "fault": "exhaust",
+      "status": 503,
+      "ended": 28328.484
+    },
+    {
+      "started": 28329.562,
+      "fault": "exhaust",
+      "status": 503,
+      "ended": 28329.562
+    },
+    {
+      "started": 28331.625,
+      "fault": "exhaust",
+      "status": 503,
+      "ended": 28331.625
+    },
+    {
+      "started": 28336.234,
+      "fault": "exhaust",
+      "status": 503,
+      "ended": 28336.234
+    },
+    {
+      "started": 28345.281,
+      "fault": "exhaust",
+      "status": 503,
+      "ended": 28345.281
+    },
+    {
+      "started": 28375.296,
+      "fault": null,
+      "status": 200,
+      "sha256": "f3cca1d22648e17f4dbe7b9b85e5ae10bc1a0e9ba3b0fd8cea1896c08433537f",
+      "ended": 28375.296
+    },
+    {
+      "started": 28394.156,
+      "fault": null,
+      "status": 200,
+      "sha256": "827c7f2562aafa203eac1a4fa27838b1ae23d3ee7fa9abfbedc791aa3a87d097",
+      "ended": 28394.171
+    }
+  ],
+  "writes": [
+    {
+      "method": "PUT",
+      "path": "/api/v1/workspace-state",
+      "started": 27996.156
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSMu2JXNFRQ3jM-8MlEs8nfgTd8jEl/draft",
+      "started": 28000.843
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSMu2JXNFRQ3jM-8MlEs8nfgTd8jEl/draft",
+      "started": 28034.875
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSMu2JXNFRQ3jM-8MlEs8nfgTd8jEl/draft",
+      "started": 28164.609
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSMu2JXNFRQ3jM-8MlEs8nfgTd8jEl/draft",
+      "started": 28394.187
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSMu2JXNFRQ3jM-8MlEs8nfgTd8jEl/draft",
+      "started": 28394.203
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSMu2JXNFRQ3jM-8MlEs8nfgTd8jEl/draft/submissions/66fa4d045edab4450a3623769a806a6a",
+      "started": 28394.218
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/projects/default/sessions/V-OSMu2JXNFRQ3jM-8MlEs8nfgTd8jEl/queue",
+      "started": 28394.218
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/projects/default/sessions/V-OSMu2JXNFRQ3jM-8MlEs8nfgTd8jEl/draft/submissions/66fa4d045edab4450a3623769a806a6a",
+      "started": 28394.25
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSMu2JXNFRQ3jM-8MlEs8nfgTd8jEl/queue/66fa4d045edab4450a3623769a806a6a",
+      "started": 28394.265
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSMu2JXNFRQ3jM-8MlEs8nfgTd8jEl/queue/66fa4d045edab4450a3623769a806a6a",
+      "started": 28394.281
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/projects/default/sessions/V-OSMu2JXNFRQ3jM-8MlEs8nfgTd8jEl/runs",
+      "started": 28394.296
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/projects/default/sessions/V-OSMu2JXNFRQ3jM-8MlEs8nfgTd8jEl/queue/66fa4d045edab4450a3623769a806a6a",
+      "started": 28394.312
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSMu2JXNFRQ3jM-8MlEs8nfgTd8jEl/draft",
+      "started": 28414.937
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSMu2JXNFRQ3jM-8MlEs8nfgTd8jEl/draft",
+      "started": 28414.953
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSMu2JXNFRQ3jM-8MlEs8nfgTd8jEl/draft/submissions/4a553eff760c47566346d502cc102f96",
+      "started": 28414.953
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/projects/default/sessions/V-OSMu2JXNFRQ3jM-8MlEs8nfgTd8jEl/queue",
+      "started": 28414.968
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/projects/default/sessions/V-OSMu2JXNFRQ3jM-8MlEs8nfgTd8jEl/draft/submissions/4a553eff760c47566346d502cc102f96",
+      "started": 28414.984
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSMu2JXNFRQ3jM-8MlEs8nfgTd8jEl/queue/4a553eff760c47566346d502cc102f96",
+      "started": 28414.984
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSMu2JXNFRQ3jM-8MlEs8nfgTd8jEl/queue/4a553eff760c47566346d502cc102f96",
+      "started": 28415.0
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/projects/default/sessions/V-OSMu2JXNFRQ3jM-8MlEs8nfgTd8jEl/runs",
+      "started": 28415.031
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/projects/default/sessions/V-OSMu2JXNFRQ3jM-8MlEs8nfgTd8jEl/queue/4a553eff760c47566346d502cc102f96",
+      "started": 28415.062
+    }
+  ],
+  "websockets": [
+    {
+      "started": 27996.171,
+      "status": 101,
+      "upstream_bytes": 332,
+      "downstream_bytes": 563,
+      "opened": 27996.171,
+      "closed": 28083.265
+    },
+    {
+      "started": 28102.093,
+      "status": 101,
+      "upstream_bytes": 290,
+      "downstream_bytes": 489,
+      "opened": 28102.093,
+      "closed": 28155.25
+    },
+    {
+      "started": 28164.296,
+      "status": 101,
+      "upstream_bytes": 960,
+      "downstream_bytes": 10753,
+      "opened": 28164.296
+    }
+  ],
+  "model_calls": {
+    "网络恢复后继续这段输入": 1,
+    "恢复后第二轮对话": 1
+  },
+  "served_sources": {
+    "js/app.js": "e7cd59e043dbee0a27a6298d8a20c0d22cf7b43b01b1fbde6aec4b6d400022b6",
+    "js/features/settings/project-purge-recovery.js": "759b2756b8af3ed9f7f101e4df82b074cff3dce3b5d523227d7680d3ed513273",
+    "js/features/projects/project-purge-recovery-panel.js": "d28f80bb1d1b4f18d41543b1539927d0aba4d4bfe2e000a85831ceb7647edb95",
+    "js/api/request-recovery.js": "5d70df9f3c8cc077cfe06f27edf1b96b5c26540bb2c3146fd314be8df1e70be8",
+    "js/features/shell/workspace-startup.js": "514099059f01e6d3d938f1b40fd47d6949e9a1b9e19b91ac34303d320cdcc537",
+    "lang/zh-CN.json": "3314c0b3372e9db6ddf370d0a322938c9ed66e06ddd95a7ef90b4df275b80c12",
+    "lang/en-US.json": "31c5888359da5aa0d17ac691be91165c7067e7787cf66bd3bbf64943b77a17a8",
+    "lang/ru-RU.json": "d08ac18626a3739a5bca997bd31d6976325a7cb8f701e9b010d89fe67e7d13ed"
+  },
+  "user_inputs": [
+    "网络恢复后继续这段输入",
+    "恢复后第二轮对话"
+  ],
+  "final_model_errors": 0,
+  "event_kinds": {
+    "agent_start": 2,
+    "model_start": 2,
+    "model_text_delta": 2,
+    "model_done": 2,
+    "agent_done": 2
+  },
+  "draft": {
+    "revision": 12,
+    "text": "",
+    "attachments": [],
+    "run_admission_uncertain": false,
+    "submission": null,
+    "submissions": []
+  },
+  "queue": {
+    "items": [],
+    "discard_images": []
+  },
+  "runs": {
+    "automatic": true,
+    "active_runs": 0,
+    "starting_runs": 0,
+    "retained_runs": 2,
+    "max_active": 8,
+    "max_retained": 64,
+    "runs_started": 2,
+    "runs_completed": 2,
+    "runs_failed": 0,
+    "items": [
+      {
+        "id": "run-V-OSMvijJA1K_BxYrQmHZ6yuZWoTvlTn",
+        "project_id": "default",
+        "session_id": "V-OSMu2JXNFRQ3jM-8MlEs8nfgTd8jEl",
+        "agent_run_id": 2,
+        "agent_id": "mdo.default",
+        "model_id": "queue-fixture",
+        "protocol": "openai-chat-completions",
+        "reasoning_effort": "none",
+        "state": "succeeded",
+        "result": "ok",
+        "error_code": "none",
+        "terminal": true,
+        "cancel_requested": false,
+        "resume": false,
+        "client_resume_id": "",
+        "created_at": 1791515612369067,
+        "started_at": 1791515612375935,
+        "ended_at": 1791515612407940,
+        "config_revision": 2,
+        "model_generation": 2,
+        "module_generation": 1,
+        "skill_generation": 1,
+        "memory_generation": 1,
+        "agent_turns": 1,
+        "model_calls": 1,
+        "tool_calls": 0,
+        "compactions": 0,
+        "final_text_available": true,
+        "final_text_truncated": false,
+        "final_text_bytes": 48
+      },
+      {
+        "id": "run-V-OSMvdmlQ1HQ3WRo8SY7mBPQO8CddEk",
+        "project_id": "default",
+        "session_id": "V-OSMu2JXNFRQ3jM-8MlEs8nfgTd8jEl",
+        "agent_run_id": 1,
+        "agent_id": "mdo.default",
+        "model_id": "queue-fixture",
+        "protocol": "openai-chat-completions",
+        "reasoning_effort": "none",
+        "state": "succeeded",
+        "result": "ok",
+        "error_code": "none",
+        "terminal": true,
+        "cancel_requested": false,
+        "resume": false,
+        "client_resume_id": "",
+        "created_at": 1791515591624106,
+        "started_at": 1791515591630035,
+        "ended_at": 1791515591662043,
+        "config_revision": 2,
+        "model_generation": 2,
+        "module_generation": 1,
+        "skill_generation": 1,
+        "memory_generation": 1,
+        "agent_turns": 1,
+        "model_calls": 1,
+        "tool_calls": 0,
+        "compactions": 0,
+        "final_text_available": true,
+        "final_text_truncated": false,
+        "final_text_bytes": 57
+      }
+    ]
+  }
+}

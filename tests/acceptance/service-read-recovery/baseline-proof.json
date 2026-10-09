@@ -1,0 +1,66 @@
+{
+  "phases": [
+    {
+      "mode": "hold",
+      "started": 27776.703,
+      "reads": [
+        {
+          "started": 27777.093,
+          "fault": "hold",
+          "status": 200,
+          "sha256": "3c7faf31f908b47ce722c29d1013f2575f6e0469d522d495146d371abcbe3987",
+          "ended": 27789.109
+        }
+      ],
+      "left": 0
+    }
+  ],
+  "reads": [
+    {
+      "started": 27777.093,
+      "fault": "hold",
+      "status": 200,
+      "sha256": "3c7faf31f908b47ce722c29d1013f2575f6e0469d522d495146d371abcbe3987",
+      "ended": 27789.109
+    }
+  ],
+  "writes": [],
+  "websockets": [],
+  "model_calls": {},
+  "served_sources": {
+    "js/app.js": "f389806876176cf9f14050c4568dcd7a31350b838780bd6794af4e4489a0875c",
+    "js/features/settings/project-purge-recovery.js": "77173d8d25ebec3fb1e27154c47141dab6f61cc488f091b338f76a8b5897f552",
+    "js/features/projects/project-purge-recovery-panel.js": "23eee4ec99aff25888ca7e421a4594e4fb345517c25f4f8ade2d1c46238804f8",
+    "js/api/request-recovery.js": "5d70df9f3c8cc077cfe06f27edf1b96b5c26540bb2c3146fd314be8df1e70be8",
+    "lang/zh-CN.json": "25115906d3a6770fd0427e06ee826328b4c5fd15ab15f811a1ed145555a2039e",
+    "lang/en-US.json": "0ef838da02ae125a682fd1f2872e1768167e370e3dfd1e038286437afa874933",
+    "lang/ru-RU.json": "a72571bd53d6aa0e0a5022ce0a4da6234a857d0dae511281d9b681bce963d9c4"
+  },
+  "user_inputs": [],
+  "final_model_errors": 0,
+  "event_kinds": {},
+  "draft": {
+    "revision": 1,
+    "text": "SERVICE_READ_SAVED_DRAFT",
+    "attachments": [],
+    "run_admission_uncertain": false,
+    "submission": null,
+    "submissions": []
+  },
+  "queue": {
+    "items": [],
+    "discard_images": []
+  },
+  "runs": {
+    "automatic": true,
+    "active_runs": 0,
+    "starting_runs": 0,
+    "retained_runs": 0,
+    "max_active": 8,
+    "max_retained": 64,
+    "runs_started": 0,
+    "runs_completed": 0,
+    "runs_failed": 0,
+    "items": []
+  }
+}

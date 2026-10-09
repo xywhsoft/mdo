@@ -4,8 +4,8 @@ import { errorMessage, toast } from "../../utils/dom.js";
 function statusCopy(state) {
   if (state.writeConflictReason === "restart" && !state.intent) return t("shell.serviceRestarted");
   if (state.writeConflict && !state.intent) return t("purgeRecovery.stalePage");
-  if (!state.checked) return t("purgeRecovery.loading");
-  if (!state.intent) return state.error ? t("purgeRecovery.unavailable") : "";
+  if (!state.intent) return state.busy || !state.checked ? t("purgeRecovery.checkingService")
+    : state.error ? t("purgeRecovery.serviceUnavailable") : "";
   if (state.result?.committed) return t(state.result.restart_required ? "purgeConfirm.committedRestart" : "purgeRecovery.committed");
   if (state.result?.outcome === "aborted") return t("purgeRecovery.aborted");
   if (state.result?.outcome === "pending") return t("purgeRecovery.pending");
@@ -40,26 +40,31 @@ export function createProjectPurgeRecoveryPanel({ panel, notice, recovery, navig
 
   function render(state = recovery.get()) {
     const restarted = state.writeConflictReason === "restart" && !state.intent;
+    const serviceCheck = !recovery.requiresReview();
     const paused = recovery.isPaused();
     const active = document.activeElement;
     panel.hidden = !paused;
     panel.setAttribute("aria-busy", String(state.busy));
     if (!paused && dialog.open) dialog.close();
     notice.hidden = !paused || dialog.open;
-    notice.querySelector("span").textContent = t(restarted ? "shell.serviceRestarted" : "purgeRecovery.notice");
-    jump.textContent = t(restarted ? "devices.retry" : "purgeRecovery.open");
-    panel.querySelector("h3").textContent = t(restarted ? "shell.serviceRestartedTitle" : "purgeRecovery.title");
-    panel.querySelector('[data-purge-field="description"]').textContent = t(restarted
-      ? "shell.serviceRestartedDescription" : "purgeRecovery.description");
+    notice.querySelector("span").textContent = t(serviceCheck
+      ? state.busy || !state.error ? "purgeRecovery.checkingService" : "purgeRecovery.serviceUnavailable"
+      : restarted ? "shell.serviceRestarted" : "purgeRecovery.notice");
+    jump.textContent = t(serviceCheck || restarted ? "devices.retry" : "purgeRecovery.open");
+    panel.querySelector("h3").textContent = t(serviceCheck ? "purgeRecovery.serviceTitle"
+      : restarted ? "shell.serviceRestartedTitle" : "purgeRecovery.title");
+    panel.querySelector('[data-purge-field="description"]').textContent = t(serviceCheck
+      ? "purgeRecovery.serviceDescription" : restarted ? "shell.serviceRestartedDescription" : "purgeRecovery.description");
     panel.querySelector('[data-purge-field="status"]').textContent = statusCopy(state);
     binding.hidden = !state.intent;
     for (const field of ["name", "project_id", "revision", "purge_request_id"])
       panel.querySelector(`[data-purge-field="${field}"]`).textContent = String(state.intent?.[field] ?? "");
     for (const field of ["name", "project_id", "revision", "purge_request_id"])
       panel.querySelector(`[data-purge-label="${field}"]`).textContent = t(`purgeRecovery.${field}`);
-    error.hidden = !state.error || (restarted && state.error.code === "service_restarted");
+    error.hidden = !state.error || (serviceCheck && state.busy) || (restarted && state.error.code === "service_restarted");
     error.textContent = state.error ? errorMessage(state.error) : "";
-    query.textContent = state.busy ? t("purgeRecovery.working") : t("purgeRecovery.query");
+    query.textContent = serviceCheck ? t(state.busy ? "purgeRecovery.checkingService" : "devices.retry")
+      : state.busy ? t("purgeRecovery.working") : t("purgeRecovery.query");
     cancel.textContent = t("purgeRecovery.cancel");
     acknowledge.textContent = t("purgeRecovery.acknowledge");
     query.disabled = state.busy;

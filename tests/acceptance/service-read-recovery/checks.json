@@ -1,0 +1,28 @@
+{
+  "related_node_passed": 68,
+  "scoped_frontend_contracts_passed": 2,
+  "full_frontend_contracts": {
+    "scoped_passed": 2,
+    "full_passed": 17,
+    "full_failed": 3,
+    "preexisting_failures_match_baseline": [
+      "test_permission_decisions_are_visible_bounded_and_one_shot",
+      "test_resource_management_is_split_into_bounded_stores",
+      "test_untrusted_api_text_uses_dom_text_nodes"
+    ],
+    "baseline_new_selection_failed": 1
+  },
+  "actual_model_calls": 4,
+  "final_model_errors": 0,
+  "background_retry_seconds": 30.015,
+  "lifecycle_events_synthetic": true,
+  "trusted_ime_verified": false,
+  "native_online_refresh_exceptions": 0,
+  "unplanned_native_input": {
+    "length": 6,
+    "sha256": "4477ef4fe07a98103e09ac483e0aa690d9aaffa10c2493e92b9eba79aa3b911e",
+    "sent_to_model": false,
+    "origin_verified": false,
+    "retained_in_isolated_home": true
+  }
+}

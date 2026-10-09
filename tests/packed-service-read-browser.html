@@ -1,0 +1,68 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Service read recovery QA</title>
+<style>
+  body { margin:0; background:#202020; color:#ddd; font:13px system-ui }
+  header { padding:6px; display:flex; gap:8px; align-items:center }
+  button { padding:5px 10px }
+  iframe { width:100%; height:calc(100vh - 100px); border:0 }
+  #summary { margin:4px 8px; white-space:pre-wrap }
+</style>
+<header>
+  <button id="cold">冷启动：暂扣首次状态正文 12 秒</button>
+  <button id="temporary">状态读取失败两次（合成 focus）</button>
+  <button id="exhaust">状态读取失败六次（合成 focus）</button>
+  <button id="page-return">慢读中立即返回页面（合成 lifecycle）</button>
+</header>
+<pre id="summary">只观察真实工作台。focus 为夹具合成事件，不代表原生窗口输入。</pre>
+<script type="application/json" id="observations">[]</script>
+<iframe id="mdo" title="Actual packed mdo"></iframe>
+<script>
+  const frame = document.querySelector('#mdo');
+  const records = [], errors = [], seenToasts = new WeakSet();
+  const route = new URLSearchParams(location.search).get('route');
+  const started = performance.now();
+  let last = '', timer = 0;
+  function observe() {
+    const doc = frame.contentDocument, prompt = doc?.querySelector('#prompt');
+    if (!prompt) return;
+    for (const node of doc.querySelectorAll('#toast-region [data-tone="error"]')) {
+      if (!seenToasts.has(node)) { seenToasts.add(node); errors.push(node.textContent); }
+    }
+    const notice = doc.querySelector('#project-purge-notice');
+    const dialog = doc.querySelector('#project-purge-recovery-dialog');
+    const state = { input:prompt.value, inputDisabled:prompt.disabled,
+      sendDisabled:doc.querySelector('#send')?.disabled,
+      notice:notice?.hidden ? '' : notice?.textContent.trim(),
+      dialog:dialog?.open ? dialog.innerText.trim() : '',
+      hint:doc.querySelector('#composer-hint')?.textContent,
+      errors:errors.slice() };
+    const serialized = JSON.stringify(state);
+    if (serialized !== last) {
+      records.push({ seconds:Math.round((performance.now()-started)/100)/10, ...state });
+      last = serialized;
+      document.querySelector('#observations').textContent = JSON.stringify(records);
+      document.querySelector('#summary').textContent = JSON.stringify({ changes:records.length, ...state });
+    }
+  }
+  frame.addEventListener('load', () => {
+    clearInterval(timer); timer = setInterval(observe, 100); observe();
+  });
+  document.querySelector('#cold').addEventListener('click', async () => {
+    await fetch('/__qa/arm/hold'); frame.src = '/?qa_reload=' + Date.now() + '#' + route;
+  });
+  for (const mode of ['temporary', 'exhaust'])
+    document.querySelector('#' + mode).addEventListener('click', async () => {
+      await fetch('/__qa/arm/' + mode);
+      frame.contentWindow.dispatchEvent(new Event('focus'));
+    });
+  document.querySelector('#page-return').addEventListener('click', async () => {
+    await fetch('/__qa/arm/hold');
+    frame.contentWindow.dispatchEvent(new Event('focus'));
+    setTimeout(() => {
+      frame.contentWindow.dispatchEvent(new Event('pagehide'));
+      frame.contentWindow.dispatchEvent(new Event('pageshow'));
+    }, 250);
+  });
+  window.addEventListener('pagehide', () => clearInterval(timer));
+</script>

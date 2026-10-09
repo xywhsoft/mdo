@@ -31,7 +31,8 @@ function runningSessionCandidate(runs, sessions) {
 
 export async function startWorkspaceNavigation({ navigation, settingsStore,
   sessionsStore, runsStore, sessionDetailStore, dialog, title, continueButton, newButton,
-  prompt, entryHash, shouldRestore = () => true, canPersistSelection = () => true }) {
+  prompt, entryHash, shouldRestore = () => true, canPersistSelection = () => true,
+  subscribeWritable = null }) {
   let lastSavedKey = "";
   let savedReady = false;
   let target = null;
@@ -60,6 +61,9 @@ export async function startWorkspaceNavigation({ navigation, settingsStore,
     target = { key, projectId, sessionId };
     void flushSelection();
   });
+  // Remember the latest local navigation while continuity is being verified.
+  // Resume its normal save after the gate opens, never write through the gate.
+  subscribeWritable?.(() => { void flushSelection(); });
 
   const savedPromise = (async () => {
     let saved = null;
