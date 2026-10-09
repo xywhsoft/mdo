@@ -1,0 +1,22 @@
+{
+  "mode": "search_recovery",
+  "page_requests": 0,
+  "search_requests": 3,
+  "tool_completions": [
+    {
+      "kind": 6,
+      "success": true
+    },
+    {
+      "kind": 6,
+      "success": true
+    }
+  ],
+  "agent_completed_successfully": true,
+  "artifacts": [
+    {
+      "bytes": 15856,
+      "sha256": "5f23f8862b46bf548262c317b3ebdf4459daadea3f2ed3ff14120eab48381f37"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "xs_commit": "153315a092b8c37d9d79f090122f81ed2bcc139d",
+  "mdo_commit": "4172f7186d9d9a3dc864c8dab9eff5853a9c1d61",
+  "sha256": "7c7fbdc38d77f079efcca0fb989d90c1cd38f5af6f3e0cd17cf7553527b400f8",
+  "bytes": 4504269,
+  "packaged_app_sha256": "2cd671ad33e3d2a941935743aee99d44588f23dd4df89eb90d5dd55c46e0af06",
+  "mdo_worktree_dirty": false,
+  "website_commit": "ec458f53a75504f670becbab1742b7ef4816ae6c",
+  "host": {
+    "revision": "153315a092b8c37d9d79f090122f81ed2bcc139d",
+    "profile_sha256": "893b7863bf7768b125dfa9ca8af27550f8fdddccca70070fcfc5d8aac4a5bc04",
+    "binary_sha256": "75cdf12c877cbe44b5caab3a8cba31fa60ce07178ae282eb7c8d71e05c9fa55f",
+    "binary_bytes": 3179008
+  }
+}

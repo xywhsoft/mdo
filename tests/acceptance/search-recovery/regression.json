@@ -1,0 +1,19 @@
+{
+  "clean_worktree_commit": "4172f7186d9d9a3dc864c8dab9eff5853a9c1d61",
+  "passed": [
+    "test_search_api_runtime.py: strict POST/auth/UTF-8/normalization/error/no-ambiguous-replay",
+    "test_search_recovery.py: 25 finite native cases",
+    "test_search_xadmin_integration.py: unified plugin, real JWT, 9 total provider dispatches, exact quota",
+    "test_web_open_recovery.py: 20 native page cases and expired preflight",
+    "test_web_result_session_runtime.py --search-recovery: clean committed app",
+    "test_web_result_session_runtime.py --search-denied: clean committed app",
+    "test_search_packed.py: new clean candidate VFS/login gate/migration",
+    "test_web_contract.py: 4 clean contract checks"
+  ],
+  "external_model_used": false,
+  "browser_ui_verified": false,
+  "android_verified": false,
+  "stress_or_high_load_tests": false,
+  "daily_release_changed": false,
+  "website_deployed": false
+}
