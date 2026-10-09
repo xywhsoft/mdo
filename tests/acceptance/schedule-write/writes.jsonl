@@ -1,0 +1,12 @@
+{"method": "PUT", "path": "/api/v1/workspace-state", "status": 200, "started": 89578.921}
+{"method": "PATCH", "path": "/api/v1/settings/settings", "status": 200, "started": 89578.921}
+{"method": "PUT", "path": "/api/v1/projects/default/sessions/V-OSQUWEL_JKqF5Ez0gszxYst5S435O9/draft", "status": 200, "started": 89584.687}
+{"method": "PUT", "path": "/api/v1/projects/default/sessions/V-OSQUWEL_JKqF5Ez0gszxYst5S435O9/draft", "status": 200, "started": 89905.437}
+{"method": "PUT", "path": "/api/v1/projects/default/sessions/V-OSQUWEL_JKqF5Ez0gszxYst5S435O9/draft", "status": 200, "started": 89905.453}
+{"method": "PUT", "path": "/api/v1/projects/default/sessions/V-OSQUWEL_JKqF5Ez0gszxYst5S435O9/draft/submissions/6b34040dc5aaa40fc1c7fc5866f872e1", "status": 200, "started": 89905.468}
+{"method": "POST", "path": "/api/v1/projects/default/sessions/V-OSQUWEL_JKqF5Ez0gszxYst5S435O9/queue", "status": 201, "started": 89905.468}
+{"method": "DELETE", "path": "/api/v1/projects/default/sessions/V-OSQUWEL_JKqF5Ez0gszxYst5S435O9/draft/submissions/6b34040dc5aaa40fc1c7fc5866f872e1", "status": 200, "started": 89905.484}
+{"method": "PUT", "path": "/api/v1/projects/default/sessions/V-OSQUWEL_JKqF5Ez0gszxYst5S435O9/queue/6b34040dc5aaa40fc1c7fc5866f872e1", "status": 200, "started": 89905.5}
+{"method": "PUT", "path": "/api/v1/projects/default/sessions/V-OSQUWEL_JKqF5Ez0gszxYst5S435O9/queue/6b34040dc5aaa40fc1c7fc5866f872e1", "status": 200, "started": 89905.5}
+{"method": "POST", "path": "/api/v1/projects/default/sessions/V-OSQUWEL_JKqF5Ez0gszxYst5S435O9/runs", "status": 202, "started": 89905.515}
+{"method": "DELETE", "path": "/api/v1/projects/default/sessions/V-OSQUWEL_JKqF5Ez0gszxYst5S435O9/queue/6b34040dc5aaa40fc1c7fc5866f872e1", "status": 200, "started": 89905.546}

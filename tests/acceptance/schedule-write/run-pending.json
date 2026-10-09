@@ -1,0 +1,14 @@
+{
+  "actions": "",
+  "body": "跳到计划任务\n墨斗\n◉\n登录账号\n本机\n▾\n新建任务\nCtrl N\n计划任务\n项目\n\n添加项目，让任务按工作区分组。\n\n任务\n对话恢复浏览器验收\n2分钟前\n本地服务 0.1.0\n计划任务\n新建计划\n\n1 项计划\n\n确认丢失后仍可修改\n已启用\n\n仅一次 · default · mdo.default\n\n下次运行\n2026年10月10日 05:13\n触发次数\n0\n最近触发\n尚未触发\n正在运行\n0\n编辑\n暂停\n立即运行\n历史\n删除",
+  "draft": "SCHEDULE_ACK_FOLLOWUP",
+  "editorOpen": false,
+  "errors": [],
+  "formNotice": "",
+  "history": "",
+  "input": "",
+  "label": "",
+  "list": "1 项计划",
+  "saveDisabled": true,
+  "url": "http://127.0.0.1:57796/#/schedules"
+}

@@ -1,0 +1,29 @@
+✔ bundled language packs cover the annotated shell and switch without stale responses (51.5373ms)
+✔ schedule list quietly recovers two temporary failures (33.2302ms)
+✔ background polls preserve old cards and share ongoing recovery (3.017ms)
+✔ final temporary failures do not let polling restart six attempts (5.7967ms)
+✔ a hanging schedule response releases within the shared minute (3.0129ms)
+✔ leaving cancels a held list, preserves its snapshot and rejects late replacement (1.6769ms)
+✔ permanent read denials and run writes are never retried (2.5004ms)
+✔ lost create acknowledgement reads the original identity without another POST (4.5357ms)
+✔ browser duplicate conflict after creation is confirmed against the complete definition (0.6655ms)
+✔ an original ID not yet visible recovers quietly, never submitting a substitute (0.9927ms)
+✔ native read service failures recover even when that code is a definite write refusal (0.7184ms)
+✔ unconfirmed save retry remains read-only and retains the frozen original body (9.1726ms)
+✔ revisioned replace and pause recover matching state, while a different later edit is not overwritten (1.2218ms)
+✔ a no-op pause acknowledgement at the original revision remains successful (0.4295ms)
+✔ lost deletion confirmation verifies absence in the same native generation (0.7344ms)
+✔ declared persistence, capacity and permission refusals are immediate and do not inspect (0.7885ms)
+✔ hanging acknowledgement and confirmations share one deadline and release their signals (1.5608ms)
+✔ view cancellation releases a late write and later explicit retry only reads its result (0.6143ms)
+✔ changed target, malformed identity and wrong snapshot cannot acknowledge another schedule (0.7345ms)
+✔ manual run accepts one valid acknowledgement and never replays an uncertain start (0.803ms)
+✔ manual run has a finite ACK wait, cancels quietly and preserves definite refusals (0.8904ms)
+ℹ tests 21
+ℹ suites 0
+ℹ pass 21
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 145.6897

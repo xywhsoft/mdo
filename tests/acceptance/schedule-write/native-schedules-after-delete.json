@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "ok": true,
+  "request_id": "mdo-09f74de2d2cd3a5f0bb070dc",
+  "data": {
+    "generation": 10,
+    "enabled": true,
+    "automatic": true,
+    "persistence_fault": false,
+    "active_runs": 0,
+    "claims_started": 1,
+    "runs_completed": 1,
+    "runs_failed": 0,
+    "last_error": "",
+    "total": 0,
+    "truncated": false,
+    "items": []
+  }
+}

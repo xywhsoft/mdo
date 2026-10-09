@@ -1,0 +1,13 @@
+{
+  "result": {
+    "data": {
+      "id": "sc-c-9244f56ae5887339f8bd3b3db90f2b36",
+      "removed": true
+    }
+  },
+  "calls": [
+    "DELETE",
+    "GET",
+    "GET"
+  ]
+}

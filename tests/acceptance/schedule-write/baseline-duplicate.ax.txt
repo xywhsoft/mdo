@@ -1,0 +1,94 @@
+Browser tab: 42, Title: "墨斗", URL: "http://127.0.0.1:54090/#/schedules".
+0 AXWebArea 墨斗, URL: 127.0.0.1:54090/#/schedules
+	1 link Description: 跳到计划任务, Value: 127.0.0.1:54090/#schedules-content
+	2 container app-shell
+		3 container Description: 会话导航, ID: sidebar
+			4 link Description: 墨斗主页, Value: 127.0.0.1:54090/#/
+			5 container 通知 · 2
+				6 pop up button 扩展工具包安装
+				7 pop up button 登录账号
+			8 button Description: 关闭会话导航, ID: close-sidebar
+			9 button 登录账号, ID: open-account
+			10 pop up button 本机, Help: 选择设备, ID: open-devices
+			11 checkbox 新建任务 Ctrl N, Value: 0, ID: new-session
+				12 text 新建任务
+				13 text Ctrl N
+			14 checkbox 计划任务, Value: 1, ID: open-schedules
+			15 container 会话
+				16 container session-list
+					17 container 项目
+						18 button (expanded) Description: 折叠 项目, Secondary Actions: Collapse
+						19 pop up button (collapsed) Description: 列表选项, Secondary Actions: Expand
+						20 button 添加项目
+						21 text 添加项目，让任务按工作区分组。
+					22 container 任务
+						23 button (expanded) Description: 折叠 任务, Secondary Actions: Collapse
+						24 button 在默认项目新建任务
+						25 content list
+							26 container
+								27 button 对话恢复浏览器验收 2分钟前, Help: 对话恢复浏览器验收 default · conversation-fixture
+									28 text 对话恢复浏览器验收
+									29 text 2分钟前
+								30 pop up button (collapsed) Description: 对话恢复浏览器验收 的操作, Secondary Actions: Expand
+			91 text 本地服务 0.1.0
+			32 pop up button (collapsed) Description: 搜索会话, Help: 搜索会话（/）, ID: open-session-search, Secondary Actions: Expand
+			33 button Description: 切换为深色主题, ID: toggle-theme
+			34 button Description: 设置, ID: open-settings
+		35 container Agent 工作区
+			36 container 计划任务, ID: schedules-workspace
+				37 container
+					38 button Description: 返回对话, ID: close-schedules
+					39 heading 计划任务, Value: 1, ID: schedules-title
+						40 text 计划任务
+					41 button Description: 刷新, ID: schedules-refresh
+					42 button 新建计划, ID: schedule-new
+				43 container schedules-content
+					44 text 2 项计划
+					45 container schedules-list
+						46 container 确认丢失后的新计划
+							47 text 确认丢失后的新计划
+							48 text 已启用
+							49 text 仅一次 · default · mdo.default
+							50 definition list
+								51 container 下次运行
+									52 text 下次运行
+								53 text 2026年10月10日 04:54
+								54 container 触发次数
+									55 text 触发次数
+								56 text 0
+								57 container 最近触发
+									58 text 最近触发
+								59 text 尚未触发
+								60 container 正在运行
+									61 text 正在运行
+								62 text 0
+							63 button 编辑
+							64 button 暂停
+							65 button 立即运行
+							66 button 历史
+							67 button 删除
+						68 container 确认丢失后的新计划
+							69 text 确认丢失后的新计划
+							70 text 已启用
+							71 text 仅一次 · default · mdo.default
+							72 definition list
+								73 container 下次运行
+									74 text 下次运行
+								75 text 2026年10月10日 04:54
+								76 container 触发次数
+									77 text 触发次数
+								78 text 0
+								79 container 最近触发
+									80 text 最近触发
+								81 text 尚未触发
+								82 container 正在运行
+									83 text 正在运行
+								84 text 0
+							85 button 编辑
+							86 button 暂停
+							87 button 立即运行
+							88 button 历史
+							89 button 删除
+		90 splitter Description: 调整会话导航宽度, Value: 272, ID: sidebar-resize
+
+The focused UI element is 68 container 确认丢失后的新计划

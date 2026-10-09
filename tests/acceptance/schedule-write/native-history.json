@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "ok": true,
+  "request_id": "mdo-792fb8048293b72b7de7aedd",
+  "data": {
+    "schedule_id": "sc-c-9244f56ae5887339f8bd3b3db90f2b36",
+    "count": 1,
+    "limit": 32,
+    "has_more": false,
+    "items": [
+      {
+        "task_id": 1,
+        "agent_run_id": 1,
+        "scheduled_at": 1791576888947352,
+        "finished_at": 1791576889113659,
+        "result": "succeeded",
+        "text": "FIXTURE_OK: SCHEDULE_ACK_RUN",
+        "text_truncated": false
+      }
+    ]
+  }
+}
