@@ -1258,7 +1258,10 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
         goto fail;
     }
     DefinitionConfig.bAllowArtifactWrites = Home.Persistence != MDO_PERSISTENCE_EPHEMERAL;
+    /* General research/document/memory writes do not imply a coding task.
+     * Coding profiles can require verification without changing permissions. */
     DefinitionConfig.bRequireVerificationAfterWrite =
+        (AgentInfo.Flags & MDO_AGENT_REQUIRE_VERIFICATION_AFTER_WRITE) != 0u &&
         (AllowedEffects & XWORK_TOOL_EFFECT_WORKSPACE_WRITE) != 0u;
     DefinitionConfig.bInjectSystemPrompt = true;
     Definition = xworkAgentDefinitionCreate(&DefinitionConfig, Error);

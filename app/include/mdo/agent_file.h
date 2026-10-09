@@ -85,10 +85,24 @@ static inline bool MdoAgentFileParse(cstr Id, cstr Text, bool Main,
     xvalue* Document;
     size_t i;
     bool Ok;
+    bool RequireVerification = false;
     memset(File, 0, sizeof(*File));
     if (!MdoExtensionIdValid(Id)) return false;
     Document = MdoPromptParse(Text, true, Error, Capacity);
     if (Document == NULL) return false;
+    const xvalue* Verification = xrtValueObjectGet(Document,
+        xrtStrView("require_verification_after_write"));
+    xstrview VerificationText = {0};
+    if (Verification && (!xrtValueGetString(Verification, &VerificationText) ||
+        !((VerificationText.Size == 4u && !memcmp(VerificationText.Data, "true", 4u)) ||
+          (VerificationText.Size == 5u && !memcmp(VerificationText.Data, "false", 5u))) ||
+        (!Main && VerificationText.Size == 4u))) {
+        if (Error && Capacity) snprintf(Error, Capacity,
+            "require_verification_after_write must be a boolean on a main Agent; SubAgents inherit it");
+        xrtValueRelease(Document);
+        return false;
+    }
+    RequireVerification = Verification && VerificationText.Size == 4u;
     File->Agent.Size = sizeof(File->Agent);
     File->Agent.AbiVersion = MDO_MODULE_ABI_VERSION;
     snprintf(File->Id, sizeof(File->Id), "%s.%s", Main ? (!strcmp(Id,"default")?"mdo":"agent") : "subagent", Id);
@@ -130,6 +144,8 @@ static inline bool MdoAgentFileParse(cstr Id, cstr Text, bool Main,
     File->Agent.Flags = (Main?MDO_AGENT_MAIN:MDO_AGENT_SUBAGENT) | MDO_AGENT_ALLOW_BACKGROUND;
     if (MdoPromptTrue(Document, "read_only")) File->Agent.Flags |= MDO_AGENT_READ_ONLY;
     if (MdoPromptTrue(Document, "allow_delegation")) File->Agent.Flags |= MDO_AGENT_ALLOW_DELEGATION;
+    if (RequireVerification)
+        File->Agent.Flags |= MDO_AGENT_REQUIRE_VERIFICATION_AFTER_WRITE;
     File->Agent.AllowedEffects = (File->Agent.Flags & MDO_AGENT_READ_ONLY)
         ? MDO_TOOL_EFFECT_READ : MDO_TOOL_EFFECT_ALL;
     File->Agent.MaxTurns = Main?128u:64u; File->Agent.TimeoutMilliseconds = 120000u;

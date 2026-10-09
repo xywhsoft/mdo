@@ -1045,6 +1045,12 @@ static bool MdoModulesAgentCopy(MdoModuleGeneration* pGeneration,
         return false;
     }
     uRoles = pAgent->Flags & (MDO_AGENT_MAIN | MDO_AGENT_SUBAGENT);
+    if ((pAgent->Flags & MDO_AGENT_REQUIRE_VERIFICATION_AFTER_WRITE) &&
+        !(uRoles & MDO_AGENT_MAIN)) {
+        MdoModulesCopyError(Error, ErrorCapacity,
+            "completion verification is configured on the main Agent; SubAgents inherit it");
+        return false;
+    }
     if ( uRoles == 0u ||
          (pGeneration->Kind == MDO_MODULE_SUBAGENTS &&
           (uRoles != MDO_AGENT_SUBAGENT)) ) {
@@ -1763,6 +1769,7 @@ static bool MdoModulesApplyProfiles(MdoModuleCatalog* Catalog,MdoModuleDiagnosti
          * ordinary profile onto its C owner so callbacks keep their TCC lifetime.
          * C mode owns the base prompt/lifecycle/budgets; the UI owns tool scope. */
         if (Profile->UseCode) {
+            Config->Flags |= Native->Flags & MDO_AGENT_REQUIRE_VERIFICATION_AFTER_WRITE;
             xrtFree(Config->SystemPrompt); Config->SystemPrompt=Native->SystemPrompt; Native->SystemPrompt=NULL;
             Config->UserData=Native->UserData; Config->Acquire=Native->Acquire; Config->Release=Native->Release;
             Config->ContextWindowTokens=Native->ContextWindowTokens; Config->MaxInputTokens=Native->MaxInputTokens;

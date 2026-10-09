@@ -159,11 +159,14 @@ typedef enum mdo_agent_flag {
     MDO_AGENT_SUBAGENT = UINT32_C(1) << 1,
     MDO_AGENT_READ_ONLY = UINT32_C(1) << 2,
     MDO_AGENT_ALLOW_BACKGROUND = UINT32_C(1) << 3,
-    MDO_AGENT_ALLOW_DELEGATION = UINT32_C(1) << 4
+    MDO_AGENT_ALLOW_DELEGATION = UINT32_C(1) << 4,
+    /* Main-Agent opt-in: require an executable verification after each write.
+     * Delegated runs inherit their main Agent's completion policy. */
+    MDO_AGENT_REQUIRE_VERIFICATION_AFTER_WRITE = UINT32_C(1) << 5
 } mdo_agent_flag;
 #define MDO_AGENT_FLAGS_V1 (MDO_AGENT_MAIN | MDO_AGENT_SUBAGENT | \
     MDO_AGENT_READ_ONLY | MDO_AGENT_ALLOW_BACKGROUND | \
-    MDO_AGENT_ALLOW_DELEGATION)
+    MDO_AGENT_ALLOW_DELEGATION | MDO_AGENT_REQUIRE_VERIFICATION_AFTER_WRITE)
 
 struct mdo_host_services_v1;
 typedef mdo_result (*mdo_agent_acquire_v1)(void* UserData,

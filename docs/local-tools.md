@@ -62,6 +62,12 @@ code: false
 
 主 Agent 指令留空时按系统默认规则生成；普通模式下填写指令则使用所填的基础提示词。语言偏好、工作区、记忆等运行时规则继续由现有提示词组合器加入。SubAgent 需要填写任务指令。
 
+通用 Agent 默认不强制在写文件后追加命令验证，联网调研、保存报告和维护记忆可直接交付。
+编码主 Agent 可在 frontmatter 中设置 `require_verification_after_write: true`，要求在
+最后一次工作区修改之后成功执行验证命令才能结束；应在交付正文前完成适当验证。
+这项完成策略不改变工具权限；子 Agent 继承主 Agent 的完成策略。C 主 Agent 对应
+`MDO_AGENT_REQUIRE_VERIFICATION_AFTER_WRITE` 标志。
+
 默认 Agent 可以编辑和导出，不能停用；保存的外部版本可“恢复默认”。只查看默认配置不会创建 `mdo-home/agents`。
 
 ### 可选 C 能力
