@@ -162,9 +162,14 @@ static xwork_result MdoWebPageFailure(xwork_tool_result_writer* Writer,
             return MdoWebFail(Error, XWORK_ERROR_CANCELLED, "Web page reading cancelled");
         if ( Kind == XERR_MEMORY )
             return MdoWebFail(Error, XWORK_ERROR_OUT_OF_MEMORY, "Cannot allocate Web page response");
-        if ( Recovery->Exhausted )
-            return MdoWebToolFail(Writer, Error,
-                "Web page could not be reached after bounded automatic retries. The connection or remote server is still unavailable; try another source or retry later.");
+        if ( Recovery->Exhausted ) {
+            char Message[480];
+            snprintf(Message, sizeof(Message), "Web page could not be reached (%u attempt%s). %sThe connection or remote server is still unavailable; try another source or retry later.",
+                (unsigned)Recovery->Attempts, Recovery->Attempts == 1u ? "" : "s",
+                Recovery->WaitExceedsBudget ? "The next retry would exceed the remaining time. " :
+                "Automatic recovery limits were reached. ");
+            return MdoWebToolFail(Writer, Error, Message);
+        }
         /* These are routine tool failures the model can work around, not a
          * reason to abort the whole conversation. Keep raw transport prose
          * (which can contain URL credentials) out of model-visible results. */

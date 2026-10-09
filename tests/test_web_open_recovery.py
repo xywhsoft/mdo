@@ -25,7 +25,7 @@ class Handler(BaseHTTPRequestHandler):
         calls = self.calls.setdefault(self.path, [])
         calls.append(time.monotonic())
         attempt = len(calls)
-        if self.path == "/disconnect" and attempt <= 2:
+        if self.path in ("/disconnect", "/short-network") and attempt <= 2:
             self.connection.shutdown(socket.SHUT_RDWR)
             self.connection.close()
             self.close_connection = True
@@ -118,13 +118,13 @@ static bool Fetch(void* data, const XS_FetchRequest* request,
     cases = ["recover", "disconnect", "denied", "missing", "deadline", "cancel"]
     if not baseline:
         cases += ["partial", "malformed", "policy", "large", "limited", "date", "limited-long",
-                  "limited-overflow", "limited-invalid", "limited-duplicate", "deadline-late", "cancel-wait", "exhausted"]
+                  "limited-overflow", "limited-invalid", "limited-duplicate", "deadline-late", "short-network", "cancel-wait", "exhausted"]
     calls = []
     for name in cases:
         arguments = json.dumps({"url": f"http://127.0.0.1:{port}/{name}"})
         calls.append(f'''
     probe.Fetches = 0u;
-    ProbeDeadline = xrtDeadlineAfter({200000 if name == 'deadline' else 800000 if name == 'deadline-late' else 25000000}u);
+    ProbeDeadline = xrtDeadlineAfter({200000 if name in ('deadline', 'short-network') else 800000 if name == 'deadline-late' else 25000000}u);
     ProbeCancel = {'xrtCancelCreate()' if name.startswith('cancel') else 'NULL'};
     uint64 started_{name.replace('-', '_')} = xrtClock();
     bool ok_{name.replace('-', '_')} = Execute(agent, "web_open", {json.dumps(arguments)}, &open);
@@ -195,7 +195,7 @@ def run(host: Path, baseline: bool, output_file: Path | None) -> None:
                 assert "case=limited-long success:0 fetches:1" in output, output
                 assert "case=exhausted success:0 fetches:6" in output, output
                 assert "case=partial success:1 fetches:3" in output, output
-                for name in ("malformed", "policy", "large", "limited-overflow", "cancel-wait"):
+                for name in ("malformed", "policy", "large", "limited-overflow", "short-network", "cancel-wait"):
                     assert f"case={name} success:0 fetches:1" in output, output
                 assert "case=deadline-late success:0 fetches:2" in output, output
                 for name in ("limited-invalid", "limited-duplicate"):
@@ -205,8 +205,9 @@ def run(host: Path, baseline: bool, output_file: Path | None) -> None:
                     assert marker in output, output
                 for marker in ("protocol validation", "policy denied", "response size limit"):
                     assert marker in output, output
-                assert output.count("execute_web_open=") == 19, output
-                assert "summary=permissions:19 docs:7 completed:7 failed:12" in output, output
+                assert "Web page could not be reached (1 attempt). The next retry would exceed" in output, output
+                assert output.count("execute_web_open=") == 20, output
+                assert "summary=permissions:20 docs:7 completed:7 failed:13" in output, output
             record = {"baseline": baseline, "native_output": output,
                       "requests": {name: [round(t - times[0], 3) for t in times]
                                    for name, times in Handler.calls.items()}}
