@@ -540,10 +540,9 @@ select:focus-visible,
 .resource-error button { margin-top: 8px; }
 
 .sidebar-footer { padding-top: 9px; border-top: 1px solid var(--border); }
-.sidebar-status-row { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+.sidebar-status-row { display: flex; align-items: center; gap: 6px; margin-top: 4px; padding-right: 4px; }
 .runtime-state { display: flex; flex: 1; min-width: 0; align-items: center; gap: 8px; padding: 4px 11px; color: var(--muted); font-size: 11px; }
 #runtime-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sidebar-theme-toggle { flex: 0 0 auto; margin-right: 4px; }
 
 .status-dot {
   width: 7px;

@@ -113,17 +113,16 @@
       </nav>
 
       <div class="sidebar-footer">
-        <button class="sidebar-link" id="open-settings" type="button">
-          <span class="icon" data-icon="settings" aria-hidden="true"></span>
-          <span data-i18n="shell.settings">设置</span>
-        </button>
         <div class="sidebar-status-row">
           <div class="runtime-state" id="runtime-state" role="status">
             <span class="status-dot" aria-hidden="true"></span>
             <span id="runtime-label">正在连接本地服务…</span>
           </div>
-          <button class="icon-button sidebar-theme-toggle" id="toggle-theme" type="button" aria-label="切换主题" title="切换主题">
+          <button class="icon-button" id="toggle-theme" type="button" aria-label="切换主题" title="切换主题">
             <span class="icon" data-icon="theme" aria-hidden="true"></span>
+          </button>
+          <button class="icon-button" id="open-settings" type="button" aria-label="设置" data-i18n-aria-label="shell.settings" title="设置" data-i18n-title="shell.settings">
+            <span class="icon" data-icon="settings" aria-hidden="true"></span>
           </button>
         </div>
       </div>
