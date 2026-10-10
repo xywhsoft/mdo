@@ -1,0 +1,2 @@
+# Preserve the exact files read back from Android, including line endings.
+* -text

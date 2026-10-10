@@ -118,19 +118,27 @@ def run(args):
     threading.Thread(target=server.serve_forever, daemon=True).start()
     model_port = server.server_port
     local_port = None
+    device_port = None
     proof = {'scope': 'real ARM64 app C/TCC + HTTP API; browser/native UI separately',
              'package': args.package, 'stress_or_high_load': False, 'cases': []}
     try:
         adb('reverse', 'tcp:' + str(model_port), 'tcp:' + str(model_port))
+        # launch() waits for a new listener; an already-open Activity would
+        # otherwise make that wait time out without a product startup failure.
+        adb('shell', 'am', 'force-stop', args.package)
 
-        def reconnect(device_port):
-            nonlocal local_port
+        def reconnect(port):
+            nonlocal local_port, device_port
             if local_port is not None:
                 adb('forward', '--remove', 'tcp:' + str(local_port))
-            local_port = int(adb('forward', 'tcp:0', 'tcp:' + str(device_port)))
+            device_port = port
+            local_port = int(adb('forward', 'tcp:0', 'tcp:' + str(port)))
 
         def request(method, path, data=None, extra=None):
-            headers = dict(extra or {})
+            # ADB changes the transport port, but the application's public
+            # authority remains its phone listener. Keep Host/Origin together.
+            authority = f'127.0.0.1:{device_port}'
+            headers = {'Host': authority, 'Origin': 'http://' + authority, **(extra or {})}
             if data is not None:
                 headers['Content-Type'] = 'application/json'
             if method not in ('GET', 'HEAD', 'OPTIONS'):

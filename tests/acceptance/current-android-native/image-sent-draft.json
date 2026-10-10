@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "ok": true,
+  "request_id": "mdo-8f21ea8f939d910be9eaa6c0",
+  "data": {
+    "revision": 6,
+    "text": "",
+    "attachments": [],
+    "run_admission_uncertain": false,
+    "submission": null,
+    "submissions": []
+  }
+}

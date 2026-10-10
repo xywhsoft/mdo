@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "ok": true,
+  "request_id": "mdo-f06442f49d0d3220f2bcbb32",
+  "data": {
+    "id": "V-OSVBQljYSO_k_36nlBTNuVaH1VyAAP",
+    "project_id": "default",
+    "parent_session_id": "",
+    "title": "手机系统接口验收",
+    "agent_id": "mdo.default",
+    "model_id": "android-native-image",
+    "protocol": "openai-chat-completions",
+    "reasoning_effort": "none",
+    "permission_profile": "read-only",
+    "workspace_root": "/data/user/0/org.xleaves.mdo.qa.stability/files/mdo-home/workspace",
+    "status": "active",
+    "revision": 2,
+    "created_at": 1791657535199883,
+    "updated_at": 1791657665230591,
+    "pinned": false,
+    "runtime_open": false,
+    "config_revision": 1,
+    "model_generation": 1,
+    "module_generation": 1,
+    "skill_generation": 1,
+    "max_output_tokens": 16384,
+    "forked_through_sequence": 0
+  }
+}

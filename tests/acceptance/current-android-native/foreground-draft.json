@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "ok": true,
+  "request_id": "mdo-53626e8edafce68a12974aef",
+  "data": {
+    "revision": 2,
+    "text": "中文：像素画笔与橡皮。\nEnglish: keep the original text.\nРусский: сохранить исходный текст.\n\n- Color: #34a1ff\n- File: pixel.png\n",
+    "attachments": [
+      "2e5f4614078a87a19fd610b73f5a3ab2"
+    ],
+    "run_admission_uncertain": false,
+    "submission": null,
+    "submissions": []
+  }
+}

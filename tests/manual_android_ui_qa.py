@@ -78,7 +78,7 @@ def main():
     assert 'uid=' in adb('shell', 'run-as', args.package, 'id'), 'A debuggable QA APK is required'
     server = ThreadingHTTPServer(('127.0.0.1', 0), Model)
     threading.Thread(target=server.serve_forever, daemon=True).start()
-    model_port, local_port = server.server_port, None
+    model_port, local_port, device_port = server.server_port, None, None
     proof = {'scope': 'real QA APK and native UI; synthetic model', 'package': args.package,
              'stress_or_high_load': False, 'expected_reply': REPLY}
 
@@ -95,13 +95,17 @@ def main():
         raise AssertionError('QA host did not publish a loopback listener')
 
     def reconnect(port):
-        nonlocal local_port
+        nonlocal local_port, device_port
         if local_port is not None:
             adb('forward', '--remove', 'tcp:' + str(local_port))
         local_port = int(adb('forward', 'tcp:0', 'tcp:' + str(port)))
+        device_port = port
 
     def request(method, path, body=None, headers=None):
-        headers = dict(headers or {})
+        # ADB forwards to another PC port; the public API still validates the
+        # phone listener's authority. Keep its Host and Origin together.
+        authority = f'127.0.0.1:{device_port}'
+        headers = {'Host': authority, 'Origin': 'http://' + authority, **(headers or {})}
         if body is not None:
             headers['Content-Type'] = 'application/json'
         if method not in ('GET', 'HEAD', 'OPTIONS'):
@@ -119,6 +123,9 @@ def main():
 
     try:
         adb('reverse', 'tcp:' + str(model_port), 'tcp:' + str(model_port))
+        # An already-open Activity does not append a fresh listener to the log.
+        # Start the owned QA process anew, preserving its application data.
+        adb('shell', 'am', 'force-stop', args.package)
         reconnect(launch())
         config, headers = request('GET', '/api/v1/models/config')
         provider = {'id': 'android-native', 'name': 'Android native UI fixture', 'builtin': False,

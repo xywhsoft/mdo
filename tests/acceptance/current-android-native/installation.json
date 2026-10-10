@@ -1,0 +1,9 @@
+{
+  "package": "org.xleaves.mdo.qa.stability",
+  "version_code": 30000064,
+  "sha256": "2f74b8455953d48f9680bd43663ffa83a35c7411dca547acc8cb7549985f660d",
+  "bytes": 4199661,
+  "installed_bytes_match_candidate": true,
+  "installation": "fresh independent QA package; previous QA package absent",
+  "daily_package_modified": false
+}

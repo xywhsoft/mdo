@@ -1,0 +1,174 @@
+{
+  "scope": "real ARM64 app C/TCC + HTTP API; browser/native UI separately",
+  "package": "org.xleaves.mdo.qa.stability",
+  "stress_or_high_load": false,
+  "cases": [
+    {
+      "name": "retry",
+      "requests": 3,
+      "state": "succeeded",
+      "errors": 0
+    },
+    {
+      "name": "network",
+      "requests": 2,
+      "state": "succeeded",
+      "errors": 0
+    },
+    {
+      "name": "partial",
+      "requests": 2,
+      "state": "succeeded",
+      "errors": 0
+    },
+    {
+      "name": "quota",
+      "requests": 1,
+      "state": "failed",
+      "errors": 1,
+      "error_kind": "daily_token_limit"
+    },
+    {
+      "name": "cancel_backoff",
+      "requests_before_resume": 1,
+      "state": "cancelled",
+      "cancel_ms": 97
+    },
+    {
+      "name": "resume_continue_restart",
+      "resumed": true,
+      "credential_retained": true,
+      "draft_retained": true,
+      "errors": 0
+    }
+  ],
+  "calls": {
+    "retry": 3,
+    "network": 2,
+    "partial": 2,
+    "quota": 1,
+    "stop": 2,
+    "continue": 1,
+    "after-restart": 1
+  },
+  "requests": [
+    {
+      "prompt": "retry",
+      "attempt": 1,
+      "at": 170282.281,
+      "users": [
+        "retry"
+      ]
+    },
+    {
+      "prompt": "retry",
+      "attempt": 2,
+      "at": 170283.406,
+      "users": [
+        "retry"
+      ]
+    },
+    {
+      "prompt": "retry",
+      "attempt": 3,
+      "at": 170285.562,
+      "users": [
+        "retry"
+      ]
+    },
+    {
+      "prompt": "network",
+      "attempt": 1,
+      "at": 170285.671,
+      "users": [
+        "retry",
+        "network"
+      ]
+    },
+    {
+      "prompt": "network",
+      "attempt": 2,
+      "at": 170286.765,
+      "users": [
+        "retry",
+        "network"
+      ]
+    },
+    {
+      "prompt": "partial",
+      "attempt": 1,
+      "at": 170286.843,
+      "users": [
+        "retry",
+        "network",
+        "partial"
+      ]
+    },
+    {
+      "prompt": "partial",
+      "attempt": 2,
+      "at": 170288.0,
+      "users": [
+        "retry",
+        "network",
+        "partial"
+      ]
+    },
+    {
+      "prompt": "quota",
+      "attempt": 1,
+      "at": 170288.078,
+      "users": [
+        "quota"
+      ]
+    },
+    {
+      "prompt": "stop",
+      "attempt": 1,
+      "at": 170288.203,
+      "users": [
+        "retry",
+        "network",
+        "partial",
+        "stop"
+      ]
+    },
+    {
+      "prompt": "stop",
+      "attempt": 2,
+      "at": 170289.64,
+      "users": [
+        "retry",
+        "network",
+        "partial",
+        "stop"
+      ]
+    },
+    {
+      "prompt": "continue",
+      "attempt": 1,
+      "at": 170289.734,
+      "users": [
+        "retry",
+        "network",
+        "partial",
+        "stop",
+        "continue"
+      ]
+    },
+    {
+      "prompt": "after-restart",
+      "attempt": 1,
+      "at": 170290.625,
+      "users": [
+        "retry",
+        "network",
+        "partial",
+        "stop",
+        "continue",
+        "after-restart"
+      ]
+    }
+  ],
+  "url": "http://127.0.0.1:54644/#/projects/default/sessions/V-OSVBE_WnOBCjpespcEHjO6M_NY4nF7"
+}

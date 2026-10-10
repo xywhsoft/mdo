@@ -1,0 +1,200 @@
+{
+  "date": "2026-10-11",
+  "device": {
+    "model": "RMX5090",
+    "android": 16,
+    "api": 36,
+    "abi": "arm64-v8a",
+    "webview": "138.0.7204.179"
+  },
+  "installation": {
+    "package": "org.xleaves.mdo.qa.stability",
+    "version_code": 30000064,
+    "sha256": "2f74b8455953d48f9680bd43663ffa83a35c7411dca547acc8cb7549985f660d",
+    "bytes": 4199661,
+    "installed_bytes_match_candidate": true,
+    "installation": "fresh independent QA package; previous QA package absent",
+    "daily_package_modified": false
+  },
+  "source": {
+    "files": 431,
+    "sha256": "82cb0b6354b30226a4d69dead949fe36df061ee86ed782d1e3c34d3b0a8945e2",
+    "includes_uncommitted_source": true,
+    "unchanged": true,
+    "xs_revision": "f05f7661062fdca04da8d571ad859eb4b87c0889"
+  },
+  "api_conversation": {
+    "model_requests": 12,
+    "cases": [
+      {
+        "name": "retry",
+        "requests": 3,
+        "state": "succeeded",
+        "errors": 0
+      },
+      {
+        "name": "network",
+        "requests": 2,
+        "state": "succeeded",
+        "errors": 0
+      },
+      {
+        "name": "partial",
+        "requests": 2,
+        "state": "succeeded",
+        "errors": 0
+      },
+      {
+        "name": "quota",
+        "requests": 1,
+        "state": "failed",
+        "errors": 1,
+        "error_kind": "daily_token_limit"
+      },
+      {
+        "name": "cancel_backoff",
+        "requests_before_resume": 1,
+        "state": "cancelled",
+        "cancel_ms": 97
+      },
+      {
+        "name": "resume_continue_restart",
+        "resumed": true,
+        "credential_retained": true,
+        "draft_retained": true,
+        "errors": 0
+      }
+    ]
+  },
+  "native_system_ui": {
+    "model_requests": 3,
+    "requests": [
+      {
+        "model": "android-native-text",
+        "prompt": "UI base turn",
+        "images": 0,
+        "image_sha256": [],
+        "at": 170333.39
+      },
+      {
+        "model": "android-native-image",
+        "prompt": "中文：像素画笔与橡皮。\nEnglish: keep the original text.\nРусский: сохранить исходный текст.\n\n- Color: #34a1ff\n- File: pixel.png",
+        "images": 1,
+        "image_sha256": [
+          "c44ad1ad286fbbce7b20e7c9e2941b077594eab5acf96d6c5ca116ced2e25047"
+        ],
+        "at": 170567.781
+      },
+      {
+        "model": "android-native-image",
+        "prompt": "after-native-restore-current",
+        "images": 0,
+        "image_sha256": [],
+        "at": 171166.078
+      }
+    ],
+    "clipboard": "actual reply copy button and Android Paste; exact multilingual six-line draft",
+    "model_switch": "actual panel after a completed turn; text draft retained",
+    "attachment": "actual filtered system photo picker, one synthetic PNG, native send button",
+    "foreground_return": "Home then return to the same Activity; text and attachment unchanged",
+    "export_directory": "/sdcard/Download/mdo-stability-qa-20261011-current",
+    "exports": [
+      {
+        "name": "mdo-手机系统接口验收.md",
+        "bytes": 21258,
+        "sha256": "dba621992a653e5bf55753f980499f5a1ba3fc0faf153a7db2cc58210342d4b3"
+      },
+      {
+        "name": "mdo-session-V-OSVBQljYSO_k_36nlBTNuVaH1VyAAP.backu.json",
+        "bytes": 68554,
+        "sha256": "da69c7b6a0c25719c40d3dd0855e5e2c9b13aa9b23893d938aa19ec3e37e040b"
+      }
+    ],
+    "all_backup_file_lengths_and_hashes_valid": [
+      {
+        "path": "attachments/2e5f4614078a87a19fd610b73f5a3ab2.bin",
+        "bytes": 15254,
+        "sha256": "c44ad1ad286fbbce7b20e7c9e2941b077594eab5acf96d6c5ca116ced2e25047"
+      },
+      {
+        "path": "attachments/2e5f4614078a87a19fd610b73f5a3ab2.json",
+        "bytes": 156,
+        "sha256": "82fa8a6ca43b682c61e84dcfb7a6b16d2b1d4c56cc445131242238706f44f649"
+      },
+      {
+        "path": "attachments/events/6.json",
+        "bytes": 82,
+        "sha256": "8eefddb039079df793e728be62b8a9854e657851e056a45e593c9d2eae6938fa"
+      },
+      {
+        "path": "draft.json",
+        "bytes": 109,
+        "sha256": "ea6345f671d3aed35e0bd586ecc475339d3a5d037139aef2a2b870b42f6af486"
+      },
+      {
+        "path": "meta.json",
+        "bytes": 752,
+        "sha256": "6dac219611cbc90c1fff239f0d9df3f419d9558611a17d7d7da196d5668a7495"
+      },
+      {
+        "path": "queue-receipts/f0abdd4827f4885a169f627c4f484d3c.json",
+        "bytes": 108,
+        "sha256": "e5069d07fa6630e2acfcc8108ad0def2bd25ed5d4e5a11f2219d66125746eced"
+      },
+      {
+        "path": "queue.json",
+        "bytes": 51,
+        "sha256": "d60fde09cedf096d889ceac8fec0096a0957cd1304ef1c5d7778c03f5606f154"
+      },
+      {
+        "path": "snapshot.json",
+        "bytes": 26112,
+        "sha256": "72b6ac26a56a4d155779dd42c246981b6b1a0cc8e91dba50315fc4442db91650"
+      },
+      {
+        "path": "ui-events.jsonl",
+        "bytes": 7250,
+        "sha256": "583d55a24fbc9f1e415b1f04ba0d4aabf9b82e1d024c1db0dbae54bdd215ca79"
+      }
+    ],
+    "markdown_embedded_image_exact": true,
+    "image_sha256": "c44ad1ad286fbbce7b20e7c9e2941b077594eab5acf96d6c5ca116ced2e25047",
+    "restore": {
+      "session_id": "28893f1aff8c82bf4a31f5a186d1312f",
+      "source_session_id": "V-OSVBQljYSO_k_36nlBTNuVaH1VyAAP",
+      "history_rows_exact_except_session_id": 10,
+      "total_rows_after_continuation": 15,
+      "image_bytes_exact": true,
+      "continuation_requests": 1,
+      "terminal_success": true,
+      "errors": 0
+    }
+  },
+  "fixtures_ended": true,
+  "owned_adb_forwards_and_reverses_removed": true,
+  "daily_package_modified": false,
+  "production_models_or_credentials_used": false,
+  "stress_or_high_load": false,
+  "not_covered": [
+    "upgrade data preservation: previous QA package absent",
+    "physical external keyboard",
+    "long background execution",
+    "other phone models",
+    "Windows system clipboard and save UI",
+    "Linux system clipboard, save UI and interactive window close",
+    "official release"
+  ],
+  "fixture_startup_from_running": {
+    "scope": "owned QA package already open before the bounded fixture",
+    "before": {
+      "before_fixture_pid": "27082",
+      "already_running": true
+    },
+    "exit_code": 0,
+    "model_requests": 1,
+    "terminal_success": true,
+    "errors": 0,
+    "session": "V-OSVFfSLcx533pb7IKkyQm6oC9BAAaB"
+  },
+  "total_successful_acceptance_model_requests": 16
+}

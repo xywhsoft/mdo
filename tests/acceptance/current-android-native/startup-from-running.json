@@ -1,0 +1,12 @@
+{
+  "scope": "owned QA package already open before the bounded fixture",
+  "before": {
+    "before_fixture_pid": "27082",
+    "already_running": true
+  },
+  "exit_code": 0,
+  "model_requests": 1,
+  "terminal_success": true,
+  "errors": 0,
+  "session": "V-OSVFfSLcx533pb7IKkyQm6oC9BAAaB"
+}
