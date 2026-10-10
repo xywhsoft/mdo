@@ -68,3 +68,11 @@ python tools/qa_release.py --skip-host-build --xserver-root <锁定xs目录>
 没有执行压力、高负载或 soak 测试，没有发布官网或更新日用包。新版 QA 包的实际
 升级、对话和原生系统接口仍待设备连接；较早 QA 包的真机结果不替代新版验收。
 Windows 原生复制与文件保存也仍需实际系统交接确认。
+
+## Linux 服务版补验
+
+2026-10-11，相同 431 个应用输入已构建为 glibc 2.28 和静态 musl 服务版，
+通过实际页面的限流/流式恢复、准确额度拒绝、停止与继续、多语草稿保留、
+重启续聊及执行中断后恢复队列。来源、原生 API、页面及构建收尾修复见
+[Linux 集成验收](../current-linux-integration/README.md)。这项补验不替代
+Android 真机或 Windows/Linux 原生剪贴板及文件选择器验收。

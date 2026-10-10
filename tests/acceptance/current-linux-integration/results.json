@@ -1,0 +1,57 @@
+{
+  "application_source_sha256": "82cb0b6354b30226a4d69dead949fe36df061ee86ed782d1e3c34d3b0a8945e2",
+  "source_files": 431,
+  "includes_uncommitted_source": true,
+  "source_matches_windows_android_integration_candidate": true,
+  "browser_on_windows_native_service_on_linux": true,
+  "linux_native_gtk_or_system_clipboard_tested": false,
+  "stress_or_high_load": false,
+  "products": [
+    {
+      "libc": "glibc",
+      "passed": true,
+      "browser_model_calls": 11,
+      "interruption_model_calls": 3,
+      "event_counts": {
+        "agent_start": 7,
+        "model_start": 8,
+        "model_text_delta": 6,
+        "model_done": 5,
+        "agent_done": 6,
+        "error": 1
+      },
+      "only_error": "daily_token_limit (expected, one attempt)",
+      "user_inputs_not_duplicated": true,
+      "unfinished_stream_replaced": true,
+      "cancelled_run": true,
+      "draft_and_history_preserved_after_restart": true,
+      "no_automatic_replay_after_restart": true,
+      "normal_followup_after_restart": true,
+      "browser_warnings_or_errors": 0,
+      "fixtures_ended": true
+    },
+    {
+      "libc": "musl",
+      "passed": true,
+      "browser_model_calls": 11,
+      "interruption_model_calls": 3,
+      "event_counts": {
+        "agent_start": 7,
+        "model_start": 8,
+        "model_text_delta": 6,
+        "model_done": 5,
+        "agent_done": 6,
+        "error": 1
+      },
+      "only_error": "daily_token_limit (expected, one attempt)",
+      "user_inputs_not_duplicated": true,
+      "unfinished_stream_replaced": true,
+      "cancelled_run": true,
+      "draft_and_history_preserved_after_restart": true,
+      "no_automatic_replay_after_restart": true,
+      "normal_followup_after_restart": true,
+      "browser_warnings_or_errors": 0,
+      "fixtures_ended": true
+    }
+  ]
+}

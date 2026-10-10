@@ -1,0 +1,133 @@
+- link "跳到对话":
+  - /url: "#timeline"
+- complementary "会话导航":
+  - link "墨斗主页":
+    - /url: "#/"
+    - generic: 墨斗
+  - group "通知 · 2":
+    - button "扩展工具包安装":
+    - button "登录账号":
+  - button "关闭会话导航":
+  - button "登录账号":
+    - generic: ◉
+    - generic: 登录账号
+  - button "本机":
+    - generic: 本机
+    - generic: ▾
+  - button "新建任务 Ctrl N":
+    - generic: 新建任务
+    - generic: Ctrl N
+  - button "计划任务":
+    - generic: 计划任务
+  - navigation "会话":
+    - region "项目":
+      - button "折叠 项目" [expanded]:
+        - generic: 项目
+      - button "列表选项":
+      - button "添加项目":
+      - paragraph: 添加项目，让任务按工作区分组。
+    - region "任务":
+      - button "折叠 任务" [expanded]:
+        - generic: 任务
+      - button "在默认项目新建任务":
+      - list:
+        - button "对话恢复浏览器验收 1分钟前":
+          - generic: 对话恢复浏览器验收
+          - time: 1分钟前
+        - button "对话恢复浏览器验收 的操作":
+  - status:
+    - generic: 本地服务 0.1.0
+  - button "搜索会话":
+  - button "切换为深色主题":
+  - button "设置":
+- main "Agent 工作区":
+  - button "切换项目，当前 默认项目":
+    - generic: 默认项目
+    - generic: ▾
+  - generic: /
+  - heading "对话恢复浏览器验收" [level=1]
+  - paragraph: mdo.default · conversation-fixture
+  - generic: 就绪
+  - button "搜索当前会话":
+  - button "导出当前会话 Markdown":
+  - button "更多会话操作":
+  - region "当前会话":
+    - list:
+      - time: 02:07
+      - generic: retry
+      - button "复制消息":
+      - button "编辑此消息并重新发送":
+      - time: 02:08
+      - paragraph: "FIXTURE_OK: retry"
+      - button "复制消息":
+      - button "从此回复分叉会话":
+      - button "重试此回合":
+      - generic: 10 输入 / 4 输出 tokens · LLM 3.3 秒 · 1.2 tok/s
+      - time: 02:08
+      - generic: partial
+      - button "复制消息":
+      - button "编辑此消息并重新发送":
+      - time: 02:08
+      - paragraph: "FIXTURE_OK: partial"
+      - button "复制消息":
+      - button "从此回复分叉会话":
+      - button "重试此回合":
+      - generic: 10 输入 / 4 输出 tokens · LLM 1.2 秒 · 3.4 tok/s
+      - time: 02:09
+      - generic: quota
+      - button "复制消息":
+      - button "编辑此消息并重新发送":
+      - generic "查看思考与执行过程":
+        - generic: 查看思考与执行过程
+      - time: 02:09
+      - paragraph: "FIXTURE_OK: quota"
+      - button "复制消息":
+      - button "从此回复分叉会话":
+      - button "重试此回合":
+      - generic: 10 输入 / 4 输出 tokens · LLM <0.1 秒 · 108.3 tok/s
+      - time: 02:09
+      - generic: stop
+      - button "复制消息":
+      - button "编辑此消息并重新发送":
+      - generic: 已停止
+      - time: 02:09
+      - time: 02:10
+      - generic: continue
+      - button "复制消息":
+      - button "编辑此消息并重新发送":
+      - time: 02:10
+      - paragraph: "FIXTURE_OK: continue"
+      - button "复制消息":
+      - button "从此回复分叉会话":
+      - button "重试此回合":
+      - generic: 10 输入 / 4 输出 tokens · LLM <0.1 秒 · 73.2 tok/s
+      - time: 02:10
+      - generic: after-restart
+      - button "复制消息":
+      - button "编辑此消息并重新发送":
+      - time: 02:10
+      - paragraph: "FIXTURE_OK: after-restart"
+      - button "复制消息":
+      - button "从此回复分叉会话":
+      - button "重试此回合":
+      - generic: 10 输入 / 4 输出 tokens · LLM <0.1 秒 · 72.0 tok/s
+  - region "发送消息":
+    - generic: 向 Agent 描述任务
+    - textbox "向 Agent 描述任务" [active]:
+      - /placeholder: 向墨斗描述任务…
+    - button "添加图片":
+    - button "权限：只读":
+    - button "查看 token 用量"
+    - button "模型与思考深度：Conversation fixture · 无思考":
+      - generic: Conversation fixture
+      - generic: 无思考
+    - generic: Enter 发送 · Shift Enter 换行
+    - button "发送任务":
+  - navigation "对话历史导航":
+    - button "retry"
+    - button "partial"
+    - button "quota"
+    - button "stop"
+    - button "continue"
+    - button "after-restart"
+- separator "调整会话导航宽度"

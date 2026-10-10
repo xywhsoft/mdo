@@ -7,6 +7,7 @@
 | 范围 | 已实际验证的行为 | 主要证据 |
 | --- | --- | --- |
 | 模型调用 | 临时 429/503、未交付内容的网络错误有界退避，遵守 Retry-After；取消停止等待。每日额度、余额、账号权限和配置拒绝有准确最终提示。 | [对话页面](../tests/acceptance/conversation-ui/README.md)、[本地配置错误](../tests/acceptance/model-request-configuration/README.md) |
+| 当前 Linux 服务版 | 当前应用输入生成 glibc 2.28 与静态 musl 两版，实际页面的 429/流式恢复、准确额度提示、继续/停止、重启保留多语草稿与续聊通过；模型执行中断后恢复原输入和队列也通过。 | [Linux 集成验收](../tests/acceptance/current-linux-integration/README.md) |
 | 启动明确拒绝 | 原生入口明确拒绝图片/模型校验后，未被认领的队列项恢复待发送，保留文字、图片和固定配置；准确原因不被列表刷新误清除。修正同一模型后显式重试一次，并正常续聊。 | [运行校验拒绝](../tests/acceptance/run-validation-rejection/README.md) |
 | 流式与上下文 | 缺少结束标记的流不冒报成功；失败草稿替换恢复；无效或额度不足的摘要保留原历史，取消和继续可用。 | [摘要失败与恢复](../tests/acceptance/conversation-compaction-failure/README.md)、[连续完成状态](../tests/acceptance/conversation-completion/README.md) |
 | 中断、队列与重启 | 真实执行期间停止宿主，原输入和队列保留；明确继续后完成，不重复原输入。普通断网保留输入，宿主重启后重新载入原会话可续聊；原模型不可用时可先更换模型，保留中断调用并自动刷新恢复界面。 | [执行中断](../tests/acceptance/conversation-queue-interruption/README.md)、[断网与重启](../tests/acceptance/conversation-network/README.md)、[中断后换模型](../tests/acceptance/interrupted-profile/README.md) |
@@ -33,6 +34,6 @@
 1. **Android 原生页面已补验**：冻结应用在 RMX5090 验证启动、原生发送；正式 API 验证退避取消、恢复和进程重启后继续。发送后模型切换和前台返回保留文字/图片通过，见 [原生补验](../tests/acceptance/android-file-chooser/README.md)。实际 Android 语言环境的俄文、中文、其他语言回退英文及保留用户偏好通过；仅清除 QA 语言偏好来验证初始化路径，没有全新安装或改变全局系统语言。见 [后续记录](../tests/acceptance/android-restore-locale/README.md)。
 2. **输入与手机系统接口已补验**：真实中文候选确认、系统复制粘贴、Markdown/备份保存并读回通过。系统图片选择发现 xs 丢失 `ClipData`，修复已提交并锁定依赖；实际选图、发送图片摘要及中英俄六行复制粘贴通过。通过系统文件选择器导入原备份，45 条历史完整保留，实际更换模型后续聊成功；原生 Shift+Enter 生成两行草稿、软键盘 Enter 只发送一次。多行组合键由 ADB 注入，不声称实测实体外接键盘。见 [恢复与输入](../tests/acceptance/android-restore-locale/README.md)。本轮没有使用个人会话。
 3. **Windows 系统交接**：在正式原生 WebView2 窗口完成复制后 Ctrl+V，以及 Markdown/备份保存落盘。本轮官方入口能读取控件树和填写合成输入，但窗口截屏及输入几何信息仍失败；没有发送、复制或导出，隔离模型调用为零。实包模块的草稿选区检查通过，仍不能代替系统粘贴或保存。当前具体命令见 [桌面手工验收入口](../tests/acceptance/desktop-copy-export/README.md)。
-4. **当前候选补验与正式发布**：本轮独立候选已集成工作区已有修改，Windows 全量有界门禁、确定性打包和实际 UI 重试续聊通过。新版 ARM64 QA 30000064 的升级、对话和系统接口仍待设备连接，不能用上一版 30000048 的真机结果代替。日用位置及 `dist/` 仍是另批较早发布候选；其他平台正式产物、正式签名和官网更新须按发布流程核对，未计为本轮完成。
+4. **当前候选补验与正式发布**：本轮独立候选已集成工作区已有修改，Windows 全量有界门禁、确定性打包和实际 UI 重试续聊通过。Linux glibc/musl 两个独立服务版已补验相同应用输入的实际重试、停止、恢复、草稿/历史重启及执行中断；没有验证当前 Linux GTK 原生窗口。新版 ARM64 QA 30000064 的升级、对话和系统接口仍待设备连接，不能用上一版 30000048 的真机结果代替。日用位置及 `dist/` 仍是另批较早发布候选；正式产物、正式签名和官网更新须按发布流程核对，未计为本轮完成。
 
 本轮结束时 adb 未检测到设备，已请求重新连接；上一版 QA 已安装并完成实际验收。明确的输入、原生保存或生命周期问题将继续修复并逐阶段提交；不为了这些限制无限重跑已经通过的回环模型和前端检查，不新增治理框架或压力用例。

@@ -1,0 +1,73 @@
+{
+  "before": {
+    "draft": {
+      "revision": 21,
+      "text": "中文草稿\nEnglish draft\nРусский черновик",
+      "attachments": [],
+      "run_admission_uncertain": false,
+      "submission": null,
+      "submissions": []
+    },
+    "model_calls": {
+      "retry": 3,
+      "partial": 2,
+      "quota": 2,
+      "stop": 2,
+      "continue": 1
+    },
+    "runs": [
+      {
+        "id": "run-V-OSV4yqgTHo_-dtznqKnwLGyaD42Z8U",
+        "state": "succeeded"
+      },
+      {
+        "id": "run-V-OSV4uEXIHGj6V3YZqYK_E-RZGDJRjQ",
+        "state": "cancelled"
+      },
+      {
+        "id": "run-V-OSV4q89muAIHvQ6hUtfz_MB0NAlSuC",
+        "state": "succeeded"
+      },
+      {
+        "id": "run-V-OSV4mpgmcuShydmqCGg7QNvw_R_tj9",
+        "state": "failed"
+      },
+      {
+        "id": "run-V-OSV4ajG3F2wt3AmoQ9uvN3ts-I0THk",
+        "state": "succeeded"
+      },
+      {
+        "id": "run-V-OSV4WB_gWVhaLcOFA6oB1CfITewgMo",
+        "state": "succeeded"
+      }
+    ]
+  },
+  "after": {
+    "draft": {
+      "revision": 21,
+      "text": "中文草稿\nEnglish draft\nРусский черновик",
+      "attachments": [],
+      "run_admission_uncertain": false,
+      "submission": null,
+      "submissions": []
+    },
+    "model_calls": {
+      "retry": 3,
+      "partial": 2,
+      "quota": 2,
+      "stop": 2,
+      "continue": 1
+    },
+    "events_unchanged": true
+  },
+  "lifecycle": [
+    {
+      "event": "stopped",
+      "pid": 468
+    },
+    {
+      "event": "restarted",
+      "pid": 13522
+    }
+  ]
+}

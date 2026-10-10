@@ -1,0 +1,61 @@
+[
+  {
+    "platform": "linux",
+    "architecture": "x86_64",
+    "edition": "server",
+    "libc": "glibc",
+    "xs_commit": "f05f7661062fdca04da8d571ad859eb4b87c0889",
+    "mdo_commit": "84458e118e27f830784d5170c9c2ff1f9b3f1ab7",
+    "mdo_worktree_dirty": true,
+    "packaged_app_sha256": "6792b1de0c32b439497c252377ade90e5dc2cd81eb650e3ef28c7179ef6fae29",
+    "sha256": "e4f53ebc4aa9638dfb92ed021104478d2a5c621821e5000ab13c3268fc78b5cf",
+    "bytes": 4091778,
+    "host": {
+      "revision": "f05f7661062fdca04da8d571ad859eb4b87c0889",
+      "profile_sha256": "893b7863bf7768b125dfa9ca8af27550f8fdddccca70070fcfc5d8aac4a5bc04",
+      "binary_sha256": "70372dc8df4a7f066695cd9b20357a68346e70b2532a069e4290ccd3f4e1eb16",
+      "binary_bytes": 2705280,
+      "frontend": "none",
+      "compiler": "gcc"
+    },
+    "actual_host_prefix_matches_receipt": true,
+    "actual_elf": {
+      "static_core": false,
+      "elf_needed": [
+        "libdl.so.2",
+        "libpthread.so.0",
+        "libm.so.6",
+        "libc.so.6"
+      ],
+      "glibc_required": "2.28",
+      "glibc_max": "2.28"
+    }
+  },
+  {
+    "platform": "linux",
+    "architecture": "x86_64",
+    "edition": "server",
+    "libc": "musl",
+    "xs_commit": "f05f7661062fdca04da8d571ad859eb4b87c0889",
+    "mdo_commit": "84458e118e27f830784d5170c9c2ff1f9b3f1ab7",
+    "mdo_worktree_dirty": true,
+    "packaged_app_sha256": "8c27e64901fdbf550e15be7b681b9ac60e0492300aa60a7e3428203173640531",
+    "sha256": "d534229488fe84814a1f2750e5245b4233889d8124341351c235ebcf2a49cef3",
+    "bytes": 5929401,
+    "host": {
+      "revision": "f05f7661062fdca04da8d571ad859eb4b87c0889",
+      "profile_sha256": "893b7863bf7768b125dfa9ca8af27550f8fdddccca70070fcfc5d8aac4a5bc04",
+      "binary_sha256": "5feb85eb81bfae0be3222a0503574932f93a573ad19ba7ab3caca3d459527a61",
+      "binary_bytes": 4542904,
+      "frontend": "none",
+      "compiler": "musl-gcc"
+    },
+    "actual_host_prefix_matches_receipt": true,
+    "actual_elf": {
+      "static_core": true,
+      "elf_needed": [],
+      "glibc_required": null,
+      "glibc_max": "2.28"
+    }
+  }
+]

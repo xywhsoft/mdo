@@ -1,0 +1,16 @@
+wsl --user root -e python3 /mnt/d/GIT/mdo/tools/build_linux.py --xserver-root /mnt/d/GIT/mdo/.build/xs-tool-image-text --output-dir /mnt/d/GIT/mdo/.build/conversation-acceptance/current-linux-integration/products --edition server --libc both --cc gcc --musl-cc musl-gcc --gui-cc gcc --glibc-max 2.28 --baseline-root /root/.cache/mdo-linux-buster --skip-host-build
+chroot /root/.cache/mdo-linux-buster /opt/mdo-build-python/bin/python3.12 /mnt/d/GIT/mdo/tools/build_linux.py --xserver-root /mnt/d/GIT/mdo/.build/xs-tool-image-text --output-dir /mnt/d/GIT/mdo/.build/conversation-acceptance/current-linux-integration/products --edition server --libc both --cc gcc --musl-cc musl-gcc --gui-cc gcc --glibc-max 2.28 --skip-host-build
+/opt/mdo-build-python/bin/python3.12 /mnt/d/GIT/mdo/tools/build_mdo.py --xserver-root /mnt/d/GIT/mdo/.build/xs-tool-image-text --edition server --libc glibc --cc gcc --gui-cc gcc --output /mnt/d/GIT/mdo/.build/conversation-acceptance/current-linux-integration/products/linux-x86_64-glibc-server/mdo-server --glibc-max 2.28 --skip-host-build
+[mdo] dependencies verified at f05f7661062f
+[mdo] generated app/generated/mdo_unity.c
+/mnt/d/GIT/mdo/.build/host/linux-server-glibc/xs pack /mnt/d/GIT/mdo/.build/packages/linux-server-glibc -o /mnt/d/GIT/mdo/.build/conversation-acceptance/current-linux-integration/products/linux-x86_64-glibc-server/mdo-server
+[pack] base 2705280 bytes + 434 files, compressing...
+[pack] /mnt/d/GIT/mdo/.build/conversation-acceptance/current-linux-integration/products/linux-x86_64-glibc-server/mdo-server: 434 entries (lzma 432, store 2), archive 1386498 bytes
+[mdo] built /mnt/d/GIT/mdo/.build/conversation-acceptance/current-linux-integration/products/linux-x86_64-glibc-server/mdo-server
+/opt/mdo-build-python/bin/python3.12 /mnt/d/GIT/mdo/tools/build_mdo.py --xserver-root /mnt/d/GIT/mdo/.build/xs-tool-image-text --edition server --libc musl --cc musl-gcc --gui-cc gcc --output /mnt/d/GIT/mdo/.build/conversation-acceptance/current-linux-integration/products/linux-x86_64-musl-server/mdo-server --glibc-max 2.28 --skip-host-build --sysroot /mnt/d/GIT/mdo/.build/linux-sysroot
+[mdo] dependencies verified at f05f7661062f
+[mdo] generated app/generated/mdo_unity.c
+/mnt/d/GIT/mdo/.build/host/linux-server-musl/xs pack /mnt/d/GIT/mdo/.build/packages/linux-server-musl -o /mnt/d/GIT/mdo/.build/conversation-acceptance/current-linux-integration/products/linux-x86_64-musl-server/mdo-server
+[pack] base 4542904 bytes + 434 files, compressing...
+[pack] /mnt/d/GIT/mdo/.build/conversation-acceptance/current-linux-integration/products/linux-x86_64-musl-server/mdo-server: 434 entries (lzma 432, store 2), archive 1386497 bytes
+[mdo] built /mnt/d/GIT/mdo/.build/conversation-acceptance/current-linux-integration/products/linux-x86_64-musl-server/mdo-server

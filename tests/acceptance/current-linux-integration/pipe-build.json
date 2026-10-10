@@ -1,0 +1,34 @@
+{
+  "first_exit_code": 1,
+  "first_failure": "baseline workspace unmount: target busy",
+  "native_hosts_built_from_locked_source_in_this_stage": true,
+  "final_exit_code": 0,
+  "repack_command": [
+    "C:\\Program Files\\Python312\\python.exe",
+    "tools/build_linux.py",
+    "--wsl",
+    "--baseline-root",
+    "/root/.cache/mdo-linux-buster",
+    "--edition",
+    "server",
+    "--libc",
+    "both",
+    "--xserver-root",
+    "D:\\GIT\\mdo\\.build\\xs-tool-image-text",
+    "--output-dir",
+    "D:\\GIT\\mdo\\.build\\conversation-acceptance\\current-linux-integration\\products",
+    "--skip-host-build"
+  ],
+  "application_source_sha256": "82cb0b6354b30226a4d69dead949fe36df061ee86ed782d1e3c34d3b0a8945e2",
+  "application_source_unchanged": true,
+  "product_bytes_match_first_pack": true,
+  "products": {
+    "products\\linux-x86_64-glibc-server\\mdo-server": "e4f53ebc4aa9638dfb92ed021104478d2a5c621821e5000ab13c3268fc78b5cf",
+    "products\\linux-x86_64-musl-server\\mdo-server": "d534229488fe84814a1f2750e5245b4233889d8124341351c235ebcf2a49cef3"
+  },
+  "build_inputs": {
+    "deps.lock": "b62da6e3f51028802018937a0bfdd270b1fd9a2cdc4cd140ebed793f482b9d01",
+    "tools/build_linux.py": "3c7656ba3253b57c1ac6f160afe60340124f0329c087328c759ae507902b6af5",
+    "tools/build_mdo.py": "a3e4447235ef76cad071eb3369477917760d517f69f7e4ec53f1d2415ff0270e"
+  }
+}
