@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { renderSourceMarkdown } from "../app/web/js/utils/source-markdown.js";
 
 class Node {
@@ -20,12 +21,21 @@ test("source documentation renders headings, lists and literal code without exec
   assert(output.textContent.includes('<script>alert(1)</script>'));
   assert.equal(nodes.find(n=>n.tag==="pre").textContent,'<img src=x onerror=alert(1)>');
 });
-test("links allow only HTTP(S), images do not load and both clients share the renderer",()=>{
+test("links allow only HTTP(S) and images do not load",()=>{
   const output=renderSourceMarkdown('[safe](https://example.com/a) [bad](javascript:alert) ![image](https://example.com/x.png)');
   const nodes=flatten(output),links=nodes.filter(n=>n.tag==="a");
   assert.equal(links[0].href,'https://example.com/a');assert.equal(links[0].rel,'noopener noreferrer');
   assert(!links.some(n=>n.href?.startsWith('javascript:')));assert(!nodes.some(n=>n.tag==="img"));
-  assert.deepEqual(readFileSync(new URL('../app/web/js/utils/source-markdown.js',import.meta.url)),readFileSync('D:/GIT/home/host/xywhsoft_ai/plugin/mdo/page/ecosystem/markdown.js'));
+});
+const ecosystemSite = process.env.MDO_ECOSYSTEM_SITE_ROOT;
+test("the configured ecosystem website shares the source renderer", {
+  skip: ecosystemSite ? false : "Set MDO_ECOSYSTEM_SITE_ROOT for the website integration check",
+}, () => {
+  // Git may check out CRLF on Windows. Compare source text, retaining all
+  // other differences; a missing configured website is still a test failure.
+  const source = path => readFileSync(path, "utf8").replaceAll("\r\n", "\n");
+  assert.equal(source(new URL('../app/web/js/utils/source-markdown.js',import.meta.url)),
+    source(resolve(ecosystemSite, 'plugin/mdo/page/ecosystem/markdown.js')));
 });
 test("ecosystem translations follow the application's flat language-pack contract",()=>{
   for(const locale of ['zh-CN','en-US','ru-RU']){
