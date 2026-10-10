@@ -1,5 +1,7 @@
 """Product validation: target CRT selection and actual ELF linkage checks."""
 import importlib.util
+import contextlib
+import io
 import os
 from pathlib import Path
 import shutil
@@ -15,6 +17,26 @@ import build_mdo
 
 
 class LinuxBuildTests(unittest.TestCase):
+    def test_wsl_log_forwarding_preserves_output_and_failure(self):
+        # A real child verifies both streams without depending on WSL being
+        # installed. Actual baseline unmounting is checked by the Linux gate.
+        command = [sys.executable, '-c',
+                   'import sys; print("build-output"); '
+                   'print("build-diagnostic", file=sys.stderr); sys.exit(7)']
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            with self.assertRaises(subprocess.CalledProcessError) as raised:
+                build_linux.run_wsl(command, ROOT, False)
+        self.assertEqual(raised.exception.returncode, 7)
+        self.assertIn('build-output', output.getvalue())
+        self.assertIn('build-diagnostic', output.getvalue())
+
+    def test_wsl_dry_run_does_not_launch_a_child(self):
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            build_linux.run_wsl(['missing-build-executable'], ROOT, True)
+        self.assertIn('missing-build-executable', output.getvalue())
+
     def test_reused_host_cannot_bypass_the_release_baseline(self):
         receipt = {"linux_abi": {"static_core": True, "glibc_required": None},
                    "gui_linux_abi": {"static_core": False, "glibc_required": "2.34"}}

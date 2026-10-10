@@ -22,6 +22,32 @@ import build_mdo
 ROOT = build_mdo.ROOT
 
 
+def run_wsl(command: list[str], cwd: Path, dry_run: bool) -> None:
+    """Keep redirected Windows file handles out of the WSL build process.
+
+    An inherited log handle can pin the baseline workspace bind mount even
+    after chroot exits. Forward bytes through a pipe in the Windows parent so
+    ordinary log redirection cannot prevent normal unmounting. Never mask a
+    build failure or force/lazily detach a busy mount.
+    """
+    print(" ".join(command), flush=True)
+    if dry_run:
+        return
+    with subprocess.Popen(command, cwd=cwd, stdout=subprocess.PIPE,
+                          stderr=subprocess.STDOUT) as process:
+        assert process.stdout is not None
+        while chunk := process.stdout.read1(65536):
+            if hasattr(sys.stdout, 'buffer'):
+                sys.stdout.buffer.write(chunk)
+                sys.stdout.buffer.flush()
+            else:
+                sys.stdout.write(chunk.decode('utf-8', errors='replace'))
+                sys.stdout.flush()
+        code = process.wait()
+    if code:
+        raise subprocess.CalledProcessError(code, command)
+
+
 def wsl_path(path: Path) -> str:
     value = path.resolve().as_posix()
     if len(value) < 3 or value[1:3] != ":/":
@@ -132,7 +158,7 @@ def main(argv: list[str] | None = None) -> int:
                 command.append("--dry-run")
             if args.skip_host_build:
                 command.append("--skip-host-build")
-            build_mdo.run(command, ROOT, args.dry_run)
+            run_wsl(command, ROOT, args.dry_run)
             return 0
         if sys.platform != 'linux':
             raise build_mdo.BuildError('Linux products require a Linux build environment')
