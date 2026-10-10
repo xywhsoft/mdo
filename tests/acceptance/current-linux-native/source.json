@@ -1,0 +1,28 @@
+{
+  "head": "2781deff024da224fc814e6ee30bf3ef0446f536",
+  "source_files": 431,
+  "application_source_sha256": "82cb0b6354b30226a4d69dead949fe36df061ee86ed782d1e3c34d3b0a8945e2",
+  "includes_uncommitted_source": true,
+  "source_unchanged": true,
+  "build_inputs": {
+    "deps.lock": "b62da6e3f51028802018937a0bfdd270b1fd9a2cdc4cd140ebed793f482b9d01",
+    "tools/build_linux.py": "c729d52899dea5e3a6943ae199964a09c71b9c029a215f2d7bad8c0b941566fe",
+    "tools/build_mdo.py": "a3e4447235ef76cad071eb3369477917760d517f69f7e4ec53f1d2415ff0270e"
+  },
+  "command": [
+    "C:\\Program Files\\Python312\\python.exe",
+    "tools/build_linux.py",
+    "--wsl",
+    "--edition",
+    "gui",
+    "--libc",
+    "both",
+    "--baseline-root",
+    "/root/.cache/mdo-linux-buster",
+    "--xserver-root",
+    "D:\\GIT\\mdo\\.build\\xs-tool-image-text",
+    "--output-dir",
+    "D:\\GIT\\mdo\\.build\\conversation-acceptance\\current-linux-native\\products"
+  ],
+  "exit_code": 0
+}

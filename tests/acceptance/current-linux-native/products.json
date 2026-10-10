@@ -1,0 +1,133 @@
+{
+  "application_source_sha256": "82cb0b6354b30226a4d69dead949fe36df061ee86ed782d1e3c34d3b0a8945e2",
+  "application_source_files": 431,
+  "includes_uncommitted_source": true,
+  "native_input_or_pixels_tested": false,
+  "model_requests_submitted": false,
+  "stress_or_high_load": false,
+  "products": [
+    {
+      "platform": "linux",
+      "architecture": "x86_64",
+      "edition": "gui",
+      "libc": "glibc",
+      "xs_commit": "f05f7661062fdca04da8d571ad859eb4b87c0889",
+      "mdo_commit": "2781deff024da224fc814e6ee30bf3ef0446f536",
+      "mdo_worktree_dirty": true,
+      "packaged_app_sha256": "3ceec83167a6041a417874765db63b538f2759fb6aadc572c170402dd9a7d997",
+      "sha256": "36b1698cd401751484cfc861e21ec3b469939d58f4282c3715cc7ed33cb19443",
+      "bytes": 4120684,
+      "host": {
+        "revision": "f05f7661062fdca04da8d571ad859eb4b87c0889",
+        "profile_sha256": "893b7863bf7768b125dfa9ca8af27550f8fdddccca70070fcfc5d8aac4a5bc04",
+        "binary_sha256": "f4fc0dcd273de9a6781ab0ba997483c123e3257347bd3acdf12de80d62be8af5",
+        "binary_bytes": 2734016,
+        "frontend": "native",
+        "compiler": "gcc",
+        "gui_helper_sha256": "802655150778c17653805750d22ffcf1633b357f7f78e7b8442eb261d815380a",
+        "gui_runtime": "GTK3 + WebKitGTK 4.1 or 4.0 (>= 2.30)"
+      },
+      "actual_host_prefix_matches_receipt": true,
+      "actual_elf": {
+        "static_core": false,
+        "elf_needed": [
+          "libdl.so.2",
+          "libpthread.so.0",
+          "libm.so.6",
+          "libc.so.6"
+        ],
+        "glibc_required": "2.28",
+        "glibc_max": "2.28"
+      },
+      "built_helper_matches_actual_extracted_helper": {
+        "sha256": "802655150778c17653805750d22ffcf1633b357f7f78e7b8442eb261d815380a",
+        "elf": {
+          "elf_needed": [
+            "libgtk-3.so.0",
+            "libgdk-3.so.0",
+            "libpangocairo-1.0.so.0",
+            "libpango-1.0.so.0",
+            "libatk-1.0.so.0",
+            "libcairo-gobject.so.2",
+            "libcairo.so.2",
+            "libgdk_pixbuf-2.0.so.0",
+            "libgio-2.0.so.0",
+            "libgobject-2.0.so.0",
+            "libglib-2.0.so.0",
+            "libX11.so.6",
+            "libdl.so.2",
+            "libpthread.so.0",
+            "libc.so.6"
+          ],
+          "elf_interpreter": "/lib64/ld-linux-x86-64.so.2",
+          "glibc_required": "2.2.5",
+          "glibc_versions": [
+            "2.2.5"
+          ],
+          "glibc_max": "2.28",
+          "static_core": false
+        }
+      },
+      "lifecycle_passed": true
+    },
+    {
+      "platform": "linux",
+      "architecture": "x86_64",
+      "edition": "gui",
+      "libc": "musl",
+      "xs_commit": "f05f7661062fdca04da8d571ad859eb4b87c0889",
+      "mdo_commit": "2781deff024da224fc814e6ee30bf3ef0446f536",
+      "mdo_worktree_dirty": true,
+      "packaged_app_sha256": "a11b206d7f14a96b66b2710e2d2f367d14dcbdd664a9e11153fab5e905c63403",
+      "sha256": "a1fa06192864650cc73595c8b36077d7668eadd6527ac58fb1eeb8fa1caf2a58",
+      "bytes": 5958243,
+      "host": {
+        "revision": "f05f7661062fdca04da8d571ad859eb4b87c0889",
+        "profile_sha256": "893b7863bf7768b125dfa9ca8af27550f8fdddccca70070fcfc5d8aac4a5bc04",
+        "binary_sha256": "4bce07fd51f645ad275e1b46457268430740085d3a5f196071d14754c8520086",
+        "binary_bytes": 4571576,
+        "frontend": "native",
+        "compiler": "musl-gcc",
+        "gui_helper_sha256": "802655150778c17653805750d22ffcf1633b357f7f78e7b8442eb261d815380a",
+        "gui_runtime": "GTK3 + WebKitGTK 4.1 or 4.0 (>= 2.30)"
+      },
+      "actual_host_prefix_matches_receipt": true,
+      "actual_elf": {
+        "static_core": true,
+        "elf_needed": [],
+        "glibc_required": null,
+        "glibc_max": "2.28"
+      },
+      "built_helper_matches_actual_extracted_helper": {
+        "sha256": "802655150778c17653805750d22ffcf1633b357f7f78e7b8442eb261d815380a",
+        "elf": {
+          "elf_needed": [
+            "libgtk-3.so.0",
+            "libgdk-3.so.0",
+            "libpangocairo-1.0.so.0",
+            "libpango-1.0.so.0",
+            "libatk-1.0.so.0",
+            "libcairo-gobject.so.2",
+            "libcairo.so.2",
+            "libgdk_pixbuf-2.0.so.0",
+            "libgio-2.0.so.0",
+            "libgobject-2.0.so.0",
+            "libglib-2.0.so.0",
+            "libX11.so.6",
+            "libdl.so.2",
+            "libpthread.so.0",
+            "libc.so.6"
+          ],
+          "elf_interpreter": "/lib64/ld-linux-x86-64.so.2",
+          "glibc_required": "2.2.5",
+          "glibc_versions": [
+            "2.2.5"
+          ],
+          "glibc_max": "2.28",
+          "static_core": false
+        }
+      },
+      "lifecycle_passed": true
+    }
+  ]
+}

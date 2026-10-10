@@ -1,0 +1,37 @@
+{
+  "passed": true,
+  "binary_sha256": "36b1698cd401751484cfc861e21ec3b469939d58f4282c3715cc7ed33cb19443",
+  "home": "/tmp/mdo-native-lifecycle-qa-y70kh0fq/mdo-home",
+  "log": "/tmp/mdo-native-lifecycle-qa-y70kh0fq/native.log",
+  "ordinary_user": true,
+  "sandbox_override": false,
+  "model_requests_submitted": false,
+  "native_input_or_pixels_tested": false,
+  "helper_sha256": "802655150778c17653805750d22ffcf1633b357f7f78e7b8442eb261d815380a",
+  "renderer_before": {
+    "pid": 473,
+    "parent": 418,
+    "start": 18205,
+    "state": "R",
+    "executable": "/usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess"
+  },
+  "renderer_after": {
+    "pid": 534,
+    "parent": 418,
+    "start": 19463,
+    "state": "R",
+    "executable": "/usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess"
+  },
+  "checks": [
+    "packed native initialization",
+    "actual WebKit renderer",
+    "portable window cache",
+    "bounded startup interval",
+    "single renderer failure/recovery",
+    "service remains available after renderer recovery",
+    "normal SIGTERM shutdown",
+    "no surviving owned descendants",
+    "same Home restart"
+  ],
+  "native_log_filename": "glibc-lifecycle.native.log"
+}
