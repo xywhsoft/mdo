@@ -91,6 +91,34 @@ test("an explicit run rejection keeps its ordinary failure status", async () => 
   } finally { globalThis.fetch = originalFetch; }
 });
 
+test("known pre-execution validation failures identify rejected admission without replay", async context => {
+  const cases = ["image_model_unsupported", "attachment_invalid",
+    "session_profile_invalid", "model_profile_model_missing"];
+  for (const code of cases) {
+    let posts = 0;
+    context.mock.method(globalThis, "fetch", async (_path, options) => {
+      assert.equal(options.method, "POST");
+      posts++;
+      return failure(code, 422);
+    });
+    await assert.rejects(startRun("default", "validation-rejected", "hello", [], queueId),
+      error => error.code === code && error.status === 422 &&
+        error.runAdmissionRejected === true && !error.runAdmissionUncertain);
+    assert.equal(posts, 1);
+    context.mock.restoreAll();
+  }
+});
+
+test("an unknown error or mismatched status cannot authorize resetting a sending item", async context => {
+  for (const [code, status] of [["unknown_validation", 422],
+      ["image_model_unsupported", 503], ["queue_run_started", 409]]) {
+    context.mock.method(globalThis, "fetch", async () => failure(code, status));
+    await assert.rejects(startRun("default", "unknown-rejection", "hello", [], queueId),
+      error => error.code === code && !error.runAdmissionRejected);
+    context.mock.restoreAll();
+  }
+});
+
 test("a competing queue start requires review without replay", async () => {
   const originalFetch = globalThis.fetch;
   let posts = 0;

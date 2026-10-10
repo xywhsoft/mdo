@@ -7,6 +7,18 @@ import { createRequestRecovery } from "../api/request-recovery.js";
 export const runsStore = createResourceStore({ active_runs: 0, items: [] },
   { recoverRead: isTransientReadError, retainDataOnError: isTransientReadError });
 
+// These 422 replies are emitted before the run's execution boundary. Do not
+// infer rejection from status alone: an unknown error cannot authorize replay.
+const rejectedBeforeExecution = new Set([
+  "run_start_invalid", "image_model_unsupported", "attachment_invalid",
+  "session_profile_invalid", "model_profile_image_unsupported",
+  "model_profile_model_missing", "model_profile_protocol_unsupported",
+  "model_profile_reasoning_unsupported", "model_profile_output_limit",
+  "model_profile_context_limit", "model_profile_credential_unavailable",
+  "model_profile_proxy_unavailable", "model_profile_ca_unavailable",
+  "model_profile_endpoint_invalid",
+]);
+
 export function loadRuns({ retry = false } = {}) {
   if (!retry && runsStore.isPending()) return Promise.resolve(runsStore.get());
   return runsStore.load(async signal => (await api.get("/runs", { signal })).data,
@@ -62,6 +74,8 @@ export async function startRun(projectId, sessionId, prompt, attachments = [],
       } catch (failure) { error.confirmationError = failure; }
     }
     if (uncertain) error.runAdmissionUncertain = true;
+    else if (submitted && error instanceof ApiError && error.status === 422 &&
+        rejectedBeforeExecution.has(error.code)) error.runAdmissionRejected = true;
     throw error;
   } finally { recovery.dispose(); }
 }

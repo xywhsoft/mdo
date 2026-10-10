@@ -1625,7 +1625,7 @@ export async function boot() {
           await Promise.all([...(stillSelected() ? [refreshSelectedTimeline()] : []),
             loadTasks(), loadRuns(), loadRecovery()]);
         } catch (error) {
-          if (error?.code === "session_busy") {
+          if (error?.code === "session_busy" || error?.runAdmissionRejected) {
             try {
               await promptQueue.select(selected.projectId, selected.sessionId);
               const current = promptQueue.find(selected.projectId,
@@ -1637,7 +1637,9 @@ export async function boot() {
                   selected.sessionId, entry.id);
                 deferred = true;
               }
-              if (deferred) {
+              // A known validation rejection leaves the message queued and
+              // keeps its precise error. Only a busy runtime defers silently.
+              if (deferred && error?.code === "session_busy") {
                 queueBlocked.unblock(key);
                 if (stillSelected()) hideComposerError();
                 void loadRuns();
