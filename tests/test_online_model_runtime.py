@@ -16,7 +16,8 @@ import threading
 import time
 from http.server import ThreadingHTTPServer
 
-ROOT=Path(__file__).resolve().parents[1];HOME=ROOT.parent/'home'
+ROOT=Path(__file__).resolve().parents[1]
+HOME=Path(os.environ.get("MDO_TEST_WEBSITE_REPO", str(ROOT.parent/'home'))).resolve()
 sys.path.insert(0,str(HOME/'tests'))
 from test_mdo_delivery import fixture, request
 from model_gateway_fixture import Upstream

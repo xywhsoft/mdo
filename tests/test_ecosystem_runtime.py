@@ -14,7 +14,7 @@ import time
 from test_api_runtime import free_port
 
 ROOT=Path(__file__).resolve().parents[1]
-HOME=ROOT.parent/"home"
+HOME=Path(os.environ.get("MDO_TEST_WEBSITE_REPO", str(ROOT.parent/"home"))).resolve()
 sys.path.insert(0,str(HOME/"tests"))
 from test_mdo_delivery import fixture,request
 
