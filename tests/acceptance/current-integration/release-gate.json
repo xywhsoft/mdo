@@ -1,0 +1,40 @@
+{
+  "passed": true,
+  "python": {
+    "tests": 148,
+    "skipped": 3
+  },
+  "frontend": {
+    "tests": 1002,
+    "passed": 1002,
+    "skipped": 0,
+    "modules": 165
+  },
+  "strict_c_compilation": true,
+  "runtime_probes": 82,
+  "packed_probes": 12,
+  "windows_portable_webview_home_gate": true,
+  "packed_startup_seconds": 20,
+  "deterministic_pack": true,
+  "source_inputs_unchanged": true,
+  "host_binary_prefix_sha256_verified": true,
+  "candidate": {
+    "bytes": 4570274,
+    "sha256": "224318e83b37c7099386a41288672e2fa36eaa06eb512bc7eb6358ab548fb3ed",
+    "git_base": "2a2c07af4acf64991feb0927491db93cf3f1da94",
+    "includes_uncommitted_source": true,
+    "xs_commit": "f05f7661062fdca04da8d571ad859eb4b87c0889",
+    "packaged_app_sha256": "9ead756b3b6ad638724eb890806b5dfdda88b0b6d27e96deef78db9bd04db159",
+    "host": {
+      "revision": "f05f7661062fdca04da8d571ad859eb4b87c0889",
+      "binary_sha256": "e91dc0ad9798abef6b8adc2cc3fb0c1ad8642c9d5cd980c6343992508ae73136",
+      "binary_bytes": 3183616,
+      "profile_sha256": "893b7863bf7768b125dfa9ca8af27550f8fdddccca70070fcfc5d8aac4a5bc04"
+    }
+  },
+  "test_scope": "bounded offline functionality and failure recovery; no stress/high load",
+  "android_device_tested_for_this_candidate": false,
+  "windows_native_copy_export_tested": false,
+  "daily_products_updated": false,
+  "website_published": false
+}

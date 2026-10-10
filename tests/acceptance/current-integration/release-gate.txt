@@ -1,0 +1,1604 @@
+[qa] "C:\Program Files\Python312\python.exe" -m unittest discover -s tests
+......................................................................................s.s..s........................................................
+----------------------------------------------------------------------
+Ran 148 tests in 4.399s
+
+OK (skipped=3)
+[qa] C:\Users\Administrator\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.EXE --experimental-vm-modules C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tools\check_web_modules.mjs
+frontend module graph: 165 modules parsed and reachable
+(node:20844) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node.EXE --trace-warnings ...` to show where the warning was created)
+[qa] C:\Users\Administrator\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.EXE --test C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_account_allowance.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_account_balance.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_account_session_state.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_api_abort_scope.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_artifact_timeline.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_ask_refresh.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_automatic_recovery.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_background_read_probes.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_backup_download_frontend.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_backup_export_dialog.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_backup_import_controller.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_backup_import_deadline.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_backup_import_dialog.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_backup_import_transport.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_catalog_read_recovery.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_clipboard.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_composer_agent_defaults.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_composer_images.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_composition_tracker.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_connector_refresh.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_conversation_history.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_conversation_search_lifecycle.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_conversation_snapshot.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_decision_action.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_decision_read_recovery.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_directory_picker.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_draft_read_deadline.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_draft_read_recovery.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_draft_store.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_draft_write_recovery.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_extension_formats.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_extension_loopback.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_extension_reads.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_extension_validation.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_file_download.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_folder_drop.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_frontend_approval_decisions.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_frontend_i18n.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_frontend_session_runtime.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_history_window.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_image_names.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_image_preview_load.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_image_upload_deadline.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_image_upload_recovery.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_initial_locale.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_keyboard_shortcuts.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_live_connection.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_live_probe_deadline.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_live_timeline.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_locale_initialization_gate.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_memory_browser.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_message_edit_dialog.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_message_edit_recovery.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_message_replacement.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_mobile_viewport.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_model_errors.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_navigation_new_task_guard.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_navigation_refresh.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_new_task_composer_focus.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_new_task_controller.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_notifications.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_pane_layout.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_project_dialog.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_project_draft_selection.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_project_identity.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_project_purge_execution.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_project_purge_recovery.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_prompt_queue_reads.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_prompt_queue_writes.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_provider_presets.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_purge_service_read_recovery.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_queue_gate.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_read_recovery.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_recovery_action.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_recovery_decisions.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_remote_transport.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_remote_transport_performance.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_resource_operation.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_resource_operation_errors.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_resource_read_deadline.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_run_poll_read.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_run_stop_controller.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_runtime_read_recovery.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_schedule_history_errors.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_schedule_reads.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_schedule_write.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_session_action_focus.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_session_cache.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_session_composer_focus.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_session_detail_wait.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_session_export_full_text.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_session_export_i18n.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_session_export_image_recovery.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_session_export_images.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_session_fork_recovery.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_session_history_read.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_session_load_notice.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_session_metadata_sync.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_session_profile_recovery.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_session_purge.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_session_read_recovery.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_session_run_activity.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_session_text_recovery.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_session_text_snapshot.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_session_trash.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_settings_autosave.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_settings_pages.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_settings_resource_loading.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_settings_state.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_settings_write_recovery.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_sidebar_tree.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_source_markdown.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_startup_intent.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_store_draft.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_store_formats.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_submission_controller.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_target_context.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_task_cancellation.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_task_details.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_task_error_copy.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_task_owner.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_task_questions.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_task_read_recovery.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_task_stop_action.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_text_edit.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_timeline_history_bounds.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_timeline_history_i18n.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_timeline_images.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_timeline_interleaving.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_timeline_read_deadline.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_timeline_recovered_errors.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_timeline_refresh_ownership.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_timeline_replay.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_timeline_reply_actions.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_timeline_resume.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_timeline_search_position.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_timeline_terminal.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_timeline_tool_resume.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_todo_refresh.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_token_meter_escape.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_tool_content.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_tool_preview.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_unused_image_cleanup.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_update_frontend.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_web_module_graph.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_workspace_startup.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_workspace_startup_recovery.mjs C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_write_token.mjs
+PASS allowance percentage, unlimited, VIP expiry, stale data and invalid values
+PASS shared pool displayed once with weighted model equivalents
+✔ C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_account_allowance.mjs (108.3247ms)
+PASS CNY micro-unit formatting, reservations, zero, stale and unavailable balance
+✔ C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_account_balance.mjs (126.5178ms)
+✔ an offline remembered account keeps its identity and switch-account action (1.097ms)
+✔ a stale profile after explicit expiry or logout cannot count as signed in (0.2211ms)
+✔ a browser account switch preserves the previous identity until it succeeds (0.1819ms)
+✔ JSON read releases an uncooperative body on abort and ignores late conflict feedback (45.5887ms)
+✔ JSON write releases an uncooperative body on abort and ignores late conflict feedback (3.0909ms)
+✔ image write releases an uncooperative body on abort and ignores late conflict feedback (1.4902ms)
+✔ backup chunk releases an uncooperative body on abort and ignores late conflict feedback (1.1592ms)
+✔ abort releases an uncooperative fetch and suppresses its late network notification (1.0731ms)
+✔ an already cancelled request starts neither its transport nor write tracking (0.7845ms)
+✔ a cancelled startup read cannot adopt a late write token (0.905ms)
+✔ tool results expose their artifact even without a separate artifact event (5.2255ms)
+✔ unpaired tool results still expose their artifact (0.456ms)
+✔ an explicit first history boundary replaces the generic gap notice (0.686ms)
+✔ timeline marks incomplete user and assistant text before copy (1.3162ms)
+✔ copy resolves a truncated user event without changing the visible timeline (1.1468ms)
+✔ copy restores only truncated assistant chunks in their original order (0.3778ms)
+✔ long-message edit and retry require the original prompt before changing history (0.9639ms)
+✔ a healthy unchanged question snapshot clears a transient read error (60.9137ms)
+✔ a late question snapshot cannot redisplay a question absent from the newer read (2.1027ms)
+✔ an older failure cannot replace a newer healthy read in the same session (1.5976ms)
+✔ switching or clearing questions invalidates old reads even with reused IDs (1.9407ms)
+✔ identical healthy snapshots do not republish or remount the question editor (2.9654ms)
+✔ a safe interrupted read gets one automatic attempt, not a polling retry loop (1.5018ms)
+✔ stops, mutations, unavailable tools and inactive views remain manual (0.3004ms)
+✔ turns are scoped to their project and session (1.8093ms)
+✔ rewriting history admits a new interrupted turn with the same number (0.2513ms)
+✔ missing or unstable history identity never enables an automatic loop (0.3392ms)
+✔ an appended result or changed inspection token keeps the same attempt limit (0.204ms)
+✔ exhausted reads keep their final notice during rate-limited background probes (5.8765ms)
+✔ explicit retry bypasses the probe delay and keeps the normal bounded recovery (0.9831ms)
+✔ a permanent refusal stays visible without poll floods and a changed cause remains accurate (0.6181ms)
+✔ page cache return resumes an interrupted quiet probe without clearing its final notice (0.7707ms)
+✔ authoritative context replacement cancels a quiet probe and its cooldown (0.484ms)
+✔ a stalled automatic probe has one eight-second attempt and preserves the final notice (0.5194ms)
+✔ incremental SHA-256 agrees with independent native hashing at padding and chunk boundaries (133.7228ms)
+✔ v2 downloads verify exact bytes/hash, report progress and use the pinned owner route (31.4791ms)
+✔ invalid lengths/type/hash, short/overflow/empty chunks never create a file (6.5067ms)
+✔ server envelopes are bounded and preserve stable error codes for localized retry (1.2698ms)
+✔ pre-cancel, progress cancellation and deadline release readers without a download (20.1157ms)
+✔ large chunks yield to cancellation without relying on secure-context Web Crypto (27.8938ms)
+✔ an Android limit refusal preserves the dialog and session without a success notice (4.14ms)
+✔ duplicate actions and caller mutations cannot switch an active export owner (0.7218ms)
+✔ Esc/reopen ignores old native close events, progress and even a successful late response (1.6057ms)
+✔ a failure stays visible with keyboard focus and retries exactly the same session (0.9053ms)
+✔ external close and destroy cancel work and suppress late saves (0.4331ms)
+✔ upload/preview never apply; explicit confirmation pins target and bookmarks before acceptance (6.1229ms)
+✔ lost apply response and refresh retain identity; recreation only queries and never reapplies (1.9508ms)
+✔ an unknown 404 is not permission to discard identity, upload another file or apply again (1.0024ms)
+✔ cancellation racing with commit preserves committed and asks no new restore (0.6939ms)
+✔ changing an unsubmitted destination deletes its review then proves it missing before reuse (1.6188ms)
+✔ a concurrent acceptance during destination change is followed using the same ID (2.3701ms)
+✔ failure to persist identity prevents POST apply; read may recover the original review (1.8889ms)
+✔ mismatched result cannot replace saved target or checksum (1.2058ms)
+✔ preview/review response recovery discovers existing work without creating anything (10.8696ms)
+✔ legacy partial preview cannot enter destination review or apply (0.9389ms)
+✔ a lost seal response retains its upload until explicit discard; discovery cannot enable a no-op file input (0.6539ms)
+✔ bounded observation expiry retains pending identity for manual query (5.0283ms)
+✔ obsolete upload completion after explicit cancellation cannot install a preview (0.8073ms)
+✔ cleanup or restart uncertainty retains result bookmark and blocks acknowledgement (0.3174ms)
+✔ URL bookmark preserves unrelated query, route and history and rejects malformed identity (1.6036ms)
+✔ a hung restore read retries quietly, keeps identity, and ignores its late result (6.8441ms)
+✔ destroy releases an uncooperative read and cancels all observation timers (1.5045ms)
+✔ explicit cancellation releases the old observer without starting another restore (2.6254ms)
+✔ an unconfirmed apply ends its wait once and queries the same identity without replaying POST (2.438ms)
+✔ cancel settles a stuck upload and rejects callbacks from its previous owner (1.2877ms)
+✔ an uncooperative upload has its original two-minute limit and preserves cleanup identity (0.9765ms)
+✔ the restore observation deadline includes retries and response parsing (1.1786ms)
+✔ transient 503 discovery recovers before publishing an error and never writes (3.3329ms)
+✔ cancellation before the request microtask starts sends no ghost read (1.19ms)
+✔ Esc hides the import, restores focus and keeps accepted work; obsolete close does not hide reopen (3.2975ms)
+✔ committed results wait for an explicit open; uncertain cleanup blocks both open and reset (0.8566ms)
+✔ unknown recovery queries only, failure receives focus and partial preview cannot confirm (0.7905ms)
+✔ server microsecond timestamps render a real date and the reviewed target precedes source details (29.7892ms)
+✔ plain HTTP-compatible incremental hash/upload uses bounded binary chunks and shared write admission (95.6973ms)
+✔ file size, late hash cancellation and corrupt seal cannot silently return a verified upload (3.2501ms)
+✔ the first lost catalog read settles startup, then restores in the background (3.7416ms)
+✔ exhaustion uses exponential waits and publishes one final error (1.4903ms)
+✔ six aborted reads and waits cannot exceed the shared minute deadline (4.003ms)
+✔ permanent access failures stay visible and are never retried (0.3465ms)
+✔ an explicit newer read cancels the old retry and keeps the new result (0.3696ms)
+✔ a stale in-flight response cannot replace a newer catalog (0.4193ms)
+✔ reset and authoritative data cancel any scheduled recovery (0.5158ms)
+✔ a temporary refresh failure keeps the previously loaded catalog (0.3144ms)
+✔ ordinary stores keep their original single-read failure behavior (0.2107ms)
+✔ leaving a page cancels its queued recovery and returning resumes the interrupted read (1.2135ms)
+✔ leaving during an in-flight read aborts it without publishing a failure (0.402ms)
+✔ foreground recovery reads only an exhausted transient catalog through the real API (39.1023ms)
+✔ copy uses the asynchronous API when available (2.052ms)
+✔ fallback copy preserves a backwards reader selection and focus (1.523ms)
+✔ fallback restores independent ranges on WebViews without directional selection (0.5456ms)
+✔ failed OS copying still restores the reader selection (1.002ms)
+✔ fallback skips a removed selection even when its live clone relocates to a connected parent (0.3588ms)
+✔ a delayed native refusal preserves the current draft caret and scroll (0.565ms)
+✔ code copying falls back and restores button focus without the Clipboard API (0.2526ms)
+✔ a rejected native copy tries the fallback and reports a definite failure (0.6358ms)
+✔ a known non-reasoning model clears a previous thinking preference (1.5288ms)
+✔ retired built-in references resolve in project defaults without shadowing a custom model (1.9307ms)
+✔ blank task follows the default Agent until the user chooses overrides (1.6378ms)
+✔ leaving a model save cancels its confirmation and ignores the late settings (6.0168ms)
+✔ newer model metadata wins over a late confirmed save (2.819ms)
+✔ destroying the profile view cancels an outstanding confirmation (0.9809ms)
+✔ a confirmed current model change refreshes recovery after updating session metadata (1.0889ms)
+✔ global permission changes affect blank tasks, preserve chat overrides, and never rewrite existing sessions (0.8756ms)
+✔ blank task choices survive refresh per project without freezing other defaults (52.2524ms)
+✔ OS files with no MIME retain supported image uploads (1.1794ms)
+✔ a supplied MIME is authoritative over the filename (0.1868ms)
+✔ a partially readable items view cannot hide files from a multi-image paste (1.4361ms)
+✔ both transfer views upload each selected file once, including matching metadata (0.6964ms)
+✔ file-item MIME hints fill unspecified types without overriding a supplied type (1.281ms)
+✔ items-only transfers retain files and MIME hints while skipping unreadable entries (2.3054ms)
+✔ ordinary text and absent transfers contain no image files (0.4173ms)
+✔ composition belongs to its editor and another field's end cannot release it (1.2612ms)
+✔ editor blur clears only its own unfinished composition (0.294ms)
+✔ losing the owner window clears composition when the same field is revisited (0.3733ms)
+✔ disposing a component clears its state and removes composition listeners (1.0199ms)
+✔ controller refresh preserves account binding before obtaining a device ticket (824.6718ms)
+✔ opening a session loads only the last four turns, preserving the full navigation index (47.5042ms)
+✔ prepending history cannot rewind the live cursor or replace concurrently arriving messages (6.3778ms)
+✔ jumping loads just the selected range and leaves live subscription history intact (2.1675ms)
+✔ history failure preserves the conversation and permits an explicit retry (4.3983ms)
+✔ earlier navigation summaries load independently without downloading their conversation text (1.9198ms)
+✔ switching sessions rejects a late historical response even when transport ignores abort (2.4559ms)
+✔ a clear during historical loading removes obsolete records and summaries (5.076ms)
+✔ all main replies stay visible between chronologically folded execution blocks (2.2994ms)
+✔ a report cannot be hidden by later file verification or memory housekeeping (0.6465ms)
+✔ main errors remain visible and subagent text stays in its execution block (0.7367ms)
+✔ model completion alone cannot collapse a turn still awaiting a tool or further model call (0.2706ms)
+✔ resuming without a new user input summarizes only the last run's answer even if model turn IDs repeat (0.3756ms)
+✔ a cold history fragment and its completed turn share one reply/process projection (1.0434ms)
+✔ a live fragment folds execution without inventing a user or hiding public output (0.2735ms)
+✔ search reveals history before focus and restores cards before the composer (3.4234ms)
+✔ navigation releases hidden cards without focusing the previous conversation (0.4783ms)
+✔ IME candidate cancellation keeps search and cards in the same lifecycle (0.5859ms)
+✔ window blur releases unfinished search composition while candidate Escape stays protected (0.5323ms)
+✔ an unfinished composition cannot block Escape after an explicit search close and reopen (0.3956ms)
+✔ snapshot hashes, order, ownership and aggregate ranges are checked before use (5.9906ms)
+✔ a complete reply can exceed the old byte and event preview limits (119.1769ms)
+✔ cold history uses one compact snapshot and cursor-only revalidation (36.9844ms)
+✔ switching back paints cached content while a single delta request is pending (7.5736ms)
+✔ a replaced journal discards cached nodes instead of combining two histories (5.2444ms)
+✔ an older history response preserves pushes that arrived while it was in flight (11.2816ms)
+✔ a superseded response cannot overwrite the newly selected session (1.6392ms)
+✔ an exact acknowledgement completes immediately (7.1422ms)
+✔ lost acknowledgement retries only the identical decision (2.0223ms)
+✔ a stalled response body releases write tracking and recovers (41.3951ms)
+✔ an unresolved submission has one accurate final failure and bounded attempts (3.098ms)
+✔ permanent refusals are not retried (1.269ms)
+✔ explicit temporary refusals retain their accurate final error (2.91ms)
+✔ a later refusal cannot confirm an earlier lost submission (0.9052ms)
+✔ a response for a different value or ID cannot acknowledge this intent (1.5737ms)
+✔ a restarted host or changed target does not receive a replay (0.925ms)
+✔ leaving the page cancels a hanging decision and its timers (0.6737ms)
+✔ other mutations cannot accidentally opt into decision replay (0.3332ms)
+✔ conversation questions quietly recover and merge ordinary polling into the pending read (699.1074ms)
+✔ a permanent question refusal hides stale controls but keeps the selected read scope (3.5331ms)
+✔ an accepted answer is not delayed by a hanging secondary read (6.2189ms)
+✔ an accepted approval keeps its one-shot guard while failed refreshes recover (679.7986ms)
+✔ a malformed approval snapshot cannot release an already accepted decision (2.0028ms)
+✔ a temporary run-list failure retains the active run and coalesces polling (653.4857ms)
+✔ final read errors describe reading, not submitting, in every interface language (36.0585ms)
+✔ directory paths retain native roots, UNC prefixes and literal POSIX backslashes (1.0708ms)
+✔ selection is unavailable until the requested directory loads; typed paths need confirmation (15.719ms)
+✔ a late response or queued close cannot replace a newly opened directory (11.4292ms)
+✔ parent and shortcuts navigate without selecting; IME Enter does not submit a partial path (1.2767ms)
+✔ a hanging cold body retries quietly and preserves input before its late completion (50.0144ms)
+✔ six ignored cold reads finish one minute with one read failure and no writes (3.7515ms)
+✔ temporary cold errors use quiet exponential waits while permanent denial stays exact (2.7644ms)
+✔ page exit releases a cold read without an error and returning reads the preserved editor (3.9336ms)
+✔ an edited cold draft loads once on reconnect and survives a new store (54.9583ms)
+✔ cold reads back off with a cap and typing does not bypass their timer (12.6871ms)
+✔ a cold read restores a saved reply guard and queue before saving a local edit (3.086ms)
+✔ permanent access errors do not automatically retry cold reads or save edits (3.0953ms)
+✔ a cold remote timeout restores its saved editor on a read retry without writing (1.3243ms)
+✔ a late cold recovery saves its owner without replacing another selected editor (1.6614ms)
+✔ a peer write after cold recovery is still protected by the saved revision (1.4962ms)
+✔ a lost saved-text acknowledgement is confirmed by one read without another draft write (42.8895ms)
+✔ a lost remote submission response is reconciled by reads without repeating writes (4.2449ms)
+✔ a queue refresh does not mistake the current tab's unsaved image edit for a peer conflict (6.2635ms)
+✔ a newer peer draft still blocks an unsaved image edit (2.298ms)
+✔ an oversized draft stays unsaved without repeated retries and recovers after editing (712.2508ms)
+✔ a failed send restores its text and images ahead of a newer saved draft (2.1258ms)
+✔ an edit before draft loading keeps the persisted run review guard (1.0316ms)
+✔ an uncertain run blocks retry across draft edits and reload until acknowledged (41.0974ms)
+✔ an in-flight submission survives refresh while the next draft stays editable (7.0516ms)
+✔ multiple pending submissions keep their order and state across reload (2.227ms)
+✔ composer profile and per-message snapshots survive edits and reload (3.3699ms)
+✔ saved PUT with a hanging body confirms quietly and saves a newer edit separately (52.6861ms)
+✔ a write which did not arrive retries the identical versioned snapshot (7.6469ms)
+✔ late original acceptance between read and CAS retry causes one logical save (2.5618ms)
+✔ a newer peer draft remains protected after an uncertain local write (1.6254ms)
+✔ unreadable confirmations settle and later confirm the same save without another PUT (2.9542ms)
+✔ page exit cancels a saved PUT wait and returning confirms before writing (1.9924ms)
+✔ a hung submission refresh uses bounded read recovery without replaying a write (1.7313ms)
+✔ submission state and removal with hung acknowledgements confirm by exact ID (2.8441ms)
+✔ a target change while confirming cannot retry the old save on another device (3.774ms)
+✔ cancelling a submission refresh releases an ignored abort without another read (1.265ms)
+✔ permanent access and quota refusals preserve input without retries or confirmation reads (2.0983ms)
+✔ a permanent confirmation refusal retains the uncertain snapshot without background retries (1.5574ms)
+✔ an oversized next edit cannot prevent confirmation of an already saved submission (5.8141ms)
+✔ editing common fields preserves unrelated Skill metadata and references (4.5503ms)
+✔ portable IDs prevent cross-platform special path names (1.2692ms)
+✔ standard MCP imports isolate credentials and reject incompatible transports (1.9569ms)
+✔ command arguments are literal prompt text, including dollar replacement sequences (0.2176ms)
+✔ MCP form credentials seal at save time without replacing existing references (0.6658ms)
+✔ MCP form accepts explicit loopback HTTP and rejects remote or ambiguous authorities (3.6592ms)
+✔ MCP server import uses the same loopback transport rule as the form (1.3337ms)
+✔ extension GETs quietly recover twice with exponential waits (49.5301ms)
+✔ permanent and optional failures are not retried (2.6459ms)
+✔ hanging bodies stop within the shared minute and six attempts (4.0879ms)
+✔ a new edit intent releases an abort-ignoring old transport (1.9932ms)
+✔ an old read finishing cannot forget the replacement's cancellation (2.5377ms)
+✔ leaving cancels every active read without another request (1.1044ms)
+✔ a changed owner prevents another retry after backoff (1.0738ms)
+✔ a late successful result from a changed owner is discarded (0.9243ms)
+✔ page exit cancels recovery, and an explicit later read can resume (1.5059ms)
+✔ missing and whitespace-only SubAgent fields are identified before serialization (3.4064ms)
+✔ default Agent instructions and Skill bodies remain optional; commands require instructions only (1.1319ms)
+✔ reserved command names and nonportable IDs cannot reach a write (0.4763ms)
+✔ native UTF-8 field limits are measured in bytes rather than character count (0.5089ms)
+✔ MCP validation checks only the active transport and accepts either credential representation (1.3259ms)
+✔ MCP arguments and credential mistakes identify the field without reflecting its contents (0.6115ms)
+✔ Android exports reject excess bytes before a Blob URL, DOM click or native handoff (2.4886ms)
+✔ the Android boundary keeps a connected anchor and filename for the document listener (1.0339ms)
+✔ browser downloads above the Android limit retain their ordinary handoff (0.2456ms)
+✔ failed browser handoff removes the anchor and releases its temporary URL (0.3105ms)
+✔ directory drops use absolute host paths, never a virtual entry fullPath (2.8819ms)
+✔ multi-folder and file drops are rejected before registering a workspace (1.2326ms)
+✔ native file paths require the matching request, and closing cancels the listener (6.3751ms)
+✔ directory handles are captured during the drop event and passed to the native host (0.6948ms)
+✔ both approval surfaces share one in-flight submission (53.5045ms)
+✔ a committed decision stays locked when the refresh fails (3.2377ms)
+✔ run grant shares the one-shot lock across both approval surfaces (2.9745ms)
+✔ bundled language packs cover the annotated shell and switch without stale responses (98.9122ms)
+✔ a new run waits for navigation's recovery inspection (57.3294ms)
+✔ a failed operation releases its session without blocking other sessions (0.8156ms)
+✔ a lost run response is reported as uncertain without replaying the POST (2.424ms)
+✔ an explicit run rejection keeps its ordinary failure status (4.2874ms)
+✔ known pre-execution validation failures identify rejected admission without replay (3.5728ms)
+✔ an unknown error or mismatched status cannot authorize resetting a sending item (2.4137ms)
+✔ a competing queue start requires review without replay (1.0952ms)
+✔ a run error after the execution boundary requires review (1.369ms)
+✔ foreground runtime inspection quietly recovers transient failures before sending (15.4909ms)
+✔ wrong-session and malformed inspection bodies never prove runtime availability (1.91ms)
+✔ inspection timeouts release the session even when the transport ignores abort (3.6761ms)
+✔ cancelling a queued inspection cannot let its follower bypass the active runtime (0.9636ms)
+✔ a lost run response is confirmed by its exact queue receipt without replaying POST (2.609ms)
+✔ a slow admission response times out and confirms the real accepted run (1.5709ms)
+✔ missing receipts exhaust quietly within the shared cap and leave only final uncertainty (4.1401ms)
+✔ confirmation can never adopt another queue item or another session's run (2.7078ms)
+✔ a definite quota refusal remains accurate and never performs confirmation or replay (0.8861ms)
+✔ a start without a correlation ID times out once and never guesses an accepted run (1.303ms)
+✔ page exit cancels confirmation without forgetting that the POST may have succeeded (1.6084ms)
+✔ cancelling before acquiring the runtime sends no POST and preserves the active owner (2.0595ms)
+✔ initial history fills 2.5 viewport heights with complete pages (6.8719ms)
+✔ one screen of headroom starts a single batch before the top is reached (1.9168ms)
+✔ long replies remain whole even when one page exceeds the height target (0.9274ms)
+✔ many short groups also fill the viewport buffer (2.309ms)
+✔ search, exhaustion and zero-height windows suppress automatic requests (0.8956ms)
+✔ a session change or view destruction ends the old batch (0.9221ms)
+✔ non-advancing or invisible pages do not cause a fetch loop (0.5886ms)
+✔ a taller viewport gets additional buffer without loading all history (0.7965ms)
+✔ image filenames are bounded by UTF-8 bytes and exclude path/control/malformed text (1.5576ms)
+✔ uploads encode names in one header and preserve the original binary body (34.2405ms)
+✔ draft and history share pending name reads but session and project scopes stay separate (1.2004ms)
+✔ legacy metadata keeps generic labels while malformed/failed reads retry after a bound (0.4261ms)
+✔ recent attachment names stay in a bounded cache and evicted entries can reload (0.4147ms)
+✔ cached upload names label detached new cards before reconciliation and use literal text (0.5095ms)
+✔ late reads update only the still connected thumbnail with its original reference (0.5183ms)
+✔ an open preview retains its name read after the original thumbnail is detached (0.3146ms)
+✔ reusing a thumbnail binds a new name read without changing a captured preview (0.4489ms)
+✔ failed preview retries once, preserves names/focus, and rejects old image events (69.6575ms)
+✔ an upload ignoring abort ends at thirty seconds and confirms the same image once (8.0004ms)
+✔ a confirmation body ignoring abort retries only the read before returning its receipt (5.6094ms)
+✔ uncooperative transfers exhaust the shared ninety-second budget without extra writes (2.1589ms)
+✔ leaving the page releases an uncooperative transfer and starts no confirmation (2.0535ms)
+✔ leaving during backoff ends its wait before another upload or read (1.1522ms)
+✔ leaving before the transfer microtask sends nothing (5.2875ms)
+✔ a lost upload acknowledgement is read back without a second write (7.1283ms)
+✔ an upload that was not accepted retries the same identity after read confirmation (1.5172ms)
+✔ a failing confirmation read backs off without replaying the image (4.4942ms)
+✔ temporary failures exhaust once with bounded delay and a useful final cause (9.1479ms)
+✔ an actual aborted transfer obeys the shared recovery deadline (1.4526ms)
+✔ quota, format, conflicts and write-generation fences never retry (1.3599ms)
+✔ an older device rejecting PUT does not fall back to an uncertain POST (0.6862ms)
+✔ changing the editor during recovery prevents any further request (0.6612ms)
+✔ an accepted response after navigation stays available for owner cleanup (0.5519ms)
+✔ a mismatched receipt never adds another file to the editor (0.6403ms)
+✔ binary transport uses a keyed PUT and releases write tracking on cancellation (1.3392ms)
+✔ first-use language follows the primary system language, with English fallback (1.4152ms)
+✔ native Android language wins over WebView's browser language (0.2685ms)
+✔ an unavailable native bridge falls back to the browser language (0.5525ms)
+✔ initial language is saved once and survives a later system language change (54.2125ms)
+✔ upgrading an existing saved language never rewrites it (6.6161ms)
+✔ unsupported system language is persisted as English even with secondary Chinese (4.9299ms)
+✔ a concurrent accepted language wins over first-use detection (1.2662ms)
+✔ a lost write reply is confirmed by reading, without repeating the write (1.3191ms)
+✔ an unreadable write confirmation keeps the first-use UI usable (1.0508ms)
+✔ read-only recovery uses the detected language without bypassing the write guard (1.1668ms)
+✔ composition in a removed or different editor cannot block new-task shortcuts (1.9944ms)
+✔ window focus loss releases an unfinished composition before shortcuts resume (0.4417ms)
+✔ IME candidate keys cannot submit a composer turn (0.1715ms)
+✔ Escape respects a composer menu before handling a run or drawer (0.5632ms)
+✔ slash search only claims keys in the workspace outside composition (0.5307ms)
+✔ Escape leaves scheduled tasks without stopping the background conversation (0.3923ms)
+✔ same-origin token and ready gate protect a single connection (4.666ms)
+✔ restart renews only the read socket and announces the stale page before connecting (4.7077ms)
+✔ unreachable read-token probe backs off without opening stale sockets (1.2354ms)
+✔ an HTTP transport failure rechecks a seemingly open socket only once (0.8926ms)
+✔ pause or stop invalidates delayed token probes and never reconnects in the background (0.9937ms)
+✔ reconnect reads the latest offline cursor and ignores the old socket (0.3851ms)
+✔ selection generation rejects delayed packets even when returning to the same session (0.2913ms)
+✔ heartbeat failure reconnects, and hidden pages release connections and timers (0.2701ms)
+✔ failed handshakes use bounded exponential backoff and stop cancels retries (0.2811ms)
+✔ a probe ignoring abort times out and reconnects without adopting its late token (8.0446ms)
+✔ pause and stop abort hanging probes and release their deadline immediately (1.7235ms)
+✔ a replacement connection cancels its old probe without clearing the new watchdog (1.1373ms)
+✔ cancellation before a probe's HTTP turn sends no ghost read (1.1282ms)
+✔ a timed-out probe's late rejection cannot disturb its healthy successor (1.0646ms)
+✔ repeated hung probes retain the existing capped exponential reconnect pace (1.6856ms)
+✔ stopping from a runtime-change observer never reports a stale reachable state (0.7433ms)
+✔ the exported live connection bounds real API JSON and retains the page's mutation fence (38.7212ms)
+✔ replay/live overlap is deduplicated without rewinding the cursor (3.7035ms)
+✔ temporary background read failures retain messages and back off without error cards (41.0626ms)
+✔ an unchanged successful replay clears a previous read error (7.4612ms)
+✔ cold timeline loading recovers network_error and then restores its history (6.0405ms)
+✔ cold timeline loading recovers remote_timeout and then restores its history (3.2255ms)
+✔ permanent permission failures remain visible instead of being retried silently (0.9694ms)
+✔ a newer push prevents an in-flight HTTP fallback overwriting it (1.3256ms)
+✔ intentional clear removes its range but additional streaming never evicts earlier messages (1.5104ms)
+✔ wrong session and malformed cursors cannot mutate the timeline (0.4581ms)
+✔ initial locale displays promptly and waits for continuity before saving (5.2231ms)
+✔ a language selected by another page wins over deferred initialization (1.0529ms)
+✔ manual selection cancels an initializer even before the manual write completes (5.4901ms)
+✔ repeated writable notifications do not duplicate an initialization read or write (1.7285ms)
+✔ a lost initialization acknowledgement never turns into another automatic write (0.852ms)
+✔ restoring defaults supersedes a deferred automatic locale save (0.926ms)
+✔ the public API guard defers initialization without sending a rejected PATCH (43.6089ms)
+✔ memory browsing is lazy, shows exact file content, and refreshes the selected file (1.5823ms)
+✔ late scope replies cannot replace the current project files (1.3931ms)
+✔ rapid file selection ignores both late successes and late failures (0.5033ms)
+✔ leaving the memory page cancels reads and empty folders remain usable (0.7292ms)
+✔ a queued close from a cancelled edit cannot cancel a reopened image-only edit (3.7893ms)
+✔ an externally closed current dialog still cancels and restores its own opener (1.2855ms)
+✔ plain Enter saves one edit and returns focus to its message action (0.3872ms)
+✔ Shift+Enter and modified Enter keep the editor's native input behavior (0.6509ms)
+✔ IME candidates never resend, and input or window blur releases composition (1.7331ms)
+✔ Enter uses the button's validation and permits an image-only edit (0.694ms)
+✔ disabled, readonly, and previously consumed Enter cannot submit (0.3523ms)
+✔ a delayed commit keeps the editor open and rejects duplicate submission and cancellation (0.437ms)
+✔ a refused message edit preserves text and attachments for correction or cancellation (6.3731ms)
+✔ a late commit response cannot close or change a newer editor (0.9543ms)
+✔ closing an editor whose opener was removed returns focus through its owner-checked fallback (0.3399ms)
+✔ temporary edit reads recover silently with exponential waits (6.8706ms)
+✔ six failures terminate, and permission refusals do not retry (2.9367ms)
+✔ abort-aware and noncooperative I/O share the one-minute deadline (2.4393ms)
+✔ leaving the page cancels both an active request and backoff (0.9758ms)
+✔ draft writes remain single attempts; only keyed edits accept uncertain replies (0.9323ms)
+✔ history edits get independent 128-bit identities (4.1151ms)
+✔ message edit stays bound to its original session (12.7198ms)
+✔ profile validation rejects image retry before changing history (0.9243ms)
+✔ an unsettled submission found during preflight cannot truncate history (6.5472ms)
+✔ navigation during asynchronous preflight cannot truncate the old session (1.2208ms)
+✔ navigation before truncation prevents changing the new session (0.5065ms)
+✔ navigation during truncation finishes the old run without changing new UI (1.4106ms)
+✔ a refused history transaction never announces a visible commit (0.5874ms)
+✔ an obsolete message boundary cannot commit or reveal a replacement turn (0.3356ms)
+✔ missing original event identity cannot load or mutate history (0.7986ms)
+✔ a reused sequence with a fresh revision still submits the original event guard (0.7992ms)
+✔ failed background resend saves the old draft without touching visible UI (5.9665ms)
+✔ a lost cut acknowledgement repeats one guarded edit and starts just one run (1.5364ms)
+✔ lost draft acknowledgements are read back before history changes (0.6024ms)
+✔ an unsaved draft prevents any history cut and returns the input (0.6965ms)
+✔ exhausted edit confirmation leaves the saved input and one accurate final failure (7.1806ms)
+✔ changing routes while saving input cannot cut history (0.9815ms)
+✔ leaving the page after a confirmed cut cannot start a hidden model run (0.555ms)
+✔ a failed model start is never replayed by edit recovery (1.9534ms)
+✔ visual viewport override follows keyboard occlusion and clears on restore (1.465ms)
+✔ unavailable and nearly full visual viewports retain CSS dynamic height (0.4815ms)
+✔ final model errors use the UI language and preserve unknown explanations (84.7284ms)
+✔ one execution has one final error, retains partial output, and survives cleanup (0.47ms)
+✔ a child failure stays in task details while its parent continues (0.4025ms)
+✔ stream recovery replaces only the interrupted turn's draft (1.1676ms)
+✔ a pending new task keeps new-task routes in its owning project (22.0334ms)
+✔ hash navigation loads once while in-place refresh leaves route-owned controls intact (19.2777ms)
+✔ scheduled tasks retain the exact conversation when refreshed (4.0604ms)
+✔ utility pages retain the composer owner while a real workspace selection changes it (3.3178ms)
+✔ new-task focus survives disabling and returns once in the created session (3.1546ms)
+✔ background recovery and existing sessions never acquire composer focus (1.281ms)
+✔ a newer focus or non-focusable click cannot be undone by migration (0.3996ms)
+✔ leaving the original project, task or workspace cancels pending focus (0.3232ms)
+✔ a hidden page or unfocused window never reopens its composer (0.3836ms)
+✔ only the acknowledged migration target can receive saved focus (0.2018ms)
+✔ an explicit new-task action or failed preparation can cancel saved focus (0.2027ms)
+✔ new-task titles stay within the UTF-8 session title limit (1.4933ms)
+✔ attachment-first creation recovers a lost create response (62.4094ms)
+✔ new-task inputs survive a delayed create and move in order (9.3291ms)
+✔ a rejected create can change profile without losing queued inputs (5.4936ms)
+✔ a conflicting create response never attaches input to another session (0.4867ms)
+✔ an uncertain create keeps its original ID and profile on review (0.4293ms)
+✔ notice filters include lower and exclude upper version/time boundaries (1.3729ms)
+✔ update/read/resolution, guide snooze, marketing and revision reset (14.6802ms)
+✔ tool operations respect target admission, dependencies, withdrawal and compatibility (0.5668ms)
+✔ Android application and bundled tools produce one update notification (0.3981ms)
+✔ tool page offers APK upgrades on Android and independent packages on Windows (1.3201ms)
+✔ tool failures distinguish checksums from functional probes and show retained diagnostics (0.5012ms)
+✔ indicators keep update priority and bubble content while mapping notification severity (0.326ms)
+✔ a toggle before first read preserves the other saved fields and cannot write defaults (49.2073ms)
+✔ a resize owns its width and open panel while untouched geometry still restores (2.1374ms)
+✔ mobile drawer clicks do not save desktop preferences or suppress their first read (5.9798ms)
+✔ edits arriving during a save are serialized as one latest complete snapshot (2.1866ms)
+✔ saving from the sidebar restores the refreshed project menu button (42.0559ms)
+✔ a dropped folder is checked on the host and stale checks cannot fill a newer dialog (1.828ms)
+✔ late project reads and queued close events cannot overwrite a newly opened form (0.6437ms)
+✔ an in-flight update keeps its owner and never closes or navigates a newer dialog (1.7747ms)
+✔ unread definitions cannot be saved and background errors do not replace current form errors (0.591ms)
+✔ picked directories suggest identities but preserve manually edited names and IDs (0.5441ms)
+✔ blank tasks keep independent portable drafts for each project (46.6217ms)
+✔ an old global draft moves to its project before the global file clears (2.6384ms)
+✔ a conflicting project draft leaves both copies and keeps project ownership (1.3422ms)
+✔ a cold global draft edited offline migrates durably after reconnect (17186.549ms)
+✔ quick project creation derives the same identity from Windows and Unix paths (2.8301ms)
+✔ explicit confirmation drains, saves one binding, executes it and ACKs without unlocking old memory (6.3666ms)
+✔ an in-flight or failed draft drain creates no ID or saved request (1.0944ms)
+✔ a lost preparation keeps its original proposed ID and cannot execute until publication is read back (1.4869ms)
+✔ lost execution replies query the same original receipt and preserve verified commit facts (0.8551ms)
+✔ reloaded saved intent may be explicitly reviewed, but revision/incarnation changes never execute (0.8838ms)
+✔ a missing/different portable intent cannot authorize execution from cached review (4.6064ms)
+✔ lost ACK validates absence/new ownership, never erases known commit facts and reloads only explicitly (1.5325ms)
+✔ unsaved local edits, pending results and restart requirements cannot ACK a committed request (0.8518ms)
+✔ advisory inventory rejects invalid headers, paths, unsafe numbers and active/diagnostic counts (0.5953ms)
+✔ API activity counts mutations through envelope parsing and releases on invalid response or upload failure (49.3094ms)
+✔ draining drafts saves existing edits across owners without creating untouched empty drafts (5.5169ms)
+✔ cold empty reads unlock without creating or executing a request (3.7151ms)
+✔ abort acknowledgement on a stale page does not resume saves or discard unsent input via automatic reload (1.3751ms)
+✔ unknown saved requests cancel with the original binding and need explicit abort acknowledgement (1.3038ms)
+✔ lost cancellation responses inspect the same ID without a new cancellation (1.2446ms)
+✔ an HTTP failure carrying committed facts never becomes cancelled or acknowledged (0.6454ms)
+✔ pending/committed results cannot trigger cancel or acknowledgement (0.7785ms)
+✔ lost acknowledgement verifies portable absence before releasing the gate (0.7271ms)
+✔ a failed acknowledgement preserves the same abort and can be retried (0.7154ms)
+✔ other-page acknowledgement never drops a known committed request (0.4987ms)
+✔ a verified abort can hand over to another page's subsequent intent (0.6749ms)
+✔ corrupt intent/ETag/unsafe numbers fail closed without a mutation (0.9345ms)
+✔ mismatched receipts and contradictory commit facts keep the original binding (2.9659ms)
+✔ later contradictory results do not erase a known committed fact (0.3357ms)
+✔ repeated clicks coalesce; a failed initial read remains paused during retry (9.0062ms)
+✔ page write guard covers JSON writes and raw uploads, but permits reads and stopping a run (40.0679ms)
+✔ paused drafts retain local edits without retry loops or pagehide writes, then resume (3.7881ms)
+✔ a pause during an in-flight save stops later dirty iterations without losing edits (1.175ms)
+✔ new-task and submission recovery do not touch restored state while paused (0.887ms)
+✔ a failed recheck of a formerly empty Home does not unlock writes while retrying (5.3807ms)
+✔ a bounded read timeout preserves the startup recovery gate (19.9812ms)
+✔ coalesced queue loads recover two temporary failures without writes (57.0981ms)
+✔ failed refresh retains the saved queue and releases its load gate (8.2271ms)
+✔ hung transport cannot permanently occupy a session queue load (2.4704ms)
+✔ page exit cancels a hung read and ignores its late queue (1.0123ms)
+✔ old refresh cannot overwrite a queue mutation that finished first (2.1346ms)
+✔ malformed queue data cannot erase or replace the saved queue (2.3064ms)
+✔ exact receipt reads quietly recover and never submit another queue item (1.513ms)
+✔ only a real missing receipt is absence; access and malformed responses fail (1.873ms)
+✔ hung queue POST confirms its saved exact item after eight seconds (46.7294ms)
+✔ lost queue POST waits out transient confirmation faults without replay (8.2294ms)
+✔ absent queue data does not prove an unknown POST can be repeated (6.5928ms)
+✔ an exact consumed receipt confirms a queue POST; another ID cannot (2.6437ms)
+✔ confirmation cannot adopt the same ID with different text or model (2.2489ms)
+✔ hung promotion and sending PUTs confirm the actual state, never repeat PUT (2.6817ms)
+✔ retry cannot mistake an accepted run for a successful reset to pending (4.5756ms)
+✔ lost deletion quietly confirms absence after two temporary read failures (2.6558ms)
+✔ definite queue and account refusals retain their exact error without confirmation (2.643ms)
+✔ changing target while loading the queue cannot submit the old input to the new target (3.3312ms)
+✔ page exit cancels the wait, preserves write uncertainty, and ignores a late acknowledgement (1.2863ms)
+✔ a receipt from a restarted service cannot confirm the old write (1.706ms)
+PASS supplier products, unique identities, conservative profiles and recommended model selection
+✔ C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_provider_presets.mjs (135.8203ms)
+✔ service continuity checks recover quietly from two transient read failures (7.3159ms)
+✔ ignored aborts end service checks within one minute without inventing a purge (2.3565ms)
+✔ a reachable connection resumes a failed check once without replaying a mutation (1.3784ms)
+✔ permanent denial is final and connection events do not retry it (0.8411ms)
+✔ a verified service restart keeps review and never automatically releases stale writes (0.9272ms)
+✔ page departure cancels a pending read and a late empty result cannot unlock it (0.8446ms)
+✔ a cold exhausted check recovers in the background without another click (1.3401ms)
+✔ hiding the page cancels its cooldown and showing it resumes only the read (1.3088ms)
+✔ returning to the page resumes a cancelled read (1.0747ms)
+✔ returning to the page resumes a cancelled read before cancellation settles (2.4379ms)
+✔ a hung cancellation stays single attempt and retains its original request (2.1302ms)
+✔ an older navigation load cannot release a newer queue gate (1.2836ms)
+✔ manual review and navigation loads block independently (0.2123ms)
+✔ a detail refresh cannot release an unfinished runtime check (0.2862ms)
+✔ a newer runtime check replaces an obsolete one (2.3488ms)
+✔ background transport failures never imply an unfinished reply (3.7082ms)
+✔ an actual remote read deadline is recoverable while an admitted write remains uncertain (40.4973ms)
+✔ a known interrupted response stays visible while its current inspection is offline (0.2712ms)
+✔ HTTP network detection signals recovery without replaying the original mutation (11.9143ms)
+✔ lost resume acknowledgement is confirmed by exact identity after quiet read backoff (9.9635ms)
+✔ a successful resume and close need no confirmation reads (1.3545ms)
+✔ six unreadable confirmations produce one accurate uncertainty without repeating the write (2.8781ms)
+✔ an ending is confirmed only by a newer, closed boundary in its original session (1.2279ms)
+✔ definite refusals keep their actual error and do not inspect or repeat (1.2468ms)
+✔ timeouts cap the whole confirmation at one minute, including uncooperative reads (1.5046ms)
+✔ page exit aborts both submission and confirmation without another request (1.0598ms)
+✔ target changes and host epochs prevent an older acknowledgement from applying (1.0189ms)
+✔ default ending confirmation releases a timed-out runtime before its next read (39.6538ms)
+✔ leaving during default ending confirmation releases its runtime and ignores late data (2.4492ms)
+✔ a cancelled ending confirmation waiting behind an owner never opens a ghost runtime (1.4075ms)
+✔ same-token refresh preserves a choice; a new token never inherits permission to repeat (3.3115ms)
+✔ projects and sessions independently bind choices even when providers reuse their IDs (0.3524ms)
+✔ an unavailable tool cannot inherit retry while recording uncertainty remains valid (0.2868ms)
+✔ in-flight A does not block B, and a late A completion preserves B's reviewed choices (0.4446ms)
+✔ a new token for an in-flight session cannot submit until its original operation settles (0.2864ms)
+✔ unknown effects default to not repeating; a failed submission preserves an explicit retry (0.2134ms)
+✔ only an available tool explicitly marked read-only is retried by default (0.3549ms)
+✔ accepted recovery stays locked through refresh and a session round trip (0.2788ms)
+✔ late recovery callbacks belong only to the original workspace, including after settings navigation (0.2713ms)
+✔ a failed resumed run can be retried after a fresh idle inspection with the same token (0.8929ms)
+✔ history editing cannot transfer a reviewed retry to a reused call and token (0.2398ms)
+PASS target HTTP multiplexing, consumer ACK, binary upload, bounds/scope, live SHA/Unicode, lost-write receipt, reconnect/late response, cancellation and view mode
+✔ C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_remote_transport.mjs (213.9411ms)
+✔ a negotiated window admits 128 KiB before consumption, retaining consumer ACKs (41.0784ms)
+✔ LAN probing preserves active relay reads, routes new reads directly and keeps credentials private (2.3724ms)
+✔ LAN disconnect never replays writes and later requests still use relay (1.7566ms)
+✔ a direct handshake cannot change the selected runtime or authority (2.3927ms)
+✔ LAN send failures and delayed close events preserve the relay (1.7276ms)
+✔ gzip is decoded once and a truncated gzip cannot become valid JSON (25.6294ms)
+✔ foreground requests bypass queued history and cancelled reads leave the queue (2.1208ms)
+✔ accepted MCP operation quietly survives two 503 reads without another POST (56.2056ms)
+✔ already terminal failures and cancellations are never reported as success (7.0911ms)
+✔ a different operation ID or server cannot satisfy the original request (9.9876ms)
+✔ catalog reload returns the confirmed terminal result rather than its queued snapshot (1.6887ms)
+✔ normal pending states use progressively slower polls and preserve one accepted ID (2.5035ms)
+✔ cancellation releases an abort-ignoring body without cancelling the native operation (2.3691ms)
+✔ page exit cancels a retry wait without another request (2.4245ms)
+✔ hanging status bodies end within the shared minute as unconfirmed, not failed (4.9238ms)
+✔ an unaccepted failing POST is never automatically replayed (2.5298ms)
+✔ target changes while accepting an operation cannot read a different device (1.5523ms)
+✔ an accepted reply must also identify the server that was actually requested (1.5023ms)
+✔ a permanent status refusal is final after one GET (1.2991ms)
+✔ a lost startup reply is recovered by its requested ID with no repeated POST (1.9414ms)
+✔ a hanging startup body is bounded and its late result cannot replace confirmation (1.3191ms)
+✔ unknown acceptance ends accurately and retains a GET-only recheck identity (3.8115ms)
+✔ startup and subsequent observation share one minute (1.8036ms)
+✔ leaving during an uncertain startup preserves the identity for GET-only recheck (1.4239ms)
+✔ malformed acknowledgement recovers module reload through the same identity (1.6721ms)
+✔ unrelated 404 after acceptance is final rather than evidence of a late submission (1.3779ms)
+✔ terminal MCP failure reasons are localized and never reflect provider text (90.1213ms)
+✔ HTTP authentication, permission, limit and service failures have distinct final advice (2.5312ms)
+✔ legacy or unknown error codes remain safe and do not start a retry (1.1618ms)
+✔ malformed optional diagnostic metadata cannot become final advice (1.9385ms)
+✔ a read ignoring abort releases startup at eight seconds and quietly recovers (9.3433ms)
+✔ six uncooperative reads settle in one minute with one final error (2.1283ms)
+✔ page exit settles an ignored abort and resume reads once without old data (1.918ms)
+✔ a replacement read settles its predecessor without clearing the new deadline (0.8809ms)
+✔ reset, authoritative data and errors all release hanging loads without retries (0.8922ms)
+✔ the real API response body is bounded even if JSON parsing ignores abort (55.8202ms)
+✔ synchronous permanent failure keeps its exact error and clears all timers (1.4421ms)
+✔ one hanging run read expires at eight seconds without repeating it (7.2211ms)
+✔ cancel releases an uncooperative read and ignores its late terminal state (4.2771ms)
+✔ a new run cancels the old read without old cleanup cancelling its successor (0.9984ms)
+✔ cancelling before the HTTP turn sends no ghost request (0.3918ms)
+✔ a response proves only the exact run, project, session and boolean boundary (0.9931ms)
+✔ the real run API adapter aborts fetch when its bounded wait expires (39.1032ms)
+✔ the real fallback scheduler releases a hanging GET and backs off quietly (2.3416ms)
+✔ the real scheduler never adopts a wrong-session run response (3.3019ms)
+✔ explicit lifecycle cancellation is silent in the real scheduler (1.8035ms)
+✔ transient polling failures back off to fifteen seconds without failing the run (3.0997ms)
+✔ permanent polling denials retain their precise error without retry (1.5201ms)
+✔ hidden pages, utility views and healthy live connections do not start fallback reads (3.0745ms)
+✔ a normal stop is acknowledged once without waiting for secondary reads (12.6366ms)
+✔ an offline stop waits, then inspects and cancels the original run on reconnect (1.4243ms)
+✔ a lost stop acknowledgement is verified before any repeat cancellation (1.257ms)
+✔ an unaccepted transient stop retries only that exact run with bounded backoff (1.2884ms)
+✔ read failures keep the stop intent with a cap and jitter rather than replaying writes (1.6154ms)
+✔ an already completed run satisfies the intent without falsely marking it cancelled (0.5733ms)
+✔ a generation change during inspection prevents late cancellation (0.9225ms)
+✔ the write guard is checked again after reading the run (0.6337ms)
+✔ an authoritative acknowledgement settles a pending intent and ignores its late response (0.8695ms)
+✔ permanent denial is shown once and remains available for an explicit retry (1.0502ms)
+✔ mismatched run responses never acknowledge or cancel another session (0.8548ms)
+✔ a hung accepted stop times out and confirms the original run without another DELETE (6.7945ms)
+✔ a hung stop inspection releases its attempt and leaves another session usable (0.9236ms)
+✔ unconfirmable stops produce one final uncertainty within a minute and permit explicit retry (1.1595ms)
+✔ a known offline interval keeps the stop intent without consuming its connected budget (0.7616ms)
+✔ authoritative observation aborts a hanging stop and ignores its late acknowledgement (0.6531ms)
+✔ clearing the target aborts a hanging inspection with no late write or error (0.9789ms)
+✔ clearing before the first HTTP turn cannot send a queued stop (0.4933ms)
+✔ connection loss before the first HTTP turn reconnects through an exact run inspection (0.6576ms)
+✔ run API adapters cancel the real read and DELETE transports when their signal aborts (44.5471ms)
+✔ authoritative completion clears only the error belonging to the same run (0.4148ms)
+✔ background inspections preserve known state and coalesce during quiet recovery (46.1172ms)
+✔ exhaustion retains an actual interrupted response and only explicit retry bypasses cooldown (5.1808ms)
+✔ switching inspection scope cancels an uncooperative transport and rejects its late data (2.7758ms)
+✔ an attempt deadline works even when fetch does not observe AbortSignal (4.6105ms)
+✔ a busy runtime is unavailable for inspection and is not replayed as a transport failure (1.0642ms)
+✔ permanent and malformed inspections discard stale decisions without automatic retry (1.0288ms)
+✔ failed schedule history reuses typed model explanations in all UI languages (99.6444ms)
+✔ success, cancellation and legacy or unknown failures preserve actual history text (0.296ms)
+✔ schedule list quietly recovers two temporary failures (69.6506ms)
+✔ background polls preserve old cards and share ongoing recovery (6.5972ms)
+✔ final temporary failures do not let polling restart six attempts (9.2123ms)
+✔ a hanging schedule response releases within the shared minute (4.2744ms)
+✔ leaving cancels a held list, preserves its snapshot and rejects late replacement (3.3304ms)
+✔ permanent read denials and run writes are never retried (4.5127ms)
+✔ lost create acknowledgement reads the original identity without another POST (7.6437ms)
+✔ browser duplicate conflict after creation is confirmed against the complete definition (4.3921ms)
+✔ an original ID not yet visible recovers quietly, never submitting a substitute (2.016ms)
+✔ native read service failures recover even when that code is a definite write refusal (1.2154ms)
+✔ unconfirmed save retry remains read-only and retains the frozen original body (24.3791ms)
+✔ revisioned replace and pause recover matching state, while a different later edit is not overwritten (1.7892ms)
+✔ a no-op pause acknowledgement at the original revision remains successful (0.796ms)
+✔ lost deletion confirmation verifies absence in the same native generation (1.3434ms)
+✔ declared persistence, capacity and permission refusals are immediate and do not inspect (1.5303ms)
+✔ hanging acknowledgement and confirmations share one deadline and release their signals (3.168ms)
+✔ view cancellation releases a late write and later explicit retry only reads its result (1.1598ms)
+✔ changed target, malformed identity and wrong snapshot cannot acknowledge another schedule (1.5441ms)
+✔ manual run accepts one valid acknowledgement and never replays an uncertain start (1.1986ms)
+✔ manual run has a finite ACK wait, cancels quietly and preserves definite refusals (1.523ms)
+✔ renaming a sidebar session returns focus to its replacement button (2.699ms)
+✔ removing the session from the current list returns focus to the filter (0.3667ms)
+✔ a newer focus choice or navigation is never overridden (1.2351ms)
+✔ hidden, inert or disabled sidebar controls cannot regain focus (0.2631ms)
+✔ native dialog focus return to a stable header button is preserved (0.3131ms)
+✔ LRU is bounded and revisiting promotes a session (2.8596ms)
+✔ incomplete or oversized reads never enter the cache (0.4276ms)
+✔ pointer-selected session focuses only after its detail is ready (1.566ms)
+✔ a retry unblocks the selected detail before an older read finishes (2.8129ms)
+✔ a changed route releases a pending detail wait (0.415ms)
+✔ Markdown export restores long user and assistant events before formatting (67.6245ms)
+✔ Markdown export keeps an honest warning when an exact event is unavailable (2.666ms)
+✔ Markdown session export follows the selected language and keeps transcript data (80.1353ms)
+✔ temporary image metadata errors recover quietly before adding an incomplete warning (45.0472ms)
+✔ temporary binary image failures retry the same read without consuming a second reservation (3.6669ms)
+✔ a disconnected fetch or image stream recovers before reporting an incomplete export (2.3492ms)
+✔ an image fetch ignoring abort returns an honest partial export at the shared deadline (1.3714ms)
+✔ a response reader and its cancel promise cannot hold export beyond the deadline (1.4774ms)
+✔ leaving the page cancels image recovery without creating a partial download (2.0093ms)
+✔ a late image response cannot add a payload after export settled (2.374ms)
+✔ pure-image Markdown keeps original bytes/names and deduplicates repeated image payloads (84.6105ms)
+✔ a missing image does not prevent later images, and partial Markdown retains its traceable ID (2.2377ms)
+✔ image export rejects wrong identities, unsafe names, oversized metadata and mismatched streams (5.3885ms)
+✔ image count and transfer budgets fence further payload reads, including failed reservations (1.8625ms)
+✔ the export deadline cancels an outstanding image and never starts later image reads (22.2514ms)
+✔ lost acknowledgement is recovered by reading the exact reserved child (8.1364ms)
+✔ explicit pre-application refusals quietly retry the same frozen body (1.1614ms)
+✔ a definitely missing child allows only the same keyed POST (1.1207ms)
+✔ six exhausted attempts keep the intent for a read-only manual retry (3.5561ms)
+✔ a confirmed fork releases the intent for a later deliberate fork (1.2468ms)
+✔ permanent rejection and known refusal exhaustion retain accurate categories (1.0721ms)
+✔ invalid acknowledgement is confirmed without accepting a neighbouring branch (0.7277ms)
+✔ wrong project, parent, boundary and ETag never confirm the result (2.8732ms)
+✔ a restarted service or changed target cannot reuse an acknowledgement (2.4819ms)
+✔ abort-ignoring bodies share one minute and six total attempts (1.3905ms)
+✔ route/dialog cancellation and pagehide stop waiting without a late result (1.6421ms)
+✔ changing source revision after uncertain delivery still reads the original child (0.7184ms)
+✔ invalid inputs never submit a write (2.318ms)
+✔ standalone history reads quietly recover and validate the exact source (47.4742ms)
+✔ an abort-ignoring history body has a shared one-minute limit and an accurate final error (3.3602ms)
+✔ a caller-owned deadline makes only one history attempt (0.7441ms)
+✔ mismatched boundaries and revisions cannot prepare a fork or cut (6.6168ms)
+✔ permanent access refusal is accurate and not retried (0.8739ms)
+✔ switching sessions or opening a utility page cancels preparation without applying the late boundary (1.4798ms)
+✔ a newer fork/range intent supersedes an older read (0.7909ms)
+✔ history preparation owns one recovery budget and final reading error (2.2651ms)
+✔ leaving the document or explicitly cancelling releases a hanging history read (1.0737ms)
+✔ a direct task has visible loading, retry, and focus recovery (2.4157ms)
+✔ a final detail error stays visible with cached history and retries task metadata (0.6475ms)
+✔ exhausted history reads explain the failure instead of describing an ongoing check (1.3411ms)
+✔ a cold history denial shows its precise cause when task metadata is already present (0.3327ms)
+✔ task metadata errors retain priority over a simultaneous history failure (0.3278ms)
+✔ remote archive updates the selected session only once per revision (3.67ms)
+✔ old responses cannot replace a newer local revision or another session (1.1672ms)
+✔ remote restore rechecks the pending queue once (1.3918ms)
+✔ background metadata does not compete with the selected task's pending read (0.6434ms)
+✔ an observed restore can release the queue before a stalled sidebar read (8.3375ms)
+✔ metadata retries transient reads quietly and coalesces the whole recovery (1.8753ms)
+✔ exhaustion keeps saved metadata and periodic polls do not restart six retries (2.4158ms)
+✔ a hanging read cannot hold its session in flight forever even if it ignores abort (1.6874ms)
+✔ leaving a session cancels its read and returning starts a fresh check (1.2472ms)
+✔ a confirmed local revision cancels stale metadata recovery before another attempt (0.7035ms)
+✔ a selected-detail load supersedes an already pending background check (0.7901ms)
+✔ page exit releases metadata reads and a later check can proceed (2.0696ms)
+✔ definite refusals are not retried and do not overwrite saved metadata (0.664ms)
+✔ destroy cancels active reads and unsubscribes from navigation (0.6609ms)
+✔ an exact profile acknowledgement completes without a confirmation read (6.7599ms)
+✔ a lost profile acknowledgement quietly reads the current desired state (1.586ms)
+✔ an unchanged read permits only the original ETag and frozen profile (1.3964ms)
+✔ a stale PUT is confirmed only when its desired settings are current (1.7437ms)
+✔ a peer revision after lost delivery is never overwritten (0.9008ms)
+✔ known refusal retries quietly while preserving any earlier uncertain delivery (1.0718ms)
+✔ permanent refusals are not retried; known and unknown exhaustion are distinct (11.0874ms)
+✔ invalid ownership, revision and ETag cannot confirm a profile (4.5058ms)
+✔ restart fencing and a changed device do not apply a late acknowledgement (0.8464ms)
+✔ a hanging body shares one minute and six total attempts (1.0679ms)
+✔ cancellation and page exit release profile waiting and prevent late effects (1.0629ms)
+✔ waiting for the runtime is bounded without claiming an unsubmitted PUT (1.2433ms)
+✔ invalid profile and source guards never issue a request (0.3385ms)
+✔ only recycle-bin menus offer permanent deletion and explain its consequences (2.5727ms)
+✔ a lost deletion reply checks absence without a second destructive request (42.9543ms)
+✔ a restored or changed session is retained after deletion is refused (1.3696ms)
+✔ discarding a deleted session draft prevents late reads and saves from bringing it back (3.5999ms)
+✔ a deleted session's cached new-task draft is discarded while other owners remain available (5.0415ms)
+✔ a failed session-list poll stays quiet and preserves the visible sessions (47.3305ms)
+✔ an accepted profile or session write finishes before a stalled sidebar read (14.4489ms)
+✔ cancelling a fork confirmation quietly refreshes its already-created child in the sidebar (2.1177ms)
+✔ session detail recovery never leaks a previous session into the new selection (1.6254ms)
+✔ a warm detail retries quietly but a permanent refusal discards its controls (1.1091ms)
+✔ a mismatched detail response cannot publish another task (3.8531ms)
+✔ list exhaustion is finite and only an explicit retry bypasses its probe cooldown (2.6107ms)
+✔ an acknowledged write supersedes an older sidebar snapshot (1.3302ms)
+✔ returning to a warm task keeps its queue gate closed until recovery finishes (1.4582ms)
+✔ permanent list refusal and malformed envelopes discard unavailable rows without retry (1.1955ms)
+✔ the sidebar distinguishes preparing, ongoing and acknowledged stopping (1.3049ms)
+✔ finished and incomplete records cannot invent a running indicator (0.2577ms)
+✔ equal session IDs in different projects keep their own activity (0.9083ms)
+✔ older completion does not erase a live run in either snapshot order (0.1858ms)
+✔ a new active run takes priority over stopping or preparing in either order (0.2101ms)
+✔ transcript pages and full bodies quietly retry transient reads within one owner (53.9634ms)
+✔ multi-event originals share their deadline with recursive full-text reads (3.1061ms)
+✔ copying several spans cannot restart the one-minute budget for every span (4.0161ms)
+✔ hung event pages end export with a final read error rather than a partial success (3.6699ms)
+✔ hung full bodies produce an honest preview export without holding later reads (3.4326ms)
+✔ leaving the page cancels export and copy instead of completing an old action (1.7927ms)
+✔ history edit/retry does not accept a visible prefix after recovery is exhausted (2.5198ms)
+✔ tool artifact bodies recover quietly and then return complete UTF-8 text (3.9784ms)
+✔ hung tool artifacts return the visible section within the common deadline (1.8566ms)
+✔ a quiet history restart cannot reset the export's one-minute deadline (5.8646ms)
+✔ export quietly restarts once if history is replaced between pages (46.3621ms)
+✔ full-body history replacement cannot upgrade an old preview into another reply (2.9102ms)
+✔ an inconsistent full-text response preserves the original export preview (1.3177ms)
+✔ repeated history replacement ends with one accurate failure and no transcript (2.8362ms)
+✔ single-event full text verifies the supplied history epoch too (0.6518ms)
+✔ projected user, assistant and final messages keep their epoch for copy and edit (5.3905ms)
+✔ export rejects missing or malformed history identities (1.3677ms)
+✔ append within the same history keeps the original export boundary (0.9861ms)
+✔ trash acknowledgement disables an open session and supersedes its delayed active read (40.4269ms)
+✔ changing selection before trash acknowledgement preserves the newer conversation (1.3384ms)
+✔ a refused trash request preserves the selected active session (1.0307ms)
+✔ quick edits coalesce; invalid and discarded input make no requests (5.5782ms)
+✔ edits during a pending save stay editable and save after it with their latest value (0.8648ms)
+✔ a failure keeps edits and stops automatic retries; Save retries once (0.8024ms)
+✔ composition pauses pending saves and resumes only when the text is complete (0.734ms)
+✔ teardown cancels delayed writes and does not act on a later response (1.7983ms)
+✔ a server echo rebases submitted fields while retaining newer text, select and switch values (0.4158ms)
+✔ destroy aborts an in-flight save and removes its recovery owner (0.4671ms)
+✔ new HTML pages appear in both navigations and share preference actions (8.1081ms)
+✔ native dropdown and desktop clicks use the same route without losing form state (0.7204ms)
+✔ back navigation resets page scroll and focuses the visible mobile control (0.4699ms)
+✔ locale changes refresh dropdown labels without resetting the selected page (33.6316ms)
+✔ mobile groups follow desktop labels without changing the selected page or route (0.612ms)
+✔ chat and ordinary preferences do not load management catalogs (2.3857ms)
+✔ rapid extension page visits share reads and keep the loaded catalog (31.1501ms)
+✔ a failed read is visible and retries only on a new visit or explicit reload (1.667ms)
+✔ a superseded read cannot replace or forget an explicit refresh (1.0864ms)
+✔ permissions and diagnostics load only their own page data (1.7544ms)
+✔ a committed save distinguishes a failed confirmation and never repeats the write (41.3733ms)
+✔ an accepted write with a permanently denied confirmation is identified accurately (0.5518ms)
+✔ confirmed-write errors explain the saved result in all UI languages (23.6777ms)
+✔ restoring defaults requires a fresh readable snapshot (1.9774ms)
+✔ startup releases its first failed read and quietly restores saved preferences (5.9477ms)
+✔ an accepted save waits for readback recovery through the actual API (2.0041ms)
+✔ restoring defaults retries confirmation reads, never DELETE (1.1691ms)
+✔ locale initialization is attempted once even when its acknowledgement and echo are lost (3.7127ms)
+✔ an obsolete auto-locale response cannot write after a newer read (0.6061ms)
+✔ permanent read and write failures never retry (0.6105ms)
+✔ reset cancels a pending confirmation and removes its retries (0.7872ms)
+✔ foreground recovery reads an exhausted snapshot without auto-locale writes (0.2978ms)
+✔ a newer snapshot wins a locale-initialization revision conflict (0.2954ms)
+✔ explicit save confirmation of auto locale is read-only (0.2618ms)
+✔ public settings exports still confirm an ordinary successful save (1.1487ms)
+✔ a lost accepted PATCH is confirmed quietly, without replaying the mutation (5.5296ms)
+✔ a lost DELETE acknowledgement confirms cleared user settings and keeps the reset read-only (1.3092ms)
+✔ a request lost before commit is replayed only with its original revision (2.8454ms)
+✔ a newer different configuration is a conflict, never an automatic overwrite (1.7943ms)
+✔ credential replacement uses the complete patch preview, not the configured boolean (3.5841ms)
+✔ an uncertain save retains its submitted intent while later edits change the caller's object (1.3693ms)
+✔ preview crossing a revision change is read again, without replaying the write (0.896ms)
+✔ unknown delivery exhausts one bounded backoff budget and reports an uncertain result once (2.0471ms)
+✔ invalid success envelopes are confirmed instead of being treated as failed writes (1.15ms)
+✔ known pre-transaction merge failures retry the guarded request and never claim an unknown commit (5.6641ms)
+✔ storage, runtime, and service fences are permanent even with a retryable HTTP status (1.1913ms)
+✔ a degraded runtime and a changed service token do not masquerade as a saved result (1.3195ms)
+✔ an acknowledged save does not wrap a later service fence in an ordinary read failure (0.4327ms)
+✔ cancellation releases pending adapters and recovery waits, with no late publication (4.7045ms)
+✔ a delayed first mutation and its replay can change the guarded revision only once (2.0312ms)
+✔ late confirmation does not replace a newer settings snapshot already published by another view (0.7371ms)
+✔ invalid original revision guards never reach the server (0.4006ms)
+✔ pinning moves a task out of its project while default tasks remain separate (15.4306ms)
+✔ removing a definition keeps its saved history visible, without management privileges (0.2369ms)
+✔ status views never lose archived pinned tasks or mix them into active pins (0.3641ms)
+✔ search filters empty projects and matches localized default project names (0.7667ms)
+✔ dialog search shares title, project and agent matching without changing the catalog (0.5902ms)
+✔ search resolves orphaned projects and respects the selected session status (0.234ms)
+✔ project sorting uses activity or names without changing catalog data (0.3976ms)
+✔ older selected tasks remain visible without rendering the whole hidden prefix (0.4177ms)
+✔ source documentation renders headings, lists and literal code without executing HTML (3.7226ms)
+✔ links allow only HTTP(S) and images do not load (0.4196ms)
+✔ the configured ecosystem website shares the source renderer (0.7464ms)
+✔ ecosystem translations follow the application's flat language-pack contract (8.3125ms)
+✔ startup fallback yields to input, composition, pointer and meaningful keyboard intent (1.5367ms)
+✔ modifiers and data refresh do not claim startup; a route change does and teardown removes listeners (0.2918ms)
+✔ draft edits during save are persisted with the returned revision (1.4211ms)
+✔ save conflict preserves dirty fields and retries with the original revision (2.436ms)
+✔ legacy receipt paths still link to their resource managers (1.2882ms)
+✔ source export remains portable and does not mutate edited resources (2.4693ms)
+✔ publishing requires a real resource selection and platform declaration (0.6485ms)
+✔ a queued ID with a changed profile cannot acknowledge a draft intent (2.6362ms)
+✔ a second Enter is durable while the first queue POST is still waiting (49.6468ms)
+✔ a stale tab appends its stable intent without replacing another tab's intent (14.9242ms)
+✔ a lost draft PUT response reuses the same saved submission ID (2.0606ms)
+✔ a submission with no durable acknowledgement keeps the composer text (34277.7148ms)
+✔ a peer-observed intent still confirms its original submitter (1.3302ms)
+✔ an in-flight composer clear is not undone by an older draft response (0.9109ms)
+✔ an accepted receipt confirms a submitter after its draft intent was consumed (0.2633ms)
+✔ a late receipt clears the original input after an initially uncertain submit (0.5317ms)
+✔ review restores text after removing an uncertain submission (1.1377ms)
+✔ a recovered staged predecessor holds later submissions until continued (0.4163ms)
+✔ polling an uncertain queue admission asks for review only once (0.3449ms)
+✔ a second tab does not warn or enqueue while another tab claims the intent (0.2876ms)
+✔ a consumed queue receipt releases only its matching saved intent (0.7062ms)
+✔ receipt read failure cannot turn review into a duplicate queue POST (0.2698ms)
+✔ a definite queue-full rejection stays blocked across reconciliation (0.692ms)
+PASS target selection, account binding, route isolation, switch fence, native-only actions, no local fallback and changed runtime guard
+✔ C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_target_context.mjs (670.4938ms)
+✔ an accepted stop snapshot survives a failed task refresh (36.8676ms)
+✔ a rejected stop leaves the active task available (1.5193ms)
+✔ a lost stop acknowledgement is quietly confirmed without another cancellation (513.6483ms)
+✔ a normal background task list confirms the stop without reading task details (594.5262ms)
+✔ secondary task reads cannot delay an acknowledged stop (2.5703ms)
+✔ unverified or foreign-host task lists cannot confirm an uncertain stop (1121.6617ms)
+✔ task detail reads operational data without a debug event request (38.4106ms)
+✔ task failures describe the resource or action in all UI languages (58.3568ms)
+✔ background tasks belong to their snapshot session on Windows and Unix (2.5383ms)
+✔ unrecognized owners never attach a task to the current conversation (0.2191ms)
+✔ task answer validates UTF-8 bytes and returns its acknowledgement before refresh (35.9581ms)
+✔ a slow question read for an earlier task cannot replace the newly selected task (4.4214ms)
+✔ task list retains its snapshot and recovers transient reads without a visible error (687.367ms)
+✔ failed task detail batches abort sibling reads and append recovered output only once (657.5383ms)
+✔ clearing the selected task cancels its queued read recovery (655.288ms)
+✔ permanent task read refusal stays precise and has no automatic retry (660.5981ms)
+✔ an unreadable detail loses stale questions until a fresh read succeeds (2.3602ms)
+✔ ordinary task refreshes keep final notices while explicit retry reads immediately (1.3454ms)
+✔ a successful stop returns its acknowledgement without another read (6.5353ms)
+✔ lost acknowledgement is confirmed from the original stopped task (2.0677ms)
+✔ an unaccepted stop repeats only after inspecting the same active task (1.1444ms)
+✔ unreadable confirmations exhaust once without replaying cancellation (2.6712ms)
+✔ a malformed cancellation acknowledgement is inspected before any repeat (0.9984ms)
+✔ permanent refusal remains precise with no automatic repeat (1.3304ms)
+✔ reused IDs with different immutable ownership cannot receive a second stop (5.32ms)
+✔ unknown tasks are read first and naturally completed tasks need no stop (0.8759ms)
+✔ host or target changes prevent late acknowledgement and further cancellation (1.0509ms)
+✔ all request and waiting phases share one minute even for uncooperative transport (2.9325ms)
+✔ page exit cancels the request or its backoff without a late read or stop (0.9355ms)
+✔ a matching authoritative task snapshot confirms an uncertain stop without another read (0.5901ms)
+✔ stale host, reused task or active observations never confirm a stop (1.0179ms)
+✔ a snapshot received with the final failed confirmation suppresses a false final error (2.1772ms)
+✔ native replacement preserves surrounding draft and emits only one input notification (2.1506ms)
+✔ a native command reporting failure after editing is never applied twice (0.3021ms)
+✔ unavailable and rejected native commands retain a single legacy edit and notification (1.7716ms)
+✔ cancelled beforeinput keeps the draft and original caret without bypassing its handler (0.4826ms)
+✔ an unchanged completion moves the caret without resetting the editor's history (0.2597ms)
+✔ disabled or read-only drafts cannot be changed by an old completion option (0.2501ms)
+✔ reaching the first transcript group also completes the summary prefix without an extra GET (34.3704ms)
+✔ late summary pages cannot rewind a stronger prefix proof from transcript loading (7.1683ms)
+✔ a summary prefix ahead of the text stays intact until an overlapping page advances it (2.385ms)
+✔ a jump during an older page read cannot move either oldest boundary forwards (3.3559ms)
+✔ history replacement releases old transcript, index and jump reads despite ignored transport cancellation (4.0296ms)
+✔ durable truncate and clear markers follow the current language without changing events (8.9776ms)
+✔ custom history notes and canonical-looking user, model, tool, and error text remain literal (0.8823ms)
+✔ translated history boundaries retain the existing distinction from unexplained gaps (0.3884ms)
+✔ chat omits repeated edit and retry boundaries without changing the export projection or messages (0.5116ms)
+✔ chat keeps clear markers, custom history notes and malformed or unidentified boundaries (0.2973ms)
+✔ silent intentional replacement does not add a false gap, while unexplained loss stays visible (0.1762ms)
+✔ an image-only user row and its retry keep empty text and durable attachment references (2.7225ms)
+✔ literal image-placeholder text remains user content with or without attachments (0.384ms)
+✔ interleaved text, reasoning, and task events retain one card per model turn (3.056ms)
+✔ a truncated event window does not invent an LLM duration (0.2588ms)
+✔ completed tool-stage wall time belongs only to the final reply of its run (0.6278ms)
+✔ tool-only model call contributes to the final reply's run usage (0.2545ms)
+✔ a truncated run does not present partial usage as the run total (0.2015ms)
+✔ incomplete model timing hides mixed-scope duration and speed (0.215ms)
+✔ agent completion text receives run totals when no text deltas arrived (0.8385ms)
+✔ single model completion text retains its usage without text deltas (0.2426ms)
+✔ cold conversation JSON ignoring abort recovers quietly and ignores its late body (37.2556ms)
+✔ cached messages remain visible through a slow refresh and automatic recovery (6.8621ms)
+✔ six uncooperative history reads end one budget with a single final read error (2.253ms)
+✔ switching tasks releases an ignored abort without waiting for its deadline (2.7319ms)
+✔ clear releases a hanging refresh and leaves no recovery work (2.1462ms)
+✔ old history retry preserves a live push and releases its loading control (2.6413ms)
+✔ page exit cancels a hanging older read and returning allows one fresh retry (3.4456ms)
+✔ permanent history denial reports the accurate error once without retry (0.6807ms)
+✔ backgrounding a cold load settles it and foregrounding restores history once (1.5587ms)
+✔ legacy event replay has the same bounded wait after a missing snapshot route (2.0211ms)
+✔ a successful continuation folds resolved errors and recovery records, preserving their diagnostics (4.1021ms)
+✔ only an admitted continuation folds older failures; active recovery is still running (0.9326ms)
+✔ cancelled continuations remain stopped and failed continuations show only the latest error (1.0638ms)
+✔ only preceding errors are resolved when another attempt later fails under a reused run ID (0.3749ms)
+✔ a new user question, even with identical text or sequence, cannot resolve the preceding error (0.3598ms)
+✔ subagent success does not resolve the main failure and child errors remain execution details (0.379ms)
+✔ missing or discarded original history and legacy starts cannot prove recovery of an error (0.4561ms)
+✔ a successful new question alone and a malformed continuation start never conceal a final failure (0.4818ms)
+✔ retained history boundaries and several failed attempts can be resolved by one exact continuation (0.3772ms)
+✔ accepted live replay releases an ignored-abort refresh immediately without retry (36.9994ms)
+✔ accepted live replay cancels the old refresh backoff without another HTTP read (5.0828ms)
+✔ a newer refresh releases its predecessor and a late denial cannot affect the new result (3.8988ms)
+✔ resubscribing on a healthy live connection releases a stale HTTP fallback (1.5722ms)
+✔ wrong-owner and malformed live packets cannot cancel a valid refresh (2.4202ms)
+✔ live replay cancels current refresh while preserving an independent older-page retry (3.134ms)
+✔ cancel before the transport microtask starts performs no ghost HTTP read (0.9811ms)
+✔ legacy event fallback also releases immediately when superseded by live replay (1.8904ms)
+✔ truncate removes its cached ID range while retaining prefix, marker and reused-sequence replacement (2.9029ms)
+✔ history notes without valid ID ranges remain literal and never remove cached records (0.4658ms)
+✔ polling honors an intentional clear without reporting an unexplained history gap (32.2104ms)
+✔ a delayed older replay cannot resurrect discarded events or rewind the cursor (5.9502ms)
+✔ history clear drops an obsolete plan and invalidates its pending read (6.0343ms)
+✔ truncate may restore an earlier plan, and later todo calls still advance it (2.3822ms)
+✔ a post-boundary todo response inside the discarded range is retried rather than displayed (2.0837ms)
+✔ a cold reply fragment has fork/retry actions without displaying the older input (2.7025ms)
+✔ a resumed reply can inherit the original input across different run IDs (0.3661ms)
+✔ paging the original input in preserves actions and displays exactly one input (0.2837ms)
+✔ an action preview fetches the complete original input under the current owner (1.1151ms)
+✔ snapshot validation rejects foreign, invalid and newer input anchors (8.0215ms)
+✔ an incomplete fragment without a trusted anchor keeps mutation actions unavailable (0.2545ms)
+✔ a resumed reply retains the original durable input for retry and fork (3.7116ms)
+✔ multiple resumes and reused run IDs retain the same input until a new user turn (0.6816ms)
+✔ subagent prompts cannot become the original input of a resumed main Agent (0.3743ms)
+✔ missing original history and legacy zero-sequence starts never invent action targets (0.4235ms)
+✔ a history boundary invalidates discarded action targets even when a run ID is reused (0.4084ms)
+✔ a retained original input survives a later history boundary (0.3907ms)
+✔ search keeps role and time when a complete first text line also fits (1.1522ms)
+✔ cramped search reveals text instead of spending the viewport on metadata (0.1915ms)
+✔ short text and rows without a separate body retain their natural position (0.162ms)
+✔ a fatal stream error ends partial reply, reasoning and tool cards without losing content (2.8253ms)
+✔ failure settles only its run and current epoch when runs interleave or IDs are reused (1.1866ms)
+✔ failure after completed model turns changes only the final answer and pending work (0.5367ms)
+✔ failure before model output keeps the original error without inventing an empty answer (0.2216ms)
+✔ the library cancellation event remains stopped while partial content and retry input survive (0.3334ms)
+✔ explicit recovery completes the original unfinished tool card under a new process run ID (4.3589ms)
+✔ a pending card stays running across repeated explicit resumes and reused run IDs (0.618ms)
+✔ recovery retains partial stopped replies and does not invent a terminal event for an abrupt exit (1.1236ms)
+✔ completed, failed and normally settled calls remain distinct history (0.6662ms)
+✔ matching requires durable original input, round, tool identity and complete identical arguments (1.0803ms)
+✔ history boundaries and a new user turn prevent matching an older pending call (0.3762ms)
+✔ canonical recovery explanations follow all UI languages while custom notes remain verbatim (11.9087ms)
+✔ a transient todo read recovers without a new tool event (35.6164ms)
+✔ transport failures and projection lag share the same bounded retry budget (4.8219ms)
+✔ persistent failures stay quiet until six attempts and formal retry resets the budget (2.6599ms)
+✔ network errors retry but rejected and malformed todo responses do not (2.6917ms)
+✔ an older failure cannot cover a newer tool event's healthy plan (1.6208ms)
+✔ switching sessions cancels even a retry callback already queued to run (1.2273ms)
+✔ a forbidden read removes the old plan and can be retried without reselecting (1.4948ms)
+✔ projection lag alone exhausts one budget and retains the previous plan (3.301ms)
+✔ a restored history boundary cancels old reads and allows a zero-event plan (1.5533ms)
+✔ a hanging read times out quietly and clearing aborts pending recovery (1.054ms)
+✔ identical background plan reads keep the same state and subscribers (0.6247ms)
+✔ Token meter Escape closes the panel before the global stop shortcut (26.0584ms)
+✔ last-call usage uses its own model after the next model is selected (1.222ms)
+✔ composer estimate names uncounted image tokens and restores text-only state (0.785ms)
+✔ file/search/process/task summaries preserve the old tool-specific reading mode (1.9076ms)
+✔ call formatting changes only the display, malformed and non-object text stays literal (1.3424ms)
+✔ write/edit previews show requested text safely without claiming a whole-file diff (1.2897ms)
+✔ tool projection retains independent full-text event identities and truncation flags (1.3984ms)
+✔ section copy reads only its original event, preserving raw arguments and visible-prefix agreement (0.7826ms)
+✔ spilled tool output reads its session artifact on demand, not the model-facing summary (0.3782ms)
+✔ native argv previews preserve argument boundaries and the working directory (1.3748ms)
+✔ custom tools and malformed arguments do not invent shell commands (0.2629ms)
+✔ a removed queue image is deleted after its session run settles (2.5192ms)
+✔ a transient in-use response leaves an image for a later retry (1.3006ms)
+✔ a transient storage error retries while the page remains open (0.756ms)
+✔ a missed run-state notification cannot strand a removed image (0.3385ms)
+✔ a lasting reference waits for a state change instead of polling (0.4172ms)
+✔ an image added during deletion receives a later cleanup pass (0.3588ms)
+✔ installation is offered only for an enabled, idle, verified package (1.0578ms)
+✔ panel consumes API envelopes, persists optional badge, and cannot dismiss mandatory updates (6.0684ms)
+✔ transient operation errors preserve the required update actions and badge (0.3654ms)
+✔ download and cancellation follow the current operation (0.2067ms)
+✔ remote updates never install or exit the physical controller (1.0244ms)
+✔ module checker accepts reachable static and lazy local imports (67.747ms)
+✔ module checker rejects orphan modules and missing import targets (157.9769ms)
+✔ continuity verification defers selection saves and resumes only the latest destination (36.8556ms)
+✔ read-only or unavailable targets browse sessions without persisting selection (1.5098ms)
+✔ startup focuses a ready composer without stealing focus after navigation (3.049ms)
+✔ late saved selection never overrides a newer route in any startup mode (1.3334ms)
+✔ typing or opening a drawer during a candidate read cancels fallback without a route change (2.7744ms)
+✔ restoring a session does not steal focus from a control used while its detail loads (0.7248ms)
+✔ an explicit session URL focuses after loading without stealing a newer focus (0.7357ms)
+✔ an explicit session opens before the saved selection responds (1.5764ms)
+✔ last startup resumes a live session before an idle saved session (1.5164ms)
+✔ saved selection and candidate share quiet read recovery (89.3177ms)
+✔ an explicit task never reports obsolete startup read failures (90.4853ms)
+✔ exhausted startup reads give one final notice and usable catalog fallback (78.9464ms)
+✔ an unreadable startup fallback preserves the original saved choice until user navigation (93.4752ms)
+✔ a deleted saved task uses the catalog without a network error (78.4015ms)
+✔ a mismatched candidate cannot restore a different task under the saved identity (0.8355ms)
+✔ user intent wins during backoff and suppresses obsolete failures (78.257ms)
+✔ page departure settles an adapter that ignores abort without navigation or feedback (15.5204ms)
+✔ a lost accepted save is confirmed by quiet reads without another PUT (46.5534ms)
+✔ a hung accepted save reaches bounded read confirmation (31.2328ms)
+✔ a failed unconfirmed save reports once and is not replayed by writable notifications (94.7099ms)
+✔ a newer destination survives slow acceptance of the previous save (31.1536ms)
+✔ a malformed saved selection cannot be replaced by an automatic fallback (0.7014ms)
+✔ page departure cancels an uncertain save and cannot replay or report it (45.3902ms)
+✔ the page adopts its first startup token once, sends it on JSON/uploads and never silently renews (34.8805ms)
+✔ an empty intent after another page's ACK or host restart still fences this page (2.1861ms)
+✔ a rejected mutation retains the fence even if later reads have no intent (0.6439ms)
+✔ copying paused drafts includes image-only input and detached configuration/intent snapshots (3.4297ms)
+ℹ tests 1002
+ℹ suites 0
+ℹ pass 1002
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 37116.9507
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tools\build_mdo.py --xserver-root D:\GIT\mdo\.build\xs-tool-image-text --output C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\qa-release\mdo-release-a.exe --cc E:\software\w64devkit\bin\gcc.exe --skip-host-build
+[mdo] dependencies verified at f05f7661062f
+[mdo] generated app\generated\mdo_unity.c
+C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xsw.exe pack C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\packages\windows-gui-glibc -o C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\qa-release\mdo-release-a.exe
+[mdo] built C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\qa-release\mdo-release-a.exe
+[qa] E:\software\w64devkit\bin\gcc.exe -std=c11 -Wall -Wextra -Werror -fsyntax-only -I D:\GIT\mdo\.build\xs-tool-image-text\src\sdk -I D:\GIT\mdo\.build\xs-tool-image-text\lib -I D:\GIT\mdo\.build\xs-tool-image-text\lib\xwork -I D:\GIT\mdo\.build\xs-tool-image-text\lib\xllm -I D:\GIT\mdo\.build\xs-tool-image-text\lib\xllm-session -I D:\GIT\mdo\.build\xs-tool-image-text\lib\xs-image -I D:\GIT\mdo\.build\xs-tool-image-text\tcc -I D:\GIT\mdo\.build\xs-tool-image-text -DXS_USE_XLLM=1 -DXS_USE_XLLM_SESSION=1 -DXS_USE_XWORK=1 -DXS_USE_WEBVIEW=1 -DXS_USE_IMAGE=1 C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\app\generated\mdo_unity.c
+[qa] DEVICE CHECK NOT RUN: test_android_conversation_runtime.py: requires an isolated Android QA package and device
+[qa] DEVICE CHECK NOT RUN: test_android_device_runtime.py: requires an explicitly selected Android device
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_account_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+PASS remembered identity survives three offline restarts and reconnects without login
+PASS service 503, lost successful renewal reply and shutdown during renewal retain remembered login
+PASS direct password login, private snapshots, encrypted/temporary credentials, failed switch preservation and strict input
+PASS native browser login/PKCE/strict callback/CSRF/encrypted persistence/restart/refresh/switch/independent logout/cancel/search waiting and skip
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_agent_media_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+Agent media projection, model switch, explicit image rejection and offline resume: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_agent_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+agent runtime probe: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_api_origin_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+PASS local authority, DNS rebinding rejection, same-origin reads/writes and callback navigation
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_api_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+API runtime probe: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_artifact_publication_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+artifact publication runtime probe: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_backup_decode_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+backup decode HTTP: owned v2/v1, exact bytes, 247 malformed inputs, separate unbound model replay, budgets/cancel, model/UI relations and real writers, retries and zero Home writes PASS
+backup decode TLS: owned v2/v1, exact bytes, 247 malformed inputs, separate unbound model replay, budgets/cancel, model/UI relations and real writers, retries and zero Home writes PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_backup_download_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+backup HTTP: exact bytes/hash, released capture, admission, HEAD, real backpressure cancel, peer close, deadline, network-worker Unit, invalid/budget/retry PASS
+backup TLS: exact bytes/hash, released capture, admission, HEAD, real backpressure cancel, peer close, deadline, network-worker Unit, invalid/budget/retry PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_backup_export_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+production frontend complete backup: HTTP/TLS bytes/hash, retained UI/model/images/name/draft/queue/artifact PASS
+(node:9836) Warning: Setting the NODE_TLS_REJECT_UNAUTHORIZED environment variable to '0' makes TLS connections and HTTPS requests insecure by disabling certificate verification.
+(Use `node --trace-warnings ...` to show where the warning was created)
+production frontend complete backup: HTTP/TLS bytes/hash, retained UI/model/images/name/draft/queue/artifact PASS
+formal frontend complete backup transfer/readback probe: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_backup_import_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+production import: bounded upload/SHA/preview/explicit target/lost apply/reload same ID/staged queue PASS
+(node:2116) Warning: Setting the NODE_TLS_REJECT_UNAUTHORIZED environment variable to '0' makes TLS connections and HTTPS requests insecure by disabling certificate verification.
+(Use `node --trace-warnings ...` to show where the warning was created)
+production import: bounded upload/SHA/preview/explicit target/lost apply/reload same ID/staged queue PASS
+formal frontend import and same-ID response recovery: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_backup_preview_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+backup preview HTTP: production async gates, immutable multi-reader pins, deletion/expiry quota, native last-release/Unit generations, cancel/retry and zero Home writes PASS
+backup preview TLS: production async gates, immutable multi-reader pins, deletion/expiry quota, native last-release/Unit generations, cancel/retry and zero Home writes PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_backup_stage_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+private Stage retained cleanup handle: {'ok': False, 'code': 9, 'error': 'staging failed; retain cleanup handle: session backup validation cancelled', 'cleanup_error': 'cannot access private session staging: artifacts/run-00000000000000000001/00000000000000000001-stage.txt', 'cleanup_fault_pending': 0, 'retained': True, 'verified': False, 'publication_identity': False, 'size_safe': True, 'directory': 'restore-2be32a6227f1084aabd8278413cf980f', 'source_id': '', 'files': 0, 'bytes': 0, 'ui_records': 0, 'matched': 0, 'model_unverified': 0, 'inline_images': 0, 'restore_ready': False, 'original_unchanged': True, 'repaired_bindings': 0, 'repaired_todo': False, 'unverified_refs': 0, 'removed_refs': 0, 'inputs': [], 'accepted_queue': 0, 'accepted_draft': 0, 'duplicate_draft': 0, 'queue_review': 0, 'draft_review': 0, 'discard_images': 0, 'direct_uncertain': False, 'provenance_entries': 0, 'origin_entries': 0, 'restore_records': 0, 'artifact_references': 0, 'artifact_reader_paths': True, 'restore_project': ''}
+private Stage bounded cleanup retry: PASS
+actual restored sidecars/live frontend reload controllers: PASS
+actual restored sidecars/live frontend reload controllers: PASS
+private Stage retained cleanup handle: {'ok': False, 'code': 9, 'error': 'staging failed; retain cleanup handle: session backup validation cancelled', 'cleanup_error': 'cannot access private session staging: artifacts/run-00000000000000000001/00000000000000000001-stage.txt', 'cleanup_fault_pending': 0, 'retained': True, 'verified': False, 'publication_identity': False, 'size_safe': True, 'directory': 'restore-d5ce9157284ff8b158fe1ea4a27bb229', 'source_id': '', 'files': 0, 'bytes': 0, 'ui_records': 0, 'matched': 0, 'model_unverified': 0, 'inline_images': 0, 'restore_ready': False, 'original_unchanged': True, 'repaired_bindings': 0, 'repaired_todo': False, 'unverified_refs': 0, 'removed_refs': 0, 'inputs': [], 'accepted_queue': 0, 'accepted_draft': 0, 'duplicate_draft': 0, 'queue_review': 0, 'draft_review': 0, 'discard_images': 0, 'direct_uncertain': False, 'provenance_entries': 0, 'origin_entries': 0, 'restore_records': 0, 'artifact_references': 0, 'artifact_reader_paths': True, 'restore_project': ''}
+private Stage bounded cleanup retry: PASS
+actual restored sidecars/live frontend reload controllers: PASS
+actual restored sidecars/live frontend reload controllers: PASS
+private session backup staging HTTP/TLS probe: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_backup_upload_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+backup upload HTTP: exact document/hash, framing, retry/conflict, budget, token, pins, expiry/generation and zero Home writes PASS
+backup upload TLS: exact document/hash, framing, retry/conflict, budget, token, pins, expiry/generation and zero Home writes PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_completion_policy_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+PASS general: 2 model calls, explicit verification=False
+PASS coding: 4 model calls, explicit verification=True
+PASS coding-c: 4 model calls, explicit verification=True
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_config_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+config runtime probe: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_conversation_groups_runtime.py --packed C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\qa-release\mdo-release-a.exe
+complete history groups: 5 replies, 10 tool pairs, long body, resume and delta PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_conversation_resume_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+conversation resume runtime probe: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_conversation_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+history fixture: complete reply, 250638 bytes, gzip 1753 bytes
+PASS conversation history: reverse pages, summaries, seek, unlimited append, restart, query validation
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_debug_cleanup_runtime.py --packed-path C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\qa-release\mdo-release-a.exe
+Packed debug cleanup + sidebar migration + chat replay + offline report: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_decision_retry_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+{"baseline_commit": null, "cases": [{"kind": "cache_boundaries", "checks": 151, "ttl": true, "capacity": true, "invalid_inputs": true, "epoch": true, "reset": true}, {"kind": "concurrent_same_answer", "statuses": [200, 200]}, {"kind": "interactive_replay_after_completion", "answer": true, "approval": true, "conflict": true, "model_requests": 3, "tool_completions": 2, "exec_invocations": 1, "final_errors": 0}, {"kind": "task_answer_replay_after_completion", "replayed": true, "conflict": true}, {"kind": "cancelled_question", "falsely_acknowledged": false}, {"kind": "restart", "old_token_rejected": true, "receipt_cleared": true}], "passed": true}
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_directories_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+Directory picker runtime probe: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_distribution_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+PASS install/Python/repair/rollback without executing tools, metadata versions and truthful prompt verification; checksum/truncation/manifest diagnostics, cancellation, restart/refresh persistence, repair/uninstall/cleanup
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_ecosystem_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+Switch D:\GIT\home\.build\mdo-ecosystem-native\vhost: disable web-search, device-relay, model-gateway, mdo-update; enable mdo; retain billing and legacy private storage.
+Switch D:\GIT\home\.build\mdo-ecosystem-native\vhost: disable web-search, device-relay, model-gateway, mdo-update; enable mdo; retain billing and legacy private storage.
+Activated offline; snapshot: D:\GIT\home\.build\mdo-ecosystem-native\vhost\plugin_data\mdo\migration\20261011-012314
+PASS native login, publish/review/install bundle, C trust, Skill attachments, edited-file conflict, compile rollback, update, uninstall preservation and startup recovery
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_exec_arguments_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+SSH key generation SKIP: ssh-keygen is unavailable
+Exec arguments PASS: middle-empty
+Exec arguments PASS: consecutive-trailing-empty
+Exec arguments PASS: quoted-unicode-empty
+Exec arguments PASS: spawn-empty
+Exec arguments PASS: balanced-allow-empty
+Exec arguments PASS: balanced-deny-empty
+Exec arguments PASS: missing-argv
+Exec arguments PASS: empty-argv
+Exec arguments PASS: empty-program
+Exec arguments PASS: non-string-argument
+Exec arguments PASS: nul-argument
+Exec arguments PASS: nul-program
+Exec arguments PASS: too-many-arguments
+Exec arguments PASS: oversize-preview
+Exec arguments PASS: balanced-invalid
+Exec arguments PASS: spawn-invalid
+Exec arguments PASS: mixed-batch
+Exec arguments runtime PASS: 17 bounded cases; no external traffic
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_extensions_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+extension HTTP probe: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_home_artifact_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+external Home read-only artifact restart/move/API probe: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_home_import_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+Home import transaction runtime probe: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_home_purge_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+Home project purge transaction runtime probe: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_home_restore_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+Home session restore storage PASS: bounded publication/collision/identity/crash recovery; no live dispatch
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_home_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+home runtime probe: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_image_download_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+image HTTP: valid PNG exact bytes/hash, HEAD, four thumbnails, separate backup quota, released capture, real wait cancel, peer close, deadline, active/queued Unit, immutable deleted-image response, retry PASS
+image TLS: valid PNG exact bytes/hash, HEAD, four thumbnails, separate backup quota, released capture, real wait cancel, peer close, deadline, active/queued Unit, immutable deleted-image response, retry PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_image_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+image runtime probe: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_image_upload_identity_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+image upload identity runtime: PASS (replay, content/name conflicts, namespace, quota, restart; no model calls)
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_interrupt_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+interrupt transaction runtime probe: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_interrupted_profile_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+PASS missing model replaced with pending read/write intact; explicit resume executes each once
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_live_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+PASS WebSocket: auth, fragmentation/ping, partial stream, cursor reconnect, HTTP parity, run completion, ask, approval, close
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_mcp_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+MCP runtime probe: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_memory_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+memory runtime probe: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_migration_storage_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+Migration unsupported-storage refusal runtime probe: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_model_error_events_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+Structured model error replay, old event compatibility and strict validation: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_model_proxy_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+model proxy TLS runtime probe: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_model_retry_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+case=transient result=0 kind=unknown attempts=3 retries=2 deltas=1 exhausted=0 ms=48
+case=network result=0 kind=unknown attempts=2 retries=1 deltas=1 exhausted=0 ms=31
+case=daily result=-1 kind=daily_token_limit attempts=1 retries=0 deltas=0 exhausted=0 ms=0
+daily_message=accurate
+case=balance result=-1 kind=insufficient_balance attempts=1 retries=0 deltas=0 exhausted=0 ms=0
+case=quota result=-1 kind=quota_exceeded attempts=1 retries=0 deltas=0 exhausted=0 ms=0
+case=membership result=-1 kind=membership_required attempts=1 retries=0 deltas=0 exhausted=0 ms=0
+case=authentication result=-1 kind=authentication_failed attempts=1 retries=0 deltas=0 exhausted=0 ms=0
+case=service-quota result=-1 kind=service_quota_exceeded attempts=1 retries=0 deltas=0 exhausted=0 ms=0
+case=service-config result=-1 kind=service_configuration attempts=1 retries=0 deltas=0 exhausted=0 ms=0
+case=invalid result=-1 kind=invalid_request attempts=1 retries=0 deltas=0 exhausted=0 ms=0
+case=exhausted result=-1 kind=service_unavailable attempts=6 retries=5 deltas=0 exhausted=1 ms=423
+case=retry-after result=0 kind=unknown attempts=2 retries=1 deltas=1 exhausted=0 ms=93
+case=cancel result=-3 kind=cancelled attempts=1 retries=1 deltas=0 exhausted=0 ms=0
+case=deadline result=-2 kind=timeout attempts=1 retries=1 deltas=0 exhausted=0 ms=217
+case=partial result=-1 kind=network attempts=1 retries=0 deltas=1 exhausted=0 ms=15
+case=hook-stop result=-3 kind=cancelled attempts=1 retries=0 deltas=0 exhausted=0 ms=15
+case=partial-recover result=0 kind=unknown attempts=2 retries=1 deltas=2 exhausted=0 ms=31
+case=eof-protected result=-1 kind=invalid_response attempts=1 retries=0 deltas=1 exhausted=0 ms=14
+case=eof-recover result=0 kind=unknown attempts=2 retries=1 deltas=2 exhausted=0 ms=31
+case=eof-exhausted result=-1 kind=invalid_response attempts=6 retries=5 deltas=6 exhausted=1 ms=518
+case=output-protected result=-1 kind=output_limit attempts=1 retries=0 deltas=0 exhausted=0 ms=0
+case=output-recover result=0 kind=unknown attempts=2 retries=1 deltas=1 exhausted=0 ms=15
+case=output-exhausted result=-1 kind=output_limit attempts=6 retries=5 deltas=0 exhausted=1 ms=409
+case=malformed-recover result=0 kind=unknown attempts=2 retries=1 deltas=1 exhausted=0 ms=15
+case=recovery-budget result=-2 kind=timeout attempts=2 retries=1 deltas=0 exhausted=1 ms=1212
+case=local-invalid result=-1 kind=request_configuration attempts=1 retries=0 deltas=0 exhausted=0 ms=0
+local_kind=profile_model_missing safe=1 retry=0
+local_kind=profile_protocol_unsupported safe=1 retry=0
+local_kind=profile_reasoning_unsupported safe=1 retry=0
+local_kind=profile_output_limit safe=1 retry=0
+local_kind=profile_context_limit safe=1 retry=0
+local_kind=profile_credential_unavailable safe=1 retry=0
+local_kind=profile_proxy_unavailable safe=1 retry=0
+local_kind=profile_ca_unavailable safe=1 retry=0
+local_kind=profile_endpoint_invalid safe=1 retry=0
+upstream_kind=authentication_failed
+resource_kind=unknown
+cancelled_kind=cancelled
+
+Model retry, business classification, deadline, cancellation and partial-output protection: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_model_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+model runtime probe: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_model_setup_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+PASS discovery, encrypted restart, conflict, enablement and all three model protocols
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_module_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+module runtime probe: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_online_model_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+Switch D:\GIT\home\.build\online-model-client-test\vhost: disable web-search, device-relay, model-gateway, mdo-update; enable mdo; retain billing and legacy private storage.
+Switch D:\GIT\home\.build\online-model-client-test\vhost: disable web-search, device-relay, model-gateway, mdo-update; enable mdo; retain billing and legacy private storage.
+Activated offline; snapshot: D:\GIT\home\.build\online-model-client-test\vhost\plugin_data\mdo\migration\20261011-012449
+PASS native login, billing balance, token allowance, VIP catalog, model switching with history, logout and secret isolation
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_operation_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+operation runtime probe: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_passive_home_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+passive Home runtime: PASS (four local publication/read/migration cases)
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_permission_profiles_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+Permission profile PASS: full-access / auto
+Permission profile PASS: balanced / allow
+Permission profile PASS: balanced / deny
+Permission profile PASS: read-only / readonly
+Permission profile PASS: full-access / agent-readonly
+Permission profiles runtime PASS: 5 bounded cases; no external model traffic
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_power_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+power runtime lifecycle probe: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_project_binding_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+[xs] XServer 1.0.0 (commit f05f7661062fdca04da8d571ad859eb4b87c0889, 2026-10-11, windows)
+[xs] extensions (5): xllm, xllm-session, xwork, webview, image
+[xs] config loaded: C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\project-binding-_koy5s_x\site\xs.json (1 servers)
+[xs] server 'mdo-home-probe' class=http 127.0.0.1:53925 tls=off enabled
+[xs]   default-host 'probe' path=C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\project-binding-_koy5s_x\site\web devfile=C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\project-binding-_koy5s_x\site\probe.c
+[xs] engine started, workers=12
+[xs] script loaded: C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\project-binding-_koy5s_x\site\probe.c (14.3 KB gen 1)
+binding_app_path=C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\project-binding-_koy5s_x\site
+probe_ok=1 binding_checks=60 binding_calls=6
+[xs] http server 'mdo-home-probe' static-only mode
+project binding runtime probe: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_project_purge_cancel_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+Project purge cancellation runtime probe: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_project_purge_frontend_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+Frontend original-ID/drain/execute/ACK/lost-reply HTTP/xs/TCC probe: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_project_purge_http_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+Project purge HTTP execution/query/reference preview runtime probe: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_project_purge_intent_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+Portable project purge intent runtime probe: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_project_purge_receipts_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+Durable project purge request/receipt runtime probe: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_project_purge_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+Project purge business coordinator runtime probe: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_project_references_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+Project global reference coordination runtime probe: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_recovery_history_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+PASS automatic read recovery across clear/truncate with reused turn; one read each; user stop remains manual
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_remote_service_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+Switch D:\GIT\home\.build\mdo-remote-native-311b65de\vhost: disable web-search, device-relay, model-gateway, mdo-update; enable mdo; retain billing and legacy private storage.
+Switch D:\GIT\home\.build\mdo-remote-native-311b65de\vhost: disable web-search, device-relay, model-gateway, mdo-update; enable mdo; retain billing and legacy private storage.
+Activated offline; snapshot: D:\GIT\home\.build\mdo-remote-native-311b65de\vhost\plugin_data\mdo\migration\20261011-012936
+PASS default off, portable config, encrypted stable account-specific identities, invalid config and corrupt-credential preservation
+PASS native registration (201), device listing, one-use ticket/WS connection, text/binary relay, revoke, explicit reactivation and account-lease cancellation
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_responses_followup_runtime.py --packed C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\qa-release\mdo-release-a.exe
+PASS first reply, follow-up, reopen, failed follow-up recovery, next question
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_restore_coordinator_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+production restore coordinator/reservation HTTP/TLS probe: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_restore_receipt_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+durable restore request/result: native acceptance, pending/commit/abort, exact identity, restart/GC, torn/conflicting evidence, namespace/replay/capacity PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_restore_worker_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+production restore review/durable admission/worker HTTP/TLS probe: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_run_completion_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+run completion and shutdown barrier runtime probe: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_run_manager_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+interactive run manager runtime probe: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_schedule_executor_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+schedule error history, reload and 8 metadata boundaries: PASS
+schedule executor runtime probe: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_schedule_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+schedule runtime probe: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_search_api_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+PASS search API POST/auth/UTF-8/results/empty/errors/no-redirect/no-retry/limits
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_session_artifact_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+session artifact replay runtime probe: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_session_profile_errors_runtime.py --packed C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\qa-release\mdo-release-a.exe
+{"profile_rejections": 7, "model_calls": 2, "final_errors": 0, "result": "PASS"}
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_session_purge_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe --packed C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\qa-release\mdo-release-a.exe
+session purge API: revision/status/body/write guards, file cleanup, reference isolation and restart passed
+session purge storage: 9 bounded commit/rollback/interruption cases passed
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_session_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+session runtime probe: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_settings_confirmation_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+Settings confirmation native runtime: PASS (two deterministic read boundaries, credentials, reset)
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_settings_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+settings transaction runtime probe: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_skill_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+skill runtime probe: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_task_stop_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe --directory C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\qa-release\task-stop-c284d27063774367b3589bdde8004f91
+Real packed/TCC child stopping state, idempotent cancellation, list/detail and terminal transition: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_update_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+PASS matching hash; startup is read only
+PASS different hash and external URL rejection
+PASS checksum mismatch leaves running package and cache unchanged
+PASS verified, atomically saved package
+PASS remote/headless request cannot stop host without native confirmation
+PASS cancellation leaves host responsive
+PASS unpublished platform has no update prompt
+PASS mandatory policy persists and backend blocks mutations
+PASS invalid metadata, 404 and offline cannot revoke mandatory policy
+PASS failed/cancelled download and missing native confirmation retain lock
+PASS cached mandatory policy and verified package survive offline restart
+PASS valid policy revocation releases lock without replacing package
+PASS matching running hash is exempt from mandatory lock
+PASS installation pauses mutations while reads and resume remain available
+PASS worker deadline triggers remote check without frontend polling POST
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_web_result_files_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+PASS 1 search files: bounded index/pages, read-only paths, receipts, UTF-8, hashes
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_web_result_session_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+PASS real search/read/model ledger/UI completion/recovery pipeline
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_web_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+PASS bounded Web search/open/find runtime
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_write_admission_runtime.py --host C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xs.exe
+HTTP write admission/stale-page/restart/two-client probe: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tools\build_mdo.py --xserver-root D:\GIT\mdo\.build\xs-tool-image-text --output C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\qa-release\mdo-release-b.exe --cc E:\software\w64devkit\bin\gcc.exe --skip-host-build
+[mdo] dependencies verified at f05f7661062f
+[mdo] generated app\generated\mdo_unity.c
+C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xsw.exe pack C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\packages\windows-gui-glibc -o C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\qa-release\mdo-release-b.exe
+[mdo] built C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\qa-release\mdo-release-b.exe
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_packed_home_lease.py --packed C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\qa-release\mdo-release-a.exe
+packed Home lease probe: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_packed_default_workspace.py --packed C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\qa-release\mdo-release-a.exe
+Default workspace, file completion, replay, overrides and recovery: PASS
+Non-directory workspace refused without cwd fallback or overwrite: PASS
+portable default workspace runtime probe: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_packed_module_catalog.py --packed C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\qa-release\mdo-release-a.exe
+PASS packed default Agent/todo catalog; no Echo test tool
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_live_runtime.py --packed C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\qa-release\mdo-release-a.exe
+PASS WebSocket: auth, fragmentation/ping, partial stream, cursor reconnect, HTTP parity, run completion, ask, approval, close
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_packed_queue_start_recovery.py --packed C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\qa-release\mdo-release-a.exe
+{
+  "passed": true,
+  "model_calls": 3,
+  "interrupted_while_model_active": true,
+  "restored_queue_items": 2,
+  "restart_and_duplicate_start_did_not_replay": true,
+  "original_input_not_duplicated": true,
+  "explicit_resume_succeeded": true,
+  "queued_followup_succeeded": true,
+  "final_errors": 0
+}
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_packed_backup_download.py --packed C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\qa-release\mdo-release-a.exe
+packed embedded VFS backup/upload/preview/restart probe: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_packed_restore.py --packed C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\qa-release\mdo-release-a.exe
+packed embedded VFS restore/admission/receipt/moved-executable replay probe: PASS
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_packed_compaction_failure.py --packed C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\qa-release\mdo-release-a.exe
+{
+  "passed": true,
+  "cases": [
+    {
+      "mode": "quality",
+      "kind": "context_compaction",
+      "expected_kind": "context_compaction",
+      "calls": {
+        "normal": 3,
+        "summary": 3
+      },
+      "final_errors": 1,
+      "resume_and_followup": true,
+      "restarted_before_resume": true
+    },
+    {
+      "mode": "quota",
+      "kind": "daily_token_limit",
+      "expected_kind": "daily_token_limit",
+      "calls": {
+        "normal": 3,
+        "summary": 2
+      },
+      "final_errors": 1,
+      "resume_and_followup": true,
+      "restarted_before_resume": false
+    },
+    {
+      "mode": "wait",
+      "kind": "",
+      "expected_kind": "",
+      "calls": {
+        "normal": 3,
+        "summary": 2
+      },
+      "final_errors": 0,
+      "resume_and_followup": true,
+      "restarted_before_resume": false,
+      "cancel_ms": 14
+    }
+  ]
+}
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_packed_compaction_recovery.py --packed C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\qa-release\mdo-release-a.exe
+{
+  "passed": true,
+  "restarted": true,
+  "calls": {
+    "normal": 6,
+    "summary": 6
+  },
+  "requests": [
+    {
+      "kind": "normal",
+      "message_bytes": 16491,
+      "has_marker": true,
+      "tool_count": 9,
+      "max_tokens": 1024
+    },
+    {
+      "kind": "summary",
+      "message_bytes": 14215,
+      "has_marker": true,
+      "tool_count": 0,
+      "max_tokens": 1024
+    },
+    {
+      "kind": "summary",
+      "message_bytes": 14215,
+      "has_marker": true,
+      "tool_count": 0,
+      "max_tokens": 1024
+    },
+    {
+      "kind": "summary",
+      "message_bytes": 14461,
+      "has_marker": true,
+      "tool_count": 0,
+      "max_tokens": 1024
+    },
+    {
+      "kind": "normal",
+      "message_bytes": 17331,
+      "has_marker": true,
+      "tool_count": 9,
+      "max_tokens": 1024
+    },
+    {
+      "kind": "summary",
+      "message_bytes": 14968,
+      "has_marker": true,
+      "tool_count": 0,
+      "max_tokens": 1024
+    },
+    {
+      "kind": "normal",
+      "message_bytes": 17331,
+      "has_marker": true,
+      "tool_count": 9,
+      "max_tokens": 1024
+    },
+    {
+      "kind": "summary",
+      "message_bytes": 14968,
+      "has_marker": true,
+      "tool_count": 0,
+      "max_tokens": 1024
+    },
+    {
+      "kind": "normal",
+      "message_bytes": 17331,
+      "has_marker": true,
+      "tool_count": 9,
+      "max_tokens": 1024
+    },
+    {
+      "kind": "summary",
+      "message_bytes": 14968,
+      "has_marker": true,
+      "tool_count": 0,
+      "max_tokens": 1024
+    },
+    {
+      "kind": "normal",
+      "message_bytes": 17331,
+      "has_marker": true,
+      "tool_count": 9,
+      "max_tokens": 1024
+    },
+    {
+      "kind": "normal",
+      "message_bytes": 17547,
+      "has_marker": true,
+      "tool_count": 9,
+      "max_tokens": 1024
+    }
+  ],
+  "run_compactions": [
+    0,
+    1,
+    1,
+    1,
+    1,
+    0
+  ],
+  "events": [
+    {
+      "kind": "model_done",
+      "text": "Reply complete; PIXEL_KEEP: dimensions32 palette8 output pixels.png."
+    },
+    {
+      "kind": "compaction_start",
+      "text": ""
+    },
+    {
+      "kind": "compaction_rejected",
+      "text": ""
+    },
+    {
+      "kind": "compaction_done",
+      "text": ""
+    },
+    {
+      "kind": "model_done",
+      "text": "Reply complete; PIXEL_KEEP: dimensions32 palette8 output pixels.png."
+    },
+    {
+      "kind": "compaction_start",
+      "text": ""
+    },
+    {
+      "kind": "compaction_done",
+      "text": ""
+    },
+    {
+      "kind": "model_done",
+      "text": "Reply complete; PIXEL_KEEP: dimensions32 palette8 output pixels.png."
+    },
+    {
+      "kind": "compaction_start",
+      "text": ""
+    },
+    {
+      "kind": "compaction_done",
+      "text": ""
+    },
+    {
+      "kind": "model_done",
+      "text": "Reply complete; PIXEL_KEEP: dimensions32 palette8 output pixels.png."
+    },
+    {
+      "kind": "compaction_start",
+      "text": ""
+    },
+    {
+      "kind": "compaction_done",
+      "text": ""
+    },
+    {
+      "kind": "model_done",
+      "text": "Reply complete; PIXEL_KEEP: dimensions32 palette8 output pixels.png."
+    },
+    {
+      "kind": "model_done",
+      "text": "Reply complete; PIXEL_KEEP: dimensions32 palette8 output pixels.png."
+    }
+  ],
+  "final_errors": 0,
+  "packed_sha256": "224318e83b37c7099386a41288672e2fa36eaa06eb512bc7eb6358ab548fb3ed"
+}
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_packed_fork_recovery.py --packed C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\qa-release\mdo-release-a.exe --report C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\qa-release\fork-recovery.json
+PASS fixed packed fork: 7 cases
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_packed_message_edit_recovery.py --packed C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\qa-release\mdo-release-a.exe
+{
+  "passed": true,
+  "checks": [
+    "invalid inputs, missing preconditions and source guards leave all session files unchanged",
+    "two replays return the original successful response without a second cut or revision change",
+    "changed replay parameters, a new ID with an old revision and a removed source are refused",
+    "a later session change invalidates cached replies; legacy guarded cuts still work",
+    "host restart fences the old page instead of replaying its writes",
+    "only the two explicitly started loopback model turns executed"
+  ],
+  "model_requests": 2,
+  "packed_sha256": "224318e83b37c7099386a41288672e2fa36eaa06eb512bc7eb6358ab548fb3ed"
+}
+[qa] "C:\Program Files\Python312\python.exe" C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\test_packed_recovery_ack.py --packed C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\qa-release\mdo-release-a.exe
+{
+  "passed": true,
+  "model_requests": 3,
+  "packed_sha256": "224318e83b37c7099386a41288672e2fa36eaa06eb512bc7eb6358ab548fb3ed",
+  "checks": [
+    "invalid correlation IDs do not change history or start a model",
+    "accepted resume has the same correlation in the reply, run detail and run list",
+    "a busy/stale recovery is refused without another model call",
+    "legacy resume without a client ID still works",
+    "ending advances a closed recovery boundary; repeating its old guard changes nothing",
+    "host restart fences the old page and preserves files"
+  ]
+}
+[qa] C:\Users\Administrator\.cache\codex-runtimes\codex-primary-runtime\dependencies\native\powershell\pwsh.EXE -NoProfile -ExecutionPolicy Bypass -File C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\packed-startup-smoke.ps1 -Xsw C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xsw.exe -App C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\tests\fixtures\packed-startup-app -ObserveSeconds 20
+PASS: packed service initialized and survived 20s
+host: C:\Users\Administrator\.codex\worktrees\conversation-current-integration\mdo\.build\host\xsw.exe
+artifacts: cleaned
+[qa] PASS: unit/contract suite, 82 runtime probes
+[qa] PASS: 12 packed-product probes
+[qa] PASS: deterministic pack sha256=224318e83b37c7099386a41288672e2fa36eaa06eb512bc7eb6358ab548fb3ed
+[qa] PASS: portable WebView2 Home and packed crash gates
