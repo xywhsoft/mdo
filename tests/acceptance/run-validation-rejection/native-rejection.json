@@ -1,0 +1,16 @@
+{
+  "scope": "explicit diagnostic POST after the baseline UI fixture ended",
+  "status": 422,
+  "reply": {
+    "schema_version": 1,
+    "ok": false,
+    "request_id": "mdo-3c6856e289fb3bf197926487",
+    "error": {
+      "code": "image_model_unsupported",
+      "message": "The selected model does not support image input"
+    }
+  },
+  "runs_started": 0,
+  "model_endpoint_closed": true,
+  "no_execution": true
+}

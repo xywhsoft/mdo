@@ -1,0 +1,26 @@
+{
+  "application_commit": "ec91433f837f38d138e3b55d5aeccf1a82e98a58",
+  "xs_commit": "f05f7661062fdca04da8d571ad859eb4b87c0889",
+  "packed_bytes": 4563274,
+  "packed_sha256": "d63d15e7f2eaca9bf8828af380674b4466b44d34c400187d72169115c58a19c9",
+  "files": [
+    {
+      "path": "js/app.js",
+      "bytes": 132020,
+      "sha256": "b3c07f946651d185657625360a64cfd04c14a5d54940d13cd82054d4f0ef7295",
+      "served_bytes_equal": true
+    },
+    {
+      "path": "js/state/runs.js",
+      "bytes": 4992,
+      "sha256": "52ac0b7a5c659c1337194451fc4ee5c5e0ac5f63598161b93e41639646529087",
+      "served_bytes_equal": true
+    }
+  ],
+  "host": {
+    "revision": "f05f7661062fdca04da8d571ad859eb4b87c0889",
+    "binary_sha256": "e91dc0ad9798abef6b8adc2cc3fb0c1ad8642c9d5cd980c6343992508ae73136",
+    "binary_bytes": 3183616,
+    "profile_sha256": "893b7863bf7768b125dfa9ca8af27550f8fdddccca70070fcfc5d8aac4a5bc04"
+  }
+}

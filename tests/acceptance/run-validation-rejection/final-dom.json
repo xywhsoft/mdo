@@ -1,0 +1,10 @@
+{
+  "errorHidden": true,
+  "prompt": "",
+  "queueHidden": true,
+  "timeline": "00:44\nimage-rejection-test\npixel.png\nAgent\n00:44\n\nREJECTION_RECOVERED: image-rejection-test\n\n40 输入 / 20 输出 tokens · LLM <0.1 秒 · 2030.0 tok/s\n00:44\nafter-rejection-follow-up\nAgent\n00:44\n\nREJECTION_RECOVERED: after-rejection-follow-up\n\n40 输入 / 20 输出 tokens · LLM <0.1 秒 · 1850.7 tok/s",
+  "viewport": {
+    "height": 1972,
+    "width": 1114
+  }
+}

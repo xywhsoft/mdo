@@ -1,0 +1,9 @@
+{
+  "error": {
+    "code": "image_model_unsupported",
+    "hidden": false,
+    "text": "当前模型不支持图片输入，请切换模型或移除图片。"
+  },
+  "prompt": "",
+  "queue": "待发送 · 1\n发送下一条\n1\nimage-rejection-test\n已固定：QA Image · 无思考 · 只读\npixel.png\n移除"
+}
