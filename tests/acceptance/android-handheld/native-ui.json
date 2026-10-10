@@ -1,0 +1,94 @@
+{
+  "date": "2026-10-10",
+  "source_commit": "630556a0dcb180ead6a2323ddc489aae8073c0ff",
+  "package": "org.xleaves.mdo.qa.stability",
+  "daily_package_modified": false,
+  "apk": {
+    "bytes": 4191469,
+    "sha256": "78bebec0a9e349a84eb926c43825ec03f41d12270584548df8222001936c6e5b",
+    "installed_sha256_matches": true
+  },
+  "device": {
+    "model": "RMX5090",
+    "android_api": 36,
+    "abi": "arm64-v8a",
+    "webview": "com.google.android.webview 138.0.7204.179"
+  },
+  "model_peer": "bounded synthetic loopback; no production account",
+  "requests_total": 14,
+  "stress_or_high_load": false,
+  "native_ui": {
+    "reply_copy_system_paste": {
+      "expected": "ANDROID_OK: after-restart",
+      "match": true,
+      "sent_once": true
+    },
+    "chinese_ime_candidate": {
+      "expected": "你",
+      "confirmation_did_not_send": true,
+      "enter_sent_once": true
+    },
+    "markdown_saved_and_read_back": true,
+    "json_backup_saved_and_read_back": true,
+    "multilanguage_clipboard": "not tested",
+    "mobile_newline_combinations": "not tested",
+    "system_image_picker": "not tested",
+    "model_switch_after_turn": "not tested",
+    "background_return": "not tested",
+    "backup_import": "not tested"
+  },
+  "export_files": [
+    {
+      "file": "mdo-session-V-OSUDF4wsc0aEQlyck42u5l6Xf6Na2N.backu.json",
+      "bytes": 49147,
+      "sha256": "9193d1f8d31ec1673470c86aaf1986c5e4dd040765b6917b8e17ef87092ecca3"
+    },
+    {
+      "file": "mdo-安卓对话恢复验收.md",
+      "bytes": 993,
+      "sha256": "ac80b78c526643c0737ec95be0f6ce98da0143fac03b140c287f27199ef7b648"
+    }
+  ],
+  "backup_files_verified": [
+    {
+      "path": "draft.json",
+      "bytes": 110,
+      "sha256": "0d84dd67325c6db8fdf5fc5ebc8c4673784fe41b3093f7f16815fde6a11eecdf"
+    },
+    {
+      "path": "meta.json",
+      "bytes": 746,
+      "sha256": "5834fbced3b28a00513ac2be9e4967ee8e24bba6e68df02425394644b694f13d"
+    },
+    {
+      "path": "queue-receipts/c67b3bbe6ddf53cb28b8c08a95e63017.json",
+      "bytes": 108,
+      "sha256": "a2b775b6ad3310a049cfca418cf78f8fa95e7c8457d6ee763af989585c6fdd79"
+    },
+    {
+      "path": "queue-receipts/d1b2163622d19301c7409649f3ab02bd.json",
+      "bytes": 108,
+      "sha256": "9656cd0bcd1fd00916676d032f6852b59553d7428eacdfdf17332e1db7f421fd"
+    },
+    {
+      "path": "queue.json",
+      "bytes": 51,
+      "sha256": "d60fde09cedf096d889ceac8fec0096a0957cd1304ef1c5d7778c03f5606f154"
+    },
+    {
+      "path": "snapshot.json",
+      "bytes": 6854,
+      "sha256": "67bac394161dfdf0d3283d490a7c3672b0cda2118370b7e9da97ed4ef21ee6b0"
+    },
+    {
+      "path": "ui-events.jsonl",
+      "bytes": 27592,
+      "sha256": "3849fe463d34e23723c96975ec8ad24af792df3fe997720b79fc61a97943df53"
+    }
+  ],
+  "backup_ui_records": 45,
+  "backup_final_errors": 0,
+  "backup_restore_ready_as_exported": false,
+  "windows_native_copy_and_save": "pending manual; capture timeout after fresh selection and one retry",
+  "fixture_shutdown": "normal 1800-second expiry; post-expiry HTTP read refused"
+}

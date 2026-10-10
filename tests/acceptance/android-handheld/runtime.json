@@ -1,0 +1,362 @@
+{
+  "scope": "real ARM64 app C/TCC + HTTP API; browser/native UI separately",
+  "package": "org.xleaves.mdo.qa.stability",
+  "stress_or_high_load": false,
+  "cases": [
+    {
+      "name": "retry",
+      "requests": 3,
+      "state": "succeeded",
+      "errors": 0
+    },
+    {
+      "name": "network",
+      "requests": 2,
+      "state": "succeeded",
+      "errors": 0
+    },
+    {
+      "name": "partial",
+      "requests": 2,
+      "state": "succeeded",
+      "errors": 0
+    },
+    {
+      "name": "quota",
+      "requests": 1,
+      "state": "failed",
+      "errors": 1,
+      "error_kind": "daily_token_limit"
+    },
+    {
+      "name": "cancel_backoff",
+      "requests_before_resume": 1,
+      "state": "cancelled",
+      "cancel_ms": 112
+    },
+    {
+      "name": "resume_continue_restart",
+      "resumed": true,
+      "credential_retained": true,
+      "draft_retained": true,
+      "errors": 0
+    }
+  ],
+  "calls": {
+    "retry": 3,
+    "network": 2,
+    "partial": 2,
+    "quota": 1,
+    "stop": 2,
+    "continue": 1,
+    "after-restart": 1
+  },
+  "requests": [
+    {
+      "prompt": "retry",
+      "attempt": 1,
+      "at": 153641.953,
+      "users": [
+        "retry"
+      ]
+    },
+    {
+      "prompt": "retry",
+      "attempt": 2,
+      "at": 153643.015,
+      "users": [
+        "retry"
+      ]
+    },
+    {
+      "prompt": "retry",
+      "attempt": 3,
+      "at": 153645.343,
+      "users": [
+        "retry"
+      ]
+    },
+    {
+      "prompt": "network",
+      "attempt": 1,
+      "at": 153645.421,
+      "users": [
+        "retry",
+        "network"
+      ]
+    },
+    {
+      "prompt": "network",
+      "attempt": 2,
+      "at": 153646.671,
+      "users": [
+        "retry",
+        "network"
+      ]
+    },
+    {
+      "prompt": "partial",
+      "attempt": 1,
+      "at": 153646.765,
+      "users": [
+        "retry",
+        "network",
+        "partial"
+      ]
+    },
+    {
+      "prompt": "partial",
+      "attempt": 2,
+      "at": 153647.781,
+      "users": [
+        "retry",
+        "network",
+        "partial"
+      ]
+    },
+    {
+      "prompt": "quota",
+      "attempt": 1,
+      "at": 153648.015,
+      "users": [
+        "quota"
+      ]
+    },
+    {
+      "prompt": "stop",
+      "attempt": 1,
+      "at": 153648.187,
+      "users": [
+        "retry",
+        "network",
+        "partial",
+        "stop"
+      ]
+    },
+    {
+      "prompt": "stop",
+      "attempt": 2,
+      "at": 153649.609,
+      "users": [
+        "retry",
+        "network",
+        "partial",
+        "stop"
+      ]
+    },
+    {
+      "prompt": "continue",
+      "attempt": 1,
+      "at": 153649.718,
+      "users": [
+        "retry",
+        "network",
+        "partial",
+        "stop",
+        "continue"
+      ]
+    },
+    {
+      "prompt": "after-restart",
+      "attempt": 1,
+      "at": 153650.906,
+      "users": [
+        "retry",
+        "network",
+        "partial",
+        "stop",
+        "continue",
+        "after-restart"
+      ]
+    },
+    {
+      "prompt": "ANDROID_OK: after-restart",
+      "attempt": 1,
+      "at": 153868.515,
+      "users": [
+        "retry",
+        "network",
+        "partial",
+        "stop",
+        "continue",
+        "after-restart",
+        "ANDROID_OK: after-restart"
+      ]
+    },
+    {
+      "prompt": "你",
+      "attempt": 1,
+      "at": 153985.75,
+      "users": [
+        "retry",
+        "network",
+        "partial",
+        "stop",
+        "continue",
+        "after-restart",
+        "ANDROID_OK: after-restart",
+        "你"
+      ]
+    }
+  ],
+  "url": "http://127.0.0.1:65415/#/projects/default/sessions/V-OSUDF4wsc0aEQlyck42u5l6Xf6Na2N",
+  "calls_after_browser": {
+    "retry": 3,
+    "network": 2,
+    "partial": 2,
+    "quota": 1,
+    "stop": 2,
+    "continue": 1,
+    "after-restart": 1,
+    "ANDROID_OK: after-restart": 1,
+    "你": 1
+  },
+  "requests_after_browser": [
+    {
+      "prompt": "retry",
+      "attempt": 1,
+      "at": 153641.953,
+      "users": [
+        "retry"
+      ]
+    },
+    {
+      "prompt": "retry",
+      "attempt": 2,
+      "at": 153643.015,
+      "users": [
+        "retry"
+      ]
+    },
+    {
+      "prompt": "retry",
+      "attempt": 3,
+      "at": 153645.343,
+      "users": [
+        "retry"
+      ]
+    },
+    {
+      "prompt": "network",
+      "attempt": 1,
+      "at": 153645.421,
+      "users": [
+        "retry",
+        "network"
+      ]
+    },
+    {
+      "prompt": "network",
+      "attempt": 2,
+      "at": 153646.671,
+      "users": [
+        "retry",
+        "network"
+      ]
+    },
+    {
+      "prompt": "partial",
+      "attempt": 1,
+      "at": 153646.765,
+      "users": [
+        "retry",
+        "network",
+        "partial"
+      ]
+    },
+    {
+      "prompt": "partial",
+      "attempt": 2,
+      "at": 153647.781,
+      "users": [
+        "retry",
+        "network",
+        "partial"
+      ]
+    },
+    {
+      "prompt": "quota",
+      "attempt": 1,
+      "at": 153648.015,
+      "users": [
+        "quota"
+      ]
+    },
+    {
+      "prompt": "stop",
+      "attempt": 1,
+      "at": 153648.187,
+      "users": [
+        "retry",
+        "network",
+        "partial",
+        "stop"
+      ]
+    },
+    {
+      "prompt": "stop",
+      "attempt": 2,
+      "at": 153649.609,
+      "users": [
+        "retry",
+        "network",
+        "partial",
+        "stop"
+      ]
+    },
+    {
+      "prompt": "continue",
+      "attempt": 1,
+      "at": 153649.718,
+      "users": [
+        "retry",
+        "network",
+        "partial",
+        "stop",
+        "continue"
+      ]
+    },
+    {
+      "prompt": "after-restart",
+      "attempt": 1,
+      "at": 153650.906,
+      "users": [
+        "retry",
+        "network",
+        "partial",
+        "stop",
+        "continue",
+        "after-restart"
+      ]
+    },
+    {
+      "prompt": "ANDROID_OK: after-restart",
+      "attempt": 1,
+      "at": 153868.515,
+      "users": [
+        "retry",
+        "network",
+        "partial",
+        "stop",
+        "continue",
+        "after-restart",
+        "ANDROID_OK: after-restart"
+      ]
+    },
+    {
+      "prompt": "你",
+      "attempt": 1,
+      "at": 153985.75,
+      "users": [
+        "retry",
+        "network",
+        "partial",
+        "stop",
+        "continue",
+        "after-restart",
+        "ANDROID_OK: after-restart",
+        "你"
+      ]
+    }
+  ]
+}
