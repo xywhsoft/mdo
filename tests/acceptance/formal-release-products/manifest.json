@@ -1,0 +1,202 @@
+{
+  "version_name": "0.1.0",
+  "status": "verified-not-published",
+  "releases": [
+    {
+      "id": "desktop",
+      "platform": "windows-x86_64",
+      "edition": "desktop",
+      "build_id": 30000065,
+      "sha256": "cf655ce4489b8c2a1813fe1a05834f07acafff366994a901bf24dd3755615a36",
+      "size": 4570279,
+      "notes": "mdo 0.1.0：账号持久化、会话恢复与回收站修复；发布前安全及运行时检查。",
+      "required": false,
+      "status": "staged",
+      "file": "mdo.exe"
+    },
+    {
+      "id": "windows-server",
+      "platform": "windows-x86_64",
+      "edition": "server",
+      "build_id": 30000066,
+      "sha256": "87ee4de6c458375defe8de7c42a78f166871b00134e7a677e0aa10c24d91cb69",
+      "size": 4376060,
+      "notes": "mdo 0.1.0：账号持久化、会话恢复与回收站修复；发布前安全及运行时检查。",
+      "required": false,
+      "status": "staged",
+      "file": "mdo-server.exe"
+    },
+    {
+      "id": "linux-glibc-gui",
+      "platform": "linux-x86_64-glibc",
+      "edition": "desktop",
+      "build_id": 30000067,
+      "sha256": "3603d838c2d9d37571a29ed33ad9c94fd4c3cce546d09aa926686412854cf387",
+      "size": 4120688,
+      "notes": "mdo 0.1.0：账号持久化、会话恢复与回收站修复；发布前安全及运行时检查。",
+      "required": false,
+      "status": "staged",
+      "file": "mdo-linux-x86_64-glibc"
+    },
+    {
+      "id": "linux-glibc-server",
+      "platform": "linux-x86_64-glibc",
+      "edition": "server",
+      "build_id": 30000068,
+      "sha256": "93c6d59f26ffa0f2883235bc4aae34672da8ce0986911306281e1ebac51d5059",
+      "size": 4091782,
+      "notes": "mdo 0.1.0：账号持久化、会话恢复与回收站修复；发布前安全及运行时检查。",
+      "required": false,
+      "status": "staged",
+      "file": "mdo-server-linux-x86_64-glibc"
+    },
+    {
+      "id": "linux-musl-gui",
+      "platform": "linux-x86_64-musl",
+      "edition": "desktop",
+      "build_id": 30000069,
+      "sha256": "ca024c8bcc826e284a48a430b22ef52050644a6f118ace74bff24961008a5e1b",
+      "size": 5958247,
+      "notes": "mdo 0.1.0：账号持久化、会话恢复与回收站修复；发布前安全及运行时检查。",
+      "required": false,
+      "status": "staged",
+      "file": "mdo-linux-x86_64-musl"
+    },
+    {
+      "id": "linux-musl-server",
+      "platform": "linux-x86_64-musl",
+      "edition": "server",
+      "build_id": 30000070,
+      "sha256": "cc26d054e4f01a4bd9fae65b3e84984fea2daf02f1ecb7449f9ecb792cc36b7d",
+      "size": 5929405,
+      "notes": "mdo 0.1.0：账号持久化、会话恢复与回收站修复；发布前安全及运行时检查。",
+      "required": false,
+      "status": "staged",
+      "file": "mdo-server-linux-x86_64-musl"
+    },
+    {
+      "id": "lite",
+      "platform": "android-arm64-v8a",
+      "edition": "lite",
+      "build_id": 30000071,
+      "sha256": "c45569dd4cf66703335a9aa49a1665c5e556184ea1e6030f650bccf446c63be9",
+      "size": 4203757,
+      "notes": "mdo 0.1.0：账号持久化、会话恢复与回收站修复；发布前安全及运行时检查。",
+      "required": false,
+      "status": "staged",
+      "file": "mdo-arm64-v8a.apk"
+    },
+    {
+      "id": "full",
+      "platform": "android-arm64-v8a",
+      "edition": "full",
+      "build_id": 30000072,
+      "sha256": "7b8f6b04f58c429b99b065701f7cee966b0efe11fc90bf1d5be7ad3a4cbdc881",
+      "size": 60961614,
+      "notes": "mdo 0.1.0：账号持久化、会话恢复与回收站修复；发布前安全及运行时检查。",
+      "required": false,
+      "status": "staged",
+      "file": "mdo-full-arm64-v8a.apk",
+      "toolpack_revision": 2
+    }
+  ],
+  "android_release_signed": true,
+  "toolpacks": [
+    {
+      "id": "core",
+      "platform": "windows-x86_64",
+      "revision": 2,
+      "sha256": "e336a3f82c803a099bb500af07daf43aed68d20d8d9b94a305e0d796dcfe407f",
+      "size": 10428777,
+      "name": "常用工具包",
+      "min_build": 30000065,
+      "max_build": 0,
+      "dependencies": [],
+      "tools": [
+        {
+          "id": "busybox",
+          "name": "busybox",
+          "version": "1.38.0-FRP-6075-g169694ebd",
+          "size": 694188,
+          "source": "https://frippery.org/files/busybox/busybox-w64u-FRP-6075-g169694ebd.exe",
+          "license": "GPL-2.0-only"
+        },
+        {
+          "id": "curl",
+          "name": "curl",
+          "version": "8.13.0",
+          "size": 901724,
+          "source": "User-provided runtime preserved; file hashes recorded here.",
+          "license": "curl"
+        },
+        {
+          "id": "jq",
+          "name": "jq",
+          "version": "1.8.2",
+          "size": 1044491,
+          "source": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-windows-amd64.exe",
+          "license": "MIT"
+        },
+        {
+          "id": "openssh",
+          "name": "openssh",
+          "version": "10.3p1",
+          "size": 14816717,
+          "source": "https://github.com/git-for-windows/MSYS2-packages",
+          "license": "BSD; bundled dependency licenses included"
+        },
+        {
+          "id": "aria2",
+          "name": "aria2",
+          "version": "1.37.0",
+          "size": 5675699,
+          "source": "https://github.com/aria2/aria2/releases/download/release-1.37.0/aria2-1.37.0-win-64bit-build1.zip",
+          "license": "GPL-2.0-or-later; bundled dependency licenses included"
+        },
+        {
+          "id": "ripgrep",
+          "name": "ripgrep",
+          "version": "15.2.0",
+          "size": 4221346,
+          "source": "https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-x86_64-pc-windows-msvc.zip",
+          "license": "MIT OR Unlicense"
+        },
+        {
+          "id": "7zip",
+          "name": "7zip",
+          "version": "26.04",
+          "size": 2491279,
+          "source": "https://www.7-zip.org/a/7z2604-x64.exe",
+          "license": "LGPL-2.1-or-later AND BSD-3-Clause; unRAR restriction"
+        }
+      ],
+      "status": "staged",
+      "notes": "BusyBox, curl, jq, SSH/SCP/SFTP, aria2c, ripgrep, 7-Zip",
+      "file": "toolpacks/core.xrtpack"
+    },
+    {
+      "id": "python",
+      "platform": "windows-x86_64",
+      "revision": 2,
+      "sha256": "c8dd507191c00ed7504be9f8941042e6b3ef461a8f20cbed074363be560a173b",
+      "size": 9648640,
+      "name": "Python",
+      "min_build": 30000065,
+      "max_build": 0,
+      "dependencies": [],
+      "tools": [
+        {
+          "id": "python",
+          "name": "python",
+          "version": "3.13.7",
+          "size": 21292576,
+          "source": "User-provided runtime preserved; file hashes recorded here.",
+          "license": "PSF-2.0"
+        }
+      ],
+      "status": "staged",
+      "notes": "CPython embeddable runtime",
+      "file": "toolpacks/python.xrtpack"
+    }
+  ]
+}

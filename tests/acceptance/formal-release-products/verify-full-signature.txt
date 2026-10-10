@@ -1,0 +1,17 @@
+Verifies
+Verified using v1 scheme (JAR signing): false
+Verified using v2 scheme (APK Signature Scheme v2): true
+Verified using v3 scheme (APK Signature Scheme v3): true
+Verified using v3.1 scheme (APK Signature Scheme v3.1): false
+Verified using v4 scheme (APK Signature Scheme v4): false
+Verified for SourceStamp: false
+Number of signers: 1
+Signer #1 certificate DN: CN=mdo Android Release, O=xywhsoft, C=CN
+Signer #1 certificate SHA-256 digest: 94b1947b60f3ce0852b19d9c37a47cc4a084fe9d601692c6a1f6b204c2174e84
+Signer #1 certificate SHA-1 digest: 43de383e70a20346900f0cf6675bff26041c39a8
+Signer #1 certificate MD5 digest: bc56e47bdb5a6d7d29167ceb30182ee9
+Signer #1 key algorithm: RSA
+Signer #1 key size (bits): 4096
+Signer #1 public key SHA-256 digest: 53280cb65937c3148468f6c6e8b69c42628464e0ac2cf1a1c1ea9a503c976118
+Signer #1 public key SHA-1 digest: 26577618a3b9f69e6553271e17370e9f8486a0f1
+Signer #1 public key MD5 digest: 02795c26a2bfe30beed2f0bbb40136a5

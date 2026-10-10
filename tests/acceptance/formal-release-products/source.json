@@ -1,0 +1,35 @@
+{
+  "git_head": "161b2f34023847eb1ff4b2d7ccc42defa689423a",
+  "includes_uncommitted_source": true,
+  "source_root": "D:\\GIT\\mdo",
+  "candidate_root": "C:\\Users\\Administrator\\.codex\\worktrees\\conversation-release-verification\\mdo",
+  "accepted_app_files": 431,
+  "accepted_app_sha256": "82cb0b6354b30226a4d69dead949fe36df061ee86ed782d1e3c34d3b0a8945e2",
+  "candidate_app_sha256": "1a1b77d5f3fc944adce03f07eeb7f02c49e884120305c834950bd7ee58cbfddc",
+  "intentional_changes": [
+    "app/release.json"
+  ],
+  "candidate_build_ids": {
+    "windows_build_id": 30000065,
+    "windows_server_build_id": 30000066,
+    "linux_glibc_gui_build_id": 30000067,
+    "linux_glibc_server_build_id": 30000068,
+    "linux_musl_gui_build_id": 30000069,
+    "linux_musl_server_build_id": 30000070,
+    "android_lite_build_id": 30000071,
+    "android_full_build_id": 30000072
+  },
+  "published": false,
+  "main_app_source_unchanged_after_validation": false,
+  "main_app_source_sha256_at_close": "c109c53cacfe28b89c029c3628b251d6128112e0a39b7636bad86a5040493242",
+  "post_snapshot_changes_not_in_candidate": [
+    "app/src/models/completion.inc.c",
+    "app/src/models/online_access.inc.c"
+  ],
+  "candidate_inputs_remain_frozen": true,
+  "new_apk_installation_tested": false,
+  "native_android_library_and_dex_match_tested_qa": true,
+  "signing_identity_sha256": "94b1947b60f3ce0852b19d9c37a47cc4a084fe9d601692c6a1f6b204c2174e84",
+  "private_signing_material_in_repository": false,
+  "website_published": false
+}

@@ -1,0 +1,183 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-10-10T19:50:54.649481+00:00",
+  "version_name": "0.1.0",
+  "source_head_at_recording": "161b2f34023847eb1ff4b2d7ccc42defa689423a",
+  "includes_uncommitted_application_changes": true,
+  "application_source_sha256": "1a1b77d5f3fc944adce03f07eeb7f02c49e884120305c834950bd7ee58cbfddc",
+  "common_application_files": 431,
+  "xrt_commit": "6040abda647bd947bd561cd185f37a3751f122f4",
+  "xs_commit": "f05f7661062fdca04da8d571ad859eb4b87c0889",
+  "host_profile_sha256": "7211b5374543682c5b5833fe96dac27c8261a966d77650e6f1e1b14510f2e695",
+  "toolpack_revision": 2,
+  "release_status": "verified-not-published",
+  "gate": {
+    "command": [
+      "C:\\Program Files\\Python312\\python.exe",
+      "tools/qa_release.py",
+      "--xserver-root",
+      "C:\\Users\\Administrator\\.codex\\worktrees\\conversation-release-verification\\mdo\\.build\\locked-xs\\f05f7661062fdca04da8d571ad859eb4b87c0889"
+    ],
+    "skip_host_build": false,
+    "exit_code": 0,
+    "elapsed_seconds": 1213.36,
+    "passed": true,
+    "test_scope": "bounded offline functional verification; no stress/high load",
+    "published": false,
+    "log_sha256": "8f2c92d763b71bb176a1a507e8e16637f9241582c09ed1cbfd761ffd10af92cb",
+    "android_device_tested": false,
+    "android_release_signed": true
+  },
+  "products": [
+    {
+      "filename": "mdo.exe",
+      "platform": "windows",
+      "edition": "desktop",
+      "build_id": 30000065,
+      "xs_commit": "f05f7661062fdca04da8d571ad859eb4b87c0889",
+      "bytes": 4570279,
+      "sha256": "cf655ce4489b8c2a1813fe1a05834f07acafff366994a901bf24dd3755615a36",
+      "host_bytes": 3183616,
+      "host_sha256": "e91dc0ad9798abef6b8adc2cc3fb0c1ad8642c9d5cd980c6343992508ae73136",
+      "packaged_app_sha256": "242178b304f9419128ee0874dcf45b2996703cad206dbd957f8583f283a1d9a9",
+      "architecture": "x86_64",
+      "libc": "mingw",
+      "verification": {
+        "packed_archive": true,
+        "native_host_prefix": true
+      }
+    },
+    {
+      "filename": "mdo-server.exe",
+      "platform": "windows",
+      "edition": "server",
+      "build_id": 30000066,
+      "xs_commit": "f05f7661062fdca04da8d571ad859eb4b87c0889",
+      "bytes": 4376060,
+      "sha256": "87ee4de6c458375defe8de7c42a78f166871b00134e7a677e0aa10c24d91cb69",
+      "host_bytes": 2989568,
+      "host_sha256": "715e4ea43e8b8784d3049872418512ecdbde94f49f9935815664c45bc588db37",
+      "packaged_app_sha256": "7af80e0c897d9a006874f25c8300154b97e145682b18f52a4a1e45da21d78d6a",
+      "architecture": "x86_64",
+      "libc": "mingw",
+      "verification": {
+        "packed_archive": true,
+        "native_host_prefix": true
+      }
+    },
+    {
+      "filename": "mdo-linux-x86_64-glibc",
+      "platform": "linux",
+      "edition": "desktop",
+      "build_id": 30000067,
+      "xs_commit": "f05f7661062fdca04da8d571ad859eb4b87c0889",
+      "bytes": 4120688,
+      "sha256": "3603d838c2d9d37571a29ed33ad9c94fd4c3cce546d09aa926686412854cf387",
+      "host_bytes": 2734016,
+      "host_sha256": "f4fc0dcd273de9a6781ab0ba997483c123e3257347bd3acdf12de80d62be8af5",
+      "packaged_app_sha256": "e65fbb837b4f15836cc727d6166cd824283dfd0faf56a43cfb05640fe85c5a0a",
+      "architecture": "x86_64",
+      "libc": "glibc",
+      "verification": {
+        "packed_archive": true,
+        "native_host_prefix": true
+      }
+    },
+    {
+      "filename": "mdo-server-linux-x86_64-glibc",
+      "platform": "linux",
+      "edition": "server",
+      "build_id": 30000068,
+      "xs_commit": "f05f7661062fdca04da8d571ad859eb4b87c0889",
+      "bytes": 4091782,
+      "sha256": "93c6d59f26ffa0f2883235bc4aae34672da8ce0986911306281e1ebac51d5059",
+      "host_bytes": 2705280,
+      "host_sha256": "70372dc8df4a7f066695cd9b20357a68346e70b2532a069e4290ccd3f4e1eb16",
+      "packaged_app_sha256": "77f1afae2075f150ce23fefaa95c7616a5741c88b042a032ccbe97a3d1257902",
+      "architecture": "x86_64",
+      "libc": "glibc",
+      "verification": {
+        "packed_archive": true,
+        "native_host_prefix": true
+      }
+    },
+    {
+      "filename": "mdo-linux-x86_64-musl",
+      "platform": "linux",
+      "edition": "desktop",
+      "build_id": 30000069,
+      "xs_commit": "f05f7661062fdca04da8d571ad859eb4b87c0889",
+      "bytes": 5958247,
+      "sha256": "ca024c8bcc826e284a48a430b22ef52050644a6f118ace74bff24961008a5e1b",
+      "host_bytes": 4571576,
+      "host_sha256": "4bce07fd51f645ad275e1b46457268430740085d3a5f196071d14754c8520086",
+      "packaged_app_sha256": "27118e3c8ac940950823ff699f70c61ced1e7ab69a0505b36428905686519b3f",
+      "architecture": "x86_64",
+      "libc": "musl",
+      "verification": {
+        "packed_archive": true,
+        "native_host_prefix": true
+      }
+    },
+    {
+      "filename": "mdo-server-linux-x86_64-musl",
+      "platform": "linux",
+      "edition": "server",
+      "build_id": 30000070,
+      "xs_commit": "f05f7661062fdca04da8d571ad859eb4b87c0889",
+      "bytes": 5929405,
+      "sha256": "cc26d054e4f01a4bd9fae65b3e84984fea2daf02f1ecb7449f9ecb792cc36b7d",
+      "host_bytes": 4542904,
+      "host_sha256": "5feb85eb81bfae0be3222a0503574932f93a573ad19ba7ab3caca3d459527a61",
+      "packaged_app_sha256": "c9c409c5ad513423b07b2418cd78527a27d4930003862934b3197828a6e981cb",
+      "architecture": "x86_64",
+      "libc": "musl",
+      "verification": {
+        "packed_archive": true,
+        "native_host_prefix": true
+      }
+    },
+    {
+      "filename": "mdo-arm64-v8a.apk",
+      "platform": "android",
+      "edition": "lite",
+      "build_id": 30000071,
+      "xs_commit": "f05f7661062fdca04da8d571ad859eb4b87c0889",
+      "bytes": 4203757,
+      "sha256": "c45569dd4cf66703335a9aa49a1665c5e556184ea1e6030f650bccf446c63be9",
+      "host_bytes": 2670448,
+      "host_sha256": "c8096a7298bb1440c378ed23ed172c1901cf2b7d6bb17e1ecfa958c4d6d56a0b",
+      "signature_sha256": "94b1947b60f3ce0852b19d9c37a47cc4a084fe9d601692c6a1f6b204c2174e84",
+      "release_signed": true,
+      "runtime_mappings": 0,
+      "native_files": 1,
+      "app_pack_sha256": "d6e7c9e479fc4134e8c0dfe945f1be541fd91cd627594bdca49b134a0c42a317",
+      "verification": {
+        "apk_structure": true,
+        "signature": true,
+        "device_tested": false
+      }
+    },
+    {
+      "filename": "mdo-full-arm64-v8a.apk",
+      "platform": "android",
+      "edition": "full",
+      "build_id": 30000072,
+      "xs_commit": "f05f7661062fdca04da8d571ad859eb4b87c0889",
+      "bytes": 60961614,
+      "sha256": "7b8f6b04f58c429b99b065701f7cee966b0efe11fc90bf1d5be7ad3a4cbdc881",
+      "host_bytes": 2670448,
+      "host_sha256": "c8096a7298bb1440c378ed23ed172c1901cf2b7d6bb17e1ecfa958c4d6d56a0b",
+      "signature_sha256": "94b1947b60f3ce0852b19d9c37a47cc4a084fe9d601692c6a1f6b204c2174e84",
+      "release_signed": true,
+      "runtime_mappings": 125,
+      "native_files": 75,
+      "app_pack_sha256": "d6e7c9e479fc4134e8c0dfe945f1be541fd91cd627594bdca49b134a0c42a317",
+      "verification": {
+        "apk_structure": true,
+        "signature": true,
+        "device_tested": false
+      }
+    }
+  ]
+}

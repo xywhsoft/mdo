@@ -1,0 +1,54 @@
+{
+  "passed": true,
+  "products": [
+    {
+      "file": "mdo.exe",
+      "source_files_compared": 430,
+      "common_source_matches": true,
+      "xs_json": "platform normalization excluded; validated by build and platform probes"
+    },
+    {
+      "file": "mdo-server.exe",
+      "source_files_compared": 430,
+      "common_source_matches": true,
+      "xs_json": "platform normalization excluded; validated by build and platform probes"
+    },
+    {
+      "file": "mdo-linux-x86_64-glibc",
+      "source_files_compared": 430,
+      "common_source_matches": true,
+      "xs_json": "platform normalization excluded; validated by build and platform probes"
+    },
+    {
+      "file": "mdo-server-linux-x86_64-glibc",
+      "source_files_compared": 430,
+      "common_source_matches": true,
+      "xs_json": "platform normalization excluded; validated by build and platform probes"
+    },
+    {
+      "file": "mdo-linux-x86_64-musl",
+      "source_files_compared": 430,
+      "common_source_matches": true,
+      "xs_json": "platform normalization excluded; validated by build and platform probes"
+    },
+    {
+      "file": "mdo-server-linux-x86_64-musl",
+      "source_files_compared": 430,
+      "common_source_matches": true,
+      "xs_json": "platform normalization excluded; validated by build and platform probes"
+    },
+    {
+      "file": "mdo-arm64-v8a.apk",
+      "source_files_compared": 430,
+      "common_source_matches": true,
+      "xs_json": "platform normalization excluded; validated by build and platform probes"
+    }
+  ],
+  "android_full_shares_verified_app_pack": true,
+  "android_comparison": {
+    "native_library_same_as_device_tested_qa": true,
+    "dex_same_as_device_tested_qa": true,
+    "new_release_apk_device_tested": false
+  },
+  "scope": "actual archive readback through Windows xs; not an Android or Linux device test"
+}
