@@ -1,0 +1,44 @@
+[xs] app pack: 434 entries (xrt-v1)
+[xs] XServer 1.0.0 (commit f05f7661062fdca04da8d571ad859eb4b87c0889, 2026-10-10, linux)
+[xs] extensions (5): xllm, xllm-session, xwork, webview, image
+[xs] config loaded: /tmp/mdo-native-lifecycle-qa-jhbyrokg/xs.json (1 servers)
+[xs] server 'mdo' class=app 127.0.0.1:0 tls=off enabled
+[xs] custom:{"body_limit":8388608,"window":{"title":"墨斗 mdo","width":1440,"height":900,"min_width":360,"min_height":320,"url":"/","devtools":false,"close":"stop","profile_dir":{"argument":"--home","environment":"MDO_HOME","default":"mdo-home","subdir":"data/cache/webkit"},"install_fallback":"ask"}}
+[xs]   default-host 'mdo' path=/tmp/mdo-native-lifecycle-qa-jhbyrokg/web devfile=/tmp/mdo-native-lifecycle-qa-jhbyrokg/generated/mdo_unity.c
+[xs] engine started, workers=12
+[xs-window] using libwebkit2gtk-4.1.so.0
+libEGL warning: DRI3 error: Could not get DRI3 device
+libEGL warning: Ensure your X server supports DRI3 to get accelerated rendering
+
+(xs-window-802655150778c17653805750d22ffcf1633b357f7f78e7b8442eb261d815380a:662): IBUS-WARNING **: 02:33:54.341: Failed to mkdir /nonexistent/.config/ibus/bus: Permission denied
+[xs] script loaded: /tmp/mdo-native-lifecycle-qa-jhbyrokg/generated/mdo_unity.c (4.8 KB gen 1)
+[mdo] bootstrap ready: version=0.1.0 home=/tmp/mdo-native-lifecycle-qa-jhbyrokg/mdo-home mode=external defaults=2223 providers=1 models=1 skills=1 memory=0 web=0 mcp=0 modules=3 tools=1 schedules=0
+[xs] server 'mdo' http bound on 127.0.0.1:44779
+[xs] app 'mdo': open http://127.0.0.1:44779/ in a browser
+[xs] running, press Ctrl+C to stop
+[xs] stopping
+[xs] engine stopped
+[xs] generation finalized: server 'mdo' (connections=0)
+[xs] bye
+[xs] app pack: 434 entries (xrt-v1)
+[xs] XServer 1.0.0 (commit f05f7661062fdca04da8d571ad859eb4b87c0889, 2026-10-10, linux)
+[xs] extensions (5): xllm, xllm-session, xwork, webview, image
+[xs] config loaded: /tmp/mdo-native-lifecycle-qa-jhbyrokg/xs.json (1 servers)
+[xs] server 'mdo' class=app 127.0.0.1:0 tls=off enabled
+[xs] custom:{"body_limit":8388608,"window":{"title":"墨斗 mdo","width":1440,"height":900,"min_width":360,"min_height":320,"url":"/","devtools":false,"close":"stop","profile_dir":{"argument":"--home","environment":"MDO_HOME","default":"mdo-home","subdir":"data/cache/webkit"},"install_fallback":"ask"}}
+[xs]   default-host 'mdo' path=/tmp/mdo-native-lifecycle-qa-jhbyrokg/web devfile=/tmp/mdo-native-lifecycle-qa-jhbyrokg/generated/mdo_unity.c
+[xs] engine started, workers=12
+[xs-window] using libwebkit2gtk-4.1.so.0
+libEGL warning: DRI3 error: Could not get DRI3 device
+libEGL warning: Ensure your X server supports DRI3 to get accelerated rendering
+
+(xs-window-802655150778c17653805750d22ffcf1633b357f7f78e7b8442eb261d815380a:783): IBUS-WARNING **: 02:34:08.038: Failed to mkdir /nonexistent/.config/ibus/bus: Permission denied
+[xs] script loaded: /tmp/mdo-native-lifecycle-qa-jhbyrokg/generated/mdo_unity.c (4.8 KB gen 1)
+[mdo] bootstrap ready: version=0.1.0 home=/tmp/mdo-native-lifecycle-qa-jhbyrokg/mdo-home mode=external defaults=2224 providers=1 models=1 skills=1 memory=0 web=0 mcp=0 modules=3 tools=1 schedules=0
+[xs] server 'mdo' http bound on 127.0.0.1:44779
+[xs] app 'mdo': open http://127.0.0.1:44779/ in a browser
+[xs] running, press Ctrl+C to stop
+[xs] stopping
+[xs] engine stopped
+[xs] generation finalized: server 'mdo' (connections=0)
+[xs] bye
