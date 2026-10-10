@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "key_alias": "mdo-release",
+  "algorithm": "RSA",
+  "key_bits": 4096,
+  "keystore": "E:\\software\\mdo-signing\\mdo-release.p12",
+  "certificate_sha256": "94b1947b60f3ce0852b19d9c37a47cc4a084fe9d601692c6a1f6b204c2174e84",
+  "private_material_tracked": false,
+  "existing_apk_upgrade_compatible": false
+}
