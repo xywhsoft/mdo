@@ -1,0 +1,35 @@
+{
+  "passed": true,
+  "checks": [
+    "APK CRC and duplicate entries",
+    "exact native library and application archive",
+    "locked host receipt, SDK revision, profile and required API symbols",
+    "ARM64 ELF dependency closure",
+    "16 KiB ELF and ZIP alignment",
+    "FileChooserResult in actual DEX",
+    "isolated QA ID, build ID and lite metadata"
+  ],
+  "apk": {
+    "path": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\current-integration\\android\\mdo-stability-qa.apk",
+    "bytes": 4199661,
+    "sha256": "2f74b8455953d48f9680bd43663ffa83a35c7411dca547acc8cb7549985f660d",
+    "package": "org.xleaves.mdo.qa.stability",
+    "build_id": 30000064
+  },
+  "native": {
+    "revision": "f05f7661062fdca04da8d571ad859eb4b87c0889",
+    "binary_sha256": "c8096a7298bb1440c378ed23ed172c1901cf2b7d6bb17e1ecfa958c4d6d56a0b",
+    "profile_sha256": "893b7863bf7768b125dfa9ca8af27550f8fdddccca70070fcfc5d8aac4a5bc04",
+    "extensions": [
+      "xllm",
+      "xllm-session",
+      "xwork",
+      "webview",
+      "image"
+    ]
+  },
+  "pack_sha256": "faba25780402fa49fcb49c0cd93fd6eb7d67ecaa3a91cf9d286aa53966217985",
+  "device_tested": false,
+  "daily_package_updated": false,
+  "website_published": false
+}

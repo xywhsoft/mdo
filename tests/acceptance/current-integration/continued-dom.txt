@@ -1,0 +1,94 @@
+- link "跳到对话":
+  - /url: "#timeline"
+- complementary "会话导航":
+  - link "墨斗主页":
+    - /url: "#/"
+    - generic: 墨斗
+  - group "通知 · 2":
+    - button "扩展工具包安装":
+    - button "登录账号":
+  - button "关闭会话导航":
+  - button "登录账号":
+    - generic: ◉
+    - generic: 登录账号
+  - button "本机":
+    - generic: 本机
+    - generic: ▾
+  - button "新建任务 Ctrl N":
+    - generic: 新建任务
+    - generic: Ctrl N
+  - button "计划任务":
+    - generic: 计划任务
+  - navigation "会话":
+    - region "项目":
+      - button "折叠 项目" [expanded]:
+        - generic: 项目
+      - button "列表选项":
+      - button "添加项目":
+      - paragraph: 添加项目，让任务按工作区分组。
+    - region "任务":
+      - button "折叠 任务" [expanded]:
+        - generic: 任务
+      - button "在默认项目新建任务":
+      - list:
+        - button "明确拒绝后重试验收 1分钟前":
+          - generic: 明确拒绝后重试验收
+          - time: 1分钟前
+        - button "明确拒绝后重试验收 的操作":
+  - status:
+    - generic: 本地服务 0.1.0
+  - button "搜索会话":
+  - button "切换为深色主题":
+  - button "设置":
+- main "Agent 工作区":
+  - button "切换项目，当前 默认项目":
+    - generic: 默认项目
+    - generic: ▾
+  - generic: /
+  - heading "明确拒绝后重试验收" [level=1]
+  - paragraph: mdo.default · queue-fixture
+  - generic: 就绪
+  - button "搜索当前会话":
+  - button "导出当前会话 Markdown":
+  - button "更多会话操作":
+  - region "当前会话":
+    - list:
+      - time: 01:10
+      - generic: image-rejection-test
+      - button "查看图片 1：pixel.png":
+        - img "pixel.png"
+        - generic "pixel.png"
+      - button "复制消息":
+      - button "编辑此消息并重新发送":
+      - time: 01:10
+      - paragraph: "REJECTION_RECOVERED: image-rejection-test"
+      - button "复制消息":
+      - button "从此回复分叉会话":
+      - button "重试此回合":
+      - generic: 40 输入 / 20 输出 tokens · LLM <0.1 秒 · 1781.3 tok/s
+      - time: 01:10
+      - generic: after-rejection-follow-up
+      - button "复制消息":
+      - button "编辑此消息并重新发送":
+      - time: 01:10
+      - paragraph: "REJECTION_RECOVERED: after-rejection-follow-up"
+      - button "复制消息":
+      - button "从此回复分叉会话":
+      - button "重试此回合":
+      - generic: 40 输入 / 20 输出 tokens · LLM <0.1 秒 · 1805.4 tok/s
+  - region "发送消息":
+    - generic: 向 Agent 描述任务
+    - textbox "向 Agent 描述任务" [active]:
+      - /placeholder: 向墨斗描述任务…
+    - button "添加图片":
+    - button "权限：只读":
+    - button "查看 token 用量"
+    - button "模型与思考深度：QA Image · 无思考":
+      - generic: QA Image
+      - generic: 无思考
+    - generic: Enter 发送 · Shift Enter 换行
+    - button "发送任务":
+  - navigation "对话历史导航":
+    - button "image-rejection-test"
+    - button "after-rejection-follow-up"
+- separator "调整会话导航宽度"

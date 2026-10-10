@@ -1,0 +1,8 @@
+{
+  "apk_signatures_valid": true,
+  "same_previous_installed_qa_signer": true,
+  "certificate_sha256": "f91d4271ee0b3a959699fd80e735232ca47852326000e2dc1464fddf2970183e",
+  "old_build_id": 30000048,
+  "new_build_id": 30000064,
+  "actual_device_upgrade_tested": false
+}

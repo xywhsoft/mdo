@@ -1,0 +1,100 @@
+{
+  "toolpacks": [
+    {
+      "id": "core",
+      "platform": "windows-x86_64",
+      "revision": 2,
+      "sha256": "e336a3f82c803a099bb500af07daf43aed68d20d8d9b94a305e0d796dcfe407f",
+      "size": 10428777,
+      "name": "\u5e38\u7528\u5de5\u5177\u5305",
+      "min_build": 30000055,
+      "max_build": 0,
+      "dependencies": [],
+      "tools": [
+        {
+          "id": "busybox",
+          "name": "busybox",
+          "version": "1.38.0-FRP-6075-g169694ebd",
+          "size": 694188,
+          "source": "https://frippery.org/files/busybox/busybox-w64u-FRP-6075-g169694ebd.exe",
+          "license": "GPL-2.0-only"
+        },
+        {
+          "id": "curl",
+          "name": "curl",
+          "version": "8.13.0",
+          "size": 901724,
+          "source": "User-provided runtime preserved; file hashes recorded here.",
+          "license": "curl"
+        },
+        {
+          "id": "jq",
+          "name": "jq",
+          "version": "1.8.2",
+          "size": 1044491,
+          "source": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-windows-amd64.exe",
+          "license": "MIT"
+        },
+        {
+          "id": "openssh",
+          "name": "openssh",
+          "version": "10.3p1",
+          "size": 14816717,
+          "source": "https://github.com/git-for-windows/MSYS2-packages",
+          "license": "BSD; bundled dependency licenses included"
+        },
+        {
+          "id": "aria2",
+          "name": "aria2",
+          "version": "1.37.0",
+          "size": 5675699,
+          "source": "https://github.com/aria2/aria2/releases/download/release-1.37.0/aria2-1.37.0-win-64bit-build1.zip",
+          "license": "GPL-2.0-or-later; bundled dependency licenses included"
+        },
+        {
+          "id": "ripgrep",
+          "name": "ripgrep",
+          "version": "15.2.0",
+          "size": 4221346,
+          "source": "https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-x86_64-pc-windows-msvc.zip",
+          "license": "MIT OR Unlicense"
+        },
+        {
+          "id": "7zip",
+          "name": "7zip",
+          "version": "26.04",
+          "size": 2491279,
+          "source": "https://www.7-zip.org/a/7z2604-x64.exe",
+          "license": "LGPL-2.1-or-later AND BSD-3-Clause; unRAR restriction"
+        }
+      ],
+      "status": "published",
+      "notes": "BusyBox, curl, jq, SSH/SCP/SFTP, aria2c, ripgrep, 7-Zip",
+      "file": "core.xrtpack"
+    },
+    {
+      "id": "python",
+      "platform": "windows-x86_64",
+      "revision": 2,
+      "sha256": "c8dd507191c00ed7504be9f8941042e6b3ef461a8f20cbed074363be560a173b",
+      "size": 9648640,
+      "name": "Python",
+      "min_build": 30000055,
+      "max_build": 0,
+      "dependencies": [],
+      "tools": [
+        {
+          "id": "python",
+          "name": "python",
+          "version": "3.13.7",
+          "size": 21292576,
+          "source": "User-provided runtime preserved; file hashes recorded here.",
+          "license": "PSF-2.0"
+        }
+      ],
+      "status": "published",
+      "notes": "CPython embeddable runtime",
+      "file": "python.xrtpack"
+    }
+  ]
+}

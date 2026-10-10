@@ -1,0 +1,80 @@
+{
+  "passed": true,
+  "read_through": "actual Windows xs/TCC HTTP and VFS",
+  "android_device_tested": false,
+  "model_requests": 0,
+  "products": [
+    {
+      "product": "windows_candidate",
+      "packed_sha256": "224318e83b37c7099386a41288672e2fa36eaa06eb512bc7eb6358ab548fb3ed",
+      "files": [
+        {
+          "path": "js/app.js",
+          "bytes": 132364,
+          "sha256": "0ba4aa3ba7e5fa654d7657aa3f8a7c2230cbf192026dbc56f1b6ab406f7c3c7c",
+          "served_bytes_equal": true
+        },
+        {
+          "path": "js/state/runs.js",
+          "bytes": 4901,
+          "sha256": "cbc59f645b953278d223206b17bd004bc388bdd36442de0c6b37f732cfe8ab6b",
+          "served_bytes_equal": true
+        },
+        {
+          "path": "js/features/chat/draft-store.js",
+          "bytes": 33925,
+          "sha256": "8fd3c5546a1ea6337b181a29ec49f9c2dfff5dc2cf7277043533a250e7bedc6e",
+          "served_bytes_equal": true
+        },
+        {
+          "path": "js/features/account/session-state.js",
+          "bytes": 398,
+          "sha256": "08ed85527f8d80c89704e6cd7df0d7eff9ef0b20ac17f03f685e4c689162be58",
+          "served_bytes_equal": true
+        },
+        {
+          "path": "lang/zh-CN.json",
+          "bytes": 135827,
+          "sha256": "0b40edad8de88f25ad60f79f36839cd1b9e0702327224b7312b8753d1ae14c84",
+          "served_bytes_equal": true
+        }
+      ]
+    },
+    {
+      "product": "android_archive_on_windows_host",
+      "packed_sha256": "3ea48ce9d292e022fd43b69bfee5adb134e42a4228d55f46a45f93559bb5bb8d",
+      "files": [
+        {
+          "path": "js/app.js",
+          "bytes": 132364,
+          "sha256": "0ba4aa3ba7e5fa654d7657aa3f8a7c2230cbf192026dbc56f1b6ab406f7c3c7c",
+          "served_bytes_equal": true
+        },
+        {
+          "path": "js/state/runs.js",
+          "bytes": 4901,
+          "sha256": "cbc59f645b953278d223206b17bd004bc388bdd36442de0c6b37f732cfe8ab6b",
+          "served_bytes_equal": true
+        },
+        {
+          "path": "js/features/chat/draft-store.js",
+          "bytes": 33925,
+          "sha256": "8fd3c5546a1ea6337b181a29ec49f9c2dfff5dc2cf7277043533a250e7bedc6e",
+          "served_bytes_equal": true
+        },
+        {
+          "path": "js/features/account/session-state.js",
+          "bytes": 398,
+          "sha256": "08ed85527f8d80c89704e6cd7df0d7eff9ef0b20ac17f03f685e4c689162be58",
+          "served_bytes_equal": true
+        },
+        {
+          "path": "lang/zh-CN.json",
+          "bytes": 135827,
+          "sha256": "0b40edad8de88f25ad60f79f36839cd1b9e0702327224b7312b8753d1ae14c84",
+          "served_bytes_equal": true
+        }
+      ]
+    }
+  ]
+}
