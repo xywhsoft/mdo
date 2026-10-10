@@ -43,6 +43,14 @@ void ServiceInit(XS_HostInfo* Host) {
     Good=MdoEventsParse(Bridge.ProjectId,Bridge.SessionId,xrtStrViewN(Json,Size),&Parsed);
     printf("local_profile=%u kind=%s\n",Good,Parsed.Info.ModelErrorKind);
     MdoEventsOwnedUnit(&Parsed); xrtFree(Json);
+    Event.eModelErrorCode=XLLM_ERROR_INVALID_ARGUMENT;
+    Event.sProviderCode="profile_image_unsupported";
+    Json=MdoEventsRecord(&Bridge,3,&Event,"",0,&Size);
+    Good=MdoEventsParse(Bridge.ProjectId,Bridge.SessionId,xrtStrViewN(Json,Size),&Parsed);
+    printf("image_profile=%u kind=%s\n",Good,Parsed.Info.ModelErrorKind);
+    MdoEventsOwnedUnit(&Parsed); xrtFree(Json);
+    Event.eModelErrorCode=XLLM_ERROR_AUTH;
+    Event.sProviderCode="profile_credential_unavailable";
     Event.uHttpStatus=401u;
     Json=MdoEventsRecord(&Bridge,3,&Event,"",0,&Size);
     Good=MdoEventsParse(Bridge.ProjectId,Bridge.SessionId,xrtStrViewN(Json,Size),&Parsed);
@@ -114,6 +122,7 @@ def main():
         output = run_probe(host, site, base / 'home')
         for expected in ('current=1 schema=6 kind=daily_token_limit status=429 attempts=1',
                          'local_profile=1 kind=profile_credential_unavailable',
+                         'image_profile=1 kind=profile_image_unsupported',
                          'upstream_profile_code=1 kind=authentication_failed',
                          'legacy=1 schema=5 empty_kind=1',
                          'missing_error_metadata_rejected=1', 'ordinary=1 empty_kind=1',

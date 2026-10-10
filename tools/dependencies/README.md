@@ -1,6 +1,6 @@
 # Locked xs host source
 
-`xs-linux-products.bundle` carries the compatibility commits from
+`xs-tool-image-text.bundle` carries the compatibility commits from
 `bd7831704482cc7dd418260281a37c6bdb222b23` to the xs revision in `deps.lock`.
 It contains the upstream xllm stream termination/output-limit fixes and xwork
 draft restart markers, configured compaction summary formatting and accepted
@@ -47,3 +47,16 @@ origin, retaining the selected conversation. An unchanged live origin can
 restore WebView history. Lost-renderer callbacks wait for Activity recreation.
 The source bundle includes the route resolver's JVM checks and compilation
 test; actual WebView input and lifecycle verification still require a device.
+
+The locked xwork command tools also preserve empty `argv` entries after the
+program name, including `ssh-keygen -N ""`. Approval and command parsing reject
+an empty program or embedded NUL. Descriptor failures retain their diagnostic
+through batch execution instead of being reported as approval denials; actual
+permission refusals retain their existing behavior. Empty arguments are shown
+as `""` in command previews. This compatibility fix keeps ABI 8 unchanged and
+requires rebuilding the Windows and Android native hosts.
+
+The session library also retains the tool result's text/path as a text part
+alongside image bytes (upstream `xrt@54676d1d`). This fixes the loss of text
+when a message switches from plain content to structured parts. The session
+schema and public ABI are unchanged; rebuild native hosts to use the fix.

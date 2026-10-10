@@ -1940,6 +1940,7 @@
   "model.error.profile_proxy_unavailable": "本地无法读取配置的代理密码，请检查代理设置和密钥引用。",
   "model.error.profile_ca_unavailable": "无法加载配置的 CA 证书，请在网络设置中检查证书文件。",
   "model.error.profile_endpoint_invalid": "配置的模型接口地址无效，请在模型设置中检查服务商 API 地址。",
+  "model.error.profile_image_unsupported": "当前模型无法查看此对话中的图片，请选择支持图片输入的模型后继续。",
   "model.errorTitle.allowance": "模型额度不足",
   "model.errorTitle.balance": "账户余额不足",
   "model.errorTitle.signIn": "需要登录账号",

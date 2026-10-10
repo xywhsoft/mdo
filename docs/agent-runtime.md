@@ -52,6 +52,18 @@ model、协议、reasoning、权限档位和任何越权预算都在 session 创
 
 ## Tool、Skill 与子 Agent
 
+工具返回的图片按本次调用的实际 model route 适配。支持图片输入的模型
+收到原始图片；文本模型收到工具的文字结果、图片格式/大小，以及无法
+查看图片的明确说明。适配仅创建临时请求视图，不改动持久会话、图片
+字节或 tool call ID；重启后可以继续，切换到视觉模型仍能读取原图。
+`read`、MCP、自定义 C 工具及子 Agent 都使用这一统一调用入口。
+
+用户主动提交的图片不会降级为文本。模型不支持时返回
+`profile_image_unsupported`，界面提示选择支持图片输入的模型。
+新图片工具结果同时保存文字与图片，避免进入结构化 parts 后丢失文字。
+有界验证：`tests/test_agent_media_runtime.py`；打包读图与重启继续：
+`tests/test_tool_image_packed.py --packed <candidate>`，均使用离线模型。
+
 Agent descriptor 可以声明 tool allowlist、effect ceiling、Skill 列表和子 Agent
 能力。mdo 先让 xwork 构造实际工具目录和子 Agent roster，再按 allowlist 与
 effect 删除不可用工具。只读档位保留读取与只读委派能力，写入、进程、网络、

@@ -36,7 +36,7 @@ test("final model errors use the UI language and preserve unknown explanations",
       for (const kind of ["profile_model_missing", "profile_protocol_unsupported",
         "profile_reasoning_unsupported", "profile_output_limit", "profile_context_limit",
         "profile_credential_unavailable", "profile_proxy_unavailable", "profile_ca_unavailable",
-        "profile_endpoint_invalid"]) {
+        "profile_endpoint_invalid", "profile_image_unsupported"]) {
         const explanation = errorMessage({ code: `model_${kind}`, message: "private diagnostic" });
         assert.notEqual(explanation, "private diagnostic");
         const final = eventsToTimeline([{ kind: "error", event_id: 30, run_id: kind,

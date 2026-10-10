@@ -295,14 +295,60 @@ static void MdoAgentsOwnerReleaseCallback(void* UserData)
     MdoAgentOwnerRelease((MdoAgentOwner*)UserData);
 }
 
+#include "request_media.inc.c"
+
+static xllm_result MdoAgentsRouteComplete(MdoAgentOwner* Owner,
+    MdoAgentRoute* Match, const xllm_request* Request,
+    const xllm_stream_callbacks* Callbacks, xllm_response** Response,
+    xllm_error* Error)
+{
+    MdoModelClientOptions Options;
+    xllm_client* Client;
+    if ( Owner->ExternalComplete != NULL )
+        return Owner->ExternalComplete(Owner->ExternalModelData, Request,
+            Callbacks, Response, Error);
+    if(MdoModelIsOnline(Owner->Models,Match->ModelId)){
+        MdoModelClientOptionsInit(&Options);Options.ModelId=Match->ModelId;Options.Protocol=Match->Protocol;
+        Options.ReasoningEffort=Match->ReasoningEffort;Options.MaxOutputTokens=Match->MaxOutputTokens;
+        Options.RestartableStream=true;
+        return MdoModelOnlineComplete(Owner->Models,&Options,Request,Callbacks,Response,Error);
+    }
+    if ( Owner->RouteLock == NULL || !xrtMutexLock(Owner->RouteLock) ) {
+        if ( Error != NULL ) {
+            xllmErrorInit(Error);
+            Error->eCode = XLLM_ERROR_HOOK;
+            snprintf(Error->sMessage, sizeof(Error->sMessage), "%s",
+                "model route is unavailable");
+        }
+        return XLLM_RESULT_ERROR;
+    }
+    /* Routes are published before runs start; main and child calls share
+     * lazily created clients under this lock. */
+    if ( Match->Client == NULL ) {
+        MdoModelClientOptionsInit(&Options);
+        Options.ModelId = Match->ModelId;
+        Options.Protocol = Match->Protocol;
+        Options.ReasoningEffort = Match->ReasoningEffort;
+        Options.MaxOutputTokens = Match->MaxOutputTokens;
+        Match->Client = MdoModelClientCreate(Owner->Models, &Options, NULL,
+            Error);
+    }
+    Client = Match->Client;
+    (void)xrtMutexUnlock(Owner->RouteLock);
+    if ( Client == NULL ) return XLLM_RESULT_ERROR;
+    return MdoModelCompleteRestartable(Client, Request, Callbacks, Response, Error);
+}
+
 static xllm_result MdoAgentsComplete(void* UserData,
     const xllm_request* Request, const xllm_stream_callbacks* Callbacks,
     xllm_response** Response, xllm_error* Error)
 {
     MdoAgentOwner* Owner = (MdoAgentOwner*)UserData;
     MdoAgentRoute* Match = NULL;
-    MdoModelClientOptions Options;
-    xllm_client* Client;
+    xllm_model_profile Profile;
+    xllm_request Storage, View;
+    const xllm_request* Projected;
+    xllm_result Result;
     size_t Matches = 0u;
     size_t i;
     if ( Owner == NULL || Request == NULL || Response == NULL ) {
@@ -314,9 +360,7 @@ static xllm_result MdoAgentsComplete(void* UserData,
         }
         return XLLM_RESULT_ERROR;
     }
-    if ( Owner->ExternalComplete != NULL )
-        return Owner->ExternalComplete(Owner->ExternalModelData, Request,
-            Callbacks, Response, Error);
+    *Response = NULL;
     for ( i = 0u; i < Owner->RouteCount; ++i ) {
         MdoAgentRoute* Route = &Owner->Routes[i];
         if ( Request->sModel != NULL &&
@@ -338,37 +382,17 @@ static xllm_result MdoAgentsComplete(void* UserData,
         }
         return XLLM_RESULT_ERROR;
     }
-    if(MdoModelIsOnline(Owner->Models,Match->ModelId)){
-        MdoModelClientOptionsInit(&Options);Options.ModelId=Match->ModelId;Options.Protocol=Match->Protocol;
-        Options.ReasoningEffort=Match->ReasoningEffort;Options.MaxOutputTokens=Match->MaxOutputTokens;
-        Options.RestartableStream=true;
-        return MdoModelOnlineComplete(Owner->Models,&Options,Request,Callbacks,Response,Error);
-    }
-    if ( Owner->RouteLock == NULL || !xrtMutexLock(Owner->RouteLock) ) {
-        if ( Error != NULL ) {
-            xllmErrorInit(Error);
-            Error->eCode = XLLM_ERROR_HOOK;
-            snprintf(Error->sMessage, sizeof(Error->sMessage), "%s",
-                "model route is unavailable");
-        }
+    if ( !MdoModelCatalogProfile(Owner->Models, Match->ModelId,
+            Match->Protocol, &Profile, Error) ) return XLLM_RESULT_ERROR;
+    if ( !MdoAgentsProjectImages(Request, &Profile, &Storage, &View,
+            &Projected, Error) ) {
+        xllmRequestUnit(&Storage);
         return XLLM_RESULT_ERROR;
     }
-    /* Routes are published before runs start.  A model client can therefore
-     * be initialized on first use without changing the catalog generation;
-     * the lock allows concurrent main/subagent calls to share one client. */
-    if ( Match->Client == NULL ) {
-        MdoModelClientOptionsInit(&Options);
-        Options.ModelId = Match->ModelId;
-        Options.Protocol = Match->Protocol;
-        Options.ReasoningEffort = Match->ReasoningEffort;
-        Options.MaxOutputTokens = Match->MaxOutputTokens;
-        Match->Client = MdoModelClientCreate(Owner->Models, &Options, NULL,
-            Error);
-    }
-    Client = Match->Client;
-    (void)xrtMutexUnlock(Owner->RouteLock);
-    if ( Client == NULL ) return XLLM_RESULT_ERROR;
-    return MdoModelCompleteRestartable(Client, Request, Callbacks, Response, Error);
+    Result = MdoAgentsRouteComplete(Owner, Match, Projected, Callbacks,
+        Response, Error);
+    xllmRequestUnit(&Storage);
+    return Result;
 }
 
 static bool MdoAgentOwnerAcquireAgent(MdoAgentOwner* Owner,
@@ -1851,7 +1875,7 @@ MdoAgentRun* MdoAgentRunCreate(MdoAgentSession* Session,
                 Session->ModelId, &Model) ||
              (Model.Capabilities & XLLM_CAP_IMAGE_IN) == 0u ||
              (Model.Attachments & MDO_MODEL_ATTACHMENT_IMAGE) == 0u ) {
-            MdoAgentsError(Error, XWORK_ERROR_MODEL,
+            MdoAgentsProfileError(Error, "profile_image_unsupported",
                 "the selected model does not support image input");
             return NULL;
         }

@@ -1936,6 +1936,7 @@
   "model.error.profile_proxy_unavailable": "The configured proxy credential is unavailable locally. Check the proxy settings and its secret reference.",
   "model.error.profile_ca_unavailable": "The configured CA certificate could not be loaded. Check the certificate file in network settings.",
   "model.error.profile_endpoint_invalid": "The configured model endpoint is invalid. Check the provider API address in model settings.",
+  "model.error.profile_image_unsupported": "The selected model cannot view images in this conversation. Choose a model with image input to continue.",
   "model.errorTitle.allowance": "Model allowance exhausted",
   "model.errorTitle.balance": "Insufficient account balance",
   "model.errorTitle.signIn": "Sign in required",

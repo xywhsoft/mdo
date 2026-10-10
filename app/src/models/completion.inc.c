@@ -20,6 +20,7 @@ static const struct {
     const char* Kind;
     const char* Message;
 } MdoModelsProfileErrors[] = {
+    { "profile_image_unsupported", "The selected model cannot view images in this conversation. Choose a model with image input to continue." },
     { "profile_model_missing", "The selected model is no longer in the model list. Refresh the list or choose another model." },
     { "profile_protocol_unsupported", "The selected model does not support this API protocol. Check the model protocol or choose another model." },
     { "profile_reasoning_unsupported", "The selected model does not support this reasoning level. Choose a supported level." },
