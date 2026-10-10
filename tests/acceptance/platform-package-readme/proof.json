@@ -1,0 +1,21 @@
+{
+  "passed": true,
+  "cases": [
+    {
+      "platform": "windows-x86_64-gui",
+      "readme": "windows.md",
+      "binary_preserved": true,
+      "archive_sha256": "519a49c07f9f4e5b7df7a5f55ecaf88f99069a35a895d095b984ed1002417feb",
+      "crc_or_tar_readback": true
+    },
+    {
+      "platform": "linux-x86_64-glibc-gui",
+      "readme": "linux.md",
+      "binary_preserved": true,
+      "archive_sha256": "1c8479c4243d7587b0808e90c28bcb00976afbbdbdef2c6f105d5c44cf79757b",
+      "crc_or_tar_readback": true
+    }
+  ],
+  "native_program_executed": false,
+  "scope": "actual archive contents and platform instructions; not a new conversation or release test"
+}

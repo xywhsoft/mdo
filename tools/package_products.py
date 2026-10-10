@@ -32,8 +32,9 @@ def main():
         binary = directory / name
         if receipt['xs_commit'] != lock['xserver']['commit'] or hashlib.sha256(binary.read_bytes()).hexdigest() != receipt['sha256']:
             raise ValueError('stale or changed product: ' + directory.name)
+        readme = ROOT / 'docs' / ('windows.md' if receipt['platform'] == 'windows' else 'linux.md')
         entries = {name: binary.read_bytes(), 'mdo-home/docs/build.json': (directory / 'build.json').read_bytes(),
-                   'mdo-home/docs/README.md': (ROOT / 'docs/linux.md').read_bytes()}
+                   'mdo-home/docs/README.md': readme.read_bytes()}
         if (ROOT / 'LICENSE').is_file():
             entries['mdo-home/docs/LICENSE'] = (ROOT / 'LICENSE').read_bytes()
         if receipt['edition'] == 'server' and receipt['platform'] == 'linux':
