@@ -68,7 +68,8 @@ python tools/qa_release.py --skip-host-build --xserver-root <锁定xs目录>
 没有执行压力、高负载或 soak 测试，没有发布官网或更新日用包。新版 QA 包已在
 RMX5090 全新安装并完成对话、系统复制、选图、保存和导入后续聊验收，见
 [当前 Android 真机记录](../current-android-native/README.md)。原 QA 包当时已不存在，
-升级保留数据没有据此验收。Windows 原生复制与文件保存仍需实际系统交接确认。
+升级保留数据没有据此验收。Windows 原生复制与文件保存随后也由用户实际操作
+并通过草稿/文件读回确认，见 [当前 Windows 原生记录](../current-desktop-native/README.md)。
 
 ## Linux 服务版补验
 

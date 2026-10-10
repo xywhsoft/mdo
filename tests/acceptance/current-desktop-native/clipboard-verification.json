@@ -1,0 +1,10 @@
+{
+  "source": "user performed reply-copy and Ctrl+V in the actual isolated WebView2 window; user confirmed complete text and line breaks",
+  "session_id": "5ac3eb831fb04c62bae9b93d19a0a0bd",
+  "public_api_draft_text_exact": true,
+  "saved_draft_text_exact": true,
+  "expected_utf8_bytes": 204,
+  "draft_revision": 4,
+  "attachments": [],
+  "typed_or_pasted_by_agent": false
+}

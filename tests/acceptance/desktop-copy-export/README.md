@@ -56,3 +56,15 @@ python tests/manual_desktop_export_qa.py --packed .build/conversation-acceptance
 使用脚本打印的独立窗口、会话和 stop 文件，完成上方复制及保存流程；
 不选择日常墨斗窗口，不输入个人账号或凭据。新候选的来源、门禁及明确的
 设备验收缺口见 [集成候选记录](../current-integration/README.md)。
+
+## 2026-10-11 用户完成实际系统交接
+
+当前候选已由用户在本轮隔离 WebView2 窗口完成发送、回复复制后 Ctrl+V，以及
+Markdown/会话备份系统保存。用户明确确认复制完整一致；正式 API 和持久化
+草稿与 204 字节多语原回复完全相同。两个指定 Downloads 文件均已读回，备份的
+6 个文件摘要及 5 条历史正确，Markdown 保留完整回复。3 次回环模型请求，夹具
+正常结束。详见 [当前原生验收](../current-desktop-native/README.md)。
+
+官方截图入口本轮仍在一次恢复重试后超时，因此这些通过项来自用户操作与数据
+读回；没有把自动控制失败算作成功，也没有调用其他 Windows 自动输入方式。
+上文的“未验收”保留为各早期阶段的事实，本节补充当前候选的实际完成结果。

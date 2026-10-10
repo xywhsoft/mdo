@@ -1,0 +1,59 @@
+{
+  "source": "user-reported Windows system save; read back the two named files",
+  "source_directory": "E:\\WindowsDocument\\Downloads",
+  "session_id": "5ac3eb831fb04c62bae9b93d19a0a0bd",
+  "native_workspace": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\current-desktop-system-20261011\\home\\workspace",
+  "same_isolated_home": true,
+  "candidate_sha256": "224318e83b37c7099386a41288672e2fa36eaa06eb512bc7eb6358ab548fb3ed",
+  "model_id": "queue-fixture",
+  "reply_exact": true,
+  "exported_history_rows": 5,
+  "persisted_history_bytes_exact": true,
+  "terminal_success": true,
+  "export_files": [
+    {
+      "name": "mdo-session-5ac3eb831fb04c62bae9b93d19a0a0bd.backup.json",
+      "bytes": 14446,
+      "sha256": "0d6a17ca6316b0692c7314d27cdd48513fd7f8b4d757ba10445d34f5db74ca10"
+    },
+    {
+      "name": "mdo-copy and export.md",
+      "bytes": 393,
+      "sha256": "2fe47133339c2907ff3a393cdad1774018f1d174241c5552870b3fbca75a8496"
+    }
+  ],
+  "decoded_files": [
+    {
+      "path": "draft.json",
+      "bytes": 109,
+      "sha256": "0c31875269454c23a646f5c769ff0ccde7afaba6c06907d5f6a3b41f63cbdd77"
+    },
+    {
+      "path": "meta.json",
+      "bytes": 766,
+      "sha256": "dfa66e6ed8f31a53064a922a7346df1556cb8071a3a8d481b27e24eacbea12be"
+    },
+    {
+      "path": "queue-receipts/5ac3eb831fb04c62bae9b93d19a0a0bd.json",
+      "bytes": 108,
+      "sha256": "e623a01c899d596c8246b1b982d61a38f0d8bfaf6cb0d92941114ea380b603b5"
+    },
+    {
+      "path": "queue.json",
+      "bytes": 51,
+      "sha256": "d60fde09cedf096d889ceac8fec0096a0957cd1304ef1c5d7778c03f5606f154"
+    },
+    {
+      "path": "snapshot.json",
+      "bytes": 4956,
+      "sha256": "a304d645dab9ff81798c607ba69314711957378de8996a42d876e918b67c732f"
+    },
+    {
+      "path": "ui-events.jsonl",
+      "bytes": 3670,
+      "sha256": "49e02145bccc8d1df2bc2095017df115296b31d989b9384356c4a17b99342568"
+    }
+  ],
+  "markdown_multilingual_reply_exact": true,
+  "clipboard": "user confirmed; public API and saved draft exactly match reply"
+}

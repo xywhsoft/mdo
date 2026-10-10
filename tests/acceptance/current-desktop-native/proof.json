@@ -1,0 +1,26 @@
+{
+  "date": "2026-10-11",
+  "candidate_bytes": 4570274,
+  "candidate_sha256": "224318e83b37c7099386a41288672e2fa36eaa06eb512bc7eb6358ab548fb3ed",
+  "source_files": 431,
+  "source_sha256": "82cb0b6354b30226a4d69dead949fe36df061ee86ed782d1e3c34d3b0a8945e2",
+  "includes_uncommitted_source": true,
+  "source_unchanged": true,
+  "native_model_requests": 3,
+  "final_errors": 0,
+  "automated_windows_ui_inputs": 0,
+  "manual_user_confirmation": {
+    "send": "successful",
+    "copy_paste": "complete and identical",
+    "exports": "two named files at E:\\WindowsDocument\\Downloads"
+  },
+  "clipboard_exact_in_api_and_disk": true,
+  "backup_file_hashes_and_lengths_valid": 6,
+  "exported_history_records": 5,
+  "markdown_reply_exact": true,
+  "native_fixture_exit_code": 0,
+  "owned_fixture_ended": true,
+  "production_models_or_credentials_used": false,
+  "daily_home_modified": false,
+  "stress_or_high_load": false
+}

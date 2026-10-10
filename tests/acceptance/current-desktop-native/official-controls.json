@@ -1,0 +1,27 @@
+{
+  "date": "2026-10-11",
+  "candidate_sha256": "224318e83b37c7099386a41288672e2fa36eaa06eb512bc7eb6358ab548fb3ed",
+  "candidate_bytes": 4570274,
+  "window": {
+    "app": "process:D:\\GIT\\mdo\\.build\\conversation-acceptance\\current-desktop-system-20261011\\native\\mdo.exe",
+    "id": 22153268,
+    "title": "mdo · 桌面导出验收"
+  },
+  "official_entry": "node_repl + @oai/sky",
+  "state_captures": [
+    {
+      "after": "fresh selection and activation",
+      "error": "FrameArrived timed out: timed out waiting on channel"
+    },
+    {
+      "after": "refresh list_windows, select and activate again; one retry",
+      "error": "window capture timed out: timed out waiting on channel"
+    }
+  ],
+  "automatic_inputs": 0,
+  "manual_result": "user performed and confirmed sending, copy/paste and two exports; readback verified",
+  "system_clipboard_verified": true,
+  "native_file_save_verified": true,
+  "stress_or_high_load": false,
+  "verification_method": "human actual UI operation plus API/disk readback, not automated Windows input"
+}

@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "ok": true,
+  "request_id": "mdo-f74be928247a181c4d6325e5",
+  "data": {
+    "revision": 4,
+    "text": "mdo desktop copy/export acceptance.\n\n中文：像素画笔与橡皮。\nEnglish: keep the original text.\nРусский: сохранить исходный текст.\n\n- Color: #34a1ff\n- File: pixel.png\n",
+    "attachments": [],
+    "run_admission_uncertain": false,
+    "submission": null,
+    "submissions": []
+  }
+}
