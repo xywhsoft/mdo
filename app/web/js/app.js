@@ -938,6 +938,7 @@ export async function boot() {
       tokenMeter.refresh();
       composerImages?.refresh();
       if (composerError.dataset.code === "image_model_unsupported" &&
+          !composerErrorState?.error?.runAdmissionRejected &&
           composerImages?.supportsCurrentModel()) hideComposerError();
     },
     onProfileUpdated() {
