@@ -33,4 +33,4 @@
 
 ## 剩余检查
 
-后续系统图片选择发现 xs 忽略 `ClipData`，已修复并在同一手机补验；发送后模型切换、前台返回保留草稿和中英俄六行复制粘贴也已通过，见 [原生补验](../android-file-chooser/README.md)。真实软键盘多行输入、首次系统语言检测、手机导入恢复仍待补验。本记录也不替代 Windows WebView2 的系统复制和实际保存。Windows 同日独立窗口重试仍返回 `FrameArrived timed out`、`window capture timed out`，没有执行原生发送、复制或保存；手工入口见 [桌面验收](../desktop-copy-export/README.md)。
+后续系统图片选择发现 xs 忽略 `ClipData`，已修复并在同一手机补验；发送后模型切换、前台返回保留草稿和中英俄六行复制粘贴也已通过，见 [原生补验](../android-file-chooser/README.md)。10 月 11 日进一步通过系统选择器导入原备份、核对 45 条历史后实际续聊，多行原生按键及软键盘发送、未设置偏好时的三语言初始化路径也通过，见 [恢复与语言](../android-restore-locale/README.md)，其中明确说明未全新安装及未使用实体外接键盘。本记录不替代 Windows WebView2 的系统复制和实际保存。Windows 独立窗口重试仍返回 `FrameArrived timed out`、`window capture timed out`，没有执行原生发送、复制或保存；手工入口见 [桌面验收](../desktop-copy-export/README.md)。

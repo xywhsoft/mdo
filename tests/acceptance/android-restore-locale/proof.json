@@ -1,0 +1,104 @@
+{
+  "date": "2026-10-11",
+  "qa_package": "org.xleaves.mdo.qa.stability",
+  "daily_package_modified": false,
+  "stress_or_high_load": false,
+  "application_commit": "630556a0dcb180ead6a2323ddc489aae8073c0ff",
+  "android_shell_commit": "f05f7661062fdca04da8d571ad859eb4b87c0889",
+  "apk_version_code": 30000048,
+  "backup": {
+    "source_sha256": "9193d1f8d31ec1673470c86aaf1986c5e4dd040765b6917b8e17ef87092ecca3",
+    "bytes": 49147,
+    "retained_files": 7,
+    "source_ui_records": 45,
+    "original_records_equal_except_rebased_session_id": true,
+    "new_session_id": "40a721cd7549054b74dd928781e4db57",
+    "restore_state": "committed",
+    "native_file_picker": true,
+    "native_review_confirm_open": true,
+    "native_model_switch_and_continue": true
+  },
+  "keyboard": {
+    "native_shift_enter": "ADB injected key combination 59+66 in actual phone WebView",
+    "draft": "line-one\nline-two",
+    "soft_enter_tap_sent_once": true,
+    "model_received_exact_multiline": true,
+    "not_a_physical_external_keyboard_test": true
+  },
+  "bounded_model_requests": {
+    "restore_fixture": [
+      {
+        "model": "android-native-text",
+        "prompt": "UI base turn",
+        "images": 0,
+        "image_sha256": [],
+        "at": 161398.703
+      },
+      {
+        "model": "android-native-text",
+        "prompt": "after-native-restore",
+        "images": 0,
+        "image_sha256": [],
+        "at": 161674.421
+      }
+    ],
+    "keyboard_fixture": [
+      {
+        "model": "android-native-text",
+        "prompt": "UI base turn",
+        "images": 0,
+        "image_sha256": [],
+        "at": 161900.234
+      },
+      {
+        "model": "android-native-text",
+        "prompt": "line-one\nline-two",
+        "images": 0,
+        "image_sha256": [],
+        "at": 161965.203
+      }
+    ]
+  },
+  "locale": {
+    "scope": "actual QA Android resources and WebView; reset QA language preference to auto",
+    "daily_package_modified": false,
+    "system_locale_modified": false,
+    "cases": [
+      {
+        "name": "russian-auto",
+        "android_app_locale": "ru-RU",
+        "unset_preference": true,
+        "saved_preference": "ru-RU",
+        "expected": "ru-RU"
+      },
+      {
+        "name": "explicit-russian-preserved",
+        "android_app_locale": "ja-JP",
+        "unset_preference": false,
+        "saved_preference": "ru-RU",
+        "expected": "ru-RU"
+      },
+      {
+        "name": "unsupported-auto",
+        "android_app_locale": "ja-JP",
+        "unset_preference": true,
+        "saved_preference": "en-US",
+        "expected": "en-US"
+      },
+      {
+        "name": "chinese-auto",
+        "android_app_locale": "zh-CN",
+        "unset_preference": true,
+        "saved_preference": "zh-CN",
+        "expected": "zh-CN"
+      }
+    ],
+    "initial_app_locale_override": "Locales for org.xleaves.mdo.qa.stability for user 0 are []",
+    "original_preference": "zh-CN",
+    "final_app_locale_override": "Locales for org.xleaves.mdo.qa.stability for user 0 are []"
+  },
+  "limits": [
+    "unset QA preference tests initial language path; no reinstall or fresh OS setup",
+    "does not replace outstanding Windows WebView2 clipboard and save verification"
+  ]
+}
