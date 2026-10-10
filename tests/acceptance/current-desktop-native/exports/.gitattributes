@@ -1,2 +1,4 @@
 # Keep the exact files saved by the user through the native window.
 * -text
+# An exported reply ends with a deliberate blank line; do not trim evidence.
+*.md whitespace=-blank-at-eof
