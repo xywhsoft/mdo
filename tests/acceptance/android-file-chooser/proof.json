@@ -1,0 +1,42 @@
+{
+  "date": "2026-10-11",
+  "scope": "real ARM64 QA APK; native picker, copy/paste and send; synthetic model",
+  "daily_package_modified": false,
+  "stress_or_high_load": false,
+  "application_commit": "630556a0dcb180ead6a2323ddc489aae8073c0ff",
+  "android_shell_commit": "f05f7661062fdca04da8d571ad859eb4b87c0889",
+  "native_host_commit": "93ef1f61e3203cfd71868ae1c4d8a4743d96d9c8",
+  "apk": {
+    "sha256": "ed95ab0ca106526c85b960990064c80c8503cca5292f1297bf757a060dfdda0f",
+    "bytes": 4191469,
+    "version_code": 30000048,
+    "installed_sha256_matches": true,
+    "signature_v2_v3_verified": true,
+    "zip_16kb_alignment_verified": true,
+    "entries": {
+      "lib/arm64-v8a/libxs.so": "9baa4515c93fd1f0760b7dc74a3f96fbdbacd3172bf0fb74b1cfcfd51b83b2c5",
+      "assets/app.xrtpack": "f7daa3059232f6b88183a73f18ef29e095b1dd848dd10f47614887ecbe6180ff"
+    }
+  },
+  "before_fix": {
+    "system_picker_confirmed_one_image": true,
+    "draft_attachments": []
+  },
+  "after_fix": {
+    "system_picker_received_one_image": true,
+    "model_received_one_image": true,
+    "image_sha256_matches_source": true,
+    "completed_turn_model_switch": true,
+    "three_language_clipboard_exact": true,
+    "clipboard_lines": 6,
+    "foreground_return_draft_retained": true,
+    "model_requests": 2
+  },
+  "limits": [
+    "soft-keyboard Enter still sends; pasted multiline only, not mobile newline entry",
+    "idle background HTTP forward briefly disconnected; foreground draft and image retained",
+    "initial fixture image model lacked media-input capability; corrected before successful native send",
+    "old uncertain synthetic queue item was removed before a fresh native send",
+    "Windows native copy/save and phone import restoration are still pending"
+  ]
+}

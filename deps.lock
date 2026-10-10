@@ -7,7 +7,7 @@
     "single_header_sha256": "1ea16b21f968d09e5084162f3919b7e6ae2412f9e13c3bbbdd4b322bcd5a26d2"
   },
   "xserver": {
-    "commit": "ce940a12944182067287531d9f2e9128b13e0be2",
+    "commit": "f05f7661062fdca04da8d571ad859eb4b87c0889",
     "version": "1.0.0",
     "required_extensions": [
       "xwork",
@@ -22,7 +22,7 @@
     },
     "source_bundle": {
       "path": "tools/dependencies/xs-tool-image-text.bundle",
-      "sha256": "9ea39571018704448e96d53ae2fb4d125113e24a272412504b2446c8f6764537",
+      "sha256": "a972ff182282c95fbd8762f1a153fa1db8626608151164d5cb5a35c141ddc21d",
       "ref": "refs/heads/codex/tool-image-text"
     }
   },

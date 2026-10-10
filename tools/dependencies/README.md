@@ -60,3 +60,12 @@ The session library also retains the tool result's text/path as a text part
 alongside image bytes (upstream `xrt@54676d1d`). This fixes the loss of text
 when a message switches from plain content to structured parts. The session
 schema and public ABI are unchanged; rebuild native hosts to use the fix.
+
+The Android window shell now accepts document-picker `ClipData` as well as a
+single URI. It keeps selection order, removes duplicates, honors single-input
+mode and completes canceled selections once. Returned URIs must use the granted
+`content` provider scheme; private `file` paths and other URL schemes are not
+passed to WebView. Bounded JVM cases and the full Android shell compile are in
+`tools/test_android_file_chooser.py`; actual ARM64 picker/send evidence is in
+`tests/acceptance/android-file-chooser` in mdo. This changes Java only, not the
+native ABI. Repackage Android to include it.
