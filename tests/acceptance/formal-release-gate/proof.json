@@ -1,0 +1,45 @@
+{
+  "passed": true,
+  "python": {
+    "tests": 150,
+    "skipped": 3
+  },
+  "frontend": {
+    "tests": 1002,
+    "passed": 1002,
+    "skipped": 0,
+    "modules": 165
+  },
+  "strict_c11_compile": true,
+  "runtime_probes": 82,
+  "packed_probes": 12,
+  "windows_portable_home": true,
+  "packed_startup_seconds": 20,
+  "fresh_native_host_build": true,
+  "deterministic_pack": true,
+  "candidate": {
+    "bytes": 4570279,
+    "sha256": "cf655ce4489b8c2a1813fe1a05834f07acafff366994a901bf24dd3755615a36",
+    "build_id": 30000065,
+    "xs_commit": "f05f7661062fdca04da8d571ad859eb4b87c0889",
+    "app_files": 431,
+    "application_source_sha256": "1a1b77d5f3fc944adce03f07eeb7f02c49e884120305c834950bd7ee58cbfddc",
+    "accepted_source_sha256": "82cb0b6354b30226a4d69dead949fe36df061ee86ed782d1e3c34d3b0a8945e2",
+    "source_difference": [
+      "app/release.json"
+    ],
+    "includes_uncommitted_application_changes": true,
+    "host": {
+      "revision": "f05f7661062fdca04da8d571ad859eb4b87c0889",
+      "binary_bytes": 3183616,
+      "binary_sha256": "e91dc0ad9798abef6b8adc2cc3fb0c1ad8642c9d5cd980c6343992508ae73136",
+      "profile_sha256": "893b7863bf7768b125dfa9ca8af27550f8fdddccca70070fcfc5d8aac4a5bc04"
+    }
+  },
+  "elapsed_seconds": 1213.36,
+  "log_sha256": "8f2c92d763b71bb176a1a507e8e16637f9241582c09ed1cbfd761ffd10af92cb",
+  "daily_products_updated": false,
+  "website_published": false,
+  "linux_native_clipboard_save": "deferred by user",
+  "android_new_signature_identity": "94b1947b60f3ce0852b19d9c37a47cc4a084fe9d601692c6a1f6b204c2174e84"
+}
