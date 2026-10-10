@@ -22,10 +22,37 @@ python tests/manual_desktop_export_qa.py --packed <独立 Windows 候选> --dire
 
 630556a0 打包程序已再次启动独立原生窗口。本轮官方 Windows 控制入口能读取控件树和填写合成输入，但窗口截屏持续超时，指针操作缺少几何信息，键盘焦点变化没有确认。没有发送、复制或导出；夹具已退出，模型调用及会话事件均为零。详细记录见 [复制兼容验收](../recovery-draft-copy/README.md)，不把这些工具失败视为 mdo 功能失败。
 
-在 `D:\GIT\mdo` 运行以下命令可建立当前程序的独立手工测试窗口。目录必须首次使用；重复测试需换新的目录名：
+以下历史入口使用 630556a0 候选。最新工作区候选的入口见下一节。
 
 ```powershell
 python tests/manual_desktop_export_qa.py --packed .build/conversation-acceptance/recovery-draft-copy/final-modal/mdo.exe --directory .build/manual-desktop-20261010
 ```
 
 按上方流程发送 `copy and export`，复制后真实 Ctrl+V，核对原文，保持粘贴内容不发送；再正常保存 Markdown 和完整备份并检查实际文件。请分别记录复制、Markdown 保存、备份保存是否通过及具体失败现象，不提供个人数据或账号凭据。此入口没有模拟系统剪贴板或保存对话框，也不接触日常 Home。
+
+## 2026-10-11 当前工作区候选复核
+
+重新建立最新集成候选的独立原生窗口，候选 SHA-256 为
+`224318e83b37c7099386a41288672e2fa36eaa06eb512bc7eb6358ab548fb3ed`。
+官方 Windows 控制入口能读取控件树、填写 `copy and export` 并读回。
+一次 Tab 后焦点仍指向 RootWebArea，因此不能声称已确认键盘焦点。
+发送按钮的索引操作返回 `Error: coordinate input geometry is unavailable`；
+截图返回 `Error: FrameArrived timed out: timed out waiting on channel`。
+刷新并重新选择同一独立窗口后，仅重试一次，仍返回
+`Error: window capture timed out: timed out waiting on channel`。
+按控制技能的恢复规则停止输入，没有继续使用旧索引或坐标。
+
+[官方控制记录](current-official-controls.json) 保留实际控件树和错误，
+[结束记录](current-proof.json) 确认模型请求为零、会话事件为空。
+独立实例已正常结束。此结果只说明当前控制环境无法完成系统操作，
+复制、粘贴、Markdown/备份保存仍为未验收，不是 mdo 失败或通过。
+
+在 `D:\GIT\mdo` 可用以下入口手工验收最新候选。目录必须首次使用：
+
+```powershell
+python tests/manual_desktop_export_qa.py --packed .build/conversation-acceptance/current-integration/mdo.exe --directory .build/manual-desktop-current-20261011
+```
+
+使用脚本打印的独立窗口、会话和 stop 文件，完成上方复制及保存流程；
+不选择日常墨斗窗口，不输入个人账号或凭据。新候选的来源、门禁及明确的
+设备验收缺口见 [集成候选记录](../current-integration/README.md)。
