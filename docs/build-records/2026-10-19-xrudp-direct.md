@@ -37,3 +37,11 @@ Linux 原生宿主重建后，SDK 外层/嵌套导出、IPv4/IPv6 原生连接�
 新增回归在修复前稳定复现：本机 `directSocket` 工厂尚未返回时没有 12 秒协商计时器，本机启动请求挂起会阻止后续 LAN 尝试。修复后 xrudp 的 12 秒、LAN 的 6 秒期限从本机请求之前开始，涵盖请求、WebSocket 打开和远端授权，工厂返回不续期。超时或账号连接代终止会取消启动 fetch、立即结算可选探测并继续既有回退；不支持取消的工厂即使迟到返回，连接也会被关闭，不能替换新路径。
 
 `test_remote_rendezvous.mjs` 覆盖工厂永久挂起后仍进入 LAN、取消信号、迟到连接清理、预算不续期、退出后的迟到结果；`test_connector_direct.mjs` 验证真实 connector 将 AbortSignal 传给 fetch，并拒绝已取消但 fetch 同时完成的原生 WebSocket 受理。原远控传输及账号刷新回归通过。修复前失败证据 `.build/rendezvous-startup-before.log`，修复后 `.build/rendezvous-startup-after.log`。中转业务在可选探测挂起期间仍可使用。
+
+## 可信公网映射服务
+
+xs 主分支 `7e54d7c0a40cc84e3363f9463c5ea373f6b8e1a2` 增加独立的 C/XRT STUN Binding 服务，运行时不增加第三方依赖，不加载网站 ABI、账号或数据。默认 IPv4/IPv6 UDP 3478，固定来源表及共享/来源令牌桶、输入属性和回复上限、原生收发队列与 Engine 硬限制；服务日志只有聚合计数。两平台真实 UDP 与独立 Python 协议测试通过，Linux 静态构建和 ASan/UBSan/泄漏检查通过，包含 SIGTERM 后取消 UDP、关闭和 Engine join。
+
+2026-10-19 已部署至显卡服务器的 `xs` 用户服务 `xrudp-stun.service`，用户 linger 已存在；内存限制 32 MiB、CPU 25%、最多八个任务。可执行文件 `~/.local/libexec/xrudp-stun`，SHA256 `a4dd5c18f3755d43ca26c562505d181572bae32f250a08d1ffd175982d17fb46`，所有构建输入逐字节核对到提交；未覆盖既有单元或程序。现有网站 MainPID 与 active 状态保持不变，不重启网站、不读写账号和计费数据。
+
+本机通过域名 `ai.xywhsoft.com` 查询真实公网 UDP 3478，收到 40 字节响应，事务号、FINGERPRINT 及 XOR-MAPPED-ADDRESS 独立校验通过，返回公网映射，单次往返约 31 ms。证据保存于 xs 的 `.build/stun-public-deployment.json`、`.build/stun-public-probe.json` 和 `stun-{windows,linux,linux-asan}-test.log`。这证明公网映射服务可达；真实两机 mdo 业务直连、其他 NAT 类型、Android 和长稳仍需继续验收。
