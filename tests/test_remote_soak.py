@@ -40,6 +40,24 @@ static bool SoakExpireAccess(MdoApiContext* C) {
 }'''
 ROUTE=' {"/api/v1/test-soak-stats",XHTTP_METHOD_GET,"GET",SoakStats,false},'
 EXPIRY_ROUTE=' {"/api/v1/test-soak-expire",XHTTP_METHOD_POST,"POST",SoakExpireAccess,false},'
+_WINDOWS_MEMORY=None
+
+
+def windows_memory_backend():
+    global _WINDOWS_MEMORY
+    if _WINDOWS_MEMORY is not None: return _WINDOWS_MEMORY
+    class Counters(ctypes.Structure):
+        _fields_=[('cb',wintypes.DWORD),('faults',wintypes.DWORD)]+[(name,ctypes.c_size_t) for name in
+            ('peak_rss','rss','peak_paged','paged','peak_nonpaged','nonpaged','pagefile','peak_pagefile','private')]
+    kernel=ctypes.WinDLL('kernel32',use_last_error=True); psapi=ctypes.WinDLL('psapi',use_last_error=True)
+    kernel.OpenProcess.argtypes=[wintypes.DWORD,wintypes.BOOL,wintypes.DWORD]; kernel.OpenProcess.restype=wintypes.HANDLE
+    kernel.CloseHandle.argtypes=[wintypes.HANDLE]; kernel.CloseHandle.restype=wintypes.BOOL
+    psapi.GetProcessMemoryInfo.argtypes=[wintypes.HANDLE,ctypes.POINTER(Counters),wintypes.DWORD]
+    psapi.GetProcessMemoryInfo.restype=wintypes.BOOL
+    kernel.GetProcessHandleCount.argtypes=[wintypes.HANDLE,ctypes.POINTER(wintypes.DWORD)]
+    kernel.GetProcessHandleCount.restype=wintypes.BOOL
+    _WINDOWS_MEMORY=kernel,psapi,Counters
+    return _WINDOWS_MEMORY
 
 
 def source_hash(path):
@@ -55,14 +73,7 @@ def memory(pid):
         values={line.split(':')[0]:line.split(':')[1].strip() for line in Path(f'/proc/{pid}/status').read_text().splitlines() if ':' in line}
         return {'rss':int(values['VmRSS'].split()[0])*1024,'private':int(values['VmData'].split()[0])*1024,
             'handles':len(list(Path(f'/proc/{pid}/fd').iterdir()))}
-    class Counters(ctypes.Structure):
-        _fields_=[('cb',wintypes.DWORD),('faults',wintypes.DWORD)]+[(name,ctypes.c_size_t) for name in
-            ('peak_rss','rss','peak_paged','paged','peak_nonpaged','nonpaged','pagefile','peak_pagefile','private')]
-    kernel=ctypes.WinDLL('kernel32',use_last_error=True); psapi=ctypes.WinDLL('psapi',use_last_error=True)
-    kernel.OpenProcess.argtypes=[wintypes.DWORD,wintypes.BOOL,wintypes.DWORD]; kernel.OpenProcess.restype=wintypes.HANDLE
-    kernel.CloseHandle.argtypes=[wintypes.HANDLE]
-    psapi.GetProcessMemoryInfo.argtypes=[wintypes.HANDLE,ctypes.POINTER(Counters),wintypes.DWORD]
-    kernel.GetProcessHandleCount.argtypes=[wintypes.HANDLE,ctypes.POINTER(wintypes.DWORD)]
+    kernel,psapi,Counters=windows_memory_backend()
     handle=kernel.OpenProcess(0x400|0x10,False,pid); assert handle,'resource query open failed'
     try:
         value=Counters(); value.cb=ctypes.sizeof(value); count=wintypes.DWORD()
@@ -130,7 +141,9 @@ def main():
         for process in processes: assert process.poll() is None,'owned host exited'
         if started is not None:
             assert abs((time.time()-wall)-(now-started))<5,'wall/monotonic clock diverged'
-            resources={str(p.pid):memory(p.pid) for p in processes}; state['resources']=resources
+            resources={str(p.pid):memory(p.pid) for p in processes}
+            resources[str(os.getpid())]=memory(os.getpid())
+            state['resources']=resources; state['observer_pid']=os.getpid()
             for pid,value in resources.items():
                 assert value['private']<768*1024*1024 and value['handles']<2048,'resource ceiling exceeded'
                 if now-started>=1800:
