@@ -28,7 +28,43 @@ Windows 稳定宿主的构建版本为 `c806e08`，核心和 xrudp 源字节已�
 二进制/收据/生命周期短测通过（`.build/remote-soak-monitor-windows.log`、
 `xrudp-soak-smoke-observer-fixed.log`）。后续以新提交、新收据重新起算完整时长。
 
-当前实际长测从 `c125bfc1` 起算，使用新 SDK `7edc866` 的已核验 Windows 宿主；
-`.build/xrudp-soak/mdo-72h-20261019-r3/state.json` 为本轮唯一有效的业务长测收据。
-它按真实时钟运行，未启用到期加速，尚未达到 72 小时。原生库另有 Windows/Linux 的
-八组持续多流、消息、游戏与 UDP 故障长测，独立记录，不能与本轮时长相加或相互代替。
+第三轮实际长测从 `c125bfc1` 起算，使用新 SDK `7edc866` 的已核验 Windows 宿主，
+未启用到期加速。`.build/xrudp-soak/mdo-72h-20261019-r3/state.json` 已终止失败：
+3603.703 秒、684 次读取、6 次写入/收据/大文件往返、一次七十秒空闲检查。
+第一次整点重连时，原生账号处于 `refreshing`，真实设备列表任务立即返回失败。
+这段时长不得计入后续 72 小时验收。原生库另有 Windows/Linux 的八组持续多流、
+消息、游戏与 UDP 故障长测，独立运行；本次账号错误不重置它们的时钟。
+
+## 整点重连的账号续期竞态
+
+根因是远程后台任务调用了非阻塞 `MdoAccountAcquireService`：访问令牌到期时它仅排队
+续期并立即返回 false，任务把“续期尚未完成”误报为 `remote_login_required`。
+短测通过真正的隔离账号续期请求增加 300 ms 延迟，稳定复现：
+`.build/xrudp-soak/refresh-failure-repro-02/state.json` 在约 11.093 秒失败，
+公开状态仍为 `refreshing` 且 `refresh_available:true`。故障发生于新票据前的设备列表，
+不是 xrudp 丢包、打洞或服务端拒绝登录。第一次延迟实验未匹配实际刷新 URL，
+其通过结果不作为复现证据。
+
+新增 `MdoAccountAcquireServiceWait` 供后台任务使用：最多等待二十秒，复用已有
+账号刷新工作和条件变量，不注册交互式登录等待项。调用取消最多百毫秒感知；
+退出、账号 ID、登录 epoch 和持有引用的会话取消根共同约束，禁止等待跨越注销、
+登录尝试或会话替换。失败清理部分凭据及引用，账号 Unit 等待 acquisition 归零。
+本地关闭远程控制仍走原有即时路径；有会话但服务暂不可用时使用现有
+`remote_service_unavailable`，只有确实无会话才报需要登录。
+
+验证证据：
+
+- `.build/xrudp-soak/refresh-wait-fixed-01/state.json`：40 秒真实传输、强制访问令牌
+  到期及 300 ms 真续期延迟，三次真实重连成功，管理器完整收尾通过；不是长稳通过。
+- `.build/remote-service-lease-windows-r2.log`：真正的网站/原生账号检查新鲜凭据、
+  一秒延迟续期、40 ms 超时、取消、登录 epoch 变更、零交互等待项、注销引用排空；
+  原有撤权、账号切换、禁用、原生 Unit/restore 和网站热重载也通过。
+- `.build/service-lease-native-{windows,linux}-r3.log`：两系统执行从真实源码提取的
+  lease/wait/release 函数，验证实际单调时钟、条件唤醒、线程、取消引用、相同 epoch
+  下会话替换和停止排空。周围 HTTP worker 是受控状态夹具，真实续期由上一项覆盖。
+  首次夹具缺少 XS 服务名，随后 Windows 缺少 stdio 声明，修正测试后均通过；
+  未将这些夹具错误当作产品缺陷。
+
+续期延迟和强制到期选项只适用于短测，一小时以上测试禁止开启。产品未添加调试路由。
+账号文件中的其他任务修改原样保留，本修复只提交新增等待函数及其必要调用/测试。
+后续第四轮使用新提交和新收据重新起算，最终仍需连续实际 72 小时和完整收尾。

@@ -463,6 +463,31 @@ bool MdoAccountAcquireService(xcancel* Cancel, MdoAccountLease* Lease)
     if (!ok) MdoAccountRelease(Lease);
     return ok;
 }
+bool MdoAccountAcquireServiceWait(xcancel* Cancel, uint32 TimeoutMs, MdoAccountLease* Lease)
+{
+    if (!Lease) return false;
+    memset(Lease,0,sizeof(*Lease));
+    if (!g_MdoAccount.Initialized || !TimeoutMs || TimeoutMs>30000u) return false;
+    bool ok=false; uint64 until=MdoDeadlineAfterUs((uint64)TimeoutMs*1000u);
+    xrtMutexLock(g_MdoAccount.Lock); ++g_MdoAccount.Acquirers;
+    uint64 epoch=g_MdoAccount.Epoch, member=g_MdoAccount.Tokens.MemberId;
+    xcancel* session=g_MdoAccount.SessionCancel ? xrtCancelRef(g_MdoAccount.SessionCancel):NULL;
+    for (;;) {
+        if (!session || !member || g_MdoAccount.Stopping || g_MdoAccount.Epoch!=epoch ||
+            g_MdoAccount.Tokens.MemberId!=member || xrtCancelRequested(session) ||
+            (Cancel && xrtCancelRequested(Cancel)) || MdoDeadlineExpired(until)) break;
+        if (g_MdoAccount.Tokens.Access[0] && g_MdoAccount.Tokens.Expires>MdoDeadlineAfterUs(30000000)) {
+            ok=MdoAccountLeaseLocked(Cancel,Lease); break;
+        }
+        if (!g_MdoAccount.Tokens.Refresh[0] || !MdoAccountQueueLocked(MDO_ACCOUNT_WORK_REFRESH)) break;
+        uint64 left=MdoDeadlineRemainingUs(until);
+        xrtCondWaitFor(g_MdoAccount.Changed,g_MdoAccount.Lock,MdoDurationMs(left<100000u ? left:100000u));
+    }
+    --g_MdoAccount.Acquirers; xrtCondBroadcast(g_MdoAccount.Changed); xrtMutexUnlock(g_MdoAccount.Lock);
+    xrtCancelDestroy(session);
+    if (!ok) MdoAccountRelease(Lease);
+    return ok;
+}
 bool MdoAccountAcquire(cstr Query, const xwork_tool_context* Context, MdoAccountLease* Lease)
 {
     size_t slot = MDO_ACCOUNT_WAIT_MAX, i; bool ok = false;

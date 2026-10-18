@@ -39,6 +39,11 @@ bool MdoAccountAcquire(cstr Query, const xwork_tool_context* Context,
  * prompt/waiter. An expired token queues refresh and returns unavailable.
  * Logout/account switch cancels acquired leases through the same authority. */
 bool MdoAccountAcquireService(xcancel* Cancel, MdoAccountLease* Lease);
+/* Noninteractive background-worker acquisition, bounded to 1..30000 ms.
+ * Waits for an existing session's refresh; never opens a login prompt and
+ * never crosses logout, login attempts, or replacement of the session. */
+bool MdoAccountAcquireServiceWait(xcancel* Cancel, uint32 TimeoutMs,
+    MdoAccountLease* Lease);
 void MdoAccountRelease(MdoAccountLease* Lease);
 bool MdoAccountRejectAccess(const MdoAccountLease* Lease);
 void MdoAccountSearchStatus(uint16 Status);

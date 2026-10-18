@@ -98,8 +98,10 @@ def main():
     parser.add_argument('--idle-every',type=float,default=1800); parser.add_argument('--idle-seconds',type=float,default=70)
     parser.add_argument('--reconnect-every',type=float,default=3600)
     parser.add_argument('--exercise-expiry',action='store_true',help='short regression only: make local access due while retaining the session')
+    parser.add_argument('--refresh-delay-ms',type=int,default=0,help='short fixture only: delay its native refresh client, never production or long acceptance')
     args=parser.parse_args(); assert 20<=args.seconds<=7*86400
     assert not args.exercise_expiry or args.seconds<3600,'never accelerate expiry in 72h acceptance'
+    assert 0<=args.refresh_delay_ms<=2000 and (not args.refresh_delay_ms or args.seconds<3600)
     assert min(args.period,args.upload_every,args.idle_every,args.idle_seconds,args.reconnect_every)>0
     state_path=args.state.resolve(); state_path.parent.mkdir(parents=True,exist_ok=True)
     assert not state_path.exists(),'use a new private receipt path; interrupted acceptance is never silently resumed'
@@ -110,6 +112,7 @@ def main():
         'reads':0,'writes':0,'receipts':0,'uploads':0,'live_events':0,'reconnects':0,'idle_checks':0,
         'largest_tick_gap':0,'acceptance_72h':False,'stage':'fixture setup','is_private_fixture':True}
     state['forced_expiry_enabled']=args.exercise_expiry
+    state['refresh_delay_ms']=args.refresh_delay_ms
     host_receipt=json.loads(args.host.with_name(args.host.name+'.build.json').read_text(encoding='utf-8'))
     assert host_receipt['binary_sha256']==state['host_sha256'],'host receipt does not match actual bytes'
     state['host_sdk_revision']=host_receipt['revision']
@@ -153,6 +156,13 @@ def main():
         save()
     def setup(site,home):
         native.setup(site,home)
+        if args.refresh_delay_ms:
+            client=site/'src/account/client.c'
+            needle='    return MdoAccountJsonClient(Origin,Path,Method,Body,Access,Cancel,Status,false);'
+            source=client.read_text(encoding='utf-8'); assert source.count(needle)==1
+            source=source.replace(needle,
+                f'    if (!strcmp(Path,"/api/v1/token/refresh")) xrtSleep({args.refresh_delay_ms});\n'+needle)
+            client.write_text(source,encoding='utf-8')
         state['site']=str(site); state['home']=str(home)
     def exercise(*,client,hello,app,device,call,bearer,website_port,clients):
         nonlocal started,wall,last_tick
@@ -211,7 +221,15 @@ def main():
                     value=app()
                     if value['job']['id']==refresh and value['job']['state'] in ('done','failed'): break
                     assert time.monotonic()<released,'controller release listing stalled'; time.sleep(.025)
-                assert value['job']['state']=='done'
+                state['release_job_status']=value.get('status')
+                error=value.get('error')
+                state['release_job_error']=error if isinstance(error,str) and error.isascii() and error.replace('_','').isalnum() else ''
+                if value['job']['state']!='done':
+                    account=app(path='/account')
+                    state['failed_job_account_state']=account.get('state')
+                    state['failed_job_refresh_available']=account.get('refresh_available')
+                    save(True)
+                assert value['job']['state']=='done','native controller listing failed'
                 item=next(v for v in value['listing']['devices'] if v['id']==device)
                 if not item['controlled']: break
                 assert time.monotonic()<released,'closed controller slot did not release'; time.sleep(.05)

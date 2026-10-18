@@ -22,7 +22,7 @@ from channel_e2e import WebSocket
 from remote_website_fixture import remote_website_fixture, WEBSITE_HOST
 
 
-def run(host: Path, website_host: Path, exercise=None, native_hook='', native_routes='', site_setup=None, observe=None, on_launch=None):
+def run(host: Path, website_host: Path, exercise=None, native_hook='', native_routes='', site_setup=None, observe=None, on_launch=None, before_logout=None):
     port = free_port()
     website, website_port, admin_user, admin_password = remote_website_fixture()
     (ROOT/'.build').mkdir(exist_ok=True)
@@ -211,6 +211,7 @@ def run(host: Path, website_host: Path, exercise=None, native_hook='', native_ro
         assert json.loads(new.recv()[1])['type'] == 'ready'
         assert json.loads(new.recv()[1])['runtime_id'] != old_runtime,'receipts cannot cross account bindings'
         new.close(); clients.remove(new)
+        if before_logout: before_logout(app)
         app('POST','/account/logout',{})
         until(lambda v: not v['allow_remote'],'logout closes device')
         if observe: observe('disabled',app)

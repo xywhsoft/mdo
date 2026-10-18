@@ -261,11 +261,14 @@ static void MdoRemoteRunJob(const MdoRemoteJob* Job, xcancel* Cancel)
 {
     MdoAccountLease lease = {0}; MdoRemoteIdentity identity = {0};
     uint16 status = 0u; cstr error = "remote_login_required";
-    xvalue *body = NULL, *result = NULL; bool ok = MdoAccountAcquireService(Cancel,&lease);
+    xvalue *body = NULL, *result = NULL;
+    bool ok = Job->Action == MDO_REMOTE_DISABLE ? MdoAccountAcquireService(Cancel,&lease) :
+        MdoAccountAcquireServiceWait(Cancel,20000u,&lease);
     if (!ok) {
         /* Local permission is already off; logout cannot make disabling it
          * fail merely because there is no session left to revoke remotely. */
         if (Job->Action == MDO_REMOTE_DISABLE) { ok = true; status = 200u; }
+        else if (MdoAccountHasSession()) error = "remote_service_unavailable";
         goto done;
     }
     error = "remote_service_unavailable";
