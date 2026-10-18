@@ -428,6 +428,14 @@ def verify_host_receipt(host: Path, lock: dict, full_host: bool, *, icon: bool =
         # Check actual application API references before creating a release.
         # This also guards future mdo changes that need an additional xrt root.
         available = set(receipt.get("xrt_symbols", []))
+        extension_symbols = receipt.get("extension_symbols", {})
+        if not isinstance(extension_symbols, dict):
+            raise BuildError("host extension API receipt is invalid; rebuild the host")
+        for name in lock["xserver"]["required_extensions"]:
+            names = extension_symbols.get(name, [])
+            if not isinstance(names, list) or any(not isinstance(symbol, str) for symbol in names):
+                raise BuildError("host extension API receipt is invalid; rebuild the host")
+            available.update(names)
         used = set()
         for path in APP.rglob("*"):
             if path.suffix not in (".c", ".h") or "generated" in path.relative_to(APP).parts:
@@ -440,7 +448,7 @@ def verify_host_receipt(host: Path, lock: dict, full_host: bool, *, icon: bool =
             used.update(re.findall(r"\b(xrt[A-Za-z0-9_]+)\s*\(", source))
         missing = sorted(used - available)
         if missing:
-            raise BuildError("compact host is missing application APIs: " + ", ".join(missing) + "; extend tools/host-profile.json")
+            raise BuildError("compact host is missing application APIs: " + ", ".join(missing) + "; check tools/host-profile.json and selected extension exports")
 
 
 def verify_linux_host_abi(receipt: dict, libc: str, frontend: str, maximum: str) -> None:

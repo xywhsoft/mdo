@@ -7,12 +7,13 @@
     "single_header_sha256": "015f5b19e07dd1fbfb085c1fd096cf69c813b03bdd9dc94b29ae8b5c471cd18a"
   },
   "xserver": {
-    "commit": "25200032fbea715784231795c4902e88bd4f473b",
+    "commit": "5b249f0618ead9c052d3efc619fd766ebcfb7512",
     "version": "1.0.0",
     "required_extensions": [
       "xwork",
       "webview",
-      "image"
+      "image",
+      "xrudp"
     ],
     "native_extensions": {
       "image": {
@@ -22,7 +23,7 @@
     },
     "source_bundle": {
       "path": "tools/dependencies/xs-xrt-current.bundle",
-      "sha256": "7c86d1d48ff25b95585e178d92be2be8c166a59df46770b40f6ebf264be672b5",
+      "sha256": "5924d010c5994dd4f8b63ae45f70968b202211f83dcf7cb50558ba8f1f9ae86f",
       "ref": "refs/heads/master"
     }
   },

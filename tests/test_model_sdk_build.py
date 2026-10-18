@@ -33,5 +33,28 @@ class ModelSdkBuildTests(unittest.TestCase):
                 with self.assertRaisesRegex(BUILD.BuildError, 'xrtUnusedApi'):
                     BUILD.verify_host_receipt(host, lock, False)
 
+    def test_xrt_prefix_extension_requires_its_actual_selected_export(self):
+        lock = json.loads((ROOT / 'deps.lock').read_text(encoding='utf8'))
+        with tempfile.TemporaryDirectory(prefix='mdo-xrudp-sdk-') as temporary:
+            base = Path(temporary); app = base / 'app'; app.mkdir()
+            host = base / 'xs'; host.write_bytes(b'fixture')
+            source = app / 'client.c'
+            source.write_text('void f(void){xrtRudpEndpointBind();xrtFree(0);}\n', encoding='utf8')
+            receipt = {'schema_version': 1, 'profile_sha256': BUILD.host_profile_digest(False),
+                'revision': lock['xserver']['commit'], 'extensions': lock['xserver']['required_extensions'],
+                'binary_sha256': hashlib.sha256(host.read_bytes()).hexdigest(), 'xrt_symbols': ['xrtFree'],
+                'extension_symbols': {'xrudp': ['xrtRudpEndpointBind']}}
+            path = host.with_name('xs.build.json')
+            with patch.object(BUILD, 'APP', app):
+                path.write_text(json.dumps(receipt), encoding='utf8')
+                BUILD.verify_host_receipt(host, lock, False)
+                for exports in ({}, {'not-selected': ['xrtRudpEndpointBind']}, {'xrudp': []}):
+                    path.write_text(json.dumps({**receipt, 'extension_symbols': exports}), encoding='utf8')
+                    with self.assertRaisesRegex(BUILD.BuildError, 'xrtRudpEndpointBind'):
+                        BUILD.verify_host_receipt(host, lock, False)
+                path.write_text(json.dumps({**receipt, 'extension_symbols': {'xrudp': None}}), encoding='utf8')
+                with self.assertRaisesRegex(BUILD.BuildError, 'invalid'):
+                    BUILD.verify_host_receipt(host, lock, False)
+
 
 if __name__ == '__main__': unittest.main(verbosity=2)

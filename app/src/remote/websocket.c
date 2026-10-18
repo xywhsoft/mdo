@@ -11,6 +11,9 @@
 #define MDO_REMOTE_IDLE_US 60000000u
 
 struct MdoRemoteSocket {
+#if defined(XS_USE_XRUDP)
+    MdoRudpTransport* Rudp;
+#endif
     xnetstream* Tcp;
     xtlsstream* Tls;
     xcancel* Cancel;
@@ -58,6 +61,9 @@ static bool MdoRemoteFuture(xfuture* Future, uint64 Deadline, xcancel* Cancel)
 }
 static bool MdoRemoteSocketAlive(MdoRemoteSocket* Socket)
 {
+#if defined(XS_USE_XRUDP)
+    if (Socket && Socket->Rudp) return !Socket->Failed && MdoRudpConnected(Socket->Rudp);
+#endif
     return Socket && !Socket->Failed && !xrtCancelRequested(Socket->Cancel) &&
         (Socket->Tls ? xrtTlsStreamState(Socket->Tls) == XTLS_STREAM_OPEN :
         Socket->Tcp && xrtNetStreamState(Socket->Tcp) == XNET_STREAM_OPEN);
@@ -135,6 +141,9 @@ static bool MdoRemoteFail(MdoRemoteSocket* Socket, uint16 Code)
 void MdoRemoteSocketDestroy(MdoRemoteSocket* Socket)
 {
     if (!Socket) return;
+#if defined(XS_USE_XRUDP)
+    if (Socket->Rudp) { MdoRudpDestroy(Socket->Rudp); xrtSecureZero(Socket,sizeof(*Socket)); xrtFree(Socket); return; }
+#endif
     if (Socket->Ready && !Socket->CloseSent && MdoRemoteSocketAlive(Socket))
         (void)MdoRemoteFail(Socket,1000u);
     /* No callbacks contain application code. Abort bounds teardown even if
@@ -225,6 +234,13 @@ MdoRemoteSocket* MdoRemoteSocketOpen(MdoRemoteNet* Net,
 
 bool MdoRemoteSocketSend(MdoRemoteSocket* Socket, bool Binary, xbytesview Data)
 {
+#if defined(XS_USE_XRUDP)
+    if (Socket && Socket->Rudp) {
+        bool Sent=!Socket->Failed && MdoRudpSend(Socket->Rudp,Binary,Data);
+        if (!Sent) Socket->Failed=true;
+        return Sent;
+    }
+#endif
     if (!Socket || !Socket->Ready || Socket->CloseSent || !MdoRemoteSocketAlive(Socket) ||
         Data.Size > Socket->Limit || (Data.Size && !Data.Data)) return false;
     if (Socket->UpgradeHeadSize) {
@@ -237,12 +253,23 @@ bool MdoRemoteSocketSend(MdoRemoteSocket* Socket, bool Binary, xbytesview Data)
 }
 uint16 MdoRemoteSocketCloseCode(const MdoRemoteSocket* Socket)
 {
+#if defined(XS_USE_XRUDP)
+    if (Socket && Socket->Rudp) { MdoRudpInfo Info; MdoRudpGetInfo(Socket->Rudp,&Info); return Info.CloseCode; }
+#endif
     return Socket ? Socket->CloseCode : 0u;
 }
 bool MdoRemoteSocketPeerClosed(const MdoRemoteSocket* Socket)
-{ return Socket && Socket->PeerClosed; }
+{
+#if defined(XS_USE_XRUDP)
+    if (Socket && Socket->Rudp) { MdoRudpInfo Info; MdoRudpGetInfo(Socket->Rudp,&Info); return Info.PeerClosed; }
+#endif
+    return Socket && Socket->PeerClosed;
+}
 bool MdoRemoteSocketPoll(MdoRemoteSocket* Socket, MdoRemoteMessageProc Proc, void* Data)
 {
+#if defined(XS_USE_XRUDP)
+    if (Socket && Socket->Rudp) return !Socket->Failed && MdoRudpPoll(Socket->Rudp,Proc,Data);
+#endif
     if (!Socket || !Socket->Ready || Socket->Failed || !Proc || xrtCancelRequested(Socket->Cancel)) return false;
     if (Socket->UpgradeHeadSize) {
         if (!MdoRemoteRawSend(Socket,Socket->UpgradeHead,Socket->UpgradeHeadSize,Socket->UpgradeUntil)) return false;
@@ -304,3 +331,13 @@ bool MdoRemoteSocketPoll(MdoRemoteSocket* Socket, MdoRemoteMessageProc Proc, voi
 }
 #include "transfer.inc.c"
 #include "lan_socket.inc.c"
+#include "rudp.inc.c"
+#if defined(XS_USE_XRUDP)
+MdoRemoteSocket* MdoRemoteSocketAdoptRudp(MdoRudpTransport* Transport)
+{
+    if (!MdoRudpConnected(Transport)) return NULL;
+    MdoRemoteSocket* Socket=xrtCalloc(1,sizeof(*Socket));
+    if (Socket) { Socket->Rudp=Transport; Socket->Ready=true; }
+    return Socket;
+}
+#endif

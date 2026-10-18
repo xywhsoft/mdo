@@ -2,11 +2,13 @@
 #define MDO_REMOTE_NET_H
 
 #include <xsbase.h>
+#include "rudp.h"
 
 /* Internal outbound transport, never a browser-facing arbitrary URL API.
  * A retained host server owns Engine. All socket calls belong to one service
- * thread; other threads enqueue work or request cancellation. No app callback
- * is installed on an xrt network worker or retained beyond Poll. */
+ * thread; other threads enqueue work or request cancellation. App message
+ * callbacks run only inside Poll. The optional xrudp backend owns a private
+ * Engine and joins all of its internal callbacks before Destroy returns. */
 typedef struct MdoRemoteNet {
     xnetengine* Engine;
     xnetresolver* Resolver;
@@ -51,5 +53,10 @@ uint16 MdoRemoteSocketCloseCode(const MdoRemoteSocket* Socket);
  * protocol/application rejection. Local 1008 must not revoke device consent. */
 bool MdoRemoteSocketPeerClosed(const MdoRemoteSocket* Socket);
 void MdoRemoteSocketDestroy(MdoRemoteSocket* Socket);
+#if defined(XS_USE_XRUDP)
+/* Takes a confirmed, mutually pinned transport on success only. Account and
+ * request authorization still belongs to the existing bridge/relay owner. */
+MdoRemoteSocket* MdoRemoteSocketAdoptRudp(MdoRudpTransport* Transport);
+#endif
 
 #endif
