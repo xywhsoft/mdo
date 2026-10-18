@@ -63,7 +63,7 @@ MdoLan* MdoLanCreate(MdoRemoteNet* Net, MdoRemoteBridge* Bridge, xcancel* Cancel
     if (!Lan->Cancel || !Lan->Addresses || !Identity) goto fail;
     xtlslistenerconfig Config; xrtTlsListenerConfigInit(&Config);
     Config.Tls.Context=Net->Tls; Config.Tls.Identity=Identity;
-    Config.AcceptQueueLimit=4u; Config.HandshakeLimit=4u; Config.Stream.HandshakeTimeout=2000000u;
+    Config.AcceptQueueLimit=4u; Config.HandshakeLimit=4u; Config.Stream.HandshakeTimeout=2000;
     Config.Listen.AcceptConcurrency=2u; Config.Listen.AcceptQueueLimit=4u;
     Lan->Listener=xrtTlsListenerStart(Net->Engine,&Config,NULL,NULL,NULL);
     xrtTlsIdentityRelease(Identity); Identity=NULL;

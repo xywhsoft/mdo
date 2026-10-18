@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 import shutil
+import socket
 import subprocess
 import tempfile
 import time
@@ -66,10 +67,31 @@ def controller_logout_probe(offer, relay_hello, relay):
             finally:
                 if gateway: gateway.close()
                 process.terminate(); process.wait(timeout=5)
+def handshake_slots_expire(offer):
+    # Fill the real four-slot TLS listener without sending ClientHello. The
+    # native budget is two seconds, including with the latest millisecond XRT.
+    peers = []
+    try:
+        for _ in range(4):
+            peers.append(socket.create_connection(("127.0.0.1", offer["port"]), timeout=2))
+        deadline = time.monotonic() + 4
+        for peer in peers:
+            peer.settimeout(max(.05, deadline-time.monotonic()))
+            try:
+                while peer.recv(1024):
+                    assert time.monotonic() < deadline
+            except (ConnectionResetError, ConnectionAbortedError):
+                pass
+        assert time.monotonic() < deadline, "LAN handshake slots outlived their two-second budget"
+        print("PASS four silent LAN TLS handshakes expire without occupying the listener")
+    finally:
+        for peer in peers: peer.close()
+
 def exercise(*, client, hello, app, device, call, bearer, website_port, clients):
     assert "direct" in hello, "target failed to create ephemeral LAN identity/listener"
     offer = {**hello["direct"], "addresses":["127.0.0.1"]}
     assert offer["version"] == 1 and len(offer["certificate"]) < 1536
+    handshake_slots_expire(offer)
     port = json.loads((SITE/"xs.json").read_text())["services"][0]["port"]
     _, headers, _ = request(port,"GET","/api/v1/project-purge-intent")
     token = headers["X-Mdo-Write-Token"]
