@@ -30,10 +30,16 @@ from test_rudp_discovery import Oracles
 
 HOOK='''static bool SoakStats(MdoApiContext* C) {
     xvalue* V=xrtValueObject();
-    if (!V || !MdoAccountSetUInt(V,"transports",xrtAtomic32Load(&g_MdoRudpTransports,XMEMORY_ACQUIRE))) { xrtValueRelease(V); return false; }
+    if (!V || !MdoAccountSetUInt(V,"transports",xrtAtomic32Load(&g_MdoRudpTransports,XMEMORY_ACQUIRE)) ||
+        !MdoAccountSetBool(V,"account_session",MdoAccountHasSession())) { xrtValueRelease(V); return false; }
     return MdoApiReplySuccessTake(C,200u,V,NULL);
+}
+static bool SoakExpireAccess(MdoApiContext* C) {
+    xrtMutexLock(g_MdoAccount.Lock); g_MdoAccount.Tokens.Expires=0;
+    xrtMutexUnlock(g_MdoAccount.Lock); return SoakStats(C);
 }'''
 ROUTE=' {"/api/v1/test-soak-stats",XHTTP_METHOD_GET,"GET",SoakStats,false},'
+EXPIRY_ROUTE=' {"/api/v1/test-soak-expire",XHTTP_METHOD_POST,"POST",SoakExpireAccess,false},'
 
 
 def source_hash(path):
@@ -80,7 +86,9 @@ def main():
     parser.add_argument('--period',type=float,default=5); parser.add_argument('--upload-every',type=float,default=600)
     parser.add_argument('--idle-every',type=float,default=1800); parser.add_argument('--idle-seconds',type=float,default=70)
     parser.add_argument('--reconnect-every',type=float,default=3600)
+    parser.add_argument('--exercise-expiry',action='store_true',help='short regression only: make local access due while retaining the session')
     args=parser.parse_args(); assert 20<=args.seconds<=7*86400
+    assert not args.exercise_expiry or args.seconds<3600,'never accelerate expiry in 72h acceptance'
     assert min(args.period,args.upload_every,args.idle_every,args.idle_seconds,args.reconnect_every)>0
     state_path=args.state.resolve(); state_path.parent.mkdir(parents=True,exist_ok=True)
     assert not state_path.exists(),'use a new private receipt path; interrupted acceptance is never silently resumed'
@@ -90,6 +98,7 @@ def main():
         'host_sha256':hashlib.sha256(args.host.read_bytes()).hexdigest(),'hosts':[],
         'reads':0,'writes':0,'receipts':0,'uploads':0,'live_events':0,'reconnects':0,'idle_checks':0,
         'largest_tick_gap':0,'acceptance_72h':False,'stage':'fixture setup','is_private_fixture':True}
+    state['forced_expiry_enabled']=args.exercise_expiry
     host_receipt=json.loads(args.host.with_name(args.host.name+'.build.json').read_text(encoding='utf-8'))
     assert host_receipt['binary_sha256']==state['host_sha256'],'host receipt does not match actual bytes'
     state['host_sdk_revision']=host_receipt['revision']
@@ -213,6 +222,7 @@ def main():
             state['controller_start_type']=kind if isinstance(kind,str) and kind.isascii() and kind.replace('_','').isalnum() else 'invalid'
             assert opcode==1 and first['type']=='ready'
             hello=json.loads(client.recv()[1]); connect(hello)
+            assert app(path='/account')['state']=='signed_in','native ticket did not renew access'
             state['reconnects']+=1
         def write_title():
             state['stage']='title write + cross-route receipt'
@@ -251,12 +261,18 @@ def main():
             started=time.monotonic(); wall=time.time(); last_tick=started
             state.update(status='running',started_unix=wall,stage='initial business check',session_id=sid)
             write_title(); upload(); tick(); save(True)
+            if args.exercise_expiry:
+                assert app('POST','/test-soak-expire',{})['account_session']
+                assert app(path='/account')['state']=='refreshing'
+                state['short_expiry_exercised']=True
             next_upload=started+args.upload_every; next_idle=started+args.idle_every; next_reconnect=started+args.reconnect_every
             while time.monotonic()-started<args.seconds:
                 tick(); state['stage']='persistent direct HTTP/live'
                 assert rpc.json('GET',f'/api/v1/projects/default/sessions/{sid}')[2]==200; state['reads']+=1; events()
                 stats=app(path='/test-soak-stats'); assert stats['transports']==2,'native transport leak or direct loss'
-                assert app(path='/account')['state']=='signed_in','account expired during active soak'
+                assert stats['account_session'],'native account session expired during active soak'
+                account=app(path='/account'); state['native_account_state']=account['state']
+                assert account['refresh_available'] and account['state'] in ('signed_in','refreshing'),'native credentials were lost'
                 now=time.monotonic()
                 if now>=next_upload: write_title(); upload(); next_upload=now+args.upload_every
                 if now>=next_idle:
@@ -267,7 +283,15 @@ def main():
                     state['stage']='controlled fresh peer + native account ticket renewal'; reconnect(); next_reconnect=time.monotonic()+args.reconnect_every
                 pump(min(args.period,max(0,args.seconds-(time.monotonic()-started))))
             state['stage']='final business verification'; write_title()
-            assert app(path='/account')['state']=='signed_in','native account expired during soak'
+            # A genuine native authenticated read must refresh a due access
+            # token itself; no test code installs native tokens or logs in.
+            refresh=app('POST','/connector/devices',{'action':'refresh'},202)['job']['id']
+            end=time.monotonic()+20
+            while True:
+                value=app()
+                if value['job']['id']==refresh and value['job']['state'] in ('done','failed'): break
+                assert time.monotonic()<end,'final native account renewal stalled'; time.sleep(.05)
+            assert value['job']['state']=='done' and app(path='/account')['state']=='signed_in','native account could not renew itself'
             state['duration_passed']=time.monotonic()-started>=args.seconds
             state['acceptance_72h']=args.seconds>=72*3600 and state['duration_passed']
             # Only the independent fixture observer signs in again for the
@@ -290,7 +314,8 @@ def main():
             assert kernel.SetThreadExecutionState(0x80000001),'temporary sleep inhibition failed'; inhibited=True
         with Oracles() as oracle:
             native.ORACLE=oracle; native.DUAL=True
-            run(args.host.resolve(),args.website_host.resolve(),exercise,native_hook=HOOK,native_routes=ROUTE,site_setup=setup,on_launch=launched)
+            run(args.host.resolve(),args.website_host.resolve(),exercise,native_hook=HOOK,
+                native_routes=ROUTE+(EXPIRY_ROUTE if args.exercise_expiry else ''),site_setup=setup,on_launch=launched)
             assert not oracle.errors,'UDP fixture failure'
         state['fixture_lifecycle_passed']=True; save(True)
         return 0
