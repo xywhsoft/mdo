@@ -8,7 +8,7 @@ MdoLan* MdoLanCreate(MdoRemoteNet* Net, MdoRemoteBridge* Bridge, xcancel* Cancel
 void MdoLanDestroy(MdoLan* Lan);
 bool MdoLanPoll(MdoLan* Lan);
 void MdoLanPeerClose(MdoLan* Lan, cstr Peer);
-bool MdoLanEmit(MdoLan* Lan, xbytesview Envelope, bool* Handled);
+bool MdoLanEmit(MdoLan* Lan, uint64 Route, xbytesview Envelope, bool* Handled);
 xvalue* MdoLanOffer(cstr Peer, bool ReadOnly, void* Data);
 bool MdoLanGatewayInit(XS_ServerInfo* Server);
 void MdoLanGatewayUnit(void);

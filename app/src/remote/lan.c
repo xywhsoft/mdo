@@ -7,7 +7,7 @@
 #define MDO_LAN_PEERS 4u
 #define MDO_LAN_PROTOCOL "mdo.lan.v1"
 typedef struct MdoLanGrant { char Peer[33], Token[65]; bool ReadOnly; uint64 Until; } MdoLanGrant;
-typedef struct MdoLanChannel { MdoRemoteSocket* Socket; size_t Grant; bool Ready; char Requests[8][33]; } MdoLanChannel;
+typedef struct MdoLanChannel { MdoRemoteSocket* Socket; size_t Grant; bool Ready; uint64 Route; } MdoLanChannel;
 struct MdoLan {
     MdoRemoteBridge* Bridge; xcancel* Cancel; xtlslistener* Listener;
     char Certificate[1537]; uint16 Port; xvalue* Addresses;
@@ -29,13 +29,7 @@ static cstr MdoLanText(const xvalue* Value)
 static void MdoLanChannelClose(MdoLan* Lan, size_t Slot)
 {
     MdoLanChannel* Channel=&Lan->Channels[Slot];
-    if (Channel->Ready) {
-        for (size_t i=0u;i<8u;++i) if (Channel->Requests[i][0]) {
-            char Json[128]; int Size=snprintf(Json,sizeof(Json),"{\"type\":\"cancel\",\"id\":\"%s\"}",Channel->Requests[i]);
-            (void)MdoRemoteBridgeInput(Lan->Bridge,Lan->Grants[Channel->Grant].Peer,false,
-                (xbytesview){(const uint8*)Json,(size_t)Size});
-        }
-    }
+    if (Channel->Route) MdoRemoteBridgeRouteClose(Lan->Bridge,Channel->Route);
     MdoRemoteSocketDestroy(Channel->Socket); memset(Channel,0,sizeof(*Channel));
 }
 void MdoLanPeerClose(MdoLan* Lan, cstr Peer)
@@ -123,24 +117,7 @@ static bool MdoLanAuthorize(const xhttp1head* Head, void* Data)
 static bool MdoLanMessage(bool Binary, xbytesview Bytes, void* Data)
 {
     MdoLanContext* Context=Data; MdoLan* Lan=Context->Lan; MdoLanChannel* Channel=&Lan->Channels[Context->Slot];
-    if (!Binary) {
-        xjsonreadconfig Limits; xrtJsonReadConfigInit(&Limits); Limits.MaxInputBytes=16384u; Limits.MaxValues=128u;
-        xvalue* Value=xrtJsonRead(xrtStrViewN((cstr)Bytes.Data,Bytes.Size),&Limits);
-        cstr Type=MdoAccountText(Value,"type",32u), Id=MdoAccountText(Value,"id",32u);
-        if (Type && Id && MdoRemoteIdValid(Id) && (!strcmp(Type,"request") || !strcmp(Type,"live_open") || !strcmp(Type,"receipt"))) {
-            bool Exists=false;
-            for (size_t i=0u;i<8u;++i) if (!strcmp(Channel->Requests[i],Id)) Exists=true;
-            if (!Exists) for (size_t i=0u;i<8u;++i) if (!Channel->Requests[i][0]) { strcpy(Channel->Requests[i],Id); Exists=true; break; }
-            /* Never admit a request whose response cannot be routed back. */
-            if (!Exists) { xrtValueRelease(Value); return false; }
-        }
-        /* Explicit cancellation has no terminal reply. Reclaim its route
-         * slot immediately; the controller ignores any late cancelled IDs. */
-        if (Type && Id && (!strcmp(Type,"cancel") || !strcmp(Type,"live_close")))
-            for (size_t i=0u;i<8u;++i) if (!strcmp(Channel->Requests[i],Id)) Channel->Requests[i][0]=0;
-        xrtValueRelease(Value);
-    }
-    return MdoRemoteBridgeInput(Lan->Bridge,Lan->Grants[Channel->Grant].Peer,Binary,Bytes);
+    return MdoRemoteBridgeInputRouted(Lan->Bridge,Lan->Grants[Channel->Grant].Peer,Channel->Route,Binary,Bytes);
 }
 bool MdoLanPoll(MdoLan* Lan)
 {
@@ -157,6 +134,8 @@ bool MdoLanPoll(MdoLan* Lan)
             int Result=MdoRemoteSocketUpgrade(Channel->Socket,MDO_LAN_PROTOCOL,MdoLanAuthorize,&Context);
             if (Result<0) { MdoLanChannelClose(Lan,i); continue; }
             if (!Result) continue;
+            Channel->Route=MdoRemoteBridgeRoute(Lan->Bridge);
+            if (!Channel->Route) { MdoLanChannelClose(Lan,i); continue; }
             Channel->Ready=true;
             char Ready[256]; MdoLanGrant* Grant=&Lan->Grants[Channel->Grant];
             int Size=snprintf(Ready,sizeof(Ready),"{\"type\":\"direct_ready\",\"version\":1,\"runtime_id\":\"%s\",\"peer_id\":\"%s\",\"mode\":\"%s\"}",
@@ -167,35 +146,18 @@ bool MdoLanPoll(MdoLan* Lan)
     }
     return true;
 }
-bool MdoLanEmit(MdoLan* Lan, xbytesview Envelope, bool* Handled)
+bool MdoLanEmit(MdoLan* Lan, uint64 Route, xbytesview Envelope, bool* Handled)
 {
-    *Handled=false; if (!Lan || Envelope.Size<21u) return true;
+    *Handled=false; if (!Lan || !Route || Envelope.Size<21u) return true;
     char Peer[33]; static const char Hex[]="0123456789abcdef";
     for (size_t i=0u;i<16u;++i) { Peer[i*2u]=Hex[Envelope.Data[4u+i]>>4u]; Peer[i*2u+1u]=Hex[Envelope.Data[4u+i]&15u]; } Peer[32]=0;
     for (size_t i=0u;i<MDO_LAN_PEERS;++i) {
         MdoLanChannel* Channel=&Lan->Channels[i];
-        if (!Channel->Ready || strcmp(Peer,Lan->Grants[Channel->Grant].Peer)) continue;
-        /* HTTP/live streams remain on the route where they were admitted.
-         * Control-plane notices and old in-flight relay requests stay relay. */
-        char Id[33]=""; bool Terminal=false;
-        if (Envelope.Data[20u]==2u && Envelope.Size>=50u) {
-            for (size_t j=0u;j<16u;++j) { Id[j*2u]=Hex[Envelope.Data[26u+j]>>4u]; Id[j*2u+1u]=Hex[Envelope.Data[26u+j]&15u]; }
-        } else if (Envelope.Data[20u]==1u) {
-            xjsonreadconfig Limits; xrtJsonReadConfigInit(&Limits); Limits.MaxInputBytes=16384u; Limits.MaxValues=128u;
-            xvalue* Value=xrtJsonRead(xrtStrViewN((cstr)Envelope.Data+21u,Envelope.Size-21u),&Limits);
-            cstr Name=MdoAccountText(Value,"id",32u), Type=MdoAccountText(Value,"type",32u);
-            if (MdoRemoteIdValid(Name)) strcpy(Id,Name);
-            Terminal=Type && (!strcmp(Type,"end") || !strcmp(Type,"error") || !strcmp(Type,"receipt") || !strcmp(Type,"live_closed"));
-            xrtValueRelease(Value);
-        }
-        for (size_t j=0u;j<8u;++j) if (Id[0] && !strcmp(Channel->Requests[j],Id)) {
-            *Handled=true;
-            bool Ok=MdoRemoteSocketSend(Channel->Socket,Envelope.Data[20u]==2u,
-                (xbytesview){Envelope.Data+21u,Envelope.Size-21u});
-            if (Terminal) Channel->Requests[j][0]=0;
-            if (!Ok) MdoLanChannelClose(Lan,i);
-            return true; /* A direct failure must not tear down the relay. */
-        }
+        if (!Channel->Ready || Channel->Route!=Route || strcmp(Peer,Lan->Grants[Channel->Grant].Peer)) continue;
+        *Handled=true;
+        if (!MdoRemoteSocketSend(Channel->Socket,Envelope.Data[20u]==2u,
+            (xbytesview){Envelope.Data+21u,Envelope.Size-21u})) MdoLanChannelClose(Lan,i);
+        return true;
     }
     return true;
 }

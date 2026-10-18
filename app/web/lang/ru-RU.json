@@ -1539,6 +1539,7 @@
   "account.login_rate_limited": "Слишком много попыток входа. Повторите позже.",
   "devices.local": "Это устройство",
   "devices.lan": "Прямое соединение по локальной сети",
+  "devices.xrudp": "Прямое соединение устройств",
   "devices.relay": "Серверный ретранслятор",
   "devices.choose": "Выбрать устройство",
   "devices.target": "Цель: {name}",

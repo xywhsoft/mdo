@@ -332,6 +332,7 @@ bool MdoRemoteSocketPoll(MdoRemoteSocket* Socket, MdoRemoteMessageProc Proc, voi
 #include "transfer.inc.c"
 #include "lan_socket.inc.c"
 #include "rudp.inc.c"
+#include "rendezvous.inc.c"
 #if defined(XS_USE_XRUDP)
 MdoRemoteSocket* MdoRemoteSocketAdoptRudp(MdoRudpTransport* Transport)
 {

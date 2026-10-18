@@ -1,22 +1,58 @@
 #include "../../include/mdo/time.h"
+#include "rendezvous.h"
 /* Browser/WebView only talks to its own loopback xs. The native gateway
  * verifies the leaf against the ephemeral CA learned through the account relay,
  * preserving TLS on the LAN without installing a machine/browser CA. */
 typedef struct MdoLanGateway {
     MdoRemoteSocket *Browser,*Target; MdoRemoteNet Net; XS_ServerInfo* Server; xcancel* Cancel; bool Opened;
     MdoAccountLease Lease;
+#if defined(XS_USE_XRUDP)
+    MdoPeerSession* Rudp;
+#endif
 } MdoLanGateway;
 static struct { xmutex* Lock; xtaskpool* Pool; xfuture* Futures[4]; xcancel* Stop; XS_ServerInfo* Server; bool Stopping; } g_MdoLanGateway;
 static bool MdoLanGatewayTarget(bool Binary, xbytesview Bytes, void* Data)
 { return MdoRemoteSocketSend(((MdoLanGateway*)Data)->Browser,Binary,Bytes); }
+#if defined(XS_USE_XRUDP)
+static bool MdoLanGatewaySignal(const xvalue* Signal, void* Data)
+{
+    MdoLanGateway* Gateway=Data; xvalue* V=xrtValueObject();
+    bool Ok=V && MdoAccountSetString(V,"type","rudp_forward") &&
+        xrtValueObjectSetNew(V,XRT_STR_LITERAL("payload"),xrtValueDeepClone(Signal));
+    size_t Size=0; char* Json=Ok ? xrtJsonStringify(V,false,&Size):NULL;
+    Ok=Json && Size<=4096 && MdoRemoteSocketSend(Gateway->Browser,false,(xbytesview){(const uint8*)Json,Size});
+    xrtFree(Json); xrtValueRelease(V); return Ok;
+}
+#endif
 static bool MdoLanGatewayBrowser(bool Binary, xbytesview Bytes, void* Data)
 {
     MdoLanGateway* Gateway=Data;
     if (Gateway->Target) return MdoRemoteSocketSend(Gateway->Target,Binary,Bytes);
+#if defined(XS_USE_XRUDP)
+    if (Gateway->Rudp) {
+        if (Binary || Bytes.Size>4096) return false;
+        xjsonreadconfig Limits; xrtJsonReadConfigInit(&Limits); Limits.MaxInputBytes=4096; Limits.MaxValues=128; Limits.MaxDepth=5;
+        xvalue* V=xrtJsonRead(xrtStrViewN((cstr)Bytes.Data,Bytes.Size),&Limits); cstr Type=MdoAccountText(V,"type",24);
+        bool Ok=Type && !strcmp(Type,"rudp_signal") && xrtValueCount(V)==2 &&
+            MdoPeerInput(Gateway->Rudp,xrtValueObjectGet(V,XRT_STR_LITERAL("payload")));
+        xrtValueRelease(V); return Ok;
+    }
+#endif
     if (Gateway->Opened || Binary || Bytes.Size>4096u) return false;
     Gateway->Opened=true;
     xjsonreadconfig Limits; xrtJsonReadConfigInit(&Limits); Limits.MaxInputBytes=4096u; Limits.MaxValues=32u; Limits.MaxDepth=3u;
     xvalue* Value=xrtJsonRead(xrtStrViewN((cstr)Bytes.Data,Bytes.Size),&Limits);
+#if defined(XS_USE_XRUDP)
+    cstr Transport=MdoAccountText(Value,"transport",16);
+    if (Transport && !strcmp(Transport,"xrudp")) {
+        bool Ready=xrtValueType(Value)==XVALUE_OBJECT && xrtValueCount(Value)==2 &&
+            MdoRemoteNetInit(&Gateway->Net,Gateway->Server->Engine,NULL);
+        MdoPeerPolicy Policy; MdoPeerPolicyInit(&Policy,&Gateway->Net,MDO_ACCOUNT_SERVICE_ORIGIN);
+        if (Ready) Gateway->Rudp=MdoPeerInitiate(xrtValueObjectGet(Value,XRT_STR_LITERAL("offer")),Gateway->Lease.MemberId,
+            &Policy,Gateway->Lease.Cancel,MdoLanGatewaySignal,Gateway);
+        xrtValueRelease(Value); return Gateway->Rudp!=NULL;
+    }
+#endif
     cstr Certificate=MdoAccountText(Value,"certificate",1536u), Token=MdoAccountText(Value,"token",64u), Peer=MdoAccountText(Value,"peer_id",32u);
     const xvalue* Addresses=xrtValueObjectGet(Value,XRT_STR_LITERAL("addresses")); uint64 Port=0u, Version=0u;
     uint8 Der[1024]; size_t Size=0u; xx509store* Trust=NULL; bool Ok=false;
@@ -50,13 +86,28 @@ static xtaskoutcome MdoLanGatewayRun(xcancel* Cancel, ptr Data, xtaskvalue* Valu
     if (!MdoAccountAcquireService(Gateway->Cancel,&Gateway->Lease)) return XTASK_FAILED;
     while (!xrtCancelRequested(Gateway->Lease.Cancel) && (Gateway->Opened || !MdoDeadlineExpired(Until)) &&
         MdoRemoteSocketPoll(Gateway->Browser,MdoLanGatewayBrowser,Gateway) &&
-        (!Gateway->Target || MdoRemoteSocketPoll(Gateway->Target,MdoLanGatewayTarget,Gateway))) xrtSleep(5u);
+        (!Gateway->Target || MdoRemoteSocketPoll(Gateway->Target,MdoLanGatewayTarget,Gateway))) {
+#if defined(XS_USE_XRUDP)
+        if (Gateway->Rudp && !Gateway->Target) {
+            MdoPeerInfo Info;
+            if (!MdoPeerPoll(Gateway->Rudp)) break;
+            if (MdoPeerGetInfo(Gateway->Rudp,&Info) && Info.Ready) {
+                Gateway->Target=MdoPeerTakeSocket(Gateway->Rudp); if (!Gateway->Target) break;
+            }
+        }
+#endif
+        xrtSleep(5u);
+    }
     return XTASK_SUCCESS;
 }
 static void MdoLanGatewayDrop(ptr Value, ptr Data)
 {
     (void)Data; MdoLanGateway* Gateway=Value;
-    MdoRemoteSocketDestroy(Gateway->Target); MdoRemoteSocketDestroy(Gateway->Browser); MdoRemoteNetUnit(&Gateway->Net);
+    MdoRemoteSocketDestroy(Gateway->Target);
+#if defined(XS_USE_XRUDP)
+    MdoPeerSessionDestroy(Gateway->Rudp);
+#endif
+    MdoRemoteSocketDestroy(Gateway->Browser); MdoRemoteNetUnit(&Gateway->Net);
     MdoAccountRelease(&Gateway->Lease);
     xrtCancelDestroy(Gateway->Cancel); xsServerRelease(Gateway->Server); xrtFree(Gateway);
 }

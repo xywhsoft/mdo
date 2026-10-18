@@ -45,7 +45,7 @@ typedef struct MdoBridgeRequest {
     xthread* Thread;
     MdoBridgeCommand *Commands, *LastCommand;
     MdoRemoteReceipt* Receipt;
-    uint64 Serial, PeerGeneration, Until, Received, Sent, Acknowledged, LiveSequence;
+    uint64 Serial, PeerGeneration, Until, Received, Sent, Acknowledged, LiveSequence, Route;
     size_t Peer, Slot, Packets;
     size_t Window;
     uint16 Status;
@@ -55,7 +55,7 @@ typedef struct MdoBridgeRequest {
 typedef struct MdoBridgePacket {
     struct MdoBridgePacket* Next;
     size_t Peer, Slot, Size;
-    uint64 PeerGeneration, RequestSerial;
+    uint64 PeerGeneration, RequestSerial, Route;
     uint8 Bytes[];
 } MdoBridgePacket;
 struct MdoRemoteBridge {
@@ -69,9 +69,12 @@ struct MdoRemoteBridge {
     MdoBridgePacket *First, *Last;
     size_t Bytes, Packets, UploadBytes;
     uint64 Serial;
+    uint64 RouteSerial, InputRoute;
     bool Stopping;
     MdoRemoteBridgeOffer Offer;
     void* OfferData;
+    MdoRemoteBridgeOffer Rendezvous;
+    void* RendezvousData;
 };
 
 static int32 MdoBridgeHttpWorker(void* Data);
@@ -141,6 +144,7 @@ static bool MdoBridgeQueue(MdoRemoteBridge* Bridge, size_t Peer, MdoBridgeReques
     packet->Next = NULL; packet->Peer = Peer; packet->PeerGeneration = peer->Generation;
     packet->Slot = Request ? Request->Slot : SIZE_MAX;
     packet->RequestSerial = Request ? Request->Serial : 0u; packet->Size = size;
+    packet->Route = Request ? Request->Route : Bridge->InputRoute;
     memcpy(packet->Bytes,"MDR1",4u); memcpy(packet->Bytes+4u,peer->Bytes,16u); packet->Bytes[20] = Binary ? 2u : 1u;
     if (Payload.Size) memcpy(packet->Bytes+MDO_REMOTE_RELAY_HEADER,Payload.Data,Payload.Size);
     if (Bridge->Last) Bridge->Last->Next = packet; else Bridge->First = packet;
@@ -285,7 +289,7 @@ static bool MdoBridgeAdmit(MdoRemoteBridge* Bridge, size_t Peer, const xvalue* V
         if (admission != MDO_REMOTE_RECEIPT_ADMITTED) return MdoBridgeReceiptReply(Bridge,Peer,id,admission,receipt);
     }
     memset(request,0,sizeof(*request)); request->Bridge = Bridge;
-    request->Peer = Peer; request->PeerGeneration = Bridge->Peers[Peer].Generation;
+    request->Peer = Peer; request->PeerGeneration = Bridge->Peers[Peer].Generation; request->Route=Bridge->InputRoute;
     request->Window = (size_t)window;
     request->Slot = (size_t)(request-Bridge->Requests); request->Serial = ++Bridge->Serial;
     request->Receipt = receipt; strcpy(request->Id,id); strcpy(request->Method,method); strcpy(request->Path,path);
@@ -341,7 +345,7 @@ static bool MdoBridgeLiveOpen(MdoRemoteBridge* Bridge, size_t Peer, const xvalue
     }
     if (!request || MdoBridgeRequestFind(Bridge,Peer,id)) return MdoBridgeError(Bridge,Peer,id,"live_capacity","not_started");
     memset(request,0,sizeof(*request)); request->Bridge = Bridge; request->Live = true;
-    request->Peer = Peer; request->PeerGeneration = Bridge->Peers[Peer].Generation;
+    request->Peer = Peer; request->PeerGeneration = Bridge->Peers[Peer].Generation; request->Route=Bridge->InputRoute;
     request->Slot = (size_t)(request-Bridge->Requests); request->Serial = ++Bridge->Serial;
     strcpy(request->Id,id); strcpy(request->FieldStorage,token);
     request->Cancel = xrtCancelChild(Bridge->Peers[Peer].Cancel);
@@ -353,6 +357,7 @@ static bool MdoBridgeLiveSend(MdoRemoteBridge* Bridge, size_t Peer, const xvalue
 {
     cstr id = MdoAccountText(Value,"id",32u), data = MdoAccountText(Value,"data",4096u);
     MdoBridgeRequest* request = MdoRemoteIdValid(id) ? MdoBridgeRequestFind(Bridge,Peer,id) : NULL;
+    if (request && request->Route!=Bridge->InputRoute) request=NULL;
     if (xrtValueCount(Value) != 3u || !data || !data[0] || !request || !request->Live ||
         !MdoBridgeRequestLive(request) || request->Completed || request->CommandCount >= MDO_BRIDGE_LIVE_COMMANDS)
         return MdoBridgeError(Bridge,Peer,MdoRemoteIdValid(id) ? id : "","live_command_unavailable","not_started");
@@ -372,6 +377,7 @@ static bool MdoBridgeUpload(MdoRemoteBridge* Bridge, size_t Peer, xbytesview Byt
     for (size_t i = 0u; i < 16u; i++) { id[i*2u] = hex[data[5u+i] >> 4u]; id[i*2u+1u] = hex[data[5u+i] & 15u]; }
     id[32] = 0;
     MdoBridgeRequest* request = MdoBridgeRequestFind(Bridge,Peer,id);
+    if (request && request->Route!=Bridge->InputRoute) request=NULL;
     if (!request || request->Completed || request->Thread) return MdoBridgeError(Bridge,Peer,id,"upload_unavailable","unknown");
     size_t size = Bytes.Size-MDO_BRIDGE_BINARY_HEAD; uint64 offset = MdoBridgeRead64(data+21u);
     if (!MdoBridgeRequestLive(request) || offset != request->Received ||
@@ -386,10 +392,13 @@ static bool MdoBridgeUpload(MdoRemoteBridge* Bridge, size_t Peer, xbytesview Byt
     return request->Received == request->Request.Body.Size ? MdoBridgeStart(request) : true;
 }
 bool MdoRemoteBridgeInput(MdoRemoteBridge* Bridge, cstr Peer, bool Binary, xbytesview Message)
+{ return MdoRemoteBridgeInputRouted(Bridge,Peer,0,Binary,Message); }
+bool MdoRemoteBridgeInputRouted(MdoRemoteBridge* Bridge, cstr Peer, uint64 Route, bool Binary, xbytesview Message)
 {
     if (!Bridge || !MdoRemoteIdValid(Peer) || !Message.Data) return false;
     xrtMutexLock(Bridge->Lock); size_t peer = MdoBridgePeerFind(Bridge,Peer);
     if (peer == SIZE_MAX || Bridge->Stopping) { xrtMutexUnlock(Bridge->Lock); return true; }
+    Bridge->InputRoute=Route;
     bool ok;
     if (Binary) ok = MdoBridgeUpload(Bridge,peer,Message);
     else {
@@ -409,6 +418,7 @@ bool MdoRemoteBridgeInput(MdoRemoteBridge* Bridge, cstr Peer, bool Binary, xbyte
         } else if (type && MdoRemoteIdValid(id) && (!strcmp(type,"cancel") || !strcmp(type,"live_close") ||
             !strcmp(type,"download_ack") || !strcmp(type,"live_ack"))) {
             MdoBridgeRequest* request = MdoBridgeRequestFind(Bridge,peer,id); uint64 offset = 0u;
+            if (request && request->Route!=Route) request=NULL;
             if (!strcmp(type,"cancel") || !strcmp(type,"live_close")) { if (request) MdoBridgeAbandon(request); ok = true; }
             else if (!request || request->Completed) ok = true; /* Late ack after terminal response. */
             else if (xrtValueCount(value) == 3u && MdoAccountGetUInt(xrtValueObjectGet(value,XRT_STR_LITERAL("offset")),&offset) &&
@@ -422,7 +432,7 @@ bool MdoRemoteBridgeInput(MdoRemoteBridge* Bridge, cstr Peer, bool Binary, xbyte
          * and the source WS message is cleared by its owning transport. */
         xrtValueRelease(value);
     }
-    xrtMutexUnlock(Bridge->Lock); return ok;
+    Bridge->InputRoute=0; xrtMutexUnlock(Bridge->Lock); return ok;
 }
 
 static bool MdoBridgeWorkerQueue(MdoBridgeRequest* Request, bool Binary, xbytesview Bytes, size_t BodyBytes)
@@ -586,6 +596,35 @@ static int32 MdoBridgeLiveWorker(void* Data)
 
 void MdoRemoteBridgeDirect(MdoRemoteBridge* Bridge, MdoRemoteBridgeOffer Offer, void* Data)
 { if (Bridge) { Bridge->Offer=Offer; Bridge->OfferData=Data; } }
+void MdoRemoteBridgeRendezvous(MdoRemoteBridge* Bridge, MdoRemoteBridgeOffer Offer, void* Data)
+{ if (Bridge) { Bridge->Rendezvous=Offer; Bridge->RendezvousData=Data; } }
+uint64 MdoRemoteBridgeRoute(MdoRemoteBridge* Bridge)
+{
+    if (!Bridge) return 0;
+    xrtMutexLock(Bridge->Lock);
+    uint64 Route=Bridge->RouteSerial==UINT64_MAX ? 0:++Bridge->RouteSerial;
+    xrtMutexUnlock(Bridge->Lock); return Route;
+}
+void MdoRemoteBridgeRouteClose(MdoRemoteBridge* Bridge, uint64 Route)
+{
+    if (!Bridge || !Route) return;
+    xrtMutexLock(Bridge->Lock);
+    for (size_t i=0;i<MDO_BRIDGE_REQUESTS;++i)
+        if (Bridge->Requests[i].Id[0] && Bridge->Requests[i].Route==Route) MdoBridgeAbandon(&Bridge->Requests[i]);
+    xrtMutexUnlock(Bridge->Lock);
+}
+bool MdoRemoteBridgeControl(MdoRemoteBridge* Bridge, cstr Peer, const xvalue* Value)
+{
+    if (!Bridge || !Peer || !Value) return false;
+    size_t Size=0; char* Json=xrtJsonStringify(Value,false,&Size); bool Ok=false;
+    if (Json && Size<=4096) {
+        xrtMutexLock(Bridge->Lock); size_t Slot=MdoBridgePeerFind(Bridge,Peer);
+        if (Slot!=SIZE_MAX && !Bridge->Stopping) Ok=MdoBridgeQueue(Bridge,Slot,NULL,false,(xbytesview){(const uint8*)Json,Size});
+        xrtMutexUnlock(Bridge->Lock);
+    }
+    if (Json) xrtSecureZero(Json,Size);
+    xrtFree(Json); return Ok;
+}
 cstr MdoRemoteBridgeRuntime(MdoRemoteBridge* Bridge) { return Bridge ? Bridge->Receipts.Runtime : ""; }
 
 MdoRemoteBridge* MdoRemoteBridgeCreate(XS_ServerInfo* Server, MdoRemoteNet* Net)
@@ -624,6 +663,10 @@ bool MdoRemoteBridgePeerOpen(MdoRemoteBridge* Bridge, cstr Peer, bool ReadOnly, 
         if (ok && Bridge->Offer) {
             xvalue* offer = Bridge->Offer(Peer,ReadOnly,Bridge->OfferData);
             if (offer && !xrtValueObjectSetNew(hello,XRT_STR_LITERAL("direct"),offer)) ok = false;
+        }
+        if (ok && Bridge->Rendezvous) {
+            xvalue* Offer=Bridge->Rendezvous(Peer,ReadOnly,Bridge->RendezvousData);
+            if (Offer && !xrtValueObjectSetNew(hello,XRT_STR_LITERAL("rudp"),Offer)) ok=false;
         }
         if (ok) ok = MdoBridgeValue(Bridge,slot,NULL,hello); else xrtValueRelease(hello);
         if (!ok) { peer->Active = false; xrtCancelRequest(peer->Cancel); }
@@ -676,7 +719,7 @@ static void MdoBridgeRequestRelease(MdoBridgeRequest* Request)
     Request->Bridge->UploadBytes -= Request->Request.Body.Size;
     xrtSecureZero(Request,sizeof(*Request));
 }
-bool MdoRemoteBridgePump(MdoRemoteBridge* Bridge, MdoRemoteBridgeEmit Emit, void* Data)
+bool MdoRemoteBridgePumpRouted(MdoRemoteBridge* Bridge, MdoRemoteBridgeRoutedEmit Emit, void* Data)
 {
     if (!Bridge) return false;
     for (size_t i = 0u; i < 16u; i++) {
@@ -687,7 +730,7 @@ bool MdoRemoteBridgePump(MdoRemoteBridge* Bridge, MdoRemoteBridgeEmit Emit, void
         bool live = Bridge->Peers[packet->Peer].Active &&
             Bridge->Peers[packet->Peer].Generation == packet->PeerGeneration;
         xrtMutexUnlock(Bridge->Lock);
-        bool sent = !live || (Emit && Emit((xbytesview){packet->Bytes,packet->Size},Data));
+        bool sent = !live || (Emit && Emit(packet->Route,(xbytesview){packet->Bytes,packet->Size},Data));
         xrtMutexLock(Bridge->Lock);
         if (packet->Slot < MDO_BRIDGE_REQUESTS && Bridge->Requests[packet->Slot].Serial == packet->RequestSerial)
             --Bridge->Requests[packet->Slot].Packets;
@@ -700,7 +743,9 @@ bool MdoRemoteBridgePump(MdoRemoteBridge* Bridge, MdoRemoteBridgeEmit Emit, void
         MdoBridgeRequest* request = &Bridge->Requests[i];
         if (!request->Id[0]) continue;
         if (!request->Thread && !request->Completed && MdoDeadlineExpired(request->Until)) {
+            Bridge->InputRoute=request->Route;
             (void)MdoBridgeError(Bridge,request->Peer,request->Id,"upload_timeout","not_started");
+            Bridge->InputRoute=0;
             MdoBridgeAbandon(request);
         }
         if (request->Completed && !request->Packets && (!request->Thread || xrtThreadState(request->Thread) == XTHREAD_FINISHED))
@@ -708,6 +753,14 @@ bool MdoRemoteBridgePump(MdoRemoteBridge* Bridge, MdoRemoteBridgeEmit Emit, void
     }
     xrtMutexUnlock(Bridge->Lock); return true;
 }
+typedef struct MdoBridgeLegacyEmit { MdoRemoteBridgeEmit Proc; void* Data; } MdoBridgeLegacyEmit;
+static bool MdoBridgeRelayOnly(uint64 Route, xbytesview Bytes, void* Data)
+{
+    MdoBridgeLegacyEmit* Emit=Data;
+    return Route || (Emit->Proc && Emit->Proc(Bytes,Emit->Data));
+}
+bool MdoRemoteBridgePump(MdoRemoteBridge* Bridge, MdoRemoteBridgeEmit Emit, void* Data)
+{ MdoBridgeLegacyEmit Legacy={Emit,Data}; return MdoRemoteBridgePumpRouted(Bridge,MdoBridgeRelayOnly,&Legacy); }
 void MdoRemoteBridgeDestroy(MdoRemoteBridge* Bridge)
 {
     if (!Bridge) return;

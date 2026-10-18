@@ -7,6 +7,7 @@
 #include "service_client.h"
 #include "bridge.h"
 #include "lan.h"
+#include "direct_rudp.inc.c"
 
 /* Only the connection worker owns a socket. The service worker handles slow
  * HTTPS operations independently, so listing devices cannot starve heartbeats.
@@ -381,6 +382,9 @@ typedef struct MdoRemoteConnectionContext {
     uint64 Epoch;
     char Id[33];
     MdoLan* Lan;
+#if defined(XS_USE_XRUDP)
+    MdoDirectRudp* Rudp;
+#endif
 } MdoRemoteConnectionContext;
 static bool MdoRemoteConnectionMessage(bool Binary, xbytesview Message, void* Data)
 {
@@ -390,6 +394,12 @@ static bool MdoRemoteConnectionMessage(bool Binary, xbytesview Message, void* Da
         if (Message.Size < MDO_REMOTE_RELAY_HEADER || memcmp(bytes,"MDR1",4u) || (bytes[20] != 1u && bytes[20] != 2u)) return false;
         for (size_t i = 0u; i < 16u; i++) { peer[i*2u] = hex[bytes[4u+i] >> 4u]; peer[i*2u+1u] = hex[bytes[4u+i] & 15u]; }
         peer[32] = 0;
+#if defined(XS_USE_XRUDP)
+        bool Handled=false;
+        if (!MdoDirectRudpInput(context->Rudp,peer,bytes[20]==2,
+            (xbytesview){bytes+MDO_REMOTE_RELAY_HEADER,Message.Size-MDO_REMOTE_RELAY_HEADER},&Handled)) return false;
+        if (Handled) return true;
+#endif
         return MdoRemoteBridgeInput(context->Bridge,peer,bytes[20] == 2u,
             (xbytesview){bytes+MDO_REMOTE_RELAY_HEADER,Message.Size-MDO_REMOTE_RELAY_HEADER});
     }
@@ -416,15 +426,22 @@ static bool MdoRemoteConnectionMessage(bool Binary, xbytesview Message, void* Da
         ok = MdoRemoteBridgePeerOpen(context->Bridge,peer,!strcmp(mode,"view"),context->Cancel);
     } else if (ok && !strcmp(type,"peer_close")) {
         MdoLanPeerClose(context->Lan,peer);
+#if defined(XS_USE_XRUDP)
+        MdoDirectRudpPeerClose(context->Rudp,peer);
+#endif
         MdoRemoteBridgePeerClose(context->Bridge,peer);
     }
     xrtValueRelease(notice); return ok;
 }
-static bool MdoRemoteConnectionEmit(xbytesview Envelope, void* Data)
+static bool MdoRemoteConnectionEmit(uint64 Route, xbytesview Envelope, void* Data)
 {
     MdoRemoteConnectionContext* Context=Data; bool Handled=false;
-    if (!MdoLanEmit(Context->Lan,Envelope,&Handled)) return false;
-    return Handled || MdoRemoteSocketSend(Context->Socket,true,Envelope);
+#if defined(XS_USE_XRUDP)
+    if (!MdoDirectRudpEmit(Context->Rudp,Route,Envelope,&Handled)) return false;
+    if (Handled) return true;
+#endif
+    if (!MdoLanEmit(Context->Lan,Route,Envelope,&Handled)) return false;
+    return Handled || Route || MdoRemoteSocketSend(Context->Socket,true,Envelope);
 }
 static void MdoRemoteBackgroundRenew(uint64* Token, uint64* Next)
 {
@@ -461,6 +478,9 @@ static int32 MdoRemoteConnectionWorker(void* Data)
          * Timed leases also expire if a worker fails to run or release on Unit. */
         MdoRemoteBackgroundRenew(&background,&next_background);
         MdoAccountLease lease = {0}; MdoRemoteSocket* socket = NULL; MdoLan* lan=NULL;
+#if defined(XS_USE_XRUDP)
+        MdoDirectRudp* rudp=NULL;
+#endif
         xvalue *body = NULL, *ticket = NULL; uint16 status = 0u, close_code = 0u;
         bool available = cancel && MdoAccountAcquireService(cancel,&lease);
         cstr off = NULL;
@@ -497,16 +517,26 @@ static int32 MdoRemoteConnectionWorker(void* Data)
         MdoAccountSecretValueRelease(ticket); ticket = NULL;
         if (!socket) goto closed;
         lan=MdoLanCreate(&net,bridge,lease.Cancel);
-        MdoRemoteConnectionContext context = {socket,bridge,lease.Cancel,epoch,"",lan}; strcpy(context.Id,identity.Id);
+        MdoRemoteConnectionContext context = {.Socket=socket,.Bridge=bridge,.Cancel=lease.Cancel,.Epoch=epoch,.Lan=lan}; strcpy(context.Id,identity.Id);
+#if defined(XS_USE_XRUDP)
+        rudp=MdoDirectRudpCreate(&net,bridge,lease.MemberId,lease.Cancel); context.Rudp=rudp;
+#endif
         while (!xrtCancelRequested(lease.Cancel) && MdoRemoteServerLive() &&
             MdoRemoteSocketPoll(socket,MdoRemoteConnectionMessage,&context) &&
-            MdoLanPoll(lan) && MdoRemoteBridgePump(bridge,MdoRemoteConnectionEmit,&context)) {
+            MdoLanPoll(lan) &&
+#if defined(XS_USE_XRUDP)
+            MdoDirectRudpPoll(rudp) &&
+#endif
+            MdoRemoteBridgePumpRouted(bridge,MdoRemoteConnectionEmit,&context)) {
             MdoRemoteBackgroundRenew(&background,&next_background);
             retry = 0u; xrtSleep(5u);
         }
         close_code = MdoRemoteSocketCloseCode(socket);
         if (close_code == 1008u && MdoRemoteSocketPeerClosed(socket)) off = "remote_revoked";
 closed:
+#if defined(XS_USE_XRUDP)
+        MdoDirectRudpDestroy(rudp);
+#endif
         MdoLanDestroy(lan);
         MdoRemoteBridgeDisconnect(bridge);
         if (bridge) (void)MdoRemoteBridgePump(bridge,NULL,NULL);

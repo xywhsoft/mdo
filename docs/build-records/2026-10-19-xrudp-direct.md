@@ -9,3 +9,15 @@
 Windows/Linux 真实 TCC 的同端口探测套件增加到 26 组端点场景，包含 IPv4/IPv6 首地址黑洞后连接成功、端口与身份保持、确认后不重连、整体期限不续期。Linux 原生 ASan/UBSan 与泄漏检查通过同一套 26 组场景。既有消息传输 20 组场景仍通过。
 
 证据日志：`.build/rendezvous-candidates-{windows,linux,sanitizers}.log`。候选切换本身不构成账号授权，不代表已完成公网或实机验收。
+
+## 账号会合与业务路由
+
+复用现有认证中转的 peer 身份及控制消息，增加独立的 `hello.rudp`，保留原局域网 TLS 授权格式。目标端在有效的同 peer 初始化消息到达后才创建 UDP 端点；每个 offer 有独立的 X25519 密钥、scope、绑定种子和 nonce，60 秒过期且只能使用一次。Noise 应用上下文同时绑定账号、peer、runtime、nonce、只读权限和地址族，篡改权限不能完成握手。密钥只在本机内存保存。
+
+本地网关核对账号 lease，通过当前浏览器认证中转交换有限的会合控制消息；双方在同一端口执行可信 STUN 映射、候选发布、过滤器预热和确认握手。最多八个同族单播候选、4096 字节信令、四个 peer、十秒总体协商期限。STUN 目的地来自本地账号服务配置，远端不能指定。DNS 解析、UDP 打开和连接均为异步，探测失败时中转仍可使用。
+
+确认后原 HTTP、二进制分片、实时订阅和收据协议直接走加密 UDP。桥接请求与排队回复持有单调不复用的内部路由号；上传、ACK、取消和实时命令只能影响原路由的请求，收据仍可经中转查询。路由关闭会取消所属任务并丢弃迟到输出，不把已受理写入自动搬到另一条连接。前端优先尝试 xrudp，然后局域网 TLS，最后使用中转，并显示实际路径。
+
+验证：Windows 原生账号、中转、本地网关和真实 mdo HTTP/live/收据在 IPv4/IPv6 NAT 端口过滤模拟下通过；包含同 ID 冲突与跨路由取消隔离、只读拒绝、同账号不同 peer 不可冒用、一次性授权、退出/撤销和中转回退。原 LAN TLS、静默握手槽超时及 manager 生命周期回归通过。纯会合核心在 Windows/Linux 真实 TCC 和 Linux ASan/UBSan/泄漏检查通过五组加密场景，包含权限篡改拒绝。前端协商、信令边界、迟到回调及写入不重放测试通过。全应用 GCC 语法与警告检查通过。
+
+证据：`.build/rendezvous-e2e-final-nat{4,6}.log`、`rendezvous-final-lan.log`、`rendezvous-core-{windows,linux,sanitizers}.log`、`rendezvous-final-syntax.log`。所有账号和服务均为本地隔离测试实例。尚未部署可信公网 STUN 服务，也未完成 Android、公网双机和长期稳定性验收；空闲保活另行修复，本记录不宣称生产发布完成。

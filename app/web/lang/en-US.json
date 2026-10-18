@@ -1524,6 +1524,7 @@
   "account.login_rate_limited": "Too many sign-in attempts. Try again later.",
   "devices.local": "This device",
   "devices.lan": "Direct LAN connection",
+  "devices.xrudp": "Direct device connection",
   "devices.relay": "Server relay",
   "devices.choose": "Choose device",
   "devices.target": "Target: {name}",

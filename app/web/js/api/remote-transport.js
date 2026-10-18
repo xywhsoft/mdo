@@ -14,6 +14,17 @@ function randomId() {
 }
 function digest(bytes) { const hash = createSha256(); hash.update(bytes); return hash.hex(); }
 function integer(value, max = Number.MAX_SAFE_INTEGER) { return Number.isSafeInteger(value) && value >= 0 && value <= max; }
+function rendezvousControl(value, nonce, runtime) {
+  if (!value || value.nonce !== nonce || value.runtime_id !== runtime) return false;
+  const count = Object.keys(value).length;
+  if (value.type === "rudp_cancel") return count === 3;
+  if (value.type === "rudp_init") return count === 5 && SHA.test(value.public_key) && [4, 6].includes(value.family);
+  return value.type === "rudp_candidates" && count === 4 && Array.isArray(value.candidates) &&
+    value.candidates.length > 0 && value.candidates.length <= 8 && value.candidates.every(candidate =>
+      candidate && Object.keys(candidate).length === 3 && typeof candidate.ip === "string" &&
+      /^[0-9a-fA-F:.]{2,64}$/.test(candidate.ip) && integer(candidate.port, 65535) && candidate.port > 0 &&
+      ["host", "srflx"].includes(candidate.kind));
+}
 function chunk(kind, id, offset, bytes) {
   const output = new Uint8Array(29 + bytes.length), view = new DataView(output.buffer);
   output.set(encoder.encode("MDP1")); output[4] = kind;
@@ -39,7 +50,7 @@ export function createRemoteTransport({ socket = (...args) => new WebSocket(...a
   const client = id(), requests = new Map(), waiting = [], lives = new Map(), uncertain = new Map();
   let connection = null, hello = null, sequence = 0, admitted = 0, generation = 0;
   let connectReject = null, connectTimer = 0;
-  let direct = null, directReady = false, directTimer = 0;
+  let direct = null, directReady = false, directTimer = 0, rendezvous = null;
   const send = (value, route = connection) => {
     if (route?.readyState !== 1) throw remoteError("remote_offline", "目标设备连接已断开");
     route.send(typeof value === "string" || value instanceof Uint8Array ? value : JSON.stringify(value));
@@ -80,6 +91,7 @@ export function createRemoteTransport({ socket = (...args) => new WebSocket(...a
   function disconnect(error = remoteError("remote_offline", "目标设备离线，操作不会转到本机")) {
     const old = connection; connection = null; hello = null; generation++;
     const oldDirect = direct; direct = null; directReady = false; clearTimer(directTimer); oldDirect?.close();
+    rendezvous?.finish(false); rendezvous = null;
     clearTimer(connectTimer); connectReject?.(error); connectReject = null;
     for (const entry of [...requests.values()]) {
       let failure = error;
@@ -278,9 +290,13 @@ export function createRemoteTransport({ socket = (...args) => new WebSocket(...a
     catch (error) { lives.delete(liveId); routeFailure(route, error); throw error; }
     return current;
   }
-  function loseDirect(active, error = remoteError("remote_offline", "局域网连接中断，已使用服务器中转")) {
+  function loseDirect(active, error = remoteError("remote_offline", "直连中断，已使用服务器中转")) {
     if (active !== direct) return;
     direct = null; directReady = false; clearTimer(directTimer); active.close();
+    if (rendezvous?.socket === active) {
+      try { send({ type: "rudp_cancel", nonce: rendezvous.nonce, runtime_id: rendezvous.runtime }, connection); } catch {}
+      rendezvous.finish(false); rendezvous = null;
+    }
     for (const entry of [...requests.values()]) if (entry.socket === active) {
       let failure = error;
       if (entry.write && entry.admitted) failure = remoteError("remote_result_unconfirmed",
@@ -290,13 +306,16 @@ export function createRemoteTransport({ socket = (...args) => new WebSocket(...a
     for (const live of [...lives.values()]) if (live.socket === active) live.fail(error);
     if (hello) onState({ connected: true, hello, route: "relay" });
   }
-  async function probeDirect(offer, relay, token) {
+  async function probeDirect(offer, relay, token, kind = "lan") {
     let active;
+    let finish;
+    const ready = new Promise(resolve => { finish = resolve; });
     try {
-      active = await directSocket(offer);
-      if (relay !== connection || token !== generation || !hello) { active.close(); return; }
+      active = await directSocket(kind === "xrudp" ? { transport: "xrudp", offer } : offer);
+      if (relay !== connection || token !== generation || !hello) { active.close(); return false; }
       direct = active; active.binaryType = "arraybuffer";
-      directTimer = setTimer(() => loseDirect(active), 6000);
+      if (kind === "xrudp") rendezvous = { socket: active, nonce: offer.nonce, runtime: offer.runtime_id, finish };
+      directTimer = setTimer(() => { loseDirect(active); finish(false); }, kind === "xrudp" ? 12000 : 6000);
       active.onmessage = ({data}) => {
         if (active !== direct) return;
         try {
@@ -308,19 +327,35 @@ export function createRemoteTransport({ socket = (...args) => new WebSocket(...a
             throw remoteError("remote_protocol", "Invalid direct response");
           const value = JSON.parse(data);
           if (!directReady) {
+            if (kind === "xrudp" && value.type === "rudp_forward") {
+              const control = value.payload;
+              if (Object.keys(value).length !== 2 || !rendezvousControl(control, offer.nonce, offer.runtime_id) || encoder.encode(data).length > 4096)
+                throw remoteError("remote_protocol", "Invalid rendezvous control");
+              send(control, relay); return;
+            }
             if (value.type !== "direct_ready" || value.version !== 1 || value.runtime_id !== hello.runtime_id ||
-                value.mode !== hello.mode || value.peer_id !== offer.peer_id)
+                value.mode !== hello.mode || value.peer_id !== offer.peer_id || (kind === "xrudp" && value.transport !== "xrudp"))
               throw remoteError("remote_protocol", "Direct authority differs from selected target");
             directReady = true; clearTimer(directTimer);
-            onState({ connected: true, hello, route: "lan" }); return;
+            finish(true); onState({ connected: true, hello, route: kind }); return;
           }
           const live = lives.get(value.id);
           if (live?.socket === active) live.text(value); else receive(value, active);
-        } catch (error) { loseDirect(active, error); }
+        } catch (error) { loseDirect(active, error); finish(false); }
       };
-      active.onerror = () => loseDirect(active);
-      active.onclose = () => loseDirect(active);
-    } catch { active?.close(); /* Relay is already usable; probing never blocks it. */ }
+      active.onerror = () => { loseDirect(active); finish(false); };
+      active.onclose = () => { loseDirect(active); finish(false); };
+    } catch { active?.close(); finish(false); /* Relay stays usable during negotiation. */ }
+    return ready;
+  }
+  async function chooseDirect(lan, rudp, relay, token, owner, peer) {
+    if (typeof owner === "string" && /^[1-9][0-9]{0,19}$/.test(owner) &&
+        rudp && rudp.version === 1 && rudp.peer_id === peer && rudp.runtime_id === hello?.runtime_id &&
+        rudp.mode === hello?.mode && rudp.owner_id === owner && ID.test(rudp.nonce)) {
+      if (await probeDirect(rudp, relay, token, "xrudp")) return;
+    }
+    if (lan && relay === connection && token === generation && hello && !directReady)
+      await probeDirect(lan, relay, token);
   }
   return {
     fetch: fetchTarget, liveSocket, close: disconnect,
@@ -334,10 +369,10 @@ export function createRemoteTransport({ socket = (...args) => new WebSocket(...a
         try { send({ ...meta, type: "receipt" }, entry.socket); } catch (error) { routeFailure(entry.socket, error); }
       });
     },
-    connect({ origin, ticket, deviceId, mode = "control" }) {
+    connect({ origin, ticket, deviceId, mode = "control", owner }) {
       disconnect();
       return new Promise((resolve, rejectPromise) => {
-        connectReject = rejectPromise; let relayReady = false;
+        connectReject = rejectPromise; let relayReady = false, relayPeer = "";
         try {
           const url = new URL(origin);
           if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || url.pathname !== "/" || url.search || url.hash ||
@@ -356,16 +391,22 @@ export function createRemoteTransport({ socket = (...args) => new WebSocket(...a
               const value = JSON.parse(data);
               if (!hello) {
                 if (!relayReady && value.type === "ready" && value.version === 1 && value.device_id === deviceId &&
-                    value.mode === mode && ID.test(value.peer_id) && value.payload_limit === 262123) { relayReady = true; return; }
+                    value.mode === mode && ID.test(value.peer_id) && value.payload_limit === 262123) { relayReady = true; relayPeer = value.peer_id; return; }
                 if (!relayReady || value.type !== "hello" || value.version !== 1 || !ID.test(value.runtime_id) || value.mode !== mode ||
                     value.upload_limit !== 8388608 || value.chunk_limit !== WINDOW || value.window_bytes !== WINDOW ||
                     value.live !== true || value.live_limit !== 2097152 ||
                     (value.window_max !== undefined && (!integer(value.window_max,262144) ||
                       value.window_max < WINDOW || value.window_max % 16384))) throw remoteError("remote_protocol", "Invalid target handshake");
-                const offer = value.direct; delete value.direct;
+                const offer = value.direct, rudp = value.rudp; delete value.direct; delete value.rudp;
                 hello = Object.freeze(value); clearTimer(connectTimer); connectReject = null;
                 onState({ connected: true, hello, route: "relay" }); resolve(hello);
-                if (offer && directSocket) void probeDirect(offer, active, generation); return;
+                if ((offer || rudp) && directSocket) void chooseDirect(offer, rudp, active, generation, owner, relayPeer); return;
+              }
+              if (["rudp_answer", "rudp_failed"].includes(value.type)) {
+                if (rendezvous && rendezvous.socket === direct && !directReady &&
+                    value.nonce === rendezvous.nonce && value.runtime_id === rendezvous.runtime && encoder.encode(data).length <= 4096)
+                  direct.send(JSON.stringify({ type: "rudp_signal", payload: value }));
+                return;
               }
               if (lives.has(value.id)) { const live=lives.get(value.id); if (live.socket===active) live.text(value); } else receive(value);
             } catch (error) { disconnect(remoteError("remote_protocol", error.message)); }

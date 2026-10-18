@@ -24,7 +24,8 @@ export function createDevices() {
     settingsTarget.hidden = !state.selected;
     settingsTarget.textContent = title + (readonly ? ` · ${copy("view", {}, "只读查看")}` : "");
     button.dataset.remote = String(Boolean(state.selected));
-    const route = state.route === "lan" ? copy("lan", {}, "局域网直连") : copy("relay", {}, "服务器中转");
+    const route = state.route === "xrudp" ? copy("xrudp", {}, "设备直连") :
+      state.route === "lan" ? copy("lan", {}, "局域网直连") : copy("relay", {}, "服务器中转");
     button.title = state.selected ? copy(state.connected ? "target" : "offline", { name }, `目标设备：${name}`) +
       (state.connected ? ` · ${route}` : "") : copy("choose", {}, "选择设备");
     button.dataset.route = state.selected && state.connected ? state.route || "relay" : "local";
