@@ -27,3 +27,8 @@ Windows 稳定宿主的构建版本为 `c806e08`，核心和 xrudp 源字节已�
 纳入内存、句柄及增长上限。`tests/test_remote_soak_monitor.py` 和真实二十五秒到期/重连/
 二进制/收据/生命周期短测通过（`.build/remote-soak-monitor-windows.log`、
 `xrudp-soak-smoke-observer-fixed.log`）。后续以新提交、新收据重新起算完整时长。
+
+当前实际长测从 `c125bfc1` 起算，使用新 SDK `7edc866` 的已核验 Windows 宿主；
+`.build/xrudp-soak/mdo-72h-20261019-r3/state.json` 为本轮唯一有效的业务长测收据。
+它按真实时钟运行，未启用到期加速，尚未达到 72 小时。原生库另有 Windows/Linux 的
+八组持续多流、消息、游戏与 UDP 故障长测，独立记录，不能与本轮时长相加或相互代替。
