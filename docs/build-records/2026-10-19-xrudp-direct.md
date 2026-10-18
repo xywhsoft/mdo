@@ -45,3 +45,13 @@ xs 主分支 `7e54d7c0a40cc84e3363f9463c5ea373f6b8e1a2` 增加独立的 C/XRT ST
 2026-10-19 已部署至显卡服务器的 `xs` 用户服务 `xrudp-stun.service`，用户 linger 已存在；内存限制 32 MiB、CPU 25%、最多八个任务。可执行文件 `~/.local/libexec/xrudp-stun`，SHA256 `a4dd5c18f3755d43ca26c562505d181572bae32f250a08d1ffd175982d17fb46`，所有构建输入逐字节核对到提交；未覆盖既有单元或程序。现有网站 MainPID 与 active 状态保持不变，不重启网站、不读写账号和计费数据。
 
 本机通过域名 `ai.xywhsoft.com` 查询真实公网 UDP 3478，收到 40 字节响应，事务号、FINGERPRINT 及 XOR-MAPPED-ADDRESS 独立校验通过，返回公网映射，单次往返约 31 ms。证据保存于 xs 的 `.build/stun-public-deployment.json`、`.build/stun-public-probe.json` 和 `stun-{windows,linux,linux-asan}-test.log`。这证明公网映射服务可达；真实两机 mdo 业务直连、其他 NAT 类型、Android 和长稳仍需继续验收。
+
+## Windows 与显卡服务器的真实业务直连
+
+`test_remote_public.py` 为显式选择的两机验收：使用本机 Windows 原生 mdo 和显卡服务器 Ubuntu 22.04/GCC11 原生 mdo。远端 SDK 在独立的私有目录从已锁定提交 `c806e08` 构建，完整导出和 xrudp SDK 回归通过，不替换生产宿主。账号网站是本机的隔离副本，创建的账号、两端 Home 和项目均为测试数据；SSH 转发只承载该副本的认证中转和测试控制。两端的 STUN、物理接口候选、Noise、UDP 传输、桥接和业务路由使用实际实现。
+
+两个方向均通过，且强制要求双方原生信令均发布真实公网 srflx 候选：Windows 控制 Linux 目标约 250 ms 建立 xrudp；Linux 控制 NAT 后的 Windows 目标约 375 ms。后者空闲 65 秒后仍可调用 HTTP。通过目标端写入令牌创建的项目只出现在目标端，控制端项目列表没有该项目；实时订阅、第二个只读直连拒绝写入、取消直连后经中转查询成功写入收据、控制端退出关闭网关及中转保持可用均通过。
+
+两端测试宿主通过隔离的停止路由退出，退出码为零，日志确认 Engine 停止与运行代释放；另行核对远端四次测试均无遗留进程。证据：`.build/remote-public-final.log`、`.build/public-remote-6a65170614ae47a289bc8583a4915be9/receipt.json`、`.build/remote-public-reverse-idle.log`、`.build/public-remote-c35595eaebf14868a4406a9f3fa8fda6/receipt.json`、`.build/remote-public-cleanup.json`。中间一次回归仅因 Windows 在关闭已取消的本地网关时返回 TCP RST 而非 EOF 失败，验收明确允许这两种终止，仍拒绝超时。
+
+该结果覆盖本机当前 NAT 与公网服务器的两个方向，不等于两个不同住宅/运营商 NAT、不可达 UDP 的自动回退、IPv4/IPv6 双族优选、Android、完整独立 wire 互操作或 72h 长稳全部完成。

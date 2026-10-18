@@ -50,7 +50,7 @@ def gateway(port, token, offer):
     result.send(1,json.dumps({'transport':'xrudp','offer':offer}).encode()); return result
 
 
-def negotiate(native, relay, offer, *, misplaced=None):
+def negotiate(native, relay, offer, *, misplaced=None, observe=None):
     end=time.monotonic()+12; sent=0
     while time.monotonic()<end:
         available=[s for s in (native,relay) if s.pending]
@@ -69,6 +69,7 @@ def negotiate(native, relay, offer, *, misplaced=None):
                     assert sent>=2; return value
                 assert value['type']=='rudp_forward',value
                 control=value['payload']; assert control['nonce']==offer['nonce']
+                if observe: observe('controller',control)
                 if misplaced and control['type']=='rudp_init':
                     # Same account, different authenticated peer: the relay
                     # attaches its real peer identity, so this offer is unusable.
@@ -78,6 +79,7 @@ def negotiate(native, relay, offer, *, misplaced=None):
                 assert value['type'] in ('rudp_answer','rudp_failed'),value
                 assert value['nonce']==offer['nonce'],value
                 assert value['type']!='rudp_failed',value
+                if observe: observe('target',value)
                 native.send(1,json.dumps({'type':'rudp_signal','payload':value}).encode())
     raise AssertionError('xrudp rendezvous deadline')
 
