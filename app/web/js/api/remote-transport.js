@@ -14,12 +14,16 @@ function randomId() {
 }
 function digest(bytes) { const hash = createSha256(); hash.update(bytes); return hash.hex(); }
 function integer(value, max = Number.MAX_SAFE_INTEGER) { return Number.isSafeInteger(value) && value >= 0 && value <= max; }
-function rendezvousControl(value, nonce, runtime) {
-  if (!value || value.nonce !== nonce || value.runtime_id !== runtime) return false;
+function rendezvousControl(value, nonce, runtime, fromTarget = false) {
+  if (!value || typeof value !== "object" || Array.isArray(value) || value.nonce !== nonce || value.runtime_id !== runtime) return false;
   const count = Object.keys(value).length;
-  if (value.type === "rudp_cancel") return count === 3;
-  if (value.type === "rudp_init") return count === 5 && SHA.test(value.public_key) && [4, 6].includes(value.family);
-  return value.type === "rudp_candidates" && count === 4 && Array.isArray(value.candidates) &&
+  if (!fromTarget && value.type === "rudp_cancel") return count === 3;
+  if (fromTarget && value.type === "rudp_failed") return count === 4 && typeof value.code === "string" && /^[a-z_]{1,32}$/.test(value.code);
+  if (!fromTarget && value.type === "rudp_init") return count === 5 && SHA.test(value.public_key) &&
+    Array.isArray(value.families) && value.families.length > 0 && value.families.length <= 2 &&
+    new Set(value.families).size === value.families.length && value.families.every(family => [4, 6].includes(family));
+  if (value.type === (fromTarget ? "rudp_selected" : "rudp_select")) return count === 4 && [4, 6].includes(value.family);
+  return value.type === (fromTarget ? "rudp_answer" : "rudp_candidates") && count === 5 && [4, 6].includes(value.family) && Array.isArray(value.candidates) &&
     value.candidates.length > 0 && value.candidates.length <= 8 && value.candidates.every(candidate =>
       candidate && Object.keys(candidate).length === 3 && typeof candidate.ip === "string" &&
       /^[0-9a-fA-F:.]{2,64}$/.test(candidate.ip) && integer(candidate.port, 65535) && candidate.port > 0 &&
@@ -422,10 +426,13 @@ export function createRemoteTransport({ socket = (...args) => new WebSocket(...a
                 onState({ connected: true, hello, route: "relay" }); resolve(hello);
                 if ((offer || rudp) && directSocket) void chooseDirect(offer, rudp, active, generation, owner, relayPeer); return;
               }
-              if (["rudp_answer", "rudp_failed"].includes(value.type)) {
+              if (["rudp_answer", "rudp_selected", "rudp_failed"].includes(value.type)) {
                 if (rendezvous && rendezvous.socket === direct && !directReady &&
-                    value.nonce === rendezvous.nonce && value.runtime_id === rendezvous.runtime && encoder.encode(data).length <= 4096)
-                  direct.send(JSON.stringify({ type: "rudp_signal", payload: value }));
+                    value.nonce === rendezvous.nonce && value.runtime_id === rendezvous.runtime) {
+                  if (encoder.encode(data).length <= 4096 && rendezvousControl(value, rendezvous.nonce, rendezvous.runtime, true))
+                    direct.send(JSON.stringify({ type: "rudp_signal", payload: value }));
+                  else loseDirect(direct, remoteError("remote_protocol", "Invalid target rendezvous control"));
+                }
                 return;
               }
               if (lives.has(value.id)) { const live=lives.get(value.id); if (live.socket===active) live.text(value); } else receive(value);

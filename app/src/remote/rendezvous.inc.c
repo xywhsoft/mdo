@@ -4,6 +4,7 @@
 #include "rendezvous.h"
 #define MDO_PEER_CANDIDATES 8u
 #define MDO_PEER_ATTEMPT_US UINT64_C(10000000)
+#define MDO_PEER_ALTERNATE_US UINT64_C(250000)
 #ifndef MDO_REMOTE_STUN_PORT
 #define MDO_REMOTE_STUN_PORT 3478u
 #endif
@@ -14,21 +15,28 @@ struct MdoPeerOffer {
     unsigned Families;
     bool Used;
 };
-struct MdoPeerSession {
-    MdoPeerInfo Info;
-    MdoPeerPolicy Policy;
+typedef struct MdoPeerLane {
     MdoRudpTransport* Raw;
-    xcancel* Cancel;
     xfuture* Resolve;
-    MdoPeerSignalProc Signal;
-    void* SignalData;
-    uint64 Until, MappingUntil;
+    uint64 MappingUntil;
     xnetaddr Candidates[MDO_PEER_CANDIDATES];
     uint8 Kinds[MDO_PEER_CANDIDATES];
     size_t Count;
     xnetfamily Family;
+    bool MappingStarted, MappingComplete, CandidatesSent, RemoteReady, Dialed, Failed;
+} MdoPeerLane;
+struct MdoPeerSession {
+    MdoPeerInfo Info;
+    MdoPeerPolicy Policy;
+    MdoPeerLane Lanes[2];
+    xcancel* Cancel;
+    MdoPeerSignalProc Signal;
+    void* SignalData;
+    uint64 Until, AlternateAt;
+    unsigned Families;
+    xnetfamily Selected;
     unsigned char Public[32];
-    bool Initiator, InitSent, MappingStarted, MappingComplete, CandidatesSent, RemoteReady, Dialed, Taken;
+    bool Initiator, InitSent, SelectionAck, Taken;
 };
 static cstr MdoPeerText(const xvalue* Value, cstr Key, size_t Limit)
 {
@@ -70,8 +78,9 @@ static bool MdoPeerUnhex(cstr Text, size_t Size, unsigned char* Bytes, bool Nonz
 }
 static unsigned MdoPeerFamilies(const MdoPeerPolicy* Policy)
 {
-    if (Policy->Local.Family==XNET_FAMILY_IPV4) return 1u;
-    if (Policy->Local.Family==XNET_FAMILY_IPV6) return 2u;
+    if (Policy->Local[0].Family || Policy->Local[1].Family)
+        return (Policy->Local[0].Family==XNET_FAMILY_IPV4 ? 1u:0u) |
+            (Policy->Local[1].Family==XNET_FAMILY_IPV6 ? 2u:0u);
     unsigned Mask=1u; xnetinterfacelist Interfaces={0};
     if (xrtNetInterfaces(&Interfaces)) {
         for (size_t i=0;i<Interfaces.Count;++i) {
@@ -85,6 +94,23 @@ static unsigned MdoPeerFamilies(const MdoPeerPolicy* Policy)
         xrtNetInterfacesFree(&Interfaces);
     }
     return Mask;
+}
+static bool MdoPeerReadFamilies(const xvalue* Value, unsigned* Mask)
+{
+    *Mask=0;
+    if (xrtValueType(Value)!=XVALUE_ARRAY || !xrtValueCount(Value) || xrtValueCount(Value)>2) return false;
+    for (size_t i=0;i<xrtValueCount(Value);++i) {
+        uint64 F=0; if (!MdoPeerUInt(xrtValueArrayGet(Value,i),&F) || (F!=4 && F!=6)) return false;
+        unsigned Bit=F==4?1u:2u; if (*Mask&Bit) return false; *Mask|=Bit;
+    }
+    return true;
+}
+static xvalue* MdoPeerFamilyValue(unsigned Mask)
+{
+    xvalue* V=xrtValueArray(); if (!V) return NULL;
+    if (((Mask&1u) && !xrtValueArrayAppendNew(V,xrtValueUInt(4))) ||
+        ((Mask&2u) && !xrtValueArrayAppendNew(V,xrtValueUInt(6)))) { xrtValueRelease(V); return NULL; }
+    return V;
 }
 void MdoPeerPolicyInit(MdoPeerPolicy* Policy, MdoRemoteNet* Net, cstr TrustedOrigin)
 {
@@ -135,18 +161,12 @@ xvalue* MdoPeerOfferValue(const MdoPeerOffer* O)
     if (Ok) { Ok=xrtValueObjectSetNew(V,XRT_STR_LITERAL("families"),Families); Families=NULL; }
     xrtValueRelease(Families); if (!Ok) { xrtValueRelease(V); V=NULL; } return V;
 }
-static MdoPeerSession* MdoPeerStart(const MdoPeerInfo* Info, const MdoPeerPolicy* Policy,
-    MdoRudpConfig* Config, xcancel* Cancel, MdoPeerSignalProc Signal, void* Data)
+static bool MdoPeerBindAuthority(const MdoPeerInfo* Info, MdoRudpConfig* Config)
 {
-    MdoPeerSession* S=xrtCalloc(1,sizeof(*S));
-    if (!S) { xrtSecureZero(Config->Private,32); return NULL; }
-    S->Info=*Info; S->Policy=*Policy; S->Family=Config->Local.Family; S->Initiator=!Config->Listen;
-    S->Signal=Signal; S->SignalData=Data; S->Cancel=xrtCancelChild(Cancel); S->Until=MdoDeadlineAfterUs(MDO_PEER_ATTEMPT_US);
-    if (!xrtX25519Public(Config->Private,S->Public) || !S->Cancel) { xrtSecureZero(Config->Private,32); MdoPeerSessionDestroy(S); return NULL; }
     /* Bind authority explicitly, in addition to the fresh offer seed. A
      * modified mode/owner/runtime/peer/nonce/family cannot share this Noise
      * application context with the target's immutable relay-granted metadata. */
-    xsha256 Hash; unsigned char Binding[32], Flags[2]={Info->ReadOnly?1u:0u,(uint8)S->Family};
+    xsha256 Hash; unsigned char Binding[32], Flags[2]={Info->ReadOnly?1u:0u,(uint8)Config->Local.Family};
     static const char Domain[]="mdo.peer.authority.v1";
     xrtSha256Init(&Hash);
     bool Bound=xrtSha256Update(&Hash,Domain,sizeof(Domain)-1) && xrtSha256Update(&Hash,Config->Binding,32) &&
@@ -156,29 +176,47 @@ static MdoPeerSession* MdoPeerStart(const MdoPeerInfo* Info, const MdoPeerPolicy
     xrtSecureZero(&Hash,sizeof(Hash));
     if (Bound) memcpy(Config->Binding,Binding,32);
     xrtSecureZero(Binding,sizeof(Binding));
-    if (Bound) S->Raw=MdoRudpStart(Config,S->Cancel);
-    xrtSecureZero(Config->Private,32);
-    if (!S->Raw) { MdoPeerSessionDestroy(S); return NULL; } return S;
+    return Bound;
 }
 static bool MdoPeerLocal(MdoRudpConfig* C, const MdoPeerPolicy* P, xnetfamily Family)
 {
-    if (P->Local.Family) { if (P->Local.Family!=Family) return false; C->Local=P->Local; return true; }
+    const xnetaddr* A=&P->Local[Family==XNET_FAMILY_IPV6 ? 1:0];
+    if (A->Family) { if (A->Family!=Family) return false; C->Local=*A; return true; }
     return xrtNetAddrAny(&C->Local,Family,0);
+}
+static MdoPeerSession* MdoPeerStart(const MdoPeerInfo* Info, const MdoPeerPolicy* Policy,
+    MdoRudpConfig* Config, unsigned Families, xcancel* Cancel, MdoPeerSignalProc Signal, void* Data)
+{
+    MdoPeerSession* S=xrtCalloc(1,sizeof(*S));
+    if (!S) { xrtSecureZero(Config->Private,32); return NULL; }
+    S->Info=*Info; S->Policy=*Policy; S->Initiator=!Config->Listen; S->Families=Families;
+    S->Signal=Signal; S->SignalData=Data; S->Cancel=xrtCancelChild(Cancel);
+    S->Until=MdoDeadlineAfterUs(MDO_PEER_ATTEMPT_US); S->AlternateAt=MdoDeadlineAfterUs(MDO_PEER_ALTERNATE_US);
+    bool Any=false;
+    if (S->Cancel && xrtX25519Public(Config->Private,S->Public)) for (unsigned i=0;i<2;++i) {
+        MdoPeerLane* L=&S->Lanes[i]; if (!(Families&(1u<<i))) continue;
+        L->Family=i ? XNET_FAMILY_IPV6:XNET_FAMILY_IPV4;
+        MdoRudpConfig C=*Config;
+        if (MdoPeerLocal(&C,Policy,L->Family) && MdoPeerBindAuthority(Info,&C)) L->Raw=MdoRudpStart(&C,S->Cancel);
+        xrtSecureZero(&C,sizeof(C)); L->Failed=!L->Raw; Any|=L->Raw!=NULL;
+    }
+    xrtSecureZero(Config->Private,32);
+    if (!Any) { MdoPeerSessionDestroy(S); return NULL; } return S;
 }
 MdoPeerSession* MdoPeerAccept(MdoPeerOffer* O, const xvalue* Init, const MdoPeerPolicy* Policy,
     xcancel* Cancel, MdoPeerSignalProc Signal, void* Data)
 {
     cstr Type=MdoPeerText(Init,"type",24), Nonce=MdoPeerText(Init,"nonce",32), Runtime=MdoPeerText(Init,"runtime_id",32);
-    uint64 Family=0; MdoRudpConfig C={0};
+    unsigned Families=0; MdoRudpConfig C={0};
     if (!O || !Policy || !Signal || O->Used || MdoDeadlineExpired(O->Until) || xrtValueCount(Init)!=5 ||
         !Type || strcmp(Type,"rudp_init") || !Nonce || strcmp(Nonce,O->Info.Nonce) || !Runtime || strcmp(Runtime,O->Info.Runtime) ||
-        !MdoPeerUInt(xrtValueObjectGet(Init,XRT_STR_LITERAL("family")),&Family) ||
-        (Family!=4 && Family!=6) || !(O->Families&(Family==4?1u:2u)) ||
+        !MdoPeerReadFamilies(xrtValueObjectGet(Init,XRT_STR_LITERAL("families")),&Families) ||
+        (Families&~(O->Families&MdoPeerFamilies(Policy))) ||
         !MdoPeerUnhex(MdoPeerText(Init,"public_key",64),32,C.PeerPublic,true) ||
-        !memcmp(C.PeerPublic,O->Public,32) || !MdoPeerLocal(&C,Policy,(xnetfamily)Family)) return NULL;
+        !memcmp(C.PeerPublic,O->Public,32)) return NULL;
     memcpy(C.Private,O->Private,32); memcpy(C.Scope,O->Scope,16); memcpy(C.Binding,O->Binding,32);
     C.Listen=true; C.MessageLimit=MDO_RUDP_MESSAGE_MAX; O->Used=true; xrtSecureZero(O->Private,32);
-    return MdoPeerStart(&O->Info,Policy,&C,Cancel,Signal,Data);
+    return MdoPeerStart(&O->Info,Policy,&C,Families,Cancel,Signal,Data);
 }
 MdoPeerSession* MdoPeerInitiate(const xvalue* Offer, uint64 Owner, const MdoPeerPolicy* Policy,
     xcancel* Cancel, MdoPeerSignalProc Signal, void* Data)
@@ -195,16 +233,11 @@ MdoPeerSession* MdoPeerInitiate(const xvalue* Offer, uint64 Owner, const MdoPeer
         !MdoPeerUnhex(MdoPeerText(Offer,"public_key",64),32,C.PeerPublic,true) ||
         !MdoPeerUnhex(MdoPeerText(Offer,"scope",32),16,C.Scope,true) ||
         !MdoPeerUnhex(MdoPeerText(Offer,"binding",64),32,C.Binding,true) ||
-        xrtValueType(Families)!=XVALUE_ARRAY || !xrtValueCount(Families) || xrtValueCount(Families)>2) return NULL;
-    for (size_t i=0;i<xrtValueCount(Families);++i) {
-        uint64 F=0; if (!MdoPeerUInt(xrtValueArrayGet(Families,i),&F) || (F!=4 && F!=6)) return NULL;
-        unsigned Bit=F==4?1u:2u; if (Mask&Bit) return NULL; Mask|=Bit;
-    }
+        !MdoPeerReadFamilies(Families,&Mask)) return NULL;
     Mask&=MdoPeerFamilies(Policy); if (!Mask) return NULL;
     strcpy(Info.Nonce,MdoPeerText(Offer,"nonce",32));
-    if (!MdoPeerLocal(&C,Policy,(Mask&2u)?XNET_FAMILY_IPV6:XNET_FAMILY_IPV4)) return NULL;
     if (!xrtSecureRandom(C.Private,32)) { xrtSecureZero(C.Private,32); return NULL; }
-    C.MessageLimit=MDO_RUDP_MESSAGE_MAX; return MdoPeerStart(&Info,Policy,&C,Cancel,Signal,Data);
+    C.MessageLimit=MDO_RUDP_MESSAGE_MAX; return MdoPeerStart(&Info,Policy,&C,Mask,Cancel,Signal,Data);
 }
 static xvalue* MdoPeerMessage(MdoPeerSession* S, cstr Type)
 {
@@ -228,24 +261,37 @@ bool MdoPeerInput(MdoPeerSession* S, const xvalue* V)
     if (!S || S->Info.Failed || !Type || !Nonce || strcmp(Nonce,S->Info.Nonce) || !Runtime || strcmp(Runtime,S->Info.Runtime)) return false;
     if (!strcmp(Type,"rudp_cancel") && xrtValueCount(V)==3) return MdoPeerFail(S,"cancelled");
     if (S->Initiator && !strcmp(Type,"rudp_failed") && xrtValueCount(V)==4 && MdoPeerText(V,"code",32)) return MdoPeerFail(S,"remote_unavailable");
-    if (strcmp(Type,S->Initiator?"rudp_answer":"rudp_candidates") || xrtValueCount(V)!=4) return false;
+    uint64 Family=0;
+    if (!MdoPeerUInt(xrtValueObjectGet(V,XRT_STR_LITERAL("family")),&Family) || (Family!=4 && Family!=6) ||
+        !(S->Families&(Family==4?1u:2u))) return false;
+    if (!strcmp(Type,S->Initiator?"rudp_selected":"rudp_select")) {
+        if (xrtValueCount(V)!=4 || (S->Selected && S->Selected!=(xnetfamily)Family) ||
+            (S->Initiator && !S->Selected)) return false;
+        S->Selected=(xnetfamily)Family;
+        if (S->Initiator) S->SelectionAck=true;
+        return true; /* Exact repeats never change the selected family or deadline. */
+    }
+    if (strcmp(Type,S->Initiator?"rudp_answer":"rudp_candidates") || xrtValueCount(V)!=5) return false;
+    MdoPeerLane* L=&S->Lanes[Family==6 ? 1:0];
     const xvalue* List=xrtValueObjectGet(V,XRT_STR_LITERAL("candidates"));
     size_t Count=xrtValueCount(List); xnetaddr Addresses[8]; uint8 Kinds[8];
-    if (xrtValueType(List)!=XVALUE_ARRAY || !Count || Count>MDO_PEER_CANDIDATES) return false;
+    size_t Limit=S->Families==3u ? MDO_PEER_CANDIDATES/2u:MDO_PEER_CANDIDATES;
+    if (xrtValueType(List)!=XVALUE_ARRAY || !Count || Count>Limit) return false;
     for (size_t i=0;i<Count;++i) {
         const xvalue* Item=xrtValueArrayGet(List,i); cstr Ip=MdoPeerText(Item,"ip",64), Kind=MdoPeerText(Item,"kind",8); uint64 Port=0;
         if (xrtValueType(Item)!=XVALUE_OBJECT || xrtValueCount(Item)!=3 || !Ip || !Kind || (strcmp(Kind,"host") && strcmp(Kind,"srflx")) ||
             !MdoPeerUInt(xrtValueObjectGet(Item,XRT_STR_LITERAL("port")),&Port) || !Port || Port>65535 ||
-            !xrtNetAddrParse(&Addresses[i],Ip,(uint16)Port) || Addresses[i].Family!=S->Family || !MdoPeerCandidate(&Addresses[i])) return false;
+            !xrtNetAddrParse(&Addresses[i],Ip,(uint16)Port) || Addresses[i].Family!=(xnetfamily)Family || !MdoPeerCandidate(&Addresses[i])) return false;
         Kinds[i]=!strcmp(Kind,"srflx")?1u:0u;
         for (size_t j=0;j<i;++j) if (xrtNetAddrEqual(&Addresses[i],&Addresses[j])) return false;
     }
-    if (S->RemoteReady) {
-        if (S->Count!=Count) return false;
-        for (size_t i=0;i<Count;++i) if (Kinds[i]!=S->Kinds[i] || !xrtNetAddrEqual(&Addresses[i],&S->Candidates[i])) return false;
+    if (L->RemoteReady) {
+        if (L->Count!=Count) return false;
+        for (size_t i=0;i<Count;++i) if (Kinds[i]!=L->Kinds[i] || !xrtNetAddrEqual(&Addresses[i],&L->Candidates[i])) return false;
         return true; /* Exact duplicate, no deadline renewal or new targets. */
     }
-    memcpy(S->Candidates,Addresses,Count*sizeof(*Addresses)); memcpy(S->Kinds,Kinds,Count); S->Count=Count; S->RemoteReady=true; return true;
+    if (S->Selected && S->Selected!=(xnetfamily)Family) return true; /* A late loser cannot restart work. */
+    memcpy(L->Candidates,Addresses,Count*sizeof(*Addresses)); memcpy(L->Kinds,Kinds,Count); L->Count=Count; L->RemoteReady=true; return true;
 }
 static bool MdoPeerAppendCandidate(xvalue* List, const xnetaddr* Address, cstr Kind)
 {
@@ -261,7 +307,7 @@ static bool MdoPeerAppendCandidate(xvalue* List, const xnetaddr* Address, cstr K
         xrtValueObjectSetNew(Item,XRT_STR_LITERAL("port"),xrtValueUInt(Address->Port));
     if (!Ok) { xrtValueRelease(Item); return false; } return xrtValueArrayAppendNew(List,Item);
 }
-static xvalue* MdoPeerCandidates(MdoPeerSession* S, const MdoRudpInfo* Info)
+static xvalue* MdoPeerCandidates(MdoPeerSession* S, MdoPeerLane* L, const MdoRudpInfo* Info)
 {
     xvalue* List=xrtValueArray(); if (!List) return NULL;
     if (Info->Discovery.Complete && !MdoPeerAppendCandidate(List,&Info->Discovery.Mapped,"srflx")) goto fail;
@@ -276,46 +322,102 @@ static xvalue* MdoPeerCandidates(MdoPeerSession* S, const MdoRudpInfo* Info)
                 if (!(N->Flags&XNET_INTERFACE_UP) || (N->Flags&XNET_INTERFACE_LOOPBACK)) continue;
                 for (size_t j=0;j<N->AddressCount && xrtValueCount(List)<MDO_PEER_CANDIDATES;++j) {
                     xnetaddr A=N->Addresses[j].Address; A.Port=Info->Local.Port;
-                    if (A.Family==S->Family && !MdoPeerAppendCandidate(List,&A,"host")) Ok=false;
+                    if (A.Family==L->Family && !MdoPeerAppendCandidate(List,&A,"host")) Ok=false;
                 }
             }
             xrtNetInterfacesFree(&Interfaces); if (!Ok) goto fail;
         }
     }
+    if (S->Families==3u) while (xrtValueCount(List)>MDO_PEER_CANDIDATES/2u)
+        xrtValueArrayRemove(List,xrtValueCount(List)-1,1);
     if (xrtValueCount(List)) return List;
 fail:
     xrtValueRelease(List); return NULL;
 }
-static bool MdoPeerMap(MdoPeerSession* S, MdoRudpInfo* Info)
+static bool MdoPeerMap(MdoPeerSession* S, MdoPeerLane* L, MdoRudpInfo* Info)
 {
-    if (S->MappingComplete) return true;
-    if (!S->MappingStarted) {
-        S->MappingStarted=true; S->MappingUntil=MdoDeadlineAfterUs(UINT64_C(1500000));
-        xnetaddr Server=S->Policy.Stun;
+    if (L->MappingComplete) return true;
+    if (!L->MappingStarted) {
+        L->MappingStarted=true; L->MappingUntil=MdoDeadlineAfterUs(UINT64_C(1500000));
+        xnetaddr Server=S->Policy.Stun[L->Family==XNET_FAMILY_IPV6 ? 1:0];
         if (!Server.Family && S->Policy.StunHost[0] && !xrtNetAddrParse(&Server,S->Policy.StunHost,S->Policy.StunPort) && S->Policy.Resolver)
-            S->Resolve=xrtNetResolveAsync(S->Policy.Resolver,S->Policy.StunHost,S->Family);
-        if (Server.Family==S->Family) {
+            L->Resolve=xrtNetResolveAsync(S->Policy.Resolver,S->Policy.StunHost,L->Family);
+        if (Server.Family==L->Family) {
             if (!Server.Port) Server.Port=S->Policy.StunPort;
-            (void)MdoRudpDiscover(S->Raw,&Server,1000);
+            (void)MdoRudpDiscover(L->Raw,&Server,1000);
         }
     }
-    if (S->Resolve && xrtFutureState(S->Resolve)!=XFUTURE_PENDING) {
-        if (xrtFutureState(S->Resolve)==XFUTURE_RESOLVED && !MdoDeadlineExpired(S->MappingUntil)) {
-            const xnetaddrlist* List=xrtFutureValue(S->Resolve);
+    if (L->Resolve && xrtFutureState(L->Resolve)!=XFUTURE_PENDING) {
+        if (xrtFutureState(L->Resolve)==XFUTURE_RESOLVED && !MdoDeadlineExpired(L->MappingUntil)) {
+            const xnetaddrlist* List=xrtFutureValue(L->Resolve);
             for (size_t i=0;i<xrtNetAddrListCount(List);++i) {
                 xnetaddr Server=*xrtNetAddrListGet(List,i); Server.Port=S->Policy.StunPort;
-                if (Server.Family==S->Family && MdoPeerCandidate(&Server) && MdoRudpDiscover(S->Raw,&Server,1000)) break;
+                if (Server.Family==L->Family && MdoPeerCandidate(&Server) && MdoRudpDiscover(L->Raw,&Server,1000)) break;
             }
         }
-        xrtFutureDestroy(S->Resolve); S->Resolve=NULL;
+        xrtFutureDestroy(L->Resolve); L->Resolve=NULL;
     }
-    if (MdoDeadlineExpired(S->MappingUntil)) {
-        if (S->Resolve) { (void)xrtFutureCancel(S->Resolve); xrtFutureDestroy(S->Resolve); S->Resolve=NULL; }
-        MdoRudpCancelProbes(S->Raw); S->MappingComplete=true; return true;
+    if (MdoDeadlineExpired(L->MappingUntil)) {
+        if (L->Resolve) { (void)xrtFutureCancel(L->Resolve); xrtFutureDestroy(L->Resolve); L->Resolve=NULL; }
+        MdoRudpCancelProbes(L->Raw); L->MappingComplete=true; return true;
     }
-    (void)MdoRudpGetInfo(S->Raw,Info);
-    S->MappingComplete=!S->Resolve && !Info->Discovery.Pending;
-    return S->MappingComplete;
+    (void)MdoRudpGetInfo(L->Raw,Info);
+    L->MappingComplete=!L->Resolve && !Info->Discovery.Pending;
+    return L->MappingComplete;
+}
+static void MdoPeerLaneDrop(MdoPeerLane* L)
+{
+    if (L->Resolve) { (void)xrtFutureCancel(L->Resolve); xrtFutureDestroy(L->Resolve); L->Resolve=NULL; }
+    MdoRudpDestroy(L->Raw); L->Raw=NULL; L->Failed=true;
+}
+static bool MdoPeerLanePoll(MdoPeerSession* S, MdoPeerLane* L)
+{
+    if (!L->Raw || L->Failed) return false;
+    MdoRudpInfo Info;
+    if (!MdoRudpGetInfo(L->Raw,&Info) || Info.Closed || Info.PeerClosed) { MdoPeerLaneDrop(L); return false; }
+    if (!Info.Opened) return true;
+    if (S->Initiator && !S->InitSent) {
+        xvalue* V=MdoPeerMessage(S,"rudp_init"); char Public[65]; MdoPeerHex(S->Public,32,Public);
+        bool Ok=V && MdoPeerTextSet(V,"public_key",Public) &&
+            xrtValueObjectSetNew(V,XRT_STR_LITERAL("families"),MdoPeerFamilyValue(S->Families));
+        if (!Ok) { xrtValueRelease(V); return MdoPeerFail(S,"resources_unavailable"); }
+        if (!MdoPeerSignal(S,V)) return MdoPeerFail(S,"signal_unavailable");
+        S->InitSent=true;
+    }
+    bool MapReady=MdoPeerMap(S,L,&Info);
+    if (!L->CandidatesSent && MapReady) {
+        xvalue* List=MdoPeerCandidates(S,L,&Info), *V=MdoPeerMessage(S,S->Initiator?"rudp_candidates":"rudp_answer");
+        if (!List) { xrtValueRelease(V); MdoPeerLaneDrop(L); return false; }
+        if (!V) { xrtValueRelease(List); return MdoPeerFail(S,"resources_unavailable"); }
+        bool Ok=xrtValueObjectSetNew(V,XRT_STR_LITERAL("candidates"),List) &&
+            xrtValueObjectSetNew(V,XRT_STR_LITERAL("family"),xrtValueUInt(L->Family));
+        if (!Ok) { xrtValueRelease(V); return MdoPeerFail(S,"resources_unavailable"); }
+        if (!MdoPeerSignal(S,V)) return MdoPeerFail(S,"signal_unavailable");
+        L->CandidatesSent=true;
+    }
+    if (L->RemoteReady && L->CandidatesSent && !L->Dialed && (!S->Initiator || L->Family!=XNET_FAMILY_IPV4 ||
+        !(S->Families&2u) || S->Lanes[1].Failed || MdoDeadlineExpired(S->AlternateAt))) {
+        /* Candidate fallback is owned by the transport, before application
+         * admission; never rebuild or replay a confirmed application stream. */
+        (void)MdoRudpWarmup(L->Raw,L->Candidates,L->Count,5000); L->Dialed=true;
+        if (S->Initiator) {
+            xnetaddr Ordered[8]; size_t Count=0;
+            for (unsigned Kind=1;Kind<3;++Kind) for (size_t i=0;i<L->Count;++i)
+                if (L->Kinds[i]==(Kind==1 ? 1u:0u)) Ordered[Count++]=L->Candidates[i];
+            uint64 Remaining=MdoDeadlineRemainingUs(S->Until)/1000u;
+            if (!Remaining || !MdoRudpDialCandidates(L->Raw,Ordered,Count,(uint32)Remaining)) {
+                MdoPeerLaneDrop(L); return false;
+            }
+        }
+    }
+    return true;
+}
+static bool MdoPeerSelectionSignal(MdoPeerSession* S, cstr Type)
+{
+    xvalue* V=MdoPeerMessage(S,Type);
+    if (!V) return false;
+    if (!xrtValueObjectSetNew(V,XRT_STR_LITERAL("family"),xrtValueUInt(S->Selected))) { xrtValueRelease(V); return false; }
+    return MdoPeerSignal(S,V);
 }
 bool MdoPeerPoll(MdoPeerSession* S)
 {
@@ -323,36 +425,34 @@ bool MdoPeerPoll(MdoPeerSession* S)
     if (xrtCancelRequested(S->Cancel)) return MdoPeerFail(S,"cancelled");
     if (S->Info.Ready || S->Taken) return true;
     if (MdoDeadlineExpired(S->Until)) return MdoPeerFail(S,"attempt_timeout");
-    MdoRudpInfo Info; if (!MdoRudpGetInfo(S->Raw,&Info) || Info.Closed) return MdoPeerFail(S,"endpoint_unavailable");
-    if (!Info.Opened) return true;
-    if (S->Initiator && !S->InitSent) {
-        xvalue* V=MdoPeerMessage(S,"rudp_init"); char Public[65]; MdoPeerHex(S->Public,32,Public);
-        bool Ok=V && MdoPeerTextSet(V,"public_key",Public) && xrtValueObjectSetNew(V,XRT_STR_LITERAL("family"),xrtValueUInt(S->Family));
-        if (!Ok) { xrtValueRelease(V); return MdoPeerFail(S,"resources_unavailable"); }
-        if (!MdoPeerSignal(S,V)) return MdoPeerFail(S,"signal_unavailable");
-        S->InitSent=true;
-    }
-    bool MapReady=MdoPeerMap(S,&Info);
-    if (!S->CandidatesSent && MapReady) {
-        xvalue* List=MdoPeerCandidates(S,&Info), *V=MdoPeerMessage(S,S->Initiator?"rudp_candidates":"rudp_answer");
-        if (!List || !V) { xrtValueRelease(List); xrtValueRelease(V); return MdoPeerFail(S,"no_candidates"); }
-        if (!xrtValueObjectSetNew(V,XRT_STR_LITERAL("candidates"),List)) { xrtValueRelease(V); return MdoPeerFail(S,"resources_unavailable"); }
-        if (!MdoPeerSignal(S,V)) return MdoPeerFail(S,"signal_unavailable");
-        S->CandidatesSent=true;
-    }
-    if (S->RemoteReady && S->CandidatesSent && !S->Dialed) {
-        /* Candidate fallback is owned by the transport, before application
-         * admission; never rebuild or replay a confirmed application stream. */
-        (void)MdoRudpWarmup(S->Raw,S->Candidates,S->Count,5000); S->Dialed=true;
-        if (S->Initiator) {
-            xnetaddr Ordered[8]; size_t Count=0;
-            for (unsigned Kind=1;Kind<3;++Kind) for (size_t i=0;i<S->Count;++i)
-                if (S->Kinds[i]==(Kind==1 ? 1u:0u)) Ordered[Count++]=S->Candidates[i];
-            uint64 Remaining=MdoDeadlineRemainingUs(S->Until)/1000u;
-            if (!Remaining || !MdoRudpDialCandidates(S->Raw,Ordered,Count,(uint32)Remaining)) return MdoPeerFail(S,"dial_unavailable");
+    bool Any=false;
+    /* IPv6 gets a bounded head start; neither the other family nor slow DNS
+     * can renew the attempt. Only the initiator chooses the confirmed lane. */
+    for (unsigned n=0;n<2;++n) {
+        MdoPeerLane* L=&S->Lanes[1u-n];
+        if (S->Selected && L->Family!=S->Selected) { MdoPeerLaneDrop(L); continue; }
+        if (MdoPeerLanePoll(S,L)) Any=true;
+        if (S->Info.Failed) return false;
+        MdoRudpInfo Info;
+        if (!S->Selected && S->Initiator && L->Raw && MdoRudpGetInfo(L->Raw,&Info) && Info.Confirmed && !Info.Closed && !Info.PeerClosed) {
+            S->Selected=L->Family;
+            if (!MdoPeerSelectionSignal(S,"rudp_select")) return MdoPeerFail(S,"signal_unavailable");
         }
     }
-    if (Info.Confirmed) S->Info.Ready=true;
+    if (!Any) return MdoPeerFail(S,"endpoint_unavailable");
+    if (S->Selected) {
+        unsigned Index=S->Selected==XNET_FAMILY_IPV6 ? 1u:0u;
+        MdoPeerLaneDrop(&S->Lanes[1u-Index]);
+        MdoPeerLane* L=&S->Lanes[Index]; MdoRudpInfo Info;
+        if (!L->Raw || !MdoRudpGetInfo(L->Raw,&Info) || Info.Closed || Info.PeerClosed) return MdoPeerFail(S,"selected_endpoint_unavailable");
+        if (Info.Confirmed) {
+            if (!S->Initiator && !S->SelectionAck) {
+                if (!MdoPeerSelectionSignal(S,"rudp_selected")) return MdoPeerFail(S,"signal_unavailable");
+                S->SelectionAck=true;
+            }
+            if (S->SelectionAck) { S->Info.Family=S->Selected; S->Info.Ready=true; }
+        }
+    }
     return true;
 }
 bool MdoPeerGetInfo(MdoPeerSession* S, MdoPeerInfo* Info)
@@ -360,14 +460,15 @@ bool MdoPeerGetInfo(MdoPeerSession* S, MdoPeerInfo* Info)
 MdoRemoteSocket* MdoPeerTakeSocket(MdoPeerSession* S)
 {
     if (!S || !S->Info.Ready || S->Info.Failed || S->Taken) return NULL;
-    MdoRemoteSocket* Socket=MdoRemoteSocketAdoptRudp(S->Raw);
-    if (Socket) { S->Raw=NULL; S->Taken=true; } return Socket;
+    MdoPeerLane* L=&S->Lanes[S->Selected==XNET_FAMILY_IPV6 ? 1:0];
+    MdoRemoteSocket* Socket=MdoRemoteSocketAdoptRudp(L->Raw);
+    if (Socket) { L->Raw=NULL; S->Taken=true; } return Socket;
 }
 void MdoPeerSessionDestroy(MdoPeerSession* S)
 {
     if (!S) return;
     xrtCancelRequest(S->Cancel);
-    if (S->Resolve) { (void)xrtFutureCancel(S->Resolve); xrtFutureDestroy(S->Resolve); }
-    MdoRudpDestroy(S->Raw); xrtCancelDestroy(S->Cancel); xrtSecureZero(S,sizeof(*S)); xrtFree(S);
+    for (unsigned i=0;i<2;++i) MdoPeerLaneDrop(&S->Lanes[i]);
+    xrtCancelDestroy(S->Cancel); xrtSecureZero(S,sizeof(*S)); xrtFree(S);
 }
 #endif

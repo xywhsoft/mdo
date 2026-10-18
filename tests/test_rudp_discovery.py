@@ -264,6 +264,7 @@ void ServiceInit(XS_HostInfo* Host)
 class Oracles:
     def __enter__(self):
         self.sockets = {}; self.ports = {}; self.warm = []; self.late = 0
+        self.blocked_families=set(); self.blocked_packets={4:0,6:0}
         self.stop = threading.Event(); self.errors = []
         self.nat = {4: {'local': [None,None], 'allow': [False,False], 'forwarded': 0, 'warm': 0},
                     6: {'local': [None,None], 'allow': [False,False], 'forwarded': 0, 'warm': 0}}
@@ -312,6 +313,8 @@ class Oracles:
                         state['allow'][sender]=True
                         if packet[:2]==b'\x00\x11':
                             state['warm']+=1; continue  # drop every warmup packet
+                        if family in self.blocked_families:
+                            self.blocked_packets[family]+=1; continue
                         if not state['allow'][side]: continue
                         out=next(s for s,(f,m) in self.sockets.items() if f==family and m==f'nat{sender}')
                         self.send(out,packet,state['local'][side]); state['forwarded']+=1; continue

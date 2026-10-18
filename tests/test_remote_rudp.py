@@ -21,6 +21,8 @@ SITE=None
 FAMILY=4
 ORACLE=None
 IDLE_SECONDS=0
+DUAL=False
+BLOCK_FAMILY=0
 
 
 def setup(site, home):
@@ -28,20 +30,27 @@ def setup(site, home):
     SITE=site
     # Exercise the public native local-bind policy, without depending on the
     # test machine's physical adapter/firewall or publishing its real IPs.
-    for relative, needle, replacement in (
+    for relative, needle, prefix in (
         ('src/remote/direct_rudp.inc.c',
          'MdoPeerPolicyInit(&Direct->Policy,Net,MDO_ACCOUNT_SERVICE_ORIGIN);',
-         'MdoPeerPolicyInit(&Direct->Policy,Net,MDO_ACCOUNT_SERVICE_ORIGIN); xrtNetAddrLoopback(&Direct->Policy.Local,XNET_FAMILY_IPV4,0); Direct->Policy.StunHost[0]=0;'),
+         'Direct->Policy'),
         ('src/remote/lan_gateway.inc.c',
          'MdoPeerPolicyInit(&Policy,&Gateway->Net,MDO_ACCOUNT_SERVICE_ORIGIN);',
-         'MdoPeerPolicyInit(&Policy,&Gateway->Net,MDO_ACCOUNT_SERVICE_ORIGIN); xrtNetAddrLoopback(&Policy.Local,XNET_FAMILY_IPV4,0); Policy.StunHost[0]=0;')):
-        replacement=replacement.replace('XNET_FAMILY_IPV4',f'XNET_FAMILY_IPV{FAMILY}')
-        if ORACLE:
-            side=0 if 'direct_rudp' in relative else 1
-            prefix='Direct->Policy' if side==0 else 'Policy'
-            replacement+=f' xrtNetAddrLoopback(&{prefix}.Stun,XNET_FAMILY_IPV{FAMILY},{ORACLE.ports[(FAMILY,f"natinfo{side}")]});'
+         'Policy')):
+        replacement=needle+f' {prefix}.StunHost[0]=0;'
+        for family in ((4,6) if DUAL else (FAMILY,)):
+            replacement+=f' xrtNetAddrLoopback(&{prefix}.Local[{family==6:d}],XNET_FAMILY_IPV{family},0);'
+            if ORACLE:
+                side=0 if 'direct_rudp' in relative else 1
+                replacement+=f' xrtNetAddrLoopback(&{prefix}.Stun[{family==6:d}],XNET_FAMILY_IPV{family},{ORACLE.ports[(family,f"natinfo{side}")]});'
         path=site/relative; text=path.read_text(encoding='utf-8'); assert needle in text
         path.write_text(text.replace(needle,replacement),encoding='utf-8')
+    if DUAL and ORACLE:
+        # Distinct private LANs: only independently discovered public mappings
+        # can reach the other endpoint, never the oracle's shared loopback.
+        path=site/'src/remote/rendezvous.inc.c'; text=path.read_text(encoding='utf-8')
+        needle='    if (!xrtNetAddrIsUnspecified(&Info->Local)) {'; assert text.count(needle)==1
+        path.write_text(text.replace(needle,'    if (Info->Discovery.Complete) return List;\n'+needle),encoding='utf-8')
 
 
 def gateway(port, token, offer):
@@ -51,7 +60,7 @@ def gateway(port, token, offer):
 
 
 def negotiate(native, relay, offer, *, misplaced=None, observe=None):
-    end=time.monotonic()+12; sent=0
+    end=time.monotonic()+12; sent=0; selected=None
     while time.monotonic()<end:
         available=[s for s in (native,relay) if s.pending]
         if not available:
@@ -66,7 +75,12 @@ def negotiate(native, relay, offer, *, misplaced=None, observe=None):
                 if value.get('type')=='direct_ready':
                     assert value['transport']=='xrudp' and value['peer_id']==offer['peer_id']
                     assert value['runtime_id']==offer['runtime_id'] and value['mode']==offer['mode']
-                    assert sent>=2; return value
+                    assert sent>=3 and selected is not None
+                    # The native gateway has already taken its selected socket.
+                    # A late repeated acknowledgement must remain a control
+                    # message, never leak into the target's business protocol.
+                    native.send(1,json.dumps({'type':'rudp_signal','payload':selected}).encode())
+                    return value
                 assert value['type']=='rudp_forward',value
                 control=value['payload']; assert control['nonce']==offer['nonce']
                 if observe: observe('controller',control)
@@ -76,9 +90,10 @@ def negotiate(native, relay, offer, *, misplaced=None, observe=None):
                     misplaced.send(1,json.dumps(control).encode())
                 relay.send(1,json.dumps(control).encode()); sent+=1
             else:
-                assert value['type'] in ('rudp_answer','rudp_failed'),value
+                assert value['type'] in ('rudp_answer','rudp_selected','rudp_failed'),value
                 assert value['nonce']==offer['nonce'],value
                 assert value['type']!='rudp_failed',value
+                if value['type']=='rudp_selected': selected=value
                 if observe: observe('target',value)
                 native.send(1,json.dumps({'type':'rudp_signal','payload':value}).encode())
     raise AssertionError('xrudp rendezvous deadline')
@@ -107,7 +122,11 @@ def exercise(*,client,hello,app,device,call,bearer,website_port,clients):
     except EOFError: pass
     bad.close()
     direct=gateway(port,token,offer); clients.append(direct)
-    negotiate(direct,client,offer,misplaced=viewer)
+    observations=[]
+    negotiate(direct,client,offer,misplaced=viewer,observe=lambda who,value:observations.append((who,value)))
+    if DUAL:
+        chosen=[value['family'] for _,value in observations if value['type'] in ('rudp_select','rudp_selected')]
+        assert chosen==[4 if BLOCK_FAMILY==6 else 6]*2,chosen
     rpc=BufferedRpc(direct,hello); relay=Rpc(client,hello,client_id=rpc.client)
     assert rpc.json('GET','/api/v1/projects')[2]==200
     assert relay.json('GET','/api/v1/settings')[2]==200
@@ -162,8 +181,12 @@ def exercise(*,client,hello,app,device,call,bearer,website_port,clients):
     readonly.close(); clients.remove(readonly)
     if ORACLE:
         assert not ORACLE.errors,ORACLE.errors
-        assert ORACLE.nat[FAMILY]['forwarded']>0 and ORACLE.nat[FAMILY]['warm']>0,ORACLE.nat[FAMILY]
-    print(f'PASS authenticated xrudp family={FAMILY} nat={bool(ORACLE)}, owner/peer/nonce pinning, real HTTP/live/receipts, collision route isolation, readonly, one-use and relay fallback')
+        used=chosen[0] if DUAL else FAMILY
+        assert ORACLE.nat[used]['forwarded']>0 and ORACLE.nat[used]['warm']>0,ORACLE.nat[used]
+        if BLOCK_FAMILY:
+            assert ORACLE.nat[BLOCK_FAMILY]['warm']>0 and ORACLE.nat[BLOCK_FAMILY]['forwarded']==0,ORACLE.nat
+            if BLOCK_FAMILY==6: assert ORACLE.blocked_packets[6]>0,'preferred IPv6 handshake must meet the blackhole'
+    print(f'PASS authenticated xrudp family={"dual" if DUAL else FAMILY} blocked={BLOCK_FAMILY} nat={bool(ORACLE)}, owner/peer/nonce pinning, real HTTP/live/receipts, collision route isolation, readonly, one-use and relay fallback')
     return client
 
 
@@ -171,9 +194,14 @@ if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__); parser.add_argument('--host',type=Path,required=True)
     parser.add_argument('--website-host',type=Path,default=WEBSITE_HOST)
     parser.add_argument('--family',type=int,choices=(4,6),default=4); parser.add_argument('--nat',action='store_true')
+    parser.add_argument('--dual',action='store_true')
+    parser.add_argument('--block-family',type=int,choices=(4,6),default=0)
     parser.add_argument('--idle-seconds',type=int,choices=range(61,91),metavar='61..90',default=0)
-    args=parser.parse_args(); FAMILY=args.family; IDLE_SECONDS=args.idle_seconds
+    args=parser.parse_args(); FAMILY=args.family; IDLE_SECONDS=args.idle_seconds; DUAL=args.dual; BLOCK_FAMILY=args.block_family
+    if BLOCK_FAMILY and not (args.dual and args.nat): parser.error('--block-family requires --dual --nat')
     if IDLE_SECONDS and args.nat: parser.error('idle gate uses independent loopback peers; the NAT fixture models one pair only')
     if args.nat:
-        with Oracles() as ORACLE: run(args.host.resolve(),args.website_host.resolve(),exercise,site_setup=setup)
+        with Oracles() as ORACLE:
+            ORACLE.blocked_families={BLOCK_FAMILY} if BLOCK_FAMILY else set()
+            run(args.host.resolve(),args.website_host.resolve(),exercise,site_setup=setup)
     else: run(args.host.resolve(),args.website_host.resolve(),exercise,site_setup=setup)

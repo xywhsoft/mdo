@@ -65,3 +65,15 @@ xs 主分支 `7e54d7c0a40cc84e3363f9463c5ea373f6b8e1a2` 增加独立的 C/XRT ST
 Windows 服务端候选以 mdo `1814a155` 源状态重新打包，5,159,614 字节，SHA256 `c0c9d8d7041de310992eb9033e75530d33d67351a3d440a269dd0a3250b83bc1`；打包后的 Home 独占、冲突和进程重启恢复回归通过。两个包均包含工作区原有的其他任务未提交产品修改，保留真实 dirty 收据，不作为已发布版本。当前官网、已安装 mdo 与网站宿主没有被这些候选包替换。
 
 证据：`.build/xrudp-android-native-build.log`、`xrudp-android-apk-build.log`、`xrudp-android-elf.log`、`xrudp-android-manifest.log`、`xrudp-android/validation.json`、`xrudp-current-pack.log`、`xrudp-current-packed-home.log`。xs 主仓的 `sync_xrt.py --check` 和 mdo 三项依赖锁定/行尾独立性/图片库校验再次通过。基础 XRT 升级已完成；长期目标的实机、双重 NAT、双族选择、完整互操作和长稳验收继续保留。
+
+## IPv4/IPv6 竞争与统一选路
+
+修复了“双方存在 IPv6 地址就只尝试 IPv6”的缺陷。一次性 init 在同一个授权中声明共同地址族，每个协商最多创建两个独立、同族端点；IPv6 先尝试，IPv4 最多等待 250 毫秒，若本机 IPv6 已失败则立即加入。两族同时进行独立的 DNS/同端口 STUN，不能相互阻塞或续期原有十秒总预算。双族每族最多四个候选，单族最多八个，总候选与全进程八个原生传输的限制不变。某族没有候选或绑定失败只淘汰该族。
+
+发起端统一选择已经完成 Noise 确认的族，通过现有认证中继发送 `rudp_select`；目标端只能确认同一族并回复 `rudp_selected`。发起端收到确认之前无法取得业务 socket，目标端也不能自行选择另一族。未选中的端点及解析 future 在业务受理前取消并关闭，后续不换路、不重放业务。公钥和一次性授权身份保持固定，各族的 Noise 上下文分别绑定地址族及已有账号/peer/runtime/nonce/权限。重复信令不续期，不允许改变已选族；本机网关在取得 socket 后仍消费迟到的确认控制消息，不把它转发给业务桥接。
+
+Windows/Linux 实际 TCC 和 Linux ASan/UBSan/泄漏检查通过十二组核心场景：原单族/NAT/权限篡改，以及双族优选、任一族黑洞、双方不可达时总期限终止、混合单族、某族绑定失败、延迟确认、矛盾选路拒绝、重复信令和关闭后零传输计数。完整账号/原生网关/真实 HTTP/live/只读/收据/退出生命周期在单独 IPv4/IPv6 NAT 模拟及双族组合通过：IPv6 握手确实进入黑洞后由 IPv4 完成业务；IPv4 被阻断时 IPv6 在备用拨号前胜出，因此不要求产生 IPv4 握手包。后者的映射/预热及零数据转发由独立 UDP oracle 核验。两个组合都在取得 socket 后重发选路确认并继续业务，验证控制与业务隔离。
+
+更新后的协议通过 Linux 公网控制端至 NAT 后 Windows 目标的实际原生直连，约 437 ms；两端真实公网映射、写入、实时、权限、收据和干净退出通过，未使用生产账号或模型。该公网场景共同族为 IPv4，不能代替公网双族/双重 NAT 或安卓实机验收。Windows/Linux 全应用 GCC 声明及警告检查无诊断；Android ARM64 Clang 全应用语法通过，只有既有 SDK 静态辅助函数未使用的警告。前端信令白名单、反向消息边界、整体协商期限和写入不重放回归通过，既有 26 组同端口探测回归仍通过。
+
+证据：`.build/rendezvous-dual-{windows,linux,sanitizers,frontend,transport,syntax,linux-syntax,android-syntax,probe-regression}.log`、`rendezvous-dual-e2e-{nat4,nat6,block4,block6}.log`、`rendezvous-dual-public-reverse.log`、`public-remote-caaeb6c17baa4a8d8a33d1eb44786796/receipt.json`。双族协商代码及模拟验证已完成；两个独立公网 NAT、UDP 全阻断时完整前端自动回退、Android 实机、完整 wire 互操作/模糊测试和 72h 长稳仍待验收。

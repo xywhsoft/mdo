@@ -5,7 +5,7 @@
 typedef struct MdoPeerOffer MdoPeerOffer;
 typedef struct MdoPeerSession MdoPeerSession;
 typedef struct MdoPeerPolicy {
-    xnetaddr Local, Stun; /* Optional locally trusted numeric overrides. */
+    xnetaddr Local[2], Stun[2]; /* Optional trusted IPv4/IPv6 numeric overrides. */
     xnetresolver* Resolver; /* Borrowed through SessionDestroy. */
     char StunHost[256];
     uint16 StunPort;
@@ -13,6 +13,7 @@ typedef struct MdoPeerPolicy {
 typedef struct MdoPeerInfo {
     char Peer[33], Runtime[33], Nonce[33], Owner[21];
     cstr Error;
+    xnetfamily Family; /* Selected by the initiator, acknowledged by target. */
     bool ReadOnly, Ready, Failed;
 } MdoPeerInfo;
 /* Owner-thread only; signal callback borrows JSON and must not reenter this

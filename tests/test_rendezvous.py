@@ -40,10 +40,10 @@ static void Session(xnetfamily Family, bool Nat, bool TamperMode)
     MdoPeerPolicy P[2]={{0}}; Queue Q[2]={{0}}; MdoPeerInfo I[2]; MdoPeerSession* S[2]={NULL,NULL};
     MdoRemoteSocket* Socket[2]={NULL,NULL}; xcancel* Cancel=xrtCancelCreate(); CHECK(Cancel);
     for (unsigned i=0;i<2;++i) {
-        CHECK(xrtNetAddrLoopback(&P[i].Local,Family,0));
+        CHECK(xrtNetAddrLoopback(&P[i].Local[Family==XNET_FAMILY_IPV6],Family,0));
         if (Nat) {
             unsigned Port=Family==XNET_FAMILY_IPV4 ? (i?TEST_NATINFO1_4:TEST_NATINFO0_4):(i?TEST_NATINFO1_6:TEST_NATINFO0_6);
-            CHECK(xrtNetAddrLoopback(&P[i].Stun,Family,(uint16)Port));
+            CHECK(xrtNetAddrLoopback(&P[i].Stun[Family==XNET_FAMILY_IPV6],Family,(uint16)Port));
         }
     }
     MdoPeerOffer* O=MdoPeerOfferCreate("11111111111111111111111111111111","22222222222222222222222222222222",7,TamperMode,&P[0]); CHECK(O);
@@ -74,9 +74,11 @@ static void Session(xnetfamily Family, bool Nat, bool TamperMode)
                     CHECK(S[1-i]);
                     Bad=xrtValueDeepClone(V); CHECK(MdoPeerTextSet(Bad,"runtime_id","33333333333333333333333333333333"));
                     CHECK(!MdoPeerInput(S[1-i],Bad)); xrtValueRelease(Bad);
-                    Bad=xrtValueDeepClone(V); xvalue* List=xrtValueObjectEdit(Bad,XRT_STR_LITERAL("candidates")); CHECK(List);
-                    xvalue* First=xrtValueArrayEdit(List,0); CHECK(First && MdoPeerTextSet(First,"ip","255.255.255.255"));
-                    CHECK(!MdoPeerInput(S[1-i],Bad)); xrtValueRelease(Bad);
+                    if (!strcmp(Type,"rudp_candidates") || !strcmp(Type,"rudp_answer")) {
+                        Bad=xrtValueDeepClone(V); xvalue* List=xrtValueObjectEdit(Bad,XRT_STR_LITERAL("candidates")); CHECK(List);
+                        xvalue* First=xrtValueArrayEdit(List,0); CHECK(First && MdoPeerTextSet(First,"ip","255.255.255.255"));
+                        CHECK(!MdoPeerInput(S[1-i],Bad)); xrtValueRelease(Bad);
+                    }
                     CHECK(MdoPeerInput(S[1-i],V) && MdoPeerInput(S[1-i],V));
                 }
                 xrtValueRelease(V);
@@ -87,6 +89,7 @@ static void Session(xnetfamily Family, bool Nat, bool TamperMode)
         CHECK(xrtTimer()<End); xrtSleep(1);
     }
     if (!TamperMode) {
+        CHECK(I[0].Family==Family && I[1].Family==Family);
         for (unsigned i=0;i<2;++i) { Socket[i]=MdoPeerTakeSocket(S[i]); CHECK(Socket[i] && !MdoPeerTakeSocket(S[i])); }
         for (unsigned i=0;i<2;++i) {
             CHECK(MdoRemoteSocketSend(Socket[i],false,(xbytesview){(const uint8*)"verified",8})); bool Got=false;
@@ -97,12 +100,94 @@ static void Session(xnetfamily Family, bool Nat, bool TamperMode)
     MdoPeerOfferDestroy(O); xrtCancelDestroy(Cancel); CHECK(xrtAtomic32Load(&g_MdoRudpTransports,XMEMORY_ACQUIRE)==0);
     printf("PASS rendezvous family=%u nat=%u tamper-mode=%u\n",(unsigned)Family,Nat,TamperMode); fflush(stdout);
 }
+static void Dual(unsigned Broken, unsigned Restrict, bool BindFailure)
+{
+    MdoPeerPolicy P[2]={{0}}; Queue Q[2]={{0}}; MdoPeerSession* S[2]={NULL,NULL};
+    MdoPeerInfo I[2]={{0}}; MdoRemoteSocket* Socket[2]={NULL,NULL}; xvalue* Held=NULL;
+    xcancel* Cancel=xrtCancelCreate(); CHECK(Cancel);
+    for (unsigned i=0;i<2;++i) for (unsigned f=0;f<2;++f)
+        CHECK(xrtNetAddrLoopback(&P[i].Local[f],f?XNET_FAMILY_IPV6:XNET_FAMILY_IPV4,0));
+    if (Restrict) memset(&P[1].Local[Restrict==1 ? 1:0],0,sizeof(xnetaddr));
+    if (BindFailure) P[0].Local[1].Port=TEST_DROP_6;
+    MdoPeerOffer* O=MdoPeerOfferCreate("11111111111111111111111111111111","22222222222222222222222222222222",7,false,&P[0]); CHECK(O);
+    xvalue* Offer=MdoPeerOfferValue(O); CHECK(Offer);
+    S[1]=MdoPeerInitiate(Offer,7,&P[1],Cancel,Signal,&Q[1]); CHECK(S[1]); xrtValueRelease(Offer);
+    uint64 OriginalUntil=S[1]->Until; double Begin=xrtTimer(), HoldUntil=0, End=Begin+5;
+    unsigned Expected=Restrict ? (Restrict==1 ? 4:6):((Broken&2u)||BindFailure ? 4:6); bool Selected=false;
+    for (;;) {
+        for (unsigned i=0;i<2;++i) if (S[i]) { CHECK(MdoPeerPoll(S[i])); CHECK(MdoPeerGetInfo(S[i],&I[i])); }
+        if (Broken==3 && xrtTimer()>Begin+.6) {
+            CHECK(!S[1]->Selected && !I[0].Ready && !I[1].Ready);
+            CHECK(S[1]->Until==OriginalUntil); S[1]->Until=MdoMonotonicUs();
+            CHECK(!MdoPeerPoll(S[1]) && !MdoPeerTakeSocket(S[1])); break;
+        }
+        for (unsigned i=0;i<2;++i) {
+            xvalue* V;
+            while ((V=Pop(&Q[i]))) {
+                cstr Type=MdoPeerText(V,"type",24); CHECK(Type);
+                if (!strcmp(Type,"rudp_init")) {
+                    CHECK(i==1 && !S[0]);
+                    xvalue* Bad=xrtValueDeepClone(V),*F=xrtValueArray(); CHECK(Bad && F);
+                    CHECK(xrtValueArrayAppendNew(F,xrtValueUInt(4)) && xrtValueArrayAppendNew(F,xrtValueUInt(4)));
+                    CHECK(xrtValueObjectSetNew(Bad,XRT_STR_LITERAL("families"),F));
+                    CHECK(!MdoPeerAccept(O,Bad,&P[0],Cancel,Signal,&Q[0]) && !O->Used); xrtValueRelease(Bad);
+                    S[0]=MdoPeerAccept(O,V,&P[0],Cancel,Signal,&Q[0]); CHECK(S[0]);
+                } else {
+                    CHECK(S[1-i]); uint64 Family=0; CHECK(MdoPeerUInt(xrtValueObjectGet(V,XRT_STR_LITERAL("family")),&Family));
+                    if (!strcmp(Type,"rudp_answer") || !strcmp(Type,"rudp_candidates")) {
+                        if (Broken&(Family==4 ? 1u:2u)) {
+                            xvalue* List=xrtValueObjectEdit(V,XRT_STR_LITERAL("candidates")); CHECK(List && xrtValueCount(List)==1);
+                            xvalue* First=xrtValueArrayEdit(List,0); CHECK(First);
+                            CHECK(xrtValueObjectSetNew(First,XRT_STR_LITERAL("port"),xrtValueUInt(Family==4 ? TEST_DROP_4:TEST_DROP_6)));
+                        }
+                    } else if (!strcmp(Type,"rudp_select")) {
+                        CHECK(i==1 && !Selected && Family==Expected && !I[0].Ready && !I[1].Ready);
+                        CHECK(!MdoPeerTakeSocket(S[0]) && !MdoPeerTakeSocket(S[1])); Selected=true;
+                        if (Expected==4 && !Restrict) CHECK(xrtTimer()-Begin>=.20 && xrtTimer()-Begin<2);
+                    } else if (!strcmp(Type,"rudp_selected")) {
+                        CHECK(i==0 && Selected && !Held && Family==Expected);
+                        Held=xrtValueDeepClone(V); CHECK(Held); HoldUntil=xrtTimer()+.12; xrtValueRelease(V); continue;
+                    } else CHECK(false);
+                    uint64 Until=S[1-i]->Until;
+                    CHECK(MdoPeerInput(S[1-i],V) && MdoPeerInput(S[1-i],V) && S[1-i]->Until==Until);
+                }
+                xrtValueRelease(V);
+            }
+        }
+        if (Held) {
+            CHECK(!I[1].Ready && !MdoPeerTakeSocket(S[1]));
+            if (xrtTimer()>=HoldUntil) {
+                CHECK(xrtAtomic32Load(&g_MdoRudpTransports,XMEMORY_ACQUIRE)==2);
+                CHECK(MdoPeerInput(S[1],Held) && MdoPeerInput(S[1],Held));
+                xvalue* Bad=xrtValueDeepClone(Held); CHECK(Bad);
+                CHECK(xrtValueObjectSetNew(Bad,XRT_STR_LITERAL("family"),xrtValueUInt(Expected==4 ? 6:4)));
+                CHECK(!MdoPeerInput(S[1],Bad)); xrtValueRelease(Bad); xrtValueRelease(Held); Held=NULL;
+            }
+        }
+        if (S[0] && I[0].Ready && I[1].Ready) break;
+        CHECK(xrtTimer()<End); xrtSleep(1);
+    }
+    if (Broken!=3) {
+        CHECK(Selected && I[0].Family==Expected && I[1].Family==Expected);
+        for (unsigned i=0;i<2;++i) { Socket[i]=MdoPeerTakeSocket(S[i]); CHECK(Socket[i] && !MdoPeerTakeSocket(S[i])); }
+        for (unsigned i=0;i<2;++i) {
+            CHECK(MdoRemoteSocketSend(Socket[i],false,(xbytesview){(const uint8*)"verified",8})); bool Got=false;
+            while (!Got) { CHECK(xrtTimer()<End); CHECK(MdoRemoteSocketPoll(Socket[1-i],Receive,&Got)); xrtSleep(1); }
+        }
+    }
+    xrtValueRelease(Held); xrtCancelRequest(Cancel);
+    for (unsigned i=0;i<2;++i) { MdoRemoteSocketDestroy(Socket[i]); MdoPeerSessionDestroy(S[i]); xvalue* V; while ((V=Pop(&Q[i]))) xrtValueRelease(V); }
+    MdoPeerOfferDestroy(O); xrtCancelDestroy(Cancel); CHECK(xrtAtomic32Load(&g_MdoRudpTransports,XMEMORY_ACQUIRE)==0);
+    printf("PASS dual family broken=%u restrict=%u bind-failure=%u selected=%u\n",Broken,Restrict,BindFailure,Broken==3 ? 0:Expected); fflush(stdout);
+}
 void ServiceInit(XS_HostInfo* Host)
 {
     (void)Host;
     Session(XNET_FAMILY_IPV4,false,false); Session(XNET_FAMILY_IPV6,false,false);
     Session(XNET_FAMILY_IPV4,true,false); Session(XNET_FAMILY_IPV6,true,false);
     Session(XNET_FAMILY_IPV4,false,true);
+    Dual(0,0,false); Dual(2,0,false); Dual(1,0,false); Dual(3,0,false);
+    Dual(0,1,false); Dual(0,2,false); Dual(0,0,true);
     printf("PASS rendezvous authority, immutable identity, exact duplicate signals, NAT and encrypted message lifecycle\n"); fflush(stdout); exit(0);
 }
 '''

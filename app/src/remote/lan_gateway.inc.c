@@ -27,16 +27,20 @@ static bool MdoLanGatewaySignal(const xvalue* Signal, void* Data)
 static bool MdoLanGatewayBrowser(bool Binary, xbytesview Bytes, void* Data)
 {
     MdoLanGateway* Gateway=Data;
-    if (Gateway->Target) return MdoRemoteSocketSend(Gateway->Target,Binary,Bytes);
 #if defined(XS_USE_XRUDP)
-    if (Gateway->Rudp) {
-        if (Binary || Bytes.Size>4096) return false;
+    if (Gateway->Rudp && !Binary && Bytes.Size<=4096) {
         xjsonreadconfig Limits; xrtJsonReadConfigInit(&Limits); Limits.MaxInputBytes=4096; Limits.MaxValues=128; Limits.MaxDepth=5;
         xvalue* V=xrtJsonRead(xrtStrViewN((cstr)Bytes.Data,Bytes.Size),&Limits); cstr Type=MdoAccountText(V,"type",24);
-        bool Ok=Type && !strcmp(Type,"rudp_signal") && xrtValueCount(V)==2 &&
-            MdoPeerInput(Gateway->Rudp,xrtValueObjectGet(V,XRT_STR_LITERAL("payload")));
-        xrtValueRelease(V); return Ok;
+        if (Type && !strcmp(Type,"rudp_signal")) {
+            bool Ok=xrtValueCount(V)==2 && MdoPeerInput(Gateway->Rudp,xrtValueObjectGet(V,XRT_STR_LITERAL("payload")));
+            xrtValueRelease(V); return Ok;
+        }
+        xrtValueRelease(V);
     }
+#endif
+    if (Gateway->Target) return MdoRemoteSocketSend(Gateway->Target,Binary,Bytes);
+#if defined(XS_USE_XRUDP)
+    if (Gateway->Rudp) return false;
 #endif
     if (Gateway->Opened || Binary || Bytes.Size>4096u) return false;
     Gateway->Opened=true;

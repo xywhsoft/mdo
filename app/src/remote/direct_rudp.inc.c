@@ -82,7 +82,7 @@ bool MdoDirectRudpInput(MdoDirectRudp* Direct, cstr Peer, bool Binary, xbytesvie
     xjsonreadconfig Limits; xrtJsonReadConfigInit(&Limits); Limits.MaxInputBytes=4096; Limits.MaxStringBytes=128; Limits.MaxValues=128; Limits.MaxDepth=4;
     xvalue* V=xrtJsonRead(xrtStrViewN((cstr)Bytes.Data,Bytes.Size),&Limits);
     cstr Type=MdoAccountText(V,"type",24), Nonce=MdoAccountText(V,"nonce",32), Runtime=MdoAccountText(V,"runtime_id",32);
-    if (!Type || (strcmp(Type,"rudp_init") && strcmp(Type,"rudp_candidates") && strcmp(Type,"rudp_cancel"))) { xrtValueRelease(V); return true; }
+    if (!Type || (strcmp(Type,"rudp_init") && strcmp(Type,"rudp_candidates") && strcmp(Type,"rudp_select") && strcmp(Type,"rudp_cancel"))) { xrtValueRelease(V); return true; }
     *Handled=true;
     for (size_t i=0;i<MDO_DIRECT_RUDP_PEERS;++i) {
         MdoDirectRudpPeer* Row=&Direct->Peers[i];

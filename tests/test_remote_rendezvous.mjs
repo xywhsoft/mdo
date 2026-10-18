@@ -38,14 +38,17 @@ function ready(socket) { socket.receive({ type: "direct_ready", version: 1, runt
   assert.deepEqual(s.natives[0].offer, { transport: "xrudp", offer: rudp });
   const initial = s.transport.fetch("/api/v1/projects").catch(error => error);
   assert.equal(s.relay.sent.filter(v => v.type === "request").length, 1, "relay stays usable during negotiation");
-  forward(direct, { type: "rudp_init", public_key: "4".repeat(64), family: 4 });
-  forward(direct, { type: "rudp_candidates", candidates: [{ ip: "127.0.0.1", port: 2222, kind: "host" }] });
-  assert.deepEqual(s.relay.sent.slice(-2).map(v => v.type), ["rudp_init", "rudp_candidates"]);
+  forward(direct, { type: "rudp_init", public_key: "4".repeat(64), families: [4, 6] });
+  forward(direct, { type: "rudp_candidates", family: 4, candidates: [{ ip: "127.0.0.1", port: 2222, kind: "host" }] });
+  forward(direct, { type: "rudp_select", family: 4 });
+  assert.deepEqual(s.relay.sent.slice(-3).map(v => v.type), ["rudp_init", "rudp_candidates", "rudp_select"]);
   const before = direct.sent.length;
   s.relay.receive({ type: "rudp_answer", nonce: "8".repeat(32), runtime_id: runtime, candidates: [] });
   assert.equal(direct.sent.length, before, "wrong attempt cannot signal the gateway");
-  const answer = { type: "rudp_answer", nonce, runtime_id: runtime, candidates: [{ ip: "127.0.0.1", port: 3333, kind: "host" }] };
+  const answer = { type: "rudp_answer", nonce, runtime_id: runtime, family: 4, candidates: [{ ip: "127.0.0.1", port: 3333, kind: "host" }] };
   s.relay.receive(answer); assert.deepEqual(direct.sent.at(-1), { type: "rudp_signal", payload: answer });
+  const selected = { type: "rudp_selected", nonce, runtime_id: runtime, family: 4 };
+  s.relay.receive(selected); assert.deepEqual(direct.sent.at(-1), { type: "rudp_signal", payload: selected });
   ready(direct); assert.equal(s.states.at(-1).route, "xrudp");
   const write = s.transport.fetch("/api/v1/projects", { method: "POST", body: "{}", headers: { "X-Mdo-Write-Token": token } }).catch(error => error);
   assert.equal(direct.sent.at(-1).type, "request");
@@ -61,15 +64,31 @@ for (const override of [{ owner_id: "8" }, { peer_id: "0".repeat(32) }, { runtim
 }
 for (const control of [
   { type: "request", method: "POST" },
-  { type: "rudp_init", public_key: "4".repeat(64), family: 4, access_token: "never-forward" },
-  { type: "rudp_init", public_key: "4".repeat(64), family: 8 },
-  { type: "rudp_candidates", candidates: [{ ip: "attacker.example", port: 1, kind: "host" }] },
-  { type: "rudp_candidates", candidates: [{ ip: "127.0.0.1", port: 0, kind: "host" }] },
+  { type: "rudp_init", public_key: "4".repeat(64), families: [4], access_token: "never-forward" },
+  { type: "rudp_init", public_key: "4".repeat(64), families: [8] },
+  { type: "rudp_init", public_key: "4".repeat(64), families: [4, 4] },
+  { type: "rudp_init", public_key: "4".repeat(64), families: [] },
+  { type: "rudp_select", family: 8 },
+  { type: "rudp_selected", family: 4 },
+  { type: "rudp_candidates", family: 4, candidates: [{ ip: "attacker.example", port: 1, kind: "host" }] },
+  { type: "rudp_candidates", family: 4, candidates: [{ ip: "127.0.0.1", port: 0, kind: "host" }] },
 ]) {
   const s = await setup({}, true), direct = s.natives[0].socket;
   forward(direct, control); await flush();
   assert.ok(!s.relay.sent.some(v => v.access_token || v.type === control.type), "invalid native message cannot become a relay command");
   assert.deepEqual(s.natives[1].offer, lan, "failed native negotiation falls back to the existing LAN path"); s.transport.close();
+}
+for (const value of [
+  { type: "rudp_selected", family: 8 },
+  { type: "rudp_selected", family: 4, access_token: "never-forward" },
+  { type: "rudp_answer", family: 4, candidates: [{ ip: "attacker.example", port: 2, kind: "host" }] },
+  { type: "rudp_failed", code: "x".repeat(33) },
+]) {
+  const s = await setup({}, true), direct = s.natives[0].socket, before = direct.sent.length;
+  s.relay.receive({ nonce, runtime_id: runtime, ...value }); await flush();
+  assert.equal(direct.sent.length, before, "invalid target control must not reach the native gate");
+  assert.equal(s.relay.readyState, 1, "malformed optional direct control leaves the relay usable");
+  assert.deepEqual(s.natives[1].offer, lan); s.transport.close();
 }
 {
   const s = await setup({}, true), direct = s.natives[0].socket;
