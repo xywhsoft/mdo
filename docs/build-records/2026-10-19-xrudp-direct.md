@@ -55,3 +55,13 @@ xs 主分支 `7e54d7c0a40cc84e3363f9463c5ea373f6b8e1a2` 增加独立的 C/XRT ST
 两端测试宿主通过隔离的停止路由退出，退出码为零，日志确认 Engine 停止与运行代释放；另行核对远端四次测试均无遗留进程。证据：`.build/remote-public-final.log`、`.build/public-remote-6a65170614ae47a289bc8583a4915be9/receipt.json`、`.build/remote-public-reverse-idle.log`、`.build/public-remote-c35595eaebf14868a4406a9f3fa8fda6/receipt.json`、`.build/remote-public-cleanup.json`。中间一次回归仅因 Windows 在关闭已取消的本地网关时返回 TCP RST 而非 EOF 失败，验收明确允许这两种终止，仍拒绝超时。
 
 该结果覆盖本机当前 NAT 与公网服务器的两个方向，不等于两个不同住宅/运营商 NAT、不可达 UDP 的自动回退、IPv4/IPv6 双族优选、Android、完整独立 wire 互操作或 72h 长稳全部完成。
+
+## Android 构建兼容与候选包
+
+同一已锁定的产品 SDK `c806e08`、XRT `7c82e311` 已完成 Android ARM64/API 26 的精简配置原生构建。最初失败是隔离检出的 `android/` 文件带有 skip-worktree 标记且尚未展开，缺少 `host_jni.c`；从同一提交恢复文件后构建通过，无须更改或降级运行时。NDK 版本保持锁定的 `30.0.16248370`，原生库收据通过 mdo 依赖及导出校验。
+
+独立测试包 `.build/xrudp-android/mdo-xrudp-qa.apk` 使用包名 `org.xleaves.mdo.xrudp.qa` 和开发签名，未安装或发布。APK 内的原生库与应用 pack 均逐字节核对哈希；APK v2/v3 签名、16 KiB ZIP 对齐、所有原生 LOAD 段 16 KiB 对齐通过。APK 为 5,068,013 字节，SHA256 `7d167ebe88f62a5b3689897d2443d1d3bde25e622367438846f1e7910111ec3f`。ADB 未发现设备，因此 JNI 实际加载、安卓直连、后台切换和恢复仍未验证。
+
+Windows 服务端候选以 mdo `1814a155` 源状态重新打包，5,159,614 字节，SHA256 `c0c9d8d7041de310992eb9033e75530d33d67351a3d440a269dd0a3250b83bc1`；打包后的 Home 独占、冲突和进程重启恢复回归通过。两个包均包含工作区原有的其他任务未提交产品修改，保留真实 dirty 收据，不作为已发布版本。当前官网、已安装 mdo 与网站宿主没有被这些候选包替换。
+
+证据：`.build/xrudp-android-native-build.log`、`xrudp-android-apk-build.log`、`xrudp-android-elf.log`、`xrudp-android-manifest.log`、`xrudp-android/validation.json`、`xrudp-current-pack.log`、`xrudp-current-packed-home.log`。xs 主仓的 `sync_xrt.py --check` 和 mdo 三项依赖锁定/行尾独立性/图片库校验再次通过。基础 XRT 升级已完成；长期目标的实机、双重 NAT、双族选择、完整互操作和长稳验收继续保留。
