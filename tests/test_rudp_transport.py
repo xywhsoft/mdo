@@ -202,12 +202,36 @@ static void ResourceLimit(void)
     for (unsigned i=0;i<MDO_RUDP_TRANSPORTS_MAX-2;i++) MdoRudpDestroy(Others[i]);
     Cleanup(&P);
 }
+typedef struct SendGate { xatomic32 Entered, Release; } SendGate;
+static void HoldSend(xnetworker* Worker, ptr Data)
+{
+    (void)Worker; SendGate* G=Data; double End=xrtTimer()+2;
+    xrtAtomic32Store(&G->Entered,1,XMEMORY_RELEASE);
+    while (!xrtAtomic32Load(&G->Release,XMEMORY_ACQUIRE)) { CHECK(xrtTimer()<End); xrtSleep(1); }
+}
+static void CancelQueuedSend(void)
+{
+    Pair P; Setup(&P,XNET_FAMILY_IPV4,false,false); xcancel* Cancel=xrtCancelCreate(); CHECK(Cancel);
+    MdoRudpDestroy(P.Raw[1]);
+    for (unsigned j=0;j<32;++j) P.Config[1].Private[j]=(unsigned char)(21+71+j);
+    P.Raw[1]=MdoRudpBind(&P.Config[1],Cancel); CHECK(P.Raw[1]); xrtSecureZero(P.Config[1].Private,32); Connect(&P);
+    SendGate G={0}; CHECK(xrtNetEnginePost(P.Raw[1]->Engine,0,HoldSend,&G)); double End=xrtTimer()+1;
+    while (!xrtAtomic32Load(&G.Entered,XMEMORY_ACQUIRE)) { CHECK(xrtTimer()<End); xrtSleep(1); }
+    CHECK(MdoRemoteSocketSend(P.Socket[1],false,(xbytesview){(const uint8*)"queued",6}));
+    xrtCancelRequest(Cancel); xrtAtomic32Store(&G.Release,1,XMEMORY_RELEASE);
+    unsigned Count=0; End=xrtTimer()+.15;
+    /* Only poll the receiver. Cancellation must stop the sender's pending
+     * worker command even if that owner never calls another API. */
+    while (xrtTimer()<End) { (void)MdoRemoteSocketPoll(P.Socket[0],ReceiveAny,&Count); xrtSleep(1); }
+    CHECK(!Count); Cleanup(&P); xrtCancelDestroy(Cancel);
+    printf("PASS cancelled parent stops queued application sends without sender polling\n");
+}
 void ServiceInit(XS_HostInfo* Host)
 {
     (void)Host;
     Payloads(XNET_FAMILY_IPV4); Payloads(XNET_FAMILY_IPV6);
     for (unsigned i=0;i<7;i++) Framing(i);
-    Identity(); Rejection(); Cancellation(); Backpressure(); ResourceLimit();
+    Identity(); Rejection(); Cancellation(); Backpressure(); ResourceLimit(); CancelQueuedSend();
     for (unsigned i=0;i<4;i++) { Pair P; Setup(&P,XNET_FAMILY_IPV4,false,false); Connect(&P); Cleanup(&P); }
     printf("PASS mdo embedded xrudp: %u pair lifecycles, close barriers and global admission\n",Cases); fflush(stdout); exit(0);
 }

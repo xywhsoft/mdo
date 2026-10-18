@@ -164,6 +164,7 @@ static void MdoRudpWakeWorker(xnetworker* Worker, ptr Data)
     Connect=R->ConnectPending; R->ConnectPending=false; Remote=R->Remote;
     Stop=R->Stopping || R->Failed; xrtMutexUnlock(R->Lock);
     if (Stop) return;
+    if (xrtCancelRequested(R->Cancel)) { MdoRudpFail(R,1006,XRUDP_CANCELLED); return; }
     if (Connect) {
         xrudpconnectconfig Config={R->Config.PeerPublic,R->Config.Scope,R->Context}; xrudppeer* Peer=NULL;
         xrudpresult Result=xrtRudpEndpointConnect(R->Endpoint,&Remote,&Config,&Peer);
@@ -186,7 +187,7 @@ static void MdoRudpKick(MdoRudpTransport* R)
 static bool MdoRudpWorkerLive(MdoRudpTransport* R)
 {
     bool Live;
-    xrtMutexLock(R->Lock); Live=R->Confirmed && !R->Failed && !R->Stopping;
+    xrtMutexLock(R->Lock); Live=R->Confirmed && !R->Failed && !R->Stopping && !xrtCancelRequested(R->Cancel);
     xrtMutexUnlock(R->Lock); return Live;
 }
 static void MdoRudpPump(MdoRudpTransport* R)
