@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -391,7 +392,7 @@ bool MdoProjectCreate(const MdoProjectCreateOptions* Options,
     Writer = MdoProjectDefinitionAcquire(Lease, Error);
     if ( Writer == NULL ) { MdoProjectLeaseRelease(Lease); return false; }
     Candidate.Revision = 1u;
-    Candidate.CreatedAt = xrtNow();
+    Candidate.CreatedAt = MdoUtcUs();
     Candidate.UpdatedAt = Candidate.CreatedAt;
     Json = MdoProjectsJson(&Candidate, &Size);
     if ( Json == NULL ) {
@@ -503,7 +504,7 @@ MdoProjectMutationResult MdoProjectReplace(
     }
     Candidate.Revision = Current.Revision + 1u;
     Candidate.CreatedAt = Current.CreatedAt;
-    Candidate.UpdatedAt = xrtNow();
+    Candidate.UpdatedAt = MdoUtcUs();
     if ( Candidate.UpdatedAt < Candidate.CreatedAt )
         Candidate.UpdatedAt = Candidate.CreatedAt;
     Json = MdoProjectsJson(&Candidate, &Size);

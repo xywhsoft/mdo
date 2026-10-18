@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 #include <string.h>
 
 #include "internal.h"
@@ -147,7 +148,7 @@ bool MdoApiImageDownloadStart(MdoApiContext* Context, cstr Project,
     if ( Job->Request.tls == NULL && Job->Request.tcp == NULL ) goto unavailable;
     Job->Context.Request = &Job->Request;
     memcpy(Job->Context.RequestId, Context->RequestId, sizeof(Job->Context.RequestId));
-    Job->Context.SendDeadline = xrtDeadlineAfter(MDO_IMAGE_DOWNLOAD_TIMEOUT_US);
+    Job->Context.SendDeadline = MdoDeadlineAfterUs(MDO_IMAGE_DOWNLOAD_TIMEOUT_US);
     Job->Context.CloseResponse = true;
     xrtMutexLock(g_MdoImageDownloads.Lock);
     if ( g_MdoImageDownloads.Stopping || g_MdoImageDownloads.Count >=

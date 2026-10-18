@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -99,7 +100,7 @@ static bool MdoMigrationConvertSchedule(MdoMigrationContext* Context,
     uint64 Delay;
     uint64 Created;
     uint64 NextDue;
-    int64 Now = xrtNow();
+    int64 Now = MdoUtcUs();
     int Written;
     bool Ok = false;
     if ( Legacy == NULL ) return false;

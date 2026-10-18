@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 #include <stdio.h>
 #include <string.h>
 #include "../../include/mdo/update.h"
@@ -56,9 +57,9 @@ bool MdoUpdateWindowsInstall(cstr Source,cstr Hash)
     Config.NewGroup = false; /* helper must survive the old host's exit */
     Config.Stdin.Mode = Config.Stdout.Mode = Config.Stderr.Mode = XPROCESS_IO_NULL;
     Process = xrtProcessSpawn(&Config); Ok = Process != NULL;
-    xdeadline Deadline = xrtDeadlineAfter(UINT64_C(20000000));
+    uint64 Deadline = MdoDeadlineAfterUs(UINT64_C(20000000));
     bool Ready = false;
-    while (Ok && !xrtDeadlineExpired(Deadline) && !xrtThreadStopping()) {
+    while (Ok && !MdoDeadlineExpired(Deadline) && !xrtThreadStopping()) {
         bool Exists = false; xfileinfo Info;
         if (MdoHomeExternalStat("data/update/install.ready",&Exists,&Info) && Exists &&
             Info.Type == XFILE_TYPE_FILE) { Ready = true; break; }

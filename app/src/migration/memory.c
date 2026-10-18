@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -173,7 +174,7 @@ static bool MdoMigrationMemoryStore(MdoMigrationContext* Context,
         MDO_MEMORY_PROJECT;
     const char* ProjectId = Project != NULL ? Project->NewId : NULL;
     xvalue* Entries = xrtValueArray();
-    int64 Now = xrtNow();
+    int64 Now = MdoUtcUs();
     size_t i;
     size_t Count = 0u;
     bool Ok = false;

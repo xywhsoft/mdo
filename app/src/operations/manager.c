@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -128,7 +129,7 @@ static void MdoOperationFinish(cstr Id, MdoOperationState State,
     Entry = MdoOperationFindLocked(Id);
     if ( Entry != NULL && !MdoOperationTerminal(Entry->Info.State) ) {
         Entry->Info.State = State;
-        Entry->Info.EndedAt = xrtNow();
+        Entry->Info.EndedAt = MdoUtcUs();
         Entry->Info.Generation = Generation;
         Entry->Info.ItemCount = Items;
         Entry->Info.SecondaryCount = Secondary;
@@ -196,7 +197,7 @@ static void MdoOperationFinishMcp(cstr Id, MdoOperationState State,
     Entry = MdoOperationFindLocked(Id);
     if ( Entry != NULL && !MdoOperationTerminal(Entry->Info.State) ) {
         Entry->Info.State = State;
-        Entry->Info.EndedAt = xrtNow();
+        Entry->Info.EndedAt = MdoUtcUs();
         snprintf(Entry->Info.ErrorCode, sizeof(Entry->Info.ErrorCode),
             "%s", ErrorCode != NULL ? ErrorCode : "");
         Entry->Info.HttpStatus = HttpStatus;
@@ -234,7 +235,7 @@ static xtaskoutcome MdoOperationRun(xcancel* Cancel, ptr Data,
          xrtCancelRequested(Cancel) ) {
         if ( Entry != NULL && !MdoOperationTerminal(Entry->Info.State) ) {
             Entry->Info.State = MDO_OPERATION_CANCELLED;
-            Entry->Info.EndedAt = xrtNow();
+            Entry->Info.EndedAt = MdoUtcUs();
             snprintf(Entry->Info.Message, sizeof(Entry->Info.Message),
                 "Operation was cancelled before execution");
         }
@@ -242,7 +243,7 @@ static xtaskoutcome MdoOperationRun(xcancel* Cancel, ptr Data,
         return XTASK_CANCELLED;
     }
     Entry->Info.State = MDO_OPERATION_RUNNING;
-    Entry->Info.StartedAt = xrtNow();
+    Entry->Info.StartedAt = MdoUtcUs();
     Kind = Entry->Info.Kind;
     (void)xrtMutexUnlock(g_MdoOperations.Lock);
 
@@ -315,7 +316,7 @@ static xtaskoutcome MdoOperationRun(xcancel* Cancel, ptr Data,
             (uint64)Server.RequestTimeoutMilliseconds) * 1000u;
         MdoMcpCatalogRelease(Catalog);
         Ok = MdoMcpManagerRefresh(Job->Target, Cancel,
-            xrtDeadlineAfter(Timeout), &Error);
+            MdoDeadlineAfterUs(Timeout), &Error);
         if ( !Ok ) {
             uint32 HttpStatus;
             cstr ErrorCode;
@@ -469,7 +470,7 @@ static bool MdoOperationStart(MdoOperationKind Kind, cstr Target,
     Entry->Info.Sequence = ++g_MdoOperations.NextSequence;
     Entry->Info.Kind = Kind;
     Entry->Info.State = MDO_OPERATION_PENDING;
-    Entry->Info.CreatedAt = xrtNow();
+    Entry->Info.CreatedAt = MdoUtcUs();
     snprintf(Entry->Info.Id, sizeof(Entry->Info.Id), "%s", Job->Id);
     if ( Target != NULL ) {
         snprintf(Job->Target, sizeof(Job->Target), "%s", Target);
@@ -583,7 +584,7 @@ bool MdoOperationCancel(const char* Id, MdoOperationInfo* Info)
     Entry = MdoOperationFindLocked(Id);
     if ( Entry != NULL && Entry->Info.State == MDO_OPERATION_PENDING ) {
         Entry->Info.State = MDO_OPERATION_CANCELLED;
-        Entry->Info.EndedAt = xrtNow();
+        Entry->Info.EndedAt = MdoUtcUs();
         snprintf(Entry->Info.Message, sizeof(Entry->Info.Message),
             "Operation was cancelled before execution");
     }

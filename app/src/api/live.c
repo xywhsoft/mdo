@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -128,7 +129,7 @@ static bool MdoLiveFrame(MdoLiveClient* Client, uint8 Opcode,
     size_t Bytes;
     xrtWsFrameInit(&Frame); Frame.Opcode = Opcode;
     Frame.Flags = XWS_FRAME_FIN; Frame.PayloadSize = Size;
-    Client->Context.SendDeadline = xrtDeadlineAfter(MDO_LIVE_SEND_US);
+    Client->Context.SendDeadline = MdoDeadlineAfterUs(MDO_LIVE_SEND_US);
     return xrtWsFrameWrite(&Frame, NULL, Head, sizeof(Head), &Bytes) &&
         MdoApiDownloadSend(&Client->Context, Head, Bytes) &&
         MdoApiDownloadSend(&Client->Context, Data, Size);
@@ -234,8 +235,7 @@ static bool MdoLiveReceive(MdoLiveClient* Client)
         if ( Capacity == 0u ) return MdoLiveClose(Client, 1009u);
         Future = Client->Request.tls != NULL ? xrtTlsStreamRecvAsync(Client->Request.tls, Capacity) :
             xrtNetStreamRecvAsync(Client->Request.tcp, Capacity);
-        Ok = Future != NULL && xrtFutureWaitUntilCancel(Future,
-            xrtDeadlineAfter(MDO_LIVE_SEND_US), Client->Context.SendCancel) == XWAIT_OK &&
+        Ok = Future != NULL && xrtFutureWaitForCancel(Future, MdoDeadlineWaitMs(MdoDeadlineAfterUs(MDO_LIVE_SEND_US)), Client->Context.SendCancel) == XWAIT_OK &&
             xrtFutureState(Future) == XFUTURE_RESOLVED;
         Bytes = Ok ? (xnetbytes*)xrtFutureValue(Future) : NULL;
         if ( Bytes == NULL ) Ok = false;
@@ -267,7 +267,7 @@ static bool MdoLiveReceive(MdoLiveClient* Client)
              !xrtWsMessagePayload(&Client->MessageState, (xbytesview){(const uint8*)Payload, Size}, &Error) ||
              !xrtWsMessageFrameEnd(&Client->MessageState, &Error) )
             return MdoLiveClose(Client, Error.CloseCode != 0u ? Error.CloseCode : 1002u);
-        Client->LastRead = xrtClock();
+        Client->LastRead = MdoMonotonicUs();
         if ( Frame.Opcode == XWS_OPCODE_CLOSE ) {
             Client->CloseSent = true;
             (void)MdoLiveFrame(Client, XWS_OPCODE_CLOSE, Payload, Size); return false;
@@ -418,22 +418,22 @@ static void MdoLiveDrop(ptr Value, ptr Data)
 static xtaskoutcome MdoLiveRun(xcancel* Cancel, ptr Data, xtaskvalue* Result)
 {
     MdoLiveClient* Client = (MdoLiveClient*)Data;
-    uint64 Tick = xrtClock();
+    uint64 Tick = MdoMonotonicUs();
     xwsmessageconfig Config;
     (void)Result;
     Client->Context.SendCancel = Cancel;
-    Client->Context.SendDeadline = xrtDeadlineAfter(MDO_LIVE_SEND_US);
+    Client->Context.SendDeadline = MdoDeadlineAfterUs(MDO_LIVE_SEND_US);
     Client->LastRead = Client->LastPing = Tick;
     xrtWsMessageConfigInitSafe(&Config); Config.MaxSize = MDO_LIVE_INPUT;
     if ( !xrtWsMessageInit(&Client->MessageState, &Config) ||
          !MdoApiDownloadSend(&Client->Context, Client->Head, Client->HeadSize) ||
          !MdoLiveText(Client, "{\"type\":\"ready\",\"version\":1}") ) return XTASK_FAILED;
     for ( ; ; ) {
-        uint64 Now = xrtClock(), StateRevision;
+        uint64 Now = MdoMonotonicUs(), StateRevision;
         bool Stop;
-        Client->Context.SendDeadline = xrtDeadlineAfter(MDO_LIVE_SEND_US);
+        Client->Context.SendDeadline = MdoDeadlineAfterUs(MDO_LIVE_SEND_US);
         if ( !MdoApiDownloadLive(&Client->Context) || !MdoLiveReceive(Client) ) break;
-        Now = xrtClock();
+        Now = MdoMonotonicUs();
         if ( Now - Client->LastRead >= MDO_LIVE_IDLE_US ) { (void)MdoLiveClose(Client, 1001u); break; }
         if ( Now - Client->LastPing >= MDO_LIVE_PING_US ) {
             if ( !MdoLiveText(Client, "{\"type\":\"ping\"}") ) break;
@@ -449,12 +449,12 @@ static xtaskoutcome MdoLiveRun(xcancel* Cancel, ptr Data, xtaskvalue* Result)
                 if ( !MdoLiveText(Client, "{\"type\":\"changed\"}") ) break;
                 Client->StateRevision = StateRevision;
             }
-            Tick = xrtClock() + MDO_LIVE_TICK_US;
+            Tick = MdoMonotonicUs() + MDO_LIVE_TICK_US;
         }
         /* Bounded control-input check, event-driven wakeup, 25 ms batching.
          * No file scans or HTTP requests are made while the ring covers us. */
         xrtMutexLock(g_MdoLive.Lock);
-        if ( !g_MdoLive.Stopping ) (void)xrtCondWaitUntil(g_MdoLive.Changed, g_MdoLive.Lock, Tick);
+        if ( !g_MdoLive.Stopping ) (void)xrtCondWaitFor(g_MdoLive.Changed, g_MdoLive.Lock, MdoDeadlineWaitMs(Tick));
         xrtMutexUnlock(g_MdoLive.Lock);
     }
     return XTASK_SUCCESS;

@@ -2,12 +2,12 @@
   "schema_version": 1,
   "hash_algorithm": "sha256-path-nul-lf-normalized-content-nul-v1",
   "xrt": {
-    "commit": "6040abda647bd947bd561cd185f37a3751f122f4",
+    "commit": "ac05926783fae77d9d9b13902172414343d84631",
     "version": "2.0.0-dev",
-    "single_header_sha256": "1ea16b21f968d09e5084162f3919b7e6ae2412f9e13c3bbbdd4b322bcd5a26d2"
+    "single_header_sha256": "015f5b19e07dd1fbfb085c1fd096cf69c813b03bdd9dc94b29ae8b5c471cd18a"
   },
   "xserver": {
-    "commit": "f05f7661062fdca04da8d571ad859eb4b87c0889",
+    "commit": "25200032fbea715784231795c4902e88bd4f473b",
     "version": "1.0.0",
     "required_extensions": [
       "xwork",
@@ -21,27 +21,27 @@
       }
     },
     "source_bundle": {
-      "path": "tools/dependencies/xs-tool-image-text.bundle",
-      "sha256": "a972ff182282c95fbd8762f1a153fa1db8626608151164d5cb5a35c141ddc21d",
-      "ref": "refs/heads/codex/tool-image-text"
+      "path": "tools/dependencies/xs-xrt-current.bundle",
+      "sha256": "7c86d1d48ff25b95585e178d92be2be8c166a59df46770b40f6ebf264be672b5",
+      "ref": "refs/heads/master"
     }
   },
   "libraries": {
     "xllm": {
       "version": "3.1.0",
       "source_commit": "5d16ece2b049fd73eee1d8e79551d6d70c6be216",
-      "production_tree_sha256": "2387b4268b36be01b52eb9733c0a2f5ebf42c8573794cd600bace8e064fc96e5"
+      "production_tree_sha256": "02e153e4f5778213c518ebb83a94551a0f0636ed7ffb6f0aba41a06e119abec2"
     },
     "xllm-session": {
       "version": "3.0.0-dev",
       "source_commit": "54676d1d5623e536829fb7370f51455923abd215",
-      "production_tree_sha256": "65892209dd741e5d22e5184811d12d57c2f6349a73ee1906c699a7534ee93023",
+      "production_tree_sha256": "67278680c129312219876250cf2419658008c70ae80de420f18969998ceb4f17",
       "persistence_schema_version": 4
     },
     "xwork": {
       "version": "3.11.0",
       "source_commit": "0dc70638b0faa00b89a6cdb4e73eac35ad2213e3",
-      "production_tree_sha256": "b9a723d902e5003d7b7f685b4a80255c8c9eb767e34f4762608156c062cf36ee",
+      "production_tree_sha256": "08ba19a37ebbec50ff21ec2b574af690ed199468b89726efc71f1d33dc315d12",
       "abi_version": 8,
       "event_schema_version": 3
     }

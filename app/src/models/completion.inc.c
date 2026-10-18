@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 /* Product retry policy. The transport performs one attempt; only this layer
  * decides whether another model generation is appropriate. No tool is replayed
  * here and no failed attempt is published as an Agent error. */
@@ -201,8 +202,8 @@ static xllm_result MdoModelsScope(const xllm_request* Request, xllm_error* Error
         Error->eCode = XLLM_ERROR_CANCELLED;
         return XLLM_RESULT_CANCELLED;
     }
-    if (Request->uDeadline != XRT_DEADLINE_NEVER &&
-        xrtDeadlineExpired(Request->uDeadline)) {
+    if (Request->uDeadline != MDO_DEADLINE_NEVER &&
+        MdoDeadlineExpired(Request->uDeadline)) {
         Error->eCode = XLLM_ERROR_TIMEOUT;
         return XLLM_RESULT_TIMEOUT;
     }
@@ -242,7 +243,7 @@ static xllm_result MdoModelsComplete(xllm_client* Client, const xllm_request* Re
     xllm_error Error;
     xllm_result Result = XLLM_RESULT_ERROR;
     uint64 RecoveryStarted = 0u;
-    uint64 Jitter = xrtClock() ^ (uint64)(uintptr_t)Request ^
+    uint64 Jitter = MdoMonotonicUs() ^ (uint64)(uintptr_t)Request ^
         (uint64)(uintptr_t)Client;
     if (!Jitter) Jitter = 1u;
     uint32 Attempt = 0u;
@@ -269,7 +270,7 @@ static xllm_result MdoModelsComplete(xllm_client* Client, const xllm_request* Re
         xllm_request AttemptRequest = *ActiveRequest;
         if (RecoveryStarted) {
             uint64 RecoveryEnd = RecoveryStarted + (uint64)MDO_MODEL_RECOVERY_MS * 1000u;
-            if (AttemptRequest.uDeadline == XRT_DEADLINE_NEVER ||
+            if (AttemptRequest.uDeadline == MDO_DEADLINE_NEVER ||
                 AttemptRequest.uDeadline > RecoveryEnd)
                 AttemptRequest.uDeadline = RecoveryEnd;
         }
@@ -343,7 +344,7 @@ static xllm_result MdoModelsComplete(xllm_client* Client, const xllm_request* Re
             RepairRequest.iStableMessages = 0u;
             ActiveRequest = &RepairRequest;
         }
-        uint64 Now = xrtClock();
+        uint64 Now = MdoMonotonicUs();
         if (!RecoveryStarted) RecoveryStarted = Now;
         uint64 RecoveryEnd = RecoveryStarted + (uint64)MDO_MODEL_RECOVERY_MS * 1000u;
         uint32 Delay = MdoModelsRetryDelay(Attempt,
@@ -362,7 +363,7 @@ static xllm_result MdoModelsComplete(xllm_client* Client, const xllm_request* Re
         for (;;) {
             Result = MdoModelsScope(Request, &Error);
             if (Result != XLLM_RESULT_OK) { Retryable = false; goto done; }
-            uint64 Current = xrtClock();
+            uint64 Current = MdoMonotonicUs();
             if (Current >= End) break;
             uint64 Remaining = End - Current;
             xrtSleep(Remaining > 20000u ? 20u :

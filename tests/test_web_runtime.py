@@ -150,7 +150,7 @@ static bool Execute(xwork_agent *agent, const char *name,
     if (!xworkExecutorBind(&executor, agent, &error)) return false;
     memset(&context, 0, sizeof(context));
     context.uRound = 1u;
-    context.uDeadline = xrtDeadlineAfter(5000000u);
+    context.uDeadline = MdoDeadlineAfterUs(5000000u);
     memset(&call, 0, sizeof(call));
     call.sId = (char*)"web-probe-call";
     call.sName = (char*)name;
@@ -198,7 +198,7 @@ void ServiceInit(XS_HostInfo *host) {
     if (token && strlen(token) < sizeof(g_MdoAccount.Tokens.Access) && MdoAccountTokenValid(token)) {
         xrtMutexLock(g_MdoAccount.Lock);
         strcpy(g_MdoAccount.Tokens.Access, token);
-        g_MdoAccount.Tokens.Expires = xrtDeadlineAfter(600000000);
+        g_MdoAccount.Tokens.Expires = MdoDeadlineAfterUs(600000000);
         g_MdoAccount.Tokens.MemberId = 1;
         xrtMutexUnlock(g_MdoAccount.Lock);
     }

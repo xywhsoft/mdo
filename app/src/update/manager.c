@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 #include "../../include/mdo/distribution.h"
 #include <stdio.h>
 #include <string.h>
@@ -21,7 +22,7 @@ static struct {
     xcancel* Cancel;
     str Source;
     unsigned Command;
-    xdeadline NextCheck;
+    uint64 NextCheck;
     MdoUpdateStatus Status;
 } g_MdoUpdate;
 
@@ -210,18 +211,18 @@ static void MdoUpdateDoInstall(MdoUpdateStatus* Status)
 }
 static int32 MdoUpdateThread(ptr Data)
 {
-    (void)Data; xdeadline NextStop = xrtDeadlineAfter(0);
+    (void)Data; uint64 NextStop = MdoDeadlineAfterUs(0);
     while (!xrtThreadStopping()) {
-        MdoUpdateStatus Status; unsigned Command; xdeadline NextCheck;
+        MdoUpdateStatus Status; unsigned Command; uint64 NextCheck;
         xrtMutexLock(g_MdoUpdate.Lock);
         Command = g_MdoUpdate.Command; g_MdoUpdate.Command = 0;
         Status = g_MdoUpdate.Status;
         NextCheck = g_MdoUpdate.NextCheck;
         xrtMutexUnlock(g_MdoUpdate.Lock);
         if (!Command) {
-            if (xrtDeadlineExpired(NextCheck)) (void)MdoUpdateCheck();
-            if (Status.Required && Status.Available && xrtDeadlineExpired(NextStop)) {
-                MdoUpdateStopTasks(); NextStop = xrtDeadlineAfter(UINT64_C(1000000));
+            if (MdoDeadlineExpired(NextCheck)) (void)MdoUpdateCheck();
+            if (Status.Required && Status.Available && MdoDeadlineExpired(NextStop)) {
+                MdoUpdateStopTasks(); NextStop = MdoDeadlineAfterUs(UINT64_C(1000000));
             }
             xrtSleep(100); continue;
         }
@@ -237,7 +238,7 @@ static int32 MdoUpdateThread(ptr Data)
         if (xrtCancelRequested(g_MdoUpdate.Cancel))
             MdoUpdateComplete(&Status,Status.Ready ? "ready" : "error","Update operation cancelled");
         xrtMutexLock(g_MdoUpdate.Lock); g_MdoUpdate.Status = Status;
-        g_MdoUpdate.NextCheck = xrtDeadlineAfter(MDO_UPDATE_CHECK_INTERVAL);
+        g_MdoUpdate.NextCheck = MdoDeadlineAfterUs(MDO_UPDATE_CHECK_INTERVAL);
         xrtMutexUnlock(g_MdoUpdate.Lock);
         if (Status.Required && Status.Available) MdoUpdateStopTasks();
     }

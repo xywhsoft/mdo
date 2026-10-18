@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -671,7 +672,7 @@ void MdoSessionRuntimeOptionsInit(MdoSessionRuntimeOptions* Options)
     if ( Options == NULL ) return;
     memset(Options, 0, sizeof(*Options));
     Options->Size = sizeof(*Options);
-    Options->Deadline = XRT_DEADLINE_NEVER;
+    Options->Deadline = MDO_DEADLINE_NEVER;
 }
 
 void MdoSessionForkOptionsInit(MdoSessionForkOptions* Options)
@@ -841,7 +842,7 @@ MdoSession* MdoSessionCreate(const MdoSessionCreateOptions* Options,
     memset(&Info, 0, sizeof(Info));
     Info.Size = sizeof(Info);
     Info.Revision = 1u;
-    Info.CreatedAt = xrtNow();
+    Info.CreatedAt = MdoUtcUs();
     Info.UpdatedAt = Info.CreatedAt;
     Info.Status = MDO_SESSION_ACTIVE;
     Info.PreviousStatus = MDO_SESSION_ACTIVE;
@@ -1087,7 +1088,7 @@ MdoSession* MdoSessionOpen(const char* ProjectId, const char* SessionId,
         }
         Candidate = Info;
         ++Candidate.Revision;
-        Candidate.UpdatedAt = xrtNow();
+        Candidate.UpdatedAt = MdoUtcUs();
         if ( Candidate.UpdatedAt < Candidate.CreatedAt )
             Candidate.UpdatedAt = Candidate.CreatedAt;
         Candidate.Protocol = AgentInfo.Protocol;
@@ -1285,7 +1286,7 @@ MdoSession* MdoSessionFork(MdoSession* Source,
     memset(&Info, 0, sizeof(Info));
     Info.Size = sizeof(Info);
     Info.Revision = 1u;
-    Info.CreatedAt = xrtNow();
+    Info.CreatedAt = MdoUtcUs();
     Info.UpdatedAt = Info.CreatedAt;
     Info.Status = MDO_SESSION_ACTIVE;
     Info.PreviousStatus = MDO_SESSION_ACTIVE;
@@ -1509,7 +1510,7 @@ static bool MdoSessionsCandidate(MdoSession* Session,
     }
     *Candidate = Session->Info;
     ++Candidate->Revision;
-    Candidate->UpdatedAt = xrtNow();
+    Candidate->UpdatedAt = MdoUtcUs();
     if ( Candidate->UpdatedAt < Candidate->CreatedAt )
         Candidate->UpdatedAt = Candidate->CreatedAt;
     return true;
@@ -1984,7 +1985,7 @@ static bool MdoSessionsExportCapture(const MdoSessionInfo* Info,
     }
     Written = snprintf(Header, sizeof(Header),
         "{\"export_schema\":1,\"exported_at_us\":%lld,\"meta\":",
-        (long long)xrtNow());
+        (long long)MdoUtcUs());
     if ( Written <= 0 || (size_t)Written >= sizeof(Header) ) goto memory;
     HeaderSize = (size_t)Written;
     if ( HeaderSize > SIZE_MAX - MetaSize ||

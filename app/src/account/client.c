@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 #include "internal.h"
 
 bool MdoAccountSetString(xvalue* Object, cstr Key, cstr Value)
@@ -158,5 +159,5 @@ bool MdoAccountClientTokens(const xvalue* Data, MdoAccountTokens* Tokens)
         !MdoAccountGetUInt(xrtValueObjectGet(Data, xrtStrView("expires_in")), &expiry) || !expiry || expiry > 900 ||
         !MdoAccountGetUInt(xrtValueObjectGet(Data, xrtStrView("id")), &id) || !id) return false;
     memset(Tokens, 0, sizeof(*Tokens)); strcpy(Tokens->Access, access); strcpy(Tokens->Refresh, refresh);
-    Tokens->Expires = xrtDeadlineAfter(expiry * 1000000u); Tokens->MemberId = id; return true;
+    Tokens->Expires = MdoDeadlineAfterUs(expiry * 1000000u); Tokens->MemberId = id; return true;
 }

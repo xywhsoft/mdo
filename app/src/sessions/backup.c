@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -54,7 +55,7 @@ bool MdoBackupLimits(const MdoSessionBackupLimits* Input,
         *Output = *Input;
     }
     {
-        xdeadline Maximum = xrtDeadlineAfter(Timeout);
+        uint64 Maximum = MdoDeadlineAfterUs(Timeout);
         if ( Output->Deadline == 0u || Output->Deadline > Maximum ) Output->Deadline = Maximum;
     }
     return true;
@@ -62,7 +63,7 @@ bool MdoBackupLimits(const MdoSessionBackupLimits* Input,
 
 static bool MdoBackupTime(const MdoSessionBackupLimits* Limits, xwork_error* Error)
 {
-    return !xrtDeadlineExpired(Limits->Deadline) ||
+    return !MdoDeadlineExpired(Limits->Deadline) ||
         MdoBackupError(Error, XWORK_ERROR_LIMIT, "session backup deadline exceeded", NULL);
 }
 
@@ -254,7 +255,7 @@ static bool MdoBackupCaptureRead(const MdoSessionInfo* Info, void* UserData, xwo
     if ( Written <= 0 || (size_t)Written >= sizeof(Base) )
         return MdoBackupError(Error, XWORK_ERROR_LIMIT, "session backup path exceeds its budget", NULL);
     Backup->Info = *Info;
-    Backup->CapturedAt = xrtNow();
+    Backup->CapturedAt = MdoUtcUs();
     return MdoBackupScan(Backup, Base, "", 0u, Error);
 }
 

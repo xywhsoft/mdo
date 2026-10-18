@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 #include "../../include/mdo/distribution.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -956,7 +957,7 @@ void MdoAgentSessionOptionsInit(MdoAgentSessionOptions* Options)
     if ( Options == NULL ) return;
     memset(Options, 0, sizeof(*Options));
     Options->Size = sizeof(*Options);
-    Options->Deadline = XRT_DEADLINE_NEVER;
+    Options->Deadline = MDO_DEADLINE_NEVER;
 }
 
 static void MdoAgentSessionFree(MdoAgentSession* Session)
@@ -1845,7 +1846,7 @@ void MdoAgentRunOptionsInit(MdoAgentRunOptions* Options)
     if ( Options == NULL ) return;
     memset(Options, 0, sizeof(*Options));
     Options->Size = sizeof(*Options);
-    Options->Deadline = XRT_DEADLINE_NEVER;
+    Options->Deadline = MDO_DEADLINE_NEVER;
 }
 
 MdoAgentRun* MdoAgentRunCreate(MdoAgentSession* Session,

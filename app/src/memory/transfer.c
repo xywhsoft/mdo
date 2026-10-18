@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -672,7 +673,7 @@ static char* MdoMemoryTransferManifest(const MdoMemoryTransfer* Transfer,
          !MdoMemoryTransferObjectString(Root, "kind",
             "mdo-memory-directory") ||
          !MdoMemoryTransferObjectTake(Root, "exported_at_us",
-            xrtValueInt(xrtNow())) ||
+            xrtValueInt(MdoUtcUs())) ||
          !MdoMemoryTransferObjectTake(Root, "store_count",
             xrtValueUInt(Transfer->StoreCount)) ||
          !MdoMemoryTransferObjectTake(Root, "project_count",

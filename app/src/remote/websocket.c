@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 #include <stdio.h>
 #include <string.h>
 #include "net.h"
@@ -48,9 +49,9 @@ bool MdoRemoteNetInit(MdoRemoteNet* Net, xnetengine* Engine, const xx509store* T
     if (Net->Resolver && Net->Tls && Net->Verifier) return true;
     MdoRemoteNetUnit(Net); return false;
 }
-static bool MdoRemoteFuture(xfuture* Future, xdeadline Deadline, xcancel* Cancel)
+static bool MdoRemoteFuture(xfuture* Future, uint64 Deadline, xcancel* Cancel)
 {
-    bool ok = Future && xrtFutureWaitUntilCancel(Future,Deadline,Cancel) == XWAIT_OK &&
+    bool ok = Future && xrtFutureWaitForCancel(Future, MdoDeadlineWaitMs(Deadline),Cancel) == XWAIT_OK &&
         xrtFutureState(Future) == XFUTURE_RESOLVED;
     if (!ok && Future) (void)xrtFutureCancel(Future);
     return ok;
@@ -65,12 +66,12 @@ static size_t MdoRemoteAvailable(MdoRemoteSocket* Socket)
 {
     return Socket->Tls ? xrtTlsStreamAvailable(Socket->Tls) : xrtNetStreamAvailable(Socket->Tcp);
 }
-static bool MdoRemoteRawSend(MdoRemoteSocket* Socket, const void* Data, size_t Size, xdeadline Until)
+static bool MdoRemoteRawSend(MdoRemoteSocket* Socket, const void* Data, size_t Size, uint64 Until)
 {
     size_t offset = 0u;
     while (offset < Size) {
         size_t chunk = Size - offset; bool ok;
-        if (!MdoRemoteSocketAlive(Socket) || xrtDeadlineExpired(Until)) return false;
+        if (!MdoRemoteSocketAlive(Socket) || MdoDeadlineExpired(Until)) return false;
         if (chunk > 16384u) chunk = 16384u;
         if (Socket->Tls) {
             xfuture* sent = xrtTlsStreamSendAsync(Socket->Tls,(const char*)Data+offset,chunk);
@@ -85,14 +86,14 @@ static bool MdoRemoteRawSend(MdoRemoteSocket* Socket, const void* Data, size_t S
             if (chunk > limit) chunk = limit;
             xnetresult result = xrtNetStreamSend(Socket->Tcp,(const char*)Data+offset,chunk);
             if (result != XNET_RESULT_OK && result != XNET_RESULT_AGAIN) return false;
-            if (!xrtNetStreamWait(Socket->Tcp,XNET_STREAM_WAIT_DRAIN,Until,Socket->Cancel)) return false;
+            if (!xrtNetStreamWait(Socket->Tcp,XNET_STREAM_WAIT_DRAIN, MdoDeadlineWaitMs(Until),Socket->Cancel)) return false;
             if (result == XNET_RESULT_AGAIN) continue;
         }
         offset += chunk;
     }
     return true;
 }
-static bool MdoRemoteRead(MdoRemoteSocket* Socket, xdeadline Until)
+static bool MdoRemoteRead(MdoRemoteSocket* Socket, uint64 Until)
 {
     size_t capacity = Socket->Capacity - Socket->InputSize;
     if (!capacity || xrtCancelRequested(Socket->Cancel)) return false;
@@ -118,7 +119,7 @@ static bool MdoRemoteFrame(MdoRemoteSocket* Socket, uint8 Opcode, const void* Da
         !xrtWsFrameWrite(&frame,NULL,wire,Size+XWS_FRAME_HEAD_MAX,&head)) goto done;
     if (Size) memcpy(wire+head,Data,Size);
     if (!Socket->Server && !xrtWsMask(wire+head,Size,frame.Mask,0u)) goto done;
-    ok = MdoRemoteRawSend(Socket,wire,head+Size,xrtDeadlineAfter(MDO_REMOTE_SEND_US));
+    ok = MdoRemoteRawSend(Socket,wire,head+Size,MdoDeadlineAfterUs(MDO_REMOTE_SEND_US));
 done:
     xrtSecureZero(wire,Size+XWS_FRAME_HEAD_MAX); xrtFree(wire); return ok;
 }
@@ -153,7 +154,7 @@ MdoRemoteSocket* MdoRemoteSocketOpenTrusted(MdoRemoteNet* Net,
     xhttpfield fields[32]; xhttp1head response; xhttp1limits limits;
     xwsupgradeclientconfig upgrade; xwsupgrade selected; xwsmessageconfig message;
     char key[XWS_KEY_CAPACITY], host[512], request[MDO_REMOTE_HEAD]; size_t count, size;
-    xdeadline until = xrtDeadlineAfter(Timeout);
+    uint64 until = MdoDeadlineAfterUs(Timeout);
     if (HttpStatus) *HttpStatus = 0u;
     if (!Net || !Net->Engine || !Net->Resolver || !Config || !Config->Host || !Config->Host[0] ||
         strlen(Config->Host) > 253u || !Config->Port || !Config->Path || Config->Path[0] != '/' ||
@@ -174,12 +175,12 @@ MdoRemoteSocket* MdoRemoteSocketOpenTrusted(MdoRemoteNet* Net,
         xrtTlsClientConfigInit(&tls); tls.Context = Net->Tls; tls.Verifier = Net->Verifier;
         if (VerifyName) { tls.VerifyName=xrtStrView(VerifyName); tls.ServerName=xrtStrView(VerifyName); }
         /* Dial sets DNS SNI and IP VerifyName correctly from Host. */
-        xrtTlsDialConfigInit(&dial); dial.Timeout = Timeout;
+        xrtTlsDialConfigInit(&dial); dial.Timeout = MdoDurationMs(Timeout);
         future = xrtTlsDialAsync(Net->Engine,Net->Resolver,Config->Host,Config->Port,&tls,&dial,NULL,NULL);
         if (!MdoRemoteFuture(future,until,socket->Cancel)) goto fail;
         socket->Tls = xrtTlsStreamRef((xtlsstream*)xrtFutureValue(future));
     } else {
-        xnetdialconfig dial; xrtNetDialConfigInit(&dial); dial.Timeout = Timeout;
+        xnetdialconfig dial; xrtNetDialConfigInit(&dial); dial.Timeout = MdoDurationMs(Timeout);
         future = xrtNetDialAsync(Net->Engine,Net->Resolver,Config->Host,Config->Port,&dial,NULL,NULL);
         if (!MdoRemoteFuture(future,until,socket->Cancel)) goto fail;
         socket->Tcp = xrtNetStreamRef((xnetstream*)xrtFutureValue(future));
@@ -211,7 +212,7 @@ MdoRemoteSocket* MdoRemoteSocketOpenTrusted(MdoRemoteNet* Net,
     memmove(socket->Input,socket->Input+response.Bytes,socket->InputSize);
     xrtWsMessageConfigInitSafe(&message); message.MaxSize = socket->Limit;
     if (!xrtWsMessageInit(&socket->State,&message)) goto fail;
-    socket->LastRead = socket->LastPing = xrtClock(); socket->Ready = true;
+    socket->LastRead = socket->LastPing = MdoMonotonicUs(); socket->Ready = true;
     return socket;
 fail:
     xrtSecureZero(request,sizeof(request));
@@ -250,7 +251,7 @@ bool MdoRemoteSocketPoll(MdoRemoteSocket* Socket, MdoRemoteMessageProc Proc, voi
     /* A coalesced upgrade can already fill Input with complete WS frames.
      * Parse those before trying to receive into a zero-capacity buffer. */
     if (Socket->InputSize < Socket->Capacity && MdoRemoteAvailable(Socket) &&
-        !MdoRemoteRead(Socket,xrtDeadlineAfter(MDO_REMOTE_SEND_US))) {
+        !MdoRemoteRead(Socket,MdoDeadlineAfterUs(MDO_REMOTE_SEND_US))) {
         Socket->CloseCode = 1006u; Socket->Failed = true; return false;
     }
     while (Socket->InputSize) {
@@ -270,7 +271,7 @@ bool MdoRemoteSocketPoll(MdoRemoteSocket* Socket, MdoRemoteMessageProc Proc, voi
             !xrtWsMessagePayload(&Socket->State,(xbytesview){(const uint8*)payload,size},&error) ||
             !xrtWsMessageFrameEnd(&Socket->State,&error))
             return MdoRemoteFail(Socket,error.CloseCode ? error.CloseCode : 1002u);
-        Socket->LastRead = xrtClock();
+        Socket->LastRead = MdoMonotonicUs();
         if (frame.Opcode == XWS_OPCODE_CLOSE) {
             Socket->PeerClosed = true;
             Socket->CloseCode = size >= 2u ?
@@ -293,11 +294,11 @@ bool MdoRemoteSocketPoll(MdoRemoteSocket* Socket, MdoRemoteMessageProc Proc, voi
     /* A partial frame cannot fill our header + maximum-payload buffer. */
     if (Socket->InputSize == Socket->Capacity) return MdoRemoteFail(Socket,1009u);
     if (!MdoRemoteSocketAlive(Socket)) { Socket->Failed = true; return false; }
-    uint64 now = xrtClock();
+    uint64 now = MdoMonotonicUs();
     if (now - Socket->LastRead >= MDO_REMOTE_IDLE_US) return MdoRemoteFail(Socket,1001u);
     if (now - Socket->LastPing >= MDO_REMOTE_PING_US) {
         if (!MdoRemoteFrame(Socket,XWS_OPCODE_PING,NULL,0u)) { Socket->Failed = true; return false; }
-        Socket->LastPing = xrtClock();
+        Socket->LastPing = MdoMonotonicUs();
     }
     return true;
 }

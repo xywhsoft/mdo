@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 /* Included by sessions.c after its ordinary validation/reply helpers. The
  * existing session mutex serializes keyed edits and reply publication. Only
  * completed replies are retained, for longer than the client's retry budget. */
@@ -13,7 +14,7 @@ static bool MdoApiSessionEditOnce(MdoApiContext* Context,
     MdoApiEditReply* Reply = NULL;
     MdoApiEditReply* Free = NULL;
     xwork_error Error;
-    uint64 ExpectedRevision = 0u, Now = xrtClock();
+    uint64 ExpectedRevision = 0u, Now = MdoMonotonicUs();
     uint32 Status = 0u;
     const char* Code = NULL;
     const char* Message = NULL;
@@ -103,7 +104,7 @@ static bool MdoApiSessionEditOnce(MdoApiContext* Context,
     Free->CreatedAt = Info.CreatedAt;
     Free->ThroughSequence = ThroughSequence;
     Free->SourceEventId = SourceEventId;
-    Free->ExpiresAt = xrtClock() + MDO_API_EDIT_REPLY_TTL_US;
+    Free->ExpiresAt = MdoMonotonicUs() + MDO_API_EDIT_REPLY_TTL_US;
     goto done;
 changed:
     Status = 412u; Code = "revision_conflict";

@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -192,10 +193,10 @@ bool MdoAskAnswer(const char* ProjectId, const char* SessionId,
              strcmp(Entry->SessionId, SessionId) != 0 ) continue;
         if ( g_MdoAsks.Stopping ||
              (Entry->Cancel != NULL && xrtCancelRequested(Entry->Cancel)) ||
-             xrtDeadlineExpired(Entry->ExpiresAt) ||
+             MdoDeadlineExpired(Entry->ExpiresAt) ||
              (Entry->Deadline != 0u &&
-              Entry->Deadline != XRT_DEADLINE_NEVER &&
-              xrtDeadlineExpired(Entry->Deadline)) ) break;
+              Entry->Deadline != MDO_DEADLINE_NEVER &&
+              MdoDeadlineExpired(Entry->Deadline)) ) break;
         memcpy(Entry->Answer, Answer, Length + 1u);
         Entry->Answered = true;
         if ( g_MdoAsks.Observer != NULL ) g_MdoAsks.Observer(g_MdoAsks.ObserverData);
@@ -246,7 +247,7 @@ static xwork_result MdoAskExecute(void* UserData,
     Entry->Info = Request;
     Entry->Info.Id = ++g_MdoAsks.NextId;
     Entry->Info.RunId = Context->uRunId;
-    Entry->Info.CreatedAt = xrtNow();
+    Entry->Info.CreatedAt = MdoUtcUs();
     Entry->Cancel = Context->pCancel;
     Entry->Deadline = Context->uDeadline;
     memcpy(Entry->ProjectId, Binding->ProjectId,
@@ -254,14 +255,14 @@ static xwork_result MdoAskExecute(void* UserData,
     memcpy(Entry->SessionId, Binding->SessionId,
         strlen(Binding->SessionId) + 1u);
     ++g_MdoAsks.ActiveCallbacks;
-    ExpiresAt = xrtClock();
+    ExpiresAt = MdoMonotonicUs();
     ExpiresAt = ExpiresAt > UINT64_MAX - MDO_ASK_TIMEOUT_US ?
         UINT64_MAX : ExpiresAt + MDO_ASK_TIMEOUT_US;
     Entry->ExpiresAt = ExpiresAt;
     if ( g_MdoAsks.Observer != NULL ) g_MdoAsks.Observer(g_MdoAsks.ObserverData);
     (void)xrtCondBroadcast(g_MdoAsks.Changed);
     while ( !Entry->Answered ) {
-        uint64 Now = xrtClock();
+        uint64 Now = MdoMonotonicUs();
         uint64 Wake = Now + MDO_ASK_POLL_US;
         if ( g_MdoAsks.Stopping ||
              (Context->pCancel != NULL &&
@@ -270,15 +271,14 @@ static xwork_result MdoAskExecute(void* UserData,
             break;
         }
         if ( Now >= ExpiresAt ||
-             (Context->uDeadline != XRT_DEADLINE_NEVER &&
+             (Context->uDeadline != MDO_DEADLINE_NEVER &&
               Context->uDeadline != 0u &&
-              xrtDeadlineExpired(Context->uDeadline)) ) break;
+              MdoDeadlineExpired(Context->uDeadline)) ) break;
         if ( Wake > ExpiresAt ) Wake = ExpiresAt;
-        if ( Context->uDeadline != XRT_DEADLINE_NEVER &&
+        if ( Context->uDeadline != MDO_DEADLINE_NEVER &&
              Context->uDeadline != 0u && Context->uDeadline < Wake )
             Wake = Context->uDeadline;
-        if ( xrtCondWaitUntil(g_MdoAsks.Changed, g_MdoAsks.Lock,
-                Wake) == XWAIT_ERROR ) break;
+        if ( xrtCondWaitFor(g_MdoAsks.Changed, g_MdoAsks.Lock, MdoDeadlineWaitMs(Wake)) == XWAIT_ERROR ) break;
     }
     snprintf(Answer, sizeof(Answer), "%s", Entry->Answer);
     memset(Entry, 0, sizeof(*Entry));

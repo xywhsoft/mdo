@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 /* Browser/WebView only talks to its own loopback xs. The native gateway
  * verifies the leaf against the ephemeral CA learned through the account relay,
  * preserving TLS on the LAN without installing a machine/browser CA. */
@@ -42,12 +43,12 @@ done:
 static xtaskoutcome MdoLanGatewayRun(xcancel* Cancel, ptr Data, xtaskvalue* Value)
 {
     (void)Cancel; (void)Value;
-    MdoLanGateway* Gateway=Data; xdeadline Until=xrtDeadlineAfter(2000000u);
+    MdoLanGateway* Gateway=Data; uint64 Until=MdoDeadlineAfterUs(2000000u);
     /* A retained browser WS cannot outlive the controller's local account.
      * This is the existing native logout/account-switch cancellation authority;
      * no token is sent on the LAN or added to the handshake. */
     if (!MdoAccountAcquireService(Gateway->Cancel,&Gateway->Lease)) return XTASK_FAILED;
-    while (!xrtCancelRequested(Gateway->Lease.Cancel) && (Gateway->Opened || !xrtDeadlineExpired(Until)) &&
+    while (!xrtCancelRequested(Gateway->Lease.Cancel) && (Gateway->Opened || !MdoDeadlineExpired(Until)) &&
         MdoRemoteSocketPoll(Gateway->Browser,MdoLanGatewayBrowser,Gateway) &&
         (!Gateway->Target || MdoRemoteSocketPoll(Gateway->Target,MdoLanGatewayTarget,Gateway))) xrtSleep(5u);
     return XTASK_SUCCESS;

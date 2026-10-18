@@ -61,7 +61,7 @@ static int32 Run(void* data) {
     MdoRemoteSocketConfig config = {TEST_HOST,TEST_PORT,TEST_SECURE,"/connect",TEST_ORIGIN,
         "test.remote.v1, test.proof.runtime-only","test.remote.v1",TEST_LARGE_EVENT ? 2097152u : 256u};
     uint16 status = 0; uint16 closed = 0; bool opened = false, cancelled = false, peer_closed = false;
-    uint64 start = xrtClock();
+    uint64 start = MdoMonotonicUs();
     if (TEST_CANCEL_OPEN) Canceller = xrtThreadCreate(CancelSoon,NULL,0);
     MdoRemoteSocket* socket = initialized ? MdoRemoteSocketOpen(&net,&config,Stop,&status) : NULL;
     if (socket) {
@@ -70,8 +70,8 @@ static int32 Run(void* data) {
         Valid = Valid && MdoRemoteSocketSend(socket,false,(xbytesview){(const uint8*)"client text",11u}) &&
             MdoRemoteSocketSend(socket,true,(xbytesview){binary,sizeof(binary)});
         if (TEST_CANCEL_POLL) xrtCancelRequest(Stop);
-        uint64 until = xrtDeadlineAfter(TEST_KEEPALIVE ? 45000000u : 4000000u);
-        while (!xrtDeadlineExpired(until) && MdoRemoteSocketPoll(socket,Message,NULL)) xrtSleep(5);
+        uint64 until = MdoDeadlineAfterUs(TEST_KEEPALIVE ? 45000000u : 4000000u);
+        while (!MdoDeadlineExpired(until) && MdoRemoteSocketPoll(socket,Message,NULL)) xrtSleep(5);
         closed = MdoRemoteSocketCloseCode(socket);
         peer_closed = MdoRemoteSocketPeerClosed(socket);
         cancelled = xrtCancelRequested(Stop);
@@ -83,7 +83,7 @@ static int32 Run(void* data) {
     if (file) { fprintf(file,"{\"initialized\":%s,\"opened\":%s,\"status\":%u,\"valid\":%s,"
         "\"messages\":%u,\"close_code\":%u,\"cancelled\":%s,\"peer_closed\":%s,\"elapsed_ms\":%llu}",
         initialized ? "true":"false",opened ? "true":"false",status,Valid ? "true":"false",
-        Messages,closed,cancelled ? "true":"false",peer_closed ? "true":"false",(unsigned long long)((xrtClock()-start)/1000u)); fclose(file); }
+        Messages,closed,cancelled ? "true":"false",peer_closed ? "true":"false",(unsigned long long)((MdoMonotonicUs()-start)/1000u)); fclose(file); }
     return 0;
 }
 void ServiceInit(XS_HostInfo* host) {

@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -89,10 +90,10 @@ static bool MdoApprovalCapture(MdoApprovalInfo* Info,
     Info->AgentTurn = Request->uAgentTurn;
     Info->Effects = Request->uEffects;
     Info->Risk = Request->eRisk;
-    Info->CreatedAt = xrtNow();
-    Info->CreatedMicroseconds = xrtClock();
+    Info->CreatedAt = MdoUtcUs();
+    Info->CreatedMicroseconds = MdoMonotonicUs();
     Info->Deadline = Request->uDeadline;
-    Info->ExpiresAt = xrtDeadlineAfter(MDO_APPROVAL_MAX_WAIT_MICROSECONDS);
+    Info->ExpiresAt = MdoDeadlineAfterUs(MDO_APPROVAL_MAX_WAIT_MICROSECONDS);
     if ( Request->uDeadline != 0u && Request->uDeadline < Info->ExpiresAt )
         Info->ExpiresAt = Request->uDeadline;
     Info->ResourceCount = Request->iResourceCount;
@@ -203,7 +204,7 @@ xwork_permission_decision MdoApprovalOnPermission(void* UserData,
     if ( Request->pCancel != NULL &&
          xrtCancelRequested(Request->pCancel) ) goto unlock;
     if ( Request->uDeadline != 0u &&
-         xrtDeadlineExpired(Request->uDeadline) ) goto unlock;
+         MdoDeadlineExpired(Request->uDeadline) ) goto unlock;
     if ( Scope != NULL && Scope->AllowRun ) {
         Result = XWORK_PERMISSION_ALLOW;
         goto unlock;
@@ -221,23 +222,23 @@ xwork_permission_decision MdoApprovalOnPermission(void* UserData,
     if ( g_MdoApprovals.Observer != NULL ) g_MdoApprovals.Observer(g_MdoApprovals.ObserverData);
     (void)xrtCondBroadcast(g_MdoApprovals.Changed);
     while ( Entry->Decision == XWORK_PERMISSION_DEFAULT ) {
-        uint64 Now = xrtClock();
+        uint64 Now = MdoMonotonicUs();
         uint64 Wake = Now > UINT64_MAX - MDO_APPROVAL_POLL_MICROSECONDS ?
             UINT64_MAX : Now + MDO_APPROVAL_POLL_MICROSECONDS;
         if ( g_MdoApprovals.Stopping ||
              (Request->pCancel != NULL &&
               xrtCancelRequested(Request->pCancel)) ||
              (Request->uDeadline != 0u &&
-              xrtDeadlineExpired(Request->uDeadline)) ||
-             xrtDeadlineExpired(Entry->Info.ExpiresAt) ) {
+              MdoDeadlineExpired(Request->uDeadline)) ||
+             MdoDeadlineExpired(Entry->Info.ExpiresAt) ) {
             Entry->Decision = XWORK_PERMISSION_DENY;
             break;
         }
         if ( Request->uDeadline != 0u && Request->uDeadline < Wake )
             Wake = Request->uDeadline;
         if ( Entry->Info.ExpiresAt < Wake ) Wake = Entry->Info.ExpiresAt;
-        if ( xrtCondWaitUntil(g_MdoApprovals.Changed,
-                g_MdoApprovals.Lock, Wake) == XWAIT_ERROR ) {
+        if ( xrtCondWaitFor(g_MdoApprovals.Changed,
+                g_MdoApprovals.Lock, MdoDeadlineWaitMs(Wake)) == XWAIT_ERROR ) {
             Entry->Decision = XWORK_PERMISSION_DENY;
             break;
         }
@@ -247,8 +248,8 @@ xwork_permission_decision MdoApprovalOnPermission(void* UserData,
         (Request->pCancel == NULL ||
          !xrtCancelRequested(Request->pCancel)) &&
         (Request->uDeadline == 0u ||
-         !xrtDeadlineExpired(Request->uDeadline)) &&
-        !xrtDeadlineExpired(Entry->Info.ExpiresAt) ?
+         !MdoDeadlineExpired(Request->uDeadline)) &&
+        !MdoDeadlineExpired(Entry->Info.ExpiresAt) ?
         XWORK_PERMISSION_ALLOW : XWORK_PERMISSION_DENY;
     memset(Entry, 0, sizeof(*Entry));
     --g_MdoApprovals.ActiveCallbacks;
@@ -377,7 +378,7 @@ bool MdoApprovalDecide(uint64 RequestId,
     Index = MdoApprovalFindLocked(RequestId);
     if ( g_MdoApprovals.Stopping || Index == SIZE_MAX ||
          g_MdoApprovals.Entries[Index].Decision != XWORK_PERMISSION_DEFAULT ||
-         xrtDeadlineExpired(g_MdoApprovals.Entries[Index].Info.ExpiresAt) ||
+         MdoDeadlineExpired(g_MdoApprovals.Entries[Index].Info.ExpiresAt) ||
          (g_MdoApprovals.Entries[Index].Cancel != NULL &&
           xrtCancelRequested(g_MdoApprovals.Entries[Index].Cancel)) ||
          (AllowRun && g_MdoApprovals.Entries[Index].Scope == NULL) ) {
@@ -395,7 +396,7 @@ bool MdoApprovalDecide(uint64 RequestId,
                  Entry->Decision == XWORK_PERMISSION_DEFAULT )
                 Entry->Decision = (Entry->Cancel == NULL ||
                     !xrtCancelRequested(Entry->Cancel)) &&
-                    !xrtDeadlineExpired(Entry->Info.ExpiresAt) ?
+                    !MdoDeadlineExpired(Entry->Info.ExpiresAt) ?
                     XWORK_PERMISSION_ALLOW : XWORK_PERMISSION_DENY;
         }
     } else {

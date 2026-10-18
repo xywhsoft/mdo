@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -90,7 +91,7 @@ static bool MdoApiApprovalValue(const MdoApprovalInfo* Info, xvalue** Value)
 {
     xvalue* Item = xrtValueObject();
     xvalue* Resources = xrtValueArray();
-    uint64 Now = xrtClock();
+    uint64 Now = MdoMonotonicUs();
     uint64 Remaining = Info->ExpiresAt > Now ? Info->ExpiresAt - Now : 0u;
     size_t Index;
     bool Ok = Item != NULL && Resources != NULL &&

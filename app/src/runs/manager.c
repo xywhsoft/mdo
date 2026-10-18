@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -379,10 +380,10 @@ bool MdoRunManagerPump(size_t* Completed, xwork_error* Error)
         Entry->Info.StartedMicroseconds = AgentInfo.Run.uStartedUs;
         Entry->Info.EndedMicroseconds = AgentInfo.Run.uEndedUs;
         if ( !MdoRunsTerminal(AgentInfo.Run.eState) ) continue;
-        Entry->Info.EndedAt = xrtNow();
+        Entry->Info.EndedAt = MdoUtcUs();
         memset(&Result, 0, sizeof(Result));
         xworkErrorInit(&WaitError);
-        WaitResult = MdoAgentRunWait(Entry->Run, XRT_DEADLINE_NEVER,
+        WaitResult = MdoAgentRunWait(Entry->Run, MDO_DEADLINE_NEVER,
             &Result, &WaitError);
         Entry->Info.ErrorCode = WaitError.eCode;
         Entry->Info.Result = AgentInfo.Run.eResult;
@@ -433,8 +434,7 @@ static int32 MdoRunsThread(ptr Data)
         Stop = g_MdoRuns.Stopping;
         Poll = g_MdoRuns.Options.PollMilliseconds;
         if ( !Stop )
-            (void)xrtCondWaitFor(g_MdoRuns.Changed, g_MdoRuns.Lock,
-                (uint64)Poll * UINT64_C(1000));
+            (void)xrtCondWaitFor(g_MdoRuns.Changed, g_MdoRuns.Lock, MdoDurationMs((uint64)Poll * UINT64_C(1000)));
         Stop = g_MdoRuns.Stopping;
         (void)xrtMutexUnlock(g_MdoRuns.Lock);
         if ( Stop ) break;
@@ -639,8 +639,8 @@ bool MdoRunStartWithOutcome(const MdoRunStartOptions* Options,
     Reserved.Size = sizeof(Reserved);
     Reserved.State = XWORK_RUN_CREATED;
     Reserved.Result = XWORK_RESULT_ERROR;
-    Reserved.CreatedAt = xrtNow();
-    Reserved.CreatedMicroseconds = xrtClock();
+    Reserved.CreatedAt = MdoUtcUs();
+    Reserved.CreatedMicroseconds = MdoMonotonicUs();
     Reserved.Resume = Options->Resume;
     if ( Options->ClientResumeId != NULL )
         snprintf(Reserved.ClientResumeId, sizeof(Reserved.ClientResumeId),
@@ -695,8 +695,8 @@ bool MdoRunStartWithOutcome(const MdoRunStartOptions* Options,
     (void)xrtMutexUnlock(g_MdoRuns.Lock);
 
     Deadline = Options->TimeoutMilliseconds != 0u ?
-        xrtDeadlineAfter((uint64)Options->TimeoutMilliseconds *
-            UINT64_C(1000)) : XRT_DEADLINE_NEVER;
+        MdoDeadlineAfterUs((uint64)Options->TimeoutMilliseconds *
+            UINT64_C(1000)) : MDO_DEADLINE_NEVER;
     MdoSessionRuntimeOptionsInit(&RuntimeOptions);
     RuntimeOptions.PrepareNewTurn = !Options->Resume;
     RuntimeOptions.Cancel = StartCancel;
@@ -815,7 +815,7 @@ publish:
         Entry->Info.CreatedMicroseconds = AgentInfo.Run.uCreatedUs;
         Entry->Info.StartedMicroseconds = AgentInfo.Run.uStartedUs;
         Entry->Info.EndedMicroseconds = AgentInfo.Run.uEndedUs;
-        Entry->Info.StartedAt = xrtNow();
+        Entry->Info.StartedAt = MdoUtcUs();
         if ( Entry->Info.State != AgentInfo.Run.eState && g_MdoRuns.Observer != NULL )
             g_MdoRuns.Observer(g_MdoRuns.ObserverData);
         /* Even a very fast model may finish before Start returns. Its

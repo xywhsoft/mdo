@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 /* Filter quota facts before they reach the WebView. Unknown fields are never
  * copied; malformed replies cannot replace previously verified snapshots. */
 static xvalue* MdoAccountAllowance(const xvalue* Data,uint64 Id)
@@ -48,10 +49,10 @@ static xvalue* MdoAccountAllowance(const xvalue* Data,uint64 Id)
 static bool MdoAccountModelAccess(xcancel* Cancel,uint64 Deadline,MdoModelOnlineAccess* Access)
 {
     MdoAccountLease* Lease=xrtCalloc(1,sizeof(*Lease));if(!Lease||!g_MdoAccount.Initialized){xrtFree(Lease);return false;}
-    uint64 Until=xrtDeadlineAfter(30000000);bool Ok=false;
-    if(Deadline!=XRT_DEADLINE_NEVER&&Deadline<Until)Until=Deadline;
+    uint64 Until=MdoDeadlineAfterUs(30000000);bool Ok=false;
+    if(Deadline!=MDO_DEADLINE_NEVER&&Deadline<Until)Until=Deadline;
     xrtMutexLock(g_MdoAccount.Lock);++g_MdoAccount.Acquirers;
-    while(!g_MdoAccount.Stopping&&!xrtDeadlineExpired(Until)&&(!Cancel||!xrtCancelRequested(Cancel))){
+    while(!g_MdoAccount.Stopping&&!MdoDeadlineExpired(Until)&&(!Cancel||!xrtCancelRequested(Cancel))){
         if(MdoAccountLeaseLocked(Cancel,Lease)){Ok=true;break;}
         /* Unwatch may wait for a cancellation callback. A partially created
          * lease is cleaned up after unlocking, never inside the account lock. */
@@ -65,10 +66,10 @@ static bool MdoAccountModelAccess(xcancel* Cancel,uint64 Deadline,MdoModelOnline
                 g_MdoAccount.BusyKind==MDO_ACCOUNT_WORK_EXCHANGE));
         if(!LoginPending&&(!g_MdoAccount.Tokens.Refresh[0]||
             !MdoAccountQueueLocked(MDO_ACCOUNT_WORK_REFRESH)))break;
-        uint64 Now=xrtClock();
+        uint64 Now=MdoMonotonicUs();
         if(Now>=Until)break;
         uint64 Wait=Until-Now;
-        xrtCondWaitFor(g_MdoAccount.Changed,g_MdoAccount.Lock,Wait<100000u?Wait:100000u);
+        xrtCondWaitFor(g_MdoAccount.Changed,g_MdoAccount.Lock, MdoDurationMs(Wait<100000u?Wait:100000u));
     }
     --g_MdoAccount.Acquirers;xrtCondBroadcast(g_MdoAccount.Changed);xrtMutexUnlock(g_MdoAccount.Lock);
     if(!Ok){MdoAccountRelease(Lease);xrtFree(Lease);return false;}

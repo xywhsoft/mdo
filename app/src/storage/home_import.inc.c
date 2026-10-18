@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 /* Private Home transaction implementation, included by home.c.
  * The cache is never traversed or moved. Only a flushed, validated manifest
  * authorizes data-root moves. Recovery reconstructs each move from its two
@@ -171,7 +172,7 @@ static bool MdoHomeImportMarker(cstr Name, const char* Text)
     snprintf(Temporary, sizeof(Temporary), "%s/%s.tmp", MDO_HOME_IMPORT_DIR, Name);
     snprintf(Target, sizeof(Target), "%s/%s", MDO_HOME_IMPORT_DIR, Name);
     if ( !MdoHomeImportWrite(Temporary, Text, strlen(Text)) ) return false;
-    if ( xrtRootRenameNoReplace(g_MdoHome.Root, Temporary, Target) ) return true;
+    if ( xsRootRenameNoReplace(g_MdoHome.Root, Temporary, Target) ) return true;
     /* Root rename may report a handle-close error after the actual move. */
     Ok = MdoHomeImportRead(Target, &Read, &Size) && Size == strlen(Text) &&
         memcmp(Read, Text, Size) == 0;
@@ -367,7 +368,7 @@ static bool MdoHomeImportGc(void)
 
 static bool MdoHomeImportRetire(void)
 {
-    if ( !xrtRootRenameNoReplace(g_MdoHome.Root, MDO_HOME_IMPORT_DIR, MDO_HOME_IMPORT_GC) ) {
+    if ( !xsRootRenameNoReplace(g_MdoHome.Root, MDO_HOME_IMPORT_DIR, MDO_HOME_IMPORT_GC) ) {
         xfileinfo Info;
         bool Source, Target;
         if ( !MdoHomeImportStat(MDO_HOME_IMPORT_DIR, &Source, &Info) || Source ||
@@ -441,7 +442,7 @@ static bool MdoHomeImportRecoverLocked(bool* Published)
                 if ( (Installed & (1u << i)) == 0u ) continue;
                 snprintf(Destination, sizeof(Destination), "%s/payload/%s",
                     MDO_HOME_IMPORT_DIR, g_MdoHomeImportRoots[i]);
-                if ( !xrtRootRenameNoReplace(g_MdoHome.Root,
+                if ( !xsRootRenameNoReplace(g_MdoHome.Root,
                         g_MdoHomeImportRoots[i], Destination) ) return false;
             }
         }
@@ -457,7 +458,7 @@ static bool MdoHomeImportRecoverLocked(bool* Published)
  * Do not perform this write probe in Inspect or ordinary Home startup. */
 static bool MdoHomeImportPreflight(void)
 {
-    if ( !xrtRootRenameNoReplace(g_MdoHome.Root,
+    if ( !xsRootRenameNoReplace(g_MdoHome.Root,
             MDO_HOME_IMPORT_DIR, MDO_HOME_IMPORT_GC) ) return false;
     return MdoHomeImportGc() &&
         xrtRootDirCreate(g_MdoHome.Root, MDO_HOME_IMPORT_DIR, 0700u);
@@ -549,7 +550,7 @@ static bool MdoHomeImportPublishLocked(void)
         if ( (Roots & (1u << i)) == 0u ) continue;
         snprintf(Source, sizeof(Source), "%s/payload/%s", MDO_HOME_IMPORT_DIR,
             g_MdoHomeImportRoots[i]);
-        if ( !xrtRootRenameNoReplace(g_MdoHome.Root, Source, g_MdoHomeImportRoots[i]) ) return false;
+        if ( !xsRootRenameNoReplace(g_MdoHome.Root, Source, g_MdoHomeImportRoots[i]) ) return false;
     }
     return MdoHomeImportMarker("committed", MDO_HOME_IMPORT_MAGIC);
 }

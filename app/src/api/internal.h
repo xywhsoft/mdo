@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 #ifndef MDO_API_INTERNAL_H
 #define MDO_API_INTERNAL_H
 
@@ -23,7 +24,7 @@ typedef struct MdoApiContext {
     bool WriteShared;
     bool WriteExclusive;
     /* Set only on a copied, owned request in the download executor. */
-    xdeadline SendDeadline;
+    uint64 SendDeadline;
     xcancel* SendCancel;
     bool CloseResponse;
     bool Takeover;

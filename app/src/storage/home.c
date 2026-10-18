@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -749,7 +750,7 @@ bool MdoHomeRenameNoReplace(cstr Source, cstr Target)
             "external Home does not exist");
         return false;
     }
-    bOk = xrtRootRenameNoReplace(g_MdoHome.Root, Source, Target);
+    bOk = xsRootRenameNoReplace(g_MdoHome.Root, Source, Target);
     xrtMutexUnlock(g_MdoHome.Lock);
     return bOk;
 }

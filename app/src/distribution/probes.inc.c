@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 /* Offline functional probes: never contact a user's SSH host or use credentials. */
 static bool MdoDistToolProbe(size_t Index,cstr Path,char Version[257])
 {
@@ -6,7 +7,7 @@ static bool MdoDistToolProbe(size_t Index,cstr Path,char Version[257])
     if(Index==7)return MdoDistRunCheck(Path,VersionArgs,1,NULL,0,NULL,"HTTPS");
     if(Index==8||Index==9) {
         char Relative[128],Input[160],Archive[160],Output[160],Directory[160];
-        snprintf(Relative,sizeof(Relative),"data/toolpacks/extra-probe-%llu",(unsigned long long)xrtClock());
+        snprintf(Relative,sizeof(Relative),"data/toolpacks/extra-probe-%llu",(unsigned long long)MdoMonotonicUs());
         if(!MdoHomeCreateDirectory(Relative))return false;
         snprintf(Input,sizeof(Input),"%s/input",Relative);snprintf(Archive,sizeof(Archive),"%s/probe.7z",Relative);
         snprintf(Output,sizeof(Output),"%s/out/input",Relative);snprintf(Directory,sizeof(Directory),"%s/out",Relative);
@@ -30,7 +31,7 @@ static bool MdoDistToolProbe(size_t Index,cstr Path,char Version[257])
         char Out[257]={0};return MdoDistRun(Path,Args,3,NULL,0,Out)&&!strcmp(Out,"mdo_python_verified");
     }
     if(Index==5) {
-        char Relative[128];snprintf(Relative,sizeof(Relative),"data/toolpacks/probe-%llu",(unsigned long long)xrtClock());
+        char Relative[128];snprintf(Relative,sizeof(Relative),"data/toolpacks/probe-%llu",(unsigned long long)MdoMonotonicUs());
         if(!MdoHomeCreateDirectory(Relative))return false;
         char Input[160],Output[160];snprintf(Input,sizeof(Input),"%s/input",Relative);snprintf(Output,sizeof(Output),"%s/output",Relative);
         str Work=MdoHomeExternalPath(Relative);const cstr Args[]={"input","output"};
@@ -47,7 +48,7 @@ static bool MdoDistToolProbe(size_t Index,cstr Path,char Version[257])
 #else
         str Busybox=Root?xrtPathJoin(Root,"busybox/busybox.exe"):NULL;
 #endif
-        char Relative[128],Script[160],Batch[160],Command[1024];snprintf(Relative,sizeof(Relative),"data/toolpacks/sftp-probe-%llu",(unsigned long long)xrtClock());
+        char Relative[128],Script[160],Batch[160],Command[1024];snprintf(Relative,sizeof(Relative),"data/toolpacks/sftp-probe-%llu",(unsigned long long)MdoMonotonicUs());
         bool Ok=Busybox&&MdoHomeCreateDirectory(Relative);snprintf(Script,sizeof(Script),"%s/probe.sh",Relative);snprintf(Batch,sizeof(Batch),"%s/batch",Relative);
         /* Tiny local SFTP v3 peer: INIT, VERSION, REALPATH and NAME. No network/authentication. */
         cstr Body="\"$1\" dd bs=1 count=9 >/dev/null 2>/dev/null\nprintf '\\000\\000\\000\\005\\002\\000\\000\\000\\003'\n\"$1\" dd bs=1 count=14 >/dev/null 2>/dev/null\nprintf '\\000\\000\\000\\027\\150\\000\\000\\000\\001\\000\\000\\000\\001\\000\\000\\000\\001.\\000\\000\\000\\001.\\000\\000\\000\\000'\n\"$1\" cat >/dev/null\n";

@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -31,7 +32,7 @@ bool MdoApiDownloadLive(const MdoApiContext* Context)
 {
     if ( Context == NULL || Context->Request == NULL ||
          xrtCancelRequested(Context->SendCancel) ||
-         xrtDeadlineExpired(Context->SendDeadline) ) return false;
+         MdoDeadlineExpired(Context->SendDeadline) ) return false;
     if ( Context->Request->tls != NULL )
         return xrtTlsStreamState(Context->Request->tls) == XTLS_STREAM_OPEN;
     return Context->Request->tcp != NULL &&
@@ -40,8 +41,7 @@ bool MdoApiDownloadLive(const MdoApiContext* Context)
 
 static bool MdoDownloadFuture(xfuture* Future, MdoApiContext* Context)
 {
-    bool Ok = Future != NULL && xrtFutureWaitUntilCancel(Future,
-        Context->SendDeadline, Context->SendCancel) == XWAIT_OK &&
+    bool Ok = Future != NULL && xrtFutureWaitForCancel(Future, MdoDeadlineWaitMs(Context->SendDeadline), Context->SendCancel) == XWAIT_OK &&
         xrtFutureState(Future) == XFUTURE_RESOLVED;
     if ( !Ok && Future != NULL ) (void)xrtFutureCancel(Future);
     /* A producer still owns any unfinished async copy. Stream ownership stays
@@ -75,8 +75,7 @@ bool MdoApiDownloadSend(MdoApiContext* Context, const void* Data, size_t Bytes)
             if ( Chunk > Limit ) Chunk = Limit;
             Result = xrtNetStreamSend(Request->tcp, (const char*)Data + Offset, Chunk);
             if ( Result != XNET_RESULT_OK && Result != XNET_RESULT_AGAIN ) return false;
-            if ( !xrtNetStreamWait(Request->tcp, XNET_STREAM_WAIT_DRAIN,
-                    Context->SendDeadline, Context->SendCancel) ) return false;
+            if ( !xrtNetStreamWait(Request->tcp, XNET_STREAM_WAIT_DRAIN, MdoDeadlineWaitMs(Context->SendDeadline), Context->SendCancel) ) return false;
             if ( Result == XNET_RESULT_AGAIN ) continue; /* no bytes accepted */
         }
         Offset += Chunk;
@@ -222,7 +221,7 @@ bool MdoApiSessionBackupStart(MdoApiContext* Context, MdoSession* Session)
     if ( Job->Request.tls == NULL && Job->Request.tcp == NULL ) goto unavailable;
     Job->Context.Request = &Job->Request;
     memcpy(Job->Context.RequestId, Context->RequestId, sizeof(Job->Context.RequestId));
-    Job->Context.SendDeadline = xrtDeadlineAfter(MDO_DOWNLOAD_TIMEOUT_US);
+    Job->Context.SendDeadline = MdoDeadlineAfterUs(MDO_DOWNLOAD_TIMEOUT_US);
     Job->Context.CloseResponse = true;
     Job->Session = Session;
     xrtMutexLock(g_MdoDownloads.Lock);

@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 /* Recovery stays inside one read-only tool call: attempts never write a tool
  * result, publish a document or replay the billed search POST. Wall-clock
  * Retry-After dates become delays once; all waiting uses the monotonic clock. */
@@ -38,7 +39,7 @@ static void MdoWebRetryAfterHeader(void* Data, uint16 Status,
         xtime Date = 0;
         if ( !xrtTimeTryParseHTTPDate(Value, &Date) ) return;
         xtime Now = xrtNow();
-        Delay = Date > Now ? (uint64)Date - (uint64)Now : 0u;
+        Delay = Date > Now ? ((uint64)Date - (uint64)Now) * 1000u : 0u;
     }
     /* Duplicate fields are handled conservatively: never retry sooner than
      * any valid advertised minimum. Malformed fields leave backoff intact. */
@@ -99,25 +100,25 @@ static uint64 MdoWebRecoveryDelay(uint32 Attempt, uint64* Jitter, uint64 Minimum
 static bool MdoWebRecoveryWait(const xwork_tool_context* Context, uint64 End,
     uint64 Delay)
 {
-    uint64 WaitEnd = xrtClock() + Delay;
+    uint64 WaitEnd = MdoMonotonicUs() + Delay;
     xerror* Saved = xrtTakeError();
-    while ( !xrtDeadlineExpired(WaitEnd) && !xrtDeadlineExpired(End) ) {
+    while ( !MdoDeadlineExpired(WaitEnd) && !MdoDeadlineExpired(End) ) {
         if ( Context->pCancel && xrtCancelRequested(Context->pCancel) ) break;
-        uint64 Left = xrtDeadlineRemaining(WaitEnd);
+        uint64 Left = MdoDeadlineRemainingUs(WaitEnd);
         xrtSleep(Left > 20000u ? 20u : (uint32)((Left + 999u) / 1000u));
     }
     if ( Saved ) xrtSetErrorTake(Saved);
-    return !(Context->pCancel && xrtCancelRequested(Context->pCancel)) && !xrtDeadlineExpired(End);
+    return !(Context->pCancel && xrtCancelRequested(Context->pCancel)) && !MdoDeadlineExpired(End);
 }
 
 static bool MdoWebFetchPage(MdoWebState* State, const xwork_tool_context* Context,
     const char* Url, const XS_FetchHeader* Headers, size_t HeaderCount,
     XS_FetchResponse* Response, MdoWebRecovery* Recovery)
 {
-    uint64 End = xrtDeadlineAfter(MDO_WEB_OPEN_RECOVERY_US);
-    uint64 Jitter = xrtClock() ^ (uint64)(uintptr_t)Context;
+    uint64 End = MdoDeadlineAfterUs(MDO_WEB_OPEN_RECOVERY_US);
+    uint64 Jitter = MdoMonotonicUs() ^ (uint64)(uintptr_t)Context;
     if ( !Jitter ) Jitter = 1u;
-    if ( Context->uDeadline != XRT_DEADLINE_NEVER && Context->uDeadline < End )
+    if ( Context->uDeadline != MDO_DEADLINE_NEVER && Context->uDeadline < End )
         End = Context->uDeadline;
     xwork_tool_context Attempt = *Context;
     Attempt.uDeadline = End;
@@ -127,7 +128,7 @@ static bool MdoWebFetchPage(MdoWebState* State, const xwork_tool_context* Contex
         if ( Context->pCancel && xrtCancelRequested(Context->pCancel) ) {
             Recovery->Cancelled = true; break;
         }
-        if ( xrtDeadlineExpired(End) ) break;
+        if ( MdoDeadlineExpired(End) ) break;
         if ( Count > 1u ) {
             State->Transport.ResponseUnit(State->Transport.Context, Response);
             memset(Response, 0, sizeof(*Response));
@@ -146,7 +147,7 @@ static bool MdoWebFetchPage(MdoWebState* State, const xwork_tool_context* Contex
         Recovery->Exhausted = true;
         if ( Count == MDO_WEB_OPEN_MAX_ATTEMPTS ) break;
         uint64 Delay = MdoWebRecoveryDelay(Count, &Jitter, RetryAfter);
-        uint64 Remaining = xrtDeadlineRemaining(End);
+        uint64 Remaining = MdoDeadlineRemainingUs(End);
         if ( Delay >= Remaining ) {
             Recovery->WaitExceedsBudget = true; break;
         }
@@ -166,7 +167,7 @@ static xwork_result MdoWebPageFailure(xwork_tool_result_writer* Writer,
 {
     if ( Recovery->Cancelled )
         return MdoWebFail(Error, XWORK_ERROR_CANCELLED, "Web page reading cancelled");
-    if ( Context->uDeadline != XRT_DEADLINE_NEVER && xrtDeadlineExpired(Context->uDeadline) )
+    if ( Context->uDeadline != MDO_DEADLINE_NEVER && MdoDeadlineExpired(Context->uDeadline) )
         return MdoWebFail(Error, XWORK_ERROR_TIMEOUT, "Web page reading exceeded the task deadline");
     if ( !FetchOk ) {
         xerrkind Kind = MdoWebTransportKind();

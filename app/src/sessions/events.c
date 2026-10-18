@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <stddef.h>
@@ -1074,7 +1075,7 @@ bool MdoSessionEventTrimApply(MdoSessionEventTrimPlan* Plan,
     /* Synthetic markers use source_event_id as the first discarded UI ID.
      * This lets sidecar repair recognize a prior partial mutation on retry. */
     Marker.uEventId = Plan->RemovedFromEventId;
-    Marker.iOccurredAtUs = xrtNow();
+    Marker.iOccurredAtUs = MdoUtcUs();
     Marker.bSuccess = true;
     Marker.sText = Plan->Clear ? "会话历史已清空" : "会话历史已截断";
     Marker.iTextLength = strlen(Marker.sText);

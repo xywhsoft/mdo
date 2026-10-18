@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -115,8 +116,8 @@ static xwork_result MdoWebXrtFailure(xwork_tool_result_writer* pWriter,
     if ( pContext != NULL && pContext->pCancel != NULL &&
          xrtCancelRequested(pContext->pCancel) )
         return MdoWebFail(pError, XWORK_ERROR_CANCELLED, Message);
-    if ( pContext != NULL && pContext->uDeadline != XRT_DEADLINE_NEVER &&
-         xrtDeadlineExpired(pContext->uDeadline) )
+    if ( pContext != NULL && pContext->uDeadline != MDO_DEADLINE_NEVER &&
+         MdoDeadlineExpired(pContext->uDeadline) )
         return MdoWebFail(pError, XWORK_ERROR_TIMEOUT, Message);
     if ( Kind == XERR_CANCELLED )
         return MdoWebFail(pError, XWORK_ERROR_CANCELLED, Message);
@@ -661,8 +662,8 @@ static bool MdoWebFetchRequest(MdoWebState* pState,
     uint64 Timeout = (uint64)pState->Settings.TimeoutMilliseconds * 1000u;
     uint64 IdleTimeout =
         (uint64)pState->Settings.IdleTimeoutMilliseconds * 1000u;
-    if ( pContext->uDeadline != XRT_DEADLINE_NEVER ) {
-        uint64 Remaining = xrtDeadlineRemaining(pContext->uDeadline);
+    if ( pContext->uDeadline != MDO_DEADLINE_NEVER ) {
+        uint64 Remaining = MdoDeadlineRemainingUs(pContext->uDeadline);
         if ( Remaining == 0u ) {
             xrtSetErrorKind(XERR_TIMEOUT);
             return false;
@@ -790,7 +791,7 @@ static xwork_result MdoWebOpenExecute(void* pUserData,
     MdoWebRequestFinished(pState, FetchOk && !Recovery.Cancelled &&
         Response.Status >= 200u && Response.Status < 300u);
     if ( !FetchOk || Recovery.Cancelled || Response.Status < 200u || Response.Status >= 300u ||
-         (pContext->uDeadline != XRT_DEADLINE_NEVER && xrtDeadlineExpired(pContext->uDeadline)) ) {
+         (pContext->uDeadline != MDO_DEADLINE_NEVER && MdoDeadlineExpired(pContext->uDeadline)) ) {
         Result = MdoWebPageFailure(pWriter, pError, pContext, FetchOk, &Response, &Recovery);
         goto done;
     }

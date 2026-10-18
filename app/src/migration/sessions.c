@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -205,7 +206,7 @@ static bool MdoMigrationConvertSession(MdoMigrationContext* Context,
     MdoSessionInfo Validated;
     char* Json = NULL;
     size_t Size = 0u;
-    int64 Now = xrtNow();
+    int64 Now = MdoUtcUs();
     uint64 CreatedMs;
     uint64 UpdatedMs;
     bool Ok = false;

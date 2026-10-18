@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 #include "internal.h"
 
 bool MdoAccountAuthorizationStart(cstr Origin, cstr LocalOrigin, bool Remember,
@@ -33,7 +34,7 @@ bool MdoAccountAuthorizationStart(cstr Origin, cstr LocalOrigin, bool Remember,
         Origin, Authorization->Client, callback, Authorization->State, challenge) < (int)sizeof(Authorization->Url);
     xrtFree(callback); xrtSecureZero(digest, sizeof(digest));
     Authorization->Remember = Remember && xsCredentialProtectionAvailable();
-    Authorization->Expires = xrtNow() / 1000000 + 600;
+    Authorization->Expires = MdoUtcUs() / 1000000 + 600;
     return ok;
 }
 bool MdoAccountAuthorizationSave(const MdoAccountAuthorization* Authorization)
@@ -62,7 +63,7 @@ bool MdoAccountAuthorizationLoad(MdoAccountAuthorization* Authorization)
     uint64 expires = 0; bool remember = false;
     bool ok = value && !strcmp(origin, "https://ai.xywhsoft.com") && MdoAccountHex(state, 64) && MdoAccountHex(verifier, 64) &&
         MdoAccountGetUInt(xrtValueObjectGet(value, xrtStrView("expires_at")), &expires) &&
-        expires > (uint64)(xrtNow() / 1000000) && expires <= (uint64)(xrtNow() / 1000000 + 600) &&
+        expires > (uint64)(MdoUtcUs() / 1000000) && expires <= (uint64)(MdoUtcUs() / 1000000 + 600) &&
         xrtValueGetBool(xrtValueObjectGet(value, xrtStrView("remember")), &remember);
     if (ok) {
         memset(Authorization, 0, sizeof(*Authorization));

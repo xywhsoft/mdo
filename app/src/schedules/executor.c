@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 #include <stdlib.h>
 #include <string.h>
 #include "../../include/mdo/update.h"
@@ -136,7 +137,7 @@ static bool MdoScheduleExecutorFinishAt(size_t Index, size_t* Completed,
          Info.Run.eState == XWORK_RUN_RUNNING ) return true;
     memset(&Result, 0, sizeof(Result));
     xworkErrorInit(&WaitError);
-    Code = MdoAgentRunWait(Execution.Run, XRT_DEADLINE_NEVER, &Result,
+    Code = MdoAgentRunWait(Execution.Run, MDO_DEADLINE_NEVER, &Result,
         &WaitError);
     Details = MdoScheduleExecutorResultDetails(&WaitError);
     /* A previous reply is not the cause of a failed run. Prefer the typed
@@ -536,7 +537,7 @@ static int32 MdoScheduleExecutorThread(ptr Data)
         Poll = g_MdoScheduleExecutor.Options.PollMilliseconds;
         xrtMutexUnlock(g_MdoScheduleExecutor.Lock);
         if ( Stop ) break;
-        (void)MdoScheduleExecutorPump(xrtNow(), NULL, NULL, &Error);
+        (void)MdoScheduleExecutorPump(MdoUtcUs(), NULL, NULL, &Error);
         xrtSleep(Poll);
     }
     return 0;

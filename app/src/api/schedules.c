@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -860,7 +861,7 @@ bool MdoApiScheduleRunRoute(MdoApiContext* Context)
         return MdoApiReplyError(Context, 412u, "revision_conflict",
             "The schedule changed; reload it before running", NULL);
     memset(&Error, 0, sizeof(Error));
-    if ( !MdoScheduleExecutorRunNow(ScheduleId, ExpectedRevision, xrtNow(),
+    if ( !MdoScheduleExecutorRunNow(ScheduleId, ExpectedRevision, MdoUtcUs(),
             &TaskId, &AgentRunId, &Error) ) {
         if ( Error.eCode == XWORK_ERROR_CONTEXT )
             return MdoApiScheduleMutationFailure(Context, ScheduleId,

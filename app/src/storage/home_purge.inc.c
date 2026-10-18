@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 /* Private storage transaction, included after home_import.inc.c by home.c.
  * The journal is immutable once ready. Each rename is reconstructed from
  * exactly one of its two locations, not from a mutable progress counter.
@@ -205,7 +206,7 @@ static bool MdoHomePurgeMarker(cstr Name, const void* Bytes, size_t Size)
     snprintf(Temporary, sizeof(Temporary), "%s/%s.tmp", MDO_HOME_PURGE_DIR, Name);
     snprintf(Target, sizeof(Target), "%s/%s", MDO_HOME_PURGE_DIR, Name);
     if ( !MdoHomeImportWrite(Temporary, Bytes, Size) ) return false;
-    if ( xrtRootRenameNoReplace(g_MdoHome.Root, Temporary, Target) ) return true;
+    if ( xsRootRenameNoReplace(g_MdoHome.Root, Temporary, Target) ) return true;
     Ok = MdoHomePurgeRead(Target, &Read, &ReadSize) && ReadSize == Size &&
         memcmp(Read, Bytes, Size) == 0;
     xrtFree(Read);
@@ -513,7 +514,7 @@ static bool MdoHomePurgeReceiptPublish(const MdoHomePurgeRequest* Request, MdoHo
     }
     if ( (!Exists || PartialSize != Size) &&
          !MdoHomeImportWrite(MDO_HOME_PURGE_DIR "/result.tmp", Text, Size) ) goto done;
-    if ( xrtRootRenameNoReplace(g_MdoHome.Root, MDO_HOME_PURGE_DIR "/result.tmp", Path) ) Ok = true;
+    if ( xsRootRenameNoReplace(g_MdoHome.Root, MDO_HOME_PURGE_DIR "/result.tmp", Path) ) Ok = true;
     else if ( MdoHomePurgeRecordRead(Path, true, &Existing, &Exists) && Exists &&
               MdoHomePurgeRequestSame(&Existing.Request, Request) && Existing.Outcome == Outcome ) {
         xrtClearError(); Ok = true;
@@ -706,7 +707,7 @@ static bool MdoHomePurgeMove(cstr Source, cstr Target, const xfileinfo* Expected
     if ( !MdoHomeImportStat(Source, &Exists, &Info) || !Exists ||
          !MdoHomePurgeSame(&Info, Expected) ||
          !MdoHomeImportStat(Target, &Exists, &Info) || Exists ) return false;
-    (void)xrtRootRenameNoReplace(g_MdoHome.Root, Source, Target);
+    (void)xsRootRenameNoReplace(g_MdoHome.Root, Source, Target);
     if ( !MdoHomeImportStat(Source, &SourceExists, &Info) || SourceExists ||
          !MdoHomeImportStat(Target, &Exists, &Info) || !Exists ||
          !MdoHomePurgeSame(&Info, Expected) ) return false;

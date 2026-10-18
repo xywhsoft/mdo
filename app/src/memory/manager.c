@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -533,7 +534,7 @@ static bool MdoMemoryAudit(const char* Operation, MdoMemoryScope Scope,
     if ( Root == NULL || AuditId == NULL ||
          !MdoMemoryObjectTake(Root, "schema_version", xrtValueUInt(1u)) ||
          !MdoMemoryObjectString(Root, "audit_id", AuditId) ||
-         !MdoMemoryObjectTake(Root, "occurred_at_us", xrtValueInt(xrtNow())) ||
+         !MdoMemoryObjectTake(Root, "occurred_at_us", xrtValueInt(MdoUtcUs())) ||
          !MdoMemoryObjectString(Root, "phase", "prepared") ||
          !MdoMemoryObjectString(Root, "operation", Operation) ||
          !MdoMemoryObjectString(Root, "scope",
@@ -1098,7 +1099,7 @@ bool MdoMemoryUpsert(const MdoMemoryWriteOptions* Options,
             "memory entry revision is exhausted");
         goto done_locked;
     }
-    Now = xrtNow();
+    Now = MdoUtcUs();
     xrtFree(Entry->Id);
     xrtFree(Entry->Title);
     xrtFree(Entry->Content);
@@ -1204,7 +1205,7 @@ bool MdoMemoryRemove(const MdoMemoryRemoveOptions* Options,
         goto done;
     }
     Previous = Snapshot->Revision++;
-    Snapshot->UpdatedAt = xrtNow();
+    Snapshot->UpdatedAt = MdoUtcUs();
     if ( Snapshot->UpdatedAt < Snapshot->Entries[Index].CreatedAt )
         Snapshot->UpdatedAt = Snapshot->Entries[Index].CreatedAt;
     if ( !MdoMemoryAudit("remove", Options->Scope, Options->ProjectId,

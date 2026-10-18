@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -23,7 +24,7 @@ typedef struct MdoBackupRestoreInfo {
     char PreviewId[33], Hash[65];
     MdoBackupRestorePhase Phase;
     xtime CreatedAt, StartedAt, EndedAt;
-    xdeadline ExpiresAt;
+    uint64 ExpiresAt;
     bool Accepted, CancelRequested;
     MdoSessionRestoreResult Result;
     xwork_error Error;
@@ -106,7 +107,7 @@ static void MdoBackupRestoreRetire(MdoBackupRestoreStore* Store, MdoBackupRestor
 
 static MdoBackupRestoreJob* MdoBackupRestoreCollectLocked(MdoBackupRestoreStore* Store)
 {
-    return Store->Slot != NULL && xrtDeadlineExpired(Store->Slot->Info.ExpiresAt) ?
+    return Store->Slot != NULL && MdoDeadlineExpired(Store->Slot->Info.ExpiresAt) ?
         MdoBackupRestoreDetachLocked(Store) : NULL;
 }
 
@@ -257,7 +258,7 @@ static xtaskoutcome MdoBackupRestoreRun(xcancel* Cancel, ptr Data, xtaskvalue* R
     bool Ok;
     (void)Result;
     xrtMutexLock(Store->Lock); Job->Info.Phase = MDO_BACKUP_RESTORE_RUNNING;
-    Job->Info.StartedAt = xrtNow(); xrtMutexUnlock(Store->Lock);
+    Job->Info.StartedAt = MdoUtcUs(); xrtMutexUnlock(Store->Lock);
     MdoSessionRestoreResultInit(&Facts);
     Ok = MdoSessionRestoreExecute(&Job->Operation, Cancel, &Facts, &Error);
     xrtMutexLock(Store->Lock); Job->Info.Result = Facts; Job->Info.Error = Error;
@@ -289,8 +290,8 @@ static void MdoBackupRestoreDrop(ptr Data, ptr Context)
     xrtMutexLock(Store->Lock);
     /* Cancellation after the directory commit cannot change its outcome. */
     Job->Info.CancelRequested = Job->Info.CancelRequested || xrtCancelRequested(Job->Cancel);
-    Job->Info.Phase = MDO_BACKUP_RESTORE_DONE; Job->Info.EndedAt = xrtNow();
-    Job->Info.ExpiresAt = xrtDeadlineAfter(MDO_BACKUP_RESTORE_TTL_US);
+    Job->Info.Phase = MDO_BACKUP_RESTORE_DONE; Job->Info.EndedAt = MdoUtcUs();
+    Job->Info.ExpiresAt = MdoDeadlineAfterUs(MDO_BACKUP_RESTORE_TTL_US);
     Store->Active = NULL;
     xrtMutexUnlock(Store->Lock);
 }
@@ -349,8 +350,8 @@ bool MdoApiBackupRestoreReviewRoute(MdoApiContext* Context)
     if ( !MdoApiBackupPreviewHash(Job->Document, Job->Info.Hash) ||
          !MdoBackupRestoreRandomId(Job->Info.Request.SessionId) ) { Status = 503u; goto failed; }
     memcpy(Job->Info.PreviewId, Preview, sizeof(Preview));
-    Job->Info.CreatedAt = Job->Info.Request.RestoredAt = xrtNow();
-    Job->Info.ExpiresAt = xrtDeadlineAfter(MDO_BACKUP_RESTORE_TTL_US);
+    Job->Info.CreatedAt = Job->Info.Request.RestoredAt = MdoUtcUs();
+    Job->Info.ExpiresAt = MdoDeadlineAfterUs(MDO_BACKUP_RESTORE_TTL_US);
     MdoSessionRestoreResultInit(&Job->Info.Result);
     xrtMutexLock(Store->Lock); Retired = MdoBackupRestoreCollectLocked(Store);
     if ( Retired != NULL ) {
@@ -395,7 +396,7 @@ bool MdoApiBackupRestoreApplyRoute(MdoApiContext* Context)
     if ( Store == NULL ) return MdoApiReplyError(Context, 503u, "restore_unavailable", "Restore admission is unavailable", NULL);
     xrtMutexLock(Store->Lock); Job = Store->Slot;
     if ( Store->Stopping || Job == NULL || strcmp(Job->Info.Request.SessionId, Id) != 0 ||
-         (Store->Active == NULL && xrtDeadlineExpired(Job->Info.ExpiresAt)) ) {
+         (Store->Active == NULL && MdoDeadlineExpired(Job->Info.ExpiresAt)) ) {
         xrtMutexUnlock(Store->Lock);
         return MdoApiReplyError(Context, 404u, "restore_review_not_found", "The review is no longer available; no restore was started by this call", NULL);
     }

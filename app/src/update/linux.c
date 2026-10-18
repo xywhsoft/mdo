@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 /* POSIX permits replacing the executable inode while its old image runs.
  * Prepare and sync a sibling first; rename is the only publication boundary.
  * The native host drains then execs itself, preserving systemd's MainPID. */
@@ -35,7 +36,7 @@ bool MdoUpdateLinuxInstall(cstr Source,cstr Hash)
     str Parent=xrtPathParent(Source);xroot Directory=NULL;
     if(!Download||!Backup||!Parent||!xrtPathStat(Source,false,&Original)||Original.Type!=XFILE_TYPE_FILE||
        !xrtPathStat("/proc/self/exe",true,&Running)||!MdoUpdateLinuxSame(&Original,&Running))goto done;
-    int n=snprintf(Swap,sizeof(Swap),"%s.mdo-update-%llu",Source,(unsigned long long)xrtClock());
+    int n=snprintf(Swap,sizeof(Swap),"%s.mdo-update-%llu",Source,(unsigned long long)MdoMonotonicUs());
     if(n<=0||(size_t)n>=sizeof(Swap))goto done;
     Directory=xrtRootOpen(Parent);if(!Directory)goto done;
     if(!MdoUpdateLinuxCopy(Download,Swap,Original.Mode&0777,true,&OwnSwap))goto cleanup;
@@ -43,7 +44,7 @@ bool MdoUpdateLinuxInstall(cstr Source,cstr Hash)
     if(!MdoUpdateFileHash(Swap,Actual,true)||strcmp(Actual,Hash))goto cleanup;
     const cstr Args[]={"--version"};xprocessconfig Config;xprocessrunoptions Options;xprocessresult Result={0};
     xrtProcessConfigInit(&Config);xrtProcessRunOptionsInit(&Options);Config.Program=Swap;Config.Args=Args;Config.ArgCount=1;
-    Config.Stdin.Mode=Config.Stdout.Mode=Config.Stderr.Mode=XPROCESS_IO_NULL;Options.Deadline=xrtDeadlineAfter(UINT64_C(10000000));
+    Config.Stdin.Mode=Config.Stdout.Mode=Config.Stderr.Mode=XPROCESS_IO_NULL;Options.Timeout=10000;
     bool Runnable=xrtProcessRun(&Config,&Options,&Result)&&Result.Wait==XWAIT_OK&&Result.Status.Code==0;
     xrtProcessResultUnit(&Result);if(!Runnable)goto cleanup;
     /* Keep a durable previous version inside Home, including on another disk. */

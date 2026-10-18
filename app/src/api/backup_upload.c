@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -12,7 +13,7 @@ struct MdoBackupUploadDocument {
     size_t Bytes, Received, Pins;
     char ExpectedHash[65], Hash[65];
     xsha256 Digest;
-    xdeadline Deadline;
+    uint64 Deadline;
     bool Sealed, Removed;
 };
 struct MdoBackupUploadStore {
@@ -50,7 +51,7 @@ static void MdoUploadCollectLocked(MdoBackupUploadStore* Store)
 {
     MdoBackupUploadDocument* Slot = Store->Slot;
     if ( Slot == NULL ) return;
-    if ( Store->Stopping || xrtDeadlineExpired(Slot->Deadline) ) Slot->Removed = true;
+    if ( Store->Stopping || MdoDeadlineExpired(Slot->Deadline) ) Slot->Removed = true;
     if ( Slot->Removed && Slot->Pins == 0u ) {
         Store->Slot = NULL;
         xrtFree(Slot->Data); xrtFree(Slot);
@@ -195,7 +196,7 @@ static bool MdoUploadError(MdoApiContext* Context, uint16 Status, cstr Code)
 static xvalue* MdoUploadValueLocked(const MdoBackupUploadDocument* Slot)
 {
     xvalue* Value = xrtValueObject();
-    uint64 Now = xrtClock();
+    uint64 Now = MdoMonotonicUs();
     bool Ok = Value != NULL && MdoApiValueSetString(Value, "id", Slot->Id) &&
         MdoApiValueSetUInt(Value, "bytes", Slot->Bytes) &&
         MdoApiValueSetUInt(Value, "received_bytes", Slot->Received) &&
@@ -256,7 +257,7 @@ static bool MdoUploadCreate(MdoApiContext* Context)
         } else {
             Slot->Store = Store; Slot->Bytes = (size_t)Bytes;
             memcpy(Slot->Id, Name, sizeof(Name)); memcpy(Slot->ExpectedHash, Expected, sizeof(Expected));
-            Slot->Deadline = xrtDeadlineAfter(MDO_BACKUP_UPLOAD_TTL_US);
+            Slot->Deadline = MdoDeadlineAfterUs(MDO_BACKUP_UPLOAD_TTL_US);
             xrtSha256Init(&Slot->Digest); Store->Slot = Slot;
         }
     }

@@ -1,5 +1,13 @@
 # Locked xs host source
 
+The current lock uses `xs-xrt-current.bundle` on `refs/heads/master`.
+It upgrades the product host to XRT `ac059267` while retaining the existing
+product APIs and fixes from `4b0dddaa`. XRT is implemented exactly once; the
+HTTP client compiles as native sources instead of embedding an old core.
+Product Unix/monotonic microsecond records retain their meaning; native XRT
+waits receive signed relative milliseconds. See
+`docs/build-records/2026-10-18-xs-xrt-upgrade.md` for the migration and gates.
+
 `xs-tool-image-text.bundle` carries the compatibility commits from
 `bd7831704482cc7dd418260281a37c6bdb222b23` to the xs revision in `deps.lock`.
 It contains the upstream xllm stream termination/output-limit fixes and xwork

@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -161,7 +162,7 @@ bool MdoMigrationWriteReport(MdoMigrationContext* Context,
          !MdoMigrationReportString(Root, "preview_token",
             Context->Preview.PreviewToken) ||
          !MdoMigrationReportTake(Root, "migrated_at_us",
-            xrtValueInt(xrtNow())) ||
+            xrtValueInt(MdoUtcUs())) ||
          !MdoMigrationReportTake(Root, "source_preserved",
             xrtValueBool(true)) ||
          !MdoMigrationReportTake(Root, "restart_required",

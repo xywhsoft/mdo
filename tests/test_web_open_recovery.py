@@ -111,7 +111,7 @@ static bool Fetch(void* data, const XS_FetchRequest* request,
     return ok;
 }
 ''' + text[end:]
-    text = text.replace("context.uDeadline = xrtDeadlineAfter(5000000u);",
+    text = text.replace("context.uDeadline = MdoDeadlineAfterUs(5000000u);",
                         "context.uDeadline = ProbeDeadline; context.pCancel = ProbeCancel;")
     start = text.index('    if (!Execute(agent, "web_search"')
     end = text.index('    printf("probe_done=1', start)
@@ -124,12 +124,12 @@ static bool Fetch(void* data, const XS_FetchRequest* request,
         arguments = json.dumps({"url": f"http://127.0.0.1:{port}/{name}"})
         calls.append(f'''
     probe.Fetches = 0u;
-    ProbeDeadline = xrtDeadlineAfter({200000 if name in ('deadline', 'short-network') else 800000 if name == 'deadline-late' else 25000000}u);
+    ProbeDeadline = MdoDeadlineAfterUs({200000 if name in ('deadline', 'short-network') else 800000 if name == 'deadline-late' else 25000000}u);
     ProbeCancel = {'xrtCancelCreate()' if name.startswith('cancel') else 'NULL'};
-    uint64 started_{name.replace('-', '_')} = xrtClock();
+    uint64 started_{name.replace('-', '_')} = MdoMonotonicUs();
     bool ok_{name.replace('-', '_')} = Execute(agent, "web_open", {json.dumps(arguments)}, &open);
     printf("case={name} success:%d fetches:%u elapsed_ms:%llu\\n", ok_{name.replace('-', '_')},
-        probe.Fetches, (unsigned long long)((xrtClock() - started_{name.replace('-', '_')}) / 1000u));
+        probe.Fetches, (unsigned long long)((MdoMonotonicUs() - started_{name.replace('-', '_')}) / 1000u));
     xrtFree(open); open = NULL;
     if (ProbeCancelThread) {{ xrtThreadWait(ProbeCancelThread); xrtThreadDestroy(ProbeCancelThread); ProbeCancelThread = NULL; }}
     xrtCancelDestroy(ProbeCancel); ProbeCancel = NULL;
@@ -144,7 +144,7 @@ static bool Fetch(void* data, const XS_FetchRequest* request,
     preflight = "" if baseline else r'''
     {
         xwork_tool_context expired = {0}; XS_FetchResponse unused = {0};
-        expired.uDeadline = xrtDeadlineAfter(1u); xrtSleep(2u);
+        expired.uDeadline = MdoDeadlineAfterUs(1u); xrtSleep(2u);
         xrtSetErrorKind(XERR_PERMISSION);
         if (MdoWebFetchRequest(g_MdoWeb.Current, &expired, "https://example.com/", NULL, 0u,
                 false, NULL, 0u, &unused, NULL) || xrtGetError() == NULL ||

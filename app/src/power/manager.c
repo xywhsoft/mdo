@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 #include <string.h>
 
 #include "../../include/mdo/config.h"
@@ -45,9 +46,9 @@ static int32 MdoPowerManagerThread(ptr Data)
                 Schedules.ActiveRuns != 0u;
         }
         if ( Configured && Running ) {
-            if ( !Inhibitor.Active && xrtClock() >= RetryAfter ) {
+            if ( !Inhibitor.Active && MdoMonotonicUs() >= RetryAfter ) {
                 Available = MdoPowerInhibitorBegin(&Inhibitor);
-                if ( !Available ) RetryAfter = xrtClock() +
+                if ( !Available ) RetryAfter = MdoMonotonicUs() +
                     MDO_POWER_RETRY_MICROSECONDS;
             }
         } else MdoPowerInhibitorEnd(&Inhibitor);

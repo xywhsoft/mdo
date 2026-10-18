@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 /* Settings probes never persist drafts or follow redirects with credentials.
  * Discovery verifies the catalog endpoint; only Test makes a model request. */
 #include "../../include/mdo/http_url.h"
@@ -141,7 +142,7 @@ static bool MdoApiModelTestRun(MdoApiContext* Context, MdoApiJsonBody Body)
 {
     MdoModelCatalog* Catalog = NULL; xllm_client* Client = NULL; xllm_response* Response = NULL;
     xllm_request Request; xllm_error Error = {0}; MdoModelClientOptions Options;
-    MdoModelInfo Info = {0}; xvalue* Data = NULL; bool Ok = false, Tools = false; uint64 Started = xrtClock();
+    MdoModelInfo Info = {0}; xvalue* Data = NULL; bool Ok = false, Tools = false; uint64 Started = MdoMonotonicUs();
     cstr Id = MdoApiModelText(Body.Value, "model_id", 128u);
     xvalue* ToolMode = xrtValueObjectGet(Body.Value, XRT_STR_LITERAL("tools"));
     if (ToolMode && !xrtValueGetBool(ToolMode, &Tools))
@@ -171,7 +172,7 @@ static bool MdoApiModelTestRun(MdoApiContext* Context, MdoApiJsonBody Body)
     else if (Ok && (!Response || ((!Response->sContent || !Response->sContent[0]) && (!Response->sReasoningContent || !Response->sReasoningContent[0])))) Ok = false;
     if (Ok) {
         Data = xrtValueObject(); Ok = Data && MdoApiValueSetBool(Data, "verified", true) &&
-            MdoApiValueSetUInt(Data, "latency_ms", (xrtClock() - Started) / 1000u);
+            MdoApiValueSetUInt(Data, "latency_ms", (MdoMonotonicUs() - Started) / 1000u);
     }
     xllmResponseDestroy(Response); xllmRequestUnit(&Request); xllmClientDestroy(Client);
     MdoModelCatalogRelease(Catalog); xrtClearError();
@@ -243,7 +244,7 @@ static bool MdoApiModelProbeStart(MdoApiContext* Context, bool Test)
     else Job->Request.tcp = xrtNetStreamRef(Context->Request->tcp);
     Job->Context.Request = &Job->Request; Job->Test = Test;
     memcpy(Job->Context.RequestId, Context->RequestId, sizeof(Job->Context.RequestId));
-    Job->Context.SendDeadline = xrtDeadlineAfter(Test ? 30000000u : 15000000u); Job->Context.CloseResponse = true;
+    Job->Context.SendDeadline = MdoDeadlineAfterUs(Test ? 30000000u : 15000000u); Job->Context.CloseResponse = true;
     xrtMutexLock(g_MdoModelProbes.Lock);
     if (!g_MdoModelProbes.Stopping && g_MdoModelProbes.Count < 2u) {
         if (!g_MdoModelProbes.Pool) { xtaskpoolconfig Config = {0}; Config.Threads = 1u; Config.QueueLimit = 1u; g_MdoModelProbes.Pool = xrtTaskPoolCreate(&Config); }

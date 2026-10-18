@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 #include "../../include/mdo/distribution.h"
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/version.h"
@@ -87,7 +88,7 @@ static bool MdoDistRunCheck(cstr Path,const cstr* Args,size_t Count,cstr WorkDir
     xprocessconfig Config; xprocessrunoptions Options; xprocessresult Result={0};
     xrtProcessConfigInit(&Config); Config.Program=Path; Config.Args=Args; Config.ArgCount=Count; Config.WorkDir=WorkDir;
     Config.HideWindow=true; Config.InheritEnv=true; Config.Stdin.Mode=XPROCESS_IO_NULL; Config.Stdout.Mode=XPROCESS_IO_PIPE; Config.Stderr.Mode=XPROCESS_IO_PIPE;
-    xrtProcessRunOptionsInit(&Options); Options.Deadline=xrtDeadlineAfter(UINT64_C(5000000));
+    xrtProcessRunOptionsInit(&Options); Options.Timeout=5000;
     Options.StdoutLimit=8192; Options.StderrLimit=8192; Options.Overflow=XPROCESS_OVERFLOW_KEEP_LAST;
     Options.Cancel=g_MdoDistribution.Operation?g_MdoDistribution.Operation:g_MdoDistribution.Cancel;
     xrtClearError();bool Ran=xrtProcessRun(&Config,&Options,&Result);
@@ -182,7 +183,7 @@ static bool MdoDistExtract(cstr Id,xvalue* Package,char Target[128])
     if(!Files||xrtValueType(Files)!=XVALUE_ARRAY || xrtValueCount(Files)>10000 ||
        strcmp(MdoDistText(Manifest,"id"),Id) || strcmp(MdoDistText(Manifest,"platform"),MdoToolPlatform()) ||
        MdoDistNumber(Manifest,"revision")!=MdoDistNumber(Package,"revision"))goto done;
-    snprintf(Target,128,"data/toolpacks/%s/%llu-%.12s-%llu",Id,(unsigned long long)MdoDistNumber(Package,"revision"),MdoDistText(Package,"sha256"),(unsigned long long)xrtClock());
+    snprintf(Target,128,"data/toolpacks/%s/%llu-%.12s-%llu",Id,(unsigned long long)MdoDistNumber(Package,"revision"),MdoDistText(Package,"sha256"),(unsigned long long)MdoMonotonicUs());
     Code="write";Detail="Unable to create the tool package directory";
     if(!MdoHomeCreateDirectory(Target))goto done;
     MdoDistProgress(0,xrtValueCount(Files),"extracting");
@@ -313,9 +314,9 @@ static int32 MdoDistWorker(void* Data)
         unsigned Command; char Id[16]; bool Dirty=false;
         xrtMutexLock(g_MdoDistribution.Lock); Command=g_MdoDistribution.Command; g_MdoDistribution.Command=0;
         snprintf(Id,sizeof(Id),"%s",g_MdoDistribution.Id); xrtMutexUnlock(g_MdoDistribution.Lock);
-        if(Socket&&!MdoRemoteSocketPoll(Socket,MdoDistInvalidate,&Dirty)) {MdoRemoteSocketDestroy(Socket); Socket=NULL; Retry=xrtClock()+30000000;}
-        if(Command || Dirty || xrtClock()>=Next) {
-            bool Ok=Command==2?MdoDistInstall(Id):Command>=3?MdoDistMaintain(Command,Id):MdoDistFetch(); Next=xrtClock()+300000000;
+        if(Socket&&!MdoRemoteSocketPoll(Socket,MdoDistInvalidate,&Dirty)) {MdoRemoteSocketDestroy(Socket); Socket=NULL; Retry=MdoMonotonicUs()+30000000;}
+        if(Command || Dirty || MdoMonotonicUs()>=Next) {
+            bool Ok=Command==2?MdoDistInstall(Id):Command>=3?MdoDistMaintain(Command,Id):MdoDistFetch(); Next=MdoMonotonicUs()+300000000;
             if(Ok&&Command>=3){MdoHomeRemove("data/toolpacks/download.failed",false);MdoHomeRemove("data/toolpacks/last-error.json",false);}
             xrtMutexLock(g_MdoDistribution.Lock); bool Cancelled=xrtCancelRequested(g_MdoDistribution.Operation);if(Command)g_MdoDistribution.Busy=false; if(Command>=2) {xrtCancelDestroy(g_MdoDistribution.Operation); g_MdoDistribution.Operation=NULL;}
             if(Cancelled){xrtValueRelease(g_MdoDistribution.Error);g_MdoDistribution.Error=NULL;}
@@ -325,11 +326,11 @@ static int32 MdoDistWorker(void* Data)
             if(!Preserve)snprintf(g_MdoDistribution.Message,sizeof(g_MdoDistribution.Message),"%s",Ok||Cancelled?"":g_MdoDistribution.Error?MdoDistText(g_MdoDistribution.Error,"detail"):Command>=2?"Tool package operation failed":"Online service unavailable; cached notices retained");
             xrtMutexUnlock(g_MdoDistribution.Lock);
         }
-        if(!Socket&&xrtClock()>=Retry) {
+        if(!Socket&&MdoMonotonicUs()>=Retry) {
             if(!Net.Engine)MdoRemoteNetInit(&Net,g_MdoDistribution.Server->Engine,NULL);
             MdoRemoteSocketConfig Config={MDO_DISTRIBUTION_HOST,MDO_DISTRIBUTION_PORT,MDO_DISTRIBUTION_SECURE,
                 "/mdo/push",MDO_DISTRIBUTION_ORIGIN,"mdo.notifications.v1","mdo.notifications.v1",4096};
-            Socket=MdoRemoteSocketOpen(&Net,&Config,g_MdoDistribution.Cancel,NULL); Retry=xrtClock()+60000000;
+            Socket=MdoRemoteSocketOpen(&Net,&Config,g_MdoDistribution.Cancel,NULL); Retry=MdoMonotonicUs()+60000000;
         }
         xrtSleep(100);
     }

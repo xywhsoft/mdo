@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -200,7 +201,7 @@ xvalue* MdoRemoteSnapshot(void)
     MdoAccountLease account = {0};
     bool signed_in = MdoAccountAcquireService(NULL,&account);
     xrtMutexLock(g_MdoRemote.Lock);
-    if (g_MdoRemote.Ticket && (xrtDeadlineExpired(g_MdoRemote.TicketExpires) ||
+    if (g_MdoRemote.Ticket && (MdoDeadlineExpired(g_MdoRemote.TicketExpires) ||
         !signed_in || account.MemberId != g_MdoRemote.TicketMember)) MdoRemoteTicketClearLocked();
     xvalue *value = xrtValueObject(), *job = xrtValueObject();
     bool ok = value && job && MdoAccountSetBool(value,"allow_remote",g_MdoRemote.Config.AllowRemote) &&
@@ -235,7 +236,7 @@ xvalue* MdoRemoteTicketTake(cstr JobId)
     xrtMutexLock(g_MdoRemote.Lock);
     if (live && !g_MdoRemote.Stopping && !strcmp(JobId,g_MdoRemote.JobId) &&
         !strcmp(g_MdoRemote.JobState,"done") && lease.MemberId == g_MdoRemote.TicketMember &&
-        !xrtCancelRequested(lease.Cancel) && !xrtDeadlineExpired(g_MdoRemote.TicketExpires)) {
+        !xrtCancelRequested(lease.Cancel) && !MdoDeadlineExpired(g_MdoRemote.TicketExpires)) {
         ticket = g_MdoRemote.Ticket; g_MdoRemote.Ticket = NULL;
         g_MdoRemote.TicketMember = g_MdoRemote.TicketExpires = 0u;
     }
@@ -325,7 +326,7 @@ done:
             g_MdoRemote.TicketMember = lease.MemberId;
             /* Service tickets are <=60 s; this shorter local consume window
              * prevents exposing stale credentials from an abandoned tab. */
-            g_MdoRemote.TicketExpires = xrtDeadlineAfter(20000000u);
+            g_MdoRemote.TicketExpires = MdoDeadlineAfterUs(20000000u);
         } else if (ok && (Job->Action == MDO_REMOTE_REVOKE || Job->Action == MDO_REMOTE_REMOVE) &&
             g_MdoRemote.Identity.MemberId == lease.MemberId && !strcmp(Job->Argument,g_MdoRemote.Identity.Id)) {
             MdoRemoteOffLocked("disabled","");
@@ -349,7 +350,7 @@ static int32 MdoRemoteServiceWorker(void* Data)
     for (;;) {
         xrtMutexLock(g_MdoRemote.Lock);
         while (!g_MdoRemote.Stopping && !xrtCancelRequested(g_MdoRemote.Stop) && !g_MdoRemote.Pending.Action)
-            xrtCondWaitFor(g_MdoRemote.Changed,g_MdoRemote.Lock,250000u);
+            xrtCondWaitFor(g_MdoRemote.Changed,g_MdoRemote.Lock, MdoDurationMs(250000u));
         if (g_MdoRemote.Stopping || xrtCancelRequested(g_MdoRemote.Stop)) { xrtMutexUnlock(g_MdoRemote.Lock); break; }
         MdoRemoteJob job = g_MdoRemote.Pending;
         memset(&g_MdoRemote.Pending,0,sizeof(g_MdoRemote.Pending));
@@ -427,7 +428,7 @@ static bool MdoRemoteConnectionEmit(xbytesview Envelope, void* Data)
 }
 static void MdoRemoteBackgroundRenew(uint64* Token, uint64* Next)
 {
-    uint64 now = xrtClock();
+    uint64 now = MdoMonotonicUs();
     if (now < *Next) return;
     if (*Token && !xsBackgroundLeaseRenew(*Token,60000u)) *Token = 0u;
     if (!*Token) *Token = xsBackgroundLeaseAcquire(60000u);
@@ -443,7 +444,7 @@ static int32 MdoRemoteConnectionWorker(void* Data)
         xrtMutexLock(g_MdoRemote.Lock);
         while (!g_MdoRemote.Stopping && !xrtCancelRequested(g_MdoRemote.Stop) && !g_MdoRemote.Config.AllowRemote) {
             xsBackgroundLeaseRelease(background); background = next_background = 0u;
-            xrtCondWaitFor(g_MdoRemote.Changed,g_MdoRemote.Lock,250000u);
+            xrtCondWaitFor(g_MdoRemote.Changed,g_MdoRemote.Lock, MdoDurationMs(250000u));
             xrtMutexUnlock(g_MdoRemote.Lock);
             if (bridge) (void)MdoRemoteBridgePump(bridge,NULL,NULL);
             xrtMutexLock(g_MdoRemote.Lock);
@@ -532,7 +533,7 @@ closed:
         if (delay > 15000000u) delay = 15000000u;
         xrtMutexLock(g_MdoRemote.Lock);
         if (g_MdoRemote.Epoch == epoch && g_MdoRemote.Config.AllowRemote && !g_MdoRemote.Stopping)
-            xrtCondWaitFor(g_MdoRemote.Changed,g_MdoRemote.Lock,delay);
+            xrtCondWaitFor(g_MdoRemote.Changed,g_MdoRemote.Lock, MdoDurationMs(delay));
         xrtMutexUnlock(g_MdoRemote.Lock);
     }
     xsBackgroundLeaseRelease(background);

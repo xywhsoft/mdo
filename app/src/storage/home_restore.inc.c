@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 /* Included after Home's import/purge leaves. These existing helpers provide
  * anchored stat, bounded reads, flushed exclusive writes and identity JSON.
  * Publication has one commit point: payload -> live directory. Recovery does
@@ -100,7 +101,7 @@ static bool MdoHomeRestoreSave(cstr Name, const MdoHomeRestoreRecord* Record, bo
     snprintf(Temporary, sizeof(Temporary), "%s/%s.tmp", MDO_HOME_RESTORE_DIR, Name);
     snprintf(Target, sizeof(Target), "%s/%s", MDO_HOME_RESTORE_DIR, Name);
     if ( Ok ) Ok = MdoHomeImportWrite(Temporary, Text, TextBytes);
-    if ( Ok && !xrtRootRenameNoReplace(g_MdoHome.Root, Temporary, Target) ) {
+    if ( Ok && !xsRootRenameNoReplace(g_MdoHome.Root, Temporary, Target) ) {
         char* Read = NULL; size_t Bytes = 0u;
         Ok = MdoHomePurgeReadBounded(Target, MDO_HOME_RESTORE_RECORD_BYTES, &Read, &Bytes) &&
             Bytes == TextBytes && memcmp(Read, Text, Bytes) == 0;
@@ -465,7 +466,7 @@ bool MdoHomeSessionRestoreEnd(MdoHomeSessionRestore* Restore, cstr Name,
     snprintf(Source, sizeof(Source), "%s/payload/%s", MDO_HOME_RESTORE_DIR, Record.Name);
     /* Recover actual positions after every rename result, including native
      * handle-close errors reported after the move already committed. */
-    (void)xrtRootRenameNoReplace(g_MdoHome.Root, Source, Target);
+    (void)xsRootRenameNoReplace(g_MdoHome.Root, Source, Target);
 done:
     {
         xerror* Saved = xrtTakeError();

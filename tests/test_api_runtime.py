@@ -444,7 +444,7 @@ static xwork_permission_decision MdoApiProbeRequestApproval(uint64 RequestId,
     Request.sArgumentsJson = "{\"path\":\"notes.txt\"}";
     Request.sWorkspaceRoot = "api-probe-workspace";
     Request.uAgentTurn = 9u;
-    Request.uDeadline = xrtDeadlineAfter(UINT64_C(120) * 1000000u);
+    Request.uDeadline = MdoDeadlineAfterUs(UINT64_C(120) * 1000000u);
     return MdoApprovalOnPermission(Scope, &Request);
 }
 
@@ -476,14 +476,14 @@ static void MdoApiProbeCreateTasks(void)
     Config.sOwnerSession = "api-probe-session";
     Config.sLabel = "api-probe-finished";
     Config.sNotify = "none";
-    Config.iScheduledAtUs = xrtNow();
+    Config.iScheduledAtUs = MdoUtcUs();
     if ( xworkRuntimeCreateScheduledTask(Runtime, &Config, &TaskId, &Error) ) {
         (void)xworkRuntimeStartScheduledTask(Runtime, TaskId, &Error);
         (void)xworkRuntimeFinishScheduledTask(Runtime, TaskId, XWORK_RESULT_OK,
             "task-result", &Error);
     }
     Config.sLabel = "api-probe-cancellable";
-    Config.iScheduledAtUs = xrtNow() + 60000000;
+    Config.iScheduledAtUs = MdoUtcUs() + 60000000;
     (void)xworkRuntimeCreateScheduledTask(Runtime, &Config, &TaskId, &Error);
 }
 

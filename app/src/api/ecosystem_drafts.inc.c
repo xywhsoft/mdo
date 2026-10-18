@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 /* Portable publication drafts hold metadata and resource references, not raw
  * credentials or a second copy of runtime files. The extension mutex owns CAS. */
 #define ECO_DRAFT_DIRECTORY "data/extensions/drafts"
@@ -59,7 +60,7 @@ static bool EcoDraftAction(MdoApiContext* c,const xvalue* input)
     if(!strcmp(action,"draft_delete")){bool ok=!missing&&MdoHomeRemove(path,false);return ok?MdoApiReplySuccessTake(c,200,xrtValueObject(),NULL):MdoApiReplyError(c,missing?404:503,"ecosystem_draft_delete","Cannot remove draft",NULL);}
     if(!EcoDraftValid(draft))return MdoApiReplyError(c,422,"ecosystem_draft_invalid","Invalid draft fields or resource references",NULL);
     if(missing){xvalue* list=EcoDraftList();bool allowed=list&&xrtValueCount(list)<ECO_DRAFT_COUNT;xrtValueRelease(list);if(!allowed)return MdoApiReplyError(c,409,"ecosystem_draft_limit","Keep at most 64 local plugin drafts",NULL);}
-    xvalue* doc=xrtValueClone(draft);bool ok=doc&&MdoApiValueSetUInt(doc,"updated_at",xrtNow()/1000000u);size_t n=0;char* json=ok?xrtJsonStringify(doc,false,&n):NULL;
+    xvalue* doc=xrtValueClone(draft);bool ok=doc&&MdoApiValueSetUInt(doc,"updated_at",MdoUtcUs()/1000000u);size_t n=0;char* json=ok?xrtJsonStringify(doc,false,&n):NULL;
     ok=json&&n<=ECO_DRAFT_LIMIT&&MdoExtensionHash(json,revision)&&MdoHomeAtomicWrite(path,json,n,false);xrtFree(json);
     if(ok){MdoApiValueSetString(doc,"revision",revision);return MdoApiReplySuccessTake(c,200,doc,NULL);}xrtValueRelease(doc);return MdoApiReplyError(c,503,"ecosystem_draft_save","Cannot save portable draft",NULL);
 }

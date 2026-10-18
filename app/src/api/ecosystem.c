@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 #include "internal.h"
 #include "write_admission.h"
 #include "../account/internal.h"
@@ -125,7 +126,7 @@ bool MdoApiEcosystemRoute(MdoApiContext* c)
     if(c->Request->tls)job->Request.tls=xrtTlsStreamRef(c->Request->tls);else if(c->Request->tcp)job->Request.tcp=xrtNetStreamRef(c->Request->tcp);
     if(!job->Request.tls&&!job->Request.tcp)goto failed;
     job->Context.Request=&job->Request;job->Context.Target.Path=xrtStrView("/api/v1/ecosystem");job->Context.CloseResponse=true;
-    job->Context.SendDeadline=xrtDeadlineAfter(30000000);memcpy(job->Context.RequestId,c->RequestId,sizeof(c->RequestId));job->Input=input;
+    job->Context.SendDeadline=MdoDeadlineAfterUs(30000000);memcpy(job->Context.RequestId,c->RequestId,sizeof(c->RequestId));job->Input=input;
     /* Transfer the admitted write count to the owned job. Home purge/import
      * stays fenced until network work and any resource publication finish. */
     job->Context.WriteShared=c->WriteShared;job->Context.WriteExclusive=c->WriteExclusive;

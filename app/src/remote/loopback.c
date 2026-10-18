@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 #include <stdio.h>
 #include <string.h>
 #include "loopback.h"
@@ -80,27 +81,27 @@ static bool MdoRemoteHttpGeneration(XS_ServerInfo* Server)
     XS_ServerInfo* current = xsServerFind(Server->Name);
     bool ok = current == Server; xsServerRelease(current); return ok;
 }
-static bool MdoRemoteHttpSend(xnetstream* Stream, xbytesview Bytes, xdeadline Until, xcancel* Cancel)
+static bool MdoRemoteHttpSend(xnetstream* Stream, xbytesview Bytes, uint64 Until, xcancel* Cancel)
 {
     size_t offset = 0u;
     while (offset < Bytes.Size) {
         size_t size = Bytes.Size-offset, limit = xrtNetStreamWriteLimit(Stream);
-        if (!limit || xrtDeadlineExpired(Until) || (Cancel && xrtCancelRequested(Cancel))) return false;
+        if (!limit || MdoDeadlineExpired(Until) || (Cancel && xrtCancelRequested(Cancel))) return false;
         if (size > 16384u) size = 16384u;
         if (size > limit) size = limit;
         xnetresult result = xrtNetStreamSend(Stream,(const uint8*)Bytes.Data+offset,size);
         if (result != XNET_RESULT_OK && result != XNET_RESULT_AGAIN) return false;
-        if (!xrtNetStreamWait(Stream,XNET_STREAM_WAIT_DRAIN,Until,Cancel)) return false;
+        if (!xrtNetStreamWait(Stream,XNET_STREAM_WAIT_DRAIN, MdoDeadlineWaitMs(Until),Cancel)) return false;
         if (result == XNET_RESULT_OK) offset += size;
     }
     return true;
 }
 static bool MdoRemoteHttpRead(xnetstream* Stream, char* Input, size_t* Size,
-    bool* End, xdeadline Until, xcancel* Cancel)
+    bool* End, uint64 Until, xcancel* Cancel)
 {
-    if (*Size >= MDO_REMOTE_HTTP_HEAD || xrtDeadlineExpired(Until) || (Cancel && xrtCancelRequested(Cancel))) return false;
+    if (*Size >= MDO_REMOTE_HTTP_HEAD || MdoDeadlineExpired(Until) || (Cancel && xrtCancelRequested(Cancel))) return false;
     xfuture* future = xrtNetStreamRecvAsync(Stream,MDO_REMOTE_HTTP_HEAD-*Size);
-    bool ok = future && xrtFutureWaitUntilCancel(future,Until,Cancel) == XWAIT_OK &&
+    bool ok = future && xrtFutureWaitForCancel(future, MdoDeadlineWaitMs(Until),Cancel) == XWAIT_OK &&
         xrtFutureState(future) == XFUTURE_RESOLVED;
     xnetbytes* bytes = ok ? (xnetbytes*)xrtFutureValue(future) : NULL;
     xbytesview view = bytes ? xrtNetBytesView(bytes) : (xbytesview){0};
@@ -125,7 +126,7 @@ bool MdoRemoteLoopbackCall(XS_ServerInfo* Server, const MdoRemoteHttpRequest* Re
     xnetaddr address; xnetstreamconfig stream_config; xnetstream* stream = NULL; bool ok = false;
     char host[64],origin[80],length[32],request[MDO_REMOTE_HTTP_SEND],input[MDO_REMOTE_HTTP_HEAD];
     size_t request_size = 0u, input_size = 0u, count = 0u; xhttpfield fields[MDO_REMOTE_HTTP_FIELDS];
-    xdeadline until = xrtDeadlineAfter(MDO_REMOTE_HTTP_US);
+    uint64 until = MdoDeadlineAfterUs(MDO_REMOTE_HTTP_US);
     snprintf(host,sizeof(host),"127.0.0.1:%u",(unsigned)Server->PortBound);
     snprintf(origin,sizeof(origin),"http://%s",host);
     snprintf(length,sizeof(length),"%llu",(unsigned long long)Request->Body.Size);
@@ -141,7 +142,7 @@ bool MdoRemoteLoopbackCall(XS_ServerInfo* Server, const MdoRemoteHttpRequest* Re
     stream_config.ReadLimit = 65536u; stream_config.WriteLimit = 65536u;
     stream_config.WriteHighWater = 32768u; stream_config.WriteLowWater = 16384u;
     stream = xrtNetStreamConnect(Server->Engine,&address,0u,&stream_config,NULL,NULL);
-    if (!stream || !xrtNetStreamWait(stream,XNET_STREAM_WAIT_OPEN,until,Cancel) ||
+    if (!stream || !xrtNetStreamWait(stream,XNET_STREAM_WAIT_OPEN, MdoDeadlineWaitMs(until),Cancel) ||
         !MdoRemoteHttpGeneration(Server) ||
         !MdoRemoteHttpSend(stream,(xbytesview){(const uint8*)request,request_size},until,Cancel) ||
         !MdoRemoteHttpSend(stream,Request->Body,until,Cancel)) goto done;

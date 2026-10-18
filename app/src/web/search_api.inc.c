@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 /* xadmin is the only search protocol. Provider credentials stay on its server;
  * this client sends a member access token only to its account service.
  * One opaque ID is reused on the dedicated durable endpoint. A legacy service
@@ -113,8 +114,8 @@ static xwork_result MdoWebSearchExecute(void* pUserData,
     char* Authorization = NULL;
     XS_FetchHeader Headers[4];
     XS_FetchResponse Response;
-    uint64 End = XRT_DEADLINE_NEVER;
-    uint64 Jitter = xrtClock() ^ (uint64)(uintptr_t)pContext;
+    uint64 End = MDO_DEADLINE_NEVER;
+    uint64 Jitter = MdoMonotonicUs() ^ (uint64)(uintptr_t)pContext;
     uint32 Attempts = 0u;
     bool Registered = true;
     bool UncertainSubmission = false;
@@ -148,7 +149,7 @@ acquire_account:
     /* Initial sign-in may wait for the user. A renewal during recovery shares
      * the same remaining deadline instead of starting a new waiting budget. */
     AccountContext = *pContext;
-    if (End != XRT_DEADLINE_NEVER) AccountContext.uDeadline = End;
+    if (End != MDO_DEADLINE_NEVER) AccountContext.uDeadline = End;
     if (!MdoAccountAcquire(Query.Data, &AccountContext, &Lease)) {
         Result = MdoWebToolFail(pWriter, pError,
             "Search needs an account login. The login wait was skipped, cancelled or expired; no search was sent. Do not retry until the user signs in.");
@@ -170,7 +171,7 @@ acquire_account:
                 "Cannot safely retain the search request before submission. No search was sent.");
             Result=MdoWebToolFail(pWriter,pError,Message);goto done;
         }
-        int64 Now=xrtNow()/INT64_C(1000000);
+        int64 Now=MdoUtcUs()/INT64_C(1000000);
         if (Now <= 0 || RequestToken.iCreatedAt > Now ||
             Now-RequestToken.iCreatedAt >= MDO_WEB_SEARCH_REQUEST_MAX_AGE) {
             Result=MdoWebToolFail(pWriter,pError,
@@ -184,9 +185,9 @@ acquire_account:
     }
     FetchContext = *pContext;
     if (Lease.Cancel) FetchContext.pCancel = Lease.Cancel;
-    if ( End == XRT_DEADLINE_NEVER ) {
-        End = xrtDeadlineAfter(MDO_WEB_SEARCH_RECOVERY_US);
-        if ( pContext->uDeadline != XRT_DEADLINE_NEVER && pContext->uDeadline < End ) End = pContext->uDeadline;
+    if ( End == MDO_DEADLINE_NEVER ) {
+        End = MdoDeadlineAfterUs(MDO_WEB_SEARCH_RECOVERY_US);
+        if ( pContext->uDeadline != MDO_DEADLINE_NEVER && pContext->uDeadline < End ) End = pContext->uDeadline;
     }
     FetchContext.uDeadline = End;
     Authorization = (char*)xrtMalloc(strlen(Token) + 8u);
@@ -213,7 +214,7 @@ fetch_search:
         if (Registered) UncertainSubmission=true;
         uint64 Delay=MdoWebRecoveryDelay(Attempts,&Jitter,0u);
         if (Registered && MdoWebTransientTransport() && Attempts<MDO_WEB_SEARCH_MAX_ATTEMPTS &&
-            Delay<xrtDeadlineRemaining(End) && !(FetchContext.pCancel && xrtCancelRequested(FetchContext.pCancel))) {
+            Delay<MdoDeadlineRemainingUs(End) && !(FetchContext.pCancel && xrtCancelRequested(FetchContext.pCancel))) {
             if (MdoWebRecoveryWait(&FetchContext,End,Delay)) {
                 State->Transport.ResponseUnit(State->Transport.Context,&Response);
                 memset(&Response,0,sizeof(Response));xrtClearError();goto fetch_search;
@@ -222,8 +223,8 @@ fetch_search:
         }
         if ( (pContext->pCancel != NULL && xrtCancelRequested(pContext->pCancel)) || Kind == XERR_CANCELLED )
             Result = MdoWebFail(pError, XWORK_ERROR_CANCELLED, "Search request was cancelled");
-        else if ( pContext->uDeadline != XRT_DEADLINE_NEVER &&
-                    xrtDeadlineExpired(pContext->uDeadline) )
+        else if ( pContext->uDeadline != MDO_DEADLINE_NEVER &&
+                    MdoDeadlineExpired(pContext->uDeadline) )
             Result = MdoWebFail(pError, XWORK_ERROR_TIMEOUT, "Search request timed out");
         else if ( Kind == XERR_MEMORY )
             Result = MdoWebFail(pError, XWORK_ERROR_OUT_OF_MEMORY, "Cannot allocate search request or response");
@@ -242,7 +243,7 @@ fetch_search:
         goto done;
     }
     if (Registered && Response.Status==404u && !UncertainSubmission &&
-        Attempts<MDO_WEB_SEARCH_MAX_ATTEMPTS && !xrtDeadlineExpired(End)) {
+        Attempts<MDO_WEB_SEARCH_MAX_ATTEMPTS && !MdoDeadlineExpired(End)) {
         /* A POST to this dedicated route creates a receipt. A definitive route
          * miss alone permits a legacy POST; transport failures never do. */
         Registered=false;
@@ -272,12 +273,12 @@ fetch_search:
         }
         if (Reason && strcmp(Reason->Code,"request_pending")==0) UncertainSubmission=true;
         uint64 Delay = MdoWebRecoveryDelay(Attempts, &Jitter, Minimum > RetryAfter ? Minimum : RetryAfter);
-        bool WaitFits = Delay < xrtDeadlineRemaining(End);
+        bool WaitFits = Delay < MdoDeadlineRemainingUs(End);
         if ( RetrySafe && Attempts < MDO_WEB_SEARCH_MAX_ATTEMPTS && WaitFits ) {
             if ( !MdoWebRecoveryWait(&FetchContext,End,Delay) ) {
                 if (FetchContext.pCancel && xrtCancelRequested(FetchContext.pCancel))
                     Result = MdoWebFail(pError,XWORK_ERROR_CANCELLED,"Search request was cancelled");
-                else if (pContext->uDeadline != XRT_DEADLINE_NEVER && xrtDeadlineExpired(pContext->uDeadline))
+                else if (pContext->uDeadline != MDO_DEADLINE_NEVER && MdoDeadlineExpired(pContext->uDeadline))
                     Result = MdoWebFail(pError,XWORK_ERROR_TIMEOUT,"Search recovery exceeded the task deadline");
                 else Result = MdoWebToolFail(pWriter,pError,"Search service is still busy. Automatic recovery time was exhausted; try again later.");
                 goto done;

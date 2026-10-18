@@ -73,10 +73,10 @@ void ServiceInit(XS_HostInfo* Host) {
         if (!strcmp(Names[i],"cancel")) {
             O.Cancel=xrtCancelCreate(); xllmRequestSetCancel(&Request,O.Cancel);
         }
-        if (!strcmp(Names[i],"deadline")) Request.uDeadline=xrtClock()+200000u;
+        if (!strcmp(Names[i],"deadline")) Request.uDeadline=MdoMonotonicUs()+200000u;
         if (!strcmp(Names[i],"hook-stop")) O.Stop=true;
         xllm_response* Response=NULL;
-        uint64 Started=xrtClock();
+        uint64 Started=MdoMonotonicUs();
         uint64 OriginalDeadline=Request.uDeadline;
         bool Restartable=strstr(Names[i],"recover") || strstr(Names[i],"exhausted");
         xllm_result Result=Restartable?
@@ -85,7 +85,7 @@ void ServiceInit(XS_HostInfo* Host) {
         printf("case=%s result=%d kind=%s attempts=%u retries=%u deltas=%u exhausted=%u ms=%llu\n",
             Names[i],Result,MdoModelErrorKind(&Error),Error.tDiagnostics.uAttemptCount,
             O.Retries,O.Deltas,Error.tDiagnostics.bRetryExhausted?1:0,
-            (unsigned long long)((xrtClock()-Started)/1000u));
+            (unsigned long long)((MdoMonotonicUs()-Started)/1000u));
         if (Request.iMessageCount!=1u || Request.uMaxOutputTokens!=OriginalOutputLimit || Request.uDeadline!=OriginalDeadline)
             printf("request_mutated=1\n");
         if (!strcmp(Names[i],"daily") && strstr(Error.sMessage,"00:00 Asia/Shanghai"))

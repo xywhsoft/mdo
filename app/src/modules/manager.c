@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -706,7 +707,7 @@ static uint64_t MdoModulesHostClock(void* pContext)
     MdoModuleGeneration* pGeneration = (MdoModuleGeneration*)pContext;
     return pGeneration != NULL &&
         (pGeneration->Capabilities & MDO_CAPABILITY_CLOCK) != 0u
-        ? xrtClock() : 0u;
+        ? MdoMonotonicUs() : 0u;
 }
 
 static int64_t MdoModulesHostUnix(void* pContext)
@@ -714,7 +715,7 @@ static int64_t MdoModulesHostUnix(void* pContext)
     MdoModuleGeneration* pGeneration = (MdoModuleGeneration*)pContext;
     return pGeneration != NULL &&
         (pGeneration->Capabilities & MDO_CAPABILITY_CLOCK) != 0u
-        ? (int64_t)xrtNow() : 0;
+        ? (int64_t)MdoUtcUs() : 0;
 }
 
 static bool MdoModulesHostCancelled(void* pContext, const void* pCancel)

@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 /* Billing amounts use CNY micro-units, independent of daily token allowance.
  * Copy only verified account totals; arbitrary service data never reaches UI. */
 static xvalue* MdoAccountBalance(const xvalue* Data, uint64 MemberId)
@@ -20,7 +21,7 @@ static xvalue* MdoAccountBalance(const xvalue* Data, uint64 MemberId)
     bool Ok = Balance && MdoAccountSetUInt(Balance, "member_id", Id) &&
         MdoAccountSetString(Balance, "currency", Currency) &&
         MdoAccountSetUInt(Balance, "amount_scale", Scale) &&
-        MdoAccountSetUInt(Balance, "updated_at", (uint64)(xrtNow() / 1000000));
+        MdoAccountSetUInt(Balance, "updated_at", (uint64)(MdoUtcUs() / 1000000));
     for ( Index = 0u; Ok && Index < 5u; ++Index )
         Ok = MdoAccountSetUInt(Balance, Fields[Index], Amounts[Index]);
     if ( !Ok ) { xrtValueRelease(Balance); return NULL; }

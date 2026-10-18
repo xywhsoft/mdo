@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -25,7 +26,7 @@ typedef struct MdoBackupPreviewInfo {
     MdoBackupPreviewState State;
     unsigned Completed;
     xtime CreatedAt, StartedAt, EndedAt;
-    xdeadline ExpiresAt;
+    uint64 ExpiresAt;
     bool CancelRequested, Discarded, ResultAvailable;
     xwork_error Error;
     MdoSessionBackupPreview Backup;
@@ -95,7 +96,7 @@ static MdoBackupPreviewDocument* MdoBackupPreviewDetachLocked(MdoBackupPreviewSt
 static MdoBackupPreviewDocument* MdoBackupPreviewCollectLocked(MdoBackupPreviewStore* Store)
 {
     if ( Store->Active == NULL && Store->Info.Id[0] != '\0' &&
-         xrtDeadlineExpired(Store->Info.ExpiresAt) ) {
+         MdoDeadlineExpired(Store->Info.ExpiresAt) ) {
         if ( Store->Slot != NULL ) Store->Slot->Removed = true;
         memset(&Store->Info, 0, sizeof(Store->Info));
     }
@@ -131,7 +132,7 @@ static bool MdoBackupPreviewStep(MdoBackupPreviewJob* Job, xcancel* Cancel,
     Live = !Store->Stopping && !Store->Info.CancelRequested;
     Store->Info.State = MDO_BACKUP_PREVIEW_RUNNING;
     Store->Info.Completed = Completed;
-    if ( Store->Info.StartedAt == 0 ) Store->Info.StartedAt = xrtNow();
+    if ( Store->Info.StartedAt == 0 ) Store->Info.StartedAt = MdoUtcUs();
     Job->Info.StartedAt = Store->Info.StartedAt;
     xrtMutexUnlock(Store->Lock);
     if ( !Live || xrtCancelRequested(Cancel) ) {
@@ -140,7 +141,7 @@ static bool MdoBackupPreviewStep(MdoBackupPreviewJob* Job, xcancel* Cancel,
             "Backup inspection was cancelled");
         return false;
     }
-    if ( xrtDeadlineExpired(Job->Limits.Deadline) ) {
+    if ( MdoDeadlineExpired(Job->Limits.Deadline) ) {
         Job->Info.Error.eCode = XWORK_ERROR_LIMIT;
         snprintf(Job->Info.Error.sMessage, sizeof(Job->Info.Error.sMessage),
             "Backup inspection exceeded its thirty-second budget");
@@ -228,8 +229,8 @@ static void MdoBackupPreviewDrop(ptr Data, ptr Context)
                 "Backup worker could not complete inspection");
         }
     }
-    Store->Info.EndedAt = xrtNow();
-    Store->Info.ExpiresAt = xrtDeadlineAfter(MDO_BACKUP_PREVIEW_TTL_US);
+    Store->Info.EndedAt = MdoUtcUs();
+    Store->Info.ExpiresAt = MdoDeadlineAfterUs(MDO_BACKUP_PREVIEW_TTL_US);
     Store->Active = NULL;
     xrtMutexUnlock(Store->Lock);
     xrtFree(Job->Document); xrtFree(Job);
@@ -348,7 +349,7 @@ static xvalue* MdoBackupPreviewValue(const MdoBackupPreviewInfo* Info)
 {
     xvalue* Value = xrtValueObject();
     bool Terminal = MdoBackupPreviewTerminal(Info);
-    uint64 Now = xrtClock();
+    uint64 Now = MdoMonotonicUs();
     cstr Phase = Terminal ? "done" : Info->State == MDO_BACKUP_PREVIEW_PENDING ? "queued" :
         Info->Completed == 0u ? "decode" : Info->Completed == 1u ? "model_ui" : "images";
     bool Ok = Value != NULL && MdoApiValueSetString(Value, "id", Info->Id) &&
@@ -488,9 +489,9 @@ bool MdoApiBackupPreviewStartRoute(MdoApiContext* Context)
     memcpy(Job->Info.UploadId, Id, sizeof(Id));
     (void)MdoApiBackupUploadHash(Job->Upload, Job->Info.UploadHash);
     memcpy(Job->Document->Hash, Job->Info.UploadHash, sizeof(Job->Document->Hash));
-    Job->Info.CreatedAt = xrtNow(); Job->Info.State = MDO_BACKUP_PREVIEW_PENDING;
+    Job->Info.CreatedAt = MdoUtcUs(); Job->Info.State = MDO_BACKUP_PREVIEW_PENDING;
     MdoSessionBackupLimitsInit(&Job->Limits);
-    Job->Limits.Deadline = xrtDeadlineAfter(MDO_BACKUP_PREVIEW_TIMEOUT_US);
+    Job->Limits.Deadline = MdoDeadlineAfterUs(MDO_BACKUP_PREVIEW_TIMEOUT_US);
     Job->Info.ExpiresAt = Job->Limits.Deadline;
     xworkErrorInit(&Job->Info.Error);
     Args.Cancel = Store->Cancel; Args.Destroy = MdoBackupPreviewDrop;

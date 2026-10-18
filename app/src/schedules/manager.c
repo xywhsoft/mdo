@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -744,7 +745,7 @@ static bool MdoSchedulesAudit(const char* Operation,
          AuditId == NULL ||
          !MdoSchedulesObjectTake(Root, "schema_version", xrtValueUInt(1u)) ||
          !MdoSchedulesObjectString(Root, "audit_id", AuditId) ||
-         !MdoSchedulesObjectTake(Root, "occurred_at_us", xrtValueInt(xrtNow())) ||
+         !MdoSchedulesObjectTake(Root, "occurred_at_us", xrtValueInt(MdoUtcUs())) ||
          !MdoSchedulesObjectString(Root, "phase", "prepared") ||
          !MdoSchedulesObjectString(Root, "operation", Operation) ||
          !MdoSchedulesObjectString(Root, "schedule_id", Info->Id) ||
@@ -1465,7 +1466,7 @@ static bool MdoSchedulesInfoFromOptions(const MdoScheduleCreateOptions* Options,
     memset(Info, 0, sizeof(*Info));
     Info->Size = sizeof(*Info);
     Info->Revision = 1u;
-    Info->UpdatedAt = xrtNow();
+    Info->UpdatedAt = MdoUtcUs();
     Info->Frequency = Options->Frequency;
     Info->Interval = Options->Interval;
     Info->StartAt = Options->StartAt;
@@ -1656,7 +1657,7 @@ bool MdoScheduleSetEnabled(const char* ScheduleId, uint64 ExpectedRevision,
             Enabled && g_MdoSchedules.Enabled, Error) ) goto done;
     Entry->Info.Enabled = Enabled;
     ++Entry->Info.Revision;
-    Entry->Info.UpdatedAt = xrtNow();
+    Entry->Info.UpdatedAt = MdoUtcUs();
     xworkScheduleInfoInit(&RuntimeInfo);
     if ( !xworkRuntimeScheduleGetInfo(g_MdoSchedules.Runtime, ScheduleId,
             &RuntimeInfo) ) goto rollback;
@@ -1736,7 +1737,7 @@ bool MdoScheduleReplace(const char* ScheduleId, uint64 ExpectedRevision,
     if ( !MdoSchedulesWriterLock(Error) ) goto done;
     Previous = Entry->Info;
     Candidate.Revision = Previous.Revision + 1u;
-    Candidate.UpdatedAt = xrtNow();
+    Candidate.UpdatedAt = MdoUtcUs();
     MdoSchedulesConfig(&Candidate,
         Candidate.Enabled && g_MdoSchedules.Enabled, &Config);
     if ( !xworkRuntimeReplaceSchedule(g_MdoSchedules.Runtime, &Config,
@@ -1950,7 +1951,7 @@ static bool MdoSchedulesSyncRuntime(const xwork_schedule_claim* Claim,
         }
         MdoSchedulesRuntimeInfo(&Entry->Info, &RuntimeInfo);
         ++Entry->Info.Revision;
-        Entry->Info.UpdatedAt = xrtNow();
+        Entry->Info.UpdatedAt = MdoUtcUs();
         IsClaim = Claimed && Claim != NULL && Claim->sScheduleId != NULL &&
             strcmp(Entry->Info.Id, Claim->sScheduleId) == 0;
         if ( !MdoSchedulesAudit(IsClaim ? ClaimOperation : "advance", &Entry->Info,
@@ -2211,7 +2212,7 @@ static bool MdoSchedulesHistory(uint64 TaskId, uint64 AgentRunId,
          !MdoSchedulesObjectString(Root, "schedule_id", Task->sScheduleId) ||
          !MdoSchedulesObjectTake(Root, "scheduled_at_us",
             xrtValueInt(Task->iScheduledAtUs)) ||
-         !MdoSchedulesObjectTake(Root, "finished_at_us", xrtValueInt(xrtNow())) ||
+         !MdoSchedulesObjectTake(Root, "finished_at_us", xrtValueInt(MdoUtcUs())) ||
          !MdoSchedulesObjectTake(Root, "result", xrtValueInt(Result)) ||
          !MdoSchedulesObjectString(Root, "text",
             ResultText != NULL ? ResultText : "") ) goto memory;

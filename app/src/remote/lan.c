@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 #include <stdio.h>
 #include <string.h>
 #include "lan.h"
@@ -94,7 +95,7 @@ xvalue* MdoLanOffer(cstr Peer, bool ReadOnly, void* Data)
     if (Slot==MDO_LAN_PEERS) return NULL;
     MdoLanGrant* Grant=&Lan->Grants[Slot];
     if (!MdoAccountRandom(Grant->Token)) return NULL;
-    strcpy(Grant->Peer,Peer); Grant->ReadOnly=ReadOnly; Grant->Until=xrtDeadlineAfter(60000000u);
+    strcpy(Grant->Peer,Peer); Grant->ReadOnly=ReadOnly; Grant->Until=MdoDeadlineAfterUs(60000000u);
     xvalue* Offer=xrtValueObject();
     bool Ok=Offer && MdoAccountSetUInt(Offer,"version",1u) && MdoAccountSetUInt(Offer,"port",Lan->Port) &&
         MdoAccountSetString(Offer,"peer_id",Peer) && MdoAccountSetString(Offer,"token",Grant->Token) &&
@@ -111,7 +112,7 @@ static bool MdoLanAuthorize(const xhttp1head* Head, void* Data)
         xrtHttpFieldGetUnique(Head->Fields,Head->FieldCount,XRT_STR_LITERAL("Sec-WebSocket-Protocol"),&Protocols)!=XHTTP_NEXT_ITEM) return false;
     for (size_t i=0u;i<MDO_LAN_PEERS;++i) {
         MdoLanGrant* Grant=&Lan->Grants[i]; char Token[96];
-        if (!Grant->Token[0] || xrtDeadlineExpired(Grant->Until)) continue;
+        if (!Grant->Token[0] || MdoDeadlineExpired(Grant->Until)) continue;
         snprintf(Token,sizeof(Token),"mdo.grant.%s",Grant->Token);
         if (xrtWsProtocolsHas(Protocols->Value,xrtStrView(Token))) {
             xrtSecureZero(Grant->Token,sizeof(Grant->Token)); Lan->Channels[Context->Slot].Grant=i; return true;

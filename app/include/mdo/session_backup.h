@@ -1,3 +1,4 @@
+#include "time.h"
 #ifndef MDO_SESSION_BACKUP_H
 #define MDO_SESSION_BACKUP_H
 
@@ -23,7 +24,7 @@ typedef struct MdoSessionBackupLimits {
     size_t FileBytes;
     size_t TotalBytes;
     size_t DocumentBytes;
-    xdeadline Deadline;
+    uint64 Deadline;
 } MdoSessionBackupLimits;
 
 typedef struct MdoSessionBackupFile {

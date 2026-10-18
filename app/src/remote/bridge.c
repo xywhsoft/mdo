@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -289,7 +290,7 @@ static bool MdoBridgeAdmit(MdoRemoteBridge* Bridge, size_t Peer, const xvalue* V
     request->Slot = (size_t)(request-Bridge->Requests); request->Serial = ++Bridge->Serial;
     request->Receipt = receipt; strcpy(request->Id,id); strcpy(request->Method,method); strcpy(request->Path,path);
     memcpy(request->Digest,digest,32u); xrtSha256Init(&request->Hash);
-    request->Cancel = xrtCancelChild(Bridge->Peers[Peer].Cancel); request->Until = xrtDeadlineAfter(MDO_BRIDGE_UPLOAD_US);
+    request->Cancel = xrtCancelChild(Bridge->Peers[Peer].Cancel); request->Until = MdoDeadlineAfterUs(MDO_BRIDGE_UPLOAD_US);
     request->Request = req; request->Request.Method = request->Method; request->Request.Target = request->Path;
     request->Request.Headers = request->Fields;
     size_t at = 0u;
@@ -374,7 +375,7 @@ static bool MdoBridgeUpload(MdoRemoteBridge* Bridge, size_t Peer, xbytesview Byt
     if (!request || request->Completed || request->Thread) return MdoBridgeError(Bridge,Peer,id,"upload_unavailable","unknown");
     size_t size = Bytes.Size-MDO_BRIDGE_BINARY_HEAD; uint64 offset = MdoBridgeRead64(data+21u);
     if (!MdoBridgeRequestLive(request) || offset != request->Received ||
-        size > request->Request.Body.Size-request->Received || xrtDeadlineExpired(request->Until)) {
+        size > request->Request.Body.Size-request->Received || MdoDeadlineExpired(request->Until)) {
         bool reply = MdoBridgeError(Bridge,Peer,id,"invalid_chunk","not_started");
         MdoBridgeAbandon(request); return reply;
     }
@@ -426,14 +427,14 @@ bool MdoRemoteBridgeInput(MdoRemoteBridge* Bridge, cstr Peer, bool Binary, xbyte
 
 static bool MdoBridgeWorkerQueue(MdoBridgeRequest* Request, bool Binary, xbytesview Bytes, size_t BodyBytes)
 {
-    MdoRemoteBridge* bridge = Request->Bridge; xdeadline until = xrtDeadlineAfter(MDO_BRIDGE_QUEUE_US);
+    MdoRemoteBridge* bridge = Request->Bridge; uint64 until = MdoDeadlineAfterUs(MDO_BRIDGE_QUEUE_US);
     xrtMutexLock(bridge->Lock);
-    while (MdoBridgeRequestLive(Request) && !xrtDeadlineExpired(until) &&
+    while (MdoBridgeRequestLive(Request) && !MdoDeadlineExpired(until) &&
         (bridge->Bytes+Bytes.Size+MDO_REMOTE_RELAY_HEADER > MDO_BRIDGE_QUEUE || bridge->Packets >= MDO_BRIDGE_PACKETS ||
         (BodyBytes && Request->Sent+BodyBytes-Request->Acknowledged >
           (Request->Live ? MDO_BRIDGE_WINDOW : Request->Window))))
-        xrtCondWaitFor(bridge->Changed,bridge->Lock,100000u);
-    bool ok = !xrtDeadlineExpired(until) && MdoBridgeQueue(bridge,Request->Peer,Request,Binary,Bytes);
+        xrtCondWaitFor(bridge->Changed,bridge->Lock, MdoDurationMs(100000u));
+    bool ok = !MdoDeadlineExpired(until) && MdoBridgeQueue(bridge,Request->Peer,Request,Binary,Bytes);
     if (ok) Request->Sent += BodyBytes;
     xrtMutexUnlock(bridge->Lock); return ok;
 }
@@ -571,7 +572,7 @@ static int32 MdoBridgeLiveWorker(void* Data)
         MdoBridgeCommandRelease(command);
         ok = ok && MdoRemoteSocketPoll(socket,MdoBridgeLiveMessage,request);
         xrtMutexLock(bridge->Lock);
-        if (ok && !request->Commands && MdoBridgeRequestLive(request)) xrtCondWaitFor(bridge->Changed,bridge->Lock,25000u);
+        if (ok && !request->Commands && MdoBridgeRequestLive(request)) xrtCondWaitFor(bridge->Changed,bridge->Lock, MdoDurationMs(25000u));
         xrtMutexUnlock(bridge->Lock);
     }
     value = xrtValueObject(); uint16 code = MdoRemoteSocketCloseCode(socket);
@@ -698,7 +699,7 @@ bool MdoRemoteBridgePump(MdoRemoteBridge* Bridge, MdoRemoteBridgeEmit Emit, void
     for (size_t i = 0u; i < MDO_BRIDGE_REQUESTS; i++) {
         MdoBridgeRequest* request = &Bridge->Requests[i];
         if (!request->Id[0]) continue;
-        if (!request->Thread && !request->Completed && xrtDeadlineExpired(request->Until)) {
+        if (!request->Thread && !request->Completed && MdoDeadlineExpired(request->Until)) {
             (void)MdoBridgeError(Bridge,request->Peer,request->Id,"upload_timeout","not_started");
             MdoBridgeAbandon(request);
         }

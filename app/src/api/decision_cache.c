@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 #include <string.h>
 #include "decision_cache.h"
 #include "write_admission.h"
@@ -53,7 +54,7 @@ MdoApiDecisionStatus MdoApiDecisionBegin(const MdoApiContext* Context,
          !xrtMutexLock(g_MdoDecisionLock) ) return MDO_API_DECISION_UNAVAILABLE;
     for ( i = 0u; i < MDO_DECISION_CACHE_MAX; ++i ) {
         MdoApiDecisionReceipt* Entry = &g_MdoDecisionReceipts[i];
-        if ( Entry->ExpiresAt == 0u || xrtDeadlineExpired(Entry->ExpiresAt) ) {
+        if ( Entry->ExpiresAt == 0u || MdoDeadlineExpired(Entry->ExpiresAt) ) {
             if ( Free == NULL ) Free = Entry;
             continue;
         }
@@ -84,7 +85,7 @@ void MdoApiDecisionEnd(MdoApiDecisionAttempt* Attempt, bool Applied)
     Entry = (MdoApiDecisionReceipt*)Attempt->Entry;
     if ( Entry == NULL ) return;
     if ( Applied ) {
-        uint64 Now = xrtClock();
+        uint64 Now = MdoMonotonicUs();
         Entry->ExpiresAt = Now > UINT64_MAX - MDO_DECISION_RETAIN_US ?
             UINT64_MAX : Now + MDO_DECISION_RETAIN_US;
     } else xrtSecureZero(Entry, sizeof(*Entry));

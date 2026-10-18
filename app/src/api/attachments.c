@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -550,7 +551,7 @@ bool MdoApiAttachmentsRoute(MdoApiContext* Context)
             MdoApiValueSetString(Metadata, "id", Id) &&
             MdoApiValueSetString(Metadata, "mime_type", Mime) &&
             MdoApiValueSetUInt(Metadata, "size", Size) &&
-            MdoApiValueSetInt(Metadata, "created_at", xrtNow()) &&
+            MdoApiValueSetInt(Metadata, "created_at", MdoUtcUs()) &&
             (!FileName[0] || MdoApiValueSetString(Metadata, "file_name", FileName));
         if ( Ok ) Meta = xrtJsonStringify(Metadata, false, &MetaSize);
         Ok = Meta != NULL && MetaSize <= MDO_ATTACHMENT_META_MAX &&
@@ -720,7 +721,7 @@ static bool MdoAttachmentCollectExpired(const char* Project,
     xdirentry Entry;
     xdirnext Next = XDIR_NEXT_END;
     bool Ok = true;
-    xtime Cutoff = xrtNow() - MDO_ATTACHMENT_GRACE_US;
+    xtime Cutoff = MdoUtcUs() - MDO_ATTACHMENT_GRACE_US;
     size_t i;
     if ( !MdoHomeExternalStat(Directory, &Exists, &Info) ) return false;
     if ( !Exists ) return true;
@@ -763,7 +764,7 @@ static bool MdoAttachmentCollectExpired(const char* Project,
             if ( CounterpartExists ||
                  (Entry.Info.Available & XFILE_INFO_MODIFY_TIME) == 0u ||
                  Entry.Info.Modified <= 0 ) continue;
-            Stamp = Entry.Info.Modified;
+            Stamp = xllmTimeToUnixUs(Entry.Info.Modified);
         } else if ( MetaFile ) {
             if ( !MdoAttachmentCreatedAt(Project, Session, Id, &Stamp) )
                 continue; /* Corrupt metadata needs manual inspection. */

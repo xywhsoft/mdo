@@ -1,3 +1,4 @@
+#include "../../include/mdo/time.h"
 /* Included by the restore journal leaf. Immutable request/result records share
  * Home's lock, anchored I/O and no-replace rename helpers. No live session is
  * opened to answer a terminal receipt, even after its project was deleted. */
@@ -251,7 +252,7 @@ static bool MdoHomeRestoreReceiptPublish(const MdoHomeRestoreRecord* Record, boo
     if ( Terminal ) { Ok = true; goto done; }
     if ( Exists && PartialBytes != Bytes && !xrtRootRemove(g_MdoHome.Root, MDO_HOME_RESTORE_DIR "/result.tmp") ) goto done;
     if ( (!Exists || PartialBytes != Bytes) && !MdoHomeImportWrite(MDO_HOME_RESTORE_DIR "/result.tmp", Text, Bytes) ) goto done;
-    if ( xrtRootRenameNoReplace(g_MdoHome.Root, MDO_HOME_RESTORE_DIR "/result.tmp", Path) ) Ok = true;
+    if ( xsRootRenameNoReplace(g_MdoHome.Root, MDO_HOME_RESTORE_DIR "/result.tmp", Path) ) Ok = true;
     else if ( MdoHomeRestoreReceiptRead(Record->Request.SessionId, &Existing, &Exists) && Exists &&
               MdoHomeRestoreReceiptMatches(&Existing, Record, Committed) ) { xrtClearError(); Ok = true; }
 done:
