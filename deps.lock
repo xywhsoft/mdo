@@ -2,12 +2,12 @@
   "schema_version": 1,
   "hash_algorithm": "sha256-path-nul-lf-normalized-content-nul-v1",
   "xrt": {
-    "commit": "1d35b80b936d6c6e4c23b9bf73c3e2abc4ccd288",
+    "commit": "ccd6390eb913f7689e7d34551d33cc1d7553f442",
     "version": "2.0.0-dev",
     "single_header_sha256": "015f5b19e07dd1fbfb085c1fd096cf69c813b03bdd9dc94b29ae8b5c471cd18a"
   },
   "xserver": {
-    "commit": "7e34997e717f1fe91dd340430dc4662d32ee1358",
+    "commit": "4d4c10dda9e4921b40d84724b4319bb716ee4f1e",
     "version": "1.0.0",
     "required_extensions": [
       "xwork",
@@ -23,7 +23,7 @@
     },
     "source_bundle": {
       "path": "tools/dependencies/xs-xrt-current.bundle",
-      "sha256": "6ed5c8570db612289ca947d9a744537fab9bec0b934931ddb214c12c70b75add",
+      "sha256": "c68728de1336f532db60982d6c6352c9a94290594fca34d51bb6927e484268a4",
       "ref": "refs/heads/master"
     }
   },

@@ -1,6 +1,6 @@
 # XS 锁定当前 XRT 提交
 
-按用户要求，XS 主仓和 mdo 实际使用的产品 SDK 均锁定到 XRT 主分支当前已提交版本 `1d35b80b936d6c6e4c23b9bf73c3e2abc4ccd288`（此前为 `13cc17b6`）。使用提交导出，不包含另一个任务尚未提交的文件系统和内存修改。
+当前 XS 主仓和 mdo 实际使用的产品 SDK 均已锁定到 XRT 主分支最新已提交版本 `ccd6390eb913f7689e7d34551d33cc1d7553f442`。使用提交导出，不包含尚未完成的异步接口、文件系统和内存修改。下面保留前两次同步的记录，最新同步和验证见文末。
 
 - XS 主仓提交：`773a903`。快照来源、扩展来源和脚本导出来源同步更新。
 - 产品 SDK 提交：`7e34997e717f1fe91dd340430dc4662d32ee1358`，保留原有 xllm、session、xwork API 和产品修复。
@@ -19,3 +19,17 @@ Windows 新宿主及 GUI 子系统变体也已成功重建，实际构建版本�
 后续锁定 `1d35b80b` 时重新通过 XS 快照/来源/扩展配置 44 项、mdo 依赖与哈希 3 项，并在上述 Windows、Linux 宿主上重新通过单调计时、条件等待、进程超时、XS 定时器、Unix 起点、计划持久化及根内禁止覆盖移动回归。日志为 XS `.build/xrt-current-snapshot-tests.log`、mdo `.build/xrt-current-dependency-tests.log` 和产品 SDK `.build/xrt-current-{windows,linux}-runtime.log`。bundle 校验及依赖完整校验记录于 mdo `.build/xrt-current-lock.log`，48 个文件逐字节核验记录于 `.build/current-xrt-byte-verification.json`。
 
 此次 `7edc866` → `7e34997` 只有版本来源文本和生成注释改变，不修改运行时代码；现有宿主的真实构建收据仍为 `7edc866`，未改写为新提交的构建收据。后续产品构建由更新后的锁文件和 bundle 获取 `7e34997`。
+
+## 当前同步到 ccd6390e
+
+用户再次要求将 XS 使用的 XRT 更新到最新版。本地主分支 `ccd6390e` 比远程主分支 `ac059267` 领先 15 个提交，远程不存在本地缺失的主线提交。本次以本地主分支已提交内容为准。
+
+- XS 主仓提交 `2f2b25d85d4be2d4e0d81c52cca25997c7631f55`，通过 `sync_xrt.py --source D:/GIT/xrt --ref ccd6390eb913f7689e7d34551d33cc1d7553f442` 导出，987 个来源/生成文件的哈希校验通过，快照、固定提交导出及扩展配置 44 项通过。
+- mdo 兼容 SDK 提交 `4d4c10dda9e4921b40d84724b4319bb716ee4f1e`。48 个核心与 xrudp 快照文件逐字节核对，运行时代码与旧锁定版本完全相同，仅 xrudp README、版本来源和生成注释改变；保留产品的 xllm、session、xwork API。
+- mdo `deps.lock` 和 `xs-xrt-current.bundle` 同步更新。bundle 为 4,419,391 字节，SHA256 `c68728de1336f532db60982d6c6352c9a94290594fca34d51bb6927e484268a4`，引用 `refs/heads/master`，公共前置保持 `695988f7b8eec4b52bcc829a2d52210443c0bc69`；完整依赖与 bundle 验证通过。
+
+Windows 和 Linux 实际 TCC 宿主再次通过单调计时、条件等待、进程超时、XS 定时器、Unix 起点、持久化日历以及根内禁止覆盖移动回归。兼容性测试自身的栈内锁/条件变量清理改为 `Unit`，并新增清理后无错误断言，提交 `40a99c75c02f019124069b7b84aa59d1c3b0dee1`。两平台使用原 `7edc866` 宿主，其运行时代码与本次快照逐字节相同；本次没有重建宿主，也没有改写旧二进制的构建收据。
+
+另对开发中的 xrudp Future 退出崩溃完成定位：`xrtMutexInit(&state->Lock)` 创建的是嵌入式锁，错误调用 `xrtMutexDestroy` 会释放整个 state 所在的首地址，随后清零和再次释放破坏堆缓存。应配对调用 `xrtMutexUnit`。修正后 Windows Select/IOCP 与 Linux Select/Epoll 的 IPv4/IPv6 共 8 组开发测试全部退出 0，Linux 同时通过 ASan/UBSan/泄漏检查。这是调用方的所有权错误，升级到字节相同的 XRT 不能单独修复它；该修正属于仍在开发的异步接口，不混入本次已提交 SDK 快照。
+
+证据：XS `.build/xrt-ccd6390-snapshot-tests.log`；兼容 SDK `.build/xrt-ccd6390-{windows,linux}-runtime.log`；mdo `.build/xrt-ccd6390-{byte-verification.json,lock.log,dependency-tests.log}`；XRT `dev/xrudp-async-mutex-unit-{windows,linux}.log`。没有发布、替换已安装程序或重启正在运行的长稳测试。
