@@ -22,7 +22,7 @@ from channel_e2e import WebSocket
 from remote_website_fixture import remote_website_fixture, WEBSITE_HOST
 
 
-def run(host: Path, website_host: Path, exercise=None, native_hook='', native_routes='', site_setup=None, observe=None):
+def run(host: Path, website_host: Path, exercise=None, native_hook='', native_routes='', site_setup=None, observe=None, on_launch=None):
     port = free_port()
     website, website_port, admin_user, admin_password = remote_website_fixture()
     (ROOT/'.build').mkdir(exist_ok=True)
@@ -57,7 +57,9 @@ def run(host: Path, website_host: Path, exercise=None, native_hook='', native_ro
         env = dict(os.environ)
         if portable: env['MDO_HOME'] = str(portable)
         process = subprocess.Popen([str(executable),str(path/'xs.json')],cwd=path,env=env,stdout=log,stderr=log)
-        processes.append(process); return process
+        processes.append(process)
+        if on_launch: on_launch(process,path)
+        return process
 
     def ready(which,path,process):
         for _ in range(160):
