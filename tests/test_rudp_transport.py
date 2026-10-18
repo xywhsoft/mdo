@@ -237,7 +237,7 @@ void ServiceInit(XS_HostInfo* Host)
 }
 '''
 
-def native_lower(sdk: Path, cc: str):
+def native_lower(sdk: Path, cc: str, fixture=SOURCE):
     """Instrument the actual lower adapter and libraries, using the same cases.
 
     The --host path checks TCC exports and the socket facade. This mode calls
@@ -259,7 +259,7 @@ static MdoRemoteSocket* MdoRemoteSocketAdoptRudp(MdoRudpTransport* R) { return R
 static uint16 MdoRemoteSocketCloseCode(MdoRemoteSocket* R) { MdoRudpInfo I; MdoRudpGetInfo(R,&I); return I.CloseCode; }
 static bool MdoRemoteSocketPeerClosed(MdoRemoteSocket* R) { MdoRudpInfo I; MdoRudpGetInfo(R,&I); return I.PeerClosed; }
 '''
-    source = SOURCE.replace('#include "src/storage/home.c"\n#include "src/remote/websocket.c"', preamble)
+    source = fixture.replace('#include "src/storage/home.c"\n#include "src/remote/websocket.c"', preamble)
     source = source.replace('void ServiceInit(XS_HostInfo* Host)', 'int main(void)').replace('    (void)Host;\n', '')
     sources = sorted((sdk / 'lib/xrudp/src').rglob('*.c'))
     if len(sources) != 20:

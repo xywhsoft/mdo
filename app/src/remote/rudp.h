@@ -19,6 +19,14 @@ typedef struct MdoRudpConfig {
     size_t MessageLimit;
     bool Listen;
 } MdoRudpConfig;
+/* Fixed-storage endpoint jobs. A mapping or warmup completion is only a hint,
+ * never identity/reachability evidence. Only Confirmed admits messages. */
+typedef struct MdoRudpProbe {
+    xnetaddr Mapped;
+    uint32 NativeReason, Sent;
+    bool Pending, Complete;
+} MdoRudpProbe;
+
 typedef struct MdoRudpInfo {
     xnetaddr Local;
     unsigned char Public[32], Scope[16];
@@ -26,7 +34,8 @@ typedef struct MdoRudpInfo {
     size_t NativeReservedBytes;
     uint32 NativeReason;
     uint16 CloseCode;
-    bool Confirmed, Closed, PeerClosed;
+    bool Opened, Confirmed, Closed, PeerClosed;
+    MdoRudpProbe Discovery, Warmup;
 } MdoRudpInfo;
 typedef bool (*MdoRudpMessageProc)(bool Binary, xbytesview Message, void* Data);
 
@@ -35,10 +44,22 @@ typedef bool (*MdoRudpMessageProc)(bool Binary, xbytesview Message, void* Data);
  * This layer does not grant account authority. Binding is domain-separated
  * before Noise. The caller owns and must erase its input private key. */
 MdoRudpTransport* MdoRudpBind(const MdoRudpConfig* Config, xcancel* Cancel);
+/* Does not wait for bind: observe Opened/Closed via GetInfo. */
+MdoRudpTransport* MdoRudpStart(const MdoRudpConfig* Config, xcancel* Cancel);
 bool MdoRudpGetInfo(MdoRudpTransport* Transport, MdoRudpInfo* Info);
+/* Local policy chooses the STUN server, never a remote offer. At most one
+ * mapping and warmup job each; restart only after completion. Inputs copied;
+ * success means admission. Mapping timeout 1..60s; warmup 1..10s, 1..8 distinct
+ * authenticated unicast candidates. Same socket as handshake/business. */
+bool MdoRudpDiscover(MdoRudpTransport* Transport, const xnetaddr* Server, uint32 TimeoutMs);
+bool MdoRudpWarmup(MdoRudpTransport* Transport, const xnetaddr* Candidates, size_t Count, uint32 TimeoutMs);
+void MdoRudpCancelProbes(MdoRudpTransport* Transport);
 /* Initiator only, one attempt per handle; false is terminal. Native callbacks
  * continue during this bounded wait. The responder observes Confirmed via Info. */
 bool MdoRudpConnect(MdoRudpTransport* Transport, const xnetaddr* Remote, uint32 TimeoutMs);
+/* Nonblocking initiation with the same one-attempt/deadline contract. A
+ * private worker timer enforces deadlines even when the owner is idle. */
+bool MdoRudpDial(MdoRudpTransport* Transport, const xnetaddr* Remote, uint32 TimeoutMs);
 bool MdoRudpConnected(MdoRudpTransport* Transport);
 /* Admission copies exactly one complete frame. Success is local buffering,
  * not delivery/execution. No application message is replayed on another path.
