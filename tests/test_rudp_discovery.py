@@ -214,6 +214,38 @@ static void AsyncCloseAndDeadline(void)
     for (unsigned k=0;k<8;++k) { C.Local.Port=0; Conflict=MdoRudpStart(&C,NULL); CHECK(Conflict); MdoRudpDestroy(Conflict); }
     CHECK(xrtAtomic32Load(&g_MdoRudpTransports,XMEMORY_ACQUIRE)==0); xrtSecureZero(C.Private,32);
 }
+typedef struct PeerAbort { MdoRudpTransport* R; xatomic32 Done; } PeerAbort;
+static void AbortConfirmed(xnetworker* Worker, ptr Data)
+{
+    (void)Worker; PeerAbort* A=Data; (void)xrtRudpPeerAbort(A->R->Peer);
+    xrtAtomic32Store(&A->Done,1,XMEMORY_RELEASE);
+}
+static void Candidates(xnetfamily Family)
+{
+    Pair P; Setup(&P,Family); MdoRudpInfo Before, Target, I;
+    CHECK(MdoRudpGetInfo(P.R[0],&Target)); CHECK(MdoRudpGetInfo(P.R[1],&Before));
+    xnetaddr Choices[3]={Address(Family,1),Target.Local,Address(Family,0)};
+    CHECK(!MdoRudpDialCandidates(P.R[1],Choices,0,5000));
+    CHECK(!MdoRudpDialCandidates(P.R[1],Choices,9,5000));
+    CHECK(!MdoRudpDialCandidates(P.R[1],Choices,3,15001));
+    CHECK(MdoRudpDialCandidates(P.R[1],Choices,3,7000)); double End=xrtTimer()+6;
+    while (!MdoRudpConnected(P.R[0]) || !MdoRudpConnected(P.R[1])) { CHECK(xrtTimer()<End); xrtSleep(1); }
+    CHECK(MdoRudpGetInfo(P.R[1],&I) && I.DialAttempts==2 && I.LastDialReason==XRUDP_TIMEOUT);
+    CHECK(xrtNetAddrEqual(&I.Local,&Before.Local) && !memcmp(I.Public,Before.Public,32) && !memcmp(I.Scope,Before.Scope,16));
+    CHECK(MdoRudpSend(P.R[1],false,(xbytesview){(const uint8*)"survived",8})); bool Got=false;
+    while (!Got) { CHECK(xrtTimer()<End); CHECK(MdoRudpPoll(P.R[0],Received,&Got)); xrtSleep(1); }
+    PeerAbort A={P.R[1],{0}}; CHECK(xrtNetEnginePost(P.R[1]->Engine,0,AbortConfirmed,&A));
+    while (!xrtAtomic32Load(&A.Done,XMEMORY_ACQUIRE)) { CHECK(xrtTimer()<End); xrtSleep(1); }
+    xrtSleep(100); CHECK(MdoRudpGetInfo(P.R[1],&I) && I.Closed && I.DialAttempts==2);
+    Cleanup(&P); printf("PASS candidates family=%u retain mapped socket and pins, retry before admission only\n",(unsigned)Family);
+}
+static void CandidateDeadline(void)
+{
+    Pair P; Setup(&P,XNET_FAMILY_IPV4); xnetaddr Choices[2]={Address(XNET_FAMILY_IPV4,1),Address(XNET_FAMILY_IPV4,0)};
+    double Start=xrtTimer(); CHECK(MdoRudpDialCandidates(P.R[1],Choices,2,100)); MdoRudpInfo I;
+    do { CHECK(MdoRudpGetInfo(P.R[1],&I)); CHECK(xrtTimer()-Start<1); xrtSleep(1); } while (!I.Closed);
+    CHECK(I.NativeReason==XRUDP_TIMEOUT && I.DialAttempts==1); Cleanup(&P);
+}
 void ServiceInit(XS_HostInfo* Host)
 {
     (void)Host;
@@ -223,6 +255,7 @@ void ServiceInit(XS_HostInfo* Host)
     NatFilter(XNET_FAMILY_IPV4,false); NatFilter(XNET_FAMILY_IPV4,true);
     NatFilter(XNET_FAMILY_IPV6,false); NatFilter(XNET_FAMILY_IPV6,true);
     QueuePressure(false); QueuePressure(true); CancelQueuedSend(); AsyncCloseAndDeadline();
+    Candidates(XNET_FAMILY_IPV4); Candidates(XNET_FAMILY_IPV6); CandidateDeadline();
     printf("PASS mdo same-socket probes: %u pairs, async startup/dial, cancellation and close barriers\n",Cases); fflush(stdout); exit(0);
 }
 '''

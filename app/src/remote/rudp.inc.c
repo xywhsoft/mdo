@@ -32,6 +32,11 @@ struct MdoRudpTransport {
     MdoRudpInfo Info;
     xnetaddr Remote;
     xnetaddr DiscoveryServer, WarmupCandidates[8];
+    xnetaddr DialCandidates[8];
+    size_t DialCount, DialNext;
+    uint64 CandidateUntil, RetryAt, AttemptStarted;
+    xrudpresult InlineReason;
+    bool Retiring, Connecting, InlineClosed;
     uint64 DiscoveryId, WarmupId, DialUntil, OpenUntil, DiscoveryUntil, WarmupUntil;
     uint64 DeadlineTimer, DeadlineAt;
     uint32 DiscoveryTimeoutMs, WarmupTimeoutMs;
@@ -49,6 +54,7 @@ static void MdoRudpPump(MdoRudpTransport* R);
 static void MdoRudpKick(MdoRudpTransport* R);
 static void MdoRudpAdvance(MdoRudpTransport* R);
 static void MdoRudpArm(MdoRudpTransport* R);
+static void MdoRudpCandidateStep(MdoRudpTransport* R);
 
 static bool MdoRudpNonzero(const unsigned char* Bytes, size_t Size)
 {
@@ -60,7 +66,7 @@ static bool MdoRudpAddress(MdoRudpTransport* R, const xnetaddr* Address)
 {
     return Address && Address->Port && Address->Family==R->Config.Local.Family &&
         !xrtNetAddrIsUnspecified(Address) && !xrtNetAddrIsMulticast(Address) && !xrtNetAddrIsMapped(Address) &&
-        !(Address->Family==XNET_FAMILY_IPV4 && Address->Address[0]==255 && Address->Address[1]==255 && Address->Address[2]==255 && Address->Address[3]==255) &&
+        !(Address->Family==XNET_FAMILY_IPV4 && (Address->Scope || !Address->Address[0] || Address->Address[0]>=224 || MdoRudpNonzero(Address->Address+4,12))) &&
         !(Address->Family==XNET_FAMILY_IPV6 && xrtNetAddrIsLinkLocal(Address) && !Address->Scope);
 }
 static void MdoRudpProbeResult(MdoRudpProbe* Probe, xrudpresult Reason)
@@ -121,21 +127,40 @@ static void MdoRudpConfirmed(xrudpendpoint* Endpoint, xrudppeer* Peer, void* Dat
     if (Late || Cancelled || R->Stopping || R->Failed || (R->Peer && R->Peer!=Peer)) Extra=true;
     else {
         if (!R->Peer) R->Peer=xrtRudpPeerRef(Peer);
-        R->Confirmed=true; R->Info.NativeReservedBytes=Info.ReservedBytes;
+        R->Confirmed=true; R->CandidateUntil=R->RetryAt=0; R->Info.NativeReservedBytes=Info.ReservedBytes;
     }
     xrtCondBroadcast(R->Changed); xrtMutexUnlock(R->Lock);
     if (Late || Cancelled) MdoRudpFail(R,1006,Cancelled ? XRUDP_CANCELLED:XRUDP_TIMEOUT);
     if (Extra) (void)xrtRudpPeerAbort(Peer);
     else { MdoRudpCancelProbes(R); MdoRudpPump(R); }
 }
+static bool MdoRudpRetry(MdoRudpTransport* R, xrudpresult Reason)
+{
+    bool Retry;
+    xrtMutexLock(R->Lock);
+    Retry=!R->Confirmed && !R->Stopping && !R->Failed && !R->Config.Listen &&
+        R->DialNext<R->DialCount && !MdoDeadlineExpired(R->DialUntil) && !xrtCancelRequested(R->Cancel) &&
+        Reason!=XRUDP_NO_MEMORY && Reason!=XRUDP_LIMIT && Reason!=XRUDP_ARGUMENT;
+    R->Info.LastDialReason=R->Retiring ? XRUDP_TIMEOUT:Reason;
+    if (Retry) {
+        uint64 Now=MdoMonotonicUs(), Spaced=R->AttemptStarted+UINT64_C(500000);
+        R->RetryAt=Spaced>Now ? Spaced:Now+1000u; R->CandidateUntil=0;
+    }
+    xrtMutexUnlock(R->Lock);
+    if (Retry) MdoRudpArm(R);
+    return Retry;
+}
 static void MdoRudpPeerClosed(xrudpendpoint* Endpoint, xrudppeer* Peer, xrudpresult Reason, void* Data)
 {
     MdoRudpTransport* R=Data; bool Ours;
     (void)Endpoint;
     xrtMutexLock(R->Lock); Ours=R->Peer==Peer;
+    /* Connect may report a hard local send failure synchronously before its
+     * returned owned handle has been installed. Preserve that exact reason. */
+    if (!Ours && R->Connecting && !R->Peer) { R->InlineClosed=true; R->InlineReason=Reason; }
     xrtMutexUnlock(R->Lock);
     /* Failed, unconfirmed listener handshakes do not kill the pinned listener. */
-    if (Ours) MdoRudpFail(R,1006,Reason);
+    if (Ours && !MdoRudpRetry(R,Reason)) MdoRudpFail(R,1006,R->Retiring ? XRUDP_TIMEOUT:Reason);
 }
 static void MdoRudpClosed(xrudpendpoint* Endpoint, xrudpresult Reason, const xerror* Error, void* Data)
 {
@@ -267,17 +292,31 @@ static void MdoRudpWakeWorker(xnetworker* Worker, ptr Data)
     MdoRudpTransport* R=Data; xnetaddr Remote; bool Connect, Stop;
     (void)Worker;
     xrtMutexLock(R->Lock); R->WakePending=false;
-    Connect=R->ConnectPending; R->ConnectPending=false; Remote=R->Remote;
     Stop=R->Stopping || R->Failed; xrtMutexUnlock(R->Lock);
     if (Stop) return;
     if (xrtCancelRequested(R->Cancel)) { MdoRudpFail(R,1006,XRUDP_CANCELLED); return; }
+    MdoRudpCandidateStep(R);
+    xrtMutexLock(R->Lock); Connect=R->ConnectPending; R->ConnectPending=false; Remote=R->Remote;
+    Stop=R->Stopping || R->Failed; xrtMutexUnlock(R->Lock); if (Stop) return;
     MdoRudpProbeWorker(R);
     if (Connect) {
         if (MdoDeadlineExpired(R->DialUntil)) { MdoRudpFail(R,1006,XRUDP_TIMEOUT); return; }
+        xrudppeer* Old=R->Peer;
+        xrtMutexLock(R->Lock); R->Peer=NULL; R->Connecting=true; R->InlineClosed=false;
+        R->AttemptStarted=MdoMonotonicUs(); ++R->Info.DialAttempts;
+        R->CandidateUntil=MdoDeadlineAfterUs(UINT64_C(3000000));
+        if (R->CandidateUntil>R->DialUntil) R->CandidateUntil=R->DialUntil;
+        xrtMutexUnlock(R->Lock); xrtRudpPeerDestroy(Old);
         xrudpconnectconfig Config={R->Config.PeerPublic,R->Config.Scope,R->Context}; xrudppeer* Peer=NULL;
         xrudpresult Result=xrtRudpEndpointConnect(R->Endpoint,&Remote,&Config,&Peer);
-        if (Result!=XRUDP_OK) { MdoRudpFail(R,1006,Result); return; }
-        xrtMutexLock(R->Lock); R->Peer=Peer; xrtMutexUnlock(R->Lock);
+        xrtMutexLock(R->Lock); R->Peer=Peer; R->Connecting=false;
+        bool Closed=R->InlineClosed; xrudpresult ClosedReason=R->InlineReason;
+        xrtMutexUnlock(R->Lock);
+        if (Result!=XRUDP_OK || Closed) {
+            xrudpresult Reason=Closed ? ClosedReason:Result;
+            if (!MdoRudpRetry(R,Reason)) MdoRudpFail(R,1006,Reason);
+            return;
+        }
     }
     MdoRudpPump(R);
     MdoRudpArm(R);
@@ -286,7 +325,22 @@ static void MdoRudpDeadline(xnetworker* Worker, uint64 Id, xnetresult Result, pt
 {
     MdoRudpTransport* R=Data; (void)Worker;
     if (R->DeadlineTimer==Id) { R->DeadlineTimer=0; R->DeadlineAt=0; }
-    if (Result==XNET_RESULT_OK) { MdoRudpAdvance(R); MdoRudpArm(R); }
+    if (Result==XNET_RESULT_OK) { MdoRudpCandidateStep(R); MdoRudpAdvance(R); MdoRudpArm(R); }
+}
+static void MdoRudpCandidateStep(MdoRudpTransport* R)
+{
+    xrudppeer* Abort=NULL;
+    xrtMutexLock(R->Lock);
+    if (!R->Confirmed && !R->Failed && !R->Stopping) {
+        if (R->CandidateUntil && MdoDeadlineExpired(R->CandidateUntil) && R->Peer && !R->RetryAt) {
+            Abort=R->Peer; R->Retiring=true; R->CandidateUntil=0;
+        }
+        if (R->RetryAt && MdoDeadlineExpired(R->RetryAt) && R->DialNext<R->DialCount && !MdoDeadlineExpired(R->DialUntil)) {
+            R->RetryAt=0; R->Remote=R->DialCandidates[R->DialNext++]; R->ConnectPending=true;
+        }
+    }
+    xrtMutexUnlock(R->Lock);
+    if (Abort) { (void)xrtRudpPeerAbort(Abort); xrtMutexLock(R->Lock); R->Retiring=false; xrtMutexUnlock(R->Lock); }
 }
 static void MdoRudpArm(MdoRudpTransport* R)
 {
@@ -297,6 +351,9 @@ static void MdoRudpArm(MdoRudpTransport* R)
     if (!R->Stopping && !R->Failed && !R->EndpointClosed) {
         if (!R->Opened) Until=R->OpenUntil;
         if (R->ConnectIssued && !R->Confirmed && R->DialUntil<Until) Until=R->DialUntil;
+        if (!R->Confirmed && R->CandidateUntil && R->CandidateUntil<Until) Until=R->CandidateUntil;
+        if (!R->Confirmed && R->RetryAt && R->RetryAt<Until) Until=R->RetryAt;
+        if (R->ConnectPending) { uint64 Retry=MdoMonotonicUs()+1000u; if (Retry<Until) Until=Retry; }
         if (R->Info.Discovery.Pending && R->DiscoveryUntil<Until) Until=R->DiscoveryUntil;
         if (R->Info.Warmup.Pending && R->WarmupUntil<Until) Until=R->WarmupUntil;
     }
@@ -523,12 +580,21 @@ void MdoRudpCancelProbes(MdoRudpTransport* R)
 }
 bool MdoRudpDial(MdoRudpTransport* R, const xnetaddr* Remote, uint32 TimeoutMs)
 {
-    if (!R || !MdoRudpAddress(R,Remote) || !TimeoutMs || TimeoutMs>5000) return false;
+    return TimeoutMs<=5000 && MdoRudpDialCandidates(R,Remote,1,TimeoutMs);
+}
+bool MdoRudpDialCandidates(MdoRudpTransport* R, const xnetaddr* Candidates, size_t Count, uint32 TimeoutMs)
+{
+    if (!R || !Candidates || !Count || Count>8 || !TimeoutMs || TimeoutMs>15000) return false;
+    for (size_t i=0;i<Count;++i) {
+        if (!MdoRudpAddress(R,&Candidates[i])) return false;
+        for (size_t j=0;j<i;++j) if (xrtNetAddrEqual(&Candidates[i],&Candidates[j])) return false;
+    }
     xrtMutexLock(R->Lock);
     if (!R->Opened || R->Stopping || R->Failed || R->Config.Listen || R->ConnectIssued || xrtCancelRequested(R->Cancel)) {
         xrtMutexUnlock(R->Lock); return false;
     }
-    R->Remote=*Remote; R->DialUntil=MdoDeadlineAfterUs((uint64)TimeoutMs*1000u);
+    memcpy(R->DialCandidates,Candidates,Count*sizeof(*Candidates)); R->DialCount=Count; R->DialNext=1;
+    R->Remote=Candidates[0]; R->DialUntil=MdoDeadlineAfterUs((uint64)TimeoutMs*1000u);
     R->ConnectIssued=R->ConnectPending=true; xrtMutexUnlock(R->Lock); MdoRudpKick(R); return true;
 }
 bool MdoRudpConnect(MdoRudpTransport* R, const xnetaddr* Remote, uint32 TimeoutMs)

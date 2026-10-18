@@ -33,6 +33,7 @@ typedef struct MdoRudpInfo {
     size_t SendBytes, ReceiveBytes, SendRecords, ReceiveRecords;
     size_t NativeReservedBytes;
     uint32 NativeReason;
+    uint32 DialAttempts, LastDialReason;
     uint16 CloseCode;
     bool Opened, Confirmed, Closed, PeerClosed;
     MdoRudpProbe Discovery, Warmup;
@@ -60,6 +61,10 @@ bool MdoRudpConnect(MdoRudpTransport* Transport, const xnetaddr* Remote, uint32 
 /* Nonblocking initiation with the same one-attempt/deadline contract. A
  * private worker timer enforces deadlines even when the owner is idle. */
 bool MdoRudpDial(MdoRudpTransport* Transport, const xnetaddr* Remote, uint32 TimeoutMs);
+/* Try at most eight trusted candidates on this same bound socket, in order,
+ * under one 1..15000ms deadline. Retry only before confirmation/application
+ * admission; a confirmed stream is never recreated or replayed. */
+bool MdoRudpDialCandidates(MdoRudpTransport* Transport, const xnetaddr* Candidates, size_t Count, uint32 TimeoutMs);
 bool MdoRudpConnected(MdoRudpTransport* Transport);
 /* Admission copies exactly one complete frame. Success is local buffering,
  * not delivery/execution. No application message is replayed on another path.
