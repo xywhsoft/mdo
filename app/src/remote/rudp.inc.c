@@ -200,6 +200,7 @@ static void MdoRudpBindWorker(xnetworker* Worker, ptr Data)
         Config.Session.Local.StreamCredit=256u*1024u; Config.Session.Local.ConnectionCredit=256u*1024u;
         Config.Session.PacketCapacity=128; Config.Session.MaximumWindow=256u*1024u;
         Config.Session.Local.IdleTimeoutMs=60000; Config.Session.ProgressTimeoutUs=UINT64_C(10000000);
+        Config.Session.KeepAliveUs=UINT64_C(20000000);
         Events.Open=MdoRudpOpened; Events.Confirmed=MdoRudpConfirmed; Events.Changed=MdoRudpChanged;
         Events.PeerClose=MdoRudpPeerClosed; Events.Close=MdoRudpClosed;
         Result=xrtRudpEndpointBind(Worker,&R->Config.Local,&Config,&Events,R,&Endpoint);

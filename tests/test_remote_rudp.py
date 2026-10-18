@@ -20,6 +20,7 @@ from test_rudp_discovery import Oracles
 SITE=None
 FAMILY=4
 ORACLE=None
+IDLE_SECONDS=0
 
 
 def setup(site, home):
@@ -129,6 +130,23 @@ def exercise(*,client,hello,app,device,call,bearer,website_port,clients):
     negotiate(readonly,viewer,view_hello['rudp'])
     refused,_=Rpc(readonly,view_hello).call('POST','/api/v1/projects',b'{}')
     assert refused['code']=='read_only',refused
+    if IDLE_SECONDS:
+        # No application RPC/live traffic during the negotiated idle lease.
+        # Native encrypted PING must keep both channels and NAT filters alive.
+        end=time.monotonic()+IDLE_SECONDS
+        sockets=(client,direct,viewer,readonly)
+        while time.monotonic()<end:
+            available=[s for s in sockets if s.pending]
+            if not available:
+                ready,_,_=select.select([s.socket for s in sockets],[],[],min(.25,max(0,end-time.monotonic())))
+                available=[s for s in sockets if s.socket in ready]
+            for source in available:
+                opcode,payload=source.recv()
+                assert opcode in (9,10),(opcode,payload)
+                if opcode==9: source.send(10,payload)
+        assert rpc.json('GET','/api/v1/projects')[2]==200
+        assert relay.json('GET','/api/v1/projects')[2]==200
+        print(f'PASS native xrudp direct RPC after {IDLE_SECONDS}s without application traffic')
     # The offer was consumed; a second native gateway cannot rebind its key.
     replay=gateway(port,token,offer); replay.socket.settimeout(3)
     first=json.loads(replay.recv()[1]); assert first['type']=='rudp_forward'
@@ -151,7 +169,9 @@ if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__); parser.add_argument('--host',type=Path,required=True)
     parser.add_argument('--website-host',type=Path,default=WEBSITE_HOST)
     parser.add_argument('--family',type=int,choices=(4,6),default=4); parser.add_argument('--nat',action='store_true')
-    args=parser.parse_args(); FAMILY=args.family
+    parser.add_argument('--idle-seconds',type=int,choices=range(61,91),metavar='61..90',default=0)
+    args=parser.parse_args(); FAMILY=args.family; IDLE_SECONDS=args.idle_seconds
+    if IDLE_SECONDS and args.nat: parser.error('idle gate uses independent loopback peers; the NAT fixture models one pair only')
     if args.nat:
         with Oracles() as ORACLE: run(args.host.resolve(),args.website_host.resolve(),exercise,site_setup=setup)
     else: run(args.host.resolve(),args.website_host.resolve(),exercise,site_setup=setup)
