@@ -31,3 +31,9 @@ Windows/Linux 真实 TCC 的同端口探测套件增加到 26 组端点场景，
 Windows 实际账号、中转、原生网关、两条独立直连在 65 秒没有业务请求后仍可正常调用 HTTP；期间只处理浏览器/中转自身的 WebSocket PING/PONG，未通过 RPC 维持 xrudp。SDK 的 IPv4/IPv6 原生、取消、关闭、外层/嵌套 TCC 与 562 个公共导出检查通过；Linux 实际会合核心的新版本 sanitizer 回归通过。证据为 `.build/rendezvous-native-idle-windows.log`、`rendezvous-keepalive-sanitizers.log` 和 SDK 的 `.build/keepalive-sdk-windows.log`。
 
 Linux 原生宿主重建后，SDK 外层/嵌套导出、IPv4/IPv6 原生连接与真实 TCC 五组会合场景均通过（SDK `.build/keepalive-sdk-linux.log`、mdo `.build/rendezvous-keepalive-linux.log`）。这是本机 WSL 的原生测试构建，未宣称完成 Linux 发行版 ABI、Android 或实机公网验收。
+
+## 本机网关启动计入协商期限
+
+新增回归在修复前稳定复现：本机 `directSocket` 工厂尚未返回时没有 12 秒协商计时器，本机启动请求挂起会阻止后续 LAN 尝试。修复后 xrudp 的 12 秒、LAN 的 6 秒期限从本机请求之前开始，涵盖请求、WebSocket 打开和远端授权，工厂返回不续期。超时或账号连接代终止会取消启动 fetch、立即结算可选探测并继续既有回退；不支持取消的工厂即使迟到返回，连接也会被关闭，不能替换新路径。
+
+`test_remote_rendezvous.mjs` 覆盖工厂永久挂起后仍进入 LAN、取消信号、迟到连接清理、预算不续期、退出后的迟到结果；`test_connector_direct.mjs` 验证真实 connector 将 AbortSignal 传给 fetch，并拒绝已取消但 fetch 同时完成的原生 WebSocket 受理。原远控传输及账号刷新回归通过。修复前失败证据 `.build/rendezvous-startup-before.log`，修复后 `.build/rendezvous-startup-after.log`。中转业务在可选探测挂起期间仍可使用。

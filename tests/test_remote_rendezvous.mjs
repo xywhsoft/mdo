@@ -16,10 +16,13 @@ class Socket {
   receive(value) { this.onmessage({ data: JSON.stringify(value) }); }
 }
 async function flush() { for (let i = 0; i < 6; i++) await Promise.resolve(); }
-async function setup(overrides = {}, legacy = false) {
+async function setup(overrides = {}, legacy = false, factory = null) {
   let serial = 0; const relay = new Socket(), natives = [], states = [], timers = [];
   const transport = createRemoteTransport({ socket: () => relay, id: () => (++serial).toString(16).padStart(32, "0"),
-    directSocket: async offer => { const socket = new Socket(); natives.push({ socket, offer }); return socket; },
+    directSocket: async (offer, options) => {
+      const socket = new Socket(); natives.push({ socket, offer, options });
+      return factory ? factory(socket, options, natives.length) : socket;
+    },
     onState: value => states.push(value), setTimer: (fn, ms) => { const timer = { fn, ms, active: true }; timers.push(timer); return timer; },
     clearTimer: timer => { if (timer) timer.active = false; } });
   const connected = transport.connect({ origin: "https://ai.xywhsoft.com", ticket, deviceId: device, owner, mode: "control" });
@@ -78,4 +81,34 @@ for (const control of [
   s.transport.close(); direct.receive({ type: "direct_ready", version: 1, runtime_id: runtime, peer_id: peer, mode: "control", transport: "xrudp" });
   await flush(); assert.equal(s.natives.length, 1, "late completion cannot reopen a retired account generation");
 }
-console.log("PASS rendezvous forwarding bounds and authority, direct selection, LAN/relay fallback, stale generations and no write replay");
+{
+  let release;
+  const s = await setup({}, true, (socket, options, count) => count === 1 ? new Promise(resolve => { release = () => resolve(socket); }) : socket);
+  const first = s.natives[0], timer = s.timers.find(value => value.active && value.ms === 12000);
+  assert.ok(timer, "whole-attempt deadline must start before the gateway factory resolves");
+  timer.fn(); await flush();
+  assert.ok(first.options.signal.aborted, "deadline aborts the local startup fetch");
+  assert.deepEqual(s.natives[1].offer, lan, "pending gateway factory cannot prevent LAN fallback");
+  release(); await flush();
+  assert.equal(first.socket.readyState, 3, "late gateway is closed without replacing the current route");
+  assert.equal(s.natives[1].socket.readyState, 1); assert.equal(s.relay.readyState, 1); s.transport.close();
+}
+{
+  let release;
+  const s = await setup({}, true, socket => new Promise(resolve => { release = () => resolve(socket); }));
+  const first = s.natives[0], original = s.timers.find(value => value.active && value.ms === 12000);
+  release(); await flush();
+  assert.equal(s.timers.filter(value => value.ms === 12000).length, 1, "native startup must not renew the handshake budget");
+  assert.ok(original.active); original.fn(); await flush();
+  assert.equal(first.socket.readyState, 3); s.transport.close();
+}
+{
+  let release;
+  const s = await setup({}, true, socket => new Promise(resolve => { release = () => resolve(socket); }));
+  const first = s.natives[0]; s.transport.close(); await flush();
+  assert.ok(first.options.signal.aborted, "account generation cancellation aborts a pending startup");
+  assert.ok(!s.timers.some(value => value.active));
+  release(); await flush();
+  assert.equal(first.socket.readyState, 3); assert.equal(s.natives.length, 1, "late factory cannot start a retired LAN attempt");
+}
+console.log("PASS rendezvous authority/bounds, complete startup deadline, abort/late completion, direct selection, fallback and no write replay");

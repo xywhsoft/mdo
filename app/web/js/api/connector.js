@@ -6,7 +6,7 @@ let nonce = null;
 // TLS certificate/grant are delivered by the authenticated target, retained
 // only for this attempt. A native loopback gateway handles LAN TLS so WebView
 // never needs certificate exceptions, private-network CORS or a machine CA.
-export async function connectorDirectSocket(offer) {
+export async function connectorDirectSocket(offer, { signal } = {}) {
   const rudp = offer?.transport === "xrudp", payload = rudp ? offer.offer : offer;
   if (rudp ? (!payload || payload.version !== 1 || !/^[0-9a-f]{32}$/.test(payload.peer_id) ||
       !/^[1-9][0-9]{0,19}$/.test(payload.owner_id) || !/^[0-9a-f]{32}$/.test(payload.nonce)) :
@@ -15,7 +15,8 @@ export async function connectorDirectSocket(offer) {
       !Number.isInteger(offer.port) || offer.port < 1 || offer.port > 65535 ||
       !Array.isArray(offer.addresses) || !offer.addresses.length || offer.addresses.length > 4))
     throw new Error("Invalid direct offer");
-  const startup = await read("/project-purge-intent");
+  const startup = await read("/project-purge-intent", { signal });
+  if (signal?.aborted) throw new DOMException("Direct startup was canceled", "AbortError");
   const token = startup.response.headers.get("X-Mdo-Write-Token");
   if (!/^[0-9a-f]{32}-(0|[1-9][0-9]{0,19})$/.test(token || "")) throw new Error("Invalid gateway token");
   const url = new URL("/api/v1/connector/direct", location.href);

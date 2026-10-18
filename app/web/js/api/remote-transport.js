@@ -50,7 +50,7 @@ export function createRemoteTransport({ socket = (...args) => new WebSocket(...a
   const client = id(), requests = new Map(), waiting = [], lives = new Map(), uncertain = new Map();
   let connection = null, hello = null, sequence = 0, admitted = 0, generation = 0;
   let connectReject = null, connectTimer = 0;
-  let direct = null, directReady = false, directTimer = 0, rendezvous = null;
+  let direct = null, directReady = false, directTimer = 0, rendezvous = null, probing = null;
   const send = (value, route = connection) => {
     if (route?.readyState !== 1) throw remoteError("remote_offline", "目标设备连接已断开");
     route.send(typeof value === "string" || value instanceof Uint8Array ? value : JSON.stringify(value));
@@ -91,6 +91,7 @@ export function createRemoteTransport({ socket = (...args) => new WebSocket(...a
   function disconnect(error = remoteError("remote_offline", "目标设备离线，操作不会转到本机")) {
     const old = connection; connection = null; hello = null; generation++;
     const oldDirect = direct; direct = null; directReady = false; clearTimer(directTimer); oldDirect?.close();
+    probing?.finish(false); probing = null;
     rendezvous?.finish(false); rendezvous = null;
     clearTimer(connectTimer); connectReject?.(error); connectReject = null;
     for (const entry of [...requests.values()]) {
@@ -306,46 +307,65 @@ export function createRemoteTransport({ socket = (...args) => new WebSocket(...a
     for (const live of [...lives.values()]) if (live.socket === active) live.fail(error);
     if (hello) onState({ connected: true, hello, route: "relay" });
   }
-  async function probeDirect(offer, relay, token, kind = "lan") {
-    let active;
-    let finish;
-    const ready = new Promise(resolve => { finish = resolve; });
+  function probeDirect(offer, relay, token, kind = "lan") {
+    if (relay !== connection || token !== generation || !hello) return Promise.resolve(false);
+    let active, settled = false, timer = 0, resolveReady;
+    const abort = new AbortController(), ready = new Promise(resolve => { resolveReady = resolve; });
+    const probe = { finish(value) {
+      if (settled) return;
+      settled = true; clearTimer(timer); if (directTimer === timer) directTimer = 0;
+      if (probing === probe) probing = null;
+      if (!value) {
+        abort.abort();
+        if (active && active === direct) loseDirect(active); else active?.close();
+      }
+      resolveReady(value);
+    } };
+    const finish = value => probe.finish(value);
+    probing = probe;
+    // One budget covers local startup, WebSocket open and peer authorization.
+    // A canceled factory may still resolve; its late socket is closed below.
+    timer = setTimer(() => finish(false), kind === "xrudp" ? 12000 : 6000); directTimer = timer;
     try {
-      active = await directSocket(kind === "xrudp" ? { transport: "xrudp", offer } : offer);
-      if (relay !== connection || token !== generation || !hello) { active.close(); return false; }
-      direct = active; active.binaryType = "arraybuffer";
-      if (kind === "xrudp") rendezvous = { socket: active, nonce: offer.nonce, runtime: offer.runtime_id, finish };
-      directTimer = setTimer(() => { loseDirect(active); finish(false); }, kind === "xrudp" ? 12000 : 6000);
-      active.onmessage = ({data}) => {
-        if (active !== direct) return;
-        try {
-          if (data instanceof ArrayBuffer) {
-            if (!directReady) throw remoteError("remote_protocol", "Body before direct authorization");
-            receiveBody(unpack(data), active); return;
-          }
-          if (typeof data !== "string" || encoder.encode(data).length > 262123)
-            throw remoteError("remote_protocol", "Invalid direct response");
-          const value = JSON.parse(data);
-          if (!directReady) {
-            if (kind === "xrudp" && value.type === "rudp_forward") {
-              const control = value.payload;
-              if (Object.keys(value).length !== 2 || !rendezvousControl(control, offer.nonce, offer.runtime_id) || encoder.encode(data).length > 4096)
-                throw remoteError("remote_protocol", "Invalid rendezvous control");
-              send(control, relay); return;
+      Promise.resolve(directSocket(kind === "xrudp" ? { transport: "xrudp", offer } : offer, { signal: abort.signal })).then(candidate => {
+        active = candidate;
+        if (settled) { active?.close(); return; }
+        if (relay !== connection || token !== generation || !hello || probing !== probe || !active || active.readyState >= 2) {
+          finish(false); return;
+        }
+        direct = active; active.binaryType = "arraybuffer";
+        if (kind === "xrudp") rendezvous = { socket: active, nonce: offer.nonce, runtime: offer.runtime_id, finish };
+        active.onmessage = ({data}) => {
+          if (active !== direct) return;
+          try {
+            if (data instanceof ArrayBuffer) {
+              if (!directReady) throw remoteError("remote_protocol", "Body before direct authorization");
+              receiveBody(unpack(data), active); return;
             }
-            if (value.type !== "direct_ready" || value.version !== 1 || value.runtime_id !== hello.runtime_id ||
-                value.mode !== hello.mode || value.peer_id !== offer.peer_id || (kind === "xrudp" && value.transport !== "xrudp"))
-              throw remoteError("remote_protocol", "Direct authority differs from selected target");
-            directReady = true; clearTimer(directTimer);
-            finish(true); onState({ connected: true, hello, route: kind }); return;
-          }
-          const live = lives.get(value.id);
-          if (live?.socket === active) live.text(value); else receive(value, active);
-        } catch (error) { loseDirect(active, error); finish(false); }
-      };
-      active.onerror = () => { loseDirect(active); finish(false); };
-      active.onclose = () => { loseDirect(active); finish(false); };
-    } catch { active?.close(); finish(false); /* Relay stays usable during negotiation. */ }
+            if (typeof data !== "string" || encoder.encode(data).length > 262123)
+              throw remoteError("remote_protocol", "Invalid direct response");
+            const value = JSON.parse(data);
+            if (!directReady) {
+              if (kind === "xrudp" && value.type === "rudp_forward") {
+                const control = value.payload;
+                if (Object.keys(value).length !== 2 || !rendezvousControl(control, offer.nonce, offer.runtime_id) || encoder.encode(data).length > 4096)
+                  throw remoteError("remote_protocol", "Invalid rendezvous control");
+                send(control, relay); return;
+              }
+              if (value.type !== "direct_ready" || value.version !== 1 || value.runtime_id !== hello.runtime_id ||
+                  value.mode !== hello.mode || value.peer_id !== offer.peer_id || (kind === "xrudp" && value.transport !== "xrudp"))
+                throw remoteError("remote_protocol", "Direct authority differs from selected target");
+              directReady = true;
+              finish(true); onState({ connected: true, hello, route: kind }); return;
+            }
+            const live = lives.get(value.id);
+            if (live?.socket === active) live.text(value); else receive(value, active);
+          } catch (error) { loseDirect(active, error); finish(false); }
+        };
+        active.onerror = () => { loseDirect(active); finish(false); };
+        active.onclose = () => { loseDirect(active); finish(false); };
+      }).catch(() => finish(false));
+    } catch { finish(false); /* Relay stays usable during negotiation. */ }
     return ready;
   }
   async function chooseDirect(lan, rudp, relay, token, owner, peer) {
