@@ -77,3 +77,13 @@ Windows/Linux 实际 TCC 和 Linux ASan/UBSan/泄漏检查通过十二组核心�
 更新后的协议通过 Linux 公网控制端至 NAT 后 Windows 目标的实际原生直连，约 437 ms；两端真实公网映射、写入、实时、权限、收据和干净退出通过，未使用生产账号或模型。该公网场景共同族为 IPv4，不能代替公网双族/双重 NAT 或安卓实机验收。Windows/Linux 全应用 GCC 声明及警告检查无诊断；Android ARM64 Clang 全应用语法通过，只有既有 SDK 静态辅助函数未使用的警告。前端信令白名单、反向消息边界、整体协商期限和写入不重放回归通过，既有 26 组同端口探测回归仍通过。
 
 证据：`.build/rendezvous-dual-{windows,linux,sanitizers,frontend,transport,syntax,linux-syntax,android-syntax,probe-regression}.log`、`rendezvous-dual-e2e-{nat4,nat6,block4,block6}.log`、`rendezvous-dual-public-reverse.log`、`public-remote-caaeb6c17baa4a8d8a33d1eb44786796/receipt.json`。双族协商代码及模拟验证已完成；两个独立公网 NAT、UDP 全阻断时完整前端自动回退、Android 实机、完整 wire 互操作/模糊测试和 72h 长稳仍待验收。
+
+## 双族 UDP 全阻断时的真实浏览器回退
+
+增加 `test_remote_fallback_browser.py` 与配套浏览器驱动，使用真实 Edge/Chrome 加载产品的 `createRemoteTransport` 和 `connectorDirectSocket`，直接连接隔离账号中继及原生网关。独立 UDP oracle 对两个地址族均允许 STUN 映射、丢弃所有后续加密报文，两个族的真实握手均实际进入黑洞；测试候选仅保留映射，模拟两个不能直接访问彼此私网地址的局域网。
+
+每个浏览器分别验证 UDP→LAN 和 UDP→LAN失败→中继。后者使用持续占用的真实 TCP 静默监听口，让 TLS 在原有期限内失败，避免误接其他服务；前者保留实际授权证书并使用本机测试地址。协商期间的第一笔真实项目写入始终经中继受理，自动回退后的第二笔经最终路径完成，两个项目各存在一份、只有两个不同请求号、没有发往未确认 UDP 的业务或任何写入重放。独立只读中继在浏览器关闭后仍可读取，原生传输计数在五秒内归零。服务端单控制端约束保持有效，浏览器逐个持有控制权限。
+
+Edge 与 Chrome 的四个组合全部通过。Edge 两族握手约 3.3 秒后失败，LAN 成功组合约 3.7 秒完成，LAN 静默失败后中继组合约 4.9 秒完成；计时使用真实浏览器时钟和产品定时器，没有虚拟时钟加速。测试只显式使用本机已有浏览器及 Playwright 工具，产品未引入依赖；没有生产账号、模型调用或公网测试负载。
+
+证据：`.build/rendezvous-browser-fallback-{edge,chrome}.log`，Edge 收据 `.build/remote-manager-xqrfs9nl/browser-fallback-receipt.json`，Chrome 收据见对应日志。两端映射/打洞和拒绝跨路由重放仍由既有真实原生测试覆盖；这组新增验收证明整个前端自动回退链路。两个独立公网 NAT、Android 实机、完整协议独立互操作/模糊测试及 72h 混合长稳继续保留。
