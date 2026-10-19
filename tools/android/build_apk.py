@@ -159,7 +159,7 @@ if __name__ == "__main__":
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--package", required=True)
     parser.add_argument("--label", required=True)
-    parser.add_argument("--version", default="0.1.0")
+    parser.add_argument("--version", default=json.loads((MDO_ROOT / "app/release.json").read_text(encoding="utf-8"))["version_name"])
     parser.add_argument("--version-code", type=int, default=1)
     parser.add_argument("--keystore", type=Path, required=True)
     parser.add_argument("--key-alias", default="xs-development")
