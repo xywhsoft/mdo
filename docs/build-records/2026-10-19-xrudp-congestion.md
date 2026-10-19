@@ -36,4 +36,16 @@ Windows、Linux 均通过时间/条件等待/进程超时/定时器/持久化/�
 
 日志：产品 SDK `.build/xrudp-congestion-{windows,linux}-{build,runtime,sdk}.log`；mdo `.build/xrudp-congestion-{windows,linux}-rendezvous.log`、`xrudp-congestion-windows-remote.log`、`xrudp-congestion-dependencies.log`、`xrudp-congestion-sdk-sync.json` 和 `xrudp-congestion-lock.json`。
 
-原 18 组长稳均保留原二进制及计时，不计为本次运行时的最终验收。仍需当前运行时独立线路复验、接入/资源压力审查、XS 服务类型新宿主复验、最终长稳、实体 Android 和双独立 NAT。用户回复稍后连接 Android，当前已构建的 Android QA 仍属旧 SDK，须刷新后再进行最终真机验收。本次没有发布、替换安装程序或重启生产服务。
+原 18 组长稳均保留原二进制及计时，不计为本次运行时的最终验收。用户回复稍后连接 Android，当前已构建的 Android QA 仍属旧 SDK，须刷新后再进行最终真机验收。本次没有发布、替换安装程序或重启生产服务。
+
+## 当前版本后续验收
+
+XRT 提交 `ed000181` 新增真实原生端点的保留句柄内存限额回归：Windows GCC、Linux Clang ASan/UBSan/leaks，IPv4/IPv6，Select 与显式 IOCP/Epoll，模块化全功能和单头 endpoint-only，共 16 个进程、1,024 轮拒绝/释放后恢复、3,072 次压力连接关闭、32 次 Engine join。先开发验证，再用已提交源码重建复验，源文件和二进制哈希均复核。没有复现新的运行时缺陷，运行时代码仍为 `3d55ec41`。收据 `D:/GIT/xrt/out/xrudp-endpoint-quota/acceptance.json`。
+
+XS 源码 `6bc2fd8` 的全新 xrudp-only Windows/Linux 宿主均通过实际 `class: xrudp` 字节流、消息、游戏数据报、身份/上下文、重入取消、保留连接重载、失败回滚、禁用及退出。记录提交 `0014ed9`；SDK 产品分支 `a6906e2` 不变。这补齐本次运行时的 XS 服务类型验证。
+
+mdo 提交 `13661af2` 修正长跑测试夹具：启动前核对实际宿主和当前锁定 SDK，私有副本内重新生成 unity/依赖标记，确认根应用未改动，避免沿用历史缓存。25 秒短测完成真实 HTTP/live、大文件上传下载、两次重连和退出，随后单独启动正常 72 小时用例，不加速令牌过期。
+
+本次 `3d55ec41` 已另外冻结源码、核心和驱动，启动 4 组 Windows、4 组 Linux 原生 Future 多流/消息/游戏用例及 1 组当前 SDK 的 mdo 业务长跑。8 组原生用例均先完成短测和退出后的 Future 资源归零校验。固定构建、进程、原始开始时刻、远端单元身份及哈希保存在 `D:/GIT/xrt/out/xrudp-native-soak/congestion-long-runs.json`。9 组当前都只记作运行中，尚未达到 72 小时；原 18 组仅作为历史基线保留，不能替代当前版本的验收。
+
+仍需当前运行时独立线路完整矩阵、最新宿主的公网双机复验、最终长稳、刷新后的实体 Android、双独立 NAT 和接入限速表压力审查。线上 `xs.service` PID `3030721` 保持运行，本轮未改动生产服务。
