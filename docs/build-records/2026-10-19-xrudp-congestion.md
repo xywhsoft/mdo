@@ -1,5 +1,19 @@
 # xrudp 持续拥塞与当前 SDK 验证
 
+## 已提交源码的独立构建复核
+
+从 mdo `2da7ad5928a35867f517d679f4b6e294bbaded51` 的 Git 提交检出独立普通副本（master，无新分支、无 worktree），仅含 2,561 个已跟踪文件，没有带入主工作区 152 个既有改动或 7 个未跟踪的传输源文件。使用锁定的产品 SDK `a6906e2`、XRUDP 运行时 `3d55ec41`；Windows 与 WSL Git 环境均确认干净，全部提交文件重新计算哈希一致。
+
+Windows GCC 与 Linux Clang 的 server 包均构建成功；自动展开为产品要求的六个扩展。实际打包程序在隔离 Home 与回环临时端口启动，经过内置 TCC 编译与 bootstrap，并通过双进程 Home 排他、异常退出释放锁和重新打开保留会话检查。两平台再用这份干净源码分别通过真实本地账号/协调/中继夹具的双族 NAT 和 IPv6 黑洞回退 IPv4、owner/runtime/nonce pinning、HTTP/live/收据、只读权限、一次性票据、中继回退、注销及取消生命周期回归。没有发起模型请求或生产网站请求。
+
+Windows 包 5,119,895 字节，SHA256 `e417567f4eab1cc569e47797688e3ae5f9759442b2e56507248257f5289b350f`；Linux 包 5,358,049 字节，SHA256 `e3d3a91c24ab9456668db19d0778cec9defa5ab443f1efa0797b0571712f6928`。完整源码清单、构建/实际运行日志与二进制哈希收据在 `.build/committed-source-audit-20261019/acceptance.json`。
+
+本轮修正的是私有验证环境：共享 Git 对象路径和 CRLF 策略需要同时适配 Windows/WSL；最初 Linux 构建把 Git 环境错误记为 dirty，修正后重新构建为 false，产物 SHA 不变。最初 Linux 网站夹具误用没有 SQLite 的 mdo 精简宿主，改用已有 SQLite 网站宿主后通过。两项失败日志均保留，不计为产品失败或产品修复。
+
+这些是 server 开发检查包，保留提交版本元数据；Linux 使用 WSL 本机 ABI，不是发行基线。未验证 GUI 发行、实体 Android、两个独立 NAT、系统休眠恢复或实际 72 小时长稳，也没有安装、发布或重启生产服务。需求与剩余门槛现集中于 `D:/GIT/xrt/extlibs/xrudp/docs/acceptance-matrix.md`，长期目标仍 active。
+
+## 持续拥塞修复
+
 会话恢复原先没有调用拥塞组件已有的最小窗口收缩入口。公开 Session 的真实加密 ACK 回归确认：实测 RTT 后，已声明网络丢失包的发送区间超过三倍基础 PTO，原实现只将窗口从 12000 减半到 6000；本次完成区间证明后收缩到 2400。
 
 新证据环按实际发送顺序、有界保留元数据，计入会话/端点峰值预算。发送时必须已有 RTT 样本，区间严格超过三倍无退避基础 PTO，任意中间确认均切断证据；旧包迟到 ACK、纯 ACK、MTU、本地背压/丢弃及路径切换均有针对性边界。单次 PTO 不收缩，所有权、在途字节和已交付数据不改写。SessionState.PersistentCongestion 统计证明完成的区间；字段及实现必须成套更新，不能用旧 SDK 声明配新库。
