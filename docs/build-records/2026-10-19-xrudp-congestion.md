@@ -62,9 +62,11 @@ Android 用产品 SDK `a6906e2` 重建 ARM64/API26 原生库，并在私有应�
 | --- | ---: | --- |
 | `native/libxs.so` | 3,479,576 | `559cbb723b9b5d4cdf273eef21302358c6aed1bfcd913ea63903f127e4cce11d` |
 | `app.xrtpack` | 1,453,356 | `8194f3e2db4de6f46ab3f20ed65dea538625713e4be4bfdddd7ed2b475348d3f` |
-| `mdo-xrudp-congestion-qa.apk` | 4,993,702 | `8ea1c35806b929f30ea119389a5e027c028ddb0e1f79b45a09fe2c35b7a76565` |
+| `mdo-xrudp-congestion-qa-r2.apk` | 5,076,205 | `a5347e0d8bea2f52df996fb6fb447a9fb86e7becec99c974baf91cef6ce6e27f` |
 
-已核对实际 APK 内的原生库及 pack 与构建产物相同、ELF ARM64/API 架构、LOAD 段及未压缩库的 16 KiB 对齐、v2/v3 签名、SDK 收据和原生宿主导出注册表。导出注册表检查不等于在 Android 执行了 Native/Future；这些入口不是可用 `dlsym` 证明执行的 ELF 导出。正式真机用例仍待完成。
+已核对实际 APK 内的原生库及 pack 与构建产物相同、ELF ARM64 架构、清单 minSdk26、LOAD 段及未压缩库的 16 KiB 对齐、v2/v3 签名、SDK 收据和原生宿主导出注册表。导出注册表检查不等于在 Android 执行了 Native/Future；这些入口不是可用 `dlsym` 证明执行的 ELF 导出。正式真机用例仍待完成。
+
+最终 QA r2 使用应用当前的安卓轻量版构建号 `30000097`，并包含原品牌资源。初版 QA 临时使用 versionCode1，会经 MdoRuntime 写入一位数 `MDO_BUILD_ID`，随后被 MdoBuildId 的八位数校验拒绝而回退到 unity 的 Windows 默认构建号，影响真机观察到的发行身份。已修正这项私有测试包配置；核对实际清单与 `assets/mdo-runtime.json` 的 `edition=lite`、`build_id=30000097` 一致，避免用错误身份开展真机回归。初版收据另存 `validation-r1.json`，没有改动正式构建脚本或产品运行时。
 
 Windows ADB 从 SDK 锁定的官方 platform-tools 37.0.1 包准备，按已锁定 SHA1/大小验证并记录 SHA256；通过原生 Windows USB 主机执行 `devices -l`，当前没有设备，未用 WSL 设备列表替代 Windows 检查。用户已回复稍后连接，未重复催问、安装或发布。收据 `.build/xrudp-android-congestion/validation.json`、`.build/android-platform-tools/verification.json`。
 
