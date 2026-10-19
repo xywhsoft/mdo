@@ -118,7 +118,12 @@
     "owned_children_exited": true,
     "logout_cleanup": true,
     "system_screen_stay_awake_setting_never_changed": true,
-    "production_package_metadata_unchanged": true
+    "production_package_metadata_unchanged": true,
+    "deviceidle_force_false_and_deep_active": true,
+    "doze_restoration_guard_files_removed": true,
+    "android_native_nat_probe_removed": true,
+    "qa_permanent_idle_whitelisted": true,
+    "permanent_idle_whitelist_not_modified_by_test": true
   },
   "evidence": {
     "native-future/device-receipt.json": {
@@ -152,14 +157,57 @@
     "diagnostic-cleanup-final.json": {
       "path": ".build/xrudp-android-device-20261019-r4/diagnostic-cleanup-final.json",
       "sha256": "c7a776ba20a0d31078f848ce553caf53a7174a6a61634f7e59245f650f5e7c12"
+    },
+    "device-two-nat-mobile-receipt.json": {
+      "path": ".build/xrudp-android-device-20261019-r4/device-two-nat-mobile-receipt.json",
+      "sha256": "2464e2ead242f63a76233850f959fb1d05cd73b348550c5163b2e547b4057e61"
+    },
+    "device-two-nat-mobile-reverse-receipt.json": {
+      "path": ".build/xrudp-android-device-20261019-r4/device-two-nat-mobile-reverse-receipt.json",
+      "sha256": "885aa860ca45cd563ed9f694799af71070c175cc702ed809236e70807c75a127"
+    },
+    "device-two-nat-mobile-browser-fallback.json": {
+      "path": ".build/xrudp-android-device-20261019-r4/device-two-nat-mobile-browser-fallback.json",
+      "sha256": "33a93ccf382d5f1cf7a8babc644fddf408e4b57fceed8d1a6f256cfb14678740"
+    },
+    "device-two-nat-mobile-browser-fallback-r2.json": {
+      "path": ".build/xrudp-android-device-20261019-r4/device-two-nat-mobile-browser-fallback-r2.json",
+      "sha256": "a7748fdbf29ef6e4ab1c60e6285c7565212371e35ec9069557e2ddd108c54530"
+    },
+    "device-two-nat-mobile-webview-fallback.json": {
+      "path": ".build/xrudp-android-device-20261019-r4/device-two-nat-mobile-webview-fallback.json",
+      "sha256": "6555fb0691b2c9ced34b7cf7c2bfaf2a138eea74fb0589ebf4fa0a322569ed7a"
+    },
+    "mobile-nat-probe/receipt.json": {
+      "path": ".build/xrudp-android-device-20261019-r4/mobile-nat-probe/receipt.json",
+      "sha256": "e770468a27c3c22da32ae2c0966173e0d1ee1dbc0e77f29f461d0c5abc95371e"
+    },
+    "mobile-nat-probe/cleanup-verified.json": {
+      "path": ".build/xrudp-android-device-20261019-r4/mobile-nat-probe/cleanup-verified.json",
+      "sha256": "7edff1177263a0ef956b5a164b9c12316bae6e2dc122923f74620f9371d4b10e"
+    },
+    "device-forced-doze-recovery.json": {
+      "path": ".build/xrudp-android-device-20261019-r4/device-forced-doze-recovery.json",
+      "sha256": "12271c45515b1e27ceba25cb09c2ac590e104b7730859f77680cafe51807d5a5"
+    },
+    "doze-policy-snapshot.json": {
+      "path": ".build/xrudp-android-device-20261019-r4/doze-policy-snapshot.json",
+      "sha256": "da23333e93c3e4a1b58f4044773fdd41618627b0471539f636b14d83701393e6"
+    },
+    "diagnostic-cleanup-after-mobile-doze.json": {
+      "path": ".build/xrudp-android-device-20261019-r4/diagnostic-cleanup-after-mobile-doze.json",
+      "sha256": "1423fef8a39b13c45208ad7b82f720eb0d87485f5031fb31580eae5760faaa9e"
     }
   },
   "limits": [
-    "same Wi-Fi NAT; signaling/control HTTP uses ADB, native data uses real device UDP",
+    "initial direct/freeze/background cases on same Wi-Fi NAT; mobile-data independent-network attempts and automatic fallback recorded separately; signaling/control HTTP over ADB, actual UDP over device network",
     "first freeze receipt is a successful forward case in an otherwise failed attempt; reverse admission raced an existing controller",
     "reverse-only repeat uses bounded three-second 409 controller-release admission retry; no production protocol change",
     "physical UID freezing is distinct from whole-system suspend or Android Doze",
-    "native WebView shell started; no claim of comprehensive touch or visual UI acceptance"
+    "native WebView shell started; no claim of comprehensive touch or visual UI acceptance",
+    "two-NAT positive direct connection still unproven; both actual mobile directions used automatic relay fallback",
+    "first mobile browser attempt failed because the fixture did not service independent view pings; preserved failed receipt, corrected driver and complete repeat passed",
+    "forced Doze with user permanent idle whitelist, display awake and USB power is distinct from physical system suspend or natural screen-off Doze"
   ],
   "continuous_background_two_native_devices": [
     {
@@ -195,5 +243,182 @@
       "completed": true
     }
   ],
-  "continuous_background_condition": "user removed application freezing and allowed background execution; normal QA APK, no temporary battery exemption; display awake"
+  "continuous_background_condition": "user removed application freezing and allowed background execution; normal QA APK, no temporary battery exemption; display awake",
+  "two_independent_nat_networks_exercised": true,
+  "two_independent_nat_direct_connection_passed": false,
+  "mobile_network_native_attempts": [
+    {
+      "direction": "windows-to-android",
+      "distinct_public_ipv4_mappings": true,
+      "both_candidate_sets_exchanged": true,
+      "direct_confirmed": false,
+      "selected_families": [],
+      "closed_source": null,
+      "close_code": null,
+      "closed_after_ms": null,
+      "evidence_file": "device-two-nat-mobile-receipt.json"
+    },
+    {
+      "direction": "android-to-windows",
+      "distinct_public_ipv4_mappings": true,
+      "both_candidate_sets_exchanged": true,
+      "direct_confirmed": false,
+      "selected_families": [],
+      "closed_source": "native_gateway",
+      "close_code": 1000,
+      "closed_after_ms": 9766.0,
+      "evidence_file": "device-two-nat-mobile-reverse-receipt.json"
+    }
+  ],
+  "mobile_network_automatic_fallback": [
+    {
+      "direction": "windows-to-android",
+      "final_route": "relay",
+      "native_families": [
+        4
+      ],
+      "no_udp_business": true,
+      "hold_seconds": 65,
+      "early_write_route": "relay",
+      "late_write_route": "relay",
+      "writes": 2,
+      "unique_request_ids": 2,
+      "attempts": [
+        {
+          "route": "xrudp",
+          "start_ms": 59,
+          "closed_ms": 9274
+        },
+        {
+          "route": "lan",
+          "start_ms": 9274,
+          "closed_ms": 11708
+        }
+      ],
+      "uid_freeze_at_hold_end": "0",
+      "native_transports_after_close": 0,
+      "independent_view_survived": true,
+      "completed": true,
+      "browser_surface": "actual Windows Edge",
+      "evidence_file": "device-two-nat-mobile-browser-fallback-r2.json"
+    },
+    {
+      "direction": "android-to-windows",
+      "final_route": "relay",
+      "native_families": [
+        4
+      ],
+      "no_udp_business": true,
+      "hold_seconds": 65,
+      "early_write_route": "relay",
+      "late_write_route": "relay",
+      "writes": 2,
+      "unique_request_ids": 2,
+      "attempts": [
+        {
+          "route": "xrudp",
+          "start_ms": 59,
+          "closed_ms": 9328
+        },
+        {
+          "route": "lan",
+          "start_ms": 9329,
+          "closed_ms": 10601
+        }
+      ],
+      "uid_freeze_at_hold_end": "0",
+      "native_transports_after_close": 0,
+      "independent_view_survived": true,
+      "completed": true,
+      "browser_surface": "actual Android WebView via CDP",
+      "evidence_file": "device-two-nat-mobile-webview-fallback.json"
+    }
+  ],
+  "mobile_mapping_diagnostic": {
+    "context": "Android shell UID and Windows, not APK UID equivalence proof",
+    "same_socket_probe_order": "A/B/A destination ports on same public server",
+    "android_port_dependent_mapping_observed": true,
+    "windows_mapping_unchanged_in_this_probe": true,
+    "valid_probe_packets": 6,
+    "temporary_server_exited": true,
+    "android_probe_deleted_verified": true,
+    "not_a_complete_nat_classifier": true
+  },
+  "forced_android_doze_recovery_passed": true,
+  "forced_android_doze_recovery": [
+    {
+      "direction": "windows-to-android",
+      "hold_seconds": 65,
+      "doze_initial": {
+        "deep": "ACTIVE",
+        "force": "false",
+        "screen": "true",
+        "charging": "true"
+      },
+      "doze_entered": {
+        "deep": "IDLE",
+        "force": "true",
+        "screen": "true",
+        "charging": "true"
+      },
+      "doze_at_hold_end": {
+        "deep": "IDLE",
+        "force": "true"
+      },
+      "doze_restored": {
+        "deep": "ACTIVE",
+        "force": "false",
+        "screen": "true",
+        "charging": "true"
+      },
+      "existing_native_read_during_doze": true,
+      "same_android_pid": true,
+      "fresh_native_reconnected": true,
+      "receipt_authority_retained": true,
+      "previous_write_once": true,
+      "native_transports_after_close": 0,
+      "forced_doze_recovery": true,
+      "completed": true
+    },
+    {
+      "direction": "android-to-windows",
+      "hold_seconds": 65,
+      "doze_initial": {
+        "deep": "ACTIVE",
+        "force": "false",
+        "screen": "true",
+        "charging": "true"
+      },
+      "doze_entered": {
+        "deep": "IDLE",
+        "force": "true",
+        "screen": "true",
+        "charging": "true"
+      },
+      "doze_at_hold_end": {
+        "deep": "IDLE",
+        "force": "true"
+      },
+      "doze_restored": {
+        "deep": "ACTIVE",
+        "force": "false",
+        "screen": "true",
+        "charging": "true"
+      },
+      "existing_native_read_during_doze": true,
+      "same_android_pid": true,
+      "fresh_native_reconnected": true,
+      "receipt_authority_retained": true,
+      "previous_write_once": true,
+      "native_transports_after_close": 0,
+      "forced_doze_recovery": true,
+      "completed": true
+    }
+  ],
+  "forced_android_doze_scope": {
+    "permanent_idle_whitelist_already_enabled_by_user": true,
+    "test_did_not_modify_whitelist": true,
+    "display_awake_and_usb_powered": true,
+    "physical_soc_suspend_or_natural_screen_off_doze_proven": false
+  }
 }
