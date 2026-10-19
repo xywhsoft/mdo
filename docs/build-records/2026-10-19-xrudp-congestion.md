@@ -71,3 +71,22 @@ Android 用产品 SDK `a6906e2` 重建 ARM64/API26 原生库，并在私有应�
 Windows ADB 从 SDK 锁定的官方 platform-tools 37.0.1 包准备，按已锁定 SHA1/大小验证并记录 SHA256；通过原生 Windows USB 主机执行 `devices -l`，当前没有设备，未用 WSL 设备列表替代 Windows 检查。用户已回复稍后连接，未重复催问、安装或发布。收据 `.build/xrudp-android-congestion/validation.json`、`.build/android-platform-tools/verification.json`。
 
 剩余门槛为最新产品宿主的公网复验、完整长稳、Android 真机、双独立 NAT 和接入压力完整审查。当前版本 9 组长跑与历史 18 组基线继续保持各自计时。
+
+## 最新 SDK 的真实公网双机复验与接入边界
+
+产品 SDK `a6906e2` 的 1,292 个已提交来源在显卡服务器隔离目录 `/home/xs/.cache/mdo-xrudp-public-a6906e2-20261019-r1` 重建；归档 12,157,909 字节，SHA256 `6d09a6eb69c06f20ad786f34d943c02e1a40536b8d87088f9b7332dab89ddc81`。服务端宿主 3,658,768 字节，SHA256 `ef625351ae1050738cf8d7d87499759eb7de4a2fd0dfa2117c8b9234be965c92`。构建及探针使用独立用户单元，内存 1.5 GiB、CPU 100%、TasksMax512、禁用重启；一次完成构建和验证，无须重启生产网站。
+
+新宿主通过时间/等待/进程/持久化/根内移动和六扩展实际外层、嵌套 TCC/原生 Future 探针。随后与当前 Windows 宿主进行真实公网双向测试，均先核对实际宿主收据及 SDK，再为两端私有应用重新生成依赖标记：
+
+| 方向 | STUN | 建连 | 实际空闲 | 用例 |
+| --- | --- | ---: | ---: | --- |
+| Windows 控制 Linux | `222.186.10.53` | 407 ms | 65 s | `ae735c94ddf54720b385d67508ee6b23` |
+| Linux 控制 Windows NAT 后设备 | `ai.xywhsoft.com` | 547 ms | 65 s | `d772675f2984499d9a20f8ca8067e3f3` |
+
+双方真实原生公网映射、Noise、目标专属项目 HTTP/写入/live、只读拒绝、直连取消后的回执/中继、账号退出和正常原生退出均通过。账号协调使用私有测试站点；UDP 使用实际公网，不经过该站点的 SSH 隧道。测试没有覆盖双方分别位于两个独立 NAT 后的网络，不能把本表当作双 NAT 验收。
+
+收据 `.build/public-remote-<用例>/receipt.json` 以及 `.build/xrudp-public-congestion/{launch,remote-validation}.json`；日志 `forward.log`、`reverse-idle.log`。执行后重新核对全部 1,292 个远端来源及宿主哈希；两个临时原生进程均已退出，线上 `xs.service` 保持 PID `3030721` 和 active 状态。
+
+XRT `a148a934` 增加实际生成代码的确定性握手限速边界：同 IP 换端口、IPv6 scope 区分、64 桶满后的不驱逐/拒绝、已知地址剩余额度、时间窗口及总速率。在四个提交后构建中完成 40,000 次满表拒绝、1,024 轮虚拟窗口切换；全程禁止 XRT 堆分配。另以提交源码重建公开原生端点套件，Windows Select/IOCP 与 Linux ASan/UBSan/leaks Select/Epoll 四个进程通过 24 个生命周期场景及 464 个真实未认证 HELLO/伪 CID 包，认证连接存活、保留字节不增长，Engine 正常 join。来源、核心对象、二进制及实际用例集合均重验，记录 `D:/GIT/xrt/out/xrudp-endpoint-admission/acceptance.json`。没有复现运行时缺陷，未修改 SDK/产品运行时；这些有界检查仍不能代替大规模 CPU 洪泛/公平性验收。
+
+剩余为完整长稳、Android 真机、双独立 NAT、接入 CPU/公平性压力审查及最终逐项验收；历史长稳不重启、不改标。
