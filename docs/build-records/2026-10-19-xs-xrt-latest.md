@@ -1,6 +1,6 @@
 # XS 锁定当前 XRT 提交
 
-当前 XS 主仓和 mdo 实际使用的产品 SDK 均已锁定到 XRT 主分支最新已提交版本 `ccd6390eb913f7689e7d34551d33cc1d7553f442`。使用提交导出，不包含尚未完成的异步接口、文件系统和内存修改。下面保留前两次同步的记录，最新同步和验证见文末。
+当前 XS 主仓和 mdo 实际使用的产品 SDK 均已锁定到 XRT 主分支最新已提交版本 `b093114d3d78d9700a113518d9030ffe836c7602`。使用提交导出，包含已完成的 xrudp Future 接口，不包含其他任务尚未提交的文件系统、内存和核心单头修改。下面保留此前同步的记录，最新同步和验证见文末。
 
 - XS 主仓提交：`773a903`。快照来源、扩展来源和脚本导出来源同步更新。
 - 产品 SDK 提交：`7e34997e717f1fe91dd340430dc4662d32ee1358`，保留原有 xllm、session、xwork API 和产品修复。
@@ -33,3 +33,39 @@ Windows 和 Linux 实际 TCC 宿主再次通过单调计时、条件等待、进
 另对开发中的 xrudp Future 退出崩溃完成定位：`xrtMutexInit(&state->Lock)` 创建的是嵌入式锁，错误调用 `xrtMutexDestroy` 会释放整个 state 所在的首地址，随后清零和再次释放破坏堆缓存。应配对调用 `xrtMutexUnit`。修正后 Windows Select/IOCP 与 Linux Select/Epoll 的 IPv4/IPv6 共 8 组开发测试全部退出 0，Linux 同时通过 ASan/UBSan/泄漏检查。这是调用方的所有权错误，升级到字节相同的 XRT 不能单独修复它；该修正属于仍在开发的异步接口，不混入本次已提交 SDK 快照。
 
 证据：XS `.build/xrt-ccd6390-snapshot-tests.log`；兼容 SDK `.build/xrt-ccd6390-{windows,linux}-runtime.log`；mdo `.build/xrt-ccd6390-{byte-verification.json,lock.log,dependency-tests.log}`；XRT `dev/xrudp-async-mutex-unit-{windows,linux}.log`。没有发布、替换已安装程序或重启正在运行的长稳测试。
+
+## 当前同步到 b093114d：Future 接口集成与新宿主验证
+
+XRT `b093114d3d78d9700a113518d9030ffe836c7602` 已完成可选的 xrudp Future 接口。本次同步其已提交内容，并将三个新接口加入宿主导出和外层、嵌套 TCC 的真实运行验证。XS 主仓和产品 SDK 均在 `master` 分别提交构建修复与依赖集成。
+
+| 项目 | 提交或结果 |
+| --- | --- |
+| XS 主仓 Linux 构建修复 | `60ddc881c9358c6c2f38198b02ef6ed25d73eecb` |
+| XS 主仓 XRT 集成 | `ea50214b07dff02436e76a23a5c8ecef2a5e509b` |
+| 产品 SDK Linux 构建修复 | `35521dd` |
+| mdo 锁定的产品 SDK | `49dd88fac538ca3b4988975ea9d92ac45db223d4` |
+| bundle | 4,431,278 字节，SHA256 `4720b62477e17b07e5764b899723e5a5fc2026adf74d05613713c0ba498fa119` |
+| bundle 引用和前置 | `refs/heads/master`；`695988f7b8eec4b52bcc829a2d52210443c0bc69` |
+
+产品 SDK 的 47 个 xrudp 文件、XRT 单头和声明共 49 个文件，与上述 XRT 提交逐字节一致。原 xllm 3.1、session 3.0-dev、xwork 3.11/ABI 8 的文件指纹及其他扩展注册项保持一致；完整依赖验证也覆盖 image 的固定树哈希。`deps.lock` 和 `xs-xrt-current.bundle` 同步更新，未将 XS 主仓较新的其他产品 API 强行混入 mdo。
+
+本轮确认并修复了一个独立的 Linux 构建缺陷：Clang 的 `-dumpmachine` 返回 `x86_64-pc-linux-gnu`，实际 libc 头文件位于 `/usr/include/x86_64-linux-gnu`。此前将前者直接写入 TCC `CONFIG_TRIPLET`，导致 `<stdint.h>` 无法包含 `bits/libc-header-start.h`。现在优先使用编译器的 multiarch 信息，缺失时从实际预处理器搜索目录解析 libc 目录。GCC、Clang、平坦 libc 布局和非法目标文本有针对性回归；重建后的 Linux 实际 TCC 编译、执行全部通过。此前的嵌入式锁 `Destroy`/`Unit` 所有权错误已在 XRT Future 实现中修正，未用升级版本号替代实际修复。
+
+新产品宿主从干净、已提交的 `49dd88f` SDK 构建，使用 mdo compact profile。Windows 控制台与 GUI 子系统变体均成功链接；Linux 使用本机 Clang/native ABI，仅作为兼容性测试构建，不作为发行版 ABI 验收。实际文件与构建收据的版本、profile、大小和 SHA256 已核对：
+
+| 宿主 | 大小 | SHA256 |
+| --- | ---: | --- |
+| `.build/xrudp-future-host/xs.exe` | 3,711,488 | `6053fa2315f861a088bbd5ab8730672a81db2395dc9bc809ea8f0e5f18eadc03` |
+| `.build/xrudp-future-linux/xs` | 3,955,264 | `f61f2a4741f7f89abda8fa0d525f30decfa1c3c290b3f664cb2820c19d2f254d` |
+
+验证结果：
+
+- XS 快照来源及哈希校验通过；主仓 48 项快照、构建和扩展单元检查及 7 项构建来源检查通过。产品 SDK 40 项检查通过，其中 1 项按平台跳过；mdo 依赖与哈希 3 项通过。
+- Windows、Linux 新产品宿主分别通过六个扩展的 565 个公共导出及外层、嵌套 TCC 调用，涵盖 IPv4/IPv6 Noise、可靠字节/FIN、取消、关闭句柄，以及 Future 消息复制和 Engine 销毁后结果保留。保留现有直接操作接口的测试。
+- 两平台单调计时、条件等待、进程超时、XS 60 ms 定时器、Unix 起点、持久化日历及根内禁止覆盖移动回归通过；mdo 各 12 组真实会合、NAT、双族选择、黑洞和身份校验场景通过。
+- Windows 新产品宿主进一步通过真实账号、直连 HTTP/live/回执和只读权限测试；独立 NAT 模拟器丢弃 IPv6 数据后，IPv4 接管成功，原路由取消、一次性会合、重放隔离、中继兜底、恢复及退出全部通过。测试只使用隔离网站与临时账号。
+- XS 主仓 xrudp-only 宿主在两平台通过服务类型的字节/消息/游戏流、固定身份与上下文、重入取消、重载保留、错误回滚和禁用测试。这些主仓测试构建保留提交前的真实 `2f2b25d-dirty` 收据；未将其伪装成提交后的二进制。
+
+证据：主仓 `.build/xrudp-future-{compiler-unit,provenance-unit,snapshot-check}.log`、`xrudp-future-sdk-{windows,linux-fixed}.log` 和 `xrudp-future-service-{windows,linux}-test.log`；产品 SDK `.build/xrudp-future-{windows,linux}-{build,runtime,sdk}.log`；mdo `.build/xrudp-future-{sdk-byte-verification.json,lock.json,dependency-tests.log}`、`xrudp-future-{windows,linux}-rendezvous.log` 和 `xrudp-future-windows-remote.log`。
+
+正在运行的九组隔离长稳仍保留原二进制和计时，其旧运行时结果不计为本次 Future 运行时的 72 小时验收。XRT 原生 Future 的 68 组固定提交验收证据另存于 `out/xrudp-endpoint-future/acceptance-receipt.json`，当前源文件和二进制哈希复核通过。整体 xrudp 长期任务仍有最终长稳、实体 Android 和两端独立 NAT 等验收工作；本次完成依赖升级和兼容性验证，没有进行安装包发布或线上替换。
