@@ -15,6 +15,7 @@ import os
 import select
 import struct
 import subprocess
+import sys
 import time
 import traceback
 import uuid
@@ -27,6 +28,9 @@ from test_remote_live import LiveRpc
 from remote_website_fixture import WEBSITE_HOST
 import test_remote_rudp as native
 from test_rudp_discovery import Oracles
+
+sys.path.insert(0,str(ROOT/'tools'))
+import build_mdo
 
 HOOK='''static bool SoakStats(MdoApiContext* C) {
     xvalue* V=xrtValueObject();
@@ -100,6 +104,9 @@ def main():
     parser.add_argument('--exercise-expiry',action='store_true',help='short regression only: make local access due while retaining the session')
     parser.add_argument('--refresh-delay-ms',type=int,default=0,help='short fixture only: delay its native refresh client, never production or long acceptance')
     args=parser.parse_args(); assert 20<=args.seconds<=7*86400
+    lock=build_mdo.load_object(ROOT/'deps.lock')
+    build_mdo.verify_host_receipt(args.host,lock,False)
+    app_hash=source_hash(ROOT/'app')
     assert not args.exercise_expiry or args.seconds<3600,'never accelerate expiry in 72h acceptance'
     assert 0<=args.refresh_delay_ms<=2000 and (not args.refresh_delay_ms or args.seconds<3600)
     assert min(args.period,args.upload_every,args.idle_every,args.idle_seconds,args.reconnect_every)>0
@@ -116,6 +123,8 @@ def main():
     host_receipt=json.loads(args.host.with_name(args.host.name+'.build.json').read_text(encoding='utf-8'))
     assert host_receipt['binary_sha256']==state['host_sha256'],'host receipt does not match actual bytes'
     state['host_sdk_revision']=host_receipt['revision']
+    state['xrt_commit']=lock['xrt']['commit']
+    state['xs_commit']=lock['xserver']['commit']
     processes=[]; started=None; wall=None; last_tick=None; saved=0; baselines={}; inhibited=False
     def save(force=False):
         nonlocal saved
@@ -155,6 +164,14 @@ def main():
                     assert value['handles']-baselines[pid]['handles']<256,'handle growth exceeded'
         save()
     def setup(site,home):
+        assert source_hash(ROOT/'app')==app_hash==source_hash(site),'application changed while copying soak fixture'
+        # The root cache may be from an older SDK. Stamp only this disposable
+        # copy with the same locked dependency that the actual host verified.
+        unity=site/'generated/mdo_unity.c'
+        unity.write_text(build_mdo.generated_unity(lock,build_mdo.source_list()),encoding='utf-8')
+        (site/'generated/deps.lock').write_text(json.dumps(lock,indent=2)+'\n',encoding='utf-8')
+        state['generated_unity_sha256']=hashlib.sha256(unity.read_bytes()).hexdigest()
+        assert source_hash(ROOT/'app')==app_hash,'root application must remain unchanged'
         native.setup(site,home)
         if args.refresh_delay_ms:
             client=site/'src/account/client.c'
