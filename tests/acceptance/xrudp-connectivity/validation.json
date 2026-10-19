@@ -1,0 +1,198 @@
+{
+  "schema": 1,
+  "refs": {
+    "xrt": "0c46aca7519c5513c51b15de61d73d90ebca79b6",
+    "xs": "585214bba855f0cc74518aec6dae02c54aa77241",
+    "sdk": "5cdc54eb7ca76518612bc1ffc70eb6873333d4f6",
+    "mdo_product": "4d2361d2",
+    "core": "3d55ec41e13f0884ffe840d44a57a0189d9310f3"
+  },
+  "automated": [
+    {
+      "name": "sdk-runtime",
+      "exit": 0,
+      "seconds": 1.72
+    },
+    {
+      "name": "sdk-core",
+      "exit": 0,
+      "seconds": 1.52
+    },
+    {
+      "name": "rendezvous-current",
+      "exit": 0,
+      "seconds": 15.17
+    },
+    {
+      "name": "rendezvous-reverse-current",
+      "exit": 0,
+      "seconds": 16.09
+    },
+    {
+      "name": "discovery-current",
+      "exit": 0,
+      "seconds": 15.56
+    },
+    {
+      "name": "remote-dual-nat-current",
+      "exit": 0,
+      "seconds": 14.2
+    },
+    {
+      "name": "remote-block4-current",
+      "exit": 0,
+      "seconds": 14.16
+    },
+    {
+      "name": "remote-block6-current",
+      "exit": 0,
+      "seconds": 15.05
+    },
+    {
+      "name": "browser-signals-current",
+      "exit": 0,
+      "seconds": 0.11
+    }
+  ],
+  "evidence_sha256": {
+    "check-test.log": "6f64f5af8ea75a838e3687a795c47399e13097e2d3be317e5be6af21b078a371",
+    "single-check.log": "6f64f5af8ea75a838e3687a795c47399e13097e2d3be317e5be6af21b078a371",
+    "rendezvous-linux-asan-r2.log": "6b00e7694de232f519d5729c06f36f580b7d684f6a802ac3e1ec386203ee272b",
+    "server-release-validation.json": "c952d7dfbe4fbc92569465831def064f3ac4ae5e3add65dae42bf128bbeeb859",
+    "stun-release-validation.log": "db196ae89593cc51585bdeee460430b6c1e1f710b251e838acd1347799d73412",
+    "connector-current.log": "cc92026e95039b5e9237e8a79feb0261897e9ecb4875b22880485bb7c68ca814",
+    "connector-refresh-current.log": "50db0cd1e4d896841144f6c53d4f8dffc75f6687085d192aba781e93da1484a7"
+  },
+  "sanitizers": [
+    "ASan",
+    "UBSan",
+    "leak detection"
+  ],
+  "checks_cases": 9,
+  "single_header_cases": 9,
+  "model_calls": 0,
+  "production_accounts_or_home_written": false,
+  "clients_publicly_released": false,
+  "public_website_or_update_manifest_modified": false,
+  "phone": {
+    "qa_apk_sha256": "ded3f079ad426079330c1285d3707037a8e7fa314d17daf29b3e4c05912140f2",
+    "installed_qa_matches": true,
+    "qa_stopped": true,
+    "wifi_restored": true,
+    "force_doze": "false",
+    "deep_idle": "ACTIVE",
+    "usb_stay_on": "15",
+    "debug_property_empty": true,
+    "production_installation_unchanged": true
+  },
+  "public_mobile_direct": [
+    {
+      "direction": "public-linux-to-android",
+      "handshake_ms": 1704.0,
+      "native_dialers": [
+        2
+      ],
+      "write_once": true,
+      "live": true,
+      "readonly": true,
+      "relay_receipt_after_cancel": true,
+      "native_transports_after_close": 0
+    },
+    {
+      "direction": "android-to-public-linux",
+      "handshake_ms": 515.0,
+      "native_dialers": [
+        1
+      ],
+      "write_once": true,
+      "live": true,
+      "readonly": true,
+      "relay_receipt_after_cancel": true,
+      "native_transports_after_close": 0
+    }
+  ],
+  "two_nat_browser_fallback": [
+    {
+      "direction": "windows-to-android",
+      "final_route": "relay",
+      "attempts": [
+        {
+          "route": "xrudp",
+          "start_ms": 49,
+          "closed_ms": 10075
+        },
+        {
+          "route": "lan",
+          "start_ms": 10075,
+          "closed_ms": 12508
+        }
+      ],
+      "early_write_route": "relay",
+      "late_write_route": "relay",
+      "writes": 2,
+      "unique_request_ids": 2,
+      "native_transports_after_close": 0,
+      "browser_surface": "actual Windows Edge",
+      "independent_view_survived": true
+    },
+    {
+      "direction": "android-to-windows",
+      "final_route": "relay",
+      "attempts": [
+        {
+          "route": "xrudp",
+          "start_ms": 68,
+          "closed_ms": 10121
+        },
+        {
+          "route": "lan",
+          "start_ms": 10123,
+          "closed_ms": 12552
+        }
+      ],
+      "early_write_route": "relay",
+      "late_write_route": "relay",
+      "writes": 2,
+      "unique_request_ids": 2,
+      "native_transports_after_close": 0,
+      "browser_surface": "actual Android WebView via CDP",
+      "independent_view_survived": true
+    }
+  ],
+  "wifi_actual_browsers": [
+    {
+      "direction": "windows-to-android",
+      "final_route": "xrudp",
+      "early_write_route": "relay",
+      "late_write_route": "xrudp",
+      "writes": 2,
+      "unique_request_ids": 2,
+      "native_transports_after_close": 0,
+      "browser_surface": "actual Windows Edge",
+      "independent_view_survived": true
+    },
+    {
+      "direction": "android-to-windows",
+      "final_route": "xrudp",
+      "early_write_route": "relay",
+      "late_write_route": "xrudp",
+      "writes": 2,
+      "unique_request_ids": 2,
+      "native_transports_after_close": 0,
+      "browser_surface": "actual Android WebView via CDP",
+      "independent_view_survived": true
+    }
+  ],
+  "server": {
+    "stun_active": true,
+    "stun_sha256": "9d079e35b918217e6973eecbe663aefd1ada47c9649f1965a8d85edf7fb4d610",
+    "website_unchanged": true,
+    "owned_public_native_exited": true,
+    "version": "xrudp-stun xs=585214bba855f0cc74518aec6dae02c54aa77241 xrudp=0c46aca7519c5513c51b15de61d73d90ebca79b6 core=3d55ec41e13f0884ffe840d44a57a0189d9310f3",
+    "external_ipv4_binding_passed": true
+  },
+  "two_nat_direct_succeeded": false,
+  "all_networks_reachable_claimed": false,
+  "long_soak_acceptance_claimed": false,
+  "existing_soak_binary_preserved": true
+}
