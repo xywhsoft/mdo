@@ -1,5 +1,19 @@
 # xrudp 持续拥塞与当前 SDK 验证
 
+## 真实进程暂停恢复与浏览器自动回退
+
+`tests/test_remote_process_pause.py` 在独立测试子进程中使用 Windows NtSuspendProcess/NtResumeProcess 或 Linux SIGSTOP/SIGCONT（pidfd 绑定进程），保留网站夹具运行。只操作本夹具创建的进程句柄，不接受外部 PID；finally 中恢复后清理。暂停时实际 HTTP 无响应，恢复后验证原生业务。运行时仍为 `3d55ec41`，产品 SDK `a6906e2`，应用来自干净的已提交副本 `2da7ad59`；没有缩短任何产品期限。
+
+Windows/Linux × IPv4/IPv6 × 3 秒/65 秒八个逻辑组合全部通过。3 秒场景恢复原有直连、实时订阅及中继；65 秒场景超过原生 60 秒空闲期限，旧直连确实关闭，同设备中继恢复并重新建立直连。每次继续通过 Unit/restore、撤销、账号切换和注销回归，子进程均被回收。
+
+测试代码提交 `b621acbc`，随后 `0c60bf0a` 修正预期关闭的判定：Windows 可能返回 TCP ConnectionResetError，而非关闭帧或 EOF。初次 Windows 矩阵在这里判失败，原日志保留；修正后复验两个 Windows 超时场景。Linux 四项与 Windows 短暂停两项已通过原先更严格的关闭判定，没有为五行测试修正重复这些已通过场景。各项测试源码、应用源码、宿主及日志哈希分别记录，未将不同测试版本混写成同一文件哈希。
+
+同一干净应用和当前 SDK 宿主还通过真实 Edge `155.0.4283.62` 无头浏览器回归：双族 UDP 同时黑洞后自动回退 LAN，以及 LAN TLS 无响应时继续回退中继。每场两次实际写入对应两个唯一请求 ID，未重复执行；关闭后原生 transport 计数均为零。Playwright 仅使用已有开发工具，不引入产品依赖。此项是浏览器传输代码验证，不代表原生 WebView 外壳或发行 ABI 验收。
+
+统一收据 `.build/xrudp-process-pause/acceptance.json` 复核了八项进程结果、两项浏览器结果、2,561 个应用提交文件、静态分析的 146 个输入与报告哈希。XRT 同期完成全部 20 个 C 翻译单元的 Clang 路径分析及两条状态不变量候选路径复核，未确认新运行时缺陷；完整告警和复核说明见 XRT `extlibs/xrudp/docs/static-analysis-validation.md`。
+
+进程暂停同时停止同一 mdo 子进程内的两个原生端点；不等于单端暂停、物理系统休眠、Android Doze、双独立 NAT 或 72 小时验收。既有 27 组长稳继续保留原来源、二进制和时钟，未安装、发布或重启生产服务。
+
 ## 已提交源码的独立构建复核
 
 从 mdo `2da7ad5928a35867f517d679f4b6e294bbaded51` 的 Git 提交检出独立普通副本（master，无新分支、无 worktree），仅含 2,561 个已跟踪文件，没有带入主工作区 152 个既有改动或 7 个未跟踪的传输源文件。使用锁定的产品 SDK `a6906e2`、XRUDP 运行时 `3d55ec41`；Windows 与 WSL Git 环境均确认干净，全部提交文件重新计算哈希一致。
