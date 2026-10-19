@@ -90,3 +90,15 @@ Windows ADB 从 SDK 锁定的官方 platform-tools 37.0.1 包准备，按已锁�
 XRT `a148a934` 增加实际生成代码的确定性握手限速边界：同 IP 换端口、IPv6 scope 区分、64 桶满后的不驱逐/拒绝、已知地址剩余额度、时间窗口及总速率。在四个提交后构建中完成 40,000 次满表拒绝、1,024 轮虚拟窗口切换；全程禁止 XRT 堆分配。另以提交源码重建公开原生端点套件，Windows Select/IOCP 与 Linux ASan/UBSan/leaks Select/Epoll 四个进程通过 24 个生命周期场景及 464 个真实未认证 HELLO/伪 CID 包，认证连接存活、保留字节不增长，Engine 正常 join。来源、核心对象、二进制及实际用例集合均重验，记录 `D:/GIT/xrt/out/xrudp-endpoint-admission/acceptance.json`。没有复现运行时缺陷，未修改 SDK/产品运行时；这些有界检查仍不能代替大规模 CPU 洪泛/公平性验收。
 
 剩余为完整长稳、Android 真机、双独立 NAT、接入 CPU/公平性压力审查及最终逐项验收；历史长稳不重启、不改标。
+
+## 本机恶意 UDP 输入下的进展与资源验收
+
+XRT `82e39f64` 新增限时公开 API 夹具及 `tools/test_xrudp_ingress.py`：两条真实 Worker、八条认证流，独立发送器向回环 UDP 混合发送非法格式、合法 HELLO 和指向已知 CID 的错误来源密文。没有替换 UDP/core 函数。Windows 调度使用有限 256 包批次达到约 6,000 包/秒，不修改全机计时器精度。
+
+提交后重建的 Windows GCC Select/IOCP、Linux Clang ASan/UBSan/leaks Select/Epoll，IPv4/IPv6 共八个八秒场景全部通过，累计实际发包 388,352 个。所有 64 条流实例在每个 500ms 采样区间持续进展，内容校验包含完整偏移字节，最慢/最快总进展比至少 0.9581。心跳最大间隔 21.776ms，逻辑预约字节始终不变、在途账本不越界；观测到的最大私有内存增长为 15,998,976 字节（包括诊断开销），低于 32MiB 增长上限，句柄不越界。四个 Linux 进程开启 8MiB ASan quarantine 与泄漏检查；全部正常退出并 join。
+
+另记录 129,190 个已知 CID 的错误来源丢弃、512 份受限 RETRY。CPU 数据包含服务端及八个客户端的两条 Worker，仅作该夹具的实测，不能当成服务端单独 CPU 或跨系统性能对比。此验收覆盖测得的本机负载，不保证互联网容量或任意 DDoS 下仍可用。
+
+开发阶段修正了测试夹具的预期取消处理、Windows 短等待导致发包不足、最终退出采样竞态和诊断 EOF 提示，未将其误报为产品缺陷。正式记录 `D:/GIT/xrt/out/xrudp-ingress/acceptance.json` 已重验源文件、核心对象、可执行文件及逐用例记录。153 个实际来源/元数据归档 `frozen-82e39f64-ingress-source.tar.gz`，SHA256 `9980efad652e76027141207abac404a84191c7265bfe9929a68a3b64ac55fc7c`。
+
+运行时仍为 `3d55ec41`，产品 SDK、依赖锁和安装版本均未变；无需重启或重置长稳。当前版本的业务长跑已完成一次正常的一小时重连，继续保持原时钟，尚未达到 72 小时。剩余为完整长稳、Android 真机、双独立 NAT 和最终逐项代码/交付审查。
