@@ -49,3 +49,23 @@ mdo 提交 `13661af2` 修正长跑测试夹具：启动前核对实际宿主和�
 本次 `3d55ec41` 已另外冻结源码、核心和驱动，启动 4 组 Windows、4 组 Linux 原生 Future 多流/消息/游戏用例及 1 组当前 SDK 的 mdo 业务长跑。8 组原生用例均先完成短测和退出后的 Future 资源归零校验。固定构建、进程、原始开始时刻、远端单元身份及哈希保存在 `D:/GIT/xrt/out/xrudp-native-soak/congestion-long-runs.json`。9 组当前都只记作运行中，尚未达到 72 小时；原 18 组仅作为历史基线保留，不能替代当前版本的验收。
 
 仍需当前运行时独立线路完整矩阵、最新宿主的公网双机复验、最终长稳、刷新后的实体 Android、双独立 NAT 和接入限速表压力审查。线上 `xs.service` PID `3030721` 保持运行，本轮未改动生产服务。
+
+## 独立线路矩阵与新版 Android QA
+
+当前运行时的独立线路完整矩阵已完成。基于 XRT `9f449361` 的测试/文档快照重新构建，逐个确认生产 C/头文件与 `3d55ec41` 相同：Windows GCC Select/IOCP、Linux Clang ASan/UBSan/leaks Select/Epoll，IPv4/IPv6 和双 Noise 角色，共 2,080 个实际原生进程，全部正常 join。覆盖默认流/五流消息游戏 32 个、STOP/RESET/双方发起关闭 48 个、负向与合法乱序 1,920 个、地址重绑定 16 个、MTU 增长黑洞 32 个、缩小恢复 16 个、迁移后尺寸重建 16 个；执行 3,520 份未认证变异。笛卡尔积、驱动、来源及二进制哈希均重新核对。
+
+证据：`D:/GIT/xrt/out/xrudp-wire-interop/congestion-wire-acceptance.json`；Windows 二进制 SHA256 `def882a8a05c70946a3ab7301217af733c59e33a864e2538cd23bf932b1765e2`，Linux `d7ec8aa68e1dbb3dd3b2600db92841ce6d478e50b33d575ba2110043e8b02973`。154 个来源/驱动的不可变归档为 `frozen-3d55-congestion-wire-source.tar.gz`，SHA256 `de66a735cbc4711d7b77ba7416e8f95c0037b44a63217c360281a635085558ee`；旧运行时证据保留。本轮未修改产品运行时代码。
+
+Android 用产品 SDK `a6906e2` 重建 ARM64/API26 原生库，并在私有应用副本内生成当前依赖标记，原工作区应用树哈希保持 `0a5f9b305c4adf916a1948ed835df80baab5b4eb279468e0d541061243071e38`。新测试包目录 `.build/xrudp-android-congestion`，独立包名 `org.xleaves.mdo.xrudp.congestionqa`、独立 Home 和开发签名；没有覆盖已有应用。
+
+| 产物 | 字节 | SHA256 |
+| --- | ---: | --- |
+| `native/libxs.so` | 3,479,576 | `559cbb723b9b5d4cdf273eef21302358c6aed1bfcd913ea63903f127e4cce11d` |
+| `app.xrtpack` | 1,453,356 | `8194f3e2db4de6f46ab3f20ed65dea538625713e4be4bfdddd7ed2b475348d3f` |
+| `mdo-xrudp-congestion-qa.apk` | 4,993,702 | `8ea1c35806b929f30ea119389a5e027c028ddb0e1f79b45a09fe2c35b7a76565` |
+
+已核对实际 APK 内的原生库及 pack 与构建产物相同、ELF ARM64/API 架构、LOAD 段及未压缩库的 16 KiB 对齐、v2/v3 签名、SDK 收据和原生宿主导出注册表。导出注册表检查不等于在 Android 执行了 Native/Future；这些入口不是可用 `dlsym` 证明执行的 ELF 导出。正式真机用例仍待完成。
+
+Windows ADB 从 SDK 锁定的官方 platform-tools 37.0.1 包准备，按已锁定 SHA1/大小验证并记录 SHA256；通过原生 Windows USB 主机执行 `devices -l`，当前没有设备，未用 WSL 设备列表替代 Windows 检查。用户已回复稍后连接，未重复催问、安装或发布。收据 `.build/xrudp-android-congestion/validation.json`、`.build/android-platform-tools/verification.json`。
+
+剩余门槛为最新产品宿主的公网复验、完整长稳、Android 真机、双独立 NAT 和接入压力完整审查。当前版本 9 组长跑与历史 18 组基线继续保持各自计时。
