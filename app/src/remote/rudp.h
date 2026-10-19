@@ -3,6 +3,7 @@
 #include <xsbase.h>
 
 #if defined(XS_USE_XRUDP)
+#include <xrudp.h>
 /* One authenticated, bidirectional message transport and one private Engine.
  * The owner calls every API below; only cancellation may originate elsewhere.
  * Destroy joins that Engine before releasing application code/data. Poll is
@@ -17,7 +18,8 @@ typedef struct MdoRudpConfig {
     xnetaddr Local;
     unsigned char Private[32], PeerPublic[32], Scope[16], Binding[32];
     size_t MessageLimit;
-    bool Listen;
+    uint64 TraversalUntil; /* Local absolute monotonic session deadline. */
+    bool Listen, Traversal;
 } MdoRudpConfig;
 /* Fixed-storage endpoint jobs. A mapping or warmup completion is only a hint,
  * never identity/reachability evidence. Only Confirmed admits messages. */
@@ -35,8 +37,9 @@ typedef struct MdoRudpInfo {
     uint32 NativeReason;
     uint32 DialAttempts, LastDialReason;
     uint16 CloseCode;
-    bool Opened, Confirmed, Closed, PeerClosed;
+    bool Opened, Confirmed, Closed, PeerClosed, NativeInitiator;
     MdoRudpProbe Discovery, Warmup;
+    xrudpcheckstate Check;
 } MdoRudpInfo;
 typedef bool (*MdoRudpMessageProc)(bool Binary, xbytesview Message, void* Data);
 
@@ -55,7 +58,8 @@ bool MdoRudpGetInfo(MdoRudpTransport* Transport, MdoRudpInfo* Info);
 bool MdoRudpDiscover(MdoRudpTransport* Transport, const xnetaddr* Server, uint32 TimeoutMs);
 bool MdoRudpWarmup(MdoRudpTransport* Transport, const xnetaddr* Candidates, size_t Count, uint32 TimeoutMs);
 void MdoRudpCancelProbes(MdoRudpTransport* Transport);
-/* Initiator only, one attempt per handle; false is terminal. Native callbacks
+/* Native dialer only (may differ from UI controller), one attempt per handle;
+ * false is terminal. Native callbacks
  * continue during this bounded wait. The responder observes Confirmed via Info. */
 bool MdoRudpConnect(MdoRudpTransport* Transport, const xnetaddr* Remote, uint32 TimeoutMs);
 /* Nonblocking initiation with the same one-attempt/deadline contract. A

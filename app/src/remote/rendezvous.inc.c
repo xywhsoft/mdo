@@ -23,6 +23,9 @@ typedef struct MdoPeerLane {
     uint8 Kinds[MDO_PEER_CANDIDATES];
     size_t Count;
     xnetfamily Family;
+    uint64 CheckAt;
+    unsigned Dialer; /* 0 undecided, 1 controller, 2 target. Immutable once set. */
+    bool NativeDialed;
     bool MappingStarted, MappingComplete, CandidatesSent, RemoteReady, Dialed, Failed;
 } MdoPeerLane;
 struct MdoPeerSession {
@@ -151,7 +154,7 @@ xvalue* MdoPeerOfferValue(const MdoPeerOffer* O)
     if (!O || O->Used || MdoDeadlineExpired(O->Until)) return NULL;
     char Public[65], Scope[33], Binding[65]; MdoPeerHex(O->Public,32,Public); MdoPeerHex(O->Scope,16,Scope); MdoPeerHex(O->Binding,32,Binding);
     xvalue* V=xrtValueObject(); xvalue* Families=xrtValueArray();
-    bool Ok=V && Families && xrtValueObjectSetNew(V,XRT_STR_LITERAL("version"),xrtValueUInt(1)) &&
+    bool Ok=V && Families && xrtValueObjectSetNew(V,XRT_STR_LITERAL("version"),xrtValueUInt(2)) &&
         MdoPeerTextSet(V,"peer_id",O->Info.Peer) && MdoPeerTextSet(V,"runtime_id",O->Info.Runtime) &&
         MdoPeerTextSet(V,"owner_id",O->Info.Owner) && MdoPeerTextSet(V,"mode",O->Info.ReadOnly?"view":"control") &&
         MdoPeerTextSet(V,"nonce",O->Info.Nonce) && MdoPeerTextSet(V,"public_key",Public) &&
@@ -167,7 +170,7 @@ static bool MdoPeerBindAuthority(const MdoPeerInfo* Info, MdoRudpConfig* Config)
      * modified mode/owner/runtime/peer/nonce/family cannot share this Noise
      * application context with the target's immutable relay-granted metadata. */
     xsha256 Hash; unsigned char Binding[32], Flags[2]={Info->ReadOnly?1u:0u,(uint8)Config->Local.Family};
-    static const char Domain[]="mdo.peer.authority.v1";
+    static const char Domain[]="mdo.peer.authority.v2";
     xrtSha256Init(&Hash);
     bool Bound=xrtSha256Update(&Hash,Domain,sizeof(Domain)-1) && xrtSha256Update(&Hash,Config->Binding,32) &&
         xrtSha256Update(&Hash,Info->Peer,32) && xrtSha256Update(&Hash,Info->Runtime,32) &&
@@ -196,7 +199,7 @@ static MdoPeerSession* MdoPeerStart(const MdoPeerInfo* Info, const MdoPeerPolicy
     if (S->Cancel && xrtX25519Public(Config->Private,S->Public)) for (unsigned i=0;i<2;++i) {
         MdoPeerLane* L=&S->Lanes[i]; if (!(Families&(1u<<i))) continue;
         L->Family=i ? XNET_FAMILY_IPV6:XNET_FAMILY_IPV4;
-        MdoRudpConfig C=*Config;
+        MdoRudpConfig C=*Config; C.Traversal=true; C.TraversalUntil=S->Until;
         if (MdoPeerLocal(&C,Policy,L->Family) && MdoPeerBindAuthority(Info,&C)) L->Raw=MdoRudpStart(&C,S->Cancel);
         xrtSecureZero(&C,sizeof(C)); L->Failed=!L->Raw; Any|=L->Raw!=NULL;
     }
@@ -226,7 +229,7 @@ MdoPeerSession* MdoPeerInitiate(const xvalue* Offer, uint64 Owner, const MdoPeer
     cstr Mode=MdoPeerText(Offer,"mode",8), AdvertisedOwner=MdoPeerText(Offer,"owner_id",20);
     snprintf(OwnerText,sizeof(OwnerText),"%llu",(unsigned long long)Owner);
     if (!Policy || !Signal || xrtValueType(Offer)!=XVALUE_OBJECT || xrtValueCount(Offer)!=10 ||
-        !MdoPeerUInt(xrtValueObjectGet(Offer,XRT_STR_LITERAL("version")),&Version) || Version!=1 ||
+        !MdoPeerUInt(xrtValueObjectGet(Offer,XRT_STR_LITERAL("version")),&Version) || Version!=2 ||
         !Mode || (strcmp(Mode,"view") && strcmp(Mode,"control")) || !AdvertisedOwner || strcmp(AdvertisedOwner,OwnerText) ||
         !MdoPeerMetadata(&Info,MdoPeerText(Offer,"peer_id",32),MdoPeerText(Offer,"runtime_id",32),Owner,!strcmp(Mode,"view")) ||
         !MdoPeerUnhex(MdoPeerText(Offer,"nonce",32),16,NULL,true) ||
@@ -264,15 +267,22 @@ bool MdoPeerInput(MdoPeerSession* S, const xvalue* V)
     uint64 Family=0;
     if (!MdoPeerUInt(xrtValueObjectGet(V,XRT_STR_LITERAL("family")),&Family) || (Family!=4 && Family!=6) ||
         !(S->Families&(Family==4?1u:2u))) return false;
+    MdoPeerLane* L=&S->Lanes[Family==6 ? 1:0];
+    if (!S->Initiator && !strcmp(Type,"rudp_dial")) {
+        uint64 Dialer=0;
+        if (xrtValueCount(V)!=5 || !MdoPeerUInt(xrtValueObjectGet(V,XRT_STR_LITERAL("dialer")),&Dialer) ||
+            (Dialer!=1 && Dialer!=2) || (L->Dialer && L->Dialer!=Dialer)) return false;
+        if (S->Selected && S->Selected!=(xnetfamily)Family) return true;
+        L->Dialer=(unsigned)Dialer; return true;
+    }
     if (!strcmp(Type,S->Initiator?"rudp_selected":"rudp_select")) {
         if (xrtValueCount(V)!=4 || (S->Selected && S->Selected!=(xnetfamily)Family) ||
-            (S->Initiator && !S->Selected)) return false;
+            (S->Initiator && !S->Selected) || !L->Dialer) return false;
         S->Selected=(xnetfamily)Family;
         if (S->Initiator) S->SelectionAck=true;
         return true; /* Exact repeats never change the selected family or deadline. */
     }
     if (strcmp(Type,S->Initiator?"rudp_answer":"rudp_candidates") || xrtValueCount(V)!=5) return false;
-    MdoPeerLane* L=&S->Lanes[Family==6 ? 1:0];
     const xvalue* List=xrtValueObjectGet(V,XRT_STR_LITERAL("candidates"));
     size_t Count=xrtValueCount(List); xnetaddr Addresses[8]; uint8 Kinds[8];
     size_t Limit=S->Families==3u ? MDO_PEER_CANDIDATES/2u:MDO_PEER_CANDIDATES;
@@ -395,19 +405,44 @@ static bool MdoPeerLanePoll(MdoPeerSession* S, MdoPeerLane* L)
         if (!MdoPeerSignal(S,V)) return MdoPeerFail(S,"signal_unavailable");
         L->CandidatesSent=true;
     }
-    if (L->RemoteReady && L->CandidatesSent && !L->Dialed && (!S->Initiator || L->Family!=XNET_FAMILY_IPV4 ||
-        !(S->Families&2u) || S->Lanes[1].Failed || MdoDeadlineExpired(S->AlternateAt))) {
-        /* Candidate fallback is owned by the transport, before application
-         * admission; never rebuild or replay a confirmed application stream. */
-        (void)MdoRudpWarmup(L->Raw,L->Candidates,L->Count,5000); L->Dialed=true;
-        if (S->Initiator) {
+    if (L->RemoteReady && L->CandidatesSent && !L->Dialed) {
+        uint64 Remaining=MdoDeadlineRemainingUs(S->Until)/1000u;
+        if (Remaining<1000 || !MdoRudpWarmup(L->Raw,L->Candidates,L->Count,(uint32)Remaining)) {
+            MdoPeerLaneDrop(L); return false;
+        }
+        L->Dialed=true; L->CheckAt=MdoMonotonicUs();
+    }
+    bool FamilyReady=L->Family!=XNET_FAMILY_IPV4 || !(S->Families&2u) ||
+        S->Lanes[1].Failed || MdoDeadlineExpired(S->AlternateAt);
+    if (S->Initiator && !L->Dialer && L->Dialed && FamilyReady) {
+        unsigned Dialer=Info.Check.Replies ? 1u:
+            (Info.Check.Confirmations && MdoMonotonicUs()-L->CheckAt>=MDO_PEER_ALTERNATE_US ? 2u:0u);
+        if (Dialer) {
+            xvalue* V=MdoPeerMessage(S,"rudp_dial");
+            bool Ok=V && xrtValueObjectSetNew(V,XRT_STR_LITERAL("family"),xrtValueUInt(L->Family)) &&
+                xrtValueObjectSetNew(V,XRT_STR_LITERAL("dialer"),xrtValueUInt(Dialer));
+            if (!Ok) { xrtValueRelease(V); return MdoPeerFail(S,"resources_unavailable"); }
+            if (!MdoPeerSignal(S,V)) return MdoPeerFail(S,"signal_unavailable");
+            L->Dialer=Dialer;
+        }
+    }
+    if (L->Dialer) {
+        bool NativeInitiator=(L->Dialer==1)==S->Initiator;
+        if (Info.Confirmed && Info.NativeInitiator!=NativeInitiator) { MdoPeerLaneDrop(L); return false; }
+        if (NativeInitiator && !L->NativeDialed && Info.Check.Replies) {
+            /* Only return-path validated addresses precede the ordinary
+             * authenticated candidates. Same socket, fixed total deadline,
+             * one chosen native dialer; no application request is replayed. */
             xnetaddr Ordered[8]; size_t Count=0;
-            for (unsigned Kind=1;Kind<3;++Kind) for (size_t i=0;i<L->Count;++i)
-                if (L->Kinds[i]==(Kind==1 ? 1u:0u)) Ordered[Count++]=L->Candidates[i];
-            uint64 Remaining=MdoDeadlineRemainingUs(S->Until)/1000u;
-            if (!Remaining || !MdoRudpDialCandidates(L->Raw,Ordered,Count,(uint32)Remaining)) {
-                MdoPeerLaneDrop(L); return false;
+            for (size_t i=0;i<Info.Check.Replies && Count<8;++i) Ordered[Count++]=Info.Check.Reply[i];
+            for (unsigned Kind=1;Kind<3;++Kind) for (size_t i=0;i<L->Count && Count<8;++i) {
+                if (L->Kinds[i]!=(Kind==1 ? 1u:0u)) continue;
+                bool Found=false; for (size_t j=0;j<Count;++j) Found|=xrtNetAddrEqual(&Ordered[j],&L->Candidates[i]);
+                if (!Found) Ordered[Count++]=L->Candidates[i];
             }
+            uint64 Remaining=MdoDeadlineRemainingUs(S->Until)/1000u;
+            if (!Remaining || !MdoRudpDialCandidates(L->Raw,Ordered,Count,(uint32)Remaining)) { MdoPeerLaneDrop(L); return false; }
+            L->NativeDialed=true;
         }
     }
     return true;
@@ -434,7 +469,7 @@ bool MdoPeerPoll(MdoPeerSession* S)
         if (MdoPeerLanePoll(S,L)) Any=true;
         if (S->Info.Failed) return false;
         MdoRudpInfo Info;
-        if (!S->Selected && S->Initiator && L->Raw && MdoRudpGetInfo(L->Raw,&Info) && Info.Confirmed && !Info.Closed && !Info.PeerClosed) {
+        if (!S->Selected && S->Initiator && L->Dialer && L->Raw && MdoRudpGetInfo(L->Raw,&Info) && Info.Confirmed && !Info.Closed && !Info.PeerClosed) {
             S->Selected=L->Family;
             if (!MdoPeerSelectionSignal(S,"rudp_select")) return MdoPeerFail(S,"signal_unavailable");
         }
@@ -446,6 +481,7 @@ bool MdoPeerPoll(MdoPeerSession* S)
         MdoPeerLane* L=&S->Lanes[Index]; MdoRudpInfo Info;
         if (!L->Raw || !MdoRudpGetInfo(L->Raw,&Info) || Info.Closed || Info.PeerClosed) return MdoPeerFail(S,"selected_endpoint_unavailable");
         if (Info.Confirmed) {
+            if (Info.NativeInitiator!=((L->Dialer==1)==S->Initiator)) return MdoPeerFail(S,"invalid_native_role");
             if (!S->Initiator && !S->SelectionAck) {
                 if (!MdoPeerSelectionSignal(S,"rudp_selected")) return MdoPeerFail(S,"signal_unavailable");
                 S->SelectionAck=true;

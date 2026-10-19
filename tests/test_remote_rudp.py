@@ -182,9 +182,9 @@ def exercise(*,client,hello,app,device,call,bearer,website_port,clients):
     if ORACLE:
         assert not ORACLE.errors,ORACLE.errors
         used=chosen[0] if DUAL else FAMILY
-        assert ORACLE.nat[used]['forwarded']>0 and ORACLE.nat[used]['warm']>0,ORACLE.nat[used]
+        assert ORACLE.nat[used]['forwarded']>0 and ORACLE.nat[used]['checks']>0,ORACLE.nat[used]
         if BLOCK_FAMILY:
-            assert ORACLE.nat[BLOCK_FAMILY]['warm']>0 and ORACLE.nat[BLOCK_FAMILY]['forwarded']==0,ORACLE.nat
+            assert ORACLE.nat[BLOCK_FAMILY]['checks']>0 and ORACLE.nat[BLOCK_FAMILY]['forwarded']==0,ORACLE.nat
             if BLOCK_FAMILY==6: assert ORACLE.blocked_packets[6]>0,'preferred IPv6 handshake must meet the blackhole'
     print(f'PASS authenticated xrudp family={"dual" if DUAL else FAMILY} blocked={BLOCK_FAMILY} nat={bool(ORACLE)}, owner/peer/nonce pinning, real HTTP/live/receipts, collision route isolation, readonly, one-use and relay fallback')
     return client

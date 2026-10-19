@@ -44,4 +44,14 @@ HTTP 派发已接入。请求头为 `{type:"request",id,runtime_id,client_id,seq
 
 hello 可携带 `direct`，包含 `{version, port, peer_id, token, certificate, addresses}`。它只在通过认证的中继连接上传递，不进入业务状态存储。控制端在后台通过本机原生网关探测，核对 `direct_ready` 的运行代、peer 和权限；探测前后的中继请求保持可用。
 
-目标监听使用独立临时 CA 签发的服务端证书和单次 peer 握手令牌；网关执行标准 TLS 验证，拒绝非私网 IPv4 地址。直接通道使用同一套 MDP1 和受理记录，HTTP、live 和 receipt 各自固定到受理链路。断线不重放写入；授权中继断开时直连随之关闭。此版本不实现 WebRTC/DataChannel 或公网穿透。详细预算与验证边界见 [会话加载和远控性能](remote-performance.md)。
+目标监听使用独立临时 CA 签发的服务端证书和单次 peer 握手令牌；网关执行标准 TLS 验证，拒绝非私网 IPv4 地址。直接通道使用同一套 MDP1 和受理记录，HTTP、live 和 receipt 各自固定到受理链路。断线不重放写入；授权中继断开时直连随之关闭。详细预算与验证边界见 [会话加载和远控性能](remote-performance.md)。
+
+## XRUDP 连通性检查与握手方向
+
+`hello.rudp.version=2` 表示支持经过认证的双向检查。控制端的传输选择器和本机连接器均校验该版本；旧版或未知 offer 不进入原生网关，继续使用其他可用通道。它与 LAN offer 的 version=1、业务 hello/direct_ready 的 version=1 分别校验，不混用。
+
+每个地址族在同一 UDP 端点上执行映射发现、认证检查和 Noise 握手。XRC1 检查使用双方固定公钥的 X25519 共享值、Scope 以及绑定账号、peer、runtime、nonce、权限和地址族的应用上下文派生 HMAC 密钥。请求、回复、源地址 cookie 确认均有固定长度；不从未认证 STUN 或任意来源的 UDP 学习可信对端。检查只产生有界的可达性提示，最终仍须完成原有固定公钥的 Noise 握手。
+
+控制端根据验证过的回复或确认选择每个族的底层拨号者，通过认证中继发送 `{type:"rudp_dial",nonce,runtime_id,family,dialer}`；dialer=1 为控制端，2 为目标端。方向一旦选定不能修改，重复消息不续期。底层拨号者与 UI 控制权限相互独立，目标主动建立网络连接不会获得控制端权限。验证过的实际回复来源排在普通候选之前，候选总数仍不超过八个。
+
+原生协商共享启动时确定的十秒总时限；工作队列、延迟绑定、重复信令、检查和候选重试都不能重新开始计时。双族最终仍由控制端以 `rudp_select` 选择，目标以 `rudp_selected` 确认，落选工作取消。只有已确认且角色匹配的选定通道准入业务。浏览器十二秒预算涵盖本机连接器启动及原生协商，失败继续 LAN/中继；协商期间业务始终可走中继，写入不因换路自动重放。

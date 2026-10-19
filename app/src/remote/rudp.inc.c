@@ -121,6 +121,8 @@ static void MdoRudpOpened(xrudpendpoint* Endpoint, void* Data)
 static void MdoRudpConfirmed(xrudpendpoint* Endpoint, xrudppeer* Peer, void* Data)
 {
     MdoRudpTransport* R=Data; bool Extra=false, Late=false, Cancelled; xrudpendpointinfo Info={0};
+    xrudphandshakeinfo Handshake; xnetaddr Address;
+    if (xrtRudpPeerInfo(Peer,&Handshake,&Address)!=XRUDP_OK) { MdoRudpFail(R,1006,XRUDP_IO_ERROR); return; }
     (void)xrtRudpEndpointInfo(Endpoint,&Info);
     xrtMutexLock(R->Lock);
     Late=R->ConnectIssued && MdoDeadlineExpired(R->DialUntil); Cancelled=xrtCancelRequested(R->Cancel);
@@ -128,6 +130,7 @@ static void MdoRudpConfirmed(xrudpendpoint* Endpoint, xrudppeer* Peer, void* Dat
     else {
         if (!R->Peer) R->Peer=xrtRudpPeerRef(Peer);
         R->Confirmed=true; R->CandidateUntil=R->RetryAt=0; R->Info.NativeReservedBytes=Info.ReservedBytes;
+        R->Info.NativeInitiator=Handshake.Role==XRUDP_INITIATOR;
     }
     xrtCondBroadcast(R->Changed); xrtMutexUnlock(R->Lock);
     if (Late || Cancelled) MdoRudpFail(R,1006,Cancelled ? XRUDP_CANCELLED:XRUDP_TIMEOUT);
@@ -138,7 +141,7 @@ static bool MdoRudpRetry(MdoRudpTransport* R, xrudpresult Reason)
 {
     bool Retry;
     xrtMutexLock(R->Lock);
-    Retry=!R->Confirmed && !R->Stopping && !R->Failed && !R->Config.Listen &&
+    Retry=!R->Confirmed && !R->Stopping && !R->Failed && (!R->Config.Listen || R->Config.Traversal) &&
         R->DialNext<R->DialCount && !MdoDeadlineExpired(R->DialUntil) && !xrtCancelRequested(R->Cancel) &&
         Reason!=XRUDP_NO_MEMORY && Reason!=XRUDP_LIMIT && Reason!=XRUDP_ARGUMENT;
     R->Info.LastDialReason=R->Retiring ? XRUDP_TIMEOUT:Reason;
@@ -192,7 +195,13 @@ static void MdoRudpBindWorker(xnetworker* Worker, ptr Data)
         xrtRudpEndpointConfigInit(&Config);
         Config.StaticPrivate=R->Config.Private; Config.PeerPublic=R->Config.PeerPublic;
         Config.Scope=R->Config.Scope; Config.ApplicationContext=R->Context;
-        Config.Listen=R->Config.Listen; Config.MaxPeers=Config.MaxHalfOpen=1;
+        Config.Listen=R->Config.Listen || R->Config.Traversal; Config.ConnectivityChecks=R->Config.Traversal;
+        if (R->Config.Traversal) {
+            uint64 Remaining=MdoDeadlineRemainingUs(R->Config.TraversalUntil)/1000u;
+            if (!Remaining) { Result=XRUDP_TIMEOUT; Stop=true; }
+            Config.ConnectivityTimeoutMs=(uint32)(Remaining>10000u ? 10000u:Remaining);
+        }
+        Config.MaxPeers=Config.MaxHalfOpen=1;
         Config.HandshakesPerSecond=4; Config.AddressHandshakesPerSecond=2;
         Config.HandshakeTimeoutUs=UINT64_C(3000000); Config.MemoryLimit=MDO_RUDP_NATIVE_BYTES;
         Config.Session.StreamCapacity=Config.Session.Local.MaxStreams=1;
@@ -203,7 +212,7 @@ static void MdoRudpBindWorker(xnetworker* Worker, ptr Data)
         Config.Session.KeepAliveUs=UINT64_C(20000000);
         Events.Open=MdoRudpOpened; Events.Confirmed=MdoRudpConfirmed; Events.Changed=MdoRudpChanged;
         Events.PeerClose=MdoRudpPeerClosed; Events.Close=MdoRudpClosed;
-        Result=xrtRudpEndpointBind(Worker,&R->Config.Local,&Config,&Events,R,&Endpoint);
+        if (!Stop) Result=xrtRudpEndpointBind(Worker,&R->Config.Local,&Config,&Events,R,&Endpoint);
     }
     xrtMutexLock(R->Lock); R->Endpoint=Endpoint; R->Initialized=true; Stop=R->Stopping;
     xrtSecureZero(R->Config.Private,sizeof(R->Config.Private));
@@ -268,6 +277,7 @@ static void MdoRudpProbeWorker(MdoRudpTransport* R)
         xrtCondBroadcast(R->Changed); xrtMutexUnlock(R->Lock); Discover=false;
     }
     if (CancelWarmup) {
+        if (R->Config.Traversal) (void)xrtRudpEndpointCheckCancel(R->Endpoint);
         if (R->WarmupId) (void)xrtRudpEndpointPunchCancel(R->Endpoint,R->WarmupId);
         xrtMutexLock(R->Lock);
         if (Warmup) MdoRudpProbeResult(&R->Info.Warmup,XRUDP_CANCELLED);
@@ -282,10 +292,19 @@ static void MdoRudpProbeWorker(MdoRudpTransport* R)
     }
     if (Warmup) {
         uint64 Id=0;
-        xrudpresult Result=xrtRudpEndpointPunch(R->Endpoint,Candidates,Count,WarmupMs,MdoRudpWarmupDone,R,&Id);
+        xrudpresult Result=R->Config.Traversal ? xrtRudpEndpointCheck(R->Endpoint,Candidates,Count,WarmupMs):
+            xrtRudpEndpointPunch(R->Endpoint,Candidates,Count,WarmupMs,MdoRudpWarmupDone,R,&Id);
         xrtMutexLock(R->Lock); R->WarmupId=Id;
         if (Result!=XRUDP_OK) MdoRudpProbeResult(&R->Info.Warmup,Result);
         xrtCondBroadcast(R->Changed); xrtMutexUnlock(R->Lock);
+    }
+    if (R->Config.Traversal) {
+        xrudpcheckstate Check;
+        if (xrtRudpEndpointCheckInfo(R->Endpoint,&Check)==XRUDP_OK) {
+            xrtMutexLock(R->Lock); R->Info.Check=Check; R->Info.Warmup.Sent=Check.Sent;
+            if (!Check.Active && R->Info.Warmup.Pending) MdoRudpProbeResult(&R->Info.Warmup,Check.Reason);
+            xrtCondBroadcast(R->Changed); xrtMutexUnlock(R->Lock);
+        }
     }
 }
 static void MdoRudpWakeWorker(xnetworker* Worker, ptr Data)
@@ -352,9 +371,13 @@ static void MdoRudpArm(MdoRudpTransport* R)
     if (!R->Stopping && !R->Failed && !R->EndpointClosed) {
         if (!R->Opened) Until=R->OpenUntil;
         if (R->ConnectIssued && !R->Confirmed && R->DialUntil<Until) Until=R->DialUntil;
+        if (R->Config.Traversal && !R->Confirmed && R->Config.TraversalUntil<Until) Until=R->Config.TraversalUntil;
         if (!R->Confirmed && R->CandidateUntil && R->CandidateUntil<Until) Until=R->CandidateUntil;
         if (!R->Confirmed && R->RetryAt && R->RetryAt<Until) Until=R->RetryAt;
         if (R->ConnectPending) { uint64 Retry=MdoMonotonicUs()+1000u; if (Retry<Until) Until=Retry; }
+        if (R->Config.Traversal && R->Opened && !R->Confirmed) {
+            uint64 Refresh=MdoMonotonicUs()+UINT64_C(20000); if (Refresh<Until) Until=Refresh;
+        }
         if (R->Info.Discovery.Pending && R->DiscoveryUntil<Until) Until=R->DiscoveryUntil;
         if (R->Info.Warmup.Pending && R->WarmupUntil<Until) Until=R->WarmupUntil;
     }
@@ -503,7 +526,8 @@ static void MdoRudpAdvance(MdoRudpTransport* R)
     bool Expired;
     xrtMutexLock(R->Lock);
     Expired=!R->Failed && !R->Stopping && ((!R->Opened && MdoDeadlineExpired(R->OpenUntil)) ||
-        (!R->Confirmed && R->ConnectIssued && MdoDeadlineExpired(R->DialUntil)));
+        (!R->Confirmed && R->ConnectIssued && MdoDeadlineExpired(R->DialUntil)) ||
+        (!R->Confirmed && R->Config.Traversal && MdoDeadlineExpired(R->Config.TraversalUntil)));
     if (R->Info.Discovery.Pending && MdoDeadlineExpired(R->DiscoveryUntil)) {
         if (R->Info.Discovery.NativeReason==XRUDP_OK) R->Info.Discovery.NativeReason=XRUDP_TIMEOUT;
         R->DiscoveryCancel=true;
@@ -574,7 +598,7 @@ void MdoRudpCancelProbes(MdoRudpTransport* R)
     if (R->Info.Discovery.Pending) {
         R->DiscoveryCancel=true;
     }
-    if (R->Info.Warmup.Pending) {
+    if (R->Info.Warmup.Pending || R->Config.Traversal) {
         R->WarmupCancel=true;
     }
     xrtMutexUnlock(R->Lock); MdoRudpKick(R);
@@ -591,7 +615,7 @@ bool MdoRudpDialCandidates(MdoRudpTransport* R, const xnetaddr* Candidates, size
         for (size_t j=0;j<i;++j) if (xrtNetAddrEqual(&Candidates[i],&Candidates[j])) return false;
     }
     xrtMutexLock(R->Lock);
-    if (!R->Opened || R->Stopping || R->Failed || R->Config.Listen || R->ConnectIssued || xrtCancelRequested(R->Cancel)) {
+    if (!R->Opened || R->Stopping || R->Failed || (R->Config.Listen && !R->Config.Traversal) || R->ConnectIssued || xrtCancelRequested(R->Cancel)) {
         xrtMutexUnlock(R->Lock); return false;
     }
     memcpy(R->DialCandidates,Candidates,Count*sizeof(*Candidates)); R->DialCount=Count; R->DialNext=1;

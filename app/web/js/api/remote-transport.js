@@ -22,6 +22,7 @@ function rendezvousControl(value, nonce, runtime, fromTarget = false) {
   if (!fromTarget && value.type === "rudp_init") return count === 5 && SHA.test(value.public_key) &&
     Array.isArray(value.families) && value.families.length > 0 && value.families.length <= 2 &&
     new Set(value.families).size === value.families.length && value.families.every(family => [4, 6].includes(family));
+  if (!fromTarget && value.type === "rudp_dial") return count === 5 && [4, 6].includes(value.family) && [1, 2].includes(value.dialer);
   if (value.type === (fromTarget ? "rudp_selected" : "rudp_select")) return count === 4 && [4, 6].includes(value.family);
   return value.type === (fromTarget ? "rudp_answer" : "rudp_candidates") && count === 5 && [4, 6].includes(value.family) && Array.isArray(value.candidates) &&
     value.candidates.length > 0 && value.candidates.length <= 8 && value.candidates.every(candidate =>
@@ -374,7 +375,7 @@ export function createRemoteTransport({ socket = (...args) => new WebSocket(...a
   }
   async function chooseDirect(lan, rudp, relay, token, owner, peer) {
     if (typeof owner === "string" && /^[1-9][0-9]{0,19}$/.test(owner) &&
-        rudp && rudp.version === 1 && rudp.peer_id === peer && rudp.runtime_id === hello?.runtime_id &&
+        rudp && rudp.version === 2 && rudp.peer_id === peer && rudp.runtime_id === hello?.runtime_id &&
         rudp.mode === hello?.mode && rudp.owner_id === owner && ID.test(rudp.nonce)) {
       if (await probeDirect(rudp, relay, token, "xrudp")) return;
     }

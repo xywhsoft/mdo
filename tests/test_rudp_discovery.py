@@ -198,6 +198,16 @@ static void QueuePressure(bool Expire)
 }
 static void AsyncCloseAndDeadline(void)
 {
+    for (unsigned k=0;k<4;++k) {
+        Pair Expired; Setup(&Expired,XNET_FAMILY_IPV4); MdoRudpConfig C=Expired.C[0];
+        for (unsigned j=0;j<32;++j) C.Private[j]=(unsigned char)(11+j);
+        C.Traversal=true; C.TraversalUntil=MdoMonotonicUs()-1u;
+        MdoRudpTransport* R=MdoRudpStart(&C,NULL); CHECK(R); MdoRudpInfo State;
+        double End=xrtTimer()+2;
+        do { CHECK(MdoRudpGetInfo(R,&State)); CHECK(xrtTimer()<End); xrtSleep(1); } while (!State.Closed);
+        CHECK(!State.Opened && State.NativeReason==XRUDP_TIMEOUT);
+        MdoRudpDestroy(R); Cleanup(&Expired);
+    }
     Pair P; Setup(&P,XNET_FAMILY_IPV4); MdoRudpInfo I; CHECK(MdoRudpGetInfo(P.R[1],&I));
     CHECK(MdoRudpDial(P.R[1],&I.Local,80)); xrtSleep(200);
     CHECK(MdoRudpGetInfo(P.R[1],&I) && I.Closed && I.NativeReason==XRUDP_TIMEOUT); Cleanup(&P);
@@ -265,9 +275,10 @@ class Oracles:
     def __enter__(self):
         self.sockets = {}; self.ports = {}; self.warm = []; self.late = 0
         self.blocked_families=set(); self.blocked_packets={4:0,6:0}
+        self.blocked_check_senders=set()
         self.stop = threading.Event(); self.errors = []
-        self.nat = {4: {'local': [None,None], 'allow': [False,False], 'forwarded': 0, 'warm': 0},
-                    6: {'local': [None,None], 'allow': [False,False], 'forwarded': 0, 'warm': 0}}
+        self.nat = {4: {'local': [None,None], 'allow': [False,False], 'forwarded': 0, 'warm': 0, 'checks': 0},
+                    6: {'local': [None,None], 'allow': [False,False], 'forwarded': 0, 'warm': 0, 'checks': 0}}
         for family, host, number in ((socket.AF_INET,'127.0.0.1',4),(socket.AF_INET6,'::1',6)):
             for mode in ('good','drop','bad','warm','warm2','late','wrong-source','nat0','nat1','natinfo0','natinfo1'):
                 sock = socket.socket(family,socket.SOCK_DGRAM)
@@ -311,6 +322,9 @@ class Oracles:
                         side=int(mode[-1]); state=self.nat[family]; sender=1-side
                         if source!=state['local'][sender]: continue
                         state['allow'][sender]=True
+                        if packet[:4]==b'XRC1' and len(packet)==72: state['checks']+=1
+                        if packet[:4]==b'XRC1' and len(packet)==72 and packet[4]==1 and sender in self.blocked_check_senders:
+                            self.blocked_packets[family]+=1; continue
                         if packet[:2]==b'\x00\x11':
                             state['warm']+=1; continue  # drop every warmup packet
                         if family in self.blocked_families:

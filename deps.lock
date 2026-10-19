@@ -7,7 +7,7 @@
     "single_header_sha256": "015f5b19e07dd1fbfb085c1fd096cf69c813b03bdd9dc94b29ae8b5c471cd18a"
   },
   "xserver": {
-    "commit": "a6906e202e051b6bc624f16ec131b88892963457",
+    "commit": "5cdc54eb7ca76518612bc1ffc70eb6873333d4f6",
     "version": "1.0.0",
     "required_extensions": [
       "xwork",
@@ -19,11 +19,15 @@
       "image": {
         "abi_version": 1,
         "tree_sha256": "2c454f809f8da1cc08bf9765deb2a2fa7e33c630abd0b1687c19dee2f5da90ee"
+      },
+      "xrudp": {
+        "source_commit": "0c46aca7519c5513c51b15de61d73d90ebca79b6",
+        "snapshot_manifest_sha256": "ca0ef1981d95cac0dca089f5389ebf517fbc0e70dd917f4de323b9a6106aa394"
       }
     },
     "source_bundle": {
       "path": "tools/dependencies/xs-xrt-current.bundle",
-      "sha256": "9014d41448b1a28bb5691699b3f5186e55156d104eb41c733a43a7231b246a64",
+      "sha256": "0b30c4d3d872dee54f587f2a0cbff9702551dfe5830aa8500f4cac311eb05980",
       "ref": "refs/heads/master"
     }
   },

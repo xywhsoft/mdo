@@ -18,6 +18,9 @@ SOURCE=r'''
 #include "src/storage/home.c"
 #include "src/remote/websocket.c"
 #define CHECK(c) do { if (!(c)) { printf("FAIL rendezvous %d %s\n",__LINE__,#c); fflush(stdout); exit(5); } } while(0)
+#ifndef TEST_REVERSE_CHECKS
+#define TEST_REVERSE_CHECKS 0
+#endif
 typedef struct Queue { xvalue* Values[4]; size_t Count; } Queue;
 static bool Signal(const xvalue* V, void* Data)
 {
@@ -54,7 +57,7 @@ static void Session(xnetfamily Family, bool Nat, bool TamperMode)
     CHECK(!MdoPeerInitiate(Bad,7,&P[1],Cancel,Signal,&Q[1])); xrtValueRelease(Bad);
     if (TamperMode) CHECK(MdoPeerTextSet(Offer,"mode","control"));
     S[1]=MdoPeerInitiate(Offer,7,&P[1],Cancel,Signal,&Q[1]); CHECK(S[1]); xrtValueRelease(Offer);
-    double End=xrtTimer()+8; bool ClientFailed=false;
+    double End=xrtTimer()+12; bool ClientFailed=false;
     for (;;) {
         for (unsigned i=0;i<2;++i) if (S[i]) {
             bool Ok=MdoPeerPoll(S[i]); CHECK(MdoPeerGetInfo(S[i],&I[i]));
@@ -72,9 +75,25 @@ static void Session(xnetfamily Family, bool Nat, bool TamperMode)
                     CHECK(!MdoPeerAccept(O,V,&P[0],Cancel,Signal,&Q[0]) && !MdoPeerOfferValue(O));
                 } else {
                     CHECK(S[1-i]);
+                    if (!strcmp(Type,"rudp_dial")) {
+                        uint64 Dialer=0; CHECK(MdoPeerUInt(xrtValueObjectGet(V,XRT_STR_LITERAL("dialer")),&Dialer));
+                        CHECK(Dialer==1 || Dialer==2);
+                        uint64 Until=S[1-i]->Until;
+                        CHECK(MdoPeerInput(S[1-i],V));
+                        Bad=xrtValueDeepClone(V); CHECK(xrtValueObjectSetNew(Bad,XRT_STR_LITERAL("dialer"),xrtValueUInt(3-Dialer)));
+                        CHECK(!MdoPeerInput(S[1-i],Bad) && S[1-i]->Until==Until); xrtValueRelease(Bad);
+                    }
                     Bad=xrtValueDeepClone(V); CHECK(MdoPeerTextSet(Bad,"runtime_id","33333333333333333333333333333333"));
                     CHECK(!MdoPeerInput(S[1-i],Bad)); xrtValueRelease(Bad);
                     if (!strcmp(Type,"rudp_candidates") || !strcmp(Type,"rudp_answer")) {
+                        if (Nat) {
+                            xvalue* List=xrtValueObjectEdit(V,XRT_STR_LITERAL("candidates")); CHECK(List);
+                            for (size_t n=xrtValueCount(List);n>0;--n) {
+                                const xvalue* Item=xrtValueArrayGet(List,n-1);
+                                if (!strcmp(MdoPeerText(Item,"kind",8),"host")) CHECK(xrtValueArrayRemove(List,n-1,1));
+                            }
+                            CHECK(xrtValueCount(List)==1);
+                        }
                         Bad=xrtValueDeepClone(V); xvalue* List=xrtValueObjectEdit(Bad,XRT_STR_LITERAL("candidates")); CHECK(List);
                         xvalue* First=xrtValueArrayEdit(List,0); CHECK(First && MdoPeerTextSet(First,"ip","255.255.255.255"));
                         CHECK(!MdoPeerInput(S[1-i],Bad)); xrtValueRelease(Bad);
@@ -90,6 +109,7 @@ static void Session(xnetfamily Family, bool Nat, bool TamperMode)
     }
     if (!TamperMode) {
         CHECK(I[0].Family==Family && I[1].Family==Family);
+        if (TEST_REVERSE_CHECKS && Nat) CHECK(S[1]->Lanes[Family==XNET_FAMILY_IPV6].Dialer==2);
         for (unsigned i=0;i<2;++i) { Socket[i]=MdoPeerTakeSocket(S[i]); CHECK(Socket[i] && !MdoPeerTakeSocket(S[i])); }
         for (unsigned i=0;i<2;++i) {
             CHECK(MdoRemoteSocketSend(Socket[i],false,(xbytesview){(const uint8*)"verified",8})); bool Got=false;
@@ -140,6 +160,10 @@ static void Dual(unsigned Broken, unsigned Restrict, bool BindFailure)
                             xvalue* First=xrtValueArrayEdit(List,0); CHECK(First);
                             CHECK(xrtValueObjectSetNew(First,XRT_STR_LITERAL("port"),xrtValueUInt(Family==4 ? TEST_DROP_4:TEST_DROP_6)));
                         }
+                    } else if (!strcmp(Type,"rudp_dial")) {
+                        CHECK(i==1 && !Selected);
+                        uint64 Dialer=0; CHECK(MdoPeerUInt(xrtValueObjectGet(V,XRT_STR_LITERAL("dialer")),&Dialer));
+                        CHECK(Dialer==1 || Dialer==2);
                     } else if (!strcmp(Type,"rudp_select")) {
                         CHECK(i==1 && !Selected && Family==Expected && !I[0].Ready && !I[1].Ready);
                         CHECK(!MdoPeerTakeSocket(S[0]) && !MdoPeerTakeSocket(S[1])); Selected=true;
@@ -213,9 +237,11 @@ def native(sdk, fixture, cc):
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__); mode=parser.add_mutually_exclusive_group(required=True)
-    mode.add_argument('--host',type=Path); mode.add_argument('--native',type=Path); parser.add_argument('--cc',default='gcc'); args=parser.parse_args()
+    mode.add_argument('--host',type=Path); mode.add_argument('--native',type=Path); parser.add_argument('--cc',default='gcc')
+    parser.add_argument('--reverse-checks',action='store_true'); args=parser.parse_args()
     with Oracles() as oracle:
-        fixture=oracle.defines()+SOURCE
+        if args.reverse_checks: oracle.blocked_check_senders.add(1)
+        fixture=oracle.defines()+('#define TEST_REVERSE_CHECKS 1\n' if args.reverse_checks else '')+SOURCE
         if args.native:
             native(args.native.resolve(),fixture,args.cc); assert not oracle.errors,oracle.errors; return 0
         with tempfile.TemporaryDirectory(prefix='mdo-rendezvous-') as raw:

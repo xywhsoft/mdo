@@ -8,7 +8,7 @@ let nonce = null;
 // never needs certificate exceptions, private-network CORS or a machine CA.
 export async function connectorDirectSocket(offer, { signal } = {}) {
   const rudp = offer?.transport === "xrudp", payload = rudp ? offer.offer : offer;
-  if (rudp ? (!payload || payload.version !== 1 || !/^[0-9a-f]{32}$/.test(payload.peer_id) ||
+  if (rudp ? (!payload || payload.version !== 2 || !/^[0-9a-f]{32}$/.test(payload.peer_id) ||
       !/^[1-9][0-9]{0,19}$/.test(payload.owner_id) || !/^[0-9a-f]{32}$/.test(payload.nonce)) :
       (!offer || offer.version !== 1 || !/^[0-9a-f]{32}$/.test(offer.peer_id) ||
       !/^[0-9a-f]{64}$/.test(offer.token) || typeof offer.certificate !== "string" || offer.certificate.length > 1536 ||

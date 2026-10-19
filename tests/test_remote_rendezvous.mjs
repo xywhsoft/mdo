@@ -4,7 +4,7 @@ import { createRemoteTransport } from "../app/web/js/api/remote-transport.js";
 const peer = "a".repeat(32), runtime = "b".repeat(32), nonce = "c".repeat(32), device = "d".repeat(32);
 const owner = "7", token = "e".repeat(32) + "-0";
 const ticket = { path: "/api/v1/devices/connect", protocol: "xadmin.device-relay.v1", ticket: "f".repeat(64), payload_limit: 262123 };
-const rudp = { version: 1, peer_id: peer, runtime_id: runtime, nonce, owner_id: owner, mode: "control",
+const rudp = { version: 2, peer_id: peer, runtime_id: runtime, nonce, owner_id: owner, mode: "control",
   public_key: "1".repeat(64), scope: "2".repeat(32), binding: "3".repeat(64), families: [4, 6] };
 const hello = { type: "hello", version: 1, runtime_id: runtime, mode: "control", upload_limit: 8388608,
   chunk_limit: 65536, window_bytes: 65536, live: true, live_limit: 2097152 };
@@ -40,8 +40,9 @@ function ready(socket) { socket.receive({ type: "direct_ready", version: 1, runt
   assert.equal(s.relay.sent.filter(v => v.type === "request").length, 1, "relay stays usable during negotiation");
   forward(direct, { type: "rudp_init", public_key: "4".repeat(64), families: [4, 6] });
   forward(direct, { type: "rudp_candidates", family: 4, candidates: [{ ip: "127.0.0.1", port: 2222, kind: "host" }] });
+  forward(direct, { type: "rudp_dial", family: 4, dialer: 2 });
   forward(direct, { type: "rudp_select", family: 4 });
-  assert.deepEqual(s.relay.sent.slice(-3).map(v => v.type), ["rudp_init", "rudp_candidates", "rudp_select"]);
+  assert.deepEqual(s.relay.sent.slice(-4).map(v => v.type), ["rudp_init", "rudp_candidates", "rudp_dial", "rudp_select"]);
   const before = direct.sent.length;
   s.relay.receive({ type: "rudp_answer", nonce: "8".repeat(32), runtime_id: runtime, candidates: [] });
   assert.equal(direct.sent.length, before, "wrong attempt cannot signal the gateway");
@@ -59,7 +60,7 @@ function ready(socket) { socket.receive({ type: "direct_ready", version: 1, runt
   assert.equal(s.states.at(-1).route, "relay");
   s.transport.close(); await initial;
 }
-for (const override of [{ owner_id: "8" }, { peer_id: "0".repeat(32) }, { runtime_id: "0".repeat(32) }, { mode: "view" }, { nonce: "bad" }]) {
+for (const override of [{ version: 1 }, { version: 3 }, { owner_id: "8" }, { peer_id: "0".repeat(32) }, { runtime_id: "0".repeat(32) }, { mode: "view" }, { nonce: "bad" }]) {
   const s = await setup(override); assert.equal(s.natives.length, 0, "authority mismatch must not open the native gate"); s.transport.close();
 }
 for (const control of [
@@ -69,6 +70,10 @@ for (const control of [
   { type: "rudp_init", public_key: "4".repeat(64), families: [4, 4] },
   { type: "rudp_init", public_key: "4".repeat(64), families: [] },
   { type: "rudp_select", family: 8 },
+  { type: "rudp_dial", family: 4, dialer: 0 },
+  { type: "rudp_dial", family: 4, dialer: 3 },
+  { type: "rudp_dial", family: 8, dialer: 2 },
+  { type: "rudp_dial", family: 4, dialer: 2, mode: "control" },
   { type: "rudp_selected", family: 4 },
   { type: "rudp_candidates", family: 4, candidates: [{ ip: "attacker.example", port: 1, kind: "host" }] },
   { type: "rudp_candidates", family: 4, candidates: [{ ip: "127.0.0.1", port: 0, kind: "host" }] },
