@@ -1,0 +1,199 @@
+{
+  "schema": 1,
+  "date": "2026-10-19",
+  "status": "partial_acceptance",
+  "mdo_version": "0.2.0",
+  "mdo_source_commit": "e6865f3c4fe889b12cad3db26a3555b32a2e4bd0",
+  "xrudp_runtime_commit": "3d55ec41e13f0884ffe840d44a57a0189d9310f3",
+  "sdk_commit": "a6906e202e051b6bc624f16ec131b88892963457",
+  "device": {
+    "model": "Realme GT7 Pro Racing / RMX5090",
+    "android": 16,
+    "abi": "arm64-v8a",
+    "page_size": 4096
+  },
+  "qa_package": "org.xleaves.mdo.xrudp.congestionqa",
+  "qa_apk_sha256": "d5496bfd572c16d1344ae760b25c5f61d6e59a2c18e67a6d906b5d5d4dfb62e1",
+  "native_library_sha256": "559cbb723b9b5d4cdf273eef21302358c6aed1bfcd913ea63903f127e4cce11d",
+  "native_future": {
+    "context": "standalone Android shell UID; actual JNI/TCC checked separately",
+    "binary_sha256": "a6c35624e5359c10bc36902c79144ecfb6d9ec79d2f71cbef2e99bd7c5395967",
+    "cases": [
+      {
+        "family": 4,
+        "backend": "select",
+        "exit_code": 0,
+        "seconds": 1.063,
+        "passed": true
+      },
+      {
+        "family": 4,
+        "backend": "epoll",
+        "exit_code": 0,
+        "seconds": 0.953,
+        "passed": true
+      },
+      {
+        "family": 6,
+        "backend": "select",
+        "exit_code": 0,
+        "seconds": 1.0,
+        "passed": true
+      },
+      {
+        "family": 6,
+        "backend": "epoll",
+        "exit_code": 0,
+        "seconds": 1.031,
+        "passed": true
+      }
+    ]
+  },
+  "apk_tcc_future_operation_initialized": true,
+  "android_credential_protection": true,
+  "foreground_two_native_devices": [
+    {
+      "direction": "windows-to-android",
+      "transport": "xrudp",
+      "handshake_ms": 329.0,
+      "target_only_write_once": true,
+      "live_subscription": true,
+      "view_readonly": true,
+      "cancel_relay_receipt_recovery": true,
+      "native_transports_after_close": 0,
+      "completed": true
+    },
+    {
+      "direction": "android-to-windows",
+      "transport": "xrudp",
+      "handshake_ms": 375.0,
+      "target_only_write_once": true,
+      "live_subscription": true,
+      "view_readonly": true,
+      "cancel_relay_receipt_recovery": true,
+      "native_transports_after_close": 0,
+      "completed": true
+    }
+  ],
+  "physical_uid_freeze_recovery": [
+    {
+      "direction": "windows-to-android",
+      "hold_seconds": 65,
+      "uid_freeze_observed": "1",
+      "same_android_pid": true,
+      "unfrozen_on_foreground": true,
+      "fresh_native_reconnected": true,
+      "receipt_authority_retained": true,
+      "previous_write_once": true,
+      "native_transports_after_close": 0,
+      "completed": true
+    },
+    {
+      "direction": "android-to-windows",
+      "hold_seconds": 65,
+      "uid_freeze_observed": "1",
+      "same_android_pid": true,
+      "unfrozen_on_foreground": true,
+      "fresh_native_reconnected": true,
+      "receipt_authority_retained": true,
+      "previous_write_once": true,
+      "native_transports_after_close": 0,
+      "completed": true
+    }
+  ],
+  "background_continuous_execution_passed": true,
+  "confirmed_background_obstruction": "UID ancestor cgroup.freeze=1 and cgroup.events frozen=1; child cgroup.freeze=0 with frozen=1; foreground service and partial CPU lease do not override ancestor freezing",
+  "freezer_actor_identified": false,
+  "android_system_suspend_or_doze_complete": false,
+  "two_independent_nat_networks_complete": false,
+  "actual_72h_complete": false,
+  "release_or_production_install": false,
+  "model_requests": 0,
+  "cleanup": {
+    "installed_normal_qa_sha256": "d5496bfd572c16d1344ae760b25c5f61d6e59a2c18e67a6d906b5d5d4dfb62e1",
+    "installed_diagnostic_apk_removed": true,
+    "debug_property_restored_exactly": true,
+    "temporary_qa_battery_exemption_removed": true,
+    "qa_stopped": true,
+    "owned_children_exited": true,
+    "logout_cleanup": true,
+    "system_screen_stay_awake_setting_never_changed": true,
+    "production_package_metadata_unchanged": true
+  },
+  "evidence": {
+    "native-future/device-receipt.json": {
+      "path": ".build/xrudp-android-device-20261019-r4/native-future/device-receipt.json",
+      "sha256": "af0b6d4b6f60755664ee851554ec1899123e7ab55e3f86d839f132848ddd9269"
+    },
+    "device-foreground-receipt.json": {
+      "path": ".build/xrudp-android-device-20261019-r4/device-foreground-receipt.json",
+      "sha256": "3b01f0a78f0a1365ba19c32dba40a649e5ec0ff1896bb2740b795ef1444fa994"
+    },
+    "ancestor-freezer-state.json": {
+      "path": ".build/xrudp-android-device-20261019-r4/ancestor-freezer-state.json",
+      "sha256": "3d525f91217de9504c7dbcff016a357a29f88973b80bc08a7f6b3b4c1ca2e64e"
+    },
+    "device-actual-freeze-recovery.json": {
+      "path": ".build/xrudp-android-device-20261019-r4/device-actual-freeze-recovery.json",
+      "sha256": "d09960ae665fef268fa4b30710f3803dc79249ef1ff1632829f18824bd8e22cd"
+    },
+    "device-actual-freeze-recovery-reverse.json": {
+      "path": ".build/xrudp-android-device-20261019-r4/device-actual-freeze-recovery-reverse.json",
+      "sha256": "fbc83a1981937572179c1e7de261d10264e17ae063d73ea192c5a71e2d6e2664"
+    },
+    "diagnostic-cleanup.json": {
+      "path": ".build/xrudp-android-device-20261019-r4/diagnostic-cleanup.json",
+      "sha256": "6a4d9aa5a772b87ffca8ecf21b47552cda4bf2b8815367a411f24618bbd61254"
+    },
+    "device-background-user-unfrozen-receipt.json": {
+      "path": ".build/xrudp-android-device-20261019-r4/device-background-user-unfrozen-receipt.json",
+      "sha256": "5fcfe54992f5f542737ed82290d7a94810d783075b263e194780ead36513d94a"
+    },
+    "diagnostic-cleanup-final.json": {
+      "path": ".build/xrudp-android-device-20261019-r4/diagnostic-cleanup-final.json",
+      "sha256": "c7a776ba20a0d31078f848ce553caf53a7174a6a61634f7e59245f650f5e7c12"
+    }
+  },
+  "limits": [
+    "same Wi-Fi NAT; signaling/control HTTP uses ADB, native data uses real device UDP",
+    "first freeze receipt is a successful forward case in an otherwise failed attempt; reverse admission raced an existing controller",
+    "reverse-only repeat uses bounded three-second 409 controller-release admission retry; no production protocol change",
+    "physical UID freezing is distinct from whole-system suspend or Android Doze",
+    "native WebView shell started; no claim of comprehensive touch or visual UI acceptance"
+  ],
+  "continuous_background_two_native_devices": [
+    {
+      "direction": "windows-to-android",
+      "transport": "xrudp",
+      "handshake_ms": 375.0,
+      "target_only_write_once": true,
+      "live_subscription": true,
+      "view_readonly": true,
+      "background": true,
+      "hold_seconds": 65,
+      "uid_freeze_at_hold_end": "0",
+      "same_android_pid": true,
+      "foreground_return": true,
+      "cancel_relay_receipt_recovery": true,
+      "native_transports_after_close": 0,
+      "completed": true
+    },
+    {
+      "direction": "android-to-windows",
+      "transport": "xrudp",
+      "handshake_ms": 359.0,
+      "target_only_write_once": true,
+      "live_subscription": true,
+      "view_readonly": true,
+      "background": true,
+      "hold_seconds": 65,
+      "uid_freeze_at_hold_end": "0",
+      "same_android_pid": true,
+      "foreground_return": true,
+      "cancel_relay_receipt_recovery": true,
+      "native_transports_after_close": 0,
+      "completed": true
+    }
+  ],
+  "continuous_background_condition": "user removed application freezing and allowed background execution; normal QA APK, no temporary battery exemption; display awake"
+}
