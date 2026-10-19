@@ -1,0 +1,429 @@
+{
+  "kind": "physical-mobile-network-diagnosis",
+  "date": "2026-10-19",
+  "mdo_source_commit": "e6865f3c4fe889b12cad3db26a3555b32a2e4bd0",
+  "sdk_commit": "a6906e202e051b6bc624f16ec131b88892963457",
+  "xrt_runtime_commit": "3d55ec41e13f0884ffe840d44a57a0189d9310f3",
+  "native_library_sha256": "559cbb723b9b5d4cdf273eef21302358c6aed1bfcd913ea63903f127e4cce11d",
+  "ordinary_qa_apk_sha256": "d5496bfd572c16d1344ae760b25c5f61d6e59a2c18e67a6d906b5d5d4dfb62e1",
+  "product_implementation_modified": false,
+  "private_raw_evidence_committed": false,
+  "signaling_scope": "Isolated local account service; control via ADB/SSH; UDP over physical cellular or Windows network",
+  "same_socket_discovery": [
+    {
+      "ui_direction": "windows-to-android",
+      "windows_same_mapping": true,
+      "android_same_mapping": false,
+      "windows_same_ip": true,
+      "windows_local_port": 61848,
+      "android_same_ip": true,
+      "android_local_port": 50883
+    },
+    {
+      "ui_direction": "android-to-windows",
+      "windows_same_mapping": true,
+      "android_same_mapping": false,
+      "windows_same_ip": true,
+      "windows_local_port": 63583,
+      "android_same_ip": true,
+      "android_local_port": 48718
+    }
+  ],
+  "connection_cases": [
+    {
+      "topology": "two-independent-nats",
+      "ui_direction": "windows-to-android",
+      "native_handshake_roles_reversed": false,
+      "direct_passed": false,
+      "native_initiator": "windows",
+      "case_completed": false,
+      "cleanup_errors": [],
+      "qa_stopped": true,
+      "diagnostic_apk_sha256": "c75cd9e98f5ddfe2c98989a05bdbf142a430c4a201650e90aec1860f918fba8e",
+      "endpoint_counters": {
+        "windows": {
+          "sent": 29,
+          "received": 2,
+          "invalid": 0,
+          "rate_dropped": 0,
+          "address_dropped": 0,
+          "capacity_dropped": 0,
+          "io_errors": 0
+        },
+        "android": {
+          "sent": 17,
+          "received": 2,
+          "invalid": 0,
+          "rate_dropped": 0,
+          "address_dropped": 0,
+          "capacity_dropped": 0,
+          "io_errors": 0
+        }
+      }
+    },
+    {
+      "topology": "two-independent-nats",
+      "ui_direction": "android-to-windows",
+      "native_handshake_roles_reversed": false,
+      "direct_passed": false,
+      "native_initiator": "android",
+      "case_completed": false,
+      "cleanup_errors": [],
+      "qa_stopped": true,
+      "diagnostic_apk_sha256": "c75cd9e98f5ddfe2c98989a05bdbf142a430c4a201650e90aec1860f918fba8e",
+      "endpoint_counters": {
+        "windows": {
+          "sent": 17,
+          "received": 2,
+          "invalid": 0,
+          "rate_dropped": 0,
+          "address_dropped": 0,
+          "capacity_dropped": 0,
+          "io_errors": 0
+        },
+        "android": {
+          "sent": 30,
+          "received": 2,
+          "invalid": 0,
+          "rate_dropped": 0,
+          "address_dropped": 0,
+          "capacity_dropped": 0,
+          "io_errors": 0
+        }
+      }
+    },
+    {
+      "topology": "mobile-nat-to-public-linux",
+      "ui_direction": "linux-to-android",
+      "native_handshake_roles_reversed": false,
+      "direct_passed": false,
+      "native_initiator": "public-linux",
+      "case_completed": false,
+      "cleanup_errors": [],
+      "qa_stopped": true,
+      "diagnostic_apk_sha256": "1ab6395b7b6df0b63f9a587b3f6dcf5873d8a6fb5384942eec73371a85abae98",
+      "endpoint_counters": {
+        "linux": {
+          "sent": 28,
+          "received": 6,
+          "invalid": 0,
+          "rate_dropped": 0,
+          "address_dropped": 0,
+          "capacity_dropped": 0,
+          "io_errors": 0
+        },
+        "android": {
+          "sent": 11,
+          "received": 1,
+          "invalid": 0,
+          "rate_dropped": 0,
+          "address_dropped": 0,
+          "capacity_dropped": 0,
+          "io_errors": 0
+        }
+      }
+    },
+    {
+      "topology": "mobile-nat-to-public-linux",
+      "ui_direction": "android-to-linux",
+      "native_handshake_roles_reversed": false,
+      "direct_passed": true,
+      "native_initiator": "android",
+      "case_completed": true,
+      "cleanup_errors": [],
+      "qa_stopped": true,
+      "diagnostic_apk_sha256": "1ab6395b7b6df0b63f9a587b3f6dcf5873d8a6fb5384942eec73371a85abae98",
+      "handshake_ms": 422.0,
+      "endpoint_counters": {
+        "linux": {
+          "sent": 46,
+          "received": 38,
+          "invalid": 0,
+          "rate_dropped": 0,
+          "address_dropped": 0,
+          "capacity_dropped": 0,
+          "io_errors": 0
+        },
+        "android": {
+          "sent": 39,
+          "received": 43,
+          "invalid": 0,
+          "rate_dropped": 0,
+          "address_dropped": 0,
+          "capacity_dropped": 0,
+          "io_errors": 0
+        }
+      }
+    },
+    {
+      "topology": "mobile-nat-to-public-linux",
+      "ui_direction": "linux-to-android",
+      "native_handshake_roles_reversed": true,
+      "direct_passed": true,
+      "native_initiator": "android",
+      "case_completed": true,
+      "cleanup_errors": [],
+      "qa_stopped": true,
+      "diagnostic_apk_sha256": "750eaa122b7f092cbe92ce0c14fdf366ac7195f49b068907e7cfa74d624d6726",
+      "handshake_ms": 453.0,
+      "remote_native_exited": true,
+      "endpoint_counters": {
+        "linux": {
+          "sent": 43,
+          "received": 39,
+          "invalid": 0,
+          "rate_dropped": 0,
+          "address_dropped": 0,
+          "capacity_dropped": 0,
+          "io_errors": 0
+        },
+        "android": {
+          "sent": 40,
+          "received": 41,
+          "invalid": 0,
+          "rate_dropped": 0,
+          "address_dropped": 0,
+          "capacity_dropped": 0,
+          "io_errors": 0
+        }
+      }
+    },
+    {
+      "topology": "mobile-nat-to-public-linux",
+      "ui_direction": "android-to-linux",
+      "native_handshake_roles_reversed": true,
+      "direct_passed": false,
+      "native_initiator": "public-linux",
+      "case_completed": false,
+      "cleanup_errors": [],
+      "qa_stopped": true,
+      "diagnostic_apk_sha256": "750eaa122b7f092cbe92ce0c14fdf366ac7195f49b068907e7cfa74d624d6726",
+      "remote_native_exited": true,
+      "endpoint_counters": {
+        "linux": {
+          "sent": 28,
+          "received": 6,
+          "invalid": 0,
+          "rate_dropped": 0,
+          "address_dropped": 0,
+          "capacity_dropped": 0,
+          "io_errors": 0
+        },
+        "android": {
+          "sent": 11,
+          "received": 1,
+          "invalid": 0,
+          "rate_dropped": 0,
+          "address_dropped": 0,
+          "capacity_dropped": 0,
+          "io_errors": 0
+        }
+      }
+    },
+    {
+      "topology": "two-independent-nats",
+      "ui_direction": "windows-to-android",
+      "native_handshake_roles_reversed": true,
+      "direct_passed": false,
+      "native_initiator": "android",
+      "case_completed": false,
+      "cleanup_errors": [],
+      "qa_stopped": true,
+      "diagnostic_apk_sha256": "750eaa122b7f092cbe92ce0c14fdf366ac7195f49b068907e7cfa74d624d6726",
+      "endpoint_counters": {
+        "windows": {
+          "sent": 16,
+          "received": 1,
+          "invalid": 0,
+          "rate_dropped": 0,
+          "address_dropped": 0,
+          "capacity_dropped": 0,
+          "io_errors": 0
+        },
+        "android": {
+          "sent": 28,
+          "received": 1,
+          "invalid": 0,
+          "rate_dropped": 0,
+          "address_dropped": 0,
+          "capacity_dropped": 0,
+          "io_errors": 0
+        }
+      }
+    },
+    {
+      "topology": "two-independent-nats",
+      "ui_direction": "android-to-windows",
+      "native_handshake_roles_reversed": true,
+      "direct_passed": false,
+      "native_initiator": "windows",
+      "case_completed": false,
+      "cleanup_errors": [],
+      "qa_stopped": true,
+      "diagnostic_apk_sha256": "750eaa122b7f092cbe92ce0c14fdf366ac7195f49b068907e7cfa74d624d6726",
+      "endpoint_counters": {
+        "windows": {
+          "sent": 28,
+          "received": 1,
+          "invalid": 0,
+          "rate_dropped": 0,
+          "address_dropped": 0,
+          "capacity_dropped": 0,
+          "io_errors": 0
+        },
+        "android": {
+          "sent": 16,
+          "received": 1,
+          "invalid": 0,
+          "rate_dropped": 0,
+          "address_dropped": 0,
+          "capacity_dropped": 0,
+          "io_errors": 0
+        }
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "path": ".build/xrudp-mobile-apk-diagnosis-20261019-r2/mobile-counter-windows-to-android-trace.json",
+      "sha256": "308e8b4de71bfc696bc39b60fd53457c46910cc908e08a838b4a00799e9ee38c"
+    },
+    {
+      "path": ".build/xrudp-mobile-apk-diagnosis-20261019-r2/mobile-counter-android-to-windows-trace.json",
+      "sha256": "eeecaf145e6e4fe146d2d1f4282e42afe635ed38afd4f11feb7a5036e01049c6"
+    },
+    {
+      "path": ".build/xrudp-mobile-apk-diagnosis-20261019-r2/mobile-counter-windows-to-android.json",
+      "sha256": "ffdd5ce60ff77de9bb94104e2f1f3238d2b788527644159584c26bf98b50d761"
+    },
+    {
+      "path": ".build/xrudp-mobile-apk-diagnosis-20261019-r2/mobile-counter-windows-to-android-trace.json",
+      "sha256": "308e8b4de71bfc696bc39b60fd53457c46910cc908e08a838b4a00799e9ee38c"
+    },
+    {
+      "path": ".build/xrudp-mobile-apk-diagnosis-20261019-r2/mobile-counter-android-to-windows.json",
+      "sha256": "1a681cf385d3ab3c50b7b5f27bb09806505aa17f36ff538642fe49f25923212c"
+    },
+    {
+      "path": ".build/xrudp-mobile-apk-diagnosis-20261019-r2/mobile-counter-android-to-windows-trace.json",
+      "sha256": "eeecaf145e6e4fe146d2d1f4282e42afe635ed38afd4f11feb7a5036e01049c6"
+    },
+    {
+      "path": ".build/xrudp-mobile-public-diagnosis-20261019-r1/mobile-counter-windows-to-android.json",
+      "sha256": "1d5bae1250375e79936fa7ec1ea308d441dcba953196c70799315255376b68c8"
+    },
+    {
+      "path": ".build/xrudp-mobile-public-diagnosis-20261019-r1/mobile-counter-windows-to-android-trace.json",
+      "sha256": "a3c4d3c5a173de1dd7b559fdc4587905f68a69b820f7912b452809925abc13c3"
+    },
+    {
+      "path": ".build/xrudp-mobile-public-diagnosis-20261019-r1/mobile-counter-android-to-windows.json",
+      "sha256": "d208e691bc9c93213f477acd4f7a6ced8ba0bfce2fb1be8c702f722a10dfd442"
+    },
+    {
+      "path": ".build/xrudp-mobile-public-diagnosis-20261019-r1/mobile-counter-android-to-windows-trace.json",
+      "sha256": "a6cdff2d32faf4cb0e0737a069121c1346ab412ed75be4c4367c7085054fc3b7"
+    },
+    {
+      "path": ".build/xrudp-mobile-role-diagnosis-20261019-r2/mobile-counter-windows-to-android.json",
+      "sha256": "828e36808577c7930142d899f219b5d49a61986adf9eb04bbda64ad7f06c3fa5"
+    },
+    {
+      "path": ".build/xrudp-mobile-role-diagnosis-20261019-r2/mobile-counter-windows-to-android-trace.json",
+      "sha256": "c7539272cd52416e36c4a4790736ffc0e38ef28b6351ef4ed241463be7ce9831"
+    },
+    {
+      "path": ".build/xrudp-mobile-role-diagnosis-20261019-r2/mobile-counter-android-to-windows.json",
+      "sha256": "5b016923b6188b3e21d314f50f3e5a70a9dd10127fb98d2071cb651a913afe16"
+    },
+    {
+      "path": ".build/xrudp-mobile-role-diagnosis-20261019-r2/mobile-counter-android-to-windows-trace.json",
+      "sha256": "cad45cd7adccf58085d7f115a08f34b2e7cef31dab3ad0ef6139d23a893abb44"
+    },
+    {
+      "path": ".build/xrudp-mobile-role-local-diagnosis-20261019-r1/mobile-counter-windows-to-android.json",
+      "sha256": "d474856fad360cdd00389218f1e86ef28c48d7683e2dd1af43eb4615742ba26b"
+    },
+    {
+      "path": ".build/xrudp-mobile-role-local-diagnosis-20261019-r1/mobile-counter-windows-to-android-trace.json",
+      "sha256": "19a5321d8cd18e3ad32f869919054ca9dc4defe6e88ddb0af0e2c621d133ad2a"
+    },
+    {
+      "path": ".build/xrudp-mobile-role-local-diagnosis-20261019-r1/mobile-counter-android-to-windows.json",
+      "sha256": "924a76972af0feefda6755a3c8f617fc2e0007dd48c9c3716f442392ea213b27"
+    },
+    {
+      "path": ".build/xrudp-mobile-role-local-diagnosis-20261019-r1/mobile-counter-android-to-windows-trace.json",
+      "sha256": "5c08277de7a9e3662c4a0048f66ef24b868e145bb23918329e1e90594b70d0ef"
+    },
+    {
+      "path": ".build/xrudp-mobile-role-local-diagnosis-20261019-r1/diagnostic-cleanup.json",
+      "sha256": "68bcc493697d12ebb88af0d3770ac774b3f53f37d5d0f115c56c98899f2483ad"
+    },
+    {
+      "path": ".build/xrudp-mobile-role-local-diagnosis-20261019-r1/server-and-firewall-cleanup.json",
+      "sha256": "caed855f0f9cb753e3b56ae75a74bbaf543b188a0efe8ef424b4c8dcf62480a6"
+    },
+    {
+      "path": ".build/xrudp-mobile-role-local-diagnosis-20261019-r1/existing-program-firewall-rules.txt",
+      "sha256": "1b89c6fb4668aaf89ad53ad2acc3a9b2caa7d0ac4ce6cc10f25283f0fe6b6b3f"
+    }
+  ],
+  "restoration": {
+    "completed_unix": 1792423885.1662202,
+    "ordinary_qa_apk_sha256": "d5496bfd572c16d1344ae760b25c5f61d6e59a2c18e67a6d906b5d5d4dfb62e1",
+    "ordinary_qa_restored": true,
+    "qa_stopped": true,
+    "wifi_on": "1",
+    "default_transport": "wifi",
+    "deviceidle_deep": "ACTIVE",
+    "deviceidle_force": "false",
+    "stay_on_while_plugged_in": "15",
+    "debug_property": "",
+    "temporary_qa_idle_exemption": false,
+    "production_metadata": [
+      "versionCode=30000090 minSdk=26 targetSdk=36",
+      "versionName=0.1.1",
+      "lastUpdateTime=2026-10-13 17:56:27",
+      "firstInstallTime=2026-10-13 17:56:27"
+    ],
+    "production_installation_metadata_unchanged": true,
+    "production_home_accessed": false,
+    "real_model_requests": 0
+  },
+  "confirmed_findings": [
+    "Same APK socket obtains distinct public ports for distinct STUN destination ports",
+    "UI authority is coupled to native handshake initiation in rendezvous",
+    "Public Linux control of mobile succeeds when only native handshake roles are reversed",
+    "Role reversal alone does not establish direct connectivity between these two independent NATs"
+  ],
+  "not_proven": [
+    "Exact upstream filter that drops packets before application delivery in the two-NAT case",
+    "Automatic role negotiation or authenticated peer-reflexive candidate learning implemented",
+    "Positive two-NAT direct connection or 72-hour acceptance"
+  ],
+  "server_restoration": {
+    "owned_native_processes_active": [],
+    "temporary_stun_processes_still_present": [],
+    "production_service": "MainPID=3030721\nActiveState=active\n",
+    "existing_program_firewall_rules": 4,
+    "active_private_udp_allow": true,
+    "firewall_modified": false,
+    "sdk_git_status": "",
+    "live_windows_host_sha256": "f27a8e680ea032739194d7eb52a82bac171878c7e467a3bc0122eb3dc46464b2"
+  },
+  "apk_native_library_checks": [
+    {
+      "apk_sha256": "c75cd9e98f5ddfe2c98989a05bdbf142a430c4a201650e90aec1860f918fba8e",
+      "native_sha256": "559cbb723b9b5d4cdf273eef21302358c6aed1bfcd913ea63903f127e4cce11d"
+    },
+    {
+      "apk_sha256": "1ab6395b7b6df0b63f9a587b3f6dcf5873d8a6fb5384942eec73371a85abae98",
+      "native_sha256": "559cbb723b9b5d4cdf273eef21302358c6aed1bfcd913ea63903f127e4cce11d"
+    },
+    {
+      "apk_sha256": "750eaa122b7f092cbe92ce0c14fdf366ac7195f49b068907e7cfa74d624d6726",
+      "native_sha256": "559cbb723b9b5d4cdf273eef21302358c6aed1bfcd913ea63903f127e4cce11d"
+    }
+  ]
+}
