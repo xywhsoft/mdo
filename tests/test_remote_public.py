@@ -15,6 +15,7 @@ import select
 import shlex
 import shutil
 import subprocess
+import sys
 import tarfile
 import time
 import uuid
@@ -25,6 +26,9 @@ from test_remote_bridge import Rpc
 from test_remote_live import LiveRpc
 from test_remote_rudp import gateway, negotiate
 from remote_website_fixture import remote_website_fixture, WEBSITE_HOST
+
+sys.path.insert(0,str(ROOT/'tools'))
+import build_mdo
 
 
 def api(port,method='GET',path='/remote',body=None,status=200):
@@ -48,10 +52,21 @@ def until(port,predicate,path='/remote',seconds=20):
     raise AssertionError(('condition deadline',path,value))
 
 
-def source(site, port, origin, stun, edition):
+def tree_hashes(root):
+    return {p.relative_to(root).as_posix():hashlib.sha256(p.read_bytes()).hexdigest()
+        for p in sorted(root.rglob('*')) if p.is_file()}
+
+
+def source(site, port, origin, stun, edition, lock):
+    before=tree_hashes(ROOT/'app')
     shutil.copytree(ROOT/'app',site,dirs_exist_ok=True,ignore=shutil.ignore_patterns('mdo-home','*.log'))
+    assert before==tree_hashes(ROOT/'app'),'application changed while copying the public fixture'
     unity=site/'generated/mdo_unity.c'
-    unity.write_text('#define MDO_ACCOUNT_SERVICE_ORIGIN '+json.dumps(origin)+'\n#define MDO_SERVER_BUILD 1\n'+unity.read_text(encoding='utf-8'),encoding='utf-8')
+    # The root generated entry can belong to a previous SDK. Regenerate only
+    # inside the private fixture; preserve the user's working application.
+    generated=build_mdo.generated_unity(lock,build_mdo.source_list())
+    unity.write_text('#define MDO_ACCOUNT_SERVICE_ORIGIN '+json.dumps(origin)+'\n#define MDO_SERVER_BUILD 1\n'+generated,encoding='utf-8')
+    (site/'generated/deps.lock').write_text(json.dumps(lock,indent=2)+'\n',encoding='utf-8')
     for relative,needle,prefix in (
         ('src/remote/direct_rudp.inc.c','MdoPeerPolicyInit(&Direct->Policy,Net,MDO_ACCOUNT_SERVICE_ORIGIN);','Direct->Policy'),
         ('src/remote/lan_gateway.inc.c','MdoPeerPolicyInit(&Policy,&Gateway->Net,MDO_ACCOUNT_SERVICE_ORIGIN);','Policy')):
@@ -68,6 +83,9 @@ def source(site, port, origin, stun, edition):
     config=json.loads((site/'xs.json').read_text(encoding='utf-8')); service=config['services'][0]
     service.update({'class':'http','name':'public-'+edition,'ip':'127.0.0.1','port':port}); service.pop('window',None)
     (site/'xs.json').write_text(json.dumps(config),encoding='utf-8')
+    return {'original_app_sha256':hashlib.sha256(json.dumps(before,sort_keys=True).encode()).hexdigest(),
+        'fixture_sha256':hashlib.sha256(json.dumps(tree_hashes(site),sort_keys=True).encode()).hexdigest(),
+        'generated_unity_sha256':hashlib.sha256(unity.read_bytes()).hexdigest()}
 
 
 SUPERVISOR=r'''
@@ -106,12 +124,26 @@ def main():
     assert re.fullmatch(r'[a-z][a-z0-9_-]*@[A-Za-z0-9.-]+',args.ssh)
     assert re.fullmatch(r'[A-Za-z0-9.-]{1,253}',args.stun)
     assert args.remote_root.startswith('/home/') and args.remote_exe.startswith(args.remote_root+'/')
+    lock=build_mdo.load_object(ROOT/'deps.lock')
+    build_mdo.verify_host_receipt(args.host,lock,False)
+    local_build=build_mdo.load_object(args.host.with_name(args.host.name+'.build.json'))
     ssh=[str(args.ssh_bin),'-o','BatchMode=yes','-o','StrictHostKeyChecking=yes','-o','ConnectTimeout=10','-i',str(args.ssh_key),args.ssh]
     def remote(code,*values):
         return subprocess.check_output([*ssh,shlex.join(['python3','-',*values])],input=code.encode(),timeout=20).decode()
     def upload(path,target):
         subprocess.run([str(args.ssh_bin.with_name('scp.exe' if os.name=='nt' else 'scp')),
             '-q',*ssh[1:-1],str(path),args.ssh+':'+target],check=True,timeout=40)
+
+    remote_build=json.loads(remote('''from pathlib import Path
+import hashlib,json,sys
+exe=Path(sys.argv[1]); receipt=json.loads(exe.with_name(exe.name+'.build.json').read_text())
+assert sys.argv[2].startswith(receipt['revision']) and len(receipt['revision'])>=7
+assert receipt['profile_sha256']==sys.argv[3]
+assert receipt['extensions']==json.loads(sys.argv[4])
+assert receipt['binary_sha256']==hashlib.sha256(exe.read_bytes()).hexdigest()
+assert receipt['binary_bytes']==exe.stat().st_size
+print(json.dumps({k:receipt[k] for k in ('revision','profile_sha256','extensions','binary_sha256','binary_bytes')}))
+''',args.remote_exe,lock['xserver']['commit'],local_build['profile_sha256'],json.dumps(local_build['extensions'])))
 
     website,website_port,_,_=remote_website_fixture()
     remote_port,local_port=free_port(),free_port()
@@ -122,8 +154,9 @@ def main():
     local=ROOT/'.build'/('public-remote-'+case); local.mkdir()
     remote_source=local/'remote'; local_source=local/'local'
     origin=f'http://127.0.0.1:{website_port}'
-    source(remote_source,remote_port,origin,args.stun,'controller' if args.reverse else 'target')
-    source(local_source,local_port,origin,args.stun,'target' if args.reverse else 'controller')
+    remote_snapshot=source(remote_source,remote_port,origin,args.stun,'controller' if args.reverse else 'target',lock)
+    local_snapshot=source(local_source,local_port,origin,args.stun,'target' if args.reverse else 'controller',lock)
+    assert remote_snapshot['original_app_sha256']==local_snapshot['original_app_sha256'],'application changed between the two fixture copies'
     (remote_source/'supervise.py').write_text(SUPERVISOR,encoding='utf-8')
     archive=local/'target.tar.gz'
     with tarfile.open(archive,'w:gz') as tar:
@@ -245,6 +278,9 @@ with tarfile.open(archive) as tar:
             'http_write':True,'live':True,'readonly':True,'receipt_after_direct_cancel':True,'controller_logout':True,
             'target_only_project':True,'remote_source_archive_sha256':hashlib.sha256(archive.read_bytes()).hexdigest()}
         result.update(handshake_ms=handshake_ms,native_public_mappings=mappings,reverse=args.reverse,idle_seconds=args.idle_seconds)
+        result.update(xrt_commit=lock['xrt']['commit'],sdk_commit=lock['xserver']['commit'],
+            local_host_sha256=local_build['binary_sha256'],remote_host=remote_build,
+            local_source=local_snapshot,remote_source=remote_snapshot)
         success=True
     finally:
         for ws in sockets: ws.close()

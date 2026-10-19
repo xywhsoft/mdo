@@ -69,3 +69,22 @@ XRT `b093114d3d78d9700a113518d9030ffe836c7602` 已完成可选的 xrudp Future �
 证据：主仓 `.build/xrudp-future-{compiler-unit,provenance-unit,snapshot-check}.log`、`xrudp-future-sdk-{windows,linux-fixed}.log` 和 `xrudp-future-service-{windows,linux}-test.log`；产品 SDK `.build/xrudp-future-{windows,linux}-{build,runtime,sdk}.log`；mdo `.build/xrudp-future-{sdk-byte-verification.json,lock.json,dependency-tests.log}`、`xrudp-future-{windows,linux}-rendezvous.log` 和 `xrudp-future-windows-remote.log`。
 
 正在运行的九组隔离长稳仍保留原二进制和计时，其旧运行时结果不计为本次 Future 运行时的 72 小时验收。XRT 原生 Future 的 68 组固定提交验收证据另存于 `out/xrudp-endpoint-future/acceptance-receipt.json`，当前源文件和二进制哈希复核通过。整体 xrudp 长期任务仍有最终长稳、实体 Android 和两端独立 NAT 等验收工作；本次完成依赖升级和兼容性验证，没有进行安装包发布或线上替换。
+
+## 当前 SDK 在显卡服务器的重建与双向公网复验
+
+从干净的产品 SDK `49dd88f` 提交导出 1291 个实际构建来源文件，剔除历史发行包和开发样例二进制。归档为 12,154,728 字节，SHA256 `d1c172813643f1812135b14e5d16e3e75c26e9d545610296b36f0daea5902940`。显卡服务器独立目录 `/home/xs/.cache/mdo-xrudp-public-49dd88f-20261019-r2` 完成 GCC 原生构建，构建前后逐文件哈希保持一致。新 Linux 宿主为 3,658,768 字节，SHA256 `e53f7dabb184857f109ecc4b987b3f59277baa702fc7707a6791f9f6994e83d4`，其完整提交、profile、导出和二进制大小/哈希与真实收据一致。此构建使用服务器原生 ABI，不充当发行基线 ABI 验收。
+
+构建后的时间/等待/进程/定时器/持久化/根内移动回归，以及六个扩展、565 个公共导出的外层与嵌套 TCC 验证均通过，包含实际 IPv4/IPv6 Native/Future 和 Engine 销毁后结果保留。首次构建包装器的运行检查失败是测试容器 `TasksMax=64` 不足以容纳默认 64 个工作线程加主线程等；二进制已经构建成功。仅将复验容器限额提高到 512 后，同一二进制检查通过，CPU、内存和最长执行时间仍有限制，没有修改产品代码或放宽生产配置。
+
+`tests/test_remote_public.py` 修正了测试入口使用旧生成缓存的问题：只在两个私有应用副本内按当前 `deps.lock` 和来源清单生成 unity/deps；检查复制期间及两次复制之间原应用未变化，并在连接前验证两端宿主版本、profile、扩展、大小和 SHA256。收据保存真实 SDK、XRT、原应用及测试副本指纹。原应用包含其他任务尚未提交的改动，其树哈希 `0a5f9b305c4adf916a1948ed835df80baab5b4eb279468e0d541061243071e38` 保持不变，没有把工作区来源伪称为干净的 mdo 提交。
+
+| 真实方向 | STUN | Noise/选路耗时 | 空闲后继续业务 |
+| --- | --- | ---: | --- |
+| Windows 控制端 → 显卡服务器目标 | `222.186.10.53` | 407 ms | 65 秒后通过 |
+| 显卡服务器控制端 → Windows 目标 | `ai.xywhsoft.com`，实际 DNS | 484 ms | 65 秒后通过 |
+
+两次均通过真实公网反射候选、原生 xrudp、目标独有项目写入、HTTP/live、只读拒绝、取消直连后的已完成写入回执及中继读取、控制端退出和目标撤销。SSH 仅承载隔离账号的信令/测试控制，业务经过 UDP；两端原生宿主均返回 0 并正常关闭 Engine。两个用例是独立会话，未将单次短测计作连续长稳；服务器具有公网 IPv4，该结果不能代替两端各自处于独立 NAT 后或公网 IPv6 的验收。
+
+证据为 `.build/xrudp-public-future/{launch.json,remote-validation.json,forward.log,reverse-idle.log}`，业务收据为 `.build/public-remote-d75bf6cd354c49978a7ee70f86997b06/receipt.json` 与 `.build/public-remote-567f5c68dc76418d8a55b942abfad693/receipt.json`。远端来源和退出进程另行核对；生产 `xs.service` 仍为原 PID `3030721`、active，未安装、发布或重启生产网站。
+
+同时在当前 `b093114d` 运行时的固定输入/二进制上重新通过 48 个独立线路 STOP/RESET、双向优雅关闭和丢包恢复场景，覆盖 Windows Select/IOCP、Linux ASan/UBSan Select/Epoll、IPv4/IPv6 及两个角色；收据为 XRT `out/xrudp-wire-interop/future-controls-acceptance.json`。这些回归和 XRT 后续测试/文档提交不改变运行时依赖锁。原有十八组实际长稳继续各自计时，最新业务长稳已自然续期并完成第一次小时重连，尚未达到 72 小时。用户已回复稍后连接 Android，实体设备验收继续保留。
