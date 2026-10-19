@@ -185,6 +185,7 @@ def main():
             # Preserve the configured 60s transport idle timeout. Expired
             # sockets must close, rather than masquerading as a live route.
             direct.socket.settimeout(10)
+            close_kind = 'frame'
             try:
                 end = time.monotonic() + 10
                 while True:
@@ -196,8 +197,11 @@ def main():
                         direct.send(10, payload)
                     assert time.monotonic() < end, 'expired direct route stayed open'
             except EOFError:
-                pass
+                close_kind = 'eof'
+            except ConnectionResetError:
+                close_kind = 'reset'
             result['expired_direct_closed'] = True
+            result['expired_direct_close_kind'] = close_kind
             direct.close()
             clients.remove(direct)
             client.close()
