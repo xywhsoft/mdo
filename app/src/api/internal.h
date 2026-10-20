@@ -228,6 +228,7 @@ bool MdoApiSessionCreateRoute(MdoApiContext* pContext);
 bool MdoApiSessionsInit(void);
 void MdoApiSessionsUnit(void);
 bool MdoApiSessionProfileRoute(MdoApiContext* pContext);
+bool MdoApiSessionPermissionRoute(MdoApiContext* pContext);
 bool MdoApiSessionRoute(MdoApiContext* pContext);
 bool MdoApiSessionRestoreRoute(MdoApiContext* pContext);
 bool MdoApiSessionHistoryRoute(MdoApiContext* pContext);

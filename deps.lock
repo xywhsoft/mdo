@@ -7,7 +7,7 @@
     "single_header_sha256": "015f5b19e07dd1fbfb085c1fd096cf69c813b03bdd9dc94b29ae8b5c471cd18a"
   },
   "xserver": {
-    "commit": "5cdc54eb7ca76518612bc1ffc70eb6873333d4f6",
+    "commit": "98c7651fafe52ce81854fc3abebedc938ab13311",
     "version": "1.0.0",
     "required_extensions": [
       "xwork",
@@ -27,7 +27,7 @@
     },
     "source_bundle": {
       "path": "tools/dependencies/xs-xrt-current.bundle",
-      "sha256": "0b30c4d3d872dee54f587f2a0cbff9702551dfe5830aa8500f4cac311eb05980",
+      "sha256": "8f17c7164ad2530c4835273fba577e41024e8596d11b89f248f638c6ef30d99d",
       "ref": "refs/heads/master"
     }
   },
@@ -46,7 +46,7 @@
     "xwork": {
       "version": "3.11.0",
       "source_commit": "0dc70638b0faa00b89a6cdb4e73eac35ad2213e3",
-      "production_tree_sha256": "08ba19a37ebbec50ff21ec2b574af690ed199468b89726efc71f1d33dc315d12",
+      "production_tree_sha256": "d14e0434ce0fc1e5af54fc742785effe7e51494d2f8152634d64ff3d8404a82d",
       "abi_version": 8,
       "event_schema_version": 3
     }

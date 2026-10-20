@@ -5,7 +5,7 @@ import { downloadSessionBackup } from "../api/backup-download.js";
 import { isTransientReadError } from "../api/read-recovery.js";
 import { createRequestRecovery } from "../api/request-recovery.js";
 import { runSessionFork } from "./session-fork.js";
-import { runSessionProfileUpdate } from "./session-profile.js";
+import { runSessionProfileUpdate, runSessionPermissionUpdate } from "./session-profile.js";
 
 const readRecovery = { recoverRead: isTransientReadError,
   retainDataOnError: isTransientReadError };
@@ -71,6 +71,10 @@ function refreshAfter(response) {
 
 export async function patchSession(session, patch) {
   return refreshAfter(await api.patch(endpoint(session), patch, { ifMatch: etag(session) }));
+}
+
+export async function updateSessionPermission(session, profile, options) {
+  return runSessionPermissionUpdate(session, profile, options);
 }
 
 export async function updateSessionProfile(session, profile, options) {

@@ -5,6 +5,7 @@
 #include <xwork.h>
 
 #include "models.h"
+#include "approvals.h"
 
 typedef struct MdoAgentSession MdoAgentSession;
 typedef struct MdoAgentRun MdoAgentRun;
@@ -34,6 +35,7 @@ typedef struct MdoAgentSessionOptions {
     xwork_permission_fn OnPermission;
     void* PermissionUserData;
     bool UseRunPermissionScope; /* pass an owner-scoped grant state instead. */
+    MdoApprovalScope* LivePermissionScope; /* optional borrowed managed scope */
     xwork_hook_fn OnHook;
     void* HookUserData;
     xwork_event_fn OnEvent;

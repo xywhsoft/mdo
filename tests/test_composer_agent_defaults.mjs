@@ -143,6 +143,37 @@ function savingProfile(updateProfile) {
     choose() { modelSelect.value = "code"; modelSelect.dispatchEvent(new Event("change")); } };
 }
 
+test("permissions update an active or queued task immediately without applying its deferred model", async () => {
+  for (const active of [true, false]) {
+    const session = { id: "live", project_id: "qa", revision: 1, status: "active",
+      model_id: "text", reasoning_effort: "medium", permission_profile: "balanced" };
+    const sessionStore = createResourceStore(session);
+    let deferred = { model_id: "code", reasoning_effort: "high", permission_profile: "balanced" };
+    let applied = 0, refreshed = 0;
+    const permissionSelect = new Select(["balanced", "full-access"]);
+    const env = createComposerProfile({ modelSelect: new Select(), reasoningSelect: new Select(),
+      permissionSelect, navigation: { get: () => ({ projectId: "qa", sessionId: "live" }), subscribe: () => () => {} },
+      sessionStore, modelsStore: createResourceStore({ models }), agentsStore: createResourceStore({ items: [] }),
+      projectsStore: createResourceStore({ items: [] }), isRunActive: () => active,
+      hasPendingSubmission: () => !active, onBusyChange() {}, onProfileUpdated() { refreshed++; },
+      draftStore: { isLoaded: () => true, composerProfile: () => deferred,
+        setComposerProfile(_key, value) { deferred = value; }, flush: async () => true },
+      updateProfile() { throw new Error("must not change the model"); },
+      async updatePermission(before, choice) {
+        applied++; assert.equal(before.model_id, "text");
+        return { ...before, revision: 2, permission_profile: choice.permission_profile };
+      } });
+    permissionSelect.value = "full-access"; permissionSelect.dispatchEvent(new Event("change"));
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(applied, 1); assert.equal(refreshed, 0);
+    assert.equal(sessionStore.get().data.model_id, "text");
+    assert.equal(sessionStore.get().data.permission_profile, "full-access");
+    assert.deepEqual(deferred, { model_id: "code", reasoning_effort: "high", permission_profile: "full-access" });
+    assert.equal(env.selection().permission_profile, "full-access");
+    assert.equal(env.selection().model_id, "code"); env.destroy();
+  }
+});
+
 test("leaving a model save cancels its confirmation and ignores the late settings", async () => {
   let signal, finish;
   const env = savingProfile((_session, _profile, options) => {

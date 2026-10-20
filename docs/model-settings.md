@@ -69,3 +69,18 @@ python tools/model_http_sdk.py --check .build/implementation-xs
 第三方供应商模板是默认值，模型可用性由用户的 Key、API 产品和地区决定；没有各供应商真实凭据时，不能将模板验证当作全平台线上联调通过。
 
 模板地址参考：[ZCode 配置说明](https://zcode.z.ai/cn/docs/configuration)、[百炼 Coding Plan](https://help.aliyun.com/zh/model-studio/coding-plan)、[硅基流动快速开始](https://docs.siliconflow.cn/docs/userguide/quickstart)、[DeepSeek API](https://api-docs.deepseek.com/)。
+
+## 对话权限即时切换
+
+输入框中的“询问 / 完全访问”修改成功后立即作用于当前任务，无需重新发送消息或重启任务。
+切换到完全访问会唤醒该会话尚未决定的工具审批；切回询问会清除“本轮均允许”的授权，
+之后的工具调用重新遵守询问策略。文件工具的工作区边界与权限同步切换，已创建的子任务
+（包括后台任务）共享该状态；其他会话不受影响。已开始执行的操作继续完成。
+显式声明只读的 Agent 保持只读上限。
+
+模型和思考强度在任务运行期间仍作为后续消息配置保存。排队消息里的旧权限不覆盖
+会话的最新权限；切换权限也不提前应用排队消息的模型或思考强度。
+权限更新使用独立的 `PUT /api/v1/projects/{project}/sessions/{session}/permission`，
+请求体只含 `permission_profile`，并要求当前会话的 `If-Match`。先持久化，再发布运行时
+权限；写入失败时维持旧权限。客户端会确认丢失的响应，仅在权限字段未变时合并无关的
+元数据版本变化。设置在重启后保留。

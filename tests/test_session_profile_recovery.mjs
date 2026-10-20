@@ -40,6 +40,41 @@ function environment(options = {}) {
   env.update = createSessionProfileUpdater({ ...env, ...options }); return env;
 }
 
+test("live permission writes contain only permission and bypass runtime inspection waits", async () => {
+  let unlock, wrote = false;
+  const held = withSessionRuntime("default", "source", () => new Promise(resolve => { unlock = resolve; }));
+  await flush();
+  const env = environment({ permissionOnly: true, send: async (path, body) => {
+    assert.equal(path, "/projects/default/sessions/source/permission");
+    assert.deepEqual(body, { permission_profile: "full-access" }); wrote = true;
+    return reply({ model_id: "unchanged", permission_profile: "full-access" });
+  }});
+  try {
+    const result = await env.settle(env.update(source, { permission_profile: "full-access" }));
+    assert.ok(wrote); assert.equal(result.model_id, "unchanged");
+  } finally { unlock(); await held; }
+});
+
+test("lost permission acknowledgement confirms the permission while preserving other profile fields", async () => {
+  const env = environment({ permissionOnly: true, send: async () => { throw network(); },
+    inspect: async () => reply({ model_id: "peer-model", reasoning_effort: "none", permission_profile: "full-access" }) });
+  const result = await env.settle(env.update(source, { permission_profile: "full-access" }));
+  assert.equal(result.model_id, "peer-model"); assert.equal(result.reasoning_effort, "none");
+});
+
+test("a live permission click rebases over an unrelated metadata revision", async () => {
+  const tags = [];
+  const env = environment({ permissionOnly: true, send: async (_path, _body, options) => {
+    tags.push(options.ifMatch);
+    if (tags.length === 1) throw stale();
+    return reply({ revision: 3, model_id: "peer-model", permission_profile: "full-access" });
+  }, inspect: async () => reply({ model_id: "peer-model", permission_profile: "balanced" }) });
+  const result = await env.settle(env.update({ ...source, permission_profile: "balanced" },
+    { permission_profile: "full-access" }));
+  assert.deepEqual(tags, ['"mdo-session-source-1"', '"mdo-session-source-2"']);
+  assert.equal(result.model_id, "peer-model");
+});
+
 test("an exact profile acknowledgement completes without a confirmation read", async () => {
   let writes = 0;
   const env = environment({ send: async (_path, body, options) => {

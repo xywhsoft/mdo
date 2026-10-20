@@ -180,6 +180,62 @@ void MdoApprovalManagerUnit(void)
     memset(&g_MdoApprovals, 0, sizeof(g_MdoApprovals));
 }
 
+MdoApprovalScope* MdoApprovalScopeCreate(void)
+{
+    MdoApprovalScope* Scope = (MdoApprovalScope*)xrtCalloc(1u, sizeof(*Scope));
+    if ( Scope == NULL ) return NULL;
+    xrtAtomic32Init(&Scope->Refs, 1u);
+    Scope->Files = xworkFileScopeCreate(false);
+    if ( Scope->Files == NULL ) { xrtFree(Scope); return NULL; }
+    return Scope;
+}
+MdoApprovalScope* MdoApprovalScopeRef(MdoApprovalScope* Scope)
+{
+    uint32 Refs;
+    if ( Scope == NULL ) return NULL;
+    Refs = xrtAtomic32Load(&Scope->Refs, XMEMORY_ACQUIRE);
+    for ( ; ; ) {
+        uint32 Expected = Refs;
+        if ( Refs == 0u || Refs == UINT32_MAX ) return NULL;
+        if ( xrtAtomic32CompareExchange(&Scope->Refs, &Expected, Refs + 1u,
+                XMEMORY_ACQ_REL, XMEMORY_ACQUIRE) ) return Scope;
+        Refs = Expected;
+    }
+}
+void MdoApprovalScopeRelease(MdoApprovalScope* Scope)
+{
+    if ( Scope && xrtAtomic32FetchSub(&Scope->Refs, 1u, XMEMORY_ACQ_REL) == 1u ) {
+        xworkFileScopeRelease(Scope->Files);
+        xrtFree(Scope);
+    }
+}
+bool MdoApprovalScopeInitialize(MdoApprovalScope* Scope, bool FullAccess)
+{
+    if ( !Scope || !g_MdoApprovals.Lock || !xrtMutexLock(g_MdoApprovals.Lock) ) return false;
+    if ( !Scope->Configured ) {
+        xworkFileScopeSetExternal(Scope->Files, FullAccess);
+        Scope->Configured = true;
+    }
+    (void)xrtMutexUnlock(g_MdoApprovals.Lock);
+    return true;
+}
+bool MdoApprovalScopeUpdate(MdoApprovalScope* Scope, bool FullAccess,
+    bool (*Commit)(void*), void* Data)
+{
+    bool Ok;
+    if ( !Scope ) return Commit(Data);
+    if ( !g_MdoApprovals.Lock || !xrtMutexLock(g_MdoApprovals.Lock) ) return false;
+    Ok = !g_MdoApprovals.Stopping && Commit(Data);
+    if ( Ok ) {
+        Scope->AllowRun = false;
+        Scope->Configured = true;
+        xworkFileScopeSetExternal(Scope->Files, FullAccess);
+        (void)xrtCondBroadcast(g_MdoApprovals.Changed);
+    }
+    (void)xrtMutexUnlock(g_MdoApprovals.Lock);
+    return Ok;
+}
+
 xwork_permission_decision MdoApprovalOnPermission(void* UserData,
     const xwork_permission_request* Request)
 {
@@ -188,15 +244,10 @@ xwork_permission_decision MdoApprovalOnPermission(void* UserData,
     xwork_permission_decision Result = XWORK_PERMISSION_DENY;
     size_t Index;
     MdoApprovalScope* Scope = (MdoApprovalScope*)UserData;
-    /* Use the runtime's effective full-access profile rather than creating a
-     * product prompt before xwork can apply AUTO. The callback remains bound
-     * for nested agents; xwork enforces read-only agents before invoking it.
-     * External permission callbacks keep their own policy and user data. */
-    if ( Request != NULL && ((Scope != NULL && Scope->AutoApprove) ||
-         (Request->uEffects &
-          ~((xwork_tool_effects)XWORK_TOOL_EFFECT_READ)) == 0u) )
+    if ( Request != NULL && (Request->uEffects &
+          ~((xwork_tool_effects)XWORK_TOOL_EFFECT_READ)) == 0u )
         return XWORK_PERMISSION_DEFAULT;
-    if ( !MdoApprovalCapture(&Captured, Request) ||
+    if ( Request == NULL ||
          !g_MdoApprovals.Initialized || g_MdoApprovals.Lock == NULL ||
          !xrtMutexLock(g_MdoApprovals.Lock) ) return XWORK_PERMISSION_DENY;
     if ( g_MdoApprovals.Stopping ||
@@ -205,10 +256,11 @@ xwork_permission_decision MdoApprovalOnPermission(void* UserData,
          xrtCancelRequested(Request->pCancel) ) goto unlock;
     if ( Request->uDeadline != 0u &&
          MdoDeadlineExpired(Request->uDeadline) ) goto unlock;
-    if ( Scope != NULL && Scope->AllowRun ) {
+    if ( Scope != NULL && (Scope->AllowRun || xworkFileScopeExternal(Scope->Files)) ) {
         Result = XWORK_PERMISSION_ALLOW;
         goto unlock;
     }
+    if ( !MdoApprovalCapture(&Captured, Request) ) goto unlock;
     Index = MdoApprovalFreeLocked();
     if ( Index == SIZE_MAX ) goto unlock;
     Entry = &g_MdoApprovals.Entries[Index];
@@ -232,6 +284,10 @@ xwork_permission_decision MdoApprovalOnPermission(void* UserData,
               MdoDeadlineExpired(Request->uDeadline)) ||
              MdoDeadlineExpired(Entry->Info.ExpiresAt) ) {
             Entry->Decision = XWORK_PERMISSION_DENY;
+            break;
+        }
+        if ( Scope != NULL && xworkFileScopeExternal(Scope->Files) ) {
+            Entry->Decision = XWORK_PERMISSION_ALLOW;
             break;
         }
         if ( Request->uDeadline != 0u && Request->uDeadline < Wake )

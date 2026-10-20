@@ -77,3 +77,11 @@ passed to WebView. Bounded JVM cases and the full Android shell compile are in
 `tools/test_android_file_chooser.py`; actual ARM64 picker/send evidence is in
 `tests/acceptance/android-file-chooser` in mdo. This changes Java only, not the
 native ABI. Repackage Android to include it.
+
+The compatible xwork source bundle also provides a retained `xwork_file_scope`.
+Hosts attach it before executor binding and can change its external-path policy
+atomically during execution. Existing and future child agents retain the same
+scope; mounted aliases remain confined and read-only effect ceilings still apply.
+mdo pairs this scope with its synchronized approval state, so a live permission
+change updates both approval and native-path access without restarting an Agent.
+The additional opaque APIs leave ABI 8 and persisted session schemas unchanged.

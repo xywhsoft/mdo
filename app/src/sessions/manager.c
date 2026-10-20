@@ -20,6 +20,7 @@
 typedef struct MdoSessionActive {
     char ProjectId[MDO_PROJECT_ID_CAPACITY];
     char SessionId[MDO_SESSION_ID_CAPACITY];
+    MdoApprovalScope* PermissionScope;
 } MdoSessionActive;
 
 typedef struct MdoSessionManagerState {
@@ -574,8 +575,11 @@ static bool MdoSessionsActiveAdd(const char* ProjectId,
     if ( !MdoSessionsGrow((void**)&g_MdoSessions.Active,
             &g_MdoSessions.ActiveCapacity, g_MdoSessions.ActiveCount + 1u,
             sizeof(*g_MdoSessions.Active)) ) return false;
-    Active = &g_MdoSessions.Active[g_MdoSessions.ActiveCount++];
+    Active = &g_MdoSessions.Active[g_MdoSessions.ActiveCount];
     memset(Active, 0, sizeof(*Active));
+    Active->PermissionScope = MdoApprovalScopeCreate();
+    if ( Active->PermissionScope == NULL ) return false;
+    ++g_MdoSessions.ActiveCount;
     snprintf(Active->ProjectId, sizeof(Active->ProjectId), "%s", ProjectId);
     snprintf(Active->SessionId, sizeof(Active->SessionId), "%s", SessionId);
     MdoSessionsGenerationAdvance();
@@ -590,6 +594,7 @@ void MdoSessionsInternalActiveRelease(const char* ProjectId,
     xrtMutexLock(g_MdoSessions.Lock);
     Index = MdoSessionsActiveFind(ProjectId, SessionId);
     if ( Index != SIZE_MAX ) {
+        MdoApprovalScopeRelease(g_MdoSessions.Active[Index].PermissionScope);
         --g_MdoSessions.ActiveCount;
         if ( Index != g_MdoSessions.ActiveCount )
             g_MdoSessions.Active[Index] =
@@ -627,6 +632,11 @@ void MdoSessionManagerUnit(void)
         MdoSessionRestoreReservation* Next = Restore->Next;
         Restore->Next = NULL;
         Restore = Next;
+    }
+    {
+        size_t i;
+        for ( i = 0u; i < g_MdoSessions.ActiveCount; ++i )
+            MdoApprovalScopeRelease(g_MdoSessions.Active[i].PermissionScope);
     }
     g_MdoSessions.Initialized = false;
     MdoSessionDataUnit();
@@ -827,6 +837,10 @@ MdoSession* MdoSessionCreate(const MdoSessionCreateOptions* Options,
     AgentOptions.OwnerUserData = Bridge;
     AgentOptions.OnOwnerRetain = MdoSessionEventBridgeRef;
     AgentOptions.OnOwnerRelease = MdoSessionEventBridgeRelease;
+    xrtMutexLock(g_MdoSessions.Lock);
+    AgentOptions.LivePermissionScope = g_MdoSessions.Active[
+        MdoSessionsActiveFind(AgentOptions.ProjectId, AgentOptions.ProductSessionId)].PermissionScope;
+    xrtMutexUnlock(g_MdoSessions.Lock);
     Agent = MdoAgentSessionCreateWithRuntime(g_MdoSessions.Runtime,
         &AgentOptions, Error);
     if ( Agent == NULL ) goto done;
@@ -1014,13 +1028,14 @@ MdoSession* MdoSessionOpen(const char* ProjectId, const char* SessionId,
         goto done;
     }
     MdoSessionEventBridgeSetRegistered(Bridge);
+    (void)MdoApprovalScopeInitialize(g_MdoSessions.Active[
+        MdoSessionsActiveFind(ProjectId, SessionId)].PermissionScope,
+        strcmp(Info.PermissionProfile, "full-access") == 0);
     xrtMutexUnlock(g_MdoSessions.Lock);
     ProfileChanged = Options->ProfileModelId != NULL &&
         (strcmp(Options->ProfileModelId, Info.ModelId) != 0 ||
          strcmp(Options->ProfileReasoningEffort,
-            Info.ReasoningEffort) != 0 ||
-         strcmp(Options->ProfilePermissionProfile,
-            Info.PermissionProfile) != 0);
+            Info.ReasoningEffort) != 0);
     if ( ProfileChanged && Info.Revision == UINT64_MAX ) {
         MdoSessionsError(Error, XWORK_ERROR_LIMIT,
             "session metadata revision is exhausted");
@@ -1036,9 +1051,9 @@ MdoSession* MdoSessionOpen(const char* ProjectId, const char* SessionId,
     AgentOptions.ReasoningEffort =
         Options->ProfileReasoningEffort != NULL ?
         Options->ProfileReasoningEffort : Info.ReasoningEffort;
-    AgentOptions.PermissionProfile =
-        Options->ProfilePermissionProfile != NULL ?
-        Options->ProfilePermissionProfile : Info.PermissionProfile;
+    /* Queued model choices are frozen; permissions always follow the latest
+     * session setting, including changes after the item was queued. */
+    AgentOptions.PermissionProfile = Info.PermissionProfile;
     AgentOptions.MaxOutputTokens = AgentOptions.Protocol == 0 ?
         0u : Info.MaxOutputTokens;
     AgentOptions.WorkspaceRoot = Info.WorkspaceRoot;
@@ -1054,6 +1069,10 @@ MdoSession* MdoSessionOpen(const char* ProjectId, const char* SessionId,
     AgentOptions.OwnerUserData = Bridge;
     AgentOptions.OnOwnerRetain = MdoSessionEventBridgeRef;
     AgentOptions.OnOwnerRelease = MdoSessionEventBridgeRelease;
+    xrtMutexLock(g_MdoSessions.Lock);
+    AgentOptions.LivePermissionScope = g_MdoSessions.Active[
+        MdoSessionsActiveFind(AgentOptions.ProjectId, AgentOptions.ProductSessionId)].PermissionScope;
+    xrtMutexUnlock(g_MdoSessions.Lock);
     Agent = MdoAgentSessionCreateWithRuntime(g_MdoSessions.Runtime,
         &AgentOptions, Error);
     if ( Agent == NULL ) goto done;
@@ -1086,26 +1105,6 @@ MdoSession* MdoSessionOpen(const char* ProjectId, const char* SessionId,
                 "resolve interrupted Agent calls before changing the profile");
             goto done;
         }
-        Candidate = Info;
-        ++Candidate.Revision;
-        Candidate.UpdatedAt = MdoUtcUs();
-        if ( Candidate.UpdatedAt < Candidate.CreatedAt )
-            Candidate.UpdatedAt = Candidate.CreatedAt;
-        Candidate.Protocol = AgentInfo.Protocol;
-        Candidate.MaxOutputTokens = AgentInfo.MaxOutputTokens;
-        Candidate.ConfigRevision = AgentInfo.ConfigRevision;
-        Candidate.ModelGeneration = AgentInfo.ModelGeneration;
-        Candidate.ModuleGeneration = AgentInfo.ModuleGeneration;
-        Candidate.SkillGeneration = AgentInfo.SkillGeneration;
-        snprintf(Candidate.ModelId, sizeof(Candidate.ModelId), "%s",
-            AgentInfo.ModelId);
-        snprintf(Candidate.ReasoningEffort,
-            sizeof(Candidate.ReasoningEffort), "%s",
-            AgentInfo.ReasoningEffort);
-        snprintf(Candidate.PermissionProfile,
-            sizeof(Candidate.PermissionProfile), "%s",
-            AgentInfo.PermissionProfile);
-        Candidate.RuntimeOpen = true;
     }
     Info.RuntimeOpen = true;
     Session = MdoSessionsHandleCreate(Agent, Bridge, ProjectLease, &Info, MetaPath);
@@ -1114,8 +1113,35 @@ MdoSession* MdoSessionOpen(const char* ProjectId, const char* SessionId,
     if ( ProfileChanged || InterruptedClosed ) {
         xrtMutexLock(Session->Lock);
         xrtMutexLock(g_MdoSessions.Lock);
-        Committed = MdoSessionsValidateCurrent(Session, Error) &&
-            MdoSessionsCommit(Session, &Candidate, Error);
+        /* A live permission or title edit can commit while recovery opens the
+         * Agent. Merge those fields instead of rejecting the run or restoring
+         * the queued item's obsolete permission. Profile edits remain blocked
+         * by the active reservation. */
+        {
+            MdoSessionInfo Current;
+            Committed = MdoSessionsMetaRead(ProjectId, SessionId, &Current) &&
+                Current.Status == MDO_SESSION_ACTIVE &&
+                Current.Revision != UINT64_MAX;
+            if ( Committed ) {
+                Session->Info = Current;
+                Candidate = Current;
+                ++Candidate.Revision;
+                Candidate.UpdatedAt = MdoUtcUs();
+                if ( Candidate.UpdatedAt < Candidate.CreatedAt )
+                    Candidate.UpdatedAt = Candidate.CreatedAt;
+                Candidate.Protocol = AgentInfo.Protocol;
+                Candidate.MaxOutputTokens = AgentInfo.MaxOutputTokens;
+                Candidate.ConfigRevision = AgentInfo.ConfigRevision;
+                Candidate.ModelGeneration = AgentInfo.ModelGeneration;
+                Candidate.ModuleGeneration = AgentInfo.ModuleGeneration;
+                Candidate.SkillGeneration = AgentInfo.SkillGeneration;
+                snprintf(Candidate.ModelId, sizeof(Candidate.ModelId), "%s", AgentInfo.ModelId);
+                snprintf(Candidate.ReasoningEffort, sizeof(Candidate.ReasoningEffort), "%s", AgentInfo.ReasoningEffort);
+                Candidate.RuntimeOpen = true;
+                Committed = MdoSessionsCommit(Session, &Candidate, Error);
+            } else MdoSessionsError(Error, XWORK_ERROR_CONTEXT,
+                "session changed while opening its runtime");
+        }
         xrtMutexUnlock(g_MdoSessions.Lock);
         xrtMutexUnlock(Session->Lock);
         if ( !Committed ) {
@@ -1271,6 +1297,10 @@ MdoSession* MdoSessionFork(MdoSession* Source,
     AgentOptions.OwnerUserData = Bridge;
     AgentOptions.OnOwnerRetain = MdoSessionEventBridgeRef;
     AgentOptions.OnOwnerRelease = MdoSessionEventBridgeRelease;
+    xrtMutexLock(g_MdoSessions.Lock);
+    AgentOptions.LivePermissionScope = g_MdoSessions.Active[
+        MdoSessionsActiveFind(AgentOptions.ProjectId, AgentOptions.ProductSessionId)].PermissionScope;
+    xrtMutexUnlock(g_MdoSessions.Lock);
     Agent = MdoAgentSessionCreateWithRuntime(g_MdoSessions.Runtime,
         &AgentOptions, Error);
     if ( Agent == NULL ) goto done;
@@ -1514,6 +1544,53 @@ static bool MdoSessionsCandidate(MdoSession* Session,
     if ( Candidate->UpdatedAt < Candidate->CreatedAt )
         Candidate->UpdatedAt = Candidate->CreatedAt;
     return true;
+}
+
+typedef struct MdoPermissionCommit {
+    MdoSession* Session;
+    MdoSessionInfo* Candidate;
+    xwork_error* Error;
+} MdoPermissionCommit;
+static bool MdoSessionsPermissionCommit(void* Data)
+{
+    MdoPermissionCommit* Commit = (MdoPermissionCommit*)Data;
+    return MdoSessionsCommit(Commit->Session, Commit->Candidate, Commit->Error);
+}
+bool MdoSessionSetPermission(MdoSession* Session, const char* Permission,
+    xwork_error* Error)
+{
+    MdoSessionInfo Candidate;
+    MdoPermissionCommit Commit;
+    size_t Active;
+    bool Ok = false;
+    xworkErrorInit(Error);
+    if ( !Session || !Permission || (strcmp(Permission, "balanced") != 0 &&
+            strcmp(Permission, "full-access") != 0) ) {
+        MdoSessionsError(Error, XWORK_ERROR_INVALID_ARGUMENT, "invalid live permission profile");
+        return false;
+    }
+    xrtMutexLock(Session->Lock);
+    xrtMutexLock(g_MdoSessions.Lock);
+    if ( !MdoSessionsValidateCurrent(Session, Error) ) goto done;
+    if ( Session->Info.Status != MDO_SESSION_ACTIVE ||
+         strcmp(Session->Info.PermissionProfile, "read-only") == 0 ) {
+        MdoSessionsError(Error, XWORK_ERROR_POLICY, "session does not support live permission changes");
+        goto done;
+    }
+    if ( strcmp(Session->Info.PermissionProfile, Permission) == 0 ) { Ok = true; goto done; }
+    if ( !MdoSessionsCandidate(Session, &Candidate, Error) ) goto done;
+    snprintf(Candidate.PermissionProfile, sizeof(Candidate.PermissionProfile), "%s", Permission);
+    Active = MdoSessionsActiveFind(Candidate.ProjectId, Candidate.Id);
+    Commit.Session = Session; Commit.Candidate = &Candidate; Commit.Error = Error;
+    Ok = MdoApprovalScopeUpdate(Active == SIZE_MAX ? NULL :
+        g_MdoSessions.Active[Active].PermissionScope,
+        strcmp(Permission, "full-access") == 0, MdoSessionsPermissionCommit, &Commit);
+    if ( !Ok && Error && Error->eCode == XWORK_ERROR_NONE )
+        MdoSessionsError(Error, XWORK_ERROR_CONTEXT, "live permission update is unavailable");
+done:
+    xrtMutexUnlock(g_MdoSessions.Lock);
+    xrtMutexUnlock(Session->Lock);
+    return Ok;
 }
 
 bool MdoSessionSetProfile(MdoSession* Session, const char* ModelId,

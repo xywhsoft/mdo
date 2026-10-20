@@ -1,4 +1,4 @@
-import { updateSessionProfile } from "../../state/sessions.js";
+import { updateSessionProfile, updateSessionPermission } from "../../state/sessions.js";
 import { projectDraftKey } from "./draft-store.js";
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
 import { subscribeLocale, t } from "../../i18n.js";
@@ -34,7 +34,8 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
   permissionSelect, navigation, sessionStore, modelsStore, agentsStore,
   projectsStore, settingsStore, draftStore, status, resetButton, isRunActive,
   hasPendingSubmission = () => false, onBusyChange,
-  onSelectionChange, onProfileUpdated, updateProfile = updateSessionProfile }) {
+  onSelectionChange, onProfileUpdated, updateProfile = updateSessionProfile,
+  updatePermission = updateSessionPermission }) {
   // Blank tasks have no session metadata. Keep manual choices per project, but
   // continue following its configured default until the user picks a model.
   const drafts = new Map();
@@ -117,7 +118,8 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
     const projectId = navigation.get().projectId || "default";
     const pending = session ? draft(projectId) : blankOverrides(projectId);
     const key = selectedKey();
-    const deferred = session && draftStore?.composerProfile(key);
+    const saved = session && draftStore?.composerProfile(key);
+    const deferred = saved && { ...saved, permission_profile: agentPermission(session) };
     const selected = changing.get(key) || deferred;
     const catalog = models();
     const requested = selected?.model_id || session?.model_id || pending.model_id ||
@@ -225,7 +227,7 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
     onBusyChange(true);
     let stopSaving = () => {};
     try {
-      if (runActive || isRunActive() || hasPendingSubmission(session)) {
+      if (field !== "permission" && (runActive || isRunActive() || hasPendingSubmission(session))) {
         // A queued submission already froze its profile. Do not change the
         // session while that run may start; save the next choice separately.
         if (!draftStore) { sync(); return; }
@@ -237,8 +239,9 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
             "后续消息配置未能保存，请检查草稿状态"));
         return;
       }
-      if (sameProfile(profile, sessionProfile(session))) {
-        if (draftStore?.composerProfile(key)) {
+      if (field === "permission" ? profile.permission_profile === session.permission_profile :
+          sameProfile(profile, sessionProfile(session))) {
+        if (field !== "permission" && draftStore?.composerProfile(key)) {
           draftStore.setComposerProfile(key, null);
           if (!await draftStore.flush(key))
             throw new Error(t("profile.deferredSaveFailed", {},
@@ -258,7 +261,8 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
         unsubscribe?.();
         if (saving.get(key) === controller) saving.delete(key);
       };
-      const updated = await updateProfile(session, profile, { signal: controller.signal });
+      const updated = await (field === "permission" ? updatePermission : updateProfile)(
+        session, profile, { signal: controller.signal });
       if (controller.signal.aborted) return;
       const selected = navigation.get();
       const latest = current();
@@ -268,10 +272,13 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
       if (selected.projectId === updated.project_id &&
           selected.sessionId === updated.id) {
         sessionStore.setData(updated);
-        onProfileUpdated?.(updated);
+        if (field !== "permission") onProfileUpdated?.(updated);
       }
       if (draftStore?.composerProfile(key)) {
-        draftStore.setComposerProfile(key, null);
+        const deferred = draftStore.composerProfile(key);
+        const next = field === "permission" ? { ...deferred,
+          permission_profile: updated.permission_profile } : null;
+        draftStore.setComposerProfile(key, next && !sameProfile(next, sessionProfile(updated)) ? next : null);
         if (!await draftStore.flush(key))
           throw new Error(t("profile.deferredClearFailed", {},
             "会话配置已更新，但旧的后续消息配置未能清除，请检查草稿状态"));

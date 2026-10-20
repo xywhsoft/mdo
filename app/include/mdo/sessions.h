@@ -59,8 +59,9 @@ typedef struct MdoSessionRuntimeOptions {
     void* OwnerUserData;
     xwork_agent_owner_retain_fn OnOwnerRetain;
     xwork_agent_owner_release_fn OnOwnerRelease;
-    /* Complete open-time profile override. Applied while this session owns
-     * the exclusive runtime reservation, before its Agent can run. */
+    /* Queue-bound profile. Model/reasoning apply under the exclusive runtime
+     * reservation. Permission is retained for queue storage compatibility;
+     * execution always uses the latest session permission. */
     const char* ProfileModelId;
     const char* ProfileReasoningEffort;
     const char* ProfilePermissionProfile;
@@ -199,6 +200,10 @@ bool MdoSessionRename(MdoSession* Session, const char* Title,
 bool MdoSessionSetProfile(MdoSession* Session, const char* ModelId,
     const char* ReasoningEffort, const char* PermissionProfile,
     const MdoSessionRuntimeOptions* Runtime, xwork_error* Error);
+/* Persist and apply ask/full access without recreating a running Agent.
+ * The handle's revision is revalidated under the manager lock. */
+bool MdoSessionSetPermission(MdoSession* Session, const char* Permission,
+    xwork_error* Error);
 bool MdoSessionSetPinned(MdoSession* Session, bool Pinned,
     xwork_error* Error);
 bool MdoSessionSetArchived(MdoSession* Session, bool Archived,

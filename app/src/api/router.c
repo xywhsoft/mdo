@@ -214,6 +214,8 @@ static const MdoApiRoute g_MdoApiRoutes[] = {
       MdoApiSessionRoute, true },
     { "/api/v1/projects/{project}/sessions/{session}/restore",
       XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiSessionRestoreRoute, true },
+    { "/api/v1/projects/{project}/sessions/{session}/permission",
+      XHTTP_METHOD_PUT, "PUT, OPTIONS", MdoApiSessionPermissionRoute, true },
     { "/api/v1/projects/{project}/sessions/{session}/profile",
       XHTTP_METHOD_PUT, "PUT, OPTIONS", MdoApiSessionProfileRoute, true },
     { "/api/v1/projects/{project}/sessions/{session}/history",

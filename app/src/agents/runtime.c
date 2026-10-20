@@ -32,7 +32,7 @@ typedef struct MdoAgentOwner {
     xatomic32 Refs;
     xwork_runtime* Runtime;
     MdoProjectLease* ProjectLease;
-    MdoApprovalScope ApprovalScope;
+    MdoApprovalScope* ApprovalScope;
     MdoModelCatalog* Models;
     MdoModuleCatalog* Modules;
     MdoSkillCatalog* Skills;
@@ -263,6 +263,7 @@ static void MdoAgentOwnerRelease(MdoAgentOwner* Owner)
         xllmSessionDisableJournal(Owner->LlmSession);
         xllmSessionDestroy(Owner->LlmSession);
     }
+    MdoApprovalScopeRelease(Owner->ApprovalScope);
     for ( i = 0u; i < Owner->RouteCount; ++i ) {
         xllmClientDestroy(Owner->Routes[i].Client);
         xrtFree(Owner->Routes[i].ReasoningEffort);
@@ -1221,11 +1222,11 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
      * Remove the old structured-memory section as well during the transition. */
     {
         static const char* Starts[] = { "\n\n<file_memory>\n",
-            "\n\nMEMORY_REFERENCE_DATA_JSONL_BEGIN\n" };
+            "\n\nMEMORY_REFERENCE_DATA_JSONL_BEGIN\n", "\n\n<file_access>\n" };
         static const char* Ends[] = { "</file_memory>\n",
-            "MEMORY_REFERENCE_DATA_JSONL_END\n" };
+            "MEMORY_REFERENCE_DATA_JSONL_END\n", "</file_access>\n" };
         size_t i;
-        for ( i = 0u; i < 2u; ++i ) {
+        for ( i = 0u; i < 3u; ++i ) {
             char* Begin = strstr(Prompt, Starts[i]);
             if ( Begin != NULL ) {
                 char* End = strstr(Begin, Ends[i]);
@@ -1238,11 +1239,6 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
                 &MemoryPromptBytes, &MemoryGeneration, Error);
             if ( MemoryPrompt == NULL || !MdoAgentsAppendPrompt(&Prompt,
                     MemoryPrompt, MemoryPromptBytes, Error) ) goto fail;
-        }
-        if ( Options->Recover && !xllmSessionSetSystemPrompt(Owner->LlmSession,
-                Prompt, &ModelError) ) {
-            MdoAgentsModelError(Error, &ModelError, "cannot refresh memory context");
-            goto fail;
         }
     }
     Permission = Options->PermissionProfile != NULL &&
@@ -1259,7 +1255,31 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
             "Agent permission profile is unknown");
         goto fail;
     }
-    Owner->ApprovalScope.AutoApprove = Approval == XWORK_APPROVAL_AUTO;
+    {
+        const char* FileAccess =
+            "\n\n<file_access>\nThe user can change permissions while a task is running. "
+            "In full access mode, use read directly for user-specified native paths outside the workspace; "
+            "ordinary OS permissions still apply. In ask or read-only mode, file tools are confined "
+            "to the workspace and explicit host-mounted @alias/ directories. Tool policy is authoritative. "
+            "Use @memory-global/ and @memory-project/ for memory. Read pages include continuation offsets.\n</file_access>\n";
+        if ( !MdoAgentsAppendPrompt(&Prompt, FileAccess, strlen(FileAccess), Error) ) goto fail;
+        if ( Options->Recover && !xllmSessionSetSystemPrompt(Owner->LlmSession, Prompt, &ModelError) ) {
+            MdoAgentsModelError(Error, &ModelError, "cannot refresh file access and memory context");
+            goto fail;
+        }
+    }
+    if ( Options->UseRunPermissionScope ) {
+        Owner->ApprovalScope = Options->LivePermissionScope ?
+            MdoApprovalScopeRef(Options->LivePermissionScope) : MdoApprovalScopeCreate();
+        if ( !Owner->ApprovalScope ) {
+            MdoAgentsError(Error, XWORK_ERROR_OUT_OF_MEMORY, "cannot allocate the live permission scope");
+            goto fail;
+        }
+        if ( !MdoApprovalScopeInitialize(Owner->ApprovalScope, Approval == XWORK_APPROVAL_AUTO) ) {
+            MdoAgentsError(Error, XWORK_ERROR_CONTEXT, "cannot initialize the live permission scope");
+            goto fail;
+        }
+    }
     AllowedEffects = (xwork_tool_effects)AgentInfo.AllowedEffects;
     if ( Approval == XWORK_APPROVAL_READ_ONLY )
         AllowedEffects &= XWORK_TOOL_EFFECT_READ |
@@ -1269,7 +1289,8 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
     DefinitionConfig.sSystemPrompt = Prompt;
     DefinitionConfig.sModel = Model.Info.WireModel;
     DefinitionConfig.sReasoningEffort = Model.ReasoningEffort;
-    DefinitionConfig.eApprovalMode = Approval;
+    DefinitionConfig.eApprovalMode = Options->UseRunPermissionScope &&
+        Approval != XWORK_APPROVAL_READ_ONLY ? XWORK_APPROVAL_CALLBACK : Approval;
     DefinitionConfig.uCommandTimeoutMs = AgentInfo.TimeoutMilliseconds;
     DefinitionConfig.uMaxAgentTurns = AgentInfo.MaxTurns;
     DefinitionConfig.uMaxParallelTools = Settings.MaxParallelTools;
@@ -1341,7 +1362,7 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
      * Keep product approval grants in that lifetime; injected callbacks keep
      * their original user data. */
     AgentOptions.pPermissionUserData = Options->UseRunPermissionScope ?
-        &Owner->ApprovalScope : Options->PermissionUserData;
+        Owner->ApprovalScope : Options->PermissionUserData;
     AgentOptions.OnHook = Options->OnHook;
     AgentOptions.pHookUserData = Options->HookUserData;
     AgentOptions.OnEvent = Options->OnEvent;
@@ -1354,6 +1375,10 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
     Session->Agent = xworkAgentCreateWithRuntime(Runtime, Definition,
         &AgentOptions, Error);
     if ( Session->Agent == NULL ) goto fail;
+    if ( Owner->ApprovalScope ) {
+        if ( !xworkAgentSetFileScope(Session->Agent, Owner->ApprovalScope->Files, Error) ) goto fail;
+    } else if ( !xworkAgentAllowExternalPaths(Session->Agent,
+            Approval == XWORK_APPROVAL_AUTO, Error) ) goto fail;
     if ( !MdoAskRegisterTool(Session->Agent, Options->ProjectId,
             Options->AskScopeId != NULL ? Options->AskScopeId :
                 Options->ProductSessionId, &Session->AskBinding, Error) ||
@@ -1471,7 +1496,9 @@ bool MdoAgentSessionGetInfo(const MdoAgentSession* Session,
     Info->ProviderId = Session->ProviderId;
     Info->WireModel = Session->WireModel;
     Info->ReasoningEffort = Session->ReasoningEffort;
-    Info->PermissionProfile = Session->PermissionProfile;
+    Info->PermissionProfile = strcmp(Session->PermissionProfile, "read-only") == 0 ||
+        !Session->Owner->ApprovalScope ? Session->PermissionProfile :
+        xworkFileScopeExternal(Session->Owner->ApprovalScope->Files) ? "full-access" : "balanced";
     Info->Protocol = Session->Protocol;
     Info->ContextWindowTokens = Session->ContextWindowTokens;
     Info->MaxInputTokens = Session->MaxInputTokens;

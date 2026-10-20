@@ -525,7 +525,7 @@ static bool MdoApiSessionMutationFailure(MdoApiContext* Context,
         "The session could not be updated", NULL);
 }
 
-bool MdoApiSessionProfileRoute(MdoApiContext* Context)
+static bool MdoApiSessionProfileUpdate(MdoApiContext* Context, bool PermissionOnly)
 {
     char Project[MDO_PROJECT_ID_CAPACITY];
     char SessionId[MDO_SESSION_ID_CAPACITY];
@@ -558,10 +558,10 @@ bool MdoApiSessionProfileRoute(MdoApiContext* Context)
     if ( BodyStatus != MDO_API_BODY_OK )
         return MdoApiReplyBodyError(Context, BodyStatus);
     Valid = xrtValueType(Body.Value) == XVALUE_OBJECT &&
-        MdoApiSessionString(Body.Value, "model_id", Model,
+        (PermissionOnly || (MdoApiSessionString(Body.Value, "model_id", Model,
             sizeof(Model), true, &Present) &&
         MdoApiSessionText(Body.Value, "reasoning_effort", Reasoning,
-            sizeof(Reasoning), true, true, &Present) &&
+            sizeof(Reasoning), true, true, &Present))) &&
         MdoApiSessionString(Body.Value, "permission_profile", Permission,
             sizeof(Permission), true, &Present) &&
         Present == xrtValueCount(Body.Value);
@@ -584,14 +584,14 @@ bool MdoApiSessionProfileRoute(MdoApiContext* Context)
         return MdoApiReplyError(Context, 412u, "revision_conflict",
             "The session changed; reload it before updating", NULL);
     }
-    if ( strcmp(Info.ModelId, Model) == 0 &&
+    if ( !PermissionOnly && strcmp(Info.ModelId, Model) == 0 &&
          strcmp(Info.ReasoningEffort, Reasoning) == 0 &&
          strcmp(Info.PermissionProfile, Permission) == 0 ) {
         MdoSessionRelease(Session);
         return MdoApiSessionReply(Context, 200u, &Info);
     }
-    if ( !MdoSessionSetProfile(Session, Model, Reasoning, Permission,
-            NULL, &Error) ) {
+    if ( !(PermissionOnly ? MdoSessionSetPermission(Session, Permission, &Error) :
+            MdoSessionSetProfile(Session, Model, Reasoning, Permission, NULL, &Error)) ) {
         MdoSessionRelease(Session);
         if ( Error.eCode == XWORK_ERROR_MODEL )
             return MdoApiReplyModelProfileFailure(Context, &Error.tModelError,
@@ -610,6 +610,15 @@ bool MdoApiSessionProfileRoute(MdoApiContext* Context)
         return MdoApiReplyError(Context, 500u, "session_result_unavailable",
             "The session was updated but its metadata is unavailable", NULL);
     return MdoApiSessionReply(Context, 200u, &Info);
+}
+
+bool MdoApiSessionProfileRoute(MdoApiContext* Context)
+{
+    return MdoApiSessionProfileUpdate(Context, false);
+}
+bool MdoApiSessionPermissionRoute(MdoApiContext* Context)
+{
+    return MdoApiSessionProfileUpdate(Context, true);
 }
 
 bool MdoApiSessionCreateRoute(MdoApiContext* Context)

@@ -5445,8 +5445,10 @@ def run_probe(host: Path) -> None:
                 assert after_profile["model_id"] == run_profile[
                     "model_id"] and after_profile["reasoning_effort"] == (
                     run_profile["reasoning_effort"]), after_profile
+                # Queue snapshots freeze model/reasoning; live permission is
+                # always the current session setting.
                 assert after_profile["permission_profile"] == (
-                    run_profile["permission_profile"]), after_profile
+                    before_profile["permission_profile"]), after_profile
                 deadline = time.monotonic() + 5.0
                 while time.monotonic() < deadline:
                     profile_run = json.loads(request(port, "GET",

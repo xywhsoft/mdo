@@ -15,13 +15,14 @@
 
 typedef struct MdoApprovalSnapshot MdoApprovalSnapshot;
 
-/* Owned by one Agent runtime (one interactive turn or scheduled execution).
- * AutoApprove is set from the effective profile before publishing the runtime
- * and remains immutable. Only the approval manager may access AllowRun, under
- * its lock. */
+/* Shared by one managed session runtime and its descendants. Only the
+ * approval manager accesses AllowRun/Configured, under its lock. The file
+ * scope supplies the atomic live access mode to all file-tool executors. */
 typedef struct MdoApprovalScope {
     bool AllowRun;
-    bool AutoApprove;
+    bool Configured;
+    xatomic32 Refs;
+    xwork_file_scope* Files;
 } MdoApprovalScope;
 
 typedef struct MdoApprovalResourceInfo {
@@ -50,6 +51,15 @@ typedef struct MdoApprovalInfo {
     char WorkspaceRoot[MDO_APPROVAL_WORKSPACE_CAPACITY];
     MdoApprovalResourceInfo Resources[MDO_APPROVAL_RESOURCE_MAX];
 } MdoApprovalInfo;
+
+MdoApprovalScope* MdoApprovalScopeCreate(void);
+MdoApprovalScope* MdoApprovalScopeRef(MdoApprovalScope* Scope);
+void MdoApprovalScopeRelease(MdoApprovalScope* Scope);
+bool MdoApprovalScopeInitialize(MdoApprovalScope* Scope, bool FullAccess);
+/* Commit runs under the approval lock before the mode changes. A failed
+ * durable write leaves both approvals and file access unchanged. */
+bool MdoApprovalScopeUpdate(MdoApprovalScope* Scope, bool FullAccess,
+    bool (*Commit)(void*), void* Data);
 
 bool MdoApprovalManagerInit(void);
 void MdoApprovalManagerUnit(void);

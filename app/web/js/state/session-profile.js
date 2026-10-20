@@ -17,18 +17,20 @@ const same = (a, b) => ["model_id", "reasoning_effort", "permission_profile"].ev
 // A profile is an absolute desired state, protected by the original revision.
 // Read it after uncertain delivery; replay only while that revision is unchanged.
 // This does not turn other, unguarded mutations into retryable operations.
-export function createSessionProfileUpdater({ epoch = stamp, token = currentPageWriteToken,
+export function createSessionProfileUpdater({ permissionOnly = false, epoch = stamp, token = currentPageWriteToken,
   createRecovery = createRequestRecovery,
   send = (path, body, options) => api.put(path, body, options),
   inspect = (path, options) => api.get(path, options) } = {}) {
   return async function update(session, profile, { signal } = {}) {
     if (signal?.aborted) throw aborted();
     const project = resourceId(session.project_id), id = resourceId(session.id);
-    const revision = Number(session.revision), tag = `"mdo-session-${id}-${revision}"`;
-    const body = Object.freeze({ model_id: resourceId(profile.model_id),
-      reasoning_effort: profile.reasoning_effort, permission_profile: profile.permission_profile });
+    let revision = Number(session.revision), tag = `"mdo-session-${id}-${revision}"`;
+    const body = Object.freeze(permissionOnly ? { permission_profile: profile.permission_profile } :
+      { model_id: resourceId(profile.model_id), reasoning_effort: profile.reasoning_effort,
+        permission_profile: profile.permission_profile });
+    const matches = value => permissionOnly ? value.permission_profile === body.permission_profile : same(value, body);
     if (!Number.isSafeInteger(revision) || revision < 1 || (session.etag && session.etag !== tag) ||
-        typeof body.reasoning_effort !== "string" ||
+        (!permissionOnly && typeof body.reasoning_effort !== "string") ||
         !["read-only", "balanced", "full-access"].includes(body.permission_profile))
       throw new TypeError("Invalid session profile");
     const original = epoch(), writeToken = token(), path = `/projects/${project}/sessions/${id}`;
@@ -58,8 +60,15 @@ export function createSessionProfileUpdater({ epoch = stamp, token = currentPage
         assertOwner();
         if (confirm) {
           const fresh = verified(await inspect(path, { signal: attemptSignal }));
-          if (same(fresh, body)) return fresh;
+          if (matches(fresh)) return fresh;
           if (fresh.revision !== revision) {
+            // A title/model edit or runtime startup must not discard a live
+            // permission click. Rebase only if that field is still unchanged;
+            // a peer's different permission remains an explicit conflict.
+            if (permissionOnly && fresh.permission_profile === session.permission_profile) {
+              revision = fresh.revision; tag = fresh.etag;
+              confirm = false; throw pending();
+            }
             const error = new ApiError("The session profile changed", { code: "session_profile_conflict" });
             error.currentSession = fresh; throw error;
           }
@@ -69,12 +78,13 @@ export function createSessionProfileUpdater({ epoch = stamp, token = currentPage
         }
         const wasUncertain = uncertain;
         try {
-          const fresh = verified(await withSessionRuntime(project, id, () => {
+          const schedule = permissionOnly ? (_project, _id, operation) => operation() : withSessionRuntime;
+          const fresh = verified(await schedule(project, id, () => {
             assertOwner(); uncertain = true; confirm = true;
-            return send(path + "/profile", body, { ifMatch: tag, signal: attemptSignal });
+            return send(path + (permissionOnly ? "/permission" : "/profile"), body, { ifMatch: tag, signal: attemptSignal });
           },
           { signal: attemptSignal }));
-          if (!same(fresh, body)) throw new ApiError("Profile result differs", { code: "invalid_response" });
+          if (!matches(fresh)) throw new ApiError("Profile result differs", { code: "invalid_response" });
           return fresh;
         } catch (error) {
           assertOwner();
@@ -98,3 +108,4 @@ export function createSessionProfileUpdater({ epoch = stamp, token = currentPage
 }
 
 export const runSessionProfileUpdate = createSessionProfileUpdater();
+export const runSessionPermissionUpdate = createSessionProfileUpdater({ permissionOnly: true });
