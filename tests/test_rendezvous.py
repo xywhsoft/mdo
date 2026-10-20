@@ -204,9 +204,54 @@ static void Dual(unsigned Broken, unsigned Restrict, bool BindFailure)
     MdoPeerOfferDestroy(O); xrtCancelDestroy(Cancel); CHECK(xrtAtomic32Load(&g_MdoRudpTransports,XMEMORY_ACQUIRE)==0);
     printf("PASS dual family broken=%u restrict=%u bind-failure=%u selected=%u\n",Broken,Restrict,BindFailure,Broken==3 ? 0:Expected); fflush(stdout);
 }
+static void PreCandidateResponse(void)
+{
+    MdoPeerPolicy P[2]={{0}}; Queue Q[2]={{0}}; MdoPeerSession* S[2]={NULL,NULL};
+    xcancel* Cancel=xrtCancelCreate(); CHECK(Cancel);
+    for (unsigned i=0;i<2;++i) CHECK(xrtNetAddrLoopback(&P[i].Local[0],XNET_FAMILY_IPV4,0));
+    MdoPeerOffer* O=MdoPeerOfferCreate("11111111111111111111111111111111","22222222222222222222222222222222",7,true,&P[0]); CHECK(O);
+    xvalue* Offer=MdoPeerOfferValue(O),*Held=NULL; CHECK(Offer);
+    S[1]=MdoPeerInitiate(Offer,7,&P[1],Cancel,Signal,&Q[1]); xrtValueRelease(Offer); CHECK(S[1]);
+    bool Replied=false; double End=xrtTimer()+2;
+    while (!Replied) {
+        for (unsigned i=0;i<2;++i) if (S[i]) CHECK(MdoPeerPoll(S[i]));
+        for (unsigned i=0;i<2;++i) {
+            xvalue* V;
+            while ((V=Pop(&Q[i]))) {
+                cstr Type=MdoPeerText(V,"type",24); CHECK(Type);
+                if (!strcmp(Type,"rudp_init")) {
+                    CHECK(i==1 && !S[0]); S[0]=MdoPeerAccept(O,V,&P[0],Cancel,Signal,&Q[0]); CHECK(S[0]);
+                } else if (!strcmp(Type,"rudp_candidates")) {
+                    CHECK(i==1 && !Held); Held=xrtValueDeepClone(V); CHECK(Held);
+                    /* The target has no controller candidates and cannot yet
+                     * start its own check burst. It must still answer a valid
+                     * incoming check on its already bound pinned endpoint. */
+                } else { CHECK(S[1-i] && MdoPeerInput(S[1-i],V)); }
+                xrtValueRelease(V);
+            }
+        }
+        if (S[0] && Held) {
+            MdoRudpInfo A,B;
+            CHECK(MdoRudpGetInfo(S[0]->Lanes[0].Raw,&A) && MdoRudpGetInfo(S[1]->Lanes[0].Raw,&B));
+            CHECK(!S[0]->Lanes[0].RemoteReady && !S[0]->Lanes[0].Dialed && !A.Warmup.Pending);
+            Replied=B.Check.Replies>0;
+            if (Replied) CHECK(A.Check.Sent>0);
+        }
+        CHECK(xrtTimer()<End); xrtSleep(1);
+    }
+    xrtValueRelease(Held); xrtCancelRequest(Cancel);
+    for (unsigned i=0;i<2;++i) { MdoPeerSessionDestroy(S[i]); xvalue* V; while ((V=Pop(&Q[i]))) xrtValueRelease(V); }
+    MdoPeerOfferDestroy(O); xrtCancelDestroy(Cancel);
+    CHECK(xrtAtomic32Load(&g_MdoRudpTransports,XMEMORY_ACQUIRE)==0);
+    puts("PASS authenticated incoming check replies before target receives controller candidates"); fflush(stdout);
+}
 void ServiceInit(XS_HostInfo* Host)
 {
     (void)Host;
+    PreCandidateResponse();
+#ifdef TEST_PRE_CANDIDATE_ONLY
+    puts("PASS rendezvous authority pre-candidate response and complete cleanup"); fflush(stdout); exit(0);
+#endif
     Session(XNET_FAMILY_IPV4,false,false); Session(XNET_FAMILY_IPV6,false,false);
     Session(XNET_FAMILY_IPV4,true,false); Session(XNET_FAMILY_IPV6,true,false);
     Session(XNET_FAMILY_IPV4,false,true);
@@ -238,10 +283,11 @@ def native(sdk, fixture, cc):
 def main():
     parser=argparse.ArgumentParser(description=__doc__); mode=parser.add_mutually_exclusive_group(required=True)
     mode.add_argument('--host',type=Path); mode.add_argument('--native',type=Path); parser.add_argument('--cc',default='gcc')
-    parser.add_argument('--reverse-checks',action='store_true'); args=parser.parse_args()
+    parser.add_argument('--reverse-checks',action='store_true')
+    parser.add_argument('--pre-candidate-only',action='store_true'); args=parser.parse_args()
     with Oracles() as oracle:
         if args.reverse_checks: oracle.blocked_check_senders.add(1)
-        fixture=oracle.defines()+('#define TEST_REVERSE_CHECKS 1\n' if args.reverse_checks else '')+SOURCE
+        fixture=oracle.defines()+('#define TEST_REVERSE_CHECKS 1\n' if args.reverse_checks else '')+('#define TEST_PRE_CANDIDATE_ONLY 1\n' if args.pre_candidate_only else '')+SOURCE
         if args.native:
             native(args.native.resolve(),fixture,args.cc); assert not oracle.errors,oracle.errors; return 0
         with tempfile.TemporaryDirectory(prefix='mdo-rendezvous-') as raw:

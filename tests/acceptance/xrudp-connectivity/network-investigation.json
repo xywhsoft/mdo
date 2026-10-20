@@ -1,0 +1,100 @@
+{
+  "schema": 1,
+  "client_product_commit": "4d2361d2",
+  "native_sdk_commit": "5cdc54eb7ca76518612bc1ffc70eb6873333d4f6",
+  "local_exe_sha256": "ce038f61d1bb0c824215560b603f085d0fc32cebce7a269f35142f1d0ede9920",
+  "cases": [
+    {
+      "target": "公司台式机",
+      "candidate_delay_ms": 0,
+      "native_noise_ready": true,
+      "application_ready": true,
+      "http_status": 200,
+      "response_bytes": 1072,
+      "native_transports_after_close": 0,
+      "advertised_stun_ports": [
+        12375
+      ],
+      "observed_authenticated_ports": [
+        4823
+      ],
+      "mapping_port_changed": true,
+      "evidence_sha256": "7caee91d2bbbc08caabd62d0fb01c94eb8814f2283061866002ca4838a51091f"
+    },
+    {
+      "target": "家用台式机",
+      "candidate_delay_ms": 0,
+      "native_noise_ready": true,
+      "application_ready": true,
+      "http_status": 200,
+      "response_bytes": 1073,
+      "native_transports_after_close": 0,
+      "advertised_stun_ports": [
+        40122
+      ],
+      "observed_authenticated_ports": [
+        40122
+      ],
+      "mapping_port_changed": false,
+      "evidence_sha256": "12a268efbc9878b21adc960b7e006cd981df007724906fbd0ae22fac0a472131"
+    },
+    {
+      "target": "公司台式机",
+      "candidate_delay_ms": 1200,
+      "native_noise_ready": true,
+      "application_ready": true,
+      "http_status": 200,
+      "response_bytes": 1072,
+      "native_transports_after_close": 0,
+      "advertised_stun_ports": [
+        12441
+      ],
+      "observed_authenticated_ports": [
+        3741
+      ],
+      "mapping_port_changed": true,
+      "evidence_sha256": "55e45c0593df903c75cdec32afcda5136c51ff2d6fbd90a5a1a0b8beed777a07",
+      "pre_outbound_request_count": 15,
+      "pre_outbound_authenticated_responses": 0,
+      "after_outbound_authenticated_response_seen": true
+    },
+    {
+      "target": "家用台式机",
+      "candidate_delay_ms": 1200,
+      "native_noise_ready": true,
+      "application_ready": true,
+      "http_status": 200,
+      "response_bytes": 1073,
+      "native_transports_after_close": 0,
+      "advertised_stun_ports": [
+        40187
+      ],
+      "observed_authenticated_ports": [
+        40187
+      ],
+      "mapping_port_changed": false,
+      "evidence_sha256": "7800e51c6eb97d55dec53ff5bf2e2dde5e6338db4f345933936fcced0ecdf3ca",
+      "pre_outbound_request_count": 9,
+      "pre_outbound_authenticated_responses": 0,
+      "after_outbound_authenticated_response_seen": true
+    }
+  ],
+  "pre_candidate_response_regression_windows_tcc": true,
+  "pre_candidate_response_regression_linux_asan_ubsan_leaks": true,
+  "home_company_direct_baseline": "failed before authenticated direction selection; automatic relay fallback passed",
+  "finding": "Observed company destination-dependent mapping plus home destination-dependent ingress filtering explains failure of current candidate-based hole punching.",
+  "claim_all_code_bug_free": false,
+  "claim_all_hole_punch_algorithms_impossible": false,
+  "exact_filtering_appliance_identified": false,
+  "product_clients_replaced": false,
+  "firewall_or_router_changed": false,
+  "model_calls": 0,
+  "company_data_writes": 0,
+  "remote_cleanup": {
+    "public_native_processes_exited": true,
+    "website_and_stun_preserved": true,
+    "probe_source_sha256": "3cd73208c025295218f0f1682adc5b59aee7100d9e496d0d0b4aea3d5e26d180"
+  },
+  "device_viewers_and_controllers_after_test": 0,
+  "local_account_retained": true
+}
