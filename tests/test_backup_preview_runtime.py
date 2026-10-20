@@ -51,7 +51,7 @@ class Probe(UploadProbe):
         ):
             assert text.count(old) == 1, old
             text = text.replace(old, new, 1)
-        text = ('void BackupPreviewFixturePause(unsigned, xcancel*, xdeadline);\n'
+        text = ('void BackupPreviewFixturePause(unsigned, xcancel*, uint64);\n'
                 'void BackupPreviewFixtureBudget(MdoSessionBackupLimits*);\n'
                 'void BackupPreviewFixtureBeforeSubmit(xcancel*, xtaskpool*);\n'
                 'void BackupPreviewFixtureRetirePause(void);\n'

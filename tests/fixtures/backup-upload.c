@@ -22,7 +22,7 @@ static bool BackupUploadFixtureControl(XS_HttpReq* Request)
     if ( MdoApiViewEqualText(Target, "/__fixture/backup-upload/release") ) BackupUploadFixtureUnit();
     else if ( MdoApiViewEqualText(Target, "/__fixture/backup-upload/expire") ) {
         xrtMutexLock(g_MdoBackupUploads->Lock);
-        if (g_MdoBackupUploads->Slot) g_MdoBackupUploads->Slot->Deadline = xrtClock();
+        if (g_MdoBackupUploads->Slot) g_MdoBackupUploads->Slot->Deadline = MdoMonotonicUs();
         xrtMutexUnlock(g_MdoBackupUploads->Lock);
     } else if ( MdoApiViewEqualText(Target, "/__fixture/backup-upload/reset") ) {
         MdoApiBackupUploadsUnit();

@@ -98,7 +98,7 @@ void ServiceInit(XS_HostInfo* Host)
     /* Test-only token injection stays within this disposable fixture TU. */
     xrtMutexLock(g_MdoAccount.Lock);
     strcpy(g_MdoAccount.Tokens.Access, "probe-secret");
-    g_MdoAccount.Tokens.Expires = xrtDeadlineAfter(600000000u);
+    g_MdoAccount.Tokens.Expires = MdoDeadlineAfterUs(600000000u);
     g_MdoAccount.Tokens.MemberId = 1;
     xrtMutexUnlock(g_MdoAccount.Lock);
     if (!MdoWebManagerReload()) goto done;
@@ -115,7 +115,7 @@ void ServiceInit(XS_HostInfo* Host)
     MdoAgentRunOptionsInit(&Options); Options.Prompt = "Search and read the relevant result range";
     Run = Agent ? MdoAgentRunCreate(Agent, &Options, &Error) : NULL;
     if (!Run || !MdoAgentRunStart(Run, &Error) ||
-        MdoAgentRunWait(Run, xrtDeadlineAfter(5000000u), &Result, &Error) != XWORK_RESULT_OK ||
+        MdoAgentRunWait(Run, MdoDeadlineAfterUs(5000000u), &Result, &Error) != XWORK_RESULT_OK ||
         g_WebSessionCalls != 3u || !g_WebSessionBudget) goto done;
     for (unsigned Mode = 0u; Mode < 2u; ++Mode) {
         xworkRunResultUnit(&Result); MdoAgentRunDestroy(Run); Run = NULL;
@@ -127,7 +127,7 @@ void ServiceInit(XS_HostInfo* Host)
         Agent = Session ? MdoSessionAgentRef(Session) : NULL;
         Run = Agent ? MdoAgentRunCreate(Agent, &Options, &Error) : NULL;
         if (!Run || !MdoAgentRunStart(Run, &Error)) goto done;
-        xwork_result Outcome = MdoAgentRunWait(Run, xrtDeadlineAfter(5000000u), &Result, &Error);
+        xwork_result Outcome = MdoAgentRunWait(Run, MdoDeadlineAfterUs(5000000u), &Result, &Error);
         if (Mode ? (Outcome != XWORK_RESULT_ERROR || Error.eCode != XWORK_ERROR_IO)
                  : Outcome != XWORK_RESULT_CANCELLED) goto done;
     }

@@ -157,7 +157,7 @@ static bool BackupDecodeFixtureRun(MdoSession* Session, const char* Prompt, bool
         if ( !Ok ) { xllmMessageUnit(&Message); MdoAgentSessionRelease(Agent); return false; }
         Options.UserMessage = &Message;
     }
-    Options.Deadline = xrtDeadlineAfter(UINT64_C(5000000));
+    Options.Deadline = MdoDeadlineAfterUs(UINT64_C(5000000));
     Run = MdoAgentRunCreate(Agent, &Options, Error); MdoAgentSessionRelease(Agent); xllmMessageUnit(&Message);
     Ok = Run != NULL && MdoAgentRunStart(Run, Error) &&
         MdoAgentRunWait(Run, Options.Deadline, &Result, Error) == XWORK_RESULT_OK;

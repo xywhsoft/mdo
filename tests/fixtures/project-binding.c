@@ -28,12 +28,12 @@ static void BindingProbeOptions(MdoProjectCreateOptions* Options, cstr Id, cstr 
 
 static bool BindingProbeWriteCheckpoint(void)
 {
-    xdeadline Deadline;
+    uint64 Deadline;
     if ( !xrtAtomic32Load(&g_BindingHold, XMEMORY_ACQUIRE) ) return true;
-    Deadline = xrtDeadlineAfter(3000000u);
+    Deadline = MdoDeadlineAfterUs(3000000u);
     xrtAtomic32Store(&g_BindingReady, 1u, XMEMORY_RELEASE);
     while ( !xrtAtomic32Load(&g_BindingStop, XMEMORY_ACQUIRE) ) {
-        if ( xrtDeadlineExpired(Deadline) ) return false;
+        if ( MdoDeadlineExpired(Deadline) ) return false;
         xrtSleep(1000u);
     }
     return true;
@@ -83,7 +83,7 @@ void ServiceInit(XS_HostInfo* Host)
     xwork_error Error;
     xroot Site = NULL, OldRoot = NULL;
     xthread* Thread = NULL;
-    xdeadline Deadline;
+    uint64 Deadline;
     unsigned Calls;
     bool Found, Ok = false;
     (void)Host;
@@ -138,8 +138,8 @@ void ServiceInit(XS_HostInfo* Host)
     xrtAtomic32Store(&g_BindingHold, 1u, XMEMORY_RELEASE);
     Thread = xrtThreadCreate(BindingProbeWriter, NULL, 0u);
     BINDING_CHECK(Thread != NULL);
-    Deadline = xrtDeadlineAfter(3000000u);
-    while ( !xrtAtomic32Load(&g_BindingReady, XMEMORY_ACQUIRE) && !xrtDeadlineExpired(Deadline) ) xrtSleep(1000u);
+    Deadline = MdoDeadlineAfterUs(3000000u);
+    while ( !xrtAtomic32Load(&g_BindingReady, XMEMORY_ACQUIRE) && !MdoDeadlineExpired(Deadline) ) xrtSleep(1000u);
     BINDING_CHECK(xrtAtomic32Load(&g_BindingReady, XMEMORY_ACQUIRE) != 0u);
     Info.Size = sizeof(Info);
     BINDING_CHECK(MdoProjectGet("pending", &Info, &Found, &Error) && !Found);

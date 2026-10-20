@@ -64,7 +64,7 @@ def run(host):
             'g_MdoUpdate.Thread=xrtThreadCreate(MdoUpdateThread,NULL,0); MdoUpdateCheck();\n}\n'
             'XS_RequestResult RequestProc(XS_HttpReq* req) {\n'
             'if(MdoApiViewEqualText(req->head->Target,"/api/v1/update?fixture=periodic")){\n'
-            'xrtMutexLock(g_MdoUpdate.Lock);g_MdoUpdate.NextCheck=xrtDeadlineAfter(0);xrtMutexUnlock(g_MdoUpdate.Lock);}\n'
+            'xrtMutexLock(g_MdoUpdate.Lock);g_MdoUpdate.NextCheck=MdoDeadlineAfterUs(0);xrtMutexUnlock(g_MdoUpdate.Lock);}\n'
             'if (MdoApiViewEqualText(req->head->Target,"/api/v1/update?fixture=pause") ||\n'
             '    MdoApiViewEqualText(req->head->Target,"/api/v1/update?fixture=resume")) {\n'
             ' xrtMutexLock(g_MdoUpdate.Lock); g_MdoUpdate.Status.Installing=\n'

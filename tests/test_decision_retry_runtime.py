@@ -29,16 +29,16 @@ static bool g_DecisionCacheTestEnabled;
 static uint64 g_DecisionCacheTestNow;
 static const char* g_DecisionCacheTestToken;
 static uint64 DecisionCacheClock(void)
-{ return g_DecisionCacheTestEnabled ? g_DecisionCacheTestNow : xrtClock(); }
+{ return g_DecisionCacheTestEnabled ? g_DecisionCacheTestNow : MdoMonotonicUs(); }
 static bool DecisionCacheExpired(uint64 At)
-{ return g_DecisionCacheTestEnabled ? g_DecisionCacheTestNow >= At : xrtDeadlineExpired(At); }
+{ return g_DecisionCacheTestEnabled ? g_DecisionCacheTestNow >= At : MdoDeadlineExpired(At); }
 static bool DecisionCacheToken(char Token[MDO_API_WRITE_TOKEN_CAPACITY])
 {
     if (!g_DecisionCacheTestEnabled) return MdoApiWriteToken(Token);
     strcpy(Token, g_DecisionCacheTestToken); return true;
 }
-#define xrtClock DecisionCacheClock
-#define xrtDeadlineExpired DecisionCacheExpired
+#define MdoMonotonicUs DecisionCacheClock
+#define MdoDeadlineExpired DecisionCacheExpired
 #define MdoApiWriteToken DecisionCacheToken
 '''
 
@@ -100,8 +100,8 @@ def probe(args):
             shutil.copytree(ROOT / 'app', site)
         if not args.baseline_commit:
             cache = site / 'src/api/decision_cache.c'
-            cache.write_text(CACHE_CLOCK + cache.read_text() + '\n#undef xrtClock\n'
-                '#undef xrtDeadlineExpired\n#undef MdoApiWriteToken\n', encoding='utf-8')
+            cache.write_text(CACHE_CLOCK + cache.read_text() + '\n#undef MdoMonotonicUs\n'
+                '#undef MdoDeadlineExpired\n#undef MdoApiWriteToken\n', encoding='utf-8')
             shutil.copy2(ROOT / 'tests/fixtures/decision-cache-check.c', site / 'src/bootstrap')
             service = site / 'src/bootstrap/service.c'
             source = service.read_text()

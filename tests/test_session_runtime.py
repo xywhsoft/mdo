@@ -231,7 +231,7 @@ static bool Run(MdoSession *session, const char *prompt) {
     MdoAgentSessionRelease(agent);
     if (run == NULL || !MdoAgentRunStart(run, &error)) goto done;
     memset(&result, 0, sizeof(result));
-    status = MdoAgentRunWait(run, xrtDeadlineAfter(UINT64_C(5000000)),
+    status = MdoAgentRunWait(run, MdoDeadlineAfterUs(UINT64_C(5000000)),
         &result, &error);
     printf("run=%d text:%s\n", (int)status,
         result.sFinalText != NULL ? result.sFinalText : "null");

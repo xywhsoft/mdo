@@ -101,8 +101,8 @@ static int32 RemoteTestRun(void* data) {
     RemoteTest.Socket = MdoRemoteServiceConnect(&net,ticket,&lease,&status);
     MdoAccountSecretValueRelease(ticket); ticket = NULL;
     ok = RemoteTest.Socket != NULL; if (!ok) goto done;
-    uint64 until = xrtDeadlineAfter(15000000u);
-    while (!xrtDeadlineExpired(until) && MdoRemoteSocketPoll(RemoteTest.Socket,RemoteTestMessage,&identity)) xrtSleep(5);
+    uint64 until = MdoDeadlineAfterUs(15000000u);
+    while (!MdoDeadlineExpired(until) && MdoRemoteSocketPoll(RemoteTest.Socket,RemoteTestMessage,&identity)) xrtSleep(5);
     code = MdoRemoteSocketCloseCode(RemoteTest.Socket);
 done:
     if (identity.MemberId) { config.AllowRemote = false; (void)MdoRemoteConfigSave(&config); }

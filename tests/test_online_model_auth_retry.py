@@ -34,7 +34,7 @@ static uint64 RequestDeadline;
 static void CancelLease(void* Data) { xrtCancelRequest((xcancel*)Data); }
 static bool Acquire(xcancel* Cancel,uint64 Deadline,MdoModelOnlineAccess* Access) {
     if (Fresh && !strcmp(Case,"deadline")) {
-        while (!xrtDeadlineExpired(Deadline)) xrtSleep(1u);
+        while (!MdoDeadlineExpired(Deadline)) xrtSleep(1u);
         return false;
     }
     if ((Cancel && xrtCancelRequested(Cancel)) || xrtCancelRequested(AccountCancel)) return false;
@@ -81,21 +81,21 @@ void ServiceInit(XS_HostInfo* Host) {
         AccountCancel=xrtCancelCreate();xcancel* UserCancel=xrtCancelCreate();
         xllm_request Request;xllmRequestInit(&Request);
         xllmRequestAddTextMessage(&Request,XLLM_ROLE_USER,Case);Request.uMaxOutputTokens=64u;
-        Request.pCancel=UserCancel;RequestDeadline=XRT_DEADLINE_NEVER;
-        if (!strcmp(Case,"deadline")) RequestDeadline=xrtDeadlineAfter(100000u);
-        if (!strcmp(Case,"preexpired")) RequestDeadline=xrtClock()-1u;
+        Request.pCancel=UserCancel;RequestDeadline=MDO_DEADLINE_NEVER;
+        if (!strcmp(Case,"deadline")) RequestDeadline=MdoDeadlineAfterUs(100000u);
+        if (!strcmp(Case,"preexpired")) RequestDeadline=MdoMonotonicUs()-1u;
         if (!strcmp(Case,"cancelled")) xrtCancelRequest(UserCancel);
         Request.uDeadline=RequestDeadline;
         xllm_stream_callbacks Callbacks={0};Callbacks.OnEvent=Event;
         xllm_hooks Hooks={0};Hooks.pOnRetry=Retry;Request.pHooks=&Hooks;
         Request.bStream=!strcmp(Case,"partial");
         xllm_response* Response=NULL;xllm_error Error;xllmErrorInit(&Error);
-        uint64 Started=xrtClock();
+        uint64 Started=MdoMonotonicUs();
         xllm_result Result=MdoModelOnlineComplete(Catalog,&Options,&Request,&Callbacks,&Response,
             !strcmp(Case,"nullable-error")?NULL:&Error);
         printf("case=%s result=%d kind=%s attempts=%u acquired=%u released=%u deltas=%u retries=%u ms=%llu\n",
             Case,Result,MdoModelErrorKind(&Error),Error.tDiagnostics.uAttemptCount,Acquired,Released,
-            Deltas,Retries,(unsigned long long)((xrtClock()-Started)/1000u));
+            Deltas,Retries,(unsigned long long)((MdoMonotonicUs()-Started)/1000u));
         if(Request.pCancel!=UserCancel || Request.uDeadline!=RequestDeadline || Request.iMessageCount!=1u || Request.uMaxOutputTokens!=64u)
             printf("request_mutated=1\n");
         xllmResponseDestroy(Response);xllmRequestUnit(&Request);

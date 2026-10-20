@@ -431,7 +431,7 @@ void ServiceInit(XS_HostInfo *host) {{
         PrintRuntimeError("run_start_error", &error); goto done;
     }}
     memset(&result, 0, sizeof(result));
-    run_result = MdoAgentRunWait(run, xrtDeadlineAfter(UINT64_C(5000000)),
+    run_result = MdoAgentRunWait(run, MdoDeadlineAfterUs(UINT64_C(5000000)),
         &result, &error);
     printf("run=result:%d text:%s turns:%llu calls:%llu\n", (int)run_result,
         result.sFinalText != NULL ? result.sFinalText : "null",

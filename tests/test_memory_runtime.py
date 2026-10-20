@@ -186,7 +186,7 @@ static bool ExecuteMemory(xwork_agent *agent, const char *name,
     if (!xworkExecutorBind(&executor, agent, &error)) return false;
     memset(&context, 0, sizeof(context));
     context.uRound = 1u;
-    context.uDeadline = xrtDeadlineAfter(5000000u);
+    context.uDeadline = MdoDeadlineAfterUs(5000000u);
     memset(&call, 0, sizeof(call));
     call.sId = (char*)"memory-probe-call";
     call.sName = (char*)name;

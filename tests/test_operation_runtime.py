@@ -48,7 +48,7 @@ bool MdoModuleManagerReload(void) {
     xrtAtomic32FetchAdd(&ReloadCalls, 1u, XMEMORY_RELAXED);
     xrtAtomic32Store(&ReloadEntered, 1u, XMEMORY_RELEASE);
     while (xrtAtomic32Load(&BlockReload, XMEMORY_ACQUIRE) != 0u)
-        xrtSleepUs(1000u);
+        xrtSleep(1u);
     if (xrtAtomic32Load(&FailReload, XMEMORY_ACQUIRE) != 0u) {
         xrtAtomic32Store(&FailReload, 0u, XMEMORY_RELEASE);
         return false;
@@ -110,8 +110,8 @@ bool MdoMcpManagerRefresh(const char* id, xcancel* cancel, uint64 deadline,
     xrtAtomic32FetchAdd(&McpCalls, 1u, XMEMORY_RELAXED);
     /* Initialization and discovery have independent limits. The operation's
      * total scope must not clip the larger initialization timeout. */
-    if (xrtDeadlineRemaining(deadline) < 2500000u ||
-        xrtDeadlineRemaining(deadline) > 3000000u) {
+    if (MdoDeadlineRemainingUs(deadline) < 2500000u ||
+        MdoDeadlineRemainingUs(deadline) > 3000000u) {
         error->eCode = XWORK_ERROR_TIMEOUT;
         snprintf(error->sMessage, sizeof(error->sMessage), "startup budget was clipped");
         return false;
@@ -184,7 +184,7 @@ static bool WaitTerminal(const char* id, MdoOperationInfo* info) {
         if (info->State == MDO_OPERATION_SUCCEEDED ||
             info->State == MDO_OPERATION_FAILED ||
             info->State == MDO_OPERATION_CANCELLED) return true;
-        xrtSleepUs(1000u);
+        xrtSleep(1u);
     }
     return false;
 }
@@ -297,7 +297,7 @@ void ServiceInit(XS_HostInfo* host) {
     snprintf(blocker_id, sizeof(blocker_id), "%s", blocker.Id);
     for (i = 0u; i < 5000u &&
          xrtAtomic32Load(&ReloadEntered, XMEMORY_ACQUIRE) == 0u; ++i)
-        xrtSleepUs(1000u);
+        xrtSleep(1u);
     if (xrtAtomic32Load(&ReloadEntered, XMEMORY_ACQUIRE) == 0u) {
         printf("enter_error=1\n"); goto done;
     }

@@ -91,7 +91,7 @@ void ServiceInit(XS_HostInfo* Host)
     RunOptions.Prompt = "Read input.txt, then verify workspace restrictions";
     Run = Agent ? MdoAgentRunCreate(Agent, &RunOptions, &Error) : NULL;
     if ( !Run || !MdoAgentRunStart(Run, &Error) ||
-         MdoAgentRunWait(Run, xrtDeadlineAfter(UINT64_C(5000000)), &Result, &Error) != XWORK_RESULT_OK ||
+         MdoAgentRunWait(Run, MdoDeadlineAfterUs(UINT64_C(5000000)), &Result, &Error) != XWORK_RESULT_OK ||
          g_HomeArtifactCalls != 4u ) goto done;
     xworkArtifactInfoInit(&Info);
     if ( xworkRuntimeArtifactCount(MdoBootstrapRuntime()) != 1u ||

@@ -86,7 +86,7 @@ static bool QuiescentCaptureProbe(MdoAgentSession* session)
     xrtSemPost(gate.Release);
     stage = "child-finish";
     if (xworkRuntimeWaitTasks(session->Owner->Runtime, &child_task_id, 1u,
-            XWORK_TASK_WAIT_ALL, xrtDeadlineAfter(UINT64_C(5000000)), NULL,
+            XWORK_TASK_WAIT_ALL, MdoDeadlineAfterUs(UINT64_C(5000000)), NULL,
             &completed, &error) != XWORK_RESULT_OK) goto done;
     /* An already-terminal root task cannot justify capturing a retained
      * descendant owner. This also covers a nested queued-child handoff. */
@@ -106,7 +106,7 @@ done:
     if (gate.Release) xrtSemPost(gate.Release);
     if (child_task_id) {
         (void)xworkRuntimeWaitTasks(session->Owner->Runtime, &child_task_id, 1u,
-            XWORK_TASK_WAIT_ALL, xrtDeadlineAfter(UINT64_C(5000000)), NULL,
+            XWORK_TASK_WAIT_ALL, MdoDeadlineAfterUs(UINT64_C(5000000)), NULL,
             &completed, &error);
         (void)xworkRuntimeReleaseTask(session->Owner->Runtime, child_task_id, &error);
     }

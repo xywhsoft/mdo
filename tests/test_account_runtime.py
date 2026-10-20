@@ -50,7 +50,7 @@ static xthread* AccountTestWorker;
 static bool AccountTestTaken;
 static int32 AccountTestSearch(void* data) {
     (void)data;
-    xwork_tool_context context = {0}; context.uDeadline = XRT_DEADLINE_NEVER;
+    xwork_tool_context context = {0}; context.uDeadline = MDO_DEADLINE_NEVER;
     AccountTestTaken = MdoAccountAcquire("local lease probe",&context,&AccountTestLease);
     return 0;
 }

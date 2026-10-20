@@ -31,8 +31,8 @@ PROBE = r'''
 #include "src/account/authorization.c"
 #include "src/account/session.c"
 static bool Idle(uint64 Member) {
-    uint64 Until=xrtDeadlineAfter(2000000u);
-    while(!xrtDeadlineExpired(Until)) {
+    uint64 Until=MdoDeadlineAfterUs(2000000u);
+    while(!MdoDeadlineExpired(Until)) {
         xrtMutexLock(g_MdoAccount.Lock);
         bool Ready=g_MdoAccount.Tokens.MemberId==Member&&!g_MdoAccount.Busy&&!g_MdoAccount.Work.Kind;
         xrtMutexUnlock(g_MdoAccount.Lock);
@@ -66,11 +66,11 @@ void ServiceInit(XS_HostInfo* Host) {
         Request.bStream=false;
         xthread* Thread=NULL;
         if(!strcmp(Name,"account-logout")||!strcmp(Name,"account-switch"))Thread=xrtThreadCreate(Transition,(void*)Name,0);
-        if(!strcmp(Name,"account-deadline"))Request.uDeadline=xrtDeadlineAfter(100000u);
+        if(!strcmp(Name,"account-deadline"))Request.uDeadline=MdoDeadlineAfterUs(100000u);
         xllm_response* Response=NULL;xllm_error Error;xllmErrorInit(&Error);
-        uint64 Started=xrtClock();
+        uint64 Started=MdoMonotonicUs();
         xllm_result Result=MdoModelOnlineComplete(Catalog,&Options,&Request,NULL,&Response,&Error);
-        uint64 Elapsed=(xrtClock()-Started)/1000u;
+        uint64 Elapsed=(MdoMonotonicUs()-Started)/1000u;
         if(Thread){xrtThreadWait(Thread);xrtThreadDestroy(Thread);}
         if(!strcmp(Name,"account-switch")&&!Idle(2u))printf("switch_failed=1\n");
         printf("case=%s result=%d kind=%s attempts=%u acquirers=%zu ms=%llu\n",Name,Result,

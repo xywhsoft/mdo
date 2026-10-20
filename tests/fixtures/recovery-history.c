@@ -68,7 +68,7 @@ static bool RecoveryHistoryInterrupt(void)
     Options.Prompt = "Read the fixture file";
     if (Agent) Run = MdoAgentRunCreate(Agent, &Options, &Error);
     if (Run && MdoAgentRunStart(Run, &Error)) {
-        xwork_result Outcome = MdoAgentRunWait(Run, xrtDeadlineAfter(5000000u), &Result, &Error);
+        xwork_result Outcome = MdoAgentRunWait(Run, MdoDeadlineAfterUs(5000000u), &Result, &Error);
         Ok = g_RecoveryHistoryIo ? Outcome == XWORK_RESULT_ERROR && Error.eCode == XWORK_ERROR_IO :
             Outcome == XWORK_RESULT_CANCELLED;
     }

@@ -13,7 +13,7 @@ HOOK='''static bool RemoteFullReloadTest(MdoApiContext* c) {
 }
 static bool RemoteFullReloadGeneration(MdoApiContext* c) {
     static char marker[32];
-    if (!marker[0]) snprintf(marker,sizeof(marker),"%llu",(unsigned long long)xrtNow());
+    if (!marker[0]) snprintf(marker,sizeof(marker),"%llu",(unsigned long long)MdoUtcUs());
     xvalue* value=xrtValueObject(); MdoAccountSetString(value,"marker",marker);
     MdoAccountSetUInt(value,"port_bound",c->Request->server->PortBound);
     return MdoApiReplySuccessTake(c,200u,value,NULL);

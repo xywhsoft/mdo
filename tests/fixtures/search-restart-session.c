@@ -64,7 +64,7 @@ void ServiceInit(XS_HostInfo* Host)
     /* Only this disposable TU injects a JWT from the local website fixture. */
     xrtMutexLock(g_MdoAccount.Lock);
     strcpy(g_MdoAccount.Tokens.Access,Token);
-    g_MdoAccount.Tokens.Expires=xrtDeadlineAfter(600000000u);
+    g_MdoAccount.Tokens.Expires=MdoDeadlineAfterUs(600000000u);
     g_MdoAccount.Tokens.MemberId=(uint64)atoi(Member);
     xrtMutexUnlock(g_MdoAccount.Lock);
     if (!MdoWebManagerReload()) goto done;
@@ -84,7 +84,7 @@ void ServiceInit(XS_HostInfo* Host)
     Options.Prompt=g_RestartResume ? NULL : "Search once and continue after interruptions";
     Run=Agent ? MdoAgentRunCreate(Agent,&Options,&Error) : NULL;
     if (Run && MdoAgentRunStart(Run,&Error)) {
-        xwork_result Outcome=MdoAgentRunWait(Run,xrtDeadlineAfter(15000000u),&Result,&Error);
+        xwork_result Outcome=MdoAgentRunWait(Run,MdoDeadlineAfterUs(15000000u),&Result,&Error);
         printf("restart_outcome=%d tool_seen:%d tool_success:%d model_calls:%u error:%d:%s\n",
             Outcome,g_RestartToolSeen,g_RestartToolSuccess,g_RestartModelCalls,Error.eCode,Error.sMessage);
     }

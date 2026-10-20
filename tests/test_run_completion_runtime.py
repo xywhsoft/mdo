@@ -51,11 +51,11 @@ static bool ProbeGateReset(ProbeGate* Gate) {
     xrtMutexLock(Gate->Lock); Gate->Signaled = false; xrtMutexUnlock(Gate->Lock); return true;
 }
 static xwaitresult ProbeGateWaitFor(ProbeGate* Gate, uint64 Timeout) {
-    uint64 end = xrtClock() + Timeout;
+    uint64 end = MdoMonotonicUs() + Timeout;
     xwaitresult result = XWAIT_TIMEOUT;
     xrtMutexLock(Gate->Lock);
     while (!Gate->Signaled) {
-        uint64 now = xrtClock();
+        uint64 now = MdoMonotonicUs();
         if (now >= end) break;
         if (xrtCondWaitFor(Gate->Changed, Gate->Lock, end - now) == XWAIT_ERROR) break;
     }
@@ -95,7 +95,7 @@ static bool ProbeGetInfo(MdoAgentRun* Run, MdoAgentRunInfo* Info) {
         xwork_error error;
         xrtAtomic32Store(&FinishBeforeStartReturns, 0u, XMEMORY_RELEASE);
         memset(&result, 0, sizeof(result));
-        (void)MdoAgentRunWait(Run, xrtDeadlineAfter(UINT64_C(5000000)), &result, &error);
+        (void)MdoAgentRunWait(Run, MdoDeadlineAfterUs(UINT64_C(5000000)), &result, &error);
         xworkRunResultUnit(&result);
         ok = MdoAgentRunGetInfo(Run, Info);
         printf("finished_before_publish=state:%d\n", (int)Info->Run.eState);

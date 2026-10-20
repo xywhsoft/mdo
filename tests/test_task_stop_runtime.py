@@ -30,12 +30,12 @@ static xllm_result StopChild(void* User, const xllm_request* Request,
 {
     (void)User; (void)Callbacks; *Response = NULL;
     xrtAtomic32Store(&g_StopEntered, 1u, XMEMORY_RELEASE);
-    uint64 Deadline = xrtDeadlineAfter(UINT64_C(300000000));
-    while (!xrtCancelRequested(Request->pCancel) && !xrtDeadlineExpired(Deadline))
+    uint64 Deadline = MdoDeadlineAfterUs(UINT64_C(300000000));
+    while (!xrtCancelRequested(Request->pCancel) && !MdoDeadlineExpired(Deadline))
         xrtSleep(10u);
     if (xrtCancelRequested(Request->pCancel))
         xrtAtomic32Store(&g_StopObserved, 1u, XMEMORY_RELEASE);
-    while (!xrtAtomic32Load(&g_StopRelease, XMEMORY_ACQUIRE) && !xrtDeadlineExpired(Deadline))
+    while (!xrtAtomic32Load(&g_StopRelease, XMEMORY_ACQUIRE) && !MdoDeadlineExpired(Deadline))
         xrtSleep(10u);
     xllmErrorInit(Error); Error->eCode = XLLM_ERROR_CANCELLED;
     return XLLM_RESULT_CANCELLED;
@@ -112,7 +112,7 @@ static void StopFixtureUnit(void)
         if (xworkTaskSnapshotTaskAt(Tasks, i, &Task)) {
             xworkRuntimeCancelTask(MdoBootstrapRuntime(), Task.uTaskId, NULL);
             xworkRuntimeWaitTasks(MdoBootstrapRuntime(), &Task.uTaskId, 1u,
-                XWORK_TASK_WAIT_ALL, xrtDeadlineAfter(UINT64_C(2000000)), NULL, NULL, NULL);
+                XWORK_TASK_WAIT_ALL, MdoDeadlineAfterUs(UINT64_C(2000000)), NULL, NULL, NULL);
         }
     xworkTaskSnapshotRelease(Tasks);
     xworkExecutorUnbind(&g_StopExecutor);

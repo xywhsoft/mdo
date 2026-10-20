@@ -243,7 +243,7 @@ void ServiceInit(XS_HostInfo *host) {{
 
     memset(&error, 0, sizeof(error));
     printf("refresh=%d\n", MdoMcpManagerRefresh("mock", NULL,
-        XRT_DEADLINE_NEVER, &error) ? 1 : 0);
+        MDO_DEADLINE_NEVER, &error) ? 1 : 0);
     PrintStatus("ready_status");
     printf("ready_marker=%d\n", MarkerExists());
 
@@ -255,7 +255,7 @@ void ServiceInit(XS_HostInfo *host) {{
     printf("disconnect=%d\n", MdoMcpManagerDisconnect("mock", &error) ? 1 : 0);
     PrintStatus("disconnected_status");
     printf("reconnect=%d\n", MdoMcpManagerRefresh("mock", NULL,
-        XRT_DEADLINE_NEVER, &error) ? 1 : 0);
+        MDO_DEADLINE_NEVER, &error) ? 1 : 0);
     PrintStatus("reconnected_status");
 
     if (!Write("mcp/mock.json", sChanged)) goto done;

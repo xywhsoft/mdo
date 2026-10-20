@@ -93,7 +93,7 @@ static void Projection(xllm_session* session, const char* label)
     routes[1].ModelId="media-vision";routes[1].WireModel="media-vision";
     routes[0].Protocol=routes[1].Protocol=MDO_MODEL_PROTOCOL_OPENAI_CHAT_COMPLETIONS;
     routes[0].ReasoningEffort=routes[1].ReasoningEffort="medium";
-    request.pCancel=cancel;request.uDeadline=xrtDeadlineAfter(5000000u);
+    request.pCancel=cancel;request.uDeadline=MdoDeadlineAfterUs(5000000u);
     request.pStablePrefixOwner=session;request.uStablePrefixStamp=7u;
     request.iStableMessages=request.iMessageCount;
     CHECK(MdoModelCatalogProfile(owner.Models,routes[0].ModelId,routes[0].Protocol,&profile,&error),"profile");
@@ -152,7 +152,7 @@ static void Resume(xwork_runtime* runtime, const char* path, const char* label)
     ExpectImage=false;MdoAgentRunOptionsInit(&run_options);run_options.Resume=true;
     run=MdoAgentRunCreate(session,&run_options,&error);
     CHECK(run && MdoAgentRunStart(run,&error) &&
-        MdoAgentRunWait(run,xrtDeadlineAfter(5000000u),&result,&error)==XWORK_RESULT_OK &&
+        MdoAgentRunWait(run,MdoDeadlineAfterUs(5000000u),&result,&error)==XWORK_RESULT_OK &&
         result.sFinalText && !strcmp(result.sFinalText,"media-ok") &&
         Calls==before+1u,"resume_without_tool_replay");
     if(Failures)printf("run_error=%s\n",error.sMessage);

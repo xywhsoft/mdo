@@ -103,7 +103,7 @@ void ServiceInit(XS_HostInfo* host)
     run_config.sPrompt = "Read input.txt";
     run = agent ? xworkRunCreate(agent, &run_config, &error) : NULL;
     if (!run || !xworkRunStart(run, &error) ||
-        xworkRunWait(run, xrtDeadlineAfter(UINT64_C(5000000)), &result, &error) != XWORK_RESULT_OK ||
+        xworkRunWait(run, MdoDeadlineAfterUs(UINT64_C(5000000)), &result, &error) != XWORK_RESULT_OK ||
         g_ModelCalls != 2u) goto done;
     xworkArtifactInfoInit(&info);
     if (xworkRuntimeArtifactCount(runtime) != 1u ||

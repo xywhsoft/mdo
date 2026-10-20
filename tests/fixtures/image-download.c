@@ -30,7 +30,7 @@ static void ImageDownloadFixtureUnit(void)
 bool ImageDownloadFixturePause(unsigned Phase, MdoApiContext* Context)
 {
     xfuture* Future;
-    xdeadline Deadline;
+    uint64 Deadline;
     bool Ok;
     if ( xrtAtomic32Load(&g_ImageFixturePhase, XMEMORY_ACQUIRE) != Phase ) return true;
     xrtMutexLock(g_ImageFixtureLock);
@@ -42,11 +42,11 @@ bool ImageDownloadFixturePause(unsigned Phase, MdoApiContext* Context)
     xrtMutexUnlock(g_ImageFixtureLock);
     if ( Future == NULL ) return false;
     if ( Phase == 2u && xrtAtomic32Exchange(&g_ImageFixtureShort, 0u, XMEMORY_ACQ_REL) )
-        Context->SendDeadline = xrtDeadlineAfter(250000u);
+        Context->SendDeadline = MdoDeadlineAfterUs(250000u);
     Deadline = Context->SendDeadline;
-    if ( Deadline > xrtDeadlineAfter(5000000u) ) Deadline = xrtDeadlineAfter(5000000u);
+    if ( Deadline > MdoDeadlineAfterUs(5000000u) ) Deadline = MdoDeadlineAfterUs(5000000u);
     (void)xrtAtomic32FetchAdd(&g_ImageFixtureEntered, 1u, XMEMORY_ACQ_REL);
-    Ok = xrtFutureWaitUntilCancel(Future, Deadline, Context->SendCancel) == XWAIT_OK &&
+    Ok = xrtFutureWaitForCancel(Future, MdoDeadlineWaitMs(Deadline), Context->SendCancel) == XWAIT_OK &&
         xrtFutureState(Future) == XFUTURE_RESOLVED;
     xrtFutureDestroy(Future);
     return Ok;

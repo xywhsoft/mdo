@@ -140,7 +140,7 @@ static bool MdoPurgeFixtureControl(XS_HttpReq* Request)
     } else if ( strcmp(Mode, "native-start") == 0 || strcmp(Mode, "trigger-removed") == 0 ) {
         xwork_schedule_claim Claim;
         xworkScheduleClaimInit(&Claim);
-        Ok = xworkRuntimeTriggerSchedule(MdoBootstrapRuntime(), "purge-own-a", xrtNow(), &Claim, &Error);
+        Ok = xworkRuntimeTriggerSchedule(MdoBootstrapRuntime(), "purge-own-a", MdoUtcUs(), &Claim, &Error);
         if ( strcmp(Mode, "trigger-removed") == 0 ) Ok = !Ok;
         else if ( Ok ) g_MdoPurgeNativeTask = Claim.uTaskId;
     } else if ( strcmp(Mode, "native-finish") == 0 ) {
@@ -200,7 +200,7 @@ static bool MdoPurgeFixtureControl(XS_HttpReq* Request)
         Ok = !MdoHomeAtomicWrite("data/should-not-exist.json", "{}", 2u, false);
         NativePath = MdoHomeExternalPath("data/should-not-exist.json");
         Ok = Ok && NativePath == NULL; xrtFree(NativePath);
-        Ok = Ok && !MdoScheduleTrigger("purge-other", 1u, xrtNow(), &Claim, &Error);
+        Ok = Ok && !MdoScheduleTrigger("purge-other", 1u, MdoUtcUs(), &Claim, &Error);
     } else if ( strcmp(Mode, "state") != 0 ) Ok = false;
     if ( Ok && strcmp(Mode, "state") == 0 ) Ok = MdoPurgeFixtureState(Data);
     if ( !Ok ) {

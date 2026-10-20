@@ -46,7 +46,7 @@ void BackupPreviewFixtureRetirePause(void)
 {
     if ( !xrtAtomic32Load(&g_PreviewFixtureReleaseHold, XMEMORY_ACQUIRE) ) return;
     xrtAtomic32Store(&g_PreviewFixtureReleaseEntered, 1u, XMEMORY_RELEASE);
-    (void)xrtFutureWaitUntil(g_PreviewFixtureReleaseFuture, xrtDeadlineAfter(5000000u));
+    (void)xrtFutureWaitFor(g_PreviewFixtureReleaseFuture, 5000);
 }
 
 static int32 BackupPreviewFixtureReleaseWorker(ptr Data)
@@ -55,20 +55,20 @@ static int32 BackupPreviewFixtureReleaseWorker(ptr Data)
     xrtAtomic32Store(&g_PreviewFixtureReleaseDone, 1u, XMEMORY_RELEASE); return 0;
 }
 
-void BackupPreviewFixturePause(unsigned Completed, xcancel* Cancel, xdeadline Deadline)
+void BackupPreviewFixturePause(unsigned Completed, xcancel* Cancel, uint64 Deadline)
 {
     xfuture* Future;
     if ( xrtAtomic32Load(&g_PreviewFixtureHold, XMEMORY_ACQUIRE) != Completed + 1u ) return;
     xrtMutexLock(g_PreviewFixtureLock); Future = xrtFutureRef(g_PreviewFixtureFuture);
     xrtMutexUnlock(g_PreviewFixtureLock);
     xrtAtomic32Store(&g_PreviewFixtureEntered, Completed + 1u, XMEMORY_RELEASE);
-    if ( Deadline > xrtDeadlineAfter(5000000u) ) Deadline = xrtDeadlineAfter(5000000u);
-    (void)xrtFutureWaitUntilCancel(Future, Deadline, Cancel); xrtFutureDestroy(Future);
+    if ( Deadline > MdoDeadlineAfterUs(5000000u) ) Deadline = MdoDeadlineAfterUs(5000000u);
+    (void)xrtFutureWaitForCancel(Future, MdoDeadlineWaitMs(Deadline), Cancel); xrtFutureDestroy(Future);
 }
 
 void BackupPreviewFixtureBudget(MdoSessionBackupLimits* Limits)
 {
-    if ( xrtAtomic32Exchange(&g_PreviewFixtureShort, 0u, XMEMORY_ACQ_REL) != 0u ) Limits->Deadline = xrtClock();
+    if ( xrtAtomic32Exchange(&g_PreviewFixtureShort, 0u, XMEMORY_ACQ_REL) != 0u ) Limits->Deadline = MdoMonotonicUs();
 }
 
 bool BackupPreviewFixtureLock(xmutex* Lock)
@@ -121,7 +121,7 @@ static bool BackupPreviewFixtureControl(XS_HttpReq* Request)
     else if ( MdoApiViewEqualText(Target, "/__fixture/backup-preview/refuse") )
         xrtAtomic32Store(&g_PreviewFixtureRefuse, 1u, XMEMORY_RELEASE);
     else if ( MdoApiViewEqualText(Target, "/__fixture/backup-preview/expire") ) {
-        xrtMutexLock(g_MdoBackupPreviews->Lock); g_MdoBackupPreviews->Info.ExpiresAt = xrtClock();
+        xrtMutexLock(g_MdoBackupPreviews->Lock); g_MdoBackupPreviews->Info.ExpiresAt = MdoMonotonicUs();
         xrtMutexUnlock(g_MdoBackupPreviews->Lock);
     } else if ( MdoApiViewEqualText(Target, "/__fixture/backup-preview/reset") ) {
         MdoApiBackupPreviewsUnit();

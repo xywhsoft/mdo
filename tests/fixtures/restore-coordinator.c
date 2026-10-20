@@ -21,13 +21,13 @@ static unsigned g_RestoreChecks;
 void RestoreFixturePause(void)
 {
     RestoreFixtureJob* Job = g_RestoreJob;
-    xdeadline Deadline;
+    uint64 Deadline;
     if ( Job == NULL || strcmp(Job->Mode, "hold") != 0 ) return;
-    Deadline = xrtDeadlineAfter(5000000u);
+    Deadline = MdoDeadlineAfterUs(5000000u);
     xrtAtomic32Store(&Job->Ready, 1u, XMEMORY_RELEASE);
     while ( !xrtAtomic32Load(&Job->Stop, XMEMORY_ACQUIRE) &&
-            !xrtCancelRequested(Job->Cancel) && !xrtDeadlineExpired(Deadline) ) xrtSleep(1000u);
-    if ( xrtDeadlineExpired(Deadline) ) (void)xrtCancelRequest(Job->Cancel);
+            !xrtCancelRequested(Job->Cancel) && !MdoDeadlineExpired(Deadline) ) xrtSleep(1000u);
+    if ( MdoDeadlineExpired(Deadline) ) (void)xrtCancelRequest(Job->Cancel);
 }
 
 void RestoreFixtureCommit(void)

@@ -98,18 +98,18 @@ static bool Fetch(void* data,const XS_FetchRequest* request,XS_FetchResponse* re
     return ok;
 }
 '''+text[b:]
-    text=text.replace('context.uDeadline = xrtDeadlineAfter(5000000u);',
+    text=text.replace('context.uDeadline = MdoDeadlineAfterUs(5000000u);',
                       'context.uDeadline=ProbeDeadline; context.pCancel=ProbeCancel;')
     a=text.index('    if (!Execute(agent, "web_search"');b=text.index('done:\n',a)
     calls=[]
     for name,_,_,_,_,_ in CASES:
         args=json.dumps(json.dumps({'query':name}))
         calls.append(f'''
-    probe.Fetches=0u; ProbeDeadline=xrtDeadlineAfter({200000 if name=='short' else 25000000}u);
+    probe.Fetches=0u; ProbeDeadline=MdoDeadlineAfterUs({200000 if name=='short' else 25000000}u);
     ProbeCancel={'xrtCancelCreate()' if name=='cancel' else 'NULL'};
-    uint64 start_{name}=xrtClock(); bool ok_{name}=Execute(agent,"web_search",{args},&search);
+    uint64 start_{name}=MdoMonotonicUs(); bool ok_{name}=Execute(agent,"web_search",{args},&search);
     printf("case={name} success:%d fetches:%u elapsed_ms:%llu\\n",ok_{name},probe.Fetches,
-        (unsigned long long)((xrtClock()-start_{name})/1000u));
+        (unsigned long long)((MdoMonotonicUs()-start_{name})/1000u));
     xrtFree(search);search=NULL;
     if (CancelThread) {{ xrtThreadWait(CancelThread);xrtThreadDestroy(CancelThread);CancelThread=NULL; }}
     xrtCancelDestroy(ProbeCancel);ProbeCancel=NULL;

@@ -65,8 +65,8 @@ class Probe:
         replace(self.site, "src/api/downloads.c", "    while ( Offset < Bytes ) {",
                 "    if (!BackupDownloadFixturePause(2u, Context)) return false;\n"
                 "    while ( Offset < Bytes ) {")
-        replace(self.site, "src/api/downloads.c", "xrtDeadlineAfter(MDO_DOWNLOAD_TIMEOUT_US)",
-                "xrtDeadlineAfter(BackupDownloadFixtureTimeout())")
+        replace(self.site, "src/api/downloads.c", "MdoDeadlineAfterUs(MDO_DOWNLOAD_TIMEOUT_US)",
+                "MdoDeadlineAfterUs(BackupDownloadFixtureTimeout())")
         replace(self.site, "src/api/downloads.c", "    Limits.Deadline = Job->Context.SendDeadline;",
                 "    Limits.Deadline = Job->Context.SendDeadline;\n"
                 "    if (BackupDownloadFixtureLowFiles()) Limits.Files = 1u;")

@@ -151,7 +151,7 @@ def invoke(host: Path, endpoint: str, cases: list[tuple[str, bool]],
         url = urlsplit(endpoint)
         assert url.scheme in ('http', 'https') and url.path == '/api/v1/search' and not url.query and not url.fragment and not url.username
         origin = url.scheme+'://'+url.netloc
-        text = source(cases, external=external).replace('xrtDeadlineAfter(5000000u)', f'xrtDeadlineAfter({deadline_us}u)')
+        text = source(cases, external=external).replace('MdoDeadlineAfterUs(5000000u)', f'MdoDeadlineAfterUs({deadline_us}u)')
         (base / "site/probe.c").write_text('#define MDO_ACCOUNT_SERVICE_ORIGIN '+json.dumps(origin)+'\n'+text, encoding="utf-8")
         output = web.run_probe(host.resolve(), base / "site", base / "home", token,
                                wait_timeout=max(15, deadline_us / 1_000_000 + 5))

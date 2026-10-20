@@ -134,7 +134,7 @@ static bool ExecuteOne(xwork_runtime *runtime, const char *name,
     if (!xworkExecutorBind(&executor, agent, &error)) return false;
     memset(&context, 0, sizeof(context));
     context.uRound = 1u;
-    context.uDeadline = XRT_DEADLINE_NEVER;
+    context.uDeadline = MDO_DEADLINE_NEVER;
     memset(&call, 0, sizeof(call));
     call.sId = (char*)"module-probe-call";
     call.sName = (char*)name;

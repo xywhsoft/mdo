@@ -5,13 +5,13 @@ static xatomic32 g_RestoreWorkerRuns, g_RestoreWorkerSubmits, g_RestoreWorkerChe
 void RestoreWorkerFixturePause(xcancel* Cancel, bool Drop)
 {
     uint32 Mode = xrtAtomic32Load(&g_RestoreWorkerMode, XMEMORY_ACQUIRE);
-    xdeadline Deadline = xrtDeadlineAfter(5000000u);
+    uint64 Deadline = MdoDeadlineAfterUs(5000000u);
     if ( !Drop ) (void)xrtAtomic32FetchAdd(&g_RestoreWorkerRuns, 1u, XMEMORY_RELAXED);
     if ( (!Drop && Mode != 1u) || (Drop && Mode != 6u) ) return;
     xrtAtomic32Store(&g_RestoreWorkerReady, 1u, XMEMORY_RELEASE);
     while ( !xrtAtomic32Load(&g_RestoreWorkerStop, XMEMORY_ACQUIRE) &&
-            !xrtCancelRequested(Cancel) && !xrtDeadlineExpired(Deadline) ) xrtSleep(1000u);
-    if ( xrtDeadlineExpired(Deadline) ) (void)xrtCancelRequest(Cancel);
+            !xrtCancelRequested(Cancel) && !MdoDeadlineExpired(Deadline) ) xrtSleep(1000u);
+    if ( MdoDeadlineExpired(Deadline) ) (void)xrtCancelRequest(Cancel);
 }
 
 void RestoreWorkerFixtureBeforeSubmit(MdoBackupRestoreJob* Job)
