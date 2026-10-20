@@ -74,7 +74,7 @@ def main():
                     'prefix':'fallback-'+uuid.uuid4().hex[:14],
                     'connection':{'origin':f'http://127.0.0.1:{website_port}','ticket':ticket('control'),
                         'deviceId':device,'mode':'control','owner':hello['rudp']['owner_id']}}
-                output=subprocess.run([str(args.node.resolve()),str(ROOT/'tests/test_remote_fallback_browser.mjs')],
+                output=subprocess.run([str(args.node.resolve()),str(ROOT/'tests/fixtures/remote-fallback-browser.mjs')],
                     input=json.dumps(data),text=True,encoding='utf-8',capture_output=True,timeout=75)
                 assert output.returncode==0,output.stderr[-6000:]
                 result=json.loads(output.stdout)
