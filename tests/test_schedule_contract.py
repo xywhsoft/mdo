@@ -55,7 +55,7 @@ class ScheduleContractTests(unittest.TestCase):
         self.assertIn("MdoAgentSessionCreateWithRuntime", executor)
         self.assertIn("MdoAgentRunStart", executor)
         self.assertIn("MdoScheduleFinishTaskWithRun", executor)
-        self.assertIn("MdoScheduleExecutorPump(xrtNow()", executor)
+        self.assertIn("MdoScheduleExecutorPump(MdoUtcUs()", executor)
 
     def test_store_is_revisioned_locked_and_audited(self) -> None:
         source = (ROOT / "app/src/schedules/manager.c").read_text(encoding="utf-8")

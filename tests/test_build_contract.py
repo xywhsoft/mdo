@@ -308,6 +308,13 @@ class BuildContractTests(unittest.TestCase):
             "src/api/mutations.c",
             "src/api/account.c",
             "src/api/remote.c",
+            "src/transfers/store.c",
+            "src/transfers/capture.c",
+            "src/transfers/rpc.c",
+            "src/transfers/receive.c",
+            "src/transfers/commit.c",
+            "src/transfers/send.c",
+            "src/transfers/manager.c",
             "src/api/router.c",
             "src/bootstrap/service.c",
         ])
