@@ -1,18 +1,22 @@
 # 八种发行版的下载与更新
 
+## 2026-10-20：mdo 0.2.0 已发布
+
+八种正式产物已更新官网与自动更新，Build ID 为 30000102–30000109；Android 沿用原正式签名，工具包修订 3，源码下载保持撤下。发布内容、验证结果、网络限制和备份位置见 [0.2.0 发布记录](build-records/2026-10-20-0.2.0-public-release.md)。
+
 2026-10-09：官网直接提供八个单文件产物；网站统一 `mdo` 插件的“应用发布”
 页面独立维护八条通道。检查更新不需要会员登录。
 
 | 发行版 | platform | edition | 当前编号 |
 | --- | --- | --- | --- |
-| Windows 桌面 | windows-x86_64 | desktop | 30000047 |
-| Windows 服务 | windows-x86_64 | server | 30000054 |
-| Linux glibc 桌面 | linux-x86_64-glibc | desktop | 30000048 |
-| Linux glibc 服务 | linux-x86_64-glibc | server | 30000049 |
-| Linux musl 桌面 | linux-x86_64-musl | desktop | 30000050 |
-| Linux musl 服务 | linux-x86_64-musl | server | 30000051 |
-| Android 精简 | android-arm64-v8a | lite | 30000052 |
-| Android 完整 | android-arm64-v8a | full | 30000053 |
+| Windows 桌面 | windows-x86_64 | desktop | 30000102 |
+| Windows 服务 | windows-x86_64 | server | 30000103 |
+| Linux glibc 桌面 | linux-x86_64-glibc | desktop | 30000104 |
+| Linux glibc 服务 | linux-x86_64-glibc | server | 30000105 |
+| Linux musl 桌面 | linux-x86_64-musl | desktop | 30000106 |
+| Linux musl 服务 | linux-x86_64-musl | server | 30000107 |
+| Android 精简 | android-arm64-v8a | lite | 30000108 |
+| Android 完整 | android-arm64-v8a | full | 30000109 |
 
 接口：`GET https://ai.xywhsoft.com/update/version?platform=…&edition=…&build_id=…`。
 服务器只返回匹配平台与发行版的包。旧 Windows 客户端省略 edition 时仍选择桌面版；
@@ -20,8 +24,7 @@ Windows 服务版必须携带完整平台、发行版和编号，拒绝桌面版
 glibc、musl 和桌面/服务版不会互相升级。Android 用户可在现有更新界面选择精简/完整。
 
 `app/release.json` 中八个编号必须唯一。任何已发布编号与 hash 不可复用；新编号
-高于服务器的 `last_build_id`。本次 Windows 服务版增加更新能力，单独重新打包为
-30000054；其余七个包保留前一轮验证的原始字节。根目录 `mdo-builds.json` 记录实际
+高于服务器的 `last_build_id`。0.2.0 的八个产物全部重新构建，编号为 30000102–30000109。根目录 `mdo-builds.json` 记录实际
 文件大小和 SHA-256，不能用源代码当前状态推断旧包的内容。
 
 ## 安装行为
@@ -59,3 +62,5 @@ Linux 保留现有同目录原子替换和 exec 重启流程；systemd 管理的
 
 本机非管理员，SCM 注册服务的安装重启未做实机测试；普通 Windows 服务版的网页
 更新已实测。Linux 和 APK 本轮沿用先前的构建验证，未新增安卓真机安装测试。
+
+0.2.0 本轮已重新构建全部八个产物，完成四个 Linux 实际打包产物的隔离启动、默认工作区与重启持久化验证；Android 完成签名、安装器策略与包结构验证，未新增真机回归。Windows SCM 安装重启和 Linux 桌面窗口显示本轮未实机测试。
