@@ -21,6 +21,7 @@ PROBE_SOURCE = r'''
 #include <stdio.h>
 #include <string.h>
 #include <xsbase.h>
+#include "include/mdo/time.h"
 
 #include "include/mdo/modules.h"
 #include "include/mdo/mcp.h"
@@ -348,6 +349,8 @@ void ServiceUnit(XS_HostInfo* host) { (void)host; }
 
 
 def write_site(site: Path) -> None:
+    from runtime_sources import copy_app_source
+    copy_app_source("src/operations/manager.c", site)
     for relative in ("web", "src/operations", "include/mdo",
                      "generated/module-sdk/mdo"):
         (site / relative).mkdir(parents=True, exist_ok=True)

@@ -21,6 +21,7 @@ SOURCE = r'''
 #include <string.h>
 #include <xsbase.h>
 #include <xwork.h>
+#include <xllm-time.h>
 
 static unsigned g_ModelCalls;
 static char* CopyText(const char* text)
@@ -103,7 +104,7 @@ void ServiceInit(XS_HostInfo* host)
     run_config.sPrompt = "Read input.txt";
     run = agent ? xworkRunCreate(agent, &run_config, &error) : NULL;
     if (!run || !xworkRunStart(run, &error) ||
-        xworkRunWait(run, MdoDeadlineAfterUs(UINT64_C(5000000)), &result, &error) != XWORK_RESULT_OK ||
+        xworkRunWait(run, xllmDeadlineAfterUs(UINT64_C(5000000)), &result, &error) != XWORK_RESULT_OK ||
         g_ModelCalls != 2u) goto done;
     xworkArtifactInfoInit(&info);
     if (xworkRuntimeArtifactCount(runtime) != 1u ||
