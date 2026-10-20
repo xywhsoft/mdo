@@ -35,7 +35,7 @@ struct MdoPeerSession {
     xcancel* Cancel;
     MdoPeerSignalProc Signal;
     void* SignalData;
-    uint64 Until, AlternateAt;
+    uint64 Until, IPv4ReadyAt;
     unsigned Families;
     xnetfamily Selected;
     unsigned char Public[32];
@@ -194,7 +194,7 @@ static MdoPeerSession* MdoPeerStart(const MdoPeerInfo* Info, const MdoPeerPolicy
     if (!S) { xrtSecureZero(Config->Private,32); return NULL; }
     S->Info=*Info; S->Policy=*Policy; S->Initiator=!Config->Listen; S->Families=Families;
     S->Signal=Signal; S->SignalData=Data; S->Cancel=xrtCancelChild(Cancel);
-    S->Until=MdoDeadlineAfterUs(MDO_PEER_ATTEMPT_US); S->AlternateAt=MdoDeadlineAfterUs(MDO_PEER_ALTERNATE_US);
+    S->Until=MdoDeadlineAfterUs(MDO_PEER_ATTEMPT_US);
     bool Any=false;
     if (S->Cancel && xrtX25519Public(Config->Private,S->Public)) for (unsigned i=0;i<2;++i) {
         MdoPeerLane* L=&S->Lanes[i]; if (!(Families&(1u<<i))) continue;
@@ -317,6 +317,44 @@ static bool MdoPeerAppendCandidate(xvalue* List, const xnetaddr* Address, cstr K
         xrtValueObjectSetNew(Item,XRT_STR_LITERAL("port"),xrtValueUInt(Address->Port));
     if (!Ok) { xrtValueRelease(Item); return false; } return xrtValueArrayAppendNew(List,Item);
 }
+static bool MdoPeerGlobalIPv6(const xnetaddr* A)
+{ return A->Family==XNET_FAMILY_IPV6 && (A->Address[0]&0xe0u)==0x20u; }
+static bool MdoPeerDirectIPv6(const MdoPeerPolicy* Policy, const MdoRudpInfo* Info)
+{
+    /* An explicit local endpoint is trusted local policy (including loopback
+     * tests). With an ordinary wildcard bind require a globally routed host
+     * address; ULA-only deployments still get their existing STUN discovery. */
+    if (Policy->Local[1].Family) return true;
+    if (!xrtNetAddrIsUnspecified(&Info->Local)) return MdoPeerGlobalIPv6(&Info->Local);
+    xnetinterfacelist Interfaces={0}; bool Found=false;
+    if (xrtNetInterfaces(&Interfaces)) {
+        for (size_t i=0;i<Interfaces.Count && !Found;++i) {
+            const xnetinterface* N=&Interfaces.Items[i];
+            if (!(N->Flags&XNET_INTERFACE_UP) || (N->Flags&XNET_INTERFACE_LOOPBACK)) continue;
+            for (size_t j=0;j<N->AddressCount;++j)
+                if (MdoPeerGlobalIPv6(&N->Addresses[j].Address) && !N->Addresses[j].Address.Scope) Found=true;
+        }
+        xrtNetInterfacesFree(&Interfaces);
+    }
+    return Found;
+}
+static bool MdoPeerInterfaceCandidates(xvalue* List, xnetfamily Family, uint16 Port,
+    const xnetinterfacelist* Interfaces, size_t Limit)
+{
+    /* A virtual adapter's ULA must not exhaust the bounded list before a
+     * physical adapter's globally routed IPv6 addresses are considered. */
+    for (unsigned Pass=0;Pass<(Family==XNET_FAMILY_IPV6 ? 2u:1u);++Pass)
+        for (size_t i=0;i<Interfaces->Count && xrtValueCount(List)<Limit;++i) {
+            const xnetinterface* N=&Interfaces->Items[i];
+            if (!(N->Flags&XNET_INTERFACE_UP) || (N->Flags&XNET_INTERFACE_LOOPBACK)) continue;
+            for (size_t j=0;j<N->AddressCount && xrtValueCount(List)<Limit;++j) {
+                xnetaddr A=N->Addresses[j].Address; A.Port=Port;
+                if (A.Family!=Family || (Family==XNET_FAMILY_IPV6 && MdoPeerGlobalIPv6(&A)!=(Pass==0))) continue;
+                if (!MdoPeerAppendCandidate(List,&A,"host")) return false;
+            }
+        }
+    return true;
+}
 static xvalue* MdoPeerCandidates(MdoPeerSession* S, MdoPeerLane* L, const MdoRudpInfo* Info)
 {
     xvalue* List=xrtValueArray(); if (!List) return NULL;
@@ -326,15 +364,8 @@ static xvalue* MdoPeerCandidates(MdoPeerSession* S, MdoPeerLane* L, const MdoRud
     } else {
         xnetinterfacelist Interfaces={0};
         if (xrtNetInterfaces(&Interfaces)) {
-            bool Ok=true;
-            for (size_t i=0;i<Interfaces.Count && xrtValueCount(List)<MDO_PEER_CANDIDATES;++i) {
-                const xnetinterface* N=&Interfaces.Items[i];
-                if (!(N->Flags&XNET_INTERFACE_UP) || (N->Flags&XNET_INTERFACE_LOOPBACK)) continue;
-                for (size_t j=0;j<N->AddressCount && xrtValueCount(List)<MDO_PEER_CANDIDATES;++j) {
-                    xnetaddr A=N->Addresses[j].Address; A.Port=Info->Local.Port;
-                    if (A.Family==L->Family && !MdoPeerAppendCandidate(List,&A,"host")) Ok=false;
-                }
-            }
+            size_t Limit=S->Families==3u ? MDO_PEER_CANDIDATES/2u:MDO_PEER_CANDIDATES;
+            bool Ok=MdoPeerInterfaceCandidates(List,L->Family,Info->Local.Port,&Interfaces,Limit);
             xrtNetInterfacesFree(&Interfaces); if (!Ok) goto fail;
         }
     }
@@ -350,6 +381,13 @@ static bool MdoPeerMap(MdoPeerSession* S, MdoPeerLane* L, MdoRudpInfo* Info)
     if (!L->MappingStarted) {
         L->MappingStarted=true; L->MappingUntil=MdoDeadlineAfterUs(UINT64_C(1500000));
         xnetaddr Server=S->Policy.Stun[L->Family==XNET_FAMILY_IPV6 ? 1:0];
+        /* Native IPv6 host candidates need no translation discovery. Publish
+         * them immediately, even when the trusted STUN name has no AAAA or
+         * its DNS/UDP path is blackholed. Numeric overrides retain deliberate
+         * NAT66 discovery for deployments/tests that explicitly request it. */
+        if (L->Family==XNET_FAMILY_IPV6 && !Server.Family && MdoPeerDirectIPv6(&S->Policy,Info)) {
+            L->MappingComplete=true; return true;
+        }
         if (!Server.Family && S->Policy.StunHost[0] && !xrtNetAddrParse(&Server,S->Policy.StunHost,S->Policy.StunPort) && S->Policy.Resolver)
             L->Resolve=xrtNetResolveAsync(S->Policy.Resolver,S->Policy.StunHost,L->Family);
         if (Server.Family==L->Family) {
@@ -412,9 +450,7 @@ static bool MdoPeerLanePoll(MdoPeerSession* S, MdoPeerLane* L)
         }
         L->Dialed=true; L->CheckAt=MdoMonotonicUs();
     }
-    bool FamilyReady=L->Family!=XNET_FAMILY_IPV4 || !(S->Families&2u) ||
-        S->Lanes[1].Failed || MdoDeadlineExpired(S->AlternateAt);
-    if (S->Initiator && !L->Dialer && L->Dialed && FamilyReady) {
+    if (S->Initiator && !L->Dialer && L->Dialed) {
         unsigned Dialer=Info.Check.Replies ? 1u:
             (Info.Check.Confirmations && MdoMonotonicUs()-L->CheckAt>=MDO_PEER_ALTERNATE_US ? 2u:0u);
         if (Dialer) {
@@ -461,8 +497,9 @@ bool MdoPeerPoll(MdoPeerSession* S)
     if (S->Info.Ready || S->Taken) return true;
     if (MdoDeadlineExpired(S->Until)) return MdoPeerFail(S,"attempt_timeout");
     bool Any=false;
-    /* IPv6 gets a bounded head start; neither the other family nor slow DNS
-     * can renew the attempt. Only the initiator chooses the confirmed lane. */
+    /* Both families check and perform Noise independently. Preference affects
+     * only final selection, never admission of the IPv4 probe/handshake. */
+    unsigned Confirmed=0;
     for (unsigned n=0;n<2;++n) {
         MdoPeerLane* L=&S->Lanes[1u-n];
         if (S->Selected && L->Family!=S->Selected) { MdoPeerLaneDrop(L); continue; }
@@ -470,11 +507,17 @@ bool MdoPeerPoll(MdoPeerSession* S)
         if (S->Info.Failed) return false;
         MdoRudpInfo Info;
         if (!S->Selected && S->Initiator && L->Dialer && L->Raw && MdoRudpGetInfo(L->Raw,&Info) && Info.Confirmed && !Info.Closed && !Info.PeerClosed) {
-            S->Selected=L->Family;
-            if (!MdoPeerSelectionSignal(S,"rudp_select")) return MdoPeerFail(S,"signal_unavailable");
+            Confirmed|=L->Family==XNET_FAMILY_IPV6 ? 2u:1u;
         }
     }
     if (!Any) return MdoPeerFail(S,"endpoint_unavailable");
+    if (!S->Selected && S->Initiator) {
+        if ((Confirmed&1u) && !S->IPv4ReadyAt) S->IPv4ReadyAt=MdoMonotonicUs();
+        if (Confirmed&2u) S->Selected=XNET_FAMILY_IPV6;
+        else if ((Confirmed&1u) && (!(S->Families&2u) || S->Lanes[1].Failed ||
+            MdoMonotonicUs()-S->IPv4ReadyAt>=MDO_PEER_ALTERNATE_US)) S->Selected=XNET_FAMILY_IPV4;
+        if (S->Selected && !MdoPeerSelectionSignal(S,"rudp_select")) return MdoPeerFail(S,"signal_unavailable");
+    }
     if (S->Selected) {
         unsigned Index=S->Selected==XNET_FAMILY_IPV6 ? 1u:0u;
         MdoPeerLaneDrop(&S->Lanes[1u-Index]);

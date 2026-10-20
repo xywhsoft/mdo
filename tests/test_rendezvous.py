@@ -57,11 +57,11 @@ static void Session(xnetfamily Family, bool Nat, bool TamperMode)
     CHECK(!MdoPeerInitiate(Bad,7,&P[1],Cancel,Signal,&Q[1])); xrtValueRelease(Bad);
     if (TamperMode) CHECK(MdoPeerTextSet(Offer,"mode","control"));
     S[1]=MdoPeerInitiate(Offer,7,&P[1],Cancel,Signal,&Q[1]); CHECK(S[1]); xrtValueRelease(Offer);
-    double End=xrtTimer()+12; bool ClientFailed=false;
+    double End=xrtTimer()+12; bool AuthorityRejected=false;
     for (;;) {
         for (unsigned i=0;i<2;++i) if (S[i]) {
             bool Ok=MdoPeerPoll(S[i]); CHECK(MdoPeerGetInfo(S[i],&I[i]));
-            if (!Ok) { CHECK(i==1 && TamperMode); ClientFailed=true; }
+            if (!Ok) { CHECK(TamperMode); AuthorityRejected=true; }
         }
         for (unsigned i=0;i<2;++i) {
             xvalue* V;
@@ -103,7 +103,7 @@ static void Session(xnetfamily Family, bool Nat, bool TamperMode)
                 xrtValueRelease(V);
             }
         }
-        if (ClientFailed) { CHECK(!I[0].Ready && !I[1].Ready); break; }
+        if (AuthorityRejected) { CHECK(!I[0].Ready && !I[1].Ready); break; }
         if (S[0] && I[0].Ready && I[1].Ready) break;
         CHECK(xrtTimer()<End); xrtSleep(1);
     }
@@ -120,7 +120,27 @@ static void Session(xnetfamily Family, bool Nat, bool TamperMode)
     MdoPeerOfferDestroy(O); xrtCancelDestroy(Cancel); CHECK(xrtAtomic32Load(&g_MdoRudpTransports,XMEMORY_ACQUIRE)==0);
     printf("PASS rendezvous family=%u nat=%u tamper-mode=%u\n",(unsigned)Family,Nat,TamperMode); fflush(stdout);
 }
-static void Dual(unsigned Broken, unsigned Restrict, bool BindFailure)
+static void CandidatePriority(void)
+{
+    xnetinterfaceaddress Addresses[7]={{0}};
+    const char* Ip[]={"fd00::1","fd00::2","fd00::3","fd00::4","fe80::1","2001:db8::1","2001:db8::2"};
+    for (unsigned i=0;i<7;++i) CHECK(xrtNetAddrParse(&Addresses[i].Address,Ip[i],0));
+    xnetinterface Adapters[2]={{0}};
+    Adapters[0].Flags=Adapters[1].Flags=XNET_INTERFACE_UP;
+    Adapters[0].Addresses=Addresses; Adapters[0].AddressCount=5;
+    Adapters[1].Addresses=Addresses+5; Adapters[1].AddressCount=2;
+    xnetinterfacelist Interfaces={Adapters,2}; xvalue* List=xrtValueArray(); CHECK(List);
+    CHECK(MdoPeerInterfaceCandidates(List,XNET_FAMILY_IPV6,12345,&Interfaces,4));
+    CHECK(xrtValueCount(List)==4);
+    for (unsigned i=0;i<2;++i) CHECK(!strcmp(MdoPeerText(xrtValueArrayGet(List,i),"ip",64),Ip[i+5]));
+    CHECK(!strcmp(MdoPeerText(xrtValueArrayGet(List,2),"ip",64),Ip[0]));
+    xrtValueRelease(List);
+    MdoPeerPolicy Policy={0}; MdoRudpInfo Info={0};
+    CHECK(xrtNetAddrParse(&Info.Local,"2001:db8::1",12345) && MdoPeerDirectIPv6(&Policy,&Info));
+    CHECK(xrtNetAddrParse(&Info.Local,"fd00::1",12345) && !MdoPeerDirectIPv6(&Policy,&Info));
+    puts("PASS globally routed IPv6 candidates precede virtual ULA adapters within bounded list"); fflush(stdout);
+}
+static void Dual(unsigned Broken, unsigned Restrict, bool BindFailure, unsigned SlowMapping)
 {
     MdoPeerPolicy P[2]={{0}}; Queue Q[2]={{0}}; MdoPeerSession* S[2]={NULL,NULL};
     MdoPeerInfo I[2]={{0}}; MdoRemoteSocket* Socket[2]={NULL,NULL}; xvalue* Held=NULL;
@@ -129,11 +149,18 @@ static void Dual(unsigned Broken, unsigned Restrict, bool BindFailure)
         CHECK(xrtNetAddrLoopback(&P[i].Local[f],f?XNET_FAMILY_IPV6:XNET_FAMILY_IPV4,0));
     if (Restrict) memset(&P[1].Local[Restrict==1 ? 1:0],0,sizeof(xnetaddr));
     if (BindFailure) P[0].Local[1].Port=TEST_DROP_6;
+    for (unsigned i=0;i<2;++i) if (SlowMapping) {
+        /* IPv4 mapping must not hold up native IPv6 host candidates; a
+         * stalled explicitly requested IPv6 mapping must not hold up IPv4. */
+        unsigned F=SlowMapping==1 ? 0:1;
+        CHECK(xrtNetAddrLoopback(&P[i].Stun[F],F ? XNET_FAMILY_IPV6:XNET_FAMILY_IPV4,F ? TEST_DROP_6:TEST_DROP_4));
+        strcpy(P[i].StunHost,"stun-without-aaaa.invalid");
+    }
     MdoPeerOffer* O=MdoPeerOfferCreate("11111111111111111111111111111111","22222222222222222222222222222222",7,false,&P[0]); CHECK(O);
     xvalue* Offer=MdoPeerOfferValue(O); CHECK(Offer);
     S[1]=MdoPeerInitiate(Offer,7,&P[1],Cancel,Signal,&Q[1]); CHECK(S[1]); xrtValueRelease(Offer);
     uint64 OriginalUntil=S[1]->Until; double Begin=xrtTimer(), HoldUntil=0, End=Begin+5;
-    unsigned Expected=Restrict ? (Restrict==1 ? 4:6):((Broken&2u)||BindFailure ? 4:6); bool Selected=false;
+    unsigned Expected=Restrict ? (Restrict==1 ? 4:6):((Broken&2u)||BindFailure||SlowMapping==2 ? 4:6); bool Selected=false;
     for (;;) {
         for (unsigned i=0;i<2;++i) if (S[i]) { CHECK(MdoPeerPoll(S[i])); CHECK(MdoPeerGetInfo(S[i],&I[i])); }
         if (Broken==3 && xrtTimer()>Begin+.6) {
@@ -168,6 +195,13 @@ static void Dual(unsigned Broken, unsigned Restrict, bool BindFailure)
                         CHECK(i==1 && !Selected && Family==Expected && !I[0].Ready && !I[1].Ready);
                         CHECK(!MdoPeerTakeSocket(S[0]) && !MdoPeerTakeSocket(S[1])); Selected=true;
                         if (Expected==4 && !Restrict) CHECK(xrtTimer()-Begin>=.20 && xrtTimer()-Begin<2);
+                        if (SlowMapping) {
+                            unsigned Slow=SlowMapping==1 ? 0:1;
+                            CHECK(xrtTimer()-Begin<.9 && !S[0]->Lanes[Slow].MappingComplete);
+                            MdoRudpInfo Pending; CHECK(MdoRudpGetInfo(S[0]->Lanes[Slow].Raw,&Pending));
+                            CHECK(Pending.Discovery.Pending);
+                            if (Expected==6) CHECK(!S[1]->Lanes[1].Resolve && S[1]->Lanes[1].MappingComplete);
+                        }
                     } else if (!strcmp(Type,"rudp_selected")) {
                         CHECK(i==0 && Selected && !Held && Family==Expected);
                         Held=xrtValueDeepClone(V); CHECK(Held); HoldUntil=xrtTimer()+.12; xrtValueRelease(V); continue;
@@ -202,7 +236,7 @@ static void Dual(unsigned Broken, unsigned Restrict, bool BindFailure)
     xrtValueRelease(Held); xrtCancelRequest(Cancel);
     for (unsigned i=0;i<2;++i) { MdoRemoteSocketDestroy(Socket[i]); MdoPeerSessionDestroy(S[i]); xvalue* V; while ((V=Pop(&Q[i]))) xrtValueRelease(V); }
     MdoPeerOfferDestroy(O); xrtCancelDestroy(Cancel); CHECK(xrtAtomic32Load(&g_MdoRudpTransports,XMEMORY_ACQUIRE)==0);
-    printf("PASS dual family broken=%u restrict=%u bind-failure=%u selected=%u\n",Broken,Restrict,BindFailure,Broken==3 ? 0:Expected); fflush(stdout);
+    printf("PASS dual family broken=%u restrict=%u bind-failure=%u slow-mapping=%u selected=%u\n",Broken,Restrict,BindFailure,SlowMapping,Broken==3 ? 0:Expected); fflush(stdout);
 }
 static void PreCandidateResponse(void)
 {
@@ -252,11 +286,15 @@ void ServiceInit(XS_HostInfo* Host)
 #ifdef TEST_PRE_CANDIDATE_ONLY
     puts("PASS rendezvous authority pre-candidate response and complete cleanup"); fflush(stdout); exit(0);
 #endif
+    CandidatePriority();
+#ifndef TEST_DUAL_STACK_ONLY
     Session(XNET_FAMILY_IPV4,false,false); Session(XNET_FAMILY_IPV6,false,false);
     Session(XNET_FAMILY_IPV4,true,false); Session(XNET_FAMILY_IPV6,true,false);
     Session(XNET_FAMILY_IPV4,false,true);
-    Dual(0,0,false); Dual(2,0,false); Dual(1,0,false); Dual(3,0,false);
-    Dual(0,1,false); Dual(0,2,false); Dual(0,0,true);
+#endif
+    Dual(0,0,false,0); Dual(2,0,false,0); Dual(1,0,false,0); Dual(3,0,false,0);
+    Dual(0,1,false,0); Dual(0,2,false,0); Dual(0,0,true,0);
+    Dual(0,0,false,1); Dual(0,0,false,2);
     printf("PASS rendezvous authority, immutable identity, exact duplicate signals, NAT and encrypted message lifecycle\n"); fflush(stdout); exit(0);
 }
 '''
@@ -284,10 +322,11 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__); mode=parser.add_mutually_exclusive_group(required=True)
     mode.add_argument('--host',type=Path); mode.add_argument('--native',type=Path); parser.add_argument('--cc',default='gcc')
     parser.add_argument('--reverse-checks',action='store_true')
-    parser.add_argument('--pre-candidate-only',action='store_true'); args=parser.parse_args()
+    parser.add_argument('--pre-candidate-only',action='store_true')
+    parser.add_argument('--dual-stack-only',action='store_true'); args=parser.parse_args()
     with Oracles() as oracle:
         if args.reverse_checks: oracle.blocked_check_senders.add(1)
-        fixture=oracle.defines()+('#define TEST_REVERSE_CHECKS 1\n' if args.reverse_checks else '')+('#define TEST_PRE_CANDIDATE_ONLY 1\n' if args.pre_candidate_only else '')+SOURCE
+        fixture=oracle.defines()+('#define TEST_REVERSE_CHECKS 1\n' if args.reverse_checks else '')+('#define TEST_PRE_CANDIDATE_ONLY 1\n' if args.pre_candidate_only else '')+('#define TEST_DUAL_STACK_ONLY 1\n' if args.dual_stack_only else '')+SOURCE
         if args.native:
             native(args.native.resolve(),fixture,args.cc); assert not oracle.errors,oracle.errors; return 0
         with tempfile.TemporaryDirectory(prefix='mdo-rendezvous-') as raw:
