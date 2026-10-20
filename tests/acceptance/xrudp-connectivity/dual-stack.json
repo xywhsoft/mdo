@@ -1,0 +1,36 @@
+{
+  "schema": 1,
+  "source_commit": "dc62594fdd9abbf60b8ebde9b714ad3a9601df95",
+  "version": "0.2.0",
+  "windows_build_id": 30000101,
+  "sdk_commit": "5cdc54eb7ca76518612bc1ffc70eb6873333d4f6",
+  "xrudp_commit": "0c46aca7519c5513c51b15de61d73d90ebca79b6",
+  "exe_bytes": 5319224,
+  "exe_sha256": "03056f8d8f4139c4a31c0b94b621d222a436fd5bef58af4c285ad2e4c27afe89",
+  "zip_bytes": 3639633,
+  "zip_sha256": "11afe8ac2f04fb94efa15b52554d3bc408666a65955beec3ed3f6460acb1a6e8",
+  "tests": [
+    "Windows frozen native forward/reverse and parallel mapping",
+    "Linux ASan UBSan leaks with forward/reverse and parallel mapping",
+    "frozen encrypted RPC/live/readonly/receipts/relay cleanup with IPv4 blocked",
+    "frozen encrypted RPC/live/readonly/receipts/relay cleanup with IPv6 blocked",
+    "delivered GUI EXE bootstrap/native WebView profile/build ID/clean exit",
+    "product STUN binding and ZIP contents"
+  ],
+  "evidence_sha256": {
+    "frozen-windows-native": "7af2e5dafbf08ee3ed37a8880391d0eeff8a31a6b0d36f24d883c38e523d1847",
+    "linux-asan-ubsan-leaks": "7af2e5dafbf08ee3ed37a8880391d0eeff8a31a6b0d36f24d883c38e523d1847",
+    "frozen-business-block4": "97e111f5ae0855cbc17dca8ef30d59428d621983fd287ee34ede55dbbd19fe2a",
+    "frozen-business-block6": "fc18a88b7aced8564d337ac9e2867c009fd485cb5181282f7a0df7a9f8c692d3"
+  },
+  "model_calls": 0,
+  "production_data_written": false,
+  "server_update_required": false,
+  "server_stun_ipv4_ipv6_listening": true,
+  "client_website_or_update_published": false,
+  "actual_home_company_ipv6_test_pending": true,
+  "home_network_preflight": {
+    "global_ipv6_addresses": 0,
+    "ipv6_default_route": false
+  }
+}
