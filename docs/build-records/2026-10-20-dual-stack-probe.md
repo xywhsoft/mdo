@@ -35,3 +35,5 @@
 通过家用端实际原生连接器向公司端建立只读连接：公司 offer 的 families 为 `[4]`，本机 init 同样为 `[4]`，双方交换 IPv4 host/srflx 候选；没有认证通过后的 `rudp_dial` 或 `rudp_select`。XRUDP 尝试 10035 ms 后结束，LAN 随后失败，保留中继；5 次 GET 均返回 200，延迟 114–131 ms，空闲约 22 秒后仍可读取。未修改公司项目、会话或模型数据，测试连接关闭后双方 controlled=false、viewers=0。完整阶段证据保留在 `.build/xrudp-home-company-dual-live-20261020-r1/`，脱敏收据为 `tests/acceptance/xrudp-connectivity/dual-stack-live.json`。
 
 本机 Windows 以太网的 IPv6 binding、RouterDiscovery 与 DHCP 均已启用，但只有链路本地地址，没有公网 IPv6 或默认路由；本轮 IPv6 没有可供测试的实际通路。公司端未公布 IPv6 候选，不将其等同于已经完整检查了公司系统/路由器配置。该结果证明新版本已经替换并运行、IPv4 直连仍未成功及中继正常，不能声称已经完成双栈公网直连测试。公司控制家用的反方向操作需由公司电脑发起，已向用户请求操作，尚待结果；本次记录严格标为家用控制公司，未冒充反方向验收。
+
+用户随后在公司电脑连接家用并确认显示“服务器中转”。本机只读 API 同步核对：家用 stage=online、status=200、error 为空，设备列表中的家用 controlled=true；协商结束后家用进程没有活动 UDP 端点。反方向结果记录为用户观察到中继、家用端独立确认收到控制连接，没有伪造该方向的原始信令/延迟测量。复查家用仍只有链路本地 IPv6，默认 IPv6 路由为零；两个方向当前均未实现 UDP 直连，IPv6 路径尚不具备测试条件。保留用户正在进行的控制连接，没有断开、修改防火墙或路由器、替换服务或写入业务数据。

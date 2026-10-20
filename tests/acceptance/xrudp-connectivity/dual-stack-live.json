@@ -54,6 +54,19 @@
   "remote_data_writes": 0,
   "model_calls": 0,
   "firewall_router_or_online_service_changed": false,
-  "company_controller_to_home_target_pending": true,
-  "evidence_sha256": "6ffed229674d273c339dbf88e8c6eeacd0fda1089197a8282b52fa509c534104"
+  "company_controller_to_home_target_pending": false,
+  "evidence_sha256": "6ffed229674d273c339dbf88e8c6eeacd0fda1089197a8282b52fa509c534104",
+  "company_controller_to_home_target": {
+    "route": "relay",
+    "route_evidence": "user observation of company device selector",
+    "local_api_online": true,
+    "local_api_error": "",
+    "home_controlled": true,
+    "home_global_ipv6_addresses": 0,
+    "home_ipv6_default_route": false,
+    "home_active_udp_endpoints_after_negotiation": 0,
+    "user_connection_preserved": true,
+    "remote_data_writes": 0,
+    "snapshot_sha256": "1e262759cd824d951bf2dfd57544e24442fb58a4e3d005f8f1a74a69f6c2e66a"
+  }
 }
