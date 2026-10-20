@@ -12,6 +12,7 @@ import tempfile
 from pathlib import Path
 
 from test_home_runtime import ROOT, run_probe, write_site
+from runtime_sources import copy_app_source
 
 
 def write_binding_site(site: Path) -> None:
@@ -20,7 +21,7 @@ def write_binding_site(site: Path) -> None:
     for name in ("projects.h", "project_lifecycle.h", "project_binding.h"):
         shutil.copy2(ROOT / "app/include/mdo" / name, site / "include/mdo" / name)
     for name in ("lifecycle.c", "manager.c", "binding.c"):
-        shutil.copy2(ROOT / "app/src/projects" / name, site / "src/projects" / name)
+        copy_app_source("src/projects/" + name, site)
     manager = site / "src/projects/manager.c"
     text = manager.read_text(encoding="utf-8")
     needle = "    if ( !MdoHomeAtomicWrite(Path, Json, Size, false) ) {"
