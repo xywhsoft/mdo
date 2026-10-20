@@ -34,7 +34,7 @@ void ServiceInit(XS_HostInfo* Host)
     xrtMutexLock(g_MdoAccount.Lock);
     MdoAccountNewSessionLocked();
     strcpy(g_MdoAccount.Tokens.Access,Token);
-    g_MdoAccount.Tokens.Expires=xrtDeadlineAfter(900000000u);
+    g_MdoAccount.Tokens.Expires=MdoDeadlineAfterUs(900000000u);
     g_MdoAccount.Tokens.MemberId=(uint64)atoi(Member);
     (void)MdoAccountQueueLocked(MDO_ACCOUNT_WORK_PROFILE);
     xrtMutexUnlock(g_MdoAccount.Lock);

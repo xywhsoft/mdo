@@ -39,7 +39,7 @@ static int32 OnlineSearchWork(void* unused) {
     xworkAgentOptionsInit(&options); options.pSession=session; options.sWorkspaceRoot="."; options.OnPermission=OnlinePermission;
     xwork_agent* agent=xworkAgentCreateWithRuntime(MdoBootstrapRuntime(),definition,&options,&error);
     bool ok=definition && session && agent && xworkExecutorBind(&executor,agent,&error);
-    context.uRound=1; context.uDeadline=xrtDeadlineAfter(30000000);
+    context.uRound=1; context.uDeadline=MdoDeadlineAfterUs(30000000);
     call.sId="online-search"; call.sName="web_search";
     call.sArgumentsJson="{\"query\":\"Bocha Web Search API documentation\",\"count\":3}";
     if(ok) ok=executor.pExecute(executor.pUserData,&call,&context,&result) && result.bSuccess;
