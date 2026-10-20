@@ -1,0 +1,59 @@
+{
+  "schema": 1,
+  "version": "0.2.0",
+  "windows_build_id": 30000101,
+  "local_api_port": 54240,
+  "direction": "home-controller-to-company-target",
+  "both_binaries_sha256": "03056f8d8f4139c4a31c0b94b621d222a436fd5bef58af4c285ad2e4c27afe89",
+  "remote_offered_families": [
+    4
+  ],
+  "negotiated_families": [
+    4
+  ],
+  "selected_route": "relay",
+  "xrudp_attempt_ms": 10035,
+  "encrypted_direct_selected": false,
+  "read_count": 5,
+  "read_statuses": [
+    200,
+    200,
+    200,
+    200,
+    200
+  ],
+  "read_latency_ms": [
+    131,
+    116,
+    124,
+    126,
+    114
+  ],
+  "after_idle_route": "relay",
+  "local_global_ipv6_addresses": 0,
+  "local_ipv6_default_route": false,
+  "windows_ipv6_binding_enabled": true,
+  "windows_router_discovery_enabled": true,
+  "test_channel_closed": true,
+  "final_devices": [
+    {
+      "name": "家用台式机",
+      "online": true,
+      "allow_remote": true,
+      "viewers": 0,
+      "controlled": false
+    },
+    {
+      "name": "公司台式机",
+      "online": true,
+      "allow_remote": true,
+      "viewers": 0,
+      "controlled": false
+    }
+  ],
+  "remote_data_writes": 0,
+  "model_calls": 0,
+  "firewall_router_or_online_service_changed": false,
+  "company_controller_to_home_target_pending": true,
+  "evidence_sha256": "6ffed229674d273c339dbf88e8c6eeacd0fda1089197a8282b52fa509c534104"
+}

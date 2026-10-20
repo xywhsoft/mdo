@@ -27,3 +27,11 @@
 冻结的交付源码再次通过完整 Windows 原生协商及分别屏蔽两个协议族的实际远控业务；最终源码 Linux ASan/UBSan/泄漏检查通过。ZIP 完整性及包内 EXE 与构建产物逐字节一致均通过。首次并行验证遭遇本机提交内存不足，保留失败日志；待资源恢复后改为串行，最终完整验证通过，未将环境失败当作产品回归结果。
 
 交付包 `.build/xrudp-portable-test-20261020-r3-dual/mdo-0.2.0-dual-stack-test-windows-x64.zip` 为 3,639,633 字节，SHA-256 `11afe8ac2f04fb94efa15b52554d3bc408666a65955beec3ed3f6460acb1a6e8`。压缩包内含 `mdo.exe`、使用说明、SHA256SUMS 和构建信息；替换前退出两端旧程序，仅替换 EXE，保留原 `mdo-home`。脱敏验收收据为 `tests/acceptance/xrudp-connectivity/dual-stack.json`；完整构建与验证记录保留在上述私有构建目录。
+
+## 用户替换两端程序后的实际连接
+
+用户确认替换后，本机运行 PID 为 13536，API 为 127.0.0.1:54240，LAN 监听为 54253。本机 EXE 哈希和通过公司端只读 `/api/v1/update` 得到的运行程序 `local_sha256` 均为上述 `03056f8d…`，两端确为同一新构建，均在线并允许远控。
+
+通过家用端实际原生连接器向公司端建立只读连接：公司 offer 的 families 为 `[4]`，本机 init 同样为 `[4]`，双方交换 IPv4 host/srflx 候选；没有认证通过后的 `rudp_dial` 或 `rudp_select`。XRUDP 尝试 10035 ms 后结束，LAN 随后失败，保留中继；5 次 GET 均返回 200，延迟 114–131 ms，空闲约 22 秒后仍可读取。未修改公司项目、会话或模型数据，测试连接关闭后双方 controlled=false、viewers=0。完整阶段证据保留在 `.build/xrudp-home-company-dual-live-20261020-r1/`，脱敏收据为 `tests/acceptance/xrudp-connectivity/dual-stack-live.json`。
+
+本机 Windows 以太网的 IPv6 binding、RouterDiscovery 与 DHCP 均已启用，但只有链路本地地址，没有公网 IPv6 或默认路由；本轮 IPv6 没有可供测试的实际通路。公司端未公布 IPv6 候选，不将其等同于已经完整检查了公司系统/路由器配置。该结果证明新版本已经替换并运行、IPv4 直连仍未成功及中继正常，不能声称已经完成双栈公网直连测试。公司控制家用的反方向操作需由公司电脑发起，已向用户请求操作，尚待结果；本次记录严格标为家用控制公司，未冒充反方向验收。
