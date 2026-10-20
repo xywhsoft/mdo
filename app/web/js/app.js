@@ -88,6 +88,7 @@ import { createThemeToggle } from "./features/shell/theme-toggle.js";
 import { createRunNotifications } from "./features/shell/run-notifications.js";
 import { startWorkspaceNavigation } from "./features/shell/workspace-startup.js";
 import { createStartupIntent } from "./features/shell/startup-intent.js";
+import { createAndroidShares } from "./features/sharing/android-shares.js";
 import { focusSessionComposerAfterNavigation } from "./features/shell/session-composer-focus.js";
 import { createProjectSwitcher } from "./features/shell/project-switcher.js";
 import { createSessionMetadataSync } from "./features/shell/session-metadata-sync.js";
@@ -2717,6 +2718,13 @@ export async function boot() {
   document.documentElement.dataset.mdoStartupStage = "navigation";
   // Last-session restoration is a fallback, not a gate on the usable shell.
   // Keep tracking intent while that read runs so a new action wins over it.
+  const androidShares = createAndroidShares({ draftStore, navigation, projectsStore, sessionsStore, modelsStore,
+    mount: $("#composer-profile-controls .composer-options"),
+    canWrite: () => Boolean(bootstrapStore.get().data?.ready) && !purgeRecovery.isPaused() && !localServiceReconnecting,
+    onImported(result) {
+      showActiveSessions(); navigation.select(result.project_id, result.session_id); closeDrawers();
+      draftStore.select(result.key); prompt.focus(); void loadSessions({ retry: true });
+    } });
   void startWorkspaceNavigation({ navigation, settingsStore, sessionsStore,
     runsStore,
     sessionDetailStore,
@@ -2724,7 +2732,7 @@ export async function boot() {
     title: $("#startup-last-title"),
     continueButton: $("#startup-continue"),
     newButton: $("#startup-new"), prompt, entryHash,
-    shouldRestore: startupIntent.allowsRestore,
+    shouldRestore: () => !androidShares.hasPending() && startupIntent.allowsRestore(),
     subscribeWritable: purgeRecovery.subscribe,
     canPersistSelection: () => !purgeRecovery.isPaused() && (!isRemoteTarget() ||
       (targetState().connected && !targetState().runtimeChanged &&

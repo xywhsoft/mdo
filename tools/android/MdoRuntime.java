@@ -9,6 +9,7 @@ import java.security.MessageDigest;
 /** Native code is installed by PackageManager. Only data and symlinks live in files/. */
 final class MdoRuntime {
     static void initialize(Context context) throws Exception {
+        Os.setenv("MDO_ANDROID_SHARE_ROOT", new File(context.getFilesDir(), "mdo-shares").getAbsolutePath(), true);
         JSONObject metadata;
         try (InputStream input = context.getAssets().open("mdo-runtime.json")) {
             ByteArrayOutputStream bytes = new ByteArrayOutputStream();

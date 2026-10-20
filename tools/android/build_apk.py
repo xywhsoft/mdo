@@ -15,6 +15,7 @@ from xml.sax.saxutils import escape
 
 ROOT = Path(os.environ["MDO_ANDROID_XSERVER_ROOT"])
 from runtime_bundle import add_runtime
+from share_overlay import MANIFEST as SHARE_MANIFEST, apply as overlay_sharing
 MDO_ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -95,6 +96,7 @@ def build(sdk: Path, java: Path, library: Path, pack: Path, output: Path,
   <activity android:name="org.xserver.android.XsActivity" android:exported="true" android:launchMode="singleTask" android:windowSoftInputMode="adjustResize">
    <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
    {''.join(filters)}
+   {SHARE_MANIFEST}
   </activity>
   {'<activity android:name="org.xserver.android.PackageInstall" android:exported="false" android:configChanges="orientation|screenSize" /><receiver android:name="org.xserver.android.PackageInstall$ResultReceiver" android:exported="false" />' if package_install else ''}
   <service android:name="org.xserver.android.XsService" android:exported="false" android:foregroundServiceType="specialUse">
@@ -110,6 +112,7 @@ def build(sdk: Path, java: Path, library: Path, pack: Path, output: Path,
         overlay = directory / "java"
         import shutil
         shutil.copytree(ROOT / "android/src", overlay)
+        overlay_sharing(overlay)
         service = overlay / "org/xserver/android/XsService.java"
         text = service.read_text().replace("PackageInstall.initialize(getApplicationContext());", "MdoRuntime.initialize(getApplicationContext());\n            PackageInstall.initialize(getApplicationContext());")
         service.write_text(text)

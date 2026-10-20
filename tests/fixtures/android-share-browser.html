@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Android share inbox regression</title><link rel="stylesheet" href="/app/web/css/app.css">
+<main><button id="mount">Composer</button><pre id="result">Running…</pre></main>
+<script type="module">
+import { createAndroidShares } from "/app/web/js/features/sharing/android-shares.js";
+import { createResourceStore } from "/app/web/js/state/store.js";
+import { loadLocale } from "/app/web/js/i18n.js";
+const sid = "a".repeat(32), fid = "b".repeat(32);
+let share = { id: sid, text: "请分析分享的文件", files: [{ id: fid, name: "小说.txt", bytes: 9, mime: "text/plain", sha256: "0".repeat(64) }] };
+let draft = { text: "保留旧草稿", attachments: [] }, persisted = false, ackCount = 0, imports = 0, edits = 0, received = null;
+const requests = [];
+const originalFetch = window.fetch;
+window.__mdoShareToken = "qa-proof";
+window.MdoShares = {
+  peek(proof) { if (proof !== "qa-proof") throw Error("invalid proof"); return JSON.stringify(share); },
+  bind(proof,id,project_id,session_id,create) { share.destination = { project_id, session_id, create }; return JSON.stringify(share); },
+  plan(proof,id,plan) { share.delivery = JSON.parse(plan); return true; },
+  acknowledge() { if (!persisted) throw Error("acknowledged before persistence"); ackCount++; if (ackCount === 1) return false; share = null; return true; }
+};
+window.fetch = async (path, options = {}) => {
+  if (String(path).startsWith("/lang/")) return originalFetch("/app/web"+path);
+  requests.push([String(path),options.method || "GET"]);
+  let data;
+  if (String(path).endsWith("/shared-files")) { imports++; data = { path: `shared-files/${sid}/${fid}-小说.txt`, bytes: 9 }; }
+  else data = { id: "existing", project_id: "default", status: "active", model_id: "text" };
+  return Response.json({ ok: true, data });
+};
+await loadLocale("zh-CN");
+const draftStore = {
+  async flushAll() { return true; }, async ensureLoaded() { return true; }, snapshot() { return structuredClone(draft); },
+  edit(key,text,attachments) { edits++; draft = { text, attachments }; },
+  async flush() { persisted = true; return true; }, isDraftDurable() { return persisted; }
+};
+const controller = createAndroidShares({ draftStore,
+  navigation: { get: () => ({ projectId: "default", sessionId: "existing" }), preferredProject: () => "default" },
+  projectsStore: createResourceStore({ items: [] }),
+  sessionsStore: createResourceStore({ items: [{ id: "existing", project_id: "default", title: "已有会话", status: "active" }] }),
+  modelsStore: createResourceStore({ models: [{ id: "text", attachments: 0 }] }),
+  canWrite: () => true, onImported: value => { received = value; }, mount: document.querySelector("main")
+});
+try {
+  const dialog = document.querySelector(".android-share-dialog");
+  if (!dialog.open) throw Error("share dialog did not open");
+  if (new URLSearchParams(location.search).has("pause")) await new Promise(resolve => { window.__shareResume = resolve; });
+  if (dialog.querySelectorAll("select")[1].value !== "existing") throw Error("current conversation was not selected");
+  const until = async predicate => { for(let i=0;i<150;i++) { if(predicate()) return; await new Promise(resolve=>setTimeout(resolve,10)); } throw Error("UI wait expired"); };
+  dialog.querySelector("button.primary-button").click();
+  await until(() => ackCount === 1 && !dialog.querySelector("button.primary-button").disabled);
+  if (!dialog.open || dialog.querySelector("[role=alert]").hidden) throw Error("lost acknowledgement was hidden");
+  const saved = draft.text;
+  dialog.querySelector("button.primary-button").click();
+  await until(() => received);
+  const passed = !dialog.open && imports === 1 && edits === 1 && draft.text === saved &&
+    saved.startsWith("保留旧草稿\n\n请分析分享的文件") && received.session_id === "existing" &&
+    requests.every(([path])=>!path.endsWith("/runs"));
+  document.querySelector("#result").dataset.passed = String(passed);
+  document.querySelector("#result").textContent = JSON.stringify({ passed, imports, edits, ackCount, draft, received, requests },null,2);
+} catch(error) {
+  document.querySelector("#result").dataset.passed = "false";
+  document.querySelector("#result").textContent = error.stack || String(error);
+} finally { controller.destroy(); }
+</script></html>

@@ -525,6 +525,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
     },
     isRunUncertain(key) { return entry(key).uncertainRun; },
     text(key) { return entry(key).text; },
+    snapshot(key) { const current = entry(key); return { text: current.text, attachments: [...current.attachments] }; },
     composerProfile(key) { return entry(key).composerProfile &&
       { ...entry(key).composerProfile }; },
     profileSaveState(key) {

@@ -1,0 +1,10 @@
+.android-share-open { border: 1px solid var(--border); border-radius: 8px; padding: 4px 8px; background: var(--surface); color: var(--ink); font-size: 12px; }
+.app-dialog.android-share-dialog { width: min(480px, calc(100vw - 32px)); max-height: 85dvh; overflow: auto; padding: 20px; }
+.android-share-dialog h2 { margin: 0 0 14px; font-size: 18px; }
+.android-share-dialog > label { display: grid; gap: 6px; margin: 12px 0; }
+.android-share-dialog select { width: 100%; min-height: 40px; padding: 8px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--bg); color: var(--ink); }
+.android-share-dialog > p, .android-share-dialog li { white-space: pre-wrap; overflow-wrap: anywhere; }
+.android-share-dialog .dialog-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+.android-share-dialog .dialog-error { margin: 12px 0; }
+.android-share-dialog button { min-height: 40px; }
+.android-share-limits { color: var(--muted); font-size: 12px; }
