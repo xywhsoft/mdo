@@ -96,7 +96,7 @@ bool MdoReceiptFixtureRename(xroot Root, cstr Source, cstr Target)
 {
     bool Ok;
     if ( g_MdoReceiptFault == 3u ) MdoReceiptCheckpoint("temporary");
-    Ok = xrtRootRenameNoReplace(Root, Source, Target);
+    Ok = xsRootRenameNoReplace(Root, Source, Target);
     if ( Ok && g_MdoReceiptFault == 4u ) MdoReceiptCheckpoint("published");
     if ( Ok && g_MdoReceiptFault == 5u ) {
         (void)MdoHomePurgeError("bounded rename close error after publication"); return false;

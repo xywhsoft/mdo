@@ -91,7 +91,7 @@ def fixture(site: Path) -> None:
     leaf = site / "src/storage/home_restore_receipt.inc.c"
     text = leaf.read_text(encoding="utf-8")
     text = text.replace("#define MDO_HOME_RESTORE_RECEIPT_LIMIT 1024u", "#define MDO_HOME_RESTORE_RECEIPT_LIMIT 3u")
-    old = '    if ( xrtRootRenameNoReplace(g_MdoHome.Root, MDO_HOME_RESTORE_DIR "/result.tmp", Path) ) Ok = true;'
+    old = '    if ( xsRootRenameNoReplace(g_MdoHome.Root, MDO_HOME_RESTORE_DIR "/result.tmp", Path) ) Ok = true;'
     assert text.count(old) == 1
     text = text.replace(old, '    if ( !RestoreProbeStep("result") ) goto done;\n' + old)
     old = '    xrtFree(Text); xrtFree(Partial); xrtValueRelease(Value); return Ok;'

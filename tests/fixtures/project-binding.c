@@ -179,7 +179,7 @@ void ServiceInit(XS_HostInfo* Host)
      * pinned while replacing the fixture directory, preventing inode reuse. */
     Site = xrtRootOpen(xsAppPath()); OldRoot = xrtRootOpen(Binding.WorkspaceRoot);
     BINDING_CHECK(Site != NULL && OldRoot != NULL &&
-        xrtRootRenameNoReplace(Site, "workspaces/空间 alpha", "workspaces/alpha-old") &&
+        xsRootRenameNoReplace(Site, "workspaces/空间 alpha", "workspaces/alpha-old") &&
         xrtRootDirCreate(Site, "workspaces/空间 alpha", 0700u));
     BINDING_CHECK(!MdoProjectWithBinding(&Binding, Owner, BindingProbeCommit, NULL, &Error) && g_BindingCalls == Calls);
     BINDING_CHECK(MdoProjectBindingGet("alpha", &Changed, &Error) &&

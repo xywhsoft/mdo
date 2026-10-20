@@ -210,18 +210,18 @@ def site_fixture(site: Path) -> None:
     (site / "probe.c").write_text(PROBE, encoding="utf-8")
     source = site / "src/storage/home_import.inc.c"
     text = source.read_text(encoding="utf-8")
-    move = "        if ( !xrtRootRenameNoReplace(g_MdoHome.Root, Source, g_MdoHomeImportRoots[i]) ) return false;"
+    move = "        if ( !xsRootRenameNoReplace(g_MdoHome.Root, Source, g_MdoHomeImportRoots[i]) ) return false;"
     commit = '    return MdoHomeImportMarker("committed", MDO_HOME_IMPORT_MAGIC);'
     cleanup = '            snprintf(Path, sizeof(Path), "%s/%s", MDO_HOME_IMPORT_GC, Files[i]);'
-    rollback = '                if ( !xrtRootRenameNoReplace(g_MdoHome.Root,\n                        g_MdoHomeImportRoots[i], Destination) ) return false;'
-    preflight = '    if ( !xrtRootRenameNoReplace(g_MdoHome.Root,\n            MDO_HOME_IMPORT_DIR, MDO_HOME_IMPORT_GC) ) return false;'
+    rollback = '                if ( !xsRootRenameNoReplace(g_MdoHome.Root,\n                        g_MdoHomeImportRoots[i], Destination) ) return false;'
+    preflight = '    if ( !xsRootRenameNoReplace(g_MdoHome.Root,\n            MDO_HOME_IMPORT_DIR, MDO_HOME_IMPORT_GC) ) return false;'
     assert text.count(move) == text.count(commit) == text.count(cleanup) == 1
     text = text.replace(move, '        if ( !HomeProbeBefore((unsigned)i + 1u) ) return false;\n' +
         move + '\n        if ( !HomeProbeAfter((unsigned)i + 1u) ) return false;')
     text = text.replace(commit, "    return HomeProbeCommit();")
     text = text.replace(cleanup, "            HomeProbeCleanup((unsigned)i);\n" + cleanup)
     assert text.count(rollback) == 1
-    text = text.replace(rollback, '                if ( !HomeProbeRollback() || !xrtRootRenameNoReplace(g_MdoHome.Root,\n                        g_MdoHomeImportRoots[i], Destination) ) return false;')
+    text = text.replace(rollback, '                if ( !HomeProbeRollback() || !xsRootRenameNoReplace(g_MdoHome.Root,\n                        g_MdoHomeImportRoots[i], Destination) ) return false;')
     assert text.count(preflight) == 1
     text = text.replace(preflight, '    if ( !HomeProbePreflightBefore() ) return false;\n' +
         preflight + '\n    if ( !HomeProbePreflightAfter() ) return false;')

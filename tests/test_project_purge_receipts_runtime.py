@@ -60,7 +60,7 @@ class ReceiptProbe(Probe):
             'MdoHomeImportWrite(MDO_HOME_PURGE_DIR "/result.tmp", Text, Size)',
             'MdoReceiptFixtureWrite(MDO_HOME_PURGE_DIR "/result.tmp", Text, Size)')
         change("src/storage/home_purge.inc.c",
-            'xrtRootRenameNoReplace(g_MdoHome.Root, MDO_HOME_PURGE_DIR "/result.tmp", Path)',
+            'xsRootRenameNoReplace(g_MdoHome.Root, MDO_HOME_PURGE_DIR "/result.tmp", Path)',
             'MdoReceiptFixtureRename(g_MdoHome.Root, MDO_HOME_PURGE_DIR "/result.tmp", Path)')
         change("src/projects/purge.c", '#include "../sessions/internal.h"',
             '#include "../sessions/internal.h"\nvoid MdoReceiptFixtureBeforeReferences(void);')

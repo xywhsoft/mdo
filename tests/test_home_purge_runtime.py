@@ -71,7 +71,7 @@ static bool PurgeProbeCommit(void) {
     return true;
 }
 static bool PurgeProbeRename(cstr Source, cstr Target) {
-    bool Ok = xrtRootRenameNoReplace(g_MdoHome.Root, Source, Target);
+    bool Ok = xsRootRenameNoReplace(g_MdoHome.Root, Source, Target);
     if ( Ok && PurgeProbeMode("close-error") ) return PurgeProbeFailure();
     return Ok;
 }
@@ -181,9 +181,9 @@ def site_fixture(site: Path) -> None:
         move + "\n        if ( !PurgeProbeAfter((unsigned)i + 1u) ) goto done;")
     text = text.replace(commit, "    if ( !PurgeProbeCommit() ) goto done;")
     text = text.replace(rollback, "(!PurgeProbeRollback() || " + rollback + ")")
-    text = text.replace("(void)xrtRootRenameNoReplace(g_MdoHome.Root, Source, Target);",
+    text = text.replace("(void)xsRootRenameNoReplace(g_MdoHome.Root, Source, Target);",
                         "(void)PurgeProbeRename(Source, Target);")
-    text = text.replace("if ( xrtRootRenameNoReplace(g_MdoHome.Root, Temporary, Target) )",
+    text = text.replace("if ( xsRootRenameNoReplace(g_MdoHome.Root, Temporary, Target) )",
                         "if ( PurgeProbeRename(Temporary, Target) )")
     # Checkpoint after a fully flushed temporary marker, before publication.
     text = text.replace("    if ( PurgeProbeRename(Temporary, Target) )",

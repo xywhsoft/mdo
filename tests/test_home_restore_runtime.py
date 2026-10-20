@@ -64,7 +64,7 @@ static bool RestoreProbeWrite(xroot Root, cstr Path, cstr Text)
 static bool RestoreProbeRename(xroot Root, cstr Source, cstr Target)
 {
     bool Ok;
-    if ( strstr(Target, "sessions/") != Target ) return xrtRootRenameNoReplace(Root, Source, Target);
+    if ( strstr(Target, "sessions/") != Target ) return xsRootRenameNoReplace(Root, Source, Target);
     if ( !RestoreProbeStep("rename-before") ) return false;
     if ( RestoreProbeMode("collision-after-ready") ) {
         char Path[160];
@@ -72,7 +72,7 @@ static bool RestoreProbeRename(xroot Root, cstr Source, cstr Target)
         snprintf(Path, sizeof(Path), "%s/meta.json", Target);
         if ( !RestoreProbeWrite(Root, Path, "foreign-target") ) return false;
     }
-    Ok = xrtRootRenameNoReplace(Root, Source, Target);
+    Ok = xsRootRenameNoReplace(Root, Source, Target);
     return RestoreProbeStep("rename-after") && Ok;
 }
 void ServiceInit(XS_HostInfo* Host)
@@ -152,7 +152,7 @@ def fixture(site: Path) -> None:
     leaf = site / "src/storage/home_restore.inc.c"
     text = leaf.read_text(encoding="utf-8")
     changes = {
-        '    (void)xrtRootRenameNoReplace(g_MdoHome.Root, Source, Target);':
+        '    (void)xsRootRenameNoReplace(g_MdoHome.Root, Source, Target);':
             '    (void)RestoreProbeRename(g_MdoHome.Root, Source, Target);',
         '    snprintf(Source, sizeof(Source), "%s/payload/%s", MDO_HOME_RESTORE_DIR, Record.Name);':
             '    if ( !RestoreProbeStep("ready") ) goto done;\n'

@@ -122,7 +122,7 @@ static bool BackupStageFixtureControl(XS_HttpReq* Request)
         char Ancestor[4096];
         snprintf(Ancestor, sizeof(Ancestor), "%s/..", getenv("MDO_STAGE_FIXTURE_PARENT"));
         Parent = xrtRootOpen(Ancestor);
-        Ok = Parent != NULL && xrtRootRenameNoReplace(Parent, "private-staging", "moved-staging");
+        Ok = Parent != NULL && xsRootRenameNoReplace(Parent, "private-staging", "moved-staging");
         if ( Parent ) (void)xrtRootClose(Parent);
     }
     else if ( MdoApiViewEqualText(Target, "/__fixture/backup-stage/check") )
