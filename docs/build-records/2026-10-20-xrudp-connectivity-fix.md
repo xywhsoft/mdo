@@ -29,3 +29,11 @@ Android 16 ARM64 与 Windows 的 Wi-Fi 两个方向原生直连通过：目标�
 网站 `xs.service` 主进程、宿主和 xs.json 哈希均保持不变；未修改下载或更新清单。线上中继已能透传认证协商消息，无需替换网站宿主。本次主要修复在 XRUDP 库和客户端；旧客户端不会仅因 STUN 服务更新而获得新协商能力，需之后升级客户端才完整生效。
 
 保留最终独立 QA 包，版本 `0.2.0-xrudp-qa`、build `30000099`，APK SHA-256 `ded3f079ad426079330c1285d3707037a8e7fa314d17daf29b3e4c05912140f2`，原生库 SHA-256 `ed4b700a60613e407bfede3158c713e04d209611967754a19dfff1a5b6965177`。安装后的真实 APK 哈希相同，包内原生库逐字节核对。该包使用隔离测试账号站点，测试后已停止；日常 mdo 安装元数据保持不变。Wi-Fi/default 网络、非强制 Doze/ACTIVE、USB 亮屏 15 和空调试属性均已核对恢复。既有长稳测试宿主哈希未变，没有替换或终止长稳进程。
+
+## 提供跨电脑测试的 Windows 便携包
+
+按用户要求，从已验证的提交 `a428fe9c` 冻结 app、构建工具、品牌素材、模块 SDK 头和 deps.lock；仅在隔离副本中将 Windows build 编号设为 `30000100`。不包含其他任务在工作区尚未提交的功能。使用 SDK `5cdc54e` 构建带原生 WebView2 窗口的 Windows x64 宿主，正式账号域名 `https://ai.xywhsoft.com` 与同域 UDP 3478 保持产品配置，没有 QA 站点或账户数据。
+
+单文件 mdo 为 5,318,632 字节，SHA-256 `ce038f61d1bb0c824215560b603f085d0fc32cebce7a269f35142f1d0ede9920`。隔离 Home 启动实际交付 EXE，bootstrap/version、正式版前端的 v2 校验、未登录/远控默认关闭、WebView2 profile、自动正常退出均通过；构建源中的编号为 `30000100`。新 GUI 宿主的反向握手协商回归通过，正式域名实际 STUN Binding 的事务/长度/指纹通过，PE 仅导入 Windows 系统 DLL。ZIP 完整性与包内 EXE 哈希核对通过，含运行说明和 SHA256SUMS。此测试包不发布到官网或自动更新。
+
+交付路径为 `.build/xrudp-portable-test-20261020-r2/mdo-0.2.0-xrudp-test-windows-x64.zip`；详细构建与验证收据保留在同目录。两台电脑需使用同一测试版并登录同一账号，连接后“设备直连”为 XRUDP，“局域网直连”为 LAN，“服务器中转”为中继；跨 NAT 测试须使用不同网络。
