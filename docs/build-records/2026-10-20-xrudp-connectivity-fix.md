@@ -37,3 +37,13 @@ Android 16 ARM64 与 Windows 的 Wi-Fi 两个方向原生直连通过：目标�
 单文件 mdo 为 5,318,632 字节，SHA-256 `ce038f61d1bb0c824215560b603f085d0fc32cebce7a269f35142f1d0ede9920`。隔离 Home 启动实际交付 EXE，bootstrap/version、正式版前端的 v2 校验、未登录/远控默认关闭、WebView2 profile、自动正常退出均通过；构建源中的编号为 `30000100`。新 GUI 宿主的反向握手协商回归通过，正式域名实际 STUN Binding 的事务/长度/指纹通过，PE 仅导入 Windows 系统 DLL。ZIP 完整性与包内 EXE 哈希核对通过，含运行说明和 SHA256SUMS。此测试包不发布到官网或自动更新。
 
 交付路径为 `.build/xrudp-portable-test-20261020-r2/mdo-0.2.0-xrudp-test-windows-x64.zip`；详细构建与验证收据保留在同目录。两台电脑需使用同一测试版并登录同一账号，连接后“设备直连”为 XRUDP，“局域网直连”为 LAN，“服务器中转”为中继；跨 NAT 测试须使用不同网络。
+
+## 家用台式机至公司台式机实测
+
+用户替换两端 EXE 并登录后，通过家用电脑正在运行的 mdo 原生连接器建立只读连接，不使用隔离账号站点。家用端页面/API 监听 127.0.0.1:62676，现有 LAN 监听为 62688；实际 EXE 哈希与上述交付程序一致。公司设备在线、允许远控，中继授予的目标身份和 v2 XRUDP offer 均验证成功。
+
+实际自动协商仅有 IPv4：约 587 ms 家用端发布 host/srflx 候选，约 840 ms 收到公司端 host/srflx 候选。未出现 `rudp_dial` 或 `rudp_select`，即未取得足以选定握手方向的认证检查证据。XRUDP 约 10 秒结束，随后 LAN 约 4.9 秒失败，最终继续使用中继。四项远程只读 API 全部返回 200，耗时 111–135 ms；包含结束协商后和空闲约 22 秒后的读取。不能据此宣称真实双 NAT 打洞成功，也未确定丢包发生在哪一级。
+
+自动化浏览器首轮曾被 `ERR_BLOCKED_BY_LOCAL_NETWORK_ACCESS_CHECKS` 在连接本机 WebSocket 前拦截；为临时浏览器中精确的本机 Origin 授予 local-network-access 后才进行上述有效测试。没有禁用浏览器安全功能或修改系统防火墙。本机有效网络为 Private，已有精确匹配 EXE 的 Private UDP 入站 Allow；Public Block 不能作为当前拦截证据，仍不能排除其他过滤位置。
+
+测试只读取目标身份/bootstrap/远控状态，没有创建项目、会话、调用模型或修改公司数据。结束后关闭测试通道；首次收尾刷新出现一次服务不可用，后续刷新成功，双方仍在线且 viewers=0、controlled=false。本机此次 UDP 端点归零，用户 mdo 保持运行。原始脱敏消息阶段、浏览器环境拒绝、实际回退和最终核查分别保留在 `.build/xrudp-home-company-live-20261020-r1/`，无令牌、私钥或请求正文落盘。
