@@ -35,7 +35,7 @@ def elf_dependencies(data, name):
 
 
 def inspect(edition, release):
-    path = ROOT / f".build/releases/mdo-android-{edition}-arm64-v8a.apk"
+    path = ROOT / ("mdo-arm64-v8a.apk" if edition == "lite" else "mdo-full-arm64-v8a.apk")
     with zipfile.ZipFile(path) as apk:
         assert apk.testzip() is None
         names = apk.namelist()
