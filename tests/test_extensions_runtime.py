@@ -202,10 +202,61 @@ def main():
                 assert request(port,'GET','/api/v1/skills?project=missing')[0]==404
                 assert request(port,'GET','/api/v1/skills?project=default&path=bad')[0]==400
                 scoped.unlink(); scoped.parent.rmdir()
+                project_api='/api/v1/skills/project'
+                project_doc='---\nname: Created\ndescription: A project Skill\n---\nFirst version'
+                def project_write(id,content,match='new'):
+                    return request(port,'PUT',f'{project_api}/{id}?project=default',body=json.dumps({'content':content}).encode(),headers={'Content-Type':'application/json','If-Match':f'"{match}"'})
+                status,_,raw=project_write('created',project_doc)
+                assert status==200,raw
+                project_revision=json.loads(raw)['data']['revision']
+                assert project_write('created',project_doc+' changed')[0]==412
+                status,_,raw=project_write('created',project_doc+' changed',project_revision)
+                assert status==200,raw
+                project_revision=json.loads(raw)['data']['revision']
+                invalid_resources=project_doc.replace('description: A project Skill','description: A project Skill\nscripts: [scripts/missing.txt]')
+                assert project_write('created',invalid_resources,project_revision)[0]==422
+                status,_,raw=request(port,'GET',f'{project_api}/created?project=default')
+                assert status==200 and json.loads(raw)['data']['content']==project_doc+' changed',raw
+                assert request(port,'POST',f'{project_api}/created/enabled?project=default',body=b'{"enabled":false}',headers={'Content-Type':'application/json','If-Match':f'"{project_revision}"'})[0]==200
+                listed=json.loads(request(port,'GET',project_api+'?project=default')[2])['data']['items']
+                assert any(i['id']=='created' and i['enabled'] is False for i in listed),listed
+                assert not any(i['id']=='created' for i in json.loads(request(port,'GET','/api/v1/skills?project=default')[2])['data']['items'])
+                status,_,raw=request(port,'DELETE',f'{project_api}/created?project=default',headers={'If-Match':f'"{project_revision}"'})
+                assert status==200,raw
+                recovery=json.loads(raw)['data']['recovery_path']
+                assert (base/'home/workspace'/recovery/'SKILL.md').read_text(encoding='utf-8')==project_doc+' changed'
+                assert request(port,'GET',f'{project_api}/created?project=default')[0]==404
+                source=base/'home/workspace/.claude/skills/portable'
+                source.mkdir(parents=True)
+                (source/'SKILL.md').write_text(project_doc,encoding='utf-8')
+                (source/'references').mkdir()
+                payload=b'resource payload'*50000
+                (source/'references/large.bin').write_bytes(payload)
+                bad=source.parent/'unsupported';bad.mkdir();(bad/'SKILL.md').write_text(project_doc.replace('name: Created','name: Created\ncontext: fork'),encoding='utf-8')
+                status,_,raw=request(port,'GET','/api/v1/skills/sources?project=default')
+                assert status==200,raw[:400]
+                sources=json.loads(raw)['data']
+                assert any(i['id']=='portable' and i['origin']=='project' and i['provider']=='claude' for i in sources['items']),sources
+                assert any('context' in i['message'] for i in sources['diagnostics']),sources
+                def migrate(id,scope):
+                    return request(port,'POST','/api/v1/skills/migrate?project=default',body=json.dumps({'origin':'project','provider':'claude','id':'portable','target_id':id,'scope':scope}).encode(),headers={'Content-Type':'application/json'})
+                status,_,raw=migrate('imported-project','project');assert status==200,raw
+                status,_,raw=migrate('imported-user','user');assert status==200,raw
+                assert migrate('imported-user','user')[0]==409
+                assert migrate('../escape','user')[0]==409
+                assert migrate('1-invalid','user')[0]==409
+                assert (base/'home/workspace/.mdo/skills/imported-project/references/large.bin').read_bytes()==payload
+                assert (base/'home/skills/imported-user/references/large.bin').read_bytes()==payload
+                assert (source/'references/large.bin').read_bytes()==payload
                 large='---\nname: large\ndescription: A large instruction document\n---\n'+'x'*60000
                 assert call('PUT','skills/large',{'content':large},'new')[0] == 200
                 status, _, raw=request(port,'POST','/api/v1/skills/invoke',body=json.dumps({'id':'large'}).encode(),headers={'Content-Type':'application/json'})
                 assert status == 200 and 'x'*60000 in json.loads(raw)['data']['text'], raw[:400]
+                assert call('PUT','skills/1-invalid',{'content':large},'new')[0]==422
+                escaped='---\nname: escaped\ndescription: JSON escaping fixture\n---\n'+'\"'*131000
+                assert call('PUT','skills/escaped',{'content':escaped},'new')[0]==200
+                status,_,raw=request(port,'POST','/api/v1/skills/invoke',body=b'{"id":"escaped"}',headers={'Content-Type':'application/json'})
+                assert status==200 and '\"'*131000 in json.loads(raw)['data']['text'],raw[:400]
                 assert call('PUT','skills/oversized',{'content':large+'x'*80000},'new')[0] in (413,422)
                 manual='---\nname: manual\ndescription: MANUAL_ONLY_MARKER\ndisable-model-invocation: true\n---\nTask: $ARGUMENTS\nFiles: ${MDO_SKILL_DIR}'
                 assert call('PUT','skills/manual',{'content':manual},'new')[0] == 200

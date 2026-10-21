@@ -44,7 +44,8 @@ class AgentContractTests(unittest.TestCase):
         for fragment in (
             "MdoModelCatalogSnapshot()",
             "MdoModuleCatalogSnapshot()",
-            "MdoSkillCatalogSnapshot()",
+            "Owner->Skills = MdoSkillCatalogForWorkspace(",
+            "MdoSkillCatalogRelease(Owner->Skills)",
             "MdoModuleCatalogAgentAcquire",
             "MdoModuleCatalogAgentRelease",
             "AgentOptions.OnOwnerRetain = MdoAgentsOwnerRetainCallback",

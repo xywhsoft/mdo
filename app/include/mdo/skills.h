@@ -113,6 +113,9 @@ uint64 MdoSkillManagerGeneration(void);
 
 MdoSkillCatalog* MdoSkillCatalogSnapshot(void);
 MdoSkillCatalog* MdoSkillCatalogForWorkspace(const char* Workspace);
+MdoSkillCatalog* MdoSkillCatalogDirectory(const char* Root,const char* Directory);
+MdoSkillCatalog* MdoSkillCatalogSingle(const char* Root,const char* Directory,const char* Id);
+char* MdoSkillCatalogDocument(const MdoSkillCatalog* Catalog,const char* Id);
 MdoSkillDiagnostics* MdoSkillCatalogDiagnostics(const MdoSkillCatalog* Catalog);
 MdoSkillCatalog* MdoSkillCatalogRef(MdoSkillCatalog* pCatalog);
 void MdoSkillCatalogRelease(MdoSkillCatalog* pCatalog);

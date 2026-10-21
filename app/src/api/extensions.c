@@ -51,7 +51,10 @@ static bool ExtensionValidate(cstr Kind,cstr Id,cstr Text,char Error[1024])
         if (xrtStrTrim(xrtStrView(Text)).Size) return true;
         snprintf(Error,1024u,"C source must not be empty"); return false;
     }
-    if (strcmp(Kind,"skills")==0) return MdoSkillValidateText(Text,Error,1024u);
+    if (strcmp(Kind,"skills")==0) {
+        if(Id[0]<'a'||Id[0]>'z'){snprintf(Error,1024u,"Skill ID must start with a lowercase letter");return false;}
+        return MdoSkillValidateText(Text,Error,1024u);
+    }
     if (strcmp(Kind,"mcp")==0) return MdoMcpValidateText(Id,Text,Error,1024u);
     if (strcmp(Kind,"subagents")==0 || !strcmp(Kind,"agents")) {
         MdoAgentFile File;
@@ -583,3 +586,5 @@ bool MdoApiExtensionsRoute(MdoApiContext* C)
     }
     xrtMutexUnlock(g_MdoExtensionLock); return Result;
 }
+
+#include "skill_management.inc.c"

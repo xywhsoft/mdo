@@ -1,3 +1,4 @@
+import { createSkillAuthoringDraft } from "./features/settings/skill-authoring.js";
 import { createNotificationCenter } from "./features/notifications/center.js";
 import { liveConnection } from "./api/live.js";
 import { uploadImageWithRecovery } from "./api/image-upload.js";
@@ -2412,6 +2413,23 @@ export async function boot() {
     prompt.focus();
   }
   $("#new-session").addEventListener("click", openNewTask);
+  let creatingSkill = false;
+  window.addEventListener("mdo-create-skill", event => {
+    const detail = event.detail;
+    if (creatingSkill || !detail || detail.target !== (targetState().selected?.id || "local") ||
+        !/^[A-Za-z0-9_-][A-Za-z0-9._-]{0,63}$/.test(detail.projectId) ||
+        typeof detail.text !== "string" || detail.text.length > 32000) return;
+    creatingSkill = true;
+    const token = currentPageWriteToken(), owner = detail.target;
+    const check = () => {
+      if (currentPageWriteToken() !== token || (targetState().selected?.id || "local") !== owner)
+        throw new Error("设备或工作区状态已改变，请重新创建 Skill");
+    };
+    void createSkillAuthoringDraft({ createSession, draftStore, projectId: detail.projectId, text: detail.text, check })
+      .then(session => { check(); navigation.select(session.project_id, session.id); closeDrawers(); prompt.focus(); })
+      .catch(error => { if ((targetState().selected?.id || "local") === owner) toast(errorMessage(error), "error"); })
+      .finally(() => { creatingSkill = false; });
+  });
 
   let drawerReturnFocus = null;
   function setSidebar(open, options = {}) {

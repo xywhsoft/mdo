@@ -108,7 +108,8 @@ static xwork_result MdoSkillExecute(void* Data, const xwork_tool_context* Contex
             xrtValueObjectSetNew(Result,XRT_STR_LITERAL("next_offset"),xrtValueUInt(Offset+Count));
         xrtValueRelease(Items); xrtFree(Needle);
     }
-    if (Ok) Json = xrtJsonStringify(Result, false, &Bytes);
+    if (Ok) { Json = xrtJsonStringify(Result, false, &Bytes);
+        if(Json&&Bytes>1024u*1024u)Message="Expanded Skill result exceeds 1 MiB; reduce arguments or read a resource page"; }
     Ok = Ok && Json != NULL && Bytes <= 1024u * 1024u &&
         xworkToolResultWriterWrite(Writer, Json, Bytes) && xworkToolResultWriterSetSuccess(Writer, true);
     xrtFree(Json); xrtFree(Id); xrtFree(Resource); xrtFree(Base);

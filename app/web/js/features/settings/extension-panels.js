@@ -1,3 +1,4 @@
+import { createSkillWorkbench } from "./skill-workbench.js";
 import { newTool } from "./tool-template.js";
 import { api } from "../../api/client.js";
 import { targetState, subscribeTarget } from "../../api/target.js";
@@ -43,6 +44,7 @@ export function createExtensionPanels() {
   let selected = "", editing = null, activeTarget = targetKey(), pendingResource = null;
   let disposed = false, paused = false;
   const reads = createExtensionReads();
+  const skillWorkbench = createSkillWorkbench({ onChange: () => announceChange("skills") });
   const actions = new Map();
   const current = (kind, target) => !disposed && !paused && selected === kind && target === targetKey();
   function cancelReads() {
@@ -124,6 +126,7 @@ export function createExtensionPanels() {
       actions.splice(3, 0, button(t("resource.recheckOperation", {}, "重新读取状态"), () => act(kind, scope => awaitResourceOperation(operation, scope))));
     }
     if (kind === "skills") {
+      actions.push(button(label("skillSources", "来源、项目与 AI 创建"), () => skillWorkbench.open()));
       const folder = element("input", { attrs: { type: "file", webkitdirectory: "", multiple: "", "aria-label": label("importFolder", "导入文件夹") } });
       folder.hidden = true; folder.addEventListener("change", () => { void importFolder([...folder.files]); });
       actions.splice(2, 0, button(label("importFolder", "导入文件夹"), () => folder.click()), folder);
@@ -535,7 +538,7 @@ export function createExtensionPanels() {
       if (selected && (!states.get(kind).loaded || kind === "tools") && !states.get(kind).busy) void load(kind);
       else if(pendingResource?.kind===selected)void openLinkedResource();
     },
-    hasPendingChanges: dirty,
-    destroy() { disposed = true; cancelReads(); closeEditor(true); unsubscribeLocale(); unsubscribeTarget();window.removeEventListener("mdo-extensions-changed", invalidate);window.removeEventListener("mdo-open-resource",openResource);window.removeEventListener("pagehide",onHide);window.removeEventListener("pageshow",onShow); },
+    hasPendingChanges: () => dirty() || skillWorkbench.hasPendingChanges(),
+    destroy() { disposed = true; skillWorkbench.destroy(); cancelReads(); closeEditor(true); unsubscribeLocale(); unsubscribeTarget();window.removeEventListener("mdo-extensions-changed", invalidate);window.removeEventListener("mdo-open-resource",openResource);window.removeEventListener("pagehide",onHide);window.removeEventListener("pageshow",onShow); },
   });
 }

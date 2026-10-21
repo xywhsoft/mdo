@@ -98,3 +98,9 @@ python tests/test_module_runtime.py
 node --test tests/test_extension_formats.mjs tests/test_frontend_i18n.mjs
 node --experimental-vm-modules tools/check_web_modules.mjs
 ```
+
+The Skill manager's **来源、项目与 AI 创建** entry adds project-local editing,
+independent enablement, recoverable removal, AI-assisted authoring in a separate
+conversation, and explicit copies from compatible agents' skill directories.
+See [Skill format](skill-format.md) for source precedence, supported fields and
+resource limits. Cross-scope imports preserve the source and reject overwrites.

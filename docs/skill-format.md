@@ -56,8 +56,8 @@ untrusted reference material, including after reload or cache materialization.
 ## Project scope and package names
 
 Chat resolves Skills for its actual workspace. Personal Home overrides built-ins.
-Within a project, precedence (lowest first) is `.zcode/skills`, `.claude/skills`,
-`.agents/skills`, `.mdo/skills`. Inside a Git worktree, ancestor directories up to
+Within a project, precedence (lowest first) is `.opencode/skills`, `.zcode/skills`, `.codex/skills`,
+`.claude/skills`, `.agents/skills`, `.mdo/skills`. Inside a Git worktree, ancestor directories up to
 the nearest `.git` marker are eligible; the closest directory wins. Outside Git,
 only the exact workspace is scanned. Symlinks are not followed. Invalid or disabled
 project shadows do not reveal lower-priority instructions. Diagnostics include the
@@ -72,3 +72,48 @@ Bare IDs remain callable for old Agent bindings but are hidden from discovery; a
 project override replaces the bare ID while the qualified package Skill remains
 available. Namespace collisions fail explicitly. These are resource packages, not
 the future client-plugin runtime.
+
+## Creation, migration and management
+
+In Settings > Skill, choose **来源、项目与 AI 创建**. The workbench shows the
+selected project's `.mdo/skills` entries, their enabled/valid status and source
+paths. Create or edit SKILL.md, enable/disable a Skill, or remove it into
+`.mdo/skill-trash/<id>-<nonce>`. Removal preserves the entire folder for manual
+recovery. Personal Skills continue to use the existing editor and package owner
+controls. Editors require the last content revision; conflicting writes fail
+instead of overwriting another edit. Project mutations hold a shared project
+lifecycle lease and writer lock.
+
+**用 AI 编写 Skill** creates a dedicated conversation with an unsent, saved draft.
+It specifies the selected device's real target directory and supported format.
+Existing conversations, drafts and attachments are preserved. The user sends the
+draft before any model call; normal tool approvals govern subsequent writes.
+
+Migration discovers personal mdo Skills plus `.agents`, `.claude`, `.codex`,
+`.zcode`, `.opencode` and `.mdo` skill directories in the selected workspace and
+the OS user profile. It does not search the disk recursively. Pick an individual
+source and an unused destination ID in personal or project scope. The source is
+unchanged. Imports validate the complete staged Skill before publishing the folder
+with a no-replace rename. Source files that change during reading are rejected.
+Scripts are copied without execution or dependency installation. Unsupported
+behavior fields are reported in source diagnostics.
+
+A migration copies up to 128 ordinary, non-hidden resource files, 8 MiB each and
+16 MiB total including SKILL.md. Symlinks are excluded. Source discovery displays
+up to 128 entries and 128 diagnostics and reports truncation. New managed IDs are
+limited to 64 portable characters and must begin with a lowercase letter. Existing
+compatible longer source IDs may be copied to a shorter destination ID.
+
+Relevant local APIs: `GET /skills?project=<id>`, `POST /skills/invoke?project=<id>`,
+`GET /skills/sources?project=<id>`, `POST /skills/migrate?project=<id>`, and
+`GET/PUT/DELETE /skills/project/<skill-id>?project=<id>` with the `/enabled` POST
+operation. All mutating editor operations require If-Match; import always refuses
+an existing target. Skill text replies allow 1 MiB of encoded JSON so escaping
+does not silently shrink the documented 128 KiB document limit. Excessive argument
+expansion is rejected explicitly.
+
+The chat composer has a separate 64 KiB durable-draft limit. Inline `$skill`
+expansions that exceed it are rejected before replacing the current draft, with
+a specific message. Large Skills remain available through the model's lazy Skill
+tool (128 KiB instructions and paginated resources); move detailed material into
+references when a Skill must also support inline manual selection.

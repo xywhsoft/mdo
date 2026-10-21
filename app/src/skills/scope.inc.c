@@ -98,7 +98,7 @@ static bool MdoSkillsProjectDirectory(MdoSkillCatalog* Catalog,cstr Root,cstr Di
 
 static bool MdoSkillsProjectRoot(MdoSkillCatalog* Catalog,cstr Root)
 {
-    static const char* Dirs[]={".zcode/skills",".claude/skills",".agents/skills",".mdo/skills"};
+    static const char* Dirs[]={".opencode/skills",".zcode/skills",".codex/skills",".claude/skills",".agents/skills",".mdo/skills"};
     xroot Anchor=xrtRootOpen(Root);if(!Anchor)return false;
     xfileoptions Opt;xrtFileOptionsInit(&Opt);Opt.Flags=XFILE_READ|XFILE_NOFOLLOW;
     xfile File=xrtRootFileOpen(Anchor,".mdo/skills.json",&Opt);xrtRootClose(Anchor);
@@ -154,3 +154,42 @@ MdoSkillCatalog* MdoSkillCatalogForWorkspace(cstr Workspace)
 
 MdoSkillDiagnostics* MdoSkillCatalogDiagnostics(const MdoSkillCatalog* Catalog)
 {return Catalog?MdoSkillDiagnosticsRef(Catalog->Diagnostics):NULL;}
+
+/* Explicit, bounded import discovery. No ancestor search or global publication. */
+MdoSkillCatalog* MdoSkillCatalogDirectory(cstr Root,cstr Directory)
+{
+    MdoSkillCatalog* Catalog=MdoSkillsCatalogCreate(0);
+    if(!Catalog)return NULL;
+    Catalog->Diagnostics=MdoSkillsDiagnosticsCreate();
+    if(!Catalog->Diagnostics || !MdoSkillsProjectDirectory(Catalog,Root,Directory,NULL)) {
+        MdoSkillCatalogRelease(Catalog);return NULL;
+    }
+    if(Catalog->Count>1)qsort(Catalog->Entries,Catalog->Count,sizeof(*Catalog->Entries),MdoSkillsEntryCompare);
+    return Catalog;
+}
+
+MdoSkillCatalog* MdoSkillCatalogSingle(cstr Root,cstr Directory,cstr Id)
+{
+    MdoSkillCatalog* Catalog=MdoSkillsCatalogCreate(0);if(!Catalog)return NULL;
+    Catalog->Diagnostics=MdoSkillsDiagnosticsCreate();
+    char* Native=xrtPathJoin(Root,Directory);
+    MdoSkillSource Source={0};Source.External=true;Source.NativeRoot=(char*)Root;
+    Source.Id=(char*)Id;Source.RelativeDirectory=(char*)Directory;Source.VirtualDirectory=Native;Source.Scope="project";
+    bool Ok=Catalog->Diagnostics&&Native&&MdoSkillsScopedPut(Catalog,&Source,true)&&Catalog->Count==1;
+    xrtFree(Native);if(!Ok){MdoSkillCatalogRelease(Catalog);return NULL;}return Catalog;
+}
+
+char* MdoSkillCatalogDocument(const MdoSkillCatalog* Catalog,cstr Id)
+{
+    const MdoSkillEntry* Entry=MdoSkillsFind(Catalog,Id);
+    char *Path=NULL,*Text=NULL;size_t Got=0;xfileinfo Info={0};
+    xfile File=Entry?MdoSkillsOpenEntry(Entry,"SKILL.md",&Path):NULL;
+    bool Ok=File&&xrtFileStat(File,&Info)&&MdoSkillsSameFile(&Entry->DocumentInfo,&Info);
+    if(Ok)Text=xrtMalloc((size_t)Info.Size+1);
+    Ok=Ok&&Text&&xrtReadAtFull(File,0,Text,(size_t)Info.Size,&Got)&&Got==Info.Size;
+    if(Ok){Text[Got]=0;Ok=!memchr(Text,0,Got)&&xrtUtf8Valid(xrtStrViewN(Text,Got),NULL);}
+    xfileinfo After={0};
+    if(Ok)Ok=xrtFileStat(File,&After)&&MdoSkillsSameFile(&Info,&After);
+    if(File&&!xrtClose(File))Ok=false;
+    xrtFree(Path);if(!Ok){xrtFree(Text);return NULL;}return Text;
+}

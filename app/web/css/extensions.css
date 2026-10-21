@@ -12,6 +12,9 @@
 .extension-editor-heading h2 { font-size: 18px; margin: 0; }
 .extension-editor input:not([type="checkbox"]), .extension-editor select, .extension-editor textarea, .extension-search { border: 1px solid var(--border); border-radius: 7px; padding: 9px 11px; background: var(--surface); color: inherit; box-sizing: border-box; min-width: 0; font: inherit; }
 .extension-field { display: grid; gap: 6px; margin-bottom: 14px; font-size: 13px; }
+.skill-workbench-editor { display: grid; gap: 8px; margin-bottom: 16px; }
+.skill-workbench-editor textarea { width: 100%; min-height: 240px; }
+.extension-editor .resource-card code { overflow-wrap: anywhere; white-space: pre-wrap; }
 .extension-field small { color: var(--muted); font-size: 11px; line-height: 1.6; }
 .extension-editor input[aria-invalid="true"], .extension-editor textarea[aria-invalid="true"], .extension-editor select[aria-invalid="true"] { border-color: var(--danger, #c94343); }
 .extension-editor .extension-field-error { color: var(--danger, #c94343); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }

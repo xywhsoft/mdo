@@ -12,5 +12,9 @@ export async function loadSelectableSkills(project = "default") {
 }
 
 export async function expandSkillSelection(selection, project = "default") {
-  return (await api.post(`/skills/invoke?project=${encodeURIComponent(project)}`, selection)).data.text;
+  const text = (await api.post(`/skills/invoke?project=${encodeURIComponent(project)}`, selection)).data.text;
+  if (typeof text !== "string") throw new Error("Skill expansion returned invalid text");
+  if (new TextEncoder().encode(text).length > 65536)
+    throw new Error("Skill 展开后超过 64 KiB 草稿上限；请将详细内容移到 references，或让模型通过 skill 工具分次读取。原草稿已保留。");
+  return text;
 }

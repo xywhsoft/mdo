@@ -9,7 +9,7 @@ bundles. This change set completes the Skill layer in five independently committ
 - [x] Reliable invocation: consistent limits, usable resource directories, bounded reads and clear errors.
 - [x] Format compatibility: invocation controls, argument/directory variables, diagnostics for unsupported behavior.
 - [x] Scope and isolation: project discovery and precedence, plugin-qualified names, independent visibility.
-- [ ] Creation and migration: assisted authoring, existing-agent imports, source/scope management.
+- [x] Creation and migration: assisted authoring, existing-agent imports, source/scope management.
 
 Skill instructions never authorize tools or install dependencies. Script execution
 continues through the ordinary approved process tools. Each goal includes bounded
