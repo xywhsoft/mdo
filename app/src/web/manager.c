@@ -95,12 +95,14 @@ static xwork_result MdoWebToolFail(xwork_tool_result_writer* pWriter,
         "cannot write the Web tool failure result");
 }
 
+static xerrkind MdoWebTransportKind(void);
+
 static xwork_result MdoWebXrtFailure(xwork_tool_result_writer* pWriter,
     xwork_error* pError, const xwork_tool_context* pContext,
     const char* Fallback)
 {
     const xerror* pCause = xrtGetError();
-    xerrkind Kind = pCause != NULL ? xrtErrorKind(pCause) : XERR_INTERNAL;
+    xerrkind Kind = MdoWebTransportKind();
     const char* Message = pCause != NULL ? xrtErrorMessage(pCause) : Fallback;
     char Details[768];
     size_t Used = (size_t)snprintf(Details, sizeof(Details), "%s", Message);
@@ -120,7 +122,8 @@ static xwork_result MdoWebXrtFailure(xwork_tool_result_writer* pWriter,
          MdoDeadlineExpired(pContext->uDeadline) )
         return MdoWebFail(pError, XWORK_ERROR_TIMEOUT, Message);
     if ( Kind == XERR_CANCELLED )
-        return MdoWebFail(pError, XWORK_ERROR_CANCELLED, Message);
+        return MdoWebToolFail(pWriter, pError,
+            "Web operation was interrupted without cancelling the task; inspect its result before retrying.");
     if ( Kind == XERR_TIMEOUT )
         return MdoWebToolFail(pWriter, pError, Message);
     if ( Kind == XERR_MEMORY )

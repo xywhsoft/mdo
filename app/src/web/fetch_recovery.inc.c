@@ -59,8 +59,12 @@ static xerrkind MdoWebTransportKind(void)
     xerrkind Kind = xrtErrorKind(Error);
     for ( const xerror* Cause = Error; Cause != NULL; Cause = xrtErrorCause(Cause) ) {
         xerrkind Nested = xrtErrorKind(Cause);
+        /* The HTTP client records a deadline before cancelling its transport
+         * to close the socket. Preserve that first specific failure: the
+         * nested teardown cancellation is not a cancellation of the task. */
         if ( Nested == XERR_PERMISSION || Nested == XERR_MEMORY || Nested == XERR_RANGE ||
-             Nested == XERR_ARGUMENT || Nested == XERR_CANCELLED || Nested == XERR_UNSUPPORTED ||
+             Nested == XERR_ARGUMENT || Nested == XERR_TIMEOUT ||
+             Nested == XERR_CANCELLED || Nested == XERR_UNSUPPORTED ||
              Nested == XERR_PROTOCOL )
             return Nested;
     }
@@ -165,14 +169,15 @@ static xwork_result MdoWebPageFailure(xwork_tool_result_writer* Writer,
     xwork_error* Error, const xwork_tool_context* Context,
     bool FetchOk, const XS_FetchResponse* Response, const MdoWebRecovery* Recovery)
 {
-    if ( Recovery->Cancelled )
+    if ( Recovery->Cancelled || (Context->pCancel && xrtCancelRequested(Context->pCancel)) )
         return MdoWebFail(Error, XWORK_ERROR_CANCELLED, "Web page reading cancelled");
     if ( Context->uDeadline != MDO_DEADLINE_NEVER && MdoDeadlineExpired(Context->uDeadline) )
         return MdoWebFail(Error, XWORK_ERROR_TIMEOUT, "Web page reading exceeded the task deadline");
     if ( !FetchOk ) {
         xerrkind Kind = MdoWebTransportKind();
         if ( Kind == XERR_CANCELLED )
-            return MdoWebFail(Error, XWORK_ERROR_CANCELLED, "Web page reading cancelled");
+            return MdoWebToolFail(Writer, Error,
+                "Web page request was interrupted without cancelling the task; try another source or retry later.");
         if ( Kind == XERR_MEMORY )
             return MdoWebFail(Error, XWORK_ERROR_OUT_OF_MEMORY, "Cannot allocate Web page response");
         if ( Recovery->Exhausted ) {

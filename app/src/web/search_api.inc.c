@@ -84,6 +84,18 @@ static bool MdoWebSearchApiItem(xvalue* Results, const xvalue* Item,
     return true;
 }
 
+/* Account leases and individual HTTP calls can be cancelled independently.
+ * Only the owning task's token may report task cancellation to xwork. */
+static xwork_result MdoWebSearchInterrupted(xwork_tool_result_writer* Writer,
+    xwork_error* Error, const xwork_tool_context* Context, const char* Message)
+{
+    if ( Context->pCancel && xrtCancelRequested(Context->pCancel) )
+        return MdoWebFail(Error, XWORK_ERROR_CANCELLED, "Search request was cancelled");
+    if ( Context->uDeadline != MDO_DEADLINE_NEVER && MdoDeadlineExpired(Context->uDeadline) )
+        return MdoWebFail(Error, XWORK_ERROR_TIMEOUT, "Search recovery exceeded the task deadline");
+    return MdoWebToolFail(Writer, Error, Message);
+}
+
 static xwork_result MdoWebSearchExecute(void* pUserData,
     const xwork_tool_context* pContext, const char* ArgumentsJson,
     xwork_tool_result_writer* pWriter, xwork_error* pError)
@@ -157,7 +169,8 @@ acquire_account:
     }
     Token = Lease.AccessToken;
     if (AccountAcquired && MemberId!=Lease.MemberId) {
-        Result=MdoWebFail(pError,XWORK_ERROR_CANCELLED,"Account changed while recovering search; no request was sent for the new account.");goto done;
+        Result=MdoWebSearchInterrupted(pWriter,pError,pContext,
+            "Account changed while recovering search; no request was sent for the new account. Review the account before searching again.");goto done;
     }
     MemberId=Lease.MemberId;AccountAcquired=true;
     if (!RequestKey[0]) {
@@ -201,7 +214,8 @@ acquire_account:
 fetch_search:
     if ( (FetchContext.pCancel && xrtCancelRequested(FetchContext.pCancel)) ||
          (pContext->pCancel && xrtCancelRequested(pContext->pCancel)) ) {
-        Result = MdoWebFail(pError, XWORK_ERROR_CANCELLED, "Search request was cancelled"); goto done;
+        Result = MdoWebSearchInterrupted(pWriter, pError, pContext,
+            "Search authorization changed. No further request was sent; review the account before searching again."); goto done;
     }
     uint64 RetryAfter = 0u;
     ++Attempts;
@@ -221,8 +235,10 @@ fetch_search:
             }
             Kind=FetchContext.pCancel && xrtCancelRequested(FetchContext.pCancel)?XERR_CANCELLED:Kind;
         }
-        if ( (pContext->pCancel != NULL && xrtCancelRequested(pContext->pCancel)) || Kind == XERR_CANCELLED )
-            Result = MdoWebFail(pError, XWORK_ERROR_CANCELLED, "Search request was cancelled");
+        if ( (pContext->pCancel && xrtCancelRequested(pContext->pCancel)) ||
+             (FetchContext.pCancel && xrtCancelRequested(FetchContext.pCancel)) || Kind == XERR_CANCELLED )
+            Result = MdoWebSearchInterrupted(pWriter, pError, pContext,
+                "Search request was interrupted. Submission could not be confirmed; no additional search was submitted. Review its status before retrying.");
         else if ( pContext->uDeadline != MDO_DEADLINE_NEVER &&
                     MdoDeadlineExpired(pContext->uDeadline) )
             Result = MdoWebFail(pError, XWORK_ERROR_TIMEOUT, "Search request timed out");
@@ -277,7 +293,8 @@ fetch_search:
         if ( RetrySafe && Attempts < MDO_WEB_SEARCH_MAX_ATTEMPTS && WaitFits ) {
             if ( !MdoWebRecoveryWait(&FetchContext,End,Delay) ) {
                 if (FetchContext.pCancel && xrtCancelRequested(FetchContext.pCancel))
-                    Result = MdoWebFail(pError,XWORK_ERROR_CANCELLED,"Search request was cancelled");
+                    Result = MdoWebSearchInterrupted(pWriter,pError,pContext,
+                        "Search authorization changed during recovery. No further request was sent; review the account before searching again.");
                 else if (pContext->uDeadline != MDO_DEADLINE_NEVER && MdoDeadlineExpired(pContext->uDeadline))
                     Result = MdoWebFail(pError,XWORK_ERROR_TIMEOUT,"Search recovery exceeded the task deadline");
                 else Result = MdoWebToolFail(pWriter,pError,"Search service is still busy. Automatic recovery time was exhausted; try again later.");
