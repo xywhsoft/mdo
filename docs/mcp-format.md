@@ -198,3 +198,27 @@ The full result is bounded, asynchronous, cancellable and kept in recent operati
 memory. Binary blocks are not automatically fetched by URI. Agent tool results
 persist full typed JSON through the normal artifact store when enabled, forward
 one supported image to the model, and exclude binary data from text previews.
+
+## Client requests and progress
+
+The 2025-11-25 client advertises roots and form elicitation. Both stdio and
+Streamable HTTP dispatch ping, roots/list and elicitation/create while an outgoing
+request is active. HTTP SSE bytes are consumed on the ordinary request thread;
+network callbacks only copy bounded chunks. A server request may reuse the
+numeric ID of the outgoing client request without being mistaken for its result.
+
+Roots contain only the active operation's project directory. With no associated
+Agent context (for example Settings connection tests), the list is empty. Roots
+are advisory context, not a filesystem permission grant. Form requests use the
+current conversation's ask_user entry: users explicitly answer a JSON object or
+decline/cancel. Primitive types, required keys, enum and numeric/string bounds
+are checked; unsupported input or no active user-question tool produces cancel.
+URL elicitation, sampling and task execution are not advertised or executed.
+Unknown client methods receive -32601 without failing the original call.
+
+Legacy requests include an operation-local progress token. Only matching,
+nondecreasing, finite progress is accepted; stale tokens are ignored. The
+cold diagnostics endpoint can read progress even while the server is busy.
+Resource-browser reads display it while waiting. Request bytes, SSE frames,
+client requests, waiters and deadlines remain bounded. HTTP cancellation/timeout
+closes the active call; a completed write is never replayed as a network retry.

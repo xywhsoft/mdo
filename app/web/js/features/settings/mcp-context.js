@@ -10,7 +10,9 @@ export function createMcpContext() {
     close(); controller = new AbortController(); const { signal } = controller;
     const owner = targetState().selected?.id || "local";
     const current = () => dialog && !signal.aborted && owner === (targetState().selected?.id || "local");
-    const options = { signal, isCurrent: current };
+    const options = { signal, isCurrent: current, onProgress: info => {
+      if (current() && Number.isFinite(info.progress)) status.textContent = `读取中 · ${info.progress}${info.total > 0 ? ` / ${info.total}` : ""}${info.message ? ` · ${info.message}` : ""}`;
+    } };
     dialog = element("dialog", { className: "extension-editor skill-workbench" });
     const status = element("p", { attrs: { role: "status" } }), rows = element("div"), form = element("div");
     const output = element("textarea", { className: "extension-source", attrs: { readonly: "", "aria-label": "MCP 结果" } });

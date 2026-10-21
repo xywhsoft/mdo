@@ -26,6 +26,8 @@ class Provider(BaseHTTPRequestHandler):
     token_failure = 0
     reject_once = False
     revoked = 0
+    replies = {}
+    condition = threading.Condition()
 
     def log_message(self, *_): pass
 
@@ -69,7 +71,7 @@ class Provider(BaseHTTPRequestHandler):
             type(self).accepted = f'fixture-access-{type(self).refreshes+1}'
             # No expires_in means unknown, never an invented short lifetime.
             self.reply(200, {'access_token': type(self).accepted, 'token_type': 'Bearer',
-                **({'refresh_token': 'fixture-refresh'} if form['grant_type'] == ['authorization_code'] else {})})
+                **({'refresh_token': 'fixture-refresh'} if form['grant_type'] == ['authorization_code'] else {'expires_in':3600})})
         elif self.path == '/revoke':
             assert parse_qs(body.decode())['token'] == ['fixture-refresh']
             type(self).revoked += 1; self.reply(200, {})
@@ -77,7 +79,40 @@ class Provider(BaseHTTPRequestHandler):
             if self.headers.get('Authorization') != 'Bearer '+type(self).accepted or type(self).reject_once:
                 type(self).reject_once = False; self.reply(401, {}); return
             rpc = json.loads(body)
-            if rpc['method'] == 'notifications/initialized': self.reply(202, {}); return
+            if 'method' not in rpc:
+                with type(self).condition:
+                    type(self).replies[rpc['id']]=rpc
+                    type(self).condition.notify_all()
+                self.reply(202,{})
+                return
+            if rpc['method']=='resources/read' and rpc['params']['uri'] in ('fixture:///slow','fixture:///timeout'):
+                self.send_response(200);self.send_header('Content-Type','text/event-stream');self.end_headers()
+                self.wfile.write(('data: '+json.dumps({'jsonrpc':'2.0','method':'notifications/progress','params':{
+                    'progressToken':rpc['params']['_meta']['progressToken'],'progress':1,'total':10}})+'\n\n').encode());self.wfile.flush()
+                time.sleep(2.5)
+                try:
+                    self.wfile.write(('data: '+json.dumps({'jsonrpc':'2.0','id':rpc['id'],'result':{'contents':[]}})+'\n\n').encode());self.wfile.flush()
+                except (BrokenPipeError,ConnectionResetError,OSError): pass
+                return
+            if rpc['method']=='resources/read' and rpc['params']['uri']=='fixture:///interactive':
+                self.send_response(200);self.send_header('Content-Type','text/event-stream');self.end_headers()
+                def event(value):
+                    self.wfile.write(('data: '+json.dumps(value)+'\n\n').encode());self.wfile.flush()
+                def client(method,id,params={}):
+                    with type(self).condition:
+                        type(self).replies.pop(id,None)
+                    event({'jsonrpc':'2.0','id':id,'method':method,'params':params})
+                    with type(self).condition:
+                        assert type(self).condition.wait_for(lambda:id in type(self).replies,timeout=5),method
+                        return type(self).replies.pop(id)
+                assert client('roots/list',rpc['id'])['result']['roots']==[]
+                assert client('elicitation/create','form-http',{'message':'Fixture','requestedSchema':{'type':'object','properties':{}}})['result']['action']=='cancel'
+                assert client('sampling/createMessage','unsupported-http')['error']['code']==-32601
+                event({'jsonrpc':'2.0','method':'notifications/progress','params':{
+                    'progressToken':rpc['params']['_meta']['progressToken'],'progress':1,'total':2,'message':'Fixture halfway'}})
+                event({'jsonrpc':'2.0','id':rpc['id'],'result':{'contents':[{'uri':'fixture:///interactive','text':'HTTP_INTERACTION_OK'}]}})
+                return
+            if rpc['method'].startswith('notifications/'): self.reply(202, {}); return
             result = {'protocolVersion': '2025-11-25', 'serverInfo': {'name': 'fixture', 'version':'1'}, 'capabilities': {'tools': {}, 'resources': {}, 'prompts': {}, 'completions': {}}, 'instructions':'REMOTE_CONTEXT_INSTRUCTIONS'}
             if rpc['method'] == 'tools/list': result = {'tools': []}
             elif rpc['method']=='resources/list': result={'resources':[{'uri':'fixture:///note','name':'note'}],**({} if rpc['params'].get('cursor') else {'nextCursor':'second'})}
@@ -135,10 +170,12 @@ def main():
                 start()
                 document=json.loads(server_document('unused','unused','unused',server_id='oauth-fixture'))
                 document['protocol_version']='2025-11-25'
+                document['request_timeout_ms']=1000
                 document['transport']={'type':'streamable-http','endpoint':f'http://127.0.0.1:{provider.server_port}/mcp','headers':[]}
                 document['oauth']={'client_id':'mdo-fixture'}
                 code,result=call('PUT','extensions/mcp/oauth-fixture',{'content':json.dumps(document)},'new'); assert code==200,result
                 assert not status()['authorized']
+                missing=refresh();assert missing['state']=='failed' and missing['error_code']=='mcp_authorization_required' and missing['http_status']==0,missing
                 code,result=call('POST','mcp/oauth-fixture/oauth/start'); assert code==202,result
                 data=settled(); assert data['state']=='ready',data
                 params=parse_qs(urlsplit(data['authorization_url']).query)
@@ -162,6 +199,7 @@ def main():
                 Provider.reject_once=True
                 assert refresh()['state']=='succeeded'
                 assert Provider.refreshes==1
+                assert abs(status()['expires_at']-time.time()-3600)<10,status()
                 Provider.reject_once=True;Provider.token_failure=503
                 assert refresh()['state']=='failed'
                 assert status()['authorized'],status()
@@ -186,9 +224,31 @@ def main():
                 assert context('prompts/list')['prompts'][0]['name']=='greet'
                 assert context('prompts/get',{'name':'greet','arguments':{'name':'world'}})['messages'][0]['content']['text']=='Hello world'
                 assert context('completion/complete',{'ref':{'type':'ref/prompt','name':'greet'},'argument':{'name':'name','value':'f'}})['completion']['values']==['fixture']
+                assert context('resources/read',{'uri':'fixture:///interactive'})['contents'][0]['text']=='HTTP_INTERACTION_OK'
                 assert call('POST','mcp/oauth-fixture/context',{'method':'tools/call','params':{'name':'delete'}})[0]==400
                 code,diag=call('GET','mcp/oauth-fixture/diagnostics');assert code==200 and diag['data']['resources'] and diag['data']['prompts'],diag
                 assert diag['data']['instructions']=='REMOTE_CONTEXT_INSTRUCTIONS',diag
+                assert diag['data']['operation_progress']['progress']==1 and diag['data']['operation_progress']['total']==2,diag
+                code,queued=call('POST','mcp/oauth-fixture/context',{'method':'resources/read','params':{'uri':'fixture:///slow'}});assert code==202,queued
+                operation=queued['data']['id']
+                for _ in range(100):
+                    code,busy=call('GET','mcp/oauth-fixture/diagnostics')
+                    if code==200 and busy['data'].get('progress')==1: break
+                    time.sleep(.01)
+                else: raise AssertionError('Live HTTP progress was not observable')
+                assert call('DELETE','operations/'+operation)[0] in (200,202)
+                for _ in range(100):
+                    _,cancelled=call('GET','operations/'+operation)
+                    if cancelled['data']['terminal']: break
+                    time.sleep(.025)
+                assert cancelled['data']['state']=='cancelled',cancelled
+                code,queued=call('POST','mcp/oauth-fixture/context',{'method':'resources/read','params':{'uri':'fixture:///timeout'}});assert code==202,queued
+                for _ in range(200):
+                    _,timed=call('GET','operations/'+queued['data']['id'])
+                    if timed['data']['terminal']:break
+                    time.sleep(.025)
+                assert timed['data']['state']=='failed' and timed['data']['error_code']=='mcp_timeout',timed
+                assert context('resources/read',{'uri':'fixture:///note'})['contents'][0]['text']=='RESOURCE_FIXTURE_CONTENT'
                 code,result=call('DELETE','mcp/oauth-fixture/oauth');assert code==202,result
                 assert not settled()['authorized']
                 assert Provider.revoked==1

@@ -6,6 +6,7 @@ import sys
 
 initialized = False
 record = Path(sys.argv[1]) if len(sys.argv) > 1 else None
+interactive=len(sys.argv)>2 and sys.argv[2]=="interactive"
 for line in sys.stdin:
     request = json.loads(line)
     method = request.get("method")
@@ -28,6 +29,17 @@ for line in sys.stdin:
                 "additionalProperties": False}, "annotations": {"readOnlyHint": True}}]}
     elif method == "tools/call":
         assert initialized and request["params"]["name"] == "echo"
+        if interactive and request['params']['arguments']['text']=='MCP_CALLBACK_RESULT':
+            print(json.dumps({'jsonrpc':'2.0','id':'roots-fixture','method':'roots/list','params':{}}),flush=True)
+            roots=json.loads(sys.stdin.readline())
+            assert len(roots['result']['roots'])==1 and roots['result']['roots'][0]['uri'].startswith('file://'),roots
+            print(json.dumps({'jsonrpc':'2.0','id':'form-fixture','method':'elicitation/create','params':{
+                'message':'Confirm the fixture name','requestedSchema':{'type':'object','properties':{'name':{'type':'string','enum':['fixture']}},'required':['name']}}}),flush=True)
+            answer=json.loads(sys.stdin.readline())
+            assert answer['result']=={'action':'accept','content':{'name':'fixture'}},answer
+            print(json.dumps({'jsonrpc':'2.0','method':'notifications/progress','params':{
+                'progressToken':request['params']['_meta']['progressToken'],'progress':1,'total':1,'message':'Fixture complete'}}),flush=True)
+            if record: record.with_suffix('.interaction.json').write_text(json.dumps({'roots':roots['result']['roots'],'accepted':True}))
         result = {"content": [{"type": "text",
             "text": request["params"]["arguments"]["text"]}], "isError": False}
     elif "id" not in request:

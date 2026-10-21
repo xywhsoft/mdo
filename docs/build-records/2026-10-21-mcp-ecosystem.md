@@ -75,3 +75,20 @@ not replay a possibly completed state-changing tool call.
   classifications; successful refresh clears stale temporary errors. Replacing
   pending login state removes its previous index; public clients never transmit
   an optional client secret when their auth method is `none`.
+
+- Interaction implemented for 2025-11-25 stdio and Streamable HTTP: ping,
+  operation-scoped roots, form elicitation through the owning conversation's
+  ask_user, and matching progress. Native SSE callbacks never wait for user
+  input; the ordinary caller handles client requests before the stream closes.
+  No-context questions cancel, and unknown methods return -32601. Sampling,
+  URL elicitation and task execution remain unadvertised as planned.
+- Regression passed actual model -> MCP stdio -> conversation question -> answer
+  -> tool completion, current-project root URI, HTTP root/client-ID collision,
+  no-context cancellation, unknown method recovery, progress before completion,
+  explicit HTTP cancellation, timeout and a following successful request.
+- Regression testing exposed a temporary JSON allocator mismatch; fixed with
+  matching allocation/free ownership and reran the native/conversation suites.
+- Android ARM64 native library compiles with the first-party xoauth2 extension
+  and the same verified overlay. No Android device or real authorization browser
+  has been exercised. Windows standalone package verification remains the final
+  check. No production server, installer feed or download has been published.

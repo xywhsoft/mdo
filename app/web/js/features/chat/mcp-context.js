@@ -1,15 +1,22 @@
 import { targetState } from "../../api/target.js";
 import { api } from "../../api/client.js";
 
-export async function mcpContextRead(server, method, params = {}, { signal, isCurrent = () => true } = {}) {
+export async function mcpContextRead(server, method, params = {}, { signal, isCurrent = () => true, onProgress } = {}) {
   const owner = targetState().selected?.id || "local";
   const { data } = await api.post(`/mcp/${encodeURIComponent(server)}/context`, { method, params }, { signal });
-  let operation = data;
+  let operation = data, progressAt = 0;
   try {
     while (!operation.terminal) {
       if (!isCurrent() || signal?.aborted) throw new DOMException("Context changed", "AbortError");
       await new Promise(resolve => setTimeout(resolve, 150));
       operation = (await api.get(`/operations/${encodeURIComponent(data.id)}`, { signal })).data;
+      if (onProgress && !operation.terminal && Date.now() - progressAt > 750) {
+        progressAt = Date.now();
+        try {
+          const { data: info } = await api.get(`/mcp/${encodeURIComponent(server)}/diagnostics`, { signal });
+          if (isCurrent() && !signal?.aborted) onProgress(info.operation_progress || info);
+        } catch (error) { if (signal?.aborted) throw error; }
+      }
     }
     if (operation.state !== "succeeded") throw new Error(`${operation.message} (${operation.error_code}${operation.http_status ? ` · HTTP ${operation.http_status}` : ""})`);
     return operation.result.content;
@@ -21,9 +28,11 @@ export async function mcpContextRead(server, method, params = {}, { signal, isCu
 }
 
 export function mcpPromptText(result) {
-  const text = (result?.messages ?? []).map(message => {
+  const messages = result?.messages ?? [];
+  const text = messages.map(message => {
+    if (!["user", "assistant"].includes(message.role)) throw new Error("MCP 提示词包含不支持的消息角色。");
     if (message.content?.type !== "text") throw new Error("此提示词含有非文本内容，请先在 MCP 资源页查看完整结果。");
-    return String(message.content.text || "");
+    return `${messages.length > 1 ? `[${message.role}]\n` : ""}${String(message.content.text || "")}`;
   }).join("\n\n");
   if (!text || text.length > 65536) throw new Error("MCP 提示词为空或超过 64 KiB，请缩小参数范围。");
   return text;

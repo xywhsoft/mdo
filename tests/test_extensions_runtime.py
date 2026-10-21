@@ -510,7 +510,7 @@ def main():
                 legacy_log = base / 'legacy-mcp.jsonl'
                 legacy = {**mcp, 'id': 'legacy', 'protocol_version': '2025-11-25',
                     'transport': {**mcp['transport'], 'environment': [],
-                        'arguments': [str(ROOT / 'tests/fixtures/mcp-2025.py'), str(legacy_log)]}}
+                        'arguments': [str(ROOT / 'tests/fixtures/mcp-2025.py'), str(legacy_log), 'interactive']}}
                 status, legacy_item = call('PUT', 'mcp/legacy', {'content': json.dumps(legacy)}, 'new')
                 assert status == 200 and not legacy_log.exists(), legacy_item
                 status, _, raw = request(port, 'POST', f'/api/v1/projects/default/sessions/{session}/runs',
@@ -520,6 +520,12 @@ def main():
                 run = json.loads(raw)['data']; deadline = time.monotonic() + 8
                 while not run['terminal'] and time.monotonic() < deadline:
                     time.sleep(.05)
+                    questions=json.loads(request(port,'GET',f'/api/v1/projects/default/sessions/{session}/asks')[2])['data']['items']
+                    for question in questions:
+                        if 'MCP legacy requests information' in question['question']:
+                            code,_,answer=request(port,'PUT',f'/api/v1/projects/default/sessions/{session}/asks/{question['id']}',
+                                body=json.dumps({'answer':'{"name":"fixture"}'}).encode(),headers={'Content-Type':'application/json'})
+                            assert code==200,answer
                     run = json.loads(request(port, 'GET', '/api/v1/runs/' + run['id'])[2])['data']
                 assert run['state'] == 'succeeded', run
                 assert len(SkillModel.mcp_payloads) == 4, 'discover, load, call, then final reply'
@@ -528,7 +534,8 @@ def main():
                 assert 'MCP_CALLBACK_RESULT' in json.dumps(SkillModel.mcp_payloads[-1]), SkillModel.mcp_payloads[-1]['input'][-2:]
                 rpc = [json.loads(line) for line in legacy_log.read_text().splitlines()]
                 assert [row['method'] for row in rpc] == ['initialize', 'notifications/initialized', 'tools/list', 'tools/call'], rpc
-                assert rpc[-1]['params'] == {'name': 'echo', 'arguments': {'text': 'MCP_CALLBACK_RESULT'}}, rpc
+                assert {key:value for key,value in rpc[-1]['params'].items() if key!='_meta'} == {'name': 'echo', 'arguments': {'text': 'MCP_CALLBACK_RESULT'}}, rpc
+                assert json.loads(legacy_log.with_suffix('.interaction.json').read_text())['accepted']
                 def scoped(method, suffix='', body=None, revision=None):
                     headers={'Content-Type':'application/json'}
                     if revision is not None: headers['If-Match']='"'+revision+'"'
