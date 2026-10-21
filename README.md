@@ -1,114 +1,134 @@
-# mdo 墨斗 — 原生 C 栈 Agent 工作台
+# mdo — Native C-Stack Agent Workbench
 
-mdo 是基于 xrt、xs、xllm、xllm-session 与 xwork 的便携式 Agent 工作台。
-当前实现全部位于 `app/`，按 [重构实施计划](docs/mdo-refactor-implementation-plan.md) 开发。
-旧版参考源码已从工作树移除，需要对照历史行为时可读取 Git 提交 `ccb0f6c` 中的
-`app_bak/`，例如 `git show ccb0f6c:app_bak/wwwroot/src/ui.js`。
+> Full agent capabilities in a ~4 MB desktop app. Build, extend, and run it anywhere.
+> See [README_zh.md](README_zh.md) for the Chinese version.
 
-当前开发方向已调整为[基础 Agent 优先](docs/core-agent-priorities.md)：工具、
-聊天体验、项目/会话和设置先行。内建默认模型为 `ornith-1.5-35b`。
+mdo (墨斗) is a portable Agent workbench that layers a **native C stack** —
+`xrt`, `xs`, `xllm`, `xllm-session`, and `xwork` — under a native HTML/CSS/JavaScript
+frontend. Business logic is written in C, compiled into a single TCC unity entry, and
+hosted by an `xs` runtime that renders the UI in a WebView. The result is a fast,
+self-contained desktop / mobile / server app with a full local-agent feature set.
 
-## 构建
+---
 
-`deps.lock` 固定 xrt、xserver 和三库的完整提交、版本与生产源码树哈希。
-构建器会先验证依赖，再从 `app/sources.json` 生成单个 TCC unity 入口，构建
-匹配的 xs 宿主并打包应用。构建会拒绝没有入口引用的 C 源文件与私有头；
-前端发布检查也会拒绝缺失的导入与无法从页面入口到达的模块：
+## ✨ Highlights
+
+### 🪶 Complete Agent in ~4 MB
+The full agent feature set ships in a remarkably small footprint:
+
+| Product | Size | Notes |
+| --- | --- | --- |
+| `mdo-arm64-v8a.apk` (Android, slim) | **~4 MB** | Full agent on Android |
+| `mdo-linux-x86_64-glibc` | ~4.8 MB | Desktop, dynamic core |
+| `mdo-server.exe` | ~5 MB | Headless server edition |
+| `mdo.exe` (Windows) | ~5.1 MB | Desktop with native window |
+| `mdo-full-arm64-v8a.apk` (Android, full) | ~59 MB | Bundles a bundled browser |
+
+The slim APK reaches the ~4 MB target while still delivering the complete agent:
+model chat, tools, projects, sessions, memory, skills, and remote control.
+
+### ⚡ Full Feature Set
+- **Local Agent core** — model chat with streaming, tool calls, and guided builders.
+- **Projects & Sessions** — create, restore, search, fork, truncate, export, pin, archive, trash; snapshot/journal layered persistence.
+- **Skills** — author, scope, and invoke skills; built-in creator and native validation.
+- **Memory** — per-project memory plus transfer between devices.
+- **Web tools** — bounded `web_search`, `web_open`, `web_find` with DNS-rebinding protection.
+- **Configuration** — layered defaults + per-user settings, atomic replace, `.bak` backups, `secret_ref` for sensitive values.
+- **MCP** — Model Context Protocol support.
+- **Schedules, runs, approvals, asks** — background automation and permission gating.
+- **Auto-update** — Windows and Linux update pipelines.
+
+### 🛠 Secondary Development (Extensibility)
+mdo is built to be extended and rebuilt:
+
+- **C source is the app** — all logic lives in `app/src/`, organized by product boundary
+  (`api/`, `sessions/`, `remote/`, `skills/`, `projects/`, ...). ~200 C files, ~73k lines.
+- **Deterministic build** — `deps.lock` pins every dependency to a full commit + source hash;
+  `tools/build.py` generates the TCC unity entry from `app/sources.json`, builds the matching
+  `xs` host, and packages the app. It rejects unreferenced C sources and private headers.
+- **Native module ABI** — `app/include/mdo/` defines versioned modules (MDO-3) for pluggable features.
+- **Frontend contract** — `app/web/` holds the HTML/CSS/JS; a publish check rejects missing imports
+  and modules unreachable from page entry points.
+- **Add your own** — skills, models, MCP servers, and custom modules slot into the same pipeline.
+
+### 🌐 Cross-Platform
+One code base, four targets, portable Home:
+
+| Platform | Artifact | GUI | Notes |
+| --- | --- | --- | --- |
+| Windows | `mdo.exe` / `mdo-server.exe` | Native window | Portable Home, zero-write read-only startup |
+| Android | `mdo-arm64-v8a.apk` / `mdo-full-arm64-v8a.apk` | WebView2 | Slim (~4 MB) and full variants |
+| Linux | `mdo-linux-x86_64-{glibc,musl}` | GTK / WebKitGTK | GUI + headless server editions |
+
+- **Portable Home** — all runtime data (`mdo-home/`) lives beside the executable; never pollutes the user profile.
+  Override with `--home` / `MDO_HOME`.
+- **Consistent sessions** — same session format, config schema, and Home layout across platforms.
+- **Linux build** — glibc/musl, GUI/server editions, Debian-baseline bootstrap, `--wsl` support.
+
+### 📱 Multi-Device Remote Control
+Control one device from another, or move work between them:
+
+- **Bidirectional control** — PC ↔ Android remote control (real-device verified). Same account,
+  enable remote control on both ends.
+- **Send to device** — send a single session or a complete project from the menu; the receiver
+  keeps an independent copy (source data is never moved).
+- **What transfers** — single session: model ledger, UI history, usage, attachments, artifacts,
+  schedules, drafts, staging queue. Full project: all sessions (incl. archive & trash), the entire
+  workspace directory, and project memory.
+- **Resilient transfer** — native background tasks with chunked writes, checksums, resume-after-break,
+  and lease-based exclusivity so running processes don't corrupt the send.
+- **Secure transport** — reuses remote-control auth (same-account tickets, write tokens, sequence numbers);
+  LAN TLS when available, otherwise relayed through the existing server.
+
+---
+
+## 🚀 Quick Start
+
+Build the app (Windows PowerShell):
 
 ```powershell
 python tools/build.py
 ```
 
-默认在仓库同级目录中寻找与锁文件提交完全匹配的 `xserver` 工作树。也可以
-显式指定：
-
-```powershell
-python tools/build.py --xserver-root D:\GIT\xserver-mdo-refactor
-```
-
-Windows 可直接运行 `生成程序.bat`，也可向它传递同样的构建参数。默认同时生成根目录
-`mdo.exe`、精简版 `mdo-arm64-v8a.apk` 和完整版 `mdo-full-arm64-v8a.apk`；Linux 的
-桌面产物名为 `mdo`。Android 构建需要已有 SDK 与 JDK 17+，统一入口优先使用
-`--sdk` / `--java-home` 或 `MDO_ANDROID_SDK` / `MDO_ANDROID_JAVA_HOME`，然后检查本地
-工具链与 Windows 上的 WSL 工具链缓存。WSL 路径需配合 `--wsl`；安装方法见
-[Android 构建说明](docs/android.md)。工具链缺失会明确失败，不会只生成桌面版。
-单独构建桌面版使用 `python tools/build_mdo.py`。首次构建需要 xserver 支持的 Python、GCC/Clang 和平台链接工具；
-构建不依赖仓库根目录中预先存在的 `xs.exe` 或 `xsw.exe`。
-
-发布候选使用统一的低负载门禁：
-
-```powershell
-python tools/qa_release.py --xserver-root D:\GIT\xserver-mdo-refactor
-```
-
-它会验证依赖锁、Python 合同检查、全部前端 ES 模块语法与 Node 交互测试、
-严格 C11 编译、真实 TCC 低负载运行时探针、两次确定性 pack，
-以及 Windows 无窗口只读启动零写、原生窗口便携 Home 和打包启动回归。构建命令不依赖 Node.js，
-发布门禁运行前端检查时需要 Node.js。
-门禁范围和 Linux 文件系统要求见[发布门禁](docs/release-gate.md)，
-当前源码版本为 `0.2.1`。首个重构基线的功能与限制见[开发阶段发布说明](docs/release-notes-0.1.0-dev.md)。
-首个公开版候选见[0.1.0 发布说明](docs/release-notes-0.1.0.md)与
-[发布前检查记录](docs/build-records/2026-10-10-release-audit.md)。
-
-开发前先生成入口，再启动构建出的宿主：
+Prepare the entry, then launch the built host:
 
 ```powershell
 python tools/build_mdo.py --prepare-only
 .build\host\xs.exe dev.json
 ```
 
-## 源码布局
+Release gate (requires Node.js for frontend checks):
+
+```powershell
+python tools/qa_release.py --xserver-root D:\GIT\xserver-mdo-refactor
+```
+
+---
+
+## 📂 Source Layout
 
 ```text
 app/
-  include/mdo/       应用私有公共头
-  src/               按产品边界拆分的 C 模块
-  default-home/      mdo.exe 内置的只读默认资源树
-  web/               原生 HTML/CSS/JavaScript 前端
-  sources.json       unity 源清单
-  xs.json            单文件应用配置
-include/mdo/         版本化外接模块 ABI（MDO-3）
-deps.lock            跨仓库依赖与格式版本锁
-tools/build_mdo.py   验证、生成、宿主构建与打包入口
-tools/build.py       桌面版与 Android 精简版、完整版统一构建入口
+  include/mdo/     versioned module ABI (MDO-3)
+  src/             C modules by product boundary
+  default-home/    read-only default resource tree for mdo.exe
+  web/             native HTML/CSS/JavaScript frontend
+  sources.json     unity source manifest
+  xs.json            single-file app config
+deps.lock          cross-repo dependency + format-version lock
+tools/build_mdo.py verify → generate → host build → package
+tools/build.py     desktop + Android slim/full unified build
 ```
 
-发布物可以只有 `mdo.exe`。运行时持久化数据只允许进入可执行文件旁的
-`mdo-home/`。Windows 原生窗口首次打开时，WebView2 会按需创建
-`mdo-home/data/cache/webview2/`；无窗口的只读启动和退出不会创建 Home。
-该行为由便携 Home 与发布门禁测试固定。可以用 `MDO_HOME` 环境变量覆盖，也可以把应用参数
-放在 xs 的 `--` 分隔符之后：
+---
 
-```powershell
-mdo.exe -- --home D:\Portable\mdo-home
-```
+## 📚 Docs
+Full contracts and guides live in [`docs/`](docs):
+`configuration.md`, `session-storage.md`, `web-tools.md`, `device-transfers.md`,
+`device-remote-control.md`, `linux.md`, `android.md`, `release-gate.md`,
+`mdo-refactor-implementation-plan.md`.
 
-默认项目的新任务使用 `mdo-home/workspace/` 作为专用工作目录，首次创建任务时
-自动建立，不再使用程序目录或启动目录。`--home`、`MDO_HOME` 会同时改变这个
-目录的位置；Android 上位于应用私有 Home 内。已有会话保留创建时记录的工作
-目录，显式指定的项目或会话路径仍优先；移动旧文件请自行复制到新工作目录。
+---
 
-## 配置
-
-内置 `config/defaults.json` 与外部 Home 中的 `settings.json`、`models.json`
-和 `permissions.json` 按键合并。外部文件只保存用户差异，使用 schema v1、
-原子替换和 `.bak` 备份；敏感值只允许保存 `secret_ref`。完整格式、运行时
-覆盖、导入预览和内建 Ornith 模型规则见
-[配置合同](docs/configuration.md)。
-
-内建联网能力由 `web_search`、`web_open` 和 `web_find` 三个有界工具组成；
-配置、权限、DNS 重绑定防护与进程内文档缓存见
-[Web 工具合同](docs/web-tools.md)。
-
-会话使用 `meta.json` 与 xllm-session 的 snapshot/journal 分层持久化；创建、
-恢复、搜索、分叉、清空、截断、导出、置顶、归档、回收站和并发更新规则见
-[会话存储合同](docs/session-storage.md)。
-
-旧版可执行文件旁 `data/` 与用户目录 `.mdo/` 只能通过设置页中的显式预览、
-二次确认和原子导入迁移；目标 Home 不允许已存在，旧目录始终保留。转换规则、
-不支持项、失败清理和回退方式见[旧数据迁移说明](docs/legacy-migration.md)。
-
-Linux GUI、glibc 服务版、musl 静态服务版，以及 Windows 服务版的构建和运行见[平台构建说明](docs/linux.md)。
-
-会话和完整项目可以从菜单直接“发送到设备”。两端登录同一账号，并在接收端的远控设置开启接收；
-传输完成后源数据保留，目标设备获得独立副本。断线续传、目录选择、数据范围和限制见[设备传输](docs/device-transfers.md)。
+## 📄 License
+See [LICENSE](LICENSE). Current source version: **0.2.1**.
