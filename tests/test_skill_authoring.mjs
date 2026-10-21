@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { skillAuthoringPrompt, createSkillAuthoringDraft } from "../app/web/js/features/settings/skill-authoring.js";
+import { skillAuthoringPrompt, createSkillAuthoringDraft, expandSkillAuthoringDraft } from "../app/web/js/features/settings/skill-authoring.js";
 
 function fixture() {
   const entries = new Map([["project:existing", { text: "Unsent task", attachments: ["image"] }]]);
@@ -40,4 +40,38 @@ test("authoring prompts retain literal directory variables and declare supported
   assert.ok(prompt.includes("$ARGUMENTS[0]")); assert.ok(prompt.includes("arguments: [file, focus]"));
   assert.ok(prompt.includes("argument-hint 只提供输入提示")); assert.ok(prompt.includes("不要因此终止任务"));
   assert.throws(() => skillAuthoringPrompt({ directory: "" }), /unavailable/);
+});
+
+test("builder modes preserve explicit targets and make reviews read-only", () => {
+  const settings = { directory: "D:/mdo/skills", scope: "user", id: "reviewer", request: "Improve the output format" };
+  const improve = skillAuthoringPrompt({ ...settings, mode: "improve" });
+  assert.ok(improve.includes("改进已有")); assert.ok(improve.includes('"reviewer"'));
+  assert.ok(improve.includes("保留原 ID")); assert.ok(improve.includes("保留可恢复副本"));
+  assert.ok(improve.includes("Improve the output format"));
+  const review = skillAuthoringPrompt({ ...settings, mode: "review" });
+  assert.ok(review.includes("不修改文件，不运行目标脚本"));
+  assert.throws(() => skillAuthoringPrompt({ ...settings, id: "", mode: "improve" }), /ID/);
+  for (const id of ["con", "name..bad", "name.", "../other"])
+    assert.throws(() => skillAuthoringPrompt({ ...settings, id, mode: "improve" }), /ID/);
+  assert.throws(() => skillAuthoringPrompt({ ...settings, request: "x".repeat(8193) }), /8 KiB/);
+  assert.throws(() => skillAuthoringPrompt({ ...settings, mode: "execute" }), /mode/);
+});
+
+test("builder prepares the actual installed creator as an unsent bounded draft", async context => {
+  const settings = { directory: "D:/work/.mdo/skills", scope: "project", projectId: "work", request: "Build a review checklist" };
+  context.mock.method(globalThis, "fetch", async (url, options) => {
+    assert.equal(url, "/api/v1/skills/invoke?project=work");
+    assert.equal(JSON.parse(options.body).id, "skill-creator");
+    assert.ok(JSON.parse(options.body).arguments.includes(settings.request));
+    return Response.json({ ok: true, data: { text: "Installed creator instructions and task" } });
+  });
+  assert.equal(await expandSkillAuthoringDraft(settings), "Installed creator instructions and task");
+});
+
+test("failed or oversized creator expansion never falls back to an unverified draft", async context => {
+  const settings = { directory: "D:/work/.mdo/skills", scope: "project" };
+  context.mock.method(globalThis, "fetch", async () => Response.json({ ok: true, data: { text: "x".repeat(65537) } }));
+  await assert.rejects(expandSkillAuthoringDraft(settings), /64 KiB/);
+  context.mock.method(globalThis, "fetch", async () => Response.json({ ok: false, error: { code: "disabled", message: "Creator disabled" } }, { status: 403 }));
+  await assert.rejects(expandSkillAuthoringDraft(settings), /Creator disabled/);
 });

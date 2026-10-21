@@ -2425,7 +2425,8 @@ export async function boot() {
       if (currentPageWriteToken() !== token || (targetState().selected?.id || "local") !== owner)
         throw new Error("设备或工作区状态已改变，请重新创建 Skill");
     };
-    void createSkillAuthoringDraft({ createSession, draftStore, projectId: detail.projectId, text: detail.text, check })
+    const title = ["创建 Skill", "改进 Skill", "检查 Skill"].includes(detail.title) ? detail.title : "创建 Skill";
+    void createSkillAuthoringDraft({ createSession, draftStore, projectId: detail.projectId, text: detail.text, title, check })
       .then(session => { check(); navigation.select(session.project_id, session.id); closeDrawers(); prompt.focus(); })
       .catch(error => { if ((targetState().selected?.id || "local") === owner) toast(errorMessage(error), "error"); })
       .finally(() => { creatingSkill = false; });

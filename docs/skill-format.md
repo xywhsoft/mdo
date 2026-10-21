@@ -160,6 +160,14 @@ It specifies the selected device's real target directory and supported format.
 Existing conversations, drafts and attachments are preserved. The user sends the
 draft before any model call; normal tool approvals govern subsequent writes.
 
+The **Skill 构建器** toolbar shortcut opens this flow directly. Choose new,
+improve or read-only review, specify an existing ID when needed, and describe the
+task. It expands the actually installed `skill-creator` into the draft through
+the scoped invocation API; disabled, missing or oversized creators fail without
+discarding the form. Improvements preserve identity and recoverability; reviews
+request no file changes. Project cards offer folder checks and AI improvement;
+the project editor can check unsaved document format without publishing it.
+
 Migration discovers personal mdo Skills plus `.agents`, `.claude`, `.codex`,
 `.zcode`, `.opencode` and `.mdo` skill directories in the selected workspace and
 the OS user profile. It does not search the disk recursively. Pick an individual

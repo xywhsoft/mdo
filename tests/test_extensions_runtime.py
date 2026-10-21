@@ -242,6 +242,11 @@ def main():
                 assert status==200 and checked['data']['valid'] and checked['data']['resources_checked'],checked
                 status, checked=validate_skill({'name':'absent','scope':'user'})
                 assert status==200 and not checked['data']['valid'] and checked['data']['errors'],checked
+                status, _, creator_draft=request(port,'POST','/api/v1/skills/invoke',
+                    body=b'{"id":"skill-creator","arguments":"CREATOR_REQUEST_MARKER"}',headers={'Content-Type':'application/json'})
+                assert status==200,creator_draft
+                creator_text=json.loads(creator_draft)['data']['text']
+                assert '默认使用 `$ARGUMENTS`' in creator_text and creator_text.count('CREATOR_REQUEST_MARKER')==2,creator_text
                 scoped=base/'home/workspace/.mdo/skills/research/SKILL.md'
                 scoped.parent.mkdir(parents=True,exist_ok=True)
                 scoped.write_text(skill.replace('Use references/guide.txt.','PROJECT_SCOPE_MARKER'),encoding='utf-8')

@@ -126,6 +126,7 @@ export function createExtensionPanels() {
       actions.splice(3, 0, button(t("resource.recheckOperation", {}, "重新读取状态"), () => act(kind, scope => awaitResourceOperation(operation, scope))));
     }
     if (kind === "skills") {
+      actions.push(button(label("skillBuilder", "Skill 构建器"), () => skillWorkbench.open({ builder: true })));
       actions.push(button(label("skillSources", "来源、项目与 AI 创建"), () => skillWorkbench.open()));
       const folder = element("input", { attrs: { type: "file", webkitdirectory: "", multiple: "", "aria-label": label("importFolder", "导入文件夹") } });
       folder.hidden = true; folder.addEventListener("change", () => { void importFolder([...folder.files]); });
@@ -174,6 +175,8 @@ export function createExtensionPanels() {
           await api.post(`${path(kind, item.id)}/enabled`, { enabled: !item.enabled }, revision(item));
         }));
         const controls = [edit, ...(kind === "agents" && item.id === "default" ? [] : [toggle]), button(label("export", "导出"), () => exportItem(kind, item))];
+        if (kind === "skills") controls.push(button(label("improveSkill", "用 AI 改进"), () =>
+          skillWorkbench.open({ builder: true, mode: "improve", id: item.id, scope: "user" })));
         if (kind === "mcp") controls.push(button(label("test", "测试连接"), () => act(kind, async scope => {
           await refreshMcp(item.id, scope);
           if (scope.isCurrent()) toast(label("testOk", "连接测试完成"), "success");
