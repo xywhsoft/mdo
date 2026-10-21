@@ -39,5 +39,11 @@ not replay a possibly completed state-changing tool call.
 - Real HTTP/model-loop regression passes: cold save, stale-write rejection,
   project-only discovery, rejected personal-server schema load, successful
   project tool call, and disabled project configuration without personal fallback.
-- Remaining goals (external configuration migration, OAuth, context/interaction
-  features and expanded diagnostics) are still in progress.
+- External configuration preview/migration implemented for fixed Claude,
+  Codex TOML, ZCode, OpenCode and `.agents` paths. Preview is read-only and
+  omits credentials; explicit migration checks source revisions, rejects
+  existing targets, seals credentials and preserves the original files.
+  Real HTTP regression covers four providers, project and personal targets,
+  TOML timeouts, stale-source rejection, collisions and cold imports.
+- Remaining goals (OAuth, context/interaction features and expanded
+  diagnostics) are still in progress. Unsupported migration forms are reported.

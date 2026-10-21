@@ -219,6 +219,8 @@ static const MdoApiRoute g_MdoApiRoutes[] = {
     { "/api/v1/mcp/reload", XHTTP_METHOD_POST,
       "POST, OPTIONS", MdoApiMcpReloadRoute, false },
     { "/api/v1/mcp/project", XHTTP_METHOD_GET|XHTTP_METHOD_POST, "GET, POST, OPTIONS", MdoApiMcpProjectRoute, false },
+    { "/api/v1/mcp/sources", XHTTP_METHOD_GET, "GET, OPTIONS", MdoApiMcpSourcesRoute, false },
+    { "/api/v1/mcp/migrate", XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiMcpMigrateRoute, false },
     { "/api/v1/mcp/project/{id}", XHTTP_METHOD_GET|XHTTP_METHOD_PUT|XHTTP_METHOD_DELETE, "GET, PUT, DELETE, OPTIONS", MdoApiMcpProjectRoute, false },
     { "/api/v1/mcp/project/{id}/enabled", XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiMcpProjectRoute, false },
     { "/api/v1/mcp/{server}/enabled", XHTTP_METHOD_PUT,

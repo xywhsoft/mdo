@@ -132,6 +132,21 @@ def main():
         thread = threading.Thread(target=model_server.serve_forever, daemon=True); thread.start()
         env = dict(os.environ, MDO_HOME=str(base / 'home'), MDO_EXTENSION_MODEL_KEY='bounded-fixture-key',
             USE_WEBVIEW='0')
+        foreign=base/'foreign';foreign.mkdir()
+        foreign_sources={
+            '.claude.json':json.dumps({'mcpServers':{'imported-stdio':{'command':sys.executable,
+                'args':['-c',f'from pathlib import Path; Path({str(base / "import-executed")!r}).touch()'],
+                'env':{'EXTERNAL_TOKEN':'foreign-secret-claude'}}}}),
+            '.codex/config.toml':f'[mcp_servers.imported-codex]\ncommand = {json.dumps(sys.executable)}\nargs = ["-c", "pass"]\nstartup_timeout_sec = 2\ntool_timeout_sec = 12\n[mcp_servers.imported-codex.env]\nEXTERNAL_TOKEN = \'foreign-secret-codex\'\n',
+            '.zcode/cli/config.json':json.dumps({'mcp':{'servers':{'imported-zcode':{
+                'url':'http://127.0.0.1:9911/mcp','headers':{'Authorization':'Bearer foreign-secret-zcode'}}}}}),
+            '.config/opencode/opencode.json':json.dumps({'mcp':{'imported-open':{
+                'type':'local','command':[sys.executable,'-c','pass'],'environment':{'TOKEN':'foreign-secret-open'}}}}),
+            '.agents/mcp.json':json.dumps({'mcpServers':{'legacy-sse':{'type':'sse','url':'https://example.invalid/sse'}}}),
+        }
+        for name,text in foreign_sources.items():
+            file=foreign/name;file.parent.mkdir(parents=True,exist_ok=True);file.write_text(text,encoding='utf-8')
+        env.update(USERPROFILE=str(foreign),HOME=str(foreign))
         with (base / 'log.txt').open('wb') as log:
             command = [str(site / args.packed.name), '--', '--home', str(base / 'home')] if args.packed else [str(args.host.resolve()), str(site / 'xs.json')]
             process = subprocess.Popen(command,
@@ -437,6 +452,31 @@ def main():
                 assert call('DELETE', 'skills/research', revision=skill_revision)[0] == 200
                 assert not (base / 'home/skills/research').exists()
                 assert call('DELETE', 'commands/review', revision=revision)[0] == 200
+                status,_,raw=request(port,'GET','/api/v1/mcp/sources?project=default')
+                assert status==200 and 'foreign-secret-' not in raw.decode() and 'vault:' not in raw.decode(),raw[:300]
+                source_items=json.loads(raw)['data']['items']
+                assert {'imported-stdio','imported-codex','imported-zcode','imported-open','legacy-sse'} <= {item['id'] for item in source_items},source_items
+                assert not next(item for item in source_items if item['id']=='legacy-sse')['compatible']
+                for source in source_items:
+                    if not source['compatible']:continue
+                    target_scope='project' if source['id']=='imported-open' else 'user'
+                    body={key:source[key] for key in ('origin','id','source_index','revision')}
+                    body['scope']=target_scope
+                    status,_,raw=request(port,'POST','/api/v1/mcp/migrate?project=default',body=json.dumps(body).encode(),headers={'Content-Type':'application/json'})
+                    assert status==200,(source['id'],source,raw[:500])
+                    path=(base/'home/mcp' if target_scope=='user' else base/'home/workspace/.mdo/mcp')/(source['id']+'.json')
+                    saved=path.read_text(encoding='utf-8')
+                    assert 'foreign-secret-' not in saved and 'vault:' in saved,saved
+                    if source['id']=='imported-codex':
+                        doc=json.loads(saved);assert doc['startup_timeout_ms']==2000 and doc['request_timeout_ms']==12000,doc
+                    assert request(port,'POST','/api/v1/mcp/migrate?project=default',body=json.dumps(body).encode(),headers={'Content-Type':'application/json'})[0]==412
+                assert not (base/'import-executed').exists(),'Preview/import started a server'
+                for name,text in foreign_sources.items():assert (foreign/name).read_text(encoding='utf-8')==text,name
+                stale=next(item for item in source_items if item['id']=='imported-codex')
+                with (foreign/'.codex/config.toml').open('a',encoding='utf-8') as output:output.write('\n# changed\n')
+                body={key:stale[key] for key in ('origin','id','source_index','revision')};body.update(scope='user',target_id='must-not-import')
+                assert request(port,'POST','/api/v1/mcp/migrate?project=default',body=json.dumps(body).encode(),headers={'Content-Type':'application/json'})[0]==412
+                assert not (base/'home/mcp/must-not-import.json').exists()
                 marker = base / 'mcp-started.txt'
                 mock = base / 'mcp_mock.py'
                 credential = 'fixture MCP key with spaces 中文'

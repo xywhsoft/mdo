@@ -11,7 +11,12 @@ static char* MdoMcpProjectRead(xroot Root, cstr Path)
     if(xrtFileSize(File,&Size)&&Size<=MDO_MCP_FILE_LIMIT) {
         Text=xrtMalloc((size_t)Size+1u);
         if(Text&&!xrtReadFull(File,Text,(size_t)Size,NULL)){xrtFree(Text);Text=NULL;}
-        if(Text)Text[Size]=0;
+        if(Text) {
+            Text[Size]=0;
+            if(memchr(Text,0,(size_t)Size)||!xrtUtf8Valid(xrtStrViewN(Text,(size_t)Size),NULL)) {
+                xrtFree(Text);Text=NULL;
+            }
+        }
     }
     if(!xrtClose(File)){xrtFree(Text);Text=NULL;}
     return Text;

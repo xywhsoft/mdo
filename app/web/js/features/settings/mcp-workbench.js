@@ -25,6 +25,10 @@ export function createMcpWorkbench({ onChange }) {
       element("option", { text: "默认项目", attrs: { value: "default" } })]);
     const status = element("p", { attrs: { role: "status" } });
     const list = element("div", { className: "extension-list" });
+    const external = element("div", { className: "extension-list" });
+    const destination = element("select", { attrs: { "aria-label": "迁移目标范围" } }, [
+      element("option", { text: "迁移到个人 MCP", attrs: { value: "user" } }),
+      element("option", { text: "迁移到所选项目", attrs: { value: "project" } })]);
     const editor = element("div");
     let busy = false, source = null, baseline = "", editProject = "", editId = "", revision = "new", inputs = [];
     let idInput = null;
@@ -37,7 +41,7 @@ export function createMcpWorkbench({ onChange }) {
     };
     function controls() {
       if (!live()) return;
-      dialog.querySelectorAll("button,select").forEach(node => { node.disabled = busy; });
+      dialog.querySelectorAll("button,select").forEach(node => { node.disabled = busy || node.dataset.unavailable === "true"; });
       if (source) source.readOnly = busy;
     }
     async function run(action) {
@@ -100,6 +104,33 @@ export function createMcpWorkbench({ onChange }) {
     dialog.append(element("h2", { text: "项目 MCP" }), project,
       element("p", { className: "extension-help", text: "配置保存在项目 .mdo/mcp；同名项目配置覆盖个人配置。保存和读取不会启动服务器，凭据仍保存在本机。" }),
       button("新增项目 MCP", () => edit()), list, editor,
+      element("h3", { text: "从其他 Agent 迁移" }),
+      element("p", { className: "extension-help", text: "扫描 Claude Code、Codex、ZCode、OpenCode 与 .agents 配置。预览不显示密钥；导入时保管凭据并保留原文件。原 Agent 的权限规则不会迁移。" }),
+      destination, button("扫描已有配置", async () => {
+        const response = await api.get(`/mcp/sources?project=${encodeURIComponent(project.value)}`, options());
+        if (!live()) return; clear(external);
+        for (const item of response.data.items ?? []) {
+          const name = element("input", { attrs: { "aria-label": `${item.id} 的目标名称`, value: item.id } });
+          const migrate = button("导入", async () => {
+            if (!portable(name.value)) throw new Error("目标服务器 ID 格式无效");
+            await api.post(`/mcp/migrate?project=${encodeURIComponent(project.value)}`, {
+              origin: item.origin, source_index: item.source_index, id: item.id,
+              revision: item.revision, target_id: name.value, scope: destination.value,
+            }, options());
+            if (live()) { onChange(); await load(); status.textContent = `已导入 ${name.value}`; }
+          });
+          migrate.disabled = !item.compatible;
+          if (!item.compatible) migrate.dataset.unavailable = "true";
+          external.append(element("article", { className: "resource-card" }, [
+            element("h3", { text: item.id }),
+            element("p", { text: `${item.provider} · ${item.origin === "project" ? "项目" : "个人"} · ${item.credential_count} 项凭据` }),
+            item.error ? element("p", { className: "extension-error", text: item.error }) : null,
+            name, migrate,
+          ]));
+        }
+        for (const issue of response.data.issues ?? []) external.append(element("p", { className: "extension-error", text: `${issue.provider}：${issue.message}` }));
+        if (!(response.data.items ?? []).length) external.append(element("p", { text: "未发现可迁移的 MCP 配置。" }));
+      }), external,
       element("h3", { text: "导入现有配置到此项目" }), imported,
       button("导入 JSON", async () => {
         const documents = mcpImportDocuments(imported.value); let completed = 0;
@@ -112,6 +143,7 @@ export function createMcpWorkbench({ onChange }) {
     project.addEventListener("change", () => {
       if (dirty() && !window.confirm("放弃未保存的 MCP 配置？")) { project.value = editProject; return; }
       source = null; inputs = []; clear(editor); void run(load);
+      clear(external);
     });
     dialog.addEventListener("cancel", event => { event.preventDefault(); close(); });
     document.body.append(dialog); dialog.showModal();

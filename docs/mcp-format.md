@@ -102,6 +102,23 @@ filesystem paths are not accepted. Credentials imported as ordinary maps are
 sealed in the current device's vault; the project file contains references only.
 Use environment references for project configurations intended to be shared.
 
+## External configuration migration
+
+The Project MCP panel can scan fixed user/project paths for Claude Code,
+Codex, ZCode, OpenCode and `.agents`. The read-only `/api/v1/mcp/sources`
+preview returns source identities, revisions, compatibility and credential
+counts; it returns no credential values or vault entries. Explicit migration
+through `/api/v1/mcp/migrate` rereads the selected source, rejects a stale
+revision or occupied target, seals credentials and creates a native document.
+It never edits the original configuration or starts an MCP server.
+
+Codex TOML parsing is bounded to the MCP configuration subset: strings,
+booleans, numbers, arrays, inline maps and server/environment/header tables.
+Unsupported expressions are rejected for that server. Legacy standalone SSE,
+OAuth and selective environment forwarding currently require manual setup;
+the preview reports those cases rather than silently changing their meaning.
+Only connection settings are migrated, not another Agent's permission rules.
+
 ## Runtime behavior
 
 Registration is cold: startup copies validated definitions into the
