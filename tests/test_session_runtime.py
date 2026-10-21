@@ -35,6 +35,7 @@ PROBE_SOURCE = r'''
 #include "src/skills/manager.c"
 #include "src/memory/manager.c"
 #include "src/modules/manager.c"
+#include "src/approvals/manager.c"
 #include "src/agents/runtime.c"
 #include "src/asks/manager.c"
 #include "src/sessions/data_gate.c"
@@ -464,7 +465,7 @@ void ServiceInit(XS_HostInfo *host) {
     memset(&fork_probe, 0, sizeof(fork_probe));
     if (!MdoHomeInit() || !MdoProjectLifecycleInit() ||
         !LifecycleProbe() || !MdoConfigInit() || !MdoModelManagerInit() ||
-        !MdoSkillManagerInit()) { printf("init_error=pre-runtime\n"); goto done; }
+        !MdoSkillManagerInit() || !MdoApprovalManagerInit()) { printf("init_error=pre-runtime\n"); goto done; }
     if (!LegacyMeta()) goto done;
     xworkRuntimeConfigInit(&runtime_config);
     runtime = xworkRuntimeCreate(&runtime_config, &error);
@@ -775,6 +776,7 @@ done:
     MdoSkillManagerUnit();
     xworkRuntimeRelease(runtime);
     MdoModelManagerUnit();
+    MdoApprovalManagerUnit();
     MdoConfigUnit();
     MdoProjectLifecycleUnit();
     MdoHomeUnit();
@@ -822,6 +824,7 @@ def write_site(site: Path) -> None:
         "src/memory/manager.c",
         "src/modules/manager.c",
         "src/agents/runtime.c",
+        "src/approvals/manager.c",
         "src/asks/manager.c",
         "src/sessions/data_gate.c", "src/sessions/data_gate.h",
         "src/sessions/events.c",

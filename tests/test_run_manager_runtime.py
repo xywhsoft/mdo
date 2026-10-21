@@ -33,6 +33,7 @@ PROBE_SOURCE = r'''
 #include "src/skills/manager.c"
 #include "src/memory/manager.c"
 #include "src/modules/manager.c"
+#include "src/approvals/manager.c"
 #include "src/agents/runtime.c"
 #include "src/asks/manager.c"
 #include "src/sessions/data_gate.c"
@@ -153,7 +154,7 @@ void ServiceInit(XS_HostInfo *host) {
     memset(&owner, 0, sizeof(owner)); owner.Refs = 1u;
     if (!MdoHomeInit() || !MdoProjectLifecycleInit() ||
         !MdoConfigInit() || !MdoModelManagerInit() ||
-        !MdoSkillManagerInit()) {
+        !MdoSkillManagerInit() || !MdoApprovalManagerInit()) {
         printf("init_error=product\n"); goto done;
     }
     xworkRuntimeConfigInit(&runtime_config);
@@ -268,6 +269,7 @@ done:
     MdoSkillManagerUnit();
     xworkRuntimeRelease(runtime);
     MdoModelManagerUnit();
+    MdoApprovalManagerUnit();
     MdoConfigUnit();
     MdoProjectLifecycleUnit();
     MdoHomeUnit();
@@ -297,6 +299,7 @@ def write_site(site: Path) -> None:
         "src/models/catalog.c", "src/skills/manager.c", "src/memory/manager.c",
         "src/modules/manager.c", "src/agents/runtime.c",
         "src/sessions/data_gate.c", "src/sessions/data_gate.h", "src/sessions/events.c",
+        "src/approvals/manager.c",
         "src/asks/manager.c",
         "src/sessions/todo.c", "src/sessions/attachments.c",
         "src/sessions/sidecars/binding.c", "src/sessions/sidecars/binding.h",

@@ -174,6 +174,7 @@ PROBE_SOURCE = rf'''
 #include "src/skills/manager.c"
 #include "src/memory/manager.c"
 #include "src/modules/manager.c"
+#include "src/approvals/manager.c"
 #include "src/agents/runtime.c"
 #include "src/asks/manager.c"
 
@@ -338,7 +339,7 @@ void ServiceInit(XS_HostInfo *host) {{
             strlen(sSkillV1), false) ||
         !MdoHomeAtomicWrite("modules/agents/probe.c", sModuleV1,
             strlen(sModuleV1), false) ||
-        !MdoConfigInit() || !MdoModelManagerInit() || !MdoSkillManagerInit()) {{
+        !MdoConfigInit() || !MdoModelManagerInit() || !MdoSkillManagerInit() || !MdoApprovalManagerInit()) {{
         printf("init_error=pre-runtime\n"); goto done;
     }}
     xworkRuntimeConfigInit(&runtime_config);
@@ -572,6 +573,7 @@ done:
     MdoSkillManagerUnit();
     xworkRuntimeRelease(runtime);
     MdoModelManagerUnit();
+    MdoApprovalManagerUnit();
     MdoConfigUnit();
     MdoProjectLifecycleUnit();
     MdoHomeUnit();
@@ -619,6 +621,7 @@ def write_site(site: Path, memory_enabled: bool = True) -> None:
         "src/memory/manager.c",
         "src/modules/manager.c",
         "src/agents/runtime.c",
+        "src/approvals/manager.c",
         "src/asks/manager.c",
     ):
         copy_app_source(relative, site)

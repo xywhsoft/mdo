@@ -33,6 +33,7 @@ PROBE_SOURCE = r'''
 #include "src/skills/manager.c"
 #include "src/memory/manager.c"
 #include "src/modules/manager.c"
+#include "src/approvals/manager.c"
 #include "src/agents/runtime.c"
 #include "src/asks/manager.c"
 #include "src/schedules/manager.c"
@@ -533,7 +534,7 @@ void ServiceInit(XS_HostInfo *host) {
     }
     xworkRuntimeConfigInit(&runtime_config);
     runtime = xworkRuntimeCreate(&runtime_config, &error);
-    if (runtime == NULL || !MdoSkillManagerInit() ||
+    if (runtime == NULL || !MdoSkillManagerInit() || !MdoApprovalManagerInit() ||
         !MdoMemoryManagerInit(runtime) || !MdoModuleManagerInit(runtime) ||
         !MdoScheduleManagerInit(runtime)) {
         printf("init_error=runtime\n"); goto done;
@@ -655,6 +656,7 @@ done:
     MdoSkillManagerUnit();
     xworkRuntimeRelease(runtime);
     MdoModelManagerUnit();
+    MdoApprovalManagerUnit();
     MdoConfigUnit();
     MdoProjectLifecycleUnit();
     MdoHomeUnit();
@@ -683,6 +685,7 @@ def write_site(site: Path, memory_enabled: bool = True) -> None:
         "src/config/config.c", "src/security/secrets.c",
         "src/models/catalog.c", "src/skills/manager.c", "src/memory/manager.c",
         "src/modules/manager.c", "src/agents/runtime.c",
+        "src/approvals/manager.c",
         "src/asks/manager.c",
         "src/schedules/manager.c", "src/schedules/executor.c",
     ):
