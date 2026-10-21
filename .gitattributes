@@ -1,3 +1,4 @@
 tools/dependencies/*.bundle -text
+tools/dependencies/*.patch text eol=lf
 tools/linux/*.sh text eol=lf
 tools/linux/*.gpg -text

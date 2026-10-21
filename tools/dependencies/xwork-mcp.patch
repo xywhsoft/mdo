@@ -1,0 +1,346 @@
+--- a/lib/xwork/src/xwork_mcp.c
++++ b/lib/xwork/src/xwork_mcp.c
+@@ -16,6 +16,7 @@
+ #define XWORK_MCP_RETAINED_SERVER_LIMIT 4096u
+ #define XWORK_MCP_HTTP_HEADER_LIMIT 128u
+ #define XWORK_MCP_HTTP_RESUME_LIMIT 8u
++#define XWORK_MCP_WAITER_LIMIT 32u
+ 
+ typedef struct xwork_mcp_http_header_owned {
+     char* sName;
+@@ -83,6 +84,14 @@
+     bool bServerSupportsToolListChanges;
+     bool bFailed;
+     bool bHttpHeaderMismatch;
++    bool bSupportsTools;
++    bool bSupportsResources;
++    bool bSupportsPrompts;
++    bool bSchemaDirty;
++    char* sInstructions;
++    uint64_t uRejectedTools;
++    xwork_buf tToolDiagnostics;
++    volatile long iWaiters;
+     xcancel* pCancel;
+     uint64_t uDeadline;
+     xprocess* pProcess;
+@@ -399,6 +408,38 @@
+     if ( pClient && pClient->uDeadline != XLLM_DEADLINE_NEVER &&
+          xllmDeadlineExpired(pClient->uDeadline) ) return XWORK_OPERATION_TIMED_OUT;
+     return XWORK_OPERATION_ACTIVE;
++}
++
++/* A normal concurrent call waits instead of becoming a model-visible tool
++ * failure. Waiting is bounded independently of peer progress and cancellable.
++ * Runtime registry operations keep their non-blocking admission: they hold the
++ * registry lock and must never wait for an operation that may need that lock. */
++static bool xwork__mcp_lock_scoped(xwork_mcp_client* pClient,
++    const xcancel* pCancel, uint64_t uDeadline, xwork_error* pError)
++{
++    uint64_t uNow = xllmClockUs();
++    uint64_t uBudget = (uint64_t)pClient->uRequestTimeoutMs * 1000u;
++    uint64_t uWaitDeadline = uNow > UINT64_MAX-uBudget ? UINT64_MAX : uNow+uBudget;
++    long iWaiters = xwork__atomic_inc(&pClient->iWaiters);
++    if ( iWaiters > XWORK_MCP_WAITER_LIMIT ) {
++        xwork__atomic_dec(&pClient->iWaiters);
++        xwork__set_error(pError, XWORK_ERROR_CONTEXT, "MCP request queue is full (32 waiting requests)");
++        return false;
++    }
++    for ( ;; ) {
++        xwork_operation_status eStatus = xwork__mcp_context_status(pClient, pCancel, uDeadline);
++        if ( eStatus != XWORK_OPERATION_ACTIVE || xllmDeadlineExpired(uWaitDeadline) ) {
++            xwork__atomic_dec(&pClient->iWaiters);
++            xwork__mcp_set_context_error(pError, eStatus == XWORK_OPERATION_ACTIVE
++                ? XWORK_OPERATION_TIMED_OUT : eStatus);
++            return false;
++        }
++        if ( xwork__mcp_try_lock(pClient) ) {
++            xwork__atomic_dec(&pClient->iWaiters);
++            return true;
++        }
++        xrtSleep(5u);
++    }
+ }
+ 
+ static xhttpclient* xwork__mcp_http_client_get(
+@@ -1145,6 +1186,44 @@
+     return sTail;
+ }
+ 
++/* Only called with the client lock and no request in flight. Consume buffered
++ * notifications without sending a request or waiting for the peer. Late replies
++ * to cancelled requests are intentionally discarded. */
++static bool xwork__mcp_poll_notifications(xwork_mcp_client* pClient, xwork_error* pError)
++{
++    size_t iSize = 0u;
++    uint64_t uBase = 0u, uNext = pClient->uStdoutOffset;
++    char* sChunk;
++    unsigned i;
++    if ( pClient->eTransport != XWORK_MCP_TRANSPORT_STDIO || !pClient->pCapture ) return true;
++    sChunk = (char*)xwork__process_capture_since(pClient->pCapture, false,
++        pClient->uStdoutOffset, pClient->iMaxMessageBytes + 1u, &iSize, &uBase, &uNext);
++    if ( uBase > pClient->uStdoutOffset || iSize > pClient->iMaxMessageBytes ||
++         pClient->tReadBuffer.iLen > pClient->iMaxMessageBytes-iSize ) {
++        free(sChunk);
++        xwork__set_error(pError, XWORK_ERROR_IO, "MCP notification buffer exceeded its limit");
++        return false;
++    }
++    if ( iSize && !xwork__buf_append(&pClient->tReadBuffer, sChunk, iSize) ) {
++        free(sChunk); xwork__set_error(pError, XWORK_ERROR_OUT_OF_MEMORY, "failed to buffer MCP notifications"); return false;
++    }
++    free(sChunk);
++    pClient->uStdoutOffset = uNext;
++    for ( i = 0u; i < 64u; ++i ) {
++        char* sLine = xwork__mcp_take_line(pClient);
++        xvalue* tMessage;
++        const char* sMethod;
++        if ( !sLine ) break;
++        tMessage = xrtJsonParse((xstrview){ sLine, strlen(sLine) });
++        free(sLine);
++        sMethod = xwork__json_text(tMessage, "method");
++        if ( sMethod && strcmp(sMethod, "notifications/tools/list_changed") == 0 )
++            pClient->bSchemaDirty = true;
++        if ( tMessage ) xrtValueRelease(tMessage);
++    }
++    return true;
++}
++
+ static char* xwork__mcp_read_message(
+     xwork_mcp_client* pClient,
+     const xcancel* pOperationCancel,
+@@ -1383,8 +1462,9 @@
+         }
+         tId = xwork__json_get(tRoot, "id");
+         if ( !tId ) {
+-            /* Notifications are asynchronous and may legally interleave a
+-             * response. list_changed is reflected in the next explicit refresh. */
++            const char* sNotification = xwork__json_text(tRoot, "method");
++            if ( sNotification && strcmp(sNotification, "notifications/tools/list_changed") == 0 )
++                pClient->bSchemaDirty = true;
+             xrtValueRelease(tRoot);
+             continue;
+         }
+@@ -1525,10 +1605,18 @@
+     bool bValid = true;
+     uint32_t uSalt = 0u;
+     if ( !sRemoteName || !sRemoteName[0] || !tSchema ||
+-         xrtValueType(tSchema) != XVALUE_OBJECT ) {
+-        xwork__set_error(pError, XWORK_ERROR_TOOL,
+-            "MCP tools/list returned a tool without a name or object inputSchema");
+-        return false;
++         xrtValueType(tSchema) != XVALUE_OBJECT ||
++         (xwork__json_text(tSchema, "type") &&
++          strcmp(xwork__json_text(tSchema, "type"), "object") != 0) ||
++         (xwork__json_get(tSchema, "properties") &&
++          xrtValueType(xwork__json_get(tSchema, "properties")) != XVALUE_OBJECT) ||
++         (xwork__json_get(tSchema, "required") &&
++          xrtValueType(xwork__json_get(tSchema, "required")) != XVALUE_ARRAY) ) {
++        ++pClient->uRejectedTools;
++        if ( pClient->tToolDiagnostics.iLen < 8192u )
++            (void)xwork__buf_append_cstr(&pClient->tToolDiagnostics,
++                "Excluded tool: missing name or object inputSchema.\n");
++        return true;
+     }
+     if ( pClient->eTransport == XWORK_MCP_TRANSPORT_STREAMABLE_HTTP &&
+          pClient->bModernProtocol &&
+@@ -1539,8 +1627,11 @@
+     }
+     if ( !xwork__mcp_tool_permitted(pClient, sRemoteName) ) return true;
+     if ( xwork__mcp_proxy_remote_exists(*ppTools, *piCount, sRemoteName) ) {
+-        xwork__set_error(pError, XWORK_ERROR_TOOL, "MCP tools/list returned duplicate tool names");
+-        return false;
++        ++pClient->uRejectedTools;
++        if ( pClient->tToolDiagnostics.iLen < 8192u )
++            (void)xwork__buf_append_cstr(&pClient->tToolDiagnostics,
++                "Excluded tool: duplicate remote name.\n");
++        return true;
+     }
+     if ( *piCount >= pClient->iMaxTools ) {
+         xwork__set_error(pError, XWORK_ERROR_TOOL, "MCP tool count exceeds configured limit");
+@@ -1601,6 +1692,10 @@
+     char* sCursor = NULL;
+     uint32_t uPages = 0u;
+     uint64_t uMinTtlMs = UINT64_MAX;
++    pClient->uRejectedTools = 0u;
++    pClient->tToolDiagnostics.iLen = 0u;
++    pClient->bSchemaDirty = false;
++    if ( !pClient->bSupportsTools ) return true;
+     for ( ;; ) {
+         xwork_buf tParams = {0};
+         xvalue* tRoot = NULL;
+@@ -1652,8 +1747,7 @@
+         }
+         for ( i = 0u; i < xrtValueCount(tTools); ++i ) {
+             xvalue* tTool = xrtValueArrayGet(tTools, i);
+-            if ( !tTool || xrtValueType(tTool) != XVALUE_OBJECT ||
+-                 !xwork__mcp_append_proxy(pClient, ppTools, piCount, piCap, tTool, pError) ) {
++            if ( !xwork__mcp_append_proxy(pClient, ppTools, piCount, piCap, tTool, pError) ) {
+                 xrtValueRelease(tRoot);
+                 free(sCursor);
+                 return false;
+@@ -1668,7 +1762,7 @@
+                     ? XLLM_DEADLINE_NEVER
+                     : uNow + uMinTtlMs * UINT64_C(1000);
+             } else {
+-                pClient->uSchemaExpiresUs = XLLM_DEADLINE_NEVER;
++                pClient->uSchemaExpiresUs = xllmClockUs() + UINT64_C(30000000);
+             }
+             xrtValueRelease(tRoot);
+             free(sCursor);
+@@ -1852,8 +1946,7 @@
+         xwork__set_error(pError, XWORK_ERROR_POLICY, "MCP server is disabled");
+         return false;
+     }
+-    if ( !xwork__mcp_try_lock(pClient) ) {
+-        xwork__set_error(pError, XWORK_ERROR_CONTEXT, "MCP client already has an active request");
++    if ( !xwork__mcp_lock_scoped(pClient, pCancel, uDeadline, pError) ) {
+         return false;
+     }
+     if ( pClient->bConnected ) { bOk = true; goto cleanup; }
+@@ -1906,8 +1999,7 @@
+         if ( !tResult || xrtValueType(tResult) != XVALUE_OBJECT ||
+              !tSupportedVersions ||
+              xrtValueType(tSupportedVersions) != XVALUE_ARRAY ||
+-             !tCapabilities || xrtValueType(tCapabilities) != XVALUE_OBJECT ||
+-             !tToolsCapability || xrtValueType(tToolsCapability) != XVALUE_OBJECT ) {
++             !tCapabilities || xrtValueType(tCapabilities) != XVALUE_OBJECT ) {
+             xwork__set_error(pError, XWORK_ERROR_TOOL,
+                 "modern MCP discovery lacks supportedVersions or tools capability");
+             goto cleanup;
+@@ -1959,8 +2051,7 @@
+         tToolsCapability = xwork__json_get(tCapabilities, "tools");
+         if ( !tResult || xrtValueType(tResult) != XVALUE_OBJECT ||
+              !sProtocol || !sProtocol[0] ||
+-             !tCapabilities || xrtValueType(tCapabilities) != XVALUE_OBJECT ||
+-             !tToolsCapability || xrtValueType(tToolsCapability) != XVALUE_OBJECT ) {
++             !tCapabilities || xrtValueType(tCapabilities) != XVALUE_OBJECT ) {
+             xwork__set_error(pError, XWORK_ERROR_TOOL,
+                 "MCP initialize response lacks protocolVersion or tools capability");
+             goto cleanup;
+@@ -1973,6 +2064,13 @@
+     }
+     if ( !xwork__replace(&pClient->sNegotiatedProtocolVersion, sProtocol) ) {
+         xwork__set_error(pError, XWORK_ERROR_OUT_OF_MEMORY, "failed to copy negotiated MCP version");
++        goto cleanup;
++    }
++    pClient->bSupportsTools = tToolsCapability && xrtValueType(tToolsCapability) == XVALUE_OBJECT;
++    pClient->bSupportsResources = xwork__json_get(tCapabilities, "resources") != NULL;
++    pClient->bSupportsPrompts = xwork__json_get(tCapabilities, "prompts") != NULL;
++    if ( !xwork__replace(&pClient->sInstructions, xwork__json_text(tResult, "instructions")) ) {
++        xwork__set_error(pError, XWORK_ERROR_OUT_OF_MEMORY, "failed to retain MCP instructions");
+         goto cleanup;
+     }
+     pClient->bServerSupportsToolListChanges = xwork__json_bool(
+@@ -2142,9 +2240,7 @@
+             "connected MCP client is required");
+         return false;
+     }
+-    if ( !xwork__mcp_try_lock(pClient) ) {
+-        xwork__set_error(pError, XWORK_ERROR_CONTEXT,
+-            "MCP client already has an active request");
++    if ( !xwork__mcp_lock_scoped(pClient, pCancel, uDeadline, pError) ) {
+         return false;
+     }
+     bOk = xwork__mcp_refresh_cache_locked(
+@@ -2192,10 +2288,10 @@
+             "invalid MCP arguments: expected a JSON object")
+             ? XWORK_RESULT_OK : XWORK_RESULT_ERROR;
+     }
+-    if ( !xwork__mcp_try_lock(pClient) ) {
++    if ( !xwork__mcp_lock_scoped(pClient, pCancel, uDeadline, pError) ) {
+         xrtValueRelease(tArguments);
+-        return xworkToolOutputSet(pOutput, false, "MCP client is busy")
+-            ? XWORK_RESULT_OK : XWORK_RESULT_ERROR;
++        return pError->eCode == XWORK_ERROR_CANCELLED ? XWORK_RESULT_CANCELLED
++            : pError->eCode == XWORK_ERROR_TIMEOUT ? XWORK_RESULT_TIMEOUT : XWORK_RESULT_ERROR;
+     }
+     sCompactArguments = xrtJsonStringify(tArguments, NULL, &iCompactArguments);
+     if ( !sCompactArguments ) {
+@@ -2358,6 +2454,8 @@
+     xwork__mcp_string_array_unit(
+         pClient->psDeniedTools, pClient->iDeniedToolCount);
+     free(pClient->sServerName);
++    free(pClient->sInstructions);
++    xwork__buf_unit(&pClient->tToolDiagnostics);
+     free(pClient->sSummary);
+     free(pClient->sProgram);
+     free(pClient->sEndpoint);
+@@ -3094,11 +3192,7 @@
+             "MCP server is disabled or unavailable");
+         return false;
+     }
+-    if ( !xwork__mcp_try_lock(pClient) ) {
+-        xwork__set_error(pError, XWORK_ERROR_CONTEXT,
+-            "MCP client already has an active request");
+-        return false;
+-    }
++    if ( !xwork__mcp_lock_scoped(pClient, pCancel, uDeadline, pError) ) return false;
+     bReconnectBlocked = pClient->bFailed && !pClient->bAutoReconnect &&
+         !pClient->bConnected;
+     xwork__mcp_unlock(pClient);
+@@ -3110,15 +3204,15 @@
+     if ( !xwork__mcp_connect_scoped(pClient, pCancel, uDeadline, pError) ) {
+         return false;
+     }
+-    if ( !xwork__mcp_try_lock(pClient) ) {
+-        xwork__set_error(pError, XWORK_ERROR_CONTEXT,
+-            "MCP client already has an active request");
+-        return false;
+-    }
++    if ( !xwork__mcp_lock_scoped(pClient, pCancel, uDeadline, pError) ) return false;
+     bDiscovered = pClient->bToolsDiscovered;
+-    bSchemaExpired = pClient->bModernProtocol && bDiscovered &&
++    if ( !xwork__mcp_poll_notifications(pClient, pError) ) {
++        xwork__mcp_unlock(pClient); return false;
++    }
++    bSchemaExpired = bDiscovered &&
+         pClient->uSchemaExpiresUs != XLLM_DEADLINE_NEVER &&
+         xllmClockUs() >= pClient->uSchemaExpiresUs;
++    bSchemaExpired = bSchemaExpired || pClient->bSchemaDirty;
+     xwork__mcp_unlock(pClient);
+     if ( bRefresh || !bDiscovered || bSchemaExpired ) {
+         return xwork__mcp_refresh_cache(pClient, pCancel, uDeadline, pError);
+@@ -3231,11 +3325,7 @@
+     pClient = xwork__runtime_mcp_find(pAgent->pRuntime, sServerId);
+     if ( !pClient || !xwork__mcp_prepare_lazy(
+             pClient, false, pCancel, uDeadline, pError) ) return false;
+-    if ( !xwork__mcp_try_lock(pClient) ) {
+-        xwork__set_error(pError, XWORK_ERROR_CONTEXT,
+-            "MCP client already has an active request");
+-        return false;
+-    }
++    if ( !xwork__mcp_lock_scoped(pClient, pCancel, uDeadline, pError) ) return false;
+     for ( i = 0u; i < pClient->iToolCount; ++i ) {
+         if ( strcmp(pClient->pTools[i].sRemoteName, sRemoteToolName) == 0 ) {
+             pProxy = &pClient->pTools[i];
+@@ -3388,16 +3478,26 @@
+                 pContext && pContext->uDeadline
+                     ? pContext->uDeadline : XLLM_DEADLINE_NEVER,
+                 pError) ) goto cleanup;
+-        if ( !xwork__mcp_try_lock(pClient) ) {
+-            xwork__set_error(pError, XWORK_ERROR_CONTEXT,
+-                "MCP client already has an active request");
+-            goto cleanup;
+-        }
++        if ( !xwork__mcp_lock_scoped(pClient,
++                pContext ? pContext->pCancel : NULL,
++                pContext && pContext->uDeadline ? pContext->uDeadline : XLLM_DEADLINE_NEVER,
++                pError) ) goto cleanup;
+         if ( !xwork__buf_appendf(&tReport,
+                 "server=%s schema_generation=%llu\n", pClient->sServerName,
+                 (unsigned long long)pClient->uSchemaGeneration) ) {
+             xwork__mcp_unlock(pClient);
+             goto oom;
++        }
++        if ( pClient->sInstructions &&
++             (!xwork__buf_append_cstr(&tReport, "server_instructions=") ||
++              !xwork__mcp_append_compact_text(&tReport, pClient->sInstructions, 4096u) ||
++              !xwork__buf_append_char(&tReport, '\n')) ) {
++            xwork__mcp_unlock(pClient); goto oom;
++        }
++        if ( pClient->uRejectedTools &&
++             !xwork__buf_appendf(&tReport, "excluded_tools=%llu (invalid schema or duplicate name)\n",
++                 (unsigned long long)pClient->uRejectedTools) ) {
++            xwork__mcp_unlock(pClient); goto oom;
+         }
+         for ( i = 0u; i < pClient->iToolCount && iShown < (size_t)uLimit; ++i ) {
+             xwork_mcp_tool_proxy* pTool = &pClient->pTools[i];

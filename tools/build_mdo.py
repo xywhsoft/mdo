@@ -12,6 +12,8 @@ import shlex
 import shutil
 import subprocess
 import sys
+import tarfile
+import tempfile
 from pathlib import Path
 
 
@@ -141,18 +143,54 @@ def find_xserver(explicit: Path | None, lock: dict) -> Path:
         if root in seen:
             continue
         seen.add(root)
+        marker = root / ".mdo-sdk-overlay.json"
+        if marker.is_file() and load_object(marker) == lock.get("sdk_overlay"):
+            return root
         head = git_head(root) if root.is_dir() else None
         checked.append(f"{root} @ {head or 'unavailable'}")
         if head == expected:
-            return root
+            return prepare_sdk_overlay(root, lock)
         if explicit is not None:
             break
     if explicit is None:
         recovered = restore_bundled_xserver(candidates, lock)
         if recovered is not None:
-            return recovered
+            return prepare_sdk_overlay(recovered, lock)
     detail = "; ".join(checked) if checked else "no candidates"
     raise BuildError(f"locked xserver {expected} was not found ({detail})")
+
+
+def prepare_sdk_overlay(source: Path, lock: dict) -> Path:
+    """Materialize verified compatibility fixes without editing a user checkout."""
+    record = lock.get("sdk_overlay")
+    if record is None:
+        return source
+    patch = (ROOT / record["path"]).resolve()
+    if (not patch.is_relative_to(ROOT) or not patch.is_file()
+            or hashlib.sha256(patch.read_bytes()).hexdigest() != record["sha256"]):
+        raise BuildError("SDK compatibility patch hash mismatch")
+    destination = ROOT / ".build/sdk-overlays" / record["sha256"]
+    if destination.exists():
+        if load_object(destination / ".mdo-sdk-overlay.json") != record:
+            raise BuildError("SDK compatibility overlay metadata mismatch")
+        return destination
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="prepare-", dir=destination.parent) as raw:
+        stage = Path(raw)
+        archive = stage / "sdk.tar"
+        subprocess.run(["git", "archive", "--format=tar", "-o", str(archive),
+                        locked_commit(lock["xserver"], "xserver")], cwd=source, check=True)
+        extracted = stage / "sdk"
+        extracted.mkdir()
+        with tarfile.open(archive) as contents:
+            contents.extractall(extracted, filter="data")
+        subprocess.run(["git", "apply", "--whitespace=nowarn",
+                        str(patch)], cwd=extracted, check=True)
+        verify_dependencies(extracted, lock)
+        (extracted / ".mdo-sdk-overlay.json").write_text(
+            json.dumps(record, indent=2) + "\n", encoding="utf-8")
+        extracted.rename(destination)
+    return destination
 
 
 def normalized_source_bytes(path: Path) -> bytes:

@@ -1,0 +1,35 @@
+# MCP ecosystem implementation
+
+The accepted work is split into independently verified commits on master:
+
+1. Reliability: bounded cancellable request admission, tool-change invalidation,
+   malformed-tool isolation, capability-based initialization, and actionable diagnostics.
+2. Configuration: project/user scopes with explicit precedence and external-agent
+   migration previews. Project definitions must not silently launch processes.
+3. Authorization: OAuth discovery, PKCE, explicit browser launch, persistent token
+   references, refresh and disconnect/revoke. Cover local and Android callback paths.
+4. Context: resources/templates, prompts integrated with commands, server instructions,
+   and typed content results with bounded persistence.
+5. Interaction: elicitation, roots and progress, enabled only when implemented;
+   task/sampling extensions remain demand-driven as proposed in the audit.
+
+Implementation baseline: mdo 9138f577, locked xs 216f5445163c, xwork 3.11.0.
+The current upstream xrt/xs master has changed its public library layout and API.
+Keep the existing production SDK and apply source-hash-verified MCP compatibility
+changes during SDK preparation; do not replace unrelated runtime/platform code.
+
+Validation must use deterministic local peers rather than production accounts.
+Keep credentials out of logs, exports, git and test artifacts. Network failure must
+not replay a possibly completed state-changing tool call.
+
+## Progress
+
+- Initial audit: existing four MCP contracts and native runtime probe pass.
+- Reliability changes use a source-hash-verified SDK overlay, preserving xs/xrt,
+  ABI 8, protocol codecs and the existing regex fix. The source checkout stays
+  untouched. SDK overlays are generated artifacts, not a new source branch.
+- Verified native concurrent tool calls both complete; an already-cancelled
+  waiter returns cancellation and a short-deadline waiter times out. A
+  resources-only server initializes successfully. Invalid/duplicate definitions
+  are excluded while a valid tool remains available.
+- Remaining goals are still in progress.

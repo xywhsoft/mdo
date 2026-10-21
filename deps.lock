@@ -49,7 +49,7 @@
     "xwork": {
       "version": "3.11.0",
       "source_commit": "0dc70638b0faa00b89a6cdb4e73eac35ad2213e3",
-      "production_tree_sha256": "d14e0434ce0fc1e5af54fc742785effe7e51494d2f8152634d64ff3d8404a82d",
+      "production_tree_sha256": "00266d912c7e434a1d9c6d93b47816eb8d24c3df50e5e9519a7d8685398e6f58",
       "abi_version": 8,
       "event_schema_version": 3
     }
@@ -62,5 +62,11 @@
     "module_abi_version": 1,
     "session_schema_version": 3,
     "config_schema_version": 1
+  },
+  "sdk_overlay": {
+    "path": "tools/dependencies/xwork-mcp.patch",
+    "sha256": "ae718dd7c250ae115358d29516b9e0c0f39776615c2aa670a8037a4098355cdc",
+    "base_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
+    "purpose": "MCP compatibility fixes; base SDK unchanged"
   }
 }
