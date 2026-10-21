@@ -192,6 +192,11 @@ def main():
                 assert status == 200, raw
                 selected=json.loads(raw)['data']['text']
                 assert 'Use references/guide.txt.' in selected and 'literal $1 and $&' in selected, selected
+                large='---\nname: large\ndescription: A large instruction document\n---\n'+'x'*60000
+                assert call('PUT','skills/large',{'content':large},'new')[0] == 200
+                status, _, raw=request(port,'POST','/api/v1/skills/invoke',body=json.dumps({'id':'large'}).encode(),headers={'Content-Type':'application/json'})
+                assert status == 200 and 'x'*60000 in json.loads(raw)['data']['text'], raw[:400]
+                assert call('PUT','skills/oversized',{'content':large+'x'*80000},'new')[0] in (413,422)
                 status, bundle = call('GET', 'skills/research/bundle')
                 assert status == 200 and bundle['data']['files'] == [file], bundle
                 assert call('POST', 'skills/research/enabled', {'enabled': False}, skill_revision)[0] == 200

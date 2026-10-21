@@ -5,6 +5,8 @@
 #include <xwork.h>
 
 #define MDO_SKILL_FORMAT_VERSION 1u
+#define MDO_SKILL_TEXT_LIMIT (128u * 1024u)
+#define MDO_SKILL_FILE_LIMIT (8u * 1024u * 1024u)
 
 typedef struct MdoSkillCatalog MdoSkillCatalog;
 typedef struct MdoSkillDiagnostics MdoSkillDiagnostics;
@@ -98,6 +100,9 @@ bool MdoSkillToolsRegister(xwork_runtime* Runtime);
 /* Bounded metadata only; bodies remain lazy. Replaces our prior section. */
 bool MdoSkillCatalogAppendPrompt(const MdoSkillCatalog* Catalog, char** Prompt);
 bool MdoSkillSearchMatches(const MdoSkillInfo* Info, const char* Query);
+char* MdoSkillCatalogBaseDirectory(const MdoSkillCatalog* Catalog, const char* Id);
+bool MdoSkillTextPage(const void* Text, size_t Size, uint64 Cursor, size_t Limit,
+    xvalue* Result);
 uint64 MdoSkillManagerGeneration(void);
 
 MdoSkillCatalog* MdoSkillCatalogSnapshot(void);

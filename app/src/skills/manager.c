@@ -9,7 +9,7 @@
 
 #define MDO_SKILL_COUNT_LIMIT 256u
 #define MDO_SKILL_DIAGNOSTIC_LIMIT 256u
-#define MDO_SKILL_DOCUMENT_LIMIT (512u * 1024u)
+#define MDO_SKILL_DOCUMENT_LIMIT MDO_SKILL_TEXT_LIMIT
 #define MDO_SKILL_FRONTMATTER_LIMIT (64u * 1024u)
 #define MDO_SKILL_RESOURCE_LIMIT (8u * 1024u * 1024u)
 #define MDO_SKILL_DEPENDENCY_LIMIT 128u
@@ -1107,7 +1107,7 @@ static MdoSkillLoadStatus MdoSkillsLoad(const MdoSkillSource* pSource,
                 pEntry->SourcePath != NULL ? pEntry->SourcePath :
                 pSource->VirtualDirectory,
                 pError != NULL ? xrtErrorMessage(pError) :
-                "SKILL.md is missing or exceeds 512 KiB") ) Fatal = true;
+                "SKILL.md is missing or exceeds 128 KiB") ) Fatal = true;
         if ( Document != NULL ) (void)xrtClose(Document);
         return Fatal ? MDO_SKILL_LOAD_FATAL : MDO_SKILL_LOAD_INVALID;
     }
@@ -1144,6 +1144,15 @@ static MdoSkillLoadStatus MdoSkillsLoad(const MdoSkillSource* pSource,
         return MDO_SKILL_LOAD_INVALID;
     }
     Status = MdoSkillsOpenResources(pSource, pEntry, pDiagnostics);
+    size_t Total = FileSize;
+    for (size_t i=0; Status==MDO_SKILL_LOAD_OK && i<pEntry->ResourceCount; ++i) {
+        Total += pEntry->Resources[i].Bytes;
+        if (Total>16u*1024u*1024u) {
+            (void)MdoSkillsDiagnosticAdd(pDiagnostics,MDO_SKILL_DIAGNOSTIC_RESOURCE,
+                pEntry->Id,pEntry->SourcePath,"Skill files exceed the 16 MiB total limit");
+            Status=MDO_SKILL_LOAD_INVALID;
+        }
+    }
     return Status;
 }
 
@@ -1636,3 +1645,5 @@ bool MdoSkillDiagnosticsAt(const MdoSkillDiagnostics* pDiagnostics,
     pInfo->Message = pEntry->Message;
     return true;
 }
+
+#include "resources.inc.c"

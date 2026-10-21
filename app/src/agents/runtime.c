@@ -525,6 +525,13 @@ static char* MdoAgentsComposePrompt(const MdoModuleAgentInfo* Agent,
                 "selected Skill body is not valid text");
             goto done;
         }
+        {
+            char* Base=MdoSkillCatalogBaseDirectory(Skills,Agent->Skills[i]);
+            char* Prepared=Base?xrtFormat("Base directory for this Skill: %s\nResolve Skill-relative files against this directory; ordinary tool permissions still apply.\n%s",Base,Contents[i].Text):NULL;
+            xrtFree(Base);
+            if(!Prepared){MdoAgentsError(Error,XWORK_ERROR_CONTEXT,"cannot prepare selected Skill resources");goto done;}
+            xrtFree(Contents[i].Text);Contents[i].Text=Prepared;Contents[i].Bytes=strlen(Prepared);
+        }
         for ( j = 0u; j < Infos[i].RequiredToolCount; ++j ) {
             if ( !MdoAgentsToolSelected(Agent, Infos[i].RequiredTools[j]) ) {
                 MdoAgentsError(Error, XWORK_ERROR_POLICY,
