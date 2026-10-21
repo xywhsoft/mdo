@@ -56,6 +56,8 @@ typedef struct MdoSkillInfo {
     bool AutoInvoke;
     bool UserInvocable;
     const char* ArgumentHint;
+    bool Visible;
+    const char* Scope;
 } MdoSkillInfo;
 
 typedef struct MdoSkillResourceInfo {
@@ -110,6 +112,8 @@ char* MdoSkillRender(const char* Text, const char* Directory, const char* Argume
 uint64 MdoSkillManagerGeneration(void);
 
 MdoSkillCatalog* MdoSkillCatalogSnapshot(void);
+MdoSkillCatalog* MdoSkillCatalogForWorkspace(const char* Workspace);
+MdoSkillDiagnostics* MdoSkillCatalogDiagnostics(const MdoSkillCatalog* Catalog);
 MdoSkillCatalog* MdoSkillCatalogRef(MdoSkillCatalog* pCatalog);
 void MdoSkillCatalogRelease(MdoSkillCatalog* pCatalog);
 uint64 MdoSkillCatalogGeneration(const MdoSkillCatalog* pCatalog);

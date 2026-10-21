@@ -1107,7 +1107,11 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
     xrtAtomic32Init(&Session->Refs, 1u);
     Owner->Models = MdoModelCatalogSnapshot();
     Owner->Modules = MdoModuleCatalogSnapshot();
-    Owner->Skills = MdoSkillCatalogSnapshot();
+    if ((!Options->WorkspaceRoot || !Options->WorkspaceRoot[0]) &&
+        Options->ProjectId && !strcmp(Options->ProjectId,"default"))
+        DefaultWorkspace=MdoHomeDefaultWorkspacePath(true);
+    Owner->Skills = MdoSkillCatalogForWorkspace(Options->WorkspaceRoot && Options->WorkspaceRoot[0]?
+        Options->WorkspaceRoot:(DefaultWorkspace?DefaultWorkspace:"."));
     Owner->ExternalComplete = Options->OnModelComplete;
     Owner->ExternalModelData = Options->ModelUserData;
     Owner->ExternalOwnerData = Options->OwnerUserData;
@@ -1359,7 +1363,7 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
         Options->WorkspaceRoot[0] != '\0' ? Options->WorkspaceRoot : ".";
     if ( (Options->WorkspaceRoot == NULL || Options->WorkspaceRoot[0] == '\0') &&
          Options->ProjectId != NULL && strcmp(Options->ProjectId, "default") == 0 ) {
-        DefaultWorkspace = MdoHomeDefaultWorkspacePath(true);
+        if(!DefaultWorkspace)DefaultWorkspace = MdoHomeDefaultWorkspacePath(true);
         if ( DefaultWorkspace == NULL ) {
             MdoAgentsError(Error, XWORK_ERROR_IO,
                 "cannot prepare the default project workspace");

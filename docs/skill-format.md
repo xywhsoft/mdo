@@ -52,3 +52,23 @@ completely shadow the corresponding built-in Skill; an invalid override never
 falls back to the built-in definition. Undeclared legacy resources cannot be opened
 through the Skill API. External content is labeled EXTERNAL_REFERENCE and remains
 untrusted reference material, including after reload or cache materialization.
+
+## Project scope and package names
+
+Chat resolves Skills for its actual workspace. Personal Home overrides built-ins.
+Within a project, precedence (lowest first) is `.zcode/skills`, `.claude/skills`,
+`.agents/skills`, `.mdo/skills`. Inside a Git worktree, ancestor directories up to
+the nearest `.git` marker are eligible; the closest directory wins. Outside Git,
+only the exact workspace is scanned. Symlinks are not followed. Invalid or disabled
+project shadows do not reveal lower-priority instructions. Diagnostics include the
+source path. Scope limits apply to the combined catalog (256 entries).
+
+Project enable flags live in `.mdo/skills.json` as an ID-to-boolean object, separate
+from personal enable flags. Project catalogs are independently owned; they never
+mutate the global catalog. Current projects and devices select their own chat list.
+
+Installed resource-package receipts expose Skills as `package-slug:skill-id`.
+Bare IDs remain callable for old Agent bindings but are hidden from discovery; a
+project override replaces the bare ID while the qualified package Skill remains
+available. Namespace collisions fail explicitly. These are resource packages, not
+the future client-plugin runtime.

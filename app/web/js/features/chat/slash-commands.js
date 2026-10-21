@@ -21,7 +21,7 @@ function exactCommand(value) {
   return COMMANDS.find((item) => item.name === value);
 }
 
-export function createSlashCommands({ composer, input, onExecute, contextKey = () => "" }) {
+export function createSlashCommands({ composer, input, onExecute, contextKey = () => "", skillProject = () => "default" }) {
   const list = element("div", {
     className: "slash-menu",
     attrs: { id: "slash-menu", role: "listbox", "aria-label": t("slash.label", {}, "斜杠命令") },
@@ -115,7 +115,7 @@ export function createSlashCommands({ composer, input, onExecute, contextKey = (
     if (fetch) {
       skills = [];
       const serial = ++lookup, key = contextKey();
-      void loadSelectableSkills().then(items => {
+      void loadSelectableSkills(skillProject()).then(items => {
         if (serial !== lookup || key !== contextKey() || input.value !== value) return;
         skills = items; update(false);
       }).catch(() => {});
@@ -169,7 +169,7 @@ export function createSlashCommands({ composer, input, onExecute, contextKey = (
       const skill = parseSkillSelection(value);
       if (skill) {
         const key = contextKey();
-        const text = await expandSkillSelection(skill);
+        const text = await expandSkillSelection(skill, skillProject());
         if (input.value !== value || contextKey() !== key) return true;
         hide(); input.value = text;
         input.dispatchEvent(new Event("input", { bubbles: true })); input.focus(); return true;

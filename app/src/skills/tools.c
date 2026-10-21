@@ -17,7 +17,7 @@ static xwork_result MdoSkillExecute(void* Data, const xwork_tool_context* Contex
 {
     xvalue* Args = xrtJsonParse(xrtStrView(Arguments));
     xvalue* Result = xrtValueObject();
-    MdoSkillCatalog* Catalog = MdoSkillCatalogSnapshot();
+    MdoSkillCatalog* Catalog = MdoSkillCatalogForWorkspace(Context?Context->sWorkspaceRoot:NULL);
     xstrview Name = {0}, Query = {0}, Path = {0}, Parameters = {0};
     char* Id = NULL;
     char* Resource = NULL;
@@ -32,7 +32,7 @@ static xwork_result MdoSkillExecute(void* Data, const xwork_tool_context* Contex
     (void)Data; (void)Context;
     if (Ok) {
         const xvalue* V = xrtValueObjectGet(Args, XRT_STR_LITERAL("name"));
-        if (V != NULL) Ok = xrtValueGetString(V, &Name) && Name.Size <= 96u && memchr(Name.Data, 0, Name.Size) == NULL;
+        if (V != NULL) Ok = xrtValueGetString(V, &Name) && Name.Size <= 192u && memchr(Name.Data, 0, Name.Size) == NULL;
         V = xrtValueObjectGet(Args, XRT_STR_LITERAL("query"));
         if (V != NULL) Ok = Ok && xrtValueGetString(V, &Query) && Query.Size <= 256u && memchr(Query.Data, 0, Query.Size) == NULL;
         V = xrtValueObjectGet(Args, XRT_STR_LITERAL("path"));
@@ -92,7 +92,7 @@ static xwork_result MdoSkillExecute(void* Data, const xwork_tool_context* Contex
             Info.Size = sizeof(Info);
             Ok = MdoSkillCatalogAt(Catalog, i, &Info);
             if (!Ok) break;
-            if(!Info.AutoInvoke)continue;
+            if(!Info.Visible||!Info.AutoInvoke)continue;
             if (!MdoSkillSearchMatches(&Info, Needle)) continue;
             if (Total++ < Offset || Count >= Limit) continue;
             Item = xrtValueObject();

@@ -22,6 +22,7 @@ char* MdoSkillCatalogBaseDirectory(const MdoSkillCatalog* Catalog, cstr Id)
 {
     const MdoSkillEntry* Entry=MdoSkillsFind(Catalog,Id);
     if (!Entry) return NULL;
+    if (Entry->NativeRoot) return xrtPathJoin(Entry->NativeRoot,Entry->RelativeDirectory);
     if (Entry->External) return MdoHomeExternalPath(Entry->RelativeDirectory);
     MdoSkillResourceContent* Files=xrtCalloc(Entry->ResourceCount,sizeof(*Files));
     char *DocumentPath=NULL,*Directory=NULL; bytes Document=NULL;
@@ -55,7 +56,8 @@ char* MdoSkillCatalogBaseDirectory(const MdoSkillCatalog* Catalog, cstr Id)
         if(Ok)Directory=MdoHomeExternalPath(Root);
     }
     for(size_t i=0;Files&&i<Entry->ResourceCount;i++)MdoSkillResourceContentUnit(&Files[i]);
-    if(File)xrtClose(File);xrtFree(Files);xrtFree(Document);xrtFree(DocumentPath);
+    if(File)xrtClose(File);
+    xrtFree(Files);xrtFree(Document);xrtFree(DocumentPath);
     if(!Directory)MdoSkillsSetError("Skill resources could not be prepared in the local cache");
     return Directory;
 }

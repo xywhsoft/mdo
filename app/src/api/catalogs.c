@@ -370,7 +370,9 @@ bool MdoApiModulesRoute(MdoApiContext* Context)
 
 bool MdoApiSkillsRoute(MdoApiContext* Context)
 {
-    MdoSkillCatalog* Catalog = MdoSkillCatalogSnapshot();
+    char* Workspace=NULL;
+    if(!MdoApiSkillScope(Context,&Workspace))return true;
+    MdoSkillCatalog* Catalog = MdoSkillCatalogForWorkspace(Workspace);xrtFree(Workspace);
     xvalue* Data = xrtValueObject();
     xvalue* Items = xrtValueArray();
     size_t Index;
@@ -380,7 +382,9 @@ bool MdoApiSkillsRoute(MdoApiContext* Context)
         MdoSkillInfo Info;
         xvalue* Item = xrtValueObject();
         memset(&Info, 0, sizeof(Info)); Info.Size = sizeof(Info);
-        Ok = Item != NULL && MdoSkillCatalogAt(Catalog, Index, &Info) &&
+        if (!MdoSkillCatalogAt(Catalog,Index,&Info)) {xrtValueRelease(Item);Ok=false;break;}
+        if (!Info.Visible) {xrtValueRelease(Item);continue;}
+        Ok = Item != NULL &&
             MdoApiValueSetString(Item, "id", Info.Id) &&
             MdoApiValueSetString(Item, "name", Info.Name) &&
             MdoApiValueSetString(Item, "description", Info.Description) &&
@@ -388,6 +392,7 @@ bool MdoApiSkillsRoute(MdoApiContext* Context)
             MdoApiValueSetString(Item, "license", Info.License) &&
             MdoApiValueSetString(Item, "compatibility", Info.Compatibility) &&
             MdoApiValueSetString(Item, "source_path", Info.SourcePath) &&
+            MdoApiValueSetString(Item,"scope",Info.Scope) &&
             MdoApiValueSetString(Item, "metadata_hash", Info.MetadataHash) &&
             MdoApiValueSetUInt(Item, "generation", Info.Generation) &&
             MdoApiValueSetBool(Item, "external", Info.External) &&
@@ -413,6 +418,16 @@ bool MdoApiSkillsRoute(MdoApiContext* Context)
         MdoApiValueSetUInt(Data, "generation",
             MdoSkillCatalogGeneration(Catalog)) &&
         MdoApiValueSetTake(Data, "items", &Items);
+    MdoSkillDiagnostics* Diagnostics=MdoSkillCatalogDiagnostics(Catalog);
+    xvalue* Issues=xrtValueArray();
+    for(size_t i=0;Ok&&i<MdoSkillDiagnosticsCount(Diagnostics);i++){
+        MdoSkillDiagnosticInfo Info={0};Info.Size=sizeof(Info);xvalue* Issue=xrtValueObject();
+        Ok=Issue&&MdoSkillDiagnosticsAt(Diagnostics,i,&Info)&&
+            MdoApiValueSetString(Issue,"id",Info.SkillId)&&MdoApiValueSetString(Issue,"source",Info.SourcePath)&&
+            MdoApiValueSetString(Issue,"message",Info.Message)&&xrtValueArrayAppend(Issues,Issue);xrtValueRelease(Issue);
+    }
+    if(Ok)Ok=Issues&&xrtValueObjectSet(Data,XRT_STR_LITERAL("diagnostics"),Issues);
+    xrtValueRelease(Issues);MdoSkillDiagnosticsRelease(Diagnostics);
     xrtValueRelease(Items);
     MdoSkillCatalogRelease(Catalog);
     if ( !Ok ) { xrtValueRelease(Data); Data = NULL; }

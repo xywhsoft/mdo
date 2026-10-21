@@ -776,6 +776,7 @@ export async function boot() {
   });
   const slashCommands = createSlashCommands({
     composer, input: prompt, contextKey: () => String(routeVersion),
+    skillProject: () => navigation.get().projectId || "default",
     onExecute: async (command) => {
       const session = sessionDetailStore.get().data;
       if (command === "/new") openNewTask();

@@ -7,6 +7,7 @@
 #include "../../include/mdo/prompt_file.h"
 #include "../../include/mdo/tool_catalog.h"
 #include "discovery.inc.c"
+#include "../../include/mdo/extension_files.h"
 
 #define MDO_SKILL_COUNT_LIMIT 256u
 #define MDO_SKILL_DIAGNOSTIC_LIMIT 256u
@@ -39,6 +40,9 @@ typedef struct MdoSkillResource {
 typedef struct MdoSkillEntry {
     bool External;
     bool AutoResources;
+    bool Visible;
+    const char* Scope;
+    char* NativeRoot;
     bool AutoInvoke,UserInvocable;
     char* ArgumentHint;
     char* Id;
@@ -71,6 +75,7 @@ struct MdoSkillCatalog {
     MdoSkillEntry* Entries;
     size_t Count;
     size_t Capacity;
+    MdoSkillDiagnostics* Diagnostics;
 };
 
 typedef struct MdoSkillDiagnosticEntry {
@@ -89,6 +94,8 @@ struct MdoSkillDiagnostics {
 
 typedef struct MdoSkillSource {
     bool External;
+    const char* Scope;
+    char* NativeRoot;
     char* Id;
     char* VirtualDirectory;
     char* RelativeDirectory;
@@ -282,6 +289,7 @@ static void MdoSkillsEntryUnit(MdoSkillEntry* pEntry)
     xrtFree(pEntry->ArgumentHint);
     xrtFree(pEntry->VirtualDirectory);
     xrtFree(pEntry->RelativeDirectory);
+    xrtFree(pEntry->NativeRoot);
     xrtFree(pEntry->CachedBody);
     memset(pEntry, 0, sizeof(*pEntry));
 }
@@ -326,6 +334,7 @@ void MdoSkillCatalogRelease(MdoSkillCatalog* pCatalog)
     if ( Previous == 0u ) abort();
     for ( i = 0u; i < pCatalog->Count; ++i )
         MdoSkillsEntryUnit(&pCatalog->Entries[i]);
+    MdoSkillDiagnosticsRelease(pCatalog->Diagnostics);
     xrtFree(pCatalog->Entries);
     (void)xrtMutexDestroy(pCatalog->CacheLock);
     xrtFree(pCatalog);
@@ -408,6 +417,7 @@ static void MdoSkillsSourceUnit(MdoSkillSource* pSource)
     xrtFree(pSource->Id);
     xrtFree(pSource->VirtualDirectory);
     xrtFree(pSource->RelativeDirectory);
+    xrtFree(pSource->NativeRoot);
     memset(pSource, 0, sizeof(*pSource));
 }
 
@@ -553,7 +563,11 @@ static xfile MdoSkillsOpen(const MdoSkillSource* pSource, cstr Path,
     if ( !MdoSkillsJoin(&Virtual, pSource->VirtualDirectory, Path) ||
          !MdoSkillsJoin(&Relative, pSource->RelativeDirectory, Path) )
         goto done;
-    if ( pSource->External ) {
+    if (pSource->NativeRoot) {
+        xroot Root=xrtRootOpen(pSource->NativeRoot);
+        xrtFileOptionsInit(&Options);Options.Flags=XFILE_READ|XFILE_NOFOLLOW;
+        if(Root){File=xrtRootFileOpen(Root,Relative,&Options);xrtRootClose(Root);}
+    } else if ( pSource->External ) {
         File = MdoHomeOpenRead(Relative);
     } else {
         xrtFileOptionsInit(&Options);
@@ -574,6 +588,7 @@ static xfile MdoSkillsOpenEntry(const MdoSkillEntry* pEntry, cstr Path,
     MdoSkillSource Source;
     memset(&Source, 0, sizeof(Source));
     Source.External = pEntry->External;
+    Source.NativeRoot = pEntry->NativeRoot;
     Source.Id = pEntry->Id;
     Source.VirtualDirectory = pEntry->VirtualDirectory;
     Source.RelativeDirectory = pEntry->RelativeDirectory;
@@ -1016,7 +1031,11 @@ static bool MdoSkillsScanResources(const MdoSkillSource* Source,
     snprintf(Directory, sizeof(Directory), "%s%s%s", Source->External ?
         Source->RelativeDirectory : Source->VirtualDirectory,
         Prefix[0] ? "/" : "", Prefix);
-    Dir = Source->External ? MdoHomeOpenDirectory(Directory, XDIR_STAT) :
+    if(Source->NativeRoot) {
+        xroot Root=xrtRootOpen(Source->NativeRoot);
+        Dir=Root?xrtRootDirOpen(Root,Directory,XDIR_STAT):NULL;
+        if(Root)xrtRootClose(Root);
+    } else Dir = Source->External ? MdoHomeOpenDirectory(Directory, XDIR_STAT) :
         xrtVfsDirOpen(MdoHomeApplicationVfs(), Directory, XDIR_STAT);
     if (Dir == NULL) return false;
     while ((Next = xrtDirNext(Dir, &Item)) == XDIR_NEXT_ITEM) {
@@ -1096,12 +1115,15 @@ static MdoSkillLoadStatus MdoSkillsLoad(const MdoSkillSource* pSource,
     memset(pEntry, 0, sizeof(*pEntry));
     memset(Error, 0, sizeof(Error));
     pEntry->External = pSource->External;
+    pEntry->Visible=true;
+    pEntry->Scope=pSource->Scope?pSource->Scope:(pSource->External?"user":"builtin");
+    pEntry->NativeRoot=pSource->NativeRoot?xrtStrDup(pSource->NativeRoot):NULL;
     pEntry->Id = xrtStrDup(pSource->Id);
     pEntry->VirtualDirectory = xrtStrDup(pSource->VirtualDirectory);
     pEntry->RelativeDirectory = xrtStrDup(pSource->RelativeDirectory);
     Document = MdoSkillsOpen(pSource, "SKILL.md", &pEntry->SourcePath);
     if ( pEntry->Id == NULL || pEntry->VirtualDirectory == NULL ||
-         pEntry->RelativeDirectory == NULL ) {
+         pEntry->RelativeDirectory == NULL || (pSource->NativeRoot && !pEntry->NativeRoot) ) {
         if ( Document != NULL ) (void)xrtClose(Document);
         return MDO_SKILL_LOAD_FATAL;
     }
@@ -1386,6 +1408,7 @@ static void MdoSkillsInfo(const MdoSkillCatalog* pCatalog,
     pInfo->ResourceCount = pEntry->ResourceCount;
     pInfo->AutoInvoke=pEntry->AutoInvoke;pInfo->UserInvocable=pEntry->UserInvocable;
     pInfo->ArgumentHint=pEntry->ArgumentHint;
+    pInfo->Visible=pEntry->Visible;pInfo->Scope=pEntry->Scope;
 }
 
 size_t MdoSkillCatalogCount(const MdoSkillCatalog* pCatalog)
@@ -1659,3 +1682,5 @@ bool MdoSkillDiagnosticsAt(const MdoSkillDiagnostics* pDiagnostics,
 }
 
 #include "resources.inc.c"
+
+#include "scope.inc.c"

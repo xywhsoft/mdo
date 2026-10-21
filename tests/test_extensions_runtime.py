@@ -192,6 +192,16 @@ def main():
                 assert status == 200, raw
                 selected=json.loads(raw)['data']['text']
                 assert 'Use references/guide.txt.' in selected and 'literal $1 and $&' in selected, selected
+                scoped=base/'home/workspace/.mdo/skills/research/SKILL.md'
+                scoped.parent.mkdir(parents=True,exist_ok=True)
+                scoped.write_text(skill.replace('Use references/guide.txt.','PROJECT_SCOPE_MARKER'),encoding='utf-8')
+                scoped_data=json.loads(request(port,'GET','/api/v1/skills?project=default')[2])['data']
+                assert any(i['id']=='research' and i['scope']=='project' for i in scoped_data['items']),scoped_data
+                status,_,raw=request(port,'POST','/api/v1/skills/invoke?project=default',body=b'{"id":"research"}',headers={'Content-Type':'application/json'})
+                assert status==200 and 'PROJECT_SCOPE_MARKER' in json.loads(raw)['data']['text'],raw[:400]
+                assert request(port,'GET','/api/v1/skills?project=missing')[0]==404
+                assert request(port,'GET','/api/v1/skills?project=default&path=bad')[0]==400
+                scoped.unlink(); scoped.parent.rmdir()
                 large='---\nname: large\ndescription: A large instruction document\n---\n'+'x'*60000
                 assert call('PUT','skills/large',{'content':large},'new')[0] == 200
                 status, _, raw=request(port,'POST','/api/v1/skills/invoke',body=json.dumps({'id':'large'}).encode(),headers={'Content-Type':'application/json'})
