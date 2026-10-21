@@ -70,5 +70,8 @@ not replay a possibly completed state-changing tool call.
   method rejection, diagnostics, typed PNG/structured content, binary exclusion,
   real model tool_search/load/call, scope inheritance and OAuth regression.
   Strict C compilation and JavaScript module graph pass.
-- Remaining interaction features are in progress. Unsupported migration forms
-  are reported; no publication has been performed.
+- Authorization diagnostics now retain real HTTP status only (an unconfigured
+  login has no synthetic HTTP 401). Cancel/deadline conditions keep their own
+  classifications; successful refresh clears stale temporary errors. Replacing
+  pending login state removes its previous index; public clients never transmit
+  an optional client secret when their auth method is `none`.

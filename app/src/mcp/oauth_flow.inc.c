@@ -167,7 +167,7 @@ static xvalue* McpOAuthDiscover(McpOAuthHttp* Http,const xvalue* Config,cstr Red
         McpOAuthContains(xrtValueObjectGet(Metadata,XRT_STR_LITERAL("code_challenge_methods_supported")),"S256");
     xvalue* Credentials=Ok?xrtValueObject():NULL;
     cstr Client=McpOAuthText(Config,"client_id");
-    if(!Client)Client=McpOAuthText(Config,"client_metadata_url");
+    if(!Client&&McpOAuthBool(Metadata,"client_id_metadata_document_supported"))Client=McpOAuthText(Config,"client_metadata_url");
     xvalue* Registration=NULL;
     if(Ok&&!Client) {
         cstr Endpoint=McpOAuthText(Metadata,"registration_endpoint");
@@ -219,7 +219,9 @@ static void McpOAuthClient(xoauth2client* Client,const xvalue* Credentials,McpOA
     Config.ClientId=McpOAuthText(Credentials,"client_id");Config.ClientSecret=McpOAuthText(Credentials,"client_secret");
     if(Config.ClientSecret&&!Config.ClientSecret[0])Config.ClientSecret=NULL;
     Config.RedirectUri=McpOAuthText(Credentials,"redirect_uri");Config.Scope=McpOAuthText(Credentials,"scope");Config.UsePkce=true;
-    cstr Method=McpOAuthText(Credentials,"auth_method");Config.AuthStyle=Method&&!strcmp(Method,"client_secret_basic")?XOAUTH2_AUTH_BASIC:XOAUTH2_AUTH_BODY;
+    cstr Method=McpOAuthText(Credentials,"auth_method");
+    if(Method&&!strcmp(Method,"none"))Config.ClientSecret=NULL;
+    Config.AuthStyle=Method&&!strcmp(Method,"client_secret_basic")?XOAUTH2_AUTH_BASIC:XOAUTH2_AUTH_BODY;
     Config.Http=McpOAuthTokenHttp;Config.HttpContext=Http;Http->Resource=McpOAuthText(Credentials,"resource");
     xoauth2UseCustom(Client,&Config);
 }

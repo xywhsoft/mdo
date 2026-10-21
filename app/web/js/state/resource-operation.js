@@ -9,6 +9,7 @@ export const resourceOperationEpoch = () => JSON.stringify([targetState().select
 const invalid = () => new ApiError(t("resource.operationInvalid", {}, "操作状态响应不符，请重新读取状态。"), { code: "resource_operation_invalid" });
 const aborted = () => new DOMException("Operation observation cancelled", "AbortError");
 const mcpFailures = Object.freeze({
+  mcp_authorization_required: ["mcpAuthorizationRequired", "请在 MCP 设置中完成该服务器授权，并检查权限配置。"],
   mcp_start_failed: ["mcpStartFailed", "无法启动 MCP 程序，请检查程序路径、工作目录和环境配置。"],
   mcp_timeout: ["mcpTimeout", "MCP 服务器未在时限内响应，请检查服务器状态或调整超时设置。"],
   mcp_io: ["mcpIo", "MCP 连接中断或无法读取响应，请检查网络或服务器进程。"],

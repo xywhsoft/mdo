@@ -38,11 +38,11 @@ static bool McpOAuthAuthorize(void* Data,cstr Id,cstr Endpoint,bool Force,xcance
     (void)Data;Header[0]=0;
     MdoMcpOAuthEntry* Entry=McpOAuthFind(Id,NULL);
     if(!Entry)return true;
-    bool Ok=false;uint16 Status=401;
+    bool Ok=false;uint16 Status=0;xwork_error_code Failure=XWORK_ERROR_POLICY;
     cstr Message="Authorize this MCP server in Settings > MCP before connecting";
     if(strcmp(Entry->Endpoint,Endpoint)||!McpOAuthLock(Entry,Cancel,Deadline))goto failed;
     xvalue* Record=McpOAuthRead(Entry);
-    if(!Record){Message="Saved MCP credentials cannot be read; unlock the system credential store or authorize again";goto unlock;}
+    if(!Record){Failure=XWORK_ERROR_IO;Message="Saved MCP credentials cannot be read; unlock the system credential store or authorize again";goto unlock;}
     const xvalue* Credentials=xrtValueObjectGet(Record,XRT_STR_LITERAL("credentials"));
     const xvalue* Tokens=xrtValueObjectGet(Record,XRT_STR_LITERAL("tokens"));
     cstr Access=McpOAuthText(Tokens,"access_token");uint64 Expiry=McpOAuthUInt(Tokens,"expires_at");
@@ -59,8 +59,9 @@ static bool McpOAuthAuthorize(void* Data,cstr Id,cstr Endpoint,bool Force,xcance
             if(!Ok){Message="Refreshed MCP credentials could not be saved";xoauth2ClientUnit(&Client);goto record_done;}
             Tokens=xrtValueObjectGet(Record,XRT_STR_LITERAL("tokens"));Access=McpOAuthText(Tokens,"access_token");
         } else {
-            Status=Http.Status;Message="MCP token refresh failed temporarily; saved credentials were retained";
+            Status=Http.Status;Failure=XWORK_ERROR_IO;Message="MCP token refresh failed temporarily; saved credentials were retained";
             if(Http.Permanent) {
+                Failure=XWORK_ERROR_POLICY;
                 (void)xrtValueObjectSetNew(Record,XRT_STR_LITERAL("needs_authorization"),xrtValueBool(true));
                 (void)McpOAuthSave(Entry,Record);Message="MCP authorization expired or was revoked; authorize this server again";
             }
@@ -78,9 +79,15 @@ record_done:
 unlock:
     xrtMutexUnlock(Entry->Tokens);
 failed:
-    if(!Ok) {
+    if(Ok) {
+        xrtMutexLock(Entry->Lock);
+        if(!Entry->Busy&&Entry->Status==MDO_MCP_AUTH_ERROR){Entry->Status=MDO_MCP_AUTH_IDLE;Entry->Message[0]=0;Entry->HttpStatus=0;}
+        xrtMutexUnlock(Entry->Lock);
+    } else {
+        if((Cancel&&xrtCancelRequested(Cancel))||xrtCancelRequested(Entry->Cancel)){Failure=XWORK_ERROR_CANCELLED;Message="MCP authorization was cancelled";}
+        else if(MdoDeadlineExpired(Deadline)){Failure=XWORK_ERROR_TIMEOUT;Message="MCP authorization exceeded the request deadline";}
         McpOAuthState(Entry,MDO_MCP_AUTH_ERROR,Message,Status);
-        if(Error){xworkErrorInit(Error);Error->eCode=Status==401?XWORK_ERROR_POLICY:XWORK_ERROR_TOOL;
+        if(Error){xworkErrorInit(Error);Error->eCode=Failure;
             Error->uHttpStatus=Status;snprintf(Error->sMessage,sizeof(Error->sMessage),"%s",Message);}
     }
     return Ok;
@@ -110,10 +117,13 @@ static int32 McpOAuthWorker(void* Data)
             Ok=Complete&&Pending&&Path[0]&&McpOAuthSet(Pending,"state",Client.sState)&&McpOAuthSet(Pending,"verifier",Client.sVerifier)&&
                 McpOAuthSet(Pending,"challenge",Client.sChallenge)&&xrtValueObjectSetNew(Pending,XRT_STR_LITERAL("expires_at"),
                     xrtValueUInt((uint64)(MdoUtcUs()/1000000)+600));
+            char PreviousPath[128]={0};cstr Previous=McpOAuthText(xrtValueObjectGet(Record,XRT_STR_LITERAL("pending")),"state");
+            if(Previous)McpOAuthPendingPath(Previous,PreviousPath);
             if(Ok){Ok=xrtValueObjectSet(Record,XRT_STR_LITERAL("credentials"),Credentials)&&
                 xrtValueObjectSet(Record,XRT_STR_LITERAL("pending"),Pending)&&
                 xrtValueObjectSetNew(Record,XRT_STR_LITERAL("needs_authorization"),xrtValueBool(true))&&McpOAuthSave(Entry,Record)&&
                 MdoHomeAtomicWrite(Path,Entry->Key,64,false);}
+            if(Ok&&PreviousPath[0]&&strcmp(PreviousPath,Path))(void)MdoHomeRemove(PreviousPath,false);
             if(Ok){xrtMutexLock(Entry->Lock);xrtFree(Entry->AuthorizationUrl);Entry->AuthorizationUrl=Complete;Complete=NULL;xrtMutexUnlock(Entry->Lock);}
             xrtFree(Complete);McpOAuthSecretFree(Pending);xoauth2ClientUnit(&Client);McpOAuthSecretFree(Credentials);
         }
@@ -216,9 +226,10 @@ static bool McpOAuthRevoke(MdoMcpOAuthEntry* Entry,const xvalue* Record)
     if(!Token||!Token[0])Token=McpOAuthText(Tokens,"access_token");
     if(!Endpoint||!Token||!Token[0])return true;
     char* Encoded=xoauth2UrlEncode(Token),*Id=xoauth2UrlEncode(McpOAuthText(Credentials,"client_id"));
-    cstr SecretText=McpOAuthText(Credentials,"client_secret");
+    cstr Method=McpOAuthText(Credentials,"auth_method");
+    cstr SecretText=Method&&strcmp(Method,"none")?McpOAuthText(Credentials,"client_secret"):NULL;
     char* Secret=xoauth2UrlEncode(SecretText?SecretText:"");
-    cstr Method=McpOAuthText(Credentials,"auth_method");bool Basic=Method&&!strcmp(Method,"client_secret_basic");
+    bool Basic=Method&&!strcmp(Method,"client_secret_basic");
     char* Joined=Basic&&Id&&Secret?xrtFormat("%s:%s",Id,Secret):NULL;
     char* Base64=Joined?xrtBase64EncodeNew(Joined,strlen(Joined),NULL):NULL;
     char* Header=Base64?xrtFormat("Basic %s",Base64):NULL;
