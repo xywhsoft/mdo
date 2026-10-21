@@ -90,5 +90,14 @@ not replay a possibly completed state-changing tool call.
   matching allocation/free ownership and reran the native/conversation suites.
 - Android ARM64 native library compiles with the first-party xoauth2 extension
   and the same verified overlay. No Android device or real authorization browser
-  has been exercised. Windows standalone package verification remains the final
-  check. No production server, installer feed or download has been published.
+  has been exercised. Windows standalone package verification also passes the expanded real
+  model/extension suite, including the owning conversation elicitation. No production server, installer feed or download has been published.
+
+Final local verification (2026-10-22): strict C, module graph, four MCP contracts,
+five extension-format tests, manager/reliability probes, OAuth/HTTP client-request
+and cancellation/timeout regression, packed extension model loop, ARM64 native
+build and 19 Android installation-policy cases plus pinned SDK integration pass.
+The two new MCP runtime probes participate in the release gate's normal
+`test_*_runtime.py` discovery. Private binary/hash receipt is
+`.build/mcp-20261022/final-receipt.json`; Windows executable is
+`.build/mcp-20261022/mdo.exe`. No public release is implied by this test build.
