@@ -580,6 +580,7 @@
   "slash.label": "Slash commands",
   "slash.new": "Create a new task",
   "slash.model": "Switch to the next model",
+  "slash.mcp": "Use an MCP prompt: server prompt arguments JSON",
   "slash.fork": "Fork this session",
   "slash.export": "Export this conversation as Markdown",
   "slash.clear": "Clear this session's history",

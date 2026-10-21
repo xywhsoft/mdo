@@ -580,6 +580,7 @@
   "slash.label": "斜杠命令",
   "slash.new": "新建任务",
   "slash.model": "切换到下一个模型",
+  "slash.mcp": "调用 MCP 提示词：服务器 提示词 参数JSON",
   "slash.fork": "分叉当前会话",
   "slash.export": "导出当前会话 Markdown",
   "slash.clear": "清空当前会话历史",
