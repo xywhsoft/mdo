@@ -55,6 +55,11 @@ PROBE_SOURCE = r'''
 #include "session-capture.c"
 #include "session-backup.c"
 
+/* MCP scope installation is covered by test_extensions_runtime. This
+ * isolated fixture has no MCP manager or configured MCP servers. */
+bool MdoMcpConfigureAgent(xwork_agent* agent, const char* workspace, xwork_error* error)
+{ (void)agent; (void)workspace; (void)error; return true; }
+
 xwork_runtime *MdoBootstrapRuntime(void) { return NULL; }
 /* Optional executable discovery is covered by the distribution probe. This
  * standalone session fixture has no initialized toolpack manager. */
@@ -981,7 +986,7 @@ def main() -> int:
         image_id = "a" * 32
         assert restored_files[f"attachments/{image_id}.bin"] == b"\x89PNG\x00\xff\x01\x02"
         image_meta = json.loads(restored_files[f"attachments/{image_id}.json"])
-        assert image_meta["file_name"] == "original 图片.png" and image_meta["size"] == 8
+        assert image_meta["file_name"] == "original 鍥剧墖.png" and image_meta["size"] == 8
         assert json.loads(restored_files["draft.json"])["text"] == "draft"
         assert json.loads(restored_files["queue.json"])["items"][0]["state"] == "pending"
         assert json.loads(restored_files["todo.json"])["items"][0]["text"] == "Saved task"

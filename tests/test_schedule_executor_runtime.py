@@ -43,6 +43,11 @@ static void ShutdownLeaseCheckpoint(void);
 /* Tool environment prompt generation has its own distribution probe. */
 bool MdoToolPrompt(char **prompt) { return prompt != NULL && *prompt != NULL; }
 
+/* MCP scope installation is covered by test_extensions_runtime. This
+ * isolated fixture has no MCP manager or configured MCP servers. */
+bool MdoMcpConfigureAgent(xwork_agent* agent, const char* workspace, xwork_error* error)
+{ (void)agent; (void)workspace; (void)error; return true; }
+
 xwork_runtime *MdoBootstrapRuntime(void) { return NULL; }
 static bool UpdatePending;
 bool MdoUpdateInstalling(void) { return UpdatePending; }
