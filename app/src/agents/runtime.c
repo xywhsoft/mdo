@@ -525,9 +525,12 @@ static char* MdoAgentsComposePrompt(const MdoModuleAgentInfo* Agent,
                 "selected Skill body is not valid text");
             goto done;
         }
+        if(!Infos[i].AutoInvoke){MdoAgentsError(Error,XWORK_ERROR_POLICY,"manual-only Skill cannot be preloaded by an Agent");goto done;}
         {
             char* Base=MdoSkillCatalogBaseDirectory(Skills,Agent->Skills[i]);
-            char* Prepared=Base?xrtFormat("Base directory for this Skill: %s\nResolve Skill-relative files against this directory; ordinary tool permissions still apply.\n%s",Base,Contents[i].Text):NULL;
+            char* Rendered=Base?MdoSkillRender(Contents[i].Text,Base,""):NULL;
+            char* Prepared=Rendered?xrtFormat("Base directory for this Skill: %s\nResolve Skill-relative files against this directory; ordinary tool permissions still apply.\n%s",Base,Rendered):NULL;
+            xrtFree(Rendered);
             xrtFree(Base);
             if(!Prepared){MdoAgentsError(Error,XWORK_ERROR_CONTEXT,"cannot prepare selected Skill resources");goto done;}
             xrtFree(Contents[i].Text);Contents[i].Text=Prepared;Contents[i].Bytes=strlen(Prepared);

@@ -7,7 +7,7 @@ bundles. This change set completes the Skill layer in five independently committ
 
 - [x] Discovery and selection: bounded model metadata, paginated search, explicit chat selection.
 - [x] Reliable invocation: consistent limits, usable resource directories, bounded reads and clear errors.
-- [ ] Format compatibility: invocation controls, argument/directory variables, diagnostics for unsupported behavior.
+- [x] Format compatibility: invocation controls, argument/directory variables, diagnostics for unsupported behavior.
 - [ ] Scope and isolation: project discovery and precedence, plugin-qualified names, independent visibility.
 - [ ] Creation and migration: assisted authoring, existing-agent imports, source/scope management.
 

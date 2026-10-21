@@ -18,7 +18,7 @@ static xwork_result MdoSkillExecute(void* Data, const xwork_tool_context* Contex
     xvalue* Args = xrtJsonParse(xrtStrView(Arguments));
     xvalue* Result = xrtValueObject();
     MdoSkillCatalog* Catalog = MdoSkillCatalogSnapshot();
-    xstrview Name = {0}, Query = {0}, Path = {0};
+    xstrview Name = {0}, Query = {0}, Path = {0}, Parameters = {0};
     char* Id = NULL;
     char* Resource = NULL;
     char* Json = NULL;
@@ -43,12 +43,15 @@ static xwork_result MdoSkillExecute(void* Data, const xwork_tool_context* Contex
         if (V != NULL) Ok = Ok && MdoSkillArgumentUInt(V, &Limit) && Limit >= 1 && Limit <= 50;
         V = xrtValueObjectGet(Args, XRT_STR_LITERAL("cursor"));
         if (V != NULL) Ok = Ok && MdoSkillArgumentUInt(V, &Cursor) && Cursor<=MDO_SKILL_FILE_LIMIT;
+        V=xrtValueObjectGet(Args,XRT_STR_LITERAL("arguments"));
+        if(V)Ok=Ok&&xrtValueGetString(V,&Parameters)&&Parameters.Size<=16384&&!memchr(Parameters.Data,0,Parameters.Size);
     }
     if (Ok && Name.Size != 0u) {
         MdoSkillInfo Info = {0};
         Id = xrtStrDupN(Name.Data, Name.Size); Info.Size = sizeof(Info);
         Ok = Id != NULL && MdoSkillCatalogFind(Catalog, Id, &Info);
         if (!Ok) Message = "Skill is missing or disabled; search installed Skills first";
+        if(Ok&&!Info.AutoInvoke){Ok=false;Message="This Skill requires explicit user selection with $name; do not reproduce its workflow automatically";}
         if (Ok) { Base=MdoSkillCatalogBaseDirectory(Catalog,Id);Ok=Base!=NULL;
             if(!Ok)Message="Skill directory could not be prepared; check local storage and refresh Skills"; }
         if (Ok && Path.Size == 0u) {
@@ -57,6 +60,8 @@ static xwork_result MdoSkillExecute(void* Data, const xwork_tool_context* Contex
             size_t i;
             Body.Size = sizeof(Body);
             Ok = Files != NULL && MdoSkillCatalogLoadBody(Catalog, Id, &Body);
+            if(Ok){char* Rendered=MdoSkillRender(Body.Text,Base,Parameters.Data);Ok=Rendered!=NULL;
+                if(Ok){xrtFree(Body.Text);Body.Text=Rendered;Body.Bytes=strlen(Rendered);}}
             for (i = 0u; Ok && i < Info.ResourceCount; ++i) {
                 MdoSkillResourceInfo Item = {0}; Item.Size = sizeof(Item);
                 Ok = MdoSkillCatalogResourceAt(Catalog, Id, i, &Item) &&
@@ -87,6 +92,7 @@ static xwork_result MdoSkillExecute(void* Data, const xwork_tool_context* Contex
             Info.Size = sizeof(Info);
             Ok = MdoSkillCatalogAt(Catalog, i, &Info);
             if (!Ok) break;
+            if(!Info.AutoInvoke)continue;
             if (!MdoSkillSearchMatches(&Info, Needle)) continue;
             if (Total++ < Offset || Count >= Limit) continue;
             Item = xrtValueObject();
@@ -118,7 +124,7 @@ bool MdoSkillToolsRegister(xwork_runtime* Runtime)
     xwork_tool_definition Tool = {0}; xwork_error Error;
     Tool.sName = "skill";
     Tool.sDescription = "Discover installed Skills with query (or empty arguments), then load instructions with name; load a listed text reference with name and path. Use relevant Skills before specialized work. Bodies are lazy; scripts are never executed by this tool.";
-    Tool.sParametersJson = "{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"path\":{\"type\":\"string\"},\"cursor\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":8388608},\"offset\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":256},\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":50}},\"required\":[],\"additionalProperties\":false}";
+    Tool.sParametersJson = "{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"path\":{\"type\":\"string\"},\"arguments\":{\"type\":\"string\",\"maxLength\":16384},\"cursor\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":8388608},\"offset\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":256},\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":50}},\"required\":[],\"additionalProperties\":false}";
     Tool.bStrict = true; Tool.uEffects = XWORK_TOOL_EFFECT_READ;
     Tool.sSource = "mdo.skills"; Tool.OnExecuteV2 = MdoSkillExecute;
     Tool.iMaxResultBytes = 1024u * 1024u; Tool.bParallelSafe = true;

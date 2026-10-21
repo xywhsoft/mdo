@@ -395,6 +395,9 @@ bool MdoApiSkillsRoute(MdoApiContext* Context)
                 Info.Trust == MDO_SKILL_TRUST_BUILTIN ? "builtin" :
                 "external_reference") &&
             MdoApiValueSetUInt(Item, "body_bytes", Info.BodyBytes) &&
+            MdoApiValueSetBool(Item,"auto_invoke",Info.AutoInvoke) &&
+            MdoApiValueSetBool(Item,"user_invocable",Info.UserInvocable) &&
+            MdoApiValueSetString(Item,"argument_hint",Info.ArgumentHint) &&
             MdoApiValueSetUInt(Item, "estimated_tokens", Info.EstimatedTokens) &&
             MdoApiValueSetUInt(Item, "resource_count", Info.ResourceCount) &&
             MdoApiValueSetStrings(Item, "required_tools", Info.RequiredTools,

@@ -94,7 +94,15 @@ static inline xvalue* MdoPromptParse(cstr Text, bool HeaderRequired,
                 Line = End != NULL ? End + 1 : Line + Raw.Size; continue;
             }
             if (Indent != 0u) {
-                if (Active != NULL && Trimmed.Size >= 2u &&
+                if (Active && xrtValueType(Active)==XVALUE_OBJECT) {
+                    size_t Split=0;while(Split<Trimmed.Size&&Trimmed.Data[Split]!=':')++Split;
+                    if(!Split||Split==Trimmed.Size||Split>128)goto failed;
+                    xstrview Key=xrtStrTrim(xrtStrViewN(Trimmed.Data,Split));
+                    if(xrtValueObjectGet(Active,Key))goto failed;
+                    xvalue* Item=MdoPromptScalar(xrtStrTrim(xrtStrViewN(Trimmed.Data+Split+1,Trimmed.Size-Split-1)));
+                    bool Ok=Item&&xrtValueType(Item)==XVALUE_STRING&&xrtValueObjectSet(Active,Key,Item);
+                    xrtValueRelease(Item);if(!Ok)goto failed;
+                } else if (Active != NULL && Trimmed.Size >= 2u &&
                     Trimmed.Data[0] == '-' && Trimmed.Data[1] == ' ') {
                     xvalue* Item = MdoPromptScalar(xrtStrViewN(Trimmed.Data + 2, Trimmed.Size - 2u));
                     bool Ok = Item != NULL && xrtValueType(Item) == XVALUE_STRING &&
@@ -125,7 +133,7 @@ static inline xvalue* MdoPromptParse(cstr Text, bool HeaderRequired,
                     Block = (char*)xrtCalloc(64u * 1024u + 1u, 1u);
                     if (Block == NULL) goto failed;
                 } else {
-                    Value = Input.Size == 0u ? xrtValueArray() : MdoPromptScalar(Input);
+                    Value = Input.Size == 0u ? (xrtStrEqual(Key,XRT_STR_LITERAL("metadata"))?xrtValueObject():xrtValueArray()) : MdoPromptScalar(Input);
                     if (Value == NULL || !xrtValueObjectSet(Object, Key, Value)) {
                         xrtValueRelease(Value); goto failed;
                     }

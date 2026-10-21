@@ -53,6 +53,9 @@ typedef struct MdoSkillInfo {
     const char* const* RequiredPermissions;
     size_t RequiredPermissionCount;
     size_t ResourceCount;
+    bool AutoInvoke;
+    bool UserInvocable;
+    const char* ArgumentHint;
 } MdoSkillInfo;
 
 typedef struct MdoSkillResourceInfo {
@@ -103,6 +106,7 @@ bool MdoSkillSearchMatches(const MdoSkillInfo* Info, const char* Query);
 char* MdoSkillCatalogBaseDirectory(const MdoSkillCatalog* Catalog, const char* Id);
 bool MdoSkillTextPage(const void* Text, size_t Size, uint64 Cursor, size_t Limit,
     xvalue* Result);
+char* MdoSkillRender(const char* Text, const char* Directory, const char* Arguments);
 uint64 MdoSkillManagerGeneration(void);
 
 MdoSkillCatalog* MdoSkillCatalogSnapshot(void);

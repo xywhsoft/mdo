@@ -7,7 +7,7 @@ export function parseSkillSelection(value) {
 
 export async function loadSelectableSkills() {
   const response = await api.get("/skills");
-  return (response.data.items || []).map(item => ({ ...item, skill: true,
+  return (response.data.items || []).filter(item => item.user_invocable !== false).map(item => ({ ...item, skill: true,
     name: `$${item.id}`, custom: true }));
 }
 

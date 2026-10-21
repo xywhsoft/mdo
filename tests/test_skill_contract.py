@@ -23,8 +23,8 @@ class SkillContractTests(unittest.TestCase):
         self.assertIn("MdoSkillCatalogLoadResource", text)
         self.assertIn("MDO_SKILL_TRUST_EXTERNAL_REFERENCE", text)
 
-    def test_format_requires_explicit_resources_and_shadowing(self) -> None:
-        text = FORMAT.read_text(encoding="utf-8")
+    def test_format_documents_resources_and_shadowing(self) -> None:
+        text = " ".join(FORMAT.read_text(encoding="utf-8").split())
         self.assertIn("scripts/", text)
         self.assertIn("templates/", text)
         self.assertIn("assets/", text)

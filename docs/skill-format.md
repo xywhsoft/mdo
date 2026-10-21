@@ -1,66 +1,54 @@
-# mdo Skill format v1
+# mdo Skill format
 
-A Skill is a readable directory below `skills/<id>/`. The directory ID starts
-with a lowercase ASCII letter and then uses lowercase letters, digits, `.`,
-`_`, or `-`. Each directory has one `SKILL.md` and may contain explicitly
-declared files below `scripts/`, `templates/`, and `assets/`.
-
-`SKILL.md` starts with a bounded YAML front matter subset:
+A Skill is a directory containing SKILL.md and optional scripts/, references/,
+assets/ and templates/. The UTF-8 Markdown document starts with YAML frontmatter;
+name and description are required. Unknown passive metadata is preserved.
+YAML aliases, tags, duplicate fields and unsafe resource paths are rejected.
 
 ```markdown
 ---
-name: Project Explorer
-description: Inspect a repository before making changes.
-version: 1.0.0
-license: MIT
-compatibility: mdo >= 0.1
-tools:
-  - ls
-  - glob
-  - grep
-mcp: []
-permissions:
-  - workspace.read
-scripts: []
-templates:
-  - templates/report.md
-assets: []
+name: review
+description: Inspect changes before delivery
 ---
-
-# Project Explorer
-
-The body is loaded only when an Agent selects this Skill.
 ```
 
-The scalar keys `name` and `description` are required. `version`, `license`,
-and `compatibility` are optional. Sequence values accept either the block form
-shown above or an inline list such as `[ls, "grep"]`. Values may be plain,
-single quoted, or JSON-style double quoted strings. Duplicate keys, duplicate
-list entries, tabs, aliases, tags, mappings, multiline scalars, and unknown
-keys are rejected. This deliberately small grammar keeps parsing deterministic
-without embedding a second configuration language.
+Use `name: review` and `description: Inspect changes before delivery` as top-level
+fields. Directory IDs are portable lowercase names. Optional fields include
+version, license, compatibility, when_to_use, argument-hint and metadata mappings.
 
-`tools`, `mcp`, and `permissions` declare dependencies for policy checks and
-the settings UI. Resource lists are manifests, not search paths. Every entry
-must use `/`, remain below its matching directory, and contain no empty, `.`,
-or `..` segment. A resource not listed in front matter cannot be opened through
-the Skill API.
+- `disable-model-invocation: true` hides the Skill from model discovery and blocks
+  model loads and Agent preloading. The user can select it with `$review`.
+- `user-invocable: false` hides it from chat selection and rejects explicit user
+  invocation; model discovery/loading still works.
+- `metadata: {"opencode/autoinvoke":"false"}` also disables model invocation.
+- `tools: [read, grep]` declares required tools. The compatibility spelling
+  `allowed-tools: Read Grep` maps plain tool aliases; it never bypasses approval.
+  Use one spelling. Command permission patterns are unsupported.
+- `mcp` and `permissions` retain dependency metadata. They grant no permissions.
+- Legacy scripts/templates/assets arrays restrict resource access to those files.
+  Without these arrays, safe files are discovered automatically (128 files,
+  depth 8, 8 MiB per resource, 16 MiB total).
 
-Startup reads only the front matter and file metadata, then closes every file
-so a Windows handle cannot block atomic replacement. On the first explicit
-load, the catalog reopens the file, verifies size, identity, timestamps, and
-the front matter hash, and stores an owned bounded cache. A mismatch reports a
-stale catalog and requires reload instead of mixing generations. Once loaded,
-an old catalog continues to return its cached generation after replacement.
+`context`, `agent`, `model`, `effort`, `hooks`, `shell`, `paths`, `disallowed-tools`
+and named `arguments` declarations require unsupported execution semantics and
+are rejected with a field-specific diagnostic. Configure an Agent or SubAgent
+for those workflows. Shell substitutions in Markdown are never executed.
 
-The merged VFS discovers built-in and external directories by ID. An external
-directory completely shadows the same built-in ID. If its `SKILL.md` or a
-declared resource is missing or invalid, mdo publishes a diagnostic and omits
-that Skill from the new catalog; it never falls back to the built-in copy.
-Other valid Skills remain available.
+The model receives a bounded metadata index. The skill tool searches with query,
+offset and limit (default 20, maximum 50); responses include total/next_offset.
+Loading name returns instructions and a real base_directory. `$ARGUMENTS` and
+`${MDO_SKILL_DIR}`, `${CLAUDE_SKILL_DIR}`, `${ZCODE_SKILL_DIR}` are replaced
+literally; replacement values are never evaluated or recursively expanded.
+Script execution continues through normal process tools and permission checks.
 
-Catalog records label built-in content as `BUILTIN` and external content as
-`EXTERNAL_REFERENCE`. Prompt assembly must preserve that source label and treat
-external Skill bodies, scripts, templates, and assets as user-controlled
-reference material. The loader validates structure and paths but does not
-claim that content is safe instructions or safe executable code.
+SKILL.md is limited to 128 KiB in management and runtime. Resource text reads are
+48 KiB pages with UTF-8-aligned cursor, next_cursor and eof. Binary resources are
+not converted to text. XRTPACK resources are materialized on demand into a
+content-addressed Home cache; listing does not write files. File changes require
+catalog refresh; existing loaded generations retain their owned bytes.
+
+Startup reads only the front matter and file metadata. External directories
+completely shadow the corresponding built-in Skill; an invalid override never
+falls back to the built-in definition. Undeclared legacy resources cannot be opened
+through the Skill API. External content is labeled EXTERNAL_REFERENCE and remains
+untrusted reference material, including after reload or cache materialization.

@@ -197,6 +197,14 @@ def main():
                 status, _, raw=request(port,'POST','/api/v1/skills/invoke',body=json.dumps({'id':'large'}).encode(),headers={'Content-Type':'application/json'})
                 assert status == 200 and 'x'*60000 in json.loads(raw)['data']['text'], raw[:400]
                 assert call('PUT','skills/oversized',{'content':large+'x'*80000},'new')[0] in (413,422)
+                manual='---\nname: manual\ndescription: MANUAL_ONLY_MARKER\ndisable-model-invocation: true\n---\nTask: $ARGUMENTS\nFiles: ${MDO_SKILL_DIR}'
+                assert call('PUT','skills/manual',{'content':manual},'new')[0] == 200
+                status, _, raw=request(port,'POST','/api/v1/skills/invoke',body=json.dumps({'id':'manual','arguments':'literal $&'}).encode(),headers={'Content-Type':'application/json'})
+                assert status == 200 and 'Task: literal $&' in json.loads(raw)['data']['text'] and '${MDO_SKILL_DIR}' not in json.loads(raw)['data']['text'], raw[:400]
+                automatic=manual.replace('disable-model-invocation: true','user-invocable: false').replace('MANUAL_ONLY_MARKER','Automatic task')
+                assert call('PUT','skills/automatic',{'content':automatic},'new')[0] == 200
+                assert request(port,'POST','/api/v1/skills/invoke',body=b'{"id":"automatic"}',headers={'Content-Type':'application/json'})[0] == 403
+                assert call('PUT','skills/forked',{'content':manual.replace('disable-model-invocation: true','context: fork')},'new')[0] == 422
                 status, bundle = call('GET', 'skills/research/bundle')
                 assert status == 200 and bundle['data']['files'] == [file], bundle
                 assert call('POST', 'skills/research/enabled', {'enabled': False}, skill_revision)[0] == 200
@@ -250,6 +258,7 @@ def main():
                 page = json.loads(discovered[-1][discovered[-1].index('{'):])
                 assert page['total'] == 1 and page['items'][0]['name'] == 'research' and page['next_offset'] == 1, page
                 assert 'mdo_available_skills' in json.dumps(SkillModel.payloads[0]), 'Skill metadata missing'
+                assert 'MANUAL_ONLY_MARKER' not in json.dumps(SkillModel.payloads[0]).replace('Automatic',''), 'manual-only Skill advertised'
                 assert 'Use references/guide.txt.' not in json.dumps(SkillModel.payloads[0]), 'Skill body eagerly injected'
                 assert 'Inspect first' in json.dumps(SkillModel.payloads[-1]), SkillModel.payloads[-1]
                 status, _, raw_run = request(port, 'POST', '/api/v1/projects/default/sessions/' + session + '/runs',

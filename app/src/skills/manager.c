@@ -5,6 +5,7 @@
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/skills.h"
 #include "../../include/mdo/prompt_file.h"
+#include "../../include/mdo/tool_catalog.h"
 #include "discovery.inc.c"
 
 #define MDO_SKILL_COUNT_LIMIT 256u
@@ -38,6 +39,8 @@ typedef struct MdoSkillResource {
 typedef struct MdoSkillEntry {
     bool External;
     bool AutoResources;
+    bool AutoInvoke,UserInvocable;
+    char* ArgumentHint;
     char* Id;
     char* Name;
     char* Description;
@@ -276,6 +279,7 @@ static void MdoSkillsEntryUnit(MdoSkillEntry* pEntry)
     xrtFree(pEntry->License);
     xrtFree(pEntry->Compatibility);
     xrtFree(pEntry->SourcePath);
+    xrtFree(pEntry->ArgumentHint);
     xrtFree(pEntry->VirtualDirectory);
     xrtFree(pEntry->RelativeDirectory);
     xrtFree(pEntry->CachedBody);
@@ -827,6 +831,10 @@ static bool MdoSkillsListValue(MdoSkillEntry* pEntry,
         return false;
     }
     if ( pList != NULL ) {
+        if(Field==MDO_SKILL_FIELD_TOOLS) {
+            cstr Canonical=MdoBuiltinToolCanonicalId(Value);
+            if(strcmp(Canonical,Value)){char* Copy=xrtStrDup(Canonical);xrtFree(Value);Value=Copy;if(!Value)return false;}
+        }
         if ( !MdoSkillsIdValid(Value) ||
              !MdoSkillsStringListAdd(pList, Value) ) {
             xrtFree(Value);
@@ -909,6 +917,8 @@ static bool MdoSkillsScalarField(MdoSkillEntry* pEntry,
     return MdoSkillsScalar(Value, Limit, pTarget);
 }
 
+#include "compatibility.inc.c"
+
 static bool MdoSkillsParseMetadata(MdoSkillEntry* Entry, const xvalue* Document,
     char* Error, size_t Capacity)
 {
@@ -947,7 +957,7 @@ static bool MdoSkillsParseMetadata(MdoSkillEntry* Entry, const xvalue* Document,
         MdoSkillsCopyError(Error, Capacity, "Skill requires name and description");
         return false;
     }
-    return true;
+    return MdoSkillsCompatibility(Entry,Document,Error,Capacity);
 }
 
 static bool MdoSkillsParseFrontmatter(MdoSkillEntry* Entry,
@@ -1374,6 +1384,8 @@ static void MdoSkillsInfo(const MdoSkillCatalog* pCatalog,
         (const char* const*)pEntry->Permissions.Items;
     pInfo->RequiredPermissionCount = pEntry->Permissions.Count;
     pInfo->ResourceCount = pEntry->ResourceCount;
+    pInfo->AutoInvoke=pEntry->AutoInvoke;pInfo->UserInvocable=pEntry->UserInvocable;
+    pInfo->ArgumentHint=pEntry->ArgumentHint;
 }
 
 size_t MdoSkillCatalogCount(const MdoSkillCatalog* pCatalog)
