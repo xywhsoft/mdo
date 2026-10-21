@@ -32,6 +32,7 @@ typedef struct MdoMcpHttpHeaderEntry {
 } MdoMcpHttpHeaderEntry;
 
 typedef struct MdoMcpServerEntry {
+    char* RuntimeId;
     bool External;
     bool Enabled;
     bool AutoReconnect;
@@ -253,6 +254,7 @@ static void MdoMcpServerUnit(MdoMcpServerEntry* pEntry)
 {
     size_t i;
     if ( pEntry == NULL ) return;
+    xrtFree(pEntry->RuntimeId);
     xrtFree(pEntry->Id);
     xrtFree(pEntry->Name);
     xrtFree(pEntry->Description);
@@ -1518,8 +1520,8 @@ done:
     return Ok;
 }
 
-static bool MdoMcpPublishCandidate(MdoMcpCatalog* pCatalog,
-    MdoMcpDiagnostics* pDiagnostics)
+static bool MdoMcpRegisterCatalog(MdoMcpCatalog* pCatalog,
+    MdoMcpDiagnostics* pDiagnostics, const char* Source, bool Publish)
 {
     xwork_mcp_server_config* Configs = NULL;
     xwork_mcp_environment** Environment = NULL;
@@ -1564,7 +1566,7 @@ static bool MdoMcpPublishCandidate(MdoMcpCatalog* pCatalog,
                 HttpHeaders[i][j].sValue = pEntry->HttpHeaders[j].Value;
             }
         }
-        Configs[i].sServerId = pEntry->Id;
+        Configs[i].sServerId = pEntry->RuntimeId != NULL ? pEntry->RuntimeId : pEntry->Id;
         Configs[i].sSummary = pEntry->Description;
         Configs[i].sProgram = pEntry->Program;
         Configs[i].psArguments = (const char* const*)pEntry->Arguments;
@@ -1601,10 +1603,17 @@ static bool MdoMcpPublishCandidate(MdoMcpCatalog* pCatalog,
     if ( !xrtMutexLock(g_MdoMcp.Lock) ) goto done;
     if ( g_MdoMcp.Initialized && g_MdoMcp.Runtime != NULL )
         Registered = xworkRuntimeReplaceMcpServersBySource(g_MdoMcp.Runtime,
-            MDO_MCP_SOURCE, Configs, pCatalog->Count, &Replaced, &Error);
+            Source, Configs, pCatalog->Count, &Replaced, &Error);
     /* xwork has synchronously deep-copied accepted definitions. Catalog
      * snapshots retain only names and counts, never resolved secret values. */
     MdoMcpCatalogForgetSecrets(pCatalog);
+    if ( !Publish ) {
+        if ( !Registered ) (void)MdoMcpDiagnosticAdd(pDiagnostics,
+            MDO_MCP_DIAGNOSTIC_PUBLISH, NULL, Source, NULL,
+            Error.sMessage[0] ? Error.sMessage : "Project MCP registration failed");
+        (void)xrtMutexUnlock(g_MdoMcp.Lock);
+        Ok = Registered;goto done;
+    }
     if ( !Registered ) {
         cstr Message = Error.sMessage[0] != '\0' ? Error.sMessage :
             "xwork rejected the MCP catalog transaction";
@@ -1637,6 +1646,11 @@ done:
     xrtFree(Environment);
     xrtFree(Configs);
     return Ok;
+}
+
+static bool MdoMcpPublishCandidate(MdoMcpCatalog* Catalog, MdoMcpDiagnostics* Diagnostics)
+{
+    return MdoMcpRegisterCatalog(Catalog, Diagnostics, MDO_MCP_SOURCE, true);
 }
 
 bool MdoMcpManagerReload(void)
@@ -1750,6 +1764,7 @@ static bool MdoMcpServerInfoCopy(const MdoMcpCatalog* pCatalog,
     pInfo->TrustReadOnlyAnnotations = pEntry->TrustReadOnlyAnnotations;
     pInfo->Transport = pEntry->Transport;
     pInfo->Id = pEntry->Id;
+    pInfo->RuntimeId = pEntry->RuntimeId != NULL ? pEntry->RuntimeId : pEntry->Id;
     pInfo->Name = pEntry->Name;
     pInfo->Description = pEntry->Description;
     pInfo->ProtocolVersion = pEntry->ProtocolVersion;
@@ -1804,7 +1819,7 @@ bool MdoMcpManagerGetStatus(cstr ServerId, MdoMcpServerStatus* pStatus)
     memset(&CatalogInfo, 0, sizeof(CatalogInfo));
     CatalogInfo.Size = sizeof(CatalogInfo);
     Found = MdoMcpCatalogFind(pCatalog, ServerId, &CatalogInfo);
-    if ( !Found || g_MdoMcp.Runtime == NULL ) {
+    if ( g_MdoMcp.Runtime == NULL ) {
         MdoMcpCatalogRelease(pCatalog);
         return false;
     }
@@ -1879,3 +1894,5 @@ bool MdoMcpDiagnosticsAt(const MdoMcpDiagnostics* pDiagnostics,
     pInfo->Message = pEntry->Message;
     return true;
 }
+
+#include "scopes.inc.c"

@@ -1,4 +1,5 @@
 import { createSkillWorkbench } from "./skill-workbench.js";
+import { createMcpWorkbench } from "./mcp-workbench.js";
 import { newTool } from "./tool-template.js";
 import { api } from "../../api/client.js";
 import { targetState, subscribeTarget } from "../../api/target.js";
@@ -45,6 +46,7 @@ export function createExtensionPanels() {
   let disposed = false, paused = false;
   const reads = createExtensionReads();
   const skillWorkbench = createSkillWorkbench({ onChange: () => announceChange("skills") });
+  const mcpWorkbench = createMcpWorkbench({ onChange: () => announceChange("mcp") });
   const actions = new Map();
   const current = (kind, target) => !disposed && !paused && selected === kind && target === targetKey();
   function cancelReads() {
@@ -133,6 +135,7 @@ export function createExtensionPanels() {
       actions.splice(2, 0, button(label("importFolder", "导入文件夹"), () => folder.click()), folder);
     }
     const builtinView = kind === "tools" && state.view === "builtin";
+    if (kind === "mcp") actions.push(button("项目 MCP", () => mcpWorkbench.open()));
     const toolbar = element("div", { className: "extension-toolbar" }, builtinView ? [actions[2], ...(state.operation ? [actions[3]] : [])] : actions);
     const categories = kind === "tools" ? element("div", { className: "extension-toolbar tool-categories" }, ["builtin", "custom"].map(view => {
       const control = button(label(view === "builtin" ? "builtinTools" : "customTools", view === "builtin" ? "mdo 内建工具" : "自定义工具"), () => { state.view = view; render(kind); });
@@ -541,7 +544,7 @@ export function createExtensionPanels() {
       if (selected && (!states.get(kind).loaded || kind === "tools") && !states.get(kind).busy) void load(kind);
       else if(pendingResource?.kind===selected)void openLinkedResource();
     },
-    hasPendingChanges: () => dirty() || skillWorkbench.hasPendingChanges(),
-    destroy() { disposed = true; skillWorkbench.destroy(); cancelReads(); closeEditor(true); unsubscribeLocale(); unsubscribeTarget();window.removeEventListener("mdo-extensions-changed", invalidate);window.removeEventListener("mdo-open-resource",openResource);window.removeEventListener("pagehide",onHide);window.removeEventListener("pageshow",onShow); },
+    hasPendingChanges: () => dirty() || skillWorkbench.hasPendingChanges() || mcpWorkbench.hasPendingChanges(),
+    destroy() { disposed = true; skillWorkbench.destroy(); mcpWorkbench.destroy(); cancelReads(); closeEditor(true); unsubscribeLocale(); unsubscribeTarget();window.removeEventListener("mdo-extensions-changed", invalidate);window.removeEventListener("mdo-open-resource",openResource);window.removeEventListener("pagehide",onHide);window.removeEventListener("pageshow",onShow); },
   });
 }

@@ -32,4 +32,12 @@ not replay a possibly completed state-changing tool call.
   waiter returns cancellation and a short-deadline waiter times out. A
   resources-only server initializes successfully. Invalid/duplicate definitions
   are excluded while a valid tool remains available.
-- Remaining goals are still in progress.
+- Project scope implemented with native `.mdo/mcp/<id>.json` definitions,
+  per-Agent server restrictions inherited by subagents, project editor/import,
+  revision guards, project lifecycle leases and cross-process writer locks.
+  Disabled/invalid project definitions shadow personal definitions.
+- Real HTTP/model-loop regression passes: cold save, stale-write rejection,
+  project-only discovery, rejected personal-server schema load, successful
+  project tool call, and disabled project configuration without personal fallback.
+- Remaining goals (external configuration migration, OAuth, context/interaction
+  features and expanded diagnostics) are still in progress.

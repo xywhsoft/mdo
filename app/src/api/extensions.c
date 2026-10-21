@@ -588,3 +588,4 @@ bool MdoApiExtensionsRoute(MdoApiContext* C)
 }
 
 #include "skill_management.inc.c"
+#include "mcp_management.inc.c"

@@ -32,6 +32,7 @@ typedef struct MdoMcpServerInfo {
     bool TrustReadOnlyAnnotations;
     MdoMcpTransport Transport;
     const char* Id;
+    const char* RuntimeId;
     const char* Name;
     const char* Description;
     const char* ProtocolVersion;
@@ -100,6 +101,9 @@ bool MdoMcpManagerDisconnect(const char* ServerId, xwork_error* pError);
 bool MdoMcpManagerRefresh(const char* ServerId, xcancel* pCancel,
     uint64 Deadline, xwork_error* pError);
 bool MdoMcpValidateText(const char* Id, const char* Text, char* Error, size_t Capacity);
+/* Reads project definitions without executing them. Scope restrictions are
+ * inherited by subagents and apply to search, schema load and invocation. */
+bool MdoMcpConfigureAgent(xwork_agent* Agent, const char* Workspace, xwork_error* Error);
 
 MdoMcpDiagnostics* MdoMcpDiagnosticsSnapshot(void);
 MdoMcpDiagnostics* MdoMcpDiagnosticsRef(MdoMcpDiagnostics* pDiagnostics);

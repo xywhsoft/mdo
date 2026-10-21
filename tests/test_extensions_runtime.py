@@ -30,6 +30,9 @@ class SkillModel(BaseHTTPRequestHandler):
     profile_payloads = []
     mcp_payloads = []
     builder_payloads = []
+    scope_payloads = []
+    disabled_scope_payloads = []
+    scope_server = ''
     def log_message(self, *_): pass
     def do_POST(self):
         payload = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
@@ -46,6 +49,22 @@ class SkillModel(BaseHTTPRequestHandler):
             output=[{'type':'function_call','call_id':f'builder-{calls}','name':steps[calls-1][0],
                 'arguments':json.dumps(steps[calls-1][1])}] if calls<=len(steps) else [
                 {'type':'message','content':[{'type':'output_text','text':'Builder probe complete'}]}]
+        elif 'EXTENSION MCP disabled scope probe' in latest:
+            type(self).disabled_scope_payloads.append(payload)
+            calls=len(type(self).disabled_scope_payloads)
+            output = [{'type':'function_call','call_id':'disabled-scope','name':'tool_search','arguments':'{}'}] if len(type(self).disabled_scope_payloads)==1 else [
+                {'type':'message','content':[{'type':'output_text','text':'Disabled scope complete'}]}]
+        elif 'EXTENSION MCP scope probe' in latest:
+            type(self).scope_payloads.append(payload); calls=len(type(self).scope_payloads)
+            steps=[('tool_search',{}),('tool_load',{'server':'legacy','tool':'echo'}),
+                ('tool_load',{'server':type(self).scope_server,'tool':'echo'})]
+            if calls<=3: name,arguments=steps[calls-1]
+            elif calls==4:
+                loaded=[tool for tool in payload['tools'] if tool['name'].startswith('mcp__')]
+                assert len(loaded)==1,loaded
+                name,arguments=loaded[0]['name'],{'text':'PROJECT_SCOPE_RESULT'}
+            output=[{'type':'function_call','call_id':f'scope-{calls}','name':name,'arguments':json.dumps(arguments)}] if calls<=4 else [
+                {'type':'message','content':[{'type':'output_text','text':'Project scope complete'}]}]
         elif 'EXTENSION MCP probe' in latest:
             type(self).mcp_payloads.append(payload)
             calls = len(type(self).mcp_payloads)
@@ -470,6 +489,39 @@ def main():
                 rpc = [json.loads(line) for line in legacy_log.read_text().splitlines()]
                 assert [row['method'] for row in rpc] == ['initialize', 'notifications/initialized', 'tools/list', 'tools/call'], rpc
                 assert rpc[-1]['params'] == {'name': 'echo', 'arguments': {'text': 'MCP_CALLBACK_RESULT'}}, rpc
+                def scoped(method, suffix='', body=None, revision=None):
+                    headers={'Content-Type':'application/json'}
+                    if revision is not None: headers['If-Match']='"'+revision+'"'
+                    status,_,raw=request(port,method,'/api/v1/mcp/project'+suffix+'?project=default',
+                        body=json.dumps(body).encode() if body is not None else None,headers=headers)
+                    return status,json.loads(raw)
+                project_log=base/'project-mcp.jsonl'
+                project_doc={**legacy,'transport':{**legacy['transport'],
+                    'arguments':[str(ROOT/'tests/fixtures/mcp-2025.py'),str(project_log)]}}
+                status,project_item=scoped('PUT','/legacy',{'content':json.dumps(project_doc)},'new')
+                assert status==200 and not project_log.exists(),project_item
+                conflict=scoped('PUT','/legacy',{'content':json.dumps(project_doc)},'new')
+                assert conflict[0]==412,conflict
+                SkillModel.scope_server=project_item['data']['runtime_id']
+                def scope_run(prompt):
+                    status,_,raw=request(port,'POST',f'/api/v1/projects/default/sessions/{session}/runs',
+                        body=json.dumps({'prompt':prompt,'timeout_ms':5000}).encode(),headers={'Content-Type':'application/json'})
+                    assert status==202,raw
+                    run=json.loads(raw)['data'];end=time.monotonic()+8
+                    while not run['terminal'] and time.monotonic()<end:
+                        time.sleep(.05);run=json.loads(request(port,'GET','/api/v1/runs/'+run['id'])[2])['data']
+                    assert run['state']=='succeeded',run
+                scope_run('EXTENSION MCP scope probe')
+                search=SkillModel.scope_payloads[1]['input'][-1]['output'];denied=SkillModel.scope_payloads[2]['input'][-1]['output']
+                assert SkillModel.scope_server in search and 'server=legacy ' not in search,(SkillModel.scope_server,search)
+                assert "outside this project's scope" in denied,denied
+                assert 'PROJECT_SCOPE_RESULT' in json.dumps(SkillModel.scope_payloads[-1])
+                status,disabled=scoped('POST','/legacy/enabled',{'enabled':False},project_item['data']['revision'])
+                assert status==200,disabled
+                scope_run('EXTENSION MCP disabled scope probe')
+                search=SkillModel.disabled_scope_payloads[-1]['input'][-1]['output']
+                assert 'server=legacy ' not in search and 'server='+SkillModel.scope_server+' ' not in search,search
+                assert scoped('DELETE','/legacy',revision=disabled['data']['revision'])[0]==200
                 assert call('DELETE', 'mcp/legacy', revision=legacy_item['data']['revision'])[0] == 200
                 status, _, raw_op = request(port, 'POST', '/api/v1/mcp/mock/refresh')
                 assert status == 202, raw_op

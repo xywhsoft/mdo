@@ -82,6 +82,26 @@ values through catalog or status APIs, and never writes resolved values back to
 the configuration. Missing or unavailable secrets produce a diagnostic and do
 not start the server.
 
+## Project scope
+
+Personal definitions remain in `mdo-home/mcp`. A project can additionally own
+native documents in `<workspace>/.mdo/mcp/<id>.json`. The settings MCP panel has
+a Project MCP editor, JSON import, connection test, enable/disable and deletion.
+Project edits use a revision precondition and anchored atomic file writes.
+
+A project document shadows the same personal ID as a whole, including when
+disabled, invalid, or missing a credential. Such a definition never silently
+falls back to the personal server. Other personal servers remain available.
+Each Agent receives only the effective server IDs for its workspace. Subagents
+inherit this list; guessing another project's server ID does not load its tools.
+Scoped runtime IDs include a workspace digest so two projects can independently
+configure the same ID. Registration, listing and saving remain cold.
+
+The project API is `/api/v1/mcp/project[/{id}]?project=<project-id>`; raw caller
+filesystem paths are not accepted. Credentials imported as ordinary maps are
+sealed in the current device's vault; the project file contains references only.
+Use environment references for project configurations intended to be shared.
+
 ## Runtime behavior
 
 Registration is cold: startup copies validated definitions into the

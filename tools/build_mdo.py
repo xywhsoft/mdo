@@ -145,7 +145,7 @@ def find_xserver(explicit: Path | None, lock: dict) -> Path:
         seen.add(root)
         marker = root / ".mdo-sdk-overlay.json"
         if marker.is_file() and load_object(marker) == lock.get("sdk_overlay"):
-            return root
+            return prepare_sdk_overlay(root, lock)
         head = git_head(root) if root.is_dir() else None
         checked.append(f"{root} @ {head or 'unavailable'}")
         if head == expected:
@@ -165,6 +165,8 @@ def prepare_sdk_overlay(source: Path, lock: dict) -> Path:
     record = lock.get("sdk_overlay")
     if record is None:
         return source
+    if record.get("base_commit") != lock["xserver"]["commit"]:
+        raise BuildError("SDK compatibility patch targets a different xs revision")
     patch = (ROOT / record["path"]).resolve()
     if (not patch.is_relative_to(ROOT) or not patch.is_file()
             or hashlib.sha256(patch.read_bytes()).hexdigest() != record["sha256"]):

@@ -23,7 +23,23 @@
      xcancel* pCancel;
      uint64_t uDeadline;
      xprocess* pProcess;
-@@ -399,6 +408,38 @@
+@@ -125,6 +134,15 @@
+     return uEffects != 0u && (uEffects & ~XWORK_TOOL_EFFECT_ALL) == 0u;
+ }
+ 
++static bool xwork__mcp_visible(const xwork_agent* pAgent, const char* sServerId)
++{
++    size_t i;
++    if ( !pAgent || !pAgent->bMcpServerScope ) return true;
++    for ( i = 0u; i < pAgent->iMcpServerScopeCount; ++i )
++        if ( strcmp(pAgent->psMcpServerScope[i], sServerId) == 0 ) return true;
++    return false;
++}
++
+ static void xwork__mcp_string_array_unit(char** psValues, size_t iCount)
+ {
+     size_t i;
+@@ -399,6 +417,38 @@
      if ( pClient && pClient->uDeadline != XLLM_DEADLINE_NEVER &&
           xllmDeadlineExpired(pClient->uDeadline) ) return XWORK_OPERATION_TIMED_OUT;
      return XWORK_OPERATION_ACTIVE;
@@ -62,7 +78,7 @@
  }
  
  static xhttpclient* xwork__mcp_http_client_get(
-@@ -1145,6 +1186,44 @@
+@@ -1145,6 +1195,44 @@
      return sTail;
  }
  
@@ -107,7 +123,7 @@
  static char* xwork__mcp_read_message(
      xwork_mcp_client* pClient,
      const xcancel* pOperationCancel,
-@@ -1383,8 +1462,9 @@
+@@ -1383,8 +1471,9 @@
          }
          tId = xwork__json_get(tRoot, "id");
          if ( !tId ) {
@@ -119,7 +135,7 @@
              xrtValueRelease(tRoot);
              continue;
          }
-@@ -1525,10 +1605,18 @@
+@@ -1525,10 +1614,18 @@
      bool bValid = true;
      uint32_t uSalt = 0u;
      if ( !sRemoteName || !sRemoteName[0] || !tSchema ||
@@ -142,7 +158,7 @@
      }
      if ( pClient->eTransport == XWORK_MCP_TRANSPORT_STREAMABLE_HTTP &&
           pClient->bModernProtocol &&
-@@ -1539,8 +1627,11 @@
+@@ -1539,8 +1636,11 @@
      }
      if ( !xwork__mcp_tool_permitted(pClient, sRemoteName) ) return true;
      if ( xwork__mcp_proxy_remote_exists(*ppTools, *piCount, sRemoteName) ) {
@@ -156,7 +172,7 @@
      }
      if ( *piCount >= pClient->iMaxTools ) {
          xwork__set_error(pError, XWORK_ERROR_TOOL, "MCP tool count exceeds configured limit");
-@@ -1601,6 +1692,10 @@
+@@ -1601,6 +1701,10 @@
      char* sCursor = NULL;
      uint32_t uPages = 0u;
      uint64_t uMinTtlMs = UINT64_MAX;
@@ -167,7 +183,7 @@
      for ( ;; ) {
          xwork_buf tParams = {0};
          xvalue* tRoot = NULL;
-@@ -1652,8 +1747,7 @@
+@@ -1652,8 +1756,7 @@
          }
          for ( i = 0u; i < xrtValueCount(tTools); ++i ) {
              xvalue* tTool = xrtValueArrayGet(tTools, i);
@@ -177,7 +193,7 @@
                  xrtValueRelease(tRoot);
                  free(sCursor);
                  return false;
-@@ -1668,7 +1762,7 @@
+@@ -1668,7 +1771,7 @@
                      ? XLLM_DEADLINE_NEVER
                      : uNow + uMinTtlMs * UINT64_C(1000);
              } else {
@@ -186,7 +202,18 @@
              }
              xrtValueRelease(tRoot);
              free(sCursor);
-@@ -1852,8 +1946,7 @@
+@@ -1711,6 +1814,10 @@
+     xcancel* pOperationCancel = pContext ? pContext->pCancel : NULL;
+     uint64_t uOperationDeadline = pContext && pContext->uDeadline
+         ? pContext->uDeadline : XLLM_DEADLINE_NEVER;
++    if ( !pProxy || !xwork__mcp_visible(pContext ? pContext->pAgent : NULL,
++            pProxy->pClient->sServerName) )
++        return xworkToolOutputSet(pOutput, false, "MCP server is outside this project's scope")
++            ? XWORK_RESULT_OK : XWORK_RESULT_ERROR;
+     if ( pProxy && pProxy->pClient->bRuntimeOwned &&
+          !xwork__mcp_prepare_lazy(pProxy->pClient, false,
+             pOperationCancel, uOperationDeadline, pError) ) {
+@@ -1852,8 +1959,7 @@
          xwork__set_error(pError, XWORK_ERROR_POLICY, "MCP server is disabled");
          return false;
      }
@@ -196,7 +223,7 @@
          return false;
      }
      if ( pClient->bConnected ) { bOk = true; goto cleanup; }
-@@ -1906,8 +1999,7 @@
+@@ -1906,8 +2012,7 @@
          if ( !tResult || xrtValueType(tResult) != XVALUE_OBJECT ||
               !tSupportedVersions ||
               xrtValueType(tSupportedVersions) != XVALUE_ARRAY ||
@@ -206,7 +233,7 @@
              xwork__set_error(pError, XWORK_ERROR_TOOL,
                  "modern MCP discovery lacks supportedVersions or tools capability");
              goto cleanup;
-@@ -1959,8 +2051,7 @@
+@@ -1959,8 +2064,7 @@
          tToolsCapability = xwork__json_get(tCapabilities, "tools");
          if ( !tResult || xrtValueType(tResult) != XVALUE_OBJECT ||
               !sProtocol || !sProtocol[0] ||
@@ -216,7 +243,7 @@
              xwork__set_error(pError, XWORK_ERROR_TOOL,
                  "MCP initialize response lacks protocolVersion or tools capability");
              goto cleanup;
-@@ -1973,6 +2064,13 @@
+@@ -1973,6 +2077,13 @@
      }
      if ( !xwork__replace(&pClient->sNegotiatedProtocolVersion, sProtocol) ) {
          xwork__set_error(pError, XWORK_ERROR_OUT_OF_MEMORY, "failed to copy negotiated MCP version");
@@ -230,7 +257,7 @@
          goto cleanup;
      }
      pClient->bServerSupportsToolListChanges = xwork__json_bool(
-@@ -2142,9 +2240,7 @@
+@@ -2142,9 +2253,7 @@
              "connected MCP client is required");
          return false;
      }
@@ -241,7 +268,7 @@
          return false;
      }
      bOk = xwork__mcp_refresh_cache_locked(
-@@ -2192,10 +2288,10 @@
+@@ -2192,10 +2301,10 @@
              "invalid MCP arguments: expected a JSON object")
              ? XWORK_RESULT_OK : XWORK_RESULT_ERROR;
      }
@@ -255,7 +282,7 @@
      }
      sCompactArguments = xrtJsonStringify(tArguments, NULL, &iCompactArguments);
      if ( !sCompactArguments ) {
-@@ -2358,6 +2454,8 @@
+@@ -2358,6 +2467,8 @@
      xwork__mcp_string_array_unit(
          pClient->psDeniedTools, pClient->iDeniedToolCount);
      free(pClient->sServerName);
@@ -264,7 +291,38 @@
      free(pClient->sSummary);
      free(pClient->sProgram);
      free(pClient->sEndpoint);
-@@ -3094,11 +3192,7 @@
+@@ -2662,6 +2773,30 @@
+     return sLeft == sRight || (sLeft && sRight && strcmp(sLeft, sRight) == 0);
+ }
+ 
++bool xworkAgentSetMcpServers(xwork_agent* pAgent,
++    const char* const* psServerIds, size_t iCount, xwork_error* pError)
++{
++    char** psOwned = NULL;
++    size_t i;
++    if ( !pAgent || iCount > 256u ||
++         !xwork__mcp_string_array_copy(&psOwned, psServerIds, iCount) ) {
++        xwork__set_error(pError, XWORK_ERROR_INVALID_ARGUMENT, "invalid MCP server scope"); return false;
++    }
++    if ( !xrtMutexLock(pAgent->pStateLock) ) {
++        xwork__mcp_string_array_unit(psOwned, iCount);return false;
++    }
++    if ( pAgent->bRunning ) {
++        (void)xrtMutexUnlock(pAgent->pStateLock);
++        xwork__mcp_string_array_unit(psOwned, iCount);
++        xwork__set_error(pError, XWORK_ERROR_CONTEXT, "MCP scope cannot change during a run");return false;
++    }
++    for ( i = 0u; i < pAgent->iMcpServerScopeCount; ++i ) free(pAgent->psMcpServerScope[i]);
++    free(pAgent->psMcpServerScope);
++    pAgent->psMcpServerScope = psOwned;pAgent->iMcpServerScopeCount = iCount;
++    pAgent->bMcpServerScope = true;
++    (void)xrtMutexUnlock(pAgent->pStateLock);return true;
++}
++
+ static bool xwork__mcp_client_config_equal(
+     xwork_mcp_client* pLeft, xwork_mcp_client* pRight)
+ {
+@@ -3094,11 +3229,7 @@
              "MCP server is disabled or unavailable");
          return false;
      }
@@ -277,7 +335,7 @@
      bReconnectBlocked = pClient->bFailed && !pClient->bAutoReconnect &&
          !pClient->bConnected;
      xwork__mcp_unlock(pClient);
-@@ -3110,15 +3204,15 @@
+@@ -3110,15 +3241,15 @@
      if ( !xwork__mcp_connect_scoped(pClient, pCancel, uDeadline, pError) ) {
          return false;
      }
@@ -299,9 +357,17 @@
      xwork__mcp_unlock(pClient);
      if ( bRefresh || !bDiscovered || bSchemaExpired ) {
          return xwork__mcp_refresh_cache(pClient, pCancel, uDeadline, pError);
-@@ -3231,11 +3325,7 @@
+@@ -3229,13 +3360,14 @@
+         return false;
+     }
      pClient = xwork__runtime_mcp_find(pAgent->pRuntime, sServerId);
-     if ( !pClient || !xwork__mcp_prepare_lazy(
+-    if ( !pClient || !xwork__mcp_prepare_lazy(
++    if ( !pClient || !xwork__mcp_visible(pAgent, sServerId) ) {
++        xwork__set_error(pError, XWORK_ERROR_POLICY,
++            "MCP server is outside this project's scope; use tool_search to discover available servers");
++        return false;
++    }
++    if ( !xwork__mcp_prepare_lazy(
              pClient, false, pCancel, uDeadline, pError) ) return false;
 -    if ( !xwork__mcp_try_lock(pClient) ) {
 -        xwork__set_error(pError, XWORK_ERROR_CONTEXT,
@@ -312,7 +378,24 @@
      for ( i = 0u; i < pClient->iToolCount; ++i ) {
          if ( strcmp(pClient->pTools[i].sRemoteName, sRemoteToolName) == 0 ) {
              pProxy = &pClient->pTools[i];
-@@ -3388,16 +3478,26 @@
+@@ -3357,6 +3489,7 @@
+              iShown < (size_t)uLimit; ++i ) {
+             pClient = pAgent->pRuntime->ppMcpServers[i];
+             if ( !pClient || !pClient->bRegistered ||
++                 !xwork__mcp_visible(pAgent, pClient->sServerName) ||
+                  xwork__atomic_load(&pClient->iEnabled) == 0 ||
+                  (!xwork__ascii_contains(pClient->sServerName, sQuery) &&
+                   !xwork__ascii_contains(pClient->sSummary, sQuery)) ) continue;
+@@ -3378,7 +3511,7 @@
+         size_t i;
+         size_t iShown = 0u;
+         pClient = xwork__runtime_mcp_find(pAgent->pRuntime, sServer);
+-        if ( !pClient ) {
++        if ( !pClient || !xwork__mcp_visible(pAgent, sServer) ) {
+             eResult = xworkToolOutputSet(pOutput, false,
+                 "unknown MCP server id") ? XWORK_RESULT_OK : XWORK_RESULT_ERROR;
+             goto cleanup;
+@@ -3388,16 +3521,26 @@
                  pContext && pContext->uDeadline
                      ? pContext->uDeadline : XLLM_DEADLINE_NEVER,
                  pError) ) goto cleanup;
@@ -344,3 +427,59 @@
          }
          for ( i = 0u; i < pClient->iToolCount && iShown < (size_t)uLimit; ++i ) {
              xwork_mcp_tool_proxy* pTool = &pClient->pTools[i];
+--- a/lib/xwork/xwork.h
++++ b/lib/xwork/xwork.h
+@@ -1071,6 +1071,10 @@
+ );
+ bool xworkMcpClientGetInfo(const xwork_mcp_client* pClient, xwork_mcp_info* pInfo);
+ void xworkMcpClientDestroy(xwork_mcp_client* pClient);
++/* Restrict lazy discovery and calls to this immutable run's effective servers.
++ * An empty list disables MCP. Subagents inherit the parent's restriction. */
++bool xworkAgentSetMcpServers(xwork_agent* pAgent,
++    const char* const* psServerIds, size_t iCount, xwork_error* pError);
+ 
+ void xworkMcpServerConfigInit(xwork_mcp_server_config* pConfig);
+ void xworkMcpServerInfoInit(xwork_mcp_server_info* pInfo);
+--- a/lib/xwork/src/xwork_internal.h
++++ b/lib/xwork/src/xwork_internal.h
+@@ -407,6 +407,9 @@
+     xllm_client* pClient;
+     xllm_session* pSession;
+     char* sWorkspaceRoot;
++    bool bMcpServerScope;
++    char** psMcpServerScope;
++    size_t iMcpServerScopeCount;
+     struct { char* sAlias; char* sDirectory; } PathMounts[8];
+     size_t iPathMountCount;
+     bool bFileMountsSealed;
+--- a/lib/xwork/src/xwork_core.c
++++ b/lib/xwork/src/xwork_core.c
+@@ -1085,6 +1085,9 @@
+     xworkSubagentCatalogRelease(pAgent->pSubagentCatalog);
+     xwork__delegation_scope_release(pAgent->pDelegationScope);
+     free(pAgent->sWorkspaceRoot);
++    for ( size_t iScope = 0u; iScope < pAgent->iMcpServerScopeCount; ++iScope )
++        free(pAgent->psMcpServerScope[iScope]);
++    free(pAgent->psMcpServerScope);
+     free(pAgent->sSystemPrompt);
+     free(pAgent->sSessionPath);
+     free(pAgent->sArtifactDirectory);
+--- a/lib/xwork/src/xwork_subagent.c
++++ b/lib/xwork/src/xwork_subagent.c
+@@ -800,6 +800,9 @@
+     pChild = xworkAgentCreateWithRuntime(pArgs->pParent->pRuntime,
+         pDefinition, &tOptions, pError);
+     if ( !pChild ) goto cleanup;
++    if ( pArgs->pParent->bMcpServerScope && !xworkAgentSetMcpServers(pChild,
++            (const char* const*)pArgs->pParent->psMcpServerScope,
++            pArgs->pParent->iMcpServerScopeCount, pError) ) goto cleanup;
+     if ( pArgs->pParent->pFileScope ) {
+         if ( !xworkAgentSetFileScope(pChild, pArgs->pParent->pFileScope, pError) ) goto cleanup;
+     } else if ( !xworkAgentAllowExternalPaths(pChild,
+--- a/src/script/import_xwork.inc
++++ b/src/script/import_xwork.inc
+@@ -186,3 +186,4 @@
+ XS_XWORK_SYMBOL(xworkFileScopeSetExternal)
+ XS_XWORK_SYMBOL(xworkFileScopeExternal)
+ XS_XWORK_SYMBOL(xworkAgentSetFileScope)
++XS_XWORK_SYMBOL(xworkAgentSetMcpServers)

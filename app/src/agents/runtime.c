@@ -10,6 +10,7 @@
 #include "../../include/mdo/config.h"
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/memory.h"
+#include "../../include/mdo/mcp.h"
 #include "../../include/mdo/models.h"
 #include "../../include/mdo/modules.h"
 #include "../../include/mdo/project_lifecycle.h"
@@ -1395,6 +1396,7 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
     Session->Agent = xworkAgentCreateWithRuntime(Runtime, Definition,
         &AgentOptions, Error);
     if ( Session->Agent == NULL ) goto fail;
+    if ( !MdoMcpConfigureAgent(Session->Agent, AgentOptions.sWorkspaceRoot, Error) ) goto fail;
     if ( Owner->ApprovalScope ) {
         if ( !xworkAgentSetFileScope(Session->Agent, Owner->ApprovalScope->Files, Error) ) goto fail;
     } else if ( !xworkAgentAllowExternalPaths(Session->Agent,
