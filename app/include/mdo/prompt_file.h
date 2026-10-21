@@ -51,6 +51,8 @@ static inline xvalue* MdoPromptParse(cstr Text, bool HeaderRequired,
     char* Block = NULL;
     size_t BlockSize = 0u, BlockIndent = 0u;
     bool Fold = false, IgnoredBlock = false, FoundEnd = false;
+    bool ArgumentList = false;
+    cstr Failure = "Invalid Markdown frontmatter, duplicate field, or text limit";
     if (Error != NULL && Capacity != 0u) Error[0] = '\0';
     if (Text == NULL || strlen(Text) > MDO_EXTENSION_TEXT_LIMIT ||
         !xrtUtf8Valid(xrtStrView(Text), NULL)) goto failed;
@@ -109,10 +111,13 @@ static inline xvalue* MdoPromptParse(cstr Text, bool HeaderRequired,
                         xrtValueArrayAppend(Active, Item);
                     xrtValueRelease(Item);
                     if (!Ok) goto failed;
+                } else if (ArgumentList) {
+                    Failure = "Skill arguments block must be a list of identifier strings";
+                    goto failed;
                 } else if (!IgnoredBlock) goto failed;
                 Line = End != NULL ? End + 1 : Line + Raw.Size; continue;
             }
-            Active = NULL; IgnoredBlock = false;
+            Active = NULL; IgnoredBlock = false; ArgumentList = false;
             while (Colon < Trimmed.Size && Trimmed.Data[Colon] != ':') ++Colon;
             if (Colon == 0u || Colon == Trimmed.Size || Colon >= 96u) goto failed;
             {
@@ -137,7 +142,8 @@ static inline xvalue* MdoPromptParse(cstr Text, bool HeaderRequired,
                     if (Value == NULL || !xrtValueObjectSet(Object, Key, Value)) {
                         xrtValueRelease(Value); goto failed;
                     }
-                    if (Input.Size == 0u) { Active = Value; IgnoredBlock = true; }
+                    if (Input.Size == 0u) { Active = Value; IgnoredBlock = true;
+                        ArgumentList = xrtStrEqual(Key, XRT_STR_LITERAL("arguments")); }
                     xrtValueRelease(Value);
                 }
             }
@@ -155,7 +161,7 @@ static inline xvalue* MdoPromptParse(cstr Text, bool HeaderRequired,
 failed:
     xrtFree(Block); xrtValueRelease(Object);
     if (Error != NULL && Capacity != 0u)
-        snprintf(Error, Capacity, "Invalid Markdown frontmatter, duplicate field, or text limit");
+        snprintf(Error, Capacity, "%s", Failure);
     return NULL;
 }
 

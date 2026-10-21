@@ -16,6 +16,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from test_api_runtime import free_port, request, wait_ready, MCP_MOCK_SERVER
 
 ROOT = Path(__file__).resolve().parent.parent
+SKILL_PARAMETERS = r'"C:\new folder\章节.txt" "检查 $0 与 ${MDO_SKILL_DIR}" ""'
+SKILL_PARAMETER_BODY = 'ARG_MARKER=$file|$focus|$2\nRAW=$ARGUMENTS\nINDEX=$ARGUMENTS[0]'
+SKILL_PARAMETER_RENDERED = ('ARG_MARKER=C:\\new folder\\章节.txt|检查 $0 与 ${MDO_SKILL_DIR}|\nRAW='
+    + SKILL_PARAMETERS + '\nINDEX=C:\\new folder\\章节.txt')
 
 class SkillModel(BaseHTTPRequestHandler):
     calls = 0
@@ -63,7 +67,8 @@ class SkillModel(BaseHTTPRequestHandler):
             type(self).payloads.append(payload)
             type(self).calls += 1
             calls = type(self).calls
-            arguments = ({'query':'RESEARCH', 'offset':0, 'limit':1}, {'name': 'research'}, {'name': 'research', 'path': 'references/guide.txt'})
+            arguments = ({'query':'RESEARCH', 'offset':0, 'limit':1},
+                {'name': 'research', 'arguments': SKILL_PARAMETERS}, {'name': 'research', 'path': 'references/guide.txt'})
             output = [{'type': 'function_call', 'call_id': 'skill-' + str(calls),
                 'name': 'skill', 'arguments': json.dumps(arguments[calls-1])}] if calls <= 3 else [
                     {'type': 'message', 'content': [{'type': 'output_text', 'text': 'Skill probe complete'}]}]
@@ -178,7 +183,7 @@ def main():
                 assert call('POST', 'commands/review/enabled', {'enabled': False}, revision)[0] == 200
                 assert call('GET', 'commands/review')[1]['data']['enabled'] is False
                 assert call('POST', 'commands/review/enabled', {'enabled': True}, revision)[0] == 200
-                skill = '---\nname: research\ndescription: >\n  Research a project\n  before changes.\nmetadata:\n  author: test\n---\nUse references/guide.txt.'
+                skill = '---\nname: research\ndescription: >\n  Research a project\n  before changes.\narguments: [file, focus]\nargument-hint: "[file] [focus]"\nmetadata:\n  author: test\n---\nUse references/guide.txt.\n' + SKILL_PARAMETER_BODY
                 file = {'path': 'references/guide.txt', 'base64': base64.b64encode(b'Inspect first').decode()}
                 status, data = call('PUT', 'skills/research', {'content': skill, 'files': [file]}, 'new')
                 assert status == 200, data
@@ -186,12 +191,28 @@ def main():
                 skill_revision = data['data']['revision']
                 skills = json.loads(request(port, 'GET', '/api/v1/skills')[2])['data']['items']
                 assert any(item['id'] == 'research' and item['resource_count'] == 1 for item in skills), skills
+                parameters = next(item for item in skills if item['id'] == 'research')
+                assert parameters['arguments'] == ['file', 'focus'] and parameters['argument_hint'] == '[file] [focus]', parameters
                 status, _, raw = request(port, 'POST', '/api/v1/skills/invoke',
-                    body=json.dumps({'id':'research','arguments':'literal $1 and $&'}).encode(),
+                    body=json.dumps({'id':'research','arguments':SKILL_PARAMETERS}).encode(),
                     headers={'Content-Type':'application/json'})
                 assert status == 200, raw
                 selected=json.loads(raw)['data']['text']
-                assert 'Use references/guide.txt.' in selected and 'literal $1 and $&' in selected, selected
+                expected_instructions = 'Use references/guide.txt.\n' + SKILL_PARAMETER_RENDERED
+                assert expected_instructions in selected and selected.endswith(SKILL_PARAMETERS), selected
+                status, _, raw = request(port, 'POST', '/api/v1/skills/invoke',
+                    body=b'{"id":"research"}', headers={'Content-Type':'application/json'})
+                assert status == 200 and 'ARG_MARKER=||$2' in json.loads(raw)['data']['text'], raw
+                for invalid in (42, 'bad\0input', 'x' * 16385):
+                    assert request(port, 'POST', '/api/v1/skills/invoke',
+                        body=json.dumps({'id':'research','arguments':invalid}).encode(),
+                        headers={'Content-Type':'application/json'})[0] == 400
+                assert call('PUT', 'skills/invalid-arguments',
+                    {'content': skill.replace('[file, focus]', '[file, file]')}, 'new')[0] == 422
+                assert not (base / 'home/skills/invalid-arguments').exists()
+                status, invalid = call('PUT', 'skills/invalid-arguments',
+                    {'content': skill.replace('arguments: [file, focus]', 'arguments:\n  file: required')}, 'new')
+                assert status == 422 and 'arguments' in json.dumps(invalid), invalid
                 scoped=base/'home/workspace/.mdo/skills/research/SKILL.md'
                 scoped.parent.mkdir(parents=True,exist_ok=True)
                 scoped.write_text(skill.replace('Use references/guide.txt.','PROJECT_SCOPE_MARKER'),encoding='utf-8')
@@ -318,6 +339,11 @@ def main():
                 assert discovered and 'status: success\ntool: skill\n{' in discovered[-1], discovered
                 page = json.loads(discovered[-1][discovered[-1].index('{'):])
                 assert page['total'] == 1 and page['items'][0]['name'] == 'research' and page['next_offset'] == 1, page
+                assert page['items'][0]['argument_names'] == ['file', 'focus'] and page['items'][0]['argument_hint'] == '[file] [focus]', page
+                loaded = [part['output'] for part in SkillModel.payloads[2]['input'] if part.get('type') == 'function_call_output'][-1]
+                loaded = json.loads(loaded[loaded.index('{'):])
+                assert loaded['instructions'] == expected_instructions, loaded
+                assert loaded['arguments'] == SKILL_PARAMETERS and loaded['argument_names'] == ['file', 'focus'], loaded
                 assert 'mdo_available_skills' in json.dumps(SkillModel.payloads[0]), 'Skill metadata missing'
                 assert 'MANUAL_ONLY_MARKER' not in json.dumps(SkillModel.payloads[0]).replace('Automatic',''), 'manual-only Skill advertised'
                 assert 'Use references/guide.txt.' not in json.dumps(SkillModel.payloads[0]), 'Skill body eagerly injected'

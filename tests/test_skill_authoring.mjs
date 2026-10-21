@@ -37,5 +37,7 @@ test("authoring prompts retain literal directory variables and declare supported
   const prompt = skillAuthoringPrompt({ directory: "D:/some path/skills", scope: "project" });
   assert.ok(prompt.includes('"D:/some path/skills"')); assert.ok(prompt.includes("${MDO_SKILL_DIR}"));
   assert.ok(prompt.includes("disable-model-invocation")); assert.ok(prompt.includes("不要覆盖"));
+  assert.ok(prompt.includes("$ARGUMENTS[0]")); assert.ok(prompt.includes("arguments: [file, focus]"));
+  assert.ok(prompt.includes("argument-hint 只提供输入提示")); assert.ok(prompt.includes("不要因此终止任务"));
   assert.throws(() => skillAuthoringPrompt({ directory: "" }), /unavailable/);
 });

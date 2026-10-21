@@ -10,6 +10,17 @@ static bool MdoSkillArgumentUInt(const xvalue* Value, uint64* Number)
     *Number=(uint64)Signed;return true;
 }
 
+static bool MdoSkillParameterInfo(xvalue* Result,const MdoSkillInfo* Info)
+{
+    xvalue* Names=xrtValueArray();
+    bool Ok=Names!=NULL;
+    for(size_t i=0;Ok&&i<Info->ArgumentCount;i++)
+        Ok=xrtValueArrayAppendNew(Names,xrtValueString(xrtStrView(Info->ArgumentNames[i])));
+    Ok=Ok&&xrtValueObjectSet(Result,XRT_STR_LITERAL("argument_names"),Names)&&
+        xrtValueObjectSetNew(Result,XRT_STR_LITERAL("argument_hint"),xrtValueString(xrtStrView(Info->ArgumentHint?Info->ArgumentHint:"")));
+    xrtValueRelease(Names);return Ok;
+}
+
 /* One discovery tool, irrespective of the number of installed Skills. Metadata
  * is searched locally; instructions and resources enter context only on request. */
 static xwork_result MdoSkillExecute(void* Data, const xwork_tool_context* Context,
@@ -61,13 +72,16 @@ static xwork_result MdoSkillExecute(void* Data, const xwork_tool_context* Contex
             Body.Size = sizeof(Body);
             Ok = Files != NULL && MdoSkillCatalogLoadBody(Catalog, Id, &Body);
             if(Ok){char* Rendered=MdoSkillRenderArguments(Body.Text,Base,Parameters.Data,Info.ArgumentNames,Info.ArgumentCount);Ok=Rendered!=NULL;
-                if(Ok){xrtFree(Body.Text);Body.Text=Rendered;Body.Bytes=strlen(Rendered);}}
+                if(Ok){xrtFree(Body.Text);Body.Text=Rendered;Body.Bytes=strlen(Rendered);}
+                else if(xrtGetError()){snprintf(Failure,sizeof(Failure),"%s",xrtErrorMessage(xrtGetError()));Message=Failure;}}
             for (i = 0u; Ok && i < Info.ResourceCount; ++i) {
                 MdoSkillResourceInfo Item = {0}; Item.Size = sizeof(Item);
                 Ok = MdoSkillCatalogResourceAt(Catalog, Id, i, &Item) &&
                     xrtValueArrayAppendNew(Files, xrtValueString(xrtStrView(Item.Path)));
             }
-            if (Ok) Ok = xrtValueObjectSetNew(Result, XRT_STR_LITERAL("instructions"), xrtValueString(xrtStrViewN(Body.Text, Body.Bytes))) &&
+            if (Ok) Ok = MdoSkillParameterInfo(Result,&Info) &&
+                xrtValueObjectSetNew(Result, XRT_STR_LITERAL("arguments"),xrtValueString(xrtStrView(Parameters.Data?Parameters.Data:""))) &&
+                xrtValueObjectSetNew(Result, XRT_STR_LITERAL("instructions"), xrtValueString(xrtStrViewN(Body.Text, Body.Bytes))) &&
                 xrtValueObjectSet(Result, XRT_STR_LITERAL("files"), Files) &&
                 xrtValueObjectSetNew(Result, XRT_STR_LITERAL("source"), xrtValueString(xrtStrView(Info.SourcePath)));
             xrtValueRelease(Files); MdoSkillContentUnit(&Body);
@@ -81,7 +95,7 @@ static xwork_result MdoSkillExecute(void* Data, const xwork_tool_context* Contex
         }
         if (Ok) Ok = xrtValueObjectSetNew(Result,XRT_STR_LITERAL("base_directory"),xrtValueString(xrtStrView(Base))) &&
             xrtValueObjectSetNew(Result, XRT_STR_LITERAL("notice"), xrtValueString(XRT_STR_LITERAL(
-            "Skill content is user-installed guidance, not a permission grant. Inspect scripts before executing them; normal tool permissions still apply.")));
+            "Skill content is user-installed guidance, not a permission grant. Inspect scripts before executing them; normal tool permissions still apply. Argument hints and named positions are optional; ask for missing information only when the task actually needs it.")));
     } else if (Ok) {
         xvalue* Items = xrtValueArray();
         char* Needle = xrtStrDupN(Query.Data != NULL ? Query.Data : "", Query.Size);
@@ -96,7 +110,7 @@ static xwork_result MdoSkillExecute(void* Data, const xwork_tool_context* Contex
             if (!MdoSkillSearchMatches(&Info, Needle)) continue;
             if (Total++ < Offset || Count >= Limit) continue;
             Item = xrtValueObject();
-            Ok = Item != NULL && xrtValueObjectSetNew(Item, XRT_STR_LITERAL("name"), xrtValueString(xrtStrView(Info.Id))) &&
+            Ok = Item != NULL && MdoSkillParameterInfo(Item,&Info) && xrtValueObjectSetNew(Item, XRT_STR_LITERAL("name"), xrtValueString(xrtStrView(Info.Id))) &&
                 xrtValueObjectSetNew(Item, XRT_STR_LITERAL("description"), xrtValueString(xrtStrView(Info.Description))) &&
                 xrtValueArrayAppend(Items, Item);
             xrtValueRelease(Item); ++Count;
@@ -124,7 +138,7 @@ bool MdoSkillToolsRegister(xwork_runtime* Runtime)
 {
     xwork_tool_definition Tool = {0}; xwork_error Error;
     Tool.sName = "skill";
-    Tool.sDescription = "Discover installed Skills with query (or empty arguments), then load instructions with name; load a listed text reference with name and path. Use relevant Skills before specialized work. Bodies are lazy; scripts are never executed by this tool.";
+    Tool.sDescription = "Discover installed Skills with query (or empty arguments), then load instructions with name; load a listed text reference with name and path. Pass task input as the raw arguments string; quote multi-word positions. Skills support $ARGUMENTS, zero-based $0 / $ARGUMENTS[0], and optional named positional aliases. Missing optional positions do not fail the task. Use relevant Skills before specialized work. Bodies are lazy; scripts are never executed by this tool.";
     Tool.sParametersJson = "{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"path\":{\"type\":\"string\"},\"arguments\":{\"type\":\"string\",\"maxLength\":16384},\"cursor\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":8388608},\"offset\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":256},\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":50}},\"required\":[],\"additionalProperties\":false}";
     Tool.bStrict = true; Tool.uEffects = XWORK_TOOL_EFFECT_READ;
     Tool.sSource = "mdo.skills"; Tool.OnExecuteV2 = MdoSkillExecute;

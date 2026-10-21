@@ -39,11 +39,14 @@ VALID_DECLARATIONS = [
     'arguments: [file, focus]', 'arguments: ["file", "focus"]',
     "arguments: ['file', 'focus']", 'arguments: file focus',
     'arguments:\n  - file\n  - focus',
+    'arguments: []',
+    'arguments: [' + ', '.join(f'a{i}' for i in range(128)) + ']',
 ]
 INVALID_DECLARATIONS = [
     'arguments: [file, file]', 'arguments: [ARGUMENTS]', 'arguments: [0file]',
     'arguments: [file-name]', 'arguments: [""]', 'arguments: [file,]',
     'arguments: {file: required}', 'arguments: [1]', 'arguments: ["file\\u0000x"]',
+    'arguments:\n  file: required', 'arguments:\n  - file\n  required: true',
     'arguments: [' + 'x' * 65 + ']',
     'arguments: [' + ', '.join(f'a{i}' for i in range(129)) + ']',
 ]

@@ -37,8 +37,9 @@ static bool MdoSkillsArgumentNames(MdoSkillEntry* Entry,const xvalue* Value,char
             for(size_t i=0;i<=Names.Size;i++)if(i==Names.Size||Names.Data[i]==',') {
                 char* Name=NULL;
                 bool Ok=MdoSkillsScalar(xrtStrTrim(xrtStrViewN(Names.Data+Start,i-Start)),64,&Name);
-                if(Ok)Ok=MdoSkillsArgumentName(Entry,xrtStrView(Name),Error,Capacity);
-                xrtFree(Name);if(!Ok)goto invalid;
+                if(!Ok){xrtFree(Name);goto invalid;}
+                Ok=MdoSkillsArgumentName(Entry,xrtStrView(Name),Error,Capacity);
+                xrtFree(Name);if(!Ok)return false;
                 Start=i+1;
             }
             return true;

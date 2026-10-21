@@ -403,6 +403,7 @@ bool MdoApiSkillsRoute(MdoApiContext* Context)
             MdoApiValueSetBool(Item,"auto_invoke",Info.AutoInvoke) &&
             MdoApiValueSetBool(Item,"user_invocable",Info.UserInvocable) &&
             MdoApiValueSetString(Item,"argument_hint",Info.ArgumentHint) &&
+            MdoApiValueSetStrings(Item,"arguments",Info.ArgumentNames,Info.ArgumentCount) &&
             MdoApiValueSetUInt(Item, "estimated_tokens", Info.EstimatedTokens) &&
             MdoApiValueSetUInt(Item, "resource_count", Info.ResourceCount) &&
             MdoApiValueSetStrings(Item, "required_tools", Info.RequiredTools,

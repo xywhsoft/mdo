@@ -15,6 +15,7 @@ description: Inspect changes before delivery
 Use `name: review` and `description: Inspect changes before delivery` as top-level
 fields. Directory IDs are portable lowercase names. Optional fields include
 version, license, compatibility, when_to_use, argument-hint and metadata mappings.
+The optional `arguments` field supplies named positional aliases as described below.
 
 - `disable-model-invocation: true` hides the Skill from model discovery and blocks
   model loads and Agent preloading. The user can select it with `$review`.
@@ -87,6 +88,9 @@ Invoke with `$review "src/example.c" "memory leaks"` or pass
 `{"name":"review","arguments":"\"src/example.c\" \"memory leaks\""}` to
 the model's Skill tool. Use the same zero-based indexing for every Skill; the
 one-based positions used by some other products' commands are not reinterpreted.
+The chat picker displays `argument-hint`. Catalog responses include `arguments`;
+the model's discovery/load results include `argument_names` and `argument_hint`.
+Loaded results also retain the raw `arguments` so unused input remains visible.
 
 SKILL.md is limited to 128 KiB in management and runtime. Resource text reads are
 48 KiB pages with UTF-8-aligned cursor, next_cursor and eof. Binary resources are

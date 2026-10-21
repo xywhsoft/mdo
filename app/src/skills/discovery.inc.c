@@ -45,7 +45,8 @@ bool MdoSkillCatalogAppendPrompt(const MdoSkillCatalog* Catalog, char** Prompt)
         if (n > 384) { n=384; while (n && ((unsigned char)Info.Description[n]&0xc0)==0x80) --n; }
         xvalue* Item = xrtValueObject();
         Ok = Item && xrtValueObjectSetNew(Item,XRT_STR_LITERAL("name"),xrtValueString(xrtStrView(Info.Id))) &&
-            xrtValueObjectSetNew(Item,XRT_STR_LITERAL("description"),xrtValueString(xrtStrViewN(Info.Description,n)));
+            xrtValueObjectSetNew(Item,XRT_STR_LITERAL("description"),xrtValueString(xrtStrViewN(Info.Description,n))) &&
+            (!Info.ArgumentHint || xrtValueObjectSetNew(Item,XRT_STR_LITERAL("argument_hint"),xrtValueString(xrtStrView(Info.ArgumentHint))));
         char* Encoded = Ok ? xrtJsonStringify(Item,false,NULL) : NULL;
         if (!Encoded) Ok=false;
         size_t Bytes = Encoded ? strlen(Encoded) : 0; xrtFree(Encoded);
