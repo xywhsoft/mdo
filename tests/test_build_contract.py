@@ -305,6 +305,7 @@ class BuildContractTests(unittest.TestCase):
             "src/api/operations.c",
             "src/api/session_capture.c",
             "src/api/sessions.c",
+            "src/api/shared_files.c",
             "src/api/mutations.c",
             "src/api/account.c",
             "src/api/remote.c",

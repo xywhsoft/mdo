@@ -140,11 +140,15 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("await submissionController.submit(key, rawInput, attachments, interrupt,", app)
         self.assertIn("newTaskController.createForAttachment", app)
         self.assertIn("updateProfile = updateSessionProfile", profile)
-        self.assertIn("updateProfile(session, profile, { signal: controller.signal })", profile)
+        self.assertIn("updatePermission = updateSessionPermission", profile)
+        self.assertRegex(profile,
+                         r'await \(field === "permission" \? updatePermission : updateProfile\)\(\s*'
+                         r'session, profile, \{ signal: controller\.signal \}\)')
         self.assertIn("isRunActive()", profile)
         self.assertIn("draftStore.setComposerProfile(key,", profile)
         self.assertIn("runSessionProfileUpdate(session, profile, options)", sessions)
-        self.assertIn('send(path + "/profile", body, { ifMatch: tag, signal: attemptSignal })', profile_update)
+        self.assertIn('send(path + (permissionOnly ? "/permission" : "/profile"), body, '
+                      '{ ifMatch: tag, signal: attemptSignal })', profile_update)
         self.assertIn("ifMatch: etag(session)", sessions)
 
     def test_settings_autosave_uses_etag_and_server_side_merge(self) -> None:
