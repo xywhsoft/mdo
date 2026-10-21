@@ -1,7 +1,14 @@
 # Locked xs host source
 
-The current lock uses `xs-xrt-current.bundle` on `refs/heads/master`.
-It upgrades the product host to XRT `ac059267` while retaining the existing
+The current lock uses `xs-regex-acceptance.bundle` on `refs/heads/master`.
+It retains XRT `3d55ec41` with the upstream DFA acceptance fix from
+`xrt@a539c579` and records that backport in `deps.lock.xrt.upstream_fixes`.
+The native host must be rebuilt: changing application sources alone does not
+repair the regex engine. This fixes ordinary `grep` searches such as `match .*`
+against `xrtahomatch Match;`, including retrying an interrupted persisted call.
+No application/extension ABI or persistence schema is changed.
+
+The preceding `xs-xrt-current.bundle` upgraded the product host while retaining the existing
 product APIs and fixes from `4b0dddaa`. XRT is implemented exactly once; the
 HTTP client compiles as native sources instead of embedding an old core.
 Product Unix/monotonic microsecond records retain their meaning; native XRT

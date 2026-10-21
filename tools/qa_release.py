@@ -155,12 +155,15 @@ def packed_probe_commands(packed: Path, output: Path) -> list[list[str]]:
         "test_packed_restore.py", "test_packed_compaction_failure.py",
         "test_packed_compaction_recovery.py", "test_packed_fork_recovery.py",
         "test_packed_message_edit_recovery.py", "test_packed_recovery_ack.py",
+        "test_grep_regex_packed.py",
     )
     commands = []
     for name in names:
         command = [sys.executable, str(TESTS / name), "--packed", str(packed)]
         if name == "test_packed_fork_recovery.py":
             command += ["--report", str(output / "fork-recovery.json")]
+        if name == "test_grep_regex_packed.py":
+            command += ["--report", str(output / "grep-regex.json")]
         commands.append(command)
     return commands
 

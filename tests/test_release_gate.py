@@ -38,12 +38,14 @@ class ReleaseGateTests(unittest.TestCase):
     def test_packed_recovery_probes_use_this_candidate_and_required_report(self):
         candidate = Path("final-candidate")
         commands = qa_release.packed_probe_commands(candidate, Path("qa-output"))
-        self.assertEqual(len(commands), 12)
+        self.assertEqual(len(commands), 13)
         for command in commands:
             self.assertTrue(Path(command[1]).is_file())
             self.assertEqual(command[2:4], ["--packed", str(candidate)])
         fork = next(c for c in commands if c[1].endswith("test_packed_fork_recovery.py"))
         self.assertEqual(fork[4:], ["--report", str(Path("qa-output/fork-recovery.json"))])
+        grep = next(c for c in commands if c[1].endswith("test_grep_regex_packed.py"))
+        self.assertEqual(grep[4:], ["--report", str(Path("qa-output/grep-regex.json"))])
 
     def test_publication_rejects_stale_source_or_dependency_records(self):
         record = {"version_name": "0.1.0", "xs_commit": "current", "xrt_commit": "runtime",

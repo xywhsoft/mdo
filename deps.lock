@@ -4,10 +4,13 @@
   "xrt": {
     "commit": "3d55ec41e13f0884ffe840d44a57a0189d9310f3",
     "version": "2.0.0-dev",
-    "single_header_sha256": "015f5b19e07dd1fbfb085c1fd096cf69c813b03bdd9dc94b29ae8b5c471cd18a"
+    "single_header_sha256": "ffc9dd38f76051c7a7c6263bd196ca65a76bcada7a03a948aaa00358733f98c8",
+    "upstream_fixes": [
+      "a539c579408fb0021456ad263249adfabb2e5a1a"
+    ]
   },
   "xserver": {
-    "commit": "98c7651fafe52ce81854fc3abebedc938ab13311",
+    "commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
     "version": "1.0.0",
     "required_extensions": [
       "xwork",
@@ -26,8 +29,8 @@
       }
     },
     "source_bundle": {
-      "path": "tools/dependencies/xs-xrt-current.bundle",
-      "sha256": "8f17c7164ad2530c4835273fba577e41024e8596d11b89f248f638c6ef30d99d",
+      "path": "tools/dependencies/xs-regex-acceptance.bundle",
+      "sha256": "33a994a476cdf631b92877db13767e2be27c234de10048ab8355c4f997ca8684",
       "ref": "refs/heads/master"
     }
   },
