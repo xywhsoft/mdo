@@ -33,6 +33,7 @@ typedef struct MdoMcpHttpHeaderEntry {
 
 typedef struct MdoMcpServerEntry {
     char* RuntimeId;
+    char* OAuthJson;
     bool External;
     bool Enabled;
     bool AutoReconnect;
@@ -107,6 +108,8 @@ typedef struct MdoMcpState {
 } MdoMcpState;
 
 static MdoMcpState g_MdoMcp;
+
+#include "oauth.inc.c"
 
 static void MdoMcpSetError(cstr Message)
 {
@@ -255,6 +258,7 @@ static void MdoMcpServerUnit(MdoMcpServerEntry* pEntry)
     size_t i;
     if ( pEntry == NULL ) return;
     xrtFree(pEntry->RuntimeId);
+    xrtFree(pEntry->OAuthJson);
     xrtFree(pEntry->Id);
     xrtFree(pEntry->Name);
     xrtFree(pEntry->Description);
@@ -1241,7 +1245,7 @@ static bool MdoMcpParseServer(const MdoMcpSource* pSource,
         "schema_version", "id", "name", "description", "enabled",
         "transport", "protocol_version", "startup_timeout_ms",
         "request_timeout_ms", "limits", "tools", "security",
-        "auto_reconnect"
+        "auto_reconnect", "oauth"
     };
     static const char* const LimitKeys[] = { "message_bytes", "tools" };
     static const char* const ToolKeys[] = { "allow", "deny" };
@@ -1404,6 +1408,19 @@ static bool MdoMcpParseServer(const MdoMcpSource* pSource,
         MdoMcpFormatError(Error, MDO_MCP_ERROR_LIMIT,
             "transport.type is unsupported");
         goto done;
+    }
+    {
+        const xvalue* OAuth=MdoMcpObjectGet(pRoot,"oauth");
+        pEntry->OAuthJson=McpOAuthConfig(OAuth,Error);
+        if(Error[0])goto done;
+        if(pEntry->OAuthJson) {
+            if(pEntry->Transport!=MDO_MCP_TRANSPORT_STREAMABLE_HTTP) {
+                snprintf(Error,MDO_MCP_ERROR_LIMIT,"OAuth requires Streamable HTTP; stdio servers use environment credentials");goto done;
+            }
+            for(size_t i=0;i<pEntry->HttpHeaderCount;i++)if(MdoMcpHeaderNameEqualsText(xrtStrView(pEntry->HttpHeaders[i].Name),"Authorization")) {
+                snprintf(Error,MDO_MCP_ERROR_LIMIT,"OAuth cannot be combined with a static Authorization header");goto done;
+            }
+        }
     }
     Ok = true;
 
@@ -1601,9 +1618,13 @@ static bool MdoMcpRegisterCatalog(MdoMcpCatalog* pCatalog,
     }
     memset(&Error, 0, sizeof(Error));
     if ( !xrtMutexLock(g_MdoMcp.Lock) ) goto done;
+    if(!McpOAuthBeginSource(Source,pCatalog)) {
+        (void)xrtMutexUnlock(g_MdoMcp.Lock);goto done;
+    }
     if ( g_MdoMcp.Initialized && g_MdoMcp.Runtime != NULL )
         Registered = xworkRuntimeReplaceMcpServersBySource(g_MdoMcp.Runtime,
             Source, Configs, pCatalog->Count, &Replaced, &Error);
+    McpOAuthEndSource(Registered);
     /* xwork has synchronously deep-copied accepted definitions. Catalog
      * snapshots retain only names and counts, never resolved secret values. */
     MdoMcpCatalogForgetSecrets(pCatalog);
@@ -1701,6 +1722,7 @@ bool MdoMcpManagerInit(xwork_runtime* pRuntime)
     }
     g_MdoMcp.Runtime = pRuntime;
     g_MdoMcp.Initialized = true;
+    if(!McpOAuthInit(pRuntime)){MdoMcpManagerUnit();return false;}
     if ( !MdoMcpManagerReload() ) {
         MdoMcpManagerUnit();
         return false;
@@ -1710,6 +1732,7 @@ bool MdoMcpManagerInit(xwork_runtime* pRuntime)
 
 void MdoMcpManagerUnit(void)
 {
+    McpOAuthUnit(g_MdoMcp.Runtime);
     MdoMcpCatalog* pCatalog = g_MdoMcp.Catalog;
     MdoMcpDiagnostics* pDiagnostics = g_MdoMcp.Diagnostics;
     xmutex* pLock = g_MdoMcp.Lock;
@@ -1760,6 +1783,7 @@ static bool MdoMcpServerInfoCopy(const MdoMcpCatalog* pCatalog,
     pInfo->Generation = pCatalog->Generation;
     pInfo->External = pEntry->External;
     pInfo->Enabled = pEntry->Enabled;
+    pInfo->OAuth = pEntry->OAuthJson != NULL;
     pInfo->AutoReconnect = pEntry->AutoReconnect;
     pInfo->TrustReadOnlyAnnotations = pEntry->TrustReadOnlyAnnotations;
     pInfo->Transport = pEntry->Transport;

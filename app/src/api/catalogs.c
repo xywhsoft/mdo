@@ -470,6 +470,7 @@ bool MdoApiMcpRoute(MdoApiContext* Context)
             MdoApiValueSetUInt(Item, "generation", Info.Generation) &&
             MdoApiValueSetBool(Item, "external", Info.External) &&
             MdoApiValueSetBool(Item, "enabled", Info.Enabled) &&
+            MdoApiValueSetBool(Item, "has_oauth", Info.OAuth) &&
             MdoApiValueSetBool(Item, "auto_reconnect", Info.AutoReconnect) &&
             MdoApiValueSetBool(Item, "trust_read_only_annotations",
                 Info.TrustReadOnlyAnnotations) &&

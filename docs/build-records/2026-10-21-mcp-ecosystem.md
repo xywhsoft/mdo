@@ -45,5 +45,17 @@ not replay a possibly completed state-changing tool call.
   existing targets, seals credentials and preserves the original files.
   Real HTTP regression covers four providers, project and personal targets,
   TOML timeouts, stale-source rejection, collisions and cold imports.
-- Remaining goals (OAuth, context/interaction features and expanded
-  diagnostics) are still in progress. Unsupported migration forms are reported.
+- OAuth implemented with the SDK's first-party xoauth2 extension, private pinned
+  core clock/deadline compatibility adapter, PRM/AS discovery, S256 PKCE, explicit
+  native browser opening, preregistered/CIMD/DCR clients, native sealed persistence,
+  restart-safe pending state, refresh preservation, one authenticated 401 retry,
+  logout and asynchronous best-effort provider revocation. UI supports personal
+  and project servers; no production authorization or real browser was exercised.
+- Real local OAuth regression passes PKCE verifier/resource/scope, restart during
+  login, callback replay rejection, unknown token expiry, restart after login,
+  forced refresh, omitted replacement refresh token, transient 503 retention,
+  reconnection, logout/revocation and plaintext-at-rest scan. Existing extension
+  HTTP suite and strict C compilation also pass. Android hardware is unavailable;
+  its callback path shares native code but still requires device acceptance.
+- Remaining context/interaction features and expanded diagnostics are in progress.
+  Unsupported migration forms are reported.

@@ -1,3 +1,4 @@
+import { createMcpAuthorization } from "./mcp-authorization.js";
 import { api } from "../../api/client.js";
 import { targetState, subscribeTarget } from "../../api/target.js";
 import { element, clear, errorMessage } from "../../utils/dom.js";
@@ -8,11 +9,12 @@ const targetKey = () => targetState().selected?.id || "local";
 const portable = id => /^[a-zA-Z][a-zA-Z0-9._-]{0,63}$/.test(id);
 
 export function createMcpWorkbench({ onChange }) {
+  const authorization = createMcpAuthorization();
   let dialog = null, controller = null, unsubscribe = null;
   function close(force = false) {
     if (!dialog) return true;
     if (!force && dialog._pending() && !window.confirm("放弃未保存的 MCP 配置？")) return false;
-    controller?.abort(); unsubscribe?.(); dialog.close(); dialog.remove(); dialog = null; return true;
+    authorization.destroy(); controller?.abort(); unsubscribe?.(); dialog.close(); dialog.remove(); dialog = null; return true;
   }
   function open() {
     if (!close()) return;
@@ -61,6 +63,9 @@ export function createMcpWorkbench({ onChange }) {
           item.valid ? null : element("p", { className: "extension-error", text: item.error }),
           element("div", { className: "resource-actions" }, [
             button("编辑", () => edit(item)),
+            item.has_oauth ? button("授权", async () => {
+              await api.post(endpoint(), {}, options()); if (live()) authorization.open(item.runtime_id);
+            }) : null,
             button(item.enabled ? "停用" : "启用", async () => {
               await api.post(`/mcp/project/${encodeURIComponent(item.id)}/enabled?project=${encodeURIComponent(project.value)}`,
                 { enabled: !item.enabled }, { ...options(), ifMatch: `"${item.revision}"` });

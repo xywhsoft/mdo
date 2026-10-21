@@ -155,3 +155,30 @@ MDO accepts `2026-07-28` and `2025-11-25` as separate wire codecs. It does not
 silently downgrade one to the other. The modern codec uses server-provided
 cache metadata; cache records are bounded runtime state and contain no secret
 material.
+
+## Browser authorization
+
+Streamable HTTP servers can set `oauth: true` or an object with `enabled`,
+`client_id`, `client_metadata_url`, `client_secret_ref`, `scope`,
+`resource_metadata_url`, `authorization_server`, `redirect_uri`, and `auth_method`.
+Only `none`, `client_secret_basic`, and `client_secret_post` are supported.
+A static Authorization header cannot be combined with OAuth. Stdio credentials
+continue to use environment references.
+
+Settings > MCP > Authorize discovers protected-resource/authorization metadata,
+requires S256 PKCE, and prepares an explicit browser action on the owning device.
+Pre-registered clients and metadata URLs are supported, with dynamic registration
+as fallback. Default callbacks use the current loopback app port; a configured
+redirect URI must have been registered with the provider. Android uses its local
+server callback. Pending PKCE material survives restart for ten minutes.
+
+Credentials/tokens are sealed by the native platform credential service under
+`data/mcp/oauth`; they never enter configuration exports, browser storage, or
+status responses. A missing token expiry remains unknown. Refresh preserves an
+omitted refresh token and retains saved credentials on transient errors. An
+authenticated HTTP 401 permits one refresh/retry; transport errors never replay a
+tool request. Forget removes local credentials first, disconnects the MCP session,
+and attempts advertised provider revocation in the background. Revocation failure
+does not restore local credentials.
+
+Reference: https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization

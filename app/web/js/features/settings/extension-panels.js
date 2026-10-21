@@ -1,4 +1,5 @@
 import { createSkillWorkbench } from "./skill-workbench.js";
+import { createMcpAuthorization } from "./mcp-authorization.js";
 import { createMcpWorkbench } from "./mcp-workbench.js";
 import { newTool } from "./tool-template.js";
 import { api } from "../../api/client.js";
@@ -46,6 +47,7 @@ export function createExtensionPanels() {
   let disposed = false, paused = false;
   const reads = createExtensionReads();
   const skillWorkbench = createSkillWorkbench({ onChange: () => announceChange("skills") });
+  const mcpAuthorization = createMcpAuthorization();
   const mcpWorkbench = createMcpWorkbench({ onChange: () => announceChange("mcp") });
   const actions = new Map();
   const current = (kind, target) => !disposed && !paused && selected === kind && target === targetKey();
@@ -184,6 +186,7 @@ export function createExtensionPanels() {
           await refreshMcp(item.id, scope);
           if (scope.isCurrent()) toast(label("testOk", "连接测试完成"), "success");
         })));
+        if (kind === "mcp" && item.has_oauth) controls.push(button("授权", () => mcpAuthorization.open(item.id)));
         if (kind === "mcp" && item.connected) controls.push(button(t("resource.disconnect"), () => act(kind, () => disconnectMcp(item.id))));
         if (item.external) controls.push(button(label(kind === "agents" && item.id === "default" ? "resetAgent" : "delete", kind === "agents" && item.id === "default" ? "恢复默认" : "删除"), () => act(kind, async () => {
           if (!window.confirm(kind === "agents" && item.id === "default" ? label("resetAgentConfirm", "恢复内置默认 Agent 配置？") : label("deleteConfirm", "删除 {name}？", { name: item.name }))) return;
@@ -281,6 +284,11 @@ export function createExtensionPanels() {
         environment: parseExtensionJson(values.environment || "[]", "environment"),
       } : { type: "streamable-http", endpoint: values.endpoint, headers: parseExtensionJson(values.headers || "[]", "headers") };
       if (old?.type === "stdio" && doc.transport.type === "stdio") doc.transport.inherit_environment = old.inherit_environment ?? true;
+      if (values.transport === "streamable-http" && values.oauth_enabled) {
+        doc.oauth = { ...(typeof doc.oauth === "object" ? doc.oauth : {}), enabled: true };
+        if (values.oauth_client_id) doc.oauth.client_id = values.oauth_client_id; else delete doc.oauth.client_id;
+        if (values.oauth_scope) doc.oauth.scope = values.oauth_scope; else delete doc.oauth.scope;
+      } else delete doc.oauth;
       return JSON.stringify(doc, null, 2);
     }
     const fields = { name: values.name, description: values.description, prompt: values.prompt };
@@ -320,6 +328,9 @@ export function createExtensionPanels() {
       const http = element("div", { className: "extension-transport" });
       inputField(http, "endpoint", label("endpoint", "服务器地址"), transport.endpoint || "", { type: "url", required: true });
       inputField(http, "headers", label("headers", "请求头（JSON）"), JSON.stringify(transport.headers || [], null, 2), { area: true, hint: label("secretHint", "普通 JSON 对象的值会自动加密保存；原生数组使用 secret_ref 引用 env:、file: 或 vault: 凭据。") });
+      inputField(http, "oauth_enabled", "使用浏览器 OAuth 授权", doc.oauth === true || (doc.oauth && doc.oauth.enabled !== false), { type: "checkbox" });
+      inputField(http, "oauth_client_id", "OAuth client ID（可选）", doc.oauth?.client_id || "", { hint: "留空时尝试动态注册。高级授权参数可在 JSON 中设置。" });
+      inputField(http, "oauth_scope", "OAuth scope（可选）", doc.oauth?.scope || "");
       editing.form.append(stdio, http);
       const sync = () => {
         stdio.hidden = select.value !== "stdio"; http.hidden = !stdio.hidden;
@@ -545,6 +556,6 @@ export function createExtensionPanels() {
       else if(pendingResource?.kind===selected)void openLinkedResource();
     },
     hasPendingChanges: () => dirty() || skillWorkbench.hasPendingChanges() || mcpWorkbench.hasPendingChanges(),
-    destroy() { disposed = true; skillWorkbench.destroy(); mcpWorkbench.destroy(); cancelReads(); closeEditor(true); unsubscribeLocale(); unsubscribeTarget();window.removeEventListener("mdo-extensions-changed", invalidate);window.removeEventListener("mdo-open-resource",openResource);window.removeEventListener("pagehide",onHide);window.removeEventListener("pageshow",onShow); },
+    destroy() { disposed = true; skillWorkbench.destroy(); mcpWorkbench.destroy(); mcpAuthorization.destroy(); cancelReads(); closeEditor(true); unsubscribeLocale(); unsubscribeTarget();window.removeEventListener("mdo-extensions-changed", invalidate);window.removeEventListener("mdo-open-resource",openResource);window.removeEventListener("pagehide",onHide);window.removeEventListener("pageshow",onShow); },
   });
 }

@@ -16,7 +16,8 @@
       "xwork",
       "webview",
       "image",
-      "xrudp"
+      "xrudp",
+      "xoauth2"
     ],
     "native_extensions": {
       "image": {
@@ -26,6 +27,11 @@
       "xrudp": {
         "source_commit": "0c46aca7519c5513c51b15de61d73d90ebca79b6",
         "snapshot_manifest_sha256": "ca0ef1981d95cac0dca089f5389ebf517fbc0e70dd917f4de323b9a6106aa394"
+      },
+      "xoauth2": {
+        "version": "2.0.0",
+        "source_commit": "609a67436cfd6d77dde7d89f63cac36238f92b69",
+        "tree_sha256": "1b65822a21a7ebd086aa301bc864fe16dfb5052f4209035e0b9ea27bd80afae3"
       }
     },
     "source_bundle": {
@@ -49,7 +55,7 @@
     "xwork": {
       "version": "3.11.0",
       "source_commit": "0dc70638b0faa00b89a6cdb4e73eac35ad2213e3",
-      "production_tree_sha256": "5e953a0a47db225ca79c5282450b1f54747f2ebaada2cdc3eda5d2b9561c59a8",
+      "production_tree_sha256": "4529e1cc31dff59a1dd073b3857301e012d034eb57ad02947def5f630c3c1141",
       "abi_version": 8,
       "event_schema_version": 3
     }
@@ -65,7 +71,7 @@
   },
   "sdk_overlay": {
     "path": "tools/dependencies/xwork-mcp.patch",
-    "sha256": "af83afc83f11d46db11872e20aafea9e85c838850d992154b23bab4a534f5d8b",
+    "sha256": "8dbd560f28af0faf200eb4fa0e503e675fb97276a079b29e2e73307716ccf459",
     "base_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
     "purpose": "MCP compatibility fixes; base SDK unchanged"
   }

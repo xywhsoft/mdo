@@ -119,6 +119,18 @@ export function mcpImportDocuments(text) {
       doc.transport.working_directory = server.cwd ?? null;
       doc.transport.environment = Object.entries(server.env ?? {}).map(([name, value]) => ({ name, secret_ref: reference(value) }));
     }
+    if (server.oauth) {
+      if (!server.url) throw new Error("OAuth requires an HTTP server");
+      const auth = server.oauth;
+      doc.oauth = auth === true ? true : {};
+      if (auth !== true) {
+        for (const [name, alias] of Object.entries({ client_id: "clientId", client_metadata_url: "clientMetadataUrl", scope: "scope", resource_metadata_url: "resource_metadata_url", authorization_server: "authorization_server", redirect_uri: "redirectUri", auth_method: "auth_method", client_secret_ref: "client_secret_ref", enabled: "enabled" })) {
+          const value = auth[name] ?? auth[alias]; if (value !== undefined) doc.oauth[name] = value;
+        }
+        const secret = auth.client_secret ?? auth.clientSecret;
+        if (secret) doc.oauth.client_secret_ref = reference(secret);
+      }
+    }
     doc.enabled = !server.disabled;
     return { id, content: JSON.stringify(doc, null, 2), secrets };
   });

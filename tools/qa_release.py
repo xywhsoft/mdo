@@ -96,6 +96,7 @@ def strict_compile(cc: str, xserver: Path) -> None:
         xserver / "lib/xllm",
         xserver / "lib/xllm-session",
         xserver / "lib/xs-image",
+        xserver / "lib/xoauth2",
         xserver / "tcc",
         xserver,
     )

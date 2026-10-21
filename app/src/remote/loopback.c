@@ -39,7 +39,7 @@ static bool MdoRemoteHttpPath(xstrview Path, bool ReadOnly)
     }
     if (ok && (xrtStrEqual(xrtStrViewN(path,size),XRT_STR_LITERAL("/api/v1/live")) ||
         (size >= 17u && !memcmp(path,"/api/v1/connector",17u) && (size == 17u || path[17] == '/')) ||
-        (ReadOnly && xrtStrEqual(xrtStrViewN(path,size),XRT_STR_LITERAL("/api/v1/account/callback"))))) ok = false;
+        (ReadOnly && (xrtStrEqual(xrtStrViewN(path,size),XRT_STR_LITERAL("/api/v1/account/callback")) || xrtStrEqual(xrtStrViewN(path,size),XRT_STR_LITERAL("/api/v1/mcp/oauth/callback")))))) ok = false;
     xrtFree(path); return ok;
 }
 bool MdoRemoteHttpRequestValid(const MdoRemoteHttpRequest* Request)

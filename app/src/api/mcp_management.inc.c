@@ -26,6 +26,7 @@ static xvalue* McpProjectItem(xroot Root,cstr Workspace,cstr Id)
         MdoApiValueSetStringView(Item,"description",Description)&&MdoApiValueSetBool(Item,"enabled",Enabled)&&
         MdoApiValueSetBool(Item,"valid",Valid)&&MdoApiValueSetBool(Item,"external",true)&&
         MdoApiValueSetString(Item,"error",Error);
+    Ok=Ok&&MdoApiValueSetBool(Item,"has_oauth",Doc&&xrtValueObjectHas(Doc,XRT_STR_LITERAL("oauth")));
     if(Ok&&MdoExtensionHash(Workspace,Hash)) {
         char* RuntimeId=xrtFormat("mdo-project-%.16s.%s",Hash,Id);
         Ok=RuntimeId&&MdoApiValueSetString(Item,"runtime_id",RuntimeId);xrtFree(RuntimeId);

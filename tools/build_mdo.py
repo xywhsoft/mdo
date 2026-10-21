@@ -264,6 +264,12 @@ def verify_dependencies(xserver: Path, lock: dict) -> None:
         raise BuildError("xs image extension/decoder source hash differs from deps.lock")
     if int(macro((image_root / "xs-image.h").read_text(encoding="utf-8"), "XS_IMAGE_ABI_VERSION").rstrip("uU")) != image_record.get("abi_version"):
         raise BuildError("xs image ABI differs from deps.lock")
+    if "xoauth2" in lock["xserver"].get("required_extensions", []):
+        record = lock["xserver"].get("native_extensions", {}).get("xoauth2", {})
+        oauth_root = xserver / "lib/xoauth2"
+        if production_tree_sha256(oauth_root) != record.get("tree_sha256"):
+            raise BuildError("xoauth2 production source hash differs from deps.lock")
+        verify_version(oauth_root / "xoauth2.h", ("XOAUTH2_VERSION_MAJOR", "XOAUTH2_VERSION_MINOR", "XOAUTH2_VERSION_PATCH"), "2.0.0")
     xrt_commit = locked_commit(xrt, "xrt")
     header = xserver / "lib" / "xrt.h"
     if source_file_sha256(header) != xrt.get("single_header_sha256"):

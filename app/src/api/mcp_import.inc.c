@@ -211,7 +211,24 @@ static xvalue* McpImportDocument(const xvalue* Server,cstr Id,xvalue* Inputs,cha
     }
     const xvalue* OAuth=xrtValueObjectGet(Server,XRT_STR_LITERAL("oauth"));bool Auth=false;
     if(OAuth&&(xrtValueType(OAuth)==XVALUE_OBJECT||(xrtValueGetBool(OAuth,&Auth)&&Auth))) {
-        snprintf(Error,256,"OAuth server needs authorization configuration");Ok=false;
+        if(!Url.Size){snprintf(Error,256,"OAuth requires an HTTP server");Ok=false;}
+        else {
+            xvalue* Native=xrtValueObject();bool Converted=Native!=NULL;
+            const char* NativeKeys[]={"client_id","client_metadata_url","scope","resource_metadata_url","authorization_server","redirect_uri","auth_method","client_secret_ref","enabled"};
+            const char* ForeignKeys[]={"clientId","clientMetadataUrl","scope","resource_metadata_url","authorization_server","redirectUri","auth_method","client_secret_ref","enabled"};
+            for(size_t i=0;Converted&&i<9;i++) {
+                const xvalue* Value=xrtValueObjectGet(OAuth,xrtStrView(NativeKeys[i]));
+                if(!Value)Value=xrtValueObjectGet(OAuth,xrtStrView(ForeignKeys[i]));
+                if(Value)Converted=xrtValueObjectSet(Native,xrtStrView(NativeKeys[i]),(xvalue*)Value);
+            }
+            const xvalue* Secret=xrtValueObjectGet(OAuth,XRT_STR_LITERAL("clientSecret"));
+            if(!Secret)Secret=xrtValueObjectGet(OAuth,XRT_STR_LITERAL("client_secret"));
+            if(Secret) {
+                char Reference[24];snprintf(Reference,sizeof(Reference),"input:%u",(unsigned)xrtValueCount(Inputs));
+                Converted=Converted&&xrtValueCount(Inputs)<32&&xrtValueArrayAppend(Inputs,(xvalue*)Secret)&&MdoApiValueSetString(Native,"client_secret_ref",Reference);
+            }
+            Ok=Ok&&Converted&&xrtValueObjectSet(Doc,XRT_STR_LITERAL("oauth"),Native);xrtValueRelease(Native);
+        }
     }
     if(xrtValueObjectHas(Server,XRT_STR_LITERAL("env_vars"))) {
         snprintf(Error,256,"Selective environment forwarding needs manual configuration");Ok=false;

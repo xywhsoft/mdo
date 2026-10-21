@@ -163,6 +163,7 @@ static xvalue* ExtensionItem(cstr Kind,cstr Id,bool IncludeSource)
         if (!Ok) goto fail;
     }
     if (!strcmp(Kind,"mcp")) {
+        if(!MdoApiValueSetBool(Item,"has_oauth",Doc&&xrtValueObjectHas(Doc,XRT_STR_LITERAL("oauth"))))goto fail;
         MdoMcpServerStatus Status={0}; Status.Size=sizeof(Status);
         if (MdoMcpManagerGetStatus(Id,&Status)) {
             cstr State=Status.State==XWORK_MCP_SERVER_READY?"ready":Status.State==XWORK_MCP_SERVER_FAILED?"failed":
@@ -320,11 +321,13 @@ static bool ExtensionMcpCredentials(char** Text,const xvalue* Inputs,
     const char* Keys[]={"environment","headers"}; size_t k,i;
     bool Ok=Doc!=NULL;
     if (Inputs && (xrtValueType(Inputs)!=XVALUE_ARRAY || xrtValueCount(Inputs)>32u)) Ok=false;
-    for (k=0u;Ok && k<2u;++k) {
-        const xvalue* Array=xrtValueObjectGet(Transport,xrtStrView(Keys[k]));
-        for (i=0u;Array && Ok && i<xrtValueCount(Array);++i) {
-            xvalue* Item=(xvalue*)xrtValueArrayGet(Array,i); xstrview Ref;
-            if (!ExtensionString(Item,"secret_ref",&Ref) || Ref.Size<6u || memcmp(Ref.Data,"input:",6u)) continue;
+    for (k=0u;Ok && k<3u;++k) {
+        const xvalue* Array=k<2u?xrtValueObjectGet(Transport,xrtStrView(Keys[k])):xrtValueObjectGet(Doc,XRT_STR_LITERAL("oauth"));
+        cstr RefKey=k<2u?"secret_ref":"client_secret_ref";
+        size_t Length=Array?(k<2u?xrtValueCount(Array):1u):0u;
+        for (i=0u;Array && Ok && i<Length;++i) {
+            xvalue* Item=k<2u?(xvalue*)xrtValueArrayGet(Array,i):(xvalue*)Array; xstrview Ref;
+            if (!ExtensionString(Item,RefKey,&Ref) || Ref.Size<6u || memcmp(Ref.Data,"input:",6u)) continue;
             {
                 size_t n=0u,j; xstrview Value; char* Owned;
                 if (Ref.Size==6u) { Ok=false; break; }
@@ -338,7 +341,7 @@ static bool ExtensionMcpCredentials(char** Text,const xvalue* Inputs,
                 Owned=xrtStrDupN(Value.Data,Value.Size); if (!Owned) { Ok=false; break; }
                 Ok=MdoSecretStore(Owned,References[*Count]);
                 xrtSecureZero(Owned,strlen(Owned)); xrtFree(Owned);
-                if (Ok) { ++*Count; Ok=xrtValueObjectSetNew(Item,XRT_STR_LITERAL("secret_ref"),xrtValueString(xrtStrView(References[*Count-1u]))); }
+                if (Ok) { ++*Count; Ok=xrtValueObjectSetNew(Item,xrtStrView(RefKey),xrtValueString(xrtStrView(References[*Count-1u]))); }
             }
         }
     }
@@ -590,3 +593,4 @@ bool MdoApiExtensionsRoute(MdoApiContext* C)
 #include "skill_management.inc.c"
 #include "mcp_management.inc.c"
 #include "mcp_import.inc.c"
+#include "mcp_auth_routes.inc.c"

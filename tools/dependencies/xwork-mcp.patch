@@ -78,7 +78,118 @@
  }
  
  static xhttpclient* xwork__mcp_http_client_get(
-@@ -1145,6 +1195,44 @@
+@@ -726,19 +776,33 @@
+     return bOk;
+ }
+ 
+-static xhttpresult* xwork__mcp_http_do(xwork_mcp_client* pClient,
++static xhttpresult* xwork__mcp_http_do_authorized(xwork_mcp_client* pClient,
+     const char* sHttpMethod, const char* sRpcMethod, const char* sRpcName,
+     const char* sBody, const char* sLastEventId,
+     const xcancel* pOperationCancel, uint64_t uOperationDeadline,
+-    uint32_t uTimeoutMs, xwork_error* pError)
++    uint32_t uTimeoutMs, bool bRefreshAuthorization, xwork_error* pError)
+ {
+     xhttpclient* pHttp = xwork__mcp_http_client_get(pClient, pError);
+     xhttprequest* pRequest = NULL;
+     xhttpcalloptions tOptions;
+     xhttpresult* pResult = NULL;
+     char* sEncodedName = NULL;
++    char sAuthorization[8192] = {0};
++    uint64_t uNow = xllmClockUs();
++    uint64_t uBudget = (uint64_t)(uTimeoutMs ? uTimeoutMs : pClient->uRequestTimeoutMs) * 1000u;
++    uint64_t uRequestDeadline = uNow > UINT64_MAX-uBudget ? UINT64_MAX : uNow+uBudget;
+     size_t i;
+     if ( !pHttp ) return NULL;
++    if ( uOperationDeadline == 0u || uOperationDeadline > uRequestDeadline )
++        uOperationDeadline = uRequestDeadline;
++    if ( pClient->pRuntime->OnMcpAuthorize &&
++         !pClient->pRuntime->OnMcpAuthorize(pClient->pRuntime->pMcpAuthorizationData,
++            pClient->sServerName, pClient->sEndpoint, bRefreshAuthorization,
++            (xcancel*)(pOperationCancel ? pOperationCancel : pClient->pCancel),
++            uOperationDeadline, sAuthorization, sizeof(sAuthorization), pError) ) {
++        xrtSecureZero(sAuthorization, sizeof(sAuthorization));
++        return NULL;
++    }
+     pRequest = xrtHttpRequestCreate(
+         (xstrview){ sHttpMethod, strlen(sHttpMethod) },
+         (xstrview){ pClient->sEndpoint, strlen(pClient->sEndpoint) });
+@@ -769,12 +833,20 @@
+             XRT_STR_LITERAL("Last-Event-ID"),
+             (xstrview){ sLastEventId, strlen(sLastEventId) }) ) goto failed;
+     for ( i = 0u; i < pClient->iHttpHeaderCount; ++i ) {
++        if ( sAuthorization[0] && xwork__mcp_ascii_casecmp(
++                pClient->pHttpHeaders[i].sName, "Authorization") == 0 ) {
++            xwork__set_error(pError, XWORK_ERROR_POLICY,
++                "MCP OAuth conflicts with a configured Authorization header");goto failed_set;
++        }
+         if ( !xrtHttpRequestAddHeader(pRequest,
+                 (xstrview){ pClient->pHttpHeaders[i].sName,
+                     strlen(pClient->pHttpHeaders[i].sName) },
+                 (xstrview){ pClient->pHttpHeaders[i].sValue,
+                     strlen(pClient->pHttpHeaders[i].sValue) }) ) goto failed;
+     }
++    if ( sAuthorization[0] && !xrtHttpRequestAddHeader(pRequest,
++            XRT_STR_LITERAL("Authorization"),
++            (xstrview){ sAuthorization, strlen(sAuthorization) }) ) goto failed;
+     if ( sBody && !xrtHttpRequestSetBytes(pRequest,
+             (xbytesview){ (const uint8*)sBody, strlen(sBody) },
+             XRT_STR_LITERAL("application/json")) ) goto failed;
+@@ -788,6 +860,17 @@
+     pResult = xrtHttpClientDoSync(pHttp, pRequest, &tOptions);
+     free(sEncodedName);
+     xrtHttpRequestDestroy(pRequest);
++    if ( pResult && sAuthorization[0] && !bRefreshAuthorization ) {
++        const xhttpresponse* pResponse = xrtHttpResultResponse(pResult);
++        if ( pResponse && xrtHttpResponseStatus(pResponse) == 401u ) {
++            xrtHttpResultDestroy(pResult);
++            xrtSecureZero(sAuthorization, sizeof(sAuthorization));
++            return xwork__mcp_http_do_authorized(pClient, sHttpMethod, sRpcMethod,
++                sRpcName, sBody, sLastEventId, pOperationCancel,
++                uOperationDeadline, uTimeoutMs, true, pError);
++        }
++    }
++    xrtSecureZero(sAuthorization, sizeof(sAuthorization));
+     if ( pResult ) return pResult;
+     {
+         xwork_operation_status eStatus = xwork__mcp_context_status(
+@@ -808,15 +891,35 @@
+     }
+     return NULL;
+ failed:
++    xrtSecureZero(sAuthorization, sizeof(sAuthorization));
+     free(sEncodedName);
+     xrtHttpRequestDestroy(pRequest);
+     xwork__set_error(pError, XWORK_ERROR_OUT_OF_MEMORY,
+         "failed to construct MCP HTTP request");
+     return NULL;
+ failed_set:
++    xrtSecureZero(sAuthorization, sizeof(sAuthorization));
+     free(sEncodedName);
+     xrtHttpRequestDestroy(pRequest);
+     return NULL;
++}
++
++static xhttpresult* xwork__mcp_http_do(xwork_mcp_client* pClient,
++    const char* sHttpMethod, const char* sRpcMethod, const char* sRpcName,
++    const char* sBody, const char* sLastEventId,
++    const xcancel* pOperationCancel, uint64_t uOperationDeadline,
++    uint32_t uTimeoutMs, xwork_error* pError)
++{
++    return xwork__mcp_http_do_authorized(pClient,sHttpMethod,sRpcMethod,sRpcName,
++        sBody,sLastEventId,pOperationCancel,uOperationDeadline,uTimeoutMs,false,pError);
++}
++
++bool xworkRuntimeSetMcpAuthorizationProvider(xwork_runtime* pRuntime,
++    xwork_mcp_authorization_fn OnAuthorize, void* pData)
++{
++    if(!pRuntime||!xrtMutexLock(pRuntime->pLock))return false;
++    pRuntime->OnMcpAuthorize=OnAuthorize;pRuntime->pMcpAuthorizationData=pData;
++    (void)xrtMutexUnlock(pRuntime->pLock);return true;
+ }
+ 
+ static void xwork__mcp_http_terminate(xwork_mcp_client* pClient)
+@@ -1145,6 +1248,44 @@
      return sTail;
  }
  
@@ -123,7 +234,7 @@
  static char* xwork__mcp_read_message(
      xwork_mcp_client* pClient,
      const xcancel* pOperationCancel,
-@@ -1383,8 +1471,9 @@
+@@ -1383,8 +1524,9 @@
          }
          tId = xwork__json_get(tRoot, "id");
          if ( !tId ) {
@@ -135,7 +246,7 @@
              xrtValueRelease(tRoot);
              continue;
          }
-@@ -1525,10 +1614,18 @@
+@@ -1525,10 +1667,18 @@
      bool bValid = true;
      uint32_t uSalt = 0u;
      if ( !sRemoteName || !sRemoteName[0] || !tSchema ||
@@ -158,7 +269,7 @@
      }
      if ( pClient->eTransport == XWORK_MCP_TRANSPORT_STREAMABLE_HTTP &&
           pClient->bModernProtocol &&
-@@ -1539,8 +1636,11 @@
+@@ -1539,8 +1689,11 @@
      }
      if ( !xwork__mcp_tool_permitted(pClient, sRemoteName) ) return true;
      if ( xwork__mcp_proxy_remote_exists(*ppTools, *piCount, sRemoteName) ) {
@@ -172,7 +283,7 @@
      }
      if ( *piCount >= pClient->iMaxTools ) {
          xwork__set_error(pError, XWORK_ERROR_TOOL, "MCP tool count exceeds configured limit");
-@@ -1601,6 +1701,10 @@
+@@ -1601,6 +1754,10 @@
      char* sCursor = NULL;
      uint32_t uPages = 0u;
      uint64_t uMinTtlMs = UINT64_MAX;
@@ -183,7 +294,7 @@
      for ( ;; ) {
          xwork_buf tParams = {0};
          xvalue* tRoot = NULL;
-@@ -1652,8 +1756,7 @@
+@@ -1652,8 +1809,7 @@
          }
          for ( i = 0u; i < xrtValueCount(tTools); ++i ) {
              xvalue* tTool = xrtValueArrayGet(tTools, i);
@@ -193,7 +304,7 @@
                  xrtValueRelease(tRoot);
                  free(sCursor);
                  return false;
-@@ -1668,7 +1771,7 @@
+@@ -1668,7 +1824,7 @@
                      ? XLLM_DEADLINE_NEVER
                      : uNow + uMinTtlMs * UINT64_C(1000);
              } else {
@@ -202,7 +313,7 @@
              }
              xrtValueRelease(tRoot);
              free(sCursor);
-@@ -1711,6 +1814,10 @@
+@@ -1711,6 +1867,10 @@
      xcancel* pOperationCancel = pContext ? pContext->pCancel : NULL;
      uint64_t uOperationDeadline = pContext && pContext->uDeadline
          ? pContext->uDeadline : XLLM_DEADLINE_NEVER;
@@ -213,7 +324,7 @@
      if ( pProxy && pProxy->pClient->bRuntimeOwned &&
           !xwork__mcp_prepare_lazy(pProxy->pClient, false,
              pOperationCancel, uOperationDeadline, pError) ) {
-@@ -1852,8 +1959,7 @@
+@@ -1852,8 +2012,7 @@
          xwork__set_error(pError, XWORK_ERROR_POLICY, "MCP server is disabled");
          return false;
      }
@@ -223,7 +334,7 @@
          return false;
      }
      if ( pClient->bConnected ) { bOk = true; goto cleanup; }
-@@ -1906,8 +2012,7 @@
+@@ -1906,8 +2065,7 @@
          if ( !tResult || xrtValueType(tResult) != XVALUE_OBJECT ||
               !tSupportedVersions ||
               xrtValueType(tSupportedVersions) != XVALUE_ARRAY ||
@@ -233,7 +344,7 @@
              xwork__set_error(pError, XWORK_ERROR_TOOL,
                  "modern MCP discovery lacks supportedVersions or tools capability");
              goto cleanup;
-@@ -1959,8 +2064,7 @@
+@@ -1959,8 +2117,7 @@
          tToolsCapability = xwork__json_get(tCapabilities, "tools");
          if ( !tResult || xrtValueType(tResult) != XVALUE_OBJECT ||
               !sProtocol || !sProtocol[0] ||
@@ -243,7 +354,7 @@
              xwork__set_error(pError, XWORK_ERROR_TOOL,
                  "MCP initialize response lacks protocolVersion or tools capability");
              goto cleanup;
-@@ -1973,6 +2077,13 @@
+@@ -1973,6 +2130,13 @@
      }
      if ( !xwork__replace(&pClient->sNegotiatedProtocolVersion, sProtocol) ) {
          xwork__set_error(pError, XWORK_ERROR_OUT_OF_MEMORY, "failed to copy negotiated MCP version");
@@ -257,7 +368,7 @@
          goto cleanup;
      }
      pClient->bServerSupportsToolListChanges = xwork__json_bool(
-@@ -2142,9 +2253,7 @@
+@@ -2142,9 +2306,7 @@
              "connected MCP client is required");
          return false;
      }
@@ -268,7 +379,7 @@
          return false;
      }
      bOk = xwork__mcp_refresh_cache_locked(
-@@ -2192,10 +2301,10 @@
+@@ -2192,10 +2354,10 @@
              "invalid MCP arguments: expected a JSON object")
              ? XWORK_RESULT_OK : XWORK_RESULT_ERROR;
      }
@@ -282,7 +393,7 @@
      }
      sCompactArguments = xrtJsonStringify(tArguments, NULL, &iCompactArguments);
      if ( !sCompactArguments ) {
-@@ -2358,6 +2467,8 @@
+@@ -2358,6 +2520,8 @@
      xwork__mcp_string_array_unit(
          pClient->psDeniedTools, pClient->iDeniedToolCount);
      free(pClient->sServerName);
@@ -291,7 +402,7 @@
      free(pClient->sSummary);
      free(pClient->sProgram);
      free(pClient->sEndpoint);
-@@ -2662,6 +2773,30 @@
+@@ -2662,6 +2826,30 @@
      return sLeft == sRight || (sLeft && sRight && strcmp(sLeft, sRight) == 0);
  }
  
@@ -322,7 +433,7 @@
  static bool xwork__mcp_client_config_equal(
      xwork_mcp_client* pLeft, xwork_mcp_client* pRight)
  {
-@@ -3094,11 +3229,7 @@
+@@ -3094,11 +3282,7 @@
              "MCP server is disabled or unavailable");
          return false;
      }
@@ -335,7 +446,7 @@
      bReconnectBlocked = pClient->bFailed && !pClient->bAutoReconnect &&
          !pClient->bConnected;
      xwork__mcp_unlock(pClient);
-@@ -3110,15 +3241,15 @@
+@@ -3110,15 +3294,15 @@
      if ( !xwork__mcp_connect_scoped(pClient, pCancel, uDeadline, pError) ) {
          return false;
      }
@@ -357,7 +468,7 @@
      xwork__mcp_unlock(pClient);
      if ( bRefresh || !bDiscovered || bSchemaExpired ) {
          return xwork__mcp_refresh_cache(pClient, pCancel, uDeadline, pError);
-@@ -3229,13 +3360,14 @@
+@@ -3229,13 +3413,14 @@
          return false;
      }
      pClient = xwork__runtime_mcp_find(pAgent->pRuntime, sServerId);
@@ -378,7 +489,7 @@
      for ( i = 0u; i < pClient->iToolCount; ++i ) {
          if ( strcmp(pClient->pTools[i].sRemoteName, sRemoteToolName) == 0 ) {
              pProxy = &pClient->pTools[i];
-@@ -3357,6 +3489,7 @@
+@@ -3357,6 +3542,7 @@
               iShown < (size_t)uLimit; ++i ) {
              pClient = pAgent->pRuntime->ppMcpServers[i];
              if ( !pClient || !pClient->bRegistered ||
@@ -386,7 +497,7 @@
                   xwork__atomic_load(&pClient->iEnabled) == 0 ||
                   (!xwork__ascii_contains(pClient->sServerName, sQuery) &&
                    !xwork__ascii_contains(pClient->sSummary, sQuery)) ) continue;
-@@ -3378,7 +3511,7 @@
+@@ -3378,7 +3564,7 @@
          size_t i;
          size_t iShown = 0u;
          pClient = xwork__runtime_mcp_find(pAgent->pRuntime, sServer);
@@ -395,7 +506,7 @@
              eResult = xworkToolOutputSet(pOutput, false,
                  "unknown MCP server id") ? XWORK_RESULT_OK : XWORK_RESULT_ERROR;
              goto cleanup;
-@@ -3388,16 +3521,26 @@
+@@ -3388,16 +3574,26 @@
                  pContext && pContext->uDeadline
                      ? pContext->uDeadline : XLLM_DEADLINE_NEVER,
                  pError) ) goto cleanup;
@@ -429,7 +540,7 @@
              xwork_mcp_tool_proxy* pTool = &pClient->pTools[i];
 --- a/lib/xwork/xwork.h
 +++ b/lib/xwork/xwork.h
-@@ -1071,6 +1071,10 @@
+@@ -1071,6 +1071,19 @@
  );
  bool xworkMcpClientGetInfo(const xwork_mcp_client* pClient, xwork_mcp_info* pInfo);
  void xworkMcpClientDestroy(xwork_mcp_client* pClient);
@@ -437,12 +548,30 @@
 + * An empty list disables MCP. Subagents inherit the parent's restriction. */
 +bool xworkAgentSetMcpServers(xwork_agent* pAgent,
 +    const char* const* psServerIds, size_t iCount, xwork_error* pError);
++/* Host-owned credentials are resolved for every HTTP request. Returning an
++ * empty header leaves ordinary configured headers unchanged. A 401 may request
++ * one refresh before a single replay; transport errors never replay a call. */
++typedef bool (*xwork_mcp_authorization_fn)(void* pData,
++    const char* sServerId, const char* sEndpoint, bool bRefresh,
++    xcancel* pCancel, uint64_t uDeadline, char* sHeader, size_t iCapacity,
++    xwork_error* pError);
++bool xworkRuntimeSetMcpAuthorizationProvider(xwork_runtime* pRuntime,
++    xwork_mcp_authorization_fn OnAuthorize, void* pData);
  
  void xworkMcpServerConfigInit(xwork_mcp_server_config* pConfig);
  void xworkMcpServerInfoInit(xwork_mcp_server_info* pInfo);
 --- a/lib/xwork/src/xwork_internal.h
 +++ b/lib/xwork/src/xwork_internal.h
-@@ -407,6 +407,9 @@
+@@ -261,6 +261,8 @@
+     size_t iMcpServerCap;
+     xnetengine* pMcpNetEngine;
+     xhttpclient* pMcpHttpClient;
++    xwork_mcp_authorization_fn OnMcpAuthorize;
++    void* pMcpAuthorizationData;
+     xmutex* pSchedulerLock;
+     xwork_schedule_entry** ppSchedules; /* stable until runtime destruction */
+     size_t iScheduleCount;
+@@ -407,6 +409,9 @@
      xllm_client* pClient;
      xllm_session* pSession;
      char* sWorkspaceRoot;
@@ -478,8 +607,56 @@
      } else if ( !xworkAgentAllowExternalPaths(pChild,
 --- a/src/script/import_xwork.inc
 +++ b/src/script/import_xwork.inc
-@@ -186,3 +186,4 @@
+@@ -104,6 +104,7 @@
+ XS_XWORK_SYMBOL(xworkRuntimeFinishScheduledTask)
+ XS_XWORK_SYMBOL(xworkRuntimeMcpServerCount)
+ XS_XWORK_SYMBOL(xworkRuntimeMcpServerGetInfo)
++XS_XWORK_SYMBOL(xworkRuntimeSetMcpAuthorizationProvider)
+ XS_XWORK_SYMBOL(xworkRuntimeReadArtifact)
+ XS_XWORK_SYMBOL(xworkRuntimeReadTaskEvents)
+ XS_XWORK_SYMBOL(xworkRuntimeReadTaskOutput)
+@@ -186,3 +187,4 @@
  XS_XWORK_SYMBOL(xworkFileScopeSetExternal)
  XS_XWORK_SYMBOL(xworkFileScopeExternal)
  XS_XWORK_SYMBOL(xworkAgentSetFileScope)
 +XS_XWORK_SYMBOL(xworkAgentSetMcpServers)
+--- a/lib/xoauth2/xoauth2.c
++++ b/lib/xoauth2/xoauth2.c
+@@ -1,4 +1,36 @@
+-/* xoauth2 unity TU。 */
++/* Pinned xoauth2 uses Unix microseconds and microsecond waits. Adapt its
++ * private transport to this product SDK's civil milliseconds and relative-ms
++ * waits; no public xrt symbols or ABI are replaced. */
++#include "src/xoauth2_internal.h"
++typedef uint64_t xdeadline;
++static uint64_t mdo_xoauth_clock_us(void) {
++    double Now=xrtTimer()*1000000.0;
++    return !(Now>=0.0)?0u:Now>=(double)(UINT64_MAX-1u)?UINT64_MAX-1u:(uint64_t)Now;
++}
++static xdeadline mdo_xoauth_after(uint64_t Duration) {
++    uint64_t Now=mdo_xoauth_clock_us();
++    return Duration>=UINT64_MAX-Now?UINT64_MAX:Now+Duration;
++}
++static uint64_t mdo_xoauth_remaining(xdeadline Deadline) {
++    uint64_t Now=mdo_xoauth_clock_us();
++    return Deadline==UINT64_MAX?UINT64_MAX:Deadline>Now?Deadline-Now:0u;
++}
++static bool mdo_xoauth_expired(xdeadline Deadline) {
++    return Deadline!=UINT64_MAX&&mdo_xoauth_remaining(Deadline)==0u;
++}
++static xwaitresult mdo_xoauth_wait(xfuture* Future,uint64_t Microseconds) {
++    uint64_t Milliseconds=Microseconds/1000u+(Microseconds%1000u!=0u);
++    return xrtFutureWaitFor(Future,Microseconds==UINT64_MAX?XRT_WAIT_FOREVER:
++        Milliseconds>INT64_MAX?INT64_MAX:(int64_t)Milliseconds);
++}
++static int64_t mdo_xoauth_unix_us(void) {
++    return (xrtNow()-XRT_TIME_UNIX_EPOCH)*INT64_C(1000);
++}
++#define xrtDeadlineAfter mdo_xoauth_after
++#define xrtDeadlineRemaining mdo_xoauth_remaining
++#define xrtDeadlineExpired mdo_xoauth_expired
++#define xrtFutureWaitFor mdo_xoauth_wait
++#define xrtNow mdo_xoauth_unix_us
+ #include "src/xoauth2_core.c"
+ #include "src/xoauth2_flow.c"
+ #include "src/xoauth2_http.c"

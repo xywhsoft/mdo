@@ -30,6 +30,7 @@ typedef struct MdoMcpServerInfo {
     bool Enabled;
     bool AutoReconnect;
     bool TrustReadOnlyAnnotations;
+    bool OAuth;
     MdoMcpTransport Transport;
     const char* Id;
     const char* RuntimeId;
@@ -104,6 +105,11 @@ bool MdoMcpValidateText(const char* Id, const char* Text, char* Error, size_t Ca
 /* Reads project definitions without executing them. Scope restrictions are
  * inherited by subagents and apply to search, schema load and invocation. */
 bool MdoMcpConfigureAgent(xwork_agent* Agent, const char* Workspace, xwork_error* Error);
+xvalue* MdoMcpAuthorizationStatus(const char* ServerId);
+bool MdoMcpAuthorizationStart(const char* ServerId,const char* LocalOrigin);
+bool MdoMcpAuthorizationOpen(const char* ServerId);
+bool MdoMcpAuthorizationCallback(const char* State,const char* Code,const char* Issuer,const char* Error);
+bool MdoMcpAuthorizationForget(const char* ServerId);
 
 MdoMcpDiagnostics* MdoMcpDiagnosticsSnapshot(void);
 MdoMcpDiagnostics* MdoMcpDiagnosticsRef(MdoMcpDiagnostics* pDiagnostics);
