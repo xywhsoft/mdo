@@ -154,8 +154,10 @@ static cstr MdoOperationMcpErrorCode(const xwork_error* Error,
 {
     cstr Message = Error->sMessage;
     *HttpStatus = 0u;
-    if(Error->uHttpStatus>=100u&&Error->uHttpStatus<=599u){*HttpStatus=Error->uHttpStatus;return "mcp_http_error";}
-    if(Error->eCode==XWORK_ERROR_POLICY&&strcmp(Message,"MCP server is disabled")&&strcmp(Message,"MCP server is disabled or unavailable"))return "mcp_authorization_required";
+    if(Error->eCode==XWORK_ERROR_POLICY&&strcmp(Message,"MCP server is disabled")&&strcmp(Message,"MCP server is disabled or unavailable")) {
+        if(Error->uHttpStatus>=400u&&Error->uHttpStatus<=599u)*HttpStatus=Error->uHttpStatus;
+        return "mcp_authorization_required";
+    }
     if ( Error->eCode == XWORK_ERROR_IO ) {
         if ( strcmp(Message, "failed to start MCP stdio server") == 0 )
             return "mcp_start_failed";
@@ -163,7 +165,7 @@ static cstr MdoOperationMcpErrorCode(const xwork_error* Error,
             if ( Error->uHttpStatus == 404u ) *HttpStatus = 404u;
             return "mcp_session_expired";
         }
-        if ( Error->uHttpStatus >= 100u && Error->uHttpStatus <= 599u ) {
+        if ( Error->uHttpStatus >= 400u && Error->uHttpStatus <= 599u ) {
             *HttpStatus = Error->uHttpStatus;
             return "mcp_http_error";
         }
