@@ -129,6 +129,16 @@ bool MdoMcpManagerRefresh(const char* id, xcancel* cancel, uint64 deadline,
     return true;
 }
 
+/* Context operations have their own HTTP integration probe. This fixture
+ * exercises operation identity, reload and discovery failure classification. */
+bool MdoMcpRead(const char* server, const char* method, const char* params,
+    xcancel* cancel, uint64 deadline, char** result, xwork_error* error) {
+    (void)server; (void)method; (void)params; (void)cancel; (void)deadline;
+    if (result) *result = NULL;
+    if (error) { xworkErrorInit(error); error->eCode = XWORK_ERROR_INVALID_ARGUMENT; }
+    return false;
+}
+
 #include "src/operations/manager.c"
 
 static bool CheckMcpFailureClassification(void) {
