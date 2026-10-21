@@ -1,5 +1,9 @@
 # 八种发行版的下载与更新
 
+## 2026-10-21：mdo 0.2.1 已发布
+
+八种正式产物已同步官网与自动更新，Build ID 为 30000110–30000117。修复网页超时误终止会话，权限切换立即生效，Android 增加系统分享到会话草稿；Android 沿用正式签名，工具包修订 3，源码下载保持撤下。见 [0.2.1 发布记录](build-records/2026-10-21-0.2.1-public-release.md)。
+
 ## 2026-10-20：mdo 0.2.0 已发布
 
 八种正式产物已更新官网与自动更新，Build ID 为 30000102–30000109；Android 沿用原正式签名，工具包修订 3，源码下载保持撤下。发布内容、验证结果、网络限制和备份位置见 [0.2.0 发布记录](build-records/2026-10-20-0.2.0-public-release.md)。
@@ -9,14 +13,14 @@
 
 | 发行版 | platform | edition | 当前编号 |
 | --- | --- | --- | --- |
-| Windows 桌面 | windows-x86_64 | desktop | 30000102 |
-| Windows 服务 | windows-x86_64 | server | 30000103 |
-| Linux glibc 桌面 | linux-x86_64-glibc | desktop | 30000104 |
-| Linux glibc 服务 | linux-x86_64-glibc | server | 30000105 |
-| Linux musl 桌面 | linux-x86_64-musl | desktop | 30000106 |
-| Linux musl 服务 | linux-x86_64-musl | server | 30000107 |
-| Android 精简 | android-arm64-v8a | lite | 30000108 |
-| Android 完整 | android-arm64-v8a | full | 30000109 |
+| Windows 桌面 | windows-x86_64 | desktop | 30000110 |
+| Windows 服务 | windows-x86_64 | server | 30000111 |
+| Linux glibc 桌面 | linux-x86_64-glibc | desktop | 30000112 |
+| Linux glibc 服务 | linux-x86_64-glibc | server | 30000113 |
+| Linux musl 桌面 | linux-x86_64-musl | desktop | 30000114 |
+| Linux musl 服务 | linux-x86_64-musl | server | 30000115 |
+| Android 精简 | android-arm64-v8a | lite | 30000116 |
+| Android 完整 | android-arm64-v8a | full | 30000117 |
 
 接口：`GET https://ai.xywhsoft.com/update/version?platform=…&edition=…&build_id=…`。
 服务器只返回匹配平台与发行版的包。旧 Windows 客户端省略 edition 时仍选择桌面版；
