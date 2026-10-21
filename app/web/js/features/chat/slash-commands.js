@@ -1,3 +1,4 @@
+import { expandMcpCommand } from "./mcp-context.js";
 import { subscribeLocale, t } from "../../i18n.js";
 import { loadCommands, subscribeCommands, commandExpansion } from "./extension-commands.js";
 import { loadSelectableSkills, parseSkillSelection, expandSkillSelection } from "./skill-selection.js";
@@ -6,6 +7,7 @@ import { createCompositionTracker } from "../../utils/composition.js";
 import { subscribeTarget } from "../../api/target.js";
 
 const COMMANDS = Object.freeze([
+  { name: "/mcp", mcp: true, descriptionKey: "slash.mcp", fallback: "调用 MCP 提示词：服务器 提示词 参数JSON" },
   { name: "/new", descriptionKey: "slash.new", fallback: "新建任务" },
   { name: "/model", descriptionKey: "slash.model", fallback: "切换到下一个模型" },
   { name: "/fork", descriptionKey: "slash.fork", fallback: "分叉当前会话" },
@@ -83,6 +85,7 @@ export function createSlashCommands({ composer, input, onExecute, contextKey = (
   }
 
   async function execute(command) {
+    if (command.mcp) { hide(); input.value = "/mcp "; input.dispatchEvent(new Event("input", { bubbles: true })); input.focus(); return; }
     if (command.skill) {
       hide(); input.value = `$${command.id} `;
       input.dispatchEvent(new Event("input", { bubbles: true })); input.focus(); return;
@@ -166,6 +169,12 @@ export function createSlashCommands({ composer, input, onExecute, contextKey = (
       return false;
     },
     async expandIntoComposer(value) {
+      if (value === "/mcp" || value.startsWith("/mcp ")) {
+        const key = contextKey();
+        const text = await expandMcpCommand(value, skillProject(), { isCurrent: () => input.value === value && contextKey() === key });
+        if (input.value === value && contextKey() === key) { hide(); input.value = text; input.dispatchEvent(new Event("input", { bubbles: true })); input.focus(); }
+        return true;
+      }
       const skill = parseSkillSelection(value);
       if (skill) {
         const key = contextKey();

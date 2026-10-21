@@ -1920,3 +1920,13 @@ bool MdoMcpDiagnosticsAt(const MdoMcpDiagnostics* pDiagnostics,
 }
 
 #include "scopes.inc.c"
+
+bool MdoMcpRead(cstr Server,cstr Method,cstr Params,xcancel* Cancel,uint64 Deadline,char** Result,xwork_error* Error)
+{
+    return g_MdoMcp.Initialized&&xworkRuntimeMcpRead(g_MdoMcp.Runtime,Server,Method,Params,Cancel,Deadline,Result,Error);
+}
+xvalue* MdoMcpDescribe(cstr Server)
+{
+    xwork_error Error;char* Text=g_MdoMcp.Initialized?xworkRuntimeMcpDescribe(g_MdoMcp.Runtime,Server,&Error):NULL;
+    xvalue* Value=Text?xrtJsonParse(xrtStrView(Text)):NULL;xrtFree(Text);return Value;
+}

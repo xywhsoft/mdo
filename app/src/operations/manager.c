@@ -13,11 +13,14 @@ typedef struct MdoOperationEntry {
     bool Occupied;
     MdoOperationInfo Info;
     xfuture* Future;
+    char* ContextResult;
 } MdoOperationEntry;
 
 typedef struct MdoOperationJob {
     char Id[MDO_OPERATION_ID_CAPACITY];
     char Target[128];
+    char* Method;
+    char* Params;
 } MdoOperationJob;
 
 typedef struct MdoOperationStateData {
@@ -42,7 +45,8 @@ static void MdoOperationError(cstr Message)
 static void MdoOperationJobFree(ptr Value, ptr Context)
 {
     (void)Context;
-    xrtFree(Value);
+    MdoOperationJob* Job=Value;
+    if(Job){xrtFree(Job->Method);xrtFree(Job->Params);xrtFree(Job);}
 }
 
 static bool MdoOperationTerminal(MdoOperationState State)
@@ -115,6 +119,7 @@ static MdoOperationEntry* MdoOperationSlotLocked(void)
     }
     if ( Oldest != NULL ) {
         if ( Oldest->Future != NULL ) xrtFutureDestroy(Oldest->Future);
+        xrtFree(Oldest->ContextResult);
         memset(Oldest, 0, sizeof(*Oldest));
     }
     return Oldest;
@@ -253,6 +258,18 @@ static xtaskoutcome MdoOperationRun(xcancel* Cancel, ptr Data,
             0u, 0u, "Operation was cancelled before execution");
         return XTASK_CANCELLED;
     }
+    if(Kind==MDO_OPERATION_MCP_CONTEXT) {
+        char* Result=NULL;xwork_error Error;xworkErrorInit(&Error);
+        bool Ok=MdoMcpRead(Job->Target,Job->Method,Job->Params,Cancel,MdoDeadlineAfterUs(60000000u),&Result,&Error);
+        if(Ok&&(!Result||strlen(Result)>1024u*1024u)){Ok=false;xrtFree(Result);Result=NULL;Error.eCode=XWORK_ERROR_LIMIT;}
+        xrtMutexLock(g_MdoOperations.Lock);Entry=MdoOperationFindLocked(Job->Id);
+        if(Entry&&!Entry->Info.CancelRequested){Entry->ContextResult=Result;Result=NULL;}
+        xrtMutexUnlock(g_MdoOperations.Lock);xrtFree(Result);
+        uint32 Status=0;cstr Code=Ok?"":MdoOperationMcpErrorCode(&Error,&Status);
+        MdoOperationFinishMcp(Job->Id,Ok?MDO_OPERATION_SUCCEEDED:xrtCancelRequested(Cancel)?MDO_OPERATION_CANCELLED:MDO_OPERATION_FAILED,
+            NULL,Ok?"MCP context received":"MCP context request failed",Code,Status);
+        return Ok?XTASK_SUCCESS:XTASK_FAILED;
+    }
     if ( Kind == MDO_OPERATION_MODULE_RELOAD ) {
         MdoModuleCatalog* Catalog;
         MdoModuleDiagnostics* Diagnostics;
@@ -390,6 +407,7 @@ void MdoOperationManagerUnit(void)
         for ( Index = 0u; Index < MDO_OPERATION_LIMIT; Index++ ) {
             xrtFutureDestroy(g_MdoOperations.Entries[Index].Future);
             g_MdoOperations.Entries[Index].Future = NULL;
+            xrtFree(g_MdoOperations.Entries[Index].ContextResult);
         }
         (void)xrtMutexUnlock(Lock);
     }
@@ -412,7 +430,7 @@ bool MdoOperationRequestIdValid(cstr Id)
 }
 
 static bool MdoOperationStart(MdoOperationKind Kind, cstr Target,
-    cstr RequestedId, MdoOperationInfo* Info)
+    cstr RequestedId, MdoOperationInfo* Info,cstr Method,cstr Params)
 {
     MdoOperationEntry* Entry;
     MdoOperationJob* Job;
@@ -464,6 +482,10 @@ static bool MdoOperationStart(MdoOperationKind Kind, cstr Target,
         return false;
     }
     if ( RequestedId != NULL ) snprintf(Job->Id, sizeof(Job->Id), "%s", RequestedId);
+    if(Kind==MDO_OPERATION_MCP_CONTEXT) {
+        Job->Method=xrtStrDup(Method);Job->Params=xrtStrDup(Params);
+        if(!Job->Method||!Job->Params){xrtMutexUnlock(g_MdoOperations.Lock);MdoOperationJobFree(Job,NULL);return false;}
+    }
     memset(Entry, 0, sizeof(*Entry));
     Entry->Occupied = true;
     Entry->Info.Size = sizeof(Entry->Info);
@@ -487,7 +509,7 @@ static bool MdoOperationStart(MdoOperationKind Kind, cstr Target,
     if ( Future == NULL ) {
         memset(Entry, 0, sizeof(*Entry));
         (void)xrtMutexUnlock(g_MdoOperations.Lock);
-        xrtFree(Job);
+        MdoOperationJobFree(Job,NULL);
         return false;
     }
     Entry->Future = Future;
@@ -503,7 +525,7 @@ bool MdoOperationStartModuleReload(MdoOperationInfo* Info)
 
 bool MdoOperationStartModuleReloadIdentified(cstr Id, MdoOperationInfo* Info)
 {
-    return MdoOperationStart(MDO_OPERATION_MODULE_RELOAD, NULL, Id, Info);
+    return MdoOperationStart(MDO_OPERATION_MODULE_RELOAD, NULL, Id, Info,NULL,NULL);
 }
 
 bool MdoOperationStartMcpRefresh(cstr ServerId, MdoOperationInfo* Info)
@@ -517,7 +539,7 @@ bool MdoOperationStartMcpRefreshIdentified(cstr ServerId, cstr Id,
     if ( ServerId == NULL || ServerId[0] == '\0' ||
          strlen(ServerId) >= sizeof(((MdoOperationInfo*)0)->Target) )
         return false;
-    return MdoOperationStart(MDO_OPERATION_MCP_REFRESH, ServerId, Id, Info);
+    return MdoOperationStart(MDO_OPERATION_MCP_REFRESH, ServerId, Id, Info,NULL,NULL);
 }
 
 bool MdoOperationGet(const char* Id, MdoOperationInfo* Info)
@@ -591,4 +613,17 @@ bool MdoOperationCancel(const char* Id, MdoOperationInfo* Info)
     Result = Entry != NULL && MdoOperationCopyInfo(Info, &Entry->Info);
     (void)xrtMutexUnlock(g_MdoOperations.Lock);
     return Result;
+}
+
+bool MdoOperationStartMcpContext(cstr Server,cstr Method,cstr Params,MdoOperationInfo* Info)
+{
+    if(!Server||!Server[0]||strlen(Server)>=128||!Method||strlen(Method)>40||!Params||strlen(Params)>65536u)return false;
+    return MdoOperationStart(MDO_OPERATION_MCP_CONTEXT,Server,NULL,Info,Method,Params);
+}
+xvalue* MdoOperationContextResult(cstr Id)
+{
+    if(!g_MdoOperations.Lock)return NULL;
+    xrtMutexLock(g_MdoOperations.Lock);MdoOperationEntry* Entry=MdoOperationFindLocked(Id);
+    xvalue* Result=Entry&&Entry->ContextResult?xrtJsonParse(xrtStrView(Entry->ContextResult)):NULL;
+    xrtMutexUnlock(g_MdoOperations.Lock);return Result;
 }

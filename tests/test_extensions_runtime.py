@@ -193,7 +193,7 @@ def main():
                     assert status == 200, raw
                     return {item['id']: item for item in json.loads(raw)['data']['items']}
                 builtins = tool_catalog()
-                assert len(builtins) == 21 and 'ask_user' in builtins, builtins
+                assert len(builtins) == 22 and 'ask_user' in builtins and 'mcp_read' in builtins, builtins
                 assert builtins['web_search']['member_only'] and builtins['web_search']['availability'] == 'sign_in_required'
                 assert builtins['agent']['availability'] == 'no_subagents'
                 tool_source = (ROOT / 'tests/fixtures/modules/local-tool.c').read_text()
@@ -525,7 +525,7 @@ def main():
                 assert len(SkillModel.mcp_payloads) == 4, 'discover, load, call, then final reply'
                 for payload in SkillModel.mcp_payloads[:2]:
                     assert not any(tool['name'].startswith('mcp__') for tool in payload['tools']), 'schema loaded eagerly'
-                assert 'MCP_CALLBACK_RESULT' in json.dumps(SkillModel.mcp_payloads[-1])
+                assert 'MCP_CALLBACK_RESULT' in json.dumps(SkillModel.mcp_payloads[-1]), SkillModel.mcp_payloads[-1]['input'][-2:]
                 rpc = [json.loads(line) for line in legacy_log.read_text().splitlines()]
                 assert [row['method'] for row in rpc] == ['initialize', 'notifications/initialized', 'tools/list', 'tools/call'], rpc
                 assert rpc[-1]['params'] == {'name': 'echo', 'arguments': {'text': 'MCP_CALLBACK_RESULT'}}, rpc

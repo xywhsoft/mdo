@@ -57,5 +57,18 @@ not replay a possibly completed state-changing tool call.
   reconnection, logout/revocation and plaintext-at-rest scan. Existing extension
   HTTP suite and strict C compilation also pass. Android hardware is unavailable;
   its callback path shares native code but still requires device acceptance.
-- Remaining context/interaction features and expanded diagnostics are in progress.
-  Unsupported migration forms are reported.
+- Context implemented: scoped `mcp_read`, resources/list, templates/list, read,
+  prompts/list/get, completion/complete, explicit pagination, project/personal
+  resource browser, `/mcp server prompt {string arguments}` composer expansion,
+  capability checks and cold diagnostics with instructions/schema rejection reasons.
+  User context stays ordinary input; it never becomes a system message.
+- Typed MCP tool results use the host writer/artifact API. The first supported
+  image is forwarded as an image; complete typed content is kept in a bounded
+  JSON artifact when persistence is available. Binary data is excluded from text
+  rendering. Concurrent waiters recheck connection/enabled state before dispatch.
+- Local regressions pass all six context methods, pagination, forbidden tool-call
+  method rejection, diagnostics, typed PNG/structured content, binary exclusion,
+  real model tool_search/load/call, scope inheritance and OAuth regression.
+  Strict C compilation and JavaScript module graph pass.
+- Remaining interaction features are in progress. Unsupported migration forms
+  are reported; no publication has been performed.

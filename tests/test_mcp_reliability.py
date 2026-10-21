@@ -45,6 +45,14 @@ void ServiceInit(XS_HostInfo* host) {
     (void)host;
     client=Open("resources");printf("resources_connect=%d\n",client!=NULL);
     if(client)xworkMcpClientDestroy(client);
+    client=Open("image");
+    if(client) {
+        xworkToolOutputInit(&output);
+        xwork_result image=xworkMcpClientCallTool(client,"echo","{}",NULL,XLLM_DEADLINE_NEVER,&output,&error);
+        printf("typed_image=%d\n",image==XWORK_RESULT_OK&&output.bSuccess&&output.pImageBytes&&output.iImageSize>50&&
+            !strstr(output.sContent,"iVBOR")&&!strstr(output.sContent,"BINARY_MUST_NOT_ENTER_CONTEXT")&&strstr(output.sContent,"structured_content"));
+        xworkToolOutputUnit(&output);xworkMcpClientDestroy(client);
+    }
     client=Open("normal");if(!client)goto done;
     worker=xrtThreadCreate(Worker,NULL,0); if(!worker)goto done;
     xrtSleep(100);
@@ -84,7 +92,7 @@ def main():
             "host_default": {"enabled": True,"name":"probe","path":"web",
                              "devlang":"c","devfile":"probe.c"}}]}))
         output = run_probe(args.host.resolve(), base, base / "home")
-        assert "resources_connect=1" in output, output
+        assert "resources_connect=1" in output and "typed_image=1" in output, output
         assert "admission=first:1 second:1 cancelled:1 timeout:1 requests:3" in output, output
         # A single bad or duplicate definition must not hide the valid echo tool.
         runtime.MOCK_SERVER = runtime.MOCK_SERVER.replace(

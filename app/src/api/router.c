@@ -220,6 +220,8 @@ static const MdoApiRoute g_MdoApiRoutes[] = {
     { "/api/v1/mcp/{server}/oauth", XHTTP_METHOD_GET|XHTTP_METHOD_DELETE, "GET, DELETE, OPTIONS", MdoApiMcpAuthRoute, false },
     { "/api/v1/mcp/{server}/oauth/start", XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiMcpAuthRoute, false },
     { "/api/v1/mcp/{server}/oauth/open", XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiMcpAuthRoute, false },
+    { "/api/v1/mcp/{server}/context", XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiMcpContextRoute, false },
+    { "/api/v1/mcp/{server}/diagnostics", XHTTP_METHOD_GET, "GET, OPTIONS", MdoApiMcpContextRoute, false },
     { "/api/v1/mcp/reload", XHTTP_METHOD_POST,
       "POST, OPTIONS", MdoApiMcpReloadRoute, false },
     { "/api/v1/mcp/project", XHTTP_METHOD_GET|XHTTP_METHOD_POST, "GET, POST, OPTIONS", MdoApiMcpProjectRoute, false },

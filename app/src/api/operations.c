@@ -11,6 +11,7 @@ static cstr MdoApiOperationKindText(MdoOperationKind Kind)
     switch ( Kind ) {
     case MDO_OPERATION_MODULE_RELOAD: return "module_reload";
     case MDO_OPERATION_MCP_REFRESH: return "mcp_refresh";
+    case MDO_OPERATION_MCP_CONTEXT: return "mcp_context";
     default: return "unknown";
     }
 }
@@ -247,6 +248,12 @@ bool MdoApiOperationRoute(MdoApiContext* Context)
         return MdoApiReplyError(Context, 500u, "operation_result_unavailable",
             "The operation result could not be created", NULL);
     }
+    if(Info.Kind==MDO_OPERATION_MCP_CONTEXT) {
+        xvalue* Content=MdoOperationContextResult(Info.Id);
+        xvalue* Result=(xvalue*)xrtValueObjectGet(Data,XRT_STR_LITERAL("result"));
+        if(Content&&!MdoApiValueSetTake(Result,"content",&Content)){xrtValueRelease(Content);xrtValueRelease(Data);return false;}
+        xrtValueRelease(Content);
+    }
     return MdoApiReplySuccessTake(Context,
         Context->Request->head->MethodCode == XHTTP_METHOD_DELETE &&
         !MdoApiOperationTerminal(Info.State) ? 202u : 200u, Data, NULL);
@@ -407,4 +414,29 @@ bool MdoApiMcpRefreshRoute(MdoApiContext* Context)
         return MdoApiReplyError(Context, 500u, "operation_result_unavailable",
             "The MCP refresh was queued but its result is unavailable", NULL);
     return MdoApiReplySuccessTake(Context, 202u, Data, NULL);
+}
+
+bool MdoApiMcpContextRoute(MdoApiContext* Context)
+{
+    char Server[128];
+    if(!MdoApiMcpServerId(Context,Server))return MdoApiReplyError(Context,400,"invalid_mcp_server","Invalid MCP server",NULL);
+    if(Context->Request->head->MethodCode==XHTTP_METHOD_GET) {
+        xvalue* Value=MdoMcpDescribe(Server);
+        return Value?MdoApiReplySuccessTake(Context,200,Value,NULL):MdoApiReplyError(Context,409,"mcp_busy","MCP diagnostics are busy or unavailable",NULL);
+    }
+    MdoApiJsonBody Body;MdoApiBodyStatus Status=MdoApiJsonBodyRead(Context,&Body);
+    if(Status!=MDO_API_BODY_OK)return MdoApiReplyBodyError(Context,Status);
+    xstrview Method={0};bool Ok=xrtValueGetString(xrtValueObjectGet(Body.Value,XRT_STR_LITERAL("method")),&Method)&&
+        Method.Size&&Method.Size<=40&&!memchr(Method.Data,0,Method.Size);
+    const char* Methods[]={"resources/list","resources/templates/list","resources/read","prompts/list","prompts/get","completion/complete"};
+    bool Allowed=false;for(size_t i=0;Ok&&i<sizeof(Methods)/sizeof(*Methods);i++)if(Method.Size==strlen(Methods[i])&&!memcmp(Method.Data,Methods[i],Method.Size))Allowed=true;
+    xvalue* Params=xrtValueObjectGet(Body.Value,XRT_STR_LITERAL("params"));
+    char* Text=Params?xrtJsonStringify(Params,false,NULL):xrtStrDup("{}");
+    MdoOperationInfo Info={0};Info.Size=sizeof(Info);
+    Ok=Ok&&Allowed&&(!Params||xrtValueType(Params)==XVALUE_OBJECT)&&Text&&strlen(Text)<=65536&&
+        MdoOperationStartMcpContext(Server,Method.Data,Text,&Info);
+    xrtFree(Text);MdoApiJsonBodyUnit(&Body);
+    xvalue* Data=NULL;
+    if(Ok)Ok=MdoApiOperationValue(&Info,&Data);
+    return Ok?MdoApiReplySuccessTake(Context,202,Data,NULL):MdoApiReplyError(Context,400,"mcp_context_invalid","Unsupported context method, invalid parameters or full operation queue",NULL);
 }

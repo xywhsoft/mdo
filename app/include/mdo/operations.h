@@ -8,7 +8,8 @@
 
 typedef enum MdoOperationKind {
     MDO_OPERATION_MODULE_RELOAD = 0,
-    MDO_OPERATION_MCP_REFRESH
+    MDO_OPERATION_MCP_REFRESH,
+    MDO_OPERATION_MCP_CONTEXT
 } MdoOperationKind;
 
 typedef enum MdoOperationState {
@@ -60,6 +61,8 @@ bool MdoOperationRequestIdValid(const char* Id);
 bool MdoOperationStartModuleReloadIdentified(const char* Id, MdoOperationInfo* Info);
 bool MdoOperationStartMcpRefreshIdentified(const char* ServerId, const char* Id,
     MdoOperationInfo* Info);
+bool MdoOperationStartMcpContext(const char* Server,const char* Method,const char* Params,MdoOperationInfo* Info);
+xvalue* MdoOperationContextResult(const char* Id);
 bool MdoOperationGet(const char* Id, MdoOperationInfo* Info);
 size_t MdoOperationList(MdoOperationInfo* Items, size_t Capacity);
 bool MdoOperationCancel(const char* Id, MdoOperationInfo* Info);

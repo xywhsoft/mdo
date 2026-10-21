@@ -105,6 +105,8 @@ bool MdoMcpValidateText(const char* Id, const char* Text, char* Error, size_t Ca
 /* Reads project definitions without executing them. Scope restrictions are
  * inherited by subagents and apply to search, schema load and invocation. */
 bool MdoMcpConfigureAgent(xwork_agent* Agent, const char* Workspace, xwork_error* Error);
+bool MdoMcpRead(const char* Server,const char* Method,const char* Params,xcancel* Cancel,uint64 Deadline,char** Result,xwork_error* Error);
+xvalue* MdoMcpDescribe(const char* Server);
 xvalue* MdoMcpAuthorizationStatus(const char* ServerId);
 bool MdoMcpAuthorizationStart(const char* ServerId,const char* LocalOrigin);
 bool MdoMcpAuthorizationOpen(const char* ServerId);

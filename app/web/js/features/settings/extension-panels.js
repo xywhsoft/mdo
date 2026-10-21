@@ -1,4 +1,5 @@
 import { createSkillWorkbench } from "./skill-workbench.js";
+import { createMcpContext } from "./mcp-context.js";
 import { createMcpAuthorization } from "./mcp-authorization.js";
 import { createMcpWorkbench } from "./mcp-workbench.js";
 import { newTool } from "./tool-template.js";
@@ -47,6 +48,7 @@ export function createExtensionPanels() {
   let disposed = false, paused = false;
   const reads = createExtensionReads();
   const skillWorkbench = createSkillWorkbench({ onChange: () => announceChange("skills") });
+  const mcpContext = createMcpContext();
   const mcpAuthorization = createMcpAuthorization();
   const mcpWorkbench = createMcpWorkbench({ onChange: () => announceChange("mcp") });
   const actions = new Map();
@@ -186,6 +188,7 @@ export function createExtensionPanels() {
           await refreshMcp(item.id, scope);
           if (scope.isCurrent()) toast(label("testOk", "连接测试完成"), "success");
         })));
+        if (kind === "mcp") controls.push(button("资源、提示词与诊断", () => mcpContext.open(item.id)));
         if (kind === "mcp" && item.has_oauth) controls.push(button("授权", () => mcpAuthorization.open(item.id)));
         if (kind === "mcp" && item.connected) controls.push(button(t("resource.disconnect"), () => act(kind, () => disconnectMcp(item.id))));
         if (item.external) controls.push(button(label(kind === "agents" && item.id === "default" ? "resetAgent" : "delete", kind === "agents" && item.id === "default" ? "恢复默认" : "删除"), () => act(kind, async () => {
@@ -556,6 +559,6 @@ export function createExtensionPanels() {
       else if(pendingResource?.kind===selected)void openLinkedResource();
     },
     hasPendingChanges: () => dirty() || skillWorkbench.hasPendingChanges() || mcpWorkbench.hasPendingChanges(),
-    destroy() { disposed = true; skillWorkbench.destroy(); mcpWorkbench.destroy(); mcpAuthorization.destroy(); cancelReads(); closeEditor(true); unsubscribeLocale(); unsubscribeTarget();window.removeEventListener("mdo-extensions-changed", invalidate);window.removeEventListener("mdo-open-resource",openResource);window.removeEventListener("pagehide",onHide);window.removeEventListener("pageshow",onShow); },
+    destroy() { disposed = true; skillWorkbench.destroy(); mcpWorkbench.destroy(); mcpAuthorization.destroy(); mcpContext.destroy(); cancelReads(); closeEditor(true); unsubscribeLocale(); unsubscribeTarget();window.removeEventListener("mdo-extensions-changed", invalidate);window.removeEventListener("mdo-open-resource",openResource);window.removeEventListener("pagehide",onHide);window.removeEventListener("pageshow",onShow); },
   });
 }

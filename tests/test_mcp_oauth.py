@@ -78,8 +78,14 @@ class Provider(BaseHTTPRequestHandler):
                 type(self).reject_once = False; self.reply(401, {}); return
             rpc = json.loads(body)
             if rpc['method'] == 'notifications/initialized': self.reply(202, {}); return
-            result = {'protocolVersion': '2025-11-25', 'serverInfo': {'name': 'fixture', 'version':'1'}, 'capabilities': {'tools': {}}}
+            result = {'protocolVersion': '2025-11-25', 'serverInfo': {'name': 'fixture', 'version':'1'}, 'capabilities': {'tools': {}, 'resources': {}, 'prompts': {}, 'completions': {}}, 'instructions':'REMOTE_CONTEXT_INSTRUCTIONS'}
             if rpc['method'] == 'tools/list': result = {'tools': []}
+            elif rpc['method']=='resources/list': result={'resources':[{'uri':'fixture:///note','name':'note'}],**({} if rpc['params'].get('cursor') else {'nextCursor':'second'})}
+            elif rpc['method']=='resources/templates/list': result={'resourceTemplates':[{'uriTemplate':'fixture:///{name}','name':'notes'}]}
+            elif rpc['method']=='resources/read': result={'contents':[{'uri':rpc['params']['uri'],'text':'RESOURCE_FIXTURE_CONTENT'}]}
+            elif rpc['method']=='prompts/list': result={'prompts':[{'name':'greet','arguments':[{'name':'name','required':True}]}]}
+            elif rpc['method']=='prompts/get': result={'messages':[{'role':'user','content':{'type':'text','text':'Hello '+rpc['params']['arguments']['name']}}]}
+            elif rpc['method']=='completion/complete': result={'completion':{'values':['fixture'],'total':1,'hasMore':False}}
             self.reply(200, {'jsonrpc':'2.0', 'id':rpc['id'], 'result':result})
         else: self.reply(404, {})
 
@@ -164,6 +170,25 @@ def main():
                 Provider.reject_once=True
                 assert refresh()['state']=='succeeded'
                 assert Provider.refreshes==3 # original refresh token survived omission and 503
+                def context(method,params={}):
+                    code,data=call('POST','mcp/oauth-fixture/context',{'method':method,'params':params});assert code==202,data
+                    for _ in range(200):
+                        _,operation=call('GET','operations/'+data['data']['id'])
+                        if operation['data']['terminal']:
+                            assert operation['data']['state']=='succeeded',operation
+                            return operation['data']['result']['content']
+                        time.sleep(.025)
+                    raise AssertionError('Context read timed out')
+                assert context('resources/list')['nextCursor']=='second'
+                assert 'nextCursor' not in context('resources/list',{'cursor':'second'})
+                assert context('resources/templates/list')['resourceTemplates'][0]['uriTemplate']=='fixture:///{name}'
+                assert context('resources/read',{'uri':'fixture:///note'})['contents'][0]['text']=='RESOURCE_FIXTURE_CONTENT'
+                assert context('prompts/list')['prompts'][0]['name']=='greet'
+                assert context('prompts/get',{'name':'greet','arguments':{'name':'world'}})['messages'][0]['content']['text']=='Hello world'
+                assert context('completion/complete',{'ref':{'type':'ref/prompt','name':'greet'},'argument':{'name':'name','value':'f'}})['completion']['values']==['fixture']
+                assert call('POST','mcp/oauth-fixture/context',{'method':'tools/call','params':{'name':'delete'}})[0]==400
+                code,diag=call('GET','mcp/oauth-fixture/diagnostics');assert code==200 and diag['data']['resources'] and diag['data']['prompts'],diag
+                assert diag['data']['instructions']=='REMOTE_CONTEXT_INSTRUCTIONS',diag
                 code,result=call('DELETE','mcp/oauth-fixture/oauth');assert code==202,result
                 assert not settled()['authorized']
                 assert Provider.revoked==1

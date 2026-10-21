@@ -182,3 +182,19 @@ and attempts advertised provider revocation in the background. Revocation failur
 does not restore local credentials.
 
 Reference: https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization
+
+## Resources and prompts
+
+`mcp_read` exposes only resources/list, resources/templates/list, resources/read,
+prompts/list, prompts/get and completion/complete. It inherits the Agent's MCP
+scope and external-service permission. Lists return nextCursor without automatically
+walking unbounded pages. Server capabilities are checked before dispatch.
+
+Settings > MCP > Resources, prompts and diagnostics opens the user-driven browser.
+Templates display the URI template and accept a concrete URI. Prompt fields accept
+string arguments. `/mcp server prompt {"argument":"value"}` expands a prompt into
+the composer for review; a matching project definition shadows the personal server.
+The full result is bounded, asynchronous, cancellable and kept in recent operation
+memory. Binary blocks are not automatically fetched by URI. Agent tool results
+persist full typed JSON through the normal artifact store when enabled, forward
+one supported image to the model, and exclude binary data from text previews.

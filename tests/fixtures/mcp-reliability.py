@@ -21,8 +21,12 @@ for line in sys.stdin:
                             {"name": "echo", "inputSchema": {"type": "object"}},
                             {"name": "badroot", "inputSchema": {"type": "array"}}]}
     elif method == "tools/call":
-        time.sleep(0.4)
+        if mode!='image': time.sleep(0.4)
         result = {"content": [{"type": "text", "text": "SERIAL_OK"}]}
+        if mode=='image':
+            result['content'] += [{'type':'image','mimeType':'image/png','data':'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aV9kAAAAASUVORK5CYII='},
+                {'type':'resource','resource':{'uri':'fixture:///binary','blob':'BINARY_MUST_NOT_ENTER_CONTEXT'}}]
+            result['structuredContent']={'ok':True}
     else:
         continue
     print(json.dumps({"jsonrpc": "2.0", "id": request["id"], "result": result}), flush=True)

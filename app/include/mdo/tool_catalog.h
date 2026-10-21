@@ -40,7 +40,8 @@ static const MdoBuiltinTool MDO_BUILTIN_TOOLS[] = {
     {"web_open", "Read a public web page", XWORK_TOOL_EFFECT_READ | XWORK_TOOL_EFFECT_NETWORK, MDO_TOOL_WEB, true},
     {"web_find", "Find text in an opened web page", XWORK_TOOL_EFFECT_READ, MDO_TOOL_WEB, true},
     {"tool_search", "Discover connected MCP tools", XWORK_TOOL_EFFECT_EXTERNAL_SERVICE, MDO_TOOL_MCP, false},
-    {"tool_load", "Load an MCP tool on demand", XWORK_TOOL_EFFECT_EXTERNAL_SERVICE, MDO_TOOL_MCP, false}
+    {"tool_load", "Load an MCP tool on demand", XWORK_TOOL_EFFECT_EXTERNAL_SERVICE, MDO_TOOL_MCP, false},
+    {"mcp_read", "Read MCP resources and prompts", XWORK_TOOL_EFFECT_EXTERNAL_SERVICE, MDO_TOOL_MCP, false}
 };
 
 static inline const MdoBuiltinTool* MdoBuiltinToolFind(cstr Id)
