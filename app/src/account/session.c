@@ -20,6 +20,8 @@ static void MdoAccountClearTokensLocked(void)
 {
     xrtSecureZero(&g_MdoAccount.Tokens, sizeof(g_MdoAccount.Tokens));
     g_MdoAccount.Saved = false;
+    g_MdoAccount.NextRefresh = 0;
+    g_MdoAccount.RefreshFailures = 0;
     MdoAccountClearModelsLocked();
     MdoAccountClearBalanceLocked();
     (void)MdoHomeRemove(MDO_ACCOUNT_SESSION_PATH, false);
@@ -49,6 +51,7 @@ static bool MdoAccountQueueLocked(unsigned Kind)
          g_MdoAccount.Work.Kind == MDO_ACCOUNT_WORK_PASSWORD)) return true;
     if (Kind == MDO_ACCOUNT_WORK_PROFILE && (g_MdoAccount.Busy || g_MdoAccount.Work.Kind)) return true;
     if (Kind == MDO_ACCOUNT_WORK_REFRESH && !g_MdoAccount.Tokens.Refresh[0]) return false;
+    if (Kind == MDO_ACCOUNT_WORK_REFRESH && !MdoDeadlineExpired(g_MdoAccount.NextRefresh)) return true;
     xrtSecureZero(&g_MdoAccount.Work, sizeof(g_MdoAccount.Work));
     g_MdoAccount.Work.Kind = Kind; g_MdoAccount.Work.Epoch = g_MdoAccount.Epoch;
     strcpy(g_MdoAccount.Work.Origin, g_MdoAccount.Origin);
@@ -102,6 +105,10 @@ static int32 MdoAccountWorker(void* Unused)
         memset(&work, 0, sizeof(work)); memset(&tokens, 0, sizeof(tokens));
         xrtMutexLock(g_MdoAccount.Lock);
         while (!g_MdoAccount.Stopping && !g_MdoAccount.Work.Kind) {
+            if (g_MdoAccount.NextRefresh && g_MdoAccount.Tokens.Refresh[0] &&
+                MdoDeadlineExpired(g_MdoAccount.NextRefresh) && !g_MdoAccount.Authorization.State[0]) {
+                (void)MdoAccountQueueLocked(MDO_ACCOUNT_WORK_REFRESH); break;
+            }
             if(g_MdoAccount.Tokens.Access[0]&&!MdoDeadlineExpired(g_MdoAccount.Tokens.Expires)&&
                 MdoDeadlineExpired(g_MdoAccount.NextProfile)&&!g_MdoAccount.Authorization.State[0]){
                 (void)MdoAccountQueueLocked(MDO_ACCOUNT_WORK_PROFILE);break;}
@@ -116,11 +123,6 @@ static int32 MdoAccountWorker(void* Unused)
         if(work.Kind==MDO_ACCOUNT_WORK_PROFILE)g_MdoAccount.NextProfile=MdoDeadlineAfterUs(30000000);
         g_MdoAccount.Busy = true; g_MdoAccount.BusyKind = work.Kind;
         cancel = xrtCancelCreate(); g_MdoAccount.WorkCancel = cancel;
-        if (work.Kind == MDO_ACCOUNT_WORK_REFRESH) {
-            /* Remove the old refresh before sending it. A crash or lost reply
-             * must cause re-login, never replay a possibly rotated token. */
-            (void)MdoHomeRemove(MDO_ACCOUNT_SESSION_PATH, false); g_MdoAccount.Saved = false;
-        }
         MdoAccountChangedLocked(); xrtMutexUnlock(g_MdoAccount.Lock);
         if (cancel && (work.Kind == MDO_ACCOUNT_WORK_EXCHANGE || work.Kind == MDO_ACCOUNT_WORK_REFRESH ||
             work.Kind == MDO_ACCOUNT_WORK_PASSWORD)) {
@@ -134,7 +136,8 @@ static int32 MdoAccountWorker(void* Unused)
             } else if (body && work.Kind == MDO_ACCOUNT_WORK_PASSWORD) {
                 ok = MdoAccountSetString(body, "identifier", work.Identifier) &&
                     MdoAccountSetString(body, "password", work.Password);
-            } else if (body) ok = MdoAccountSetString(body, "refresh_token", work.Tokens.Refresh);
+            } else if (body) ok = MdoAccountSetString(body, "refresh_token", work.Tokens.Refresh) &&
+                MdoAccountSetBool(body, "persistent", true);
             if (ok) data = MdoAccountClient(work.Origin, work.Kind == MDO_ACCOUNT_WORK_EXCHANGE ?
                 "/api/v1/auth/token" : work.Kind == MDO_ACCOUNT_WORK_PASSWORD ? "/api/v1/login" :
                 "/api/v1/token/refresh", "POST", body, NULL, cancel, &status);
@@ -169,6 +172,8 @@ static int32 MdoAccountWorker(void* Unused)
             if (work.Kind == MDO_ACCOUNT_WORK_EXCHANGE || work.Kind == MDO_ACCOUNT_WORK_REFRESH ||
                 work.Kind == MDO_ACCOUNT_WORK_PASSWORD) {
                 if (ok) {
+                    bool replaced = work.Kind != MDO_ACCOUNT_WORK_REFRESH ||
+                        strcmp(tokens.Refresh, work.Tokens.Refresh) != 0;
                     if (work.Kind == MDO_ACCOUNT_WORK_EXCHANGE || work.Kind == MDO_ACCOUNT_WORK_PASSWORD) {
                         MdoAccountNewSessionLocked();
                         xrtValueRelease(g_MdoAccount.Profile); g_MdoAccount.Profile = NULL;
@@ -178,18 +183,29 @@ static int32 MdoAccountWorker(void* Unused)
                         g_MdoAccount.Remember = work.Kind == MDO_ACCOUNT_WORK_PASSWORD ? work.Remember : work.Authorization.Remember;
                     }
                     g_MdoAccount.Tokens = tokens; g_MdoAccount.Message[0] = 0;
-                    (void)MdoAccountCredentialSaveLocked();
+                    g_MdoAccount.NextRefresh = 0; g_MdoAccount.RefreshFailures = 0;
+                    (void)MdoAccountCredentialSaveLocked(replaced);
                     (void)MdoAccountQueueLocked(MDO_ACCOUNT_WORK_PROFILE);
                 } else {
-                    if (work.Kind == MDO_ACCOUNT_WORK_REFRESH) MdoAccountClearTokensLocked();
+                    if (work.Kind == MDO_ACCOUNT_WORK_REFRESH) {
+                        if (status == 401 || status == 410) MdoAccountClearTokensLocked();
+                        else {
+                            if (g_MdoAccount.RefreshFailures < 6u) ++g_MdoAccount.RefreshFailures;
+                            uint64 seconds = (uint64)1u << g_MdoAccount.RefreshFailures;
+                            g_MdoAccount.NextRefresh = MdoDeadlineAfterUs(seconds * 1000000u);
+                        }
+                    }
                     strcpy(g_MdoAccount.Message, work.Kind == MDO_ACCOUNT_WORK_PASSWORD && (status == 400 || status == 401) ? "invalid_credentials" :
                         status == 429 ? "login_rate_limited" : status == 401 || status == 410 ? "login_expired" :
-                        status == 404 ? "service_update_required" : "account_connection_failed");
+                        status == 404 ? "service_update_required" : work.Kind == MDO_ACCOUNT_WORK_REFRESH ?
+                        "account_renewal_pending" : "account_connection_failed");
                 }
                 ++g_MdoAccount.RefreshSerial;
                 if (work.Kind == MDO_ACCOUNT_WORK_EXCHANGE) MdoAccountClearAuthorizationLocked();
             } else if (work.Kind == MDO_ACCOUNT_WORK_PROFILE) {
+                bool save_profile = profile && !g_MdoAccount.Profile;
                 if (profile) { xrtValueRelease(g_MdoAccount.Profile); g_MdoAccount.Profile = profile; profile = NULL; }
+                if (save_profile && g_MdoAccount.Remember) (void)MdoAccountCredentialSaveLocked(false);
                 if (usage) { xrtValueRelease(g_MdoAccount.Usage); g_MdoAccount.Usage = usage; usage = NULL; }
                 if (usage_status) g_MdoAccount.SearchStatus = usage_status;
                 if(allowance){xrtValueRelease(g_MdoAccount.Allowance);g_MdoAccount.Allowance=allowance;allowance=NULL;}
@@ -316,12 +332,6 @@ bool MdoAccountLoginStart(cstr LocalOrigin, bool Remember, xvalue** PublicResult
     ok = MdoAccountAuthorizationStart(g_MdoAccount.Origin, LocalOrigin, Remember, &authorization) &&
         MdoAccountAuthorizationSave(&authorization);
     if (ok) {
-        if (g_MdoAccount.Busy && g_MdoAccount.BusyKind == MDO_ACCOUNT_WORK_REFRESH) {
-            /* The previous rotation may already have reached the server.
-             * Discard its old refresh rather than replay it after switching. */
-            xrtSecureZero(g_MdoAccount.Tokens.Refresh, sizeof(g_MdoAccount.Tokens.Refresh));
-            g_MdoAccount.Saved = false;
-        }
         ++g_MdoAccount.Epoch; xrtCancelRequest(g_MdoAccount.WorkCancel);
         xrtSecureZero(&g_MdoAccount.Work, sizeof(g_MdoAccount.Work));
         g_MdoAccount.Authorization = authorization; g_MdoAccount.Message[0] = 0;
@@ -344,10 +354,6 @@ bool MdoAccountLoginPassword(cstr Identifier, cstr Password, bool Remember)
     xrtMutexLock(g_MdoAccount.Lock);
     /* Keep the previous account until the new credentials succeed. Epoch
      * prevents cancelled or superseded requests from installing a late login. */
-    if (g_MdoAccount.Busy && g_MdoAccount.BusyKind == MDO_ACCOUNT_WORK_REFRESH) {
-        xrtSecureZero(g_MdoAccount.Tokens.Refresh, sizeof(g_MdoAccount.Tokens.Refresh));
-        g_MdoAccount.Saved = false;
-    }
     ++g_MdoAccount.Epoch; xrtCancelRequest(g_MdoAccount.WorkCancel);
     MdoAccountClearAuthorizationLocked();
     bool ok = MdoAccountQueueLocked(MDO_ACCOUNT_WORK_PASSWORD);

@@ -1,0 +1,55 @@
+<!doctype html><meta charset="utf-8"><title>Disposable session trash regression</title>
+<pre id="result">Running</pre><iframe style="width:1200px;height:850px" id="app"></iframe>
+<script type="module">
+const result = document.querySelector("#result"), frame = document.querySelector("#app");
+const params = new URLSearchParams(location.search);
+const session = params.get("session"), selected = params.get("selected"), menu = params.get("menu");
+const assert = (ok, message) => { if (!ok) throw new Error(message); };
+const sleep = () => new Promise(resolve => setTimeout(resolve, 50));
+async function until(check, message) {
+  for (let i = 0; i < 240; ++i) { if (check()) return; await sleep(); }
+  throw new Error(message);
+}
+try {
+  const route = "#/projects/default/sessions/" + selected;
+  frame.src = "/" + route;
+  await until(() => frame.contentDocument?.querySelector("#session-actions")?.disabled === false, "session did not load");
+  const doc = frame.contentDocument;
+  await until(() => doc.querySelector(`[data-session-key="default/${session}"]`), "active list did not render");
+  await until(() => !doc.querySelector("#prompt").disabled, "active composer did not load");
+  async function openTrash() {
+    if (menu === "sidebar") {
+      const row = doc.querySelector(`button[data-session-key="default/${session}"]`).closest(".session-item-row");
+      row.querySelector(".session-more").click();
+    } else doc.querySelector("#session-actions").click();
+    const root = doc.querySelector(menu === "sidebar" ? "#sidebar-session-menu" : "#session-header-menu");
+    const item = [...root.querySelectorAll('[role="menuitem"]')]
+      .find(node => /移到回收站|Move to trash|В корзину/.test(node.textContent));
+    assert(item, "menu must offer move to trash"); item.click();
+    await until(() => doc.querySelector("#session-action-dialog").open, "confirmation did not open");
+  }
+  await openTrash(); doc.querySelector("#cancel-session-action").click();
+  assert(frame.contentWindow.location.hash === route, "cancel must preserve the selected session");
+  let proof = await (await fetch("/__qa/proof")).json();
+  assert(proof.trashes === 0 && proof.status === "active", "cancel must not trash data");
+  await openTrash(); doc.querySelector("#confirm-session-action").click();
+  if (selected === session) {
+    await until(() => frame.contentWindow.location.hash.endsWith("/new"), "trashed selected session did not navigate to new task");
+    assert(doc.querySelector("#composer").hasAttribute("data-new-task"), "composer still targets the trashed session");
+    assert(doc.querySelector("#timeline").children.length === 0, "old timeline remains in the new task");
+    assert(doc.querySelector("#prompt-queue").hidden, "old session queue remains visible");
+  }
+  await until(() => !doc.querySelector("#session-action-dialog").open, "successful trash did not close confirmation");
+  await until(() => !doc.querySelector(`button[data-session-key="default/${session}"]`), "trashed session remains in active sidebar");
+  if (selected !== session) {
+    assert(frame.contentWindow.location.hash === route, "trashing another session replaced the current selection");
+    assert(!doc.querySelector("#composer").hasAttribute("data-new-task"), "current conversation lost its composer");
+  }
+  await until(() => !doc.querySelector("#prompt").disabled, "remaining composer is not usable");
+  assert(!doc.querySelector("#session-list .session-read-notice"), "sidebar requires a manual reread");
+  proof = await (await fetch("/__qa/proof")).json();
+  assert(proof.trashes === 1 && proof.session_status === 200 && proof.status === "trash", "trash must retain the recoverable session");
+  result.textContent = JSON.stringify({ passed: true, menu, selected_session: selected === session,
+    confirmation_cancel: true, navigation_correct: true, composer_usable: true, recoverable_session: true });
+} catch (error) { result.textContent = JSON.stringify({ passed: false, error: error.message, stack: error.stack }); }
+</script>

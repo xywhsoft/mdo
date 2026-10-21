@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createTokenMeter } from "../app/web/js/features/chat/token-meter.js";
+import { createTokenMeter, contextCheckpoint, estimateInputTokens } from "../app/web/js/features/chat/token-meter.js";
 import { createKeyboardShortcuts } from
   "../app/web/js/features/shell/keyboard-shortcuts.js";
 
@@ -143,10 +143,10 @@ test("last-call usage uses its own model after the next model is selected", () =
           context_window_tokens: 10000 },
       ] }), runsStore: { get: () => ({ data: { items: runItems } }),
         subscribe: () => () => {} } });
-    assert.equal(ring.style.values.get("--meter-percent"), "50%",
-      "last-call input must use the previous model's context window");
+    assert.equal(ring.style.values.get("--meter-percent"), "53%",
+      "last input plus output must use the previous model's context window");
     assert.match(trigger.title, /Previous/);
-    assert.match(trigger.title, /500/);
+    assert.match(trigger.title, /525/);
     assert.match(trigger.title, /1,000/);
     const details = panel.children[1];
     const fields = details.children.map((child) => child.textContent);
@@ -170,9 +170,77 @@ test("last-call usage uses its own model after the next model is selected", () =
     event = { ...event, agent_depth: 0, model_id: "previous",
       context_window_tokens: 1000 };
     meter.refresh();
-    assert.equal(ring.style.values.get("--meter-percent"), "50%",
+    assert.equal(ring.style.values.get("--meter-percent"), "53%",
       "persisted event profile survives loss of in-memory run records");
     assert.match(trigger.title, /Previous/);
+  } finally {
+    meter?.destroy();
+    globalThis.document = previousDocument;
+  }
+});
+
+test("context checkpoints exclude subagents and reset at history boundaries", () => {
+  const parent = { event_id: 1, kind: "model_done", agent_depth: 0,
+    input_tokens: 500, output_tokens: 25, success: true };
+  const child = { event_id: 2, kind: "model_done", agent_depth: 1,
+    input_tokens: 9000, output_tokens: 900, success: true };
+  assert.equal(contextCheckpoint([parent, child]).latestCall, parent);
+  const compacted = { event_id: 3, kind: "compaction_done", agent_depth: 0,
+    context: { exact: false, estimated_input_tokens: 64, input_budget_tokens: 850,
+      compact_threshold_tokens: 800, fill_tokens: 0, growth_tokens: 0 } };
+  assert.equal(contextCheckpoint([parent, child, compacted]).contextEvent, compacted);
+  const reset = contextCheckpoint([parent, compacted, { event_id: 4, kind: "history_truncated" }]);
+  assert.equal(reset.contextEvent, undefined);
+  assert.equal(reset.latestCall, undefined);
+  assert.equal(contextCheckpoint([parent, { ...compacted, agent_depth: 1 }]).contextEvent, undefined);
+});
+
+test("draft estimates match native ASCII rounding and Unicode scalar counting", () => {
+  assert.equal(estimateInputTokens(""), 0);
+  assert.equal(estimateInputTokens("a"), 1);
+  assert.equal(estimateInputTokens("aaaaa"), 2);
+  assert.equal(estimateInputTokens("abc世界🙂é"), 5);
+});
+
+test("the ring uses native context growth, draft and compaction state together", () => {
+  const previousDocument = globalThis.document;
+  const document = new EventTarget();
+  document.createElement = () => new Node(document);
+  document.querySelector = () => null;
+  document.body = new Node(document);
+  document.activeElement = document.body;
+  globalThis.document = document;
+  const [root, trigger, panel, prompt, estimate, ring] = Array.from({ length: 6 }, () => new Node(document));
+  let events = [{ kind: "model_done", event_id: 1, agent_depth: 0, success: true,
+    model_id: "main", context_window_tokens: 1000, input_tokens: 500, output_tokens: 25,
+    context: { exact: true, fill_tokens: 525, growth_tokens: 0, estimated_input_tokens: 525,
+      input_budget_tokens: 900, compact_threshold_tokens: 850 } }];
+  let meter;
+  try {
+    meter = createTokenMeter({ root, trigger, panel, prompt, estimate, ring,
+      modelSelect: { value: "main" }, sessionStore: resource({ project_id: "p", id: "s" }),
+      timelineStore: { get: () => ({ data: { projectId: "p", sessionId: "s", events } }),
+        subscribe: () => () => {} },
+      modelsStore: resource({ models: [{ id: "main", name: "Main", context_window_tokens: 1000 }] }) });
+    assert.equal(ring.style.values.get("--meter-percent"), "53%");
+    prompt.value = "x".repeat(100);
+    meter.refresh();
+    assert.equal(ring.style.values.get("--meter-percent"), "56%", "draft includes the native message overhead");
+    events.push({ ...events[0], event_id: 2, kind: "model_start", context: { ...events[0].context,
+      growth_tokens: 125, estimated_input_tokens: 650 } });
+    meter.refresh();
+    assert.equal(ring.style.values.get("--meter-percent"), "69%");
+    assert.match(trigger.title, /687/);
+    const fields = panel.children[1].children.map(node => node.textContent);
+    assert.ok(fields.includes("850"), "the native compaction threshold is visible");
+    events.push({ ...events[0], event_id: 3, kind: "compaction_done", context: {
+      ...events[0].context, exact: false, fill_tokens: 0, estimated_input_tokens: 64 } });
+    meter.refresh();
+    assert.equal(ring.style.values.get("--meter-percent"), "10%", "compaction replaces the old usage baseline");
+    prompt.value = "";
+    events = JSON.parse(JSON.stringify(events));
+    meter.refresh();
+    assert.equal(ring.style.values.get("--meter-percent"), "6%", "restored event checkpoints retain the compacted context");
   } finally {
     meter?.destroy();
     globalThis.document = previousDocument;

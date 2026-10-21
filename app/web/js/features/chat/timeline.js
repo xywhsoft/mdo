@@ -197,6 +197,21 @@ export function eventsToTimeline(events, historyLost = false,
       }
       case "model_text_delta":
         {
+          const input = event.action_prompt;
+          if (!(event.agent_depth > 0) && !promptsByRun.has(runKey) &&
+              input?.kind === "agent_start" && input.agent_depth === 0 && input.schema_version >= 3 &&
+              Number.isSafeInteger(input.event_id) && input.event_id > 0 && input.event_id < event.event_id &&
+              Number.isSafeInteger(input.user_message_sequence) && input.user_message_sequence > 0 &&
+              input.projection_epoch === event.projection_epoch) {
+            const prompt = { sourceEventId: input.event_id, sequence: input.user_message_sequence,
+              text: input.text || "", textTruncated: Boolean(input.text_truncated),
+              copySpans: input.text_truncated ? [completeTextSpan(input)] : [],
+              attachments: input.attachments || [] };
+            promptsByRun.set(runKey, prompt);
+            promptsByEpoch.set(`${runKey}:${epoch}`, prompt);
+            if (!latestMainPrompt || prompt.sourceEventId > latestMainPrompt.sourceEventId)
+              latestMainPrompt = prompt;
+          }
           const answer = appendOrCreate(items, streams, event, "assistant", event.model || "Agent", `assistant-${modelKey(event, epoch)}`);
           answer.runKey = runKey;
           answer.runEpoch = epoch;
@@ -720,7 +735,7 @@ function timelineNode(item, handlers, projectId, sessionId, writable,
       projectId, sessionId, toolTextCache);
   const time = timeNode(item.time);
   const header = element("div", { className: "timeline-item-header" }, [
-    item.kind === "user" ? null :
+    item.kind === "user" || item.kind === "assistant" ? null :
       element("span", { className: "timeline-role", text: item.role }),
     time,
   ]);

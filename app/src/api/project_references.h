@@ -18,6 +18,10 @@ typedef struct MdoProjectReferenceGuard MdoProjectReferenceGuard;
  * two files must move in the SAME transaction as the project data. */
 MdoProjectReferenceGuard* MdoApiProjectReferencesBegin(const char* ProjectId,
     MdoProjectLease* Owner, xwork_error* Error);
+/* Same locks and exclusive owner, selecting only references to this exact
+ * session. Drafts and selections belonging to its neighbours are retained. */
+MdoProjectReferenceGuard* MdoApiSessionReferencesBegin(const char* ProjectId,
+    const char* SessionId, MdoProjectLease* Owner, xwork_error* Error);
 /* Advisory inspection acquires its own shared project lease and the same
  * selection/draft locks. It never authorizes moves or repairs either file. */
 MdoProjectReferenceGuard* MdoApiProjectReferencesPreview(const char* ProjectId,
@@ -32,6 +36,8 @@ void MdoApiProjectReferencesFree(MdoProjectReferenceGuard* Guard);
 bool MdoApiDraftReferenceLock(const char* ProjectId,
     const MdoProjectLease* Owner, MdoHomePurgeTarget* Target, bool* Present);
 bool MdoApiDraftReferencePreviewLock(const char* ProjectId,
+    const MdoProjectLease* Owner, MdoHomePurgeTarget* Target, bool* Present);
+bool MdoApiDraftSessionReferenceLock(const char* ProjectId, const char* SessionId,
     const MdoProjectLease* Owner, MdoHomePurgeTarget* Target, bool* Present);
 void MdoApiDraftReferenceUnlock(void);
 

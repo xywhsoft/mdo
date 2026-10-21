@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 from contextlib import contextmanager
 import hashlib
+import json
 import os
 import shutil
 import subprocess
@@ -70,6 +71,23 @@ def digest(path: Path) -> str:
     return value.hexdigest()
 
 
+def release_inputs() -> dict[str, str]:
+    files = {path.relative_to(ROOT).as_posix(): digest(path)
+             for path in sorted((ROOT / "app").rglob("*"))
+             if path.is_file() and "generated" not in path.relative_to(ROOT / "app").parts}
+    return {"application": hashlib.sha256(json.dumps(files, sort_keys=True).encode()).hexdigest(),
+            "dependency lock": digest(ROOT / "deps.lock"),
+            "host profile": digest(ROOT / "tools/host-profile.json")}
+
+
+def verify_release_inputs(expected: dict[str, str]) -> None:
+    actual = release_inputs()
+    changed = [name for name in expected if actual.get(name) != expected[name]]
+    if changed:
+        raise GateError("release inputs changed during validation: " + ", ".join(changed) +
+                        "; finish concurrent edits and rerun the gate")
+
+
 def strict_compile(cc: str, xserver: Path) -> None:
     includes = (
         xserver / "src/sdk",
@@ -100,16 +118,51 @@ def runtime_probe_command(probe: Path, host: Path, packed: Path) -> list[str]:
     # Always pass this run's candidate instead of its default root mdo.exe.
     if probe.name == "test_debug_cleanup_runtime.py":
         return [sys.executable, str(probe), "--packed-path", str(packed)]
+    if probe.name == "test_session_purge_runtime.py":
+        return [sys.executable, str(probe), "--host", str(host), "--packed", str(packed)]
+    if probe.name == "test_task_stop_runtime.py":
+        directory = BUILD / "qa-release" / ("task-stop-" + uuid.uuid4().hex)
+        return [sys.executable, str(probe), "--host", str(host), "--directory", str(directory)]
+    if probe.name in {"test_conversation_groups_runtime.py", "test_responses_followup_runtime.py",
+                      "test_session_profile_errors_runtime.py"}:
+        return [sys.executable, str(probe), "--packed", str(packed)]
     return [sys.executable, str(probe), "--host", str(host)]
 
 
 def runtime_probes(host: Path, packed: Path) -> int:
-    probes = sorted(TESTS.glob("test_*_runtime.py"), key=lambda path: path.name)
+    device_probes = {
+        "test_android_conversation_runtime.py": "requires an isolated Android QA package and device",
+        "test_android_device_runtime.py": "requires an explicitly selected Android device",
+    }
+    probes = []
+    for probe in sorted(TESTS.glob("test_*_runtime.py"), key=lambda path: path.name):
+        if probe.name in device_probes:
+            print(f"[qa] DEVICE CHECK NOT RUN: {probe.name}: {device_probes[probe.name]}", flush=True)
+        else:
+            probes.append(probe)
     if not probes:
         raise GateError("no bounded runtime probes were found")
     for probe in probes:
         run(runtime_probe_command(probe, host, packed))
     return len(probes)
+
+
+def packed_probe_commands(packed: Path, output: Path) -> list[list[str]]:
+    names = (
+        "test_packed_home_lease.py", "test_packed_default_workspace.py",
+        "test_packed_module_catalog.py", "test_live_runtime.py",
+        "test_packed_queue_start_recovery.py", "test_packed_backup_download.py",
+        "test_packed_restore.py", "test_packed_compaction_failure.py",
+        "test_packed_compaction_recovery.py", "test_packed_fork_recovery.py",
+        "test_packed_message_edit_recovery.py", "test_packed_recovery_ack.py",
+    )
+    commands = []
+    for name in names:
+        command = [sys.executable, str(TESTS / name), "--packed", str(packed)]
+        if name == "test_packed_fork_recovery.py":
+            command += ["--report", str(output / "fork-recovery.json")]
+        commands.append(command)
+    return commands
 
 
 def frontend_checks() -> None:
@@ -245,7 +298,7 @@ def windows_packed_crash_gate(packer: Path, observe_seconds: int) -> None:
     if shell is None:
         raise GateError("PowerShell is required for the packed startup gate")
     run([
-        shell, "-NoProfile", "-File", str(TESTS / "packed-startup-smoke.ps1"),
+        shell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(TESTS / "packed-startup-smoke.ps1"),
         "-Xsw", str(packer),
         "-App", str(TESTS / "fixtures/packed-startup-app"),
         "-ObserveSeconds", str(observe_seconds),
@@ -272,12 +325,14 @@ def main(argv: list[str] | None = None) -> int:
         lock = build_mdo.load_object(ROOT / "deps.lock")
         xserver = build_mdo.find_xserver(args.xserver_root, lock)
         build_mdo.verify_dependencies(xserver, lock)
+        inputs = release_inputs()
         output_dir = BUILD / "qa-release"
         output_dir.mkdir(parents=True, exist_ok=True)
         suffix = ".exe" if os.name == "nt" else ""
         first = output_dir / f"mdo-release-a{suffix}"
         second = output_dir / f"mdo-release-b{suffix}"
-        host = BUILD / "host" / f"xs{suffix}"
+        host_dir = BUILD / "host" if os.name == "nt" else BUILD / "host/linux-gui-glibc"
+        host = host_dir / f"xs{suffix}"
         packer = host.with_name("xsw.exe") if os.name == "nt" else host
 
         run([sys.executable, "-m", "unittest", "discover", "-s", "tests"])
@@ -290,6 +345,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.skip_host_build:
             build.append("--skip-host-build")
         run(build)
+        host_hash, packer_hash = digest(host), digest(packer)
         strict_compile(args.cc, xserver)
         if os.name == "nt":
             # Distribution probes require catalog/archives from this source,
@@ -297,34 +353,33 @@ def main(argv: list[str] | None = None) -> int:
             run([sys.executable, str(ROOT / "tools/build_toolpacks.py"),
                  "--packer", str(host)])
         probe_count = runtime_probes(host, first)
-        run([str(packer), "pack", str(ROOT / "app"), "-o", str(second)])
+        verify_release_inputs(inputs)
+        # Reproduce the product staging too: build_mdo adds edition/platform
+        # definitions and normalizes xs.json before packing. Packing raw app/
+        # compares different inputs and cannot test product determinism.
+        repeat_build = [item for item in build if item != "--skip-host-build"]
+        repeat_build[repeat_build.index(str(first))] = str(second)
+        run([*repeat_build, "--skip-host-build"])
         first_hash = digest(first)
         second_hash = digest(second)
         if first_hash != second_hash:
             raise GateError(
                 f"pack is not deterministic: {first_hash} != {second_hash}"
             )
-        run([sys.executable, str(TESTS / "test_packed_home_lease.py"),
-             "--packed", str(first)])
-        run([sys.executable, str(TESTS / "test_packed_default_workspace.py"),
-             "--packed", str(first)])
-        run([sys.executable, str(TESTS / "test_packed_module_catalog.py"),
-             "--packed", str(first)])
-        run([sys.executable, str(TESTS / "test_live_runtime.py"),
-             "--packed", str(first)])
-        run([sys.executable,
-             str(TESTS / "test_packed_queue_start_recovery.py"),
-             "--packed", str(first)])
-        run([sys.executable, str(TESTS / "test_packed_backup_download.py"),
-             "--packed", str(first)])
-        run([sys.executable, str(TESTS / "test_packed_restore.py"),
-             "--packed", str(first)])
+        packed_commands = packed_probe_commands(first, output_dir)
+        for command in packed_commands:
+            run(command)
 
         if os.name == "nt" and not args.skip_gui_smoke:
             windows_single_file(first, args.observe_seconds)
             windows_packed_crash_gate(packer, max(args.observe_seconds, 20))
 
+        verify_release_inputs(inputs)
+        if (digest(host), digest(packer)) != (host_hash, packer_hash):
+            raise GateError("native hosts changed during validation; rerun the gate")
+
         print(f"[qa] PASS: unit/contract suite, {probe_count} runtime probes")
+        print(f"[qa] PASS: {len(packed_commands)} packed-product probes")
         print(f"[qa] PASS: deterministic pack sha256={first_hash}")
         if os.name == "nt" and not args.skip_gui_smoke:
             print("[qa] PASS: portable WebView2 Home and packed crash gates")

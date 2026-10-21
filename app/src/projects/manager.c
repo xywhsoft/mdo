@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "../../include/mdo/device_transfer.h"
 
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/project_lifecycle.h"
@@ -250,6 +251,7 @@ bool MdoProjectGet(const char* Id, MdoProjectInfo* Info, bool* Found,
         return false;
     }
     if ( !*Found ) return true;
+    if (!MdoDeviceTransferProjectVisible(Id)) { *Found=false; return true; }
     return MdoProjectsRead(Id, Info, Error);
 }
 
@@ -305,6 +307,7 @@ bool MdoProjectList(MdoProjectInfo* Items, size_t Capacity, size_t* Count,
             ++*InvalidCount;
             continue;
         }
+        if (!MdoDeviceTransferProjectVisible(Id)) continue;
         if ( *Count == Capacity ) {
             *Truncated = true;
             break;
@@ -360,8 +363,8 @@ static MdoProjectMutationResult MdoProjectsLease(const char* Id,
         MDO_PROJECT_MUTATION_BUSY : MDO_PROJECT_MUTATION_UNAVAILABLE;
 }
 
-bool MdoProjectCreate(const MdoProjectCreateOptions* Options,
-    MdoProjectInfo* Info, xwork_error* Error)
+static bool MdoProjectsCreateInternal(const MdoProjectCreateOptions* Options,
+    MdoProjectLease* Owner, MdoProjectInfo* Info, xwork_error* Error)
 {
     MdoProjectInfo Candidate;
     char Path[96];
@@ -387,8 +390,15 @@ bool MdoProjectCreate(const MdoProjectCreateOptions* Options,
             "project fields are invalid or exceed their bounds");
         return false;
     }
-    if ( MdoProjectsLease(Options->Id, &Lease, Error) !=
-            MDO_PROJECT_MUTATION_OK ) return false;
+    if (Owner) {
+        if (!MdoProjectLeaseProtects(Owner,Options->Id,MDO_PROJECT_LEASE_SHARED)) return false;
+        Lease=MdoProjectLeaseRef(Owner);
+    } else {
+        if (!MdoDeviceTransferProjectVisible(Options->Id)) {
+            MdoProjectsError(Error,XWORK_ERROR_CONTEXT,"project ID is reserved by a transfer"); return false;
+        }
+        if (MdoProjectsLease(Options->Id,&Lease,Error)!=MDO_PROJECT_MUTATION_OK) return false;
+    }
     Writer = MdoProjectDefinitionAcquire(Lease, Error);
     if ( Writer == NULL ) { MdoProjectLeaseRelease(Lease); return false; }
     Candidate.Revision = 1u;
@@ -435,6 +445,11 @@ done:
     MdoProjectLeaseRelease(Lease);
     return Ok;
 }
+
+bool MdoProjectCreate(const MdoProjectCreateOptions* Options,MdoProjectInfo* Info,xwork_error* Error)
+{ return MdoProjectsCreateInternal(Options,NULL,Info,Error); }
+bool MdoProjectPublishTransfer(const MdoProjectCreateOptions* Options,MdoProjectLease* Owner,MdoProjectInfo* Info,xwork_error* Error)
+{ return Owner && MdoProjectsCreateInternal(Options,Owner,Info,Error); }
 
 static MdoProjectMutationResult MdoProjectsMutationBegin(const char* Id,
     uint64 ExpectedRevision, char Path[96], xfile* Lock,

@@ -13,4 +13,8 @@ xvalue* MdoLanOffer(cstr Peer, bool ReadOnly, void* Data);
 bool MdoLanGatewayInit(XS_ServerInfo* Server);
 void MdoLanGatewayUnit(void);
 bool MdoLanGatewayAccept(XS_HttpReq* Request);
+/* Verified native controller path; same authenticated offer and CA as the
+ * browser gateway. Caller retains the relay and owns Net/socket until close. */
+MdoRemoteSocket* MdoLanConnectOffer(MdoRemoteNet* Net, XS_ServerInfo* Server,
+    const xvalue* Offer, xcancel* Cancel);
 #endif

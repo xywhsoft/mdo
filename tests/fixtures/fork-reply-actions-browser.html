@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<link rel="stylesheet" href="/css/app.css">
+<style>.conversation { height: 60vh; overflow: auto; } #result { white-space: pre-wrap; }</style>
+<pre id="result">Preparing</pre><textarea id="prompt"></textarea>
+<div class="conversation"><p id="welcome"></p><ol id="timeline" class="timeline"></ol></div>
+<button id="to-bottom" hidden>Bottom</button><div id="toast-region"></div>
+<script type="module">
+import { createTimelineView } from "/js/features/chat/timeline.js";
+import { createResourceStore } from "/js/state/store.js";
+import { decodeConversationPage } from "/js/features/chat/conversation-page.js";
+const result = document.querySelector("#result");
+const sourceId = new URLSearchParams(location.search).get("session");
+const store = createResourceStore(), sessions = createResourceStore();
+const retries = [], proof = {};
+const paint = () => new Promise(resolve => setTimeout(resolve, 50));
+const path = id => `/api/v1/projects/default/sessions/${id}`;
+async function read(url) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`${url}: ${response.status}`);
+  return response;
+}
+async function select(id) {
+  const previousAnswer = [...document.querySelectorAll('[data-kind="assistant"]')].at(-1);
+  sessions.reset();
+  const detail = (await (await read(path(id))).json()).data;
+  const raw = (await (await read(`${path(id)}/conversation?limit=1`)).json()).data;
+  const page = decodeConversationPage(raw, { projectId: "default", sessionId: id });
+  store.setData({ projectId: "default", sessionId: id, events: page.items,
+    cursor: page.next_cursor, hasOlder: page.has_more });
+  sessions.setData(detail);
+  for (let n = 0; n < 120; ++n) {
+    await paint();
+    const answer = [...document.querySelectorAll('[data-kind="assistant"]')].at(-1);
+    if (answer && answer !== previousAnswer && actions().fork && actions().retry) break;
+  }
+  return page;
+}
+function actions() {
+  const answer = [...document.querySelectorAll('[data-kind="assistant"]')].at(-1);
+  return { fork: answer?.querySelector('[data-timeline-action$="/fork"]'),
+    retry: answer?.querySelector('[data-timeline-action$="/retry"]') };
+}
+function check(condition, label) { if (!condition) throw new Error(label); }
+let childId = "", forkError;
+createTimelineView({ container: document.querySelector("#timeline"),
+  welcome: document.querySelector("#welcome"), toBottom: document.querySelector("#to-bottom"),
+  store, sessionStore: sessions,
+  async onFork(boundary, owner) {
+    try {
+      const historyResponse = await read(`${path(owner.sessionId)}/history`);
+      const history = (await historyResponse.json()).data;
+      const bootstrap = await read("/api/v1/bootstrap");
+      const response = await fetch(`${path(owner.sessionId)}/fork`, { method: "POST",
+        headers: { "Content-Type": "application/json", "If-Match": historyResponse.headers.get("ETag"),
+          "X-Mdo-Write-Token": bootstrap.headers.get("X-Mdo-Write-Token") },
+        body: JSON.stringify({ title: "Browser action branch", through_sequence: boundary ?? history.last_sequence,
+          client_session_id: crypto.randomUUID().replaceAll("-", "") }) });
+      check(response.status === 201, `fork status ${response.status}`);
+      const child = (await response.json()).data;
+      check(child.parent_session_id === sourceId, "wrong parent");
+      await select(child.id);
+      childId = child.id;
+    } catch (error) { forkError = error; throw error; }
+  },
+  onRetry(sequence, text, attachments, owner, resolveText, sourceEventId) {
+    retries.push({ sequence, text, attachments, owner, sourceEventId });
+  }, onEdit() {},
+});
+try {
+  result.textContent = "Loading source";
+  const sourcePage = await select(sourceId);
+  check(!sourcePage.items.some(e => e.kind === "agent_start" && e.user_message_sequence), "fixture must be a partial turn");
+  check(actions().fork && actions().retry, "source buttons missing before scrolling");
+  proof.source_cold_buttons = true;
+  actions().fork.click();
+  for (let n = 0; n < 200 && !childId && !forkError; ++n) await paint();
+  if (forkError) throw forkError;
+  check(childId, "fork did not finish");
+  check(actions().fork && actions().retry, "child buttons missing immediately after fork");
+  proof.child_buttons_after_fork = true;
+  actions().retry.click(); await paint();
+  check(retries.length === 1 && retries[0].owner.sessionId === childId &&
+    retries[0].sourceEventId === 1 && retries[0].text === "Fork reply action input",
+    "child retry target incorrect: " + JSON.stringify(retries));
+  proof.child_retry_owner = true;
+  await select(sourceId);
+  check(actions().fork && actions().retry, "source buttons missing after returning from branch");
+  proof.source_buttons_on_return = true;
+  actions().retry.click(); await paint();
+  check(retries.length === 2 && retries[1].owner.sessionId === sourceId &&
+    retries[1].sourceEventId === 1, "source retry target incorrect");
+  proof.source_retry_owner = true;
+  let page = sourcePage;
+  const events = new Map(store.get().data.events.map(e => [e.event_id, e]));
+  while (page.has_more) {
+    page = decodeConversationPage((await (await read(`${path(sourceId)}/conversation?before=${page.next_before}&limit=1`)).json()).data,
+      { projectId: "default", sessionId: sourceId });
+    for (const event of page.items) events.set(event.event_id, event);
+    store.setData({ ...store.get().data, events: [...events.values()].sort((a,b) => a.event_id - b.event_id) });
+    await paint();
+  }
+  check(document.querySelectorAll('[data-kind="user"]').length === 1, "older input duplicated");
+  check(actions().fork && actions().retry, "paging removed existing actions");
+  proof.incremental_loading_preserves_actions = true;
+  result.textContent = JSON.stringify({ passed: true, ...proof });
+} catch (error) { result.textContent = JSON.stringify({ passed: false, ...proof, error: String(error) }); }
+</script>
+</html>

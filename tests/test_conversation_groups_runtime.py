@@ -50,8 +50,11 @@ def records(session):
             add(6, call, "读取成功", tool_call_id=f"tool-{n}-{extra}", tool_name="read")
         add(1, turn + 2)
         add(3, turn + 2, f"回复前思考 {n}")
-        text = f"完整回复 {n}：\n\n" + "段落内容。" * 2000 + f"\n\n回复 {n} 的结尾。"
-        first = add(2, turn + 2, text[:6000]); last = add(2, turn + 2, text[6000:])
+        paragraph = "长段落\n\"引用\"\\path\n" * 18000 if n == 5 else "段落内容。" * 2000
+        text = f"完整回复 {n}：\n\n" + paragraph + f"\n\n回复 {n} 的结尾。"
+        first = len(items) + 1
+        for offset in range(0, len(text), 6000):
+            last = add(2, turn + 2, text[offset:offset + 6000])
         bodies.append((first, last, text))
         add(4, turn + 2)
     add(10, turn=3)
@@ -95,6 +98,15 @@ def probe(packed, replay_journal=None):
                 assert len([e for e in events if e["kind"] == "tool_done"]) == 2, n
                 assert any(e["kind"] == "model_start" and e["agent_turn"] == body[0]["agent_turn"] for e in events)
                 assert any(e["kind"] == "model_done" and e["agent_turn"] == body[0]["agent_turn"] for e in events)
+                # Cold reply groups keep their input action anchor without
+                # inserting that older user row or changing paging cursors.
+                if n > 1:
+                    prompt = body[0]["action_prompt"]
+                    assert prompt["event_id"] == 1 and prompt["user_message_sequence"] == 1
+                    assert prompt["text"] == "原始问题" and prompt["projection_epoch"] == page["epoch"]
+                    assert not any(e["kind"] == "agent_start" and e["user_message_sequence"] for e in events)
+                else:
+                    assert "action_prompt" not in body[0]
                 ids = [e["event_id"] for e in events]
                 assert not set(ids) & set(seen), n
                 seen.extend(ids); before = page["next_before"]

@@ -56,6 +56,13 @@ class InspectSessionTests(unittest.TestCase):
         self.assertEqual(report['event_counts'], {'custom_event': 1, 'unknown:5': 1, 'unknown:500': 1})
         self.assertIn('truncated text', report['warnings'][0])
 
+    def test_current_schema_usage_and_future_schema_are_distinguished(self):
+        self.journal([{'kind': 4, 'schema_version': 7, 'input_tokens': 8, 'output_tokens': 3},
+                      {'kind': 4, 'schema_version': 8, 'input_tokens': 100, 'output_tokens': 100}])
+        report = inspect_session(self.path)
+        self.assertEqual(report['event_counts'], {'model_done': 1, 'unknown:4': 1})
+        self.assertEqual(report['model_usage'], {'input_tokens': 8, 'output_tokens': 3})
+
     def test_restarted_run_does_not_pair_an_old_call(self):
         self.journal([{'kind': 5, 'run_id': 1, 'tool_call_id': 'x', 'occurred_at_us': 100},
                       {'kind': 0, 'run_id': 1},

@@ -11,6 +11,8 @@
 #include "../../include/mdo/projects.h"
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/update.h"
+#include "../../include/mdo/http_url.h"
+#include "../transfers/internal.h"
 
 typedef struct MdoApiRoute {
     cstr Path;
@@ -26,6 +28,15 @@ static xatomic64 g_MdoApiFallbackId;
 static bool g_MdoApiInitialized;
 
 static const MdoApiRoute g_MdoApiRoutes[] = {
+    { "/api/v1/device-transfers/capabilities", XHTTP_METHOD_GET, "GET, OPTIONS", MdoApiDeviceTransfersRoute, false },
+    { "/api/v1/device-transfers/policy", XHTTP_METHOD_GET|XHTTP_METHOD_PUT, "GET, PUT, OPTIONS", MdoApiDeviceTransfersRoute, false },
+    { "/api/v1/device-transfers/devices", XHTTP_METHOD_GET|XHTTP_METHOD_POST, "GET, POST, OPTIONS", MdoApiDeviceTransfersRoute, false },
+    { "/api/v1/device-transfers/incoming/{transfer}", XHTTP_METHOD_GET|XHTTP_METHOD_POST, "GET, POST, OPTIONS", MdoApiDeviceTransfersRoute, false },
+    { "/api/v1/device-transfers/incoming/{transfer}/{action}", XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiDeviceTransfersRoute, false },
+    { "/api/v1/device-transfers/incoming/{transfer}/{action}/{offset}", XHTTP_METHOD_PUT, "PUT, OPTIONS", MdoApiDeviceTransfersRoute, false },
+    { "/api/v1/device-transfers/incoming/{transfer}/{action}/{index}/{offset}", XHTTP_METHOD_PUT, "PUT, OPTIONS", MdoApiDeviceTransfersRoute, false },
+    { "/api/v1/device-transfers", XHTTP_METHOD_GET|XHTTP_METHOD_POST, "GET, POST, OPTIONS", MdoApiDeviceTransfersRoute, false },
+    { "/api/v1/device-transfers/{transfer}", XHTTP_METHOD_GET|XHTTP_METHOD_POST, "GET, POST, OPTIONS", MdoApiDeviceTransfersRoute, false },
     { "/api/v1/ecosystem", XHTTP_METHOD_GET | XHTTP_METHOD_POST, "GET, POST, OPTIONS", MdoApiEcosystemRoute, false },
     { "/api/v1/extensions/{kind}", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD, "GET, HEAD, OPTIONS", MdoApiExtensionsRoute, false },
     { "/api/v1/extensions/{kind}/{id}", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_PUT | XHTTP_METHOD_DELETE,
@@ -214,6 +225,9 @@ static const MdoApiRoute g_MdoApiRoutes[] = {
       MdoApiSessionRoute, true },
     { "/api/v1/projects/{project}/sessions/{session}/restore",
       XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiSessionRestoreRoute, true },
+    /* The session purge handler owns its exclusive project lease. */
+    { "/api/v1/projects/{project}/sessions/{session}/purge",
+      XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiSessionPurgeRoute, false },
     { "/api/v1/projects/{project}/sessions/{session}/permission",
       XHTTP_METHOD_PUT, "PUT, OPTIONS", MdoApiSessionPermissionRoute, true },
     { "/api/v1/projects/{project}/sessions/{session}/shared-files",
@@ -330,6 +344,42 @@ static bool MdoApiPath(xstrview Path)
     return (Path.Size == 4u && memcmp(Path.Data, "/api", 4u) == 0) ||
         (Path.Size >= sizeof(Prefix) - 1u &&
          memcmp(Path.Data, Prefix, sizeof(Prefix) - 1u) == 0);
+}
+
+/* This control API is served on loopback. A Host chosen by a remote domain
+ * must never expose Home, account state or the write token through DNS
+ * rebinding. Native bridges forward a loopback authority too. Origin may be
+ * absent for CLI clients and top-level PKCE navigation; when present it must
+ * match this exact local authority, even on reads and OPTIONS. */
+bool MdoApiLocalRequest(const XS_HttpReq* Request)
+{
+    const xhttpfield *Host = NULL, *Origin = NULL;
+    if (!Request || !Request->head || !Request->server ||
+        xrtHttpFieldGetUnique(Request->head->Fields, Request->head->FieldCount,
+            XRT_STR_LITERAL("Host"), &Host) != XHTTP_NEXT_ITEM || !Host) return false;
+    uint16 Port = Request->tls ? Request->server->PortTLS :
+        Request->server->PortBound ? Request->server->PortBound : Request->server->Port;
+    if (!Port) return false;
+    const char* Names[] = { "127.0.0.1", "localhost", "[::1]" };
+    char Authority[64]; bool Local = false;
+    for (size_t i = 0u; i < sizeof(Names) / sizeof(Names[0]); ++i) {
+        int Length = snprintf(Authority, sizeof(Authority), "%s:%u", Names[i], (unsigned)Port);
+        if (Length > 0 && Host->Value.Size == (size_t)Length &&
+            MdoHttpUrlAsciiEqual(Host->Value.Data, Authority, (size_t)Length)) Local = true;
+        if (Port == (Request->tls ? 443u : 80u) &&
+            Host->Value.Size == strlen(Names[i]) &&
+            MdoHttpUrlAsciiEqual(Host->Value.Data, Names[i], Host->Value.Size)) Local = true;
+    }
+    if (!Local) return false;
+    xhttpnext Next = xrtHttpFieldGetUnique(Request->head->Fields, Request->head->FieldCount,
+        XRT_STR_LITERAL("Origin"), &Origin);
+    if (Next == XHTTP_NEXT_END) return true;
+    if (Next != XHTTP_NEXT_ITEM || !Origin) return false;
+    const char* Scheme = Request->tls ? "https://" : "http://";
+    size_t Size = strlen(Scheme);
+    return Origin->Value.Size == Size + Host->Value.Size &&
+        !memcmp(Origin->Value.Data, Scheme, Size) &&
+        MdoHttpUrlAsciiEqual(Origin->Value.Data + Size, Host->Value.Data, Host->Value.Size);
 }
 
 static bool MdoApiRouteMatch(MdoApiContext* Context, cstr Pattern)
@@ -560,6 +610,12 @@ XS_RequestResult MdoApiRequest(XS_HttpReq* pRequest)
         return XS_FALLBACK;
     }
     MdoApiRequestId(Context.RequestId);
+    if (!MdoApiLocalRequest(pRequest)) {
+        Context.UntrustedOrigin = true;
+        (void)MdoApiReplyError(&Context, 403u, "local_origin_required",
+            "Use the local application address and its own origin", NULL);
+        return XS_OK;
+    }
     for ( Index = 0u;
           Index < sizeof(g_MdoApiRoutes) / sizeof(g_MdoApiRoutes[0]);
           Index++ ) {

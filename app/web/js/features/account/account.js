@@ -4,6 +4,7 @@ import { toast, errorMessage } from "../../utils/dom.js";
 import { isRemoteTarget } from "../../api/target.js";
 import { allowanceView, searchAllowanceView } from "./allowance.js";
 import { balanceView, formatBalance } from "./balance.js";
+import { isAccountSignedIn } from "./session-state.js";
 
 // Tokens stay in the native host. Passwords are submitted once from the form,
 // then cleared; account rendering uses only filtered public snapshots.
@@ -30,8 +31,7 @@ export function createAccount({ navigation, onModelsChange = () => {} }) {
   let authorizationUrl = "", returnFocus = null, returnOwner = null, returnAction = "", dialogLogin = false;
   const copy = (key, values = {}) => t(`account.${key}`, values);
   const displayName = () => snapshot?.profile?.nickname || snapshot?.profile?.username || copy("signedIn");
-  const signedIn = () => snapshot?.state === "signed_in" ||
-    (snapshot?.state === "authorizing" && Boolean(snapshot?.profile));
+  const signedIn = () => isAccountSignedIn(snapshot);
   function text(tag, value, className) {
     const node = document.createElement(tag); node.textContent = value;
     if (className) node.className = className;

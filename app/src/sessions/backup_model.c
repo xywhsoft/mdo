@@ -288,7 +288,7 @@ static bool MdoBackupModelSnapshotValidate(const MdoBackupOwnedFile* File, const
     static const char* const Keys[] = {"format", "version", "config", "next_sequence",
         "checkpoint_sequence", "journal_sequence", "current_turn", "compacted_through",
         "compaction_count", "summary_generation", "summary_prompt_at_birth", "summary_output_at_birth",
-        "tail_floor", "fill_seen", "summary", "read_files", "read_file_sequences", "modified_files",
+        "tail_floor", "fill_seen", "context_usage", "summary", "read_files", "read_file_sequences", "modified_files",
         "modified_file_sequences", "entries", "checksum"};
     static const char* const Counters[] = {"checkpoint_sequence", "journal_sequence", "compaction_count",
         "summary_prompt_at_birth", "summary_output_at_birth"};
@@ -319,6 +319,17 @@ static bool MdoBackupModelSnapshotValidate(const MdoBackupOwnedFile* File, const
     Number = 0u;
     if ( !MdoBackupModelUInt(Root, "tail_floor", &Number, true) || Number >= Next ) goto invalid;
     if ( !MdoBackupModelConfig(MdoBackupModelGet(Root, "config"), Error) ) return false;
+    {
+        static const char* const Fields[] = {"fill_tokens", "prefix_estimate", "through_sequence", "cached_input_tokens", "profile_fingerprint"};
+        const xvalue* Usage = MdoBackupModelGet(Root, "context_usage");
+        if (Usage != NULL && xrtValueType(Usage) != XVALUE_NULL) {
+            if (!MdoBackupModelKeys(Usage, Fields, 5u)) goto invalid;
+            for (i = 0u; i < 5u; ++i)
+                if (!MdoBackupUInt(Usage, Fields[i], &Number) || Number == UINT64_MAX) goto invalid;
+            if (!MdoBackupUInt(Usage, "through_sequence", &Number) || Number >= Next ||
+                !MdoBackupUInt(Usage, "fill_tokens", &Number) || !Number) goto invalid;
+        }
+    }
     Entries = MdoBackupModelGet(Root, "entries");
     if ( xrtValueType(Entries) != XVALUE_ARRAY ) goto invalid;
     for ( i = 0u; i < xrtValueCount(Entries); ++i ) {
@@ -346,6 +357,7 @@ static bool MdoBackupModelJournalRecord(const MdoBackupOwnedFile* File, const xv
     static const char* const Truncate[] = {"from_sequence", "to_sequence", "reason"};
     static const char* const Rewrite[] = {"through_sequence", "previous_next_sequence"};
     static const char* const UsageKeys[] = {"prompt_tokens", "output_tokens"};
+    static const char* const ContextUsage[] = {"context_usage"};
     const char* Keys[10] = {"format", "version", NULL, NULL, "checksum"};
     const char* const* Payload = NULL;
     size_t Count = 0u, i;
@@ -365,6 +377,7 @@ static bool MdoBackupModelJournalRecord(const MdoBackupOwnedFile* File, const xv
     if ( MdoBackupModelEqual(Operation, "begin_turn") ) { Payload = Begin; Count = 1u; }
     else if ( MdoBackupModelEqual(Operation, "add_message") ) { Payload = Message; Count = 1u; }
     else if ( MdoBackupModelEqual(Operation, "compact") ) { Payload = Compact; Count = 5u; }
+    else if ( MdoBackupModelEqual(Operation, "usage") ) { Payload = ContextUsage; Count = 1u; }
     else if ( MdoBackupModelEqual(Operation, "ledger") ) { Payload = Ledger; Count = 3u; }
     else if ( MdoBackupModelEqual(Operation, "truncate") ) { Payload = Truncate; Count = 3u; }
     else if ( MdoBackupModelEqual(Operation, "rewind") || MdoBackupModelEqual(Operation, "clear") ) { Payload = Rewrite; Count = 2u; }
@@ -390,6 +403,12 @@ static bool MdoBackupModelJournalRecord(const MdoBackupOwnedFile* File, const xv
         if ( Usage != NULL && (!MdoBackupModelKeys(Usage, UsageKeys, 2u) ||
              !MdoBackupModelUInt(Usage, "prompt_tokens", &A, true) ||
              !MdoBackupModelUInt(Usage, "output_tokens", &B, true)) ) goto invalid;
+    } else if ( Payload == ContextUsage ) {
+        static const char* const Fields[] = {"fill_tokens", "prefix_estimate", "through_sequence", "cached_input_tokens", "profile_fingerprint"};
+        const xvalue* ContextUsageValue = MdoBackupModelGet(Root, "context_usage");
+        if (!ContextUsageValue || !MdoBackupModelKeys(ContextUsageValue, Fields, 5u)) goto invalid;
+        for (i = 0u; i < 5u; ++i)
+            if (!MdoBackupUInt(ContextUsageValue, Fields[i], &A) || A == UINT64_MAX) goto invalid;
     } else if ( Payload == Ledger ) {
         if ( !MdoBackupView(Root, "kind", &Text) ||
              (!MdoBackupModelEqual(Text, "read") && !MdoBackupModelEqual(Text, "modified")) ||

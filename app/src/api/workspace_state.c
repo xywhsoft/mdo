@@ -133,7 +133,7 @@ void MdoApiProjectReferencesFree(MdoProjectReferenceGuard* Guard)
     xrtFree(Guard);
 }
 
-static MdoProjectReferenceGuard* MdoApiProjectReferencesAcquire(const char* ProjectId,
+static MdoProjectReferenceGuard* MdoApiProjectReferencesAcquire(const char* ProjectId, const char* SessionId,
     MdoProjectLease* Owner, MdoProjectLeaseMode Mode, xwork_error* Error)
 {
     MdoProjectReferenceGuard* Guard;
@@ -166,12 +166,15 @@ static MdoProjectReferenceGuard* MdoApiProjectReferencesAcquire(const char* Proj
          !MdoHomeExternalStat(MDO_WORKSPACE_STATE_PATH, &AfterExists, &After) ||
          Exists != AfterExists || (Exists && !MdoReferenceInfoSame(&Before, &After)) )
         goto failed;
-    if ( Exists && strcmp(State.ProjectId, ProjectId) == 0 ) {
+    if ( Exists && strcmp(State.ProjectId, ProjectId) == 0 &&
+         (SessionId == NULL || strcmp(State.SessionId, SessionId) == 0) ) {
         snprintf(Guard->Targets[Guard->Count].Path,
             sizeof(Guard->Targets[Guard->Count].Path), "%s", MDO_WORKSPACE_STATE_PATH);
         Guard->Targets[Guard->Count++].Info = After;
     }
-    if ( !(Mode == MDO_PROJECT_LEASE_EXCLUSIVE ?
+    if ( !(SessionId != NULL ?
+            MdoApiDraftSessionReferenceLock(ProjectId, SessionId, Owner, &Guard->Targets[Guard->Count], &DraftPresent) :
+            Mode == MDO_PROJECT_LEASE_EXCLUSIVE ?
             MdoApiDraftReferenceLock(ProjectId, Owner, &Guard->Targets[Guard->Count], &DraftPresent) :
             MdoApiDraftReferencePreviewLock(ProjectId, Owner, &Guard->Targets[Guard->Count], &DraftPresent)) ) goto failed;
     Guard->DraftLocked = true;
@@ -190,7 +193,14 @@ failed:
 MdoProjectReferenceGuard* MdoApiProjectReferencesBegin(const char* ProjectId,
     MdoProjectLease* Owner, xwork_error* Error)
 {
-    return MdoApiProjectReferencesAcquire(ProjectId, Owner, MDO_PROJECT_LEASE_EXCLUSIVE, Error);
+    return MdoApiProjectReferencesAcquire(ProjectId, NULL, Owner, MDO_PROJECT_LEASE_EXCLUSIVE, Error);
+}
+
+MdoProjectReferenceGuard* MdoApiSessionReferencesBegin(const char* ProjectId,
+    const char* SessionId, MdoProjectLease* Owner, xwork_error* Error)
+{
+    if ( SessionId == NULL ) return NULL;
+    return MdoApiProjectReferencesAcquire(ProjectId, SessionId, Owner, MDO_PROJECT_LEASE_EXCLUSIVE, Error);
 }
 
 MdoProjectReferenceGuard* MdoApiProjectReferencesPreview(const char* ProjectId,
@@ -199,7 +209,7 @@ MdoProjectReferenceGuard* MdoApiProjectReferencesPreview(const char* ProjectId,
     MdoProjectLease* Owner = MdoProjectLeaseAcquire(ProjectId, MDO_PROJECT_LEASE_SHARED, Error);
     MdoProjectReferenceGuard* Guard;
     if ( Owner == NULL ) return NULL;
-    Guard = MdoApiProjectReferencesAcquire(ProjectId, Owner, MDO_PROJECT_LEASE_SHARED, Error);
+    Guard = MdoApiProjectReferencesAcquire(ProjectId, NULL, Owner, MDO_PROJECT_LEASE_SHARED, Error);
     MdoProjectLeaseRelease(Owner);
     return Guard;
 }

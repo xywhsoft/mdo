@@ -224,7 +224,7 @@ def write_site(site: Path) -> int:
 
 
 def run_probe(host: Path, site: Path, home: Path,
-              environment: dict[str, str] | None = None) -> str:
+              environment: dict[str, str] | None = None, timeout_seconds: float = 10.0) -> str:
     command = [str(host), "xs.json", "--", "--home", str(home)]
     process_environment = os.environ.copy()
     for name in (
@@ -253,7 +253,7 @@ def run_probe(host: Path, site: Path, home: Path,
 
     reader = threading.Thread(target=read_output, daemon=True)
     reader.start()
-    done.wait(timeout=10.0)
+    done.wait(timeout=timeout_seconds)
     if process.poll() is None:
         process.terminate()
         try:

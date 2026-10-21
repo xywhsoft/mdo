@@ -5,7 +5,7 @@ const kinds = new Set([
   "membership_required", "login_required", "authentication_failed",
   "permission_denied", "account_restricted", "request_pending", "model_changed",
   "model_unavailable", "context_limit", "request_too_large", "rate_limited",
-  "timeout", "network", "service_unavailable", "invalid_response", "invalid_request",
+  "timeout", "network", "service_unavailable", "invalid_response", "empty_response", "invalid_request",
   "output_limit", "context_compaction",
   "service_quota_exceeded", "service_configuration", "request_configuration",
   "profile_model_missing", "profile_protocol_unsupported", "profile_reasoning_unsupported",

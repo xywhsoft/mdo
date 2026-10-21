@@ -198,6 +198,23 @@ static bool MdoApiSessionEventValueLimit(const MdoSessionEventInfo* Event,
     if (Ok) Ok = MdoApiValueSetUInt(Item, "input_tokens", Event->InputTokens) &&
         MdoApiValueSetUInt(Item, "output_tokens", Event->OutputTokens) &&
         MdoApiValueSetUInt(Item, "total_tokens", Event->TotalTokens);
+    if (Ok && Event->ContextAvailable) {
+        xvalue* Usage = xrtValueObject();
+        Ok = Usage && MdoApiValueSetBool(Usage, "exact", Event->ContextExact) &&
+            MdoApiValueSetUInt(Usage, "fill_tokens", Event->ContextFillTokens) &&
+            MdoApiValueSetUInt(Usage, "growth_tokens", Event->ContextGrowthTokens) &&
+            MdoApiValueSetUInt(Usage, "estimated_input_tokens", Event->ContextInputTokens) &&
+            MdoApiValueSetUInt(Usage, "input_budget_tokens", Event->ContextInputBudgetTokens) &&
+            MdoApiValueSetUInt(Usage, "compact_threshold_tokens", Event->ContextCompactThresholdTokens) &&
+            MdoApiValueSetTake(Item, "context", &Usage);
+        xrtValueRelease(Usage);
+    }
+    if (Ok && Event->Kind == XWORK_EVENT_MODEL_DONE && Event->SchemaVersion >= 7u)
+        Ok = MdoApiValueSetString(Item, "model_request_id", Event->ModelRequestId) &&
+            MdoApiValueSetString(Item, "model_finish_reason", Event->ModelFinishReason) &&
+            MdoApiValueSetUInt(Item, "model_tool_call_count", Event->ModelToolCallCount) &&
+            MdoApiValueSetUInt(Item, "model_http_status", Event->ModelHttpStatus) &&
+            MdoApiValueSetUInt(Item, "model_attempts", Event->ModelAttempts);
     if (Ok && Event->Kind == XWORK_EVENT_ERROR)
         Ok = MdoApiValueSetString(Item, "model_error_kind", Event->ModelErrorKind) &&
             MdoApiValueSetUInt(Item, "model_http_status", Event->ModelHttpStatus) &&
@@ -400,6 +417,7 @@ bool MdoApiSessionConversationRoute(MdoApiContext* Context)
         "conversation_changed", "Conversation changed while reading; retry the snapshot", NULL);
     Items = xrtValueArray(); Data = xrtValueObject();
     if (!Items || !Data) goto fail;
+    bool NeedsActionPrompt = Page.ActionPrompt.UserMessageSequence != 0u;
     for (size_t i = 0u; i < MdoSessionEventSnapshotCount(Snapshot); ++i) {
         MdoSessionEventInfo Event; xvalue* Item = NULL; char Node[256];
         Event.Size = sizeof(Event);
@@ -409,6 +427,16 @@ bool MdoApiSessionConversationRoute(MdoApiContext* Context)
             ? 1024u * 1024u : MDO_API_EVENT_SINGLE_TEXT_BYTES;
         if (!MdoApiSessionEventValueLimit(&Event, Project, Session, TextLimit, &Item)) goto fail;
         if (!MdoApiValueSetString(Item, "projection_epoch", Page.Epoch)) { xrtValueRelease(Item); goto fail; }
+        if (Event.Kind == XWORK_EVENT_AGENT_START && !Event.AgentDepth &&
+            (Event.UserMessageSequence || Event.SchemaVersion < 3u)) NeedsActionPrompt = false;
+        if (NeedsActionPrompt && Event.Kind == XWORK_EVENT_MODEL_TEXT_DELTA && !Event.AgentDepth) {
+            xvalue* Prompt = NULL;
+            bool Ok = MdoApiSessionEventValueLimit(&Page.ActionPrompt, Project, Session, 4096u, &Prompt) &&
+                MdoApiValueSetString(Prompt, "projection_epoch", Page.Epoch) &&
+                MdoApiValueSetTake(Item, "action_prompt", &Prompt);
+            xrtValueRelease(Prompt);
+            if (!Ok) { xrtValueRelease(Item); goto fail; }
+        }
         snprintf(Node, sizeof(Node), "%s:%s:%llu", Session, Page.Epoch, (unsigned long long)Event.EventId);
         size_t Size = 0u; char* Encoded = xrtJsonStringify(Item, false, &Size);
         bool Ok = Encoded && MdoApiConversationHash(xrtStrViewN(Encoded, Size), Hash) &&
@@ -419,6 +447,12 @@ bool MdoApiSessionConversationRoute(MdoApiContext* Context)
         if (!Ok) goto fail;
     }
     Json = xrtJsonStringify(Items, false, &JsonSize);
+    if (Json && JsonSize > MDO_API_CONVERSATION_ITEMS_MAX_BYTES) {
+        xrtFree(Json); xrtValueRelease(Items); xrtValueRelease(Data);
+        MdoSessionEventSnapshotRelease(Snapshot);
+        return MdoApiReplyError(Context, 413u, "conversation_group_too_large",
+            "A complete conversation group exceeds display limits", NULL);
+    }
     if (!Json || !MdoApiConversationHash(xrtStrViewN(Json, JsonSize), Hash) ||
         !MdoApiValueSetString(Data, "project_id", Project) ||
         !MdoApiValueSetString(Data, "session_id", Session) ||

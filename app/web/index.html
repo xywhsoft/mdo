@@ -14,6 +14,7 @@
   <link rel="stylesheet" href="/css/store.css">
   <link rel="stylesheet" href="/css/account.css">
   <link rel="stylesheet" href="/css/remote.css">
+  <link rel="stylesheet" href="/css/device-transfer.css">
   <link rel="stylesheet" href="/css/extensions.css">
 </head>
 <body>
@@ -506,9 +507,11 @@
               <form class="remote-form">
                 <label><span data-i18n="devices.name">设备名称</span><input name="device_name" maxlength="96" autocomplete="off"></label>
                 <label><input name="allow_remote" type="checkbox"><span data-i18n="devices.allow">允许远程控制</span></label>
+                <label><input name="allow_receive" type="checkbox"><span data-i18n="transfer.allowReceive">允许同账号设备发送会话和项目到此设备</span></label>
                 <p data-remote-status role="status"></p>
                 <button class="primary-button" type="submit" data-i18n="devices.save">保存远控设置</button>
               </form>
+              <button type="button" data-device-transfer-tasks data-i18n="transfer.tasks">设备传输任务</button>
               <p data-i18n="devices.security">同账号设备可操作这里的项目、文件和设置。关闭或撤销授权会断开连接；Android 的后台在线状态受系统限制。</p>
               <aside class="remote-background-help" data-remote-android hidden aria-labelledby="remote-android-title">
                 <h3 id="remote-android-title" data-i18n="devices.android.title">Android 后台运行说明</h3>

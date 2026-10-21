@@ -151,6 +151,17 @@ def main():
                 assert sum(e['kind']=='compaction_rejected' for e in events)==1,record
                 assert sum(e['kind']=='model_done' and e['success'] for e in events)==6,record
                 assert all(r['has_marker'] for r in Model.requests) and all(r['tool_count']==0 for r in Model.requests if r['kind']=='summary'),record
+                main_calls=[e for e in events if e['kind']=='model_done' and not e['agent_depth']]
+                assert all(e.get('context',{}).get('exact') and
+                    e['context']['fill_tokens']==e['input_tokens']+e['output_tokens'] and
+                    e['context']['growth_tokens']==0 and
+                    e['context']['estimated_input_tokens']==e['context']['fill_tokens'] for e in main_calls),main_calls
+                starts=[e for e in events if e['kind']=='agent_start' and not e['agent_depth']]
+                assert starts[-1]['context']['exact'] and starts[-1]['context']['growth_tokens']>0,starts[-1]
+                compacted=[e for e in events if e['kind']=='compaction_done' and not e['agent_depth']]
+                assert compacted and all(not e['context']['exact'] and e['context']['estimated_input_tokens']>0 for e in compacted),compacted
+                record['context_checkpoints']=[{'kind':e['kind'],'event_id':e['event_id'],'context':e.get('context')}
+                    for e in events if e['kind'] in ('agent_start','model_start','model_done','compaction_done') and not e['agent_depth']]
                 record['passed']=True
                 record['packed_sha256']=hashlib.sha256(args.packed.read_bytes()).hexdigest()
                 if args.record:args.record.parent.mkdir(parents=True,exist_ok=True);args.record.write_text(json.dumps(record,indent=2)+'\n')

@@ -73,8 +73,8 @@ static xllm_result MdoModelsOnlineAttempt(void* Data,xllm_client** Client,
 }
 
 /* The account lease covers renewal, all attempts, and request cancellation.
- * Generation retries use the same six-attempt and recovery-time budget as
- * configured providers, rather than nesting a second completion loop. */
+ * Generation retries use the same persistent connection recovery and bounded
+ * draft repair as configured providers, with no nested completion loop. */
 xllm_result MdoModelOnlineComplete(const MdoModelCatalog* Catalog,const MdoModelClientOptions* Options,
     const xllm_request* Request,const xllm_stream_callbacks* Callbacks,xllm_response** Response,xllm_error* Error)
 {

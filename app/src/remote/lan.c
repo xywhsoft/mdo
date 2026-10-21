@@ -161,4 +161,30 @@ bool MdoLanEmit(MdoLan* Lan, uint64 Route, xbytesview Envelope, bool* Handled)
     }
     return true;
 }
+MdoRemoteSocket* MdoLanConnectOffer(MdoRemoteNet* Net, XS_ServerInfo* Server,
+    const xvalue* Offer, xcancel* Cancel)
+{
+    cstr Certificate=MdoAccountText(Offer,"certificate",1536u),Token=MdoAccountText(Offer,"token",64u);
+    cstr Peer=MdoAccountText(Offer,"peer_id",32u);
+    const xvalue* Addresses=xrtValueObjectGet(Offer,XRT_STR_LITERAL("addresses"));
+    uint64 Port=0,Version=0; uint8 Der[1024]; size_t Size=0;
+    xx509store* Trust=NULL; MdoRemoteSocket* Socket=NULL;
+    if (!Net || !Server || !MdoAccountHex(Token,64u) || !MdoRemoteIdValid(Peer) ||
+        !MdoAccountGetUInt(xrtValueObjectGet(Offer,XRT_STR_LITERAL("version")),&Version) || Version!=1u ||
+        !MdoAccountGetUInt(xrtValueObjectGet(Offer,XRT_STR_LITERAL("port")),&Port) || !Port || Port>65535u ||
+        xrtValueType(Addresses)!=XVALUE_ARRAY || !xrtValueCount(Addresses) || xrtValueCount(Addresses)>4u ||
+        !Certificate || !xrtBase64Decode(Certificate,strlen(Certificate),Der,sizeof(Der),&Size,NULL)) return NULL;
+    for (size_t i=0;i<xrtValueCount(Addresses);i++) if (!MdoLanAddress(MdoLanText(xrtValueArrayGet(Addresses,i)))) return NULL;
+    Trust=xrtX509StoreCreate();
+    if (!Trust || xrtX509StoreAdd(Trust,Der,Size)<0 || !MdoRemoteNetInit(Net,Server->Engine,Trust)) goto done;
+    for (size_t i=0;i<xrtValueCount(Addresses) && !Socket && !xrtCancelRequested(Cancel);i++) {
+        char Protocols[128]; snprintf(Protocols,sizeof(Protocols),MDO_LAN_PROTOCOL ", mdo.grant.%s",Token);
+        MdoRemoteSocketConfig Config={MdoLanText(xrtValueArrayGet(Addresses,i)),(uint16)Port,true,
+            "/mdo-lan","http://mdo.local",Protocols,MDO_LAN_PROTOCOL,262123u}; uint16 Status=0;
+        Socket=MdoRemoteSocketOpenTrusted(Net,&Config,Cancel,&Status,"mdo-lan",1200000u);
+        xrtSecureZero(Protocols,sizeof(Protocols));
+    }
+done:
+    xrtX509StoreFree(Trust); return Socket;
+}
 #include "lan_gateway.inc.c"

@@ -3,6 +3,7 @@
 #include "../api/internal.h"
 #include "../../include/mdo/bootstrap.h"
 #include "../../include/mdo/remote.h"
+#include "../../include/mdo/device_transfer.h"
 
 static uint64 g_MdoServiceRetryTimer;
 static unsigned g_MdoServiceRetryCount;
@@ -24,6 +25,7 @@ static void MdoServiceRetry(void* User)
     if (xrtAtomic32Load(&g_MdoServiceState,XMEMORY_ACQUIRE) != MDO_SERVICE_WAITING) return;
     if (MdoBootstrapInit(host)) {
         (void)MdoRemoteInit(host->Server);
+        (void)MdoDeviceTransfersInit(host->Server);
         xrtAtomic32Store(&g_MdoServiceState,MDO_SERVICE_READY,XMEMORY_RELEASE);
         return;
     }
@@ -68,7 +70,7 @@ void ServiceInit(XS_HostInfo* pHost)
         }
     }
     (void)MdoApiInit();
-    if (ready) (void)MdoRemoteInit(pHost->Server);
+    if (ready) { (void)MdoRemoteInit(pHost->Server); (void)MdoDeviceTransfersInit(pHost->Server); }
 }
 
 void ServiceUnit(XS_HostInfo* pHost)
@@ -77,6 +79,7 @@ void ServiceUnit(XS_HostInfo* pHost)
     xrtAtomic32Store(&g_MdoServiceState,MDO_SERVICE_FAILED,XMEMORY_RELEASE);
     if (g_MdoServiceRetryTimer) (void)xsTimerCancel(g_MdoServiceRetryTimer);
     g_MdoServiceRetryTimer = 0u;
+    MdoDeviceTransfersUnit();
     MdoRemoteUnit();
     MdoApiUnit();
     MdoBootstrapUnit();
@@ -91,6 +94,12 @@ XS_RequestResult RequestProc(XS_HttpReq* pRequest)
         if (xrtHttpTargetParse(pRequest->head->Method,pRequest->head->Target,&context.Target) &&
             MdoApiPath(context.Target.Path)) {
             MdoApiRequestId(context.RequestId);
+            if (!MdoApiLocalRequest(pRequest)) {
+                context.UntrustedOrigin = true;
+                (void)MdoApiReplyError(&context,403u,"local_origin_required",
+                    "Use the local application address and its own origin",NULL);
+                return XS_OK;
+            }
             (void)MdoApiReplyError(&context,503u,
                 state == MDO_SERVICE_WAITING ? "home_reload_pending" : "home_reload_failed",
                 state == MDO_SERVICE_WAITING ?

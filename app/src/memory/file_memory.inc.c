@@ -106,6 +106,55 @@ static bool MdoMemoryFilePrepare(const char* ProjectId, xwork_error* Error)
     return Ok;
 }
 
+/* Render local Markdown links as tool paths without rewriting the user's
+ * index. Keep the same 8 KiB bound and leave URLs, anchors and traversal alone. */
+static char* MdoMemoryFileIndexToolPaths(const char* Text, const char* Alias,
+    size_t* Bytes)
+{
+    char* Rendered = (char*)xrtMalloc(8193u);
+    size_t Used = 0u, LastLine = 0u, AliasSize = strlen(Alias);
+    const char* Cursor = Text;
+    if ( Rendered == NULL ) return NULL;
+    while ( *Cursor ) {
+        if ( Cursor[0] == ']' && Cursor[1] == '(' ) {
+            const char* End = strchr(Cursor + 2u, ')');
+            size_t Size = End != NULL ? (size_t)(End - Cursor - 2u) : 0u;
+            size_t i;
+            bool Local = Size > 3u && Size <= 255u && Cursor[2] != '.' &&
+                Cursor[Size - 1u] == '.' &&
+                (Cursor[Size] == 'm' || Cursor[Size] == 'M') &&
+                (Cursor[Size + 1u] == 'd' || Cursor[Size + 1u] == 'D');
+            for ( i = 0u; Local && i < Size; ++i ) {
+                unsigned char c = (unsigned char)Cursor[2u + i];
+                if ( c < 0x80u && !((c >= 'a' && c <= 'z') ||
+                        (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
+                        c == '-' || c == '_' || c == '.') ) Local = false;
+            }
+            if ( Local ) {
+                if ( Used + Size + AliasSize + 3u > 8192u ) goto truncated;
+                memcpy(Rendered + Used, "](", 2u); Used += 2u;
+                memcpy(Rendered + Used, Alias, AliasSize); Used += AliasSize;
+                memcpy(Rendered + Used, Cursor + 2u, Size + 1u); Used += Size + 1u;
+                Cursor = End + 1u;
+                continue;
+            }
+        }
+        if ( Used == 8192u ) goto truncated;
+        Rendered[Used++] = *Cursor;
+        if ( *Cursor++ == '\n' ) LastLine = Used;
+    }
+    goto done;
+truncated:
+    if ( LastLine != 0u ) Used = LastLine;
+done:
+    {
+        size_t Bad = 0u;
+        if ( !xrtUtf8Valid((xstrview){ Rendered, Used }, &Bad) ) Used = Bad;
+    }
+    Rendered[Used] = '\0'; *Bytes = Used;
+    return Rendered;
+}
+
 static char* MdoMemoryFileIndex(const char* ProjectId, size_t* Bytes,
     xwork_error* Error)
 {
@@ -138,8 +187,14 @@ static char* MdoMemoryFileIndex(const char* ProjectId, size_t* Bytes,
         size_t Bad = 0u;
         if ( !xrtUtf8Valid((xstrview){ Text, Size }, &Bad) ) Size = Bad;
     }
-    Text[Size] = '\0'; *Bytes = Size;
-    return Text;
+    Text[Size] = '\0';
+    {
+        char* Rendered = MdoMemoryFileIndexToolPaths(Text,
+            ProjectId != NULL && ProjectId[0] != '\0'
+                ? "@memory-project/" : "@memory-global/", Bytes);
+        xrtFree(Text);
+        return Rendered;
+    }
 }
 
 bool MdoMemoryConfigureFileTools(xwork_agent* Agent, const char* ProjectId,
@@ -173,6 +228,10 @@ str MdoMemoryBuildPrompt(const char* ProjectId, size_t* Bytes,
         "Persistent memory uses normal read/ls/glob/grep/write/edit tools, no memory-specific tools. "
         "Global memory is @memory-global/ (user preferences); current-project memory is @memory-project/ "
         "(project decisions and constraints). These aliases point into portable mdo-home, outside the project. "
+        "Use the aliases exactly; never guess a physical mdo-home/data/memory directory. "
+        "A bare MEMORY.md or relative topic filename resolves in the workspace, not in memory. "
+        "Read the global index with read({\"path\":\"@memory-global/MEMORY.md\"}); "
+        "read a linked topic using its complete @memory-global/<topic>.md path. "
         "Read the index and relevant topic files before relying on remembered information. "
         "Save one durable fact per <short-slug>.md file with frontmatter name, description and metadata.type "
         "(user, feedback, project or reference). Keep MEMORY.md as short one-line links to those files; "
@@ -196,11 +255,15 @@ str MdoMemoryBuildPrompt(const char* ProjectId, size_t* Bytes,
     Global = MdoMemoryFileIndex(NULL, &GlobalSize, Error);
     Project = HasProject ? MdoMemoryFileIndex(ProjectId, &ProjectSize, Error) : xrtStrDup("");
     if ( Global == NULL || Project == NULL ) goto done;
-    Capacity = sizeof(Instructions) + GlobalSize + ProjectSize + 256u;
+    Capacity = sizeof(Instructions) + GlobalSize + ProjectSize + 768u;
     Prompt = (char*)xrtMalloc(Capacity);
     if ( Prompt != NULL ) {
-        int Written = snprintf(Prompt, Capacity, "%s%s\nGlobal MEMORY.md:\n%s\nProject MEMORY.md:\n%s\n</file_memory>\n",
-            Instructions, HasProject ? "" : "No project memory is mounted in this session; use global memory only.", Global, Project);
+        int Written = snprintf(Prompt, Capacity,
+            "%s%s\nGlobal index: @memory-global/MEMORY.md (excerpt):\n%s\n%s%s\n</file_memory>\n",
+            Instructions, HasProject
+                ? "Read the current-project index with read({\"path\":\"@memory-project/MEMORY.md\"}); follow its complete @memory-project/<topic>.md links."
+                : "No project memory is mounted in this session; use global memory only.",
+            Global, HasProject ? "Project index: @memory-project/MEMORY.md (excerpt):\n" : "", Project);
         if ( Written < 0 || (size_t)Written >= Capacity ) { xrtFree(Prompt); Prompt = NULL; }
         else if ( Bytes != NULL ) *Bytes = (size_t)Written;
     }

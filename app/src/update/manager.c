@@ -265,11 +265,22 @@ static bool MdoUpdateRequest(unsigned Command)
     xrtMutexUnlock(g_MdoUpdate.Lock); return Ok;
 }
 bool MdoUpdateCheck(void) { return MdoUpdateRequest(1); }
+static void MdoUpdateSelectEdition(MdoUpdateStatus* Status, cstr Edition)
+{
+    if (!strcmp(Status->Edition, Edition)) return;
+    snprintf(Status->Edition,sizeof(Status->Edition),"%s",Edition);
+    /* A verified download and its mandatory policy belong to one edition.
+     * If the new check fails offline, never offer the previous edition's APK
+     * under the new label or reuse its ready/install state. */
+    Status->Hash[0] = Status->DownloadPath[0] = Status->Notes[0] = 0;
+    Status->BuildId = 0u; Status->Bytes = 0u;
+    Status->Ready = Status->Available = Status->Required = false;
+}
 bool MdoUpdateCheckEdition(cstr Edition)
 {
     if(!g_MdoUpdate.Lock||!Edition||strcmp(MdoToolPlatform(),"android-arm64-v8a")||(strcmp(Edition,"lite")&&strcmp(Edition,"full")))return false;
     xrtMutexLock(g_MdoUpdate.Lock);bool Ok=!g_MdoUpdate.Status.Busy&&!(g_MdoUpdate.Status.Required&&g_MdoUpdate.Status.Available);
-    if(Ok)snprintf(g_MdoUpdate.Status.Edition,sizeof(g_MdoUpdate.Status.Edition),"%s",Edition);
+    if(Ok)MdoUpdateSelectEdition(&g_MdoUpdate.Status,Edition);
     xrtMutexUnlock(g_MdoUpdate.Lock);return Ok&&MdoUpdateRequest(1);
 }
 bool MdoUpdateDownload(void) { return MdoUpdateRequest(2); }

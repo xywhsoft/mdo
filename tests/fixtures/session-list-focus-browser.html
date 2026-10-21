@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Session sidebar focus regression</title>
+<pre id="result">Running</pre>
+<script type="module">
+import { createSessionList } from "/app/web/js/features/sessions/session-list.js";
+
+const checks = {};
+const assert = (condition, message) => { if (!condition) throw new Error(message); };
+const session = (id, project_id = "default", extra = {}) => ({ id, project_id,
+  title: id, status: "active", pinned: false, updated_at: 100, ...extra });
+
+function fixture(items) {
+  const root = document.createElement("aside"); root.className = "sidebar";
+  root.innerHTML = '<select><option value="active">Active</option><option value="trash">Trash</option></select><span></span><div class="session-list"></div>';
+  document.body.append(root);
+  const container = root.querySelector("div"), filter = root.querySelector("select");
+  let state = { status: "ready", updatedAt: 1, data: { items } }, publish;
+  const store = { get: () => state,
+    subscribe(listener) { publish = listener; listener(state); return () => {}; } };
+  const view = createSessionList({ container, count: root.querySelector("span"), filter, store,
+    projectsStore: { get: () => ({ data: { items: [] } }), subscribe: () => () => {} },
+    navigation: { get: () => ({ projectId: items[0]?.project_id, sessionId: items[0]?.id }),
+      subscribe: () => () => {} }, onSelect() {}, onAction() {}, onNewInProject() {} });
+  return { container, filter, view,
+    item(id) { return [...container.querySelectorAll(".session-item")]
+      .find(node => node.dataset.sessionKey.endsWith("/" + id)); },
+    update(next) { state = { ...state, data: { items: next } }; publish(state); },
+    focusValid() { return container.contains(document.activeElement) && document.activeElement.isConnected; },
+    close() { view.destroy(); root.remove(); } };
+}
+
+function check(name, items, run) {
+  const f = fixture(items);
+  try { run(f); checks[name] = true; }
+  finally { f.close(); }
+}
+
+try {
+  const one = session("one"), two = session("two");
+  check("trash_focused_session", [one, two], f => {
+    f.item("one").focus();
+    f.update([{ ...one, status: "trash" }, two]);
+    assert(!f.item("one") && f.item("two") && f.focusValid(), "trash must update the sidebar and restore focus without retry");
+    assert(!f.container.querySelector(".session-read-notice"), "a completed deletion must not become a list read error");
+    // An explicit reread remains safe but is no longer needed for recovery.
+    f.update([{ ...one, status: "trash" }, two]);
+    assert(f.item("two"), "rereading the catalog must retain remaining sessions");
+    f.filter.value = "trash"; f.filter.dispatchEvent(new Event("change"));
+    f.item("one").focus(); f.update([one, two]);
+    assert(!f.item("one") && f.focusValid(), "restoring the last trash item must preserve a usable sidebar");
+  });
+  check("remove_last_pinned_group", [session("pin", "alpha", { pinned: true })], f => {
+    f.item("pin").focus(); f.update([session("pin", "alpha", { status: "trash", pinned: true })]);
+    assert(!f.container.querySelector(".sidebar-pinned") && f.focusValid(), "removing the final pin must fall back to a live control");
+  });
+  check("permanent_delete_trash_item", [session("old", "default", { status: "trash" })], f => {
+    f.filter.value = "trash"; f.filter.dispatchEvent(new Event("change"));
+    const old = f.item("old");
+    const menu = old.closest(".session-item-row").querySelector(".session-more");
+    menu.click();
+    assert([...document.querySelectorAll('[role="menuitem"]')].some(item => /彻底删除/.test(item.textContent)),
+      "recycle-bin menu must offer permanent deletion");
+    old.focus(); f.update([]);
+    assert(!f.item("old") && f.focusValid() && !f.container.querySelector(".session-read-notice"),
+      "deleting the final recycle-bin session must leave a usable sidebar");
+  });
+  check("remove_last_orphan_project", [session("orphan", "removed")], f => {
+    f.item("orphan").focus(); f.update([session("orphan", "removed", { status: "archived" })]);
+    assert(!f.container.querySelector(".session-project") && f.focusValid(), "removing the final orphan task must restore focus");
+  });
+  const pages = Array.from({ length: 12 }, (_, index) => session("page" + index, "alpha", { updated_at: 100 - index }));
+  check("expand_final_page", pages, f => {
+    let more = f.container.querySelector(".session-show-more"); more.focus(); more.click();
+    more = f.container.querySelector(".session-show-more");
+    assert(more && document.activeElement === more, "intermediate expansion must retain the More button focus");
+    more.click();
+    assert(!f.container.querySelector(".session-show-more") && f.container.querySelectorAll(".session-item").length === 12,
+      "the final expansion must reveal all tasks");
+    assert(document.activeElement === f.item("page11"), "the final page must focus its last task");
+  });
+  document.querySelector("#result").textContent = JSON.stringify({ passed: true, checks });
+} catch (error) {
+  document.querySelector("#result").textContent = JSON.stringify({ passed: false, checks, error: error.message, stack: error.stack });
+}
+</script>
+</html>

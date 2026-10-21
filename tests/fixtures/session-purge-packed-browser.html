@@ -1,0 +1,43 @@
+<!doctype html><meta charset="utf-8"><title>Disposable session purge regression</title>
+<pre id="result">Running</pre><iframe style="width:1200px;height:850px" id="app"></iframe>
+<script type="module">
+const result = document.querySelector("#result"), frame = document.querySelector("#app");
+const session = new URLSearchParams(location.search).get("session");
+const assert = (ok, message) => { if (!ok) throw new Error(message); };
+const sleep = () => new Promise(resolve => setTimeout(resolve, 50));
+async function until(check, message) {
+  for (let i = 0; i < 240; ++i) { if (check()) return; await sleep(); }
+  throw new Error(message);
+}
+try {
+  frame.src = "/#/projects/default/sessions/" + session;
+  await until(() => frame.contentDocument?.querySelector("#session-actions")?.disabled === false, "session did not load");
+  const doc = frame.contentDocument;
+  const filter = doc.querySelector("#session-status-filter");
+  filter.value = "trash"; filter.dispatchEvent(new frame.contentWindow.Event("change"));
+  await until(() => doc.querySelector(`[data-session-key="default/${session}"]`), "trash list did not render");
+  async function openDelete() {
+    doc.querySelector("#session-actions").click();
+    const item = [...doc.querySelectorAll('#session-header-menu [role="menuitem"]')]
+      .find(node => /彻底删除|Delete permanently|Удалить навсегда/.test(node.textContent));
+    assert(item, "conversation header must offer permanent deletion"); item.click();
+    await until(() => doc.querySelector("#session-action-dialog").open, "confirmation did not open");
+    assert(!doc.querySelector("#session-action-description").textContent.includes("undefined"), "confirmation text must name the session");
+    assert(doc.querySelector("#confirm-session-action").classList.contains("danger-button"), "confirmation must identify destructive action");
+  }
+  await openDelete();
+  doc.querySelector("#cancel-session-action").click();
+  assert(!doc.querySelector("#session-action-dialog").open, "cancel must close confirmation");
+  let proof = await (await fetch("/__qa/proof")).json();
+  assert(proof.purges === 0, "opening or cancelling must not delete data");
+  await openDelete(); doc.querySelector("#confirm-session-action").click();
+  await until(() => frame.contentWindow.location.hash.endsWith("/new"), "deleted selected session did not navigate to new task");
+  await until(() => !doc.querySelector("#session-action-dialog").open, "successful deletion did not close confirmation");
+  assert(!doc.querySelector(`[data-session-key="default/${session}"]`), "deleted session remains in sidebar");
+  assert(!doc.querySelector("#session-list .session-read-notice"), "sidebar must stay usable without rereading");
+  proof = await (await fetch("/__qa/proof")).json();
+  assert(proof.purges === 1 && proof.session_status === 404, "one confirmation must remove the session exactly once");
+  result.textContent = JSON.stringify({ passed: true, confirmation_cancel: true, selected_session_navigation: true,
+    sidebar_updated: true, permanent_delete_requests: proof.purges });
+} catch (error) { result.textContent = JSON.stringify({ passed: false, error: error.message, stack: error.stack }); }
+</script>

@@ -104,6 +104,51 @@ python D:\GIT\xserver-mdo-refactor\tools\android\setup.py --root .build\android-
 变量名及其当前值，apksigner 使用 `env:` 读取，日志不回显密码。自定义 keystore 不会
 自动创建，也不会使用默认开发密码。精简版和完整版必须始终使用同一正式签名。
 
+### 首次生成签名
+
+签名密钥可以免费在本机生成，无需购买证书。以下命令使用这台构建机已有的
+WSL JDK，将密钥保存在仓库、`.build` 和应用数据目录之外。密码由 `keytool`
+交互输入；不要写进命令、聊天、Git 或构建日志。
+
+```powershell
+New-Item -ItemType Directory -Force E:\software\mdo-signing
+wsl -e /home/ubuntu/.cache/mdo-android-toolchain/java/usr/lib/jvm/java-1.17.0-openjdk-amd64/bin/keytool `
+  -genkeypair -storetype PKCS12 -keystore /mnt/e/software/mdo-signing/mdo-release.p12 `
+  -alias mdo-release -keyalg RSA -keysize 3072 -validity 10000
+```
+
+已有该文件时不要重复生成。记录 alias，另外备份密钥库和密码到可信的独立位置，
+限制文件访问权限；所有后续更新继续使用同一密钥。10000 天约为 27 年，满足
+Android 官方对长期有效密钥的建议。详情见
+[Android 应用签名](https://developer.android.com/studio/publish/app-signing)。
+
+本机正式签名构建示例（密码只在当前进程环境中短暂提供）：
+
+```powershell
+$signingSecret = Read-Host '正式签名密钥库密码' -AsSecureString
+try {
+  $env:MDO_ANDROID_STORE_PASSWORD = [System.Net.NetworkCredential]::new('', $signingSecret).Password
+  python tools/build_android.py --wsl `
+    --sdk /home/ubuntu/.cache/mdo-android-toolchain/sdk `
+    --java-home /home/ubuntu/.cache/mdo-android-toolchain/java/usr/lib/jvm/java-1.17.0-openjdk-amd64 `
+    --keystore E:\software\mdo-signing\mdo-release.p12 --key-alias mdo-release `
+    --store-password-env MDO_ANDROID_STORE_PASSWORD --edition both
+} finally {
+  Remove-Item Env:\MDO_ANDROID_STORE_PASSWORD -ErrorAction SilentlyContinue
+  $signingSecret.Dispose()
+}
+```
+
+这份正式签名与目前开发版的签名不同。现有开发版不能直接覆盖升级，必须先导出
+需要保留的会话和配置，再安排测试设备迁移；卸载会清除 Android 私有数据。
+签名完成后重新验签、核对构建记录和发布清单，并验证首次安装与同签名覆盖升级。
+当前候选的开发签名验证成功，不代表已完成正式发行签名。
+
+Android 浏览器登录通过 `https://ai.xywhsoft.com/app/mdo/callback` 返回应用。
+换成正式签名时，还须把正式证书的 SHA-256 登记到网站
+`/.well-known/assetlinks.json`，保留需要继续支持的开发证书关联，并实际验证浏览器
+授权能够回到应用。关联登记与网站配置步骤见[账号登录](account-login.md)。
+
 `python tests/test_android_device_runtime.py` 是显式运行的设备网络检查，需开发签名的
 `--debuggable` 完整版与测试机 ADB 连接。测试服务只监听本机，通过临时 ADB reverse
 供手机访问；需要本机已有 Paramiko/cryptography。它验证 TLS、SSH/SCP/SFTP 后删除
@@ -113,6 +158,25 @@ python D:\GIT\xserver-mdo-refactor\tools\android\setup.py --root .build\android-
 Android 精简版与完整版覆盖同一个 mdo 图标，不会同时出现两个入口。完整版可从
 “设置 → 扩展能力 → 扩展工具包”查看实际工具及其版本。覆盖升级不使用卸载或降级；
 在测试前后读取配置、项目及会话指纹，确认数据未变。
+
+## 完整版更新包大小与旧版迁移
+
+0.1.1 的安卓修订 30000089（轻量）和 30000090（完整）统一下载与原生安装的
+512 MiB 大小上限。mdo 打包器在 Java overlay 中调用自有文件策略，保留 SDK 原有的
+SHA-256、同包名、同签名、versionCode 和系统确认检查。文件必须处于应用私有目录，
+路径越界、文件缺失、空文件与大小超限分别报错。
+
+此前的原生安装器限制为 32 MiB，完整版 APK 约 58 MiB，下载成功后会显示
+“无法安装更新：更新文件路径或大小无效”。这是安装器大小限制，不是手机权限问题。
+旧版安装器仍在旧 APK 内，无法仅靠更换服务器文件修复；第一次请从官网下载安装
+新版完整版并直接覆盖安装，保留原有账号、配置和会话。也可以先在应用内切换轻量版
+更新，再切回完整版；两个版本沿用同一包名、正式签名及 Home 数据目录。
+
+每次 `tools/build_android.py` 构建都会执行 `tests/test_android_package_install.py`：
+使用真实文件大小和路径验证大小边界，并编译实际 SDK 安装器 overlay。Linux/WSL
+还覆盖软链接越界。SDK 校验代码变化时打包会失败，要求重新审核 overlay；APK 离线
+验收另外检查 DEX 中确实包含新版策略。真机仍需覆盖完整版到完整版的应用内更新，
+不能只用轻量版候选证明完整版更新有效。
 
 ## 工具目录初始化与再次启动
 
@@ -125,6 +189,7 @@ Android 精简版与完整版覆盖同一个 mdo 图标，不会同时出现两�
 真实软链接上验证首次初始化、再次启动、升级后的失效链接，以及路径越界拒绝。
 设备验收应覆盖安装完整版后连续关闭、重开，再覆盖升级并重新打开；不要卸载或
 清空应用数据来绕过启动问题。
+
 
 ## Android 系统分享
 

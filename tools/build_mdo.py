@@ -546,6 +546,8 @@ def build(args: argparse.Namespace, xserver: Path, lock: dict) -> None:
             build_id = load_object(APP / "release.json")["windows_server_build_id"]
             linux_defines = f'#define MDO_BUILD_ID {build_id}u\n'
         unity.write_text(linux_defines + ("#define MDO_SERVER_BUILD 1\n" if edition == "server" else "") + '#define MDO_PRODUCT_EDITION "' + ("server" if edition == "server" else "desktop") + '"\n' + unity.read_text(encoding="utf-8"), encoding="utf-8")
+    if not args.dry_run:
+        output.parent.mkdir(parents=True, exist_ok=True)
     run([str(packer), "pack", str(package), "-o", str(output)], ROOT, args.dry_run)
     if not args.dry_run:
         digest = hashlib.sha256()
@@ -559,7 +561,9 @@ def build(args: argparse.Namespace, xserver: Path, lock: dict) -> None:
                    "packaged_app_sha256": digest.hexdigest(),
                    "mdo_worktree_dirty": subprocess.run(["git", "diff", "--quiet"], cwd=ROOT, stderr=subprocess.DEVNULL).returncode != 0,
                    "sha256": hashlib.sha256(output.read_bytes()).hexdigest(), "bytes": output.stat().st_size,
-                   "host": receipt}
+                   # Windows GUI packs embed xsw.exe, whereas xs.exe is the
+                   # console host used by probes. Record the actual prefix.
+                   "host": load_object(packer.with_name(packer.name + ".build.json"))}
         receipt_path = output.with_name('build.json') if output.parent != ROOT else ROOT / '.build/product-receipts' / (output.name + '.json')
         write_if_changed(receipt_path, (json.dumps(product, indent=2) + '\n').encode())
     print(f"[mdo] {'would build' if args.dry_run else 'built'} {output}", flush=True)

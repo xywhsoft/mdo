@@ -1098,7 +1098,7 @@ def main() -> int:
         prefix_fork_calls = {event["source_event_id"]: event
                              for event in prefix_fork_events if event["kind"] == 4}
         assert full_fork_calls and prefix_fork_calls
-        assert all(event["schema_version"] == 6 and event["model_id"] and
+        assert all(event["schema_version"] == 7 and event["model_id"] and
                    event["context_window_tokens"] > 0
                    for event in full_fork_calls.values())
         assert all((event["model_id"], event["context_window_tokens"]) ==
@@ -1118,10 +1118,13 @@ def main() -> int:
         assert invalid_events == 0
         assert all(event["session_id"] == source_path.parent.name for event in events)
         model_events = [event for event in events if event.get("input_tokens")]
-        assert model_events and all(event["schema_version"] == 6 and
+        assert model_events and all(event["schema_version"] == 7 and
                                     event["model_id"] and
                                     event["context_window_tokens"] > 0
                                     for event in model_events)
+        assert all({"model_request_id", "model_finish_reason", "model_tool_call_count",
+                    "model_http_status", "model_attempts"}.issubset(event)
+                   for event in model_events)
         assert any(event["user_message_sequence"] > 0 for event in events)
         assert not any(event["text"] in ("legacy message", "first durable prompt",
                                           "second prompt", "third transient prompt")

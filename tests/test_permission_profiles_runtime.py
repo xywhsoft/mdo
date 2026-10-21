@@ -24,6 +24,8 @@ class Model(BaseHTTPRequestHandler):
     calls = {}
     lock = threading.Lock()
     workspace = None
+    external = None
+    failures = []
     def log_message(self, *_args):
         pass
 
@@ -53,7 +55,17 @@ class Model(BaseHTTPRequestHandler):
             output = [{"type": "function_call", "name": "read",
                        "call_id": "permission-verify",
                        "arguments": json.dumps({"path": prompt + ".txt"})}]
-        elif count == 3 and prompt.endswith(("-auto", "-allow")):
+        elif count == 3:
+            output = [{"type": "function_call", "name": "read",
+                       "call_id": "permission-external-read",
+                       "arguments": json.dumps({"path": str(Model.external)})}]
+        elif count == 4:
+            results = [item.get('output', '') for item in inputs
+                       if item.get('type') == 'function_call_output']
+            expected = 'PROFILE_EXTERNAL_CONTENT' if prompt.endswith('-auto') else 'reason=permission_denied'
+            if not results or expected not in str(results[-1]):
+                Model.failures.append((prompt, expected))
+        if count == 4 and prompt.endswith(("-auto", "-allow")):
             target = str(Model.workspace / (prompt + ".txt"))
             output = [{"type": "function_call", "name": "exec",
                        "call_id": "permission-check",
@@ -103,7 +115,13 @@ def probe(host):
             encoding="utf-8")
         model = ThreadingHTTPServer(("127.0.0.1", 0), Model)
         Model.calls = {}
+        Model.failures = []
         Model.workspace = base
+        Model.external = base / 'external-profile-read.txt'
+        Model.external.write_text('PROFILE_EXTERNAL_CONTENT\n', encoding='utf-8')
+        workspace = base / 'workspace'
+        workspace.mkdir()
+        Model.workspace = workspace
         model.daemon_threads = True
         threading.Thread(target=model.serve_forever, daemon=True).start()
         environment = dict(os.environ, USERPROFILE=str(base), HOME=str(base),
@@ -124,7 +142,7 @@ def probe(host):
                     "project_id": "default", "title": prompt,
                     "agent_id": agent_id, "model_id": "ornith-1.5-35b",
                     "protocol": "openai-responses", "permission_profile": profile,
-                    "workspace_root": str(base), "max_output_tokens": 1024})
+                    "workspace_root": str(workspace), "max_output_tokens": 1024})
                 assert status == 201, (status, body)
                 sid = body["data"]["id"]
                 status, body = request(port, "POST",
@@ -139,7 +157,7 @@ def probe(host):
                     if approvals:
                         pending_seen = True
                         assert profile == "balanced" and not resolved, (label, approvals)
-                        assert not (base / (prompt + ".txt")).exists()
+                        assert not (workspace / (prompt + ".txt")).exists()
                         item = approvals[0]
                         status, result = request(port, "PUT",
                             f'/api/v1/approvals/{item["id"]}',
@@ -154,12 +172,13 @@ def probe(host):
                     raise AssertionError((label, "bounded run timeout"))
                 assert run["state"] == "succeeded", (label, run)
                 assert pending_seen == (profile == "balanced"), label
-                target = base / (prompt + ".txt")
+                target = workspace / (prompt + ".txt")
                 assert target.exists() == (label in ("auto", "allow")), label
                 if target.exists():
                     assert target.read_text(encoding="utf-8") == prompt
                 assert not read(port, "approvals")["items"]
                 print(f"Permission profile PASS: {profile} / {label}", flush=True)
+            assert not Model.failures, Model.failures
             assert process.poll() is None
         except BaseException:
             if (base / "xs.log").exists():

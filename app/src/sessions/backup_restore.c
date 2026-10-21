@@ -31,9 +31,17 @@ static bool MdoRestoreTarget(const MdoSessionBackup* Source, const MdoSessionBac
          !MdoRestoreText(Info->WorkspaceRoot, sizeof(Info->WorkspaceRoot), Target->WorkspaceRoot) ||
          !MdoBackupWorkspaceAbsolute(xrtStrView(Info->WorkspaceRoot)) ) goto invalid;
     Info->Revision = 1u; Info->CreatedAt = Info->UpdatedAt = Target->RestoredAt;
-    Info->Status = Info->PreviousStatus = MDO_SESSION_ACTIVE;
-    Info->Pinned = Info->RuntimeOpen = false;
+    if (!Target->PreserveLifecycle) {
+        Info->Status = Info->PreviousStatus = MDO_SESSION_ACTIVE;
+        Info->Pinned = false;
+    }
+    Info->RuntimeOpen = false;
     memset(Info->ParentSessionId, 0, sizeof(Info->ParentSessionId)); Info->ForkedThroughSequence = 0u;
+    if (Target->PreserveLifecycle && Target->ParentSessionId && Target->ParentSessionId[0]) {
+        if (strlen(Target->ParentSessionId)!=32u || !MdoBackupDigits(Target->ParentSessionId,32u,true)) goto invalid;
+        strcpy(Info->ParentSessionId,Target->ParentSessionId);
+        Info->ForkedThroughSequence=Source->Info.ForkedThroughSequence;
+    }
     Info->ConfigRevision = Info->ModelGeneration = Info->ModuleGeneration = Info->SkillGeneration = 0u;
     return true;
 invalid:
@@ -168,7 +176,7 @@ MdoSessionBackup* MdoSessionBackupPrepareRestore(const MdoSessionBackup* Backup,
     Copy->Info = Parsed;
     if ( !MdoBackupReplaceOwned(Copy, "meta.json", &Meta, Bytes, &Budget, Cancel, Error) ||
          !MdoRestoreUi(Backup, Copy, Paths, Result, &Budget, Cancel, Error) ||
-         !MdoBackupOriginAppend(Backup, Copy, &Paths, Result, &Budget, Cancel, Error) ||
+         !MdoBackupOriginAppend(Backup, Copy, &Paths, Result, Target->PreserveLifecycle, &Budget, Cancel, Error) ||
          !MdoBackupValidate(Copy, &Budget, Cancel, &Copy->History, Error) ||
          !MdoBackupRelationsValidate(Copy, &Budget, Cancel, &Copy->Relations, Error) ||
          !MdoBackupCheck(&Budget, Cancel, Error) ) goto done;

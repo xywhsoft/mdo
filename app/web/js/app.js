@@ -4,12 +4,13 @@ import { uploadImageWithRecovery } from "./api/image-upload.js";
 import { isTransientReadError } from "./api/read-recovery.js";
 import { isRemoteTarget, targetState, subscribeTarget, setTargetSwitchGuard } from "./api/target.js";
 import { createRemotePanel } from "./features/settings/remote-panel.js";
+import { createDeviceTransferPanel } from "./features/transfers/device-transfer-panel.js";
 import { createAccount } from "./features/account/account.js";
 import { mountIcons } from "./components/icons.js";
 import { bootstrapStore, loadBootstrap } from "./state/bootstrap.js";
 import {
   sessionsStore, sessionDetailStore, loadSessions, loadSession, readSession, createSession,
-  patchSession, trashSession, restoreSession, loadSessionHistory, forkSession,
+  patchSession, trashSession, purgeSession, restoreSession, loadSessionHistory, forkSession,
   truncateSession, clearSession, loadSessionTranscript,
 } from "./state/sessions.js";
 import { modelsStore, agentsStore, projectsStore, loadCatalogs, loadModels, loadAgents, loadProjects, recoverCatalogs } from "./state/catalogs.js";
@@ -341,6 +342,8 @@ export async function boot() {
     onRefreshProjects: loadProjects,
     onRetrySessions: () => loadSessions({ retry: true }),
     onProjectAction(action, projectId, origin) {
+      if (action === "send_device") return deviceTransfers.openProject({ id: projectId,
+        name: projectsStore.get().data?.items?.find(item => item.id === projectId)?.name }, origin);
       if (action === "edit") return projectDialog.open({ id: projectId }, origin);
       if (action === "unregister") return projectManagement.openUnregister({ id: projectId }, origin);
       if (action === "purge") return projectManagement.openPreview({ id: projectId,
@@ -352,6 +355,9 @@ export async function boot() {
     },
     onNewInProject: switchToProject,
   });
+  const deviceTransfers = createDeviceTransferPanel({ beforeStart: async () =>
+    await draftStore.flushAll() && !draftStore.hasUnsaved() && !hasPendingApiWrites() });
+  document.querySelector("[data-device-transfer-tasks]")?.addEventListener("click", () => deviceTransfers.openTasks());
   const sessionSearch = createSessionSearch({
     dialog: $("#session-search-dialog"), button: $("#open-session-search"),
     store: sessionsStore, projectsStore,
@@ -2284,7 +2290,21 @@ export async function boot() {
     else if (action === "pin") updated = await patchSession(session, { pinned: !session.pinned });
     else if (action === "archive") updated = await patchSession(session, { archived: true });
     else if (action === "unarchive") updated = await patchSession(session, { archived: false });
-    else if (action === "trash") updated = await trashSession(session);
+    else if (action === "trash") {
+      updated = await trashSession(session);
+      const selected = navigation.workspace();
+      if (selected.projectId === session.project_id && selected.sessionId === session.id)
+        navigation.newTask(session.project_id, { replace: true });
+    }
+    else if (action === "purge") {
+      updated = await purgeSession(session);
+      draftStore.forgetSession(`${session.project_id}/${session.id}`);
+      const selected = navigation.workspace();
+      if (selected.projectId === session.project_id && selected.sessionId === session.id)
+        navigation.newTask(session.project_id, { replace: true });
+      toast(updated.restart_required ? t("sessionAction.purgedRestart") : sessionActionToast(action, updated));
+      return updated;
+    }
     else if (action === "restore") updated = await restoreSession(session);
     else if (action === "fork") {
       updated = await forkWithNavigation(session, { title, through_sequence: actionForm.elements.through_sequence.value });
@@ -2306,6 +2326,7 @@ export async function boot() {
   }
 
   async function handleSessionAction(action, session) {
+    if (action === "send_device") { deviceTransfers.openSession(session); return; }
     if (action === "tasks") { taskDialog.open(); return; }
     if (action === "import_json") { backupImport.open(); return; }
     if (action === "export_json") { backupExport.open(session); return; }
@@ -2321,7 +2342,7 @@ export async function boot() {
       toast(t("sessionAction.markdownDownloading", {}, "Markdown 已开始下载"));
       return;
     }
-    if (!["rename", "trash", "fork", "truncate", "clear"].includes(action)) return applySessionAction(action, session);
+    if (!["rename", "trash", "purge", "fork", "truncate", "clear"].includes(action)) return applySessionAction(action, session);
     let history = null;
     if (action === "fork" || action === "truncate") history = await sessionHistoryRead.read(session);
     pendingSessionAction = { action, session: history ? { ...session, etag: history.etag, revision: history.revision } : session };
@@ -2337,7 +2358,7 @@ export async function boot() {
     actionForm.elements.through_sequence.required = hasSequence;
     actionForm.elements.through_sequence.value = hasSequence ? String(history.last_sequence) : "";
     actionForm.elements.through_sequence.max = hasSequence ? String(history.last_sequence) : "";
-    actionConfirm.className = ["trash", "truncate", "clear"].includes(action) ? "danger-button" : "primary-button";
+    actionConfirm.className = ["trash", "purge", "truncate", "clear"].includes(action) ? "danger-button" : "primary-button";
     actionError.hidden = true;
     if (!actionDialog.open) {
       restoreSessionActionFocus = rememberSessionActionFocus({

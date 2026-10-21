@@ -7,6 +7,8 @@ export function createRemotePanel() {
   const panel = document.querySelector("#remote-panel"), form = panel.querySelector("form");
   const status = panel.querySelector("[data-remote-status]"), submit = form.querySelector("[type=submit]");
   let snapshot = null, pending = false, timer = 0, dirty = false, failure = "";
+  const receive = form.elements.allow_receive;
+  let receiveSupported = true;
   function render() {
     if (!snapshot) return;
     panel.querySelector("[data-remote-android]").hidden = snapshot.platform !== "android";
@@ -22,6 +24,7 @@ export function createRemotePanel() {
     const readonly = isRemoteTarget() && (targetState().selected.mode === "view" ||
       !targetState().connected || targetState().runtimeChanged);
     for (const control of form.elements) control.disabled = pending || readonly;
+    if (receive) receive.disabled = pending || readonly || !receiveSupported;
     submit.disabled = pending || readonly;
   }
   async function refresh() {
@@ -29,6 +32,10 @@ export function createRemotePanel() {
     try {
       snapshot = (await api.get("/remote")).data;
       if (!dirty) { form.elements.device_name.value = snapshot.name || ""; form.elements.allow_remote.checked = snapshot.allow_remote; }
+      if (receive && !dirty) {
+        try { receive.checked = (await api.get("/device-transfers/policy")).data.allow_receive; receiveSupported = true; }
+        catch (cause) { if (cause.status === 404) receiveSupported = false; else throw cause; }
+      }
       render();
     } catch (error) { status.textContent = errorMessage(error); }
     finally { timer = setTimeout(refresh, pending ? 500 : snapshot?.allow_remote || !panel.hidden ? 10000 : 30000); }
@@ -47,7 +54,11 @@ export function createRemotePanel() {
       while (Date.now() < until) {
         const state = (await api.get("/remote")).data;
         if (state.job.id !== job || state.job.state === "failed") throw new Error(state.error || "Device operation changed");
-        if (state.job.state === "done") { snapshot = state; dirty = false; break; }
+        if (state.job.state === "done") {
+          snapshot = state;
+          if (receive && receiveSupported) await api.put("/device-transfers/policy", { allow_receive: receive.checked });
+          dirty = false; break;
+        }
         await new Promise(resolve => setTimeout(resolve, 300));
       }
       if (dirty) throw new Error(t("devices.operationTimeout", {}, "设备操作超时，请重新读取状态后再操作。"));

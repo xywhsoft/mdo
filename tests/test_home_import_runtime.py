@@ -240,7 +240,11 @@ def launch(host: Path, site: Path, home: Path, mode: str, log: Path,
                 "import_end=", "import_begin=", "import_init=0", "import_inspect=")
             while time.monotonic() < deadline:
                 text = log.read_text(encoding="utf-8", errors="replace")
-                if any(needle in text for needle in needles):
+                # printf may reach the file in several writes. A marker prefix
+                # is not completion: killing here could cut off the result and
+                # make a successful transaction look like a failure.
+                complete = text[:text.rfind("\n") + 1]
+                if any(needle in complete for needle in needles):
                     assert process.poll() is None, text
                     break
                 if process.poll() is not None:

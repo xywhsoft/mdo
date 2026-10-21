@@ -423,6 +423,8 @@ export function createSessionList({ container, count, filter, searchButton, stor
       const projectOptions = menuButton(`menu:${key}`, t("nav.manageProject", { name: group.name }, `管理 ${group.name} 项目`),
         `menu:${key}`, () => [
           option(t("project.newTask", {}, "新任务"), `menu:${key}`, () => onNewInProject(group.id)),
+          ...(onProjectAction ? [option(t("transfer.sendProject", {}, "发送完整项目到设备"), `menu:${key}`,
+            (origin) => onProjectAction("send_device", group.id, origin))] : []),
           ...(group.project?.managed && onProjectAction ? [
             option(t("nav.projectSettings", {}, "项目设置"), `menu:${key}`,
               (origin) => onProjectAction("edit", group.id, origin)),
@@ -465,8 +467,8 @@ export function createSessionList({ container, count, filter, searchButton, stor
       // Once the final page is expanded, its More button disappears. Keep
       // keyboard focus at the newly revealed end of that group.
       const expandedKey = controlKey?.startsWith("more:") ? controlKey.slice(5) : "";
-      const expandedGroup = expandedKey && (sidebarFocus(expandedKey) ?? sidebarFocus(`section:${expandedKey}`));
-      const expandedBody = expandedGroup && document.getElementById(expandedGroup.getAttribute("aria-controls"));
+      const expandedGroup = expandedKey ? (sidebarFocus(expandedKey) ?? sidebarFocus(`section:${expandedKey}`)) : null;
+      const expandedBody = expandedGroup ? document.getElementById(expandedGroup.getAttribute("aria-controls")) : null;
       const expandedTasks = [...(expandedBody?.querySelectorAll(".session-item") ?? [])];
       (expandedTasks.at(-1) ?? container.querySelector('.session-item[aria-current="page"]') ??
         container.querySelector(".session-item, .sidebar-section-toggle") ?? filter).focus();

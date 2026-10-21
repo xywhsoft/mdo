@@ -232,7 +232,6 @@ static MdoSessionEventSnapshot* MdoReadConversationPage(const char* Project,
     }
     if (ReplyGroups && !Delta && Scanned >= MDO_VIEW_SCAN && End) goto oversized;
     if (Reader->Failed) goto io;
-    if (!MdoViewCurrent(Path, Reader)) goto changed;
     if (!Delta) {
         /* Reverse scanning aggregates in reverse order; original event IDs
          * put interleaved reasoning/tasks back into their canonical order. */
@@ -245,7 +244,48 @@ static MdoSessionEventSnapshot* MdoReadConversationPage(const char* Project,
         }
         Page->NextBefore = Snapshot->Count ? Snapshot->Events[0].Info.EventId : Before;
         Page->HasMore = End != 0u;
+        /* Keep reply paging independent of input paging. A partial user turn
+         * still needs its real input ID/text for fork and retry actions. Read
+         * only that anchor, never insert old execution or an extra user row. */
+        const MdoSessionEventInfo* FirstMain = NULL;
+        for (size_t i = 0u; i < Snapshot->Count; ++i) {
+            if (!Snapshot->Events[i].Info.AgentDepth) {
+                FirstMain = &Snapshot->Events[i].Info; break;
+            }
+        }
+        if (ReplyGroups && FirstMain &&
+            FirstMain->Kind != MDO_SESSION_EVENT_HISTORY_TRUNCATED &&
+            !(FirstMain->Kind == XWORK_EVENT_AGENT_START &&
+              (FirstMain->UserMessageSequence || FirstMain->SchemaVersion < 3u))) {
+            uint64 ContextEnd = End, ContextScanned = 0u;
+            while (ContextScanned < MDO_VIEW_SCAN &&
+                   MdoEventReaderPrevious(Reader, &ContextEnd, &Record)) {
+                MdoSessionEventOwned Input;
+                ContextScanned += Record.Size + 1u;
+                if (!MdoEventsParse(Project, Session, Record, &Input)) {
+                    xrtClearError(); break;
+                }
+                bool Boundary = Input.Info.Kind == MDO_SESSION_EVENT_HISTORY_TRUNCATED;
+                bool RootInput = Input.Info.Kind == XWORK_EVENT_AGENT_START &&
+                    !Input.Info.AgentDepth &&
+                    (Input.Info.UserMessageSequence || Input.Info.SchemaVersion < 3u);
+                if (RootInput && Input.Info.SchemaVersion >= 3u && Input.Info.UserMessageSequence &&
+                    Input.Info.EventId < FirstMain->EventId) {
+                    size_t Keep = MdoViewPrefix(Input.Text, 4096u);
+                    if (Input.Text[Keep]) {
+                        Input.Text[Keep] = '\0'; Input.Info.TextTruncated = true;
+                    }
+                    Snapshot->ActionPrompt = Input;
+                    Page->ActionPrompt = Input.Info;
+                    break;
+                }
+                MdoEventsOwnedUnit(&Input);
+                if (Boundary || RootInput) break;
+            }
+        }
     } else Page->HasMore = Snapshot->NextCursor < Snapshot->LatestId;
+    if (Reader->Failed) goto io;
+    if (!MdoViewCurrent(Path, Reader)) goto changed;
     MdoEventReaderClose(Reader); return Snapshot;
 invalid:
     MdoEventsError(Error, XWORK_ERROR_INVALID_ARGUMENT, "invalid conversation snapshot"); return NULL;

@@ -20,20 +20,24 @@ PROBE = r'''
 #include <string.h>
 #include <xsbase.h>
 #define MDO_MODEL_RETRY_BASE_MS 10u
-#define MDO_MODEL_RECOVERY_MS 1200u
+#define MDO_MODEL_RETRY_MAX_MS 80u
 #include "src/storage/home.c"
 #include "src/config/config.c"
 #include "src/security/secrets.c"
 #include "src/models/catalog.c"
 
-typedef struct Observer { unsigned Retries, Deltas; xcancel* Cancel; bool Stop; } Observer;
+typedef struct Observer { unsigned Retries, Deltas, CancelAt, FirstDelay, LastDelay;
+    xcancel* Cancel; bool Stop; } Observer;
 static bool Retry(xllm_client* Client, const xllm_diagnostics* Diagnostics,
     uint32 Next, void* Data) {
     Observer* O=Data; (void)Client;
     if (Next != Diagnostics->uAttemptCount + 1u ||
-        Diagnostics->uMaxAttempts != 6u) return false;
+        Diagnostics->uMaxAttempts != 0u ||
+        Diagnostics->uRetryAfterMs < O->LastDelay) return false;
+    if (!O->FirstDelay) O->FirstDelay=Diagnostics->uRetryAfterMs;
+    O->LastDelay=Diagnostics->uRetryAfterMs;
     ++O->Retries;
-    if (O->Cancel) xrtCancelRequest(O->Cancel);
+    if (O->Cancel && O->Retries>=O->CancelAt) xrtCancelRequest(O->Cancel);
     return !O->Stop;
 }
 static bool Event(void* Data,const xllm_event* E) {
@@ -55,10 +59,13 @@ void ServiceInit(XS_HostInfo* Host) {
     xllm_client* Client=MdoModelClientCreate(Catalog,&Options,NULL,&Error);
     if (!Client) {printf("client_failed=%s\nprobe_done=1\n",Error.sMessage); return;}
     const char* Names[]={"transient","network","daily","balance","quota",
-        "membership","authentication","service-quota","service-config","invalid","exhausted","retry-after",
+        "membership","authentication","service-quota","service-config","invalid","persistent-cancel","retry-after",
         "cancel","deadline","partial","hook-stop","partial-recover",
         "eof-protected","eof-recover","eof-exhausted",
-        "output-protected","output-recover","output-exhausted","malformed-recover","recovery-budget","local-invalid"};
+        "output-protected","output-recover","output-exhausted","malformed-recover","long-recover","local-invalid",
+        "persistent-recover","reset","unknown-recover","retry-after-grow",
+        "empty-recover","thinking-recover","whitespace-recover","empty-exhausted","empty-protected",
+        "empty-cancel","empty-reset"};
     for (unsigned i=0;i<sizeof(Names)/sizeof(Names[0]);++i) {
         Observer O={0}; xllm_request Request; xllmRequestInit(&Request);
         xllmRequestAddTextMessage(&Request,XLLM_ROLE_USER,Names[i]);
@@ -70,22 +77,25 @@ void ServiceInit(XS_HostInfo* Host) {
         xllm_stream_callbacks Stream={&O,Event};
         xllm_hooks Hooks={0}; Hooks.pOnRetry=Retry; Hooks.pUserData=&O;
         Request.pHooks=&Hooks;
-        if (!strcmp(Names[i],"cancel")) {
+        if (!strcmp(Names[i],"cancel") || !strcmp(Names[i],"persistent-cancel") ||
+            !strcmp(Names[i],"eof-exhausted") || !strcmp(Names[i],"empty-cancel")) {
             O.Cancel=xrtCancelCreate(); xllmRequestSetCancel(&Request,O.Cancel);
+            O.CancelAt=!strcmp(Names[i],"cancel")?1u:!strcmp(Names[i],"empty-cancel")?10u:11u;
         }
         if (!strcmp(Names[i],"deadline")) Request.uDeadline=MdoMonotonicUs()+200000u;
         if (!strcmp(Names[i],"hook-stop")) O.Stop=true;
         xllm_response* Response=NULL;
         uint64 Started=MdoMonotonicUs();
         uint64 OriginalDeadline=Request.uDeadline;
-        bool Restartable=strstr(Names[i],"recover") || strstr(Names[i],"exhausted");
+        bool Restartable=strstr(Names[i],"recover") || strstr(Names[i],"exhausted") ||
+            (!strncmp(Names[i],"empty-",6) && strcmp(Names[i],"empty-protected"));
         xllm_result Result=Restartable?
             MdoModelCompleteRestartable(Client,&Request,&Stream,&Response,&Error):
             MdoModelComplete(Client,&Request,&Stream,&Response,&Error);
-        printf("case=%s result=%d kind=%s attempts=%u retries=%u deltas=%u exhausted=%u ms=%llu\n",
+        printf("case=%s result=%d kind=%s attempts=%u retries=%u deltas=%u exhausted=%u ms=%llu first_delay=%u last_delay=%u\n",
             Names[i],Result,MdoModelErrorKind(&Error),Error.tDiagnostics.uAttemptCount,
             O.Retries,O.Deltas,Error.tDiagnostics.bRetryExhausted?1:0,
-            (unsigned long long)((MdoMonotonicUs()-Started)/1000u));
+            (unsigned long long)((MdoMonotonicUs()-Started)/1000u),O.FirstDelay,O.LastDelay);
         if (Request.iMessageCount!=1u || Request.uMaxOutputTokens!=OriginalOutputLimit || Request.uDeadline!=OriginalDeadline)
             printf("request_mutated=1\n");
         if (!strcmp(Names[i],"daily") && strstr(Error.sMessage,"00:00 Asia/Shanghai"))
@@ -97,6 +107,18 @@ void ServiceInit(XS_HostInfo* Host) {
         if (O.Cancel) xrtCancelDestroy(O.Cancel);
     }
     xllmClientDestroy(Client); MdoModelCatalogRelease(Catalog);
+    uint64 Jitter=17u; uint32 Previous=0u;
+    bool Growing=true;
+    for (uint32 Attempt=1u;Attempt<=14u;++Attempt) {
+        uint32 Delay=MdoModelsRetryDelay(Attempt,0u,Previous,&Jitter);
+        if (Delay<Previous || (Previous<MDO_MODEL_RETRY_MAX_MS && Delay<=Previous) ||
+            Delay>MDO_MODEL_RETRY_MAX_MS) Growing=false;
+        Previous=Delay;
+    }
+    uint32 Large=MdoModelsRetryDelay(UINT32_MAX,1000u,Previous,&Jitter);
+    uint32 Retained=MdoModelsRetryDelay(2u,0u,Large,&Jitter);
+    printf("backoff_growth=%u cap=%u retry_after_retained=%u\n",Growing,Previous,
+        Large>=1000u && Retained>=Large);
     const char* LocalKinds[]={"profile_model_missing", "profile_protocol_unsupported",
         "profile_reasoning_unsupported", "profile_output_limit", "profile_context_limit",
         "profile_credential_unavailable", "profile_proxy_unavailable", "profile_ca_unavailable",
@@ -146,6 +168,9 @@ class Model(BaseHTTPRequestHandler):
             if attempt > 1:
                 assert len(body['messages']) == 2 and body['messages'][-1]['role'] == 'system', body
                 assert 'only one small, complete tool call' in body['messages'][-1]['content']
+        if name.startswith(('empty', 'thinking', 'whitespace')) and attempt > 1:
+            assert len(body['messages']) == 2 and body['messages'][-1]['role'] == 'system', body
+            assert 'visible answer' in body['messages'][-1]['content'], body
         if name in ('output-protected', 'output-exhausted') or (
             name in ('output-recover', 'malformed-recover') and attempt == 1):
             chunk = {'choices': [{'delta': {'tool_calls': [{'index': 0, 'id': 'draft',
@@ -162,7 +187,7 @@ class Model(BaseHTTPRequestHandler):
             self.close_connection = True
             self.connection.shutdown(socket.SHUT_RDWR)
             return
-        if name == 'recovery-budget' and attempt > 1:
+        if name == 'long-recover' and attempt > 1:
             time.sleep(2)
         if name == 'partial' or (name == 'partial-recover' and attempt == 1):
             self.send_response(200)
@@ -199,7 +224,7 @@ class Model(BaseHTTPRequestHandler):
             'service-quota': (429, 'upstream_quota_exceeded'),
             'service-config': (401, 'upstream_configuration_error'),
             'invalid': (400, 'invalid_request'),
-            'exhausted': (503, 'service_unavailable'),
+            'persistent-cancel': (503, 'service_unavailable'),
             'cancel': (429, 'rate_limit_exceeded'),
             'deadline': (429, 'rate_limit_exceeded'),
             'hook-stop': (429, 'rate_limit_exceeded'),
@@ -208,8 +233,16 @@ class Model(BaseHTTPRequestHandler):
             failure = (429 if attempt == 1 else 503, 'rate_limit_exceeded')
         if name == 'retry-after' and attempt == 1:
             failure = (429, 'rate_limit_exceeded')
-        if name == 'recovery-budget' and attempt == 1:
+        if name == 'long-recover' and attempt == 1:
             failure = (503, 'service_unavailable')
+        if name == 'persistent-recover' and attempt <= 12:
+            failure = (502, 'upstream_unavailable')
+        if name == 'reset' and attempt == 1:
+            failure = (503, 'service_unavailable')
+        if name == 'unknown-recover' and attempt <= 10:
+            failure = (418, 'opaque_provider_failure')
+        if name == 'retry-after-grow' and attempt <= 2:
+            failure = (429, 'rate_limit_exceeded')
         if failure:
             status, code = failure
             payload = {'error': {'code': code, 'type': code, 'message': 'fixture-only'}}
@@ -219,11 +252,17 @@ class Model(BaseHTTPRequestHandler):
                        [{'index': 0, 'message': {'role': 'assistant', 'content': 'recovered'},
                          'finish_reason': 'stop'}],
                        'usage': {'prompt_tokens': 10, 'completion_tokens': 2, 'total_tokens': 12}}
+            if (name in ('empty-protected', 'empty-exhausted', 'empty-cancel') or
+                name in ('empty-recover', 'thinking-recover', 'whitespace-recover') and attempt <= 10 or
+                name == 'empty-reset' and attempt == 1):
+                message = {'role': 'assistant', 'content': '\n \t' if name == 'whitespace-recover' else ''}
+                if name == 'thinking-recover': message['reasoning_content'] = 'Thinking without an answer'
+                payload['choices'][0]['message'] = message
         raw = json.dumps(payload).encode()
         self.send_response(status)
         self.send_header('Content-Type', 'application/json')
         self.send_header('Content-Length', str(len(raw)))
-        if name == 'retry-after' and attempt == 1:
+        if name in ('retry-after','retry-after-grow') and attempt == 1:
             self.send_header('Retry-After-Ms', '80')
         if name in ('cancel', 'deadline'):
             self.send_header('Retry-After', '1')
@@ -249,7 +288,7 @@ def main():
             output = run_probe(host, site, base / 'home', {
                 'MDO_ORNITH_CHAT_COMPLETIONS_URL': endpoint,
                 'MDO_ORNITH_API_KEY': 'fixture-only-key',
-            })
+            }, timeout_seconds=30.0)
             assert 'init_failed' not in output and 'client_failed' not in output, output
             expected = {'transient': (0, 'unknown', 3), 'network': (0, 'unknown', 2),
                         'daily': (-1, 'daily_token_limit', 1), 'balance': (-1, 'insufficient_balance', 1),
@@ -258,23 +297,29 @@ def main():
                         'service-quota': (-1, 'service_quota_exceeded', 1),
                         'service-config': (-1, 'service_configuration', 1),
                         'invalid': (-1, 'invalid_request', 1),
-                        'exhausted': (-1, 'service_unavailable', 6), 'retry-after': (0, 'unknown', 2),
+                        'persistent-cancel': (-3, 'cancelled', 11), 'retry-after': (0, 'unknown', 2),
                         'cancel': (-3, 'cancelled', 1), 'deadline': (-2, 'timeout', 1),
                         'partial': (-1, 'network', 1), 'hook-stop': (-3, 'cancelled', 1),
                         'partial-recover': (0, 'unknown', 2),
                         'eof-protected': (-1, 'invalid_response', 1),
                         'eof-recover': (0, 'unknown', 2),
-                        'eof-exhausted': (-1, 'invalid_response', 6),
+                        'eof-exhausted': (-3, 'cancelled', 11),
                         'output-protected': (-1, 'output_limit', 1),
                         'output-recover': (0, 'unknown', 2),
-                        'output-exhausted': (-1, 'output_limit', 6),
+                        'output-exhausted': (-1, 'output_limit', 11),
                         'malformed-recover': (0, 'unknown', 2),
-                        'recovery-budget': (-2, 'timeout', 2),
-                        'local-invalid': (-1, 'request_configuration', 1)}
+                        'long-recover': (0, 'unknown', 2),
+                        'local-invalid': (-1, 'request_configuration', 1),
+                        'persistent-recover': (0, 'unknown', 13), 'reset': (0, 'unknown', 2),
+                        'unknown-recover': (0, 'unknown', 11), 'retry-after-grow': (0, 'unknown', 3),
+                        'empty-recover': (0, 'unknown', 11), 'thinking-recover': (0, 'unknown', 11),
+                        'whitespace-recover': (0, 'unknown', 11), 'empty-exhausted': (-1, 'empty_response', 11),
+                        'empty-protected': (0, 'unknown', 1), 'empty-cancel': (-3, 'cancelled', 10),
+                        'empty-reset': (0, 'unknown', 2)}
             for name, (result, kind, count) in expected.items():
                 assert f'case={name} result={result} kind={kind} attempts={count}' in output, output
                 assert Model.calls[name] == (0 if name == 'local-invalid' else count), (name, Model.calls, output)
-            assert 'case=exhausted result=-1 kind=service_unavailable attempts=6 retries=5' in output, output
+            assert 'backoff_growth=1 cap=80 retry_after_retained=1' in output, output
             assert 'daily_message=accurate' in output, output
             assert 'response_attempts_mismatch' not in output, output
             assert 'request_mutated' not in output, output
@@ -287,11 +332,17 @@ def main():
             assert 'resource_kind=unknown' in output, output
             assert 'cancelled_kind=cancelled' in output, output
             after = next(line for line in output.splitlines() if line.startswith('case=retry-after '))
-            assert int(after.split('ms=')[1]) >= 80, output
+            assert int(after.split('ms=')[1].split()[0]) >= 80, output
             cancelled = next(line for line in output.splitlines() if line.startswith('case=cancel '))
-            assert int(cancelled.split('ms=')[1]) < 1000 and 'exhausted=0' in cancelled, output
-            budget = next(line for line in output.splitlines() if line.startswith('case=recovery-budget '))
-            assert 1000 <= int(budget.split('ms=')[1]) < 1800 and 'exhausted=1' in budget, output
+            assert int(cancelled.split('ms=')[1].split()[0]) < 1000 and 'exhausted=0' in cancelled, output
+            long = next(line for line in output.splitlines() if line.startswith('case=long-recover '))
+            assert int(long.split('ms=')[1].split()[0]) >= 1800, output
+            reset = next(line for line in output.splitlines() if line.startswith('case=reset '))
+            assert 10 <= int(reset.split('first_delay=')[1].split()[0]) <= 12, output
+            assert 'exhausted=0' in next(line for line in output.splitlines()
+                if line.startswith('case=persistent-cancel ')), output
+            empty_reset = next(line for line in output.splitlines() if line.startswith('case=empty-reset '))
+            assert 10 <= int(empty_reset.split('first_delay=')[1].split()[0]) <= 12, output
             print(output[output.find('case='):output.find('probe_done=')])
         print('Model retry, business classification, deadline, cancellation and partial-output protection: PASS')
     finally:

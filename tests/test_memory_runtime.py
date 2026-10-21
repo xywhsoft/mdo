@@ -174,8 +174,8 @@ static void MemoryEvent(void *data, const xwork_event *event) {
             event->sText ? event->sText : "null");
 }
 
-static bool ExecuteMemory(xwork_agent *agent, const char *name,
-    const char *arguments, bool expect_success) {
+static bool ExecuteMemoryContaining(xwork_agent *agent, const char *name,
+    const char *arguments, bool expect_success, const char *expected) {
     xllm_executor executor;
     xllm_executor_ctx context;
     xllm_executor_result result;
@@ -200,7 +200,13 @@ static bool ExecuteMemory(xwork_agent *agent, const char *name,
         infrastructure ? 1 : 0, result.bSuccess ? 1 : 0,
         result.sContent != NULL ? result.sContent : "null");
     xworkExecutorUnbind(&executor);
-    return infrastructure && result.bSuccess == expect_success;
+    return infrastructure && result.bSuccess == expect_success &&
+        (!expected || (result.sContent && strstr(result.sContent, expected)));
+}
+
+static bool ExecuteMemory(xwork_agent *agent, const char *name,
+    const char *arguments, bool expect_success) {
+    return ExecuteMemoryContaining(agent, name, arguments, expect_success, NULL);
 }
 
 void ServiceInit(XS_HostInfo *host) {
@@ -404,6 +410,34 @@ void ServiceInit(XS_HostInfo *host) {
         !ExecuteMemory(agent, "write",
             "{\"path\":\"@memory-project/../escape.md\",\"content\":\"Denied\"}", false)) goto done;
     printf("file_memory_tools=1\n");
+    if (!ExecuteMemoryContaining(agent, "read",
+            "{\"path\":\"@memory-global/MEMORY.md\"}", true, "editor-style.md") ||
+        !ExecuteMemoryContaining(agent, "read",
+            "{\"path\":\"@memory-global/editor-style.md\"}", true, "Prefer compact diffs") ||
+        !ExecuteMemoryContaining(agent, "read",
+            "{\"path\":\"MEMORY.md\"}", false, "read_failure: reason=not_found") ||
+        !ExecuteMemoryContaining(agent, "read",
+            "{\"path\":\"MEMORY.md\"}", false, "resolved_path:") ||
+        !ExecuteMemoryContaining(agent, "read",
+            "{\"path\":\"MEMORY.md\"}", false, "@memory-global/MEMORY.md") ||
+        !ExecuteMemoryContaining(agent, "read",
+            "{\"path\":\"../outside.md\"}", false, "reason=permission_denied") ||
+        !ExecuteMemoryContaining(agent, "read",
+            "{\"path\":\"@unknown/file.md\"}", false, "unknown file mount alias") ||
+        !ExecuteMemoryContaining(agent, "read",
+            "{\"path\":\"@unknown/file.md\"}", false, "reason=invalid_argument") ||
+        !ExecuteMemoryContaining(agent, "read",
+            "{\"path\":\"@memory-project/../escape.md\"}", false, "reason=permission_denied") ||
+        !ExecuteMemoryContaining(agent, "read",
+            "{\"path\":\"MEMORY.md\\u0000ignored\"}", false, "embedded NUL")) goto done;
+#if defined(_WIN32)
+    if (!ExecuteMemoryContaining(agent, "read",
+            "{\"path\":\"tmp_diag.py\\n</parameter atlas=\\\"#\\\">\\n Atlas #>\\n\"}",
+            false, "reason=invalid_argument") ||
+        !ExecuteMemoryContaining(agent, "read",
+            "{\"path\":\"read-denied.txt\"}", false, "reason=permission_denied")) goto done;
+#endif
+    printf("file_memory_read_recovery=1\n");
     printf("tool_permissions=%u resources:%u\n", tool_probe.Permissions, tool_probe.Resources);
     {
         MdoMemorySnapshot *files = MdoMemoryFileSnapshotCreate(
@@ -419,8 +453,42 @@ void ServiceInit(XS_HostInfo *host) {
             MdoMemoryFileWrite(MDO_MEMORY_PROJECT, "project-alpha",
                 "MEMORY", "stale", false, before, NULL, &error)) goto done;
         fresh = MdoMemoryBuildPrompt("project-alpha", NULL, NULL, &error);
-        if (!fresh || !strstr(fresh, "[Note](tool-note.md)")) { xrtFree(fresh); goto done; }
+        if (!fresh || !strstr(fresh, "[Note](@memory-project/tool-note.md)") ||
+            !strstr(fresh, "@memory-global/MEMORY.md") ||
+            !strstr(fresh, "read({\"path\":\"@memory-project/MEMORY.md\"})")) {
+            xrtFree(fresh); goto done;
+        }
         xrtFree(fresh);
+        {
+            static const char index[] =
+                "- [Note](tool-note.md)\n- [Web](https://example.test/a.md)\n"
+                "- [Anchor](#section)\n- [Outside](../outside.md)\n"
+                "- [Mounted](@memory-project/tool-note.md)\n"
+                "- [Unicode](中文记忆.md)\n";
+            size_t bytes;
+            char* rendered = MdoMemoryFileIndexToolPaths(index, "@memory-project/", &bytes);
+            if (!rendered || !strstr(rendered, "[Note](@memory-project/tool-note.md)") ||
+                !strstr(rendered, "(https://example.test/a.md)") ||
+                !strstr(rendered, "(#section)") || !strstr(rendered, "(../outside.md)") ||
+                !strstr(rendered, "[Mounted](@memory-project/tool-note.md)") ||
+                !strstr(rendered, "[Unicode](@memory-project/中文记忆.md)") ||
+                bytes > 8192u) { xrtFree(rendered); goto done; }
+            xrtFree(rendered);
+            {
+                char raw[8193]; size_t used = 0u;
+                const char* row = "- [中文条目](tool-note.md)\n";
+                while (used + strlen(row) < sizeof(raw)) {
+                    memcpy(raw + used, row, strlen(row)); used += strlen(row);
+                }
+                raw[used] = 0;
+                rendered = MdoMemoryFileIndexToolPaths(raw, "@memory-global/", &bytes);
+                if (!rendered || bytes > 8192u || bytes == 0u || rendered[bytes - 1u] != '\n' ||
+                    !xrtUtf8Valid((xstrview){rendered, bytes}, NULL)) {
+                    xrtFree(rendered); goto done;
+                }
+                xrtFree(rendered);
+            }
+        }
         printf("file_memory_ui_and_refresh=1\n");
     }
 
@@ -703,6 +771,12 @@ def main() -> int:
         site = base / "site"
         home = base / "home"
         write_site(site)
+        if os.name == "nt":
+            denied = site / "read-denied.txt"
+            denied.write_text("Disposable read ACL fixture", encoding="utf-8")
+            acl = subprocess.run([str(Path(os.environ["SystemRoot"]) / "System32/icacls.exe"),
+                str(denied), "/deny", os.environ["USERNAME"] + ":(R)"], capture_output=True)
+            assert acl.returncode == 0, "Could not set read-only denial on disposable fixture"
         output = run_probe(host, site, home)
         assert "init_error=" not in output, output
         assert "write_error=" not in output, output
@@ -719,6 +793,7 @@ def main() -> int:
         assert "prompt=ok:1" in output and "global:1 project:1 untrusted:1" in output, output
         assert "project_recovered=ok:1 revision:1 count:1 generation:1 code:0" in output, output
         assert "file_memory_tools=1" in output, output
+        assert "file_memory_read_recovery=1" in output, output
         assert "file_memory_ui_and_refresh=1" in output, output
         for label in ("empty_read_only", "legacy_read_only", "conversion_etag_stable",
                       "partial_conversion_failure"):

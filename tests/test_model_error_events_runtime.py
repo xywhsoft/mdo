@@ -105,6 +105,29 @@ void ServiceInit(XS_HostInfo* Host) {
     Event.eKind=XWORK_EVENT_AGENT_START;
     MdoEventsCompactionPhase(&Bridge,&Event);
     printf("reused_run=%u\n",!Bridge.MainCompacting);
+    Event.eKind=XWORK_EVENT_MODEL_DONE;
+    Event.sText="Completed reply"; Event.iTextLength=strlen(Event.sText);
+    Event.sProviderRequestId="request-fixture"; Event.sFinishReason="stop";
+    Event.uHttpStatus=200u; Event.iResponseToolCallCount=2u;
+    Event.tDiagnostics.uAttemptCount=3u;
+    Json=MdoEventsRecord(&Bridge,8,&Event,"",0,&Size);
+    Good=Json && MdoEventsParse(Bridge.ProjectId,Bridge.SessionId,xrtStrViewN(Json,Size),&Parsed);
+    printf("model_done_metadata=%u\n",Good && Parsed.Info.SchemaVersion==7u &&
+        !strcmp(Parsed.Info.ModelRequestId,"request-fixture") &&
+        !strcmp(Parsed.Info.ModelFinishReason,"stop") && Parsed.Info.ModelToolCallCount==2u &&
+        Parsed.Info.ModelHttpStatus==200u && Parsed.Info.ModelAttempts==3u);
+    MdoEventsOwnedUnit(&Parsed);
+    Root=xrtJsonParse(xrtStrViewN(Json,Size)); xrtFree(Json);
+    xrtValueObjectSetNew(Root,XRT_STR_LITERAL("schema_version"),xrtValueUInt(6));
+    xrtValueObjectRemove(Root,XRT_STR_LITERAL("model_request_id"));
+    xrtValueObjectRemove(Root,XRT_STR_LITERAL("model_finish_reason"));
+    xrtValueObjectRemove(Root,XRT_STR_LITERAL("model_tool_call_count"));
+    xrtValueObjectRemove(Root,XRT_STR_LITERAL("model_http_status"));
+    xrtValueObjectRemove(Root,XRT_STR_LITERAL("model_attempts"));
+    Json=xrtJsonStringify(Root,false,&Size);
+    Good=MdoEventsParse(Bridge.ProjectId,Bridge.SessionId,xrtStrViewN(Json,Size),&Parsed);
+    printf("legacy_model_done=%u\n",Good && Parsed.Info.SchemaVersion==6u && !Parsed.Info.ModelRequestId[0]);
+    MdoEventsOwnedUnit(&Parsed); xrtFree(Json); xrtValueRelease(Root);
     printf("probe_done=1\n");
 }
 '''
@@ -120,7 +143,7 @@ def main():
         write_site(site)
         (site / 'probe.c').write_text(PROBE, encoding='utf-8')
         output = run_probe(host, site, base / 'home')
-        for expected in ('current=1 schema=6 kind=daily_token_limit status=429 attempts=1',
+        for expected in ('current=1 schema=7 kind=daily_token_limit status=429 attempts=1',
                          'local_profile=1 kind=profile_credential_unavailable',
                          'image_profile=1 kind=profile_image_unsupported',
                          'upstream_profile_code=1 kind=authentication_failed',
@@ -129,7 +152,7 @@ def main():
                          'child_isolation=1', 'unrelated_run=1',
                          'compaction=1 kind=context_compaction',
                          'compaction_provider=1 kind=daily_token_limit', 'closed_phase=1',
-                         'cancelled_phase=1', 'reused_run=1'):
+                         'cancelled_phase=1', 'reused_run=1', 'model_done_metadata=1', 'legacy_model_done=1'):
             assert expected in output, output
     print('Structured model error replay, old event compatibility and strict validation: PASS')
 

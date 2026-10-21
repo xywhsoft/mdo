@@ -3,6 +3,7 @@ from pathlib import Path
 import hashlib
 import json
 import zipfile
+from python_runtime import prepare_windows_python
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCES = json.loads(Path(__file__).with_name('sources.lock.json').read_text(encoding='utf-8'))
@@ -57,6 +58,8 @@ for name in ('busybox-1.38.0.tar.bz2', 'busybox-w32-FRP-6075-g169694ebd.tgz','ar
 for platform, tools in TOOLS.items():
     for tool, (version, group, entrypoints, sources) in tools.items():
         directory = ROOT / platform / tool
+        if platform == 'windows-x86_64' and tool == 'python':
+            prepare_windows_python(directory)
         for entry in entrypoints:
             if not (directory / entry).is_file():
                 raise FileNotFoundError(directory / entry)

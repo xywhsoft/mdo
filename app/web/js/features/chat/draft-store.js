@@ -136,6 +136,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
   isWritePaused = () => false, random = Math.random,
   createRecovery = createRequestRecovery }) {
   const entries = new Map();
+  const forgotten = new Set();
   const reads = new Set();
   const transport = createDraftTransport({ matchesSnapshot, createRecovery });
   const encoder = new TextEncoder();
@@ -156,6 +157,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
   }
 
   function schedule(key, immediate = false) {
+    if (forgotten.has(key)) return;
     const current = entry(key);
     window.clearTimeout(current.timer);
     if (readPaused || current.conflict || isWritePaused() ||
@@ -170,6 +172,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
   }
 
   function scheduleRead(key) {
+    if (forgotten.has(key)) return;
     const current = entry(key);
     if (readPaused || current.loaded || current.conflict || current.readTimer ||
         isWritePaused() || !isTransientReadError(current.error)) return;
@@ -184,6 +187,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
   }
 
   async function load(key) {
+    if (forgotten.has(key)) return;
     const current = entry(key);
     if (readPaused || current.loaded) return;
     if (current.loading) return current.loading;
@@ -196,6 +200,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
     current.loading = (async () => {
       try {
         const response = await recovery.request(signal => api.get(endpoint(key), { signal }));
+        if (forgotten.has(key) || current.retired) return;
         current.revision = Number(response.data.revision);
         // A local edit may precede the GET response. Never clear a persisted
         // review guard while saving that edit.
@@ -207,6 +212,11 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
         if (!storedSubmissions)
           throw new Error(t("draft.submissionConflict"));
         const storedNewTask = newTask(response.data.new_task);
+        if (!key && storedNewTask && forgotten.has(`${storedNewTask.project_id}/${storedNewTask.session_id}`)) {
+          current.retired = true; entries.delete("");
+          if (selected === "") select("");
+          return;
+        }
         const storedProfile = profile(response.data.composer_profile,
           key.startsWith("project:"));
         if (storedNewTask === undefined || storedProfile === undefined ||
@@ -237,6 +247,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
         if (selected === key && !current.dirty) onSaved();
         if (selected === key) onLoaded();
       } catch (error) {
+        if (forgotten.has(key) || current.retired) return;
         if (error?.name === "AbortError") return;
         current.error = error;
         if (selected === key) onError(error, "read");
@@ -250,6 +261,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
   }
 
   async function flush(key) {
+    if (forgotten.has(key)) return true;
     const current = entry(key);
     window.clearTimeout(current.timer);
     current.timer = 0;
@@ -260,8 +272,9 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
     }
     current.saving = (async () => {
       if (!current.loaded) await load(key);
-      if (!current.loaded || current.conflict) return;
+      if (!current.loaded || current.conflict || forgotten.has(key) || current.retired) return;
       while (current.dirty) {
+        if (forgotten.has(key) || current.retired) return;
         if (isWritePaused()) return;
         const text = current.text;
         const attachments = [...current.attachments];
@@ -289,6 +302,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
           if (!key) body.new_task = stagedNewTask;
           const keepalive = encoder.encode(JSON.stringify(body)).length <= 60 * 1024;
           const saved = await transport.save(key, body, { keepalive });
+          if (forgotten.has(key) || current.retired) return;
           const response = saved.response;
           // A previous uncertain save may be confirmed before this newer
           // edit. Acknowledge its actual snapshot, then persist the new edit.
@@ -308,6 +322,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
             current.dirty = true;
           if (selected === key && !current.dirty) onSaved();
         } catch (error) {
+          if (forgotten.has(key) || current.retired) return;
           current.dirty = true;
           if (error?.name === "AbortError") return;
           current.error = error;
@@ -327,6 +342,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
   }
 
   function applySessionResponse(key, data) {
+    if (forgotten.has(key)) return [];
     const current = entry(key);
     const remoteSubmissions = submissions(data?.submissions);
     const remoteProfile = profile(data?.composer_profile);
@@ -430,6 +446,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
   }
 
   function edit(key, text, attachments = entry(key).attachments, immediate = false) {
+    if (forgotten.has(key)) return;
     const current = entry(key);
     const ids = key ? imageIds(attachments) : [];
     const changed = current.text !== text || !sameIds(current.attachments, ids);
@@ -503,6 +520,26 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
   return Object.freeze({
     select,
     edit,
+    forgetSession(key) {
+      if (!key || key.startsWith("project:")) throw new TypeError("a session draft key is required");
+      forgotten.add(key);
+      transport.forget(key);
+      const current = entry(key);
+      window.clearTimeout(current.timer); window.clearTimeout(current.readTimer);
+      current.timer = 0; current.readTimer = 0; current.dirty = false;
+      current.text = ""; current.attachments = []; current.submissions = [];
+      current.uncertainRun = false; current.newTask = null; current.error = null;
+      current.unpersisted.clear();
+      const global = entries.get("");
+      if (global?.newTask && `${global.newTask.project_id}/${global.newTask.session_id}` === key) {
+        // Its durable global draft was removed by the same transaction. Retire
+        // late reads/saves, then allow a fresh unrelated new-task draft.
+        global.retired = true; global.dirty = false;
+        window.clearTimeout(global.timer); window.clearTimeout(global.readTimer);
+        transport.forget(""); entries.delete("");
+        if (selected === "") select("");
+      }
+    },
     editAttachments(key, attachments, immediate = false) {
       edit(key, entry(key).text, attachments, immediate);
     },

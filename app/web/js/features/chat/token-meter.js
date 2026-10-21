@@ -3,9 +3,24 @@ import { currentLocale, subscribeLocale, t } from "../../i18n.js";
 import { findModel } from "../../utils/models.js";
 
 export function estimateInputTokens(text) {
-  const characters = String(text || "");
-  const cjk = (characters.match(/[\u2e80-\u9fff]/gu) ?? []).length;
-  return Math.round(cjk + (characters.length - cjk) / 4);
+  // Match xllmEstimateTextTokens: ceil(ASCII / 4) + Unicode scalar count.
+  let ascii = 0, other = 0;
+  for (const character of String(text || "")) {
+    if (character.codePointAt(0) < 128) ascii += 1;
+    else other += 1;
+  }
+  return Math.ceil(ascii / 4) + other;
+}
+
+export function contextCheckpoint(events) {
+  const boundary = events.findLastIndex(event => event.kind === "history_truncated");
+  const retained = events.slice(boundary + 1).filter(event => !Number(event.agent_depth));
+  const latestCall = retained.findLast(event => event.kind === "model_done" &&
+    event.success !== false && (event.input_tokens || event.output_tokens));
+  const contextEvent = retained.findLast(event => event.context &&
+    ["estimated_input_tokens", "input_budget_tokens", "compact_threshold_tokens"].every(key =>
+      Number.isSafeInteger(event.context[key]) && event.context[key] >= 0));
+  return { latestCall, contextEvent };
 }
 
 export function createTokenMeter({ root, trigger, ring, panel, estimate, prompt,
@@ -17,50 +32,57 @@ export function createTokenMeter({ root, trigger, ring, panel, estimate, prompt,
   function update() {
     const number = (value) => value.toLocaleString(currentLocale());
     const input = estimateInputTokens(prompt.value);
-    const hasImages = attachments().length > 0;
+    const imageCount = attachments().length;
+    const hasImages = imageCount > 0;
+    const draft = input + imageCount * 4096 + (prompt.value || hasImages ? 12 : 0);
     estimate.textContent = hasImages
-      ? t("token.textEstimateWithImages", { count: number(input) },
-        `文字 ~${number(input)} tok · 图片另计`)
+      ? t("token.textEstimateWithImages", { count: number(input), images: number(imageCount * 4096) },
+        `文字 ~${number(input)} tok · 图片 ~${number(imageCount * 4096)} tok`)
       : prompt.value ? t("token.inputEstimate", { count: number(input) },
         `输入 ~${number(input)} tok`) : "";
     estimate.title = hasImages
-      ? t("token.imageEstimateTitle", {}, "仅估算输入文字；图片 token 未计入")
+      ? t("token.imageEstimateTitle", {}, "图片按每张 4,096 token 估算；实际用量由模型返回")
       : t("token.estimateTitle", {}, "按输入文本粗略估算");
     const session = sessionStore.get().data;
     const models = modelsStore.get().data?.models ?? [];
     const model = findModel(models, modelSelect.value || session?.model_id);
     const timeline = timelineStore.get().data;
-    const calls = (session && timeline?.projectId === session.project_id &&
-      timeline?.sessionId === session.id ? timeline.events ?? [] : []).filter((event) =>
+    const events = session && timeline?.projectId === session.project_id &&
+      timeline?.sessionId === session.id ? timeline.events ?? [] : [];
+    const calls = events.filter((event) =>
       event.kind === "model_done" && (event.input_tokens || event.output_tokens));
-    const latestCall = calls.at(-1);
+    const { latestCall, contextEvent } = contextCheckpoint(events);
+    const reference = contextEvent || latestCall;
     const latestInput = Number(latestCall?.input_tokens || 0);
-    const eventModelId = latestCall?.model_id || "";
-    const lastRun = latestCall && !eventModelId &&
-      !Number(latestCall.agent_depth) && session &&
+    const latestOutput = Number(latestCall?.output_tokens || 0);
+    const eventModelId = reference?.model_id || "";
+    const lastRun = reference && !eventModelId && session &&
       (runsStore?.get().data?.items ?? []).find((run) =>
         run.project_id === session.project_id && run.session_id === session.id &&
-        Number(run.agent_run_id) === Number(latestCall.run_id));
+        Number(run.agent_run_id) === Number(reference.run_id));
     const historicalModelId = eventModelId || lastRun?.model_id || "";
-    const matchingModels = models.filter((item) => latestCall?.model &&
-      (item.id === latestCall.model || item.wire_model === latestCall.model));
+    const matchingModels = models.filter((item) => reference?.model &&
+      (item.id === reference.model || item.wire_model === reference.model));
     const latestModel = historicalModelId
       ? findModel(models, historicalModelId)
       : matchingModels.length === 1 ? matchingModels[0] : null;
     const lastModelName = latestModel?.name || historicalModelId ||
-      latestCall?.model || "—";
+      reference?.model || "—";
     const totalInput = calls.reduce((sum, item) => sum + Number(item.input_tokens || 0), 0);
     const totalOutput = calls.reduce((sum, item) => sum + Number(item.output_tokens || 0), 0);
     const windowTokens = Number(model?.context_window_tokens || 0);
-    const lastWindowTokens = Number(latestCall?.context_window_tokens || 0) ||
-      Number(latestModel?.context_window_tokens || 0);
+    const lastWindowTokens = Number(reference?.context_window_tokens || 0) ||
+      Number(latestModel?.context_window_tokens || 0) || (!reference ? windowTokens : 0);
+    const base = contextEvent ? contextEvent.context.estimated_input_tokens : latestInput + latestOutput;
+    const nextInput = base + draft;
+    const compactThreshold = Number(contextEvent?.context.compact_threshold_tokens || 0);
     const percent = lastWindowTokens
-      ? Math.min(100, Math.round(latestInput / lastWindowTokens * 100)) : 0;
+      ? Math.min(100, Math.round(nextInput / lastWindowTokens * 100)) : 0;
     ring.style.setProperty("--meter-percent", `${percent}%`);
-    trigger.title = latestCall && lastWindowTokens
-      ? t("token.tooltip", { model: lastModelName,
-        input: number(latestInput), limit: number(lastWindowTokens) },
-        `上次 ${lastModelName} 输入 ${number(latestInput)} / 上下文上限 ${number(lastWindowTokens)} tokens`)
+    trigger.title = lastWindowTokens
+      ? t("token.tooltip", { model: reference ? lastModelName : model?.name || model?.id || "—",
+        input: number(nextInput), limit: number(lastWindowTokens) },
+        `${lastModelName} 预计下次输入 ~${number(nextInput)} / 上下文上限 ${number(lastWindowTokens)} tokens`)
       : t("token.view", {}, "查看 token 用量");
     const scrollTop = panel.scrollTop;
     const closeFocused = document.activeElement === closeButton;
@@ -77,12 +99,20 @@ export function createTokenMeter({ root, trigger, ring, panel, estimate, prompt,
       [t("token.model", {}, "输入区模型"), model?.name || model?.id || "—"],
       [t("token.contextLimit", {}, "输入区上下文上限"),
         windowTokens ? number(windowTokens) : "—"],
-      ...(latestCall && latestModel?.id !== model?.id ? [
+      ...(reference && latestModel?.id !== model?.id ? [
         [t("token.lastModel", {}, "上次调用模型"), lastModelName],
         [t("token.lastContextLimit", {}, "上次调用上下文上限"),
           lastWindowTokens ? number(lastWindowTokens) : "—"],
       ] : []),
       [t("token.lastInput", {}, "上次模型输入"), latestInput ? number(latestInput) : "—"],
+      [t("token.lastOutput", {}, "上次模型输出"), latestOutput ? number(latestOutput) : "—"],
+      [t("token.nextInput", {}, "预计下次输入"), `~${number(nextInput)}`],
+      ...(contextEvent ? [
+        [t("token.usageBase", {}, "服务端用量基准"), contextEvent.context.exact
+          ? number(contextEvent.context.fill_tokens) : t("token.estimatedBase", {}, "历史内容估算")],
+        [t("token.contextGrowth", {}, "基准后新增估算"), `~${number(contextEvent.context.growth_tokens + draft)}`],
+        [t("token.compactThreshold", {}, "自动压缩阈值"), number(compactThreshold)],
+      ] : []),
       [t(hasImages ? "token.currentTextEstimate" : "token.currentEstimate", {},
         hasImages ? "本次文字估算" : "本次输入估算"), `~${number(input)}`],
       [t("token.visibleInput", {}, "可见调用累计输入"), number(totalInput)],
@@ -92,11 +122,14 @@ export function createTokenMeter({ root, trigger, ring, panel, estimate, prompt,
       details.append(element("dt", { text: label }), element("dd", { text: value }));
     panel.append(heading, details,
       element("p", { text: t("token.note", {},
-        "模型用量来自服务端事件；输入框估算仅供参考。历史事件被裁剪时，累计值只包含当前可见调用。") }));
+        "预计输入与自动压缩共用上下文检查点：上次服务端输入与输出，加上此后新增内容及草稿估算。输出预留与安全余量已计入压缩阈值；累计用量只包含可见调用。") }));
     if (hasImages)
       panel.append(element("p", { text: t("token.imageEstimateNote", {},
-        "图片 token 未计入估算，实际用量取决于模型。") }));
-    if (latestCall && !lastWindowTokens)
+        "图片按每张 4,096 token 估算，实际用量取决于模型。") }));
+    if (!contextEvent && latestCall)
+      panel.append(element("p", { text: t("token.legacyCheckpoint", {},
+        "此会话暂无新的上下文检查点，当前使用上次用量估算；继续运行后刷新。") }));
+    if (reference && !lastWindowTokens)
       panel.append(element("p", { text: t("token.unknownContext", {},
         "上次调用的模型配置无法确定，暂不显示上下文占比。") }));
     panel.scrollTop = scrollTop;

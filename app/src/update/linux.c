@@ -51,7 +51,8 @@ bool MdoUpdateLinuxInstall(cstr Source,cstr Hash)
     if(!MdoUpdateLinuxCopy(Source,Backup,Original.Mode&0777,false,NULL))goto cleanup;
     xfileinfo Current;
     if(!xrtPathStat(Source,false,&Current)||!MdoUpdateLinuxSame(&Current,&Original))goto cleanup;
-    if(!xrtPathRename(Swap,Source,true))goto cleanup;Published=true;
+    if(!xrtPathRename(Swap,Source,true))goto cleanup;
+    Published=true;
     if(fsync((int)xrtRootNative(Directory)))goto cleanup;
     Ok=xsAppRequestRestart();
 cleanup:

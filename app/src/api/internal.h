@@ -9,6 +9,10 @@
 #include "../../include/mdo/ecosystem.h"
 
 #define MDO_API_RESPONSE_MAX_BYTES (256u * 1024u)
+#define MDO_API_CONVERSATION_ITEMS_MAX_BYTES (4u * 1024u * 1024u)
+/* items_json is a string inside another JSON envelope, so escaping can
+ * double its wire size. Keep the extra budget specific to conversation pages. */
+#define MDO_API_CONVERSATION_RESPONSE_MAX_BYTES (8u * 1024u * 1024u + 16384u)
 #define MDO_API_REQUEST_MAX_BYTES (256u * 1024u)
 #define MDO_API_IMAGE_MAX_BYTES (8u * 1024u * 1024u)
 #define MDO_API_DOWNLOAD_MAX_BYTES (33u * 1024u * 1024u)
@@ -28,7 +32,10 @@ typedef struct MdoApiContext {
     xcancel* SendCancel;
     bool CloseResponse;
     bool Takeover;
+    bool UntrustedOrigin;
 } MdoApiContext;
+
+bool MdoApiLocalRequest(const XS_HttpReq* Request);
 
 struct MdoSessionEventInfo;
 bool MdoApiLiveInit(void);
@@ -232,6 +239,7 @@ bool MdoApiSessionPermissionRoute(MdoApiContext* pContext);
 bool MdoApiSharedFilesRoute(MdoApiContext* pContext);
 bool MdoApiSessionRoute(MdoApiContext* pContext);
 bool MdoApiSessionRestoreRoute(MdoApiContext* pContext);
+bool MdoApiSessionPurgeRoute(MdoApiContext* pContext);
 bool MdoApiSessionHistoryRoute(MdoApiContext* pContext);
 bool MdoApiSessionRecoveryRoute(MdoApiContext* pContext);
 bool MdoApiSessionResumeRoute(MdoApiContext* pContext);

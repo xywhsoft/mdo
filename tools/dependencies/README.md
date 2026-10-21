@@ -8,6 +8,42 @@ Product Unix/monotonic microsecond records retain their meaning; native XRT
 waits receive signed relative milliseconds. See
 `docs/build-records/2026-10-18-xs-xrt-upgrade.md` for the migration and gates.
 
+The preceding lock used `xs-context-governance.bundle`, extending the compatible
+history described below. It preserves native process failure causes for
+exec/spawn/stop (including system codes, without argv/environment or error Data),
+and reports relevant bounded edit contexts and actual multiline match locations.
+Exact matching, atomic batch writes, public ABI 8 and the locked xrt ABI are
+unchanged. Rebuild native hosts to include these fixes.
+
+Context governance now retains the last server input/output usage as a prefix
+anchor and estimates the actual later messages, tool results and system prompt
+changes. The checkpoint and journal preserve the anchor and its model identity;
+reapplying the same model keeps it, and a different model or missing legacy
+feedback falls back to the retained context estimate. Context events expose the
+same statistics to the token meter. Structured text and image parts participate
+in estimates. This compatibility extension preserves the public ABI and schema
+4, with additive checkpoint fields and a usage journal record.
+
+The continuation extension aligns UTF-8 cursors and separates invalid encoding
+from binary data. Tool-local failures become failed results instead of aborting
+the loop; cancellation, OOM, lost context and uncertain receipts retain their
+fatal semantics. Successful repeated batches continue. All completed batch
+results are saved before applying a consecutive failure guard. Unusable model
+responses are rejected before ledger commit, and product recovery owns retries.
+
+The memory-read extension distinguishes invalid path arguments, missing files,
+filesystem permissions and mount/workspace boundary failures. Read diagnostics
+include bounded escaped locators and the actually mounted memory index aliases.
+Embedded NUL is rejected on every platform; Windows also rejects invalid file
+name characters. Other platforms retain their legal file names, and the existing
+workspace boundary remains the default. The new additive host opt-in allows
+ordinary external file paths in full access; explicit mounts retain their own
+boundaries. Subagents inherit the host-selected scope. The read handler verifies
+unambiguous formatting/memory path recovery, declares the corrected resource to
+permission callbacks, clamps page options and pages large text files. True
+missing files and OS denial remain errors. The original tool-diagnostics bundle
+remains available as historical source evidence; ABI 8 and the xrt lock are unchanged.
+
 `xs-tool-image-text.bundle` carries the compatibility commits from
 `bd7831704482cc7dd418260281a37c6bdb222b23` to the xs revision in `deps.lock`.
 It contains the upstream xllm stream termination/output-limit fixes and xwork

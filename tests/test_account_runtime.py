@@ -56,6 +56,19 @@ static int32 AccountTestSearch(void* data) {
 }
 static bool AccountTestRoute(MdoApiContext* c) {
     xvalue* out = xrtValueObject();
+    if (c->Target.Query.Size == 8 && !memcmp(c->Target.Query.Data,"fault503",8)) {
+        xrtAtomic32Store(&AccountFault,1,XMEMORY_RELEASE);
+        MdoAccountSetBool(out,"set",true);
+    } else if (c->Target.Query.Size == 9 && !memcmp(c->Target.Query.Data,"faultlost",9)) {
+        xrtAtomic32Store(&AccountFault,2,XMEMORY_RELEASE);
+        MdoAccountSetBool(out,"set",true);
+    } else if (c->Target.Query.Size == 9 && !memcmp(c->Target.Query.Data,"faultwait",9)) {
+        xrtAtomic32Store(&AccountFault,3,XMEMORY_RELEASE);
+        MdoAccountSetBool(out,"set",true);
+    } else if (c->Target.Query.Size == 10 && !memcmp(c->Target.Query.Data,"faultclear",10)) {
+        xrtAtomic32Store(&AccountFault,0,XMEMORY_RELEASE);
+        MdoAccountSetBool(out,"set",true);
+    } else
     if (c->Target.Query.Size == 4 && !memcmp(c->Target.Query.Data,"poll",4)) {
         bool done = !AccountTestWorker || xrtThreadState(AccountTestWorker) == XTHREAD_FINISHED;
         if (done && AccountTestWorker) {
@@ -93,6 +106,27 @@ static bool AccountTestRoute(MdoApiContext* c) {
         MdoAccountRelease(&AccountTestLease);
     }
     return MdoApiReplySuccessTake(c,200,out,NULL);
+}
+'''
+
+FAULT_CLIENT = r'''
+static xatomic32 AccountFault;
+xvalue* MdoAccountClient(cstr Origin,cstr Path,cstr Method,const xvalue* Body,
+    cstr Access,xcancel* Cancel,uint16* Status)
+{
+    int fault = !strcmp(Path,"/api/v1/token/refresh") ?
+        xrtAtomic32Load(&AccountFault,XMEMORY_ACQUIRE) : 0;
+    if (fault == 1) { *Status = 503; return NULL; }
+    if (fault == 3) {
+        while (!xrtCancelRequested(Cancel)) xrtSleep(10);
+        *Status = 0; return NULL;
+    }
+    xvalue* data = AccountRealClient(Origin,Path,Method,Body,Access,Cancel,Status);
+    if (fault == 2) {
+        xrtAtomic32Store(&AccountFault,0,XMEMORY_RELEASE);
+        MdoAccountSecretValueRelease(data); *Status = 0; return NULL;
+    }
+    return data;
 }
 '''
 
@@ -205,6 +239,9 @@ def run(host):
             (site/'xs.json').write_text(json.dumps(config))
             unity = site/'generated/mdo_unity.c'
             unity.write_text('#define MDO_ACCOUNT_SERVICE_ORIGIN '+json.dumps(origin)+'\n#include <xsbase.h>\nstatic bool TestOpenUrl(cstr s){(void)s;return true;}\n#define xsOpenExternalUrl TestOpenUrl\n'+unity.read_text(encoding='utf-8'),encoding='utf-8')
+            client = site/'src/account/client.c'
+            client.write_text(client.read_text(encoding='utf-8').replace(
+                'xvalue* MdoAccountClient(', 'xvalue* AccountRealClient(', 1) + FAULT_CLIENT, encoding='utf-8')
             router = site/'src/api/router.c'; source = router.read_text(); source = source.replace('static const MdoApiRoute g_MdoApiRoutes[]',HOOK+'\nstatic const MdoApiRoute g_MdoApiRoutes[]')
             source = source.replace('static const MdoApiRoute g_MdoApiRoutes[] = {','static const MdoApiRoute g_MdoApiRoutes[] = {\n {"/api/v1/test-account", XHTTP_METHOD_GET, "GET", AccountTestRoute, false},')
             router.write_text(source)
@@ -252,6 +289,48 @@ def run(host):
             running = launch(site, site/'xs.json', home); ready(app_port, running, '/api/v1/account')
             state = wait_state('signed_in'); assert state['profile']['username'] == 'mdo_login_test', state
             assert search_take()
+            # A disconnected launch keeps the encrypted device credential and
+            # identity across repeated restarts; renewal resumes automatically.
+            running.terminate(); running.wait(timeout=15)
+            web_process.terminate(); web_process.wait(timeout=15)
+            offline_credential = saved.read_bytes()
+            for _ in range(3):
+                running = launch(site, site/'xs.json', home); ready(app_port, running, '/api/v1/account')
+                state = wait_state('refreshing')
+                assert state['message'] == 'account_renewal_pending', state
+                assert state['remembered'] and state['refresh_available'], state
+                assert state['profile']['username'] == 'mdo_login_test', state
+                assert saved.read_bytes() == offline_credential
+                running.terminate(); running.wait(timeout=15)
+            running = launch(site, site/'xs.json', home); ready(app_port, running, '/api/v1/account')
+            state = wait_state('refreshing'); assert state['remembered'], state
+            web_process = launch(website, website/'xs.json', executable=XADMIN/'xs.exe')
+            ready(website_port, web_process, '/api/v1/auth/providers')
+            state = wait_state('signed_in'); assert state['profile']['username'] == 'mdo_login_test', state
+            assert saved.exists() and search_take()
+            print('PASS remembered identity survives three offline restarts and reconnects without login')
+            for fault in ('fault503', 'faultlost'):
+                before_fault = saved.read_bytes()
+                assert app('GET', '/test-account?' + fault)['set']
+                assert app('GET', '/test-account?expire')['queued']
+                state = wait_state('refreshing')
+                assert state['remembered'] and state['refresh_available'], state
+                assert state['message'] == 'account_renewal_pending', state
+                assert saved.read_bytes() == before_fault
+                assert app('GET', '/test-account?faultclear')['set']
+                wait_state('signed_in')
+            before_close = saved.read_bytes()
+            assert app('GET', '/test-account?faultwait')['set']
+            assert app('GET', '/test-account?expire')['queued']
+            for _ in range(50):
+                if app('GET')['busy']: break
+                time.sleep(.05)
+            else: raise AssertionError('renewal did not begin')
+            running.terminate(); running.wait(timeout=15)
+            assert saved.read_bytes() == before_close
+            running = launch(site, site/'xs.json', home); ready(app_port, running, '/api/v1/account')
+            state = wait_state('signed_in'); assert state['remembered'] and search_take()
+            print('PASS service 503, lost successful renewal reply and shutdown during renewal retain remembered login')
             app('POST','/account/logout',{}); wait_state('signed_out')
             assert app('GET','/test-account')['cancelled'] and not saved.exists()
             # Native logout does not revoke the originating browser session.

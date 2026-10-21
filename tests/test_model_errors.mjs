@@ -45,6 +45,9 @@ test("final model errors use the UI language and preserve unknown explanations",
         assert.equal(final.role, localTimeline.role);
       }
       const limit = errorMessage({ code: "model_output_limit", message: "raw" });
+      const empty = errorMessage({ code: "model_empty_response", message: "raw" });
+      assert.match(empty, locale === "zh-CN" ? /空回复/ :
+        locale === "ru-RU" ? /пустой ответ/ : /no usable reply/);
       assert.notEqual(limit, "raw");
       assert.match(limit, locale === "zh-CN" ? /输出上限/ :
         locale === "ru-RU" ? /лимита вывода/ : /output limit/);

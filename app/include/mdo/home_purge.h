@@ -73,6 +73,14 @@ bool MdoHomePurgeRequestCancel(cstr RequestId, cstr ProjectId, uint64 Revision,
 bool MdoHomePurgeFiles(cstr ProjectId, const MdoHomePurgeTarget* Targets,
     size_t Count, bool* Committed);
 
+/* Same recoverable transaction for one session. A current exclusive project
+ * lease must cover metadata validation, owned reference guards and this call.
+ * Only the exact session directory, its legacy prompt and guarded global
+ * references are allowed. Project definitions and neighbouring sessions stay
+ * outside this transaction. Committed remains authoritative on cleanup errors. */
+bool MdoHomePurgeSessionFiles(cstr ProjectId, cstr SessionId,
+    const MdoHomePurgeTarget* Targets, size_t Count, bool* Committed);
+
 /* Same storage boundary, with durable acceptance and immutable terminal
  * receipt. Existing IDs are rejected before any move; the application looks
  * up and replays matching results before entering this function. Neither

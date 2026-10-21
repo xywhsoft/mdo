@@ -1,4 +1,5 @@
 """Real xs/TCC + HTTP test; isolated Home and publication server."""
+import argparse
 import hashlib
 import json
 import os
@@ -24,8 +25,9 @@ class Published(BaseHTTPRequestHandler):
         if self.path.startswith("/mdo/catalog"):
             rows=json.loads((ROOT/".build/releases/toolpacks/catalog.json").read_text())["toolpacks"]
             for row in rows: row.pop("file",None)
-            if self.manifest_mismatch:next(row for row in rows if row['id']=='core')['revision']=3
-            if self.dependencies:next(row for row in rows if row['id']=='python')['dependencies']=[dict(id='core',revision=2)]
+            core = next(row for row in rows if row['id']=='core')
+            if self.manifest_mismatch:core['revision']+=1
+            if self.dependencies:next(row for row in rows if row['id']=='python')['dependencies']=[dict(id='core',revision=core['revision'])]
             data=json.dumps(dict(revision=1,notices=[],toolpacks=rows)).encode()
             self.send_response(200);self.send_header("Content-Length",str(len(data)));self.end_headers();self.wfile.write(data)
         elif self.path.startswith("/mdo/blob/"):
@@ -45,7 +47,8 @@ class Published(BaseHTTPRequestHandler):
             self.wfile.write(b"0\r\n\r\n")
         else:self.send_error(404)
 
-def run():
+def run(host):
+    core_revision=next(row for row in json.loads((ROOT/".build/releases/toolpacks/catalog.json").read_text())["toolpacks"] if row['id']=='core')['revision']
     publisher=ThreadingHTTPServer(("127.0.0.1",0),Published);threading.Thread(target=publisher.serve_forever,daemon=True).start()
     base=Path(tempfile.mkdtemp(prefix="distribution-test-",dir=ROOT/".build"));site=base/"site";home=base/"home"
     assert base.resolve().is_relative_to(ROOT.resolve()) and site.resolve().is_relative_to(base.resolve())
@@ -65,7 +68,7 @@ def run():
     config["services"][0]["class"]="http"
     (site/"xs.json").write_text(json.dumps(config),encoding="utf-8")
     log=(base/"native.log").open("wb")
-    proc=subprocess.Popen([str(ROOT/".build/host/xs.exe"),str(site/"xs.json"),"--","--home",str(home)],cwd=ROOT,env={**os.environ,"MDO_HOME":str(home)},stdout=log,stderr=log,creationflags=subprocess.CREATE_NO_WINDOW)
+    proc=subprocess.Popen([str(host),str(site/"xs.json"),"--","--home",str(home)],cwd=ROOT,env={**os.environ,"MDO_HOME":str(home)},stdout=log,stderr=log,creationflags=subprocess.CREATE_NO_WINDOW if os.name=="nt" else 0)
     try:
         wait_ready(port,proc)
         def get():
@@ -87,7 +90,7 @@ def run():
         assert json.loads((home/'data/toolpacks/last-error.json').read_text())==error
         state=install('','check');assert state['stage']=='failed' and state['error']==error,'catalog refresh must retain installation failure'
         proc.terminate();proc.wait(10)
-        proc=subprocess.Popen([str(ROOT/".build/host/xs.exe"),str(site/"xs.json"),"--","--home",str(home)],cwd=ROOT,env={**os.environ,"MDO_HOME":str(home)},stdout=log,stderr=log,creationflags=subprocess.CREATE_NO_WINDOW)
+        proc=subprocess.Popen([str(host),str(site/"xs.json"),"--","--home",str(home)],cwd=ROOT,env={**os.environ,"MDO_HOME":str(home)},stdout=log,stderr=log,creationflags=subprocess.CREATE_NO_WINDOW if os.name=="nt" else 0)
         wait_ready(port,proc);assert get()['error']==error and get()['stage']=='failed','failure diagnosis must survive restart'
         Published.damaged=False
         Published.truncated=True
@@ -125,14 +128,14 @@ def run():
         python=next(t for t in state["tools"] if t["id"]=="python")
         assert python['verification']=='file-integrity' and 'sqlite-memory' not in python['verified']
         assert python['version']=='3.13.7' and not (home/'probe.called').exists(),'Python installation must not start any tool process'
-        assert state["installed"]["core_revision"]==2
+        assert state["installed"]["core_revision"]==core_revision
         status,_,body=request(port,"GET","/fixture/prompt");prompt=json.loads(body)["data"]
         assert prompt.count("<mdo_tool_environment>")==1 and "AGENT_SENTINEL" in prompt and "stale" not in prompt and "python" in prompt
         assert 'file-integrity' in prompt and 'without executing the tools' in prompt
         (home/'probe.forbid').unlink()
         proc.terminate();proc.wait(10)
-        proc=subprocess.Popen([str(ROOT/".build/host/xs.exe"),str(site/"xs.json"),"--","--home",str(home)],cwd=ROOT,env={**os.environ,"MDO_HOME":str(home)},stdout=log,stderr=log,creationflags=subprocess.CREATE_NO_WINDOW)
-        wait_ready(port,proc);assert len(get()["tools"])==10 and get()["installed"]["core_revision"]==2
+        proc=subprocess.Popen([str(host),str(site/"xs.json"),"--","--home",str(home)],cwd=ROOT,env={**os.environ,"MDO_HOME":str(home)},stdout=log,stderr=log,creationflags=subprocess.CREATE_NO_WINDOW if os.name=="nt" else 0)
+        wait_ready(port,proc);assert len(get()["tools"])==10 and get()["installed"]["core_revision"]==core_revision
         (home/'probe.forbid').write_bytes(b'1')
         old=home/get()["installed"]["core"];(old/"jq/jq.exe").write_bytes(b"damaged")
         state=install("core","repair");assert len(state["tools"])==10 and home/state["installed"]["core"]!=old
@@ -157,4 +160,7 @@ def run():
         try:proc.wait(10)
         except subprocess.TimeoutExpired:proc.kill();proc.wait()
         log.close();publisher.shutdown()
-if __name__=="__main__":run()
+if __name__=="__main__":
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--host',type=Path,default=ROOT/'.build/host/xs.exe')
+    run(parser.parse_args().host.resolve())

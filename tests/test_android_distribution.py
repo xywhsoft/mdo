@@ -40,6 +40,9 @@ def inspect(edition, release):
         assert apk.testzip() is None
         names = apk.namelist()
         assert len(names) == len(set(names)), "duplicate APK entries"
+        dex = b"".join(apk.read(name) for name in names if name.endswith(".dex"))
+        assert "更新文件超过 512 MiB 上限".encode("utf-8") in dex, "mdo installer policy missing from APK"
+        assert "更新文件路径或大小无效".encode("utf-8") not in dex, "old 32 MiB SDK installer shipped"
         metadata = json.loads(apk.read("assets/mdo-runtime.json"))
         assert metadata["edition"] == edition
         assert int(metadata["build_id"]) == release[f"android_{edition}_build_id"]

@@ -83,7 +83,38 @@ export async function updateSessionProfile(session, profile, options) {
 }
 
 export async function trashSession(session) {
-  return refreshAfter(await api.delete(endpoint(session), { ifMatch: etag(session) }));
+  const updated = refreshAfter(await api.delete(endpoint(session), { ifMatch: etag(session) }));
+  const selected = sessionDetailStore.get().data;
+  // The acknowledgement closes this session for sending immediately, even
+  // if an older detail read is still in flight. Leave other selections alone.
+  if (selected?.project_id === session.project_id && selected.id === session.id)
+    sessionDetailStore.setData(updated);
+  return updated;
+}
+
+export async function purgeSession(session) {
+  if (session.status !== "trash") throw new TypeError("only trashed sessions can be permanently deleted");
+  let data;
+  try {
+    data = (await api.post(`${endpoint(session)}/purge`, undefined, { ifMatch: etag(session) })).data;
+    if (data?.deleted !== true || data.project_id !== session.project_id || data.id !== session.id)
+      throw new ApiError("Invalid session deletion acknowledgement", { code: "invalid_response" });
+  } catch (error) {
+    // A lost acknowledgement may follow a committed deletion. Check absence;
+    // never repeat the destructive POST automatically.
+    if (!isTransientReadError(error)) throw error;
+    try { await readSession(session.project_id, session.id); }
+    catch (readError) {
+      if (readError?.status === 404 && readError?.code === "session_not_found")
+        data = { project_id: session.project_id, id: session.id, deleted: true };
+    }
+    if (!data) throw error;
+  }
+  const catalog = sessionsStore.get().data;
+  if (Array.isArray(catalog?.items)) sessionsStore.setData({ ...catalog,
+    items: catalog.items.filter(item => item.project_id !== session.project_id || item.id !== session.id) });
+  void loadSessions({ retry: true });
+  return data;
 }
 
 export async function restoreSession(session) {

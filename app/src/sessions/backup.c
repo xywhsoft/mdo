@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "../../include/mdo/project_lifecycle.h"
 
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/session_file_policy.h"
@@ -286,6 +287,52 @@ MdoSessionBackup* MdoSessionBackupCapture(MdoSession* Session,
         goto failed;
     }
     return Backup;
+failed:
+    MdoSessionBackupRelease(Backup);
+    return NULL;
+}
+
+static bool MdoBackupStoredCheckpoint(MdoSessionBackup* Backup,xwork_error* Error)
+{
+    const MdoBackupOwnedFile* Journal=MdoBackupFind(Backup,"journal.jsonl");
+    if (!Journal) return false;
+    xllm_session_restore_options Options; xllm_error Cause;
+    xllmSessionRestoreOptionsInit(&Options); Options.iMaxJournalBytes=Backup->Limits.FileBytes;
+    Options.uDeadline=Backup->Limits.Deadline;
+    xllm_session* Model=xllmSessionRestore(NULL,0u,Journal->Data,Journal->Bytes,&Options,&Cause);
+    if (!Model) return MdoBackupError(Error,XWORK_ERROR_IO,"cannot checkpoint stored session journal",Cause.sMessage);
+    uint8 Random[16]; char Directory[96],Path[128],Hex[33]; bool Ok=false;
+    str Native=NULL; xfile File=NULL; char* Data=NULL; size_t Bytes=0,Read=0;
+    if (!xrtSecureRandom(Random,sizeof(Random))) goto done;
+    for (size_t i=0;i<16u;i++) snprintf(Hex+2u*i,3u,"%02x",Random[i]);
+    snprintf(Directory,sizeof(Directory),"data/session-capture/%s",Hex);
+    snprintf(Path,sizeof(Path),"%s/snapshot.json",Directory);
+    if (!MdoHomeCreateDirectory(Directory) || !(Native=MdoHomeExternalPath(Path)) || !xllmSessionSave(Model,Native,&Cause)) goto done;
+    File=MdoHomeOpenRead(Path); xfileinfo Info;
+    if (!File || !xrtFileStat(File,&Info) || Info.Size>Backup->Limits.FileBytes) goto done;
+    Bytes=(size_t)Info.Size; Data=xrtMalloc(Bytes+1u);
+    if (!Data || !xrtRead(File,Data,Bytes,&Read) || Read!=Bytes) goto done;
+    Data[Bytes]=0;
+    Ok=MdoBackupReplaceOwned(Backup,"snapshot.json",&Data,Bytes,&Backup->Limits,NULL,Error);
+done:
+    xrtClose(File); xrtFree(Data); xllmSessionDestroy(Model);
+    if (Native) { (void)MdoHomeRemove(Path,false); (void)MdoHomeRemoveEmptyDirectory(Directory); }
+    xrtFree(Native);
+    return Ok;
+}
+
+MdoSessionBackup* MdoSessionBackupCaptureStored(cstr ProjectId, cstr SessionId,
+    MdoProjectLease* Owner, const MdoSessionBackupLimits* Limits, xwork_error* Error)
+{
+    MdoSessionBackup* Backup = xrtCalloc(1u,sizeof(*Backup));
+    if (!Backup) return NULL;
+    Backup->Schema = MDO_SESSION_BACKUP_SCHEMA;
+    if (!MdoBackupLimits(Limits,&Backup->Limits,5000000u,Error) ||
+        !MdoSessionWithStoredCapture(ProjectId,SessionId,Owner,MdoBackupCaptureRead,Backup,Error)) goto failed;
+    qsort(Backup->Files,Backup->Count,sizeof(*Backup->Files),MdoBackupCompare);
+    if (!MdoBackupFind(Backup,"snapshot.json") && !MdoBackupStoredCheckpoint(Backup,Error)) goto failed;
+    if (MdoBackupFind(Backup,"meta.json") && MdoBackupFind(Backup,"snapshot.json")) return Backup;
+    (void)MdoBackupError(Error,XWORK_ERROR_IO,"stored session is missing its checkpoint or metadata",NULL);
 failed:
     MdoSessionBackupRelease(Backup);
     return NULL;

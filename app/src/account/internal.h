@@ -58,7 +58,8 @@ typedef struct MdoAccountManager {
     xvalue* Usage;
     xvalue* Allowance;
     xvalue* Balance;
-    uint64 NextProfile;
+    uint64 NextProfile, NextRefresh;
+    unsigned RefreshFailures;
     uint16 ModelsStatus;
     uint16 BalanceStatus;
     char OnlineVersion[65];
@@ -97,7 +98,7 @@ xvalue* MdoAccountServiceJson(cstr Path, cstr Method, const xvalue* Body,
 bool MdoAccountClientTokens(const xvalue* Data, MdoAccountTokens* Tokens);
 bool MdoAccountCredentialWrite(cstr Path, cstr Origin, const xvalue* Value);
 xvalue* MdoAccountCredentialRead(cstr Path, char Origin[MDO_ACCOUNT_ORIGIN_LIMIT]);
-bool MdoAccountCredentialSaveLocked(void);
+bool MdoAccountCredentialSaveLocked(bool Replaced);
 bool MdoAccountAuthorizationStart(cstr Origin, cstr LocalOrigin, bool Remember,
     MdoAccountAuthorization* Authorization);
 bool MdoAccountAuthorizationSave(const MdoAccountAuthorization* Authorization);

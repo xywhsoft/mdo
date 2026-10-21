@@ -63,7 +63,7 @@ bool MdoBackupWorkspaceAbsolute(xstrview Path);
 bool MdoBackupOriginValid(const xvalue* Root, const MdoSessionBackupLimits* Limits,
     const xcancel* Cancel, xwork_error* Error);
 bool MdoBackupOriginAppend(const MdoSessionBackup* Source, MdoSessionBackup* Copy,
-    xvalue** ArtifactPaths, MdoSessionBackupRestoreInfo* Facts,
+    xvalue** ArtifactPaths, MdoSessionBackupRestoreInfo* Facts, bool PreserveLifecycle,
     const MdoSessionBackupLimits* Limits, const xcancel* Cancel, xwork_error* Error);
 typedef enum MdoBackupAdmission { MDO_BACKUP_NOT_ACCEPTED, MDO_BACKUP_ACCEPTED,
     MDO_BACKUP_ADMISSION_UNCERTAIN } MdoBackupAdmission;

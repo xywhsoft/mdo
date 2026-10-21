@@ -5,10 +5,10 @@
 #ifndef MDO_MODEL_RETRY_BASE_MS
 #define MDO_MODEL_RETRY_BASE_MS 1000u
 #endif
-#define MDO_MODEL_MAX_ATTEMPTS 6u
-#define MDO_MODEL_RETRY_MAX_MS 30000u
-#ifndef MDO_MODEL_RECOVERY_MS
-#define MDO_MODEL_RECOVERY_MS 120000u
+/* Initial attempt plus ten recoveries for a completed but unusable draft. */
+#define MDO_MODEL_REPAIR_ATTEMPTS 11u
+#ifndef MDO_MODEL_RETRY_MAX_MS
+#define MDO_MODEL_RETRY_MAX_MS 300000u
 #endif
 
 static bool MdoModelsCode(const xllm_error* Error, const char* Code)
@@ -67,6 +67,7 @@ const char* MdoModelErrorKind(const xllm_error* Error)
     if (Error->eCode == XLLM_ERROR_CANCELLED) return "cancelled";
     if (Error->eCode == XLLM_ERROR_TIMEOUT) return "timeout";
     if (Error->eCode == XLLM_ERROR_OUTPUT_LIMIT) return "output_limit";
+    if (MdoModelsCode(Error, "empty_response")) return "empty_response";
     size_t Profile = MdoModelsProfileErrorIndex(Error);
     if (Profile != SIZE_MAX) return MdoModelsProfileErrors[Profile].Kind;
     if (MdoModelsCode(Error, "upstream_quota_exceeded")) return "service_quota_exceeded";
@@ -156,6 +157,8 @@ const char* MdoModelErrorMessage(const xllm_error* Error)
         "The model service is temporarily unavailable and automatic recovery did not succeed. Your conversation is saved; try again later.";
     if (!strcmp(Kind, "invalid_response")) return
         "The model service returned an incomplete or invalid response. Your conversation is saved; you can continue or choose another model.";
+    if (!strcmp(Kind, "empty_response")) return
+        "The model repeatedly returned only reasoning or no usable reply after automatic recovery. Your conversation is saved; you can continue or choose another model.";
     if (!strcmp(Kind, "output_limit")) return
         "The model reached its output limit before completing a tool call. Automatic recovery did not succeed; increase the output limit or ask for smaller steps. Your conversation is saved.";
     if (!strcmp(Kind, "invalid_request")) return
@@ -193,7 +196,19 @@ static bool MdoModelsRetryable(const xllm_error* Error)
     const char* Kind = MdoModelErrorKind(Error);
     return !strcmp(Kind, "rate_limited") || !strcmp(Kind, "network") ||
         !strcmp(Kind, "service_unavailable") || !strcmp(Kind, "timeout") ||
+        (!strcmp(Kind, "unknown") && Error->eCode == XLLM_ERROR_UPSTREAM) ||
         Error->eCode == XLLM_ERROR_INCOMPLETE_RESPONSE;
+}
+
+static bool MdoModelsUsableResponse(const xllm_response* Response)
+{
+    const unsigned char* Text;
+    if (!Response) return false;
+    if (Response->iToolCallCount) return true;
+    Text = (const unsigned char*)Response->sContent;
+    for (; Text && *Text; ++Text)
+        if (*Text != ' ' && *Text != '\t' && *Text != '\r' && *Text != '\n') return true;
+    return false;
 }
 
 static xllm_result MdoModelsScope(const xllm_request* Request, xllm_error* Error)
@@ -211,11 +226,14 @@ static xllm_result MdoModelsScope(const xllm_request* Request, xllm_error* Error
 }
 
 static uint32 MdoModelsRetryDelay(uint32 Attempt, uint32 RetryAfter,
-    uint64* Jitter)
+    uint32 PreviousDelay, uint64* Jitter)
 {
     uint64 Delay = MDO_MODEL_RETRY_BASE_MS;
     for (uint32 i = 1u; i < Attempt && Delay < MDO_MODEL_RETRY_MAX_MS; ++i)
         Delay *= 2u;
+    if (Delay > MDO_MODEL_RETRY_MAX_MS) Delay = MDO_MODEL_RETRY_MAX_MS;
+    if (Delay <= PreviousDelay && PreviousDelay < MDO_MODEL_RETRY_MAX_MS)
+        Delay = (uint64)PreviousDelay + MDO_MODEL_RETRY_BASE_MS;
     if (Delay > MDO_MODEL_RETRY_MAX_MS) Delay = MDO_MODEL_RETRY_MAX_MS;
     /* Positive jitter never retries earlier than the exponential base or the
      * provider's requested minimum. Retry-After is not clipped to our cap. */
@@ -226,12 +244,15 @@ static uint32 MdoModelsRetryDelay(uint32 Attempt, uint32 RetryAfter,
     *Jitter ^= *Jitter << 17u;
     Delay += *Jitter % (Delay / 4u + 1u);
     if (Delay > MDO_MODEL_RETRY_MAX_MS) Delay = MDO_MODEL_RETRY_MAX_MS;
+    /* A provider's larger minimum must not be followed by a shorter wait.
+     * A successful completion starts a new local failure streak. */
+    if (Delay < PreviousDelay) Delay = PreviousDelay;
     if (Delay < RetryAfter) Delay = RetryAfter;
     return Delay > UINT32_MAX ? UINT32_MAX : (uint32)Delay;
 }
 
-/* Online attempts can replace credentials while sharing the same retry and
- * recovery budget. The adapter retains its client until the next attempt, so
+/* Online attempts can replace credentials while sharing the same recovery
+ * policy. The adapter retains its client until the next attempt, so
  * retry hooks never receive an already destroyed client. */
 typedef xllm_result (*MdoModelsAttemptFn)(void*, xllm_client**,
     const xllm_request*, const xllm_stream_callbacks*, xllm_response**, xllm_error*);
@@ -242,12 +263,13 @@ static xllm_result MdoModelsComplete(xllm_client* Client, const xllm_request* Re
 {
     xllm_error Error;
     xllm_result Result = XLLM_RESULT_ERROR;
-    uint64 RecoveryStarted = 0u;
     uint64 Jitter = MdoMonotonicUs() ^ (uint64)(uintptr_t)Request ^
         (uint64)(uintptr_t)Client;
     if (!Jitter) Jitter = 1u;
-    uint32 Attempt = 0u;
+    uint32 Attempt = 1u;
     uint32 AttemptsMade = 0u;
+    uint32 RepairAttempts = 0u;
+    uint32 PreviousDelay = 0u;
     bool Retryable = false;
     bool AuthenticationRetried = false;
     xllm_request RepairRequest = {0};
@@ -259,7 +281,7 @@ static xllm_result MdoModelsComplete(xllm_client* Client, const xllm_request* Re
         Error.eCode = XLLM_ERROR_INVALID_ARGUMENT;
         goto done;
     }
-    for (Attempt = 1u; Attempt <= MDO_MODEL_MAX_ATTEMPTS; ++Attempt) {
+    for (;;) {
         MdoModelStreamGuard Guard = {0};
         xllm_stream_callbacks Stream = {0};
         Guard.Callbacks = Callbacks;
@@ -268,19 +290,28 @@ static xllm_result MdoModelsComplete(xllm_client* Client, const xllm_request* Re
         Stream.pUserData = &Guard;
         Stream.OnEvent = MdoModelsStream;
         xllm_request AttemptRequest = *ActiveRequest;
-        if (RecoveryStarted) {
-            uint64 RecoveryEnd = RecoveryStarted + (uint64)MDO_MODEL_RECOVERY_MS * 1000u;
-            if (AttemptRequest.uDeadline == MDO_DEADLINE_NEVER ||
-                AttemptRequest.uDeadline > RecoveryEnd)
-                AttemptRequest.uDeadline = RecoveryEnd;
-        }
         Result = MdoModelsScope(Request, &Error);
         if (Result != XLLM_RESULT_OK) { Retryable = false; break; }
-        ++AttemptsMade;
+        if (AttemptsMade != UINT32_MAX) ++AttemptsMade;
         Result = Complete ? Complete(Data, &Client, &AttemptRequest,
             Callbacks ? &Stream : NULL, Response, &Error) :
             xllmClientComplete(Client, &AttemptRequest, Callbacks ? &Stream : NULL,
                 Response, &Error);
+        if (Result == XLLM_RESULT_OK && Restartable &&
+            !MdoModelsUsableResponse(*Response)) {
+            xllmErrorInit(&Error);
+            Error.eCode = XLLM_ERROR_PROTOCOL;
+            snprintf(Error.sProviderCode, sizeof(Error.sProviderCode), "empty_response");
+            snprintf(Error.sMessage, sizeof(Error.sMessage),
+                "Model returned only reasoning or no usable text/tool calls");
+            if (*Response) {
+                Error.iHttpStatus = (int32)(*Response)->uHttpStatus;
+                Error.tDiagnostics = (*Response)->tDiagnostics;
+            }
+            xllmResponseDestroy(*Response);
+            *Response = NULL;
+            Result = XLLM_RESULT_ERROR;
+        }
         /* Waiting for credentials can end before transport starts. Do not
          * report that wait as another model request. */
         if (Complete && Result != XLLM_RESULT_OK && !Error.tDiagnostics.uAttemptCount)
@@ -305,20 +336,27 @@ static xllm_result MdoModelsComplete(xllm_client* Client, const xllm_request* Re
             !xrtAtomic32Load(&Guard.Stopped, XMEMORY_ACQUIRE);
         Retryable = RenewAuthentication || ((MdoModelsRetryable(&Error) || (Restartable &&
             (!strcmp(MdoModelErrorKind(&Error), "invalid_response") ||
+             !strcmp(MdoModelErrorKind(&Error), "empty_response") ||
              Error.eCode == XLLM_ERROR_OUTPUT_LIMIT))) &&
             !*Response && (Restartable ||
             (!Error.tDiagnostics.bModelDataDelivered &&
              !xrtAtomic32Load(&Guard.Delivered, XMEMORY_ACQUIRE))) &&
             !xrtAtomic32Load(&Guard.Stopped, XMEMORY_ACQUIRE));
-        if (!Retryable || Attempt == MDO_MODEL_MAX_ATTEMPTS) break;
+        if (!Retryable) break;
+        /* Transient/opaque connection failures remain recoverable until a
+         * successful model reply or the caller's cancellation/deadline.
+         * Known malformed/output-limited drafts still have bounded repair. */
+        if (!RenewAuthentication && !MdoModelsRetryable(&Error) &&
+            ++RepairAttempts >= MDO_MODEL_REPAIR_ATTEMPTS) break;
         if (RenewAuthentication) AuthenticationRetried = true;
-        if (Error.eCode == XLLM_ERROR_OUTPUT_LIMIT && !RepairMessages) {
+        if ((Error.eCode == XLLM_ERROR_OUTPUT_LIMIT ||
+             MdoModelsCode(&Error, "empty_response"))) {
             /* Add one ephemeral instruction to a borrowed message overlay.
              * Keep the user's token limit and persisted history unchanged;
              * the failed draft has never committed or dispatched tools. */
-            if (Request->iMessageCount >= SIZE_MAX / sizeof(*RepairMessages) - 1u ||
+            if (!RepairMessages && (Request->iMessageCount >= SIZE_MAX / sizeof(*RepairMessages) - 1u ||
                 !(RepairMessages = calloc(Request->iMessageCount + 1u,
-                    sizeof(*RepairMessages)))) {
+                    sizeof(*RepairMessages))))) {
                 Error.eCode = XLLM_ERROR_OUT_OF_MEMORY;
                 snprintf(Error.sMessage, sizeof(Error.sMessage),
                     "Cannot prepare model output-limit recovery");
@@ -329,6 +367,12 @@ static xllm_result MdoModelsComplete(xllm_client* Client, const xllm_request* Re
                 Request->iMessageCount * sizeof(*RepairMessages));
             RepairMessages[Request->iMessageCount].eRole = XLLM_ROLE_SYSTEM;
             RepairMessages[Request->iMessageCount].sContent =
+                MdoModelsCode(&Error, "empty_response") ?
+                "The previous generation returned only reasoning or no usable reply. "
+                "None of its draft tool calls executed. Continue from the existing "
+                "tool results. Keep reasoning brief and return either a visible "
+                "answer or one small complete tool call. Do not repeat completed "
+                "tools or invent another user message." :
                 "The previous generation hit the output token limit before completing "
                 "its tool calls. None of those draft calls executed. Keep reasoning "
                 "brief and emit only one small, complete tool call at a time. Split "
@@ -345,17 +389,18 @@ static xllm_result MdoModelsComplete(xllm_client* Client, const xllm_request* Re
             ActiveRequest = &RepairRequest;
         }
         uint64 Now = MdoMonotonicUs();
-        if (!RecoveryStarted) RecoveryStarted = Now;
-        uint64 RecoveryEnd = RecoveryStarted + (uint64)MDO_MODEL_RECOVERY_MS * 1000u;
         uint32 Delay = MdoModelsRetryDelay(Attempt,
-            Error.tDiagnostics.uRetryAfterMs, &Jitter);
-        if (Now >= RecoveryEnd || (uint64)Delay * 1000u > RecoveryEnd - Now) break;
+            Error.tDiagnostics.uRetryAfterMs, PreviousDelay, &Jitter);
+        PreviousDelay = Delay;
         Error.tDiagnostics.uAttemptCount = Attempt;
-        Error.tDiagnostics.uMaxAttempts = MDO_MODEL_MAX_ATTEMPTS;
+        /* Zero means this product policy has no fixed connection-attempt cap. */
+        Error.tDiagnostics.uMaxAttempts = 0u;
+        Error.tDiagnostics.uRetryAfterMs = Delay;
         Error.tDiagnostics.bRetryable = true;
         if (Request->pHooks && Request->pHooks->pOnRetry &&
             !Request->pHooks->pOnRetry(Client, &Error.tDiagnostics,
-                Attempt + 1u, Request->pHooks->pUserData)) {
+                Attempt == UINT32_MAX ? Attempt : Attempt + 1u,
+                Request->pHooks->pUserData)) {
             Retryable = false;
             break;
         }
@@ -369,18 +414,19 @@ static xllm_result MdoModelsComplete(xllm_client* Client, const xllm_request* Re
             xrtSleep(Remaining > 20000u ? 20u :
                 (uint32)((Remaining + 999u) / 1000u));
         }
+        if (Attempt != UINT32_MAX) ++Attempt;
     }
 done:
     /* The overlay owns only its array; every string is borrowed. */
     free(RepairMessages);
     Error.tDiagnostics.uAttemptCount = AttemptsMade;
-    Error.tDiagnostics.uMaxAttempts = MDO_MODEL_MAX_ATTEMPTS;
+    Error.tDiagnostics.uMaxAttempts = 0u;
     Error.tDiagnostics.bRetryable = false;
     Error.tDiagnostics.bRetryExhausted = Retryable &&
         Result != XLLM_RESULT_OK && Result != XLLM_RESULT_CANCELLED;
     if (Response && *Response && Result == XLLM_RESULT_OK) {
         (*Response)->tDiagnostics.uAttemptCount = AttemptsMade;
-        (*Response)->tDiagnostics.uMaxAttempts = MDO_MODEL_MAX_ATTEMPTS;
+        (*Response)->tDiagnostics.uMaxAttempts = 0u;
         (*Response)->tDiagnostics.bRetryable = false;
         (*Response)->tDiagnostics.bRetryExhausted = false;
     }

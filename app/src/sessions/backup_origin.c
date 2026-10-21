@@ -66,13 +66,17 @@ invalid:
     return MdoOriginError(Error, "invalid origin metadata bytes, hash or live schema");
 }
 
-static bool MdoOriginTarget(const MdoSessionInfo* Source, const MdoSessionInfo* Target, int64 RestoredAt)
+static bool MdoOriginTarget(const MdoSessionInfo* Source, const MdoSessionInfo* Target, int64 RestoredAt, bool Preserve)
 {
     return strlen(Target->Id) == 32u && MdoBackupDigits(Target->Id, 32u, true) &&
         strcmp(Target->Id, Source->Id) != 0 && MdoBackupWorkspaceAbsolute(xrtStrView(Target->WorkspaceRoot)) &&
         Target->Revision == 1u && Target->CreatedAt == RestoredAt && Target->UpdatedAt == RestoredAt &&
-        !Target->Pinned && Target->Status == MDO_SESSION_ACTIVE && Target->PreviousStatus == MDO_SESSION_ACTIVE &&
-        Target->ParentSessionId[0] == '\0' && Target->ForkedThroughSequence == 0u &&
+        (Preserve ? (Target->Pinned == Source->Pinned && Target->Status == Source->Status && Target->PreviousStatus == Source->PreviousStatus &&
+            ((!Target->ParentSessionId[0] && Target->ForkedThroughSequence==0u) ||
+             (Source->ParentSessionId[0] && strlen(Target->ParentSessionId)==32u && MdoBackupDigits(Target->ParentSessionId,32u,true) &&
+              strcmp(Target->ParentSessionId,Source->ParentSessionId) && Target->ForkedThroughSequence==Source->ForkedThroughSequence))) :
+            (!Target->Pinned && Target->Status==MDO_SESSION_ACTIVE && Target->PreviousStatus==MDO_SESSION_ACTIVE &&
+             !Target->ParentSessionId[0] && Target->ForkedThroughSequence==0u)) &&
         Target->ConfigRevision == 0u && Target->ModelGeneration == 0u && Target->ModuleGeneration == 0u && Target->SkillGeneration == 0u &&
         Target->Protocol == Source->Protocol && Target->MaxOutputTokens == Source->MaxOutputTokens &&
         strcmp(Target->Title, Source->Title) == 0 && strcmp(Target->AgentId, Source->AgentId) == 0 &&
@@ -121,9 +125,11 @@ bool MdoBackupOriginValid(const xvalue* Root, const MdoSessionBackupLimits* Limi
         const xvalue* Entry = xrtValueArrayGet(Entries, i);
         xstrview UiHash;
         uint64 At, Captured;
-        bool Ui;
+        bool Ui, Preserve=false;
+        const xvalue* Lifecycle=xrtValueObjectGet(Entry,XRT_STR_LITERAL("preserve_lifecycle"));
+        if (Lifecycle && (!xrtValueGetBool(Lifecycle,&Preserve) || !Preserve)) goto invalid;
         if ( !MdoBackupCheck(Limits, Cancel, Error) ) return false;
-        if ( xrtValueType(Entry) != XVALUE_OBJECT || xrtValueCount(Entry) != 7u ||
+        if ( xrtValueType(Entry) != XVALUE_OBJECT || xrtValueCount(Entry) != (Lifecycle?8u:7u) ||
              !MdoBackupUInt(Entry, "restored_at_us", &At) || At == 0u || At > INT64_MAX ||
              !MdoBackupUInt(Entry, "captured_at_us", &Captured) || Captured == 0u || Captured > INT64_MAX ||
              !xrtValueGetBool(xrtValueObjectGet(Entry, XRT_STR_LITERAL("ui_present")), &Ui) ||
@@ -131,7 +137,7 @@ bool MdoBackupOriginValid(const xvalue* Root, const MdoSessionBackupLimits* Limi
              (Ui ? (UiHash.Size != 64u || !MdoBackupDigits(UiHash.Data, UiHash.Size, true)) : UiHash.Size != 0u) ) goto invalid;
         if ( !MdoOriginMeta(xrtValueObjectGet(Entry, XRT_STR_LITERAL("source_meta")), &Source, Limits, Cancel, Error) ||
              !MdoOriginMeta(xrtValueObjectGet(Entry, XRT_STR_LITERAL("target_meta")), &Target, Limits, Cancel, Error) ) return false;
-        if ( !MdoOriginTarget(&Source, &Target, (int64)At) ) goto invalid;
+        if ( !MdoOriginTarget(&Source, &Target, (int64)At, Preserve) ) goto invalid;
         for ( j = 0u; j < Count; ++j ) if ( strcmp(Seen[j], Target.Id) == 0 ) goto invalid;
         memcpy(Seen[Count++], Source.Id, sizeof(Source.Id)); memcpy(Seen[Count++], Target.Id, sizeof(Target.Id));
         if ( !MdoOriginPaths(xrtValueObjectGet(Entry, XRT_STR_LITERAL("artifact_paths")), Ui, Limits, Cancel, Error) ) return false;
@@ -154,7 +160,7 @@ static xvalue* MdoOriginFile(const MdoBackupOwnedFile* File, const MdoSessionBac
 }
 
 bool MdoBackupOriginAppend(const MdoSessionBackup* Source, MdoSessionBackup* Copy,
-    xvalue** ArtifactPaths, MdoSessionBackupRestoreInfo* Facts,
+    xvalue** ArtifactPaths, MdoSessionBackupRestoreInfo* Facts, bool PreserveLifecycle,
     const MdoSessionBackupLimits* Limits, const xcancel* Cancel, xwork_error* Error)
 {
     const MdoBackupOwnedFile* Before = MdoBackupFind(Source, MDO_ORIGIN_PATH);
@@ -191,6 +197,7 @@ bool MdoBackupOriginAppend(const MdoSessionBackup* Source, MdoSessionBackup* Cop
          !MdoOriginSet(Entry, "target_meta", MdoOriginFile(MdoBackupFind(Copy, "meta.json"), Limits, Cancel, Error)) ||
          !MdoOriginSet(Entry, "source_ui_sha256", xrtValueString(xrtStrView(Hash))) ||
          !MdoOriginSet(Entry, "ui_present", xrtValueBool(Ui != NULL)) ||
+         (PreserveLifecycle && !MdoOriginSet(Entry,"preserve_lifecycle",xrtValueBool(true))) ||
          !xrtValueObjectSetTake(Entry, XRT_STR_LITERAL("artifact_paths"), ArtifactPaths) ||
          !xrtValueArrayAppendTake(Entries, &Entry) ||
          !MdoBackupOriginValid(Root, Limits, Cancel, Error) ||

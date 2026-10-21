@@ -57,6 +57,8 @@ void MdoSessionBackupLimitsInit(MdoSessionBackupLimits* Limits);
  * This is a file capture, not authorization to restore or run a session. */
 MdoSessionBackup* MdoSessionBackupCapture(MdoSession* Session,
     const MdoSessionBackupLimits* Limits, xwork_error* Error);
+MdoSessionBackup* MdoSessionBackupCaptureStored(cstr ProjectId, cstr SessionId,
+    struct MdoProjectLease* Owner, const MdoSessionBackupLimits* Limits, xwork_error* Error);
 void MdoSessionBackupRelease(MdoSessionBackup* Backup);
 size_t MdoSessionBackupFileCount(const MdoSessionBackup* Backup);
 bool MdoSessionBackupFileGet(const MdoSessionBackup* Backup, size_t Index,
@@ -225,6 +227,8 @@ typedef struct MdoSessionBackupRestoreTarget {
     const char* SessionId;       /* caller-reserved fresh 32-character hex ID */
     const char* WorkspaceRoot;   /* explicit absolute target, never inferred */
     int64 RestoredAt;            /* positive UTC microseconds */
+    bool PreserveLifecycle;     /* trusted device transfer retains trash/archive/pin */
+    const char* ParentSessionId; /* rebound only within the transferred project */
 } MdoSessionBackupRestoreTarget;
 
 typedef struct MdoSessionBackupRestoreInfo {

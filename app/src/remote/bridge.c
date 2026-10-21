@@ -659,6 +659,7 @@ bool MdoRemoteBridgePeerOpen(MdoRemoteBridge* Bridge, cstr Peer, bool ReadOnly, 
             MdoAccountSetUInt(hello,"chunk_limit",MDO_BRIDGE_CHUNK) &&
             MdoAccountSetUInt(hello,"window_bytes",MDO_BRIDGE_WINDOW) && MdoAccountSetBool(hello,"live",true) &&
             MdoAccountSetUInt(hello,"window_max",MDO_BRIDGE_WINDOW_MAX) &&
+            MdoAccountSetUInt(hello,"device_transfer",1u) &&
             MdoAccountSetUInt(hello,"live_limit",MDO_BRIDGE_LIVE_LIMIT);
         if (ok && Bridge->Offer) {
             xvalue* offer = Bridge->Offer(Peer,ReadOnly,Bridge->OfferData);

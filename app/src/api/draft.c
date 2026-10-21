@@ -197,7 +197,7 @@ static bool MdoDraftRead(const char* Path, MdoDraft* Draft)
     return Ok;
 }
 
-static bool MdoApiDraftReferenceLockMode(const char* ProjectId,
+static bool MdoApiDraftReferenceLockMode(const char* ProjectId, const char* SessionId,
     const MdoProjectLease* Owner, MdoProjectLeaseMode Mode,
     MdoHomePurgeTarget* Target, bool* Present)
 {
@@ -219,7 +219,8 @@ static bool MdoApiDraftReferenceLockMode(const char* ProjectId,
         MdoHomeExternalStat("data/draft.json", &AfterExists, &After) &&
         Exists == AfterExists && (!Exists || MdoReferenceInfoSame(&Before, &After));
     if ( Ok && Exists && Draft->HasNewTask &&
-         strcmp(Draft->NewTask.ProjectId, ProjectId) == 0 ) {
+         strcmp(Draft->NewTask.ProjectId, ProjectId) == 0 &&
+         (SessionId == NULL || strcmp(Draft->NewTask.SessionId, SessionId) == 0) ) {
         *Present = true;
         snprintf(Target->Path, sizeof(Target->Path), "data/draft.json");
         Target->Info = After;
@@ -232,20 +233,27 @@ static bool MdoApiDraftReferenceLockMode(const char* ProjectId,
 bool MdoApiDraftReferenceLock(const char* ProjectId,
     const MdoProjectLease* Owner, MdoHomePurgeTarget* Target, bool* Present)
 {
-    return MdoApiDraftReferenceLockMode(ProjectId, Owner,
+    return MdoApiDraftReferenceLockMode(ProjectId, NULL, Owner,
         MDO_PROJECT_LEASE_EXCLUSIVE, Target, Present);
 }
 
 bool MdoApiDraftReferencePreviewLock(const char* ProjectId,
     const MdoProjectLease* Owner, MdoHomePurgeTarget* Target, bool* Present)
 {
-    return MdoApiDraftReferenceLockMode(ProjectId, Owner,
+    return MdoApiDraftReferenceLockMode(ProjectId, NULL, Owner,
         MDO_PROJECT_LEASE_SHARED, Target, Present);
 }
 
 void MdoApiDraftReferenceUnlock(void)
 {
     xrtMutexUnlock(g_MdoDraftLock);
+}
+
+bool MdoApiDraftSessionReferenceLock(const char* ProjectId, const char* SessionId,
+    const MdoProjectLease* Owner, MdoHomePurgeTarget* Target, bool* Present)
+{
+    return SessionId != NULL && MdoApiDraftReferenceLockMode(ProjectId, SessionId, Owner,
+        MDO_PROJECT_LEASE_EXCLUSIVE, Target, Present);
 }
 
 typedef enum MdoDraftGlobalPinResult {

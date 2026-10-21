@@ -14,6 +14,7 @@ import os
 from pathlib import Path
 import shutil
 import socket
+import select
 import struct
 import subprocess
 import tempfile
@@ -22,6 +23,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from test_packed_home_lease import free_port, request, stop, wait_bootstrap, release_packed_copies
+from test_packed_queue_start_recovery import configure_model
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -173,8 +175,7 @@ def probe(host: Path | None, packed: Path | None):
             "devlang": "c", "devfile": "generated/mdo_unity.c"}}]}), encoding="utf-8")
         env = os.environ.copy()
         endpoint = f"http://127.0.0.1:{server.server_port}/v1"
-        env.update(MDO_ORNITH_API_KEY="live-test-key", MDO_ORNITH_CHAT_COMPLETIONS_URL=endpoint,
-            MDO_ORNITH_RESPONSES_URL=endpoint, MDO_ORNITH_ANTHROPIC_URL="https://example.invalid")
+        env.update(MDO_QUEUE_FIXTURE_KEY="live-test-key")
         def connect(**kwargs):
             client = WebSocket(port, **kwargs); sockets.append(client); return client
         try:
@@ -189,24 +190,46 @@ def probe(host: Path | None, packed: Path | None):
             for client in sockets: client.close()
             sockets.clear()
             assert not home.exists(), "read-only WebSocket check created portable Home"
+            configure_model(port, endpoint)
             status, document = request(port, "POST", "/api/v1/sessions", {
                 "project_id": "default", "title": "Live probe", "agent_id": "mdo.default",
-                "model_id": "ornith-1.5-35b", "protocol": "openai-chat-completions",
+                "model_id": "queue-fixture", "protocol": "openai-chat-completions",
                 "reasoning_effort": "medium", "permission_profile": "read-only", "max_output_tokens": 1024})
             assert status == 201, document
             session = document["data"]["id"]; path = f"/api/v1/projects/default/sessions/{session}"
             client = connect(); assert client.status == 101
             client.select(session)
             initial = client.json(); assert initial["type"] == "events" and initial["next_cursor"] == 0
+            # Leave a legitimate application response queued while control
+            # frames are tested. A WebSocket need not deliver pong first.
+            client.select(session, selection=2)
+            assert client.buffer or select.select([client.socket], [], [], 2)[0], "subscription response not queued"
             # Interleaved ping inside a fragmented subscription exercises xrt's
             # message state machine rather than a home-grown frame parser.
             message = json.dumps({"type": "subscribe", "project_id": "default", "session_id": session,
-                "after": 0, "selection": 2}).encode()
+                "after": 0, "selection": 3}).encode()
             client.send_frame(message[:20], final=False)
             client.send_frame(b"control-probe", opcode=9)
             client.send_frame(message[20:], opcode=0)
-            assert client.frame() == (10, b"control-probe")
-            assert client.json()["selection"] == 2
+            pong_received = subscription_received = False
+            control_deadline = time.monotonic() + 3
+            while not (pong_received and subscription_received):
+                assert time.monotonic() < control_deadline, "control pong or subscription acknowledgement missing"
+                opcode, payload = client.frame()
+                if opcode == 10:
+                    assert payload == b"control-probe", payload
+                    pong_received = True
+                    continue
+                assert opcode == 1, (opcode, payload)
+                packet = json.loads(payload)
+                if packet["type"] == "ping":
+                    client.send({"type": "pong"})
+                    continue
+                if packet["type"] == "changed":
+                    continue
+                assert packet["type"] == "events" and packet["selection"] in (2, 3), packet
+                if packet["selection"] == 3:
+                    subscription_received = True
             status, document = request(port, "POST", path + "/runs", {"prompt": "live stream", "timeout_ms": 10000})
             assert status == 202, document
             run_id = document["data"]["id"]
@@ -216,6 +239,7 @@ def probe(host: Path | None, packed: Path | None):
                 packet = client.json()
                 if packet["type"] == "changed": changed = True; continue
                 assert packet["type"] == "events", packet
+                assert not any(item["kind"] == "error" for item in packet["items"]), packet
                 delivered += packet["items"]
                 if any(item["kind"] == "model_text_delta" for item in packet["items"]) and first_partial is None:
                     first_partial = time.monotonic()
@@ -258,7 +282,7 @@ def probe(host: Path | None, packed: Path | None):
             assert status in (200, 202), document
             status, document = request(port, "POST", "/api/v1/sessions", {
                 "project_id": "default", "title": "Live permission probe", "agent_id": "mdo.default",
-                "model_id": "ornith-1.5-35b", "protocol": "openai-chat-completions",
+                "model_id": "queue-fixture", "protocol": "openai-chat-completions",
                 "reasoning_effort": "medium", "permission_profile": "balanced", "max_output_tokens": 1024})
             assert status == 201, document
             approval_session = document["data"]["id"]

@@ -20,6 +20,7 @@ import tempfile
 import time
 
 from test_api_runtime import ROOT, free_port
+from fixture_offline import isolate_background_network
 
 PREFIX = "/api/v1/session-backups/uploads"
 CONTROL = "/__fixture/backup-upload/"
@@ -32,6 +33,10 @@ class Probe:
         self.site, self.home = base / "site", base / "home"
         self.port, self.process = free_port(), None
         shutil.copytree(ROOT / "app", self.site)
+        # Backup probes measure Home writes. Isolate unrelated passive catalog
+        # and update workers, which otherwise fetch the public website and can
+        # create notification cache files while a zero-write assertion runs.
+        isolate_background_network(self.site)
         shutil.copy2(ROOT / "tests/fixtures/backup-upload.c", self.site / "src/bootstrap/backup-upload.c")
         service = self.site / "src/bootstrap/service.c"
         text = service.read_text(encoding="utf-8")

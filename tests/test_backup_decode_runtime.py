@@ -732,6 +732,10 @@ class Probe(UploadProbe):
                  "artifact_id": 0, "artifact_path": "", "tool_name": "", "text": "Prompt",
                  "queue_item_id": queue_id}
         model = {**start, "event_id": 2, "kind": kinds["model"], "text": "Answer", "queue_item_id": ""}
+        if model["schema_version"] >= 7:
+            # Match the real v7 writer: model-done records carry five attribution fields.
+            model.update(model_request_id="fixture", model_finish_reason="stop",
+                         model_tool_call_count=0, model_http_status=200, model_attempts=1)
         plan = {**ui[1], "event_id": 3, "run_id": 7, "artifact_id": 0, "artifact_path": ""}
         related = copy.deepcopy(small)
         set_ui(related, [start, model, plan])
@@ -816,8 +820,11 @@ class Probe(UploadProbe):
         replace(gap, "todo.json", dump({**todo, "event_id": 13}))
         replace(gap, "attachments/events/11.json", dump(binding))
         assert not self.validate(dump(gap))["ok"]
-        altered("duplicate UI key", lambda doc: replace(doc, "ui-events.jsonl",
-                raw_ui.replace(b'"schema_version":5', b'"schema_version":5,"schema_version":5', 1)))
+        ui_schema = str(json.loads(raw_ui.splitlines()[0])["schema_version"]).encode()
+        schema_field = b'"schema_version":' + ui_schema
+        duplicate_ui = raw_ui.replace(schema_field, schema_field + b',' + schema_field, 1)
+        assert duplicate_ui != raw_ui, "duplicate-key fault injection must change the fixture"
+        altered("duplicate UI key", lambda doc: replace(doc, "ui-events.jsonl", duplicate_ui))
         altered("duplicate todo key", lambda doc: replace(doc, "todo.json",
                 raw_todo.replace(b'"schema_version":1', b'"schema_version":1,"schema_version":1', 1)))
         # Duplicates include escaped aliases; SAX supplies decoded member names.
@@ -885,7 +892,12 @@ class Probe(UploadProbe):
         assert not self.validate(legacy.replace(version_field, version_field + b',' + version_field, 1))["ok"]
         assert self.validate(raw_small)["ok"]  # errors never poison later input
         self.api("GET", DECODE + "release")
-        assert before == inventory()
+        after = inventory()
+        assert before == after, {
+            "added": sorted(after.keys() - before.keys()),
+            "removed": sorted(before.keys() - after.keys()),
+            "changed": sorted(path for path in before.keys() & after.keys() if before[path] != after[path]),
+        }
         print(f"backup decode {'TLS' if self.secure else 'HTTP'}: owned v2/v1, exact bytes, "
               f"{len(cases)} malformed inputs, separate unbound model replay, budgets/cancel, "
               "model/UI relations and real writers, retries and zero Home writes PASS", flush=True)
@@ -904,6 +916,9 @@ class Probe(UploadProbe):
         return value
 
     def check_model_history(self, with_snapshot, populated, template, kinds):
+        # Keep the synthetic history cases in their original v6 schema. The
+        # real-writer round trip above separately checks the current v7 schema.
+        template = {**template, "schema_version": 6}
         base = with_snapshot(populated)
         base["files"] = [f for f in base["files"] if f["path"] in ("meta.json", "snapshot.json")]
         recount(base)

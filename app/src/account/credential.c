@@ -53,7 +53,7 @@ done:
     if (plain) { xrtSecureZero(plain, plain_size); xrtFree(plain); }
     xrtFree(document); return result;
 }
-bool MdoAccountCredentialSaveLocked(void)
+bool MdoAccountCredentialSaveLocked(bool Replaced)
 {
     if (!g_MdoAccount.Remember) {
         g_MdoAccount.Saved = false;
@@ -67,12 +67,14 @@ bool MdoAccountCredentialSaveLocked(void)
     ok = ok && MdoAccountCredentialWrite(MDO_ACCOUNT_SESSION_PATH, g_MdoAccount.Origin, value);
     cstr refresh = MdoAccountText(value, "refresh_token", 64);
     if (refresh) xrtSecureZero((void*)refresh, strlen(refresh));
-    xrtValueRelease(value); g_MdoAccount.Saved = ok;
+    xrtValueRelease(value);
+    if (ok || Replaced) g_MdoAccount.Saved = ok;
     if (!ok) {
-        /* A rotated refresh must never leave an older replayable credential
-         * on disk. Current memory login remains usable until this run ends. */
-        (void)MdoHomeRemove(MDO_ACCOUNT_SESSION_PATH, false);
-        strcpy(g_MdoAccount.Message, "credential_save_failed");
+        /* A failed metadata update must retain the same valid device token.
+         * A successful account switch/legacy rotation cannot restore an old
+         * account, so remove the previous credential if its replacement fails. */
+        if (Replaced) (void)MdoHomeRemove(MDO_ACCOUNT_SESSION_PATH, false);
+        if (!g_MdoAccount.Saved) strcpy(g_MdoAccount.Message, "credential_save_failed");
     }
     return ok;
 }

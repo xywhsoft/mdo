@@ -160,10 +160,20 @@ typedef struct MdoSessionEventInfo {
     const char* Model;
     const char* ModelId;
     uint64 ContextWindowTokens;
+    bool ContextAvailable;
+    bool ContextExact;
+    uint64 ContextFillTokens;
+    uint64 ContextGrowthTokens;
+    uint64 ContextInputTokens;
+    uint64 ContextInputBudgetTokens;
+    uint64 ContextCompactThresholdTokens;
     /* Model-facing failure, including context summarization. Empty for
      * unrelated Agent errors and older records. */
     char ModelErrorKind[48];
     uint32 ModelHttpStatus;
+    char ModelRequestId[129];
+    char ModelFinishReason[129];
+    uint32 ModelToolCallCount;
     uint32 ModelAttempts;
 } MdoSessionEventInfo;
 
@@ -244,6 +254,13 @@ typedef bool (*MdoSessionCaptureReadFn)(const MdoSessionInfo* Info,
     void* UserData, xwork_error* Error);
 bool MdoSessionWithCapture(MdoSession* Session, MdoSessionCaptureReadFn Read,
     void* UserData, xwork_error* Error);
+/* Offline capture of an idle persisted session, including archived/trash.
+ * Owner pins this project (shared or exclusive); no Agent/profile is opened.
+ * API sidecar writers must additionally be excluded by its capture guard. */
+struct MdoProjectLease;
+bool MdoSessionWithStoredCapture(const char* ProjectId, const char* SessionId,
+    struct MdoProjectLease* Owner, MdoSessionCaptureReadFn Read,
+    void* UserData, xwork_error* Error);
 
 MdoSessionCatalog* MdoSessionCatalogSnapshot(xwork_error* Error);
 MdoSessionCatalog* MdoSessionCatalogSearch(const MdoSessionQuery* Query,
@@ -251,6 +268,7 @@ MdoSessionCatalog* MdoSessionCatalogSearch(const MdoSessionQuery* Query,
 MdoSessionCatalog* MdoSessionCatalogRef(MdoSessionCatalog* Catalog);
 void MdoSessionCatalogRelease(MdoSessionCatalog* Catalog);
 uint64 MdoSessionCatalogGeneration(const MdoSessionCatalog* Catalog);
+bool MdoSessionCatalogChanged(void);
 size_t MdoSessionCatalogCount(const MdoSessionCatalog* Catalog);
 bool MdoSessionCatalogAt(const MdoSessionCatalog* Catalog, size_t Index,
     MdoSessionInfo* Info);
@@ -277,6 +295,9 @@ typedef struct MdoConversationPageInfo {
     uint64 NextBefore;
     bool HasMore;
     bool Delta;
+    /* Optional root input for a reply page that starts inside its user turn.
+     * Strings are borrowed from the returned snapshot until its release. */
+    MdoSessionEventInfo ActionPrompt;
 } MdoConversationPageInfo;
 /* One anchored journal view. Before pages backwards; After + matching Epoch
  * pages forwards. Text deltas are aggregated, tool bodies remain previews.

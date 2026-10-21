@@ -25,7 +25,7 @@ export function subscribeTarget(listener) { listeners.add(listener); listener(st
 export function setTargetSwitchGuard(guard) { switchGuard = guard; }
 export async function requestTargetSwitch(next, options = {}) {
   if (!await switchGuard(options)) throw remoteError("target_switch_busy", "请等待操作完成，并保存或复制未保存的草稿后切换设备", { target: next });
-  switchTarget(next);
+  switchTarget(next, options.route);
 }
 
 export function targetFetch(path, options = {}) {
@@ -83,8 +83,10 @@ export function initializeTarget() {
 
 // Reload is the context boundary: existing subscriptions, dialogs, store
 // closures and asynchronous action continuations cannot address the next target.
-export function switchTarget(next) {
+export function switchTarget(next, route = null) {
   if (next !== null && !validSelection(next)) throw new TypeError("Invalid target selection");
+  if (route !== null && !/^#\/projects\/[A-Za-z0-9_.%-]+\/(?:new|sessions\/[0-9a-f]{32})$/.test(route))
+    throw new TypeError("Invalid target route");
   const routes = storageRead(ROUTES) || {};
   const key = value => value ? `${value.owner}/${value.id}` : "local";
   routes[key(selected)] = location.hash;
@@ -92,7 +94,7 @@ export function switchTarget(next) {
   sessionStorage.setItem(ROUTES, JSON.stringify(Object.fromEntries(entries)));
   if (next) sessionStorage.setItem(KEY, JSON.stringify(next)); else sessionStorage.removeItem(KEY);
   switching = true; stopped = true; clearTimeout(retry); transport?.close();
-  history.replaceState({ ...history.state, mdoWorkspace: null }, "", routes[key(next)] || "#/");
+  history.replaceState({ ...history.state, mdoWorkspace: null }, "", route || routes[key(next)] || "#/");
   location.reload();
 }
 if (typeof window !== "undefined") window.addEventListener("pagehide", () => {

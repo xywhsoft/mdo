@@ -9,7 +9,7 @@
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/models.h"
 
-#define MDO_SESSION_EVENT_SCHEMA 6u
+#define MDO_SESSION_EVENT_SCHEMA 7u
 #define MDO_SESSION_EVENT_RECORD_LIMIT (96u * 1024u)
 #define MDO_SESSION_EVENT_TEXT_LIMIT (64u * 1024u)
 #define MDO_SESSION_EVENT_METADATA_LIMIT 4096u
@@ -35,6 +35,7 @@ struct MdoSessionEventSnapshot {
     uint64 LatestId;
     bool HistoryLost;
     char Epoch[65];
+    MdoSessionEventOwned ActionPrompt;
 };
 
 struct MdoSessionEventBridge {
@@ -306,6 +307,35 @@ static char* MdoEventsRecord(const MdoSessionEventBridge* Bridge,
          !MdoEventsObjectTake(Object, "context_window_tokens",
             xrtValueUInt(ContextWindowTokens)) )
         goto done;
+    if (Event->uAgentDepth == 0u && Event->tSessionStats.uContextWindowTokens) {
+        const xllm_session_stats* Stats = &Event->tSessionStats;
+        uint64 Fill = Stats->bFillExactValid ? Stats->uFillExact : 0u;
+        uint64 Growth = Stats->bFillExactValid ? Stats->uIncrementMax : 0u;
+        uint64 Input = Stats->bFillExactValid ?
+            (Fill > UINT64_MAX - Growth ? UINT64_MAX : Fill + Growth) : Stats->uRenderedActiveTokens;
+        xvalue* Usage = xrtValueObject();
+        if (!Usage || !MdoEventsObjectTake(Usage, "exact", xrtValueBool(Stats->bFillExactValid)) ||
+            !MdoEventsObjectTake(Usage, "fill_tokens", xrtValueUInt(Fill)) ||
+            !MdoEventsObjectTake(Usage, "growth_tokens", xrtValueUInt(Growth)) ||
+            !MdoEventsObjectTake(Usage, "estimated_input_tokens", xrtValueUInt(Input)) ||
+            !MdoEventsObjectTake(Usage, "input_budget_tokens", xrtValueUInt(Stats->uInputBudgetTokens)) ||
+            !MdoEventsObjectTake(Usage, "compact_threshold_tokens", xrtValueUInt(Stats->uCompactThresholdTokens))) {
+            xrtValueRelease(Usage); goto done;
+        }
+        if (!MdoEventsObjectTake(Object, "context", Usage)) goto done;
+    }
+    if (Event->eKind == XWORK_EVENT_MODEL_DONE) {
+        xstrview RequestId = {0}, FinishReason = {0};
+        if (!MdoEventsBoundedView(Event->sProviderRequestId, SIZE_MAX,
+                128u, &RequestId, &Truncated) ||
+            !MdoEventsBoundedView(Event->sFinishReason, SIZE_MAX,
+                128u, &FinishReason, &Truncated) ||
+            !MdoEventsObjectString(Object, "model_request_id", RequestId.Data, RequestId.Size) ||
+            !MdoEventsObjectString(Object, "model_finish_reason", FinishReason.Data, FinishReason.Size) ||
+            !MdoEventsObjectTake(Object, "model_tool_call_count", xrtValueUInt(Event->iResponseToolCallCount)) ||
+            !MdoEventsObjectTake(Object, "model_http_status", xrtValueUInt(Event->uHttpStatus)) ||
+            !MdoEventsObjectTake(Object, "model_attempts", xrtValueUInt(Event->tDiagnostics.uAttemptCount))) goto done;
+    }
     if (Event->eKind == XWORK_EVENT_ERROR) {
         xllm_error Error = {0};
         Error.eCode = Event->eModelErrorCode;
@@ -356,14 +386,15 @@ static bool MdoEventsAppend(MdoSessionEventBridge* Bridge,
     char* Json;
     size_t Size = 0u;
     bool Ok;
-    bool MainModelCall = Event->eKind == XWORK_EVENT_MODEL_DONE &&
-        Event->uAgentDepth == 0u;
+    bool MainModelCall = Event->uAgentDepth == 0u &&
+        (Event->eKind == XWORK_EVENT_MODEL_DONE || Event->tSessionStats.uContextWindowTokens);
     if ( Bridge->NextEventId == 0u || Bridge->NextEventId == UINT64_MAX )
         return false;
     if ( MainModelCall && Bridge->ModelId[0] == '\0' ) return false;
     Json = MdoEventsRecord(Bridge, Bridge->NextEventId, Event,
         MainModelCall ? Bridge->ModelId : "",
-        MainModelCall ? Bridge->ContextWindowTokens : 0u, &Size);
+        MainModelCall ? (Event->tSessionStats.uContextWindowTokens ?
+            Event->tSessionStats.uContextWindowTokens : Bridge->ContextWindowTokens) : 0u, &Size);
     if ( Json == NULL ||
          !MdoHomeExternalStat(Bridge->Path, &Exists, &Info) ) {
         xrtFree(Json);
@@ -475,27 +506,31 @@ static bool MdoEventsParse(const char* ProjectId, const char* SessionId,
     uint64 AgentDepth;
     uint64 Effects;
     uint64 TaskState;
+    size_t FieldCount;
     bool Ok = false;
     memset(Result, 0, sizeof(*Result));
     Result->Info.Size = sizeof(Result->Info);
     xrtJsonReadConfigInit(&Config);
     Config.MaxInputBytes = MDO_SESSION_EVENT_RECORD_LIMIT;
     Config.MaxDepth = 6u;
-    Config.MaxValues = 44u;
-    Config.MaxContainerItems = 35u;
+    Config.MaxValues = 64u;
+    Config.MaxContainerItems = 38u;
     Root = xrtJsonRead(Json, &Config);
+    FieldCount = Root ? xrtValueCount(Root) : 0u;
+    if (Root && xrtValueObjectGet(Root, xrtStrView("context"))) --FieldCount;
     if ( Root == NULL || xrtValueType(Root) != XVALUE_OBJECT ||
-         (xrtValueCount(Root) != 25u && xrtValueCount(Root) != 28u &&
-          xrtValueCount(Root) != 29u && xrtValueCount(Root) != 31u &&
-          xrtValueCount(Root) != 32u && xrtValueCount(Root) != 35u) ||
+         (FieldCount != 25u && FieldCount != 28u &&
+          FieldCount != 29u && FieldCount != 31u &&
+          FieldCount != 32u && FieldCount != 35u && FieldCount != 37u) ||
          !MdoEventsValueUInt(Root, "schema_version", &Schema) ||
-         !((Schema == 1u && xrtValueCount(Root) == 25u) ||
-           (Schema == 2u && xrtValueCount(Root) == 28u) ||
-           (Schema == 3u && xrtValueCount(Root) == 29u) ||
-           (Schema == 4u && xrtValueCount(Root) == 31u) ||
-           (Schema == 5u && xrtValueCount(Root) == 32u) ||
+         !((Schema == 1u && FieldCount == 25u) ||
+           (Schema == 2u && FieldCount == 28u) ||
+           (Schema == 3u && FieldCount == 29u) ||
+           (Schema == 4u && FieldCount == 31u) ||
+           (Schema == 5u && FieldCount == 32u) ||
+           (Schema == 6u && (FieldCount == 32u || FieldCount == 35u)) ||
            (Schema == MDO_SESSION_EVENT_SCHEMA &&
-            (xrtValueCount(Root) == 32u || xrtValueCount(Root) == 35u))) ||
+            (FieldCount == 32u || FieldCount == 35u || FieldCount == 37u))) ||
          !MdoEventsValueUInt(Root, "event_id", &Result->Info.EventId) ||
          Result->Info.EventId == 0u ||
          !MdoEventsValueUInt(Root, "source_event_id",
@@ -551,7 +586,40 @@ static bool MdoEventsParse(const char* ProjectId, const char* SessionId,
           (!MdoEventsValueString(Root, "model_id", &ModelId) ||
            !MdoEventsValueUInt(Root, "context_window_tokens",
               &Result->Info.ContextWindowTokens))) ) goto done;
-    if (Schema >= 6u && xrtValueCount(Root) == 35u) {
+    {
+        const xvalue* Usage = xrtValueObjectGet(Root, xrtStrView("context"));
+        if (Usage != NULL) {
+            if (Schema < 7u || AgentDepth != 0u ||
+                xrtValueType(Usage) != XVALUE_OBJECT || xrtValueCount(Usage) != 6u ||
+                !MdoEventsValueBool(Usage, "exact", &Result->Info.ContextExact) ||
+                !MdoEventsValueUInt(Usage, "fill_tokens", &Result->Info.ContextFillTokens) ||
+                !MdoEventsValueUInt(Usage, "growth_tokens", &Result->Info.ContextGrowthTokens) ||
+                !MdoEventsValueUInt(Usage, "estimated_input_tokens", &Result->Info.ContextInputTokens) ||
+                !MdoEventsValueUInt(Usage, "input_budget_tokens", &Result->Info.ContextInputBudgetTokens) ||
+                !MdoEventsValueUInt(Usage, "compact_threshold_tokens", &Result->Info.ContextCompactThresholdTokens) ||
+                !Result->Info.ContextWindowTokens ||
+                Result->Info.ContextInputBudgetTokens > Result->Info.ContextWindowTokens ||
+                Result->Info.ContextCompactThresholdTokens > Result->Info.ContextInputBudgetTokens)
+                goto done;
+            Result->Info.ContextAvailable = true;
+        }
+    }
+    if (Schema >= 7u && Kind == (uint64)XWORK_EVENT_MODEL_DONE) {
+        xstrview RequestId, FinishReason;
+        uint64 HttpStatus, Attempts, ToolCalls;
+        if (FieldCount != 37u ||
+            !MdoEventsValueString(Root, "model_request_id", &RequestId) || RequestId.Size > 128u ||
+            !MdoEventsValueString(Root, "model_finish_reason", &FinishReason) || FinishReason.Size > 128u ||
+            !MdoEventsValueUInt(Root, "model_tool_call_count", &ToolCalls) || ToolCalls > UINT32_MAX ||
+            !MdoEventsValueUInt(Root, "model_http_status", &HttpStatus) || HttpStatus > 599u ||
+            !MdoEventsValueUInt(Root, "model_attempts", &Attempts) || Attempts > UINT32_MAX) goto done;
+        memcpy(Result->Info.ModelRequestId, RequestId.Data, RequestId.Size);
+        memcpy(Result->Info.ModelFinishReason, FinishReason.Data, FinishReason.Size);
+        Result->Info.ModelToolCallCount = (uint32)ToolCalls;
+        Result->Info.ModelHttpStatus = (uint32)HttpStatus;
+        Result->Info.ModelAttempts = (uint32)Attempts;
+    } else if (FieldCount == 37u) goto done;
+    if (Schema >= 6u && FieldCount == 35u) {
         xstrview ErrorKind;
         uint64 HttpStatus, Attempts;
         if (Kind != (uint64)XWORK_EVENT_ERROR ||
@@ -1574,6 +1642,7 @@ void MdoSessionEventSnapshotRelease(MdoSessionEventSnapshot* Snapshot)
     if ( Previous == 0u ) abort();
     for ( i = 0u; i < Snapshot->Count; ++i )
         MdoEventsOwnedUnit(&Snapshot->Events[i]);
+    MdoEventsOwnedUnit(&Snapshot->ActionPrompt);
     xrtFree(Snapshot->Events);
     xrtFree(Snapshot);
 }

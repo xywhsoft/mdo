@@ -23,6 +23,11 @@ SCP/SFTP 是主要使用范围。Python 保留标准库、SQLite、TLS、ctypes�
 
 ## 目录与发布素材
 
+Windows Python 修订 3 在打包阶段移除强制隔离的 `python*._pth`，恢复项目同目录
+模块和 `PYTHONPATH` 的标准导入行为。显式 `-I`、`-E`、`-P` 保持 CPython 语义。
+`python_runtime.py` 用于 ZIP 与 XRTPACK 两条打包路径，转换完成后再计算文件哈希。
+`tests/test_python_runtime_compatibility.py` 覆盖真实解释器的导入、路径和参数行为。
+
 ```text
 tools/runtime/
   windows-x86_64/{busybox,curl,jq,openssh,aria2,ripgrep,7zip,python,git}/

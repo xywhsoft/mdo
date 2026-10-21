@@ -151,7 +151,7 @@ def main():
                     errors = [e for e in events if e["kind"] == "error"]
                     assert len(errors) == (0 if mode == "wait" else 1), errors
                     assert Model.calls["normal"] == 1, Model.calls
-                    assert Model.calls["summary"] == (2 if mode == "quality" else 1), Model.calls
+                    assert Model.calls["summary"] == (11 if mode == "quality" else 1), Model.calls
                     expected = "context_compaction" if mode == "quality" else "daily_token_limit" if mode == "quota" else ""
                     before_kind = errors[0]["model_error_kind"] if errors else ""
                     if mode == "quality":

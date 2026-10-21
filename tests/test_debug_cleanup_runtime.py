@@ -16,6 +16,7 @@ import threading
 
 from test_interrupt_runtime import ModelHandler, ModelServer, free_port, request, stop_host, until
 from test_api_runtime import request as raw_request
+from test_packed_queue_start_recovery import configure_model
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -40,8 +41,7 @@ def main():
         'port': port, 'host_default': {'enabled': True, 'name': 'mdo', 'path': 'web',
             'devlang': 'c', 'devfile': 'generated/mdo_unity.c'}}]}), encoding='utf-8')
     env = dict(os.environ, MDO_HOME=str(home), USERPROFILE=str(base), HOME=str(base),
-        MDO_ORNITH_API_KEY='bounded-local-test',
-        MDO_ORNITH_RESPONSES_URL=f'http://127.0.0.1:{model.server_port}/v1/responses')
+        MDO_QUEUE_FIXTURE_KEY='bounded-local-test')
     process = None
     static = None
     try:
@@ -59,6 +59,7 @@ def main():
             except (OSError, KeyError):
                 return False
         until(ready, 20)
+        configure_model(port, f'http://127.0.0.1:{model.server_port}/v1', 'openai-responses')
         for path in ('/api/v1/events', '/api/v1/tasks/1/events'):
             for method in ('GET', 'HEAD', 'OPTIONS'):
                 status, _, body = raw_request(port, method, path)
@@ -103,7 +104,7 @@ def main():
         assert 'id="tasks-dialog"' in html and 'id="inspector"' not in html
         status, response = request(port, 'GET', '/api/v1/models')
         assert status == 200, response
-        model_id = response['data']['models'][0]['id']
+        model_id = 'queue-fixture'
         status, response = request(port, 'POST', '/api/v1/sessions', {
             'project_id': 'default', 'title': '精简界面验证', 'agent_id': 'mdo.default', 'model_id': model_id,
             'protocol': 'openai-responses', 'permission_profile': 'balanced',

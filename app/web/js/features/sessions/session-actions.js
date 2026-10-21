@@ -5,9 +5,11 @@ export function sessionActionItems(session) {
   const item = (name, key, fallback, tone) =>
     ({ name, label: t(key, {}, fallback), ...(tone ? { tone } : {}) });
   if (session.status === "trash")
-    return [item("restore", "action.restore", "恢复")];
+    return [item("restore", "action.restore", "恢复"),
+      item("send_device", "transfer.title", "发送到设备"),
+      item("purge", "action.purgeSession", "彻底删除", "danger")];
 
-  const actions = [item("tasks", "action.tasks", "后台任务"),
+  const actions = [item("send_device", "transfer.title", "发送到设备"), item("tasks", "action.tasks", "后台任务"),
     item("rename", "action.rename", "重命名")];
   if (session.status === "active") {
     actions.push(
@@ -38,6 +40,11 @@ export function sessionActionDialogCopy(action, session) {
       t("sessionAction.trashTitle", {}, "移到回收站"),
       t("sessionAction.trashDescription", { title }, `“${title}”可从回收站恢复。`),
       t("sessionAction.trashConfirm", {}, "移到回收站"),
+    ],
+    purge: [
+      t("sessionAction.purgeTitle", {}, "彻底删除会话"),
+      t("sessionAction.purgeDescription", { title }, `将永久删除“${title}”的会话记录、草稿和附件。此操作无法恢复。`),
+      t("sessionAction.purgeConfirm", {}, "彻底删除"),
     ],
     fork: [
       t("sessionAction.forkTitle", {}, "创建会话分支"),
@@ -72,6 +79,7 @@ export function sessionActionToast(action, session) {
     archive: ["sessionAction.archived", "会话已归档"],
     unarchive: ["sessionAction.unarchived", "会话已移回进行中"],
     trash: ["sessionAction.trashed", "会话已移到回收站"],
+    purge: ["sessionAction.purged", "会话已彻底删除"],
     restore: ["sessionAction.restored", "会话已恢复"],
     fork: ["sessionAction.forked", "已创建会话分支"],
     truncate: ["sessionAction.truncated", "会话历史已截断"],

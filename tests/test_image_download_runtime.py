@@ -24,6 +24,7 @@ import time
 from fixture_images import ordinary_png
 from test_api_runtime import ROOT, free_port
 from test_backup_download_runtime import replace
+from fixture_offline import isolate_background_network
 
 CONTROL = "/__fixture/image-download/"
 
@@ -35,6 +36,7 @@ class Probe:
         self.port = free_port()
         self.process, self.log = None, None
         shutil.copytree(ROOT / "app", self.site)
+        isolate_background_network(self.site)
         shutil.copy2(ROOT / "tests/fixtures/image-download.c", self.site / "src/bootstrap/image-download.c")
         replace(self.site, "src/bootstrap/service.c", "void ServiceInit(XS_HostInfo* pHost)",
                 '#include "image-download.c"\nvoid ServiceInit(XS_HostInfo* pHost)')

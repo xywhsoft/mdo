@@ -114,6 +114,11 @@ def main(argv: list[str] | None = None) -> int:
                                env={**os.environ, "XS_BUILD_COMMIT": revision, "MDO_ANDROID_XSERVER_ROOT": str(sdk_source), "MDO_ANDROID_EDITION": edition})
 
         path = linux_path if args.wsl else lambda p: str(p.resolve())
+        android_lock = build_mdo.load_object(sdk_source / "tools/android/toolchain.lock.json")
+        target_run(ROOT / "tests/test_android_package_install.py", [
+            "--java-home", args.java_home, "--xserver-root", path(sdk_source),
+            "--android-jar", (Path(args.sdk) / "platforms" /
+                              f"android-{android_lock['compile_sdk']}" / "android.jar").as_posix()])
         if not args.skip_native_build:
             target_run(sdk_source / "tools/android/build_native.py", [*lock["xserver"]["required_extensions"],
                 "--sdk", args.sdk, "--out", path(native), "--cc", args.cc,

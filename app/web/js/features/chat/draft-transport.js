@@ -27,10 +27,10 @@ export function createDraftTransport({ matchesSnapshot, createRecovery = createR
   epoch = stamp } = {}) {
   if (typeof matchesSnapshot !== "function" || typeof epoch !== "function")
     throw new TypeError("Invalid draft transport callbacks");
-  const active = new Set(), pending = new Map();
-  async function scoped(action, { signal, origin = epoch(), token = currentPageWriteToken() } = {}) {
+  const active = new Map(), pending = new Map();
+  async function scoped(action, { signal, key, origin = epoch(), token = currentPageWriteToken() } = {}) {
     const recovery = createRecovery({ eventTarget: null });
-    active.add(recovery);
+    active.set(recovery, key);
     const cancel = () => recovery.dispose();
     signal?.addEventListener("abort", cancel, { once: true });
     if (signal?.aborted) cancel();
@@ -52,7 +52,7 @@ export function createDraftTransport({ matchesSnapshot, createRecovery = createR
     return scoped(({ recovery, assertOwner, checked }) => recovery.request(async requestSignal => {
       assertOwner(requestSignal);
       return checked(await api.get(draftEndpoint(key), { ...options, signal: requestSignal }), requestSignal);
-    }, { retry }), { signal });
+    }, { retry }), { signal, key });
   }
   function mutate(key, send, conflicts = []) {
     return scoped(async ({ recovery, assertOwner, checked }) => {
@@ -65,13 +65,13 @@ export function createDraftTransport({ matchesSnapshot, createRecovery = createR
           assertOwner(signal); return checked(await api.get(draftEndpoint(key), { signal }), signal);
         });
       }
-    });
+    }, { key });
   }
   async function save(key, body, { keepalive = false } = {}) {
     let previous = pending.get(key);
     const isNew = !previous;
     if (!previous) {
-      previous = { body: JSON.parse(JSON.stringify(body)), keepalive,
+      previous = { body: JSON.parse(JSON.stringify(body)), keepalive, key,
         origin: epoch(), token: currentPageWriteToken() };
       pending.set(key, previous);
     }
@@ -132,6 +132,10 @@ export function createDraftTransport({ matchesSnapshot, createRecovery = createR
       if (previous && previous.origin === epoch() && Number.isSafeInteger(Number(data?.revision)) &&
           Number(data.revision) > previous.body.revision) pending.delete(key);
     },
-    cancel() { for (const recovery of active) recovery.dispose(); },
+    forget(key) {
+      pending.delete(key);
+      for (const [recovery, owner] of active) if (owner === key) recovery.dispose();
+    },
+    cancel() { for (const recovery of active.keys()) recovery.dispose(); },
   });
 }

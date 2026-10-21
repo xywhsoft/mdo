@@ -5,6 +5,7 @@
 #include "../../include/mdo/project_lifecycle.h"
 #include "data_gate.h"
 #include "../../include/mdo/home_restore.h"
+#include "../../include/mdo/home_purge.h"
 
 typedef struct MdoSessionEventBridge MdoSessionEventBridge;
 typedef struct MdoSessionEventTrimPlan MdoSessionEventTrimPlan;
@@ -55,6 +56,14 @@ xvalue* MdoSessionsInternalTodoParse(xstrview Json, bool Stored);
 /* Publish a committed project bucket removal to catalog observers. The
  * exclusive owner proves no session/Agent object needs to be evicted. */
 bool MdoSessionsProjectPurged(const char* ProjectId, const MdoProjectLease* Owner);
+/* The exclusive project owner drains handles, sidecar writers and captures.
+ * References must come from the API's held exact-session reference guard.
+ * Reads current metadata under the manager lock and deletes only trash at the
+ * expected revision. Committed is authoritative even if cleanup needs restart. */
+bool MdoSessionsPurge(const char* ProjectId, const char* SessionId,
+    uint64 ExpectedRevision, const MdoProjectLease* Owner,
+    const MdoHomePurgeTarget* References, size_t ReferenceCount,
+    MdoSessionInfo* Info, bool* Committed, xwork_error* Error);
 
 MdoSessionEventBridge* MdoSessionEventBridgeCreate(
     const char* ProjectId, const char* SessionId,

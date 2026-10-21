@@ -47,6 +47,8 @@ python tools/qa_release.py --xserver-root D:\GIT\xserver-mdo-refactor
 发布门禁运行前端检查时需要 Node.js。
 门禁范围和 Linux 文件系统要求见[发布门禁](docs/release-gate.md)，
 当前源码版本为 `0.2.1`。首个重构基线的功能与限制见[开发阶段发布说明](docs/release-notes-0.1.0-dev.md)。
+首个公开版候选见[0.1.0 发布说明](docs/release-notes-0.1.0.md)与
+[发布前检查记录](docs/build-records/2026-10-10-release-audit.md)。
 
 开发前先生成入口，再启动构建出的宿主：
 
@@ -107,3 +109,6 @@ mdo.exe -- --home D:\Portable\mdo-home
 不支持项、失败清理和回退方式见[旧数据迁移说明](docs/legacy-migration.md)。
 
 Linux GUI、glibc 服务版、musl 静态服务版，以及 Windows 服务版的构建和运行见[平台构建说明](docs/linux.md)。
+
+会话和完整项目可以从菜单直接“发送到设备”。两端登录同一账号，并在接收端的远控设置开启接收；
+传输完成后源数据保留，目标设备获得独立副本。断线续传、目录选择、数据范围和限制见[设备传输](docs/device-transfers.md)。

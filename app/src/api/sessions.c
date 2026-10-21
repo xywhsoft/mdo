@@ -6,6 +6,8 @@
 #include "../../include/mdo/projects.h"
 #include "../../include/mdo/sessions.h"
 #include "../../include/mdo/models.h"
+#include "../sessions/internal.h"
+#include "project_references.h"
 
 static xmutex* g_MdoApiSessionCreateLock;
 
@@ -925,6 +927,69 @@ static bool MdoApiSessionMutate(MdoApiContext* Context, bool Restore)
     }
     MdoSessionRelease(Session);
     return MdoApiSessionReply(Context, 200u, &Info);
+}
+
+bool MdoApiSessionPurgeRoute(MdoApiContext* Context)
+{
+    char Project[MDO_PROJECT_ID_CAPACITY], SessionId[MDO_SESSION_ID_CAPACITY];
+    MdoApiSessionPreconditionStatus Precondition;
+    MdoProjectLease* Owner;
+    MdoProjectReferenceGuard* References;
+    MdoHomePurgeTarget Targets[2];
+    MdoSessionInfo Info;
+    MdoHomeSnapshot Home;
+    xwork_error Error;
+    xvalue* Data;
+    uint64 ExpectedRevision = 0u;
+    size_t i, Count;
+    bool MatchesSession = false, Committed = false, Ok;
+    if ( !MdoApiSessionPath(Context, Project, SessionId) )
+        return MdoApiReplyError(Context, 400u, "invalid_session_path", "The project or session ID is invalid", NULL);
+    Precondition = MdoApiSessionExpectedRevision(Context, SessionId, &ExpectedRevision, &MatchesSession);
+    if ( Precondition == MDO_API_SESSION_PRECONDITION_MISSING )
+        return MdoApiReplyError(Context, 428u, "precondition_required", "If-Match must contain the current session ETag", NULL);
+    if ( Precondition != MDO_API_SESSION_PRECONDITION_OK )
+        return MdoApiReplyError(Context, 400u, "invalid_precondition", "If-Match must use the form \"mdo-session-ID-N\"", NULL);
+    if ( !MdoApiSessionNoBody(Context) )
+        return MdoApiReplyError(Context, 400u, "body_not_allowed", "This session operation does not accept a body", NULL);
+    if ( !MatchesSession )
+        return MdoApiReplyError(Context, 412u, "revision_conflict", "The session changed; reload it before deleting", NULL);
+    xrtClearError();
+    Owner = MdoProjectLeaseAcquire(Project, MDO_PROJECT_LEASE_EXCLUSIVE, &Error);
+    if ( Owner == NULL )
+        return MdoApiReplyError(Context, Error.eCode == XWORK_ERROR_CONTEXT ? 409u : 503u,
+            "session_purge_busy", "Wait for project runs and data operations to finish before deleting", NULL);
+    References = MdoApiSessionReferencesBegin(Project, SessionId, Owner, &Error);
+    if ( References == NULL ) {
+        MdoProjectLeaseRelease(Owner);
+        return MdoApiReplyError(Context, 503u, "session_purge_unavailable", "The session references could not be checked", NULL);
+    }
+    Count = MdoApiProjectReferencesCount(References);
+    Ok = Count <= 2u;
+    for ( i = 0u; Ok && i < Count; ++i ) Ok = MdoApiProjectReferencesAt(References, i, &Targets[i]);
+    memset(&Info, 0, sizeof(Info)); Info.Size = sizeof(Info);
+    if ( Ok ) Ok = MdoSessionsPurge(Project, SessionId, ExpectedRevision, Owner,
+        Targets, Count, &Info, &Committed, &Error);
+    MdoApiProjectReferencesFree(References);
+    MdoProjectLeaseRelease(Owner);
+    if ( !Committed ) {
+        if ( Info.Revision != 0u && Info.Revision != ExpectedRevision )
+            return MdoApiReplyError(Context, 412u, "revision_conflict", "The session changed; reload it before deleting", NULL);
+        if ( Info.Revision == 0u ) return MdoApiSessionLoadFailure(Context, &Error);
+        if ( Error.eCode == XWORK_ERROR_CONTEXT )
+            return MdoApiReplyError(Context, 409u, "session_purge_requires_trash", "Only idle sessions in the recycle bin can be permanently deleted", NULL);
+        return MdoApiReplyError(Context, 503u, "session_purge_unavailable", "The session could not be permanently deleted", NULL);
+    }
+    memset(&Home, 0, sizeof(Home)); Home.Size = sizeof(Home);
+    Data = xrtValueObject();
+    if ( Data == NULL || !MdoApiValueSetString(Data, "project_id", Project) ||
+         !MdoApiValueSetString(Data, "id", SessionId) || !MdoApiValueSetBool(Data, "deleted", true) ||
+         !MdoApiValueSetBool(Data, "restart_required", !Ok || !MdoHomeGetSnapshot(&Home) || Home.RestartRequired) ) {
+        xrtValueRelease(Data);
+        return MdoApiReplyError(Context, 500u, "session_result_unavailable", "Deletion committed but its reply is unavailable; reload the list", NULL);
+    }
+    xrtClearError();
+    return MdoApiReplySuccessTake(Context, 200u, Data, NULL);
 }
 
 bool MdoApiSessionHistoryRoute(MdoApiContext* Context)

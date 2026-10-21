@@ -1,0 +1,8 @@
+.device-transfer-dialog { width: min(640px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow: auto; }
+.device-transfer-dialog > * { margin-block: 12px; }
+.transfer-new, .transfer-destination { display: flex; flex-wrap: wrap; gap: 10px; }
+.transfer-new select, .transfer-destination input, .transfer-destination select { flex: 1 1 220px; min-width: 0; }
+.transfer-tasks { display: grid; gap: 6px; max-height: 240px; overflow: auto; }
+.transfer-tasks button { text-align: start; overflow-wrap: anywhere; }
+.device-transfer-dialog [role="status"], .device-transfer-dialog [role="alert"] { overflow-wrap: anywhere; }
+.device-transfer-dialog [hidden] { display: none !important; }

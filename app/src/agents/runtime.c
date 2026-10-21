@@ -1293,6 +1293,10 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
         Approval != XWORK_APPROVAL_READ_ONLY ? XWORK_APPROVAL_CALLBACK : Approval;
     DefinitionConfig.uCommandTimeoutMs = AgentInfo.TimeoutMilliseconds;
     DefinitionConfig.uMaxAgentTurns = AgentInfo.MaxTurns;
+    DefinitionConfig.uConsecutiveFailureLimit = 10u;
+    DefinitionConfig.uRepeatedToolBatchLimit = 10u;
+    DefinitionConfig.uCompletionVerificationRetries = 10u;
+    DefinitionConfig.uCompactionQualityRetries = 10u;
     DefinitionConfig.uMaxParallelTools = Settings.MaxParallelTools;
     DefinitionConfig.uMaxSubagentDepth = AgentInfo.MaxDepth;
     DefinitionConfig.uMaxConcurrentSubagents = Settings.MaxParallelSubagents;

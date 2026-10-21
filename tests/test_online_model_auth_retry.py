@@ -19,7 +19,7 @@ PROBE = r'''
 #include <string.h>
 #include <xsbase.h>
 #define MDO_MODEL_RETRY_BASE_MS 10u
-#define MDO_MODEL_RECOVERY_MS 2000u
+#define MDO_MODEL_RETRY_MAX_MS 80u
 #include "src/storage/home.c"
 #include "src/config/config.c"
 #include "src/security/secrets.c"
@@ -61,7 +61,7 @@ static bool Event(void* Data,const xllm_event* E) {
 }
 static bool Retry(xllm_client* Client,const xllm_diagnostics* Diagnostics,uint32 Next,void* Data) {
     (void)Client;(void)Data;
-    if (Next!=Diagnostics->uAttemptCount+1u || Diagnostics->uMaxAttempts!=6u) return false;
+    if (Next!=Diagnostics->uAttemptCount+1u || Diagnostics->uMaxAttempts!=0u) return false;
     ++Retries; return strcmp(Case,"hook-stop")!=0;
 }
 void ServiceInit(XS_HostInfo* Host) {
@@ -164,7 +164,7 @@ def main():
         assert "init_failed" not in output and "probe_done=1" in output and "request_mutated=1" not in output,output
         expected={"renew":(0,"unknown",2),"expired-again":(-1,"login_required",2),
             "backoff-expiry":(0,"unknown",2),"business":(-1,"service_configuration",1),
-            "budget":(-1,"login_required",6),"cancel":(-3,"cancelled",1),
+            "budget":(-1,"login_required",7),"cancel":(-3,"cancelled",1),
             "deadline":(-2,"timeout",1),"partial":(-1,"network",1),
             "hook-stop":(-1,"login_required",1),"preexpired":(-2,"timeout",0),
             "cancelled":(-3,"cancelled",0),"nullable-error":(0,"unknown",2)}
@@ -180,7 +180,7 @@ def main():
             "scope":"loopback HTTP, real product completion, simulated authority; no website or private credentials"}
         if args.record:
             args.record.parent.mkdir(parents=True,exist_ok=True);args.record.write_text(json.dumps(record,indent=2)+"\n")
-        print("Online token recovery, shared retry budget, cancellation and deadline: PASS")
+        print("Online token recovery, persistent connection recovery, cancellation and deadline: PASS")
     finally:
         server.shutdown();server.server_close();worker.join(timeout=3)
 

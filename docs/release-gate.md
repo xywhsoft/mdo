@@ -27,16 +27,34 @@ python3 tools/qa_release.py --xserver-root /path/to/xserver
 3. 解析 `app/web/js/` 中所有 ES 模块，运行 `tests/*.mjs` 前端交互测试；
 4. 从锁定依赖构建宿主并生成第一份单文件 pack；
 5. 以 GCC C11、`-Wall -Wextra -Werror` 严格编译 mdo unity；
-6. 运行所有真实 xs/TCC 低负载运行时探针；
-7. 生成第二份 pack，并要求两份文件的 SHA-256 完全一致；
-8. Windows 上将单文件包复制到空临时目录，用唯一文件名打开原生 WebView2，确认旁边只生成 `mdo-home` 且浏览器数据在其 `data/cache/webview2` 中、没有按程序名写入 AppData；移动可执行文件与 Home 后重启，并检查 `MDO_HOME` 与 `--home` 覆盖；
-9. Windows 上运行 20 秒打包启动回归，确认 TCC 服务初始化后进程仍存活，且没有 crash、dump 或 `xsw.log`。
+6. 运行桌面 xs/TCC 低负载运行时探针；Android 两项设备探针明确输出 `DEVICE CHECK NOT RUN`，须在连接测试设备后单独执行，不计为通过；
+7. 用相同产品配置重新建立暂存目录并生成第二份 pack，要求两份文件的 SHA-256 完全一致；
+8. 对同一打包候选运行 12 项 Home、工作区、目录、实时连接、队列、备份、恢复、压缩、分支、编辑和恢复确认检查；
+9. Windows 上将单文件包复制到空临时目录，用唯一文件名打开原生 WebView2，确认旁边只生成 `mdo-home` 且浏览器数据在其 `data/cache/webview2` 中、没有按程序名写入 AppData；移动可执行文件与 Home 后重启，并检查 `MDO_HOME` 与 `--home` 覆盖；
+10. Windows 上运行 20 秒打包启动回归，确认 TCC 服务初始化后进程仍存活，且没有 crash、dump 或 `xsw.log`。
 
 任一步失败都会返回非零退出码。构建产物与探针临时目录位于 `.build/qa-release/`，不进入版本控制。
 
-Windows 真实页面绘制的人工检查可另外运行 `pwsh -NoProfile -File tests/native-webview-snapshot.ps1 -PackedPath .\mdo.exe`。它将截图留在 `.build/native-webview-qa-*/window.png`；需要检查会话恢复时可加 `-SeedHome <已有 mdo-home 目录>`，脚本会复制该 Home，不会改动原件。必须人工查看截图中的实际内容；这个检查不证明点击、拖放或偶发启动故障已消失。
+门禁在运行前记录应用源码、依赖锁文件与宿主配置指纹，并在运行时探针结束和最终
+通过前复核；原生宿主哈希也必须保持不变。检查期间仍有其他任务修改这些输入时，
+应先完成修改，再重跑门禁，不能合并不同输入的通过结果。
+
+`tools/prepare_release.py` 在本地暂存八个平台产物前，会核对 `mdo-builds.json` 的
+版本、应用源码指纹、锁定 SDK/runtime revision、宿主配置、工具包 revision、文件哈希与内嵌构建号。构建记录必须来自
+当前源码与实际产物；不能沿用旧记录。产物回执的 `host` 指向实际嵌入的宿主，
+Windows GUI 对应 `xsw.exe`。暂存清单标为 `verified-not-published`，并明确记录
+`android_release_signed`；本地暂存不等于上线，也不代表 Android 真机验收完成。
+
+Windows 真实页面绘制的人工检查可另外运行 `pwsh -NoProfile -ExecutionPolicy Bypass -File tests/native-webview-snapshot.ps1 -PackedPath .\mdo.exe`。这里的执行策略仅作用于本次 PowerShell 进程。它将截图留在 `.build/native-webview-qa-*/window.png`；需要检查会话恢复时可加 `-SeedHome <已有 mdo-home 目录>`，脚本会复制该 Home，不会改动原件。必须人工查看截图中的实际内容；这个检查不证明点击、拖放或偶发启动故障已消失。
 
 ## 当前验证证据
+
+2026-10-10 首个公开版本候选：Windows 标准门禁通过 148 项 Python 检查（3 项
+ELF 检查在 Windows 跳过并在 Linux 补跑）、999 项 Node 检查、165 个模块解析、
+严格 C11、82 项运行时和 12 项打包检查，另通过确定性打包、便携 Home 与原生启动
+检查。八版构建、宿主和源码校验及发行前剩余事项见
+[本轮检查报告](build-records/2026-10-10-release-audit.md)。Android 正式签名和最终 APK
+的设备验收不包含在桌面标准门禁中。
 
 | 平台 | 结果 | 确定性 pack SHA-256 |
 | --- | --- | --- |

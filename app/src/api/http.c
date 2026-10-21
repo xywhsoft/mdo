@@ -25,9 +25,19 @@ static bool MdoApiConnectionSend(MdoApiContext* Context, const void* pData,
 
 /* Only bounded, successful history reads are compressed. Small live updates
  * avoid codec overhead; xrt's gzip encoder is already part of the XS C SDK. */
+static bool MdoApiConversationPath(xstrview Path)
+{
+    const char* Prefix = "/api/v1/projects/";
+    const char* Suffix = "/conversation";
+    size_t A = strlen(Prefix), B = strlen(Suffix);
+    return Path.Size > A + B && !memcmp(Path.Data, Prefix, A) &&
+        !memcmp(Path.Data + Path.Size - B, Suffix, B);
+}
 static bool MdoApiHistoryGzip(MdoApiContext* Context, uint16 Status, size_t Size)
 {
-    if (Status != 200u || Size < 32768u || Size > MDO_API_RESPONSE_MAX_BYTES ||
+    size_t Limit = MdoApiConversationPath(Context->Target.Path) ?
+        MDO_API_CONVERSATION_RESPONSE_MAX_BYTES : MDO_API_RESPONSE_MAX_BYTES;
+    if (Status != 200u || Size < 32768u || Size > Limit ||
         Context->Request->head->MethodCode != XHTTP_METHOD_GET) return false;
     xstrview Path = Context->Target.Path;
     const char* Suffixes[] = {"/conversation", "/events", "/turns"};
@@ -96,7 +106,7 @@ static bool MdoApiReplyRaw(MdoApiContext* pContext, uint16 Status,
         XRT_STR_LITERAL("Referrer-Policy"), XRT_STR_LITERAL("no-referrer") };
     Fields[FieldCount++] = (xhttpfield){
         XRT_STR_LITERAL("X-Request-Id"), xrtStrView(pContext->RequestId) };
-    if ( MdoApiWriteToken(WriteToken) ) Fields[FieldCount++] = (xhttpfield){
+    if ( !pContext->UntrustedOrigin && MdoApiWriteToken(WriteToken) ) Fields[FieldCount++] = (xhttpfield){
         XRT_STR_LITERAL("X-Mdo-Write-Token"), xrtStrView(WriteToken) };
     if ( Allow != NULL ) {
         Fields[FieldCount++] = (xhttpfield){
@@ -176,6 +186,7 @@ static bool MdoApiReplyValue(MdoApiContext* pContext, uint16 Status,
      * envelopes; all other routes retain their existing small response cap. */
     size_t Limit = xrtStrEqual(pContext->Target.Path,xrtStrView("/api/v1/ecosystem"))
         ? 1152u * 1024u : MDO_API_RESPONSE_MAX_BYTES;
+    if (MdoApiConversationPath(pContext->Target.Path)) Limit = MDO_API_CONVERSATION_RESPONSE_MAX_BYTES;
     if ( Json == NULL || JsonSize > Limit ) {
         xrtFree(Json);
         return MdoApiReplySerializationFailure(pContext, 500u);

@@ -14,6 +14,7 @@
 
 typedef struct MdoHomePurgeManifest {
     char Project[65];
+    char Session[65];
     xfileinfo Journal, Payload;
     MdoHomePurgeTarget* Targets;
     size_t Count;
@@ -51,7 +52,7 @@ static bool MdoHomePurgeId(cstr Id)
  * this layer accepts only a syntactically valid plan namespace. The two global
  * reference files require the caller's owned reference guard and conditional
  * project association check; they are not unconditional project roots. */
-static bool MdoHomePurgePath(cstr Project, const MdoHomePurgeTarget* Target)
+static bool MdoHomePurgePath(cstr Project, cstr Session, const MdoHomePurgeTarget* Target)
 {
     static const struct { cstr Format; bool Directory; } Fixed[] = {
         { "projects/%s.json", false }, { "projects/%s.json.bak", false },
@@ -67,6 +68,12 @@ static bool MdoHomePurgePath(cstr Project, const MdoHomePurgeTarget* Target)
     if ( strcmp(Target->Path, "data/draft.json") == 0 ||
          strcmp(Target->Path, "data/workspace-state.json") == 0 )
         return Target->Info.Type == XFILE_TYPE_FILE;
+    if ( Session[0] != '\0' ) {
+        snprintf(Path, sizeof(Path), "sessions/%s/%s", Project, Session);
+        if ( strcmp(Target->Path, Path) == 0 ) return Target->Info.Type == XFILE_TYPE_DIRECTORY;
+        snprintf(Path, sizeof(Path), "migration/session-prompts/%s/%s.txt", Project, Session);
+        return strcmp(Target->Path, Path) == 0 && Target->Info.Type == XFILE_TYPE_FILE;
+    }
     for ( i = 0u; i < sizeof(Fixed) / sizeof(Fixed[0]); ++i ) {
         snprintf(Path, sizeof(Path), Fixed[i].Format, Project);
         if ( strcmp(Target->Path, Path) == 0 ) return Target->Info.Type ==
@@ -103,11 +110,14 @@ static bool MdoHomePurgeTargets(const MdoHomePurgeManifest* Manifest)
     char Required[96];
     if ( !MdoHomePurgeId(Manifest->Project) || Manifest->Targets == NULL ||
          Manifest->Count == 0u || Manifest->Count > MDO_HOME_PURGE_TARGET_LIMIT ) return false;
-    snprintf(Required, sizeof(Required), "projects/%s.json", Manifest->Project);
+    if ( Manifest->Session[0] != '\0' ) {
+        if ( !MdoHomePurgeId(Manifest->Session) || Manifest->HasRequest || Manifest->Count > 4u ) return false;
+        snprintf(Required, sizeof(Required), "sessions/%s/%s", Manifest->Project, Manifest->Session);
+    } else snprintf(Required, sizeof(Required), "projects/%s.json", Manifest->Project);
     for ( i = 0u; i < Manifest->Count; ++i ) {
         const MdoHomePurgeTarget* Target = &Manifest->Targets[i];
         if ( memchr(Target->Path, '\0', sizeof(Target->Path)) == NULL ||
-             !MdoHomePurgePath(Manifest->Project, Target) ||
+             !MdoHomePurgePath(Manifest->Project, Manifest->Session, Target) ||
              (Target->Info.Available & XFILE_INFO_IDENTITY) == 0u || Target->Info.Identity == 0u ||
              (Target->Info.Type == XFILE_TYPE_FILE &&
                 (Target->Info.Available & XFILE_INFO_SIZE) == 0u) ||
@@ -531,10 +541,12 @@ static bool MdoHomePurgeSave(const MdoHomePurgeManifest* Manifest)
     char* Text = NULL;
     size_t Size = 0u, i;
     bool Ok = Root != NULL && Array != NULL &&
-        MdoHomePurgeTake(Root, "version", xrtValueInt(Manifest->HasRequest ? 2 : 1)) &&
+        MdoHomePurgeTake(Root, "version", xrtValueInt(Manifest->Session[0] != '\0' ? 3 : Manifest->HasRequest ? 2 : 1)) &&
         MdoHomePurgeTake(Root, "project", xrtValueString(xrtStrView(Manifest->Project))) &&
         MdoHomePurgePutIdentity(Root, "journal", &Manifest->Journal) &&
         MdoHomePurgePutIdentity(Root, "payload", &Manifest->Payload);
+    if ( Ok && Manifest->Session[0] != '\0' ) Ok = MdoHomePurgeTake(Root, "session",
+        xrtValueString(xrtStrView(Manifest->Session)));
     if ( Ok && Manifest->HasRequest ) Ok = MdoHomePurgeTake(Root, "request",
         MdoHomePurgeRequestValue(&Manifest->Request));
     for ( i = 0u; Ok && i < Manifest->Count; ++i ) {
@@ -567,7 +579,7 @@ static bool MdoHomePurgeLoad(cstr Base, MdoHomePurgeManifest* Manifest)
     xjsonreadconfig Config;
     xvalue* Root = NULL;
     const xvalue* Array;
-    xstrview Project;
+    xstrview Project, Session;
     int64 Version = 0;
     bool Ok;
     snprintf(Path, sizeof(Path), "%s/ready", Base);
@@ -579,13 +591,19 @@ static bool MdoHomePurgeLoad(cstr Base, MdoHomePurgeManifest* Manifest)
     if ( Ok ) Root = xrtJsonRead(xrtStrViewN(Text, Size), &Config);
     Ok = Root != NULL && xrtValueType(Root) == XVALUE_OBJECT &&
         xrtValueGetInt(xrtValueObjectGet(Root, XRT_STR_LITERAL("version")), &Version) &&
-        (Version == 1 || Version == 2) && xrtValueCount(Root) == (Version == 1 ? 5u : 6u) &&
+        (Version == 1 || Version == 2 || Version == 3) && xrtValueCount(Root) == (Version == 1 ? 5u : 6u) &&
         xrtValueGetString(xrtValueObjectGet(Root,
             XRT_STR_LITERAL("project")), &Project) && Project.Size < sizeof(Manifest->Project) &&
         memchr(Project.Data, '\0', Project.Size) == NULL &&
         MdoHomePurgeGetIdentity(Root, "journal", &Manifest->Journal) &&
         MdoHomePurgeGetIdentity(Root, "payload", &Manifest->Payload);
     if ( Ok ) { memcpy(Manifest->Project, Project.Data, Project.Size); Manifest->Project[Project.Size] = '\0'; }
+    if ( Ok && Version == 3 ) {
+        Ok = xrtValueGetString(xrtValueObjectGet(Root, XRT_STR_LITERAL("session")), &Session) &&
+            Session.Size != 0u && Session.Size < sizeof(Manifest->Session) &&
+            memchr(Session.Data, '\0', Session.Size) == NULL;
+        if ( Ok ) { memcpy(Manifest->Session, Session.Data, Session.Size); Manifest->Session[Session.Size] = '\0'; }
+    }
     Manifest->HasRequest = Version == 2;
     if ( Ok && Manifest->HasRequest ) Ok = MdoHomePurgeRequestParse(
         xrtValueObjectGet(Root, XRT_STR_LITERAL("request")), &Manifest->Request, false);
@@ -967,7 +985,7 @@ done:
     return Ok;
 }
 
-static bool MdoHomePurgeFilesImpl(cstr ProjectId, const MdoHomePurgeTarget* Targets,
+static bool MdoHomePurgeFilesImpl(cstr ProjectId, cstr SessionId, const MdoHomePurgeTarget* Targets,
     size_t Count, const MdoHomePurgeRequest* Request, bool* Committed)
 {
     MdoHomePurgeManifest Manifest;
@@ -979,6 +997,10 @@ static bool MdoHomePurgeFilesImpl(cstr ProjectId, const MdoHomePurgeTarget* Targ
         return MdoHomePurgeError("invalid project purge storage request");
     memset(&Manifest, 0, sizeof(Manifest));
     snprintf(Manifest.Project, sizeof(Manifest.Project), "%s", ProjectId);
+    if ( SessionId != NULL ) {
+        if ( !MdoHomePurgeId(SessionId) ) return MdoHomePurgeError("invalid session purge storage request");
+        snprintf(Manifest.Session, sizeof(Manifest.Session), "%s", SessionId);
+    }
     Manifest.Targets = (MdoHomePurgeTarget*)Targets; Manifest.Count = Count;
     if ( Request != NULL ) { Manifest.HasRequest = true; Manifest.Request = *Request; }
     if ( !MdoHomePurgeTargets(&Manifest) ) return MdoHomePurgeError("invalid project purge targets");
@@ -1036,12 +1058,19 @@ done:
 
 bool MdoHomePurgeFiles(cstr ProjectId, const MdoHomePurgeTarget* Targets, size_t Count, bool* Committed)
 {
-    return MdoHomePurgeFilesImpl(ProjectId, Targets, Count, NULL, Committed);
+    return MdoHomePurgeFilesImpl(ProjectId, NULL, Targets, Count, NULL, Committed);
+}
+
+bool MdoHomePurgeSessionFiles(cstr ProjectId, cstr SessionId,
+    const MdoHomePurgeTarget* Targets, size_t Count, bool* Committed)
+{
+    if ( SessionId == NULL ) return MdoHomePurgeError("session purge requires a session ID");
+    return MdoHomePurgeFilesImpl(ProjectId, SessionId, Targets, Count, NULL, Committed);
 }
 
 bool MdoHomePurgeFilesRequested(const MdoHomePurgeRequest* Request,
     const MdoHomePurgeTarget* Targets, size_t Count, bool* Committed)
 {
     return MdoHomePurgeFilesImpl(Request != NULL ? Request->ProjectId : NULL,
-        Targets, Count, Request, Committed);
+        NULL, Targets, Count, Request, Committed);
 }

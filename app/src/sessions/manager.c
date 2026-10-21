@@ -1,6 +1,7 @@
 #include "../../include/mdo/time.h"
 #include <stdlib.h>
 #include <string.h>
+#include "../../include/mdo/device_transfer.h"
 
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/home_restore.h"
@@ -669,6 +670,68 @@ bool MdoSessionsProjectPurged(const char* ProjectId, const MdoProjectLease* Owne
     return Ok;
 }
 
+static int MdoSessionsPurgeTargetCompare(const void* A, const void* B)
+{
+    return strcmp(((const MdoHomePurgeTarget*)A)->Path, ((const MdoHomePurgeTarget*)B)->Path);
+}
+
+bool MdoSessionsPurge(const char* ProjectId, const char* SessionId,
+    uint64 ExpectedRevision, const MdoProjectLease* Owner,
+    const MdoHomePurgeTarget* References, size_t ReferenceCount,
+    MdoSessionInfo* Info, bool* Committed, xwork_error* Error)
+{
+    MdoHomePurgeTarget Targets[4];
+    size_t Count = ReferenceCount;
+    bool Exists, Ok = false;
+    xworkErrorInit(Error);
+    if ( Committed != NULL ) *Committed = false;
+    if ( Info != NULL ) { memset(Info, 0, sizeof(*Info)); Info->Size = sizeof(*Info); }
+    if ( !g_MdoSessions.Initialized || Info == NULL || Committed == NULL ||
+         ExpectedRevision == 0u || ReferenceCount > 2u ||
+         (ReferenceCount != 0u && References == NULL) ||
+         !MdoSessionsIdValid(SessionId, MDO_SESSION_ID_CAPACITY) ||
+         !MdoProjectLeaseProtects(Owner, ProjectId, MDO_PROJECT_LEASE_EXCLUSIVE) ) {
+        MdoSessionsError(Error, XWORK_ERROR_INVALID_ARGUMENT, "invalid exclusive session purge request");
+        return false;
+    }
+    memset(Targets, 0, sizeof(Targets));
+    if ( ReferenceCount != 0u ) memcpy(Targets, References, ReferenceCount * sizeof(*Targets));
+    xrtMutexLock(g_MdoSessions.Lock);
+    if ( !MdoSessionsMetaRead(ProjectId, SessionId, Info) ) {
+        MdoSessionsXrtError(Error, XWORK_ERROR_IO, "cannot read session metadata");
+        goto done;
+    }
+    if ( Info->Revision != ExpectedRevision ) {
+        MdoSessionsError(Error, XWORK_ERROR_CONTEXT, "session metadata changed; reload before deleting it");
+        goto done;
+    }
+    if ( Info->Status != MDO_SESSION_TRASH || MdoSessionsActiveFind(ProjectId, SessionId) != SIZE_MAX ||
+         MdoSessionsRestoreReserved(ProjectId, SessionId) ) {
+        MdoSessionsError(Error, XWORK_ERROR_CONTEXT, "only idle trashed sessions can be permanently deleted");
+        goto done;
+    }
+    if ( g_MdoSessions.Generation == UINT64_MAX ) {
+        MdoSessionsError(Error, XWORK_ERROR_LIMIT, "session catalog generation is exhausted");
+        goto done;
+    }
+    snprintf(Targets[Count].Path, sizeof(Targets[Count].Path), "migration/session-prompts/%s/%s.txt", ProjectId, SessionId);
+    if ( !MdoHomeExternalStat(Targets[Count].Path, &Exists, &Targets[Count].Info) ) goto storage_error;
+    if ( Exists ) ++Count;
+    snprintf(Targets[Count].Path, sizeof(Targets[Count].Path), "sessions/%s/%s", ProjectId, SessionId);
+    if ( !MdoHomeExternalStat(Targets[Count].Path, &Exists, &Targets[Count].Info) || !Exists ) goto storage_error;
+    ++Count;
+    qsort(Targets, Count, sizeof(*Targets), MdoSessionsPurgeTargetCompare);
+    Ok = MdoHomePurgeSessionFiles(ProjectId, SessionId, Targets, Count, Committed);
+    if ( *Committed ) MdoSessionsGenerationAdvance();
+    if ( !Ok ) goto storage_error;
+    goto done;
+storage_error:
+    MdoSessionsXrtError(Error, XWORK_ERROR_IO, "cannot permanently delete session storage");
+done:
+    xrtMutexUnlock(g_MdoSessions.Lock);
+    return Ok;
+}
+
 void MdoSessionCreateOptionsInit(MdoSessionCreateOptions* Options)
 {
     if ( Options == NULL ) return;
@@ -961,6 +1024,10 @@ MdoSession* MdoSessionOpen(const char* ProjectId, const char* SessionId,
          !MdoSessionsPath(MetaPath, ProjectId, SessionId, "meta.json") ) {
         MdoSessionsError(Error, XWORK_ERROR_INVALID_ARGUMENT,
             "invalid managed session open request");
+        return NULL;
+    }
+    if (!MdoDeviceTransferSessionVisible(ProjectId, SessionId)) {
+        MdoSessionsError(Error, XWORK_ERROR_CONTEXT, "session transfer is not committed");
         return NULL;
     }
     ProjectLease = MdoProjectLeaseAcquire(ProjectId,
@@ -1402,6 +1469,10 @@ MdoSession* MdoSessionLoad(const char* ProjectId, const char* SessionId,
     MdoProjectLease* ProjectLease;
     char MetaPath[MDO_SESSION_PATH_CAPACITY];
     xworkErrorInit(Error);
+    if (MdoSessionsIdValid(ProjectId,MDO_PROJECT_ID_CAPACITY) &&
+        MdoSessionsIdValid(SessionId,MDO_SESSION_ID_CAPACITY) && !MdoDeviceTransferSessionVisible(ProjectId,SessionId)) {
+        MdoSessionsError(Error,XWORK_ERROR_CONTEXT,"session transfer has not committed"); return NULL;
+    }
     if ( !g_MdoSessions.Initialized ||
          !MdoSessionsIdValid(ProjectId, MDO_PROJECT_ID_CAPACITY) ||
          !MdoSessionsIdValid(SessionId, MDO_SESSION_ID_CAPACITY) ||
@@ -2159,6 +2230,34 @@ busy:
     return false;
 }
 
+bool MdoSessionWithStoredCapture(const char* ProjectId, const char* SessionId,
+    MdoProjectLease* Owner, MdoSessionCaptureReadFn Read,
+    void* UserData, xwork_error* Error)
+{
+    MdoSessionInfo Info;
+    MdoSessionDataLease* Data = NULL;
+    bool Ok = false;
+    xworkErrorInit(Error);
+    if (!Read || !g_MdoSessions.Initialized ||
+        (!MdoProjectLeaseProtects(Owner,ProjectId,MDO_PROJECT_LEASE_SHARED) &&
+         !MdoProjectLeaseProtects(Owner,ProjectId,MDO_PROJECT_LEASE_EXCLUSIVE)))
+        goto busy;
+    if (!xrtMutexTryLock(g_MdoSessions.Lock)) goto busy;
+    if (!MdoSessionsIdValid(SessionId,MDO_SESSION_ID_CAPACITY) ||
+        MdoSessionsActiveFind(ProjectId,SessionId) != SIZE_MAX ||
+        MdoSessionsRestoreReserved(ProjectId,SessionId) ||
+        !MdoSessionsMetaRead(ProjectId,SessionId,&Info)) goto done;
+    Data = MdoSessionDataAcquire(ProjectId,SessionId,MDO_SESSION_DATA_CAPTURE,Error);
+    if (Data) Ok = Read(&Info,UserData,Error);
+done:
+    MdoSessionDataRelease(Data);
+    xrtMutexUnlock(g_MdoSessions.Lock);
+    if (Ok || (Error && Error->eCode != XWORK_ERROR_NONE)) return Ok;
+busy:
+    MdoSessionsError(Error,XWORK_ERROR_CONTEXT,"session data is busy; wait for the current task to finish");
+    return false;
+}
+
 str MdoSessionExportJson(MdoSession* Session, size_t* Size,
     xwork_error* Error)
 {
@@ -2199,6 +2298,7 @@ static bool MdoSessionsCatalogDiagnostic(MdoSessionCatalog* Catalog,
 static bool MdoSessionsCatalogItem(MdoSessionCatalog* Catalog,
     const MdoSessionInfo* Info)
 {
+    if (!MdoDeviceTransferSessionVisible(Info->ProjectId,Info->Id)) return true;
     if ( Catalog->Count >= MDO_SESSION_CATALOG_MAX ) {
         Catalog->Truncated = true;
         return true;
@@ -2225,6 +2325,7 @@ static int MdoSessionsCatalogCompare(const void* LeftValue,
 static bool MdoSessionsScanProject(MdoSessionCatalog* Catalog,
     const char* ProjectId)
 {
+    if (!MdoDeviceTransferProjectVisible(ProjectId)) return true;
     char ProjectPath[MDO_SESSION_PATH_CAPACITY];
     xdir Directory;
     xdirentry Entry;
@@ -2494,6 +2595,12 @@ void MdoSessionCatalogRelease(MdoSessionCatalog* Catalog)
 uint64 MdoSessionCatalogGeneration(const MdoSessionCatalog* Catalog)
 {
     return Catalog != NULL ? Catalog->Generation : 0u;
+}
+bool MdoSessionCatalogChanged(void) {
+    if (!g_MdoSessions.Initialized) return false;
+    xrtMutexLock(g_MdoSessions.Lock); bool Ok=g_MdoSessions.Generation!=UINT64_MAX;
+    if (Ok) g_MdoSessions.Generation++;
+    xrtMutexUnlock(g_MdoSessions.Lock); return Ok;
 }
 
 size_t MdoSessionCatalogCount(const MdoSessionCatalog* Catalog)

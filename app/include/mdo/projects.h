@@ -49,6 +49,9 @@ bool MdoProjectList(MdoProjectInfo* Items, size_t Capacity, size_t* Count,
     size_t* InvalidCount, bool* Truncated, xwork_error* Error);
 bool MdoProjectCreate(const MdoProjectCreateOptions* Options,
     MdoProjectInfo* Info, xwork_error* Error);
+struct MdoProjectLease;
+bool MdoProjectPublishTransfer(const MdoProjectCreateOptions* Options,
+    struct MdoProjectLease* Owner, MdoProjectInfo* Info, xwork_error* Error);
 /* All definition writes acquire a shared lifecycle lease and the process-wide
  * definition gate before touching Home or taking the native writer file lock.
  * Initialize the lifecycle service first. Neither acquisition waits.

@@ -28,6 +28,18 @@ export function decodeConversationPage(page, owner) {
         (event.aggregate_end_id && (event.aggregate_end_id < event.event_id || event.aggregate_end_id > page.next_cursor)))
       throw invalid();
     previous = event.event_id;
+    if (event.action_prompt !== undefined) {
+      const prompt = event.action_prompt;
+      if (event.kind !== "model_text_delta" || event.agent_depth !== 0 || !prompt ||
+          prompt.kind !== "agent_start" || prompt.agent_depth !== 0 ||
+          !(prompt.schema_version >= 3) ||
+          !Number.isSafeInteger(prompt.event_id) || prompt.event_id <= 0 ||
+          prompt.event_id >= event.event_id || prompt.projection_epoch !== page.epoch ||
+          !Number.isSafeInteger(prompt.user_message_sequence) || prompt.user_message_sequence <= 0 ||
+          typeof prompt.text !== "string" || typeof prompt.text_truncated !== "boolean" ||
+          (prompt.attachments !== undefined && (!Array.isArray(prompt.attachments) ||
+            prompt.attachments.some(id => typeof id !== "string" || !/^[0-9a-f]{32}$/.test(id))))) throw invalid();
+    }
   }
   return { ...page, items };
 }

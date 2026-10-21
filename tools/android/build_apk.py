@@ -24,6 +24,28 @@ def run(command: list[str]) -> None:
     subprocess.run(command, check=True)
 
 
+def overlay_package_installer(source: Path) -> None:
+    """Keep xs's signature/installer checks; apply mdo's download-size policy.
+
+    Fail if the pinned SDK validator changes, rather than silently shipping an
+    unpatched installer. Both the initial check and pre-commit recheck call it.
+    """
+    original = '''        File root = getFilesDir().getCanonicalFile(), file = candidate.getCanonicalFile();
+        if (!file.getPath().startsWith(root.getPath()+File.separator) ||
+            !file.isFile() || file.length() <= 0 || file.length() > 32L*1024*1024)
+            throw new IOException("更新文件路径或大小无效");
+        candidate = file;'''
+    text = source.read_text(encoding="utf-8")
+    if text.count(original) != 1:
+        raise ValueError("pinned Android package installer validator changed; review mdo's overlay")
+    source.write_text(text.replace(original,
+        "        File file = MdoPackageInstallPolicy.validateFile(getFilesDir(), candidate);\n"
+        "        candidate = file;"), encoding="utf-8")
+    import shutil
+    shutil.copy2(MDO_ROOT / "tools/android/MdoPackageInstallPolicy.java",
+                 source.with_name("MdoPackageInstallPolicy.java"))
+
+
 def build(sdk: Path, java: Path, library: Path, pack: Path, output: Path,
           package: str, label: str, version: str, code: int, keystore: Path,
           debuggable: bool = False, home_name: str = "app-home",
@@ -113,6 +135,7 @@ def build(sdk: Path, java: Path, library: Path, pack: Path, output: Path,
         import shutil
         shutil.copytree(ROOT / "android/src", overlay)
         overlay_sharing(overlay)
+        overlay_package_installer(overlay / "org/xserver/android/PackageInstall.java")
         service = overlay / "org/xserver/android/XsService.java"
         text = service.read_text().replace("PackageInstall.initialize(getApplicationContext());", "MdoRuntime.initialize(getApplicationContext());\n            PackageInstall.initialize(getApplicationContext());")
         service.write_text(text)
