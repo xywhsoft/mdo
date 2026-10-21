@@ -126,6 +126,26 @@ the future client-plugin runtime.
 
 ## Creation, migration and management
 
+The built-in `$skill-creator` guides new Skills, improvements to existing Skills,
+and read-only reviews. It can also capture a workflow from the current chat.
+References cover supported format/limits and a realistic test plan; a minimal
+template is bundled. File writes still use ordinary tools and approvals.
+
+The read-only `skill` tool accepts `action: "validate"` with either `content`
+(up to 128 KiB) for a draft format check, or `name` plus `scope: "user"|"project"`
+for a fresh check of a saved folder. Project checks require a real workspace and
+look only in `.mdo/skills/<id>`; user checks look only in the configured Home's
+`skills/<id>`. Arbitrary paths are rejected. The same check is available through
+`POST /skills/validate?project=<id>` (project query optional for user/draft checks).
+Invalid documents return `valid: false` with errors as a normal successful
+report, allowing correction without a tool failure. Malformed requests return an
+argument error. `resources_checked` distinguishes actual folder checks from
+document-only checks; `behavior_tested` is always false. Validators never run
+scripts, install dependencies, publish files, change enablement or invoke models.
+Full-folder validation reads the UTF-8 body and checks discovered/declared resource
+paths and limits; it does not prove that every prose reference or instruction is
+correct. Model behavior must be tried separately and reported honestly.
+
 In Settings > Skill, choose **来源、项目与 AI 创建**. The workbench shows the
 selected project's `.mdo/skills` entries, their enabled/valid status and source
 paths. Create or edit SKILL.md, enable/disable a Skill, or remove it into

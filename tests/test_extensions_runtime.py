@@ -20,6 +20,7 @@ SKILL_PARAMETERS = r'"C:\new folder\章节.txt" "检查 $0 与 ${MDO_SKILL_DIR}"
 SKILL_PARAMETER_BODY = 'ARG_MARKER=$file|$focus|$2\nRAW=$ARGUMENTS\nINDEX=$ARGUMENTS[0]'
 SKILL_PARAMETER_RENDERED = ('ARG_MARKER=C:\\new folder\\章节.txt|检查 $0 与 ${MDO_SKILL_DIR}|\nRAW='
     + SKILL_PARAMETERS + '\nINDEX=C:\\new folder\\章节.txt')
+BUILDER_DOCUMENT = '---\nname: builder-fixture\ndescription: Local builder regression\n---\nReturn a short checklist for $ARGUMENTS.'
 
 class SkillModel(BaseHTTPRequestHandler):
     calls = 0
@@ -28,12 +29,24 @@ class SkillModel(BaseHTTPRequestHandler):
     tool_payloads = []
     profile_payloads = []
     mcp_payloads = []
+    builder_payloads = []
     def log_message(self, *_): pass
     def do_POST(self):
         payload = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
         users = [item for item in payload.get('input', []) if item.get('role') == 'user']
         latest = json.dumps(users[-1] if users else payload)
-        if 'EXTENSION MCP probe' in latest:
+        if 'EXTENSION builder probe' in latest:
+            type(self).builder_payloads.append(payload)
+            calls=len(type(self).builder_payloads)
+            steps=[('skill',{'name':'skill-creator'}),
+                ('skill',{'action':'validate','content':'missing frontmatter'}),
+                ('skill',{'action':'validate','content':BUILDER_DOCUMENT}),
+                ('write',{'path':'.mdo/skills/builder-fixture/SKILL.md','content':BUILDER_DOCUMENT,'mode':'create'}),
+                ('skill',{'action':'validate','name':'builder-fixture','scope':'project'})]
+            output=[{'type':'function_call','call_id':f'builder-{calls}','name':steps[calls-1][0],
+                'arguments':json.dumps(steps[calls-1][1])}] if calls<=len(steps) else [
+                {'type':'message','content':[{'type':'output_text','text':'Builder probe complete'}]}]
+        elif 'EXTENSION MCP probe' in latest:
             type(self).mcp_payloads.append(payload)
             calls = len(type(self).mcp_payloads)
             if calls <= 2:
@@ -213,6 +226,22 @@ def main():
                 status, invalid = call('PUT', 'skills/invalid-arguments',
                     {'content': skill.replace('arguments: [file, focus]', 'arguments:\n  file: required')}, 'new')
                 assert status == 422 and 'arguments' in json.dumps(invalid), invalid
+                # Validation reports do not publish or activate a draft.
+                def validate_skill(data, project=''):
+                    status, _, raw=request(port,'POST','/api/v1/skills/validate'+project,
+                        body=json.dumps(data).encode(),headers={'Content-Type':'application/json'})
+                    return status,json.loads(raw)
+                status, checked=validate_skill({'content':BUILDER_DOCUMENT})
+                assert status==200 and checked['data']['valid'] and not checked['data']['resources_checked'],checked
+                assert not checked['data']['behavior_tested'] and not (base/'home/skills/builder-fixture').exists()
+                status, checked=validate_skill({'content':'invalid'})
+                assert status==200 and not checked['data']['valid'] and checked['data']['errors'],checked
+                assert validate_skill({'name':'../outside','scope':'user'})[0]==400
+                assert validate_skill({'name':'research','scope':'project'})[0]==400
+                status, checked=validate_skill({'name':'research','scope':'user'})
+                assert status==200 and checked['data']['valid'] and checked['data']['resources_checked'],checked
+                status, checked=validate_skill({'name':'absent','scope':'user'})
+                assert status==200 and not checked['data']['valid'] and checked['data']['errors'],checked
                 scoped=base/'home/workspace/.mdo/skills/research/SKILL.md'
                 scoped.parent.mkdir(parents=True,exist_ok=True)
                 scoped.write_text(skill.replace('Use references/guide.txt.','PROJECT_SCOPE_MARKER'),encoding='utf-8')
@@ -348,6 +377,23 @@ def main():
                 assert 'MANUAL_ONLY_MARKER' not in json.dumps(SkillModel.payloads[0]).replace('Automatic',''), 'manual-only Skill advertised'
                 assert 'Use references/guide.txt.' not in json.dumps(SkillModel.payloads[0]), 'Skill body eagerly injected'
                 assert 'Inspect first' in json.dumps(SkillModel.payloads[-1]), SkillModel.payloads[-1]
+                status, _, raw_run=request(port,'POST','/api/v1/projects/default/sessions/'+session+'/runs',
+                    body=json.dumps({'prompt':'EXTENSION builder probe','timeout_ms':5000}).encode(),
+                    headers={'Content-Type':'application/json'})
+                assert status==202,raw_run
+                run=json.loads(raw_run)['data'];deadline=time.monotonic()+8
+                while not run['terminal'] and time.monotonic()<deadline:
+                    time.sleep(.05)
+                    run=json.loads(request(port,'GET','/api/v1/runs/'+run['id'])[2])['data']
+                assert run['state']=='succeeded' and len(SkillModel.builder_payloads)==6,run
+                assert (base/'home/workspace/.mdo/skills/builder-fixture/SKILL.md').read_text(encoding='utf-8')==BUILDER_DOCUMENT
+                def builder_result(index):
+                    outputs=[part['output'] for part in SkillModel.builder_payloads[index]['input'] if part.get('type')=='function_call_output']
+                    value=outputs[-1];return json.loads(value[value.index('{'):])
+                assert 'Skill 构建器' in builder_result(1)['instructions']
+                assert builder_result(2)['valid'] is False and builder_result(2)['errors']
+                assert builder_result(3)['valid'] is True and builder_result(3)['behavior_tested'] is False
+                assert builder_result(5)['valid'] is True and builder_result(5)['resources_checked'] is True
                 status, _, raw_run = request(port, 'POST', '/api/v1/projects/default/sessions/' + session + '/runs',
                     body=json.dumps({'prompt': 'EXTENSION delegation probe', 'timeout_ms': 5000}).encode(),
                     headers={'Content-Type': 'application/json'})
@@ -522,7 +568,7 @@ def main():
                     receipt = {'passed': True, 'model_requests': {
                         'custom_tool': len(SkillModel.tool_payloads), 'skill': len(SkillModel.payloads),
                         'delegation': len(SkillModel.delegation_payloads), 'profiles': len(SkillModel.profile_payloads),
-                        'mcp': len(SkillModel.mcp_payloads)}, 'final_model_errors': 0,
+                        'mcp': len(SkillModel.mcp_payloads), 'builder': len(SkillModel.builder_payloads)}, 'final_model_errors': 0,
                         'mcp_2025_methods': [row['method'] for row in rpc],
                         'mcp_schemas_lazy': True, 'packed_sha256': hashlib.sha256(args.packed.read_bytes()).hexdigest() if args.packed else None}
                     args.record.parent.mkdir(parents=True, exist_ok=True)

@@ -152,6 +152,7 @@ bool MdoApiExtensionsRoute(MdoApiContext* Context);
 bool MdoApiSkillsRoute(MdoApiContext* pContext);
 bool MdoApiSkillInvokeRoute(MdoApiContext* pContext);
 bool MdoApiSkillSourcesRoute(MdoApiContext* pContext);
+bool MdoApiSkillValidateRoute(MdoApiContext* pContext);
 bool MdoApiSkillMigrateRoute(MdoApiContext* pContext);
 bool MdoApiSkillProjectRoute(MdoApiContext* pContext);
 bool MdoApiToolsRoute(MdoApiContext* pContext);

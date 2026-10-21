@@ -1688,3 +1688,4 @@ bool MdoSkillDiagnosticsAt(const MdoSkillDiagnostics* pDiagnostics,
 #include "resources.inc.c"
 
 #include "scope.inc.c"
+#include "validation.inc.c"

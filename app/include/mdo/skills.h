@@ -103,6 +103,9 @@ bool MdoSkillManagerInit(void);
 void MdoSkillManagerUnit(void);
 bool MdoSkillManagerReload(void);
 bool MdoSkillValidateText(const char* Text, char* Error, size_t Capacity);
+/* Read-only builder checks. Invalid documents return a successful report with
+ * valid=false; false means an invalid request or an infrastructure failure. */
+bool MdoSkillCheckRequest(const xvalue* Input, const char* Workspace, xvalue* Report);
 bool MdoSkillToolsRegister(xwork_runtime* Runtime);
 /* Bounded metadata only; bodies remain lazy. Replaces our prior section. */
 bool MdoSkillCatalogAppendPrompt(const MdoSkillCatalog* Catalog, char** Prompt);

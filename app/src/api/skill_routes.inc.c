@@ -1,5 +1,20 @@
 #include "skill_scope.inc.h"
 
+bool MdoApiSkillValidateRoute(MdoApiContext* Context)
+{
+    MdoApiJsonBody Input={0};MdoApiBodyStatus Status=MdoApiJsonBodyRead(Context,&Input);
+    if(Status!=MDO_API_BODY_OK)return MdoApiReplyBodyError(Context,Status);
+    char* Workspace=NULL;
+    if(!MdoApiSkillScopeMode(Context,&Workspace,false)){MdoApiJsonBodyUnit(&Input);return true;}
+    xvalue* Data=xrtValueObject();
+    bool Ok=Data&&MdoSkillCheckRequest(Input.Value,Workspace,Data);
+    char Error[1024]={0};
+    if(!Ok&&xrtGetError())snprintf(Error,sizeof(Error),"%s",xrtErrorMessage(xrtGetError()));
+    xrtFree(Workspace);MdoApiJsonBodyUnit(&Input);
+    if(!Ok){xrtValueRelease(Data);return MdoApiReplyError(Context,400,"skill_check_invalid",Error[0]?Error:"Cannot check Skill; verify content, name, scope and storage availability",NULL);}
+    return MdoApiReplySuccessTake(Context,200,Data,NULL);
+}
+
 /* Explicit user selection is rendered as an ordinary reviewable draft. No
  * script runs and no permission is granted by reading a Skill. */
 bool MdoApiSkillInvokeRoute(MdoApiContext* Context)

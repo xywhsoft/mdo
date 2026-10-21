@@ -300,12 +300,12 @@ def main() -> int:
         write_site(site)
         output = run_probe(host, site, base / "home")
         assert "skill_init_error=" not in output, output
-        assert "initial_generation=1 count=1" in output, output
+        assert "initial_generation=1 count=2" in output, output
         assert "initial_skill=id:project-explorer external:0 trust:0" in output, output
         assert "builtin_body=external:0 trust:0" in output, output
         assert "# Project Explorer" in output, output
         assert "builtin_template=kind:2 external:0" in output, output
-        assert "external_v1_generation=2 count=1 old_count=1" in output, output
+        assert "external_v1_generation=2 count=2 old_count=2" in output, output
         assert "external_v1_skill=id:project-explorer external:1 trust:1 version:2.0.0" in output, output
         assert "external_v1_body=external:1 trust:1 text:external-body-v1" in output, output
         assert "external_v1_script=kind:1 external:1 text:script-v1" in output, output
@@ -316,10 +316,10 @@ def main() -> int:
         assert "pinned_v1_body=external:1 trust:1 text:external-body-v1" in output, output
         assert "pinned_v1_script=kind:1 external:1 text:script-v1" in output, output
         assert "stale_v1_template=Skill resource changed; reload the Skill catalog" in output, output
-        assert "invalid_generation=4 count=0" in output, output
+        assert "invalid_generation=4 count=1" in output, output
         assert "invalid_diagnostic_count=1" in output, output
         assert "invalid_diagnostic=stage:3 id:project-explorer" in output, output
-        assert "missing_generation=5 count=0" in output, output
+        assert "missing_generation=5 count=1" in output, output
         assert "missing_diagnostic_count=1" in output, output
         assert "missing_diagnostic=stage:4 id:project-explorer" in output, output
         assert "probe_done=1" in output, output

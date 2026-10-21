@@ -41,6 +41,17 @@ static xwork_result MdoSkillExecute(void* Data, const xwork_tool_context* Contex
     bool Ok = Args != NULL && Result != NULL && Catalog != NULL;
     cstr Message = "Skill request failed; refresh the catalog if files changed";
     (void)Data; (void)Context;
+    const xvalue* Action=xrtValueObjectGet(Args,XRT_STR_LITERAL("action"));xstrview ActionText={0};
+    bool Checking=Action&&xrtValueGetString(Action,&ActionText)&&xrtStrEqual(ActionText,XRT_STR_LITERAL("validate"));
+    if(Action&&!Checking){Ok=false;Message="The optional Skill action must be validate; omit action to discover or load Skills";}
+    if(Ok&&Checking) {
+        Ok=MdoSkillCheckRequest(Args,Context?Context->sWorkspaceRoot:NULL,Result);
+        if(!Ok&&xrtGetError()){snprintf(Failure,sizeof(Failure),"%s",xrtErrorMessage(xrtGetError()));Message=Failure;}
+        goto reply;
+    }
+    if(!Checking&&(xrtValueObjectGet(Args,XRT_STR_LITERAL("content"))||xrtValueObjectGet(Args,XRT_STR_LITERAL("scope")))) {
+        Ok=false;Message="content and scope are only used with action validate";
+    }
     if (Ok) {
         const xvalue* V = xrtValueObjectGet(Args, XRT_STR_LITERAL("name"));
         if (V != NULL) Ok = xrtValueGetString(V, &Name) && Name.Size <= 192u && memchr(Name.Data, 0, Name.Size) == NULL;
@@ -122,6 +133,7 @@ static xwork_result MdoSkillExecute(void* Data, const xwork_tool_context* Contex
             xrtValueObjectSetNew(Result,XRT_STR_LITERAL("next_offset"),xrtValueUInt(Offset+Count));
         xrtValueRelease(Items); xrtFree(Needle);
     }
+reply:
     if (Ok) { Json = xrtJsonStringify(Result, false, &Bytes);
         if(Json&&Bytes>1024u*1024u)Message="Expanded Skill result exceeds 1 MiB; reduce arguments or read a resource page"; }
     Ok = Ok && Json != NULL && Bytes <= 1024u * 1024u &&
@@ -138,8 +150,8 @@ bool MdoSkillToolsRegister(xwork_runtime* Runtime)
 {
     xwork_tool_definition Tool = {0}; xwork_error Error;
     Tool.sName = "skill";
-    Tool.sDescription = "Discover installed Skills with query (or empty arguments), then load instructions with name; load a listed text reference with name and path. Pass task input as the raw arguments string; quote multi-word positions. Skills support $ARGUMENTS, zero-based $0 / $ARGUMENTS[0], and optional named positional aliases. Missing optional positions do not fail the task. Use relevant Skills before specialized work. Bodies are lazy; scripts are never executed by this tool.";
-    Tool.sParametersJson = "{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"path\":{\"type\":\"string\"},\"arguments\":{\"type\":\"string\",\"maxLength\":16384},\"cursor\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":8388608},\"offset\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":256},\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":50}},\"required\":[],\"additionalProperties\":false}";
+    Tool.sDescription = "Discover Skills with query, load instructions with name, read references with name/path. Pass task input as the raw arguments string; quote multi-word positions. Supports $ARGUMENTS, zero-based $0 / $ARGUMENTS[0], optional named aliases. To build Skills, load skill-creator. Use action validate with content for a draft format check, OR name and scope user/project for a fresh on-disk format/resource check. Invalid Skill content returns valid=false with errors, so fix and recheck. Validation never runs scripts or tests model behavior. Bodies are lazy; normal permissions still apply.";
+    Tool.sParametersJson = "{\"type\":\"object\",\"properties\":{\"action\":{\"type\":\"string\",\"enum\":[\"validate\"]},\"content\":{\"type\":\"string\",\"maxLength\":131072},\"scope\":{\"type\":\"string\",\"enum\":[\"user\",\"project\"]},\"query\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"path\":{\"type\":\"string\"},\"arguments\":{\"type\":\"string\",\"maxLength\":16384},\"cursor\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":8388608},\"offset\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":256},\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":50}},\"required\":[],\"additionalProperties\":false}";
     Tool.bStrict = true; Tool.uEffects = XWORK_TOOL_EFFECT_READ;
     Tool.sSource = "mdo.skills"; Tool.OnExecuteV2 = MdoSkillExecute;
     Tool.iMaxResultBytes = 1024u * 1024u; Tool.bParallelSafe = true;
