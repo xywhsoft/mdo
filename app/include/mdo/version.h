@@ -10,9 +10,9 @@
 #endif
 #define MDO_VERSION_MAJOR 0
 #define MDO_VERSION_MINOR 2
-#define MDO_VERSION_PATCH 1
+#define MDO_VERSION_PATCH 4
 #ifndef MDO_VERSION_TEXT
-#define MDO_VERSION_TEXT "0.2.1"
+#define MDO_VERSION_TEXT "0.2.4"
 #endif
 
 #define MDO_CONFIG_SCHEMA_VERSION 1u
