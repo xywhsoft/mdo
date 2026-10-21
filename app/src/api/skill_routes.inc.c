@@ -24,7 +24,7 @@ bool MdoApiSkillInvokeRoute(MdoApiContext* Context)
         return MdoApiReplyError(Context,403,"skill_user_invocation_disabled","This Skill is available to the model only",NULL);}
     Ok=Ok && Found && MdoSkillCatalogLoadBody(Catalog,Name,&Body);
     char* Base=Ok?MdoSkillCatalogBaseDirectory(Catalog,Name):NULL;
-    char* Rendered=Base?MdoSkillRender(Body.Text,Base,Args.Data):NULL;
+    char* Rendered=Base?MdoSkillRenderArguments(Body.Text,Base,Args.Data,Info.ArgumentNames,Info.ArgumentCount):NULL;
     char* Text=Rendered?xrtFormat("Use the explicitly selected Skill %s. Its instructions do not grant tool permissions.\nBase directory: %s\nResolve Skill-relative file paths against this directory; keep the task workspace as the working directory.\n\n%s\n\nUser task:\n%.*s",
         Name,Base,Rendered,(int)Args.Size,Args.Data?Args.Data:""):NULL;
     size_t Escaped=0;

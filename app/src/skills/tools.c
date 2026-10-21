@@ -60,7 +60,7 @@ static xwork_result MdoSkillExecute(void* Data, const xwork_tool_context* Contex
             size_t i;
             Body.Size = sizeof(Body);
             Ok = Files != NULL && MdoSkillCatalogLoadBody(Catalog, Id, &Body);
-            if(Ok){char* Rendered=MdoSkillRender(Body.Text,Base,Parameters.Data);Ok=Rendered!=NULL;
+            if(Ok){char* Rendered=MdoSkillRenderArguments(Body.Text,Base,Parameters.Data,Info.ArgumentNames,Info.ArgumentCount);Ok=Rendered!=NULL;
                 if(Ok){xrtFree(Body.Text);Body.Text=Rendered;Body.Bytes=strlen(Rendered);}}
             for (i = 0u; Ok && i < Info.ResourceCount; ++i) {
                 MdoSkillResourceInfo Item = {0}; Item.Size = sizeof(Item);

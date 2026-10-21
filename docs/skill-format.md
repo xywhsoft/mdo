@@ -29,8 +29,8 @@ version, license, compatibility, when_to_use, argument-hint and metadata mapping
   Without these arrays, safe files are discovered automatically (128 files,
   depth 8, 8 MiB per resource, 16 MiB total).
 
-`context`, `agent`, `model`, `effort`, `hooks`, `shell`, `paths`, `disallowed-tools`
-and named `arguments` declarations require unsupported execution semantics and
+`context`, `agent`, `model`, `effort`, `hooks`, `shell`, `paths` and `disallowed-tools`
+require unsupported execution semantics and
 are rejected with a field-specific diagnostic. Configure an Agent or SubAgent
 for those workflows. Shell substitutions in Markdown are never executed.
 
@@ -40,6 +40,53 @@ Loading name returns instructions and a real base_directory. `$ARGUMENTS` and
 `${MDO_SKILL_DIR}`, `${CLAUDE_SKILL_DIR}`, `${ZCODE_SKILL_DIR}` are replaced
 literally; replacement values are never evaluated or recursively expanded.
 Script execution continues through normal process tools and permission checks.
+
+## Arguments
+
+Natural-language input is the default. Manual selection and model Skill calls use
+the same renderer and accept one raw `arguments` string of at most 16 KiB.
+`$ARGUMENTS` preserves that complete string, including quotes and whitespace.
+If no argument placeholder receives input, nonempty input is appended as
+`ARGUMENTS: <raw input>` so a Skill without placeholders still receives the task.
+
+Optional Claude Code-compatible substitutions are host features, not requirements
+of the Agent Skills standard:
+
+- `$ARGUMENTS[0]` and `$0` refer to the first argument; `$1` is the second.
+- `arguments: [file, focus]` declares `$file` and `$focus` as positional aliases.
+  A YAML list or space-separated string is supported. Names are unique ASCII
+  identifiers, at most 64 characters each and 128 names; `ARGUMENTS` is reserved.
+- Whitespace separates positions. Single/double quotes group text, including an
+  empty argument. Backslash escapes quotes/backslashes, and whitespace outside
+  quotes; ordinary Windows path backslashes are retained. Use single quotes for
+  literal UNC paths. An unfinished quote groups the remainder instead of failing.
+- Missing named positions expand to empty; missing indexed positions remain
+  literal. Neither causes invocation failure. The Skill may ask for information
+  actually needed to finish the task. `argument-hint` is UI help, never validation.
+- A single backslash escapes an argument placeholder (`\$0` becomes literal
+  `$0`); two or more backslashes remain literal and the following placeholder
+  expands. Unknown placeholders are preserved. Inserted values are never parsed
+  again, including directory-variable text or shell syntax within arguments.
+- Expansion is bounded below 2 MiB, with the existing API/JSON and draft limits
+  still applying. Types, required fields, enums and execution validation belong
+  in the actual tool or script; no per-Skill parameter schema is required.
+
+```markdown
+---
+name: review
+description: Review a file for a requested concern
+arguments: [file, focus]
+argument-hint: '"file path" "review focus"'
+---
+Review file: $file
+Focus: $focus
+If the focus is empty, perform a general review.
+```
+
+Invoke with `$review "src/example.c" "memory leaks"` or pass
+`{"name":"review","arguments":"\"src/example.c\" \"memory leaks\""}` to
+the model's Skill tool. Use the same zero-based indexing for every Skill; the
+one-based positions used by some other products' commands are not reinterpreted.
 
 SKILL.md is limited to 128 KiB in management and runtime. Resource text reads are
 48 KiB pages with UTF-8-aligned cursor, next_cursor and eof. Binary resources are

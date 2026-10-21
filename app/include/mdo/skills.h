@@ -58,6 +58,8 @@ typedef struct MdoSkillInfo {
     const char* ArgumentHint;
     bool Visible;
     const char* Scope;
+    const char* const* ArgumentNames;
+    size_t ArgumentCount;
 } MdoSkillInfo;
 
 typedef struct MdoSkillResourceInfo {
@@ -109,6 +111,8 @@ char* MdoSkillCatalogBaseDirectory(const MdoSkillCatalog* Catalog, const char* I
 bool MdoSkillTextPage(const void* Text, size_t Size, uint64 Cursor, size_t Limit,
     xvalue* Result);
 char* MdoSkillRender(const char* Text, const char* Directory, const char* Arguments);
+char* MdoSkillRenderArguments(const char* Text, const char* Directory,
+    const char* Arguments, const char* const* Names, size_t NameCount);
 uint64 MdoSkillManagerGeneration(void);
 
 MdoSkillCatalog* MdoSkillCatalogSnapshot(void);

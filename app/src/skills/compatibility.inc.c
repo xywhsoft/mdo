@@ -9,9 +9,62 @@ static bool MdoSkillsBoolean(const xvalue* Value, bool Default, bool* Result)
     return false;
 }
 
+static bool MdoSkillsArgumentName(MdoSkillEntry* Entry,xstrview Name,char* Error,size_t Capacity)
+{
+    bool Valid=Name.Size>0 && Name.Size<=64 && !MdoSkillsViewEqual(Name,"ARGUMENTS");
+    for(size_t i=0;Valid && i<Name.Size;i++) {
+        unsigned char c=(unsigned char)Name.Data[i];
+        Valid=(c>='a'&&c<='z')||(c>='A'&&c<='Z')||c=='_'||(i>0&&c>='0'&&c<='9');
+    }
+    char* Copy=Valid?xrtStrDupN(Name.Data,Name.Size):NULL;
+    if(Copy && MdoSkillsStringListAdd(&Entry->Arguments,Copy))return true;
+    xrtFree(Copy);
+    snprintf(Error,Capacity,"Skill arguments must be unique identifiers of 1-64 ASCII letters, digits or underscores, starting with a letter or underscore; ARGUMENTS is reserved (maximum 128 names)");
+    return false;
+}
+
+static bool MdoSkillsArgumentNames(MdoSkillEntry* Entry,const xvalue* Value,char* Error,size_t Capacity)
+{
+    if(!Value)return true;
+    xstrview Names={0};
+    if(xrtValueGetString(Value,&Names)) {
+        Names=xrtStrTrim(Names);
+        if(Names.Size && Names.Data[0]=='[') {
+            if(Names.Size<2||Names.Data[Names.Size-1]!=']')goto invalid;
+            Names=xrtStrTrim(xrtStrViewN(Names.Data+1,Names.Size-2));
+            if(!Names.Size)return true;
+            size_t Start=0;
+            for(size_t i=0;i<=Names.Size;i++)if(i==Names.Size||Names.Data[i]==',') {
+                char* Name=NULL;
+                bool Ok=MdoSkillsScalar(xrtStrTrim(xrtStrViewN(Names.Data+Start,i-Start)),64,&Name);
+                if(Ok)Ok=MdoSkillsArgumentName(Entry,xrtStrView(Name),Error,Capacity);
+                xrtFree(Name);if(!Ok)goto invalid;
+                Start=i+1;
+            }
+            return true;
+        }
+        size_t Start=0;
+        for(size_t i=0;i<=Names.Size;i++)if(i==Names.Size||Names.Data[i]==' '||Names.Data[i]=='\t') {
+            if(i>Start&&!MdoSkillsArgumentName(Entry,xrtStrViewN(Names.Data+Start,i-Start),Error,Capacity))return false;
+            Start=i+1;
+        }
+        return true;
+    }
+    if(xrtValueType(Value)==XVALUE_ARRAY) {
+        for(size_t i=0;i<xrtValueCount(Value);i++) {
+            if(!xrtValueGetString(xrtValueArrayGet(Value,i),&Names))break;
+            if(!MdoSkillsArgumentName(Entry,Names,Error,Capacity))return false;
+            if(i+1==xrtValueCount(Value))return true;
+        }
+        if(xrtValueCount(Value)==0)return true;
+    }
+invalid:
+    snprintf(Error,Capacity,"Skill arguments must be a space-separated string or a list of identifier strings");return false;
+}
+
 static bool MdoSkillsCompatibility(MdoSkillEntry* Entry,const xvalue* Doc,char* Error,size_t Capacity)
 {
-    static const char* const Unsupported[]={"context","agent","model","effort","hooks","shell","paths","disallowed-tools","arguments"};
+    static const char* const Unsupported[]={"context","agent","model","effort","hooks","shell","paths","disallowed-tools"};
     for(size_t i=0;i<sizeof(Unsupported)/sizeof(Unsupported[0]);i++)if(xrtValueObjectGet(Doc,xrtStrView(Unsupported[i]))) {
         snprintf(Error,Capacity,"Skill field '%s' requires unsupported execution behavior; use an Agent/SubAgent configuration instead",Unsupported[i]);return false;
     }
@@ -25,6 +78,7 @@ static bool MdoSkillsCompatibility(MdoSkillEntry* Entry,const xvalue* Doc,char* 
         snprintf(Error,Capacity,"Skill invocation controls must be true or false");return false;
     }
     Entry->AutoInvoke=Auto&&!Disabled;
+    if(!MdoSkillsArgumentNames(Entry,xrtValueObjectGet(Doc,XRT_STR_LITERAL("arguments")),Error,Capacity))return false;
     Entry->ArgumentHint=MdoPromptString(Doc,"argument-hint");
     if(Entry->ArgumentHint && (strlen(Entry->ArgumentHint)>256 || strchr(Entry->ArgumentHint,'\n'))) {
         snprintf(Error,Capacity,"Skill argument-hint must be a single line of at most 256 bytes");return false;
@@ -60,23 +114,4 @@ static bool MdoSkillsCompatibility(MdoSkillEntry* Entry,const xvalue* Doc,char* 
     return true;
 }
 
-char* MdoSkillRender(cstr Text,cstr Directory,cstr Arguments)
-{
-    static const char* const Keys[]={"${MDO_SKILL_DIR}","${CLAUDE_SKILL_DIR}","${ZCODE_SKILL_DIR}","$ARGUMENTS"};
-    const char* Values[]={Directory,Directory,Directory,Arguments?Arguments:""};
-    if(!Text||!Directory)return NULL;
-    size_t Capacity=strlen(Text)+1;
-    for(size_t i=0;i<4;i++)for(const char* p=Text;(p=strstr(p,Keys[i]))!=NULL;p+=strlen(Keys[i])) {
-        size_t Added=strlen(Values[i]);if(Added>2u*1024u*1024u-Capacity)return NULL;Capacity+=Added;
-    }
-    char* Result=xrtMalloc(Capacity);if(!Result)return NULL;
-    char* Out=Result;
-    for(const char* p=Text;*p;) {
-        bool Replaced=false;
-        for(size_t i=0;i<4;i++)if(!strncmp(p,Keys[i],strlen(Keys[i]))) {
-            size_t n=strlen(Values[i]);memcpy(Out,Values[i],n);Out+=n;p+=strlen(Keys[i]);Replaced=true;break;
-        }
-        if(!Replaced)*Out++=*p++;
-    }
-    *Out=0;return Result;
-}
+#include "arguments.inc.c"

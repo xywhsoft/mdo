@@ -63,6 +63,7 @@ typedef struct MdoSkillEntry {
     MdoSkillStringList Tools;
     MdoSkillStringList Mcp;
     MdoSkillStringList Permissions;
+    MdoSkillStringList Arguments;
     MdoSkillResource* Resources;
     size_t ResourceCount;
     size_t ResourceCapacity;
@@ -279,6 +280,7 @@ static void MdoSkillsEntryUnit(MdoSkillEntry* pEntry)
     MdoSkillsStringListUnit(&pEntry->Tools);
     MdoSkillsStringListUnit(&pEntry->Mcp);
     MdoSkillsStringListUnit(&pEntry->Permissions);
+    MdoSkillsStringListUnit(&pEntry->Arguments);
     xrtFree(pEntry->Id);
     xrtFree(pEntry->Name);
     xrtFree(pEntry->Description);
@@ -1409,6 +1411,8 @@ static void MdoSkillsInfo(const MdoSkillCatalog* pCatalog,
     pInfo->AutoInvoke=pEntry->AutoInvoke;pInfo->UserInvocable=pEntry->UserInvocable;
     pInfo->ArgumentHint=pEntry->ArgumentHint;
     pInfo->Visible=pEntry->Visible;pInfo->Scope=pEntry->Scope;
+    pInfo->ArgumentNames=(const char* const*)pEntry->Arguments.Items;
+    pInfo->ArgumentCount=pEntry->Arguments.Count;
 }
 
 size_t MdoSkillCatalogCount(const MdoSkillCatalog* pCatalog)
