@@ -172,6 +172,12 @@ as fallback. Default callbacks use the current loopback app port; a configured
 redirect URI must have been registered with the provider. Android uses its local
 server callback. Pending PKCE material survives restart for ten minutes.
 
+OAuth requires the host's native credential protection. The pinned Windows and
+Android hosts provide it; the current Linux hosts do not. On unsupported hosts,
+status reports `available: false` and `state: unsupported`, and starting login
+returns `credential_protection_unavailable` before discovery or token exchange.
+The UI disables login and browser actions. No plaintext fallback is used.
+
 Credentials/tokens are sealed by the native platform credential service under
 `data/mcp/oauth`; they never enter configuration exports, browser storage, or
 status responses. A missing token expiry remains unknown. Refresh preserves an

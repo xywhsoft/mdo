@@ -47,6 +47,8 @@ bool MdoApiMcpAuthRoute(MdoApiContext* C)
     if(C->Request->head->MethodCode==XHTTP_METHOD_DELETE)Ok=MdoMcpAuthorizationForget(Id);
     else if(Path.Size>=5&&!memcmp(Path.Data+Path.Size-5,"/open",5))Ok=MdoMcpAuthorizationOpen(Id);
     else {
+        if(!xsCredentialProtectionAvailable())return MdoApiReplyError(C,409,"credential_protection_unavailable",
+            "This device cannot securely store OAuth credentials; system credential protection is unavailable",NULL);
         const xhttpfield* Host=NULL;char Origin[128];
         if(xrtHttpFieldGetUnique(C->Request->head->Fields,C->Request->head->FieldCount,XRT_STR_LITERAL("Host"),&Host)==XHTTP_NEXT_ITEM&&Host&&Host->Value.Size<90) {
             snprintf(Origin,sizeof(Origin),"%s://%.*s",C->Request->tls?"https":"http",(int)Host->Value.Size,Host->Value.Data);

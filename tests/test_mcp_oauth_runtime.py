@@ -175,6 +175,15 @@ def main():
                 document['oauth']={'client_id':'mdo-fixture'}
                 code,result=call('PUT','extensions/mcp/oauth-fixture',{'content':json.dumps(document)},'new'); assert code==200,result
                 assert not status()['authorized']
+                if status().get('available') is False:
+                    assert status()['state']=='unsupported',status()
+                    code,result=call('POST','mcp/oauth-fixture/oauth/start')
+                    assert code==409 and result['error']['code']=='credential_protection_unavailable',result
+                    assert not status()['busy'] and not status()['authorized']
+                    assert Provider.exchanges==0
+                    print('MCP OAuth: unsupported credential protection is explicit; no authorization job or token exchange started: PASS')
+                    provider.shutdown();provider.server_close();thread.join(timeout=2)
+                    return
                 missing=refresh();assert missing['state']=='failed' and missing['error_code']=='mcp_authorization_required' and missing['http_status']==0,missing
                 code,result=call('POST','mcp/oauth-fixture/oauth/start'); assert code==202,result
                 data=settled(); assert data['state']=='ready',data

@@ -15,14 +15,15 @@ export function createMcpAuthorization() {
     const path = `/mcp/${encodeURIComponent(id)}/oauth`;
     dialog = element("dialog", { className: "extension-editor" });
     const status = element("p", { attrs: { role: "status" } });
-    let busy = false;
+    let busy = false, available = true;
     const buttons = [];
+    const updateButtons = () => buttons.forEach((b, i) => { b.disabled = busy || (!available && i < 2); });
     const run = async fn => {
       if (!current() || busy) return;
       busy = true; buttons.forEach(b => { b.disabled = true; });
       try { await fn(); await poll(); }
       catch (error) { if (current()) status.textContent = errorMessage(error); }
-      finally { busy = false; if (current()) buttons.forEach(b => { b.disabled = false; }); }
+      finally { busy = false; if (current()) updateButtons(); }
     };
     const button = (text, fn) => {
       const node = element("button", { text, attrs: { type: "button" }, className: "secondary-button" });
@@ -32,7 +33,8 @@ export function createMcpAuthorization() {
       clearTimeout(timer);
       try {
         const { data } = await api.get(path, { signal }); if (!current()) return;
-        const labels = { idle: "等待授权", discovery: "正在发现授权服务…", ready: "已准备好，请打开授权网页", exchange: "正在完成授权…", error: "授权未完成" };
+        available = data.available !== false; updateButtons();
+        const labels = { idle: "等待授权", discovery: "正在发现授权服务…", ready: "已准备好，请打开授权网页", exchange: "正在完成授权…", error: "授权未完成", unsupported: "当前设备不支持安全保存 OAuth 凭据" };
         status.textContent = `${data.authorized ? "已授权" : labels[data.state] || data.state}${data.http_status >= 400 ? ` · HTTP ${data.http_status}` : ""}${data.message ? `：${data.message}` : ""}`;
         if (data.busy || data.state === "ready") timer = setTimeout(poll, 1500);
       } catch (error) { if (current()) status.textContent = errorMessage(error); }

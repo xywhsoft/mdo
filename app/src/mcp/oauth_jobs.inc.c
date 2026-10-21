@@ -178,7 +178,10 @@ xvalue* MdoMcpAuthorizationStatus(cstr Id)
     MdoMcpOAuthEntry* Entry=McpOAuthFind(Id,NULL);if(!Entry)return NULL;
     xrtMutexLock(Entry->Lock);xvalue* Out=xrtValueObject();
     cstr States[]={"idle","discovery","ready","exchange","error"};
-    bool Ok=Out&&McpOAuthSet(Out,"state",States[Entry->Status])&&McpOAuthSet(Out,"message",Entry->Message)&&
+    bool Available=xsCredentialProtectionAvailable();
+    bool Ok=Out&&McpOAuthSet(Out,"state",Available?States[Entry->Status]:"unsupported")&&
+        McpOAuthSet(Out,"message",Available?Entry->Message:"This device cannot securely store OAuth credentials; system credential protection is unavailable")&&
+        xrtValueObjectSetNew(Out,XRT_STR_LITERAL("available"),xrtValueBool(Available))&&
         McpOAuthSet(Out,"authorization_url",Entry->Status==MDO_MCP_AUTH_READY?Entry->AuthorizationUrl:NULL)&&
         xrtValueObjectSetNew(Out,XRT_STR_LITERAL("busy"),xrtValueBool(Entry->Busy))&&
         xrtValueObjectSetNew(Out,XRT_STR_LITERAL("authorized"),xrtValueBool(Entry->HasToken&&!Entry->NeedsAuthorization))&&
@@ -189,6 +192,7 @@ xvalue* MdoMcpAuthorizationStatus(cstr Id)
 
 bool MdoMcpAuthorizationStart(cstr Id,cstr LocalOrigin)
 {
+    if(!xsCredentialProtectionAvailable())return false;
     MdoMcpOAuthEntry* Entry=McpOAuthFind(Id,NULL);if(!Entry)return false;
     xvalue* Config=xrtJsonParse(xrtStrView(Entry->Config));cstr Configured=McpOAuthText(Config,"redirect_uri");
     char* Redirect=Configured?xrtStrDup(Configured):LocalOrigin&&McpOAuthLoopback(LocalOrigin)?xrtFormat("%s%s",LocalOrigin,MDO_MCP_OAUTH_CALLBACK):NULL;
