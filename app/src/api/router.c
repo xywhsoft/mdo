@@ -205,6 +205,8 @@ static const MdoApiRoute g_MdoApiRoutes[] = {
       "POST, OPTIONS", MdoApiModelsReloadRoute, false },
     { "/api/v1/skills/reload", XHTTP_METHOD_POST,
       "POST, OPTIONS", MdoApiSkillsReloadRoute, false },
+    { "/api/v1/skills/invoke", XHTTP_METHOD_POST,
+      "POST, OPTIONS", MdoApiSkillInvokeRoute, false },
     { "/api/v1/modules/reload", XHTTP_METHOD_POST,
       "POST, OPTIONS", MdoApiModulesReloadRoute, false },
     { "/api/v1/mcp/reload", XHTTP_METHOD_POST,

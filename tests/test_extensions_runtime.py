@@ -63,7 +63,7 @@ class SkillModel(BaseHTTPRequestHandler):
             type(self).payloads.append(payload)
             type(self).calls += 1
             calls = type(self).calls
-            arguments = ({}, {'name': 'research'}, {'name': 'research', 'path': 'references/guide.txt'})
+            arguments = ({'query':'RESEARCH', 'offset':0, 'limit':1}, {'name': 'research'}, {'name': 'research', 'path': 'references/guide.txt'})
             output = [{'type': 'function_call', 'call_id': 'skill-' + str(calls),
                 'name': 'skill', 'arguments': json.dumps(arguments[calls-1])}] if calls <= 3 else [
                     {'type': 'message', 'content': [{'type': 'output_text', 'text': 'Skill probe complete'}]}]
@@ -186,6 +186,12 @@ def main():
                 skill_revision = data['data']['revision']
                 skills = json.loads(request(port, 'GET', '/api/v1/skills')[2])['data']['items']
                 assert any(item['id'] == 'research' and item['resource_count'] == 1 for item in skills), skills
+                status, _, raw = request(port, 'POST', '/api/v1/skills/invoke',
+                    body=json.dumps({'id':'research','arguments':'literal $1 and $&'}).encode(),
+                    headers={'Content-Type':'application/json'})
+                assert status == 200, raw
+                selected=json.loads(raw)['data']['text']
+                assert 'Use references/guide.txt.' in selected and 'literal $1 and $&' in selected, selected
                 status, bundle = call('GET', 'skills/research/bundle')
                 assert status == 200 and bundle['data']['files'] == [file], bundle
                 assert call('POST', 'skills/research/enabled', {'enabled': False}, skill_revision)[0] == 200
@@ -234,6 +240,11 @@ def main():
                     run = json.loads(raw_run)['data']
                 assert run['state'] == 'succeeded', run
                 assert SkillModel.calls == 4, SkillModel.payloads
+                discovered = [part['output'] for part in SkillModel.payloads[1]['input'] if part.get('type') == 'function_call_output']
+                assert discovered and 'status: success\ntool: skill\n{' in discovered[-1], discovered
+                page = json.loads(discovered[-1][discovered[-1].index('{'):])
+                assert page['total'] == 1 and page['items'][0]['name'] == 'research' and page['next_offset'] == 1, page
+                assert 'mdo_available_skills' in json.dumps(SkillModel.payloads[0]), 'Skill metadata missing'
                 assert 'Use references/guide.txt.' not in json.dumps(SkillModel.payloads[0]), 'Skill body eagerly injected'
                 assert 'Inspect first' in json.dumps(SkillModel.payloads[-1]), SkillModel.payloads[-1]
                 status, _, raw_run = request(port, 'POST', '/api/v1/projects/default/sessions/' + session + '/runs',

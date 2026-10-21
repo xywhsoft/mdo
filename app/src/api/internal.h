@@ -150,6 +150,7 @@ bool MdoApiExtensionsInit(void);
 void MdoApiExtensionsUnit(void);
 bool MdoApiExtensionsRoute(MdoApiContext* Context);
 bool MdoApiSkillsRoute(MdoApiContext* pContext);
+bool MdoApiSkillInvokeRoute(MdoApiContext* pContext);
 bool MdoApiToolsRoute(MdoApiContext* pContext);
 bool MdoApiMcpRoute(MdoApiContext* pContext);
 bool MdoApiProjectsRoute(MdoApiContext* pContext);

@@ -1,7 +1,9 @@
 import { subscribeLocale, t } from "../../i18n.js";
 import { loadCommands, subscribeCommands, commandExpansion } from "./extension-commands.js";
+import { loadSelectableSkills, parseSkillSelection, expandSkillSelection } from "./skill-selection.js";
 import { clear, element, errorMessage, isImeKey, revealListOption, toast } from "../../utils/dom.js";
 import { createCompositionTracker } from "../../utils/composition.js";
+import { subscribeTarget } from "../../api/target.js";
 
 const COMMANDS = Object.freeze([
   { name: "/new", descriptionKey: "slash.new", fallback: "新建任务" },
@@ -34,6 +36,8 @@ export function createSlashCommands({ composer, input, onExecute, contextKey = (
   const composition = createCompositionTracker(input);
   let custom = [];
   let expanding = false;
+  let skills = [], lookup = 0;
+  const stopTarget = subscribeTarget(() => { skills = []; ++lookup; hide(); });
   const stopCommands = subscribeCommands(items => { custom = items; if (document.activeElement === input && input.value.startsWith("/")) update(false); });
 
   function hide() {
@@ -79,6 +83,10 @@ export function createSlashCommands({ composer, input, onExecute, contextKey = (
   }
 
   async function execute(command) {
+    if (command.skill) {
+      hide(); input.value = `$${command.id} `;
+      input.dispatchEvent(new Event("input", { bubbles: true })); input.focus(); return;
+    }
     if (command.custom) {
       if (expanding) return;
       const before = input.value, key = contextKey();
@@ -103,9 +111,19 @@ export function createSlashCommands({ composer, input, onExecute, contextKey = (
   function update(fetch = true) {
     if (composition.isComposing(input) || fetch?.isComposing) { hide(); return; }
     const value = input.value;
-    if (!value.startsWith("/") || /[\s]/.test(value)) { hide(); return; }
+    if ((!value.startsWith("/") && !value.startsWith("$")) || /[\s]/.test(value)) { ++lookup; hide(); return; }
+    if (fetch) {
+      skills = [];
+      const serial = ++lookup, key = contextKey();
+      void loadSelectableSkills().then(items => {
+        if (serial !== lookup || key !== contextKey() || input.value !== value) return;
+        skills = items; update(false);
+      }).catch(() => {});
+    }
     if (fetch) void loadCommands().then(items => { custom = items; if (input.value === value && document.activeElement === input) update(false); }).catch(() => {});
-    matches = [...COMMANDS, ...custom].filter((command) => command.name.startsWith(value));
+    matches = [...COMMANDS, ...custom, ...skills.map(item => ({...item,
+      name: value.startsWith("/") ? `/skill:${item.id}` : `$${item.id}`}))]
+      .filter((command) => command.name.startsWith(value));
     if (!matches.some((command) => command.custom || command.name !== value)) { hide(); return; }
     active = 0;
     render();
@@ -148,6 +166,14 @@ export function createSlashCommands({ composer, input, onExecute, contextKey = (
       return false;
     },
     async expandIntoComposer(value) {
+      const skill = parseSkillSelection(value);
+      if (skill) {
+        const key = contextKey();
+        const text = await expandSkillSelection(skill);
+        if (input.value !== value || contextKey() !== key) return true;
+        hide(); input.value = text;
+        input.dispatchEvent(new Event("input", { bubbles: true })); input.focus(); return true;
+      }
       const match = /^\/([a-z0-9_.-]+)(?:\s+([\s\S]*))?$/.exec(value);
       if (!match || exactCommand(`/${match[1]}`)) return false;
       const key = contextKey();
@@ -160,7 +186,7 @@ export function createSlashCommands({ composer, input, onExecute, contextKey = (
       input.dispatchEvent(new Event("input", { bubbles: true })); input.focus();
       return true;
     },
-    destroy() { stopCommands(); composition.dispose(); view?.removeEventListener("blur", hide); hide(); },
+    destroy() { stopTarget(); stopCommands(); composition.dispose(); view?.removeEventListener("blur", hide); hide(); },
     consumeExact(value) {
       const command = exactCommand(value);
       if (!command) return false;

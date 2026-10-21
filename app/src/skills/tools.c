@@ -2,6 +2,14 @@
 #include <string.h>
 #include "../../include/mdo/skills.h"
 
+static bool MdoSkillArgumentUInt(const xvalue* Value, uint64* Number)
+{
+    int64 Signed=0;
+    if (xrtValueGetUInt(Value,Number)) return true;
+    if (!xrtValueGetInt(Value,&Signed) || Signed<0) return false;
+    *Number=(uint64)Signed;return true;
+}
+
 /* One discovery tool, irrespective of the number of installed Skills. Metadata
  * is searched locally; instructions and resources enter context only on request. */
 static xwork_result MdoSkillExecute(void* Data, const xwork_tool_context* Context,
@@ -15,6 +23,7 @@ static xwork_result MdoSkillExecute(void* Data, const xwork_tool_context* Contex
     char* Resource = NULL;
     char* Json = NULL;
     size_t Bytes = 0u;
+    uint64 Offset = 0, Limit = 20;
     bool Ok = Args != NULL && Result != NULL && Catalog != NULL;
     cstr Message = "Skill request failed; refresh the catalog if files changed";
     (void)Data; (void)Context;
@@ -25,6 +34,10 @@ static xwork_result MdoSkillExecute(void* Data, const xwork_tool_context* Contex
         if (V != NULL) Ok = Ok && xrtValueGetString(V, &Query) && Query.Size <= 256u && memchr(Query.Data, 0, Query.Size) == NULL;
         V = xrtValueObjectGet(Args, XRT_STR_LITERAL("path"));
         if (V != NULL) Ok = Ok && xrtValueGetString(V, &Path) && Path.Size <= 1024u && memchr(Path.Data, 0, Path.Size) == NULL && Name.Size != 0u;
+        V = xrtValueObjectGet(Args, XRT_STR_LITERAL("offset"));
+        if (V != NULL) Ok = Ok && MdoSkillArgumentUInt(V, &Offset) && Offset <= 256;
+        V = xrtValueObjectGet(Args, XRT_STR_LITERAL("limit"));
+        if (V != NULL) Ok = Ok && MdoSkillArgumentUInt(V, &Limit) && Limit >= 1 && Limit <= 50;
     }
     if (Ok && Name.Size != 0u) {
         MdoSkillInfo Info = {0};
@@ -64,22 +77,26 @@ static xwork_result MdoSkillExecute(void* Data, const xwork_tool_context* Contex
     } else if (Ok) {
         xvalue* Items = xrtValueArray();
         char* Needle = xrtStrDupN(Query.Data != NULL ? Query.Data : "", Query.Size);
-        size_t i, Count = 0u;
+        size_t i, Count = 0u, Total = 0u;
         Ok = Items != NULL && Needle != NULL;
-        for (i = 0u; Ok && i < MdoSkillCatalogCount(Catalog) && Count < 20u; ++i) {
+        for (i = 0u; Ok && i < MdoSkillCatalogCount(Catalog); ++i) {
             MdoSkillInfo Info = {0}; xvalue* Item;
             Info.Size = sizeof(Info);
             Ok = MdoSkillCatalogAt(Catalog, i, &Info);
             if (!Ok) break;
-            if (Query.Size != 0u && strstr(Info.Id, Needle) == NULL &&
-                strstr(Info.Name, Needle) == NULL && strstr(Info.Description, Needle) == NULL) continue;
+            if (!MdoSkillSearchMatches(&Info, Needle)) continue;
+            if (Total++ < Offset || Count >= Limit) continue;
             Item = xrtValueObject();
             Ok = Item != NULL && xrtValueObjectSetNew(Item, XRT_STR_LITERAL("name"), xrtValueString(xrtStrView(Info.Id))) &&
                 xrtValueObjectSetNew(Item, XRT_STR_LITERAL("description"), xrtValueString(xrtStrView(Info.Description))) &&
                 xrtValueArrayAppend(Items, Item);
             xrtValueRelease(Item); ++Count;
         }
-        if (Ok) Ok = xrtValueObjectSet(Result, XRT_STR_LITERAL("items"), Items);
+        if (Ok) Ok = xrtValueObjectSet(Result, XRT_STR_LITERAL("items"), Items) &&
+            xrtValueObjectSetNew(Result,XRT_STR_LITERAL("total"),xrtValueUInt(Total)) &&
+            xrtValueObjectSetNew(Result,XRT_STR_LITERAL("offset"),xrtValueUInt(Offset)) &&
+            xrtValueObjectSetNew(Result,XRT_STR_LITERAL("has_more"),xrtValueBool(Offset+Count<Total)) &&
+            xrtValueObjectSetNew(Result,XRT_STR_LITERAL("next_offset"),xrtValueUInt(Offset+Count));
         xrtValueRelease(Items); xrtFree(Needle);
     }
     if (Ok) Json = xrtJsonStringify(Result, false, &Bytes);
@@ -98,7 +115,7 @@ bool MdoSkillToolsRegister(xwork_runtime* Runtime)
     xwork_tool_definition Tool = {0}; xwork_error Error;
     Tool.sName = "skill";
     Tool.sDescription = "Discover installed Skills with query (or empty arguments), then load instructions with name; load a listed text reference with name and path. Use relevant Skills before specialized work. Bodies are lazy; scripts are never executed by this tool.";
-    Tool.sParametersJson = "{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"path\":{\"type\":\"string\"}},\"required\":[],\"additionalProperties\":false}";
+    Tool.sParametersJson = "{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"path\":{\"type\":\"string\"},\"offset\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":256},\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":50}},\"required\":[],\"additionalProperties\":false}";
     Tool.bStrict = true; Tool.uEffects = XWORK_TOOL_EFFECT_READ;
     Tool.sSource = "mdo.skills"; Tool.OnExecuteV2 = MdoSkillExecute;
     Tool.iMaxResultBytes = 128u * 1024u; Tool.bParallelSafe = true;

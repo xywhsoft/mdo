@@ -366,6 +366,8 @@ bool MdoApiModulesRoute(MdoApiContext* Context)
     return MdoApiCatalogReply(Context, Data);
 }
 
+#include "skill_routes.inc.c"
+
 bool MdoApiSkillsRoute(MdoApiContext* Context)
 {
     MdoSkillCatalog* Catalog = MdoSkillCatalogSnapshot();

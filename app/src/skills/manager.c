@@ -5,6 +5,7 @@
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/skills.h"
 #include "../../include/mdo/prompt_file.h"
+#include "discovery.inc.c"
 
 #define MDO_SKILL_COUNT_LIMIT 256u
 #define MDO_SKILL_DIAGNOSTIC_LIMIT 256u

@@ -861,7 +861,8 @@ static bool MdoAgentsPublishSubagents(MdoAgentOwner* Owner,
             Error);
         if ( Prompts[Count] == NULL ) goto done;
         ++PromptCount;
-        if ( !MdoAgentsReplyLanguage(&Prompts[Count], Error) || !MdoToolPrompt(&Prompts[Count]) ) goto done;
+        if ( !MdoAgentsReplyLanguage(&Prompts[Count], Error) || !MdoToolPrompt(&Prompts[Count]) ||
+             !MdoSkillCatalogAppendPrompt(MdoAgentsToolSelected(&Subagent,"skill") ? Owner->Skills : NULL, &Prompts[Count]) ) goto done;
         ModelId = Subagent.Model != NULL && Subagent.Model[0] != '\0' ?
             Subagent.Model : MainModel->Info.Id;
         Reasoning = Subagent.ReasoningEffort != NULL &&
@@ -1216,7 +1217,8 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
                     sizeof(InstructionsFooter) - 1u, Error)) ) goto fail;
         }
     }
-    if ( !MdoAgentsReplyLanguage(&Prompt, Error) || !MdoToolPrompt(&Prompt) ) goto fail;
+    if ( !MdoAgentsReplyLanguage(&Prompt, Error) || !MdoToolPrompt(&Prompt) ||
+         !MdoSkillCatalogAppendPrompt(MdoAgentsToolSelected(&AgentInfo,"skill") ? Owner->Skills : NULL, &Prompt) ) goto fail;
     /* Memory is a dynamic context section. Keep the recovered Agent/Skill/user
      * instructions, but refresh memory paths and indices when a run is admitted.
      * Remove the old structured-memory section as well during the transition. */

@@ -95,6 +95,9 @@ void MdoSkillManagerUnit(void);
 bool MdoSkillManagerReload(void);
 bool MdoSkillValidateText(const char* Text, char* Error, size_t Capacity);
 bool MdoSkillToolsRegister(xwork_runtime* Runtime);
+/* Bounded metadata only; bodies remain lazy. Replaces our prior section. */
+bool MdoSkillCatalogAppendPrompt(const MdoSkillCatalog* Catalog, char** Prompt);
+bool MdoSkillSearchMatches(const MdoSkillInfo* Info, const char* Query);
 uint64 MdoSkillManagerGeneration(void);
 
 MdoSkillCatalog* MdoSkillCatalogSnapshot(void);
