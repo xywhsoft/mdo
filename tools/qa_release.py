@@ -291,6 +291,11 @@ def main(argv: list[str] | None = None) -> int:
             build.append("--skip-host-build")
         run(build)
         strict_compile(args.cc, xserver)
+        if os.name == "nt":
+            # Distribution probes require catalog/archives from this source,
+            # not an earlier release's ignored build cache.
+            run([sys.executable, str(ROOT / "tools/build_toolpacks.py"),
+                 "--packer", str(host)])
         probe_count = runtime_probes(host, first)
         run([str(packer), "pack", str(ROOT / "app"), "-o", str(second)])
         first_hash = digest(first)
