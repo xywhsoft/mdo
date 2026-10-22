@@ -4,14 +4,14 @@ import { subscribeLocale, t } from "../../i18n.js";
 import { element, errorMessage, toast } from "../../utils/dom.js";
 import { loadAgents } from "../../state/catalogs.js";
 import { loadResource } from "../../state/resources.js";
-import { makeStorePackage, STORE_KINDS, STORE_PLATFORMS, containsCode, resourceReferences, receiptKey, packageFields } from "./store-formats.js";
+import { makeStorePackage, STORE_KINDS, STORE_EDITOR_KINDS, STORE_PLATFORMS, containsCode, resourceReferences, receiptKey, packageFields } from "./store-formats.js";
 import { createStoreDraft } from "./store-draft.js";
 import { renderSourceMarkdown } from "../../utils/source-markdown.js";
 import { saveBlobFile } from "../../utils/file-download.js";
 
 const text = (key, fallback, args = {}) => t(`store.${key}`, args, fallback);
 const kindName = kind => ({ agents: "Agent", subagents: "SubAgent", tools: text("tools", "工具"),
-  skills: "Skill", mcp: "MCP", commands: text("commands", "命令"), "c-agents": "C Agent", "c-subagents": "C SubAgent" })[kind] || kind;
+  skills: "Skill", mcp: "MCP", modules: text("modules","扩展包（C 模块）"), toolpacks: text("toolpacks","扩展工具包"), plugins: text("plugins","mdo 插件"), commands: text("commands", "命令"), "c-agents": "C Agent", "c-subagents": "C SubAgent" })[kind] || kind;
 const node = (tag, value, className) => element(tag, { text: value, className });
 const publicationMessage = error => {
   const key = ({ "Invalid package ID": "id", "Invalid version": "version",
@@ -111,6 +111,7 @@ export function createStorePanel() {
       const badges=node("div","","store-badges");for(const type of types)badges.append(node("span",kindName(type),"store-badge"));card.append(badges);
       const actions = node("div", "", "store-card-actions");
       if (view === "installed") {
+        if(row.activation && row.activation!=="active")card.append(node("p",row.activation==="reload_required"?text("activationReload","已安装。mdo 插件需重新启动应用后完整生效。"):text("activationSetup","已安装。MCP 需要填写本机配置并测试连接。"),"store-note"));
         if(row.source !== "local")actions.append(button(text("checkUpdate", "检查更新"), async () => {
           try { const latest = await call({ action: "latest", id: row.id });
             if (!latest || latest.id === row.id) toast(text("upToDate", "已是最新公开版本。"));else await detail(latest); }
@@ -134,6 +135,14 @@ export function createStorePanel() {
     nodes.push(button(text("refresh", "刷新"), () => load()));root.replaceChildren(...nodes);
     for (const b of root.querySelectorAll("button")) b.disabled = busy;
   }
+  function planSummary(plan) {
+    const section=node("details","","store-install-plan");section.open=true;
+    section.append(node("summary",text("installationPlan","安装计划")));
+    for(const file of plan.files)section.append(node("p",`${file.operation} · ${file.path} · ${file.bytes} B`));
+    if(plan.reload_required)section.append(node("p",text("activationReload","已安装。mdo 插件需重新启动应用后完整生效。"),"store-note"));
+    if(plan.configuration_required)section.append(node("p",text("mcpSetup","MCP 安装后保持停用。请在 MCP 管理页配置并测试。"),"store-note"));
+    return section;
+  }
   async function detail(row) {
     if (busy) return;busy = true;
     try {
@@ -156,11 +165,12 @@ export function createStorePanel() {
       if (p.resources.some(r => r.kind === "mcp")) d.append(node("p", text("mcpSetup", "MCP 安装后保持停用。请在 MCP 管理页填写本机凭据、检查程序或地址，再启用并测试连接。"), "store-note"));
       const hasCode = containsCode(p.resources), already = Boolean(installed[row.id]);let approved = !hasCode;
       if (data.state === "published") {
+        let plan=null;try{plan=await call({action:"plan",id:row.id});d.append(planSummary(plan));}catch(e){d.append(node("p",errorMessage(e),"store-status"));}
         const install = button(already ? text("installed", "已安装") : text("install", "安装到当前设备"), () => {
-          if (!approved || already) return;closeDialog();void act(() => call({ action: "install", id: row.id, trust_code: approved }));
-        }, true);install.disabled = already || !approved;
+          if (!approved || already || !plan) return;closeDialog();void act(() => call({ action: "install", id: row.id, trust_code: approved, expected_plan:plan.sha256 }));
+        }, true);install.disabled = already || !approved || !plan;
         if (hasCode) { const label = node("label", "", "store-code-consent"), checkbox = element("input", { attrs: { type: "checkbox" } });
-          label.append(checkbox, node("span", text("codeConsent", "我已检查源码并信任作者。C 扩展在墨斗进程内运行，编译注册时也能执行代码。")));checkbox.onchange = () => { approved = checkbox.checked;install.disabled = !approved || already; };d.append(label); }
+          label.append(checkbox, node("span", text("codeConsent", "我已检查源码并信任作者。C 扩展在墨斗进程内运行，编译注册时也能执行代码。")));checkbox.onchange = () => { approved = checkbox.checked;install.disabled = !approved || already || !plan; };d.append(label); }
         d.append(install);
       }
       busy = false;d.showModal();
@@ -169,7 +179,7 @@ export function createStorePanel() {
   }
   function openResource(ref,row) {
     closeDialog();
-    if(ref.kind.startsWith("c-")){location.hash="#/settings/extensions";return;}
+    if(ref.kind.startsWith("c-")||["modules","toolpacks","plugins"].includes(ref.kind)){location.hash="#/settings/extensions";return;}
     window.dispatchEvent(new CustomEvent("mdo-open-resource",{detail:{...ref,packageKey:receiptKey(row)}}));
     location.hash=`#/settings/${ref.kind}`;
   }
@@ -185,13 +195,13 @@ export function createStorePanel() {
     input.onchange=async()=>{
       const file=input.files?.[0];if(!file)return;busy=true;
       try{
-        if(file.size>1024*1024)throw Error(text("packageLimit","插件包不能超过 1 MiB。"));
-        const p=JSON.parse(await file.text());if(p.format!=="mdo.extension.v1"||!p.manifest||!Array.isArray(p.resources))throw Error(text("invalidPackage","不是有效的墨斗插件源码包。"));
-        makeStorePackage(packageFields(p.manifest),p.resources);await api.get("/ecosystem");
+        if(file.size>6*1024*1024)throw Error(text("packageLimit","插件包不能超过 1 MiB。"));
+        const p=JSON.parse(await file.text());if(!["mdo.extension.v1","mdo.extension.v2"].includes(p.format)||!p.manifest||!Array.isArray(p.resources))throw Error(text("invalidPackage","不是有效的墨斗插件源码包。"));
+        makeStorePackage(packageFields(p.manifest),p.resources);const plan=await call({action:"plan_import",package:p});
         const d=createDialog(p.manifest.name),readme=node("div","","store-readme markdown-body");readme.append(renderSourceMarkdown(p.manifest.readme));d.append(node("p",text("offlineImportHint","从本地文件导入，不代表通过线上审核。请检查全部资源；此操作无需连接商店。"),"store-note"),readme);
         for(const r of p.resources){const source=node("details");source.append(node("summary",`${kindName(r.kind)} / ${r.id}`),node("pre",r.content,"store-source"));for(const f of r.files || [])source.append(node("p",f.path));d.append(source);}
-        let trust=!containsCode(p.resources);
-        const install=button(text("confirmImport","确认导入"),()=>{if(!trust)return;closeDialog();view="installed";void act(()=>call({action:"import",package:p,trust_code:trust}));},true);install.disabled=!trust;
+        d.append(planSummary(plan));let trust=!containsCode(p.resources);
+        const install=button(text("confirmImport","确认导入"),()=>{if(!trust)return;closeDialog();view="installed";void act(()=>call({action:"import",package:p,trust_code:trust,expected_plan:plan.sha256}));},true);install.disabled=!trust;
         if(!trust){const label=node("label","","store-code-consent"),check=element("input",{attrs:{type:"checkbox"}});label.append(check,node("span",text("codeConsent","我已检查源码并信任作者。C 扩展在墨斗进程内运行，编译注册时也能执行代码。")));check.onchange=()=>{trust=check.checked;install.disabled=!trust;};d.append(label);}
         d.append(install);d.showModal();
       }catch(e){toast(publicationMessage(e),"error");}finally{busy=false;}
@@ -200,7 +210,7 @@ export function createStorePanel() {
   async function publish(previous = null) {
     if (busy) return;busy = true;
     try {
-      // Native store access also checks login, before exposing publish tools.
+      // Local authoring and drafts work offline; submitting requires a service session.
       await api.get("/ecosystem");
       let selectedResources = [],savedDraft=null;
       if(previous?.draftId){savedDraft=await call({action:"draft_read",id:previous.draftId});selectedResources=savedDraft.references;previous=savedDraft.fields;}
@@ -211,9 +221,9 @@ export function createStorePanel() {
         const parts = /^(\d+)\.(\d+)\.(\d+)$/.exec(previous.version);
         if (parts) previous.version = `${parts[1]}.${parts[2]}.${Number(parts[3]) + 1}`;
       }
-      const lists = await Promise.all(STORE_KINDS.map(async k => [k, (await api.get(`/extensions/${k}`)).data.items]));
+      const lists = await Promise.all(STORE_EDITOR_KINDS.map(async k => [k, (await api.get(`/extensions/${k}`)).data.items]));
       const cSources = await call({ action: "c_sources" });
-      for (const k of ["c-agents", "c-subagents"]) lists.push([k, cSources.items.filter(r => r.kind === k)]);
+      for (const k of ["c-agents", "c-subagents", "modules", "toolpacks", "plugins"]) lists.push([k, cSources.items.filter(r => r.kind === k)]);
       const d = createDialog(text("editPackage", "编辑插件包")), form = element("form", { className: "store-publish-form" });
       editor = { dirty: false, saved: false, draft:null };
       const fields = {};

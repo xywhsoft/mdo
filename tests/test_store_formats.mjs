@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { makeStorePackage, containsCode } from "../app/web/js/features/settings/store-formats.js";
+import { makeStorePackage, containsCode, STORE_KINDS } from "../app/web/js/features/settings/store-formats.js";
 const fields={slug:"review",name:"Review",version:"1.0.0",description:"Review code",readme:"Check changed files",license:"MIT",platforms:["windows-x86_64"]};
 const resources=[{kind:"commands",id:"review",content:'/* mdo-command {"id":"review","description":"Review"} */\nC source'}];
 test("source export remains portable and does not mutate edited resources",()=>{
@@ -11,4 +11,14 @@ test("publishing requires a real resource selection and platform declaration",()
   assert.throws(()=>makeStorePackage(fields,[]));assert.throws(()=>makeStorePackage({...fields,platforms:[]},resources));
   assert.throws(()=>makeStorePackage({...fields,platforms:["unknown"]},resources));assert.throws(()=>makeStorePackage({...fields,slug:"../x"},resources));
   assert.throws(()=>makeStorePackage({...fields,version:"1\n2"},resources));
+});
+test("nine systems use portable v2 with a client build floor and numeric public versions",()=>{
+  assert.equal(STORE_KINDS.length,9);
+  for(const kind of ["modules","toolpacks","plugins"]){
+    const resource={kind,id:"fixture",content:"fixture"};
+    const p=makeStorePackage({...fields,version:"1.10.0"},[resource]);
+    assert.equal(p.format,"mdo.extension.v2");assert.equal(p.manifest.min_build_id,30000126);assert.equal(containsCode([resource]),true);
+    assert.throws(()=>makeStorePackage({...fields,version:"1.01.0"},[resource]));
+    assert.throws(()=>makeStorePackage({...fields,version:"4294967296.0.0"},[resource]));
+  }
 });
