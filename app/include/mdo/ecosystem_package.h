@@ -5,7 +5,7 @@
  * validation nor preview compiles C, connects MCP, or executes resource files. */
 #include <stdio.h>
 #include <string.h>
-#define MDO_PACKAGE_LIMIT (8u * 1024u * 1024u)
+#define MDO_PACKAGE_LIMIT (6u * 1024u * 1024u)
 #define MDO_PACKAGE_V1_LIMIT (1024u * 1024u)
 #define MDO_PACKAGE_FORMAT "mdo.extension.v1"
 #define MDO_PACKAGE_FORMAT_V2 "mdo.extension.v2"
@@ -121,6 +121,8 @@ static bool MdoPackageValidate(const xvalue* package,char* error,size_t capacity
         if(files){reason="This resource cannot contain attached files";if((strcmp(kind,"skills")&&!module&&!plugin&&!toolpack)||xrtValueType(files)!=XVALUE_ARRAY||xrtValueCount(files)>128)goto bad;
             for(size_t j=0;j<xrtValueCount(files);j++){const xvalue* f=xrtValueArrayGet(files,j);const char* path=MdoPackageText(f,"path",220),*base64=MdoPackageText(f,"base64",v2?1400000u:180000u);
                 reason="Invalid attached file path or size";if(!MdoPackagePath(path)||(!strcmp(kind,"skills")&&MdoPackageSamePath(path,"SKILL.md"))||!base64)goto bad;
+                size_t prefix=plugin?8u+strlen(id)+11u+64u+7u:module?14u+strlen(id)+1u:toolpack?106u:8u+strlen(id);
+                if(prefix+strlen(path)>220u){reason="Installed file path exceeds the portable limit";goto bad;}
                 for(size_t k=0;k<j;k++)if(MdoPackageSamePath(path,MdoPackageText(xrtValueArrayGet(files,k),"path",220))){reason="Duplicate file path";goto bad;}
                 size_t size=0;void* bytes=xrtBase64DecodeNew(base64,strlen(base64),&size,NULL);bool ok=bytes&&size<=(v2?1048576u:131072u);xrtFree(bytes);if(!ok)goto bad;
                 total+=size;if(total>sourceLimit){reason="Package decoded content exceeds its limit";goto bad;}
@@ -139,11 +141,10 @@ static bool MdoPackageValidate(const xvalue* package,char* error,size_t capacity
                     valid=MdoPackageId(name)&&MdoPackagePath(path)&&MdoPackageText(program,"description",600);
                     for(size_t k=0;valid&&k<j;k++)if(!strcmp(name,MdoPackageText(xrtValueArrayGet(programs,k),"name",64)))valid=false;
                     bool found=false;for(size_t k=0;valid&&k<xrtValueCount(files);k++)if(!strcmp(path,MdoPackageText(xrtValueArrayGet(files,k),"path",220)))found=true;
-                    if(!found&&!xrtValueObjectGet(doc,XRT_STR_LITERAL("archive")))valid=false;
+                    if(!found)valid=false;
                 }
                 const xvalue* archive=xrtValueObjectGet(doc,XRT_STR_LITERAL("archive"));
-                if(archive){const char* hash=MdoPackageText(archive,"sha256",64);int64 size=0;valid=valid&&hash&&strlen(hash)==64&&MdoPackageNumber(archive,"bytes",&size)&&size>0&&size<=536870912;
-                    for(size_t k=0;valid&&k<64;k++)if(!((hash[k]>='0'&&hash[k]<='9')||(hash[k]>='a'&&hash[k]<='f')))valid=false;}
+                if(archive)valid=false; /* Every reviewed byte belongs to this immutable portable package. */
             }
             xrtValueRelease(doc);if(!valid){reason=plugin?"Invalid mdo plugin manifest or frontend file":"Invalid command-line toolpack manifest";goto bad;}
         }

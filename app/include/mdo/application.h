@@ -36,6 +36,11 @@ bool MdoApplicationPluginsInit(void);
 void MdoApplicationPluginsUnit(void);
 xvalue* MdoApplicationPluginsCatalog(void);
 bool MdoApplicationPluginsCall(const mdo_sdk_context_v1*,cstr,const xvalue*,xvalue**,mdo_error_v1*,bool*);
+/* Internal store transaction reservation. Begin/End enclose filesystem journal
+ * publication and rollback; Publish mounts only verified immutable revisions. */
+bool MdoApplicationPluginsStoreBegin(xvalue**,char*,size_t);
+bool MdoApplicationPluginsStorePublish(const xvalue*,char*,size_t);
+void MdoApplicationPluginsStoreEnd(void);
 bool MdoApplicationUiInit(void);
 void MdoApplicationUiUnit(void);
 xvalue* MdoApplicationUiCatalog(void);

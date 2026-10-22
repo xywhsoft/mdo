@@ -13,10 +13,17 @@ bool MdoEcosystemPackageCompatible(const xvalue* package,const xvalue* input,cha
 {
     if(!MdoPackageValidate(package,error,capacity))return false;
     const xvalue* manifest=xrtValueObjectGet(package,XRT_STR_LITERAL("manifest"));
+    int64 MinBuild=0;if(MdoPackageV2(package)&&(!MdoPackageNumber(manifest,"min_build_id",&MinBuild)||(uint64)MinBuild>MdoBuildId())){snprintf(error,capacity,"Update mdo before installing this package");return false;}
     const xvalue* platforms=xrtValueObjectGet(manifest,XRT_STR_LITERAL("platforms"));bool compatible=false,code=false,trust=false;
     for(size_t i=0;i<xrtValueCount(platforms);i++){xstrview p;if(xrtValueGetString(xrtValueArrayGet(platforms,i),&p)&&xrtStrEqual(p,xrtStrView(MdoToolPlatform())))compatible=true;}
     const xvalue* resources=xrtValueObjectGet(package,XRT_STR_LITERAL("resources"));
-    for(size_t i=0;i<xrtValueCount(resources);i++){cstr kind=MdoPackageText(xrtValueArrayGet(resources,i),"kind",16);if(kind&&(!strcmp(kind,"tools")||!strcmp(kind,"commands")||!strncmp(kind,"c-",2)))code=true;}
+    for(size_t i=0;i<xrtValueCount(resources);i++){cstr kind=MdoPackageText(xrtValueArrayGet(resources,i),"kind",16);if(kind&&(!strcmp(kind,"tools")||!strcmp(kind,"commands")||!strncmp(kind,"c-",2)||!strcmp(kind,"modules")||!strcmp(kind,"plugins")||!strcmp(kind,"toolpacks")))code=true;
+#if defined(__ANDROID__)
+        if(kind&&!strcmp(kind,"toolpacks")){const xvalue* R=xrtValueArrayGet(resources,i);xvalue* Doc=xrtJsonParse(xrtStrView(MdoPackageText(R,"content",131072)));const xvalue* Programs=xrtValueObjectGet(Doc,XRT_STR_LITERAL("programs"));bool Scripts=true;
+            for(size_t j=0;j<xrtValueCount(Programs);j++){cstr Interpreter=MdoPackageText(xrtValueArrayGet(Programs,j),"interpreter",64);if(!Interpreter||!Interpreter[0])Scripts=false;}xrtValueRelease(Doc);
+            if(!Scripts){snprintf(error,capacity,"Android command-line packages need an APK-installed interpreter; downloaded native executables are unsupported");return false;}}
+#endif
+    }
     (void)xrtValueGetBool(xrtValueObjectGet(input,XRT_STR_LITERAL("trust_code")),&trust);
     if(!compatible|| (code&&!trust)){snprintf(error,capacity,"Package does not support this device, or C code approval is required");return false;}
     return true;
@@ -24,15 +31,16 @@ bool MdoEcosystemPackageCompatible(const xvalue* package,const xvalue* input,cha
 
 /* First-party proxy: tokens never enter JavaScript, paths are constructed from
  * validated fields, redirects and ambiguous POST retries are forbidden. */
-static xvalue* EcoService(cstr path,cstr method,const xvalue* body,MdoAccountLease* lease,uint16* status)
+static xvalue* EcoService(cstr path,cstr method,const xvalue* body,MdoAccountLease* lease,xcancel* cancel,uint16* status)
 {
     char url[1024],auth[4200];XS_FetchHeader headers[3];XS_FetchRequest req={0};XS_FetchResponse resp={0};size_t size=0;
     char* json=body?xrtJsonStringify(body,false,&size):NULL;xvalue* envelope=NULL,*data=NULL;*status=0;
-    if(!lease->Managed||!lease->AccessToken||size>MDO_PACKAGE_LIMIT||xrtCancelRequested(lease->Cancel))goto done;
-    snprintf(url,sizeof(url),MDO_ACCOUNT_SERVICE_ORIGIN "%s",path);snprintf(auth,sizeof(auth),"Bearer %s",lease->AccessToken);
-    headers[0]=(XS_FetchHeader){"Authorization",auth};headers[1]=(XS_FetchHeader){"Accept","application/json"};headers[2]=(XS_FetchHeader){"Content-Type","application/json"};
-    req.Size=sizeof(req);req.Version=XS_FETCH_REQUEST_VERSION;req.Url=url;req.Method=method;req.Headers=headers;req.HeaderCount=3;req.Body=json;req.BodySize=size;
-    req.Timeout=20000000;req.IdleTimeout=10000000;req.MaxBodyBytes=MDO_PACKAGE_LIMIT+65536;req.Cancel=lease->Cancel;resp.Size=sizeof(resp);
+    if(size>MDO_PACKAGE_LIMIT||(cancel&&xrtCancelRequested(cancel)))goto done;
+    snprintf(url,sizeof(url),MDO_ACCOUNT_SERVICE_ORIGIN "%s",path);
+    headers[0]=(XS_FetchHeader){"Accept","application/json"};headers[1]=(XS_FetchHeader){"Content-Type","application/json"};
+    size_t Count=2;if(lease->Managed&&lease->AccessToken){snprintf(auth,sizeof(auth),"Bearer %s",lease->AccessToken);headers[Count++]=(XS_FetchHeader){"Authorization",auth};}
+    req.Size=sizeof(req);req.Version=XS_FETCH_REQUEST_VERSION;req.Url=url;req.Method=method;req.Headers=headers;req.HeaderCount=Count;req.Body=json;req.BodySize=size;
+    req.Timeout=20000000;req.IdleTimeout=10000000;req.MaxBodyBytes=MDO_PACKAGE_LIMIT+65536;req.Cancel=lease->Managed?lease->Cancel:cancel;resp.Size=sizeof(resp);
     if(!xsFetch(&req,&resp))goto done;
     *status=resp.Status;
     if(!resp.Body||!xrtUtf8Valid((xstrview){(cstr)resp.Body,resp.BodySize},NULL))goto done;
@@ -42,7 +50,7 @@ static xvalue* EcoService(cstr path,cstr method,const xvalue* body,MdoAccountLea
     data=xrtValueObjectTake(envelope,XRT_STR_LITERAL("data"));
 done:
     xrtSecureZero(auth,sizeof(auth));xrtFree(json);xrtValueRelease(envelope);xsFetchResponseUnit(&resp);
-    if(xrtCancelRequested(lease->Cancel)){xrtValueRelease(data);data=NULL;*status=0;}return data;
+    if((cancel&&xrtCancelRequested(cancel))||(lease->Managed&&xrtCancelRequested(lease->Cancel))){xrtValueRelease(data);data=NULL;*status=0;}return data;
 }
 static bool EcoHandleInput(MdoApiContext* c,xvalue* input)
 {
@@ -53,26 +61,30 @@ static bool EcoHandleInput(MdoApiContext* c,xvalue* input)
         if(kind&&kind[0]&&!MdoPackageKind(kind))valid=false;
         size_t n=0;char* encoded=xrtPercentEncodeNew(query?query:"",query?strlen(query):0,xrtStrView(""),&n);
         if(!encoded)valid=false;
-        snprintf(path,sizeof(path),"/api/v1/mdo/ecosystem/packages?q=%s&kind=%s%s%s%lld",encoded?encoded:"",kind?kind:"",!strcmp(action,"mine")?"&mine=1":"",before?"&before=":"&unused=",(long long)before);xrtFree(encoded);
-    }else if(valid&&(!strcmp(action,"detail")||!strcmp(action,"latest")||!strcmp(action,"install")||!strcmp(action,"history"))){valid=MdoPackageNumber(input,"id",&id)&&id>0;
+        snprintf(path,sizeof(path),"/api/v1/mdo/ecosystem/packages?format=2&build_id=%llu&q=%s&kind=%s%s%s%lld",(unsigned long long)MdoBuildId(),encoded?encoded:"",kind?kind:"",!strcmp(action,"mine")?"&mine=1":"",before?"&before=":"&unused=",(long long)before);xrtFree(encoded);
+    }else if(valid&&(!strcmp(action,"detail")||!strcmp(action,"latest")||!strcmp(action,"install")||!strcmp(action,"plan")||!strcmp(action,"history"))){valid=MdoPackageNumber(input,"id",&id)&&id>0;
         int64 before=0;if(xrtValueObjectGet(input,XRT_STR_LITERAL("before"))&&(!MdoPackageNumber(input,"before",&before)||before<0))valid=false;
-        snprintf(path,sizeof(path),"/api/v1/mdo/ecosystem/%s?id=%lld%s&before=%lld",!strcmp(action,"history")?"history":"package",(long long)id,!strcmp(action,"latest")?"&latest=1":"",(long long)(before?before:INT64_MAX));
+        snprintf(path,sizeof(path),"/api/v1/mdo/ecosystem/%s?format=2&build_id=%llu&id=%lld%s&before=%lld",!strcmp(action,"history")?"history":"package",(unsigned long long)MdoBuildId(),(long long)id,!strcmp(action,"latest")?"&latest=1":"",(long long)(before?before:INT64_MAX));
     }else if(valid&&!strcmp(action,"withdraw")){int64 revision=0;valid=MdoPackageNumber(input,"id",&id)&&id>0&&MdoPackageNumber(input,"revision",&revision)&&revision>0;body=input;strcpy(path,"/api/v1/mdo/ecosystem/withdraw");method="POST";
     }else if(valid&&!strcmp(action,"submit")){body=xrtValueObjectGet(input,XRT_STR_LITERAL("package"));char error[256];valid=MdoPackageValidate(body,error,sizeof(error));strcpy(path,"/api/v1/mdo/ecosystem/submit");method="POST";
-    }else if(valid&&(!strcmp(action,"uninstall")||!strcmp(action,"export")||!strcmp(action,"c_sources")||!strcmp(action,"import")||!strcmp(action,"drafts")||!strcmp(action,"draft_read")||!strcmp(action,"draft_save")||!strcmp(action,"draft_delete"))){bool result=MdoApiEcosystemLocal(c,input);xrtValueRelease(input);return result;
+    }else if(valid&&(!strcmp(action,"uninstall")||!strcmp(action,"export")||!strcmp(action,"c_sources")||!strcmp(action,"import")||!strcmp(action,"plan_import")||!strcmp(action,"drafts")||!strcmp(action,"draft_read")||!strcmp(action,"draft_save")||!strcmp(action,"draft_delete"))){bool result=MdoApiEcosystemLocal(c,input);xrtValueRelease(input);return result;
     }else valid=false;
     if(!valid){xrtValueRelease(input);return MdoApiReplyError(c,422,"ecosystem_request_invalid","Invalid store request or portable package",NULL);}
     MdoAccountLease lease={0};uint16 status=0;
-    if(!MdoAccountAcquireService(c->SendCancel,&lease)){xrtValueRelease(input);return MdoApiReplyError(c,401,"ecosystem_login_refresh","Login is renewing; retry shortly",NULL);}
-    xvalue* data=EcoService(path,method,body,&lease,&status);if(status==401)(void)MdoAccountRejectAccess(&lease);MdoAccountRelease(&lease);
+    bool Acquired=MdoAccountAcquireService(c->SendCancel,&lease);
+    if(!Acquired&&(!strcmp(action,"mine")||strcmp(method,"GET"))){xrtValueRelease(input);return MdoApiReplyError(c,401,"ecosystem_login_refresh","Sign in or wait for login renewal before publishing",NULL);}
+    xvalue* data=EcoService(path,method,body,&lease,c->SendCancel,&status);if(status==401&&Acquired)(void)MdoAccountRejectAccess(&lease);if(Acquired)MdoAccountRelease(&lease);
     if(!data){xrtValueRelease(input);return MdoApiReplyError(c,status>=400&&status<600?status:502,"ecosystem_service_failed",status==409?"This version already exists; publish a new version":status==401?"Sign in again or wait for login renewal":"The extension service could not complete this request",NULL);}
-    if(!strcmp(action,"install")){
-        const xvalue* package=xrtValueObjectGet(data,XRT_STR_LITERAL("package"));char error[256];bool compatible=MdoEcosystemPackageCompatible(package,input,error,sizeof(error));
+    if(!strcmp(action,"install")||!strcmp(action,"plan")){
+        bool Planning=!strcmp(action,"plan");xvalue* Consent=Planning?xrtValueClone(input):NULL;if(Consent)MdoApiValueSetBool(Consent,"trust_code",true);
+        const xvalue* package=xrtValueObjectGet(data,XRT_STR_LITERAL("package"));char error[256];bool compatible=MdoEcosystemPackageCompatible(package,Consent?Consent:input,error,sizeof(error));xrtValueRelease(Consent);
         cstr state=MdoPackageText(data,"state",16);compatible=compatible&&state&&!strcmp(state,"published");
         size_t n=0;char* json=xrtJsonStringify(package,false,&n);char hash[65];cstr expected=MdoPackageText(data,"sha256",64);compatible=compatible&&json&&expected&&MdoExtensionHashBytes(json,n,hash)&&!strcmp(hash,expected);xrtFree(json);
         bool result;
         if(!compatible)result=MdoApiReplyError(c,409,"ecosystem_incompatible","Package is unpublished, incompatible, unverified, or C code approval is required",NULL);
-        else {xvalue* local=xrtValueObject();MdoApiValueSetString(local,"action","install");xrtValueObjectSet(local,XRT_STR_LITERAL("entry"),data);result=MdoApiEcosystemLocal(c,local);xrtValueRelease(local);}
+        else {xvalue* local=xrtValueObject();MdoApiValueSetString(local,"action",Planning?"plan":"install");xrtValueObjectSet(local,XRT_STR_LITERAL("entry"),data);
+            const xvalue* Expected=xrtValueObjectGet(input,XRT_STR_LITERAL("expected_plan"));if(Expected)xrtValueObjectSet(local,XRT_STR_LITERAL("expected_plan"),Expected);
+            result=MdoApiEcosystemLocal(c,local);xrtValueRelease(local);}
         xrtValueRelease(data);xrtValueRelease(input);return result;
     }
     xrtValueRelease(input);return MdoApiReplySuccessTake(c,status==201?201:200,data,NULL);
@@ -113,7 +125,6 @@ void MdoApiEcosystemUnit(void)
 }
 bool MdoApiEcosystemRoute(MdoApiContext* c)
 {
-    if(!MdoAccountHasSession())return MdoApiReplyError(c,401,"ecosystem_login_required","Sign in to use the extension store",NULL);
     if(c->Request->head->MethodCode==XHTTP_METHOD_GET){xvalue* input=xrtValueObject();MdoApiValueSetString(input,"action","installed");bool result=MdoApiEcosystemLocal(c,input);xrtValueRelease(input);return result;}
     char* raw=NULL;size_t length=0;MdoApiBodyStatus read=MdoApiBinaryBodyRead(c,MDO_PACKAGE_LIMIT+4096,&raw,&length);
     if(read!=MDO_API_BODY_OK)return MdoApiReplyBodyError(c,read);

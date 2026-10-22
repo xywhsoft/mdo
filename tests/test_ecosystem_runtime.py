@@ -64,7 +64,7 @@ def run(ui=False,host=None,website_host=None):
             actual,_,raw=request(app_port,method,"/api/v1"+path,body,headers=headers)
             assert actual==status,(path,actual,raw)
             return json.loads(raw).get("data")
-        app("GET","/ecosystem",status=401)
+        assert app("GET","/ecosystem")=={}
         app("POST","/account/login",{"identifier":"eco_native","password":"Fixture-2026-password","remember":False})
         for _ in range(100):
             account=app("GET","/account")

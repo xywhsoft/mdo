@@ -47,6 +47,32 @@ static bool SdkPluginMountRevision(SdkPlugin* P,const xvalue* Manifest){
     xrtValueRelease(M);return Ok;
 }
 static bool SdkPluginConfigSave(const xvalue* Config){char* Text=SdkJson(Config);bool Ok=Text&&MdoHomeAtomicWrite("config/plugins.json",Text,strlen(Text),true);xrtFree(Text);return Ok;}
+bool MdoApplicationPluginsStoreBegin(xvalue** Config,char* Error,size_t Capacity){
+    if(!Config||!SdkPlugins.Lock)return false;*Config=NULL;
+    xrtMutexLock(SdkPlugins.Lock);
+    bool Ok=!SdkPlugins.Busy&&!SdkPlugins.Recovery;
+    if(Ok){*Config=xrtValueClone(SdkPlugins.Config);Ok=*Config!=NULL;if(Ok)SdkPlugins.Busy=true;}
+    xrtMutexUnlock(SdkPlugins.Lock);
+    if(!Ok&&Error&&Capacity)snprintf(Error,Capacity,"Plugin manager is busy or in recovery mode; retry after recovery");
+    return Ok;
+}
+void MdoApplicationPluginsStoreEnd(void){
+    if(SdkPlugins.Lock){xrtMutexLock(SdkPlugins.Lock);SdkPlugins.Busy=false;xrtMutexUnlock(SdkPlugins.Lock);}
+}
+bool MdoApplicationPluginsStorePublish(const xvalue* Config,char* Error,size_t Capacity){
+    if(xrtValueType(Config)!=XVALUE_ARRAY||xrtValueCount(Config)>32||!SdkPlugins.Lock)return false;
+    SdkPlugin* Candidates=xrtCalloc(32,sizeof(*Candidates));xvalue* Next=xrtValueClone(Config);bool Ok=Candidates&&Next;
+    for(size_t i=0;Ok&&i<xrtValueCount(Config);i++)Ok=SdkPluginMountRevision(&Candidates[i],xrtValueArrayGet(Config,i));
+    if(Ok){xrtMutexLock(SdkPlugins.Lock);
+        if(!SdkPlugins.Busy)Ok=false;
+        else{for(size_t i=0;i<32;i++){SdkPluginDrop(&SdkPlugins.Plugins[i]);SdkPlugins.Plugins[i]=Candidates[i];memset(&Candidates[i],0,sizeof(Candidates[i]));}
+            xrtValueRelease(SdkPlugins.Config);SdkPlugins.Config=Next;Next=NULL;}
+        xrtMutexUnlock(SdkPlugins.Lock);
+    }
+    if(Candidates){for(size_t i=0;i<32;i++)SdkPluginDrop(&Candidates[i]);xrtFree(Candidates);}xrtValueRelease(Next);
+    if(!Ok&&Error&&Capacity)snprintf(Error,Capacity,"Plugin candidate could not be mounted; previous runtime is retained");
+    return Ok;
+}
 bool MdoApplicationPluginsInit(void){
     SdkPlugins.Lock=xrtMutexCreate();if(!SdkPlugins.Lock)return false;
     char* Mode=xrtEnvGet("MDO_PLUGINS_DISABLED");SdkPlugins.Recovery=Mode&&strcmp(Mode,"0");xrtFree(Mode);

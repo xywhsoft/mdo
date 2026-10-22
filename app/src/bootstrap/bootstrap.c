@@ -61,12 +61,12 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
         MdoBootstrapFail("Home initialization failed");
         return false;
     }
-    if(!MdoApplicationInit(pHost->Server)){MdoBootstrapFail("Application SDK initialization failed");return false;}
-    MdoModuleManagerAttachApplication(MdoApplicationApi());
     if ( !MdoEcosystemRecover() ) {
         MdoBootstrapFail("Extension installation recovery failed");
         return false;
     }
+    if(!MdoApplicationInit(pHost->Server)){MdoBootstrapFail("Application SDK initialization failed");return false;}
+    MdoModuleManagerAttachApplication(MdoApplicationApi());
     if(!MdoCommandMigrateLegacy())fprintf(stderr,"[mdo] legacy command migration needs attention; originals retained\n");
     if ( !MdoProjectLifecycleInit() ) {
         MdoBootstrapFail("project lifecycle initialization failed");

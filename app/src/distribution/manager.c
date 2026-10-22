@@ -2,6 +2,7 @@
 #include "../../include/mdo/distribution.h"
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/version.h"
+#include "../../include/mdo/ecosystem_package.h"
 #include "../remote/net.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -392,6 +393,7 @@ xvalue* MdoDistributionSnapshot(void)
     xrtValueObjectSetNew(Root,XRT_STR_LITERAL("bundled_toolpack_revision"),xrtValueUInt(!strcmp(MdoEdition(),"full")?MDO_TOOLPACK_REVISION:0));
     MdoDistSet(Root,"edition",MdoEdition()); MdoDistSet(Root,"platform",MdoToolPlatform()); return Root;
 }
+#include "ecosystem.inc.c"
 bool MdoToolPrompt(char** Prompt)
 {
     if(!Prompt||!*Prompt)return false;
@@ -401,7 +403,10 @@ bool MdoToolPrompt(char** Prompt)
         End+=strlen("</mdo_tool_environment>\n");memmove(Begin,End,strlen(End)+1);
     }
     xvalue* Snapshot=MdoDistributionSnapshot(); xvalue* Tools=Snapshot?xrtValueObjectGet(Snapshot,XRT_STR_LITERAL("tools")):NULL;
-    xvalue* Environment=xrtValueObject();xrtValueObjectSetNew(Environment,XRT_STR_LITERAL("tools"),Tools?xrtValueClone(Tools):xrtValueArray());
+    xvalue* Environment=xrtValueObject(),*Merged=Tools?xrtValueClone(Tools):xrtValueArray(),*Instructions=xrtValueArray();
+    MdoDistCommunityTools(Merged,Instructions);
+    xrtValueObjectSetNew(Environment,XRT_STR_LITERAL("tools"),Merged);
+    xrtValueObjectSetNew(Environment,XRT_STR_LITERAL("package_instructions"),Instructions);
     xrtValueObjectSetNew(Environment,XRT_STR_LITERAL("capability_revision"),xrtValueUInt(MdoDistNumber(Snapshot,"capability_revision")));
     size_t Size=0; str Json=xrtJsonStringify(Environment,false,&Size);xrtValueRelease(Environment);
     if(Json)Size=strlen(Json);
