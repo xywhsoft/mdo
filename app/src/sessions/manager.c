@@ -2071,6 +2071,27 @@ bool MdoSessionClear(MdoSession* Session, xwork_error* Error)
     return MdoSessionsLedgerMutation(Session, true, 0u, 0u, NULL, Error);
 }
 
+bool MdoSessionCompact(MdoSession* Session,xwork_error* Error)
+{
+    xworkErrorInit(Error);if(!Session){MdoSessionsError(Error,XWORK_ERROR_INVALID_ARGUMENT,"session is required");return false;}
+    xrtMutexLock(Session->Lock);xrtMutexLock(g_MdoSessions.Lock);
+    bool Ok=Session->Agent&&Session->Info.Status==MDO_SESSION_ACTIVE&&MdoSessionsValidateCurrent(Session,Error);
+    xrtMutexUnlock(g_MdoSessions.Lock);
+    bool Recovery=false;
+    if(Ok)Ok=MdoAgentSessionRecoveryRequired(Session->Agent,&Recovery,Error)&&!Recovery;
+    if(Recovery)MdoSessionsError(Error,XWORK_ERROR_CONTEXT,"Resolve the interrupted response before compressing context");
+    /* Do not retain the manager mutex through model callbacks or event writes. */
+    if(Ok)Ok=MdoAgentSessionCompact(Session->Agent,Error);
+    if(Ok){
+        xrtMutexLock(g_MdoSessions.Lock);MdoSessionInfo Current,Candidate;
+        Ok=MdoSessionsMetaRead(Session->Info.ProjectId,Session->Info.Id,&Current);
+        if(Ok){Session->Info=Current;Ok=MdoSessionsCandidate(Session,&Candidate,Error)&&MdoSessionsCommit(Session,&Candidate,Error);}
+        xrtMutexUnlock(g_MdoSessions.Lock);
+    }
+    if(!Ok&&Error&&Error->eCode==XWORK_ERROR_NONE)MdoSessionsError(Error,XWORK_ERROR_CONTEXT,"Context compaction is unavailable for this session");
+    xrtMutexUnlock(Session->Lock);return Ok;
+}
+
 bool MdoSessionTruncateAfter(MdoSession* Session, uint64 ThroughSequence,
     xwork_error* Error)
 {

@@ -1843,6 +1843,13 @@ bool MdoAgentSessionClear(MdoAgentSession* Session, xwork_error* Error)
     return Ok;
 }
 
+bool MdoAgentSessionCompact(MdoAgentSession* Session,xwork_error* Error)
+{
+    xworkErrorInit(Error);
+    if(!Session||!Session->Agent){MdoAgentsError(Error,XWORK_ERROR_CONTEXT,"an open Agent session is required");return false;}
+    return xworkAgentCompact(Session->Agent,Error)==XWORK_RESULT_OK;
+}
+
 bool MdoAgentSessionTruncateAfter(MdoAgentSession* Session,
     uint64 ThroughSequence, xwork_error* Error)
 {

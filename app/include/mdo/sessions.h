@@ -228,6 +228,9 @@ bool MdoSessionFinishInterrupted(MdoSession* Session,
     uint64 ExpectedRevision, uint64 ExpectedLastSequence,
     uint64* FinishedSequence, xwork_error* Error);
 bool MdoSessionClear(MdoSession* Session, xwork_error* Error);
+/* Own an idle, recovered runtime. Uses its cancellation/deadline and event
+ * bridge; never manufactures a user turn or removes transcript records. */
+bool MdoSessionCompact(MdoSession* Session, xwork_error* Error);
 bool MdoSessionTruncateAfter(MdoSession* Session, uint64 ThroughSequence,
     xwork_error* Error);
 typedef enum MdoSessionMessageMutationResult {

@@ -131,6 +131,7 @@ bool MdoAgentRecoverySnapshotToken(const xwork_recovery_snapshot* Snapshot,
  * It therefore fails while another run is active. Successful mutations are
  * checkpointed to the managed snapshot before returning. */
 bool MdoAgentSessionCheckpoint(MdoAgentSession* Session, xwork_error* Error);
+bool MdoAgentSessionCompact(MdoAgentSession* Session, xwork_error* Error);
 /* Checkpoint and perform a bounded, read-only capture before releasing the
  * exclusive run window. Read is called synchronously only after a successful
  * checkpoint; NULL Read performs just the checkpoint. A reader must not call

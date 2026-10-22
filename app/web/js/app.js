@@ -807,6 +807,11 @@ export async function boot() {
         "ui.settings": () => navigation.openSettings("general"),
         "ui.theme": () => toggleTheme(),
         "ui.help": () => shortcuts.openHelp(),
+        "ui.refresh": async () => {
+          const selected=navigation.get();
+          if(selected.projectId===scope.projectId&&selected.sessionId===scope.sessionId)
+            await Promise.all([loadSession(scope.projectId,scope.sessionId),reloadSelectedTimeline()]);
+        },
         "ui.stop": async () => {
         const cancelled = await slashCommands.cancel(receipt.id);
         if (!activeRun && !cancelled)

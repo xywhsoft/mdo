@@ -3,6 +3,7 @@
 #include "../../include/mdo/time.h"
 #include "../remote/loopback.h"
 #include "../api/write_admission.h"
+#include "../../include/mdo/sessions.h"
 
 #define COMMAND_JOBS 64u
 #define COMMAND_ACTIVE 4u
@@ -128,6 +129,17 @@ static xvalue* CommandHostCall(CommandJob* J,const xvalue* Q,char Error[512]) {
     cstr Method=CommandText(Q,"method");const xvalue* Params=xrtValueObjectGet(Q,XRT_STR_LITERAL("params"));
     if(!Method){snprintf(Error,512,"Host method is missing");return NULL;}
     if(!strcmp(Method,"api.request"))return CommandApiCall(J,Params,Error);
+    if(!strcmp(Method,"session.compact")){
+        MdoSessionRuntimeOptions Options;MdoSessionRuntimeOptionsInit(&Options);Options.Cancel=J->Cancel;Options.Deadline=J->Deadline;
+        xwork_error E;MdoSession* Session=MdoSessionOpen(CommandText(J->Input,"project_id"),CommandText(J->Input,"session_id"),&Options,&E);
+        bool Ok=Session&&MdoSessionCompact(Session,&E);MdoSessionRelease(Session);
+        if(!Ok){snprintf(Error,512,"%.500s",E.sMessage[0]?E.sMessage:"Context compaction failed");return NULL;}
+        xvalue* Action=xrtValueObject(),*Result=xrtValueObject();
+        Ok=Action&&Result&&CommandSet(Action,"type","ui.refresh")&&xrtValueArrayAppendNew(J->Actions,Action)&&
+            CommandSet(Result,"message","上下文已压缩，原始会话记录仍可查看。");
+        if(!Ok){xrtValueRelease(Result);snprintf(Error,512,"Context compacted but its UI result is unavailable");return NULL;}
+        return Result;
+    }
     static const char* Methods[]={"ui.new","ui.model","ui.settings","ui.theme","ui.help","ui.stop","ui.session","ui.mcp","skill.invoke"};
     for(size_t i=0;i<sizeof(Methods)/sizeof(*Methods);i++)if(!strcmp(Method,Methods[i])){
         xvalue* A=xrtValueObject();
