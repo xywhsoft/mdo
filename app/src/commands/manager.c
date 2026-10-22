@@ -1,4 +1,5 @@
 #include "../../include/mdo/commands.h"
+#include "../../include/mdo/application.h"
 #include "../../include/mdo/project_lifecycle.h"
 #include "../../include/mdo/time.h"
 #include "../remote/loopback.h"
@@ -75,7 +76,7 @@ static void CommandDispose(CommandJob* J) {
     xrtCancelDestroy(J->Cancel);xrtFree(J->Workspace);MdoProjectLeaseRelease(J->Lease);memset(J,0,sizeof(*J));
 }
 static void CommandCleanup(CommandJob* J,unsigned Count) {
-    const char* Names[]={"input.json","command.c","worker.c","xs.json","web/index.html","mdo/command.h","mdo/module.h","final.json"};
+    const char* Names[]={"input.json","command.c","worker.c","xs.json","web/index.html","mdo/command.h","mdo/module.h","mdo/sdk.h","final.json"};
     char P[256];
     for(size_t i=0;i<sizeof(Names)/sizeof(*Names);i++){
         snprintf(P,sizeof(P),"%s/%s",J->Directory,Names[i]);(void)MdoHomeRemove(P,false);
@@ -139,6 +140,21 @@ static xvalue* CommandApiCall(CommandJob* J,const xvalue* P,char Error[512]) {
 static xvalue* CommandHostCall(CommandJob* J,const xvalue* Q,char Error[512]) {
     cstr Method=CommandText(Q,"method");const xvalue* Params=xrtValueObjectGet(Q,XRT_STR_LITERAL("params"));
     if(!Method){snprintf(Error,512,"Host method is missing");return NULL;}
+    if(!strcmp(Method,"sdk.invoke")){
+        mdo_sdk_context_v1 C;MdoApplicationInvocation Invocation={0};Invocation.Cancel=J->Cancel;Invocation.Actions=J->Actions;
+        MdoApplicationContext(&C,&Invocation,CommandText(J->Input,"command_id"),J->Id,CommandText(J->Input,"project_id"),
+            CommandText(J->Input,"session_id"),CommandText(J->Input,"run_id"),J->Workspace,J->Deadline);
+        mdo_error_v1 E={0};xvalue* Result=NULL;cstr Service=CommandText(Params,"method");
+        mdo_result Code=MdoApplicationCall(&C,Service,xrtValueObjectGet(Params,XRT_STR_LITERAL("params")),&Result,&E);
+        xvalue* Frame=xrtValueObject(),*Failure=xrtValueObject();
+        xrtValueObjectSetNew(Frame,XRT_STR_LITERAL("code"),xrtValueInt(Code));
+        xrtValueObjectSetNew(Frame,XRT_STR_LITERAL("result"),Result?Result:xrtValueNull());
+        CommandSet(Failure,"code",E.Code);CommandSet(Failure,"message",E.Message);CommandSet(Failure,"stage",E.Stage);
+        xrtValueObjectSetNew(Failure,XRT_STR_LITERAL("status"),xrtValueUInt(E.Status));
+        xrtValueObjectSetNew(Failure,XRT_STR_LITERAL("retryable"),xrtValueBool(E.Retryable));
+        xrtValueObjectSetNew(Failure,XRT_STR_LITERAL("may_have_completed"),xrtValueBool(E.MayHaveCompleted));
+        xrtValueObjectSetNew(Frame,XRT_STR_LITERAL("error"),Failure);return Frame;
+    }
     if(!strcmp(Method,"api.request"))return CommandApiCall(J,Params,Error);
     if(!strcmp(Method,"session.create")){
         cstr Project=CommandText(J->Input,"project_id"),Requested=CommandText(Params,"project_id");
@@ -189,6 +205,7 @@ static int32 CommandExecute(void* Value) {
     if(!CommandCopyResource(J,"/app/command-worker.c","worker.c")||
        !CommandCopyResource(J,"/app/generated/module-sdk/mdo/command.h","mdo/command.h")||
        !CommandCopyResource(J,"/app/generated/module-sdk/mdo/module.h","mdo/module.h")||
+       !CommandCopyResource(J,"/app/generated/module-sdk/mdo/sdk.h","mdo/sdk.h")||
        !CommandJobJson(J,"input.json",J->Input)||!CommandJobWrite(J,"web/index.html","Command worker")||
        !CommandJobWrite(J,"xs.json","{\"engine\":{\"workers\":1},\"services\":[{\"enabled\":true,\"class\":\"custom\",\"name\":\"command-worker\",\"host_default\":{\"enabled\":true,\"path\":\"web\",\"devlang\":\"c\",\"devfile\":\"worker.c\"}}]}")){
         snprintf(Error,sizeof(Error),"Cannot prepare isolated command worker");goto finish;

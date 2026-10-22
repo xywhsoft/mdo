@@ -30,11 +30,15 @@ typedef enum mdo_result {
 } mdo_result;
 
 typedef uint64_t mdo_capabilities;
+struct mdo_sdk_context_v1;
+struct mdo_service_v1;
+struct mdo_hook_v1;
 typedef enum mdo_capability_flag {
     MDO_CAPABILITY_LOG = UINT64_C(1) << 0,
-    MDO_CAPABILITY_CLOCK = UINT64_C(1) << 1
+    MDO_CAPABILITY_CLOCK = UINT64_C(1) << 1,
+    MDO_CAPABILITY_APPLICATION = UINT64_C(1) << 2
 } mdo_capability_flag;
-#define MDO_CAPABILITY_ALL (MDO_CAPABILITY_LOG | MDO_CAPABILITY_CLOCK)
+#define MDO_CAPABILITY_ALL (MDO_CAPABILITY_LOG | MDO_CAPABILITY_CLOCK | MDO_CAPABILITY_APPLICATION)
 
 typedef uint64_t mdo_tool_effects;
 typedef enum mdo_tool_effect_flag {
@@ -83,6 +87,7 @@ typedef struct mdo_tool_context_v1 {
     uint64_t CatalogGeneration;
     uint64_t Deadline;
     const void* CancelToken;
+    const struct mdo_sdk_context_v1* Application;
 } mdo_tool_context_v1;
 
 typedef struct mdo_permission_writer_v1 {
@@ -224,6 +229,7 @@ typedef struct mdo_host_services_v1 {
     uint32_t AbiVersion;
     mdo_capabilities GrantedCapabilities;
     const mdo_host_core_v1* Core;
+    const struct mdo_sdk_context_v1* Application;
 } mdo_host_services_v1;
 
 typedef struct mdo_registrar_v1 {
@@ -234,6 +240,8 @@ typedef struct mdo_registrar_v1 {
         char* ErrorMessage, size_t ErrorCapacity);
     mdo_result (*AddAgent)(void* Context, const mdo_agent_v1* Agent,
         char* ErrorMessage, size_t ErrorCapacity);
+    mdo_result (*AddService)(void* Context, const struct mdo_service_v1*, char*, size_t);
+    mdo_result (*AddHook)(void* Context, const struct mdo_hook_v1*, char*, size_t);
 } mdo_registrar_v1;
 
 typedef mdo_result (*mdo_module_register_v1)(

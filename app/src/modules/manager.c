@@ -7,6 +7,10 @@
 
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/modules.h"
+#include "../../include/mdo/application.h"
+#include "../application/internal.h"
+static const mdo_application_v1* g_MdoModuleApplication;
+void MdoModuleManagerAttachApplication(const mdo_application_v1* Api){g_MdoModuleApplication=Api;}
 #include "../../include/mdo/agent_file.h"
 #include "../../include/mdo/tool_catalog.h"
 
@@ -26,7 +30,7 @@
 #define MDO_MODULE_ERROR_LIMIT 1024u
 #define MDO_MODULE_SOURCE "mdo.modules"
 #define MDO_MODULE_COMPILE_OPTIONS "-std=c11 -Wall -Wextra -Werror"
-#define MDO_MODULE_COMPILE_ID "c11|-Wall|-Wextra|-Werror|restricted-v1"
+#define MDO_MODULE_COMPILE_ID "c11|-Wall|-Wextra|-Werror|application-sdk-v1"
 
 typedef struct MdoModuleGeneration MdoModuleGeneration;
 
@@ -103,6 +107,11 @@ struct MdoModuleGeneration {
     bool UnregisterReady;
     mdo_host_core_v1 HostCore;
     mdo_host_services_v1 HostServices;
+    mdo_sdk_context_v1 Application;
+    mdo_service_v1* Services;
+    size_t ServiceCount;
+    mdo_hook_v1* Hooks;
+    size_t HookCount;
     char CompilerLog[4096];
     size_t CompilerLogLength;
 };
@@ -148,6 +157,7 @@ typedef struct MdoModuleRegistrarContext {
 
 typedef struct MdoModuleState {
     xmutex* Lock;
+    xmutex* ReloadLock;
     xwork_runtime* Runtime;
     MdoModuleCatalog* Catalog;
     MdoModuleDiagnostics* Diagnostics;
@@ -300,6 +310,12 @@ static void MdoModulesGenerationRelease(MdoModuleGeneration* pGeneration)
     if ( pGeneration->UnregisterReady && pGeneration->Unregister != NULL )
         pGeneration->Unregister(pGeneration->ModuleData);
     if ( pGeneration->Tcc != NULL ) xsDestroyTCC(pGeneration->Tcc);
+    for(i=0;i<pGeneration->ServiceCount;i++){
+        xrtFree((void*)pGeneration->Services[i].Id);xrtFree((void*)pGeneration->Services[i].Description);
+        xrtFree((void*)pGeneration->Services[i].InputSchema);xrtFree((void*)pGeneration->Services[i].OutputSchema);
+    }
+    for(i=0;i<pGeneration->HookCount;i++){xrtFree((void*)pGeneration->Hooks[i].Id);xrtFree((void*)pGeneration->Hooks[i].Topic);}
+    xrtFree(pGeneration->Services);xrtFree(pGeneration->Hooks);
     for ( i = 0u; i < pGeneration->ToolCount; ++i )
         MdoModulesToolUnit(&pGeneration->Tools[i]);
     for ( i = 0u; i < pGeneration->AgentCount; ++i )
@@ -816,6 +832,12 @@ static bool MdoModulesCopyDescriptor(MdoModuleGeneration* pGeneration,
     pGeneration->HostServices.GrantedCapabilities =
         pGeneration->Capabilities;
     pGeneration->HostServices.Core = &pGeneration->HostCore;
+    pGeneration->Application.Size=sizeof(pGeneration->Application);pGeneration->Application.Version=MDO_SDK_VERSION;
+    pGeneration->Application.Api=g_MdoModuleApplication;pGeneration->Application.ExtensionId=pGeneration->Id;
+    pGeneration->Application.InvocationId="";pGeneration->Application.DeviceId="local";
+    pGeneration->Application.ProjectId="";pGeneration->Application.SessionId="";
+    pGeneration->Application.RunId="";pGeneration->Application.Workspace="";
+    pGeneration->HostServices.Application=&pGeneration->Application;
     return true;
 }
 
@@ -864,7 +886,7 @@ static MdoModuleGeneration* MdoModulesCompile(const MdoModuleSource* pSource,
     xsTccConfigInit(&Config);
     Config.ApplicationVfs = MdoHomeApplicationVfs();
     Config.ApplicationRoot = MdoHomeApplicationRoot();
-    Config.Flags = XS_TCC_RESTRICT_HOST_SYMBOLS;
+    Config.Flags = 0; /* Trusted native extensions may use the public xs/xrt SDK. */
     pGeneration->Tcc = xsCreateTCCEx(&Config, &pTccError);
     if ( pGeneration->Tcc == NULL ) {
         (void)MdoModulesDiagnosticAdd(pDiagnostics,
@@ -1232,6 +1254,8 @@ failed:
     return MDO_RESULT_ERROR;
 }
 
+#include "application.inc.c"
+
 static bool MdoModulesRegister(MdoModuleGeneration* pGeneration,
     mdo_module_register_v1 Register, MdoModuleDiagnostics* pDiagnostics)
 {
@@ -1248,6 +1272,8 @@ static bool MdoModulesRegister(MdoModuleGeneration* pGeneration,
     Registrar.Context = &Context;
     Registrar.AddTool = MdoModulesRegistrarAddTool;
     Registrar.AddAgent = MdoModulesRegistrarAddAgent;
+    Registrar.AddService = MdoModulesRegistrarAddService;
+    Registrar.AddHook = MdoModulesRegistrarAddHook;
     memset(sError, 0, sizeof(sError));
     Result = Register(&pGeneration->HostServices, &Registrar,
         &pGeneration->ModuleData, sError, sizeof(sError));
@@ -1262,7 +1288,7 @@ static bool MdoModulesRegister(MdoModuleGeneration* pGeneration,
         return false;
     }
     if ( (pGeneration->Kind == MDO_MODULE_TOOLS &&
-          pGeneration->ToolCount == 0u) ||
+          pGeneration->ToolCount == 0u && pGeneration->ServiceCount==0u && pGeneration->HookCount==0u) ||
          (pGeneration->Kind != MDO_MODULE_TOOLS &&
           pGeneration->AgentCount == 0u) ) {
         (void)MdoModulesDiagnosticAdd(pDiagnostics,
@@ -1917,8 +1943,15 @@ bool MdoModuleManagerReload(void)
         MdoModulesSetError("module manager is not initialized");
         return false;
     }
-    pCandidate = MdoModulesBuildCandidate(g_MdoModules.NextGeneration,
+    if(!g_MdoModules.ReloadLock||!xrtMutexTryLock(g_MdoModules.ReloadLock)){
+        xrtMutexUnlock(g_MdoModules.Lock);MdoModuleDiagnosticsRelease(pDiagnostics);
+        MdoModulesSetError("module reload is already in progress");return false;
+    }
+    uint64 CandidateGeneration=g_MdoModules.NextGeneration;
+    xrtMutexUnlock(g_MdoModules.Lock);
+    pCandidate = MdoModulesBuildCandidate(CandidateGeneration,
         pDiagnostics);
+    xrtMutexLock(g_MdoModules.Lock);
     if ( pCandidate != NULL ) {
         pDefinitions = MdoModulesDefinitions(pCandidate);
         if ( pCandidate->ToolCount != 0u && pDefinitions == NULL ) {
@@ -1963,6 +1996,7 @@ bool MdoModuleManagerReload(void)
     MdoModuleCatalogRelease(pOldCatalog);
     MdoModuleDiagnosticsRelease(pOldDiagnostics);
     MdoModuleDiagnosticsRelease(pDiagnostics);
+    xrtMutexUnlock(g_MdoModules.ReloadLock);
     if ( !bOk ) MdoModulesSetError(sFailure[0] != '\0' ? sFailure :
         "module reload failed");
     return bOk;
@@ -1981,10 +2015,11 @@ bool MdoModuleManagerInit(xwork_runtime* pRuntime)
     }
     memset(&g_MdoModules, 0, sizeof(g_MdoModules));
     g_MdoModules.Lock = xrtMutexCreate();
+    g_MdoModules.ReloadLock = xrtMutexCreate();
     g_MdoModules.Runtime = xworkRuntimeRef(pRuntime);
     g_MdoModules.Diagnostics = MdoModulesDiagnosticsCreate();
     g_MdoModules.NextGeneration = 1u;
-    if ( g_MdoModules.Lock == NULL || g_MdoModules.Runtime == NULL ||
+    if ( g_MdoModules.Lock == NULL || g_MdoModules.ReloadLock==NULL || g_MdoModules.Runtime == NULL ||
          g_MdoModules.Diagnostics == NULL ) {
         MdoModuleManagerUnit();
         MdoModulesSetError("failed to allocate module manager state");
@@ -2001,10 +2036,12 @@ bool MdoModuleManagerInit(xwork_runtime* pRuntime)
 void MdoModuleManagerUnit(void)
 {
     xmutex* pLock = g_MdoModules.Lock;
+    xmutex* Reload=g_MdoModules.ReloadLock;
     xwork_runtime* pRuntime = NULL;
     MdoModuleCatalog* pCatalog = NULL;
     MdoModuleDiagnostics* pDiagnostics = NULL;
 
+    if(Reload)xrtMutexLock(Reload);
     if ( pLock != NULL ) (void)xrtMutexLock(pLock);
     pRuntime = g_MdoModules.Runtime;
     pCatalog = g_MdoModules.Catalog;
@@ -2024,6 +2061,7 @@ void MdoModuleManagerUnit(void)
     MdoModuleDiagnosticsRelease(pDiagnostics);
     xworkRuntimeRelease(pRuntime);
     if ( pLock != NULL ) (void)xrtMutexDestroy(pLock);
+    if(Reload){xrtMutexUnlock(Reload);xrtMutexDestroy(Reload);}
     memset(&g_MdoModules, 0, sizeof(g_MdoModules));
 }
 

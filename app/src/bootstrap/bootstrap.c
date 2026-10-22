@@ -8,6 +8,7 @@
 #include "../../include/mdo/asks.h"
 #include "../../include/mdo/bootstrap.h"
 #include "../../include/mdo/commands.h"
+#include "../../include/mdo/application.h"
 #include "../../include/mdo/mcp.h"
 #include "../../include/mdo/memory.h"
 #include "../../include/mdo/models.h"
@@ -60,6 +61,8 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
         MdoBootstrapFail("Home initialization failed");
         return false;
     }
+    if(!MdoApplicationInit(pHost->Server)){MdoBootstrapFail("Application SDK initialization failed");return false;}
+    MdoModuleManagerAttachApplication(MdoApplicationApi());
     if ( !MdoEcosystemRecover() ) {
         MdoBootstrapFail("Extension installation recovery failed");
         return false;
@@ -265,6 +268,8 @@ void MdoBootstrapUnit(void)
     MdoSettingsServiceUnit();
     MdoConfigUnit();
     MdoProjectLifecycleUnit();
+    MdoApplicationUnit();
+    MdoModuleManagerAttachApplication(NULL);
     MdoHomeUnit();
     memset(&g_MdoBootstrap, 0, sizeof(g_MdoBootstrap));
 }

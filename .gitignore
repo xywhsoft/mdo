@@ -28,6 +28,7 @@ tools/*
 !tools/inspect_session.py
 !tools/README.md
 !tools/build_mdo.py
+!tools/application_sdk.py
 !tools/build.py
 !tools/build_android.py
 !tools/host-profile.json

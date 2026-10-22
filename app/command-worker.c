@@ -1,6 +1,8 @@
 /* Private child-process bootstrap, never included in the product unity. */
 #include <xsbase.h>
 #include "mdo/command.h"
+#include "mdo/sdk.h"
+#include <xllm-time.h>
 #include <stdio.h>
 #include <string.h>
 #if defined(_WIN32) || defined(_WIN64)
@@ -89,6 +91,33 @@ static void CWCompileError(void* Unused,cstr Message) {
     (void)Unused;size_t N=strlen(CWError);
     if(N<sizeof(CWError)-1)snprintf(CWError+N,sizeof(CWError)-N,"%s%s",N?"\n":"",Message);
 }
+static bool CWSdkSet(xvalue* V,cstr K,const xvalue* Child){return xrtValueObjectSet(V,xrtStrView(K),Child);}
+static xvalue* CWSdkString(cstr S){return xrtValueString(xrtStrView(S?S:""));}
+static cstr CWSdkKey(const xvalue* V,size_t I){xstrview K={0};return xrtValueObjectAt(V,I,&K)?K.Data:NULL;}
+static mdo_value_kind CWSdkKind(const xvalue* V){return (mdo_value_kind)CWKind(V);}
+static bool CWSdkUInt(const xvalue* V,uint64* N){int64 I=0;return xrtValueGetUInt(V,N)||(xrtValueGetInt(V,&I)&&I>=0&&(*N=(uint64)I,true));}
+static uint64 CWSdkClock(void){return xllmClockUs();}
+static bool CWSdkCancelled(const mdo_sdk_context_v1* C){return C->Deadline&&xllmDeadlineExpired(C->Deadline);}
+static mdo_result CWSdkCall(const mdo_sdk_context_v1* C,cstr M,const xvalue* P,xvalue** R,mdo_error_v1* E){
+    (void)C;*R=NULL;if(E){memset(E,0,sizeof(*E));E->Size=sizeof(*E);}
+    xvalue* Q=xrtValueObject(),*Frame=NULL;
+    bool Ok=Q&&M&&xrtValueObjectSetNew(Q,XRT_STR_LITERAL("method"),CWSdkString(M))&&
+        xrtValueObjectSetNew(Q,XRT_STR_LITERAL("params"),P?xrtValueClone(P):xrtValueNull());
+    mdo_result Code=Ok?CWCall(NULL,"sdk.invoke",Q,&Frame):MDO_RESULT_ERROR;xrtValueRelease(Q);
+    if(Code==MDO_RESULT_OK){int64 N=-1;if(xrtValueGetInt(CWGet(Frame,"code"),&N))Code=(mdo_result)N;
+        if(CWGet(Frame,"result"))*R=xrtValueClone(CWGet(Frame,"result"));
+        const xvalue* Failure=CWGet(Frame,"error");
+        if(E){snprintf(E->Code,sizeof(E->Code),"%s",CWText(Failure,"code"));snprintf(E->Message,sizeof(E->Message),"%s",CWText(Failure,"message"));
+            snprintf(E->Stage,sizeof(E->Stage),"%s",CWText(Failure,"stage"));uint64 Status=0;CWSdkUInt(CWGet(Failure,"status"),&Status);E->Status=(uint32)Status;
+            xrtValueGetBool(CWGet(Failure,"retryable"),&E->Retryable);xrtValueGetBool(CWGet(Failure,"may_have_completed"),&E->MayHaveCompleted);}
+        if(Code!=MDO_RESULT_OK)snprintf(CWError,sizeof(CWError),"%s: %s",CWText(Failure,"code"),CWText(Failure,"message"));
+    }else if(E){snprintf(E->Code,sizeof(E->Code),"sdk_transport_failed");snprintf(E->Message,sizeof(E->Message),"%s",CWError);E->MayHaveCompleted=true;}
+    xrtValueRelease(Frame);return Code;
+}
+static const mdo_values_v1 CWSdkValues={sizeof(CWSdkValues),xrtValueNull,xrtValueBool,xrtValueInt,xrtValueUInt,xrtValueFloat,
+    CWSdkString,xrtValueObject,xrtValueArray,xrtValueClone,CWSdkSet,xrtValueArrayAppend,CWGet,CWAt,CWSdkKey,xrtValueCount,CWSdkKind,
+    CWString,xrtValueGetBool,xrtValueGetInt,CWSdkUInt,xrtValueGetFloat,CWParse,CWJson,xrtValueRelease,xrtFree};
+static const mdo_application_v1 CWSdkApi={sizeof(CWSdkApi),MDO_SDK_VERSION,&CWSdkValues,CWSdkCall,CWSdkCancelled,CWSdkClock};
 void ServiceInit(XS_HostInfo* H) {
 #if defined(_WIN32) || defined(_WIN64)
     SetErrorMode(0x8003u); /* Worker faults must not wait for an OS crash dialog. */
@@ -108,7 +137,7 @@ void ServiceInit(XS_HostInfo* H) {
     xthread* Watch=Monitor?xrtThreadCreate(CWParentWatch,NULL,0):NULL;
     char* SourcePath=CWPath("command.c");size_t Length=0;
     char* Source=(char*)xrtFileReadAllLimit(SourcePath,128u*1024u,&Length);xrtFree(SourcePath);
-    xs_tcc_config Config;xsTccConfigInit(&Config);Config.Flags=XS_TCC_RESTRICT_HOST_SYMBOLS;Config.ApplicationRoot=CWRoot;
+    xs_tcc_config Config;xsTccConfigInit(&Config);Config.Flags=0;Config.ApplicationRoot=CWRoot;
     TCCState* Tcc=xsCreateTCCEx(&Config,NULL);mdo_result Code=MDO_RESULT_ERROR;
     if(Tcc){tcc_set_error_func(Tcc,NULL,CWCompileError);tcc_add_include_path(Tcc,CWRoot);}
     union {void* P;mdo_command_run_v1 F;} Entry={0};bool Compiled=false;
@@ -126,6 +155,10 @@ void ServiceInit(XS_HostInfo* H) {
             C.RawArguments=CWText(Input,"raw_arguments");
             int64 Deadline=0;if(xrtValueGetInt(CWGet(Input,"deadline"),&Deadline)&&Deadline>0)C.Deadline=(uint64)Deadline;
             C.Host=&Host;C.Error=CWError;C.ErrorCapacity=sizeof(CWError);
+            mdo_sdk_context_v1 Application={0};Application.Size=sizeof(Application);Application.Version=MDO_SDK_VERSION;Application.Api=&CWSdkApi;
+            Application.ExtensionId=C.CommandId;Application.InvocationId=C.InvocationId;Application.ProjectId=C.ProjectId;
+            Application.SessionId=C.SessionId;Application.RunId=C.RunId;Application.Workspace=C.Workspace;Application.DeviceId="local";Application.Deadline=C.Deadline;
+            C.Application=&Application;
             Code=Entry.F(&C,CWGet(Input,"arguments"),&Result);
         }else snprintf(CWError,sizeof(CWError),"Missing mdoCommandRun entry point");
     }

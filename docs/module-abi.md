@@ -16,10 +16,13 @@ and string array while `Register` is running. Module memory is never returned
 for the host to free: tool text, images, permission resources, and errors cross
 the boundary through host-owned writers or caller-owned buffers.
 
-Modules are trusted in-process code. A restricted xs TCC state omits xrt, xs,
-libtcc, and extension symbol injection, then mdo passes only the capability
-tables requested by the module. This narrows accidental access; it is not a
-sandbox. Code that needs isolation must run in a child process.
+Modules are trusted in-process code and can include the public xs/xrt headers.
+The Application SDK is supplied through `Host->Application`; include
+`mdo/sdk.h` for typed values, service discovery and application calls.
+`Registrar->AddService` and `AddHook` register generation-owned providers and
+hooks. Registration can query application metadata without retaining the
+module-manager mutex. Native code is not a sandbox; isolated command workers
+use the same service contract through RPC.
 
 Tool effects are authoritative. A mutating tool either supplies a side-effect
 free `DescribePermissions` callback, or declares one constant

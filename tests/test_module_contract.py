@@ -38,9 +38,12 @@ class ModuleContractTests(unittest.TestCase):
         self.assertNotIn("TCCState", text)
         self.assertIn('../../generated/module-sdk/mdo/module.h', text)
 
-    def test_manager_uses_restricted_atomic_generations(self) -> None:
+    def test_manager_uses_public_sdk_and_atomic_generations(self) -> None:
         text = MANAGER_C.read_text(encoding="utf-8")
-        self.assertIn("XS_TCC_RESTRICT_HOST_SYMBOLS", text)
+        self.assertIn("HostServices.Application", text)
+        self.assertIn("g_MdoModuleApplication", text)
+        self.assertIn("Config.Flags = 0", text)
+        self.assertIn("ReloadLock", text)
         self.assertIn('"/app/generated/module-sdk"', text)
         self.assertIn("tcc_compile_string", text)
         self.assertIn("xworkRuntimeReplaceToolsBySource", text)

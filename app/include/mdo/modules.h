@@ -7,6 +7,8 @@
 #include "../../generated/module-sdk/mdo/module.h"
 
 typedef struct MdoModuleCatalog MdoModuleCatalog;
+struct mdo_application_v1;
+void MdoModuleManagerAttachApplication(const struct mdo_application_v1* Api);
 typedef struct MdoModuleDiagnostics MdoModuleDiagnostics;
 
 typedef enum MdoModuleKind {
