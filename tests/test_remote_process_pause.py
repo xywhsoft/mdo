@@ -31,17 +31,26 @@ class SuspendedChild:
             from ctypes import wintypes
             self.kernel = ctypes.WinDLL('kernel32', use_last_error=True)
             self.nt = ctypes.WinDLL('ntdll')
-            self.kernel.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
-            self.kernel.OpenProcess.restype = wintypes.HANDLE
+            self.kernel.GetCurrentProcess.argtypes = []
+            self.kernel.GetCurrentProcess.restype = wintypes.HANDLE
+            self.kernel.DuplicateHandle.argtypes = [wintypes.HANDLE, wintypes.HANDLE,
+                wintypes.HANDLE, ctypes.POINTER(wintypes.HANDLE), wintypes.DWORD,
+                wintypes.BOOL, wintypes.DWORD]
+            self.kernel.DuplicateHandle.restype = wintypes.BOOL
             self.kernel.CloseHandle.argtypes = [wintypes.HANDLE]
             self.kernel.CloseHandle.restype = wintypes.BOOL
             for name in ('NtSuspendProcess', 'NtResumeProcess'):
                 function = getattr(self.nt, name)
                 function.argtypes = [wintypes.HANDLE]
                 function.restype = ctypes.c_long
-            self.handle = self.kernel.OpenProcess(0x0800, False, self.process.pid)
-            if not self.handle:
+            # Keep the exact process object owned by Popen, rather than look
+            # it up again by a numeric PID during a possible exit race.
+            duplicate = wintypes.HANDLE()
+            current = self.kernel.GetCurrentProcess()
+            if not self.kernel.DuplicateHandle(current, wintypes.HANDLE(int(self.process._handle)),
+                    current, ctypes.byref(duplicate), 0x0800, False, 0):
                 raise ctypes.WinError(ctypes.get_last_error())
+            self.handle = duplicate
             status = self.nt.NtSuspendProcess(self.handle)
             if status != 0:
                 self.kernel.CloseHandle(self.handle)
