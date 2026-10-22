@@ -18,3 +18,19 @@
 九类包均需覆盖投稿、未公开隔离、审核、浏览和真实本地安装。组合包覆盖重复目标、资源冲突和失败恢复。需要配置及需要重载分别报告，不能以下载成功代替生效。补充断线、重复提交、损坏文件、恶意路径、旧目录升级、卸载保留本机修改和插件恢复启动检查。
 
 发布需验证服务端实际运行时、客户端打包内容及原有扩展回归，保留上线前代码与数据库备份；不覆盖其他任务的源码修改。
+
+## 首版交付范围（0.2.5）
+
+新格式 `mdo.extension.v2` 包含 `manifest` 与 `resources`。清单增加 `min_build_id`（至少 30000126），公开版本使用无前导零的 `x.y.z`；`resources[].kind` 为上述九类的 `agents/subagents/tools/skills/mcp/commands/modules/toolpacks/plugins`。C Agent 和 C SubAgent 保留 `c-agents/c-subagents` 实现形式，目录分类分别归入 Agent 和 SubAgent。
+
+资源的 `content` 为文本；`files` 为 `{path,base64}` 数组。总 JSON 上限 6 MiB、附属文件解码总量 4 MiB、每文件 1 MiB、每包 16 项资源、每资源 128 个文件。旧版包仍按 1 MiB 契约处理。全部受审核的字节随包携带，安装不会执行安装脚本或下载未经审阅的依赖。较大的官方二进制工具包继续通过现有 XRTPACK 通道分发。
+
+- `modules`：`content` 为 C 入口源码，附属文件放入 `modules/tools/<id>/`；源码引用附属文件时使用 `<id>/...` 相对路径。
+- `toolpacks`：`content` 为 JSON，包含 `prompt` 和 `programs:[{name,path,description,interpreter?}]`。`path` 指向附属文件；运行时向主／子 Agent 提供绝对程序路径、解释器字段和说明。不会修改系统 PATH。Android 包必须声明解释器，实际执行需要设备已有该运行环境。
+- `plugins`：`content` 为 JSON，可声明 `frontend:"web/example.js"`；附属文件是应用 VFS 的新增或覆盖。安装生成不可变修订并接入 SDK 插件管理器；不同插件的同名 VFS 文件会被拒绝。代码覆盖需要重载宿主，前端覆盖需要刷新界面，安装记录会提示重载要求。可通过 `MDO_PLUGINS_DISABLED=1` 进入原有恢复模式。
+
+客户端 `POST /api/v1/ecosystem` 支持 `plan_import`（本地包）或 `plan`（商店版本 ID）；返回每个文件的增删改、前后哈希、所需配置／重载和计划 SHA-256。界面确认安装时携带 `expected_plan`，目标变化则拒绝提交。只有实际安装且用户明确选择信任后才允许加载 C 代码。MCP 安装保持停用，需在 MCP 页面完成本机配置。
+
+网站公开查询加 `format=2`；客户端还发送 `build_id` 过滤兼容版本。不带格式参数的旧客户端仍仅获取 v1 包。管理菜单拆为固定的“扩展审核”“扩展管理”“扩展审核记录”页面；审核记录与状态更新在同一 SQLite 事务中提交。
+
+本版校验依据为 HTTPS 通道、不可变内容 SHA-256 及绑定版本修订的管理员审核，尚未提供离线公钥签名验证。外部大文件上传、跨包依赖自动解析、网站直接推送到指定设备均留作后续交付；本版网站下载生态包后可导入，客户端内支持直接安装。
