@@ -98,6 +98,12 @@ def main():
                     body=json.dumps({'invocation_id':damaged,'command_id':'help'}).encode(),headers={'Content-Type':'application/json'})
                 assert status==409,raw
                 assert (home/'data/commands'/f'{damaged}.json').read_text(encoding='utf-8')=='corrupt receipt'
+                process.terminate();process.wait(timeout=10)
+                process=subprocess.Popen([str(host),*([] if args.packed else [str(config)]),'--','--home',str(home)],cwd=base,stdout=output,stderr=subprocess.STDOUT,
+                    creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
+                wait_ready(port,process)
+                assert wait(invoke('help'))['state']=='succeeded','One corrupt receipt disabled normal commands after restart'
+                assert (home/'data/commands'/f'{damaged}.json').read_text(encoding='utf-8')=='corrupt receipt'
                 assert not list((home/'data/cache/command-workers').glob('*/input.json')),'Sensitive worker inputs retained'
                 assert process.poll() is None,'Command terminated the host'
             finally:

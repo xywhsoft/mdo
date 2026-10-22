@@ -162,7 +162,7 @@ xvalue* MdoCommandCatalog(cstr Workspace)
     if(Dir&&!xrtDirClose(Dir)){Dir=NULL;goto fail;}Dir=NULL;
     if(Next==XDIR_NEXT_ERROR)goto fail;
     if(Workspace&&Workspace[0]){
-        xroot Root=xrtRootOpen(Workspace);if(!Root){if(CommandMissing())return Map;goto fail;}
+        xroot Root=xrtRootOpen(Workspace);if(!Root){if(CommandMissing())goto no_project;goto fail;}
         xvalue* Settings=MdoCommandProjectSettings(Root);
         if(!Settings){xrtRootClose(Root);goto fail;}
         Dir=xrtRootDirOpen(Root,".mdo/commands",XDIR_STAT);
@@ -189,6 +189,7 @@ xvalue* MdoCommandCatalog(cstr Workspace)
         if(Dir&&!xrtDirClose(Dir)){Dir=NULL;goto fail;}Dir=NULL;
         if(Next==XDIR_NEXT_ERROR)goto fail;
     }
+no_project: ;
     bool Missing=false;char* Report=MdoExtensionRead("data/commands/migration-report.json",true,MDO_COMMAND_TEXT_LIMIT,&Missing);
     xvalue* Rows=Report?xrtJsonParse(xrtStrView(Report)):NULL;xrtFree(Report);
     for(size_t i=0;i<xrtValueCount(Rows);i++){

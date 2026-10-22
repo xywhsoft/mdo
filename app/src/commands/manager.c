@@ -269,7 +269,10 @@ static bool CommandRecover(void) {
             xrtValueObjectSetNew(V,XRT_STR_LITERAL("terminal"),xrtValueBool(true));
             if(!CommandSave(J)){xrtDirClose(Dir);return false;}
         }
-        snprintf(J->Directory,sizeof(J->Directory),"data/cache/command-workers/%s",Id);CommandCleanup(J,128);
+        snprintf(J->Directory,sizeof(J->Directory),"data/cache/command-workers/%s",Id);
+        bool Scratch=false;xfileinfo ScratchInfo={0};
+        if(!MdoHomeExternalStat(J->Directory,&Scratch,&ScratchInfo)){xrtDirClose(Dir);return false;}
+        if(Scratch){if(ScratchInfo.Type!=XFILE_TYPE_DIRECTORY){xrtDirClose(Dir);return false;}CommandCleanup(J,128);}
     }
     bool Ok=Next==XDIR_NEXT_END;return xrtDirClose(Dir)&&Ok;
 }
