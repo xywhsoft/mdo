@@ -2,6 +2,7 @@
 import hashlib,json
 from pathlib import Path
 import re
+import application_contracts
 
 ALIASES = {
     'project.list':('GET','/api/v1/projects'), 'project.create':('POST','/api/v1/projects'),
@@ -26,24 +27,30 @@ def services(root: Path):
     source=(root/'app/src/api/router.c').read_text(encoding='utf-8')
     source=source[source.index('g_MdoApiRoutes[]'):source.index('static bool MdoApiViewEqualText')]
     records=[]
-    for path,flags in re.findall(r'\{\s*"(/api/v1/[^"\n]+)"\s*,\s*((?:XHTTP_METHOD_[A-Z]+\s*\|?\s*)+),',source):
+    for path,flags,handler in re.findall(r'\{\s*"(/api/v1/[^"\n]+)"\s*,\s*((?:XHTTP_METHOD_[A-Z]+\s*\|?\s*)+),\s*"[^"\n]+"\s*,\s*(\w+)\s*,',source):
         for method in re.findall(r'XHTTP_METHOD_([A-Z]+)',flags):
             if method=='HEAD':continue
             parts=path.removeprefix('/api/v1/').split('/')
             name='product.'+'.'.join('by_'+p[1:-1] if p.startswith('{') else p.replace('-','_') for p in parts)+'.'+method.lower()
-            records.append(dict(id=name,method=method,path=path,domain=parts[0]))
+            records.append(dict(id=name,method=method,path=path,domain=parts[0],handler=handler))
     pairs={(r['method'],r['path']) for r in records}
     if not records or len({r['id'] for r in records})!=len(records):raise ValueError('Invalid or duplicate product service directory')
     for name,(method,path) in ALIASES.items():
         if (method,path) not in pairs:raise ValueError('Application SDK alias has no product route: '+name)
-        records.append(dict(id=name,method=method,path=path,domain=path.split('/')[3]))
+        original=next(r for r in records if (r['method'],r['path'])==(method,path))
+        records.append({**original,'id':name})
     return records
 
 def generate(root: Path):
     rows=services(root)
     target=root/'app/generated/application-routes.inc.h'
     text='/* Generated from the production router by tools/application_sdk.py. */\nstatic const MdoApplicationRoute SdkRoutes[]={\n'
-    text+=''.join('    {'+','.join(json.dumps(r[k]) for k in ('id','method','path','domain'))+'},\n' for r in rows)+'};\n'
+    for r in rows:
+        input_schema,output_schema=application_contracts.contract(r)
+        r['input_schema']=input_schema;r['output_schema']=output_schema
+        values=[r[k] for k in ('id','method','path','domain')]+[json.dumps(s,separators=(',',':')) for s in (input_schema,output_schema)]
+        text+='    {'+','.join(json.dumps(v) for v in values)+'},\n'
+    text+='};\n'
     target.parent.mkdir(parents=True,exist_ok=True)
     if not target.exists() or target.read_text(encoding='utf-8')!=text:target.write_text(text,encoding='utf-8')
     generate_native(root)

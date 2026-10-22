@@ -56,11 +56,14 @@ static bool SdkValidateContract(cstr Method,const xvalue* Params,mdo_error_v1* E
     }
     return true;
 }
-static xvalue* SdkDescription(const MdoApplicationRoute* R){
+static xvalue* SdkDescription(const MdoApplicationRoute* R,bool Detailed){
     xvalue* V=xrtValueObject();if(!V)return NULL;
     SdkPut(V,"id",R->Id);SdkPut(V,"domain",R->Domain);SdkPut(V,"method",R->Method);SdkPut(V,"resource",R->Path);
-    xrtValueObjectSetNew(V,XRT_STR_LITERAL("input_schema"),SdkParse("{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"object\"},\"query\":{\"type\":\"object\"},\"body\":{},\"revision\":{\"type\":\"string\"}}}"));
-    xrtValueObjectSetNew(V,XRT_STR_LITERAL("output_schema"),SdkParse("{\"type\":\"object\",\"properties\":{\"status\":{\"type\":\"integer\"},\"data\":{},\"revision\":{\"type\":\"string\"}}}"));
+    if(Detailed){
+        xrtValueObjectSetNew(V,XRT_STR_LITERAL("input_schema"),SdkParse(R->InputSchema));
+        xrtValueObjectSetNew(V,XRT_STR_LITERAL("output_schema"),SdkParse(R->OutputSchema));
+    }
+    xrtValueObjectSetNew(V,XRT_STR_LITERAL("schema_available"),xrtValueBool(true));
     SdkPut(V,"validation","The product service validates its body and revision; SDK calls retain the same lifecycle and mutation contracts.");
     SdkPut(V,"retry","Reads may be retried; mutations must use the product operation identity or inspect their receipt after an uncertain result.");
     xrtValueObjectSetNew(V,XRT_STR_LITERAL("mutation"),xrtValueBool(strcmp(R->Method,"GET")!=0));
@@ -73,7 +76,7 @@ xvalue* MdoApplicationCatalog(void){
         SdkPut(V,"domain","sdk");SdkPut(V,"transport","native");xrtValueArrayAppendNew(A,V);
     }
     for(size_t i=0;i<sizeof(SdkRoutes)/sizeof(*SdkRoutes);i++){
-        if(!xrtValueArrayAppendNew(A,SdkDescription(&SdkRoutes[i]))){xrtValueRelease(A);return NULL;}
+        if(!xrtValueArrayAppendNew(A,SdkDescription(&SdkRoutes[i],false))){xrtValueRelease(A);return NULL;}
     }
     xvalue* Runtime=MdoApplicationRuntimeCatalog();
     for(size_t i=0;i<xrtValueCount(Runtime);i++)xrtValueArrayAppend(A,xrtValueArrayGet(Runtime,i));
@@ -123,7 +126,11 @@ static mdo_result SdkInvoke(const mdo_sdk_context_v1* C,cstr Method,const xvalue
         xvalue* Catalog=MdoApplicationCatalog();
         for(size_t i=0;Id&&i<xrtValueCount(Catalog);i++){
             const xvalue* Item=xrtValueArrayGet(Catalog,i);
-            if(!strcmp(Id,SdkField(Item,"id"))){*R=xrtValueClone(Item);xrtValueRelease(Catalog);return *R?MDO_RESULT_OK:MDO_RESULT_ERROR;}
+            if(!strcmp(Id,SdkField(Item,"id"))){
+                *R=xrtValueClone(Item);
+                if(!SdkGet(Item,"input_schema"))for(size_t k=0;k<sizeof(SdkRoutes)/sizeof(*SdkRoutes);k++)if(!strcmp(Id,SdkRoutes[k].Id)){xrtValueRelease(*R);*R=SdkDescription(&SdkRoutes[k],true);break;}
+                xrtValueRelease(Catalog);return *R?MDO_RESULT_OK:MDO_RESULT_ERROR;
+            }
         }xrtValueRelease(Catalog);
         MdoApplicationError(E,"sdk_method_missing","Service is not registered","discovery",404,false);return MDO_RESULT_ERROR;
     }

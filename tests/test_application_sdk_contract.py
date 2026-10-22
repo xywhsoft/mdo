@@ -6,6 +6,7 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'tools'))
 import application_sdk
+import application_contracts
 
 class ApplicationSdkContractTests(unittest.TestCase):
     def test_directory_covers_every_product_route_and_mutation(self):
@@ -41,3 +42,34 @@ class ApplicationSdkContractTests(unittest.TestCase):
                 names.update(re.findall(r'"([a-z]+\.[a-z._]+)"',block))
         self.assertGreater(len(names),50)
         self.assertEqual(names,set(application_sdk.native_contracts()))
+
+    def test_product_contracts_cover_all_routes_with_resolvable_typed_references(self):
+        def visit(value,definitions):
+            if isinstance(value,dict):
+                self.assertTrue(value,'An empty schema conceals the wire contract')
+                if '$ref' in value:self.assertIn(value['$ref'].removeprefix('#/$defs/'),definitions)
+                for key,child in value.items():
+                    # Empty properties/required are valid for a bodyless call.
+                    if key not in ('properties','$defs'):visit(child,definitions)
+                    elif isinstance(child,dict):
+                        for item in child.values():visit(item,definitions)
+            elif isinstance(value,list):
+                for child in value:visit(child,definitions)
+        for row in application_sdk.services(ROOT):
+            for schema in application_contracts.contract(row):visit(schema,schema.get('$defs',{}))
+        with self.assertRaisesRegex(ValueError,'no SDK contract'):
+            application_contracts.contract({'handler':'MdoApiUnknownRoute','path':'/api/v1/new','method':'POST'})
+
+    def test_business_fields_binary_bodies_and_context_fallback_are_described(self):
+        rows={row['id']:row for row in application_sdk.services(ROOT)}
+        project,_=application_contracts.contract(rows['project.create'])
+        self.assertEqual(project['$defs']['ProjectCreateInput']['required'],['id','name'])
+        self.assertIn('workspace_root',project['$defs']['ProjectCreateInput']['properties'])
+        session,_=application_contracts.contract(rows['session.get'])
+        self.assertEqual(session['properties']['path']['required'],[])
+        schedule,_=application_contracts.contract(rows['product.schedules.post'])
+        self.assertIn('timezone',schedule['$defs']['ScheduleInput']['properties'])
+        image,_=application_contracts.contract(rows['product.projects.by_project.sessions.by_session.attachments.post'])
+        self.assertIn('body_base64',image['properties']);self.assertNotIn('body',image['properties'])
+        queue,_=application_contracts.contract(rows['product.projects.by_project.sessions.by_session.queue.post'])
+        self.assertEqual(queue['$defs']['QueueInput']['properties']['priority']['type'],'boolean')

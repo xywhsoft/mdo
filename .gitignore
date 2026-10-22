@@ -29,6 +29,7 @@ tools/*
 !tools/README.md
 !tools/build_mdo.py
 !tools/application_sdk.py
+!tools/application_contracts.py
 !tools/build.py
 !tools/build_android.py
 !tools/host-profile.json

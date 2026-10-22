@@ -43,7 +43,7 @@ bool MdoApplicationUiCall(const mdo_sdk_context_v1*,cstr,const xvalue*,xvalue**,
 mdo_result MdoApplicationCall(const mdo_sdk_context_v1*,cstr,const xvalue*,xvalue**,mdo_error_v1*);
 /* Captured product routes are generated from the production router, never a
  * separately maintained allowlist. */
-typedef struct MdoApplicationRoute {const char *Id,*Method,*Path,*Domain;} MdoApplicationRoute;
+typedef struct MdoApplicationRoute {const char *Id,*Method,*Path,*Domain,*InputSchema,*OutputSchema;} MdoApplicationRoute;
 typedef struct MdoApplicationResponse {
     uint32 Status;
     char *Body,*ContentType,*Revision;

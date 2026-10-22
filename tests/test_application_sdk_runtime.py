@@ -115,6 +115,9 @@ def main():
     ids=invoke('sdk.services',{},'ids');assert len(ids)>200 and 'qa.echo' in ids,ids
     assert {'account.logout','session.create','product.update.install.post','product.device_transfers.post'}<=set(ids)
     assert invoke('sdk.context')['project']=='default'
+    contract=invoke('sdk.describe',{'id':'project.create'})['input_schema']
+    assert contract['$defs']['ProjectCreateInput']['required']==['id','name']
+    assert 'workspace_root' in contract['$defs']['ProjectCreateInput']['properties']
     native=base/'outside-workspace'/'中文.bin'
     assert invoke('fs.write',{'path':str(native),'base64':'AAEC/w=='})['bytes']==4
     read=invoke('fs.read',{'path':str(native),'offset':1,'limit':2})
