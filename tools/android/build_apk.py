@@ -24,6 +24,16 @@ def run(command: list[str]) -> None:
     subprocess.run(command, check=True)
 
 
+def verify_command_runtime(library: Path, nm: Path) -> None:
+    """Reject a stale compact host before packaging an unusable C worker."""
+    symbols = subprocess.check_output(
+        [str(nm), "--dynamic", "--defined-only", "--extern-only", str(library)],
+        text=True)
+    if not any(re.fullmatch(r"[0-9a-fA-F]+ T xsHostRun", row.strip())
+               for row in symbols.splitlines()):
+        raise ValueError("Android libxs.so does not export xsHostRun; rebuild the native host without --skip-native-build")
+
+
 def overlay_package_installer(source: Path) -> None:
     """Keep xs's signature/installer checks; apply mdo's download-size policy.
 
@@ -87,6 +97,9 @@ def build(sdk: Path, java: Path, library: Path, pack: Path, output: Path,
     lock = json.loads((ROOT / "tools/android/toolchain.lock.json").read_text())
     tools = sdk / "build-tools" / lock["build_tools"]
     suffix = ".exe" if os.name == "nt" else ""
+    host_tag = "windows-x86_64" if os.name == "nt" else "linux-x86_64"
+    llvm = sdk / "ndk" / lock["ndk"] / "toolchains/llvm/prebuilt" / host_tag / "bin"
+    verify_command_runtime(library, llvm / ("llvm-nm" + suffix))
     android = sdk / "platforms" / f"android-{lock['compile_sdk']}" / "android.jar"
     jvm = str(java / "bin" / ("java" + suffix))
     d8 = [jvm, "-cp", str(tools / "lib/d8.jar"), "com.android.tools.r8.D8"]
@@ -129,8 +142,7 @@ def build(sdk: Path, java: Path, library: Path, pack: Path, output: Path,
     with tempfile.TemporaryDirectory(prefix="xs-apk-", dir=output.parent) as raw:
         directory = Path(raw)
         native_worker=directory / "libmdo_command_worker.so"
-        host_tag="windows-x86_64" if os.name=="nt" else "linux-x86_64"
-        clang=sdk / "ndk" / lock["ndk"] / "toolchains/llvm/prebuilt" / host_tag / "bin" / ("clang"+suffix)
+        clang=llvm / ("clang"+suffix)
         run([str(clang), f"--target=aarch64-linux-android{lock['api']}", "-fPIE", "-pie", "-O2",
              "-Wall", "-Wextra", "-Werror", "-Wl,-z,max-page-size=16384", "-I"+str(ROOT / "src/sdk"),
              str(MDO_ROOT / "tools/android/command_worker.c"), "-ldl", "-o", str(native_worker)])

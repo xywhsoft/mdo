@@ -34,8 +34,8 @@ def elf_dependencies(data, name):
     return {data[strings + v:data.index(0, strings + v)].decode("ascii") for t, v in tags if t == 1}
 
 
-def inspect(edition, release):
-    path = ROOT / ("mdo-arm64-v8a.apk" if edition == "lite" else "mdo-full-arm64-v8a.apk")
+def inspect(edition, release, path=None):
+    path = path or ROOT / ("mdo-arm64-v8a.apk" if edition == "lite" else "mdo-full-arm64-v8a.apk")
     with zipfile.ZipFile(path) as apk:
         assert apk.testzip() is None
         names = apk.namelist()
@@ -49,6 +49,8 @@ def inspect(edition, release):
         assert metadata["revision"] == release["toolpack_revision"]
         native = {n.rsplit("/", 1)[1]: n for n in names if n.startswith("lib/")}
         assert native and all(n.startswith("lib/arm64-v8a/lib") and n.endswith(".so") for n in native.values())
+        host_files = {"libxs.so", "libmdo_command_worker.so"}
+        assert host_files <= native.keys(), "C command runtime/helper missing"
         for name in native.values():
             info = apk.getinfo(name)
             assert info.compress_type == zipfile.ZIP_STORED, name
@@ -73,9 +75,9 @@ def inspect(edition, release):
                 data = apk.read("assets/mdo-runtime/" + relative)
                 assert not data.startswith(b"\x7fELF"), relative
                 assert hashlib.sha256(data).hexdigest() == record["sha256"], relative
-        assert mapped == native.keys() - {"libxs.so"}, "unmapped native tools"
+        assert mapped == native.keys() - host_files, "unmapped native tools"
         if edition == "lite":
-            assert len(native) == 1 and not metadata["files"]
+            assert len(native) == len(host_files) and not metadata["files"]
         else:
             assert {"busybox/busybox", "busybox/sh", "curl/curl", "jq/jq", "openssh/ssh", "openssh/scp", "openssh/sftp", "python/bin/python3"} <= logical_paths
             assert len(native) > 5

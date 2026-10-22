@@ -1331,3 +1331,21 @@
  #include "src/xoauth2_core.c"
  #include "src/xoauth2_flow.c"
  #include "src/xoauth2_http.c"
+--- a/src/sdk/xs_host.h
++++ b/src/sdk/xs_host.h
+@@ -24,7 +24,15 @@
+     const char* InstalledPackage;
+ } xs_host_options;
+ 
++/* Android native helpers use dlopen without loading a Java VM. Keep these
++ * embedding entrypoints visible in compact hosts built with hidden symbols. */
++#if defined(__ANDROID__)
++__attribute__((visibility("default")))
++#endif
+ int xsHostRun(const xs_host_options* Options);
++#if defined(__ANDROID__)
++__attribute__((visibility("default")))
++#endif
+ void xsHostRequestStop(void);
+ 
+ #ifdef __cplusplus

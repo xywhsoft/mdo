@@ -71,8 +71,8 @@
   },
   "sdk_overlay": {
     "path": "tools/dependencies/xwork-mcp.patch",
-    "sha256": "74865b9f6a3943f31b82f9129275b94873b001cf4d8c89ae4eed27e06f065169",
+    "sha256": "0a457840bd6b61092dfcd166a5b5175f65efed6f3da712d0b7290fb0e1ad7cdd",
     "base_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
-    "purpose": "MCP compatibility fixes; base SDK unchanged"
+    "purpose": "MCP compatibility and Android embedding entrypoints; base SDK revision unchanged"
   }
 }
