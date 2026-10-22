@@ -1,6 +1,12 @@
 #include "../../include/mdo/application.h"
 #include "internal.h"
 #include "../../generated/application-routes.inc.h"
+static const struct {cstr Id,Description;} SdkBuiltins[]={
+    {"sdk.services","Discover every product and extension service"},
+    {"sdk.describe","Describe a service and its call contract"},
+    {"sdk.context","Read the immutable caller context"},
+    {"events.read","Read the bounded event journal with a resumable cursor"}
+};
 static xvalue* SdkDescription(const MdoApplicationRoute* R){
     xvalue* V=xrtValueObject();if(!V)return NULL;
     SdkPut(V,"id",R->Id);SdkPut(V,"domain",R->Domain);SdkPut(V,"method",R->Method);SdkPut(V,"resource",R->Path);
@@ -13,6 +19,10 @@ static xvalue* SdkDescription(const MdoApplicationRoute* R){
 }
 xvalue* MdoApplicationCatalog(void){
     xvalue* A=xrtValueArray();if(!A)return NULL;
+    for(size_t i=0;i<sizeof(SdkBuiltins)/sizeof(*SdkBuiltins);i++){
+        xvalue* V=xrtValueObject();SdkPut(V,"id",SdkBuiltins[i].Id);SdkPut(V,"description",SdkBuiltins[i].Description);
+        SdkPut(V,"domain","sdk");SdkPut(V,"transport","native");xrtValueArrayAppendNew(A,V);
+    }
     for(size_t i=0;i<sizeof(SdkRoutes)/sizeof(*SdkRoutes);i++){
         if(!xrtValueArrayAppendNew(A,SdkDescription(&SdkRoutes[i]))){xrtValueRelease(A);return NULL;}
     }
@@ -31,7 +41,11 @@ static mdo_result SdkInvoke(const mdo_sdk_context_v1* C,cstr Method,const xvalue
     if(!strcmp(Method,"events.read")){*R=MdoApplicationEvents(P,E);return *R?MDO_RESULT_OK:MDO_RESULT_ERROR;}
     if(!strcmp(Method,"sdk.describe")){
         cstr Id=SdkField(P,"id");
-        for(size_t i=0;Id&&i<sizeof(SdkRoutes)/sizeof(*SdkRoutes);i++)if(!strcmp(Id,SdkRoutes[i].Id)){*R=SdkDescription(&SdkRoutes[i]);return *R?MDO_RESULT_OK:MDO_RESULT_ERROR;}
+        xvalue* Catalog=MdoApplicationCatalog();
+        for(size_t i=0;Id&&i<xrtValueCount(Catalog);i++){
+            const xvalue* Item=xrtValueArrayGet(Catalog,i);
+            if(!strcmp(Id,SdkField(Item,"id"))){*R=xrtValueClone(Item);xrtValueRelease(Catalog);return *R?MDO_RESULT_OK:MDO_RESULT_ERROR;}
+        }xrtValueRelease(Catalog);
         MdoApplicationError(E,"sdk_method_missing","Service is not registered","discovery",404,false);return MDO_RESULT_ERROR;
     }
     bool Found=false;bool CustomOk=MdoApplicationCustomCall(C,Method,P,R,E,&Found);
@@ -41,6 +55,8 @@ static mdo_result SdkInvoke(const mdo_sdk_context_v1* C,cstr Method,const xvalue
     MdoApplicationError(E,"sdk_method_missing","Service is not registered","dispatch",404,false);return MDO_RESULT_ERROR;
 }
 mdo_result MdoApplicationCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue* P,xvalue** R,mdo_error_v1* E){
+    mdo_error_v1 LocalError;
+    if(!E)E=&LocalError;
     if(R)*R=NULL;
     if(E){memset(E,0,sizeof(*E));E->Size=sizeof(*E);}
     if(!C||C->Size<sizeof(*C)||C->Version!=MDO_SDK_VERSION||!R||!SdkIdValid(Method)){

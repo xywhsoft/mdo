@@ -88,6 +88,19 @@ static bool MdoApiBodyReserve(char** pBuffer, size_t* pCapacity,
 static MdoApiBodyStatus MdoApiBodyDecode(MdoApiContext* Context,
     size_t Limit, char** pDocument, size_t* pSize)
 {
+    if(Context->ApplicationResponse){
+        if(!Context->ApplicationBinary.Data&&!Context->ApplicationBody)return MDO_API_BODY_MISSING;
+        if(Context->ApplicationBinary.Data){
+            if(!Context->ApplicationBinary.Size)return MDO_API_BODY_MISSING;
+            *pSize=Context->ApplicationBinary.Size;if(*pSize>Limit)return MDO_API_BODY_TOO_LARGE;
+            *pDocument=xrtMalloc(*pSize+1);if(!*pDocument)return MDO_API_BODY_READ_FAILED;
+            memcpy(*pDocument,Context->ApplicationBinary.Data,*pSize);(*pDocument)[*pSize]=0;return MDO_API_BODY_OK;
+        }
+        *pDocument=xrtJsonStringify(Context->ApplicationBody,false,pSize);
+        if(!*pDocument)return MDO_API_BODY_READ_FAILED;
+        if(*pSize>Limit){xrtSecureZero(*pDocument,*pSize);xrtFree(*pDocument);*pDocument=NULL;return MDO_API_BODY_TOO_LARGE;}
+        return MDO_API_BODY_OK;
+    }
     const xhttp1head* Head = Context->Request->head;
     const xnetbuf* Network;
     unsigned char Chunk[4096];

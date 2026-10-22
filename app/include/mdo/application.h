@@ -24,6 +24,8 @@ typedef struct MdoApplicationResponse {
     char *Body,*ContentType,*Revision;
     size_t Bytes;
 } MdoApplicationResponse;
+#define MDO_APPLICATION_RESPONSE_LIMIT (96u*1024u*1024u)
+XS_ServerInfo* MdoApplicationServer(void); /* borrowed until the SDK is drained */
 bool MdoApiApplicationInvoke(const mdo_sdk_context_v1*,cstr Method,cstr Target,
     const xvalue* Body,const xvalue* Headers,xbytesview Binary,MdoApplicationResponse*,mdo_error_v1*);
 bool MdoApplicationRouteInvoke(const mdo_sdk_context_v1*,const MdoApplicationRoute*,const xvalue*,xvalue**,mdo_error_v1*);

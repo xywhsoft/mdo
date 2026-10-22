@@ -310,6 +310,7 @@ class BuildContractTests(unittest.TestCase):
             "src/api/todo.c",
             "src/api/operations.c",
             "src/api/commands.c",
+            "src/api/application.c",
             "src/api/session_capture.c",
             "src/api/sessions.c",
             "src/api/shared_files.c",

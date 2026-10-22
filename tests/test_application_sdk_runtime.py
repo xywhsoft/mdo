@@ -73,7 +73,7 @@ def main():
     assert invoke('sdk.context')['project']=='default'
     assert invoke('qa.echo',{'nested':['',True,3,{'windows':'C:\\work'}]})=={'nested':['',True,3,{'windows':'C:\\work'}],'hooked':True}
     created=invoke('session.create',{'body':{'project_id':'default','title':'Created using public SDK'}})
-    assert created['status']==201,created
+    assert created['status']==201 and created['transport']=='native',created
     session=created['data']['id'];scope={'project':'default','session':session}
     detail=invoke('session.get',{'path':scope});assert detail['data']['title']=='Created using public SDK',detail
     assert invoke('sdk.does_not_exist',{},'catch')=={'error':'sdk_method_missing','status':404}
@@ -81,6 +81,9 @@ def main():
     events=invoke('events.read',{'after':0});assert events['cursor']>0 and events['items'],events
     assert 'nested' not in json.dumps(events),'Service event journal leaked input payloads'
     assert child.poll() is None
+    status,_,body=request(port,'GET','/api/v1/application/services');catalog=json.loads(body)['data'];assert status==200 and len(catalog)>200,(status,body)
+    status,_,body=request(port,'POST','/api/v1/application/call',body=json.dumps({'method':'qa.echo','params':{'hello':'front-end'}}).encode(),headers={'Content-Type':'application/json'})
+    assert status==200 and json.loads(body)['data']=={'hello':'front-end','hooked':True},(status,body)
    finally:
     child.terminate()
     try:child.wait(timeout=10)

@@ -7,6 +7,7 @@ static XS_ServerInfo* SdkServer;
 static xmutex* SdkEventLock;
 static xvalue* SdkEventRing[256];
 static uint64 SdkEventSequence;
+XS_ServerInfo* MdoApplicationServer(void){return SdkServer;}
 bool MdoApplicationInit(XS_ServerInfo* Server){
     if(SdkServer)return true;
     SdkEventLock=xrtMutexCreate();SdkServer=xsServerRetain(Server);
@@ -90,26 +91,50 @@ bool MdoApplicationRouteInvoke(const mdo_sdk_context_v1* C,const MdoApplicationR
     char Target[8192]={0};if(!SdkTarget(C,Route,P,Target,E))return false;
     const xvalue *Body=SdkGet(P,"body"),*Fields=SdkGet(P,"headers");cstr Revision=SdkField(P,"revision");
     char* Json=Body?SdkJson(Body):NULL;XS_FetchHeader Headers[20];size_t Count=0;
+    cstr BinaryText=SdkField(P,"body_base64");unsigned char* Binary=NULL;size_t BinarySize=0;
+    if(BinaryText){
+        bool Valid=!Body&&xrtBase64Decode(BinaryText,strlen(BinaryText),NULL,0,&BinarySize,NULL)&&BinarySize<=MDO_REMOTE_HTTP_BODY_MAX;
+        Binary=Valid?xrtMalloc(BinarySize+1):NULL;
+        if(!Binary||!xrtBase64Decode(BinaryText,strlen(BinaryText),Binary,BinarySize,&BinarySize,NULL)){xrtFree(Binary);xrtFree(Json);return MdoApplicationError(E,"sdk_arguments_invalid","Invalid or oversized binary body","resolve",400,false);}
+    }
     char Token[MDO_API_WRITE_TOKEN_CAPACITY];bool Ok=!Fields||xrtValueType(Fields)==XVALUE_OBJECT;
     for(size_t i=0;Ok&&i<xrtValueCount(Fields);i++){
         cstr Key=SdkKey(Fields,i),Value=SdkText(xrtValueObjectGet(Fields,xrtStrView(Key)));
         Ok=Count<16&&Key&&Value&&!strpbrk(Key,"\r\n")&&!strpbrk(Value,"\r\n")&&
-            strcmp(Key,"X-Mdo-Write-Token")&&strcmp(Key,"Host")&&strcmp(Key,"Origin");
+            !xrtStrCaseEqual(xrtStrView(Key),XRT_STR_LITERAL("X-Mdo-Write-Token"))&&
+            !xrtStrCaseEqual(xrtStrView(Key),XRT_STR_LITERAL("Host"))&&!xrtStrCaseEqual(xrtStrView(Key),XRT_STR_LITERAL("Origin"));
         if(Ok)Headers[Count++]=(XS_FetchHeader){Key,Value};
     }
+    if(!Ok){xrtFree(Binary);xrtFree(Json);return MdoApplicationError(E,"sdk_arguments_invalid","Invalid, reserved or excessive service headers","resolve",400,false);}
     if(strcmp(Route->Method,"GET")){Ok=Ok&&MdoApiWriteToken(Token);Headers[Count++]=(XS_FetchHeader){"X-Mdo-Write-Token",Token};}
     if(Revision)Headers[Count++]=(XS_FetchHeader){"If-Match",Revision};
     if(Json)Headers[Count++]=(XS_FetchHeader){"Content-Type","application/json"};
     MdoRemoteHttpRequest Request={0};Request.Method=Route->Method;Request.Target=Target;Request.Headers=Headers;Request.HeaderCount=Count;
-    Request.Body=(xbytesview){(const unsigned char*)Json,Json?strlen(Json):0};
+    Request.Body=(xbytesview){Binary?Binary:(const unsigned char*)Json,Binary?BinarySize:Json?strlen(Json):0};
     MdoApplicationInvocation* I=C->Opaque;SdkResponse Reply={0};MdoRemoteHttpSink Sink={SdkResponseHead,SdkResponseBody,&Reply};
-    Ok=Ok&&(!Body||Json)&&MdoRemoteLoopbackCall(SdkServer,&Request,I?I->Cancel:NULL,&Sink);
+    xvalue* NativeHeaders=Fields?xrtValueClone(Fields):xrtValueObject();if(Revision)SdkPut(NativeHeaders,"If-Match",Revision);
+    MdoApplicationResponse Captured={0};
+    bool Native=Ok&&MdoApiApplicationInvoke(C,Route->Method,Target,Body,NativeHeaders,
+        (xbytesview){Binary,BinarySize},&Captured,E);
+    xrtValueRelease(NativeHeaders);
+    if(Native){Reply.Status=Captured.Status;Reply.Body=Captured.Body;Reply.Bytes=Captured.Bytes;Reply.Type=Captured.ContentType;Reply.Revision=Captured.Revision;}
+    else if(!E||!E->Code[0]){
+        Ok=Ok&&(!Body||Json)&&MdoRemoteLoopbackCall(SdkServer,&Request,I?I->Cancel:NULL,&Sink);
+    }else Ok=false;
     if(Json)xrtSecureZero(Json,strlen(Json));
     xrtFree(Json);
-    if(!Ok){xrtFree(Reply.Body);xrtFree(Reply.Type);xrtFree(Reply.Revision);return MdoApplicationError(E,"sdk_transport_failed","Service transport failed; inspect the operation receipt before repeating a mutation","transport",503,strcmp(Route->Method,"GET")!=0);}
+    if(Binary)xrtSecureZero(Binary,BinarySize);
+    xrtFree(Binary);
+    if(!Ok){
+        xrtFree(Reply.Body);xrtFree(Reply.Type);xrtFree(Reply.Revision);
+        xrtFree(Captured.Body);xrtFree(Captured.ContentType);xrtFree(Captured.Revision);
+        if(E&&E->Code[0])return false;
+        return MdoApplicationError(E,"sdk_transport_failed","Service transport failed; inspect the operation receipt before repeating a mutation","transport",503,strcmp(Route->Method,"GET")!=0);
+    }
     xvalue* Parsed=Reply.Body?xrtJsonParse(xrtStrViewN(Reply.Body,Reply.Bytes)):NULL;
     *Out=xrtValueObject();bool Success=Reply.Status>=200&&Reply.Status<300;
     SdkPutUInt(*Out,"status",Reply.Status);SdkPut(*Out,"revision",Reply.Revision);SdkPut(*Out,"content_type",Reply.Type);
+    SdkPut(*Out,"transport",Native?"native":"http-stream");
     if(Parsed){const xvalue* Data=SdkGet(Parsed,"data");xrtValueObjectSetNew(*Out,XRT_STR_LITERAL("data"),xrtValueClone(Data?Data:Parsed));}
     else {size_t N=0;bool EncodedOk=xrtBase64Encode(Reply.Body,Reply.Bytes,NULL,0,&N,NULL);char* Encoded=EncodedOk?xrtMalloc(N+1):NULL;
         if(Encoded&&xrtBase64Encode(Reply.Body,Reply.Bytes,Encoded,N+1,&N,NULL)){Encoded[N]=0;SdkPut(*Out,"base64",Encoded);}else Success=false;

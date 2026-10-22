@@ -28,6 +28,9 @@ static xatomic64 g_MdoApiFallbackId;
 static bool g_MdoApiInitialized;
 
 static const MdoApiRoute g_MdoApiRoutes[] = {
+    { "/api/v1/application/services", XHTTP_METHOD_GET, "GET, OPTIONS", MdoApiApplicationRoute, false },
+    { "/api/v1/application/call", XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiApplicationRoute, false },
+    { "/api/v1/application/events", XHTTP_METHOD_GET, "GET, OPTIONS", MdoApiApplicationRoute, false },
     { "/api/v1/commands", XHTTP_METHOD_GET, "GET, OPTIONS", MdoApiCommandsRoute, false },
     { "/api/v1/commands/project/{command}", XHTTP_METHOD_GET|XHTTP_METHOD_PUT|XHTTP_METHOD_DELETE, "GET, PUT, DELETE, OPTIONS", MdoApiCommandProjectRoute, false },
     { "/api/v1/commands/project/{command}/{enabled}", XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiCommandProjectRoute, false },
@@ -619,6 +622,44 @@ static bool MdoApiRouteInvoke(MdoApiContext* Context, const MdoApiRoute* Route)
     if ( (Context->Request->head->MethodCode & (XHTTP_METHOD_GET | XHTTP_METHOD_HEAD)) == 0u )
         MdoApiLiveChanged(NULL);
     return Ok;
+}
+
+bool MdoApiApplicationInvoke(const mdo_sdk_context_v1* Caller,cstr Method,cstr Target,
+    const xvalue* Body,const xvalue* Headers,xbytesview Binary,MdoApplicationResponse* Response,mdo_error_v1* Error)
+{
+    if(!g_MdoApiInitialized)return MdoApplicationError(Error,"sdk_unavailable","Product services are not initialized","dispatch",503,false);
+    xhttp1head Head={0};XS_HttpReq Request={0};MdoApiContext C={0};xhttpfield Fields[20];size_t Count=0;
+    Head.Method=xrtStrView(Method);
+    const struct {cstr Name;xhttpmethod Code;} Methods[]={{"GET",XHTTP_METHOD_GET},{"POST",XHTTP_METHOD_POST},{"PUT",XHTTP_METHOD_PUT},{"PATCH",XHTTP_METHOD_PATCH},{"DELETE",XHTTP_METHOD_DELETE}};
+    for(size_t i=0;i<sizeof(Methods)/sizeof(*Methods);i++)if(!strcmp(Method,Methods[i].Name))Head.MethodCode=Methods[i].Code;
+    Head.Target=xrtStrView(Target);Request.head=&Head;Request.server=MdoApplicationServer();C.Request=&Request;
+    C.ApplicationContext=Caller;C.ApplicationBody=Body;C.ApplicationBinary=Binary;C.ApplicationResponse=Response;
+    if(!Head.MethodCode||!xrtHttpTargetParse(Head.Method,Head.Target,&C.Target))return MdoApplicationError(Error,"sdk_arguments_invalid","Invalid product operation","resolve",400,false);
+    for(size_t i=0;i<xrtValueCount(Headers);i++){
+        if(Count>=18)return MdoApplicationError(Error,"sdk_arguments_invalid","Too many service headers","resolve",400,false);
+        cstr Name=SdkKey(Headers,i),Value=SdkField(Headers,Name);if(!Value)return MdoApplicationError(Error,"sdk_arguments_invalid","Service headers must contain strings","resolve",400,false);
+        Fields[Count++]=(xhttpfield){xrtStrView(Name),xrtStrView(Value)};
+    }
+    char Token[MDO_API_WRITE_TOKEN_CAPACITY];
+    if(strcmp(Method,"GET")&&MdoApiWriteToken(Token))Fields[Count++]=(xhttpfield){XRT_STR_LITERAL("X-Mdo-Write-Token"),xrtStrView(Token)};
+    if(Body&&!Binary.Data)Fields[Count++]=(xhttpfield){XRT_STR_LITERAL("Content-Type"),XRT_STR_LITERAL("application/json")};
+    char Authority[64];
+    if(Request.server){uint16 Port=Request.server->PortBound?Request.server->PortBound:Request.server->Port;
+        snprintf(Authority,sizeof(Authority),"127.0.0.1:%u",(unsigned)Port);Fields[Count++]=(xhttpfield){XRT_STR_LITERAL("Host"),xrtStrView(Authority)};}
+    Head.Fields=Fields;Head.FieldCount=Count;MdoApiRequestId(C.RequestId);
+    for(size_t i=0;i<sizeof(g_MdoApiRoutes)/sizeof(*g_MdoApiRoutes);i++){
+        const MdoApiRoute* R=&g_MdoApiRoutes[i];if(!MdoApiRouteMatch(&C,R->Path))continue;
+        /* These handlers explicitly retain a physical HTTP connection. The SDK
+         * transport chooses loopback before invoking them, never replays work. */
+        if(R->Proc==MdoApiEcosystemRoute||R->Proc==MdoApiModelDiscoverRoute||R->Proc==MdoApiModelTestRoute||
+            R->Proc==MdoApiSessionBackupRoute||R->Proc==MdoApiLiveRoute||R->Proc==MdoApiDirectRoute||
+            strstr(Target,"/attachments/"))return false;
+        if(!(R->Methods&Head.MethodCode)){MdoApplicationError(Error,"method_not_allowed","Unsupported operation method","dispatch",405,false);return false;}
+        bool Ok=MdoApiRouteInvoke(&C,R);
+        if(!Ok&&!Response->Status)return MdoApplicationError(Error,"sdk_service_failed","Product handler did not provide a result","service",500,strcmp(Method,"GET")!=0);
+        return true;
+    }
+    return MdoApplicationError(Error,"sdk_service_missing","Product resource does not exist","dispatch",404,false);
 }
 
 XS_RequestResult MdoApiRequest(XS_HttpReq* pRequest)

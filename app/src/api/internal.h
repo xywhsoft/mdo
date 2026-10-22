@@ -7,6 +7,7 @@
 #include "../../include/mdo/api.h"
 #include "profile.h"
 #include "../../include/mdo/ecosystem.h"
+#include "../../include/mdo/application.h"
 
 #define MDO_API_RESPONSE_MAX_BYTES (256u * 1024u)
 #define MDO_API_CONVERSATION_ITEMS_MAX_BYTES (4u * 1024u * 1024u)
@@ -33,6 +34,11 @@ typedef struct MdoApiContext {
     bool CloseResponse;
     bool Takeover;
     bool UntrustedOrigin;
+    /* Native SDK calls reuse route business handlers without a socket. */
+    const mdo_sdk_context_v1* ApplicationContext;
+    const xvalue* ApplicationBody;
+    xbytesview ApplicationBinary;
+    MdoApplicationResponse* ApplicationResponse;
 } MdoApiContext;
 
 bool MdoApiLocalRequest(const XS_HttpReq* Request);
@@ -52,6 +58,7 @@ bool MdoApiSessionConversationRoute(MdoApiContext* Context);
 
 typedef bool (*MdoApiRouteProc)(MdoApiContext* pContext);
 bool MdoApiCommandsRoute(MdoApiContext* Context);
+bool MdoApiApplicationRoute(MdoApiContext* Context);
 bool MdoApiCommandInvocationRoute(MdoApiContext* Context);
 bool MdoApiCommandProjectRoute(MdoApiContext* Context);
 bool MdoApiDistributionRoute(MdoApiContext* Context);

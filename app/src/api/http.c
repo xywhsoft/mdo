@@ -79,6 +79,14 @@ static bool MdoApiReplyRaw(MdoApiContext* pContext, uint16 Status,
     if ( pContext == NULL || pContext->Request == NULL ||
          pContext->Request->head == NULL ||
          (pBody == NULL && BodySize != 0u) ) return false;
+    if(pContext->ApplicationResponse){
+        MdoApplicationResponse* R=pContext->ApplicationResponse;
+        if(BodySize>MDO_APPLICATION_RESPONSE_LIMIT||R->Body)return false;
+        R->Body=xrtMalloc(BodySize+1);R->ContentType=xrtStrDup(ContentType?ContentType:"application/json; charset=utf-8");
+        R->Revision=xrtStrDup(EntityTag?EntityTag:"");if(!R->Body||!R->ContentType||!R->Revision)return false;
+        if(BodySize)memcpy(R->Body,pBody,BodySize);
+        R->Body[BodySize]=0;R->Bytes=BodySize;R->Status=Status;return true;
+    }
     if (MdoApiHistoryGzip(pContext, Status, BodySize)) {
         xdeflateconfig Config; size_t Size = 0u; xrtDeflateConfigInit(&Config);
         Config.Format = XDEFLATE_GZIP; Config.Level = 1; Config.OutputLimit = BodySize * 9u / 10u;
