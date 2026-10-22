@@ -1,0 +1,318 @@
+#include "../../include/mdo/commands.h"
+#include "../../include/mdo/project_lifecycle.h"
+#include "../../include/mdo/time.h"
+#include "../remote/loopback.h"
+
+#define COMMAND_JOBS 64u
+#define COMMAND_ACTIVE 4u
+#define COMMAND_RESULT_LIMIT (1024u*1024u)
+typedef struct CommandJob {
+    char Id[37],Hash[65],Directory[128];
+    char* Workspace;
+    xvalue *Input,*Info,*Actions;
+    xthread* Thread;
+    xprocess* Process;
+    xcancel* Cancel;
+    MdoProjectLease* Lease;
+    uint64 Deadline,Sequence;
+    bool Terminal,TimedOut;
+} CommandJob;
+static struct {
+    xmutex* Lock;
+    xthread* Watch;
+    XS_ServerInfo* Server;
+    CommandJob Jobs[COMMAND_JOBS];
+    uint64 Sequence;
+    bool Stopping;
+} CommandManager;
+
+bool MdoCommandInvocationIdValid(cstr Id) {
+    if(!Id||strlen(Id)!=36||strncmp(Id,"cmd-",4))return false;
+    for(size_t i=4;i<36;i++)if(!((Id[i]>='0'&&Id[i]<='9')||(Id[i]>='a'&&Id[i]<='f')))return false;
+    return true;
+}
+static void CommandReceiptPath(cstr Id,char Path[128]){snprintf(Path,128,"data/commands/%s.json",Id);}
+static bool CommandSave(CommandJob* J) {
+    char P[128];CommandReceiptPath(J->Id,P);char* Text=xrtJsonStringify(J->Info,false,NULL);
+    bool Ok=Text&&strlen(Text)<=COMMAND_RESULT_LIMIT&&MdoHomeAtomicWrite(P,Text,strlen(Text),false);
+    xrtFree(Text);return Ok;
+}
+static xvalue* CommandReadJson(cstr Path) {
+    bool Missing=false;char* S=MdoExtensionRead(Path,true,COMMAND_RESULT_LIMIT,&Missing);
+    xvalue* V=S?xrtJsonParse(xrtStrView(S)):NULL;xrtFree(S);return V;
+}
+static bool CommandJobWrite(CommandJob* J,cstr Name,cstr Text) {
+    char P[256];snprintf(P,sizeof(P),"%s/%s",J->Directory,Name);
+    return Text&&MdoHomeAtomicWrite(P,Text,strlen(Text),false);
+}
+static bool CommandJobJson(CommandJob* J,cstr Name,const xvalue* V) {
+    char* S=xrtJsonStringify(V,false,NULL);bool Ok=S&&strlen(S)<=COMMAND_RESULT_LIMIT&&CommandJobWrite(J,Name,S);
+    xrtFree(S);return Ok;
+}
+static xvalue* CommandJobRead(CommandJob* J,cstr Name) {
+    char P[256];snprintf(P,sizeof(P),"%s/%s",J->Directory,Name);return CommandReadJson(P);
+}
+static CommandJob* CommandFind(cstr Id) {
+    for(size_t i=0;i<COMMAND_JOBS;i++)if(!strcmp(CommandManager.Jobs[i].Id,Id))return &CommandManager.Jobs[i];
+    return NULL;
+}
+static void CommandDispose(CommandJob* J) {
+    if(J->Thread){xrtThreadWait(J->Thread);xrtThreadDestroy(J->Thread);}
+    xrtValueRelease(J->Input);xrtValueRelease(J->Info);xrtValueRelease(J->Actions);
+    xrtCancelDestroy(J->Cancel);xrtFree(J->Workspace);MdoProjectLeaseRelease(J->Lease);memset(J,0,sizeof(*J));
+}
+static void CommandCleanup(CommandJob* J,unsigned Count) {
+    const char* Names[]={"input.json","command.c","worker.c","xs.json","web/index.html","mdo/command.h","mdo/module.h","final.json"};
+    char P[256];
+    for(size_t i=0;i<sizeof(Names)/sizeof(*Names);i++){
+        snprintf(P,sizeof(P),"%s/%s",J->Directory,Names[i]);(void)MdoHomeRemove(P,false);
+    }
+    for(unsigned i=1;i<=Count;i++){
+        snprintf(P,sizeof(P),"%s/request-%u.json",J->Directory,i);(void)MdoHomeRemove(P,false);
+        snprintf(P,sizeof(P),"%s/response-%u.json",J->Directory,i);(void)MdoHomeRemove(P,false);
+    }
+    snprintf(P,sizeof(P),"%s/web",J->Directory);(void)MdoHomeRemoveEmptyDirectory(P);
+    snprintf(P,sizeof(P),"%s/mdo",J->Directory);(void)MdoHomeRemoveEmptyDirectory(P);
+    (void)MdoHomeRemoveEmptyDirectory(J->Directory);xrtClearError();
+}
+typedef struct CommandHttpResult { unsigned Status;char* Bytes;size_t Size; } CommandHttpResult;
+static bool CommandHttpHead(const xhttp1head* H,void* Data){((CommandHttpResult*)Data)->Status=H->Status;return true;}
+static bool CommandHttpBody(xbytesview B,void* Data) {
+    CommandHttpResult* R=Data;if(B.Size>COMMAND_RESULT_LIMIT-R->Size)return false;
+    char* Next=xrtRealloc(R->Bytes,R->Size+B.Size+1);if(!Next)return false;
+    R->Bytes=Next;memcpy(Next+R->Size,B.Data,B.Size);R->Size+=B.Size;Next[R->Size]=0;return true;
+}
+static xvalue* CommandApiCall(CommandJob* J,const xvalue* P,char Error[512]) {
+    cstr Method=CommandText(P,"method"),Path=CommandText(P,"path");
+    /* Commands cannot recursively spawn commands or stop/update their own host.
+     * This is a stability boundary, not a native-code security sandbox. */
+    if(!Method||!Path||strstr(Path,"/commands")||strstr(Path,"/command-invocations")||strstr(Path,"/update")||strstr(Path,"/distribution")){
+        snprintf(Error,512,"Unsupported local API target");return NULL;
+    }
+    const xvalue* Body=xrtValueObjectGet(P,XRT_STR_LITERAL("body"));
+    char* Json=Body?xrtJsonStringify(Body,false,NULL):NULL;
+    XS_FetchHeader Headers[16];size_t Count=0;
+    const xvalue* Fields=xrtValueObjectGet(P,XRT_STR_LITERAL("headers"));
+    bool Ok=!Fields||xrtValueType(Fields)==XVALUE_OBJECT;
+    for(size_t i=0;Ok&&i<xrtValueCount(Fields);i++){
+        xstrview Name={0},Text={0};const xvalue* V=xrtValueObjectAt(Fields,i,&Name);
+        Ok=Count<15&&xrtValueGetString(V,&Text)&&!memchr(Name.Data,0,Name.Size)&&!memchr(Text.Data,0,Text.Size);
+        if(Ok){Headers[Count].Name=Name.Data;Headers[Count++].Value=Text.Data;}
+    }
+    if(Json){Headers[Count].Name="Content-Type";Headers[Count++].Value="application/json";}
+    MdoRemoteHttpRequest Request={0};Request.Method=Method;Request.Target=Path;
+    Request.Headers=Headers;Request.HeaderCount=Count;Request.Body=(xbytesview){(const unsigned char*)Json,Json?strlen(Json):0};
+    CommandHttpResult Received={0};MdoRemoteHttpSink Sink={CommandHttpHead,CommandHttpBody,&Received};
+    Ok=Ok&&(!Body||Json)&&MdoRemoteLoopbackCall(CommandManager.Server,&Request,J->Cancel,&Sink);
+    xrtFree(Json);
+    xvalue* Result=Ok?xrtValueObject():NULL;
+    xvalue* Data=Received.Bytes?xrtJsonParse(xrtStrViewN(Received.Bytes,Received.Size)):NULL;
+    if(Result)Ok=xrtValueObjectSetNew(Result,XRT_STR_LITERAL("status"),xrtValueUInt(Received.Status))&&
+        xrtValueObjectSetNew(Result,XRT_STR_LITERAL("body"),Data?Data:xrtValueNull());
+    else xrtValueRelease(Data);
+    xrtFree(Received.Bytes);
+    if(!Ok||!Result){xrtValueRelease(Result);snprintf(Error,512,"Local API request failed; a sent mutation may already have completed. Do not retry blindly.");return NULL;}
+    return Result;
+}
+static xvalue* CommandHostCall(CommandJob* J,const xvalue* Q,char Error[512]) {
+    cstr Method=CommandText(Q,"method");const xvalue* Params=xrtValueObjectGet(Q,XRT_STR_LITERAL("params"));
+    if(!Method){snprintf(Error,512,"Host method is missing");return NULL;}
+    if(!strcmp(Method,"api.request"))return CommandApiCall(J,Params,Error);
+    static const char* Methods[]={"ui.new","ui.model","ui.settings","ui.theme","ui.help","ui.stop","ui.session","ui.mcp","skill.invoke"};
+    for(size_t i=0;i<sizeof(Methods)/sizeof(*Methods);i++)if(!strcmp(Method,Methods[i])){
+        xvalue* A=xrtValueObject();
+        bool Ok=A&&xrtValueCount(J->Actions)<16&&CommandSet(A,"type",Method)&&
+            xrtValueObjectSetNew(A,XRT_STR_LITERAL("params"),Params?xrtValueClone(Params):xrtValueObject())&&
+            xrtValueArrayAppendNew(J->Actions,A);
+        if(!Ok){snprintf(Error,512,"Command UI action limit reached");return NULL;}
+        return xrtValueObject();
+    }
+    snprintf(Error,512,"Unknown command host method: %.120s",Method);return NULL;
+}
+static bool CommandCopyResource(CommandJob* J,cstr Source,cstr Target) {
+    size_t N=0;char* Text=(char*)xrtVfsReadAllLimit(MdoHomeApplicationVfs(),Source,256u*1024u,&N);
+    bool Ok=Text&&!memchr(Text,0,N)&&CommandJobWrite(J,Target,Text);xrtFree(Text);return Ok;
+}
+static int32 CommandExecute(void* Value) {
+    CommandJob* J=Value;unsigned Sequence=1;char Error[512]={0};cstr State="failed";xvalue* Final=NULL;
+    xrtMutexLock(CommandManager.Lock);CommandSet(J->Info,"state","running");CommandSave(J);xrtMutexUnlock(CommandManager.Lock);
+    char* Directory=MdoHomeExternalPath(J->Directory);char* Executable=NULL,*ConfigPath=NULL;
+    const char* Args[2];size_t ArgCount=0;
+    if(!CommandCopyResource(J,"/app/command-worker.c","worker.c")||
+       !CommandCopyResource(J,"/app/generated/module-sdk/mdo/command.h","mdo/command.h")||
+       !CommandCopyResource(J,"/app/generated/module-sdk/mdo/module.h","mdo/module.h")||
+       !CommandJobJson(J,"input.json",J->Input)||!CommandJobWrite(J,"web/index.html","Command worker")||
+       !CommandJobWrite(J,"xs.json","{\"services\":[{\"enabled\":true,\"class\":\"custom\",\"name\":\"command-worker\",\"host_default\":{\"enabled\":true,\"path\":\"web\",\"devlang\":\"c\",\"devfile\":\"worker.c\"}}]}")){
+        snprintf(Error,sizeof(Error),"Cannot prepare isolated command worker");goto finish;
+    }
+    (void)MdoHomeSetMode(J->Directory,0700);
+#if defined(__ANDROID__)
+    cstr Native=getenv("MDO_NATIVE_DIR");Executable=Native?xrtPathJoin(Native,"libmdo_command_worker.so"):NULL;
+    ConfigPath=Native?xrtPathJoin(Native,"libxs.so"):NULL;Args[0]=Directory;Args[1]=ConfigPath;ArgCount=2;
+#else
+    Executable=xrtPathExecutable();ConfigPath=xrtPathJoin(Directory,"xs.json");Args[0]=ConfigPath;Args[1]="--no-vfs";ArgCount=2;
+#endif
+    xprocessconfig Config;xrtProcessConfigInit(&Config);Config.Program=Executable;Config.Args=Args;Config.ArgCount=ArgCount;
+    Config.WorkDir=Directory;Config.HideWindow=true;Config.NewGroup=true;
+    Config.Stdin.Mode=XPROCESS_IO_NULL;Config.Stdout.Mode=XPROCESS_IO_NULL;Config.Stderr.Mode=XPROCESS_IO_NULL;
+    xrtMutexLock(CommandManager.Lock);
+    if(!xrtCancelRequested(J->Cancel))J->Process=Executable?xrtProcessSpawn(&Config):NULL;
+    xrtMutexUnlock(CommandManager.Lock);
+    if(!J->Process){snprintf(Error,sizeof(Error),"Isolated command worker could not start");goto finish;}
+    for(;;){
+        if(xrtCancelRequested(J->Cancel))break;
+        char Name[64];snprintf(Name,sizeof(Name),"request-%u.json",Sequence);
+        xvalue* Q=Sequence<=128?CommandJobRead(J,Name):NULL;
+        if(Q){
+            xvalue* Reply=xrtValueObject();xvalue* Result=CommandHostCall(J,Q,Error);xrtValueRelease(Q);
+            bool Ok=Reply&&xrtValueObjectSetNew(Reply,XRT_STR_LITERAL("ok"),xrtValueBool(Result!=NULL))&&
+                CommandSet(Reply,"error",Error)&&xrtValueObjectSetNew(Reply,XRT_STR_LITERAL("result"),Result?Result:xrtValueNull());
+            snprintf(Name,sizeof(Name),"response-%u.json",Sequence);Ok=Ok&&CommandJobJson(J,Name,Reply);xrtValueRelease(Reply);
+            if(!Ok){snprintf(Error,sizeof(Error),"Command host response exceeded limits or could not be saved");break;}
+            Sequence++;Error[0]=0;
+        }
+        Final=CommandJobRead(J,"final.json");if(Final)break;
+        if(xrtProcessWaitFor(J->Process,20)==XWAIT_OK){
+            Final=CommandJobRead(J,"final.json");
+            if(!Final)snprintf(Error,sizeof(Error),"Command worker exited without a result (crash or bootstrap failure)");
+            break;
+        }
+        xrtClearError();
+    }
+finish:
+    xrtMutexLock(CommandManager.Lock);xprocess* Process=J->Process;J->Process=NULL;xrtMutexUnlock(CommandManager.Lock);
+    if(Process){(void)xrtProcessKillTree(Process);(void)xrtProcessWait(Process);xrtProcessDestroy(Process);}
+    if(xrtCancelRequested(J->Cancel)){State=J->TimedOut?"timed_out":"cancelled";snprintf(Error,sizeof(Error),"%s",J->TimedOut?"Command execution timed out":"Command execution cancelled");}
+    else if(Final){
+        bool Ok=false;xrtValueGetBool(xrtValueObjectGet(Final,XRT_STR_LITERAL("ok")),&Ok);
+        if(Ok)State="succeeded";else snprintf(Error,sizeof(Error),"%.500s",CommandText(Final,"error")?CommandText(Final,"error"):"Command failed");
+    }
+    CommandCleanup(J,Sequence>128?128:Sequence);xrtFree(Directory);xrtFree(Executable);xrtFree(ConfigPath);
+    /* Publish terminal state last. A retained result may be read repeatedly;
+     * the originating UI applies its action list once per invocation. */
+    xrtMutexLock(CommandManager.Lock);
+    CommandSet(J->Info,"state",State);CommandSet(J->Info,"error",Error);
+    if(Final&&!strcmp(State,"succeeded")){
+        const xvalue* Result=xrtValueObjectGet(Final,XRT_STR_LITERAL("result"));
+        xrtValueObjectSetNew(J->Info,XRT_STR_LITERAL("result"),Result?xrtValueClone(Result):xrtValueObject());
+        xrtValueObjectSetNew(J->Info,XRT_STR_LITERAL("actions"),xrtValueClone(J->Actions));
+    }
+    xrtValueObjectSetNew(J->Info,XRT_STR_LITERAL("terminal"),xrtValueBool(true));
+    if(!CommandSave(J)){CommandSet(J->Info,"error","Command finished but its receipt could not be saved; do not repeat a mutation blindly");}
+    MdoProjectLeaseRelease(J->Lease);J->Lease=NULL;J->Terminal=true;
+    xrtValueRelease(Final);xrtMutexUnlock(CommandManager.Lock);return 0;
+}
+static int32 CommandWatch(void* Unused) {
+    (void)Unused;
+    for(;;){
+        xrtMutexLock(CommandManager.Lock);bool Stop=CommandManager.Stopping;
+        for(size_t i=0;i<COMMAND_JOBS;i++){
+            CommandJob* J=&CommandManager.Jobs[i];if(!J->Id[0]||J->Terminal)continue;
+            if(Stop||MdoDeadlineExpired(J->Deadline)){
+                if(!xrtCancelRequested(J->Cancel))J->TimedOut=!Stop;
+                xrtCancelRequest(J->Cancel);if(J->Process)(void)xrtProcessKillTree(J->Process);
+            }
+        }
+        xrtMutexUnlock(CommandManager.Lock);if(Stop)return 0;xrtSleep(20);
+    }
+}
+static bool CommandRecover(void) {
+    xdir Dir=MdoHomeOpenDirectory("data/commands",XDIR_STAT);
+    if(!Dir)return CommandMissing();
+    xdirentry E;xdirnext Next;size_t Count=0;
+    while((Next=xrtDirNext(Dir,&E))==XDIR_NEXT_ITEM){
+        if(E.Name.Size!=41||memcmp(E.Name.Data+36,".json",5))continue;
+        char Id[37],Path[128];memcpy(Id,E.Name.Data,36);Id[36]=0;
+        if(!MdoCommandInvocationIdValid(Id)||Count>=COMMAND_JOBS){xrtDirClose(Dir);return false;}
+        CommandReceiptPath(Id,Path);xvalue* V=CommandReadJson(Path);
+        if(!V||!CommandText(V,"id")||strcmp(CommandText(V,"id"),Id)||!CommandText(V,"request_hash")){
+            xrtValueRelease(V);xrtDirClose(Dir);return false;
+        }
+        CommandJob* J=&CommandManager.Jobs[Count++];snprintf(J->Id,sizeof(J->Id),"%s",Id);
+        J->Info=V;J->Sequence=++CommandManager.Sequence;J->Terminal=true;
+        bool Terminal=false;xrtValueGetBool(xrtValueObjectGet(V,XRT_STR_LITERAL("terminal")),&Terminal);
+        if(!Terminal){
+            CommandSet(V,"state","interrupted");CommandSet(V,"error","Host restarted before completion; a mutation may have completed. Inspect its result before repeating.");
+            xrtValueObjectSetNew(V,XRT_STR_LITERAL("terminal"),xrtValueBool(true));
+            if(!CommandSave(J)){xrtDirClose(Dir);return false;}
+        }
+        snprintf(J->Directory,sizeof(J->Directory),"data/cache/command-workers/%s",Id);CommandCleanup(J,128);
+    }
+    bool Ok=Next==XDIR_NEXT_END;return xrtDirClose(Dir)&&Ok;
+}
+bool MdoCommandManagerInit(XS_ServerInfo* Server) {
+    if(CommandManager.Lock)return true;
+    memset(&CommandManager,0,sizeof(CommandManager));
+    CommandManager.Lock=xrtMutexCreate();CommandManager.Server=xsServerRetain(Server);
+    if(CommandManager.Lock&&CommandManager.Server&&CommandRecover())CommandManager.Watch=xrtThreadCreate(CommandWatch,NULL,0);
+    if(!CommandManager.Watch){MdoCommandManagerUnit();return false;}return true;
+}
+void MdoCommandManagerUnit(void) {
+    if(!CommandManager.Lock)return;
+    xrtMutexLock(CommandManager.Lock);CommandManager.Stopping=true;xrtMutexUnlock(CommandManager.Lock);
+    if(CommandManager.Watch){xrtThreadWait(CommandManager.Watch);xrtThreadDestroy(CommandManager.Watch);}
+    for(size_t i=0;i<COMMAND_JOBS;i++)CommandDispose(&CommandManager.Jobs[i]);
+    xsServerRelease(CommandManager.Server);xrtMutexDestroy(CommandManager.Lock);memset(&CommandManager,0,sizeof(CommandManager));
+}
+xvalue* MdoCommandGet(cstr Id) {
+    if(!MdoCommandInvocationIdValid(Id)||!CommandManager.Lock)return NULL;
+    xrtMutexLock(CommandManager.Lock);CommandJob* J=CommandFind(Id);xvalue* V=J?xrtValueClone(J->Info):NULL;
+    if(!J){
+        char P[128];CommandReceiptPath(Id,P);V=CommandReadJson(P);
+        bool Terminal=false;xrtValueGetBool(xrtValueObjectGet(V,XRT_STR_LITERAL("terminal")),&Terminal);
+        if(V&&!Terminal){CommandSet(V,"state","interrupted");CommandSet(V,"error","Host restarted before completion; a mutation may have completed. Inspect its result before repeating.");xrtValueObjectSetNew(V,XRT_STR_LITERAL("terminal"),xrtValueBool(true));}
+    }
+    xrtMutexUnlock(CommandManager.Lock);return V;
+}
+bool MdoCommandCancel(cstr Id) {
+    if(!MdoCommandInvocationIdValid(Id)||!CommandManager.Lock)return false;
+    xrtMutexLock(CommandManager.Lock);CommandJob* J=CommandFind(Id);bool Found=J!=NULL;
+    if(J&&!J->Terminal){xrtCancelRequest(J->Cancel);if(J->Process)(void)xrtProcessKillTree(J->Process);}
+    xrtMutexUnlock(CommandManager.Lock);return Found;
+}
+xvalue* MdoCommandStart(const xvalue* Input,cstr Workspace,char Error[512]) {
+    Error[0]=0;cstr Id=CommandText(Input,"invocation_id"),Command=CommandText(Input,"command_id"),Project=CommandText(Input,"project_id");
+    if(!CommandManager.Lock||!MdoCommandInvocationIdValid(Id)||!MdoExtensionIdValid(Command)||!MdoExtensionIdValid(Project))goto invalid;
+    char* Json=xrtJsonStringify(Input,false,NULL);char Hash[65];bool HasHash=Json&&MdoExtensionHash(Json,Hash);xrtFree(Json);if(!HasHash)goto invalid;
+    xvalue* Existing=MdoCommandGet(Id);
+    if(Existing){if(strcmp(Hash,CommandText(Existing,"request_hash")?CommandText(Existing,"request_hash"):"")){xrtValueRelease(Existing);goto conflict;}return Existing;}
+    char *Source=NULL,Revision[65];xvalue* Meta=NULL;
+    if(!MdoCommandResolve(Workspace,Command,&Source,&Meta,Revision,Error))return NULL;
+    cstr Requested=CommandText(Input,"revision");
+    if(Requested&&Requested[0]&&strcmp(Requested,Revision)){xrtFree(Source);xrtValueRelease(Meta);snprintf(Error,512,"Command source changed; refresh the catalog");return NULL;}
+    bool NeedsSession=false;xrtValueGetBool(xrtValueObjectGet(Meta,XRT_STR_LITERAL("requires_session")),&NeedsSession);
+    cstr Session=CommandText(Input,"session_id");
+    if(NeedsSession&&(!Session||!Session[0])){xrtFree(Source);xrtValueRelease(Meta);snprintf(Error,512,"This command requires a session");return NULL;}
+    uint64 Timeout=30000;xrtValueGetUInt(xrtValueObjectGet(Meta,XRT_STR_LITERAL("timeout_ms")),&Timeout);xrtValueRelease(Meta);
+    xwork_error LeaseError;MdoProjectLease* Lease=MdoProjectLeaseAcquire(Project,MDO_PROJECT_LEASE_SHARED,&LeaseError);
+    if(!Lease){xrtFree(Source);snprintf(Error,512,"Project is busy or unavailable");return NULL;}
+    xrtMutexLock(CommandManager.Lock);size_t Active=0;CommandJob* Slot=NULL;
+    for(size_t i=0;i<COMMAND_JOBS;i++){
+        CommandJob* J=&CommandManager.Jobs[i];if(J->Id[0]&&!J->Terminal)Active++;
+        if(!J->Id[0]||J->Terminal)if(!Slot||!J->Id[0]||(Slot->Id[0]&&J->Sequence<Slot->Sequence))Slot=J;
+    }
+    bool Ok=!CommandManager.Stopping&&Active<COMMAND_ACTIVE&&Slot&&!CommandFind(Id);
+    if(Ok){
+        if(Slot->Id[0]){char P[128];CommandReceiptPath(Slot->Id,P);(void)MdoHomeRemove(P,false);CommandDispose(Slot);}
+        snprintf(Slot->Id,sizeof(Slot->Id),"%s",Id);snprintf(Slot->Hash,sizeof(Slot->Hash),"%s",Hash);
+        snprintf(Slot->Directory,sizeof(Slot->Directory),"data/cache/command-workers/%s",Id);
+        Slot->Input=xrtValueClone(Input);Slot->Info=xrtValueObject();Slot->Actions=xrtValueArray();Slot->Cancel=xrtCancelCreate();
+        Slot->Workspace=xrtStrDup(Workspace?Workspace:"");Slot->Lease=Lease;Lease=NULL;Slot->Sequence=++CommandManager.Sequence;
+        Slot->Deadline=MdoDeadlineAfterUs(Timeout*1000u);
+        Ok=Slot->Input&&Slot->Info&&Slot->Actions&&Slot->Cancel&&Slot->Workspace&&CommandSet(Slot->Input,"workspace",Slot->Workspace)&&
+            CommandSet(Slot->Input,"revision",Revision)&&
+            xrtValueObjectSetNew(Slot->Input,XRT_STR_LITERAL("deadline"),xrtValueUInt(Slot->Deadline))&&
+            CommandSet(Slot->Info,"id",Id)&&CommandSet(Slot->Info,"command_id",Command)&&CommandSet(Slot->Info,"project_id",Project)&&
+            CommandSet(Slot->Info,"session_id",Session)&&CommandSet(Slot->Info,"revision",Revision)&&CommandSet(Slot->Info,"request_hash",Hash)&&
+            CommandSet(Slot->Info,"state","pending")&&xrtValueObjectSetNew(Slot->Info,XRT_STR_LITERAL("terminal"),xrtValueBool(false))&&
+            CommandJobWrite(Slot,"command.c",Source)&&CommandSave(Slot);
+        if(Ok){Slot->Thread=xrtThreadCreate(CommandExecute,Slot,0);Ok=Slot->Thread!=NULL;}
+        if(!Ok){CommandCleanup(Slot,0);CommandDispose(Slot);}
+    }
+    xvalue* Result=Ok?xrtValueClone(Slot->Info):NULL;
+    xrtMutexUnlock(CommandManager.Lock);MdoProjectLeaseRelease(Lease);xrtFree(Source);
+    if(!Ok)snprintf(Error,512,"Command admission failed (busy, storage unavailable, or duplicate submission); check the invocation receipt before resubmitting");
+    return Result;
+conflict:snprintf(Error,512,"Invocation ID belongs to a different command request");return NULL;
+invalid:snprintf(Error,512,"Invalid command invocation or command manager unavailable");return NULL;
+}

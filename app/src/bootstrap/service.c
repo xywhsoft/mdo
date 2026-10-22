@@ -81,6 +81,7 @@ void ServiceUnit(XS_HostInfo* pHost)
     g_MdoServiceRetryTimer = 0u;
     MdoDeviceTransfersUnit();
     MdoRemoteUnit();
+    MdoCommandManagerUnit();
     MdoApiUnit();
     MdoBootstrapUnit();
     MdoApiLiveRelease();

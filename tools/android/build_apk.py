@@ -128,6 +128,12 @@ def build(sdk: Path, java: Path, library: Path, pack: Path, output: Path,
 </manifest>'''
     with tempfile.TemporaryDirectory(prefix="xs-apk-", dir=output.parent) as raw:
         directory = Path(raw)
+        native_worker=directory / "libmdo_command_worker.so"
+        host_tag="windows-x86_64" if os.name=="nt" else "linux-x86_64"
+        clang=sdk / "ndk" / lock["ndk"] / "toolchains/llvm/prebuilt" / host_tag / "bin" / ("clang"+suffix)
+        run([str(clang), f"--target=aarch64-linux-android{lock['api']}", "-fPIE", "-pie", "-O2",
+             "-Wall", "-Wextra", "-Werror", "-Wl,-z,max-page-size=16384", "-I"+str(ROOT / "src/sdk"),
+             str(MDO_ROOT / "tools/android/command_worker.c"), "-ldl", "-o", str(native_worker)])
         xml = directory / "AndroidManifest.xml"
         xml.write_text(manifest, encoding="utf-8")
         classes = directory / "classes"; classes.mkdir()
@@ -159,6 +165,7 @@ def build(sdk: Path, java: Path, library: Path, pack: Path, output: Path,
         run([str(tools / ("aapt2" + suffix)), "link", "-I", str(android), "--manifest", str(xml), "-o", str(unsigned), *compiled_resources])
         with zipfile.ZipFile(unsigned, "a") as archive:
             archive.write(library, "lib/arm64-v8a/libxs.so", compress_type=zipfile.ZIP_STORED)
+            archive.write(native_worker, "lib/arm64-v8a/libmdo_command_worker.so", compress_type=zipfile.ZIP_STORED)
             archive.write(pack, "assets/app.xrtpack", compress_type=zipfile.ZIP_STORED)
             release = json.loads((MDO_ROOT / "app/release.json").read_text())
             add_runtime(archive, MDO_ROOT / "tools/runtime/android-arm64-v8a", os.environ["MDO_ANDROID_EDITION"], code, release["toolpack_revision"])

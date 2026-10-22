@@ -186,6 +186,9 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
         printf("[mdo] bootstrap failed: %s\n", g_MdoBootstrap.Message);
         return false;
     }
+    if(!MdoCommandManagerInit(pHost->Server)) {
+        MdoBootstrapFail("command manager initialization failed");return false;
+    }
     g_MdoBootstrap.Stage = MDO_BOOTSTRAP_EXECUTOR_READY;
 
     if ( !MdoPowerManagerInit() ) {
@@ -236,6 +239,7 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
 
 void MdoBootstrapUnit(void)
 {
+    MdoCommandManagerUnit();
     MdoDistributionUnit();
     MdoUpdateUnit();
     MdoScheduleExecutorUnit();

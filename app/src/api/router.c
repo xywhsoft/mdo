@@ -28,6 +28,9 @@ static xatomic64 g_MdoApiFallbackId;
 static bool g_MdoApiInitialized;
 
 static const MdoApiRoute g_MdoApiRoutes[] = {
+    { "/api/v1/commands", XHTTP_METHOD_GET, "GET, OPTIONS", MdoApiCommandsRoute, false },
+    { "/api/v1/command-invocations", XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiCommandInvocationRoute, false },
+    { "/api/v1/command-invocations/{invocation}", XHTTP_METHOD_GET|XHTTP_METHOD_DELETE, "GET, DELETE, OPTIONS", MdoApiCommandInvocationRoute, false },
     { "/api/v1/device-transfers/capabilities", XHTTP_METHOD_GET, "GET, OPTIONS", MdoApiDeviceTransfersRoute, false },
     { "/api/v1/device-transfers/policy", XHTTP_METHOD_GET|XHTTP_METHOD_PUT, "GET, PUT, OPTIONS", MdoApiDeviceTransfersRoute, false },
     { "/api/v1/device-transfers/devices", XHTTP_METHOD_GET|XHTTP_METHOD_POST, "GET, POST, OPTIONS", MdoApiDeviceTransfersRoute, false },

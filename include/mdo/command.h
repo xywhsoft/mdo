@@ -21,6 +21,7 @@ typedef struct mdo_command_host_v1 {
 struct mdo_command_context_v1 {
     uint32_t Size, AbiVersion;
     const char *InvocationId, *CommandId, *ProjectId, *SessionId, *RunId;
+    const char* SourceRevision;
     const char *Workspace, *RawArguments;
     uint64_t Deadline;
     const mdo_command_host_v1* Host;

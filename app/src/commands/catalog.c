@@ -9,6 +9,12 @@ static cstr CommandText(const xvalue* V,cstr Key)
 }
 static bool CommandSet(xvalue* V,cstr K,cstr S)
 {return xrtValueObjectSetNew(V,xrtStrView(K),xrtValueString(xrtStrView(S?S:"")));}
+static bool CommandUInt(const xvalue* V,uint64* N) {
+    int64 Signed=0;
+    if(xrtValueType(V)==XVALUE_UINT)return xrtValueGetUInt(V,N);
+    if(xrtValueType(V)==XVALUE_INT&&xrtValueGetInt(V,&Signed)&&Signed>=0){*N=(uint64)Signed;return true;}
+    return false;
+}
 
 xvalue* MdoCommandMetadata(cstr Id,cstr Source,char Error[512])
 {
@@ -45,7 +51,7 @@ xvalue* MdoCommandMetadata(cstr Id,cstr Source,char Error[512])
         }
     }
     uint64 Timeout=30000;const xvalue* T=xrtValueObjectGet(Meta,XRT_STR_LITERAL("timeout_ms"));
-    if(T&&(!xrtValueGetUInt(T,&Timeout)||!Timeout||Timeout>600000))goto bad;
+    if(T&&(!CommandUInt(T,&Timeout)||!Timeout||Timeout>600000))goto bad;
     bool Required=false;T=xrtValueObjectGet(Meta,XRT_STR_LITERAL("requires_session"));
     if(T&&!xrtValueGetBool(T,&Required))goto bad;
     if(!xrtValueObjectSetNew(Meta,XRT_STR_LITERAL("timeout_ms"),xrtValueUInt(Timeout)))goto bad;
@@ -142,7 +148,7 @@ xvalue* MdoCommandCatalog(cstr Workspace)
     if(Dir&&!xrtDirClose(Dir)){Dir=NULL;goto fail;}Dir=NULL;
     if(Next==XDIR_NEXT_ERROR)goto fail;
     if(Workspace&&Workspace[0]){
-        xroot Root=xrtRootOpen(Workspace);if(!Root)goto fail;
+        xroot Root=xrtRootOpen(Workspace);if(!Root){if(CommandMissing())return Map;goto fail;}
         Dir=xrtRootDirOpen(Root,".mdo/commands",XDIR_STAT);
         if(!Dir&&!CommandMissing()){xrtRootClose(Root);goto fail;}
         Next=XDIR_NEXT_END;
