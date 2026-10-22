@@ -46,7 +46,7 @@ export function createSlashCommands({ composer, input, onExecute, contextKey = (
           "aria-selected": String(index === active) },
       }, [
         element("code", { text: command.name }),
-        element("span", { text: command.custom ? `${command.description}${command.argument_hint ? " · " + command.argument_hint : ""}` : t(command.descriptionKey, {}, command.fallback) }),
+        element("span", { text: `${command.scope === "builtin" ? t(`slash.${command.id}`, {}, command.description) : command.description}${command.argument_hint ? " · " + command.argument_hint : ""}` }),
       ]);
       option.addEventListener("pointerdown", (event) => {
         event.preventDefault();
@@ -85,7 +85,7 @@ export function createSlashCommands({ composer, input, onExecute, contextKey = (
     selections.add(selectionKey);
     hide();let cleared = false;
     try {
-      const command = (await loadCommands(scope.projectId)).find(item => item.id === selection.id);
+      const command = (await loadCommands(scope.projectId, { refresh: true })).find(item => item.id === selection.id);
       if (!command) throw new Error(`命令 /${selection.id} 不存在、已停用或配置无效。`);
       if (key !== contextKey()) return true;
       const result = await runCommand(command, selection.raw, scope, { onPending(id, target, done) {
