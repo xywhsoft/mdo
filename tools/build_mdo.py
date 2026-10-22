@@ -10,6 +10,7 @@ import os
 import re
 import shlex
 import shutil
+import struct
 import subprocess
 import sys
 import tarfile
@@ -20,6 +21,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 APP = ROOT / "app"
 LOCK_PATH = ROOT / "deps.lock"
+MUSL_THREAD_STACK_BYTES = 8 * 1024 * 1024
 SOURCES_PATH = APP / "sources.json"
 GENERATED = APP / "generated"
 UNITY_PATH = GENERATED / "mdo_unity.c"
@@ -521,6 +523,32 @@ def verify_linux_host_abi(receipt: dict, libc: str, frontend: str, maximum: str)
                 raise BuildError(f"cached {key} requires glibc {required}, maximum is {maximum}; rebuild in the baseline root")
 
 
+def verify_musl_host_stack(host: Path) -> None:
+    """musl uses PT_GNU_STACK to size new native threads (128 KiB otherwise).
+
+    Nested Agent tool batches alone need more than 280 KiB per frame. Require
+    the linked default on cached hosts too, before packing a crashing product.
+    """
+    with host.open("rb") as stream:
+        header = stream.read(64)
+        if len(header) != 64 or header[:6] != b"\x7fELF\x02\x01":
+            raise BuildError("musl host must be a little-endian ELF64 executable")
+        offset = struct.unpack_from("<Q", header, 32)[0]
+        width, count = struct.unpack_from("<HH", header, 54)
+        if width < 56 or width > 4096 or not 0 < count <= 256:
+            raise BuildError("musl host has an invalid program header table")
+        for index in range(count):
+            stream.seek(offset + index * width)
+            entry = stream.read(56)
+            if len(entry) != 56:
+                raise BuildError("musl host has a truncated program header table")
+            if struct.unpack_from("<I", entry)[0] == 0x6474E551:
+                if struct.unpack_from("<Q", entry, 40)[0] >= MUSL_THREAD_STACK_BYTES:
+                    return
+                break
+    raise BuildError("musl native threads need an 8 MiB default stack; rebuild without --skip-host-build")
+
+
 def build(args: argparse.Namespace, xserver: Path, lock: dict) -> None:
     edition = getattr(args, "edition", "gui")
     libc = getattr(args, "libc", "glibc")
@@ -552,7 +580,7 @@ def build(args: argparse.Namespace, xserver: Path, lock: dict) -> None:
             "--frontend", frontend,
             "--gui-cc", getattr(args, "gui_cc", "gcc"),
             *(["--glibc-max", getattr(args, "glibc_max", "2.28")] if os.name != "nt" else []),
-            *(["--sysroot", str(args.sysroot), "--compile-extra", "-idirafter " + shlex.quote(str(args.sysroot / "include")), "--link-extra=-static"] if libc == "musl" else []),
+            *(["--sysroot", str(args.sysroot), "--compile-extra", "-idirafter " + shlex.quote(str(args.sysroot / "include")), f"--link-extra=-static -Wl,-z,stack-size={MUSL_THREAD_STACK_BYTES}"] if libc == "musl" else []),
             *host_profile_arguments(args.full_host),
             *(["--icon", str(ICON_PATH)] if os.name == "nt" else []),
         ], xserver, args.dry_run)
@@ -564,6 +592,8 @@ def build(args: argparse.Namespace, xserver: Path, lock: dict) -> None:
         raise BuildError(f"pack host was not built: {packer}")
     if not args.dry_run:
         verify_host_receipt(packer, lock, args.full_host, icon=os.name == "nt")
+        if libc == "musl":
+            verify_musl_host_stack(host)
     if not args.dry_run:
         receipt = load_object(host.with_name(host.name + ".build.json"))
         if receipt.get("frontend") != frontend or (libc == "musl" and "-static" not in receipt.get("link_extra", "")):
