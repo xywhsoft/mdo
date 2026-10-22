@@ -47,6 +47,37 @@ EXPIRY_ROUTE=' {"/api/v1/test-soak-expire",XHTTP_METHOD_POST,"POST",SoakExpireAc
 _WINDOWS_MEMORY=None
 
 
+class SoakGateError(AssertionError):
+    """Record fixed gate codes instead of potentially sensitive error text."""
+    def __init__(self, code):
+        super().__init__(code)
+        self.code=code
+
+
+def observe_clock(state, now, previous, started=None, wall=None, wall_now=None):
+    clock={}
+    if previous is not None:
+        gap=now-previous
+        clock['tick_gap_seconds']=gap
+        state['largest_tick_gap']=max(state.get('largest_tick_gap',0),gap)
+    if started is not None:
+        clock.update(monotonic_elapsed_seconds=now-started,wall_elapsed_seconds=wall_now-wall)
+        clock['offset_seconds']=clock['wall_elapsed_seconds']-clock['monotonic_elapsed_seconds']
+    state['clock']=clock
+    if previous is not None and not 0<=clock['tick_gap_seconds']<15:
+        raise SoakGateError('observation_gap')
+    if started is not None and not abs(clock['offset_seconds'])<5:
+        raise SoakGateError('clock_diverged')
+
+
+def record_failure(state, error):
+    state.update(status='cancelled' if isinstance(error,InterruptedError) else 'failed',
+        acceptance_72h=False,error_type=type(error).__name__,
+        failure_code=error.code if isinstance(error,SoakGateError) else 'unclassified')
+    state['error_frames']=[{'file':Path(v.filename).name,'line':v.lineno,'function':v.name}
+        for v in traceback.extract_tb(error.__traceback__)]
+
+
 def windows_memory_backend():
     global _WINDOWS_MEMORY
     if _WINDOWS_MEMORY is not None: return _WINDOWS_MEMORY
@@ -146,13 +177,10 @@ def main():
         nonlocal last_tick
         now=time.monotonic()
         if stop.exists(): raise InterruptedError('stop file requested')
-        if last_tick is not None:
-            gap=now-last_tick; state['largest_tick_gap']=max(state['largest_tick_gap'],gap)
-            assert gap<15,'unplanned execution gap; acceptance clock invalid'
+        observe_clock(state,now,last_tick,started,wall,time.time())
         last_tick=now
         for process in processes: assert process.poll() is None,'owned host exited'
         if started is not None:
-            assert abs((time.time()-wall)-(now-started))<5,'wall/monotonic clock diverged'
             resources={str(p.pid):memory(p.pid) for p in processes}
             resources[str(os.getpid())]=memory(os.getpid())
             state['resources']=resources; state['observer_pid']=os.getpid()
@@ -368,9 +396,7 @@ def main():
         state['fixture_lifecycle_passed']=True; save(True)
         return 0
     except BaseException as error:
-        state['status']='cancelled' if isinstance(error,InterruptedError) else 'failed'; state['acceptance_72h']=False
-        state['error_type']=type(error).__name__
-        state['error_frames']=[{'file':Path(v.filename).name,'line':v.lineno,'function':v.name} for v in traceback.extract_tb(error.__traceback__)]
+        record_failure(state,error)
         save(True)
         print('soak failed; inspect sanitized receipt stage and frames',flush=True); return 1
     finally:
