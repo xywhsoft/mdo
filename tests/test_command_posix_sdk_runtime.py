@@ -7,7 +7,7 @@ def main():
     p=argparse.ArgumentParser();p.add_argument('--host',type=Path,required=True);args=p.parse_args()
     with tempfile.TemporaryDirectory(dir=ROOT/'.build',prefix='command-posix-sdk-') as tmp:
         base=Path(tmp);site=base/'site';write_site(site);(site/'mdo').mkdir()
-        for name in ('command.h','module.h'):shutil.copy2(ROOT/'include/mdo'/name,site/'mdo'/name)
+        for name in ('command.h','module.h','sdk.h'):shutil.copy2(ROOT/'include/mdo'/name,site/'mdo'/name)
         shutil.copy2(ROOT/'app/command-worker.c',site/'worker.c')
         (site/'probe.c').write_text(r'''
 #include <xsbase.h>

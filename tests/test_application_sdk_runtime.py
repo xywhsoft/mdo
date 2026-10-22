@@ -1,5 +1,5 @@
 """Public SDK through real TCC workers and generation-owned native providers."""
-import argparse,json,os,subprocess,tempfile,time,uuid
+import argparse,base64,json,os,subprocess,sys,tempfile,time,uuid
 from pathlib import Path
 from test_api_runtime import ROOT,write_site,free_port,request,wait_ready
 
@@ -71,6 +71,20 @@ def main():
     ids=invoke('sdk.services',{},'ids');assert len(ids)>200 and 'qa.echo' in ids,ids
     assert {'account.logout','session.create','product.update.install.post','product.device_transfers.post'}<=set(ids)
     assert invoke('sdk.context')['project']=='default'
+    native=base/'outside-workspace'/'中文.bin'
+    assert invoke('fs.write',{'path':str(native),'base64':'AAEC/w=='})['bytes']==4
+    read=invoke('fs.read',{'path':str(native),'offset':1,'limit':2})
+    assert base64.b64decode(read['base64'])==b'\x01\x02' and read['size']==4,read
+    assert invoke('fs.list',{'path':str(native.parent)})['items'][0]['name']=='中文.bin'
+    assert invoke('storage.write',{'path':'settings/state.json','text':'{"test":true}'})['bytes']==13
+    assert invoke('storage.read',{'path':'settings/state.json'})['text']=='{"test":true}'
+    assert invoke('storage.read',{'path':'../escape'},'catch')['status']==400
+    process=invoke('process.run',{'program':sys.executable,'cwd':str(base),'args':['-c','import sys; print(repr(sys.argv[1])); sys.exit(7)','']})
+    assert process['exit_code']==7 and process['stdout']['text'].strip()=="''",process
+    assert invoke('process.run',{'program':'mdo-sdk-missing-program'},'catch')['error']=='sdk_native_failed'
+    assert invoke('runtime.info')['version']=='0.2.4'
+    invoke('runtime.env.set',{'name':'MDO_SDK_TEST_VALUE','value':'hello'})
+    assert invoke('runtime.env.get',{'name':'MDO_SDK_TEST_VALUE'})['value']=='hello'
     assert invoke('qa.echo',{'nested':['',True,3,{'windows':'C:\\work'}]})=={'nested':['',True,3,{'windows':'C:\\work'}],'hooked':True}
     created=invoke('session.create',{'body':{'project_id':'default','title':'Created using public SDK'}})
     assert created['status']==201 and created['transport']=='native',created

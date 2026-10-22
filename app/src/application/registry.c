@@ -26,6 +26,9 @@ xvalue* MdoApplicationCatalog(void){
     for(size_t i=0;i<sizeof(SdkRoutes)/sizeof(*SdkRoutes);i++){
         if(!xrtValueArrayAppendNew(A,SdkDescription(&SdkRoutes[i]))){xrtValueRelease(A);return NULL;}
     }
+    xvalue* Runtime=MdoApplicationRuntimeCatalog();
+    for(size_t i=0;i<xrtValueCount(Runtime);i++)xrtValueArrayAppend(A,xrtValueArrayGet(Runtime,i));
+    xrtValueRelease(Runtime);
     xvalue* Custom=MdoApplicationCustomCatalog();
     for(size_t i=0;i<xrtValueCount(Custom);i++)xrtValueArrayAppend(A,xrtValueArrayGet(Custom,i));
     xrtValueRelease(Custom);
@@ -48,7 +51,9 @@ static mdo_result SdkInvoke(const mdo_sdk_context_v1* C,cstr Method,const xvalue
         }xrtValueRelease(Catalog);
         MdoApplicationError(E,"sdk_method_missing","Service is not registered","discovery",404,false);return MDO_RESULT_ERROR;
     }
-    bool Found=false;bool CustomOk=MdoApplicationCustomCall(C,Method,P,R,E,&Found);
+    bool Found=false;bool RuntimeOk=MdoApplicationRuntimeCall(C,Method,P,R,E,&Found);
+    if(Found)return RuntimeOk?MDO_RESULT_OK:MDO_RESULT_ERROR;
+    bool CustomOk=MdoApplicationCustomCall(C,Method,P,R,E,&Found);
     if(Found)return CustomOk?MDO_RESULT_OK:MDO_RESULT_ERROR;
     for(size_t i=0;i<sizeof(SdkRoutes)/sizeof(*SdkRoutes);i++)if(!strcmp(Method,SdkRoutes[i].Id))
         return MdoApplicationRouteInvoke(C,&SdkRoutes[i],P,R,E)?MDO_RESULT_OK:MDO_RESULT_ERROR;
@@ -68,7 +73,7 @@ mdo_result MdoApplicationCall(const mdo_sdk_context_v1* C,cstr Method,const xval
     MdoApplicationInvocation* I=C->Opaque;
     if(I&&I->Depth>=32){MdoApplicationError(E,"sdk_recursion_limit","Service recursion exceeded 32 nested calls","dispatch",409,false);return MDO_RESULT_LIMIT;}
     if(I)I->Depth++;
-    xvalue* Input=P?xrtValueClone(P):xrtValueObject();
+    xvalue* Input=P&&xrtValueType(P)!=XVALUE_NULL?xrtValueClone(P):xrtValueObject();
     bool Hooked=strncmp(Method,"sdk.",4)&&strcmp(Method,"events.read");
     xvalue* Facts=xrtValueObject();SdkPut(Facts,"method",Method);
     if(Hooked)MdoApplicationEvent("service.before",C,Facts);

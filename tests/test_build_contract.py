@@ -222,6 +222,7 @@ class BuildContractTests(unittest.TestCase):
             "src/mcp/manager.c",
             "src/application/value.c",
             "src/application/broker.c",
+            "src/application/runtime.c",
             "src/application/registry.c",
             "src/modules/manager.c",
             "src/commands/catalog.c",

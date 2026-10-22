@@ -15,6 +15,8 @@ void MdoApplicationContext(mdo_sdk_context_v1*,MdoApplicationInvocation*,cstr Ex
 bool MdoApplicationInit(XS_ServerInfo*);
 void MdoApplicationUnit(void);
 xvalue* MdoApplicationCatalog(void);
+xvalue* MdoApplicationRuntimeCatalog(void);
+bool MdoApplicationRuntimeCall(const mdo_sdk_context_v1*,cstr,const xvalue*,xvalue**,mdo_error_v1*,bool*);
 mdo_result MdoApplicationCall(const mdo_sdk_context_v1*,cstr,const xvalue*,xvalue**,mdo_error_v1*);
 /* Captured product routes are generated from the production router, never a
  * separately maintained allowlist. */

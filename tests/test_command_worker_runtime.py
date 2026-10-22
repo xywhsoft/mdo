@@ -6,7 +6,7 @@ ROOT=Path(__file__).resolve().parents[1]
 def worker(host,root,source,arguments,watch_parent=False):
     root.mkdir();(root/'mdo').mkdir();(root/'web').mkdir()
     (root/'web/index.html').write_text('worker',encoding='utf-8')
-    for name in ('command.h','module.h'):shutil.copy2(ROOT/'include/mdo'/name,root/'mdo'/name)
+    for name in ('command.h','module.h','sdk.h'):shutil.copy2(ROOT/'include/mdo'/name,root/'mdo'/name)
     shutil.copy2(ROOT/'app/command-worker.c',root/'worker.c')
     (root/'command.c').write_text('#include "mdo/command.h"\n'+source,encoding='utf-8')
     (root/'input.json').write_text(json.dumps({'invocation_id':'fixture','command_id':'fixture','arguments':arguments,'watch_parent':watch_parent}),encoding='utf-8')
