@@ -193,7 +193,8 @@ def main():
                     assert status == 200, raw
                     return {item['id']: item for item in json.loads(raw)['data']['items']}
                 builtins = tool_catalog()
-                assert len(builtins) == 22 and 'ask_user' in builtins and 'mcp_read' in builtins, builtins
+                assert len(builtins) == 21 and 'ask_user' in builtins and 'mcp_read' in builtins, builtins
+                assert 'mdo.todo' not in builtins, builtins
                 assert builtins['web_search']['member_only'] and builtins['web_search']['availability'] == 'sign_in_required'
                 assert builtins['agent']['availability'] == 'no_subagents'
                 tool_source = (ROOT / 'tests/fixtures/modules/local-tool.c').read_text()
