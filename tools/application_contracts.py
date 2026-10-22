@@ -125,14 +125,14 @@ BODY_GROUPS={
  'ModelSetup':'ModelSetupRoute','AccountLogin':'AccountRoute','Remote':'RemoteRoute',
  'Update':'UpdateRoute','Transfer':'DeviceTransfersRoute',
  'Ecosystem':'EcosystemRoute','Purge':'ProjectPurgeRoute ProjectPurgeCancelRoute ProjectPurgeIntentPrepareRoute ProjectPurgeIntentRoute',
- 'BackupUpload':'BackupUploadsRoute','BackupPreview':'BackupPreviewStartRoute','BackupReview':'BackupRestoreReviewRoute',
+ 'BackupUpload':'BackupUploadsRoute','BackupReview':'BackupRestoreReviewRoute',
  'SharedFiles':'SharedFilesRoute','WorkspaceState':'WorkspaceStateRoute','PaneLayout':'PaneLayoutRoute',
  'McpContext':'McpContextRoute','McpAuth':'McpAuthRoute',
 }
 BODY={handler:name for name,handlers in BODY_GROUPS.items() for handler in handlers.split()}
 NO_BODY=set('''CommandsRoute DistributionRoute LiveRoute DirectRoute UpdateExitRoute BootstrapRoute SettingsRoute
 ModelsRoute ModelConfigRoute AgentsRoute BackupUploadRoute BackupUploadSealRoute BackupPreviewsRoute BackupPreviewRoute UpdateDownloadRoute UpdateInstallRoute
-BackupRestoreApplyRoute BackupRestoresRoute BackupRestoreRoute ModulesRoute ToolsRoute SkillsRoute McpRoute DirectoriesRoute
+BackupRestoreApplyRoute BackupRestoresRoute BackupRestoreRoute BackupPreviewStartRoute ModulesRoute ToolsRoute SkillsRoute McpRoute DirectoriesRoute
 ProjectPurgePreviewRoute ProjectPurgeResultRoute ProjectWorkspaceFilesRoute MemoryOpenDirectoryRoute MemoryEntryRoute
 RunsRoute TasksRoute ApprovalsRoute AsksRoute WorkspaceFilesRoute ArtifactsRoute PermissionsRoute DiagnosticsRoute StorageRoute
 OperationsRoute ModelsReloadRoute SkillsReloadRoute SkillSourcesRoute ModulesReloadRoute McpReloadRoute McpSourcesRoute

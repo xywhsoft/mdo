@@ -73,3 +73,8 @@ class ApplicationSdkContractTests(unittest.TestCase):
         self.assertIn('body_base64',image['properties']);self.assertNotIn('body',image['properties'])
         queue,_=application_contracts.contract(rows['product.projects.by_project.sessions.by_session.queue.post'])
         self.assertEqual(queue['$defs']['QueueInput']['properties']['priority']['type'],'boolean')
+        preview,_=application_contracts.contract(rows['product.session_backups.uploads.by_upload.preview.post'])
+        self.assertNotIn('body',preview['properties'])
+        account,_=application_contracts.contract(rows['account.logout'])
+        self.assertEqual(account['$defs']['EmptyInput']['properties'],{})
+        self.assertIn('body',account['required'])
