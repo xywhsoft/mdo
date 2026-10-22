@@ -4,6 +4,7 @@ import { loadSelectableSkills, parseSkillSelection, expandSkillSelection } from 
 import { clear, element, errorMessage, isImeKey, revealListOption, toast } from "../../utils/dom.js";
 import { createCompositionTracker } from "../../utils/composition.js";
 import { subscribeTarget } from "../../api/target.js";
+import { presentCommandResult } from "./command-results.js";
 
 export function createSlashCommands({ composer, input, onExecute, contextKey = () => "", skillProject = () => "default", commandScope = () => ({ projectId: skillProject() }), onPendingChange = () => {} }) {
   const list = element("div", {
@@ -91,10 +92,10 @@ export function createSlashCommands({ composer, input, onExecute, contextKey = (
       const result = await runCommand(command, selection.raw, scope, { onPending(id, target, done) {
         if (done) pending.delete(id);else pending.set(id, target);onPendingChange(pending.size);
       } });
-      if (key !== contextKey()) { toast(`命令 /${command.id} 已完成。`);return true; }
+      if (key !== contextKey()) { presentCommandResult(result);return true; }
       if (input.value === before) { input.value = "";cleared = true; input.dispatchEvent(new Event("input", { bubbles: true })); }
       await onExecute(result, scope);
-      if (result.result?.message) toast(String(result.result.message));
+      presentCommandResult(result,{input,isCurrent:()=>key===contextKey()});
     } catch (error) {
       if (cleared && key === contextKey() && !input.value) { input.value = before;input.dispatchEvent(new Event("input", { bubbles: true })); }
       if (error?.name !== "AbortError") toast(errorMessage(error), "error");
