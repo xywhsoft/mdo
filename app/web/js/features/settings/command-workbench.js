@@ -11,9 +11,10 @@ export function createCommandWorkbench({ onChange = () => {} } = {}) {
     if(!force&&guard()&&!window.confirm("放弃尚未保存的项目命令修改？"))return false;
     ++serial;controller?.abort();controller=null;dialog?.remove();dialog=null;guard=()=>false;return true;
   }
-  const unsubscribe = subscribeTarget(()=>close(true));
+  let activeTarget=owner();
+  const unsubscribe = subscribeTarget(()=>{const next=owner();if(next!==activeTarget){activeTarget=next;close(true);}});
   async function open() {
-    if(!close())return;const target = owner();dialog=element("dialog",{className:"extension-editor"});
+    if(!close())return;const target = owner();dialog=element("dialog",{className:"extension-editor command-workbench"});const view=dialog;
     const project=element("select",{attrs:{"aria-label":"项目"}}),list=element("div",{className:"extension-list"});
     project.append(element("option",{text:"默认项目",attrs:{value:"default"}}));
     const id=element("input",{attrs:{placeholder:"my-command","aria-label":"命令 ID",maxlength:64}});
@@ -31,6 +32,7 @@ export function createCommandWorkbench({ onChange = () => {} } = {}) {
           const row=element("div",{className:"extension-row"},[
             element("span",{text:`/${item.id} · ${item.scope} · ${item.enabled?"启用":"停用"}${item.valid?"":" · 配置无效"}`}),
             action(item.scope==="project"?"编辑":"复制到项目",async()=>{
+              if(guard()&&!window.confirm("放弃尚未保存的项目命令修改？"))return;
               const token=++serial;controller?.abort();controller=new AbortController();
               try {
                 const path=item.scope==="project"?`/commands/project/${item.id}?project=${encodeURIComponent(scope)}`:`/extensions/commands/${item.id}`;
@@ -55,9 +57,10 @@ export function createCommandWorkbench({ onChange = () => {} } = {}) {
         if(kind==="delete")await api.delete(path,{ifMatch:`"${revision}"`});
         else if(kind==="toggle")await api.post(path,{enabled:!selected.enabled},{ifMatch:`"${revision}"`});
         else await api.put(path,{content:source.value},{ifMatch:`"${revision}"`});
-        if(!dialog||target!==owner())return;onChange();await load();
+        if(target===owner())onChange();
+        if(dialog!==view||target!==owner())return;await load();
       }catch(error){if(dialog&&target===owner())status.textContent=errorMessage(error);}
-      finally{busy=false;if(dialog){dialog.querySelectorAll("button,input,textarea,select").forEach(n=>n.disabled=false);id.disabled=Boolean(selected);}}
+      finally{busy=false;if(dialog===view){dialog.querySelectorAll("button,input,textarea,select").forEach(n=>n.disabled=false);id.disabled=Boolean(selected);}}
     }
     id.addEventListener("input",()=>{if(source.value===baseline&&portableId(id.value)){source.value=newCommand(id.value);baseline=source.value;}});
     let previousProject=project.value;
@@ -66,12 +69,13 @@ export function createCommandWorkbench({ onChange = () => {} } = {}) {
       previousProject=project.value;void load();
     };
     dialog.addEventListener("cancel",e=>{e.preventDefault();if(!busy)close();});
-    dialog.append(element("h2",{text:"项目命令"}),element("p",{text:"项目命令优先于个人和内置命令。保存仅校验元数据；C 代码在调用时编译运行。"}),project,list,id,source,status,
-      element("div",{className:"extension-toolbar"},[action("新建",reset),action("保存",()=>mutate("save")),action("启用 / 停用",()=>mutate("toggle")),action("删除覆盖文件",()=>mutate("delete")),action("关闭",()=>{if(!busy)close();})]));
+    dialog.append(element("h2",{text:"项目命令"}),element("p",{text:"项目命令优先于个人和内置命令。保存仅校验元数据；C 代码在调用时编译运行。"}),project,
+      element("div",{className:"command-workbench-columns"},[list,element("div",{className:"command-workbench-editor"},[id,source,status])]),
+      element("div",{className:"extension-toolbar"},[action("新建",()=>{if(!guard()||window.confirm("放弃尚未保存的项目命令修改？"))reset();}),action("保存",()=>mutate("save")),action("启用 / 停用",()=>mutate("toggle")),action("删除覆盖文件",()=>mutate("delete")),action("关闭",()=>{if(!busy)close();})]));
     document.body.append(dialog);dialog.showModal();reset();
     try {
       controller=new AbortController();const items=(await api.get("/projects",{signal:controller.signal})).data.items||[];
-      if(!dialog||target!==owner())return;
+      if(dialog!==view||target!==owner())return;
       for(const item of items)if(item.id!=="default")project.append(element("option",{text:item.name||item.id,attrs:{value:item.id}}));
       await load();
     }catch(error){if(dialog&&error.name!=="AbortError")status.textContent=errorMessage(error);}
