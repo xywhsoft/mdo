@@ -2,7 +2,7 @@ import { createApplicationClient, applyApplicationAction } from "../../api/appli
 import { isRemoteTarget } from "../../api/target.js";
 import { toast } from "../../utils/dom.js";
 
-export function createApplicationUi({ navigation, executeActions }) {
+export function createApplicationUi({ navigation, executeActions, canCall = () => true }) {
   let clientId = `ui-${crypto.randomUUID()}`;
   try {
     const saved = sessionStorage.getItem("mdo.sdk.client");
@@ -11,7 +11,7 @@ export function createApplicationUi({ navigation, executeActions }) {
   } catch { /* Effects still require the separate intent journal below. */ }
   const api = createApplicationClient(() => ({ project: navigation.preferredProject(), session: navigation.workspace().sessionId || "", client: clientId }));
   const panels = new Map(), menus = new Map(), renderers = new Map(), actions = new Map(), openDialogs = new Map(), disposers = [];
-  let stopped = false, timer = null, registered = false;
+  let stopped = false, timer = null, registered = false, pluginsLoaded = false;
   const register = (map, id, value) => {
     if (stopped) throw new Error("Application UI instance has been disposed");
     if (!/^[A-Za-z0-9_.-]+$/.test(id) || map.has(id)) throw new Error("Duplicate or invalid SDK contribution ID");
@@ -101,8 +101,10 @@ export function createApplicationUi({ navigation, executeActions }) {
   };
   const poll = async () => {
     try {
-      if (isRemoteTarget()) return;
+      if (isRemoteTarget() || !canCall()) return;
       if (!registered) { await api.call("client.hello", { client: clientId, context: navigation.get() }); registered = true; }
+      if (!pluginsLoaded) await loadPlugins();
+      if (stopped || !canCall()) return;
       const pending = await api.call("client.poll", { client: clientId });
       if (stopped) return;
       for (const action of pending) {
@@ -115,12 +117,14 @@ export function createApplicationUi({ navigation, executeActions }) {
     } catch { registered = false; }
     finally { if (!stopped) timer = setTimeout(poll, document.hidden ? 10000 : 1500); }
   };
-  void poll();
   // Installed local UI code runs in the displaying client's DOM. Its SDK calls
   // still use the explicitly selected target through the standard API adapter.
   const loadPlugins = async () => {
     if (isRemoteTarget()) return;
     const result = await api.call("plugin.list"); if (result.recovery_mode || stopped) return;
+    // Once activation starts, never automatically repeat its effects. Failed
+    // directory reads can recover through poll; an activation failure cannot.
+    pluginsLoaded = true;
     for (const plugin of result.items) if (plugin.enabled && !plugin.error && plugin.frontend?.startsWith("web/")) {
       let scope;
       try {
@@ -133,6 +137,6 @@ export function createApplicationUi({ navigation, executeActions }) {
       } catch (error) { scope?.dispose(); console.error(`Plugin ${plugin.id} failed`, error); toast(`插件 ${plugin.id} 启动失败：${error.message}`, "error"); }
     }
   };
-  void loadPlugins().catch(error => console.warn("Plugin directory unavailable", error));
+  void poll();
   return Object.freeze({ sdk, destroy() { if (stopped) return; stopped = true; clearTimeout(timer); for (const dispose of disposers.reverse()) { try { dispose(); } catch { /* Finish other cleanup. */ } } } });
 }

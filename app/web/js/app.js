@@ -846,7 +846,8 @@ export async function boot() {
     onPendingChange: count => { stop.hidden = !activeRun && !count; },
     onExecute: executeApplicationActions,
   });
-  const applicationUi = createApplicationUi({ navigation, executeActions: executeApplicationActions });
+  const applicationUi = createApplicationUi({ navigation, executeActions: executeApplicationActions,
+    canCall: () => !purgeRecovery.isPaused() && !localServiceReconnecting });
   Object.defineProperty(globalThis, "mdo", { value: applicationUi.sdk, configurable: true });
   window.addEventListener("pagehide", () => applicationUi.destroy(), { once: true });
   const fileMentions = createFileMentions({ composer, input: prompt, navigation });

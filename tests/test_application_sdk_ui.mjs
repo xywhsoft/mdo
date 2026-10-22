@@ -11,9 +11,10 @@ class Node extends EventTarget {
 globalThis.window=new EventTarget();globalThis.document=new Node("document");document.body=new Node("body");const sidebar=new Node("aside");
 document.hidden=false;document.createElement=tag=>new Node(tag);document.querySelector=selector=>selector==='.sidebar'?sidebar:null;
 const stored=new Map();globalThis.sessionStorage={getItem:key=>stored.get(key)||null,setItem:(key,value)=>stored.set(key,value)};
-let plugins=[];const writes=[];
+let plugins=[];const writes=[],calls=[];
 globalThis.fetch=async(url,options={})=>{
   const input=options.body?JSON.parse(options.body):null;
+  if(input?.method)calls.push(input.method);
   let data={};if(input?.method==="plugin.list")data={items:plugins,recovery_mode:false};if(input?.method==="client.poll")data=[];
   if(input?.method==="storage.write")writes.push({text:input.params.text,extension:input.context.extension});
   return Response.json({ok:true,data},{headers:{"X-Mdo-Write-Token":"a".repeat(32)+"-0"}});
@@ -35,6 +36,19 @@ test("UI contribution lifecycle closes owned panels and releases menus/keybindin
   } finally {app.destroy();}
   assert.equal(sidebar.children.length,0);
   assert.throws(()=>app.sdk.ui.registerPanel("qa.late",{}),/disposed/);
+});
+test("startup recovery gate delays registration and plugin activation until writable",async()=>{
+ const frontend='web/'+fileURLToPath(new URL('./fixtures/application-sdk-plugin.mjs',import.meta.url)).replaceAll('\\','/').replace(/^\/+/, '');
+ const navigation={preferredProject:()=>"default",workspace:()=>({projectId:"default",sessionId:"s"}),get:()=>({projectId:"default",sessionId:"s"})};
+ let ready=false;plugins=[{id:"qa-scope",enabled:true,frontend,revision:"gate"}];calls.length=0;
+ globalThis.applicationSdkFixture={};const app=createApplicationUi({navigation,executeActions:async()=>{},canCall:()=>ready});
+ try{
+  await new Promise(resolve=>setTimeout(resolve,20));assert.deepEqual(calls,[]);assert.equal(globalThis.applicationSdkFixture.ready,undefined);
+  ready=true;
+  for(let i=0;i<400&&!globalThis.applicationSdkFixture.ready;i++)await new Promise(resolve=>setTimeout(resolve,5));
+  assert.equal(globalThis.applicationSdkFixture.ready,true);assert.equal(calls.filter(x=>x==='plugin.list').length,1);
+  await new Promise(resolve=>setTimeout(resolve,1600));assert.equal(calls.filter(x=>x==='plugin.list').length,1,'Do not activate twice on subsequent polls');
+ }finally{app.destroy();plugins=[];delete globalThis.applicationSdkFixture;}
 });
 test("plugin callbacks retain the owning SDK and failed activation rolls back contributions",async()=>{
  const frontend='web/'+fileURLToPath(new URL('./fixtures/application-sdk-plugin.mjs',import.meta.url)).replaceAll('\\','/').replace(/^\/+/, '');
