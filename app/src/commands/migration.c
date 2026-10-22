@@ -9,6 +9,12 @@ static bool CommandMigrationFile(cstr Path,cstr Text) {
     bool Ok=Old?!strcmp(Old,Text):Missing&&MdoHomeAtomicWrite(Path,Text,strlen(Text),false);
     xrtFree(Old);return Ok;
 }
+static bool CommandMigrationDone(cstr Id,cstr State) {
+    char Path[192];snprintf(Path,sizeof(Path),"data/commands/migrations/%s.json",Id);
+    xvalue* V=xrtValueObject();bool Ok=V&&CommandSet(V,"id",Id)&&CommandSet(V,"state",State);
+    char* Text=Ok?xrtJsonStringify(V,false,NULL):NULL;Ok=Ok&&Text&&MdoHomeAtomicWrite(Path,Text,strlen(Text),false);
+    xrtFree(Text);xrtValueRelease(V);return Ok;
+}
 bool MdoCommandMigrateLegacy(void) {
     xdir Dir=MdoHomeOpenDirectory("commands",XDIR_STAT);if(!Dir)return CommandMissing();
     xdirentry E;xdirnext Next=XDIR_NEXT_END;xvalue* Report=xrtValueArray();bool Ok=Report!=NULL;size_t Count=0;
@@ -17,9 +23,12 @@ bool MdoCommandMigrateLegacy(void) {
         char Id[65];memcpy(Id,E.Name.Data,N-3);Id[N-3]=0;if(!MdoExtensionIdValid(Id))continue;
         if(++Count>MDO_COMMAND_LIMIT){Ok=false;break;}
         char Path[192],CPath[160];snprintf(Path,sizeof(Path),"commands/%s.md",Id);snprintf(CPath,sizeof(CPath),"commands/%s.c",Id);
+        char Marker[192];snprintf(Marker,sizeof(Marker),"data/commands/migrations/%s.json",Id);
         bool Exists=false;xfileinfo Info={0};
+        if(!MdoHomeExternalStat(Marker,&Exists,&Info)){Ok=false;break;}
+        if(Exists)continue; /* Originals are now backups, never active inputs. */
         if(!MdoHomeExternalStat(CPath,&Exists,&Info)){Ok=false;break;}
-        if(Exists)continue; /* A new or edited C command is authoritative. */
+        if(Exists){Ok=CommandMigrationDone(Id,"c_override");continue;}
         bool Missing=false;char Error[512]={0};char* Text=MdoExtensionRead(Path,true,MDO_COMMAND_TEXT_LIMIT,&Missing);
         xvalue* Doc=Text?MdoPromptParse(Text,false,Error,sizeof(Error)):NULL;
         cstr Body=CommandText(Doc,"prompt"),Description=CommandText(Doc,"description");
@@ -37,6 +46,7 @@ bool MdoCommandMigrateLegacy(void) {
             xrtFree(Header);
             Migrated=Size>0&&(size_t)Size<Capacity&&SourceSize>0&&SourceSize<8192&&
                 MdoSkillValidateText(Document,Error,sizeof(Error))&&CommandMigrationFile(SkillPath,Document)&&CommandMigrationFile(CPath,Source);
+            if(Migrated)Migrated=CommandMigrationDone(Id,"migrated");
         }else Migrated=false;
         xvalue* Row=xrtValueObject();Ok=Row&&CommandSet(Row,"id",Id)&&CommandSet(Row,"skill_id",Skill)&&
             CommandSet(Row,"state",Migrated?"migrated":"needs_attention")&&CommandSet(Row,"message",Migrated?"Original Markdown retained":Error[0]?Error:"Legacy command is invalid or a generated Skill conflicts with an existing file")&&xrtValueArrayAppendNew(Report,Row);

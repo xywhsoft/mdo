@@ -74,6 +74,9 @@ def main():
                     body=json.dumps({'id':skill,'arguments':'hello world'}).encode(),headers={'Content-Type':'application/json'})
                 assert status==200 and 'Review hello world carefully.' in json.loads(raw)['data']['text'],raw
                 assert (home/'commands/legacy.md').read_text(encoding='utf-8')==legacy
+                old=json.loads(request(port,'GET','/api/v1/extensions/commands/legacy')[2])['data']
+                status,_,raw=request(port,'DELETE','/api/v1/extensions/commands/legacy',headers={'If-Match':'"'+old['revision']+'"'})
+                assert status==200,(status,raw)
                 builtin=json.loads(request(port,'GET','/api/v1/extensions/commands/help')[2])['data']['content']
                 path='/api/v1/commands/project/help?project=default'
                 status,_,raw=request(port,'PUT',path,body=json.dumps({'content':builtin}).encode(),headers={'Content-Type':'application/json','If-Match':'"new"'})
@@ -103,6 +106,7 @@ def main():
                     creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
                 wait_ready(port,process)
                 assert wait(invoke('help'))['state']=='succeeded','One corrupt receipt disabled normal commands after restart'
+                assert 'legacy' not in json.loads(request(port,'GET','/api/v1/commands?project=default')[2])['data'],'Deleted migrated command was resurrected from its backup'
                 assert (home/'data/commands'/f'{damaged}.json').read_text(encoding='utf-8')=='corrupt receipt'
                 assert not list((home/'data/cache/command-workers').glob('*/input.json')),'Sensitive worker inputs retained'
                 assert process.poll() is None,'Command terminated the host'
