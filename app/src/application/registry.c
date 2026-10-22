@@ -49,7 +49,8 @@ static bool SdkValidateContract(cstr Method,const xvalue* Params,mdo_error_v1* E
     for(size_t i=0;i<sizeof(SdkContracts)/sizeof(*SdkContracts);i++)if(!strcmp(Method,SdkContracts[i].Id)){
         xvalue* Schema=SdkParse(SdkContracts[i].Input);char Message[256]="Cannot load the service parameter contract";bool Ok=Schema&&SdkSchemaCheck(Params,Schema,0,"params",Message);xrtValueRelease(Schema);
         return Ok||MdoApplicationError(E,"sdk_arguments_invalid",Message,"validation",400,false);
-    }return true;
+    }
+    return true;
 }
 static xvalue* SdkDescription(const MdoApplicationRoute* R){
     xvalue* V=xrtValueObject();if(!V)return NULL;
