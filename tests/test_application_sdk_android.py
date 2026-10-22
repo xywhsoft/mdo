@@ -15,6 +15,7 @@ import time
 import uuid
 
 from test_application_sdk_runtime import COMMAND, MODULE, ModelHandler
+from test_api_runtime import ROOT
 
 ANDROID_MODULE = MODULE.replace('#include "mdo/native/config.h"', '#include "mdo/native/config.h"\n#include "mdo/native/sessions.h"').replace('static mdo_result Register(', r'''
 static mdo_result Diagnose(void* U,const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E){
