@@ -5,8 +5,11 @@
  * validation nor preview compiles C, connects MCP, or executes resource files. */
 #include <stdio.h>
 #include <string.h>
-#define MDO_PACKAGE_LIMIT (1024u * 1024u)
+#define MDO_PACKAGE_LIMIT (8u * 1024u * 1024u)
+#define MDO_PACKAGE_V1_LIMIT (1024u * 1024u)
 #define MDO_PACKAGE_FORMAT "mdo.extension.v1"
+#define MDO_PACKAGE_FORMAT_V2 "mdo.extension.v2"
+#define MDO_PACKAGE_V2_MIN_BUILD 30000126u
 static bool MdoPackageNumber(const xvalue* object,const char* key,int64* result)
 {
     const xvalue* value=xrtValueObjectGet(object,xrtStrView(key));uint64 n;
@@ -34,7 +37,32 @@ static bool MdoPackageKind(const char* kind)
 {
     return kind&&(!strcmp(kind,"agents")||!strcmp(kind,"subagents")||!strcmp(kind,"tools")||
         !strcmp(kind,"skills")||!strcmp(kind,"mcp")||!strcmp(kind,"commands")||
-        !strcmp(kind,"c-agents")||!strcmp(kind,"c-subagents"));
+        !strcmp(kind,"c-agents")||!strcmp(kind,"c-subagents")||!strcmp(kind,"modules")||
+        !strcmp(kind,"toolpacks")||!strcmp(kind,"plugins"));
+}
+static const char* MdoPackageSystem(const char* kind)
+{return kind&&!strcmp(kind,"c-agents")?"agents":kind&&!strcmp(kind,"c-subagents")?"subagents":kind;}
+static bool MdoPackageV2(const xvalue* package)
+{const char* f=MdoPackageText(package,"format",32);return f&&!strcmp(f,MDO_PACKAGE_FORMAT_V2);}
+/* Public versions use three bounded numeric components, compared numerically.
+ * Legacy v1 version strings keep their historical parsing contract. */
+static bool MdoPackageVersion(const char* version,uint32 parts[3])
+{
+    if(!version||!*version)return false;
+    const char* p=version;
+    for(size_t i=0;i<3;i++){
+        uint64 n=0;const char* first=p;
+        while(*p>='0'&&*p<='9'){n=n*10u+(unsigned)(*p++-'0');if(n>UINT32_MAX)return false;}
+        if(p==first||(p-first>1&&*first=='0'))return false;
+        if(parts)parts[i]=(uint32)n;
+        if(i<2){if(*p++!='.')return false;}else if(*p)return false;
+    }return true;
+}
+static int MdoPackageVersionCompare(const char* a,const char* b)
+{
+    uint32 x[3],y[3];if(!MdoPackageVersion(a,x)||!MdoPackageVersion(b,y))return strcmp(a?a:"",b?b:"");
+    for(size_t i=0;i<3;i++){if(x[i]!=y[i])return x[i]<y[i]?-1:1;}
+    return 0;
 }
 static bool MdoPackagePath(const char* path)
 {
@@ -66,30 +94,58 @@ static bool MdoPackageValidate(const xvalue* package,char* error,size_t capacity
     const char* name=MdoPackageText(m,"name",100),*version=MdoPackageText(m,"version",32);
     const char* description=MdoPackageText(m,"description",600),*readme=MdoPackageText(m,"readme",32768),*license=MdoPackageText(m,"license",80);
     if(xrtValueObjectGet(m,XRT_STR_LITERAL("changelog"))&&!MdoPackageText(m,"changelog",8192))goto bad;
-    if(!format||strcmp(format,MDO_PACKAGE_FORMAT)||!MdoPackageId(slug)||!name||!name[0]||!version||!version[0]||
+    bool v2=MdoPackageV2(package);size_t sourceLimit=v2?4u*1024u*1024u:524288u;
+    if(!format||(strcmp(format,MDO_PACKAGE_FORMAT)&&!v2)||!MdoPackageId(slug)||!name||!name[0]||!version||!version[0]||
        !description||!description[0]||!readme||!readme[0]||!license||!license[0]||
        xrtValueType(resources)!=XVALUE_ARRAY||!xrtValueCount(resources)||xrtValueCount(resources)>16)goto bad;
     for(const char* p=version;*p;p++)if(!((*p>='0'&&*p<='9')||(*p>='a'&&*p<='z')||(*p>='A'&&*p<='Z')||strchr(".-_",*p)))goto bad;
+    if(v2){int64 build=0;reason="v2 packages need x.y.z and a compatible minimum build";
+        if(!MdoPackageVersion(version,NULL)||!MdoPackageNumber(m,"min_build_id",&build)||build<MDO_PACKAGE_V2_MIN_BUILD||build>99999999)goto bad;}
     const xvalue* platforms=xrtValueObjectGet(m,XRT_STR_LITERAL("platforms"));
-    if(xrtValueType(platforms)!=XVALUE_ARRAY||!xrtValueCount(platforms)||xrtValueCount(platforms)>4)goto bad;
+    if(xrtValueType(platforms)!=XVALUE_ARRAY||!xrtValueCount(platforms)||xrtValueCount(platforms)>8)goto bad;
     for(size_t i=0;i<xrtValueCount(platforms);i++){xstrview p;if(!xrtValueGetString(xrtValueArrayGet(platforms,i),&p)||
         !(xrtStrEqual(p,XRT_STR_LITERAL("windows-x86_64"))||xrtStrEqual(p,XRT_STR_LITERAL("android-arm64-v8a"))||
-          xrtStrEqual(p,XRT_STR_LITERAL("linux-x86_64"))||xrtStrEqual(p,XRT_STR_LITERAL("macos-arm64"))))goto bad;}
+          xrtStrEqual(p,XRT_STR_LITERAL("linux-x86_64"))||xrtStrEqual(p,XRT_STR_LITERAL("linux-arm64"))||
+          xrtStrEqual(p,XRT_STR_LITERAL("linux-x86_64-glibc"))||xrtStrEqual(p,XRT_STR_LITERAL("linux-x86_64-musl"))||
+          xrtStrEqual(p,XRT_STR_LITERAL("macos-arm64"))))goto bad;}
     size_t total=0;
     for(size_t i=0;i<xrtValueCount(resources);i++){
         const xvalue* r=xrtValueArrayGet(resources,i);const char* kind=MdoPackageText(r,"kind",16),*id=MdoPackageText(r,"id",64),*content=MdoPackageText(r,"content",131072);
         reason="Invalid resource kind, ID or content";
         if(!MdoPackageKind(kind)||!MdoPackageId(id)||!content||!content[0]||(!strcmp(kind,"agents")&&!strcmp(id,"default")))goto bad;
+        bool module=!strcmp(kind,"modules"),plugin=!strcmp(kind,"plugins"),toolpack=!strcmp(kind,"toolpacks");
+        if((module||plugin||toolpack)&&!v2){reason="This resource needs the v2 package format";goto bad;}
         for(size_t j=0;j<i;j++){const xvalue* q=xrtValueArrayGet(resources,j);if(!strcmp(kind,MdoPackageText(q,"kind",16))&&!strcmp(id,MdoPackageText(q,"id",64))){reason="Duplicate resource ID";goto bad;}}
-        total+=strlen(content);if(total>524288){reason="Package source exceeds 512 KiB";goto bad;}
+        total+=strlen(content);if(total>sourceLimit){reason="Package decoded content exceeds its limit";goto bad;}
         const xvalue* files=xrtValueObjectGet(r,XRT_STR_LITERAL("files"));
-        if(files){reason="Only Skills may contain extra files";if(strcmp(kind,"skills")||xrtValueType(files)!=XVALUE_ARRAY||xrtValueCount(files)>128)goto bad;
-            for(size_t j=0;j<xrtValueCount(files);j++){const xvalue* f=xrtValueArrayGet(files,j);const char* path=MdoPackageText(f,"path",220),*base64=MdoPackageText(f,"base64",180000);
-                reason="Invalid Skill file path or size";if(!MdoPackagePath(path)||MdoPackageSamePath(path,"SKILL.md")||!base64)goto bad;
+        if(files){reason="This resource cannot contain attached files";if((strcmp(kind,"skills")&&!module&&!plugin&&!toolpack)||xrtValueType(files)!=XVALUE_ARRAY||xrtValueCount(files)>128)goto bad;
+            for(size_t j=0;j<xrtValueCount(files);j++){const xvalue* f=xrtValueArrayGet(files,j);const char* path=MdoPackageText(f,"path",220),*base64=MdoPackageText(f,"base64",v2?1400000u:180000u);
+                reason="Invalid attached file path or size";if(!MdoPackagePath(path)||(!strcmp(kind,"skills")&&MdoPackageSamePath(path,"SKILL.md"))||!base64)goto bad;
                 for(size_t k=0;k<j;k++)if(MdoPackageSamePath(path,MdoPackageText(xrtValueArrayGet(files,k),"path",220))){reason="Duplicate file path";goto bad;}
-                size_t size=0;void* bytes=xrtBase64DecodeNew(base64,strlen(base64),&size,NULL);bool ok=bytes&&size<=131072;xrtFree(bytes);if(!ok)goto bad;
-                total+=size;if(total>524288){reason="Package source exceeds 512 KiB";goto bad;}
+                size_t size=0;void* bytes=xrtBase64DecodeNew(base64,strlen(base64),&size,NULL);bool ok=bytes&&size<=(v2?1048576u:131072u);xrtFree(bytes);if(!ok)goto bad;
+                total+=size;if(total>sourceLimit){reason="Package decoded content exceeds its limit";goto bad;}
             }
+        }
+        if(plugin||toolpack){
+            xvalue* doc=xrtJsonParse(xrtStrView(content));bool valid=xrtValueType(doc)==XVALUE_OBJECT;
+            if(plugin){const char* frontend=MdoPackageText(doc,"frontend",220);
+                valid=valid&&files&&xrtValueCount(files)&&(!frontend||!frontend[0]||(MdoPackagePath(frontend)&&!strncmp(frontend,"web/",4)));
+                if(valid&&frontend&&frontend[0]){bool found=false;for(size_t j=0;j<xrtValueCount(files);j++)if(!strcmp(frontend,MdoPackageText(xrtValueArrayGet(files,j),"path",220)))found=true;valid=found;}
+            }else{
+                const xvalue* programs=xrtValueObjectGet(doc,XRT_STR_LITERAL("programs"));const char* prompt=MdoPackageText(doc,"prompt",32768);
+                valid=valid&&prompt&&xrtValueType(programs)==XVALUE_ARRAY&&xrtValueCount(programs)>0&&xrtValueCount(programs)<=32;
+                for(size_t j=0;valid&&j<xrtValueCount(programs);j++){
+                    const xvalue* program=xrtValueArrayGet(programs,j);const char* name=MdoPackageText(program,"name",64),*path=MdoPackageText(program,"path",100);
+                    valid=MdoPackageId(name)&&MdoPackagePath(path)&&MdoPackageText(program,"description",600);
+                    for(size_t k=0;valid&&k<j;k++)if(!strcmp(name,MdoPackageText(xrtValueArrayGet(programs,k),"name",64)))valid=false;
+                    bool found=false;for(size_t k=0;valid&&k<xrtValueCount(files);k++)if(!strcmp(path,MdoPackageText(xrtValueArrayGet(files,k),"path",220)))found=true;
+                    if(!found&&!xrtValueObjectGet(doc,XRT_STR_LITERAL("archive")))valid=false;
+                }
+                const xvalue* archive=xrtValueObjectGet(doc,XRT_STR_LITERAL("archive"));
+                if(archive){const char* hash=MdoPackageText(archive,"sha256",64);int64 size=0;valid=valid&&hash&&strlen(hash)==64&&MdoPackageNumber(archive,"bytes",&size)&&size>0&&size<=536870912;
+                    for(size_t k=0;valid&&k<64;k++)if(!((hash[k]>='0'&&hash[k]<='9')||(hash[k]>='a'&&hash[k]<='f')))valid=false;}
+            }
+            xrtValueRelease(doc);if(!valid){reason=plugin?"Invalid mdo plugin manifest or frontend file":"Invalid command-line toolpack manifest";goto bad;}
         }
         /* Portable MCP exports have credential placeholders, never vault or
          * local file references, inline tokens, or machine-specific paths. */
@@ -104,6 +160,8 @@ static bool MdoPackageValidate(const xvalue* package,char* error,size_t capacity
             xrtValueRelease(doc);if(!ok){reason="MCP export must use input: credential placeholders and no local working directory";goto bad;}
         }
     }
+    {size_t size=0;char* json=xrtJsonStringify(package,false,&size);bool bounded=json&&size<=(v2?MDO_PACKAGE_LIMIT:MDO_PACKAGE_V1_LIMIT);xrtFree(json);
+        if(!bounded){reason="Package JSON exceeds its format limit";goto bad;}}
     return true;
 bad:if(error&&capacity)snprintf(error,capacity,"%s",reason);return false;
 }
