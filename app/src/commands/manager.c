@@ -176,7 +176,7 @@ static int32 CommandExecute(void* Value) {
 #endif
     xprocessconfig Config;xrtProcessConfigInit(&Config);Config.Program=Executable;Config.Args=Args;Config.ArgCount=ArgCount;
     Config.WorkDir=Directory;Config.HideWindow=true;Config.NewGroup=true;
-    Config.Stdin.Mode=XPROCESS_IO_NULL;Config.Stdout.Mode=XPROCESS_IO_NULL;Config.Stderr.Mode=XPROCESS_IO_NULL;
+    Config.Stdin.Mode=XPROCESS_IO_PIPE;Config.Stdout.Mode=XPROCESS_IO_NULL;Config.Stderr.Mode=XPROCESS_IO_NULL;
     xrtMutexLock(CommandManager.Lock);
     if(!xrtCancelRequested(J->Cancel))J->Process=Executable?xrtProcessSpawn(&Config):NULL;
     xrtMutexUnlock(CommandManager.Lock);
@@ -322,6 +322,7 @@ xvalue* MdoCommandStart(const xvalue* Input,cstr Workspace,char Error[512]) {
         Slot->Workspace=xrtStrDup(Workspace?Workspace:"");Slot->Lease=Lease;Lease=NULL;Slot->Sequence=++CommandManager.Sequence;
         Slot->Deadline=MdoDeadlineAfterUs(Timeout*1000u);
         Ok=Slot->Input&&Slot->Info&&Slot->Actions&&Slot->Cancel&&Slot->Workspace&&CommandSet(Slot->Input,"workspace",Slot->Workspace)&&
+            xrtValueObjectSetNew(Slot->Input,XRT_STR_LITERAL("watch_parent"),xrtValueBool(true))&&
             CommandSet(Slot->Input,"revision",Revision)&&
             xrtValueObjectSetNew(Slot->Input,XRT_STR_LITERAL("deadline"),xrtValueUInt(Slot->Deadline))&&
             CommandSet(Slot->Info,"id",Id)&&CommandSet(Slot->Info,"command_id",Command)&&CommandSet(Slot->Info,"project_id",Project)&&

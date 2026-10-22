@@ -3,11 +3,37 @@
 #include "mdo/command.h"
 #include <stdio.h>
 #include <string.h>
+#if defined(_WIN32) || defined(_WIN64)
+#include <windows.h>
+#include <process.h>
+#else
+#include <poll.h>
+#include <unistd.h>
+#include <signal.h>
+#endif
 
 #define CW_LIMIT (1024u*1024u)
 static char CWError[2048];
 static unsigned CWSequence;
 static char* CWRoot;
+static xatomic32 CWDone;
+static int32 CWParentWatch(void* Unused) {
+    (void)Unused;
+    while(!xrtAtomic32Load(&CWDone,XMEMORY_ACQUIRE)){
+#if defined(_WIN32) || defined(_WIN64)
+        DWORD Available=0;
+        if(!PeekNamedPipe(GetStdHandle(STD_INPUT_HANDLE),NULL,0,NULL,&Available,NULL))_exit(125);
+        xrtSleep(50);
+#else
+        struct pollfd P={0,POLLIN,0};int Ready=poll(&P,1,50);
+        if(Ready>0&&(P.revents&(POLLHUP|POLLERR|POLLNVAL))){
+            /* Only our own process group, never the host's group. */
+            (void)kill(-getpid(),SIGKILL);_exit(125);
+        }
+#endif
+    }
+    return 0;
+}
 static cstr CWText(const xvalue* V,cstr K) {
     xstrview T={0};return xrtValueGetString(xrtValueObjectGet(V,xrtStrView(K)),&T)&&
         !memchr(T.Data,0,T.Size)?T.Data:"";
@@ -62,13 +88,24 @@ static void CWCompileError(void* Unused,cstr Message) {
 void ServiceInit(XS_HostInfo* H) {
     CWRoot=xrtPathParent(H->DevFile);
     xvalue* Input=CWRead("input.json"),*Output=xrtValueObject(),*Result=NULL;
+    bool Monitor=false;xrtValueGetBool(CWGet(Input,"watch_parent"),&Monitor);
+#if defined(_WIN32) || defined(_WIN64)
+    /* The child owns this nested Job handle. Closing it on process death also
+     * terminates subprocesses spawned by a C command after the parent died. */
+    HANDLE Job=Monitor?CreateJobObjectW(NULL,NULL):NULL;bool JobReady=!Monitor;
+    if(Job){JOBOBJECT_EXTENDED_LIMIT_INFORMATION Limits={0};Limits.BasicLimitInformation.LimitFlags=JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        JobReady=SetInformationJobObject(Job,JobObjectExtendedLimitInformation,&Limits,sizeof(Limits))&&AssignProcessToJobObject(Job,GetCurrentProcess());}
+#else
+    bool JobReady=true;
+#endif
+    xthread* Watch=Monitor?xrtThreadCreate(CWParentWatch,NULL,0):NULL;
     char* SourcePath=CWPath("command.c");size_t Length=0;
     char* Source=(char*)xrtFileReadAllLimit(SourcePath,128u*1024u,&Length);xrtFree(SourcePath);
     xs_tcc_config Config;xsTccConfigInit(&Config);Config.Flags=XS_TCC_RESTRICT_HOST_SYMBOLS;Config.ApplicationRoot=CWRoot;
     TCCState* Tcc=xsCreateTCCEx(&Config,NULL);mdo_result Code=MDO_RESULT_ERROR;
     if(Tcc){tcc_set_error_func(Tcc,NULL,CWCompileError);tcc_add_include_path(Tcc,CWRoot);}
     union {void* P;mdo_command_run_v1 F;} Entry={0};
-    if(Input&&Source&&Tcc&&tcc_compile_string(Tcc,Source)>=0&&tcc_relocate(Tcc)>=0) {
+    if(Input&&Source&&Tcc&&JobReady&&(!Monitor||Watch)&&tcc_compile_string(Tcc,Source)>=0&&tcc_relocate(Tcc)>=0) {
         Entry.P=tcc_get_symbol(Tcc,MDO_COMMAND_ENTRY);
         if(Entry.F){
             mdo_command_host_v1 Host={sizeof(Host),1,xrtValueCount,CWAt,CWGet,CWString,
@@ -94,6 +131,8 @@ void ServiceInit(XS_HostInfo* H) {
     xrtValueObjectSetNew(Output,XRT_STR_LITERAL("error"),xrtValueString(xrtStrView(CWError)));
     if(Result)xrtValueObjectSet(Output,XRT_STR_LITERAL("result"),Result);
     (void)CWWrite("final.json",Output);
+    xrtAtomic32Store(&CWDone,1,XMEMORY_RELEASE);
+    if(Watch){xrtThreadWait(Watch);xrtThreadDestroy(Watch);}
     xrtValueRelease(Result);xrtValueRelease(Output);xrtValueRelease(Input);xrtFree(Source);
     if(Tcc)tcc_delete(Tcc);
     xrtFree(CWRoot);CWRoot=NULL;

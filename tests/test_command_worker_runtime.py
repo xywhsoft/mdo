@@ -3,17 +3,17 @@ import argparse,json,os,shutil,subprocess,tempfile,time
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 
-def worker(host,root,source,arguments):
+def worker(host,root,source,arguments,watch_parent=False):
     root.mkdir();(root/'mdo').mkdir();(root/'web').mkdir()
     (root/'web/index.html').write_text('worker',encoding='utf-8')
     for name in ('command.h','module.h'):shutil.copy2(ROOT/'include/mdo'/name,root/'mdo'/name)
     shutil.copy2(ROOT/'app/command-worker.c',root/'worker.c')
     (root/'command.c').write_text('#include "mdo/command.h"\n'+source,encoding='utf-8')
-    (root/'input.json').write_text(json.dumps({'invocation_id':'fixture','command_id':'fixture','arguments':arguments}),encoding='utf-8')
+    (root/'input.json').write_text(json.dumps({'invocation_id':'fixture','command_id':'fixture','arguments':arguments,'watch_parent':watch_parent}),encoding='utf-8')
     config={'services':[{'enabled':True,'class':'custom','name':'worker',
       'host_default':{'enabled':True,'path':'web','devlang':'c','devfile':'worker.c'}}]}
     (root/'xs.json').write_text(json.dumps(config),encoding='utf-8')
-    p=subprocess.Popen([str(host),str(root/'xs.json'),'--no-vfs'],cwd=root,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,
+    p=subprocess.Popen([str(host),str(root/'xs.json'),'--no-vfs'],cwd=root,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,
         creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
     return p
 
@@ -48,5 +48,14 @@ MDO_EXPORT mdo_result mdoCommandRun(const mdo_command_context_v1* C,const xvalue
             assert result['ok'] and result['result']=={'accepted':True},(result,log)
         finally:
             if p.poll() is None:p.kill();p.wait()
-    print('Isolated command typed values / host RPC: PASS')
+        p=worker(a.host.resolve(),root/'orphan',r'''
+mdo_result mdoCommandRun(const mdo_command_context_v1* C,const xvalue* A,xvalue** R){for(;;){}return MDO_RESULT_ERROR;}
+''',[],watch_parent=True)
+        try:
+            time.sleep(.3);assert p.poll() is None
+            p.stdin.close();assert p.wait(timeout=5)==125
+        finally:
+            if p.poll() is None:p.kill();p.wait()
+            p.stdout.close()
+    print('Isolated command typed values / host RPC / parent-death cleanup: PASS')
 if __name__=='__main__':main()
