@@ -124,6 +124,13 @@ def main():
     assert invoke('runtime.info')['version']=='0.2.4'
     invoke('runtime.env.set',{'name':'MDO_SDK_TEST_VALUE','value':'hello'})
     assert invoke('runtime.env.get',{'name':'MDO_SDK_TEST_VALUE'})['value']=='hello'
+    # Invalid identities must never select an empty, zero-capacity stream slot.
+    for action in ('close','read','write','stat','release'):
+     for handle in ('','str-','str-'+'A'*32,'sdk-'+'0'*32):
+      params={'handle':handle}
+      if action=='write':params['text']=''
+      assert invoke('stream.'+action,params,'catch')['status']==400,(action,handle)
+    assert invoke('runtime.info')['version']=='0.2.4' and child.poll() is None
     stream=invoke('stream.open',{'capacity':4})['handle']
     assert invoke('stream.write',{'handle':stream,'text':'abcd'})['written']==4
     assert invoke('stream.write',{'handle':stream,'text':'x'},'catch')['error']=='sdk_stream_would_block'
