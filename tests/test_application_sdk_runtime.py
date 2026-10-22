@@ -165,12 +165,13 @@ def main():
     assert invoke('operation.start',{**start,'method':'fs.write'},'catch')['status']==409
     invoke('operation.release',{'id':opid})
     assert invoke('operation.start',reordered)['state']=='succeeded' and (base/'once.txt').read_text()=='once'
-    def exclusive():
+    def native(method,params=None,project='default',expected=200):
      # Command workers themselves hold a project lease. Probe from an ordinary
      # SDK caller after that worker has finished, not from inside the worker.
-     status,_,body=request(port,'POST','/api/v1/application/call',body=json.dumps({'method':'qa.exclusive','context':{'project':'default'}}).encode(),headers={'Content-Type':'application/json'})
-     assert status==200,(status,body)
-     return json.loads(body)['data']
+     status,_,body=request(port,'POST','/api/v1/application/call',body=json.dumps({'method':method,'params':params or {},'context':{'project':project}}).encode(),headers={'Content-Type':'application/json'})
+     assert status==expected,(status,body)
+     return json.loads(body)['data'] if expected==200 else json.loads(body)['error']
+    def exclusive(project='default'):return native('qa.exclusive',project=project)
     assert exclusive() is True
     sleeping=invoke('operation.start',{'method':'runtime.sleep','params':{'milliseconds':10000}})['id']
     assert exclusive() is False,'Active native jobs must pin their invocation project'
@@ -178,6 +179,17 @@ def main():
     assert invoke('operation.wait',{'id':sleeping,'timeout_ms':2000})['state']=='cancelled'
     invoke('operation.release',{'id':sleeping})
     assert exclusive() is True,'Cancellation/completion must release the project lease'
+    project_root=base/'sdk-project-workspace';project_root.mkdir()
+    invoke('project.create',{'body':{'id':'sdk-project','name':'SDK project','workspace_root':str(project_root)}})
+    assert exclusive('sdk-project') is True
+    sleeping=native('operation.start',{'method':'runtime.sleep','params':{'milliseconds':10000}},'sdk-project')['id']
+    assert exclusive('sdk-project') is False
+    native('operation.cancel',{'id':sleeping},'sdk-project')
+    assert native('operation.wait',{'id':sleeping,'timeout_ms':2000},'sdk-project')['state']=='cancelled'
+    native('operation.release',{'id':sleeping},'sdk-project');assert exclusive('sdk-project') is True
+    project_root.rmdir()
+    assert native('operation.start',{'method':'runtime.sleep','params':{'milliseconds':1}},'sdk-project',409)['code']=='sdk_project_changed'
+    assert exclusive('sdk-project') is True,'Rejected admission must release its provisional lease'
     plugin_path='web/plugins/qa-sdk/value.txt'
     first=invoke('plugin.apply',{'id':'qa-sdk','files':[{'path':plugin_path,'text':'revision one'}]})
     assert first['items'][0]['enabled'],first
