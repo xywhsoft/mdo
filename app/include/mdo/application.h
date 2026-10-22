@@ -17,6 +17,9 @@ void MdoApplicationContext(mdo_sdk_context_v1*,MdoApplicationInvocation*,cstr Ex
 bool MdoApplicationInit(XS_ServerInfo*);
 void MdoApplicationUnit(void);
 xvalue* MdoApplicationCatalog(void);
+/* Product handlers own their lifecycle coordination, including exclusive
+ * purge/restore operations. Native/custom jobs pin their invocation project. */
+bool MdoApplicationProductService(cstr Method);
 xvalue* MdoApplicationRuntimeCatalog(void);
 bool MdoApplicationRuntimeCall(const mdo_sdk_context_v1*,cstr,const xvalue*,xvalue**,mdo_error_v1*,bool*);
 bool MdoApplicationJobsInit(void);

@@ -25,6 +25,7 @@ MODULE=r'''
 #include "mdo/sdk.h"
 #include "mdo/native/models.h"
 #include "mdo/native/config.h"
+#include "mdo/native/project_lifecycle.h"
 #include <string.h>
 static mdo_result Echo(void* U,const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E){
  (void)U;(void)E;
@@ -39,6 +40,10 @@ static mdo_result Hook(void* U,const mdo_sdk_context_v1* C,const char* T,const x
  (void)U;(void)T;(void)E;if(!strcmp(C->Method,"qa.echo")){
  const mdo_values_v1* V=C->Api->Values;*R=V->Clone(P);xvalue* B=V->Bool(true);V->Set(*R,"hooked",B);V->Release(B);}
  return MDO_RESULT_OK;
+}
+static mdo_result Exclusive(void* U,const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E){
+ (void)U;(void)P;(void)E;xwork_error X;MdoProjectLease* L=MdoProjectLeaseAcquire(C->ProjectId,MDO_PROJECT_LEASE_EXCLUSIVE,&X);
+ *R=C->Api->Values->Bool(L!=NULL);MdoProjectLeaseRelease(L);return MDO_RESULT_OK;
 }
 static mdo_result Tool(void* U,const mdo_tool_context_v1* C,const char* P,mdo_result_writer_v1* W,char* Error,size_t N){
  (void)U;(void)P;(void)Error;(void)N;if(!C->Application||!C->Application->Api)return MDO_RESULT_ERROR;
@@ -55,6 +60,8 @@ static mdo_result Register(const mdo_host_services_v1* H,const mdo_registrar_v1*
  mdo_hook_v1 HookSpec={sizeof(HookSpec),1,"qa.before","service.before",0,true,NULL,Hook};
  mdo_tool_v1 T={0};T.Size=sizeof(T);T.AbiVersion=1;T.Id="qa.context";T.Name="SDK context";T.Description="SDK context test";T.ParametersJson="{\"type\":\"object\",\"additionalProperties\":false}";T.Effects=MDO_TOOL_EFFECT_READ;T.MaxResultBytes=8192;T.Execute=Tool;
  if(R->AddTool(R->Context,&T,Error,N)!=MDO_RESULT_OK)return MDO_RESULT_ERROR;
+ if(R->AddService(R->Context,&S,Error,N)!=MDO_RESULT_OK)return MDO_RESULT_ERROR;
+ S.Id="qa.exclusive";S.Execute=Exclusive;
  if(R->AddService(R->Context,&S,Error,N)!=MDO_RESULT_OK)return MDO_RESULT_ERROR;
  return R->AddHook(R->Context,&HookSpec,Error,N);
 }
@@ -152,10 +159,19 @@ def main():
     assert invoke('operation.start',{**start,'method':'fs.write'},'catch')['status']==409
     invoke('operation.release',{'id':opid})
     assert invoke('operation.start',start)['state']=='succeeded' and (base/'once.txt').read_text()=='once'
+    def exclusive():
+     # Command workers themselves hold a project lease. Probe from an ordinary
+     # SDK caller after that worker has finished, not from inside the worker.
+     status,_,body=request(port,'POST','/api/v1/application/call',body=json.dumps({'method':'qa.exclusive','context':{'project':'default'}}).encode(),headers={'Content-Type':'application/json'})
+     assert status==200,(status,body)
+     return json.loads(body)['data']
+    assert exclusive() is True
     sleeping=invoke('operation.start',{'method':'runtime.sleep','params':{'milliseconds':10000}})['id']
+    assert exclusive() is False,'Active native jobs must pin their invocation project'
     invoke('operation.cancel',{'id':sleeping})
     assert invoke('operation.wait',{'id':sleeping,'timeout_ms':2000})['state']=='cancelled'
     invoke('operation.release',{'id':sleeping})
+    assert exclusive() is True,'Cancellation/completion must release the project lease'
     plugin_path='web/plugins/qa-sdk/value.txt'
     first=invoke('plugin.apply',{'id':'qa-sdk','files':[{'path':plugin_path,'text':'revision one'}]})
     assert first['items'][0]['enabled'],first
@@ -224,7 +240,7 @@ def main():
     assert invoke('runtime.reload',{'domain':'modules'},'catch')['status']==409
     assert invoke('qa.echo',{'retained':'old-catalog'})['retained']=='old-catalog'
     duplicate.unlink();invoke('runtime.reload',{'domain':'modules'})
-    override=modules/'override.c';source=MODULE.replace('"qa.sdk","SDK fixture"','"qa.override","SDK fixture"').replace('T.Id="qa.context"','T.Id="qa.override-context"').replace('"qa.echo"','"runtime.clock"')
+    override=modules/'override.c';source=MODULE.replace('"qa.sdk","SDK fixture"','"qa.override","SDK fixture"').replace('T.Id="qa.context"','T.Id="qa.override-context"').replace('"qa.exclusive"','"qa.override-exclusive"').replace('"qa.echo"','"runtime.clock"')
     override.write_text(source,encoding='utf-8')
     assert invoke('runtime.reload',{'domain':'modules'},'catch')['status']==409
     override.write_text(source.replace(' mdo_hook_v1 HookSpec',' S.Flags=MDO_SERVICE_REPLACE_BUILTIN;\n mdo_hook_v1 HookSpec'),encoding='utf-8');invoke('runtime.reload',{'domain':'modules'})

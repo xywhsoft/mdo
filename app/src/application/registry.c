@@ -2,6 +2,10 @@
 #include "internal.h"
 #include "../../generated/application-routes.inc.h"
 #include "../../generated/application-contracts.inc.h"
+bool MdoApplicationProductService(cstr Method){
+    for(size_t i=0;Method&&i<sizeof(SdkRoutes)/sizeof(*SdkRoutes);i++)if(!strcmp(Method,SdkRoutes[i].Id))return true;
+    return false;
+}
 static const struct {cstr Id,Description;} SdkBuiltins[]={
     {"sdk.services","Discover every product and extension service"},
     {"sdk.describe","Describe a service and its call contract"},

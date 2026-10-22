@@ -2,6 +2,7 @@
 #include "../../include/mdo/extension_files.h"
 #include "../../include/mdo/modules.h"
 #include "../../include/mdo/project_lifecycle.h"
+#include "../../include/mdo/project_binding.h"
 #include "../../include/mdo/time.h"
 
 /* Operation identities are admission receipts, not retry instructions. Never
@@ -35,6 +36,22 @@ static bool SdkOperationId(cstr Id){
     return true;
 }
 static SdkJob* SdkJobFind(cstr Id){for(size_t i=0;Id&&i<SDK_JOBS;i++)if(!strcmp(Id,SdkJobs.Jobs[i].Id))return &SdkJobs.Jobs[i];return NULL;}
+static bool SdkJobProject(const mdo_sdk_context_v1* C,cstr Method,MdoProjectLease** Lease,mdo_error_v1* E){
+    *Lease=NULL;
+    if(!C->ProjectId||!C->ProjectId[0]||MdoApplicationProductService(Method))return true;
+    xwork_error Error;*Lease=MdoProjectLeaseAcquire(C->ProjectId,MDO_PROJECT_LEASE_SHARED,&Error);
+    if(!*Lease)return MdoApplicationError(E,"sdk_project_busy",Error.sMessage,"operation",409,false);
+    /* The HTTP/command context may have been captured before a project was
+     * replaced. Never publish a job against a different physical workspace. */
+    if(strcmp(C->ProjectId,"default")){
+        MdoProjectBinding Binding={0};Binding.Size=sizeof(Binding);xfileinfo Expected={0};
+        bool Ok=MdoProjectBindingGet(C->ProjectId,&Binding,&Error)&&C->Workspace&&C->Workspace[0]&&
+            xrtPathStat(C->Workspace,true,&Expected)&&Expected.Type==XFILE_TYPE_DIRECTORY&&
+            Expected.Device==Binding.WorkspaceIdentity.Device&&Expected.Identity==Binding.WorkspaceIdentity.Identity;
+        if(!Ok){MdoProjectLeaseRelease(*Lease);*Lease=NULL;return MdoApplicationError(E,"sdk_project_changed","Project or workspace changed before the operation was admitted","operation",409,false);}
+    }
+    return true;
+}
 static void SdkJobPath(cstr Id,char P[128]){snprintf(P,128,"data/application/operations/%s.json",Id);}
 static bool SdkJobSave(SdkJob* J){
     char P[128];SdkJobPath(J->Id,P);char* Text=SdkJson(J->Info);bool Ok=Text&&MdoHomeAtomicWrite(P,Text,strlen(Text),false);xrtFree(Text);return Ok;
@@ -122,7 +139,10 @@ bool MdoApplicationJobsCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue
             if(SdkJobs.Stopping){xrtMutexUnlock(SdkJobs.Lock);return MdoApplicationError(E,"sdk_stopping","Application is stopping","operation",503,false);}
             size_t Active=0;for(size_t i=0;i<SDK_JOBS;i++){if(SdkJobs.Jobs[i].Id[0]&&!SdkJobs.Jobs[i].Terminal)Active++;if(!SdkJobs.Jobs[i].Id[0]&&!J)J=&SdkJobs.Jobs[i];}
             if(!J||Active>=SDK_ACTIVE_JOBS){xrtMutexUnlock(SdkJobs.Lock);return MdoApplicationError(E,"sdk_operation_limit","Release completed operations or wait for active work","operation",429,false);}
+            MdoProjectLease* Lease=NULL;
+            if(!SdkJobProject(C,Target,&Lease,E)){xrtMutexUnlock(SdkJobs.Lock);return false;}
             snprintf(J->Id,sizeof(J->Id),"%s",Id);snprintf(J->Hash,sizeof(J->Hash),"%s",Hash);
+            J->Lease=Lease;
             J->Extension=xrtStrDup(C->ExtensionId);J->Project=xrtStrDup(C->ProjectId);J->Session=xrtStrDup(C->SessionId);J->Run=xrtStrDup(C->RunId);J->Workspace=xrtStrDup(C->Workspace);J->Method=xrtStrDup(Target);
             J->Params=SdkGet(P,"params")?xrtValueClone(SdkGet(P,"params")):xrtValueObject();J->Cancel=xrtCancelCreate();J->Modules=MdoModuleCatalogSnapshot();J->Deadline=C->Deadline;J->Info=xrtValueObject();
             MdoApplicationInvocation* Caller=C->Opaque;if(Caller)snprintf(J->WriteToken,sizeof(J->WriteToken),"%s",Caller->WriteToken);
@@ -130,7 +150,7 @@ bool MdoApplicationJobsCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue
             xrtValueObjectSetNew(J->Info,XRT_STR_LITERAL("terminal"),xrtValueBool(false));
             bool Ok=J->Extension&&J->Project&&J->Session&&J->Run&&J->Workspace&&J->Method&&J->Params&&J->Cancel&&J->Info&&SdkJobSave(J);
             if(Ok)J->Thread=xrtThreadCreate(SdkJobRun,J,0);
-            if(!Ok||!J->Thread){J->Terminal=true;SdkPut(J->Info,"state","not_started");xrtValueObjectSetNew(J->Info,XRT_STR_LITERAL("terminal"),xrtValueBool(true));(void)SdkJobSave(J);xrtMutexUnlock(SdkJobs.Lock);return MdoApplicationError(E,"sdk_operation_admission_failed","Operation was not started; inspect its receipt","operation",500,false);}
+            if(!Ok||!J->Thread){MdoProjectLeaseRelease(J->Lease);J->Lease=NULL;J->Terminal=true;SdkPut(J->Info,"state","not_started");xrtValueObjectSetNew(J->Info,XRT_STR_LITERAL("terminal"),xrtValueBool(true));(void)SdkJobSave(J);xrtMutexUnlock(SdkJobs.Lock);return MdoApplicationError(E,"sdk_operation_admission_failed","Operation was not started; inspect its receipt","operation",500,false);}
         }
         if(!strcmp(Method,"operation.cancel")&&!J->Terminal)xrtCancelRequest(J->Cancel);
         if(!strcmp(Method,"operation.release")){
