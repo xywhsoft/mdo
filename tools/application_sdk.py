@@ -1,5 +1,5 @@
 """Generate the complete product service directory from the actual router."""
-import json
+import hashlib,json
 from pathlib import Path
 import re
 
@@ -46,4 +46,39 @@ def generate(root: Path):
     text+=''.join('    {'+','.join(json.dumps(r[k]) for k in ('id','method','path','domain'))+'},\n' for r in rows)+'};\n'
     target.parent.mkdir(parents=True,exist_ok=True)
     if not target.exists() or target.read_text(encoding='utf-8')!=text:target.write_text(text,encoding='utf-8')
+    generate_native(root)
     return rows
+
+def native_symbols(root: Path):
+    """Export declared product functions, never private manager globals."""
+    result={}
+    for header in sorted((root/'app/include/mdo').glob('*.h')):
+        if header.name=='application.h':continue  # SDK transport implementation
+        source=re.sub(r'/\*.*?\*/|//[^\n]*','',header.read_text(encoding='utf-8'),flags=re.S)
+        for match in re.finditer(r'^\s*(?!static\b|typedef\b)(?:[\w]+\s*\*?\s+|[\w]+\*\s*)+(Mdo\w+)\s*\([^;{}]*\)\s*;',source,re.M):
+            name=match.group(1)
+            if name in result and result[name]!=header.name:raise ValueError('Duplicate native SDK symbol '+name)
+            result[name]=header.name
+    return sorted(result.items())
+
+def generate_native(root: Path):
+    directory=root/'app/generated/module-sdk/mdo/native';directory.mkdir(parents=True,exist_ok=True)
+    headers=sorted((root/'app/include/mdo').glob('*.h'))
+    for header in headers:
+        if header.name=='application.h':continue
+        source=header.read_text(encoding='utf-8').replace('../../generated/module-sdk/mdo/module.h','../module.h').replace('../../generated/module-sdk/mdo/sdk.h','../sdk.h')
+        target=directory/header.name
+        if not target.exists() or target.read_text(encoding='utf-8')!=source:target.write_text(source,encoding='utf-8')
+    symbols=native_symbols(root)
+    text='/* Generated from product API declarations; no handwritten export subset. */\n'
+    text+=''.join('#include "../include/mdo/'+h.name+'"\n' for h in headers if h.name!='application.h')
+    text+='static const struct {const char *Name,*Header;void (*Function)(void);} SdkNativeSymbols[]={\n'
+    text+=''.join('    {"'+name+'","mdo/native/'+header+'",(void(*)(void))'+name+'},\n' for name,header in symbols)+'};\n'
+    target=root/'app/generated/application-native.inc.h'
+    if not target.exists() or target.read_text(encoding='utf-8')!=text:target.write_text(text,encoding='utf-8')
+    fingerprint=hashlib.sha256()
+    for header in headers+[root/'include/mdo/sdk.h',root/'include/mdo/module.h']:
+        fingerprint.update(header.name.encode()+b'\0'+header.read_bytes()+b'\0')
+    target=root/'app/generated/application-sdk-fingerprint.inc.h'
+    text='#define MDO_APPLICATION_SDK_FINGERPRINT "'+fingerprint.hexdigest()+'"\n'
+    if not target.exists() or target.read_text(encoding='utf-8')!=text:target.write_text(text,encoding='utf-8')

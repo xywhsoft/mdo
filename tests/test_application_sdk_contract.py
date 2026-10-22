@@ -25,3 +25,10 @@ class ApplicationSdkContractTests(unittest.TestCase):
         rows={r['id']:r for r in application_sdk.services(ROOT)}
         for alias,pair in application_sdk.ALIASES.items():
             self.assertEqual((rows[alias]['method'],rows[alias]['path']),pair)
+
+    def test_native_exports_cover_product_api_domains(self):
+        symbols=dict(application_sdk.native_symbols(ROOT))
+        self.assertGreater(len(symbols),500)
+        for name in ('MdoModelClientCreate','MdoAgentSessionCreateWithRuntime','MdoSessionCreate',
+                     'MdoSkillCatalogSnapshot','MdoRemoteSnapshot','MdoApprovalOnPermission'):
+            self.assertIn(name,symbols)

@@ -117,7 +117,7 @@ static mdo_result CWSdkCall(const mdo_sdk_context_v1* C,cstr M,const xvalue* P,x
 static const mdo_values_v1 CWSdkValues={sizeof(CWSdkValues),xrtValueNull,xrtValueBool,xrtValueInt,xrtValueUInt,xrtValueFloat,
     CWSdkString,xrtValueObject,xrtValueArray,xrtValueClone,CWSdkSet,xrtValueArrayAppend,CWGet,CWAt,CWSdkKey,xrtValueCount,CWSdkKind,
     CWString,xrtValueGetBool,xrtValueGetInt,CWSdkUInt,xrtValueGetFloat,CWParse,CWJson,xrtValueRelease,xrtFree};
-static const mdo_application_v1 CWSdkApi={sizeof(CWSdkApi),MDO_SDK_VERSION,&CWSdkValues,CWSdkCall,CWSdkCancelled,CWSdkClock};
+static const mdo_application_v1 CWSdkApi={sizeof(CWSdkApi),MDO_SDK_VERSION,&CWSdkValues,CWSdkCall,CWSdkCancelled,CWSdkClock,NULL};
 void ServiceInit(XS_HostInfo* H) {
 #if defined(_WIN32) || defined(_WIN64)
     SetErrorMode(0x8003u); /* Worker faults must not wait for an OS crash dialog. */

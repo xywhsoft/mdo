@@ -53,6 +53,9 @@ typedef struct mdo_application_v1 {
     mdo_result (*Call)(const mdo_sdk_context_v1*,const char*,const xvalue*,xvalue**,mdo_error_v1*);
     bool (*Cancelled)(const mdo_sdk_context_v1*);
     uint64_t (*MonotonicMicroseconds)(void);
+    /* In-process native modules only. The isolated command worker exposes
+     * Call/RPC instead; native function pointers never cross a process. */
+    bool (*BindNative)(void* TccState);
 } mdo_application_v1;
 struct mdo_sdk_context_v1 {
     uint32_t Size, Version;

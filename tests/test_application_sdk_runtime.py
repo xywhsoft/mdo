@@ -22,9 +22,16 @@ mdo_result mdoCommandRun(const mdo_command_context_v1* C,const xvalue* A,xvalue*
 }'''
 MODULE=r'''
 #include "mdo/sdk.h"
+#include "mdo/native/models.h"
+#include "mdo/native/config.h"
 #include <string.h>
 static mdo_result Echo(void* U,const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E){
- (void)U;(void)E;*R=C->Api->Values->Clone(P);return MDO_RESULT_OK;
+ (void)U;(void)E;
+ MdoModelCatalog* Models=MdoModelCatalogSnapshot();
+ if(!Models)return MDO_RESULT_ERROR;
+ size_t Count=MdoModelCatalogModelCount(Models);MdoModelCatalogRelease(Models);
+ if(!Count)return MDO_RESULT_ERROR;
+ *R=C->Api->Values->Clone(P);return MDO_RESULT_OK;
 }
 static mdo_result Hook(void* U,const mdo_sdk_context_v1* C,const char* T,const xvalue* P,xvalue** R,mdo_error_v1* E){
  (void)U;(void)T;(void)E;if(!strcmp(C->Method,"qa.echo")){

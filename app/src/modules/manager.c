@@ -9,6 +9,7 @@
 #include "../../include/mdo/modules.h"
 #include "../../include/mdo/application.h"
 #include "../application/internal.h"
+#include "../../generated/application-sdk-fingerprint.inc.h"
 static const mdo_application_v1* g_MdoModuleApplication;
 void MdoModuleManagerAttachApplication(const mdo_application_v1* Api){g_MdoModuleApplication=Api;}
 #include "../../include/mdo/agent_file.h"
@@ -671,6 +672,7 @@ static bool MdoModulesSourceHash(cstr Path, const void* pSource,
     if ( !MdoModulesHashField(&Hash, Path, strlen(Path)) ||
          !MdoModulesHashField(&Hash, pSource, iSource) ||
          !MdoModulesHashField(&Hash, pHeader, iHeader) ||
+         !MdoModulesHashField(&Hash, MDO_APPLICATION_SDK_FINGERPRINT,64) ||
          !MdoModulesHashField(&Hash, MDO_MODULE_COMPILE_ID,
             strlen(MDO_MODULE_COMPILE_ID)) ||
          !xrtSha256Final(&Hash, Digest) ) return false;
@@ -900,6 +902,9 @@ static MdoModuleGeneration* MdoModulesCompile(const MdoModuleSource* pSource,
         return NULL;
     }
     xrtErrorFree(pTccError);
+    if(g_MdoModuleApplication&&g_MdoModuleApplication->BindNative&&!g_MdoModuleApplication->BindNative(pGeneration->Tcc)){
+        xrtFree(pBytes);MdoModulesGenerationRelease(pGeneration);return NULL;
+    }
     tcc_set_error_func(pGeneration->Tcc, pGeneration, MdoModulesTccError);
     if ( tcc_set_options(pGeneration->Tcc, MDO_MODULE_COMPILE_OPTIONS) < 0 ||
          tcc_add_quote_include_path(pGeneration->Tcc,
@@ -1540,8 +1545,9 @@ static xwork_result MdoModulesResult(mdo_result Result)
     }
 }
 
+typedef struct MdoModuleCallScope {mdo_sdk_context_v1 Application;MdoApplicationInvocation Invocation;char Run[32];} MdoModuleCallScope;
 static void MdoModulesToolContext(mdo_tool_context_v1* pTarget,
-    const MdoModuleToolBinding* pTool, const xwork_tool_context* pSource)
+    const MdoModuleToolBinding* pTool, const xwork_tool_context* pSource,MdoModuleCallScope* Scope)
 {
     memset(pTarget, 0, sizeof(*pTarget));
     pTarget->Size = sizeof(*pTarget);
@@ -1555,6 +1561,11 @@ static void MdoModulesToolContext(mdo_tool_context_v1* pTarget,
     pTarget->CatalogGeneration = pSource->uCatalogGeneration;
     pTarget->Deadline = pSource->uDeadline;
     pTarget->CancelToken = pSource->pCancel;
+    memset(Scope,0,sizeof(*Scope));Scope->Application=pTool->Owner->Application;
+    Scope->Invocation.Cancel=pSource->pCancel;Scope->Application.Opaque=&Scope->Invocation;
+    Scope->Application.InvocationId=pSource->sToolCallId;Scope->Application.Workspace=pSource->sWorkspaceRoot;
+    Scope->Application.Deadline=pSource->uDeadline;snprintf(Scope->Run,sizeof(Scope->Run),"%llu",(unsigned long long)pSource->uRunId);
+    Scope->Application.RunId=Scope->Run;pTarget->Application=&Scope->Application;
 }
 
 static bool MdoModulesPermissionAdd(void* pContext,
@@ -1626,6 +1637,7 @@ static xwork_result MdoModulesDescribePermissions(void* pUserData,
 {
     MdoModuleToolBinding* pTool = (MdoModuleToolBinding*)pUserData;
     mdo_tool_context_v1 Context;
+    MdoModuleCallScope Scope;
     mdo_permission_writer_v1 Writer;
     mdo_result Result;
     char sError[MDO_MODULE_ERROR_LIMIT];
@@ -1642,7 +1654,7 @@ static xwork_result MdoModulesDescribePermissions(void* pUserData,
             "constant module permission resource is invalid");
         return XWORK_RESULT_ERROR;
     }
-    MdoModulesToolContext(&Context, pTool, pContext);
+    MdoModulesToolContext(&Context, pTool, pContext,&Scope);
     memset(&Writer, 0, sizeof(Writer));
     Writer.Size = sizeof(Writer);
     Writer.AbiVersion = MDO_MODULE_ABI_VERSION;
@@ -1666,6 +1678,7 @@ static xwork_result MdoModulesExecute(void* pUserData,
 {
     MdoModuleToolBinding* pTool = (MdoModuleToolBinding*)pUserData;
     mdo_tool_context_v1 Context;
+    MdoModuleCallScope Scope;
     mdo_result_writer_v1 Writer;
     mdo_result Result;
     char sError[MDO_MODULE_ERROR_LIMIT];
@@ -1676,7 +1689,7 @@ static xwork_result MdoModulesExecute(void* pUserData,
             "module execute callback received an invalid context");
         return XWORK_RESULT_ERROR;
     }
-    MdoModulesToolContext(&Context, pTool, pContext);
+    MdoModulesToolContext(&Context, pTool, pContext,&Scope);
     memset(&Writer, 0, sizeof(Writer));
     Writer.Size = sizeof(Writer);
     Writer.AbiVersion = MDO_MODULE_ABI_VERSION;

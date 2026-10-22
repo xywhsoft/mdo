@@ -5,6 +5,7 @@ static const struct {cstr Id,Description;} SdkBuiltins[]={
     {"sdk.services","Discover every product and extension service"},
     {"sdk.describe","Describe a service and its call contract"},
     {"sdk.context","Read the immutable caller context"},
+    {"sdk.native","Discover typed product functions for in-process native modules"},
     {"events.read","Read the bounded event journal with a resumable cursor"}
 };
 static xvalue* SdkDescription(const MdoApplicationRoute* R){
@@ -41,6 +42,7 @@ xvalue* MdoApplicationCatalog(void){
     return A;
 }
 static mdo_result SdkInvoke(const mdo_sdk_context_v1* C,cstr Method,const xvalue* P,xvalue** R,mdo_error_v1* E){
+    if(!strcmp(Method,"sdk.native")){*R=SdkNativeCatalog();return *R?MDO_RESULT_OK:MDO_RESULT_ERROR;}
     if(!strcmp(Method,"sdk.services")){*R=MdoApplicationCatalog();return *R?MDO_RESULT_OK:MDO_RESULT_ERROR;}
     if(!strcmp(Method,"sdk.context")){
         *R=xrtValueObject();SdkPut(*R,"extension",C->ExtensionId);SdkPut(*R,"invocation",C->InvocationId);

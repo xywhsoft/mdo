@@ -21,7 +21,7 @@ static uint64 SdkClock(void){return MdoMonotonicUs();}
 static const mdo_values_v1 SdkValues={sizeof(SdkValues),xrtValueNull,xrtValueBool,xrtValueInt,xrtValueUInt,xrtValueFloat,
     SdkString,xrtValueObject,xrtValueArray,xrtValueClone,SdkSet,xrtValueArrayAppend,SdkGet,SdkAt,SdkKey,xrtValueCount,SdkKind,
     SdkText,xrtValueGetBool,xrtValueGetInt,SdkUInt,xrtValueGetFloat,SdkParse,SdkJson,xrtValueRelease,xrtFree};
-static const mdo_application_v1 SdkApi={sizeof(SdkApi),MDO_SDK_VERSION,&SdkValues,MdoApplicationCall,SdkCancelled,SdkClock};
+static const mdo_application_v1 SdkApi={sizeof(SdkApi),MDO_SDK_VERSION,&SdkValues,MdoApplicationCall,SdkCancelled,SdkClock,SdkBindNative};
 const mdo_application_v1* MdoApplicationApi(void){return &SdkApi;}
 void MdoApplicationContext(mdo_sdk_context_v1* C,MdoApplicationInvocation* I,cstr Extension,cstr Invocation,
     cstr Project,cstr Session,cstr Run,cstr Workspace,uint64 Deadline){

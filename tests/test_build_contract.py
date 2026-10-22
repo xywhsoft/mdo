@@ -220,6 +220,7 @@ class BuildContractTests(unittest.TestCase):
             "src/remote/manager.c",
             "src/web/manager.c",
             "src/mcp/manager.c",
+            "src/application/native.c",
             "src/application/value.c",
             "src/application/broker.c",
             "src/application/runtime.c",
