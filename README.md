@@ -31,6 +31,7 @@ model chat, tools, projects, sessions, memory, skills, and remote control.
 - **Local Agent core** — model chat with streaming, tool calls, and guided builders.
 - **Projects & Sessions** — create, restore, search, fork, truncate, export, pin, archive, trash; snapshot/journal layered persistence.
 - **Skills** — author, scope, and invoke skills; built-in creator and native validation.
+- **C commands** — independent files, typed arguments, isolated execution, host APIs, and manual context compaction. [Command SDK](docs/commands.md).
 - **Memory** — per-project memory plus transfer between devices.
 - **Web tools** — bounded `web_search`, `web_open`, `web_find` with DNS-rebinding protection.
 - **Configuration** — layered defaults + per-user settings, atomic replace, `.bak` backups, `secret_ref` for sensitive values.
