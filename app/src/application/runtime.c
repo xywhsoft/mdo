@@ -35,7 +35,12 @@ xvalue* MdoApplicationRuntimeCatalog(void){
 static bool SdkNativeFailure(mdo_error_v1* E,cstr Stage){
     const xerror* X=xrtGetError();xerrkind Kind=X?xrtErrorKind(X):XERR_INTERNAL;
     uint32 Status=Kind==XERR_NOT_FOUND?404:Kind==XERR_PERMISSION?403:Kind==XERR_ARGUMENT||Kind==XERR_RANGE||Kind==XERR_TYPE||Kind==XERR_VALUE?400:Kind==XERR_EXISTS||Kind==XERR_STATE?409:Kind==XERR_TIMEOUT?504:Kind==XERR_CANCELLED?499:500;
-    return MdoApplicationError(E,"sdk_native_failed",X?xrtErrorMessage(X):"Native operation failed",Stage,Status,false);
+    MdoApplicationError(E,"sdk_native_failed",X?xrtErrorMessage(X):"Native operation failed",Stage,Status,false);
+    if(E){size_t At=0;for(const xerror* Cause=X;Cause&&At+1<sizeof(E->Cause);Cause=xrtErrorCause(Cause)){
+        int N=snprintf(E->Cause+At,sizeof(E->Cause)-At,"%s%s/%d: %s",At?" <- ":"",xrtErrorDomain(Cause),(int)xrtErrorCode(Cause),xrtErrorMessage(Cause));
+        if(N<0||(size_t)N>=sizeof(E->Cause)-At)break;
+        At+=(size_t)N;
+    }}return false;
 }
 static char* SdkBase64(const void* Bytes,size_t Size){
     size_t N=0;if(!xrtBase64Encode(Bytes,Size,NULL,0,&N,NULL))return NULL;
@@ -44,7 +49,7 @@ static char* SdkBase64(const void* Bytes,size_t Size){
 }
 static bool SdkByteValue(xvalue* R,const void* Bytes,size_t Size){
     char* Encoded=SdkBase64(Bytes,Size);bool Ok=Encoded&&SdkPut(R,"base64",Encoded)&&SdkPutUInt(R,"bytes",Size);xrtFree(Encoded);
-    if(Ok&&!memchr(Bytes,0,Size)&&xrtUtf8Valid(xrtStrViewN(Bytes,Size),NULL))
+    if(Ok&&(!Size||!memchr(Bytes,0,Size))&&xrtUtf8Valid(xrtStrViewN(Bytes,Size),NULL))
         Ok=xrtValueObjectSetNew(R,XRT_STR_LITERAL("text"),xrtValueString(xrtStrViewN(Bytes,Size)));
     return Ok;
 }
@@ -137,7 +142,8 @@ static bool SdkFileCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue* P,
         char* To=SdkNativePath(C,Target,Storage,E);xrtValueRelease(Target);
         Ok=To&&(!strcmp(Action,"copy")?xrtFileCopy(Path,To,Replace):xrtPathRename(Path,To,Replace));xrtFree(To);if(Ok)*R=xrtValueObject();
     }
-    xrtFree(Path);return Ok||((E&&E->Code[0])?false:SdkNativeFailure(E,"filesystem"));
+    bool Mutation=!strcmp(Action,"write")||!strcmp(Action,"append")||!strcmp(Action,"remove")||!strcmp(Action,"mkdir")||!strcmp(Action,"copy")||!strcmp(Action,"move");
+    xrtFree(Path);if(!Ok){if(!E||!E->Code[0])SdkNativeFailure(E,"filesystem");if(E&&Mutation)E->MayHaveCompleted=true;}return Ok;
 invalid:xrtFree(Path);return MdoApplicationError(E,"sdk_arguments_invalid","Invalid path, range, limit or destination","filesystem",400,false);
 }
 static bool SdkProcessOutput(xprocessstream Stream,xbytesview B,void* User){
@@ -168,7 +174,9 @@ static bool SdkProcessCall(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** 
         xrtValueObjectSetNew(*R,XRT_STR_LITERAL("truncated"),xrtValueBool(Result.StdoutTruncated||Result.StderrTruncated));
         SdkPutUInt(*R,"wait_status",Result.Wait);
     }
-    xrtProcessResultUnit(&Result);return Ok||SdkNativeFailure(E,"process");
+    xwaitresult Wait=Result.Wait;xrtProcessResultUnit(&Result);
+    if(Ok&&Wait!=XWAIT_OK)return MdoApplicationError(E,Wait==XWAIT_TIMEOUT?"sdk_process_timeout":"sdk_cancelled",Wait==XWAIT_TIMEOUT?"Process execution timed out; partial output is retained":"Process execution cancelled; partial output is retained","process",Wait==XWAIT_TIMEOUT?504:499,true);
+    return Ok||SdkNativeFailure(E,"process");
 }
 static bool SdkNetworkCall(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E){
     cstr Url=SdkField(P,"url"),Method=SdkField(P,"method"),Body=SdkField(P,"body");const xvalue* H=SdkGet(P,"headers");
@@ -180,7 +188,7 @@ static bool SdkNetworkCall(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** 
     Request.Timeout=C->Deadline?MdoDeadlineRemainingUs(C->Deadline):30000000;Request.IdleTimeout=30000000;Request.MaxBodyBytes=256u*1024u;
     MdoApplicationInvocation* I=C->Opaque;Request.Cancel=I?I->Cancel:NULL;XS_FetchResponse Reply={0};Reply.Size=sizeof(Reply);Reply.Version=1;
     bool Ok=xsFetch(&Request,&Reply);if(Ok){*R=xrtValueObject();SdkPutUInt(*R,"status",Reply.Status);SdkPut(*R,"url",Reply.FinalUrl);SdkPut(*R,"content_type",Reply.ContentType);Ok=SdkByteValue(*R,Reply.Body,Reply.BodySize);}
-    xsFetchResponseUnit(&Reply);return Ok||SdkNativeFailure(E,"network");
+    xsFetchResponseUnit(&Reply);if(!Ok){SdkNativeFailure(E,"network");if(E&&strcmp(Request.Method,"GET")&&strcmp(Request.Method,"HEAD"))E->MayHaveCompleted=true;}return Ok;
 }
 bool MdoApplicationRuntimeCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue* P,xvalue** R,mdo_error_v1* E,bool* Found){
     *Found=false;for(size_t i=0;i<sizeof(SdkRuntimeMethods)/sizeof(*SdkRuntimeMethods);i++)if(!strcmp(Method,SdkRuntimeMethods[i].Id))*Found=true;

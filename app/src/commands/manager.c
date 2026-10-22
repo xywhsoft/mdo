@@ -150,6 +150,7 @@ static xvalue* CommandHostCall(CommandJob* J,const xvalue* Q,char Error[512]) {
         xrtValueObjectSetNew(Frame,XRT_STR_LITERAL("code"),xrtValueInt(Code));
         xrtValueObjectSetNew(Frame,XRT_STR_LITERAL("result"),Result?Result:xrtValueNull());
         CommandSet(Failure,"code",E.Code);CommandSet(Failure,"message",E.Message);CommandSet(Failure,"stage",E.Stage);
+        CommandSet(Failure,"cause",E.Cause);
         xrtValueObjectSetNew(Failure,XRT_STR_LITERAL("status"),xrtValueUInt(E.Status));
         xrtValueObjectSetNew(Failure,XRT_STR_LITERAL("retryable"),xrtValueBool(E.Retryable));
         xrtValueObjectSetNew(Failure,XRT_STR_LITERAL("may_have_completed"),xrtValueBool(E.MayHaveCompleted));

@@ -13,7 +13,7 @@ void MdoApplicationStreamsStop(void){if(SdkStreams.Lock){xrtMutexLock(SdkStreams
 static void SdkStreamFree(SdkStream* S){if(S->Bytes)xrtSecureZero(S->Bytes,S->Capacity);xrtFree(S->Bytes);memset(S,0,sizeof(*S));}
 void MdoApplicationStreamsUnit(void){if(!SdkStreams.Lock)return;for(size_t i=0;i<64;i++)SdkStreamFree(&SdkStreams.Slots[i]);xrtMutexDestroy(SdkStreams.Lock);memset(&SdkStreams,0,sizeof(SdkStreams));}
 xvalue* MdoApplicationStreamsCatalog(void){xvalue* A=xrtValueArray();for(size_t i=0;i<sizeof(SdkStreamMethods)/sizeof(*SdkStreamMethods);i++){xvalue* V=xrtValueObject();SdkPut(V,"id",SdkStreamMethods[i]);SdkPut(V,"domain","stream");SdkPut(V,"transport","native");xrtValueArrayAppendNew(A,V);}return A;}
-static xvalue* SdkStreamInfo(const SdkStream* S){xvalue* R=xrtValueObject();SdkPut(R,"handle",S->Id);SdkPutUInt(R,"buffered",S->Size);SdkPutUInt(R,"capacity",S->Capacity);xrtValueObjectSetNew(R,XRT_STR_LITERAL("eof"),xrtValueBool(S->Closed&&!S->Size));return R;}
+static xvalue* SdkStreamInfo(const SdkStream* S){xvalue* R=xrtValueObject();SdkPut(R,"handle",S->Id);SdkPutUInt(R,"buffered",S->Size);SdkPutUInt(R,"capacity",S->Capacity);xrtValueObjectSetNew(R,XRT_STR_LITERAL("closed"),xrtValueBool(S->Closed));xrtValueObjectSetNew(R,XRT_STR_LITERAL("eof"),xrtValueBool(S->Closed&&!S->Size));return R;}
 bool MdoApplicationStreamsCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue* P,xvalue** R,mdo_error_v1* E,bool* Found){
     *Found=false;for(size_t i=0;i<sizeof(SdkStreamMethods)/sizeof(*SdkStreamMethods);i++)if(!strcmp(Method,SdkStreamMethods[i]))*Found=true;
     if(!*Found)return true;

@@ -41,11 +41,11 @@ MDO_EXPORT mdo_result mdoCommandRun(const mdo_command_context_v1* C,const xvalue
             request=root/'bridge/request-1.json'
             while not request.exists() and p.poll() is None and time.monotonic()<until:time.sleep(.02)
             assert request.exists(),p.communicate(timeout=2)[0].decode('utf-8',errors='replace')
-            assert json.loads(request.read_text(encoding='utf-8'))=={'method':'ui.help','params':[]}
-            (root/'bridge/response-1.json').write_text('{"ok":true,"result":{"accepted":true}}',encoding='utf-8')
+            assert json.loads(request.read_text(encoding='utf-8'))=={'method':'sdk.invoke','params':{'method':'ui.invoke','params':{'action':'ui.help','params':[]}}}
+            (root/'bridge/response-1.json').write_text('{"ok":true,"result":{"code":0,"result":{"state":"queued_in_command"},"error":{}}}',encoding='utf-8')
             log=p.communicate(timeout=10)[0].decode('utf-8',errors='replace')
             result=json.loads((root/'bridge/final.json').read_text(encoding='utf-8'))
-            assert result['ok'] and result['result']=={'accepted':True},(result,log)
+            assert result['ok'] and result['result']=={},(result,log)
         finally:
             if p.poll() is None:p.kill();p.wait()
         p=worker(a.host.resolve(),root/'orphan',r'''

@@ -4,7 +4,7 @@
 #include "internal.h"
 static bool SdkSet(xvalue* V,cstr K,const xvalue* X){return K&&xrtValueObjectSet(V,xrtStrView(K),X);}
 static const xvalue* SdkAt(const xvalue* V,size_t I){return xrtValueArrayGet(V,I);}
-static cstr SdkKey(const xvalue* V,size_t I){xstrview K={0};return xrtValueObjectAt(V,I,&K)?K.Data:NULL;}
+static cstr SdkKey(const xvalue* V,size_t I){xstrview K={0};return xrtValueObjectAt(V,I,&K)&&!memchr(K.Data,0,K.Size)?K.Data:NULL;}
 static mdo_value_kind SdkKind(const xvalue* V){
     switch(xrtValueType(V)){
     case XVALUE_NULL:return MDO_VALUE_NULL;case XVALUE_BOOL:return MDO_VALUE_BOOL;
@@ -21,7 +21,8 @@ static uint64 SdkClock(void){return MdoMonotonicUs();}
 static const mdo_values_v1 SdkValues={sizeof(SdkValues),xrtValueNull,xrtValueBool,xrtValueInt,xrtValueUInt,xrtValueFloat,
     SdkString,xrtValueObject,xrtValueArray,xrtValueClone,SdkSet,xrtValueArrayAppend,SdkGet,SdkAt,SdkKey,xrtValueCount,SdkKind,
     SdkText,xrtValueGetBool,xrtValueGetInt,SdkUInt,xrtValueGetFloat,SdkParse,SdkJson,xrtValueRelease,xrtFree};
-static const mdo_application_v1 SdkApi={sizeof(SdkApi),MDO_SDK_VERSION,&SdkValues,MdoApplicationCall,SdkCancelled,SdkClock,SdkBindNative};
+static bool SdkBuiltinService(cstr Method);
+static const mdo_application_v1 SdkApi={sizeof(SdkApi),MDO_SDK_VERSION,&SdkValues,MdoApplicationCall,SdkCancelled,SdkClock,SdkBindNative,SdkBuiltinService};
 const mdo_application_v1* MdoApplicationApi(void){return &SdkApi;}
 void MdoApplicationContext(mdo_sdk_context_v1* C,MdoApplicationInvocation* I,cstr Extension,cstr Invocation,
     cstr Project,cstr Session,cstr Run,cstr Workspace,uint64 Deadline){

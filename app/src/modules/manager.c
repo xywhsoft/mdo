@@ -105,6 +105,8 @@ struct MdoModuleGeneration {
     size_t AgentCapacity;
     void* ModuleData;
     mdo_module_unregister_v1 Unregister;
+    mdo_module_unregister_v1 Stop;
+    xatomic32 Stopped;
     bool UnregisterReady;
     mdo_host_core_v1 HostCore;
     mdo_host_services_v1 HostServices;
@@ -312,6 +314,14 @@ static bool MdoModulesGenerationRef(MdoModuleGeneration* pGeneration)
     }
 }
 
+static void MdoModulesGenerationStop(MdoModuleGeneration* G){
+    if(!G||!G->UnregisterReady)return;
+    uint32 Expected=0;
+    if(xrtAtomic32CompareExchange(&G->Stopped,&Expected,1u,XMEMORY_ACQ_REL,XMEMORY_ACQUIRE)&&G->Stop)G->Stop(G->ModuleData);
+}
+static void MdoModulesCatalogStop(MdoModuleCatalog* C){for(size_t i=0;C&&i<C->ModuleCount;i++)MdoModulesGenerationStop(C->Modules[i]);}
+void MdoModuleManagerStop(void){MdoModuleCatalog* C=MdoModuleCatalogSnapshot();MdoModulesCatalogStop(C);MdoModuleCatalogRelease(C);}
+
 static void MdoModulesGenerationRelease(MdoModuleGeneration* pGeneration)
 {
     size_t i;
@@ -322,6 +332,7 @@ static void MdoModulesGenerationRelease(MdoModuleGeneration* pGeneration)
         XMEMORY_ACQ_REL);
     if ( iPrevious > 1u ) return;
     if ( iPrevious == 0u ) abort();
+    MdoModulesGenerationStop(pGeneration);
     if ( pGeneration->UnregisterReady && pGeneration->Unregister != NULL )
         pGeneration->Unregister(pGeneration->ModuleData);
     if ( pGeneration->Tcc != NULL ) xsDestroyTCC(pGeneration->Tcc);
@@ -830,6 +841,7 @@ static bool MdoModulesCopyDescriptor(MdoModuleGeneration* pGeneration,
     }
     pGeneration->Capabilities = pModule->RequiredCapabilities;
     pGeneration->Unregister = pModule->Unregister;
+    pGeneration->Stop=pModule->Stop;
     pGeneration->HostCore.Size = sizeof(pGeneration->HostCore);
     pGeneration->HostCore.AbiVersion = MDO_MODULE_ABI_VERSION;
     pGeneration->HostCore.Context = pGeneration;
@@ -922,7 +934,8 @@ static MdoModuleGeneration* MdoModulesCompile(const MdoModuleSource* pSource,
     tcc_set_error_func(pGeneration->Tcc, pGeneration, MdoModulesTccError);
     if ( tcc_set_options(pGeneration->Tcc, MDO_MODULE_COMPILE_OPTIONS) < 0 ||
          tcc_add_quote_include_path(pGeneration->Tcc,
-            "/app/generated/module-sdk") < 0 ) {
+            "/app/generated/module-sdk") < 0 ||
+         tcc_add_include_path(pGeneration->Tcc,"/app/generated/module-sdk") < 0 ) {
         (void)MdoModulesDiagnosticAdd(pDiagnostics,
             MDO_MODULE_DIAGNOSTIC_COMPILE, pSource->VirtualPath,
             pGeneration->SourceHash,
@@ -1445,6 +1458,10 @@ static bool MdoModulesValidateCatalog(MdoModuleCatalog* pCatalog,
 
     for ( i = 0u; i < pCatalog->ModuleCount; ++i ) {
         MdoModuleGeneration* pModule = pCatalog->Modules[i];
+        for(size_t a=0;a<pModule->ServiceCount;a++)for(size_t b=0;b<i;b++)for(size_t c=0;c<pCatalog->Modules[b]->ServiceCount;c++)
+            if(!strcmp(pModule->Services[a].Id,pCatalog->Modules[b]->Services[c].Id)){
+                (void)MdoModulesDiagnosticAdd(pDiagnostics,MDO_MODULE_DIAGNOSTIC_VALIDATE,pModule->SourcePath,pModule->SourceHash,"Duplicate application service ID across modules");return false;
+            }
         if (pModule->Kind==MDO_MODULE_TOOLS && pModule->ToolCount==0u &&
             !strncmp(pModule->SourcePath,"/app/default-home/tools/",sizeof("/app/default-home/tools/")-1u)) {
             (void)MdoModulesDiagnosticAdd(pDiagnostics,MDO_MODULE_DIAGNOSTIC_VALIDATE,pModule->SourcePath,pModule->SourceHash,
@@ -2021,6 +2038,7 @@ bool MdoModuleManagerReload(void)
     }
     (void)xrtMutexUnlock(g_MdoModules.Lock);
     xrtFree(pDefinitions);
+    MdoModulesCatalogStop(pOldCatalog);
     MdoModuleCatalogRelease(pCandidate);
     MdoModuleCatalogRelease(pOldCatalog);
     MdoModuleDiagnosticsRelease(pOldDiagnostics);

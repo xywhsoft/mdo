@@ -83,6 +83,8 @@ class ModuleContractTests(unittest.TestCase):
             self.skipTest("GCC C/C++ compilers are unavailable")
         source = r'''
 #include "mdo/module.h"
+#include "mdo/sdk.h"
+#include "mdo/command.h"
 static mdo_result execute(void *data, const mdo_tool_context_v1 *context,
     const char *arguments, mdo_result_writer_v1 *writer,
     char *error, size_t error_capacity) {
@@ -106,7 +108,7 @@ static mdo_result register_module(const mdo_host_services_v1 *host,
 }
 static const mdo_module_v1 module = {
     MDO_V1_HEADER(mdo_module_v1), "contract", "Contract", "Contract",
-    "1.0.0", 0, 0, 0, register_module, 0
+    "1.0.0", 0, 0, 0, register_module, 0, 0
 };
 MDO_EXPORT const mdo_module_v1 *mdoModuleEntry(void) { return &module; }
 int main(void) { return mdoModuleEntry()->AbiVersion == 1u ? 0 : 1; }
@@ -118,11 +120,12 @@ int main(void) { return mdoModuleEntry()->AbiVersion == 1u ? 0 : 1; }
                 path = root / f"contract.{suffix}"
                 output = root / f"contract-{suffix}.exe"
                 path.write_text(source, encoding="utf-8")
-                subprocess.run([
+                result=subprocess.run([
                     compiler, f"-std={standard}", "-Wall", "-Wextra",
                     "-Werror", "-I", str(ROOT / "include"), str(path),
                     "-o", str(output),
-                ], check=True, capture_output=True, text=True)
+                ], capture_output=True, text=True)
+                self.assertEqual(result.returncode,0,result.stderr)
 
 
 if __name__ == "__main__":

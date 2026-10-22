@@ -1,6 +1,8 @@
 #ifndef MDO_PUBLIC_COMMAND_H
 #define MDO_PUBLIC_COMMAND_H
 #include "module.h"
+#include "sdk.h"
+#include <string.h>
 /* xvalue is opaque. Values belong to the worker's host allocator. */
 typedef struct xvalue xvalue;
 typedef struct mdo_command_context_v1 mdo_command_context_v1;
@@ -47,6 +49,15 @@ static inline const char* mdoCommandArgText(const mdo_command_context_v1* C,
     const xvalue* A, size_t I) { return C->Host->Text(C->Host->At(A,I)); }
 static inline mdo_result mdoCommandCall(const mdo_command_context_v1* C,
     const char* Method, const xvalue* A, xvalue** R) {
+    if(C->Application&&C->Application->Api){
+        const mdo_sdk_context_v1* S=C->Application;const mdo_values_v1* V=S->Api->Values;mdo_error_v1 E;memset(&E,0,sizeof(E));
+        if(!strncmp(Method,"ui.",3)||!strcmp(Method,"skill.invoke")){
+            xvalue* P=V->Object(),*Type=V->String(Method);bool Ok=P&&Type&&V->Set(P,"action",Type)&&(!A||V->Set(P,"params",A));V->Release(Type);
+            mdo_result Code=Ok?mdoCall(S,"ui.invoke",P,R,&E):MDO_RESULT_ERROR;V->Release(P);
+            if(Code==MDO_RESULT_OK){V->Release(*R);*R=V->Object();}return Code;
+        }
+        if(!strcmp(Method,"session.compact"))return mdoCall(S,Method,A,R,&E);
+    }
     return C->Host->Call(C,Method,A,R);
 }
 #endif

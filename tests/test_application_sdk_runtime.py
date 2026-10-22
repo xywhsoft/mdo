@@ -32,6 +32,7 @@ static mdo_result Echo(void* U,const mdo_sdk_context_v1* C,const xvalue* P,xvalu
  if(!Models)return MDO_RESULT_ERROR;
  size_t Count=MdoModelCatalogModelCount(Models);MdoModelCatalogRelease(Models);
  if(!Count)return MDO_RESULT_ERROR;
+ uint64_t Delay=0;if(C->Api->Values->Unsigned(C->Api->Values->Get(P,"delay_ms"),&Delay)&&Delay<=2000)xrtSleep((int64)Delay);
  *R=C->Api->Values->Clone(P);return MDO_RESULT_OK;
 }
 static mdo_result Hook(void* U,const mdo_sdk_context_v1* C,const char* T,const xvalue* P,xvalue** R,mdo_error_v1* E){
@@ -76,10 +77,12 @@ def main():
   base=Path(tmp);port=free_port();config=write_site(base,port);home=base/'home';(home/'commands').mkdir(parents=True)
   (home/'commands/sdk.c').write_text('/* mdo-command {"id":"sdk","description":"SDK fixture"} */\n#include <string.h>\n'+COMMAND,encoding='utf-8')
   modules=home/'modules/tools';modules.mkdir(parents=True);(modules/'sdk.c').write_text(MODULE,encoding='utf-8')
+  (modules/'application-example.c').write_text((ROOT/'examples/application-sdk/application-module.c').read_text(encoding='utf-8'),encoding='utf-8')
   with (base/'host.log').open('wb') as log:
    child=subprocess.Popen([str(args.host.resolve()),str(config),'--','--home',str(home)],cwd=base,stdout=log,stderr=log,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
    try:
-    wait_ready(port,child)
+    try:wait_ready(port,child)
+    except Exception as error:raise RuntimeError((base/'host.log').read_text(encoding='utf-8',errors='replace')) from error
     def invoke(method,params=None,mode=None):
      identity='cmd-'+uuid.uuid4().hex;raw=[method,params]
      if mode:raw.append(mode)
@@ -107,6 +110,8 @@ def main():
     process=invoke('process.run',{'program':sys.executable,'cwd':str(base),'args':['-c','import sys; print(repr(sys.argv[1])); sys.exit(7)','']})
     assert process['exit_code']==7 and process['stdout']['text'].strip()=="''",process
     assert invoke('process.run',{'program':'mdo-sdk-missing-program'},'catch')['error']=='sdk_native_failed'
+    assert invoke('process.run',{'program':sys.executable,'cwd':str(base),'args':['-c','import time; time.sleep(3)'],'timeout_ms':20},'catch')['status']==504
+    assert invoke('fs.read',{'path':str(native),'limit':'wrong'},'catch')['status']==400
     assert invoke('runtime.info')['version']=='0.2.4'
     invoke('runtime.env.set',{'name':'MDO_SDK_TEST_VALUE','value':'hello'})
     assert invoke('runtime.env.get',{'name':'MDO_SDK_TEST_VALUE'})['value']=='hello'
@@ -124,6 +129,10 @@ def main():
     assert invoke('operation.wait',{'id':opid,'timeout_ms':2000})['state']=='succeeded'
     invoke('operation.start',start);assert (base/'once.txt').read_text()=='once'
     assert invoke('operation.result',{'id':opid})['bytes']==4
+    auto={'method':'fs.append','params':{'path':str(base/'auto-once.txt'),'text':'auto'}}
+    autoid=invoke('operation.start',auto)['id'];invoke('operation.wait',{'id':autoid,'timeout_ms':2000})
+    invoke('operation.start',{'id':autoid,**auto});assert (base/'auto-once.txt').read_text()=='auto'
+    invoke('operation.release',{'id':autoid})
     assert invoke('operation.start',{**start,'method':'fs.write'},'catch')['status']==409
     invoke('operation.release',{'id':opid})
     assert invoke('operation.start',start)['state']=='succeeded' and (base/'once.txt').read_text()=='once'
@@ -158,6 +167,7 @@ def main():
     created=invoke('session.create',{'body':{'project_id':'default','title':'Created using public SDK'}})
     assert created['status']==201 and created['transport']=='native',created
     session=created['data']['id'];scope={'project':'default','session':session}
+    assert invoke('example.agent.inspect',{'project':'default','session':session})['tools']>10
     tool=invoke('tool.call',{'project':'default','session':session,'tool':'qa.context','arguments':{}})
     assert tool['success'],tool
     tool_context=json.loads(tool['text'][tool['text'].index('{'):tool['text'].rindex('}')+1]);assert tool_context['project']=='default' and tool_context['session']==session,tool_context
@@ -184,6 +194,24 @@ def main():
     status,_,body=request(port,'GET','/api/v1/application/services');catalog=json.loads(body)['data'];assert status==200 and len(catalog)>200,(status,body)
     status,_,body=request(port,'POST','/api/v1/application/call',body=json.dumps({'method':'qa.echo','params':{'hello':'front-end'}}).encode(),headers={'Content-Type':'application/json'})
     assert status==200 and json.loads(body)['data']=={'hello':'front-end','hooked':True},(status,body)
+    duplicate=modules/'duplicate.c';duplicate.write_text(MODULE.replace('"qa.sdk","SDK fixture"','"qa.duplicate","SDK fixture"').replace('T.Id="qa.context"','T.Id="qa.duplicate-context"'),encoding='utf-8')
+    assert invoke('runtime.reload',{'domain':'modules'},'catch')['status']==409
+    assert invoke('qa.echo',{'retained':'old-catalog'})['retained']=='old-catalog'
+    duplicate.unlink();invoke('runtime.reload',{'domain':'modules'})
+    override=modules/'override.c';source=MODULE.replace('"qa.sdk","SDK fixture"','"qa.override","SDK fixture"').replace('T.Id="qa.context"','T.Id="qa.override-context"').replace('"qa.echo"','"runtime.clock"')
+    override.write_text(source,encoding='utf-8')
+    assert invoke('runtime.reload',{'domain':'modules'},'catch')['status']==409
+    override.write_text(source.replace(' mdo_hook_v1 HookSpec',' S.Flags=MDO_SERVICE_REPLACE_BUILTIN;\n mdo_hook_v1 HookSpec'),encoding='utf-8');invoke('runtime.reload',{'domain':'modules'})
+    assert invoke('runtime.clock',{'replaced':True})=={'replaced':True,'hooked':True}
+    override.unlink();invoke('runtime.reload',{'domain':'modules'})
+    assert 'monotonic_us' in invoke('runtime.clock')
+    pending=invoke('operation.start',{'method':'qa.echo','params':{'delay_ms':500,'old_generation':True}})['id']
+    (modules/'sdk.c').write_text(MODULE.replace('*R=C->Api->Values->Clone(P);return MDO_RESULT_OK;','*R=C->Api->Values->Object();return MDO_RESULT_OK;'),encoding='utf-8')
+    invoke('runtime.reload',{'domain':'modules'})
+    assert invoke('operation.wait',{'id':pending,'timeout_ms':2000})['state']=='succeeded'
+    assert invoke('operation.result',{'id':pending})['old_generation']
+    invoke('operation.release',{'id':pending})
+    (modules/'sdk.c').write_text(MODULE,encoding='utf-8');invoke('runtime.reload',{'domain':'modules'})
    finally:
     child.terminate()
     try:child.wait(timeout=10)

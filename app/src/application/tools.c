@@ -17,7 +17,16 @@ static bool SdkToolCall(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,m
     if(!Project||!Project[0]||!SessionId||!SessionId[0]||!Tool||!Tool[0])return MdoApplicationError(E,"sdk_arguments_invalid","Select a product project/session and a tool ID","tool",400,false);
     MdoSessionRuntimeOptions Options;MdoSessionRuntimeOptionsInit(&Options);MdoApplicationInvocation* I=C->Opaque;Options.Cancel=I?I->Cancel:NULL;Options.Deadline=C->Deadline;Options.OnPermission=MdoApprovalOnPermission;Options.UseRunPermissionScope=true;
     xwork_error Error;MdoSession* Session=MdoSessionOpen(Project,SessionId,&Options,&Error);MdoAgentSession* Agent=Session?MdoSessionAgentRef(Session):NULL;
-    SdkToolExecution Execution={C,P,NULL};bool Ok=Agent&&MdoAgentSessionDriveNative(Agent,SdkToolDrive,&Execution,&Error);
+    bool Required=false,Ready=Agent&&MdoAgentSessionRecoveryRequired(Agent,&Required,&Error);
+    if(Ready&&Required){Ready=false;xworkErrorInit(&Error);Error.eCode=XWORK_ERROR_CONTEXT;snprintf(Error.sMessage,sizeof(Error.sMessage),"Resolve interrupted tool calls before executing another managed tool");}
+    SdkToolExecution Execution={C,P,NULL};bool Ok=Ready&&MdoAgentSessionDriveNative(Agent,SdkToolDrive,&Execution,&Error);
     MdoAgentSessionRelease(Agent);MdoSessionRelease(Session);*R=Execution.Result;
     return Ok||MdoApplicationError(E,"sdk_tool_execution_failed",Error.sMessage,"tool",409,Execution.Result!=NULL);
+}
+static bool SdkCompactCall(const mdo_sdk_context_v1* C,xvalue** R,mdo_error_v1* E){
+    MdoSessionRuntimeOptions Options;MdoSessionRuntimeOptionsInit(&Options);MdoApplicationInvocation* I=C->Opaque;Options.Cancel=I?I->Cancel:NULL;Options.Deadline=C->Deadline;
+    xwork_error Error;MdoSession* Session=MdoSessionOpen(C->ProjectId,C->SessionId,&Options,&Error);bool Ok=Session&&MdoSessionCompact(Session,&Error);MdoSessionRelease(Session);
+    if(!Ok)return MdoApplicationError(E,"sdk_compact_failed",Error.sMessage,"context",SdkCancelled(C)?499:409,false);
+    if(I&&I->Actions){xvalue* P=xrtValueObject(),*Result=NULL;SdkPut(P,"action","ui.refresh");bool Found=false;Ok=MdoApplicationUiCall(C,"ui.invoke",P,&Result,E,&Found);xrtValueRelease(Result);xrtValueRelease(P);if(!Ok){E->MayHaveCompleted=true;return false;}}
+    *R=xrtValueObject();SdkPut(*R,"message","上下文已压缩，原始会话记录仍可查看。");return true;
 }

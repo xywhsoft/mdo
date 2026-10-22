@@ -1,11 +1,16 @@
 /* Generation-owned providers and hooks. A catalog reference pins callback code;
  * external callbacks always run after the module manager lock was released. */
+static mdo_result MdoModulesApplicationReject(MdoModuleRegistrarContext* R,char* Error,size_t Cap,cstr Message){
+    MdoModulesCopyError(Error,Cap,Message);if(R){R->Failed=true;MdoModulesCopyError(R->Message,sizeof(R->Message),Message);}return MDO_RESULT_ERROR;
+}
 static mdo_result MdoModulesRegistrarAddService(void* U,const mdo_service_v1* D,char* Error,size_t Cap){
     MdoModuleRegistrarContext* R=U;MdoModuleGeneration* M=R?R->Generation:NULL;
     if(!M||!D||D->Size<sizeof(*D)||D->Version!=MDO_SDK_VERSION||!SdkIdValid(D->Id)||
-        !strchr(D->Id,'.')||!strncmp(D->Id,"sdk.",4)||!strncmp(D->Id,"product.",8)||!D->Execute||M->ServiceCount>=64){
-        MdoModulesCopyError(Error,Cap,"Invalid service descriptor, namespace or limit");return MDO_RESULT_ERROR;}
-    for(size_t i=0;i<M->ServiceCount;i++)if(!strcmp(D->Id,M->Services[i].Id)){MdoModulesCopyError(Error,Cap,"Duplicate service ID");return MDO_RESULT_ERROR;}
+        !strchr(D->Id,'.')||!D->Execute||M->ServiceCount>=64||(D->Flags&~MDO_SERVICE_REPLACE_BUILTIN))
+        return MdoModulesApplicationReject(R,Error,Cap,"Invalid service descriptor, flags or limit");
+    if(g_MdoModuleApplication&&g_MdoModuleApplication->Builtin&&g_MdoModuleApplication->Builtin(D->Id)&&!(D->Flags&MDO_SERVICE_REPLACE_BUILTIN))return MdoModulesApplicationReject(R,Error,Cap,"Replacing a built-in service requires MDO_SERVICE_REPLACE_BUILTIN");
+    for(size_t i=0;i<M->ServiceCount;i++)if(!strcmp(D->Id,M->Services[i].Id))return MdoModulesApplicationReject(R,Error,Cap,"Duplicate service ID");
+    if((D->Description&&strlen(D->Description)>16384)||(D->InputSchema&&!MdoModulesSchemaValid(D->InputSchema))||(D->OutputSchema&&!MdoModulesSchemaValid(D->OutputSchema)))return MdoModulesApplicationReject(R,Error,Cap,"Service schema or description exceeds its contract");
     mdo_service_v1 Copy=*D;
     Copy.Id=xrtStrDup(D->Id);Copy.Description=xrtStrDup(D->Description?D->Description:"");
     Copy.InputSchema=xrtStrDup(D->InputSchema?D->InputSchema:"{}");Copy.OutputSchema=xrtStrDup(D->OutputSchema?D->OutputSchema:"{}");
@@ -13,17 +18,17 @@ static mdo_result MdoModulesRegistrarAddService(void* U,const mdo_service_v1* D,
     bool Ok=Copy.Id&&Copy.Description&&In&&Out&&xrtValueType(In)==XVALUE_OBJECT&&xrtValueType(Out)==XVALUE_OBJECT;
     xrtValueRelease(In);xrtValueRelease(Out);
     mdo_service_v1* Next=Ok?xrtRealloc(M->Services,(M->ServiceCount+1)*sizeof(*Next)):NULL;
-    if(!Next){xrtFree((void*)Copy.Id);xrtFree((void*)Copy.Description);xrtFree((void*)Copy.InputSchema);xrtFree((void*)Copy.OutputSchema);MdoModulesCopyError(Error,Cap,"Service schema or allocation is invalid");return MDO_RESULT_ERROR;}
+    if(!Next){xrtFree((void*)Copy.Id);xrtFree((void*)Copy.Description);xrtFree((void*)Copy.InputSchema);xrtFree((void*)Copy.OutputSchema);return MdoModulesApplicationReject(R,Error,Cap,"Service schema or allocation is invalid");}
     M->Services=Next;Next[M->ServiceCount++]=Copy;return MDO_RESULT_OK;
 }
 static mdo_result MdoModulesRegistrarAddHook(void* U,const mdo_hook_v1* D,char* Error,size_t Cap){
     MdoModuleRegistrarContext* R=U;MdoModuleGeneration* M=R?R->Generation:NULL;
     if(!M||!D||D->Size<sizeof(*D)||D->Version!=MDO_SDK_VERSION||!SdkIdValid(D->Id)||!SdkIdValid(D->Topic)||!D->Execute||M->HookCount>=64){
-        MdoModulesCopyError(Error,Cap,"Invalid hook descriptor or limit");return MDO_RESULT_ERROR;}
-    for(size_t i=0;i<M->HookCount;i++)if(!strcmp(D->Id,M->Hooks[i].Id)){MdoModulesCopyError(Error,Cap,"Duplicate hook ID");return MDO_RESULT_ERROR;}
+        return MdoModulesApplicationReject(R,Error,Cap,"Invalid hook descriptor or limit");}
+    for(size_t i=0;i<M->HookCount;i++)if(!strcmp(D->Id,M->Hooks[i].Id))return MdoModulesApplicationReject(R,Error,Cap,"Duplicate hook ID");
     mdo_hook_v1 Copy=*D;Copy.Id=xrtStrDup(D->Id);Copy.Topic=xrtStrDup(D->Topic);
     mdo_hook_v1* Next=Copy.Id&&Copy.Topic?xrtRealloc(M->Hooks,(M->HookCount+1)*sizeof(*Next)):NULL;
-    if(!Next){xrtFree((void*)Copy.Id);xrtFree((void*)Copy.Topic);return MDO_RESULT_ERROR;}
+    if(!Next){xrtFree((void*)Copy.Id);xrtFree((void*)Copy.Topic);return MdoModulesApplicationReject(R,Error,Cap,"Cannot allocate hook descriptor");}
     M->Hooks=Next;Next[M->HookCount++]=Copy;return MDO_RESULT_OK;
 }
 xvalue* MdoApplicationCustomCatalog(void){
@@ -35,6 +40,7 @@ xvalue* MdoApplicationCustomCatalog(void){
             SdkPut(V,"id",S->Id);SdkPut(V,"domain",M->Id);SdkPut(V,"description",S->Description);
             xrtValueObjectSetNew(V,XRT_STR_LITERAL("input_schema"),SdkParse(S->InputSchema));
             xrtValueObjectSetNew(V,XRT_STR_LITERAL("output_schema"),SdkParse(S->OutputSchema));SdkPutUInt(V,"generation",M->Generation);
+            SdkPutUInt(V,"effects",S->Effects);xrtValueObjectSetNew(V,XRT_STR_LITERAL("replaces_builtin"),xrtValueBool((S->Flags&MDO_SERVICE_REPLACE_BUILTIN)!=0));
             xrtValueArrayAppendNew(A,V);
         }
     }MdoModuleCatalogRelease(Catalog);return A;

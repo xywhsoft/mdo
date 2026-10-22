@@ -97,6 +97,7 @@ typedef struct MdoModuleDiagnosticInfo {
 
 bool MdoModuleManagerInit(xwork_runtime* pRuntime);
 void MdoModuleManagerUnit(void);
+void MdoModuleManagerStop(void);
 bool MdoModuleManagerReload(void);
 uint64 MdoModuleManagerGeneration(void);
 

@@ -47,7 +47,75 @@ def generate(root: Path):
     target.parent.mkdir(parents=True,exist_ok=True)
     if not target.exists() or target.read_text(encoding='utf-8')!=text:target.write_text(text,encoding='utf-8')
     generate_native(root)
+    contracts=native_contracts()
+    text='/* Generated parameter contracts for native application services. */\nstatic const struct {const char *Id,*Description,*Input,*Output;} SdkContracts[]={\n'
+    for name,(description,input_schema,output_schema) in contracts.items():
+        text+='    {'+','.join(json.dumps(v,ensure_ascii=True) for v in (name,description,json.dumps(input_schema,separators=(',',':')),json.dumps(output_schema,separators=(',',':'))))+'},\n'
+    text+='};\n';target=root/'app/generated/application-contracts.inc.h'
+    if not target.exists() or target.read_text(encoding='utf-8')!=text:target.write_text(text,encoding='utf-8')
     return rows
+
+def native_contracts():
+    """Discovery metadata; each service retains its own business validation."""
+    string={'type':'string'};uint={'type':'integer','minimum':0};boolean={'type':'boolean'};obj={'type':'object'};arr={'type':'array'}
+    result={}
+    def add(name,description,properties=None,required=(),output=None):
+        result[name]=(description,{'type':'object','properties':properties or {},'required':list(required)},output or obj)
+    for name in ('sdk.services','sdk.native'):add(name,'Discover registered services or typed native product function declarations',output=arr)
+    add('sdk.describe','Read the exact registered service descriptor',{'id':string},('id',))
+    add('sdk.context','Read the immutable invocation, device, project, session, workspace and deadline')
+    add('events.read','Read events with epoch/cursor loss detection; resync on overflow or restart',{'after':uint,'epoch':string,'topic':string})
+    add('events.emit','Publish an extension event; event data is visible to trusted application subscribers',{'topic':string,'data':{}},('topic',))
+    for name in ('runtime.info','runtime.clock'):add(name,'Read application identity and native runtime metadata')
+    add('runtime.log','Write at most 16 KiB of diagnostic text',{'message':string},('message',))
+    add('runtime.sleep','Cancellable wait; inherited deadline remains authoritative',{'milliseconds':{**uint,'maximum':86400000}},('milliseconds',))
+    add('runtime.env.get','Read a native environment variable',{'name':string},('name',))
+    add('runtime.env.set','Set an environment variable; omit value to remove it',{'name':string,'value':string},('name',))
+    add('system.open','Ask the OS to open a native file or URL',{'target':string},('target',))
+    path={'path':string,'space':{'type':'string','enum':['native','workspace','home','application']}}
+    for prefix in ('fs','vfs','storage'):
+        names={'fs':['resolve','stat','read','write','append','list','mkdir','remove','copy','move'],'vfs':['read','list'],'storage':['read','write','remove']}[prefix]
+        for action in names:
+            fields=dict(path)
+            if action=='read':fields.update(offset=uint,limit={**uint,'minimum':1,'maximum':262144})
+            if action=='list':fields.update(offset=uint,limit={**uint,'minimum':1,'maximum':1024})
+            if action in ('write','append'):fields.update(text=string,base64=string,parents=boolean,revision=string)
+            if action=='remove':fields.update(recursive=boolean)
+            if action in ('copy','move'):fields.update(destination=string,replace=boolean)
+            add(prefix+'.'+action,'Native resource operation. VFS paths start /app/; storage paths are extension-relative. Byte payloads use exactly one text/base64 field.',fields,('path',)+(('destination',) if action in ('copy','move') else ()))
+    add('secret.store','Seal a credential without placing it in logs or event facts',{'value':string},('value',))
+    for action in ('read','remove'):add('secret.'+action,'Operate on a device credential reference',{'reference':string},('reference',))
+    add('process.run','Run exact argv, including empty strings. Nonzero exit is a tool outcome with stdout/stderr; no shell expansion is added.',{'program':string,'args':{'type':'array','items':string,'maxItems':1024},'cwd':string,'input':string,'timeout_ms':uint,'stream':boolean},('program',))
+    add('network.request','HTTP(S) transport; returns the HTTP status and binary/text body, capped at 256 KiB',{'url':string,'method':string,'body':string,'headers':{'type':'object','additionalProperties':string}},('url',))
+    add('operation.start','Durably admit a service call once. Reusing an ID with a different request is a conflict. Params/results are not persisted.',{'id':string,'method':string,'params':{}},('method',))
+    add('operation.list','List retained in-process operation receipts',output=arr)
+    for action in ('get','wait','cancel','result','release'):
+        fields={'id':string}
+        if action=='wait':fields['timeout_ms']={**uint,'maximum':60000}
+        if action=='result':fields.update(offset=uint,limit={**uint,'minimum':1,'maximum':16384})
+        add('operation.'+action,'Read, wait, cancel or release an operation. Large results use UTF-8 JSON byte ranges; released/restarted results return 410.',fields,('id',))
+    add('stream.open','Create an opaque bounded byte stream; idle lease is five minutes',{'capacity':{**uint,'minimum':1,'maximum':1048576}})
+    for action in ('read','write','close','release','stat'):
+        fields={'handle':string}
+        if action in ('read','write'):fields.update(timeout_ms={**uint,'maximum':60000})
+        if action=='read':fields['limit']={**uint,'minimum':1,'maximum':16384}
+        if action=='write':fields.update(text=string,base64=string)
+        add('stream.'+action,'Operate on a stream handle. A would-block failure accepts no bytes; close preserves buffered data until EOF.',fields,('handle',))
+    add('plugin.list','List installed VFS plugins and recovery status')
+    add('plugin.apply','Stage an immutable revision and publish a VFS overlay. Module/core source changes require runtime.reload.',{'id':string,'frontend':string,'files':{'type':'array','minItems':1,'maxItems':128,'items':{'type':'object','properties':{'path':string,'text':string,'base64':string},'required':['path']}}},('id','files'))
+    for action in ('enable','disable','remove','rollback'):add('plugin.'+action,'Change plugin activation while retaining immutable revision backups',{'id':string},('id',))
+    add('runtime.reload','Reload modules or submit a host source reload. Host reload completion is queried separately.',{'domain':{'type':'string','enum':['modules','host']}},('domain',))
+    add('runtime.reload.status','Read a native host reload receipt',{'id':uint},('id',))
+    add('client.hello','Register or renew a target window lease',{'client':string,'context':obj},('client',))
+    add('client.poll','Read pending actions for exactly one window',{'client':string},('client',),arr)
+    add('client.ack','Acknowledge the actual window outcome; duplicate acknowledgements do not replay effects',{'client':string,'id':string,'success':boolean,'error':string},('client','id','success'))
+    add('ui.clients','Discover active target windows; never select the first window implicitly',output=arr)
+    add('ui.invoke','Queue an action for an explicit client, or append it to the originating command receipt',{'client':string,'action':string,'params':{},'context':obj},('action',))
+    add('ui.result','Read queued/succeeded/failed UI action status',{'id':string},('id',))
+    add('model.complete','Managed model boundary with messages, tools, multimodal parts, usage and optional newline-delimited stream events',{'model':string,'protocol':{**uint,'maximum':3},'reasoning_effort':string,'max_output_tokens':uint,'messages':{'type':'array','minItems':1,'maxItems':4096,'items':obj},'tools':{'type':'array','maxItems':256,'items':obj},'extra_body':obj,'stream':string},('messages',))
+    add('tool.call','Execute a tool through a recovered session and its live permission scope; a tool-level failure is a successful SDK result with success:false',{'project':string,'session':string,'tool':string,'arguments':obj},('tool',))
+    add('session.compact','Compact the immutable invocation session; original history remains available')
+    return result
 
 def native_symbols(root: Path):
     """Export declared product functions, never private manager globals."""

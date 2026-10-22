@@ -78,6 +78,7 @@ void MdoApiLiveChanged(void* Data)
         (void)xrtCondBroadcast(g_MdoLive.Changed);
     }
     xrtMutexUnlock(g_MdoLive.Lock);
+    MdoApplicationEvent("product.changed",NULL,NULL);
 }
 
 static void MdoLiveEvict(void)
@@ -119,6 +120,8 @@ notify:
     (void)xrtCondBroadcast(g_MdoLive.Changed);
 done:
     xrtMutexUnlock(g_MdoLive.Lock);
+    mdo_sdk_context_v1 Context;MdoApplicationContext(&Context,NULL,"product","",Project,Session,"","",0);
+    xvalue* Facts=xrtValueObject();SdkPutUInt(Facts,"bytes",Json.Size);xrtValueObjectSetNew(Facts,XRT_STR_LITERAL("state_changed"),xrtValueBool(StateChanged));MdoApplicationEvent("session.event",&Context,Facts);xrtValueRelease(Facts);
 }
 
 static bool MdoLiveFrame(MdoLiveClient* Client, uint8 Opcode,

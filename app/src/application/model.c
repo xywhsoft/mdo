@@ -12,6 +12,7 @@ static bool SdkModelEvent(void* User,const xllm_event* Event){
         xrtValueObjectSetNew(V,XRT_STR_LITERAL("text"),xrtValueString(xrtStrViewN(Event->as.tText.sData,Event->as.tText.iLen)));SdkPutUInt(V,"block",Event->as.tText.iBlock);
     }else if(Event->eKind==XLLM_EVENT_TOOL_CALL_DELTA){SdkPut(V,"id",Event->as.tToolCall.sIdDelta);SdkPut(V,"name",Event->as.tToolCall.sNameDelta);SdkPut(V,"arguments",Event->as.tToolCall.sArgumentsDelta);SdkPutUInt(V,"index",Event->as.tToolCall.iIndex);}
     else if(Event->eKind==XLLM_EVENT_USAGE)xrtValueObjectSetNew(V,XRT_STR_LITERAL("usage"),SdkUsageValue(&Event->as.tUsage));
+    else if(Event->eKind==XLLM_EVENT_BLOCK_META){SdkPutUInt(V,"block",Event->as.tBlockMeta.iBlock);SdkPutUInt(V,"block_kind",Event->as.tBlockMeta.eKind);xrtValueObjectSetNew(V,XRT_STR_LITERAL("end"),xrtValueBool(Event->as.tBlockMeta.bEnd));}
     else if(Event->eKind==XLLM_EVENT_RESPONSE_START||Event->eKind==XLLM_EVENT_RESPONSE_DONE){SdkPutUInt(V,"http_status",Event->as.tResponse.uHttpStatus);SdkPut(V,"request_id",Event->as.tResponse.sRequestId);}
     char* Json=SdkJson(V);char* Line=Json?xrtFormat("%s\n",Json):NULL;xrtFree(Json);xrtValueRelease(V);
     xvalue* Params=xrtValueObject(),*Result=NULL;SdkPut(Params,"handle",S->Handle);SdkPut(Params,"text",Line);xrtFree(Line);bool Found=false;mdo_error_v1 Error={0};
@@ -44,6 +45,12 @@ static bool SdkModelMessage(const xvalue* Source,xllm_request* Request){
     xllmMessageUnit(&M);return Ok;
 }
 static bool SdkModelCall(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E){
+    cstr Handle=SdkField(P,"stream");bool Dispatched=false;
+    if(Handle){xvalue* Params=xrtValueObject(),*Result=NULL;SdkPut(Params,"handle",Handle);bool Found=false;
+        bool Ok=MdoApplicationStreamsCall(C,"stream.stat",Params,&Result,E,&Found),Closed=false;xrtValueGetBool(SdkGet(Result,"closed"),&Closed);xrtValueRelease(Params);xrtValueRelease(Result);
+        if(!Ok)return false;
+        if(Closed)return MdoApplicationError(E,"sdk_stream_closed","Model output stream is already closed","stream",409,false);
+    }
     const xvalue *Messages=SdkGet(P,"messages"),*Tools=SdkGet(P,"tools");
     if(xrtValueType(Messages)!=XVALUE_ARRAY||!xrtValueCount(Messages)||xrtValueCount(Messages)>4096||(Tools&&xrtValueType(Tools)!=XVALUE_ARRAY)||xrtValueCount(Tools)>256)
         return MdoApplicationError(E,"sdk_arguments_invalid","Supply 1..4096 messages and an optional tool array","model",400,false);
@@ -62,16 +69,22 @@ static bool SdkModelCall(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,
     MdoModelInfo Info={0};Info.Size=sizeof(Info);Ok=MdoModelCatalogModelFind(Catalog,Profile.sId,&Info)&&xllmRequestSetModel(&Request,Info.WireModel)&&xllmRequestSetReasoningEffort(&Request,Options.ReasoningEffort?Options.ReasoningEffort:Info.DefaultReasoningEffort);
     Request.uMaxOutputTokens=Options.MaxOutputTokens?Options.MaxOutputTokens:Info.MaxOutputTokens;
     MdoApplicationInvocation* Invocation=C->Opaque;xllmRequestSetCancel(&Request,Invocation?Invocation->Cancel:NULL);xllmRequestSetDeadline(&Request,C->Deadline?C->Deadline:MdoDeadlineAfterUs(600000000));
-    cstr Handle=SdkField(P,"stream");SdkModelStream Stream={C,Handle,false};xllm_stream_callbacks Callbacks={&Stream,SdkModelEvent};
+    SdkModelStream Stream={C,Handle,false};xllm_stream_callbacks Callbacks={&Stream,SdkModelEvent};
     if(Ok&&!MdoModelIsOnline(Catalog,Info.Id)){Client=MdoModelClientCreate(Catalog,&Options,NULL,&Error);Ok=Client!=NULL;}
-    if(Ok)Ok=(MdoModelIsOnline(Catalog,Info.Id)?MdoModelOnlineComplete(Catalog,&Options,&Request,Handle?&Callbacks:NULL,&Response,&Error):MdoModelComplete(Client,&Request,Handle?&Callbacks:NULL,&Response,&Error))==XLLM_RESULT_OK;
+    if(Ok){Dispatched=true;Ok=(MdoModelIsOnline(Catalog,Info.Id)?MdoModelOnlineComplete(Catalog,&Options,&Request,Handle?&Callbacks:NULL,&Response,&Error):MdoModelComplete(Client,&Request,Handle?&Callbacks:NULL,&Response,&Error))==XLLM_RESULT_OK;}
     if(Stream.Overflow){Ok=MdoApplicationError(E,"sdk_stream_overflow","Model stream consumer did not drain its buffer; call cancelled without dropping deltas","stream",409,false);}
     if(Ok&&Response){
         *R=xrtValueObject();SdkPut(*R,"id",Response->sId);SdkPut(*R,"model",Response->sModel);SdkPut(*R,"text",Response->sContent);SdkPut(*R,"reasoning",Response->sReasoningContent);SdkPut(*R,"finish_reason",Response->sFinishReason);SdkPut(*R,"request_id",Response->sRequestId);SdkPutUInt(*R,"http_status",Response->uHttpStatus);
+        SdkPut(*R,"refusal",Response->sRefusal);SdkPutUInt(*R,"finish",Response->eFinish);
         xrtValueObjectSetNew(*R,XRT_STR_LITERAL("usage"),SdkUsageValue(&Response->tUsage));SdkPutUInt(*R,"attempts",Response->tStats.uAttempts);
         xvalue* Calls=xrtValueArray();for(size_t i=0;i<Response->iToolCallCount;i++){xvalue* T=xrtValueObject();SdkPut(T,"id",Response->pToolCalls[i].sId);SdkPut(T,"name",Response->pToolCalls[i].sName);SdkPut(T,"arguments_json",Response->pToolCalls[i].sArgumentsJson);xrtValueArrayAppendNew(Calls,T);}xrtValueObjectSetNew(*R,XRT_STR_LITERAL("tool_calls"),Calls);
+        xvalue* Blocks=xrtValueArray();for(size_t i=0;i<Response->iBlockCount;i++){const xllm_block* Block=&Response->pBlocks[i];xvalue* B=xrtValueObject();SdkPutUInt(B,"kind",Block->eKind);SdkPut(B,"text",Block->sText);SdkPutUInt(B,"tool_index",Block->iToolIndex);SdkPut(B,"native",Block->sNative);xrtValueArrayAppendNew(Blocks,B);}xrtValueObjectSetNew(*R,XRT_STR_LITERAL("blocks"),Blocks);
+        xvalue* Stats=xrtValueObject();SdkPutUInt(Stats,"connect_ms",Response->tStats.uConnectMs);SdkPutUInt(Stats,"first_byte_ms",Response->tStats.uFirstByteMs);SdkPutUInt(Stats,"first_token_ms",Response->tStats.uFirstTokenMs);SdkPutUInt(Stats,"total_ms",Response->tStats.uTotalMs);SdkPutUInt(Stats,"request_bytes",Response->tStats.uRequestBytes);SdkPutUInt(Stats,"response_bytes",Response->tStats.uResponseBytes);xrtValueObjectSetNew(*R,XRT_STR_LITERAL("stats"),Stats);
     }
 done:
-    if(!Ok&&!E->Code[0])MdoApplicationError(E,MdoModelErrorKind(&Error),MdoModelErrorMessage(&Error),"model",Error.iHttpStatus?(uint32)Error.iHttpStatus:502,false);
+    if(Handle){xvalue* Params=xrtValueObject(),*Result=NULL;SdkPut(Params,"handle",Handle);bool Found=false;mdo_error_v1 CloseError={0};(void)MdoApplicationStreamsCall(C,"stream.close",Params,&Result,&CloseError,&Found);xrtValueRelease(Params);xrtValueRelease(Result);}
+    if(Ok&&!Response)Ok=MdoApplicationError(E,"sdk_model_response_missing","Model boundary returned no response object","model",502,false);
+    if(!Ok&&!E->Code[0])MdoApplicationError(E,MdoModelErrorKind(&Error),MdoModelErrorMessage(&Error),"model",Error.eCode==XLLM_ERROR_CANCELLED?499:Error.eCode==XLLM_ERROR_TIMEOUT?504:Error.eCode==XLLM_ERROR_INVALID_ARGUMENT?400:Error.iHttpStatus?(uint32)Error.iHttpStatus:502,false);
+    if(!Ok&&Dispatched&&(E->Status>=500||E->Status==499||!strcmp(E->Code,"sdk_stream_overflow")))E->MayHaveCompleted=true;
     xllmResponseDestroy(Response);xllmClientDestroy(Client);xllmRequestUnit(&Request);MdoModelCatalogRelease(Catalog);return Ok;
 }

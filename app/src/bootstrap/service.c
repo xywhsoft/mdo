@@ -80,6 +80,7 @@ void ServiceUnit(XS_HostInfo* pHost)
     xrtAtomic32Store(&g_MdoServiceState,MDO_SERVICE_FAILED,XMEMORY_RELEASE);
     if (g_MdoServiceRetryTimer) (void)xsTimerCancel(g_MdoServiceRetryTimer);
     g_MdoServiceRetryTimer = 0u;
+    MdoModuleManagerStop();
     MdoApplicationStreamsStop();
     MdoApplicationJobsStop();
     MdoDeviceTransfersUnit();

@@ -265,6 +265,9 @@ typedef struct mdo_module_v1 {
     size_t DependencyCount;
     mdo_module_register_v1 Register;
     mdo_module_unregister_v1 Unregister;
+    /* Stop only owned producers/workers; shared callback data stays valid
+     * until Unregister. Called once on retirement/shutdown, outside locks. */
+    mdo_module_unregister_v1 Stop;
 } mdo_module_v1;
 
 typedef const mdo_module_v1* (*mdo_module_entry_v1)(void);

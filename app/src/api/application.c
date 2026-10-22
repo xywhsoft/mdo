@@ -1,4 +1,5 @@
 #include "internal.h"
+#include "../../include/mdo/projects.h"
 bool MdoApiApplicationRoute(MdoApiContext* C){
     bool Services=xrtStrEqual(C->Target.Path,XRT_STR_LITERAL("/api/v1/application/services"));
     if(Services)return MdoApiReplySuccessTake(C,200,MdoApplicationCatalog(),NULL);
@@ -19,11 +20,20 @@ bool MdoApiApplicationRoute(MdoApiContext* C){
     const xhttpfield* Token=NULL;
     if(xrtHttpFieldGetUnique(C->Request->head->Fields,C->Request->head->FieldCount,XRT_STR_LITERAL("X-Mdo-Write-Token"),&Token)==XHTTP_NEXT_ITEM&&Token)
         snprintf(I.WriteToken,sizeof(I.WriteToken),"%.*s",(int)Token->Value.Size,Token->Value.Data);
-    MdoApplicationContext(&Native,&I,"local-client",C->RequestId,SdkField(Scope,"project"),SdkField(Scope,"session"),SdkField(Scope,"run"),NULL,0);
+    cstr Extension=SdkField(Scope,"extension");if(Extension&&!SdkIdValid(Extension)){MdoApiJsonBodyUnit(&Body);return MdoApiReplyError(C,400,"sdk_context_invalid","Invalid extension identity",NULL);}
+    cstr Project=SdkField(Scope,"project");char* Workspace=NULL;
+    if(!Project||!Project[0]||!strcmp(Project,"default"))Workspace=MdoHomeDefaultWorkspacePath(false);
+    else {MdoProjectInfo Info={0};Info.Size=sizeof(Info);bool Found=false;xwork_error Error;
+        if(!MdoProjectGet(Project,&Info,&Found,&Error)||!Found){MdoApiJsonBodyUnit(&Body);return MdoApiReplyError(C,404,"sdk_project_missing","The selected project is unavailable",NULL);}
+        Workspace=xrtPathAbs(Info.WorkspaceRoot);
+    }
+    MdoApplicationContext(&Native,&I,Extension?Extension:"local-client",C->RequestId,Project,SdkField(Scope,"session"),SdkField(Scope,"run"),Workspace,0);
     xvalue* R=NULL;mdo_error_v1 E={0};mdo_result Code=MdoApplicationCall(C->ApplicationContext?C->ApplicationContext:&Native,Method,SdkGet(Body.Value,"params"),&R,&E);
     MdoApiJsonBodyUnit(&Body);
+    xrtFree(Workspace);
     if(Code==MDO_RESULT_OK)return MdoApiReplySuccessTake(C,200,R?R:xrtValueObject(),NULL);
     xvalue* Details=xrtValueObject();SdkPut(Details,"stage",E.Stage);
+    SdkPut(Details,"cause",E.Cause);
     xrtValueObjectSetNew(Details,XRT_STR_LITERAL("retryable"),xrtValueBool(E.Retryable));
     xrtValueObjectSetNew(Details,XRT_STR_LITERAL("may_have_completed"),xrtValueBool(E.MayHaveCompleted));
     if(R)xrtValueObjectSetNew(Details,XRT_STR_LITERAL("result"),R);

@@ -10,25 +10,32 @@ export function createApplicationUi({ navigation, executeActions }) {
     else sessionStorage.setItem("mdo.sdk.client", clientId);
   } catch { /* Effects still require the separate intent journal below. */ }
   const api = createApplicationClient(() => ({ project: navigation.preferredProject(), session: navigation.workspace().sessionId || "", client: clientId }));
-  const panels = new Map(), menus = new Map(), renderers = new Map(), actions = new Map(), disposers = [];
+  const panels = new Map(), menus = new Map(), renderers = new Map(), actions = new Map(), openDialogs = new Map(), disposers = [];
   let stopped = false, timer = null, registered = false;
   const register = (map, id, value) => {
+    if (stopped) throw new Error("Application UI instance has been disposed");
     if (!/^[A-Za-z0-9_.-]+$/.test(id) || map.has(id)) throw new Error("Duplicate or invalid SDK contribution ID");
     map.set(id, value); const dispose = () => map.delete(id); disposers.push(dispose); return dispose;
   };
   const openPanel = async (id, params) => {
+    if (stopped) throw new Error("Application UI instance has been disposed");
     const descriptor = panels.get(id); if (!descriptor) throw new Error(`Panel ${id} is not registered`);
     const dialog = document.createElement("dialog"), heading = document.createElement("h2"), body = document.createElement("div"), close = document.createElement("button");
     heading.textContent = descriptor.title || id; close.textContent = "关闭"; close.type = "button";
     const abort = new AbortController(); let dispose;
-    const cleanup = () => { abort.abort(); try { dispose?.(); } finally { dialog.remove(); } };
+    const cleanup = () => { abort.abort(); openDialogs.get(id)?.delete(dialog); try { if (typeof dispose === "function") dispose(); } finally { dialog.remove(); } };
     close.onclick = () => dialog.close(); dialog.addEventListener("close", cleanup, { once: true });
     dialog.append(heading, body, close); document.body.append(dialog); dialog.showModal();
-    try { dispose = await descriptor.render(body, { sdk, params, signal: abort.signal }); if (abort.signal.aborted) dispose?.(); }
+    if (!openDialogs.has(id)) openDialogs.set(id, new Set()); openDialogs.get(id).add(dialog);
+    try { dispose = await descriptor.render(body, { sdk, params, signal: abort.signal }); if (abort.signal.aborted && typeof dispose === "function") dispose(); }
     catch (error) { dialog.close(); throw error; }
   };
   const ui = Object.freeze({
-    registerPanel: (id, descriptor) => register(panels, id, descriptor),
+    registerPanel: (id, descriptor) => {
+      const remove = register(panels, id, descriptor);
+      const dispose = () => { for (const dialog of openDialogs.get(id) || []) dialog.close(); openDialogs.delete(id); remove(); };
+      disposers.push(dispose); return dispose;
+    },
     registerAction: (id, execute) => register(actions, id, execute),
     registerRenderer: (id, render) => register(renderers, id, render),
     render: (id, root, value, options = {}) => { const render = renderers.get(id); if (!render) throw new Error("Renderer is not registered"); return render(root, value, { sdk, ...options }); },
@@ -48,6 +55,10 @@ export function createApplicationUi({ navigation, executeActions }) {
       const dispose = () => { document.removeEventListener("keydown", callback); remove(); }; disposers.push(dispose); return dispose;
     },
     openPanel,
+    openWindow: ({ url, name = "_blank" }) => {
+      const opened = window.open(url, name, "noopener");
+      if (!opened) throw new Error("The OS or browser blocked the new window; open it from a user action");
+    },
     openEditor: async ({ path, space = "workspace" }) => {
       const resource = await api.call("fs.read", { path, space, limit: 262144 });
       if (typeof resource.text !== "string" || resource.bytes !== resource.size) throw new Error("The editor supports complete UTF-8 files up to 256 KiB");
@@ -68,6 +79,7 @@ export function createApplicationUi({ navigation, executeActions }) {
     if (action.action === "ui.toast") { toast(String(action.params?.message || "")); return; }
     if (action.action === "ui.panel") return openPanel(action.params?.id, action.params);
     if (action.action === "ui.editor") return ui.openEditor(action.params);
+    if (action.action === "ui.window") return ui.openWindow(action.params);
     if (action.action === "ui.navigate") { navigation.select(action.params.project, action.params.session); return; }
     return executeActions({ id: action.id, state: "succeeded", raw_arguments: "", actions: [{ type: action.action, params: action.params }] }, { projectId: selected.projectId || "default", sessionId: selected.sessionId || "", runId: "" });
   };
@@ -76,7 +88,9 @@ export function createApplicationUi({ navigation, executeActions }) {
       if (isRemoteTarget()) return;
       if (!registered) { await api.call("client.hello", { client: clientId, context: navigation.get() }); registered = true; }
       const pending = await api.call("client.poll", { client: clientId });
+      if (stopped) return;
       for (const action of pending) {
+        if (stopped) break;
         let ack;
         try { ack = await applyApplicationAction(action, execute, sessionStorage, `mdo.sdk.actions.${clientId}`); }
         catch (error) { ack = { success: false, error: `UI intent journal unavailable: ${error.message}` }; }
@@ -90,12 +104,14 @@ export function createApplicationUi({ navigation, executeActions }) {
   // still use the explicitly selected target through the standard API adapter.
   const loadPlugins = async () => {
     if (isRemoteTarget()) return;
-    const result = await api.call("plugin.list"); if (result.recovery_mode) return;
+    const result = await api.call("plugin.list"); if (result.recovery_mode || stopped) return;
     for (const plugin of result.items) if (plugin.enabled && !plugin.error && plugin.frontend?.startsWith("web/")) {
       try {
         const module = await import(`/${plugin.frontend.slice(4)}?revision=${encodeURIComponent(plugin.revision)}`);
+        if (stopped) return;
         if (typeof module.activate !== "function") throw new Error("Plugin frontend must export activate(sdk)");
-        const dispose = await module.activate(sdk); if (typeof dispose === "function") disposers.push(dispose);
+        const scopedApi = createApplicationClient(() => ({ project: navigation.preferredProject(), session: navigation.workspace().sessionId || "", client: clientId, extension: `plugin.${plugin.id}` }));
+        const dispose = await module.activate(Object.freeze({ ...sdk, ...scopedApi })); if (typeof dispose === "function") { if (stopped) dispose(); else disposers.push(dispose); }
       } catch (error) { console.error(`Plugin ${plugin.id} failed`, error); toast(`插件 ${plugin.id} 启动失败：${error.message}`, "error"); }
     }
   };

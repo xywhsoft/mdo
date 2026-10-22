@@ -18,6 +18,7 @@ typedef struct mdo_error_v1 {
     char Code[64], Message[512], Stage[64];
     uint32_t Status;
     bool Retryable, MayHaveCompleted;
+    char Cause[1024];
 } mdo_error_v1;
 typedef struct mdo_values_v1 {
     uint32_t Size;
@@ -56,6 +57,7 @@ typedef struct mdo_application_v1 {
     /* In-process native modules only. The isolated command worker exposes
      * Call/RPC instead; native function pointers never cross a process. */
     bool (*BindNative)(void* TccState);
+    bool (*Builtin)(const char* Method);
 } mdo_application_v1;
 struct mdo_sdk_context_v1 {
     uint32_t Size, Version;
@@ -98,7 +100,9 @@ typedef struct mdo_service_v1 {
     mdo_tool_effects Effects;
     void* UserData;
     mdo_service_execute_v1 Execute;
+    uint32_t Flags;
 } mdo_service_v1;
+#define MDO_SERVICE_REPLACE_BUILTIN 1u
 typedef mdo_result (*mdo_hook_execute_v1)(void*,const mdo_sdk_context_v1*,
     const char* Topic,const xvalue* Input,xvalue** Replacement,mdo_error_v1*);
 typedef struct mdo_hook_v1 {

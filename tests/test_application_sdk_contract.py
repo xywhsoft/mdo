@@ -32,3 +32,12 @@ class ApplicationSdkContractTests(unittest.TestCase):
         for name in ('MdoModelClientCreate','MdoAgentSessionCreateWithRuntime','MdoSessionCreate',
                      'MdoSkillCatalogSnapshot','MdoRemoteSnapshot','MdoApprovalOnPermission'):
             self.assertIn(name,symbols)
+
+    def test_every_native_service_has_parameter_discovery_metadata(self):
+        names=set()
+        for source in (ROOT/'app/src/application').glob('*.c'):
+            text=source.read_text(encoding='utf-8')
+            for block in re.findall(r'Sdk(?:Builtins|RuntimeMethods|JobMethods|StreamMethods|PluginMethods|UiMethods)\[\]\s*=\s*\{(.*?)\};',text,re.S):
+                names.update(re.findall(r'"([a-z]+\.[a-z._]+)"',block))
+        self.assertGreater(len(names),50)
+        self.assertEqual(names,set(application_sdk.native_contracts()))

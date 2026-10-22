@@ -12,6 +12,7 @@ static inline bool SdkPut(xvalue* V,cstr K,cstr S){return xrtValueObjectSetNew(V
 static inline bool SdkPutUInt(xvalue* V,cstr K,uint64 I){return xrtValueObjectSetNew(V,xrtStrView(K),xrtValueUInt(I));}
 static inline bool SdkIdValid(cstr Id){
     if(!Id||!Id[0]||strlen(Id)>255)return false;
+    if(Id[0]=='.'||Id[strlen(Id)-1]=='.'||strstr(Id,".."))return false;
     for(size_t I=0;Id[I];I++)if(!((Id[I]>='a'&&Id[I]<='z')||(Id[I]>='A'&&Id[I]<='Z')||
         (Id[I]>='0'&&Id[I]<='9')||Id[I]=='.'||Id[I]=='_'||Id[I]=='-'))return false;
     return true;

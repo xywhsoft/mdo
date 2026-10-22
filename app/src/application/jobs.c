@@ -66,6 +66,7 @@ static int32 SdkJobRun(void* User){
     xrtValueObjectSetNew(J->Info,XRT_STR_LITERAL("terminal"),xrtValueBool(true));SdkPutUInt(J->Info,"finished_us",MdoMonotonicUs());
     SdkPutUInt(J->Info,"result_bytes",Size);xrtValueObjectSetNew(J->Info,XRT_STR_LITERAL("result_available"),xrtValueBool(Result!=NULL));
     if(Code!=MDO_RESULT_OK){xvalue* Error=xrtValueObject();SdkPut(Error,"code",E.Code);SdkPut(Error,"message",E.Message);SdkPut(Error,"stage",E.Stage);SdkPutUInt(Error,"status",E.Status);
+        SdkPut(Error,"cause",E.Cause);
         xrtValueObjectSetNew(Error,XRT_STR_LITERAL("may_have_completed"),xrtValueBool(E.MayHaveCompleted));xrtValueObjectSetNew(J->Info,XRT_STR_LITERAL("error"),Error);}
     if(!SdkJobSave(J))xrtValueObjectSetNew(J->Info,XRT_STR_LITERAL("receipt_uncertain"),xrtValueBool(true));
     xvalue* Event=xrtValueClone(J->Info);xrtMutexUnlock(SdkJobs.Lock);
@@ -104,7 +105,9 @@ bool MdoApplicationJobsCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue
     cstr Target=SdkField(P,"method");char Hash[65]={0};
     if(Start){
         if(!SdkIdValid(Target)||!strncmp(Target,"operation.",10))return MdoApplicationError(E,"sdk_arguments_invalid","Supply a non-operation service method","operation",400,false);
-        char* Text=SdkJson(P);bool Ok=Text&&MdoExtensionHash(Text,Hash);if(Text)xrtSecureZero(Text,strlen(Text));xrtFree(Text);if(!Ok)return false;
+        xvalue* Admission=xrtValueObject();SdkPut(Admission,"method",Target);SdkPut(Admission,"extension",C->ExtensionId);SdkPut(Admission,"project",C->ProjectId);SdkPut(Admission,"session",C->SessionId);SdkPut(Admission,"run",C->RunId);SdkPut(Admission,"workspace",C->Workspace);
+        const xvalue* Params=SdkGet(P,"params");xrtValueObjectSetNew(Admission,XRT_STR_LITERAL("params"),Params&&xrtValueType(Params)!=XVALUE_NULL?xrtValueClone(Params):xrtValueObject());
+        char* Text=SdkJson(Admission);xrtValueRelease(Admission);bool Ok=Text&&MdoExtensionHash(Text,Hash);if(Text)xrtSecureZero(Text,strlen(Text));xrtFree(Text);if(!Ok)return false;
     }
     uint64 Wait=0;if(!strcmp(Method,"operation.wait")){if(SdkGet(P,"timeout_ms")&&!SdkUInt(SdkGet(P,"timeout_ms"),&Wait))return MdoApplicationError(E,"sdk_arguments_invalid","Invalid wait timeout","operation",400,false);if(Wait>60000)Wait=60000;}
     uint64 End=MdoDeadlineAfterUs(Wait*1000);

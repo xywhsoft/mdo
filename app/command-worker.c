@@ -93,7 +93,7 @@ static void CWCompileError(void* Unused,cstr Message) {
 }
 static bool CWSdkSet(xvalue* V,cstr K,const xvalue* Child){return xrtValueObjectSet(V,xrtStrView(K),Child);}
 static xvalue* CWSdkString(cstr S){return xrtValueString(xrtStrView(S?S:""));}
-static cstr CWSdkKey(const xvalue* V,size_t I){xstrview K={0};return xrtValueObjectAt(V,I,&K)?K.Data:NULL;}
+static cstr CWSdkKey(const xvalue* V,size_t I){xstrview K={0};return xrtValueObjectAt(V,I,&K)&&!memchr(K.Data,0,K.Size)?K.Data:NULL;}
 static mdo_value_kind CWSdkKind(const xvalue* V){return (mdo_value_kind)CWKind(V);}
 static bool CWSdkUInt(const xvalue* V,uint64* N){int64 I=0;return xrtValueGetUInt(V,N)||(xrtValueGetInt(V,&I)&&I>=0&&(*N=(uint64)I,true));}
 static uint64 CWSdkClock(void){return xllmClockUs();}
@@ -109,6 +109,7 @@ static mdo_result CWSdkCall(const mdo_sdk_context_v1* C,cstr M,const xvalue* P,x
         const xvalue* Failure=CWGet(Frame,"error");
         if(E){snprintf(E->Code,sizeof(E->Code),"%s",CWText(Failure,"code"));snprintf(E->Message,sizeof(E->Message),"%s",CWText(Failure,"message"));
             snprintf(E->Stage,sizeof(E->Stage),"%s",CWText(Failure,"stage"));uint64 Status=0;CWSdkUInt(CWGet(Failure,"status"),&Status);E->Status=(uint32)Status;
+            snprintf(E->Cause,sizeof(E->Cause),"%s",CWText(Failure,"cause"));
             xrtValueGetBool(CWGet(Failure,"retryable"),&E->Retryable);xrtValueGetBool(CWGet(Failure,"may_have_completed"),&E->MayHaveCompleted);}
         if(Code!=MDO_RESULT_OK)snprintf(CWError,sizeof(CWError),"%s: %s",CWText(Failure,"code"),CWText(Failure,"message"));
     }else if(E){snprintf(E->Code,sizeof(E->Code),"sdk_transport_failed");snprintf(E->Message,sizeof(E->Message),"%s",CWError);E->MayHaveCompleted=true;}
@@ -117,7 +118,7 @@ static mdo_result CWSdkCall(const mdo_sdk_context_v1* C,cstr M,const xvalue* P,x
 static const mdo_values_v1 CWSdkValues={sizeof(CWSdkValues),xrtValueNull,xrtValueBool,xrtValueInt,xrtValueUInt,xrtValueFloat,
     CWSdkString,xrtValueObject,xrtValueArray,xrtValueClone,CWSdkSet,xrtValueArrayAppend,CWGet,CWAt,CWSdkKey,xrtValueCount,CWSdkKind,
     CWString,xrtValueGetBool,xrtValueGetInt,CWSdkUInt,xrtValueGetFloat,CWParse,CWJson,xrtValueRelease,xrtFree};
-static const mdo_application_v1 CWSdkApi={sizeof(CWSdkApi),MDO_SDK_VERSION,&CWSdkValues,CWSdkCall,CWSdkCancelled,CWSdkClock,NULL};
+static const mdo_application_v1 CWSdkApi={sizeof(CWSdkApi),MDO_SDK_VERSION,&CWSdkValues,CWSdkCall,CWSdkCancelled,CWSdkClock,NULL,NULL};
 void ServiceInit(XS_HostInfo* H) {
 #if defined(_WIN32) || defined(_WIN64)
     SetErrorMode(0x8003u); /* Worker faults must not wait for an OS crash dialog. */
