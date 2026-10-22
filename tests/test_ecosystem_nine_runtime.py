@@ -8,6 +8,8 @@ def main():
     p=argparse.ArgumentParser();p.add_argument('--host',type=Path,required=True);args=p.parse_args()
     with tempfile.TemporaryDirectory(prefix='ecosystem-nine-',dir=ROOT/'.build') as tmp:
         base=Path(tmp);port=free_port();config=write_site(base,port);home=base/'home';home.mkdir()
+        limits=json.loads((ROOT/'app/xs.json').read_text())['services'][0]
+        fixture=json.loads(config.read_text());fixture['services'][0].update({k:limits[k] for k in ['recv_limit','body_limit']});config.write_text(json.dumps(fixture))
         unity=base/'generated/mdo_unity.c'
         source='#define RequestProc ProductRequestProc\n'+unity.read_text(encoding='utf-8')
         source+='\n#undef RequestProc\nXS_RequestResult RequestProc(XS_HttpReq* R){if(xrtStrEqual(R->head->Target,XRT_STR_LITERAL("/fixture/environment"))){MdoApiContext C={0};C.Request=R;str P=xrtStrDup("fixture");if(MdoToolPrompt(&P))MdoApiReplySuccessTake(&C,200,xrtValueString(xrtStrView(P)),NULL);xrtFree(P);return XS_OK;}return ProductRequestProc(R);}\n'
@@ -35,6 +37,9 @@ def main():
             {'kind':'toolpacks','id':'eco-programs','content':json.dumps({'prompt':'ECO_USAGE_SENTINEL: run the listed QA program with Python.','programs':[{'name':'qa','path':'bin/qa.py','description':'Print an offline marker','interpreter':'python'}]}),'files':[file('bin/qa.py','print("ECO_PROGRAM_OK")\n')]},
             {'kind':'plugins','id':'eco-plugin','content':'{}','files':[file('web/ecosystem-qa.txt','ECO_PLUGIN_ONE')]},
         ]
+        # Exercise v2's real >128 KiB attachment path and >1 MiB HTTP body,
+        # including re-export, journal rollback and uninstall preservation.
+        resources[3]['files'].append(file('references/large.txt','x'*900000))
         package={'format':'mdo.extension.v2','manifest':{'slug':'nine-suite','name':'Nine systems','version':'1.0.0','description':'Native nine-system installation','readme':'Offline QA','license':'MIT','platforms':['windows-x86_64','linux-x86_64'],'min_build_id':30000126},'resources':resources}
         with (base/'host.log').open('wb') as log:
             child=subprocess.Popen([str(args.host.resolve()),str(config),'--','--home',str(home)],cwd=base,
