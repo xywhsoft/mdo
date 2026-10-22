@@ -36,6 +36,20 @@ static bool SdkOperationId(cstr Id){
     return true;
 }
 static SdkJob* SdkJobFind(cstr Id){for(size_t i=0;Id&&i<SDK_JOBS;i++)if(!strcmp(Id,SdkJobs.Jobs[i].Id))return &SdkJobs.Jobs[i];return NULL;}
+static int SdkCanonicalKeyCompare(const void* A,const void* B){return strcmp(*(const char* const*)A,*(const char* const*)B);}
+static xvalue* SdkCanonicalValue(const xvalue* V,unsigned Depth){
+    if(Depth>64)return NULL;
+    xvaluetype Type=xrtValueType(V);if(Type!=XVALUE_OBJECT&&Type!=XVALUE_ARRAY)return xrtValueClone(V);
+    size_t Count=xrtValueCount(V);xvalue* Result=Type==XVALUE_OBJECT?xrtValueObject():xrtValueArray();
+    const char** Keys=Type==XVALUE_OBJECT&&Count?xrtCalloc(Count,sizeof(*Keys)):NULL;
+    bool Ok=Result&&(Type!=XVALUE_OBJECT||!Count||Keys);
+    if(Type==XVALUE_OBJECT){for(size_t i=0;Ok&&i<Count;i++){Keys[i]=SdkKey(V,i);Ok=Keys[i]!=NULL;}if(Ok&&Count>1)qsort(Keys,Count,sizeof(*Keys),SdkCanonicalKeyCompare);}
+    for(size_t i=0;Ok&&i<Count;i++){
+        xvalue* Child=SdkCanonicalValue(Type==XVALUE_OBJECT?SdkGet(V,Keys[i]):xrtValueArrayGet(V,i),Depth+1);
+        Ok=Child&&(Type==XVALUE_OBJECT?xrtValueObjectSet(Result,xrtStrView(Keys[i]),Child):xrtValueArrayAppend(Result,Child));xrtValueRelease(Child);
+    }
+    xrtFree(Keys);if(!Ok){xrtValueRelease(Result);return NULL;}return Result;
+}
 static bool SdkJobProject(const mdo_sdk_context_v1* C,cstr Method,MdoProjectLease** Lease,mdo_error_v1* E){
     *Lease=NULL;
     if(!C->ProjectId||!C->ProjectId[0]||MdoApplicationProductService(Method))return true;
@@ -124,7 +138,9 @@ bool MdoApplicationJobsCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue
         if(!SdkIdValid(Target)||!strncmp(Target,"operation.",10))return MdoApplicationError(E,"sdk_arguments_invalid","Supply a non-operation service method","operation",400,false);
         xvalue* Admission=xrtValueObject();SdkPut(Admission,"method",Target);SdkPut(Admission,"extension",C->ExtensionId);SdkPut(Admission,"project",C->ProjectId);SdkPut(Admission,"session",C->SessionId);SdkPut(Admission,"run",C->RunId);SdkPut(Admission,"workspace",C->Workspace);
         const xvalue* Params=SdkGet(P,"params");xrtValueObjectSetNew(Admission,XRT_STR_LITERAL("params"),Params&&xrtValueType(Params)!=XVALUE_NULL?xrtValueClone(Params):xrtValueObject());
-        char* Text=SdkJson(Admission);xrtValueRelease(Admission);bool Ok=Text&&MdoExtensionHash(Text,Hash);if(Text)xrtSecureZero(Text,strlen(Text));xrtFree(Text);if(!Ok)return false;
+        xvalue* Canonical=SdkCanonicalValue(Admission,0);char* Text=Canonical?SdkJson(Canonical):NULL;xrtValueRelease(Canonical);xrtValueRelease(Admission);
+        bool Ok=Text&&MdoExtensionHash(Text,Hash);if(Text)xrtSecureZero(Text,strlen(Text));xrtFree(Text);
+        if(!Ok)return MdoApplicationError(E,"sdk_arguments_invalid","Operation parameters must be serializable JSON with at most 64 nested levels","operation",400,false);
     }
     uint64 Wait=0;if(!strcmp(Method,"operation.wait")){if(SdkGet(P,"timeout_ms")&&!SdkUInt(SdkGet(P,"timeout_ms"),&Wait))return MdoApplicationError(E,"sdk_arguments_invalid","Invalid wait timeout","operation",400,false);if(Wait>60000)Wait=60000;}
     uint64 End=MdoDeadlineAfterUs(Wait*1000);

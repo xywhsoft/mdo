@@ -147,10 +147,13 @@ def main():
     end=invoke('stream.read',{'handle':stream});assert end['text']=='cdef' and end['eof'],end
     invoke('stream.release',{'handle':stream})
     assert invoke('stream.stat',{'handle':stream},'catch')['status']==410
-    opid='sdk-'+uuid.uuid4().hex;start={'id':opid,'method':'fs.append','params':{'path':str(base/'once.txt'),'text':'once'}}
+    opid='sdk-'+uuid.uuid4().hex;start={'id':opid,'method':'fs.append','params':{'path':str(base/'once.txt'),'text':'once','metadata':{'z':2,'a':[{'y':2,'x':1},3]}}}
     invoke('operation.start',start)
     assert invoke('operation.wait',{'id':opid,'timeout_ms':2000})['state']=='succeeded'
     invoke('operation.start',start);assert (base/'once.txt').read_text()=='once'
+    reordered={'id':opid,'method':'fs.append','params':{'metadata':{'a':[{'x':1,'y':2},3],'z':2},'text':'once','path':str(base/'once.txt')}}
+    assert invoke('operation.start',reordered)['state']=='succeeded'
+    assert invoke('operation.start',{**reordered,'params':{**reordered['params'],'metadata':{'a':[3,{'x':1,'y':2}],'z':2}}},'catch')['status']==409
     assert invoke('operation.result',{'id':opid})['bytes']==4
     auto={'method':'fs.append','params':{'path':str(base/'auto-once.txt'),'text':'auto'}}
     autoid=invoke('operation.start',auto)['id'];invoke('operation.wait',{'id':autoid,'timeout_ms':2000})
@@ -158,7 +161,7 @@ def main():
     invoke('operation.release',{'id':autoid})
     assert invoke('operation.start',{**start,'method':'fs.write'},'catch')['status']==409
     invoke('operation.release',{'id':opid})
-    assert invoke('operation.start',start)['state']=='succeeded' and (base/'once.txt').read_text()=='once'
+    assert invoke('operation.start',reordered)['state']=='succeeded' and (base/'once.txt').read_text()=='once'
     def exclusive():
      # Command workers themselves hold a project lease. Probe from an ordinary
      # SDK caller after that worker has finished, not from inside the worker.
