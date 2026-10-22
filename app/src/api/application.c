@@ -16,6 +16,9 @@ bool MdoApiApplicationRoute(MdoApiContext* C){
     MdoApiJsonBody Body;MdoApiBodyStatus Status=MdoApiJsonBodyRead(C,&Body);if(Status!=MDO_API_BODY_OK)return MdoApiReplyBodyError(C,Status);
     cstr Method=SdkField(Body.Value,"method");const xvalue* Scope=SdkGet(Body.Value,"context");
     MdoApplicationInvocation I={0};mdo_sdk_context_v1 Native;
+    const xhttpfield* Token=NULL;
+    if(xrtHttpFieldGetUnique(C->Request->head->Fields,C->Request->head->FieldCount,XRT_STR_LITERAL("X-Mdo-Write-Token"),&Token)==XHTTP_NEXT_ITEM&&Token)
+        snprintf(I.WriteToken,sizeof(I.WriteToken),"%.*s",(int)Token->Value.Size,Token->Value.Data);
     MdoApplicationContext(&Native,&I,"local-client",C->RequestId,SdkField(Scope,"project"),SdkField(Scope,"session"),SdkField(Scope,"run"),NULL,0);
     xvalue* R=NULL;mdo_error_v1 E={0};mdo_result Code=MdoApplicationCall(C->ApplicationContext?C->ApplicationContext:&Native,Method,SdkGet(Body.Value,"params"),&R,&E);
     MdoApiJsonBodyUnit(&Body);

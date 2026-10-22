@@ -8,6 +8,8 @@ typedef struct MdoApplicationInvocation {
     xcancel* Cancel;
     xvalue* Actions;
     unsigned Depth;
+    void* Catalog; /* retained module generation for an asynchronous invocation */
+    char WriteToken[64]; /* original HTTP admission generation, never returned */
 } MdoApplicationInvocation;
 const mdo_application_v1* MdoApplicationApi(void);
 void MdoApplicationContext(mdo_sdk_context_v1*,MdoApplicationInvocation*,cstr Extension,
@@ -17,6 +19,16 @@ void MdoApplicationUnit(void);
 xvalue* MdoApplicationCatalog(void);
 xvalue* MdoApplicationRuntimeCatalog(void);
 bool MdoApplicationRuntimeCall(const mdo_sdk_context_v1*,cstr,const xvalue*,xvalue**,mdo_error_v1*,bool*);
+bool MdoApplicationJobsInit(void);
+void MdoApplicationJobsStop(void);
+void MdoApplicationJobsUnit(void);
+xvalue* MdoApplicationJobsCatalog(void);
+bool MdoApplicationJobsCall(const mdo_sdk_context_v1*,cstr,const xvalue*,xvalue**,mdo_error_v1*,bool*);
+bool MdoApplicationStreamsInit(void);
+void MdoApplicationStreamsStop(void);
+void MdoApplicationStreamsUnit(void);
+xvalue* MdoApplicationStreamsCatalog(void);
+bool MdoApplicationStreamsCall(const mdo_sdk_context_v1*,cstr,const xvalue*,xvalue**,mdo_error_v1*,bool*);
 mdo_result MdoApplicationCall(const mdo_sdk_context_v1*,cstr,const xvalue*,xvalue**,mdo_error_v1*);
 /* Captured product routes are generated from the production router, never a
  * separately maintained allowlist. */

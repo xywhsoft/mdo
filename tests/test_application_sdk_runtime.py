@@ -85,6 +85,27 @@ def main():
     assert invoke('runtime.info')['version']=='0.2.4'
     invoke('runtime.env.set',{'name':'MDO_SDK_TEST_VALUE','value':'hello'})
     assert invoke('runtime.env.get',{'name':'MDO_SDK_TEST_VALUE'})['value']=='hello'
+    stream=invoke('stream.open',{'capacity':4})['handle']
+    assert invoke('stream.write',{'handle':stream,'text':'abcd'})['written']==4
+    assert invoke('stream.write',{'handle':stream,'text':'x'},'catch')['error']=='sdk_stream_would_block'
+    assert invoke('stream.read',{'handle':stream,'limit':2})['text']=='ab'
+    assert invoke('stream.write',{'handle':stream,'text':'ef'})['written']==2
+    invoke('stream.close',{'handle':stream})
+    end=invoke('stream.read',{'handle':stream});assert end['text']=='cdef' and end['eof'],end
+    invoke('stream.release',{'handle':stream})
+    assert invoke('stream.stat',{'handle':stream},'catch')['status']==410
+    opid='sdk-'+uuid.uuid4().hex;start={'id':opid,'method':'fs.append','params':{'path':str(base/'once.txt'),'text':'once'}}
+    invoke('operation.start',start)
+    assert invoke('operation.wait',{'id':opid,'timeout_ms':2000})['state']=='succeeded'
+    invoke('operation.start',start);assert (base/'once.txt').read_text()=='once'
+    assert invoke('operation.result',{'id':opid})['bytes']==4
+    assert invoke('operation.start',{**start,'method':'fs.write'},'catch')['status']==409
+    invoke('operation.release',{'id':opid})
+    assert invoke('operation.start',start)['state']=='succeeded' and (base/'once.txt').read_text()=='once'
+    sleeping=invoke('operation.start',{'method':'runtime.sleep','params':{'milliseconds':10000}})['id']
+    invoke('operation.cancel',{'id':sleeping})
+    assert invoke('operation.wait',{'id':sleeping,'timeout_ms':2000})['state']=='cancelled'
+    invoke('operation.release',{'id':sleeping})
     assert invoke('qa.echo',{'nested':['',True,3,{'windows':'C:\\work'}]})=={'nested':['',True,3,{'windows':'C:\\work'}],'hooked':True}
     created=invoke('session.create',{'body':{'project_id':'default','title':'Created using public SDK'}})
     assert created['status']==201 and created['transport']=='native',created
@@ -94,6 +115,7 @@ def main():
     assert invoke('session.get',{'path':{'session':'missing'}},'catch')['status']==404
     events=invoke('events.read',{'after':0});assert events['cursor']>0 and events['items'],events
     assert 'nested' not in json.dumps(events),'Service event journal leaked input payloads'
+    assert invoke('events.read',{'epoch':'old-generation'})['resync_required']
     assert child.poll() is None
     status,_,body=request(port,'GET','/api/v1/application/services');catalog=json.loads(body)['data'];assert status==200 and len(catalog)>200,(status,body)
     status,_,body=request(port,'POST','/api/v1/application/call',body=json.dumps({'method':'qa.echo','params':{'hello':'front-end'}}).encode(),headers={'Content-Type':'application/json'})

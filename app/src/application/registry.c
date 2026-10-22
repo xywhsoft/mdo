@@ -29,6 +29,12 @@ xvalue* MdoApplicationCatalog(void){
     xvalue* Runtime=MdoApplicationRuntimeCatalog();
     for(size_t i=0;i<xrtValueCount(Runtime);i++)xrtValueArrayAppend(A,xrtValueArrayGet(Runtime,i));
     xrtValueRelease(Runtime);
+    xvalue* Jobs=MdoApplicationJobsCatalog();
+    for(size_t i=0;i<xrtValueCount(Jobs);i++)xrtValueArrayAppend(A,xrtValueArrayGet(Jobs,i));
+    xrtValueRelease(Jobs);
+    xvalue* Streams=MdoApplicationStreamsCatalog();
+    for(size_t i=0;i<xrtValueCount(Streams);i++)xrtValueArrayAppend(A,xrtValueArrayGet(Streams,i));
+    xrtValueRelease(Streams);
     xvalue* Custom=MdoApplicationCustomCatalog();
     for(size_t i=0;i<xrtValueCount(Custom);i++)xrtValueArrayAppend(A,xrtValueArrayGet(Custom,i));
     xrtValueRelease(Custom);
@@ -53,6 +59,10 @@ static mdo_result SdkInvoke(const mdo_sdk_context_v1* C,cstr Method,const xvalue
     }
     bool Found=false;bool RuntimeOk=MdoApplicationRuntimeCall(C,Method,P,R,E,&Found);
     if(Found)return RuntimeOk?MDO_RESULT_OK:MDO_RESULT_ERROR;
+    bool JobOk=MdoApplicationJobsCall(C,Method,P,R,E,&Found);
+    if(Found)return JobOk?MDO_RESULT_OK:MDO_RESULT_ERROR;
+    bool StreamOk=MdoApplicationStreamsCall(C,Method,P,R,E,&Found);
+    if(Found)return StreamOk?MDO_RESULT_OK:MDO_RESULT_ERROR;
     bool CustomOk=MdoApplicationCustomCall(C,Method,P,R,E,&Found);
     if(Found)return CustomOk?MDO_RESULT_OK:MDO_RESULT_ERROR;
     for(size_t i=0;i<sizeof(SdkRoutes)/sizeof(*SdkRoutes);i++)if(!strcmp(Method,SdkRoutes[i].Id))

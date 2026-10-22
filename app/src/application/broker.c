@@ -7,13 +7,18 @@ static XS_ServerInfo* SdkServer;
 static xmutex* SdkEventLock;
 static xvalue* SdkEventRing[256];
 static uint64 SdkEventSequence;
+static char SdkEventEpoch[33];
 XS_ServerInfo* MdoApplicationServer(void){return SdkServer;}
 bool MdoApplicationInit(XS_ServerInfo* Server){
     if(SdkServer)return true;
     SdkEventLock=xrtMutexCreate();SdkServer=xsServerRetain(Server);
-    if(!SdkEventLock||!SdkServer){MdoApplicationUnit();return false;}return true;
+    unsigned char Epoch[16];if(!xrtSecureRandom(Epoch,sizeof(Epoch))){MdoApplicationUnit();return false;}
+    for(size_t i=0;i<16;i++)snprintf(SdkEventEpoch+i*2,3,"%02x",Epoch[i]);
+    if(!SdkEventLock||!SdkServer||!MdoApplicationStreamsInit()||!MdoApplicationJobsInit()){MdoApplicationUnit();return false;}return true;
 }
 void MdoApplicationUnit(void){
+    MdoApplicationJobsUnit();
+    MdoApplicationStreamsUnit();
     for(size_t i=0;i<256;i++){xrtValueRelease(SdkEventRing[i]);SdkEventRing[i]=NULL;}
     if(SdkEventLock)xrtMutexDestroy(SdkEventLock);
     SdkEventLock=NULL;
@@ -36,8 +41,9 @@ xvalue* MdoApplicationEvents(const xvalue* P,mdo_error_v1* E){
     xrtMutexLock(SdkEventLock);uint64 Last=SdkEventSequence,First=Last>=256?Last-255:1;
     for(uint64 N=First;N<=Last;N++)if(N>After){const xvalue* V=SdkEventRing[N%256];
         if(V&&(!Topic||!strcmp(Topic,SdkField(V,"topic"))))xrtValueArrayAppend(Items,V);}
-    SdkPutUInt(R,"cursor",Last);SdkPutUInt(R,"oldest",First);
-    xrtValueObjectSetNew(R,XRT_STR_LITERAL("resync_required"),xrtValueBool(After&&First>After+1));
+    SdkPutUInt(R,"cursor",Last);SdkPutUInt(R,"oldest",First);SdkPut(R,"epoch",SdkEventEpoch);
+    cstr Epoch=SdkField(P,"epoch");
+    xrtValueObjectSetNew(R,XRT_STR_LITERAL("resync_required"),xrtValueBool((Epoch&&strcmp(Epoch,SdkEventEpoch))||After>Last||(After&&First>After&&First-After>1)));
     xrtMutexUnlock(SdkEventLock);xrtValueObjectSetNew(R,XRT_STR_LITERAL("items"),Items);return R;
 }
 typedef struct SdkResponse {unsigned Status;char *Body,*Type,*Revision;size_t Bytes;} SdkResponse;
@@ -106,7 +112,8 @@ bool MdoApplicationRouteInvoke(const mdo_sdk_context_v1* C,const MdoApplicationR
         if(Ok)Headers[Count++]=(XS_FetchHeader){Key,Value};
     }
     if(!Ok){xrtFree(Binary);xrtFree(Json);return MdoApplicationError(E,"sdk_arguments_invalid","Invalid, reserved or excessive service headers","resolve",400,false);}
-    if(strcmp(Route->Method,"GET")){Ok=Ok&&MdoApiWriteToken(Token);Headers[Count++]=(XS_FetchHeader){"X-Mdo-Write-Token",Token};}
+    MdoApplicationInvocation* Caller=C->Opaque;
+    if(strcmp(Route->Method,"GET")){if(Caller&&Caller->WriteToken[0])snprintf(Token,sizeof(Token),"%s",Caller->WriteToken);else Ok=Ok&&MdoApiWriteToken(Token);Headers[Count++]=(XS_FetchHeader){"X-Mdo-Write-Token",Token};}
     if(Revision)Headers[Count++]=(XS_FetchHeader){"If-Match",Revision};
     if(Json)Headers[Count++]=(XS_FetchHeader){"Content-Type","application/json"};
     MdoRemoteHttpRequest Request={0};Request.Method=Route->Method;Request.Target=Target;Request.Headers=Headers;Request.HeaderCount=Count;

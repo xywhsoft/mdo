@@ -597,6 +597,12 @@ static bool MdoApiRouteInvoke(MdoApiContext* Context, const MdoApiRoute* Route)
 {
     xhttpmethod Method = Context->Request->head->MethodCode;
     bool Read = (Method & (XHTTP_METHOD_GET | XHTTP_METHOD_HEAD)) != 0u;
+    /* The dispatch envelope authenticates its caller but owns no product write
+     * lease: the selected service acquires the correct shared/exclusive gate. */
+    if(Route->Proc==MdoApiApplicationRoute){
+        if(!Read&&!MdoApiWriteEnter(Context,false,false))return true;
+        MdoApiWriteLeave(Context);return Route->Proc(Context);
+    }
     bool Recovery = Route->Proc == MdoApiProjectPurgeCancelRoute ||
         Route->Proc == MdoApiProjectPurgeIntentRoute;
     bool Exclusive = Route->Proc == MdoApiProjectPurgeRoute || Route->Proc == MdoApiUpdateInstallRoute;
@@ -641,7 +647,12 @@ bool MdoApiApplicationInvoke(const mdo_sdk_context_v1* Caller,cstr Method,cstr T
         Fields[Count++]=(xhttpfield){xrtStrView(Name),xrtStrView(Value)};
     }
     char Token[MDO_API_WRITE_TOKEN_CAPACITY];
-    if(strcmp(Method,"GET")&&MdoApiWriteToken(Token))Fields[Count++]=(xhttpfield){XRT_STR_LITERAL("X-Mdo-Write-Token"),xrtStrView(Token)};
+    MdoApplicationInvocation* Invocation=Caller->Opaque;
+    if(strcmp(Method,"GET")){
+        if(Invocation&&Invocation->WriteToken[0])snprintf(Token,sizeof(Token),"%s",Invocation->WriteToken);
+        else if(!MdoApiWriteToken(Token))return MdoApplicationError(Error,"sdk_unavailable","Write admission unavailable","dispatch",503,false);
+        Fields[Count++]=(xhttpfield){XRT_STR_LITERAL("X-Mdo-Write-Token"),xrtStrView(Token)};
+    }
     if(Body&&!Binary.Data)Fields[Count++]=(xhttpfield){XRT_STR_LITERAL("Content-Type"),XRT_STR_LITERAL("application/json")};
     char Authority[64];
     if(Request.server){uint16 Port=Request.server->PortBound?Request.server->PortBound:Request.server->Port;

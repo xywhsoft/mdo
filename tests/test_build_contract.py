@@ -223,6 +223,8 @@ class BuildContractTests(unittest.TestCase):
             "src/application/value.c",
             "src/application/broker.c",
             "src/application/runtime.c",
+            "src/application/jobs.c",
+            "src/application/streams.c",
             "src/application/registry.c",
             "src/modules/manager.c",
             "src/commands/catalog.c",

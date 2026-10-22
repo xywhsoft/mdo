@@ -40,7 +40,8 @@ xvalue* MdoApplicationCustomCatalog(void){
     }MdoModuleCatalogRelease(Catalog);return A;
 }
 bool MdoApplicationCustomCall(const mdo_sdk_context_v1* C,cstr Id,const xvalue* P,xvalue** R,mdo_error_v1* E,bool* Found){
-    *Found=false;MdoModuleCatalog* Catalog=MdoModuleCatalogSnapshot();mdo_service_v1* Service=NULL;
+    MdoApplicationInvocation* Invocation=C->Opaque;
+    *Found=false;MdoModuleCatalog* Catalog=Invocation&&Invocation->Catalog?MdoModuleCatalogRef(Invocation->Catalog):MdoModuleCatalogSnapshot();mdo_service_v1* Service=NULL;
     for(size_t i=0;Catalog&&i<Catalog->ModuleCount;i++){
         MdoModuleGeneration* M=Catalog->Modules[i];
         for(size_t j=0;M&&j<M->ServiceCount;j++)if(!strcmp(M->Services[j].Id,Id)){
@@ -58,7 +59,8 @@ static int SdkHookCompare(const void* L,const void* R){
     int N=strcmp(A->Module,B->Module);return N?N:strcmp(A->Hook->Id,B->Hook->Id);
 }
 bool MdoApplicationHooks(const mdo_sdk_context_v1* C,cstr Topic,xvalue** Value,mdo_error_v1* Error){
-    MdoModuleCatalog* Catalog=MdoModuleCatalogSnapshot();SdkHookBinding* List=NULL;size_t Count=0;bool Ok=true;
+    MdoApplicationInvocation* Invocation=C->Opaque;
+    MdoModuleCatalog* Catalog=Invocation&&Invocation->Catalog?MdoModuleCatalogRef(Invocation->Catalog):MdoModuleCatalogSnapshot();SdkHookBinding* List=NULL;size_t Count=0;bool Ok=true;
     for(size_t i=0;Ok&&Catalog&&i<Catalog->ModuleCount;i++){
         MdoModuleGeneration* M=Catalog->Modules[i];
         for(size_t j=0;M&&j<M->HookCount;j++)if(!strcmp(M->Hooks[j].Topic,Topic)){
