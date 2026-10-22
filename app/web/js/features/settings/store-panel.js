@@ -6,13 +6,15 @@ import { loadAgents } from "../../state/catalogs.js";
 import { loadResource } from "../../state/resources.js";
 import { makeStorePackage, STORE_KINDS, STORE_EDITOR_KINDS, STORE_PLATFORMS, containsCode, resourceReferences, receiptKey, packageFields } from "./store-formats.js";
 import { createStoreDraft } from "./store-draft.js";
-import { renderSourceMarkdown } from "../../utils/source-markdown.js";
+import { renderSourceMarkdown, renderPackageAttachment } from "../../utils/source-markdown.js";
+import { reloadStorePluginRuntime } from "./store-activation.js";
 import { saveBlobFile } from "../../utils/file-download.js";
 
 const text = (key, fallback, args = {}) => t(`store.${key}`, args, fallback);
 const kindName = kind => ({ agents: "Agent", subagents: "SubAgent", tools: text("tools", "工具"),
   skills: "Skill", mcp: "MCP", modules: text("modules","扩展包（C 模块）"), toolpacks: text("toolpacks","扩展工具包"), plugins: text("plugins","mdo 插件"), commands: text("commands", "命令"), "c-agents": "C Agent", "c-subagents": "C SubAgent" })[kind] || kind;
 const node = (tag, value, className) => element(tag, { text: value, className });
+const fileLabels=()=>({download:text("downloadFile","下载文件"),binary:text("binaryFile","二进制文件，请下载检查。"),truncated:text("fileTruncated","仅预览前 64 KiB，请下载检查完整内容。")});
 const publicationMessage = error => {
   const key = ({ "Invalid package ID": "id", "Invalid version": "version",
     "Name, description, documentation and license are required": "fields",
@@ -70,10 +72,10 @@ export function createStorePanel() {
     finally { if (epoch === serial) { busy = false;render();if(pendingPackageKey&&visible){const row=Object.values(installed).find(r=>receiptKey(r)===pendingPackageKey);pendingPackageKey=null;if(row)installedDetails(row);} } }
   }
   async function act(work) {
-    if (busy) return;const target = targetKey();busy = true;error = "";
-    try { await work();if (target !== targetKey()) return;changed();busy = false;await load(); }
-    catch (e) { if (target === targetKey()) { feedback(e);toast(error, "error"); } }
-    finally { if (target === targetKey()) { busy = false;render(); } }
+    if (busy) return;const target = targetKey(), epoch=serial;busy = true;error = "";render();
+    try { await work();if (target !== targetKey() || epoch!==serial) return;changed();busy = false;await load(); }
+    catch (e) { if (target === targetKey() && epoch===serial) { feedback(e);toast(error, "error"); } }
+    finally { if (target === targetKey() && epoch===serial) { busy = false;render(); } }
   }
   function render() {
     if (!root) return;
@@ -111,7 +113,13 @@ export function createStorePanel() {
       const badges=node("div","","store-badges");for(const type of types)badges.append(node("span",kindName(type),"store-badge"));card.append(badges);
       const actions = node("div", "", "store-card-actions");
       if (view === "installed") {
-        if(row.activation && row.activation!=="active")card.append(node("p",row.activation==="reload_required"?text("activationReload","已安装。mdo 插件需重新启动应用后完整生效。"):text("activationSetup","已安装。MCP 需要填写本机配置并测试连接。"),"store-note"));
+        if(resourceReferences(row).some(r=>r.kind==="plugins"))actions.append(button(text("activatePlugin","加载插件"),()=>act(async()=>{
+          const core=(row.files||[]).some(f=>/\/files\/(?:src\/|include\/|generated\/|main\.c$|sources\.json$)/.test(f.path));
+          if(core){if(!confirm(text("reloadRuntimeConfirm","将重载 mdo 运行时；失败时保留原版本。继续？")))return;
+            const target=targetKey();await reloadStorePluginRuntime(async(method,params)=>{if(target!==targetKey())throw Error("Device changed");return (await api.post("/application/call",{method,params})).data;});}
+          location.reload();
+        })));
+        if(row.activation && row.activation!=="active")card.append(node("p",row.activation==="reload_required"?text("activationReload","已安装。请加载插件以刷新界面，源码覆盖还需要重载运行时。"):text("activationSetup","已安装。MCP 需要填写本机配置并测试连接。"),"store-note"));
         if(row.source !== "local")actions.append(button(text("checkUpdate", "检查更新"), async () => {
           try { const latest = await call({ action: "latest", id: row.id });
             if (!latest || latest.id === row.id) toast(text("upToDate", "已是最新公开版本。"));else await detail(latest); }
@@ -139,7 +147,7 @@ export function createStorePanel() {
     const section=node("details","","store-install-plan");section.open=true;
     section.append(node("summary",text("installationPlan","安装计划")));
     for(const file of plan.files)section.append(node("p",`${file.operation} · ${file.path} · ${file.bytes} B`));
-    if(plan.reload_required)section.append(node("p",text("activationReload","已安装。mdo 插件需重新启动应用后完整生效。"),"store-note"));
+    if(plan.reload_required)section.append(node("p",text("activationReload","已安装。请加载插件以刷新界面，源码覆盖还需要重载运行时。"),"store-note"));
     if(plan.configuration_required)section.append(node("p",text("mcpSetup","MCP 安装后保持停用。请在 MCP 管理页配置并测试。"),"store-note"));
     return section;
   }
@@ -151,7 +159,7 @@ export function createStorePanel() {
       const readme=node("div","","store-readme markdown-body");readme.append(renderSourceMarkdown(p.manifest.readme));d.append(readme);
       if(p.manifest.changelog){const notes=node("div","","store-readme markdown-body");notes.append(node("h3",text("changelog","更新说明")),renderSourceMarkdown(p.manifest.changelog));d.append(notes);}
       const files = node("div", "", "store-resource-list");files.append(node("h3", text("included", "包含的资源")));
-      for (const r of p.resources) { const source = node("details");source.append(node("summary", `${kindName(r.kind)} / ${r.id}`), node("pre", r.content, "store-source"));for (const f of r.files || []) source.append(node("p", f.path));files.append(source); }d.append(files);
+      for (const r of p.resources) { const source = node("details");source.append(node("summary", `${kindName(r.kind)} / ${r.id}`), node("pre", r.content, "store-source"));for (const f of r.files || []) source.append(renderPackageAttachment(f,fileLabels()));files.append(source); }d.append(files);
       d.append(node("p", p.manifest.platforms.join(" · "), "store-detail-meta"));
       const history=node("details","","store-history"),versions=node("div");history.append(node("summary",text("versionHistory","版本历史")),versions);d.append(history);
       let historyCursor=0,historyLoading=false,historyLoaded=false;
@@ -199,7 +207,7 @@ export function createStorePanel() {
         const p=JSON.parse(await file.text());if(!["mdo.extension.v1","mdo.extension.v2"].includes(p.format)||!p.manifest||!Array.isArray(p.resources))throw Error(text("invalidPackage","不是有效的墨斗插件源码包。"));
         makeStorePackage(packageFields(p.manifest),p.resources);const plan=await call({action:"plan_import",package:p});
         const d=createDialog(p.manifest.name),readme=node("div","","store-readme markdown-body");readme.append(renderSourceMarkdown(p.manifest.readme));d.append(node("p",text("offlineImportHint","从本地文件导入，不代表通过线上审核。请检查全部资源；此操作无需连接商店。"),"store-note"),readme);
-        for(const r of p.resources){const source=node("details");source.append(node("summary",`${kindName(r.kind)} / ${r.id}`),node("pre",r.content,"store-source"));for(const f of r.files || [])source.append(node("p",f.path));d.append(source);}
+        for(const r of p.resources){const source=node("details");source.append(node("summary",`${kindName(r.kind)} / ${r.id}`),node("pre",r.content,"store-source"));for(const f of r.files || [])source.append(renderPackageAttachment(f,fileLabels()));d.append(source);}
         d.append(planSummary(plan));let trust=!containsCode(p.resources);
         const install=button(text("confirmImport","确认导入"),()=>{if(!trust)return;closeDialog();view="installed";void act(()=>call({action:"import",package:p,trust_code:trust,expected_plan:plan.sha256}));},true);install.disabled=!trust;
         if(!trust){const label=node("label","","store-code-consent"),check=element("input",{attrs:{type:"checkbox"}});label.append(check,node("span",text("codeConsent","我已检查源码并信任作者。C 扩展在墨斗进程内运行，编译注册时也能执行代码。")));check.onchange=()=>{trust=check.checked;install.disabled=!trust;};d.append(label);}
@@ -287,7 +295,7 @@ export function createStorePanel() {
   const unsubLocale = subscribeLocale(() => { if (!dialog?.open) render(); });
   const openPackage=event=>{view="installed";items=[];cursor=0;pendingPackageKey=event.detail?.key || null;if(visible)void load();};
   window.addEventListener("mdo-open-package",openPackage);
-  const unsubTarget = subscribeTarget(() => { ++serial;items = [];installed = {};closeDialog();if (visible) void load(); });
+  const unsubTarget = subscribeTarget(() => { ++serial;busy=false;error="";items = [];installed = {};closeDialog();if (visible) void load(); });
   return {
     selectSection(section) { visible = section === "store";if (visible) void load(); },
     hasPendingChanges: () => busy || Boolean(editor?.draft?.pending && dialog?.open),

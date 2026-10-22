@@ -1782,7 +1782,6 @@
   "ecosystem.toolDescription.stdin": "向进程任务写入输入",
   "ecosystem.toolDescription.stop": "停止进程或子 Agent 任务",
   "ecosystem.toolDescription.ask_user": "向用户提问",
-  "ecosystem.toolDescription.mdo.todo": "更新对话待办计划",
   "ecosystem.toolDescription.skill": "按需发现和读取 Skill",
   "ecosystem.toolDescription.agent": "将任务委派给已启用的 SubAgent",
   "ecosystem.toolDescription.web_search": "使用账号服务搜索互联网",
@@ -2101,6 +2100,11 @@
   "store.toolpacks": "扩展工具包",
   "store.plugins": "mdo 插件",
   "store.installationPlan": "安装计划",
-  "store.activationReload": "已安装。mdo 插件需重新启动应用后完整生效。",
-  "store.activationSetup": "已安装。MCP 需要填写本机配置并测试连接。"
+  "store.activationReload": "已安装。请加载插件以刷新界面，源码覆盖还需要重载运行时。",
+  "store.activationSetup": "已安装。MCP 需要填写本机配置并测试连接。",
+  "store.activatePlugin": "加载插件",
+  "store.reloadRuntimeConfirm": "将重载 mdo 运行时；失败时保留原版本。继续？",
+  "store.downloadFile": "下载文件",
+  "store.binaryFile": "二进制文件，请下载检查。",
+  "store.fileTruncated": "仅预览前 64 KiB，请下载检查完整内容。"
 }

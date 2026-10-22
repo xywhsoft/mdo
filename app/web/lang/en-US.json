@@ -1778,7 +1778,6 @@
   "ecosystem.toolDescription.stdin": "Write to a process task’s input",
   "ecosystem.toolDescription.stop": "Stop a process or SubAgent task",
   "ecosystem.toolDescription.ask_user": "Ask the user a question",
-  "ecosystem.toolDescription.mdo.todo": "Update the conversation task plan",
   "ecosystem.toolDescription.skill": "Discover and read installed Skills",
   "ecosystem.toolDescription.agent": "Delegate to an enabled SubAgent",
   "ecosystem.toolDescription.web_search": "Search the web through the account service",
@@ -2101,6 +2100,11 @@
   "store.toolpacks": "Command-line toolpack",
   "store.plugins": "mdo plugin",
   "store.installationPlan": "Installation plan",
-  "store.activationReload": "Installed. Restart mdo to fully activate client plugins.",
-  "store.activationSetup": "Installed. Configure MCP locally and test the connection."
+  "store.activationReload": "Installed. Load the plugin to refresh the UI; source overlays also need a runtime reload.",
+  "store.activationSetup": "Installed. Configure MCP locally and test the connection.",
+  "store.activatePlugin": "Load plugin",
+  "store.reloadRuntimeConfirm": "Reload the mdo runtime? If compilation fails, the previous generation is retained.",
+  "store.downloadFile": "Download file",
+  "store.binaryFile": "Binary file. Download to inspect.",
+  "store.fileTruncated": "Preview: 64 KiB. Download to inspect the complete file."
 }

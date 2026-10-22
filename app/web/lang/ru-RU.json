@@ -1793,7 +1793,6 @@
   "ecosystem.toolDescription.stdin": "Передача ввода в процесс",
   "ecosystem.toolDescription.stop": "Остановка процесса или задачи SubAgent",
   "ecosystem.toolDescription.ask_user": "Вопрос пользователю",
-  "ecosystem.toolDescription.mdo.todo": "Обновление плана задач диалога",
   "ecosystem.toolDescription.skill": "Поиск и чтение установленных Skill",
   "ecosystem.toolDescription.agent": "Передача задачи включённому SubAgent",
   "ecosystem.toolDescription.web_search": "Поиск в интернете через сервис аккаунта",
@@ -2101,6 +2100,11 @@
   "store.toolpacks": "Набор консольных инструментов",
   "store.plugins": "Плагин mdo",
   "store.installationPlan": "План установки",
-  "store.activationReload": "Установлено. Перезапустите mdo для активации плагинов.",
-  "store.activationSetup": "Установлено. Настройте MCP и проверьте подключение."
+  "store.activationReload": "Установлено. Загрузите плагин для обновления интерфейса; изменения исходного кода требуют перезагрузки среды.",
+  "store.activationSetup": "Установлено. Настройте MCP и проверьте подключение.",
+  "store.activatePlugin": "Загрузить плагин",
+  "store.reloadRuntimeConfirm": "Перезагрузить среду mdo? При ошибке компиляции сохранится предыдущая версия.",
+  "store.downloadFile": "Скачать файл",
+  "store.binaryFile": "Двоичный файл. Скачайте для проверки.",
+  "store.fileTruncated": "Показаны первые 64 КиБ. Скачайте файл целиком."
 }
