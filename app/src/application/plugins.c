@@ -114,7 +114,13 @@ bool MdoApplicationPluginsCall(const mdo_sdk_context_v1* C,cstr Method,const xva
             char Path[256];snprintf(Path,sizeof(Path),"plugins/%s/revisions/%s/manifest.json",Id,Previous);bool Missing=false;char* Text=MdoExtensionRead(Path,true,1024u*1024u,&Missing);xvalue* Saved=SdkParse(Text);xrtFree(Text);
             if(!Saved)Ok=false;else{SdkPut(Manifest,"revision",Previous);SdkPut(Manifest,"frontend",SdkField(Saved,"frontend"));xrtValueObjectSet(Manifest,XRT_STR_LITERAL("source_reload_required"),SdkGet(Saved,"source_reload_required"));}xrtValueRelease(Saved);}}
         else xrtValueObjectSetNew(Manifest,XRT_STR_LITERAL("enabled"),xrtValueBool(!strcmp(Method,"plugin.enable")));}
-    if(Ok&&!Remove){if(Old)SdkPut(Manifest,"previous",SdkField(Old,"revision"));Ok=xrtValueCount(Config)<32&&SdkPluginMountRevision(&Candidate,Manifest);if(Ok)Ok=xrtValueArrayAppend(Config,Manifest);}
+    if(Ok&&!Remove){
+        if(Old){cstr Revision=SdkField(Manifest,"revision"),Prior=SdkField(Old,"revision");
+            cstr Previous=Revision&&Prior&&strcmp(Revision,Prior)?Prior:SdkField(Old,"previous");
+            if(Previous)SdkPut(Manifest,"previous",Previous);
+        }
+        Ok=xrtValueCount(Config)<32&&SdkPluginMountRevision(&Candidate,Manifest);if(Ok)Ok=xrtValueArrayAppend(Config,Manifest);
+    }
     if(Ok)Ok=SdkPluginConfigSave(Config);
     xrtMutexLock(SdkPlugins.Lock);
     if(Ok){for(size_t i=0;i<32;i++)if(SdkPlugins.Plugins[i].Manifest&&!strcmp(Id,SdkField(SdkPlugins.Plugins[i].Manifest,"id")))SdkPluginDrop(&SdkPlugins.Plugins[i]);

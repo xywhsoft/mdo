@@ -176,8 +176,12 @@ def main():
     first=invoke('plugin.apply',{'id':'qa-sdk','files':[{'path':plugin_path,'text':'revision one'}]})
     assert first['items'][0]['enabled'],first
     assert invoke('vfs.read',{'path':'/app/'+plugin_path})['text']=='revision one'
-    invoke('plugin.apply',{'id':'qa-sdk','files':[{'path':plugin_path,'text':'revision two'}]})
+    second_payload={'id':'qa-sdk','files':[{'path':plugin_path,'text':'revision two'}]}
+    invoke('plugin.apply',second_payload)
     assert invoke('vfs.read',{'path':'/app/'+plugin_path})['text']=='revision two'
+    invoke('plugin.disable',{'id':'qa-sdk'});invoke('plugin.enable',{'id':'qa-sdk'})
+    invoke('plugin.apply',second_payload)  # same revision must retain history too
+    assert invoke('plugin.list')['items'][0]['previous']==first['items'][0]['revision']
     invoke('plugin.rollback',{'id':'qa-sdk'})
     assert invoke('vfs.read',{'path':'/app/'+plugin_path})['text']=='revision one'
     invoke('plugin.disable',{'id':'qa-sdk'})
