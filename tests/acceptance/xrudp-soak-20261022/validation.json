@@ -1,0 +1,407 @@
+{
+  "schema": 1,
+  "checked_unix": 1792664346.2556815,
+  "runtime_commit": "3d55ec41e13f0884ffe840d44a57a0189d9310f3",
+  "linux": [
+    {
+      "family": 4,
+      "backend": "select",
+      "checks": {
+        "terminal_receipt": true,
+        "continuous_72h": true,
+        "joined": true,
+        "all_bytes_drained": true,
+        "future_quota_zero": true,
+        "faults_exercised": true,
+        "binary_preserved": true,
+        "sources_preserved": true,
+        "driver_preserved": true,
+        "service_finished": true,
+        "owned_processes_gone": true
+      },
+      "state_sha256": "e44ac4c11bcb2d1a3681006bf08ce4a4b36e61e34d2ca3c0b893bfd54c22da72",
+      "build_receipt_sha256": "012c4c8662ce8ff224e63cb492cf21b75febcf94c1e64c81e84bf83e361142e1",
+      "elapsed_seconds": 259200.15420183307,
+      "sample": {
+        "phase": "draining",
+        "elapsed": 259200.133,
+        "read": 15272583752,
+        "written": 15272583752,
+        "messages": 1988460,
+        "games": 14504994,
+        "backpressure": 283822,
+        "rekeys": 683896,
+        "packets": 87538773,
+        "idle_checks": 138,
+        "future_mode": true,
+        "future_submitted": 3976924,
+        "future_completed": 3976924,
+        "future_pending": 0,
+        "future_retained": 0,
+        "future_bytes": 0
+      }
+    },
+    {
+      "family": 4,
+      "backend": "native",
+      "checks": {
+        "terminal_receipt": true,
+        "continuous_72h": true,
+        "joined": true,
+        "all_bytes_drained": true,
+        "future_quota_zero": true,
+        "faults_exercised": true,
+        "binary_preserved": true,
+        "sources_preserved": true,
+        "driver_preserved": true,
+        "service_finished": true,
+        "owned_processes_gone": true
+      },
+      "state_sha256": "92478eb62f747357e7eab8a956a87bcb745a914ffd5ab0239f9c53aa5fd34df0",
+      "build_receipt_sha256": "012c4c8662ce8ff224e63cb492cf21b75febcf94c1e64c81e84bf83e361142e1",
+      "elapsed_seconds": 259200.1523944349,
+      "sample": {
+        "phase": "draining",
+        "elapsed": 259200.131,
+        "read": 15281472840,
+        "written": 15281472840,
+        "messages": 1989616,
+        "games": 14503073,
+        "backpressure": 285306,
+        "rekeys": 684997,
+        "packets": 87679788,
+        "idle_checks": 138,
+        "future_mode": true,
+        "future_submitted": 3979236,
+        "future_completed": 3979236,
+        "future_pending": 0,
+        "future_retained": 0,
+        "future_bytes": 0
+      }
+    },
+    {
+      "family": 6,
+      "backend": "select",
+      "checks": {
+        "terminal_receipt": true,
+        "continuous_72h": true,
+        "joined": true,
+        "all_bytes_drained": true,
+        "future_quota_zero": true,
+        "faults_exercised": true,
+        "binary_preserved": true,
+        "sources_preserved": true,
+        "driver_preserved": true,
+        "service_finished": true,
+        "owned_processes_gone": true
+      },
+      "state_sha256": "788bba3e9eef0efb0cbfc558b8bbef389c085245aa16cb70d38732c02691680a",
+      "build_receipt_sha256": "012c4c8662ce8ff224e63cb492cf21b75febcf94c1e64c81e84bf83e361142e1",
+      "elapsed_seconds": 259200.27223344194,
+      "sample": {
+        "phase": "draining",
+        "elapsed": 259200.251,
+        "read": 15272340016,
+        "written": 15272340016,
+        "messages": 1988428,
+        "games": 14506174,
+        "backpressure": 285113,
+        "rekeys": 683981,
+        "packets": 87549764,
+        "idle_checks": 138,
+        "future_mode": true,
+        "future_submitted": 3976860,
+        "future_completed": 3976860,
+        "future_pending": 0,
+        "future_retained": 0,
+        "future_bytes": 0
+      }
+    },
+    {
+      "family": 6,
+      "backend": "native",
+      "checks": {
+        "terminal_receipt": true,
+        "continuous_72h": true,
+        "joined": true,
+        "all_bytes_drained": true,
+        "future_quota_zero": true,
+        "faults_exercised": true,
+        "binary_preserved": true,
+        "sources_preserved": true,
+        "driver_preserved": true,
+        "service_finished": true,
+        "owned_processes_gone": true
+      },
+      "state_sha256": "9264b26f9b5f89990047a3903389dbe848a97badb5814cc65e71d2bd008d626b",
+      "build_receipt_sha256": "012c4c8662ce8ff224e63cb492cf21b75febcf94c1e64c81e84bf83e361142e1",
+      "elapsed_seconds": 259200.14715353493,
+      "sample": {
+        "phase": "draining",
+        "elapsed": 259200.126,
+        "read": 15281370440,
+        "written": 15281370440,
+        "messages": 1989612,
+        "games": 14505364,
+        "backpressure": 287220,
+        "rekeys": 685372,
+        "packets": 87727751,
+        "idle_checks": 138,
+        "future_mode": true,
+        "future_submitted": 3979228,
+        "future_completed": 3979228,
+        "future_pending": 0,
+        "future_retained": 0,
+        "future_bytes": 0
+      }
+    }
+  ],
+  "windows": [
+    {
+      "case": "4-native",
+      "status": "failed",
+      "error_type": "AssertionError",
+      "state_sha256": "77d200f63b5bc300b5a62839f5818ceb7ea07d857b60afd5805db0f03e1f00ac",
+      "elapsed_seconds": 101214.67200000002,
+      "exact_failure_location_recorded": false
+    },
+    {
+      "case": "4-select",
+      "status": "failed",
+      "error_type": "AssertionError",
+      "state_sha256": "4258ec1f6d21261dd9e8e5307740c036408851e978e3f38b9cd40c145afe896f",
+      "elapsed_seconds": 101210.29700000002,
+      "exact_failure_location_recorded": false
+    },
+    {
+      "case": "6-native",
+      "status": "failed",
+      "error_type": "AssertionError",
+      "state_sha256": "cb4002412bc9f80309c2f1478feeb99e35e001a96268fe01b9bd09594b3254f4",
+      "elapsed_seconds": 101207.40599999996,
+      "exact_failure_location_recorded": false
+    },
+    {
+      "case": "6-select",
+      "status": "failed",
+      "error_type": "AssertionError",
+      "state_sha256": "5ff665b01cbc729e0821ba456eb4615fd202212c75bf2415489624489152a745",
+      "elapsed_seconds": 101203.718,
+      "exact_failure_location_recorded": false
+    }
+  ],
+  "overall_acceptance_complete": false,
+  "mdo": {
+    "status": "failed",
+    "elapsed_seconds": 101196.71900000004,
+    "reads": 18849,
+    "writes": 163,
+    "receipts": 163,
+    "uploads": 163,
+    "reconnects": 28,
+    "error_frames": [
+      {
+        "file": "test_remote_soak.py",
+        "line": 365,
+        "function": "main"
+      },
+      {
+        "file": "test_remote_manager.py",
+        "line": 146,
+        "function": "run"
+      },
+      {
+        "file": "test_remote_soak.py",
+        "line": 332,
+        "function": "exercise"
+      },
+      {
+        "file": "test_remote_soak.py",
+        "line": 196,
+        "function": "pump"
+      },
+      {
+        "file": "test_remote_soak.py",
+        "line": 155,
+        "function": "tick"
+      }
+    ],
+    "verified_failed_gate": "wall_monotonic_clock_divergence",
+    "state_sha256": "f3b5fc8d2de30e07430195bed875459e4f1d17049c0a0adbfb3783f79c490ec0",
+    "saved_wall_minus_monotonic_seconds": 5.141160112340003
+  },
+  "diagnostic_smokes": {
+    "native": {
+      "status": "smoke_passed",
+      "elapsed_seconds": 25.562999999994645,
+      "clock": {
+        "tick_gap_seconds": 0.4850000000005821,
+        "monotonic_elapsed_seconds": 25.562999999994645,
+        "wall_elapsed_seconds": 25.554162740707397,
+        "offset_seconds": -0.008837259287247434
+      }
+    },
+    "business": {
+      "status": "smoke_passed",
+      "elapsed_seconds": 29.187000000005355,
+      "clock": {
+        "tick_gap_seconds": 0.25,
+        "monotonic_elapsed_seconds": 24.921000000002095,
+        "wall_elapsed_seconds": 24.931113243103027,
+        "offset_seconds": 0.010113243100931868
+      }
+    }
+  },
+  "current_business_run": {
+    "mdo_commit": "3344c560c9ed10779a5c0155bd767d66ff56a912",
+    "sdk_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
+    "xrudp_commit": "0c46aca7519c5513c51b15de61d73d90ebca79b6",
+    "state_path": ".build/xrudp-audit-20261022/business-72h-3344c560-r1/state.json",
+    "launch_path": ".build/xrudp-audit-20261022/business-long-launch.json",
+    "acceptance_72h": false
+  },
+  "current_native_runs": {
+    "source_commit": "1df26c6710114bd174d68404f167807bd0973957",
+    "windows": [
+      {
+        "case": "native-4-native",
+        "source_commit": "1df26c6710114bd174d68404f167807bd0973957",
+        "state": "D:\\GIT\\mdo\\.build\\xrudp-audit-20261022\\native-72h-1df26c67-4-native-r1\\state.json",
+        "observer_pid": 68292,
+        "native_pid": 67340,
+        "binary_sha256": "70e43e072c3eff2495df6e4fed3f39ee0a7d7f023dbea4a2d91d0b50358e497f",
+        "business_started_unix": 1792664825.5349863,
+        "last_checked_elapsed_seconds": 180.07800000000861,
+        "acceptance_72h": false
+      },
+      {
+        "case": "native-4-select",
+        "source_commit": "1df26c6710114bd174d68404f167807bd0973957",
+        "state": "D:\\GIT\\mdo\\.build\\xrudp-audit-20261022\\native-72h-1df26c67-4-select-r1\\state.json",
+        "observer_pid": 77344,
+        "native_pid": 10412,
+        "binary_sha256": "70e43e072c3eff2495df6e4fed3f39ee0a7d7f023dbea4a2d91d0b50358e497f",
+        "business_started_unix": 1792664825.6436853,
+        "last_checked_elapsed_seconds": 180.03100000000268,
+        "acceptance_72h": false
+      },
+      {
+        "case": "native-6-native",
+        "source_commit": "1df26c6710114bd174d68404f167807bd0973957",
+        "state": "D:\\GIT\\mdo\\.build\\xrudp-audit-20261022\\native-72h-1df26c67-6-native-r1\\state.json",
+        "observer_pid": 85168,
+        "native_pid": 84188,
+        "binary_sha256": "70e43e072c3eff2495df6e4fed3f39ee0a7d7f023dbea4a2d91d0b50358e497f",
+        "business_started_unix": 1792664826.096215,
+        "last_checked_elapsed_seconds": 180.0619999999908,
+        "acceptance_72h": false
+      },
+      {
+        "case": "native-6-select",
+        "source_commit": "1df26c6710114bd174d68404f167807bd0973957",
+        "state": "D:\\GIT\\mdo\\.build\\xrudp-audit-20261022\\native-72h-1df26c67-6-select-r1\\state.json",
+        "observer_pid": 88184,
+        "native_pid": 60064,
+        "binary_sha256": "70e43e072c3eff2495df6e4fed3f39ee0a7d7f023dbea4a2d91d0b50358e497f",
+        "business_started_unix": 1792664826.1437573,
+        "last_checked_elapsed_seconds": 180.04700000000594,
+        "acceptance_72h": false
+      }
+    ],
+    "linux": [
+      {
+        "family": 4,
+        "backend": "native",
+        "unit": "xrudp-soak-1df26c67-4-native.service",
+        "state": "/home/xs/.cache/xrudp-native-soak-1df26c67-20261022/source/out/xrudp-native-soak/linux-72h-current-4-native/state.json",
+        "observer_pid": 45708,
+        "native_pid": 45760,
+        "business_started_unix": 1792665188.3888793,
+        "binary_sha256": "b74dca205299f418b511f688c3177e460ad9d3cbb10f0015073511f4d6d1fb5c",
+        "systemd": {
+          "MainPID": "45708",
+          "CPUQuotaPerSecUSec": "250ms",
+          "MemoryMax": "536870912",
+          "TasksMax": "16",
+          "NoNewPrivileges": "yes",
+          "ActiveState": "active",
+          "SubState": "running",
+          "InvocationID": "eac09d23508c45658e9ed3b309d19f27"
+        },
+        "source_commit": "1df26c6710114bd174d68404f167807bd0973957",
+        "last_checked_elapsed_seconds": 60.016686134040356,
+        "acceptance_72h": false
+      },
+      {
+        "family": 4,
+        "backend": "select",
+        "unit": "xrudp-soak-1df26c67-4-select.service",
+        "state": "/home/xs/.cache/xrudp-native-soak-1df26c67-20261022/source/out/xrudp-native-soak/linux-72h-current-4-select/state.json",
+        "observer_pid": 45767,
+        "native_pid": 45819,
+        "business_started_unix": 1792665189.081293,
+        "binary_sha256": "b74dca205299f418b511f688c3177e460ad9d3cbb10f0015073511f4d6d1fb5c",
+        "systemd": {
+          "MainPID": "45767",
+          "CPUQuotaPerSecUSec": "250ms",
+          "MemoryMax": "536870912",
+          "TasksMax": "16",
+          "NoNewPrivileges": "yes",
+          "ActiveState": "active",
+          "SubState": "running",
+          "InvocationID": "e95733326a5741ef90c2a017702daa00"
+        },
+        "source_commit": "1df26c6710114bd174d68404f167807bd0973957",
+        "last_checked_elapsed_seconds": 60.001773779746145,
+        "acceptance_72h": false
+      },
+      {
+        "family": 6,
+        "backend": "native",
+        "unit": "xrudp-soak-1df26c67-6-native.service",
+        "state": "/home/xs/.cache/xrudp-native-soak-1df26c67-20261022/source/out/xrudp-native-soak/linux-72h-current-6-native/state.json",
+        "observer_pid": 45826,
+        "native_pid": 45884,
+        "business_started_unix": 1792665189.6875758,
+        "binary_sha256": "b74dca205299f418b511f688c3177e460ad9d3cbb10f0015073511f4d6d1fb5c",
+        "systemd": {
+          "MainPID": "45826",
+          "CPUQuotaPerSecUSec": "250ms",
+          "MemoryMax": "536870912",
+          "TasksMax": "16",
+          "NoNewPrivileges": "yes",
+          "ActiveState": "active",
+          "SubState": "running",
+          "InvocationID": "f56b4d333b42405f8eb14a55c1db0698"
+        },
+        "source_commit": "1df26c6710114bd174d68404f167807bd0973957",
+        "last_checked_elapsed_seconds": 60.01259968196973,
+        "acceptance_72h": false
+      },
+      {
+        "family": 6,
+        "backend": "select",
+        "unit": "xrudp-soak-1df26c67-6-select.service",
+        "state": "/home/xs/.cache/xrudp-native-soak-1df26c67-20261022/source/out/xrudp-native-soak/linux-72h-current-6-select/state.json",
+        "observer_pid": 45891,
+        "native_pid": 45943,
+        "business_started_unix": 1792665190.3804991,
+        "binary_sha256": "b74dca205299f418b511f688c3177e460ad9d3cbb10f0015073511f4d6d1fb5c",
+        "systemd": {
+          "MainPID": "45891",
+          "CPUQuotaPerSecUSec": "250ms",
+          "MemoryMax": "536870912",
+          "TasksMax": "16",
+          "NoNewPrivileges": "yes",
+          "ActiveState": "active",
+          "SubState": "running",
+          "InvocationID": "c669d1c8cb89405aa4a91b278f31aabe"
+        },
+        "source_commit": "1df26c6710114bd174d68404f167807bd0973957",
+        "last_checked_elapsed_seconds": 60.000301816966385,
+        "acceptance_72h": false
+      }
+    ],
+    "acceptance_72h": false
+  }
+}
