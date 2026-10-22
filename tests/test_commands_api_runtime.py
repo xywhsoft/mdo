@@ -24,6 +24,8 @@ def main():
           'quit':'#include <stdlib.h>\nmdo_result mdoCommandRun(const mdo_command_context_v1* C,const xvalue* A,xvalue** R){exit(17);return MDO_RESULT_ERROR;}',
           'loop':'mdo_result mdoCommandRun(const mdo_command_context_v1* C,const xvalue* A,xvalue** R){for(;;){}return MDO_RESULT_ERROR;}',
           'broken':'syntax error',
+          'cancelcode':'mdo_result mdoCommandRun(const mdo_command_context_v1* C,const xvalue* A,xvalue** R){return MDO_RESULT_CANCELLED;}',
+          'timeoutcode':'mdo_result mdoCommandRun(const mdo_command_context_v1* C,const xvalue* A,xvalue** R){return MDO_RESULT_TIMEOUT;}',
           'bridge':'mdo_result mdoCommandRun(const mdo_command_context_v1* C,const xvalue* A,xvalue** R){return mdoCommandCall(C,"ui.help",A,R);}',
           'api':'mdo_result mdoCommandRun(const mdo_command_context_v1* C,const xvalue* A,xvalue** R){xvalue* P=C->Host->Parse("{\\"method\\":\\"GET\\",\\"path\\":\\"/api/v1/bootstrap\\"}");mdo_result E=mdoCommandCall(C,"api.request",P,R);C->Host->Release(P);return E;}',
         }
@@ -54,6 +56,9 @@ def main():
                 assert wait(identity)==result,'Replay changed the receipt'
                 for name in ('quit','broken'):
                     result=wait(invoke(name));assert result['state']=='failed' and result['error'],result
+                    assert result['error_code']==('command_worker_lost' if name=='quit' else 'command_compile_failed'),result
+                for name,state in [('cancelcode','cancelled'),('timeoutcode','timed_out')]:
+                    result=wait(invoke(name));assert result['state']==state,result
                 result=wait(invoke('loop'));assert result['state']=='timed_out',result
                 identity=invoke('loop');request(port,'DELETE','/api/v1/command-invocations/'+identity)
                 assert wait(identity)['state']=='cancelled'

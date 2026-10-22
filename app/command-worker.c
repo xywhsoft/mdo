@@ -108,8 +108,9 @@ void ServiceInit(XS_HostInfo* H) {
     xs_tcc_config Config;xsTccConfigInit(&Config);Config.Flags=XS_TCC_RESTRICT_HOST_SYMBOLS;Config.ApplicationRoot=CWRoot;
     TCCState* Tcc=xsCreateTCCEx(&Config,NULL);mdo_result Code=MDO_RESULT_ERROR;
     if(Tcc){tcc_set_error_func(Tcc,NULL,CWCompileError);tcc_add_include_path(Tcc,CWRoot);}
-    union {void* P;mdo_command_run_v1 F;} Entry={0};
+    union {void* P;mdo_command_run_v1 F;} Entry={0};bool Compiled=false;
     if(Input&&Source&&Tcc&&JobReady&&(!Monitor||Watch)&&tcc_compile_string(Tcc,Source)>=0&&tcc_relocate(Tcc)>=0) {
+        Compiled=true;
         Entry.P=tcc_get_symbol(Tcc,MDO_COMMAND_ENTRY);
         if(Entry.F){
             mdo_command_host_v1 Host={sizeof(Host),1,xrtValueCount,CWAt,CWGet,CWString,
@@ -125,13 +126,17 @@ void ServiceInit(XS_HostInfo* H) {
             Code=Entry.F(&C,CWGet(Input,"arguments"),&Result);
         }else snprintf(CWError,sizeof(CWError),"Missing mdoCommandRun entry point");
     }
-    if(Code!=MDO_RESULT_OK&&!CWError[0])snprintf(CWError,sizeof(CWError),"Command compilation or execution failed (%d)",Code);
+    if(Code!=MDO_RESULT_OK&&!CWError[0])snprintf(CWError,sizeof(CWError),"%s (%d)",Compiled?"Command returned an error":"Command worker setup or compilation failed",Code);
     if(Result){
         char* Encoded=CWJson(Result);
         if(!Encoded||strlen(Encoded)>65536u){Code=MDO_RESULT_LIMIT;snprintf(CWError,sizeof(CWError),"Command result exceeds 64 KiB");xrtValueRelease(Result);Result=NULL;}
         xrtFree(Encoded);
     }
     xrtValueObjectSetNew(Output,XRT_STR_LITERAL("ok"),xrtValueBool(Code==MDO_RESULT_OK));
+    xrtValueObjectSetNew(Output,XRT_STR_LITERAL("code"),xrtValueInt(Code));
+    const char* ErrorCode=!Compiled?"command_compile_failed":!Entry.F?"command_entry_missing":Code==MDO_RESULT_CANCELLED?"command_cancelled":
+        Code==MDO_RESULT_TIMEOUT?"command_timeout":Code==MDO_RESULT_LIMIT?"command_limit":Code==MDO_RESULT_OK?"":"command_failed";
+    xrtValueObjectSetNew(Output,XRT_STR_LITERAL("error_code"),xrtValueString(xrtStrView(ErrorCode)));
     xrtValueObjectSetNew(Output,XRT_STR_LITERAL("error"),xrtValueString(xrtStrView(CWError)));
     if(Result)xrtValueObjectSet(Output,XRT_STR_LITERAL("result"),Result);
     (void)CWWrite("final.json",Output);

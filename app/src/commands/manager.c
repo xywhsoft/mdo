@@ -146,8 +146,9 @@ static xvalue* CommandHostCall(CommandJob* J,const xvalue* Q,char Error[512]) {
         bool Ok=Session&&MdoSessionCompact(Session,&E);MdoSessionRelease(Session);
         if(!Ok){snprintf(Error,512,"%.500s",E.sMessage[0]?E.sMessage:"Context compaction failed");return NULL;}
         xvalue* Action=xrtValueObject(),*Result=xrtValueObject();
-        Ok=Action&&Result&&CommandSet(Action,"type","ui.refresh")&&xrtValueArrayAppendNew(J->Actions,Action)&&
+        Ok=Action&&Result&&CommandSet(Action,"type","ui.refresh")&&xrtValueArrayAppend(J->Actions,Action)&&
             CommandSet(Result,"message","上下文已压缩，原始会话记录仍可查看。");
+        xrtValueRelease(Action);
         if(!Ok){xrtValueRelease(Result);snprintf(Error,512,"Context compacted but its UI result is unavailable");return NULL;}
         return Result;
     }
@@ -156,7 +157,8 @@ static xvalue* CommandHostCall(CommandJob* J,const xvalue* Q,char Error[512]) {
         xvalue* A=xrtValueObject();
         bool Ok=A&&xrtValueCount(J->Actions)<16&&CommandSet(A,"type",Method)&&
             xrtValueObjectSetNew(A,XRT_STR_LITERAL("params"),Params?xrtValueClone(Params):xrtValueObject())&&
-            xrtValueArrayAppendNew(J->Actions,A);
+            xrtValueArrayAppend(J->Actions,A);
+        xrtValueRelease(A);
         if(!Ok){snprintf(Error,512,"Command UI action limit reached");return NULL;}
         return xrtValueObject();
     }
@@ -167,7 +169,7 @@ static bool CommandCopyResource(CommandJob* J,cstr Source,cstr Target) {
     bool Ok=Text&&!memchr(Text,0,N)&&CommandJobWrite(J,Target,Text);xrtFree(Text);return Ok;
 }
 static int32 CommandExecute(void* Value) {
-    CommandJob* J=Value;unsigned Sequence=1;char Error[512]={0};cstr State="failed";xvalue* Final=NULL;
+    CommandJob* J=Value;unsigned Sequence=1;char Error[512]={0};cstr State="failed",ErrorCode="command_worker_start_failed";xvalue* Final=NULL;
     xrtMutexLock(CommandManager.Lock);CommandSet(J->Info,"state","running");CommandSave(J);xrtMutexUnlock(CommandManager.Lock);
     char* Directory=MdoHomeExternalPath(J->Directory);char* Executable=NULL,*ConfigPath=NULL;
     const char* Args[2];size_t ArgCount=0;
@@ -192,6 +194,7 @@ static int32 CommandExecute(void* Value) {
     if(!xrtCancelRequested(J->Cancel))J->Process=Executable?xrtProcessSpawn(&Config):NULL;
     xrtMutexUnlock(CommandManager.Lock);
     if(!J->Process){snprintf(Error,sizeof(Error),"Isolated command worker could not start");goto finish;}
+    ErrorCode="command_worker_lost";
     for(;;){
         if(xrtCancelRequested(J->Cancel))break;
         char Name[64];snprintf(Name,sizeof(Name),"request-%u.json",Sequence);
@@ -215,16 +218,22 @@ static int32 CommandExecute(void* Value) {
 finish:
     xrtMutexLock(CommandManager.Lock);xprocess* Process=J->Process;J->Process=NULL;xrtMutexUnlock(CommandManager.Lock);
     if(Process){(void)xrtProcessKillTree(Process);(void)xrtProcessWait(Process);xrtProcessDestroy(Process);}
-    if(xrtCancelRequested(J->Cancel)){State=J->TimedOut?"timed_out":"cancelled";snprintf(Error,sizeof(Error),"%s",J->TimedOut?"Command execution timed out":"Command execution cancelled");}
+    if(xrtCancelRequested(J->Cancel)){State=J->TimedOut?"timed_out":"cancelled";ErrorCode=J->TimedOut?"command_timeout":"command_cancelled";snprintf(Error,sizeof(Error),"%s",J->TimedOut?"Command execution timed out":"Command execution cancelled");}
     else if(Final){
         bool Ok=false;xrtValueGetBool(xrtValueObjectGet(Final,XRT_STR_LITERAL("ok")),&Ok);
-        if(Ok)State="succeeded";else snprintf(Error,sizeof(Error),"%.500s",CommandText(Final,"error")?CommandText(Final,"error"):"Command failed");
+        ErrorCode=CommandText(Final,"error_code");if(!ErrorCode)ErrorCode="command_failed";
+        if(Ok)State="succeeded";
+        else {
+            int64 Code=0;xrtValueGetInt(xrtValueObjectGet(Final,XRT_STR_LITERAL("code")),&Code);
+            if(Code==-2)State="cancelled";else if(Code==-4)State="timed_out";
+            snprintf(Error,sizeof(Error),"%.500s",CommandText(Final,"error")?CommandText(Final,"error"):"Command failed");
+        }
     }
     CommandCleanup(J,Sequence>128?128:Sequence);xrtFree(Directory);xrtFree(Executable);xrtFree(ConfigPath);
     /* Publish terminal state last. A retained result may be read repeatedly;
      * the originating UI applies its action list once per invocation. */
     xrtMutexLock(CommandManager.Lock);
-    CommandSet(J->Info,"state",State);CommandSet(J->Info,"error",Error);
+    CommandSet(J->Info,"state",State);CommandSet(J->Info,"error",Error);CommandSet(J->Info,"error_code",ErrorCode);
     if(Final&&!strcmp(State,"succeeded")){
         const xvalue* Result=xrtValueObjectGet(Final,XRT_STR_LITERAL("result"));
         xrtValueObjectSetNew(J->Info,XRT_STR_LITERAL("result"),Result?xrtValueClone(Result):xrtValueObject());

@@ -65,7 +65,7 @@ export async function runCommand(command, raw, scope, { onPending, signal } = {}
     }
     terminal = result.terminal && !["interrupted", "uncertain"].includes(result.state);
     if(!current())throw new DOMException("Command target changed","AbortError");
-    if (result.state !== "succeeded") throw new Error(result.error || `命令执行失败：${result.state}`);
+    if (result.state !== "succeeded") throw Object.assign(new Error(result.error || `命令执行失败：${result.state}`),{code:result.error_code,invocationId:id});
     return { ...result, raw_arguments: raw };
   } finally {
     if (terminal) recoveries.delete(recoveryKey);
