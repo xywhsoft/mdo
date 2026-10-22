@@ -50,6 +50,9 @@ typedef struct MdoAgentOwner {
     void* ExternalOwnerData;
     xwork_agent_owner_release_fn ExternalOwnerRelease;
     bool ExternalOwnerRetained;
+    char ProductProject[128],ProductSession[128];
+    xwork_event_fn ExternalEvent;
+    void* ExternalEventData;
 } MdoAgentOwner;
 
 struct MdoAgentSession {
@@ -84,7 +87,21 @@ struct MdoAgentSession {
 struct MdoAgentRun {
     xwork_run* Run;
     MdoAgentSession* Session;
+    xwork_event_fn ExternalEvent;
+    void* ExternalEventData;
 };
+
+/* Descendants inherit the Agent event callback. Their runtime identity is
+ * available before permission discovery, unlike workspace-based guesses. */
+static bool MdoAgentsForwardEvent(MdoAgentOwner* Owner,xwork_event_fn Forward,void* Data,const xwork_event* Event){
+    if(Event->eKind==XWORK_EVENT_AGENT_START&&Event->uAgentId&&
+        !MdoModuleAgentIdentityBegin(Owner,Event->uAgentId,Owner->ProductProject,Owner->ProductSession))xrtClearError();
+    bool Ok=!Forward||Forward(Data,Event);
+    if(Event->eKind==XWORK_EVENT_AGENT_DONE&&Event->uAgentId)MdoModuleAgentIdentityEnd(Owner,Event->uAgentId);
+    return Ok;
+}
+static bool MdoAgentsOwnerEvent(void* User,const xwork_event* Event){MdoAgentOwner* Owner=User;return MdoAgentsForwardEvent(Owner,Owner->ExternalEvent,Owner->ExternalEventData,Event);}
+static bool MdoAgentsRunEvent(void* User,const xwork_event* Event){MdoAgentRun* Run=User;return MdoAgentsForwardEvent(Run->Session->Owner,Run->ExternalEvent,Run->ExternalEventData,Event);}
 
 typedef struct MdoAgentResolvedModel {
     MdoModelInfo Info;
@@ -260,6 +277,7 @@ static void MdoAgentOwnerRelease(MdoAgentOwner* Owner)
     Previous = xrtAtomic32FetchSub(&Owner->Refs, 1u, XMEMORY_ACQ_REL);
     if ( Previous > 1u ) return;
     if ( Previous == 0u ) abort();
+    MdoModuleAgentIdentityEnd(Owner,0);
     if ( Owner->LlmSession != NULL ) {
         xllmSessionDisableJournal(Owner->LlmSession);
         xllmSessionDestroy(Owner->LlmSession);
@@ -1116,6 +1134,9 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
         Options->WorkspaceRoot:(DefaultWorkspace?DefaultWorkspace:"."));
     Owner->ExternalComplete = Options->OnModelComplete;
     Owner->ExternalModelData = Options->ModelUserData;
+    snprintf(Owner->ProductProject,sizeof(Owner->ProductProject),"%s",Options->ProjectId?Options->ProjectId:"");
+    snprintf(Owner->ProductSession,sizeof(Owner->ProductSession),"%s",Options->ProductSessionId?Options->ProductSessionId:"");
+    Owner->ExternalEvent=Options->OnEvent;Owner->ExternalEventData=Options->EventUserData;
     Owner->ExternalOwnerData = Options->OwnerUserData;
     Owner->ExternalOwnerRelease = Options->OnOwnerRelease;
     if ( Owner->Models == NULL || Owner->Modules == NULL ||
@@ -1387,8 +1408,8 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
         Owner->ApprovalScope : Options->PermissionUserData;
     AgentOptions.OnHook = Options->OnHook;
     AgentOptions.pHookUserData = Options->HookUserData;
-    AgentOptions.OnEvent = Options->OnEvent;
-    AgentOptions.pEventUserData = Options->EventUserData;
+    AgentOptions.OnEvent = MdoAgentsOwnerEvent;
+    AgentOptions.pEventUserData = Owner;
     AgentOptions.OnModelComplete = MdoAgentsComplete;
     AgentOptions.pModelUserData = Owner;
     AgentOptions.pOwnerUserData = Owner;
@@ -1977,8 +1998,9 @@ MdoAgentRun* MdoAgentRunCreate(MdoAgentSession* Session,
     Config.bResume = Options->Resume;
     Config.pCancel = Options->Cancel;
     Config.uDeadline = Options->Deadline;
-    Config.OnEvent = Options->OnEvent;
-    Config.pEventUserData = Options->EventUserData;
+    Result->ExternalEvent=Options->OnEvent;Result->ExternalEventData=Options->EventUserData;
+    Config.OnEvent = Options->OnEvent?MdoAgentsRunEvent:NULL;
+    Config.pEventUserData = Result;
     Config.pResumeOptions = Options->ResumeOptions;
     Result->Run = Options->UserMessage != NULL ?
         xworkRunCreateWithUserMessage(Session->Agent, &Config,

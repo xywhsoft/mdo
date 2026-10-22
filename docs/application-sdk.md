@@ -94,9 +94,11 @@ static mdo_result Inspect(const mdo_sdk_context_v1* C, xvalue** Result) {
 
 `Registrar->AddService` 接受 ID、说明、输入/输出 schema、effects 和执行回调。产品服务自行验证业务参数；自定义服务应验证自己的契约。重复服务名会拒绝整个候选目录，保留旧目录。覆盖内置服务必须设置 `MDO_SERVICE_REPLACE_BUILTIN`，目录只显示最终生效的提供者。
 
-`AddHook` 支持有确定排序的 `service.before` 和 `service.after`。观察者不能修改值；Transform 钩子可替换输入或结果。回调在 manager 锁外运行，递归调用最多 32 层；after 钩子失败会标记效果可能已经发生。事件总线还提供 `events.emit/read`，按 epoch/cursor 检测宿主重启和环形日志缺口。`product.changed` 与 `session.event` 是变更提示，详细历史仍从对应产品资源重读；不会将所有会话正文复制到诊断事件里。
+`AddHook` 支持有确定排序的 `service.before` 和 `service.after`。观察者不能修改值；Transform 钩子可替换输入或结果。回调在目录互斥锁外运行，递归调用最多 32 层；after 钩子失败会标记效果可能已经发生。事件总线还提供 `events.emit/read`，按 epoch/cursor 检测宿主重启和环形日志缺口。`product.changed` 与 `session.event` 是变更提示，详细历史仍从对应产品资源重读；不会将所有会话正文复制到诊断事件里。
 
-模块及异步操作持有代码代际引用，热重载不会释放仍在使用的代码。`Stop` 在退休/退出时调用一次，用于停止并回收模块自己的后台生产者；它不能释放仍供活动回调使用的数据。`Unregister` 在最后引用释放后回收共享数据。回调均不在模块 manager 锁内执行。后台模块应使用 Stop 打破自己持有会话/任务所形成的生命周期引用，不能只依赖最终 Unregister。
+模块及异步操作持有代码代际引用，热重载不会释放仍在使用的代码。`Stop` 在退休/退出时调用一次，用于停止并回收模块自己的后台生产者；它不能释放仍供活动回调使用的数据。`Unregister` 在最后引用释放后回收共享数据。回调不持有模块目录互斥锁；重载事务自身串行化，回调内再次重载会立即返回 busy。不要在回调中调用宿主/manager 的 Unit 销毁流程。后台模块应使用 Stop 打破自己持有会话/任务所形成的生命周期引用，不能只依赖最终 Unregister。
+
+受管子 Agent 在开始运行时继承所有者的项目、产品会话标识；结束运行或释放所有者时清理映射。工具执行和权限发现使用同一运行时身份映射，不通过工作区路径猜测会话。显式 run 事件回调也保留这一桥接。
 
 ## 完整的原生 Agent 驱动
 

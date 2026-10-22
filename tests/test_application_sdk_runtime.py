@@ -66,20 +66,29 @@ class ModelHandler(BaseHTTPRequestHandler):
  def log_message(self,*args):pass
  def do_POST(self):
   self.server.last_request=json.loads(self.rfile.read(int(self.headers['Content-Length'])))
-  chunks=[{'id':'qa-model-response','model':'qa-local-model','choices':[{'index':0,'delta':{'role':'assistant','content':'sdk-model-ok'}}]},
-          {'id':'qa-model-response','model':'qa-local-model','choices':[{'index':0,'delta':{},'finish_reason':'stop'}],'usage':{'prompt_tokens':11,'completion_tokens':4,'total_tokens':15}}]
+  child=getattr(self.server,'child_scope',False);has_result=any(m.get('role')=='tool' for m in self.server.last_request.get('messages',[]))
+  delta={'role':'assistant','content':'sdk-model-ok'};finish='stop'
+  if child and not has_result:
+   delta={'role':'assistant','tool_calls':[{'index':0,'id':'qa-child-call','type':'function','function':{'name':'qa.context','arguments':'{}'}}]};finish='tool_calls'
+  chunks=[{'id':'qa-model-response','model':'qa-local-model','choices':[{'index':0,'delta':delta}]},
+          {'id':'qa-model-response','model':'qa-local-model','choices':[{'index':0,'delta':{},'finish_reason':finish}],'usage':{'prompt_tokens':11,'completion_tokens':4,'total_tokens':15}}]
   data=(''.join('data: '+json.dumps(c)+'\n\n' for c in chunks)+'data: [DONE]\n\n').encode()
   self.send_response(200);self.send_header('Content-Type','text/event-stream');self.send_header('Content-Length',str(len(data)));self.end_headers();self.wfile.write(data)
 
 def main():
- p=argparse.ArgumentParser();p.add_argument('--host',type=Path,required=True);args=p.parse_args()
+ p=argparse.ArgumentParser();target=p.add_mutually_exclusive_group(required=True);target.add_argument('--host',type=Path);target.add_argument('--packed',type=Path);args=p.parse_args()
  with tempfile.TemporaryDirectory(dir=ROOT/'.build',prefix='application-sdk-') as tmp:
-  base=Path(tmp);port=free_port();config=write_site(base,port);home=base/'home';(home/'commands').mkdir(parents=True)
+  if args.packed:
+   from test_packed_home_lease import site,release_packed_copies
+   base,port=site(Path(tmp),'site',args.packed.resolve());command=[str(base/args.packed.name),'--']
+  else:
+   base=Path(tmp);port=free_port();config=write_site(base,port);command=[str(args.host.resolve()),str(config),'--']
+  home=base/'home';(home/'commands').mkdir(parents=True)
   (home/'commands/sdk.c').write_text('/* mdo-command {"id":"sdk","description":"SDK fixture"} */\n#include <string.h>\n'+COMMAND,encoding='utf-8')
   modules=home/'modules/tools';modules.mkdir(parents=True);(modules/'sdk.c').write_text(MODULE,encoding='utf-8')
   (modules/'application-example.c').write_text((ROOT/'examples/application-sdk/application-module.c').read_text(encoding='utf-8'),encoding='utf-8')
   with (base/'host.log').open('wb') as log:
-   child=subprocess.Popen([str(args.host.resolve()),str(config),'--','--home',str(home)],cwd=base,stdout=log,stderr=log,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+   child=subprocess.Popen([*command,'--home',str(home)],cwd=base,env=dict(os.environ,USE_WEBVIEW='0'),stdout=log,stderr=log,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
    try:
     try:wait_ready(port,child)
     except Exception as error:raise RuntimeError((base/'host.log').read_text(encoding='utf-8',errors='replace')) from error
@@ -183,6 +192,16 @@ def main():
      assert model_result['text']=='sdk-model-ok' and model_result['usage']['input_tokens']==11,model_result
      assert 'sdk-model-ok' in invoke('stream.read',{'handle':stream})['text']
      invoke('stream.release',{'handle':stream})
+     child_dir=home/'subagents';child_dir.mkdir(exist_ok=True)
+     (child_dir/'qa-child.md').write_text('---\nname: QA child\ndescription: SDK descendant identity probe\nmodel: qa-local-model\ntools: [qa.context]\nread_only: true\n---\nUse qa.context once, then report.\n',encoding='utf-8')
+     invoke('runtime.reload',{'domain':'modules'})
+     parent=invoke('session.create',{'body':{'project_id':'default','title':'Child SDK scope','model_id':'qa-local-model','permission_profile':'full-access'}})['data']['id']
+     mock.child_scope=True
+     delegated=invoke('tool.call',{'project':'default','session':parent,'tool':'agent','arguments':{'name':'subagent.qa-child','prompt':'child-scope-probe'}})
+     assert delegated['success'] and 'sdk-model-ok' in delegated['text'],delegated
+     reply=next(m['content'] for m in mock.last_request['messages'] if m['role']=='tool')
+     context=json.loads(reply[reply.index('{'):reply.rindex('}')+1]);assert context['project']=='default' and context['session']==parent,context
+     mock.child_scope=False
     finally:mock.shutdown();mock.server_close();mock_thread.join()
     detail=invoke('session.get',{'path':scope});assert detail['data']['title']=='Created using public SDK',detail
     assert invoke('sdk.does_not_exist',{},'catch')=={'error':'sdk_method_missing','status':404}
@@ -216,5 +235,6 @@ def main():
     child.terminate()
     try:child.wait(timeout=10)
     except subprocess.TimeoutExpired:child.kill();child.wait()
+    if args.packed:release_packed_copies(base/args.packed.name)
  print('Application SDK: full product directory, real CRUD, typed values, providers, hooks, errors and reentrant registration PASS')
 if __name__=='__main__':main()

@@ -158,7 +158,7 @@ typedef struct MdoModuleRegistrarContext {
     char Message[MDO_MODULE_ERROR_LIMIT];
 } MdoModuleRegistrarContext;
 
-typedef struct MdoModuleAgentScope {xwork_agent* Agent;char Project[128],Session[128];struct MdoModuleAgentScope* Next;} MdoModuleAgentScope;
+typedef struct MdoModuleAgentScope {xwork_agent* Agent;void* Owner;uint64 AgentId;char Project[128],Session[128];struct MdoModuleAgentScope* Next;} MdoModuleAgentScope;
 typedef struct MdoModuleState {
     xmutex* Lock;
     xmutex* ReloadLock;
@@ -171,6 +171,19 @@ typedef struct MdoModuleState {
 } MdoModuleState;
 
 static MdoModuleState g_MdoModules;
+bool MdoModuleAgentIdentityBegin(void* Owner,uint64 AgentId,cstr Project,cstr Session){
+    if(!g_MdoModules.Lock||!Owner||!AgentId)return false;
+    MdoModuleAgentScope* Scope=xrtCalloc(1,sizeof(*Scope));if(!Scope)return false;
+    Scope->Owner=Owner;Scope->AgentId=AgentId;snprintf(Scope->Project,sizeof(Scope->Project),"%s",Project?Project:"");snprintf(Scope->Session,sizeof(Scope->Session),"%s",Session?Session:"");
+    xrtMutexLock(g_MdoModules.Lock);for(MdoModuleAgentScope* S=g_MdoModules.Scopes;S;S=S->Next)if(S->Owner==Owner&&S->AgentId==AgentId){xrtMutexUnlock(g_MdoModules.Lock);xrtFree(Scope);return true;}
+    Scope->Next=g_MdoModules.Scopes;g_MdoModules.Scopes=Scope;xrtMutexUnlock(g_MdoModules.Lock);return true;
+}
+void MdoModuleAgentIdentityEnd(void* Owner,uint64 AgentId){
+    if(!g_MdoModules.Lock||!Owner)return;
+    xrtMutexLock(g_MdoModules.Lock);MdoModuleAgentScope** At=&g_MdoModules.Scopes;
+    while(*At){MdoModuleAgentScope* Scope=*At;if(Scope->Owner==Owner&&(!AgentId||Scope->AgentId==AgentId)){*At=Scope->Next;xrtFree(Scope);}else At=&Scope->Next;}
+    xrtMutexUnlock(g_MdoModules.Lock);
+}
 bool MdoModuleAgentBindContext(xwork_agent* Agent,cstr Project,cstr Session){
     if(!Agent||!g_MdoModules.Lock)return false;
     MdoModuleAgentScope* Scope=xrtCalloc(1,sizeof(*Scope));if(!Scope)return false;Scope->Agent=Agent;
@@ -1597,7 +1610,7 @@ static void MdoModulesToolContext(mdo_tool_context_v1* pTarget,
     Scope->Application.InvocationId=pSource->sToolCallId;Scope->Application.Workspace=pSource->sWorkspaceRoot;
     Scope->Application.Deadline=pSource->uDeadline;snprintf(Scope->Run,sizeof(Scope->Run),"%llu",(unsigned long long)pSource->uRunId);
     Scope->Application.RunId=Scope->Run;pTarget->Application=&Scope->Application;
-    if(g_MdoModules.Lock){xrtMutexLock(g_MdoModules.Lock);for(MdoModuleAgentScope* S=g_MdoModules.Scopes;S;S=S->Next)if(S->Agent==pSource->pAgent){snprintf(Scope->Project,sizeof(Scope->Project),"%s",S->Project);snprintf(Scope->Session,sizeof(Scope->Session),"%s",S->Session);break;}xrtMutexUnlock(g_MdoModules.Lock);}
+    if(g_MdoModules.Lock){xrtMutexLock(g_MdoModules.Lock);for(MdoModuleAgentScope* S=g_MdoModules.Scopes;S;S=S->Next)if((S->Agent&&S->Agent==pSource->pAgent)||(S->AgentId&&S->AgentId==pSource->uAgentId)){snprintf(Scope->Project,sizeof(Scope->Project),"%s",S->Project);snprintf(Scope->Session,sizeof(Scope->Session),"%s",S->Session);break;}xrtMutexUnlock(g_MdoModules.Lock);}
     Scope->Application.ProjectId=Scope->Project;Scope->Application.SessionId=Scope->Session;
 }
 

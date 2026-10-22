@@ -11,6 +11,8 @@ struct mdo_application_v1;
 void MdoModuleManagerAttachApplication(const struct mdo_application_v1* Api);
 bool MdoModuleAgentBindContext(xwork_agent*,const char* Project,const char* Session);
 void MdoModuleAgentUnbindContext(xwork_agent*);
+bool MdoModuleAgentIdentityBegin(void* Owner,uint64 AgentId,const char* Project,const char* Session);
+void MdoModuleAgentIdentityEnd(void* Owner,uint64 AgentId);
 typedef struct MdoModuleDiagnostics MdoModuleDiagnostics;
 
 typedef enum MdoModuleKind {
