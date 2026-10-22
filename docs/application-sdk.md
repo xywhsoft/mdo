@@ -131,6 +131,16 @@ VFS 的挂载发布具有文件级原子性，多个文件不构成全局读事�
 
 插件的 UI 回调参数同样传入该插件的 SDK，`storage.*` 始终使用 `plugin.<id>` 命名空间。注册失败会回滚挂载，激活失败会清理本次已注册的贡献；清理函数可重复调用，旧清理函数不会删除同名的新贡献。启停及重新应用相同 revision 不改变上一版本指针，更新和回滚才切换版本历史。
 
+前端注册及插件发现等待页面的启动恢复检查允许调用后才开始。目录读取失败可在下一轮轮询恢复；一旦开始激活插件，不会因后续轮询而自动重放其副作用。客户端意图记录损坏或不可读时拒绝执行动作，保留原记录供检查。
+
 通过 `ui.clients` 找到明确的窗口，再调用 `ui.invoke {client,action,params}` 和 `ui.result`。命令内部未指定 client 的动作会附加到原命令回执。已排队不等于已执行；客户端 ACK 才确定结果。客户端在执行前保存意图，页面中途重载会报告不确定状态，不会重复执行分支、导出等副作用。
 
 可运行的 C/JavaScript 示例见 [examples/application-sdk](../examples/application-sdk)。模型测试采用本机模拟服务，不需要供应商密钥或真实模型额度。
+
+## 跨平台验证
+
+`tests/test_application_sdk_runtime.py --packed <程序>` 使用独立 Home 验证 C 命令、模块服务/钩子、产品调用、模型/子 Agent、流、异步回执和生命周期。默认项目与具名项目均验证操作持有租约，以及取消、拒绝入场后释放租约。`test_application_sdk_ui.mjs` 验证插件作用域、启动门禁和清理。
+
+Linux musl 产品通过 `PT_GNU_STACK` 将默认原生线程栈设置为 8 MiB；嵌套 Agent 工具批次需要超过 musl 默认的 128 KiB。构建时会检查实际 ELF，旧的缓存宿主也不能绕过此检查。Android 的可选 Git 祖先发现遇到上级目录权限边界即停止，仍严格校验实际工作区内的 Skill 配置。
+
+Android 真机入口为 `tests/test_application_sdk_android.py`，仅接受独立的 `org.xleaves.mdo.qa.*` 测试包。它检查实际 JNI/TCC、C 模块、命令、模型边界、本地流、异步租约、凭据库和 WebView 插件；每次运行保存分项结果，只有全部成功才写入 `passed: true`。测试包停止后保留自己的诊断数据，不操作日常 mdo 安装。最新平台结果与待验项见 [2026-10-23 完成记录](build-records/2026-10-23-application-sdk-completion.md)。
