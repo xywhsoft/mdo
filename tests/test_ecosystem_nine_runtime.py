@@ -35,7 +35,7 @@ def main():
             {'kind':'toolpacks','id':'eco-programs','content':json.dumps({'prompt':'ECO_USAGE_SENTINEL: run the listed QA program with Python.','programs':[{'name':'qa','path':'bin/qa.py','description':'Print an offline marker','interpreter':'python'}]}),'files':[file('bin/qa.py','print("ECO_PROGRAM_OK")\n')]},
             {'kind':'plugins','id':'eco-plugin','content':'{}','files':[file('web/ecosystem-qa.txt','ECO_PLUGIN_ONE')]},
         ]
-        package={'format':'mdo.extension.v2','manifest':{'slug':'nine-suite','name':'Nine systems','version':'1.0.0','description':'Native nine-system installation','readme':'Offline QA','license':'MIT','platforms':['windows-x86_64'],'min_build_id':30000126},'resources':resources}
+        package={'format':'mdo.extension.v2','manifest':{'slug':'nine-suite','name':'Nine systems','version':'1.0.0','description':'Native nine-system installation','readme':'Offline QA','license':'MIT','platforms':['windows-x86_64','linux-x86_64'],'min_build_id':30000126},'resources':resources}
         with (base/'host.log').open('wb') as log:
             child=subprocess.Popen([str(args.host.resolve()),str(config),'--','--home',str(home)],cwd=base,
                                    env=dict(os.environ,USE_WEBVIEW='0',MDO_BUILD_ID='30000126'),stdout=log,stderr=log,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
