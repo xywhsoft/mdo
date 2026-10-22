@@ -15,7 +15,8 @@ export function createApplicationUi({ navigation, executeActions }) {
   const register = (map, id, value) => {
     if (stopped) throw new Error("Application UI instance has been disposed");
     if (!/^[A-Za-z0-9_.-]+$/.test(id) || map.has(id)) throw new Error("Duplicate or invalid SDK contribution ID");
-    map.set(id, value); const dispose = () => map.delete(id); disposers.push(dispose); return dispose;
+    map.set(id, value); let active = true;
+    return () => { if (active && map.get(id) === value) map.delete(id); active = false; };
   };
   const openPanel = async (id, params) => {
     if (stopped) throw new Error("Application UI instance has been disposed");
@@ -30,47 +31,62 @@ export function createApplicationUi({ navigation, executeActions }) {
     try { dispose = await descriptor.render(body, { sdk, params, signal: abort.signal }); if (abort.signal.aborted && typeof dispose === "function") dispose(); }
     catch (error) { dialog.close(); throw error; }
   };
-  const ui = Object.freeze({
+  const createScope = clientApi => {
+    let active = true, scopedSdk; const owned = [];
+    const check = () => { if (!active || stopped) throw new Error("Application UI instance has been disposed"); };
+    const own = cleanup => {
+      let retained = true; const dispose = () => { if (retained) { retained = false; cleanup(); } };
+      if (!active || stopped) dispose(); else owned.push(dispose); return dispose;
+    };
+    const ui = Object.freeze({
     registerPanel: (id, descriptor) => {
-      const remove = register(panels, id, descriptor);
+      check(); const remove = register(panels, id, { ...descriptor, render: (root, options) => descriptor.render(root, { ...options, sdk: scopedSdk }) });
       const dispose = () => { for (const dialog of openDialogs.get(id) || []) dialog.close(); openDialogs.delete(id); remove(); };
-      disposers.push(dispose); return dispose;
+      return own(dispose);
     },
-    registerAction: (id, execute) => register(actions, id, execute),
-    registerRenderer: (id, render) => register(renderers, id, render),
-    render: (id, root, value, options = {}) => { const render = renderers.get(id); if (!render) throw new Error("Renderer is not registered"); return render(root, value, { sdk, ...options }); },
+    registerAction: (id, execute) => { check(); return own(register(actions, id, (params, options) => execute(params, { ...options, sdk: scopedSdk }))); },
+    registerRenderer: (id, render) => { check(); return own(register(renderers, id, (root, value, options) => render(root, value, { ...options, sdk: scopedSdk }))); },
+    render: (id, root, value, options = {}) => { check(); const render = renderers.get(id); if (!render) throw new Error("Renderer is not registered"); return render(root, value, { ...options, sdk: scopedSdk }); },
     registerMenu: (id, descriptor) => {
+      check();
       const button = document.createElement("button"); button.type = "button"; button.textContent = descriptor.label || id;
       const root = document.querySelector(descriptor.mount || ".sidebar"); if (!root) throw new Error("Menu mount is unavailable");
-      button.onclick = () => Promise.resolve(descriptor.execute({ sdk })).catch(error => toast(error.message, "error")); root.append(button);
-      const remove = register(menus, id, button); const dispose = () => { button.remove(); remove(); }; disposers.push(dispose); return dispose;
+      const remove = register(menus, id, button);
+      button.onclick = () => Promise.resolve().then(() => { check(); return descriptor.execute({ sdk: scopedSdk }); }).catch(error => toast(error.message, "error"));
+      try { root.append(button); } catch (error) { button.remove(); remove(); throw error; }
+      return own(() => { button.remove(); remove(); });
     },
     registerKeybinding: (id, descriptor) => {
+      check();
       const callback = event => {
         if (event.isComposing || event.repeat || event.code !== descriptor.code || Boolean(event.ctrlKey || event.metaKey) !== Boolean(descriptor.mod) || Boolean(event.altKey) !== Boolean(descriptor.alt) || Boolean(event.shiftKey) !== Boolean(descriptor.shift)) return;
         if (!descriptor.inInput && event.target?.closest?.("input,textarea,[contenteditable=true]")) return;
-        event.preventDefault(); Promise.resolve(descriptor.execute({ sdk, event })).catch(error => toast(error.message, "error"));
+        event.preventDefault(); Promise.resolve().then(() => { check(); return descriptor.execute({ sdk: scopedSdk, event }); }).catch(error => toast(error.message, "error"));
       };
       const remove = register(actions, `keybinding.${id}`, callback); document.addEventListener("keydown", callback);
-      const dispose = () => { document.removeEventListener("keydown", callback); remove(); }; disposers.push(dispose); return dispose;
+      return own(() => { document.removeEventListener("keydown", callback); remove(); });
     },
-    openPanel,
+    openPanel: (id, params) => { check(); return openPanel(id, params); },
     openWindow: ({ url, name = "_blank" }) => {
+      check();
       const opened = window.open(url, name, "noopener");
       if (!opened) throw new Error("The OS or browser blocked the new window; open it from a user action");
     },
     openEditor: async ({ path, space = "workspace" }) => {
-      const resource = await api.call("fs.read", { path, space, limit: 262144 });
+      check(); const resource = await clientApi.call("fs.read", { path, space, limit: 262144 }); check();
       if (typeof resource.text !== "string" || resource.bytes !== resource.size) throw new Error("The editor supports complete UTF-8 files up to 256 KiB");
       const id = `editor.${crypto.randomUUID()}`;
       const dispose = ui.registerPanel(id, { title: path, render(root, { signal }) {
         const input = document.createElement("textarea"), save = document.createElement("button"); input.value = resource.text; input.style.cssText = "width:70vw;height:60vh"; save.textContent = "保存";
-        save.onclick = async () => { save.disabled = true; try { const saved = await api.call("fs.write", { path, space, text: input.value, revision: resource.revision }, { signal }); resource.revision = saved.revision; save.textContent = "已保存"; } catch (error) { toast(error.message, "error"); } finally { save.disabled = false; } };
+        save.onclick = async () => { save.disabled = true; try { const saved = await clientApi.call("fs.write", { path, space, text: input.value, revision: resource.revision }, { signal }); resource.revision = saved.revision; save.textContent = "已保存"; } catch (error) { toast(error.message, "error"); } finally { save.disabled = false; } };
         root.append(input, save); return dispose;
       } }); await openPanel(id, {});
     },
-  });
-  const sdk = Object.freeze({ ...api, ui, clientId, context: () => navigation.get() });
+    });
+    scopedSdk = Object.freeze({ ...clientApi, ui, clientId, context: () => navigation.get() });
+    return { sdk: scopedSdk, own, dispose() { if (!active) return; active = false; for (const dispose of owned.reverse()) { try { dispose(); } catch { /* Finish every owned cleanup. */ } } } };
+  };
+  const rootScope = createScope(api), sdk = rootScope.sdk, ui = sdk.ui; disposers.push(() => rootScope.dispose());
   const execute = async action => {
     const scope = action.context || {}, selected = navigation.workspace();
     if ((scope.project && scope.project !== selected.projectId && !(scope.project === "default" && !selected.projectId)) || (scope.session && scope.session !== selected.sessionId))
@@ -106,15 +122,17 @@ export function createApplicationUi({ navigation, executeActions }) {
     if (isRemoteTarget()) return;
     const result = await api.call("plugin.list"); if (result.recovery_mode || stopped) return;
     for (const plugin of result.items) if (plugin.enabled && !plugin.error && plugin.frontend?.startsWith("web/")) {
+      let scope;
       try {
         const module = await import(`/${plugin.frontend.slice(4)}?revision=${encodeURIComponent(plugin.revision)}`);
         if (stopped) return;
         if (typeof module.activate !== "function") throw new Error("Plugin frontend must export activate(sdk)");
         const scopedApi = createApplicationClient(() => ({ project: navigation.preferredProject(), session: navigation.workspace().sessionId || "", client: clientId, extension: `plugin.${plugin.id}` }));
-        const dispose = await module.activate(Object.freeze({ ...sdk, ...scopedApi })); if (typeof dispose === "function") { if (stopped) dispose(); else disposers.push(dispose); }
-      } catch (error) { console.error(`Plugin ${plugin.id} failed`, error); toast(`插件 ${plugin.id} 启动失败：${error.message}`, "error"); }
+        scope = createScope(scopedApi); disposers.push(() => scope.dispose());
+        const dispose = await module.activate(scope.sdk); if (typeof dispose === "function") scope.own(dispose);
+      } catch (error) { scope?.dispose(); console.error(`Plugin ${plugin.id} failed`, error); toast(`插件 ${plugin.id} 启动失败：${error.message}`, "error"); }
     }
   };
   void loadPlugins().catch(error => console.warn("Plugin directory unavailable", error));
-  return Object.freeze({ sdk, destroy() { stopped = true; clearTimeout(timer); for (const dispose of disposers.reverse()) { try { dispose(); } catch { /* Finish other cleanup. */ } } } });
+  return Object.freeze({ sdk, destroy() { if (stopped) return; stopped = true; clearTimeout(timer); for (const dispose of disposers.reverse()) { try { dispose(); } catch { /* Finish other cleanup. */ } } } });
 }
