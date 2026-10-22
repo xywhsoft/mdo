@@ -22,6 +22,7 @@ def main():
         bodies={
           'echo':'mdo_result mdoCommandRun(const mdo_command_context_v1* C,const xvalue* A,xvalue** R){char* J=C->Host->Json(A);*R=C->Host->Parse(J);C->Host->Free(J);return MDO_RESULT_OK;}',
           'quit':'#include <stdlib.h>\nmdo_result mdoCommandRun(const mdo_command_context_v1* C,const xvalue* A,xvalue** R){exit(17);return MDO_RESULT_ERROR;}',
+          'crash':'mdo_result mdoCommandRun(const mdo_command_context_v1* C,const xvalue* A,xvalue** R){*(volatile int*)0=1;return MDO_RESULT_ERROR;}',
           'loop':'mdo_result mdoCommandRun(const mdo_command_context_v1* C,const xvalue* A,xvalue** R){for(;;){}return MDO_RESULT_ERROR;}',
           'broken':'syntax error',
           'cancelcode':'mdo_result mdoCommandRun(const mdo_command_context_v1* C,const xvalue* A,xvalue** R){return MDO_RESULT_CANCELLED;}',
@@ -54,9 +55,10 @@ def main():
                 assert result['state']=='succeeded' and result['result']==['',True,3,{'x':[1]}],result
                 assert invoke('echo','["",true,3,{"x":[1]}]',identity)==identity
                 assert wait(identity)==result,'Replay changed the receipt'
-                for name in ('quit','broken'):
+                for name in ('quit','crash','broken'):
                     result=wait(invoke(name));assert result['state']=='failed' and result['error'],result
-                    assert result['error_code']==('command_worker_lost' if name=='quit' else 'command_compile_failed'),result
+                    assert result['error_code']==('command_compile_failed' if name=='broken' else 'command_worker_lost'),result
+                    if name=='quit':assert 'exit=17' in result['error'],result
                 for name,state in [('cancelcode','cancelled'),('timeoutcode','timed_out')]:
                     result=wait(invoke(name));assert result['state']==state,result
                 result=wait(invoke('loop'));assert result['state']=='timed_out',result

@@ -7,6 +7,7 @@
 #include "../../include/mdo/account.h"
 #include "../../include/mdo/asks.h"
 #include "../../include/mdo/bootstrap.h"
+#include "../../include/mdo/commands.h"
 #include "../../include/mdo/mcp.h"
 #include "../../include/mdo/memory.h"
 #include "../../include/mdo/models.h"

@@ -140,6 +140,19 @@ static xvalue* CommandHostCall(CommandJob* J,const xvalue* Q,char Error[512]) {
     cstr Method=CommandText(Q,"method");const xvalue* Params=xrtValueObjectGet(Q,XRT_STR_LITERAL("params"));
     if(!Method){snprintf(Error,512,"Host method is missing");return NULL;}
     if(!strcmp(Method,"api.request"))return CommandApiCall(J,Params,Error);
+    if(!strcmp(Method,"session.create")){
+        cstr Project=CommandText(J->Input,"project_id"),Requested=CommandText(Params,"project_id");
+        if((Params&&xrtValueType(Params)!=XVALUE_OBJECT)||(Requested&&strcmp(Requested,Project))){snprintf(Error,512,"session.create requires an object for the invocation project");return NULL;}
+        xvalue* Body=Params?xrtValueClone(Params):xrtValueObject(),*Request=xrtValueObject();
+        bool Ok=Body&&Request&&CommandSet(Body,"project_id",Project)&&CommandSet(Request,"method","POST")&&CommandSet(Request,"path","/api/v1/sessions")&&
+            xrtValueObjectSet(Request,XRT_STR_LITERAL("body"),Body);
+        xvalue* Reply=Ok?CommandApiCall(J,Request,Error):NULL;uint64 Status=0;
+        Ok=Reply&&CommandUInt(xrtValueObjectGet(Reply,XRT_STR_LITERAL("status")),&Status)&&Status>=200&&Status<300;
+        const xvalue* Envelope=xrtValueObjectGet(Reply,XRT_STR_LITERAL("body"));
+        xvalue* Result=Ok?xrtValueClone(xrtValueObjectGet(Envelope,XRT_STR_LITERAL("data"))):NULL;
+        if(!Ok&&!Error[0]){cstr Message=CommandText(xrtValueObjectGet(Envelope,XRT_STR_LITERAL("error")),"message");snprintf(Error,512,"%.500s",Message?Message:"Session creation failed");}
+        xrtValueRelease(Reply);xrtValueRelease(Body);xrtValueRelease(Request);return Result;
+    }
     if(!strcmp(Method,"session.compact")){
         MdoSessionRuntimeOptions Options;MdoSessionRuntimeOptionsInit(&Options);Options.Cancel=J->Cancel;Options.Deadline=J->Deadline;
         xwork_error E;MdoSession* Session=MdoSessionOpen(CommandText(J->Input,"project_id"),CommandText(J->Input,"session_id"),&Options,&E);
@@ -177,7 +190,7 @@ static int32 CommandExecute(void* Value) {
        !CommandCopyResource(J,"/app/generated/module-sdk/mdo/command.h","mdo/command.h")||
        !CommandCopyResource(J,"/app/generated/module-sdk/mdo/module.h","mdo/module.h")||
        !CommandJobJson(J,"input.json",J->Input)||!CommandJobWrite(J,"web/index.html","Command worker")||
-       !CommandJobWrite(J,"xs.json","{\"services\":[{\"enabled\":true,\"class\":\"custom\",\"name\":\"command-worker\",\"host_default\":{\"enabled\":true,\"path\":\"web\",\"devlang\":\"c\",\"devfile\":\"worker.c\"}}]}")){
+       !CommandJobWrite(J,"xs.json","{\"engine\":{\"workers\":1},\"services\":[{\"enabled\":true,\"class\":\"custom\",\"name\":\"command-worker\",\"host_default\":{\"enabled\":true,\"path\":\"web\",\"devlang\":\"c\",\"devfile\":\"worker.c\"}}]}")){
         snprintf(Error,sizeof(Error),"Cannot prepare isolated command worker");goto finish;
     }
     (void)MdoHomeSetMode(J->Directory,0700);
@@ -210,7 +223,10 @@ static int32 CommandExecute(void* Value) {
         Final=CommandJobRead(J,"final.json");if(Final)break;
         if(xrtProcessWaitFor(J->Process,20)==XWAIT_OK){
             Final=CommandJobRead(J,"final.json");
-            if(!Final)snprintf(Error,sizeof(Error),"Command worker exited without a result (crash or bootstrap failure)");
+            if(!Final){
+                xprocessstatus Exit={0};(void)xrtProcessStatus(J->Process,&Exit);
+                snprintf(Error,sizeof(Error),"Command worker exited without a result (exit=%ld, signal=%ld; crash or bootstrap failure)",(long)Exit.Code,(long)Exit.Signal);
+            }
             break;
         }
         xrtClearError();

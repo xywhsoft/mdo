@@ -39,7 +39,12 @@ def main():
             model['window'].update(context_tokens=131072,max_input_tokens=131072,max_output_tokens=1024,output_reserve_tokens=1024,summary_tokens=1024)
             settings['providers'].append(provider);settings['items'].append(model);settings.pop('runtime_override',None)
             call('PUT','/settings/models',{'schema_version':1,'patch':settings},{'If-Match':fields['etag']})
-            session,_=call('POST','/sessions',{'project_id':'default','title':'Manual compact','model_id':'command-fixture','reasoning_effort':'none','permission_profile':'read-only','max_output_tokens':1024},status=201)
+            (home/'commands').mkdir(exist_ok=True)
+            (home/'commands/sessioncreate.c').write_text('/* mdo-command {"id":"sessioncreate","description":"Create fixture session"} */\n#include "mdo/command.h"\nmdo_result mdoCommandRun(const mdo_command_context_v1* C,const xvalue* A,xvalue** R){return mdoCommandCall(C,"session.create",C->Host->At(A,0),R);}',encoding='utf-8')
+            create,_=call('POST','/command-invocations?project=default',{'invocation_id':'cmd-'+uuid.uuid4().hex,'command_id':'sessioncreate',
+              'raw_arguments':json.dumps([{'title':'Manual compact','model_id':'command-fixture','reasoning_effort':'none','permission_profile':'read-only','max_output_tokens':1024}])},status=202)
+            created=wait('/command-invocations/'+create['id']);assert created['state']=='succeeded',created
+            session=created['result']
             path='/projects/default/sessions/'+session['id']
             for i in range(5):
               run,_=call('POST',path+'/runs',{'prompt':f'Turn {i} PIXEL_KEEP: dimensions32 palette8 output pixels.png. '+'history-note '*2500},status=202)

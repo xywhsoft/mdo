@@ -2,6 +2,7 @@
 
 #include "../api/internal.h"
 #include "../../include/mdo/bootstrap.h"
+#include "../../include/mdo/commands.h"
 #include "../../include/mdo/remote.h"
 #include "../../include/mdo/device_transfer.h"
 

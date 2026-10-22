@@ -90,6 +90,9 @@ static void CWCompileError(void* Unused,cstr Message) {
     if(N<sizeof(CWError)-1)snprintf(CWError+N,sizeof(CWError)-N,"%s%s",N?"\n":"",Message);
 }
 void ServiceInit(XS_HostInfo* H) {
+#if defined(_WIN32) || defined(_WIN64)
+    SetErrorMode(0x8003u); /* Worker faults must not wait for an OS crash dialog. */
+#endif
     CWRoot=xrtPathParent(H->DevFile);
     xvalue* Input=CWRead("input.json"),*Output=xrtValueObject(),*Result=NULL;
     bool Monitor=false;xrtValueGetBool(CWGet(Input,"watch_parent"),&Monitor);
