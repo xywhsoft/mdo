@@ -29,7 +29,7 @@ class ApiContractTests(unittest.TestCase):
         # response still uses the ordinary small envelope limit.
         self.assertRegex(self.http, r'Limit = xrtStrEqual\(pContext->Target.Path,\s*'
             r'xrtStrView\("/api/v1/ecosystem"\)\)\s*'
-            r'\? 1152u \* 1024u : MDO_API_RESPONSE_MAX_BYTES;')
+            r'\? 6u \* 1024u \* 1024u \+ 65536u : MDO_API_RESPONSE_MAX_BYTES;')
         self.assertIn("JsonSize > Limit", self.http)
         for resource in (
             "bootstrap", "settings", "models", "agents", "modules",
