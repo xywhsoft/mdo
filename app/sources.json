@@ -35,6 +35,7 @@
     "src/mcp/manager.c",
     "src/modules/manager.c",
     "src/commands/catalog.c",
+    "src/commands/migration.c",
     "src/commands/manager.c",
     "src/operations/manager.c",
     "src/distribution/manager.c",

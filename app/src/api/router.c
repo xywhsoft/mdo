@@ -29,6 +29,8 @@ static bool g_MdoApiInitialized;
 
 static const MdoApiRoute g_MdoApiRoutes[] = {
     { "/api/v1/commands", XHTTP_METHOD_GET, "GET, OPTIONS", MdoApiCommandsRoute, false },
+    { "/api/v1/commands/project/{command}", XHTTP_METHOD_GET|XHTTP_METHOD_PUT|XHTTP_METHOD_DELETE, "GET, PUT, DELETE, OPTIONS", MdoApiCommandProjectRoute, false },
+    { "/api/v1/commands/project/{command}/{enabled}", XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiCommandProjectRoute, false },
     { "/api/v1/command-invocations", XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiCommandInvocationRoute, false },
     { "/api/v1/command-invocations/{invocation}", XHTTP_METHOD_GET|XHTTP_METHOD_DELETE, "GET, DELETE, OPTIONS", MdoApiCommandInvocationRoute, false },
     { "/api/v1/device-transfers/capabilities", XHTTP_METHOD_GET, "GET, OPTIONS", MdoApiDeviceTransfersRoute, false },

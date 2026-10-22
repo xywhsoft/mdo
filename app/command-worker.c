@@ -19,6 +19,15 @@ static const xvalue* CWGet(const xvalue* V,const char* K){return xrtValueObjectG
 static xvalue* CWParse(const char* S){return S&&strlen(S)<=CW_LIMIT?xrtJsonParse(xrtStrView(S)):NULL;}
 static const xvalue* CWAt(const xvalue* V,size_t I){return xrtValueArrayGet(V,I);}
 static char* CWJson(const xvalue* V){return xrtJsonStringify(V,false,NULL);}
+static mdo_command_value_kind CWKind(const xvalue* V) {
+    switch(xrtValueType(V)){
+    case XVALUE_NULL:return MDO_COMMAND_NULL;case XVALUE_BOOL:return MDO_COMMAND_BOOL;
+    case XVALUE_INT:return MDO_COMMAND_INT;case XVALUE_UINT:return MDO_COMMAND_UINT;
+    case XVALUE_FLOAT:return MDO_COMMAND_NUMBER;case XVALUE_STRING:return MDO_COMMAND_STRING;
+    case XVALUE_ARRAY:return MDO_COMMAND_ARRAY;case XVALUE_OBJECT:return MDO_COMMAND_OBJECT;
+    default:return MDO_COMMAND_OTHER;
+    }
+}
 static char* CWPath(cstr Name){return xrtPathJoin(CWRoot,Name);}
 static xvalue* CWRead(cstr Name) {
     char* P=CWPath(Name);size_t N=0;char* S=(char*)xrtFileReadAllLimit(P,CW_LIMIT,&N);
@@ -63,7 +72,7 @@ void ServiceInit(XS_HostInfo* H) {
         Entry.P=tcc_get_symbol(Tcc,MDO_COMMAND_ENTRY);
         if(Entry.F){
             mdo_command_host_v1 Host={sizeof(Host),1,xrtValueCount,CWAt,CWGet,CWString,
-                CWParse,CWJson,xrtFree,xrtValueRelease,CWCall};
+                CWParse,CWJson,xrtFree,xrtValueRelease,CWCall,CWKind,xrtValueGetBool,xrtValueGetInt,xrtValueGetUInt,xrtValueGetFloat};
             mdo_command_context_v1 C={0};C.Size=sizeof(C);C.AbiVersion=1;
             C.InvocationId=CWText(Input,"invocation_id");C.CommandId=CWText(Input,"command_id");
             C.ProjectId=CWText(Input,"project_id");C.SessionId=CWText(Input,"session_id");

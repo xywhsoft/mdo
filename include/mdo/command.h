@@ -4,6 +4,11 @@
 /* xvalue is opaque. Values belong to the worker's host allocator. */
 typedef struct xvalue xvalue;
 typedef struct mdo_command_context_v1 mdo_command_context_v1;
+typedef enum mdo_command_value_kind {
+    MDO_COMMAND_NULL, MDO_COMMAND_BOOL, MDO_COMMAND_INT, MDO_COMMAND_UINT,
+    MDO_COMMAND_NUMBER, MDO_COMMAND_STRING, MDO_COMMAND_ARRAY, MDO_COMMAND_OBJECT,
+    MDO_COMMAND_OTHER
+} mdo_command_value_kind;
 typedef struct mdo_command_host_v1 {
     uint32_t Size, AbiVersion;
     size_t (*Count)(const xvalue*);
@@ -17,6 +22,11 @@ typedef struct mdo_command_host_v1 {
     /* Result is owned. Failure fills Context->Error; no implicit retries. */
     mdo_result (*Call)(const mdo_command_context_v1*, const char* Method,
         const xvalue* Params, xvalue** Result);
+    mdo_command_value_kind (*Kind)(const xvalue*);
+    bool (*Boolean)(const xvalue*,bool*);
+    bool (*Integer)(const xvalue*,int64_t*);
+    bool (*Unsigned)(const xvalue*,uint64_t*);
+    bool (*Number)(const xvalue*,double*);
 } mdo_command_host_v1;
 struct mdo_command_context_v1 {
     uint32_t Size, AbiVersion;

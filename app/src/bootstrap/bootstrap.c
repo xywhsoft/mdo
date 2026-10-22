@@ -63,6 +63,7 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
         MdoBootstrapFail("Extension installation recovery failed");
         return false;
     }
+    if(!MdoCommandMigrateLegacy())fprintf(stderr,"[mdo] legacy command migration needs attention; originals retained\n");
     if ( !MdoProjectLifecycleInit() ) {
         MdoBootstrapFail("project lifecycle initialization failed");
         return false;

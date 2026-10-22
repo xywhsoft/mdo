@@ -83,8 +83,8 @@ xvalue* MdoCommandArguments(cstr Raw,char Error[512])
         while(*Raw&&(Quote||!isspace((unsigned char)*Raw))){
             char C=*Raw++;
             if(C=='\\'&&*Raw&&((Quote!='"'&&Quote!='\'')?
-                (*Raw=='\\'||*Raw=='"'||*Raw=='\''||isspace((unsigned char)*Raw)):
-                (Quote=='"'&&(*Raw=='"'||*Raw=='\\')))){Word[N++]=*Raw++;continue;}
+                (*Raw=='"'||*Raw=='\''||isspace((unsigned char)*Raw)):
+                (Quote=='"'&&*Raw=='"'))){Word[N++]=*Raw++;continue;}
             if((C=='"'||C=='\'')&&(!Quote||Quote==C)){Quote=Quote?0:C;continue;}
             Word[N++]=C;
         }
@@ -127,6 +127,20 @@ static void CommandPut(xvalue* Map,cstr Id,cstr Source,cstr Scope,cstr Path,bool
     xrtValueObjectSetNew(Item,XRT_STR_LITERAL("valid"),xrtValueBool(Valid));
     xrtValueObjectSetNew(Map,xrtStrView(Id),Item);
 }
+xvalue* MdoCommandProjectSettings(xroot Root) {
+    xfileoptions O;xrtFileOptionsInit(&O);O.Flags=XFILE_READ|XFILE_NOFOLLOW;
+    xfile F=xrtRootFileOpen(Root,".mdo/commands.json",&O);
+    if(!F&&CommandMissing())return xrtJsonParse(XRT_STR_LITERAL("{\"schema_version\":1,\"disabled\":{}}"));
+    char* Text=CommandReadFile(F);xvalue* V=Text?xrtJsonParse(xrtStrView(Text)):NULL;xrtFree(Text);
+    uint64 Schema=0;const xvalue* Disabled=xrtValueObjectGet(V,XRT_STR_LITERAL("disabled"));
+    bool Ok=xrtValueType(V)==XVALUE_OBJECT&&xrtValueCount(V)==2&&CommandUInt(xrtValueObjectGet(V,XRT_STR_LITERAL("schema_version")),&Schema)&&
+        Schema==1&&xrtValueType(Disabled)==XVALUE_OBJECT&&xrtValueCount(Disabled)<=MDO_COMMAND_LIMIT;
+    for(size_t i=0;Ok&&i<xrtValueCount(Disabled);i++){
+        xstrview Key={0};const xvalue* Item=xrtValueObjectAt(Disabled,i,&Key);bool Value=false;
+        Ok=Key.Size>0&&Key.Size<=64&&!memchr(Key.Data,0,Key.Size)&&MdoExtensionIdValid(Key.Data)&&xrtValueGetBool(Item,&Value);
+    }
+    if(!Ok){xrtValueRelease(V);return NULL;}return V;
+}
 xvalue* MdoCommandCatalog(cstr Workspace)
 {
     xvalue* Map=xrtValueObject();if(!Map)return NULL;
@@ -149,13 +163,15 @@ xvalue* MdoCommandCatalog(cstr Workspace)
     if(Next==XDIR_NEXT_ERROR)goto fail;
     if(Workspace&&Workspace[0]){
         xroot Root=xrtRootOpen(Workspace);if(!Root){if(CommandMissing())return Map;goto fail;}
+        xvalue* Settings=MdoCommandProjectSettings(Root);
+        if(!Settings){xrtRootClose(Root);goto fail;}
         Dir=xrtRootDirOpen(Root,".mdo/commands",XDIR_STAT);
-        if(!Dir&&!CommandMissing()){xrtRootClose(Root);goto fail;}
+        if(!Dir&&!CommandMissing()){xrtValueRelease(Settings);xrtRootClose(Root);goto fail;}
         Next=XDIR_NEXT_END;
         while(Dir&&(Next=xrtDirNext(Dir,&E))==XDIR_NEXT_ITEM){
             if(!(E.Flags&XDIR_ENTRY_UTF8)||E.Name.Size<3||E.Name.Size>66||
                 memcmp(E.Name.Data+E.Name.Size-2,".c",2))continue;
-            if(++Count>2*MDO_COMMAND_LIMIT){xrtRootClose(Root);goto fail;}
+            if(++Count>2*MDO_COMMAND_LIMIT){xrtValueRelease(Settings);xrtRootClose(Root);goto fail;}
             char Id[65],Path[160];memcpy(Id,E.Name.Data,E.Name.Size-2);Id[E.Name.Size-2]=0;
             if(!MdoExtensionIdValid(Id))continue;
             snprintf(Path,sizeof(Path),".mdo/commands/%s.c",Id);
@@ -163,10 +179,28 @@ xvalue* MdoCommandCatalog(cstr Workspace)
             char* Text=CommandReadFile(xrtRootFileOpen(Root,Path,&O));
             CommandPut(Map,Id,Text,"project",Path,true);xrtFree(Text);
         }
+        const xvalue* Disabled=xrtValueObjectGet(Settings,XRT_STR_LITERAL("disabled"));
+        for(size_t i=0;i<xrtValueCount(Disabled);i++){
+            xstrview Key={0};bool Value=false;xrtValueGetBool(xrtValueObjectAt(Disabled,i,&Key),&Value);
+            xvalue* Item=xrtValueObjectGet(Map,Key);if(Item&&Value)xrtValueObjectSetNew(Item,XRT_STR_LITERAL("enabled"),xrtValueBool(false));
+        }
+        xrtValueRelease(Settings);
         xrtRootClose(Root);
         if(Dir&&!xrtDirClose(Dir)){Dir=NULL;goto fail;}Dir=NULL;
         if(Next==XDIR_NEXT_ERROR)goto fail;
     }
+    bool Missing=false;char* Report=MdoExtensionRead("data/commands/migration-report.json",true,MDO_COMMAND_TEXT_LIMIT,&Missing);
+    xvalue* Rows=Report?xrtJsonParse(xrtStrView(Report)):NULL;xrtFree(Report);
+    for(size_t i=0;i<xrtValueCount(Rows);i++){
+        const xvalue* Row=xrtValueArrayGet(Rows,i);cstr Id=CommandText(Row,"id"),State=CommandText(Row,"state");
+        const xvalue* Existing=Id?xrtValueObjectGet(Map,xrtStrView(Id)):NULL;
+        cstr Scope=CommandText(Existing,"scope");
+        if(Id&&State&&!strcmp(State,"needs_attention")&&(!Scope||!strcmp(Scope,"builtin"))){
+            char Path[160];snprintf(Path,sizeof(Path),"commands/%s.md",Id);CommandPut(Map,Id,NULL,"user",Path,true);
+            CommandSet(xrtValueObjectGet(Map,xrtStrView(Id)),"diagnostic",CommandText(Row,"message"));
+        }
+    }
+    xrtValueRelease(Rows);
     if(xrtValueCount(Map)>MDO_COMMAND_LIMIT)goto fail;
     return Map;
 fail:if(Dir)xrtDirClose(Dir);xrtValueRelease(Map);return NULL;

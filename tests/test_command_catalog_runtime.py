@@ -32,6 +32,9 @@ void ServiceInit(XS_HostInfo* H){
  A=MdoCommandArguments("\"\" C:\\foo\\bar",Error);CHECK(A);
  xstrview T={0};CHECK(xrtValueGetString(xrtValueArrayGet(A,0),&T)&&T.Size==0);
  CHECK(xrtValueGetString(xrtValueArrayGet(A,1),&T)&&!strcmp(T.Data,"C:\\foo\\bar"));xrtValueRelease(A);
+ A=MdoCommandArguments("\\\\server\\share\\file",Error);CHECK(A);
+ CHECK(xrtValueGetString(xrtValueArrayGet(A,0),&T)&&!strcmp(T.Data,"\\\\server\\share\\file"));xrtValueRelease(A);
+ M=MdoCommandMetadata("x","/* mdo-command {\"id\":\"x\",\"description\":\"x\",\"timeout_ms\":30000} */",Error);CHECK(M);xrtValueRelease(M);
  M=MdoCommandMetadata("x","/* mdo-command {\"id\":\"x\",\"description\":\"x\",\"timeout_ms\":0} */",Error);CHECK(!M);
  M=MdoCommandCatalog(WORKSPACE);CHECK(M&&xrtValueCount(M)==3);
  bool Valid=true;CHECK(xrtValueGetBool(xrtValueObjectGet(xrtValueObjectGet(M,XRT_STR_LITERAL("shadow")),XRT_STR_LITERAL("valid")),&Valid)&&!Valid);

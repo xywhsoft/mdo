@@ -20,6 +20,7 @@ export function createSlashCommands({ composer, input, onExecute, contextKey = (
   const composition = createCompositionTracker(input);
   let custom = [];
   const pending = new Map();
+  const selections = new Set();
   let skills = [], lookup = 0;
   const stopTarget = subscribeTarget(() => { skills = []; ++lookup; hide(); });
   const stopCommands = subscribeCommands(items => { custom = items; if (document.activeElement === input && input.value.startsWith("/")) update(false); });
@@ -80,6 +81,8 @@ export function createSlashCommands({ composer, input, onExecute, contextKey = (
   async function executeValue(value) {
     const selection = parseCommand(value);if (!selection) return false;
     const before = input.value, key = contextKey(), scope = { ...commandScope() };
+    const selectionKey=JSON.stringify([key,value]);if(selections.has(selectionKey))return true;
+    selections.add(selectionKey);
     hide();let cleared = false;
     try {
       const command = (await loadCommands(scope.projectId)).find(item => item.id === selection.id);
@@ -95,7 +98,7 @@ export function createSlashCommands({ composer, input, onExecute, contextKey = (
     } catch (error) {
       if (cleared && key === contextKey() && !input.value) { input.value = before;input.dispatchEvent(new Event("input", { bubbles: true })); }
       if (error?.name !== "AbortError") toast(errorMessage(error), "error");
-    }
+    } finally { selections.delete(selectionKey); }
     return true;
   }
 

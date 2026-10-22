@@ -10,6 +10,9 @@ def main():
     p=argparse.ArgumentParser();p.add_argument('--host',required=True,type=Path);args=p.parse_args()
     with tempfile.TemporaryDirectory(dir=ROOT/'.build',prefix='commands-api-') as tmp:
         base=Path(tmp);port=free_port();config=write_site(base,port);home=base/'home'
+        (home/'commands').mkdir(parents=True)
+        legacy='---\ndescription: Legacy review\n---\nReview $ARGUMENTS carefully.'
+        (home/'commands/legacy.md').write_text(legacy,encoding='utf-8')
         commands=base/'default-home/commands';commands.mkdir(exist_ok=True)
         bodies={
           'echo':'mdo_result mdoCommandRun(const mdo_command_context_v1* C,const xvalue* A,xvalue** R){char* J=C->Host->Json(A);*R=C->Host->Parse(J);C->Host->Free(J);return MDO_RESULT_OK;}',
@@ -59,6 +62,29 @@ def main():
                     if name in ('fork','export','clear'):assert result['actions'][0]['params']['action']==name,result
                 result=wait(invoke('new','unexpected'))
                 assert result['state']=='failed' and 'Invalid arguments for /new' in result['error'],result
+                result=wait(invoke('legacy','"C:\\new folder\\chapter.txt"'))
+                assert result['state']=='succeeded' and result['actions'][0]['type']=='skill.invoke',result
+                skill=result['actions'][0]['params']['id']
+                status,_,raw=request(port,'POST','/api/v1/skills/invoke?project=default',
+                    body=json.dumps({'id':skill,'arguments':'hello world'}).encode(),headers={'Content-Type':'application/json'})
+                assert status==200 and 'Review hello world carefully.' in json.loads(raw)['data']['text'],raw
+                assert (home/'commands/legacy.md').read_text(encoding='utf-8')==legacy
+                builtin=json.loads(request(port,'GET','/api/v1/extensions/commands/help')[2])['data']['content']
+                path='/api/v1/commands/project/help?project=default'
+                status,_,raw=request(port,'PUT',path,body=json.dumps({'content':builtin}).encode(),headers={'Content-Type':'application/json','If-Match':'"new"'})
+                assert status==200,(status,raw)
+                revision=json.loads(raw)['data']['revision']
+                assert json.loads(request(port,'GET','/api/v1/commands?project=default')[2])['data']['help']['scope']=='project'
+                toggle='/api/v1/commands/project/help/enabled?project=default'
+                for enabled in (False,True):
+                    status,_,raw=request(port,'POST',toggle,body=json.dumps({'enabled':enabled}).encode(),headers={'Content-Type':'application/json','If-Match':'"'+revision+'"'})
+                    assert status==200,(status,raw)
+                    assert json.loads(request(port,'GET','/api/v1/commands?project=default')[2])['data']['help']['enabled']==enabled
+                status,_,_=request(port,'PUT',path,body=json.dumps({'content':builtin}).encode(),headers={'Content-Type':'application/json','If-Match':'"new"'})
+                assert status==412
+                status,_,raw=request(port,'DELETE',path,headers={'If-Match':'"'+revision+'"'})
+                assert status==200,(status,raw)
+                assert json.loads(request(port,'GET','/api/v1/commands?project=default')[2])['data']['help']['scope']=='builtin'
                 assert not list((home/'data/cache/command-workers').glob('*/input.json')),'Sensitive worker inputs retained'
                 assert process.poll() is None,'Command terminated the host'
             finally:
