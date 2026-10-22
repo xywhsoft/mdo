@@ -198,9 +198,6 @@ void ServiceInit(XS_HostInfo *host) {{
     }}
     if (!ExecuteOne(runtime, "mdo.echo", "{{\"text\":\"hello\"}}",
             &agent, &session, &definition)) goto done;
-    if (!ExecuteOne(runtime, "mdo.todo",
-            "{{\"items\":[{{\"text\":\"inspect\",\"done\":false}}]}}",
-            &agent, &session, &definition)) goto done;
     old_catalog = catalog; catalog = NULL;
     if (!MdoHomeAtomicWrite("modules/tools/external.c", sExternal,
             strlen(sExternal), false) || !MdoModuleManagerReload()) {{
@@ -302,8 +299,6 @@ def write_site(site: Path) -> None:
     shutil.copy2(ROOT / "app/default-home/config/defaults.json",
                  site / "default-home/config/defaults.json")
     copy_echo_module(site)
-    shutil.copy2(ROOT / "app/default-home/modules/tools/builtin_todo.c",
-                 site / "default-home/modules/tools/builtin_todo.c")
     shutil.copy2(ROOT / "app/default-home/modules/agents/builtin_default.c",
                  site / "default-home/modules/agents/builtin_default.c")
     for relative in (
@@ -379,12 +374,11 @@ def main() -> int:
         write_site(site)
         output = run_probe(host, site, base / "home")
         assert "module_init_error=" not in output, output
-        assert "initial_generation=1 modules=3 tools=2 agents=1" in output, output
+        assert "initial_generation=1 modules=2 tools=1 agents=1" in output, output
         assert "initial_module=mdo.core.echo external=0" in output, output
         assert "initial_tool=mdo.echo agent=mdo.default permission=inherit" in output, output
         assert "execute_mdo.echo=infra:1 success:1" in output, output
-        assert "execute_mdo.todo=infra:1 success:1" in output, output
-        assert "reloaded_generation=2 modules=4 tools=3 old_modules=3" in output, output
+        assert "reloaded_generation=2 modules=3 tools=2 old_modules=2" in output, output
         assert "external_module=1 external=1" in output, output
         assert "schedule_parallel=1 group=probe.group source=mdo.modules" in output, output
         assert "execute_probe.external=infra:1 success:1" in output, output

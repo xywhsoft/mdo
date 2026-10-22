@@ -374,7 +374,7 @@ after an exe restart or Home move. Missing journal events and artifacts return
 `404`; an offset past the file returns `416`.
 
 `GET /projects/{project}/sessions/{session}/todo` returns the most recent
-successful main-Agent `mdo.todo` tool snapshot as `schema_version`, `event_id`,
+successful main-Agent `mdo.todo` tool snapshot (when the optional external example is installed) as `schema_version`, `event_id`,
 and an `items` array of `{text, done}` objects. A missing sidecar returns an
 empty list without creating Home. The tool submits a complete snapshot on each
 call, including an empty list to clear it; the event bridge validates and

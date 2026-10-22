@@ -4311,6 +4311,10 @@ def run_probe(host: Path) -> None:
                     ask_recovered_run)
                 assert ask_recovered_run["resume"] is True, ask_recovered_run
 
+                status, _, body = request(port, "PUT", "/api/v1/extensions/tools/todo-example",
+                    body=json.dumps({"content":(ROOT / "examples/tools/todo.c").read_text(encoding="utf-8")}).encode(),
+                    headers={"Content-Type":"application/json", "If-Match":'"new"'})
+                assert status == 200, (status, body)
                 status, _, body = request(port, "POST", run_path,
                     body=b'{"prompt":"TODO probe","timeout_ms":10000}',
                     headers={"Content-Type": "application/json"})

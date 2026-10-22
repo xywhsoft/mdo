@@ -111,6 +111,8 @@ def main():
     model = ThreadingHTTPServer(("127.0.0.1", 0), Model)
     worker = threading.Thread(target=model.serve_forever, daemon=True)
     worker.start()
+    from runtime_sources import install_todo_example
+    install_todo_example(base / "home")
     process = start(native, packed, base / "home", dict(os.environ, USE_WEBVIEW="0", MDO_QUEUE_FIXTURE_KEY="fixture-only"))
     def call(method, path, body=None, expected=200):
         status, _, raw = request(port, method, path, body=None if body is None else json.dumps(body).encode(),

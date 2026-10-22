@@ -29,6 +29,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from test_api_runtime import ROOT, free_port, request, wait_ready
+from runtime_sources import install_todo_example
 
 
 class Model(BaseHTTPRequestHandler):
@@ -155,6 +156,7 @@ def main():
     if base.exists():
         raise RuntimeError('Choose a new disposable directory; existing data is retained')
     base.mkdir(parents=True)
+    install_todo_example(base/'home')
     Model.workspace = base
     Model.stream_wait = max(.5, min(args.stream_wait, 60))
     exe=base/'mdo.exe';shutil.copy2(args.packed.resolve(),exe)

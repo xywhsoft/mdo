@@ -33,7 +33,6 @@ static const MdoBuiltinTool MDO_BUILTIN_TOOLS[] = {
     {"stdin", "Write to a process task's input", XWORK_TOOL_EFFECT_PROCESS, MDO_TOOL_ALWAYS, false},
     {"stop", "Stop a process or SubAgent task", XWORK_TOOL_EFFECT_PROCESS, MDO_TOOL_ALWAYS, false},
     {"ask_user", "Ask the user a question", XWORK_TOOL_EFFECT_READ, MDO_TOOL_ALWAYS, false},
-    {"mdo.todo", "Update the conversation task plan", XWORK_TOOL_EFFECT_READ, MDO_TOOL_ALWAYS, false},
     {"skill", "Discover and read installed Skills", XWORK_TOOL_EFFECT_READ, MDO_TOOL_ALWAYS, false},
     {"agent", "Delegate to an enabled SubAgent", XWORK_TOOL_EFFECT_AGENT_DELEGATION, MDO_TOOL_SUBAGENT, false},
     {"web_search", "Search the web through the account service", XWORK_TOOL_EFFECT_READ | XWORK_TOOL_EFFECT_NETWORK | XWORK_TOOL_EFFECT_EXTERNAL_SERVICE | XWORK_TOOL_EFFECT_SECRETS, MDO_TOOL_WEB, true},
@@ -58,7 +57,7 @@ static inline cstr MdoBuiltinToolCanonicalId(cstr Id)
     static const char* const Aliases[][2] = {
         {"Read","read"}, {"Grep","grep"}, {"Glob","glob"}, {"Bash","exec"},
         {"Edit","edit"}, {"Write","write"}, {"WebSearch","web_search"},
-        {"WebFetch","web_open"}, {"TodoWrite","mdo.todo"}, {"Skill","skill"}
+        {"WebFetch","web_open"}, {"Skill","skill"}
     };
     size_t i;
     for (i=0u;i<sizeof(Aliases)/sizeof(Aliases[0]);++i)

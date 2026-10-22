@@ -12,6 +12,14 @@ APP = (Path(__file__).resolve().parents[1] / "app").resolve()
 QUOTED_INCLUDE = re.compile(r'^\s*#\s*include\s*"([^"\r\n]+)"', re.MULTILINE)
 
 
+def install_todo_example(home: Path) -> None:
+    """Explicit opt-in for plan fixtures; the product never installs this."""
+    source = APP.parent / "examples/tools/todo.c"
+    target = home / "tools/todo-example.c"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, target)
+
+
 def copy_echo_module(site: Path) -> None:
     """Inject the test tool into a disposable Home, never the product tree."""
     source = Path(__file__).resolve().parent / "fixtures/modules/echo.c"

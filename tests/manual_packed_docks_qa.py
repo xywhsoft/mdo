@@ -1430,6 +1430,8 @@ threading.Thread(target=model.serve_forever, daemon=True).start()
                      "devlang": "c", "devfile": "generated/mdo_unity.c"}}]}),
     encoding="utf-8")
 home = base / "mdo-home"
+from runtime_sources import install_todo_example
+install_todo_example(home)
 if args.agent_profile_fixture:
     agent_dir = home / "modules/agents"
     agent_dir.mkdir(parents=True)

@@ -2,8 +2,9 @@
 
 #include "mdo/module.h"
 
-/* The result is a complete, bounded plan snapshot. The session event bridge
- * validates it again before projecting it into the portable Home. */
+/* Optional external-tool example, never bundled into the default Home.
+ * The session plan protocol validates successful main-Agent results before
+ * projecting them into the portable Home. */
 static mdo_result MdoTodoExecute(void* UserData,
     const mdo_tool_context_v1* Context, const char* ArgumentsJson,
     mdo_result_writer_v1* Writer, char* ErrorMessage,
@@ -56,9 +57,9 @@ static mdo_result MdoTodoRegister(const mdo_host_services_v1* Host,
 
 static const mdo_module_v1 MDO_TODO_MODULE = {
     MDO_V1_HEADER(mdo_module_v1),
-    "mdo.core.todo",
-    "Built-in Plan Tool",
-    "Publishes a compact plan snapshot for the session conversation dock.",
+    "example.todo",
+    "Conversation Plan Example",
+    "Optional external tool demonstrating the conversation plan protocol.",
     "1.0.0",
     0u,
     NULL,
