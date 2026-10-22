@@ -814,9 +814,10 @@ export async function boot() {
         },
         "ui.stop": async () => {
         const cancelled = await slashCommands.cancel(receipt.id);
-        if (!activeRun && !cancelled)
+        const capturedRun = activeRun && activeRun.id === scope.runId;
+        if (!capturedRun && !cancelled)
           throw new Error(t("slash.noActiveRun", {}, "当前没有运行中的任务"));
-        if (activeRun) stop.click();
+        if (capturedRun) stop.click();
         },
         "ui.session": async params => {
         const session = sessionDetailStore.get().data;

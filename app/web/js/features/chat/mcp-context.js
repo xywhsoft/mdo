@@ -50,7 +50,7 @@ export async function expandMcpArguments(values, project, options) {
       typeof values[0] !== "string" || !/^[A-Za-z0-9_.-]{1,128}$/.test(values[0]) ||
       typeof values[1] !== "string" || !values[1] || values[1].length > 256)
     throw new Error('用法：/mcp ["服务器","提示词",{"参数":"值"}]');
-  const args = values[2] || {};
+  const args = values.length === 3 ? values[2] : {};
   if (!args || Array.isArray(args) || typeof args !== "object" || Object.values(args).some(v => typeof v !== "string")) throw new Error("MCP 提示词参数必须是字符串值的 JSON 对象。");
   let server = values[0];
   const query = `?project=${encodeURIComponent(project || "default")}`;
