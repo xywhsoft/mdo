@@ -29,6 +29,14 @@ void MdoApplicationStreamsStop(void);
 void MdoApplicationStreamsUnit(void);
 xvalue* MdoApplicationStreamsCatalog(void);
 bool MdoApplicationStreamsCall(const mdo_sdk_context_v1*,cstr,const xvalue*,xvalue**,mdo_error_v1*,bool*);
+bool MdoApplicationPluginsInit(void);
+void MdoApplicationPluginsUnit(void);
+xvalue* MdoApplicationPluginsCatalog(void);
+bool MdoApplicationPluginsCall(const mdo_sdk_context_v1*,cstr,const xvalue*,xvalue**,mdo_error_v1*,bool*);
+bool MdoApplicationUiInit(void);
+void MdoApplicationUiUnit(void);
+xvalue* MdoApplicationUiCatalog(void);
+bool MdoApplicationUiCall(const mdo_sdk_context_v1*,cstr,const xvalue*,xvalue**,mdo_error_v1*,bool*);
 mdo_result MdoApplicationCall(const mdo_sdk_context_v1*,cstr,const xvalue*,xvalue**,mdo_error_v1*);
 /* Captured product routes are generated from the production router, never a
  * separately maintained allowlist. */

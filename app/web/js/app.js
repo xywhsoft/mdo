@@ -67,6 +67,7 @@ import { createComposerImages, unsupportedModelError } from "./features/chat/com
 import { createComposerProject } from "./features/chat/composer-project.js";
 import { createImagePreview } from "./features/chat/image-preview.js";
 import { createSlashCommands } from "./features/chat/slash-commands.js";
+import { createApplicationUi } from "./features/shell/application-sdk.js";
 import { applyCommandActions } from "./features/chat/command-actions.js";
 import { expandMcpCommand, expandMcpArguments } from "./features/chat/mcp-context.js";
 import { expandSkillSelection } from "./features/chat/skill-selection.js";
@@ -778,12 +779,7 @@ export async function boot() {
       await dispatchQueued();
     },
   });
-  const slashCommands = createSlashCommands({
-    composer, input: prompt, contextKey: () => String(routeVersion),
-    skillProject: () => navigation.get().projectId || "default",
-    commandScope: () => ({ projectId: navigation.get().projectId || "default", sessionId: navigation.get().sessionId || "", runId: activeRun?.id || "" }),
-    onPendingChange: count => { stop.hidden = !activeRun && !count; },
-    onExecute: async (receipt, scope) => {
+  const executeApplicationActions = async (receipt, scope) => {
       const version = routeVersion;
       const isCurrent = () => version === routeVersion;
       const handlers = {
@@ -842,8 +838,17 @@ export async function boot() {
         },
       };
       await applyCommandActions(receipt, handlers, isCurrent);
-    },
+  };
+  const slashCommands = createSlashCommands({
+    composer, input: prompt, contextKey: () => String(routeVersion),
+    skillProject: () => navigation.get().projectId || "default",
+    commandScope: () => ({ projectId: navigation.get().projectId || "default", sessionId: navigation.get().sessionId || "", runId: activeRun?.id || "" }),
+    onPendingChange: count => { stop.hidden = !activeRun && !count; },
+    onExecute: executeApplicationActions,
   });
+  const applicationUi = createApplicationUi({ navigation, executeActions: executeApplicationActions });
+  Object.defineProperty(globalThis, "mdo", { value: applicationUi.sdk, configurable: true });
+  window.addEventListener("pagehide", () => applicationUi.destroy(), { once: true });
   const fileMentions = createFileMentions({ composer, input: prompt, navigation });
   const tokenMeter = createTokenMeter({
     root: $("#context-meter"), trigger: $("#context-meter-trigger"),

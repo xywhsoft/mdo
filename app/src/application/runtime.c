@@ -33,7 +33,9 @@ xvalue* MdoApplicationRuntimeCatalog(void){
     }return A;
 }
 static bool SdkNativeFailure(mdo_error_v1* E,cstr Stage){
-    const xerror* X=xrtGetError();return MdoApplicationError(E,"sdk_native_failed",X?xrtErrorMessage(X):"Native operation failed",Stage,500,false);
+    const xerror* X=xrtGetError();xerrkind Kind=X?xrtErrorKind(X):XERR_INTERNAL;
+    uint32 Status=Kind==XERR_NOT_FOUND?404:Kind==XERR_PERMISSION?403:Kind==XERR_ARGUMENT||Kind==XERR_RANGE||Kind==XERR_TYPE||Kind==XERR_VALUE?400:Kind==XERR_EXISTS||Kind==XERR_STATE?409:Kind==XERR_TIMEOUT?504:Kind==XERR_CANCELLED?499:500;
+    return MdoApplicationError(E,"sdk_native_failed",X?xrtErrorMessage(X):"Native operation failed",Stage,Status,false);
 }
 static char* SdkBase64(const void* Bytes,size_t Size){
     size_t N=0;if(!xrtBase64Encode(Bytes,Size,NULL,0,&N,NULL))return NULL;
@@ -113,12 +115,16 @@ static bool SdkFileCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue* P,
             xrtFree(Bytes);
         }
     }else if(!strcmp(Action,"write")||!strcmp(Action,"append")){
+        cstr Revision=SdkField(P,"revision");
+        if(Revision){xfileinfo Current={0};xvalue* Metadata=xrtPathStat(Path,false,&Current)?SdkFileInfo(&Current):NULL;
+            bool Match=Metadata&&!strcmp(Revision,SdkField(Metadata,"revision"));xrtValueRelease(Metadata);
+            if(!Match){xrtFree(Path);return MdoApplicationError(E,"sdk_file_conflict","File changed since it was read; reload before saving","filesystem",412,false);}}
         unsigned char* Bytes=NULL;size_t Size=0;
         if(!SdkInputBytes(P,&Bytes,&Size,E)){xrtFree(Path);return false;}
         bool Parents=true;xrtValueGetBool(SdkGet(P,"parents"),&Parents);char* Parent=xrtPathParent(Path);
         Ok=!Parents||(Parent&&xrtDirCreateAll(Parent));xrtFree(Parent);
         if(Ok)Ok=!strcmp(Action,"append")?xrtFileAppend(Path,(xbytesview){Bytes,Size}):xrtFileWriteAtomic(Path,(xbytesview){Bytes,Size});
-        xrtSecureZero(Bytes,Size);xrtFree(Bytes);if(Ok){*R=xrtValueObject();SdkPutUInt(*R,"bytes",Size);}
+        xrtSecureZero(Bytes,Size);xrtFree(Bytes);if(Ok){xfileinfo Current={0};*R=xrtPathStat(Path,false,&Current)?SdkFileInfo(&Current):xrtValueObject();SdkPutUInt(*R,"bytes",Size);}
     }else if(!strcmp(Action,"mkdir")){Ok=xrtDirCreateAll(Path);if(Ok)*R=xrtValueObject();}
     else if(!strcmp(Action,"remove")){
         bool Recursive=false;xrtValueGetBool(SdkGet(P,"recursive"),&Recursive);xfileinfo Info={0};

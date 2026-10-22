@@ -145,6 +145,22 @@ bool MdoAgentSessionWithCheckpoint(MdoAgentSession* Session,
  * a root run claim alone does not freeze an asynchronous child Agent. */
 bool MdoAgentSessionWithQuiescentCheckpoint(MdoAgentSession* Session,
     MdoAgentCheckpointReadFn Read, void* UserData, xwork_error* Error);
+/* A native extension may own the complete loop: request construction, model
+ * calls, tool scheduling and ledger changes. The driver runs under the idle
+ * Agent's exclusive run claim, with no product manager mutex held. Borrowed
+ * handles are valid only during Drive. The executor retains live permissions,
+ * hooks, result limits, artifacts and the generation-pinned tool catalog. */
+typedef struct MdoAgentNativeContext {
+    uint32 Size;
+    xwork_runtime* Runtime;
+    xwork_agent* Agent;
+    xllm_session* History;
+    xllm_executor* Executor;
+    void* ModelUserData;
+    xwork_model_complete_fn Complete;
+} MdoAgentNativeContext;
+typedef bool (*MdoAgentNativeDriveFn)(void*,const MdoAgentNativeContext*,xwork_error*);
+bool MdoAgentSessionDriveNative(MdoAgentSession*,MdoAgentNativeDriveFn,void*,xwork_error*);
 bool MdoAgentSessionLastSequence(MdoAgentSession* Session,
     uint64* LastSequence, xwork_error* Error);
 /* Close a cancelled model turn without repeating it. Requires an exact ledger

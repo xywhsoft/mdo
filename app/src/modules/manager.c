@@ -156,6 +156,7 @@ typedef struct MdoModuleRegistrarContext {
     char Message[MDO_MODULE_ERROR_LIMIT];
 } MdoModuleRegistrarContext;
 
+typedef struct MdoModuleAgentScope {xwork_agent* Agent;char Project[128],Session[128];struct MdoModuleAgentScope* Next;} MdoModuleAgentScope;
 typedef struct MdoModuleState {
     xmutex* Lock;
     xmutex* ReloadLock;
@@ -164,9 +165,22 @@ typedef struct MdoModuleState {
     MdoModuleDiagnostics* Diagnostics;
     uint64 NextGeneration;
     bool Initialized;
+    MdoModuleAgentScope* Scopes;
 } MdoModuleState;
 
 static MdoModuleState g_MdoModules;
+bool MdoModuleAgentBindContext(xwork_agent* Agent,cstr Project,cstr Session){
+    if(!Agent||!g_MdoModules.Lock)return false;
+    MdoModuleAgentScope* Scope=xrtCalloc(1,sizeof(*Scope));if(!Scope)return false;Scope->Agent=Agent;
+    snprintf(Scope->Project,sizeof(Scope->Project),"%s",Project?Project:"");snprintf(Scope->Session,sizeof(Scope->Session),"%s",Session?Session:"");
+    xrtMutexLock(g_MdoModules.Lock);Scope->Next=g_MdoModules.Scopes;g_MdoModules.Scopes=Scope;xrtMutexUnlock(g_MdoModules.Lock);return true;
+}
+void MdoModuleAgentUnbindContext(xwork_agent* Agent){
+    if(!g_MdoModules.Lock)return;
+    xrtMutexLock(g_MdoModules.Lock);MdoModuleAgentScope** At=&g_MdoModules.Scopes;
+    while(*At){if((*At)->Agent==Agent){MdoModuleAgentScope* Scope=*At;*At=Scope->Next;xrtFree(Scope);break;}At=&(*At)->Next;}
+    xrtMutexUnlock(g_MdoModules.Lock);
+}
 
 static void MdoModulesSetError(cstr Message)
 {
@@ -1545,7 +1559,7 @@ static xwork_result MdoModulesResult(mdo_result Result)
     }
 }
 
-typedef struct MdoModuleCallScope {mdo_sdk_context_v1 Application;MdoApplicationInvocation Invocation;char Run[32];} MdoModuleCallScope;
+typedef struct MdoModuleCallScope {mdo_sdk_context_v1 Application;MdoApplicationInvocation Invocation;char Run[32],Project[128],Session[128];} MdoModuleCallScope;
 static void MdoModulesToolContext(mdo_tool_context_v1* pTarget,
     const MdoModuleToolBinding* pTool, const xwork_tool_context* pSource,MdoModuleCallScope* Scope)
 {
@@ -1566,6 +1580,8 @@ static void MdoModulesToolContext(mdo_tool_context_v1* pTarget,
     Scope->Application.InvocationId=pSource->sToolCallId;Scope->Application.Workspace=pSource->sWorkspaceRoot;
     Scope->Application.Deadline=pSource->uDeadline;snprintf(Scope->Run,sizeof(Scope->Run),"%llu",(unsigned long long)pSource->uRunId);
     Scope->Application.RunId=Scope->Run;pTarget->Application=&Scope->Application;
+    if(g_MdoModules.Lock){xrtMutexLock(g_MdoModules.Lock);for(MdoModuleAgentScope* S=g_MdoModules.Scopes;S;S=S->Next)if(S->Agent==pSource->pAgent){snprintf(Scope->Project,sizeof(Scope->Project),"%s",S->Project);snprintf(Scope->Session,sizeof(Scope->Session),"%s",S->Session);break;}xrtMutexUnlock(g_MdoModules.Lock);}
+    Scope->Application.ProjectId=Scope->Project;Scope->Application.SessionId=Scope->Session;
 }
 
 static bool MdoModulesPermissionAdd(void* pContext,
@@ -2073,6 +2089,7 @@ void MdoModuleManagerUnit(void)
     MdoModuleCatalogRelease(pCatalog);
     MdoModuleDiagnosticsRelease(pDiagnostics);
     xworkRuntimeRelease(pRuntime);
+    while(g_MdoModules.Scopes){MdoModuleAgentScope* Scope=g_MdoModules.Scopes;g_MdoModules.Scopes=Scope->Next;xrtFree(Scope);}
     if ( pLock != NULL ) (void)xrtMutexDestroy(pLock);
     if(Reload){xrtMutexUnlock(Reload);xrtMutexDestroy(Reload);}
     memset(&g_MdoModules, 0, sizeof(g_MdoModules));

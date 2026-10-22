@@ -6,6 +6,8 @@ static const struct {cstr Id,Description;} SdkBuiltins[]={
     {"sdk.describe","Describe a service and its call contract"},
     {"sdk.context","Read the immutable caller context"},
     {"sdk.native","Discover typed product functions for in-process native modules"},
+    {"model.complete","Call a configured model with managed credentials, tools, parts, usage and optional stream"},
+    {"tool.call","Execute one tool with the selected session's live permission scope and result rules"},
     {"events.read","Read the bounded event journal with a resumable cursor"}
 };
 static xvalue* SdkDescription(const MdoApplicationRoute* R){
@@ -36,6 +38,12 @@ xvalue* MdoApplicationCatalog(void){
     xvalue* Streams=MdoApplicationStreamsCatalog();
     for(size_t i=0;i<xrtValueCount(Streams);i++)xrtValueArrayAppend(A,xrtValueArrayGet(Streams,i));
     xrtValueRelease(Streams);
+    xvalue* Plugins=MdoApplicationPluginsCatalog();
+    for(size_t i=0;i<xrtValueCount(Plugins);i++)xrtValueArrayAppend(A,xrtValueArrayGet(Plugins,i));
+    xrtValueRelease(Plugins);
+    xvalue* Ui=MdoApplicationUiCatalog();
+    for(size_t i=0;i<xrtValueCount(Ui);i++)xrtValueArrayAppend(A,xrtValueArrayGet(Ui,i));
+    xrtValueRelease(Ui);
     xvalue* Custom=MdoApplicationCustomCatalog();
     for(size_t i=0;i<xrtValueCount(Custom);i++)xrtValueArrayAppend(A,xrtValueArrayGet(Custom,i));
     xrtValueRelease(Custom);
@@ -43,6 +51,8 @@ xvalue* MdoApplicationCatalog(void){
 }
 static mdo_result SdkInvoke(const mdo_sdk_context_v1* C,cstr Method,const xvalue* P,xvalue** R,mdo_error_v1* E){
     if(!strcmp(Method,"sdk.native")){*R=SdkNativeCatalog();return *R?MDO_RESULT_OK:MDO_RESULT_ERROR;}
+    if(!strcmp(Method,"model.complete"))return SdkModelCall(C,P,R,E)?MDO_RESULT_OK:MDO_RESULT_ERROR;
+    if(!strcmp(Method,"tool.call"))return SdkToolCall(C,P,R,E)?MDO_RESULT_OK:MDO_RESULT_ERROR;
     if(!strcmp(Method,"sdk.services")){*R=MdoApplicationCatalog();return *R?MDO_RESULT_OK:MDO_RESULT_ERROR;}
     if(!strcmp(Method,"sdk.context")){
         *R=xrtValueObject();SdkPut(*R,"extension",C->ExtensionId);SdkPut(*R,"invocation",C->InvocationId);
@@ -65,6 +75,10 @@ static mdo_result SdkInvoke(const mdo_sdk_context_v1* C,cstr Method,const xvalue
     if(Found)return JobOk?MDO_RESULT_OK:MDO_RESULT_ERROR;
     bool StreamOk=MdoApplicationStreamsCall(C,Method,P,R,E,&Found);
     if(Found)return StreamOk?MDO_RESULT_OK:MDO_RESULT_ERROR;
+    bool PluginOk=MdoApplicationPluginsCall(C,Method,P,R,E,&Found);
+    if(Found)return PluginOk?MDO_RESULT_OK:MDO_RESULT_ERROR;
+    bool UiOk=MdoApplicationUiCall(C,Method,P,R,E,&Found);
+    if(Found)return UiOk?MDO_RESULT_OK:MDO_RESULT_ERROR;
     bool CustomOk=MdoApplicationCustomCall(C,Method,P,R,E,&Found);
     if(Found)return CustomOk?MDO_RESULT_OK:MDO_RESULT_ERROR;
     for(size_t i=0;i<sizeof(SdkRoutes)/sizeof(*SdkRoutes);i++)if(!strcmp(Method,SdkRoutes[i].Id))

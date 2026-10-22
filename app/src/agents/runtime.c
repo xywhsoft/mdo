@@ -977,6 +977,7 @@ static void MdoAgentSessionFree(MdoAgentSession* Session)
 {
     if ( Session == NULL ) return;
     xworkAgentDestroy(Session->Agent);
+    MdoModuleAgentUnbindContext(Session->Agent);
     MdoAskBindingDestroy(Session->AskBinding);
     MdoAgentOwnerRelease(Session->Owner);
     xrtFree(Session->AgentId);
@@ -1396,6 +1397,9 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
     Session->Agent = xworkAgentCreateWithRuntime(Runtime, Definition,
         &AgentOptions, Error);
     if ( Session->Agent == NULL ) goto fail;
+    if(!MdoModuleAgentBindContext(Session->Agent,Options->ProjectId,Options->ProductSessionId)){
+        MdoAgentsError(Error,XWORK_ERROR_OUT_OF_MEMORY,"Cannot bind Agent application identity");goto fail;
+    }
     if ( !MdoMcpConfigureAgent(Session->Agent, AgentOptions.sWorkspaceRoot, Error) ) goto fail;
     if ( Owner->ApprovalScope ) {
         if ( !xworkAgentSetFileScope(Session->Agent, Owner->ApprovalScope->Files, Error) ) goto fail;
@@ -1745,6 +1749,24 @@ bool MdoAgentSessionWithQuiescentCheckpoint(MdoAgentSession* Session,
     MdoAgentCheckpointReadFn Read, void* UserData, xwork_error* Error)
 {
     return MdoAgentWithCheckpoint(Session, Read, UserData, true, Error);
+}
+
+bool MdoAgentSessionDriveNative(MdoAgentSession* Session,MdoAgentNativeDriveFn Drive,void* Data,xwork_error* Error)
+{
+    xwork_error LocalError;if(!Error)Error=&LocalError;xworkErrorInit(Error);
+    if(!Drive||!(Session=MdoAgentSessionRef(Session))){MdoAgentsError(Error,XWORK_ERROR_INVALID_ARGUMENT,"An owned Agent and native driver are required");return false;}
+    bool Ok=false; xllm_executor Executor={0};
+    if(!MdoAgentLedgerBegin(Session,Error))goto done;
+    if(!xworkExecutorBind(&Executor,Session->Agent,Error)){xworkAgentRunEnd(Session->Agent);goto done;}
+    MdoAgentNativeContext Context={sizeof(Context),Session->Owner->Runtime,Session->Agent,Session->Owner->LlmSession,&Executor,Session->Owner,MdoAgentsComplete};
+    Ok=Drive(Data,&Context,Error);
+    xworkExecutorUnbind(&Executor);
+    /* A failed driver can still have appended durable calls/results. Preserve
+     * them for recovery rather than treating failure as a transaction rollback. */
+    if(Session->SnapshotPath&&Session->SnapshotPath[0]){xllm_error ModelError;
+        if(!MdoAgentLedgerCheckpoint(Session,&ModelError)){Ok=false;MdoAgentsModelError(Error,&ModelError,"Native Agent driver could not checkpoint its history");}}
+    xworkAgentRunEnd(Session->Agent);
+done:MdoAgentSessionRelease(Session);return Ok;
 }
 
 bool MdoAgentSessionLastSequence(MdoAgentSession* Session,
