@@ -23,3 +23,12 @@ test("failed effects and unavailable intent storage cannot trigger repeated acti
   await assert.rejects(()=>applyApplicationAction(action,execute,{getItem:()=>null,setItem:()=>{throw Error("quota")}},"journal"),/quota/);
   assert.equal(calls,1);
 });
+test("corrupt or unreadable intent journals cannot be mistaken for empty storage",async()=>{
+ let calls=0,writes=0;
+ for(const text of ['{','null','[]','false','""']){
+  const storage={getItem:()=>text,setItem:()=>writes++};
+  await assert.rejects(()=>applyApplicationAction({id:'uia-uncertain'},()=>calls++,storage,'journal'),/journal/);
+ }
+ await assert.rejects(()=>applyApplicationAction({id:'uia-uncertain'},()=>calls++,{getItem(){throw Error('unavailable')},setItem:()=>writes++},'journal'),/unavailable/);
+ assert.equal(calls,0);assert.equal(writes,0);
+});

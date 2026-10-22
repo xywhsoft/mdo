@@ -31,9 +31,14 @@ export function createApplicationClient(context = () => ({})) {
 /* Record intent before an effect. A reload between effect and acknowledgement
  * is uncertain and must be reviewed, never silently replayed. */
 export async function applyApplicationAction(action, execute, storage, key) {
-  let records = {};
-  try { records = JSON.parse(storage.getItem(key) || "{}"); } catch { /* Empty journal. */ }
-  if (!records || typeof records !== "object" || Array.isArray(records)) records = {};
+  // A missing journal is empty; an unreadable/corrupt journal is uncertain.
+  // Treating corruption as empty could repeat an already completed effect.
+  const saved = storage.getItem(key);
+  let records;
+  try { records = saved === null ? {} : JSON.parse(saved); }
+  catch { throw new Error("UI intent journal is corrupt; inspect the UI before repeating effects"); }
+  if (!records || typeof records !== "object" || Array.isArray(records))
+    throw new Error("UI intent journal is invalid; inspect the UI before repeating effects");
   if (Object.hasOwn(records, action.id)) {
     const saved = records[action.id];
     return saved.state === "done" ? saved.ack : { success: false, error: "The page restarted while this action was executing; inspect the UI before repeating it" };
