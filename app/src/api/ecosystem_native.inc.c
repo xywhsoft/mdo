@@ -60,7 +60,8 @@ static bool EcoNativePrepare(xvalue* Files,const xvalue* Package,const xvalue* P
     for(size_t i=0;i<xrtValueCount(Resources);i++){cstr Kind=MdoPackageText(xrtValueArrayGet(Resources,i),"kind",16);if(Kind&&!strcmp(Kind,"plugins"))Has=true;}
     for(size_t i=0;i<xrtValueCount(OldResources);i++){cstr Kind=MdoPackageText(xrtValueArrayGet(OldResources,i),"kind",16);if(Kind&&!strcmp(Kind,"plugins"))Has=true;}
     if(!Has)return true;
-    if(!MdoApplicationPluginsStoreBegin(Before,Error,1024))return false;*Reserved=true;
+    if(!MdoApplicationPluginsStoreBegin(Before,Error,1024))return false;
+    *Reserved=true;
     *After=xrtValueArray();bool Ok=*After!=NULL;
     for(size_t i=0;Ok&&i<xrtValueCount(*Before);i++){
         const xvalue* Item=xrtValueArrayGet(*Before,i);cstr Id=MdoPackageText(Item,"id",64);

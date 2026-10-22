@@ -20,12 +20,14 @@ static bool EcoNativeSourceList(xvalue* Items)
 }
 static bool EcoNativeExportFile(xvalue* Extras,cstr Root,cstr Name,size_t* Total)
 {
-    if(!MdoPackagePath(Name))return false;char Path[512];int N=snprintf(Path,sizeof(Path),"%s/%s",Root,Name);if(N<=0||(size_t)N>=sizeof(Path))return false;
+    if(!MdoPackagePath(Name))return false;
+    char Path[512];int N=snprintf(Path,sizeof(Path),"%s/%s",Root,Name);if(N<=0||(size_t)N>=sizeof(Path))return false;
     xfile F=MdoHomeOpenRead(Path);xfileinfo Info={0};bool Ok=F&&xrtFileStat(F,&Info)&&Info.Type==XFILE_TYPE_FILE&&Info.Size<=1048576u&&*Total+Info.Size<=4u*1024u*1024u;
     bytes Data=Ok?xrtMalloc((size_t)Info.Size+1):NULL;Ok=Ok&&Data&&xrtReadFull(F,Data,(size_t)Info.Size,NULL);if(F)xrtClose(F);
     char* B64=Ok?xrtBase64EncodeNew(Data,(size_t)Info.Size,NULL):NULL;xvalue* E=xrtValueObject();
     Ok=Ok&&B64&&E&&MdoApiValueSetString(E,"path",Name)&&MdoApiValueSetString(E,"base64",B64)&&xrtValueArrayAppend(Extras,E);
-    if(Ok)*Total+=(size_t)Info.Size;xrtFree(B64);xrtFree(Data);xrtValueRelease(E);return Ok;
+    if(Ok)*Total+=(size_t)Info.Size;
+    xrtFree(B64);xrtFree(Data);xrtValueRelease(E);return Ok;
 }
 static bool EcoNativeExport(cstr Kind,cstr Id,xvalue* Resource)
 {
@@ -49,7 +51,8 @@ static bool EcoNativeExport(cstr Kind,cstr Id,xvalue* Resource)
 }
 static bool EcoNativeExportTree(cstr Root,cstr Prefix,xvalue* Extras,size_t* Total,size_t Depth)
 {
-    if(Depth>8)return false;char Directory[512];snprintf(Directory,sizeof(Directory),"%s%s%s",Root,Prefix[0]?"/":"",Prefix);
+    if(Depth>8)return false;
+    char Directory[512];snprintf(Directory,sizeof(Directory),"%s%s%s",Root,Prefix[0]?"/":"",Prefix);
     xdir Dir=MdoHomeOpenDirectory(Directory,XDIR_STAT);if(!Dir)return false;xdirentry E;xdirnext Next;bool Ok=true;
     while(Ok&&(Next=xrtDirNext(Dir,&E))==XDIR_NEXT_ITEM){
         if(E.Name.Size>64||memchr(E.Name.Data,0,E.Name.Size)){Ok=false;break;}char Name[65],Relative[256];memcpy(Name,E.Name.Data,E.Name.Size);Name[E.Name.Size]=0;

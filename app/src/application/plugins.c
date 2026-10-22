@@ -48,7 +48,8 @@ static bool SdkPluginMountRevision(SdkPlugin* P,const xvalue* Manifest){
 }
 static bool SdkPluginConfigSave(const xvalue* Config){char* Text=SdkJson(Config);bool Ok=Text&&MdoHomeAtomicWrite("config/plugins.json",Text,strlen(Text),true);xrtFree(Text);return Ok;}
 bool MdoApplicationPluginsStoreBegin(xvalue** Config,char* Error,size_t Capacity){
-    if(!Config||!SdkPlugins.Lock)return false;*Config=NULL;
+    if(!Config||!SdkPlugins.Lock)return false;
+    *Config=NULL;
     xrtMutexLock(SdkPlugins.Lock);
     bool Ok=!SdkPlugins.Busy&&!SdkPlugins.Recovery;
     if(Ok){*Config=xrtValueClone(SdkPlugins.Config);Ok=*Config!=NULL;if(Ok)SdkPlugins.Busy=true;}

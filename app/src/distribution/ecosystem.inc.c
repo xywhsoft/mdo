@@ -20,7 +20,8 @@ static void MdoDistCommunityTools(xvalue* Tools,xvalue* Instructions)
             if(!MdoHomeExternalStat(Path,&Exists,&Info)||!Exists||Info.Type!=XFILE_TYPE_FILE)continue;
             char* Native=MdoHomeExternalPath(Path);xvalue* Tool=xrtValueClone(Program);char Qualified[140];snprintf(Qualified,sizeof(Qualified),"%s.%s",Id,Name);
             bool Ok=Native&&Tool&&MdoDistSet(Tool,"name",Qualified)&&MdoDistSet(Tool,"id",Qualified)&&MdoDistSet(Tool,"package",Id)&&MdoDistSet(Tool,"path",Native)&&MdoDistSet(Tool,"verification","file-present")&&xrtValueArrayAppend(Tools,Tool);
-            if(Ok)Added++;xrtFree(Native);xrtValueRelease(Tool);
+            if(Ok)Added++;
+            xrtFree(Native);xrtValueRelease(Tool);
         }
         if(Added&&Instructions&&Prompt&&Prompt[0]&&strlen(Prompt)<=16384u-PromptBytes){
             xvalue* Item=xrtValueObject();if(Item&&MdoDistSet(Item,"package",Id)&&MdoDistSet(Item,"instructions",Prompt))xrtValueArrayAppend(Instructions,Item);

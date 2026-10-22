@@ -198,7 +198,8 @@ static bool EcoLocalApply(const xvalue* entry,bool uninstall,char error[1024],xv
     if(!ok&&!error[0])snprintf(error,1024,"Package installation failed; previous resources restored. Check configuration and tool references.");
 finished:
     xrtValueRelease(Preview);xrtValueRelease(Changes);
-    if(pluginReserved)MdoApplicationPluginsStoreEnd();xrtValueRelease(pluginBefore);xrtValueRelease(pluginAfter);
+    if(pluginReserved)MdoApplicationPluginsStoreEnd();
+    xrtValueRelease(pluginBefore);xrtValueRelease(pluginAfter);
     xrtValueRelease(receipts);xrtValueRelease(files);xrtValueRelease(journal);xrtValueRelease(next);xrtValueRelease(record);xrtValueRelease(inventory);return ok;
 }
 #include "ecosystem_drafts.inc.c"
