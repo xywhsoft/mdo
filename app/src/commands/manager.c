@@ -25,7 +25,7 @@ static struct {
     XS_ServerInfo* Server;
     CommandJob Jobs[COMMAND_JOBS];
     uint64 Sequence;
-    bool Stopping;
+    bool Stopping,StorageBlocked;
 } CommandManager;
 
 bool MdoCommandInvocationIdValid(cstr Id) {
@@ -42,6 +42,17 @@ static bool CommandSave(CommandJob* J) {
 static xvalue* CommandReadJson(cstr Path) {
     bool Missing=false;char* S=MdoExtensionRead(Path,true,COMMAND_RESULT_LIMIT,&Missing);
     xvalue* V=S?xrtJsonParse(xrtStrView(S)):NULL;xrtFree(S);return V;
+}
+static xvalue* CommandReadReceipt(cstr Id) {
+    char Path[128];CommandReceiptPath(Id,Path);xvalue* V=CommandReadJson(Path);
+    if(V&&xrtValueType(V)==XVALUE_OBJECT&&CommandText(V,"id")&&!strcmp(CommandText(V,"id"),Id)&&CommandText(V,"request_hash"))return V;
+    xrtValueRelease(V);bool Exists=false;xfileinfo Info={0};
+    if(MdoHomeExternalStat(Path,&Exists,&Info)&&!Exists)return NULL;
+    /* Corrupt/unreadable is never equivalent to not admitted. Preserve the
+     * original receipt and refuse to run this identity again. */
+    V=xrtValueObject();CommandSet(V,"id",Id);CommandSet(V,"state","uncertain");
+    CommandSet(V,"error","Command receipt cannot be read safely; a mutation may have completed. Inspect the target before repeating.");
+    xrtValueObjectSetNew(V,XRT_STR_LITERAL("terminal"),xrtValueBool(true));return V;
 }
 static bool CommandJobWrite(CommandJob* J,cstr Name,cstr Text) {
     char P[256];snprintf(P,sizeof(P),"%s/%s",J->Directory,Name);
@@ -246,8 +257,8 @@ static bool CommandRecover(void) {
         if(E.Name.Size!=41||memcmp(E.Name.Data+36,".json",5))continue;
         char Id[37],Path[128];memcpy(Id,E.Name.Data,36);Id[36]=0;
         if(!MdoCommandInvocationIdValid(Id)||Count>=COMMAND_JOBS){xrtDirClose(Dir);return false;}
-        CommandReceiptPath(Id,Path);xvalue* V=CommandReadJson(Path);
-        if(!V||!CommandText(V,"id")||strcmp(CommandText(V,"id"),Id)||!CommandText(V,"request_hash")){
+        CommandReceiptPath(Id,Path);xvalue* V=CommandReadReceipt(Id);
+        if(!V){
             xrtValueRelease(V);xrtDirClose(Dir);return false;
         }
         CommandJob* J=&CommandManager.Jobs[Count++];snprintf(J->Id,sizeof(J->Id),"%s",Id);
@@ -266,7 +277,11 @@ bool MdoCommandManagerInit(XS_ServerInfo* Server) {
     if(CommandManager.Lock)return true;
     memset(&CommandManager,0,sizeof(CommandManager));
     CommandManager.Lock=xrtMutexCreate();CommandManager.Server=xsServerRetain(Server);
-    if(CommandManager.Lock&&CommandManager.Server&&CommandRecover())CommandManager.Watch=xrtThreadCreate(CommandWatch,NULL,0);
+    if(CommandManager.Lock&&CommandManager.Server){
+        CommandManager.StorageBlocked=!CommandRecover();
+        if(CommandManager.StorageBlocked)fprintf(stderr,"[mdo] command receipt storage unavailable; new commands are blocked\n");
+        CommandManager.Watch=xrtThreadCreate(CommandWatch,NULL,0);
+    }
     if(!CommandManager.Watch){MdoCommandManagerUnit();return false;}return true;
 }
 void MdoCommandManagerUnit(void) {
@@ -280,7 +295,7 @@ xvalue* MdoCommandGet(cstr Id) {
     if(!MdoCommandInvocationIdValid(Id)||!CommandManager.Lock)return NULL;
     xrtMutexLock(CommandManager.Lock);CommandJob* J=CommandFind(Id);xvalue* V=J?xrtValueClone(J->Info):NULL;
     if(!J){
-        char P[128];CommandReceiptPath(Id,P);V=CommandReadJson(P);
+        V=CommandReadReceipt(Id);
         bool Terminal=false;xrtValueGetBool(xrtValueObjectGet(V,XRT_STR_LITERAL("terminal")),&Terminal);
         if(V&&!Terminal){CommandSet(V,"state","interrupted");CommandSet(V,"error","Host restarted before completion; a mutation may have completed. Inspect its result before repeating.");xrtValueObjectSetNew(V,XRT_STR_LITERAL("terminal"),xrtValueBool(true));}
     }
@@ -295,6 +310,7 @@ bool MdoCommandCancel(cstr Id) {
 xvalue* MdoCommandStart(const xvalue* Input,cstr Workspace,char Error[512]) {
     Error[0]=0;cstr Id=CommandText(Input,"invocation_id"),Command=CommandText(Input,"command_id"),Project=CommandText(Input,"project_id");
     if(!CommandManager.Lock||!MdoCommandInvocationIdValid(Id)||!MdoExtensionIdValid(Command)||!MdoExtensionIdValid(Project))goto invalid;
+    if(CommandManager.StorageBlocked){snprintf(Error,512,"Command receipt storage needs recovery before admitting new commands");return NULL;}
     char* Json=xrtJsonStringify(Input,false,NULL);char Hash[65];bool HasHash=Json&&MdoExtensionHash(Json,Hash);xrtFree(Json);if(!HasHash)goto invalid;
     xvalue* Existing=MdoCommandGet(Id);
     if(Existing){if(strcmp(Hash,CommandText(Existing,"request_hash")?CommandText(Existing,"request_hash"):"")){xrtValueRelease(Existing);goto conflict;}return Existing;}
@@ -314,8 +330,9 @@ xvalue* MdoCommandStart(const xvalue* Input,cstr Workspace,char Error[512]) {
         if(!J->Id[0]||J->Terminal)if(!Slot||!J->Id[0]||(Slot->Id[0]&&J->Sequence<Slot->Sequence))Slot=J;
     }
     bool Ok=!CommandManager.Stopping&&Active<COMMAND_ACTIVE&&Slot&&!CommandFind(Id);
+    if(Ok&&Slot->Id[0]){char P[128];CommandReceiptPath(Slot->Id,P);Ok=MdoHomeRemove(P,false);}
     if(Ok){
-        if(Slot->Id[0]){char P[128];CommandReceiptPath(Slot->Id,P);(void)MdoHomeRemove(P,false);CommandDispose(Slot);}
+        if(Slot->Id[0])CommandDispose(Slot);
         snprintf(Slot->Id,sizeof(Slot->Id),"%s",Id);snprintf(Slot->Hash,sizeof(Slot->Hash),"%s",Hash);
         snprintf(Slot->Directory,sizeof(Slot->Directory),"data/cache/command-workers/%s",Id);
         Slot->Input=xrtValueClone(Input);Slot->Info=xrtValueObject();Slot->Actions=xrtValueArray();Slot->Cancel=xrtCancelCreate();
@@ -329,7 +346,14 @@ xvalue* MdoCommandStart(const xvalue* Input,cstr Workspace,char Error[512]) {
             CommandSet(Slot->Info,"session_id",Session)&&CommandSet(Slot->Info,"revision",Revision)&&CommandSet(Slot->Info,"request_hash",Hash)&&
             CommandSet(Slot->Info,"state","pending")&&xrtValueObjectSetNew(Slot->Info,XRT_STR_LITERAL("terminal"),xrtValueBool(false))&&
             CommandJobWrite(Slot,"command.c",Source)&&CommandSave(Slot);
-        if(Ok){Slot->Thread=xrtThreadCreate(CommandExecute,Slot,0);Ok=Slot->Thread!=NULL;}
+        if(Ok){
+            Slot->Thread=xrtThreadCreate(CommandExecute,Slot,0);
+            if(!Slot->Thread){
+                CommandSet(Slot->Info,"state","failed");CommandSet(Slot->Info,"error","Worker thread could not start; no command was executed");
+                xrtValueObjectSetNew(Slot->Info,XRT_STR_LITERAL("terminal"),xrtValueBool(true));Slot->Terminal=true;(void)CommandSave(Slot);
+                MdoProjectLeaseRelease(Slot->Lease);Slot->Lease=NULL;CommandCleanup(Slot,0);
+            }
+        }
         if(!Ok){CommandCleanup(Slot,0);CommandDispose(Slot);}
     }
     xvalue* Result=Ok?xrtValueClone(Slot->Info):NULL;

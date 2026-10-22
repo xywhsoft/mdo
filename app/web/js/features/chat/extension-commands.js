@@ -63,7 +63,7 @@ export async function runCommand(command, raw, scope, { onPending, signal } = {}
       try { result = (await api.get(path, { signal })).data;checkReceipt(); readFailures = 0; }
       catch (error) { if (++readFailures >= 10 || error.status >= 400) throw error; }
     }
-    terminal = result.terminal && result.state !== "interrupted";
+    terminal = result.terminal && !["interrupted", "uncertain"].includes(result.state);
     if(!current())throw new DOMException("Command target changed","AbortError");
     if (result.state !== "succeeded") throw new Error(result.error || `命令执行失败：${result.state}`);
     return { ...result, raw_arguments: raw };

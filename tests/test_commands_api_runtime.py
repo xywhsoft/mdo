@@ -1,5 +1,5 @@
 """Command jobs: real parent/child execution, cancellation, deadline and replay."""
-import argparse,json,os,subprocess,tempfile,time,uuid
+import argparse,json,os,subprocess,tempfile,time,uuid,shutil
 from pathlib import Path
 from test_api_runtime import ROOT,write_site,free_port,request,wait_ready
 
@@ -7,13 +7,18 @@ def fixture(id,body,timeout=30000):
     return '/* mdo-command '+json.dumps({'id':id,'description':'fixture','timeout_ms':timeout})+' */\n#include "mdo/command.h"\n'+body
 
 def main():
-    p=argparse.ArgumentParser();p.add_argument('--host',required=True,type=Path);args=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument('--host',required=True,type=Path);p.add_argument('--packed',action='store_true');args=p.parse_args()
     with tempfile.TemporaryDirectory(dir=ROOT/'.build',prefix='commands-api-') as tmp:
-        base=Path(tmp);port=free_port();config=write_site(base,port);home=base/'home'
+        base=Path(tmp);port=free_port();home=base/'home';host=args.host.resolve()
+        if args.packed:
+            shutil.copy2(host,base/'mdo.exe');host=base/'mdo.exe';config=base/'xs.json'
+            config.write_text(json.dumps({'services':[{'enabled':True,'class':'http','name':'commands-packed','ip':'127.0.0.1','port':port,
+              'host_default':{'enabled':True,'path':'web','devlang':'c','devfile':'generated/mdo_unity.c'}}]}),encoding='utf-8')
+        else:config=write_site(base,port)
         (home/'commands').mkdir(parents=True)
         legacy='---\ndescription: Legacy review\n---\nReview $ARGUMENTS carefully.'
         (home/'commands/legacy.md').write_text(legacy,encoding='utf-8')
-        commands=base/'default-home/commands';commands.mkdir(exist_ok=True)
+        commands=home/'commands' if args.packed else base/'default-home/commands';commands.mkdir(parents=True,exist_ok=True)
         bodies={
           'echo':'mdo_result mdoCommandRun(const mdo_command_context_v1* C,const xvalue* A,xvalue** R){char* J=C->Host->Json(A);*R=C->Host->Parse(J);C->Host->Free(J);return MDO_RESULT_OK;}',
           'quit':'#include <stdlib.h>\nmdo_result mdoCommandRun(const mdo_command_context_v1* C,const xvalue* A,xvalue** R){exit(17);return MDO_RESULT_ERROR;}',
@@ -25,7 +30,7 @@ def main():
         for name,body in bodies.items():(commands/f'{name}.c').write_text(fixture(name,body,1000 if name=='loop' else 30000),encoding='utf-8')
         log=base/'host.log'
         with log.open('wb') as output:
-            process=subprocess.Popen([str(args.host.resolve()),str(config),'--','--home',str(home)],cwd=base,stdout=output,stderr=subprocess.STDOUT,
+            process=subprocess.Popen([str(host),*([] if args.packed else [str(config)]),'--','--home',str(home)],cwd=base,stdout=output,stderr=subprocess.STDOUT,
                 creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
             try:
                 wait_ready(port,process)
@@ -85,6 +90,14 @@ def main():
                 status,_,raw=request(port,'DELETE',path,headers={'If-Match':'"'+revision+'"'})
                 assert status==200,(status,raw)
                 assert json.loads(request(port,'GET','/api/v1/commands?project=default')[2])['data']['help']['scope']=='builtin'
+                damaged='cmd-'+uuid.uuid4().hex
+                (home/'data/commands'/f'{damaged}.json').write_text('corrupt receipt',encoding='utf-8')
+                status,_,raw=request(port,'GET','/api/v1/command-invocations/'+damaged)
+                assert status==200 and json.loads(raw)['data']['state']=='uncertain',raw
+                status,_,raw=request(port,'POST','/api/v1/command-invocations?project=default',
+                    body=json.dumps({'invocation_id':damaged,'command_id':'help'}).encode(),headers={'Content-Type':'application/json'})
+                assert status==409,raw
+                assert (home/'data/commands'/f'{damaged}.json').read_text(encoding='utf-8')=='corrupt receipt'
                 assert not list((home/'data/cache/command-workers').glob('*/input.json')),'Sensitive worker inputs retained'
                 assert process.poll() is None,'Command terminated the host'
             finally:
