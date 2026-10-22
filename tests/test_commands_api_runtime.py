@@ -28,7 +28,7 @@ def main():
                 wait_ready(port,process)
                 def invoke(name,raw='',identity=None):
                     identity=identity or 'cmd-'+uuid.uuid4().hex
-                    payload={'invocation_id':identity,'command_id':name,'raw_arguments':raw}
+                    payload={'invocation_id':identity,'command_id':name,'raw_arguments':raw,'session_id':'fixture'}
                     status,_,body=request(port,'POST','/api/v1/command-invocations?project=default',body=json.dumps(payload).encode(),headers={'Content-Type':'application/json'})
                     assert status==202,(status,body,request(port,'GET','/api/v1/commands?project=default')[2],log.read_text(encoding='utf-8',errors='replace'))
                     return identity
@@ -51,6 +51,14 @@ def main():
                 assert wait(identity)['state']=='cancelled'
                 result=wait(invoke('bridge'));assert result['state']=='succeeded' and result['actions'][0]['type']=='ui.help',result
                 result=wait(invoke('api'));assert result['state']=='succeeded' and result['result']['status']==200,result
+                expected={'new':'ui.new','model':'ui.model','fork':'ui.session','export':'ui.session',
+                  'clear':'ui.session','stop':'ui.stop','settings':'ui.settings','theme':'ui.theme','help':'ui.help','mcp':'ui.mcp'}
+                for name,action in expected.items():
+                    result=wait(invoke(name))
+                    assert result['state']=='succeeded' and result['actions'][0]['type']==action,(name,result)
+                    if name in ('fork','export','clear'):assert result['actions'][0]['params']['action']==name,result
+                result=wait(invoke('new','unexpected'))
+                assert result['state']=='failed' and 'Invalid arguments for /new' in result['error'],result
                 assert not list((home/'data/cache/command-workers').glob('*/input.json')),'Sensitive worker inputs retained'
                 assert process.poll() is None,'Command terminated the host'
             finally:

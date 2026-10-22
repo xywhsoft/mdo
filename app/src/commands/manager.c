@@ -2,6 +2,7 @@
 #include "../../include/mdo/project_lifecycle.h"
 #include "../../include/mdo/time.h"
 #include "../remote/loopback.h"
+#include "../api/write_admission.h"
 
 #define COMMAND_JOBS 64u
 #define COMMAND_ACTIVE 4u
@@ -75,8 +76,13 @@ static void CommandCleanup(CommandJob* J,unsigned Count) {
     snprintf(P,sizeof(P),"%s/mdo",J->Directory);(void)MdoHomeRemoveEmptyDirectory(P);
     (void)MdoHomeRemoveEmptyDirectory(J->Directory);xrtClearError();
 }
-typedef struct CommandHttpResult { unsigned Status;char* Bytes;size_t Size; } CommandHttpResult;
-static bool CommandHttpHead(const xhttp1head* H,void* Data){((CommandHttpResult*)Data)->Status=H->Status;return true;}
+typedef struct CommandHttpResult { unsigned Status;char* Bytes;size_t Size;char Etag[256]; } CommandHttpResult;
+static bool CommandHttpHead(const xhttp1head* H,void* Data){
+    CommandHttpResult* R=Data;R->Status=H->Status;
+    for(size_t i=0;i<H->FieldCount;i++)if(xrtStrCaseEqual(H->Fields[i].Name,XRT_STR_LITERAL("ETag"))&&H->Fields[i].Value.Size<sizeof(R->Etag))
+        snprintf(R->Etag,sizeof(R->Etag),"%.*s",(int)H->Fields[i].Value.Size,H->Fields[i].Value.Data);
+    return true;
+}
 static bool CommandHttpBody(xbytesview B,void* Data) {
     CommandHttpResult* R=Data;if(B.Size>COMMAND_RESULT_LIMIT-R->Size)return false;
     char* Next=xrtRealloc(R->Bytes,R->Size+B.Size+1);if(!Next)return false;
@@ -91,13 +97,17 @@ static xvalue* CommandApiCall(CommandJob* J,const xvalue* P,char Error[512]) {
     }
     const xvalue* Body=xrtValueObjectGet(P,XRT_STR_LITERAL("body"));
     char* Json=Body?xrtJsonStringify(Body,false,NULL):NULL;
-    XS_FetchHeader Headers[16];size_t Count=0;
+    XS_FetchHeader Headers[16];size_t Count=0;char WriteToken[MDO_API_WRITE_TOKEN_CAPACITY];bool SuppliedToken=false;
     const xvalue* Fields=xrtValueObjectGet(P,XRT_STR_LITERAL("headers"));
     bool Ok=!Fields||xrtValueType(Fields)==XVALUE_OBJECT;
     for(size_t i=0;Ok&&i<xrtValueCount(Fields);i++){
         xstrview Name={0},Text={0};const xvalue* V=xrtValueObjectAt(Fields,i,&Name);
-        Ok=Count<15&&xrtValueGetString(V,&Text)&&!memchr(Name.Data,0,Name.Size)&&!memchr(Text.Data,0,Text.Size);
+        Ok=Count<14&&xrtValueGetString(V,&Text)&&!memchr(Name.Data,0,Name.Size)&&!memchr(Text.Data,0,Text.Size);
         if(Ok){Headers[Count].Name=Name.Data;Headers[Count++].Value=Text.Data;}
+        if(xrtStrCaseEqual(Name,XRT_STR_LITERAL("X-Mdo-Write-Token")))SuppliedToken=true;
+    }
+    if(!SuppliedToken&&strcmp(Method,"GET")&&strcmp(Method,"HEAD")){
+        Ok=Ok&&MdoApiWriteToken(WriteToken);Headers[Count++]=(XS_FetchHeader){"X-Mdo-Write-Token",WriteToken};
     }
     if(Json){Headers[Count].Name="Content-Type";Headers[Count++].Value="application/json";}
     MdoRemoteHttpRequest Request={0};Request.Method=Method;Request.Target=Path;
@@ -108,7 +118,7 @@ static xvalue* CommandApiCall(CommandJob* J,const xvalue* P,char Error[512]) {
     xvalue* Result=Ok?xrtValueObject():NULL;
     xvalue* Data=Received.Bytes?xrtJsonParse(xrtStrViewN(Received.Bytes,Received.Size)):NULL;
     if(Result)Ok=xrtValueObjectSetNew(Result,XRT_STR_LITERAL("status"),xrtValueUInt(Received.Status))&&
-        xrtValueObjectSetNew(Result,XRT_STR_LITERAL("body"),Data?Data:xrtValueNull());
+        CommandSet(Result,"etag",Received.Etag)&&xrtValueObjectSetNew(Result,XRT_STR_LITERAL("body"),Data?Data:xrtValueNull());
     else xrtValueRelease(Data);
     xrtFree(Received.Bytes);
     if(!Ok||!Result){xrtValueRelease(Result);snprintf(Error,512,"Local API request failed; a sent mutation may already have completed. Do not retry blindly.");return NULL;}

@@ -3,6 +3,7 @@ import { createMcpContext } from "./mcp-context.js";
 import { createMcpAuthorization } from "./mcp-authorization.js";
 import { createMcpWorkbench } from "./mcp-workbench.js";
 import { newTool } from "./tool-template.js";
+import { newCommand } from "./command-template.js";
 import { api } from "../../api/client.js";
 import { targetState, subscribeTarget } from "../../api/target.js";
 import { subscribeLocale, t } from "../../i18n.js";
@@ -120,7 +121,7 @@ export function createExtensionPanels() {
     if (!root) return;
     clear(root);
     const add = button(label("create", "新建"), () => openEditor(kind));
-    const file = element("input", { attrs: { type: "file", accept: kind === "tools" ? ".c" : kind === "mcp" ? ".json" : ".md,.json", "aria-label": label("import", "导入") } });
+    const file = element("input", { attrs: { type: "file", accept: ["tools", "commands"].includes(kind) ? ".c" : kind === "mcp" ? ".json" : ".md,.json", "aria-label": label("import", "导入") } });
     file.hidden = true; file.addEventListener("change", () => { void importFile(kind, file.files?.[0]); });
     const pick = button(label("import", "导入"), () => file.click());
     const actions = [add, pick, button(label("refresh", "刷新"), () => act(kind, async scope => {
@@ -211,7 +212,7 @@ export function createExtensionPanels() {
         subagents: "独立委派任务；模型默认跟随主 Agent。子任务仍受父任务权限限制。",
         skills: "按需读取 SKILL.md 和参考文件；安装 Skill 不会自动执行脚本。",
         mcp: "保存配置不会启动程序。测试连接或模型调用时才建立连接；远程服务使用 HTTPS，本机服务也可使用 HTTP。",
-        commands: "在输入框键入 / 选择命令；$ARGUMENTS 代表参数，展开后确认发送。",
+        commands: "在输入框键入 / 执行独立 C 命令。参数通过 xvalue 数组传入；命令在隔离进程中运行。",
       })[kind]) }),
       state.error ? element("p", { className: "extension-error", attrs: { role: "alert" }, text: state.error }) : "", list);
   }
@@ -359,7 +360,7 @@ export function createExtensionPanels() {
   function openEditor(kind, item = null, imported = null, packageKey = null) {
     reads.cancel("editor");
     if (editing && !closeEditor()) return;
-    const initial = imported?.content ?? item?.content ?? (kind === "tools" ? newTool() : kind === "mcp" ? JSON.stringify(newMcp(), null, 2) :
+    const initial = imported?.content ?? item?.content ?? (kind === "commands" ? newCommand() : kind === "tools" ? newTool() : kind === "mcp" ? JSON.stringify(newMcp(), null, 2) :
       editPrompt("", { name: kind === "commands" ? undefined : "", description: "", prompt: "" }));
     const dialog = element("dialog", { className: "extension-editor", attrs: { "aria-labelledby": "extension-editor-title" } });
     const id = element("input", { attrs: { name: "extension_id", maxlength: 64, autocomplete: "off", spellcheck: "false", required: "", placeholder: "my-resource", "data-field-label": label("id", "文件 ID") } });
@@ -376,14 +377,14 @@ export function createExtensionPanels() {
       element("h2", { text: `${item ? label("edit", "编辑") : label("create", "新建")} ${title(kind)}`, attrs: { id: "extension-editor-title" } }), cancel]);
     if(packageKey)heading.append(button(label("returnPackage","返回插件"),()=>{if(closeEditor())returnToPackage(packageKey);}));
     editing = { kind, item, dialog, id, source, form, status, save, cancel, formMode,
-      baseline: initial, originalId: id.value, sourceMode: kind === "tools", toolCatalog: null, saving: false, files: imported?.files ?? [],
+      baseline: initial, originalId: id.value, sourceMode: ["tools", "commands"].includes(kind), toolCatalog: null, saving: false, files: imported?.files ?? [],
       secrets: imported?.secrets ?? [], returnFocus: document.activeElement };
     try { if (kind !== "tools") fillForm(initial); }
     catch { editing.sourceMode = true; source.hidden = false; form.hidden = true; }
-    if (kind === "tools") {
+    if (["tools", "commands"].includes(kind)) {
       source.hidden = false; form.hidden = true; formMode.hidden = true; sourceMode.hidden = true;
       if (!item && !imported) id.addEventListener("input", () => {
-        if (source.value === editing.baseline && portableId(id.value)) { source.value = newTool(id.value); editing.baseline = source.value; }
+        if (source.value === editing.baseline && portableId(id.value)) { source.value = kind === "commands" ? newCommand(id.value) : newTool(id.value); editing.baseline = source.value; }
       });
     }
     // Imported files should keep their literal source until the user chooses a form.
@@ -440,7 +441,7 @@ export function createExtensionPanels() {
       const id = editor.id.value.trim();
       validateExtensionId(editor.kind, id);
       if (!editor.sourceMode) validateExtensionForm(editor.kind, fieldValues());
-      if (editor.kind === "tools" && !editor.source.value.trim()) throw extensionFieldError("fieldRequired", "source");
+      if (["tools", "commands"].includes(editor.kind) && !editor.source.value.trim()) throw extensionFieldError("fieldRequired", "source");
       let content = currentSource();
       let secrets = editor.secrets;
       if (editor.kind === "mcp") {
@@ -488,7 +489,7 @@ export function createExtensionPanels() {
             }
           });
         }
-      } else if (kind === "tools") {
+      } else if (["tools", "commands"].includes(kind)) {
         if (!/\.c$/i.test(file.name)) throw new Error(label("cOnly", "请选择 .c 工具源文件。"));
         openEditor(kind, null, { id: file.name.replace(/\.c$/i, "").toLowerCase(), content });
       } else if (/\.json$/i.test(file.name)) {
@@ -525,7 +526,7 @@ export function createExtensionPanels() {
       const data = (await reads.read(`export:${kind}/${item.id}`, `${path(kind, item.id)}${kind === "skills" ? "/bundle" : ""}`, { isCurrent })).data;
       if (!isCurrent()) return;
       if (kind === "skills") download(`${item.id}.skill.json`, JSON.stringify({ kind, id: item.id, content: data.content, files: data.files }, null, 2));
-      else download(`${item.id}${kind === "tools" ? ".c" : kind === "mcp" ? ".json" : ".md"}`, data.content);
+      else download(`${item.id}${["tools", "commands"].includes(kind) ? ".c" : kind === "mcp" ? ".json" : ".md"}`, data.content);
       if (kind === "mcp") toast(label("exportSecrets", "凭据不会导出。换设备导入后，请重新配置凭据。"));
     } catch (error) { if (isCurrent() && error?.name !== "AbortError") toast(errorMessage(error), "error"); }
   }

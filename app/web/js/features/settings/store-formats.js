@@ -1,7 +1,7 @@
 export const STORE_FORMAT = "mdo.extension.v1";
 export const STORE_KINDS = ["agents", "subagents", "tools", "skills", "mcp", "commands"];
 export const STORE_PLATFORMS = ["windows-x86_64", "android-arm64-v8a", "linux-x86_64", "macos-arm64"];
-export const containsCode = resources => resources.some(r => r.kind === "tools" || r.kind.startsWith("c-"));
+export const containsCode = resources => resources.some(r => ["tools", "commands"].includes(r.kind) || r.kind.startsWith("c-"));
 
 // Publication includes only explicitly selected resource files. Credentials
 // are also redacted by the native exporter, before reaching this UI.

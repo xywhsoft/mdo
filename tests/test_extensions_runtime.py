@@ -219,13 +219,13 @@ def main():
                 assert call('POST', 'tools/fixture/enabled', {'enabled': False}, tool_revision)[0] == 200
                 assert 'user.fixture' not in tool_catalog()
                 assert call('POST', 'tools/fixture/enabled', {'enabled': True}, tool_revision)[0] == 200
-                command = '---\ndescription: Review changes\nargument-hint: <path>\n---\nReview $ARGUMENTS carefully.'
+                command = '/* mdo-command {"id":"review","description":"Review changes","argument_hint":"<path>"} */\n#include "mdo/command.h"\nmdo_result mdoCommandRun(const mdo_command_context_v1* C,const xvalue* A,xvalue** R){return mdoCommandCall(C,"ui.help",A,R);}'
                 status, data = call('PUT', 'commands/review', {'content': command}, 'new')
                 assert status == 200, data
                 revision = data['data']['revision']
-                assert data['data']['prompt'] == 'Review $ARGUMENTS carefully.'
+                assert data['data']['content'] == command
                 assert call('PUT', 'commands/review', {'content': command}, 'new')[0] == 412
-                assert call('PUT', 'commands/stop', {'content': command}, 'new')[0] == 422
+                assert call('PUT', 'commands/invalid', {'content': command}, 'new')[0] == 422
                 assert call('PUT', 'commands/con.txt', {'content': command}, 'new')[0] == 400
                 assert call('POST', 'commands/review/enabled', {'enabled': False}, revision)[0] == 200
                 assert call('GET', 'commands/review')[1]['data']['enabled'] is False

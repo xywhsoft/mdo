@@ -14,16 +14,16 @@ test("missing and whitespace-only SubAgent fields are identified before serializ
       rejected(() => validateExtensionForm("subagents", { ...agent, [field]: value }), "fieldRequired", field);
   assert.doesNotThrow(() => validateExtensionForm("subagents", agent));
 });
-test("default Agent instructions and Skill bodies remain optional; commands require instructions only", () => {
+test("default Agent instructions and Skill bodies remain optional; commands require C source", () => {
   for (const kind of ["agents", "skills"]) {
     assert.deepEqual(requiredExtensionFields(kind), ["name", "description"]);
     assert.doesNotThrow(() => validateExtensionForm(kind, { ...agent, prompt: "" }));
   }
-  assert.doesNotThrow(() => validateExtensionForm("commands", { prompt: "Review $ARGUMENTS" }));
-  rejected(() => validateExtensionForm("commands", { prompt: " " }), "fieldRequired", "prompt");
+  assert.doesNotThrow(() => validateExtensionForm("commands", { source: "C source" }));
+  rejected(() => validateExtensionForm("commands", { source: " " }), "fieldRequired", "source");
 });
-test("reserved command names and nonportable IDs cannot reach a write", () => {
-  rejected(() => validateExtensionId("commands", "new"), "commandReserved", "extension_id");
+test("C commands can override builtins but cannot use nonportable IDs", () => {
+  assert.doesNotThrow(() => validateExtensionId("commands", "new"));
   rejected(() => validateExtensionId("agents", "con"), "idInvalid", "extension_id");
   assert.doesNotThrow(() => validateExtensionId("agents", "new"));
   assert.doesNotThrow(() => validateExtensionId("commands", "review"));

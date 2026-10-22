@@ -1,4 +1,4 @@
-import { portableId, BUILTIN_COMMAND_NAMES, mcpHttpEndpointValid } from "./extension-formats.js";
+import { portableId, mcpHttpEndpointValid } from "./extension-formats.js";
 
 // Catch common form mistakes before writing. Native validation remains the
 // authority for advanced source metadata, resource paths and transport policy.
@@ -9,12 +9,10 @@ export function extensionFieldError(key, field, args = {}) {
 }
 export function validateExtensionId(kind, id) {
   if (!portableId(id)) throw extensionFieldError("idInvalid", "extension_id");
-  if (kind === "commands" && BUILTIN_COMMAND_NAMES.includes(id))
-    throw extensionFieldError("commandReserved", "extension_id");
 }
 export function requiredExtensionFields(kind, transport = "stdio") {
   if (kind === "mcp") return ["name", "description", transport === "stdio" ? "program" : "endpoint"];
-  if (kind === "commands") return ["prompt"];
+  if (kind === "commands") return ["source"];
   if (kind === "subagents") return ["name", "description", "prompt"];
   return ["agents", "skills"].includes(kind) ? ["name", "description"] : [];
 }

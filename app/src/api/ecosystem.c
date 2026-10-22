@@ -16,7 +16,7 @@ bool MdoEcosystemPackageCompatible(const xvalue* package,const xvalue* input,cha
     const xvalue* platforms=xrtValueObjectGet(manifest,XRT_STR_LITERAL("platforms"));bool compatible=false,code=false,trust=false;
     for(size_t i=0;i<xrtValueCount(platforms);i++){xstrview p;if(xrtValueGetString(xrtValueArrayGet(platforms,i),&p)&&xrtStrEqual(p,xrtStrView(MdoToolPlatform())))compatible=true;}
     const xvalue* resources=xrtValueObjectGet(package,XRT_STR_LITERAL("resources"));
-    for(size_t i=0;i<xrtValueCount(resources);i++){cstr kind=MdoPackageText(xrtValueArrayGet(resources,i),"kind",16);if(kind&&(!strcmp(kind,"tools")||!strncmp(kind,"c-",2)))code=true;}
+    for(size_t i=0;i<xrtValueCount(resources);i++){cstr kind=MdoPackageText(xrtValueArrayGet(resources,i),"kind",16);if(kind&&(!strcmp(kind,"tools")||!strcmp(kind,"commands")||!strncmp(kind,"c-",2)))code=true;}
     (void)xrtValueGetBool(xrtValueObjectGet(input,XRT_STR_LITERAL("trust_code")),&trust);
     if(!compatible|| (code&&!trust)){snprintf(error,capacity,"Package does not support this device, or C code approval is required");return false;}
     return true;

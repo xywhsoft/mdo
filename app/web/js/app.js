@@ -67,6 +67,9 @@ import { createComposerImages, unsupportedModelError } from "./features/chat/com
 import { createComposerProject } from "./features/chat/composer-project.js";
 import { createImagePreview } from "./features/chat/image-preview.js";
 import { createSlashCommands } from "./features/chat/slash-commands.js";
+import { applyCommandActions } from "./features/chat/command-actions.js";
+import { expandMcpCommand, expandMcpArguments } from "./features/chat/mcp-context.js";
+import { expandSkillSelection } from "./features/chat/skill-selection.js";
 import { createFileMentions } from "./features/chat/file-mentions.js";
 import { trackComposerMenuRoom } from "./features/chat/composer-menu-room.js";
 import { createComposerProfile } from "./features/chat/composer-profile.js";
@@ -778,41 +781,61 @@ export async function boot() {
   const slashCommands = createSlashCommands({
     composer, input: prompt, contextKey: () => String(routeVersion),
     skillProject: () => navigation.get().projectId || "default",
-    onExecute: async (command) => {
-      const session = sessionDetailStore.get().data;
-      if (command === "/new") openNewTask();
-      else if (command === "/model") {
+    commandScope: () => ({ projectId: navigation.get().projectId || "default", sessionId: navigation.get().sessionId || "", runId: activeRun?.id || "" }),
+    onPendingChange: count => { stop.hidden = !activeRun && !count; },
+    onExecute: async (receipt, scope) => {
+      const version = routeVersion;
+      const isCurrent = () => version === routeVersion;
+      const handlers = {
+        "ui.new": () => openNewTask(),
+        "ui.model": args => {
         const modelSelect = $("#composer-model");
         if (modelSelect.disabled)
           throw new Error(t("slash.modelBusy", {}, "当前无法切换模型"));
         const choices = [...modelSelect.options].filter((option) =>
           option.value && !option.disabled);
-        if (choices.length < 2)
+        if (args.length > 1 || (args.length && typeof args[0] !== "string")) throw new Error("用法：/model [模型 ID]");
+        if (!args.length && choices.length < 2)
           throw new Error(t("slash.noOtherModel", {}, "没有其他可切换的模型"));
         const index = choices.findIndex((option) =>
           option.value === modelSelect.value);
-        modelSelect.value = choices[(index + 1) % choices.length].value;
+        const value = args[0] || choices[(index + 1) % choices.length]?.value;
+        if (!choices.some(option => option.value === value)) throw new Error("模型不可用");
+        modelSelect.value = value;
         modelSelect.dispatchEvent(new Event("change", { bubbles: true }));
-      }
-      else if (command === "/settings") navigation.openSettings("general");
-      else if (command === "/theme") await toggleTheme();
-      else if (command === "/help") {
-        shortcuts.openHelp();
-      } else if (command === "/stop") {
-        if (!activeRun)
+        },
+        "ui.settings": () => navigation.openSettings("general"),
+        "ui.theme": () => toggleTheme(),
+        "ui.help": () => shortcuts.openHelp(),
+        "ui.stop": async () => {
+        const cancelled = await slashCommands.cancel(receipt.id);
+        if (!activeRun && !cancelled)
           throw new Error(t("slash.noActiveRun", {}, "当前没有运行中的任务"));
-        stop.click();
-      } else {
+        if (activeRun) stop.click();
+        },
+        "ui.session": async params => {
+        const session = sessionDetailStore.get().data;
         if (!session)
           throw new Error(t("slash.selectSession", {}, "请先选择会话"));
-        if (command === "/export") await handleSessionAction("export", session);
-        else {
-          if (activeRun)
+        if (session.id !== scope.sessionId || session.project_id !== scope.projectId) throw new Error("会话已切换，请重新执行命令");
+        if (!["export", "fork", "clear"].includes(params?.action)) throw new Error("不支持的会话操作");
+        if (params.action !== "export" && activeRun)
             throw new Error(t("slash.waitForHistory", {}, "请在当前运行结束后修改会话历史"));
-          if (command === "/fork") await handleSessionAction("fork", session);
-          else if (command === "/clear") await handleSessionAction("clear", session);
-        }
-      }
+        await handleSessionAction(params.action, session);
+        },
+        "ui.mcp": async args => {
+          const text = receipt.raw_arguments.trim().startsWith("[")
+            ? await expandMcpArguments(args, scope.projectId, { isCurrent })
+            : await expandMcpCommand(`/mcp ${receipt.raw_arguments}`, scope.projectId, { isCurrent });
+          if (isCurrent() && !prompt.value) { prompt.value = text;prompt.dispatchEvent(new Event("input", { bubbles: true }));prompt.focus(); }
+        },
+        "skill.invoke": async params => {
+          if (!params?.id) throw new Error("Skill ID is required");
+          const text = await expandSkillSelection({ id: params.id, arguments: params.arguments ?? receipt.raw_arguments }, scope.projectId);
+          if (isCurrent() && !prompt.value) { prompt.value = text;prompt.dispatchEvent(new Event("input", { bubbles: true }));prompt.focus(); }
+        },
+      };
+      await applyCommandActions(receipt, handlers, isCurrent);
     },
   });
   const fileMentions = createFileMentions({ composer, input: prompt, navigation });
@@ -1194,7 +1217,7 @@ export async function boot() {
       ? t("shell.stopWaiting", {}, "连接恢复后停止任务")
       : stopPhase || activeRun?.cancel_requested ? t("task.stopping", {}, "正在停止…") : runStateText(shown.state);
     send.hidden = false;
-    stop.hidden = !activeRun;
+    stop.hidden = !activeRun && !slashCommands.pendingCount();
     syncStopBusy();
     const route = navigation.get();
     const creatingNewTask = !route.sessionId &&
@@ -2132,7 +2155,7 @@ export async function boot() {
     // Commands act on the UI and keep an unsent image draft. They must stay
     // usable while an attachment is still being stored.
     if (fromComposer && slashCommands.consumeExact(text)) return;
-    if (fromComposer && text.startsWith("/")) {
+    if (fromComposer && (text.startsWith("/") || text.startsWith("$"))) {
       try { if (await slashCommands.expandIntoComposer(text)) return; }
       catch (error) { showComposerError(error); return; }
     }
@@ -2199,6 +2222,7 @@ export async function boot() {
       .then(() => { if (stillSelected() && terminalState(run)) void dispatchQueued(); });
   }
   stop.addEventListener("click", () => {
+    void slashCommands.cancel().catch(error => toast(errorMessage(error), "error"));
     if (activeRun && !stop.disabled)
       runStops.request(activeRun, document.activeElement === stop);
   });

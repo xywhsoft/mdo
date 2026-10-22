@@ -7,6 +7,7 @@
 #include "../../include/mdo/secrets.h"
 #include "../../include/mdo/ecosystem.h"
 #include "../../include/mdo/ecosystem_package.h"
+#include "../../include/mdo/commands.h"
 
 /* File-backed editors share only storage/HTTP mechanics. Runtime ownership,
  * transport, execution and permissions remain with their existing managers. */
@@ -36,7 +37,7 @@ static bool ExtensionParams(MdoApiContext* C, char Kind[16], char Id[65])
 }
 static void ExtensionPath(cstr Kind, cstr Id, char Path[160])
 {
-    snprintf(Path,160u,"%s/%s%s",Kind,Id,strcmp(Kind,"skills")==0?"/SKILL.md":strcmp(Kind,"mcp")==0?".json":strcmp(Kind,"tools")==0?".c":".md");
+    snprintf(Path,160u,"%s/%s%s",Kind,Id,strcmp(Kind,"skills")==0?"/SKILL.md":strcmp(Kind,"mcp")==0?".json":(!strcmp(Kind,"tools")||!strcmp(Kind,"commands"))?".c":".md");
 }
 static bool ExtensionString(const xvalue* Object,cstr Key,xstrview* Text)
 {
@@ -61,21 +62,8 @@ static bool ExtensionValidate(cstr Kind,cstr Id,cstr Text,char Error[1024])
         Ok=MdoAgentFileParse(Id,Text,!strcmp(Kind,"agents"),&File,Error,1024u);
         MdoAgentFileUnit(&File); return Ok;
     }
-    /* Built-ins always own their names; a saved prompt cannot shadow /stop. */
-    {
-        static const char* Reserved[]={"new","model","fork","export","clear","stop","settings","theme","help"};
-        size_t i;
-        xvalue* Doc;
-        xstrview Prompt;
-        for (i=0u;i<sizeof(Reserved)/sizeof(Reserved[0]);++i) if (!strcmp(Id,Reserved[i])) {
-            snprintf(Error,1024u,"Command name is reserved by mdo"); return false;
-        }
-        Doc=MdoPromptParse(Text,false,Error,1024u);
-        Ok=Doc != NULL && ExtensionString(Doc,"prompt",&Prompt) && xrtStrTrim(Prompt).Size != 0u;
-        xrtValueRelease(Doc);
-        if (!Ok && !Error[0]) snprintf(Error,1024u,"Command instructions must not be empty");
-        return Ok;
-    }
+    char Diagnostic[512];xvalue* Metadata=MdoCommandMetadata(Id,Text,Diagnostic);
+    Ok=Metadata!=NULL;xrtValueRelease(Metadata);if(!Ok)snprintf(Error,1024u,"%s",Diagnostic);return Ok;
 }
 static bool ExtensionReload(cstr Kind,cstr Id,bool Expected)
 {
@@ -126,7 +114,8 @@ static xvalue* ExtensionItem(cstr Kind,cstr Id,bool IncludeSource)
     if (!strcmp(Kind,"mcp")) {
         Doc=xrtJsonParse(xrtStrView(Text));
         if (Doc) (void)xrtValueGetBool(xrtValueObjectGet(Doc,XRT_STR_LITERAL("enabled")),&Enabled);
-    } else if (strcmp(Kind,"tools")) Doc=MdoPromptParse(Text,strcmp(Kind,"commands")!=0,NULL,0u);
+    } else if(!strcmp(Kind,"commands")){char Diagnostic[512];Doc=MdoCommandMetadata(Id,Text,Diagnostic);}
+    else if (strcmp(Kind,"tools")) Doc=MdoPromptParse(Text,true,NULL,0u);
     if (Doc) { (void)ExtensionString(Doc,"name",&Name); (void)ExtensionString(Doc,"description",&Description); }
     if (!MdoExtensionHash(Text,Hash) || !MdoApiValueSetString(Item,"id",Id) ||
         !MdoApiValueSetString(Item,"kind",Kind) || !MdoApiValueSetStringView(Item,"name",Name.Size?Name:xrtStrView(Id)) ||
@@ -173,11 +162,8 @@ static xvalue* ExtensionItem(cstr Kind,cstr Id,bool IncludeSource)
         }
     }
     if (!strcmp(Kind,"commands") && Doc) {
-        xstrview Prompt,Hint={0};
-        (void)ExtensionString(Doc,"argument-hint",&Hint);
-        if (ExtensionString(Doc,"prompt",&Prompt)) {
-            if ((IncludeSource && !MdoApiValueSetStringView(Item,"prompt",Prompt)) || !MdoApiValueSetStringView(Item,"argument_hint",Hint)) goto fail;
-        }
+        xstrview Hint={0};(void)ExtensionString(Doc,"argument_hint",&Hint);
+        if(!MdoApiValueSetStringView(Item,"argument_hint",Hint))goto fail;
     }
     xrtFree(Text); xrtValueRelease(Doc); return Item;
 fail:
@@ -196,7 +182,7 @@ static bool ExtensionList(MdoApiContext* C,cstr Kind)
     }
     while (Ok && Dir && (Next=xrtDirNext(Dir,&Entry))==XDIR_NEXT_ITEM) {
         char Id[65]; size_t Length=Entry.Name.Size; bool Skill=!strcmp(Kind,"skills"); xvalue* Item;
-        cstr Suffix=!strcmp(Kind,"mcp")?".json":!strcmp(Kind,"tools")?".c":".md"; size_t SuffixSize=strlen(Suffix);
+        cstr Suffix=!strcmp(Kind,"mcp")?".json":(!strcmp(Kind,"tools")||!strcmp(Kind,"commands"))?".c":".md"; size_t SuffixSize=strlen(Suffix);
         if (!(Entry.Flags&XDIR_ENTRY_UTF8)) continue;
         if (Skill) { if (Entry.Info.Type!=XFILE_TYPE_DIRECTORY) continue; }
         else { if (Entry.Info.Type!=XFILE_TYPE_FILE || Length<=SuffixSize ||

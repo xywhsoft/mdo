@@ -34,7 +34,7 @@ static mdo_result CWCall(const mdo_command_context_v1* C,cstr Method,const xvalu
     (void)C;*Result=NULL;if(++CWSequence>128u)return MDO_RESULT_LIMIT;
     char Name[64];xvalue* Q=xrtValueObject();
     bool Ok=Q&&xrtValueObjectSetNew(Q,XRT_STR_LITERAL("method"),xrtValueString(xrtStrView(Method)))&&
-        xrtValueObjectSet(Q,XRT_STR_LITERAL("params"),Params);
+        xrtValueObjectSetNew(Q,XRT_STR_LITERAL("params"),Params?xrtValueClone(Params):xrtValueNull());
     snprintf(Name,sizeof(Name),"request-%u.json",CWSequence);Ok=Ok&&CWWrite(Name,Q);xrtValueRelease(Q);
     if(!Ok){snprintf(CWError,sizeof(CWError),"Cannot publish host request");return MDO_RESULT_ERROR;}
     snprintf(Name,sizeof(Name),"response-%u.json",CWSequence);
@@ -76,6 +76,11 @@ void ServiceInit(XS_HostInfo* H) {
         }else snprintf(CWError,sizeof(CWError),"Missing mdoCommandRun entry point");
     }
     if(Code!=MDO_RESULT_OK&&!CWError[0])snprintf(CWError,sizeof(CWError),"Command compilation or execution failed (%d)",Code);
+    if(Result){
+        char* Encoded=CWJson(Result);
+        if(!Encoded||strlen(Encoded)>65536u){Code=MDO_RESULT_LIMIT;snprintf(CWError,sizeof(CWError),"Command result exceeds 64 KiB");xrtValueRelease(Result);Result=NULL;}
+        xrtFree(Encoded);
+    }
     xrtValueObjectSetNew(Output,XRT_STR_LITERAL("ok"),xrtValueBool(Code==MDO_RESULT_OK));
     xrtValueObjectSetNew(Output,XRT_STR_LITERAL("error"),xrtValueString(xrtStrView(CWError)));
     if(Result)xrtValueObjectSet(Output,XRT_STR_LITERAL("result"),Result);

@@ -1,29 +1,11 @@
-import { expandMcpCommand } from "./mcp-context.js";
 import { subscribeLocale, t } from "../../i18n.js";
-import { loadCommands, subscribeCommands, commandExpansion } from "./extension-commands.js";
+import { loadCommands, subscribeCommands, parseCommand, runCommand, cancelCommand } from "./extension-commands.js";
 import { loadSelectableSkills, parseSkillSelection, expandSkillSelection } from "./skill-selection.js";
 import { clear, element, errorMessage, isImeKey, revealListOption, toast } from "../../utils/dom.js";
 import { createCompositionTracker } from "../../utils/composition.js";
 import { subscribeTarget } from "../../api/target.js";
 
-const COMMANDS = Object.freeze([
-  { name: "/mcp", mcp: true, descriptionKey: "slash.mcp", fallback: "调用 MCP 提示词：服务器 提示词 参数JSON" },
-  { name: "/new", descriptionKey: "slash.new", fallback: "新建任务" },
-  { name: "/model", descriptionKey: "slash.model", fallback: "切换到下一个模型" },
-  { name: "/fork", descriptionKey: "slash.fork", fallback: "分叉当前会话" },
-  { name: "/export", descriptionKey: "slash.export", fallback: "导出当前会话 Markdown" },
-  { name: "/clear", descriptionKey: "slash.clear", fallback: "清空当前会话历史" },
-  { name: "/stop", descriptionKey: "slash.stop", fallback: "停止当前任务" },
-  { name: "/settings", descriptionKey: "slash.settings", fallback: "打开设置" },
-  { name: "/theme", descriptionKey: "slash.theme", fallback: "切换深浅主题" },
-  { name: "/help", descriptionKey: "slash.help", fallback: "查看命令" },
-]);
-
-function exactCommand(value) {
-  return COMMANDS.find((item) => item.name === value);
-}
-
-export function createSlashCommands({ composer, input, onExecute, contextKey = () => "", skillProject = () => "default" }) {
+export function createSlashCommands({ composer, input, onExecute, contextKey = () => "", skillProject = () => "default", commandScope = () => ({ projectId: skillProject() }), onPendingChange = () => {} }) {
   const list = element("div", {
     className: "slash-menu",
     attrs: { id: "slash-menu", role: "listbox", "aria-label": t("slash.label", {}, "斜杠命令") },
@@ -37,7 +19,7 @@ export function createSlashCommands({ composer, input, onExecute, contextKey = (
   let active = 0;
   const composition = createCompositionTracker(input);
   let custom = [];
-  let expanding = false;
+  const pending = new Map();
   let skills = [], lookup = 0;
   const stopTarget = subscribeTarget(() => { skills = []; ++lookup; hide(); });
   const stopCommands = subscribeCommands(items => { custom = items; if (document.activeElement === input && input.value.startsWith("/")) update(false); });
@@ -85,30 +67,36 @@ export function createSlashCommands({ composer, input, onExecute, contextKey = (
   }
 
   async function execute(command) {
-    if (command.mcp) { hide(); input.value = "/mcp "; input.dispatchEvent(new Event("input", { bubbles: true })); input.focus(); return; }
     if (command.skill) {
-      hide(); input.value = `$${command.id} `;
+      hide(); input.value = input.value.startsWith("/skill:") ? `/skill:${command.id} ` : `$${command.id} `;
       input.dispatchEvent(new Event("input", { bubbles: true })); input.focus(); return;
     }
-    if (command.custom) {
-      if (expanding) return;
-      const before = input.value, key = contextKey();
-      expanding = true; hide();
-      try {
-        const result = await commandExpansion(command.id, "");
-        if (input.value !== before || contextKey() !== key) return;
-        input.value = result.takesArguments ? `${command.name} ` : result.text;
-        input.dispatchEvent(new Event("input", { bubbles: true }));
-        input.focus();
-      } catch (error) { toast(errorMessage(error), "error"); }
-      finally { expanding = false; }
-      return;
+    if (command.argument_hint && !command.argument_hint.startsWith("[")) {
+      hide(); input.value = `${command.name} `;input.dispatchEvent(new Event("input", { bubbles: true }));input.focus();return;
     }
-    hide();
-    input.value = "";
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-    try { await onExecute(command.name); }
-    catch (error) { if (error?.name !== "AbortError") toast(errorMessage(error), "error"); }
+    await executeValue(command.name);
+  }
+
+  async function executeValue(value) {
+    const selection = parseCommand(value);if (!selection) return false;
+    const before = input.value, key = contextKey(), scope = { ...commandScope() };
+    hide();let cleared = false;
+    try {
+      const command = (await loadCommands(scope.projectId)).find(item => item.id === selection.id);
+      if (!command) throw new Error(`命令 /${selection.id} 不存在、已停用或配置无效。`);
+      if (key !== contextKey()) return true;
+      const result = await runCommand(command, selection.raw, scope, { onPending(id, target, done) {
+        if (done) pending.delete(id);else pending.set(id, target);onPendingChange(pending.size);
+      } });
+      if (key !== contextKey()) { toast(`命令 /${command.id} 已完成。`);return true; }
+      if (input.value === before) { input.value = "";cleared = true; input.dispatchEvent(new Event("input", { bubbles: true })); }
+      await onExecute(result, scope);
+      if (result.result?.message) toast(String(result.result.message));
+    } catch (error) {
+      if (cleared && key === contextKey() && !input.value) { input.value = before;input.dispatchEvent(new Event("input", { bubbles: true })); }
+      if (error?.name !== "AbortError") toast(errorMessage(error), "error");
+    }
+    return true;
   }
 
   function update(fetch = true) {
@@ -123,8 +111,8 @@ export function createSlashCommands({ composer, input, onExecute, contextKey = (
         skills = items; update(false);
       }).catch(() => {});
     }
-    if (fetch) void loadCommands().then(items => { custom = items; if (input.value === value && document.activeElement === input) update(false); }).catch(() => {});
-    matches = [...COMMANDS, ...custom, ...skills.map(item => ({...item,
+    if (fetch) void loadCommands(skillProject()).then(items => { custom = items; if (input.value === value && document.activeElement === input) update(false); }).catch(() => {});
+    matches = [...custom, ...skills.map(item => ({...item,
       name: value.startsWith("/") ? `/skill:${item.id}` : `$${item.id}`}))]
       .filter((command) => command.name.startsWith(value));
     if (!matches.some((command) => command.custom || command.name !== value)) { hide(); return; }
@@ -169,12 +157,6 @@ export function createSlashCommands({ composer, input, onExecute, contextKey = (
       return false;
     },
     async expandIntoComposer(value) {
-      if (value === "/mcp" || value.startsWith("/mcp ")) {
-        const key = contextKey();
-        const text = await expandMcpCommand(value, skillProject(), { isCurrent: () => input.value === value && contextKey() === key });
-        if (input.value === value && contextKey() === key) { hide(); input.value = text; input.dispatchEvent(new Event("input", { bubbles: true })); input.focus(); }
-        return true;
-      }
       const skill = parseSkillSelection(value);
       if (skill) {
         const key = contextKey();
@@ -183,26 +165,20 @@ export function createSlashCommands({ composer, input, onExecute, contextKey = (
         hide(); input.value = text;
         input.dispatchEvent(new Event("input", { bubbles: true })); input.focus(); return true;
       }
-      const match = /^\/([a-z0-9_.-]+)(?:\s+([\s\S]*))?$/.exec(value);
-      if (!match || exactCommand(`/${match[1]}`)) return false;
-      const key = contextKey();
-      const commands = await loadCommands();
-      const command = commands.find(item => item.id === match[1]);
-      if (!command) return false;
-      const result = await commandExpansion(command.id, match[2] || "");
-      if (input.value !== value || contextKey() !== key) return true;
-      hide(); input.value = result.text;
-      input.dispatchEvent(new Event("input", { bubbles: true })); input.focus();
-      return true;
+      return executeValue(value);
     },
     destroy() { stopTarget(); stopCommands(); composition.dispose(); view?.removeEventListener("blur", hide); hide(); },
     consumeExact(value) {
-      const command = exactCommand(value);
-      if (!command) return false;
-      void execute(command);
+      if (!parseCommand(value)) return false;
+      void executeValue(value);
       return true;
     },
-    isExact: (value) => Boolean(exactCommand(value)),
+    isExact: value => Boolean(parseCommand(value)),
+    pendingCount: () => pending.size,
+    async cancel(except = "") {
+      const work = [...pending].filter(([id]) => id !== except);
+      await Promise.all(work.map(([id, target]) => cancelCommand(id, target)));return work.length;
+    },
     hide,
   });
 }
