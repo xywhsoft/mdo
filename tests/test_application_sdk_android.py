@@ -97,7 +97,7 @@ def main():
         connect(launch())
         status,_,bootstrap=request('GET','/api/v1/bootstrap');assert status==200 and bootstrap['data']['ready']
         info=call('runtime.info');report['version']=info['version'];report['sdk_version']=info['sdk_version']
-        assert info['version']=='0.2.4'
+        assert info['version']==json.loads((ROOT/'app/release.json').read_text())['version_name']
         directory=call('sdk.services');native=call('sdk.native');assert len(directory)>250 and len(native)>500
         contract=call('sdk.describe',{'id':'project.create'})['input_schema']
         assert 'workspace_root' in contract['$defs']['ProjectCreateInput']['properties']

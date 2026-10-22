@@ -131,7 +131,8 @@ def main():
     assert invoke('process.run',{'program':'mdo-sdk-missing-program'},'catch')['error']=='sdk_native_failed'
     assert invoke('process.run',{'program':sys.executable,'cwd':str(base),'args':['-c','import time; time.sleep(3)'],'timeout_ms':20},'catch')['status']==504
     assert invoke('fs.read',{'path':str(native),'limit':'wrong'},'catch')['status']==400
-    assert invoke('runtime.info')['version']=='0.2.4'
+    expected_version=json.loads((ROOT/'app/release.json').read_text())['version_name']
+    assert invoke('runtime.info')['version']==expected_version
     invoke('runtime.env.set',{'name':'MDO_SDK_TEST_VALUE','value':'hello'})
     assert invoke('runtime.env.get',{'name':'MDO_SDK_TEST_VALUE'})['value']=='hello'
     # Invalid identities must never select an empty, zero-capacity stream slot.
@@ -140,7 +141,7 @@ def main():
       params={'handle':handle}
       if action=='write':params['text']=''
       assert invoke('stream.'+action,params,'catch')['status']==400,(action,handle)
-    assert invoke('runtime.info')['version']=='0.2.4' and child.poll() is None
+    assert invoke('runtime.info')['version']==expected_version and child.poll() is None
     stream=invoke('stream.open',{'capacity':4})['handle']
     assert invoke('stream.write',{'handle':stream,'text':'abcd'})['written']==4
     assert invoke('stream.write',{'handle':stream,'text':'x'},'catch')['error']=='sdk_stream_would_block'
