@@ -7,9 +7,13 @@
 #include <windows.h>
 #include <process.h>
 #else
-#include <poll.h>
-#include <unistd.h>
-#include <signal.h>
+/* The pinned compact TCC SDK intentionally omits POSIX system headers.
+ * These stable libc declarations cover only the Linux/Android pipe watchdog. */
+struct CWPosixPoll {int fd;short events,revents;};
+extern int poll(struct CWPosixPoll*,unsigned long,int);
+extern int getpid(void);
+extern int kill(int,int);
+extern void _exit(int);
 #endif
 
 #define CW_LIMIT (1024u*1024u)
@@ -25,10 +29,10 @@ static int32 CWParentWatch(void* Unused) {
         if(!PeekNamedPipe(GetStdHandle(STD_INPUT_HANDLE),NULL,0,NULL,&Available,NULL))_exit(125);
         xrtSleep(50);
 #else
-        struct pollfd P={0,POLLIN,0};int Ready=poll(&P,1,50);
-        if(Ready>0&&(P.revents&(POLLHUP|POLLERR|POLLNVAL))){
+        struct CWPosixPoll P={0,1,0};int Ready=poll(&P,1,50);
+        if(Ready>0&&(P.revents&(16|8|32))){
             /* Only our own process group, never the host's group. */
-            (void)kill(-getpid(),SIGKILL);_exit(125);
+            (void)kill(-getpid(),9);_exit(125);
         }
 #endif
     }
