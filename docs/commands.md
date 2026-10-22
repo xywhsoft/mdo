@@ -30,6 +30,8 @@
 
 公开头文件为 `include/mdo/command.h`。入口为：
 
+完整应用访问使用 `Context->Application` 和 `mdo/sdk.h`，见 [Application SDK](application-sdk.md)。现有界面命令与压缩命令已接入同一服务层；旧 Host 方法保留兼容。独立命令通过 RPC 使用应用服务，原生产品对象和长期实例使用 C 模块。
+
 ```c
 MDO_EXPORT mdo_result mdoCommandRun(
     const mdo_command_context_v1* Context,

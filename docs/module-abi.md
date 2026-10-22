@@ -24,6 +24,14 @@ hooks. Registration can query application metadata without retaining the
 module-manager mutex. Native code is not a sandbox; isolated command workers
 use the same service contract through RPC.
 
+The complete [Application SDK guide](application-sdk.md) covers typed native
+product APIs, custom Agent drivers, operations, streams, UI/VFS plugins and
+recovery. Native headers are generated as `mdo/native/*.h`. `Stop` stops a
+module's own producers at retirement/shutdown; `Unregister` frees shared state
+only after the final generation reference is released. Neither runs under the
+module-manager mutex. Replacing an application service requires the explicit
+`MDO_SERVICE_REPLACE_BUILTIN` flag; competing providers reject the candidate.
+
 Tool effects are authoritative. A mutating tool either supplies a side-effect
 free `DescribePermissions` callback, or declares one constant
 `PermissionResource` when it has exactly one non-read effect. Multiple
