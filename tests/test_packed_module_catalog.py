@@ -6,11 +6,19 @@ import json
 import os
 from pathlib import Path
 import tempfile
+import threading
+import time
+from http.server import ThreadingHTTPServer
 
 from test_packed_home_lease import (
     ROOT, release_packed_copies, request, site, start, stop, wait_bootstrap,
 )
-from test_api_runtime import request as raw_request
+from test_api_runtime import request as raw_request, ModelHandler
+from test_packed_queue_start_recovery import configure_model
+
+
+class ExampleModel(ModelHandler):
+    protocol_version = "HTTP/1.0"
 
 
 def main() -> None:
@@ -22,7 +30,8 @@ def main() -> None:
     with tempfile.TemporaryDirectory(prefix="module-packed-", dir=ROOT / ".build") as raw:
         base = Path(raw)
         directory, port = site(base, "site", packed)
-        process = start(directory, packed, base / "home", dict(os.environ, USE_WEBVIEW="0"))
+        process = start(directory, packed, base / "home", dict(os.environ, USE_WEBVIEW="0",MDO_QUEUE_FIXTURE_KEY="fixture-only"))
+        model = None
         try:
             bootstrap = wait_bootstrap(process, port, directory / "packed.log")[1]
             assert bootstrap["data"]["ready"], bootstrap
@@ -58,10 +67,18 @@ def main() -> None:
                 status, result = request(port,"POST","/api/v1/application/call",{"method":method,"params":params,"context":{"project":"default"}})
                 assert status==200,result
                 return result["data"]
-            session = call("session.create",{"body":{"project_id":"default","title":"Optional Todo example"}})["data"]["id"]
-            items = [{"text":"Install external example","done":True},{"text":"Inspect preserved plan","done":False}]
-            result = call("tool.call",{"project":"default","session":session,"tool":"mdo.todo","arguments":{"items":items}})
-            assert result["success"],result
+            ModelHandler.calls=10;ModelHandler.todo_sent=False
+            model=ThreadingHTTPServer(('127.0.0.1',0),ExampleModel)
+            model_thread=threading.Thread(target=model.serve_forever,daemon=True);model_thread.start()
+            configure_model(port,f'http://127.0.0.1:{model.server_port}/v1/responses','openai-responses')
+            session = call("session.create",{"body":{"project_id":"default","title":"Optional Todo example","model_id":"queue-fixture","protocol":"openai-responses"}})["data"]["id"]
+            status, result=request(port,"POST",f"/api/v1/projects/default/sessions/{session}/runs",{"prompt":"TODO probe","timeout_ms":10000})
+            assert status==202,result
+            run=result['data'];deadline=time.monotonic()+15
+            while not run['terminal'] and time.monotonic()<deadline:
+                time.sleep(.05);status,result=request(port,"GET","/api/v1/runs/"+run['id']);run=result['data']
+            assert status==200 and run['state']=='succeeded' and ModelHandler.todo_sent,result
+            items = [{"text":"Inspect repository","done":True},{"text":"Verify result","done":False}]
             todo_path = f"/api/v1/projects/default/sessions/{session}/todo"
             status, plan = request(port,"GET",todo_path)
             assert status==200 and plan["data"]["items"]==items,plan
@@ -71,9 +88,10 @@ def main() -> None:
             assert status==200 and all(tool["id"]!="mdo.todo" for tool in envelope["data"]["items"]),envelope
             status, preserved = request(port,"GET",todo_path)
             assert status==200 and preserved["data"]==plan["data"],preserved
-            print("PASS optional Todo import, native execution, plan projection, deletion and preserved history")
+            print("PASS optional Todo import, model tool execution, plan projection, deletion and preserved history")
         finally:
             stop(process)
+            if model is not None:model.shutdown();model.server_close();model_thread.join(timeout=5)
             release_packed_copies(directory / packed.name)
 
 
