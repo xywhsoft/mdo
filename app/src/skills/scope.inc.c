@@ -137,6 +137,11 @@ MdoSkillCatalog* MdoSkillCatalogForWorkspace(cstr Workspace)
             Ok=Anchor!=NULL;
             if(Ok&&xrtRootStat(Anchor,".git",false,&Info)){Git=true;xrtRootClose(Anchor);break;}
             if(Anchor)xrtRootClose(Anchor);
+            /* Parent directories are optional discovery, not Skill inputs.
+             * Android apps can use their workspace but cannot inspect .git
+             * in /data/user/0. Stop at that boundary; the exact workspace
+             * still gets its full, strict validation below. */
+            if(Count>1&&xrtGetError()&&xrtErrorKind(xrtGetError())==XERR_PERMISSION){Ok=true;xrtClearError();break;}
             if(Ok&&xrtGetError()&&xrtErrorKind(xrtGetError())!=XERR_NOT_FOUND){Ok=false;break;}
             xrtClearError();char* Parent=xrtPathParent(Roots[Count-1]);
             if(!Parent||!strcmp(Parent,Roots[Count-1])){xrtFree(Parent);break;}

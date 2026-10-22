@@ -5,6 +5,16 @@ import tempfile
 import test_skill_runtime as fixture
 
 ROOT = Path(__file__).resolve().parents[1]
+BOUNDARY = r'''
+static size_t BoundaryAfter,BoundaryProbes;
+static bool BoundaryStat(xroot Root,cstr Path,bool Follow,xfileinfo* Info){
+ if(BoundaryAfter&&!strcmp(Path,".git")&&++BoundaryProbes>=BoundaryAfter){
+  xrtSetErrorTake(xrtErrorCreate(XERR_PERMISSION,"skill-test",1,"optional ancestor denied"));return false;
+ }
+ return xrtRootStat(Root,Path,Follow,Info);
+}
+#define xrtRootStat BoundaryStat
+'''
 CHECKS = r'''
     {
         char* prompt=xrtStrDup("base");
@@ -75,6 +85,16 @@ CHECKS = r'''
         printf("feature_namespace=%d\n",ca&&MdoSkillCatalogFind(ca,"pack:pack-skill",&info)&&info.Visible&&!strcmp(info.Scope,"plugin")&&
             MdoSkillCatalogFind(ca,"pack-skill",&info)&&!info.Visible);
         MdoSkillCatalogRelease(ca);
+        BoundaryAfter=2;BoundaryProbes=0;ca=MdoSkillCatalogForWorkspace(rootB);
+        printf("feature_ancestor_boundary=%d\n",ca&&MdoSkillCatalogFind(ca,"project-explorer",&info));
+        MdoSkillCatalogRelease(ca);
+        BoundaryAfter=1;BoundaryProbes=0;ca=MdoSkillCatalogForWorkspace(rootB);
+        printf("feature_workspace_denied=%d\n",ca==NULL);MdoSkillCatalogRelease(ca);xrtClearError();
+        BoundaryAfter=2;BoundaryProbes=0;
+        MdoHomeAtomicWrite("scope-b/.mdo/skills.json","{broken",7,false);
+        ca=MdoSkillCatalogForWorkspace(rootB);
+        printf("feature_workspace_invalid=%d\n",ca==NULL);MdoSkillCatalogRelease(ca);xrtClearError();
+        MdoHomeRemove("scope-b/.mdo/skills.json",false);BoundaryAfter=0;
         xrtFree(rootA);xrtFree(rootB);xrtFree(child);
         MdoHomeRemove("skills/pack-skill",true);MdoHomeRemove("data/extensions/installed.json",false);MdoSkillManagerReload();
 
@@ -86,14 +106,14 @@ def main():
     parser.add_argument('--host',type=Path,default=ROOT/'.build/host/xs.exe')
     args=parser.parse_args()
     source=fixture.PROBE_SOURCE
-    fixture.PROBE_SOURCE=source.replace('PrintFirst(builtin, "initial_skill");',
+    fixture.PROBE_SOURCE=source.replace('#include "src/skills/manager.c"',BOUNDARY+'\n#include "src/skills/manager.c"\n#undef xrtRootStat').replace('PrintFirst(builtin, "initial_skill");',
         'PrintFirst(builtin, "initial_skill");\n'+CHECKS,1)
     try:
         with tempfile.TemporaryDirectory(prefix='skill-features-',dir=ROOT/'.build') as raw:
             base=Path(raw);fixture.write_site(base/'site')
             output=fixture.run_probe(args.host.resolve(),base/'site',base/'home')
             for field in ('metadata_idempotent','casefold','lazy_index','native_resources','utf8_page','binary_rejected',
-                          'controls','metadata_controls','unsupported_rejected','literal_arguments','scope_isolation','scope_nearest','bad_shadow','scope_disabled','namespace'):
+                          'controls','metadata_controls','unsupported_rejected','literal_arguments','scope_isolation','scope_nearest','bad_shadow','scope_disabled','namespace','ancestor_boundary','workspace_denied','workspace_invalid'):
                 assert f'feature_{field}=1' in output, output
             assert 'probe_done=1' in output, output
     finally: fixture.PROBE_SOURCE=source
