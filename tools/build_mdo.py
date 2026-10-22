@@ -426,6 +426,8 @@ def prepare(lock: dict, connection: Path | None = None) -> None:
     write_if_changed(UNITY_PATH, generated_unity(lock, source_list()).encode("utf-8"))
     write_if_changed(GENERATED_LOCK_PATH, LOCK_PATH.read_bytes())
     write_if_changed(GENERATED_MODULE_HEADER_PATH, MODULE_HEADER_PATH.read_bytes())
+    write_if_changed(GENERATED_MODULE_HEADER_PATH.with_name("command.h"),
+                     (ROOT / "include/mdo/command.h").read_bytes())
 
 
 def command_text(command: list[str]) -> str:

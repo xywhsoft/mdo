@@ -34,6 +34,7 @@
     "src/web/manager.c",
     "src/mcp/manager.c",
     "src/modules/manager.c",
+    "src/commands/catalog.c",
     "src/operations/manager.c",
     "src/distribution/manager.c",
     "src/agents/runtime.c",
