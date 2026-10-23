@@ -6,6 +6,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs');
  let page;const errors=[],diagnostics=[];
  try{
   page=await browser.newPage({viewport:{width:1440,height:1000},locale:'zh-CN'});
+  await page.addInitScript(()=>Object.defineProperty(navigator,'clipboard',{value:{readText:async()=>{throw Error('OS clipboard is disabled in this fixture');},writeText:async()=>{throw Error('OS clipboard is disabled in this fixture');}}}));
   page.on('pageerror',error=>errors.push(String(error)));page.on('dialog',dialog=>dialog.accept());
   page.on('console',message=>{if(['error','warning'].includes(message.type()))diagnostics.push(message.text());});
   page.on('response',async response=>{try{const req=response.request().postDataJSON();if(req?.method==='terminal.read'){const data=(await response.json()).data;diagnostics.push({read:req.params.cursor,status:response.status(),offset:data?.offset,next:data?.next,bytes:data?.bytes});if(diagnostics.length>20)diagnostics.shift();}}catch{}});
@@ -27,6 +28,9 @@ const assert=require('node:assert/strict'),fs=require('node:fs');
   await shell("[IO.File]::WriteAllText('ui-unicode.txt','界面🌙'); Write-Output '终端界面正确'");
   await file('ui-unicode.txt','界面🌙');
   await page.waitForFunction(()=>[...document.querySelectorAll('.wb-terminal-surface .xterm-rows > div')].some(row=>row.textContent.trim()==='终端界面正确'));
+  const output=view.locator('.xterm-rows > div').filter({hasText:/^终端界面正确\s*$/}),box=await output.boundingBox();await page.mouse.click(box.x+12,box.y+box.height/2,{clickCount:3});
+  await bar.getByRole('button',{name:'终端更多操作',exact:true}).click();await page.getByRole('menuitem',{name:'引用选择内容',exact:true}).click();
+  const quoted=await page.locator('.prompt-context-open').getAttribute('title');assert.ok(quoted.includes('终端界面正确')&&quoted.includes('会话：'+terminal.id)&&quoted.includes('工作目录：'),quoted);
   // Exercise the browser paste path with isolated data. Never replace/read the
   // user's OS clipboard or risk executing concurrently copied user content.
   await typing.focus();await typing.evaluate((node,text)=>{const data=new DataTransfer();data.setData('text/plain',text);node.dispatchEvent(new ClipboardEvent('paste',{clipboardData:data,bubbles:true}));},"[IO.File]::WriteAllText('clipboard.txt','粘贴成功')");
@@ -38,8 +42,14 @@ const assert=require('node:assert/strict'),fs=require('node:fs');
   assert.equal((await page.evaluate(id=>mdo.terminal.get({id}),terminal.id)).input_admitted,admitted,'oversized paste sent a partial command');
   // Real PowerShell cancellation, then prove a following command runs promptly.
   await shell("Start-Sleep -Seconds 30; [IO.File]::WriteAllText('must-not-run.txt','bad')");await page.waitForTimeout(500);await typing.focus();await page.keyboard.press('Control+c');
+  // Console Ctrl+C flushes native input while unwinding. Wait for the real
+  // PowerShell prompt before submitting the following command.
+  await until(()=>view.locator('.xterm-rows > div').evaluateAll(rows=>rows.map(row=>row.textContent.trim()).filter(Boolean).at(-1)?.endsWith('>')));
   await shell("[IO.File]::WriteAllText('interrupted.txt','ok')");await file('interrupted.txt','ok');
   await assert.rejects(()=>page.evaluate(()=>mdo.files.read({path:'must-not-run.txt'})));
+  await shell('$esc=[char]27; [Console]::Write("$esc[?1049h$esc[2J$esc[H$esc[?25l$esc[32mTUI 界面🌙$esc[0m$esc[3;4H框架测试"); Start-Sleep -Seconds 3; [Console]::Write("$esc[?25h$esc[?1049l"); [IO.File]::WriteAllText(\'tui-ended.txt\',\'ok\')');
+  await view.locator('.xterm-rows > div').filter({hasText:/^TUI 界面/}).waitFor();await page.screenshot({path:evidence+'/terminal-alternate-screen.png'});await file('tui-ended.txt','ok');
+  await until(async()=>await view.locator('.xterm-rows > div').filter({hasText:/^TUI 界面/}).count()===0);
   const before=await page.evaluate(id=>mdo.terminal.get({id}),terminal.id);
   await shell("Start-Sleep -Milliseconds 800; [IO.File]::WriteAllText('hidden.txt','ok'); Write-Output 'HIDDEN-COMPLETED'");
   await page.waitForFunction(()=>!document.querySelector('.wb-terminal-status').textContent.includes('待确认'));
@@ -77,7 +87,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs');
   await until(()=>page.evaluate(async id=>(await mdo.terminal.get({id})).drained,terminal.id));
   await view.locator('.wb-terminal-status > span:first-child').filter({hasText:/^已结束$/}).waitFor();assert.equal(await page.evaluate(()=>mdo.terminal.list().then(rows=>rows.length)),1);
   assert.deepEqual(errors,[]);
-  fs.writeFileSync(evidence+'/result.json',JSON.stringify({passed:true,time:Date.now(),checks:['real Windows PowerShell','Unicode input and render','isolated clipboard paste event','search','Ctrl+C interrupts','hidden panel continues','real resize','lost input ACK never replays','competing writer stays readonly','panel close/reattach without spawn','explicit end'],terminal,narrow},null,2));
+  fs.writeFileSync(evidence+'/result.json',JSON.stringify({passed:true,time:Date.now(),checks:['real Windows PowerShell','Unicode input and render','selected terminal quote retains provenance','alternate screen cursor/color/wide text and restore','isolated clipboard paste event','search','Ctrl+C interrupts','hidden panel continues','real resize','lost input ACK never replays','competing writer stays readonly','panel close/reattach without spawn','explicit end'],terminal,narrow},null,2));
   console.log('Terminal frontend, real PowerShell Unicode/interrupt, hide/reattach, resize and explicit end: PASS');
  }catch(error){if(page){await page.screenshot({path:evidence+'/failure.png'}).catch(()=>{});fs.writeFileSync(evidence+'/failure-diagnostics.json',JSON.stringify({error:String(error.stack||error),errors,diagnostics,body:await page.locator('body').innerText().catch(()=>''),rows:await page.locator('.xterm-rows').allTextContents().catch(()=>[])},null,2));}throw error;}
  finally{

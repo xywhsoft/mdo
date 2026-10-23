@@ -15,6 +15,7 @@ export async function mountTerminalView(root, { sdk, context, params = {}, viewS
   if (!capabilities.supported) { root.append(make("p", "wb-error", "当前设备的运行时不支持交互终端。")); return; }
   root.classList.add("wb-terminal-view");
   let terminal, fit, searchAddon, observer, themeObserver, selected, lease, input, reading, renewing = false, attaching = false, resizing = false, wantedSize, creation = false, blocked = false, connected = false, cursor = 0, generation = 0, renewAt = 0, disposed = false, fontSize = Math.max(11, Math.min(22, Number(viewState.terminal?.fontSize) || 13)), lastSize = "", notice = "", autoControl = true, pendingBytes = 0;
+  let reviewRequired = false;
   const bar = make("div", "wb-terminal-toolbar"), sessions = make("select", "wb-terminal-sessions"), path = make("div", "wb-terminal-path"), surface = make("div", "wb-terminal-surface"), footer = make("div", "wb-terminal-status"), status = make("span"), message = make("span", "wb-terminal-message"), placeholder = make("div", "wb-terminal-empty");
   const onError = error => toast(error.message || String(error), "error");
   const action = (glyph, label, execute) => iconButton(glyph, label, execute, onError);
@@ -28,7 +29,12 @@ export async function mountTerminalView(root, { sdk, context, params = {}, viewS
   const showFind = () => { findbar.hidden = false; find.focus(); find.select(); };
   findbar.append(find, matches, action("arrow-left", "上一个匹配", () => search(true)), action("arrow-right", "下一个匹配", () => search()), action("close", "关闭终端查找", hideFind)); root.insertBefore(findbar, surface);
   const copy = async () => { const text = terminal?.getSelection(); if (text) await navigator.clipboard.writeText(text); };
-  const quote = () => { const text = terminal?.getSelection(); if (!text) return; addContext({ kind: "quote", label: "终端选择内容", text: `终端：${selected?.title || "终端"}\n工作目录：${selected?.cwd || ""}\n设备：${context.device || "本机"}\n\n${text}` }); };
+  const quote = () => {
+    const text = terminal?.getSelection(); if (!text) return;
+    if (encoder.encode(text).length > 32768) throw new Error("选中内容超过 32 KiB，请缩小终端选择范围。");
+    addContext({ title: "终端选择内容", source: `terminal:${selected.id}`, context,
+      content: `终端：${selected.title || "终端"}\n会话：${selected.id}\n工作目录：${selected.cwd}\n设备：${context.target || context.device || "本机"}\n\n${text}` });
+  };
   const paste = async () => { if (!input || blocked) throw new Error("请先连接终端输入。"); terminal.paste(await navigator.clipboard.readText()); terminal.focus(); };
   const changeFont = value => { fontSize = Math.max(11, Math.min(22, value)); if (terminal) terminal.options.fontSize = fontSize; measure(); remember(); };
   const menu = popupMenu(more, () => [
@@ -46,13 +52,13 @@ export async function mountTerminalView(root, { sdk, context, params = {}, viewS
   const remember = () => { if (!disposed) void update({ title: selected?.title || "终端", view_state: { ...viewState, terminal: { id: selected?.id || "", fontSize } } }).catch(onError); };
   const renderStatus = () => {
     if (disposed) return;
-    root.dataset.terminalState = selected?.state || "empty"; root.dataset.terminalInput = input && !blocked ? "connected" : "readonly";
-    status.textContent = !selected ? "终端" : `${stateName(selected)}${running(selected) ? input && !blocked ? " · 可输入" : " · 只读" : ""}${pendingBytes ? ` · 待确认 ${pendingBytes} B` : ""}`;
+    root.dataset.terminalState = reviewRequired ? "unknown" : selected?.state || "empty"; root.dataset.terminalInput = input && !blocked ? "connected" : "readonly";
+    status.textContent = reviewRequired ? "状态待确认 · 只读" : !selected ? "终端" : `${stateName(selected)}${running(selected) ? input && !blocked ? " · 可输入" : " · 只读" : ""}${pendingBytes ? ` · 待确认 ${pendingBytes} B` : ""}`;
     message.textContent = notice || selected?.error || (!running(selected) ? reasonName(selected) : "关闭标签页会保留终端"); message.title = message.textContent;
     path.textContent = selected ? `${selected.cwd} · ${selected.program}` : ""; path.title = path.textContent;
-    plus.disabled = creation; end.disabled = !running(selected) || selected.state === "closing";
-    const option = [...sessions.options].find(option => option.value === selected?.id); if (option) option.textContent = `${selected.title} ${selected.id.slice(-4)} · ${stateName(selected)}`;
-    control.disabled = !selected || selected.state !== "running" || attaching; control.title = control.disabled ? "连接终端输入" : input && !blocked ? "重新连接终端输入" : "连接终端输入";
+    plus.disabled = creation || reviewRequired; end.disabled = reviewRequired || !running(selected) || selected.state === "closing";
+    const option = [...sessions.options].find(option => option.value === selected?.id); if (option) option.textContent = `${selected.title} ${selected.id.slice(-4)} · ${reviewRequired ? "状态待确认" : stateName(selected)}`;
+    control.disabled = reviewRequired || !selected || selected.state !== "running" || attaching; control.title = control.disabled ? "连接终端输入" : input && !blocked ? "重新连接终端输入" : "连接终端输入";
     terminal && (terminal.options.disableStdin = !input || blocked || !visible() || !connected);
   };
   const clearInput = (reason = "") => { input?.stop(); input = null; pendingBytes = 0; if (reason) notice = reason; renderStatus(); };
@@ -70,7 +76,7 @@ export async function mountTerminalView(root, { sdk, context, params = {}, viewS
     try {
       const attached = await sdk.call("terminal.attach", { id, client, control: true }, { signal });
       const newLease = { id, epoch: attached.epoch, client, control_token: attached.control_token, input_epoch: attached.input_epoch, next_sequence: attached.next_sequence };
-      if (disposed || version !== generation || !visible() || !attached.control_token) { if (attached.control_token) void sdk.call("terminal.detach", newLease).catch(() => {}); return; }
+      if (disposed || reviewRequired || version !== generation || !visible() || !attached.control_token) { if (attached.control_token) void sdk.call("terminal.detach", newLease).catch(() => {}); return; }
       selected = attached; lease = newLease; renewAt = Date.now() + 5000; blocked = false; connected = true; notice = "";
       input = createTerminalInput({ lease, write: (params, options) => timedCall("terminal.write", params, options.signal), fault: inputFault, changed: count => { pendingBytes = count; renderStatus(); } });
       lastSize = ""; measure(); terminal?.focus();
@@ -132,6 +138,7 @@ export async function mountTerminalView(root, { sdk, context, params = {}, viewS
         // Refuse huge paste events before allocating their encoded copy.
         if (text.length > 65536) throw new Error("粘贴内容超出 64 KiB 输入队列，尚未发送；请分段粘贴。");
         input.enqueue(binary ? Uint8Array.from(text, char => char.charCodeAt(0) & 255) : encoder.encode(text));
+        terminal.clearSelection();
         if (notice.startsWith("粘贴内容超出")) { notice = ""; renderStatus(); }
       } catch (error) { notice = error.message; renderStatus(); }
     };
@@ -185,6 +192,7 @@ export async function mountTerminalView(root, { sdk, context, params = {}, viewS
   sessions.onchange = () => { void select(sessions.value).catch(onError); };
   async function pump() {
     while (!disposed && !signal.aborted) {
+      if (reviewRequired) { await sleep(300); continue; }
       if (!visible()) { if (lease) detach(); await sleep(150); continue; }
       if (!selected || !terminal) { await sleep(200); continue; }
       if (!lease && autoControl && !blocked && selected.state === "running") void acquire();
@@ -209,7 +217,10 @@ export async function mountTerminalView(root, { sdk, context, params = {}, viewS
       } catch (error) {
         if (version !== generation || signal.aborted || request.signal.reason === "hidden") continue;
         connected = false;
-        if (error.code === "terminal_epoch_changed") {
+        if (["write_token_conflict", "purge_review_required"].includes(error.code)) {
+          reviewRequired = true; generation++; blocked = true; autoControl = false; detach();
+          notice = "终端状态尚未确认。请保留草稿并重新载入；进程和输入不会重放。";
+        } else if (error.code === "terminal_epoch_changed") {
           blocked = true; autoControl = false; detach();
           try { selected = await sdk.call("terminal.get", { id: current.id }, { signal }); cursor = selected.oldest; terminal.reset(); } catch { /* keep old identity, never recreate */ }
           notice = "服务已重启，旧终端未重启，输入未重放。";
