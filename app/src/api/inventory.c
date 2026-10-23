@@ -319,7 +319,7 @@ int MdoApiProjectExpectedRevision(const MdoApiContext* Context,
 }
 
 static bool MdoApiProjectMutationFailure(MdoApiContext* Context,
-    MdoProjectMutationResult Result)
+    MdoProjectMutationResult Result,const xwork_error* Error)
 {
     switch ( Result ) {
     case MDO_PROJECT_MUTATION_INVALID:
@@ -333,7 +333,7 @@ static bool MdoApiProjectMutationFailure(MdoApiContext* Context,
             "The project changed; reload it before updating", NULL);
     case MDO_PROJECT_MUTATION_BUSY:
         return MdoApiReplyError(Context, 409u, "project_busy",
-            "Project data is being changed; try again later", NULL);
+            Error&&Error->sMessage[0]?Error->sMessage:"Project data is being changed; try again later", NULL);
     default:
         return MdoApiReplyError(Context, 503u, "project_unavailable",
             "The project definition could not be changed", NULL);
@@ -408,7 +408,7 @@ bool MdoApiProjectRoute(MdoApiContext* Context)
     if ( Context->Request->head->MethodCode == XHTTP_METHOD_DELETE ) {
         Result = MdoProjectUnregister(Id, ExpectedRevision, &Error);
         if ( Result != MDO_PROJECT_MUTATION_OK )
-            return MdoApiProjectMutationFailure(Context, Result);
+            return MdoApiProjectMutationFailure(Context, Result,&Error);
         Data = xrtValueObject();
         Valid = Data != NULL &&
             MdoApiValueSetString(Data, "id", Id) &&
@@ -444,7 +444,7 @@ bool MdoApiProjectRoute(MdoApiContext* Context)
     Options.DefaultModelId = Model;
     Result = MdoProjectReplace(&Options, ExpectedRevision, &Info, &Error);
     if ( Result != MDO_PROJECT_MUTATION_OK )
-        return MdoApiProjectMutationFailure(Context, Result);
+        return MdoApiProjectMutationFailure(Context, Result,&Error);
     return MdoApiProjectReply(Context, 200u, &Info);
 }
 

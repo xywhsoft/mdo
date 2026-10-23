@@ -7,6 +7,9 @@
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/project_lifecycle.h"
 #include "../../include/mdo/projects.h"
+#include "runtime_guard.h"
+static bool (*MdoProjectsRuntimeBusy)(cstr);
+void MdoProjectRuntimeGuardSet(bool (*Busy)(cstr)){MdoProjectsRuntimeBusy=Busy;}
 
 #define MDO_PROJECT_SCHEMA_VERSION 1u
 #define MDO_PROJECT_STORE_LIMIT 8192u
@@ -513,6 +516,11 @@ MdoProjectMutationResult MdoProjectReplace(
     Result = MdoProjectsMutationBegin(Options->Id, ExpectedRevision,
         Path, &Lock, &Current, Error);
     if ( Result != MDO_PROJECT_MUTATION_OK ) goto done;
+    if ( strcmp(Current.WorkspaceRoot,Candidate.WorkspaceRoot) &&
+         MdoProjectsRuntimeBusy && MdoProjectsRuntimeBusy(Options->Id) ) {
+        MdoProjectsError(Error,XWORK_ERROR_CONTEXT,"End the project's active terminals before changing its workspace");
+        Result=MDO_PROJECT_MUTATION_BUSY;goto done;
+    }
     if ( Current.Revision == UINT64_MAX ) {
         Result = MDO_PROJECT_MUTATION_UNAVAILABLE;
         goto done;
@@ -564,6 +572,11 @@ MdoProjectMutationResult MdoProjectUnregister(const char* Id,
     }
     Result = MdoProjectsMutationBegin(Id, ExpectedRevision, Path,
         &Lock, &Current, Error);
+    if ( Result == MDO_PROJECT_MUTATION_OK && MdoProjectsRuntimeBusy &&
+         MdoProjectsRuntimeBusy(Id) ) {
+        MdoProjectsError(Error,XWORK_ERROR_CONTEXT,"End the project's active terminals before unregistering it");
+        Result=MDO_PROJECT_MUTATION_BUSY;
+    }
     if ( Result == MDO_PROJECT_MUTATION_OK &&
          !MdoHomeRemove(Path, true) )
         Result = MDO_PROJECT_MUTATION_UNAVAILABLE;

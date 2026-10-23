@@ -1,5 +1,5 @@
 """Explicit orphan cleanup: real project mutations and PTYs, private Home only."""
-import argparse,json,os,subprocess,sys,tempfile,time
+import argparse,json,os,subprocess,sys,tempfile,time,threading
 from pathlib import Path
 from test_api_runtime import ROOT,write_site,free_port,wait_ready,request
 
@@ -7,6 +7,9 @@ def main():
     parser=argparse.ArgumentParser();parser.add_argument('--host',type=Path,required=True);parser.add_argument('--evidence',type=Path);args=parser.parse_args()
     with tempfile.TemporaryDirectory(dir=ROOT/'.build' if os.name=='nt' else None,prefix='workbench-terminal-cleanup-') as raw:
         base=Path(raw);home=base/'home';port=free_port();config=write_site(base,port)
+        terminal_source=base/'src/application/terminals.c';source=terminal_source.read_text(encoding='utf-8');hook='    const xprocessenv Env[]='
+        assert source.count(hook)==1
+        terminal_source.write_text(source.replace(hook,'    if(Title&&!strcmp(Title,"race-admission")){(void)MdoHomeAtomicWrite("data/terminal-race-ready","ready",5,false);xrtSleep(1000);}\n'+hook),encoding='utf-8')
         def api(method,path,body=None,expected=200,headers=None):
             status,_,data=request(port,method,path,body=json.dumps(body).encode() if body is not None else None,headers={'Content-Type':'application/json',**(headers or {})})
             value=json.loads(data);assert status==expected,(path,status,value)
@@ -32,8 +35,19 @@ def main():
                 other=call('terminal.create',{**settings['removed'],'key':'other-owner'},'removed','qa.other')
                 until(lambda:call('terminal.get',{'id':other['id']},'removed','qa.other')['drained'])
                 active=call('terminal.create',{**settings['removed'],'key':'still-active','args':['-c','import time;time.sleep(60)']},'removed')
-                api('DELETE','/api/v1/projects/removed',headers={'If-Match':'"mdo-project-removed-1"'})
                 next_directory=base/'moved-next';next_directory.mkdir()
+                busy=api('DELETE','/api/v1/projects/removed',expected=409,headers={'If-Match':'"mdo-project-removed-1"'})
+                assert busy['code']=='project_busy' and 'terminals' in busy['message'],busy
+                api('PUT','/api/v1/projects/removed',{'name':'blocked move','workspace_root':str(next_directory),'default_model_id':''},expected=409,headers={'If-Match':'"mdo-project-removed-1"'})
+                renamed=api('PUT','/api/v1/projects/removed',{'name':'rename allowed','workspace_root':str(base/'removed'),'default_model_id':''},headers={'If-Match':'"mdo-project-removed-1"'})
+                assert renamed['revision']==2
+                call('terminal.close',{'id':active['id'],'epoch':active['epoch']},'removed');until(lambda:call('terminal.get',{'id':active['id']},'removed')['drained']);call('terminal.release',{'id':active['id']},'removed')
+                api('DELETE','/api/v1/projects/removed',headers={'If-Match':'"mdo-project-removed-2"'})
+                # Simulate a record orphaned by a pre-fix version or external
+                # definition edit. Cleanup must never stop its live process.
+                legacy=base/'legacy';legacy.mkdir();api('POST','/api/v1/projects',{'id':'legacy','name':'legacy','workspace_root':str(legacy)},201)
+                active=call('terminal.create',{'key':'legacy-active','program':sys.executable,'args':['-c','import time;time.sleep(60)']},'legacy')
+                (home/'projects/legacy.json').unlink()
                 api('PUT','/api/v1/projects/moved',{'name':'moved','workspace_root':str(next_directory),'default_model_id':''},headers={'If-Match':'"mdo-project-moved-1"'})
                 corrupt_path=home/'projects/corrupt.json';corrupt=corrupt_path.read_bytes();corrupt_path.write_text('{broken')
                 receipts={p.name:p.read_bytes() for p in (home/'data/application/terminal-receipts').glob('*.json')}
@@ -49,14 +63,26 @@ def main():
                 api('POST','/api/v1/projects',{'id':'removed','name':'restored','workspace_root':str(base/'removed')},201)
                 assert call('terminal.create',settings['removed'],'removed',expected=410)['code']=='terminal_intent_retired','late creation retry was replayed'
                 assert call('terminal.get',{'id':other['id']},'removed',expected=403)['code']=='terminal_owner_mismatch'
-                call('terminal.close',{'id':active['id'],'epoch':active['epoch']},'removed')
-                until(lambda:call('terminal.get',{'id':active['id']},'removed')['drained'])
-                api('DELETE','/api/v1/projects/removed',headers={'If-Match':'"mdo-project-removed-1"'})
+                api('POST','/api/v1/projects',{'id':'legacy','name':'legacy','workspace_root':str(legacy)},201)
+                call('terminal.close',{'id':active['id'],'epoch':active['epoch']},'legacy')
+                until(lambda:call('terminal.get',{'id':active['id']},'legacy')['drained'])
+                api('DELETE','/api/v1/projects/legacy',headers={'If-Match':'"mdo-project-legacy-1"'})
                 assert call('terminal.prune')=={'released':1}
+                api('DELETE','/api/v1/projects/removed',headers={'If-Match':'"mdo-project-removed-1"'})
                 assert call('terminal.prune',owner='qa.other')=={'released':1}
                 corrupt_path.write_bytes(corrupt)
                 assert call('terminal.get',{'id':rows['corrupt']['id']},'corrupt')['drained']
-                result={'passed':True,'checks':['real unregister and workspace replacement','only drained own orphan records released','active and other owners retained','corrupt definitions retained','admission receipts retained','late retry never respawns','idempotent explicit cleanup']}
+                race=base/'race';race.mkdir();api('POST','/api/v1/projects',{'id':'race','name':'race','workspace_root':str(race)},201)
+                pending=[];failures=[]
+                def creating():
+                    try:pending.append(call('terminal.create',{'key':'race','title':'race-admission','program':sys.executable,'args':['-c','import time;time.sleep(60)']},'race'))
+                    except Exception as error:failures.append(error)
+                worker=threading.Thread(target=creating);worker.start();until(lambda:(home/'data/terminal-race-ready').exists())
+                assert api('DELETE','/api/v1/projects/race',expected=409,headers={'If-Match':'"mdo-project-race-1"'})['code']=='project_busy'
+                worker.join(timeout=15);assert not worker.is_alive() and not failures,failures
+                row=pending[0];call('terminal.close',{'id':row['id'],'epoch':row['epoch']},'race');until(lambda:call('terminal.get',{'id':row['id']},'race')['drained'])
+                api('DELETE','/api/v1/projects/race',headers={'If-Match':'"mdo-project-race-1"'});assert call('terminal.prune')=={'released':1}
+                result={'passed':True,'checks':['real unregister and workspace replacement','active terminal blocks unregister/move but allows rename','concurrent creation excludes project mutation','only drained own orphan records released','active and other owners retained','corrupt definitions retained','admission receipts retained','late retry never respawns','idempotent explicit cleanup']}
                 if args.evidence:args.evidence.mkdir(parents=True,exist_ok=True);(args.evidence/'result.json').write_text(json.dumps(result,indent=2))
                 print('Actual project unregister/move, drained orphan cleanup, owner isolation and no replay: PASS')
             except Exception:

@@ -261,6 +261,10 @@ not_started / cancelled_before_start。不会重放原程序或输入。启动�
 创建收据保留，迟到的旧 key 仍拒绝重启。通过 SDK 的同一目标绑定到 default 上下文可
 在原项目不存在后执行；前端省略号菜单提供确认入口。清理不跳过当前服务写入保护。
 
+创建终端与项目定义修改共用准入门，防止检查目录后并发注销/换目录。项目有启动中、
+运行中或 I/O 尚未完全排空的终端时，注销和更换工作目录返回 project_busy，需先结束
+终端；仅改项目名称/默认模型不受此限制。结束记录可以保留，之后通过 release/prune 清理。
+
 内置终端页面使用离线打包的 xterm.js 6.0.0、fit/search/Unicode11 插件。来源、精确版本、
 归档完整性、发行文件 SHA-256 和 MIT 许可见 app/web/assets/terminal/manifest.json。
 `python tools/vendor_terminal.py` 离线核对；显式 `--fetch` 可复现这些文件，不安装 Node/npm。

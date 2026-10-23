@@ -38,6 +38,7 @@ bool MdoApplicationStreamsCall(const mdo_sdk_context_v1*,cstr,const xvalue*,xval
 bool MdoApplicationTerminalsInit(void);
 void MdoApplicationTerminalsStop(void);
 void MdoApplicationTerminalsUnit(void);
+bool MdoApplicationTerminalsProjectBusy(cstr Project);
 xvalue* MdoApplicationTerminalsCatalog(void);
 bool MdoApplicationTerminalsCall(const mdo_sdk_context_v1*,cstr,const xvalue*,xvalue**,mdo_error_v1*,bool*);
 bool MdoApplicationPluginsInit(void);

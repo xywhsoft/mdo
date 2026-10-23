@@ -21,6 +21,7 @@
 #include "../../include/mdo/schedules.h"
 #include "../../include/mdo/sessions.h"
 #include "../sessions/internal.h"
+#include "../projects/runtime_guard.h"
 #include "../../include/mdo/settings.h"
 #include "../../include/mdo/skills.h"
 #include "../../include/mdo/version.h"
@@ -67,6 +68,7 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
         return false;
     }
     if(!MdoApplicationInit(pHost->Server)){MdoBootstrapFail("Application SDK initialization failed");return false;}
+    MdoProjectRuntimeGuardSet(MdoApplicationTerminalsProjectBusy);
     MdoModuleManagerAttachApplication(MdoApplicationApi());
     if(!MdoCommandMigrateLegacy())fprintf(stderr,"[mdo] legacy command migration needs attention; originals retained\n");
     if ( !MdoProjectLifecycleInit() ) {

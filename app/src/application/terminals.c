@@ -225,7 +225,7 @@ static char* SdkTerminalDefault(void){
     char* Shell=xrtEnvGet("SHELL");if(Shell&&Shell[0])return Shell;xrtFree(Shell);return xrtStrDup("/bin/sh");
 #endif
 }
-static bool SdkTerminalCreate(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E){
+static bool SdkTerminalCreateImpl(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E){
     if(!xrtProcessTerminalSupported())return SdkTerminalFail(E,"terminal_unsupported","The current runtime has no supported PTY backend",501);
     cstr Key=SdkField(P,"key"),Program=SdkField(P,"program"),Title=SdkField(P,"title");const xvalue* Args=SdkGet(P,"args");uint64 Columns=80,Rows=24;
     if(!SdkIdValid(Key)||strlen(Key)>128||(Program&&(!Program[0]||strlen(Program)>4096))||(Title&&strlen(Title)>256)||(Args&&xrtValueType(Args)!=XVALUE_ARRAY)||xrtValueCount(Args)>32||
@@ -271,6 +271,23 @@ static bool SdkTerminalCreate(const mdo_sdk_context_v1* C,const xvalue* P,xvalue
     T->ReceiptUncertain=!SdkTerminalSave();*R=SdkTerminalInfo(T);bool Kill=Process&&T->Closing;if(Kill)T->Pins++;MdoProjectLease* UnstartedLease=NULL;if(!Process){UnstartedLease=T->Lease;T->Lease=NULL;}xrtMutexUnlock(SdkTerminals.Lock);MdoProjectLeaseRelease(UnstartedLease);
     if(Kill){(void)xrtProcessKillTree(Process);bool Exited=!T->Waiter&&xrtProcessWaitFor(Process,5000)==XWAIT_OK;xrtMutexLock(SdkTerminals.Lock);if(Exited){T->Exited=true;SdkPut(T->Record,"state","ended");}T->Pins--;xrtMutexUnlock(SdkTerminals.Lock);}
     if(!Spawned){xrtValueRelease(*R);*R=NULL;if(SpawnError.Code[0]){*E=SpawnError;E->MayHaveCompleted=Process!=NULL;}else MdoApplicationError(E,"terminal_start_failed","Terminal I/O could not start; inspect its retained creation record","terminal",500,Process!=NULL);return false;}return true;
+}
+static bool SdkTerminalCreate(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E){
+    xwork_error Error;MdoProjectLease* Lease=MdoProjectLeaseAcquire(C->ProjectId&&C->ProjectId[0]?C->ProjectId:"default",MDO_PROJECT_LEASE_SHARED,&Error);
+    MdoProjectDefinitionLease* Writer=Lease?MdoProjectDefinitionAcquire(Lease,&Error):NULL;
+    if(!Writer){MdoProjectLeaseRelease(Lease);return SdkTerminalFail(E,"terminal_project_busy","Project definitions are changing; no terminal was admitted",409);}
+    bool Ok=SdkTerminalCreateImpl(C,P,R,E);MdoProjectDefinitionRelease(Writer);MdoProjectLeaseRelease(Lease);return Ok;
+}
+bool MdoApplicationTerminalsProjectBusy(cstr Project){
+    if(!SdkTerminals.Lock)return false;bool Busy=false;char Key[65];size_t N=strlen(Project);if(N>=sizeof(Key))return true;
+    while(N&&Project[N-1]=='.')N--;for(size_t i=0;i<N;i++)Key[i]=Project[i]>='A'&&Project[i]<='Z'?Project[i]+'a'-'A':Project[i];Key[N]=0;
+    xrtMutexLock(SdkTerminals.Lock);
+    for(size_t i=0;i<SDK_TERMINAL_SLOTS;i++){
+        SdkTerminal* T=&SdkTerminals.Slots[i];if(!T->Record||T->Releasing)continue;
+        cstr Id=SdkField(SdkGet(T->Record,"context"),"project");if(!Id)continue;size_t Size=strlen(Id);while(Size&&Id[Size-1]=='.')Size--;if(Size!=N)continue;
+        bool Same=true;for(size_t j=0;j<N;j++){char Ch=Id[j]>='A'&&Id[j]<='Z'?Id[j]+'a'-'A':Id[j];if(Ch!=Key[j])Same=false;}
+        if(Same&&(T->Starting||!T->Exited||!T->ReaderDone||!T->WriterDone||!T->WaiterDone||T->Pins)){Busy=true;break;}
+    }xrtMutexUnlock(SdkTerminals.Lock);return Busy;
 }
 /* Explicit housekeeping only: it never reveals another context's bytes or
  * changes a live PTY. A corrupt/unreachable workspace is not proof of removal.
