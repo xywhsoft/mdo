@@ -6,11 +6,11 @@
 static bool SdkGitFail(mdo_error_v1* E,cstr Code,cstr Message,unsigned Status){return MdoApplicationError(E,Code,Message,"git",Status,false);}
 static uint64 SdkGitNumber(cstr Text){uint64 N=0;while(*Text>='0'&&*Text<='9'){unsigned Digit=(unsigned)(*Text++-'0');if(N>(UINT64_MAX-Digit)/10)return UINT64_MAX;N=N*10+Digit;}return N;}
 static void SdkGitChomp(char* Text){size_t N=Text?strlen(Text):0;if(N&&Text[N-1]=='\n')Text[--N]=0;if(N&&Text[N-1]=='\r')Text[--N]=0;}
-static bool SdkGitRun(const mdo_sdk_context_v1* C,cstr Root,const cstr* Args,size_t Count,xbytesview Input,size_t Limit,xprocessoutputproc Output,void* User,xprocessresult* R,mdo_error_v1* E){
+static bool SdkGitRunWithIndex(const mdo_sdk_context_v1* C,cstr Root,const cstr* Args,size_t Count,xbytesview Input,size_t Limit,xprocessoutputproc Output,void* User,xprocessresult* R,mdo_error_v1* E,cstr PrivateIndex){
     const cstr Prefix[]={"--literal-pathspecs","-c","core.quotepath=false","-c","core.fsmonitor=false","-c","color.ui=false","-c","core.pager=cat"};
     cstr Argv[64];size_t At=0;if(Count+sizeof(Prefix)/sizeof(*Prefix)>64)return SdkGitFail(E,"git_arguments_invalid","Too many Git arguments",400);
     for(size_t i=0;i<sizeof(Prefix)/sizeof(*Prefix);i++)Argv[At++]=Prefix[i];for(size_t i=0;i<Count;i++)Argv[At++]=Args[i];
-    const xprocessenv Env[]={{"GIT_OPTIONAL_LOCKS","0"},{"GIT_TERMINAL_PROMPT","0"},{"LC_ALL","C"},{"GIT_DIR",NULL},{"GIT_WORK_TREE",NULL},{"GIT_INDEX_FILE",NULL},{"GIT_COMMON_DIR",NULL},{"GIT_OBJECT_DIRECTORY",NULL},{"GIT_ALTERNATE_OBJECT_DIRECTORIES",NULL},{"GIT_CONFIG_COUNT",NULL},{"GIT_CONFIG_PARAMETERS",NULL}};
+    const xprocessenv Env[]={{"GIT_OPTIONAL_LOCKS","0"},{"GIT_TERMINAL_PROMPT","0"},{"LC_ALL","C"},{"GIT_DIR",NULL},{"GIT_WORK_TREE",NULL},{"GIT_INDEX_FILE",PrivateIndex},{"GIT_COMMON_DIR",NULL},{"GIT_OBJECT_DIRECTORY",NULL},{"GIT_ALTERNATE_OBJECT_DIRECTORIES",NULL},{"GIT_CONFIG_COUNT",NULL},{"GIT_CONFIG_PARAMETERS",NULL}};
     xprocessconfig Config;xrtProcessConfigInit(&Config);Config.Program="git";Config.Args=Argv;Config.ArgCount=At;Config.WorkDir=Root;Config.HideWindow=true;Config.Env=Env;Config.EnvCount=sizeof(Env)/sizeof(*Env);
     Config.Stdin.Mode=Input.Data?XPROCESS_IO_PIPE:XPROCESS_IO_NULL;Config.Stdout.Mode=XPROCESS_IO_PIPE;Config.Stderr.Mode=XPROCESS_IO_PIPE;
     xprocessrunoptions Options;xrtProcessRunOptionsInit(&Options);Options.Input=Input;Options.StdoutLimit=Limit;Options.StderrLimit=8192;Options.Overflow=XPROCESS_OVERFLOW_KEEP_FIRST;Options.Output=Output;Options.UserData=User;
@@ -21,6 +21,7 @@ static bool SdkGitRun(const mdo_sdk_context_v1* C,cstr Root,const cstr* Args,siz
     if(!Output&&R->StdoutTruncated)return SdkGitFail(E,"git_result_too_large","Git metadata exceeds 4 MiB; narrow the repository or comparison",413);
     return true;
 }
+static bool SdkGitRun(const mdo_sdk_context_v1* C,cstr Root,const cstr* Args,size_t Count,xbytesview Input,size_t Limit,xprocessoutputproc Output,void* User,xprocessresult* R,mdo_error_v1* E){return SdkGitRunWithIndex(C,Root,Args,Count,Input,Limit,Output,User,R,E,NULL);}
 static bool SdkGitSuccess(const xprocessresult* R,mdo_error_v1* E,cstr Code){
     if(R->Status.Code==0)return true;
     char Message[1200];size_t N=R->StderrSize<1000?R->StderrSize:1000;
@@ -33,6 +34,33 @@ static char* SdkGitText(const mdo_sdk_context_v1* C,cstr Root,const cstr* Args,s
         if(R.Status.Code==0){Text=xrtStrDupN((cstr)R.Stdout,R.StdoutSize);SdkGitChomp(Text);}
         else if(!Optional)SdkGitSuccess(&R,E,"git_revision_invalid");
     }xrtProcessResultUnit(&R);return Text;
+}
+/* A staged deletion followed by an untracked recreation cannot be compared by
+ * `diff HEAD`: Git hides the recreated path. Restore HEAD only into a private
+ * index, then compare that index to disk. read-tree performs no checkout and
+ * never replaces the user's index. Diff/textconv options remain disabled. */
+typedef struct SdkGitPrivateIndex {char Relative[128];char* Path;xroot Directory;} SdkGitPrivateIndex;
+static void SdkGitPrivateIndexUnit(SdkGitPrivateIndex* I){
+    if(I->Directory){(void)xrtRootRemove(I->Directory,"index.lock");(void)xrtRootRemove(I->Directory,"index");xrtRootClose(I->Directory);}
+    if(I->Relative[0])(void)MdoHomeRemoveEmptyDirectory(I->Relative);xrtFree(I->Path);memset(I,0,sizeof(*I));
+}
+static bool SdkGitPrivateIndexInit(const mdo_sdk_context_v1* C,cstr Root,cstr Head,SdkGitPrivateIndex* I,mdo_error_v1* E){
+    if(!Head||!Head[0])return SdkGitFail(E,"git_head_missing","This comparison needs a valid HEAD commit",409);
+    const cstr Inspect[]={"ls-tree","-r","-z","--name-only",Head};xprocessresult Entries={0};
+    bool Fits=SdkGitRun(C,Root,Inspect,5,(xbytesview){0},GIT_METADATA_LIMIT,NULL,NULL,&Entries,E)&&SdkGitSuccess(&Entries,E,"git_scratch_failed");
+    size_t Files=0;for(size_t i=0;Fits&&i<Entries.StdoutSize;i++)if(!Entries.Stdout[i]&&++Files>GIT_FILE_LIMIT)Fits=SdkGitFail(E,"git_result_too_large","Private comparison is limited to 20,000 HEAD entries",413);
+    xrtProcessResultUnit(&Entries);if(!Fits)return false;
+    unsigned char Random[16];char Hex[33];static const char Digits[]="0123456789abcdef";
+    if(!xrtSecureRandom(Random,sizeof(Random)))return SdkNativeFailure(E,"git");
+    for(size_t i=0;i<sizeof(Random);i++){Hex[i*2]=Digits[Random[i]>>4];Hex[i*2+1]=Digits[Random[i]&15];}Hex[32]=0;
+    snprintf(I->Relative,sizeof(I->Relative),"data/application/git-inspection-%s",Hex);
+    if(!MdoHomeCreateDirectory(I->Relative)){I->Relative[0]=0;return SdkGitFail(E,"git_scratch_failed","Cannot create a private Git inspection directory",503);}
+    /* Exclusive Home directory creation already requests 0700 on POSIX;
+     * Windows retains the Home ACL and does not implement POSIX chmod. */
+    if((I->Directory=MdoHomeOpenStorageDirectory(I->Relative))==NULL)return SdkGitFail(E,"git_scratch_failed","Cannot open the private Git inspection directory",503);
+    char Relative[160];snprintf(Relative,sizeof(Relative),"%s/index",I->Relative);I->Path=MdoHomeExternalPath(Relative);if(!I->Path)return SdkNativeFailure(E,"git");
+    const cstr Args[]={"read-tree",Head};xprocessresult Result={0};
+    bool Ok=SdkGitRunWithIndex(C,Root,Args,2,(xbytesview){0},1024,NULL,NULL,&Result,E,I->Path)&&SdkGitSuccess(&Result,E,"git_scratch_failed");xrtProcessResultUnit(&Result);return Ok;
 }
 static char* SdkGitRoot(const mdo_sdk_context_v1* C,const xvalue* P,mdo_error_v1* E){
     cstr Provided=SdkField(P,"repository");xvalue* Params=xrtValueObject();SdkPut(Params,"path",Provided&&Provided[0]?Provided:".");
@@ -65,13 +93,21 @@ static xvalue* SdkGitFile(xvalue* Files,cstr Path,cstr Status,cstr Old,mdo_error
     SdkPutUInt(V,"additions",0);SdkPutUInt(V,"deletions",0);xrtValueObjectSetNew(V,XRT_STR_LITERAL("stats_available"),xrtValueBool(false));xrtValueArrayAppendNew(Files,V);return V;
 }
 static bool SdkGitNames(xvalue* Files,const xprocessresult* R,bool Porcelain,mdo_error_v1* E){
+    xvalue* Index=xrtValueObject();bool Ok=false;
     size_t At=0;while(At<R->StdoutSize){
         cstr First=SdkGitToken(R->Stdout,R->StdoutSize,&At),Path=NULL,Old=NULL;char Status[3]={0};
-        if(!First)return SdkGitFail(E,"git_output_invalid","Git returned incomplete NUL-delimited metadata",502);
-        if(Porcelain){if(strlen(First)<4||First[2]!=' ')return SdkGitFail(E,"git_output_invalid","Malformed Git status record",502);Status[0]=First[0];Status[1]=First[1];Path=First+3;if(strchr(Status,'R')||strchr(Status,'C'))Old=SdkGitToken(R->Stdout,R->StdoutSize,&At);}
+        if(!First){SdkGitFail(E,"git_output_invalid","Git returned incomplete NUL-delimited metadata",502);goto done;}
+        if(Porcelain){if(strlen(First)<4||First[2]!=' '){SdkGitFail(E,"git_output_invalid","Malformed Git status record",502);goto done;}Status[0]=First[0];Status[1]=First[1];Path=First+3;if(strchr(Status,'R')||strchr(Status,'C'))Old=SdkGitToken(R->Stdout,R->StdoutSize,&At);}
         else {Status[0]=First[0];Path=SdkGitToken(R->Stdout,R->StdoutSize,&At);if(First[0]=='R'||First[0]=='C'){Old=Path;Path=SdkGitToken(R->Stdout,R->StdoutSize,&At);}}
-        if(!Path||((strchr(Status,'R')||strchr(Status,'C'))&&!Old)||!SdkGitFile(Files,Path,Status,Old,E))return false;
-    }return true;
+        if(!Path||((strchr(Status,'R')||strchr(Status,'C'))&&!Old))goto done;
+        xvalue* Existing=(xvalue*)SdkGet(Index,Path);
+        if(Existing){
+            if(!Porcelain||strcmp(Status,"??")||SdkField(Existing,"status")[0]!='D'){SdkGitFail(E,"git_output_invalid","Unexpected duplicate Git path",502);goto done;}
+            SdkPut(Existing,"status","D?");xrtValueObjectSetNew(Existing,XRT_STR_LITERAL("worktree_recreated"),xrtValueBool(true));continue;
+        }
+        xvalue* File=SdkGitFile(Files,Path,Status,Old,E);if(!File)goto done;xrtValueObjectSet(Index,xrtStrView(Path),File);
+    }Ok=true;
+done:xrtValueRelease(Index);return Ok;
 }
 static bool SdkGitNumbers(xvalue* Files,const xprocessresult* R,mdo_error_v1* E){
     xvalue* Index=xrtValueObject();for(size_t i=0;i<xrtValueCount(Files);i++){const xvalue* File=xrtValueArrayGet(Files,i);xrtValueObjectSet(Index,xrtStrView(SdkField(File,"path")),File);}
@@ -129,7 +165,7 @@ static size_t SdkGitDiffArgs(const SdkGitRange* G,const char* Format,cstr* Args)
     Args[N++]="--";return N;
 }
 static bool SdkGitList(const mdo_sdk_context_v1* C,const xvalue* P,SdkGitRange* G,xvalue** R,mdo_error_v1* E){
-    xvalue* Files=xrtValueArray();xprocessresult Result={0};bool Ok=false;cstr Args[32];size_t Count;
+    xvalue* Files=xrtValueArray(),*Recreated=xrtValueArray();xprocessresult Result={0};SdkGitPrivateIndex Private={0};bool Ok=false;cstr Args[32];size_t Count;
     if(!SdkGitRangeInit(C,P,G,E))goto done;
     if(!strcmp(G->Scope,"workspace")){
         const cstr Status[]={"status","--porcelain=v1","-z","--untracked-files=all","--ignore-submodules=none"};
@@ -142,6 +178,16 @@ static bool SdkGitList(const mdo_sdk_context_v1* C,const xvalue* P,SdkGitRange* 
     /* An unborn workspace contains only new entries; --cached works without HEAD. */
     if(G->Unborn&&!strcmp(G->Scope,"workspace")){Args[Count-1]="--cached";Args[Count++]="--";}
     if(!SdkGitRun(C,G->Root,Args,Count,(xbytesview){0},GIT_METADATA_LIMIT,NULL,NULL,&Result,E)||!SdkGitSuccess(&Result,E,"git_status_failed")||!SdkGitNumbers(Files,&Result,E))goto done;
+    for(size_t i=0;i<xrtValueCount(Files);i++){
+        xvalue* File=(xvalue*)xrtValueArrayGet(Files,i);bool Replaced=false;xrtValueGetBool(SdkGet(File,"worktree_recreated"),&Replaced);
+        if(Replaced){SdkPutUInt(File,"additions",0);SdkPutUInt(File,"deletions",0);xrtValueObjectSetNew(File,XRT_STR_LITERAL("stats_available"),xrtValueBool(true));xrtValueArrayAppend(Recreated,File);}
+    }
+    if(xrtValueCount(Recreated)){
+        if(!SdkGitPrivateIndexInit(C,G->Root,G->Head,&Private,E))goto done;
+        xrtProcessResultUnit(&Result);SdkGitRange Working=*G;Working.Scope="unstaged";Count=SdkGitDiffArgs(&Working,"--numstat",Args);Args[Count-1]="-z";Args[Count++]="--";
+        if(!SdkGitRunWithIndex(C,G->Root,Args,Count,(xbytesview){0},GIT_METADATA_LIMIT,NULL,NULL,&Result,E,Private.Path)||!SdkGitSuccess(&Result,E,"git_status_failed")||!SdkGitNumbers(Recreated,&Result,E))goto done;
+        SdkGitPrivateIndexUnit(&Private);
+    }
     uint64 Additions=0,Deletions=0,Unknown=0,StatsBudget=8u*1024u*1024u;
     for(size_t i=0;i<xrtValueCount(Files);i++){
         if(SdkCancelled(C)){bool Timed=C->Deadline&&MdoDeadlineExpired(C->Deadline);SdkGitFail(E,Timed?"git_timeout":"sdk_cancelled",Timed?"Git inspection timed out":"Git inspection cancelled",Timed?504:499);goto done;}
@@ -157,7 +203,7 @@ static bool SdkGitList(const mdo_sdk_context_v1* C,const xvalue* P,SdkGitRange* 
     *R=xrtValueObject();SdkPut(*R,"repository",G->Root);SdkPut(*R,"head",G->Head);SdkPut(*R,"base",G->Base);SdkPut(*R,"branch",G->Branch);SdkPut(*R,"scope",G->Scope);
     xrtValueObjectSetNew(*R,XRT_STR_LITERAL("unborn"),xrtValueBool(G->Unborn));xrtValueObjectSet(*R,XRT_STR_LITERAL("files"),Files);SdkPutUInt(*R,"additions",Additions);SdkPutUInt(*R,"deletions",Deletions);SdkPutUInt(*R,"unmeasured_files",Unknown);
     char* Json=SdkJson(*R);char Revision[65];if(!Json||!MdoExtensionHash(Json,Revision)){xrtFree(Json);goto done;}xrtFree(Json);SdkPut(*R,"revision",Revision);Ok=true;
-done:xrtProcessResultUnit(&Result);xrtValueRelease(Files);if(!Ok){xrtValueRelease(*R);*R=NULL;}return Ok;
+done:SdkGitPrivateIndexUnit(&Private);xrtProcessResultUnit(&Result);xrtValueRelease(Recreated);xrtValueRelease(Files);if(!Ok){xrtValueRelease(*R);*R=NULL;}return Ok;
 }
 #include "changes_diff.inc.c"
 static bool SdkChangesCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue* P,xvalue** R,mdo_error_v1* E){

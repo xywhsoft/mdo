@@ -57,7 +57,7 @@ export async function mountChangesView(root, { sdk, context, params = {}, viewSt
     const file = state?.files.find(file => file.path === selected);
     fileName.textContent = file ? file.path : "变更"; fileName.title = file?.old_path ? `${file.old_path} → ${file.path}` : selected;
     fileStats.textContent = file ? changeStats(file) : "";
-    open.disabled = !file || Boolean(file.directory) || file.status.includes("D");
+    open.disabled = !file || Boolean(file.directory) || file.status.includes("D") && !file.worktree_recreated;
     quote.disabled = !page?.rows.length; previous.disabled = !previousPages.length; next.disabled = !page?.more;
     summary.textContent = state ? `${state.files.length} 文件 · +${state.additions} −${state.deletions}${state.unmeasured_files ? ` · ${state.unmeasured_files} 未统计` : ""}` : "";
     summary.title = state ? `${state.repository}\n${state.branch || "分离 HEAD"}${state.unborn ? " · 尚无首次提交" : ""}${scope.value === "branch" ? `\n${state.base} → ${state.head}（提交之间）` : ""}` : "";
@@ -101,6 +101,7 @@ export async function mountChangesView(root, { sdk, context, params = {}, viewSt
     diff.scrollTop = scrollTop;
     info.replaceChildren(previous, make("span", "", `差异行 ${page.total ? page.offset + 1 : 0}–${page.next} / ${page.total.toLocaleString()} · +${page.additions} −${page.deletions}`), next);
     if (page.binary) info.append(make("span", "", "二进制文件无法显示文本差异"));
+    if (state.files.find(file => file.path === selected)?.worktree_recreated) info.append(make("span", "", "暂存删除后在原路径重建；显示 HEAD → 当前文件"));
     if (scope.value === "branch") info.append(make("span", "", "选定提交 → HEAD；打开文件显示当前工作区内容"));
     controls();
   };
@@ -136,7 +137,7 @@ export async function mountChangesView(root, { sdk, context, params = {}, viewSt
       if (item.file) { const stats = make("span", "wb-change-tree-stats", changeStats(item.file)); button.append(stats); button.title = `${item.path}\n${item.file.status} · ${stats.textContent}${item.file.old_path ? `\n原路径：${item.file.old_path}` : ""}`; }
       else button.title = item.path;
       button.onclick = () => { focused = at; treeList.focus(); activate(item); };
-      button.ondblclick = () => { if (item.file && !item.file.directory && item.file.status.trim() !== "D") void openFile(`${state.repository}/${item.path}`, 1).catch(errorToast); };
+      button.ondblclick = () => { if (item.file && !item.file.directory && (!item.file.status.includes("D") || item.file.worktree_recreated)) void openFile(`${state.repository}/${item.path}`, 1).catch(errorToast); };
       treeCanvas.append(button); if (at === focused) treeList.setAttribute("aria-activedescendant", button.id);
     }
   };

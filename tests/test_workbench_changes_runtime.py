@@ -11,6 +11,7 @@ def main():
             return subprocess.run(['git','-c','user.name=Workbench QA','-c','user.email=workbench@example.invalid',*argv],cwd=cwd,stdout=subprocess.PIPE,stderr=subprocess.PIPE,check=check)
         git('init','-b','master');(repo/'tracked.txt').write_text('one\ntwo\n',encoding='utf-8')
         (repo/'old name.txt').write_text('old name\n',encoding='utf-8');(repo/'binary.dat').write_bytes(b'a\0b')
+        (repo/'recreated.txt').write_text('original content\n',encoding='utf-8')
         (repo/'magic[1].txt').write_text('literal old\n',encoding='utf-8');(repo/'--output=bad.txt').write_text('old\n',encoding='utf-8')
         (repo/'large.txt').write_text(''.join(f'old line {i}\n' for i in range(3000)),encoding='utf-8')
         git('add','--all');git('commit','-m','baseline');git('branch','baseline')
@@ -21,6 +22,7 @@ def main():
         (repo/'magic[1].txt').write_text('literal new\n',encoding='utf-8');(repo/'--output=bad.txt').write_text('new\n',encoding='utf-8')
         (repo/'large.txt').write_text(''.join(f'new line {i}\n' for i in range(3000)),encoding='utf-8')
         (repo/'小说 untracked.txt').write_text('第一行\nsecond\n',encoding='utf-8')
+        git('rm','recreated.txt');(repo/'recreated.txt').write_text('recreated content\n',encoding='utf-8')
         index_before=hashlib.sha256((repo/'.git/index').read_bytes()).hexdigest()
         unborn=base/'unborn';unborn.mkdir();git('init','-b','master',cwd=unborn);(unborn/'new.txt').write_text('first\nsecond\n',encoding='utf-8')
         with (base/'host.log').open('wb') as log:
@@ -38,6 +40,10 @@ def main():
                 assert files['小说 untracked.txt']['status']=='??'
                 assert files['小说 untracked.txt']['stats_available'] and files['小说 untracked.txt']['additions']==2
                 assert state['branch']=='master' and state['scope']=='workspace'
+                assert len([file for file in state['files'] if file['path']=='recreated.txt'])==1,state
+                assert files['recreated.txt']['worktree_recreated'] and files['recreated.txt']['additions']==1 and files['recreated.txt']['deletions']==1,files['recreated.txt']
+                recreated=call('changes.diff',{'path':'recreated.txt','revision':state['revision']})
+                assert any(row.get('text')=='+recreated content' for row in recreated['rows']) and any(row.get('text')=='-original content' for row in recreated['rows']),recreated
                 refs=call('changes.branches');assert {'master','baseline'}<={row['name'] for row in refs}
                 diff=call('changes.diff',{'path':'tracked.txt','revision':state['revision']})
                 assert any(row.get('text')=='+working' and row.get('new_line')==2 for row in diff['rows']),diff
@@ -60,7 +66,12 @@ def main():
                 (repo/'tracked.txt').write_text('later\n',encoding='utf-8');call('changes.diff',{'path':'tracked.txt','revision':state['revision']},409)
                 fresh=call('changes.list',{'repository':str(unborn)});assert fresh['unborn'] and fresh['files'][0]['path']=='new.txt'
                 fresh_diff=call('changes.diff',{'repository':str(unborn),'path':'new.txt'});assert fresh_diff['additions']==2
+                (repo/'recreated.txt').write_text('original content\n',encoding='utf-8')
+                identical=call('changes.list');same=next(file for file in identical['files'] if file['path']=='recreated.txt')
+                assert same['stats_available'] and same['additions']==0 and same['deletions']==0,same
+                assert call('changes.diff',{'path':'recreated.txt','revision':identical['revision']})['rows']==[]
                 assert hashlib.sha256((repo/'.git/index').read_bytes()).hexdigest()==index_before,'read services modified the real index'
+                assert not list((base/'home/data/application').glob('git-inspection-*')),'private comparison indexes were not cleaned up'
                 print('Git workbench actual status/scopes, renames, binary, Unicode/untracked/literal paths, paged large diffs, stale revisions and unborn repository: PASS')
             except Exception:
                 log.flush();print((base/'host.log').read_text(encoding='utf-8',errors='replace')[-3500:]);raise

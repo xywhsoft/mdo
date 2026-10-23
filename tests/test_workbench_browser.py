@@ -16,6 +16,8 @@ def main():
    (repo/'large.txt').write_text(''.join(f'old line {i}\n' for i in range(2600)),encoding='utf-8')
    (repo/'binary.dat').write_bytes(b'old\0binary');git('add','--all');git('commit','-m','baseline');git('branch','baseline')
    (repo/'branch.txt').write_text('committed\n');git('add','--all');git('commit','-m','branch')
+   (repo/'recreated.txt').write_text('before recreation\n');git('add','--all');git('commit','-m','recreation baseline')
+   git('rm','recreated.txt');(repo/'recreated.txt').write_text('after recreation\n')
    (repo/'tracked.js').write_text('const answer = 2; // staged\nconsole.log(answer);\n',encoding='utf-8');git('add','tracked.js')
    (repo/'tracked.js').write_text('const answer = 3; // working\nconsole.log(answer);\n',encoding='utf-8')
    (repo/'large.txt').write_text(''.join(f'new line {i}\n' for i in range(2600)),encoding='utf-8')

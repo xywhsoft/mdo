@@ -47,7 +47,7 @@ static bool SdkGitDiff(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,md
     uint64 Offset=0,Limit=400;
     if((SdkGet(P,"offset")&&!SdkUInt(SdkGet(P,"offset"),&Offset))||(SdkGet(P,"limit")&&(!SdkUInt(SdkGet(P,"limit"),&Limit)||!Limit||Limit>2000)))return SdkGitFail(E,"git_arguments_invalid","Diff pages need a valid offset and 1-2000 lines",400);
     cstr Path=SdkField(P,"path"),Expected=SdkField(P,"revision");if(!SdkGitPath(Path))return SdkGitFail(E,"git_path_invalid","Select a repository-relative file",400);
-    SdkGitRange Range={0},AfterRange={0};xvalue *Before=NULL,*After=NULL;bool Ok=false;char* Full=NULL;xprocessresult Result={0};
+    SdkGitRange Range={0},AfterRange={0};SdkGitPrivateIndex Private={0};xvalue *Before=NULL,*After=NULL;bool Ok=false;char* Full=NULL;xprocessresult Result={0};
     SdkGitDiffPage Page={0};Page.Context=C;Page.Rows=xrtValueArray();Page.Offset=Offset;Page.Next=Offset;Page.Limit=Limit;
     if(!SdkGitList(C,P,&Range,&Before,E))goto done;
     if(Expected&&strcmp(Expected,SdkField(Before,"revision"))){SdkGitFail(E,"git_comparison_changed","Repository changed; refresh the file list before reading its diff",409);goto done;}
@@ -63,8 +63,12 @@ static bool SdkGitDiff(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,md
     if(NewFile){
         Full=xrtPathJoin(Range.Root,Path);if(!Full)goto done;
         const cstr Fresh[]={"diff","--no-index","--no-ext-diff","--no-textconv","--no-color","--unified=3","--","/dev/null",Full};Count=sizeof(Fresh)/sizeof(*Fresh);for(size_t i=0;i<Count;i++)Args[i]=Fresh[i];
-    }else{Count=SdkGitDiffArgs(&Range,"--unified=3",Args);if(OldPath)Args[Count++]=OldPath;Args[Count++]=Path;}
-    if(!SdkGitRun(C,Range.Root,Args,Count,(xbytesview){0},1,SdkGitDiffOutput,&Page,&Result,E))goto done;
+    }else{
+        bool Recreated=false;xrtValueGetBool(SdkGet(File,"worktree_recreated"),&Recreated);SdkGitRange Working=Range;
+        if(Recreated){if(!SdkGitPrivateIndexInit(C,Range.Root,Range.Head,&Private,E))goto done;Working.Scope="unstaged";}
+        Count=SdkGitDiffArgs(&Working,"--unified=3",Args);if(OldPath)Args[Count++]=OldPath;Args[Count++]=Path;
+    }
+    if(!SdkGitRunWithIndex(C,Range.Root,Args,Count,(xbytesview){0},1,SdkGitDiffOutput,&Page,&Result,E,Private.Path))goto done;
     if(Result.Status.Code!=0&&!(NewFile&&Result.Status.Code==1)){SdkGitSuccess(&Result,E,"git_diff_failed");goto done;}
     if(NewFile&&Result.Status.Code==1&&!Page.Total&&!Page.Used&&Result.StderrSize){SdkGitSuccess(&Result,E,"git_diff_failed");goto done;}
     if(Page.Used||Page.LineBytes)SdkGitDiffLine(&Page);
@@ -76,5 +80,5 @@ verify:
     *R=xrtValueObject();SdkPut(*R,"repository",Range.Root);SdkPut(*R,"path",Path);SdkPut(*R,"revision",SdkField(Before,"revision"));SdkPut(*R,"scope",Range.Scope);
     SdkPutUInt(*R,"offset",Offset);SdkPutUInt(*R,"next",Page.Next);SdkPutUInt(*R,"total",Page.Total);SdkPutUInt(*R,"additions",Page.Additions);SdkPutUInt(*R,"deletions",Page.Deletions);
     xrtValueObjectSetNew(*R,XRT_STR_LITERAL("more"),xrtValueBool(Page.Next<Page.Total));xrtValueObjectSetNew(*R,XRT_STR_LITERAL("binary"),xrtValueBool(Page.Binary));xrtValueObjectSet(*R,XRT_STR_LITERAL("rows"),Page.Rows);Ok=true;
-done:xrtFree(Full);xrtProcessResultUnit(&Result);xrtValueRelease(Page.Rows);xrtValueRelease(Before);xrtValueRelease(After);SdkGitRangeUnit(&Range);SdkGitRangeUnit(&AfterRange);return Ok;
+done:SdkGitPrivateIndexUnit(&Private);xrtFree(Full);xrtProcessResultUnit(&Result);xrtValueRelease(Page.Rows);xrtValueRelease(Before);xrtValueRelease(After);SdkGitRangeUnit(&Range);SdkGitRangeUnit(&AfterRange);return Ok;
 }
