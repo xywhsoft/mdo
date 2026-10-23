@@ -43,3 +43,13 @@ test("external manager has exactly two tabs, ordinary rows and a durable first-u
   panel.destroy();assert(guide.removed);
  }finally{globalThis.document=saved;}
 });
+
+test("Android APK failures remain visible and do not escape the tool manager",async()=>{
+ const saved=globalThis.document;globalThis.document={body:new Element("body"),createElement:tag=>new Element(tag)};
+ try{
+  const panel=createExternalToolsPanel({refresh:async()=>{},openTools:()=>{},signedIn:()=>false,openFull:async()=>{throw Error("APK service unavailable");}}),body=new Element("div");
+  panel.render(body,{writable:true,guide:"accepted",platform:"android-arm64-v8a",edition:"lite",items:[],tasks:[],store:{items:[]}});
+  await all(body).find(n=>n.textContent==="Install full edition").onclick();
+  assert(all(body).some(n=>n.textContent==="APK service unavailable"));panel.destroy();
+ }finally{globalThis.document=saved;}
+});

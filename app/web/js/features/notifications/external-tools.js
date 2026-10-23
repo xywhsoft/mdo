@@ -27,6 +27,7 @@ export function createExternalToolsPanel({ refresh, openFull, openTools, signedI
     try { const r=await api.post("/cli-tools",request);if(own!==(targetState().selected?.id??"local"))return false;data=r.data;error="";renderAll();void refresh();return true; }
     catch(e){if(own===(targetState().selected?.id??"local")){error=e.message;renderAll();}return false;}
   }
+  async function openBundle(){try{await openFull();}catch(e){error=e.message;renderAll();}}
   const fetchCatalog=(before=0)=>command({action:"catalog",query,before});
   function renderAll(){for(const h of hosts){signatures.delete(h);render(h,data,h.dataset.cliUpdates==="true");}}
   function closeEditor(){editor?.remove();editor=null;editing=null;}
@@ -67,14 +68,14 @@ export function createExternalToolsPanel({ refresh, openFull, openTools, signedI
     const sig=JSON.stringify([data,currentLocale(),tab,query,error,mine,next,writable(),signedIn(),updatesOnly,isMain()]);if(signatures.get(body)===sig)return;signatures.set(body,sig);body.replaceChildren();
     if(!data.platform){body.append(n("p","…"));return;}
     const android=data.platform.startsWith("android"), disabled=!writable();
-    guide.replaceChildren(n("p",c(33)),button(c(34),async()=>{if(android){if(await command({action:"accept"}))await openFull();}else if(await command({action:"recommend"}))openTools();},disabled),button(c(35),()=>command({action:"dismiss"}),disabled));
+    guide.replaceChildren(n("p",c(33)),button(c(34),async()=>{if(android){if(await command({action:"accept"}))await openBundle();}else if(await command({action:"recommend"}))openTools();},disabled),button(c(35),()=>command({action:"dismiss"}),disabled));
     guide.hidden=data.guide!=="new"||disabled||!!targetState().selected||!isMain();
     global.textContent=`↓ ${c(5)}${(data.tasks??[]).some(active)?" · "+(data.tasks??[]).filter(active).length:""}`;global.hidden=!(data.tasks??[]).length;
     if(updatesOnly){body.append(button(c(36),openTools));tasks(body);return;}
     const nav=n("div",null,"cli-tabs");nav.setAttribute("role","tablist");
     for(const [id,text] of [["local",c(0)],["store",c(1)]]){const b=button(text,()=>{tab=id;mine=false;renderAll();if(id==="store"&&!catalogRequested){catalogRequested=true;void fetchCatalog();}});b.setAttribute("role","tab");b.setAttribute("aria-selected",String(tab===id));nav.append(b);}body.append(nav);
     if(error)body.append(n("p",error,"cli-error"));if(!data.writable)body.append(n("p",c(44),"cli-error"));
-    if(android)body.append(n("p",c(30)),button(c(29),openFull,disabled));
+    if(android)body.append(n("p",c(30)),button(c(29),openBundle,disabled));
     const toolbar=n("div",null,"cli-toolbar");
     if(tab==="local"){
       toolbar.append(button(c(2),()=>edit(),disabled||android),button(c(27),()=>{mine=!mine;if(mine)void command({action:"mine"});renderAll();},disabled||!signedIn()));body.append(toolbar,n("p",c(40),"notice-description"));
@@ -92,7 +93,7 @@ export function createExternalToolsPanel({ refresh, openFull, openTools, signedI
       const search=n("input");search.type="search";search.value=query;search.placeholder=c(3);search.setAttribute("aria-label",c(3));search.oninput=()=>{query=search.value;};search.onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();void fetchCatalog();}};
       toolbar.append(search,button(c(3),()=>fetchCatalog(),disabled),button(c(4),()=>fetchCatalog(),disabled));body.append(toolbar);
       for(const t of data.store?.items??[]){const row=n("article",null,"cli-row"),info=n("div",null,"cli-info"),action=externalToolAction(t,data.items??[]);info.append(n("strong",t.name),n("small",`${t.version} · ${t.platform} · ${t.author} · ${t.license}`),n("p",t.prompt));row.append(info,button(c(41),()=>details(t)));
-        if(action)row.append(button(c(android?29:action==="update"?12:11),()=>android?openFull():command({action:"install",store_id:t.id,name:t.name}),disabled||t.platform!==data.platform));body.append(row);
+        if(action)row.append(button(c(android?29:action==="update"?12:11),()=>android?openBundle():command({action:"install",store_id:t.id,name:t.name}),disabled||t.platform!==data.platform));body.append(row);
       }if(!(data.store?.items??[]).length)body.append(n("p",c(16)));
       if(data.store?.next_before)body.append(button(c(37),()=>fetchCatalog(data.store.next_before),disabled));
     }tasks(body);
