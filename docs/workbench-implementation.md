@@ -309,6 +309,23 @@ service_restarted，只有显式新建才启动另一终端。已执行内容仅
 Android 真机 PTY 仍是未执行的设备验证边界；不能将 insertText/桌面结果冒充它们。
 最后整体审计仍应检查项目删除/迁移后的结束记录清理、真实会话基线和最终打包。
 
+### Android 构建检查
+
+已从当前锁定 216f5445 / 02871274 overlay 实际编译 Android ARM64 libxs.so（包含 PTY
+原生 API）；完整 mdo unity 用 Android ARM64 TCC 与同一份 SDK/VFS 头编译成对象通过。
+沿用的 broker.c/strpbrk 有隐式声明警告，本次没有修改它。Java 外壳、WebView2 对应的
+Android 浏览器补丁、D8、资源及 APK v2/v3 签名/16 KiB zipalign 检查均通过。
+没有安装应用或操作用户日常 Home；测试 APK 使用 org.xleaves.mdo.qa.workbench /
+mdo-workbench-qa 与开发签名，不能用于覆盖正式包，亦未标为发布包。
+
+Android 构建驱动新增 --host-dir，可复用经过回执校验的隔离宿主，不写其他任务使用的
+.build/host。默认行为保持原路径，16 项构建合同通过。QA 库和中间 APK 位于
+.build/workbench-builtin-20261023/android；最终版本仍需在真实会话基线与整体审计后重建。
+Android 真机 PTY、文件编辑/输入法和原生浏览器布局尚未执行，构建不替代运行时验证。
+
+下一步优先实现真实会话基线，随后审计项目删除/迁移后的结束终端记录清理和最终打包。
+当前中间 Windows/Android 程序都不应当作长期任务最终交付；仍不发布官网和更新。
+
 ## 验证要求
 
 测试必须验证实际行为：浏览器加载和失败、菜单显隐；文件外部修改和大目录；Git 的

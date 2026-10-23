@@ -65,6 +65,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--builtin-connection", type=Path)
     parser.add_argument("--output", type=Path, help="single-edition APK output path")
     parser.add_argument("--build-dir", type=Path, default=ROOT / ".build/android")
+    parser.add_argument("--host-dir", type=Path, default=ROOT / ".build/host",
+                        help="isolated pack host directory; reuse still verifies its receipt")
     parser.add_argument("--keystore", type=Path, default=ROOT / ".build/android-signing/development.p12")
     parser.add_argument("--key-alias", default="xs-development")
     parser.add_argument("--store-password-env", help="runtime environment variable containing the release keystore password")
@@ -84,7 +86,7 @@ def main(argv: list[str] | None = None) -> int:
         build_mdo.verify_dependencies(sdk_source, lock)
         build_mdo.prepare(lock, args.builtin_connection)
         directory = args.build_dir.resolve(); directory.mkdir(parents=True, exist_ok=True)
-        host = ROOT / ".build/host" / ("xsw.exe" if os.name == "nt" else "xs")
+        host = args.host_dir.resolve() / ("xsw.exe" if os.name == "nt" else "xs")
         if not args.skip_host_build:
             subprocess.run([sys.executable, str(sdk_source / "tools/build.py"), *lock["xserver"]["required_extensions"],
                 "--output", str(host.with_name("xs.exe" if os.name == "nt" else "xs")),
