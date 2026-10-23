@@ -194,7 +194,9 @@ MdoApiBodyStatus MdoApiJsonBodyRead(MdoApiContext* Context,
     memset(Body, 0, sizeof(*Body));
     Status = MdoApiBodyType(Context);
     if ( Status != MDO_API_BODY_OK ) return Status;
-    Status = MdoApiBodyDecode(Context, MDO_API_REQUEST_MAX_BYTES,
+    size_t Limit = xrtStrEqual(Context->Target.Path,XRT_STR_LITERAL("/api/v1/application/call"))
+        ? 2u*1024u*1024u : MDO_API_REQUEST_MAX_BYTES;
+    Status = MdoApiBodyDecode(Context, Limit,
         &Body->Document, &Body->Size);
     if ( Status != MDO_API_BODY_OK ) return Status;
     Body->Value = xrtJsonParse(xrtStrViewN(Body->Document, Body->Size));
@@ -240,7 +242,9 @@ bool MdoApiReplyBodyError(MdoApiContext* Context, MdoApiBodyStatus Status)
             NULL);
     case MDO_API_BODY_TOO_LARGE:
         return MdoApiReplyError(Context, 413u, "body_too_large",
-            "The request body exceeds the 256 KiB limit", NULL);
+            xrtStrEqual(Context->Target.Path,XRT_STR_LITERAL("/api/v1/application/call"))
+                ? "The SDK request body exceeds the 2 MiB limit"
+                : "The request body exceeds the 256 KiB limit", NULL);
     case MDO_API_BODY_INVALID:
         return MdoApiReplyError(Context, 400u, "invalid_json",
             "The request body is not valid strict JSON", NULL);

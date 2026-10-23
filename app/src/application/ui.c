@@ -49,7 +49,11 @@ bool MdoApplicationUiCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue* 
         Client->Expires=MdoDeadlineAfterUs(45000000);
         if(!strcmp(Method,"client.poll")){*R=xrtValueArray();for(size_t i=0;i<128;i++)if(SdkUi.Actions[i].Id[0]&&!SdkUi.Actions[i].Terminal&&!strcmp(SdkUi.Actions[i].Client,ClientId))xrtValueArrayAppendNew(*R,xrtValueClone(SdkUi.Actions[i].Value));}
         else {if(!Action||strcmp(Action->Client,ClientId)){Ok=MdoApplicationError(E,"sdk_ui_receipt_expired","Action does not belong to this client","ui",410,false);goto done;}
-            if(!Action->Terminal){bool Success=false;xrtValueGetBool(SdkGet(P,"success"),&Success);SdkPut(Action->Value,"state",Success?"succeeded":"failed");if(SdkField(P,"error"))SdkPut(Action->Value,"error",SdkField(P,"error"));Action->Terminal=true;}
+            if(!Action->Terminal){
+                const xvalue* Result=SdkGet(P,"result");char* Json=Result?SdkJson(Result):NULL;
+                if(Json&&strlen(Json)>1048576){xrtFree(Json);Ok=MdoApplicationError(E,"sdk_ui_result_limit","UI result exceeds 1 MiB; use a stream for larger results","ui",413,false);goto done;}
+                xrtFree(Json);if(Result)xrtValueObjectSet(Action->Value,XRT_STR_LITERAL("result"),Result);
+                bool Success=false;xrtValueGetBool(SdkGet(P,"success"),&Success);SdkPut(Action->Value,"state",Success?"succeeded":"failed");if(SdkField(P,"error"))SdkPut(Action->Value,"error",SdkField(P,"error"));Action->Terminal=true;}
             *R=xrtValueClone(Action->Value);}
     }
 done:xrtMutexUnlock(SdkUi.Lock);return Ok;

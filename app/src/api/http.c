@@ -195,6 +195,7 @@ static bool MdoApiReplyValue(MdoApiContext* pContext, uint16 Status,
     size_t Limit = xrtStrEqual(pContext->Target.Path,xrtStrView("/api/v1/ecosystem"))
         ? 6u * 1024u * 1024u + 65536u : MDO_API_RESPONSE_MAX_BYTES;
     if (MdoApiConversationPath(pContext->Target.Path)) Limit = MDO_API_CONVERSATION_RESPONSE_MAX_BYTES;
+    if(pContext->Target.Path.Size>=20u&&!memcmp(pContext->Target.Path.Data,"/api/v1/application/",20u))Limit=6u*1024u*1024u;
     /* Skill documents can contain 128 KiB of text; JSON escaping needs extra room. */
     if((pContext->Target.Path.Size>=14u&&!memcmp(pContext->Target.Path.Data,"/api/v1/skills",14u))||
         (pContext->Target.Path.Size>=25u&&!memcmp(pContext->Target.Path.Data,"/api/v1/extensions/skills",25u)))Limit=1024u*1024u;

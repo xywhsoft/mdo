@@ -26,7 +26,8 @@ static bool SdkBuiltinService(cstr Method){
         {SdkJobMethods,sizeof(SdkJobMethods)/sizeof(*SdkJobMethods)},
         {SdkStreamMethods,sizeof(SdkStreamMethods)/sizeof(*SdkStreamMethods)},
         {SdkPluginMethods,sizeof(SdkPluginMethods)/sizeof(*SdkPluginMethods)},
-        {SdkUiMethods,sizeof(SdkUiMethods)/sizeof(*SdkUiMethods)}};
+        {SdkUiMethods,sizeof(SdkUiMethods)/sizeof(*SdkUiMethods)},
+        {SdkWorkbenchMethods,sizeof(SdkWorkbenchMethods)/sizeof(*SdkWorkbenchMethods)}};
     for(size_t i=0;i<sizeof(Groups)/sizeof(*Groups);i++)for(size_t j=0;j<Groups[i].Count;j++)if(!strcmp(Method,Groups[i].Names[j]))return true;
     return false;
 }
@@ -93,6 +94,9 @@ xvalue* MdoApplicationCatalog(void){
     xvalue* Ui=MdoApplicationUiCatalog();
     for(size_t i=0;i<xrtValueCount(Ui);i++)xrtValueArrayAppend(A,xrtValueArrayGet(Ui,i));
     xrtValueRelease(Ui);
+    xvalue* WorkbenchCatalog=MdoApplicationWorkbenchCatalog();
+    for(size_t i=0;i<xrtValueCount(WorkbenchCatalog);i++)xrtValueArrayAppend(A,xrtValueArrayGet(WorkbenchCatalog,i));
+    xrtValueRelease(WorkbenchCatalog);
     xvalue* Custom=MdoApplicationCustomCatalog(),*Merged=xrtValueArray();
     for(size_t i=0;i<xrtValueCount(A);i++){const xvalue* Item=xrtValueArrayGet(A,i);bool Replaced=false;
         for(size_t k=0;k<sizeof(SdkContracts)/sizeof(*SdkContracts);k++)if(!strcmp(SdkField(Item,"id"),SdkContracts[k].Id)){
@@ -144,6 +148,8 @@ static mdo_result SdkInvoke(const mdo_sdk_context_v1* C,cstr Method,const xvalue
     if(Found)return PluginOk?MDO_RESULT_OK:MDO_RESULT_ERROR;
     bool UiOk=MdoApplicationUiCall(C,Method,P,R,E,&Found);
     if(Found)return UiOk?MDO_RESULT_OK:MDO_RESULT_ERROR;
+    bool WorkbenchOk=MdoApplicationWorkbenchCall(C,Method,P,R,E,&Found);
+    if(Found)return WorkbenchOk?MDO_RESULT_OK:MDO_RESULT_ERROR;
     for(size_t i=0;i<sizeof(SdkRoutes)/sizeof(*SdkRoutes);i++)if(!strcmp(Method,SdkRoutes[i].Id))
         return MdoApplicationRouteInvoke(C,&SdkRoutes[i],P,R,E)?MDO_RESULT_OK:MDO_RESULT_ERROR;
     MdoApplicationError(E,"sdk_method_missing","Service is not registered","dispatch",404,false);return MDO_RESULT_ERROR;

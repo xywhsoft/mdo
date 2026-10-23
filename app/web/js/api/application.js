@@ -5,6 +5,7 @@ export function createApplicationClient(context = () => ({})) {
     (await api.post("/application/call", { method, params, context: context() }, options)).data;
   return Object.freeze({
     version: 1, call,
+    bind: scope => { const fixed = Object.freeze({ ...context(), ...scope }); return createApplicationClient(() => fixed); },
     services: async options => (await api.get("/application/services", options)).data,
     describe: (id, options) => call("sdk.describe", { id }, options),
     events: (cursor = {}, options) => call("events.read", cursor, options),
@@ -48,9 +49,14 @@ export async function applyApplicationAction(action, execute, storage, key) {
   const ids = Object.keys(records); for (const id of ids.slice(0, Math.max(0, ids.length - 128))) delete records[id];
   storage.setItem(key, JSON.stringify(records));
   let ack;
-  try { await execute(action); ack = { success: true }; }
+  try { const result = await execute(action); ack = { success: true, ...(result === undefined ? {} : { result }) }; }
   catch (error) { ack = { success: false, error: String(error?.message || error).slice(0, 512) }; }
-  records[action.id] = { state: "done", ack };
+  // Keep screenshots and large snapshots out of the durable intent journal.
+  // The server retains the actual ACK; after a page crash, report an explicit
+  // ephemeral result instead of repeating the action to recreate its bytes.
+  const journalAck = JSON.stringify(ack).length > 16384
+    ? { success: ack.success, result: { ephemeral: true, message: "Read the server receipt; this result is not stored in the page journal" } } : ack;
+  records[action.id] = { state: "done", ack: journalAck };
   storage.setItem(key, JSON.stringify(records));
   return ack;
 }

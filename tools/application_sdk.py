@@ -115,13 +115,15 @@ def native_contracts():
     add('runtime.reload.status','Read a native host reload receipt',{'id':uint},('id',))
     add('client.hello','Register or renew a target window lease',{'client':string,'context':obj},('client',))
     add('client.poll','Read pending actions for exactly one window',{'client':string},('client',),arr)
-    add('client.ack','Acknowledge the actual window outcome; duplicate acknowledgements do not replay effects',{'client':string,'id':string,'success':boolean,'error':string},('client','id','success'))
+    add('client.ack','Acknowledge the actual window outcome; duplicate acknowledgements do not replay effects',{'client':string,'id':string,'success':boolean,'error':string,'result':{}},('client','id','success'))
     add('ui.clients','Discover active target windows; never select the first window implicitly',output=arr)
     add('ui.invoke','Queue an action for an explicit client, or append it to the originating command receipt',{'client':string,'action':string,'params':{},'context':obj},('action',))
     add('ui.result','Read queued/succeeded/failed UI action status',{'id':string},('id',))
     add('model.complete','Managed model boundary with messages, tools, multimodal parts, usage and optional newline-delimited stream events',{'model':string,'protocol':{**uint,'maximum':3},'reasoning_effort':string,'max_output_tokens':uint,'messages':{'type':'array','minItems':1,'maxItems':4096,'items':obj},'tools':{'type':'array','maxItems':256,'items':obj},'extra_body':obj,'stream':string},('messages',))
     add('tool.call','Execute a tool through a recovered session and its live permission scope; a tool-level failure is a successful SDK result with success:false',{'project':string,'session':string,'tool':string,'arguments':obj},('tool',))
     add('session.compact','Compact the immutable invocation session; original history remains available')
+    from workbench_contracts import contracts as workbench_contracts
+    workbench_contracts(add)
     return result
 
 def native_symbols(root: Path):
