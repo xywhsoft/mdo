@@ -106,6 +106,10 @@ bool MdoQueueParseState(xstrview State, bool AllowStaged,
         *Result = MDO_QUEUE_SENDING;
         return true;
     }
+    if ( AllowStaged && State.Size == 7u && memcmp(State.Data, "editing", 7u) == 0 ) {
+        *Result = MDO_QUEUE_EDITING;
+        return true;
+    }
     return false;
 }
 
@@ -115,6 +119,76 @@ size_t MdoQueueFind(const MdoQueue* Queue, const char* Id)
     for ( i = 0u; i < Queue->Count; ++i )
         if ( strcmp(Queue->Items[i].Id, Id) == 0 ) return i;
     return SIZE_MAX;
+}
+
+void MdoQueueRemove(MdoQueue* Queue, size_t Index)
+{
+    if ( Index >= Queue->Count ) return;
+    Queue->TextBytes -= Queue->Items[Index].TextSize;
+    xrtFree(Queue->Items[Index].Text);
+    memmove(&Queue->Items[Index], &Queue->Items[Index + 1u],
+        (Queue->Count - Index - 1u) * sizeof(Queue->Items[0]));
+    memset(&Queue->Items[--Queue->Count], 0, sizeof(Queue->Items[0]));
+}
+
+bool MdoQueueMove(MdoQueue* Queue, const char* Id, const char* Before)
+{
+    size_t From = MdoQueueFind(Queue, Id);
+    size_t To = Before[0] ? MdoQueueFind(Queue, Before) : Queue->Count;
+    MdoQueueItem Item;
+    if ( From == SIZE_MAX || To == SIZE_MAX ) return false;
+    if ( From == To ) return true;
+    Item = Queue->Items[From];
+    if ( From < To ) {
+        --To;
+        memmove(&Queue->Items[From], &Queue->Items[From + 1u],
+            (To - From) * sizeof(Item));
+    } else memmove(&Queue->Items[To + 1u], &Queue->Items[To],
+        (From - To) * sizeof(Item));
+    Queue->Items[To] = Item;
+    return true;
+}
+
+static bool MdoQueueUInt(const xvalue* Object, const char* Key, uint64* Number)
+{
+    const xvalue* Value = xrtValueObjectGet(Object, xrtStrView(Key));
+    int64 Signed;
+    if ( xrtValueType(Value) == XVALUE_UINT ) return xrtValueGetUInt(Value, Number);
+    if ( xrtValueType(Value) != XVALUE_INT || !xrtValueGetInt(Value, &Signed) || Signed < 0 ) return false;
+    *Number = (uint64)Signed;
+    return true;
+}
+
+bool MdoQueueActionParse(const xvalue* Value, MdoQueueAction* Action)
+{
+    xstrview Id, Kind, Item, Before;
+    memset(Action, 0, sizeof(*Action));
+    if ( xrtValueType(Value) != XVALUE_OBJECT || xrtValueCount(Value) != 6u ||
+         !MdoQueueString(Value, "id", &Id) || !MdoQueueId(Id, Action->Id) ||
+         !MdoQueueString(Value, "kind", &Kind) ||
+         !MdoQueueCaptureId(Kind, Action->Kind, sizeof(Action->Kind)) ||
+         (strcmp(Action->Kind, "move") && strcmp(Action->Kind, "steer") &&
+          strcmp(Action->Kind, "withdraw") && strcmp(Action->Kind, "resume")) ||
+         !MdoQueueString(Value, "item", &Item) ||
+         (Item.Size && !MdoQueueId(Item, Action->Item)) ||
+         !MdoQueueString(Value, "before", &Before) ||
+         (Before.Size && !MdoQueueId(Before, Action->Before)) ||
+         !MdoQueueUInt(Value, "revision", &Action->Revision) ||
+         !MdoQueueUInt(Value, "draft_revision", &Action->DraftRevision) ||
+         Action->Revision > UINT64_C(9007199254740991) ||
+         Action->DraftRevision > UINT64_C(9007199254740991) ) return false;
+    return (!strcmp(Action->Kind, "resume") ? !Item.Size : Item.Size != 0u) &&
+        (!strcmp(Action->Kind, "move") || !Before.Size) &&
+        (!strcmp(Action->Kind, "withdraw") || !Action->DraftRevision);
+}
+
+void MdoQueueActionRemember(MdoQueue* Queue, const MdoQueueAction* Action)
+{
+    if ( Queue->ActionCount == MDO_QUEUE_ACTION_MAX ) {
+        memmove(Queue->Actions, Queue->Actions + 1,
+            (--Queue->ActionCount) * sizeof(Queue->Actions[0]));
+    }
+    Queue->Actions[Queue->ActionCount++] = *Action;
 }
 
 bool MdoQueueInsert(MdoQueue* Queue, const char* Id,
@@ -165,13 +239,12 @@ bool MdoQueueParse(xstrview Json, MdoQueue* Queue)
     xrtJsonReadConfigInit(&Config);
     Config.MaxInputBytes = MDO_QUEUE_FILE_MAX;
     Config.MaxDepth = 5u;
-    Config.MaxValues = MDO_QUEUE_DISCARD_MAX + MDO_QUEUE_MAX_ITEMS * 16u + 5u;
+    Config.MaxValues = MDO_QUEUE_DISCARD_MAX + MDO_QUEUE_MAX_ITEMS * 28u + MDO_QUEUE_ACTION_MAX * 8u + 16u;
     Config.MaxContainerItems = MDO_QUEUE_DISCARD_MAX;
     Root = xrtJsonRead(Json, &Config);
     Items = Root != NULL ? xrtValueObjectGet(Root,
         XRT_STR_LITERAL("items")) : NULL;
     if ( xrtValueType(Root) != XVALUE_OBJECT ||
-         (xrtValueCount(Root) != 2u && xrtValueCount(Root) != 3u) ||
          xrtValueType(Items) != XVALUE_ARRAY ||
          xrtValueCount(Items) > MDO_QUEUE_MAX_ITEMS ) goto done;
     {
@@ -184,9 +257,34 @@ bool MdoQueueParse(xstrview Json, MdoQueue* Queue)
             if ( !xrtValueGetInt(Version, &Signed) || Signed < 0 ) goto done;
             Schema = (uint64)Signed;
         } else goto done;
-        if ( Schema < 1u || Schema > 7u ) goto done;
+        if ( Schema < 1u || Schema > 8u ) goto done;
     }
-    if ( xrtValueCount(Root) != (Schema >= 6u ? 3u : 2u) ) goto done;
+    if ( xrtValueCount(Root) != (Schema == 8u ? 10u : Schema >= 6u ? 3u : 2u) ) goto done;
+    if ( Schema == 8u ) {
+        xstrview Error;
+        xstrview Cancel;
+        xstrview Last;
+        const xvalue* Actions = xrtValueObjectGet(Root, XRT_STR_LITERAL("actions"));
+        if ( !MdoQueueUInt(Root, "revision", &Queue->Revision) ||
+             Queue->Revision > UINT64_C(9007199254740991) ||
+             !MdoQueueBool(Root, "managed", &Queue->Managed) ||
+             !MdoQueueBool(Root, "paused", &Queue->Paused) ||
+             !MdoQueueString(Root, "error", &Error) || Error.Size >= sizeof(Queue->Error) ||
+             !MdoQueueString(Root, "cancel_run_id", &Cancel) ||
+             (Cancel.Size && !MdoQueueRunId(Cancel, Queue->CancelRunId)) ||
+             !MdoQueueString(Root, "last_run_id", &Last) ||
+             (Last.Size && !MdoQueueRunId(Last, Queue->LastRunId)) ||
+             memchr(Error.Data, 0, Error.Size) ||
+             xrtValueType(Actions) != XVALUE_ARRAY || xrtValueCount(Actions) > MDO_QUEUE_ACTION_MAX ) goto done;
+        memcpy(Queue->Error, Error.Data, Error.Size);
+        for ( i = 0u; i < xrtValueCount(Actions); ++i ) {
+            MdoQueueAction* Action = &Queue->Actions[Queue->ActionCount];
+            if ( !MdoQueueActionParse(xrtValueArrayGet(Actions, i), Action) ) goto done;
+            for ( size_t j = 0u; j < Queue->ActionCount; ++j )
+                if ( !strcmp(Action->Id, Queue->Actions[j].Id) ) goto done;
+            Queue->ActionCount++;
+        }
+    }
     if ( Schema >= 6u ) {
         const xvalue* Discard = xrtValueObjectGet(Root,
             XRT_STR_LITERAL("discard_images"));
@@ -214,6 +312,7 @@ bool MdoQueueParse(xstrview Json, MdoQueue* Queue)
             XRT_STR_LITERAL("run_id"));
         const xvalue* ProfileValue = xrtValueObjectGet(Entry,
             XRT_STR_LITERAL("profile"));
+        const xvalue* EditValue = xrtValueObjectGet(Entry, XRT_STR_LITERAL("edit"));
         MdoComposerProfile Profile = { 0 };
         char IdText[MDO_QUEUE_ID_SIZE + 1u];
         char Attachments[4][33] = {{ 0 }};
@@ -224,8 +323,8 @@ bool MdoQueueParse(xstrview Json, MdoQueue* Queue)
              xrtValueCount(Entry) != (Schema == 1u ? 3u :
                 (Schema == 2u ? 4u : 5u +
                     (Schema >= 5u && RunIdValue != NULL ? 1u : 0u))) +
-                    (ProfileValue != NULL ? 1u : 0u) ||
-             (ProfileValue != NULL && (Schema != 7u ||
+                    (ProfileValue != NULL ? 1u : 0u) + (EditValue != NULL ? 1u : 0u) ||
+             (ProfileValue != NULL && (Schema < 7u ||
               !MdoComposerProfileParse(ProfileValue, false, &Profile) ||
               !Profile.Present)) ||
              !MdoQueueString(Entry, "id", &Id) ||
@@ -250,6 +349,11 @@ bool MdoQueueParse(xstrview Json, MdoQueue* Queue)
                 AttachmentCount, false, Priority, State, &Profile) ) goto done;
         if ( RunIdValue != NULL )
             memcpy(Queue->Items[Queue->Count - 1u].RunId, RunId, sizeof(RunId));
+        if ( (State == MDO_QUEUE_EDITING) != (EditValue != NULL) ||
+             (EditValue && (Schema < 8u ||
+              !MdoQueueActionParse(EditValue, &Queue->Items[Queue->Count - 1u].Edit) ||
+              strcmp(Queue->Items[Queue->Count - 1u].Edit.Kind, "withdraw") ||
+              strcmp(Queue->Items[Queue->Count - 1u].Edit.Item, IdText))) ) goto done;
     }
     Ok = true;
 done:

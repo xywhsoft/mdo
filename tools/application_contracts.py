@@ -54,6 +54,7 @@ DEFS={
 }
 for name in ('Project','Session','Run','Schedule','MemoryEntry','Operation','QueueItem'):
     DEFS[name+'Page']=obj({**fields('total:u truncated:b revision:u generation:u next_cursor:u has_more:b'),'items':array(ref(name))})
+DEFS['QueueItemPage']['properties'].update(fields('managed:b paused:b error:s cancel_run_id:s last_run_id:s discard_images:ss actions:a'))
 
 INPUTS={
  'ProjectCreate':document('id:s name:s workspace_root:s default_model_id:s',('id','name'),True),
@@ -74,7 +75,8 @@ INPUTS={
  'Memory':document('id:s title:s content:s tags:ss pinned:b',('id','title','content','tags','pinned'),True),
  'Draft':deepcopy(DEFS['Draft']),
  'Submission':document('id:s text:s attachments:ss profile:Profile state:s stage:s interrupt:b revision:u'),
- 'Queue':document('id:s text:s attachments:ss profile:Profile first:b priority:b stage:b',('id','text','first'),True),
+ 'Queue':document('id:s text:s attachments:ss profile:Profile first:b priority:b stage:b managed:b',('id','text','first'),True),
+ 'QueueAction':document('id:s kind:s item:s before:s revision:u draft_revision:u',('id','kind','item','before','revision','draft_revision'),True),
  'QueueState':document('state:s',('state',),True),
  'Config':document('schema_version:u patch:o',('schema_version','patch'),True),
  'Extension':document('content:s disabled:b enabled:b revision:s files:ExtensionFiles'),
@@ -118,7 +120,7 @@ BODY_GROUPS={
  'Fork':'SessionForkRoute','Truncate':'SessionTruncateRoute','Schedule':'SchedulesRoute ScheduleRoute',
  'Enabled':'ScheduleEnabledRoute McpEnabledRoute','Ask':'AskRoute TaskAskRoute','Approval':'ApprovalRoute',
  'Memory':'MemoryCollectionRoute','Draft':'DraftRoute','Submission':'DraftSubmissionAppendRoute DraftSubmissionRoute',
- 'Queue':'QueueRoute QueueItemRoute','Config':'SettingsPreviewRoute SettingsMutationRoute',
+ 'Queue':'QueueRoute QueueItemRoute','QueueAction':'QueueActionsRoute','Config':'SettingsPreviewRoute SettingsMutationRoute',
  'Extension':'ExtensionsRoute CommandProjectRoute SkillProjectRoute McpProjectRoute',
  'Command':'CommandInvocationRoute','SkillInvoke':'SkillInvokeRoute','SkillValidate':'SkillValidateRoute',
  'Migrate':'LegacyMigrationsRoute SkillMigrateRoute McpMigrateRoute','ModelProbe':'ModelDiscoverRoute ModelTestRoute',
@@ -146,7 +148,7 @@ RESULT_GROUPS={
  'Session':'SessionRoute SessionRestoreRoute SessionPermissionRoute SessionProfileRoute SessionForkRoute SessionTruncateRoute SessionClearRoute',
  'RunPage':'RunsRoute','Run':'RunStartRoute RunRoute','SchedulePage':'SchedulesRoute','Schedule':'ScheduleRoute ScheduleEnabledRoute',
  'MemoryEntryPage':'MemoryCollectionRoute','MemoryEntry':'MemoryEntryRoute','Draft':'DraftRoute',
- 'QueueItemPage':'QueueRoute','QueueItem':'QueueItemRoute','Recovery':'SessionRecoveryRoute',
+ 'QueueItemPage':'QueueRoute QueueActionsRoute','QueueItem':'QueueItemRoute','Recovery':'SessionRecoveryRoute',
  'OperationPage':'OperationsRoute','Operation':'OperationRoute CommandInvocationRoute ModulesReloadRoute McpRefreshRoute ModelDiscoverRoute ModelTestRoute',
  'Remote':'RemoteRoute','Transfer':'DeviceTransfersRoute','Account':'AccountRoute','Upload':'BackupUploadsRoute BackupUploadRoute BackupUploadChunkRoute BackupUploadSealRoute',
  'Preview':'BackupPreviewStartRoute BackupPreviewRoute','Restore':'BackupRestoreReviewRoute BackupRestoreApplyRoute BackupRestoreRoute',

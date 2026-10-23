@@ -219,6 +219,12 @@ bool MdoApiQueueItemRoute(MdoApiContext* pContext);
 bool MdoApiQueueDiscardRoute(MdoApiContext* pContext);
 bool MdoApiQueueInit(void);
 void MdoApiQueueUnit(void);
+bool MdoApiQueueActionsRoute(MdoApiContext* Context);
+bool MdoApiQueueStart(void);
+void MdoApiQueueStop(void);
+int MdoApiDraftQueueRestore(const char* Project, const char* Session,
+    const char* Id, uint64 Revision, xstrview Text,
+    const char Attachments[4][33], size_t Count, const MdoApiProfile* Profile);
 bool MdoApiQueueAttachmentReferenced(const char* ProjectId,
     const char* SessionId, const char* Id, bool* Referenced);
 bool MdoApiQueueDiscardAcknowledged(const char* ProjectId,

@@ -43,6 +43,7 @@ typedef struct MdoDraftNewTask {
 
 typedef struct MdoDraft {
     uint64 Revision;
+    char QueueRestoreId[33];
     bool RunAdmissionUncertain;
     char Text[MDO_DRAFT_TEXT_MAX + 1u];
     size_t TextSize;

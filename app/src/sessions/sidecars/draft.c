@@ -260,11 +260,12 @@ bool MdoDraftParse(xstrview Json, MdoDraftScope Scope, MdoDraft* Draft)
         XRT_STR_LITERAL("composer_profile"));
     if ( xrtValueType(Root) != XVALUE_OBJECT ||
          !MdoDraftUInt(Root, "schema_version", &Schema) ||
-         (Schema < 1u || Schema > 8u || (Schema == 8u && !Project)) ||
+         (Schema < 1u || Schema > 9u || (Schema == 8u && !Project) ||
+          (Schema == 9u && Scope != MDO_DRAFT_SESSION)) ||
          xrtValueCount(Root) != (Schema == 1u ? 3u :
             (Schema == 2u ? 4u : (Schema == 3u ? 5u :
                 (Schema >= 6u && Global ? 7u : 6u)))) +
-                (ComposerProfile != NULL ? 1u : 0u) ||
+                (ComposerProfile != NULL ? 1u : 0u) + (Schema == 9u ? 1u : 0u) ||
          (ComposerProfile != NULL && (Schema < 7u ||
           !(Schema == 8u ? MdoDraftProjectProfileRead(ComposerProfile,
               &Draft->ComposerProfile) : MdoComposerProfileParse(ComposerProfile, false,
@@ -292,6 +293,12 @@ bool MdoDraftParse(xstrview Json, MdoDraftScope Scope, MdoDraft* Draft)
           strcmp(Draft->Submissions[0]->Id,
             Draft->NewTask.SessionId) != 0) )
         goto done;
+    if ( Schema == 9u ) {
+        xstrview Id;
+        if ( !MdoDraftTextView(Root, "queue_restore_id", &Id) ||
+             (Id.Size && (Id.Size != 32u || !MdoDraftCaptureId(Id,
+                Draft->QueueRestoreId, sizeof(Draft->QueueRestoreId))))) goto done;
+    }
     Ok = true;
 done:
     xrtValueRelease(Root);

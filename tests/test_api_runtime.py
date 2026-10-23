@@ -3479,7 +3479,7 @@ def run_probe(host: Path) -> None:
                     "attachments"] == [], (status, body)
                 assert json.loads((home / f"sessions/api-project/{session_id}/"
                                    "draft.json").read_text(encoding="utf-8"))[
-                    "schema_version"] == 7
+                    "schema_version"] == 9
                 status, _, body = request(port, "PUT", draft_path,
                     body=b'{"revision":3,"text":"review before retry",'
                          b'"run_admission_uncertain":true}',
@@ -3568,7 +3568,7 @@ def run_probe(host: Path) -> None:
                 stored_draft = (home / f"sessions/api-project/{session_id}/"
                                 "draft.json")
                 assert json.loads(stored_draft.read_text(encoding="utf-8"))[
-                    "schema_version"] == 7
+                    "schema_version"] == 9
                 stored_draft.write_text(json.dumps({
                     "schema_version": 6, "revision": 12,
                     "text": "legacy schema six", "attachments": [],
@@ -3599,7 +3599,7 @@ def run_probe(host: Path) -> None:
                     body=b'{"revision":13,"text":"legacy draft updated"}',
                     headers={"Content-Type": "application/json"})
                 assert status == 200 and json.loads(stored_draft.read_text(
-                    encoding="utf-8"))["schema_version"] == 7, (status, body)
+                    encoding="utf-8"))["schema_version"] == 9, (status, body)
                 snapshot = {"model_id": "ornith-1.5-35b",
                             "reasoning_effort": "high",
                             "permission_profile": "balanced"}
@@ -3762,7 +3762,9 @@ def run_probe(host: Path) -> None:
                 queue_file = home / "sessions/api-project" / session_id / "queue.json"
                 status, _, body = request(port, "GET", queue_path)
                 assert status == 200 and json.loads(body)["data"] == {
-                    "items": [], "discard_images": []}, (status, body)
+                    "items": [], "discard_images": [], "revision": 0,
+                    "managed": False, "paused": False, "error": "",
+                    "cancel_run_id": "", "last_run_id": "", "actions": []}, (status, body)
                 assert not queue_file.exists(), queue_file
                 status, _, body = request(port, "POST", attachments_path,
                     body=png_bytes, headers={"Content-Type": "image/png"})
@@ -3934,7 +3936,7 @@ def run_probe(host: Path) -> None:
                     "attachments": [image["id"]], "priority": False,
                 }], (status, body)
                 assert json.loads(queue_file.read_text(encoding="utf-8"))[
-                    "schema_version"] == 7
+                    "schema_version"] == 8
                 status, _, body = request(port, "DELETE", image["url"])
                 assert status == 409 and json.loads(body)["error"][
                     "code"] == "attachment_in_use", (status, body)
@@ -3951,9 +3953,12 @@ def run_probe(host: Path) -> None:
                     "attachments": ["0" * 32],
                 })
                 assert status == 422, (status, body)
+                queue_before_delete = json.loads(request(port, "GET", queue_path)[2])["data"]
                 status, _, body = request(port, "DELETE",
                     queue_path + "/" + image_item_id)
                 assert status == 200 and json.loads(body)["data"] == {
+                    **queue_before_delete,
+                    "revision": queue_before_delete["revision"] + 1,
                     "items": [], "discard_images": [image["id"]]}, (status, body)
                 assert json.loads(queue_file.read_text(encoding="utf-8"))[
                     "discard_images"] == [image["id"]]
@@ -3983,7 +3988,7 @@ def run_probe(host: Path) -> None:
                 status, _, body = queue_request("POST", queue_path,
                     {"id": "1" * 32, "text": "new prompt", "first": False})
                 assert status == 201 and json.loads(queue_file.read_text(
-                    encoding="utf-8"))["schema_version"] == 7, (status, body)
+                    encoding="utf-8"))["schema_version"] == 8, (status, body)
                 for item_id in (legacy_id, "1" * 32):
                     assert request(port, "DELETE", queue_path + "/" + item_id)[0] == 200
                 queue_file.write_text(json.dumps({"schema_version": 3,
@@ -5181,7 +5186,7 @@ def run_probe(host: Path) -> None:
                 queued = json.loads(request(port, "GET", queue_path)[2])["data"]
                 assert queued["items"][0]["run_id"] == bound_run_id, queued
                 stored = json.loads(queue_file.read_text(encoding="utf-8"))
-                assert stored["schema_version"] == 7 and stored["items"][
+                assert stored["schema_version"] == 8 and stored["items"][
                     0]["run_id"] == bound_run_id, stored
                 status, _, body = queue_request("PUT", bound_path,
                     {"state": "pending"})

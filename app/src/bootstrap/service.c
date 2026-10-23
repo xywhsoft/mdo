@@ -25,6 +25,7 @@ static void MdoServiceRetry(void* User)
     g_MdoServiceRetryTimer = 0u;
     if (xrtAtomic32Load(&g_MdoServiceState,XMEMORY_ACQUIRE) != MDO_SERVICE_WAITING) return;
     if (MdoBootstrapInit(host)) {
+        (void)MdoApiQueueStart();
         (void)MdoRemoteInit(host->Server);
         (void)MdoDeviceTransfersInit(host->Server);
         xrtAtomic32Store(&g_MdoServiceState,MDO_SERVICE_READY,XMEMORY_RELEASE);
@@ -71,6 +72,7 @@ void ServiceInit(XS_HostInfo* pHost)
         }
     }
     (void)MdoApiInit();
+    if (ready) (void)MdoApiQueueStart();
     if (ready) { (void)MdoRemoteInit(pHost->Server); (void)MdoDeviceTransfersInit(pHost->Server); }
 }
 
@@ -80,6 +82,7 @@ void ServiceUnit(XS_HostInfo* pHost)
     xrtAtomic32Store(&g_MdoServiceState,MDO_SERVICE_FAILED,XMEMORY_RELEASE);
     if (g_MdoServiceRetryTimer) (void)xsTimerCancel(g_MdoServiceRetryTimer);
     g_MdoServiceRetryTimer = 0u;
+    MdoApiQueueStop();
     MdoModuleManagerStop();
     MdoApplicationStreamsStop();
     MdoApplicationJobsStop();

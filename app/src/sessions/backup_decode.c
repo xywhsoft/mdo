@@ -111,6 +111,12 @@ static bool MdoDecodeSidecar(MdoDecode* Decode, const MdoBackupOwnedFile* File)
         MdoQueueReceipt Receipt;
         memcpy(Id, File->Path + 15u, 32u); Id[32] = '\0';
         Ok = MdoQueueReceiptParse(Json, Id, &Receipt);
+    } else if ( strncmp(File->Path, "queue-withdrawn/", 16u) == 0 ) {
+        xvalue* Value = xrtJsonParse(Json);
+        MdoQueueAction Action;
+        Ok = MdoQueueActionParse(Value, &Action) && !strcmp(Action.Kind, "withdraw") &&
+            !memcmp(Action.Item, File->Path + 16u, 32u);
+        xrtValueRelease(Value);
     } else if ( strncmp(File->Path, "attachments/events/", 19u) == 0 ||
                 strncmp(File->Path, "attachments/runs/", 17u) == 0 ) {
         bool Run = strncmp(File->Path, "attachments/runs/", 17u) == 0;

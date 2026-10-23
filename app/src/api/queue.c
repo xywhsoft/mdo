@@ -3,6 +3,7 @@
 
 #include "internal.h"
 #include "profile.h"
+#include "write_admission.h"
 #include "../sessions/sidecars/queue.h"
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/runs.h"
@@ -254,13 +255,26 @@ bool MdoApiQueueAttachmentReferenced(const char* ProjectId,
     return Ok;
 }
 
+static xvalue* MdoQueueActionValue(const MdoQueueAction* Action)
+{
+    xvalue* Value = xrtValueObject();
+    if ( Value && MdoApiValueSetString(Value, "id", Action->Id) &&
+         MdoApiValueSetString(Value, "kind", Action->Kind) &&
+         MdoApiValueSetString(Value, "item", Action->Item) &&
+         MdoApiValueSetString(Value, "before", Action->Before) &&
+         MdoApiValueSetUInt(Value, "revision", Action->Revision) &&
+         MdoApiValueSetUInt(Value, "draft_revision", Action->DraftRevision) ) return Value;
+    xrtValueRelease(Value); return NULL;
+}
+
 static xvalue* MdoQueueValue(const MdoQueue* Queue, bool IncludeClaim)
 {
     xvalue* Root = xrtValueObject();
     xvalue* Items = xrtValueArray();
     xvalue* Discard = xrtValueArray();
+    xvalue* Actions = xrtValueArray();
     size_t i;
-    bool Ok = Root != NULL && Items != NULL && Discard != NULL;
+    bool Ok = Root != NULL && Items != NULL && Discard != NULL && Actions != NULL;
     for ( i = 0u; Ok && i < Queue->Count; ++i ) {
         const MdoQueueItem* Source = &Queue->Items[i];
         xvalue* Item = xrtValueObject();
@@ -269,13 +283,15 @@ static xvalue* MdoQueueValue(const MdoQueue* Queue, bool IncludeClaim)
             MdoApiValueSetStringView(Item, "text",
                 xrtStrViewN(Source->Text, Source->TextSize)) &&
             MdoApiValueSetString(Item, "state",
-                Source->State == MDO_QUEUE_STAGED ? "staged" :
+                Source->State == MDO_QUEUE_EDITING ? "editing" : Source->State == MDO_QUEUE_STAGED ? "staged" :
                 (Source->State == MDO_QUEUE_SENDING ? "sending" :
                 "pending")) &&
             MdoAttachmentIdsWriteValue(Item, Source->Attachments,
                 Source->AttachmentCount) &&
             MdoApiValueSetBool(Item, "priority", Source->Priority) &&
             MdoApiProfileSet(Item, "profile", &Source->Profile) &&
+            (Source->State != MDO_QUEUE_EDITING ||
+             xrtValueObjectSetNew(Item, XRT_STR_LITERAL("edit"), MdoQueueActionValue(&Source->Edit))) &&
             (!IncludeClaim || !Source->StartClaimed ||
              MdoApiValueSetBool(Item, "start_claimed", true)) &&
             (Source->RunId[0] == '\0' ||
@@ -287,19 +303,34 @@ static xvalue* MdoQueueValue(const MdoQueue* Queue, bool IncludeClaim)
     for ( i = 0u; Ok && i < Queue->DiscardCount; ++i )
         Ok = MdoApiValueAppendString(Discard, Queue->DiscardImages[i]);
     if ( Ok ) Ok = MdoApiValueSetTake(Root, "discard_images", &Discard);
+    for ( i = 0u; Ok && i < Queue->ActionCount; ++i ) {
+        xvalue* Action = MdoQueueActionValue(&Queue->Actions[i]);
+        Ok = MdoApiValueAppendTake(Actions, &Action);
+        xrtValueRelease(Action);
+    }
+    if ( Ok ) Ok = MdoApiValueSetUInt(Root, "revision", Queue->Revision) &&
+        MdoApiValueSetBool(Root, "managed", Queue->Managed) &&
+        MdoApiValueSetBool(Root, "paused", Queue->Paused) &&
+        MdoApiValueSetString(Root, "error", Queue->Error) &&
+        MdoApiValueSetString(Root, "cancel_run_id", Queue->CancelRunId) &&
+        MdoApiValueSetString(Root, "last_run_id", Queue->LastRunId) &&
+        MdoApiValueSetTake(Root, "actions", &Actions);
     xrtValueRelease(Items);
     xrtValueRelease(Discard);
+    xrtValueRelease(Actions);
     if ( !Ok ) { xrtValueRelease(Root); return NULL; }
     return Root;
 }
 
-static bool MdoQueueWrite(const char* Path, const MdoQueue* Queue)
+static bool MdoQueueWrite(const char* Path, MdoQueue* Queue)
 {
+    if ( Queue->Revision >= UINT64_C(9007199254740991) ) return false;
+    Queue->Revision++;
     xvalue* Data = MdoQueueValue(Queue, false);
     char* Json;
     size_t Size = 0u;
     bool Ok;
-    if ( Data == NULL || !MdoApiValueSetUInt(Data, "schema_version", 7u) ) {
+    if ( Data == NULL || !MdoApiValueSetUInt(Data, "schema_version", 8u) ) {
         xrtValueRelease(Data);
         return false;
     }
@@ -309,6 +340,21 @@ static bool MdoQueueWrite(const char* Path, const MdoQueue* Queue)
     xrtFree(Json);
     xrtValueRelease(Data);
     return Ok;
+}
+
+static bool MdoQueueWithdrawPath(char* Path, const char* Project, const char* Session, const char* Id)
+{
+    int Written = snprintf(Path, MDO_SESSION_PATH_CAPACITY,
+        "sessions/%s/%s/queue-withdrawn/%s.json", Project, Session, Id);
+    return Written > 0 && (size_t)Written < MDO_SESSION_PATH_CAPACITY;
+}
+
+static bool MdoQueueWithdrawn(const char* Project, const char* Session, const char* Id, bool* Exists)
+{
+    char Path[MDO_SESSION_PATH_CAPACITY]; xfileinfo Info;
+    return MdoQueueWithdrawPath(Path, Project, Session, Id) &&
+        MdoHomeExternalStat(Path, Exists, &Info) &&
+        (!*Exists || Info.Type == XFILE_TYPE_FILE);
 }
 
 /* Attachment DELETE already serialized its reference check. A failed marker
@@ -435,7 +481,7 @@ MdoApiQueueRunStatus MdoApiQueueRunPrepare(const char* ProjectId,
     if ( MdoQueueRead(Path, ProjectId, SessionId, &Queue) ) {
         Index = MdoQueueFind(&Queue, Id);
         Result = MDO_API_QUEUE_RUN_CONFLICT;
-        if ( Index != SIZE_MAX ) {
+        if ( Index != SIZE_MAX && (!Queue.Managed || Index == 0u) ) {
             const MdoQueueItem* Item = &Queue.Items[Index];
             if ( MdoQueueRunMatches(Item, Prompt, Attachments,
                     AttachmentCount) ) {
@@ -490,7 +536,7 @@ MdoApiQueueRunStatus MdoApiQueueRunClaim(const char* ProjectId,
     if ( MdoQueueRead(Path, ProjectId, SessionId, &Queue) ) {
         Index = MdoQueueFind(&Queue, Id);
         Result = MDO_API_QUEUE_RUN_CONFLICT;
-        if ( Index != SIZE_MAX &&
+        if ( Index != SIZE_MAX && (!Queue.Managed || Index == 0u) &&
              MdoQueueRunMatches(&Queue.Items[Index], Prompt, Attachments,
                 AttachmentCount) &&
              MdoApiProfileEqual(&Queue.Items[Index].Profile,
@@ -595,6 +641,7 @@ bool MdoApiQueueRoute(MdoApiContext* Context)
     bool First = false;
     bool Priority = false;
     bool Stage = false;
+    bool Managed = false;
     bool Add = Context->Request->head->MethodCode == XHTTP_METHOD_POST;
     bool Ok;
     bool AttachmentLocked = false;
@@ -630,14 +677,16 @@ bool MdoApiQueueRoute(MdoApiContext* Context)
                 XRT_STR_LITERAL("stage"));
             const xvalue* ProfileValue = xrtValueObjectGet(Body.Value,
                 XRT_STR_LITERAL("profile"));
+            const xvalue* ManagedValue = xrtValueObjectGet(Body.Value, XRT_STR_LITERAL("managed"));
             Ok = xrtValueType(Body.Value) == XVALUE_OBJECT &&
                 xrtValueCount(Body.Value) == (References == NULL ? 3u : 4u) +
                     (PriorityValue == NULL ? 0u : 1u) +
                     (StageValue == NULL ? 0u : 1u) +
-                    (ProfileValue == NULL ? 0u : 1u) &&
+                    (ProfileValue == NULL ? 0u : 1u) + (ManagedValue == NULL ? 0u : 1u) &&
                 MdoQueueString(Body.Value, "id", &IdView) &&
                 MdoQueueString(Body.Value, "text", &Text) &&
                 MdoQueueBool(Body.Value, "first", &First) &&
+                (ManagedValue == NULL || MdoQueueBool(Body.Value, "managed", &Managed)) &&
                 (PriorityValue == NULL ||
                  MdoQueueBool(Body.Value, "priority", &Priority)) &&
                 (StageValue == NULL ||
@@ -678,9 +727,15 @@ bool MdoApiQueueRoute(MdoApiContext* Context)
             char RunId[MDO_RUN_ID_CAPACITY];
             Ok = MdoQueueReceiptRead(ProjectId, SessionId, Id,
                 &Consumed, RunId);
+            if ( Ok && !Consumed ) Ok = MdoQueueWithdrawn(ProjectId, SessionId, Id, &Consumed);
             if ( Ok && !Consumed ) {
                 Full = Queue.Count >= MDO_QUEUE_MAX_ITEMS ||
                     Text.Size > MDO_QUEUE_MAX_TOTAL_TEXT - Queue.TextBytes;
+                if ( !Queue.Count && Managed ) {
+                    Queue.Paused = false; Queue.Error[0] = '\0';
+                    Queue.LastRunId[0] = '\0'; Queue.CancelRunId[0] = '\0';
+                }
+                Queue.Managed = Queue.Managed || Managed;
                 if ( !Full ) Ok = MdoQueueInsert(&Queue, Id, Text,
                     Attachments, AttachmentCount, First, Priority,
                     Stage ? MDO_QUEUE_STAGED : MDO_QUEUE_PENDING,
@@ -847,6 +902,11 @@ bool MdoApiQueueItemRoute(MdoApiContext* Context)
                 Queue.Items[Index].State = NextState;
                 Ok = MdoQueueWrite(Path, &Queue);
             }
+        } else if ( Index != SIZE_MAX &&
+                    (Queue.Items[Index].State == MDO_QUEUE_EDITING ||
+                     (Queue.Managed && (Queue.Items[Index].State == MDO_QUEUE_SENDING ||
+                        Queue.Items[Index].Priority) && !Queue.Paused))) {
+            Conflict = true;
         } else if ( Index != SIZE_MAX ) {
             if ( Queue.Items[Index].RunId[0] != '\0' )
                 Ok = MdoQueueReceiptWrite(ProjectId, SessionId, Id,
@@ -885,3 +945,6 @@ bool MdoApiQueueItemRoute(MdoApiContext* Context)
         409u, "queue_state_conflict", "The queue item changed state", NULL); }
     return MdoQueueReply(Context, 200u, &Queue);
 }
+
+#include "queue_actions.inc.c"
+#include "queue_dispatch.inc.c"

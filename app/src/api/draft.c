@@ -357,7 +357,8 @@ static bool MdoDraftWrite(const char* Path, const MdoDraft* Draft)
     size_t Size = 0u;
     bool Ok = Root != NULL && Submissions != NULL &&
         (!Global || NewTask != NULL) &&
-        MdoApiValueSetUInt(Root, "schema_version", Project ? 8u : 7u) &&
+        MdoApiValueSetUInt(Root, "schema_version", Project ? 8u : Global ? 7u : 9u) &&
+        (Global || Project || MdoApiValueSetString(Root, "queue_restore_id", Draft->QueueRestoreId)) &&
         MdoApiValueSetUInt(Root, "revision", Draft->Revision) &&
         MdoApiValueSetStringView(Root, "text",
             xrtStrViewN(Draft->Text, Draft->TextSize)) &&
@@ -378,6 +379,41 @@ static bool MdoDraftWrite(const char* Path, const MdoDraft* Draft)
     xrtValueRelease(NewTask);
     xrtValueRelease(Root);
     return Ok;
+}
+
+/* The queue's durable editing row pins its images before entering here. Never
+ * take the queue lock while holding this lock: capture uses draft -> queue.
+ * Keeping the source ID in every subsequent draft revision makes replay safe
+ * even if the user has edited or submitted the restored draft after a crash. */
+int MdoApiDraftQueueRestore(const char* Project, const char* Session,
+    const char* Id, uint64 Revision, xstrview Text,
+    const char Attachments[4][33], size_t Count, const MdoApiProfile* Profile)
+{
+    char Path[MDO_SESSION_PATH_CAPACITY];
+    MdoDraft* Draft = (MdoDraft*)xrtMalloc(sizeof(*Draft));
+    int Result = 0;
+    if ( Draft == NULL ) return 0;
+    int Written = snprintf(Path, sizeof(Path), "sessions/%s/%s/draft.json", Project, Session);
+    if ( Written <= 0 || (size_t)Written >= sizeof(Path) ) { xrtFree(Draft); return 0; }
+    xrtMutexLock(g_MdoDraftLock);
+    if ( MdoDraftRead(Path, Draft) ) {
+        if ( !strcmp(Draft->QueueRestoreId, Id) ) Result = 1;
+        else if ( Draft->Revision != Revision || Draft->TextSize || Draft->AttachmentCount ||
+                  Draft->SubmissionCount || Draft->RunAdmissionUncertain ) Result = -1;
+        else if ( Draft->Revision < UINT64_C(9007199254740991) && Text.Size <= MDO_DRAFT_TEXT_MAX ) {
+            Draft->Revision++;
+            memcpy(Draft->QueueRestoreId, Id, 33u);
+            memcpy(Draft->Text, Text.Data, Text.Size);
+            Draft->Text[Text.Size] = '\0'; Draft->TextSize = Text.Size;
+            memcpy(Draft->Attachments, Attachments, sizeof(Draft->Attachments));
+            Draft->AttachmentCount = Count;
+            if ( Profile->Present ) Draft->ComposerProfile = *Profile;
+            Result = MdoDraftWrite(Path, Draft) ? 1 : 0;
+        }
+    }
+    xrtMutexUnlock(g_MdoDraftLock);
+    MdoDraftRelease(Draft);
+    return Result;
 }
 
 static xvalue* MdoDraftResponse(const MdoDraft* Draft, bool Global)

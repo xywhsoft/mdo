@@ -10,12 +10,19 @@
 #define MDO_QUEUE_ID_SIZE 32u
 #define MDO_QUEUE_RECEIPT_FILE_MAX 512u
 #define MDO_QUEUE_DISCARD_MAX 256u
+#define MDO_QUEUE_ACTION_MAX 32u
 
 typedef enum MdoQueueState {
     MDO_QUEUE_STAGED,
     MDO_QUEUE_PENDING,
-    MDO_QUEUE_SENDING
+    MDO_QUEUE_SENDING,
+    MDO_QUEUE_EDITING
 } MdoQueueState;
+
+typedef struct MdoQueueAction {
+    char Id[33], Kind[12], Item[33], Before[33];
+    uint64 Revision, DraftRevision;
+} MdoQueueAction;
 
 typedef struct MdoQueueItem {
     char Id[MDO_QUEUE_ID_SIZE + 1u];
@@ -28,6 +35,7 @@ typedef struct MdoQueueItem {
     MdoComposerProfile Profile;
     bool StartClaimed;
     char RunId[MDO_RUN_ID_CAPACITY];
+    MdoQueueAction Edit;
 } MdoQueueItem;
 
 typedef struct MdoQueue {
@@ -36,6 +44,13 @@ typedef struct MdoQueue {
     size_t TextBytes;
     char DiscardImages[MDO_QUEUE_DISCARD_MAX][33];
     size_t DiscardCount;
+    uint64 Revision;
+    bool Managed, Paused;
+    char Error[80];
+    char CancelRunId[MDO_RUN_ID_CAPACITY];
+    char LastRunId[MDO_RUN_ID_CAPACITY];
+    MdoQueueAction Actions[MDO_QUEUE_ACTION_MAX];
+    size_t ActionCount;
 } MdoQueue;
 
 /* Parse owns Text allocations; Release before reuse. Receipt data is a
@@ -62,6 +77,10 @@ bool MdoQueueBool(const xvalue* Object, cstr Key, bool* Result);
 bool MdoQueueParseState(xstrview State, bool AllowStaged,
     MdoQueueState* Result);
 size_t MdoQueueFind(const MdoQueue* Queue, const char* Id);
+bool MdoQueueMove(MdoQueue* Queue, const char* Id, const char* Before);
+void MdoQueueRemove(MdoQueue* Queue, size_t Index);
+bool MdoQueueActionParse(const xvalue* Value, MdoQueueAction* Action);
+void MdoQueueActionRemember(MdoQueue* Queue, const MdoQueueAction* Action);
 bool MdoQueueInsert(MdoQueue* Queue, const char* Id,
     xstrview Text, const char Attachments[4][33],
     size_t AttachmentCount, bool First, bool Priority,
