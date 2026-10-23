@@ -145,13 +145,13 @@ static bool CliOwnedAlias(cstr Path,const xvalue* Row,const void* Image,size_t S
     (void)Image;(void)Size;char* Script=CliWrapper(Row);bool Ok=Script&&CliFileMatches(Path,Script,strlen(Script));xrtFree(Script);return Ok;
 #endif
 }
-static bool CliPrepareBindings(xvalue* Map,const xvalue* Previous,const void* Image,size_t Size)
+static bool CliPrepareBindings(xvalue* Map,const xvalue* Previous,const void* Image,size_t Size,bool Restore)
 {
     xroot Root=MdoHomeOpenStorageDirectory("data/cli-tools/bin");if(!Root)return false;xrtRootClose(Root);
     for(size_t I=0;I<xrtValueCount(Map);I++){
         xstrview Name;xvalue* Row=xrtValueObjectAt(Map,I,&Name);const xvalue* Old=xrtValueObjectGet(Previous,Name);if(!Old)Old=xrtValueObjectGet(xrtValueObjectGet(g_MdoCli.Published,XRT_STR_LITERAL("retired_commands")),Name);char Path[128];CliAliasPath(Path,Name);bool Exists=false;xfileinfo Info;
         if(!MdoHomeExternalStat(Path,&Exists,&Info))return false;
-        if(Exists&&!CliOwnedAlias(Path,Old,Image,Size)&&!CliOwnedAlias(Path,Row,Image,Size)){snprintf(g_MdoCli.BindingError,sizeof(g_MdoCli.BindingError),"Command entry '%.*s' is occupied by an unrecognized file; original file retained",(int)Name.Size,Name.Data);return false;}
+        if(Exists&&!CliOwnedAlias(Path,Old,Image,Size)&&!CliOwnedAlias(Path,Row,Image,Size)){if(Restore)continue;snprintf(g_MdoCli.BindingError,sizeof(g_MdoCli.BindingError),"Command entry '%.*s' is occupied by an unrecognized file; original file retained",(int)Name.Size,Name.Data);return false;}
 #if defined(_WIN32) || defined(_WIN64)
         char Hash[65],Master[140];uint8 Digest[32];if(!xrtSha256(Image,Size,Digest))return false;CliHex(Digest,Hash);
         if(!Exists){snprintf(Master,sizeof(Master),"data/cli-tools/forwarders/%s.exe",Hash);
@@ -184,7 +184,7 @@ static bool CliSave(void)
     if(xrtValueCount(Map)||xrtValueCount(Old)){Image=xrtVfsReadAllLimit(MdoHomeApplicationVfs(),"/app/generated/native/windows/cli-forwarder.exe",2097152,&Size);if(!Image||Size<2||Image[0]!='M'||Image[1]!='Z'){snprintf(g_MdoCli.BindingError,sizeof(g_MdoCli.BindingError),"Windows command forwarder is missing from the application VFS");Ok=false;}}
 #endif
 #if !defined(__ANDROID__)
-    if(Ok)Ok=CliPrepareBindings(Map,Old,Image,Size);
+    if(Ok)Ok=CliPrepareBindings(Map,Old,Image,Size,false);
 #endif
     xvalue* Saved=Ok?xrtValueDeepClone(g_MdoCli.State):NULL;if(!Saved)Ok=false;
     if(Ok){xvalue* Retired=CliRetiredBindings(Map,Old);Ok=Retired&&xrtValueObjectSetNew(Saved,XRT_STR_LITERAL("retired_commands"),Retired);}
@@ -197,7 +197,7 @@ static bool CliSave(void)
     if(Ok){xrtValueObjectSet(g_MdoCli.State,XRT_STR_LITERAL("commands"),Map);xrtValueObjectSet(g_MdoCli.State,XRT_STR_LITERAL("retired_commands"),xrtValueObjectGet(Saved,XRT_STR_LITERAL("retired_commands")));CliRemoveBindings(xrtValueObjectGet(Saved,XRT_STR_LITERAL("retired_commands")),Map,Image,Size);xrtValueRelease(g_MdoCli.Published);g_MdoCli.Published=Saved;Saved=NULL;}
     else{
 #if !defined(_WIN32) && !defined(_WIN64) && !defined(__ANDROID__)
-        if(!CliPrepareBindings(Old,Map,Image,Size))g_MdoCli.Writable=false;
+        if(!CliPrepareBindings(Old,Map,Image,Size,true))g_MdoCli.Writable=false;
 #endif
         CliRemoveBindings(Map,Old,Image,Size);if(!g_MdoCli.BindingError[0])snprintf(g_MdoCli.BindingError,sizeof(g_MdoCli.BindingError),"Cannot publish portable command entries; check file permissions and storage");}
     xrtValueRelease(Saved);xrtValueRelease(Map);xrtFree(Image);return Ok;
