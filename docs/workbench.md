@@ -168,6 +168,30 @@ cancel、keydown/up、wheel、heartbeat、release_all。每条包含 epoch、递
 退出、隐藏、失焦和断线停止控制；驱动必须校验租约、拒绝过期 epoch/sequence，并在租约
 过期时释放所有按键与指针。该接口不代替插件的系统授权和实际输入驱动。
 
+## 内置变更与文件服务
+
+文件页通过 `files.directory/search/read/write` 读取所属设备的项目目录；目录按页读取，
+搜索有时间与条目预算，保存携带文件修订。`mdo.files` 打开目录，`mdo.editor` 的 params
+可传 `path`、`line`；定位按需继续读取，达到预览预算后明确提示，不能伪称已到达目标行。
+
+变更页 `mdo.changes` 可传 params.repository；其 SDK 为 `changes.list/branches/diff`，
+C 的 `mdoChangesList/Branches/Diff` 与 JS 的 `sdk.changes.list/branches/diff` 共用线协议。
+比较范围：workspace=HEAD 到当前工作区（含未跟踪），staged=HEAD 到暂存区，
+unstaged=暂存区到工作区，branch=选定基准提交到 HEAD；分支比较不混入未提交内容。
+session 仅允许真实已捕获的会话基线，目前缺少基线返回 git_baseline_missing，不能退化成 HEAD。
+
+列表返回 repository/head/base/scope/files/revision，文件包括 path、old_path、status、
+additions/deletions、stats_available、binary。统计超出预算时显式标记，不将未知计作零。
+diff 传 path、相同比较参数、revision、offset、limit（最多 2000 行）；返回准确原/新
+行号、总行数、next/more 和所请求页。跨页前后比较修订变化返回 409，调用者应刷新列表。
+单页最多 512 KiB、每行最多 16 KiB，长行和非 UTF-8 有明确标记。读取超时 15 秒；
+不调用外部 diff/textconv，不以用户索引作临时空间。大量结果可通过 operation.start/result
+异步读取；视图取消和回执释放只针对自己的操作，不能取消其他面板。
+
+变更页面提供右侧可筛选/折叠的虚拟文件树、逐文件分页、统一/左右对照、差异块/行引用，
+打开工作区文件时定位到所选新行。引用正文携带仓库、范围、提交和比较修订，明确其来源。
+分支历史差异中的“打开工作区文件”显示当前磁盘内容，不冒充历史文件。
+
 ## 验证范围
 
 自动回归覆盖 C 命令工作者与 HTTP 共享资源、修订冲突、归属隔离、UI 回执、布局恢复、

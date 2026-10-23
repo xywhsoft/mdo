@@ -97,6 +97,39 @@ try{
  await fetch(TARGET+'/result',{method:'POST',mode:'no-cors',body:JSON.stringify({passed:true,application:true,screenshot_bytes:image.data.length})});
 }catch(error){await fetch(TARGET+'/result',{method:'POST',mode:'no-cors',body:JSON.stringify({passed:false,error:String(error.stack||error)})})}
 '''
+CHANGES_SCRIPT=r'''
+import {allowsApiWrite} from '/js/api/client.js';
+const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+const until=async predicate=>{for(let i=0;i<200;i++){if(predicate())return;await pause(100);}throw Error('Native changes UI timed out');};
+try{
+ await until(()=>window.mdo&&allowsApiWrite('/application/call',{method:'POST'}));
+ await mdo.ui.newTab();
+ const repository=(await mdo.files.resolve({path:'native-changes-qa'})).path;
+ await mdo.files.mkdir({path:repository});
+ const git=async(...args)=>{const result=await mdo.call('process.run',{program:'git',cwd:repository,args:['-c','user.name=QA','-c','user.email=qa@example.invalid','-c','core.hooksPath=',...args],timeout_ms:10000});if(result.exit_code!==0)throw Error(JSON.stringify(result));};
+ await git('init','-b','master');await mdo.files.write({path:repository+'/native.js',text:'const answer = 1;\n'});
+ await git('add','--all');await git('commit','-m','baseline');
+ await mdo.files.write({path:repository+'/native.js',text:'const answer = 2;\n'});await git('add','--all');
+ await mdo.files.write({path:repository+'/native.js',text:'const answer = 3;\n'});
+ const before=(await mdo.files.read({path:repository+'/.git/index'})).base64;
+ const panel=await mdo.panel.open({client:mdo.clientId,type:'mdo.changes',key:'native-changes',params:{repository},reveal:'activate'});
+ await until(()=>document.querySelector('.wb-changes-view .wb-change-added')?.textContent.includes('answer = 3'));
+ const view=document.querySelector('.wb-changes-view'),scope=view.querySelector('.wb-compare-scope');
+ scope.value='staged';scope.dispatchEvent(new Event('change'));
+ await until(()=>view.querySelector('.wb-change-added')?.textContent.includes('answer = 2'));
+ scope.value='unstaged';scope.dispatchEvent(new Event('change'));
+ await until(()=>view.querySelector('.wb-change-removed')?.textContent.includes('answer = 2')&&view.querySelector('.wb-change-added')?.textContent.includes('answer = 3'));
+ view.querySelector('[aria-label="打开工作区文件"]').click();
+ await until(()=>document.querySelector('.wb-files-view:not([hidden]) .wb-source-text')?.textContent.includes('answer = 3'));
+ document.querySelector(`.wb-tab[data-panel="${panel.id}"] [role="tab"]`).click();
+ await until(()=>!view.hidden);
+ if(view.querySelector('.wb-file-tree').hidden)throw Error('Switching tabs unexpectedly hid the file tree');
+ if(view.getBoundingClientRect().width<300)throw Error('Changes layout collapsed');
+ if(before!==(await mdo.files.read({path:repository+'/.git/index'})).base64)throw Error('Read-only changes modified the index');
+ await fetch(TARGET+'/result',{method:'POST',mode:'no-cors',body:JSON.stringify({passed:true,scope:'native WebView2 changes UI',width:view.getBoundingClientRect().width,index_unchanged:true})});
+}catch(error){await fetch(TARGET+'/result',{method:'POST',mode:'no-cors',body:JSON.stringify({passed:false,error:String(error.stack||error)})})}
+'''
+
 class Fixture(BaseHTTPRequestHandler):
  def log_message(self,*args):pass
  def do_GET(self):
@@ -107,7 +140,7 @@ class Fixture(BaseHTTPRequestHandler):
  def do_POST(self):
   self.server.result=json.loads(self.rfile.read(int(self.headers['Content-Length'])));self.send_response(204);self.end_headers()
 def main():
- p=argparse.ArgumentParser();p.add_argument('--host',type=Path,required=True);p.add_argument('--evidence',type=Path,required=True);p.add_argument('--application',action='store_true');args=p.parse_args()
+ p=argparse.ArgumentParser();p.add_argument('--host',type=Path,required=True);p.add_argument('--evidence',type=Path,required=True);modes=p.add_mutually_exclusive_group();modes.add_argument('--application',action='store_true');modes.add_argument('--changes',action='store_true');args=p.parse_args()
  args.evidence.mkdir(parents=True,exist_ok=True)
  fixture=ThreadingHTTPServer(('127.0.0.1',0),Fixture);fixture.result=None;threading.Thread(target=fixture.serve_forever,daemon=True).start()
  with tempfile.TemporaryDirectory(dir=ROOT/'.build',prefix='workbench-native-') as directory:
@@ -116,8 +149,8 @@ def main():
   service['window']=json.loads((ROOT/'app/xs.json').read_text(encoding='utf-8'))['services'][0]['window'];service['window']['title']='Mdo native browser QA';service['window']['install_fallback']='headless'
   config.write_text(json.dumps(value),encoding='utf-8')
   target=f'http://127.0.0.1:{fixture.server_port}'
-  script='<script type="module">const TARGET='+json.dumps(target)+';'+(APPLICATION_SCRIPT if args.application else SCRIPT)+'</script>'
-  page=(ROOT/'app/web/index.html').read_text(encoding='utf-8').replace('</body>',script+'</body>') if args.application else '<!doctype html><meta charset=utf-8><h1>Mdo browser QA</h1>'+script
+  script='<script type="module">const TARGET='+json.dumps(target)+';'+(CHANGES_SCRIPT if args.changes else APPLICATION_SCRIPT if args.application else SCRIPT)+'</script>'
+  page=(ROOT/'app/web/index.html').read_text(encoding='utf-8').replace('</body>',script+'</body>') if args.application or args.changes else '<!doctype html><meta charset=utf-8><h1>Mdo browser QA</h1>'+script
   (base/'web/index.html').write_text(page,encoding='utf-8')
   with (args.evidence/'native-host.log').open('wb') as log:
    process=subprocess.Popen([str(args.host.resolve()),str(config),'--','--home',str(base/'home')],cwd=base,stdout=log,stderr=log)
@@ -126,7 +159,7 @@ def main():
     while fixture.result is None and time.monotonic()<deadline and process.poll() is None:time.sleep(.1)
     result=fixture.result or {'passed':False,'error':'Native browser did not return a result'}
     (args.evidence/'native-result.json').write_text(json.dumps(result,indent=2),encoding='utf-8')
-    assert result['passed'],result;print('Actual WebView2 navigation, input, screenshot, takeover, back and SDK isolation: PASS')
+    assert result['passed'],result;print('Actual WebView2 changes scopes, file location and retained tree, real index unchanged: PASS' if args.changes else 'Actual WebView2 navigation, input, screenshot, takeover, back and SDK isolation: PASS')
    finally:
     process.terminate();process.wait(timeout=15);time.sleep(1)
  fixture.shutdown();fixture.server_close()

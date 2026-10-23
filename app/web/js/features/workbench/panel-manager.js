@@ -2,6 +2,7 @@ import { normalizeLayout, reorderPanel, safeBrowserUrl, browserLocation, validat
 import { createNativeBrowserBridge } from "./native-browser.js";
 import { mountBrowserView } from "./browser-view.js";
 import { mountFilesView } from "./files-view.js";
+import { mountChangesView } from "./changes-view.js";
 import { iconButton, popupMenu } from "./controls.js";
 import { createSurfaceInput } from "./surface-input.js";
 import { renderSourceMarkdown } from "../../utils/source-markdown.js";
@@ -283,10 +284,11 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
     }).catch(() => {});
   } });
   for (const [id, renderer, label] of [["mdo.browser", "browser", "浏览器"], ["mdo.document", "document", "文档"], ["mdo.plan", "plan", "计划"], ["mdo.diff", "diff", "变更"], ["mdo.preview", "web", "网页预览"], ["mdo.editor", "editor", "文件编辑"]]) definitions.set(id, { title: label, renderer });
-  const openFile = async (path, client) => {
+  const openFile = async (path, client, line = 1) => {
     const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(["native", path])));
     const key = [...new Uint8Array(digest)].map(value => value.toString(16).padStart(2, "0")).join("");
-    return open("mdo.editor", { key, title: path.split(/[\\/]/).at(-1), params: { path, space: "native" } }, client);
+    const panel = await open("mdo.editor", { key, title: path.split(/[\\/]/).at(-1), params: { path, space: "native", line } }, client);
+    const locating = mounts.get(panel.id)?.locate?.(line); if (locating) await locating; return panel;
   };
   for (const [id, title] of [["mdo.files", "文件"], ["mdo.editor", "文件"]]) definitions.set(id, { title, renderer: "custom", mount: (root, options) => mountFilesView(root, { ...options, openFile: path => openFile(path, options.sdk) }) });
   definitions.set("mdo.task-plan", { title: "会话计划", renderer: "custom", mount(root, { sdk, context, signal }) {
@@ -306,24 +308,7 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
     };
     void refresh(); return () => clearTimeout(timer);
   } });
-  definitions.set("mdo.changes", { title: "查看变更", renderer: "custom", async mount(root, { sdk, signal }) {
-    const toolbar = make("div", "wb-toolbar"), body = make("div"); root.append(toolbar, body);
-    const refresh = async () => {
-      body.textContent = "正在读取项目变更…";
-      try {
-        const context = await sdk.call("sdk.context", {}, { signal });
-        const result = await sdk.call("process.run", { program: "git", cwd: context.workspace,
-          args: ["-c", "core.quotepath=false", "diff", "--no-ext-diff", "--no-color", "HEAD", "--"], timeout_ms: 10000 }, { signal });
-        if (result.exit_code !== 0) throw new Error(result.stderr?.text || "当前项目无法读取 Git 变更，请检查工作目录和 Git 安装。");
-        body.replaceChildren();
-        if (result.truncated) body.append(make("p", "wb-error", "变更较大，当前展示前 16 KiB。完整变更可由插件分文件加载。"));
-        const pre = make("pre", "wb-diff");
-        for (const line of (result.stdout?.text || "当前没有已跟踪文件的变更。").split("\n")) pre.append(make("div", line.startsWith("+") ? "wb-added" : line.startsWith("-") ? "wb-removed" : "", line));
-        body.append(pre);
-      } catch (error) { if (!signal.aborted) fail(body, error, refresh); }
-    };
-    toolbar.append(button("刷新", refresh)); await refresh();
-  } });
+  definitions.set("mdo.changes", { title: "变更", renderer: "custom", mount: (root, options) => mountChangesView(root, { ...options, openFile: (path, line) => openFile(path, options.sdk, line) }) });
   async function synchronize() {
     if (stopped) return;
     try {

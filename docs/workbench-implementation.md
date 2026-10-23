@@ -94,8 +94,6 @@ C:/Users/Administrator/.cache/codex-runtimes/codex-primary-runtime/dependencies/
 执行 tests/test_workbench_browser.py --host <宿主> --evidence .build/workbench-builtin-20261023/files-browser --files。
 原生完整应用使用 tests/test_workbench_native_browser.py --host <宿主> --evidence <目录> --application。
 
-## 验证要求
-
 ### 里程碑三准备：结构化 Git 读取
 
 新增 changes.list/branches/diff，同源 C/JS 契约。读取使用 literal argv、NUL 分隔元数据，
@@ -108,7 +106,27 @@ C:/Users/Administrator/.cache/codex-runtimes/codex-primary-runtime/dependencies/
 真实私有 Git 仓库测试覆盖 MM 的暂存/未暂存区分、重命名、二进制、中文未跟踪、literal
 通配符和前导参数文件名、超过 16 KiB 的 6000 多行分页、分支、旧修订拒绝、新仓库。
 读取前后核对 .git/index SHA-256 不变。会话基线尚未实现，session 范围明确报缺少基线；
-不能因此将“变更”整项标记完成。下一步接入页面和真实会话基线。
+不能因此将“变更”整项标记完成。
+
+### 里程碑三：逐文件变更页面
+
+已接入范围选择、分支下拉、增删统计、右侧可筛选/折叠/键盘操作的虚拟文件树，
+逐文件分页、准确行号、统一/左右对照、差异块/行引用、打开工作区文件并定位。
+比较修订过期会清空旧内容并要求刷新，不将另一修订的新页拼在旧页后面。引用正文携带
+仓库、范围、提交和修订信息（不能仅放在输入上下文会丢弃的额外 metadata 字段中）。
+读取使用独立 operation，视图销毁取消并释放自己的回执，不与其他标签共享取消句柄。
+
+2026-10-24 实际验证：Edge 完整应用在 454 个变更文件中测试虚拟树、暂存/未暂存切换，
+5,205 行差异翻页/远距离跳转、左右对照、引用来源、二进制、分支提交比较、外部修改后
+拒绝旧修订/重新读取、窄屏及重载。Windows WebView2 实际页面验证两种范围、文件打开及
+返回后目录树保持可见，实际宽度 479 px；读取前后真实 .git/index 内容不变。
+22 项相关 JS 测试、20 项前端合同、6 项 SDK 合同和 206 个前端模块图检查通过。
+文件服务/原生宿主无需额外修改；测试证据在 changes-browser、native-changes、files-browser。
+
+尚需真实会话基线、连续多文件浏览及最终完整检查；“结构化 Git 变更”复选框保持未完成。
+下一阶段推进 xrt PTY，随后收尾基线、文件管理和四入口主页；不发布或更改 0.5.0 版本号。
+
+## 验证要求
 
 测试必须验证实际行为：浏览器加载和失败、菜单显隐；文件外部修改和大目录；Git 的
 未跟踪/特殊文件名/重命名/大差异；PTY 交互/中断/resize/大量输出/关闭和附着；

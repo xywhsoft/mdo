@@ -97,6 +97,39 @@
 .wb-file-compare textarea { width:100%;height:60vh;resize:none;background:transparent;color:inherit;border:1px solid var(--border);font:12px/20px Consolas,monospace; }
 @container(max-width:400px) { .wb-file-tree { position:absolute;right:0;top:0;bottom:0;width:230px;box-shadow:-6px 0 20px #0002; }.wb-file-tree-resize { display:none; }.wb-files-toolbar { gap:0;padding-inline:4px; }.wb-files-toolbar > .wb-icon-button { width:28px; } }
 .wb-diff pre { overflow-x:auto;font:12px/1.6 monospace; }
+.wb-view.wb-changes-view { padding:0;display:flex;flex-direction:column;overflow:hidden;container-type:inline-size; }
+.wb-changes-toolbar { display:flex;align-items:center;flex-wrap:wrap;gap:4px;padding:6px 8px;flex:none;border-bottom:1px solid var(--border); }
+.wb-changes-toolbar select { max-width:170px;min-width:0;border:1px solid var(--border);background:var(--surface);color:inherit;border-radius:6px;font:inherit;font-size:11px;padding:5px; }
+.wb-changes-toolbar select[hidden] { display:none; }
+.wb-changes-summary { flex:1;min-width:50px;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+.wb-change-filebar { display:flex;align-items:center;gap:3px;flex:none;min-height:38px;padding:4px 6px;border-bottom:1px solid var(--border); }
+.wb-change-stats { font-size:11px;white-space:nowrap; }
+.wb-changes-diff { flex:1;min-height:0;overflow:auto;tab-size:4; }
+.wb-change-message { padding:20px;font-size:12px;line-height:1.8;overflow-wrap:anywhere; }
+.wb-change-row { display:flex;min-width:100%;width:max-content;min-height:21px;font:12px/21px Consolas,monospace; }
+.wb-changes-diff[data-split="true"] .wb-change-row { display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);width:100%; }
+.wb-changes-diff[data-split="true"] .wb-change-wide { grid-template-columns:minmax(0,1fr); }
+.wb-change-cell { flex:1;display:flex;min-width:0;white-space:pre; }
+.wb-changes-diff[data-split="true"] .wb-change-cell { overflow:auto;border-right:1px solid var(--border); }
+.wb-change-number,.wb-change-old-number { width:46px;box-sizing:border-box;flex:none;text-align:right;padding:0 8px 0 2px;border:0;background:transparent;color:var(--text-muted,#888);font:inherit;user-select:none; }
+.wb-change-number { cursor:pointer; }
+.wb-change-number:focus-visible { outline:1px solid var(--focus); }
+.wb-change-code { padding-right:10px;min-width:0; }
+.wb-change-labels { display:grid;grid-template-columns:1fr 1fr;position:sticky;top:0;z-index:1;background:var(--surface);border-bottom:1px solid var(--border);font-size:11px;color:var(--text-muted,inherit); }
+.wb-change-labels span { padding:5px 8px; }
+.wb-change-added { background:#248b2525; }.wb-change-removed { background:#b52e2e25; }
+.wb-change-hunk { background:#4789b51b;color:var(--text-muted,inherit); }
+.wb-change-meta,.wb-change-notice,.wb-change-binary { color:var(--text-muted,inherit); }
+.wb-change-selected { box-shadow:inset 0 0 0 1px var(--focus); }
+.wb-change-truncated { color:var(--text-muted,inherit);font-size:11px; }
+.wb-changes-tree-list { position:relative;flex:1;min-height:0;overflow:auto;outline-offset:-2px;font-size:12px; }
+.wb-changes-tree-canvas { position:relative; }
+.wb-change-tree-item { position:absolute;left:0;right:0;min-width:0;width:100%;height:28px;box-sizing:border-box; }
+.wb-change-tree-item[aria-selected="true"] { background:var(--surface-hover,#8882); }
+.wb-change-tree-name { flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis; }
+.wb-change-tree-stats { flex:none;font-size:10px;max-width:85px;overflow:hidden;text-overflow:ellipsis; }
+.wb-change-tree-item .wb-icon { width:14px;height:14px; }
+@container(max-width:400px) { .wb-changes-toolbar { padding:5px 4px;gap:2px; }.wb-changes-toolbar .wb-icon-button { width:28px; }.wb-compare-base { flex-basis:100%; }.wb-change-old-number,.wb-change-number { width:35px; } }
 .wb-added { background:#248b2525; }.wb-removed { background:#b52e2e25; }
 .wb-resize { position:absolute;left:-4px;top:0;bottom:0;width:8px;z-index:14;cursor:col-resize;touch-action:none; }
 .wb-resize:hover,.wb-resize:focus-visible { background:var(--focus); }
