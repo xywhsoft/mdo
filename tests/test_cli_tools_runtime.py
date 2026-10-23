@@ -14,8 +14,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from test_api_runtime import free_port, request, wait_ready
 
 ROOT=Path(__file__).resolve().parents[1]
+PLATFORM="windows-x86_64" if os.name=="nt" else "linux-x86_64"
 PAYLOAD=b"Not an executable; must never be run\n"
-MANIFEST=dict(id="fixture",name="Fixture CLI",version="1.0.0",platform="windows-x86_64",prompt="CLI_PROMPT_SENTINEL",
+MANIFEST=dict(id="fixture",name="Fixture CLI",version="1.0.0",platform=PLATFORM,prompt="CLI_PROMPT_SENTINEL",
               entry="bin/fixture.exe",license="MIT",links=["https://example.org"],
               files=[dict(path="bin/fixture.exe",size=len(PAYLOAD),sha256=hashlib.sha256(PAYLOAD).hexdigest(),mode=493)])
 TEXT=json.dumps(MANIFEST).encode();ARCHIVE=b"MDOCLI1\n"+struct.pack("<I",len(TEXT))+TEXT+PAYLOAD
@@ -58,7 +59,7 @@ def run(host):
     try:
         assert get()["guide"]=="new" and not get()["items"]
         exe=base/"manual.exe";exe.write_bytes(PAYLOAD)
-        tool=dict(id="custom.fixture",name="Manual",version="1.0.0",path=str(exe),prompt="MANUAL_PROMPT_SENTINEL",license="MIT",platform="windows-x86_64",enabled=True,links=[])
+        tool=dict(id="custom.fixture",name="Manual",version="1.0.0",path=str(exe),prompt="MANUAL_PROMPT_SENTINEL",license="MIT",platform=PLATFORM,enabled=True,links=[])
         post("save",tool=tool);assert "MANUAL_PROMPT_SENTINEL" in prompt() and prompt().count("<mdo_tool_environment>")==1
         post("enable",id=tool["id"],enabled=False);assert "MANUAL_PROMPT_SENTINEL" not in prompt()
         post("enable",id=tool["id"],enabled=True);exe.unlink();assert "MANUAL_PROMPT_SENTINEL" not in prompt()
