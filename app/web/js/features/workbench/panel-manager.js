@@ -5,6 +5,8 @@ import { mountFilesView } from "./files-view.js";
 import { mountChangesView } from "./changes-view.js";
 import { mountTerminalView } from "./terminal-view.js";
 import { mountStartView } from "./start-view.js";
+import { filePathKey, relocatedPath } from "./file-actions.js";
+import { createFileDrafts } from "./file-drafts.js";
 import { iconButton, popupMenu } from "./controls.js";
 import { createSurfaceInput } from "./surface-input.js";
 import { renderSourceMarkdown } from "../../utils/source-markdown.js";
@@ -17,7 +19,7 @@ function button(label, execute, className = "wb-button") {
   node.onclick = () => Promise.resolve().then(execute).catch(error => toast(error.message, "error")); return node;
 }
 export function createPanelManager({ shell, api, layoutApi = api, navigation, clientId, addContext = () => {}, renderers = new Map() }) {
-  const entries = new Map(), definitions = new Map(), discovered = new Set(), mounts = new Map(), bridge = createNativeBrowserBridge();
+  const entries = new Map(), definitions = new Map(), discovered = new Set(), mounts = new Map(), bridge = createNativeBrowserBridge(), fileEvents = new EventTarget();
   const dock = make("aside", "workbench"), top = make("header", "wb-top"), tabs = make("div", "wb-tabs"), content = make("div", "wb-content");
   dock.setAttribute("aria-label", "工具工作区"); tabs.setAttribute("role", "tablist");
   const resize = make("div", "wb-resize"); resize.tabIndex = 0; resize.setAttribute("role", "separator"); resize.setAttribute("aria-label", "调整工具工作区宽度"); resize.setAttribute("aria-orientation", "vertical");
@@ -26,6 +28,7 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
   try { profile = localStorage.getItem("mdo.workbench.profile"); if (!/^wb-[a-f0-9-]{36}$/.test(profile || "")) { profile = `wb-${crypto.randomUUID()}`; localStorage.setItem("mdo.workbench.profile", profile); } }
   catch { profile = clientId; }
   if (isRemoteTarget()) profile += `.${targetState().selected.id}`;
+  const displayTarget = isRemoteTarget() ? targetState().selected.id : "local";
   const bound = row => api.bind({ ...row.context, extension: row.owner });
   const title = row => row.title || definitions.get(row.type)?.title || row.type;
   const fail = (root, error, retry) => { root.replaceChildren(make("p", "wb-error", error.message || String(error)), button("重新读取", retry)); };
@@ -54,6 +57,36 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
   };
   const reveal = id => { if (!entries.has(id)) return; layout.active = id; if (layout.secondary === id) layout.secondary = ""; layout.open = true; remember(); render(); };
   const update = async (id, patch) => { const row = entries.get(id); const saved = await bound(row).call("panel.update", { id, revision: row.revision, ...patch }); entries.set(id, saved); remember(); render(); return saved; };
+  const handle = id => Object.freeze({ id, reveal: () => reveal(id), close: () => close(id), update: patch => update(id, patch) });
+  let fileRecordChanges = Promise.resolve();
+  fileEvents.addEventListener("changed", event => {
+    if (event.detail.kind !== "move") return;
+    fileRecordChanges = fileRecordChanges.then(async () => {
+      const change = event.detail, move = path => path ? relocatedPath(path, change.path, change.destination, change.directory) : path;
+      for (const [id, row] of entries) {
+        if (stopped || !["mdo.editor", "mdo.files"].includes(row.type) || row.context.project !== change.project || mounts.get(id)?.edit) continue;
+        // Mounted ready views retain their buffers themselves. Hidden/unready
+        // records still need their persisted path and private draft migrated.
+        const files = row.view_state?.files || {}, previous = row.params?.path || files.selected, next = move(previous), root = move(files.root), parameterRoot = move(row.params?.root);
+        if (next === previous && root === files.root && parameterRoot === row.params?.root) continue;
+        if (mounts.has(id)) disposeMount(id);
+        const drafts = createFileDrafts({ context: { ...row.context, target: displayTarget, extension: row.owner }, panel: id });
+        let draftSource = files.draft_path || "", copied = false;
+        if (previous && next !== previous) {
+          try { drafts.write(next, drafts.own(previous, draftSource) || { cleared: true }); copied = true; }
+          catch { draftSource ||= previous; }
+        }
+        const saved = await bound(row).call("panel.update", { id, revision: row.revision,
+          ...(row.params?.path ? { title: next.split(/[\\/]/).at(-1) } : {}),
+          params: { ...row.params, ...(row.params?.path ? { path: next } : {}), ...(row.params?.root ? { root: parameterRoot } : {}) },
+          view_state: { ...row.view_state, files: { ...files, selected: next, root, draft_path: copied ? "" : draftSource, expanded: (files.expanded || []).map(move) } },
+        });
+        entries.set(id, saved);
+        if (copied) try { drafts.clear(previous); if (draftSource && draftSource !== previous) drafts.clear(draftSource); } catch { /* Keep redundant working copies. */ }
+      }
+      remember(); render();
+    }).catch(error => { if (!stopped) toast(`文件已改名，但面板状态未保存：${error.message}`, "error"); });
+  });
   const rect = node => { const r = node.getBoundingClientRect(); return { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height), scale: window.devicePixelRatio || 1 }; };
   const browserViews = new Map();
   async function browserView(root, row, signal, mount) {
@@ -69,10 +102,10 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
     value.resizeObserver = new ResizeObserver(() => value.events.dispatchEvent(new CustomEvent("resize", { detail: rect(root) }))); value.resizeObserver.observe(root);
     try {
       const definition = definitions.get(row.type); if (!definition) throw new Error(`面板插件未加载：${row.type}`);
-      const sdk = bound(row), signal = abort.signal;
+      const sdk = bound(row), signal = abort.signal, context = Object.freeze({ ...row.context, target: displayTarget, extension: row.owner });
       if (definition.mount || definition.render) {
         const events = value.events;
-        const result = await (definition.mount || definition.render)(root, { panelId: row.id, sdk, api: sdk, context: Object.freeze({ ...row.context }), params: row.params || {}, resource: row.resource, signal, events,
+        const result = await (definition.mount || definition.render)(root, { panelId: row.id, sdk, api: sdk, context, params: row.params || {}, resource: row.resource, signal, events,
           addContext, viewState: row.view_state || {}, update: patch => update(row.id, patch), setDirty: callback => { value.dirty = callback; } });
         if (typeof result === "function") value.dispose = result; else if (result) Object.assign(value, result);
         if (signal.aborted) value.dispose?.(); return;
@@ -82,7 +115,7 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
         if (!render) throw new Error(`插件渲染器尚未加载：${definition.frontend || row.type}`);
         const resource = row.resource?.id ? await sdk.call("resource.get", { id: row.resource.id }, { signal }) : null;
         value.resourceRevision = resource?.revision || 0;
-        const dispose = await render(root, resource?.value ?? row.params ?? {}, { sdk, context: Object.freeze({ ...row.context }), signal, events: value.events, addContext });
+        const dispose = await render(root, resource?.value ?? row.params ?? {}, { sdk, context, signal, events: value.events, addContext });
         if (typeof dispose === "function") value.dispose = dispose; if (signal.aborted) value.dispose?.(); return;
       }
       if (definition.renderer === "browser") { await browserView(root, row, signal, value); return; }
@@ -255,10 +288,25 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
     if (stopped) throw new Error("工作区已退出");
     if (definition) definitions.set(type, definition);
     const client = scopedApi.bind({});
+    if (type === "mdo.editor" && params.params?.path) {
+      const scope = await client.call("sdk.context"); if (stopped) throw new Error("工作区已退出");
+      const same = (a, b) => (a || "") === (b || "");
+      const existing = [...entries.values()].find(row => row.type === type && filePathKey(row.params?.path) === filePathKey(params.params.path) && row.owner === scope.extension && ["project", "session", "run"].every(key => same(row.context[key], scope[key])));
+      if (existing) {
+        reveal(existing.id);
+        const mounted = mounts.get(existing.id);
+        if (params.params.edit && mounted?.edit) await mounted.edit();
+        if (params.params.line && mounted?.locate) await mounted.locate(params.params.line);
+        if ((!mounted?.edit && params.params.edit) || (!mounted?.locate && params.params.line)) {
+          await update(existing.id, { params: { ...existing.params, ...params.params } }); if (!mounts.get(existing.id)?.dirty?.()) remount(existing.id);
+        }
+        return handle(existing.id);
+      }
+    }
     const row = await client.call("panel.open", { ...params, type, client: clientId });
     entries.set(row.id, row); if (!layout.order.includes(row.id)) layout.order.push(row.id);
     if (params.reveal !== "background" || !layout.active) reveal(row.id); else { remember(); render(); }
-    return Object.freeze({ id: row.id, reveal: () => reveal(row.id), close: () => close(row.id), update: patch => update(row.id, patch) });
+    return handle(row.id);
   }
   async function newTab() { return open("mdo.new-tab", { title: "新标签页" }); }
   definitions.set("mdo.new-tab", { title: "新标签页", renderer: "custom", mount(root, { sdk, signal, panelId, context }) {
@@ -303,7 +351,7 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
     const panel = await open("mdo.editor", { key, title: path.split(/[\\/]/).at(-1), params: { path, space: "native", line } }, client);
     const locating = mounts.get(panel.id)?.locate?.(line); if (locating) await locating; return panel;
   };
-  for (const [id, title] of [["mdo.files", "文件"], ["mdo.editor", "文件"]]) definitions.set(id, { title, renderer: "custom", mount: (root, options) => mountFilesView(root, { ...options, openFile: path => openFile(path, options.sdk) }) });
+  for (const [id, title] of [["mdo.files", "文件"], ["mdo.editor", "文件"]]) definitions.set(id, { title, renderer: "custom", mount: (root, options) => mountFilesView(root, { ...options, fileEvents, openFile: path => openFile(path, options.sdk) }) });
   definitions.set("mdo.task-plan", { title: "会话计划", renderer: "custom", mount(root, { sdk, context, signal }) {
     if (!context.session) { root.append(make("p", "", "请先选择一个会话，查看它的任务计划。")); return; }
     let timer, previous = "";

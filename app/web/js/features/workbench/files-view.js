@@ -3,6 +3,8 @@ import { createSourceView } from "./source-view.js";
 import { fileEncoding, encodeFileText, fileBase64 } from "./file-codec.js";
 import { renderSourceMarkdown } from "../../utils/source-markdown.js";
 import { toast } from "../../utils/dom.js";
+import { createFileActions, filePathKey, relocatedPath, fileParent } from "./file-actions.js";
+import { createFileDrafts } from "./file-drafts.js";
 
 const join = (path, name) => `${path.replace(/[\\/]$/, "")}/${name}`;
 const name = path => path.split(/[\\/]/).at(-1);
@@ -11,12 +13,14 @@ const failToast = error => toast(error.message || String(error), "error");
 const EDIT_LIMIT = 1024 * 1024, VIEW_LIMIT = 2 * EDIT_LIMIT, IMAGE_LIMIT = 8 * EDIT_LIMIT;
 const imageType = path => /\.png$/i.test(path) ? "image/png" : /\.jpe?g$/i.test(path) ? "image/jpeg" : /\.gif$/i.test(path) ? "image/gif" : /\.webp$/i.test(path) ? "image/webp" : "";
 
-export async function mountFilesView(root, { sdk, context, params = {}, viewState = {}, signal, update, setDirty, addContext, openFile }) {
+export async function mountFilesView(root, { panelId, sdk, context, params = {}, viewState = {}, signal, update, setDirty, addContext, openFile, fileEvents = new EventTarget() }) {
   root.classList.add("wb-files-view");
   const saved = viewState.files || {}, expanded = new Set(saved.expanded || []);
+  const drafts = createFileDrafts({ context, panel: panelId }); let legacyDraft = null;
   let format = { encoding: "utf-8", bom: false, lineEnding: "\n" };
   let directory = saved.root || params.root || (await sdk.call("files.resolve", { path: ".", ...(context.project === "default" ? { prepare_default: true } : {}) }, { signal })).path;
-  let hidden = Boolean(saved.hidden), file = null, text = "", decoder, readOffset = 0, binary = false, image = "", imageUrl = "", editing = false, dirty = false, loading = false, saving = false, conflict = false, source, watchTimer, searchTimer, saveTimer, sequence = 0, searchSequence = 0;
+  let hidden = Boolean(saved.hidden), file = null, draftRevision = "", text = "", decoder, readOffset = 0, binary = false, image = "", imageUrl = "", editing = false, dirty = false, loading = false, saving = false, conflict = false, missing = false, mutating = false, selectedEntry, editorPath = params.path, draftSource = saved.draft_path || "", draftFailed = false, treeDirty = false, source, watchTimer, searchTimer, saveTimer, treeTimer, sequence = 0, searchSequence = 0, watchAt = 0;
+  const directories = new Map(), rowMenus = new Map();
   const bar = make("div", "wb-files-toolbar"), heading = make("span", "wb-file-path", "文件"), body = make("div", "wb-files-body"), main = make("div", "wb-file-main"), content = make("div", "wb-file-content"), info = make("div", "wb-file-info"), tree = make("aside", "wb-file-tree"), treeHeading = make("div", "wb-tree-heading"), treeBody = make("div", "wb-tree-body"), search = make("input", "wb-file-search");
   const action = (glyph, label, run) => iconButton(glyph, label, run, failToast);
   const edit = action("compose", "编辑文件", () => editFile()), save = action("download", "保存文件", () => saveFile()), quote = action("review", "引用到对话", () => quoteFile());
@@ -41,7 +45,8 @@ export async function mountFilesView(root, { sdk, context, params = {}, viewStat
   quote.onpointerdown = event => event.preventDefault();
   bar.append(heading, edit, save, quote, preview, showTree, more); main.append(content, info);
   search.placeholder = "搜索文件…"; search.setAttribute("aria-label", "搜索项目文件");
-  treeHeading.append(make("span", "", name(directory) || directory), action("refresh", "刷新目录", () => refreshTree()));
+  const newEntry = action("plus", "新建文件或文件夹", () => {});
+  treeHeading.append(make("span", "", name(directory) || directory), newEntry, action("refresh", "刷新目录", () => refreshTree()));
   const separator = make("div", "wb-file-tree-resize"); separator.tabIndex = 0; separator.setAttribute("role", "separator"); separator.setAttribute("aria-label", "调整目录树宽度"); separator.setAttribute("aria-orientation", "vertical"); tree.style.width = `${treeWidth}px`;
   let pointerX = 0, pointerWidth = 0;
   separator.onpointerdown = event => { pointerX = event.clientX; pointerWidth = treeWidth; separator.setPointerCapture(event.pointerId); event.preventDefault(); };
@@ -52,22 +57,23 @@ export async function mountFilesView(root, { sdk, context, params = {}, viewStat
   tree.append(separator, search, treeHeading, treeBody); body.append(main, tree); root.append(bar, findBar, body); tree.hidden = Boolean(saved.treeHidden);
   let previousWidth = 0; const sizing = new ResizeObserver(() => { const width = root.clientWidth; if (!width) return; if (width < 400 && width !== previousWidth && file) tree.hidden = true; previousWidth = width; }); sizing.observe(root);
   const currentPath = () => file?.path || "";
-  const draftKey = () => `mdo.file.draft.${JSON.stringify([context.device, context.project, currentPath()])}`;
-  const remember = () => {
-    clearTimeout(saveTimer); saveTimer = setTimeout(() => {
-      if (!signal.aborted) void update({ view_state: { ...viewState, files: { root: directory, expanded: [...expanded].slice(0, 256), hidden, selected: currentPath(), treeHidden: tree.hidden, treeWidth } } }).catch(failToast);
-    }, 350);
+  const statePatch = () => ({ ...(editorPath ? { title: name(editorPath), params: { ...params, path: editorPath } } : {}), view_state: { ...viewState, files: { root: directory, expanded: [...expanded].slice(0, 256), hidden, selected: currentPath(), draft_path: draftSource, treeHidden: tree.hidden, treeWidth } } });
+  const remember = (immediate = false) => {
+    clearTimeout(saveTimer);
+    const persist = () => !signal.aborted && update(statePatch()).catch(error => { if (!signal.aborted) failToast(new Error(`面板状态未保存：${error.message}`)); });
+    if (immediate) return persist(); saveTimer = setTimeout(persist, 350);
   };
   const draft = () => {
-    if (!dirty || !file) return;
-    try { localStorage.setItem(draftKey(), JSON.stringify({ revision: file.revision, text, savedAt: Date.now() })); }
-    catch { info.textContent = "草稿暂未保存到本机；请保留页面并保存文件。"; }
+    if (!dirty || !file) return true;
+    try { drafts.write(currentPath(), { revision: draftRevision || file.revision, text, savedAt: Date.now() }); draftFailed = false; return true; }
+    catch { draftFailed = true; info.textContent = "草稿暂未保存到本机；请保留页面并保存文件。"; return false; }
   };
   setDirty(() => dirty);
   const controls = () => {
     heading.textContent = currentPath() ? `${dirty ? "● " : ""}${name(currentPath())}` : "文件"; heading.title = currentPath() || directory;
-    edit.hidden = !file || binary || Boolean(image) || editing; edit.disabled = loading || !file || file.size > EDIT_LIMIT;
-    save.hidden = !editing; save.disabled = !dirty || loading || conflict;
+    edit.hidden = !file || binary || Boolean(image) || editing; edit.disabled = loading || mutating || !file || missing || file.size > EDIT_LIMIT;
+    save.hidden = !editing; save.disabled = !dirty || loading || mutating || conflict || missing;
+    newEntry.disabled = mutating;
     quote.disabled = !file || Boolean(image) || binary;
     preview.hidden = !file || !/\.md$/i.test(file.path) || editing;
   };
@@ -94,10 +100,14 @@ export async function mountFilesView(root, { sdk, context, params = {}, viewStat
   const showInfo = () => {
     info.replaceChildren();
     if (!file) return;
-    if (conflict) {
+    if (legacyDraft) info.append(action("refresh", "恢复旧版草稿（来源设备未记录）", () => { text = legacyDraft.text; draftRevision = legacyDraft.revision; editing = dirty = true; conflict = draftRevision !== file.revision; legacyDraft = null; draft(); renderContent(); showInfo(); }));
+    if (draftFailed) info.append(make("span", "wb-error", "草稿暂未保存到本机，请保留页面并保存文件。"));
+    if (missing) { info.append(make("span", "wb-error", "文件已删除或移动；当前内容保留，未保存编辑仍是本机草稿。")); }
+    else if (conflict) {
       info.append(make("span", "wb-error", "文件已被外部修改，编辑内容已保留。"), action("split", "比较磁盘内容", () => compare()), action("refresh", "重新读取磁盘文件", async () => {
         if (!confirm("放弃当前编辑，使用磁盘上的版本？")) return;
-        try { localStorage.removeItem(draftKey()); } catch { /* Explicit discard also suppresses restoring this draft. */ }
+        try { drafts.clear(currentPath()); if (draftSource) drafts.clear(draftSource); } catch { /* Explicit discard also suppresses restoring this draft in the live view. */ }
+        draftSource = "";
         dirty = false; await loadFile(file.path, { force: true, discardDraft: true });
       }));
     } else {
@@ -125,11 +135,13 @@ export async function mountFilesView(root, { sdk, context, params = {}, viewStat
   const loadFile = async (path, { force = false, discardDraft = false } = {}) => {
     if (saving) throw new Error("文件正在保存，请等待保存完成后再切换。");
     if (dirty && !force && !confirm("当前编辑尚未保存，仍要读取其他内容吗？本机草稿会保留。")) return;
-    draft(); const request = ++sequence; loading = true; controls();
+    if (dirty && !draft()) throw new Error("草稿未能保存，请先保存当前编辑后再切换文件。");
+    const fallbackDraft = !file || filePathKey(path) === filePathKey(file.path) ? draftSource : "";
+    const request = ++sequence; loading = true; controls();
     try {
       const value = await sdk.call("files.read", { path, space: "native", offset: 0, limit: 262144 }, { signal });
       if (request !== sequence || signal.aborted) return;
-      source?.dispose(); clearImage(); file = { ...value, path }; text = ""; image = ""; binary = false; editing = false; dirty = false; conflict = false; readOffset = value.next; main.dataset.markdown = "";
+      source?.dispose(); clearImage(); file = { ...value, path }; draftRevision = value.revision; text = ""; image = ""; binary = false; editing = false; dirty = false; conflict = false; missing = false; draftFailed = false; draftSource = fallbackDraft; readOffset = value.next; main.dataset.markdown = ""; selectedEntry = file; if (editorPath) editorPath = path;
       const buffer = bytes(value.base64), type = imageType(path);
       format = { ...fileEncoding(buffer), lineEnding: "\n" }; decoder = new TextDecoder(format.encoding, { fatal: true });
       if (type && file.size <= IMAGE_LIMIT) {
@@ -145,15 +157,22 @@ export async function mountFilesView(root, { sdk, context, params = {}, viewStat
       }
       if (request !== sequence || signal.aborted) return;
       try {
-        const stored = JSON.parse(localStorage.getItem(draftKey()) || "null");
-        if (!discardDraft && !image && !binary && stored && typeof stored.text === "string" && stored.text.replace(/\r\n/g, "\n") !== text.replace(/\r\n/g, "\n") && stored.text.length <= EDIT_LIMIT) { text = stored.text; editing = true; dirty = true; conflict = stored.revision !== file.revision; }
+        const stored = drafts.read(currentPath(), draftSource); legacyDraft = null;
+        if (!discardDraft && !image && !binary && stored && typeof stored.text === "string" && stored.text.replace(/\r\n/g, "\n") !== text.replace(/\r\n/g, "\n") && stored.text.length <= EDIT_LIMIT) { text = stored.text; draftRevision = stored.revision; editing = true; dirty = true; conflict = draftRevision !== file.revision; draft(); }
+        else if (!discardDraft && !stored) { const old = drafts.legacy(currentPath()); if (old && old.text.replace(/\r\n/g, "\n") !== text.replace(/\r\n/g, "\n")) legacyDraft = old; }
       } catch { /* The file remains readable when draft storage is unavailable. */ }
-      renderContent(); showInfo(); if (root.clientWidth < 400) tree.hidden = true; remember();
-    } catch (error) { if (!signal.aborted && request === sequence) { content.replaceChildren(make("p", "wb-error", error.message)); info.replaceChildren(action("refresh", "重新读取文件", () => loadFile(path))); } }
+      renderContent(); showInfo(); if (root.clientWidth < 400) tree.hidden = true; await remember(true);
+    } catch (error) { if (!signal.aborted && request === sequence) {
+      let stored;
+      if (error.status === 404) try { stored = drafts.read(path, fallbackDraft); } catch { /* Keep an unreadable draft; never overwrite it. */ }
+      if (stored && typeof stored.text === "string" && stored.text.length <= EDIT_LIMIT) {
+        clearImage(); image = ""; binary = false; file = { path, revision: stored.revision, size: 0, type: 1 }; draftRevision = stored.revision; text = stored.text; missing = true; dirty = editing = true; conflict = false; renderContent(); showInfo(); await remember(true);
+      } else { content.replaceChildren(make("p", "wb-error", error.message)); info.replaceChildren(action("refresh", "重新读取文件", () => loadFile(path))); }
+    } }
     finally { if (request === sequence) { loading = false; controls(); } }
   };
   const editFile = async () => {
-    if (loading || !file || file.size > EDIT_LIMIT || binary || image) return;
+    if (loading || mutating || missing || !file || file.size > EDIT_LIMIT || binary || image) return;
     const request = sequence;
     while (readOffset < file.size) { if (request !== sequence || !await loadMore()) return; }
     editing = true; renderContent(); content.querySelector("textarea")?.focus();
@@ -172,6 +191,7 @@ export async function mountFilesView(root, { sdk, context, params = {}, viewStat
   };
   const saveFile = async () => {
     if (!dirty || loading || !file) return;
+    if (mutating || missing) throw new Error("文件正在变更或已被移除，编辑内容已保留，请先检查文件状态。");
     if (conflict) throw new Error("磁盘内容已改变，请先比较或重新读取；编辑草稿仍然保留。");
     const encoded = encodeFileText(text, format);
     if (encoded.length > EDIT_LIMIT) throw new Error("编辑内容超过 1 MiB，请使用外部编辑器保存。");
@@ -179,8 +199,9 @@ export async function mountFilesView(root, { sdk, context, params = {}, viewStat
     try {
       const saved = await sdk.call("files.write", { path: file.path, space: "native", revision: file.revision, base64: fileBase64(encoded) }, { signal });
       if (signal.aborted) return;
-      file = { ...file, ...saved }; dirty = false; readOffset = file.size;
-      try { localStorage.removeItem(draftKey()); } catch { /* A matching saved draft is ignored on reopen. */ }
+      file = { ...file, ...saved }; draftRevision = saved.revision; dirty = false; readOffset = file.size;
+      try { drafts.clear(currentPath()); if (draftSource) drafts.clear(draftSource); } catch { /* A matching saved draft is ignored on reopen. */ }
+      draftSource = ""; draftFailed = false; remember();
       showInfo(); controls(); toast("文件已保存", "success");
     } catch (error) { if (error.status === 412) { conflict = true; draft(); showInfo(); } throw error; }
     finally { loading = false; saving = false; controls(); }
@@ -196,67 +217,155 @@ export async function mountFilesView(root, { sdk, context, params = {}, viewStat
     if (!file) return;
     const selected = source?.selection() || (editing && (() => { const input = content.querySelector("textarea"); return input?.selectionEnd > input?.selectionStart ? { text: text.slice(input.selectionStart, input.selectionEnd), start: text.slice(0, input.selectionStart).split("\n").length } : null; })());
     if ((selected?.text.length || 0) > 32768) throw new Error("选中内容超过 32 KiB，请缩小选择范围。");
-    addContext({ title: selected ? `${name(file.path)}:${selected.start}${selected.end > selected.start ? `-${selected.end}` : ""}` : name(file.path), source: file.path, context, content: selected?.text || `文件路径：${file.path}` });
+    addContext({ title: selected ? `${name(file.path)}:${selected.start}${selected.end > selected.start ? `-${selected.end}` : ""}` : name(file.path), source: file.path, context, content: `${missing ? "文件已移除，以下内容来自界面缓存。\n" : ""}${selected?.text || `文件路径：${file.path}`}` });
   };
+  const creationDirectory = () => selectedEntry && filePathKey(selectedEntry.path).startsWith(`${filePathKey(directory)}/`) ? selectedEntry.type === 2 ? selectedEntry.path : fileParent(selectedEntry.path) : directory;
+  const fileActions = createFileActions({ sdk, context, signal, directory: () => directory, events: fileEvents,
+    state: value => { mutating = value; root.toggleAttribute("aria-busy", value); controls(); },
+    refresh: () => refreshTree({ keepSearch: true }),
+    created: async (path, folder, metadata) => {
+      if (folder) { expanded.add(path); selectedEntry = { ...metadata, path, type: 2 }; }
+      await refreshTree({ keepSearch: true });
+      if (!folder) { await loadFile(path); if (filePathKey(currentPath()) === filePathKey(path)) await editFile(); }
+    },
+  });
+  const disposeRows = parent => { for (const [node, menu] of rowMenus) if (parent.contains(node) || !node.isConnected) { menu.dispose(); rowMenus.delete(node); } };
+  const queueTreeRefresh = () => {
+    treeDirty = true; clearTimeout(treeTimer); treeTimer = setTimeout(() => { if (!signal.aborted && !root.hidden) void refreshTree({ keepSearch: true }); }, 100);
+  };
+  let fileChanges = Promise.resolve();
+  fileEvents.addEventListener("changed", event => { fileChanges = fileChanges.then(async () => {
+    const change = event.detail; if (change.project !== context.project || signal.aborted) return;
+    if (change.kind === "move") {
+      const move = path => relocatedPath(path, change.path, change.destination, change.directory);
+      directory = move(directory); const changedExpanded = [...expanded].map(move); expanded.clear(); changedExpanded.forEach(path => expanded.add(path));
+      if (selectedEntry) selectedEntry = { ...selectedEntry, path: move(selectedEntry.path) };
+      if (file && move(file.path) !== file.path) {
+        const oldPath = file.path, oldDraft = draftSource || oldPath; file = { ...file, path: move(file.path) }; if (editorPath) editorPath = file.path;
+        let savedDraft = false;
+        if (dirty) savedDraft = draft();
+        else try { drafts.write(file.path, drafts.own(oldPath, oldDraft) || { cleared: true }); savedDraft = true; } catch { /* Preserve the old clean marker as a fallback. */ }
+        draftSource = savedDraft ? "" : oldDraft;
+        content.querySelector("textarea")?.setAttribute("aria-label", `编辑 ${name(file.path)}`);
+        clearTimeout(saveTimer); await update(statePatch());
+        if (savedDraft) try { drafts.clear(oldPath); if (oldDraft !== oldPath) drafts.clear(oldDraft); } catch { /* Retain redundant draft data when cleanup fails. */ }
+        controls(); showInfo();
+      } else remember();
+    } else if (change.kind === "remove" && file && relocatedPath(file.path, change.path, "", change.directory) !== file.path) { missing = true; draft(); showInfo(); controls(); }
+    queueTreeRefresh();
+  }).catch(error => { queueTreeRefresh(); controls(); showInfo(); if (!signal.aborted) failToast(error); }); }, { signal });
   const menus = [popupMenu(more, () => [
     { label: "查找已加载内容", disabled: !file || binary || Boolean(image), execute: showFind },
     { label: "跳转到行…", disabled: !file || binary || Boolean(image), execute: () => { const line = prompt("输入行号", "1"); if (line && /^\d+$/.test(line)) moveTo(line); } },
     { label: "复制文件路径", disabled: !file, execute: () => navigator.clipboard.writeText(file.path) },
+    { label: "重命名文件…", disabled: !file || missing || mutating, execute: () => fileActions.rename(file) },
+    { label: "删除文件…", disabled: !file || missing || mutating, execute: () => fileActions.remove(file) },
+    { label: "新建文件…", disabled: mutating, execute: () => fileActions.create(creationDirectory()) },
+    { label: "新建文件夹…", disabled: mutating, execute: () => fileActions.create(creationDirectory(), true) },
     { label: "在目标设备的系统应用打开", disabled: !file, execute: () => sdk.call("system.open", { target: file.path }, { signal }) },
     { label: "显示隐藏文件", checked: hidden, execute: () => { hidden = !hidden; remember(); return refreshTree(); } },
     { label: "打开其他目录…", execute: async () => { const path = prompt("输入要浏览的目录路径", directory); if (!path) return; directory = (await sdk.call("files.resolve", { path, space: "native" }, { signal })).path; expanded.clear(); remember(); return refreshTree(); } },
+  ], { signal, onError: failToast }), popupMenu(newEntry, () => [
+    { label: "新建文件…", disabled: mutating, execute: () => fileActions.create(creationDirectory()) },
+    { label: "新建文件夹…", disabled: mutating, execute: () => fileActions.create(creationDirectory(), true) },
   ], { signal, onError: failToast })];
+  const entryRow = (item, path, label = item.name, searching = false) => {
+    const row = make("div", "wb-tree-entry"), line = make("div", "wb-tree-line"), button = make("button", "wb-tree-item"), children = make("div", "wb-tree-children"), entry = { ...item, path };
+    button.type = "button"; button.title = path; button.dataset.path = path; button.append(icon(item.type === 2 ? "folder" : "file"), make("span", "wb-tree-label", label));
+    const actions = action("more", `更多操作：${label}`, () => {}); actions.classList.add("wb-tree-actions");
+    line.append(button, actions); row.append(line);
+    rowMenus.set(row, popupMenu(actions, () => [
+      ...(item.type === 2 ? [{ label: "新建文件…", disabled: mutating, execute: () => fileActions.create(path) }, { label: "新建文件夹…", disabled: mutating, execute: () => fileActions.create(path, true) }] : []),
+      { label: "重命名…", disabled: mutating, execute: () => fileActions.rename(entry) },
+      { label: "删除…", disabled: mutating, execute: () => fileActions.remove(entry) },
+      { label: "复制路径", execute: () => navigator.clipboard.writeText(path) },
+    ], { signal, onError: failToast }));
+    line.oncontextmenu = event => { event.preventDefault(); selectedEntry = entry; actions.click(); };
+    button.onkeydown = event => { if (event.key === "F2" || event.key === "Delete") { event.preventDefault(); event.stopPropagation(); void (event.key === "F2" ? fileActions.rename(entry) : fileActions.remove(entry)).catch(failToast); } };
+    if (item.type === 2) {
+      children.hidden = !expanded.has(path); button.setAttribute("aria-expanded", String(!children.hidden)); if (!searching) row.append(children);
+      button.onclick = () => {
+        selectedEntry = entry;
+        if (searching) { expanded.add(path); void refreshTree().catch(failToast); return; }
+        children.hidden = !children.hidden; button.setAttribute("aria-expanded", String(!children.hidden));
+        if (children.hidden) expanded.delete(path); else { expanded.add(path); void populate(children, path).catch(failToast); } remember();
+      };
+      if (!searching && !children.hidden) queueMicrotask(() => { if (row.isConnected) void populate(children, path).catch(failToast); });
+    } else { button.onclick = () => { selectedEntry = entry; void loadFile(path).catch(failToast); }; button.ondblclick = () => void openFile(path).catch(failToast); }
+    return row;
+  };
   const populate = async (parent, path, reset = true) => {
+    const request = Symbol(); parent.request = request;
     const old = reset ? { next: 0, revision: undefined } : parent.page;
-    const page = await sdk.call("files.directory", { path, space: "native", offset: old.next, limit: 128, hidden, ...(old.revision ? { revision: old.revision } : {}) }, { signal });
-    if (signal.aborted) return;
-    if (reset) parent.replaceChildren(); else parent.querySelector(":scope > .wb-tree-more")?.remove(); parent.page = { next: page.next, revision: page.revision };
-    for (const item of page.items.sort((a, b) => Number(b.type === 2) - Number(a.type === 2) || a.name.localeCompare(b.name))) {
-      const childPath = join(path, item.name), row = make("div", "wb-tree-entry"), button = make("button", "wb-tree-item"), children = make("div", "wb-tree-children");
-      button.type = "button"; button.title = childPath; button.append(icon(item.type === 2 ? "folder" : "file"), document.createTextNode(item.name)); row.append(button); button.dataset.path = childPath;
-      if (item.type === 2) {
-        children.hidden = !expanded.has(childPath); button.setAttribute("aria-expanded", String(!children.hidden)); row.append(children);
-        button.onclick = async () => { children.hidden = !children.hidden; button.setAttribute("aria-expanded", String(!children.hidden)); if (children.hidden) expanded.delete(childPath); else expanded.add(childPath); remember(); if (!children.hidden && !children.childElementCount) await populate(children, childPath).catch(failToast); };
-        if (!children.hidden) void populate(children, childPath).catch(failToast);
-      } else {
-        button.onclick = () => void loadFile(childPath).catch(failToast); button.ondblclick = () => void openFile(childPath).catch(failToast);
-      }
-      parent.append(row);
-    }
+    let page;
+    try { page = await sdk.call("files.directory", { path, space: "native", offset: old.next, limit: 128, hidden, ...(old.revision ? { revision: old.revision } : {}) }, { signal }); }
+    catch (error) { if (!signal.aborted && parent.request === request && parent.isConnected) throw error; return; }
+    if (signal.aborted || parent.request !== request || !parent.isConnected) return;
+    if (reset) {
+      disposeRows(parent); for (const [key, value] of directories) if (value.node !== parent && (!value.node.isConnected || parent.contains(value.node))) directories.delete(key);
+      parent.replaceChildren();
+    } else parent.querySelector(":scope > .wb-tree-more")?.remove();
+    parent.page = { next: page.next, revision: page.revision }; directories.set(path, { node: parent, revision: page.revision });
+    for (const item of page.items.sort((a, b) => Number(b.type === 2) - Number(a.type === 2) || a.name.localeCompare(b.name))) parent.append(entryRow(item, join(path, item.name)));
     if (page.more) { const next = action("plus", "加载更多文件", () => populate(parent, path, false)); next.classList.add("wb-tree-more"); parent.append(next); }
   };
-  const refreshTree = async () => {
-    searchSequence++; search.value = ""; treeHeading.querySelector("span").textContent = name(directory) || directory;
-    try { await populate(treeBody, directory); } catch (error) { if (!signal.aborted) treeBody.replaceChildren(make("p", "wb-error", error.message), action("refresh", "重新读取目录", refreshTree)); }
+  const runSearch = async (query, request) => {
+    try {
+      const result = await sdk.call("files.search", { path: directory, space: "native", query, hidden, limit: 100 }, { signal });
+      if (signal.aborted || request !== searchSequence) return;
+      treeBody.request = Symbol(); disposeRows(treeBody); treeBody.replaceChildren();
+      for (const item of result.items) treeBody.append(entryRow(item, join(directory, item.path), item.path, true));
+      if (!result.items.length) treeBody.append(make("p", "", "未找到匹配文件"));
+      if (result.incomplete) treeBody.append(make("p", "wb-file-search-note", "搜索尚未覆盖全部目录或达到结果上限，请缩小搜索范围。"));
+      return true;
+    } catch (error) { if (!signal.aborted && request === searchSequence) { disposeRows(treeBody); treeBody.replaceChildren(make("p", "wb-error", error.message)); } return false; }
+  };
+  const refreshTree = async ({ keepSearch = false } = {}) => {
+    treeDirty = false; clearTimeout(treeTimer); clearTimeout(searchTimer); const request = ++searchSequence;
+    treeHeading.querySelector("span").textContent = name(directory) || directory;
+    if (keepSearch && search.value.trim()) return runSearch(search.value.trim(), request);
+    search.value = "";
+    try { await populate(treeBody, directory); return true; } catch (error) { if (!signal.aborted) { disposeRows(treeBody); treeBody.replaceChildren(make("p", "wb-error", error.message), action("refresh", "重新读取目录", () => refreshTree())); } return false; }
   };
   search.oninput = () => {
-    clearTimeout(searchTimer); const query = search.value.trim(), request = ++searchSequence;
-    searchTimer = setTimeout(async () => {
-      try {
-        if (!query) { await refreshTree(); return; }
-        const result = await sdk.call("files.search", { path: directory, space: "native", query, hidden, limit: 100 }, { signal });
-        if (signal.aborted || request !== searchSequence) return;
-        treeBody.replaceChildren();
-        for (const item of result.items) { const path = join(directory, item.path), button = make("button", "wb-tree-item", item.path); button.type = "button"; button.title = path; button.onclick = () => void (item.type === 2 ? (expanded.add(path), refreshTree()) : loadFile(path)).catch(failToast); button.ondblclick = () => { if (item.type !== 2) void openFile(path).catch(failToast); }; treeBody.append(button); }
-        if (!result.items.length) treeBody.append(make("p", "", "未找到匹配文件"));
-        if (result.incomplete) treeBody.append(make("p", "wb-file-search-note", "搜索尚未覆盖全部目录或达到结果上限，请缩小搜索范围。"));
-      } catch (error) { if (!signal.aborted && request === searchSequence) treeBody.replaceChildren(make("p", "wb-error", error.message)); }
-    }, 250);
+    clearTimeout(searchTimer); const query = search.value.trim(), request = ++searchSequence; treeBody.request = Symbol();
+    searchTimer = setTimeout(() => { void (query ? runSearch(query, request) : refreshTree()); }, 250);
   };
   const watch = async () => {
     try {
-      if (file && !root.hidden && !loading) {
-        const metadata = await sdk.call("files.stat", { path: file.path, space: "native" }, { signal });
-        if (metadata.revision !== file.revision) { if (dirty) { conflict = true; showInfo(); controls(); } else await loadFile(file.path, { force: true }); }
+      if (!root.hidden && !loading && !mutating) {
+        const visible = [...directories].filter(([, value]) => value.node.isConnected && !value.node.closest("[hidden]"));
+        const checking = visible.length ? Array.from({ length: Math.min(16, visible.length) }, (_, index) => visible[(watchAt + index) % visible.length]) : []; watchAt += 16;
+        const before = file && { path: file.path, revision: file.revision }, paths = [...new Set([...(before ? [before.path] : []), ...checking.map(([path]) => path)])];
+        if (!paths.length) return;
+        const result = await sdk.call("files.inspect", { paths, space: "native" }, { signal }); if (signal.aborted || loading || mutating) return;
+        const records = new Map(result.map(item => [item.path, item]));
+        if (before && file?.path === before.path && file.revision === before.revision) {
+          const metadata = records.get(before.path);
+          if (!metadata) throw new Error("文件状态回应不完整，已保留原有内容。");
+          if (metadata.status === 404) { missing = true; draft(); showInfo(); controls(); }
+          else if (metadata.error) { info.textContent = `文件状态暂不可用，内容已保留：${metadata.error}`; }
+          else if (missing || metadata.revision !== file.revision) { missing = false; if (dirty) { conflict = true; showInfo(); controls(); } else await loadFile(file.path, { force: true }); }
+        }
+        for (const [path, value] of checking) {
+          if (directories.get(path) !== value || !value.node.isConnected) continue;
+          const metadata = records.get(path);
+          if (!metadata) continue;
+          if (metadata.error) { let note = value.node.querySelector(":scope > .wb-tree-unavailable"); if (!note) { note = make("p", "wb-tree-unavailable"); value.node.prepend(note); } note.textContent = `目录状态暂不可用：${metadata.error}`; value.failed = true; }
+          else if (value.failed || metadata.revision !== value.revision) {
+            if (value.node === treeBody) { value.failed = true; if (await refreshTree({ keepSearch: true })) { value.revision = metadata.revision; value.failed = false; } break; }
+            else await populate(value.node, path);
+          }
+        }
       }
     } catch (error) { if (!signal.aborted) { info.textContent = `文件状态暂不可用：${error.message}`; } }
     finally { if (!signal.aborted) watchTimer = setTimeout(watch, 2500); }
   };
-  signal.addEventListener("abort", () => { clearTimeout(watchTimer); clearTimeout(searchTimer); clearTimeout(saveTimer); draft(); clearImage(); source?.dispose(); sizing.disconnect(); menus.forEach(menu => menu.dispose()); }, { once: true });
+  signal.addEventListener("abort", () => { clearTimeout(watchTimer); clearTimeout(searchTimer); clearTimeout(saveTimer); clearTimeout(treeTimer); draft(); clearImage(); source?.dispose(); sizing.disconnect(); menus.forEach(menu => menu.dispose()); disposeRows(treeBody); }, { once: true });
   controls(); renderContent(); await refreshTree();
   if (params.path || saved.selected) await loadFile(params.path || saved.selected, { force: true });
   if (params.edit && !editing && !signal.aborted) await editFile();
   if (params.line > 1 && !signal.aborted) await locate(params.line);
   if (!signal.aborted) void watch();
-  return { locate };
+  return { locate, edit: editFile, visible(shown) { if (shown && treeDirty) void refreshTree({ keepSearch: true }); } };
 }

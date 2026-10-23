@@ -94,7 +94,25 @@ try{
  document.querySelector('[aria-label="保存文件"]').click();let saved;
  for(let i=0;i<100;i++){await pause(100);saved=await mdo.files.read({path});if(saved.text==='Native file editor saved\r\n')break;}
  if(saved.text!=='Native file editor saved\r\n')throw Error('Native file editing did not preserve CRLF');
- await fetch(TARGET+'/result',{method:'POST',mode:'no-cors',body:JSON.stringify({passed:true,application:true,screenshot_bytes:image.data.length})});
+ const view=()=>document.querySelector('.wb-files-view:not([hidden])');
+ const menu=label=>{view().querySelector('[aria-label="文件更多操作"]').click();const item=[...document.querySelectorAll('[role="menuitem"]')].find(item=>item.textContent===label);if(!item)throw Error('Missing native file action: '+label);item.click();};
+ const prompt=window.prompt,confirm=window.confirm;
+ try{
+  window.prompt=()=> 'native-created.txt';menu('新建文件…');
+  for(let i=0;i<100;i++){await pause(100);if(view().querySelector('[aria-label="编辑 native-created.txt"]'))break;}
+  input=view().querySelector('[aria-label="编辑 native-created.txt"]');if(!input)throw Error('Native create did not open the new editor');
+  input.value='Native renamed draft 🌙\n';input.dispatchEvent(new Event('input',{bubbles:true}));
+  window.prompt=()=> 'native-renamed.txt';menu('重命名文件…');
+  for(let i=0;i<100;i++){await pause(100);if(view().querySelector('[aria-label="编辑 native-renamed.txt"]'))break;}
+  input=view().querySelector('[aria-label="编辑 native-renamed.txt"]');if(input?.value!=='Native renamed draft 🌙\n')throw Error('Native rename lost the working copy');
+  view().querySelector('[aria-label="保存文件"]').click();const renamed=path.replace(/[^\\/]+$/,'native-renamed.txt');
+  for(let i=0;i<100;i++){await pause(100);saved=await mdo.files.read({path:renamed});if(saved.text==='Native renamed draft 🌙\n')break;}
+  if(saved.text!=='Native renamed draft 🌙\n')throw Error('Native renamed editor did not save to its new path');
+  window.confirm=()=>true;menu('删除文件…');
+  for(let i=0;i<100;i++){await pause(100);if(view().textContent.includes('文件已删除或移动'))break;}
+  if(!view().textContent.includes('文件已删除或移动'))throw Error('Native deletion lost its visible missing-file state');
+ }finally{window.prompt=prompt;window.confirm=confirm;}
+ await fetch(TARGET+'/result',{method:'POST',mode:'no-cors',body:JSON.stringify({passed:true,application:true,file_actions:true,screenshot_bytes:image.data.length})});
 }catch(error){await fetch(TARGET+'/result',{method:'POST',mode:'no-cors',body:JSON.stringify({passed:false,error:String(error.stack||error)})})}
 '''
 CHANGES_SCRIPT=r'''
