@@ -1998,3 +1998,15 @@
 +    if(WindowSaveTimer){g_source_remove(WindowSaveTimer);WindowSaveTimer=0;}
 +    WindowCapture();WindowSave(NULL);g_free(WindowStatePath);WindowStatePath=NULL;
 +}
+--- a/lib/xrt.h
++++ b/lib/xrt.h
+@@ -313500,7 +313500,8 @@
+ 			);
+ 			goto cleanup;
+ 		}
+-		iFlags |= CREATE_NEW_PROCESS_GROUP | CREATE_SUSPENDED;
++		/* ConPTY owns its console; Job still owns the process tree. */
++		iFlags |= CREATE_SUSPENDED;
+ 	}
+ 	if ( !CreateProcessW(
+ 		sProgram,

@@ -190,6 +190,8 @@ def prepare_sdk_overlay(source: Path, lock: dict) -> Path:
         extracted.mkdir()
         with tarfile.open(archive) as contents:
             contents.extractall(extracted, filter="data")
+        if record.get("xrt_single_header_sha256") and source_file_sha256(extracted / "lib/xrt.h") != lock["xrt"]["single_header_sha256"]:
+            raise BuildError("SDK patch base xrt header differs from the locked upstream header")
         subprocess.run(["git", "apply", "--whitespace=nowarn",
                         str(patch)], cwd=extracted, check=True)
         verify_dependencies(extracted, lock)
@@ -276,7 +278,8 @@ def verify_dependencies(xserver: Path, lock: dict) -> None:
         verify_version(oauth_root / "xoauth2.h", ("XOAUTH2_VERSION_MAJOR", "XOAUTH2_VERSION_MINOR", "XOAUTH2_VERSION_PATCH"), "2.0.0")
     xrt_commit = locked_commit(xrt, "xrt")
     header = xserver / "lib" / "xrt.h"
-    if source_file_sha256(header) != xrt.get("single_header_sha256"):
+    expected_xrt = lock.get("sdk_overlay", {}).get("xrt_single_header_sha256", xrt.get("single_header_sha256"))
+    if source_file_sha256(header) != expected_xrt:
         raise BuildError("xserver lib/xrt.h does not match the locked xrt single header")
     if macro(header.read_text(encoding="utf-8"), "XRT_VERSION_TEXT") != xrt.get("version"):
         raise BuildError("xserver lib/xrt.h version does not match deps.lock")

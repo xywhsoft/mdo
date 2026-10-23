@@ -50,7 +50,8 @@ def main():
   log=(base/'host.log').open('wb')
   def start():
    nonlocal process
-   process=subprocess.Popen([str(args.host.resolve()),str(config),'--','--home',str(home)],cwd=base,env={**os.environ,'USE_WEBVIEW':'0'},stdout=log,stderr=log)
+   environment={key:value for key,value in os.environ.items() if os.name!='nt' or key.lower()!='psmodulepath'}
+   process=subprocess.Popen([str(args.host.resolve()),str(config),'--','--home',str(home)],cwd=base,env={**environment,'USE_WEBVIEW':'0'},stdout=log,stderr=log)
    wait_ready(port,process)
   def stop():
    if process and process.poll() is None:
@@ -82,6 +83,21 @@ def main():
    if os.name=='nt':
     defaults=call('terminal.create',{'key':'default-'+uuid.uuid4().hex,'args':['-NoLogo','-NoProfile'] if 'powershell' in cap['default_program'].lower() else ['/d','/q']})
     assert defaults['state']=='running' and Path(defaults['program']).is_absolute(),defaults
+    if 'powershell' in defaults['program'].lower():
+     shell_path=Path(defaults['cwd']);control=call('terminal.attach',{'id':defaults['id'],'client':'qa-powershell','control':True})
+     identity={key:control[key] for key in ['id','epoch','control_token','input_epoch']};identity['client']='qa-powershell';seq=0
+     def shell_write(text):
+      nonlocal seq
+      seq+=1;call('terminal.write',{**identity,'sequence':seq,'text':text})
+     # Wait for startup rather than feeding a profile/authenticode prompt.
+     deadline=time.monotonic()+10
+     while time.monotonic()<deadline:
+      value=call('terminal.read',{'id':defaults['id'],'cursor':0,'limit':65536,'wait_ms':100})
+      if b'PS ' in base64.b64decode(value['base64']):break
+     shell_write("Start-Sleep -Seconds 30; [IO.File]::WriteAllText('ctrl-c-must-not-run.txt','bad')\r");time.sleep(.5);shell_write('\x03');time.sleep(.2)
+     shell_write("[IO.File]::WriteAllText('ctrl-c-interrupted.txt','ok')\r")
+     until(lambda:(shell_path/'ctrl-c-interrupted.txt').exists())
+     assert not (shell_path/'ctrl-c-must-not-run.txt').exists(),'Ctrl+C failed to cancel PowerShell'
     call('terminal.close',{'id':defaults['id'],'epoch':defaults['epoch']});until(lambda:call('terminal.get',{'id':defaults['id']})['drained']);call('terminal.release',{'id':defaults['id']})
    settings={'key':'qa-'+uuid.uuid4().hex,'program':sys.executable,'args':['-u','-c',CHILD],'columns':80,'rows':24}
    ccontext=native('sdk.context');cterminal=native('terminal.create',{**settings,'key':'native-'+uuid.uuid4().hex})

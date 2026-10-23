@@ -226,6 +226,7 @@ class BuildContractTests(unittest.TestCase):
             "src/application/runtime.c",
             "src/application/jobs.c",
             "src/application/streams.c",
+            "src/application/terminals.c",
             "src/application/plugins.c",
             "src/application/ui.c",
             "src/application/workbench.c",

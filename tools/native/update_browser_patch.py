@@ -44,6 +44,17 @@ def main():
     change(name,'    gtk_widget_destroy(AppWindow); g_object_unref(Context);','    WindowStateFinish();\n    gtk_widget_destroy(AppWindow); g_object_unref(Context);')
     for header in ['xs_browser.inc.hpp','xs_window_geometry.h','xs_window_state_win.h','xs_window_state_gtk.h']:
         files['src/webview/'+header]=('',(ROOT/'tools/native'/header).read_text(encoding='utf-8'))
+    # A ConPTY is already a separate console. Keep Job ownership/suspended
+    # admission, but CREATE_NEW_PROCESS_GROUP would disable keyboard Ctrl+C
+    # in PowerShell and its children (Win32 process creation contract).
+    name='lib/xrt.h';old=read(name)
+    start=old.index('bool __xrtProcessTerminalSpawnWindows(')
+    end=old.index('\ncleanup:',start)
+    chunk=old[start:end];flag='iFlags |= CREATE_NEW_PROCESS_GROUP | CREATE_SUSPENDED;'
+    if chunk.count(flag)!=1:raise ValueError('Pinned ConPTY process group hook changed')
+    chunk=chunk.replace(flag,'/* ConPTY owns its console; Job still owns the process tree. */\n\t\tiFlags |= CREATE_SUSPENDED;')
+    new=old[:start]+chunk+old[end:];files[name]=(old,new)
+    lock['sdk_overlay']['xrt_single_header_sha256']=hashlib.sha256(new.encode('utf-8')).hexdigest()
     for name,(old,new) in files.items():
         text+=''.join(difflib.unified_diff(old.splitlines(True),new.splitlines(True),fromfile='a/'+name if old else '/dev/null',tofile='b/'+name))
     patch.write_text(text,encoding='utf-8',newline='\n');lock['sdk_overlay']['sha256']=hashlib.sha256(patch.read_bytes()).hexdigest()

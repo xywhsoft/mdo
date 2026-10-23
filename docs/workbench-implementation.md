@@ -172,6 +172,22 @@ Windows 宿主仍是 mdo-workbench-builtin-host/xs.exe，本阶段未改原生 o
 仍是他人未跟踪文件，提交时须排除。每次操作以即时 git status/差异为准。
 收尾时还应核对工具包 PATH/运行环境，以及项目删除/迁移后结束记录和布局的清理行为。
 
+### Windows ConPTY 中断修复
+
+真实 PowerShell 测试复现了 Ctrl+C 无法打断 Start-Sleep：锁定 xrt 的 ConPTY
+启动分支把 Job 归属与 CREATE_NEW_PROCESS_GROUP 一起开启，Win32 会因此禁用该组
+的 Ctrl+C。mdo 的 SDK 兼容补丁现在只在 ConPTY 分支移除此标志，仍在 suspended
+状态下加入独占 Job；普通非终端启动未修改，退出与进程树回收继续由 Job 负责。
+依据：https://learn.microsoft.com/en-us/windows/win32/procthread/process-creation-flags 。
+
+不覆盖正在并行开发的 xrt/xs 工作树；改动作为锁定 SDK 的精确、有哈希的 backport。
+构建先验证原始 xrt 哈希，再应用补丁并核对最终哈希。overlay 更新为
+02871274347c10589dc6865267965561d335966a5d967011cd4bec38acb37787；
+原始 xrt 来源不变，补丁后的头文件哈希为 36d53685...eecba04c6a。
+Windows 新宿主：C:/Users/Administrator/AppData/Local/Temp/mdo-workbench-terminal-host/xs.exe。
+真实默认 Shell 的 30 秒 Sleep 被 Ctrl+C 及时中断，后续命令落盘、被取消命令不落盘；
+完整 PTY 生命周期回归仍通过。该 backport 尚未合入上游 xrt。
+
 ## 验证要求
 
 测试必须验证实际行为：浏览器加载和失败、菜单显隐；文件外部修改和大目录；Git 的
