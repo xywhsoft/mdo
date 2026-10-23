@@ -1,12 +1,12 @@
 {
-  "version_name": "0.2.6",
-  "windows_build_id": 30000134,
-  "windows_server_build_id": 30000135,
-  "android_lite_build_id": 30000140,
-  "android_full_build_id": 30000141,
+  "version_name": "0.3.0",
+  "windows_build_id": 30000142,
+  "windows_server_build_id": 30000143,
+  "android_lite_build_id": 30000148,
+  "android_full_build_id": 30000149,
   "toolpack_revision": 3,
-  "linux_glibc_gui_build_id": 30000136,
-  "linux_glibc_server_build_id": 30000137,
-  "linux_musl_gui_build_id": 30000138,
-  "linux_musl_server_build_id": 30000139
+  "linux_glibc_gui_build_id": 30000144,
+  "linux_glibc_server_build_id": 30000145,
+  "linux_musl_gui_build_id": 30000146,
+  "linux_musl_server_build_id": 30000147
 }
