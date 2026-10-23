@@ -79,7 +79,7 @@ def inspect(edition, release, path=None):
         if edition == "lite":
             assert len(native) == len(host_files) and not metadata["files"]
         else:
-            assert {"busybox/busybox", "busybox/sh", "curl/curl", "jq/jq", "openssh/ssh", "openssh/scp", "openssh/sftp", "python/bin/python3"} <= logical_paths
+            assert {"busybox/busybox", "busybox/sh", "curl/curl", "jq/jq", "openssh/ssh", "openssh/scp", "openssh/sftp", "python/bin/python3", "aria2/aria2c", "ripgrep/rg", "7zip/7zz"} <= logical_paths
             assert len(native) > 5
         return {"edition": edition, "bytes": path.stat().st_size, "native_elf_files": len(native), "runtime_paths": len(logical_paths)}
 
