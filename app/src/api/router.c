@@ -87,6 +87,8 @@ static const MdoApiRoute g_MdoApiRoutes[] = {
     { "/api/v1/pane-layout",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_PUT,
       "GET, HEAD, PUT, OPTIONS", MdoApiPaneLayoutRoute, false },
+    { "/api/v1/sidebar-layout", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_PUT,
+      "GET, HEAD, PUT, OPTIONS", MdoApiSidebarLayoutRoute, false },
     { "/api/v1/models", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
       "GET, HEAD, OPTIONS", MdoApiModelsRoute, false },
     { "/api/v1/models/config", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,

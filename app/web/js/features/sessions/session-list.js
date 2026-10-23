@@ -2,7 +2,9 @@ import { element, clear, formatRelativeTime, errorMessage, isImeKey, toast } fro
 import { currentLocale, subscribeLocale, t } from "../../i18n.js";
 import { sessionActionItems } from "./session-actions.js";
 import { mountIcons } from "../../components/icons.js";
-import { recentSessions, sidebarGroups, sidebarWindow } from "./sidebar-tree.js";
+import { recentSessions, sidebarGroups, sidebarWindow, matchingSessions } from "./sidebar-tree.js";
+import { createSidebarLayoutStore, organizedSidebar, timelineSidebar } from "./sidebar-layout.js";
+import { createSidebarOrganizer } from "./sidebar-organizer.js";
 import { isTransientReadError } from "../../api/read-recovery.js";
 
 export function sessionRunActivities(runs = []) {
@@ -46,6 +48,11 @@ export function createSessionList({ container, count, filter, searchButton, stor
   let projectSort = "name";
   let previousSelection = "";
   const sidebar = container.closest(".sidebar");
+  let organizer = null;
+  const layoutStore = createSidebarLayoutStore({ changed() {
+    collapsed.clear(); for (const key of layoutStore.get().collapsed) collapsed.add(key);
+    projectSort = layoutStore.get().project_sort; render();
+  }, failed(error) { toast(errorMessage(error), "error"); } });
   const sessionKey = (session) => `${session.project_id}/${session.id}`;
   const currentSession = (key) => (state.data?.items ?? [])
     .find((session) => sessionKey(session) === key);
@@ -92,8 +99,10 @@ export function createSessionList({ container, count, filter, searchButton, stor
     if (coldRead(snapshot)) return '"loading"';
     // A revision or timestamp can change without changing any visible row.
     // Keep the row mounted so polling cannot clear selection or menu focus.
-    return JSON.stringify(recentSessions(items).map(({ project_id, id, title, status, pinned,
-      model_id, agent_id }) => [project_id, id, title, status, pinned, model_id, agent_id]));
+    const timeline = layoutStore.get().view === "timeline";
+    return JSON.stringify([timeline ? new Date().toDateString() : "", recentSessions(items).map(({ project_id, id, title, status, pinned,
+      model_id, agent_id, updated_at }) => [project_id, id, title, status, pinned, model_id, agent_id,
+        timeline ? new Date(Number(updated_at || 0) * 1000).toDateString() : ""])]);
   }
 
   function syncTimes() {
@@ -155,14 +164,16 @@ export function createSessionList({ container, count, filter, searchButton, stor
       render();
       const current = currentSession(sessionKey(session));
       if (!current) return;
-      try { await onAction(action.name, current); }
+      try { if (action.name === "organize") organizer.move(`s:${sessionKey(current)}`); else await onAction(action.name, current); }
       catch (error) { if (error?.name !== "AbortError") toast(errorMessage(error), "error"); }
     });
     return button;
   }
 
   function menuFor(session) {
-    return sessionActionItems(session).map((action) => menuAction(action, session));
+    const actions = sessionActionItems(session);
+    if (session.status !== "trash" && layoutStore.writable()) actions.push({ name: "organize", label: t("sidebar.moveToGroup") });
+    return actions.map((action) => menuAction(action, session));
   }
 
   function sidebarFocus(key) {
@@ -178,6 +189,7 @@ export function createSessionList({ container, count, filter, searchButton, stor
   }
 
   function render() {
+    if (organizer?.dragging()) return;
     const requestedFocus = focusRequest;
     focusRequest = null;
     const focused = document.activeElement;
@@ -199,12 +211,14 @@ export function createSessionList({ container, count, filter, searchButton, stor
     let restoredFocus = false;
     const selected = navigation.get();
     const selectedKey = `${selected.projectId}/${selected.sessionId}`;
-    const groups = sidebarGroups({ sessions: state.data?.items,
+    const baseGroups = sidebarGroups({ sessions: state.data?.items,
       projects: projectsStore.get().data?.items, status, query,
       locale: currentLocale(), projectSort, defaultProjectName: t("nav.defaultProject") });
+    const groups = organizedSidebar(baseGroups, layoutStore.get());
+    const workspaceView = layoutStore.get().view === "workspace";
     const searching = Boolean(query.trim());
     count.textContent = String(groups.total);
-    container.setAttribute("aria-busy", String(coldRead(state)));
+    container.setAttribute("aria-busy", String(coldRead(state) || layoutStore.busy()));
     clear(container);
     syncReadNotice();
 
@@ -220,6 +234,19 @@ export function createSessionList({ container, count, filter, searchButton, stor
       if (retainedReadFocus && readNotice.isConnected) readRetry.focus({ preventScroll: true });
       return;
     }
+
+    const toolbar = element("div", { className: "sidebar-organize-toolbar", attrs: { role: "group", "aria-label": t("sidebar.groupHint") } });
+    for (const view of ["workspace", "timeline"]) {
+      const button = element("button", { text: t(`sidebar.view.${view}`), attrs: { type: "button", title: t(`sidebar.view.${view}`),
+        "data-sidebar-focus": `view:${view}`, "aria-pressed": String(layoutStore.get().view === view) } });
+      button.disabled = !layoutStore.writable();
+      button.addEventListener("click", () => { focusRequest = { sidebar: `view:${view}` }; void organizer.save(value => ({ ...value, view })); });
+      toolbar.append(button);
+    }
+    const addGroup = element("button", { text: "+", attrs: { type: "button", title: t("sidebar.newGroup"),
+      "aria-label": t("sidebar.newGroup"), "data-sidebar-focus": "add-group" } });
+    addGroup.disabled = !layoutStore.writable() || layoutStore.get().groups.length >= 32;
+    addGroup.addEventListener("click", () => organizer.groupForm()); toolbar.append(addGroup); container.append(toolbar);
 
     const icon = (name, className = "") => element("span", {
       className: `icon ${className}`, attrs: { "data-icon": name, "aria-hidden": "true" },
@@ -240,7 +267,10 @@ export function createSessionList({ container, count, filter, searchButton, stor
       body.hidden = !expanded;
       button.disabled = searching;
       button.addEventListener("click", () => updateTree(key, () => {
-        if (collapsed.has(key)) collapsed.delete(key); else collapsed.add(key);
+        const next = new Set(collapsed);
+        if (next.has(key)) next.delete(key); else next.add(key);
+        if (layoutStore.writable()) void organizer.save(value => ({ ...value, collapsed: [...next] }));
+        else { collapsed.clear(); for (const item of next) collapsed.add(item); }
       }));
       button.addEventListener("keydown", (event) => {
         if (isImeKey(event) || !["ArrowLeft", "ArrowRight"].includes(event.key)) return;
@@ -298,12 +328,13 @@ export function createSessionList({ container, count, filter, searchButton, stor
       return { button, mount: () => attachMenu(key, button, entries) };
     }
 
-    function option(label, focusKey, action, { tone = "neutral", checked } = {}) {
+    function option(label, focusKey, action, { tone = "neutral", checked, disabled = false } = {}) {
       const button = element("button", { attrs: { type: "button",
         role: checked === undefined ? "menuitem" : "menuitemradio",
         "aria-checked": checked === undefined ? null : String(checked), "data-tone": tone,
       } }, [element("span", { text: label }), checked === true
         ? element("span", { className: "session-menu-check", text: "✓", attrs: { "aria-hidden": "true" } }) : null]);
+      button.disabled = disabled;
       button.addEventListener("click", async () => {
         focusRequest = { sidebar: focusKey };
         openMenu = "";
@@ -314,20 +345,37 @@ export function createSessionList({ container, count, filter, searchButton, stor
       return button;
     }
 
-    function section(key, label, controls = []) {
+    function section(key, label, controls = [], group = "") {
       const body = element("div", { className: "sidebar-section-body", attrs: { id: `sidebar-${key}` } });
+      body.dataset.sidebarDropZone = ""; body.dataset.sidebarKey = group ? `g:${group}` : `zone:${key}`;
+      body.dataset.sidebarGroup = group; body.dataset.sidebarParent = group ? `custom:${group}` : key;
       const toggle = toggleButton(`section:${key}`, label, body, "sidebar-section-toggle");
       const heading = element("div", { className: "session-group-heading sidebar-section-heading" +
         (key === "projects" ? " project-list-heading" : "") },
         [toggle, ...controls.map((control) => control.button ?? control)]);
       const wrapper = element("section", { className: `sidebar-section sidebar-${key}`,
         attrs: { "aria-label": label } }, [heading, body]);
+      if (group) {
+        wrapper.dataset.sidebarKey = `g:${group}`; wrapper.dataset.sidebarParent = "groups";
+        wrapper.dataset.sidebarGroup = group; wrapper.dataset.sidebarDropZone = "";
+        wrapper.dataset.sidebarSectionId = group;
+        heading.prepend(dragHandle(`g:${group}`, label));
+        // The body is a drop zone, but only the section header owns its ID.
+        delete body.dataset.sidebarKey;
+      }
       container.append(wrapper);
       for (const control of controls) control.mount?.();
       return body;
     }
 
-    function appendSession(target, session, pinned = false) {
+    function dragHandle(key, label) {
+      const button = element("button", { className: "sidebar-drag-handle", text: "⠿", attrs: {
+        type: "button", "data-sidebar-drag": key, "data-sidebar-focus": `drag:${key}`,
+        title: t("sidebar.dragHint"), "aria-label": t("sidebar.dragItem", { name: label }) } });
+      button.disabled = !layoutStore.writable() || searching || !workspaceView;
+      return button;
+    }
+    function appendSession(target, session, pinned = false, parent = "") {
       const key = sessionKey(session);
       const project = projectsStore.get().data?.items?.find((item) => item.id === session.project_id);
       const label = session.title || t("nav.untitled", {}, "未命名任务");
@@ -352,9 +400,13 @@ export function createSessionList({ container, count, filter, searchButton, stor
       });
       const menu = menuButton(key, t("nav.actionsFor", { title: label }, `${label} 的操作`),
         `session-menu:${key}`, () => menuFor(session), "session-more");
-      target.append(element("li", { className: "session-item-row", attrs: {
+      const assignment = layoutStore.get().placements.find(item => item.key === `s:${key}`)?.group || "";
+      const row = element("li", { className: "session-item-row", attrs: {
         "data-status": session.status,
-      } }, [button, menu.button]));
+        "data-sidebar-key": `s:${key}`, "data-sidebar-parent": pinned ? "pinned" : parent,
+        "data-sidebar-group": pinned ? assignment : parent.startsWith("custom:") ? parent.slice(7) : "",
+      } }, [dragHandle(`s:${key}`, label), button, menu.button]);
+      target.append(row);
       menu.mount();
       const targetFocus = requestedFocus?.key === key ? requestedFocus : retainedFocus?.key === key ? retainedFocus : null;
       if (targetFocus?.index === -2) { button.focus({ preventScroll: true }); restoredFocus = true; }
@@ -366,7 +418,7 @@ export function createSessionList({ container, count, filter, searchButton, stor
       body.append(list);
       if (!sessions.length) list.append(element("li", { className: "session-group-empty",
         text: t("nav.emptyGroup", {}, "暂无任务") }));
-      for (const session of windowed.items) appendSession(list, session, pinned);
+      for (const session of windowed.items) appendSession(list, session, pinned, key);
       if (windowed.remaining > 0) {
         const more = element("button", { className: "session-show-more", text: t("nav.showMore", {}, "显示更多"), attrs: {
           type: "button", "data-sidebar-focus": `more:${key}`,
@@ -382,6 +434,7 @@ export function createSessionList({ container, count, filter, searchButton, stor
     if (groups.pinned.length) appendSessions(section("pinned", t("nav.pinned", {}, "已置顶")),
       groups.pinned, "pinned", groups.pinned.length, true);
 
+    const manualProjects = layoutStore.get().placements.some(item => item.key.startsWith("p:") && !item.group);
     const listOptions = () => [
       ...["active", "archived", "trash", "all"].map((value) => option(
         t(`shell.status.${value}`), "list-options", () => {
@@ -389,21 +442,32 @@ export function createSessionList({ container, count, filter, searchButton, stor
           onFilterChange();
         }, { checked: status === value })),
       option(t("nav.sortProjectsName", {}, "项目按名称排序"), "list-options", () => {
-        projectSort = "name"; render();
-      }, { checked: projectSort === "name" }),
+        if (!layoutStore.writable()) { projectSort = "name"; render(); return; }
+        return organizer.save(value => ({ ...value, project_sort: "name", placements: value.placements.filter(item => !item.key.startsWith("p:") || item.group) }));
+      }, { checked: !manualProjects && projectSort === "name" }),
       option(t("nav.sortProjectsRecent", {}, "项目按最近活动排序"), "list-options", () => {
-        projectSort = "recent"; render();
-      }, { checked: projectSort === "recent" }),
+        if (!layoutStore.writable()) { projectSort = "recent"; render(); return; }
+        return organizer.save(value => ({ ...value, project_sort: "recent", placements: value.placements.filter(item => !item.key.startsWith("p:") || item.group) }));
+      }, { checked: !manualProjects && projectSort === "recent" }),
       option(t("nav.expandAll", {}, "展开所有项目"), "list-options", () => {
         collapsed.delete("section:projects");
-        for (const group of groups.projects) collapsed.delete(`project:${group.id}`);
+        for (const group of baseGroups.projects) collapsed.delete(`project:${group.id}`);
+        const next = [...collapsed];
+        if (layoutStore.writable()) return organizer.save(value => ({ ...value, collapsed: next }));
         render();
       }),
       option(t("nav.collapseAll", {}, "折叠所有项目"), "list-options", () => {
-        for (const group of groups.projects) collapsed.add(`project:${group.id}`);
+        for (const group of baseGroups.projects) collapsed.add(`project:${group.id}`);
+        const next = [...collapsed];
+        if (layoutStore.writable()) return organizer.save(value => ({ ...value, collapsed: next }));
         render();
       }),
       option(t("project.refresh", {}, "刷新"), "list-options", () => onRefreshProjects?.()),
+      ...["workspace", "timeline"].map(view => option(t(`sidebar.view.${view}`), "list-options", () =>
+        organizer.save(value => ({ ...value, view })), { checked: layoutStore.get().view === view, disabled: !layoutStore.writable() })),
+      option(t("sidebar.newGroup"), "list-options", () => organizer.groupForm(), { disabled: !layoutStore.writable() || layoutStore.get().groups.length >= 32 }),
+      option(t("sidebar.reload"), "list-options", () => layoutStore.load()),
+      option(t("sidebar.reset"), "list-options", () => organizer.reset(), { disabled: !layoutStore.writable() }),
     ];
     const options = menuButton("list:options", t("nav.listOptions", {}, "列表选项"), "list-options", listOptions);
     const add = actionButton(t("nav.addProject", {}, "添加项目"), "plus", "add-project", (event) => {
@@ -412,8 +476,7 @@ export function createSessionList({ container, count, filter, searchButton, stor
     }, "session-group-new");
     const projectLabel = status === "active" ? t("nav.projects", {}, "项目") :
       `${t("nav.projects", {}, "项目")} · ${t(`shell.status.${status}`)}`;
-    const projectBody = section("projects", projectLabel, status === "active" ? [options, add] : [options]);
-    for (const group of groups.projects) {
+    function appendProject(target, group, parent = "projects", assignment = "") {
       const key = `project:${group.id}`;
       const body = element("div", { className: "session-project-body", attrs: { id: `sidebar-project-${group.id}` } });
       const toggle = toggleButton(key, group.name, body, "session-group-main",
@@ -423,6 +486,7 @@ export function createSessionList({ container, count, filter, searchButton, stor
       const projectOptions = menuButton(`menu:${key}`, t("nav.manageProject", { name: group.name }, `管理 ${group.name} 项目`),
         `menu:${key}`, () => [
           option(t("project.newTask", {}, "新任务"), `menu:${key}`, () => onNewInProject(group.id)),
+          option(t("sidebar.moveToGroup"), `menu:${key}`, () => organizer.move(`p:${group.id}`), { disabled: !layoutStore.writable() }),
           ...(onProjectAction ? [option(t("transfer.sendProject", {}, "发送完整项目到设备"), `menu:${key}`,
             (origin) => onProjectAction("send_device", group.id, origin))] : []),
           ...(group.project?.managed && onProjectAction ? [
@@ -437,17 +501,53 @@ export function createSessionList({ container, count, filter, searchButton, stor
             () => onProjectAction("memory", group.id))] : []),
         ]);
       const heading = element("div", { className: "session-group-heading session-project-heading" },
-        [toggle, create, projectOptions.button]);
-      projectBody.append(element("div", { className: "session-project", attrs: { "data-project-id": group.id } }, [heading, body]));
+        [dragHandle(`p:${group.id}`, group.name), toggle, create, projectOptions.button]);
+      target.append(element("div", { className: "session-project", attrs: { "data-project-id": group.id,
+        "data-sidebar-key": `p:${group.id}`, "data-sidebar-parent": parent, "data-sidebar-group": assignment } }, [heading, body]));
       projectOptions.mount();
       appendSessions(body, group.sessions, key);
     }
-    if (!groups.projects.length) {
+    if (workspaceView) for (const group of groups.custom) {
+      if (searching && !group.entries.length && !group.name.toLocaleLowerCase(currentLocale()).includes(query.trim().toLocaleLowerCase(currentLocale()))) continue;
+      const menu = menuButton(`custom:${group.id}`, t("sidebar.manageGroup"), `custom-menu:${group.id}`, () => [
+        option(t("sidebar.renameGroup"), `custom-menu:${group.id}`, () => organizer.groupForm(group), { disabled: !layoutStore.writable() }),
+        option(t("sidebar.deleteGroup"), `custom-menu:${group.id}`, () => organizer.remove(group), { disabled: !layoutStore.writable() }),
+      ]);
+      const body = section(`custom-${group.id}`, group.name, [menu], group.id);
+      if (!group.entries.length) body.append(element("p", { className: "session-group-empty", text: t("sidebar.dropHint") }));
+      const key = `custom:${group.id}`, limit = limits.get(key) ?? 20;
+      const entries = searching ? [...group.entries] : group.entries.slice(0, limit);
+      const current = group.entries.find(entry => entry.kind === "project" ? entry.item.id === selected.projectId :
+        sessionKey(entry.item) === selectedKey);
+      if (current && !entries.includes(current)) entries.push(current);
+      for (const entry of entries) {
+        if (entry.kind === "project") appendProject(body, entry.item, `custom:${group.id}`, group.id);
+        else { const list = element("ul", { className: "session-group-children" }); body.append(list); appendSession(list, entry.item, false, `custom:${group.id}`); }
+      }
+      if (entries.length < group.entries.length) {
+        const more = element("button", { className: "session-show-more", text: t("nav.showMore"), attrs: {
+          type: "button", "data-sidebar-focus": `more:${key}` } });
+        more.addEventListener("click", () => updateTree(`more:${key}`, () => limits.set(key, limit + 20))); body.append(more);
+      }
+    }
+    const projectBody = section("projects", workspaceView ? projectLabel : t("sidebar.view.timeline"), status === "active" ? [options, add] : [options]);
+    if (workspaceView) for (const group of groups.projects) appendProject(projectBody, group);
+    else {
+      const sessions = matchingSessions({ sessions: state.data?.items, projects: projectsStore.get().data?.items,
+        status, query, locale: currentLocale(), defaultProjectName: t("nav.defaultProject") })
+        .filter(session => !(session.status === "active" && session.pinned));
+      for (const group of timelineSidebar(sessions)) {
+        const label = element("p", { className: "sidebar-time-heading", text: t(`sidebar.date.${group.id}`) });
+        projectBody.append(label); appendSessions(projectBody, group.sessions, `date:${group.id}`, 20);
+      }
+    }
+    if (workspaceView && !groups.projects.length) {
       const key = searching ? "nav.noMatch" : status === "trash" ? "nav.trashEmpty" :
         status === "archived" ? "nav.noArchivedSessions" : "nav.noProjects";
       projectBody.append(element("p", { className: "session-projects-empty", text: t(key) }));
     }
 
+    if (workspaceView) {
     const createDefault = actionButton(t("nav.newInDefaultProject", {}, "在默认项目新建任务"), "plus", "new:tasks",
       () => onNewInProject("default"), "session-group-new");
     const tasksBody = section("tasks", t("nav.tasks", {}, "任务"), status === "active" ? [createDefault] : []);
@@ -456,6 +556,7 @@ export function createSessionList({ container, count, filter, searchButton, stor
         status === "archived" ? "nav.noArchivedSessions" : "nav.emptyGroup";
       tasksBody.append(element("p", { className: "session-group-empty", text: t(key) }));
     } else appendSessions(tasksBody, groups.tasks, "tasks", 20);
+    }
 
     if (openMenu && !openMenuNode) openMenu = "";
     mountIcons(container);
@@ -467,7 +568,8 @@ export function createSessionList({ container, count, filter, searchButton, stor
       // Once the final page is expanded, its More button disappears. Keep
       // keyboard focus at the newly revealed end of that group.
       const expandedKey = controlKey?.startsWith("more:") ? controlKey.slice(5) : "";
-      const expandedGroup = expandedKey ? (sidebarFocus(expandedKey) ?? sidebarFocus(`section:${expandedKey}`)) : null;
+      const expandedGroup = expandedKey ? (sidebarFocus(expandedKey) ?? sidebarFocus(`section:${expandedKey}`) ??
+        (expandedKey.startsWith("custom:") ? sidebarFocus(`section:custom-${expandedKey.slice(7)}`) : null)) : null;
       const expandedBody = expandedGroup ? document.getElementById(expandedGroup.getAttribute("aria-controls")) : null;
       const expandedTasks = [...(expandedBody?.querySelectorAll(".session-item") ?? [])];
       (expandedTasks.at(-1) ?? container.querySelector('.session-item[aria-current="page"]') ??
@@ -480,6 +582,7 @@ export function createSessionList({ container, count, filter, searchButton, stor
         .focus({ preventScroll: true });
   }
 
+  organizer = createSidebarOrganizer({ container, store: layoutStore, render });
   const unsubscribeStore = store.subscribe((next) => {
     state = next;
     const key = storeContentKey(next);
@@ -487,13 +590,14 @@ export function createSessionList({ container, count, filter, searchButton, stor
       renderedStoreKey = key;
       render();
     } else {
-      container.setAttribute("aria-busy", String(coldRead(next)));
+      container.setAttribute("aria-busy", String(coldRead(next) || layoutStore.busy()));
       syncTimes();
     }
     syncReadNotice();
   });
   const unsubscribeProjects = projectsStore.subscribe(render);
   const unsubscribeNavigation = navigation.subscribe(() => {
+    organizer.cancel(); organizer.close();
     const selected = navigation.get();
     const key = `${selected.projectId}/${selected.sessionId}`;
     if (key !== previousSelection && selected.projectId) {
@@ -501,6 +605,9 @@ export function createSessionList({ container, count, filter, searchButton, stor
       collapsed.delete(`section:${section}`);
       collapsed.delete(`project:${selected.projectId}`);
       if (selected.sessionId) collapsed.delete("section:pinned");
+      const placement = layoutStore.get().placements.find(item => item.key === `s:${key}`)?.group ||
+        layoutStore.get().placements.find(item => item.key === `p:${selected.projectId}`)?.group;
+      if (placement) collapsed.delete(`section:custom-${placement}`);
       previousSelection = key;
     }
     openMenu = "";
@@ -640,6 +747,7 @@ export function createSessionList({ container, count, filter, searchButton, stor
     },
     showActive() { status = "active"; query = ""; filter.value = status; openMenu = ""; render(); },
     destroy() {
+      layoutStore.destroy(); organizer.destroy();
       unsubscribeStore();
       unsubscribeProjects();
       unsubscribeNavigation();

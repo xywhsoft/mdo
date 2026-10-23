@@ -147,6 +147,7 @@ bool MdoApiWorkspaceStateRoute(MdoApiContext* pContext);
 bool MdoApiWorkspaceStateInit(void);
 void MdoApiWorkspaceStateUnit(void);
 bool MdoApiPaneLayoutRoute(MdoApiContext* pContext);
+bool MdoApiSidebarLayoutRoute(MdoApiContext* pContext);
 bool MdoApiModelsRoute(MdoApiContext* pContext);
 bool MdoApiModelConfigRoute(MdoApiContext* pContext);
 bool MdoApiModelSetupRoute(MdoApiContext* Context);

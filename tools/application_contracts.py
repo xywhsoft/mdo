@@ -52,6 +52,14 @@ DEFS={
  'Attachment':document('id:s mime_type:s file_name:s size:u url:s created_at:i'),
  'SkillInvocation':document('id:s text:s',('id','text')),
  'PaneLayout':document('schema_version:u sidebar_width:u sidebar_open:b'),
+ 'SidebarGroup':obj({'id':{'type':'string','pattern':'^[0-9a-f]{32}$'},'name':{'type':'string','minLength':1,'maxLength':256,'description':'Nonblank name, at most 256 UTF-8 bytes.'}},('id','name'),True),
+ 'SidebarPlacement':obj({'key':{'type':'string','pattern':r'^(?:p:[A-Za-z0-9_-][A-Za-z0-9._-]{0,127}|s:[A-Za-z0-9_-][A-Za-z0-9._-]{0,127}/[A-Za-z0-9_-][A-Za-z0-9._-]{0,127})$'},
+    'group':{'type':'string','pattern':'^(?:[0-9a-f]{32})?$','description':'Existing custom group ID, or empty for the original project location.'}},('key','group'),True),
+ 'SidebarLayout':obj({'schema_version':{'type':'integer','const':1},'revision':{'type':'integer','minimum':0,'maximum':9007199254740991},
+    'view':{'type':'string','enum':['workspace','timeline']},'project_sort':{'type':'string','enum':['name','recent']},
+    'groups':{**array(ref('SidebarGroup')),'maxItems':32},'placements':{**array(ref('SidebarPlacement')),'maxItems':2048},
+    'collapsed':{**array({'type':'string','minLength':1,'maxLength':180}),'maxItems':256,'uniqueItems':True}},
+    ('schema_version','revision','view','project_sort','groups','placements','collapsed'),True),
 }
 for name in ('Project','Session','Run','Schedule','MemoryEntry','Operation','QueueItem'):
     DEFS[name+'Page']=obj({**fields('total:u truncated:b revision:u generation:u next_cursor:u has_more:b'),'items':array(ref(name))})
@@ -103,6 +111,7 @@ INPUTS={
  'SharedFiles':document('share_id:s file_id:s',('share_id','file_id'),True),
  'WorkspaceState':document('schema_version:u project_id:s session_id:s draft:j selection:j revision:u'),
  'PaneLayout':document('sidebar_width:u sidebar_open:b',('sidebar_width','sidebar_open'),True),
+ 'SidebarLayout':deepcopy(DEFS['SidebarLayout']),
  'McpContext':document('session_id:s project_id:s action:s prompt:s arguments:j context:j'),
  'McpAuth':document('client_id:s client_secret:s redirect_uri:s scopes:ss state:s code:s error:s'),
  'Application':document('method:s params:j context:o',('method',),True),
@@ -131,7 +140,7 @@ BODY_GROUPS={
  'Update':'UpdateRoute','Transfer':'DeviceTransfersRoute',
  'Ecosystem':'EcosystemRoute','Purge':'ProjectPurgeRoute ProjectPurgeCancelRoute ProjectPurgeIntentPrepareRoute ProjectPurgeIntentRoute',
  'BackupUpload':'BackupUploadsRoute','BackupReview':'BackupRestoreReviewRoute',
- 'SharedFiles':'SharedFilesRoute','WorkspaceState':'WorkspaceStateRoute','PaneLayout':'PaneLayoutRoute',
+ 'SharedFiles':'SharedFilesRoute','WorkspaceState':'WorkspaceStateRoute','PaneLayout':'PaneLayoutRoute','SidebarLayout':'SidebarLayoutRoute',
  'McpContext':'McpContextRoute','McpAuth':'McpAuthRoute',
 }
 BODY={handler:name for name,handlers in BODY_GROUPS.items() for handler in handlers.split()}
@@ -161,6 +170,7 @@ RESULT_GROUPS={
  'Attachment':'AttachmentsRoute AttachmentInfoRoute',
  'SkillInvocation':'SkillInvokeRoute',
  'PaneLayout':'PaneLayoutRoute',
+ 'SidebarLayout':'SidebarLayoutRoute',
 }
 RESULT={handler:name for name,handlers in RESULT_GROUPS.items() for handler in handlers.split()}
 

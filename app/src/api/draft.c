@@ -946,3 +946,4 @@ bool MdoApiDraftSubmissionRoute(MdoApiContext* Context)
 }
 
 #include "prompt_history.inc.c"
+#include "sidebar_layout.inc.c"
