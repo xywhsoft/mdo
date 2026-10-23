@@ -206,7 +206,6 @@ select:focus-visible,
 .icon-button:disabled:hover { background: transparent; }
 .icon { display: inline-flex; width: 18px; height: 18px; }
 .icon svg { width: 100%; height: 100%; stroke: currentColor; }
-#open-settings .icon { width: 20px; height: 20px; }
 .sidebar-close { display: none; }
 .desktop-sidebar-toggle { display: none; }
 
