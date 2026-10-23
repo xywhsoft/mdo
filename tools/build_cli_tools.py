@@ -97,7 +97,7 @@ def build(output,platforms):
                     for name in ('python','python3'):
                         if name not in names:manifest['commands'].append(dict(name=name,entry=entry,args=[]))
                 if tool=="busybox":
-                    for name in ('sh','ash','awk','sed','grep','find','cat','head','tail','sort','wc','cp','mv','rm','mkdir','rmdir','touch','tar','gzip','gunzip','unzip','xargs','tee','tr','which','basename','dirname'):
+                    for name in ('sh','ash','awk','sed','grep','find','cat','head','tail','sort','wc','cp','mv','rm','mkdir','rmdir','touch','tar','gzip','gunzip','unzip','xargs','tee','tr','which','basename','dirname','ls','pwd','echo'):
                         manifest['commands'].append(dict(name=name,entry=entry,args=[name]))
                 encoded=json.dumps(manifest,ensure_ascii=False,separators=(",",":")).encode()
                 path=output/f"{tool}-{manifest['version']}-{platform}.mdo-cli"

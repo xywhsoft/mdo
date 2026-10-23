@@ -114,6 +114,15 @@ def run(host,packed=None):
         if not packed:
             replacement=home/'own'/'replacement';replacement.write_bytes(versions['v2']);replacement.chmod(0o755);(home/'fail-cli-save').write_bytes(b'1');post('save',422,tool=dict(custom,path=str(replacement)),revision=get()['revision']);(home/'fail-cli-save').unlink();check('second');check('other')
         post('remove',id=custom['id']);assert extra.exists();assert 'second' not in get()['commands']
+        # Old archives lack a commands manifest. Their known companion entries
+        # and BusyBox applet argv must still be exported without probing PATH.
+        compat=home/'legacy SSH';compat.mkdir()
+        for name in ('ssh','scp','sftp','ssh-keygen','ssh-keyscan','ssh-agent','ssh-add'):
+            path=compat/(name+('.exe' if os.name=='nt' else ''));path.write_bytes(versions['v1']);path.chmod(0o755)
+        post('save',tool=dict(custom,id='official.openssh',path=str(compat/('ssh.exe' if os.name=='nt' else 'ssh')),command='',aliases=[]));assert {'ssh','scp','sftp','ssh-keygen','ssh-keyscan','ssh-agent','ssh-add'}<=get()['commands'].keys();check('ssh-keygen');post('remove',id='official.openssh')
+        busy=compat/('busybox.exe' if os.name=='nt' else 'busybox');busy.write_bytes(versions['v1']);busy.chmod(0o755)
+        post('save',tool=dict(custom,id='official.busybox',path=str(busy),command='',aliases=[]));assert {'ls','pwd','echo','sh','grep'}<=get()['commands'].keys()
+        r=invoke('process.run',dict(program='ls',input='stdin-sentinel'));assert r['exit_code']==37 and r['stdout']['text'].replace('\r\n','\n')=='v1\n00000002:ls\nstdin-sentinel',r;post('remove',id='official.busybox')
         if os.name!='nt':
             root=home/'scripts';(root/'bin').mkdir(parents=True);script=root/'bin/relative-tool';script.write_text('#!/bin/sh\nroot=${0%/*}/..\ncat "$root/data.txt"\n');script.chmod(0o755);(root/'data.txt').write_text('relative-runtime-ok')
             post('save',tool=dict(custom,id='custom.script',command='relative-tool',path=str(script),aliases=[]));r=invoke('process.run',{'program':'relative-tool'});assert r['stdout']['text']=='relative-runtime-ok',r;post('remove',id='custom.script')

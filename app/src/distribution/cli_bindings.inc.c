@@ -24,7 +24,7 @@ static char* CliRelative(cstr Path)
 static bool CliAliasesValid(const xvalue* R)
 {
     const xvalue* A=xrtValueObjectGet(R,XRT_STR_LITERAL("aliases"));if(!A)return true;
-    size_t Base=xrtValueCount(xrtValueObjectGet(R,XRT_STR_LITERAL("commands")));if(!Base)Base=!strcmp(CliText(R,"id",64),"official.busybox")?28:!strcmp(CliText(R,"id",64),"official.openssh")?3:!strcmp(CliText(R,"id",64),"official.python")?2:1;
+    size_t Base=xrtValueCount(xrtValueObjectGet(R,XRT_STR_LITERAL("commands")));if(!Base)Base=!strcmp(CliText(R,"id",64),"official.busybox")?31:!strcmp(CliText(R,"id",64),"official.openssh")?7:!strcmp(CliText(R,"id",64),"official.python")?2:1;
     if(xrtValueType(A)!=XVALUE_ARRAY||Base+xrtValueCount(A)>64)return false;
     for(size_t I=0;I<xrtValueCount(A);I++){xstrview V;if(!xrtValueGetString(xrtValueArrayGet(A,I),&V)||memchr(V.Data,0,V.Size)||!MdoCliCommandName(V.Data))return false;}return true;
 }
@@ -83,8 +83,8 @@ static xvalue* CliCommandMap(void)
             /* Older official archives predate multi-entry manifests. Companion
              * names are explicit package contracts, not system discovery. */
             if(Ok&&!strcmp(CliText(R,"id",64),"official.openssh")){
-                char* Parent=xrtPathParent(Relative);const cstr Names[]={"scp","sftp"};
-                for(size_t J=0;Ok&&Parent&&J<2;J++){char Target[4096];snprintf(Target,sizeof(Target),"%s/%s%s",Parent,Names[J],
+                char* Parent=xrtPathParent(Relative);const cstr Names[]={"scp","sftp","ssh-keygen","ssh-keyscan","ssh-agent","ssh-add"};
+                for(size_t J=0;Ok&&Parent&&J<sizeof(Names)/sizeof(Names[0]);J++){char Target[4096];snprintf(Target,sizeof(Target),"%s/%s%s",Parent,Names[J],
 #if defined(_WIN32) || defined(_WIN64)
                     ".exe"
 #else
@@ -94,7 +94,7 @@ static xvalue* CliCommandMap(void)
             }
             if(Ok&&!strcmp(CliText(R,"id",64),"official.python"))Ok=CliMapAdd(Map,R,!strcmp(Name,"python3")?"python":"python3",Relative,NULL);
             if(Ok&&!strcmp(CliText(R,"id",64),"official.busybox")){
-                const cstr Applets[]={"sh","ash","awk","sed","grep","find","cat","head","tail","sort","wc","cp","mv","rm","mkdir","rmdir","touch","tar","gzip","gunzip","unzip","xargs","tee","tr","which","basename","dirname"};
+                const cstr Applets[]={"sh","ash","awk","sed","grep","find","cat","head","tail","sort","wc","cp","mv","rm","mkdir","rmdir","touch","tar","gzip","gunzip","unzip","xargs","tee","tr","which","basename","dirname","ls","pwd","echo"};
                 for(size_t J=0;Ok&&J<sizeof(Applets)/sizeof(Applets[0]);J++){xvalue* Args=xrtValueArray();xrtValueArrayAppendNew(Args,xrtValueString(xrtStrView(Applets[J])));Ok=CliMapAdd(Map,R,Applets[J],Relative,Args);xrtValueRelease(Args);}
             }
         }
