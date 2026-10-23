@@ -27,6 +27,7 @@ typedef struct MdoWsScan {
     size_t Entries;
     size_t Directories;
     bool Truncated;
+    bool IncludeDirectories;
 } MdoWsScan;
 
 static bool MdoWsId(xstrview Text, char* Output, size_t Capacity)
@@ -47,18 +48,22 @@ static bool MdoWsId(xstrview Text, char* Output, size_t Capacity)
     return true;
 }
 
-static bool MdoWsQuery(xstrview Raw, char Output[MDO_WS_QUERY_MAX + 1u])
+static bool MdoWsQuery(xstrview Raw, char Output[MDO_WS_QUERY_MAX + 1u], bool* IncludeDirectories)
 {
     xstrview Encoded;
     size_t Size = 0u;
     size_t Index;
-    if ( Raw.Size < 3u || Raw.Size > MDO_WS_QUERY_MAX * 3u + 2u ||
+    static const char Suffix[] = "&include_directories=1";
+    *IncludeDirectories = Raw.Size >= sizeof(Suffix) - 1u &&
+        !memcmp(Raw.Data + Raw.Size - sizeof(Suffix) + 1u, Suffix, sizeof(Suffix) - 1u);
+    if ( *IncludeDirectories ) Raw.Size -= sizeof(Suffix) - 1u;
+    if ( Raw.Size < (*IncludeDirectories ? 2u : 3u) || Raw.Size > MDO_WS_QUERY_MAX * 3u + 2u ||
          memcmp(Raw.Data, "q=", 2u) != 0 ||
          memchr(Raw.Data + 2u, '&', Raw.Size - 2u) != NULL )
         return false;
     Encoded = xrtStrViewN(Raw.Data + 2u, Raw.Size - 2u);
     if ( !xrtPercentDecode(Encoded, Output, MDO_WS_QUERY_MAX, &Size) ||
-         Size == 0u || Size > MDO_WS_QUERY_MAX ||
+         (!*IncludeDirectories && Size == 0u) || Size > MDO_WS_QUERY_MAX ||
          memchr(Output, 0, Size) != NULL ||
          !xrtUtf8Valid(xrtStrViewN(Output, Size), NULL) ) return false;
     for ( Index = 0u; Index < Size; ++Index ) {
@@ -198,6 +203,11 @@ static bool MdoWsWalk(MdoWsScan* Scan, const char* Absolute,
             MdoWsInsert(Scan, ChildRelative, Depth);
             continue;
         }
+        if ( Scan->IncludeDirectories && (size_t)Written + 1u < sizeof(ChildRelative) ) {
+            ChildRelative[Written] = '/'; ChildRelative[Written + 1] = '\0';
+            MdoWsInsert(Scan, ChildRelative, Depth);
+            ChildRelative[Written] = '\0';
+        }
         if ( Depth + 1u >= MDO_WS_DEPTH_MAX ) {
             Scan->Truncated = true;
             continue;
@@ -265,7 +275,7 @@ bool MdoApiWorkspaceFilesRoute(MdoApiContext* Context)
             "The requested session does not exist", NULL);
     Scan = (MdoWsScan*)xrtCalloc(1u, sizeof(*Scan));
     if ( Scan == NULL ) goto unavailable;
-    if ( !MdoWsQuery(Context->Target.Query, Scan->Query) ) {
+    if ( !MdoWsQuery(Context->Target.Query, Scan->Query, &Scan->IncludeDirectories) ) {
         xrtFree(Scan);
         return MdoApiReplyError(Context, 400u, "invalid_query",
             MDO_WS_QUERY_ERROR, NULL);
@@ -309,7 +319,7 @@ bool MdoApiProjectWorkspaceFilesRoute(MdoApiContext* Context)
             "The project ID is invalid", NULL);
     Scan = (MdoWsScan*)xrtCalloc(1u, sizeof(*Scan));
     if ( Scan == NULL ) goto unavailable;
-    if ( !MdoWsQuery(Context->Target.Query, Scan->Query) ) {
+    if ( !MdoWsQuery(Context->Target.Query, Scan->Query, &Scan->IncludeDirectories) ) {
         xrtFree(Scan);
         return MdoApiReplyError(Context, 400u, "invalid_query",
             MDO_WS_QUERY_ERROR, NULL);

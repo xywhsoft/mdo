@@ -57,6 +57,7 @@ static bool MdoHomePurgePath(cstr Project, cstr Session, const MdoHomePurgeTarge
     static const struct { cstr Format; bool Directory; } Fixed[] = {
         { "projects/%s.json", false }, { "projects/%s.json.bak", false },
         { "data/project-drafts/%s.json", false }, { "data/project-drafts/%s.json.bak", false },
+        { "data/prompt-history/%s.json", false }, { "data/prompt-history/%s.json.bak", false },
         { "memory/projects/%s.json", false }, { "memory/projects/%s.json.bak", false },
         { "memory/projects/%s", true },
         { "sessions/%s", true }, { "migration/session-prompts/%s", true }

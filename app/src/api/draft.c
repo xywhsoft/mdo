@@ -944,3 +944,5 @@ bool MdoApiDraftSubmissionRoute(MdoApiContext* Context)
         "draft_unavailable", "The draft could not be read or saved", NULL);
     return MdoApiReplySuccessTake(Context, 200u, Data, NULL);
 }
+
+#include "prompt_history.inc.c"

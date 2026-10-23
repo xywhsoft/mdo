@@ -208,6 +208,7 @@ bool MdoApiLegacyMigrationsRoute(MdoApiContext* pContext);
 bool MdoApiSessionEventsRoute(MdoApiContext* pContext);
 bool MdoApiSessionTurnsRoute(MdoApiContext* pContext);
 bool MdoApiDraftRoute(MdoApiContext* pContext);
+bool MdoApiPromptHistoryRoute(MdoApiContext* pContext);
 bool MdoApiDraftSubmissionAppendRoute(MdoApiContext* pContext);
 bool MdoApiDraftSubmissionRoute(MdoApiContext* pContext);
 bool MdoApiDraftInit(void);
