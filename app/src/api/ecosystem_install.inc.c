@@ -2,7 +2,7 @@
  * ownership. A durable rollback journal precedes every multi-file write. */
 #define ECO_RECEIPTS "data/extensions/installed.json"
 #define ECO_JOURNAL "data/extensions/pending.json"
-#define ECO_JOURNAL_LIMIT (16u*1024u*1024u)
+#define ECO_JOURNAL_LIMIT (256u*1024u*1024u)
 #include "../../include/mdo/application.h"
 static bool EcoLocalSave(cstr path,const xvalue* value)
 {size_t n=0;char* json=xrtJsonStringify(value,false,&n);size_t limit=!strcmp(path,ECO_JOURNAL)?ECO_JOURNAL_LIMIT:1024u*1024u;bool ok=json&&n<=limit&&MdoHomeAtomicWrite(path,json,n,false);xrtFree(json);return ok;}
@@ -27,13 +27,13 @@ static bool EcoLocalAllowed(cstr path)
 static bool EcoLocalPut(cstr path,const xvalue* encoded)
 {
     xstrview text;if(!EcoLocalAllowed(path)||!xrtValueGetString(encoded,&text)||memchr(text.Data,0,text.Size))return false;
-    size_t n=0;bytes b=xrtBase64DecodeNew(text.Data,text.Size,&n,NULL);bool ok=b&&n<=1048576u&&MdoHomeAtomicWrite(path,b,n,false);xrtFree(b);return ok;
+    size_t n=0;bytes b=xrtBase64DecodeNew(text.Data,text.Size,&n,NULL);bool ok=b&&n<=64u*1024u*1024u&&MdoHomeAtomicWrite(path,b,n,false);xrtFree(b);return ok;
 }
 bool MdoEcosystemRecover(void)
 {
     bool missing=false;char* text=MdoExtensionRead(ECO_JOURNAL,true,ECO_JOURNAL_LIMIT,&missing);
     if(!text)return missing;
-    xjsonreadconfig limits;xrtJsonReadConfigInit(&limits);limits.MaxInputBytes=ECO_JOURNAL_LIMIT;limits.MaxStringBytes=2u*1024u*1024u;limits.MaxValues=65536;
+    xjsonreadconfig limits;xrtJsonReadConfigInit(&limits);limits.MaxInputBytes=ECO_JOURNAL_LIMIT;limits.MaxStringBytes=90u*1024u*1024u;limits.MaxValues=65536;
     xvalue* journal=xrtJsonRead(xrtStrView(text),&limits);xrtFree(text);
     const xvalue* files=xrtValueObjectGet(journal,XRT_STR_LITERAL("files"));bool ok=journal&&xrtValueType(files)==XVALUE_ARRAY&&xrtValueCount(files)<=5000;
     /* Validate all journal destinations before restoring any of them. */
@@ -76,7 +76,7 @@ static xvalue* EcoLocalFiles(const xvalue* package,char error[1024])
         }
         if(ok)ok=EcoLocalAppend(files,path,content,strlen(content));
         const xvalue* extras=xrtValueObjectGet(r,XRT_STR_LITERAL("files"));
-        for(size_t j=0;ok&&j<xrtValueCount(extras);j++){const xvalue* e=xrtValueArrayGet(extras,j);cstr relative=MdoPackageText(e,"path",220),b64=MdoPackageText(e,"base64",1400000);size_t n=0;bytes b=b64?xrtBase64DecodeNew(b64,strlen(b64),&n,NULL):NULL;
+        for(size_t j=0;ok&&j<xrtValueCount(extras);j++){const xvalue* e=xrtValueArrayGet(extras,j);cstr relative=MdoPackageText(e,"path",220),b64=MdoPackageText(e,"base64",90u*1024u*1024u);size_t n=0;bytes b=b64?xrtBase64DecodeNew(b64,strlen(b64),&n,NULL):NULL;
             int count=snprintf(path,sizeof(path),!strcmp(kind,"modules")?"modules/tools/%s/%s":"skills/%s/%s",id,relative);ok=count>0&&(size_t)count<sizeof(path)&&b&&EcoLocalAppend(files,path,b,n);xrtFree(b);}
     }
     if(!ok){if(!error[0])snprintf(error,1024,"Invalid resource file or duplicate destination");xrtValueRelease(files);return NULL;}return files;
@@ -90,7 +90,7 @@ static bool EcoLocalUnchanged(const xvalue* owned)
     cstr path=MdoPackageText(owned,"path",255),expected=MdoPackageText(owned,"sha256",64);
     if(!path||!expected)return false;
     bool exists=false;xfileinfo info;
-    if(!MdoHomeExternalStat(path,&exists,&info)||!exists||info.Type!=XFILE_TYPE_FILE||!(info.Available&XFILE_INFO_SIZE)||info.Size>1048576u)return false;
+    if(!MdoHomeExternalStat(path,&exists,&info)||!exists||info.Type!=XFILE_TYPE_FILE||!(info.Available&XFILE_INFO_SIZE)||info.Size>64u*1024u*1024u)return false;
     xfile file=MdoHomeOpenRead(path);size_t size=(size_t)info.Size;bytes data=xrtMalloc(size+1);char hash[65];
     bool same=file&&data&&xrtReadFull(file,data,size,NULL)&&MdoExtensionHashBytes(data,size,hash)&&!strcmp(hash,expected);
     if(file)xrtClose(file);
@@ -110,7 +110,7 @@ static bool EcoLocalCurrent(cstr path,xvalue* change,const xvalue* owned,char er
     if(!exists){if(owned){snprintf(error,1024,"Installed file is missing: %s",path);return false;}
         xfile builtin=MdoResourceOpenRead(path);if(builtin){xrtClose(builtin);snprintf(error,1024,"Built-in resource cannot be replaced: %s",path);return false;}
         xrtClearError();return xrtValueObjectSetNew(change,XRT_STR_LITERAL("old"),xrtValueNull());}
-    if(!owned||info.Type!=XFILE_TYPE_FILE||!(info.Available&XFILE_INFO_SIZE)||info.Size>1048576u){snprintf(error,1024,"Resource already exists: %s",path);return false;}
+    if(!owned||info.Type!=XFILE_TYPE_FILE||!(info.Available&XFILE_INFO_SIZE)||info.Size>64u*1024u*1024u){snprintf(error,1024,"Resource already exists: %s",path);return false;}
     xfile f=MdoHomeOpenRead(path);size_t n=(size_t)info.Size;bytes b=xrtMalloc(n+1);char hash[65];bool ok=f&&b&&xrtReadFull(f,b,n,NULL)&&MdoExtensionHashBytes(b,n,hash)&&!strcmp(hash,MdoPackageText(owned,"sha256",64));if(f)xrtClose(f);
     if(!ok)snprintf(error,1024,"Resource was edited locally: %s. Keep it or export/remove it before updating.",path);
     char* encoded=ok?xrtBase64EncodeNew(b,n,NULL):NULL;ok=encoded&&MdoApiValueSetString(change,"old",encoded);xrtFree(encoded);xrtFree(b);return ok;

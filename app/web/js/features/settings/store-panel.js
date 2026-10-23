@@ -280,11 +280,12 @@ export function createStorePanel() {
             filename: `${p.manifest.slug}-${p.manifest.version}.mdo-extension.json` });
         } catch (e) { message.textContent = publicationMessage(e); }finally { exportButton.disabled = false; }
       });
-      const submit = element("button", { text: text("submit", "提交审核"), className: "primary-button", attrs: { type: "submit" } });
+      const visibility=node("label"),publishOnline=element("input",{attrs:{type:"checkbox"}});visibility.append(publishOnline,node("span","申请公布（需审核）；不勾选则私有保存"));const reviewLabel=node("label","审核说明：构建方法、来源、安全及权限行为"),reviewNotes=element("textarea",{attrs:{maxlength:"8000"}});reviewLabel.append(reviewNotes);form.append(visibility,reviewLabel);
+      const submit = element("button", { text: text("submitCreator", "提交作品"), className: "primary-button", attrs: { type: "submit" } });
       form.onsubmit = async e => {
-        e.preventDefault();if (busy) return;busy = true;submit.disabled = true;previewButton.disabled = true;message.textContent = text("submitting", "正在提交…");
+        e.preventDefault();if (busy) return;if(publishOnline.checked&&reviewNotes.value.trim().length<10){message.textContent="请填写至少 10 个字符的构建及安全说明，选中资源的完整源码会随作品提供给审核员。";return;}busy = true;submit.disabled = true;previewButton.disabled = true;message.textContent = text("submitting", "正在提交…");
         const controls = [...form.querySelectorAll("input,textarea,button")];controls.forEach(control => { control.disabled = true; });
-        try { await currentEditor.draft.flush();prepared = await build();await call({ action: "submit", package: prepared });editor.saved = true;editor.dirty = false;closeDialog();view = "mine";busy = false;await load();toast(text("submitted", "投稿已提交，审核通过后会公开显示。")); }
+        try { await currentEditor.draft.flush();prepared = await build();await call({ action: "submit", package: prepared, publish:publishOnline.checked, review_notes:reviewNotes.value.trim() });editor.saved = true;editor.dirty = false;closeDialog();view = "mine";busy = false;await load();toast(publishOnline.checked?"已提交审核，现有公布版本继续可用。":"作品已私有保存，可在创作中心申请公布。"); }
         catch (e) { message.textContent = publicationMessage(e); }
         finally { busy = false;controls.forEach(control => { control.disabled = false; }); }
       };

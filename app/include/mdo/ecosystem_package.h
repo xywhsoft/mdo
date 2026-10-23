@@ -5,8 +5,9 @@
  * validation nor preview compiles C, connects MCP, or executes resource files. */
 #include <stdio.h>
 #include <string.h>
-#define MDO_PACKAGE_LIMIT (6u * 1024u * 1024u)
+#define MDO_PACKAGE_LIMIT (100u * 1024u * 1024u)
 #define MDO_PACKAGE_V1_LIMIT (1024u * 1024u)
+#define MDO_PACKAGE_LARGE_MIN_BUILD 50000009u
 #define MDO_PACKAGE_FORMAT "mdo.extension.v1"
 #define MDO_PACKAGE_FORMAT_V2 "mdo.extension.v2"
 #define MDO_PACKAGE_V2_MIN_BUILD 30000126u
@@ -94,7 +95,7 @@ static bool MdoPackageValidate(const xvalue* package,char* error,size_t capacity
     const char* name=MdoPackageText(m,"name",100),*version=MdoPackageText(m,"version",32);
     const char* description=MdoPackageText(m,"description",600),*readme=MdoPackageText(m,"readme",32768),*license=MdoPackageText(m,"license",80);
     if(xrtValueObjectGet(m,XRT_STR_LITERAL("changelog"))&&!MdoPackageText(m,"changelog",8192))goto bad;
-    bool v2=MdoPackageV2(package);size_t sourceLimit=v2?4u*1024u*1024u:524288u;
+    bool v2=MdoPackageV2(package);size_t sourceLimit=v2?64u*1024u*1024u:524288u;
     if(!format||(strcmp(format,MDO_PACKAGE_FORMAT)&&!v2)||!MdoPackageId(slug)||!name||!name[0]||!version||!version[0]||
        !description||!description[0]||!readme||!readme[0]||!license||!license[0]||
        xrtValueType(resources)!=XVALUE_ARRAY||!xrtValueCount(resources)||xrtValueCount(resources)>16)goto bad;
@@ -119,12 +120,12 @@ static bool MdoPackageValidate(const xvalue* package,char* error,size_t capacity
         total+=strlen(content);if(total>sourceLimit){reason="Package decoded content exceeds its limit";goto bad;}
         const xvalue* files=xrtValueObjectGet(r,XRT_STR_LITERAL("files"));
         if(files){reason="This resource cannot contain attached files";if((strcmp(kind,"skills")&&!module&&!plugin&&!toolpack)||xrtValueType(files)!=XVALUE_ARRAY||xrtValueCount(files)>128)goto bad;
-            for(size_t j=0;j<xrtValueCount(files);j++){const xvalue* f=xrtValueArrayGet(files,j);const char* path=MdoPackageText(f,"path",220),*base64=MdoPackageText(f,"base64",v2?1400000u:180000u);
+            for(size_t j=0;j<xrtValueCount(files);j++){const xvalue* f=xrtValueArrayGet(files,j);const char* path=MdoPackageText(f,"path",220),*base64=MdoPackageText(f,"base64",v2?90u*1024u*1024u:180000u);
                 reason="Invalid attached file path or size";if(!MdoPackagePath(path)||(!strcmp(kind,"skills")&&MdoPackageSamePath(path,"SKILL.md"))||!base64)goto bad;
                 size_t prefix=plugin?8u+strlen(id)+11u+64u+7u:module?14u+strlen(id)+1u:toolpack?106u:8u+strlen(id);
                 if(prefix+strlen(path)>220u){reason="Installed file path exceeds the portable limit";goto bad;}
                 for(size_t k=0;k<j;k++)if(MdoPackageSamePath(path,MdoPackageText(xrtValueArrayGet(files,k),"path",220))){reason="Duplicate file path";goto bad;}
-                size_t size=0;void* bytes=xrtBase64DecodeNew(base64,strlen(base64),&size,NULL);bool ok=bytes&&size<=(v2?1048576u:131072u);xrtFree(bytes);if(!ok)goto bad;
+                size_t size=0;void* bytes=xrtBase64DecodeNew(base64,strlen(base64),&size,NULL);bool ok=bytes&&size<=(v2?64u*1024u*1024u:131072u);xrtFree(bytes);if(!ok)goto bad;
                 total+=size;if(total>sourceLimit){reason="Package decoded content exceeds its limit";goto bad;}
             }
         }
@@ -161,7 +162,8 @@ static bool MdoPackageValidate(const xvalue* package,char* error,size_t capacity
             xrtValueRelease(doc);if(!ok){reason="MCP export must use input: credential placeholders and no local working directory";goto bad;}
         }
     }
-    {size_t size=0;char* json=xrtJsonStringify(package,false,&size);bool bounded=json&&size<=(v2?MDO_PACKAGE_LIMIT:MDO_PACKAGE_V1_LIMIT);xrtFree(json);
+    {int64 largeBuild=0;size_t size=0;char* json=xrtJsonStringify(package,false,&size);bool bounded=json&&size<=(v2?MDO_PACKAGE_LIMIT:MDO_PACKAGE_V1_LIMIT);xrtFree(json);
+        if(v2&&size>6u*1024u*1024u&&(!MdoPackageNumber(m,"min_build_id",&largeBuild)||largeBuild<MDO_PACKAGE_LARGE_MIN_BUILD)){reason="Large packages require a newer client build";goto bad;}
         if(!bounded){reason="Package JSON exceeds its format limit";goto bad;}}
     return true;
 bad:if(error&&capacity)snprintf(error,capacity,"%s",reason);return false;

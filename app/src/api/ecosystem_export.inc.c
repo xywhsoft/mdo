@@ -22,7 +22,7 @@ static bool EcoNativeExportFile(xvalue* Extras,cstr Root,cstr Name,size_t* Total
 {
     if(!MdoPackagePath(Name))return false;
     char Path[512];int N=snprintf(Path,sizeof(Path),"%s/%s",Root,Name);if(N<=0||(size_t)N>=sizeof(Path))return false;
-    xfile F=MdoHomeOpenRead(Path);xfileinfo Info={0};bool Ok=F&&xrtFileStat(F,&Info)&&Info.Type==XFILE_TYPE_FILE&&Info.Size<=1048576u&&*Total+Info.Size<=4u*1024u*1024u;
+    xfile F=MdoHomeOpenRead(Path);xfileinfo Info={0};bool Ok=F&&xrtFileStat(F,&Info)&&Info.Type==XFILE_TYPE_FILE&&Info.Size<=64u*1024u*1024u&&*Total+Info.Size<=64u*1024u*1024u;
     bytes Data=Ok?xrtMalloc((size_t)Info.Size+1):NULL;Ok=Ok&&Data&&xrtReadFull(F,Data,(size_t)Info.Size,NULL);if(F)xrtClose(F);
     char* B64=Ok?xrtBase64EncodeNew(Data,(size_t)Info.Size,NULL):NULL;xvalue* E=xrtValueObject();
     Ok=Ok&&B64&&E&&MdoApiValueSetString(E,"path",Name)&&MdoApiValueSetString(E,"base64",B64)&&xrtValueArrayAppend(Extras,E);

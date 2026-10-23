@@ -16,11 +16,11 @@ static bool SdkPluginEnabled(const xvalue* M){bool Enabled=true;xrtValueGetBool(
 static bool SdkPluginVerifyFile(cstr Id,cstr Revision,const xvalue* Entry){
     cstr Name=SdkField(Entry,"path"),Hash=SdkField(Entry,"sha256");if(!MdoPackagePath(Name)||!Hash||strlen(Hash)!=64)return false;
     char Path[600];snprintf(Path,sizeof(Path),"plugins/%s/revisions/%s/files/%s",Id,Revision,Name);
-    xfile File=MdoHomeOpenRead(Path);if(!File)return false;xfileinfo Info={0};bool Ok=xrtFileStat(File,&Info)&&Info.Type==XFILE_TYPE_FILE&&Info.Size<=1024u*1024u;
-    unsigned char* Bytes=Ok?xrtMalloc((size_t)Info.Size+1):NULL;char Actual[65];
-    Ok=Ok&&Bytes&&xrtReadFull(File,Bytes,(size_t)Info.Size,NULL)&&MdoExtensionHashBytes(Bytes,(size_t)Info.Size,Actual)&&!strcmp(Hash,Actual);
-    if(Bytes)xrtSecureZero(Bytes,(size_t)Info.Size);
-    xrtFree(Bytes);bool Closed=xrtClose(File);return Ok&&Closed;
+    xfile File=MdoHomeOpenRead(Path);if(!File)return false;xfileinfo Info={0};bool Ok=xrtFileStat(File,&Info)&&Info.Type==XFILE_TYPE_FILE&&Info.Size<=64u*1024u*1024u;
+    unsigned char Bytes[65536],Digest[32];char Actual[65];uint64 Total=0;xsha256 Sha;xrtSha256Init(&Sha);
+    while(Ok&&Total<Info.Size){size_t N=0;Ok=xrtRead(File,Bytes,sizeof(Bytes),&N)&&N&&xrtSha256Update(&Sha,Bytes,N);Total+=N;}
+    Ok=Ok&&Total==Info.Size&&xrtSha256Final(&Sha,Digest);if(Ok){for(size_t I=0;I<32;I++)snprintf(Actual+I*2,3,"%02x",Digest[I]);Ok=!strcmp(Hash,Actual);}
+    xrtSecureZero(Bytes,sizeof(Bytes));bool Closed=xrtClose(File);return Ok&&Closed;
 }
 static bool SdkPluginMountRevision(SdkPlugin* P,const xvalue* Manifest){
     P->Manifest=xrtValueClone(Manifest);if(!P->Manifest)return false;

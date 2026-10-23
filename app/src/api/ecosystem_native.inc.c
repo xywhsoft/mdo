@@ -16,8 +16,8 @@ static bool EcoNativeFiles(xvalue* Files,const xvalue* Resource,char Error[1024]
     else snprintf(Root,sizeof(Root),"data/ecosystem/toolpacks/%.16s/%s",Identity,Revision);
     xvalue* Inventory=xrtValueArray();Ok=Ok&&Inventory!=NULL;
     for(size_t i=0;Ok&&i<xrtValueCount(Extras);i++){
-        const xvalue* File=xrtValueArrayGet(Extras,i);cstr Name=MdoPackageText(File,"path",220),Encoded=MdoPackageText(File,"base64",1400000);
-        size_t Size=0;bytes Data=xrtBase64DecodeNew(Encoded,strlen(Encoded),&Size,NULL);char Hash[65];
+        const xvalue* File=xrtValueArrayGet(Extras,i);cstr Name=MdoPackageText(File,"path",220),Encoded=MdoPackageText(File,"base64",90u*1024u*1024u);
+        size_t Size=0;bytes Data=Encoded?xrtBase64DecodeNew(Encoded,strlen(Encoded),&Size,NULL):NULL;char Hash[65];
         int Written=snprintf(Path,sizeof(Path),Plugin?"%s/files/%s":"%s/%s",Root,Name);
         Ok=Data&&Written>0&&(size_t)Written<sizeof(Path)&&strlen(Path)<=220&&MdoExtensionHashBytes(Data,Size,Hash)&&EcoLocalAppend(Files,Path,Data,Size);
         if(Ok){xvalue* Item=xrtValueObject();Ok=Item&&MdoApiValueSetString(Item,"path",Name)&&MdoApiValueSetString(Item,"sha256",Hash)&&MdoApiValueSetUInt(Item,"bytes",Size)&&xrtValueArrayAppend(Inventory,Item);xrtValueRelease(Item);}

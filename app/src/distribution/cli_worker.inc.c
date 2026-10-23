@@ -67,6 +67,18 @@ static bool CliImport(MdoCliJob* Job,char* Error,size_t Capacity)
     if(!Ok&&Root[0]){size_t Count=0;MdoDistRemoveTree(Root,0,&Count);}if(Archive[0])MdoHomeRemove(Archive,false);xrtValueRelease(Product);xrtValueRelease(Tool);return Ok;
 #endif
 }
+/* Upload only explicit selections. Both passes hash/stream bounded buffers;
+ * the service seals the exact immutable digest before any version is visible. */
+static bool CliCreatorUpload(MdoCliJob* Job,cstr Path,cstr Hash,uint64 Size,cstr Purpose,MdoAccountLease* Lease,char Upload[33],char* Error,size_t Capacity)
+{
+    xvalue* B=xrtValueObject();CliSet(B,"action","begin");CliSet(B,"purpose",Purpose);CliSet(B,"sha256",Hash);xrtValueObjectSetNew(B,XRT_STR_LITERAL("size"),xrtValueUInt(Size));
+    xvalue* R=CliService("/api/v1/mdo/cli/upload","POST",B,Lease,Job->Cancel,Error,Capacity);xrtValueRelease(B);if(!R)return false;
+    snprintf(Upload,33,"%s",CliText(R,"id",32));uint64 Chunk=MdoDistNumber(R,"chunk_bytes");xrtValueRelease(R);if(strlen(Upload)!=32||!Chunk||Chunk>65536)return false;
+    xfile F=xrtOpen(Path,XFILE_READ);uint8 Buffer[65536];uint64 Offset=0;bool Ok=F!=NULL;CliTaskStatus(Job->Id,"uploading",NULL);
+    while(Ok&&Offset<Size){size_t N=(size_t)(Size-Offset<Chunk?Size-Offset:Chunk);Ok=!xrtCancelRequested(Job->Cancel)&&CliReadExact(F,Buffer,N);if(!Ok)break;
+        char* Enc=xrtBase64EncodeNew(Buffer,N,NULL);B=xrtValueObject();CliSet(B,"action","chunk");CliSet(B,"id",Upload);CliSet(B,"data",Enc?Enc:"");xrtFree(Enc);xrtValueObjectSetNew(B,XRT_STR_LITERAL("offset"),xrtValueUInt(Offset));R=CliService("/api/v1/mdo/cli/upload","POST",B,Lease,Job->Cancel,Error,Capacity);xrtValueRelease(B);Ok=R&&MdoDistNumber(R,"offset")==Offset+N;xrtValueRelease(R);if(Ok){Offset+=N;CliProgress(Offset,Size,Job);}}
+    xrtClose(F);if(!Ok)return false;B=xrtValueObject();CliSet(B,"action","finish");CliSet(B,"id",Upload);R=CliService("/api/v1/mdo/cli/upload","POST",B,Lease,Job->Cancel,Error,Capacity);xrtValueRelease(B);Ok=R!=NULL;xrtValueRelease(R);return Ok;
+}
 static bool CliPublish(MdoCliJob* Job,char* Error,size_t Capacity)
 {
 #if defined(__ANDROID__)
@@ -74,21 +86,21 @@ static bool CliPublish(MdoCliJob* Job,char* Error,size_t Capacity)
 #else
     const xvalue* Tool=xrtValueObjectGet(Job->Input,XRT_STR_LITERAL("tool"));MdoAccountLease Lease={0};
     if(!MdoAccountAcquireServiceWait(Job->Cancel,10000,&Lease)){snprintf(Error,Capacity,"Sign in before sharing a tool");return false;}
-    char Relative[160]={0},Hash[65],Path[256];uint64 Size=0;bool Ok=CliBuildArchive(Job,Tool,Relative,Hash,&Size,Error,Capacity);xvalue* Result=NULL;char Upload[33]={0};
-    if(!Ok)goto done;
-    xvalue* Body=xrtValueObject();CliSet(Body,"action","begin");CliSet(Body,"sha256",Hash);xrtValueObjectSetNew(Body,XRT_STR_LITERAL("size"),xrtValueUInt(Size));
-    Result=CliService("/api/v1/mdo/cli/upload","POST",Body,&Lease,Job->Cancel,Error,Capacity);xrtValueRelease(Body);if(!Result){Ok=false;goto done;}
-    snprintf(Upload,sizeof(Upload),"%s",CliText(Result,"id",32));uint64 Chunk=MdoDistNumber(Result,"chunk_bytes");xrtValueRelease(Result);Result=NULL;
-    if(strlen(Upload)!=32||!Chunk||Chunk>65536){Ok=false;goto done;}
-    xfile Input=MdoHomeOpenRead(Relative);uint8 Buffer[65536];uint64 Offset=0;Ok=Input!=NULL;CliTaskStatus(Job->Id,"uploading",NULL);
-    while(Ok&&Offset<Size){size_t N=(size_t)((Size-Offset)<Chunk?Size-Offset:Chunk);Ok=!xrtCancelRequested(Job->Cancel)&&CliReadExact(Input,Buffer,N);if(!Ok)break;
-        char* Base64=xrtBase64EncodeNew(Buffer,N,NULL);Body=xrtValueObject();CliSet(Body,"action","chunk");CliSet(Body,"id",Upload);CliSet(Body,"data",Base64?Base64:"");xrtFree(Base64);xrtValueObjectSetNew(Body,XRT_STR_LITERAL("offset"),xrtValueUInt(Offset));
-        Result=CliService("/api/v1/mdo/cli/upload","POST",Body,&Lease,Job->Cancel,Error,Capacity);xrtValueRelease(Body);Ok=Result&&MdoDistNumber(Result,"offset")==Offset+N;xrtValueRelease(Result);Result=NULL;if(Ok){Offset+=N;CliProgress(Offset,Size,Job);}}
-    xrtClose(Input);if(!Ok)goto done;
-    Body=xrtValueObject();CliSet(Body,"action","finish");CliSet(Body,"id",Upload);Result=CliService("/api/v1/mdo/cli/upload","POST",Body,&Lease,Job->Cancel,Error,Capacity);xrtValueRelease(Body);Ok=Result!=NULL;xrtValueRelease(Result);Result=NULL;if(!Ok)goto done;
-    Body=xrtValueObject();CliSet(Body,"upload_id",Upload);snprintf(Path,sizeof(Path),"/api/v1/mdo/cli/submit");Result=CliService(Path,"POST",Body,&Lease,Job->Cancel,Error,Capacity);xrtValueRelease(Body);Ok=Result!=NULL;
+    char Relative[160]={0},Hash[65],EvidenceHash[65],Upload[33]={0},EvidenceUpload[33]={0};uint64 Size=0,EvidenceSize=0;char* Absolute=NULL;bool Ok=false;xvalue* Result=NULL;
+    cstr Evidence=CliText(Job->Input,"review_file",4096);bool Publish=CliBool(Job->Input,"publish",false);
+    Result=CliService("/api/v1/mdo/creator/profile","GET",NULL,&Lease,Job->Cancel,Error,Capacity);uint64 Limit=MdoDistNumber(Result,"version_bytes");xrtValueRelease(Result);Result=NULL;if(!Limit)goto done;
+    if(Publish&&(strlen(CliText(Job->Input,"review_notes",8000))<10||(!Evidence[0]&&!CliText(Job->Input,"source_url",2000)[0]))){snprintf(Error,Capacity,"Provide source/provenance and build/security instructions before requesting publication");goto done;}
+    if(Evidence[0]){xfileinfo Info;if(!xrtPathStat(Evidence,false,&Info)||Info.Type!=XFILE_TYPE_FILE||!CliFileHash(Evidence,EvidenceHash,&EvidenceSize,Job->Cancel)||!EvidenceSize){snprintf(Error,Capacity,"Select a regular source/review file; directories and links are not uploaded");goto done;}}
+    if(!CliBuildArchive(Job,Tool,Relative,Hash,&Size,Error,Capacity))goto done;
+    if(Size>Limit||EvidenceSize>Limit-Size){snprintf(Error,Capacity,"Artifact plus review files exceed creator capacity (%llu MiB)",(unsigned long long)(Limit/1048576));goto done;}
+    Absolute=MdoHomeExternalPath(Relative);Ok=Absolute&&CliCreatorUpload(Job,Absolute,Hash,Size,"artifact",&Lease,Upload,Error,Capacity);if(!Ok)goto done;
+    if(Evidence[0]){Ok=CliCreatorUpload(Job,Evidence,EvidenceHash,EvidenceSize,"review",&Lease,EvidenceUpload,Error,Capacity);if(!Ok)goto done;}
+    xvalue* B=xrtValueObject();CliSet(B,"upload_id",Upload);CliSet(B,"evidence_upload",EvidenceUpload);CliSet(B,"review_notes",CliText(Job->Input,"review_notes",8000));CliSet(B,"source_url",CliText(Job->Input,"source_url",2000));xrtValueObjectSetNew(B,XRT_STR_LITERAL("publish"),xrtValueBool(Publish));
+    Result=CliService("/api/v1/mdo/cli/submit","POST",B,&Lease,Job->Cancel,Error,Capacity);xrtValueRelease(B);Ok=Result!=NULL;
     if(Ok){xrtMutexLock(g_MdoCli.Lock);xvalue* T=CliTask(Job->Id);if(T)xrtValueObjectSet(T,XRT_STR_LITERAL("submission"),Result);xrtMutexUnlock(g_MdoCli.Lock);}
-done:if(Relative[0])MdoHomeRemove(Relative,false);xrtValueRelease(Result);MdoAccountRelease(&Lease);return Ok;
+done:
+    if(!Ok){const char* Ids[]={Upload,EvidenceUpload};for(int I=0;I<2;I++)if(Ids[I][0]){char Ignored[256]={0};xvalue* B=xrtValueObject();CliSet(B,"action","cancel");CliSet(B,"id",Ids[I]);xvalue* R=CliService("/api/v1/mdo/cli/upload","POST",B,&Lease,NULL,Ignored,sizeof(Ignored));xrtValueRelease(B);xrtValueRelease(R);}}
+    xrtFree(Absolute);if(Relative[0])MdoHomeRemove(Relative,false);xrtValueRelease(Result);MdoAccountRelease(&Lease);return Ok;
 #endif
 }
 static bool CliMine(MdoCliJob* Job,char* Error,size_t Capacity)

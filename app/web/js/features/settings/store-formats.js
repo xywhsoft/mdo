@@ -23,8 +23,13 @@ export function makeStorePackage(fields, resources) {
     ...(v2 ? { min_build_id: Math.max(30000126, fields.min_build_id || 0) } : {}),
     ...(fields.changelog?.trim() ? { changelog: fields.changelog.trim() } : {}),
   }, resources };
-  if (new TextEncoder().encode(JSON.stringify(result)).length > (v2 ? 6 : 1) * 1024 * 1024)
-    throw new Error(v2 ? "Package exceeds 6 MiB" : "Package exceeds 1 MiB");
+  const bytes = new TextEncoder().encode(JSON.stringify(result)).length;
+  if (bytes > 1024 * 1024) {
+    result.format = "mdo.extension.v2";
+    result.manifest.min_build_id = Math.max(bytes > 6 * 1024 * 1024 ? 50000009 : 30000126, fields.min_build_id || 0);
+  }
+  if (new TextEncoder().encode(JSON.stringify(result)).length > 100 * 1024 * 1024)
+    throw new Error("Package exceeds 100 MiB");
   return result;
 }
 

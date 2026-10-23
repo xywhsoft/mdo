@@ -31,26 +31,49 @@ bool MdoEcosystemPackageCompatible(const xvalue* package,const xvalue* input,cha
 
 /* First-party proxy: tokens never enter JavaScript, paths are constructed from
  * validated fields, redirects and ambiguous POST retries are forbidden. */
-static xvalue* EcoService(cstr path,cstr method,const xvalue* body,MdoAccountLease* lease,xcancel* cancel,uint16* status)
+static xvalue* EcoService(cstr path,cstr method,const xvalue* body,MdoAccountLease* lease,xcancel* cancel,uint16* status,char* error,size_t capacity)
 {
     char url[1024],auth[4200];XS_FetchHeader headers[3];XS_FetchRequest req={0};XS_FetchResponse resp={0};size_t size=0;
-    char* json=body?xrtJsonStringify(body,false,&size):NULL;xvalue* envelope=NULL,*data=NULL;*status=0;
+    char* json=body?xrtJsonStringify(body,false,&size):NULL;xvalue* envelope=NULL,*data=NULL;*status=0;if(capacity)error[0]=0;
     if(size>MDO_PACKAGE_LIMIT||(cancel&&xrtCancelRequested(cancel)))goto done;
     snprintf(url,sizeof(url),MDO_ACCOUNT_SERVICE_ORIGIN "%s",path);
     headers[0]=(XS_FetchHeader){"Accept","application/json"};headers[1]=(XS_FetchHeader){"Content-Type","application/json"};
     size_t Count=2;if(lease->Managed&&lease->AccessToken){snprintf(auth,sizeof(auth),"Bearer %s",lease->AccessToken);headers[Count++]=(XS_FetchHeader){"Authorization",auth};}
     req.Size=sizeof(req);req.Version=XS_FETCH_REQUEST_VERSION;req.Url=url;req.Method=method;req.Headers=headers;req.HeaderCount=Count;req.Body=json;req.BodySize=size;
-    req.Timeout=20000000;req.IdleTimeout=10000000;req.MaxBodyBytes=MDO_PACKAGE_LIMIT+65536;req.Cancel=lease->Managed?lease->Cancel:cancel;resp.Size=sizeof(resp);
+    req.Timeout=20000000;req.IdleTimeout=10000000;req.MaxBodyBytes=XS_FETCH_BODY_LIMIT;req.Cancel=lease->Managed?lease->Cancel:cancel;resp.Size=sizeof(resp);
     if(!xsFetch(&req,&resp))goto done;
     *status=resp.Status;
     if(!resp.Body||!xrtUtf8Valid((xstrview){(cstr)resp.Body,resp.BodySize},NULL))goto done;
     xjsonreadconfig limits;xrtJsonReadConfigInit(&limits);limits.MaxInputBytes=MDO_PACKAGE_LIMIT+65536;limits.MaxDepth=16;limits.MaxValues=24000;limits.MaxStringBytes=MDO_PACKAGE_LIMIT;
     envelope=xrtJsonRead((xstrview){(cstr)resp.Body,resp.BodySize},&limits);int64 code=-1;
-    if(!envelope||!MdoPackageNumber(envelope,"code",&code)||code)goto done;
+    if(!envelope||!MdoPackageNumber(envelope,"code",&code)||code){cstr Message=MdoPackageText(envelope,"message",1000);if(!Message)Message=MdoPackageText(envelope,"msg",1000);if(capacity&&Message)snprintf(error,capacity,"%s",Message);goto done;}
     data=xrtValueObjectTake(envelope,XRT_STR_LITERAL("data"));
 done:
     xrtSecureZero(auth,sizeof(auth));xrtFree(json);xrtValueRelease(envelope);xsFetchResponseUnit(&resp);
     if((cancel&&xrtCancelRequested(cancel))||(lease->Managed&&xrtCancelRequested(lease->Cancel))){xrtValueRelease(data);data=NULL;*status=0;}return data;
+}
+static bool EcoDownloadSource(xvalue* Data,MdoAccountLease* Lease,xcancel* Cancel,uint16* Status,char* Error,size_t Capacity)
+{
+    if(!xrtValueObjectGet(Data,XRT_STR_LITERAL("package_blob")))return true;int64 Size=0;cstr Hash=MdoPackageText(Data,"sha256",64);
+    if(!Hash||strlen(Hash)!=64||!MdoPackageNumber(Data,"package_bytes",&Size)||Size<1||Size>MDO_PACKAGE_LIMIT)return false;
+    char* Text=xrtMalloc((size_t)Size);bool Ok=Text!=NULL;int64 Offset=0;
+    while(Ok&&Offset<Size){char Path[240];snprintf(Path,sizeof(Path),"/api/v1/mdo/ecosystem/blob?hash=%s&offset=%lld",Hash,(long long)Offset);xvalue* R=EcoService(Path,"GET",NULL,Lease,Cancel,Status,Error,Capacity);int64 End=0,Total=0;size_t N=0;cstr Enc=MdoPackageText(R,"base64",90000);void* Bytes=Enc?xrtBase64DecodeNew(Enc,strlen(Enc),&N,NULL):NULL;
+        Ok=R&&Bytes&&N&&N<=65536&&MdoPackageNumber(R,"offset",&End)&&End==Offset+(int64)N&&End<=Size&&MdoPackageNumber(R,"total",&Total)&&Total==Size;if(Ok){memcpy(Text+Offset,Bytes,N);Offset=End;}xrtFree(Bytes);xrtValueRelease(R);}
+    char Actual[65];Ok=Ok&&MdoExtensionHashBytes(Text,(size_t)Size,Actual)&&!strcmp(Actual,Hash);xjsonreadconfig Limits;xrtJsonReadConfigInit(&Limits);Limits.MaxInputBytes=MDO_PACKAGE_LIMIT;Limits.MaxStringBytes=MDO_PACKAGE_LIMIT;Limits.MaxDepth=16;Limits.MaxValues=24000;xvalue* P=Ok?xrtJsonRead(xrtStrViewN(Text,(size_t)Size),&Limits):NULL;xrtFree(Text);char Why[256];Ok=P&&MdoPackageValidate(P,Why,sizeof(Why));if(Ok)xrtValueObjectSet(Data,XRT_STR_LITERAL("package"),P);xrtValueRelease(P);return Ok;
+}
+static bool EcoUploadSource(xvalue* Input,MdoAccountLease* Lease,xcancel* Cancel,uint16* Status,char* Error,size_t Capacity)
+{
+    const xvalue* P=xrtValueObjectGet(Input,XRT_STR_LITERAL("package"));size_t Size=0;char* Json=xrtJsonStringify(P,false,&Size);char Hash[65],Upload[33]={0};
+    bool Ok=Json&&MdoExtensionHashBytes(Json,Size,Hash);xvalue* B=Ok?xrtValueObject():NULL;
+    if(B){MdoApiValueSetString(B,"action","begin");MdoApiValueSetString(B,"purpose","package");MdoApiValueSetString(B,"sha256",Hash);xrtValueObjectSetNew(B,XRT_STR_LITERAL("size"),xrtValueUInt(Size));}
+    xvalue* R=Ok?EcoService("/api/v1/mdo/cli/upload","POST",B,Lease,Cancel,Status,Error,Capacity):NULL;xrtValueRelease(B);Ok=R!=NULL;
+    if(Ok){cstr Id=MdoPackageText(R,"id",32);if(Id)snprintf(Upload,sizeof(Upload),"%s",Id);Ok=strlen(Upload)==32;}xrtValueRelease(R);
+    for(size_t Offset=0;Ok&&Offset<Size;){size_t N=Size-Offset<65536?Size-Offset:65536;char* Enc=xrtBase64EncodeNew(Json+Offset,N,NULL);B=xrtValueObject();MdoApiValueSetString(B,"action","chunk");MdoApiValueSetString(B,"id",Upload);MdoApiValueSetString(B,"data",Enc?Enc:"");xrtFree(Enc);xrtValueObjectSetNew(B,XRT_STR_LITERAL("offset"),xrtValueUInt(Offset));R=EcoService("/api/v1/mdo/cli/upload","POST",B,Lease,Cancel,Status,Error,Capacity);xrtValueRelease(B);int64 Got=0;Ok=R&&MdoPackageNumber(R,"offset",&Got)&&Got==(int64)(Offset+N);xrtValueRelease(R);Offset+=N;}
+    xrtFree(Json);
+    if(Ok){B=xrtValueObject();MdoApiValueSetString(B,"action","finish");MdoApiValueSetString(B,"id",Upload);R=EcoService("/api/v1/mdo/cli/upload","POST",B,Lease,Cancel,Status,Error,Capacity);xrtValueRelease(B);Ok=R!=NULL;xrtValueRelease(R);}
+    if(Ok){xrtValueObjectRemove(Input,XRT_STR_LITERAL("package"));MdoApiValueSetString(Input,"package_upload",Upload);}
+    else if(Upload[0]){char Ignored[256];uint16 Code;B=xrtValueObject();MdoApiValueSetString(B,"action","cancel");MdoApiValueSetString(B,"id",Upload);R=EcoService("/api/v1/mdo/cli/upload","POST",B,Lease,Cancel,&Code,Ignored,sizeof(Ignored));xrtValueRelease(B);xrtValueRelease(R);}
+    return Ok;
 }
 static bool EcoHandleInput(MdoApiContext* c,xvalue* input)
 {
@@ -66,15 +89,16 @@ static bool EcoHandleInput(MdoApiContext* c,xvalue* input)
         int64 before=0;if(xrtValueObjectGet(input,XRT_STR_LITERAL("before"))&&(!MdoPackageNumber(input,"before",&before)||before<0))valid=false;
         snprintf(path,sizeof(path),"/api/v1/mdo/ecosystem/%s?format=2&build_id=%llu&id=%lld%s&before=%lld",!strcmp(action,"history")?"history":"package",(unsigned long long)MdoBuildId(),(long long)id,!strcmp(action,"latest")?"&latest=1":"",(long long)(before?before:INT64_MAX));
     }else if(valid&&!strcmp(action,"withdraw")){int64 revision=0;valid=MdoPackageNumber(input,"id",&id)&&id>0&&MdoPackageNumber(input,"revision",&revision)&&revision>0;body=input;strcpy(path,"/api/v1/mdo/ecosystem/withdraw");method="POST";
-    }else if(valid&&!strcmp(action,"submit")){body=xrtValueObjectGet(input,XRT_STR_LITERAL("package"));char error[256];valid=MdoPackageValidate(body,error,sizeof(error));strcpy(path,"/api/v1/mdo/ecosystem/submit");method="POST";
+    }else if(valid&&!strcmp(action,"submit")){const xvalue* Package=xrtValueObjectGet(input,XRT_STR_LITERAL("package"));char error[256];valid=MdoPackageValidate(Package,error,sizeof(error));body=input;strcpy(path,"/api/v1/mdo/ecosystem/submit");method="POST";
     }else if(valid&&(!strcmp(action,"uninstall")||!strcmp(action,"export")||!strcmp(action,"c_sources")||!strcmp(action,"import")||!strcmp(action,"plan_import")||!strcmp(action,"drafts")||!strcmp(action,"draft_read")||!strcmp(action,"draft_save")||!strcmp(action,"draft_delete"))){bool result=MdoApiEcosystemLocal(c,input);xrtValueRelease(input);return result;
     }else valid=false;
     if(!valid){xrtValueRelease(input);return MdoApiReplyError(c,422,"ecosystem_request_invalid","Invalid store request or portable package",NULL);}
     MdoAccountLease lease={0};uint16 status=0;
     bool Acquired=MdoAccountAcquireService(c->SendCancel,&lease);
     if(!Acquired&&(!strcmp(action,"mine")||strcmp(method,"GET"))){xrtValueRelease(input);return MdoApiReplyError(c,401,"ecosystem_login_refresh","Sign in or wait for login renewal before publishing",NULL);}
-    xvalue* data=EcoService(path,method,body,&lease,c->SendCancel,&status);if(status==401&&Acquired)(void)MdoAccountRejectAccess(&lease);if(Acquired)MdoAccountRelease(&lease);
-    if(!data){xrtValueRelease(input);return MdoApiReplyError(c,status>=400&&status<600?status:502,"ecosystem_service_failed",status==409?"This version already exists; publish a new version":status==401?"Sign in again or wait for login renewal":"The extension service could not complete this request",NULL);}
+    char serviceError[1001]={0};bool Uploaded=strcmp(action,"submit")||EcoUploadSource(input,&lease,c->SendCancel,&status,serviceError,sizeof(serviceError));
+    xvalue* data=Uploaded?EcoService(path,method,body,&lease,c->SendCancel,&status,serviceError,sizeof(serviceError)):NULL;if(data&&!EcoDownloadSource(data,&lease,c->SendCancel,&status,serviceError,sizeof(serviceError))){xrtValueRelease(data);data=NULL;if(!serviceError[0])snprintf(serviceError,sizeof(serviceError),"Source download failed hash or format validation");}if(status==401&&Acquired)(void)MdoAccountRejectAccess(&lease);if(Acquired)MdoAccountRelease(&lease);
+    if(!data){xrtValueRelease(input);return MdoApiReplyError(c,status>=400&&status<600?status:502,"ecosystem_service_failed",serviceError[0]?serviceError:status==409?"This version already exists; publish a new version":status==401?"Sign in again or wait for login renewal":"The extension service could not complete this request",NULL);}
     if(!strcmp(action,"install")||!strcmp(action,"plan")){
         bool Planning=!strcmp(action,"plan");xvalue* Consent=Planning?xrtValueClone(input):NULL;if(Consent)MdoApiValueSetBool(Consent,"trust_code",true);
         const xvalue* package=xrtValueObjectGet(data,XRT_STR_LITERAL("package"));char error[256];bool compatible=MdoEcosystemPackageCompatible(package,Consent?Consent:input,error,sizeof(error));xrtValueRelease(Consent);
@@ -127,9 +151,9 @@ void MdoApiEcosystemUnit(void)
 bool MdoApiEcosystemRoute(MdoApiContext* c)
 {
     if(c->Request->head->MethodCode==XHTTP_METHOD_GET){xvalue* input=xrtValueObject();MdoApiValueSetString(input,"action","installed");bool result=MdoApiEcosystemLocal(c,input);xrtValueRelease(input);return result;}
-    char* raw=NULL;size_t length=0;MdoApiBodyStatus read=MdoApiBinaryBodyRead(c,MDO_PACKAGE_LIMIT+4096,&raw,&length);
+    char* raw=NULL;size_t length=0;MdoApiBodyStatus read=MdoApiBinaryBodyRead(c,MDO_PACKAGE_LIMIT+16384,&raw,&length);
     if(read!=MDO_API_BODY_OK)return MdoApiReplyBodyError(c,read);
-    xjsonreadconfig limits;xrtJsonReadConfigInit(&limits);limits.MaxInputBytes=MDO_PACKAGE_LIMIT+4096;limits.MaxStringBytes=MDO_PACKAGE_LIMIT;limits.MaxDepth=16;limits.MaxValues=24000;
+    xjsonreadconfig limits;xrtJsonReadConfigInit(&limits);limits.MaxInputBytes=MDO_PACKAGE_LIMIT+16384;limits.MaxStringBytes=MDO_PACKAGE_LIMIT;limits.MaxDepth=16;limits.MaxValues=24000;
     xvalue* input=xrtJsonRead(xrtStrViewN(raw,length),&limits);xrtFree(raw);
     if(!input)return MdoApiReplyError(c,422,"ecosystem_request_invalid","Expected a bounded JSON object",NULL);
     EcoApiJob* job=xrtCalloc(1,sizeof(*job));xfuture* future=NULL;
@@ -138,13 +162,13 @@ bool MdoApiEcosystemRoute(MdoApiContext* c)
     if(c->Request->tls)job->Request.tls=xrtTlsStreamRef(c->Request->tls);else if(c->Request->tcp)job->Request.tcp=xrtNetStreamRef(c->Request->tcp);
     if(!job->Request.tls&&!job->Request.tcp)goto failed;
     job->Context.Request=&job->Request;job->Context.Target.Path=xrtStrView("/api/v1/ecosystem");job->Context.CloseResponse=true;
-    job->Context.SendDeadline=MdoDeadlineAfterUs(30000000);memcpy(job->Context.RequestId,c->RequestId,sizeof(c->RequestId));job->Input=input;
+    job->Context.SendDeadline=MdoDeadlineAfterUs(1200000000);memcpy(job->Context.RequestId,c->RequestId,sizeof(c->RequestId));job->Input=input;
     /* Transfer the admitted write count to the owned job. Home purge/import
      * stays fenced until network work and any resource publication finish. */
     job->Context.WriteShared=c->WriteShared;job->Context.WriteExclusive=c->WriteExclusive;
     xrtMutexLock(EcoApi.Lock);
-    if(!EcoApi.Stopping&&EcoApi.Count<6){
-        if(!EcoApi.Pool){xtaskpoolconfig config={0};config.Threads=2;config.QueueLimit=4;EcoApi.Pool=xrtTaskPoolCreate(&config);}
+    if(!EcoApi.Stopping&&EcoApi.Count<3){
+        if(!EcoApi.Pool){xtaskpoolconfig config={0};config.Threads=1;config.QueueLimit=2;EcoApi.Pool=xrtTaskPoolCreate(&config);}
         if(EcoApi.Pool){xtaskargs args={0};args.Destroy=EcoApiDrop;++EcoApi.Count;future=xrtTaskSubmit(EcoApi.Pool,EcoApiRun,job,&args);if(!future)--EcoApi.Count;}
     }
     xrtMutexUnlock(EcoApi.Lock);
