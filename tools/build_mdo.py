@@ -434,6 +434,8 @@ def prepare(lock: dict, connection: Path | None = None) -> None:
                      (ROOT / "include/mdo/sdk.h").read_bytes())
     import application_sdk
     application_sdk.generate(ROOT)
+    write_if_changed(GENERATED_MODULE_HEADER_PATH.with_name("workbench.h"),
+                     (ROOT / "include/mdo/workbench.h").read_bytes())
 
 
 def command_text(command: list[str]) -> str:

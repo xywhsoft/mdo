@@ -10,3 +10,8 @@ The build copies this file byte-for-byte to
 generated directory only as a quoted include root, so a module uses
 `#include "mdo/module.h"` and always compiles against the ABI packed into the
 same executable.
+
+`sdk.h` exposes the typed Application SDK broker. `workbench.h` provides
+generated C wrappers for the same panel/resource/browser methods available to
+frontend JavaScript. See [the workbench guide](../../docs/workbench.md) and
+`examples/application-sdk/workbench-plan.c` for an executable example.

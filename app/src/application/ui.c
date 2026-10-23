@@ -1,11 +1,11 @@
 #include "internal.h"
 #include "../../include/mdo/time.h"
 typedef struct SdkClient {char* Id;xvalue* Scope;uint64 Expires;} SdkClient;
-typedef struct SdkUiAction {char Id[37];char* Client;xvalue* Value;uint64 Expires;bool Terminal;} SdkUiAction;
+typedef struct SdkUiAction {char Id[37];char* Client;xvalue* Value;uint64 Expires,Deadline;xcancel* Cancel;bool Terminal;} SdkUiAction;
 static struct {xmutex* Lock;SdkClient Clients[32];SdkUiAction Actions[128];} SdkUi;
-static const cstr SdkUiMethods[]={"client.hello","client.poll","client.ack","ui.clients","ui.invoke","ui.result"};
+static const cstr SdkUiMethods[]={"client.hello","client.poll","client.ack","ui.clients","ui.invoke","ui.result","ui.release"};
 bool MdoApplicationUiInit(void){SdkUi.Lock=xrtMutexCreate();return SdkUi.Lock!=NULL;}
-static void SdkUiActionFree(SdkUiAction* A){xrtFree(A->Client);xrtValueRelease(A->Value);memset(A,0,sizeof(*A));}
+static void SdkUiActionFree(SdkUiAction* A){xrtFree(A->Client);xrtValueRelease(A->Value);if(A->Cancel)xrtCancelDestroy(A->Cancel);memset(A,0,sizeof(*A));}
 void MdoApplicationUiUnit(void){if(!SdkUi.Lock)return;for(size_t i=0;i<32;i++){xrtFree(SdkUi.Clients[i].Id);xrtValueRelease(SdkUi.Clients[i].Scope);}for(size_t i=0;i<128;i++)SdkUiActionFree(&SdkUi.Actions[i]);xrtMutexDestroy(SdkUi.Lock);memset(&SdkUi,0,sizeof(SdkUi));}
 xvalue* MdoApplicationUiCatalog(void){xvalue* A=xrtValueArray();for(size_t i=0;i<sizeof(SdkUiMethods)/sizeof(*SdkUiMethods);i++){xvalue* V=xrtValueObject();SdkPut(V,"id",SdkUiMethods[i]);SdkPut(V,"domain","ui");SdkPut(V,"transport","native");xrtValueArrayAppendNew(A,V);}return A;}
 bool MdoApplicationUiCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue* P,xvalue** R,mdo_error_v1* E,bool* Found){
@@ -14,7 +14,7 @@ bool MdoApplicationUiCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue* 
     cstr ClientId=SdkField(P,"client"),Id=SdkField(P,"id");
     xrtMutexLock(SdkUi.Lock);SdkClient* Client=NULL;SdkUiAction* Action=NULL;
     for(size_t i=0;i<32;i++)if(ClientId&&SdkUi.Clients[i].Id&&!strcmp(ClientId,SdkUi.Clients[i].Id))Client=&SdkUi.Clients[i];
-    for(size_t i=0;i<128;i++){SdkUiAction* A=&SdkUi.Actions[i];if(A->Id[0]&&MdoDeadlineExpired(A->Expires))SdkUiActionFree(A);if(Id&&!strcmp(Id,A->Id))Action=A;}
+    for(size_t i=0;i<128;i++){SdkUiAction* A=&SdkUi.Actions[i];if(A->Id[0]&&MdoDeadlineExpired(A->Expires))SdkUiActionFree(A);if(A->Id[0]&&!A->Terminal&&((A->Cancel&&xrtCancelRequested(A->Cancel))||(A->Deadline&&MdoDeadlineExpired(A->Deadline)))){A->Terminal=true;SdkPut(A->Value,"state","cancelled");SdkPut(A->Value,"error","The originating call was cancelled or its deadline expired before UI completion");}if(Id&&!strcmp(Id,A->Id))Action=A;}
     bool Ok=true;
     if(!strcmp(Method,"ui.clients")){
         *R=xrtValueArray();for(size_t i=0;i<32;i++)if(SdkUi.Clients[i].Id&&!MdoDeadlineExpired(SdkUi.Clients[i].Expires)){xvalue* V=xrtValueObject();SdkPut(V,"id",SdkUi.Clients[i].Id);xrtValueObjectSetNew(V,XRT_STR_LITERAL("context"),xrtValueClone(SdkUi.Clients[i].Scope));xrtValueArrayAppendNew(*R,V);}
@@ -35,13 +35,18 @@ bool MdoApplicationUiCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue* 
         char* Json=Params?SdkJson(Params):NULL;if(Json&&strlen(Json)>16384){xrtFree(Json);Ok=MdoApplicationError(E,"sdk_ui_action_limit","UI arguments exceed 16 KiB","ui",413,false);goto done;}xrtFree(Json);
         Action=NULL;for(size_t i=0;i<128;i++)if(!SdkUi.Actions[i].Id[0]){Action=&SdkUi.Actions[i];break;}
         if(!Action){Ok=MdoApplicationError(E,"sdk_ui_action_limit","UI action receipts are full; wait for their lease to expire","ui",429,false);goto done;}
-        if(!SdkRandomId("uia-",Action->Id)){Ok=false;goto done;}Action->Client=xrtStrDup(ClientId);Action->Value=xrtValueObject();Action->Expires=MdoDeadlineAfterUs(600000000);
-        SdkPut(Action->Value,"id",Action->Id);SdkPut(Action->Value,"action",Type);SdkPut(Action->Value,"state","pending");
+        if(!SdkRandomId("uia-",Action->Id)){Ok=false;goto done;}Action->Client=xrtStrDup(ClientId);Action->Value=xrtValueObject();Action->Expires=MdoDeadlineAfterUs(600000000);Action->Deadline=C->Deadline;Action->Cancel=Invocation&&Invocation->Cancel?xrtCancelRef(Invocation->Cancel):NULL;
+        SdkPut(Action->Value,"client",ClientId);SdkPut(Action->Value,"id",Action->Id);SdkPut(Action->Value,"action",Type);SdkPut(Action->Value,"state","pending");
         xrtValueObjectSetNew(Action->Value,XRT_STR_LITERAL("params"),Params?xrtValueClone(Params):xrtValueObject());
         xvalue* Scope=SdkGet(P,"context")?xrtValueClone(SdkGet(P,"context")):xrtValueObject();
+        SdkPut(Scope,"extension",C->ExtensionId);
         if(!SdkGet(Scope,"project")&&C->ProjectId&&C->ProjectId[0])SdkPut(Scope,"project",C->ProjectId);
         if(!SdkGet(Scope,"session")&&C->SessionId&&C->SessionId[0])SdkPut(Scope,"session",C->SessionId);
         xrtValueObjectSetNew(Action->Value,XRT_STR_LITERAL("context"),Scope);*R=xrtValueClone(Action->Value);
+    }else if(!strcmp(Method,"ui.release")){
+        if(!Action){*R=xrtValueObject();goto done;}
+        if(!Action->Terminal){Ok=MdoApplicationError(E,"sdk_ui_pending","A pending UI action cannot be released; cancel its originating operation or wait for completion","ui",409,false);goto done;}
+        SdkUiActionFree(Action);*R=xrtValueObject();
     }else if(!strcmp(Method,"ui.result")){
         if(!Action){Ok=MdoApplicationError(E,"sdk_ui_receipt_expired","UI result is not retained; inspect the client before repeating effects","ui",410,true);goto done;}*R=xrtValueClone(Action->Value);
     }else{

@@ -920,6 +920,7 @@ export async function boot() {
     onExecute: executeApplicationActions,
   });
   const applicationUi = createApplicationUi({ navigation, executeActions: executeApplicationActions,
+    addContext: item => composerContext?.add(newPromptContext("quote", item.title, { content: item.content, path: item.source, project: item.context?.project || "default", session: item.context?.session || "" })),
     canCall: () => !purgeRecovery.isPaused() && !localServiceReconnecting });
   Object.defineProperty(globalThis, "mdo", { value: applicationUi.sdk, configurable: true });
   window.addEventListener("pagehide", () => applicationUi.destroy(), { once: true });
@@ -1262,6 +1263,7 @@ export async function boot() {
   const account = createAccount({ navigation, onModelsChange: loadModels });
   const remotePanel = createRemotePanel();
   setTargetSwitchGuard(async ({ copyDrafts = false } = {}) => {
+    if (!applicationUi.canLeave()) throw new ApiError("请先保存工具工作区的编辑内容，或等待浏览器操作完成后再切换设备", { code: "target_workbench_pending" });
     if (settingsView.hasPendingChanges() || remotePanel.hasPendingChanges() || resourcePanels.hasPendingChanges())
       throw new ApiError("Save or discard settings before changing devices", { code: "target_settings_pending" });
     if (hasPendingApiWrites()) return false;

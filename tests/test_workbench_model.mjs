@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { panelIdentity, safeBrowserUrl, reorderPanel, normalizeLayout } from "../app/web/js/features/workbench/model.js";
+import { panelIdentity, safeBrowserUrl, reorderPanel, normalizeLayout, validateImageFrame } from "../app/web/js/features/workbench/model.js";
 import { createApplicationClient, applyApplicationAction } from "../app/web/js/api/application.js";
 test("panel identities retain owner, device and immutable conversation", () => {
  const base={device:"a",project:"p",session:"s"};
@@ -16,6 +16,13 @@ test("tab ordering preserves identity and clamps restored geometry", () => {
  assert.deepEqual(reorderPanel(["a","b"],"unknown","a"),["a","b"]);
  assert.equal(normalizeLayout({width:99999}).width,960);assert.equal(normalizeLayout({width:12}).width,320);
  assert.deepEqual(normalizeLayout({order:["a","a",2]}).order,["a"]);
+});
+
+test("surface frames reject decompression-sized images before decoding", () => {
+ const bytes=new Uint8Array(24);bytes.set([137,80,78,71,13,10,26,10]);const data=new DataView(bytes.buffer);
+ data.setUint32(16,1920);data.setUint32(20,1080);assert.deepEqual(validateImageFrame(bytes),{width:1920,height:1080});
+ data.setUint32(16,8192);data.setUint32(20,8192);assert.throws(()=>validateImageFrame(bytes),/1600/);
+ assert.throws(()=>validateImageFrame(new Uint8Array([255,216,255,192])),/1600/);
 });
 test("SDK binding freezes the project before later navigation", async () => {
  let project="first",body;

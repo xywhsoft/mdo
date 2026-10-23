@@ -116,7 +116,10 @@ tools/build.py     桌面版与 Android 精简版、完整版统一构建
 `device-remote-control.md`、`linux.md`、`android.md`、`release-gate.md`、
 `mdo-refactor-implementation-plan.md`。
 
+[工作区与浏览器 SDK](docs/workbench.md) 包含插件标签页、原生浏览器视图，以及
+C／JavaScript 共用的面板、资源与浏览器接口。
+
 ---
 
 ## 📄 许可
-见 [LICENSE](LICENSE)。当前源码版本：**0.2.1**。
+见 [LICENSE](LICENSE)。当前源码版本：**0.5.0**。

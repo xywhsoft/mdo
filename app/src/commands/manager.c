@@ -76,7 +76,7 @@ static void CommandDispose(CommandJob* J) {
     xrtCancelDestroy(J->Cancel);xrtFree(J->Workspace);MdoProjectLeaseRelease(J->Lease);memset(J,0,sizeof(*J));
 }
 static void CommandCleanup(CommandJob* J,unsigned Count) {
-    const char* Names[]={"input.json","command.c","worker.c","xs.json","web/index.html","mdo/command.h","mdo/module.h","mdo/sdk.h","final.json"};
+    const char* Names[]={"input.json","command.c","worker.c","xs.json","web/index.html","mdo/command.h","mdo/module.h","mdo/sdk.h","mdo/workbench.h","final.json"};
     char P[256];
     for(size_t i=0;i<sizeof(Names)/sizeof(*Names);i++){
         snprintf(P,sizeof(P),"%s/%s",J->Directory,Names[i]);(void)MdoHomeRemove(P,false);
@@ -207,6 +207,7 @@ static int32 CommandExecute(void* Value) {
        !CommandCopyResource(J,"/app/generated/module-sdk/mdo/command.h","mdo/command.h")||
        !CommandCopyResource(J,"/app/generated/module-sdk/mdo/module.h","mdo/module.h")||
        !CommandCopyResource(J,"/app/generated/module-sdk/mdo/sdk.h","mdo/sdk.h")||
+       !CommandCopyResource(J,"/app/generated/module-sdk/mdo/workbench.h","mdo/workbench.h")||
        !CommandJobJson(J,"input.json",J->Input)||!CommandJobWrite(J,"web/index.html","Command worker")||
        !CommandJobWrite(J,"xs.json","{\"engine\":{\"workers\":1},\"services\":[{\"enabled\":true,\"class\":\"custom\",\"name\":\"command-worker\",\"host_default\":{\"enabled\":true,\"path\":\"web\",\"devlang\":\"c\",\"devfile\":\"worker.c\"}}]}")){
         snprintf(Error,sizeof(Error),"Cannot prepare isolated command worker");goto finish;

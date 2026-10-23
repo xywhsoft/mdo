@@ -98,7 +98,8 @@ static bool EcoNativePrepare(xvalue* Files,const xvalue* Package,const xvalue* P
             for(size_t a=0;Ok&&a<xrtValueCount(NewFiles);a++)for(size_t b=0;Ok&&b<xrtValueCount(OtherFiles);b++){
                 cstr A=MdoPackageText(xrtValueArrayGet(NewFiles,a),"path",220),B=MdoPackageText(xrtValueArrayGet(OtherFiles,b),"path",220);
                 if(!A||!B||MdoPackageSamePath(A,B)){snprintf(Error,1024,"Plugin VFS path conflicts with %s: %s",OtherId,A?A:"");Ok=false;}
-            }xrtValueRelease(Manifest);
+            }
+            xrtValueRelease(Manifest);
         }
     }
     if(Ok){

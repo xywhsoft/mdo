@@ -129,7 +129,10 @@ Full contracts and guides live in [`docs/`](docs):
 `device-remote-control.md`, `linux.md`, `android.md`, `release-gate.md`,
 `mdo-refactor-implementation-plan.md`.
 
+The [workbench and browser SDK](docs/workbench.md) describes plugin tabs,
+native browser views, and the shared C/JavaScript panel and resource APIs.
+
 ---
 
 ## 📄 License
-See [LICENSE](LICENSE). Current source version: **0.2.1**.
+See [LICENSE](LICENSE). Current source version: **0.5.0**.

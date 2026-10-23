@@ -30,6 +30,10 @@ tools/*
 !tools/build_mdo.py
 !tools/application_sdk.py
 !tools/application_contracts.py
+!tools/workbench_contracts.py
+!tools/native/
+!tools/native/*.hpp
+!tools/native/*.py
 !tools/build.py
 !tools/build_android.py
 !tools/host-profile.json

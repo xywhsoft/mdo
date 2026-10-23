@@ -1,17 +1,18 @@
 #include "internal.h"
 #include "../../include/mdo/home.h"
+#include "../../include/mdo/time.h"
 
 /* The durable model is shared by native extensions and the UI. Views never
  * own background jobs. Runtime browser handles are deliberately not durable. */
 #define WB_PATH "data/workbench.json"
 #define WB_BYTES (4u * 1024u * 1024u)
-static struct { xmutex* Lock; xvalue* State; bool Ready; } Workbench;
+static struct { xmutex* Lock; xvalue* State; xvalue* Runtime; bool Ready; } Workbench;
 static const cstr SdkWorkbenchMethods[]={
     "panel.types","panel.register","panel.unregister","panel.list","panel.open",
-    "panel.get","panel.update","panel.attach","panel.close","panel.reveal","panel.layout.get","panel.layout.put",
+    "panel.get","panel.update","panel.attach","panel.report","panel.close","panel.reveal","panel.layout.get","panel.layout.put",
     "resource.list","resource.get","resource.put","resource.remove",
-    "browser.capabilities","browser.list","browser.create","browser.get","browser.command",
-    "browser.close","browser.result"
+    "browser.capabilities","browser.list","browser.create","browser.get","browser.update","browser.attach","browser.command",
+    "browser.close","browser.result","browser.release","browser.report"
 };
 static bool WbFail(mdo_error_v1* E,cstr Code,cstr Message,unsigned Status){
     return MdoApplicationError(E,Code,Message,"workbench",Status,false);
@@ -66,7 +67,7 @@ static xvalue* WbEmpty(void){
     for(size_t i=0;i<5;i++)xrtValueObjectSetNew(V,xrtStrView(Names[i]),xrtValueArray());return V;
 }
 bool MdoApplicationWorkbenchInit(void){
-    Workbench.Lock=xrtMutexCreate();Workbench.State=WbEmpty();Workbench.Ready=Workbench.Lock&&Workbench.State;
+    Workbench.Lock=xrtMutexCreate();Workbench.State=WbEmpty();Workbench.Runtime=xrtValueObject();Workbench.Ready=Workbench.Lock&&Workbench.State&&Workbench.Runtime;
     bool Exists=false;xfileinfo Info;
     if(!MdoHomeExternalStat(WB_PATH,&Exists,&Info)){Workbench.Ready=false;return Workbench.Lock!=NULL;}
     if(!Exists)return Workbench.Ready;
@@ -90,7 +91,7 @@ invalid:Workbench.Ready=false;
 done:xrtValueRelease(Parsed);xrtFree(Text);if(File)xrtClose(File);return Workbench.Lock!=NULL;
 }
 void MdoApplicationWorkbenchUnit(void){
-    xrtValueRelease(Workbench.State);if(Workbench.Lock)xrtMutexDestroy(Workbench.Lock);memset(&Workbench,0,sizeof(Workbench));
+    xrtValueRelease(Workbench.State);xrtValueRelease(Workbench.Runtime);if(Workbench.Lock)xrtMutexDestroy(Workbench.Lock);memset(&Workbench,0,sizeof(Workbench));
 }
 xvalue* MdoApplicationWorkbenchCatalog(void){
     xvalue* A=xrtValueArray();for(size_t i=0;i<sizeof(SdkWorkbenchMethods)/sizeof(*SdkWorkbenchMethods);i++){
@@ -100,17 +101,21 @@ xvalue* MdoApplicationWorkbenchCatalog(void){
 static bool WbQueue(const mdo_sdk_context_v1* C,cstr Client,cstr Action,const xvalue* Params,xvalue** R,mdo_error_v1* E){
     xvalue* P=xrtValueObject();SdkPut(P,"client",Client);SdkPut(P,"action",Action);
     xrtValueObjectSet(P,XRT_STR_LITERAL("params"),Params);bool Found=false;
-    bool Ok=MdoApplicationUiCall(C,"ui.invoke",P,R,E,&Found);xrtValueRelease(P);return Ok;
+    mdo_sdk_context_v1 Bound=*C;uint64 Budget=30000000;
+    uint64 Wait=0;if(SdkUInt(SdkGet(Params,"timeout_ms"),&Wait)&&Wait<=60000)Budget=(Wait+5000)*1000;
+    uint64 Deadline=MdoDeadlineAfterUs(Budget);if(!Bound.Deadline||Bound.Deadline>Deadline)Bound.Deadline=Deadline;
+    bool Ok=MdoApplicationUiCall(&Bound,"ui.invoke",P,R,E,&Found);xrtValueRelease(P);return Ok;
 }
 static bool WbUrl(cstr Url){return Url&&strlen(Url)<=8192&&(!strncmp(Url,"https://",8)||!strncmp(Url,"http://",7))&&!strchr(Url,'\r')&&!strchr(Url,'\n');}
 bool MdoApplicationWorkbenchCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue* P,xvalue** R,mdo_error_v1* E,bool* Found){
     *Found=false;for(size_t i=0;i<sizeof(SdkWorkbenchMethods)/sizeof(*SdkWorkbenchMethods);i++)if(!strcmp(Method,SdkWorkbenchMethods[i]))*Found=true;
     if(!*Found)return true;
+    if(!SdkIdValid(C->ExtensionId))return WbFail(E,"sdk_context_invalid","A stable extension identity is required",400);
     if(!Workbench.Ready)return WbFail(E,"workbench_unavailable","Workbench data is unavailable or damaged; the saved file was preserved",503);
-    if(!strcmp(Method,"browser.result"))return MdoApplicationUiCall(C,"ui.result",P,R,E,Found);
+    if(!strcmp(Method,"browser.result")||!strcmp(Method,"browser.release"))return MdoApplicationUiCall(C,!strcmp(Method,"browser.result")?"ui.result":"ui.release",P,R,E,Found);
     if(!strcmp(Method,"browser.command")){
         cstr Id=SdkField(P,"id"),Command=SdkField(P,"command");
-        const cstr Allowed[]={"navigate","back","forward","reload","stop","snapshot","screenshot","click","type","scroll","evaluate","takeover","release"};bool Valid=false;
+        const cstr Allowed[]={"navigate","back","forward","reload","stop","state","wait","snapshot","screenshot","click","type","scroll","evaluate","takeover","release"};bool Valid=false;
         for(size_t i=0;Command&&i<sizeof(Allowed)/sizeof(*Allowed);i++)if(!strcmp(Command,Allowed[i]))Valid=true;
         if(!Valid)return WbFail(E,"browser_command_invalid","Unknown browser command",400);
         xrtMutexLock(Workbench.Lock);xvalue* V=WbFind(Workbench.State,"browsers",Id);xvalue* Copy=V?xrtValueClone(V):NULL;xrtMutexUnlock(Workbench.Lock);
@@ -120,6 +125,16 @@ bool MdoApplicationWorkbenchCall(const mdo_sdk_context_v1* C,cstr Method,const x
     }
     xrtMutexLock(Workbench.Lock);xvalue* Next=NULL;bool Ok=false,Changed=false;
     cstr Id=SdkField(P,"id"),Client=SdkField(P,"client");
+    if(!strcmp(Method,"panel.report")||!strcmp(Method,"browser.report")){
+        xvalue* Instance=WbFind(Workbench.State,!strcmp(Method,"panel.report")?"panels":"browsers",Id);
+        if(!Instance||!WbBound(C,Instance)||!WbEqual(Client,SdkField(Instance,"client"))){WbFail(E,"context_mismatch","Report must come from the attached instance and context",409);goto done;}
+        const xvalue* Value=SdkGet(P,"value");char* Json=SdkJson(Value);char* Old=SdkJson(SdkGet(Workbench.Runtime,Id));
+        bool Valid=Json&&strlen(Json)<=4096&&xrtValueType(Value)==XVALUE_OBJECT;
+        Changed=Valid&&(!Old||strcmp(Old,Json));xrtFree(Json);xrtFree(Old);
+        if(!Valid){WbFail(E,"report_invalid","Runtime report must be an object up to 4 KiB",400);goto done;}
+        if(Changed)xrtValueObjectSet(Workbench.Runtime,xrtStrView(Id),Value);
+        *R=xrtValueClone(Value);SdkPut(*R,"id",Id);Ok=true;goto done;
+    }
     if(!strcmp(Method,"browser.capabilities")){
         /* Platform features are advertised by the actual displaying client. */
         xvalue* Args=xrtValueObject();SdkPut(Args,"command","capabilities");Ok=WbQueue(C,Client,"workbench.browser",Args,R,E);xrtValueRelease(Args);goto done;
@@ -129,14 +144,17 @@ bool MdoApplicationWorkbenchCall(const mdo_sdk_context_v1* C,cstr Method,const x
         *R=xrtValueArray();const xvalue* A=SdkGet(Workbench.State,Kind);
         for(size_t i=0;i<xrtValueCount(A);i++){
             const xvalue* V=xrtValueArrayGet(A,i);
-            if((!strcmp(Kind,"types")||Client||WbOwner(C,V))&&(!Client||WbEqual(Client,SdkField(V,"client"))))xrtValueArrayAppend(*R,V);
+            if((!strcmp(Kind,"types")||Client||WbOwner(C,V))&&(!Client||WbEqual(Client,SdkField(V,"client")))){
+                xvalue* Copy=xrtValueClone(V);if(SdkGet(Workbench.Runtime,SdkField(V,"id")))xrtValueObjectSet(Copy,XRT_STR_LITERAL("runtime"),SdkGet(Workbench.Runtime,SdkField(V,"id")));
+                xrtValueArrayAppendNew(*R,Copy);
+            }
         }Ok=true;goto done;
     }
     if(!strcmp(Method,"panel.get")||!strcmp(Method,"resource.get")||!strcmp(Method,"browser.get")){
         cstr Kind=!strcmp(Method,"panel.get")?"panels":!strcmp(Method,"resource.get")?"resources":"browsers";xvalue* V=WbFind(Workbench.State,Kind,Id);
         if(!V){WbFail(E,"resource_missing","The requested workbench resource is unavailable",404);goto done;}
         if(!WbOwner(C,V)){WbFail(E,"owner_mismatch","The resource belongs to another extension",403);goto done;}
-        *R=xrtValueClone(V);Ok=true;goto done;
+        *R=xrtValueClone(V);if(SdkGet(Workbench.Runtime,Id))xrtValueObjectSet(*R,XRT_STR_LITERAL("runtime"),SdkGet(Workbench.Runtime,Id));Ok=true;goto done;
     }
     if(!strcmp(Method,"panel.reveal")){
         xvalue* V=WbFind(Workbench.State,"panels",Id);
@@ -147,7 +165,7 @@ bool MdoApplicationWorkbenchCall(const mdo_sdk_context_v1* C,cstr Method,const x
     if(!strcmp(Method,"panel.register")){
         cstr Renderer=SdkField(P,"renderer");
         if(!SdkIdValid(Id)||!WbString(P,"title",256,true)||!Renderer||
-            (strcmp(Renderer,"document")&&strcmp(Renderer,"plan")&&strcmp(Renderer,"diff")&&strcmp(Renderer,"web")&&strcmp(Renderer,"browser")&&strcmp(Renderer,"surface")&&strcmp(Renderer,"custom"))){WbFail(E,"panel_type_invalid","Panel needs an ID, title and supported renderer",400);goto done;}
+            (strcmp(Renderer,"document")&&strcmp(Renderer,"plan")&&strcmp(Renderer,"diff")&&strcmp(Renderer,"web")&&strcmp(Renderer,"browser")&&strcmp(Renderer,"surface")&&strcmp(Renderer,"editor")&&strcmp(Renderer,"custom"))){WbFail(E,"panel_type_invalid","Panel needs an ID, title and supported renderer",400);goto done;}
         xvalue* Old=WbFind(Next,"types",Id);
         if(Old&&!WbOwner(C,Old)){WbFail(E,"owner_mismatch","Panel type is owned by another extension",409);goto done;}
         if(!Old&&xrtValueCount(SdkGet(Next,"types"))>=128){WbFail(E,"panel_limit","Panel type registry is full",429);goto done;}
@@ -166,12 +184,14 @@ bool MdoApplicationWorkbenchCall(const mdo_sdk_context_v1* C,cstr Method,const x
         if(xrtValueCount(A)>=64){WbFail(E,"panel_limit","Close unused instances before opening more (limit 64)",429);goto done;}
         char NewId[64];if(!SdkRandomId(Browser?"browser-":"panel-",NewId))goto done;
         V=xrtValueClone(P);SdkPut(V,"id",NewId);SdkPut(V,"owner",C->ExtensionId);SdkPut(V,"state",Browser?"suspended":"open");
+        if(Browser)SdkPut(V,"execution","display-client");
         xrtValueObjectSetNew(V,XRT_STR_LITERAL("context"),WbContext(C));SdkPutUInt(V,"revision",1);
         xrtValueArrayAppendNew(WbArray(Next,Kind),V);*R=xrtValueClone(V);
     }else if(!strcmp(Method,"panel.layout.get")||!strcmp(Method,"panel.layout.put")){
         /* Layout belongs to the displaying window, never to a project. */
         if(!SdkIdValid(Id)){WbFail(E,"layout_invalid","A stable window profile ID is required",400);goto done;}
         xvalue* Old=WbFind(Next,"layouts",Id);
+        if(Old&&!WbOwner(C,Old)){WbFail(E,"owner_mismatch","Layout belongs to another extension",403);goto done;}
         if(!strcmp(Method,"panel.layout.get")){*R=Old?xrtValueClone(Old):SdkParse("{\"revision\":0,\"value\":{}}");Ok=true;goto done;}
         if(!WbRevision(P,Old,E))goto done;
         char* Json=SdkJson(SdkGet(P,"value"));bool Valid=Json&&strlen(Json)<=131072&&xrtValueType(SdkGet(P,"value"))==XVALUE_OBJECT;xrtFree(Json);
@@ -189,14 +209,15 @@ bool MdoApplicationWorkbenchCall(const mdo_sdk_context_v1* C,cstr Method,const x
         xvalue* V=xrtValueClone(P);SdkPut(V,"id",Id);SdkPut(V,"owner",C->ExtensionId);xrtValueObjectSetNew(V,XRT_STR_LITERAL("context"),WbContext(C));WbBump(V);
         if(Old)WbRemove(Next,"resources",Id);xrtValueArrayAppendNew(WbArray(Next,"resources"),V);*R=xrtValueClone(V);
     }else{
-        cstr Kind=!strcmp(Method,"panel.unregister")?"types":!strcmp(Method,"resource.remove")?"resources":!strcmp(Method,"browser.close")?"browsers":"panels";
+        cstr Kind=!strcmp(Method,"panel.unregister")?"types":!strcmp(Method,"resource.remove")?"resources":!strncmp(Method,"browser.",8)?"browsers":"panels";
         xvalue* V=WbFind(Next,Kind,Id);
         if(!V){WbFail(E,"resource_missing","The requested instance is unavailable",404);goto done;}
         if(!WbOwner(C,V)){WbFail(E,"owner_mismatch","The instance belongs to another extension",403);goto done;}
-        if(!strcmp(Method,"panel.update")||!strcmp(Method,"panel.attach")){
+        if((!strcmp(Kind,"resources")||!strcmp(Kind,"browsers"))&&!WbBound(C,V)){WbFail(E,"context_mismatch","The instance belongs to another context",409);goto done;}
+        if(!strcmp(Method,"panel.update")||!strcmp(Method,"panel.attach")||!strcmp(Method,"browser.attach")||!strcmp(Method,"browser.update")){
             if(!WbBound(C,V)){WbFail(E,"context_mismatch","Panel belongs to another context",409);goto done;}
             if(!WbRevision(P,V,E))goto done;
-            if(!strcmp(Method,"panel.attach")){
+            if(!strcmp(Method,"panel.attach")||!strcmp(Method,"browser.attach")){
                 if(!SdkIdValid(Client)){WbFail(E,"client_invalid","A valid display client is required",400);goto done;}
                 xvalue* Clients=NULL;bool UiFound=false;
                 if(!MdoApplicationUiCall(C,"ui.clients",NULL,&Clients,E,&UiFound))goto done;
@@ -206,8 +227,15 @@ bool MdoApplicationWorkbenchCall(const mdo_sdk_context_v1* C,cstr Method,const x
                 if(Busy){WbFail(E,"client_busy","This panel is still attached to another live window",409);goto done;}
                 SdkPut(V,"client",Client);
             }
-            const cstr Fields[]={"title","resource","params","pinned","view_state"};
-            for(size_t i=0;i<5;i++)if(SdkGet(P,Fields[i]))xrtValueObjectSet(V,xrtStrView(Fields[i]),SdkGet(P,Fields[i]));WbBump(V);*R=xrtValueClone(V);
+            if(!strcmp(Method,"browser.update")){
+                if((SdkGet(P,"url")&&!WbUrl(SdkField(P,"url")))||!WbString(P,"title",256,false)){WbFail(E,"browser_arguments_invalid","A valid HTTP URL and bounded title are required",400);goto done;}
+                if(SdkGet(P,"url"))xrtValueObjectSet(V,XRT_STR_LITERAL("url"),SdkGet(P,"url"));
+                if(SdkGet(P,"title"))xrtValueObjectSet(V,XRT_STR_LITERAL("title"),SdkGet(P,"title"));
+            }else{
+                const cstr Fields[]={"title","resource","params","pinned","view_state"};
+                for(size_t i=0;i<5;i++)if(SdkGet(P,Fields[i]))xrtValueObjectSet(V,xrtStrView(Fields[i]),SdkGet(P,Fields[i]));
+            }
+            WbBump(V);*R=xrtValueClone(V);
         }else{
             if(!strcmp(Kind,"resources")&&!WbRevision(P,V,E))goto done;
             *R=xrtValueClone(V);WbRemove(Next,Kind,Id);
@@ -221,6 +249,10 @@ bool MdoApplicationWorkbenchCall(const mdo_sdk_context_v1* C,cstr Method,const x
     WbBump(Next);
     if(!WbSave(Next)){WbFail(E,"workbench_save_failed","Workbench could not be saved; no in-memory change was published",503);goto done;}
     xrtValueRelease(Workbench.State);Workbench.State=Next;Next=NULL;Ok=true;Changed=true;
+    for(size_t i=xrtValueCount(Workbench.Runtime);i>0;i--){
+        cstr Key=SdkKey(Workbench.Runtime,i-1);
+        if(!WbFind(Workbench.State,"panels",Key)&&!WbFind(Workbench.State,"browsers",Key))xrtValueObjectRemove(Workbench.Runtime,xrtStrView(Key));
+    }
 done:xrtValueRelease(Next);xrtMutexUnlock(Workbench.Lock);
     if(!Ok){xrtValueRelease(*R);*R=NULL;}
     if(Changed){xvalue* Facts=xrtValueObject();SdkPut(Facts,"method",Method);SdkPut(Facts,"id",SdkField(*R,"id"));MdoApplicationEvent("workbench.changed",C,Facts);xrtValueRelease(Facts);}

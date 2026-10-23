@@ -2,7 +2,7 @@
 #define MDO_VERSION_H
 
 #ifndef MDO_BUILD_ID
-#define MDO_BUILD_ID 30000001u
+#define MDO_BUILD_ID 50000001u
 #endif
 
 #ifndef MDO_TOOLPACK_REVISION

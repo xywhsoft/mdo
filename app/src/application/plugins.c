@@ -155,5 +155,6 @@ bool MdoApplicationPluginsCall(const mdo_sdk_context_v1* C,cstr Method,const xva
         xrtValueRelease(SdkPlugins.Config);SdkPlugins.Config=Config;Config=NULL;}
     SdkPlugins.Busy=false;xrtMutexUnlock(SdkPlugins.Lock);SdkPluginDrop(&Candidate);xrtValueRelease(Config);xrtValueRelease(Old);xrtValueRelease(Manifest);
     if(!Ok){if(!E->Code[0])MdoApplicationError(E,"sdk_plugin_publish_failed","Plugin was not published; previous configuration is retained","plugin",500,false);return false;}
+    xvalue* Change=xrtValueObject();SdkPut(Change,"id",Id);SdkPut(Change,"method",Method);MdoApplicationEvent("plugin.changed",C,Change);xrtValueRelease(Change);
     *R=SdkPluginList();return true;
 }

@@ -77,3 +77,30 @@ test("plugin callbacks retain the owning SDK and failed activation rolls back co
   await assert.rejects(()=>app.sdk.ui.openPanel('qa.fixture.panel'),/not registered/);
  }finally{app.destroy();console.error=originalError;plugins=[];delete globalThis.applicationSdkFixture;}
 });
+
+test("plugin activation can await its own UI receipt without blocking the window queue",async()=>{
+ const frontend='web/'+fileURLToPath(new URL('./fixtures/application-sdk-plugin.mjs',import.meta.url)).replaceAll('\\','/').replace(/^\/+/, '');
+ const navigation={preferredProject:()=>"default",workspace:()=>({projectId:"default",sessionId:"s"}),get:()=>({projectId:"default",sessionId:"s"})};
+ const originalFetch=globalThis.fetch;let action=null,state='pending',executed=0;
+ globalThis.fetch=async(url,options={})=>{
+  const input=options.body?JSON.parse(options.body):null;let data;
+  if(input?.method==='ui.invoke')data=action={id:'activation-ui',action:input.params.action,params:{},context:{project:'default',session:'s'}};
+  else if(input?.method==='client.poll')data=action&&state==='pending'?[action]:[];
+  else if(input?.method==='ui.result')data={state};
+  else if(input?.method==='client.ack'){state='succeeded';data={state};}
+  else return originalFetch(url,options);
+  return Response.json({ok:true,data});
+ };
+ plugins=[{id:'qa-scope',enabled:true,frontend,revision:'receipt'}];
+ globalThis.applicationSdkFixture={waitForUi:async sdk=>{
+  sdk.ui.registerAction('qa.activation',()=>{executed++;});
+  await sdk.call('ui.invoke',{client:sdk.clientId,action:'qa.activation'});
+  for(let i=0;i<600;i++){if((await sdk.call('ui.result',{id:'activation-ui'})).state==='succeeded')return;await new Promise(resolve=>setTimeout(resolve,5));}
+  throw Error('Plugin activation prevented UI receipt delivery');
+ }};
+ const app=createApplicationUi({navigation,executeActions:async()=>{}});
+ try{
+  for(let i=0;i<700&&!applicationSdkFixture.ready;i++)await new Promise(resolve=>setTimeout(resolve,5));
+  assert.equal(applicationSdkFixture.ready,true);assert.equal(executed,1);
+ }finally{app.destroy();plugins=[];globalThis.fetch=originalFetch;delete globalThis.applicationSdkFixture;}
+});

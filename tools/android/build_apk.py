@@ -16,6 +16,7 @@ from xml.sax.saxutils import escape
 ROOT = Path(os.environ["MDO_ANDROID_XSERVER_ROOT"])
 from runtime_bundle import add_runtime
 from share_overlay import MANIFEST as SHARE_MANIFEST, apply as overlay_sharing
+from browser_overlay import apply as overlay_browser
 MDO_ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -153,6 +154,7 @@ def build(sdk: Path, java: Path, library: Path, pack: Path, output: Path,
         import shutil
         shutil.copytree(ROOT / "android/src", overlay)
         overlay_sharing(overlay)
+        overlay_browser(overlay)
         overlay_package_installer(overlay / "org/xserver/android/PackageInstall.java")
         service = overlay / "org/xserver/android/XsService.java"
         text = service.read_text().replace("PackageInstall.initialize(getApplicationContext());", "MdoRuntime.initialize(getApplicationContext());\n            PackageInstall.initialize(getApplicationContext());")

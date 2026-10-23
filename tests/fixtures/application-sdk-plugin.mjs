@@ -6,5 +6,6 @@ export async function activate(sdk) {
   sdk.ui.registerKeybinding('qa.fixture.key',{code:'KeyK',mod:true,execute:({sdk})=>sdk.call('storage.write',{path:'test.json',text:'keybinding'})});
   fixture.attempted=true;
   if(fixture.fail)throw Error('Expected activation failure');
+  if(fixture.waitForUi)await fixture.waitForUi(sdk);
   await sdk.call('storage.write',{path:'test.json',text:'activate'});fixture.ready=true;
 }

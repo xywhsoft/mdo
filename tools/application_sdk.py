@@ -42,6 +42,8 @@ def services(root: Path):
     return records
 
 def generate(root: Path):
+    from workbench_contracts import generate as generate_workbench
+    generate_workbench(root)
     rows=services(root)
     target=root/'app/generated/application-routes.inc.h'
     text='/* Generated from the production router by tools/application_sdk.py. */\nstatic const MdoApplicationRoute SdkRoutes[]={\n'
@@ -119,6 +121,7 @@ def native_contracts():
     add('ui.clients','Discover active target windows; never select the first window implicitly',output=arr)
     add('ui.invoke','Queue an action for an explicit client, or append it to the originating command receipt',{'client':string,'action':string,'params':{},'context':obj},('action',))
     add('ui.result','Read queued/succeeded/failed UI action status',{'id':string},('id',))
+    add('ui.release','Release a terminal UI receipt; pending actions remain retained',{'id':string},('id',))
     add('model.complete','Managed model boundary with messages, tools, multimodal parts, usage and optional newline-delimited stream events',{'model':string,'protocol':{**uint,'maximum':3},'reasoning_effort':string,'max_output_tokens':uint,'messages':{'type':'array','minItems':1,'maxItems':4096,'items':obj},'tools':{'type':'array','maxItems':256,'items':obj},'extra_body':obj,'stream':string},('messages',))
     add('tool.call','Execute a tool through a recovered session and its live permission scope; a tool-level failure is a successful SDK result with success:false',{'project':string,'session':string,'tool':string,'arguments':obj},('tool',))
     add('session.compact','Compact the immutable invocation session; original history remains available')
@@ -154,7 +157,7 @@ def generate_native(root: Path):
     target=root/'app/generated/application-native.inc.h'
     if not target.exists() or target.read_text(encoding='utf-8')!=text:target.write_text(text,encoding='utf-8')
     fingerprint=hashlib.sha256()
-    for header in headers+[root/'include/mdo/sdk.h',root/'include/mdo/module.h']:
+    for header in headers+[root/'include/mdo/sdk.h',root/'include/mdo/module.h',root/'include/mdo/workbench.h']:
         fingerprint.update(header.name.encode()+b'\0'+header.read_bytes()+b'\0')
     target=root/'app/generated/application-sdk-fingerprint.inc.h'
     text='#define MDO_APPLICATION_SDK_FINGERPRINT "'+fingerprint.hexdigest()+'"\n'

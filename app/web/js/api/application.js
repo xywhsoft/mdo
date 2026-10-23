@@ -1,12 +1,13 @@
 import { api } from "./client.js";
+import { workbenchServices } from "./workbench-services.js";
 
-export function createApplicationClient(context = () => ({})) {
+export function createApplicationClient(context = () => ({}), transport = api) {
   const call = async (method, params = {}, options = {}) =>
-    (await api.post("/application/call", { method, params, context: context() }, options)).data;
+    (await transport.post("/application/call", { method, params, context: context() }, options)).data;
   return Object.freeze({
-    version: 1, call,
-    bind: scope => { const fixed = Object.freeze({ ...context(), ...scope }); return createApplicationClient(() => fixed); },
-    services: async options => (await api.get("/application/services", options)).data,
+    version: 1, call, ...workbenchServices(call),
+    bind: scope => { const fixed = Object.freeze({ ...context(), ...scope }); return createApplicationClient(() => fixed, transport); },
+    services: async options => (await transport.get("/application/services", options)).data,
     describe: (id, options) => call("sdk.describe", { id }, options),
     events: (cursor = {}, options) => call("events.read", cursor, options),
     start: (method, params = {}, id, options) => call("operation.start", { method, params, ...(id ? { id } : {}) }, options),
@@ -26,6 +27,26 @@ export function createApplicationClient(context = () => ({})) {
       }
       return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
     },
+  });
+}
+
+// UI code and window geometry belong to the displaying host even while its
+// ordinary SDK calls address another device. Keep its token out of the selected
+// target adapter; an uncertain local write is never automatically repeated.
+export function createLocalApplicationClient(context = () => ({})) {
+  const read = async response => {
+    const envelope = await response.json();
+    if (!response.ok || !envelope.ok) throw Object.assign(new Error(envelope.error?.message || "本机应用服务不可用"), { code: envelope.error?.code, status: response.status });
+    return envelope;
+  };
+  return createApplicationClient(context, {
+    async post(path, body, options = {}) {
+      const bootstrap = await fetch("/api/v1/bootstrap", { signal: options.signal });
+      const token = bootstrap.headers.get("X-Mdo-Write-Token");
+      if (!bootstrap.ok || !token) throw new Error("本机应用服务尚未就绪");
+      return read(await fetch(`/api/v1${path}`, { method: "POST", headers: { "Content-Type": "application/json", "X-Mdo-Write-Token": token }, body: JSON.stringify(body), signal: options.signal }));
+    },
+    async get(path, options = {}) { return read(await fetch(`/api/v1${path}`, { signal: options.signal })); },
   });
 }
 

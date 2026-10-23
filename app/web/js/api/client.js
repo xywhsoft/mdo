@@ -138,7 +138,13 @@ export async function apiRequest(path, options = {}) {
   checkSignal(options.signal);
   checkWrite(path, options);
   const send = () => withSignal(options.signal, () => sendJson(path, options));
-  return !["GET", "HEAD", "OPTIONS"].includes((options.method ?? "GET").toUpperCase())
+  const ephemeralSdkRead = path === "/application/call" && [
+    "sdk.services", "sdk.describe", "sdk.context", "sdk.native", "events.read", "plugin.list",
+    "panel.types", "panel.list", "panel.get", "panel.layout.get", "panel.report", "browser.report",
+    "resource.list", "resource.get", "browser.list", "browser.get", "browser.result",
+    "client.hello", "client.poll", "ui.result", "stream.read", "stream.stat", "operation.get", "operation.wait", "operation.result",
+  ].includes(options.body?.method);
+  return !ephemeralSdkRead && !["GET", "HEAD", "OPTIONS"].includes((options.method ?? "GET").toUpperCase())
     ? trackWrite(send) : send();
 }
 
