@@ -1544,7 +1544,7 @@
      return 0;
 --- /dev/null
 +++ b/src/webview/xs_browser.inc.hpp
-@@ -0,0 +1,205 @@
+@@ -0,0 +1,240 @@
 +/* Native content views. Included after xs_directory_drop.inc.hpp. The bridge
 + * accepts messages only from the original main document; content has no host
 + * bindings and lives in an independent persistent browser environment. */
@@ -1569,7 +1569,7 @@
 +};
 +template<class I,typename... Args,typename F> static I* xb_cb(REFIID id,F fn){return new xb_callback<I,Args...>(id,std::function<HRESULT(Args...)>(std::move(fn)));}
 +struct xb_view{
-+  ICoreWebView2Controller* controller=nullptr;ICoreWebView2* core=nullptr;bool creating=true,manual=false,loading=true;RECT bounds{};std::string error;
++  ICoreWebView2Controller* controller=nullptr;ICoreWebView2* core=nullptr;bool creating=true,manual=false,loading=true,failed=false;RECT bounds{};std::string error;int errorCode=0;UINT64 navigation=0;
 +  ~xb_view(){if(controller){controller->Close();controller->Release();}if(core)core->Release();}
 +};
 +struct xb_host{
@@ -1596,6 +1596,24 @@
 +  auto h=static_cast<LONG>(std::max(1.0,std::min(16384.0,number("height",480)*scale)));
 +  return RECT{x,y,x+w,y+h};
 +}
++static std::string xb_navigation_error(COREWEBVIEW2_WEB_ERROR_STATUS error){
++  switch(error){
++    case COREWEBVIEW2_WEB_ERROR_STATUS_CERTIFICATE_COMMON_NAME_IS_INCORRECT:
++    case COREWEBVIEW2_WEB_ERROR_STATUS_CERTIFICATE_EXPIRED:
++    case COREWEBVIEW2_WEB_ERROR_STATUS_CLIENT_CERTIFICATE_CONTAINS_ERRORS:
++    case COREWEBVIEW2_WEB_ERROR_STATUS_CERTIFICATE_REVOKED:
++    case COREWEBVIEW2_WEB_ERROR_STATUS_CERTIFICATE_IS_INVALID:return "TLS certificate validation failed";
++    case COREWEBVIEW2_WEB_ERROR_STATUS_HOST_NAME_NOT_RESOLVED:return "The website hostname could not be resolved";
++    case COREWEBVIEW2_WEB_ERROR_STATUS_TIMEOUT:return "The website connection timed out";
++    case COREWEBVIEW2_WEB_ERROR_STATUS_CANNOT_CONNECT:
++    case COREWEBVIEW2_WEB_ERROR_STATUS_SERVER_UNREACHABLE:return "The website could not be reached";
++    case COREWEBVIEW2_WEB_ERROR_STATUS_CONNECTION_RESET:
++    case COREWEBVIEW2_WEB_ERROR_STATUS_CONNECTION_ABORTED:
++    case COREWEBVIEW2_WEB_ERROR_STATUS_DISCONNECTED:return "The website connection was interrupted";
++    case COREWEBVIEW2_WEB_ERROR_STATUS_REDIRECT_FAILED:return "The website redirect failed";
++    default:return "Browser navigation failed";
++  }
++}
 +static void xb_receive(const std::shared_ptr<xb_host>& host,const std::string& json){
 +  const auto id=xb_get(json,"id"),command=xb_get(json,"command"),browser=xb_get(json,"browser");
 +  if(id.size()!=36||xb_get(json,"channel")!="mdo-browser")return;
@@ -1603,7 +1621,11 @@
 +  if(browser.empty()||browser.size()>100){host->reply(id,"","Invalid browser identity");return;}
 +  auto found=host->views.find(browser);
 +  if(command=="create"){
-+    if(found!=host->views.end()){host->reply(id,"{\"attached\":true}");return;}
++    if(found!=host->views.end()){
++      auto view=found->second;
++      if(view->controller){view->bounds=xb_bounds(json);view->controller->put_Bounds(view->bounds);view->controller->put_IsVisible(xb_get(json,"visible")=="false"?FALSE:TRUE);}
++      host->reply(id,"{\"attached\":true}");return;
++    }
 +    if(host->views.size()>=8){host->reply(id,"","Native browser view limit reached (8)");return;}
 +    const auto url=xb_get(json,"url");const bool visible=xb_get(json,"visible")!="false";if(!xb_url(url)){host->reply(id,"","Only HTTP(S) navigation is supported");return;}
 +    auto view=std::make_shared<xb_view>();view->bounds=xb_bounds(json);host->views[browser]=view;
@@ -1639,16 +1661,26 @@
 +              [weak](ICoreWebView2*,ICoreWebView2NavigationStartingEventArgs* args){
 +                xs_wv_text uri;
 +                if(auto active=weak.lock()){
-+                  active->loading=true;active->error.clear();
++                  args->get_NavigationId(&active->navigation);active->loading=true;active->error.clear();active->errorCode=0;
 +                  if(SUCCEEDED(args->get_Uri(&uri.p))&&!xb_url(webview::detail::narrow_string(uri.p?uri.p:L""))){args->put_Cancel(TRUE);active->error="Navigation to a non-HTTP resource was blocked";active->loading=false;}
 +                }return S_OK;
 +              });
 +            EventRegistrationToken navigationToken{};view->core->add_NavigationStarting(navigation,&navigationToken);navigation->Release();
 +            auto* completed=xb_cb<ICoreWebView2NavigationCompletedEventHandler,ICoreWebView2*,ICoreWebView2NavigationCompletedEventArgs*>(IID_ICoreWebView2NavigationCompletedEventHandler,
 +              [weak](ICoreWebView2*,ICoreWebView2NavigationCompletedEventArgs* args){if(auto active=weak.lock()){
-+                BOOL success=FALSE;args->get_IsSuccess(&success);active->loading=false;if(!success)active->error="Browser navigation failed; inspect the page or retry the connection";
++                UINT64 navigation=0;args->get_NavigationId(&navigation);if(navigation!=active->navigation)return S_OK;
++                BOOL success=FALSE;args->get_IsSuccess(&success);active->loading=false;
++                COREWEBVIEW2_WEB_ERROR_STATUS error=COREWEBVIEW2_WEB_ERROR_STATUS_UNKNOWN;
++                if(!success){args->get_WebErrorStatus(&error);active->errorCode=static_cast<int>(error);
++                  if(error!=COREWEBVIEW2_WEB_ERROR_STATUS_OPERATION_CANCELED)active->error=xb_navigation_error(error);}
 +              }return S_OK;});
 +            EventRegistrationToken completedToken{};view->core->add_NavigationCompleted(completed,&completedToken);completed->Release();
++            auto* failed=xb_cb<ICoreWebView2ProcessFailedEventHandler,ICoreWebView2*,ICoreWebView2ProcessFailedEventArgs*>(IID_ICoreWebView2ProcessFailedEventHandler,
++              [weak](ICoreWebView2*,ICoreWebView2ProcessFailedEventArgs* args){if(auto active=weak.lock()){
++                COREWEBVIEW2_PROCESS_FAILED_KIND kind;args->get_ProcessFailedKind(&kind);
++                if(kind==COREWEBVIEW2_PROCESS_FAILED_KIND_RENDER_PROCESS_EXITED||kind==COREWEBVIEW2_PROCESS_FAILED_KIND_BROWSER_PROCESS_EXITED){active->loading=false;active->failed=true;active->error="Browser process stopped; reload to restore the page";active->errorCode=static_cast<int>(kind);}
++              }return S_OK;});
++            EventRegistrationToken failedToken{};view->core->add_ProcessFailed(failed,&failedToken);failed->Release();
 +            auto* popup=xb_cb<ICoreWebView2NewWindowRequestedEventHandler,ICoreWebView2*,ICoreWebView2NewWindowRequestedEventArgs*>(IID_ICoreWebView2NewWindowRequestedEventHandler,
 +              [weak](ICoreWebView2*,ICoreWebView2NewWindowRequestedEventArgs* args){
 +                args->put_Handled(TRUE);xs_wv_text uri;
@@ -1656,7 +1688,9 @@
 +              });
 +            EventRegistrationToken popupToken{};view->core->add_NewWindowRequested(popup,&popupToken);popup->Release();
 +            controller->put_Bounds(view->bounds);controller->put_IsVisible(visible?TRUE:FALSE);
-+            view->core->Navigate(webview::detail::widen_string(url).c_str());host->reply(id,"{\"created\":true}");return S_OK;
++            HRESULT navigationResult=view->core->Navigate(webview::detail::widen_string(url).c_str());
++            if(FAILED(navigationResult)){view->loading=false;view->error="Browser rejected the initial navigation";view->errorCode=static_cast<int>(navigationResult);}
++            host->reply(id,"{\"created\":true}");return S_OK;
 +          });
 +        HRESULT result=env->CreateCoreWebView2Controller(host->window,ready);ready->Release();
 +        if(FAILED(result)){host->views.erase(browser);host->reply(id,"","Content controller request failed");}return S_OK;
@@ -1672,8 +1706,9 @@
 +  }
 +  if(command=="state"){
 +    xs_wv_text url,title;core->get_Source(&url.p);core->get_DocumentTitle(&title.p);
-+    BOOL back=FALSE,forward=FALSE;core->get_CanGoBack(&back);core->get_CanGoForward(&forward);
-+    host->reply(id,"{\"url\":"+xb_quote(webview::detail::narrow_string(url.p?url.p:L""))+",\"title\":"+xb_quote(webview::detail::narrow_string(title.p?title.p:L""))+",\"can_go_back\":"+(back?"true":"false")+",\"can_go_forward\":"+(forward?"true":"false")+",\"loading\":"+(view->loading?"true":"false")+",\"error\":"+xb_quote(view->error)+"}");return;
++    BOOL back=FALSE,forward=FALSE,visible=FALSE;core->get_CanGoBack(&back);core->get_CanGoForward(&forward);view->controller->get_IsVisible(&visible);
++    const auto bounds="{\"x\":"+std::to_string(view->bounds.left)+",\"y\":"+std::to_string(view->bounds.top)+",\"width\":"+std::to_string(view->bounds.right-view->bounds.left)+",\"height\":"+std::to_string(view->bounds.bottom-view->bounds.top)+"}";
++    host->reply(id,"{\"url\":"+xb_quote(webview::detail::narrow_string(url.p?url.p:L""))+",\"title\":"+xb_quote(webview::detail::narrow_string(title.p?title.p:L""))+",\"can_go_back\":"+(back?"true":"false")+",\"can_go_forward\":"+(forward?"true":"false")+",\"loading\":"+(view->loading?"true":"false")+",\"manual\":"+(view->manual?"true":"false")+",\"visible\":"+(visible?"true":"false")+",\"process_failed\":"+(view->failed?"true":"false")+",\"bounds\":"+bounds+",\"platform\":\"webview2\",\"error_code\":"+std::to_string(view->errorCode)+",\"error\":"+xb_quote(view->error)+"}");return;
 +  }
 +  if(command=="takeover"||command=="release"){
 +    if(command=="release"&&view->manual&&xb_get(json,"agent")=="true"){host->reply(id,"","Only the user can return manual control");return;}

@@ -30,6 +30,12 @@ try{
  const isolated=await bridge.call('evaluate',{browser:id,script:'typeof window.mdo+":"+typeof window.XsBrowser'});
  check(isolated.value==='undefined:undefined','host SDK leaked into content view');
  await bridge.call('bounds',{browser:id,bounds:{x:280,y:60,width:600,height:600,scale:devicePixelRatio},visible:false});
+ const hidden=await bridge.call('state',{browser:id});check(hidden.visible===false,'native visibility was not applied');
+ await bridge.call('create',{browser:id,url:TARGET+'/page',bounds:{x:290,y:70,width:500,height:400,scale:devicePixelRatio},visible:true});
+ const attached=await bridge.call('state',{browser:id});check(attached.visible===true&&attached.bounds.width===Math.round(500*devicePixelRatio),'reattaching did not restore native bounds and visibility');
+ await bridge.call('navigate',{browser:id,url:TARGET+'/disconnect'});
+ let failure;for(let i=0;i<100;i++){await pause(100);failure=await bridge.call('state',{browser:id});if(failure.error)break;}
+ check(failure.error&&typeof failure.error_code==='number'&&!failure.loading,'navigation failure lost its concrete native error');
  await bridge.call('close',{browser:id});
  await fetch(TARGET+'/result',{method:'POST',mode:'no-cors',body:JSON.stringify({passed:true,screenshot_bytes:screenshot.data.length,capabilities})});
 }catch(error){await fetch(TARGET+'/result',{method:'POST',mode:'no-cors',body:JSON.stringify({passed:false,error:String(error.stack||error)})})}
@@ -44,6 +50,7 @@ try{
  for(let i=0;i<300&&!allowsApiWrite('/application/call',{method:'POST'});i++)await pause(100);
  const client=mdo.clientId;
  await mdo.call('client.hello',{client,context:mdo.context()});
+ await mdo.ui.newTab();
  const browser=await mdo.browser.create({client,url:TARGET+'/page'});
  const perform=async(command,params={})=>{
   const receipt=await mdo.browser.command({id:browser.id,command,...params});
@@ -60,6 +67,22 @@ try{
  const panel=await mdo.panel.open({client,type:'mdo.browser',key:'native-sdk',resource:{id:browser.id},reveal:'activate'});
  let mounted=false;for(let i=0;i<100;i++){const state=await mdo.panel.get({id:panel.id});if(state.runtime?.visible){mounted=true;break;}await pause(100);}
  if(!mounted)throw Error('Native browser did not attach to the right panel');
+ const {createNativeBrowserBridge}=await import('/js/features/workbench/native-browser.js');const bridge=createNativeBrowserBridge();
+ const nativeState=()=>bridge.call('state',{browser:browser.id});
+ for(let i=0;i<50&&!(await nativeState()).visible;i++)await pause(100);
+ if(!(await nativeState()).visible)throw Error('Background browser stayed invisible after opening its panel');
+ document.querySelector('.wb-top [aria-label="工作区更多操作"]').click();await pause(150);
+ if((await nativeState()).visible)throw Error('Native browser covered the workspace menu');
+ document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));await pause(150);
+ if(!(await nativeState()).visible)throw Error('Closing the menu did not restore native content');
+ await perform('navigate',{url:TARGET+'/disconnect'});
+ let failed=false;for(let i=0;i<100;i++){await pause(100);const row=await mdo.browser.get({id:browser.id});if(row.runtime?.state==='error'){failed=true;break;}}
+ if(!failed||!document.querySelector('[data-browser-phase="error"] .wb-browser-message:not([hidden])'))throw Error('Failure was not reported and displayed');
+ if((await nativeState()).visible)throw Error('Native error surface covered the readable error page');
+ const address=document.querySelector('.wb-browser-toolbar input');address.value=TARGET+'/page';address.form.requestSubmit();
+ for(let i=0;i<100;i++){await pause(100);const state=await nativeState();if(state.url===TARGET+'/page'&&!state.loading&&!state.error&&state.visible)break;}
+ if(!(await nativeState()).visible)throw Error('Navigation after an error did not restore the page');
+ await perform('type',{selector:'#text',text:'SDK to native browser'});await perform('click',{selector:'#apply'});bridge.dispose();
  const image=await perform('screenshot');if(image.data.length<1000)throw Error('SDK screenshot result was empty');
  await mdo.panel.close({id:panel.id});await pause(2500);
  const retained=await perform('snapshot');if(!retained.value.text.includes('SDK to native browser'))throw Error('Closing a panel destroyed the background browser');
@@ -70,6 +93,7 @@ try{
 class Fixture(BaseHTTPRequestHandler):
  def log_message(self,*args):pass
  def do_GET(self):
+  if self.path=='/disconnect':self.close_connection=True;self.connection.close();return
   data=b'''<!doctype html><title>Browser fixture</title><h1>Native browser fixture</h1><input id=text><button id=apply onclick="document.querySelector('#result').textContent='Result: '+document.querySelector('#text').value">Apply</button><p id=result></p>'''
   if self.path=='/second':data=b'<!doctype html><title>Second</title><h1>Second page</h1>'
   self.send_response(200);self.send_header('Content-Type','text/html');self.send_header('Content-Length',str(len(data)));self.end_headers();self.wfile.write(data)

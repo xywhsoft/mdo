@@ -1,5 +1,7 @@
-import { normalizeLayout, reorderPanel, safeBrowserUrl, validateImageFrame } from "./model.js";
+import { normalizeLayout, reorderPanel, safeBrowserUrl, browserLocation, validateImageFrame } from "./model.js";
 import { createNativeBrowserBridge } from "./native-browser.js";
+import { mountBrowserView } from "./browser-view.js";
+import { iconButton, popupMenu } from "./controls.js";
 import { createSurfaceInput } from "./surface-input.js";
 import { renderSourceMarkdown } from "../../utils/source-markdown.js";
 import { toast } from "../../utils/dom.js";
@@ -51,49 +53,11 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
   const rect = node => { const r = node.getBoundingClientRect(); return { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height), scale: window.devicePixelRatio || 1 }; };
   const browserViews = new Map();
   async function browserView(root, row, signal, mount) {
-    const client = bound(row); let browser = await client.call("browser.get", { id: row.resource.id }, { signal });
-    if (browser.client !== clientId) browser = await client.call("browser.attach", { id:browser.id, revision:browser.revision, client:clientId }, { signal });
-    mount.browserId = browser.id;
-    if (isRemoteTarget() && browser.url && ["localhost", "127.0.0.1", "[::1]"].includes(new URL(browser.url).hostname))
-      throw new Error("此地址指向目标设备的本地服务。请先由插件映射预览服务，或提供可访问的网址，以免打开当前设备的同名端口。");
-    const toolbar = make("div", "wb-toolbar"), address = make("input", "wb-address"), surface = make("div", "wb-browser-surface");
-    address.setAttribute("aria-label", "网址"); address.value = browser.url || "";
-    const execute = async (command, params = {}) => bridge.call(command, { browser: browser.id, ...params });
-    const back = button("←", () => execute("back")), forward = button("→", () => execute("forward")); back.disabled = true; forward.disabled = true;
-    toolbar.append(back, forward, button("刷新", () => execute("reload")), address,
-      button("接管", () => execute("takeover")), button("交还", () => execute("release")),
-      button("结束浏览", async () => { await client.call("browser.close", { id: browser.id }); await execute("close"); browserViews.delete(browser.id); await close(row.id); }));
-    if (row.type === "mdo.preview") toolbar.append(
-      button("手机", () => { surface.style.width = "390px"; surface.style.maxWidth = "100%"; surface.style.alignSelf = "center"; }),
-      button("自适应", () => { surface.style.width = "100%"; }),
-      button("横竖屏", () => { surface.style.width = surface.style.width === "844px" ? "390px" : "844px"; }));
-    root.append(toolbar, surface);
-    if (!bridge.available()) { surface.append(make("p", "wb-error", "当前为外部浏览器。普通网页受嵌入限制；完整浏览需在 mdo 客户端打开。"), button("在系统浏览器打开", () => window.open(safeBrowserUrl(address.value), "_blank", "noopener,noreferrer"))); return; }
-    address.onkeydown = event => { if (event.key === "Enter" && !event.isComposing) void execute("navigate", { url: safeBrowserUrl(address.value) }).catch(error => fail(surface, error, () => execute("reload"))); };
-    await new Promise(resolve => requestAnimationFrame(resolve));
-    await execute("create", { url: browser.url || "about:blank", bounds: rect(surface), visible: !root.hidden && layout.open });
-    browserViews.set(browser.id, { execute, row });
-    mount.dispose = () => { void execute("bounds", { bounds: rect(surface), visible: false }).catch(() => {}); };
-    if (signal.aborted) { mount.dispose(); return; }
-    let lastBounds = "";
-    mount.visible = value => {
-      const overlay = [...document.querySelectorAll("dialog[open], [role=menu]:not([hidden])")].some(node => node.getClientRects().length);
-      const params = { bounds: rect(surface), visible: value && !overlay && navigation.get().view !== "settings" };
-      const identity = JSON.stringify(params); if (identity === lastBounds) return Promise.resolve(); lastBounds = identity;
-      return execute("bounds", params).catch(() => { lastBounds = ""; });
-    };
-    const observer = new ResizeObserver(() => { if (!signal.aborted) void mount.visible(!root.hidden && layout.open); }); observer.observe(surface); mount.observer = observer;
-    const refresh = async () => { try {
-      const state = await execute("state"); if (!signal.aborted && document.activeElement !== address) address.value = state.url || address.value;
-      back.disabled = !state.can_go_back; forward.disabled = !state.can_go_forward;
-      if (/^https?:\/\//.test(state.url || "") && state.url !== browser.url) {
-        try { browser = await client.call("browser.update", { id: browser.id, revision: browser.revision, url: state.url }, { signal }); }
-        catch (error) { if (error.status === 409) browser = await client.call("browser.get", { id: browser.id }, { signal }); else throw error; }
-      }
-      await client.call("browser.report", { id: browser.id, client: clientId, value: { state: "ready", url: (state.url || "").slice(0,1024), title: (state.title || "").slice(0,256) } }, { signal });
-    } catch { /* A command provides actionable errors. */ } };
-    const timer = setInterval(() => { if (!root.hidden && !document.hidden) void refresh(); }, 1500);
-    signal.addEventListener("abort", () => clearInterval(timer), { once: true });
+    const view = await mountBrowserView(root, { row, sdk: bound(row), signal, mount, bridge, clientId,
+      shown: () => !root.hidden && layout.open && !document.hidden && navigation.get().view !== "settings",
+      updateTitle: title => update(row.id, { title }), openExternal: target => layoutApi.call("system.open", { target }), addContext,
+      onEnd: async id => { browserViews.delete(id); await close(row.id); } });
+    if (!signal.aborted) browserViews.set(view.id, { execute: view.execute, row });
   }
   async function mount(row) {
     const root = make("section", "wb-view"); root.setAttribute("role", "tabpanel"); root.tabIndex = 0; root.hidden = !layout.open || (row.id !== layout.active && row.id !== layout.secondary); content.append(root);
@@ -247,9 +211,10 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
       mounted.visible?.(visible);
       if (mounted.lastVisible !== visible) {
         mounted.lastVisible = visible; mounted.events?.dispatchEvent(new CustomEvent("visibility", { detail: visible }));
-        const row = entries.get(id), bounds = rect(mounted.root);
-        if (row) void bound(row).call("panel.report", { id, client: clientId, value: { ...mounted.status, visible, width: bounds.width, height: bounds.height } }).catch(() => {});
       }
+      const row = entries.get(id), bounds = rect(mounted.root), report = { ...mounted.status, visible, width: bounds.width, height: bounds.height };
+      const identity = JSON.stringify(report);
+      if (row && mounted.lastReport !== identity) { mounted.lastReport = identity; void bound(row).call("panel.report", { id, client: clientId, value: report }).catch(() => { mounted.lastReport = ""; }); }
     }
     content.classList.toggle("wb-split", Boolean(layout.secondary));
     for (const id of [layout.active, layout.secondary]) if (id && entries.has(id) && !mounts.has(id)) void mount(entries.get(id)).then(render);
@@ -257,9 +222,13 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
     const hidden = [...mounts].filter(([id, mounted]) => id !== layout.active && id !== layout.secondary && !mounted.dirty?.());
     for (const [id] of hidden.slice(0, Math.max(0, mounts.size - 8))) disposeMount(id);
   }
-  top.append(tabs, button("＋", () => newTab()), button("固定", () => { const row = entries.get(layout.active); return row && update(row.id, { pinned: !row.pinned }); }),
-    button("并排", () => { layout.secondary = layout.secondary ? "" : layout.order.find(id => id !== layout.active) || ""; remember(); render(); }),
-    button("展开", () => { layout.maximized = !layout.maximized; remember(); render(); }), button("收起", () => { layout.open = false; remember(); render(); }));
+  const more = iconButton("more", "工作区更多操作", () => {}), menu = popupMenu(more, () => [
+    { label: entries.get(layout.active)?.pinned ? "取消固定" : "固定", icon: "pin", checked: Boolean(entries.get(layout.active)?.pinned), disabled: !entries.has(layout.active), execute: () => { const row = entries.get(layout.active); return row && update(row.id, { pinned: !row.pinned }); } },
+    { label: layout.secondary ? "退出并排" : "并排", icon: "split", checked: Boolean(layout.secondary), disabled: layout.order.length < 2, execute: () => { layout.secondary = layout.secondary ? "" : layout.order.find(id => id !== layout.active) || ""; remember(); render(); } },
+    { label: layout.maximized ? "恢复宽度" : "展开", icon: "expand", checked: layout.maximized, execute: () => { layout.maximized = !layout.maximized; remember(); render(); } },
+    { label: "收起", execute: () => { layout.open = false; remember(); render(); } },
+  ], { onError: error => toast(error.message, "error") });
+  top.append(tabs, iconButton("plus", "新建标签页", () => newTab(), error => toast(error.message, "error")), more);
   dock.append(resize, top, content); shell.append(dock);
   let pointerX, startWidth;
   resize.onpointerdown = event => { pointerX = event.clientX; startWidth = layout.width; resize.setPointerCapture(event.pointerId); event.preventDefault(); };
@@ -273,7 +242,7 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
     if (!browserViews.size || overlayFrame || stopped) return;
     overlayFrame = requestAnimationFrame(() => { overlayFrame = 0; for (const mounted of mounts.values()) mounted.visible?.(layout.open && !document.hidden && !mounted.root.hidden); });
   });
-  overlays.observe(document.body, { subtree:true, attributes:true, attributeFilter:["open","hidden","aria-expanded","data-settings-open"] });
+  overlays.observe(document.body, { subtree:true, childList:true, attributes:true, attributeFilter:["open","hidden","aria-expanded","data-settings-open"] });
   document.addEventListener("visibilitychange", resizeWindow);
   const beforeUnload = event => { if (bridge.busy() || [...mounts.values()].some(mounted => mounted.dirty?.())) { event.preventDefault(); event.returnValue = ""; } };
   window.addEventListener("beforeunload", beforeUnload);
@@ -294,9 +263,7 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
     const go = button("打开", () => {}); go.type = "submit"; form.append(mode, address, go);
     form.onsubmit = event => { event.preventDefault(); const value = address.value.trim(); let url;
       try {
-        if (/^[a-z][a-z0-9+.-]*:/i.test(value) && !/^https?:\/\//i.test(value) && !/^[\w.-]+:\d+(?:\/|$)/.test(value)) throw new Error("请输入 HTTP 或 HTTPS 网址");
-        const local = /^(?:localhost|127\.0\.0\.1)(?::\d+)?(?:\/|$)/i.test(value);
-        url = safeBrowserUrl(/^https?:\/\//i.test(value) ? value : /^[\w.-]+(?::\d+)?(?:\/.*)?$/.test(value) && /[.:]/.test(value) ? `${local ? "http" : "https"}://${value}` : `https://www.bing.com/search?q=${encodeURIComponent(value)}`);
+        url = browserLocation(value);
       }
       catch (error) { toast(error.message, "error"); return; }
       const client = sdk.bind({});
@@ -459,6 +426,6 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
       }
       return view.execute(command, { ...params, agent: true });
     },
-    destroy() { stopped = true; clearTimeout(syncTimer); clearTimeout(saveTimer); sidebarResize.disconnect(); overlays.disconnect(); cancelAnimationFrame(overlayFrame); for (const id of [...mounts.keys()]) disposeMount(id); bridge.dispose(); window.removeEventListener("mdo-browser-shortcut",nativeShortcut); window.removeEventListener("resize", resizeWindow); window.removeEventListener("beforeunload", beforeUnload); document.removeEventListener("visibilitychange", resizeWindow); document.removeEventListener("keydown", shortcut); opener.remove(); dock.remove(); },
+    destroy() { stopped = true; menu.dispose(); clearTimeout(syncTimer); clearTimeout(saveTimer); sidebarResize.disconnect(); overlays.disconnect(); cancelAnimationFrame(overlayFrame); for (const id of [...mounts.keys()]) disposeMount(id); bridge.dispose(); window.removeEventListener("mdo-browser-shortcut",nativeShortcut); window.removeEventListener("resize", resizeWindow); window.removeEventListener("beforeunload", beforeUnload); document.removeEventListener("visibilitychange", resizeWindow); document.removeEventListener("keydown", shortcut); opener.remove(); dock.remove(); },
   });
 }

@@ -37,10 +37,25 @@ const assert=require('node:assert/strict');
   });
   await page.getByText('Custom view',{exact:true}).waitFor();
   assert.equal(scope.project,'default');
-  await page.getByRole('button',{name:'并排',exact:true}).click();assert.equal(await page.locator('.wb-content.wb-split').count(),1);
-  await page.getByRole('button',{name:'收起',exact:true}).click();assert.equal(await page.locator('.workbench').isVisible(),false);
+  assert.equal(await page.getByRole('button',{name:'并排',exact:true}).count(),0);
+  await page.getByRole('button',{name:'工作区更多操作',exact:true}).click();
+  await page.getByRole('menuitemcheckbox',{name:'并排',exact:true}).click();assert.equal(await page.locator('.wb-content.wb-split').count(),1);
+  await page.getByRole('button',{name:'工作区更多操作',exact:true}).click();
+  await page.keyboard.press('End');assert.equal(await page.evaluate(()=>document.activeElement.textContent),'收起');
+  await page.keyboard.press('Escape');assert.equal(await page.getByRole('menu').count(),0);
+  await page.getByRole('button',{name:'工作区更多操作',exact:true}).click();
+  await page.getByRole('menuitem',{name:'收起',exact:true}).click();assert.equal(await page.locator('.workbench').isVisible(),false);
   await page.evaluate(()=>window.customHandle.reveal());await page.locator('.workbench:not([hidden])').waitFor();
   await page.evaluate(()=>window.customHandle.close());assert.equal(await page.evaluate(()=>window.disposedPanels),1);
+  await page.evaluate(async()=>{
+    const browser=await mdo.browser.create({client:mdo.clientId});
+    window.browserFixture=await mdo.panel.open({client:mdo.clientId,type:'mdo.browser',resource:{id:browser.id},reveal:'activate'});
+  });
+  await page.locator('.wb-browser-toolbar').waitFor();
+  await page.getByText('完整浏览需要在 mdo 客户端打开，当前窗口没有原生浏览器后端。',{exact:true}).waitFor();
+  const address=await page.locator('.wb-browser-toolbar input').boundingBox();assert.ok(address.width>120);
+  await page.screenshot({path:evidence+'/browser-controls.png'});
+  await page.evaluate(()=>mdo.panel.close({id:window.browserFixture.id}));
   await page.evaluate(async()=>{
     const frame=await mdo.call('stream.open',{capacity:65536}),input=await mdo.call('stream.open',{capacity:65536});
     const image=document.createElement('canvas');image.width=2;image.height=2;image.getContext('2d').fillStyle='rgb(255,0,0)';image.getContext('2d').fillRect(0,0,2,2);
@@ -69,7 +84,8 @@ const assert=require('node:assert/strict');
   await page.locator('#new-workbench-tab').click();await page.locator('.workbench:not([hidden])').waitFor();
   await page.setViewportSize({width:390,height:844});await page.screenshot({path:evidence+'/mobile.png'});
   const box=await page.locator('.workbench').boundingBox();assert.ok(box.width<=391&&box.x>=-1,JSON.stringify(box));
-  await page.getByRole('button',{name:'收起',exact:true}).click();assert.equal(await page.locator('#prompt').isVisible(),true);
+  await page.getByRole('button',{name:'工作区更多操作',exact:true}).click();
+  await page.getByRole('menuitem',{name:'收起',exact:true}).click();assert.equal(await page.locator('#prompt').isVisible(),true);
   assert.deepEqual(errors,[]);console.log('Workbench real browser desktop/mobile, plugin lifecycle, resource refresh and restore: PASS');
  }finally{await browser.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});

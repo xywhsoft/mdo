@@ -22,6 +22,9 @@ final class MdoBrowser {
     private final Set<String> manual = new HashSet<>();
     private final Map<String,Boolean> loading = new HashMap<>();
     private final Map<String,String> errors = new HashMap<>();
+    private final Map<String,Integer> errorCodes = new HashMap<>();
+    private final Set<String> crashed = new HashSet<>();
+    private final Map<String,String> locations = new HashMap<>();
     private WebMessagePort port;
     private String document;
     private boolean stopped;
@@ -81,32 +84,36 @@ final class MdoBrowser {
             if(key.isEmpty()||key.length()>100)throw new IllegalArgumentException("Invalid browser identity");
             WebView web=views.get(key);
             if("create".equals(command)) {
-                if(web!=null){reply(id,new JSONObject().put("attached",true),null);return;}
+                if(web!=null){bounds(web,request);reply(id,new JSONObject().put("attached",true),null);return;}
                 if(views.size()>=8)throw new IllegalStateException("Native browser view limit reached (8)");
                 String target=request.optString("url","about:blank");if(!"about:blank".equals(target))target=url(target);
                 web=new WebView(activity);web.getSettings().setJavaScriptEnabled(true);web.getSettings().setDomStorageEnabled(true);
                 web.getSettings().setAllowFileAccess(false);web.getSettings().setAllowContentAccess(false);
                 web.getSettings().setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
                 web.setWebViewClient(new WebViewClient(){
-                    @Override public void onPageStarted(WebView view,String address,Bitmap icon){loading.put(key,true);errors.remove(key);}
+                    @Override public void onPageStarted(WebView view,String address,Bitmap icon){loading.put(key,true);errors.remove(key);errorCodes.remove(key);locations.put(key,address);}
                     @Override public void onPageFinished(WebView view,String address){loading.put(key,false);}
                     @Override public void onReceivedError(WebView view,WebResourceRequest navigation,WebResourceError error){
-                        if(navigation.isForMainFrame()){loading.put(key,false);errors.put(key,error.getDescription().toString());}
+                        if(navigation.isForMainFrame()){loading.put(key,false);errors.put(key,error.getDescription().toString());errorCodes.put(key,error.getErrorCode());}
                     }
-                    @Override public void onReceivedSslError(WebView view,SslErrorHandler handler,android.net.http.SslError error){handler.cancel();loading.put(key,false);errors.put(key,"TLS certificate validation failed");}
+                    @Override public void onReceivedSslError(WebView view,SslErrorHandler handler,android.net.http.SslError error){handler.cancel();loading.put(key,false);errors.put(key,"TLS certificate validation failed");errorCodes.put(key,error.getPrimaryError());}
+                    @Override public void onReceivedHttpError(WebView view,WebResourceRequest navigation,WebResourceResponse response){
+                        if(navigation.isForMainFrame()){errorCodes.put(key,response.getStatusCode());}
+                    }
                     @Override public boolean shouldOverrideUrlLoading(WebView view,WebResourceRequest navigation){
                         String scheme=navigation.getUrl().getScheme();return !"http".equals(scheme)&&!"https".equals(scheme);
                     }
                     @Override public boolean onRenderProcessGone(WebView view,RenderProcessGoneDetail detail){
-                        views.remove(key);manual.remove(key);loading.remove(key);errors.remove(key);root.removeView(view);view.destroy();return true;
+                        views.remove(key);manual.remove(key);loading.put(key,false);errors.put(key,"Browser process stopped; reload to restore the page");crashed.add(key);root.removeView(view);view.destroy();return true;
                     }
                 });
-                views.put(key,web);root.addView(web);bounds(web,request);web.loadUrl(target);reply(id,new JSONObject().put("created",true),null);return;
+                crashed.remove(key);locations.put(key,target);views.put(key,web);root.addView(web);bounds(web,request);web.loadUrl(target);reply(id,new JSONObject().put("created",true),null);return;
             }
-            if("close".equals(command)) {if(web!=null){views.remove(key);manual.remove(key);loading.remove(key);errors.remove(key);root.removeView(web);web.destroy();}reply(id,new JSONObject(),null);return;}
+            if("close".equals(command)) {if(web!=null){views.remove(key);root.removeView(web);web.destroy();}manual.remove(key);loading.remove(key);errors.remove(key);errorCodes.remove(key);crashed.remove(key);locations.remove(key);reply(id,new JSONObject(),null);return;}
+            if("state".equals(command)&&crashed.contains(key)){reply(id,new JSONObject().put("url",locations.getOrDefault(key,"about:blank")).put("loading",false).put("platform","android-webview").put("process_failed",true).put("error",errors.get(key)),null);return;}
             if(web==null)throw new IllegalStateException("Browser is not ready");
             if("bounds".equals(command)){bounds(web,request);reply(id,new JSONObject(),null);return;}
-            if("state".equals(command)){reply(id,new JSONObject().put("url",web.getUrl()).put("title",web.getTitle()).put("loading",Boolean.TRUE.equals(loading.get(key))).put("can_go_back",web.canGoBack()).put("can_go_forward",web.canGoForward()).put("error",errors.getOrDefault(key,"")),null);return;}
+            if("state".equals(command)){reply(id,new JSONObject().put("url",web.getUrl()).put("title",web.getTitle()).put("loading",Boolean.TRUE.equals(loading.get(key))).put("can_go_back",web.canGoBack()).put("can_go_forward",web.canGoForward()).put("manual",manual.contains(key)).put("visible",web.getVisibility()==View.VISIBLE).put("platform","android-webview").put("error_code",errorCodes.getOrDefault(key,0)).put("error",errors.getOrDefault(key,"")),null);return;}
             if("takeover".equals(command)||"release".equals(command)){
                 if("release".equals(command)&&manual.contains(key)&&request.optBoolean("agent"))throw new IllegalStateException("Only the user can return manual control");
                 if("takeover".equals(command))manual.add(key);else manual.remove(key);reply(id,new JSONObject().put("manual",manual.contains(key)),null);return;
@@ -138,5 +145,5 @@ final class MdoBrowser {
             reply(id,new JSONObject().put("accepted",true),null);
         }catch(Exception error){reply(id,null,error.getMessage());}
     }
-    void destroy(){stopped=true;if(port!=null)port.close();for(WebView web:views.values()){root.removeView(web);web.destroy();}views.clear();manual.clear();loading.clear();errors.clear();}
+    void destroy(){stopped=true;if(port!=null)port.close();for(WebView web:views.values()){root.removeView(web);web.destroy();}views.clear();manual.clear();loading.clear();errors.clear();errorCodes.clear();crashed.clear();locations.clear();}
 }

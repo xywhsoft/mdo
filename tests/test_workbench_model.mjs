@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { panelIdentity, safeBrowserUrl, reorderPanel, normalizeLayout, validateImageFrame } from "../app/web/js/features/workbench/model.js";
+import { panelIdentity, safeBrowserUrl, browserLocation, browserPhase, reorderPanel, normalizeLayout, validateImageFrame } from "../app/web/js/features/workbench/model.js";
 import { createApplicationClient, applyApplicationAction } from "../app/web/js/api/application.js";
 test("panel identities retain owner, device and immutable conversation", () => {
  const base={device:"a",project:"p",session:"s"};
@@ -16,6 +16,20 @@ test("tab ordering preserves identity and clamps restored geometry", () => {
  assert.deepEqual(reorderPanel(["a","b"],"unknown","a"),["a","b"]);
  assert.equal(normalizeLayout({width:99999}).width,960);assert.equal(normalizeLayout({width:12}).width,320);
  assert.deepEqual(normalizeLayout({order:["a","a",2]}).order,["a"]);
+});
+test("home and browser share URL/search rules including local ports and IPv6", () => {
+ for (const [input, output] of [["baidu.com", "https://baidu.com/"], ["localhost:3000/a?q=b", "http://localhost:3000/a?q=b"],
+   ["127.0.0.1:9000", "http://127.0.0.1:9000/"], ["[::1]:3000/", "http://[::1]:3000/"],
+   ["[2001:db8::1]/", "https://[2001:db8::1]/"], [" https://example.com/a ", "https://example.com/a"]])assert.equal(browserLocation(input), output);
+ assert.equal(new URL(browserLocation("帮助我查资料")).searchParams.get("q"), "帮助我查资料");
+ for(const input of ["", "file:///tmp/secret", "javascript:alert(1)", "https://user:password@example.com", "a".repeat(9000)])assert.throws(()=>browserLocation(input));
+});
+test("browser states never turn an error or a pending navigation into ready", () => {
+ assert.equal(browserPhase({url:"about:blank",loading:false}),"empty");
+ assert.equal(browserPhase({url:"https://example.com",loading:true}),"loading");
+ assert.equal(browserPhase({url:"https://example.com",loading:true,error:"DNS failed"}),"error");
+ assert.equal(browserPhase({url:"https://example.com",loading:false,error:"Connection refused"}),"error");
+ assert.equal(browserPhase({url:"https://example.com",loading:false}),"ready");
 });
 
 test("surface frames reject decompression-sized images before decoding", () => {

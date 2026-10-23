@@ -12,6 +12,25 @@ export function safeBrowserUrl(value) {
     throw new Error("请输入 HTTP 或 HTTPS 网址；地址中不能包含账号密码");
   return url.href;
 }
+/** Shared omnibox rules: ports and IPv6 literals are URLs, words are search. */
+export function browserLocation(value) {
+  const text = String(value || "").trim();
+  if (!text) throw new Error("请输入网址或搜索内容");
+  if (text.length > 8192) throw new Error("网址或搜索内容过长");
+  if (/^https?:\/\//i.test(text)) return safeBrowserUrl(text);
+  const hostPort = /^(?:localhost|[\w.-]+|\[[a-f\d:]+\])(?::\d+)?(?:[/?#]|$)/i.test(text);
+  if (hostPort && !/\s/.test(text) && (/[.:\[]/.test(text.split(/[/?#]/)[0]) || /^localhost(?:[/:?#]|$)/i.test(text))) {
+    const local = /^(?:localhost|127(?:\.\d+){3}|\[::1\])(?::\d+)?(?:[/?#]|$)/i.test(text);
+    return safeBrowserUrl(`${local ? "http" : "https"}://${text}`);
+  }
+  if (/^[a-z][a-z\d+.-]*:/i.test(text)) throw new Error("请输入 HTTP 或 HTTPS 网址");
+  return safeBrowserUrl(`https://www.bing.com/search?q=${encodeURIComponent(text)}`);
+}
+export function browserPhase(state) {
+  if (state.error) return "error";
+  if (!state.url || state.url === "about:blank") return "empty";
+  return state.loading ? "loading" : "ready";
+}
 export function reorderPanel(ids, source, before) {
   if (!ids.includes(source) || source === before || (before && !ids.includes(before))) return [...ids];
   const next = ids.filter(id => id !== source), position = before ? next.indexOf(before) : next.length;
