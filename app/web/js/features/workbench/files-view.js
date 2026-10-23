@@ -50,7 +50,7 @@ export async function mountFilesView(root, { sdk, context, params = {}, viewStat
   separator.onpointerup = event => { if (separator.hasPointerCapture(event.pointerId)) { separator.releasePointerCapture(event.pointerId); remember(); } };
   separator.onkeydown = event => { if (["ArrowLeft", "ArrowRight"].includes(event.key)) { event.preventDefault(); setTreeWidth(treeWidth + (event.key === "ArrowLeft" ? 20 : -20)); remember(); } };
   tree.append(separator, search, treeHeading, treeBody); body.append(main, tree); root.append(bar, findBar, body); tree.hidden = Boolean(saved.treeHidden);
-  let previousWidth = 0; const sizing = new ResizeObserver(() => { const width = root.clientWidth; if (width < 400 && width !== previousWidth && file) tree.hidden = true; previousWidth = width; }); sizing.observe(root);
+  let previousWidth = 0; const sizing = new ResizeObserver(() => { const width = root.clientWidth; if (!width) return; if (width < 400 && width !== previousWidth && file) tree.hidden = true; previousWidth = width; }); sizing.observe(root);
   const currentPath = () => file?.path || "";
   const draftKey = () => `mdo.file.draft.${JSON.stringify([context.device, context.project, currentPath()])}`;
   const remember = () => {
@@ -158,6 +158,18 @@ export async function mountFilesView(root, { sdk, context, params = {}, viewStat
     while (readOffset < file.size) { if (request !== sequence || !await loadMore()) return; }
     editing = true; renderContent(); content.querySelector("textarea")?.focus();
   };
+  const locate = async line => {
+    const target = Math.max(1, Math.floor(Number(line) || 1)), request = sequence;
+    if (!file || image || binary) return;
+    while (!editing && target > text.split("\n").length && readOffset < file.size && readOffset < VIEW_LIMIT) {
+      if (request !== sequence || !await loadMore()) return;
+    }
+    if (request !== sequence || signal.aborted) return;
+    if (target > text.split("\n").length) {
+      info.prepend(make("span", "wb-error", readOffset < file.size ? "目标行超出预览缓存范围，请在外部编辑器中定位。" : "文件当前版本没有该行。")); return;
+    }
+    moveTo(target);
+  };
   const saveFile = async () => {
     if (!dirty || loading || !file) return;
     if (conflict) throw new Error("磁盘内容已改变，请先比较或重新读取；编辑草稿仍然保留。");
@@ -244,5 +256,7 @@ export async function mountFilesView(root, { sdk, context, params = {}, viewStat
   controls(); renderContent(); await refreshTree();
   if (params.path || saved.selected) await loadFile(params.path || saved.selected, { force: true });
   if (params.edit && !editing && !signal.aborted) await editFile();
+  if (params.line > 1 && !signal.aborted) await locate(params.line);
   if (!signal.aborted) void watch();
+  return { locate };
 }
