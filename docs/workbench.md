@@ -251,6 +251,10 @@ not_started / cancelled_before_start。不会重放原程序或输入。启动�
 
 ## 验证范围
 
+默认项目尚无任务时，`files.resolve({path:".", prepare_default:true})` 可显式初始化
+Home 内的默认 workspace。只接受默认项目的当前根目录，持共享项目租约且使用 Home
+锚定目录接口；不创建其他项目或任意子路径。普通 resolve 始终只解析路径。
+
 自动回归覆盖 C 命令工作者与 HTTP 共享资源、修订冲突、归属隔离、UI 回执、布局恢复、
 损坏文件保留，以及真实浏览器的桌面／窄窗口交互。独立 WebView2 用例验证导航、输入、
 点击、截图、后退、接管及内容页无宿主 SDK。Android 的 Java 外壳及 ARM64 C 编译单独检查；

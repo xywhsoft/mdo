@@ -15,7 +15,7 @@ export async function mountFilesView(root, { sdk, context, params = {}, viewStat
   root.classList.add("wb-files-view");
   const saved = viewState.files || {}, expanded = new Set(saved.expanded || []);
   let format = { encoding: "utf-8", bom: false, lineEnding: "\n" };
-  let directory = saved.root || params.root || (await sdk.call("files.resolve", { path: "." }, { signal })).path;
+  let directory = saved.root || params.root || (await sdk.call("files.resolve", { path: ".", ...(context.project === "default" ? { prepare_default: true } : {}) }, { signal })).path;
   let hidden = Boolean(saved.hidden), file = null, text = "", decoder, readOffset = 0, binary = false, image = "", imageUrl = "", editing = false, dirty = false, loading = false, saving = false, conflict = false, source, watchTimer, searchTimer, saveTimer, sequence = 0, searchSequence = 0;
   const bar = make("div", "wb-files-toolbar"), heading = make("span", "wb-file-path", "文件"), body = make("div", "wb-files-body"), main = make("div", "wb-file-main"), content = make("div", "wb-file-content"), info = make("div", "wb-file-info"), tree = make("aside", "wb-file-tree"), treeHeading = make("div", "wb-tree-heading"), treeBody = make("div", "wb-tree-body"), search = make("input", "wb-file-search");
   const action = (glyph, label, run) => iconButton(glyph, label, run, failToast);

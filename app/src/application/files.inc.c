@@ -58,6 +58,18 @@ static bool SdkFileSearch(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R
     xrtFree(Root);xrtValueRelease(Queue);xrtValueRelease(Items);return Ok;
 }
 static bool SdkFilesCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue* P,xvalue** R,mdo_error_v1* E){
+    bool Prepare=false;
+    if(!strcmp(Method,"files.resolve")&&xrtValueGetBool(SdkGet(P,"prepare_default"),&Prepare)&&Prepare){
+        cstr Name=SdkField(P,"path"),Space=SdkField(P,"space");
+        if(!C->ProjectId||strcmp(C->ProjectId,"default")||!Name||strcmp(Name,".")||(Space&&strcmp(Space,"workspace")&&strcmp(Space,"native")))
+            return MdoApplicationError(E,"sdk_arguments_invalid","Only the default workspace root may be prepared","filesystem",400,false);
+        char* Expected=MdoHomeDefaultWorkspacePath(false);bool Match=Expected&&(!C->Workspace||!C->Workspace[0]||!strcmp(Expected,C->Workspace));xrtFree(Expected);
+        if(!Match)return MdoApplicationError(E,"sdk_project_changed","The selected workspace is not the current default workspace","filesystem",409,false);
+        xwork_error Error;MdoProjectLease* Lease=MdoProjectLeaseAcquire("default",MDO_PROJECT_LEASE_SHARED,&Error);
+        if(!Lease)return MdoApplicationError(E,"sdk_project_busy",Error.sMessage,"filesystem",409,false);
+        char* Directory=MdoHomeDefaultWorkspacePath(true);MdoProjectLeaseRelease(Lease);
+        if(!Directory)return SdkNativeFailure(E,"filesystem");*R=xrtValueObject();bool Ok=SdkPut(*R,"path",Directory);xrtFree(Directory);return Ok;
+    }
     if(!strcmp(Method,"files.search"))return SdkFileSearch(C,P,R,E);
     if(strcmp(Method,"files.directory")){
         char Name[48];snprintf(Name,sizeof(Name),"fs.%s",Method+6);return SdkFileCall(C,Name,P,R,E);

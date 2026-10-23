@@ -4,6 +4,7 @@
 #include "../../include/mdo/power.h"
 #include "../../include/mdo/version.h"
 #include "../../include/mdo/time.h"
+#include "../../include/mdo/project_lifecycle.h"
 
 static const struct {cstr Id,Description;} SdkRuntimeMethods[]={
     {"runtime.info","Application version, paths, platform and power state"},

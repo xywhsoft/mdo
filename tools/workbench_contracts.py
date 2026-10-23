@@ -33,7 +33,7 @@ def contracts(add):
         {**file_path,'query':s,'hidden':b,'limit':{'type':'integer','minimum':1,'maximum':200}},('path','query'))
     for action in ('resolve','stat','read','write','mkdir','move','remove'):
         add('files.'+action,'File workbench operation using the same filesystem and revision rules as fs.'+action,
-            {**file_path,'offset':u,'limit':{'type':'integer','minimum':1,'maximum':262144},'revision':s,'text':s,'base64':s,'destination':s,'recursive':b,'replace':b},('path',))
+            {**file_path,'offset':u,'limit':{'type':'integer','minimum':1,'maximum':262144},'revision':s,'text':s,'base64':s,'destination':s,'recursive':b,'replace':b,**({'prepare_default':b} if action=='resolve' else {})},('path',))
     add('panel.types','List registered panel types',output={'type':'array'})
     add('panel.register','Register an extension-owned panel type; renderer is a built-in adapter or custom JS contribution',
         {'id':s,'title':s,'renderer':{'type':'string','enum':['document','plan','diff','web','browser','surface','editor','custom']},'scope':s,'frontend':s},('id','title','renderer'))

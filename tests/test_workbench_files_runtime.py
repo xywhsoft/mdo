@@ -23,6 +23,9 @@ def main():
                 return value['data'] if status==200 else value['error']
             try:
                 wait_ready(port,process)
+                default=Path(call('files.resolve',{'path':'.'})['path']);assert not default.exists(),'fixture already created the default workspace'
+                call('files.resolve',{'path':'nested','prepare_default':True},400);assert not default.exists()
+                assert call('files.resolve',{'path':'.','prepare_default':True})['path']==str(default) and default.is_dir()
                 path={'path':str(directory),'space':'native'}
                 page=call('files.directory',{**path,'limit':1});revision=page['revision'];names=[];offset=0
                 for _ in range(20):
