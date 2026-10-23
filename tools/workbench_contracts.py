@@ -3,6 +3,11 @@ def contracts(add):
     s={'type':'string'};o={'type':'object'};b={'type':'boolean'}
     u={'type':'integer','minimum':0,'maximum':9007199254740991}
     identity={'id':s};revision={**identity,'revision':u}
+    comparison={'repository':s,'scope':{'type':'string','enum':['workspace','staged','unstaged','branch','session']},'base':s}
+    add('changes.list','Read structured Git changes without modifying the index; comparison scopes are explicit',comparison)
+    add('changes.branches','List local and remote comparison refs',{'repository':s},output={'type':'array'})
+    add('changes.diff','Read a bounded page of diff rows with exact line identities and a comparison revision',
+        {**comparison,'path':s,'revision':s,'offset':u,'limit':{'type':'integer','minimum':1,'maximum':2000}},('path',))
     file_path={'path':s,'space':{'type':'string','enum':['workspace','native','home','application']}}
     add('files.directory','Read one directory page; revision detects changed pagination',
         {**file_path,'offset':u,'limit':{'type':'integer','minimum':1,'maximum':1024},'revision':s,'hidden':b},('path',))

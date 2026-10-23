@@ -21,6 +21,9 @@ static const struct {cstr Id,Description;} SdkRuntimeMethods[]={
     {"files.resolve","Resolve a file workbench path"},{"files.stat","Read file workbench metadata"},
     {"files.read","Read a bounded file workbench byte range"},{"files.write","Save with file revision checks"},
     {"files.mkdir","Create a file workbench directory"},{"files.move","Move a file workbench entry"},{"files.remove","Remove a file workbench entry"},
+    {"changes.list","Read structured Git comparison files and statistics"},
+    {"changes.branches","Read Git branch and remote comparison refs"},
+    {"changes.diff","Read one bounded diff page with source line identities"},
     {"vfs.read","Read an application VFS resource"},{"vfs.list","List an application VFS directory"},
     {"storage.read","Read an extension-owned persistent resource"},{"storage.write","Write an extension-owned persistent resource"},
     {"storage.remove","Remove an extension-owned persistent resource"},
@@ -152,6 +155,7 @@ static bool SdkFileCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue* P,
 invalid:xrtFree(Path);return MdoApplicationError(E,"sdk_arguments_invalid","Invalid path, range, limit or destination","filesystem",400,false);
 }
 #include "files.inc.c"
+#include "changes.inc.c"
 
 static bool SdkProcessOutput(xprocessstream Stream,xbytesview B,void* User){
     const mdo_sdk_context_v1* C=User;xvalue* Data=xrtValueObject();SdkByteValue(Data,B.Data,B.Size);
@@ -203,6 +207,7 @@ bool MdoApplicationRuntimeCall(const mdo_sdk_context_v1* C,cstr Method,const xva
     if(P&&xrtValueType(P)!=XVALUE_OBJECT)return MdoApplicationError(E,"sdk_arguments_invalid","Runtime service parameters must be an object","resolve",400,false);
     if(!strncmp(Method,"fs.",3)||!strncmp(Method,"vfs.",4)||!strncmp(Method,"storage.",8))return SdkFileCall(C,Method,P,R,E);
     if(!strncmp(Method,"files.",6))return SdkFilesCall(C,Method,P,R,E);
+    if(!strncmp(Method,"changes.",8))return SdkChangesCall(C,Method,P,R,E);
     if(!strcmp(Method,"process.run"))return SdkProcessCall(C,P,R,E);
     if(!strcmp(Method,"network.request"))return SdkNetworkCall(C,P,R,E);
     if(!strncmp(Method,"secret.",7)){

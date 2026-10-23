@@ -2,6 +2,12 @@
 #ifndef MDO_WORKBENCH_SDK_H
 #define MDO_WORKBENCH_SDK_H
 #include "sdk.h"
+static inline mdo_result mdoChangesList(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
+{return mdoCall(C,"changes.list",P,R,E);}
+static inline mdo_result mdoChangesBranches(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
+{return mdoCall(C,"changes.branches",P,R,E);}
+static inline mdo_result mdoChangesDiff(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
+{return mdoCall(C,"changes.diff",P,R,E);}
 static inline mdo_result mdoFilesDirectory(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
 {return mdoCall(C,"files.directory",P,R,E);}
 static inline mdo_result mdoFilesSearch(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
