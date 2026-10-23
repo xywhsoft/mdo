@@ -2,7 +2,19 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createMessageEditDialog } from "../app/web/js/features/chat/message-edit-dialog.js";
 
-function setup({ queuedClose = false } = {}) {
+test("navigation during command preparation preserves the original draft when preparation fails", async () => {
+  let rejectPreparation, preserved = "", commits = 0;
+  const context = setup({ prepareText: () => new Promise((_, reject) => { rejectPreparation = reject; }) });
+  const result = context.editor.open("/review", [], context.opener, {
+    onCommit: async () => { ++commits; }, onDetach: text => { preserved = text; } });
+  context.key(); context.editor.cancel();
+  assert.equal(context.submit.disabled, true);
+  rejectPreparation(new Error("No longer in the original conversation"));
+  assert.equal(await result, null);
+  assert.equal(preserved, "/review"); assert.equal(commits, 0);
+});
+
+function setup({ queuedClose = false, prepareText = null } = {}) {
   const dialog = new EventTarget();
   const form = new EventTarget();
   const input = new EventTarget();
@@ -30,7 +42,7 @@ function setup({ queuedClose = false } = {}) {
     state.submits += 1;
     if (form.reportValidity()) form.dispatchEvent(new Event("submit", { cancelable: true }));
   };
-  const editor = createMessageEditDialog({ dialog, form, input, cancel, submit, error });
+  const editor = createMessageEditDialog({ dialog, form, input, cancel, submit, error, prepareText });
   const key = (fields = {}, consumed = false) => {
     const event = new Event("keydown", { cancelable: true });
     for (const [name, value] of Object.entries({ key: "Enter", ...fields }))

@@ -135,7 +135,7 @@ function createCase(label, initialRoute, ensureSession) {
     composer.dispatchEvent(event);
     return event.defaultPrevented;
   }
-  return { images, button, strip, output, changes, errors, errorKeys, add,
+  return { images, prompt, button, strip, output, changes, errors, errorKeys, add,
     pasteItemOnly, pasteFilesOnly, pasteBoth, dropItemOnly, dropUnreadable,
     setModel(value) { selectedModelId = value; modelSelect.value = value;
       images.refresh(); },
@@ -279,11 +279,24 @@ try {
   incompatible.output.dataset.passed = String(incompatiblePassed);
   incompatible.output.textContent = JSON.stringify({ incompatiblePassed,
     blocked, restored, removed, errors: incompatible.errors }, null, 2);
+  const locked = createCase("历史编辑期间主输入框不接收图片",
+    { projectId: "qa", sessionId: "locked-editor" });
+  locked.prompt.readOnly = true; locked.pasteFilesOnly();
+  const lockedPassed = locked.images.get().length === 0 && locked.errorKeys.includes("image.readOnly") &&
+    !uploadTypes.some(item => item.session === "locked-editor");
+  locked.output.dataset.passed = String(lockedPassed);
+  locked.output.textContent = JSON.stringify({ lockedPassed });
 } catch (error) {
   const output = document.createElement("pre");
   output.dataset.passed = "false";
   output.textContent = error.stack ?? String(error);
   root.append(output);
-} finally { window.fetch = originalFetch; }
+} finally {
+  window.fetch = originalFetch;
+  const results = [...root.querySelectorAll("pre[data-passed]")];
+  const summary = document.createElement("pre"); summary.id = "result";
+  summary.textContent = JSON.stringify({ passed: results.length === 11 && results.every(node => node.dataset.passed === "true"),
+    cases: results.map(node => node.textContent) }); root.append(summary);
+}
 </script>
 </html>

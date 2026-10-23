@@ -2085,6 +2085,25 @@ select:focus-visible,
 .ask-dock .ask-dock-question { color: var(--ink); font-size: 14px; line-height: 1.6; }
 .ask-dock-options button { border-radius: 9px; }
 .composer-error[data-code="recovery_required"] { border-color: var(--border-strong); background: var(--surface-raised); color: var(--muted); }
+.prompt-context-chips { display: flex; flex-wrap: wrap; gap: 6px; max-height: 132px; overflow-y: auto; padding: 6px 0; }
+.prompt-context-chip { display: inline-flex; align-items: center; gap: 2px; min-width: 0; max-width: 100%; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-raised); }
+.prompt-context-chip button { min-height: 28px; padding: 3px 7px; border: 0; border-radius: 6px; background: transparent; color: var(--ink); font-size: 12px; cursor: pointer; }
+.prompt-context-chip button:hover { background: var(--surface); }
+.prompt-context-open { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: start; }
+.prompt-context-chip[data-context-kind="quote"] { border-left: 3px solid var(--accent); }
+.prompt-context-preview .dialog-card { width: min(760px, calc(100vw - 32px)); }
+.prompt-context-preview pre { max-height: 60dvh; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
+.composer-add-menu { position: fixed; z-index: 90; width: 240px; padding: 6px; overflow-y: auto; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-raised); box-shadow: 0 8px 28px #0003; }
+.composer-add-menu button { display: block; width: 100%; min-height: 34px; padding: 6px 10px; border: 0; border-radius: 6px; text-align: start; background: transparent; color: var(--ink); cursor: pointer; }
+.composer-add-menu button:hover, .composer-add-menu button:focus-visible { background: var(--surface); }
+.selection-quote-button { position: fixed; z-index: 95; padding: 7px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-raised); color: var(--ink); box-shadow: 0 4px 14px #0002; }
+.session-mention-menu > p { padding: 8px 12px; font-size: 12px; color: var(--muted); }
+.message-inline-editor { position: relative; width: 100%; max-width: 100%; margin: 8px 0; padding: 14px; border: 1px solid var(--focus); border-radius: 10px; background: var(--surface); }
+.message-inline-editor textarea { width: 100%; min-height: 100px; max-height: 45dvh; resize: vertical; }
+.message-inline-editor h2 { font-size: 14px; }
+.message-inline-editor header p, .message-inline-editor #message-edit-help { font-size: 12px; color: var(--muted); }
+.message-inline-editor .dialog-fields { padding: 0; }
+.message-inline-editor footer { display: flex; justify-content: flex-end; gap: 8px; padding-top: 10px; }
 @media (max-width: 640px) {
   .approval-dock, .ask-dock, .recovery-dock { padding: 12px; }
   .approval-scope > summary { min-height: 40px; padding-block: 11px; }

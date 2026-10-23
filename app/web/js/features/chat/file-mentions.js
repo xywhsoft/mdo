@@ -9,13 +9,13 @@ const VISIBLE_MAX = 8;
 const QUERY_MAX_BYTES = 511;
 const encoder = new TextEncoder();
 
-function mentionAtCaret(input) {
+function mentionAtCaret(input, allowEmpty = false) {
   if (input.selectionStart !== input.selectionEnd) return null;
   const caret = input.selectionStart;
   const before = input.value.slice(0, caret);
   // Only the first @ marks the reference. A later @ may be part of a filename.
   const match = /(?:^|\s)@([^\s]*)$/.exec(before);
-  if (!match || !match[1] || match[1].length > QUERY_MAX_BYTES ||
+  if (!match || (!allowEmpty && !match[1]) || match[1].length > QUERY_MAX_BYTES ||
       encoder.encode(match[1]).length > QUERY_MAX_BYTES) return null;
   // Completing from the middle of an existing reference must replace its
   // remaining suffix too; otherwise @alpha.c becomes @src/alpha.c ha.c.
@@ -28,10 +28,11 @@ function fileReference(path) {
   return /\s/.test(path) ? `@"${path.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"` : `@${path}`;
 }
 
-export function createFileMentions({ composer, input, navigation }) {
+export function createFileMentions({ composer, input, navigation, onReference }) {
+  const slashMenuId = input.id && input.id !== "prompt" ? `${input.id}-slash-menu` : "slash-menu";
   const list = element("div", {
     className: "file-mention-menu",
-    attrs: { id: "file-mention-menu", role: "listbox", "aria-label": t("mention.label", {}, "工作区文件") },
+    attrs: { id: input.id && input.id !== "prompt" ? `${input.id}-file-mention-menu` : "file-mention-menu", role: "listbox", "aria-label": t("mention.label", {}, "工作区文件") },
   });
   list.hidden = true;
   composer.append(list);
@@ -54,7 +55,7 @@ export function createFileMentions({ composer, input, navigation }) {
     list.hidden = true;
     clear(list);
     if (input.getAttribute("aria-controls") === list.id) {
-      input.setAttribute("aria-controls", "slash-menu");
+      input.setAttribute("aria-controls", slashMenuId);
       input.setAttribute("aria-expanded", "false");
       input.removeAttribute("aria-activedescendant");
     }
@@ -66,7 +67,7 @@ export function createFileMentions({ composer, input, navigation }) {
     composer.toggleAttribute("data-file-menu-open", !list.hidden);
     if (list.hidden) {
       if (input.getAttribute("aria-controls") === list.id) {
-        input.setAttribute("aria-controls", "slash-menu");
+        input.setAttribute("aria-controls", slashMenuId);
         input.setAttribute("aria-expanded", "false");
         input.removeAttribute("aria-activedescendant");
       }
@@ -99,8 +100,12 @@ export function createFileMentions({ composer, input, navigation }) {
   }
 
   function insert(path) {
-    const token = mentionAtCaret(input);
+    const token = mentionAtCaret(input, Boolean(onReference));
     if (!token || !choices.includes(path)) { hide(); return; }
+    if (onReference) {
+      if (onReference(path, token) !== false) hide();
+      input.focus(); return;
+    }
     const separator = input.value[token.end];
     const hasSeparator = /\s/.test(separator ?? "");
     // Include the existing separator in the same native edit. This keeps its
@@ -116,7 +121,7 @@ export function createFileMentions({ composer, input, navigation }) {
 
   function update(event) {
     if (composition.isComposing(input) || event?.isComposing) { hide(); return; }
-    const token = mentionAtCaret(input);
+    const token = mentionAtCaret(input, Boolean(onReference));
     const selected = navigation.get();
     if (!token || selected.view !== "workspace" || !selected.projectId) {
       hide(); return;
@@ -134,10 +139,10 @@ export function createFileMentions({ composer, input, navigation }) {
           ? `/projects/${selected.projectId}/sessions/${selected.sessionId}`
           : `/projects/${selected.projectId}`;
         const result = await api.get(
-          `${scope}/workspace/files?q=${encodeURIComponent(token.query)}`,
+          `${scope}/workspace/files?q=${encodeURIComponent(token.query)}${onReference ? "&include_directories=1" : ""}`,
           { signal: controller.signal });
         if (serial !== generation || current !== key ||
-            mentionAtCaret(input)?.query !== token.query) return;
+            mentionAtCaret(input, Boolean(onReference))?.query !== token.query) return;
         choices = (Array.isArray(result.data?.items) ? result.data.items : [])
           .filter((path) => typeof path === "string").slice(0, VISIBLE_MAX);
         active = 0;

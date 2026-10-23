@@ -72,6 +72,14 @@ import { applyCommandActions } from "./features/chat/command-actions.js";
 import { expandMcpCommand, expandMcpArguments } from "./features/chat/mcp-context.js";
 import { expandSkillSelection } from "./features/chat/skill-selection.js";
 import { createFileMentions } from "./features/chat/file-mentions.js";
+import { createComposerContext } from "./features/chat/composer-context.js";
+import { newPromptContext } from "./features/chat/prompt-context.js";
+import { createComposerAddMenu } from "./features/chat/composer-add-menu.js";
+import { createSessionMentions } from "./features/chat/session-mentions.js";
+import { createSelectionQuote } from "./features/chat/selection-quote.js";
+import { createPromptHistory } from "./features/chat/prompt-history.js";
+import { loadCommands, parseCommand, runCommand } from "./features/chat/extension-commands.js";
+import { parseSkillSelection } from "./features/chat/skill-selection.js";
 import { trackComposerMenuRoom } from "./features/chat/composer-menu-room.js";
 import { createComposerProfile } from "./features/chat/composer-profile.js";
 import { createComposerControls } from "./features/chat/composer-controls.js";
@@ -172,6 +180,9 @@ export async function boot() {
   const mobileLayout = window.matchMedia("(max-width: 760px)");
   trackMobileViewport(shell, mobileLayout);
   const prompt = $("#prompt");
+  let composerContext = null;
+  let inlineContext = null, inlineFiles = null, inlineSessions = null, inlineSlash = null;
+  let messageEditingKey = "";
   const newTaskComposerFocus = createNewTaskComposerFocus({ prompt, navigation });
   const composer = $("#composer");
   trackComposerMenuRoom(composer);
@@ -294,7 +305,7 @@ export async function boot() {
   }
 
   function localPurgeBusy() {
-    return hasPendingApiWrites() || messageActionBusy ||
+    return hasPendingApiWrites() || messageActionBusy || Boolean(messageEditingKey) ||
       composerImages?.hasInFlight() || composerProfile.hasInFlight() ||
       submissionController?.hasInFlight() || promptQueue.hasInFlight() ||
       newTaskController?.isBusy() || newTaskController?.isPreparing() || newTaskController?.isMigrating();
@@ -437,6 +448,10 @@ export async function boot() {
   const messageEditDialog = createMessageEditDialog({
     dialog: $("#message-edit-dialog"), form: $("#message-edit-form"),
     input: $("#message-edit-input"), cancel: $("#cancel-message-edit"),
+    getText: () => inlineContext?.text() ?? $("#message-edit-input").value,
+    restoreText: text => { if (inlineContext) inlineContext.restore(text); else $("#message-edit-input").value = text; },
+    onKeyDown: event => inlineFiles?.onKeyDown(event) || inlineSessions?.onKeyDown(event) || inlineSlash?.onKeyDown(event),
+    prepareText: prepareInlineCommand,
     submit: $("#message-edit-form button[type=submit]"), error: $("#message-edit-error"),
   });
   createRunNotifications({ runsStore, navigation, settingsStore,
@@ -458,7 +473,7 @@ export async function boot() {
     if (draftStore.isRunUncertain(key)) throw uncertainRunError();
     if (draftStore.submissions(key).length ||
         promptQueue.peek(selected.projectId, selected.sessionId) ||
-        prompt.value.trim() || composerAttachments.length)
+        composerText().trim() || composerAttachments.length)
       throw new Error(t("messageAction.resolveDraft", {}, "请先处理草稿和待发送队列，再编辑历史消息"));
   }
 
@@ -511,8 +526,8 @@ export async function boot() {
           return draftStore.isDraftDurable(targetKey, text, attachments);
         },
         onPreserveFailure(_error, current) {
-          if (!current || (prompt.value.trim() && prompt.value !== text)) return;
-          prompt.value = text;
+          if (!current || (composerText().trim() && composerText() !== text)) return;
+          restoreComposerText(text);
           composerAttachments = [...attachments];
           composerImages.set(attachments);
           resizePrompt();
@@ -535,7 +550,7 @@ export async function boot() {
             void loadRuns();
           }
           if (!current) return;
-          prompt.value = text;
+          restoreComposerText(text);
           composerAttachments = [...attachments];
           composerImages.set(attachments);
           prompt.dispatchEvent(new Event("input", { bubbles: true }));
@@ -641,14 +656,35 @@ export async function boot() {
       if (!isCurrentMessageOwner(owner, version))
         throw new Error(t("messageAction.ownerChanged", {}, "会话已切换，请重新选择消息"));
       assertMessageReplacementReady(sequence, completeText, attachments);
-      await messageEditDialog.open(completeText, attachments, opener, {
-        onCommit: async (edited) => {
-          if (!isCurrentMessageOwner(owner, version))
-            throw new Error(t("messageAction.ownerChanged", {}, "会话已切换，请重新选择消息"));
-          await replaceAndRunMessage(sequence, edited, attachments, "edit", sourceEventId);
-        },
-        fallbackFocus: () => isCurrentMessageOwner(owner, version) ? prompt : null,
-      });
+      const key = `${owner.projectId}/${owner.sessionId}`, origin = promptQueue.stamp();
+      let detached = false, attempted = false;
+      messageEditingKey = key; syncSendDisabled();
+      editCommandResults.clear();
+      try {
+        const result = await messageEditDialog.open(completeText, attachments, opener, {
+          host: opener.closest(".timeline-item"),
+          onDraft: edited => { if (promptQueue.stamp() === origin) draftStore.edit(key, edited, attachments); },
+          onDetach: edited => {
+            detached = true;
+            if (promptQueue.stamp() === origin) { draftStore.edit(key, edited, attachments, true); void draftStore.flush(key); }
+          },
+          onCommit: async (edited) => {
+            if (!isCurrentMessageOwner(owner, version))
+              throw new Error(t("messageAction.ownerChanged", {}, "会话已切换，请重新选择消息"));
+            attempted = true;
+            await replaceAndRunMessage(sequence, edited, attachments, "edit", sourceEventId);
+          },
+          fallbackFocus: () => isCurrentMessageOwner(owner, version) ? prompt : null,
+        });
+        if (result === null && !detached && !attempted && promptQueue.stamp() === origin)
+          draftStore.clearIfMatches(key, messageEditDialog.text(), attachments);
+      } finally {
+        messageEditingKey = ""; syncSendDisabled(); inlineFiles.hide(); inlineSessions.hide(); inlineSlash.hide();
+        if (selectedKey === key && promptQueue.stamp() === origin) {
+          const saved = draftStore.snapshot(key); restoreComposerText(saved.text);
+          composerAttachments = saved.attachments; composerImages.set(saved.attachments); resizePrompt(); tokenMeter.refresh();
+        }
+      }
       if (isCurrentMessageOwner(owner, version) &&
           (document.activeElement === document.body || !document.activeElement?.isConnected))
         prompt.focus({ preventScroll: true });
@@ -704,7 +740,7 @@ export async function boot() {
       const sidebarOpen = shell.dataset.sidebar === "open";
       if (document.querySelector("dialog[open]")) return;
       if (!sidebarOpen &&
-          (promptComposition.isComposing(prompt) || prompt.value.length || composerAttachments.length ||
+          (promptComposition.isComposing(prompt) || composerText().length || composerAttachments.length ||
            (document.activeElement !== prompt &&
             document.activeElement !== document.body))) return;
       if (sidebarOpen) setSidebar(false, { persist: false });
@@ -790,7 +826,7 @@ export async function boot() {
       const origin = promptQueue.stamp();
       const conflict = () => new Error(t("queue.draftConflict", {}, "请先发送或清空输入框中的草稿，再撤回消息。"));
       if (queueEditKey || selectedKey !== key || composerImages.isUploading() ||
-          composerProfile.isBusy() || prompt.value || composerAttachments.length ||
+          composerProfile.isBusy() || composerText() || composerAttachments.length ||
           submissionController.isBusy(key)) throw conflict();
       queueEditKey = key;
       syncSendDisabled();
@@ -866,12 +902,12 @@ export async function boot() {
           const text = receipt.raw_arguments.trim().startsWith("[")
             ? await expandMcpArguments(args, scope.projectId, { isCurrent })
             : await expandMcpCommand(`/mcp ${receipt.raw_arguments}`, scope.projectId, { isCurrent });
-          if (isCurrent() && !prompt.value) { prompt.value = text;prompt.dispatchEvent(new Event("input", { bubbles: true }));prompt.focus(); }
+          if (isCurrent() && !composerText()) { restoreComposerText(text);prompt.dispatchEvent(new Event("input", { bubbles: true }));prompt.focus(); }
         },
         "skill.invoke": async params => {
           if (!params?.id) throw new Error("Skill ID is required");
           const text = await expandSkillSelection({ id: params.id, arguments: params.arguments ?? receipt.raw_arguments }, scope.projectId);
-          if (isCurrent() && !prompt.value) { prompt.value = text;prompt.dispatchEvent(new Event("input", { bubbles: true }));prompt.focus(); }
+          if (isCurrent() && !composerText()) { restoreComposerText(text);prompt.dispatchEvent(new Event("input", { bubbles: true }));prompt.focus(); }
         },
       };
       await applyCommandActions(receipt, handlers, isCurrent);
@@ -887,19 +923,76 @@ export async function boot() {
     canCall: () => !purgeRecovery.isPaused() && !localServiceReconnecting });
   Object.defineProperty(globalThis, "mdo", { value: applicationUi.sdk, configurable: true });
   window.addEventListener("pagehide", () => applicationUi.destroy(), { once: true });
-  const fileMentions = createFileMentions({ composer, input: prompt, navigation });
+  const contextOwner = () => JSON.stringify([selectedDraftKey, promptQueue.stamp()]);
+  composerContext = createComposerContext({ input: prompt, strip: $("#composer-contexts"), owner: contextOwner,
+    onChange: () => prompt.dispatchEvent(new Event("input", { bubbles: true })) });
+  function composerText() { return composerContext?.text() ?? prompt.value; }
+  function restoreComposerText(text) { if (composerContext) composerContext.restore(text); else prompt.value = text; }
+  const fileMentions = createFileMentions({ composer, input: prompt, navigation,
+    onReference: (path, token) => composerContext.add(newPromptContext(path.endsWith("/") ? "directory" : "file", path,
+      { path, project: navigation.get().projectId || "default" }), token) });
+  const sessionMentions = createSessionMentions({ composer, input: prompt, navigation, sessionsStore,
+    add: (item, range) => composerContext.add(item, range) });
+  const promptHistory = createPromptHistory({ input: prompt, navigation, restore: restoreComposerText,
+    hasContexts: () => composerContext.hasContexts() });
+  const editInput = $("#message-edit-input"), editForm = $("#message-edit-form");
+  inlineContext = createComposerContext({ input: editInput, strip: $("#message-edit-contexts"), owner: contextOwner,
+    onChange: () => editInput.dispatchEvent(new Event("input", { bubbles: true })) });
+  inlineFiles = createFileMentions({ composer: editForm, input: editInput, navigation,
+    onReference: (path, token) => inlineContext.add(newPromptContext(path.endsWith("/") ? "directory" : "file", path,
+      { path, project: navigation.get().projectId || "default" }), token) });
+  inlineSessions = createSessionMentions({ composer: editForm, input: editInput, navigation, sessionsStore,
+    add: (item, range) => inlineContext.add(item, range) });
+  inlineSlash = createSlashCommands({ composer: editForm, input: editInput, insertOnly: true,
+    skillProject: () => navigation.get().projectId || "default", contextKey: contextOwner });
+  createComposerAddMenu({ button: $("#message-edit-add"), input: editInput,
+    textInput: $("#message-edit-text-file"), owner: contextOwner, add: item => inlineContext.add(item) });
+  const editCommandResults = new Map();
+  async function prepareInlineCommand() {
+    const value = editInput.value.trim(), origin = contextOwner(), scope = navigation.get();
+    const project = scope.projectId || "default";
+    let expanded;
+    const skill = parseSkillSelection(value);
+    if (skill) expanded = await expandSkillSelection(skill, project);
+    else {
+      const selection = parseCommand(value);
+      if (!selection) return false;
+      const cacheKey = JSON.stringify([origin, value]);
+      if (!editCommandResults.has(cacheKey)) editCommandResults.set(cacheKey, (async () => {
+        const command = (await loadCommands(project, { refresh: true })).find(item => item.id === selection.id);
+        if (origin !== contextOwner()) throw new DOMException("Editor owner changed", "AbortError");
+        if (!command) throw new Error(t("context.editCommand"));
+        const result = await runCommand(command, selection.raw, { projectId: project, sessionId: scope.sessionId });
+        if (result.actions?.length || typeof result.result?.draft !== "string") throw new Error(t("context.editCommand"));
+        return result.result.draft;
+      })().catch(error => { editCommandResults.delete(cacheKey); throw error; }));
+      expanded = await editCommandResults.get(cacheKey);
+      while (editCommandResults.size > 16) editCommandResults.delete(editCommandResults.keys().next().value);
+    }
+    if (origin !== contextOwner()) throw new DOMException("Editor owner changed", "AbortError");
+    editInput.value = expanded; toast(t("context.editExpanded")); return true;
+  }
+  const addMenu = createComposerAddMenu({ button: $("#composer-attach"), input: prompt,
+    imageInput: $("#composer-file"), textInput: $("#composer-text-file"), owner: contextOwner,
+    add: item => composerContext.add(item) });
+  const selectionQuote = createSelectionQuote({ container: $("#timeline"), owner: () => ({
+    ...navigation.get(), origin: promptQueue.stamp() }),
+    writable: () => navigation.get().view === "workspace" && !prompt.disabled && !prompt.readOnly,
+    add: item => { if (composerContext.add(item)) prompt.focus(); } });
+  navigation.subscribe(() => { addMenu.close(); sessionMentions.hide(); selectionQuote.hide(); messageEditDialog.cancel(); });
   const tokenMeter = createTokenMeter({
     root: $("#context-meter"), trigger: $("#context-meter-trigger"),
     ring: $("#context-meter-ring"), panel: $("#context-meter-panel"),
     estimate: $("#composer-input-estimate"), prompt,
     modelSelect: $("#composer-model"),
-    attachments: () => composerAttachments,
+    attachments: () => composerAttachments, text: composerText,
     sessionStore: sessionDetailStore, timelineStore, modelsStore, runsStore,
   });
   draftStore = createDraftStore({
     isWritePaused: () => purgeRecovery.isPaused() || localServiceReconnecting,
     onRestore(text, attachments, uncertainRun, submission) {
-      prompt.value = text;
+      if (messageEditingKey && selectedKey === messageEditingKey) return;
+      restoreComposerText(text);
       composerAttachments = attachments;
       composerImages?.set(attachments);
       resizePrompt();
@@ -970,7 +1063,7 @@ export async function boot() {
     },
     onRestored(key, restored) {
       if (!selectedOwnsDraft(key)) return;
-      prompt.value = restored.text;
+      restoreComposerText(restored.text);
       composerAttachments = restored.attachments;
       composerImages.set(restored.attachments);
       resizePrompt();
@@ -1083,7 +1176,7 @@ export async function boot() {
     },
   });
   composerImages = createComposerImages({
-    uploadImage: uploadImageWithRecovery,
+    uploadImage: uploadImageWithRecovery, bindButton: false,
     composer, prompt, button: $("#composer-attach"), input: $("#composer-file"),
     strip: $("#composer-images"), modelSelect: $("#composer-model"),
     navigation, modelsStore,
@@ -1091,7 +1184,7 @@ export async function boot() {
     ensureSession: (text) => ensureSession(text, composerProfile.selection()),
     onChange(attachments) {
       composerAttachments = attachments;
-      draftStore.edit(selectedDraftKey, prompt.value, attachments);
+      draftStore.edit(selectedDraftKey, composerText(), attachments);
       tokenMeter.refresh();
     },
     async onBeforeRemove(owner, id) {
@@ -1235,8 +1328,10 @@ export async function boot() {
   let sendBlockedByState = true;
   function syncSendDisabled() {
     const localCommand = slashCommands.isExact(prompt.value.trim());
-    const extractingQueue = Boolean(queueEditKey && queueEditKey === selectedKey);
+    const extractingQueue = Boolean((queueEditKey && queueEditKey === selectedKey) ||
+      (messageEditingKey && messageEditingKey === selectedKey));
     prompt.readOnly = extractingQueue;
+    composerContext?.render();
     $("#composer-attach").disabled = extractingQueue;
     send.disabled = sendBlockedByState || extractingQueue ||
       ((composerImages?.isUploading() ||
@@ -1916,7 +2011,7 @@ export async function boot() {
     // draft. Capturing it again would resurrect a sent prompt in the source.
     if (migratedDraftTarget !== key &&
         !(skipLegacyDraftCapture && selectedDraftKey === ""))
-      draftStore.capture(selectedDraftKey, prompt.value, composerAttachments);
+      if (!messageEditingKey) draftStore.capture(selectedDraftKey, composerText(), composerAttachments);
     migratedDraftTarget = "";
     skipLegacyDraftCapture = false;
     selectedKey = key;
@@ -2158,9 +2253,9 @@ export async function boot() {
     const owner = await newTaskController.createForAttachment({
       projectId: origin.projectId || "default", title,
       profile });
-    if (stageDraft && routeVersion === originVersion && prompt.value)
+    if (stageDraft && routeVersion === originVersion && composerText())
       draftStore.edit(`${owner.projectId}/${owner.sessionId}`,
-        prompt.value, composerAttachments, true);
+        composerText(), composerAttachments, true);
     return owner;
   }
 
@@ -2171,12 +2266,13 @@ export async function boot() {
   }
 
   function clearSubmittedComposer(key, submission) {
+    if (key) void promptHistory.record(key.split("/")[0], submission);
     draftStore.clearIfMatches(key, submission.text,
       submission.attachments);
-    if (!selectedOwnsDraft(key) || prompt.value !== submission.text ||
+    if (!selectedOwnsDraft(key) || composerText() !== submission.text ||
         JSON.stringify(composerAttachments) !==
           JSON.stringify(submission.attachments)) return;
-    prompt.value = "";
+    composerContext.clear();
     composerAttachments = [];
     composerImages.clear();
     resizePrompt();
@@ -2206,6 +2302,7 @@ export async function boot() {
       return;
     }
     fileMentions.hide();
+    sessionMentions.hide(); addMenu.close();
     // Commands act on the UI and keep an unsent image draft. They must stay
     // usable while an attachment is still being stored.
     if (fromComposer && slashCommands.consumeExact(text)) return;
@@ -2213,8 +2310,8 @@ export async function boot() {
       try { if (await slashCommands.expandIntoComposer(text)) return; }
       catch (error) { showComposerError(error); return; }
     }
-    if ((!text && !attachments.length) || composerImages.isUploading()) return;
-    const rawInput = fromComposer ? prompt.value : text;
+    if ((!text && !attachments.length && !(fromComposer && composerContext.hasContexts())) || composerImages.isUploading()) return;
+    const rawInput = fromComposer ? composerText() : text;
     const origin = navigation.get();
     const originVersion = routeVersion;
     // Freeze the choice at Send. A preference write can finish after queue
@@ -2288,13 +2385,15 @@ export async function boot() {
   window.addEventListener("resize", resizePrompt);
   prompt.addEventListener("input", () => {
     resizePrompt();
-    draftStore.edit(selectedDraftKey, prompt.value, composerAttachments);
+    draftStore.edit(selectedDraftKey, composerText(), composerAttachments);
     tokenMeter.refresh();
     syncSendDisabled();
   });
   prompt.addEventListener("keydown", (event) => {
     if (slashCommands.onKeyDown(event)) return;
     if (fileMentions.onKeyDown(event)) return;
+    if (sessionMentions.onKeyDown(event)) return;
+    if (promptHistory.onKeyDown(event)) return;
     if (event.key === "Enter" && !event.shiftKey &&
         !isImeKey(event, promptComposition.isComposing(prompt))) {
       event.preventDefault();

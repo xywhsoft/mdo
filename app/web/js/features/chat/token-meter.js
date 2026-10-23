@@ -25,20 +25,20 @@ export function contextCheckpoint(events) {
 
 export function createTokenMeter({ root, trigger, ring, panel, estimate, prompt,
   modelSelect, sessionStore, timelineStore, modelsStore, runsStore,
-  attachments = () => [] }) {
+  attachments = () => [], text = () => prompt.value }) {
   let open = false;
   let closeButton = null;
 
   function update() {
     const number = (value) => value.toLocaleString(currentLocale());
-    const input = estimateInputTokens(prompt.value);
+    const input = estimateInputTokens(text());
     const imageCount = attachments().length;
     const hasImages = imageCount > 0;
-    const draft = input + imageCount * 4096 + (prompt.value || hasImages ? 12 : 0);
+    const draft = input + imageCount * 4096 + (input || hasImages ? 12 : 0);
     estimate.textContent = hasImages
       ? t("token.textEstimateWithImages", { count: number(input), images: number(imageCount * 4096) },
         `文字 ~${number(input)} tok · 图片 ~${number(imageCount * 4096)} tok`)
-      : prompt.value ? t("token.inputEstimate", { count: number(input) },
+      : input ? t("token.inputEstimate", { count: number(input) },
         `输入 ~${number(input)} tok`) : "";
     estimate.title = hasImages
       ? t("token.imageEstimateTitle", {}, "图片按每张 4,096 token 估算；实际用量由模型返回")

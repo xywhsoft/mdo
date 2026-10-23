@@ -1,5 +1,6 @@
 import { eventsToTimeline } from "../chat/timeline.js";
 import { currentLocale, t } from "../../i18n.js";
+import { promptContextText } from "../chat/prompt-context.js";
 
 function singleLine(value) {
   return String(value ?? "").replace(/\s+/g, " ").trim();
@@ -66,7 +67,7 @@ export function formatSessionMarkdown(session, transcript, exportedAt = new Date
       if (item.inputText) lines.push(t("sessionExport.call", {}, "调用："), "", fenced(item.inputText), "");
       if (item.outputText) lines.push(t("sessionExport.result", {}, "结果："), "", fenced(item.outputText), "");
       else if (item.text) lines.push(item.text, "");
-    } else if (item.text) lines.push(String(item.text), "");
+    } else if (item.text) lines.push(promptContextText(String(item.text)), "");
     if (item.attachments?.length) {
       lines.push(t("sessionExport.images", {}, "图片附件："), "");
       for (const id of item.attachments) {

@@ -6,10 +6,10 @@ import { createCompositionTracker } from "../../utils/composition.js";
 import { subscribeTarget } from "../../api/target.js";
 import { presentCommandResult } from "./command-results.js";
 
-export function createSlashCommands({ composer, input, onExecute, contextKey = () => "", skillProject = () => "default", commandScope = () => ({ projectId: skillProject() }), onPendingChange = () => {} }) {
+export function createSlashCommands({ composer, input, onExecute, contextKey = () => "", skillProject = () => "default", commandScope = () => ({ projectId: skillProject() }), onPendingChange = () => {}, insertOnly = false }) {
   const list = element("div", {
     className: "slash-menu",
-    attrs: { id: "slash-menu", role: "listbox", "aria-label": t("slash.label", {}, "斜杠命令") },
+    attrs: { id: input.id && input.id !== "prompt" ? `${input.id}-slash-menu` : "slash-menu", role: "listbox", "aria-label": t("slash.label", {}, "斜杠命令") },
   });
   list.hidden = true;
   composer.append(list);
@@ -31,15 +31,18 @@ export function createSlashCommands({ composer, input, onExecute, contextKey = (
     matches = [];
     list.hidden = true;
     clear(list);
-    input.setAttribute("aria-expanded", "false");
-    input.removeAttribute("aria-activedescendant");
+    if (input.getAttribute("aria-controls") === list.id) {
+      input.setAttribute("aria-expanded", "false");
+      input.removeAttribute("aria-activedescendant");
+    }
   }
 
   function render() {
     clear(list);
     list.hidden = matches.length === 0;
     composer.toggleAttribute("data-slash-menu-open", !list.hidden);
-    input.setAttribute("aria-expanded", String(matches.length > 0));
+    if (matches.length > 0) input.setAttribute("aria-controls", list.id);
+    if (input.getAttribute("aria-controls") === list.id) input.setAttribute("aria-expanded", String(matches.length > 0));
     matches.forEach((command, index) => {
       const option = element("div", {
         className: "slash-option",
@@ -69,6 +72,9 @@ export function createSlashCommands({ composer, input, onExecute, contextKey = (
   }
 
   async function execute(command) {
+    if (insertOnly && !command.skill) {
+      hide(); input.value = `${command.name} `; input.dispatchEvent(new Event("input", { bubbles: true })); input.focus(); return;
+    }
     if (command.skill) {
       hide(); input.value = input.value.startsWith("/skill:") ? `/skill:${command.id} ` : `$${command.id} `;
       input.dispatchEvent(new Event("input", { bubbles: true })); input.focus(); return;

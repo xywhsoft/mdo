@@ -121,7 +121,7 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("await startRun", app)
         self.assertIn("cancel: cancelRun, read: readRun", app)
         self.assertIn("await readRun", app)
-        self.assertIn("if ((!text && !attachments.length) || composerImages.isUploading())", app)
+        self.assertIn("if ((!text && !attachments.length && !(fromComposer && composerContext.hasContexts())) || composerImages.isUploading())", app)
         self.assertIn("await newTaskController.submit", app)
         self.assertIn("await submissionController.submit", app)
         self.assertNotIn("submissionLanes", app)

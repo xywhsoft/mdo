@@ -1,5 +1,7 @@
 import { element, clear, formatClock, errorMessage, toast } from "../../utils/dom.js";
 import { copyText } from "../../utils/clipboard.js";
+import { parsePromptContext, promptContextText, CONTEXT_START } from "./prompt-context.js";
+import { promptContextChips } from "./context-chips.js";
 import { attachmentUrl } from "../../api/client.js";
 import { targetImage } from "../../api/target-image.js";
 import { readCompleteSessionEventText } from "../../state/sessions.js";
@@ -624,6 +626,7 @@ function foldableNode(item, openState, previewOpen, previewScroll, projectId, se
     ? `${status} · ${elapsed}` : elapsed || duration || status;
   const details = element("details", { className: "timeline-fold",
     attrs: { "data-timeline-key": item.key } });
+  if (item.sourceEventId) details.dataset.sourceEventId = String(item.sourceEventId);
   details.open = openState ?? running;
   const summaryPreview = element("span", { className: "timeline-fold-preview", text: preview });
   details.append(element("summary", { className: "timeline-fold-summary" }, [
@@ -749,7 +752,14 @@ function timelineNode(item, handlers, projectId, sessionId, writable,
     (item.kind === "assistant" ? " markdown-body" : "") });
   function paintText(text) {
     clear(body);
-    if (item.kind !== "assistant") { body.textContent = text; return; }
+    if (item.kind !== "assistant") {
+      const parsed = item.kind === "user" ? parsePromptContext(text) : { text, contexts: [] };
+      const partialContext = item.textTruncated && parsed.text.includes(CONTEXT_START);
+      body.append(element("span", { text: partialContext ? parsed.text.slice(0, parsed.text.indexOf(CONTEXT_START)) +
+        `\n${t("context.partialContext")}` : parsed.text }));
+      if (parsed.contexts.length) body.append(promptContextChips(parsed.contexts));
+      return;
+    }
     body.append(renderMarkdown(text));
     for (const [index, button] of [...body.querySelectorAll(".md-code-head button")].entries())
       button.dataset.timelineAction = `${item.key}/code-${index}`;
@@ -835,7 +845,7 @@ function timelineNode(item, handlers, projectId, sessionId, writable,
         copy.setAttribute("aria-disabled", "true");
         try {
           const resolved = await resolveTimelineCopyText(item, owner);
-          await copyText(resolved.text);
+          await copyText(promptContextText(resolved.text));
           toast(resolved.complete
             ? t("timeline.messageCopied", {}, "消息已复制")
             : t("timeline.visibleMessageCopied", {}, "已复制可见部分"));
@@ -977,7 +987,7 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
       const { turnState, ...renderedItem } = item;
       const signature = JSON.stringify([renderedItem, writable]);
       let row = renderedRows.get(item.key);
-      if (!row || row.signature !== signature) {
+      if (!row || (row.signature !== signature && !row.node.dataset.inlineEditing)) {
         const node = timelineNode(item, handlers, projectId,
           sessionId, writable, expanded.get(item.key),
           previewExpanded.get(`${item.key}/preview`) ?? false,

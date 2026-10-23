@@ -1,9 +1,10 @@
 import { t } from "../../i18n.js";
 import { projectDraftKey } from "./draft-store.js";
 import { SESSION_TITLE_UTF8_LIMIT, sessionTitleUtf8Bytes } from "../sessions/session-title.js";
+import { promptContextSummary } from "./prompt-context.js";
 
 export function taskTitle(text, fallback = "") {
-  const characters = Array.from(text.trim().split(/\r?\n/, 1)[0])
+  const characters = Array.from(promptContextSummary(text).trim().split(/\r?\n/, 1)[0])
     .slice(0, 80);
   while (characters.length &&
       sessionTitleUtf8Bytes(characters.join("")) > SESSION_TITLE_UTF8_LIMIT)

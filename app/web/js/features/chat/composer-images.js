@@ -75,7 +75,7 @@ function selectionError(key, fallback) {
 export function createComposerImages({ composer, prompt, button, input, strip,
   modelSelect, navigation, modelsStore, sessionStore, ensureSession, onChange,
   onBeforeRemove, onRemove,
-  onUploading, onError, onDiscardedUpload, uploadImage = api.uploadImage }) {
+  onUploading, onError, onDiscardedUpload, uploadImage = api.uploadImage, bindButton = true }) {
   let ids = [];
   const uploadJobs = new Map();
   const removals = new Set();
@@ -212,7 +212,7 @@ export function createComposerImages({ composer, prompt, button, input, strip,
       text: t("image.draftUnsupported", {},
         "当前模型不支持图片；切换模型或移除图片后再发送"),
     }));
-    button.disabled = !writable || uploading || removing || !currentModel();
+    if (bindButton) button.disabled = !writable || uploading || removing || !currentModel();
     if (focusedKind && !removing) {
       const candidates = [...strip.querySelectorAll(focusedKind === "remove"
         ? ".composer-image-remove" : "[data-image-preview]")];
@@ -315,7 +315,7 @@ export function createComposerImages({ composer, prompt, button, input, strip,
     const job = currentUpload();
     // Creating an image-first task briefly marks the editor non-writable while
     // its session is being created. Already accepted uploads may still queue.
-    if (!job && !writable) { onError(imageError("image.readOnly",
+    if (!job && (!writable || prompt.readOnly || prompt.disabled)) { onError(imageError("image.readOnly",
       "当前会话不可添加图片")); return; }
     if (!job && !imageCapable()) {
       onError(unsupportedModelError());
@@ -361,7 +361,7 @@ export function createComposerImages({ composer, prompt, button, input, strip,
     void runUpload(next);
   }
 
-  button.addEventListener("click", () => {
+  if (bindButton) button.addEventListener("click", () => {
     if (!imageCapable()) {
       onError(unsupportedModelError());
       return;

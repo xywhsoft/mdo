@@ -5,6 +5,7 @@ import { clear, element, errorMessage, toast } from "../../utils/dom.js";
 import { createUnusedImageCleanup } from "./unused-image-cleanup.js";
 import { findModel } from "../../utils/models.js";
 import { createQueueReorder } from "./queue-reorder.js";
+import { promptContextSummary, promptContextText } from "./prompt-context.js";
 
 function sessionKey(projectId, sessionId) {
   return projectId && sessionId
@@ -257,8 +258,8 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
             text: String(index + 1) }),
           element("div", { className: "prompt-queue-item-body" }, [
             element("span", { className: "prompt-queue-text",
-              text: entry.text || t("queue.imageMessage"),
-              attrs: { title: entry.text || t("queue.imageMessage") } }),
+              text: promptContextSummary(entry.text) || t("queue.imageMessage"),
+              attrs: { title: promptContextText(entry.text) || t("queue.imageMessage") } }),
             element("span", { className: "prompt-queue-state",
               text: t(entry.rejected ? "queue.rejected" :
                 "queue.awaitingAdmission") }),
@@ -292,8 +293,8 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
       });
       const body = element("div", { className: "prompt-queue-item-body" }, [
         element("span", { className: "prompt-queue-text",
-          text: entry.text || t("queue.imageMessage"), attrs: {
-            title: [entry.text || t("queue.imageMessage"), profileLabel(entry.profile)].filter(Boolean).join("\n\n") } }),
+          text: promptContextSummary(entry.text) || t("queue.imageMessage"), attrs: {
+            title: [promptContextText(entry.text) || t("queue.imageMessage"), profileLabel(entry.profile)].filter(Boolean).join("\n\n") } }),
       ]);
       if (entry.attachments?.length) {
         body.append(element("span", { className: "prompt-queue-attachments",
