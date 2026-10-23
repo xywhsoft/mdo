@@ -197,6 +197,46 @@ diff 传 path、相同比较参数、revision、offset、limit（最多 2000 行
 打开工作区文件时定位到所选新行。引用正文携带仓库、范围、提交和比较修订，明确其来源。
 分支历史差异中的“打开工作区文件”显示当前磁盘内容，不冒充历史文件。
 
+## 交互终端服务
+
+`terminal.*` 由 xrt PTY 执行真实程序；C 的 `mdoTerminalCreate/Attach/Read/Write/...` 与
+JS 的 `sdk.terminal.create/attach/read/write/...` 共用同一契约。`capabilities` 返回实际
+PTY 支持、默认 Shell 和预算。`create` 接受稳定 `key`、可选 program/args/cwd/title/尺寸；
+直接 argv，不拼 shell 命令。默认项目首次使用时创建自己的工作目录；项目租约在目录
+创建前取得，持续到 PTY 与全部 I/O 清理完毕，避免运行期间项目被替换。
+
+每个终端的 owner/project/session/run/workspace 固定。隐藏或取消读取不终止进程；
+`attach` 可以只读或为明确 client 取得 15 秒输入租约，同一 client 可续期。写入、resize
+和 detach 要携带 id、服务 epoch、client、control_token、input_epoch。附着返回
+next_sequence；write 按该序号提交最多 8192 字节 text 或 base64。输入收到的是队列接收
+确认，不代表命令执行成功。最多 32 条输入收据用于相同 epoch/序号/字节的去重；不同
+内容复用序号、跳序、过期收据或租约均拒绝，不换新序号盲目重发不确定输入。
+
+输入队列 64 KiB，另有最多 8 KiB 正在写入；队列满返回 429，尚未接收该块。消费者应
+保留未接收数据并等待，不能无限堆积。终端 Enter 通常是 `\r`，Ctrl+C 是 `\x03`，
+不要将终端输入当成文本文件换行来转换。VT 二进制输入可原样使用 base64。
+
+输出是每会话 1 MiB 的有界环形缓存；最多 8 个运行会话、32 个保留记录。`read` 按字节
+cursor 读取（最多 64 KiB，等待最多 1 秒），互不消耗其他观察者的数据。返回 offset/next、
+oldest、gap、eof、drained。慢消费者的旧内容会覆盖，gap 必须明确告知；不能把任意尾部
+VT 数据声称为完整屏幕恢复。前端应等待终端解析/渲染确认后再拉取下一块。
+
+`close({id,epoch})` 明确结束终端，`get` 的 drained 为真后可 `release` 释放缓存和记录。
+eof 只表示输出读取结束，drained 才表示全部回调、原生 PTY、项目租约已清理。
+服务停止先中止并等待终端回调，再释放项目管理器和脚本代码；POSIX 主端采用非阻塞
+I/O，处理 AGAIN 和短写，避免满输入在子进程退出后仍阻塞。
+
+只持久化元信息，不保存 argv、输入、输出或控制令牌。服务重启将原记录标为 ended；
+reason 区分 service_stopped / service_restarted / process_exited / closed /
+not_started / cancelled_before_start。不会重放原程序或输入。启动失败返回具体错误，
+已接收的创建记录仍可用 list 按 key 查找。独立哈希创建收据在 release 后仍保留，旧 key
+返回 terminal_intent_retired，不把迟到重试当成新终端。新终端必须用新 key 明确创建。
+损坏的元信息或收据保留原文件、拒绝不确定的创建，不自动清空并重启程序。
+
+终端服务已接入，内置终端页面仍在实施中。后续渲染使用本地打包的终端组件，其
+[输入、二进制输入和写入回调](https://xtermjs.org/docs/api/terminal/classes/terminal/)
+需要与上述序号、字节游标和背压配合；不把一次 process.run 的文本输出充作交互终端。
+
 ## 验证范围
 
 自动回归覆盖 C 命令工作者与 HTTP 共享资源、修订冲突、归属隔离、UI 回执、布局恢复、

@@ -2,6 +2,28 @@
 #ifndef MDO_WORKBENCH_SDK_H
 #define MDO_WORKBENCH_SDK_H
 #include "sdk.h"
+static inline mdo_result mdoTerminalCapabilities(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
+{return mdoCall(C,"terminal.capabilities",P,R,E);}
+static inline mdo_result mdoTerminalCreate(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
+{return mdoCall(C,"terminal.create",P,R,E);}
+static inline mdo_result mdoTerminalList(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
+{return mdoCall(C,"terminal.list",P,R,E);}
+static inline mdo_result mdoTerminalGet(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
+{return mdoCall(C,"terminal.get",P,R,E);}
+static inline mdo_result mdoTerminalAttach(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
+{return mdoCall(C,"terminal.attach",P,R,E);}
+static inline mdo_result mdoTerminalDetach(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
+{return mdoCall(C,"terminal.detach",P,R,E);}
+static inline mdo_result mdoTerminalRead(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
+{return mdoCall(C,"terminal.read",P,R,E);}
+static inline mdo_result mdoTerminalWrite(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
+{return mdoCall(C,"terminal.write",P,R,E);}
+static inline mdo_result mdoTerminalResize(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
+{return mdoCall(C,"terminal.resize",P,R,E);}
+static inline mdo_result mdoTerminalClose(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
+{return mdoCall(C,"terminal.close",P,R,E);}
+static inline mdo_result mdoTerminalRelease(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
+{return mdoCall(C,"terminal.release",P,R,E);}
 static inline mdo_result mdoChangesList(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
 {return mdoCall(C,"changes.list",P,R,E);}
 static inline mdo_result mdoChangesBranches(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)

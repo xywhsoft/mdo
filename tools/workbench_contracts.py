@@ -3,6 +3,24 @@ def contracts(add):
     s={'type':'string'};o={'type':'object'};b={'type':'boolean'}
     u={'type':'integer','minimum':0,'maximum':9007199254740991}
     identity={'id':s};revision={**identity,'revision':u}
+    terminal_size={'columns':{'type':'integer','minimum':2,'maximum':500},'rows':{'type':'integer','minimum':2,'maximum':300}}
+    terminal_control={**identity,'epoch':s,'client':s,'control_token':s,'input_epoch':s}
+    add('terminal.capabilities','Read actual PTY support and bounded session/input/output budgets')
+    add('terminal.create','Create one PTY with an admission key; a service restart never replays the process',
+        {'key':s,'program':s,'args':{'type':'array','items':s,'maxItems':32},'cwd':s,'title':s,**terminal_size},('key',))
+    add('terminal.list','List terminal sessions in the original owner/project/session context',output={'type':'array'})
+    add('terminal.get','Read a terminal without attaching a writer',identity,('id',))
+    add('terminal.attach','Attach a view and optionally acquire or renew its exclusive input lease',
+        {**identity,'client':s,'control':b},('id','client'))
+    add('terminal.detach','Release only this client input lease; leave the process running',terminal_control,tuple(terminal_control))
+    add('terminal.read','Read a bounded output range; overwritten history returns an explicit gap',
+        {**identity,'epoch':s,'cursor':u,'limit':{'type':'integer','minimum':1,'maximum':65536},'wait_ms':{'type':'integer','minimum':0,'maximum':1000}},('id',))
+    add('terminal.write','Admit ordered input once per lease/sequence; acknowledgement is queue admission, not command completion',
+        {**terminal_control,'sequence':u,'text':s,'base64':s},(*terminal_control,'sequence'))
+    add('terminal.resize','Resize a controlled PTY', {**terminal_control,**terminal_size},(*terminal_control,*terminal_size))
+    add('terminal.close','Explicitly end the owned terminal; hiding/detaching a panel does not close it',
+        {**identity,'epoch':s},('id','epoch'))
+    add('terminal.release','Release an ended terminal after its I/O drains; never release a running child',identity,('id',))
     comparison={'repository':s,'scope':{'type':'string','enum':['workspace','staged','unstaged','branch','session']},'base':s}
     add('changes.list','Read structured Git changes without modifying the index; comparison scopes are explicit',comparison)
     add('changes.branches','List local and remote comparison refs',{'repository':s},output={'type':'array'})

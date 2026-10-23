@@ -25,6 +25,7 @@ static bool SdkBuiltinService(cstr Method){
     const struct {const cstr* Names;size_t Count;} Groups[]={
         {SdkJobMethods,sizeof(SdkJobMethods)/sizeof(*SdkJobMethods)},
         {SdkStreamMethods,sizeof(SdkStreamMethods)/sizeof(*SdkStreamMethods)},
+        {SdkTerminalMethods,sizeof(SdkTerminalMethods)/sizeof(*SdkTerminalMethods)},
         {SdkPluginMethods,sizeof(SdkPluginMethods)/sizeof(*SdkPluginMethods)},
         {SdkUiMethods,sizeof(SdkUiMethods)/sizeof(*SdkUiMethods)},
         {SdkWorkbenchMethods,sizeof(SdkWorkbenchMethods)/sizeof(*SdkWorkbenchMethods)}};
@@ -88,6 +89,9 @@ xvalue* MdoApplicationCatalog(void){
     xvalue* Streams=MdoApplicationStreamsCatalog();
     for(size_t i=0;i<xrtValueCount(Streams);i++)xrtValueArrayAppend(A,xrtValueArrayGet(Streams,i));
     xrtValueRelease(Streams);
+    xvalue* Terminals=MdoApplicationTerminalsCatalog();
+    for(size_t i=0;i<xrtValueCount(Terminals);i++)xrtValueArrayAppend(A,xrtValueArrayGet(Terminals,i));
+    xrtValueRelease(Terminals);
     xvalue* Plugins=MdoApplicationPluginsCatalog();
     for(size_t i=0;i<xrtValueCount(Plugins);i++)xrtValueArrayAppend(A,xrtValueArrayGet(Plugins,i));
     xrtValueRelease(Plugins);
@@ -144,6 +148,8 @@ static mdo_result SdkInvoke(const mdo_sdk_context_v1* C,cstr Method,const xvalue
     if(Found)return JobOk?MDO_RESULT_OK:MDO_RESULT_ERROR;
     bool StreamOk=MdoApplicationStreamsCall(C,Method,P,R,E,&Found);
     if(Found)return StreamOk?MDO_RESULT_OK:MDO_RESULT_ERROR;
+    bool TerminalOk=MdoApplicationTerminalsCall(C,Method,P,R,E,&Found);
+    if(Found)return TerminalOk?MDO_RESULT_OK:MDO_RESULT_ERROR;
     bool PluginOk=MdoApplicationPluginsCall(C,Method,P,R,E,&Found);
     if(Found)return PluginOk?MDO_RESULT_OK:MDO_RESULT_ERROR;
     bool UiOk=MdoApplicationUiCall(C,Method,P,R,E,&Found);

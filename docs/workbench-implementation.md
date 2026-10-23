@@ -137,6 +137,41 @@ Windows 不支持 POSIX chmod，直接沿用 Home 目录创建的权限/ACL；�
 临时索引建立前检查 HEAD 元数据（4 MiB / 20,000 条目），共用服务总期限，避免边界处理
 生成没有预算的大索引；完成后再次确认用户索引 SHA-256 不变、Home 无残留临时目录。
 
+### 里程碑四准备：真实 PTY 与同源 C/JS 服务
+
+已新增 terminal.capabilities/create/list/get/attach/detach/read/write/resize/close/release。
+会话独立于面板、请求和取消；程序直接 argv，8 个运行 / 32 个保留会话，输出 1 MiB、
+输入队列 64 KiB + 单次在写 8 KiB，读游标和明确 gap。独占输入租约、序号及内容去重，
+不将接收队列等同于命令成功。持久元信息与独立创建收据防止重启及 release 后重放，
+不保存 argv、输入/输出、控制令牌。默认 Windows Shell 使用系统目录的完整路径。
+
+真实测试发现并修正 POSIX 满 PTY 写入在子进程退出后仍不返回、造成退出等待的问题。
+使用 xrt 暴露的借用原生描述符，保留原标志并为本会话主端启用非阻塞；处理 AGAIN/
+短写，观察结束后退出泵；全部回调停止后关闭原生 PTY、清理遗留普通子进程、释放项目租约。
+服务 Stop 在 ProjectLifecycleUnit / 脚本代码释放前完成线程排空；eof 与 drained 明确区分。
+取消 starting 记录会阻止尚未发生的启动；启动失败保留终态记录并返回实际原因。
+
+2026-10-24 Windows ConPTY、WSL Linux POSIX PTY 的同一真实测试均通过：
+C 与 HTTP 共享终端、实际 TTY、归属/上下文、项目租约生命周期、尺寸变化、Unicode /
+Ctrl+C 字节、输入去重/乱序拒绝、只读多观察者、取消读取保留进程、超过 1 MiB 输出、
+输入背压、阻塞输入时关闭/排空、Shell 退出后普通子进程回收、崩溃重启防重放、
+release 后旧意图拒绝、元信息隐私、损坏收据、启动失败、取消尚未启动的程序、
+服务停止清理及损坏元信息保留。测试脚本 tests/test_workbench_terminal_runtime.py。
+证据在 terminal-runtime/result.json 和 terminal-posix/result.json。
+
+Linux QA 宿主重新编译自已锁定的 216f5445 / 5131a86e overlay，
+.build/workbench-builtin-20261023/linux-host/xs；使用 glibc native，供开发测试，不能作为
+正式 Linux 兼容发行包。附带 QA server 可执行文件也不是最终客户端交付物。
+Windows 宿主仍是 mdo-workbench-builtin-host/xs.exe，本阶段未改原生 overlay。
+20 项前端合同、6 项 SDK 合同、206 模块图及相关 15 项 JS 测试通过。
+
+尚未挂载终端前端，也未提供四入口新版主页。下一步打包终端渲染组件、接入视图，
+验证真实 Shell、输入法/粘贴、断线/隐藏/服务重启；还需 Git 会话基线/连续浏览、文件
+管理动作、Android 编译和最终 Windows 测试程序。终端整项保持未完成，不发布。
+其他任务在本轮并行提交了 CLI 修复，已保留，未覆盖；tests/test_remote_asymmetric_pause.py
+仍是他人未跟踪文件，提交时须排除。每次操作以即时 git status/差异为准。
+收尾时还应核对工具包 PATH/运行环境，以及项目删除/迁移后结束记录和布局的清理行为。
+
 ## 验证要求
 
 测试必须验证实际行为：浏览器加载和失败、菜单显隐；文件外部修改和大目录；Git 的

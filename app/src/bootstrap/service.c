@@ -85,6 +85,7 @@ void ServiceUnit(XS_HostInfo* pHost)
     MdoApiQueueStop();
     MdoModuleManagerStop();
     MdoApplicationStreamsStop();
+    MdoApplicationTerminalsStop();
     MdoApplicationJobsStop();
     MdoDeviceTransfersUnit();
     MdoRemoteUnit();
