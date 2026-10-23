@@ -28,6 +28,8 @@ tools/*
 !tools/inspect_session.py
 !tools/README.md
 !tools/build_mdo.py
+!tools/build_cli_forwarder.py
+!tools/cli_forwarder.c
 !tools/application_sdk.py
 !tools/application_contracts.py
 !tools/workbench_contracts.py
