@@ -36,6 +36,15 @@ const assert=require('node:assert/strict'),fs=require('node:fs');
   await start.getByRole('button',{name:'打开服务插件',exact:true}).waitFor({state:'detached'});
   await page.setViewportSize({width:480,height:780});await page.screenshot({path:evidence+'/start-narrow.png'});
   assert.ok((await start.locator('[data-tool="mdo.browser"]').boundingBox()).width>200);assert.deepEqual(errors,[]);
+  // A full retained-record budget must still leave a way to reach cleanup.
+  const terminals=await page.evaluate(()=>mdo.terminal.list());
+  for(const terminal of terminals){await page.evaluate(row=>mdo.terminal.close({id:row.id,epoch:row.epoch}),terminal);for(let at=0;at<150;at++){if(await page.evaluate(id=>mdo.terminal.get({id}).then(row=>row.drained),terminal.id))break;await page.waitForTimeout(100);}await page.evaluate(id=>mdo.terminal.release({id}),terminal.id);}
+  let creates=0;const full=async route=>{const body=route.request().postDataJSON();if(body?.method==='terminal.create'){creates++;return route.fulfill({status:429,contentType:'application/json',body:JSON.stringify({ok:false,error:{code:'terminal_limit',message:'retained terminal budget full'}})});}return route.continue();};
+  await page.route('**/api/v1/application/call',full);await page.setViewportSize({width:1440,height:1000});await start.getByRole('button',{name:'打开终端',exact:true}).click();
+  const empty=page.locator('.wb-terminal-view:not([hidden])');await empty.locator('.wb-terminal-empty').getByRole('heading',{name:'终端',exact:true}).waitFor();
+  assert.equal(creates,1,'full budget automatically repeated process creation');
+  await empty.getByRole('button',{name:'终端更多操作',exact:true}).click();await page.getByRole('menuitem',{name:'清理失效项目的终端记录…',exact:true}).waitFor();
+  await page.keyboard.press('Escape');await page.unroute('**/api/v1/application/call',full);
   fs.writeFileSync(evidence+'/result.json',JSON.stringify({passed:true,time:Date.now(),checks:['four default launchers','blank browser','empty Home files','no extra new tab','same-context file reuse','real terminal launch','changes launch','registered plugin launch/unregister','narrow layout']},null,2));console.log('Four-entry start page, context reuse, empty Home, plugin and narrow layout: PASS');
  }catch(error){if(page){await page.screenshot({path:evidence+'/failure.png'});fs.writeFileSync(evidence+'/failure.json',JSON.stringify({error:String(error.stack||error),errors,body:await page.locator('body').innerText()},null,2));}throw error;}
  finally{if(page)await page.evaluate(async()=>{try{for(const row of await mdo.terminal.list())await mdo.terminal.close({id:row.id,epoch:row.epoch});}catch{}}).catch(()=>{});await browser.close();}

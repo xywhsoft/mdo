@@ -321,8 +321,14 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
         const browser = await sdk.call("browser.create", { client: clientId, key: key(type) });
         handle = await open(type, { key: browser.id, title: "浏览器", resource: { id: browser.id }, pinned }, sdk);
       } else if (type === "mdo.terminal") {
-        const terminal = await sdk.call("terminal.create", { key: key(type) });
-        handle = await open(type, { key: terminal.id, title: "终端", params: { terminal: terminal.id }, pinned }, sdk);
+        let terminal;
+        try { terminal = await sdk.call("terminal.create", { key: key(type) }); }
+        catch (error) {
+          if (error.code !== "terminal_limit") throw error;
+          handle = await open(type, { key: "terminal-manager", title: "终端", pinned }, sdk);
+          toast("终端名额已满。请选择已有终端，或在更多操作中清理失效项目的记录。");
+        }
+        if (terminal) handle = await open(type, { key: terminal.id, title: "终端", params: { terminal: terminal.id }, pinned }, sdk);
       } else {
         const descriptor = definitions.get(type);
         await descriptor?.registration;

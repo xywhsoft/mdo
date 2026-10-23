@@ -4,10 +4,15 @@ from pathlib import Path
 from test_api_runtime import ROOT,write_site,free_port,wait_ready
 
 def main():
- p=argparse.ArgumentParser();p.add_argument('--host',type=Path,required=True);p.add_argument('--evidence',type=Path,required=True);modes=p.add_mutually_exclusive_group();modes.add_argument('--files',action='store_true');modes.add_argument('--file-actions',action='store_true');modes.add_argument('--changes',action='store_true');modes.add_argument('--baseline',action='store_true');modes.add_argument('--terminal',action='store_true');modes.add_argument('--start',action='store_true');args=p.parse_args()
+ p=argparse.ArgumentParser();target=p.add_mutually_exclusive_group(required=True);target.add_argument('--host',type=Path);target.add_argument('--packed',type=Path);p.add_argument('--evidence',type=Path,required=True);modes=p.add_mutually_exclusive_group();modes.add_argument('--files',action='store_true');modes.add_argument('--file-actions',action='store_true');modes.add_argument('--changes',action='store_true');modes.add_argument('--baseline',action='store_true');modes.add_argument('--terminal',action='store_true');modes.add_argument('--start',action='store_true');args=p.parse_args()
  args.evidence.mkdir(parents=True,exist_ok=True)
  with tempfile.TemporaryDirectory(dir=ROOT/'.build',prefix='workbench-ui-') as temporary:
-  base=Path(temporary);port=free_port();config=write_site(base,port)
+  base=Path(temporary)
+  if args.packed:
+   from test_packed_home_lease import site,release_packed_copies
+   base,port=site(base,'site',args.packed.resolve());command=[str(base/args.packed.name),'--']
+  else:
+   port=free_port();config=write_site(base,port);command=[str(args.host.resolve()),str(config),'--']
   if args.baseline:
    repo=base/'home/workspace';repo.mkdir(parents=True)
    def git(*argv):subprocess.run(['git','-c','user.name=Workbench QA','-c','user.email=workbench@example.invalid',*argv],cwd=repo,check=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
@@ -33,10 +38,13 @@ def main():
    # Do not make Windows PowerShell auto-import the harness pwsh 7 modules.
    # This is a private, clean shell fixture; production keeps the user's env.
    environment={key:value for key,value in os.environ.items() if not (args.terminal or args.start) or key.lower()!='psmodulepath'}
-   process=subprocess.Popen([str(args.host.resolve()),str(config),'--','--home',str(base/'home')],cwd=base,env={**environment,'USE_WEBVIEW':'0'},stdout=log,stderr=log)
+   process=subprocess.Popen([*command,'--home',str(base/'home')],cwd=base,env={**environment,'USE_WEBVIEW':'0'},stdout=log,stderr=log)
    try:
     wait_ready(port,process)
     fixture='workbench-baseline-browser.cjs' if args.baseline else 'workbench-file-actions-browser.cjs' if args.file_actions else 'workbench-start-browser.cjs' if args.start else 'workbench-terminal-browser.cjs' if args.terminal else 'workbench-changes-browser.cjs' if args.changes else 'workbench-files-browser.cjs' if args.files else 'workbench-browser.cjs'
     subprocess.run(['node',str(ROOT/'tests/fixtures'/fixture),f'http://127.0.0.1:{port}',str(args.evidence.resolve()),*([str(repo)] if args.changes else [])],check=True,timeout=150)
-   finally:process.terminate();process.wait(timeout=10);time.sleep(1)
+   finally:
+    process.terminate();process.wait(timeout=10)
+    if args.packed:release_packed_copies(base/args.packed.name)
+    time.sleep(1)
 if __name__=='__main__':main()

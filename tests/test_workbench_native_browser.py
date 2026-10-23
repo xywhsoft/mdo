@@ -218,11 +218,17 @@ class Fixture(BaseHTTPRequestHandler):
  def do_POST(self):
   self.server.result=json.loads(self.rfile.read(int(self.headers['Content-Length'])));self.send_response(204);self.end_headers()
 def main():
- p=argparse.ArgumentParser();p.add_argument('--host',type=Path,required=True);p.add_argument('--evidence',type=Path,required=True);modes=p.add_mutually_exclusive_group();modes.add_argument('--application',action='store_true');modes.add_argument('--changes',action='store_true');modes.add_argument('--terminal',action='store_true');modes.add_argument('--start',action='store_true');args=p.parse_args()
+ p=argparse.ArgumentParser();target=p.add_mutually_exclusive_group(required=True);target.add_argument('--host',type=Path);target.add_argument('--packed',type=Path);p.add_argument('--evidence',type=Path,required=True);modes=p.add_mutually_exclusive_group();modes.add_argument('--application',action='store_true');modes.add_argument('--changes',action='store_true');modes.add_argument('--terminal',action='store_true');modes.add_argument('--start',action='store_true');args=p.parse_args()
  args.evidence.mkdir(parents=True,exist_ok=True)
  fixture=ThreadingHTTPServer(('127.0.0.1',0),Fixture);fixture.result=None;threading.Thread(target=fixture.serve_forever,daemon=True).start()
  with tempfile.TemporaryDirectory(dir=ROOT/'.build',prefix='workbench-native-') as directory:
-  base=Path(directory);port=free_port();config=write_site(base,port)
+  base=Path(directory)
+  if args.packed:
+   from test_packed_home_lease import site,release_packed_copies
+   base,port=site(base,'site',args.packed.resolve());config=base/'xs.json';command=[str(base/args.packed.name),'--']
+   (base/'web').mkdir()
+  else:
+   port=free_port();config=write_site(base,port);command=[str(args.host.resolve()),str(config),'--']
   value=json.loads(config.read_text(encoding='utf-8'));service=value['services'][0];service['class']='app'
   service['window']=json.loads((ROOT/'app/xs.json').read_text(encoding='utf-8'))['services'][0]['window'];service['window']['title']='Mdo native browser QA';service['window']['install_fallback']='headless'
   config.write_text(json.dumps(value),encoding='utf-8')
@@ -232,7 +238,7 @@ def main():
   (base/'web/index.html').write_text(page,encoding='utf-8')
   with (args.evidence/'native-host.log').open('wb') as log:
    environment={key:value for key,value in os.environ.items() if not (args.terminal or args.start) or key.lower()!='psmodulepath'}
-   process=subprocess.Popen([str(args.host.resolve()),str(config),'--','--home',str(base/'home')],cwd=base,env=environment,stdout=log,stderr=log)
+   process=subprocess.Popen([*command,'--home',str(base/'home')],cwd=base,env=environment,stdout=log,stderr=log)
    try:
     wait_ready(port,process);deadline=time.monotonic()+90
     while fixture.result is None and time.monotonic()<deadline and process.poll() is None:time.sleep(.1)
@@ -240,6 +246,8 @@ def main():
     (args.evidence/'native-result.json').write_text(json.dumps(result,indent=2),encoding='utf-8')
     assert result['passed'],result;print('Actual WebView2 four launchers and fresh Home: PASS' if args.start else 'Actual WebView2 terminal rendering, Unicode input, dimensions, hide and end: PASS' if args.terminal else 'Actual WebView2 changes scopes, file location and retained tree, real index unchanged: PASS' if args.changes else 'Actual WebView2 navigation, input, screenshot, takeover, back and SDK isolation: PASS')
    finally:
-    process.terminate();process.wait(timeout=15);time.sleep(1)
+    process.terminate();process.wait(timeout=15)
+    if args.packed:release_packed_copies(base/args.packed.name)
+    time.sleep(1)
  fixture.shutdown();fixture.server_close()
 if __name__=='__main__':main()
