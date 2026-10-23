@@ -24,13 +24,19 @@ PRODUCT=dict(MANIFEST,id=1,slug="fixture",tool_id="official.fixture",sha256=hash
 
 class Store(BaseHTTPRequestHandler):
     damaged=False
+    slow=False
     def log_message(self,*args):pass
     def do_GET(self):
         if self.path.startswith("/api/v1/mdo/cli/blob"):
             data=bytes(len(ARCHIVE)) if self.damaged else ARCHIVE
         else:
             data=json.dumps(dict(code=0,data=PRODUCT if "/detail?" in self.path else dict(items=[PRODUCT],next_before=0))).encode()
-        self.send_response(200);self.send_header("Content-Length",str(len(data)));self.end_headers();self.wfile.write(data)
+        self.send_response(200);self.send_header("Content-Length",str(len(data)));self.end_headers()
+        try:
+            if self.slow and "/blob?" in self.path:
+                for offset in range(0,len(data),16):self.wfile.write(data[offset:offset+16]);self.wfile.flush();time.sleep(.02)
+            else:self.wfile.write(data)
+        except (BrokenPipeError,ConnectionResetError,ConnectionAbortedError):pass
 
 def run(host):
     server=ThreadingHTTPServer(("127.0.0.1",0),Store);threading.Thread(target=server.serve_forever,daemon=True).start()
@@ -74,6 +80,11 @@ def run(host):
         (home/"fail-cli-save").write_bytes(b"1");post("enable",status=422,id=t["id"],enabled=True);assert not get()["items"][0]["enabled"],"failed state writes must restore nested values";(home/"fail-cli-save").unlink()
         post("enable",id=t["id"],enabled=False);post("install",store_id=1);s=wait_task();assert s["tasks"][-1]["state"]=="complete" and not s["items"][0]["enabled"]
         original=s["items"][0]["path"];Store.damaged=True;post("install",store_id=1);s=wait_task();assert s["tasks"][-1]["state"]=="failed" and s["items"][0]["path"]==original
+        Store.damaged=False;Store.slow=True;post("install",store_id=1)
+        deadline=time.monotonic()+10
+        while get()["tasks"][-1]["state"]=="queued" and time.monotonic()<deadline:time.sleep(.01)
+        cancelled=get()["tasks"][-1]["id"];post("cancel",id=cancelled);s=wait_task();assert s["tasks"][-1]["state"]=="cancelled" and s["items"][0]["path"]==original,s
+        Store.slow=False;post("retry",id=cancelled);s=wait_task();assert s["tasks"][-1]["state"]=="complete",s;original=s["items"][0]["path"]
         Store.damaged=False;post("recommend");s=wait_task();assert s["items"][0]["enabled"] and s["guide"]=="accepted"
         post("remove",id=t["id"]);assert Path(original).exists(),"running tasks retain retired files until restart"
         proc.terminate();proc.wait(10);proc=start();s=get();assert s["guide"]=="accepted" and not s["items"] and not Path(original).exists()
