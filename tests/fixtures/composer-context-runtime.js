@@ -6,6 +6,7 @@
   window.addEventListener("unhandledrejection", event => errors.push(String(event.reason?.stack || event.reason)));
   const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
   async function wait(test, name, timeout = 9000) {
+    globalThis.__qaStage = name;
     const until = Date.now() + timeout;
     while (Date.now() < until) { const value = await test(); if (value) return value; await pause(40); }
     throw new Error(`Timed out: ${name}; ${JSON.stringify(errors)}`);
@@ -115,8 +116,14 @@
       await wait(() => document.querySelector("#session-title").textContent.includes("Source conversation") && !input.value && !chips().length, "detached editor isolation");
       location.hash = route(session);
       await wait(() => input.value === "Retained edit after navigation" && chips().length === 5, "detached edit restored as original draft");
+      await wait(() => !input.disabled && !input.readOnly &&
+        chips().every(chip => !chip.querySelector("button:last-child").disabled), "restored draft editable");
       enter(input, "");
-      while (chips().length) chips()[0].querySelector("button:last-child").click();
+      while (chips().length) {
+        const count = chips().length;
+        chips()[0].querySelector("button:last-child").click();
+        await wait(() => chips().length < count, "remove restored context");
+      }
       reports.editNavigation = true;
       input.focus(); await pause(200);
       const up = new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true, cancelable: true }); input.dispatchEvent(up);

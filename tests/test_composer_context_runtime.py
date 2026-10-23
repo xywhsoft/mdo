@@ -83,7 +83,7 @@ MDO_EXPORT mdo_result mdoCommandRun(const mdo_command_context_v1* C,
                     str(width), str(shot), str(ROOT / "tests/fixtures/composer-context-runtime.js")],
                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=52,
                     creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
-                assert result.returncode == 0, result.stderr.decode(errors="replace")[-1500:]
+                assert result.returncode == 0, (result.returncode, result.stdout.decode(errors="replace")[-4000:], result.stderr.decode(errors="replace")[-2500:])
                 report = json.loads(result.stdout.decode("utf-8", errors="replace")); print(json.dumps(report, ensure_ascii=False))
                 assert report["passed"], (report, result.stderr.decode(errors="replace")[-1800:])
             latest = Model.calls[-1]
