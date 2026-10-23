@@ -7,6 +7,7 @@ from pathlib import Path
 import shutil
 import struct
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -21,6 +22,13 @@ MANIFEST=dict(id="fixture",name="Fixture CLI",version="1.0.0",platform=PLATFORM,
               files=[dict(path="bin/fixture.exe",size=len(PAYLOAD),sha256=hashlib.sha256(PAYLOAD).hexdigest(),mode=493)])
 TEXT=json.dumps(MANIFEST).encode();ARCHIVE=b"MDOCLI1\n"+struct.pack("<I",len(TEXT))+TEXT+PAYLOAD
 PRODUCT=dict(MANIFEST,id=1,slug="fixture",tool_id="official.fixture",sha256=hashlib.sha256(ARCHIVE).hexdigest(),size=len(ARCHIVE),state="published",author="Fixture")
+
+def stage_forwarder(site):
+    if os.name!="nt":return
+    sys.path.insert(0,str(ROOT/"tools"))
+    import build_mdo,build_cli_forwarder
+    xs=build_mdo.find_xserver(None,build_mdo.load_object(build_mdo.LOCK_PATH))
+    build_cli_forwarder.build(xs,site/"generated/native/windows/cli-forwarder.exe")
 
 class Store(BaseHTTPRequestHandler):
     damaged=False
@@ -41,11 +49,12 @@ class Store(BaseHTTPRequestHandler):
 def run(host):
     server=ThreadingHTTPServer(("127.0.0.1",0),Store);threading.Thread(target=server.serve_forever,daemon=True).start()
     base=Path(tempfile.mkdtemp(prefix="cli-tools-",dir=ROOT/".build"));site=base/"site";home=base/"home";shutil.copytree(ROOT/"app",site)
+    stage_forwarder(site)
     origin=f"http://127.0.0.1:{server.server_port}"
     probe=f'#define MDO_ACCOUNT_SERVICE_ORIGIN "{origin}"\n#define MDO_DISTRIBUTION_ORIGIN "{origin}"\n#define MDO_DISTRIBUTION_HOST "127.0.0.1"\n#define MDO_DISTRIBUTION_PORT {server.server_port}\n#define MDO_DISTRIBUTION_SECURE false\n#define RequestProc ProductRequestProc\n#include "generated/mdo_unity.c"\n#undef RequestProc\n'
     probe+=r'XS_RequestResult RequestProc(XS_HttpReq* req){if(xrtStrEqual(req->head->Target,XRT_STR_LITERAL("/fixture/prompt"))){MdoApiContext c={0};c.Request=req;str p=xrtStrDup("AGENT_SENTINEL");bool ok=MdoToolPrompt(&p)&&MdoToolPrompt(&p);if(ok)MdoApiReplySuccessTake(&c,200,xrtValueString(xrtStrView(p)),NULL);xrtFree(p);return XS_OK;}return ProductRequestProc(req);}'
     probe=probe.replace('return ProductRequestProc(req);}',r'''if(xrtStrEqual(req->head->Target,XRT_STR_LITERAL("/fixture/isolation"))){MdoApiContext c={0};c.Request=req;xvalue* before=MdoCliSnapshot(),*command=xrtValueObject();xrtValueObjectSetNew(command,XRT_STR_LITERAL("action"),xrtValueString(XRT_STR_LITERAL("enable")));xrtValueObjectSetNew(command,XRT_STR_LITERAL("id"),xrtValueString(XRT_STR_LITERAL("official.fixture")));xrtValueObjectSetNew(command,XRT_STR_LITERAL("enabled"),xrtValueBool(false));char error[256]={0};bool ok=MdoCliCommand(command,error,sizeof(error));xrtValueRelease(command);xvalue* out=xrtValueObject();xrtValueObjectSetNew(out,XRT_STR_LITERAL("before"),before);xrtValueObjectSetNew(out,XRT_STR_LITERAL("after"),MdoCliSnapshot());xrtValueObjectSetNew(out,XRT_STR_LITERAL("ok"),xrtValueBool(ok));MdoApiReplySuccessTake(&c,200,out,NULL);return XS_OK;}return ProductRequestProc(req);}''')
-    fixture=site/"src/distribution/cli.inc.c";text=fixture.read_text(encoding="utf-8");text=text.replace('return MdoDistSave("data/cli-tools/state.json",g_MdoCli.State);','xfile f=MdoHomeOpenRead("fail-cli-save");if(f){xrtClose(f);return false;}return MdoDistSave("data/cli-tools/state.json",g_MdoCli.State);');fixture.write_text(text,encoding="utf-8")
+    fixture=site/"src/distribution/cli_bindings.inc.c";text=fixture.read_text(encoding="utf-8");text=text.replace('if(Ok)Ok=MdoDistSave("data/cli-tools/state.json",Saved);','if(Ok){xfile f=MdoHomeOpenRead("fail-cli-save");if(f){xrtClose(f);Ok=false;}else Ok=MdoDistSave("data/cli-tools/state.json",Saved);}');fixture.write_text(text,encoding="utf-8")
     (site/"probe.c").write_text(probe,encoding="utf-8");port=free_port()
     cfg={"services":[{"class":"http","name":"cli-fixture","enabled":True,"ip":"127.0.0.1","port":port,"host_default":{"name":"cli-fixture","enabled":True,"path":str(site/"web"),"devlang":"c","devfile":str(site/"probe.c")}}]}
     (site/"xs.json").write_text(json.dumps(cfg));log=(base/"native.log").open("wb")

@@ -613,6 +613,9 @@ def build(args: argparse.Namespace, xserver: Path, lock: dict) -> None:
         if package.exists():
             shutil.rmtree(package)
         shutil.copytree(APP, package)
+        if os.name == "nt":
+            import build_cli_forwarder
+            build_cli_forwarder.build(xserver, package / "generated/native/windows/cli-forwarder.exe", args.cc)
         config = load_object(package / "xs.json")
         for service in config["services"]:
             if service.get("class") != "app":

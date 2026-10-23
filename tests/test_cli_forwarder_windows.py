@@ -37,6 +37,7 @@ def run():
     lock=build_mdo.load_object(build_mdo.LOCK_PATH);xs=build_mdo.find_xserver(None,lock)
     helper=ROOT/'.build/cli-forwarder-development/forwarder.exe';receipt=build_cli_forwarder.build(xs,helper)
     with tempfile.TemporaryDirectory(prefix='forwarder-native-',dir=ROOT/'.build') as temp:
+        rebuilt=Path(temp)/'forwarder.exe';build_cli_forwarder.build(xs,rebuilt);assert rebuilt.read_bytes()==helper.read_bytes(),'forwarder must be reproducible in different output directories'
         base=Path(temp);home=base/'home 中文';folder=home/'data/cli-tools';bin=folder/'bin';bin.mkdir(parents=True);(home/'installed').mkdir()
         source=base/'child.c';source.write_text(CHILD,encoding='utf-8');target=home/'installed/child.exe'
         subprocess.run(['gcc','-Os','-s','-municode',str(source),'-o',str(target)],check=True)

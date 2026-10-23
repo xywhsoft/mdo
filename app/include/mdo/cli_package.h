@@ -14,6 +14,26 @@ static inline bool MdoCliPlatformValid(cstr P)
 {return P&&(!strcmp(P,"windows-x86_64")||!strcmp(P,"linux-x86_64")||!strcmp(P,"linux-arm64")||!strcmp(P,"android-arm64-v8a"));}
 static inline bool MdoCliAliasEqual(cstr A,cstr B)
 {while(*A&&*B){unsigned char X=(unsigned char)*A++,Y=(unsigned char)*B++;if(X>='A'&&X<='Z')X+=32;if(Y>='A'&&Y<='Z')Y+=32;if(X!=Y)return false;}return *A==*B;}
+static inline bool MdoCliCommandName(cstr S)
+{
+    size_t N=S?strlen(S):0;if(!N||N>64||S[0]=='.'||S[N-1]=='.')return false;
+    for(size_t I=0;I<N;I++)if(!((S[I]>='a'&&S[I]<='z')||(S[I]>='A'&&S[I]<='Z')||(S[I]>='0'&&S[I]<='9')||strchr("_.+-",S[I])))return false;
+    char Base[65];size_t I=0;while(I<N&&S[I]!='.'){Base[I]=S[I];I++;}Base[I]=0;
+    if(MdoCliAliasEqual(Base,"con")||MdoCliAliasEqual(Base,"prn")||MdoCliAliasEqual(Base,"aux")||MdoCliAliasEqual(Base,"nul"))return false;
+    if(I==4&&(Base[3]>='1'&&Base[3]<='9')){Base[3]=0;if(MdoCliAliasEqual(Base,"com")||MdoCliAliasEqual(Base,"lpt"))return false;}
+    return N<4||!MdoCliAliasEqual(S+N-4,".exe");
+}
+static inline bool MdoCliCommandsValid(const xvalue* Commands,const xvalue* Files)
+{
+    if(!Commands)return true;if(xrtValueType(Commands)!=XVALUE_ARRAY||xrtValueCount(Commands)>64)return false;
+    for(size_t I=0;I<xrtValueCount(Commands);I++){
+        const xvalue* C=xrtValueArrayGet(Commands,I);cstr Name=MdoPackageText(C,"name",64),Entry=MdoPackageText(C,"entry",220);
+        if(!MdoCliCommandName(Name)||!Entry||!MdoPackagePath(Entry))return false;
+        for(size_t J=0;J<I;J++)if(MdoCliAliasEqual(Name,MdoPackageText(xrtValueArrayGet(Commands,J),"name",64)))return false;
+        if(Files){bool Found=false;for(size_t J=0;J<xrtValueCount(Files);J++){const xvalue* F=xrtValueArrayGet(Files,J);int64 Size=0;if(!strcmp(Entry,MdoPackageText(F,"path",220))&&MdoPackageNumber(F,"size",&Size)&&Size>0)Found=true;}if(!Found)return false;}
+        const xvalue* Args=xrtValueObjectGet(C,XRT_STR_LITERAL("args"));if(Args){if(xrtValueType(Args)!=XVALUE_ARRAY||xrtValueCount(Args)>64)return false;for(size_t J=0;J<xrtValueCount(Args);J++){xstrview V;if(!xrtValueGetString(xrtValueArrayGet(Args,J),&V)||V.Size>32768||memchr(V.Data,0,V.Size))return false;}}
+    }return true;
+}
 static inline bool MdoCliManifestValid(const xvalue* M,char* Error,size_t Capacity)
 {
     cstr Id=MdoPackageText(M,"id",64),Name=MdoPackageText(M,"name",120),Version=MdoPackageText(M,"version",64);
@@ -30,7 +50,7 @@ static inline bool MdoCliManifestValid(const xvalue* M,char* Error,size_t Capaci
         Total+=(uint64)Size;if(Total>MDO_CLI_BYTES)goto invalid;
         if(!strcmp(P,Entry)){if(!Size)goto invalid;Found=true;}
     }
-    if(!Found)goto invalid;
+    if(!Found||!MdoCliCommandsValid(xrtValueObjectGet(M,XRT_STR_LITERAL("commands")),Files))goto invalid;
     if(Links){if(xrtValueType(Links)!=XVALUE_ARRAY||xrtValueCount(Links)>8)goto invalid;
         for(size_t I=0;I<xrtValueCount(Links);I++){xstrview Link;if(!xrtValueGetString(xrtValueArrayGet(Links,I),&Link)||Link.Size>2048||memchr(Link.Data,0,Link.Size)||(!xrtStrStarts(Link,XRT_STR_LITERAL("https://"))&&!xrtStrStarts(Link,XRT_STR_LITERAL("http://"))))goto invalid;}}
     return true;

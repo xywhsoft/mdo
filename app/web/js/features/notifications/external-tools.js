@@ -7,6 +7,9 @@ const labels = {
   "en-US": ["Local tools","Tool store","Add custom tool","Search","Refresh","Downloads","Enable","Disable","Edit","Uninstall","Share to store","Install","Update","Cancel","Retry","Clear finished tasks","No tools","Executable is missing. Edit its path or reinstall.","Name","Absolute executable path","Prompt for the Agent","Version (e.g. 1.0.0)","License","Related links (one per line)","Share directory (optional, includes dependencies; empty uploads only the executable)","Save","Close","My submissions","Withdraw","Install full edition","Android programs are installed and updated with the full APK.","Upload the selected executable and explicitly selected directory for review and distribution? Confirm you have redistribution rights.","Uninstall this tool? Original custom files are preserved.","Install common command-line tools to help the Agent search, download, connect remotely and process files.","Install","Don't show again","Manage downloads","Next page","File exists","File missing","Listed paths and usage notes are provided to the Agent. No probes are executed.","Details","Different platform","Sign in to share","Storage is unavailable or records are corrupt; original records retained.","Submission queued. Check its result in Downloads."],
   "ru-RU": ["На устройстве","Магазин","Добавить инструмент","Поиск","Обновить","Загрузки","Включить","Отключить","Изменить","Удалить","Поделиться","Установить","Обновить","Отмена","Повторить","Очистить завершённые","Нет инструментов","Файл не найден. Измените путь или переустановите.","Название","Полный путь к программе","Инструкция для Agent","Версия (1.0.0)","Лицензия","Ссылки (по одной на строку)","Каталог публикации (необязательно, с зависимостями)","Сохранить","Закрыть","Мои публикации","Отозвать","Полная версия","В Android программы обновляются вместе с полным APK.","Загрузить выбранные файлы для проверки и распространения? Подтвердите право распространения.","Удалить инструмент? Исходные файлы сохранятся.","Установите программы для поиска, загрузки, удалённого доступа и обработки файлов.","Установить","Не показывать","Управление загрузками","Далее","Файл существует","Файл не найден","Пути и инструкции передаются Agent. Программы не запускаются для проверки.","Подробнее","Другая платформа","Войдите для публикации","Хранилище недоступно; исходные записи сохранены.","Публикация в очереди. Результат появится в загрузках."]
 };
+labels["zh-CN"].push("命令名（留空使用程序名）","命令别名（每行一个）","复制到 mdo 工具目录","复制选定的程序及已填写的分享目录到 mdo，原文件保留。复制后可以通过统一命令目录调用，并随 mdo 一起迁移。","命令入口","外部位置；可复制到 mdo 以获得可迁移的命令入口。","mdo 子进程的命令目录（不修改系统 PATH）");
+labels["en-US"].push("Command name (defaults to executable name)","Command aliases (one per line)","Copy into mdo tools","Copy the executable and explicitly selected share directory into mdo? Originals are preserved. The copy can use the portable command directory and move with mdo.","Commands","External location; copy into mdo to create portable command entries.","Command directory for mdo child processes (system PATH is unchanged)");
+labels["ru-RU"].push("Имя команды (по умолчанию имя программы)","Псевдонимы (по одному на строку)","Копировать в mdo","Копировать программу и выбранный каталог в mdo? Исходные файлы сохранятся. Копия переносится вместе с mdo.","Команды","Внешний путь; скопируйте в mdo для переносимых команд.","Каталог команд дочерних процессов mdo (системный PATH не меняется)");
 const n = (tag, text, cls) => { const e=document.createElement(tag); if(text!=null)e.textContent=text; if(cls)e.className=cls; return e; };
 const active = t => ["queued","running","installing","uploading"].includes(t.state);
 export function externalToolAction(row, installed) {
@@ -35,16 +38,18 @@ export function createExternalToolsPanel({ refresh, openFull, openTools, signedI
     closeEditor();editing=tool.id??null;const own=context,revision=data.revision??0;
     editor=n("dialog",null,"cli-editor");const form=n("form"), message=n("p",null,"cli-error"), fields={};
     form.append(n("h3",c(tool.id?8:2)));
-    for(const [key,label,type] of [["name",18],["path",19],["prompt",20,"textarea"],["version",21],["license",22],["links",23,"textarea"],["package_root",24]]){
+    for(const [key,label,type] of [["name",18],["path",19],["command",46],["aliases",47,"textarea"],["prompt",20,"textarea"],["version",21],["license",22],["links",23,"textarea"],["package_root",24]]){
       const wrap=n("label",null,"cli-field"),input=n(type??"input");input.name=key;
-      input.value=key==="links"?(Array.isArray(tool.links)?tool.links:[]).join("\n"):tool[key]??(key==="version"?"1.0.0":key==="license"?"Unknown":"");
+      input.value=key==="links"||key==="aliases"?(Array.isArray(tool[key])?tool[key]:[]).join("\n"):tool[key]??(key==="version"?"1.0.0":key==="license"?"Unknown":"");
       input.required=["name","path","prompt","version","license"].includes(key);input.maxLength=key==="prompt"?16384:key==="path"||key==="package_root"?4096:key==="name"?120:key==="links"?16384:512;
-      if(key==="path"&&data.platform?.startsWith("android"))input.readOnly=true;
+      if(key==="path"&&(data.platform?.startsWith("android")||tool.managed_root))input.readOnly=true;
+      if(key==="command"&&tool.commands?.length)input.readOnly=true;
       wrap.append(n("span",c(label)),input);fields[key]=input;form.append(wrap);
     }
     const save=button(c(25),()=>form.requestSubmit()),close=button(c(26),closeEditor);form.append(message,save,close);editor.append(form);document.body.append(editor);
     form.onsubmit=async e=>{e.preventDefault();if(own!==context)return closeEditor();save.disabled=true;const t={id:tool.id??"custom."+crypto.randomUUID().replaceAll("-",""),platform:data.platform,enabled:tool.enabled??true};
-      for(const k of Object.keys(fields))t[k]=k==="links"?fields[k].value.split(/\r?\n/).map(v=>v.trim()).filter(Boolean):fields[k].value.trim();
+      if(tool.commands)t.commands=tool.commands;
+      for(const k of Object.keys(fields))t[k]=k==="links"||k==="aliases"?fields[k].value.split(/\r?\n/).map(v=>v.trim()).filter(Boolean):fields[k].value.trim();
       if(await command({action:"save",tool:t,revision}))closeEditor();else{message.textContent=error;save.disabled=false;}
     };editor.addEventListener("cancel",()=>closeEditor());editor.showModal();
   }
@@ -79,12 +84,17 @@ export function createExternalToolsPanel({ refresh, openFull, openTools, signedI
     const toolbar=n("div",null,"cli-toolbar");
     if(tab==="local"){
       toolbar.append(button(c(2),()=>edit(),disabled||android),button(c(27),()=>{mine=!mine;if(mine)void command({action:"mine"});renderAll();},disabled||!signedIn()));body.append(toolbar,n("p",c(40),"notice-description"));
+      if(!android&&data.command_directory)body.append(n("small",`${c(52)}: ${data.command_directory}`));
+      if(data.binding_error)body.append(n("p",data.binding_error,"cli-error"));
       for(const t of data.items??[]){const row=n("article",null,"cli-row"),main=n("div",null,"cli-info"),actions=n("div",null,"cli-actions");
         main.append(n("strong",t.name),n("small",`${t.version} · ${t.platform} · ${t.license}`),n("code",t.path),n("small",c(t.present?38:39),t.present?null:"cli-error"));
+        if(t.exported_commands?.length)main.append(n("small",`${c(50)}: ${t.exported_commands.join(" · ")}`));
+        if(!android&&!t.portable)main.append(n("small",c(51)));
         const prompt=n("details");prompt.append(n("summary",c(20)),n("p",t.prompt));main.append(prompt);
         actions.append(button(c(t.enabled?7:6),()=>command({action:"enable",id:t.id,enabled:!t.enabled}),disabled||(!t.enabled&&!t.present)),button(c(8),()=>edit(t),disabled),button(c(41),()=>details(t)));
         if(t.source!=="bundled")actions.append(button(c(9),()=>{if(window.confirm(c(32)))void command({action:"remove",id:t.id});},disabled));
         if(!android)actions.append(button(c(10),()=>{if(window.confirm(c(31)))void command({action:"publish",id:t.id,name:t.name});},disabled||!signedIn()||!t.present));
+        if(!android&&!t.managed_root)actions.append(button(c(48),()=>{if(window.confirm(c(49)))void command({action:"import",id:t.id,name:t.name});},disabled||!t.present));
         row.append(main,actions);body.append(row);
       }
       if(!(data.items??[]).length)body.append(n("p",c(16)));

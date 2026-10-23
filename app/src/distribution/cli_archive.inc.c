@@ -32,7 +32,8 @@ static bool CliCollectFiles(xvalue* Files,cstr Root,cstr Relative,unsigned Depth
 }
 static bool CliBuildArchive(MdoCliJob* Job,const xvalue* Tool,char Relative[160],char Hash[65],uint64* Size,char* Error,size_t Capacity)
 {
-    cstr Entry=CliText(Tool,"path",4096),Selected=CliText(Tool,"package_root",4096);char* Root=NULL,*EntryRelative=NULL;bool Ok=false;uint64 Total=0;
+    cstr Entry=CliText(Tool,"path",4096),Selected=CliText(Tool,"package_root",4096);char* Root=NULL,*EntryRelative=NULL,*Managed=NULL;bool Ok=false;uint64 Total=0;
+    if(!Selected[0]&&CliText(Tool,"managed_root",160)[0]){Managed=MdoHomeExternalPath(CliText(Tool,"managed_root",160));if(Managed)Selected=Managed;}
     const char* Base=Entry;for(const char* C=Entry;*C;C++)if(*C=='/'||*C=='\\')Base=C+1;
     if(Selected[0]){Root=xrtStrDup(Selected);EntryRelative=xrtPathRelative(xrtStrView(Root),xrtStrView(Entry),XPATH_NATIVE);if(EntryRelative)for(char* C=EntryRelative;*C;C++)if(*C=='\\')*C='/';}
     else{Root=xrtStrDupN(Entry,(size_t)(Base-Entry));EntryRelative=xrtStrDup(Base);}
@@ -44,6 +45,16 @@ static bool CliBuildArchive(MdoCliJob* Job,const xvalue* Tool,char Relative[160]
     for(size_t I=0;I<6;I++)CliSet(Manifest,Keys[I],CliText(Tool,Keys[I],I==4?16384:512));
     CliSet(Manifest,"entry",EntryRelative);const xvalue* Links=xrtValueObjectGet(Tool,XRT_STR_LITERAL("links"));if(Links)xrtValueObjectSet(Manifest,XRT_STR_LITERAL("links"),Links);
     xrtValueObjectSet(Manifest,XRT_STR_LITERAL("files"),Files);
+    const xvalue* ExistingCommands=xrtValueObjectGet(Tool,XRT_STR_LITERAL("commands"));xvalue* Commands=ExistingCommands?xrtValueDeepClone(ExistingCommands):xrtValueArray();
+    if(Commands&&!xrtValueCount(Commands)){char* Base=xrtPathName(EntryRelative);char* Name=Base;
+#if defined(_WIN32) || defined(_WIN64)
+        size_t L=Base?strlen(Base):0;if(L>4&&MdoCliAliasEqual(Base+L-4,".exe"))Base[L-4]=0;
+#endif
+        cstr Selected=CliText(Tool,"command",64);if(Selected[0])Name=(char*)Selected;xvalue* C=xrtValueObject();CliSet(C,"name",Name?Name:"");CliSet(C,"entry",EntryRelative);xrtValueObjectSetNew(C,XRT_STR_LITERAL("args"),xrtValueArray());xrtValueArrayAppendNew(Commands,C);xrtFree(Base);}
+    const xvalue* Aliases=xrtValueObjectGet(Tool,XRT_STR_LITERAL("aliases"));
+    for(size_t I=0;Commands&&I<xrtValueCount(Aliases);I++){xstrview Name={0};if(!xrtValueGetString(xrtValueArrayGet(Aliases,I),&Name))continue;bool Duplicate=false;for(size_t J=0;J<xrtValueCount(Commands);J++)if(MdoCliAliasEqual(Name.Data,CliText(xrtValueArrayGet(Commands,J),"name",64)))Duplicate=true;
+        if(!Duplicate){xvalue* C=xrtValueObject();CliSet(C,"name",Name.Data);CliSet(C,"entry",EntryRelative);xrtValueObjectSetNew(C,XRT_STR_LITERAL("args"),xrtValueArray());xrtValueArrayAppendNew(Commands,C);}}
+    if(Commands)xrtValueObjectSetNew(Manifest,XRT_STR_LITERAL("commands"),Commands);
     if(!Ok||!MdoCliManifestValid(Manifest,Error,Capacity))goto done;
     size_t N=0;char* Json=xrtJsonStringify(Manifest,false,&N);if(!Json||!N||N>MDO_CLI_JSON){xrtFree(Json);Ok=false;goto done;}
     snprintf(Relative,160,"data/cli-tools/uploads/%s.mdo-cli",Job->Id);Output=MdoHomeOpenWrite(Relative,XFILE_WRITE|XFILE_CREATE|XFILE_TRUNCATE);
@@ -56,7 +67,7 @@ static bool CliBuildArchive(MdoCliJob* Job,const xvalue* Tool,char Relative[160]
     }
     Ok=Ok&&xrtFlush(Output);xrtClose(Output);Output=NULL;
     if(Ok){char* Native=MdoHomeExternalPath(Relative);Ok=Native&&CliFileHash(Native,Hash,Size,Job->Cancel);xrtFree(Native);}
-done:xrtClose(Output);xrtFree(Root);xrtFree(EntryRelative);xrtValueRelease(Files);xrtValueRelease(Manifest);
+done:xrtClose(Output);xrtFree(Managed);xrtFree(Root);xrtFree(EntryRelative);xrtValueRelease(Files);xrtValueRelease(Manifest);
     if(!Ok){if(Relative[0])MdoHomeRemove(Relative,false);if(!Error[0])snprintf(Error,Capacity,"Cannot package selected program files; paths, permissions or files changed");}return Ok;
 }
 static bool CliExtract(MdoCliJob* Job,const xvalue* Product,cstr Download,char Root[160],xvalue** Out,char* Error,size_t Capacity)
@@ -81,7 +92,7 @@ static bool CliExtract(MdoCliJob* Job,const xvalue* Product,cstr Download,char R
         if(Ok)Ok=MdoHomeSetMode(Relative,(uint32)MdoDistNumber(F,"mode"));
 #endif
     }
-    if(Ok){*Out=xrtValueObject();const cstr Keys[]={"name","version","platform","prompt","license","links"};for(size_t I=0;I<6;I++){const xvalue* V=xrtValueObjectGet(M,xrtStrView(Keys[I]));if(V)xrtValueObjectSet(*Out,xrtStrView(Keys[I]),V);}
+    if(Ok){*Out=xrtValueObject();const cstr Keys[]={"name","version","platform","prompt","license","links","commands"};for(size_t I=0;I<7;I++){const xvalue* V=xrtValueObjectGet(M,xrtStrView(Keys[I]));if(V)xrtValueObjectSet(*Out,xrtStrView(Keys[I]),V);}
         char Relative[384];snprintf(Relative,sizeof(Relative),"%s/%s",Root,CliText(M,"entry",220));char* Native=MdoHomeExternalPath(Relative);
         Ok=Native&&CliPresent(Native)&&CliSet(*Out,"path",Native)&&CliSet(*Out,"managed_root",Root)&&CliSet(*Out,"source","store")&&CliSet(*Out,"entry",CliText(M,"entry",220))&&CliSet(*Out,"id",CliText(Product,"tool_id",64));xrtFree(Native);
         xrtValueObjectSet(*Out,XRT_STR_LITERAL("store_id"),xrtValueObjectGet(Product,XRT_STR_LITERAL("id")));xrtValueObjectSetNew(*Out,XRT_STR_LITERAL("enabled"),xrtValueBool(true));}

@@ -91,6 +91,14 @@ def build(output,platforms):
                 entry=tool+"/"+record["entrypoints"][0]
                 manifest=dict(id=tool,name=definition["name"],version=version(record["version"]),platform=platform,
                               prompt=definition["prompt"],entry=entry,license=record.get("license",definition["license"]),links=definition["links"],files=files)
+                manifest["commands"]=[dict(name=Path(p).stem if p.lower().endswith('.exe') else Path(p).name,entry=tool+'/'+p,args=[]) for p in record["entrypoints"]]
+                if tool=="python":
+                    names={c['name'] for c in manifest['commands']}
+                    for name in ('python','python3'):
+                        if name not in names:manifest['commands'].append(dict(name=name,entry=entry,args=[]))
+                if tool=="busybox":
+                    for name in ('sh','ash','awk','sed','grep','find','cat','head','tail','sort','wc','cp','mv','rm','mkdir','rmdir','touch','tar','gzip','gunzip','unzip','xargs','tee','tr','which','basename','dirname'):
+                        manifest['commands'].append(dict(name=name,entry=entry,args=[name]))
                 encoded=json.dumps(manifest,ensure_ascii=False,separators=(",",":")).encode()
                 path=output/f"{tool}-{manifest['version']}-{platform}.mdo-cli"
                 with path.open("wb") as f:

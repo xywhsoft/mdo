@@ -39,12 +39,32 @@ static bool CliInstall(MdoCliJob* Job,char* Error,size_t Capacity)
     xrtMutexLock(g_MdoCli.Lock);xvalue* Previous=xrtValueDeepClone(g_MdoCli.State),*Old=CliFind(Key);bool Enable=CliBool(Job->Input,"enable",Old?CliBool(Old,"enabled",true):true);
     if(Old){/* A managed update never silently replaces a user-selected program. */
         if(strcmp(CliText(Old,"source",16),"store")&&strcmp(CliText(Old,"source",16),"legacy")){Ok=false;snprintf(Error,Capacity,"Tool identity belongs to a user-defined program");}
-        else {xrtValueObjectSetNew(Tool,XRT_STR_LITERAL("enabled"),xrtValueBool(Enable));for(size_t I=0;I<xrtValueCount(CliItems());I++)if(xrtValueArrayGet(CliItems(),I)==Old){CliRetire(Old);xrtValueArraySet(CliItems(),I,Tool);break;}}
+        else {xrtValueObjectSetNew(Tool,XRT_STR_LITERAL("enabled"),xrtValueBool(Enable));const xvalue* Aliases=xrtValueObjectGet(Old,XRT_STR_LITERAL("aliases"));if(Aliases)xrtValueObjectSet(Tool,XRT_STR_LITERAL("aliases"),Aliases);if(!xrtValueCount(xrtValueObjectGet(Tool,XRT_STR_LITERAL("commands")))){const xvalue* Command=xrtValueObjectGet(Old,XRT_STR_LITERAL("command"));if(Command)xrtValueObjectSet(Tool,XRT_STR_LITERAL("command"),Command);}for(size_t I=0;I<xrtValueCount(CliItems());I++)if(xrtValueArrayGet(CliItems(),I)==Old){CliRetire(Old);xrtValueArraySet(CliItems(),I,Tool);break;}}
     }else if(xrtValueCount(CliItems())>=256){Ok=false;snprintf(Error,Capacity,"External-tool list is full");}else xrtValueArrayAppend(CliItems(),Tool);
     if(Ok){xrtValueObjectSetNew(g_MdoCli.State,XRT_STR_LITERAL("revision"),xrtValueUInt(MdoDistNumber(g_MdoCli.State,"revision")+1));Ok=!xrtCancelRequested(Job->Cancel)&&CliSave();}
-    if(!Ok){xrtValueRelease(g_MdoCli.State);g_MdoCli.State=Previous;Previous=NULL;}xrtValueRelease(Previous);xrtMutexUnlock(g_MdoCli.Lock);
+    if(!Ok){xrtValueRelease(g_MdoCli.State);g_MdoCli.State=Previous;Previous=NULL;if(!Error[0])snprintf(Error,Capacity,"%s",g_MdoCli.BindingError);}xrtValueRelease(Previous);xrtMutexUnlock(g_MdoCli.Lock);
     if(!Ok&&Root[0]){size_t Count=0;(void)MdoDistRemoveTree(Root,0,&Count);}
 done:xrtValueRelease(Product);xrtValueRelease(Tool);return Ok;
+#endif
+}
+static bool CliImport(MdoCliJob* Job,char* Error,size_t Capacity)
+{
+#if defined(__ANDROID__)
+    (void)Job;snprintf(Error,Capacity,"Android programs must be installed with the full APK");return false;
+#else
+    const xvalue* Source=xrtValueObjectGet(Job->Input,XRT_STR_LITERAL("tool"));char Archive[160]={0},Hash[65],Root[160]={0};uint64 Size=0;xvalue* Tool=NULL,*Product=xrtValueObject();
+    bool Ok=CliMeta(Source)&&CliBuildArchive(Job,Source,Archive,Hash,&Size,Error,Capacity);
+    CliSet(Product,"slug",CliText(Source,"id",64));CliSet(Product,"tool_id",CliText(Source,"id",64));CliSet(Product,"version",CliText(Source,"version",64));
+    if(Ok)Ok=CliExtract(Job,Product,Archive,Root,&Tool,Error,Capacity);
+    if(Ok){CliSet(Tool,"source","local");xrtValueObjectRemove(Tool,XRT_STR_LITERAL("store_id"));xrtValueObjectSetNew(Tool,XRT_STR_LITERAL("enabled"),xrtValueBool(CliBool(Source,"enabled",true)));
+        const cstr Keys[]={"aliases","command"};for(size_t I=0;I<2;I++){const xvalue* V=xrtValueObjectGet(Source,xrtStrView(Keys[I]));if(V)xrtValueObjectSet(Tool,xrtStrView(Keys[I]),V);}
+        xrtMutexLock(g_MdoCli.Lock);xvalue* Previous=xrtValueDeepClone(g_MdoCli.State),*Old=CliFind(CliText(Source,"id",64));
+        Ok=Previous&&Old&&!xrtCancelRequested(Job->Cancel)&&MdoDistNumber(Job->Input,"revision")==MdoDistNumber(g_MdoCli.State,"revision");
+        if(Ok){for(size_t I=0;I<xrtValueCount(CliItems());I++)if(xrtValueArrayGet(CliItems(),I)==Old){CliRetire(Old);xrtValueArraySet(CliItems(),I,Tool);break;}
+            xrtValueObjectSetNew(g_MdoCli.State,XRT_STR_LITERAL("revision"),xrtValueUInt(MdoDistNumber(g_MdoCli.State,"revision")+1));Ok=CliSave();}
+        else snprintf(Error,Capacity,"Tool list changed while copying; reload and retry");
+        if(!Ok&&Previous){xrtValueRelease(g_MdoCli.State);g_MdoCli.State=Previous;Previous=NULL;}if(!Ok&&!Error[0])snprintf(Error,Capacity,"%s",g_MdoCli.BindingError);xrtValueRelease(Previous);xrtMutexUnlock(g_MdoCli.Lock);}
+    if(!Ok&&Root[0]){size_t Count=0;MdoDistRemoveTree(Root,0,&Count);}if(Archive[0])MdoHomeRemove(Archive,false);xrtValueRelease(Product);xrtValueRelease(Tool);return Ok;
 #endif
 }
 static bool CliPublish(MdoCliJob* Job,char* Error,size_t Capacity)
@@ -109,7 +129,7 @@ static int32 CliWorker(void* Data)
         if(J){g_MdoCli.First=J->Next;if(!g_MdoCli.First)g_MdoCli.Last=NULL;J->Next=NULL;g_MdoCli.Running=J;}xrtMutexUnlock(g_MdoCli.Lock);
         if(!J){xrtSleep(100);continue;}char Error[256]={0};bool Ok=false;
         if(!xrtCancelRequested(J->Cancel)){CliTaskStatus(J->Id,"running",NULL);cstr Action=CliText(J->Input,"action",16);
-            if(!strcmp(Action,"catalog"))Ok=CliCatalog(J,Error,sizeof(Error));else if(!strcmp(Action,"install"))Ok=CliInstall(J,Error,sizeof(Error));else if(!strcmp(Action,"publish"))Ok=CliPublish(J,Error,sizeof(Error));else if(!strcmp(Action,"recommend"))Ok=CliRecommend(J,Error,sizeof(Error));else if(!strcmp(Action,"mine"))Ok=CliMine(J,Error,sizeof(Error));else if(!strcmp(Action,"withdraw"))Ok=CliWithdraw(J,Error,sizeof(Error));}
+            if(!strcmp(Action,"catalog"))Ok=CliCatalog(J,Error,sizeof(Error));else if(!strcmp(Action,"install"))Ok=CliInstall(J,Error,sizeof(Error));else if(!strcmp(Action,"import"))Ok=CliImport(J,Error,sizeof(Error));else if(!strcmp(Action,"publish"))Ok=CliPublish(J,Error,sizeof(Error));else if(!strcmp(Action,"recommend"))Ok=CliRecommend(J,Error,sizeof(Error));else if(!strcmp(Action,"mine"))Ok=CliMine(J,Error,sizeof(Error));else if(!strcmp(Action,"withdraw"))Ok=CliWithdraw(J,Error,sizeof(Error));}
         CliTaskStatus(J->Id,Ok?"complete":xrtCancelRequested(J->Cancel)?"cancelled":"failed",Ok?NULL:Error[0]?Error:"External-tool operation failed");
         xrtMutexLock(g_MdoCli.Lock);g_MdoCli.Running=NULL;
         cstr Action=CliText(J->Input,"action",16);if(Ok&&(!strcmp(Action,"catalog")||!strcmp(Action,"mine"))){for(size_t I=0;I<xrtValueCount(g_MdoCli.Tasks);I++)if(!strcmp(CliText(xrtValueArrayGet(g_MdoCli.Tasks,I),"id",32),J->Id)){xrtValueArrayRemove(g_MdoCli.Tasks,I,1);break;}(void)CliSaveTasks();}

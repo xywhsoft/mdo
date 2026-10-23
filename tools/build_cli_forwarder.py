@@ -7,7 +7,7 @@ ROOT=Path(__file__).resolve().parents[1]
 def build(xserver,output,cc='gcc'):
     source=ROOT/'tools/cli_forwarder.c';header=Path(xserver)/'lib/xrt.h';output=Path(output)
     compiler=shutil.which(cc) or cc
-    flags=['-std=c11','-Os','-s','-ffunction-sections','-fdata-sections','-municode','-Wl,--gc-sections']
+    flags=['-std=c11','-Os','-s','-ffunction-sections','-fdata-sections','-municode','-Wl,--gc-sections','-Wl,--no-insert-timestamp']
     command=[compiler,*flags,'-I'+str(header.parent),str(source),'-o',str(output),'-lshell32','-luserenv','-ladvapi32']
     fingerprint=hashlib.sha256(source.read_bytes()+header.read_bytes()+json.dumps(command).encode()+subprocess.check_output([compiler,'--version'])).hexdigest()
     receipt=output.with_suffix('.build.json')

@@ -57,7 +57,8 @@ final class MdoRuntime {
             Os.setenv("SSL_CERT_FILE", new File(root, "curl/cacert.pem").getAbsolutePath(), true);
             Os.setenv("CURL_CA_BUNDLE", new File(root, "curl/cacert.pem").getAbsolutePath(), true);
             Os.setenv("PATH", new File(root, "busybox") + ":" + new File(root, "curl") + ":" +
-                new File(root, "jq") + ":" + new File(root, "openssh") + ":" + new File(root, "python/bin") + ":" + System.getenv("PATH"), true);
+                new File(root, "jq") + ":" + new File(root, "openssh") + ":" + new File(root, "python/bin") + ":" +
+                new File(root, "aria2") + ":" + new File(root, "ripgrep") + ":" + new File(root, "7zip") + ":" + System.getenv("PATH"), true);
         }
     }
 }
