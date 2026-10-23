@@ -534,6 +534,8 @@ select:focus-visible,
 
 .sidebar-footer { padding-top: 9px; border-top: 1px solid var(--border); }
 .sidebar-status-row { display: flex; align-items: center; gap: 6px; margin-top: 4px; padding-right: 4px; }
+#open-session-search .icon svg,
+#toggle-theme .icon svg { stroke-width: 2; }
 .runtime-state { display: flex; flex: 1; min-width: 0; align-items: center; gap: 8px; padding: 4px 11px; color: var(--muted); font-size: 11px; }
 #runtime-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
