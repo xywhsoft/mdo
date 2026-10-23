@@ -207,8 +207,8 @@ static bool MdoDistInstall(cstr Id)
 #if defined(__ANDROID__)
     (void)Id; return false; /* Native updates go through the matching full APK. */
 #else
-    xrtMutexLock(g_MdoDistribution.Lock); xvalue* Catalog=xrtValueClone(g_MdoDistribution.Catalog);
-    xvalue* Active=xrtValueClone(g_MdoDistribution.Active); xrtMutexUnlock(g_MdoDistribution.Lock);
+    xrtMutexLock(g_MdoDistribution.Lock); xvalue* Catalog=xrtValueDeepClone(g_MdoDistribution.Catalog);
+    xvalue* Active=xrtValueDeepClone(g_MdoDistribution.Active); xrtMutexUnlock(g_MdoDistribution.Lock);
     xvalue* Packages=xrtValueObjectGet(Catalog,XRT_STR_LITERAL("toolpacks")); xvalue* Package=NULL;
     for(size_t i=0;i<xrtValueCount(Packages);i++)if(!strcmp(MdoDistText(xrtValueArrayGet(Packages,i),"id"),Id))Package=xrtValueArrayGet(Packages,i);
     char Path[96],Target[128]={0}; cstr Hash=MdoDistText(Package,"sha256");
@@ -246,7 +246,7 @@ static bool MdoDistInstall(cstr Id)
     if(!Ok&&!xrtCancelRequested(g_MdoDistribution.Operation)) {
         xfile Download=MdoHomeOpenRead("data/toolpacks/download.pending");bool Retained=false;
         if(Download){xrtClose(Download);MdoHomeRemove("data/toolpacks/download.failed",false);Retained=MdoHomeRenameNoReplace("data/toolpacks/download.pending","data/toolpacks/download.failed");PendingKept=!Retained;}
-        xrtMutexLock(g_MdoDistribution.Lock);xvalue* Error=xrtValueClone(g_MdoDistribution.Error);xrtMutexUnlock(g_MdoDistribution.Lock);
+        xrtMutexLock(g_MdoDistribution.Lock);xvalue* Error=xrtValueDeepClone(g_MdoDistribution.Error);xrtMutexUnlock(g_MdoDistribution.Lock);
         MdoDistSet(Error,"package",Id);MdoDistSet(Error,"expected_sha256",Hash);
         MdoDistSet(Error,"actual_sha256",Report.ActualHash);
         xrtValueObjectSetNew(Error,XRT_STR_LITERAL("expected_bytes"),xrtValueUInt(MdoDistNumber(Package,"size")));
@@ -303,7 +303,7 @@ bool MdoDistributionInit(XS_ServerInfo* Server)
     g_MdoDistribution.Catalog=MdoDistRead("data/notifications/catalog.json",1048576);
     if(xrtValueType(g_MdoDistribution.Catalog)!=XVALUE_OBJECT) {xrtValueRelease(g_MdoDistribution.Catalog);g_MdoDistribution.Catalog=xrtValueObject();}
     g_MdoDistribution.Tools=MdoDistDetect(g_MdoDistribution.Active);
-    g_MdoDistribution.CleanupEligible=xrtValueClone(xrtValueObjectGet(g_MdoDistribution.Active,XRT_STR_LITERAL("retired")));
+    g_MdoDistribution.CleanupEligible=xrtValueDeepClone(xrtValueObjectGet(g_MdoDistribution.Active,XRT_STR_LITERAL("retired")));
     g_MdoDistribution.Error=MdoDistRead("data/toolpacks/last-error.json",16384);
     if(xrtValueType(g_MdoDistribution.Error)!=XVALUE_OBJECT){xrtValueRelease(g_MdoDistribution.Error);g_MdoDistribution.Error=NULL;}
     if(g_MdoDistribution.Error){snprintf(g_MdoDistribution.Stage,sizeof(g_MdoDistribution.Stage),"failed");snprintf(g_MdoDistribution.Message,sizeof(g_MdoDistribution.Message),"%s",MdoDistText(g_MdoDistribution.Error,"detail"));snprintf(g_MdoDistribution.Id,sizeof(g_MdoDistribution.Id),"%s",MdoDistText(g_MdoDistribution.Error,"package"));}
@@ -335,13 +335,13 @@ bool MdoDistributionRequest(cstr Action,cstr Id)
 xvalue* MdoDistributionSnapshot(void)
 {
     if(!g_MdoDistribution.Lock)return NULL;
-    xrtMutexLock(g_MdoDistribution.Lock); xvalue* Root=xrtValueClone(g_MdoDistribution.Catalog);
+    xrtMutexLock(g_MdoDistribution.Lock); xvalue* Root=xrtValueDeepClone(g_MdoDistribution.Catalog);
     xvalue* Tools=xrtValueArray();
-    for(size_t i=0;i<xrtValueCount(g_MdoDistribution.Tools);i++){xvalue* Tool=xrtValueArrayGet(g_MdoDistribution.Tools,i);if(xrtFileExists(MdoDistText(Tool,"path")))xrtValueArrayAppendNew(Tools,xrtValueClone(Tool));}
+    for(size_t i=0;i<xrtValueCount(g_MdoDistribution.Tools);i++){xvalue* Tool=xrtValueArrayGet(g_MdoDistribution.Tools,i);if(xrtFileExists(MdoDistText(Tool,"path")))xrtValueArrayAppendNew(Tools,xrtValueDeepClone(Tool));}
     xrtValueObjectSetNew(Root,XRT_STR_LITERAL("tools"),Tools);
-    xrtValueObjectSetNew(Root,XRT_STR_LITERAL("installed"),xrtValueClone(g_MdoDistribution.Active));
+    xrtValueObjectSetNew(Root,XRT_STR_LITERAL("installed"),xrtValueDeepClone(g_MdoDistribution.Active));
     xrtValueObjectSetNew(Root,XRT_STR_LITERAL("busy"),xrtValueBool(g_MdoDistribution.Busy)); MdoDistSet(Root,"message",g_MdoDistribution.Message);
-    if(g_MdoDistribution.Error)xrtValueObjectSetNew(Root,XRT_STR_LITERAL("error"),xrtValueClone(g_MdoDistribution.Error));
+    if(g_MdoDistribution.Error)xrtValueObjectSetNew(Root,XRT_STR_LITERAL("error"),xrtValueDeepClone(g_MdoDistribution.Error));
     MdoDistSet(Root,"stage",g_MdoDistribution.Stage);MdoDistSet(Root,"operation_id",g_MdoDistribution.Id);
     xrtValueObjectSetNew(Root,XRT_STR_LITERAL("done"),xrtValueUInt(g_MdoDistribution.Done));
     xrtValueObjectSetNew(Root,XRT_STR_LITERAL("total"),xrtValueUInt(g_MdoDistribution.Total));

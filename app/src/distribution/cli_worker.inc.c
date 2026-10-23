@@ -36,7 +36,7 @@ static bool CliInstall(MdoCliJob* Job,char* Error,size_t Capacity)
     if(!Ok){snprintf(Error,Capacity,"Tool download failed or content SHA-256 did not match");MdoHomeRemove(Download,false);goto done;}
     (void)Report;CliTaskStatus(Job->Id,"installing",NULL);Ok=CliExtract(Job,Product,Download,Root,&Tool,Error,Capacity);MdoHomeRemove(Download,false);
     if(!Ok)goto done;
-    xrtMutexLock(g_MdoCli.Lock);xvalue* Previous=xrtValueClone(g_MdoCli.State),*Old=CliFind(Key);bool Enable=CliBool(Job->Input,"enable",Old?CliBool(Old,"enabled",true):true);
+    xrtMutexLock(g_MdoCli.Lock);xvalue* Previous=xrtValueDeepClone(g_MdoCli.State),*Old=CliFind(Key);bool Enable=CliBool(Job->Input,"enable",Old?CliBool(Old,"enabled",true):true);
     if(Old){/* A managed update never silently replaces a user-selected program. */
         if(strcmp(CliText(Old,"source",16),"store")&&strcmp(CliText(Old,"source",16),"legacy")){Ok=false;snprintf(Error,Capacity,"Tool identity belongs to a user-defined program");}
         else {xrtValueObjectSetNew(Tool,XRT_STR_LITERAL("enabled"),xrtValueBool(Enable));for(size_t I=0;I<xrtValueCount(CliItems());I++)if(xrtValueArrayGet(CliItems(),I)==Old){CliRetire(Old);xrtValueArraySet(CliItems(),I,Tool);break;}}

@@ -18,7 +18,7 @@ static void MdoDistCommunityTools(xvalue* Tools,xvalue* Instructions)
             if(!MdoPackageId(Name)||!MdoPackagePath(Relative))continue;
             snprintf(Path,sizeof(Path),"%s/%s",Root,Relative);bool Exists=false;xfileinfo Info;
             if(!MdoHomeExternalStat(Path,&Exists,&Info)||!Exists||Info.Type!=XFILE_TYPE_FILE)continue;
-            char* Native=MdoHomeExternalPath(Path);xvalue* Tool=xrtValueClone(Program);char Qualified[140];snprintf(Qualified,sizeof(Qualified),"%s.%s",Id,Name);
+            char* Native=MdoHomeExternalPath(Path);xvalue* Tool=xrtValueDeepClone(Program);char Qualified[140];snprintf(Qualified,sizeof(Qualified),"%s.%s",Id,Name);
             bool Ok=Native&&Tool&&MdoDistSet(Tool,"name",Qualified)&&MdoDistSet(Tool,"id",Qualified)&&MdoDistSet(Tool,"package",Id)&&MdoDistSet(Tool,"path",Native)&&MdoDistSet(Tool,"verification","file-present")&&xrtValueArrayAppend(Tools,Tool);
             if(Ok)Added++;
             xrtFree(Native);xrtValueRelease(Tool);

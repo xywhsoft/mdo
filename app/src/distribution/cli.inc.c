@@ -63,9 +63,9 @@ static bool CliEnqueue(const xvalue* Input,char* Error,size_t Capacity)
     if(g_MdoCli.Stopping||xrtValueCount(g_MdoCli.Tasks)>=64){snprintf(Error,Capacity,"Download task limit reached; clear finished tasks");return false;}
     MdoCliJob* J=xrtCalloc(1,sizeof(*J));xvalue* T=xrtValueObject();
     if(!J||!T||!CliId(J->Id)){xrtFree(J);xrtValueRelease(T);return false;}
-    J->Input=xrtValueClone(Input);J->Cancel=xrtCancelChild(g_MdoCli.Cancel);
+    J->Input=xrtValueDeepClone(Input);J->Cancel=xrtCancelChild(g_MdoCli.Cancel);
     CliSet(T,"id",J->Id);CliSet(T,"state","queued");CliSet(T,"error","");CliSet(T,"action",CliText(Input,"action",16));
-    CliSet(T,"name",CliText(Input,"name",120));xrtValueObjectSet(T,XRT_STR_LITERAL("request"),Input);
+    CliSet(T,"name",CliText(Input,"name",120));xrtValueObjectSetNew(T,XRT_STR_LITERAL("request"),xrtValueDeepClone(Input));
     xrtValueObjectSetNew(T,XRT_STR_LITERAL("done"),xrtValueUInt(0));xrtValueObjectSetNew(T,XRT_STR_LITERAL("total"),xrtValueUInt(0));
     J->WriteOwned=MdoApiWriteRetainBackground();
     bool Ok=J->WriteOwned&&J->Input&&J->Cancel&&xrtValueArrayAppend(g_MdoCli.Tasks,T)&&CliSaveTasks();
@@ -149,9 +149,9 @@ void MdoCliUnit(void)
 xvalue* MdoCliSnapshot(void)
 {
     if(!g_MdoCli.Lock)return NULL;
-    xrtMutexLock(g_MdoCli.Lock);xvalue* R=xrtValueClone(g_MdoCli.State),*Items=xrtValueObjectGet(R,XRT_STR_LITERAL("items"));
+    xrtMutexLock(g_MdoCli.Lock);xvalue* R=xrtValueDeepClone(g_MdoCli.State),*Items=xrtValueObjectGet(R,XRT_STR_LITERAL("items"));
     for(size_t I=0;I<xrtValueCount(Items);I++){xvalue* T=xrtValueArrayGet(Items,I);xrtValueObjectSetNew(T,XRT_STR_LITERAL("present"),xrtValueBool(CliPresent(CliText(T,"path",4096))));}
-    xrtValueObjectSetNew(R,XRT_STR_LITERAL("tasks"),xrtValueClone(g_MdoCli.Tasks));xrtValueObjectSetNew(R,XRT_STR_LITERAL("store"),xrtValueClone(g_MdoCli.Catalog));
+    xrtValueObjectSetNew(R,XRT_STR_LITERAL("tasks"),xrtValueDeepClone(g_MdoCli.Tasks));xrtValueObjectSetNew(R,XRT_STR_LITERAL("store"),xrtValueDeepClone(g_MdoCli.Catalog));
     CliSet(R,"platform",MdoToolPlatform());CliSet(R,"edition",MdoEdition());xrtValueObjectSetNew(R,XRT_STR_LITERAL("writable"),xrtValueBool(g_MdoCli.Writable));
     xrtMutexUnlock(g_MdoCli.Lock);return R;
 }
@@ -159,7 +159,7 @@ bool MdoCliCommand(const xvalue* Input,char* Error,size_t Capacity)
 {
     if(!g_MdoCli.Lock)return false;
     cstr Action=CliText(Input,"action",16),Id=CliText(Input,"id",64);bool Ok=false;
-    xrtMutexLock(g_MdoCli.Lock);xvalue* Previous=xrtValueClone(g_MdoCli.State);
+    xrtMutexLock(g_MdoCli.Lock);xvalue* Previous=xrtValueDeepClone(g_MdoCli.State);
     if(!Previous){xrtMutexUnlock(g_MdoCli.Lock);return false;}
     if(!g_MdoCli.Writable||g_MdoCli.Stopping){snprintf(Error,Capacity,"External-tool storage is unavailable or corrupt; original records retained");goto done;}
     if(!strcmp(Action,"save")){
@@ -169,7 +169,7 @@ bool MdoCliCommand(const xvalue* Input,char* Error,size_t Capacity)
         if(!Old||strcmp(CliText(Old,"path",4096),CliText(Item,"path",4096))){snprintf(Error,Capacity,"Android programs must be supplied by the full APK");goto done;}
 #endif
         if((!Old&&xrtValueCount(CliItems())>=256)||(Old&&MdoDistNumber(Input,"revision")!=MdoDistNumber(g_MdoCli.State,"revision"))){snprintf(Error,Capacity,"External-tool list changed or is full; reload before saving");goto done;}
-        xvalue* Copy=xrtValueClone(Item);xrtValueObjectRemove(Copy,XRT_STR_LITERAL("store_id"));xrtValueObjectRemove(Copy,XRT_STR_LITERAL("managed_root"));xrtValueObjectRemove(Copy,XRT_STR_LITERAL("entry"));CliSet(Copy,"source",Old?CliText(Old,"source",16):"manual");
+        xvalue* Copy=xrtValueDeepClone(Item);xrtValueObjectRemove(Copy,XRT_STR_LITERAL("store_id"));xrtValueObjectRemove(Copy,XRT_STR_LITERAL("managed_root"));xrtValueObjectRemove(Copy,XRT_STR_LITERAL("entry"));CliSet(Copy,"source",Old?CliText(Old,"source",16):"manual");
         if(Old){const xvalue* V=xrtValueObjectGet(Old,XRT_STR_LITERAL("store_id"));if(V)xrtValueObjectSet(Copy,XRT_STR_LITERAL("store_id"),V);V=xrtValueObjectGet(Old,XRT_STR_LITERAL("managed_root"));if(V)xrtValueObjectSet(Copy,XRT_STR_LITERAL("managed_root"),V);V=xrtValueObjectGet(Old,XRT_STR_LITERAL("entry"));if(V)xrtValueObjectSet(Copy,XRT_STR_LITERAL("entry"),V);}
         if(Old){for(size_t I=0;I<xrtValueCount(CliItems());I++)if(xrtValueArrayGet(CliItems(),I)==Old){xrtValueArraySet(CliItems(),I,Copy);break;}}else xrtValueArrayAppend(CliItems(),Copy);xrtValueRelease(Copy);Ok=true;
     }else if(!strcmp(Action,"enable")){xvalue* R=CliFind(Id);if(R){xrtValueObjectSetNew(R,XRT_STR_LITERAL("enabled"),xrtValueBool(CliBool(Input,"enabled",true)));Ok=true;}}
@@ -180,7 +180,7 @@ bool MdoCliCommand(const xvalue* Input,char* Error,size_t Capacity)
     else if(!strcmp(Action,"cancel")){if(g_MdoCli.Running&&!strcmp(g_MdoCli.Running->Id,Id))xrtCancelRequest(g_MdoCli.Running->Cancel);for(MdoCliJob* J=g_MdoCli.First;J;J=J->Next)if(!strcmp(J->Id,Id))xrtCancelRequest(J->Cancel);Ok=true;goto done;}
     else if(!strcmp(Action,"retry")){xvalue* T=CliTask(Id);cstr S=CliText(T,"state",16);if(T&&strcmp(S,"queued")&&strcmp(S,"running")&&strcmp(S,"installing")&&strcmp(S,"uploading"))Ok=CliEnqueue(xrtValueObjectGet(T,XRT_STR_LITERAL("request")),Error,Capacity);goto done;}
     else if(!strcmp(Action,"catalog")||!strcmp(Action,"install")||!strcmp(Action,"publish")||!strcmp(Action,"withdraw")||!strcmp(Action,"mine")||!strcmp(Action,"recommend")){
-        if(!strcmp(Action,"publish")){xvalue* Tool=CliFind(Id);if(!Tool){snprintf(Error,Capacity,"Tool not found");goto done;}xvalue* Copy=xrtValueClone(Input);xrtValueObjectSet(Copy,XRT_STR_LITERAL("tool"),Tool);Ok=CliEnqueue(Copy,Error,Capacity);xrtValueRelease(Copy);}else {if(!strcmp(Action,"recommend")){CliSet(g_MdoCli.State,"guide","accepted");if(!CliSave())goto done;}Ok=CliEnqueue(Input,Error,Capacity);if(!Ok&&!strcmp(Action,"recommend")){xrtValueRelease(g_MdoCli.State);g_MdoCli.State=xrtValueClone(Previous);if(!CliSave())g_MdoCli.Writable=false;}}goto done;
+        if(!strcmp(Action,"publish")){xvalue* Tool=CliFind(Id);if(!Tool){snprintf(Error,Capacity,"Tool not found");goto done;}xvalue* Copy=xrtValueDeepClone(Input);xrtValueObjectSetNew(Copy,XRT_STR_LITERAL("tool"),xrtValueDeepClone(Tool));Ok=CliEnqueue(Copy,Error,Capacity);xrtValueRelease(Copy);}else {if(!strcmp(Action,"recommend")){CliSet(g_MdoCli.State,"guide","accepted");if(!CliSave())goto done;}Ok=CliEnqueue(Input,Error,Capacity);if(!Ok&&!strcmp(Action,"recommend")){xrtValueRelease(g_MdoCli.State);g_MdoCli.State=xrtValueDeepClone(Previous);if(!CliSave())g_MdoCli.Writable=false;}}goto done;
     }
     if(Ok){xrtValueObjectSetNew(g_MdoCli.State,XRT_STR_LITERAL("revision"),xrtValueUInt(MdoDistNumber(g_MdoCli.State,"revision")+1));Ok=CliSave();}
 done:if(!Ok){xrtValueRelease(g_MdoCli.State);g_MdoCli.State=Previous;Previous=NULL;if(!Error[0])snprintf(Error,Capacity,"External-tool request rejected");}xrtValueRelease(Previous);xrtMutexUnlock(g_MdoCli.Lock);if(Ok)MdoApiLiveChanged(NULL);return Ok;
@@ -202,7 +202,7 @@ bool MdoCliToolPrompt(char** Prompt)
 void MdoCliLegacyChanged(void)
 {
     if(!g_MdoCli.Lock||!g_MdoDistribution.Lock)return;
-    xrtMutexLock(g_MdoDistribution.Lock);xvalue* Active=xrtValueClone(g_MdoDistribution.Active);xrtMutexUnlock(g_MdoDistribution.Lock);
+    xrtMutexLock(g_MdoDistribution.Lock);xvalue* Active=xrtValueDeepClone(g_MdoDistribution.Active);xrtMutexUnlock(g_MdoDistribution.Lock);
     xvalue* Legacy=MdoDistInventory(Active);
     xrtMutexLock(g_MdoCli.Lock);if(g_MdoCli.Writable&&!g_MdoCli.Stopping)CliMigrateLegacy(Legacy,Active,true);xrtMutexUnlock(g_MdoCli.Lock);
     xrtValueRelease(Legacy);xrtValueRelease(Active);
