@@ -33,6 +33,7 @@ tools/*
 !tools/workbench_contracts.py
 !tools/native/
 !tools/native/*.hpp
+!tools/native/*.h
 !tools/native/*.py
 !tools/build.py
 !tools/build_android.py

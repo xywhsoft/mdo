@@ -4,6 +4,11 @@ mdo 共用 C Agent 核心、HTML 前端、会话格式和便携 Home。Linux 首
 x86_64；在 ARM64 Linux 上运行相同脚本会生成 ARM64 产物，不等同于已通过
 ARM64 设备测试。Windows 使用 MinGW GCC；musl 是 Linux 的 libc，不适用于 Windows。
 
+桌面窗口将尺寸、位置和最大化状态保存到当前 Home 的 `data/ui/main-window.state`。
+X11 恢复绝对位置；Wayland 的位置由合成器管理，只恢复尺寸和最大化状态。
+最小化不会成为下次启动状态，显示器变化后恢复尺寸会按可用屏幕限制。
+此记录带平台标识，跨 Windows／Linux 搬移 Home 时不会混用物理像素与 GTK 逻辑像素。
+
 ## 构建
 
 以下构建命令均从 mdo 源码根目录执行。

@@ -30,6 +30,12 @@
           "default": "mdo-home",
           "subdir": "data/cache/webview2"
         },
+        "state_file": {
+          "argument": "--home",
+          "environment": "MDO_HOME",
+          "default": "mdo-home",
+          "subdir": "data/ui/main-window.state"
+        },
         "install_fallback": "ask"
       }
     }

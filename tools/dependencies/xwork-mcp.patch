@@ -1370,7 +1370,15 @@
  void xsWvRun(void* pWebview)
 --- a/src/webview/xs_app_window.c
 +++ b/src/webview/xs_app_window.c
-@@ -31,6 +31,7 @@
+@@ -18,6 +18,7 @@
+ 
+ #include "src/core/appnode.h"
+ #include "xs_webview.h"
++#include "xs_window_state_win.h"
+ 
+ /* webview_impl.cpp 提供的 C ABI 出口（webview 库薄封装，语义一致） */
+ extern void* xsWvCreate(int iDebug, const char* sProfileDir);
+@@ -31,6 +32,7 @@
  extern void xsWvSetSize(void* pWebview, int iWidth, int iHeight, int iHint);
  extern void* xsWvGetWindow(void* pWebview);
  extern int xsWvEnableDirectoryDrop(void* pWebview, const char* sUrl);
@@ -1378,7 +1386,20 @@
  
  /* TCC 探测契约（/xs/xs_webview.h + import_webview.inc）：只回答构建期事实 */
  int xsWebviewAvailable(void)
-@@ -402,6 +403,7 @@
+@@ -260,6 +262,7 @@
+ 	char			sTitle[128];
+ 	char			sTargetUrl[1024];	/* 状态缓冲：写缓冲在置状态之前 */
+ 	char			sFailPage[2560];
++	char*			sStateFile;
+ 	char*			sProfileDir;	/* optional absolute UTF-8 WebView2 profile path */
+ 	int			iWidth, iHeight, iMinWidth, iMinHeight;
+ 	int			iClose;
+@@ -398,10 +401,12 @@
+ 		pWin->pOrigProc = (WNDPROC)SetWindowLongPtrW(pWin->hWnd,
+ 			GWLP_WNDPROC, (LONG_PTR)app_wnd_proc);
+ 	}
++	xws_install(pWin->hWnd,pWin->sStateFile);
+ 	/* 创建完成，自查导航状态：早于本线程完成的通知在此生效 */
  	iState = InterlockedCompareExchange(&pWin->iNavState, 0, 0);
  	if ( iState == XS_APP_NAV_URL ) {
  		xsWvEnableDirectoryDrop((void*)pWin->pWebview, pWin->sTargetUrl);
@@ -1386,7 +1407,7 @@
  		pWin->iDirectoryDropChecked = 1;
  		xsWvNavigate((void*)pWin->pWebview, pWin->sTargetUrl);
  	} else if ( iState == XS_APP_NAV_FAIL )
-@@ -429,6 +431,7 @@
+@@ -429,6 +434,7 @@
  	XS_AppWindow* pWin = (XS_AppWindow*)pArg;
  	if ( !pWin->iDirectoryDropChecked ) {
  		xsWvEnableDirectoryDrop(pWv, pWin->sTargetUrl);
@@ -1394,6 +1415,133 @@
  		pWin->iDirectoryDropChecked = 1;
  	}
  	xsWvNavigate(pWv, pWin->sTargetUrl);
+@@ -682,6 +688,8 @@
+ 					"frontend disabled (no AppData fallback)\n", pServer->Name);
+ 				continue;
+ 			}
++			if (!app_cfg_window_path(pCfg,"state_file",&pWin->sStateFile))
++				printf("[xs] invalid window.state_file; placement persistence disabled\n");
+ 			app_cfg_str(pCfg, "title", pWin->sTitle, sizeof pWin->sTitle, "xs app");
+ 			app_cfg_str(pCfg, "url", pWin->sTargetUrl, sizeof pWin->sTargetUrl, "/");
+ 			pWin->iWidth = app_cfg_int(pCfg, "width", 1280, 200, 32767);
+@@ -707,6 +715,7 @@
+ 		if ( pWin->hThread == NULL ) {
+ 			printf("[xs] app '%s': UI thread create failed, headless\n",
+ 				pServer->Name);
++			xrtFree(pWin->sStateFile);pWin->sStateFile=NULL;
+ 			xrtFree(pWin->sProfileDir);
+ 			pWin->sProfileDir = NULL;
+ 			if ( pWin->iClose == XS_APP_CLOSE_STOP )
+@@ -813,6 +822,7 @@
+ 			g_tWindows[i].hThread = NULL;
+ 			/* A timed-out UI thread still reads this path during creation. */
+ 			if ( iWait == WAIT_OBJECT_0 ) {
++				xrtFree(g_tWindows[i].sStateFile);g_tWindows[i].sStateFile=NULL;
+ 				xrtFree(g_tWindows[i].sProfileDir);
+ 				g_tWindows[i].sProfileDir = NULL;
+ 			}
+--- a/src/webview/xs_window_profile.h
++++ b/src/webview/xs_window_profile.h
+@@ -90,10 +90,10 @@
+ /* A supplied profile path is an explicit storage decision. Invalid input must
+  * not fall back to the library's per-exe AppData default. Relative strings
+  * are confined to the app directory; the object form follows an app Home. */
+-static bool app_cfg_profile_dir(xvalue* pWin, char** ppPath)
++static bool app_cfg_window_path(xvalue* pWin, const char* sKey, char** ppPath)
+ {
+ 	xvalue* pValue = xrtValueObjectGet(pWin,
+-		XRT_STR_LITERAL("profile_dir"));
++		xrtStrView(sKey));
+ 	char* sRaw = NULL;
+ 	char* sJoined = NULL;
+ 	char* sResult = NULL;
+@@ -104,7 +104,7 @@
+ 		*ppPath = app_cfg_profile_home(pValue);
+ 		return *ppPath != NULL;
+ 	}
+-	sRaw = app_cfg_profile_text(pWin, "profile_dir");
++	sRaw = app_cfg_profile_text(pWin, sKey);
+ 	if ( sRaw == NULL ) return false;
+ 	if ( xrtPathIsAbs(sRaw) ) sResult = xrtPathAbs(sRaw);
+ 	else if ( xrtPathIsLocal(xrtStrView(sRaw), XPATH_NATIVE) ) {
+@@ -121,5 +121,7 @@
+ 	return true;
+ }
+ 
++static bool app_cfg_profile_dir(xvalue* pWin,char** ppPath)
++{return app_cfg_window_path(pWin,"profile_dir",ppPath);}
+ 
+ #endif
+--- a/src/webview/xs_linux_window.c
++++ b/src/webview/xs_linux_window.c
+@@ -123,11 +123,13 @@
+         XS_ServerInfo* Server = App->Servers[Index];
+         if (!Server || !Server->Enabled || !XS_ServerIsApp(Server)) continue;
+         xvalue* Config = Server->Custom ? xrtValueObjectGet(Server->Custom, XRT_STR_LITERAL("window")) : NULL;
+-        char* Profile = NULL;
++        char* Profile = NULL;char* StateFile = NULL;
+         if (Config && !app_cfg_profile_dir(Config, &Profile)) {
+             printf("[xs] invalid window.profile_dir; using browser/service mode\n"); continue;
+         }
+         if (!Profile) Profile = xrtPathJoin(xsAppPath(), ".xs/cache/webkit");
++        if(Config&&!app_cfg_window_path(Config,"state_file",&StateFile))
++            printf("[xs] invalid window.state_file; placement persistence disabled\n");
+         char* Helper = Profile ? WindowHelper(Profile) : NULL;
+         char* Title = Config ? app_cfg_profile_text(Config, "title") : NULL;
+         char* Close = Config ? app_cfg_profile_text(Config, "close") : NULL;
+@@ -142,7 +144,7 @@
+             if (Config) xrtValueGetBool(xrtValueObjectGet(Config, XRT_STR_LITERAL("devtools")), &Debug);
+             char* Arguments[] = {Helper, Profile, Title ? Title : Server->Name,
+                 Width, Height, MinWidth, MinHeight, Debug ? "1" : "0",
+-                Close ? Close : "stop", NULL};
++                Close ? Close : "stop", StateFile ? StateFile : "", NULL};
+             posix_spawn_file_actions_t Actions;
+             int Error = posix_spawn_file_actions_init(&Actions);
+             bool Initialized = Error == 0;
+@@ -162,7 +164,7 @@
+                 printf("[xs] Linux window could not start: %s\n", strerror(Error));
+             }
+         } else printf("[xs] Linux window extraction/socket failed; using browser/service mode\n");
+-        xrtFree(Helper); xrtFree(Profile); xrtFree(Title); xrtFree(Close);
++        xrtFree(StateFile); xrtFree(Helper); xrtFree(Profile); xrtFree(Title); xrtFree(Close);
+     }
+ }
+ 
+--- a/src/webview/xs_linux_ui.c
++++ b/src/webview/xs_linux_ui.c
+@@ -14,6 +14,7 @@
+ #include "xs_linux_webkit.h"
+ 
+ static GtkWidget* AppWindow;
++#include "xs_window_state_gtk.h"
+ static WebKitWebView* View;
+ static GByteArray* Input;
+ static char* Origin;
+@@ -159,7 +160,7 @@
+ 
+ int main(int argc, char** argv)
+ {
+-    if (argc != 9 || fcntl(198, F_GETFD) < 0) return 2;
++    if ((argc != 9 && argc != 10) || fcntl(198, F_GETFD) < 0) return 2;
+     /* The control descriptor must not leak into WebKit children or xdg-open. */
+     fcntl(198, F_SETFD, FD_CLOEXEC);
+     gchar* Cache = g_build_filename(argv[1], "cache", NULL);
+@@ -186,6 +187,7 @@
+     gtk_window_set_default_size(GTK_WINDOW(AppWindow), atoi(argv[3]), atoi(argv[4]));
+     GdkGeometry Geometry = {0}; Geometry.min_width = atoi(argv[5]); Geometry.min_height = atoi(argv[6]);
+     gtk_window_set_geometry_hints(GTK_WINDOW(AppWindow), NULL, &Geometry, GDK_HINT_MIN_SIZE);
++    WindowStateInstall(argc==10?argv[9]:NULL,Geometry.min_width,Geometry.min_height);
+     HideOnClose = !strcmp(argv[8], "hide");
+     View = WEBKIT_WEB_VIEW(webkit_web_view_new_with_context(Context));
+     WebKitSettings* Settings = webkit_web_view_get_settings(View);
+@@ -204,6 +206,7 @@
+     g_unix_signal_add(SIGINT, StopSignal, NULL);
+     webkit_web_view_load_html(View, "<!doctype html><meta charset=utf-8><style>body{background:#202020;color:#eee;font:16px sans-serif;padding:40px}</style><p>Starting application…</p>", NULL);
+     gtk_widget_show_all(AppWindow); Notify('R'); gtk_main();
++    WindowStateFinish();
+     gtk_widget_destroy(AppWindow); g_object_unref(Context);
+     g_byte_array_unref(Input); g_free(Origin); g_free(LastUrl); close(198);
+     return 0;
 --- /dev/null
 +++ b/src/webview/xs_browser.inc.hpp
 @@ -0,0 +1,205 @@
@@ -1601,4 +1749,217 @@
 +  std::shared_ptr<xb_host> host;
 +  {std::lock_guard<std::mutex> lock(xb_hosts_mutex);auto found=xb_hosts.find(view);if(found==xb_hosts.end())return;host=found->second;xb_hosts.erase(found);}
 +  host->alive=false;host->views.clear();host->main=nullptr;
++}
+--- /dev/null
++++ b/src/webview/xs_window_geometry.h
+@@ -0,0 +1,52 @@
++/* Shared bounded placement record. Coordinates are native Windows pixels or
++ * GTK logical pixels; backend tags prevent mixing them in a portable Home. */
++#ifndef XS_WINDOW_GEOMETRY_H
++#define XS_WINDOW_GEOMETRY_H
++#include <stdio.h>
++#include <string.h>
++#include <stdint.h>
++#include <stdlib.h>
++#include <ctype.h>
++#include <errno.h>
++typedef struct XsWindowGeometry {
++    int Backend, X, Y, Width, Height, Maximized, Dpi;
++    int WorkX, WorkY, WorkWidth, WorkHeight;
++} XsWindowGeometry;
++static int xwg_between(int n,int low,int high){return n>=low&&n<=high;}
++static int xwg_valid(const XsWindowGeometry* g){
++    return (g->Backend==1||g->Backend==2)&&xwg_between(g->X,-1048576,1048576)&&xwg_between(g->Y,-1048576,1048576)&&
++        xwg_between(g->Width,80,32768)&&xwg_between(g->Height,80,32768)&&xwg_between(g->Maximized,0,1)&&
++        xwg_between(g->Dpi,48,768)&&xwg_between(g->WorkX,-1048576,1048576)&&xwg_between(g->WorkY,-1048576,1048576)&&
++        xwg_between(g->WorkWidth,80,131072)&&xwg_between(g->WorkHeight,80,131072);
++}
++static int xwg_parse(const char* text,size_t bytes,int backend,XsWindowGeometry* out){
++    XsWindowGeometry value={0};long n[11];
++    if(!text||bytes<13||bytes>512||memchr(text,0,bytes)||memcmp(text,"xs-window-v1 ",13))return 0;
++    const char* at=text+13;char* end=NULL;
++    for(int i=0;i<11;i++){
++        if(at>=text+bytes)return 0;
++        errno=0;n[i]=strtol(at,&end,10);
++        if(errno||end==at||n[i]<-1048576||n[i]>1048576)return 0;
++        if(i<10&&(!*end||!isspace((unsigned char)*end)))return 0;
++        at=end;
++    }
++    while(at<text+bytes&&isspace((unsigned char)*at))at++;
++    if(at!=text+bytes)return 0;
++    value=(XsWindowGeometry){(int)n[0],(int)n[1],(int)n[2],(int)n[3],(int)n[4],(int)n[5],(int)n[6],(int)n[7],(int)n[8],(int)n[9],(int)n[10]};
++    if(value.Backend!=backend||!xwg_valid(&value))return 0;
++    *out=value;return 1;
++}
++static int xwg_format(const XsWindowGeometry* g,char text[256]){
++    if(!xwg_valid(g))return 0;
++    return snprintf(text,256,"xs-window-v1 %d %d %d %d %d %d %d %d %d %d %d\n",g->Backend,g->X,g->Y,g->Width,g->Height,g->Maximized,g->Dpi,g->WorkX,g->WorkY,g->WorkWidth,g->WorkHeight);
++}
++static int xwg_clamp(int n,int low,int high){return n<low?low:n>high?high:n;}
++static int xwg_scale(int n,int from,int to){return (int)((int64_t)n*to/from);}
++static XsWindowGeometry xwg_fit(XsWindowGeometry g,int x,int y,int w,int h,int dpi,int minw,int minh){
++    int from=g.Dpi;g.Width=xwg_clamp(xwg_scale(g.Width,from,dpi),minw<w?minw:w,w);
++    g.Height=xwg_clamp(xwg_scale(g.Height,from,dpi),minh<h?minh:h,h);
++    g.X=xwg_clamp(x+xwg_scale(g.X-g.WorkX,from,dpi),x,x+w-g.Width);
++    g.Y=xwg_clamp(y+xwg_scale(g.Y-g.WorkY,from,dpi),y,y+h-g.Height);
++    g.WorkX=x;g.WorkY=y;g.WorkWidth=w;g.WorkHeight=h;g.Dpi=dpi;return g;
++}
++#endif
+--- /dev/null
++++ b/src/webview/xs_window_state_win.h
+@@ -0,0 +1,82 @@
++/* Included by xs_app_window.c. No frontend bridge, timers or disk writes run
++ * on a worker thread; SetWindowSubclass owns the record through NCDESTROY. */
++#include "xs_window_geometry.h"
++typedef struct XsWindowState {
++    wchar_t* Path;char* Parent;XsWindowGeometry Geometry;char Saved[256];int Restoring,Warned;
++} XsWindowState;
++static int xws_dpi(HWND window){
++    typedef UINT (WINAPI* GetDpi)(HWND);GetDpi fn=NULL;FARPROC address=GetProcAddress(GetModuleHandleW(L"user32.dll"),"GetDpiForWindow");
++    if(address)memcpy(&fn,&address,sizeof(fn));
++    return fn?(int)fn(window):96;
++}
++static void xws_capture(HWND window,XsWindowState* state){
++    WINDOWPLACEMENT p={0};MONITORINFO m={0};p.length=sizeof(p);m.cbSize=sizeof(m);
++    if(!GetWindowPlacement(window,&p)||!GetMonitorInfoW(MonitorFromWindow(window,MONITOR_DEFAULTTONEAREST),&m))return;
++    int max=state->Geometry.Maximized;
++    if(!IsIconic(window))max=IsZoomed(window)?1:0;
++    /* WINDOWPLACEMENT normal bounds use workspace coordinates; persisted
++     * coordinates are screen coordinates, including left/top taskbars. */
++    int dx=m.rcWork.left-m.rcMonitor.left,dy=m.rcWork.top-m.rcMonitor.top;
++    if(GetWindowLongPtrW(window,GWL_EXSTYLE)&WS_EX_TOOLWINDOW)dx=dy=0;
++    XsWindowGeometry g={1,p.rcNormalPosition.left+dx,p.rcNormalPosition.top+dy,
++        p.rcNormalPosition.right-p.rcNormalPosition.left,p.rcNormalPosition.bottom-p.rcNormalPosition.top,max,xws_dpi(window),
++        m.rcWork.left,m.rcWork.top,m.rcWork.right-m.rcWork.left,m.rcWork.bottom-m.rcWork.top};
++    if(xwg_valid(&g))state->Geometry=g;
++}
++static void xws_save(HWND window,XsWindowState* state){
++    if(state->Restoring)return;
++    xws_capture(window,state);char text[256];int size=xwg_format(&state->Geometry,text);
++    if(!size||!strcmp(text,state->Saved))return;
++    wchar_t* temp=calloc(wcslen(state->Path)+100,sizeof(wchar_t));if(!temp)return;
++    static volatile LONG serial=0;swprintf(temp,wcslen(state->Path)+100,L"%ls.pending-%lu-%lu-%ld",state->Path,(unsigned long)GetCurrentProcessId(),(unsigned long)GetCurrentThreadId(),InterlockedIncrement(&serial));
++    int ok=state->Parent&&(xrtDirExists(state->Parent)||xrtDirCreateAll(state->Parent));
++    HANDLE file=ok?CreateFileW(temp,GENERIC_WRITE,0,NULL,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,NULL):INVALID_HANDLE_VALUE;
++    if(file!=INVALID_HANDLE_VALUE){DWORD wrote=0;ok=WriteFile(file,text,(DWORD)size,&wrote,NULL)&&wrote==(DWORD)size&&FlushFileBuffers(file);CloseHandle(file);}
++    else ok=0;
++    if(ok)ok=MoveFileExW(temp,state->Path,MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH)!=0;
++    if(ok){memcpy(state->Saved,text,(size_t)size+1);state->Warned=0;}
++    else{DeleteFileW(temp);if(!state->Warned)fprintf(stderr,"[xs] window placement could not be saved; continuing without persistence\n");state->Warned=1;}
++    free(temp);
++}
++static LRESULT CALLBACK xws_proc(HWND window,UINT message,WPARAM wp,LPARAM lp,UINT_PTR id,DWORD_PTR data){
++    XsWindowState* state=(XsWindowState*)data;
++    if(message==WM_CLOSE||message==WM_DESTROY||message==WM_EXITSIZEMOVE)xws_save(window,state);
++    if(message==WM_TIMER&&wp==id){KillTimer(window,id);xws_save(window,state);return 0;}
++    if(message==WM_NCDESTROY){KillTimer(window,id);RemoveWindowSubclass(window,xws_proc,id);xrtFree(state->Parent);free(state->Path);free(state);return DefSubclassProc(window,message,wp,lp);}
++    LRESULT result=DefSubclassProc(window,message,wp,lp);
++    if((message==WM_SIZE||message==WM_MOVE||message==WM_DPICHANGED)&&!state->Restoring){
++        xws_capture(window,state);SetTimer(window,id,350,NULL);
++    }return result;
++}
++static void xws_install(HWND window,const char* path){
++    if(!window||!path||!*path)return;
++    int length=MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,path,-1,NULL,0);
++    if(!length||length>32700)return;
++    XsWindowState* state=calloc(1,sizeof(*state));if(!state)return;
++    state->Path=calloc((size_t)length,sizeof(wchar_t));state->Parent=xrtStrDup(path);
++    if(!state->Path||!state->Parent){free(state->Path);xrtFree(state->Parent);free(state);return;}
++    MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,path,-1,state->Path,length);
++    char* last=NULL;for(char* p=state->Parent;*p;p++)if(*p=='/'||*p=='\\')last=p;
++    if(last)*last=0;else state->Parent[0]=0;
++    xws_capture(window,state);
++    HANDLE file=CreateFileW(state->Path,GENERIC_READ,FILE_SHARE_READ|FILE_SHARE_DELETE,NULL,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,NULL);
++    if(file!=INVALID_HANDLE_VALUE){
++        char text[514];DWORD count=0;XsWindowGeometry saved={0};
++        if(ReadFile(file,text,513,&count,NULL)&&count<=512){text[count]=0;
++            if(xwg_parse(text,count,1,&saved)){
++                RECT r={saved.X,saved.Y,saved.X+saved.Width,saved.Y+saved.Height};MONITORINFO m={0};m.cbSize=sizeof(m);
++                if(GetMonitorInfoW(MonitorFromRect(&r,MONITOR_DEFAULTTONEAREST),&m)){
++                    state->Restoring=1;
++                    SetWindowPos(window,NULL,m.rcWork.left,m.rcWork.top,0,0,SWP_NOSIZE|SWP_NOACTIVATE|SWP_NOZORDER);
++                    MINMAXINFO limits={0};SendMessageW(window,WM_GETMINMAXINFO,0,(LPARAM)&limits);
++                    saved=xwg_fit(saved,m.rcWork.left,m.rcWork.top,m.rcWork.right-m.rcWork.left,m.rcWork.bottom-m.rcWork.top,xws_dpi(window),limits.ptMinTrackSize.x,limits.ptMinTrackSize.y);
++                    WINDOWPLACEMENT p={0};p.length=sizeof(p);p.showCmd=saved.Maximized?SW_SHOWMAXIMIZED:SW_SHOWNORMAL;
++                    int dx=m.rcWork.left-m.rcMonitor.left,dy=m.rcWork.top-m.rcMonitor.top;
++                    p.rcNormalPosition=(RECT){saved.X-dx,saved.Y-dy,saved.X+saved.Width-dx,saved.Y+saved.Height-dy};
++                    SetWindowPlacement(window,&p);state->Geometry=saved;state->Restoring=0;
++                }
++            }
++        }CloseHandle(file);
++    }
++    if(!SetWindowSubclass(window,xws_proc,(UINT_PTR)state,(DWORD_PTR)state)){xrtFree(state->Parent);free(state->Path);free(state);}
++}
+--- /dev/null
++++ b/src/webview/xs_window_state_gtk.h
+@@ -0,0 +1,70 @@
++/* GTK owns placement in its UI process. Wayland controls absolute position;
++ * there we restore size/maximization and leave positioning to the compositor. */
++#include "xs_window_geometry.h"
++#include <glib/gstdio.h>
++#include <sys/stat.h>
++static char* WindowStatePath;
++static XsWindowGeometry WindowGeometry;
++static guint WindowSaveTimer;
++static gboolean WindowGeometryReady,WindowSaveWarned;
++static void WindowCapture(void){
++    if(!WindowStatePath||!WindowGeometryReady)return;
++    GdkWindow* native=gtk_widget_get_window(AppWindow);if(!native)return;
++    GdkWindowState state=gdk_window_get_state(native);
++    if(state&(GDK_WINDOW_STATE_ICONIFIED|GDK_WINDOW_STATE_MAXIMIZED|GDK_WINDOW_STATE_FULLSCREEN))return;
++    int x=0,y=0,w=0,h=0;gtk_window_get_size(GTK_WINDOW(AppWindow),&w,&h);
++    if(GDK_IS_X11_DISPLAY(gdk_display_get_default()))gtk_window_get_position(GTK_WINDOW(AppWindow),&x,&y);
++    GdkMonitor* monitor=gdk_display_get_monitor_at_window(gdk_display_get_default(),native);if(!monitor)return;
++    GdkRectangle work;gdk_monitor_get_workarea(monitor,&work);
++    XsWindowGeometry g={2,x,y,w,h,WindowGeometry.Maximized,96,work.x,work.y,work.width,work.height};
++    if(xwg_valid(&g))WindowGeometry=g;
++}
++static gboolean WindowSave(gpointer unused){
++    (void)unused;WindowSaveTimer=0;if(!WindowStatePath||!WindowGeometryReady)return G_SOURCE_REMOVE;
++    char text[256];int size=xwg_format(&WindowGeometry,text);if(!size)return G_SOURCE_REMOVE;
++    char* parent=g_path_get_dirname(WindowStatePath);int ok=g_mkdir_with_parents(parent,0700)==0;g_free(parent);
++    char* temp=g_strconcat(WindowStatePath,".pending-XXXXXX",NULL);int fd=ok?g_mkstemp_full(temp,O_RDWR|O_CLOEXEC,0600):-1;size_t at=0;
++    if(fd>=0){
++        while(at<(size_t)size){ssize_t n=write(fd,text+at,(size_t)size-at);if(n<0&&errno==EINTR)continue;if(n<=0)break;at+=(size_t)n;}
++        ok=at==(size_t)size&&fsync(fd)==0;if(close(fd))ok=0;
++        if(ok)ok=g_rename(temp,WindowStatePath)==0;
++    }else ok=0;
++    if(!ok){g_unlink(temp);if(!WindowSaveWarned)g_printerr("[xs-window] placement could not be saved; continuing without persistence\n");WindowSaveWarned=TRUE;}
++    else WindowSaveWarned=FALSE;
++    g_free(temp);return G_SOURCE_REMOVE;
++}
++static void WindowSchedule(void){if(WindowSaveTimer)g_source_remove(WindowSaveTimer);WindowSaveTimer=g_timeout_add(350,WindowSave,NULL);}
++static gboolean WindowConfigure(GtkWidget* widget,GdkEvent* event,gpointer unused){
++    (void)widget;(void)event;(void)unused;WindowCapture();WindowSchedule();return FALSE;
++}
++static gboolean WindowStateChange(GtkWidget* widget,GdkEventWindowState* event,gpointer unused){
++    (void)widget;(void)unused;
++    if((event->changed_mask&GDK_WINDOW_STATE_MAXIMIZED)&&!(event->new_window_state&GDK_WINDOW_STATE_ICONIFIED))WindowGeometry.Maximized=!!(event->new_window_state&GDK_WINDOW_STATE_MAXIMIZED);
++    WindowSchedule();return FALSE;
++}
++static void WindowStateInstall(const char* path,int minw,int minh){
++    if(!path||!*path)return;
++    WindowStatePath=g_strdup(path);
++    int fd=g_open(path,O_RDONLY|O_CLOEXEC|O_NONBLOCK,0);XsWindowGeometry g={0};
++    if(fd>=0){
++        struct stat stat;char text[514];ssize_t size=-1;
++        if(!fstat(fd,&stat)&&S_ISREG(stat.st_mode)&&stat.st_size<=512)size=read(fd,text,513);
++        if(size>=0){text[size]=0;if(!xwg_parse(text,(size_t)size,2,&g))memset(&g,0,sizeof(g));}close(fd);
++    }
++    if(g.Backend==2){
++        GdkDisplay* display=gdk_display_get_default();GdkMonitor* monitor=gdk_display_get_monitor_at_point(display,g.X,g.Y);
++        if(monitor){GdkRectangle work;gdk_monitor_get_workarea(monitor,&work);g=xwg_fit(g,work.x,work.y,work.width,work.height,96,minw,minh);
++            gtk_window_set_default_size(GTK_WINDOW(AppWindow),g.Width,g.Height);
++            if(GDK_IS_X11_DISPLAY(display))gtk_window_move(GTK_WINDOW(AppWindow),g.X,g.Y);
++            if(g.Maximized)gtk_window_maximize(GTK_WINDOW(AppWindow));
++            WindowGeometry=g;
++        }
++    }
++    WindowGeometryReady=TRUE;
++    g_signal_connect(AppWindow,"configure-event",G_CALLBACK(WindowConfigure),NULL);
++    g_signal_connect(AppWindow,"window-state-event",G_CALLBACK(WindowStateChange),NULL);
++}
++static void WindowStateFinish(void){
++    if(WindowSaveTimer){g_source_remove(WindowSaveTimer);WindowSaveTimer=0;}
++    WindowCapture();WindowSave(NULL);g_free(WindowStatePath);WindowStatePath=NULL;
 +}

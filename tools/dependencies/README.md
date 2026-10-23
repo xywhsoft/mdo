@@ -1,5 +1,11 @@
 # Locked xs host source
 
+mdo 的 native overlay 另包含浏览器面板与窗口位置记忆。窗口状态文件由
+`window.state_file` 按与 `profile_dir` 相同的 Home 选择规则解析，保存在 Home 的
+`data/ui`，与浏览器缓存分开。原生头文件在 `tools/native/`；更新后执行
+`python tools/native/update_browser_patch.py` 再构建宿主。构建盘空间不足时，
+可将 `MDO_SDK_OVERLAY_CACHE` 指向另一个磁盘的 SDK 缓存目录；仍校验锁定提交和补丁摘要。
+
 The current lock uses `xs-regex-acceptance.bundle` on `refs/heads/master`.
 It retains XRT `3d55ec41` with the upstream DFA acceptance fix from
 `xrt@a539c579` and records that backport in `deps.lock.xrt.upstream_fixes`.

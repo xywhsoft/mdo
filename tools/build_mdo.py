@@ -173,7 +173,9 @@ def prepare_sdk_overlay(source: Path, lock: dict) -> Path:
     if (not patch.is_relative_to(ROOT) or not patch.is_file()
             or hashlib.sha256(patch.read_bytes()).hexdigest() != record["sha256"]):
         raise BuildError("SDK compatibility patch hash mismatch")
-    destination = ROOT / ".build/sdk-overlays" / record["sha256"]
+    cache = os.environ.get("MDO_SDK_OVERLAY_CACHE")
+    cache_root = Path(cache).expanduser().resolve() if cache else ROOT / ".build/sdk-overlays"
+    destination = cache_root / record["sha256"]
     if destination.exists():
         if load_object(destination / ".mdo-sdk-overlay.json") != record:
             raise BuildError("SDK compatibility overlay metadata mismatch")
