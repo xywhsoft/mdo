@@ -130,6 +130,27 @@ try{
 }catch(error){await fetch(TARGET+'/result',{method:'POST',mode:'no-cors',body:JSON.stringify({passed:false,error:String(error.stack||error)})})}
 '''
 
+START_SCRIPT=r'''
+import {allowsApiWrite} from '/js/api/client.js';
+const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+const until=async fn=>{for(let i=0;i<200;i++){const value=await fn();if(value)return value;await pause(100);}throw Error('Native start condition timed out')};
+try{
+ await until(()=>window.mdo&&allowsApiWrite('/application/call',{method:'POST'}));await mdo.call('client.hello',{client:mdo.clientId,context:mdo.context()});
+ const start=async()=>{await mdo.ui.newTab();return until(()=>document.querySelector('.wb-start-view:not([hidden])'))};
+ const home=await start();const names=[...home.querySelectorAll('.wb-start-tools button')].map(node=>node.getAttribute('aria-label'));
+ if(JSON.stringify(names)!==JSON.stringify(['打开浏览器','打开文件','打开终端','打开变更']))throw Error('Default tools differ from four-entry contract');
+ home.querySelector('[data-tool="mdo.browser"]').click();await until(()=>document.querySelector('.wb-browser-view:not([hidden]) .wb-browser-toolbar'));
+ if((await mdo.panel.list()).some(row=>row.type==='mdo.new-tab'))throw Error('Launching kept the placeholder');
+ (await start()).querySelector('[data-tool="mdo.files"]').click();const files=await until(()=>document.querySelector('.wb-files-view:not([hidden])'));
+ await pause(300);if(files.querySelector('.wb-tree-body .wb-error'))throw Error('Default files failed in a fresh Home');
+ (await start()).querySelector('[data-tool="mdo.terminal"]').click();await until(()=>document.querySelector('.wb-terminal-view:not([hidden]) .xterm-rows'));
+ const terminal=(await mdo.terminal.list())[0];if(!terminal||terminal.state!=='running')throw Error('Terminal launcher did not start a PTY');
+ (await start()).querySelector('[data-tool="mdo.changes"]').click();await until(()=>document.querySelector('.wb-changes-view:not([hidden])'));
+ await mdo.terminal.close({id:terminal.id,epoch:terminal.epoch});await until(async()=>(await mdo.terminal.get({id:terminal.id})).drained);
+ await fetch(TARGET+'/result',{method:'POST',mode:'no-cors',body:JSON.stringify({passed:true,scope:'native WebView2 four launchers',tools:names,empty_home:true,terminal_ended:true})});
+}catch(error){await fetch(TARGET+'/result',{method:'POST',mode:'no-cors',body:JSON.stringify({passed:false,error:String(error.stack||error)})})}
+'''
+
 TERMINAL_SCRIPT=r'''
 import {allowsApiWrite} from '/js/api/client.js';
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
@@ -168,7 +189,7 @@ class Fixture(BaseHTTPRequestHandler):
  def do_POST(self):
   self.server.result=json.loads(self.rfile.read(int(self.headers['Content-Length'])));self.send_response(204);self.end_headers()
 def main():
- p=argparse.ArgumentParser();p.add_argument('--host',type=Path,required=True);p.add_argument('--evidence',type=Path,required=True);modes=p.add_mutually_exclusive_group();modes.add_argument('--application',action='store_true');modes.add_argument('--changes',action='store_true');modes.add_argument('--terminal',action='store_true');args=p.parse_args()
+ p=argparse.ArgumentParser();p.add_argument('--host',type=Path,required=True);p.add_argument('--evidence',type=Path,required=True);modes=p.add_mutually_exclusive_group();modes.add_argument('--application',action='store_true');modes.add_argument('--changes',action='store_true');modes.add_argument('--terminal',action='store_true');modes.add_argument('--start',action='store_true');args=p.parse_args()
  args.evidence.mkdir(parents=True,exist_ok=True)
  fixture=ThreadingHTTPServer(('127.0.0.1',0),Fixture);fixture.result=None;threading.Thread(target=fixture.serve_forever,daemon=True).start()
  with tempfile.TemporaryDirectory(dir=ROOT/'.build',prefix='workbench-native-') as directory:
@@ -177,18 +198,18 @@ def main():
   service['window']=json.loads((ROOT/'app/xs.json').read_text(encoding='utf-8'))['services'][0]['window'];service['window']['title']='Mdo native browser QA';service['window']['install_fallback']='headless'
   config.write_text(json.dumps(value),encoding='utf-8')
   target=f'http://127.0.0.1:{fixture.server_port}'
-  script='<script type="module">const TARGET='+json.dumps(target)+';'+(TERMINAL_SCRIPT if args.terminal else CHANGES_SCRIPT if args.changes else APPLICATION_SCRIPT if args.application else SCRIPT)+'</script>'
-  page=(ROOT/'app/web/index.html').read_text(encoding='utf-8').replace('</body>',script+'</body>') if args.application or args.changes or args.terminal else '<!doctype html><meta charset=utf-8><h1>Mdo browser QA</h1>'+script
+  script='<script type="module">const TARGET='+json.dumps(target)+';'+(START_SCRIPT if args.start else TERMINAL_SCRIPT if args.terminal else CHANGES_SCRIPT if args.changes else APPLICATION_SCRIPT if args.application else SCRIPT)+'</script>'
+  page=(ROOT/'app/web/index.html').read_text(encoding='utf-8').replace('</body>',script+'</body>') if args.application or args.changes or args.terminal or args.start else '<!doctype html><meta charset=utf-8><h1>Mdo browser QA</h1>'+script
   (base/'web/index.html').write_text(page,encoding='utf-8')
   with (args.evidence/'native-host.log').open('wb') as log:
-   environment={key:value for key,value in os.environ.items() if not args.terminal or key.lower()!='psmodulepath'}
+   environment={key:value for key,value in os.environ.items() if not (args.terminal or args.start) or key.lower()!='psmodulepath'}
    process=subprocess.Popen([str(args.host.resolve()),str(config),'--','--home',str(base/'home')],cwd=base,env=environment,stdout=log,stderr=log)
    try:
     wait_ready(port,process);deadline=time.monotonic()+90
     while fixture.result is None and time.monotonic()<deadline and process.poll() is None:time.sleep(.1)
     result=fixture.result or {'passed':False,'error':'Native browser did not return a result'}
     (args.evidence/'native-result.json').write_text(json.dumps(result,indent=2),encoding='utf-8')
-    assert result['passed'],result;print('Actual WebView2 terminal rendering, Unicode input, dimensions, hide and end: PASS' if args.terminal else 'Actual WebView2 changes scopes, file location and retained tree, real index unchanged: PASS' if args.changes else 'Actual WebView2 navigation, input, screenshot, takeover, back and SDK isolation: PASS')
+    assert result['passed'],result;print('Actual WebView2 four launchers and fresh Home: PASS' if args.start else 'Actual WebView2 terminal rendering, Unicode input, dimensions, hide and end: PASS' if args.terminal else 'Actual WebView2 changes scopes, file location and retained tree, real index unchanged: PASS' if args.changes else 'Actual WebView2 navigation, input, screenshot, takeover, back and SDK isolation: PASS')
    finally:
     process.terminate();process.wait(timeout=15);time.sleep(1)
  fixture.shutdown();fixture.server_close()

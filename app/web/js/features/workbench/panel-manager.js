@@ -1,9 +1,10 @@
-import { normalizeLayout, reorderPanel, safeBrowserUrl, browserLocation, validateImageFrame } from "./model.js";
+import { normalizeLayout, reorderPanel, safeBrowserUrl, validateImageFrame } from "./model.js";
 import { createNativeBrowserBridge } from "./native-browser.js";
 import { mountBrowserView } from "./browser-view.js";
 import { mountFilesView } from "./files-view.js";
 import { mountChangesView } from "./changes-view.js";
 import { mountTerminalView } from "./terminal-view.js";
+import { mountStartView } from "./start-view.js";
 import { iconButton, popupMenu } from "./controls.js";
 import { createSurfaceInput } from "./surface-input.js";
 import { renderSourceMarkdown } from "../../utils/source-markdown.js";
@@ -16,7 +17,7 @@ function button(label, execute, className = "wb-button") {
   node.onclick = () => Promise.resolve().then(execute).catch(error => toast(error.message, "error")); return node;
 }
 export function createPanelManager({ shell, api, layoutApi = api, navigation, clientId, addContext = () => {}, renderers = new Map() }) {
-  const entries = new Map(), definitions = new Map(), mounts = new Map(), bridge = createNativeBrowserBridge();
+  const entries = new Map(), definitions = new Map(), discovered = new Set(), mounts = new Map(), bridge = createNativeBrowserBridge();
   const dock = make("aside", "workbench"), top = make("header", "wb-top"), tabs = make("div", "wb-tabs"), content = make("div", "wb-content");
   dock.setAttribute("aria-label", "工具工作区"); tabs.setAttribute("role", "tablist");
   const resize = make("div", "wb-resize"); resize.tabIndex = 0; resize.setAttribute("role", "separator"); resize.setAttribute("aria-label", "调整工具工作区宽度"); resize.setAttribute("aria-orientation", "vertical");
@@ -71,7 +72,7 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
       const sdk = bound(row), signal = abort.signal;
       if (definition.mount || definition.render) {
         const events = value.events;
-        const result = await (definition.mount || definition.render)(root, { sdk, api: sdk, context: Object.freeze({ ...row.context }), params: row.params || {}, resource: row.resource, signal, events,
+        const result = await (definition.mount || definition.render)(root, { panelId: row.id, sdk, api: sdk, context: Object.freeze({ ...row.context }), params: row.params || {}, resource: row.resource, signal, events,
           addContext, viewState: row.view_state || {}, update: patch => update(row.id, patch), setDirty: callback => { value.dirty = callback; } });
         if (typeof result === "function") value.dispose = result; else if (result) Object.assign(value, result);
         if (signal.aborted) value.dispose?.(); return;
@@ -212,6 +213,7 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
     for (const [id, mounted] of mounts) {
       const visible = layout.open && !document.hidden && (id === layout.active || id === layout.secondary); mounted.root.hidden = !visible;
       mounted.visible?.(visible);
+      if (visible && entries.get(id)?.type === "mdo.new-tab") mounted.refresh?.();
       if (mounted.lastVisible !== visible) {
         mounted.lastVisible = visible; mounted.events?.dispatchEvent(new CustomEvent("visibility", { detail: visible }));
       }
@@ -259,30 +261,40 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
     return Object.freeze({ id: row.id, reveal: () => reveal(row.id), close: () => close(row.id), update: patch => update(row.id, patch) });
   }
   async function newTab() { return open("mdo.new-tab", { title: "新标签页" }); }
-  definitions.set("mdo.new-tab", { title: "新标签页", renderer: "custom", mount(root, { sdk, signal }) {
-    const form = make("form", "wb-start-form"), address = make("input", "wb-address"), mode = make("select", "wb-mode"); address.placeholder = "搜索或输入网址"; address.setAttribute("aria-label", address.placeholder);
-    mode.setAttribute("aria-label", "打开方式");
-    for (const [value, label] of [["browser", "浏览网页"], ["preview", "网页预览"]]) { const option = make("option", "", label); option.value = value; mode.append(option); }
-    const go = button("打开", () => {}); go.type = "submit"; form.append(mode, address, go);
-    form.onsubmit = event => { event.preventDefault(); const value = address.value.trim(); let url;
-      try {
-        url = browserLocation(value);
+  definitions.set("mdo.new-tab", { title: "新标签页", renderer: "custom", mount(root, { sdk, signal, panelId, context }) {
+    // An explicit click owns one admission key. Retrying an uncertain open
+    // finds its original resource rather than creating another browser/shell.
+    const keys = new Map(), history = [];
+    const key = type => { if (!keys.has(type)) keys.set(type, `start-${crypto.randomUUID()}`); return keys.get(type); };
+    const launch = async type => {
+      if (signal.aborted) return;
+      let handle; const pinned = Boolean(entries.get(panelId)?.pinned);
+      if (type === "mdo.browser") {
+        const browser = await sdk.call("browser.create", { client: clientId, key: key(type) });
+        handle = await open(type, { key: browser.id, title: "浏览器", resource: { id: browser.id }, pinned }, sdk);
+      } else if (type === "mdo.terminal") {
+        const terminal = await sdk.call("terminal.create", { key: key(type) });
+        handle = await open(type, { key: terminal.id, title: "终端", params: { terminal: terminal.id }, pinned }, sdk);
+      } else {
+        const descriptor = definitions.get(type);
+        await descriptor?.registration;
+        const client = descriptor?.api?.bind(context) || sdk.bind(descriptor?.owner ? { extension: descriptor.owner } : {});
+        handle = await open(type, { key: "workspace", title: descriptor?.title || type, pinned }, client);
       }
-      catch (error) { toast(error.message, "error"); return; }
-      const client = sdk.bind({});
-      if (mode.value === "preview") { void open("mdo.preview", { title: value, params: { url } }, client).catch(error => toast(error.message, "error")); return; }
-      void client.call("browser.create", { client: clientId, url }).then(browser => open("mdo.browser", { title: value, resource: { id: browser.id } }, client)).catch(error => toast(error.message, "error"));
+      if (!signal.aborted && handle.id !== panelId) await close(panelId);
+      return handle;
     };
-    root.append(make("h2", "", "新标签页"), form, make("h3", "", "工具"));
-    for (const [id, definition] of definitions) if ((!id.startsWith("mdo.") || ["mdo.files","mdo.terminal","mdo.changes"].includes(id)) &&
-      (definition.renderer !== "custom" || definition.mount || definition.render || renderers.has(definition.frontend || id))) root.append(button(definition.title || id, () => open(id, {}, sdk)));
-    root.append(make("h3", "", "已打开")); for (const [id, row] of entries) if (row.type !== "mdo.new-tab") root.append(button(title(row), () => reveal(id)));
+    const view = mountStartView(root, { signal, context, launch,
+      contributions: () => [...definitions].filter(([id, definition]) => !id.startsWith("mdo.") && (definition.renderer !== "custom" || definition.mount || definition.render || renderers.has(definition.frontend || id))).map(([id, definition]) => ({ ...definition, id })),
+      opened: () => [...entries.values()].filter(row => row.type !== "mdo.new-tab").map(row => ({ id: row.id, title: title(row), type: row.type })).concat(history.filter(row => ![...entries.values()].some(panel => panel.resource?.id === row.browser?.id))),
+      resume: async id => { const item = history.find(row => row.id === id); if (item && !entries.has(id)) { const browser = item.browser; await open("mdo.browser", { key: browser.id, resource: { id: browser.id }, title: item.title }, api.bind({ ...browser.context, extension: browser.owner })); } else reveal(id); if (!signal.aborted) await close(panelId); },
+    });
     void sdk.call("browser.list", { client: clientId }, { signal }).then(browsers => {
-      if (signal.aborted || !browsers.length) return;
-      root.append(make("h3", "", "浏览器会话"));
-      for (const browser of browsers) root.append(button(browser.title || browser.url || "浏览器会话", () =>
-        open("mdo.browser", { key: browser.id, resource: { id: browser.id }, title: browser.title || browser.url || "浏览器" }, api.bind({ ...browser.context, extension: browser.owner }))));
+      if (signal.aborted) return;
+      for (const browser of browsers) history.push({ id: `resume-${browser.id}`, title: browser.title || browser.url || "浏览器", type: "mdo.browser", browser });
+      view.refresh();
     }).catch(() => {});
+    return view;
   } });
   for (const [id, renderer, label] of [["mdo.browser", "browser", "浏览器"], ["mdo.document", "document", "文档"], ["mdo.plan", "plan", "计划"], ["mdo.diff", "diff", "变更"], ["mdo.preview", "web", "网页预览"], ["mdo.editor", "editor", "文件编辑"]]) definitions.set(id, { title: label, renderer });
   const openFile = async (path, client, line = 1) => {
@@ -315,7 +327,9 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
     if (stopped) return;
     try {
       const types = await api.call("panel.types");
-      for (const type of types) if (!definitions.has(type.id)) definitions.set(type.id, type);
+      const currentTypes = new Set(types.map(type => type.id));
+      for (const id of discovered) if (!currentTypes.has(id)) { discovered.delete(id); definitions.delete(id); }
+      for (const type of types) if (!definitions.has(type.id) || discovered.has(type.id)) { definitions.set(type.id, type); discovered.add(type.id); }
       const rows = await api.call("panel.list", { client: clientId }); if (stopped) return;
       const live = new Set(rows.map(row => row.id));
       for (const row of rows) {
@@ -376,7 +390,7 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
   };
   window.addEventListener("mdo-browser-shortcut", nativeShortcut);
   return Object.freeze({ ensure, open: async (...args) => { await ensure(); return open(...args); }, newTab: async () => { await ensure(); return newTab(); },
-    register(id, descriptor) { definitions.set(id, descriptor); return () => {
+    register(id, descriptor) { discovered.delete(id); definitions.set(id, descriptor); return () => {
       if (definitions.get(id) !== descriptor) return; definitions.delete(id);
       for (const [key, row] of entries) if (row.type === id) { disposeMount(key); void bound(row).call("panel.close", { id: key }).catch(error => toast(error.message, "error")); }
     }; },
