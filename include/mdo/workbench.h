@@ -24,6 +24,8 @@ static inline mdo_result mdoTerminalClose(const mdo_sdk_context_v1* C,const xval
 {return mdoCall(C,"terminal.close",P,R,E);}
 static inline mdo_result mdoTerminalRelease(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
 {return mdoCall(C,"terminal.release",P,R,E);}
+static inline mdo_result mdoTerminalPrune(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
+{return mdoCall(C,"terminal.prune",P,R,E);}
 static inline mdo_result mdoChangesList(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
 {return mdoCall(C,"changes.list",P,R,E);}
 static inline mdo_result mdoChangesBaseline(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)

@@ -255,6 +255,12 @@ not_started / cancelled_before_start。不会重放原程序或输入。启动�
 返回 terminal_intent_retired，不把迟到重试当成新终端。新终端必须用新 key 明确创建。
 损坏的元信息或收据保留原文件、拒绝不确定的创建，不自动清空并重启程序。
 
+`terminal.prune` 是明确的元信息清理：只处理当前扩展 owner、全部 I/O 已排空、项目已
+注销或当前项目目录与原目录物理身份已不同的记录。运行/关闭中的终端、其他 owner、
+仍有效项目和定义损坏/目录暂时无法检查的记录均保留；不读取其输出供其他上下文使用。
+创建收据保留，迟到的旧 key 仍拒绝重启。通过 SDK 的同一目标绑定到 default 上下文可
+在原项目不存在后执行；前端省略号菜单提供确认入口。清理不跳过当前服务写入保护。
+
 内置终端页面使用离线打包的 xterm.js 6.0.0、fit/search/Unicode11 插件。来源、精确版本、
 归档完整性、发行文件 SHA-256 和 MIT 许可见 app/web/assets/terminal/manifest.json。
 `python tools/vendor_terminal.py` 离线核对；显式 `--fetch` 可复现这些文件，不安装 Node/npm。

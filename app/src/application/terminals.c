@@ -3,6 +3,8 @@
 #include "../../include/mdo/time.h"
 #include "../../include/mdo/extension_files.h"
 #include "../../include/mdo/project_lifecycle.h"
+#include "../../include/mdo/projects.h"
+#include "../../include/mdo/project_binding.h"
 #if !defined(_WIN32) && !defined(_WIN64)
 #if defined(__TINYC__) && defined(__linux__)
 /* Same stable libc ABI used by the optional POSIX power adapter. The compact
@@ -29,7 +31,7 @@ extern int fcntl(int Descriptor,int Command,...);
 #define SDK_TERMINAL_CHUNK 8192u
 #define SDK_TERMINAL_PATH "data/application/terminals.json"
 #define SDK_TERMINAL_STORE (256u*1024u)
-static const cstr SdkTerminalMethods[]={"terminal.capabilities","terminal.create","terminal.list","terminal.get","terminal.attach","terminal.detach","terminal.read","terminal.write","terminal.resize","terminal.close","terminal.release"};
+static const cstr SdkTerminalMethods[]={"terminal.capabilities","terminal.create","terminal.list","terminal.get","terminal.attach","terminal.detach","terminal.read","terminal.write","terminal.resize","terminal.close","terminal.release","terminal.prune"};
 typedef struct SdkTerminalWrite {uint64 Sequence;size_t Bytes;char Hash[65];} SdkTerminalWrite;
 typedef struct SdkTerminal {
     xvalue* Record;
@@ -270,11 +272,46 @@ static bool SdkTerminalCreate(const mdo_sdk_context_v1* C,const xvalue* P,xvalue
     if(Kill){(void)xrtProcessKillTree(Process);bool Exited=!T->Waiter&&xrtProcessWaitFor(Process,5000)==XWAIT_OK;xrtMutexLock(SdkTerminals.Lock);if(Exited){T->Exited=true;SdkPut(T->Record,"state","ended");}T->Pins--;xrtMutexUnlock(SdkTerminals.Lock);}
     if(!Spawned){xrtValueRelease(*R);*R=NULL;if(SpawnError.Code[0]){*E=SpawnError;E->MayHaveCompleted=Process!=NULL;}else MdoApplicationError(E,"terminal_start_failed","Terminal I/O could not start; inspect its retained creation record","terminal",500,Process!=NULL);return false;}return true;
 }
+/* Explicit housekeeping only: it never reveals another context's bytes or
+ * changes a live PTY. A corrupt/unreachable workspace is not proof of removal.
+ * Keep the independent admission receipts so cleanup cannot replay creation. */
+static bool SdkTerminalOrphaned(const SdkTerminal* T){
+    const xvalue* Scope=SdkGet(T->Record,"context");cstr Project=SdkField(Scope,"project"),Workspace=SdkField(Scope,"workspace");
+    if(!Project||!Project[0]||!strcmp(Project,"default")||!Workspace||!Workspace[0])return false;
+    MdoProjectInfo Info={0};Info.Size=sizeof(Info);bool Found=false;xwork_error Error;
+    if(!MdoProjectGet(Project,&Info,&Found,&Error))return false;if(!Found)return true;
+    MdoProjectBinding Current={0};Current.Size=sizeof(Current);xfileinfo Previous={0};
+    if(!MdoProjectBindingGet(Project,&Current,&Error)||!xrtPathStat(Workspace,true,&Previous)||Previous.Type!=XFILE_TYPE_DIRECTORY)return false;
+    return Previous.Device!=Current.WorkspaceIdentity.Device||Previous.Identity!=Current.WorkspaceIdentity.Identity;
+}
+static bool SdkTerminalPrune(const mdo_sdk_context_v1* C,xvalue** R,mdo_error_v1* E){
+    xwork_error Error;MdoProjectLease* Lease=MdoProjectLeaseAcquire("default",MDO_PROJECT_LEASE_SHARED,&Error);
+    MdoProjectDefinitionLease* Writer=Lease?MdoProjectDefinitionAcquire(Lease,&Error):NULL;
+    if(!Writer){MdoProjectLeaseRelease(Lease);return SdkTerminalFail(E,"terminal_cleanup_busy","Project definitions are changing; retry cleanup after they settle",409);}
+    SdkTerminal Retired[SDK_TERMINAL_SLOTS];size_t Slots[SDK_TERMINAL_SLOTS],Count=0;bool Ok=false;
+    xrtMutexLock(SdkTerminals.Lock);
+    if(SdkTerminals.Stopping){SdkTerminalFail(E,"sdk_stopping","Terminal service is stopping",503);goto done;}
+    for(size_t i=0;i<SDK_TERMINAL_SLOTS;i++){
+        SdkTerminal* T=&SdkTerminals.Slots[i];
+        if(!T->Record||T->Releasing||T->Starting||!T->Exited||!T->ReaderDone||!T->WriterDone||!T->WaiterDone||T->Pins||!SdkTerminalEqual(C->ExtensionId,SdkField(T->Record,"owner"))||!SdkTerminalOrphaned(T))continue;
+        Slots[Count]=i;Retired[Count++]=*T;T->Record=NULL;T->Releasing=true;
+    }
+    if(Count&&!SdkTerminalSave()){
+        for(size_t i=0;i<Count;i++)SdkTerminals.Slots[Slots[i]]=Retired[i];
+        SdkTerminalFail(E,"terminal_store_failed","Ended terminal records could not be removed; original records were retained",503);goto done;
+    }
+    xrtMutexUnlock(SdkTerminals.Lock);
+    for(size_t i=0;i<Count;i++)SdkTerminalFree(&Retired[i]);
+    xrtMutexLock(SdkTerminals.Lock);for(size_t i=0;i<Count;i++)memset(&SdkTerminals.Slots[Slots[i]],0,sizeof(SdkTerminal));
+    *R=xrtValueObject();SdkPutUInt(*R,"released",Count);Ok=true;
+done:xrtMutexUnlock(SdkTerminals.Lock);MdoProjectDefinitionRelease(Writer);MdoProjectLeaseRelease(Lease);xrtClearError();return Ok;
+}
 bool MdoApplicationTerminalsCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue* P,xvalue** R,mdo_error_v1* E,bool* Found){
     *Found=false;for(size_t i=0;i<sizeof(SdkTerminalMethods)/sizeof(*SdkTerminalMethods);i++)if(!strcmp(Method,SdkTerminalMethods[i]))*Found=true;if(!*Found)return true;
     if(!SdkTerminals.Lock||!SdkTerminals.Ready)return SdkTerminalFail(E,"terminal_store_unavailable","Terminal metadata is unavailable or corrupt; no process was restarted",503);
     if(!strcmp(Method,"terminal.capabilities")){*R=xrtValueObject();xrtValueObjectSetNew(*R,XRT_STR_LITERAL("supported"),xrtValueBool(xrtProcessTerminalSupported()));SdkPut(*R,"epoch",SdkTerminals.Epoch);char* Program=SdkTerminalDefault();SdkPut(*R,"default_program",Program);xrtFree(Program);SdkPutUInt(*R,"max_active",SDK_TERMINAL_ACTIVE);SdkPutUInt(*R,"max_sessions",SDK_TERMINAL_SLOTS);SdkPutUInt(*R,"output_capacity",SDK_TERMINAL_OUTPUT);SdkPutUInt(*R,"input_capacity",SDK_TERMINAL_INPUT);SdkPutUInt(*R,"max_input_chunk",SDK_TERMINAL_CHUNK);SdkPutUInt(*R,"max_read_chunk",65536);SdkPutUInt(*R,"max_wait_ms",1000);SdkPutUInt(*R,"input_lease_ms",15000);SdkPutUInt(*R,"max_columns",500);SdkPutUInt(*R,"max_rows",300);return true;}
     if(!strcmp(Method,"terminal.create"))return SdkTerminalCreate(C,P,R,E);
+    if(!strcmp(Method,"terminal.prune"))return SdkTerminalPrune(C,R,E);
     xrtMutexLock(SdkTerminals.Lock);
     if(!strcmp(Method,"terminal.list")){*R=xrtValueArray();for(size_t i=0;i<SDK_TERMINAL_SLOTS;i++){SdkTerminal* T=&SdkTerminals.Slots[i];mdo_error_v1 Ignored={0};if(T->Record&&!T->Releasing&&SdkTerminalOwn(C,T,&Ignored))xrtValueArrayAppendNew(*R,SdkTerminalInfo(T));}xrtMutexUnlock(SdkTerminals.Lock);return true;}
     cstr Id=SdkField(P,"id");SdkTerminal* T=NULL;for(size_t i=0;Id&&i<SDK_TERMINAL_SLOTS;i++)if(SdkTerminals.Slots[i].Record&&SdkTerminalEqual(Id,SdkField(SdkTerminals.Slots[i].Record,"id")))T=&SdkTerminals.Slots[i];

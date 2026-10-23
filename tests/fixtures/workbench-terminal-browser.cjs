@@ -44,7 +44,9 @@ const assert=require('node:assert/strict'),fs=require('node:fs');
   await shell("Start-Sleep -Seconds 30; [IO.File]::WriteAllText('must-not-run.txt','bad')");await page.waitForTimeout(500);await typing.focus();await page.keyboard.press('Control+c');
   // Console Ctrl+C flushes native input while unwinding. Wait for the real
   // PowerShell prompt before submitting the following command.
-  await until(()=>view.locator('.xterm-rows > div').evaluateAll(rows=>rows.map(row=>row.textContent.trim()).filter(Boolean).at(-1)?.endsWith('>')));
+  let stableOutput=-1,quietSince=Date.now();
+  await until(async()=>{const row=await page.evaluate(id=>mdo.terminal.get({id}),terminal.id);if(row.cursor!==stableOutput){stableOutput=row.cursor;quietSince=Date.now();}
+   return Date.now()-quietSince>=350&&await view.locator('.xterm-rows > div').evaluateAll(rows=>rows.map(row=>row.textContent.trim()).filter(Boolean).at(-1)?.endsWith('>'));});
   await shell("[IO.File]::WriteAllText('interrupted.txt','ok')");await file('interrupted.txt','ok');
   await assert.rejects(()=>page.evaluate(()=>mdo.files.read({path:'must-not-run.txt'})));
   await shell('$esc=[char]27; [Console]::Write("$esc[?1049h$esc[2J$esc[H$esc[?25l$esc[32mTUI 界面🌙$esc[0m$esc[3;4H框架测试"); Start-Sleep -Seconds 3; [Console]::Write("$esc[?25h$esc[?1049l"); [IO.File]::WriteAllText(\'tui-ended.txt\',\'ok\')');
@@ -86,6 +88,9 @@ const assert=require('node:assert/strict'),fs=require('node:fs');
   await bar.getByRole('button',{name:'结束终端',exact:true}).click();
   await until(()=>page.evaluate(async id=>(await mdo.terminal.get({id})).drained,terminal.id));
   await view.locator('.wb-terminal-status > span:first-child').filter({hasText:/^已结束$/}).waitFor();assert.equal(await page.evaluate(()=>mdo.terminal.list().then(rows=>rows.length)),1);
+  await bar.getByRole('button',{name:'终端更多操作',exact:true}).click();await page.getByRole('menuitem',{name:'清理失效项目的终端记录…',exact:true}).click();
+  await page.getByText('已清理 0 条失效项目的终端记录。',{exact:true}).waitFor();
+  assert.equal(await page.evaluate(()=>mdo.terminal.list().then(rows=>rows.length)),1,'orphan cleanup discarded a valid default-project terminal');
   assert.deepEqual(errors,[]);
   fs.writeFileSync(evidence+'/result.json',JSON.stringify({passed:true,time:Date.now(),checks:['real Windows PowerShell','Unicode input and render','selected terminal quote retains provenance','alternate screen cursor/color/wide text and restore','isolated clipboard paste event','search','Ctrl+C interrupts','hidden panel continues','real resize','lost input ACK never replays','competing writer stays readonly','panel close/reattach without spawn','explicit end'],terminal,narrow},null,2));
   console.log('Terminal frontend, real PowerShell Unicode/interrupt, hide/reattach, resize and explicit end: PASS');

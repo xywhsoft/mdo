@@ -21,6 +21,7 @@ def contracts(add):
     add('terminal.close','Explicitly end the owned terminal; hiding/detaching a panel does not close it',
         {**identity,'epoch':s},('id','epoch'))
     add('terminal.release','Release an ended terminal after its I/O drains; never release a running child',identity,('id',))
+    add('terminal.prune','Explicitly release this extension owner\'s drained records from unregistered or moved projects; retain creation tombstones')
     comparison={'repository':s,'scope':{'type':'string','enum':['workspace','staged','unstaged','branch','session']},'base':s}
     add('changes.list','Read structured Git changes without modifying the index; comparison scopes are explicit',comparison)
     add('changes.baseline','Read the original local session baseline capture receipt; never create or rebase it',{'repository':s})

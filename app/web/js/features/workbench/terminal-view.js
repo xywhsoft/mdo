@@ -47,6 +47,11 @@ export async function mountTerminalView(root, { sdk, context, params = {}, viewS
     { label: "增大字体", disabled: !terminal || fontSize >= 22, execute: () => changeFont(fontSize + 1) },
     { label: "减小字体", disabled: !terminal || fontSize <= 11, execute: () => changeFont(fontSize - 1) },
     { label: "释放已结束的终端", disabled: !selected?.drained, execute: async () => { const id = selected.id; if (!confirm("移除这个已结束终端的记录和内存输出？")) return; await sdk.call("terminal.release", { id }, { signal }); await select(""); await refresh(); } },
+    { label: "清理失效项目的终端记录…", disabled: reviewRequired, execute: async () => {
+      if (!confirm("清理本扩展在已注销或已更换目录项目中的已结束终端记录？运行中的终端和其他扩展不受影响。")) return;
+      const result = await sdk.bind({ project: "default", session: "", run: "" }).call("terminal.prune", {}, { signal });
+      toast(`已清理 ${result.released} 条失效项目的终端记录。`);
+    } },
   ], { signal, onError });
   const visible = () => !disposed && !signal.aborted && !root.hidden && !document.hidden && surface.clientWidth > 0 && surface.clientHeight > 0;
   const remember = () => { if (!disposed) void update({ title: selected?.title || "终端", view_state: { ...viewState, terminal: { id: selected?.id || "", fontSize } } }).catch(onError); };
