@@ -7,7 +7,7 @@ static bool SdkGitFail(mdo_error_v1* E,cstr Code,cstr Message,unsigned Status){r
 static uint64 SdkGitNumber(cstr Text){uint64 N=0;while(*Text>='0'&&*Text<='9'){unsigned Digit=(unsigned)(*Text++-'0');if(N>(UINT64_MAX-Digit)/10)return UINT64_MAX;N=N*10+Digit;}return N;}
 static void SdkGitChomp(char* Text){size_t N=Text?strlen(Text):0;if(N&&Text[N-1]=='\n')Text[--N]=0;if(N&&Text[N-1]=='\r')Text[--N]=0;}
 static bool SdkGitRunWithIndex(const mdo_sdk_context_v1* C,cstr Root,const cstr* Args,size_t Count,xbytesview Input,size_t Limit,xprocessoutputproc Output,void* User,xprocessresult* R,mdo_error_v1* E,cstr PrivateIndex){
-    const cstr Prefix[]={"--literal-pathspecs","-c","core.quotepath=false","-c","core.fsmonitor=false","-c","color.ui=false","-c","core.pager=cat"};
+    const cstr Prefix[]={"--literal-pathspecs","-c","core.quotepath=false","-c","core.fsmonitor=false","-c","color.ui=false","-c","core.pager=cat","-c","gc.auto=0","-c","maintenance.auto=false"};
     cstr Argv[64];size_t At=0;if(Count+sizeof(Prefix)/sizeof(*Prefix)>64)return SdkGitFail(E,"git_arguments_invalid","Too many Git arguments",400);
     for(size_t i=0;i<sizeof(Prefix)/sizeof(*Prefix);i++)Argv[At++]=Prefix[i];for(size_t i=0;i<Count;i++)Argv[At++]=Args[i];
     const xprocessenv Env[]={{"GIT_OPTIONAL_LOCKS","0"},{"GIT_TERMINAL_PROMPT","0"},{"LC_ALL","C"},{"GIT_DIR",NULL},{"GIT_WORK_TREE",NULL},{"GIT_INDEX_FILE",PrivateIndex},{"GIT_COMMON_DIR",NULL},{"GIT_OBJECT_DIRECTORY",NULL},{"GIT_ALTERNATE_OBJECT_DIRECTORIES",NULL},{"GIT_CONFIG_COUNT",NULL},{"GIT_CONFIG_PARAMETERS",NULL}};
@@ -144,23 +144,37 @@ static void SdkGitNewStats(const mdo_sdk_context_v1* C,cstr Path,const xfileinfo
     if(Binary)xrtValueObjectSetNew(V,XRT_STR_LITERAL("binary"),xrtValueBool(true));
     if(Binary||Complete){xrtValueObjectSetNew(V,XRT_STR_LITERAL("stats_available"),xrtValueBool(true));SdkPutUInt(V,"additions",Binary?0:Lines+(Read&&Last!='\n'));SdkPutUInt(V,"deletions",0);}
 }
-typedef struct SdkGitRange {char *Root,*Head,*Base,*Branch;const char* Scope;bool Unborn;} SdkGitRange;
-static void SdkGitRangeUnit(SdkGitRange* G){xrtFree(G->Root);xrtFree(G->Head);xrtFree(G->Base);xrtFree(G->Branch);memset(G,0,sizeof(*G));}
+#include "changes_baseline.inc.c"
+typedef struct SdkGitRange {char *Root,*Head,*Base,*Branch,*PrivateRepo,*Current;const char* Scope;uint64 CapturedAt;bool Unborn;} SdkGitRange;
+static void SdkGitRangeUnit(SdkGitRange* G){xrtFree(G->Root);xrtFree(G->Head);xrtFree(G->Base);xrtFree(G->Branch);xrtFree(G->PrivateRepo);xrtFree(G->Current);memset(G,0,sizeof(*G));}
 static bool SdkGitRangeInit(const mdo_sdk_context_v1* C,const xvalue* P,SdkGitRange* G,mdo_error_v1* E){
     G->Scope=SdkField(P,"scope");if(!G->Scope)G->Scope="workspace";
     if(strcmp(G->Scope,"workspace")&&strcmp(G->Scope,"staged")&&strcmp(G->Scope,"unstaged")&&strcmp(G->Scope,"branch")&&strcmp(G->Scope,"session"))return SdkGitFail(E,"git_scope_invalid","Unknown comparison scope",400);
-    if(!strcmp(G->Scope,"session"))return SdkGitFail(E,"git_baseline_missing","This session has no captured baseline; select workspace or branch changes",409);
     G->Root=SdkGitRoot(C,P,E);if(!G->Root)return false;
     const cstr Head[]={"rev-parse","--verify","HEAD"},Branch[]={"symbolic-ref","--quiet","--short","HEAD"};
     G->Head=SdkGitText(C,G->Root,Head,3,true,E);if(E&&E->Code[0])return false;
     G->Unborn=!G->Head;G->Branch=SdkGitText(C,G->Root,Branch,4,true,E);if(E&&E->Code[0])return false;
+    if(!strcmp(G->Scope,"session")){
+        xvalue* Baseline=SdkGitBaselineRead(C,E);if(!Baseline)return false;bool Available=false;xrtValueGetBool(SdkGet(Baseline,"available"),&Available);
+        cstr Root=SdkField(Baseline,"repository"),Workspace=SdkField(Baseline,"workspace"),Tree=SdkField(Baseline,"tree");
+        if(!Available){SdkGitFail(E,"git_baseline_unavailable",SdkField(Baseline,"message")?SdkField(Baseline,"message"):"Session baseline capture was unavailable",409);xrtValueRelease(Baseline);return false;}
+        if(!Root||strcmp(Root,G->Root)||!Workspace||strcmp(Workspace,C->Workspace)||!SdkGitOid(Tree)||!SdkField(Baseline,"session")||strcmp(SdkField(Baseline,"session"),C->SessionId)||!SdkField(Baseline,"project")||strcmp(SdkField(Baseline,"project"),C->ProjectId)){
+            xrtValueRelease(Baseline);return SdkGitFail(E,"git_baseline_context_changed","The captured baseline belongs to the session's original repository and workspace",409);}
+        G->Base=xrtStrDup(Tree);SdkUInt(SdkGet(Baseline,"captured_at_us"),&G->CapturedAt);xrtValueRelease(Baseline);G->PrivateRepo=SdkGitSnapshotRepo(C->ProjectId);
+        unsigned char Random[16];char Hex[33];if(!G->Base||!G->PrivateRepo||!xrtSecureRandom(Random,sizeof(Random)))return SdkNativeFailure(E,"git_snapshot");
+        for(size_t i=0;i<16;i++)snprintf(Hex+i*2,3,"%02x",Random[i]);char Ref[100];snprintf(Ref,sizeof(Ref),"refs/mdo-inspection/%s",Hex);
+        G->Current=SdkGitSnapshot(C,G->Root,G->PrivateRepo,Ref,E);
+        const cstr Cleanup[]={"update-ref","-d",Ref};xprocessresult Result={0};mdo_error_v1 Ignored={0};(void)SdkGitRun(C,G->PrivateRepo,Cleanup,3,(xbytesview){0},1024,NULL,NULL,&Result,&Ignored);xrtProcessResultUnit(&Result);
+        return G->Current!=NULL;
+    }
     if(!strcmp(G->Scope,"branch")){G->Base=SdkGitResolve(C,G->Root,SdkField(P,"base"),E);if(!G->Base)return false;if(G->Unborn)return SdkGitFail(E,"git_head_missing","Branch comparison needs an initial commit",409);}
     else if(G->Head)G->Base=xrtStrDup(G->Head);return true;
 }
 static size_t SdkGitDiffArgs(const SdkGitRange* G,const char* Format,cstr* Args){
     size_t N=0;Args[N++]="diff";Args[N++]="--no-ext-diff";Args[N++]="--no-textconv";Args[N++]="--no-color";Args[N++]="--find-renames";Args[N++]=Format;
     if(!strcmp(G->Scope,"staged"))Args[N++]="--cached";
-    if(!strcmp(G->Scope,"branch")){Args[N++]=G->Base;Args[N++]=G->Head;}
+    if(!strcmp(G->Scope,"session")){Args[N++]=G->Base;Args[N++]=G->Current;}
+    else if(!strcmp(G->Scope,"branch")){Args[N++]=G->Base;Args[N++]=G->Head;}
     else if(strcmp(G->Scope,"unstaged")&&G->Base)Args[N++]=G->Base;
     Args[N++]="--";return N;
 }
@@ -172,12 +186,12 @@ static bool SdkGitList(const mdo_sdk_context_v1* C,const xvalue* P,SdkGitRange* 
         if(!SdkGitRun(C,G->Root,Status,5,(xbytesview){0},GIT_METADATA_LIMIT,NULL,NULL,&Result,E)||!SdkGitSuccess(&Result,E,"git_status_failed")||!SdkGitNames(Files,&Result,true,E))goto done;
     }else{
         Count=SdkGitDiffArgs(G,"--name-status",Args);Args[Count-1]="-z";Args[Count++]="--";
-        if(!SdkGitRun(C,G->Root,Args,Count,(xbytesview){0},GIT_METADATA_LIMIT,NULL,NULL,&Result,E)||!SdkGitSuccess(&Result,E,"git_status_failed")||!SdkGitNames(Files,&Result,false,E))goto done;
+        if(!SdkGitRun(C,G->PrivateRepo?G->PrivateRepo:G->Root,Args,Count,(xbytesview){0},GIT_METADATA_LIMIT,NULL,NULL,&Result,E)||!SdkGitSuccess(&Result,E,"git_status_failed")||!SdkGitNames(Files,&Result,false,E))goto done;
     }
     xrtProcessResultUnit(&Result);Count=SdkGitDiffArgs(G,"--numstat",Args);Args[Count-1]="-z";Args[Count++]="--";
     /* An unborn workspace contains only new entries; --cached works without HEAD. */
     if(G->Unborn&&!strcmp(G->Scope,"workspace")){Args[Count-1]="--cached";Args[Count++]="--";}
-    if(!SdkGitRun(C,G->Root,Args,Count,(xbytesview){0},GIT_METADATA_LIMIT,NULL,NULL,&Result,E)||!SdkGitSuccess(&Result,E,"git_status_failed")||!SdkGitNumbers(Files,&Result,E))goto done;
+    if(!SdkGitRun(C,G->PrivateRepo?G->PrivateRepo:G->Root,Args,Count,(xbytesview){0},GIT_METADATA_LIMIT,NULL,NULL,&Result,E)||!SdkGitSuccess(&Result,E,"git_status_failed")||!SdkGitNumbers(Files,&Result,E))goto done;
     for(size_t i=0;i<xrtValueCount(Files);i++){
         xvalue* File=(xvalue*)xrtValueArrayGet(Files,i);bool Replaced=false;xrtValueGetBool(SdkGet(File,"worktree_recreated"),&Replaced);
         if(Replaced){SdkPutUInt(File,"additions",0);SdkPutUInt(File,"deletions",0);xrtValueObjectSetNew(File,XRT_STR_LITERAL("stats_available"),xrtValueBool(true));xrtValueArrayAppend(Recreated,File);}
@@ -201,6 +215,7 @@ static bool SdkGitList(const mdo_sdk_context_v1* C,const xvalue* P,SdkGitRange* 
         uint64 A=0,D=0;SdkUInt(SdkGet(V,"additions"),&A);SdkUInt(SdkGet(V,"deletions"),&D);Additions+=A;Deletions+=D;
     }
     *R=xrtValueObject();SdkPut(*R,"repository",G->Root);SdkPut(*R,"head",G->Head);SdkPut(*R,"base",G->Base);SdkPut(*R,"branch",G->Branch);SdkPut(*R,"scope",G->Scope);
+    if(G->Current){SdkPut(*R,"current_tree",G->Current);SdkPut(*R,"representation","raw-worktree-v1");SdkPutUInt(*R,"baseline_captured_at_us",G->CapturedAt);}
     xrtValueObjectSetNew(*R,XRT_STR_LITERAL("unborn"),xrtValueBool(G->Unborn));xrtValueObjectSet(*R,XRT_STR_LITERAL("files"),Files);SdkPutUInt(*R,"additions",Additions);SdkPutUInt(*R,"deletions",Deletions);SdkPutUInt(*R,"unmeasured_files",Unknown);
     char* Json=SdkJson(*R);char Revision[65];if(!Json||!MdoExtensionHash(Json,Revision)){xrtFree(Json);goto done;}xrtFree(Json);SdkPut(*R,"revision",Revision);Ok=true;
 done:SdkGitPrivateIndexUnit(&Private);xrtProcessResultUnit(&Result);xrtValueRelease(Recreated);xrtValueRelease(Files);if(!Ok){xrtValueRelease(*R);*R=NULL;}return Ok;
@@ -208,8 +223,15 @@ done:SdkGitPrivateIndexUnit(&Private);xrtProcessResultUnit(&Result);xrtValueRele
 #include "changes_diff.inc.c"
 static bool SdkChangesCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue* P,xvalue** R,mdo_error_v1* E){
     mdo_sdk_context_v1 Bound=*C;uint64 End=MdoDeadlineAfterUs(15000000);if(!Bound.Deadline||Bound.Deadline>End)Bound.Deadline=End;C=&Bound;
-    if(!strcmp(Method,"changes.diff"))return SdkGitDiff(C,P,R,E);
+    bool Session=!strcmp(Method,"changes.baseline")||!strcmp(SdkField(P,"scope")?SdkField(P,"scope"):"","session");
+    MdoProjectLease* Lease=NULL;bool Locked=false;xwork_error LeaseError;
+    if(Session){
+        Lease=MdoProjectLeaseAcquire(C->ProjectId,MDO_PROJECT_LEASE_SHARED,&LeaseError);if(!Lease)return SdkGitFail(E,"sdk_project_busy",LeaseError.sMessage,409);
+        Locked=SdkGitBaselineEnter(C,E);if(!Locked){MdoProjectLeaseRelease(Lease);return false;}
+    }
     SdkGitRange Range={0};bool Ok=false;
+    if(!strcmp(Method,"changes.diff")){Ok=SdkGitDiff(C,P,R,E);goto done;}
+    if(!strcmp(Method,"changes.baseline")){*R=SdkGitBaselineRead(C,E);Ok=*R!=NULL;goto done;}
     if(!strcmp(Method,"changes.list"))Ok=SdkGitList(C,P,&Range,R,E);
     else if(!strcmp(Method,"changes.branches")){
         Range.Root=SdkGitRoot(C,P,E);if(!Range.Root)goto done;
@@ -224,5 +246,5 @@ static bool SdkChangesCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue*
             }
         }xrtProcessResultUnit(&Result);
     }
-done:SdkGitRangeUnit(&Range);return Ok;
+done:SdkGitRangeUnit(&Range);if(Locked)xrtMutexUnlock(SdkGitBaselineLock);MdoProjectLeaseRelease(Lease);return Ok;
 }

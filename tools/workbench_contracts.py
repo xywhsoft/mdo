@@ -23,6 +23,7 @@ def contracts(add):
     add('terminal.release','Release an ended terminal after its I/O drains; never release a running child',identity,('id',))
     comparison={'repository':s,'scope':{'type':'string','enum':['workspace','staged','unstaged','branch','session']},'base':s}
     add('changes.list','Read structured Git changes without modifying the index; comparison scopes are explicit',comparison)
+    add('changes.baseline','Read the original local session baseline capture receipt; never create or rebase it',{'repository':s})
     add('changes.branches','List local and remote comparison refs',{'repository':s},output={'type':'array'})
     add('changes.diff','Read a bounded page of diff rows with exact line identities and a comparison revision',
         {**comparison,'path':s,'revision':s,'offset':u,'limit':{'type':'integer','minimum':1,'maximum':2000}},('path',))

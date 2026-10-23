@@ -292,7 +292,8 @@ MdoProjectPurgeInventory* MdoProjectPurgeInventoryCreate(const char* ProjectId,
         { "data/prompt-history/%s.json", false }, { "data/prompt-history/%s.json.bak", false },
         { "memory/projects/%s.json", false }, { "memory/projects/%s.json.bak", false },
         { "memory/projects/%s", true },
-        { "sessions/%s", true }, { "migration/session-prompts/%s", true }
+        { "sessions/%s", true }, { "migration/session-prompts/%s", true },
+        { "workbench-baselines/%s", true }
     };
     MdoProjectLease* Lease = NULL;
     MdoProjectPurgeInventory* Inventory = NULL;

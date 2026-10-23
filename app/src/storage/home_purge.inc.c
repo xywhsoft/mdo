@@ -60,7 +60,8 @@ static bool MdoHomePurgePath(cstr Project, cstr Session, const MdoHomePurgeTarge
         { "data/prompt-history/%s.json", false }, { "data/prompt-history/%s.json.bak", false },
         { "memory/projects/%s.json", false }, { "memory/projects/%s.json.bak", false },
         { "memory/projects/%s", true },
-        { "sessions/%s", true }, { "migration/session-prompts/%s", true }
+        { "sessions/%s", true }, { "migration/session-prompts/%s", true },
+        { "workbench-baselines/%s", true }
     };
     char Path[256], Id[65];
     const char* Start;

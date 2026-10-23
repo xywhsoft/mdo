@@ -118,17 +118,20 @@ try{
 CHANGES_SCRIPT=r'''
 import {allowsApiWrite} from '/js/api/client.js';
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
-const until=async predicate=>{for(let i=0;i<200;i++){if(predicate())return;await pause(100);}throw Error('Native changes UI timed out');};
+const until=async predicate=>{for(let i=0;i<200;i++){if(await predicate())return;await pause(100);}throw Error('Native changes UI timed out');};
 try{
  await until(()=>window.mdo&&allowsApiWrite('/application/call',{method:'POST'}));
  await mdo.ui.newTab();
- const repository=(await mdo.files.resolve({path:'native-changes-qa'})).path;
+ const repository=(await mdo.files.resolve({path:'.',prepare_default:true})).path;
  await mdo.files.mkdir({path:repository});
  const git=async(...args)=>{const result=await mdo.call('process.run',{program:'git',cwd:repository,args:['-c','user.name=QA','-c','user.email=qa@example.invalid','-c','core.hooksPath=',...args],timeout_ms:10000});if(result.exit_code!==0)throw Error(JSON.stringify(result));};
  await git('init','-b','master');await mdo.files.write({path:repository+'/native.js',text:'const answer = 1;\n'});
  await git('add','--all');await git('commit','-m','baseline');
  await mdo.files.write({path:repository+'/native.js',text:'const answer = 2;\n'});await git('add','--all');
  await mdo.files.write({path:repository+'/native.js',text:'const answer = 3;\n'});
+ const {api}=await import('/js/api/client.js');
+ const session=(await api.post('/sessions',{project_id:'default',title:'Native baseline QA'})).data.id;
+ location.hash=`#/projects/default/sessions/${session}`;await until(async()=>(await mdo.call('sdk.context')).session===session);
  const before=(await mdo.files.read({path:repository+'/.git/index'})).base64;
  const panel=await mdo.panel.open({client:mdo.clientId,type:'mdo.changes',key:'native-changes',params:{repository},reveal:'activate'});
  await until(()=>document.querySelector('.wb-changes-view .wb-change-added')?.textContent.includes('answer = 3'));
@@ -148,7 +151,11 @@ try{
  await until(()=>view.querySelector('.wb-continuous-file .wb-change-added')?.textContent.includes('answer = 3'));
  if(view.querySelectorAll('.wb-continuous-file').length!==1)throw Error('Native continuous comparison did not render its file');
  if(before!==(await mdo.files.read({path:repository+'/.git/index'})).base64)throw Error('Read-only changes modified the index');
- await fetch(TARGET+'/result',{method:'POST',mode:'no-cors',body:JSON.stringify({passed:true,scope:'native WebView2 changes UI',continuous:true,width:view.getBoundingClientRect().width,index_unchanged:true})});
+ scope.value='session';scope.dispatchEvent(new Event('change'));await until(()=>view.textContent.includes('此比较范围没有变更。'));
+ await mdo.files.write({path:repository+'/native.js',text:'const answer = 4;\n'});view.querySelector('[aria-label="刷新变更"]').click();
+ await until(()=>view.querySelector('.wb-change-removed')?.textContent.includes('answer = 3')&&view.querySelector('.wb-change-added')?.textContent.includes('answer = 4'));
+ if(!view.querySelector('.wb-changes-summary').title.includes('原始工作区字节'))throw Error('Native baseline provenance missing');
+ await fetch(TARGET+'/result',{method:'POST',mode:'no-cors',body:JSON.stringify({passed:true,scope:'native WebView2 changes UI',continuous:true,session_baseline:true,width:view.getBoundingClientRect().width,index_unchanged:true})});
 }catch(error){await fetch(TARGET+'/result',{method:'POST',mode:'no-cors',body:JSON.stringify({passed:false,error:String(error.stack||error)})})}
 '''
 

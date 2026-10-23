@@ -68,7 +68,7 @@ static bool SdkGitDiff(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,md
         if(Recreated){if(!SdkGitPrivateIndexInit(C,Range.Root,Range.Head,&Private,E))goto done;Working.Scope="unstaged";}
         Count=SdkGitDiffArgs(&Working,"--unified=3",Args);if(OldPath)Args[Count++]=OldPath;Args[Count++]=Path;
     }
-    if(!SdkGitRunWithIndex(C,Range.Root,Args,Count,(xbytesview){0},1,SdkGitDiffOutput,&Page,&Result,E,Private.Path))goto done;
+    if(!SdkGitRunWithIndex(C,Range.PrivateRepo?Range.PrivateRepo:Range.Root,Args,Count,(xbytesview){0},1,SdkGitDiffOutput,&Page,&Result,E,Private.Path))goto done;
     if(Result.Status.Code!=0&&!(NewFile&&Result.Status.Code==1)){SdkGitSuccess(&Result,E,"git_diff_failed");goto done;}
     if(NewFile&&Result.Status.Code==1&&!Page.Total&&!Page.Used&&Result.StderrSize){SdkGitSuccess(&Result,E,"git_diff_failed");goto done;}
     if(Page.Used||Page.LineBytes)SdkGitDiffLine(&Page);

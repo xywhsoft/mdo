@@ -26,6 +26,8 @@ static inline mdo_result mdoTerminalRelease(const mdo_sdk_context_v1* C,const xv
 {return mdoCall(C,"terminal.release",P,R,E);}
 static inline mdo_result mdoChangesList(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
 {return mdoCall(C,"changes.list",P,R,E);}
+static inline mdo_result mdoChangesBaseline(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
+{return mdoCall(C,"changes.baseline",P,R,E);}
 static inline mdo_result mdoChangesBranches(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
 {return mdoCall(C,"changes.branches",P,R,E);}
 static inline mdo_result mdoChangesDiff(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)

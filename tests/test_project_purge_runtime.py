@@ -179,6 +179,8 @@ class Probe:
             "migration/session-prompts/purge-probe/提示.txt": b"owned legacy hint\n",
             "migration/report-preserved.json": b"shared report\n",
             "data/cache/webview2/preserved.bin": b"portable browser cache\n",
+            "workbench-baselines/purge-probe/sessions/derived.json": b"owned local comparison cache\n",
+            "workbench-baselines/purge-other/sessions/preserved.json": b"another project comparison cache\n",
         }.items():
             file = self.home / path
             file.parent.mkdir(parents=True, exist_ok=True)
@@ -188,6 +190,7 @@ class Probe:
         # deletion path or supplies a client path to the production core.
         targets = {target["path"] for target in preview["targets"]}
         assert "memory/projects/purge-probe" in targets, preview
+        assert "workbench-baselines/purge-probe" in targets, preview
         assert preview["project_memory_present"] and preview["project_memory_entry_count"] == 2, preview
         if own_references:
             targets |= {"data/draft.json", "data/workspace-state.json"}

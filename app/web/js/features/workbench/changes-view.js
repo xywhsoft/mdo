@@ -51,7 +51,8 @@ export async function mountChangesView(root, { sdk, context, params = {}, viewSt
   };
   const fail = (error, retry) => {
     if (signal.aborted || error.name === "AbortError") return;
-    multi?.dispose(); multi = null; page = null; diff.replaceChildren(make("p", "wb-error wb-change-message", error.code === "git_baseline_missing" ? "这个会话没有已捕获的比较基线。请选择工作区或分支比较。" : error.message));
+    const explanation = error.code === "git_baseline_missing" ? "这个会话没有已捕获的比较基线。请选择工作区或分支比较。" : error.code === "git_baseline_unavailable" ? `会话开始时未能捕获完整基线，不能回溯补建。请选择工作区或分支比较。${error.message}` : error.code === "git_baseline_context_changed" ? "该会话的原始仓库或工作目录已变化，不能沿用旧基线。请选择工作区或分支比较。" : error.message;
+    multi?.dispose(); multi = null; page = null; diff.replaceChildren(make("p", "wb-error wb-change-message", explanation));
     info.replaceChildren(action("refresh", "重新读取变更", retry)); controls();
   };
   const controls = () => {
@@ -62,6 +63,7 @@ export async function mountChangesView(root, { sdk, context, params = {}, viewSt
     quote.disabled = !page?.rows.length; previous.disabled = !previousPages.length; next.disabled = !page?.more;
     summary.textContent = state ? `${state.files.length} 文件 · +${state.additions} −${state.deletions}${state.unmeasured_files ? ` · ${state.unmeasured_files} 未统计` : ""}` : "";
     summary.title = state ? `${state.repository}\n${state.branch || "分离 HEAD"}${state.unborn ? " · 尚无首次提交" : ""}${scope.value === "branch" ? `\n${state.base} → ${state.head}（提交之间）` : ""}` : "";
+    if (state?.scope === "session") summary.title += `\n基线：${new Date(state.baseline_captured_at_us / 1000).toLocaleString()}\n原始工作区字节；显示会话启动后的净变化，也包含其他程序的修改。`;
   };
   const selectRow = (row, extend) => {
     selectedRows = extend && selectedRows ? [Math.min(selectedRows[0], row.offset), Math.max(selectedRows[0], row.offset)] : [row.offset, row.offset];

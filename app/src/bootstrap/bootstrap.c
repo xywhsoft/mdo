@@ -20,6 +20,7 @@
 #include "../../include/mdo/runs.h"
 #include "../../include/mdo/schedules.h"
 #include "../../include/mdo/sessions.h"
+#include "../sessions/internal.h"
 #include "../../include/mdo/settings.h"
 #include "../../include/mdo/skills.h"
 #include "../../include/mdo/version.h"
@@ -156,6 +157,7 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
         return false;
     }
     g_MdoBootstrap.Stage = MDO_BOOTSTRAP_SESSIONS_READY;
+    MdoSessionsWorkspaceCaptureSet(MdoApplicationCaptureChanges);
     if ( !MdoApprovalManagerInit() ) {
         MdoBootstrapFail("approval manager initialization failed");
         return false;

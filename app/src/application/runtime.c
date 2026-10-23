@@ -25,6 +25,7 @@ static const struct {cstr Id,Description;} SdkRuntimeMethods[]={
     {"files.read","Read a bounded file workbench byte range"},{"files.write","Save with file revision checks"},
     {"files.mkdir","Create a file workbench directory"},{"files.move","Move a file workbench entry"},{"files.remove","Remove a file workbench entry"},
     {"changes.list","Read structured Git comparison files and statistics"},
+    {"changes.baseline","Read the immutable local session-start baseline capture receipt"},
     {"changes.branches","Read Git branch and remote comparison refs"},
     {"changes.diff","Read one bounded diff page with source line identities"},
     {"vfs.read","Read an application VFS resource"},{"vfs.list","List an application VFS directory"},

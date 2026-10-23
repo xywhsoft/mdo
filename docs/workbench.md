@@ -174,11 +174,28 @@ cancel、keydown/up、wheel、heartbeat、release_all。每条包含 epoch、递
 搜索有时间与条目预算，保存携带文件修订。`mdo.files` 打开目录，`mdo.editor` 的 params
 可传 `path`、`line`；定位按需继续读取，达到预览预算后明确提示，不能伪称已到达目标行。
 
-变更页 `mdo.changes` 可传 params.repository；其 SDK 为 `changes.list/branches/diff`，
-C 的 `mdoChangesList/Branches/Diff` 与 JS 的 `sdk.changes.list/branches/diff` 共用线协议。
+变更页 `mdo.changes` 可传 params.repository；其 SDK 为 `changes.list/branches/diff/baseline`，
+C 的 `mdoChangesList/Branches/Diff/Baseline` 与 JS 同名服务共用线协议。
 比较范围：workspace=HEAD 到当前工作区（含未跟踪），staged=HEAD 到暂存区，
 unstaged=暂存区到工作区，branch=选定基准提交到 HEAD；分支比较不混入未提交内容。
-session 仅允许真实已捕获的会话基线，目前缺少基线返回 git_baseline_missing，不能退化成 HEAD。
+session 比较真实会话创建时的工作区快照到当前工作区；分叉以分叉时刻重新捕获自己的基线。
+开始前已有的未暂存/未跟踪内容作为基线，之后也包含其他程序在同一目录中的净变化，
+不能解释成仅由 Agent 修改的内容。UI 和引用显示基线时间、树身份和原始字节表示。
+
+`changes.baseline` 只读原始捕获收据，不创建或重新采集。捕获发生在发布会话前，失败
+不阻止创建会话；旧会话、导入会话或缺少本机记录时返回 git_baseline_missing，捕获超限/
+不稳定返回 git_baseline_unavailable。两者都不能退化成 HEAD 或用当前目录冒充启动状态。
+会话原目录变化时拒绝该比较。缓存位于 Home 的 workbench-baselines/<project>，仅用于
+本机比较，不包含在现有会话备份/项目传输中；清除项目数据会按项目归属一起清理。
+
+基线采用 raw-worktree-v1：文件原始字节、不执行 clean/textconv/外部 diff/checkout，
+符号链接只记录链接文本、不沿链接读取；嵌套仓库只记录 HEAD 提交号，内部未提交内容
+需在嵌套仓库单独比较。忽略的未跟踪文件不纳入，已跟踪文件即使被忽略仍保留。
+Git fast-import 写入独立私有 bare 仓库，不写项目索引或对象库。最多 20,000 条目、
+16 MiB/文件、64 MiB 原始内容，完整清单前后核对、文件身份/时间核对以及嵌套 HEAD 复核；
+不宣称对外部编辑器提供文件系统事务。捕获/比较共用 15 秒期限，串行锁可取消等待。
+私有对象库超过 128 MiB 后拒绝新快照（一次已准入最多再写 64 MiB 加有限元数据），
+已有基线保留；自动 GC 未启用。记录和基线树与 UI 缓存不同，不应随意删除后重新采集。
 
 列表返回 repository/head/base/scope/files/revision，文件包括 path、old_path、status、
 additions/deletions、stats_available、binary。统计超出预算时显式标记，不将未知计作零。

@@ -10,6 +10,9 @@
 typedef struct MdoSessionEventBridge MdoSessionEventBridge;
 typedef struct MdoSessionEventTrimPlan MdoSessionEventTrimPlan;
 typedef struct MdoSessionRestoreReservation MdoSessionRestoreReservation;
+/* Register only during bootstrap, before requests or managed runs can create
+ * sessions. The optional observer runs before the new Agent is exposed. */
+void MdoSessionsWorkspaceCaptureSet(void (*Capture)(cstr,cstr,cstr));
 
 /* One synchronous owner per reservation. Acquire a current shared project
  * lease first. Reserves a fresh 32-lowercase-hex target and owns its exclusive

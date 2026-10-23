@@ -30,5 +30,5 @@ export function diffLabels(scope) {
 }
 
 export function diffProvenance(state, path, page, rows, range) {
-  return `仓库：${state.repository}\n文件：${path}\n比较范围：${range}\n基线提交：${state.base || "空仓库"}\nHEAD：${state.head || "空仓库"}\n比较修订：${page.revision}\n差异行：${rows[0]?.offset + 1}–${rows.at(-1)?.offset + 1}`;
+  return `仓库：${state.repository}\n文件：${path}\n比较范围：${range}\n${state.scope === "session" ? "会话基线树" : "基线提交"}：${state.base || "空仓库"}\n${state.scope === "session" ? "表示：原始工作区字节，显示启动后净变化，含其他程序的修改。\n" : ""}HEAD：${state.head || "空仓库"}\n比较修订：${page.revision}\n差异行：${rows[0]?.offset + 1}–${rows.at(-1)?.offset + 1}`;
 }

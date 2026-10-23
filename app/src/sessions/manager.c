@@ -29,6 +29,7 @@ typedef struct MdoSessionManagerState {
     MdoSessionEventObserver Observer;
     void* ObserverData;
     xwork_runtime* Runtime;
+    void (*WorkspaceCapture)(cstr,cstr,cstr);
     uint64 Generation;
     MdoSessionActive* Active;
     size_t ActiveCount;
@@ -61,6 +62,7 @@ struct MdoSessionCatalog {
 };
 
 static MdoSessionManagerState g_MdoSessions;
+void MdoSessionsWorkspaceCaptureSet(void (*Capture)(cstr,cstr,cstr)){g_MdoSessions.WorkspaceCapture=Capture;}
 
 void MdoSessionsObserve(MdoSessionEventObserver Observer, void* Data)
 {
@@ -191,6 +193,7 @@ static void MdoSessionsRollbackDirectory(const char* ProjectId,
     };
     char Relative[MDO_SESSION_PATH_CAPACITY];
     size_t i;
+    if(g_MdoSessions.WorkspaceCapture)g_MdoSessions.WorkspaceCapture(ProjectId,SessionId,NULL);
     MdoSessionAttachmentForkRollback(ProjectId, SessionId);
     for ( i = 0u; i < sizeof(Files) / sizeof(Files[0]); ++i ) {
         if ( MdoSessionsPath(Relative, ProjectId, SessionId, Files[i]) )
@@ -904,6 +907,7 @@ MdoSession* MdoSessionCreate(const MdoSessionCreateOptions* Options,
     AgentOptions.LivePermissionScope = g_MdoSessions.Active[
         MdoSessionsActiveFind(AgentOptions.ProjectId, AgentOptions.ProductSessionId)].PermissionScope;
     xrtMutexUnlock(g_MdoSessions.Lock);
+    if(g_MdoSessions.WorkspaceCapture)g_MdoSessions.WorkspaceCapture(Options->ProjectId,SessionId,Workspace);
     Agent = MdoAgentSessionCreateWithRuntime(g_MdoSessions.Runtime,
         &AgentOptions, Error);
     if ( Agent == NULL ) goto done;
@@ -1344,6 +1348,7 @@ MdoSession* MdoSessionFork(MdoSession* Source,
     xrtMutexUnlock(Source->Lock);
     SourceLocked = false;
 
+    if(g_MdoSessions.WorkspaceCapture)g_MdoSessions.WorkspaceCapture(ProjectId,SessionId,SourceInfo.WorkspaceRoot);
     MdoAgentSessionOptionsInit(&AgentOptions);
     AgentOptions.AgentId = SourceInfo.AgentId;
     AgentOptions.ModelId = SourceInfo.ModelId;
