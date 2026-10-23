@@ -87,6 +87,13 @@ try{
  await mdo.panel.close({id:panel.id});await pause(2500);
  const retained=await perform('snapshot');if(!retained.value.text.includes('SDK to native browser'))throw Error('Closing a panel destroyed the background browser');
  await mdo.browser.close({id:browser.id});
+ const path=(await mdo.files.resolve({path:'native-file-qa.txt'})).path;
+ await mdo.files.write({path,text:'Native file editor fixture\r\n'});await mdo.ui.openEditor({path,space:'native'});
+ let input;for(let i=0;i<100;i++){input=document.querySelector('.wb-file-editor');if(input)break;await pause(100);}
+ if(!input)throw Error('Native file editor did not mount');input.value='Native file editor saved\n';input.dispatchEvent(new Event('input',{bubbles:true}));
+ document.querySelector('[aria-label="保存文件"]').click();let saved;
+ for(let i=0;i<100;i++){await pause(100);saved=await mdo.files.read({path});if(saved.text==='Native file editor saved\r\n')break;}
+ if(saved.text!=='Native file editor saved\r\n')throw Error('Native file editing did not preserve CRLF');
  await fetch(TARGET+'/result',{method:'POST',mode:'no-cors',body:JSON.stringify({passed:true,application:true,screenshot_bytes:image.data.length})});
 }catch(error){await fetch(TARGET+'/result',{method:'POST',mode:'no-cors',body:JSON.stringify({passed:false,error:String(error.stack||error)})})}
 '''

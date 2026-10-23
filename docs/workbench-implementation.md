@@ -16,7 +16,8 @@
 ## 实施顺序与完成标准
 
 - [x] 共用菜单、图标按钮和浏览器状态；Windows/Android 具体导航错误与原生视图恢复。
-- [ ] 文件服务与文件面板：目录/搜索、文本和图片预览、编辑、冲突及引用。
+- [x] 文件服务与文件面板：目录/搜索、文本和图片预览、编辑、冲突及引用。
+- [ ] 文件面板后续完善：新建/重命名/删除、目录变化刷新及交互细节复查。
 - [ ] 结构化 Git 变更：未跟踪/重命名/二进制、大差异、比较基线、文件定位。
 - [ ] xrt PTY 终端：长期会话、C/JS 契约、读写/附着/resize/close、有界输出与断线恢复。
 - [ ] 新标签页四入口、插件元信息和统一布局；项目/设备上下文与原有面板恢复。
@@ -57,6 +58,36 @@ Windows 新宿主已编译；最终交付将在其余工具完成后重新打包
 条目及目录队列，并明确返回 incomplete/skipped。文件写入沿用 fs.write 的原子写入及
 修订检查。真实 xs/TCC 已验证分页、隐藏文件、Unicode 搜索、链接循环、二进制范围及
 外部修改后的保存拒绝；接口合同回归通过。文件页面尚待接入。
+
+### 里程碑二：文件预览和编辑页面
+
+文件页已接入：右侧目录树、按需分页/展开/搜索、树宽度拖动与键盘调整、隐藏开关、
+单击预览/双击固定文件标签、文本虚拟行号与语法着色、查找/跳转、Markdown 和图片
+预览、代码行引用、1 MiB 编辑、2 MiB 文本预览缓存、8 MiB 图片上限及像素预算。
+编辑草稿保留在展示端，刷新页面可恢复；外部修改提示、比较和明确放弃草稿后重读均已实现。
+UTF-8/UTF-16 BOM、端序和原文件换行保留；范围读取使用流式解码，避免 Unicode 边界误判。
+
+实际 Edge 页面已验证读写、外部冲突、重载草稿、安全 Markdown、UTF-16/CRLF 保存、
+图片、26,000 行日志的范围读取和有界 DOM、搜索、查找、目录树宽度及桌面/窄屏布局。
+窄屏检查发现旧 workbench 绝对定位仍指向第 3 个网格列导致仅 1 px 宽，已改为跨全部
+网格列，增加实际内容宽度断言；不能只检验“宽度不超过屏幕”。
+
+测试中曾两次出现启动失败页（一次首开、一次重载），没有 pageerror；已给文件浏览回归
+添加 console/请求失败诊断和失败截图。随后流程通过，尚无具体错误原因，后续若再现需
+读取 .build/workbench-builtin-20261023/files-browser/failure-diagnostics.json，不能当作已根治。
+
+下一阶段：结构化 Git 变更与交互终端；文件管理动作继续完善，最终四入口待终端接入。
+
+实际完整应用→WebView2 已补测文件编辑：SDK 打开编辑器、输入/保存及 CRLF 保留通过。
+相关 19 项前端单元测试、前端模块图（203 模块）及原有桌面/窄屏工作区回归通过。
+文件服务提交 279ca0df，浏览器基础提交 52a23d2c；文件预览编辑提交后继续下一阶段。
+
+后续执行参考：Windows 宿主 C:/Users/Administrator/AppData/Local/Temp/mdo-workbench-builtin-host/xs.exe。
+本轮原生 overlay 为 5131a86e75ba59e587b74a2ef1aa1adcf565f0ba6a801cb086d183e065e52455。
+运行文件页面：设置 MDO_PLAYWRIGHT_PATH 为
+C:/Users/Administrator/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright，
+执行 tests/test_workbench_browser.py --host <宿主> --evidence .build/workbench-builtin-20261023/files-browser --files。
+原生完整应用使用 tests/test_workbench_native_browser.py --host <宿主> --evidence <目录> --application。
 
 ## 验证要求
 

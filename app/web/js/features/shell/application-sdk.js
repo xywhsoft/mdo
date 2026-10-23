@@ -104,13 +104,13 @@ export function createApplicationUi({ navigation, executeActions, canCall = () =
     openEditor: async ({ path, space = "workspace" }, callerApi = clientApi) => {
       check(); const editorApi = callerApi.bind({});
       const resolved = await editorApi.call("fs.resolve", { path, space }); path = resolved.path; space = "native";
-      const resource = await editorApi.call("fs.read", { path, space, limit: 262144 }); check();
-      if (typeof resource.text !== "string" || resource.bytes !== resource.size) throw new Error("The editor supports complete UTF-8 files up to 256 KiB");
       if (workbench) {
         const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify([space, path])));
         const key = [...new Uint8Array(digest)].map(value => value.toString(16).padStart(2,"0")).join("");
-        return workbench.open("mdo.editor", { key, title: path, params: { path, space } }, editorApi);
+        return workbench.open("mdo.editor", { key, title: path, params: { path, space, edit: true } }, editorApi);
       }
+      const resource = await editorApi.call("fs.read", { path, space, limit: 262144 }); check();
+      if (typeof resource.text !== "string" || resource.bytes !== resource.size) throw new Error("The editor supports complete UTF-8 files up to 256 KiB");
       const id = `editor.${crypto.randomUUID()}`;
       const dispose = ui.registerPanel(id, { title: path, render(root, { signal }) {
         const input = document.createElement("textarea"), save = document.createElement("button"); input.value = resource.text; input.style.cssText = "width:70vw;height:60vh"; save.textContent = "保存";

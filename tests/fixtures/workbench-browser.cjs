@@ -83,7 +83,7 @@ const assert=require('node:assert/strict');
   await page.reload();await page.waitForFunction(()=>Boolean(window.mdo));
   await page.locator('#new-workbench-tab').click();await page.locator('.workbench:not([hidden])').waitFor();
   await page.setViewportSize({width:390,height:844});await page.screenshot({path:evidence+'/mobile.png'});
-  const box=await page.locator('.workbench').boundingBox();assert.ok(box.width<=391&&box.x>=-1,JSON.stringify(box));
+  const box=await page.locator('.workbench').boundingBox();assert.ok(box.width>300&&box.width<=391&&box.x>=-1&&box.x<90,JSON.stringify(box));
   await page.getByRole('button',{name:'工作区更多操作',exact:true}).click();
   await page.getByRole('menuitem',{name:'收起',exact:true}).click();assert.equal(await page.locator('#prompt').isVisible(),true);
   assert.deepEqual(errors,[]);console.log('Workbench real browser desktop/mobile, plugin lifecycle, resource refresh and restore: PASS');

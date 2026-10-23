@@ -1,6 +1,7 @@
 import { normalizeLayout, reorderPanel, safeBrowserUrl, browserLocation, validateImageFrame } from "./model.js";
 import { createNativeBrowserBridge } from "./native-browser.js";
 import { mountBrowserView } from "./browser-view.js";
+import { mountFilesView } from "./files-view.js";
 import { iconButton, popupMenu } from "./controls.js";
 import { createSurfaceInput } from "./surface-input.js";
 import { renderSourceMarkdown } from "../../utils/source-markdown.js";
@@ -69,7 +70,7 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
       if (definition.mount || definition.render) {
         const events = value.events;
         const result = await (definition.mount || definition.render)(root, { sdk, api: sdk, context: Object.freeze({ ...row.context }), params: row.params || {}, resource: row.resource, signal, events,
-          addContext, update: patch => update(row.id, patch), setDirty: callback => { value.dirty = callback; } });
+          addContext, viewState: row.view_state || {}, update: patch => update(row.id, patch), setDirty: callback => { value.dirty = callback; } });
         if (typeof result === "function") value.dispose = result; else if (result) Object.assign(value, result);
         if (signal.aborted) value.dispose?.(); return;
       }
@@ -271,7 +272,7 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
       void client.call("browser.create", { client: clientId, url }).then(browser => open("mdo.browser", { title: value, resource: { id: browser.id } }, client)).catch(error => toast(error.message, "error"));
     };
     root.append(make("h2", "", "新标签页"), form, make("h3", "", "工具"));
-    for (const [id, definition] of definitions) if ((!id.startsWith("mdo.") || ["mdo.task-plan","mdo.changes"].includes(id)) &&
+    for (const [id, definition] of definitions) if ((!id.startsWith("mdo.") || ["mdo.files","mdo.changes"].includes(id)) &&
       (definition.renderer !== "custom" || definition.mount || definition.render || renderers.has(definition.frontend || id))) root.append(button(definition.title || id, () => open(id, {}, sdk)));
     root.append(make("h3", "", "已打开")); for (const [id, row] of entries) if (row.type !== "mdo.new-tab") root.append(button(title(row), () => reveal(id)));
     void sdk.call("browser.list", { client: clientId }, { signal }).then(browsers => {
@@ -282,6 +283,12 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
     }).catch(() => {});
   } });
   for (const [id, renderer, label] of [["mdo.browser", "browser", "浏览器"], ["mdo.document", "document", "文档"], ["mdo.plan", "plan", "计划"], ["mdo.diff", "diff", "变更"], ["mdo.preview", "web", "网页预览"], ["mdo.editor", "editor", "文件编辑"]]) definitions.set(id, { title: label, renderer });
+  const openFile = async (path, client) => {
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(["native", path])));
+    const key = [...new Uint8Array(digest)].map(value => value.toString(16).padStart(2, "0")).join("");
+    return open("mdo.editor", { key, title: path.split(/[\\/]/).at(-1), params: { path, space: "native" } }, client);
+  };
+  for (const [id, title] of [["mdo.files", "文件"], ["mdo.editor", "文件"]]) definitions.set(id, { title, renderer: "custom", mount: (root, options) => mountFilesView(root, { ...options, openFile: path => openFile(path, options.sdk) }) });
   definitions.set("mdo.task-plan", { title: "会话计划", renderer: "custom", mount(root, { sdk, context, signal }) {
     if (!context.session) { root.append(make("p", "", "请先选择一个会话，查看它的任务计划。")); return; }
     let timer, previous = "";
