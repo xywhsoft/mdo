@@ -1,6 +1,7 @@
 import { element as make, icon, iconButton, popupMenu } from "./controls.js";
-import { sourceTokens } from "./source-view.js";
-import { pairDiffRows, changesTree, changeStats } from "./changes-model.js";
+import { changesTree, changeStats } from "./changes-model.js";
+import { renderDiffRows, diffLabels, diffProvenance } from "./diff-render.js";
+import { mountContinuousChanges } from "./continuous-changes.js";
 import { readOperation } from "./read-operation.js";
 import { toast } from "../../utils/dom.js";
 
@@ -9,7 +10,7 @@ export async function mountChangesView(root, { sdk, context, params = {}, viewSt
   const saved = viewState.changes || {}, collapsed = new Set(saved.collapsed || []);
   const treeId = `changes-${crypto.randomUUID()}`;
   let repository = saved.repository || params.repository || ".", state, selected = saved.selected || "", page, split = Boolean(saved.split), treeWidth = Math.max(150, Math.min(360, saved.treeWidth || 200));
-  let operation, generation = 0, saveTimer, treeRows = [], focused = 0, selectedRows = null, previousPages = [], targetOffset = 0;
+  let operation, generation = 0, saveTimer, treeRows = [], focused = 0, selectedRows = null, previousPages = [], targetOffset = 0, continuous = Boolean(saved.continuous), multi;
   const bar = make("div", "wb-changes-toolbar"), scope = make("select", "wb-compare-scope"), base = make("select", "wb-compare-base"), summary = make("span", "wb-changes-summary");
   scope.setAttribute("aria-label", "变更比较范围"); base.setAttribute("aria-label", "比较基准分支"); base.hidden = true;
   for (const [value, label] of [["workspace", "工作区"], ["staged", "已暂存"], ["unstaged", "未暂存"], ["branch", "分支 → HEAD"], ["session", "本会话"]]) {
@@ -39,23 +40,23 @@ export async function mountChangesView(root, { sdk, context, params = {}, viewSt
   body.append(main, tree); root.append(bar, body);
   const remember = () => {
     clearTimeout(saveTimer); saveTimer = setTimeout(() => {
-      if (!signal.aborted) void update({ view_state: { ...viewState, changes: { repository, scope: scope.value, base: base.value, selected, split, treeHidden: tree.hidden, treeWidth, collapsed: [...collapsed].slice(0, 256) } } }).catch(errorToast);
+      if (!signal.aborted) void update({ view_state: { ...viewState, changes: { repository, scope: scope.value, base: base.value, selected, split, continuous, treeHidden: tree.hidden, treeWidth, collapsed: [...collapsed].slice(0, 256) } } }).catch(errorToast);
     }, 350);
   };
   const comparison = () => ({ repository, scope: scope.value, ...(scope.value === "branch" ? { base: base.value } : {}) });
-  const cancel = () => { operation?.abort(); operation = null; };
+  const cancel = () => { operation?.abort(); operation = null; multi?.dispose(); multi = null; };
   const task = () => {
     cancel(); const controller = new AbortController(); operation = controller;
     return controller;
   };
   const fail = (error, retry) => {
     if (signal.aborted || error.name === "AbortError") return;
-    page = null; diff.replaceChildren(make("p", "wb-error wb-change-message", error.code === "git_baseline_missing" ? "这个会话没有已捕获的比较基线。请选择工作区或分支比较。" : error.message));
+    multi?.dispose(); multi = null; page = null; diff.replaceChildren(make("p", "wb-error wb-change-message", error.code === "git_baseline_missing" ? "这个会话没有已捕获的比较基线。请选择工作区或分支比较。" : error.message));
     info.replaceChildren(action("refresh", "重新读取变更", retry)); controls();
   };
   const controls = () => {
     const file = state?.files.find(file => file.path === selected);
-    fileName.textContent = file ? file.path : "变更"; fileName.title = file?.old_path ? `${file.old_path} → ${file.path}` : selected;
+    fileBar.hidden = continuous; fileName.textContent = file ? file.path : "变更"; fileName.title = file?.old_path ? `${file.old_path} → ${file.path}` : selected;
     fileStats.textContent = file ? changeStats(file) : "";
     open.disabled = !file || Boolean(file.directory) || file.status.includes("D") && !file.worktree_recreated;
     quote.disabled = !page?.rows.length; previous.disabled = !previousPages.length; next.disabled = !page?.more;
@@ -70,34 +71,14 @@ export async function mountChangesView(root, { sdk, context, params = {}, viewSt
     }
     for (const node of diff.querySelectorAll("[data-offset]")) node.classList.toggle("wb-change-selected", Number(node.dataset.offset) >= selectedRows[0] && Number(node.dataset.offset) <= selectedRows[1]);
   };
-  const cell = (row, side) => {
-    const node = make("div", `wb-change-cell${row ? ` wb-change-${row.kind}` : " wb-change-blank"}`); if (!row) return node;
-    node.dataset.offset = String(row.offset);
-    const number = make("button", "wb-change-number", String(side === "old" ? row.old_line || "" : row.new_line || "")); number.type = "button";
-    number.title = row.kind === "hunk" ? "选择此差异块（当前页）" : "选择差异行（Shift 扩展）";
-    number.setAttribute("aria-label", row.kind === "hunk" ? "选择差异块" : `选择差异第 ${row.offset + 1} 行`); number.onclick = event => selectRow(row, event.shiftKey);
-    const code = make("span", "wb-change-code");
-    const text = row.text ?? `[非 UTF-8 数据，Base64：${row.base64 || ""}]`;
-    const content = ["context", "removed", "added"].includes(row.kind) ? text.slice(1) : text;
-    for (const token of sourceTokens(content, selected)) code.append(make("span", token.kind ? `wb-token-${token.kind}` : "", token.text));
-    if (row.truncated) code.append(make("span", "wb-change-truncated", ` …（该行 ${row.bytes} 字节，显示前 16 KiB）`));
-    node.append(number, code); return node;
-  };
   const renderDiff = () => {
     const scrollTop = diff.scrollTop; diff.replaceChildren(); diff.dataset.split = String(split);
     if (!page) return;
     if (split) {
-      const labels = make("div", "wb-change-labels"), old = make("span", "", scope.value === "unstaged" ? "原版本：暂存区" : scope.value === "branch" ? "原版本：选定提交" : "原版本：HEAD"), fresh = make("span", "", scope.value === "staged" ? "新版本：暂存区" : scope.value === "branch" ? "新版本：HEAD" : "新版本：工作区");
-      labels.append(old, fresh); diff.append(labels);
+      const labels = make("div", "wb-change-labels"); diffLabels(scope.value).forEach(label => labels.append(make("span", "", label))); diff.append(labels);
     }
     if (!page.rows.length) diff.append(make("p", "wb-change-message", "此范围没有可显示的文本差异（可能只有文件模式或索引状态变化）。"));
-    for (const item of split ? pairDiffRows(page.rows) : page.rows.map(wide => ({ wide }))) {
-      const row = make("div", `wb-change-row${item.wide ? " wb-change-wide" : ""}`);
-      if (item.wide) {
-        const node = cell(item.wide, "new"), old = make("span", "wb-change-old-number", String(item.wide.old_line || "")); node.prepend(old); row.append(node);
-      } else row.append(cell(item.left, "old"), cell(item.right, "new"));
-      diff.append(row);
-    }
+    renderDiffRows(diff, page, { split, path: selected, select: selectRow });
     diff.scrollTop = scrollTop;
     info.replaceChildren(previous, make("span", "", `差异行 ${page.total ? page.offset + 1 : 0}–${page.next} / ${page.total.toLocaleString()} · +${page.additions} −${page.deletions}`), next);
     if (page.binary) info.append(make("span", "", "二进制文件无法显示文本差异"));
@@ -111,11 +92,21 @@ export async function mountChangesView(root, { sdk, context, params = {}, viewSt
     const rows = page.rows.filter(row => !selectedRows || row.offset >= selectedRows[0] && row.offset <= selectedRows[1]);
     const text = selectedText && diff.contains(selection.anchorNode) && diff.contains(selection.focusNode) ? selectedText : rows.map(row => row.text ?? `[Base64: ${row.base64}]`).join("\n");
     const range = scope.options[scope.selectedIndex].text;
-    const provenance = `仓库：${state.repository}\n文件：${selected}\n比较范围：${range}\n基线提交：${state.base || "空仓库"}\nHEAD：${state.head || "空仓库"}\n比较修订：${page.revision}\n差异行：${rows[0]?.offset + 1}–${rows.at(-1)?.offset + 1}`;
+    const provenance = diffProvenance(state, selected, page, rows, range);
     addContext({ title: `${selected} · ${range}`, content: `${provenance}\n\n${text}`, source: `git:${state.repository}/${selected}`, context });
+  };
+  const showContinuous = () => {
+    cancel(); page = null; info.replaceChildren(); controls(); if (!state?.files.length) return;
+    const snapshot = state, parameters = comparison();
+    multi = mountContinuousChanges(diff, { state: snapshot, scope: scope.value, range: scope.options[scope.selectedIndex].text,
+      selected, split, context, signal, openFile, addContext,
+      read: (path, offset, signal) => readOperation(sdk, "changes.diff", { ...parameters, path, revision: snapshot.revision, offset, limit: 300 }, signal),
+      onSelect(path) { selected = path; renderTreeRows(); remember(); }, onError: error => fail(error, refreshChanges),
+    });
   };
   async function loadDiff(offset = 0, reset = true) {
     if (!state || !selected) return;
+    if (continuous) { if (multi) multi.select(selected); else showContinuous(); remember(); return; }
     const controller = task(), request = ++generation, path = selected;
     targetOffset = offset; if (reset) previousPages = []; selectedRows = null; page = null; controls();
     diff.replaceChildren(make("p", "wb-change-message", "正在读取文件差异…")); info.replaceChildren(); renderTreeRows(); remember();
@@ -188,7 +179,8 @@ export async function mountChangesView(root, { sdk, context, params = {}, viewSt
   }
   scope.onchange = () => void refreshChanges().catch(errorToast); base.onchange = () => void refreshChanges().catch(errorToast);
   const menu = popupMenu(more, () => [
-    { label: "左右对照", icon: "split", checked: split, execute: () => { split = !split; renderDiff(); remember(); } },
+    { label: "连续浏览文件", icon: "file", checked: continuous, execute: () => { continuous = !continuous; if (continuous) showContinuous(); else void loadDiff(); remember(); } },
+    { label: "左右对照", icon: "split", checked: split, execute: () => { split = !split; if (continuous) showContinuous(); else renderDiff(); remember(); } },
     { label: "跳到差异行…", icon: "search", disabled: !page?.total, execute: () => {
       const value = prompt(`输入差异行（1–${page.total}，包括文件头）`, String(targetOffset + 1)); if (value === null) return;
       const line = Number(value); if (!Number.isSafeInteger(line) || line < 1 || line > page.total) throw new Error("请输入范围内的整数行号。"); return loadDiff(line - 1);

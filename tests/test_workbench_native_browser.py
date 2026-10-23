@@ -143,8 +143,12 @@ try{
  await until(()=>!view.hidden);
  if(view.querySelector('.wb-file-tree').hidden)throw Error('Switching tabs unexpectedly hid the file tree');
  if(view.getBoundingClientRect().width<300)throw Error('Changes layout collapsed');
+ view.querySelector('[aria-label="变更更多操作"]').click();
+ [...document.querySelectorAll('[role="menuitemcheckbox"]')].find(node=>node.textContent==='连续浏览文件').click();
+ await until(()=>view.querySelector('.wb-continuous-file .wb-change-added')?.textContent.includes('answer = 3'));
+ if(view.querySelectorAll('.wb-continuous-file').length!==1)throw Error('Native continuous comparison did not render its file');
  if(before!==(await mdo.files.read({path:repository+'/.git/index'})).base64)throw Error('Read-only changes modified the index');
- await fetch(TARGET+'/result',{method:'POST',mode:'no-cors',body:JSON.stringify({passed:true,scope:'native WebView2 changes UI',width:view.getBoundingClientRect().width,index_unchanged:true})});
+ await fetch(TARGET+'/result',{method:'POST',mode:'no-cors',body:JSON.stringify({passed:true,scope:'native WebView2 changes UI',continuous:true,width:view.getBoundingClientRect().width,index_unchanged:true})});
 }catch(error){await fetch(TARGET+'/result',{method:'POST',mode:'no-cors',body:JSON.stringify({passed:false,error:String(error.stack||error)})})}
 '''
 

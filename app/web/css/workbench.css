@@ -124,6 +124,11 @@
 .wb-changes-toolbar select[hidden] { display:none; }
 .wb-changes-summary { flex:1;min-width:50px;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
 .wb-change-filebar { display:flex;align-items:center;gap:3px;flex:none;min-height:38px;padding:4px 6px;border-bottom:1px solid var(--border); }
+.wb-change-filebar[hidden] { display:none; }
+.wb-continuous-file { border-bottom:1px solid var(--border);scroll-margin-top:38px;min-width:0; }
+.wb-continuous-file > .wb-change-filebar { position:sticky;top:34px;z-index:2;background:var(--surface); }
+.wb-continuous-diff { overflow:auto;min-height:40px; }
+.wb-continuous-pager { display:flex;align-items:center;gap:8px;padding:4px;position:sticky;top:0;background:var(--surface);z-index:3;border-bottom:1px solid var(--border);font-size:10px; }
 .wb-change-stats { font-size:11px;white-space:nowrap; }
 .wb-changes-diff { flex:1;min-height:0;overflow:auto;tab-size:4; }
 .wb-change-message { padding:20px;font-size:12px;line-height:1.8;overflow-wrap:anywhere; }

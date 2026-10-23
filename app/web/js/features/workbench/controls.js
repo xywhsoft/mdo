@@ -49,6 +49,7 @@ export function popupMenu(trigger, items, { signal, onError = console.error } = 
     menu.setAttribute("aria-label", trigger.getAttribute("aria-label") || "更多操作");
     for (const item of typeof items === "function" ? items() : items) {
       const node = element("button", "wb-menu-item", item.label); node.type = "button"; node.disabled = Boolean(item.disabled);
+      node.setAttribute("aria-label", item.label);
       node.setAttribute("role", item.checked === undefined ? "menuitem" : "menuitemcheckbox");
       if (item.checked !== undefined) node.setAttribute("aria-checked", String(item.checked));
       if (item.icon) node.prepend(icon(item.icon));
