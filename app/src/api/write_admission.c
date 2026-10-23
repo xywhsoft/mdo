@@ -8,6 +8,15 @@ static char g_MdoWriteNonce[33];
 static uint64 g_MdoWriteGeneration;
 static size_t g_MdoWriteReaders;
 static bool g_MdoWriteExclusive;
+bool MdoApiWriteRetainBackground(void)
+{
+    if(!g_MdoWriteLock)return false;
+    xrtMutexLock(g_MdoWriteLock);
+    bool Ok=!g_MdoWriteExclusive&&g_MdoWriteReaders<SIZE_MAX;if(Ok)++g_MdoWriteReaders;
+    xrtMutexUnlock(g_MdoWriteLock);return Ok;
+}
+void MdoApiWriteReleaseBackground(void)
+{if(!g_MdoWriteLock)return;xrtMutexLock(g_MdoWriteLock);if(g_MdoWriteReaders)--g_MdoWriteReaders;xrtMutexUnlock(g_MdoWriteLock);}
 
 bool MdoApiWriteInit(void)
 {

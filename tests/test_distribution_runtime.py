@@ -117,7 +117,7 @@ def run(host):
         (home/'probe.forbid').write_bytes(b'1')
         state=install("core");assert {t["id"] for t in state["tools"]}=={"busybox","curl","jq","ssh","scp","sftp","aria2c","rg","7zip"},state
         assert state['stage']=='complete' and not (home/'probe.called').exists(),'install must not start any tool process'
-        assert all(t['verification']=='file-integrity' for t in state['tools'])
+        assert all(t['verification']=='file-present' for t in state['tools'])
         assert next(t for t in state['tools'] if t['id']=='7zip')['version']=='26.04'
         assert len({next(t for t in state['tools'] if t['id']==name)['version'] for name in ['ssh','scp','sftp']})==1
         assert not state.get('error') and not failed.exists() and not (home/'data/toolpacks/last-error.json').exists(),'successful retry must clear failure artifacts'
@@ -126,12 +126,12 @@ def run(host):
         state=install("python");assert len(state["tools"])==10,state
         blocked=install("core","uninstall");assert blocked['installed']['core'] and len(blocked['tools'])==10 and blocked['stage']=='failed',blocked
         python=next(t for t in state["tools"] if t["id"]=="python")
-        assert python['verification']=='file-integrity' and 'sqlite-memory' not in python['verified']
+        assert python['verification']=='file-present' and 'sqlite-memory' not in python.get('verified',[])
         assert python['version']=='3.13.7' and not (home/'probe.called').exists(),'Python installation must not start any tool process'
         assert state["installed"]["core_revision"]==core_revision
         status,_,body=request(port,"GET","/fixture/prompt");prompt=json.loads(body)["data"]
         assert prompt.count("<mdo_tool_environment>")==1 and "AGENT_SENTINEL" in prompt and "stale" not in prompt and "python" in prompt
-        assert 'file-integrity' in prompt and 'without executing the tools' in prompt
+        assert 'Listed paths exist' in prompt and 'not a functional test' in prompt
         (home/'probe.forbid').unlink()
         proc.terminate();proc.wait(10)
         proc=subprocess.Popen([str(host),str(site/"xs.json"),"--","--home",str(home)],cwd=ROOT,env={**os.environ,"MDO_HOME":str(home)},stdout=log,stderr=log,creationflags=subprocess.CREATE_NO_WINDOW if os.name=="nt" else 0)

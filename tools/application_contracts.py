@@ -144,7 +144,7 @@ BODY_GROUPS={
  'McpContext':'McpContextRoute','McpAuth':'McpAuthRoute',
 }
 BODY={handler:name for name,handlers in BODY_GROUPS.items() for handler in handlers.split()}
-NO_BODY=set('''CommandsRoute DistributionRoute LiveRoute DirectRoute UpdateExitRoute BootstrapRoute SettingsRoute
+NO_BODY=set('''CommandsRoute DistributionRoute CliToolsRoute LiveRoute DirectRoute UpdateExitRoute BootstrapRoute SettingsRoute
 ModelsRoute ModelConfigRoute AgentsRoute BackupUploadRoute BackupUploadSealRoute BackupPreviewsRoute BackupPreviewRoute UpdateDownloadRoute UpdateInstallRoute
 BackupRestoreApplyRoute BackupRestoresRoute BackupRestoreRoute BackupPreviewStartRoute ModulesRoute ToolsRoute SkillsRoute McpRoute DirectoriesRoute
 ProjectPurgePreviewRoute ProjectPurgeResultRoute ProjectWorkspaceFilesRoute MemoryOpenDirectoryRoute MemoryEntryRoute
@@ -219,6 +219,7 @@ def contract(row):
     if path.endswith('/enabled'):body_name='Enabled'
     if handler=='QueueItemRoute':body_name='QueueState'
     if handler=='RemoteRoute' and path.endswith('/ticket'):body_name=None;properties['body']=document('job_id:s',('job_id',),True)
+    if handler=='CliToolsRoute' and method=='POST':properties['body']=document('action:s id:s tool:o enabled:b revision:u store_id:u query:s before:u name:s')
     if handler=='DistributionRoute' and method=='POST':properties['body']=document('action:s channel:s product:s')
     raw=handler in ('BackupUploadChunkRoute','AttachmentRoute') and method=='PUT'
     raw=raw or handler=='AttachmentsRoute' and method=='POST'

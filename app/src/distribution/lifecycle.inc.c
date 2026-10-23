@@ -19,7 +19,7 @@ static bool MdoDistCompatible(xvalue* Package,xvalue* Active)
     }return true;
 }
 static bool MdoDistGeneration(cstr Path)
-{return MdoDistValidRelative(Path)&&(!strncmp(Path,"data/toolpacks/core/",20)||!strncmp(Path,"data/toolpacks/python/",22));}
+{return MdoDistValidRelative(Path)&&(!strncmp(Path,"data/toolpacks/core/",20)||!strncmp(Path,"data/toolpacks/python/",22)||!strncmp(Path,"data/cli-tools/installed/",25));}
 static xvalue* MdoDistMetadata(xvalue* Package)
 {
     /* Retain compatibility and declared versions without repeated descriptions. */

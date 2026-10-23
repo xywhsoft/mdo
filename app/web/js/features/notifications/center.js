@@ -3,6 +3,7 @@ import { targetState, subscribeTarget } from "../../api/target.js";
 import { currentLocale, subscribeLocale } from "../../i18n.js";
 import { buildNotices } from "./model.js";
 import { createNoticeIndicators, createNoticeIcon, noticeTone } from "./indicator.js";
+import { createExternalToolsPanel } from "./external-tools.js";
 import { createToolPanel } from "./tool-panel.js";
 
 const words = {
@@ -27,14 +28,17 @@ Object.assign(words["ru-RU"],{expectedHash:"Ожидаемый SHA-256",actualHa
 export function createNotificationCenter({ updatePanel, navigation }) {
   const dialog = document.querySelector("#notifications-dialog"), toolsBody = document.querySelector("[data-settings-toolpacks]");
   const entries = document.querySelectorAll("[data-notifications-open]");
-  let distribution = {}, update = null, account = null, preferences = {}, pending = false, timer, destroyed = false, epoch = 0, selected = null;
+  let cli = {}, distribution = {cli:{}}, update = null, account = null, preferences = {}, pending = false, timer, destroyed = false, epoch = 0, selected = null;
   let bodySignature = "";
   const copy = () => words[currentLocale()] ?? words["en-US"];
   const toolPanel=createToolPanel({copy,target:targetState,command,openFull:async()=>{
     try { await api.post("/update",{edition:"full"});await updatePanel?.refresh();updatePanel?.open(); }
     catch(error){distribution.message=copy().failure+" · "+error.message;renderTools();}
   }});
-  updatePanel?.setToolManager({title:()=>copy().unifiedUpdate,render:body=>toolPanel.render(body,distribution,true),check:()=>command("check","")});
+  const externalPanel=createExternalToolsPanel({refresh,openTools,signedIn:()=>account?.state==="signed_in",isMain:()=>navigation.get().view==="workspace",openFull:async()=>{
+    await api.post("/update",{edition:"full"});await updatePanel?.refresh();updatePanel?.open();
+  }});
+  updatePanel?.setToolManager({title:()=>copy().unifiedUpdate,render:body=>externalPanel.render(body,cli,true),check:()=>externalPanel.command({action:"catalog"})});
   const indicators = createNoticeIndicators({ hosts: entries, copy, onOpen(n) {
     if (n) showDetail(n); else { selected = null; render(); }
     if (!dialog.open) dialog.showModal();
@@ -80,8 +84,8 @@ export function createNotificationCenter({ updatePanel, navigation }) {
   }
   function renderTools() {
     const data={...distribution,message:serviceMessages[currentLocale()]?.[distribution.message]??distribution.message};
-    toolPanel.render(toolsBody,data);
-    toolPanel.render(document.querySelector("[data-update-toolpacks]"),data,true);
+    if(cli.platform){externalPanel.render(toolsBody,cli);externalPanel.render(document.querySelector("[data-update-toolpacks]"),cli,true);}
+    else {toolPanel.render(toolsBody,data);toolPanel.render(document.querySelector("[data-update-toolpacks]"),data,true);}
   }
   function openTools() { indicators.hide(); if (dialog.open) close(); navigation.openSettings("toolpacks"); }
   async function command(action, id) {
@@ -91,18 +95,19 @@ export function createNotificationCenter({ updatePanel, navigation }) {
   async function refresh() {
     if (pending || destroyed) return; pending = true; const generation = epoch;
     try {
-      const results = await Promise.allSettled([api.get("/distribution"), api.get("/update"), api.get("/account")]);
+      const results = await Promise.allSettled([api.get("/distribution"), api.get("/update"), api.get("/account"), api.get("/cli-tools")]);
       if (generation !== epoch || destroyed) return;
       if (results[0].status === "fulfilled") distribution = results[0].value.data;
       if (results[1].status === "fulfilled") update = results[1].value.data;
       if (results[2].status === "fulfilled") account = results[2].value.data;
+      if (results[3].status === "fulfilled") cli=results[3].value.data;distribution.cli=cli;
       render();
-    } finally { pending = false; clearTimeout(timer); if (!destroyed) timer = setTimeout(refresh, distribution.busy ? 1000 : 30000); }
+    } finally { pending = false; clearTimeout(timer); if (!destroyed && generation!==epoch) queueMicrotask(refresh);else if (!destroyed) timer = setTimeout(refresh, distribution.busy || (cli.tasks??[]).some(t=>["queued","running","installing","uploading"].includes(t.state)) ? 1000 : 30000); }
   }
   dialog.querySelector("[data-notifications-close]").addEventListener("click", close);
-  const locale = subscribeLocale(render), target = subscribeTarget(() => { epoch++; distribution = {}; update = account = selected = null; loadPreferences(); render(); void refresh(); });
-  const route = navigation.subscribe(state => { if (state.view === "settings" && state.settingsSection === "toolpacks") void refresh(); });
+  const locale = subscribeLocale(render), target = subscribeTarget(() => { epoch++; externalPanel.reset(); cli={}; distribution = {cli:{}}; update = account = selected = null; loadPreferences(); render(); void refresh(); });
+  const route = navigation.subscribe(state => { renderTools();if (state.view === "settings" && state.settingsSection === "toolpacks") void refresh(); });
   const foreground = () => { if (!document.hidden) void refresh(); }; document.addEventListener("visibilitychange", foreground);
   loadPreferences(); render(); void refresh();
-  return { refresh, destroy() { destroyed = true; clearTimeout(timer); indicators.destroy(); locale(); target(); route(); document.removeEventListener("visibilitychange", foreground); } };
+  return { refresh, destroy() { destroyed = true; clearTimeout(timer); indicators.destroy(); externalPanel.destroy(); locale(); target(); route(); document.removeEventListener("visibilitychange", foreground); } };
 }

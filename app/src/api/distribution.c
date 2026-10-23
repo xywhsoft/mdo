@@ -1,5 +1,13 @@
 #include "internal.h"
 #include "../../include/mdo/distribution.h"
+bool MdoApiCliToolsRoute(MdoApiContext* Context)
+{
+    if(Context->Request->head->MethodCode==XHTTP_METHOD_POST){MdoApiJsonBody Body={0};MdoApiBodyStatus Read=MdoApiJsonBodyRead(Context,&Body);
+        if(Read!=MDO_API_BODY_OK)return MdoApiReplyBodyError(Context,Read);
+        char Error[256]={0};bool Ok=MdoCliCommand(Body.Value,Error,sizeof(Error));MdoApiJsonBodyUnit(&Body);
+        if(!Ok)return MdoApiReplyError(Context,422,"external_tool_request_failed",Error,NULL);}
+    xvalue* Data=MdoCliSnapshot();return Data?MdoApiReplySuccessTake(Context,200,Data,NULL):MdoApiReplyError(Context,503,"external_tools_unavailable","External tool manager unavailable",NULL);
+}
 bool MdoApiDistributionRoute(MdoApiContext* Context)
 {
     if(Context->Request->head->MethodCode==XHTTP_METHOD_POST) {

@@ -246,10 +246,10 @@ void MdoBootstrapUnit(void)
 {
     MdoModuleManagerStop();
     MdoCommandManagerUnit();
-    MdoDistributionUnit();
     MdoUpdateUnit();
     MdoScheduleExecutorUnit();
     MdoRunManagerUnit();
+    MdoDistributionUnit();
     MdoPowerManagerUnit();
     MdoAskManagerUnit();
     MdoApprovalManagerUnit();

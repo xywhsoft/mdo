@@ -62,6 +62,7 @@ bool MdoApiApplicationRoute(MdoApiContext* Context);
 bool MdoApiCommandInvocationRoute(MdoApiContext* Context);
 bool MdoApiCommandProjectRoute(MdoApiContext* Context);
 bool MdoApiDistributionRoute(MdoApiContext* Context);
+bool MdoApiCliToolsRoute(MdoApiContext* Context);
 bool MdoApiUpdateRoute(MdoApiContext* Context);
 bool MdoApiUpdateDownloadRoute(MdoApiContext* Context);
 bool MdoApiUpdateInstallRoute(MdoApiContext* Context);

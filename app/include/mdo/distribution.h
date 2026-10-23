@@ -26,4 +26,13 @@ void MdoDistributionUnit(void);
 xvalue* MdoDistributionSnapshot(void);
 bool MdoDistributionRequest(cstr Action,cstr Id);
 bool MdoToolPrompt(char** Prompt);
+bool MdoCliInit(XS_ServerInfo* Server,const xvalue* Legacy,const xvalue* Active);
+void MdoCliLegacyChanged(void);
+void MdoCliStop(void);
+void MdoCliUnit(void);
+xvalue* MdoCliSnapshot(void);
+bool MdoCliCommand(const xvalue* Input,char* Error,size_t Capacity);
+bool MdoCliToolPrompt(char** Prompt);
+bool MdoApiWriteRetainBackground(void);
+void MdoApiWriteReleaseBackground(void);
 #endif

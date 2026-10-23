@@ -11,8 +11,8 @@ import { reloadStorePluginRuntime } from "./store-activation.js";
 import { saveBlobFile } from "../../utils/file-download.js";
 
 const text = (key, fallback, args = {}) => t(`store.${key}`, args, fallback);
-const kindName = kind => ({ agents: "Agent", subagents: "SubAgent", tools: text("tools", "工具"),
-  skills: "Skill", mcp: "MCP", modules: text("modules","扩展包（C 模块）"), toolpacks: text("toolpacks","扩展工具包"), plugins: text("plugins","mdo 插件"), commands: text("commands", "命令"), "c-agents": "C Agent", "c-subagents": "C SubAgent" })[kind] || kind;
+const kindName = kind => ({ agents: "Agent", subagents: "SubAgent", tools: text("tools", "Agent 工具"),
+  skills: "Skill", mcp: "MCP", modules: text("modules","扩展包（C 模块）"), toolpacks: text("toolpacks","外部工具"), plugins: text("plugins","mdo 插件"), commands: text("commands", "命令"), "c-agents": "C Agent", "c-subagents": "C SubAgent" })[kind] || kind;
 const node = (tag, value, className) => element(tag, { text: value, className });
 const fileLabels=()=>({download:text("downloadFile","下载文件"),binary:text("binaryFile","二进制文件，请下载检查。"),truncated:text("fileTruncated","仅预览前 64 KiB，请下载检查完整内容。")});
 const publicationMessage = error => {
@@ -95,7 +95,7 @@ export function createStorePanel() {
       select.append(element("option", { text: text("all", "全部类型"), attrs: { value: "" } }));
       for (const k of STORE_KINDS) select.append(element("option", { text: kindName(k), attrs: { value: k } }));select.value = kind;
       const submit = element("button", { text: text("searchButton", "搜索"), className: "secondary-button", attrs: { type: "submit" } });submit.disabled = busy;
-      form.append(input, select, submit);form.onsubmit = e => { e.preventDefault();query = input.value.trim();kind = select.value;void load(); };nodes.push(form);
+      form.append(input, select, submit);form.onsubmit = e => { e.preventDefault();query = input.value.trim();kind = select.value;if(kind === "toolpacks"){location.hash="#/settings/toolpacks";return;}void load(); };nodes.push(form);
     }
     if (error || busy) { const status = node("p", busy ? text("loading", "正在读取…") : error, "store-status");status.setAttribute("role", "status");nodes.push(status); }
     if (loginRequired) nodes.push(button(text("signIn", "登录账号"), () => { location.hash = "#/settings/account"; }));

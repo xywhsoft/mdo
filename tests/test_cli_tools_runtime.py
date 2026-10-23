@@ -1,0 +1,82 @@
+"""Real native external-tool lifecycle; no uploaded program is ever executed."""
+import argparse
+import hashlib
+import json
+import os
+from pathlib import Path
+import shutil
+import struct
+import subprocess
+import tempfile
+import threading
+import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from test_api_runtime import free_port, request, wait_ready
+
+ROOT=Path(__file__).resolve().parents[1]
+PAYLOAD=b"Not an executable; must never be run\n"
+MANIFEST=dict(id="fixture",name="Fixture CLI",version="1.0.0",platform="windows-x86_64",prompt="CLI_PROMPT_SENTINEL",
+              entry="bin/fixture.exe",license="MIT",links=["https://example.org"],
+              files=[dict(path="bin/fixture.exe",size=len(PAYLOAD),sha256=hashlib.sha256(PAYLOAD).hexdigest(),mode=493)])
+TEXT=json.dumps(MANIFEST).encode();ARCHIVE=b"MDOCLI1\n"+struct.pack("<I",len(TEXT))+TEXT+PAYLOAD
+PRODUCT=dict(MANIFEST,id=1,slug="fixture",tool_id="official.fixture",sha256=hashlib.sha256(ARCHIVE).hexdigest(),size=len(ARCHIVE),state="published",author="Fixture")
+
+class Store(BaseHTTPRequestHandler):
+    damaged=False
+    def log_message(self,*args):pass
+    def do_GET(self):
+        if self.path.startswith("/api/v1/mdo/cli/blob"):
+            data=bytes(len(ARCHIVE)) if self.damaged else ARCHIVE
+        else:
+            data=json.dumps(dict(code=0,data=PRODUCT if "/detail?" in self.path else dict(items=[PRODUCT],next_before=0))).encode()
+        self.send_response(200);self.send_header("Content-Length",str(len(data)));self.end_headers();self.wfile.write(data)
+
+def run(host):
+    server=ThreadingHTTPServer(("127.0.0.1",0),Store);threading.Thread(target=server.serve_forever,daemon=True).start()
+    base=Path(tempfile.mkdtemp(prefix="cli-tools-",dir=ROOT/".build"));site=base/"site";home=base/"home";shutil.copytree(ROOT/"app",site)
+    origin=f"http://127.0.0.1:{server.server_port}"
+    probe=f'#define MDO_ACCOUNT_SERVICE_ORIGIN "{origin}"\n#define MDO_DISTRIBUTION_ORIGIN "{origin}"\n#define MDO_DISTRIBUTION_HOST "127.0.0.1"\n#define MDO_DISTRIBUTION_PORT {server.server_port}\n#define MDO_DISTRIBUTION_SECURE false\n#define RequestProc ProductRequestProc\n#include "generated/mdo_unity.c"\n#undef RequestProc\n'
+    probe+=r'XS_RequestResult RequestProc(XS_HttpReq* req){if(xrtStrEqual(req->head->Target,XRT_STR_LITERAL("/fixture/prompt"))){MdoApiContext c={0};c.Request=req;str p=xrtStrDup("AGENT_SENTINEL");bool ok=MdoToolPrompt(&p)&&MdoToolPrompt(&p);if(ok)MdoApiReplySuccessTake(&c,200,xrtValueString(xrtStrView(p)),NULL);xrtFree(p);return XS_OK;}return ProductRequestProc(req);}'
+    (site/"probe.c").write_text(probe,encoding="utf-8");port=free_port()
+    cfg={"services":[{"class":"http","name":"cli-fixture","enabled":True,"ip":"127.0.0.1","port":port,"host_default":{"name":"cli-fixture","enabled":True,"path":str(site/"web"),"devlang":"c","devfile":str(site/"probe.c")}}]}
+    (site/"xs.json").write_text(json.dumps(cfg));log=(base/"native.log").open("wb")
+    def start():
+        p=subprocess.Popen([str(host),str(site/"xs.json"),"--","--home",str(home)],cwd=ROOT,env={**os.environ,"MDO_HOME":str(home)},stdout=log,stderr=log,creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0));wait_ready(port,p);return p
+    def get():
+        status,_,raw=request(port,"GET","/api/v1/cli-tools");assert status==200,(status,raw);return json.loads(raw)["data"]
+    def post(action,status=200,**fields):
+        code,_,raw=request(port,"POST","/api/v1/cli-tools",body=json.dumps(dict(action=action,**fields)).encode(),headers={"Content-Type":"application/json"});assert code==status,(code,raw);return json.loads(raw).get("data")
+    def wait_task():
+        end=time.monotonic()+25
+        while time.monotonic()<end:
+            s=get()
+            if not any(t["state"] in ("queued","running","installing","uploading") for t in s["tasks"]):return s
+            time.sleep(.05)
+        raise AssertionError(get())
+    def prompt():return json.loads(request(port,"GET","/fixture/prompt")[2])["data"]
+    proc=start()
+    try:
+        assert get()["guide"]=="new" and not get()["items"]
+        exe=base/"manual.exe";exe.write_bytes(PAYLOAD)
+        tool=dict(id="custom.fixture",name="Manual",version="1.0.0",path=str(exe),prompt="MANUAL_PROMPT_SENTINEL",license="MIT",platform="windows-x86_64",enabled=True,links=[])
+        post("save",tool=tool);assert "MANUAL_PROMPT_SENTINEL" in prompt() and prompt().count("<mdo_tool_environment>")==1
+        post("enable",id=tool["id"],enabled=False);assert "MANUAL_PROMPT_SENTINEL" not in prompt()
+        post("enable",id=tool["id"],enabled=True);exe.unlink();assert "MANUAL_PROMPT_SENTINEL" not in prompt()
+        post("save",status=422,tool=tool,revision=get().get("revision",0));exe.write_bytes(PAYLOAD)
+        post("remove",id=tool["id"]);assert exe.read_bytes()==PAYLOAD
+        post("dismiss");post("catalog");s=wait_task();assert s["store"]["items"][0]["id"]==1
+        post("install",store_id=1,name="Fixture CLI");s=wait_task();assert s["tasks"][-1]["state"]=="complete",s
+        t=s["items"][0];installed=Path(t["path"]);assert installed.read_bytes()==PAYLOAD and "CLI_PROMPT_SENTINEL" in prompt()
+        post("enable",id=t["id"],enabled=False);post("install",store_id=1);s=wait_task();assert s["tasks"][-1]["state"]=="complete" and not s["items"][0]["enabled"]
+        original=s["items"][0]["path"];Store.damaged=True;post("install",store_id=1);s=wait_task();assert s["tasks"][-1]["state"]=="failed" and s["items"][0]["path"]==original
+        Store.damaged=False;post("recommend");s=wait_task();assert s["items"][0]["enabled"] and s["guide"]=="accepted"
+        post("remove",id=t["id"]);assert Path(original).exists(),"running tasks retain retired files until restart"
+        proc.terminate();proc.wait(10);proc=start();s=get();assert s["guide"]=="accepted" and not s["items"] and not Path(original).exists()
+        assert not exe.with_suffix(".called").exists()
+        proc.terminate();proc.wait(10);state=home/"data/cli-tools/state.json";state.write_bytes(b"broken");proc=start();assert not get()["writable"];post("dismiss",status=422);assert state.read_bytes()==b"broken"
+        print("PASS CLI native manual paths, injection, missing files, individual install/update, hash failure rollback, guide, retirement, restart and corrupt-state preservation")
+    finally:
+        proc.terminate();proc.wait(15);log.close();server.shutdown();server.server_close()
+
+if __name__=="__main__":
+    p=argparse.ArgumentParser();p.add_argument("--host",type=Path,default=ROOT/".build/host/xs.exe");run(p.parse_args().host)

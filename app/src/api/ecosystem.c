@@ -114,6 +114,7 @@ static xtaskoutcome EcoApiRun(xcancel* cancel,ptr value,xtaskvalue* out)
     if(!MdoApiDownloadLive(&job->Context))return XTASK_CANCELLED;
     xvalue* input=job->Input;job->Input=NULL;
     job->Sent=EcoHandleInput(&job->Context,input);
+    if(job->Sent)MdoCliLegacyChanged();
     MdoApiLiveChanged(NULL);return job->Sent?XTASK_SUCCESS:XTASK_FAILED;
 }
 void MdoApiEcosystemUnit(void)

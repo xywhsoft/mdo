@@ -12,14 +12,14 @@ export function matchesNotice(n, device, locale, signedIn, now = Date.now()) {
 export function buildNotices({ distribution = {}, update, account, locale, preferences = {}, now = Date.now(), copy }) {
   const notices = [], tools = distribution.tools ?? [], installed = distribution.installed ?? {};
   const updates=[];
-  for (const pack of distribution.toolpacks ?? []) {
+  for (const pack of distribution.cli ? [] : distribution.toolpacks ?? []) {
     if (pack.status!=="withdrawn" && installed[pack.id] && pack.revision > (installed[pack.id + "_revision"] ?? 0))updates.push(pack);
   }
-  const apkTools=distribution.edition === "full" && distribution.toolpack_revision > (distribution.bundled_toolpack_revision ?? 0);
+  const apkTools=!distribution.cli && distribution.edition === "full" && distribution.toolpack_revision > (distribution.bundled_toolpack_revision ?? 0);
   const toolsBody=updates.map(p=>p.notes||copy.toolsBody).join("\n")+(apkTools?"\n"+copy.android:"");
   if(update?.available)notices.push({id:"app-update",revision:update.sha256+":"+updates.map(p=>p.revision).join(",")+":"+(apkTools?distribution.toolpack_revision:""),title:copy.update,body:(update.notes||copy.updateBody)+(toolsBody?"\n\n"+toolsBody:""),icon:"update",rank:0,action:"update",persistent:true});
   else if(updates.length||apkTools)notices.push({id:"tools-update",revision:updates.map(p=>p.id+":"+p.revision).join(",")+(apkTools?distribution.toolpack_revision:""),title:copy.toolsUpdate,body:toolsBody,icon:"update",rank:1,action:"update",persistent:true});
-  if (tools.filter(t => ["busybox", "curl", "jq", "ssh"].includes(t.id)).length < 4)
+  if (!distribution.cli && tools.filter(t => ["busybox", "curl", "jq", "ssh"].includes(t.id)).length < 4)
     notices.push({ id: "tools-guide", revision: 1, title: copy.install, body: copy.toolsBody, icon: "tools", rank: 2, action: "tools" });
   if (account?.state === "signed_out") notices.push({ id: "account-guide", revision: 1, title: copy.login, body: copy.accountBody, icon: "account", rank: 3, action: "account" });
   for (const n of distribution.notices ?? []) if (matchesNotice(n, distribution, locale, account?.state === "signed_in", now) && !(n.icon === "coupon" && preferences.marketing === false))

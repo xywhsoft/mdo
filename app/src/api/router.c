@@ -53,6 +53,7 @@ static const MdoApiRoute g_MdoApiRoutes[] = {
     { "/api/v1/extensions/{kind}/{id}/enabled", XHTTP_METHOD_POST,
       "POST, OPTIONS", MdoApiExtensionsRoute, false },
     { "/api/v1/distribution", XHTTP_METHOD_GET | XHTTP_METHOD_POST, "GET, POST, OPTIONS", MdoApiDistributionRoute, false },
+    { "/api/v1/cli-tools", XHTTP_METHOD_GET | XHTTP_METHOD_POST, "GET, POST, OPTIONS", MdoApiCliToolsRoute, false },
     { "/api/v1/remote", XHTTP_METHOD_GET | XHTTP_METHOD_POST,
       "GET, POST, OPTIONS", MdoApiRemoteRoute, false },
     { "/api/v1/connector/state", XHTTP_METHOD_GET, "GET, OPTIONS", MdoApiRemoteRoute, false },
@@ -533,6 +534,7 @@ bool MdoApiInit(void)
 void MdoApiUnit(void)
 {
     MdoApiQueueStop();
+    MdoCliStop();
     g_MdoApiInitialized = false;
     MdoApiModelProbesUnit();
     MdoApiEcosystemUnit();
