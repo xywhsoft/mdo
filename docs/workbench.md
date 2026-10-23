@@ -255,6 +255,15 @@ not_started / cancelled_before_start。不会重放原程序或输入。启动�
 Home 内的默认 workspace。只接受默认项目的当前根目录，持共享项目租约且使用 Home
 锚定目录接口；不创建其他项目或任意子路径。普通 resolve 始终只解析路径。
 
+`files.create({path})` 排他创建空文件，已有文件/链接保持原样，不隐式创建父目录；
+使用返回的修订继续编辑。`files.mkdir({path,exclusive:true})` 只创建该目录，已有目录
+报冲突；默认 mkdir 仍可递归创建。`files.move/remove` 可提供读取时的 revision，
+已改变的条目返回 412；重命名默认不替换目标。修订检查协调已观测版本，不构成对外部
+文件系统写入的原子事务或递归目录内容快照。
+
+`files.inspect({paths,space})` 一次检查 1–64 个路径，返回与请求对应的元信息或
+逐项 error/code/status。缺失 404 与权限/其他错误区分；不能把检查失败统一视为文件删除。
+
 自动回归覆盖 C 命令工作者与 HTTP 共享资源、修订冲突、归属隔离、UI 回执、布局恢复、
 损坏文件保留，以及真实浏览器的桌面／窄窗口交互。独立 WebView2 用例验证导航、输入、
 点击、截图、后退、接管及内容页无宿主 SDK。Android 的 Java 外壳及 ARM64 C 编译单独检查；

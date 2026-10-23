@@ -20,6 +20,8 @@ static const struct {cstr Id,Description;} SdkRuntimeMethods[]={
     {"files.directory","Read a paginated project directory with a revision precondition"},
     {"files.search","Search filenames within a bounded recursive traversal"},
     {"files.resolve","Resolve a file workbench path"},{"files.stat","Read file workbench metadata"},
+    {"files.create","Exclusively create a new empty file without replacing an entry"},
+    {"files.inspect","Inspect at most 64 paths with individual metadata or errors"},
     {"files.read","Read a bounded file workbench byte range"},{"files.write","Save with file revision checks"},
     {"files.mkdir","Create a file workbench directory"},{"files.move","Move a file workbench entry"},{"files.remove","Remove a file workbench entry"},
     {"changes.list","Read structured Git comparison files and statistics"},
@@ -104,7 +106,13 @@ static bool SdkFileCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue* P,
     if(Vfs){cstr Name=SdkField(P,"path");Path=Name?xrtStrDup(Name):NULL;if(!Path||strncmp(Path,"/app/",5))goto invalid;}
     else Path=SdkNativePath(C,P,Storage,E);
     if(!Path)return false;
-    cstr Action=strrchr(Method,'.')+1;bool Ok=false;
+    cstr Action=strrchr(Method,'.')+1;bool Ok=false,Created=false;
+    cstr Revision=SdkField(P,"revision");
+    if(Revision&&(!strcmp(Action,"write")||!strcmp(Action,"append")||!strcmp(Action,"remove")||!strcmp(Action,"move")||!strcmp(Action,"copy"))){
+        xfileinfo Current={0};xvalue* Metadata=xrtPathStat(Path,false,&Current)?SdkFileInfo(&Current):NULL;
+        bool Match=Metadata&&!strcmp(Revision,SdkField(Metadata,"revision"));xrtValueRelease(Metadata);
+        if(!Match){xrtFree(Path);return MdoApplicationError(E,"sdk_file_conflict","Entry changed since it was read; inspect it before changing it","filesystem",412,false);}
+    }
     if(!strcmp(Action,"resolve")){*R=xrtValueObject();Ok=SdkPut(*R,"path",Path);}
     else if(!strcmp(Action,"stat")){xfileinfo Info={0};Ok=xrtPathStat(Path,false,&Info);if(Ok)*R=SdkFileInfo(&Info);}
     else if(!strcmp(Action,"list")){
@@ -128,18 +136,22 @@ static bool SdkFileCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue* P,
             if(!xrtClose(File))Ok=false;
             xrtFree(Bytes);
         }
+    }else if(!strcmp(Action,"create")){
+        if(Vfs||SdkGet(P,"text")||SdkGet(P,"base64"))goto invalid;
+        xfileoptions Options;xrtFileOptionsInit(&Options);Options.Flags=XFILE_WRITE|XFILE_CREATE|XFILE_EXCLUSIVE|XFILE_NOFOLLOW;
+        xfile File=xrtFileOpen(Path,&Options);Created=File!=NULL;
+        if(File){xfileinfo Info={0};Ok=xrtFileStat(File,&Info);if(Ok){*R=SdkFileInfo(&Info);SdkPut(*R,"path",Path);}if(!xrtClose(File))Ok=false;}
     }else if(!strcmp(Action,"write")||!strcmp(Action,"append")){
-        cstr Revision=SdkField(P,"revision");
-        if(Revision){xfileinfo Current={0};xvalue* Metadata=xrtPathStat(Path,false,&Current)?SdkFileInfo(&Current):NULL;
-            bool Match=Metadata&&!strcmp(Revision,SdkField(Metadata,"revision"));xrtValueRelease(Metadata);
-            if(!Match){xrtFree(Path);return MdoApplicationError(E,"sdk_file_conflict","File changed since it was read; reload before saving","filesystem",412,false);}}
         unsigned char* Bytes=NULL;size_t Size=0;
         if(!SdkInputBytes(P,&Bytes,&Size,E)){xrtFree(Path);return false;}
         bool Parents=true;xrtValueGetBool(SdkGet(P,"parents"),&Parents);char* Parent=xrtPathParent(Path);
         Ok=!Parents||(Parent&&xrtDirCreateAll(Parent));xrtFree(Parent);
         if(Ok)Ok=!strcmp(Action,"append")?xrtFileAppend(Path,(xbytesview){Bytes,Size}):xrtFileWriteAtomic(Path,(xbytesview){Bytes,Size});
         xrtSecureZero(Bytes,Size);xrtFree(Bytes);if(Ok){xfileinfo Current={0};*R=xrtPathStat(Path,false,&Current)?SdkFileInfo(&Current):xrtValueObject();SdkPutUInt(*R,"bytes",Size);}
-    }else if(!strcmp(Action,"mkdir")){Ok=xrtDirCreateAll(Path);if(Ok)*R=xrtValueObject();}
+    }else if(!strcmp(Action,"mkdir")){
+        bool Exclusive=false;xrtValueGetBool(SdkGet(P,"exclusive"),&Exclusive);Ok=Exclusive?xrtDirCreate(Path):xrtDirCreateAll(Path);
+        if(Ok){xfileinfo Info={0};*R=xrtPathStat(Path,false,&Info)?SdkFileInfo(&Info):xrtValueObject();SdkPut(*R,"path",Path);}
+    }
     else if(!strcmp(Action,"remove")){
         bool Recursive=false;xrtValueGetBool(SdkGet(P,"recursive"),&Recursive);xfileinfo Info={0};
         Ok=xrtPathStat(Path,false,&Info)&&((Info.Type==XFILE_TYPE_DIRECTORY)?(Recursive?xrtDirRemoveAll(Path):xrtDirRemove(Path)):xrtFileDelete(Path));
@@ -151,8 +163,8 @@ static bool SdkFileCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue* P,
         char* To=SdkNativePath(C,Target,Storage,E);xrtValueRelease(Target);
         Ok=To&&(!strcmp(Action,"copy")?xrtFileCopy(Path,To,Replace):xrtPathRename(Path,To,Replace));xrtFree(To);if(Ok)*R=xrtValueObject();
     }
-    bool Mutation=!strcmp(Action,"write")||!strcmp(Action,"append")||!strcmp(Action,"remove")||!strcmp(Action,"mkdir")||!strcmp(Action,"copy")||!strcmp(Action,"move");
-    xrtFree(Path);if(!Ok){if(!E||!E->Code[0])SdkNativeFailure(E,"filesystem");if(E&&Mutation)E->MayHaveCompleted=true;}return Ok;
+    bool Mutation=!strcmp(Action,"create")||!strcmp(Action,"write")||!strcmp(Action,"append")||!strcmp(Action,"remove")||!strcmp(Action,"mkdir")||!strcmp(Action,"copy")||!strcmp(Action,"move");
+    xrtFree(Path);if(!Ok){if(!E||!E->Code[0])SdkNativeFailure(E,"filesystem");if(E&&Mutation)E->MayHaveCompleted=strcmp(Action,"create")||Created;}return Ok;
 invalid:xrtFree(Path);return MdoApplicationError(E,"sdk_arguments_invalid","Invalid path, range, limit or destination","filesystem",400,false);
 }
 #include "files.inc.c"

@@ -34,6 +34,10 @@ static inline mdo_result mdoFilesDirectory(const mdo_sdk_context_v1* C,const xva
 {return mdoCall(C,"files.directory",P,R,E);}
 static inline mdo_result mdoFilesSearch(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
 {return mdoCall(C,"files.search",P,R,E);}
+static inline mdo_result mdoFilesCreate(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
+{return mdoCall(C,"files.create",P,R,E);}
+static inline mdo_result mdoFilesInspect(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
+{return mdoCall(C,"files.inspect",P,R,E);}
 static inline mdo_result mdoFilesResolve(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
 {return mdoCall(C,"files.resolve",P,R,E);}
 static inline mdo_result mdoFilesStat(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)

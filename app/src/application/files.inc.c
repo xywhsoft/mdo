@@ -58,6 +58,21 @@ static bool SdkFileSearch(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R
     xrtFree(Root);xrtValueRelease(Queue);xrtValueRelease(Items);return Ok;
 }
 static bool SdkFilesCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue* P,xvalue** R,mdo_error_v1* E){
+    if(!strcmp(Method,"files.inspect")){
+        const xvalue* Paths=SdkGet(P,"paths");cstr Space=SdkField(P,"space");
+        if(Space&&strcmp(Space,"workspace")&&strcmp(Space,"native")&&strcmp(Space,"home")&&strcmp(Space,"application"))
+            return MdoApplicationError(E,"sdk_arguments_invalid","Inspect needs a supported resource space","filesystem",400,false);
+        if(xrtValueType(Paths)!=XVALUE_ARRAY||!xrtValueCount(Paths)||xrtValueCount(Paths)>64)
+            return MdoApplicationError(E,"sdk_arguments_invalid","Inspect needs 1 to 64 file paths","filesystem",400,false);
+        for(size_t i=0;i<xrtValueCount(Paths);i++){cstr Path=SdkText(xrtValueArrayGet(Paths,i));if(!Path||!Path[0]||strlen(Path)>4096)return MdoApplicationError(E,"sdk_arguments_invalid","Inspect paths must be nonempty strings up to 4096 bytes","filesystem",400,false);}
+        *R=xrtValueArray();
+        for(size_t i=0;i<xrtValueCount(Paths);i++){
+            if(SdkCancelled(C)){xrtValueRelease(*R);*R=NULL;return MdoApplicationError(E,"sdk_cancelled","File inspection cancelled","filesystem",499,false);}
+            cstr Path=SdkText(xrtValueArrayGet(Paths,i));xvalue* Q=xrtValueObject(),*Entry=NULL;mdo_error_v1 Error={0};SdkPut(Q,"path",Path);if(Space)SdkPut(Q,"space",Space);
+            if(!SdkFileCall(C,"fs.stat",Q,&Entry,&Error)){xrtValueRelease(Entry);Entry=xrtValueObject();SdkPut(Entry,"error",Error.Message);SdkPut(Entry,"code",Error.Code);SdkPutUInt(Entry,"status",Error.Status);}
+            SdkPut(Entry,"path",Path);xrtValueArrayAppendNew(*R,Entry);xrtValueRelease(Q);
+        }return true;
+    }
     bool Prepare=false;
     if(!strcmp(Method,"files.resolve")&&xrtValueGetBool(SdkGet(P,"prepare_default"),&Prepare)&&Prepare){
         cstr Name=SdkField(P,"path"),Space=SdkField(P,"space");

@@ -31,9 +31,12 @@ def contracts(add):
         {**file_path,'offset':u,'limit':{'type':'integer','minimum':1,'maximum':1024},'revision':s,'hidden':b},('path',))
     add('files.search','Bounded recursive filename search; reports incomplete results and never follows directory links',
         {**file_path,'query':s,'hidden':b,'limit':{'type':'integer','minimum':1,'maximum':200}},('path','query'))
+    add('files.create','Exclusively create an empty file. Existing entries, including links, are never replaced.',file_path,('path',))
+    add('files.inspect','Batch metadata for up to 64 paths, with per-entry errors rather than false deletion reports',
+        {'paths':{'type':'array','minItems':1,'maxItems':64,'items':{'type':'string','minLength':1,'maxLength':4096}},'space':file_path['space']},('paths',),output={'type':'array'})
     for action in ('resolve','stat','read','write','mkdir','move','remove'):
         add('files.'+action,'File workbench operation using the same filesystem and revision rules as fs.'+action,
-            {**file_path,'offset':u,'limit':{'type':'integer','minimum':1,'maximum':262144},'revision':s,'text':s,'base64':s,'destination':s,'recursive':b,'replace':b,**({'prepare_default':b} if action=='resolve' else {})},('path',))
+            {**file_path,'offset':u,'limit':{'type':'integer','minimum':1,'maximum':262144},'revision':s,'text':s,'base64':s,'destination':s,'recursive':b,'replace':b,**({'prepare_default':b} if action=='resolve' else {}),**({'exclusive':b} if action=='mkdir' else {})},('path',))
     add('panel.types','List registered panel types',output={'type':'array'})
     add('panel.register','Register an extension-owned panel type; renderer is a built-in adapter or custom JS contribution',
         {'id':s,'title':s,'renderer':{'type':'string','enum':['document','plan','diff','web','browser','surface','editor','custom']},'scope':s,'frontend':s},('id','title','renderer'))
