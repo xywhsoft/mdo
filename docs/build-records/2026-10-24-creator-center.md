@@ -10,4 +10,24 @@
 
 主要回归：`tests/test_creator_center_runtime.py`、`tests/test_ecosystem_runtime.py`、`tests/test_ecosystem_nine_runtime.py`、`tests/test_ecosystem_package_v2.py`、`tests/test_cli_tools_runtime.py`。
 
-构建产物和线上部署收据将在验证后追加。
+## 验证与构建结果
+
+2026-10-24 完成以下验证：
+
+- 外部工具真实闭环：本机 mdo 登录、上传程序和显式选择的源码、平台精确版本审核、公开下载、本机安装、逐字节摘要校验和安全测试程序执行。
+- 大源码包分块上传、下载、安装；九类资源、C 工具与插件、编辑冲突保护、更新、卸载、回滚及启动恢复。
+- 服务端配额跨分类并发准入、资料隔离、私有/待审/公布/退回、审核日志故障时事务回滚、更新保留旧公开版、整件下架与删除。Windows 和线上相同 Linux 运行时均通过；线上测试使用私有隔离数据库，不创建生产测试账号和作品。
+- 通用 API 回归、CLI 运行时、原生 SDK/进程及实际打包程序的命令转发回归通过。构建契约 16 项、V2 包格式 22 项以及前端格式、启用和草稿回归通过。
+- 浏览器验收：用户创作中心、申请公布、后台九类入口、待审/公布/未公布切换、layui 表格及深色主题通过。
+
+安装包位于 `.build/releases/creator-center-20261024/`，包括 Windows GUI/Server、Linux glibc/musl GUI/Server、Android lite/full。全部八个包的 ABI、VFS 源码及运行时打包检查通过，产物 SHA-256 和源码核对结果记录在目录内 `validation.json`。
+
+程序源码来自不可变提交 `806a19ae` 的 git archive，排除同时进行的工作台任务未完成改动。原生 SDK 使用锁定的 `02871274347c10589dc6865267965561d335966a5d967011cd4bec38acb37787` overlay。构建器观察到的父目录 Git 状态单独保留，`source_snapshot_commit` 是实际应用源码来源。
+
+Android 使用已有开发签名；本轮只完成编译、包内容、ELF 和对齐检查，未进行真机安装与系统交互回归。客户端安装包是本地交付文件，本轮未改动官网下载或自动更新记录。
+
+## 平台上线
+
+网站实现提交 `70338c8a`，组件装载/主题修复 `0edced95`、`da063411`，方法约束 `8715c06e`，私有资料长度与 UTF-8 姓名边界修复 `60b3f52a`。创作中心及后台九类入口已部署到 ai.xywhsoft.com。部署前核对线上哈希，隔离验证后仅替换本功能源文件，冷启动迁移保留旧作品 ID、摘要、版本和审核状态。
+
+线上二进制、服务配置、账号、会话、计费及现有客户端更新记录未改动。临时测试站点副本已清理，私有回滚快照与收据保留。部署收据在 home 仓库 `host/xywhsoft_ai/plugin/mdo/docs/deployments/2026-10-24-creator-*.json`。
