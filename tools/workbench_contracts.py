@@ -3,6 +3,14 @@ def contracts(add):
     s={'type':'string'};o={'type':'object'};b={'type':'boolean'}
     u={'type':'integer','minimum':0,'maximum':9007199254740991}
     identity={'id':s};revision={**identity,'revision':u}
+    file_path={'path':s,'space':{'type':'string','enum':['workspace','native','home','application']}}
+    add('files.directory','Read one directory page; revision detects changed pagination',
+        {**file_path,'offset':u,'limit':{'type':'integer','minimum':1,'maximum':1024},'revision':s,'hidden':b},('path',))
+    add('files.search','Bounded recursive filename search; reports incomplete results and never follows directory links',
+        {**file_path,'query':s,'hidden':b,'limit':{'type':'integer','minimum':1,'maximum':200}},('path','query'))
+    for action in ('resolve','stat','read','write','mkdir','move','remove'):
+        add('files.'+action,'File workbench operation using the same filesystem and revision rules as fs.'+action,
+            {**file_path,'offset':u,'limit':{'type':'integer','minimum':1,'maximum':262144},'revision':s,'text':s,'base64':s,'destination':s,'recursive':b,'replace':b},('path',))
     add('panel.types','List registered panel types',output={'type':'array'})
     add('panel.register','Register an extension-owned panel type; renderer is a built-in adapter or custom JS contribution',
         {'id':s,'title':s,'renderer':{'type':'string','enum':['document','plan','diff','web','browser','surface','editor','custom']},'scope':s,'frontend':s},('id','title','renderer'))

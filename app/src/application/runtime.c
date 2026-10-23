@@ -16,6 +16,11 @@ static const struct {cstr Id,Description;} SdkRuntimeMethods[]={
     {"fs.list","List a directory with pagination"},{"fs.mkdir","Create a directory tree"},
     {"fs.remove","Remove a file or an explicitly selected directory tree"},
     {"fs.move","Move a native path"},{"fs.copy","Copy a file"},
+    {"files.directory","Read a paginated project directory with a revision precondition"},
+    {"files.search","Search filenames within a bounded recursive traversal"},
+    {"files.resolve","Resolve a file workbench path"},{"files.stat","Read file workbench metadata"},
+    {"files.read","Read a bounded file workbench byte range"},{"files.write","Save with file revision checks"},
+    {"files.mkdir","Create a file workbench directory"},{"files.move","Move a file workbench entry"},{"files.remove","Remove a file workbench entry"},
     {"vfs.read","Read an application VFS resource"},{"vfs.list","List an application VFS directory"},
     {"storage.read","Read an extension-owned persistent resource"},{"storage.write","Write an extension-owned persistent resource"},
     {"storage.remove","Remove an extension-owned persistent resource"},
@@ -146,6 +151,8 @@ static bool SdkFileCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue* P,
     xrtFree(Path);if(!Ok){if(!E||!E->Code[0])SdkNativeFailure(E,"filesystem");if(E&&Mutation)E->MayHaveCompleted=true;}return Ok;
 invalid:xrtFree(Path);return MdoApplicationError(E,"sdk_arguments_invalid","Invalid path, range, limit or destination","filesystem",400,false);
 }
+#include "files.inc.c"
+
 static bool SdkProcessOutput(xprocessstream Stream,xbytesview B,void* User){
     const mdo_sdk_context_v1* C=User;xvalue* Data=xrtValueObject();SdkByteValue(Data,B.Data,B.Size);
     MdoApplicationEvent(Stream==XPROCESS_STDOUT?"process.stdout":"process.stderr",C,Data);xrtValueRelease(Data);return !SdkCancelled(C);
@@ -195,6 +202,7 @@ bool MdoApplicationRuntimeCall(const mdo_sdk_context_v1* C,cstr Method,const xva
     if(!*Found)return true;
     if(P&&xrtValueType(P)!=XVALUE_OBJECT)return MdoApplicationError(E,"sdk_arguments_invalid","Runtime service parameters must be an object","resolve",400,false);
     if(!strncmp(Method,"fs.",3)||!strncmp(Method,"vfs.",4)||!strncmp(Method,"storage.",8))return SdkFileCall(C,Method,P,R,E);
+    if(!strncmp(Method,"files.",6))return SdkFilesCall(C,Method,P,R,E);
     if(!strcmp(Method,"process.run"))return SdkProcessCall(C,P,R,E);
     if(!strcmp(Method,"network.request"))return SdkNetworkCall(C,P,R,E);
     if(!strncmp(Method,"secret.",7)){

@@ -2,6 +2,24 @@
 #ifndef MDO_WORKBENCH_SDK_H
 #define MDO_WORKBENCH_SDK_H
 #include "sdk.h"
+static inline mdo_result mdoFilesDirectory(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
+{return mdoCall(C,"files.directory",P,R,E);}
+static inline mdo_result mdoFilesSearch(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
+{return mdoCall(C,"files.search",P,R,E);}
+static inline mdo_result mdoFilesResolve(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
+{return mdoCall(C,"files.resolve",P,R,E);}
+static inline mdo_result mdoFilesStat(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
+{return mdoCall(C,"files.stat",P,R,E);}
+static inline mdo_result mdoFilesRead(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
+{return mdoCall(C,"files.read",P,R,E);}
+static inline mdo_result mdoFilesWrite(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
+{return mdoCall(C,"files.write",P,R,E);}
+static inline mdo_result mdoFilesMkdir(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
+{return mdoCall(C,"files.mkdir",P,R,E);}
+static inline mdo_result mdoFilesMove(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
+{return mdoCall(C,"files.move",P,R,E);}
+static inline mdo_result mdoFilesRemove(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
+{return mdoCall(C,"files.remove",P,R,E);}
 static inline mdo_result mdoPanelTypes(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
 {return mdoCall(C,"panel.types",P,R,E);}
 static inline mdo_result mdoPanelRegister(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
