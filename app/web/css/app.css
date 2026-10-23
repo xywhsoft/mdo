@@ -832,7 +832,7 @@ select:focus-visible,
 .todo-dock-list li.done { text-decoration: line-through; }
 .todo-dock-mark { flex: none; width: 14px; color: var(--accent); }
 .todo-dock-error { margin: 0; padding: 8px 12px; border: 1px solid var(--danger); border-radius: var(--radius-sm); color: var(--danger); font-size: 11px; }
-.prompt-queue { width: min(760px, calc(100% - 40px)); margin: 0 auto 20px; padding: 10px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface-raised); }
+.prompt-queue { width: min(var(--composer-width), 100%); margin: 0 auto -12px; padding: 6px 8px 18px; border: 1px solid var(--border-strong); border-bottom: 0; border-radius: var(--radius-lg) var(--radius-lg) 0 0; background: var(--surface-raised); }
 .prompt-queue[hidden] { display: none; }
 .prompt-queue-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .prompt-queue button { padding: 3px 7px; border: 0; border-radius: 6px; background: transparent; color: var(--accent); font-size: 11px; cursor: pointer; }
@@ -844,18 +844,29 @@ select:focus-visible,
 .prompt-queue-toggle::after { content: "⌄"; display: inline-block; color: var(--muted); transition: transform .15s ease; }
 .prompt-queue-toggle[aria-expanded="false"]::after { transform: rotate(-90deg); }
 .prompt-queue-warning { margin: 8px 0 0; color: var(--warning); font-size: 11px; line-height: 1.5; }
-.prompt-queue-list { display: grid; grid-auto-rows: max-content; gap: 4px; margin: 7px 0 0; padding: 0; list-style: none; counter-reset: queued; }
+.prompt-queue-list { display: grid; grid-auto-rows: max-content; gap: 2px; max-height: min(160px, 26dvh); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; margin: 3px 0 0; padding: 0; list-style: none; counter-reset: queued; }
 .prompt-queue-list[hidden] { display: none; }
-.prompt-queue-list li { display: flex; align-items: flex-start; gap: 8px; min-width: 0; padding: 6px 8px; border-radius: 6px; background: var(--surface-hover); font-size: 11px; }
-.prompt-queue-index { flex: none; min-width: 18px; padding-top: 3px; color: var(--faint); text-align: right; }
-.prompt-queue-item-body { flex: 1 1 auto; min-width: 0; padding-top: 3px; }
-.prompt-queue-text { display: block; white-space: pre-wrap; overflow-wrap: anywhere; }
-.prompt-queue-profile { display: block; margin-top: 3px; color: var(--muted); overflow-wrap: anywhere; }
-.prompt-queue-images { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
-.prompt-queue-images button { display: block; width: 68px; min-width: 0; padding: 0; border-radius: 6px; cursor: zoom-in; }
-.prompt-queue-images img { display: block; width: 42px; height: 42px; margin: 0 auto; border: 1px solid var(--border); border-radius: 6px; object-fit: cover; }
-.prompt-queue-list .prompt-queue-state { display: block; margin-top: 3px; color: var(--warning); }
-.prompt-queue-list li > button:last-child { flex: none; }
+.prompt-queue-list li { position: relative; display: flex; align-items: center; gap: 4px; min-width: 0; min-height: 32px; padding: 1px 2px; border-radius: 6px; font-size: 12px; }
+.prompt-queue-list li:hover, .prompt-queue-list li:focus-within { background: var(--surface-hover); }
+.prompt-queue .prompt-queue-drag { flex: none; width: 24px; min-width: 24px; padding: 2px; cursor: grab; touch-action: none; color: var(--muted); font-size: 18px; }
+.prompt-queue .prompt-queue-drag:active { cursor: grabbing; }
+.prompt-queue-actions { display: flex; flex: none; align-items: center; gap: 1px; opacity: 0; pointer-events: none; }
+.prompt-queue-list li:hover .prompt-queue-actions, .prompt-queue-list li:focus-within .prompt-queue-actions { opacity: 1; pointer-events: auto; }
+.prompt-queue .prompt-queue-actions button { min-width: 26px; min-height: 28px; padding: 2px 5px; white-space: nowrap; }
+.queue-dragging { opacity: .55; background: var(--surface-hover); }
+.queue-drop-before::before, .queue-drop-after::after { content: ""; position: absolute; left: 0; right: 0; height: 2px; background: var(--accent); border-radius: 2px; }
+.queue-drop-before::before { top: 0; }
+.queue-drop-after::after { bottom: 0; }
+.prompt-queue-index { display: none; }
+.prompt-queue-item-body { display: flex; align-items: center; gap: 4px; flex: 1 1 auto; min-width: 0; }
+.prompt-queue .prompt-queue-text { display: block; flex: 1 1 auto; min-width: 0; min-height: 0; overflow: hidden; padding: 0; color: var(--ink); text-align: start; font: inherit; line-height: 1.5; white-space: nowrap; text-overflow: ellipsis; }
+.prompt-queue .prompt-queue-text:hover { background: transparent; }
+.prompt-queue-attachments { flex: none; color: var(--muted); font-size: 11px; }
+.prompt-queue-list .prompt-queue-state { flex: none; color: var(--warning); font-size: 10px; white-space: nowrap; }
+@media (max-width: 640px), (hover: none), (pointer: coarse) {
+  .prompt-queue-actions { opacity: 1; pointer-events: auto; }
+  .prompt-queue .prompt-queue-actions button { min-width: 28px; min-height: 32px; }
+}
 .timeline-sentinel { height: calc(1px + var(--conversation-dock-overlap, 0px)); }
 
 .composer-region {
@@ -1677,7 +1688,7 @@ select:focus-visible,
   .approval-arguments summary { min-height: 40px; padding-top: 12px; padding-bottom: 12px; }
   .tasks-dialog :is(.task-open, .task-cancel, .task-detail-close,
     .task-output-section summary, .task-artifact) { min-height: 40px; }
-  .prompt-queue { width: calc(100% - 26px); }
+  .prompt-queue { width: min(var(--composer-width), 100%); }
   .prompt-queue button { min-width: 40px; min-height: 40px; }
   .prompt-queue .prompt-queue-toggle { min-height: 40px; }
   .slash-option, .file-mention-option { min-height: 40px; }

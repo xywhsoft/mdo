@@ -203,7 +203,6 @@
         </div>
 
         <ol class="timeline" id="timeline" aria-live="polite" aria-relevant="additions text" tabindex="-1"></ol>
-        <div class="prompt-queue" id="prompt-queue" aria-live="polite" hidden></div>
         <div class="timeline-sentinel" id="timeline-sentinel" aria-hidden="true"></div>
         <button class="to-bottom" id="to-bottom" type="button" aria-label="回到对话底部" data-i18n-aria-label="conversation.toBottom" hidden>↓ <span data-i18n="conversation.toBottomShort">回到底部</span></button>
       </section>
@@ -218,6 +217,7 @@
             <option value="default" data-i18n="nav.defaultProject">默认项目</option>
           </select>
         </div>
+        <div class="prompt-queue" id="prompt-queue" aria-live="polite" hidden></div>
         <form class="composer" id="composer">
           <label class="sr-only" for="prompt" data-i18n="composer.describe">向 Agent 描述任务</label>
           <textarea id="prompt" name="prompt" rows="1" maxlength="65536" placeholder="向墨斗描述任务…" data-i18n-placeholder="shell.prompt" autocomplete="off" aria-describedby="composer-hint"></textarea>

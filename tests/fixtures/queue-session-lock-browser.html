@@ -40,7 +40,8 @@ try {
   });
   await queue.select("qa", "first");
   const reviewOnRestored = container.textContent.includes("queue.uncertainWarning") &&
-    container.textContent.includes("queue.sendingUncertain");
+    Boolean(container.querySelector('[data-queue-focus="retry"]')) &&
+    container.querySelector('[data-queue-drag]').disabled;
   const localDispatch = queue.exclusive("qa", "first", () =>
     new Promise((resolve) => { finishLocal = resolve; }));
   const normalLocalSend = container.textContent.includes("queue.sending") &&

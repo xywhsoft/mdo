@@ -716,6 +716,7 @@ export async function boot() {
   let draftStore;
   let submissionController;
   let composerProfile;
+  let queueEditKey = "";
   const promptQueue = createPromptQueue({
     container: $("#prompt-queue"), navigation, modelsStore,
     isRunActive: () => Boolean(activeRun),
@@ -762,6 +763,12 @@ export async function boot() {
       if (draftStore.submission(key) &&
           !await submissionController.reconcile(key)) return;
       if (!sessionWritable) return;
+      if (promptQueue.isManaged(selected.projectId, selected.sessionId)) {
+        if (first?.state === "staged") await promptQueue.promote(selected.projectId, selected.sessionId, first.id);
+        await promptQueue.resume(selected.projectId, selected.sessionId);
+        void submissionController.pump(key);
+        return;
+      }
       if (first?.state === "sending")
         await promptQueue.retry(selected.projectId, selected.sessionId, first.id);
       if (first?.state === "staged")
@@ -777,6 +784,36 @@ export async function boot() {
       if (removed?.run_id) queueBlocked.unblock(key);
       await maybeCancelPriorityRun();
       await dispatchQueued();
+    },
+    async onChanged() { await loadRuns(); },
+    async onWithdraw(key, item, withdraw) {
+      const origin = promptQueue.stamp();
+      const conflict = () => new Error(t("queue.draftConflict", {}, "请先发送或清空输入框中的草稿，再撤回消息。"));
+      if (queueEditKey || selectedKey !== key || composerImages.isUploading() ||
+          composerProfile.isBusy() || prompt.value || composerAttachments.length ||
+          submissionController.isBusy(key)) throw conflict();
+      queueEditKey = key;
+      syncSendDisabled();
+      try {
+        if (!await draftStore.ensureLoaded(key) || !await draftStore.flush(key)) throw conflict();
+        const draft = draftStore.snapshot(key);
+        if (draft.text || draft.attachments.length || draftStore.submissions(key).length ||
+            draftStore.isRunUncertain(key)) throw conflict();
+        if (promptQueue.stamp() !== origin || selectedKey !== key) throw conflict();
+        await withdraw(draftStore.revision(key));
+      } finally {
+        // The authoritative draft survives even if the ACK was lost or the
+        // user switched session/remote target. The store binds reads to owner.
+        try { if (promptQueue.stamp() === origin) await draftStore.refreshSessionSubmissions(key); }
+        finally {
+          queueEditKey = "";
+          syncSendDisabled();
+          if (selectedKey === key) {
+            composerProfile.sync();
+            prompt.focus({ preventScroll: true });
+          }
+        }
+      }
     },
   });
   const executeApplicationActions = async (receipt, scope) => {
@@ -1198,7 +1235,10 @@ export async function boot() {
   let sendBlockedByState = true;
   function syncSendDisabled() {
     const localCommand = slashCommands.isExact(prompt.value.trim());
-    send.disabled = sendBlockedByState ||
+    const extractingQueue = Boolean(queueEditKey && queueEditKey === selectedKey);
+    prompt.readOnly = extractingQueue;
+    $("#composer-attach").disabled = extractingQueue;
+    send.disabled = sendBlockedByState || extractingQueue ||
       ((composerImages?.isUploading() ||
         composerImages?.hasUnsupportedDraft()) && !localCommand);
   }
@@ -1605,6 +1645,7 @@ export async function boot() {
   async function maybeCancelPriorityRun() {
     if (purgeRecovery.isPaused()) return;
     const selected = navigation.get();
+    if (promptQueue.isManaged(selected.projectId, selected.sessionId)) return;
     const run = activeRun;
     const key = `${selected.projectId}/${selected.sessionId}`;
     const entry = promptQueue.peek(selected.projectId, selected.sessionId);
@@ -1638,6 +1679,7 @@ export async function boot() {
   async function dispatchQueued() {
     if (purgeRecovery.isPaused() || localServiceReconnecting) return;
     const selected = navigation.get();
+    if (promptQueue.isManaged(selected.projectId, selected.sessionId)) return;
     const key = `${selected.projectId}/${selected.sessionId}`;
     if (runStops.hasSession(selected.projectId, selected.sessionId)) return;
     const session = sessionDetailStore.get().data;

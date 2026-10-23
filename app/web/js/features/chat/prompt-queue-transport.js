@@ -22,11 +22,16 @@ export function queueResponse(response) {
   if (!Array.isArray(items) || items.length > 20 || items.some(item => {
     if (typeof item?.id !== "string" || !/^[A-Za-z0-9_-][A-Za-z0-9._-]*$/.test(item.id) ||
         ids.has(item.id) || typeof item.text !== "string" ||
-        !["pending", "staged", "sending"].includes(item.state) ||
+        !["pending", "staged", "sending", "editing"].includes(item.state) ||
         typeof item.priority !== "boolean" || !Array.isArray(item.attachments) ||
         item.attachments.some(id => typeof id !== "string" || !/^[0-9a-f]{32}$/.test(id))) return true;
     ids.add(item.id); return false;
   })) throw new ApiError("Invalid prompt queue response", { code: "invalid_response" });
+  const data = response.data;
+  if ((data.revision !== undefined && (!Number.isSafeInteger(data.revision) || data.revision < 0)) ||
+      (data.managed !== undefined && typeof data.managed !== "boolean") ||
+      (data.actions !== undefined && (!Array.isArray(data.actions) || data.actions.length > 32)))
+    throw new ApiError("Invalid prompt queue metadata", { code: "invalid_response" });
   return response;
 }
 
@@ -82,7 +87,7 @@ export function createPromptQueueTransport({ createRecovery = createRequestRecov
           assertOwner(signal); submitted = true; return send(signal);
         }, { retry: false });
         checked(reply);
-        if (proves(reply.data.items)) return reply;
+        if (proves(reply.data.items, reply.data)) return reply;
         throw new ApiError("Invalid queue write acknowledgement", { code: "invalid_response" });
       } catch (error) {
         if (error?.name === "AbortError" || (!uncertain(error) && !conflicts.includes(error?.code))) throw error;
@@ -92,7 +97,7 @@ export function createPromptQueueTransport({ createRecovery = createRequestRecov
         return await recovery.request(async signal => {
           assertOwner(signal);
           const reply = checked(await api.get(path(key), { signal }), signal);
-          if (proves(reply.data.items)) return reply;
+          if (proves(reply.data.items, reply.data)) return reply;
           if (runReceipt && !reply.data.items.some(item => item.id === id) &&
               await receipt(key, id, signal, verify)) {
             assertOwner(signal); return reply;
@@ -133,6 +138,17 @@ export function createPromptQueueTransport({ createRecovery = createRequestRecov
     promote: (key, id) => state(key, id, "pending", ["pending", "sending"], true),
     markSending: (key, id) => state(key, id, "sending", ["sending"], true),
     retry: (key, id) => state(key, id, "pending", ["pending"]),
+    action(key, body) {
+      return mutate(key, body.item || body.id,
+        signal => api.post(`${path(key)}/actions`, body, { signal }), (_items, data) => {
+          const accepted = data.actions?.find(action => action.id === body.id);
+          if (!accepted) return false;
+          if (!["kind", "item", "before", "revision", "draft_revision"]
+            .every(name => accepted[name] === body[name]))
+            throw new ApiError("Queue action ID has different content", { code: "queue_action_conflict", status: 409 });
+          return true;
+        });
+    },
     remove: (key, id) => mutate(key, id, signal => api.delete(path(key, id), { signal }),
       items => !items.some(item => item.id === id)),
   });

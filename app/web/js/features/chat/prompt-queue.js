@@ -1,10 +1,10 @@
-import { api, attachmentUrl, resourceId } from "../../api/client.js";
+import { api, resourceId } from "../../api/client.js";
 import { createPromptQueueTransport, queueResponse } from "./prompt-queue-transport.js";
 import { subscribeLocale, t } from "../../i18n.js";
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
 import { createUnusedImageCleanup } from "./unused-image-cleanup.js";
-import { labelImageName } from "./image-names.js";
 import { findModel } from "../../utils/models.js";
+import { createQueueReorder } from "./queue-reorder.js";
 
 function sessionKey(projectId, sessionId) {
   return projectId && sessionId
@@ -21,17 +21,49 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
   isProfileBusy = () => false,
   isRunReviewPending = () => false, isSessionWritable = () => true,
   isSessionRunActive = () => false, modelsStore,
-  onRetry, onRemoved }) {
+  onRetry, onRemoved, onWithdraw, onChanged = () => {} }) {
   const queues = new Map();
   const loads = new Map();
   const versions = new Map();
   const expanded = new Map();
   const busy = new Set();
   const actionBusy = new Set();
+  const metadata = new Map();
   const transport = createPromptQueueTransport({ createRecovery, stamp });
   const unusedImages = createUnusedImageCleanup({
     deleteImage: api.deleteImage, isRunActive: isSessionRunActive,
   });
+  const reorder = createQueueReorder({ container,
+    snapshot: () => { const key = selectedKey(); return { key,
+      origin: transport.stamp(),
+      revision: metadata.get(key)?.revision ?? 0,
+      ids: (queues.get(key) ?? []).filter(canChange).map(item => item.id) }; },
+    onMove: (id, before, owner) => runAction(owner.key,
+      () => performAction(owner.key, "move", id, before, 0, owner.revision), owner.origin),
+    onEnd: () => render(),
+  });
+
+  function canChange(item) {
+    return item.state === "pending" && (!item.priority || metadata.get(selectedKey())?.paused) &&
+      !item.start_claimed && !item.run_id;
+  }
+
+  async function performAction(key, kind, item = "", before = "", draftRevision = 0,
+    revision = metadata.get(key)?.revision ?? 0) {
+    const body = { id: newId(), kind, item, before, revision, draft_revision: draftRevision };
+    update(key, await transport.action(key, body));
+    await onChanged(key);
+  }
+
+  async function runAction(key, operation, origin = transport.stamp()) {
+    if (transport.stamp() !== origin || !isSessionWritable() || actionBusy.has(key) || busy.has(key)) return;
+    actionBusy.add(key); render();
+    try { await operation(); }
+    catch (error) {
+      toast(errorMessage(error), "error");
+      try { await load(key, true); } catch { /* Retain the original error and saved messages. */ }
+    } finally { actionBusy.delete(key); render(); }
+  }
 
   function selectedKey() {
     const { projectId, sessionId } = navigation.get();
@@ -50,16 +82,17 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
       profile.reasoning_effort);
     const permissionText = permission ? t(permission[0], {}, permission[1]) :
       profile.permission_profile;
-    return element("span", { className: "prompt-queue-profile",
-      text: t("queue.profileSnapshot", {
+    return t("queue.profileSnapshot", {
         model: model?.name || profile.model_id, effort: reasoning,
         permission: permissionText,
-      }, `已固定：${model?.name || profile.model_id} · ${reasoning} · ${permissionText}`),
-    });
+      }, `已固定：${model?.name || profile.model_id} · ${reasoning} · ${permissionText}`);
   }
 
   function update(key, response) {
     queueResponse(response);
+    const data = response.data;
+    if (data.revision !== undefined && metadata.get(key)?.revision > data.revision) return;
+    metadata.set(key, data);
     versions.set(key, (versions.get(key) ?? 0) + 1);
     const items = response.data?.items ?? [];
     if (!(queues.get(key)?.length) && items.length) expanded.set(key, true);
@@ -93,7 +126,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     await load(key);
     if ((queues.get(key) ?? []).length >= 20 &&
         !(queues.get(key) ?? []).some((item) => item.id === id)) return null;
-    const body = { id, text: text.trim(), attachments, first, priority };
+    const body = { id, text: text.trim(), attachments, first, priority, managed: true };
     if (stage) body.stage = true;
     if (profile) body.profile = profile;
     const keepalive = new TextEncoder().encode(JSON.stringify(body)).length <= 60 * 1024;
@@ -103,9 +136,14 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
 
   function render() {
     const key = selectedKey();
+    if (reorder?.active()) {
+      if (container.dataset.queueKey !== key) reorder.cancel();
+      else return;
+    }
     const saved = queues.get(key) ?? [];
     const staged = stagedEntries?.() ?? [];
     const entries = [...saved, ...staged];
+    const meta = metadata.get(key) ?? {};
     const focused = container.dataset.queueKey === key &&
       container.contains(document.activeElement) ? document.activeElement : null;
     const previousList = container.dataset.queueKey === key &&
@@ -154,18 +192,17 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     const stagedHead = saved[0]?.state === "staged";
     const reviewPending = isRunReviewPending(key);
     const writable = isSessionWritable();
-    const [projectId, sessionId] = key.split("/");
     let open = expanded.get(key) ?? true;
     const toggle = element("button", { className: "prompt-queue-toggle",
       text: t("queue.count", { count: entries.length }),
       attrs: { type: "button", "aria-expanded": String(open),
         "aria-controls": "prompt-queue-list", "data-queue-focus": "toggle" },
     });
-    const waitingForRun = !uncertain && !stagedHead && isRunActive();
+    const waitingForRun = !meta.paused && !uncertain && !stagedHead && isRunActive();
     const waitingForProfile = !waitingForRun && isProfileBusy();
     const retry = !writable || waitingForRun || waitingForProfile || !saved.length || reviewPending ||
       sendingLocally ||
-      acceptedRun || claimedRun ? null : element("button", {
+      acceptedRun || claimedRun || (meta.managed && !meta.paused) || saved[0]?.state === "editing" ? null : element("button", {
       text: t(uncertain ? "queue.retryUncertain" : stagedHead
         ? "queue.continueStaged" : "queue.sendNext"),
       attrs: { type: "button", "data-queue-focus": "retry" },
@@ -183,7 +220,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     }
     const header = element("div", { className: "prompt-queue-header" }, [
       toggle, retry ?? element("span", { className: "prompt-queue-waiting",
-        text: t(!writable ? "queue.restoreToSend" : sendingLocally ? "queue.sending" :
+        text: meta.paused ? t("queue.paused", {}, "队列已暂停") : t(!writable ? "queue.restoreToSend" : sendingLocally ? "queue.sending" :
           acceptedRun ? "queue.runAccepted" : claimedRun
           ? "queue.runStarting" : reviewPending
           ? "queue.reviewRun" : waitingForProfile ? "queue.waitForProfile" : saved.length
@@ -191,6 +228,9 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
             ? "queue.rejected" : "queue.awaitingAdmission") }),
     ]);
     container.insertBefore(header, previousList);
+    if (meta.paused && meta.error) container.insertBefore(element("p", {
+      className: "prompt-queue-warning", text: errorMessage({ code: meta.error }),
+    }), previousList);
     if (uncertain && !sendingLocally) container.insertBefore(element("p", {
       className: "prompt-queue-warning",
       text: t(acceptedRun ? "queue.runAcceptedWarning" : claimedRun
@@ -208,6 +248,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
       list.hidden = !open;
     });
     for (const [index, entry] of entries.entries()) {
+      const origin = transport.stamp();
       const itemAttrs = typeof entry.id === "string" && entry.id
         ? { "data-queue-item-id": entry.id } : {};
       if (entry.staged) {
@@ -216,8 +257,8 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
             text: String(index + 1) }),
           element("div", { className: "prompt-queue-item-body" }, [
             element("span", { className: "prompt-queue-text",
-              text: entry.text || t("queue.imageMessage") }),
-            ...(entry.profile ? [profileLabel(entry.profile)] : []),
+              text: entry.text || t("queue.imageMessage"),
+              attrs: { title: entry.text || t("queue.imageMessage") } }),
             element("span", { className: "prompt-queue-state",
               text: t(entry.rejected ? "queue.rejected" :
                 "queue.awaitingAdmission") }),
@@ -225,64 +266,61 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
         ]));
         continue;
       }
+      const locked = !canChange(entry) || !writable || busy.has(key) || actionBusy.has(key);
+      const handle = element("button", { className: "prompt-queue-drag", text: "⠿",
+        attrs: { type: "button", "data-queue-drag": "", "data-queue-focus": `${entry.id}:drag`,
+          "aria-label": t("queue.drag", {}, "拖动排序，或按上下方向键调整顺序"),
+          title: t("queue.drag", {}, "拖动排序，或按上下方向键调整顺序") } });
+      handle.disabled = locked;
       const remove = element("button", {
         text: t("queue.remove"),
         attrs: { type: "button", "aria-label": t("queue.removeNumber", { number: index + 1 }),
+          title: t("queue.remove"),
           "data-queue-focus": entry.id, "data-queue-index": String(index) },
       });
       // Keep the focused remove button focusable while its request is in flight.
       // The click guard below blocks repeats; aria-disabled exposes that state.
-      remove.disabled = busy.has(key);
+      remove.disabled = (!canChange(entry) && !(meta.paused && entry.state === "sending")) || busy.has(key);
       if (actionBusy.has(key)) remove.setAttribute("aria-disabled", "true");
       remove.addEventListener("click", async () => {
-        if (busy.has(key) || actionBusy.has(key)) return;
+        if (transport.stamp() !== origin || busy.has(key) || actionBusy.has(key)) return;
         actionBusy.add(key);
         render();
-        try { await removeItem(entry.id); }
+        try { await removeItem(entry.id, key); }
         catch (error) { toast(errorMessage(error), "error"); }
         finally { actionBusy.delete(key); render(); }
       });
       const body = element("div", { className: "prompt-queue-item-body" }, [
         element("span", { className: "prompt-queue-text",
-          text: entry.text || t("queue.imageMessage") }),
+          text: entry.text || t("queue.imageMessage"), attrs: {
+            title: [entry.text || t("queue.imageMessage"), profileLabel(entry.profile)].filter(Boolean).join("\n\n") } }),
       ]);
-      if (entry.profile) body.append(profileLabel(entry.profile));
-      if (entry.state === "sending" || entry.state === "staged")
-        body.append(element("span", { className: "prompt-queue-state",
-          text: t(entry.state === "staged" ? "queue.staged" :
-            sendingLocally && index === 0 ? "queue.sending" :
-            entry.run_id ? "queue.runAccepted" :
-            entry.start_claimed ? "queue.runStarting" :
-            "queue.sendingUncertain") }));
-      if (entry.priority) body.append(element("span", {
-        className: "prompt-queue-state", text: t("queue.priority"),
-      }));
       if (entry.attachments?.length) {
-        const images = element("div", { className: "prompt-queue-images" });
-        for (const [imageIndex, id] of entry.attachments.entries()) {
-          if (typeof id !== "string" || !/^[0-9a-f]{32}$/.test(id)) continue;
-          const caption = element("bdi", { className: "image-file-name",
-            text: t("queue.imageAlt", { number: imageIndex + 1 }) });
-          const preview = element("button", { attrs: {
-            type: "button", "aria-label": t("queue.viewImage", { number: imageIndex + 1 }),
-            "data-image-preview": "",
-            "data-image-ref": `queue:${key}/${entry.id}/${id}/${imageIndex}`,
-          } }, [element("img", { attrs: {
-            src: attachmentUrl(projectId, sessionId, id),
-            alt: t("queue.imageAlt", { number: imageIndex + 1 }), loading: "lazy",
-          } }), caption]);
-          images.append(preview);
-          labelImageName({ preview, caption, owner: { projectId, sessionId }, id,
-            viewLabel: (name) => t("image.viewNamed", { number: imageIndex + 1, name },
-              `查看图片 ${imageIndex + 1}：${name}`) });
-        }
-        body.append(images);
+        body.append(element("span", { className: "prompt-queue-attachments",
+          text: `▧ ${entry.attachments.length}`,
+          attrs: { "aria-label": t("queue.imageMessage") } }));
       }
+      const actions = element("div", { className: "prompt-queue-actions" });
+      function action(label, fallback, suffix, callback, text = null) {
+        const button = element("button", { text: text ?? t(label, {}, fallback), attrs: {
+          type: "button", "aria-label": t(label, {}, fallback), title: t(label, {}, fallback),
+          "data-queue-focus": `${entry.id}:${suffix}` } });
+        button.disabled = locked;
+        button.addEventListener("click", () => void runAction(key, callback, origin));
+        actions.append(button);
+        return button;
+      }
+      const steer = action("queue.steer", "引导", "steer", () => performAction(key, "steer", entry.id));
+      steer.title = t("queue.steerHint", {}, "停止当前执行并优先发送此消息");
+      if (onWithdraw) action("queue.edit", "撤回编辑", "edit", () =>
+        onWithdraw(key, entry, draftRevision => performAction(key, "withdraw", entry.id, "", draftRevision)), "✎");
+      remove.textContent = "×";
+      actions.append(remove);
       nextCards.push(element("li", { attrs: itemAttrs }, [
-        element("span", { className: "prompt-queue-index",
+        handle, element("span", { className: "prompt-queue-index",
           text: String(index + 1) }),
         body,
-        remove,
+        actions,
       ]));
     }
     // Keep an unchanged card connected while queue polls or siblings change.
@@ -343,7 +381,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
         focusKey === "retry" ? retry ?? toggle :
         imageRef ? [...list.querySelectorAll("button[data-image-ref]")]
           .find((item) => item.dataset.imageRef === imageRef) :
-        removes.find((item) => item.dataset.queueFocus === focusKey) ??
+        [...list.querySelectorAll("button[data-queue-focus]")].find(item => item.dataset.queueFocus === focusKey) ??
           removes[Math.min(focusIndex, removes.length - 1)];
       const restored = target?.disabled ? toggle : target ?? toggle;
       restored.focus({ preventScroll: true });
@@ -358,8 +396,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     }
   }
 
-  async function removeItem(id) {
-    const key = selectedKey();
+  async function removeItem(id, key = selectedKey()) {
     if (!key) return;
     const removed = queues.get(key)?.find((entry) => entry.id === id);
     update(key, await transport.remove(key, id));
@@ -372,6 +409,9 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
   subscribeLocale(render);
   return Object.freeze({
     newId,
+    stamp: () => transport.stamp(),
+    isManaged(projectId, sessionId) { return metadata.get(sessionKey(projectId, sessionId))?.managed === true; },
+    async resume(projectId, sessionId) { return performAction(sessionKey(projectId, sessionId), "resume"); },
     async select(projectId, sessionId) {
       const key = sessionKey(projectId, sessionId);
       await load(key, true);
@@ -437,7 +477,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
       try { await callback(); return true; }
       finally { busy.delete(key); render(); }
     },
-    hasInFlight: () => Boolean(busy.size || actionBusy.size),
+    hasInFlight: () => Boolean(busy.size || actionBusy.size || reorder.active()),
     render,
     rememberUnusedImages(projectId, sessionId, ids) {
       unusedImages.remember(sessionKey(projectId, sessionId), ids);
