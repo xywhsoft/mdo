@@ -2,3 +2,5 @@ tools/dependencies/*.bundle -text
 tools/dependencies/*.patch text eol=lf -whitespace
 tools/linux/*.sh text eol=lf
 tools/linux/*.gpg -text
+app/web/js/vendor/terminal/* text eol=lf
+app/web/assets/terminal/* text eol=lf

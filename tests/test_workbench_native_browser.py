@@ -130,6 +130,34 @@ try{
 }catch(error){await fetch(TARGET+'/result',{method:'POST',mode:'no-cors',body:JSON.stringify({passed:false,error:String(error.stack||error)})})}
 '''
 
+TERMINAL_SCRIPT=r'''
+import {allowsApiWrite} from '/js/api/client.js';
+const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+const until=async fn=>{for(let i=0;i<200;i++){const value=await fn();if(value)return value;await pause(100);}throw Error('Native terminal condition timed out')};
+try{
+ await until(()=>window.mdo&&allowsApiWrite('/application/call',{method:'POST'}));
+ await mdo.call('client.hello',{client:mdo.clientId,context:mdo.context()});await mdo.ui.newTab();
+ const cap=await mdo.terminal.capabilities();
+ const terminal=await mdo.terminal.create({key:'native-terminal-qa',args:cap.default_program.toLowerCase().includes('powershell')?['-NoLogo','-NoProfile']:[]});
+ if(!terminal.cwd.includes('workbench-native-'))throw Error('Terminal escaped its private Home');
+ const panel=await mdo.panel.open({client:mdo.clientId,type:'mdo.terminal',key:'native-terminal',params:{terminal:terminal.id},reveal:'activate'});
+ const view=await until(()=>document.querySelector('.wb-terminal-view[data-terminal-input="connected"]'));
+ await until(()=>view.querySelector('.xterm-rows')?.textContent.includes('PS '));
+ const input=view.querySelector('.xterm-helper-textarea');
+ const send=text=>{input.focus();input.value=text;input.dispatchEvent(new InputEvent('input',{data:text,inputType:'insertText',bubbles:true}));input.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',code:'Enter',keyCode:13,which:13,bubbles:true}));};
+ send("[IO.File]::WriteAllText('native-terminal.txt','界面🌙'); Write-Output '原生终端成功'");
+ await until(async()=>{try{return(await mdo.files.read({path:'native-terminal.txt'})).text==='界面🌙'}catch{return false}});
+ await until(()=>view.querySelector('.xterm-rows')?.textContent.includes('原生终端成功'));
+ const row=await mdo.terminal.get({id:terminal.id});
+ if(row.columns<2||row.rows<2)throw Error('Native terminal was not sized');
+ await mdo.ui.newTab();await pause(200);if((await mdo.terminal.get({id:row.id})).pid!==row.pid)throw Error('Hiding ended the terminal');
+ [...document.querySelectorAll('.wb-tab-select')].find(node=>node.textContent==='终端').click();
+ await until(()=>!view.hidden&&view.dataset.terminalInput==='connected');
+ window.confirm=()=>true;view.querySelector('[aria-label="结束终端"]').click();await until(async()=>(await mdo.terminal.get({id:row.id})).drained);
+ await fetch(TARGET+'/result',{method:'POST',mode:'no-cors',body:JSON.stringify({passed:true,scope:'native WebView2 terminal UI',width:view.getBoundingClientRect().width,columns:row.columns,rows:row.rows,unicode:true,ended:true})});
+}catch(error){await fetch(TARGET+'/result',{method:'POST',mode:'no-cors',body:JSON.stringify({passed:false,error:String(error.stack||error)})})}
+'''
+
 class Fixture(BaseHTTPRequestHandler):
  def log_message(self,*args):pass
  def do_GET(self):
@@ -140,7 +168,7 @@ class Fixture(BaseHTTPRequestHandler):
  def do_POST(self):
   self.server.result=json.loads(self.rfile.read(int(self.headers['Content-Length'])));self.send_response(204);self.end_headers()
 def main():
- p=argparse.ArgumentParser();p.add_argument('--host',type=Path,required=True);p.add_argument('--evidence',type=Path,required=True);modes=p.add_mutually_exclusive_group();modes.add_argument('--application',action='store_true');modes.add_argument('--changes',action='store_true');args=p.parse_args()
+ p=argparse.ArgumentParser();p.add_argument('--host',type=Path,required=True);p.add_argument('--evidence',type=Path,required=True);modes=p.add_mutually_exclusive_group();modes.add_argument('--application',action='store_true');modes.add_argument('--changes',action='store_true');modes.add_argument('--terminal',action='store_true');args=p.parse_args()
  args.evidence.mkdir(parents=True,exist_ok=True)
  fixture=ThreadingHTTPServer(('127.0.0.1',0),Fixture);fixture.result=None;threading.Thread(target=fixture.serve_forever,daemon=True).start()
  with tempfile.TemporaryDirectory(dir=ROOT/'.build',prefix='workbench-native-') as directory:
@@ -149,17 +177,18 @@ def main():
   service['window']=json.loads((ROOT/'app/xs.json').read_text(encoding='utf-8'))['services'][0]['window'];service['window']['title']='Mdo native browser QA';service['window']['install_fallback']='headless'
   config.write_text(json.dumps(value),encoding='utf-8')
   target=f'http://127.0.0.1:{fixture.server_port}'
-  script='<script type="module">const TARGET='+json.dumps(target)+';'+(CHANGES_SCRIPT if args.changes else APPLICATION_SCRIPT if args.application else SCRIPT)+'</script>'
-  page=(ROOT/'app/web/index.html').read_text(encoding='utf-8').replace('</body>',script+'</body>') if args.application or args.changes else '<!doctype html><meta charset=utf-8><h1>Mdo browser QA</h1>'+script
+  script='<script type="module">const TARGET='+json.dumps(target)+';'+(TERMINAL_SCRIPT if args.terminal else CHANGES_SCRIPT if args.changes else APPLICATION_SCRIPT if args.application else SCRIPT)+'</script>'
+  page=(ROOT/'app/web/index.html').read_text(encoding='utf-8').replace('</body>',script+'</body>') if args.application or args.changes or args.terminal else '<!doctype html><meta charset=utf-8><h1>Mdo browser QA</h1>'+script
   (base/'web/index.html').write_text(page,encoding='utf-8')
   with (args.evidence/'native-host.log').open('wb') as log:
-   process=subprocess.Popen([str(args.host.resolve()),str(config),'--','--home',str(base/'home')],cwd=base,stdout=log,stderr=log)
+   environment={key:value for key,value in os.environ.items() if not args.terminal or key.lower()!='psmodulepath'}
+   process=subprocess.Popen([str(args.host.resolve()),str(config),'--','--home',str(base/'home')],cwd=base,env=environment,stdout=log,stderr=log)
    try:
     wait_ready(port,process);deadline=time.monotonic()+90
     while fixture.result is None and time.monotonic()<deadline and process.poll() is None:time.sleep(.1)
     result=fixture.result or {'passed':False,'error':'Native browser did not return a result'}
     (args.evidence/'native-result.json').write_text(json.dumps(result,indent=2),encoding='utf-8')
-    assert result['passed'],result;print('Actual WebView2 changes scopes, file location and retained tree, real index unchanged: PASS' if args.changes else 'Actual WebView2 navigation, input, screenshot, takeover, back and SDK isolation: PASS')
+    assert result['passed'],result;print('Actual WebView2 terminal rendering, Unicode input, dimensions, hide and end: PASS' if args.terminal else 'Actual WebView2 changes scopes, file location and retained tree, real index unchanged: PASS' if args.changes else 'Actual WebView2 navigation, input, screenshot, takeover, back and SDK isolation: PASS')
    finally:
     process.terminate();process.wait(timeout=15);time.sleep(1)
  fixture.shutdown();fixture.server_close()

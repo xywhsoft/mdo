@@ -131,6 +131,28 @@
 .wb-change-tree-item .wb-icon { width:14px;height:14px; }
 @container(max-width:400px) { .wb-changes-toolbar { padding:5px 4px;gap:2px; }.wb-changes-toolbar .wb-icon-button { width:28px; }.wb-compare-base { flex-basis:100%; }.wb-change-old-number,.wb-change-number { width:35px; } }
 .wb-added { background:#248b2525; }.wb-removed { background:#b52e2e25; }
+.wb-view.wb-terminal-view { display:flex;flex-direction:column;overflow:hidden;padding:0;min-width:0;container-type:inline-size; }
+.wb-terminal-toolbar { flex:none;display:flex;align-items:center;gap:3px;padding:5px 6px;border-bottom:1px solid var(--border); }
+.wb-terminal-sessions { flex:1;min-width:60px;max-width:100%;background:transparent;color:inherit;border:0;font:inherit;font-size:12px;padding:5px;overflow:hidden;text-overflow:ellipsis; }
+.wb-terminal-sessions option { background:var(--surface);color:var(--ink); }
+.wb-terminal-path { flex:none;font:10px/22px Consolas,monospace;color:var(--muted);padding:0 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+.wb-terminal-path:empty { display:none; }
+.wb-terminal-surface { flex:1;min-width:0;min-height:0;overflow:hidden;padding:4px 4px 0 8px;background:var(--surface); }
+.wb-terminal-surface:empty { display:none; }
+.wb-terminal-surface .xterm { height:100%; }
+.wb-terminal-surface .xterm-viewport { overscroll-behavior:contain;background-color:var(--surface); }
+.wb-terminal-surface .composition-view { background:var(--surface-raised);color:var(--ink); }
+.wb-terminal-status { flex:none;display:flex;align-items:center;gap:10px;min-height:26px;padding:3px 8px;border-top:1px solid var(--border);color:var(--muted);font-size:10px; }
+.wb-terminal-status > span:first-child { flex:none; }
+.wb-terminal-message { overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.wb-terminal-view[data-terminal-input="readonly"] .wb-terminal-status { color:var(--warning); }
+.wb-terminal-empty { flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;font-size:12px;color:var(--muted); }
+.wb-terminal-empty[hidden] { display:none; }
+.wb-terminal-empty h3,.wb-terminal-empty p { margin:0; }
+.wb-terminal-find { display:flex;gap:3px;align-items:center;flex:none;padding:4px 8px;border-bottom:1px solid var(--border);font-size:11px; }
+.wb-terminal-find[hidden] { display:none; }
+.wb-terminal-find input { flex:1;min-width:40px;background:transparent;border:1px solid var(--border);color:inherit;border-radius:5px;padding:5px;font:inherit; }
+@container(max-width:400px) { .wb-terminal-toolbar { gap:0;padding:4px; }.wb-terminal-toolbar .wb-icon-button { width:28px; }.wb-terminal-status { flex-wrap:wrap;gap:0 6px; }.wb-terminal-message { max-width:100%; } }
 .wb-resize { position:absolute;left:-4px;top:0;bottom:0;width:8px;z-index:14;cursor:col-resize;touch-action:none; }
 .wb-resize:hover,.wb-resize:focus-visible { background:var(--focus); }
 .app-shell[data-settings-open] > .workbench { display:none; }

@@ -1,10 +1,10 @@
 """Real full-application DOM regression; uses an already available Playwright."""
-import argparse,os,subprocess,tempfile
+import argparse,os,subprocess,tempfile,time
 from pathlib import Path
 from test_api_runtime import ROOT,write_site,free_port,wait_ready
 
 def main():
- p=argparse.ArgumentParser();p.add_argument('--host',type=Path,required=True);p.add_argument('--evidence',type=Path,required=True);modes=p.add_mutually_exclusive_group();modes.add_argument('--files',action='store_true');modes.add_argument('--changes',action='store_true');args=p.parse_args()
+ p=argparse.ArgumentParser();p.add_argument('--host',type=Path,required=True);p.add_argument('--evidence',type=Path,required=True);modes=p.add_mutually_exclusive_group();modes.add_argument('--files',action='store_true');modes.add_argument('--changes',action='store_true');modes.add_argument('--terminal',action='store_true');args=p.parse_args()
  args.evidence.mkdir(parents=True,exist_ok=True)
  with tempfile.TemporaryDirectory(dir=ROOT/'.build',prefix='workbench-ui-') as temporary:
   base=Path(temporary);port=free_port();config=write_site(base,port)
@@ -25,10 +25,13 @@ def main():
    (repo/'nested').mkdir()
    for at in range(450):(repo/'nested'/f'new-{at:04d}.txt').write_text('new\n')
   with (args.evidence/'host.log').open('wb') as log:
-   process=subprocess.Popen([str(args.host.resolve()),str(config),'--','--home',str(base/'home')],cwd=base,env={**os.environ,'USE_WEBVIEW':'0'},stdout=log,stderr=log)
+   # Do not make Windows PowerShell auto-import the harness pwsh 7 modules.
+   # This is a private, clean shell fixture; production keeps the user's env.
+   environment={key:value for key,value in os.environ.items() if not args.terminal or key.lower()!='psmodulepath'}
+   process=subprocess.Popen([str(args.host.resolve()),str(config),'--','--home',str(base/'home')],cwd=base,env={**environment,'USE_WEBVIEW':'0'},stdout=log,stderr=log)
    try:
     wait_ready(port,process)
-    fixture='workbench-changes-browser.cjs' if args.changes else 'workbench-files-browser.cjs' if args.files else 'workbench-browser.cjs'
+    fixture='workbench-terminal-browser.cjs' if args.terminal else 'workbench-changes-browser.cjs' if args.changes else 'workbench-files-browser.cjs' if args.files else 'workbench-browser.cjs'
     subprocess.run(['node',str(ROOT/'tests/fixtures'/fixture),f'http://127.0.0.1:{port}',str(args.evidence.resolve()),*([str(repo)] if args.changes else [])],check=True,timeout=150)
-   finally:process.terminate();process.wait(timeout=10)
+   finally:process.terminate();process.wait(timeout=10);time.sleep(1)
 if __name__=='__main__':main()

@@ -33,6 +33,7 @@ tools/*
 !tools/application_sdk.py
 !tools/application_contracts.py
 !tools/workbench_contracts.py
+!tools/vendor_terminal.py
 !tools/native/
 !tools/native/*.hpp
 !tools/native/*.h
