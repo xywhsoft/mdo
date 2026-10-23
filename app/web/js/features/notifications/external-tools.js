@@ -64,7 +64,7 @@ export function createExternalToolsPanel({ refresh, openFull, openTools, signedI
   function render(body,snapshot={},updatesOnly=false){
     if(!body)return;hosts.add(body);body.dataset.cliUpdates=String(updatesOnly);data=snapshot;
     const next=targetState().selected?.id??"local";if(context!==next){context=next;catalogRequested=false;tab="local";query=error="";mine=false;closeEditor();}
-    const sig=JSON.stringify([data,currentLocale(),tab,query,error,mine,next,writable(),signedIn(),updatesOnly]);if(signatures.get(body)===sig)return;signatures.set(body,sig);body.replaceChildren();
+    const sig=JSON.stringify([data,currentLocale(),tab,query,error,mine,next,writable(),signedIn(),updatesOnly,isMain()]);if(signatures.get(body)===sig)return;signatures.set(body,sig);body.replaceChildren();
     if(!data.platform){body.append(n("p","…"));return;}
     const android=data.platform.startsWith("android"), disabled=!writable();
     guide.replaceChildren(n("p",c(33)),button(c(34),async()=>{if(android){if(await command({action:"accept"}))await openFull();}else if(await command({action:"recommend"}))openTools();},disabled),button(c(35),()=>command({action:"dismiss"}),disabled));

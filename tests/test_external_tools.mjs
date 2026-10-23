@@ -30,12 +30,12 @@ const all=e=>[e,...e.children.flatMap(all)];
 test("external manager has exactly two tabs, ordinary rows and a durable first-use prompt",()=>{
  const saved=globalThis.document;globalThis.document={body:new Element("body"),createElement:tag=>new Element(tag)};
  try{
-  const panel=createExternalToolsPanel({refresh:async()=>{},openFull:async()=>{},openTools:()=>{},signedIn:()=>false}),body=new Element("div");
+  let main=true;const panel=createExternalToolsPanel({refresh:async()=>{},openFull:async()=>{},openTools:()=>{},signedIn:()=>false,isMain:()=>main}),body=new Element("div");
   const state={writable:true,guide:"new",platform:"windows-x86_64",edition:"desktop",items:[{id:"custom.one",name:"<script>literal</script>",path:"C:/cli/tool.exe",prompt:"use --example",version:"1.0.0",license:"MIT",enabled:true,present:true}],tasks:[],store:{items:[]}};
   panel.render(body,state);
   assert.equal(all(body).filter(n=>n.attributes.role==="tab").length,2);
   assert(all(body).some(n=>n.textContent==="<script>literal</script>"));
-  const guide=document.body.children[0];assert.equal(guide.hidden,false);
+  const guide=document.body.children[0];assert.equal(guide.hidden,false);main=false;panel.render(body,state);assert.equal(guide.hidden,true);main=true;panel.render(body,state);assert.equal(guide.hidden,false);
   for(const decision of ["accepted","dismissed","deployed"]){panel.render(body,{...state,guide:decision,items:[]});assert.equal(guide.hidden,true);}
   panel.render(body,{...state,guide:"accepted",platform:"android-arm64-v8a",edition:"full"});
   assert(all(body).some(n=>n.textContent==="Install full edition"));
