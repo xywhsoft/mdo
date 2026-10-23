@@ -5,7 +5,6 @@ import { startResourceOperation } from "./resource-operation-start.js";
 export const modulesStore = createResourceStore({ modules: [], tools: [] });
 export const skillsStore = createResourceStore({ items: [] });
 export const mcpStore = createResourceStore({ items: [] });
-export const permissionsStore = createResourceStore();
 export const storageStore = createResourceStore();
 export const diagnosticsStore = createResourceStore({ total: 0, items: [] });
 export const migrationsStore = createResourceStore({ count: 0, items: [] });
@@ -14,7 +13,6 @@ const STORES = Object.freeze({
   modules: modulesStore,
   skills: skillsStore,
   mcp: mcpStore,
-  permissions: permissionsStore,
   storage: storageStore,
   diagnostics: diagnosticsStore,
   migrations: migrationsStore,
@@ -22,7 +20,6 @@ const STORES = Object.freeze({
 const pendingReads = new Map();
 const SECTION_RESOURCES = Object.freeze({
   extensions: ["modules"],
-  permissions: ["permissions"],
   diagnostics: ["storage", "diagnostics", "migrations"],
 });
 

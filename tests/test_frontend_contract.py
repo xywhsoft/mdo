@@ -177,7 +177,7 @@ class FrontendContractTests(unittest.TestCase):
     def test_resource_management_is_split_into_bounded_stores(self) -> None:
         resources = self.scripts["js/state/resources.js"]
         panels = self.scripts["js/features/settings/resource-panels.js"]
-        for name in ("modules", "skills", "mcp", "permissions", "storage",
+        for name in ("modules", "skills", "mcp", "storage",
                      "diagnostics", "migrations"):
             self.assertIn(f"{name}Store", resources)
         self.assertIn('api.post(`/${name}/reload`)', resources)

@@ -20,7 +20,7 @@ import {
   resumeSettingsLocaleInitialization,
 } from "./state/settings.js";
 import {
-  modulesStore, skillsStore, mcpStore, permissionsStore, storageStore,
+  modulesStore, skillsStore, mcpStore, storageStore,
   diagnosticsStore, migrationsStore, loadResource,
 } from "./state/resources.js";
 import {
@@ -1317,7 +1317,6 @@ export async function boot() {
       modules: modulesStore,
       skills: skillsStore,
       mcp: mcpStore,
-      permissions: permissionsStore,
       storage: storageStore,
       diagnostics: diagnosticsStore,
       migrations: migrationsStore,

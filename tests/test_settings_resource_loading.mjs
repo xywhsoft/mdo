@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { ensureSettingsResources, loadResource, modulesStore, skillsStore,
-  mcpStore, permissionsStore, storageStore, diagnosticsStore, migrationsStore } from
+  mcpStore, storageStore, diagnosticsStore, migrationsStore } from
   "../app/web/js/state/resources.js";
 
-const stores = [modulesStore, skillsStore, mcpStore, permissionsStore,
+const stores = [modulesStore, skillsStore, mcpStore,
   storageStore, diagnosticsStore, migrationsStore];
 const reply = (data = { items: [] }) => Response.json({ ok: true, data });
 const defer = () => {
@@ -25,7 +25,7 @@ test("chat and ordinary preferences do not load management catalogs", async () =
   const calls = [];
   await withFetch(async (url) => { calls.push(url); return reply(); }, async () => {
     for (const page of ["", "general", "agent", "web", "projects", "models",
-      "retired-page", "schedules", "constructor", "toString", "unknown"])
+      "permissions", "retired-page", "schedules", "constructor", "toString", "unknown"])
       assert.deepEqual(await ensureSettingsResources(page), []);
     assert.deepEqual(calls, []);
     assert.ok(stores.every((store) => store.get().status === "idle"));
@@ -43,7 +43,6 @@ test("rapid extension page visits share reads and keep the loaded catalog", asyn
     const second = ensureSettingsResources("extensions");
     assert.deepEqual(calls, ["/api/v1/modules"]);
     assert.equal(modulesStore.get().status, "refreshing");
-    assert.equal(permissionsStore.get().status, "idle");
     for (const [path, gate] of gates) gate.resolve(reply({ items: [{ id: path }] }));
     await Promise.all([first, second]);
     await ensureSettingsResources("extensions");
@@ -101,17 +100,14 @@ test("a superseded read cannot replace or forget an explicit refresh", async () 
   });
 });
 
-test("permissions and diagnostics load only their own page data", async () => {
+test("diagnostics loads only its own page data", async () => {
   const calls = [];
   await withFetch(async (url) => { calls.push(url); return reply(); }, async () => {
-    await ensureSettingsResources("permissions");
-    assert.deepEqual(calls, ["/api/v1/permissions"]);
     assert.equal(storageStore.get().status, "idle");
     await ensureSettingsResources("diagnostics");
-    assert.deepEqual(calls.slice(1), ["/api/v1/storage", "/api/v1/diagnostics", "/api/v1/migrations/legacy"]);
+    assert.deepEqual(calls, ["/api/v1/storage", "/api/v1/diagnostics", "/api/v1/migrations/legacy"]);
     assert.equal(modulesStore.get().status, "idle");
-    await ensureSettingsResources("permissions");
     await ensureSettingsResources("diagnostics");
-    assert.equal(calls.length, 4);
+    assert.equal(calls.length, 3);
   });
 });

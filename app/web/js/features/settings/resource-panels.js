@@ -77,13 +77,6 @@ function empty(text) {
   return element("div", { className: "empty-state", text });
 }
 
-function access(value) {
-  if (value === true || value === "true") return t("resource.accessAllowed", {}, "允许");
-  if (value === false || value === "false") return t("resource.accessDenied", {}, "禁止");
-  if (value === "ask") return t("resource.accessAsk", {}, "询问");
-  return String(value);
-}
-
 const RESOURCE_CODE_KEYS = Object.freeze({
   builtin: "resource.builtin",
   external_reference: "resource.externalReference",
@@ -99,18 +92,6 @@ const RESOURCE_CODE_KEYS = Object.freeze({
 function resourceCode(value) {
   const key = RESOURCE_CODE_KEYS[value];
   return key ? t(key, {}, String(value)) : String(value);
-}
-
-const PERMISSION_PROFILE_KEYS = Object.freeze({
-  "read-only": "shell.permission.readOnly",
-  balanced: "shell.permission.balanced",
-  "full-access": "shell.permission.fullAccess",
-});
-
-function permissionProfile(value) {
-  const key = Object.hasOwn(PERMISSION_PROFILE_KEYS, value)
-    ? PERMISSION_PROFILE_KEYS[value] : "";
-  return key ? t(key, {}, value) : String(value ?? "");
 }
 
 // Only translate descriptions shipped by mdo itself. An external resource or
@@ -147,12 +128,10 @@ export function createResourcePanels({ agentsStore, stores, reload }) {
   const storePanel = createStorePanel();
   const modelsContainer = document.querySelector("#settings-models-list");
   const extensionsContainer = document.querySelector("#settings-extensions-list");
-  const permissionsContainer = document.querySelector("#settings-permissions-list");
   const diagnosticsContainer = document.querySelector("#settings-diagnostics-list");
   const unsubscribers = [];
   const extensionActions = trackedActions(extensionsContainer, "data-extension-action");
   const diagnosticActions = trackedActions(diagnosticsContainer, "data-diagnostic-action");
-  const permissionActions = trackedActions(permissionsContainer, "data-permission-action");
   let confirmingSource = "";
   let migrationResult = null;
   let migrationBusy = false;
@@ -217,30 +196,6 @@ export function createResourcePanels({ agentsStore, stores, reload }) {
         t("resource.agentCount", { count: module.agent_count }, `${module.agent_count} agents`)]));
     }
     if (focusedKey) extensionActions.find(focusedKey)?.focus({ preventScroll: true });
-  }
-
-  function renderPermissions(state) {
-    const focusedKey = permissionsContainer.contains(document.activeElement)
-      ? document.activeElement?.getAttribute("data-permission-action") : "";
-    clear(permissionsContainer);
-    if (!showReadState(permissionsContainer, state, permissionActions, "permissions")) {
-      if (focusedKey) permissionActions.find(focusedKey)?.focus({ preventScroll: true });
-      return;
-    }
-    const config = state.data?.configuration;
-    if (!config) { permissionsContainer.append(empty(t("resource.permissionsUnavailable", {}, "权限配置不可用"))); return; }
-    const defaultProfileName = permissionProfile(config.default_profile);
-    permissionsContainer.append(card(t("resource.defaultProfile", { name: defaultProfileName },
-      `默认权限方案：${defaultProfileName}`),
-      t("resource.permissionDescription", {}, "权限由服务端配置验证并在每个 Agent 会话创建时固定。"),
-      [t("resource.revision", { value: state.data.revision }, `revision ${state.data.revision}`)]));
-    for (const [name, profile] of Object.entries(config.profiles ?? {})) {
-      permissionsContainer.append(card(permissionProfile(name),
-        t("resource.workspaceAccess", { read: access(profile.workspace_read), write: access(profile.workspace_write) },
-          `工作区读取：${access(profile.workspace_read)} · 写入：${access(profile.workspace_write)}`),
-        [t("resource.processAccess", { value: access(profile.process) }, `进程 ${access(profile.process)}`),
-          t("resource.networkAccess", { value: access(profile.network) }, `网络 ${access(profile.network)}`)]));
-    }
   }
 
   function renderDiagnostics() {
@@ -363,13 +318,11 @@ export function createResourcePanels({ agentsStore, stores, reload }) {
 
   unsubscribers.push(agentsStore.subscribe(renderExtensions));
   unsubscribers.push(stores.modules.subscribe(renderExtensions));
-  unsubscribers.push(stores.permissions.subscribe(renderPermissions));
   unsubscribers.push(stores.storage.subscribe(renderDiagnostics));
   unsubscribers.push(stores.diagnostics.subscribe(renderDiagnostics));
   unsubscribers.push(stores.migrations.subscribe(renderDiagnostics));
   unsubscribers.push(subscribeLocale(() => {
     renderExtensions();
-    renderPermissions(stores.permissions.get());
     renderDiagnostics();
   }));
   unsubscribers.push(subscribeTarget(() => {
