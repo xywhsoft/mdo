@@ -14,6 +14,7 @@
 #define FORWARD_CONFIG_LIMIT (1024u * 1024u)
 #define FORWARD_ARG_LIMIT 1024u
 static volatile LONG ForwardControl;
+static HANDLE ForwardJob;
 
 static BOOL WINAPI ForwardConsole(DWORD Event)
 {
@@ -58,12 +59,12 @@ static bool ForwardContain(void)
     HANDLE Job=CreateJobObjectW(NULL,NULL);JOBOBJECT_EXTENDED_LIMIT_INFORMATION Limits={0};
     if(!Job)return false;Limits.BasicLimitInformation.LimitFlags=JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
     if(!SetInformationJobObject(Job,JobObjectExtendedLimitInformation,&Limits,sizeof(Limits))||!AssignProcessToJobObject(Job,GetCurrentProcess())){CloseHandle(Job);return false;}
-    return true;
+    ForwardJob=Job;return true;
 }
 int wmain(int argc,wchar_t** argv)
 {
     int Result=126;str Self=NULL,Bin=NULL,RegistryRoot=NULL,Data=NULL,Home=NULL,Name=NULL,Config=NULL,Target=NULL,RealHome=NULL,RealTarget=NULL;
-    bytes Raw=NULL;xvalue* Registry=NULL;xprocess* Child=NULL;char** Args=NULL;size_t Count=0,PrefixCount=0;
+    bytes Raw=NULL;xvalue* Registry=NULL;xprocess* Child=NULL;char** Args=NULL;size_t Count=0,PrefixCount=0;bool Interrupted=false;
     cstr Failure="Cannot initialize portable command",Detail="";char DepthText[12];
     if(argc<1||(size_t)argc-1>FORWARD_ARG_LIMIT){Failure="Too many command arguments";goto done;}
     Self=xrtPathExecutable();Bin=Self?xrtPathParent(Self):NULL;RegistryRoot=Bin?xrtPathParent(Bin):NULL;
@@ -99,6 +100,7 @@ int wmain(int argc,wchar_t** argv)
     Failure="Cannot start command program";Detail=Relative;Child=xrtProcessSpawn(&Launch);if(!Child)goto done;
     for(;;){
         if(InterlockedExchange(&ForwardControl,0)){
+            Interrupted=true;
             if(!xrtProcessInterrupt(Child)){/* Headless callers cancel through their enclosing Job. */xrtClearError();}
         }
         xwaitresult Wait=xrtProcessWaitFor(Child,25);if(Wait==XWAIT_TIMEOUT)continue;
@@ -106,6 +108,10 @@ int wmain(int argc,wchar_t** argv)
         xprocessstatus Status;if(!xrtProcessStatus(Child,&Status))goto done;Result=Status.Code;Failure=NULL;break;
     }
 done:
+    /* Normal completion preserves deliberately detached children, as a direct
+     * invocation does (ssh-agent, background service launchers). Cancellation
+     * and abnormal launcher death keep KILL_ON_JOB_CLOSE containment. */
+    if(!Failure&&!Interrupted&&ForwardJob){JOBOBJECT_EXTENDED_LIMIT_INFORMATION Limits={0};if(SetInformationJobObject(ForwardJob,JobObjectExtendedLimitInformation,&Limits,sizeof(Limits))){CloseHandle(ForwardJob);ForwardJob=NULL;}else{Failure="Cannot release completed command process group";Result=126;}}
     if(Failure){ForwardError(Failure,Detail);cstr Native=xrtErrorMessage(xrtGetError());if(Native&&Native[0])ForwardError("Cause",Native);}
     xrtProcessDestroy(Child);if(Args){for(size_t I=0;I<Count;I++)xrtFree(Args[I]);xrtFree(Args);}
     xrtValueRelease(Registry);xrtFree(Raw);xrtFree(Self);xrtFree(Bin);xrtFree(RegistryRoot);xrtFree(Data);xrtFree(Home);xrtFree(Name);xrtFree(Config);xrtFree(Target);xrtFree(RealHome);xrtFree(RealTarget);
