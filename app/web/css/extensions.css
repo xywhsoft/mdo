@@ -1,4 +1,4 @@
-/* The editor is an ordinary native dialog; the list stays usable on narrow screens. */
+/* Creation and editing use shared windows. Legacy consumers are migrated separately. */
 .extension-toolbar, .extension-editor-heading, .extension-editor-footer { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .extension-toolbar { margin: 0 0 12px; }
 .extension-search { width: 100%; margin: 0 0 8px; }
@@ -10,14 +10,16 @@
 .extension-editor::backdrop { background: #0007; }
 .extension-editor-heading { justify-content: space-between; margin-bottom: 16px; }
 .extension-editor-heading h2 { font-size: 18px; margin: 0; }
-.extension-editor input:not([type="checkbox"]), .extension-editor select, .extension-editor textarea, .extension-search { border: 1px solid var(--border); border-radius: 7px; padding: 9px 11px; background: var(--surface); color: inherit; box-sizing: border-box; min-width: 0; font: inherit; }
+:is(.extension-editor, .extension-authoring) input:not([type="checkbox"]), :is(.extension-editor, .extension-authoring) select, :is(.extension-editor, .extension-authoring) textarea, .extension-search { border: 1px solid var(--border); border-radius: 7px; padding: 9px 11px; background: var(--surface); color: inherit; box-sizing: border-box; min-width: 0; font: inherit; }
+.extension-authoring .extension-field > :is(input, textarea, select) { width:100%; }
+.extension-authoring form { margin:0; padding:0; border:0; background:none; box-shadow:none; }
 .extension-field { display: grid; gap: 6px; margin-bottom: 14px; font-size: 13px; }
 .skill-workbench-editor { display: grid; gap: 8px; margin-bottom: 16px; }
 .skill-workbench-editor textarea { width: 100%; min-height: 240px; }
-.extension-editor .resource-card code { overflow-wrap: anywhere; white-space: pre-wrap; }
+:is(.extension-editor, .extension-authoring) .resource-card code { overflow-wrap: anywhere; white-space: pre-wrap; }
 .extension-field small { color: var(--muted); font-size: 11px; line-height: 1.6; }
-.extension-editor input[aria-invalid="true"], .extension-editor textarea[aria-invalid="true"], .extension-editor select[aria-invalid="true"] { border-color: var(--danger, #c94343); }
-.extension-editor .extension-field-error { color: var(--danger, #c94343); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+:is(.extension-editor, .extension-authoring) :is(input, textarea, select)[aria-invalid="true"] { border-color: var(--danger, #c94343); }
+:is(.extension-editor, .extension-authoring) .extension-field-error { color: var(--danger, #c94343); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .extension-check { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
 .extension-check small { flex-basis: 100%; color: var(--muted); font-size: 11px; line-height: 1.6; }
 .extension-form textarea[name="prompt"] { min-height: 180px; resize: vertical; line-height: 1.6; }

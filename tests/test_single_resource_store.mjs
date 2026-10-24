@@ -69,6 +69,8 @@ test("single-resource sharing retains drafts on connection notifications and can
   await store.publish({ id: "test", description: "Fixture", project: "default" });
   const dialog = body.children[0]; assert.equal(dialog.open, true);
   const form = descendants(dialog).find(n => n.tagName === "FORM");
+  assert(dialog.classList.contains("mdo-layer"));
+  const footer=dialog.querySelector("footer");assert(!form.contains(footer));assert.equal(footer.firstChild.getAttribute("form"),form.id);
   form.dispatchEvent(new Event("input")); notify();
   assert.equal(dialog.open, true, "same-device reconnect must not discard a publication form");
   assert.deepEqual(calls[0].value.references, [{ kind: "skills", id: "test", project: "default" }]);
@@ -77,6 +79,7 @@ test("single-resource sharing retains drafts on connection notifications and can
   field("review_notes").value = "Source-only read-only fixture, no network.";
   form.elements.find(n => n.type === "checkbox" && n.value === "windows-x86_64").checked = true;
   submitGate = deferred(); form.dispatchEvent(new Event("submit", { cancelable: true })); await flush();
+  assert(footer.firstChild.disabled);dialog.dispatchEvent(new Event("cancel",{cancelable:true}));await flush();assert(dialog.open);
   const submit = calls.find(c => c.value.action === "submit");
   assert.equal(submit.value.single_kind, "skills"); assert.equal(submit.value.package.resources.length, 1);
   notify(); assert.equal(submit.options.signal.aborted, false);

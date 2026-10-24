@@ -28,7 +28,7 @@ export function externalToolAction(row, installed) {
   return !local||!local.present?"install":local.version!==row.version?"update":null;
 }
 export function createExternalToolsPanel({ refresh, openFull, signedIn, openDownloads=()=>{}, isMain=()=>true }) {
-  let data={}, tab="local", query="", error="", context="", catalogRequested=false, editor=null, editing=null, submissions=null, localQuery="", stateFilter="all";
+  let data={}, tab="local", query="", error="", context="", catalogRequested=false, editor=null, submissions=null, localQuery="", stateFilter="all";
   const browsers = new Map(), pending = new Set();
   let catalogRequest=null, catalogItems=[], catalogResult=null, catalogNext=0, catalogEpoch=0, catalogQuery="", submissionsRead=null;
   const signatures=new WeakMap(), hosts=new Set();
@@ -137,12 +137,34 @@ export function createExternalToolsPanel({ refresh, openFull, signedIn, openDown
     view.layer.body.append(view.status,view.list);view.layer.footer.append(view.refresh,view.close);
     submissions=view;renderSubmissions();void refreshSubmissions(view);
   }
-  function closeEditor(){editor?.remove();editor=null;editing=null;}
-  function edit(tool={}) {
+  function closeEditor(){const view=editor;editor=null;view?.layer.dispose();}
+  function editorWindow(title,owner) {
+    if(editor){editor.layer.closeButton.focus();return null;}
+    const view={target:context,busy:false};
+    view.layer=openLayer({title,icon:"terminal",width:"46rem",height:"80%",owner,
+      beforeClose:()=>!view.busy,
+      onClosed(){if(editor===view)editor=null;}});
+    view.layer.element.classList.add("cli-authoring");editor=view;return view;
+  }
+  const currentEditor=view=>editor===view&&!view.layer.signal.aborted&&view.target===context&&view.target===(targetState().selected?.id??"local");
+  function editorActions(view,form,text,submit) {
+    form.id=`${view.layer.element.id}-form`;
+    const save=button(text,()=>{}),close=button(c(26),()=>{void view.layer.close("cancel");});
+    save.onclick=null;save.type="submit";save.setAttribute("form",form.id);
+    view.layer.body.append(form);view.layer.footer.append(save,close);
+    form.addEventListener("submit",async event=>{
+      event.preventDefault();if(!currentEditor(view)||view.busy||!writable())return;
+      view.busy=true;save.disabled=close.disabled=view.layer.closeButton.disabled=true;
+      for(const control of form.elements)control.disabled=true;
+      try{if(await submit()&&currentEditor(view)){view.busy=false;await view.layer.close("saved");}}
+      finally{view.busy=false;if(currentEditor(view)){save.disabled=close.disabled=view.layer.closeButton.disabled=false;for(const control of form.elements)control.disabled=false;}}
+    },{signal:view.layer.signal});
+  }
+  function edit(tool={},owner) {
     if(tool.id&&!userDefined(tool))return;
-    closeEditor();editing=tool.id??null;const own=context,revision=data.revision??0;
-    editor=n("dialog",null,"cli-editor");const form=n("form"), message=n("p",null,"cli-error"), fields={};
-    form.append(n("h3",c(tool.id?8:2)));
+    const view=editorWindow(c(tool.id?8:2),owner);if(!view)return;
+    const revision=data.revision??0;
+    const form=n("form"), message=n("p",null,"cli-error"), fields={};
     for(const [key,label,type] of [["name",18],["description",53,"textarea"],["path",19],["command",46],["aliases",47,"textarea"],["prompt",20,"textarea"],["version",21],["copyright",58,"textarea"],["license",22],["links",23,"textarea"],["package_root",24]]){
       const wrap=n("label",null,"cli-field"),input=n(type??"input");input.name=key;
       input.value=key==="links"||key==="aliases"?(Array.isArray(tool[key])?tool[key]:[]).join("\n"):tool[key]??(key==="version"?"1.0.0":key==="license"?"Unknown":"");
@@ -151,20 +173,21 @@ export function createExternalToolsPanel({ refresh, openFull, signedIn, openDown
       if(key==="command"&&tool.commands?.length)input.readOnly=true;
       wrap.append(n("span",c(label)),input);if(key==="description"||key==="prompt")wrap.append(n("small",c(key==="description"?54:55)));fields[key]=input;form.append(wrap);
     }
-    const save=button(c(25),()=>form.requestSubmit()),close=button(c(26),closeEditor);form.append(message,save,close);editor.append(form);document.body.append(editor);
-    form.onsubmit=async e=>{e.preventDefault();if(own!==context)return closeEditor();save.disabled=true;const t={id:tool.id??"custom."+crypto.randomUUID().replaceAll("-",""),platform:data.platform,enabled:tool.enabled??true};
+    form.append(message);message.setAttribute("role","alert");
+    editorActions(view,form,c(25),async()=>{const t={id:tool.id??"custom."+crypto.randomUUID().replaceAll("-",""),platform:data.platform,enabled:tool.enabled??true};
       if(tool.commands)t.commands=tool.commands;
       for(const k of Object.keys(fields))t[k]=k==="links"||k==="aliases"?fields[k].value.split(/\r?\n/).map(v=>v.trim()).filter(Boolean):fields[k].value.trim();
-      if(await command({action:"save",tool:t,revision}))closeEditor();else{message.textContent=error;save.disabled=false;}
-    };editor.addEventListener("cancel",()=>closeEditor());editor.showModal();
+      const ok=await command({action:"save",tool:t,revision});if(currentEditor(view))message.textContent=ok?"":error;return ok;
+    });fields.name.focus();
   }
-  function share(tool) {
+  function share(tool,owner) {
     if(!userDefined(tool))return;
-    closeEditor();const own=context;editor=n("dialog",null,"cli-editor");const form=n("form"),fields={},message=n("p",null,"cli-error");form.append(n("h3",currentLocale()==="zh-CN"?"提交到创作中心":"Submit to creator center"),n("p",c(31)));
+    const view=editorWindow(currentLocale()==="zh-CN"?"提交到创作中心":"Submit to creator center",owner);if(!view)return;
+    const form=n("form"),fields={},message=n("p",null,"cli-error");form.append(n("p",c(31)));
     const visibility=n("label",null,"cli-field"),publish=n("input");publish.type="checkbox";visibility.append(publish,n("span",currentLocale()==="zh-CN"?"申请公布（需审核）；不勾选则私有保存":"Request publication (review required); otherwise save privately"));form.append(visibility);
     for(const [key,zh,en,multi] of [["source_url","固定版本源码 / 可核验来源（HTTPS）","Versioned source / provenance URL (HTTPS)"],["review_file","审核附件的本机绝对路径（源码归档等，可选）","Absolute local path to review file (optional)"],["review_notes","构建方法、安全说明、权限及网络行为","Build instructions, permissions and network behavior",true]]){const label=n("label",null,"cli-field"),input=n(multi?"textarea":"input");input.maxLength=key==="review_notes"?8000:4096;label.append(n("span",currentLocale()==="zh-CN"?zh:en),input);fields[key]=input;form.append(label);}
-    const save=button(currentLocale()==="zh-CN"?"提交作品":"Submit",()=>form.requestSubmit()),close=button(c(26),closeEditor);form.append(message,save,close);editor.append(form);document.body.append(editor);editor.showModal();
-    form.onsubmit=async e=>{e.preventDefault();if(own!==context)return closeEditor();const request={action:"publish",id:tool.id,name:tool.name,publish:publish.checked,...Object.fromEntries(Object.entries(fields).map(([k,v])=>[k,v.value.trim()]))};if(request.publish&&(request.review_notes.length<10||!request.source_url&&!request.review_file)){message.textContent=currentLocale()==="zh-CN"?"公布时请提供源码或可核验来源，并填写至少 10 个字符的构建及安全说明。":"Provide source/provenance and at least 10 characters of build/security notes.";return;}save.disabled=true;if(await command(request))closeEditor();else{message.textContent=error;save.disabled=false;}};
+    form.append(message);message.setAttribute("role","alert");
+    editorActions(view,form,currentLocale()==="zh-CN"?"提交作品":"Submit",async()=>{if(!signedIn())return false;const request={action:"publish",id:tool.id,name:tool.name,publish:publish.checked,...Object.fromEntries(Object.entries(fields).map(([k,v])=>[k,v.value.trim()]))};if(request.publish&&(request.review_notes.length<10||!request.source_url&&!request.review_file)){message.textContent=currentLocale()==="zh-CN"?"公布时请提供源码或可核验来源，并填写至少 10 个字符的构建及安全说明。":"Provide source/provenance and at least 10 characters of build/security notes.";return false;}const ok=await command(request);if(currentEditor(view))message.textContent=ok?"":error;return ok;});
   }
   function toolDetail(tool, install) {
     const description=n("div");description.append(n("p",tool.description||c(56)),detailFacts([[c(57),submitter(tool)],[c(58),tool.copyright||c(59)],[c(22),tool.license]]));
@@ -201,9 +224,9 @@ export function createExternalToolsPanel({ refresh, openFull, signedIn, openDown
       const needle=localQuery.toLocaleLowerCase();
       const rows=tab==="local"?(data.items||[]).filter(t=>`${t.name} ${t.description||""} ${t.command||""}`.toLocaleLowerCase().includes(needle)).filter(t=>stateFilter==="all"||(stateFilter==="error"?!t.present:stateFilter==="enabled"?t.enabled:!t.enabled)).map(t=>{
         const job=taskFor(t), custom=!android&&userDefined(t), actions=[];
-        if(custom)actions.push(button(c(8),()=>edit(t),disabled));
+        if(custom)actions.push(button(c(8),()=>edit(t,body),disabled));
         if(t.source!=="bundled"&&!android)actions.push(button(c(9),()=>{if(window.confirm(c(32)))void command({action:"remove",id:t.id});},disabled));
-        if(custom)actions.push(button(c(10),()=>share(t),disabled||!signedIn()||!t.present));
+        if(custom)actions.push(button(c(10),()=>share(t,body),disabled||!signedIn()||!t.present));
         if(custom&&!t.managed_root)actions.push(button(c(48),()=>{if(window.confirm(c(49)))void command({action:"import",id:t.id,name:t.name});},disabled||!t.present));
         const toggle=extensionToggle(button(c(t.enabled?7:6),()=>command({action:"enable",id:t.id,enabled:!t.enabled}),disabled||(!t.enabled&&!t.present)),t.enabled,t.name);
         return {key:`local:${t.id}`,title:t.name,byline:submitter(t),description:t.description||c(56),meta:[t.version,t.license],toggle,actions,badge:{text:job?taskLabel(job):!t.present?c(39):"",tone:!t.present?"error":""},detail:()=>toolDetail(t)};
@@ -224,7 +247,7 @@ export function createExternalToolsPanel({ refresh, openFull, signedIn, openDown
     toolbar.append(button(c(4),()=>tab==="store"?fetchCatalog():refresh(),disabled),creator);
     body.append(toolbar);
     if(tab==="local"){
-      const createMenu=actionMenu([...(android?[]:[button(c(2),()=>edit(),disabled)]),button(c(27),()=>openSubmissions(body),disabled||!signedIn())],browserText("createImport","创建 / 导入"));
+      const createMenu=actionMenu([...(android?[]:[button(c(2),()=>edit({},body),disabled)]),button(c(27),()=>openSubmissions(body),disabled||!signedIn())],browserText("createImport","创建 / 导入"));
       createMenu.classList.add("cli-create-menu");toolbar.append(createMenu);
       if(data.binding_error)body.append(n("p",data.binding_error,"cli-error"));
       renderList();body.append(browser.root);

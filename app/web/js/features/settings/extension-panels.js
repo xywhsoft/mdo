@@ -18,6 +18,7 @@ import { EXTENSION_KINDS, portableId, promptFields, editPrompt, newMcp, prepareM
 import { resourceOwner, receiptKey, resourceReferences } from "./store-formats.js";
 import { saveBlobFile } from "../../utils/file-download.js";
 import { createExtensionReads } from "./extension-reads.js";
+import { openLayer } from "../../components/layers.js";
 import { awaitResourceOperation } from "../../state/resource-operation.js";
 import { extensionFieldError, validateExtensionId, requiredExtensionFields, validateExtensionForm, parseExtensionJson } from "./extension-validation.js";
 
@@ -52,7 +53,7 @@ export function createExtensionPanels() {
   let selected = "", editing = null, activeTarget = targetKey(), pendingResource = null;
   let disposed = false, paused = false;
   const reads = createExtensionReads();
-  const skillWorkbench = createSkillWorkbench({ onChange: () => announceChange("skills"), onShare: item => stores.get("skills").publish(item) });
+  const skillWorkbench = createSkillWorkbench({ owner: roots.get("skills"), onChange: () => announceChange("skills"), onShare: item => stores.get("skills").publish(item) });
   const mcpContext = createMcpContext();
   const mcpAuthorization = createMcpAuthorization();
   const mcpWorkbench = createMcpWorkbench({ onChange: () => announceChange("mcp") });
@@ -282,11 +283,11 @@ export function createExtensionPanels() {
     catch { return true; }
   }
   function closeEditor(force = false) {
-    if (!editing || editing.saving) return false;
+    if (!editing || (!force && editing.saving)) return false;
     if (!force && dirty() && !window.confirm(label("discardConfirm", "放弃未保存的编辑？"))) return false;
     reads.cancel("tool-picker");
     const state = editing; editing = null;
-    state.dialog.close(); state.dialog.remove(); state.returnFocus?.focus(); return true;
+    state.layer.dispose({ restoreFocus: true }); return true;
   }
   function fieldValues() {
     return Object.fromEntries([...editing.form.elements].filter(node => node.name).map(node => [node.name,
@@ -422,7 +423,12 @@ export function createExtensionPanels() {
     if (editing && !closeEditor()) return;
     const initial = imported?.content ?? item?.content ?? (kind === "commands" ? newCommand() : kind === "tools" ? newTool() : kind === "mcp" ? JSON.stringify(newMcp(), null, 2) :
       editPrompt("", { name: kind === "commands" ? undefined : "", description: "", prompt: "" }));
-    const dialog = element("dialog", { className: "extension-editor", attrs: { "aria-labelledby": "extension-editor-title" } });
+    let editor;
+    const layer = openLayer({ title: `${item ? label("edit", "编辑") : label("create", "新建")} ${title(kind)}`,
+      icon: kind === "skills" ? "spark" : "terminal", width: "48rem", height: "80%", owner: roots.get(kind),
+      beforeClose: () => editing !== editor || !editor.saving && (!dirty() || window.confirm(label("discardConfirm", "放弃未保存的编辑？"))),
+      onClosed() { if (editing === editor) { reads.cancel("tool-picker"); editing = null; } } });
+    const dialog = layer.element; dialog.classList.add("extension-authoring");
     const id = element("input", { attrs: { name: "extension_id", maxlength: 64, autocomplete: "off", spellcheck: "false", required: "", placeholder: "my-resource", "data-field-label": label("id", "文件 ID") } });
     id.value = imported?.id ?? item?.id ?? ""; id.disabled = Boolean(item);
     const form = element("form", { className: "extension-form", attrs: { novalidate: "" } });
@@ -433,12 +439,10 @@ export function createExtensionPanels() {
     const sourceMode = button(label("source", "源文件"), () => changeMode(true));
     const save = button(label("save", "保存"), saveEditor, true);
     const cancel = button(label("cancel", "取消"), () => closeEditor());
-    const heading = element("div", { className: "extension-editor-heading" }, [
-      element("h2", { text: `${item ? label("edit", "编辑") : label("create", "新建")} ${title(kind)}`, attrs: { id: "extension-editor-title" } }), cancel]);
-    if(packageKey)heading.append(button(label("returnPackage","返回插件"),()=>{if(closeEditor())returnToPackage(packageKey);}));
-    editing = { kind, item, dialog, id, source, form, status, save, cancel, formMode,
+    if(packageKey)layer.footer.append(button(label("returnPackage","返回插件"),()=>{if(closeEditor())returnToPackage(packageKey);}));
+    editing = editor = { kind, item, dialog, layer, target: targetKey(), id, source, form, status, save, cancel, formMode,
       baseline: initial, originalId: id.value, sourceMode: ["tools", "commands"].includes(kind), toolCatalog: null, saving: false, files: imported?.files ?? [],
-      secrets: imported?.secrets ?? [], returnFocus: document.activeElement };
+      secrets: imported?.secrets ?? [] };
     try { if (kind !== "tools") fillForm(initial); }
     catch { editing.sourceMode = true; source.hidden = false; form.hidden = true; }
     if (["tools", "commands"].includes(kind)) {
@@ -450,18 +454,18 @@ export function createExtensionPanels() {
     // Imported files should keep their literal source until the user chooses a form.
     if (imported) { editing.sourceMode = true; source.hidden = false; form.hidden = true; }
     if (!imported && !editing.sourceMode) editing.baseline = currentSource();
-    dialog.append(heading, element("label", { className: "extension-field" }, [element("span", { text: `${label("id", "文件 ID")} · ${label("required", "必填")}` }), id,
+    layer.body.append(element("label", { className: "extension-field" }, [element("span", { text: `${label("id", "文件 ID")} · ${label("required", "必填")}` }), id,
       element("small", { text: label("idHint", "小写字母、数字、点、短横线或下划线；创建后不改名。") })]),
       element("div", { className: "extension-toolbar" }, [formMode, sourceMode]), form, source,
       imported?.files?.length ? element("p", { text: label("fileCount", "包含 {count} 个附属文件", { count: imported.files.length }) }) : "",
-      status, element("div", { className: "extension-editor-footer" }, [save]));
+      status);
+    layer.footer.append(save, cancel);
     form.addEventListener("submit", event => { event.preventDefault(); void saveEditor(); });
     const clearValidation = () => {
       if (editing?.dialog === dialog) clearEditorValidation(editing);
     };
     dialog.addEventListener("input", clearValidation); dialog.addEventListener("change", clearValidation);
-    dialog.addEventListener("cancel", event => { event.preventDefault(); closeEditor(); });
-    document.body.append(dialog); dialog.showModal(); (id.disabled ? form.querySelector("input") || source : id).focus();
+    (id.disabled ? form.querySelector("input") || source : id).focus();
   }
   function changeMode(sourceMode) {
     if (!editing || editing.saving || editing.sourceMode === sourceMode) return;
@@ -496,7 +500,7 @@ export function createExtensionPanels() {
   }
   async function saveEditor() {
     const editor = editing;
-    if (!editor || editor.saving) return;
+    if (!editor || editor.saving || editor.layer.signal.aborted || editor.target !== targetKey()) return;
     try {
       const id = editor.id.value.trim();
       validateExtensionId(editor.kind, id);
@@ -518,9 +522,11 @@ export function createExtensionPanels() {
       editor.saving = true; editor.dialog.querySelectorAll("input,textarea,select,button").forEach(node => { node.disabled = true; });
       editor.status.textContent = label("saving", "正在保存…");
       await api.put(path(editor.kind, id), body, revision(editor.item));
+      if (editing !== editor || editor.layer.signal.aborted || editor.target !== targetKey()) return;
       editor.saving = false; closeEditor(true); announceChange(editor.kind); await load(editor.kind);
       toast(label("saved", "已保存并生效"), "success");
     } catch (error) {
+      if (editing !== editor || editor.layer.signal.aborted || editor.target !== targetKey()) return;
       editor.saving = false; editor.dialog.querySelectorAll("input,textarea,select,button").forEach(node => { node.disabled = false; }); editor.id.disabled = Boolean(editor.item);
       if (editor.inheritTools?.checked) editor.toolList.querySelectorAll("input").forEach(node => { node.disabled = true; });
       editor.syncTransport?.();

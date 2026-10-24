@@ -6,6 +6,7 @@ import { element, errorMessage, toast } from "../../utils/dom.js";
 import { makeStorePackage, STORE_PLATFORMS, packageFields, resourceReferences } from "./store-formats.js";
 import { renderSourceMarkdown, renderPackageAttachment } from "../../utils/source-markdown.js";
 import { customizableResource, resourceCredits, storeReadOnlyMessage } from "./resource-credits.js";
+import { openLayer } from "../../components/layers.js";
 
 const node = (tag, text, className) => element(tag, { text, className });
 const device = () => targetState().selected?.id || "local";
@@ -34,14 +35,14 @@ export function createSingleResourceStore(kind, onChange, onBrowse = () => {}, o
   function close(force = false) {
     if (!dialog) return true;
     if (!force && (saving || (dirty && !confirm("放弃未提交的作品信息？")))) return false;
-    dialog.close(); dialog.remove(); dialog = null; dirty = saving = false; return true;
+    dialog.dispose({ restoreFocus: true }); return true;
   }
   function modal(title) {
     if (!close()) return null;
-    dialog = element("dialog", { className: "store-dialog", attrs: { "aria-label": title } });
-    dialog.append(element("div", { className: "store-dialog-heading" }, [node("h2", title), button("关闭", () => close())]));
-    dialog.addEventListener("cancel", e => { e.preventDefault(); close(); });
-    document.body.append(dialog); dialog.showModal(); return dialog;
+    const view = openLayer({ title, icon: kind === "skills" ? "spark" : "terminal", width: "48rem", height: "80%",
+      beforeClose: () => !saving && (!dirty || confirm("放弃未提交的作品信息？")),
+      onClosed() { if (dialog === view) { dialog = null; dirty = saving = false; } } });
+    dialog = view; view.element.classList.add("extension-authoring"); return view;
   }
   function link(text, path) {
     return element("a", { text, className: "secondary-button", attrs: { href: `https://ai.xywhsoft.com${path}`, target: "_blank", rel: "noopener noreferrer" } });
@@ -172,25 +173,30 @@ export function createSingleResourceStore(kind, onChange, onBrowse = () => {}, o
       form.append(platforms, node("p", `仅提交当前${name}及其参考文件。源文件随作品提供审核；请先检查其中的私密信息。配额与管理在创作中心。`, "store-note"));
       const publicly = element("input", { attrs: { type: "checkbox" } }); publicly.checked = true;
       form.append(element("label", { className: "store-choice" }, [publicly, node("span", "申请公布（审核后可供其他用户下载；取消则保存为私有作品）")]));
-      const message = element("p", { attrs: { role: "status" } }); form.append(message, element("button", { text: "提交作品", className: "primary-button", attrs: { type: "submit" } }));
+      form.id = `${d.element.id}-form`;
+      const submit = element("button", { text: "提交作品", className: "primary-button", attrs: { type: "submit", form: form.id } });
+      const cancel = button("取消", () => { void d.close("cancel"); });
+      const message = element("p", { attrs: { role: "status" } }); form.append(message);
+      d.footer.append(submit, cancel);
       form.addEventListener("input", () => { dirty = true; });
       form.addEventListener("submit", async e => {
-        e.preventDefault(); if (saving || !current(id, target)) return;
+        e.preventDefault(); if (saving || dialog !== d || d.signal.aborted || !current(id, target)) return;
         try {
           const values = Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, v.value.trim()])); values.platforms = selected.filter(c => c.checked).map(c => c.value);
           if (!/^\d+\.\d+\.\d+$/.test(values.version)) throw Error("请使用 1.0.0 格式的版本号");
           if (publicly.checked && values.review_notes.length < 10) throw Error("申请公布时请填写至少 10 个字符的审核说明");
           if (values.source_url && !/^https:\/\//i.test(values.source_url)) throw Error("源码链接须为 HTTPS");
           const p = makeStorePackage(values, exported.resources);
-          saving = true; message.textContent = "正在上传与提交…"; for (const control of form.elements) control.disabled = true;
+          saving = true; submit.disabled = cancel.disabled = d.closeButton.disabled = true;
+          message.textContent = "正在上传与提交…"; for (const control of form.elements) control.disabled = true;
           const result = await call({ action: "submit", package: p, publish: publicly.checked, review_notes: values.review_notes, source_url: values.source_url });
           if (!current(id, target) || dialog !== d) return;
           dirty = false; saving = false; status = result.state === "pending" ? "作品已提交审核，审核通过后公开。" : "作品已保存为私有，可在创作中心管理。";
           close(true); toast(status, "success"); render();
         } catch (e) { if (current(id, target) && dialog === d) message.textContent = errorMessage(e); }
-        finally { if (dialog === d) { saving = false; for (const control of form.elements) control.disabled = false; } }
+        finally { if (dialog === d) { saving = false; submit.disabled = cancel.disabled = d.closeButton.disabled = false; for (const control of form.elements) control.disabled = false; } }
       });
-      d.append(form, link("管理作品、审核与配额", `/mdo/creator?kind=${kind}`));
+      d.body.append(form, link("管理作品、审核与配额", `/mdo/creator?kind=${kind}`));
     } catch (e) { if (current(id, target)) toast(errorMessage(e), "error"); }
     finally { if (current(id, target)) busy = false; }
   }

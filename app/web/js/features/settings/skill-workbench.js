@@ -3,47 +3,51 @@ import { targetState, subscribeTarget } from "../../api/target.js";
 import { element, clear, errorMessage } from "../../utils/dom.js";
 import { expandSkillAuthoringDraft } from "./skill-authoring.js";
 import { customizableResource, storeReadOnlyMessage } from "./resource-credits.js";
+import { openLayer } from "../../components/layers.js";
 
 const targetKey = () => targetState().selected?.id || "local";
 const portable = value => /^[a-z][a-z0-9._-]{0,63}$/.test(value);
 
-export function createSkillWorkbench({ onChange, onShare }) {
+export function createSkillWorkbench({ onChange, onShare, owner: pageOwner }) {
   let dialog = null, controller = null, stopTarget = null;
   function close(force = false) {
     if (!dialog) return true;
     if (!force && dialog._dirty?.() && !window.confirm("放弃未保存的 Skill 内容？")) return false;
-    const focus = dialog._returnFocus;
-    controller?.abort(); stopTarget?.(); dialog.close(); dialog.remove(); dialog = null;
-    if (focus?.isConnected) focus.focus(); return true;
+    if (!force && dialog._busy?.()) return false;
+    dialog.dispose({ restoreFocus: true }); return true;
   }
-  async function open({ builder: showBuilder = false, mode: initialMode = "create", id: initialId = "", scope: initialScope = "user" } = {}) {
-    if (dialog) { dialog.focus(); return; }
+  async function open({ builder: showBuilder = false, mode: initialMode = "create", id: initialId = "", scope: initialScope = "user", owner: pageRoot = pageOwner } = {}) {
+    if (dialog) { dialog.closeButton.focus(); return; }
     const owner = targetKey(), requestController = new AbortController(); controller = requestController;
-    const live = () => dialog && controller === requestController && targetKey() === owner && !requestController.signal.aborted;
+    const live = () => dialog === view && controller === requestController && targetKey() === owner && !requestController.signal.aborted;
     const options = () => ({ signal: requestController.signal });
-    dialog = element("dialog", { className: "extension-editor", attrs: { "aria-label": "Skill 来源与项目管理" } });
-    dialog._returnFocus = document.activeElement;
+    const view = openLayer({ title: showBuilder ? "Skill 构建器" : "Skill 来源与项目管理", icon: "spark", width: "52rem", height: "80%", owner: pageRoot,
+      beforeClose: () => !busy && (!dirty() || window.confirm("放弃未保存的 Skill 内容？")),
+      onClosed() { requestController.abort(); if (dialog === view) { stopTarget?.(); stopTarget = null; controller = null; dialog = null; } } });
+    dialog = view; view.element.classList.add("extension-authoring", "skill-workbench");
     const project = element("select", { attrs: { "aria-label": "项目" } }, [element("option", { text: "默认项目", attrs: { value: "default" } })]);
     const scope = element("select", { attrs: { "aria-label": "保存范围" } }, [
       element("option", { text: "个人技能", attrs: { value: "user" } }), element("option", { text: "所选项目", attrs: { value: "project" } })]);
+    project.value = "default"; scope.value = "user";
     const status = element("p", { attrs: { role: "status" } });
     const location = element("p", { className: "extension-help" });
     const sources = element("div", { className: "extension-list" }), owned = element("div", { className: "extension-list" });
     const editor = element("div", { className: "skill-workbench-editor" });
     const builder = element("div", { className: "skill-workbench-editor" });
+    const sourceSection = element("section");
     let busy = false, baseline = "", sourceControl = null, idControl = null, revision = "new", editingProject = "", roots = {};
     let builderFields = null;
     const editorDirty = () => sourceControl && sourceControl.value !== baseline;
     const builderDirty = () => builderFields && (builderFields.request.value || builderFields.id.value !== builderFields.initialId || builderFields.mode.value !== builderFields.initialMode);
     const dirty = () => editorDirty() || builderDirty();
-    dialog._dirty = dirty; dialog._pending = () => busy || dirty();
+    view._dirty = dirty; view._busy = () => busy; view._pending = () => busy || dirty();
     const button = (text, action) => {
       const node = element("button", { className: "secondary-button", text, attrs: { type: "button" } });
       node.addEventListener("click", () => { void run(action); }); return node;
     };
     const controls = () => {
-      if (!dialog) return;
-      dialog.querySelectorAll("button,select").forEach(node => { node.disabled = busy; });
+      if (!live()) return;
+      view.element.querySelectorAll("button,select").forEach(node => { node.disabled = busy; });
       if (idControl) idControl.disabled = busy || revision !== "new";
       if (sourceControl) sourceControl.readOnly = busy;
       if (builderFields) { builderFields.id.disabled = busy; builderFields.request.readOnly = busy; }
@@ -57,6 +61,16 @@ export function createSkillWorkbench({ onChange, onShare }) {
     }
     const endpoint = path => `${path}?project=${encodeURIComponent(project.value)}`;
     const resetEditor = () => { clear(editor); sourceControl = idControl = null; baseline = ""; };
+    const dismiss = element("button", { className: "secondary-button", text: "关闭", attrs: { type: "button" } });
+    dismiss.addEventListener("click", () => { void view.close("cancel"); });
+    function footer(title, actions = []) {
+      view.update({ title }); view.footer.replaceChildren(...actions, dismiss); controls();
+      sourceSection.hidden = actions.length > 0;
+    }
+    function showSources() {
+      if (!discardEditor() || builderDirty() && !window.confirm("放弃未发送的构建需求？")) return;
+      resetEditor(); clear(builder); builderFields = null; footer("Skill 来源与项目管理");
+    }
     async function load() {
       const selected = project.value;
       roots = {}; location.textContent = "正在读取技能目录…"; clear(sources); clear(owned);
@@ -73,7 +87,7 @@ export function createSkillWorkbench({ onChange, onShare }) {
           const report = (await api.post(endpoint("/skills/validate"), { name: item.id, scope: "project" }, options())).data;
           if (live()) showReport(report);
         }),
-        ...(onShare && item.valid ? [button("分享到创作中心", async () => { if (!discardEditor()) return; const projectId = project.value; if (!close()) return; await onShare({ ...item, project: projectId }); })] : []),
+        ...(onShare && item.valid ? [button("分享到创作中心", async () => { if (!discardEditor()) return; const projectId = project.value; close(true); await onShare({ ...item, project: projectId }); })] : []),
         button("用 AI 改进", () => openBuilder({ mode: "improve", id: item.id, saveScope: "project" })),
         button(item.enabled === false ? "启用" : "停用", async () => {
           const data = (await api.get(endpoint(`/skills/project/${encodeURIComponent(item.id)}`), options())).data;
@@ -126,8 +140,11 @@ export function createSkillWorkbench({ onChange, onShare }) {
       skillId.value = id;
       const requirements = element("textarea", { attrs: { "aria-label": "构建需求", rows: 5, placeholder: "希望解决的任务、触发场景、输出样例，或已有技能需要改进的问题" } });
       builderFields = { mode: taskMode, id: skillId, request: requirements, initialMode: mode, initialId: id };
-      builder.append(element("h3", { text: "Skill 构建器" }), element("p", { text: "选择模式并描述需求。将打开独立对话，准备好草稿，由你发送后开始；现有对话保持不变。目标以当前保存范围和项目为准。" }),
-        taskMode, skillId, requirements, button("打开构建对话", async () => {
+      builder.append(element("p", { text: "选择模式并描述需求。将打开独立对话，准备好草稿，由你发送后开始；现有对话保持不变。目标以当前保存范围和项目为准。" }),
+        element("label", { className: "extension-field" }, [element("span", { text: "构建模式" }), taskMode]),
+        element("label", { className: "extension-field" }, [element("span", { text: "Skill ID" }), skillId]),
+        element("label", { className: "extension-field" }, [element("span", { text: "构建需求" }), requirements]));
+      footer("Skill 构建器", [button("返回来源", showSources), button("打开构建对话", async () => {
           if (!discardEditor()) return;
           const projectId = project.value, selectedScope = scope.value, selectedMode = taskMode.value;
           const text = await expandSkillAuthoringDraft({ directory: selectedScope === "project" ? roots.project_directory : roots.user_directory,
@@ -136,20 +153,25 @@ export function createSkillWorkbench({ onChange, onShare }) {
           close(true);
           window.dispatchEvent(new CustomEvent("mdo-create-skill", { detail: { text, projectId, target: owner,
             title: ({ create: "创建 Skill", improve: "改进 Skill", review: "检查 Skill" })[selectedMode] } }));
-        }));
+        })]);
       requirements.focus(); controls();
     }
     async function edit(id = "") {
       const selected = project.value;
       const item = id ? (await api.get(endpoint(`/skills/project/${encodeURIComponent(id)}`), options())).data : null;
       if (!live() || selected !== project.value) return;
+      if (builderDirty() && !window.confirm("放弃未发送的构建需求？")) return;
+      clear(builder); builderFields = null;
       clear(editor); editingProject = selected;
       idControl = element("input", { attrs: { "aria-label": "Skill ID", placeholder: "skill-id", maxlength: 64 } });
       idControl.value = id; idControl.disabled = Boolean(item); revision = item?.revision || "new";
       sourceControl = element("textarea", { attrs: { "aria-label": "SKILL.md", rows: 16, spellcheck: "false" } });
       sourceControl.value = item?.content || "---\nname: New Skill\ndescription: Describe when to use this Skill.\n---\n\nWrite the workflow here.\n";
       baseline = item?.content || "";
-      editor.append(element("h3", { text: `编辑项目 ${selected} 的 SKILL.md` }), idControl, sourceControl,
+      editor.append(element("p", { text: `保存到项目 ${selected} 的 .mdo/skills 目录` }),
+        element("label", { className: "extension-field" }, [element("span", { text: "Skill ID" }), idControl]),
+        element("label", { className: "extension-field" }, [element("span", { text: "SKILL.md" }), sourceControl]));
+      footer(id ? "编辑项目 Skill" : "新建项目 Skill", [button("返回来源", showSources),
         button("检查格式", async () => { const data = (await api.post("/skills/validate", { content: sourceControl.value }, options())).data; if (live()) showReport(data); }),
         button("保存到项目", async () => {
         if (!portable(idControl.value)) throw new Error("请使用有效的 Skill ID");
@@ -158,21 +180,23 @@ export function createSkillWorkbench({ onChange, onShare }) {
           { ...options(), ifMatch: `"${revision}"` })).data;
         if (!live()) return;
         revision = data.revision; baseline = text; idControl.disabled = true;
+        view.update({ title: "编辑项目 Skill" });
         onChange(); await load(); status.textContent = "已保存；项目技能在下次任务或调用时生效。";
-      }));
+      })]);
     }
     let previous = "default";
     project.addEventListener("change", () => {
       if (!discardEditor()) { project.value = previous; return; }
-      previous = project.value; resetEditor(); void run(load);
+      previous = project.value;
+      if (sourceControl) { resetEditor(); footer("Skill 来源与项目管理"); }
+      void run(load);
     });
-    const header = element("div", { className: "extension-editor-heading" }, [element("h2", { text: "Skill 来源与项目管理" }), button("关闭", () => close())]);
-    dialog.append(header, element("p", { text: "浏览当前设备上的技能来源，复制到个人或所选项目。所有导入均保留原文件并检查格式。" }),
+    sourceSection.append(element("h3", { text: "项目技能" }), owned, element("h3", { text: "可迁移的技能来源" }), sources);
+    view.body.append(element("p", { text: "浏览当前设备上的技能来源，复制到个人或所选项目。所有导入均保留原文件并检查格式。" }),
       element("div", { className: "extension-toolbar" }, [project, scope,
         button("刷新来源", load), button("新建项目 Skill", async () => { if (discardEditor()) await edit(); }),
-        button("用 AI 编写 Skill", () => openBuilder())]), location, status, builder, editor, element("h3", { text: "项目技能" }), owned, element("h3", { text: "可迁移的技能来源" }), sources);
-    dialog.addEventListener("cancel", event => { event.preventDefault(); if (!busy) close(); });
-    document.body.append(dialog); dialog.showModal();
+        button("用 AI 编写 Skill", () => openBuilder())]), location, status, builder, editor, sourceSection);
+    footer("Skill 来源与项目管理");
     stopTarget = subscribeTarget(() => { if (targetKey() !== owner) close(true); });
     await run(async () => {
       const response = await api.get("/projects", options()); if (!live()) return;

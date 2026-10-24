@@ -23,8 +23,9 @@ test("external store follows remote cursors, preserves previous pages and expose
   for (let i = 0; i < 4; i++) button("下一页").click(); assert.equal(body.querySelector(".eb-name").textContent, "Tool 40");
   button("下一页").click(); await flush(); assert.equal(calls.at(-1).before, 50);
   finish("second", 50, [{ ...tools[0], id: 1, name: "Tail" }], 0); assert.equal(body.querySelector(".eb-name").textContent, "Tail");
-  button("上一页").click(); await flush(); assert.equal(calls.at(-1).before, 0);
-  finish("third", 0, tools, 50); assert.equal(body.querySelector(".eb-name").textContent, "Tool 40");
+  const requests=calls.length;button("上一页").click(); await flush();
+  assert.equal(calls.length,requests,"The numbered pager reuses earlier loaded batches");
+  assert.equal(body.querySelector(".eb-name").textContent, "Tool 40");
   assert.equal(body.querySelectorAll(".cli-tasks").length, 0); assert.equal(document.body.querySelectorAll(".cli-download-entry").length, 0);
   assert(!descendants(body).some(n => n.tagName === "BUTTON" && /^Downloads/.test(n.textContent)));
 });

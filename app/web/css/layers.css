@@ -23,7 +23,7 @@
 .mdo-layer .mdo-layer-control:hover { background:var(--surface-hover); color:var(--ink); }
 .mdo-layer :focus-visible { outline:2px solid var(--ink); outline-offset:-3px; }
 .mdo-layer-body { flex:1 1 auto; min-height:0; min-width:0; padding:24px; overflow:auto; overscroll-behavior:contain; overflow-wrap:anywhere; }
-.mdo-layer-footer { flex:none; display:flex; flex-wrap:wrap; justify-content:flex-end; align-items:center; gap:8px; margin:0; padding:14px 24px; border-top:1px solid var(--border); }
+.mdo-layer-footer { flex:none; display:flex; flex-wrap:wrap; justify-content:flex-end; align-items:center; gap:8px; margin:0; padding:14px 24px; border-top:1px solid var(--border); overflow:hidden; }
 .mdo-layer-footer:empty { display:none; }
 .mdo-layer.is-fullscreen { width:var(--layer-viewport-width)!important; height:var(--layer-viewport-height)!important; max-width:none; max-height:none; border-radius:0; }
 .mdo-layer.is-mobile .mdo-layer-controls > :first-child { display:none; }
