@@ -1,4 +1,4 @@
-import { createExtensionBrowser, extensionToggle, detailTabs, detailFacts, browserText } from "../../components/extension-browser.js";
+import { createExtensionBrowser, actionMenu, extensionToggle, detailTabs, detailFacts, browserText } from "../../components/extension-browser.js";
 import { api } from "../../api/client.js";
 import { currentLocale } from "../../i18n.js";
 import { targetState } from "../../api/target.js";
@@ -82,22 +82,23 @@ export function createExternalToolsPanel({ refresh, openFull, openTools, signedI
   function render(body,snapshot={},updatesOnly=false){
     if(!body)return;hosts.add(body);body.dataset.cliUpdates=String(updatesOnly);data=snapshot;
     const next=targetState().selected?.id??"local";if(context!==next){context=next;catalogRequested=false;tab="local";query=error="";mine=false;localQuery="";stateFilter="all";for(const browser of browsers.values())browser.reset();closeEditor();}
-    const sig=JSON.stringify([data,currentLocale(),tab,query,localQuery,stateFilter,error,mine,next,writable(),signedIn(),updatesOnly,isMain()]);if(signatures.get(body)===sig)return;signatures.set(body,sig);browsers.get(body)?.rememberFocus();body.replaceChildren();
+    const sig=JSON.stringify([data,currentLocale(),tab,query,localQuery,stateFilter,error,mine,next,writable(),signedIn(),updatesOnly,isMain()]);if(signatures.get(body)===sig)return;signatures.set(body,sig);const focusedSearch=body.contains(document.activeElement)&&document.activeElement?.type==="search",selection=focusedSearch?[document.activeElement.selectionStart,document.activeElement.selectionEnd]:null;browsers.get(body)?.rememberFocus();body.replaceChildren();
     if(!data.platform){body.append(n("p","…"));return;}
     const android=data.platform.startsWith("android"), disabled=!writable();
     guide.replaceChildren(n("p",c(33)),button(c(34),async()=>{if(android){if(await command({action:"accept"}))await openBundle();}else if(await command({action:"recommend"}))openTools();},disabled),button(c(35),()=>command({action:"dismiss"}),disabled));
     guide.hidden=data.guide!=="new"||disabled||!!targetState().selected||!isMain();
     global.textContent=`↓ ${c(5)}${(data.tasks??[]).some(active)?" · "+(data.tasks??[]).filter(active).length:""}`;global.hidden=!(data.tasks??[]).length;
     if(updatesOnly){body.append(button(c(36),openTools));tasks(body);return;}
-    const nav=n("div",null,"cli-tabs");nav.setAttribute("role","tablist");
-    for(const [id,text] of [["local",c(0)],["store",c(1)]]){const b=button(text,()=>{tab=id;mine=false;for(const browser of browsers.values())browser.reset();renderAll();if(id==="store"&&!catalogRequested){catalogRequested=true;void fetchCatalog();}});b.setAttribute("role","tab");b.setAttribute("aria-selected",String(tab===id));nav.append(b);}body.append(nav);const creator=n("a",browserText("creator","创作中心"),"secondary-button");creator.href="https://ai.xywhsoft.com/mdo/creator";creator.target="_blank";creator.rel="noopener noreferrer";
+    const nav=n("div",null,"store-tabs");nav.setAttribute("role","tablist");
+    for(const [id,text] of [["local",c(0)],["store",c(1)]]){const b=button(text,()=>{tab=id;mine=false;stateFilter="all";for(const browser of browsers.values())browser.reset();renderAll();if(id==="store"&&!catalogRequested){catalogRequested=true;void fetchCatalog();}});b.setAttribute("role","tab");b.setAttribute("aria-selected",String(tab===id));nav.append(b);}body.append(nav);const creator=n("a",browserText("creator","创作中心"),"secondary-button");creator.href="https://ai.xywhsoft.com/mdo/creator";creator.target="_blank";creator.rel="noopener noreferrer";
     if(error)body.append(n("p",error,"cli-error"));if(!data.writable)body.append(n("p",c(44),"cli-error"));
     if(android)body.append(n("p",c(30)),button(c(29),openBundle,disabled));
     const toolbar=n("div",null,"cli-toolbar eb-toolbar");
     let browser=browsers.get(body);if(!browser){browser=createExtensionBrowser({kind:"toolpacks"});browsers.set(body,browser);}
     const filter=n("select");filter.setAttribute("aria-label",browserText("status","状态"));
-    for(const [id,text] of [["all",browserText("all","全部状态")],["enabled",c(6)],["disabled",c(7)],["error",browserText("needsAttention","需要处理")]]){const o=n("option",text);o.value=id;filter.append(o);}filter.value=stateFilter;
+    for(const [id,text] of (tab==="local"?[["all",browserText("all","全部状态")],["enabled",c(6)],["disabled",c(7)],["error",browserText("needsAttention","需要处理")]]:[["all",browserText("all","全部状态")],["installed",browserText("installed","已安装")],["updates",browserText("updates","可更新")],["new",browserText("notInstalled","未安装")]])){const o=n("option",text);o.value=id;filter.append(o);}filter.value=stateFilter;
     const search=n("input");search.type="search";search.value=tab==="local"?localQuery:query;search.placeholder=c(3);search.setAttribute("aria-label",c(3));
+    const taskLabel=job=>`${c(5)} · ${browserText(`task.${job.state}`,job.state)}${job.total?` · ${Math.min(100,Math.floor(100*(job.done||0)/job.total))}%`:""}`;
     const taskFor=t=>(data.tasks||[]).find(job=>active(job)&&(job.request?.id&&job.request.id===t.id||job.request?.store_id&&(job.request.store_id===t.store_id||job.request.store_id===t.id)));
     const renderList=()=>{
       const needle=localQuery.toLocaleLowerCase();
@@ -107,30 +108,30 @@ export function createExternalToolsPanel({ refresh, openFull, openTools, signedI
         if(!android)actions.push(button(c(10),()=>share(t),disabled||!signedIn()||!t.present));
         if(!android&&!t.managed_root)actions.push(button(c(48),()=>{if(window.confirm(c(49)))void command({action:"import",id:t.id,name:t.name});},disabled||!t.present));
         const toggle=extensionToggle(button(c(t.enabled?7:6),()=>command({action:"enable",id:t.id,enabled:!t.enabled}),disabled||(!t.enabled&&!t.present)),t.enabled,t.name);
-        return {key:`local:${t.id}`,title:t.name,description:t.prompt,meta:[t.version,t.license],toggle,actions,badge:{text:job?`${c(5)} · ${job.state}`:!t.present?c(39):"",tone:!t.present?"error":""},detail:()=>toolDetail(t)};
-      }):(data.store?.items||[]).map(t=>{
+        return {key:`local:${t.id}`,title:t.name,description:t.prompt,meta:[t.version,t.license],toggle,actions,badge:{text:job?taskLabel(job):!t.present?c(39):"",tone:!t.present?"error":""},detail:()=>toolDetail(t)};
+      }):(data.store?.items||[]).filter(t=>stateFilter==="all"||(stateFilter==="installed"?!externalToolAction(t,data.items||[]):stateFilter==="updates"?externalToolAction(t,data.items||[])==="update":externalToolAction(t,data.items||[])==="install")).map(t=>{
         const action=externalToolAction(t,data.items||[]),job=taskFor(t);
         const install=()=>button(c(android?29:action==="update"?12:11),()=>android?openBundle():command({action:"install",store_id:t.id,name:t.name}),disabled||t.platform!==data.platform||!!job);
         const primary=action?install():null;
-        return {key:`store:${t.id}`,title:t.name,description:t.prompt,meta:[t.author,t.version,t.platform],badge:{text:job?`${c(5)} · ${job.state}`:t.platform!==data.platform?c(42):!action?browserText("installed","已安装"):""},primary,detail:()=>toolDetail(t,action?install:null)};
+        return {key:`store:${t.id}`,title:t.name,description:t.prompt,meta:[t.author,t.version,t.platform],badge:{text:job?taskLabel(job):t.platform!==data.platform?c(42):!action?browserText("installed","已安装"):""},primary,detail:()=>toolDetail(t,action?install:null)};
       });
       browser.setItems(rows,{empty:c(16)});
     };
     search.oninput=()=>{if(tab==="local"){localQuery=search.value;renderList();}else query=search.value;};
     search.onkeydown=e=>{if(tab==="store"&&e.key==="Enter"){e.preventDefault();void fetchCatalog();}};
     filter.onchange=()=>{stateFilter=filter.value;renderList();};
-    toolbar.append(search);if(tab==="local")toolbar.append(filter);else toolbar.append(button(c(3),()=>fetchCatalog(),disabled));
-    toolbar.append(button(c(4),()=>tab==="store"?fetchCatalog():refresh(),disabled),creator);
+    toolbar.append(search,filter);if(tab==="store")toolbar.append(button(c(3),()=>fetchCatalog(),disabled));
+    toolbar.append(button(c(4),()=>tab==="store"?fetchCatalog():refresh(),disabled),creator,button(`${c(5)} (${(data.tasks||[]).filter(active).length})`,()=>{const box=body.querySelector(".cli-tasks");if(box){box.open=true;box.scrollIntoView?.({block:"nearest",behavior:"smooth"});}}));
     body.append(toolbar);
     if(tab==="local"){
-      toolbar.append(button(c(2),()=>edit(),disabled||android),button(c(27),()=>{mine=!mine;if(mine)void command({action:"mine"});renderAll();},disabled||!signedIn()));
+      toolbar.append(actionMenu([...(android?[]:[button(c(2),()=>edit(),disabled)]),button(c(27),()=>{mine=!mine;if(mine)void command({action:"mine"});renderAll();},disabled||!signedIn())],browserText("createImport","创建 / 导入")));
       if(data.binding_error)body.append(n("p",data.binding_error,"cli-error"));
       renderList();body.append(browser.root);
       if(mine){const box=n("section");box.append(n("h3",c(27)));for(const t of data.store?.mine??[]){const row=n("div",null,"cli-row");row.append(n("span",`${t.name} ${t.version} · ${t.state}${t.reason?" · "+t.reason:""}`),button(c(28),async()=>{if(await command({action:"withdraw",store_id:t.id,revision:t.revision,name:t.name}))void command({action:"mine"});},disabled||!!t.withdrawn));box.append(row);}body.append(box);}
     }else{
       renderList();body.append(browser.root);
       if(data.store?.next_before)body.append(button(c(37),()=>fetchCatalog(data.store.next_before),disabled));
-    }tasks(body);
+    }tasks(body);if(focusedSearch){search.focus({preventScroll:true});if(selection&&search.setSelectionRange)search.setSelectionRange(...selection);}
   }
   return {render,command,reset(){data={};context="";for(const browser of browsers.values())browser.reset();closeEditor();guide.hidden=true;global.hidden=true;},destroy(){for(const browser of browsers.values())browser.destroy();browsers.clear();closeEditor();guide.remove();global.remove();hosts.clear();}};
 }

@@ -2188,5 +2188,8 @@
   "extensionBrowser.update": "更新",
   "extensionBrowser.install": "安装",
   "extensionBrowser.creator": "创作中心",
-  "extensionBrowser.platform": "支持平台"
+  "extensionBrowser.platform": "支持平台",
+  "extensionBrowser.retry": "重试",
+  "extensionBrowser.filterModules": "筛选 C 模块",
+  "extensionBrowser.agentTools": "Agent 工具"
 }

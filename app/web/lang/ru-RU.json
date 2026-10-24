@@ -2188,5 +2188,8 @@
   "extensionBrowser.update": "Обновить",
   "extensionBrowser.install": "Установить",
   "extensionBrowser.creator": "Центр авторов",
-  "extensionBrowser.platform": "Платформы"
+  "extensionBrowser.platform": "Платформы",
+  "extensionBrowser.retry": "Повторить",
+  "extensionBrowser.filterModules": "Фильтр модулей C",
+  "extensionBrowser.agentTools": "Инструменты Agent"
 }

@@ -1,3 +1,4 @@
+import { createExtensionBrowser, detailFacts, browserText } from "../../components/extension-browser.js";
 import { element, clear, errorMessage, toast } from "../../utils/dom.js";
 import { subscribeLocale, t } from "../../i18n.js";
 import {
@@ -180,21 +181,24 @@ export function createResourcePanels({ agentsStore, stores, reload }) {
     return true;
   }
 
+  const moduleBrowser = createExtensionBrowser({ kind: "modules" });
+  let moduleQuery = "";
   function renderExtensions() {
     const focusedKey = extensionsContainer.contains(document.activeElement)
       ? document.activeElement?.dataset.extensionAction : "";
-    clear(extensionsContainer);
+    moduleBrowser.rememberFocus(); clear(extensionsContainer);
     const modules = stores.modules.get();
     extensionsContainer.append(heading("Module", extensionActions.create("modules-reload",
       moduleOperation ? t("resource.recheckOperation", {}, "重新读取状态") : t("resource.rebuild", {}, "重新编译"), () => refreshCatalog("modules"))));
     const modulesReady = showReadState(extensionsContainer, modules, extensionActions, "modules");
-    for (const module of modulesReady ? modules.data?.modules ?? [] : []) {
-      if (!module.source_path?.endsWith(".c")) continue;
-      extensionsContainer.append(card(module.name || module.id, resourceDescription("module", module), [module.version,
-        module.external ? t("resource.externalTcc", {}, "外部 TCC") : t("resource.builtin", {}, "内置"),
-        t("resource.toolCount", { count: module.tool_count }, `${module.tool_count} tools`),
-        t("resource.agentCount", { count: module.agent_count }, `${module.agent_count} agents`)]));
-    }
+    const search = element("input", { className: "extension-search", attrs: { type: "search", placeholder: browserText("filterModules", "筛选 C 模块"), "aria-label": browserText("filterModules", "筛选 C 模块") } }); search.value = moduleQuery;
+    const renderRows = () => moduleBrowser.setItems((modulesReady ? modules.data?.modules ?? [] : []).filter(module => module.source_path?.endsWith(".c") && `${module.name} ${module.id} ${module.description}`.toLocaleLowerCase().includes(moduleQuery.toLocaleLowerCase())).map(module => ({
+      key: module.id, title: module.name || module.id, description: resourceDescription("module", module),
+      meta: [module.version, module.external ? t("resource.externalTcc", {}, "外部 TCC") : t("resource.builtin", {}, "内置")],
+      detail: () => detailFacts([[browserText("sourceFiles", "来源与文件"), module.source_path], [browserText("versions", "版本"), module.version], ["Agent", module.agent_count], [browserText("agentTools", "Agent 工具"), module.tool_count]]),
+    })), { busy: modules.loading });
+    search.addEventListener("input", () => { moduleQuery = search.value; renderRows(); }); renderRows();
+    extensionsContainer.append(search, moduleBrowser.root);
     if (focusedKey) extensionActions.find(focusedKey)?.focus({ preventScroll: true });
   }
 
@@ -327,7 +331,7 @@ export function createResourcePanels({ agentsStore, stores, reload }) {
   }));
   unsubscribers.push(subscribeTarget(() => {
     const next = resourceOperationEpoch(); if (next === operationTarget) return;
-    operationTarget = next; moduleOperation = null; moduleController?.abort(); renderExtensions();
+    operationTarget = next; moduleBrowser.reset(); moduleOperation = null; moduleController?.abort(); renderExtensions();
   }));
 
   return Object.freeze({
@@ -342,6 +346,7 @@ export function createResourcePanels({ agentsStore, stores, reload }) {
     },
     destroy() {
       moduleController?.abort();
+      moduleBrowser.destroy();
       extensionPanels.destroy();
       storePanel.destroy();
       modelPanel.destroy();

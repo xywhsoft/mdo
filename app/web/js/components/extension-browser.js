@@ -51,6 +51,7 @@ export function detailTabs(sections) {
   tabs.setAttribute("role", "tablist"); tabs.setAttribute("aria-label", browserText("details", "扩展详情"));
   const entries = sections.filter(s => s.content), prefix = `extension-detail-${++sequence}`;
   const select = key => {
+    if (!entries.some(section => section.id === key)) return;
     root.dataset.tab = key;
     for (const [i, section] of entries.entries()) {
       const active = section.id === key, tab = tabs.children[i];
@@ -98,13 +99,13 @@ export function createExtensionBrowser({ kind, onClose } = {}) {
   };
   function showDetail(key, node, { focus = false } = {}) {
     const row = rows.find(r => r.key === key); if (!row || selected !== key) return false;
-    const previousTab = pane.querySelector(".eb-detail-tabs")?.dataset.tab, scroll = pane.scrollTop;
+    const previousTab = pane.querySelector(".eb-detail-tabs")?.dataset.tab, scroll = pane.scrollTop, hadFocus = pane.contains(document.activeElement);
     const back = element("button", { text: browserText("back", "返回列表"), className: "secondary-button eb-back", attrs: { type: "button" } });
     back.addEventListener("click", () => closeDetail());
     const heading = el("div", "eb-detail-heading"); heading.append(extensionIcon(row.kind || kind), el("h3", "", row.title));
     pane.replaceChildren(back, heading, node); pane.hidden = false; root.classList.add("has-detail");
     if (previousTab && !focus) (node.classList.contains("eb-detail-tabs") ? node : node.querySelector?.(".eb-detail-tabs"))?.selectTab?.(previousTab);
-    pane.scrollTop = focus ? 0 : scroll; if (focus) back.focus({ preventScroll: true }); return true;
+    pane.scrollTop = focus ? 0 : scroll; if (focus || hadFocus) back.focus({ preventScroll: true }); return true;
   }
   function open(key, focus = true) {
     const row = rows.find(r => r.key === key); if (!row) return;
@@ -145,7 +146,11 @@ export function createExtensionBrowser({ kind, onClose } = {}) {
       list.scrollTop = scroll;
       if (selected && !rows.some(r => r.key === selected)) closeDetail(false);
       else if (selected && rows.find(r => r.key === selected)?.detail) showDetail(selected, rows.find(r => r.key === selected).detail());
-      if (focused) [...list.querySelectorAll("[data-eb-focus]")].find(b => b.dataset.ebFocus === focused)?.focus({ preventScroll: true });
+      if (focused) {
+        const restore = () => [...list.querySelectorAll("[data-eb-focus]")].find(b => b.dataset.ebFocus === focused)?.focus({ preventScroll: true });
+        if (root.isConnected) restore();
+        else queueMicrotask(() => { if (root.isConnected && document.activeElement === document.body) restore(); });
+      }
     },
     reset() { closeDetail(false); rows = []; list.replaceChildren(); list.scrollTop = 0; },
     destroy() { closeDetail(false); root.remove(); rows = []; rememberedFocus = null; },

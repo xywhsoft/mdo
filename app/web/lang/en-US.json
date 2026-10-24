@@ -2188,5 +2188,8 @@
   "extensionBrowser.update": "Update",
   "extensionBrowser.install": "Install",
   "extensionBrowser.creator": "Creator center",
-  "extensionBrowser.platform": "Platforms"
+  "extensionBrowser.platform": "Platforms",
+  "extensionBrowser.retry": "Retry",
+  "extensionBrowser.filterModules": "Filter C modules",
+  "extensionBrowser.agentTools": "Agent tools"
 }

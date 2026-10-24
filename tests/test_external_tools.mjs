@@ -46,3 +46,19 @@ test("Android APK failures remain visible and do not escape the tool manager",as
   assert(all(body).some(n=>n.textContent==="APK service unavailable"));panel.destroy();
  }finally{globalThis.document=saved;}
 });
+
+test("external filters and download badges use registered identities and keep active installs disabled",()=>{
+ const saved=globalThis.document;globalThis.document=testDocument();
+ try{
+  const panel=createExternalToolsPanel({refresh:async()=>{},openFull:async()=>{},openTools:()=>{},signedIn:()=>true}),body=new Element("div");
+  const items=[{id:"custom.one",name:"Manual tool",prompt:"Read files",version:"1.0.0",enabled:false,present:true}];
+  const store={items:[{id:7,tool_id:"community.two",name:"Published tool",prompt:"Read files",platform:"windows-x86_64",version:"2.0.0"}]};
+  panel.render(body,{writable:true,platform:"windows-x86_64",guide:"accepted",items,store,tasks:[{id:"task-one",state:"running",request:{store_id:7},done:5,total:10}]});
+  const filter=all(body).find(n=>n.tagName==="SELECT");filter.value="enabled";filter.onchange();assert.equal(body.querySelectorAll(".eb-row").length,0);
+  filter.value="disabled";filter.onchange();assert.equal(body.querySelectorAll(".eb-row").length,1);
+  all(body).find(n=>n.attributes.role==="tab"&&n.textContent==="Tool store").onclick();
+  const install=all(body).find(n=>n.tagName==="BUTTON"&&n.textContent==="Install");assert(install.disabled);
+  assert(body.textContent.includes("50%"));assert.equal(body.querySelectorAll(".eb-row").length,1);
+  panel.destroy();
+ }finally{globalThis.document=saved;}
+});

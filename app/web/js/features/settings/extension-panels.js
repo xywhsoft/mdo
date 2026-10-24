@@ -58,7 +58,7 @@ export function createExtensionPanels() {
   const commandWorkbench = createCommandWorkbench({ onChange: () => announceChange("commands") });
   const stores = new Map(["skills", "tools"].map(kind => [kind, createSingleResourceStore(kind, () => { announceChange(kind); if (selected === kind) void load(kind); }, () => { states.get(kind).area = "store"; render(kind); })]));
   const actions = new Map();
-  const browsers = new Map(EXTENSION_KINDS.map(kind => [kind, createExtensionBrowser({ kind })]));
+  const browsers = new Map(EXTENSION_KINDS.map(kind => [kind, createExtensionBrowser({ kind, onClose: () => reads.cancel(`detail:${kind}`) })]));
   const current = (kind, target) => !disposed && !paused && selected === kind && target === targetKey();
   function cancelReads() {
     reads.cancel();
@@ -237,8 +237,18 @@ export function createExtensionPanels() {
             const description = element("div", {}, [element("p", { text: item.description }), !item.valid ? element("p", { className: "extension-error", text: item.error }) : null]);
             const usage = element("div", {}, [element("p", { text: kind === "skills" ? `$${item.id} · /skill:${item.id}` : kind === "commands" ? `/${item.id}` : kind === "mcp" ? status : item.name || item.id }),
               kind === "tools" ? element("div", { className: "tool-exports" }, (item.tools || []).map(tool => element("code", { text: tool.id }))) : null]);
-            const source = element("div", {}, [meta]);
-            return detailTabs([{ id: "description", label: browserText("description", "说明"), content: description }, { id: "usage", label: browserText("usage", "使用方式"), content: usage }, { id: "source", label: browserText("sourceFiles", "来源与文件"), content: source }]);
+            const source = element("div", {}, [meta]), preview = element("div"); source.append(preview); let sourceLoaded = false;
+            const readSource = async () => {
+              if (sourceLoaded) return;
+              const target = targetKey(), isCurrent = () => current(kind, target) && browser.isSelected(item.id) && source.isConnected;
+              preview.replaceChildren(element("p", { text: browserText("loading", "正在载入…") }));
+              try {
+                const data = (await reads.read(`detail:${kind}`, path(kind, item.id), { isCurrent })).data;
+                if (!isCurrent()) return;
+                preview.replaceChildren(element("pre", { className: "store-source", text: data.content || "" })); sourceLoaded = true;
+              } catch (error) { if (isCurrent() && error?.name !== "AbortError") preview.replaceChildren(element("p", { className: "extension-error", text: errorMessage(error) }), button(browserText("retry", "重试"), readSource)); }
+            };
+            return detailTabs([{ id: "description", label: browserText("description", "说明"), content: description }, { id: "usage", label: browserText("usage", "使用方式"), content: usage }, { id: "source", label: browserText("sourceFiles", "来源与文件"), content: source, onSelect: () => queueMicrotask(readSource) }]);
           } });
       }
       browser.setItems(rows, { busy: state.busy, empty: state.filter || state.stateFilter !== "all" ? browserText("empty", "没有匹配的扩展") : label("empty", "还没有资源。新建或导入一个即可开始。") });
