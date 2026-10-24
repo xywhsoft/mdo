@@ -52,16 +52,14 @@ export function createSettingsPages({ workspace, form, navigation }) {
     if (!content.contains(field) ||
         !["INPUT", "TEXTAREA", "SELECT"].includes(field.tagName) ||
         document.querySelector("dialog[open]")?.contains(field) ||
-        getComputedStyle(layout).display !== "block") return;
-    const area = layout.getBoundingClientRect();
-    const pickerBounds = pickerRow.getBoundingClientRect();
-    const top = visible(pickerRow) && pickerBounds.top < area.bottom &&
-      pickerBounds.bottom > area.top ? Math.max(area.top, pickerBounds.bottom) : area.top;
+        !visible(pickerRow)) return;
+    // The content scrolls between the mobile picker and fixed action row.
+    const area = content.getBoundingClientRect();
     const target = field.getBoundingClientRect();
     if (target.bottom > area.bottom - 8)
-      layout.scrollTop += target.bottom - area.bottom + 8;
-    else if (target.top < top + 8)
-      layout.scrollTop += target.top - top - 8;
+      content.scrollTop += target.bottom - area.bottom + 8;
+    else if (target.top < area.top + 8)
+      content.scrollTop += target.top - area.top - 8;
   }
 
   function syncResponsive() {

@@ -22,7 +22,6 @@
             </div>
           </form>
         </div>
-      </div>
       <footer class="settings-actions" id="actions" data-short-state="empty">
         <div class="settings-feedback">配置与本地服务保持同步。</div>
         <div class="settings-action-buttons">
@@ -31,6 +30,7 @@
           <button class="primary-button" id="apply-settings" disabled>保存</button>
         </div>
       </footer>
+      </div>
     </section>
   </main>
 </div>
@@ -45,7 +45,7 @@ const win = Object.assign(new EventTarget(),
 trackMobileViewport(shell, Object.assign(new EventTarget(), { matches: true }), win);
 const frame = () => new Promise((resolve) => requestAnimationFrame(() =>
   requestAnimationFrame(resolve)));
-const layout = document.querySelector(".settings-layout");
+const layout = document.querySelector(".settings-content");
 const actions = document.querySelector("#actions");
 await frame();
 const keyboardHeight = 250;

@@ -159,6 +159,26 @@ test("locale changes refresh dropdown labels without resetting the selected page
   } finally { f.close(); }
 });
 
+test("mobile focus scrolls only the settings content above the fixed action row", () => {
+  const f = fixture();
+  try {
+    f.pages.selectSection("general"); f.mobile();
+    const field = new Element({ tagName: "INPUT" });
+    f.content.panels[0].append(field); field.focus();
+    f.content.getBoundingClientRect = () => ({ top: 80, bottom: 400 });
+    field.getBoundingClientRect = () => ({ top: 395, bottom: 435 });
+    f.pages.keepFocusedFieldVisible();
+    assert.equal(f.content.scrollTop, 43);
+    assert.equal(f.workspace.nodes[".settings-layout"].scrollTop, 0);
+    field.getBoundingClientRect = () => ({ top: 65, bottom: 95 });
+    f.pages.keepFocusedFieldVisible();
+    assert.equal(f.content.scrollTop, 20);
+    f.pickerRow.shown = false;
+    f.pages.keepFocusedFieldVisible();
+    assert.equal(f.content.scrollTop, 20, "desktop navigation does not force mobile scrolling");
+  } finally { f.close(); }
+});
+
 test("mobile groups follow desktop labels without changing the selected page or route", async () => {
   const f = fixture({ grouped: true });
   try {
