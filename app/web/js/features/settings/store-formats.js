@@ -7,7 +7,7 @@ export const containsCode = resources => resources.some(r => ["tools", "commands
 // Publication includes only explicitly selected resource files. Credentials
 // are also redacted by the native exporter, before reaching this UI.
 export function makeStorePackage(fields, resources) {
-  const v2 = fields.min_build_id || resources.some(r => ["modules", "toolpacks", "plugins"].includes(r.kind));
+  const v2 = fields.min_build_id || resources.some(r => ["modules", "toolpacks", "plugins", "knowledge"].includes(r.kind));
   if (!/^[a-z0-9][a-z0-9._-]{0,63}$/.test(fields.slug) || fields.slug.includes(".."))
     throw new Error("Invalid package ID");
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$/.test(fields.version)) throw new Error("Invalid version");

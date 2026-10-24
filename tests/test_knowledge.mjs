@@ -3,6 +3,7 @@ import test from "node:test";
 import {readFileSync} from "node:fs";
 import {testDocument,descendants} from "./helpers/extension-dom.mjs";
 import {knowledgeMetadata,parseKnowledge,knowledgeBase64,knowledgeText,knowledgeFolder,validateKnowledgeFiles} from "../app/web/js/features/settings/knowledge-format.js";
+import {makeStorePackage} from "../app/web/js/features/settings/store-formats.js";
 const file=(path,text)=>({path,base64:knowledgeBase64(new TextEncoder().encode(text))});
 const doc=()=>knowledgeMetadata({name:"XRT",description:"Reference"});
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
@@ -32,4 +33,10 @@ test("knowledge editor keeps drafts on conflicts and same-device notifications; 
    reject=false;form.dispatchEvent(new Event("submit",{cancelable:true}));await flush();assert.equal(changes,1);
    await editor.open();device="other";notify();assert.equal(editor.hasPendingChanges(),false);
  }finally{editor?.destroy();globalThis.document=previous;delete globalThis.__knowledgeTest;}
+});
+
+test("knowledge sharing uses v2 even when a 300 KiB document fits inside a 1 MiB JSON",()=>{
+ const r={kind:"knowledge",id:"reference",content:JSON.stringify(doc()),files:[file("index.md","# Index"),file("reference.md","x".repeat(300000))]};
+ const p=makeStorePackage({slug:"reference",name:"Reference",description:"Docs",readme:"Original documents",license:"MIT",version:"1.0.0",platforms:["windows-x86_64"]},[r]);
+ assert.equal(p.format,"mdo.extension.v2");assert(p.manifest.min_build_id>=30000126);
 });
