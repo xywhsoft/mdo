@@ -1,0 +1,51 @@
+{
+  "app_commit": "8adc5b1542899dd61fc9339174d05f8b2d607c94",
+  "preview": true,
+  "auto_update_published": false,
+  "android_device_tested": false,
+  "artifacts": [
+    {
+      "file": "mdo.exe",
+      "size": 6248908,
+      "sha256": "1228308514d497f0d63d099a2f3be186490c7c8c6f8bd7920314b86ce10a97f8"
+    },
+    {
+      "file": "mdo-server.exe",
+      "size": 5990668,
+      "sha256": "2820a444bfc855c05631ea3d8568dd66a76616d857815bf5cfd7ea2550b49fb2"
+    },
+    {
+      "file": "mdo-arm64-v8a.apk",
+      "size": 5788993,
+      "sha256": "b5888cf67cf895b4a2358b5729488675daa9cd0dea09861a67ba545421d7cfd9"
+    },
+    {
+      "file": "mdo-full-arm64-v8a.apk",
+      "size": 150133145,
+      "sha256": "547a4a99ec73878fe23640fc1b337969983fc31ed11dc99b52a6a50e9d36689b"
+    }
+  ],
+  "version": "0.6.0",
+  "site_commit": "0300a5d4f44996a3cf4558d0656b5fd10ac16eb5",
+  "controls_commit": "3d312c76",
+  "site_deployed": false,
+  "verification": [
+    "38 frontend behavior tests",
+    "20 frontend contract tests",
+    "223 frontend modules parsed",
+    "private client-platform Skill/C-tool publication, review, verified submitter, install, invocation and registration",
+    "store-managed PUT/DELETE/bundle/export/migrate denial; toggle/update/uninstall preserved",
+    "damaged receipts fail closed; exact-version credit backfill and mismatched hash rejection",
+    "copyright/license legacy index backfill and repeat startup",
+    "browser installed/custom actions, credits and copyright details, pagination, no nested scrolling, 390px layout and global native selects",
+    "Windows GUI/server packed Application SDK",
+    "Android APK layout/alignment/native libraries/formal signing certificate"
+  ],
+  "screenshots": [
+    ".build\\resource-store-pattern-20261025\\screenshots\\agent-tool-detail-mobile.png",
+    ".build\\resource-store-pattern-20261025\\screenshots\\agent-tools-origin-menu.png",
+    ".build\\resource-store-pattern-20261025\\screenshots\\agent-tools-store.png",
+    ".build\\resource-store-pattern-20261025\\screenshots\\skill-credits-desktop.png"
+  ],
+  "integration_environment": "Disposable native and website hosts using the pinned client SDK and existing SMTP compile gate with mail disabled; no production accounts or model calls."
+}
