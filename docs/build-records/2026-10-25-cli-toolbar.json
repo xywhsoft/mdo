@@ -1,0 +1,42 @@
+{
+  "app_commit": "70fc4840ffee82b0f69415ee8fadf160e6b36c06",
+  "preview": true,
+  "auto_update_published": false,
+  "android_device_tested": false,
+  "artifacts": [
+    {
+      "file": "mdo.exe",
+      "size": 6235316,
+      "sha256": "7542d9f7bf939ebcee4f5ab97f66a421ca94e1df2b62f4ecfd54f4fba40b99e1"
+    },
+    {
+      "file": "mdo-server.exe",
+      "size": 5977073,
+      "sha256": "6f3faae8d2673b3c36f36d79f8b690db09a03c243cb1a5e09928e894592d47a5"
+    },
+    {
+      "file": "mdo-arm64-v8a.apk",
+      "size": 5776705,
+      "sha256": "a923a3801c3fdc9f1e756fc8d98eee61ec2b97a8ac7de5a46546bcb9f5e8069f"
+    },
+    {
+      "file": "mdo-full-arm64-v8a.apk",
+      "size": 150116761,
+      "sha256": "807281181f325f1eaee9b6225542a9758e9a07c9659b0def3cec04e8374a17e4"
+    }
+  ],
+  "version": "0.6.0",
+  "verification": [
+    "7 external-tools frontend tests",
+    "browser desktop local and store tabs",
+    "390px narrow toolbar layout",
+    "native select filtering and forced-colors fallback",
+    "Windows gui/server packed Application SDK",
+    "Android APK structure, alignment and formal signing certificate"
+  ],
+  "screenshots": [
+    ".build\\cli-toolbar-20261025\\screenshots\\local.jpg",
+    ".build\\cli-toolbar-20261025\\screenshots\\store-narrow.jpg",
+    ".build\\cli-toolbar-20261025\\screenshots\\store.jpg"
+  ]
+}
