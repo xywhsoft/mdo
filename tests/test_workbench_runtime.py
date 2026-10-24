@@ -35,7 +35,7 @@ def main():
             raise AssertionError('C invocation did not finish')
         try:
             start()
-            assert native('runtime.info')['version']=='0.5.0'
+            assert native('runtime.info')['version']=='0.6.0'
             example=native('',command='workbench-plan');assert example['resource']['kind']=='plan'
             context=native('sdk.context');owner=context['extension']
             created=native('resource.put',{'title':'C plan','kind':'plan','revision':0,'value':{'items':[{'text':'Verify native SDK','done':False}]}})

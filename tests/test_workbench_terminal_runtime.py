@@ -209,7 +209,7 @@ def main():
    before=time.monotonic();assert call('qa.terminal-stop') is True;assert time.monotonic()-before<5
    drained=call('terminal.get',{'id':running['id']});assert drained['state']=='ended' and drained['drained'] and drained['reason']=='service_stopped',drained
    stop();(home/'data/application/terminals.json').write_text('{broken terminal metadata');start()
-   call('terminal.capabilities',expected=503);assert call('runtime.info')['version']=='0.5.0'
+   call('terminal.capabilities',expected=503);assert call('runtime.info')['version']=='0.6.0'
    assert (home/'data/application/terminals.json').read_text()=='{broken terminal metadata'
    if args.evidence:
     args.evidence.mkdir(parents=True,exist_ok=True);(args.evidence/'result.json').write_text(json.dumps({'passed':True,'time':time.time(),'platform':sys.platform,'checks':['C and HTTP shared sessions','real TTY','scope isolation','project lease lifetime','ordered deduplicated input','control lease','resize','bounded output/gap','input backpressure','explicit close/drain','no create replay after release','no command replay after restart','metadata privacy','corrupt receipt','spawn failure','graceful service drain','corrupt metadata retained'],'capabilities':cap,'ended':ended,'restored':restored},indent=2),encoding='utf-8')

@@ -135,4 +135,4 @@ native browser views, and the shared C/JavaScript panel and resource APIs.
 ---
 
 ## 📄 License
-See [LICENSE](LICENSE). Current source version: **0.5.0**.
+See [LICENSE](LICENSE). Current source version: **0.6.0**.

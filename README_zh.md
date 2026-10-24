@@ -122,4 +122,4 @@ C／JavaScript 共用的面板、资源与浏览器接口。
 ---
 
 ## 📄 许可
-见 [LICENSE](LICENSE)。当前源码版本：**0.5.0**。
+见 [LICENSE](LICENSE)。当前源码版本：**0.6.0**。
