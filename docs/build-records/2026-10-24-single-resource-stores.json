@@ -1,0 +1,113 @@
+{
+  "app_commit": "8eaf085bce6960a5a627b935fc7b583a88595d16",
+  "site_commit": "709602c0937e653191fa72873c6b309bac0a6d98",
+  "platform_deployed": {
+    "passed": true,
+    "site_commit": "709602c0937e653191fa72873c6b309bac0a6d98",
+    "after": {
+      "files": {
+        "plugin/mdo/modules/ecosystem/main.c": "229e23089696889cdab667ad1816ad86fdf143eb1bfaa4179357df74153e9c7c",
+        "plugin/mdo/modules/ecosystem/creator_core.inc.c": "8887c9e48896b57ad53dd0f6c71d692a023e5cc7c3ec0d9021d1e9edbc7f761e",
+        "plugin/mdo/page/creator/center.js": "6c4682efe23a28215108b4180130b7c72ff76519b73fde6daeba8108700e4b03",
+        "plugin/mdo/page/ecosystem/store.js": "15e7a896b47a792bbf2e965eec1ec3da1b66df8af3240e50feab1e64ba8b578c"
+      },
+      "service": {
+        "/opt/www/xs": "b32fa5696b9950a0dc0fa4fd8277a112e27cbea093deb5d53948a35072d273fe",
+        "/opt/www/xs.json": "6971820ba5f8650754340b97cbd7de60b0eae91dc937f6284a16bbc5af830ee8"
+      }
+    },
+    "time": 1792832657,
+    "files": [
+      "plugin/mdo/modules/ecosystem/main.c",
+      "plugin/mdo/modules/ecosystem/creator_core.inc.c",
+      "plugin/mdo/page/creator/center.js",
+      "plugin/mdo/page/ecosystem/store.js"
+    ]
+  },
+  "build": {
+    "app_commit": "8eaf085bce6960a5a627b935fc7b583a88595d16",
+    "preview": true,
+    "auto_update_published": false,
+    "android_device_tested": false,
+    "artifacts": [
+      {
+        "file": "mdo.exe",
+        "size": 6223131,
+        "sha256": "15856e36697256bff49bd719a68308d8e60174b57e5a06ccf6ab773fae6a042e"
+      },
+      {
+        "file": "mdo-server.exe",
+        "size": 5964888,
+        "sha256": "269a9b79d377006f404f693ef0ffe3dc1e0b775ffbfd167853b7e943908955b5"
+      },
+      {
+        "file": "mdo-arm64-v8a.apk",
+        "size": 5764417,
+        "sha256": "4f071aa58946ba8ac73418bbeabe1a4099d8330fcae4a1cdedd2ac602ade7c64"
+      },
+      {
+        "file": "mdo-full-arm64-v8a.apk",
+        "size": 150100377,
+        "sha256": "2b56de57fa2e3cbe08fcf4aa0b62f515c11ad02b1e0fadd7c79f1c223ecdc5f0"
+      }
+    ]
+  },
+  "public_https": {
+    "/api/v1/mdo/ecosystem/packages?format=2": {
+      "status": 200,
+      "bytes": 694,
+      "sha256": "860a9ec482e044dd0cfab13f9c4fc7fd00feaec50ba3db07e63190d866996939",
+      "ids": [
+        1
+      ]
+    },
+    "/api/v1/mdo/ecosystem/packages?format=2&single=1&kind=skills": {
+      "status": 200,
+      "bytes": 59,
+      "sha256": "1bbb6ff08b536a002ef146ee90ac6c75d4696527b8c95f222e7f790fcc32b6db",
+      "ids": []
+    },
+    "/api/v1/mdo/ecosystem/packages?format=2&single=1&kind=tools": {
+      "status": 200,
+      "bytes": 59,
+      "sha256": "1bbb6ff08b536a002ef146ee90ac6c75d4696527b8c95f222e7f790fcc32b6db",
+      "ids": []
+    },
+    "/mdo/creator?kind=skills": {
+      "status": 200,
+      "bytes": 3328,
+      "sha256": "183f0feb4a6aa80aed73b007679ef2a19d4063e2f637e569a32bdb1c7b0c80b2"
+    },
+    "/mdo/ecosystem?kind=tools": {
+      "status": 200,
+      "bytes": 5605,
+      "sha256": "c54d86739fe1f8c1458872909819a0566a6e8267507a9a9c9165c82e75edeb0a"
+    },
+    "/mdo/creator.js": {
+      "status": 200,
+      "bytes": 10398,
+      "sha256": "6c4682efe23a28215108b4180130b7c72ff76519b73fde6daeba8108700e4b03"
+    },
+    "/mdo/ecosystem.js": {
+      "status": 200,
+      "bytes": 9070,
+      "sha256": "15e7a896b47a792bbf2e965eec1ec3da1b66df8af3240e50feab1e64ba8b578c"
+    }
+  },
+  "tests": {
+    "native_windows_single_resource_lifecycle": true,
+    "windows_existing_ecosystem": true,
+    "creator_quotas_acl_review": true,
+    "linux_site_isolated_lifecycle": true,
+    "frontend_module_graph": 219,
+    "frontend_contracts": 20,
+    "reconnect_form_and_device_cancellation": true,
+    "real_browser_skill_publish_and_download": true,
+    "real_browser_tool_private_publish_and_install": true,
+    "browser_390px_no_horizontal_overflow": true,
+    "android_physical_device": false
+  },
+  "temporary_server_fixture_removed": true,
+  "production_accounts_created": false,
+  "auto_update_published": false
+}
