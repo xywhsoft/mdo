@@ -266,11 +266,13 @@ bool MdoApiEcosystemLocal(MdoApiContext* c,const xvalue* input)
     else if(action&&!strcmp(action,"export")){
         const xvalue* refs=xrtValueObjectGet(input,XRT_STR_LITERAL("references"));xvalue* resources=xrtValueArray();
         ok=xrtValueType(refs)==XVALUE_ARRAY&&xrtValueCount(refs)>0&&xrtValueCount(refs)<=16&&resources;
+        cstr Single=MdoPackageText(input,"single_kind",16);if(Single)ok=ok&&MdoPackageSingleKind(Single)&&xrtValueCount(refs)==1;
         for(size_t i=0;ok&&i<xrtValueCount(refs);i++){const xvalue* ref=xrtValueArrayGet(refs,i);cstr kind=MdoPackageText(ref,"kind",16),id=MdoPackageText(ref,"id",64);char path[256];
+            if(Single&&(!kind||strcmp(kind,Single))){ok=false;break;}
             if(kind&&id&&!xrtValueObjectHas(ref,XRT_STR_LITERAL("project"))&&!ExtensionStoreCanCustomize(c,kind,id)){xrtValueRelease(resources);xrtMutexUnlock(g_MdoExtensionLock);return true;}
-            cstr Project=MdoPackageText(ref,"project",64);if(xrtValueObjectHas(ref,XRT_STR_LITERAL("project"))){xvalue* R=xrtValueObject();ok=kind&&!strcmp(kind,"skills")&&R&&EcoExportProjectSkill(Project,id,R)&&xrtValueArrayAppend(resources,R);xrtValueRelease(R);continue;}
+            cstr Project=MdoPackageText(ref,"project",64);if(xrtValueObjectHas(ref,XRT_STR_LITERAL("project"))){xvalue* R=xrtValueObject();ok=kind&&(!Single||!strcmp(kind,Single))&&R&&((!strcmp(kind,"skills")&&EcoExportProjectSkill(Project,id,R))||(!strcmp(kind,"commands")&&EcoExportProjectCommand(Project,id,R)))&&xrtValueArrayAppend(resources,R);xrtValueRelease(R);continue;}
             if(kind&&(!strcmp(kind,"plugins")||!strcmp(kind,"toolpacks"))){xvalue* R=xrtValueObject();ok=R&&EcoNativeExport(kind,id,R)&&xrtValueArrayAppend(resources,R);xrtValueRelease(R);continue;}
-            ok=EcoLocalPath(kind,id,path);bool missing=false;char* content=ok?MdoExtensionRead(path,false,MDO_EXTENSION_TEXT_LIMIT,&missing):NULL;xvalue* resource=xrtValueObject();
+            ok=(!Single||(kind&&!strcmp(kind,Single)))&&EcoLocalPath(kind,id,path);bool missing=false;char* content=ok?MdoExtensionRead(path,false,MDO_EXTENSION_TEXT_LIMIT,&missing):NULL;xvalue* resource=xrtValueObject();
             ok=content&&resource&&MdoApiValueSetString(resource,"kind",kind)&&MdoApiValueSetString(resource,"id",id);
             if(ok&&!strcmp(kind,"mcp")){xvalue* doc=xrtJsonParse(xrtStrView(content));xvalue* transport=(xvalue*)xrtValueObjectGet(doc,XRT_STR_LITERAL("transport"));const char* keys[]={"environment","headers"};size_t index=0;
                 ok=doc&&transport;for(size_t k=0;ok&&k<2;k++){const xvalue* values=xrtValueObjectGet(transport,xrtStrView(keys[k]));for(size_t j=0;ok&&j<xrtValueCount(values);j++){xvalue* v=(xvalue*)xrtValueArrayGet(values,j);char placeholder[24];snprintf(placeholder,sizeof(placeholder),"input:%zu",index++);ok=MdoApiValueSetString(v,"secret_ref",placeholder);}}
@@ -286,7 +288,7 @@ bool MdoApiEcosystemLocal(MdoApiContext* c,const xvalue* input)
             xrtFree(content);xrtValueRelease(resource);
         }
         if(ok){xvalue* out=xrtValueObject();xrtValueObjectSet(out,XRT_STR_LITERAL("resources"),resources);ok=MdoApiReplySuccessTake(c,200,out,NULL);}
-        else ok=MdoApiReplyError(c,422,"ecosystem_export_failed","Select 1–16 valid resources. Default Agent must be duplicated before publishing; Skill export is limited to 128 KiB of attachments.",NULL);
+        else ok=MdoApiReplyError(c,422,"ecosystem_export_failed","Select 1–16 valid resources, or one matching resource in a typed store. Only selected project Skills and C commands can be exported.",NULL);
         xrtValueRelease(resources);
     }
     else if(action&&(!strcmp(action,"install")||!strcmp(action,"uninstall")||!strcmp(action,"plan"))){

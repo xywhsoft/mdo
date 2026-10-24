@@ -26,7 +26,7 @@ static const xvalue* ExtensionStoreOwner(const xvalue* Records,cstr Path)
 }
 static bool ExtensionStoreCanCustomize(MdoApiContext* C,cstr Kind,cstr Id)
 {
-    if(strcmp(Kind,"skills")&&strcmp(Kind,"tools"))return true;
+    if(!MdoPackageSingleKind(Kind))return true;
     char Path[160];ExtensionPath(Kind,Id,Path);bool Known=false;xvalue* Records=ExtensionStoreRead(&Known);
     bool Managed=ExtensionStoreOwner(Records,Path)!=NULL;xrtValueRelease(Records);
     if(!Known){MdoApiReplyError(C,503,"ecosystem_receipts","Cannot verify resource ownership; restore installation receipts before customizing",NULL);return false;}

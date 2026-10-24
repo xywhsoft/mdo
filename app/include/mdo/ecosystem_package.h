@@ -41,6 +41,9 @@ static bool MdoPackageKind(const char* kind)
         !strcmp(kind,"c-agents")||!strcmp(kind,"c-subagents")||!strcmp(kind,"modules")||
         !strcmp(kind,"toolpacks")||!strcmp(kind,"plugins"));
 }
+/* Categories with one independently installed resource per work. */
+static bool MdoPackageSingleKind(const char* kind)
+{return kind&&(!strcmp(kind,"skills")||!strcmp(kind,"tools")||!strcmp(kind,"commands"));}
 static const char* MdoPackageSystem(const char* kind)
 {return kind&&!strcmp(kind,"c-agents")?"agents":kind&&!strcmp(kind,"c-subagents")?"subagents":kind;}
 static bool MdoPackageV2(const xvalue* package)

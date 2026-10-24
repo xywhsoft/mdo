@@ -8,15 +8,15 @@ const flush=()=>new Promise(r=>setImmediate(r));
 
 test("Skill and Agent-tool local lists restrict installed works, retain user edits and show distinct credits",async t=>{
   const old={document:globalThis.document,window:globalThis.window,fetch:globalThis.fetch};
-  const roots=new Map(["skills","tools"].map(k=>[k,new TestElement("div")])),doc=testDocument();
+  const roots=new Map(["skills","tools","commands"].map(k=>[k,new TestElement("div")])),doc=testDocument();
   doc.querySelector=s=>roots.get(s.match(/^\[data-extension-manager="([^"]+)"\]$/)?.[1])||null;
   globalThis.document=doc;globalThis.window=new EventTarget();
-  const item=(kind,id,managed)=>({id,name:`${managed?"Store":"Local"} ${kind}`,description:"User description",path:kind==="skills"?`skills/${id}/SKILL.md`:`tools/${id}.c`,enabled:true,valid:true,external:true,management_known:true,store_managed:managed});
-  const local=Object.fromEntries(["skills","tools"].map(kind=>[kind,[item(kind,"published",true),item(kind,"mine",false)]]));
-  const receipts=Object.fromEntries(["skills","tools"].map((kind,i)=>[String(i+1),{id:i+1,source:"store",submitter:"publisher_username",author:"Account nickname",version:"1.2.0",manifest:{author:"Original Developers",copyright:"Copyright Original Developers",license:"MIT"},files:[{path:local[kind][0].path}]}]));
+  const item=(kind,id,managed)=>({id,name:`${managed?"Store":"Local"} ${kind}`,description:"User description",path:kind==="skills"?`skills/${id}/SKILL.md`:`${kind}/${id}.c`,enabled:true,valid:true,external:true,management_known:true,store_managed:managed});
+  const local=Object.fromEntries(["skills","tools","commands"].map(kind=>[kind,[item(kind,"published",true),item(kind,"mine",false)]]));
+  const receipts=Object.fromEntries(["skills","tools","commands"].map((kind,i)=>[String(i+1),{id:i+1,source:"store",submitter:"publisher_username",author:"Account nickname",version:"1.2.0",manifest:{author:"Original Developers",copyright:"Copyright Original Developers",license:"MIT"},files:[{path:local[kind][0].path}]}]));
   globalThis.fetch=async url=>Response.json({ok:true,data:url==="/api/v1/ecosystem"?receipts:url==="/api/v1/tools"?{items:[]}:{items:local[url.split("/").at(-1)]||[]}});
   const panels=createExtensionPanels();t.after(()=>{panels.destroy();Object.assign(globalThis,old);});
-  for(const kind of ["skills","tools"]){
+  for(const kind of ["skills","tools","commands"]){
     panels.selectSection(kind);await flush();await flush();
     const root=roots.get(kind),rows=root.querySelectorAll(".eb-row");assert.equal(rows.length,2);
     const published=rows.find(r=>r.dataset.key==="published"),mine=rows.find(r=>r.dataset.key==="mine");

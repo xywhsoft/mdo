@@ -125,7 +125,7 @@ static xvalue* ExtensionItemRecord(cstr Kind,cstr Id,bool IncludeSource,const xv
         !MdoApiValueSetBool(Item,"enabled",Enabled) || !MdoApiValueSetBool(Item,"valid",Valid) ||
         !MdoApiValueSetString(Item,"error",Valid?"":Error) ||
         (IncludeSource && !MdoApiValueSetString(Item,"content",Text))) goto fail;
-    if(Doc&&(!strcmp(Kind,"skills")||!strcmp(Kind,"tools"))){const char* Keys[]={"author","copyright","license","version"};const size_t Limits[]={100,4096,80,32};
+    if(Doc&&MdoPackageSingleKind(Kind)){const char* Keys[]={"author","copyright","license","version"};const size_t Limits[]={100,4096,80,32};
         for(size_t i=0;i<4;i++){cstr Credit=MdoPackageText(Doc,Keys[i],Limits[i]);if(Credit&&!MdoApiValueSetString(Item,Keys[i],Credit))goto fail;}}
     if (!strcmp(Kind,"tools")) {
         MdoModuleCatalog* Catalog=MdoModuleCatalogSnapshot();
@@ -168,7 +168,7 @@ static xvalue* ExtensionItemRecord(cstr Kind,cstr Id,bool IncludeSource,const xv
         xstrview Hint={0};(void)ExtensionString(Doc,"argument_hint",&Hint);
         if(!MdoApiValueSetStringView(Item,"argument_hint",Hint))goto fail;
     }
-    if((!strcmp(Kind,"skills")||!strcmp(Kind,"tools"))&&!ExtensionStoreInfo(Item,Path,Receipts,OwnershipKnown,IncludeSource))goto fail;
+    if(MdoPackageSingleKind(Kind)&&!ExtensionStoreInfo(Item,Path,Receipts,OwnershipKnown,IncludeSource))goto fail;
     xrtFree(Text); xrtValueRelease(Doc); return Item;
 fail:
     xrtFree(Text); xrtValueRelease(Doc); xrtValueRelease(Item); return NULL;

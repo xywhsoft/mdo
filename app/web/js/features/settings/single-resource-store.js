@@ -22,8 +22,8 @@ export const singleResource = (row, kind) => {
 // Each instance is bound to one resource type and one selected device. There
 // is deliberately no resource multi-select in this publication flow.
 export function createSingleResourceStore(kind, onChange, onBrowse = () => {}, onManage = null) {
-  if (!["skills", "tools"].includes(kind)) throw Error("Unsupported resource store");
-  const name = kind === "skills" ? "Skill" : "Agent 工具";
+  if (!["skills", "tools", "commands"].includes(kind)) throw Error("Unsupported resource store");
+  const name = ({ skills: "Skill", tools: "Agent 工具", commands: "编辑器命令" })[kind];
   const root = node("div", "", "single-resource-store"), statusRoot = element("p", { className: "extension-help", attrs: { role: "status" } });
   let visible = false, disposed = false, epoch = 0, controller = null, activeTarget = device();
   let items = [], installed = {}, cursor = 0, query = "", catalogQuery = "", busy = false, error = "", status = "";
@@ -88,7 +88,7 @@ export function createSingleResourceStore(kind, onChange, onBrowse = () => {}, o
       return { key: String(row.id), kind, title: row.name, byline:credits.submitter, description: row.description, meta:credits.meta, badge: { text: same ? browserText("installed", "已安装") : receipt ? browserText("updates", "可更新") : "" }, primary, onSelect: () => loadDetail(row) };
     });
     browser.setItems(rows, { busy, pageKey:JSON.stringify([catalogQuery,stateFilter]), onNext: cursor ? () => { void load(true); } : null, empty: items.length ? browserText("empty", "没有匹配的扩展") : `暂无公开${name}。可从本机列表分享你的作品。` });
-    root.replaceChildren(search, node("p", kind === "skills" ? "按需读取 Skill，包含说明与参考文件。" : "C 工具在本机执行；安装前请检查源码并确认信任。", "extension-help"), browser.root);
+    root.replaceChildren(search, node("p", kind === "skills" ? "按需读取 Skill，包含说明与参考文件。" : kind === "commands" ? "输入 / 选择命令并传递参数；C 代码在调用时编译运行，安装前请检查源码并确认信任。" : "C 工具在本机执行；安装前请检查源码并确认信任。", "extension-help"), browser.root);
     statusRoot.textContent = error || (busy ? status || "正在载入…" : status); statusRoot.hidden = !statusRoot.textContent; statusRoot.className = error ? "extension-error" : "extension-help";
     if (loginRequired) root.append(button("登录账户", () => { location.hash = "#/settings/account"; }));
     search.querySelectorAll("button").forEach(b => { b.disabled = busy; });
@@ -112,7 +112,7 @@ export function createSingleResourceStore(kind, onChange, onBrowse = () => {}, o
       const description = node("div"); description.append(node("p", data.description || row.description),credits.facts(),renderSourceMarkdown(p.manifest.readme));
       if (p.manifest.changelog) description.append(node("h4", "更新说明"), renderSourceMarkdown(p.manifest.changelog));
       const usage = node("div"); usage.append(detailFacts([["作者", credits.author], ["版本", data.version], ["许可", credits.license], ["支持平台", p.manifest.platforms.join(" / ")]]));
-      usage.append(node("p", kind === "skills" ? `$${p.resources[0].id} · /skill:${p.resources[0].id}` : "安装后在 Agent 工具页管理；模型通过结构化参数调用。"));
+      usage.append(node("p", kind === "skills" ? `$${p.resources[0].id} · /skill:${p.resources[0].id}` : kind === "commands" ? `/${p.resources[0].id} [参数] · 支持引号分词或 JSON 数组，参数通过 xvalue array 传入 C 命令。` : "安装后在 Agent 工具页管理；模型通过结构化参数调用。"));
       const source = node("div"); source.append(node("pre", p.resources[0].content, "store-source"));
       for (const file of p.resources[0].files || []) source.append(renderPackageAttachment(file, { download: "下载文件", binary: "二进制文件，请下载检查", truncated: "仅显示前 64 KiB，请下载完整文件" }));
       const history = node("div"); let historyLoaded = false, historyBusy = false, before = 0;
@@ -140,10 +140,10 @@ export function createSingleResourceStore(kind, onChange, onBrowse = () => {}, o
         if (!valid() || !trusted || same || busy) return;
         browser.closeDetail(); void operate("下载安装", () => call({ action: "install", id: row.id, trust_code: trusted, expected_plan: plan.sha256 }, null, { name: row.name }), true);
       }, true); install.disabled = same || !trusted;
-      if (kind === "tools") {
+      if (kind !== "skills") {
         const check = element("input", { attrs: { type: "checkbox" } });
         check.addEventListener("change", () => { trusted = check.checked; install.disabled = same || !trusted; });
-        d.append(element("label", { className: "store-code-consent" }, [check, node("span", "我已检查源码并信任作者。C 工具在 mdo 进程内运行，编译注册时也可能执行代码。") ]));
+        d.append(element("label", { className: "store-code-consent" }, [check, node("span", kind === "commands" ? "我已检查源码并信任作者。C 命令在调用时由独立工作进程编译运行，可通过 Application SDK 操作 mdo 和本机资源。" : "我已检查源码并信任作者。C 工具在 mdo 进程内运行，编译注册时也可能执行代码。") ]));
       }
       d.append(install);
     } catch (e) { if (valid() && e.name !== "AbortError") { const message = node("div"); message.append(node("p", errorMessage(e), "extension-error"), button("重试", () => loadDetail(row))); browser.showDetail(key, message); } }
@@ -162,7 +162,7 @@ export function createSingleResourceStore(kind, onChange, onBrowse = () => {}, o
       const form = element("form", { className: "store-publish-form" }), fields = {};
       for (const [key, text, limit, area] of [["name", "作品名称", 100], ["slug", "作品 ID（小写英文，发布后不变）", 64], ["version", "版本（如 1.0.0）", 32], ["description", "简介", 600, true], ["author", "作品作者（可选，与提交者账号不同）", 100], ["copyright", "版权声明（可选，保留原作者归属）", 4096, true], ["readme", "使用说明", 32768, true], ["license", "许可证", 80], ["changelog", "更新说明", 8192, true], ["review_notes", "审核说明：用法、构建与权限（申请公布必填）", 8000, true], ["source_url", "源码或说明链接（HTTPS，可选）", 1000]]) {
         const control = element(area ? "textarea" : "input", { attrs: { name: key, maxlength: String(limit), required: ["name", "slug", "version", "description", "readme", "license"].includes(key) ? "" : null } });
-        control.value = previous[key] || ({ name: item.name || item.id, slug: `${kind === "skills" ? "skill" : "tool"}-${item.id}`.slice(0, 64), version: "1.0.0", description: item.description || "", license: "MIT" })[key] || "";
+        control.value = previous[key] || ({ name: item.name || item.id, slug: `${kind === "skills" ? "skill" : kind === "commands" ? "command" : "tool"}-${item.id}`.slice(0, 64), version: "1.0.0", description: item.description || "", license: "MIT" })[key] || "";
         fields[key] = control; form.append(element("label", {}, [node("span", text), control]));
       }
       const platforms = element("fieldset"), selected = []; platforms.append(node("legend", "支持平台（仅选择已验证的平台）"));

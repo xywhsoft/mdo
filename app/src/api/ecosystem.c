@@ -19,7 +19,7 @@ bool MdoEcosystemPackageCompatible(const xvalue* package,const xvalue* input,cha
     for(size_t i=0;i<xrtValueCount(platforms);i++){xstrview p;if(xrtValueGetString(xrtValueArrayGet(platforms,i),&p)&&xrtStrEqual(p,xrtStrView(MdoToolPlatform())))compatible=true;}
     const xvalue* resources=xrtValueObjectGet(package,XRT_STR_LITERAL("resources"));
     cstr Single=MdoPackageText(input,"single_kind",16);
-    if(xrtValueObjectHas(input,XRT_STR_LITERAL("single_kind"))&&(!Single||(strcmp(Single,"skills")&&strcmp(Single,"tools"))||xrtValueCount(resources)!=1||strcmp(MdoPackageText(xrtValueArrayGet(resources,0),"kind",16),Single))){snprintf(error,capacity,"This store installs exactly one Skill or Agent tool of the selected type");return false;}
+    if(xrtValueObjectHas(input,XRT_STR_LITERAL("single_kind"))&&(!Single||!MdoPackageSingleKind(Single)||xrtValueCount(resources)!=1||strcmp(MdoPackageText(xrtValueArrayGet(resources,0),"kind",16),Single))){snprintf(error,capacity,"This store installs exactly one Skill, Agent tool or editor command of the selected type");return false;}
     for(size_t i=0;i<xrtValueCount(resources);i++){cstr kind=MdoPackageText(xrtValueArrayGet(resources,i),"kind",16);if(kind&&(!strcmp(kind,"tools")||!strcmp(kind,"commands")||!strncmp(kind,"c-",2)||!strcmp(kind,"modules")||!strcmp(kind,"plugins")||!strcmp(kind,"toolpacks")))code=true;
 #if defined(__ANDROID__)
         if(kind&&!strcmp(kind,"toolpacks")){const xvalue* R=xrtValueArrayGet(resources,i);xvalue* Doc=xrtJsonParse(xrtStrView(MdoPackageText(R,"content",131072)));const xvalue* Programs=xrtValueObjectGet(Doc,XRT_STR_LITERAL("programs"));bool Scripts=true;
@@ -84,7 +84,7 @@ static bool EcoHandleInput(MdoApiContext* c,xvalue* input)
 {
     cstr action=MdoPackageText(input,"action",16);char path[1000];bool valid=action!=NULL;
     cstr Single=MdoPackageText(input,"single_kind",16);bool Typed=xrtValueObjectHas(input,XRT_STR_LITERAL("single_kind"));
-    if(Typed&&(!Single||(strcmp(Single,"skills")&&strcmp(Single,"tools")))){xrtValueRelease(input);return MdoApiReplyError(c,422,"ecosystem_request_invalid","Choose the Skill or Agent tool store",NULL);}
+    if(Typed&&(!Single||!MdoPackageSingleKind(Single))){xrtValueRelease(input);return MdoApiReplyError(c,422,"ecosystem_request_invalid","Choose the Skill, Agent tool or editor command store",NULL);}
     const xvalue* body=NULL;const char* method="GET";int64 id=0;
     if(valid&&(!strcmp(action,"catalog")||!strcmp(action,"mine"))){cstr query=MdoPackageText(input,"query",100),kind=MdoPackageText(input,"kind",16);int64 before=0;
         const xvalue* v=xrtValueObjectGet(input,XRT_STR_LITERAL("before"));if(v&&!MdoPackageNumber(input,"before",&before))valid=false;if(before<0)valid=false;

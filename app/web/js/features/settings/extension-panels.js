@@ -57,8 +57,8 @@ export function createExtensionPanels() {
   const mcpContext = createMcpContext();
   const mcpAuthorization = createMcpAuthorization();
   const mcpWorkbench = createMcpWorkbench({ onChange: () => announceChange("mcp") });
-  const commandWorkbench = createCommandWorkbench({ onChange: () => announceChange("commands") });
-  const stores = new Map(["skills", "tools"].map(kind => [kind, createSingleResourceStore(kind, () => { announceChange(kind); if (selected === kind) void load(kind); }, () => { states.get(kind).area = "store"; render(kind); }, async receipt => {
+  const commandWorkbench = createCommandWorkbench({ owner: roots.get("commands"), onChange: () => announceChange("commands"), onShare: item => stores.get("commands").publish(item) });
+  const stores = new Map(["skills", "tools", "commands"].map(kind => [kind, createSingleResourceStore(kind, () => { announceChange(kind); if (selected === kind) void load(kind); }, () => { states.get(kind).area = "store"; render(kind); }, async receipt => {
     const ref = resourceReferences(receipt).find(ref => ref.kind === kind); if (!ref || selected !== kind) return;
     const state = states.get(kind), target = targetKey(); state.area = "local"; state.view = "custom"; state.filter = "";
     stores.get(kind).activate(false); render(kind); await load(kind);
@@ -136,7 +136,7 @@ export function createExtensionPanels() {
     const store = stores.get(kind);
     if (store) {
       const tabs = element("div", { className: "store-tabs", attrs: { role: "tablist", "aria-label": title(kind) } });
-      for (const [area, text] of [["local", kind === "skills" ? "本机 Skill" : "本机 Agent 工具"], ["store", kind === "skills" ? "Skill 商店" : "Agent 工具商店"]]) {
+      for (const [area, text] of [["local", `本机 ${title(kind)}`], ["store", `${title(kind)}商店`]]) {
         const tab = button(text, () => { if (state.busy || store.hasPendingChanges()) return; state.area = area; store.activate(area === "store"); render(kind); if (area === "local") void load(kind); });
         tab.setAttribute("role", "tab"); tab.setAttribute("aria-selected", String(state.area === area)); tabs.append(tab);
       }
@@ -207,7 +207,7 @@ export function createExtensionPanels() {
           kind === "mcp" ? element("span", { text: t(`resource.mcp${({ ready: "Ready", failed: "Failed", disabled: "Disabled", disconnected: "Disconnected" })[item.state] || "Disconnected"}`) }) : null,
           kind === "mcp" ? element("span", { text: t("resource.toolCount", { count: item.tool_count || 0 }) }) : null,
         ]);
-        const owner=resourceOwner(state.packages,item.path), protectedKind=["tools","skills"].includes(kind);
+        const owner=resourceOwner(state.packages,item.path), protectedKind=["tools","skills","commands"].includes(kind);
         const editable=!protectedKind||customizableResource(item,owner), credits=protectedKind?resourceCredits(item,owner):null;
         if(owner)meta.append(button(`${owner.name} · ${owner.version} · ${owner.source==="local"?label("localImport","本地导入"):owner.author}`,()=>returnToPackage(receiptKey(owner))));
         const edit = button(label("edit", "编辑"), async () => {
@@ -418,7 +418,7 @@ export function createExtensionPanels() {
     inputField(editing.form, "prompt", label(kind === "agents" ? "agentInstructions" : "instructions", kind === "agents" ? "系统提示词（留空使用默认规则）" : "指令"), values.prompt || "", { area: true, required: required("prompt") });
   }
   function openEditor(kind, item = null, imported = null, packageKey = null) {
-    if(item&&["tools","skills"].includes(kind)&&!customizableResource(item,resourceOwner(states.get(kind).packages,item.path))){toast(storeReadOnlyMessage(),"error");return;}
+    if(item&&["tools","skills","commands"].includes(kind)&&!customizableResource(item,resourceOwner(states.get(kind).packages,item.path))){toast(storeReadOnlyMessage(),"error");return;}
     reads.cancel("editor");
     if (editing && !closeEditor()) return;
     const initial = imported?.content ?? item?.content ?? (kind === "commands" ? newCommand() : kind === "tools" ? newTool() : kind === "mcp" ? JSON.stringify(newMcp(), null, 2) :

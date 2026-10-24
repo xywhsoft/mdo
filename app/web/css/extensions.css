@@ -28,16 +28,16 @@
 .extension-editor-footer { justify-content: flex-end; margin-top: 16px; }
 .extension-transport textarea { min-height: 90px; font-family: var(--font-mono, monospace); }
 .extension-editor [hidden] { display: none !important; }
-.command-workbench { width: min(960px, calc(100vw - 24px)); }
-.command-workbench h2 { margin: 0 0 12px; }
+
+
 .command-workbench-columns { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(0, 2fr); gap: 16px; margin: 12px 0; }
-.command-workbench .extension-list { max-height: min(420px, 55dvh); overflow-y: auto; align-content: start; }
-.command-workbench .extension-row { display: grid; gap: 4px; justify-items: start; padding-bottom: 8px; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+.command-authoring .extension-list { max-height: none; overflow: visible; align-content: start; }
+.command-authoring .extension-row { display: grid; gap: 4px; justify-items: start; padding-bottom: 8px; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
 .command-workbench-editor { min-width: 0; display: grid; gap: 8px; align-content: start; }
 .command-workbench-editor .extension-source { min-height: 240px; height: min(360px, 42dvh); }
 @media (max-width: 680px) {
   .command-workbench-columns { grid-template-columns: minmax(0, 1fr); }
-  .command-workbench .extension-list { max-height: 150px; }
+
 }
 .tool-categories button[aria-pressed="true"] { background: var(--hover); border-color: var(--text); }
 .builtin-tool-card h3 { display: flex; align-items: center; gap: 8px; }

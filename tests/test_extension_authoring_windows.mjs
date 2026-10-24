@@ -42,7 +42,7 @@ test("custom external tool forms use shared fixed actions, retain failed input a
 });
 
 test("Skill and C tool editors keep validation and save recovery inside shared body with bottom actions",async t=>{
-  const restore=environment(t);const roots=new Map(["skills","tools"].map(kind=>[kind,new TestElement("div")]));
+  const restore=environment(t);const roots=new Map(["skills","tools","commands"].map(kind=>[kind,new TestElement("div")]));
   for(const root of roots.values())document.body.append(root);
   document.querySelector=selector=>roots.get(selector.match(/data-extension-manager="([^"]+)"/)?.[1])||null;
   let fail=true,gate;const writes=[];
@@ -52,7 +52,7 @@ test("Skill and C tool editors keep validation and save recovery inside shared b
   });
   const {createExtensionPanels}=await import("../app/web/js/features/settings/extension-panels.js");
   const panel=createExtensionPanels();t.after(()=>{panel.destroy();restore();});
-  for(const kind of ["skills","tools"]) {
+  for(const kind of ["skills","tools","commands"]) {
     panel.selectSection(kind);await flush();button(roots.get(kind),"新建").click();const dialog=document.body.querySelector("dialog");
     assert(dialog.classList.contains("mdo-layer"));assert(dialog.classList.contains("extension-authoring"));
     const body=dialog.querySelector(".mdo-layer-body"),footer=dialog.querySelector("footer");
@@ -63,6 +63,6 @@ test("Skill and C tool editors keep validation and save recovery inside shared b
     fail=false;let release;gate=new Promise(resolve=>{release=resolve;});footer.firstChild.click();footer.firstChild.click();await flush();
     const before=writes.length;dialog.dispatchEvent(new Event("cancel",{cancelable:true}));await flush();assert(dialog.open);assert(footer.firstChild.disabled);
     release();gate=null;await flush();assert(!document.body.querySelector("dialog"));assert.equal(writes.length,before);
-    assert.equal(writes.at(-1).url,`/api/v1/extensions/${kind}/fixture-${kind}`);assert(writes.at(-1).body.content.includes(kind==="tools"?"mdo/module.h":"Fixture skill"));
+    assert.equal(writes.at(-1).url,`/api/v1/extensions/${kind}/fixture-${kind}`);assert(writes.at(-1).body.content.includes(kind==="tools"?"mdo/module.h":kind==="commands"?"mdo/command.h":"Fixture skill"));
   }
 });

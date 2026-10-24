@@ -6,6 +6,11 @@
 bool MdoApiCommandsRoute(MdoApiContext* C) {
     char* Workspace=NULL;if(!MdoApiSkillScopeMode(C,&Workspace,false))return false;
     xvalue* Catalog=MdoCommandCatalog(Workspace);xrtFree(Workspace);
+    bool Known=false;xvalue* Records=ExtensionStoreRead(&Known);xvalueiter It={0};xvaluekey Key;xvalue* Item;
+    if(xrtValueIterBegin(Catalog,&It)){while((Item=xrtValueIterNext(&It,&Key))){
+        cstr Scope=MdoPackageText(Item,"scope",16),Path=MdoPackageText(Item,"path",255);
+        if(Scope&&!strcmp(Scope,"user")&&Path)ExtensionStoreInfo(Item,Path,Records,Known,false);
+    }xrtValueIterEnd(&It);}xrtValueRelease(Records);
     return Catalog?MdoApiReplySuccessTake(C,200,Catalog,NULL):
         MdoApiReplyError(C,503,"commands_unavailable","Command catalog is unavailable",NULL);
 }
