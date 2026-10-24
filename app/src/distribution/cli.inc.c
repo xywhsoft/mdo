@@ -44,6 +44,17 @@ static void CliCleanRetired(void)
     if(xrtValueCount(Roots)){xrtValueObjectSetNew(g_MdoCli.State,XRT_STR_LITERAL("retired_roots"),Keep);(void)CliSave();}else xrtValueRelease(Keep);
 }
 static bool CliMutable(const xvalue* R){return R&&strcmp(CliText(R,"source",16),"bundled");}
+static bool CliUserDefined(const xvalue* R)
+{cstr Source=CliText(R,"source",16);return !strcmp(Source,"manual")||!strcmp(Source,"local");}
+/* Called with Lock held. Persisted retry requests and queued snapshots must
+ * still refer to a user-added registry entry; request metadata is not authority. */
+static bool CliUserRequest(const xvalue* Input,char* Error,size_t Capacity)
+{
+    cstr Action=CliText(Input,"action",16),Id=CliText(Input,"id",64);const xvalue* Tool=xrtValueObjectGet(Input,XRT_STR_LITERAL("tool"));
+    if(strcmp(Action,"publish")&&strcmp(Action,"import"))return true;
+    if(CliUserDefined(CliFind(Id))&&CliUserDefined(Tool)&&!strcmp(Id,CliText(Tool,"id",64)))return true;
+    snprintf(Error,Capacity,"Only user-added external tools can be shared or copied");return false;
+}
 static bool CliMeta(const xvalue* R)
 {
     uint32_t Version[3];cstr Id=CliText(R,"id",64),Path=CliText(R,"path",4096),Name=CliText(R,"name",120),Prompt=CliText(R,"prompt",16384);
@@ -60,6 +71,7 @@ static void CliProgress(uint64 Done,uint64 Total,void* Data)
 }
 static bool CliEnqueue(const xvalue* Input,char* Error,size_t Capacity)
 {
+    if(!CliUserRequest(Input,Error,Capacity))return false;
     if(g_MdoCli.Stopping||xrtValueCount(g_MdoCli.Tasks)>=64){snprintf(Error,Capacity,"Download task limit reached; clear finished tasks");return false;}
     MdoCliJob* J=xrtCalloc(1,sizeof(*J));xvalue* T=xrtValueObject();
     if(!J||!T||!CliId(J->Id)){xrtFree(J);xrtValueRelease(T);return false;}
@@ -186,6 +198,7 @@ bool MdoCliCommand(const xvalue* Input,char* Error,size_t Capacity)
     if(!g_MdoCli.Writable||g_MdoCli.Stopping){snprintf(Error,Capacity,"External-tool storage is unavailable or corrupt; original records retained");goto done;}
     if(!strcmp(Action,"save")){
         const xvalue* Item=xrtValueObjectGet(Input,XRT_STR_LITERAL("tool"));cstr Key=CliText(Item,"id",64);xvalue* Old=CliFind(Key);
+        if(Old&&!CliUserDefined(Old)){snprintf(Error,Capacity,"Only user-added external tools can be edited");goto done;}
         if(!CliMeta(Item)||strcmp(CliText(Item,"platform",32),MdoToolPlatform())||!CliPresent(CliText(Item,"path",4096))){snprintf(Error,Capacity,"Name, executable path, prompt, version, platform and license are required; description must be at most 2048 UTF-8 bytes; executable must exist");goto done;}
         if(Old&&CliText(Old,"managed_root",160)[0]&&strcmp(CliText(Old,"path",4096),CliText(Item,"path",4096))){snprintf(Error,Capacity,"Managed program paths are controlled by installation; add a custom tool to use another program");goto done;}
 #if defined(__ANDROID__)

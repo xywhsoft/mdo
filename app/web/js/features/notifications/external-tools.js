@@ -25,6 +25,7 @@ export function createExternalToolsPanel({ refresh, openFull, openTools, signedI
   const browsers = new Map(), pending = new Set();
   const signatures=new WeakMap(), hosts=new Set();
   const c=i=>(labels[currentLocale()]??labels["en-US"])[i];
+  const userDefined=tool=>["manual","local"].includes(tool?.source);
   const writable=()=>{const t=targetState();return data.writable!==false&&(!t.selected||(t.connected&&!t.runtimeChanged&&t.selected.mode!=="view"));};
   const button=(text,fn,disabled=false)=>{const b=n("button",text,"secondary-button");b.type="button";b.disabled=disabled;b.onclick=fn;return b;};
   const guide=n("aside",null,"cli-first-use"), global=n("button",null,"secondary-button cli-download-entry");
@@ -40,6 +41,7 @@ export function createExternalToolsPanel({ refresh, openFull, openTools, signedI
   function renderAll(){for(const h of hosts){signatures.delete(h);render(h,data,h.dataset.cliUpdates==="true");}}
   function closeEditor(){editor?.remove();editor=null;editing=null;}
   function edit(tool={}) {
+    if(tool.id&&!userDefined(tool))return;
     closeEditor();editing=tool.id??null;const own=context,revision=data.revision??0;
     editor=n("dialog",null,"cli-editor");const form=n("form"), message=n("p",null,"cli-error"), fields={};
     form.append(n("h3",c(tool.id?8:2)));
@@ -59,6 +61,7 @@ export function createExternalToolsPanel({ refresh, openFull, openTools, signedI
     };editor.addEventListener("cancel",()=>closeEditor());editor.showModal();
   }
   function share(tool) {
+    if(!userDefined(tool))return;
     closeEditor();const own=context;editor=n("dialog",null,"cli-editor");const form=n("form"),fields={},message=n("p",null,"cli-error");form.append(n("h3",currentLocale()==="zh-CN"?"提交到创作中心":"Submit to creator center"),n("p",c(31)));
     const visibility=n("label",null,"cli-field"),publish=n("input");publish.type="checkbox";visibility.append(publish,n("span",currentLocale()==="zh-CN"?"申请公布（需审核）；不勾选则私有保存":"Request publication (review required); otherwise save privately"));form.append(visibility);
     for(const [key,zh,en,multi] of [["source_url","固定版本源码 / 可核验来源（HTTPS）","Versioned source / provenance URL (HTTPS)"],["review_file","审核附件的本机绝对路径（源码归档等，可选）","Absolute local path to review file (optional)"],["review_notes","构建方法、安全说明、权限及网络行为","Build instructions, permissions and network behavior",true]]){const label=n("label",null,"cli-field"),input=n(multi?"textarea":"input");input.maxLength=key==="review_notes"?8000:4096;label.append(n("span",currentLocale()==="zh-CN"?zh:en),input);fields[key]=input;form.append(label);}
@@ -106,10 +109,11 @@ export function createExternalToolsPanel({ refresh, openFull, openTools, signedI
     const renderList=()=>{
       const needle=localQuery.toLocaleLowerCase();
       const rows=tab==="local"?(data.items||[]).filter(t=>`${t.name} ${t.description||""} ${t.command||""}`.toLocaleLowerCase().includes(needle)).filter(t=>stateFilter==="all"||(stateFilter==="error"?!t.present:stateFilter==="enabled"?t.enabled:!t.enabled)).map(t=>{
-        const job=taskFor(t), actions=[button(c(8),()=>edit(t),disabled)];
+        const job=taskFor(t), custom=!android&&userDefined(t), actions=[];
+        if(custom)actions.push(button(c(8),()=>edit(t),disabled));
         if(t.source!=="bundled"&&!android)actions.push(button(c(9),()=>{if(window.confirm(c(32)))void command({action:"remove",id:t.id});},disabled));
-        if(!android)actions.push(button(c(10),()=>share(t),disabled||!signedIn()||!t.present));
-        if(!android&&!t.managed_root)actions.push(button(c(48),()=>{if(window.confirm(c(49)))void command({action:"import",id:t.id,name:t.name});},disabled||!t.present));
+        if(custom)actions.push(button(c(10),()=>share(t),disabled||!signedIn()||!t.present));
+        if(custom&&!t.managed_root)actions.push(button(c(48),()=>{if(window.confirm(c(49)))void command({action:"import",id:t.id,name:t.name});},disabled||!t.present));
         const toggle=extensionToggle(button(c(t.enabled?7:6),()=>command({action:"enable",id:t.id,enabled:!t.enabled}),disabled||(!t.enabled&&!t.present)),t.enabled,t.name);
         return {key:`local:${t.id}`,title:t.name,description:t.description||c(56),meta:[t.version,t.license],toggle,actions,badge:{text:job?taskLabel(job):!t.present?c(39):"",tone:!t.present?"error":""},detail:()=>toolDetail(t)};
       }):(data.store?.items||[]).filter(t=>stateFilter==="all"||(stateFilter==="installed"?!externalToolAction(t,data.items||[]):stateFilter==="updates"?externalToolAction(t,data.items||[])==="update":externalToolAction(t,data.items||[])==="install")).map(t=>{

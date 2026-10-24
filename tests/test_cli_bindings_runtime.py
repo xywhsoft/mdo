@@ -130,6 +130,8 @@ def run(host,packed=None):
         # the original stays untouched, and reinitialization rebases all paths.
         external=base/('outside.exe' if os.name=='nt' else 'outside');external.write_bytes(versions['v1']);external.chmod(0o755)
         custom.update(id='custom.import',path=str(external),command='imported',aliases=[]);post('save',tool=custom);assert not get()['items'][-1]['portable'];post('import',id=custom['id']);wait_task();assert external.read_bytes()==versions['v1'];check('imported')
+        imported=next(t for t in get()['items'] if t['id']==custom['id']);assert imported['source']=='local' and imported['managed_root']
+        post('save',tool=dict(imported,name='Edited user copy',description='Still user-managed'),revision=get()['revision']);assert next(t for t in get()['items'] if t['id']==custom['id'])['description']=='Still user-managed';check('imported')
         proc.terminate();proc.wait(15);moved=base/'Moved Home';shutil.copytree(home,moved);home=moved;proc=start();check(version='v1' if packed else 'v2');check('imported')
         if not packed:
             proc.terminate();proc.wait(15);alias=home/'data/cli-tools/bin'/('fixture.exe' if os.name=='nt' else 'fixture');alias.unlink();alias.write_bytes(b'user replacement');proc=start();assert get()['writable'] and get()['binding_error'];post('enable',id=key,enabled=False);assert alias.read_bytes()==b'user replacement'

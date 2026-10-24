@@ -37,6 +37,8 @@ class Store(BaseHTTPRequestHandler):
     wrong_description=False
     damaged=False
     slow=False
+    blob_started=None
+    blob_release=None
     def log_message(self,*args):pass
     def do_GET(self):
         archive=LEGACY_ARCHIVE if self.legacy else ARCHIVE
@@ -45,6 +47,9 @@ class Store(BaseHTTPRequestHandler):
         if self.wrong_description:product["description"]="Wrong catalog description"
         if self.path.startswith("/api/v1/mdo/cli/blob"):
             data=bytes(len(archive)) if self.damaged else archive
+            if self.blob_started is not None:
+                self.blob_started.set()
+                assert self.blob_release.wait(15),"Timed out releasing fixture download"
         else:
             data=json.dumps(dict(code=0,data=product if "/detail?" in self.path else dict(items=[product],next_before=0))).encode()
         self.send_response(200);self.send_header("Content-Length",str(len(data)));self.end_headers()
@@ -85,7 +90,8 @@ def run(host):
         assert get()["guide"]=="new" and not get()["items"]
         exe=base/"manual.exe";exe.write_bytes(PAYLOAD)
         tool=dict(id="custom.fixture",name="Manual",version="1.0.0",path=str(exe),description="MANUAL_USER_DESCRIPTION",prompt="MANUAL_PROMPT_SENTINEL",license="MIT",platform=PLATFORM,enabled=True,links=[])
-        post("save",tool=tool);assert "MANUAL_PROMPT_SENTINEL" in prompt() and prompt().count("<mdo_tool_environment>")==1
+        post("save",tool={**tool,"source":"store"});assert get()["items"][0]["source"]=="manual","new registrations cannot choose their provenance"
+        assert "MANUAL_PROMPT_SENTINEL" in prompt() and prompt().count("<mdo_tool_environment>")==1
         assert get()["items"][0]["description"]==tool["description"] and tool["description"] not in prompt()
         old_edit={k:v for k,v in tool.items() if k!="description"};post("save",tool=old_edit,revision=get().get("revision",0));assert get()["items"][0]["description"]==tool["description"]
         for invalid in [None,[],"x"*2049,"nul\0text"]:post("save",status=422,tool={**tool,"description":invalid},revision=get().get("revision",0))
@@ -97,6 +103,31 @@ def run(host):
         post("dismiss");post("catalog");s=wait_task();assert s["store"]["items"][0]["id"]==1
         post("install",store_id=1,name="Fixture CLI");s=wait_task();assert s["tasks"][-1]["state"]=="complete",s
         t=s["items"][0];installed=Path(t["path"]);assert installed.read_bytes()==PAYLOAD and "CLI_PROMPT_SENTINEL" in prompt() and t["description"]=="USER_DESCRIPTION_SENTINEL" and "USER_DESCRIPTION_SENTINEL" not in prompt()
+        before=get();durable=(home/"data/cli-tools/state.json").read_bytes()
+        for source in ["store","manual","local",None]:
+            forged={**t,"source":source,"name":"Forbidden edit","description":"Forbidden description","prompt":"Forbidden instructions"}
+            post("save",status=422,tool=forged,revision=before["revision"])
+            for action in ["publish","import"]:post(action,status=422,id=t["id"],tool=forged)
+        assert get()==before and (home/"data/cli-tools/state.json").read_bytes()==durable and installed.read_bytes()==PAYLOAD,"forbidden requests must not alter metadata, files or tasks"
+        # Pre-upgrade tasks may contain editable store snapshots. A forged
+        # snapshot must not let retries bypass the live registry provenance.
+        proc.terminate();proc.wait(10);tasks=home/"data/cli-tools/tasks.json";old_tasks=json.loads(tasks.read_text())
+        stale=[]
+        for index,action in enumerate(["publish","import"],1):
+            key=f"{index:032x}";stale.append(key)
+            old_tasks.append(dict(id=key,state="interrupted",action=action,request=dict(action=action,id=t["id"],tool={**t,"source":"manual"})))
+        tasks.write_text(json.dumps(old_tasks));proc=start();before=get()
+        for key in stale:post("retry",status=422,id=key)
+        assert get()==before,"rejected old tasks must not be readmitted"
+        # A valid queued user operation is rechecked before any archive or
+        # account work if its registered tool disappears while waiting.
+        Store.blob_started=threading.Event();Store.blob_release=threading.Event();post("install",store_id=1)
+        assert Store.blob_started.wait(10)
+        post("save",tool=tool)
+        for action in ["publish","import"]:post(action,id=tool["id"])
+        post("remove",id=tool["id"]);Store.blob_release.set();s=wait_task();Store.blob_started=Store.blob_release=None
+        assert all(task["state"]=="failed" and "user-added" in task["error"] for task in s["tasks"][-2:]),s
+        assert exe.read_bytes()==PAYLOAD and len(s["items"])==1
         isolated=json.loads(request(port,"GET","/fixture/isolation")[2])["data"];assert isolated["ok"] and isolated["before"]["items"][0]["enabled"] and not isolated["after"]["items"][0]["enabled"],"snapshots must not alias live nested containers"
         (home/"fail-cli-save").write_bytes(b"1");post("enable",status=422,id=t["id"],enabled=True);assert not get()["items"][0]["enabled"],"failed state writes must restore nested values";(home/"fail-cli-save").unlink()
         post("enable",id=t["id"],enabled=False);post("install",store_id=1);s=wait_task();assert s["tasks"][-1]["state"]=="complete" and not s["items"][0]["enabled"]
@@ -113,8 +144,9 @@ def run(host):
         proc.terminate();proc.wait(10);proc=start();s=get();assert s["guide"]=="accepted" and not s["items"] and not Path(original).exists()
         assert not exe.with_suffix(".called").exists()
         proc.terminate();proc.wait(10);state=home/"data/cli-tools/state.json";state.write_bytes(b"broken");proc=start();assert not get()["writable"];post("dismiss",status=422);assert state.read_bytes()==b"broken"
-        print("PASS CLI native manual paths, injection, missing files, individual install/update, hash failure rollback, guide, retirement, restart and corrupt-state preservation")
+        print("PASS CLI native user/store provenance, forged edits, stale retries, queued ownership changes, manual paths, injection, install/update, rollback, restart and corrupt-state preservation")
     finally:
+        if Store.blob_release is not None:Store.blob_release.set()
         proc.terminate();proc.wait(15);log.close();server.shutdown();server.server_close()
 
 if __name__=="__main__":

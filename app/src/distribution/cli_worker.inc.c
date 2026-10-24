@@ -60,7 +60,7 @@ static bool CliImport(MdoCliJob* Job,char* Error,size_t Capacity)
     if(Ok){CliSet(Tool,"source","local");xrtValueObjectRemove(Tool,XRT_STR_LITERAL("store_id"));xrtValueObjectSetNew(Tool,XRT_STR_LITERAL("enabled"),xrtValueBool(CliBool(Source,"enabled",true)));
         const cstr Keys[]={"aliases","command"};for(size_t I=0;I<2;I++){const xvalue* V=xrtValueObjectGet(Source,xrtStrView(Keys[I]));if(V)xrtValueObjectSet(Tool,xrtStrView(Keys[I]),V);}
         xrtMutexLock(g_MdoCli.Lock);xvalue* Previous=xrtValueDeepClone(g_MdoCli.State),*Old=CliFind(CliText(Source,"id",64));
-        Ok=Previous&&Old&&!xrtCancelRequested(Job->Cancel)&&MdoDistNumber(Job->Input,"revision")==MdoDistNumber(g_MdoCli.State,"revision");
+        Ok=Previous&&CliUserDefined(Old)&&!xrtCancelRequested(Job->Cancel)&&MdoDistNumber(Job->Input,"revision")==MdoDistNumber(g_MdoCli.State,"revision");
         if(Ok){for(size_t I=0;I<xrtValueCount(CliItems());I++)if(xrtValueArrayGet(CliItems(),I)==Old){CliRetire(Old);xrtValueArraySet(CliItems(),I,Tool);break;}
             xrtValueObjectSetNew(g_MdoCli.State,XRT_STR_LITERAL("revision"),xrtValueUInt(MdoDistNumber(g_MdoCli.State,"revision")+1));Ok=CliSave();}
         else snprintf(Error,Capacity,"Tool list changed while copying; reload and retry");
@@ -138,10 +138,10 @@ static int32 CliWorker(void* Data)
 {
     (void)Data;
     while(!xrtThreadStopping()&&!xrtCancelRequested(g_MdoCli.Cancel)){
-        xrtMutexLock(g_MdoCli.Lock);MdoCliJob* J=g_MdoCli.First;
-        if(J){g_MdoCli.First=J->Next;if(!g_MdoCli.First)g_MdoCli.Last=NULL;J->Next=NULL;g_MdoCli.Running=J;}xrtMutexUnlock(g_MdoCli.Lock);
-        if(!J){xrtSleep(100);continue;}char Error[256]={0};bool Ok=false;
-        if(!xrtCancelRequested(J->Cancel)){CliTaskStatus(J->Id,"running",NULL);cstr Action=CliText(J->Input,"action",16);
+        xrtMutexLock(g_MdoCli.Lock);MdoCliJob* J=g_MdoCli.First;char Error[256]={0};bool Allowed=false;
+        if(J){g_MdoCli.First=J->Next;if(!g_MdoCli.First)g_MdoCli.Last=NULL;J->Next=NULL;g_MdoCli.Running=J;Allowed=CliUserRequest(J->Input,Error,sizeof(Error));}xrtMutexUnlock(g_MdoCli.Lock);
+        if(!J){xrtSleep(100);continue;}bool Ok=false;
+        if(Allowed&&!xrtCancelRequested(J->Cancel)){CliTaskStatus(J->Id,"running",NULL);cstr Action=CliText(J->Input,"action",16);
             if(!strcmp(Action,"catalog"))Ok=CliCatalog(J,Error,sizeof(Error));else if(!strcmp(Action,"install"))Ok=CliInstall(J,Error,sizeof(Error));else if(!strcmp(Action,"import"))Ok=CliImport(J,Error,sizeof(Error));else if(!strcmp(Action,"publish"))Ok=CliPublish(J,Error,sizeof(Error));else if(!strcmp(Action,"recommend"))Ok=CliRecommend(J,Error,sizeof(Error));else if(!strcmp(Action,"mine"))Ok=CliMine(J,Error,sizeof(Error));else if(!strcmp(Action,"withdraw"))Ok=CliWithdraw(J,Error,sizeof(Error));}
         CliTaskStatus(J->Id,Ok?"complete":xrtCancelRequested(J->Cancel)?"cancelled":"failed",Ok?NULL:Error[0]?Error:"External-tool operation failed");
         xrtMutexLock(g_MdoCli.Lock);g_MdoCli.Running=NULL;

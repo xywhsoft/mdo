@@ -20,6 +20,36 @@ test("new registry does not recreate old missing-tool recommendation notificatio
 
 import { TestElement as Element, testDocument } from "./helpers/extension-dom.mjs";
 const all=e=>[e,...e.children.flatMap(all)];
+test("only user-added external tools offer edit, share and copy; store tools retain uninstall and toggle",()=>{
+ const saved=globalThis.document;globalThis.document=testDocument();
+ try{
+  let signed=true;
+  const panel=createExternalToolsPanel({refresh:async()=>{},openFull:async()=>{},openTools:()=>{},signedIn:()=>signed}),body=new Element("div");
+  const tool={id:"fixture",name:"Fixture",source:"manual",path:"C:/fixture.exe",version:"1.0.0",enabled:true,present:true};
+  const state={writable:true,platform:"windows-x86_64",guide:"accepted",items:[],tasks:[],store:{items:[]}};
+  for(const source of ["manual","local","store","bundled","legacy","unknown",undefined])for(const managed of [false,true]){
+   const custom=["manual","local"].includes(source);
+   panel.render(body,{...state,items:[{...tool,source,managed_root:managed?"data/cli-tools/installed/fixture":undefined}]});
+   const row=body.querySelector(".eb-row"),buttons=all(row).filter(n=>n.tagName==="BUTTON").map(n=>n.textContent);
+   assert.equal(buttons.includes("Edit"),custom,`${source}: edit`);
+   assert.equal(buttons.includes("Share to store"),custom,`${source}: share`);
+   assert.equal(buttons.includes("Copy into mdo tools"),custom&&!managed,`${source}: copy`);
+   assert.equal(buttons.includes("Uninstall"),source!=="bundled",`${source}: uninstall`);
+   assert(all(row).some(n=>n.attributes.role==="switch"),`${source}: enable switch`);
+   row.querySelector(".eb-open").click();
+   assert(!body.querySelector(".eb-detail").textContent.includes("Share to store"));
+  }
+  signed=false;panel.render(body,{...state,items:[tool]});
+  assert(all(body).find(n=>n.tagName==="BUTTON"&&n.textContent==="Share to store").disabled);
+  panel.render(body,{...state,writable:false,items:[tool]});
+  for(const label of ["Edit","Share to store","Copy into mdo tools"])
+   assert(all(body).find(n=>n.tagName==="BUTTON"&&n.textContent===label).disabled);
+  panel.render(body,{...state,platform:"android-arm64-v8a",items:[tool]});
+  for(const label of ["Edit","Share to store","Copy into mdo tools"])
+   assert(!all(body).some(n=>n.tagName==="BUTTON"&&n.textContent===label));
+  panel.destroy();
+ }finally{globalThis.document=saved;}
+});
 test("external manager has exactly two tabs, ordinary rows and a durable first-use prompt",()=>{
  const saved=globalThis.document;globalThis.document=testDocument();
  try{
