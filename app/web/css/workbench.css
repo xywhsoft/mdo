@@ -180,7 +180,9 @@
 .wb-terminal-find input { flex:1;min-width:40px;background:transparent;border:1px solid var(--border);color:inherit;border-radius:5px;padding:5px;font:inherit; }
 @container(max-width:400px) { .wb-terminal-toolbar { gap:0;padding:4px; }.wb-terminal-toolbar .wb-icon-button { width:28px; }.wb-terminal-status { flex-wrap:wrap;gap:0 6px; }.wb-terminal-message { max-width:100%; } }
 .wb-resize { position:absolute;left:-4px;top:0;bottom:0;width:8px;z-index:14;cursor:col-resize;touch-action:none; }
-.wb-resize:hover,.wb-resize:focus-visible { background:var(--focus); }
+.wb-resize:focus { outline:0; }
+.wb-resize::after { position:absolute;left:3px;top:0;bottom:0;width:2px;content:"";background:transparent; }
+.wb-resize:hover::after,.wb-resize:focus-visible::after,.wb-resize:active::after { background:var(--focus); }
 .app-shell[data-settings-open] > .workbench { display:none; }
 @media(max-width:1100px) {
  .app-shell[data-workbench="open"] { grid-template-columns:var(--sidebar-column,272px) minmax(0,1fr); }
