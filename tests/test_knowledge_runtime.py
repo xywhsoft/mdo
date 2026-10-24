@@ -15,11 +15,7 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT.parent/'home/tests'))
 from test_mdo_delivery import request
 
-def metadata(**changes):
-    return dict(format='mdo.knowledge.v1',name='XRT documentation',description='Static XRT reference',index='index.md',prompt='For XRT consult {$path}; index.md is the index. {$path}/reference/runtime.md',inject_prompt=True,**changes)
-def file(path,text):return dict(path=path,base64=base64.b64encode(text.encode()).decode())
-def package(version='1.0.0'):
-    return dict(format='mdo.extension.v1',manifest=dict(slug='xrt-reference',name='XRT knowledge',description='Reference docs',readme='Use the index.',version=version,license='MIT',author='Original author',copyright='Copyright original',platforms=['windows-x86_64','linux-x86_64-glibc']),resources=[dict(kind='knowledge',id='xrt-reference',content=json.dumps(metadata()),files=[file('index.md','# Index\n[Runtime](reference/runtime.md)'),file('reference/runtime.md','XRT knowledge sentinel')])])
+from knowledge_fixture import metadata,file,package
 
 def run():
     p=argparse.ArgumentParser();p.add_argument('--host',type=Path,default=ROOT/'.build/host/windows-server-glibc/xs.exe');p.add_argument('--packed',action='store_true');p.add_argument('--ui',action='store_true');args=p.parse_args()
@@ -28,6 +24,7 @@ def run():
     else:host=args.host.resolve()
     port=free_port();config=app/'xs.json';config.write_text(json.dumps(dict(services=[dict(enabled=True,name='knowledge',ip='127.0.0.1',port=port,**{'class':'http'},host_default=dict(enabled=True,name='mdo',path='web',devlang='c',devfile='generated/mdo_unity.c'))])))
     if not args.packed:
+        install=app/'src/api/ecosystem_install.inc.c';code=install.read_text(encoding='utf-8').replace('    xstrview text;if(!EcoLocalAllowed(path)', '    if(strstr(path,"/fail-write.md"))return false;\n    xstrview text;if(!EcoLocalAllowed(path)');install.write_text(code,encoding='utf-8')
         router=app/'src/api/router.c';text=router.read_text(encoding='utf-8');text=text.replace('static const MdoApiRoute g_MdoApiRoutes[]', (ROOT/'tests/fixtures/knowledge-probe.c').read_text(encoding='utf-8')+'\nstatic const MdoApiRoute g_MdoApiRoutes[]')
         text=text.replace('g_MdoApiRoutes[] = {','g_MdoApiRoutes[] = {\n {"/api/v1/fixture/knowledge",XHTTP_METHOD_GET,"GET, OPTIONS",KnowledgeProbeRoute,false},');router.write_text(text,encoding='utf-8')
     def call(method,path,body=None,status=200,revision=None):
@@ -47,6 +44,7 @@ def run():
         assert call('GET','/extensions/knowledge')['items']==[]
         custom=metadata();files=[file('index.md','# Index\n[Topic](topic.md)'),file('topic.md','first version')]
         first=call('PUT','/extensions/knowledge/local-reference',dict(content=json.dumps(custom),files=files),revision='new')
+        sdk=call('POST','/application/call',dict(method='extensions.list',params=dict(path=dict(kind='knowledge'))));assert sdk['status']==200 and len(sdk['data']['items'])==1
         assert first['valid']and first['enabled']and first['inject_prompt']and first['directory']=='@knowledge/local-reference'
         bundle=call('GET','/extensions/knowledge/local-reference/bundle');assert len(bundle['files'])==2 and bundle['bundle_revision']
         (home/'knowledge/local-reference/topic.md').write_text('changed outside app')
@@ -58,6 +56,13 @@ def run():
         if not args.packed:
             result=call('GET','/fixture/knowledge');assert result['prompt'].count('<mdo_knowledge>')==1 and '{$path}' not in result['prompt'] and '@knowledge/local-reference/reference/runtime.md' in result['prompt']
             assert result['read']and 'edited from UI'in result['read_text'] and result['grep']and result['glob']and not result['traversal']and not result['external']
+        if not args.packed:
+            before_receipts=(home/'data/extensions/installed.json').read_bytes();bundle=call('GET','/extensions/knowledge/local-reference/bundle')
+            bad_files=[file('index.md','changed index'),file('topic.md','changed body'),file('fail-write.md','force fixture I/O failure')]
+            call('PUT','/extensions/knowledge/local-reference',dict(content=json.dumps(dict(custom,name='Rejected change')),files=bad_files,bundle_revision=bundle['bundle_revision']),revision=first['revision'],status=422)
+            assert (home/'knowledge/local-reference/topic.md').read_text()=='edited from UI'
+            assert json.loads((home/'knowledge/local-reference/knowledge.json').read_text())['name']==custom['name']
+            assert (home/'data/extensions/installed.json').read_bytes()==before_receipts and not(home/'data/extensions/pending.json').exists()
         listing=call('GET','/extensions/knowledge/local-reference/documents');assert len(listing['files'])==2
         assert call('GET','/extensions/knowledge/local-reference/documents?path=topic.md')['text']=='edited from UI'
         call('GET','/extensions/knowledge/local-reference/documents?path=..%2F..%2Fconfig%2Faccount.json',status=400)

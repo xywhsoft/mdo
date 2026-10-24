@@ -80,6 +80,15 @@ def main():
     add("duplicate-file", value, False)
     value = package("toolpacks"); value["resources"][0]["content"] = json.dumps({"prompt": "test", "programs": [{"name": "test", "path": "../bin/test", "description": "test"}]})
     add("program-traversal", value, False)
+    from knowledge_fixture import package as knowledge_package, file as knowledge_file
+    kb=knowledge_package();add("knowledge-valid",kb,True)
+    value=copy.deepcopy(kb);value["resources"][0]["files"]=[];add("knowledge-needs-index",value,False)
+    value=copy.deepcopy(kb);value["resources"][0]["files"][0]["base64"]="AA==";add("knowledge-index-text",value,False)
+    value=copy.deepcopy(kb);value["resources"][0]["files"].append(knowledge_file("INDEX.md","duplicate"));add("knowledge-case-alias",value,False)
+    value=copy.deepcopy(kb);value["resources"][0]["files"].extend([knowledge_file("docs","file"),knowledge_file("docs/topic.md","child")]);add("knowledge-file-directory-alias",value,False)
+    value=copy.deepcopy(kb);value["resources"][0]["files"].append(knowledge_file("Knowledge.json/topic.md","reserved"));add("knowledge-reserved-manifest",value,False)
+    value=copy.deepcopy(kb);meta=json.loads(value["resources"][0]["content"]);meta["install"]="run a command";value["resources"][0]["content"]=json.dumps(meta);add("knowledge-inert-only",value,False)
+    value=copy.deepcopy(kb);meta=json.loads(value["resources"][0]["content"]);meta["prompt"]="x"*8193;value["resources"][0]["content"]=json.dumps(meta);add("knowledge-prompt-limit",value,False)
     (ROOT / ".build").mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="ecosystem-contract-", dir=ROOT / ".build") as temporary:
         base = Path(temporary); (base / "web").mkdir()
@@ -87,6 +96,7 @@ def main():
         report = base / "report.json"
         (base / "ecosystem_package.h").write_bytes((ROOT / "app/include/mdo/ecosystem_package.h").read_bytes())
         (base / "mcp_template.h").write_bytes((ROOT / "app/include/mdo/mcp_template.h").read_bytes())
+        (base / "knowledge_format.h").write_bytes((ROOT / "app/include/mdo/knowledge_format.h").read_bytes())
         source = '#include <xsbase.h>\n#include "ecosystem_package.h"\n' + r'''
 void ServiceInit(XS_HostInfo* Host) {
     (void)Host; size_t length=0;bytes raw=xsAppReadAll("cases.json",&length);

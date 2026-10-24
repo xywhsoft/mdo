@@ -8,7 +8,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from test_knowledge_runtime import package as knowledge_package, metadata, file
+from knowledge_fixture import package as knowledge_package, metadata, file
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT.parent/'home/tests'))
 from test_mdo_delivery import fixture,request,EXE

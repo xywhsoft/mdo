@@ -37,7 +37,7 @@ export function createKnowledgeEditor({owner,onChange}) {
       const save=element("button",{text:item?"保存":"添加",className:"primary-button",attrs:{type:"submit",form:formId}}),cancel=button("取消",()=>layer.close("cancel"));layer.footer.append(save,cancel);layer.body.append(form);
       form.addEventListener("submit",async event=>{event.preventDefault();if(state.saving||active!==state)return;try{flush();const id=fields.id.value.trim();if(!portableId(id))throw Error("请使用可移植的小写英文 ID。");const metadata=parseKnowledge(JSON.stringify({...doc,...Object.fromEntries(Object.entries(fields).filter(([k])=>k!=="id").map(([k,c])=>[k,c.value])),inject_prompt:inject.checked}));validateKnowledgeFiles(metadata,state.files);
         state.saving=true;save.disabled=cancel.disabled=true;status.textContent="正在保存文档目录…";
-        await api.put(`/extensions/knowledge/${id}`,{content:JSON.stringify(metadata),files:state.files,...(state.bundleRevision?{bundle_revision:state.bundleRevision}:{})},{headers:{"If-Match":`"${item?.revision||"new"}"`}});
+        await api.put(`/extensions/knowledge/${id}`,{content:JSON.stringify(metadata),files:state.files,...(state.bundleRevision?{bundle_revision:state.bundleRevision}:{})},{ifMatch:`"${item?.revision||"new"}"`});
         if(active!==state||device!==target())return;state.dirty=false;state.saving=false;close(true);onChange();toast("知识库已保存，下次任务运行时使用最新提示词。","success");
       }catch(e){if(active===state)status.textContent=errorMessage(e);}finally{state.saving=false;save.disabled=cancel.disabled=false;}});
     }catch(e){if(epoch===serial&&device===target())toast(errorMessage(e),"error");}
