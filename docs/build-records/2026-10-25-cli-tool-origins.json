@@ -1,0 +1,45 @@
+{
+  "app_commit": "5edcb4ce700191b41212f758b42496bd3a4196b9",
+  "preview": true,
+  "auto_update_published": false,
+  "android_device_tested": false,
+  "artifacts": [
+    {
+      "file": "mdo.exe",
+      "size": 6235176,
+      "sha256": "0428cc4e7163a2c2d3429cc7f109593c7c0f8d19396d0a6c4d6f98ecd02f1374"
+    },
+    {
+      "file": "mdo-server.exe",
+      "size": 5976935,
+      "sha256": "13b1222c770d9a5c6bc253b73d0a26c88310dcb940a1e344be57ce0cefaee72f"
+    },
+    {
+      "file": "mdo-arm64-v8a.apk",
+      "size": 5776705,
+      "sha256": "de46b3b0583f366483e69535b96e3bebf8d7b217b52a85b4606ac527fac3564c"
+    },
+    {
+      "file": "mdo-full-arm64-v8a.apk",
+      "size": 150116761,
+      "sha256": "f641e8621c93dc33db54340eecec287e2fa6ff9fda79a3130c8484ed8bcf00b9"
+    }
+  ],
+  "version": "0.6.0",
+  "verification": [
+    "7 external-tool frontend tests",
+    "20 frontend contract tests",
+    "220 frontend modules parsed",
+    "native source restrictions, forged requests, interrupted-task retry and queued ownership changes",
+    "native command lifecycle, custom import and edited user copies",
+    "creator publish/review/download/install round trip",
+    "Windows gui/server packed SDK",
+    "Android APK structure, alignment and formal signing certificate",
+    "browser store and custom action menus",
+    "Windows gui packed CLI lifecycle, exec/spawn, user-copy edit and portable Home"
+  ],
+  "screenshots": [
+    ".build\\cli-origin-20261025\\screenshots\\store-actions.jpg",
+    ".build\\cli-origin-20261025\\screenshots\\custom-actions.jpg"
+  ]
+}
