@@ -113,6 +113,7 @@ INPUTS={
  'PaneLayout':document('sidebar_width:u sidebar_open:b',('sidebar_width','sidebar_open'),True),
  'SidebarLayout':deepcopy(DEFS['SidebarLayout']),
  'McpContext':document('session_id:s project_id:s action:s prompt:s arguments:j context:j'),
+ 'McpConnection':document('action:s id:s name:s receipt_id:u receipt_key:s variant:s values:o enabled:b confirm_launch:b tools:o',('action','id'),True),
  'McpAuth':document('client_id:s client_secret:s redirect_uri:s scopes:ss state:s code:s error:s'),
  'Application':document('method:s params:j context:o',('method',),True),
 }
@@ -141,7 +142,7 @@ BODY_GROUPS={
  'Ecosystem':'EcosystemRoute','Purge':'ProjectPurgeRoute ProjectPurgeCancelRoute ProjectPurgeIntentPrepareRoute ProjectPurgeIntentRoute',
  'BackupUpload':'BackupUploadsRoute','BackupReview':'BackupRestoreReviewRoute',
  'SharedFiles':'SharedFilesRoute','WorkspaceState':'WorkspaceStateRoute','PaneLayout':'PaneLayoutRoute','SidebarLayout':'SidebarLayoutRoute',
- 'McpContext':'McpContextRoute','McpAuth':'McpAuthRoute',
+ 'McpContext':'McpContextRoute','McpAuth':'McpAuthRoute','McpConnection':'McpConnectionsRoute',
 }
 BODY={handler:name for name,handlers in BODY_GROUPS.items() for handler in handlers.split()}
 NO_BODY=set('''CommandsRoute DistributionRoute CliToolsRoute LiveRoute DirectRoute UpdateExitRoute BootstrapRoute SettingsRoute
@@ -150,7 +151,7 @@ BackupRestoreApplyRoute BackupRestoresRoute BackupRestoreRoute BackupPreviewStar
 ProjectPurgePreviewRoute ProjectPurgeResultRoute ProjectWorkspaceFilesRoute MemoryOpenDirectoryRoute MemoryEntryRoute
 RunsRoute TasksRoute ApprovalsRoute AsksRoute WorkspaceFilesRoute ArtifactsRoute PermissionsRoute DiagnosticsRoute StorageRoute
 OperationsRoute ModelsReloadRoute SkillsReloadRoute SkillSourcesRoute ModulesReloadRoute McpReloadRoute McpSourcesRoute
-McpDisconnectRoute McpRefreshRoute OperationRoute SessionRestoreRoute SessionPurgeRoute SessionHistoryRoute AttachmentsRoute
+McpTemplatesRoute McpDisconnectRoute McpRefreshRoute OperationRoute SessionRestoreRoute SessionPurgeRoute SessionHistoryRoute AttachmentsRoute
 AttachmentInfoRoute AttachmentRoute SessionArtifactRoute SessionRecoveryRoute SessionClearRoute SessionExportRoute SessionBackupRoute
 RunRoute ScheduleHistoryRoute ScheduleRunRoute TaskOutputRoute TaskAsksRoute ArtifactRoute TaskRoute SessionTurnsRoute
 SessionConversationRoute SessionEventsRoute QueueDiscardRoute TodoRoute'''.split())
@@ -175,7 +176,7 @@ RESULT_GROUPS={
 RESULT={handler:name for name,handlers in RESULT_GROUPS.items() for handler in handlers.split()}
 
 QUERY_GROUPS={
- 'project:s':'CommandsRoute CommandProjectRoute CommandInvocationRoute SkillsRoute SkillSourcesRoute SkillProjectRoute SkillInvokeRoute McpRoute McpSourcesRoute McpProjectRoute',
+ 'project:s':'CommandsRoute CommandProjectRoute CommandInvocationRoute SkillsRoute SkillSourcesRoute SkillProjectRoute SkillInvokeRoute McpRoute McpSourcesRoute McpProjectRoute McpConnectionsRoute',
  'q:s limit:u include_directories:u':'WorkspaceFilesRoute ProjectWorkspaceFilesRoute',
  'path:s':'DirectoriesRoute',
  'after:u limit:u':'SessionEventsRoute SessionConversationRoute SessionTurnsRoute SessionHistoryRoute ScheduleHistoryRoute TaskOutputRoute',

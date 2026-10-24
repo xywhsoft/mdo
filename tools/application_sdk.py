@@ -19,6 +19,7 @@ ALIASES = {
     'settings.get':('GET','/api/v1/settings'), 'models.list':('GET','/api/v1/models'),
     'tools.list':('GET','/api/v1/tools'), 'agents.list':('GET','/api/v1/agents'),
     'skills.list':('GET','/api/v1/skills'), 'mcp.list':('GET','/api/v1/mcp'),
+    'mcp.templates.list':('GET','/api/v1/mcp/templates'), 'mcp.connections.manage':('POST','/api/v1/mcp/connections'),
     'account.get':('GET','/api/v1/account'), 'account.logout':('POST','/api/v1/account/logout'),
     'devices.list':('GET','/api/v1/connector/devices'), 'extensions.list':('GET','/api/v1/extensions/{kind}'),
 }
