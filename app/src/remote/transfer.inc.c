@@ -12,7 +12,9 @@ bool MdoTransferDownloadReport(xnetengine* Engine,cstr Path,cstr Relative,uint64
     if(Report)memset(Report,0,sizeof(*Report));
     xhttpfield Fields[32]; xhttp1head Head; xhttp1limits Limits;
     xhttp1bodyplan Plan; xhttp1body Body; xhttp1bodylimits BodyLimits;
-    char Request[4096]; size_t Length; uint64 Until=MdoDeadlineAfterUs(UINT64_C(300000000));
+    /* Large optional programs/APKs can legitimately need more than five
+     * minutes. Individual socket reads retain their short idle deadline. */
+    char Request[4096]; size_t Length; uint64 Until=MdoDeadlineAfterUs(UINT64_C(3600000000));
     if (!Size || Size>UINT64_C(536870912) || !Hash || strlen(Hash)!=64 || !Path || Path[0]!='/' ||
         strchr(Path,'\r') || strchr(Path,'\n')) goto done;
     Code="network";Detail="Unable to establish download connection";

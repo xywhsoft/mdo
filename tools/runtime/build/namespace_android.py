@@ -16,9 +16,13 @@ from optional_tools import digest, elf_needed
 
 def namespace(stage, receipt):
     mapping, changes = {}, []
-    for path in stage.glob("*/*/lib/*.so"):
-        if not path.name.startswith("libmdo_ext_"):
-            mapping[path.name] = "libmdo_ext_"+path.name[3:]
+    for path in stage.glob("*/*/lib/lib*.so*"):
+        if path.is_file() and not path.name.startswith("libmdo_ext_"):
+            tail = path.name[3:]
+            if ".so." in tail:
+                stem, version = tail.split(".so.", 1)
+                tail = stem+"_"+version.replace(".", "_")+".so"
+            mapping[path.name] = "libmdo_ext_"+tail
     for root in sorted(stage.glob("*/*")):
         if not root.is_dir():
             continue
@@ -38,14 +42,17 @@ def namespace(stage, receipt):
                 before = digest(path)
                 subprocess.run(["patchelf", "--page-size", "16384", *arguments, str(path)], check=True)
                 changes.append(dict(path=path.relative_to(stage).as_posix(), before=before, after=digest(path)))
-        for path in (root/"lib").glob("*.so"):
+        for path in (root/"lib").glob("lib*.so*"):
             if path.name in mapping:
                 destination = path.with_name(mapping[path.name])
                 if destination.exists():
                     raise ValueError("Private library destination already exists: "+str(destination))
                 path.rename(destination)
     if mapping:
-        receipt.write_text(json.dumps(dict(mapping=mapping, files=changes), indent=2)+"\n", encoding="utf-8")
+        previous = json.loads(receipt.read_text(encoding="utf-8")) if receipt.exists() else dict(mapping={}, files=[])
+        previous["mapping"].update(mapping)
+        previous["files"].extend(changes)
+        receipt.write_text(json.dumps(previous, indent=2)+"\n", encoding="utf-8")
     print("Isolated", len(mapping), "Android library names;", len(changes), "ELF files patched")
 
 

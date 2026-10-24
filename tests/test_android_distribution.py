@@ -6,7 +6,8 @@ import struct
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
-SYSTEM_LIBRARIES = {"libc.so", "libdl.so", "libm.so", "liblog.so", "libz.so", "libandroid.so"}
+SYSTEM_LIBRARIES = {"libc.so", "libdl.so", "libm.so", "liblog.so", "libz.so", "libandroid.so",
+                    "libmediandk.so", "libcamera2ndk.so"}
 
 
 def elf_dependencies(data, name):
@@ -81,6 +82,10 @@ def inspect(edition, release, path=None):
         else:
             assert {"busybox/busybox", "busybox/sh", "curl/curl", "jq/jq", "openssh/ssh", "openssh/scp", "openssh/sftp", "python/bin/python3", "aria2/aria2c", "ripgrep/rg", "7zip/7zz"} <= logical_paths
             assert len(native) > 5
+            if release["toolpack_revision"] >= 4:
+                assert {"git/git", "sqlite/sqlite3", "poppler/pdftotext", "poppler/pdftoppm",
+                        "ffmpeg/ffmpeg", "ffmpeg/ffprobe", "imagemagick/magick", "fonts/fonts.conf"} <= logical_paths
+                assert not {"liblzma.so", "libcrypto.so", "libssl.so"} & native.keys(), "external libraries shadow Android framework dependencies"
         return {"edition": edition, "bytes": path.stat().st_size, "native_elf_files": len(native), "runtime_paths": len(logical_paths)}
 
 
