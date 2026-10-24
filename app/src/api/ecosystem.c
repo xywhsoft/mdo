@@ -17,6 +17,8 @@ bool MdoEcosystemPackageCompatible(const xvalue* package,const xvalue* input,cha
     const xvalue* platforms=xrtValueObjectGet(manifest,XRT_STR_LITERAL("platforms"));bool compatible=false,code=false,trust=false;
     for(size_t i=0;i<xrtValueCount(platforms);i++){xstrview p;if(xrtValueGetString(xrtValueArrayGet(platforms,i),&p)&&xrtStrEqual(p,xrtStrView(MdoToolPlatform())))compatible=true;}
     const xvalue* resources=xrtValueObjectGet(package,XRT_STR_LITERAL("resources"));
+    cstr Single=MdoPackageText(input,"single_kind",16);
+    if(xrtValueObjectHas(input,XRT_STR_LITERAL("single_kind"))&&(!Single||(strcmp(Single,"skills")&&strcmp(Single,"tools"))||xrtValueCount(resources)!=1||strcmp(MdoPackageText(xrtValueArrayGet(resources,0),"kind",16),Single))){snprintf(error,capacity,"This store installs exactly one Skill or Agent tool of the selected type");return false;}
     for(size_t i=0;i<xrtValueCount(resources);i++){cstr kind=MdoPackageText(xrtValueArrayGet(resources,i),"kind",16);if(kind&&(!strcmp(kind,"tools")||!strcmp(kind,"commands")||!strncmp(kind,"c-",2)||!strcmp(kind,"modules")||!strcmp(kind,"plugins")||!strcmp(kind,"toolpacks")))code=true;
 #if defined(__ANDROID__)
         if(kind&&!strcmp(kind,"toolpacks")){const xvalue* R=xrtValueArrayGet(resources,i);xvalue* Doc=xrtJsonParse(xrtStrView(MdoPackageText(R,"content",131072)));const xvalue* Programs=xrtValueObjectGet(Doc,XRT_STR_LITERAL("programs"));bool Scripts=true;
@@ -80,9 +82,12 @@ static bool EcoUploadSource(xvalue* Input,MdoAccountLease* Lease,xcancel* Cancel
 static bool EcoHandleInput(MdoApiContext* c,xvalue* input)
 {
     cstr action=MdoPackageText(input,"action",16);char path[1000];bool valid=action!=NULL;
+    cstr Single=MdoPackageText(input,"single_kind",16);bool Typed=xrtValueObjectHas(input,XRT_STR_LITERAL("single_kind"));
+    if(Typed&&(!Single||(strcmp(Single,"skills")&&strcmp(Single,"tools")))){xrtValueRelease(input);return MdoApiReplyError(c,422,"ecosystem_request_invalid","Choose the Skill or Agent tool store",NULL);}
     const xvalue* body=NULL;const char* method="GET";int64 id=0;
     if(valid&&(!strcmp(action,"catalog")||!strcmp(action,"mine"))){cstr query=MdoPackageText(input,"query",100),kind=MdoPackageText(input,"kind",16);int64 before=0;
         const xvalue* v=xrtValueObjectGet(input,XRT_STR_LITERAL("before"));if(v&&!MdoPackageNumber(input,"before",&before))valid=false;if(before<0)valid=false;
+        if(Typed)kind=Single;
         if(kind&&kind[0]&&!MdoPackageKind(kind))valid=false;
         size_t n=0;char* encoded=xrtPercentEncodeNew(query?query:"",query?strlen(query):0,xrtStrView(""),&n);
         if(!encoded)valid=false;
@@ -94,6 +99,8 @@ static bool EcoHandleInput(MdoApiContext* c,xvalue* input)
     }else if(valid&&!strcmp(action,"submit")){const xvalue* Package=xrtValueObjectGet(input,XRT_STR_LITERAL("package"));char error[256];valid=MdoPackageValidate(Package,error,sizeof(error));body=input;strcpy(path,"/api/v1/mdo/ecosystem/submit");method="POST";
     }else if(valid&&(!strcmp(action,"uninstall")||!strcmp(action,"export")||!strcmp(action,"c_sources")||!strcmp(action,"import")||!strcmp(action,"plan_import")||!strcmp(action,"drafts")||!strcmp(action,"draft_read")||!strcmp(action,"draft_save")||!strcmp(action,"draft_delete"))){bool result=MdoApiEcosystemLocal(c,input);xrtValueRelease(input);return result;
     }else valid=false;
+    if(valid&&Typed&&(!strcmp(action,"catalog")||!strcmp(action,"mine")||!strcmp(action,"detail")||!strcmp(action,"latest")||!strcmp(action,"install")||!strcmp(action,"plan")||!strcmp(action,"history"))){size_t N=strlen(path);int W=snprintf(path+N,sizeof(path)-N,"&single=1&single_kind=%s",Single);if(W<0||(size_t)W>=sizeof(path)-N)valid=false;}
+    if(valid&&Typed&&!strcmp(action,"submit")){const xvalue* Rs=xrtValueObjectGet(xrtValueObjectGet(input,XRT_STR_LITERAL("package")),XRT_STR_LITERAL("resources"));valid=xrtValueCount(Rs)==1&&!strcmp(MdoPackageText(xrtValueArrayGet(Rs,0),"kind",16),Single);if(valid){MdoApiValueSetString(input,"kind",Single);MdoApiValueSetBool(input,"single_resource",true);}}
     if(!valid){xrtValueRelease(input);return MdoApiReplyError(c,422,"ecosystem_request_invalid","Invalid store request or portable package",NULL);}
     MdoAccountLease lease={0};uint16 status=0;
     bool Acquired=MdoAccountAcquireService(c->SendCancel,&lease);

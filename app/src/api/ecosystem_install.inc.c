@@ -248,6 +248,7 @@ bool MdoApiEcosystemLocal(MdoApiContext* c,const xvalue* input)
         const xvalue* refs=xrtValueObjectGet(input,XRT_STR_LITERAL("references"));xvalue* resources=xrtValueArray();
         ok=xrtValueType(refs)==XVALUE_ARRAY&&xrtValueCount(refs)>0&&xrtValueCount(refs)<=16&&resources;
         for(size_t i=0;ok&&i<xrtValueCount(refs);i++){const xvalue* ref=xrtValueArrayGet(refs,i);cstr kind=MdoPackageText(ref,"kind",16),id=MdoPackageText(ref,"id",64);char path[256];
+            cstr Project=MdoPackageText(ref,"project",64);if(xrtValueObjectHas(ref,XRT_STR_LITERAL("project"))){xvalue* R=xrtValueObject();ok=kind&&!strcmp(kind,"skills")&&R&&EcoExportProjectSkill(Project,id,R)&&xrtValueArrayAppend(resources,R);xrtValueRelease(R);continue;}
             if(kind&&(!strcmp(kind,"plugins")||!strcmp(kind,"toolpacks"))){xvalue* R=xrtValueObject();ok=R&&EcoNativeExport(kind,id,R)&&xrtValueArrayAppend(resources,R);xrtValueRelease(R);continue;}
             ok=EcoLocalPath(kind,id,path);bool missing=false;char* content=ok?MdoExtensionRead(path,false,MDO_EXTENSION_TEXT_LIMIT,&missing):NULL;xvalue* resource=xrtValueObject();
             ok=content&&resource&&MdoApiValueSetString(resource,"kind",kind)&&MdoApiValueSetString(resource,"id",id);

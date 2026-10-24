@@ -1,3 +1,24 @@
+#include "../../include/mdo/projects.h"
+/* Select a project by ID, and export only its .mdo Skill using rooted catalog
+ * reads. Absolute paths, credentials and neighboring project files never enter
+ * the portable work. */
+static bool EcoExportProjectSkill(cstr Project,cstr Id,xvalue* Resource)
+{
+    if(!MdoExtensionIdValid(Id)||!Project||!Project[0])return false;
+    char* Workspace=NULL;
+    if(!strcmp(Project,"default"))Workspace=MdoHomeDefaultWorkspacePath(false);
+    else {MdoProjectInfo Info={0};Info.Size=sizeof(Info);bool Found=false;xwork_error Error;if(MdoProjectGet(Project,&Info,&Found,&Error)&&Found)Workspace=xrtPathAbs(Info.WorkspaceRoot);}
+    MdoSkillCatalog* Catalog=Workspace?MdoSkillCatalogDirectory(Workspace,".mdo/skills"):NULL;xrtFree(Workspace);
+    char* Text=Catalog?MdoSkillCatalogDocument(Catalog,Id):NULL;MdoSkillInfo Info={0};Info.Size=sizeof(Info);
+    xvalue* Extras=xrtValueArray();bool Ok=Text&&Extras&&MdoSkillCatalogFind(Catalog,Id,&Info)&&Info.ResourceCount<=128&&MdoApiValueSetString(Resource,"kind","skills")&&MdoApiValueSetString(Resource,"id",Id)&&MdoApiValueSetString(Resource,"content",Text);size_t Total=0;
+    for(size_t i=0;Ok&&i<Info.ResourceCount;i++){
+        MdoSkillResourceInfo R={0};R.Size=sizeof(R);MdoSkillResourceContent Content={0};Content.Size=sizeof(Content);
+        Ok=MdoSkillCatalogResourceAt(Catalog,Id,i,&R)&&MdoSkillCatalogLoadResource(Catalog,Id,R.Path,MDO_SKILL_FILE_LIMIT,&Content)&&Content.Bytes<=64u*1024u*1024u-Total;
+        char* B64=Ok?xrtBase64EncodeNew(Content.Data,Content.Bytes,NULL):NULL;xvalue* F=xrtValueObject();Ok=Ok&&B64&&F&&MdoApiValueSetString(F,"path",R.Path)&&MdoApiValueSetString(F,"base64",B64)&&xrtValueArrayAppend(Extras,F);
+        if(Ok)Total+=Content.Bytes;xrtFree(B64);xrtValueRelease(F);MdoSkillResourceContentUnit(&Content);
+    }
+    if(Ok)Ok=xrtValueObjectSet(Resource,XRT_STR_LITERAL("files"),Extras);xrtValueRelease(Extras);xrtFree(Text);MdoSkillCatalogRelease(Catalog);return Ok;
+}
 /* Local authoring is available without a service session. Export exact files,
  * never machine credentials, absolute roots or executable installation hooks. */
 static bool EcoNativeSourceList(xvalue* Items)
