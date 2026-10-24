@@ -5,7 +5,7 @@ import { t } from "../i18n.js";
 
 export const browserText = (key, fallback, args = {}) => t(`extensionBrowser.${key}`, args, fallback);
 const el = (tag, cls, text) => element(tag, { className: cls, ...(text === undefined ? {} : { text }) });
-const icons = { agents: "brain", subagents: "branch", tools: "code", skills: "spark", mcp: "globe", commands: "terminal", modules: "code", plugins: "settings", toolpacks: "terminal" };
+const icons = { knowledge: "folder", agents: "brain", subagents: "branch", tools: "code", skills: "spark", mcp: "globe", commands: "terminal", modules: "code", plugins: "settings", toolpacks: "terminal" };
 let sequence = 0;
 export function extensionIcon(kind) {
   const icon = element("span", { className: "icon", attrs: { "data-icon": icons[kind] || "folder", "aria-hidden": "true" } });

@@ -1,6 +1,6 @@
 // These editors preserve unknown frontmatter. This is a bounded field editor,
 // not a YAML engine: native validation remains authoritative for imported files.
-export const EXTENSION_KINDS = Object.freeze(["agents", "subagents", "tools", "skills", "mcp", "commands"]);
+export const EXTENSION_KINDS = Object.freeze(["agents", "subagents", "tools", "skills", "mcp", "commands", "knowledge"]);
 export const BUILTIN_COMMAND_NAMES = Object.freeze(["new", "model", "fork", "export", "clear", "stop", "settings", "theme", "help"]);
 export function mcpHttpEndpointValid(value) {
   const text = String(value ?? "");

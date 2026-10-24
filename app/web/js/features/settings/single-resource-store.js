@@ -23,8 +23,8 @@ export const singleResource = (row, kind) => {
 // Each instance is bound to one resource type and one selected device. There
 // is deliberately no resource multi-select in this publication flow.
 export function createSingleResourceStore(kind, onChange, onBrowse = () => {}, onManage = null) {
-  if (!["skills", "tools", "commands", "mcp"].includes(kind)) throw Error("Unsupported resource store");
-  const name = ({ skills: "Skill", tools: "Agent 工具", commands: "编辑器命令", mcp: "MCP 服务" })[kind];
+  if (!["skills", "tools", "commands", "mcp", "knowledge"].includes(kind)) throw Error("Unsupported resource store");
+  const name = ({ skills: "Skill", tools: "Agent 工具", commands: "编辑器命令", mcp: "MCP 服务", knowledge: "知识库" })[kind];
   const root = node("div", "", "single-resource-store"), statusRoot = element("p", { className: "extension-help", attrs: { role: "status" } });
   let visible = false, disposed = false, epoch = 0, controller = null, activeTarget = device();
   let items = [], installed = {}, cursor = 0, query = "", catalogQuery = "", busy = false, error = "", status = "";
@@ -116,7 +116,7 @@ export function createSingleResourceStore(kind, onChange, onBrowse = () => {}, o
       const description = node("div"); description.append(node("p", data.description || row.description),credits.facts(),renderSourceMarkdown(p.manifest.readme));
       if (p.manifest.changelog) description.append(node("h4", "更新说明"), renderSourceMarkdown(p.manifest.changelog));
       const usage = node("div"); usage.append(detailFacts([["作者", credits.author], ["版本", data.version], ["许可", credits.license], ["支持平台", p.manifest.platforms.join(" / ")]]));
-      usage.append(node("p", kind === "mcp" ? "下载模板不连接或执行服务。创建连接后填写参数；授权独立于 mdo 账号，由所属设备完成。" : kind === "skills" ? `$${p.resources[0].id} · /skill:${p.resources[0].id}` : kind === "commands" ? `/${p.resources[0].id} [参数] · 支持引号分词或 JSON 数组，参数通过 xvalue array 传入 C 命令。` : "安装后在 Agent 工具页管理；模型通过结构化参数调用。"));
+      usage.append(node("p", kind === "knowledge" ? "启用后仅注入可选检索提示，文档按需读取；不会整体注入，也不会执行文档文件。" : kind === "mcp" ? "下载模板不连接或执行服务。创建连接后填写参数；授权独立于 mdo 账号，由所属设备完成。" : kind === "skills" ? `$${p.resources[0].id} · /skill:${p.resources[0].id}` : kind === "commands" ? `/${p.resources[0].id} [参数] · 支持引号分词或 JSON 数组，参数通过 xvalue array 传入 C 命令。` : "安装后在 Agent 工具页管理；模型通过结构化参数调用。"));
       if(kind==="mcp"){const recipe=parseMcpTemplate(p.resources[0].content), info=mcpTemplateSummary(recipe);usage.append(detailFacts([["服务运营者",recipe.operator||"未提供"],["连接方式",info.transports.join(" / ")],["授权方式",info.authentication.join(" / ")],["主页",recipe.homepage||"未提供"]]));for(const v of recipe.variants){usage.append(node("h4",v.label),node("p",v.requirements||""));for(const i of mcpVariantInputs(recipe,v))usage.append(node("p",`${i.label} · ${i.secret?"设备私密凭据":i.type} · ${i.description}`));}if(recipe.capabilities?.length)usage.append(node("h4","作者声明的能力"),node("p",recipe.capabilities.join("\n")),node("p","实际工具和权限以连接后的实时发现和任务设置为准。"));}
       const source = node("div"); source.append(node("pre", p.resources[0].content, "store-source"));
       for (const file of p.resources[0].files || []) source.append(renderPackageAttachment(file, { download: "下载文件", binary: "二进制文件，请下载检查", truncated: "仅显示前 64 KiB，请下载完整文件" }));
@@ -167,7 +167,7 @@ export function createSingleResourceStore(kind, onChange, onBrowse = () => {}, o
       const form = element("form", { className: "store-publish-form" }), fields = {};
       for (const [key, text, limit, area] of [["name", "作品名称", 100], ["slug", "作品 ID（小写英文，发布后不变）", 64], ["version", "版本（如 1.0.0）", 32], ["description", "简介", 600, true], ["author", "作品作者（可选，与提交者账号不同）", 100], ["copyright", "版权声明（可选，保留原作者归属）", 4096, true], ["readme", "使用说明", 32768, true], ["license", "许可证", 80], ["changelog", "更新说明", 8192, true], ["review_notes", "审核说明：用法、构建与权限（申请公布必填）", 8000, true], ["source_url", "源码或说明链接（HTTPS，可选）", 1000]]) {
         const control = element(area ? "textarea" : "input", { attrs: { name: key, maxlength: String(limit), required: ["name", "slug", "version", "description", "readme", "license"].includes(key) ? "" : null } });
-        control.value = previous[key] || ({ name: item.name || item.id, slug: `${kind === "skills" ? "skill" : kind === "commands" ? "command" : kind==="mcp"?"mcp":"tool"}-${item.id}`.slice(0, 64), version: "1.0.0", description: item.description || "", license: "MIT" })[key] || "";
+        control.value = previous[key] || ({ name: item.name || item.id, slug: `${kind === "skills" ? "skill" : kind === "commands" ? "command" : kind==="mcp"?"mcp":kind==="knowledge"?"knowledge":"tool"}-${item.id}`.slice(0, 64), version: "1.0.0", description: item.description || "", author:item.author||"", copyright:item.copyright||"", license:kind==="knowledge"?(item.license||""):"MIT" })[key] || "";
         fields[key] = control; form.append(element("label", {}, [node("span", text), control]));
       }
       let recipeSource=null;

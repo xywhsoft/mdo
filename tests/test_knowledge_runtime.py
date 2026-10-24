@@ -65,6 +65,13 @@ def run():
         disabled=call('POST','/extensions/knowledge/local-reference/enabled',dict(enabled=False),revision=first['revision']);assert not disabled['enabled']
         if not args.packed:assert '<mdo_knowledge>'not in call('GET','/fixture/knowledge')['prompt']
         first=call('POST','/extensions/knowledge/local-reference/enabled',dict(enabled=True),revision=first['revision']);assert first['enabled']
+        without_hint=dict(custom,inject_prompt=False)
+        first=call('PUT','/extensions/knowledge/local-reference',dict(content=json.dumps(without_hint)),revision=first['revision'])
+        if not args.packed:assert '<mdo_knowledge>'not in call('GET','/fixture/knowledge')['prompt']
+        first=call('PUT','/extensions/knowledge/local-reference',dict(content=json.dumps(custom)),revision=first['revision'])
+        if not args.packed:
+            (home/'knowledge/broken').mkdir();(home/'knowledge/broken/knowledge.json').write_text('{invalid')
+            assert 'Test base prompt'in call('GET','/fixture/knowledge')['prompt']
         exported=call('POST','/ecosystem',dict(action='export',single_kind='knowledge',references=[dict(kind='knowledge',id='local-reference')]))
         assert exported['resources'][0]['files']==files or sorted(exported['resources'][0]['files'],key=lambda f:f['path'])==files
         data=package()

@@ -32,6 +32,7 @@ static bool MdoKnowledgeResource(const xvalue* Resource,char* Error,size_t Capac
     for(size_t i=0;Ok&&i<xrtValueCount(Files);i++){
         const xvalue* F=xrtValueArrayGet(Files,i);const char* Path=MdoPackageText(F,"path",220),*B64=MdoPackageText(F,"base64",90u*1024u*1024u);
         if(!Path||!MdoPackagePath(Path)||(MdoPackageSamePath(Path,"knowledge.json")||(!strncmp(Path,"knowledge.json/",15)))||!B64){Ok=false;break;}
+        size_t RootSize=strcspn(Path,"/");if(RootSize==14){char RootName[15];memcpy(RootName,Path,14);RootName[14]=0;if(MdoPackageSamePath(RootName,"knowledge.json")){Ok=false;break;}}
         for(size_t j=0;Ok&&j<i;j++){
             const char* Other=MdoPackageText(xrtValueArrayGet(Files,j),"path",220);size_t A=strlen(Path),B=strlen(Other),N=A<B?A:B;char Prefix[221];
             memcpy(Prefix,Path,N);Prefix[N]=0;char OtherPrefix[221];memcpy(OtherPrefix,Other,N);OtherPrefix[N]=0;
