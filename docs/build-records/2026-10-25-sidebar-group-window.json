@@ -1,0 +1,44 @@
+{
+  "app_commit": "10d9242556670c914c09f0b09e2f70157e0743d5",
+  "preview": true,
+  "auto_update_published": false,
+  "android_device_tested": false,
+  "artifacts": [
+    {
+      "file": "mdo.exe",
+      "size": 6260845,
+      "sha256": "8d7a4c9c46e3a8dafe27d83de0a0cf93fbc2248ec2ceff755b5d06dab83719c0"
+    },
+    {
+      "file": "mdo-server.exe",
+      "size": 6002602,
+      "sha256": "f991bab85967de96a933d63ce7542a29d79017746c9dffb724ab7aaad0dc1c4a"
+    },
+    {
+      "file": "mdo-arm64-v8a.apk",
+      "size": 5801281,
+      "sha256": "696ad41035dbb5978b621bcbc2d9905d0fca18d6f8ecf40b119d3b40693e0784"
+    },
+    {
+      "file": "mdo-full-arm64-v8a.apk",
+      "size": 150149529,
+      "sha256": "c57563786d48b4f6ed3c1c4372e40de9ea0f461e81e259608a26a9231bee4882"
+    }
+  ],
+  "version": "0.6.0",
+  "javascript_tests": 16,
+  "frontend_contract_tests": 20,
+  "reachable_web_modules": 226,
+  "android_payloads_equal": true,
+  "test_services_stopped": true,
+  "browser_fixture": "Full isolated app with real native sidebar-layout API and private Home",
+  "browser_checks": [
+    "desktop light/dark",
+    "Enter saves group",
+    "cancel does not write",
+    "timeline plus opens shared window",
+    "390x720 DPR3 no horizontal overflow",
+    "mobile footer saves group",
+    "focus returns to the replacement sidebar entry"
+  ]
+}
