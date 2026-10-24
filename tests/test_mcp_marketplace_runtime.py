@@ -16,7 +16,7 @@ from test_api_runtime import free_port
 
 
 def run():
-    base,site,port,user,password=fixture('mdo-mcp-marketplace')
+    base,site,port,user,password=fixture('mdo-mcp-marketplace'+('-ui' if '--ui' in sys.argv else ''))
     origin=f'http://127.0.0.1:{port}';(site/'db/identity.json').write_text(json.dumps(dict(public_origin=origin)))
     local=Path(tempfile.mkdtemp(prefix='client-',dir=base));app=local/'app';home=local/'home';home.mkdir();shutil.copytree(ROOT/'app',app)
     unity=app/'generated/mdo_unity.c';unity.write_text('#define MDO_ACCOUNT_SERVICE_ORIGIN '+json.dumps(origin)+'\n'+unity.read_text(encoding='utf-8'),encoding='utf-8')
@@ -83,6 +83,9 @@ def run():
         if '--ui' not in sys.argv:
             web('POST','/api/v1/mdo/creator/work',dict(action='withdraw',work=work['work'],revision=work['work_revision']),auth=auth);assert not store('catalog')['items']
         assert client('GET','/extensions/mcp/home')['valid']
+        old_template_file=home/one['template_receipt']['files'][0]['path']
+        pinned=client('GET','/extensions/mcp/work');old_path=home/pinned['template_receipt']['files'][0]['path'];assert old_path.exists()
+        client('POST','/mcp/connections',dict(id='work',action='delete'),revision=pinned['revision']);assert not old_path.exists(), 'last connection removal collects an uninstalled template'
         print('PASS real client/platform MCP submission, review, download, multi-instance pinning, independent upgrade, withdrawal and local retention')
         if '--ui' in sys.argv:
             print(json.dumps(dict(native_port=native_port,site_port=port,base=str(base),home=str(home))),flush=True)

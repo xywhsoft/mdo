@@ -49,6 +49,7 @@ def main():
     def invalid_template(name, mutation):
         value = package("mcp"); t = template("qa-resource", "key"); mutation(t)
         value["resources"][0]["content"] = json.dumps(t); add("mcp-" + name, value, False)
+    invalid_template("unknown-key-separator", lambda t: t.update({"format||id":"private"}))
     invalid_template("inline-secret", lambda t: t["variants"][0]["config"]["transport"]["headers"][0].update(secret_ref="Bearer secret"))
     invalid_template("vault-ref", lambda t: t["variants"][0]["config"]["transport"]["headers"][0].update(secret_ref="keychain:private"))
     invalid_template("secret-default", lambda t: t["inputs"][0].update(default="private"))

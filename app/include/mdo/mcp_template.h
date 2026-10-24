@@ -8,7 +8,9 @@ static bool MdoMcpTemplateKeys(const xvalue* V,cstr Keys)
     if(xrtValueType(V)!=XVALUE_OBJECT)return false;
     xvalueiter It={0};xvaluekey K;xvalue* E;bool Ok=true;
     if(xrtValueIterBegin(V,&It)){while((E=xrtValueIterNext(&It,&K))){char Key[100];
-        if(K.String.Size>96){Ok=false;break;}snprintf(Key,sizeof(Key),"|%.*s|",(int)K.String.Size,K.String.Data);
+        if(!K.String.Size||K.String.Size>96){Ok=false;break;}
+        for(size_t i=0;i<K.String.Size;i++){unsigned char C=K.String.Data[i];if(!((C>='a'&&C<='z')||(C>='A'&&C<='Z')||(C>='0'&&C<='9')||C=='_'))Ok=false;}
+        if(!Ok)break;snprintf(Key,sizeof(Key),"|%.*s|",(int)K.String.Size,K.String.Data);
         if(!strstr(Keys,Key)){Ok=false;break;}}
         xrtValueIterEnd(&It);}return Ok;
 }
@@ -21,6 +23,12 @@ static const xvalue* MdoMcpTemplateInput(const xvalue* T,cstr Id)
 }
 static bool MdoMcpTemplateString(cstr S)
 {if(!S)return false;for(cstr P=S;*P;P++)if((unsigned char)*P<32)return false;return true;}
+static bool MdoMcpTemplateHeader(cstr Name)
+{
+    size_t N=Name?strlen(Name):0;char Lower[257];if(!N||N>256)return false;
+    for(size_t i=0;i<=N;i++){unsigned char C=Name[i];if(C&&!(C>='a'&&C<='z')&&!(C>='A'&&C<='Z')&&!(C>='0'&&C<='9')&&!strchr("!#$%&'*+-.^_`|~",C))return false;Lower[i]=C>='A'&&C<='Z'?C+32:C;}
+    return strcmp(Lower,"host")&&strcmp(Lower,"content-type")&&strcmp(Lower,"accept")&&strcmp(Lower,"content-length")&&strcmp(Lower,"transfer-encoding")&&strcmp(Lower,"connection")&&strncmp(Lower,"mcp-",4);
+}
 static bool MdoMcpTemplateUrl(cstr S)
 {
     /* User-specific queries, fragments and URL userinfo are inputs, never
@@ -92,6 +100,7 @@ static bool MdoMcpTemplateValidate(const xvalue* T,cstr Id,char* Error,size_t Ca
             for(size_t j=0;j<xrtValueCount(A);j++){
                 const xvalue* E=xrtValueArrayGet(A,j);cstr Name=MdoPackageText(E,"name",256),Ref=MdoPackageText(E,"secret_ref",80);
                 if(!MdoMcpTemplateKeys(E,"|name||secret_ref|")||!Name||!*Name||!Ref||strncmp(Ref,"input:",6)||!MdoMcpTemplateFlag(MdoMcpTemplateInput(T,Ref+6),"secret",false))goto bad;
+                if(k&&!MdoMcpTemplateHeader(Name))goto bad;
                 /* Header/env values, including non-secret constants, are supplied
                  * privately by the installing user. */
             }

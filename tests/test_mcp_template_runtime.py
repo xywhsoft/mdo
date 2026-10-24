@@ -102,6 +102,8 @@ def run():
             records = json.loads(receipts.read_text()); r = records.pop('local:changed-target'); r.update(id=73, source='store', owner=7); records['73'] = r; receipts.write_text(json.dumps(records))
             api('POST', '/mcp/connections', dict(key_body, receipt_id=73, values={}), revision=retained['revision'], status=409)
             assert 'other.invalid' not in (home / 'mcp/private-key.json').read_text()
+            ref=json.loads(retained['content'])['mdo_template']['values']['token'];vault_file=home/('config/secrets/models/'+ref[6:]+'.key');assert vault_file.exists()
+            api('POST','/mcp/connections',dict(id='private-key',action='delete'),revision=retained['revision']);assert not vault_file.exists()
             # Custom exports remove URL/argument/OAuth data and declare blank
             # parameters rather than copying any original device values.
             custom = copy.deepcopy(t['variants'][0]['config']); custom.update(id='custom-export', enabled=False, oauth=dict(enabled=True, client_id=secret, client_secret_ref='env:PRIVATE_CLIENT_SECRET'))

@@ -21,11 +21,8 @@ def main():
         def store(action,**kw):return app('POST','/api/v1/ecosystem',dict(action=action,**kw))
         def file(path,text):return {'path':path,'base64':base64.b64encode(text.encode()).decode()}
         tool=(ROOT/'tests/fixtures/modules/local-tool.c').read_text()
-        mcp={'schema_version':1,'id':'eco-mcp','name':'QA MCP','description':'Offline MCP','enabled':False,
-             'transport':{'type':'streamable-http','endpoint':'https://example.invalid/mcp','headers':[]},
-             'protocol_version':'2026-07-28','startup_timeout_ms':5000,'request_timeout_ms':5000,
-             'limits':{'message_bytes':1048576,'tools':16},'tools':{'allow':[],'deny':[]},
-             'security':{'default_effects':['network','external-service'],'permission_profile':'balanced','trust_read_only_annotations':False},'auto_reconnect':True}
+        from mcp_template_fixture import template
+        mcp=template('eco-mcp')
         resources=[
             {'kind':'agents','id':'eco-agent','content':'---\nname: QA Agent\ndescription: Offline agent\ntools: [read]\n---\nRead carefully.'},
             {'kind':'subagents','id':'eco-subagent','content':'---\nname: QA Child\ndescription: Offline child\ntools: [read]\n---\nReview carefully.'},
@@ -61,8 +58,8 @@ def main():
                 registry=json.loads((home/'data/ecosystem/toolpacks/eco-programs.json').read_text());program=home/registry['root']/'bin/qa.py'
                 assert subprocess.check_output([os.sys.executable,str(program)],text=True).strip()=='ECO_PROGRAM_OK'
                 listed=store('c_sources')['items'];assert {'modules','toolpacks','plugins'} <= {r['kind'] for r in listed},listed
-                exported=store('export',references=[{'kind':r['kind'],'id':r['id']} for r in resources])['resources']
-                assert len(exported)==9 and exported[7]['files']==resources[7]['files']
+                exported=store('export',references=[{'kind':r['kind'],'id':r['id']} for r in resources if r['kind']!='mcp'])['resources']
+                assert len(exported)==8 and exported[6]['files']==resources[7]['files']
                 assert 'root' not in json.loads(exported[7]['content']), 'machine roots must never be published'
                 app('POST','/api/v1/ecosystem',{'action':'import','package':package,'trust_code':True,'expected_plan':False},status=422)
                 conflict=copy.deepcopy(package);conflict['manifest']['slug']='conflict-plugin';conflict['resources']=[copy.deepcopy(resources[8])];conflict['resources'][0]['id']='other-plugin'

@@ -6,6 +6,7 @@
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/mcp.h"
 #include "../../include/mdo/secrets.h"
+#include "../../include/mdo/ecosystem_package.h"
 
 #define MDO_MCP_SOURCE "mdo.mcp.config"
 #define MDO_MCP_DIRECTORY "/app/default-home/mcp"
@@ -1279,6 +1280,9 @@ static bool MdoMcpParseServer(const MdoMcpSource* pSource,
     if ( !MdoMcpObjectKeys(pRoot, RootKeys,
             sizeof(RootKeys) / sizeof(RootKeys[0]), "MCP document", Error) )
         goto done;
+    const xvalue* Binding=xrtValueObjectGet(pRoot,XRT_STR_LITERAL("mdo_template"));
+    if(Binding){const xvalue* T=xrtValueObjectGet(Binding,XRT_STR_LITERAL("template")),*R=xrtValueObjectGet(Binding,XRT_STR_LITERAL("receipt")),*Values=xrtValueObjectGet(Binding,XRT_STR_LITERAL("values"));cstr Id=MdoPackageText(T,"id",64);char Why[256];
+        if(!Id||!MdoMcpTemplateKeys(Binding,"|template||receipt||variant||values|")||!MdoMcpTemplateValidate(T,Id,Why,sizeof(Why))||xrtValueType(R)!=XVALUE_OBJECT||!MdoPackageText(R,"key",80)||!MdoPackageText(Binding,"variant",64)||xrtValueType(Values)!=XVALUE_OBJECT||xrtValueCount(Values)>32){MdoMcpFormatError(Error,MDO_MCP_ERROR_LIMIT,"Invalid MCP template binding");goto done;}}
     if ( !MdoMcpValueUnsigned(MdoMcpObjectGet(pRoot, "schema_version"),
             &Number) || Number != MDO_MCP_CONFIG_SCHEMA_VERSION ) {
         MdoMcpFormatError(Error, MDO_MCP_ERROR_LIMIT,

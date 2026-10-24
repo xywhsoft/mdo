@@ -115,6 +115,12 @@ static bool EcoLocalCurrent(cstr path,xvalue* change,const xvalue* owned,char er
     if(!ok)snprintf(error,1024,"Resource was edited locally: %s. Keep it or export/remove it before updating.",path);
     char* encoded=ok?xrtBase64EncodeNew(b,n,NULL):NULL;ok=encoded&&MdoApiValueSetString(change,"old",encoded);xrtFree(encoded);xrtFree(b);return ok;
 }
+static bool EcoMcpFileRetained(const xvalue* Records,cstr Excluded,cstr Path)
+{
+    xvalueiter It={0};xvaluekey K;xvalue* R;bool Keep=false;
+    if(xrtValueIterBegin(Records,&It)){while(!Keep&&(R=xrtValueIterNext(&It,&K)))if(!xrtStrEqual(K.String,xrtStrView(Excluded)))Keep=EcoLocalFind(xrtValueObjectGet(R,XRT_STR_LITERAL("files")),Path)!=NULL;xrtValueIterEnd(&It);}
+    return Keep||McpConnectionReferenced(Path);
+}
 static bool EcoLocalApply(const xvalue* entry,bool uninstall,char error[1024],xvalue** Plan,cstr ExpectedPlan)
 {
     const xvalue* package=xrtValueObjectGet(entry,XRT_STR_LITERAL("package"));char key[80];int64 id=0;
@@ -149,7 +155,7 @@ static bool EcoLocalApply(const xvalue* entry,bool uninstall,char error[1024],xv
     for(size_t i=0;ok&&i<xrtValueCount(oldFiles);i++){const xvalue* old=xrtValueArrayGet(oldFiles,i);cstr path=MdoPackageText(old,"path",255);if(EcoLocalFind(files,path))continue;
         /* Immutable plugin revisions remain available to retained UI/code
          * generations and explicit rollback after removal or update. */
-        if(path&&(!strncmp(path,"plugins/",8)||!strncmp(path,"data/ecosystem/mcp/",19)))continue;
+        if(path&&(!strncmp(path,"plugins/",8)||(!strncmp(path,"data/ecosystem/mcp/",19)&&EcoMcpFileRetained(receipts,priorKey,path))))continue;
         if(uninstall){bool keep=!EcoLocalUnchanged(old);for(size_t j=0;path&&j<keptCount;j++)if(!strncmp(path,keptSkills[j],strlen(keptSkills[j])))keep=true;if(keep)continue;}
         xvalue* f=xrtValueObject();bool current=f&&MdoApiValueSetString(f,"path",path)&&EcoLocalCurrent(path,f,old,error);
         if(uninstall&&!current&&strstr(error,"Resource was edited locally:")){error[0]=0;xrtValueRelease(f);continue;}

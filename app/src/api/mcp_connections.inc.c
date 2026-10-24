@@ -68,17 +68,31 @@ static bool McpConnectionReferenceExists(cstr Reference,xroot Root,cstr Director
         char* Text=Root?SkillRead(Root,Path,&Missing):MdoExtensionRead(Path,true,MDO_EXTENSION_TEXT_LIMIT,&Missing);Found=!Text||strstr(Text,Reference)!=NULL;xrtFree(Text);}
     if(Next==XDIR_NEXT_ERROR)Found=true;xrtDirClose(D);return Found;
 }
+static bool McpConnectionScopeReference(cstr Reference,cstr Workspace)
+{
+    xroot Root=xrtRootOpen(Workspace);if(!Root){const xerror* E=xrtGetError();bool Missing=E&&xrtErrorKind(E)==XERR_NOT_FOUND;xrtClearError();return !Missing;}
+    bool Found=McpConnectionReferenceExists(Reference,Root,".mdo/mcp");xrtRootClose(Root);return Found;
+}
+static bool McpConnectionReferenced(cstr Reference)
+{
+    if(McpConnectionReferenceExists(Reference,NULL,"mcp"))return true;
+    MdoProjectInfo Projects[MDO_PROJECT_LIST_LIMIT];size_t Count=0,Invalid=0;bool Truncated=false;xwork_error E;
+    if(!MdoProjectList(Projects,MDO_PROJECT_LIST_LIMIT,&Count,&Invalid,&Truncated,&E)||Truncated||Invalid)return true;
+    char* Default=MdoHomeDefaultWorkspacePath(false);bool Found=Default&&McpConnectionScopeReference(Reference,Default);xrtFree(Default);
+    for(size_t i=0;!Found&&i<Count;i++)Found=McpConnectionScopeReference(Reference,Projects[i].WorkspaceRoot);return Found;
+}
+static void McpConnectionCleanTemplate(const xvalue* Old)
+{
+    const xvalue* B=McpConnectionBinding(Old),*Files=xrtValueObjectGet(xrtValueObjectGet(B,XRT_STR_LITERAL("receipt")),XRT_STR_LITERAL("files"));bool Known=false;xvalue* Records=ExtensionStoreRead(&Known);
+    for(size_t i=0;Known&&i<xrtValueCount(Files);i++){const xvalue* F=xrtValueArrayGet(Files,i);cstr P=MdoPackageText(F,"path",255);if(P&&MdoPackagePath(P)&&!strncmp(P,"data/ecosystem/mcp/",19)&&!EcoMcpFileRetained(Records,"",P)&&EcoLocalUnchanged(F))(void)MdoHomeRemove(P,false);}
+    xrtValueRelease(Records);
+}
 static void McpConnectionReleaseCredentials(const xvalue* Old)
 {
     const xvalue* B=McpConnectionBinding(Old),*T=xrtValueObjectGet(B,XRT_STR_LITERAL("template")),*Inputs=xrtValueObjectGet(T,XRT_STR_LITERAL("inputs")),*Values=xrtValueObjectGet(B,XRT_STR_LITERAL("values"));
-    MdoProjectInfo Projects[MDO_PROJECT_LIST_LIMIT];size_t Count=0,Invalid=0;bool Truncated=false;xwork_error E;
-    if(!MdoProjectList(Projects,MDO_PROJECT_LIST_LIMIT,&Count,&Invalid,&Truncated,&E)||Truncated||Invalid)return;
     for(size_t i=0;i<xrtValueCount(Inputs);i++){
-        const xvalue* I=xrtValueArrayGet(Inputs,i);if(!MdoMcpTemplateFlag(I,"secret",false))continue;cstr Ref=MdoPackageText(Values,MdoPackageText(I,"id",64),256);if(!Ref||!Ref[0])continue;
-        bool Found=McpConnectionReferenceExists(Ref,NULL,"mcp");char* Default=MdoHomeDefaultWorkspacePath(false);xroot Root=Default?xrtRootOpen(Default):NULL;
-        if(Default){Found=Found||!Root||McpConnectionReferenceExists(Ref,Root,".mdo/mcp");if(Root)xrtRootClose(Root);}xrtFree(Default);
-        for(size_t j=0;!Found&&j<Count;j++){Root=xrtRootOpen(Projects[j].WorkspaceRoot);Found=!Root||McpConnectionReferenceExists(Ref,Root,".mdo/mcp");if(Root)xrtRootClose(Root);}
-        if(!Found)(void)MdoSecretDiscard(Ref);
+        const xvalue* I=xrtValueArrayGet(Inputs,i);if(!MdoMcpTemplateFlag(I,"secret",false))continue;cstr Ref=MdoPackageText(Values,MdoPackageText(I,"id",64),256);
+        if(Ref&&*Ref&&!McpConnectionReferenced(Ref))(void)MdoSecretDiscard(Ref);
     }
 }
 bool MdoApiMcpTemplatesRoute(MdoApiContext* C)
@@ -165,7 +179,7 @@ bool MdoApiMcpConnectionsRoute(MdoApiContext* C)
     if(Saved){Ok=Workspace?MdoMcpConfigureAgent(NULL,Workspace,NULL):MdoMcpManagerReload();if(!Ok){bool Restored=Old?(Workspace?SkillWrite(Root,Path,Old,strlen(Old)):MdoHomeAtomicWrite(Path,Old,strlen(Old),false)):(Workspace?xrtRootRemove(Root,Path):MdoHomeRemove(Path,false));if(!Restored)(void)MdoHomeRequireRestart("MCP connection rollback failed");Saved=false;snprintf(Error,sizeof(Error),"Runtime registration failed; previous connection restored");}
         else {if(Changed)(void)MdoMcpAuthorizationForget(RuntimeId);xvalue* Item=Workspace?McpProjectItem(Root,Workspace,Id):ExtensionItem("mcp",Id,true);Result=Item?MdoApiReplySuccessTake(C,200,Item,NULL):MdoApiReplyError(C,503,"mcp_result_unavailable","Saved; reread connection status before retrying",NULL);}}
 done:
-    if(Saved&&!Preview)McpConnectionReleaseCredentials(OldDoc);
+    if(Saved&&!Preview){McpConnectionReleaseCredentials(OldDoc);McpConnectionCleanTemplate(OldDoc);}
     if(!Saved)for(size_t i=0;i<RefCount;i++)MdoSecretDiscard(References[i]);
     if(!Result)Result=MdoApiReplyError(C,409,"mcp_connection_invalid",Error[0]?Error:"Connection could not be configured",NULL);
     if(Text){xrtSecureZero(Text,strlen(Text));xrtFree(Text);}xrtFree(Old);xrtValueRelease(OldDoc);xrtValueRelease(Receipt);xrtValueRelease(T);xrtValueRelease(Values);xrtValueRelease(Doc);xrtValueRelease(Binding);
