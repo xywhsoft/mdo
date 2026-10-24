@@ -45,11 +45,9 @@
 .account-search-notice p { margin:0 0 8px; }
 .account-search-row { display:flex; align-items:center; gap:10px; margin-top:8px; }
 .account-search-row span { flex:1; min-width:0; overflow-wrap:anywhere; }
-#account-login-dialog { width:min(440px,calc(100vw - 32px)); border:1px solid var(--border); border-radius:var(--radius-lg); background:var(--surface-raised); color:var(--ink); padding:24px; box-shadow:var(--shadow-dialog); }
-#account-login-dialog::backdrop { background:rgb(0 0 0 / 40%); }
-#account-login-dialog h2 { margin-top:0; font-size:19px; }
-#account-login-dialog p { line-height:1.6; }
-#account-login-dialog a { color:var(--focus); }
+.account-login-window p { line-height:1.6; }
+.account-login-window a { color:var(--focus); }
+.account-login-form { width:100%; margin:0; padding:0; border:0; background:none; box-shadow:none; }
 .account-field { display:grid; gap:8px; margin:16px 0; font-size:14px; }
 .account-field input { width:100%; min-width:0; box-sizing:border-box; padding:11px 12px; border:1px solid var(--border); border-radius:var(--radius-md); background:var(--surface); color:var(--ink); font:inherit; }
 .account-field input:focus-visible { outline:2px solid var(--focus); outline-offset:2px; }

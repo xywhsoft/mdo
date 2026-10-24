@@ -2,16 +2,24 @@ import { connectorRequest, connectorJob } from "../../api/connector.js";
 import { targetState, subscribeTarget, requestTargetSwitch, initializeTarget } from "../../api/target.js";
 import { element, errorMessage, toast } from "../../utils/dom.js";
 import { t, subscribeLocale } from "../../i18n.js";
+import { openLayer } from "../../components/layers.js";
+import { createLoginWindow } from "../account/login-window.js";
+import { isAccountSignedIn } from "../account/session-state.js";
 
 export function createDevices() {
-  const button = document.querySelector("#open-devices"), dialog = document.querySelector("#devices-dialog");
+  const button = document.querySelector("#open-devices");
   const settingsTarget = document.querySelector("#settings-target");
-  const banner = document.querySelector("#target-connection-notice"), list = dialog.querySelector("[data-device-list]");
-  const accountText = dialog.querySelector("[data-device-account]"), feedback = dialog.querySelector("[data-device-feedback]");
-  const form = dialog.querySelector("form"), refreshButton = dialog.querySelector("[data-device-refresh]");
-  let account = null, snapshot = null, busy = false, timer = 0, returnFocus = null;
+  const banner = document.querySelector("#target-connection-notice"), list = element("div", { attrs: { "data-device-list": "" } });
+  const accountText = element("p"), feedback = element("p", { className: "device-feedback", attrs: { role: "status" } });
+  const description = element("p", { className: "account-note" }), refreshButton = element("button", { className: "secondary-button", attrs: { type: "button" } });
+  const closeButton = element("button", { className: "secondary-button", attrs: { type: "button" } });
+  let account = null, snapshot = null, busy = false, timer = 0, layer = null, opening = null, disposed = false;
   const copy = (key, params, fallback) => t(`devices.${key}`, params, fallback);
-  const signedIn = () => account?.state === "signed_in" && account.profile?.id;
+  const signedIn = () => isAccountSignedIn(account) && account.profile?.id;
+  const login = createLoginWindow({ scope: () => "controller", allowBrowser: () => true,
+    request: { get: async (path, options) => ({ data: await connectorRequest(path, undefined, options) }),
+      post: async (path, body, options) => ({ data: await connectorRequest(path, body, options) }) },
+    onSnapshot(next) { account = next; } });
   function renderTarget() {
     const state = targetState(), name = state.selected?.name || copy("local", {}, "本机");
     const title = copy("target", { name }, `目标设备：${name}`);
@@ -37,39 +45,42 @@ export function createDevices() {
     banner.querySelector("[data-target-retry]").textContent = copy(state.runtimeChanged ? "reload" : "retry", {}, state.runtimeChanged ? "重新载入" : "重新连接");
   }
   function busyState(value) {
-    busy = value; form.querySelector("[type=submit]").disabled = value;
+    busy = value;
     refreshButton.disabled = value || !signedIn();
-    for (const node of dialog.querySelectorAll("button[data-available]")) node.disabled = value || node.dataset.available === "false";
+    for (const node of list.querySelectorAll("button")) node.disabled = value || node.dataset.available === "false";
   }
   function actionButton(label, action, available = true) {
     const node = element("button", { text: label, className: "secondary-button", attrs: { type: "button" } });
     node.dataset.available = String(available); node.setAttribute("data-available", String(available)); node.disabled = busy || !available;
-    node.addEventListener("click", () => void perform(action)); return node;
+    const owner = layer;
+    node.addEventListener("click", () => { if (owner && owner === layer && !disposed) void perform(action); }); return node;
   }
   async function perform(action) {
-    if (busy) return; busyState(true); feedback.textContent = "";
+    if (busy || disposed || !layer) return; const owner = layer; busyState(true); feedback.textContent = "";
     try { await action(); }
     catch (error) {
+      if (layer !== owner || error.name === "AbortError") return;
       feedback.textContent = errorMessage(error);
       if (error.code === "target_switch_busy") feedback.append(actionButton(copy("copySwitch", {}, "复制未保存草稿并切换"),
         () => requestTargetSwitch(error.details.target, { copyDrafts: true })));
     }
     finally {
-      busyState(false); clearTimeout(timer);
-      if (dialog.open) timer = setTimeout(() => void perform(listDevices), 10000);
+      if (layer === owner) { busyState(false); clearTimeout(timer); timer = setTimeout(() => void perform(listDevices), 10000); }
     }
   }
   function render() {
+    if (disposed) return;
+    layer?.update({ title: copy("choose", {}, "选择设备") });
+    description.textContent = copy("connectorDescription", {}, "连接器账号只用于选择设备；目标设备内的账号和所有设置均在目标上操作。");
+    refreshButton.textContent = copy("refresh", {}, "刷新设备列表"); closeButton.textContent = copy("close", {}, "关闭");
     const name = account?.profile?.nickname || account?.profile?.username || "";
     accountText.textContent = signedIn() ? copy("account", { name }, `连接器账号：${name}`) : copy("login", {}, "登录控制端账号，查看自己的设备。");
-    form.hidden = Boolean(signedIn());
-    form.elements.remember.disabled = account?.persistence_available === false;
-    if (account?.persistence_available === false) form.elements.remember.checked = false;
     const local = element("div", { className: "device-row" });
     local.append(element("strong", { text: copy("local", {}, "本机") }),
       actionButton(copy(targetState().selected ? "returnLocal" : "current", {}, "返回本机"), () => requestTargetSwitch(null), Boolean(targetState().selected)));
     const rows = [local];
-    for (const device of snapshot?.listing?.devices || []) {
+    if (!signedIn()) rows.push(actionButton(t("account.login"), async () => { layer?.dispose(); await open(); }));
+    for (const device of signedIn() ? snapshot?.listing?.devices || [] : []) {
       const thisDevice = device.id === snapshot.device_id;
       const selected = targetState().selected?.id === device.id;
       const currentMode = selected ? targetState().selected.mode : null;
@@ -86,10 +97,10 @@ export function createDevices() {
           actionButton(copy("view", {}, "只读查看"), () => choose("view"), available && currentMode !== "view" && device.viewers < 3));
       }
       if (!device.revoked) actions.append(actionButton(copy("revoke", {}, "撤销远控"), async () => {
-        await connectorJob({ action: "revoke", device_id: device.id }); await refresh();
+        await connectorJob({ action: "revoke", device_id: device.id }, { signal: layer.signal }); await refresh();
       }));
       else actions.append(actionButton(copy("remove", {}, "移除"), async () => {
-        await connectorJob({ action: "remove", device_id: device.id }); await refresh();
+        await connectorJob({ action: "remove", device_id: device.id }, { signal: layer.signal }); await refresh();
       }));
       row.append(labels, actions); rows.push(row);
     }
@@ -98,41 +109,49 @@ export function createDevices() {
     list.replaceChildren(...rows); busyState(busy); renderTarget();
   }
   async function refresh() {
-    account = await connectorRequest("/account");
+    const owner = layer, options = { signal: owner?.signal };
+    const next = await connectorRequest("/account", undefined, options);
+    if (disposed || owner !== layer) return;
+    account = next;
     if (account.state === "refreshing" && account.refresh_available && !account.busy)
-      await connectorRequest("/account/refresh", {});
-    snapshot = await connectorRequest("/connector/state");
+      await connectorRequest("/account/refresh", {}, options);
+    const state = await connectorRequest("/connector/state", undefined, options);
+    if (disposed || owner !== layer) return;
+    snapshot = state;
     render();
   }
-  async function listDevices() { await refresh(); if (signedIn()) { snapshot = await connectorJob({ action: "refresh" }); render(); } }
+  async function listDevices() { const owner = layer; await refresh(); if (owner && owner === layer && signedIn()) { const state = await connectorJob({ action: "refresh" }, { signal: owner.signal }); if (!disposed && owner === layer) { snapshot = state; render(); } } }
   function open() {
-    if (dialog.open) return;
-    returnFocus = document.activeElement; dialog.showModal();
-    void perform(listDevices);
+    if (disposed || layer) return Promise.resolve();
+    if (opening) return opening;
+    opening = (async () => {
+      try {
+        account = await connectorRequest("/account");
+        if (disposed) return;
+        if (!signedIn()) {
+          if (!await login.open(account) || disposed) return;
+          window.dispatchEvent(new Event("mdo-controller-account-changed"));
+        }
+        if (disposed) return;
+        layer = openLayer({ title: copy("choose", {}, "选择设备"), icon: "monitor", width: "48rem", height: "75%",
+          onClosed() { layer = null; busy = false; clearTimeout(timer); } });
+        layer.element.id = "devices-dialog";
+        feedback.textContent = ""; list.replaceChildren();
+        layer.body.append(accountText, description, feedback, list); layer.footer.append(refreshButton, closeButton);
+        render(); void perform(listDevices);
+      } catch (error) { if (!disposed) toast(errorMessage(error), "error"); }
+      finally { opening = null; }
+    })();
+    return opening;
   }
-  form.addEventListener("submit", event => {
-    event.preventDefault();
-    const password = form.elements.password.value; form.elements.password.value = "";
-    void perform(async () => {
-      await connectorRequest("/account/login", { identifier: form.elements.identifier.value.trim(), password, remember: form.elements.remember.checked });
-      const until = Date.now() + 20000;
-      while (Date.now() < until) {
-        await refresh();
-        if (signedIn() && !account.busy) { await listDevices(); return; }
-        if (!account.busy && account.state !== "signing_in") throw new Error(copy("loginFailed", {}, "登录失败，请检查账号和密码。"));
-        await new Promise(resolve => setTimeout(resolve, 400));
-      }
-      throw new Error(copy("loginFailed", {}, "登录失败，请检查账号和密码。"));
-    });
-  });
   button.addEventListener("click", open);
   settingsTarget.addEventListener("click", open);
   document.querySelector("#update-target")?.addEventListener("click", open);
   refreshButton.addEventListener("click", () => void perform(listDevices));
-  dialog.querySelector("[data-device-close]").addEventListener("click", () => dialog.close());
-  dialog.addEventListener("close", () => { form.elements.password.value = ""; clearTimeout(timer); returnFocus?.focus(); });
-  function switchFailed(error, next) {
-    toast(errorMessage(error), "error"); open();
+  closeButton.addEventListener("click", () => { void layer?.close(); });
+  async function switchFailed(error, next) {
+    toast(errorMessage(error), "error"); await open();
+    if (!layer) return;
     feedback.textContent = errorMessage(error);
     if (error.code === "target_switch_busy") feedback.append(actionButton(copy("copySwitch", {}, "复制未保存草稿并切换"),
       () => requestTargetSwitch(next, { copyDrafts: true })));
@@ -145,6 +164,6 @@ export function createDevices() {
     } else void initializeTarget();
   });
   banner.querySelector("[data-target-choose]").addEventListener("click", open);
-  subscribeTarget(renderTarget); subscribeLocale(render);
-  return { open, refresh };
+  const targetSubscription = subscribeTarget(renderTarget), locale = subscribeLocale(render);
+  return { open, refresh, dispose() { disposed = true; clearTimeout(timer); login.dispose(); layer?.dispose(); targetSubscription(); locale(); button.removeEventListener("click", open); settingsTarget.removeEventListener("click", open); document.querySelector("#update-target")?.removeEventListener("click", open); } };
 }

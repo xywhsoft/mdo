@@ -1,6 +1,6 @@
 // The outer connector is deliberately separate from the selected target API.
 // It accesses only this installation's account and device connection metadata.
-const endpoints = new Set(["/account", "/account/login", "/account/refresh", "/account/logout",
+const endpoints = new Set(["/account", "/account/login", "/account/refresh", "/account/logout", "/account/cancel", "/account/callback",
   "/connector/state", "/connector/devices", "/connector/ticket"]);
 let nonce = null;
 // TLS certificate/grant are delivered by the authenticated target, retained

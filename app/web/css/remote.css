@@ -18,15 +18,10 @@
 .device-labels strong { overflow-wrap: anywhere; }
 .device-labels small { color: var(--muted); }
 .device-actions, .device-toolbar { display: flex; flex-wrap: wrap; gap: 8px; }
-.device-login { display: grid; gap: 8px; margin: 12px 0; }
-.device-login label { display: grid; gap: 4px; }
-.device-login label:last-of-type { display: flex; align-items: center; gap: 8px; }
-.device-login input:not([type="checkbox"]) { width: 100%; }
 .device-feedback { color: var(--danger); overflow-wrap: anywhere; }
-#devices-dialog { padding: 20px; max-height: calc(100dvh - 24px); overflow-y: auto; }
 .dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .dialog-heading h2 { margin: 0; font-size: 17px; }
-.device-login input:not([type="checkbox"]), .remote-form input:not([type="checkbox"]) {
+.remote-form input:not([type="checkbox"]) {
   padding: 9px 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
   background: var(--bg); color: var(--ink); min-width: 0;
 }

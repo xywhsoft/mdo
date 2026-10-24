@@ -9,7 +9,8 @@ export async function start() {
   void loadLocale(resolveLocale()).catch((error) => {
     console.warn("Language pack unavailable; using HTML defaults", error);
   });
-  createDevices();
+  const devices = createDevices();
+  window.addEventListener("pagehide", () => devices.dispose(), { once: true });
   await initializeTarget();
   return boot();
 }

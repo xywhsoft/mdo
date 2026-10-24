@@ -901,19 +901,7 @@
   </dialog>
 
   <div class="toast-region" id="toast-region" aria-live="polite" aria-atomic="true"></div>
-  <dialog class="app-dialog" id="devices-dialog" aria-labelledby="devices-title">
-    <div class="dialog-heading"><h2 id="devices-title" data-i18n="devices.choose">选择设备</h2><button class="icon-button" type="button" data-device-close aria-label="关闭">×</button></div>
-    <p data-device-account></p>
-    <p data-i18n="devices.connectorDescription">连接器账号只用于选择设备；目标设备内的账号和所有设置均在目标上操作。</p>
-    <form class="device-login">
-      <label><span data-i18n="account.username">账号</span><input name="identifier" autocomplete="username" required></label>
-      <label><span data-i18n="account.password">密码</span><input name="password" type="password" autocomplete="current-password" required></label>
-      <label><input name="remember" type="checkbox" checked><span data-i18n="account.remember">记住登录</span></label>
-      <button class="primary-button" type="submit" data-i18n="account.login">登录账号</button>
-    </form>
-    <div class="device-toolbar"><button class="secondary-button" type="button" data-device-refresh data-i18n="devices.refresh">刷新设备列表</button></div>
-    <p class="device-feedback" data-device-feedback role="status"></p><div data-device-list></div>
-  </dialog>
+
   <div class="startup-loading" id="startup-loading" role="status" aria-live="polite">
     <div class="startup-loading-content">
       <img class="startup-loading-mark" src="/assets/mdo-app-icon.png" alt="" width="42" height="42" aria-hidden="true">
@@ -1027,23 +1015,7 @@
       <button class="primary-button" type="button" data-update-action="install" hidden>安装更新</button>
     </div>
   </dialog>
-  <dialog id="account-login-dialog" aria-labelledby="account-login-title">
-    <h2 id="account-login-title" data-i18n="account.login">登录账号</h2>
-    <p data-account-progress role="status"></p>
-    <a data-account-link target="_blank" rel="noopener noreferrer" data-i18n="account.reopen" hidden>再次打开登录页面</a>
-    <form id="account-password-form">
-      <label class="account-field"><span data-i18n="account.identifier">账号、手机号或邮箱</span><input name="identifier" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="254" required></label>
-      <label class="account-field"><span data-i18n="account.password">密码</span><input name="password" type="password" autocomplete="current-password" maxlength="128" required></label>
-      <label class="account-remember"><input type="checkbox" name="remember" checked><span data-i18n="account.remember">记住此设备</span></label>
-      <button class="primary-button account-password-submit" type="submit" data-i18n="account.login">登录账号</button>
-    </form>
-    <p class="account-note" data-account-storage></p>
-    <div class="account-actions">
-      <button class="secondary-button" type="button" data-account-action="begin" data-i18n="account.begin">其他登录方式 / 注册</button>
-      <button class="secondary-button" type="button" data-account-action="restart" data-i18n="account.restart" hidden>重新开始</button>
-      <button class="secondary-button" type="button" data-account-action="cancel" data-i18n="account.cancel">取消</button>
-    </div>
-  </dialog>
+
 <dialog id="notifications-dialog" class="notification-dialog" aria-labelledby="notifications-title"><header><h2 id="notifications-title">通知</h2><button class="icon-button notification-close" data-notifications-close type="button" aria-label="关闭" title="关闭"><span class="icon" data-icon="close" aria-hidden="true"></span></button></header><div data-notification-body></div></dialog>
 </body>
 </html>

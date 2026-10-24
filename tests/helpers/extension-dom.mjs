@@ -10,6 +10,8 @@ export class TestElement extends EventTarget {
   get classList() { const self = this; return { contains(c) { return (self.className || "").split(" ").includes(c); }, toggle(c, force) { const values = new Set((self.className || "").split(" ").filter(Boolean)); const add = force === undefined ? !values.has(c) : force; if (add) values.add(c); else values.delete(c); self.className = [...values].join(" "); }, remove(c) { this.toggle(c, false); }, add(c) { this.toggle(c, true); } }; }
   append(...nodes) { for (const node of nodes) { if (typeof node === "object") { node.remove(); node.parent = this; node.isConnected = true; } this.children.push(node); } }
   prepend(...nodes) { const old = [...this.children]; this.replaceChildren(...nodes, ...old); }
+  after(node) { const parent=this.parent;if(!parent)return;node.remove();node.parent=parent;node.isConnected=true;parent.children.splice(parent.children.indexOf(this)+1,0,node); }
+  replaceWith(node) { const parent=this.parent;if(!parent)return;const index=parent.children.indexOf(this);node.remove();node.parent=parent;node.isConnected=true;parent.children[index]=node;this.parent=null;this.isConnected=false; }
   insertBefore(node, before) { node.remove(); node.parent = this; this.children.splice(this.children.indexOf(before), 0, node); }
   replaceChildren(...nodes) { for (const child of this.children) if (typeof child === "object") child.parent = null; this.children = []; this.text = ""; this.append(...nodes); }
   remove() { this.removed = true; this.isConnected = false; if (this.parent) this.parent.children = this.parent.children.filter(n => n !== this); this.parent = null; }

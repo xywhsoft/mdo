@@ -1262,6 +1262,7 @@ export async function boot() {
   });
 
   const account = createAccount({ navigation, onModelsChange: loadModels });
+  window.addEventListener("pagehide", () => account.dispose(), { once: true });
   const remotePanel = createRemotePanel();
   setTargetSwitchGuard(async ({ copyDrafts = false } = {}) => {
     if (!applicationUi.canLeave()) throw new ApiError("请先保存工具工作区的编辑内容，或等待浏览器操作完成后再切换设备", { code: "target_workbench_pending" });

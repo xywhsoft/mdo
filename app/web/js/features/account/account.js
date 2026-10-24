@@ -1,7 +1,9 @@
 import { api } from "../../api/client.js";
 import { currentLocale, subscribeLocale, t } from "../../i18n.js";
 import { toast, errorMessage } from "../../utils/dom.js";
-import { isRemoteTarget } from "../../api/target.js";
+import { isRemoteTarget, targetState } from "../../api/target.js";
+import { connectorRequest } from "../../api/connector.js";
+import { createLoginWindow } from "./login-window.js";
 import { allowanceView, searchAllowanceView } from "./allowance.js";
 import { balanceView, formatBalance } from "./balance.js";
 import { isAccountSignedIn } from "./session-state.js";
@@ -22,16 +24,14 @@ export function createAccount({ navigation, onModelsChange = () => {} }) {
   const vipBadge = document.createElement("span"); vipBadge.className = "account-vip-badge"; vipBadge.textContent = "VIP";
   vipBadge.setAttribute("aria-hidden", "true"); sidebar.querySelector("[data-account-avatar]").append(vipBadge);
   let modelGeneration = null;
-  const dialog = document.querySelector("#account-login-dialog");
   const notice = document.querySelector("#account-search-notice");
-  const remember = dialog.querySelector("[name=remember]");
-  const loginForm = dialog.querySelector("#account-password-form");
-  const link = dialog.querySelector("[data-account-link]");
   let snapshot = null, timer = null, fetching = false, acting = false, disposed = false;
-  let authorizationUrl = "", returnFocus = null, returnOwner = null, returnAction = "", dialogLogin = false;
   const copy = (key, values = {}) => t(`account.${key}`, values);
   const displayName = () => snapshot?.profile?.nickname || snapshot?.profile?.username || copy("signedIn");
   const signedIn = () => isAccountSignedIn(snapshot);
+  const scope = () => targetState().selected?.id || "local";
+  const login = createLoginWindow({ request: api, scope, allowBrowser: () => !isRemoteTarget(),
+    onSnapshot(next) { snapshot = next; render(); } });
   function text(tag, value, className) {
     const node = document.createElement(tag); node.textContent = value;
     if (className) node.className = className;
@@ -57,6 +57,8 @@ export function createAccount({ navigation, onModelsChange = () => {} }) {
     renderQuotas(sidebarQuota, allowance, true);
     sidebarQuota.hidden = !signedIn();
     sidebar.title = signedIn() ? copy("title") : copy("login");
+    if (signedIn()) { sidebar.removeAttribute("aria-haspopup"); sidebar.removeAttribute("aria-controls"); }
+    else { sidebar.setAttribute("aria-haspopup", "dialog"); sidebar.setAttribute("aria-controls", "account-login-dialog"); }
     const body = panel.querySelector("[data-account-body]");
     const stateText = copy(snapshot.state === "signing_in" ? "signingIn" : snapshot.state === "signed_in" ? "signedIn" :
       snapshot.state === "authorizing" ? "waitingBrowser" : snapshot.state === "refreshing" ? "refreshing" :
@@ -93,17 +95,6 @@ export function createAccount({ navigation, onModelsChange = () => {} }) {
       actions.append(button(copy("manage"), "website"), button(copy("logout"), "logout"));
     }
     nodes.push(actions); body.replaceChildren(...nodes);
-    remember.disabled = !snapshot.persistence_available || acting;
-    if (!snapshot.persistence_available) remember.checked = false;
-    dialog.querySelector("[data-account-storage]").textContent = copy(snapshot.persistence_available ? "storage" : "storageUnavailable");
-    dialog.querySelector("[data-account-progress]").textContent = snapshot.state === "signing_in" ? copy("signingIn") :
-      snapshot.state === "authorizing" ? copy("waitingBrowser") : dialogLogin && snapshot.message ? copy(snapshot.message) : copy("directDescription");
-    loginForm.hidden = snapshot.state === "authorizing";
-    loginForm.querySelector("[type=submit]").disabled = acting || snapshot.state === "signing_in";
-    link.hidden = !authorizationUrl;
-    if (authorizationUrl) link.href = authorizationUrl;
-    dialog.querySelector("[data-account-action=begin]").hidden = isRemoteTarget() || snapshot.state === "authorizing";
-    dialog.querySelector("[data-account-action=restart]").hidden = isRemoteTarget() || snapshot.state !== "authorizing";
     const waits = snapshot.pending_searches || [];
     notice.hidden = !waits.length;
     if (waits.length) {
@@ -116,9 +107,6 @@ export function createAccount({ navigation, onModelsChange = () => {} }) {
     }
     if (focusOwner && focusAction) [...focusOwner.querySelectorAll("[data-account-action]")]
       .find((node) => node.dataset.accountAction === focusAction && node.dataset.id === focusId)?.focus({ preventScroll: true });
-    if (dialog.open && dialogLogin && snapshot.state !== "authorizing" && !snapshot.busy) {
-      if (snapshot.state === "signed_in" && !snapshot.message) { dialogLogin = false; dialog.close(); toast(copy("success"), "success"); }
-    }
   }
   function renderBalance() {
     const card = text("section", "", "account-balance");
@@ -194,12 +182,16 @@ export function createAccount({ navigation, onModelsChange = () => {} }) {
   }
   async function refresh() {
     if (fetching || disposed) return;
-    fetching = true;
+    fetching = true; const owner = scope();
     try {
-      snapshot = (await api.get("/account")).data;
+      const next = (await api.get("/account")).data;
+      if (disposed || owner !== scope()) return;
+      snapshot = next;
       if (!document.hidden && snapshot.state === "refreshing" && snapshot.refresh_available && !snapshot.busy) {
         await api.post("/account/refresh", {});
-        snapshot = (await api.get("/account")).data;
+        const renewed = (await api.get("/account")).data;
+        if (disposed || owner !== scope()) return;
+        snapshot = renewed;
       }
       render();
       if (modelGeneration !== snapshot.model_generation) {
@@ -207,78 +199,45 @@ export function createAccount({ navigation, onModelsChange = () => {} }) {
       }
     }
     catch { /* Local host reconnection uses the existing global connection UI. */ }
-    finally { fetching = false; schedule(); }
+    finally { fetching = false; if (!disposed && owner !== scope()) void refresh(); else schedule(); }
   }
-  function openLogin() {
-    if (dialog.open) return;
-    returnFocus = document.activeElement;
-    returnOwner = panel.contains(returnFocus) ? panel : notice.contains(returnFocus) ? notice : null;
-    returnAction = returnFocus?.dataset?.accountAction || "";
-    remember.checked = snapshot?.persistence_available !== false;
-    dialogLogin = false; loginForm.elements.password.value = "";
-    dialog.showModal(); render(); loginForm.elements.identifier.focus();
+  async function openLogin() {
+    const opener = document.activeElement, owner = panel.contains(opener) ? panel : notice.contains(opener) ? notice : null;
+    const previousAction = opener?.dataset?.accountAction;
+    if (await login.open(snapshot)) toast(copy("success"), "success");
+    await refresh();
+    if (owner && previousAction && !document.querySelector("dialog[open]")) [...owner.querySelectorAll("[data-account-action]")]
+      .find(node => node.dataset.accountAction === previousAction)?.focus({ preventScroll: true });
   }
-  loginForm.addEventListener("submit", async event => {
-    event.preventDefault();
-    if (acting || snapshot?.state === "signing_in") return;
-    acting = true; dialogLogin = true;
-    const password = loginForm.elements.password.value;
-    loginForm.elements.password.value = "";
-    try {
-      snapshot = (await api.post("/account/login", {identifier: loginForm.elements.identifier.value.trim(), password, remember: remember.checked})).data;
-      authorizationUrl = "";
-      render();
-    } catch (error) { dialogLogin = false; toast(errorMessage(error), "error"); }
-    finally { acting = false; await refresh(); }
-  });
   async function action(event) {
     const target = event.target.closest("[data-account-action]");
     if (!target || acting) return;
     const kind = target.dataset.accountAction;
-    if (kind === "login") { openLogin(); return; }
+    if (kind === "login") { void openLogin(); return; }
     acting = true;
     try {
-      if (kind === "begin" || kind === "restart") {
-        const result = (await api.post("/account/login", { remember: remember.checked })).data;
-        const url = new URL(result.authorization_url);
-        if (!["https:", "http:"].includes(url.protocol)) throw new Error(copy("invalidService"));
-        authorizationUrl = url.href; dialogLogin = true;
-      } else if (kind === "skip") await api.post("/account/search/skip", { id: Number(target.dataset.id) });
-      else {
-        await api.post(`/account/${kind}`, {});
-        if (kind === "cancel") { dialogLogin = false; authorizationUrl = ""; dialog.close(); }
-        if (kind === "logout") authorizationUrl = "";
-      }
+      if (kind === "skip") await api.post("/account/search/skip", { id: Number(target.dataset.id) });
+      else await api.post(`/account/${kind}`, {});
     } catch (error) { toast(errorMessage(error), "error"); }
     finally { acting = false; await refresh(); }
   }
-  sidebar.addEventListener("click", () => navigation.openSettings("account"));
+  sidebar.addEventListener("click", () => { if (signedIn()) navigation.openSettings("account"); else void openLogin(); });
   sidebarQuota.addEventListener("click", () => navigation.openSettings("account"));
-  panel.addEventListener("click", action); dialog.addEventListener("click", action); notice.addEventListener("click", action);
-  dialog.addEventListener("cancel", (event) => {
-    event.preventDefault(); void action({ target: dialog.querySelector("[data-account-action=cancel]") });
-  });
-  dialog.addEventListener("close", () => {
-    loginForm.elements.password.value = "";
-    const replacement = returnOwner && returnAction ? [...returnOwner.querySelectorAll("[data-account-action]")]
-      .find((node) => node.dataset.accountAction === returnAction) : null;
-    const next = [returnFocus, replacement, document.querySelector("#prompt"), panel.querySelector("button"), sidebar]
-      .find((node) => node?.isConnected && node.getClientRects().length && !node.closest("[inert]"));
-    next?.focus({ preventScroll: true });
-  });
+  panel.addEventListener("click", action); notice.addEventListener("click", action);
   const receiveLink = async (event) => {
-    if (isRemoteTarget()) return;
     const callback = typeof event === "string" ? event : event.detail;
     if (typeof callback !== "string") return;
-    try { await api.post("/account/callback", { callback_url: callback }); }
+    try { await connectorRequest("/account/callback", { callback_url: callback }); }
     catch (error) { toast(errorMessage(error), "error"); }
     await refresh();
   };
   window.addEventListener("xs-app-link", receiveLink);
-  window.__xsAppLinksReady = !isRemoteTarget();
-  try { const pending = !isRemoteTarget() && window.XsAppLinks?.take(); if (pending) void receiveLink(pending); } catch { /* Ordinary browser. */ }
+  window.__xsAppLinksReady = true;
+  try { const pending = window.XsAppLinks?.take(); if (pending) void receiveLink(pending); } catch { /* Ordinary browser. */ }
   window.addEventListener("focus", refresh);
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) void refresh(); else schedule(); });
-  subscribeLocale(render); void refresh();
-  return { refresh, dispose() { disposed = true; clearTimeout(timer); window.removeEventListener("xs-app-link", receiveLink); window.removeEventListener("focus", refresh); } };
+  const visible = () => { if (!document.hidden) void refresh(); else schedule(); };
+  const controllerChanged = () => { if (!isRemoteTarget()) void refresh(); };
+  document.addEventListener("visibilitychange", visible); window.addEventListener("mdo-controller-account-changed", controllerChanged);
+  const locale = subscribeLocale(render); void refresh();
+  return { refresh, dispose() { disposed = true; clearTimeout(timer); login.dispose(); locale(); window.removeEventListener("xs-app-link", receiveLink); window.removeEventListener("focus", refresh); document.removeEventListener("visibilitychange", visible); window.removeEventListener("mdo-controller-account-changed", controllerChanged); } };
 }
