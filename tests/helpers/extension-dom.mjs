@@ -24,9 +24,11 @@ export class TestElement extends EventTarget {
   click() { if (!this.disabled) { this.onclick?.(new Event("click")); this.dispatchEvent(new Event("click")); } }
   get elements() { return descendants(this).filter(n => ["INPUT", "TEXTAREA", "BUTTON", "SELECT"].includes(n.tagName)); }
   get firstChild() { return this.children[0]; } get lastChild() { return this.children.at(-1); }
+  get parentElement() { return this.parent; }
   get hidden() { return this._hidden ?? false; } set hidden(value) { this._hidden = Boolean(value); }
   showModal() { this.open = true; } close() { if (this.open) { this.open = false; this.dispatchEvent(new Event("close")); } }
   getBoundingClientRect() { return { left: 10, right: 70, top: 20, bottom: 45, width: 60, height: 25 }; }
+  getClientRects() { return this.hidden ? [] : [this.getBoundingClientRect()]; }
 }
 export function testDocument() {
   const body = new TestElement("body");

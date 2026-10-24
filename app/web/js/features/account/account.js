@@ -239,5 +239,5 @@ export function createAccount({ navigation, onModelsChange = () => {} }) {
   const controllerChanged = () => { if (!isRemoteTarget()) void refresh(); };
   document.addEventListener("visibilitychange", visible); window.addEventListener("mdo-controller-account-changed", controllerChanged);
   const locale = subscribeLocale(render); void refresh();
-  return { refresh, dispose() { disposed = true; clearTimeout(timer); login.dispose(); locale(); window.removeEventListener("xs-app-link", receiveLink); window.removeEventListener("focus", refresh); document.removeEventListener("visibilitychange", visible); window.removeEventListener("mdo-controller-account-changed", controllerChanged); } };
+  return { refresh, open() { if (signedIn()) navigation.openSettings("account"); else void openLogin(); }, dispose() { disposed = true; clearTimeout(timer); login.dispose(); locale(); window.removeEventListener("xs-app-link", receiveLink); window.removeEventListener("focus", refresh); document.removeEventListener("visibilitychange", visible); window.removeEventListener("mdo-controller-account-changed", controllerChanged); } };
 }

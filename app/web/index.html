@@ -1000,22 +1000,5 @@
       showFailure("failed");
     });
   </script>
-  <dialog id="update-dialog" class="app-dialog update-dialog" aria-labelledby="update-dialog-title" aria-describedby="update-dialog-description">
-    <div class="update-dialog-heading"><span class="update-dialog-mark" aria-hidden="true">↑</span><h2 id="update-dialog-title" data-update-title></h2></div>
-    <p id="update-dialog-description" data-update-description></p>
-    <p data-update-status role="status" aria-live="polite"></p>
-    <p data-update-notes hidden></p>
-    <div class="update-dialog-actions">
-      <button class="secondary-button" id="update-target" type="button" aria-haspopup="dialog" aria-controls="devices-dialog" hidden>切换设备</button>
-      <button class="secondary-button" type="button" data-update-later>稍后</button>
-      <button class="secondary-button" type="button" data-update-action="exit" hidden>退出墨斗</button>
-      <button class="secondary-button" type="button" data-update-action="check">重新检查</button>
-      <button class="secondary-button" type="button" data-update-action="cancel" hidden>取消下载</button>
-      <button class="primary-button" type="button" data-update-action="download" hidden>下载更新</button>
-      <button class="primary-button" type="button" data-update-action="install" hidden>安装更新</button>
-    </div>
-  </dialog>
-
-<dialog id="notifications-dialog" class="notification-dialog" aria-labelledby="notifications-title"><header><h2 id="notifications-title">通知</h2><button class="icon-button notification-close" data-notifications-close type="button" aria-label="关闭" title="关闭"><span class="icon" data-icon="close" aria-hidden="true"></span></button></header><div data-notification-body></div></dialog>
 </body>
 </html>

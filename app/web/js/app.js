@@ -1281,10 +1281,9 @@ export async function boot() {
     navigation,
     onApplied: () => Promise.all([loadBootstrap(), loadCatalogs()]),
   });
-  const updatePanel = createUpdatePanel({ root: $("#update-settings"),
-    dialog: $("#update-dialog"), entries: [] });
+  const updatePanel = createUpdatePanel({ root: $("#update-settings"), openDevices: () => document.querySelector("#open-devices")?.click(), entries: [] });
   const downloadCenter = createDownloadCenter({ updatePanel, navigation });
-  const notificationCenter = createNotificationCenter({ updatePanel, navigation, openDownloads: () => downloadCenter?.open() });
+  const notificationCenter = createNotificationCenter({ updatePanel, navigation, openAccount: () => account.open(), openDownloads: () => downloadCenter?.open() });
   window.addEventListener("pagehide", () => { notificationCenter.destroy(); downloadCenter?.destroy(); updatePanel?.destroy(); }, { once: true });
   const purgeConfirmation = createProjectPurgeConfirmation({
     dialog: $("#project-purge-confirm-dialog"), recovery: purgeRecovery,

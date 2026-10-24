@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { updateActions, updateAvailable, createUpdatePanel } from "../app/web/js/features/update/update-panel.js";
+import { TestElement, testDocument } from "./helpers/extension-dom.mjs";
 
 test("installation is offered only for an enabled, idle, verified package", () => {
   assert.equal(updateActions({ enabled: true, ready: false }).install, false);
@@ -8,52 +9,42 @@ test("installation is offered only for an enabled, idle, verified package", () =
   assert.equal(updateActions({ enabled: true, ready: true, busy: true }).install, false);
   assert.equal(updateActions({ enabled: true, ready: true, busy: false }).install, true);
 });
-test("panel consumes API envelopes, persists optional badge, and cannot dismiss mandatory updates", async () => {
-  class Node extends EventTarget {
-    constructor() { super(); this.dataset = {}; this.hidden = false; this.textContent = ""; this.classList = { contains: () => false }; }
-    setAttribute() {}
-    focus() {}
-  }
-  function surface(dialog = false) {
-    const node = new Node(), nodes = new Map();
-    for (const key of ["status", "notes", "title", "description", "later"])
-      nodes.set(`[data-update-${key}]`, new Node());
-    node.querySelector = key => nodes.get(key); node.contains = () => true;
-    node.querySelectorAll = () => [];
-    if (dialog) { node.open = false; node.showModal = () => { node.open = true; }; node.close = () => { node.open = false; }; }
-    return node;
-  }
-  const previousDocument = globalThis.document;
-  globalThis.document = Object.assign(new EventTarget(), {activeElement:null, visibilityState:"hidden"});
-  const root = surface(), dialog = surface(true), badge = new Node();
+test("shared update window has no snooze, retains the badge on close, and enforces mandatory updates", async () => {
+  const previous = { document: globalThis.document, window: globalThis.window };
+  const doc = Object.assign(new EventTarget(), testDocument(), { visibilityState: "hidden" });
+  globalThis.document = doc; globalThis.window = new EventTarget();
+  const root = new TestElement("section"), badge = new TestElement("button");
+  for (const key of ["status", "notes"]) { const node = new TestElement("p"); node.setAttribute(`data-update-${key}`, ""); root.append(node); }
+  doc.body.append(root, badge);
+  const dialog = () => doc.body.querySelector("dialog");
   let data = { enabled:true, available:true, ready:false, required:false, blocked:false, status:"available", notes:"Test" };
   let reject = false;
-  const panel = createUpdatePanel({ root, dialog, entries:[badge], transport:{ get:async () => {
+  const panel = createUpdatePanel({ root, entries:[badge], transport:{ get:async () => {
     if (reject) throw Error("offline"); return {data};
   }}});
   const flush = () => new Promise(resolve => setImmediate(resolve));
   try {
     await flush();
-    assert.equal(badge.hidden, false); assert.equal(dialog.open, false);
-    badge.dispatchEvent(new Event("click")); assert.equal(dialog.open,true);
-    dialog.querySelector("[data-update-later]").dispatchEvent(new Event("click"));
-    assert.equal(dialog.open,false); assert.equal(badge.hidden,false);
+    assert.equal(badge.hidden, false); assert.equal(dialog(), null);
+    badge.click(); assert(dialog().classList.contains("mdo-layer"));
+    assert.equal(dialog().querySelector("[data-update-later]"), null);
+    dialog().querySelector(".mdo-layer-controls").lastChild.click(); await flush();
+    assert.equal(dialog(), null); assert.equal(badge.hidden,false);
     data = { ...data, required:true, blocked:true };
     await panel.refresh();
-    assert.equal(dialog.open,true); assert.equal(dialog.querySelector("[data-update-later]").hidden,true);
-    const escape = new Event("cancel",{cancelable:true}); dialog.dispatchEvent(escape);
-    assert.equal(escape.defaultPrevented,true); assert.equal(dialog.open,true);
+    assert(dialog().open); assert(dialog().querySelector(".mdo-layer-controls").lastChild.hidden);
+    const escape = new Event("cancel",{cancelable:true}); dialog().dispatchEvent(escape); await flush();
+    assert.equal(escape.defaultPrevented,true); assert(dialog().open);
     const keyboardEscape = new Event("keydown", {cancelable:true});
     Object.defineProperty(keyboardEscape,"key",{value:"Escape"});
     document.dispatchEvent(keyboardEscape); assert.equal(keyboardEscape.defaultPrevented,true);
-    dialog.querySelector("[data-update-later]").dispatchEvent(new Event("click"));
-    assert.equal(dialog.open,true);
-    reject = true; await panel.refresh(); assert.equal(dialog.open,true);
+    dialog().querySelector(".mdo-layer-controls").lastChild.click(); await flush(); assert(dialog().open);
+    reject = true; await panel.refresh(); assert(dialog().open);
     reject = false; data = { ...data, required:false, blocked:false };
-    await panel.refresh(); assert.equal(dialog.open,false); assert.equal(badge.hidden,false);
+    await panel.refresh(); await flush(); assert.equal(dialog(), null); assert.equal(badge.hidden,false);
     data = { ...data, available:false, status:"current" };
     await panel.refresh(); assert.equal(badge.hidden,true);
-  } finally { panel.destroy(); globalThis.document = previousDocument; }
+  } finally { panel.destroy(); Object.assign(globalThis, previous); }
 });
 test("transient operation errors preserve the required update actions and badge", () => {
   const status = { enabled: true, available: true, required: true, blocked: true, status: "error", busy: false };
@@ -89,4 +80,20 @@ test("remote updates never install or exit the physical controller", () => {
     assert.deepEqual(updateActions(ready,context),{check:false,download:false,install:false,cancel:false,exit:false});
     assert.equal(updateActions({enabled:true,busy:true,status:"downloading"},context).cancel,false);
   }
+});
+
+test("closing update details leaves a download running; explicit cancel and stale controls stay distinct", async () => {
+  const previous={document:globalThis.document,window:globalThis.window};
+  const doc=Object.assign(new EventTarget(),testDocument());globalThis.document=doc;globalThis.window=new EventTarget();
+  const root=new TestElement("section");for(const key of ["status","notes"]){const n=new TestElement("p");n.setAttribute(`data-update-${key}`,"");root.append(n);}doc.body.append(root);
+  const calls=[];let data={enabled:true,available:true,status:"available",busy:false,ready:false};
+  const panel=createUpdatePanel({root,transport:{get:async()=>({data}),post:async path=>{calls.push(path);data={...data,status:"downloading",busy:true};},delete:async path=>{calls.push(path);data={...data,status:"available",busy:false};}}});
+  const flush=()=>new Promise(resolve=>setImmediate(resolve));
+  try {
+    await flush();panel.open();const old=doc.body.querySelector("dialog");
+    old.querySelector("[data-update-action=download]").click();await flush();assert.deepEqual(calls,["/update/download"]);
+    old.querySelector(".mdo-layer-controls").lastChild.click();await flush();assert(!doc.body.querySelector("dialog"));assert(data.busy);
+    old.querySelector("[data-update-action=check]").click();await flush();assert.equal(calls.length,1);
+    panel.open();doc.body.querySelector("dialog").querySelector("[data-update-action=cancel]").click();await flush();assert.deepEqual(calls,["/update/download","/update/download"]);assert(!data.busy);
+  } finally {panel.destroy();Object.assign(globalThis,previous);}
 });

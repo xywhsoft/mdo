@@ -34,7 +34,7 @@ export function createNoticeIndicators({ hosts, copy, onOpen }) {
   let list = [], preferences = {}, scope = "", anchor = null, activeId = null, hovering = false, focused = false;
   let closeTimer, autoTimer, expiry = 0, destroyed = false;
   const seen = new Set(), fingerprints = new Map();
-  const find = id => id === "all-notifications" ? { id, icon: "more", title: copy().title, body: list.map(n => n.title).join("\n") } : list.find(n => n.id === id);
+  const find = id => list.find(n => n.id === id);
   const visible = e => {
     if (!e || e.hidden || !e.getClientRects().length) return false;
     const rect = e.getBoundingClientRect();
@@ -62,7 +62,7 @@ export function createNoticeIndicators({ hosts, copy, onOpen }) {
     if (automatic) { expiry = Date.now() + 8000; clearTimeout(autoTimer); autoTimer = setTimeout(() => { if (!hovering && !focused) hide(); }, 8000); }
   }
   function leave() { clearTimeout(closeTimer); closeTimer = setTimeout(() => { if (!hovering && !focused) hide(); }, 180); }
-  function open(id) { const notice = find(id); hide(); if (notice) onOpen(id === "all-notifications" ? null : notice); }
+  function open(id) { const notice = find(id), opener = anchor; hide(); if (opener?.isConnected) { opener.focus({ preventScroll: true }); hide(); } if (notice) onOpen(notice); }
   function escape(event) { if (event.key === "Escape" && !bubble.hidden) { event.stopPropagation(); hide(); } }
   bubble.addEventListener("click", () => open(activeId));
   bubble.addEventListener("pointerenter", () => { hovering = true; clearTimeout(closeTimer); });
@@ -71,13 +71,14 @@ export function createNoticeIndicators({ hosts, copy, onOpen }) {
   bubble.addEventListener("blur", () => { focused = false; leave(); });
   bubble.addEventListener("keydown", escape);
   function makeButton(n) {
+    const owner = scope;
     const button = document.createElement("button"); button.type = "button";
     button.className = "notification-indicator"; button.dataset.noticeId = n.id;
-    button.dataset.tone = noticeTone(n); button.setAttribute("aria-controls", "notifications-dialog"); button.setAttribute("aria-haspopup", "dialog");
-    button.setAttribute("aria-label", n.id === "all-notifications" ? copy().allNotices : n.title);
+    button.dataset.tone = noticeTone(n); button.setAttribute("aria-controls", n.action === "update" && !n.online ? "update-dialog" : "notice-content-dialog"); button.setAttribute("aria-haspopup", "dialog");
+    button.setAttribute("aria-label", n.title);
     if (noticeTone(n) === "update") button.textContent = copy().updateBadge;
     else button.append(createNoticeIcon(n));
-    button.addEventListener("click", () => open(n.id));
+    button.addEventListener("click", () => { if (!destroyed && owner === scope) open(n.id); });
     button.addEventListener("pointerenter", () => { hovering = true; show(button, n.id); });
     button.addEventListener("pointerleave", () => { hovering = false; leave(); });
     button.addEventListener("focus", () => { focused = true; show(button, n.id); });
@@ -89,11 +90,10 @@ export function createNoticeIndicators({ hosts, copy, onOpen }) {
     const previousId = activeId, wasVisible = !bubble.hidden, priorHost = anchor?.parentElement, previousScope = scope;
     if (target !== scope) { hide(); seen.clear(); }
     list = next; preferences = prefs; scope = target;
-    const displayed = list.length > 3 ? [...list.slice(0, 2), find("all-notifications")] : list;
-    const signature = JSON.stringify([copy().updateBadge, copy().allNotices, displayed]);
+    const signature = JSON.stringify([scope, copy().updateBadge, list]);
     for (const host of hosts) {
       host.hidden = list.length === 0; host.setAttribute("aria-label", copy().title + " · " + list.length);
-      if (fingerprints.get(host) !== signature) { host.replaceChildren(...displayed.map(makeButton)); fingerprints.set(host, signature); }
+      if (fingerprints.get(host) !== signature) { host.replaceChildren(...list.map(makeButton)); fingerprints.set(host, signature); }
     }
     if (wasVisible && target === previousScope) {
       const replacement = [...(priorHost?.children ?? [])].find(e => e.dataset.noticeId === previousId);

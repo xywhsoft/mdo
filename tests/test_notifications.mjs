@@ -13,10 +13,10 @@ test("notice filters include lower and exclude upper version/time boundaries",()
  assert(!matchesNotice({...notice,audience:"signed_in"},device,"zh-CN",false,9000));
 });
 const copy={update:"Update",toolsUpdate:"Tools update",install:"Install",login:"Sign in"};
-test("update/read/resolution, guide snooze, marketing and revision reset",()=>{
+test("updates remain visible; run-scoped hidden notices and revision reset",()=>{
  const args={distribution:{...device,tools:[],installed:{core:"old",core_revision:1},toolpacks:[{id:"core",revision:2}],notices:[{...notice,starts_at:0,ends_at:0},{...notice,id:"offer",icon:"coupon",starts_at:0,ends_at:0}]},update:{available:true,sha256:"hash"},account:{state:"signed_out"},locale:"zh-CN",copy};
  assert.deepEqual(buildNotices(args).map(n=>n.id),["app-update","tools-guide","account-guide","offer","old"]);
- const preferences={"app-update":{dismissed:"hash",read:"hash"},"tools-guide":{snooze:Date.now()+60000},old:{dismissed:1},marketing:false};
+ const preferences={"app-update":{hidden:buildNotices(args)[0].revision,read:"hash"},"tools-guide":{hidden:1},old:{hidden:1},marketing:false};
  const ids=buildNotices({...args,preferences}).map(n=>n.id);assert(ids.includes("app-update"));assert(ids.includes("old"));assert(!ids.includes("tools-guide"));assert(!ids.includes("offer"));
  assert(!buildNotices({...args,update:{available:false},account:{state:"refreshing"}}).some(n=>["account-guide","app-update"].includes(n.id)));
 });

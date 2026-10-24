@@ -14,6 +14,7 @@ static struct {
     xvalue *Catalog,*Active,*Tools,*CleanupEligible,*Error; bool Busy; unsigned Command;
     char ProbeDetail[256];
     uint64 Done,Total; char Stage[24],Id[16],Message[256];
+    char NotificationSession[33]; /* Public UI lifetime ID, never an authorization token. */
 } g_MdoDistribution;
 static cstr MdoDistText(const xvalue* Object,cstr Key)
 {
@@ -297,6 +298,10 @@ static int32 MdoDistWorker(void* Data)
 bool MdoDistributionInit(XS_ServerInfo* Server)
 {
     if(g_MdoDistribution.Lock)return true;
+    uint8 Session[16];static const char Hex[]="0123456789abcdef";
+    if(!xrtSecureRandom(Session,sizeof(Session)))return false;
+    for(size_t I=0;I<sizeof(Session);I++){g_MdoDistribution.NotificationSession[I*2]=Hex[Session[I]>>4];g_MdoDistribution.NotificationSession[I*2+1]=Hex[Session[I]&15];}
+    g_MdoDistribution.NotificationSession[32]=0;
     g_MdoDistribution.Lock=xrtMutexCreate(); g_MdoDistribution.Cancel=xrtCancelCreate(); g_MdoDistribution.Server=Server;
     g_MdoDistribution.Active=MdoDistRead("data/toolpacks/active.json",1048576);
     if(xrtValueType(g_MdoDistribution.Active)!=XVALUE_OBJECT) {xrtValueRelease(g_MdoDistribution.Active);g_MdoDistribution.Active=xrtValueObject();}
@@ -341,6 +346,7 @@ xvalue* MdoDistributionSnapshot(void)
     xrtValueObjectSetNew(Root,XRT_STR_LITERAL("tools"),Tools);
     xrtValueObjectSetNew(Root,XRT_STR_LITERAL("installed"),xrtValueDeepClone(g_MdoDistribution.Active));
     xrtValueObjectSetNew(Root,XRT_STR_LITERAL("busy"),xrtValueBool(g_MdoDistribution.Busy)); MdoDistSet(Root,"message",g_MdoDistribution.Message);
+    MdoDistSet(Root,"notification_session",g_MdoDistribution.NotificationSession);
     if(g_MdoDistribution.Error)xrtValueObjectSetNew(Root,XRT_STR_LITERAL("error"),xrtValueDeepClone(g_MdoDistribution.Error));
     MdoDistSet(Root,"stage",g_MdoDistribution.Stage);MdoDistSet(Root,"operation_id",g_MdoDistribution.Id);
     xrtValueObjectSetNew(Root,XRT_STR_LITERAL("done"),xrtValueUInt(g_MdoDistribution.Done));

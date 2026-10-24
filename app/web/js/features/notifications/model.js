@@ -23,7 +23,7 @@ export function buildNotices({ distribution = {}, update, account, locale, prefe
     notices.push({ id: "tools-guide", revision: 1, title: copy.install, body: copy.toolsBody, icon: "tools", rank: 2, action: "tools" });
   if (account?.state === "signed_out") notices.push({ id: "account-guide", revision: 1, title: copy.login, body: copy.accountBody, icon: "account", rank: 3, action: "account" });
   for (const n of distribution.notices ?? []) if (matchesNotice(n, distribution, locale, account?.state === "signed_in", now) && !(n.icon === "coupon" && preferences.marketing === false))
-    notices.push({ ...n, rank: 4, online: true });
-  return notices.filter(n => n.persistent || (preferences[n.id]?.dismissed !== n.revision && !(preferences[n.id]?.snooze > now)))
+    notices.push({ ...n, rank: 4, online: true, persistent: false });
+  return notices.filter(n => n.persistent || preferences[n.id]?.hidden !== n.revision)
     .sort((a, b) => a.rank - b.rank || (b.priority ?? 0) - (a.priority ?? 0) || (b.starts_at ?? 0) - (a.starts_at ?? 0) || a.id.localeCompare(b.id));
 }

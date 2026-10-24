@@ -146,7 +146,6 @@ export function createDevices() {
   }
   button.addEventListener("click", open);
   settingsTarget.addEventListener("click", open);
-  document.querySelector("#update-target")?.addEventListener("click", open);
   refreshButton.addEventListener("click", () => void perform(listDevices));
   closeButton.addEventListener("click", () => { void layer?.close(); });
   async function switchFailed(error, next) {
@@ -165,5 +164,5 @@ export function createDevices() {
   });
   banner.querySelector("[data-target-choose]").addEventListener("click", open);
   const targetSubscription = subscribeTarget(renderTarget), locale = subscribeLocale(render);
-  return { open, refresh, dispose() { disposed = true; clearTimeout(timer); login.dispose(); layer?.dispose(); targetSubscription(); locale(); button.removeEventListener("click", open); settingsTarget.removeEventListener("click", open); document.querySelector("#update-target")?.removeEventListener("click", open); } };
+  return { open, refresh, dispose() { disposed = true; clearTimeout(timer); login.dispose(); layer?.dispose(); targetSubscription(); locale(); button.removeEventListener("click", open); settingsTarget.removeEventListener("click", open); } };
 }
