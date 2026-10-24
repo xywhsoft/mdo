@@ -31,6 +31,7 @@ static xvalue* McpProjectItem(xroot Root,cstr Workspace,cstr Id)
         char* RuntimeId=xrtFormat("mdo-project-%.16s.%s",Hash,Id);
         Ok=RuntimeId&&MdoApiValueSetString(Item,"runtime_id",RuntimeId);xrtFree(RuntimeId);
     }
+    Ok=Ok&&McpConnectionCredits(Item,Doc);
     xrtValueRelease(Doc);xrtFree(Text);
     if(!Ok){xrtValueRelease(Item);return NULL;}return Item;
 }
@@ -91,6 +92,7 @@ bool MdoApiMcpProjectRoute(MdoApiContext* C)
         bool Missing=false;char* Old=SkillRead(Root,Path,&Missing);
         if(!Old&&!Missing)Result=MdoApiReplyError(C,503,"mcp_project_unreadable","Existing server cannot be read safely",NULL);
         else if(!ExtensionMatch(C,Old))Result=true;
+        else if((Method==XHTTP_METHOD_DELETE||Method==XHTTP_METHOD_PUT)&&Old&&strstr(Old,"\"mdo_template\""))Result=MdoApiReplyError(C,403,"store_resource_readonly","Use the template connection editor",NULL);
         else if(Method==XHTTP_METHOD_DELETE) {
             Result=xrtRootRemove(Root,Path)?MdoApiReplySuccessTake(C,200,xrtValueObject(),NULL):MdoApiReplyError(C,409,"mcp_project_delete_failed","Cannot delete project MCP",NULL);
         } else {

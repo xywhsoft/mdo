@@ -12,6 +12,8 @@
 /* File-backed editors share only storage/HTTP mechanics. Runtime ownership,
  * transport, execution and permissions remain with their existing managers. */
 static xmutex* g_MdoExtensionLock;
+static const xvalue* McpConnectionBinding(const xvalue*);
+static bool McpConnectionCredits(xvalue*,const xvalue*);
 bool MdoApiExtensionsInit(void) { g_MdoExtensionLock = xrtMutexCreate(); return g_MdoExtensionLock != NULL; }
 void MdoApiExtensionsUnit(void) { if (g_MdoExtensionLock) xrtMutexDestroy(g_MdoExtensionLock); g_MdoExtensionLock = NULL; }
 
@@ -169,6 +171,7 @@ static xvalue* ExtensionItemRecord(cstr Kind,cstr Id,bool IncludeSource,const xv
         if(!MdoApiValueSetStringView(Item,"argument_hint",Hint))goto fail;
     }
     if(MdoPackageSingleKind(Kind)&&!ExtensionStoreInfo(Item,Path,Receipts,OwnershipKnown,IncludeSource))goto fail;
+    if(!strcmp(Kind,"mcp")&&!McpConnectionCredits(Item,Doc))goto fail;
     xrtFree(Text); xrtValueRelease(Doc); return Item;
 fail:
     xrtFree(Text); xrtValueRelease(Doc); xrtValueRelease(Item); return NULL;
@@ -555,6 +558,7 @@ static bool ExtensionBundle(MdoApiContext* C,cstr Id)
     xrtValueRelease(Files); return MdoApiReplySuccessTake(C,200,Item,NULL);
 }
 
+#include "mcp_template_export.inc.c"
 #include "ecosystem_install.inc.c"
 
 bool MdoApiExtensionsRoute(MdoApiContext* C)
@@ -589,5 +593,6 @@ bool MdoApiExtensionsRoute(MdoApiContext* C)
 
 #include "skill_management.inc.c"
 #include "mcp_management.inc.c"
+#include "mcp_connections.inc.c"
 #include "mcp_import.inc.c"
 #include "mcp_auth_routes.inc.c"

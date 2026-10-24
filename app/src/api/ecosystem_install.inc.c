@@ -22,7 +22,7 @@ static bool EcoLocalAllowed(cstr path)
     return !strncmp(path,"agents/",7)||!strncmp(path,"subagents/",10)||!strncmp(path,"tools/",6)||
         !strncmp(path,"skills/",7)||!strncmp(path,"mcp/",4)||!strncmp(path,"commands/",9)||
         !strncmp(path,"modules/agents/",15)||!strncmp(path,"modules/subagents/",18)||!strncmp(path,"modules/tools/",14)||
-        !strncmp(path,"data/ecosystem/toolpacks/",24)||!strncmp(path,"plugins/",8)||!strcmp(path,"config/plugins.json");
+        !strncmp(path,"data/ecosystem/mcp/",19)||!strncmp(path,"data/ecosystem/toolpacks/",24)||!strncmp(path,"plugins/",8)||!strcmp(path,"config/plugins.json");
 }
 static bool EcoLocalPut(cstr path,const xvalue* encoded)
 {
@@ -66,13 +66,11 @@ static xvalue* EcoLocalFiles(const xvalue* package,char error[1024])
         if(!strcmp(kind,"plugins")||!strcmp(kind,"toolpacks")){ok=EcoNativeFiles(files,r,error);continue;}
         ok=EcoLocalPath(kind,id,path);
         if(ok&&strcmp(kind,"c-agents")&&strcmp(kind,"c-subagents")&&strcmp(kind,"modules")){
-            /* MCP requires local setup after installation. Input references
-             * stay placeholders; save/test in the existing MCP editor. */
             if(strcmp(kind,"mcp"))ok=ExtensionValidate(kind,id,content,error);
-            else {xvalue* doc=xrtJsonParse(xrtStrView(content));ok=doc&&xrtValueObjectSetNew(doc,XRT_STR_LITERAL("enabled"),xrtValueBool(false));
-                const xvalue* transport=xrtValueObjectGet(doc,XRT_STR_LITERAL("transport"));const char* keys[]={"headers","environment"};
-                for(size_t k=0;ok&&k<2;k++){const xvalue* list=xrtValueObjectGet(transport,xrtStrView(keys[k]));for(size_t j=0;ok&&j<xrtValueCount(list);j++){xvalue* e=(xvalue*)xrtValueArrayGet(list,j);cstr ref=MdoPackageText(e,"secret_ref",256);char name[128];snprintf(name,sizeof(name),"env:MDO_MCP_%s_%s",id,ref?ref+6:"TOKEN");ok=xrtValueObjectSetNew(e,XRT_STR_LITERAL("secret_ref"),xrtValueString(xrtStrView(name)));}}
-                char* normalized=ok?xrtJsonStringify(doc,true,NULL):NULL;ok=normalized&&ExtensionValidate(kind,id,normalized,error)&&EcoLocalAppend(files,path,normalized,strlen(normalized));xrtFree(normalized);xrtValueRelease(doc);continue;}
+            else {char hash[65];ok=MdoExtensionHash(content,hash);
+                snprintf(path,sizeof(path),"data/ecosystem/mcp/%s/%s/template.json",id,hash);
+                if(ok)ok=EcoLocalAppend(files,path,content,strlen(content));continue;}
+
         }
         if(ok)ok=EcoLocalAppend(files,path,content,strlen(content));
         const xvalue* extras=xrtValueObjectGet(r,XRT_STR_LITERAL("files"));
@@ -110,6 +108,8 @@ static bool EcoLocalCurrent(cstr path,xvalue* change,const xvalue* owned,char er
     if(!exists){if(owned){snprintf(error,1024,"Installed file is missing: %s",path);return false;}
         xfile builtin=MdoResourceOpenRead(path);if(builtin){xrtClose(builtin);snprintf(error,1024,"Built-in resource cannot be replaced: %s",path);return false;}
         xrtClearError();return xrtValueObjectSetNew(change,XRT_STR_LITERAL("old"),xrtValueNull());}
+    if(!owned&&!strncmp(path,"data/ecosystem/mcp/",19)){bool missing=false;char* raw=MdoExtensionRead(path,true,131072,&missing);char hash[65];bool same=raw&&MdoExtensionHash(raw,hash)&&!strcmp(hash,MdoPackageText(change,"sha256",64));
+        char* encoded=same?xrtBase64EncodeNew(raw,strlen(raw),NULL):NULL;bool reused=encoded&&MdoApiValueSetString(change,"old",encoded);xrtFree(encoded);xrtFree(raw);if(reused)return true;}
     if(!owned||info.Type!=XFILE_TYPE_FILE||!(info.Available&XFILE_INFO_SIZE)||info.Size>64u*1024u*1024u){snprintf(error,1024,"Resource already exists: %s",path);return false;}
     xfile f=MdoHomeOpenRead(path);size_t n=(size_t)info.Size;bytes b=xrtMalloc(n+1);char hash[65];bool ok=f&&b&&xrtReadFull(f,b,n,NULL)&&MdoExtensionHashBytes(b,n,hash)&&!strcmp(hash,MdoPackageText(owned,"sha256",64));if(f)xrtClose(f);
     if(!ok)snprintf(error,1024,"Resource was edited locally: %s. Keep it or export/remove it before updating.",path);
@@ -128,6 +128,7 @@ static bool EcoLocalApply(const xvalue* entry,bool uninstall,char error[1024],xv
     if(xrtValueIterBegin(receipts,&it)){while((value=xrtValueIterNext(&it,&k))){cstr storedSource=MdoPackageText(value,"source",16);bool storedLocal=storedSource&&!strcmp(storedSource,"local");bool same=uninstall?xrtStrEqual(k.String,xrtStrView(key)):local==storedLocal&&
         MdoPackageText(value,"slug",64)&&MdoPackageText(entry,"slug",64)&&!strcmp(MdoPackageText(value,"slug",64),MdoPackageText(entry,"slug",64))&&
         EcoLocalNumber(value,"owner")==EcoLocalNumber(entry,"owner");
+        if(EcoNativeNeedsConfiguration(package)&&!uninstall)same=xrtStrEqual(k.String,xrtStrView(key));
         if(same&&k.String.Size<sizeof(priorKey)){prior=value;memcpy(priorKey,k.String.Data,k.String.Size);priorKey[k.String.Size]=0;break;}}xrtValueIterEnd(&it);}
     if(uninstall&&!prior){snprintf(error,1024,"Package is not installed");xrtValueRelease(receipts);return false;}
     xvalue* files=uninstall?xrtValueArray():EcoLocalFiles(package,error);
@@ -148,7 +149,7 @@ static bool EcoLocalApply(const xvalue* entry,bool uninstall,char error[1024],xv
     for(size_t i=0;ok&&i<xrtValueCount(oldFiles);i++){const xvalue* old=xrtValueArrayGet(oldFiles,i);cstr path=MdoPackageText(old,"path",255);if(EcoLocalFind(files,path))continue;
         /* Immutable plugin revisions remain available to retained UI/code
          * generations and explicit rollback after removal or update. */
-        if(path&&!strncmp(path,"plugins/",8))continue;
+        if(path&&(!strncmp(path,"plugins/",8)||!strncmp(path,"data/ecosystem/mcp/",19)))continue;
         if(uninstall){bool keep=!EcoLocalUnchanged(old);for(size_t j=0;path&&j<keptCount;j++)if(!strncmp(path,keptSkills[j],strlen(keptSkills[j])))keep=true;if(keep)continue;}
         xvalue* f=xrtValueObject();bool current=f&&MdoApiValueSetString(f,"path",path)&&EcoLocalCurrent(path,f,old,error);
         if(uninstall&&!current&&strstr(error,"Resource was edited locally:")){error[0]=0;xrtValueRelease(f);continue;}
@@ -274,11 +275,7 @@ bool MdoApiEcosystemLocal(MdoApiContext* c,const xvalue* input)
             if(kind&&(!strcmp(kind,"plugins")||!strcmp(kind,"toolpacks"))){xvalue* R=xrtValueObject();ok=R&&EcoNativeExport(kind,id,R)&&xrtValueArrayAppend(resources,R);xrtValueRelease(R);continue;}
             ok=(!Single||(kind&&!strcmp(kind,Single)))&&EcoLocalPath(kind,id,path);bool missing=false;char* content=ok?MdoExtensionRead(path,false,MDO_EXTENSION_TEXT_LIMIT,&missing):NULL;xvalue* resource=xrtValueObject();
             ok=content&&resource&&MdoApiValueSetString(resource,"kind",kind)&&MdoApiValueSetString(resource,"id",id);
-            if(ok&&!strcmp(kind,"mcp")){xvalue* doc=xrtJsonParse(xrtStrView(content));xvalue* transport=(xvalue*)xrtValueObjectGet(doc,XRT_STR_LITERAL("transport"));const char* keys[]={"environment","headers"};size_t index=0;
-                ok=doc&&transport;for(size_t k=0;ok&&k<2;k++){const xvalue* values=xrtValueObjectGet(transport,xrtStrView(keys[k]));for(size_t j=0;ok&&j<xrtValueCount(values);j++){xvalue* v=(xvalue*)xrtValueArrayGet(values,j);char placeholder[24];snprintf(placeholder,sizeof(placeholder),"input:%zu",index++);ok=MdoApiValueSetString(v,"secret_ref",placeholder);}}
-                if(ok)xrtValueObjectRemove(transport,XRT_STR_LITERAL("working_directory"));
-                char* redacted=ok?xrtJsonStringify(doc,true,NULL):NULL;xrtValueRelease(doc);xrtFree(content);content=redacted;ok=content!=NULL;
-            }
+            if(ok&&!strcmp(kind,"mcp")){char* Redacted=McpTemplateExport(content,id);xrtFree(content);content=Redacted;ok=content!=NULL;}
             if(ok)ok=MdoApiValueSetString(resource,"content",content);
             if(ok&&!strcmp(kind,"skills")){xvalue* extras=xrtValueArray();char directory[160];bool external=false;xfileinfo info;size_t total=0;snprintf(directory,sizeof(directory),"skills/%s",id);
                 ok=extras&&MdoHomeExternalStat(directory,&external,&info)&&(external?EcoNativeExportTree(directory,"",extras,&total,0):ExtensionBundleFiles(directory,"",false,extras,&total,0))&&xrtValueObjectSet(resource,XRT_STR_LITERAL("files"),extras);xrtValueRelease(extras);}

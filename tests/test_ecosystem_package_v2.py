@@ -39,10 +39,28 @@ def main():
     for kind in ("agents", "subagents", "tools", "skills", "mcp", "commands", "modules", "toolpacks", "plugins"):
         value = package(kind)
         if kind == "mcp":
-            value["resources"][0]["content"] = '{"transport":{"type":"http","url":"https://example.invalid/mcp"}}'
+            from mcp_template_fixture import template
+            value["resources"][0]["content"] = json.dumps(template("qa-resource"))
         add(kind, value, True)
+    for mode in ("key", "oauth", "stdio"):
+        from mcp_template_fixture import template
+        value = package("mcp"); value["resources"][0]["content"] = json.dumps(template("qa-resource", mode))
+        add("mcp-" + mode, value, True)
+    def invalid_template(name, mutation):
+        value = package("mcp"); t = template("qa-resource", "key"); mutation(t)
+        value["resources"][0]["content"] = json.dumps(t); add("mcp-" + name, value, False)
+    invalid_template("inline-secret", lambda t: t["variants"][0]["config"]["transport"]["headers"][0].update(secret_ref="Bearer secret"))
+    invalid_template("vault-ref", lambda t: t["variants"][0]["config"]["transport"]["headers"][0].update(secret_ref="keychain:private"))
+    invalid_template("secret-default", lambda t: t["inputs"][0].update(default="private"))
+    invalid_template("userinfo", lambda t: t["variants"][0]["config"]["transport"].update(endpoint="https://name:secret@example.invalid/mcp"))
+    invalid_template("url-token", lambda t: t["variants"][0]["config"]["transport"].update(endpoint="https://example.invalid/mcp?token=private"))
+    invalid_template("oauth-token", lambda t: t["variants"][0]["config"].update(oauth=dict(enabled=True, access_token="secret")))
+    invalid_template("hook", lambda t: t.update(install="curl run.sh | sh"))
+    invalid_template("extra-config", lambda t: t["variants"][0]["config"].update(secrets=dict(token="secret")))
+    invalid_template("security-extra", lambda t: t["variants"][0]["config"]["security"].update(token="secret"))
+    invalid_template("unknown-input", lambda t: t["variants"][0]["config"]["transport"]["headers"][0].update(secret_ref="input:unknown"))
     combo = package()
-    combo["resources"] = [copy.deepcopy(c["package"]["resources"][0]) for c in cases]
+    combo["resources"] = [copy.deepcopy(c["package"]["resources"][0]) for c in cases[:9]]
     add("all-nine-combined", combo, True)
     add("legacy", package(version="mdo.extension.v1"), True)
     add("v2-resource-in-v1", package("plugins", "mdo.extension.v1"), False)
@@ -67,6 +85,7 @@ def main():
         (base / "cases.json").write_text(json.dumps(cases), encoding="utf-8")
         report = base / "report.json"
         (base / "ecosystem_package.h").write_bytes((ROOT / "app/include/mdo/ecosystem_package.h").read_bytes())
+        (base / "mcp_template.h").write_bytes((ROOT / "app/include/mdo/mcp_template.h").read_bytes())
         source = '#include <xsbase.h>\n#include "ecosystem_package.h"\n' + r'''
 void ServiceInit(XS_HostInfo* Host) {
     (void)Host; size_t length=0;bytes raw=xsAppReadAll("cases.json",&length);

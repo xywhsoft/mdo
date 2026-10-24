@@ -1245,7 +1245,7 @@ static bool MdoMcpParseServer(const MdoMcpSource* pSource,
         "schema_version", "id", "name", "description", "enabled",
         "transport", "protocol_version", "startup_timeout_ms",
         "request_timeout_ms", "limits", "tools", "security",
-        "auto_reconnect", "oauth"
+        "auto_reconnect", "oauth", "mdo_template"
     };
     static const char* const LimitKeys[] = { "message_bytes", "tools" };
     static const char* const ToolKeys[] = { "allow", "deny" };

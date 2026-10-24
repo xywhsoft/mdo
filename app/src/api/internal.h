@@ -194,6 +194,8 @@ bool MdoApiTaskAskRoute(MdoApiContext* pContext);
 bool MdoApiAskRoute(MdoApiContext* pContext);
 bool MdoApiWorkspaceFilesRoute(MdoApiContext* pContext);
 bool MdoApiProjectWorkspaceFilesRoute(MdoApiContext* pContext);
+bool MdoApiMcpConnectionsRoute(MdoApiContext* Context);
+bool MdoApiMcpTemplatesRoute(MdoApiContext* Context);
 bool MdoApiMcpProjectRoute(MdoApiContext* Context);
 bool MdoApiMcpSourcesRoute(MdoApiContext* Context);
 bool MdoApiMcpContextRoute(MdoApiContext* Context);

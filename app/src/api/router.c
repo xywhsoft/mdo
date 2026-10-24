@@ -238,6 +238,8 @@ static const MdoApiRoute g_MdoApiRoutes[] = {
     { "/api/v1/mcp/{server}/diagnostics", XHTTP_METHOD_GET, "GET, OPTIONS", MdoApiMcpContextRoute, false },
     { "/api/v1/mcp/reload", XHTTP_METHOD_POST,
       "POST, OPTIONS", MdoApiMcpReloadRoute, false },
+    { "/api/v1/mcp/templates", XHTTP_METHOD_GET, "GET, OPTIONS", MdoApiMcpTemplatesRoute, false },
+    { "/api/v1/mcp/connections", XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiMcpConnectionsRoute, false },
     { "/api/v1/mcp/project", XHTTP_METHOD_GET|XHTTP_METHOD_POST, "GET, POST, OPTIONS", MdoApiMcpProjectRoute, false },
     { "/api/v1/mcp/sources", XHTTP_METHOD_GET, "GET, OPTIONS", MdoApiMcpSourcesRoute, false },
     { "/api/v1/mcp/migrate", XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiMcpMigrateRoute, false },

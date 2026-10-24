@@ -27,6 +27,10 @@ static const xvalue* ExtensionStoreOwner(const xvalue* Records,cstr Path)
 static bool ExtensionStoreCanCustomize(MdoApiContext* C,cstr Kind,cstr Id)
 {
     if(!MdoPackageSingleKind(Kind))return true;
+    if(!strcmp(Kind,"mcp")){char P[160];ExtensionPath(Kind,Id,P);bool Missing=false;char* S=MdoExtensionRead(P,false,MDO_EXTENSION_TEXT_LIMIT,&Missing);xvalue* D=S?xrtJsonParse(xrtStrView(S)):NULL;
+        const xvalue* B=McpConnectionBinding(D);const xvalue* R=xrtValueObjectGet(B,XRT_STR_LITERAL("receipt"));cstr Source=MdoPackageText(R,"source",16);bool Managed=B&&(!Source||strcmp(Source,"local"));xrtFree(S);xrtValueRelease(D);
+        if(Managed){MdoApiReplyError(C,403,"store_resource_readonly","Configure this MCP connection through its template; editing, exporting and republishing store templates is unavailable",NULL);return false;}}
+
     char Path[160];ExtensionPath(Kind,Id,Path);bool Known=false;xvalue* Records=ExtensionStoreRead(&Known);
     bool Managed=ExtensionStoreOwner(Records,Path)!=NULL;xrtValueRelease(Records);
     if(!Known){MdoApiReplyError(C,503,"ecosystem_receipts","Cannot verify resource ownership; restore installation receipts before customizing",NULL);return false;}

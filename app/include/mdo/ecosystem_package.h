@@ -43,7 +43,7 @@ static bool MdoPackageKind(const char* kind)
 }
 /* Categories with one independently installed resource per work. */
 static bool MdoPackageSingleKind(const char* kind)
-{return kind&&(!strcmp(kind,"skills")||!strcmp(kind,"tools")||!strcmp(kind,"commands"));}
+{return kind&&(!strcmp(kind,"skills")||!strcmp(kind,"tools")||!strcmp(kind,"commands")||!strcmp(kind,"mcp"));}
 static const char* MdoPackageSystem(const char* kind)
 {return kind&&!strcmp(kind,"c-agents")?"agents":kind&&!strcmp(kind,"c-subagents")?"subagents":kind;}
 static bool MdoPackageV2(const xvalue* package)
@@ -89,6 +89,7 @@ static bool MdoPackageSamePath(const char* a,const char* b)
 {
     for(;*a&&*b;a++,b++){unsigned char x=*a,y=*b;if(x>='A'&&x<='Z')x+=32;if(y>='A'&&y<='Z')y+=32;if(x!=y)return false;}return *a==*b;
 }
+#include "mcp_template.h"
 static bool MdoPackageValidate(const xvalue* package,char* error,size_t capacity)
 {
     const char* reason="Invalid extension package";
@@ -154,17 +155,9 @@ static bool MdoPackageValidate(const xvalue* package,char* error,size_t capacity
             }
             xrtValueRelease(doc);if(!valid){reason=plugin?"Invalid mdo plugin manifest or frontend file":"Invalid command-line toolpack manifest";goto bad;}
         }
-        /* Portable MCP exports have credential placeholders, never vault or
-         * local file references, inline tokens, or machine-specific paths. */
         if(!strcmp(kind,"mcp")){
-            xvalue* doc=xrtJsonParse(xrtStrView(content));const xvalue* transport=xrtValueObjectGet(doc,XRT_STR_LITERAL("transport"));
-            bool ok=doc&&xrtValueType(transport)==XVALUE_OBJECT;const char* keys[]={"environment","headers"};
-            for(size_t k=0;ok&&k<2;k++){const xvalue* list=xrtValueObjectGet(transport,xrtStrView(keys[k]));
-                if(list&&xrtValueType(list)!=XVALUE_ARRAY){ok=false;break;}
-                for(size_t j=0;ok&&j<xrtValueCount(list);j++){const xvalue* e=xrtValueArrayGet(list,j);const char* ref=MdoPackageText(e,"secret_ref",256);
-                    ok=ref&&!strncmp(ref,"input:",6)&&strlen(ref)>6;}}
-            const char* cwd=MdoPackageText(transport,"working_directory",1024);if(cwd&&cwd[0])ok=false;
-            xrtValueRelease(doc);if(!ok){reason="MCP export must use input: credential placeholders and no local working directory";goto bad;}
+            xvalue* doc=xrtJsonParse(xrtStrView(content));char why[256];bool ok=MdoMcpTemplateValidate(doc,id,why,sizeof(why));
+            xrtValueRelease(doc);if(!ok){if(error&&capacity)snprintf(error,capacity,"%s",why);return false;}
         }
     }
     {int64 largeBuild=0;size_t size=0;char* json=xrtJsonStringify(package,false,&size);bool bounded=json&&size<=(v2?MDO_PACKAGE_LIMIT:MDO_PACKAGE_V1_LIMIT);xrtFree(json);
