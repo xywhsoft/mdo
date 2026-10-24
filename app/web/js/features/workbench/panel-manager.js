@@ -7,7 +7,7 @@ import { mountTerminalView } from "./terminal-view.js";
 import { mountStartView } from "./start-view.js";
 import { filePathKey, relocatedPath } from "./file-actions.js";
 import { createFileDrafts } from "./file-drafts.js";
-import { iconButton, popupMenu } from "./controls.js";
+import { icon, iconButton, popupMenu } from "./controls.js";
 import { createSurfaceInput } from "./surface-input.js";
 import { renderSourceMarkdown } from "../../utils/source-markdown.js";
 import { toast } from "../../utils/dom.js";
@@ -431,7 +431,7 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
   }
   let loading;
   const ensure = () => loading ||= load().catch(error => { loading = null; throw error; });
-  const opener = button("＋", async () => { await ensure(); return newTab(); }, "icon-button"); opener.id = "new-workbench-tab"; opener.title = "新建标签页（Ctrl/⌘+Shift+B）"; opener.setAttribute("aria-label", opener.title);
+  const opener = button("", async () => { await ensure(); return newTab(); }, "icon-button"); opener.append(icon("panel-right")); opener.id = "new-workbench-tab"; opener.title = "新建标签页（Ctrl/⌘+Shift+B）"; opener.setAttribute("aria-label", opener.title);
   shell.querySelector(".header-actions")?.append(opener);
   const shortcut = event => { if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.code === "KeyB" && !event.isComposing && !event.repeat) { event.preventDefault(); void ensure().then(newTab).catch(error => toast(error.message, "error")); } };
   document.addEventListener("keydown", shortcut); render();
