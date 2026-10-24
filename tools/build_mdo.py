@@ -173,6 +173,11 @@ def prepare_sdk_overlay(source: Path, lock: dict) -> Path:
     if (not patch.is_relative_to(ROOT) or not patch.is_file()
             or hashlib.sha256(patch.read_bytes()).hexdigest() != record["sha256"]):
         raise BuildError("SDK compatibility patch hash mismatch")
+    marker = source / ".mdo-sdk-overlay.json"
+    if marker.is_file() and load_object(marker) == record:
+        # Explicit SDK exports already contain the locked compatibility patch.
+        # They need no Git metadata or dependency on a caller's cache setting.
+        return source
     cache = os.environ.get("MDO_SDK_OVERLAY_CACHE")
     cache_root = Path(cache).expanduser().resolve() if cache else ROOT / ".build/sdk-overlays"
     destination = cache_root / record["sha256"]

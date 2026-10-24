@@ -8,6 +8,7 @@ import contextlib
 import hashlib
 import io
 import json
+import os
 import re
 import subprocess
 import sys
@@ -39,6 +40,24 @@ ALL_BUILD = load_driver("mdo_all_build", "build.py")
 class BuildContractTests(unittest.TestCase):
     def setUp(self) -> None:
         self.lock = json.loads((ROOT / "deps.lock").read_text(encoding="utf-8"))
+
+    def test_explicit_sdk_export_does_not_require_git_or_the_original_cache(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            sdk = root / "exported-sdk"; sdk.mkdir()
+            compat = root / "compat.patch"; compat.write_bytes(b"locked compatibility patch")
+            record = {**self.lock["sdk_overlay"], "path": "compat.patch",
+                      "sha256": hashlib.sha256(compat.read_bytes()).hexdigest()}
+            (sdk / ".mdo-sdk-overlay.json").write_text(json.dumps(record), encoding="utf-8")
+            lock = {**self.lock, "sdk_overlay": record}
+            with patch.object(BUILD, "ROOT", root), patch.dict(os.environ,
+                    {"MDO_SDK_OVERLAY_CACHE": str(root / "different-cache")}), \
+                    patch.object(BUILD.subprocess, "run", side_effect=AssertionError("must not export patched SDK from Git")):
+                self.assertEqual(BUILD.find_xserver(sdk, lock), sdk)
+                self.assertFalse((root / "different-cache").exists())
+                compat.write_bytes(b"changed patch")
+                with self.assertRaisesRegex(BUILD.BuildError, "patch hash mismatch"):
+                    BUILD.find_xserver(sdk, lock)
 
     def test_android_editions_keep_distinct_outputs_and_build_ids(self) -> None:
         release = json.loads((ROOT / "app/release.json").read_text(encoding="utf-8"))
