@@ -51,10 +51,6 @@ export function createToolPanel({copy,target,command,openFull}) {
       if(!updatesOnly){body.append(button(c.cleanup,()=>action("cleanup",""),!toolActions(d,"",context).cleanup));if(d.installed?.retired?.length)body.append(node("p",c.cleanupHelp));}
     }
     if(!updatesOnly)for(const tool of d.tools??[])body.append(node("p",tool.id+" · "+tool.version+" · "+tool.verified),node("code",tool.path));
-    if(d.busy) {
-      const stage=c.stages?.[d.stage]||c.busy;const progress=node("progress");progress.max=d.total||1;progress.value=Math.min(d.done||0,progress.max);
-      body.append(node("p",stage+(d.total?" · "+Math.floor((d.done||0)*100/d.total)+"%":""),"toolpack-progress"),progress,button(c.cancel,()=>action("cancel",""),!toolActions({...d,busy:false},"",context).check));
-    }
     if(d.error) {
       const error=d.error,stage=c.stages?.[error.stage]||error.stage,title=c.errors?.[error.code]||error.detail||c.failure;
       body.append(node("p",`${stage} · ${title}${error.file?" · "+error.file:""}`,"notice-description"));

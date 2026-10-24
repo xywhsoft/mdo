@@ -1,3 +1,4 @@
+import { createDownloadCenter } from "./features/downloads/center.js";
 import { createSkillAuthoringDraft } from "./features/settings/skill-authoring.js";
 import { createNotificationCenter } from "./features/notifications/center.js";
 import { liveConnection } from "./api/live.js";
@@ -1281,8 +1282,9 @@ export async function boot() {
   });
   const updatePanel = createUpdatePanel({ root: $("#update-settings"),
     dialog: $("#update-dialog"), entries: [] });
-  const notificationCenter = createNotificationCenter({ updatePanel, navigation });
-  window.addEventListener("pagehide", () => { notificationCenter.destroy(); updatePanel?.destroy(); }, { once: true });
+  const downloadCenter = createDownloadCenter({ updatePanel, navigation });
+  const notificationCenter = createNotificationCenter({ updatePanel, navigation, openDownloads: () => downloadCenter?.open() });
+  window.addEventListener("pagehide", () => { notificationCenter.destroy(); downloadCenter?.destroy(); updatePanel?.destroy(); }, { once: true });
   const purgeConfirmation = createProjectPurgeConfirmation({
     dialog: $("#project-purge-confirm-dialog"), recovery: purgeRecovery,
     onResolved: () => {

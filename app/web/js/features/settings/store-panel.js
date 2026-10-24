@@ -28,7 +28,7 @@ export function createStorePanel() {
   let visible = false, view = "discover", items = [], installed = {}, query = "", kind = "", cursor = 0;
   let busy = false, error = "", loginRequired = false, serial = 0, dialog = null, editor = null, pendingPackageKey = null;
   const targetKey = () => targetState().selected?.id || "local";
-  let detailSerial = 0, detailController = null, activeTarget = targetKey();
+  let backgroundWrite = null, detailSerial = 0, detailController = null, activeTarget = targetKey();
   const browser = createExtensionBrowser({ kind: "plugins", onClose: () => { ++detailSerial; detailController?.abort(); } });
   const rowKey = row => `${view}:${row.source || "store"}:${row.slug || ""}:${row.id}`;
   const call = async (body, options) => (await api.post("/ecosystem", body, options)).data;
@@ -75,11 +75,11 @@ export function createStorePanel() {
     } catch (e) { if (epoch === serial && target === targetKey()) feedback(e); }
     finally { if (epoch === serial) { busy = false;render();if(pendingPackageKey&&visible){const row=Object.values(installed).find(r=>receiptKey(r)===pendingPackageKey);pendingPackageKey=null;if(row)installedDetails(row);} } }
   }
-  async function act(work) {
-    if (busy) return;const target = targetKey(), epoch=serial;busy = true;error = "";render();
+  async function act(work, background = false) {
+    if (busy) return;const target = targetKey(), epoch=serial;if(background)backgroundWrite=epoch;busy = true;error = "";render();
     try { await work();if (target !== targetKey() || epoch!==serial) return;changed();busy = false;await load(); }
     catch (e) { if (target === targetKey() && epoch===serial) { feedback(e);toast(error, "error"); } }
-    finally { if (target === targetKey() && epoch===serial) { busy = false;render(); } }
+    finally { if(backgroundWrite===epoch)backgroundWrite=null;if (target === targetKey() && epoch===serial) { busy = false;render(); } }
   }
   function render() {
     if (!root) return;
@@ -143,9 +143,9 @@ export function createStorePanel() {
         actions: buttons.filter(b => b !== primary), badge: { text: view === "mine" ? text(`state.${row.state}`, row.state) : view === "installed" && row.activation && row.activation !== "active" ? browserText("needsAttention", "需要处理") : installed[row.id] ? text("installed", "已安装") : "" },
         ...(view === "installed" ? { detail: () => installedBody(row) } : { onSelect: () => loadDetail(row) }) });
     }
-    browser.setItems(rows, { busy }); nodes.push(browser.root);if (cursor) nodes.push(button(text("more", "加载更多"), () => load(true)));
+    browser.setItems(rows, { busy, pageKey:JSON.stringify([view,query,kind]) }); nodes.push(browser.root);if (cursor) nodes.push(button(text("more", "加载更多"), () => load(true)));
     root.replaceChildren(...nodes);
-    for (const b of root.querySelectorAll("button")) if (!b.classList.contains("eb-open") && !b.closest(".eb-detail")) b.disabled = busy;
+    for (const b of root.querySelectorAll("button")) if (!b.classList.contains("eb-open") && !b.closest(".eb-detail") && !b.closest(".eb-pagination")) b.disabled = busy;
   }
   function planSummary(plan) {
     const section=node("details","","store-install-plan");section.open=true;
@@ -187,7 +187,7 @@ export function createStorePanel() {
       const plan=await read({action:"plan",id:row.id});if(!valid())return;d.append(planSummary(plan));
       const hasCode=containsCode(p.resources),already=Boolean(installed[row.id]);let approved=!hasCode;
       const install=button(already?text("installed","已安装"):text("install","安装到当前设备"),()=>{
-        if(!valid()||!approved||already||busy)return;browser.closeDetail();void act(()=>call({action:"install",id:row.id,trust_code:approved,expected_plan:plan.sha256}));
+        if(!valid()||!approved||already||busy)return;browser.closeDetail();void act(()=>call({action:"install",id:row.id,trust_code:approved,expected_plan:plan.sha256},{download:{name:row.name},signal:null}),true);
       },true);install.disabled=already||!approved;
       if(hasCode){const label=node("label","","store-code-consent"),checkbox=element("input",{attrs:{type:"checkbox"}});label.append(checkbox,node("span",text("codeConsent","我已检查源码并信任作者。C 扩展在墨斗进程内运行，编译注册时也能执行代码。")));checkbox.onchange=()=>{approved=checkbox.checked;install.disabled=!approved||already;};d.append(label);}
       d.append(install);
@@ -309,7 +309,7 @@ export function createStorePanel() {
   const unsubTarget = subscribeTarget(() => { if (activeTarget === targetKey()) return; activeTarget = targetKey(); browser.reset(); ++serial;busy=false;error="";items = [];installed = {};closeDialog();if (visible) void load(); });
   return {
     selectSection(section) { visible = section === "store"; if (!visible) browser.closeDetail(false);if (visible) void load(); },
-    hasPendingChanges: () => busy || Boolean(editor?.draft?.pending && dialog?.open),
+    hasPendingChanges: () => (busy && backgroundWrite === null) || Boolean(editor?.draft?.pending && dialog?.open),
     destroy() { ++serial;browser.destroy();closeDialog();unsubLocale();unsubTarget();window.removeEventListener("mdo-open-package",openPackage); },
   };
 }

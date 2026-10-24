@@ -23,25 +23,43 @@ export function externalToolAction(row, installed) {
   const local=installed.find(t=>t.id===row.tool_id);
   return !local||!local.present?"install":local.version!==row.version?"update":null;
 }
-export function createExternalToolsPanel({ refresh, openFull, openTools, signedIn, isMain=()=>true }) {
+export function createExternalToolsPanel({ refresh, openFull, signedIn, openDownloads=()=>{}, isMain=()=>true }) {
   let data={}, tab="local", query="", error="", context="", catalogRequested=false, editor=null, editing=null, mine=false, localQuery="", stateFilter="all";
   const browsers = new Map(), pending = new Set();
+  let catalogRequest=null, catalogHistory=[], catalogBefore=0, catalogOffset=0, catalogEpoch=0, catalogInitial=0;
   const signatures=new WeakMap(), hosts=new Set();
   const c=i=>(labels[currentLocale()]??labels["en-US"])[i];
   const userDefined=tool=>["manual","local"].includes(tool?.source);
   const submitter=tool=>tool.submitter||tool.author||(userDefined(tool)?c(60):c(61));
   const writable=()=>{const t=targetState();return data.writable!==false&&(!t.selected||(t.connected&&!t.runtimeChanged&&t.selected.mode!=="view"));};
   const button=(text,fn,disabled=false)=>{const b=n("button",text,"secondary-button");b.type="button";b.disabled=disabled;b.onclick=fn;return b;};
-  const guide=n("aside",null,"cli-first-use"), global=n("button",null,"secondary-button cli-download-entry");
-  guide.hidden=true;guide.setAttribute("aria-live","polite");global.type="button";global.hidden=true;global.onclick=()=>openTools();
-  document.body.append(guide,global);
+  const guide=n("aside",null,"cli-first-use");
+  guide.hidden=true;guide.setAttribute("aria-live","polite");document.body.append(guide);
   async function command(request) {
     if(!writable())return false;const own=context,key=JSON.stringify(request);if(pending.has(key))return false;pending.add(key);
     try { const r=await api.post("/cli-tools",request);if(own!==(targetState().selected?.id??"local"))return false;data=r.data;error="";renderAll();void refresh();return true; }
     catch(e){if(own===(targetState().selected?.id??"local")){error=e.message;renderAll();}return false;}finally{pending.delete(key);if(own===context)renderAll();}
   }
   async function openBundle(){try{await openFull();}catch(e){error=e.message;renderAll();}}
-  const fetchCatalog=(before=0)=>command({action:"catalog",query,before});
+  async function fetchCatalog(before=0, direction="reset", pages=0) {
+    if(catalogRequest)return false;
+    catalogRequest={before,query,direction,pages,previousId:data.store?.request_id,previousTasks:new Set((data.tasks||[]).map(t=>t.id))};renderAll();
+    if(!await command({action:"catalog",query,before})){catalogRequest=null;renderAll();return false;}
+    return true;
+  }
+  function settleCatalog() {
+    if(!catalogRequest)return;
+    const r=catalogRequest, result=data.store||{};
+    if(result.request_id&&result.request_id!==r.previousId&&result.query===r.query&&result.before===r.before){
+      if(r.direction==="next"){catalogHistory.push({before:catalogBefore,offset:catalogOffset});catalogOffset+=r.pages;}
+      else if(r.direction==="previous"){const previous=catalogHistory.pop();catalogOffset=previous?.offset||0;}
+      else {catalogHistory=[];catalogOffset=0;}
+      catalogBefore=r.before;catalogInitial=r.direction==="previous"?"last":0;catalogEpoch++;catalogRequest=null;
+    }else{
+      const failed=[...(data.tasks||[])].reverse().find(t=>!r.previousTasks.has(t.id)&&t.action==="catalog"&&t.request?.before===r.before&&t.request?.query===r.query&&["failed","cancelled","interrupted"].includes(t.state));
+      if(failed){error=failed.error||failed.state;catalogRequest=null;}
+    }
+  }
   function renderAll(){for(const h of hosts){signatures.delete(h);render(h,data,h.dataset.cliUpdates==="true");}}
   function closeEditor(){editor?.remove();editor=null;editing=null;}
   function edit(tool={}) {
@@ -81,24 +99,16 @@ export function createExternalToolsPanel({ refresh, openFull, openTools, signedI
     const root=n("div");root.append(detailTabs([{id:"description",label:browserText("description","说明"),content:description},{id:"usage",label:browserText("usage","使用方式"),content:usage},{id:"source",label:browserText("sourceFiles","来源与文件"),content:source}]));
     if(install)root.append(install());return root;
   }
-  function tasks(body){
-    const list=data.tasks??[];const box=n("details",null,"cli-tasks");box.open=list.some(active);box.append(n("summary",`${c(5)} (${list.filter(active).length}/${list.length})`));
-    for(const t of list){const row=n("div",null,"cli-task"),title=t.name||t.action;row.append(n("strong",title),n("span",t.state));
-      if(t.total){const progress=n("progress");progress.max=t.total;progress.value=t.done??0;progress.setAttribute("aria-label",title);row.append(progress,n("small",`${Math.floor(100*(t.done??0)/t.total)}%`));}
-      if(t.error)row.append(n("p",t.error,"cli-error"));if(t.submission)row.append(n("p",`#${t.submission.id} · ${t.submission.state}`));
-      if(active(t))row.append(button(c(13),()=>command({action:"cancel",id:t.id}),!writable()));else if(t.state!=="complete")row.append(button(c(14),()=>command({action:"retry",id:t.id}),!writable()));box.append(row);
-    }if(list.length)box.append(button(c(15),()=>command({action:"clear"}),!writable()));body.append(box);
-  }
   function render(body,snapshot={},updatesOnly=false){
     if(!body)return;hosts.add(body);body.dataset.cliUpdates=String(updatesOnly);data=snapshot;
-    const next=targetState().selected?.id??"local";if(context!==next){context=next;catalogRequested=false;tab="local";query=error="";mine=false;localQuery="";stateFilter="all";for(const browser of browsers.values())browser.reset();closeEditor();}
-    const sig=JSON.stringify([data,currentLocale(),tab,query,localQuery,stateFilter,error,mine,next,writable(),signedIn(),updatesOnly,isMain()]);if(signatures.get(body)===sig)return;signatures.set(body,sig);const focusedSearch=body.contains(document.activeElement)&&document.activeElement?.type==="search",selection=focusedSearch?[document.activeElement.selectionStart,document.activeElement.selectionEnd]:null;browsers.get(body)?.rememberFocus();body.replaceChildren();
+    const next=targetState().selected?.id??"local";if(context!==next){context=next;catalogRequested=false;catalogRequest=null;catalogHistory=[];catalogBefore=catalogOffset=catalogEpoch=0;tab="local";query=error="";mine=false;localQuery="";stateFilter="all";for(const browser of browsers.values())browser.reset();closeEditor();}
+    settleCatalog();
+    const sig=JSON.stringify([!!catalogRequest,catalogEpoch,data,currentLocale(),tab,query,localQuery,stateFilter,error,mine,next,writable(),signedIn(),updatesOnly,isMain()]);if(signatures.get(body)===sig)return;signatures.set(body,sig);const focusedSearch=body.contains(document.activeElement)&&document.activeElement?.type==="search",selection=focusedSearch?[document.activeElement.selectionStart,document.activeElement.selectionEnd]:null;browsers.get(body)?.rememberFocus();body.replaceChildren();
     if(!data.platform){body.append(n("p","…"));return;}
     const android=data.platform.startsWith("android"), disabled=!writable();
-    guide.replaceChildren(n("p",c(33)),button(c(34),async()=>{if(android){if(await command({action:"accept"}))await openBundle();}else if(await command({action:"recommend"}))openTools();},disabled),button(c(35),()=>command({action:"dismiss"}),disabled));
+    guide.replaceChildren(n("p",c(33)),button(c(34),async()=>{if(android){if(await command({action:"accept"}))await openBundle();}else if(await command({action:"recommend"}))openDownloads();},disabled),button(c(35),()=>command({action:"dismiss"}),disabled));
     guide.hidden=data.guide!=="new"||disabled||!!targetState().selected||!isMain();
-    global.textContent=`↓ ${c(5)}${(data.tasks??[]).some(active)?" · "+(data.tasks??[]).filter(active).length:""}`;global.hidden=!(data.tasks??[]).length;
-    if(updatesOnly){body.append(button(c(36),openTools));tasks(body);return;}
+    if(updatesOnly){body.append(button(c(36),openDownloads));return;}
     const nav=n("div",null,"store-tabs");nav.setAttribute("role","tablist");
     for(const [id,text] of [["local",c(0)],["store",c(1)]]){const b=button(text,()=>{tab=id;mine=false;stateFilter="all";for(const browser of browsers.values())browser.reset();renderAll();if(id==="store"&&!catalogRequested){catalogRequested=true;void fetchCatalog();}});b.setAttribute("role","tab");b.setAttribute("aria-selected",String(tab===id));nav.append(b);}body.append(nav);const creator=n("a",browserText("creator","创作中心"),"secondary-button");creator.href="https://ai.xywhsoft.com/mdo/creator";creator.target="_blank";creator.rel="noopener noreferrer";
     if(error)body.append(n("p",error,"cli-error"));if(!data.writable)body.append(n("p",c(44),"cli-error"));
@@ -126,13 +136,16 @@ export function createExternalToolsPanel({ refresh, openFull, openTools, signedI
         const primary=action?install():null;
         return {key:`store:${t.id}`,title:t.name,byline:submitter(t),description:t.description||c(56),meta:[t.version,t.platform],badge:{text:job?taskLabel(job):t.platform!==data.platform?c(42):!action?browserText("installed","已安装"):""},primary,detail:()=>toolDetail(t,action?install:null)};
       });
-      browser.setItems(rows,{empty:c(16)});
+      browser.setItems(rows,{empty:c(16),busy:!!catalogRequest,
+        pageKey:JSON.stringify([tab,localQuery,stateFilter,tab==="store"?catalogEpoch:0]),initialPage:catalogInitial,pageOffset:tab==="store"?catalogOffset:0,
+        onNext:tab==="store"&&data.store?.next_before?pages=>{void fetchCatalog(data.store.next_before,"next",pages);}:null,
+        onPrevious:tab==="store"&&catalogHistory.length?()=>{void fetchCatalog(catalogHistory.at(-1).before,"previous");}:null});
     };
     search.oninput=()=>{if(tab==="local"){localQuery=search.value;renderList();}else query=search.value;};
     search.onkeydown=e=>{if(tab==="store"&&e.key==="Enter"){e.preventDefault();void fetchCatalog();}};
-    filter.onchange=()=>{stateFilter=filter.value;renderList();};
+    filter.onchange=()=>{stateFilter=filter.value;if(tab==="store"&&catalogHistory.length)void fetchCatalog();else renderList();};
     toolbar.append(search,filter);if(tab==="store")toolbar.append(button(c(3),()=>fetchCatalog(),disabled));
-    toolbar.append(button(c(4),()=>tab==="store"?fetchCatalog():refresh(),disabled),creator,button(`${c(5)} (${(data.tasks||[]).filter(active).length})`,()=>{const box=body.querySelector(".cli-tasks");if(box){box.open=true;box.scrollIntoView?.({block:"nearest",behavior:"smooth"});}}));
+    toolbar.append(button(c(4),()=>tab==="store"?fetchCatalog():refresh(),disabled),creator);
     body.append(toolbar);
     if(tab==="local"){
       toolbar.append(actionMenu([...(android?[]:[button(c(2),()=>edit(),disabled)]),button(c(27),()=>{mine=!mine;if(mine)void command({action:"mine"});renderAll();},disabled||!signedIn())],browserText("createImport","创建 / 导入")));
@@ -141,8 +154,8 @@ export function createExternalToolsPanel({ refresh, openFull, openTools, signedI
       if(mine){const box=n("section");box.append(n("h3",c(27)));for(const t of data.store?.mine??[]){const row=n("div",null,"cli-row");row.append(n("span",`${t.name} ${t.version} · ${t.state}${t.reason?" · "+t.reason:""}`),button(c(28),async()=>{if(await command({action:"withdraw",store_id:t.id,revision:t.revision,name:t.name}))void command({action:"mine"});},disabled||!!t.withdrawn));box.append(row);}body.append(box);}
     }else{
       renderList();body.append(browser.root);
-      if(data.store?.next_before)body.append(button(c(37),()=>fetchCatalog(data.store.next_before),disabled));
-    }tasks(body);if(focusedSearch){search.focus({preventScroll:true});if(selection&&search.setSelectionRange)search.setSelectionRange(...selection);}
+
+    }if(focusedSearch){search.focus({preventScroll:true});if(selection&&search.setSelectionRange)search.setSelectionRange(...selection);}
   }
-  return {render,command,reset(){data={};context="";for(const browser of browsers.values())browser.reset();closeEditor();guide.hidden=true;global.hidden=true;},destroy(){for(const browser of browsers.values())browser.destroy();browsers.clear();closeEditor();guide.remove();global.remove();hosts.clear();}};
+  return {render,command,reset(){data={};context="";for(const browser of browsers.values())browser.reset();closeEditor();guide.hidden=true;},destroy(){for(const browser of browsers.values())browser.destroy();browsers.clear();closeEditor();guide.remove();hosts.clear();}};
 }

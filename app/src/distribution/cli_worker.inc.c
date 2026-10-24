@@ -36,6 +36,7 @@ static bool CliCatalog(MdoCliJob* Job,char* Error,size_t Capacity)
     char Path[1000];cstr Query=CliText(Job->Input,"query",100);size_t N=0;char* Encoded=xrtPercentEncodeNew(Query,strlen(Query),xrtStrView(""),&N);
     snprintf(Path,sizeof(Path),"/api/v1/mdo/cli/catalog?platform=%s&q=%s&before=%llu",MdoToolPlatform(),Encoded?Encoded:"",(unsigned long long)(MdoDistNumber(Job->Input,"before")?MdoDistNumber(Job->Input,"before"):INT64_MAX));xrtFree(Encoded);
     xvalue* Catalog=CliService(Path,"GET",NULL,NULL,Job->Cancel,Error,Capacity);if(!Catalog)return false;
+    CliSet(Catalog,"query",Query);CliSet(Catalog,"request_id",Job->Id);xrtValueObjectSetNew(Catalog,XRT_STR_LITERAL("before"),xrtValueUInt(MdoDistNumber(Job->Input,"before")));
     xrtMutexLock(g_MdoCli.Lock);xrtValueRelease(g_MdoCli.Catalog);(void)CliFillDescriptions(xrtValueObjectGet(Catalog,XRT_STR_LITERAL("items")));CliRefreshCredits(Catalog);g_MdoCli.Catalog=Catalog;xrtMutexUnlock(g_MdoCli.Lock);return true;
 }
 static bool CliInstall(MdoCliJob* Job,char* Error,size_t Capacity)

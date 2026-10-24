@@ -41,4 +41,4 @@
 .toolpack-section { padding:14px 0; border-bottom:1px solid var(--border); }
 .toolpack-section p { margin:8px 0; overflow-wrap:anywhere; }
 .toolpack-section a { color:var(--accent); }
-[data-settings-toolpacks] progress, [data-update-toolpacks] progress { width:100%; }
+[data-settings-toolpacks] progress { width:100%; }

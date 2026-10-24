@@ -3,6 +3,41 @@ import assert from "node:assert/strict";
 import { TestElement, testDocument } from "./helpers/extension-dom.mjs";
 import { createExtensionBrowser, detailTabs, actionMenu, extensionToggle } from "../app/web/js/components/extension-browser.js";
 
+test("pagination bounds rendered rows, preserves a live page and resets filters without nested scrolling", () => {
+  const previous = globalThis.document; globalThis.document = testDocument();
+  try {
+    const browser = createExtensionBrowser({ kind: "toolpacks" });
+    const rows = Array.from({ length: 25 }, (_, i) => ({ key: String(i), title: `Tool ${i}` }));
+    browser.setItems(rows, { pageKey: "all" });
+    assert.equal(browser.root.querySelectorAll(".eb-row").length, 10);
+    const button = label => browser.root.querySelector(".eb-pagination").querySelectorAll("button").find(b => b.textContent === label);
+    assert(button("上一页").disabled); button("下一页").click();
+    assert.equal(browser.root.querySelector(".eb-name").textContent, "Tool 10");
+    browser.setItems(rows.map(row => ({ ...row })), { pageKey: "all" });
+    assert.equal(browser.root.querySelector(".eb-name").textContent, "Tool 10", "live refresh retains current page");
+    button("下一页").click(); assert.equal(browser.root.querySelectorAll(".eb-row").length, 5); assert(button("下一页").disabled);
+    browser.setItems(rows.slice(0, 11), { pageKey: "all" }); assert.equal(browser.root.querySelector(".eb-name").textContent, "Tool 10", "deletion clamps to last valid page");
+    browser.setItems(rows, { pageKey: "new-filter" }); assert.equal(browser.root.querySelector(".eb-name").textContent, "Tool 0");
+    const size = browser.root.querySelector(".eb-pagination").querySelector("select"); size.value = "20"; size.dispatchEvent(new Event("change"));
+    assert.equal(browser.root.querySelectorAll(".eb-row").length, 20); browser.destroy();
+  } finally { globalThis.document = previous; }
+});
+
+test("cursor batches page forward and return to the previous batch's last page", () => {
+  const previous = globalThis.document; globalThis.document = testDocument();
+  try {
+    const browser = createExtensionBrowser();
+    const rows = Array.from({ length: 15 }, (_, i) => ({ key: String(i), title: `Tool ${i}` }));
+    const first = last => browser.setItems(rows, { pageKey: "first", initialPage: last ? "last" : 0, onNext: pages => {
+      assert.equal(pages, 2); browser.setItems([{ key: "last", title: "Last" }], { pageKey: "second", pageOffset: pages, onPrevious: () => first(true) });
+    } });
+    first(false);
+    const button = label => browser.root.querySelector(".eb-pagination").querySelectorAll("button").find(b => b.textContent === label);
+    button("下一页").click(); button("下一页").click(); assert.equal(browser.root.querySelector(".eb-name").textContent, "Last");
+    button("上一页").click(); assert.equal(browser.root.querySelector(".eb-name").textContent, "Tool 10"); browser.destroy();
+  } finally { globalThis.document = previous; }
+});
+
 test("selection, tabs, scroll and action focus survive a list refresh; late details are rejected", () => {
   const previous = globalThis.document; globalThis.document = testDocument();
   try {

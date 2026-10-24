@@ -55,13 +55,12 @@ export function createUpdatePanel({ root, dialog, entries = [], transport = api 
   if (!root || !dialog) return null;
   let status = null, pending = false, destroyed = false, timer, failure = "", connectionLost = false;
   const text = () => labels[currentLocale()] ?? labels["en-US"];
-  let forced = false, requiredFocus = null, toolManager = null;
+  let forced = false, requiredFocus = null;
   function open() {
     if (!dialog.open) dialog.showModal();
   }
   function render() {
     const words = text();
-    toolManager?.render(dialog.querySelector("[data-update-toolpacks]"));
     for (const node of root.querySelectorAll("[data-update-label]"))
       node.textContent = words[node.dataset.updateLabel];
     const blocked = !!status?.blocked;
@@ -77,7 +76,7 @@ export function createUpdatePanel({ root, dialog, entries = [], transport = api 
       const notes = surface.querySelector("[data-update-notes]");
       notes.textContent = status?.notes ?? ""; notes.hidden = !notes.textContent;
     }
-    dialog.querySelector("[data-update-title]").textContent = blocked ? words.requiredTitle : toolManager?.title() ?? words.notice;
+    dialog.querySelector("[data-update-title]").textContent = blocked ? words.requiredTitle : words.notice;
     dialog.querySelector("[data-update-description]").textContent = blocked ? words.requiredDescription : words.description;
     const later = dialog.querySelector("[data-update-later]");
     later.hidden = blocked; later.textContent = words.later;
@@ -130,7 +129,7 @@ export function createUpdatePanel({ root, dialog, entries = [], transport = api 
       if (kind === "cancel") await transport.delete("/update/download");
       else if (kind === "exit" && status.platform === "android-arm64-v8a" && window.XsPlatform?.requestExit)
         window.XsPlatform.requestExit();
-      else { await transport.post(kind === "check" ? "/update" : "/update/" + kind, {}); if(kind==="check")await toolManager?.check(); }
+      else await transport.post(kind === "check" ? "/update" : "/update/" + kind, {});
     } catch (error) { if (!destroyed) failure = text().failed + " · " + error.message; }
     finally { pending = false; if (!destroyed) await refresh(); }
   }
@@ -165,7 +164,7 @@ export function createUpdatePanel({ root, dialog, entries = [], transport = api 
   const unsubscribe = subscribeLocale(render);
   const unsubscribeTarget = subscribeTarget(render);
   render(); void refresh();
-  return { refresh, open, setToolManager(manager) { toolManager=manager;render(); }, renderTools:render, destroy() {
+  return { refresh, open, destroy() {
     destroyed = true; clearTimeout(timer); unsubscribe(); unsubscribeTarget();
     root.removeEventListener("click", action);
     dialog.removeEventListener("click", action); dialog.removeEventListener("click", backdrop);

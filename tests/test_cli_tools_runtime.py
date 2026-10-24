@@ -104,7 +104,8 @@ def run(host):
         post("enable",id=tool["id"],enabled=True);exe.unlink();assert "MANUAL_PROMPT_SENTINEL" not in prompt()
         post("save",status=422,tool=tool,revision=get().get("revision",0));exe.write_bytes(PAYLOAD)
         post("remove",id=tool["id"]);assert exe.read_bytes()==PAYLOAD
-        post("dismiss");post("catalog");s=wait_task();assert s["store"]["items"][0]["id"]==1
+        post("dismiss");post("catalog",query="fixture",before=17);s=wait_task();assert s["store"]["items"][0]["id"]==1
+        assert s["store"]["query"]=="fixture" and s["store"]["before"]==17 and len(s["store"]["request_id"])==32,"catalog completion must identify its exact query and cursor"
         post("install",store_id=1,name="Fixture CLI");s=wait_task();assert s["tasks"][-1]["state"]=="complete",s
         t=s["items"][0];installed=Path(t["path"]);assert installed.read_bytes()==PAYLOAD and "CLI_PROMPT_SENTINEL" in prompt() and t["description"]=="USER_DESCRIPTION_SENTINEL" and "USER_DESCRIPTION_SENTINEL" not in prompt()
         assert t["copyright"]==MANIFEST["copyright"] and t["submitter"]=="fixture_publisher" and t["author"]!=t["submitter"]

@@ -1,4 +1,6 @@
-import { targetFetch } from "./target.js";
+import { targetFetch, targetState } from "./target.js";
+
+import { downloadRegistry } from "../state/downloads.js";
 
 const API_ROOT = "/api/v1";
 let writeGuard = null;
@@ -138,6 +140,8 @@ export async function apiRequest(path, options = {}) {
   checkSignal(options.signal);
   checkWrite(path, options);
   const send = () => withSignal(options.signal, () => sendJson(path, options));
+  const tracked = () => path === "/ecosystem" && options.body?.action === "install"
+    ? downloadRegistry.run(targetState().selected?.id || "local", { id: options.body.id, name: options.download?.name }, send) : send();
   const ephemeralSdkRead = path === "/application/call" && [
     "sdk.services", "sdk.describe", "sdk.context", "sdk.native", "events.read", "plugin.list",
     "panel.types", "panel.list", "panel.get", "panel.layout.get", "panel.report", "browser.report",
@@ -145,11 +149,11 @@ export async function apiRequest(path, options = {}) {
     "client.hello", "client.poll", "ui.result", "stream.read", "stream.stat", "operation.get", "operation.wait", "operation.result",
   ].includes(options.body?.method);
   return !ephemeralSdkRead && !["GET", "HEAD", "OPTIONS"].includes((options.method ?? "GET").toUpperCase())
-    ? trackWrite(send) : send();
+    ? trackWrite(tracked) : tracked();
 }
 
 async function sendJson(path, options) {
-  const method = options.method ?? "GET";
+  const method = options.method ?? "GET", requestTarget = targetState().selected?.id || "local";
   const headers = new Headers({ Accept: "application/json" });
   if (options.body !== undefined) headers.set("Content-Type", "application/json");
   if (options.ifMatch) headers.set("If-Match", options.ifMatch);
@@ -175,7 +179,8 @@ async function sendJson(path, options) {
     throw new ApiError("无法连接本地 mdo 服务", { code: "network_error" });
   }
 
-  return readEnvelope(response, path, method, options.signal);
+  const result = await readEnvelope(response, path, method, options.signal);
+  downloadRegistry.observe(path, result.data, requestTarget); return result;
 }
 
 async function uploadImage(projectId, sessionId, file, mime = file.type, options = {}) {

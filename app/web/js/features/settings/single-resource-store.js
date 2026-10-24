@@ -26,9 +26,9 @@ export function createSingleResourceStore(kind, onChange, onBrowse = () => {}, o
   let visible = false, disposed = false, epoch = 0, controller = null, activeTarget = device();
   let items = [], installed = {}, cursor = 0, query = "", busy = false, error = "", status = "";
   let dialog = null, dirty = false, saving = false, loginRequired = false;
-  let detailSerial = 0, detailController = null, stateFilter = "all";
+  let backgroundWrite = null, detailSerial = 0, detailController = null, stateFilter = "all";
   const browser = createExtensionBrowser({ kind, onClose: () => { ++detailSerial; detailController?.abort(); } });
-  const call = async (body, signal = controller?.signal) => (await api.post("/ecosystem", { ...body, single_kind: kind }, { signal })).data;
+  const call = async (body, signal = controller?.signal, download) => (await api.post("/ecosystem", { ...body, single_kind: kind }, { signal, download })).data;
   const current = (id, target) => !disposed && epoch === id && device() === target;
   function close(force = false) {
     if (!dialog) return true;
@@ -60,15 +60,15 @@ export function createSingleResourceStore(kind, onChange, onBrowse = () => {}, o
     } catch (e) { if (current(id, target) && e.name !== "AbortError") report(e); }
     finally { if (current(id, target)) { busy = false; render(); } }
   }
-  async function operate(label, work) {
+  async function operate(label, work, background = false) {
     if (busy || disposed) return;
     const id = ++epoch, target = device(); controller?.abort(); controller = new AbortController();
-    busy = true; error = ""; status = `${label}…`; render();
+    if(background)backgroundWrite=id;busy = true; error = ""; status = `${label}…`; render();
     try {
       await work(); if (!current(id, target)) return;
       status = `${label}完成`; onChange(); busy = false; await load();
     } catch (e) { if (current(id, target) && e.name !== "AbortError") { report(e); status = `${label}未完成，请刷新核对状态后重试。`; } }
-    finally { if (current(id, target)) { busy = false; render(); } }
+    finally { if(backgroundWrite===id)backgroundWrite=null;if (current(id, target)) { busy = false; render(); } }
   }
   const owned = row => Object.values(installed).find(r => r.source !== "local" && r.owner === row.owner && r.slug === row.slug);
   function render() {
@@ -87,7 +87,7 @@ export function createSingleResourceStore(kind, onChange, onBrowse = () => {}, o
       primary.disabled = busy;
       return { key: String(row.id), kind, title: row.name, description: row.description, meta: [row.author, row.version], badge: { text: same ? browserText("installed", "已安装") : receipt ? browserText("updates", "可更新") : "" }, primary, onSelect: () => loadDetail(row) };
     });
-    browser.setItems(rows, { busy, empty: items.length ? browserText("empty", "没有匹配的扩展") : `暂无公开${name}。可从本机列表分享你的作品。` });
+    browser.setItems(rows, { busy, pageKey:JSON.stringify([query,stateFilter]), empty: items.length ? browserText("empty", "没有匹配的扩展") : `暂无公开${name}。可从本机列表分享你的作品。` });
     root.replaceChildren(search, node("p", kind === "skills" ? "按需读取 Skill，包含说明与参考文件。" : "C 工具在本机执行；安装前请检查源码并确认信任。", "extension-help"), browser.root);
     if (cursor) { const more = button("加载更多", () => load(true)); more.disabled = busy; root.append(more); }
     statusRoot.textContent = error || (busy ? status || "正在载入…" : status); statusRoot.hidden = !statusRoot.textContent; statusRoot.className = error ? "extension-error" : "extension-help";
@@ -138,7 +138,7 @@ export function createSingleResourceStore(kind, onChange, onBrowse = () => {}, o
       const same = owned(row)?.id === row.id;
       const install = button(same ? "已安装" : owned(row) ? "更新到此版本" : "下载安装", () => {
         if (!valid() || !trusted || same || busy) return;
-        browser.closeDetail(); void operate("下载安装", () => call({ action: "install", id: row.id, trust_code: trusted, expected_plan: plan.sha256 }));
+        browser.closeDetail(); void operate("下载安装", () => call({ action: "install", id: row.id, trust_code: trusted, expected_plan: plan.sha256 }, null, { name: row.name }), true);
       }, true); install.disabled = same || !trusted;
       if (kind === "tools") {
         const check = element("input", { attrs: { type: "checkbox" } });
@@ -208,6 +208,6 @@ export function createSingleResourceStore(kind, onChange, onBrowse = () => {}, o
   }
   const unsubscribe = subscribeTarget(() => { if (activeTarget === device()) return; activeTarget = device(); ++epoch; controller?.abort(); browser.reset(); close(true); items = []; installed = {}; cursor = 0; busy = false; error = status = ""; if (visible) void load(); });
   render();
-  return { root, statusRoot, publish, localActions, activate(value) { visible = value; if (!value) browser.closeDetail(false); if (value && !busy) void load(); }, hasPendingChanges: () => Boolean(dialog) || dirty || saving || busy,
+  return { root, statusRoot, publish, localActions, activate(value) { visible = value; if (!value) browser.closeDetail(false); if (value && !busy) void load(); }, hasPendingChanges: () => Boolean(dialog) || dirty || saving || (busy && backgroundWrite === null),
     destroy() { disposed = true; ++epoch; controller?.abort(); browser.destroy(); unsubscribe(); close(true); } };
 }

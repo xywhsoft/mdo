@@ -2,7 +2,7 @@ import { element } from "../utils/dom.js";
 import { mountIcons } from "./icons.js";
 import { t } from "../i18n.js";
 
-export const browserText = (key, fallback) => t(`extensionBrowser.${key}`, {}, fallback);
+export const browserText = (key, fallback, args = {}) => t(`extensionBrowser.${key}`, args, fallback);
 const el = (tag, cls, text) => element(tag, { className: cls, ...(text === undefined ? {} : { text }) });
 const icons = { agents: "brain", subagents: "branch", tools: "code", skills: "spark", mcp: "globe", commands: "terminal", modules: "code", plugins: "settings", toolpacks: "terminal" };
 let sequence = 0;
@@ -87,10 +87,11 @@ export function detailFacts(values) {
 // keyboard focus across refreshes. CSS switches the same detail pane to a
 // full-width view on phones; no cloned controls or hidden modal are involved.
 export function createExtensionBrowser({ kind, onClose } = {}) {
-  const root = el("div", "eb-browser"), list = el("div", "eb-list"), pane = el("section", "eb-detail");
+  const root = el("div", "eb-browser"), list = el("div", "eb-list"), pane = el("section", "eb-detail"), pager = el("nav", "eb-pagination");
+  pager.setAttribute("aria-label", browserText("pagination", "列表翻页")); pager.hidden = true;
   pane.setAttribute("aria-label", browserText("details", "扩展详情")); pane.hidden = true;
-  root.append(list, pane);
-  let rows = [], selected = null, rememberedFocus = null;
+  root.append(list, pane, pager);
+  let rows = [], selected = null, rememberedFocus = null, page = 0, pageSize = 10, pageKey = null, options = {};
   const closeDetail = (focus = true) => {
     const old = selected; selected = null; pane.hidden = true; pane.replaceChildren(); root.classList.remove("has-detail");
     for (const button of list.querySelectorAll(".eb-open")) button.setAttribute("aria-expanded", "false");
@@ -117,15 +118,18 @@ export function createExtensionBrowser({ kind, onClose } = {}) {
   }
   root.addEventListener("click", event => { for (const menu of root.querySelectorAll(".eb-menu[open]")) if (!menu.contains(event.target)) menu.open = false; });
   root.addEventListener("scroll", event => { for (const menu of root.querySelectorAll(".eb-menu[open]")) if (!menu.contains(event.target)) menu.open = false; }, true);
-  return {
+  const browser = {
     root, open, showDetail, closeDetail,
     rememberFocus() { rememberedFocus = list.contains(document.activeElement) ? document.activeElement?.dataset.ebFocus : null; },
     isSelected: key => selected === key,
-    setItems(next, { empty = browserText("empty", "没有匹配的扩展"), busy = false } = {}) {
+    setItems(next, settings = {}) {
+      options = settings; const { empty = browserText("empty", "没有匹配的扩展"), busy = false } = settings;
+      if (settings.pageKey !== pageKey) { page = settings.initialPage === "last" ? Math.max(0, Math.ceil(next.length / pageSize) - 1) : 0; pageKey = settings.pageKey; }
+      page = Math.min(page, Math.max(0, Math.ceil(next.length / pageSize) - 1));
       const scroll = list.scrollTop, focused = list.contains(document.activeElement) ? document.activeElement?.dataset.ebFocus : rememberedFocus;
       rememberedFocus = null;
       rows = next; list.replaceChildren(); list.setAttribute("aria-busy", String(busy));
-      for (const row of rows) {
+      for (const row of rows.slice(page * pageSize, (page + 1) * pageSize)) {
         const entry = el("article", "eb-row"); entry.dataset.key = row.key;
         entry.classList.toggle("is-selected", selected === row.key);
         const openButton = element("button", { className: "eb-open", attrs: { type: "button", "aria-expanded": String(selected === row.key) } });
@@ -145,8 +149,8 @@ export function createExtensionBrowser({ kind, onClose } = {}) {
         list.append(entry);
       }
       if (!rows.length) list.append(el("p", "eb-empty", busy ? browserText("loading", "正在载入…") : empty));
-      list.scrollTop = scroll;
-      if (selected && !rows.some(r => r.key === selected)) closeDetail(false);
+      list.scrollTop = scroll; renderPager();
+      if (selected && !rows.slice(page * pageSize, (page + 1) * pageSize).some(r => r.key === selected)) closeDetail(false);
       else if (selected && rows.find(r => r.key === selected)?.detail) showDetail(selected, rows.find(r => r.key === selected).detail());
       if (focused) {
         const restore = () => [...list.querySelectorAll("[data-eb-focus]")].find(b => b.dataset.ebFocus === focused)?.focus({ preventScroll: true });
@@ -154,7 +158,33 @@ export function createExtensionBrowser({ kind, onClose } = {}) {
         else queueMicrotask(() => { if (root.isConnected && document.activeElement === document.body) restore(); });
       }
     },
-    reset() { closeDetail(false); rows = []; list.replaceChildren(); list.scrollTop = 0; },
+    reset() { closeDetail(false); rows = []; page = 0; pageKey = null; list.replaceChildren(); list.scrollTop = 0; pager.replaceChildren(); pager.hidden = true; },
     destroy() { closeDetail(false); root.remove(); rows = []; rememberedFocus = null; },
   };
+  function turn(next) {
+    closeDetail(false); page = next; browser.setItems(rows, options);
+    root.scrollIntoView?.({ block: "start" });
+  }
+  function renderPager() {
+    const count = Math.max(1, Math.ceil(rows.length / pageSize));
+    pager.replaceChildren(); pager.hidden = rows.length <= 10 && !options.onNext && !options.onPrevious;
+    if (pager.hidden) return;
+    const previous = element("button", { text: browserText("previousPage", "上一页"), className: "secondary-button", attrs: { type: "button" } });
+    const next = element("button", { text: browserText("nextPage", "下一页"), className: "secondary-button", attrs: { type: "button" } });
+    previous.disabled = options.busy || (page === 0 && !options.onPrevious);
+    next.disabled = options.busy || (page + 1 >= count && !options.onNext);
+    previous.addEventListener("click", () => { if (!previous.disabled) page ? turn(page - 1) : options.onPrevious?.(); });
+    next.addEventListener("click", () => { if (!next.disabled) page + 1 < count ? turn(page + 1) : options.onNext?.(count); });
+    const offset = options.pageOffset || 0;
+    const summary = el("span", "eb-page-status", options.onNext
+      ? browserText("pageOpen", "第 {page} 页", { page: offset + page + 1 })
+      : browserText("pageCount", "第 {page} / {pages} 页", { page: offset + page + 1, pages: offset + count }));
+    summary.setAttribute("aria-live", "polite");
+    const size = element("select", { attrs: { "aria-label": browserText("pageSize", "每页条数") } });
+    for (const value of [10, 20, 50]) { const option = el("option", "", browserText("perPage", "每页 {count} 条", { count: value })); option.value = String(value); size.append(option); }
+    size.value = String(pageSize); size.disabled = options.busy || Boolean(offset);
+    size.addEventListener("change", () => { const value = Number(size.value); if ([10, 20, 50].includes(value)) { pageSize = value; turn(0); } });
+    pager.append(previous, summary, next, size);
+  }
+  return browser;
 }

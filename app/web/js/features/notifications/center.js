@@ -25,7 +25,7 @@ Object.assign(words["ru-RU"], { stages:{activating:"Активация паке�
 Object.assign(words["zh-CN"],{expectedHash:"预期 SHA-256",actualHash:"实际 SHA-256",diagnosticSaved:"已保留最近一次失败的下载文件及诊断记录；安装成功后自动清理。",errors:{metadata:"没有兼容的工具包或发布信息无效",network:"下载连接失败",response:"下载响应不完整或格式错误",download:"下载中断或超时",size:"下载大小与发布清单不一致",checksum:"下载文件 SHA-256 不一致",archive:"工具包无法解包",manifest:"包内清单与发布信息不一致",write:"无法写入或提取文件",file_checksum:"提取文件 SHA-256 不一致",probe:"工具运行能力检测失败",activate:"无法启用已校验的工具包"}});
 Object.assign(words["en-US"],{expectedHash:"Expected SHA-256",actualHash:"Actual SHA-256",diagnosticSaved:"The last failed download and diagnostic report are retained until installation succeeds.",errors:{metadata:"No compatible package or invalid metadata",network:"Download connection failed",response:"Incomplete or invalid download response",download:"Download interrupted or timed out",size:"Downloaded size differs from the catalog",checksum:"Downloaded SHA-256 mismatch",archive:"Cannot open package archive",manifest:"Package manifest mismatch",write:"Cannot write or extract file",file_checksum:"Extracted file SHA-256 mismatch",probe:"Tool capability check failed",activate:"Cannot activate verified package"}});
 Object.assign(words["ru-RU"],{expectedHash:"Ожидаемый SHA-256",actualHash:"Фактический SHA-256",diagnosticSaved:"Последняя неудачная загрузка и отчёт сохранены до успешной установки.",errors:{metadata:"Нет совместимого пакета или неверные метаданные",network:"Ошибка соединения",response:"Неполный или неверный ответ сервера",download:"Загрузка прервана или истекло время ожидания",size:"Размер загрузки не совпадает с каталогом",checksum:"SHA-256 загрузки не совпадает",archive:"Не удалось открыть архив",manifest:"Манифест пакета не совпадает",write:"Не удалось записать или извлечь файл",file_checksum:"SHA-256 извлечённого файла не совпадает",probe:"Проверка инструментов не пройдена",activate:"Не удалось активировать пакет"}});
-export function createNotificationCenter({ updatePanel, navigation }) {
+export function createNotificationCenter({ updatePanel, navigation, openDownloads = () => {} }) {
   const dialog = document.querySelector("#notifications-dialog"), toolsBody = document.querySelector("[data-settings-toolpacks]");
   const entries = document.querySelectorAll("[data-notifications-open]");
   let cli = {}, distribution = {cli:{}}, update = null, account = null, preferences = {}, pending = false, timer, destroyed = false, epoch = 0, selected = null;
@@ -35,10 +35,9 @@ export function createNotificationCenter({ updatePanel, navigation }) {
     try { await api.post("/update",{edition:"full"});await updatePanel?.refresh();updatePanel?.open(); }
     catch(error){distribution.message=copy().failure+" · "+error.message;renderTools();}
   }});
-  const externalPanel=createExternalToolsPanel({refresh,openTools,signedIn:()=>account?.state==="signed_in",isMain:()=>navigation.get().view==="workspace",openFull:async()=>{
+  const externalPanel=createExternalToolsPanel({refresh,openDownloads,signedIn:()=>account?.state==="signed_in",isMain:()=>navigation.get().view==="workspace",openFull:async()=>{
     await api.post("/update",{edition:"full"});await updatePanel?.refresh();updatePanel?.open();
   }});
-  updatePanel?.setToolManager({title:()=>copy().unifiedUpdate,render:body=>externalPanel.render(body,cli,true),check:()=>externalPanel.command({action:"catalog"})});
   const indicators = createNoticeIndicators({ hosts: entries, copy, onOpen(n) {
     if (n) showDetail(n); else { selected = null; render(); }
     if (!dialog.open) dialog.showModal();
@@ -84,8 +83,8 @@ export function createNotificationCenter({ updatePanel, navigation }) {
   }
   function renderTools() {
     const data={...distribution,message:serviceMessages[currentLocale()]?.[distribution.message]??distribution.message};
-    if(cli.platform){externalPanel.render(toolsBody,cli);externalPanel.render(document.querySelector("[data-update-toolpacks]"),cli,true);}
-    else {toolPanel.render(toolsBody,data);toolPanel.render(document.querySelector("[data-update-toolpacks]"),data,true);}
+    if(cli.platform){externalPanel.render(toolsBody,cli);}
+    else {toolPanel.render(toolsBody,data);}
   }
   function openTools() { indicators.hide(); if (dialog.open) close(); navigation.openSettings("toolpacks"); }
   async function command(action, id) {
@@ -102,7 +101,7 @@ export function createNotificationCenter({ updatePanel, navigation }) {
       if (results[2].status === "fulfilled") account = results[2].value.data;
       if (results[3].status === "fulfilled") cli=results[3].value.data;distribution.cli=cli;
       render();
-    } finally { pending = false; clearTimeout(timer); if (!destroyed && generation!==epoch) queueMicrotask(refresh);else if (!destroyed) timer = setTimeout(refresh, distribution.busy || (cli.tasks??[]).some(t=>["queued","running","installing","uploading"].includes(t.state)) ? 1000 : 30000); }
+    } finally { pending = false; clearTimeout(timer); if (!destroyed && generation!==epoch) queueMicrotask(refresh);else if (!destroyed) timer = setTimeout(refresh, distribution.busy || update?.busy || (cli.tasks??[]).some(t=>["queued","running","installing","uploading"].includes(t.state)) ? 1000 : 30000); }
   }
   dialog.querySelector("[data-notifications-close]").addEventListener("click", close);
   const locale = subscribeLocale(render), target = subscribeTarget(() => { epoch++; externalPanel.reset(); cli={}; distribution = {cli:{}}; update = account = selected = null; loadPreferences(); render(); void refresh(); });
