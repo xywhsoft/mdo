@@ -1,0 +1,73 @@
+{
+  "app_commit": "a1a53f1a5883e947820c17a6142b4e27c1651d80",
+  "preview": true,
+  "auto_update_published": false,
+  "android_device_tested": false,
+  "artifacts": [
+    {
+      "file": "mdo.exe",
+      "size": 6256093,
+      "sha256": "fd955536503ae04aec934b09519f4c0791ab85bd801bec6dea0904d40f3da11e"
+    },
+    {
+      "file": "mdo-server.exe",
+      "size": 5997849,
+      "sha256": "e1fdf3ff875f57315d0eee0658c70fed215abcc70e896ba7e2efcc2309988d2a"
+    },
+    {
+      "file": "mdo-arm64-v8a.apk",
+      "size": 5797185,
+      "sha256": "56ae44757ec47378ad0052fa275e2aaf6380561375ecc7b511af0dca68f0c373"
+    },
+    {
+      "file": "mdo-full-arm64-v8a.apk",
+      "size": 150133145,
+      "sha256": "6acaae0d2dc00007b454002aeb24c83937ef2de4ac47362f58a5a38d8630ea4a"
+    }
+  ],
+  "version": "0.6.0",
+  "tests": {
+    "javascript_passed": 53,
+    "frontend_contract_passed": 20,
+    "frontend_modules": 224,
+    "packed_bootstrap_and_embedded_assets": "passed"
+  },
+  "android_payloads": [
+    {
+      "file": "mdo-arm64-v8a.apk",
+      "app_xrtpack_bytes": 2088491,
+      "app_xrtpack_sha256": "a582dcde4fa414629174681052094d8e6e917fd11b45dfd646bab6fd6210f88f"
+    },
+    {
+      "file": "mdo-full-arm64-v8a.apk",
+      "app_xrtpack_bytes": 2088491,
+      "app_xrtpack_sha256": "a582dcde4fa414629174681052094d8e6e917fd11b45dfd646bab6fd6210f88f"
+    }
+  ],
+  "screenshots": [
+    "desktop-light.png",
+    "desktop-dark.png",
+    "mobile-dark.png"
+  ],
+  "packed_smoke": {
+    "bootstrap": "ready",
+    "app_commit": "a1a53f1a5883e947820c17a6142b4e27c1651d80",
+    "embedded_assets": [
+      {
+        "file": "css/layers.css",
+        "bytes": 3436,
+        "sha256": "2531711f284411acd562a876bc6f6ffb6b367cd1ed004b29954786ebab2cdbe8"
+      },
+      {
+        "file": "js/components/layers.js",
+        "bytes": 12237,
+        "sha256": "ef5b8b750e55112ae492a4f89ceaf477f56fad1d302ec5555d647d4ea88ac908"
+      },
+      {
+        "file": "js/components/extension-browser.js",
+        "bytes": 19662,
+        "sha256": "0636a8c155bd390d3c60313177539ddd0e5e3fd11257a929ae5929bde59a860d"
+      }
+    ]
+  }
+}
