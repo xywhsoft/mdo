@@ -1,0 +1,14 @@
+/* One inset arrow for native comboboxes throughout the client. Multi-select
+ * listboxes keep their platform appearance and keyboard behaviour. */
+select:not([multiple]):not([size]), select[size="1"]:not([multiple]) {
+  appearance:none;
+  padding-inline-end:36px;
+  background-image:linear-gradient(45deg,transparent 40%,currentColor 40% 60%,transparent 60%),linear-gradient(135deg,transparent 40%,currentColor 40% 60%,transparent 60%);
+  background-position:right 16px center,right 11px center;
+  background-size:5px 5px;
+  background-repeat:no-repeat;
+}
+select:dir(rtl):not([multiple]):not([size]), select:dir(rtl)[size="1"]:not([multiple]) { background-position:left 11px center,left 16px center; }
+@media(forced-colors:active) {
+  select:not([multiple]):not([size]), select[size="1"]:not([multiple]) { appearance:auto; background-image:none; padding-inline-end:24px; }
+}
