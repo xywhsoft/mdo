@@ -278,7 +278,7 @@ def main():
     while fixture.result is None and time.monotonic()<deadline and process.poll() is None:time.sleep(.1)
     result=fixture.result or {'passed':False,'error':'Native browser did not return a result'}
     (args.evidence/'native-result.json').write_text(json.dumps(result,indent=2),encoding='utf-8')
-    assert result['passed'],result;print('Actual WebView2 sidebar parent, topmost viewport and local controller geometry: PASS' if args.display else 'Actual WebView2 four launchers and fresh Home: PASS' if args.start else 'Actual WebView2 terminal rendering, Unicode input, dimensions, hide and end: PASS' if args.terminal else 'Actual WebView2 changes scopes, file location and retained tree, real index unchanged: PASS')
+    assert result['passed'],result;print('Actual WebView2 sidebar parent, topmost viewport and local controller geometry: PASS' if args.display else 'Actual WebView2 four launchers and fresh Home: PASS' if args.start else 'Actual WebView2 terminal rendering, Unicode input, dimensions, hide and end: PASS' if args.terminal else 'Actual WebView2 changes scopes, file location and retained tree, real index unchanged: PASS' if args.changes else 'Actual WebView2 browser/sidebar lifecycle and file actions: PASS' if args.application else 'Actual WebView2 navigation, isolation and input: PASS')
     if args.hold:print('Holding owned QA window for visual inspection',flush=True);time.sleep(args.hold)
    finally:
     process.terminate();process.wait(timeout=15)
