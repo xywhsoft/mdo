@@ -19,8 +19,11 @@ PLATFORMS = {"windows-x86_64", "linux-x86_64", "android-arm64-v8a"}
 
 
 def digest(path):
+    sha = hashlib.sha256()
     with path.open("rb") as source:
-        return hashlib.file_digest(source, "sha256").hexdigest()
+        for chunk in iter(lambda: source.read(1024*1024), b""):
+            sha.update(chunk)
+    return sha.hexdigest()
 
 
 def main():
