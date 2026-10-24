@@ -1,0 +1,59 @@
+{
+  "app_commit": "cf7c3bdd2d820a1889dcf39b785670ffde08d78f",
+  "preview": true,
+  "auto_update_published": false,
+  "android_device_tested": false,
+  "artifacts": [
+    {
+      "file": "mdo.exe",
+      "size": 6262000,
+      "sha256": "f76486ae050ae0fad2df48aff1366ab4aa564e0827d19d4153146ce1f482b726"
+    },
+    {
+      "file": "mdo-server.exe",
+      "size": 6003756,
+      "sha256": "8436fabdfa7843da59772563aba4de1bd7fc9060034a289b033398964dbd4cca"
+    },
+    {
+      "file": "mdo-arm64-v8a.apk",
+      "size": 5801281,
+      "sha256": "8e93bc2fcfb366d8bc930accac4610c003996ba5ab4b279dcfc20c3fa23a5334"
+    },
+    {
+      "file": "mdo-full-arm64-v8a.apk",
+      "size": 150149529,
+      "sha256": "6f203a3fb35d412a22befb68f7ac807d631371b3c71a9a80c8467c274b45f4db"
+    }
+  ],
+  "version": "0.6.0",
+  "javascript_tests": 25,
+  "frontend_contract_tests": 20,
+  "web_modules": 226,
+  "android_app_payload_matches": true,
+  "browser_qa": {
+    "desktop": [
+      1280,
+      720
+    ],
+    "mobile": [
+      390,
+      720,
+      3
+    ],
+    "external_entry_group": "账号与统计",
+    "external_url": "https://ai.xywhsoft.com/mdo/creator",
+    "target": "_blank",
+    "rel": "noopener noreferrer",
+    "arrow_svg": true,
+    "mobile_option": "创作中心 ↗",
+    "mobile_selection_after_external": "toolpacks",
+    "duplicate_creator_links_in_extension_content": 0,
+    "production_account_login": false,
+    "native_to_browser_sso_implemented": false,
+    "test_services_and_tabs_closed": true
+  },
+  "screenshots": [
+    "creator-desktop.png",
+    "creator-mobile.png"
+  ]
+}
