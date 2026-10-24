@@ -1,0 +1,43 @@
+{
+  "app_commit": "c453519bced527385d2ec3d4ca4d76e30a48fe88",
+  "preview": true,
+  "auto_update_published": false,
+  "android_device_tested": false,
+  "artifacts": [
+    {
+      "file": "mdo.exe",
+      "size": 6257511,
+      "sha256": "0b553981bf30db52d97056ab6692a2e1e0620000981baecc4a1f2e9b2935ca75"
+    },
+    {
+      "file": "mdo-server.exe",
+      "size": 5999268,
+      "sha256": "2da73e5307b46863ef7986d4c0c4bd48c161e13b3996697e45dfea6086bbfa38"
+    },
+    {
+      "file": "mdo-arm64-v8a.apk",
+      "size": 5797185,
+      "sha256": "2aaa07fc43acf0e01a92bc33f011ddb4d05ca200fc7c18f07089f2c790d35a3a"
+    },
+    {
+      "file": "mdo-full-arm64-v8a.apk",
+      "size": 150133145,
+      "sha256": "b386f61eaaa6750d9ed8d9126054619f00dca346180529fed3ec7db7a76c534a"
+    }
+  ],
+  "version": "0.6.0",
+  "tests": {
+    "javascript_passed": 17,
+    "frontend_contract_passed": 20,
+    "frontend_modules": 224
+  },
+  "ui_fixture": {
+    "backend": "isolated simulated submissions, no production account",
+    "desktop": "passed",
+    "mobile_390x844_dpr3": "passed",
+    "inline_submissions_after_close": 0,
+    "withdraw_and_refresh": "passed"
+  },
+  "screenshot": ".build\\submissions-window-20261025\\desktop.png",
+  "android_app_xrtpack_sha256": "1fbd7ae3d0f09130cfcd9f168d930dafe6a999b109d9e87757e89e2f20c13b4d"
+}
