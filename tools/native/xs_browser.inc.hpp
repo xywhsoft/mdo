@@ -22,8 +22,8 @@ public:
 };
 template<class I,typename... Args,typename F> static I* xb_cb(REFIID id,F fn){return new xb_callback<I,Args...>(id,std::function<HRESULT(Args...)>(std::move(fn)));}
 struct xb_view{
-  ICoreWebView2Controller* controller=nullptr;ICoreWebView2* core=nullptr;bool creating=true,manual=false,loading=true,failed=false;RECT bounds{};std::string error;int errorCode=0;UINT64 navigation=0;
-  ~xb_view(){if(controller){controller->Close();controller->Release();}if(core)core->Release();}
+  ICoreWebView2Controller* controller=nullptr;ICoreWebView2* core=nullptr;HWND window=nullptr;bool creating=true,manual=false,loading=true,failed=false;RECT bounds{};std::string error;int errorCode=0;UINT64 navigation=0;
+  ~xb_view(){if(controller){controller->Close();controller->Release();}if(core)core->Release();if(window)DestroyWindow(window);}
 };
 struct xb_host{
   void* owner=nullptr;HWND window=nullptr;ICoreWebView2* main=nullptr;bool alive=true;std::wstring document,profile;
@@ -48,6 +48,20 @@ static RECT xb_bounds(const std::string& json){
   auto w=static_cast<LONG>(std::max(1.0,std::min(16384.0,number("width",640)*scale)));
   auto h=static_cast<LONG>(std::max(1.0,std::min(16384.0,number("height",480)*scale)));
   return RECT{x,y,x+w,y+h};
+}
+/* The main WebView lives inside webview's full-client UI widget. A controller
+ * parented to the outer frame can load and capture successfully while that
+ * widget covers it. Give each content view its own child of the same widget,
+ * then keep its HWND above the main controller without stealing focus. */
+static bool xb_place(const std::shared_ptr<xb_view>& view,bool visible){
+  if(!view->window||!view->controller)return false;
+  const LONG width=view->bounds.right-view->bounds.left,height=view->bounds.bottom-view->bounds.top;
+  const RECT local{0,0,width,height};
+  HRESULT bounds=view->controller->put_Bounds(local);
+  HRESULT shown=view->controller->put_IsVisible(visible?TRUE:FALSE);
+  BOOL placed=SetWindowPos(view->window,HWND_TOP,view->bounds.left,view->bounds.top,width,height,
+    SWP_NOACTIVATE|(visible?SWP_SHOWWINDOW:SWP_HIDEWINDOW));
+  return SUCCEEDED(bounds)&&SUCCEEDED(shown)&&placed;
 }
 static std::string xb_navigation_error(COREWEBVIEW2_WEB_ERROR_STATUS error){
   switch(error){
@@ -76,12 +90,15 @@ static void xb_receive(const std::shared_ptr<xb_host>& host,const std::string& j
   if(command=="create"){
     if(found!=host->views.end()){
       auto view=found->second;
-      if(view->controller){view->bounds=xb_bounds(json);view->controller->put_Bounds(view->bounds);view->controller->put_IsVisible(xb_get(json,"visible")=="false"?FALSE:TRUE);}
+      if(view->controller){view->bounds=xb_bounds(json);if(!xb_place(view,xb_get(json,"visible")!="false")){host->reply(id,"","Cannot place content browser viewport");return;}}
       host->reply(id,"{\"attached\":true}");return;
     }
     if(host->views.size()>=8){host->reply(id,"","Native browser view limit reached (8)");return;}
     const auto url=xb_get(json,"url");const bool visible=xb_get(json,"visible")!="false";if(!xb_url(url)){host->reply(id,"","Only HTTP(S) navigation is supported");return;}
-    auto view=std::make_shared<xb_view>();view->bounds=xb_bounds(json);host->views[browser]=view;
+    auto view=std::make_shared<xb_view>();view->bounds=xb_bounds(json);
+    view->window=CreateWindowExW(0,L"STATIC",L"",WS_CHILD|WS_CLIPCHILDREN|WS_CLIPSIBLINGS,
+      0,0,1,1,host->window,nullptr,GetModuleHandleW(nullptr),nullptr);
+    if(!view->window){host->reply(id,"","Cannot create content browser viewport");return;}host->views[browser]=view;
     auto* environment=xb_cb<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler,HRESULT,ICoreWebView2Environment*>(IID_ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler,
       [host,view,id,browser,url,visible](HRESULT status,ICoreWebView2Environment* env){
         if(!host->alive)return S_OK;
@@ -140,12 +157,12 @@ static void xb_receive(const std::shared_ptr<xb_host>& host,const std::string& j
                 if(auto active=weak.lock())if(SUCCEEDED(args->get_Uri(&uri.p))&&xb_url(webview::detail::narrow_string(uri.p?uri.p:L"")))active->core->Navigate(uri.p);return S_OK;
               });
             EventRegistrationToken popupToken{};view->core->add_NewWindowRequested(popup,&popupToken);popup->Release();
-            controller->put_Bounds(view->bounds);controller->put_IsVisible(visible?TRUE:FALSE);
+            if(!xb_place(view,visible)){host->views.erase(browser);host->reply(id,"","Cannot place content browser viewport");return S_OK;}
             HRESULT navigationResult=view->core->Navigate(webview::detail::widen_string(url).c_str());
             if(FAILED(navigationResult)){view->loading=false;view->error="Browser rejected the initial navigation";view->errorCode=static_cast<int>(navigationResult);}
             host->reply(id,"{\"created\":true}");return S_OK;
           });
-        HRESULT result=env->CreateCoreWebView2Controller(host->window,ready);ready->Release();
+        HRESULT result=env->CreateCoreWebView2Controller(view->window,ready);ready->Release();
         if(FAILED(result)){host->views.erase(browser);host->reply(id,"","Content controller request failed");}return S_OK;
       });
     HRESULT result=host->loader.create_environment_with_options(nullptr,host->profile.c_str(),nullptr,environment);environment->Release();
@@ -155,13 +172,19 @@ static void xb_receive(const std::shared_ptr<xb_host>& host,const std::string& j
   if(found==host->views.end()||found->second->creating){host->reply(id,"","Browser is not ready");return;}
   auto view=found->second;auto* core=view->core;
   if(command=="bounds"){
-    view->bounds=xb_bounds(json);view->controller->put_Bounds(view->bounds);view->controller->put_IsVisible(xb_get(json,"visible")=="false"?FALSE:TRUE);host->reply(id,"{}");return;
+    view->bounds=xb_bounds(json);if(!xb_place(view,xb_get(json,"visible")!="false")){host->reply(id,"","Cannot place content browser viewport");return;}host->reply(id,"{}");return;
   }
   if(command=="state"){
     xs_wv_text url,title;core->get_Source(&url.p);core->get_DocumentTitle(&title.p);
     BOOL back=FALSE,forward=FALSE,visible=FALSE;core->get_CanGoBack(&back);core->get_CanGoForward(&forward);view->controller->get_IsVisible(&visible);
+    HWND parent=nullptr;view->controller->get_ParentWindow(&parent);RECT actual{};view->controller->get_Bounds(&actual);
+    const bool attached=parent==view->window&&GetParent(view->window)==host->window;
+    POINT center{view->bounds.left+(view->bounds.right-view->bounds.left)/2,view->bounds.top+(view->bounds.bottom-view->bounds.top)/2};
+    const bool topmost=ChildWindowFromPointEx(host->window,center,CWP_SKIPINVISIBLE|CWP_SKIPTRANSPARENT)==view->window;
+    const auto viewport=",\"viewport_attached\":"+std::string(attached?"true":"false")+",\"viewport_topmost\":"+(topmost?"true":"false")+
+      ",\"controller_bounds\":{\"x\":"+std::to_string(actual.left)+",\"y\":"+std::to_string(actual.top)+",\"width\":"+std::to_string(actual.right-actual.left)+",\"height\":"+std::to_string(actual.bottom-actual.top)+"}";
     const auto bounds="{\"x\":"+std::to_string(view->bounds.left)+",\"y\":"+std::to_string(view->bounds.top)+",\"width\":"+std::to_string(view->bounds.right-view->bounds.left)+",\"height\":"+std::to_string(view->bounds.bottom-view->bounds.top)+"}";
-    host->reply(id,"{\"url\":"+xb_quote(webview::detail::narrow_string(url.p?url.p:L""))+",\"title\":"+xb_quote(webview::detail::narrow_string(title.p?title.p:L""))+",\"can_go_back\":"+(back?"true":"false")+",\"can_go_forward\":"+(forward?"true":"false")+",\"loading\":"+(view->loading?"true":"false")+",\"manual\":"+(view->manual?"true":"false")+",\"visible\":"+(visible?"true":"false")+",\"process_failed\":"+(view->failed?"true":"false")+",\"bounds\":"+bounds+",\"platform\":\"webview2\",\"error_code\":"+std::to_string(view->errorCode)+",\"error\":"+xb_quote(view->error)+"}");return;
+    host->reply(id,"{\"url\":"+xb_quote(webview::detail::narrow_string(url.p?url.p:L""))+",\"title\":"+xb_quote(webview::detail::narrow_string(title.p?title.p:L""))+",\"can_go_back\":"+(back?"true":"false")+",\"can_go_forward\":"+(forward?"true":"false")+",\"loading\":"+(view->loading?"true":"false")+",\"manual\":"+(view->manual?"true":"false")+",\"visible\":"+(visible?"true":"false")+viewport+",\"process_failed\":"+(view->failed?"true":"false")+",\"bounds\":"+bounds+",\"platform\":\"webview2\",\"error_code\":"+std::to_string(view->errorCode)+",\"error\":"+xb_quote(view->error)+"}");return;
   }
   if(command=="takeover"||command=="release"){
     if(command=="release"&&view->manual&&xb_get(json,"agent")=="true"){host->reply(id,"","Only the user can return manual control");return;}
@@ -226,8 +249,8 @@ extern "C" int xsWvEnableBrowser(void* view,const char* url,const char* profile)
     auto host=std::make_shared<xb_host>();host->owner=view;host->document=xs_wv_document(webview::detail::widen_string(url?url:"").c_str());
     if(!xs_wv_local_document(host->document)||!profile||!*profile)return 0;
     host->profile=webview::detail::widen_string(std::string(profile)+"-content");
-    host->window=static_cast<HWND>(webview_get_window(static_cast<webview_t>(view)));
     auto* controller=static_cast<ICoreWebView2Controller*>(webview_get_native_handle(static_cast<webview_t>(view),WEBVIEW_NATIVE_HANDLE_KIND_BROWSER_CONTROLLER));
+    if(!controller||FAILED(controller->get_ParentWindow(&host->window))||!host->window)return 0;
     xs_wv_com<ICoreWebView2> core;if(!controller||FAILED(controller->get_CoreWebView2(core.out())))return 0;host->main=core.p;
     auto* handler=new xb_messages(host);EventRegistrationToken token{};auto result=core->add_WebMessageReceived(handler,&token);handler->Release();
     if(FAILED(result))return 0;{std::lock_guard<std::mutex> lock(xb_hosts_mutex);xb_hosts[view]=host;}return 1;

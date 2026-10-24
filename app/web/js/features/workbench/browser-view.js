@@ -50,7 +50,7 @@ export async function mountBrowserView(root, { row, sdk, signal, mount, bridge, 
       if (!result.ok) throw new Error(result.error || "读取页面失败");
       addContext({ title: state.title || state.url, content: result.value.text, source: state.url, context: row.context });
     }, disabled: browserPhase(state) !== "ready" },
-    { label: "复制诊断信息", execute: () => navigator.clipboard.writeText(JSON.stringify({ platform: state.platform, phase: browserPhase(state), loading: state.loading, visible: state.visible, bounds: state.bounds, error: state.error, error_code: state.error_code }, null, 2)) },
+    { label: "复制诊断信息", execute: () => navigator.clipboard.writeText(JSON.stringify({ platform: state.platform, phase: browserPhase(state), loading: state.loading, visible: state.visible, bounds: state.bounds, viewport_attached: state.viewport_attached, viewport_topmost: state.viewport_topmost, controller_bounds: state.controller_bounds, error: state.error, error_code: state.error_code }, null, 2)) },
     { label: "结束浏览", execute: async () => {
       await sdk.call("browser.close", { id: browser.id }, { signal });
       await execute("close"); await onEnd(browser.id);

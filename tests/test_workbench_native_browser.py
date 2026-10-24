@@ -27,12 +27,15 @@ try{
  await bridge.call('back',{browser:id});
  for(let i=0;i<100;i++){const state=await bridge.call('state',{browser:id});if(state.url.endsWith('/page'))break;await pause(100);}
  const state=await bridge.call('state',{browser:id});check(state.url.endsWith('/page'),'back navigation failed');
+ check(state.viewport_attached===true&&state.viewport_topmost===true,'content is not hosted above the main WebView in the UI widget');
+ check(state.controller_bounds.x===0&&state.controller_bounds.y===0&&state.controller_bounds.width===Math.round(600*devicePixelRatio),'content controller is not local to its viewport');
  const isolated=await bridge.call('evaluate',{browser:id,script:'typeof window.mdo+":"+typeof window.XsBrowser'});
  check(isolated.value==='undefined:undefined','host SDK leaked into content view');
  await bridge.call('bounds',{browser:id,bounds:{x:280,y:60,width:600,height:600,scale:devicePixelRatio},visible:false});
  const hidden=await bridge.call('state',{browser:id});check(hidden.visible===false,'native visibility was not applied');
  await bridge.call('create',{browser:id,url:TARGET+'/page',bounds:{x:290,y:70,width:500,height:400,scale:devicePixelRatio},visible:true});
  const attached=await bridge.call('state',{browser:id});check(attached.visible===true&&attached.bounds.width===Math.round(500*devicePixelRatio),'reattaching did not restore native bounds and visibility');
+ check(attached.viewport_attached&&attached.viewport_topmost&&attached.controller_bounds.x===0&&attached.controller_bounds.y===0&&attached.controller_bounds.width===attached.bounds.width,'reattaching lost the native viewport hierarchy');
  await bridge.call('navigate',{browser:id,url:TARGET+'/disconnect'});
  let failure;for(let i=0;i<100;i++){await pause(100);failure=await bridge.call('state',{browser:id});if(failure.error)break;}
  check(failure.error&&typeof failure.error_code==='number'&&!failure.loading,'navigation failure lost its concrete native error');
@@ -71,6 +74,7 @@ try{
  const nativeState=()=>bridge.call('state',{browser:browser.id});
  for(let i=0;i<50&&!(await nativeState()).visible;i++)await pause(100);
  if(!(await nativeState()).visible)throw Error('Background browser stayed invisible after opening its panel');
+ const placed=await nativeState();if(!placed.viewport_attached||!placed.viewport_topmost||placed.controller_bounds.x!==0||placed.controller_bounds.y!==0||placed.controller_bounds.width!==placed.bounds.width)throw Error('Loaded content is behind the main WebView or outside its viewport');
  document.querySelector('.wb-top [aria-label="工作区更多操作"]').click();await pause(150);
  if((await nativeState()).visible)throw Error('Native browser covered the workspace menu');
  document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));await pause(150);
@@ -159,6 +163,26 @@ try{
 }catch(error){await fetch(TARGET+'/result',{method:'POST',mode:'no-cors',body:JSON.stringify({passed:false,error:String(error.stack||error)})})}
 '''
 
+DISPLAY_SCRIPT=r'''
+import {allowsApiWrite} from '/js/api/client.js';
+import {createNativeBrowserBridge} from '/js/features/workbench/native-browser.js';
+const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+const until=async check=>{for(let i=0;i<300;i++){const value=await check();if(value)return value;await pause(100);}throw Error('Visible browser display timed out');};
+try{
+ await until(()=>window.mdo&&allowsApiWrite('/application/call',{method:'POST'}));await mdo.ui.newTab();
+ const browser=await mdo.browser.create({client:mdo.clientId,url:TARGET+'/paint'});
+ await mdo.panel.open({client:mdo.clientId,type:'mdo.browser',key:'visible-viewport',resource:{id:browser.id},reveal:'activate'});
+ const bridge=createNativeBrowserBridge();
+ const state=await until(async()=>{try{const row=await bridge.call('state',{browser:browser.id});return row.visible&&!row.loading&&row.title==='Visible browser QA'?row:false;}catch{return false;}});
+ if(!state.viewport_attached||!state.viewport_topmost||state.controller_bounds.x!==0||state.controller_bounds.y!==0)throw Error('Rendered browser is not above the main UI widget');
+ const surface=document.querySelector('.wb-browser-surface').getBoundingClientRect();
+ if(state.bounds.width!==Math.round(surface.width*devicePixelRatio)||state.bounds.height!==Math.round(surface.height*devicePixelRatio))throw Error('Native viewport differs from actual sidebar geometry');
+ const snapshot=await bridge.call('snapshot',{browser:browser.id});if(!snapshot.value.text.includes('VISIBLE BROWSER QA'))throw Error('Paint fixture was not loaded');
+ await fetch(TARGET+'/result',{method:'POST',mode:'no-cors',body:JSON.stringify({passed:true,scope:'native visible sidebar viewport',state,dom:{x:surface.x,y:surface.y,width:surface.width,height:surface.height,scale:devicePixelRatio}})});
+ bridge.dispose();
+}catch(error){await fetch(TARGET+'/result',{method:'POST',mode:'no-cors',body:JSON.stringify({passed:false,error:String(error.stack||error)})})}
+'''
+
 START_SCRIPT=r'''
 import {allowsApiWrite} from '/js/api/client.js';
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
@@ -214,11 +238,12 @@ class Fixture(BaseHTTPRequestHandler):
   if self.path=='/disconnect':self.close_connection=True;self.connection.close();return
   data=b'''<!doctype html><title>Browser fixture</title><h1>Native browser fixture</h1><input id=text><button id=apply onclick="document.querySelector('#result').textContent='Result: '+document.querySelector('#text').value">Apply</button><p id=result></p>'''
   if self.path=='/second':data=b'<!doctype html><title>Second</title><h1>Second page</h1>'
+  if self.path=='/paint':data=b'<!doctype html><title>Visible browser QA</title><style>body{margin:0;background:rgb(22,167,90);color:white;font:32px sans-serif;padding:30px}h1{font-size:32px}</style><h1>VISIBLE BROWSER QA</h1><p>This green content must be visible in the sidebar.</p>'
   self.send_response(200);self.send_header('Content-Type','text/html');self.send_header('Content-Length',str(len(data)));self.end_headers();self.wfile.write(data)
  def do_POST(self):
   self.server.result=json.loads(self.rfile.read(int(self.headers['Content-Length'])));self.send_response(204);self.end_headers()
 def main():
- p=argparse.ArgumentParser();target=p.add_mutually_exclusive_group(required=True);target.add_argument('--host',type=Path);target.add_argument('--packed',type=Path);p.add_argument('--evidence',type=Path,required=True);modes=p.add_mutually_exclusive_group();modes.add_argument('--application',action='store_true');modes.add_argument('--changes',action='store_true');modes.add_argument('--terminal',action='store_true');modes.add_argument('--start',action='store_true');args=p.parse_args()
+ p=argparse.ArgumentParser();target=p.add_mutually_exclusive_group(required=True);target.add_argument('--host',type=Path);target.add_argument('--packed',type=Path);p.add_argument('--evidence',type=Path,required=True);p.add_argument('--hold',type=int,choices=range(0,61),default=0);modes=p.add_mutually_exclusive_group();modes.add_argument('--application',action='store_true');modes.add_argument('--changes',action='store_true');modes.add_argument('--terminal',action='store_true');modes.add_argument('--start',action='store_true');modes.add_argument('--display',action='store_true');args=p.parse_args()
  args.evidence.mkdir(parents=True,exist_ok=True)
  fixture=ThreadingHTTPServer(('127.0.0.1',0),Fixture);fixture.result=None;threading.Thread(target=fixture.serve_forever,daemon=True).start()
  with tempfile.TemporaryDirectory(dir=ROOT/'.build',prefix='workbench-native-') as directory:
@@ -233,8 +258,8 @@ def main():
   service['window']=json.loads((ROOT/'app/xs.json').read_text(encoding='utf-8'))['services'][0]['window'];service['window']['title']='Mdo native browser QA';service['window']['install_fallback']='headless'
   config.write_text(json.dumps(value),encoding='utf-8')
   target=f'http://127.0.0.1:{fixture.server_port}'
-  script='<script type="module">const TARGET='+json.dumps(target)+';'+(START_SCRIPT if args.start else TERMINAL_SCRIPT if args.terminal else CHANGES_SCRIPT if args.changes else APPLICATION_SCRIPT if args.application else SCRIPT)+'</script>'
-  page=(ROOT/'app/web/index.html').read_text(encoding='utf-8').replace('</body>',script+'</body>') if args.application or args.changes or args.terminal or args.start else '<!doctype html><meta charset=utf-8><h1>Mdo browser QA</h1>'+script
+  script='<script type="module">const TARGET='+json.dumps(target)+';'+(DISPLAY_SCRIPT if args.display else START_SCRIPT if args.start else TERMINAL_SCRIPT if args.terminal else CHANGES_SCRIPT if args.changes else APPLICATION_SCRIPT if args.application else SCRIPT)+'</script>'
+  page=(ROOT/'app/web/index.html').read_text(encoding='utf-8').replace('</body>',script+'</body>') if args.application or args.changes or args.terminal or args.start or args.display else '<!doctype html><meta charset=utf-8><h1>Mdo browser QA</h1>'+script
   (base/'web/index.html').write_text(page,encoding='utf-8')
   with (args.evidence/'native-host.log').open('wb') as log:
    environment={key:value for key,value in os.environ.items() if not (args.terminal or args.start) or key.lower()!='psmodulepath'}
@@ -244,7 +269,8 @@ def main():
     while fixture.result is None and time.monotonic()<deadline and process.poll() is None:time.sleep(.1)
     result=fixture.result or {'passed':False,'error':'Native browser did not return a result'}
     (args.evidence/'native-result.json').write_text(json.dumps(result,indent=2),encoding='utf-8')
-    assert result['passed'],result;print('Actual WebView2 four launchers and fresh Home: PASS' if args.start else 'Actual WebView2 terminal rendering, Unicode input, dimensions, hide and end: PASS' if args.terminal else 'Actual WebView2 changes scopes, file location and retained tree, real index unchanged: PASS' if args.changes else 'Actual WebView2 navigation, input, screenshot, takeover, back and SDK isolation: PASS')
+    assert result['passed'],result;print('Actual WebView2 sidebar parent, topmost viewport and local controller geometry: PASS' if args.display else 'Actual WebView2 four launchers and fresh Home: PASS' if args.start else 'Actual WebView2 terminal rendering, Unicode input, dimensions, hide and end: PASS' if args.terminal else 'Actual WebView2 changes scopes, file location and retained tree, real index unchanged: PASS')
+    if args.hold:print('Holding owned QA window for visual inspection',flush=True);time.sleep(args.hold)
    finally:
     process.terminate();process.wait(timeout=15)
     if args.packed:release_packed_copies(base/args.packed.name)
