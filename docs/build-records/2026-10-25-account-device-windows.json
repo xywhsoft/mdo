@@ -1,0 +1,42 @@
+{
+  "app_commit": "26092567dc5658884ada0de4d19ca4e66072aae0",
+  "preview": true,
+  "auto_update_published": false,
+  "android_device_tested": false,
+  "artifacts": [
+    {
+      "file": "mdo.exe",
+      "size": 6259768,
+      "sha256": "7175d0232ae9ff3a10de888fe00ca29e9507dcb8317f3ace337c137aed94e9ce"
+    },
+    {
+      "file": "mdo-server.exe",
+      "size": 6001525,
+      "sha256": "e8d4bd24ffa6bebb9a5a5fea2947895e8edbb28949a83fd8d6300ff01aa11125"
+    },
+    {
+      "file": "mdo-arm64-v8a.apk",
+      "size": 5801281,
+      "sha256": "c9a0a751811073f949680b39b1c6c103155a6398591a596b0110b9af60f053dc"
+    },
+    {
+      "file": "mdo-full-arm64-v8a.apk",
+      "size": 150149529,
+      "sha256": "96c3842b1a7a33c3080a9799178d4b9aa5e13236fc226071bb269d624370d31c"
+    }
+  ],
+  "version": "0.6.0",
+  "javascript_tests": 28,
+  "frontend_contract_tests": 20,
+  "reachable_web_modules": 225,
+  "android_payloads_equal": true,
+  "browser_fixture": "Isolated full app with synthetic local account and device endpoints",
+  "browser_checks": [
+    "signed-out account opens login without navigation",
+    "device login continues to picker",
+    "signed-in account opens settings",
+    "desktop light/dark",
+    "390x720 DPR3 no horizontal overflow"
+  ],
+  "test_services_stopped": true
+}
