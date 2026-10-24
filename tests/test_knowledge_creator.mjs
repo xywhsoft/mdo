@@ -1,11 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {readFileSync} from "node:fs";
+import {readFileSync,existsSync} from "node:fs";
 import {testDocument,descendants} from "./helpers/extension-dom.mjs";
-test("web knowledge creation resets the index and builds a Windows-compatible inert artifact",async()=>{
+test("web knowledge creation resets the index and builds a Windows-compatible inert artifact",async t=>{
  const previous=globalThis.document;globalThis.document=testDocument();
  const format=new URL("../app/web/js/features/settings/knowledge-format.js",import.meta.url).href;
  const site=new URL("../../home/host/xywhsoft_ai/plugin/mdo/page/creator/knowledge-builder.js",import.meta.url);
+ if(!existsSync(site)){globalThis.document=previous;t.skip("Platform checkout is required for the web-builder integration");return;}
  const source=readFileSync(site,"utf8").replace('"/mdo/knowledge-format.js"',JSON.stringify(format));
  try{const {mountKnowledgeBuilder}=await import("data:text/javascript;base64,"+Buffer.from(source).toString("base64"));
   const form=document.createElement("form"),box=document.createElement("fieldset"),kind=document.createElement("select"),artifact=document.createElement("input");kind.value="knowledge";Object.defineProperty(form,"elements",{value:{kind,artifact}});form.append(box);

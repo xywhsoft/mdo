@@ -80,6 +80,10 @@ def run():
             assert 'Test base prompt'in call('GET','/fixture/knowledge')['prompt']
         exported=call('POST','/ecosystem',dict(action='export',single_kind='knowledge',references=[dict(kind='knowledge',id='local-reference')]))
         assert exported['resources'][0]['files']==files or sorted(exported['resources'][0]['files'],key=lambda f:f['path'])==files
+        large=call('PUT','/extensions/knowledge/large-reference',dict(content=json.dumps(custom),files=[file('index.md','# Large index'),file('large.md','x'*300000),dict(path='sample.bin',base64='AAEC/w==')]),revision='new')
+        assert call('GET','/extensions/knowledge/large-reference/documents?path=large.md')['truncated']
+        assert call('GET','/extensions/knowledge/large-reference/documents?path=sample.bin')['binary']
+        call('DELETE','/extensions/knowledge/large-reference',revision=large['revision'])
         data=package()
         def store(action,**extra):return call('POST','/ecosystem',dict(action=action,single_kind='knowledge',**extra))
         plan=store('plan_import',package=data);assert len(plan['files'])==3
