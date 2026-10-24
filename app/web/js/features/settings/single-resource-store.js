@@ -78,7 +78,7 @@ export function createSingleResourceStore(kind, onChange, onBrowse = () => {}, o
     const filter = element("select", { attrs: { "aria-label": browserText("status", "状态") } });
     for (const [value, text] of [["all", browserText("all", "全部状态")], ["installed", browserText("installed", "已安装")], ["updates", browserText("updates", "可更新")], ["new", browserText("notInstalled", "未安装")]]) filter.append(element("option", { text, attrs: { value } }));
     filter.value = stateFilter; filter.addEventListener("change", () => { stateFilter = filter.value; render(); });
-    search.append(input, element("button", { text: "搜索", className: "secondary-button", attrs: { type: "submit" } }), filter, button("刷新", () => load()));
+    search.append(input, filter, element("button", { text: "搜索", className: "secondary-button", attrs: { type: "submit" } }), button("刷新", () => load()));
     search.addEventListener("submit", e => { e.preventDefault(); query = input.value.trim(); void load(); });
     const rows = items.filter(row => stateFilter === "all" || (stateFilter === "installed" ? Boolean(owned(row)) : stateFilter === "updates" ? owned(row) && owned(row).id !== row.id : !owned(row))).map(row => {
       const receipt = owned(row), same = receipt?.id === row.id;
