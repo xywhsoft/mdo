@@ -1106,6 +1106,7 @@ def purge_inventory_probe(port: int, home: Path, workspace: Path) -> None:
             "memory/projects/ui-workspace.json", "memory/projects/ui-workspace.json.bak",
             "memory/projects/ui-workspace",
             "sessions/ui-workspace", "migration/session-prompts/ui-workspace",
+            "workbench-baselines/ui-workspace",
             "schedules/purge-preview-schedule.json", "schedules/purge-preview-schedule.json.bak",
             "schedules/history/purge-preview-schedule.jsonl",
         ])
