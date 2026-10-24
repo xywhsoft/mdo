@@ -1,0 +1,48 @@
+{
+  "date": "2026-10-25T02:14:00.786794+08:00",
+  "source_repository": "D:/GIT/xserver",
+  "source_commit": "771574b142daaffab0ce330e231cd90dcac1e231",
+  "xrt_commit": "803501226fd91ccbcbd39d2b52faccf593146a68",
+  "old_commit": "b5ab39c926c282e8912d1488eed0be55ce16a360",
+  "old_sha256": {
+    "xs.exe": "6383e2b619892bcabf146a351f555c1b5a3a3930776f5e3a6564a90e1ca7ad0e",
+    "xsw.exe": "79c5db04f7f003a544f586e420345b0798c19a02dc6e4a3aecd82920e8a2b4c2"
+  },
+  "source_sha256": "79537a4e1e5c97e82728a4373b9c0cb214f8e34d60ca02b524e4307cf26e9fe9",
+  "artifacts": [
+    {
+      "file": "xs.exe",
+      "size": 9047552,
+      "sha256": "901f4e81681cfd0755cadc700feb61658c36774f27caa75431a7bf06c0c650e0",
+      "subsystem": 3,
+      "version": "[xs] XServer 1.0.0 (commit 771574b, 2026-10-25, windows)\n[xs] extensions (25): sqlite, xtp, xllm, xllm-session, xwork, xmail, xsmtp, xpop3, ximap, md4c, xacme, qrcodegen, xjwt, xoauth2, webview, xhttp, xhttp-client, xhttp-policy, xhttp-server, xssh, xws, xws-client, xws-group, xws-server, xrudp"
+    },
+    {
+      "file": "xsw.exe",
+      "size": 9047552,
+      "sha256": "02f2b1cb42d22a46067bfb09e9fa1f68eed7b06d1eb944a5cce2edfeabe5a61b",
+      "subsystem": 2,
+      "version": "[xs] XServer 1.0.0 (commit 771574b, 2026-10-25, windows)\n[xs] extensions (25): sqlite, xtp, xllm, xllm-session, xwork, xmail, xsmtp, xpop3, ximap, md4c, xacme, qrcodegen, xjwt, xoauth2, webview, xhttp, xhttp-client, xhttp-policy, xhttp-server, xssh, xws, xws-client, xws-group, xws-server, xrudp"
+    }
+  ],
+  "backup": ".build/xs-root-update-20261025/backup",
+  "checks": {
+    "metadata_and_binary_hash": true,
+    "pe_x64_console_and_gui": true,
+    "version_banners": true,
+    "extensions": 25,
+    "public_sdk_exports": 2863,
+    "outer_and_nested_tcc": true,
+    "xrudp_ipv4_ipv6": true,
+    "console_vfs": {
+      "pass": 32,
+      "fail": 0
+    },
+    "gui_vfs_log_aware": {
+      "pass": 32,
+      "fail": 0
+    }
+  },
+  "gui_test_note": "Stock console-output VFS runner initially reported 31 pass and 1 fail for xsw because pack --list writes to xsw.log. Re-run with per-command appended log capture passed all unchanged assertions.",
+  "scope": "Root generic xs developer hosts only; mdo product dependency lock and release artifacts are separate."
+}
