@@ -48,11 +48,16 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
     const mount = mounts.get(id); if (!mount) return; mounts.delete(id); mount.abort.abort(); mount.observer?.disconnect(); mount.resizeObserver?.disconnect();
     try { mount.dispose?.(); } catch (error) { console.error("Panel cleanup failed", error); } mount.root.remove();
   };
+  const selectRemaining = () => {
+    layout.order = layout.order.filter(id => entries.has(id));
+    if (!entries.has(layout.active)) layout.active = layout.order.at(-1) || "";
+    if (layout.secondary === layout.active || !entries.has(layout.secondary)) layout.secondary = "";
+    if (!layout.order.length) layout.open = false;
+  };
   const close = async id => {
     const row = entries.get(id); if (!row) return;
     if (mounts.get(id)?.dirty?.() && !confirm("此面板有未保存修改，仍要关闭吗？")) return;
-    await bound(row).call("panel.close", { id }); disposeMount(id); entries.delete(id); layout.order = layout.order.filter(item => item !== id);
-    if (layout.active === id) layout.active = layout.order.at(-1) || ""; if (layout.secondary === id) layout.secondary = "";
+    await bound(row).call("panel.close", { id }); disposeMount(id); entries.delete(id); selectRemaining();
     remember(); render();
   };
   const reveal = id => { if (!entries.has(id)) return; layout.active = id; if (layout.secondary === id) layout.secondary = ""; layout.open = true; remember(); render(); };
@@ -229,6 +234,8 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
     shell.dataset.workbench = layout.open ? "open" : "closed"; shell.toggleAttribute("data-workbench-maximized", layout.maximized && layout.open);
     const sidebar = Number.parseFloat(shell.style.getPropertyValue("--sidebar-column")) || 0;
     shell.style.setProperty("--workbench-width", `${Math.min(layout.width, Math.max(320, innerWidth - sidebar - 360))}px`); dock.hidden = !layout.open;
+    opener.title = layout.open ? "隐藏右侧栏" : "展开右侧栏";
+    opener.setAttribute("aria-label", opener.title); opener.setAttribute("aria-expanded", String(layout.open));
     tabs.replaceChildren();
     for (const id of layout.order) {
       const row = entries.get(id); if (!row) continue;
@@ -309,6 +316,11 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
     return handle(row.id);
   }
   async function newTab() { return open("mdo.new-tab", { title: "新标签页" }); }
+  async function toggleWorkbench() {
+    await ensure();
+    if (!layout.open && !layout.order.length) return newTab();
+    layout.open = !layout.open; remember(); render();
+  }
   definitions.set("mdo.new-tab", { title: "新标签页", renderer: "custom", mount(root, { sdk, signal, panelId, context }) {
     // An explicit click owns one admission key. Retrying an uncertain open
     // finds its original resource rather than creating another browser/shell.
@@ -406,7 +418,7 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
           for (const [panelId, panel] of entries) if (panel.type === "mdo.browser" && panel.resource?.id === id) remount(panelId);
         }
       }
-      layout.order = layout.order.filter(id => live.has(id)); if (!entries.has(layout.active)) layout.active = layout.order.at(-1) || "";
+      selectRemaining();
       render();
     } catch { /* Existing panels remain visible during a transient disconnect. */ }
     finally { if (!stopped) syncTimer = setTimeout(sync, document.hidden ? 10000 : 2000); }
@@ -431,7 +443,7 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
   }
   let loading;
   const ensure = () => loading ||= load().catch(error => { loading = null; throw error; });
-  const opener = button("", async () => { await ensure(); return newTab(); }, "icon-button"); opener.append(icon("panel-right")); opener.id = "new-workbench-tab"; opener.title = "新建标签页（Ctrl/⌘+Shift+B）"; opener.setAttribute("aria-label", opener.title);
+  const opener = button("", toggleWorkbench, "icon-button"); opener.append(icon("panel-right")); opener.id = "new-workbench-tab";
   shell.querySelector(".header-actions")?.append(opener);
   const shortcut = event => { if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.code === "KeyB" && !event.isComposing && !event.repeat) { event.preventDefault(); void ensure().then(newTab).catch(error => toast(error.message, "error")); } };
   document.addEventListener("keydown", shortcut); render();
@@ -454,7 +466,7 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
       const panels = await client.call("panel.list"), browsers = await client.call("browser.list");
       for (const row of panels) if (row.client === clientId) { await client.bind(row.context).call("panel.close", { id: row.id }); disposeMount(row.id); entries.delete(row.id); }
       for (const row of browsers) if (row.client === clientId) { await client.bind(row.context).call("browser.close", { id: row.id }); await bridge.call("close", { browser: row.id }).catch(() => {}); browserViews.delete(row.id); }
-      layout.order = layout.order.filter(id => entries.has(id)); remember(); render();
+      selectRemaining(); remember(); render();
     },
     async execute(action) {
       await ensure();
