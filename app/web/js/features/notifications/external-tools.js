@@ -210,7 +210,7 @@ export function createExternalToolsPanel({ refresh, openFull, signedIn, openDown
     guide.hidden=data.guide!=="new"||disabled||!!targetState().selected||!isMain();
     if(updatesOnly){body.append(button(c(36),openDownloads));return;}
     const nav=n("div",null,"store-tabs");nav.setAttribute("role","tablist");
-    for(const [id,text] of [["local",c(0)],["store",c(1)]]){const b=button(text,()=>{tab=id;closeSubmissions();stateFilter="all";for(const browser of browsers.values())browser.reset();renderAll();if(id==="store"&&!catalogRequested){catalogRequested=true;void fetchCatalog();}});b.setAttribute("role","tab");b.setAttribute("aria-selected",String(tab===id));nav.append(b);}body.append(nav);const creator=n("a",browserText("creator","创作中心"),"secondary-button");creator.href="https://ai.xywhsoft.com/mdo/creator";creator.target="_blank";creator.rel="noopener noreferrer";
+    for(const [id,text] of [["local",c(0)],["store",c(1)]]){const b=button(text,()=>{tab=id;closeSubmissions();stateFilter="all";for(const browser of browsers.values())browser.reset();renderAll();if(id==="store"&&!catalogRequested){catalogRequested=true;void fetchCatalog();}});b.setAttribute("role","tab");b.setAttribute("aria-selected",String(tab===id));nav.append(b);}body.append(nav);
     if(error)body.append(n("p",error,"cli-error"));if(!data.writable)body.append(n("p",c(44),"cli-error"));
     if(android)body.append(n("p",c(30)),button(c(29),openBundle,disabled));
     const toolbar=n("div",null,"cli-toolbar eb-toolbar");
@@ -244,7 +244,7 @@ export function createExternalToolsPanel({ refresh, openFull, signedIn, openDown
     search.onkeydown=e=>{if(tab==="store"&&e.key==="Enter"){e.preventDefault();void fetchCatalog();}};
     filter.onchange=()=>{stateFilter=filter.value;renderList();};
     toolbar.append(search,filter);if(tab==="store")toolbar.append(button(c(3),()=>fetchCatalog(),disabled));
-    toolbar.append(button(c(4),()=>tab==="store"?fetchCatalog():refresh(),disabled),creator);
+    toolbar.append(button(c(4),()=>tab==="store"?fetchCatalog():refresh(),disabled));
     body.append(toolbar);
     if(tab==="local"){
       const createMenu=actionMenu([...(android?[]:[button(c(2),()=>edit({},body),disabled)]),button(c(27),()=>openSubmissions(body),disabled||!signedIn())],browserText("createImport","创建 / 导入"));

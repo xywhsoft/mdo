@@ -44,9 +44,6 @@ export function createSingleResourceStore(kind, onChange, onBrowse = () => {}, o
       onClosed() { if (dialog === view) { dialog = null; dirty = saving = false; } } });
     dialog = view; view.element.classList.add("extension-authoring"); return view;
   }
-  function link(text, path) {
-    return element("a", { text, className: "secondary-button", attrs: { href: `https://ai.xywhsoft.com${path}`, target: "_blank", rel: "noopener noreferrer" } });
-  }
   function report(e) {
     loginRequired = e.status === 401;
     error = loginRequired ? "请先在账户页登录，再发布或管理作品。" : errorMessage(e);
@@ -81,7 +78,7 @@ export function createSingleResourceStore(kind, onChange, onBrowse = () => {}, o
     const filter = element("select", { attrs: { "aria-label": browserText("status", "状态") } });
     for (const [value, text] of [["all", browserText("all", "全部状态")], ["installed", browserText("installed", "已安装")], ["updates", browserText("updates", "可更新")], ["new", browserText("notInstalled", "未安装")]]) filter.append(element("option", { text, attrs: { value } }));
     filter.value = stateFilter; filter.addEventListener("change", () => { stateFilter = filter.value; render(); });
-    search.append(input, element("button", { text: "搜索", className: "secondary-button", attrs: { type: "submit" } }), filter, button("刷新", () => load()), link("创作中心", `/mdo/creator?kind=${kind}`));
+    search.append(input, element("button", { text: "搜索", className: "secondary-button", attrs: { type: "submit" } }), filter, button("刷新", () => load()));
     search.addEventListener("submit", e => { e.preventDefault(); query = input.value.trim(); void load(); });
     const rows = items.filter(row => stateFilter === "all" || (stateFilter === "installed" ? Boolean(owned(row)) : stateFilter === "updates" ? owned(row) && owned(row).id !== row.id : !owned(row))).map(row => {
       const receipt = owned(row), same = receipt?.id === row.id;
@@ -196,7 +193,7 @@ export function createSingleResourceStore(kind, onChange, onBrowse = () => {}, o
         } catch (e) { if (current(id, target) && dialog === d) message.textContent = errorMessage(e); }
         finally { if (dialog === d) { saving = false; submit.disabled = cancel.disabled = d.closeButton.disabled = false; for (const control of form.elements) control.disabled = false; } }
       });
-      d.body.append(form, link("管理作品、审核与配额", `/mdo/creator?kind=${kind}`));
+      d.body.append(form);
     } catch (e) { if (current(id, target)) toast(errorMessage(e), "error"); }
     finally { if (current(id, target)) busy = false; }
   }

@@ -169,6 +169,7 @@ test("external manager has exactly two tabs, ordinary rows and a durable first-u
   let main=true;const panel=createExternalToolsPanel({refresh:async()=>{},openFull:async()=>{},openTools:()=>{},signedIn:()=>false,isMain:()=>main}),body=new Element("div");
   const state={writable:true,guide:"new",platform:"windows-x86_64",edition:"desktop",items:[{id:"custom.one",name:"<script>literal</script>",path:"C:/cli/tool.exe",prompt:"use --example",version:"1.0.0",license:"MIT",enabled:true,present:true}],tasks:[],store:{items:[]}};
   panel.render(body,state);
+  assert(!all(body).some(n=>n.tagName==="A"&&n.textContent==="Creator center"),"Creator navigation belongs to account/statistics settings");
   assert.equal(all(body).filter(n=>n.attributes.role==="tab").length,2);
   assert(all(body).some(n=>n.textContent==="<script>literal</script>"));
   const guide=document.body.children[0];assert.equal(guide.hidden,false);main=false;panel.render(body,state);assert.equal(guide.hidden,true);main=true;panel.render(body,state);assert.equal(guide.hidden,false);

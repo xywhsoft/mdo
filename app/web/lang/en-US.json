@@ -259,6 +259,7 @@
   "settings.navigation": "Settings sections",
   "settings.basic": "Basic settings",
   "settings.accountStatistics": "Account and statistics",
+  "settings.creatorExternal": "Creator center (opens in browser)",
   "settings.general": "General",
   "settings.web": "Network",
   "settings.extended": "Extended capabilities",

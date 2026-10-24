@@ -13,7 +13,7 @@ class Element extends EventTarget {
   }
   append(child) { this.children.push(child); child.parent = this; }
   contains(child) { return child === this || this.children.some((node) => node.contains(child)); }
-  querySelectorAll(selector) { return selector === "[data-settings-section]"
+  querySelectorAll(selector) { return selector === "[data-settings-section], [data-settings-external]"
     ? this.children : selector === "[data-settings-panel]" ? this.panels : []; }
   querySelector(selector) { return this.nodes?.[selector] ?? null; }
   getClientRects() {
@@ -27,7 +27,7 @@ class Element extends EventTarget {
   closest(selector) { return selector === "[data-settings-group]" ? this.group ?? null : this; }
 }
 
-function fixture({ grouped = false } = {}) {
+function fixture({ grouped = false, external = false } = {}) {
   const original = { document: globalThis.document, window: globalThis.window,
     getComputedStyle: globalThis.getComputedStyle, fetch: globalThis.fetch };
   const document = new Element({ title: "墨斗", documentElement: new Element() });
@@ -37,7 +37,7 @@ function fixture({ grouped = false } = {}) {
   globalThis.window = new EventTarget();
   globalThis.getComputedStyle = () => ({ display: "grid" });
   const form = new Element(), nav = new Element(), content = new Element({ panels: [] });
-  const groups = ["基础设置", "扩展能力"].map((textContent) => {
+  const groups = ["基础设置", "扩展能力", "账号与统计"].map((textContent) => {
     const heading = new Element({ textContent });
     return new Element({ nodes: { "[data-settings-group-label]": heading } });
   });
@@ -59,10 +59,13 @@ function fixture({ grouped = false } = {}) {
     else content.append(panel);
   }
   content.append(form);
+  let externalOpens=0;
+  if (external) nav.append(new Element({dataset:{settingsExternal:"creator"},textContent:"创作中心",group:grouped?groups[2]:null,
+    tagName:"A",click(){externalOpens++;}}));
   const calls = [];
   const pages = createSettingsPages({ workspace, form,
     navigation: { openSettings(section) { calls.push(section); pages.selectSection(section); } } });
-  return { pages, form, nav, picker, pickerRow, workspace, content, calls, groups,
+  return { pages, form, nav, picker, pickerRow, workspace, content, calls, groups,externalOpens:()=>externalOpens,
     mobile() { nav.shown = false; picker.shown = pickerRow.shown = true; },
     close() { pages.destroy(); Object.assign(globalThis, original); } };
 }
@@ -83,6 +86,22 @@ test("new HTML pages appear in both navigations and share preference actions", (
     assert.equal(f.pages.selectSection("constructor"), "general");
     assert.equal(f.form.hidden, false);
   } finally { f.close(); }
+});
+
+test("external creator entry appears in its group and opens without changing the local page or draft",()=>{
+  const f=fixture({grouped:true,external:true});
+  try {
+    f.pages.selectSection("future");const editor=new Element({value:"Unchanged draft",tagName:"INPUT"});f.content.panels[1].append(editor);
+    const group=f.picker.children.at(-1),option=group.children[0];
+    assert.equal(group.label,"账号与统计");assert.equal(option.textContent,"创作中心 ↗");
+    f.mobile();f.picker.value=option.value;f.picker.dispatchEvent(new Event("change"));
+    assert.equal(f.externalOpens(),1);assert.equal(f.picker.value,"future");assert.equal(f.calls.length,0);
+    assert.equal(f.content.panels[1].hidden,false);assert.equal(editor.value,"Unchanged draft");
+    assert.equal(f.workspace.nodes["#settings-actions"].hidden,false);
+    // The desktop anchor's default action must not be mistaken for a local route.
+    const event=new Event("click");Object.defineProperty(event,"target",{value:f.nav.children.at(-1)});f.nav.dispatchEvent(event);assert.equal(f.calls.length,0);
+    assert.equal(f.pages.selectSection(option.value),"general","External targets never become local settings routes");
+  }finally{f.close();}
 });
 
 test("native dropdown and desktop clicks use the same route without losing form state", () => {

@@ -1329,7 +1329,7 @@ select:focus-visible,
 .settings-navigation p { margin: 14px 9px 5px; color: var(--faint); font-size: 10px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; }
 .settings-navigation p:first-child { margin-top: 0; }
 .settings-navigation > [data-settings-group] + [data-settings-group] { margin-top: 14px; }
-.settings-navigation button {
+.settings-navigation :is(button, [data-settings-external]) {
   width: 100%;
   min-height: 35px;
   padding: 0 10px;
@@ -1339,7 +1339,9 @@ select:focus-visible,
   text-align: left;
   cursor: pointer;
 }
-.settings-navigation button:hover { background: var(--surface-hover); }
+.settings-navigation [data-settings-external] { display:flex; align-items:center; gap:6px; color:inherit; text-decoration:none; font:inherit; }
+.settings-navigation [data-settings-external] .icon { width:14px; height:14px; color:var(--muted); }
+.settings-navigation :is(button, [data-settings-external]):hover { background: var(--surface-hover); }
 .settings-navigation button[aria-current="page"] { background: var(--surface-active); font-weight: 600; }
 .settings-content { min-width: 0; overflow: auto; }
 .settings-content form { width: min(760px, calc(100% - 40px)); margin: 0 auto; padding: 34px 0 48px; }

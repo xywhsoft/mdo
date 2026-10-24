@@ -22,6 +22,7 @@ test("Skill and Agent tool stores use the shared numbered pager across cursor do
   for(const kind of ["skills","tools"]){
    const store=createSingleResourceStore(kind,()=>{});
    try{
+    assert(!descendants(store.root).some(n=>n.tagName==="A"&&n.textContent==="创作中心"));
     store.activate(true);await flush();await flush();
     const pager=()=>store.root.querySelector(".eb-pagination");
     const page=n=>pager().querySelectorAll("button").find(b=>b.textContent===String(n));

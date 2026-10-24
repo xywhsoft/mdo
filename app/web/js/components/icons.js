@@ -30,6 +30,7 @@ const ICONS = Object.freeze({
   "arrow-up": '<path d="m12 19V5M6 11l6-6 6 6"/>',
   "arrow-left": '<path d="m19 12H5M11 18l-6-6 6-6"/>',
   "arrow-right": '<path d="M5 12h14M13 6l6 6-6 6"/>',
+  "arrow-up-right": '<path d="M7 17 17 7M7 7h10v10"/>',
   globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c5 5 5 13 0 18-5-5-5-13 0-18Z"/>',
   refresh: '<path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.1 7a7 7 0 0 1 11.7-1L20 9M4 15l2.2 3A7 7 0 0 0 18 17"/>',
   stop: '<rect x="6" y="6" width="12" height="12" rx="1"/>',
