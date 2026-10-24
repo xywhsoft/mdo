@@ -1,0 +1,45 @@
+{
+  "app_commit": "89badac6e39bc6eeb54d80571a6d3728fd610969",
+  "preview": true,
+  "auto_update_published": false,
+  "android_device_tested": false,
+  "artifacts": [
+    {
+      "file": "mdo.exe",
+      "size": 6243696,
+      "sha256": "6dc2d856cc085acd8f422ad11e5ef7d5de1cb2dc88b48a37f87a5ccc30e2164f"
+    },
+    {
+      "file": "mdo-server.exe",
+      "size": 5985453,
+      "sha256": "ace91080d36f43027e02fcc342965b5d3fa88ebdcd9b7b7edc5b350542c0afcb"
+    },
+    {
+      "file": "mdo-arm64-v8a.apk",
+      "size": 5784897,
+      "sha256": "7d42cfdb080878189e74cba7497d91c16432c622d2b2189891dff4367f5f8e15"
+    },
+    {
+      "file": "mdo-full-arm64-v8a.apk",
+      "size": 150133145,
+      "sha256": "bb3677aedacf47dc58a2bb33e6643761e36bc1e01c3c05c7555fecb11adb9fba"
+    }
+  ],
+  "version": "0.6.0",
+  "verification": [
+    "42 frontend behavior tests",
+    "20 frontend contract tests",
+    "222 frontend modules parsed",
+    "native CLI lifecycle and cursor metadata",
+    "browser 25-item pagination, single content scroller, filtering and 390px layout",
+    "browser native download cancel/retry and cross-page shared entry",
+    "Windows GUI/server packed Application SDK",
+    "Android APK structure/alignment/native libraries/formal certificate"
+  ],
+  "screenshots": [
+    ".build\\extension-download-center-20261025\\screenshots\\download-center-desktop.png",
+    ".build\\extension-download-center-20261025\\screenshots\\download-center-mobile.png",
+    ".build\\extension-download-center-20261025\\screenshots\\pagination-desktop.png",
+    ".build\\extension-download-center-20261025\\screenshots\\pagination-mobile.png"
+  ]
+}
