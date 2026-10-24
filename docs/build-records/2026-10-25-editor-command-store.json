@@ -1,0 +1,189 @@
+{
+  "date": "2026-10-25",
+  "feature": "Independent editor-command distribution and creator lifecycle",
+  "version": "0.6.0",
+  "app_commit": "8bb4ea76da40be45adc7392cc97aca345cc6fb2b",
+  "platform_commit": "2f1af18a44c365fa1a7f71c6591bfb7c889f23cd",
+  "platform_deployed": true,
+  "automatic_update_published": false,
+  "android_device_tested": false,
+  "artifacts": [
+    {
+      "file": "mdo.exe",
+      "size": 6263548,
+      "sha256": "11e11dbd1d2356fe1d90c8280340aefe28d73754dd8c40c08268631f83fbda65"
+    },
+    {
+      "file": "mdo-server.exe",
+      "size": 6005308,
+      "sha256": "8b28bef926caa7ec24a82e4d514d5ab89fa45cb3fe803bf825692f1538c0cf84"
+    },
+    {
+      "file": "mdo-arm64-v8a.apk",
+      "size": 5805377,
+      "sha256": "0fc0689cc1b8097a86ec1bdb304163f75aee82be9dac2402f603077c2ece02bd"
+    },
+    {
+      "file": "mdo-full-arm64-v8a.apk",
+      "size": 150149529,
+      "sha256": "dd1778928282a24906d5b77589435bde839336eb00012df3e8c4ff203b2e69ff"
+    }
+  ],
+  "apk_application_pack": {
+    "lite_full_pack_sha256": "283d1d4f25c003fc065ebf306061578392a1aed271e87e8ca7d2a199a8d58c7b"
+  },
+  "checks": {
+    "frontend_node_tests": 17,
+    "frontend_contract_tests": 20,
+    "frontend_modules": 226,
+    "windows_single_resource_roundtrip": true,
+    "windows_command_worker_fault_cancellation_deadline_replay": true,
+    "packed_preview_command_worker": true,
+    "linux_actual_production_runtime_isolated_single_resource_creator": true,
+    "linux_external_tool_store_regression": true,
+    "linux_v1_description_migration": true,
+    "browser_command_store_and_project_share": true,
+    "production_fake_accounts_or_works_created": false,
+    "production_model_calls": false
+  },
+  "public_https": [
+    {
+      "path": "/api/v1/mdo/ecosystem/packages?format=2&single=1&kind=commands",
+      "status": 200,
+      "seconds": 0.125,
+      "sha256": "1bbb6ff08b536a002ef146ee90ac6c75d4696527b8c95f222e7f790fcc32b6db"
+    },
+    {
+      "path": "/api/v1/mdo/ecosystem/packages?format=2&single=1&kind=skills",
+      "status": 200,
+      "seconds": 0.11,
+      "sha256": "1bbb6ff08b536a002ef146ee90ac6c75d4696527b8c95f222e7f790fcc32b6db"
+    },
+    {
+      "path": "/api/v1/mdo/ecosystem/packages?format=2&single=1&kind=tools",
+      "status": 200,
+      "seconds": 0.093,
+      "sha256": "1bbb6ff08b536a002ef146ee90ac6c75d4696527b8c95f222e7f790fcc32b6db"
+    },
+    {
+      "path": "/mdo/creator.js",
+      "status": 200,
+      "seconds": 0.11,
+      "sha256": "e0d912b89758e8d55c75e6e0e604b8dc15935f82060cf2a37fc04a76bdc1a60c"
+    },
+    {
+      "path": "/mdo/ecosystem.js",
+      "status": 200,
+      "seconds": 0.109,
+      "sha256": "3cb86996a113e3b0894b6ef9d14c2b4a964834f81aa6de1fca24fd8694ac1173"
+    },
+    {
+      "path": "/mdo/ecosystem",
+      "status": 200,
+      "seconds": 0.094,
+      "sha256": "03e498e9e75d139953a4bced47e788e022bb9fcd8c7114f268c2ba4a493d592e"
+    }
+  ],
+  "deployment": {
+    "passed": true,
+    "site_commit": "2f1af18a44c365fa1a7f71c6591bfb7c889f23cd",
+    "after": {
+      "files": {
+        "plugin/mdo/modules/ecosystem/creator_core.inc.c": "cddbf2f44f281e6d5f308de0ad7c8e58747f041ce9e43a48101cc536ca0e0466",
+        "plugin/mdo/modules/ecosystem/ecosystem_package.h": "24f3b5808e6d5007154b5b7a3585faf24c915a01bbd9254f5400ba9f2e280255",
+        "plugin/mdo/modules/ecosystem/main.c": "8e17dc74dcb455287bc74019601c0f4fc18900c73eee2f69c463290456f5dba0",
+        "plugin/mdo/page/creator/center.js": "e0d912b89758e8d55c75e6e0e604b8dc15935f82060cf2a37fc04a76bdc1a60c",
+        "plugin/mdo/page/ecosystem/admin.js": "4d5e1358e7ffd70fa99b78229302dffc214dca641255de66716f67cb4f233831",
+        "plugin/mdo/page/ecosystem/store.html": "03e498e9e75d139953a4bced47e788e022bb9fcd8c7114f268c2ba4a493d592e",
+        "plugin/mdo/page/ecosystem/store.js": "3cb86996a113e3b0894b6ef9d14c2b4a964834f81aa6de1fca24fd8694ac1173",
+        "plugin/mdo/modules/ecosystem/cli_admin.inc.c": "d4ecccecae42c764f0488fae2a4cd6d6fc1052ad7bf376e43ecd9e20b807cde7",
+        "plugin/mdo/modules/ecosystem/cli_package.h": "6717799d28cf3d9771364f609bed03cfc3efd6fb248f24048c39be00aac9d514",
+        "plugin/mdo/modules/ecosystem/cli_store.inc.c": "1cdd5ac60fc07bc4587774191c568f92d93c60519cc756b63639c0a4a7d82a1b",
+        "plugin/mdo/modules/ecosystem/creator_routes.inc.c": "6e19a7d9dc35c5ee0c30261fd8b0d00af25933c45f0dd5efe97b527745a82a1a",
+        "plugin/mdo/page/cli/manage.js": "e9320eda0b39ac2b8e87b936636d064637b9a8ea31337e19f88eeb03497a7e88",
+        "plugin/mdo/page/cli/store.html": "66e3505bc04078064434a3abf9dc76c7edfff1e77236f0d0c1f5304b0e532031",
+        "plugin/mdo/page/cli/store.js": "942c751b931a4073af51ae1aeb347dd6d65cbaf0cbacf50620ee995d43bd8177"
+      },
+      "service": {
+        "/opt/www/xs": "b32fa5696b9950a0dc0fa4fd8277a112e27cbea093deb5d53948a35072d273fe",
+        "/opt/www/xs.json": "6971820ba5f8650754340b97cbd7de60b0eae91dc937f6284a16bbc5af830ee8"
+      }
+    },
+    "time": 1792875390,
+    "files": [
+      "plugin/mdo/modules/ecosystem/creator_core.inc.c",
+      "plugin/mdo/modules/ecosystem/ecosystem_package.h",
+      "plugin/mdo/modules/ecosystem/main.c",
+      "plugin/mdo/page/creator/center.js",
+      "plugin/mdo/page/ecosystem/admin.js",
+      "plugin/mdo/page/ecosystem/store.html",
+      "plugin/mdo/page/ecosystem/store.js",
+      "plugin/mdo/modules/ecosystem/cli_admin.inc.c",
+      "plugin/mdo/modules/ecosystem/cli_package.h",
+      "plugin/mdo/modules/ecosystem/cli_store.inc.c",
+      "plugin/mdo/modules/ecosystem/creator_routes.inc.c",
+      "plugin/mdo/page/cli/manage.js",
+      "plugin/mdo/page/cli/store.html",
+      "plugin/mdo/page/cli/store.js"
+    ]
+  },
+  "live_sources_matched_known_ancestors": {
+    "plugin/mdo/modules/ecosystem/creator_core.inc.c": {
+      "sha256": "8887c9e48896b57ad53dd0f6c71d692a023e5cc7c3ec0d9021d1e9edbc7f761e",
+      "matches_commit": "e416e244caa8547d4345fa7c361a0b6c29461fcd"
+    },
+    "plugin/mdo/modules/ecosystem/ecosystem_package.h": {
+      "sha256": "03f54f1a56d8f83a7214b7a4a456b07569e0db63d273f70bae337d9043f98de6",
+      "matches_commit": "70338c8a2568e5f860773b1939546c35595ddb73"
+    },
+    "plugin/mdo/modules/ecosystem/main.c": {
+      "sha256": "229e23089696889cdab667ad1816ad86fdf143eb1bfaa4179357df74153e9c7c",
+      "matches_commit": "e416e244caa8547d4345fa7c361a0b6c29461fcd"
+    },
+    "plugin/mdo/page/creator/center.js": {
+      "sha256": "6c4682efe23a28215108b4180130b7c72ff76519b73fde6daeba8108700e4b03",
+      "matches_commit": "709602c0937e653191fa72873c6b309bac0a6d98"
+    },
+    "plugin/mdo/page/ecosystem/admin.js": {
+      "sha256": "9472bc06a4e105571453694718b28aa0594fafbf61c9f470496f1d5b78103cd2",
+      "matches_commit": "ab17ecccfffd6c41d7adff0449f04f51862f21e4"
+    },
+    "plugin/mdo/page/ecosystem/store.html": {
+      "sha256": "c54d86739fe1f8c1458872909819a0566a6e8267507a9a9c9165c82e75edeb0a",
+      "matches_commit": "744bfc0aa2a6a46ea8f62e8b98b05ab4e69c7dd3"
+    },
+    "plugin/mdo/page/ecosystem/store.js": {
+      "sha256": "15e7a896b47a792bbf2e965eec1ec3da1b66df8af3240e50feab1e64ba8b578c",
+      "matches_commit": "709602c0937e653191fa72873c6b309bac0a6d98"
+    },
+    "plugin/mdo/modules/ecosystem/cli_admin.inc.c": {
+      "sha256": "b36c9543d43644fe2a9fba06a5a597af7a426aaffaea15523cfc90f674dacb11",
+      "matches_commit": "70338c8a2568e5f860773b1939546c35595ddb73"
+    },
+    "plugin/mdo/modules/ecosystem/cli_package.h": {
+      "sha256": "76eed0f0d4346f93c12c483547db1f1af7ac368297350d0366b7b01604015128",
+      "matches_commit": "744bfc0aa2a6a46ea8f62e8b98b05ab4e69c7dd3"
+    },
+    "plugin/mdo/modules/ecosystem/cli_store.inc.c": {
+      "sha256": "5698e5d8791b79a6d28de2158e0125c54d515045642ffd58bec2aceac077b7fb",
+      "matches_commit": "8aed87e021e1a7679e4ee3096474d53cc996abf1"
+    },
+    "plugin/mdo/modules/ecosystem/creator_routes.inc.c": {
+      "sha256": "6ceb8b8c7eaa67488a63e3f97d37780d89fdfea4aa986b058e164c2237b71688",
+      "matches_commit": "2682ab258636c613a2658c89b8b2df229755972d"
+    },
+    "plugin/mdo/page/cli/manage.js": {
+      "sha256": "339e91770f530193310fa64c7bc20e540180d520d513291ea64fbdfffc4321c5",
+      "matches_commit": "70338c8a2568e5f860773b1939546c35595ddb73"
+    },
+    "plugin/mdo/page/cli/store.html": {
+      "sha256": "e0899991f404abcce9d12df36f9009e16f4f69769a7e9a662c87b3deb5336d19",
+      "matches_commit": "744bfc0aa2a6a46ea8f62e8b98b05ab4e69c7dd3"
+    },
+    "plugin/mdo/page/cli/store.js": {
+      "sha256": "54ac6840ebba310454e9eb81d73a1f6b16b98db00f15cfaebcc260062e4546e0",
+      "matches_commit": "c915963ab4143ca3eb81c893136e20151bbd915c"
+    }
+  },
+  "evidence_directory": "D:\\GIT\\mdo\\.build\\editor-command-store-20261025"
+}

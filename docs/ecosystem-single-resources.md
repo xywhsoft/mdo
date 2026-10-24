@@ -13,7 +13,7 @@ Skill、Agent 工具和编辑器命令设置页分别提供「本机」与「商
 
 ## 接口与兼容
 
-本机 `/api/v1/ecosystem` 继续复用上传、下载、安装事务与回执，新增 `single_kind=skills|tools|commands|commands`。它绑定查询和安装类型，投稿必须恰好一个匹配的资源，并由原生层传递 `kind` 与 `single_resource=true`；登录令牌不进入界面。项目导出引用可带 `project` ID，目录由项目管理器解析，通过 rooted Skill catalog 或带项目租约的 no-follow 命令文件读取。
+本机 `/api/v1/ecosystem` 继续复用上传、下载、安装事务与回执，新增 `single_kind=skills|tools|commands`。它绑定查询和安装类型，投稿必须恰好一个匹配的资源，并由原生层传递 `kind` 与 `single_resource=true`；登录令牌不进入界面。项目导出引用可带 `project` ID，目录由项目管理器解析，通过 rooted Skill catalog 或带项目租约的 no-follow 命令文件读取。
 
 线上 `/api/v1/mdo/ecosystem/packages?kind=skills|tools|commands&single=1` 只返回单资源作品。详情、最新版本、历史也支持 `single=1&single_kind=...`。元数据增加 `resource_count`，首次迁移从 hash 校验的不可变源文件回填。旧组合包保留原记录与对象，不混入新商店。新投稿以 Skill、Agent 工具或编辑器命令作为分类时必须只有一个对应资源。
 
