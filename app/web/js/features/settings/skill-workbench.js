@@ -6,7 +6,7 @@ import { expandSkillAuthoringDraft } from "./skill-authoring.js";
 const targetKey = () => targetState().selected?.id || "local";
 const portable = value => /^[a-z][a-z0-9._-]{0,63}$/.test(value);
 
-export function createSkillWorkbench({ onChange }) {
+export function createSkillWorkbench({ onChange, onShare }) {
   let dialog = null, controller = null, stopTarget = null;
   function close(force = false) {
     if (!dialog) return true;
@@ -72,6 +72,7 @@ export function createSkillWorkbench({ onChange }) {
           const report = (await api.post(endpoint("/skills/validate"), { name: item.id, scope: "project" }, options())).data;
           if (live()) showReport(report);
         }),
+        ...(onShare && item.valid ? [button("分享到创作中心", async () => { if (!discardEditor()) return; const projectId = project.value; if (!close()) return; await onShare({ ...item, project: projectId }); })] : []),
         button("用 AI 改进", () => openBuilder({ mode: "improve", id: item.id, saveScope: "project" })),
         button(item.enabled === false ? "启用" : "停用", async () => {
           const data = (await api.get(endpoint(`/skills/project/${encodeURIComponent(item.id)}`), options())).data;

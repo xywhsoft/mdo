@@ -1,3 +1,4 @@
+import { createSingleResourceStore } from "./single-resource-store.js";
 import { createSkillWorkbench } from "./skill-workbench.js";
 import { createMcpContext } from "./mcp-context.js";
 import { createMcpAuthorization } from "./mcp-authorization.js";
@@ -44,16 +45,17 @@ function inputField(form, name, text, value = "", { area = false, type = "text",
 }
 
 export function createExtensionPanels() {
-  const states = new Map(EXTENSION_KINDS.map(kind => [kind, { loaded: false, serial: 0, items: [], catalog: [], view: "builtin", error: "", busy: false, reading: false, filter: "" }]));
+  const states = new Map(EXTENSION_KINDS.map(kind => [kind, { loaded: false, serial: 0, items: [], catalog: [], view: "builtin", error: "", busy: false, reading: false, filter: "", area: "local" }]));
   const roots = new Map(EXTENSION_KINDS.map(kind => [kind, document.querySelector(`[data-extension-manager="${kind}"]`)]));
   let selected = "", editing = null, activeTarget = targetKey(), pendingResource = null;
   let disposed = false, paused = false;
   const reads = createExtensionReads();
-  const skillWorkbench = createSkillWorkbench({ onChange: () => announceChange("skills") });
+  const skillWorkbench = createSkillWorkbench({ onChange: () => announceChange("skills"), onShare: item => stores.get("skills").publish(item) });
   const mcpContext = createMcpContext();
   const mcpAuthorization = createMcpAuthorization();
   const mcpWorkbench = createMcpWorkbench({ onChange: () => announceChange("mcp") });
   const commandWorkbench = createCommandWorkbench({ onChange: () => announceChange("commands") });
+  const stores = new Map(["skills", "tools"].map(kind => [kind, createSingleResourceStore(kind, () => { announceChange(kind); if (selected === kind) void load(kind); })]));
   const actions = new Map();
   const current = (kind, target) => !disposed && !paused && selected === kind && target === targetKey();
   function cancelReads() {
@@ -122,6 +124,16 @@ export function createExtensionPanels() {
     const root = roots.get(kind), state = states.get(kind);
     if (!root) return;
     clear(root);
+    const store = stores.get(kind);
+    if (store) {
+      const tabs = element("div", { className: "store-tabs", attrs: { role: "tablist", "aria-label": title(kind) } });
+      for (const [area, text] of [["local", kind === "skills" ? "本机 Skill" : "本机 Agent 工具"], ["store", kind === "skills" ? "Skill 商店" : "Agent 工具商店"]]) {
+        const tab = button(text, () => { if (state.busy || store.hasPendingChanges()) return; state.area = area; store.activate(area === "store"); render(kind); if (area === "local" && !state.loaded) void load(kind); });
+        tab.setAttribute("role", "tab"); tab.setAttribute("aria-selected", String(state.area === area)); tabs.append(tab);
+      }
+      root.append(tabs, store.statusRoot);
+      if (state.area === "store") { root.append(store.root); return; }
+    }
     const add = button(label("create", "新建"), () => openEditor(kind));
     const file = element("input", { attrs: { type: "file", accept: ["tools", "commands"].includes(kind) ? ".c" : kind === "mcp" ? ".json" : ".md,.json", "aria-label": label("import", "导入") } });
     file.hidden = true; file.addEventListener("change", () => { void importFile(kind, file.files?.[0]); });
@@ -186,6 +198,7 @@ export function createExtensionPanels() {
           await api.post(`${path(kind, item.id)}/enabled`, { enabled: !item.enabled }, revision(item));
         }));
         const controls = [edit, ...(kind === "agents" && item.id === "default" ? [] : [toggle]), button(label("export", "导出"), () => exportItem(kind, item))];
+        if (store && item.valid) controls.push(button("分享到创作中心", () => store.publish(item, owner)), ...store.localActions(owner));
         if (kind === "skills") controls.push(button(label("improveSkill", "用 AI 改进"), () =>
           skillWorkbench.open({ builder: true, mode: "improve", id: item.id, scope: "user" })));
         if (kind === "mcp") controls.push(button(label("test", "测试连接"), () => act(kind, async scope => {
@@ -536,7 +549,7 @@ export function createExtensionPanels() {
   const unsubscribeLocale = subscribeLocale(() => { for (const kind of EXTENSION_KINDS) render(kind); });
   const invalidate = event => { const state = states.get(event.detail?.kind);if (state) state.loaded = false; };
   window.addEventListener("mdo-extensions-changed", invalidate);
-  const openResource=event=>{const ref=event.detail;if(!EXTENSION_KINDS.includes(ref?.kind)||!portableId(ref?.id))return;pendingResource=ref;if(ref.kind==="tools")states.get("tools").view="custom";if(selected===ref.kind)void openLinkedResource();};
+  const openResource=event=>{const ref=event.detail;if(!EXTENSION_KINDS.includes(ref?.kind)||!portableId(ref?.id))return;pendingResource=ref;if(stores.has(ref.kind))states.get(ref.kind).area="local";if(ref.kind==="tools")states.get("tools").view="custom";if(selected===ref.kind)void openLinkedResource();};
   window.addEventListener("mdo-open-resource",openResource);
   const unsubscribeTarget = subscribeTarget(() => {
     if (activeTarget === targetKey()) return;
@@ -558,11 +571,12 @@ export function createExtensionPanels() {
     selectSection(kind) {
       const next = EXTENSION_KINDS.includes(kind) ? kind : "";
       if (selected !== next) { cancelReads(); if(pendingResource?.kind!==next)pendingResource=null; }
+      for (const [kind, store] of stores) store.activate(kind === next && states.get(kind).area === "store");
       selected = next;
       if (selected && (!states.get(kind).loaded || kind === "tools") && !states.get(kind).busy) void load(kind);
       else if(pendingResource?.kind===selected)void openLinkedResource();
     },
-    hasPendingChanges: () => dirty() || skillWorkbench.hasPendingChanges() || mcpWorkbench.hasPendingChanges() || commandWorkbench.hasPendingChanges(),
-    destroy() { disposed = true; skillWorkbench.destroy(); mcpWorkbench.destroy(); commandWorkbench.destroy(); mcpAuthorization.destroy(); mcpContext.destroy(); cancelReads(); closeEditor(true); unsubscribeLocale(); unsubscribeTarget();window.removeEventListener("mdo-extensions-changed", invalidate);window.removeEventListener("mdo-open-resource",openResource);window.removeEventListener("pagehide",onHide);window.removeEventListener("pageshow",onShow); },
+    hasPendingChanges: () => [...stores.values()].some(s => s.hasPendingChanges()) || dirty() || skillWorkbench.hasPendingChanges() || mcpWorkbench.hasPendingChanges() || commandWorkbench.hasPendingChanges(),
+    destroy() { disposed = true; for (const store of stores.values()) store.destroy(); skillWorkbench.destroy(); mcpWorkbench.destroy(); commandWorkbench.destroy(); mcpAuthorization.destroy(); mcpContext.destroy(); cancelReads(); closeEditor(true); unsubscribeLocale(); unsubscribeTarget();window.removeEventListener("mdo-extensions-changed", invalidate);window.removeEventListener("mdo-open-resource",openResource);window.removeEventListener("pagehide",onHide);window.removeEventListener("pageshow",onShow); },
   });
 }
