@@ -30,7 +30,7 @@ test("extension center keeps cached results on failed refresh and discards detai
   assert.equal(root.querySelectorAll(".eb-row").length, 1, "transient refresh errors retain the loaded list");
   assert(root.textContent.includes("Catalog unavailable"));
   root.querySelector(".eb-open").click();
-  const pane = root.querySelector(".eb-detail"); assert.equal(pane.hidden, false);
+  const pane = document.body.querySelector(".eb-detail"); assert.equal(pane.hidden, false);
   for (const notify of listeners) notify(); assert.equal(pane.hidden, false, "connection status updates keep the current details");
   selected = { id: "another-device" }; for (const notify of listeners) notify(); release(); await flush();
   assert.equal(root.querySelectorAll(".eb-row").length, 0); assert.equal(pane.hidden, true, "late source must not cross device boundaries");

@@ -614,7 +614,7 @@ export function createExtensionPanels() {
   return Object.freeze({
     selectSection(kind) {
       const next = EXTENSION_KINDS.includes(kind) ? kind : "";
-      if (selected !== next) { cancelReads(); if(pendingResource?.kind!==next)pendingResource=null; }
+      if (selected !== next) { cancelReads(); for (const [id, browser] of browsers) if (id !== next) browser.closeDetail(false); if(pendingResource?.kind!==next)pendingResource=null; }
       for (const [kind, store] of stores) store.activate(kind === next && states.get(kind).area === "store");
       selected = next;
       if (selected && (!states.get(kind).loaded || kind === "tools") && !states.get(kind).busy) void load(kind);

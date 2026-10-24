@@ -2,6 +2,7 @@ import { createApplicationClient, createLocalApplicationClient, applyApplication
 import { isRemoteTarget, targetState } from "../../api/target.js";
 import { toast } from "../../utils/dom.js";
 import { createPanelManager } from "../workbench/panel-manager.js";
+import { openLayer } from "../../components/layers.js";
 
 export function createApplicationUi({ navigation, executeActions, canCall = () => true, addContext }) {
   let clientId = `ui-${crypto.randomUUID()}`;
@@ -30,23 +31,23 @@ export function createApplicationUi({ navigation, executeActions, canCall = () =
       await descriptor.registration;
       return workbench.open(id, params, callerApi || descriptor.api, descriptor);
     }
-    const dialog = document.createElement("dialog"), heading = document.createElement("h2"), body = document.createElement("div"), close = document.createElement("button");
-    heading.textContent = descriptor.title || id; close.textContent = "关闭"; close.type = "button";
-    const abort = new AbortController(); let dispose;
-    const cleanup = () => { abort.abort(); openDialogs.get(id)?.delete(dialog); try { if (typeof dispose === "function") dispose(); } finally { dialog.remove(); } };
-    close.onclick = () => dialog.close(); dialog.addEventListener("close", cleanup, { once: true });
-    dialog.append(heading, body, close); document.body.append(dialog); dialog.showModal();
-    if (!openDialogs.has(id)) openDialogs.set(id, new Set()); openDialogs.get(id).add(dialog);
-    try { dispose = await descriptor.render(body, { sdk, params, signal: abort.signal }); if (abort.signal.aborted && typeof dispose === "function") dispose(); }
-    catch (error) { dialog.close(); throw error; }
+    let layer;
+    layer = openLayer({ title: descriptor.title || id, icon: descriptor.icon,
+      width: descriptor.width ?? "52rem", height: descriptor.height ?? "auto", mobile: descriptor.mobile ?? "fullscreen",
+      beforeClose: descriptor.beforeClose,
+      render: (body, { signal }) => descriptor.render(body, { sdk, params, signal }),
+      onClosed() { openDialogs.get(id)?.delete(layer); } });
+    if (!openDialogs.has(id)) openDialogs.set(id, new Set()); openDialogs.get(id).add(layer);
+    await layer.ready;
   };
   const createScope = clientApi => {
-    let active = true, scopedSdk; const owned = [];
+    let active = true, scopedSdk; const owned = [], ownedLayers = new Set();
     const check = () => { if (!active || stopped) throw new Error("Application UI instance has been disposed"); };
     const own = cleanup => {
       let retained = true; const dispose = () => { if (retained) { retained = false; cleanup(); } };
       if (!active || stopped) dispose(); else owned.push(dispose); return dispose;
     };
+    own(() => { for (const layer of ownedLayers) layer.dispose(); ownedLayers.clear(); });
     const viewSdk = options => !options.context ? scopedSdk : Object.freeze({ ...scopedSdk, ...options.sdk,
       context: () => Object.freeze({ ...options.context }),
       ui: Object.freeze({ ...ui, openPanel: (id, params) => openPanel(id, params, options.sdk),
@@ -65,7 +66,7 @@ export function createApplicationUi({ navigation, executeActions, canCall = () =
         contribution.registration = clientApi.call("panel.register", { id, title: descriptor.title || id, renderer: callback ? "custom" : descriptor.renderer, scope: descriptor.scope || "session" });
         contribution.registration.catch(error => toast(`面板注册失败：${error.message}`, "error"));
       }
-      const dispose = () => { for (const dialog of openDialogs.get(id) || []) dialog.close(); openDialogs.delete(id); removeDock?.(); remove(); };
+      const dispose = () => { for (const layer of openDialogs.get(id) || []) layer.dispose(); openDialogs.delete(id); removeDock?.(); remove(); };
       return own(dispose);
     },
     registerAction: (id, execute) => { check(); return own(register(actions, id, (params, options) => execute(params, { ...options, sdk: scopedSdk }))); },
@@ -95,6 +96,11 @@ export function createApplicationUi({ navigation, executeActions, canCall = () =
       return own(() => { document.removeEventListener("keydown", callback); remove(); });
     },
     openPanel: (id, params) => { check(); return openPanel(id, params); },
+    layers: Object.freeze({ open: options => {
+      check(); let layer;
+      layer = openLayer({ ...options, onClosed(result) { ownedLayers.delete(layer); options?.onClosed?.(result); } });
+      ownedLayers.add(layer); return layer;
+    } }),
     newTab: () => { check(); if (!workbench) throw new Error("Workbench is unavailable"); return workbench.newTab(); },
     openWindow: ({ url, name = "_blank" }) => {
       check();

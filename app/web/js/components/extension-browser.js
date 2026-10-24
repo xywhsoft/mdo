@@ -1,5 +1,6 @@
 import { element } from "../utils/dom.js";
 import { mountIcons } from "./icons.js";
+import { openLayer } from "./layers.js";
 import { t } from "../i18n.js";
 
 export const browserText = (key, fallback, args = {}) => t(`extensionBrowser.${key}`, args, fallback);
@@ -83,30 +84,37 @@ export function detailFacts(values) {
   return list;
 }
 
-// One persistent browser per view preserves the selected item, list scroll and
-// keyboard focus across refreshes. CSS switches the same detail pane to a
-// full-width view on phones; no cloned controls or hidden modal are involved.
+// One persistent browser per view. Details use the shared top-layer window, so
+// opening them never changes the list layout, pagination or scroll position.
 export function createExtensionBrowser({ kind, onClose } = {}) {
-  const root = el("div", "eb-browser"), list = el("div", "eb-list"), pane = el("section", "eb-detail"), pager = el("nav", "eb-pagination");
+  const root = el("div", "eb-browser"), list = el("div", "eb-list"), pager = el("nav", "eb-pagination");
   pager.setAttribute("aria-label", browserText("pagination", "列表翻页")); pager.hidden = true;
-  pane.setAttribute("aria-label", browserText("details", "扩展详情")); pane.hidden = true;
-  root.append(list, pane, pager);
-  let rows = [], selected = null, rememberedFocus = null, rememberedPager = null, page = 0, pageSize = 10, pageKey = null, options = {}, awaitingNext = null;
+  root.append(list, pager);
+  let rows = [], selected = null, detailLayer = null, rememberedFocus = null, rememberedPager = null, page = 0, pageSize = 10, pageKey = null, options = {}, awaitingNext = null;
   const closeDetail = (focus = true) => {
-    const old = selected; selected = null; pane.hidden = true; pane.replaceChildren(); root.classList.remove("has-detail");
+    const old = selected, layer = detailLayer; selected = null; detailLayer = null;
+    layer?.dispose();
     for (const button of list.querySelectorAll(".eb-open")) button.setAttribute("aria-expanded", "false");
     for (const row of list.children) row.classList.remove("is-selected");
-    onClose?.(); if (focus) [...list.querySelectorAll(".eb-open")].find(b => b.dataset.key === old)?.focus({ preventScroll: true });
+    if (old !== null) onClose?.();
+    if (focus) [...list.querySelectorAll(".eb-open")].find(b => b.dataset.key === old)?.focus({ preventScroll: true });
   };
   function showDetail(key, node, { focus = false } = {}) {
     const row = rows.find(r => r.key === key); if (!row || selected !== key) return false;
+    if (!detailLayer) {
+      detailLayer = openLayer({ owner: root, opener: [...list.querySelectorAll(".eb-open")].find(b => b.dataset.key === key),
+        title: row.title, icon: icons[row.kind || kind] || "folder", width: "52rem", height: "80%",
+        onClosed({ reason }) { if (detailLayer) closeDetail(reason !== "dispose"); } });
+      detailLayer.body.classList.add("eb-detail");
+      detailLayer.body.setAttribute("aria-label", browserText("details", "扩展详情"));
+    }
+    const pane = detailLayer.body;
     const previousTab = pane.querySelector(".eb-detail-tabs")?.dataset.tab, scroll = pane.scrollTop, hadFocus = pane.contains(document.activeElement);
-    const back = element("button", { text: browserText("back", "返回列表"), className: "secondary-button eb-back", attrs: { type: "button" } });
-    back.addEventListener("click", () => closeDetail());
-    const heading = el("div", "eb-detail-heading"); heading.append(extensionIcon(row.kind || kind), el("h3", "", row.title));
-    pane.replaceChildren(back, heading, node); pane.hidden = false; root.classList.add("has-detail");
+    detailLayer.update({ title: row.title, icon: icons[row.kind || kind] || "folder" });
+    pane.replaceChildren(node);
     if (previousTab && !focus) (node.classList.contains("eb-detail-tabs") ? node : node.querySelector?.(".eb-detail-tabs"))?.selectTab?.(previousTab);
-    pane.scrollTop = focus ? 0 : scroll; if (focus || hadFocus) back.focus({ preventScroll: true }); return true;
+    pane.scrollTop = focus ? 0 : scroll;
+    if (focus || hadFocus) detailLayer.closeButton.focus({ preventScroll: true }); return true;
   }
   function open(key, focus = true) {
     const row = rows.find(r => r.key === key); if (!row) return;

@@ -127,7 +127,7 @@ VFS 的挂载发布具有文件级原子性，多个文件不构成全局读事�
 
 恢复启动设置环境变量 `MDO_PLUGINS_DISABLED=1`，会跳过插件挂载及前端激活；坏的 revision 也会跳过挂载并报告错误。配置损坏会进入恢复模式，不覆盖原始配置。退出恢复模式前可保留备份并修正 `config/plugins.json`。核心源码覆盖属于受信任原生改造，需要保留原程序以便恢复。
 
-前端入口导出 `activate(sdk)`，可返回清理函数。`sdk.ui` 提供 registerPanel/registerMenu/registerKeybinding/registerRenderer/openPanel/openEditor，也可以直接使用 DOM 和覆写后的内置文件。渲染器由注册它的插件或其他插件显式挂载，不会自动替换所有聊天消息。UI 插件属于展示窗口的设备；切换到远程会话后，API 调用仍走用户选中的目标设备。
+前端入口导出 `activate(sdk)`，可返回清理函数。`sdk.ui` 提供 registerPanel/registerMenu/registerKeybinding/registerRenderer/openPanel/openEditor 及 `layers.open` 公共窗口接口（尺寸、图标、标题、主题与生命周期见 [frontend-layers.md](frontend-layers.md)），也可以直接使用 DOM 和覆写后的内置文件。渲染器由注册它的插件或其他插件显式挂载，不会自动替换所有聊天消息。UI 插件属于展示窗口的设备；切换到远程会话后，API 调用仍走用户选中的目标设备。
 
 插件的 UI 回调参数同样传入该插件的 SDK，`storage.*` 始终使用 `plugin.<id>` 命名空间。注册失败会回滚挂载，激活失败会清理本次已注册的贡献；清理函数可重复调用，旧清理函数不会删除同名的新贡献。启停及重新应用相同 revision 不改变上一版本指针，更新和回滚才切换版本历史。
 

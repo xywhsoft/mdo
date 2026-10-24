@@ -2256,5 +2256,8 @@
   "extensionBrowser.copyrightUnknown": "未提供独立版权声明，请参阅许可及源码中的归属信息。",
   "extensionBrowser.license": "许可",
   "extensionBrowser.version": "版本",
-  "extensionBrowser.storeInstalled": "商店安装"
+  "extensionBrowser.storeInstalled": "商店安装",
+  "layers.close": "关闭窗口",
+  "layers.maximize": "最大化窗口",
+  "layers.restore": "还原窗口"
 }

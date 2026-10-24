@@ -65,14 +65,14 @@ test("local and store rows credit submitter usernames; details distinguish copyr
    all(body).find(n=>n.attributes.role==="tab"&&n.textContent===view).click();
    const row=body.querySelector(".eb-row");assert.equal(row.querySelector(".eb-name").textContent,tool.name);
    assert.equal(row.querySelector(".eb-byline").textContent,tool.submitter);assert(!row.textContent.includes(tool.author));
-   row.querySelector(".eb-open").click();const detail=body.querySelector(".eb-detail");
+   row.querySelector(".eb-open").click();const detail=document.body.querySelector(".eb-detail");
    assert(detail.textContent.includes("Submitted by"));assert(detail.textContent.includes(tool.submitter));
    assert(detail.textContent.includes("Copyright notice"));assert(detail.textContent.includes(tool.copyright));assert(detail.textContent.includes("MIT"));
    assert.equal(body.querySelectorAll("script").length,0);
   }
   panel.render(body,{writable:true,platform:"windows-x86_64",guide:"accepted",items:[],store:{items:[{id:8,tool_id:"old",name:"Old",author:"Legacy publisher",version:"1.0.0",platform:"windows-x86_64"}]},tasks:[]});
   assert.equal(body.querySelector(".eb-byline").textContent,"Legacy publisher");body.querySelector(".eb-open").click();
-  assert(body.querySelector(".eb-detail").textContent.includes("No copyright notice supplied"));
+  assert(document.body.querySelector(".eb-detail").textContent.includes("No copyright notice supplied"));
   panel.destroy();
  }finally{globalThis.document=saved;}
 });
@@ -93,7 +93,7 @@ test("only user-added external tools offer edit, share and copy; store tools ret
    assert.equal(buttons.includes("Uninstall"),source!=="bundled",`${source}: uninstall`);
    assert(all(row).some(n=>n.attributes.role==="switch"),`${source}: enable switch`);
    row.querySelector(".eb-open").click();
-   assert(!body.querySelector(".eb-detail").textContent.includes("Share to store"));
+   assert(!document.body.querySelector(".eb-detail").textContent.includes("Share to store"));
   }
   signed=false;panel.render(body,{...state,items:[tool]});
   assert(all(body).find(n=>n.tagName==="BUTTON"&&n.textContent==="Share to store").disabled);
@@ -159,7 +159,7 @@ test("user descriptions drive local/store lists and search; model instructions s
   assert(!body.textContent.includes(tool.prompt));
   const input=body.querySelector("input");input.value="MODEL_PRIVATE";input.oninput();assert.equal(body.querySelectorAll(".eb-row").length,0);
   input.value="PDF";input.oninput();assert.equal(body.querySelectorAll(".eb-row").length,1);
-  body.querySelector(".eb-open").click();assert(body.querySelector(".eb-detail").textContent.includes(tool.prompt),"model instructions remain available in the usage detail");
+  body.querySelector(".eb-open").click();assert(document.body.querySelector(".eb-detail").textContent.includes(tool.prompt),"model instructions remain available in the usage detail");
   all(body).find(n=>n.attributes.role==="tab"&&n.textContent==="Tool store").onclick();
   assert.deepEqual(body.querySelectorAll(".eb-description").map(n=>n.textContent),[tool.description]);
   assert(!body.textContent.includes(tool.prompt));panel.destroy();

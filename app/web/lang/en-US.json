@@ -2256,5 +2256,8 @@
   "extensionBrowser.copyrightUnknown": "No separate copyright notice provided. Refer to the license and source attribution.",
   "extensionBrowser.license": "License",
   "extensionBrowser.version": "Version",
-  "extensionBrowser.storeInstalled": "Installed from store"
+  "extensionBrowser.storeInstalled": "Installed from store",
+  "layers.close": "Close window",
+  "layers.maximize": "Maximize window",
+  "layers.restore": "Restore window"
 }

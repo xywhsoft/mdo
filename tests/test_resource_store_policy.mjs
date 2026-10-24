@@ -25,7 +25,7 @@ test("Skill and Agent-tool local lists restrict installed works, retain user edi
     for(const forbidden of ["编辑","导出","分享到创作中心","用 AI 改进","删除"])assert(!labels.includes(forbidden),`${kind}: ${forbidden}`);
     assert(labels.includes("检查更新")&&labels.includes("卸载商店资源"));assert(published.querySelector(".eb-switch"));
     const own=descendants(mine).filter(n=>n.tagName==="BUTTON").map(n=>n.textContent);assert(own.includes("编辑")&&own.includes("导出")&&own.includes("分享到创作中心"));
-    published.querySelector(".eb-open").click();const pane=root.querySelector(".eb-detail");assert(pane.textContent.includes("Original Developers")&&pane.textContent.includes("MIT"));
+    published.querySelector(".eb-open").click();const pane=document.body.querySelector(".eb-detail");assert(pane.textContent.includes("Original Developers")&&pane.textContent.includes("MIT"));
   }
 });
 

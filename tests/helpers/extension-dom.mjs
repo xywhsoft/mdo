@@ -1,7 +1,7 @@
 // Minimal DOM surface for extension UI behavior tests; no product code is mocked.
 export const descendants = node => [node, ...node.children.flatMap(child => typeof child === "object" ? descendants(child) : [])];
 export class TestElement extends EventTarget {
-  constructor(tag) { super(); this.tag = tag; this.tagName = tag.toUpperCase(); this.children = []; this.dataset = {}; this.attributes = {}; this.style = {}; this.value = ""; this.scrollTop = 0; this.isConnected = true; }
+  constructor(tag) { super(); this.tag = tag; this.tagName = tag.toUpperCase(); this.children = []; this.dataset = {}; this.attributes = {}; this.style = { setProperty(key,value,priority="") { this[key]=String(value); this[`${key}:priority`]=priority; }, getPropertyValue(key) { return this[key] || ""; }, getPropertyPriority(key) { return this[`${key}:priority`] || ""; }, removeProperty(key) { delete this[key]; delete this[`${key}:priority`]; } }; this.value = ""; this.scrollTop = 0; this.isConnected = true; }
   set textContent(value) { this.replaceChildren(); this.text = String(value); }
   get textContent() { return this.text || this.children.map(c => typeof c === "object" ? c.textContent : c).join(""); }
   setAttribute(key, value) { this.attributes[key] = String(value); if (["name", "value", "type", "id"].includes(key)) this[key] = value; if (key.startsWith("data-")) this.dataset[key.slice(5).replace(/-([a-z])/g, (_, c) => c.toUpperCase())] = String(value); }
@@ -22,10 +22,11 @@ export class TestElement extends EventTarget {
   click() { if (!this.disabled) { this.onclick?.(new Event("click")); this.dispatchEvent(new Event("click")); } }
   get elements() { return descendants(this).filter(n => ["INPUT", "TEXTAREA", "BUTTON", "SELECT"].includes(n.tagName)); }
   get firstChild() { return this.children[0]; } get lastChild() { return this.children.at(-1); }
-  showModal() { this.open = true; } close() { this.open = false; }
+  get hidden() { return this._hidden ?? false; } set hidden(value) { this._hidden = Boolean(value); }
+  showModal() { this.open = true; } close() { if (this.open) { this.open = false; this.dispatchEvent(new Event("close")); } }
   getBoundingClientRect() { return { left: 10, right: 70, top: 20, bottom: 45, width: 60, height: 25 }; }
 }
 export function testDocument() {
   const body = new TestElement("body");
-  return { body, activeElement: body, createElement: tag => new TestElement(tag), createTextNode: text => String(text), createDocumentFragment: () => new TestElement("fragment"), querySelector: () => null };
+  return { body, documentElement: new TestElement("html"), activeElement: body, createElement: tag => new TestElement(tag), createTextNode: text => String(text), createDocumentFragment: () => new TestElement("fragment"), querySelector: () => null };
 }

@@ -114,11 +114,11 @@ test("store details reject late selections and require C trust plus the exact in
   store.activate(true); await flush(); await flush();
   const rows = store.root.querySelectorAll(".eb-open"); assert.equal(rows.length, 2);
   rows[0].click(); rows[1].click(); await flush(); await flush();
-  const pane = store.root.querySelector(".eb-detail");
-  assert.equal(pane.querySelector("h3").textContent, "Tool 2");
+  const pane = document.body.querySelector(".eb-detail");
+  assert.equal(document.body.querySelector(".mdo-layer-title").textContent, "Tool 2");
   const install = pane.querySelectorAll("button").find(b => b.textContent === "下载安装");
   assert(install.disabled); install.click(); assert(!calls.some(c => c.action === "install"));
-  first.resolve(); await flush(); assert.equal(pane.querySelector("h3").textContent, "Tool 2");
+  first.resolve(); await flush(); assert.equal(document.body.querySelector(".mdo-layer-title").textContent, "Tool 2");
   const check = pane.querySelector("input"); check.checked = true; check.dispatchEvent(new Event("change"));
   assert.equal(install.disabled, false); install.click(); await flush();
   const request = calls.find(c => c.action === "install"); assert.equal(request.id, 2); assert.equal(request.single_kind, "tools");

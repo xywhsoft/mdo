@@ -106,7 +106,7 @@ test("selection, tabs, scroll and action focus survive a list refresh; late deta
     const content = () => { const wrapper = new TestElement("div"); wrapper.append(detailTabs([{ id: "about", label: "About", content: new TestElement("p") }, { id: "files", label: "Files", content: new TestElement("pre") }])); return wrapper; };
     const rows = () => [{ key: "one", title: "One", description: "First", detail: content }, { key: "two", title: "Two", description: "Second", detail: content }];
     browser.setItems(rows()); browser.open("one");
-    const list = browser.root.children[0], pane = browser.root.children[1]; list.scrollTop = 130; pane.scrollTop = 42;
+    const list = browser.root.children[0], pane = document.body.querySelector(".eb-detail"); list.scrollTop = 130; pane.scrollTop = 42;
     pane.querySelector(".eb-detail-tabs").selectTab("files");
     const first = list.querySelector(".eb-open"); first.focus(); browser.setItems(rows());
     assert.equal(list.scrollTop, 130); assert.equal(pane.scrollTop, 42);

@@ -1,13 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-class Node extends EventTarget {
-  constructor(tag) { super(); this.tagName=tag;this.children=[]; }
-  append(...children) { for(const child of children){child.parent=this;this.children.push(child);} }
-  remove() { if(this.parent)this.parent.children=this.parent.children.filter(c=>c!==this);this.parent=null; }
-  showModal(){this.open=true;}
-  close(){if(this.open){this.open=false;this.dispatchEvent(new Event("close"));}}
-}
+import { TestElement as Node } from "./helpers/extension-dom.mjs";
 globalThis.window=new EventTarget();globalThis.document=new Node("document");document.body=new Node("body");const sidebar=new Node("aside");
 document.hidden=false;document.createElement=tag=>new Node(tag);document.querySelector=selector=>selector==='.sidebar'?sidebar:null;
 const stored=new Map();globalThis.sessionStorage={getItem:key=>stored.get(key)||null,setItem:(key,value)=>stored.set(key,value)};
@@ -27,6 +21,8 @@ test("UI contribution lifecycle closes owned panels and releases menus/keybindin
     const removePanel=app.sdk.ui.registerPanel("qa.panel",{render(root,{signal}){assert.equal(signal.aborted,false);return ()=>cleaned++;}});
     await app.sdk.ui.openPanel("qa.panel");assert.equal(document.body.children.length,1);
     removePanel();assert.equal(cleaned,1);assert.equal(document.body.children.length,0);
+    const layer=app.sdk.ui.layers.open({title:"Owned window",width:"75%",icon:"code"});await layer.ready;
+    assert.equal(document.body.children.length,1);assert.equal(layer.element.querySelector("h2").textContent,"Owned window");
     await assert.rejects(()=>app.sdk.ui.openPanel("qa.panel"),/not registered/);
     app.sdk.ui.registerMenu("qa.menu",{label:"Test",execute:()=>menuCalls++});await sidebar.children[0].onclick();assert.equal(menuCalls,1);
     assert.throws(()=>app.sdk.ui.registerMenu("qa.menu",{execute(){}}),/Duplicate/);
@@ -35,7 +31,9 @@ test("UI contribution lifecycle closes owned panels and releases menus/keybindin
     const event=new Event("keydown");Object.assign(event,{code:"KeyJ",ctrlKey:true});document.dispatchEvent(event);await Promise.resolve();assert.equal(menuCalls,2);
   } finally {app.destroy();}
   assert.equal(sidebar.children.length,0);
+  assert.equal(document.body.children.length,0,"Application disposal closes public SDK windows");
   assert.throws(()=>app.sdk.ui.registerPanel("qa.late",{}),/disposed/);
+  assert.throws(()=>app.sdk.ui.layers.open({title:"late"}),/disposed/);
 });
 test("startup recovery gate delays registration and plugin activation until writable",async()=>{
  const frontend='web/'+fileURLToPath(new URL('./fixtures/application-sdk-plugin.mjs',import.meta.url)).replaceAll('\\','/').replace(/^\/+/, '');
