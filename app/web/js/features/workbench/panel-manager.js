@@ -241,7 +241,8 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
       const row = entries.get(id); if (!row) continue;
       const tab = make("div", "wb-tab"), select = button(`${row.pinned ? "● " : ""}${title(row)}`, () => reveal(id), "wb-tab-select");
       tab.draggable = true; tab.dataset.panel = id; select.setAttribute("role", "tab"); select.setAttribute("aria-selected", String(id === layout.active));
-      tab.append(select, button("×", () => close(id), "wb-tab-close"));
+      const closeTab = iconButton("close", `关闭${title(row)}`, () => close(id), error => toast(error.message, "error")); closeTab.className = "wb-tab-close";
+      tab.append(select, closeTab);
       tab.ondragstart = event => { dragId = id; event.dataTransfer?.setData("text/mdo-panel", id); };
       tab.ondragover = event => { if (dragId) event.preventDefault(); };
       tab.ondrop = event => { if (!dragId) return; event.preventDefault(); layout.order = reorderPanel(layout.order, dragId, id); dragId = ""; remember(); render(); };

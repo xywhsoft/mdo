@@ -11,7 +11,8 @@
 .wb-tab:has([aria-selected="true"]) { background:var(--surface-raised,var(--surface));border-color:var(--border); }
 .wb-tab-select { overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px; }
 .wb-tab-select,.wb-tab-close,.wb-button { border:0;background:transparent;color:inherit;cursor:pointer;padding:6px 8px;font:inherit;border-radius:6px;font-size:12px; }
-.wb-tab-close { padding:4px 6px; }
+.wb-tab-close { display:inline-flex;flex:none;align-items:center;justify-content:center;padding:4px 6px; }
+.wb-tab-close .wb-icon { width:14px;height:14px; }
 .wb-button:hover,.wb-tab-close:hover { background:var(--surface-hover,#8882); }
 .wb-content { flex:1;display:flex;min-height:0;overflow:hidden; }
 .wb-view { flex:1;min-width:0;overflow:auto;padding:16px;position:relative; }
