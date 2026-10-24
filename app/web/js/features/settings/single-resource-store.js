@@ -21,7 +21,7 @@ export function createSingleResourceStore(kind, onChange) {
   if (!["skills", "tools"].includes(kind)) throw Error("Unsupported resource store");
   const name = kind === "skills" ? "Skill" : "Agent 工具";
   const root = node("div", "", "single-resource-store"), statusRoot = element("p", { className: "extension-help", attrs: { role: "status" } });
-  let visible = false, disposed = false, epoch = 0, controller = null;
+  let visible = false, disposed = false, epoch = 0, controller = null, activeTarget = device();
   let items = [], installed = {}, cursor = 0, query = "", busy = false, error = "", status = "";
   let dialog = null, dirty = false, saving = false, loginRequired = false;
   const call = async (body, signal = controller?.signal) => (await api.post("/ecosystem", { ...body, single_kind: kind }, { signal })).data;
@@ -136,7 +136,7 @@ export function createSingleResourceStore(kind, onChange) {
   }
   async function publish(item, receipt = null) {
     if (busy || disposed) return;
-    const id = epoch, target = device(); busy = true;
+    const id = epoch, target = device(); controller?.abort(); controller = new AbortController(); busy = true;
     try {
       const exported = await call({ action: "export", references: [{ kind, id: item.id, ...(item.project ? { project: item.project } : {}) }] });
       if (!current(id, target)) return;
@@ -181,7 +181,7 @@ export function createSingleResourceStore(kind, onChange) {
     if (!receipt || !singleResource(receipt, kind)) return [];
     const controls = [];
     if (receipt.source !== "local") controls.push(button("检查更新", async () => {
-      if (busy) return; const id = epoch, target = device(); busy = true;
+      if (busy) return; const id = epoch, target = device(); controller?.abort(); controller = new AbortController(); busy = true;
       try { const latest = await call({ action: "latest", id: receipt.id }); if (!current(id, target)) return; busy = false;
         if (latest.id === receipt.id) toast("已是最新公开版本"); else await detail(latest);
       } catch (e) { if (current(id, target)) toast(errorMessage(e), "error"); }
@@ -192,7 +192,7 @@ export function createSingleResourceStore(kind, onChange) {
       void operate("卸载", () => call({ action: "uninstall", entry: { id: receipt.id, source: receipt.source || "store", slug: receipt.slug } }));
     })); return controls;
   }
-  const unsubscribe = subscribeTarget(() => { ++epoch; controller?.abort(); close(true); items = []; installed = {}; cursor = 0; busy = false; error = status = ""; if (visible) void load(); });
+  const unsubscribe = subscribeTarget(() => { if (activeTarget === device()) return; activeTarget = device(); ++epoch; controller?.abort(); close(true); items = []; installed = {}; cursor = 0; busy = false; error = status = ""; if (visible) void load(); });
   render();
   return { root, statusRoot, publish, localActions, activate(value) { visible = value; if (value && !busy) void load(); }, hasPendingChanges: () => Boolean(dialog) || dirty || saving || busy,
     destroy() { disposed = true; ++epoch; controller?.abort(); unsubscribe(); close(true); } };
