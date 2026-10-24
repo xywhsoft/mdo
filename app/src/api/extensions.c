@@ -15,13 +15,15 @@ static xmutex* g_MdoExtensionLock;
 static const xvalue* McpConnectionBinding(const xvalue*);
 static bool McpConnectionCredits(xvalue*,const xvalue*);
 static bool McpConnectionReferenced(cstr);
+static xvalue* KnowledgeCurrentFiles(cstr);
+static bool KnowledgeWrite(MdoApiContext*,cstr);
 bool MdoApiExtensionsInit(void) { g_MdoExtensionLock = xrtMutexCreate(); return g_MdoExtensionLock != NULL; }
 void MdoApiExtensionsUnit(void) { if (g_MdoExtensionLock) xrtMutexDestroy(g_MdoExtensionLock); g_MdoExtensionLock = NULL; }
 
 static bool ExtensionKind(cstr Kind)
 {
     return strcmp(Kind,"agents") == 0 || strcmp(Kind,"subagents") == 0 || strcmp(Kind,"skills") == 0 ||
-        strcmp(Kind,"mcp") == 0 || strcmp(Kind,"commands") == 0 || strcmp(Kind,"tools") == 0;
+        strcmp(Kind,"knowledge") == 0 || strcmp(Kind,"mcp") == 0 || strcmp(Kind,"commands") == 0 || strcmp(Kind,"tools") == 0;
 }
 static bool ExtensionParams(MdoApiContext* C, char Kind[16], char Id[65])
 {
@@ -40,7 +42,7 @@ static bool ExtensionParams(MdoApiContext* C, char Kind[16], char Id[65])
 }
 static void ExtensionPath(cstr Kind, cstr Id, char Path[160])
 {
-    snprintf(Path,160u,"%s/%s%s",Kind,Id,strcmp(Kind,"skills")==0?"/SKILL.md":strcmp(Kind,"mcp")==0?".json":(!strcmp(Kind,"tools")||!strcmp(Kind,"commands"))?".c":".md");
+    snprintf(Path,160u,"%s/%s%s",Kind,Id,strcmp(Kind,"knowledge")==0?"/knowledge.json":strcmp(Kind,"skills")==0?"/SKILL.md":strcmp(Kind,"mcp")==0?".json":(!strcmp(Kind,"tools")||!strcmp(Kind,"commands"))?".c":".md");
 }
 static bool ExtensionString(const xvalue* Object,cstr Key,xstrview* Text)
 {
@@ -59,6 +61,7 @@ static bool ExtensionValidate(cstr Kind,cstr Id,cstr Text,char Error[1024])
         if(Id[0]<'a'||Id[0]>'z'){snprintf(Error,1024u,"Skill ID must start with a lowercase letter");return false;}
         return MdoSkillValidateText(Text,Error,1024u);
     }
+    if (!strcmp(Kind,"knowledge")) { xvalue* Doc=xrtJsonParse(xrtStrView(Text)); bool Valid=MdoKnowledgeMetadata(Doc,Error,1024);xrtValueRelease(Doc);return Valid; }
     if (strcmp(Kind,"mcp")==0) return MdoMcpValidateText(Id,Text,Error,1024u);
     if (strcmp(Kind,"subagents")==0 || !strcmp(Kind,"agents")) {
         MdoAgentFile File;
@@ -115,7 +118,7 @@ static xvalue* ExtensionItemRecord(cstr Kind,cstr Id,bool IncludeSource,const xv
     if (Text==NULL || Item==NULL || !MdoHomeExternalStat(Path,&External,&Info) ||
         !MdoExtensionEnabled(Kind,Id,&Enabled)) goto fail;
     Valid=ExtensionValidate(Kind,Id,Text,Error);
-    if (!strcmp(Kind,"mcp")) {
+    if (!strcmp(Kind,"mcp")||!strcmp(Kind,"knowledge")) {
         Doc=xrtJsonParse(xrtStrView(Text));
         if (Doc) (void)xrtValueGetBool(xrtValueObjectGet(Doc,XRT_STR_LITERAL("enabled")),&Enabled);
     } else if(!strcmp(Kind,"commands")){char Diagnostic[512];Doc=MdoCommandMetadata(Id,Text,Diagnostic);}
@@ -128,6 +131,13 @@ static xvalue* ExtensionItemRecord(cstr Kind,cstr Id,bool IncludeSource,const xv
         !MdoApiValueSetBool(Item,"enabled",Enabled) || !MdoApiValueSetBool(Item,"valid",Valid) ||
         !MdoApiValueSetString(Item,"error",Valid?"":Error) ||
         (IncludeSource && !MdoApiValueSetString(Item,"content",Text))) goto fail;
+    if(!strcmp(Kind,"knowledge")&&Doc){
+        cstr Index=MdoPackageText(Doc,"index",220);char Location[320];bool Exists=false;xfileinfo IndexInfo;
+        if(Index){snprintf(Location,sizeof(Location),"knowledge/%s/%s",Id,Index);if(!MdoHomeExternalStat(Location,&Exists,&IndexInfo)||!Exists||IndexInfo.Type!=XFILE_TYPE_FILE){
+            Valid=false;if(!MdoApiValueSetBool(Item,"valid",false)||!MdoApiValueSetString(Item,"error","The knowledge index is missing or is not a regular document"))goto fail;}}
+        const char* Keys[]={"index","prompt","inject_prompt"};for(size_t i=0;i<3;i++){const xvalue* Value=xrtValueObjectGet(Doc,xrtStrView(Keys[i]));if(Value&&!xrtValueObjectSet(Item,xrtStrView(Keys[i]),Value))goto fail;}
+        snprintf(Location,sizeof(Location),"@knowledge/%s",Id);if(!MdoApiValueSetString(Item,"directory",Location))goto fail;
+    }
     if(Doc&&MdoPackageSingleKind(Kind)){const char* Keys[]={"author","copyright","license","version"};const size_t Limits[]={100,4096,80,32};
         for(size_t i=0;i<4;i++){cstr Credit=MdoPackageText(Doc,Keys[i],Limits[i]);if(Credit&&!MdoApiValueSetString(Item,Keys[i],Credit))goto fail;}}
     if (!strcmp(Kind,"tools")) {
@@ -194,7 +204,7 @@ static bool ExtensionList(MdoApiContext* C,cstr Kind)
         if (E && xrtErrorKind(E)==XERR_NOT_FOUND) xrtClearError(); else Ok=false;
     }
     while (Ok && Dir && (Next=xrtDirNext(Dir,&Entry))==XDIR_NEXT_ITEM) {
-        char Id[65]; size_t Length=Entry.Name.Size; bool Skill=!strcmp(Kind,"skills"); xvalue* Item;
+        char Id[65]; size_t Length=Entry.Name.Size; bool Skill=!strcmp(Kind,"skills")||!strcmp(Kind,"knowledge"); xvalue* Item;
         cstr Suffix=!strcmp(Kind,"mcp")?".json":(!strcmp(Kind,"tools")||!strcmp(Kind,"commands"))?".c":".md"; size_t SuffixSize=strlen(Suffix);
         if (!(Entry.Flags&XDIR_ENTRY_UTF8)) continue;
         if (Skill) { if (Entry.Info.Type!=XFILE_TYPE_DIRECTORY) continue; }
@@ -485,9 +495,9 @@ static bool ExtensionDelete(MdoApiContext* C,cstr Kind,cstr Id,cstr Path,cstr Ol
 {
     bool External; xfileinfo Info; char Directory[160],Trash[190],Hash[65]; bool Moved=false,Ok;
     if (!MdoHomeExternalStat(Path,&External,&Info) || !External) return MdoApiReplyError(C,409,"builtin_resource","Built-in files cannot be deleted; disable or customize them instead",NULL);
-    if (!strcmp(Kind,"skills")) {
-        snprintf(Directory,sizeof(Directory),"skills/%s",Id); MdoExtensionHash(Old,Hash);
-        snprintf(Trash,sizeof(Trash),"skills/.deleted-%s-%.12s",Id,Hash);
+    if (!strcmp(Kind,"skills")||!strcmp(Kind,"knowledge")) {
+        snprintf(Directory,sizeof(Directory),"%s/%s",Kind,Id); MdoExtensionHash(Old,Hash);
+        snprintf(Trash,sizeof(Trash),"%s/.deleted-%s-%.12s",Kind,Id,Hash);
         if (!MdoHomeRenameNoReplace(Directory,Trash)) goto failed;
         Moved=true;
     } else if (!MdoHomeRemove(Path,false)) goto failed;
@@ -561,6 +571,7 @@ static bool ExtensionBundle(MdoApiContext* C,cstr Id)
 
 #include "mcp_template_export.inc.c"
 #include "ecosystem_install.inc.c"
+#include "knowledge_management.inc.c"
 
 bool MdoApiExtensionsRoute(MdoApiContext* C)
 {
@@ -572,17 +583,19 @@ bool MdoApiExtensionsRoute(MdoApiContext* C)
     else {
         ExtensionPath(Kind,Id,Path);
         if (Method==XHTTP_METHOD_GET || Method==XHTTP_METHOD_HEAD) {
+            bool Documents=C->Target.Path.Size>=10u && !memcmp(C->Target.Path.Data+C->Target.Path.Size-10u,"/documents",10u);
             bool Bundle=C->Target.Path.Size>=7u && !memcmp(C->Target.Path.Data+C->Target.Path.Size-7u,"/bundle",7u);
             xvalue* Item=Bundle?NULL:ExtensionItem(Kind,Id,true);
-            if (Bundle&&!ExtensionStoreCanCustomize(C,Kind,Id))Result=true;
-            else if (Bundle) Result=!strcmp(Kind,"skills")?ExtensionBundle(C,Id):MdoApiReplyError(C,400,"extension_action_invalid","Bundles are only supported for Skills",NULL);
+            if(Documents){xrtValueRelease(Item);Result=!strcmp(Kind,"knowledge")?KnowledgeDocuments(C,Id):MdoApiReplyError(C,400,"extension_action_invalid","Document browsing is only supported for knowledge libraries",NULL);}
+            else if (Bundle&&!ExtensionStoreCanCustomize(C,Kind,Id))Result=true;
+            else if (Bundle) Result=!strcmp(Kind,"knowledge")?KnowledgeBundle(C,Id):!strcmp(Kind,"skills")?ExtensionBundle(C,Id):MdoApiReplyError(C,400,"extension_action_invalid","Bundles are only supported for Skills",NULL);
             else Result=Item?MdoApiReplySuccessTake(C,200,Item,NULL):MdoApiReplyError(C,404,"extension_not_found","Resource not found",NULL);
         } else {
             Old=MdoExtensionRead(Path,false,MDO_EXTENSION_TEXT_LIMIT,&Missing);
             if (!Old && !Missing) Result=MdoApiReplyError(C,503,"extension_unreadable","Existing resource cannot be read safely",NULL);
             else if (!ExtensionMatch(C,Old)) Result=true;
             else if ((Method==XHTTP_METHOD_PUT||Method==XHTTP_METHOD_DELETE)&&!ExtensionStoreCanCustomize(C,Kind,Id))Result=true;
-            else if (Method==XHTTP_METHOD_PUT) Result=ExtensionWrite(C,Kind,Id,Path,Old);
+            else if (Method==XHTTP_METHOD_PUT) Result=!strcmp(Kind,"knowledge")?KnowledgeWrite(C,Id):ExtensionWrite(C,Kind,Id,Path,Old);
             else if (!Old) Result=MdoApiReplyError(C,404,"extension_not_found","Resource not found",NULL);
             else if (Method==XHTTP_METHOD_DELETE) Result=ExtensionDelete(C,Kind,Id,Path,Old);
             else Result=ExtensionEnable(C,Kind,Id);

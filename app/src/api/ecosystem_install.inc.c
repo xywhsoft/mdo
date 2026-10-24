@@ -20,7 +20,7 @@ static bool EcoLocalAllowed(cstr path)
 {
     if(!MdoPackagePath(path))return false;
     return !strncmp(path,"agents/",7)||!strncmp(path,"subagents/",10)||!strncmp(path,"tools/",6)||
-        !strncmp(path,"skills/",7)||!strncmp(path,"mcp/",4)||!strncmp(path,"commands/",9)||
+        !strncmp(path,"knowledge/",10)||!strncmp(path,"skills/",7)||!strncmp(path,"mcp/",4)||!strncmp(path,"commands/",9)||
         !strncmp(path,"modules/agents/",15)||!strncmp(path,"modules/subagents/",18)||!strncmp(path,"modules/tools/",14)||
         !strncmp(path,"data/ecosystem/mcp/",19)||!strncmp(path,"data/ecosystem/toolpacks/",24)||!strncmp(path,"plugins/",8)||!strcmp(path,"config/plugins.json");
 }
@@ -75,7 +75,7 @@ static xvalue* EcoLocalFiles(const xvalue* package,char error[1024])
         if(ok)ok=EcoLocalAppend(files,path,content,strlen(content));
         const xvalue* extras=xrtValueObjectGet(r,XRT_STR_LITERAL("files"));
         for(size_t j=0;ok&&j<xrtValueCount(extras);j++){const xvalue* e=xrtValueArrayGet(extras,j);cstr relative=MdoPackageText(e,"path",220),b64=MdoPackageText(e,"base64",90u*1024u*1024u);size_t n=0;bytes b=b64?xrtBase64DecodeNew(b64,strlen(b64),&n,NULL):NULL;
-            int count=snprintf(path,sizeof(path),!strcmp(kind,"modules")?"modules/tools/%s/%s":"skills/%s/%s",id,relative);ok=count>0&&(size_t)count<sizeof(path)&&b&&EcoLocalAppend(files,path,b,n);xrtFree(b);}
+            int count=snprintf(path,sizeof(path),!strcmp(kind,"modules")?"modules/tools/%s/%s":!strcmp(kind,"knowledge")?"knowledge/%s/%s":"skills/%s/%s",id,relative);ok=count>0&&(size_t)count<sizeof(path)&&b&&EcoLocalAppend(files,path,b,n);xrtFree(b);}
     }
     if(!ok){if(!error[0])snprintf(error,1024,"Invalid resource file or duplicate destination");xrtValueRelease(files);return NULL;}return files;
 }
@@ -96,8 +96,9 @@ static bool EcoLocalUnchanged(const xvalue* owned)
 }
 static bool EcoLocalSkillPrefix(cstr path,char prefix[256])
 {
-    if(!path||strncmp(path,"skills/",7))return false;
-    cstr end=strchr(path+7,'/');if(!end)return false;
+    size_t Offset=path&&!strncmp(path,"knowledge/",10)?10:7;
+    if(!path||(strncmp(path,"skills/",7)&&strncmp(path,"knowledge/",10)))return false;
+    cstr end=strchr(path+Offset,'/');if(!end)return false;
     size_t size=(size_t)(end-path)+1;memcpy(prefix,path,size);prefix[size]=0;return true;
 }
 static bool EcoLocalCurrent(cstr path,xvalue* change,const xvalue* owned,char error[1024])
@@ -121,7 +122,7 @@ static bool EcoMcpFileRetained(const xvalue* Records,cstr Excluded,cstr Path)
     if(xrtValueIterBegin(Records,&It)){while(!Keep&&(R=xrtValueIterNext(&It,&K)))if(!xrtStrEqual(K.String,xrtStrView(Excluded)))Keep=EcoLocalFind(xrtValueObjectGet(R,XRT_STR_LITERAL("files")),Path)!=NULL;xrtValueIterEnd(&It);}
     return Keep||McpConnectionReferenced(Path);
 }
-static bool EcoLocalApply(const xvalue* entry,bool uninstall,char error[1024],xvalue** Plan,cstr ExpectedPlan)
+static bool EcoLocalApply(const xvalue* entry,bool uninstall,char error[1024],xvalue** Plan,cstr ExpectedPlan,bool Authoring)
 {
     const xvalue* package=xrtValueObjectGet(entry,XRT_STR_LITERAL("package"));char key[80];int64 id=0;
     cstr source=MdoPackageText(entry,"source",16);bool local=source&&!strcmp(source,"local");
@@ -137,6 +138,18 @@ static bool EcoLocalApply(const xvalue* entry,bool uninstall,char error[1024],xv
         if(EcoNativeNeedsConfiguration(package)&&!uninstall)same=xrtStrEqual(k.String,xrtStrView(key));
         if(same&&k.String.Size<sizeof(priorKey)){prior=value;memcpy(priorKey,k.String.Data,k.String.Size);priorKey[k.String.Size]=0;break;}}xrtValueIterEnd(&it);}
     if(uninstall&&!prior){snprintf(error,1024,"Package is not installed");xrtValueRelease(receipts);return false;}
+    xvalue* Authored=NULL;
+    if(Authoring){const xvalue* Rs=xrtValueObjectGet(package,XRT_STR_LITERAL("resources"));cstr Id=MdoPackageText(xrtValueArrayGet(Rs,0),"id",64);char Target[256];snprintf(Target,sizeof(Target),"knowledge/%s/knowledge.json",Id);
+        xvalue* Current=KnowledgeCurrentFiles(Id);Authored=xrtValueObject();
+        if(!Current||!Authored||!xrtValueObjectSet(Authored,XRT_STR_LITERAL("files"),Current)){xrtValueRelease(Current);xrtValueRelease(Authored);xrtValueRelease(receipts);return false;}xrtValueRelease(Current);
+        priorKey[0]=0;
+        if(xrtValueIterBegin(receipts,&it)){while((value=xrtValueIterNext(&it,&k)))if(EcoLocalFind(xrtValueObjectGet(value,XRT_STR_LITERAL("files")),Target)){
+            cstr Source=MdoPackageText(value,"source",16);
+            if(!Source||strcmp(Source,"local")||xrtValueCount(xrtValueObjectGet(value,XRT_STR_LITERAL("resources")))!=1||k.String.Size>=sizeof(priorKey)){
+                snprintf(error,1024,"Knowledge belongs to a store or mixed package; use its update or uninstall controls");xrtValueIterEnd(&it);xrtValueRelease(Authored);xrtValueRelease(receipts);return false;}
+            memcpy(priorKey,k.String.Data,k.String.Size);priorKey[k.String.Size]=0;break;
+        }xrtValueIterEnd(&it);}prior=Authored;
+    }
     xvalue* files=uninstall?xrtValueArray():EcoLocalFiles(package,error);
     const xvalue* oldFiles=xrtValueObjectGet(prior,XRT_STR_LITERAL("files"));bool ok=files!=NULL;
     xvalue *pluginBefore=NULL,*pluginAfter=NULL;bool pluginReserved=false,pluginPublished=false;
@@ -208,7 +221,7 @@ finished:
     xrtValueRelease(Preview);xrtValueRelease(Changes);
     if(pluginReserved)MdoApplicationPluginsStoreEnd();
     xrtValueRelease(pluginBefore);xrtValueRelease(pluginAfter);
-    xrtValueRelease(receipts);xrtValueRelease(files);xrtValueRelease(journal);xrtValueRelease(next);xrtValueRelease(record);xrtValueRelease(inventory);return ok;
+    xrtValueRelease(Authored);xrtValueRelease(receipts);xrtValueRelease(files);xrtValueRelease(journal);xrtValueRelease(next);xrtValueRelease(record);xrtValueRelease(inventory);return ok;
 }
 #include "ecosystem_drafts.inc.c"
 #include "ecosystem_export.inc.c"
@@ -250,7 +263,7 @@ bool MdoApiEcosystemLocal(MdoApiContext* c,const xvalue* input)
            xrtValueObjectSet(entry,XRT_STR_LITERAL("package"),package)&&MdoApiValueSetString(entry,"source","local")&&
            MdoApiValueSetString(entry,"author","")&&MdoApiValueSetUInt(entry,"id",0)&&MdoApiValueSetUInt(entry,"owner",0)&&MdoApiValueSetString(entry,"sha256",hash);
         const char* keys[]={"slug","name","version"};for(size_t i=0;ok&&i<3;i++)ok=xrtValueObjectSet(entry,xrtStrView(keys[i]),xrtValueObjectGet(manifest,xrtStrView(keys[i])));
-        xvalue* Plan=NULL;if(ok)ok=EcoLocalApply(entry,false,error,Planning?&Plan:NULL,MdoPackageText(input,"expected_plan",64));
+        xvalue* Plan=NULL;if(ok)ok=EcoLocalApply(entry,false,error,Planning?&Plan:NULL,MdoPackageText(input,"expected_plan",64),false);
         xrtFree(json);xrtValueRelease(entry);
         if(!ok&&!error[0])snprintf(error,sizeof(error),"Invalid local package");
         ok=ok?MdoApiReplySuccessTake(c,200,Planning?Plan:xrtValueObject(),NULL):MdoApiReplyError(c,409,"ecosystem_import_failed",error,NULL);
@@ -283,7 +296,7 @@ bool MdoApiEcosystemLocal(MdoApiContext* c,const xvalue* input)
             ok=content&&resource&&MdoApiValueSetString(resource,"kind",kind)&&MdoApiValueSetString(resource,"id",id);
             if(ok&&!strcmp(kind,"mcp")){char* Redacted=McpTemplateExport(content,id);xrtFree(content);content=Redacted;ok=content!=NULL;}
             if(ok)ok=MdoApiValueSetString(resource,"content",content);
-            if(ok&&!strcmp(kind,"skills")){xvalue* extras=xrtValueArray();char directory[160];bool external=false;xfileinfo info;size_t total=0;snprintf(directory,sizeof(directory),"skills/%s",id);
+            if(ok&&(!strcmp(kind,"skills")||!strcmp(kind,"knowledge"))){xvalue* extras=xrtValueArray();char directory[160];bool external=false;xfileinfo info;size_t total=0;snprintf(directory,sizeof(directory),"%s/%s",kind,id);
                 ok=extras&&MdoHomeExternalStat(directory,&external,&info)&&(external?EcoNativeExportTree(directory,"",extras,&total,0):ExtensionBundleFiles(directory,"",false,extras,&total,0))&&xrtValueObjectSet(resource,XRT_STR_LITERAL("files"),extras);xrtValueRelease(extras);}
             if(ok&&!strcmp(kind,"modules")){xvalue* extras=xrtValueArray();char directory[160];bool external=false;xfileinfo info;size_t total=0;snprintf(directory,sizeof(directory),"modules/tools/%s",id);
                 ok=extras&&MdoHomeExternalStat(directory,&external,&info)&&(!external||EcoNativeExportTree(directory,"",extras,&total,0))&&xrtValueObjectSet(resource,XRT_STR_LITERAL("files"),extras);xrtValueRelease(extras);}
@@ -296,7 +309,7 @@ bool MdoApiEcosystemLocal(MdoApiContext* c,const xvalue* input)
     }
     else if(action&&(!strcmp(action,"install")||!strcmp(action,"uninstall")||!strcmp(action,"plan"))){
         xvalue* Plan=NULL;bool Planning=!strcmp(action,"plan");
-        ok=EcoLocalApply(xrtValueObjectGet(input,XRT_STR_LITERAL("entry")),!strcmp(action,"uninstall"),error,Planning?&Plan:NULL,MdoPackageText(input,"expected_plan",64));
+        ok=EcoLocalApply(xrtValueObjectGet(input,XRT_STR_LITERAL("entry")),!strcmp(action,"uninstall"),error,Planning?&Plan:NULL,MdoPackageText(input,"expected_plan",64),false);
         ok=ok?MdoApiReplySuccessTake(c,200,Planning?Plan:xrtValueObject(),NULL):MdoApiReplyError(c,409,"ecosystem_install_failed",error,NULL);
     }else ok=MdoApiReplyError(c,400,"ecosystem_action","Unknown local action",NULL);
     xrtMutexUnlock(g_MdoExtensionLock);return ok;

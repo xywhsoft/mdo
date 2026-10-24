@@ -15,6 +15,7 @@
 #include "../../include/mdo/modules.h"
 #include "../../include/mdo/project_lifecycle.h"
 #include "../../include/mdo/skills.h"
+#include "../../include/mdo/knowledge.h"
 
 #define MDO_AGENT_DEFAULT_ID "mdo.default"
 #define MDO_AGENT_PROMPT_LIMIT (512u * 1024u)
@@ -891,7 +892,7 @@ static bool MdoAgentsPublishSubagents(MdoAgentOwner* Owner,
         if ( Prompts[Count] == NULL ) goto done;
         ++PromptCount;
         if ( !MdoAgentsReplyLanguage(&Prompts[Count], Error) || !MdoToolPrompt(&Prompts[Count]) ||
-             !MdoSkillCatalogAppendPrompt(MdoAgentsToolSelected(&Subagent,"skill") ? Owner->Skills : NULL, &Prompts[Count]) ) goto done;
+             !MdoSkillCatalogAppendPrompt(MdoAgentsToolSelected(&Subagent,"skill") ? Owner->Skills : NULL, &Prompts[Count]) || !MdoKnowledgeAppendPrompt(&Prompts[Count]) ) goto done;
         ModelId = Subagent.Model != NULL && Subagent.Model[0] != '\0' ?
             Subagent.Model : MainModel->Info.Id;
         Reasoning = Subagent.ReasoningEffort != NULL &&
@@ -1255,7 +1256,7 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
         }
     }
     if ( !MdoAgentsReplyLanguage(&Prompt, Error) || !MdoToolPrompt(&Prompt) ||
-         !MdoSkillCatalogAppendPrompt(MdoAgentsToolSelected(&AgentInfo,"skill") ? Owner->Skills : NULL, &Prompt) ) goto fail;
+         !MdoSkillCatalogAppendPrompt(MdoAgentsToolSelected(&AgentInfo,"skill") ? Owner->Skills : NULL, &Prompt) || !MdoKnowledgeAppendPrompt(&Prompt) ) goto fail;
     /* Memory is a dynamic context section. Keep the recovered Agent/Skill/user
      * instructions, but refresh memory paths and indices when a run is admitted.
      * Remove the old structured-memory section as well during the transition. */
@@ -1426,7 +1427,8 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
         if ( !xworkAgentSetFileScope(Session->Agent, Owner->ApprovalScope->Files, Error) ) goto fail;
     } else if ( !xworkAgentAllowExternalPaths(Session->Agent,
             Approval == XWORK_APPROVAL_AUTO, Error) ) goto fail;
-    if ( !MdoAskRegisterTool(Session->Agent, Options->ProjectId,
+    if ( !MdoKnowledgeConfigureFileTools(Session->Agent, Error) ||
+         !MdoAskRegisterTool(Session->Agent, Options->ProjectId,
             Options->AskScopeId != NULL ? Options->AskScopeId :
                 Options->ProductSessionId, &Session->AskBinding, Error) ||
          (Settings.MemoryEnabled &&

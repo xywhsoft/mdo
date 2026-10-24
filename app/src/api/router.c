@@ -50,6 +50,7 @@ static const MdoApiRoute g_MdoApiRoutes[] = {
     { "/api/v1/extensions/{kind}/{id}", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_PUT | XHTTP_METHOD_DELETE,
       "GET, HEAD, PUT, DELETE, OPTIONS", MdoApiExtensionsRoute, false },
     { "/api/v1/extensions/{kind}/{id}/bundle", XHTTP_METHOD_GET, "GET, OPTIONS", MdoApiExtensionsRoute, false },
+    { "/api/v1/extensions/{kind}/{id}/documents", XHTTP_METHOD_GET, "GET, OPTIONS", MdoApiExtensionsRoute, false },
     { "/api/v1/extensions/{kind}/{id}/enabled", XHTTP_METHOD_POST,
       "POST, OPTIONS", MdoApiExtensionsRoute, false },
     { "/api/v1/distribution", XHTTP_METHOD_GET | XHTTP_METHOD_POST, "GET, POST, OPTIONS", MdoApiDistributionRoute, false },

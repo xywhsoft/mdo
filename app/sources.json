@@ -9,6 +9,7 @@
     "src/models/catalog.c",
     "src/skills/manager.c",
     "src/skills/tools.c",
+    "src/knowledge/manager.c",
     "src/memory/manager.c",
     "src/memory/transfer.c",
     "src/migration/manager.c",

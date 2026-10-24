@@ -213,7 +213,7 @@ MdoApiBodyStatus MdoApiBinaryBodyRead(MdoApiContext* Context,
     size_t Maximum=MDO_API_IMAGE_MAX_BYTES;
     /* Creator source packages have a dedicated bounded endpoint. Image and
      * unrelated binary routes retain their original eight-MiB ceiling. */
-    if(Context&&xrtStrEqual(Context->Target.Path,XRT_STR_LITERAL("/api/v1/ecosystem")))
+    if(Context&&(xrtStrEqual(Context->Target.Path,XRT_STR_LITERAL("/api/v1/ecosystem")) || (Context->Target.Path.Size>29&&!memcmp(Context->Target.Path.Data,"/api/v1/extensions/knowledge/",29))))
         Maximum=100u*1024u*1024u+16384u;
     if ( Context == NULL || Context->Request == NULL ||
          Context->Request->head == NULL || Data == NULL || Size == NULL ||

@@ -103,7 +103,7 @@ static bool EcoNativeExportTree(cstr Root,cstr Prefix,xvalue* Extras,size_t* Tot
     xdir Dir=MdoHomeOpenDirectory(Directory,XDIR_STAT);if(!Dir)return false;xdirentry E;xdirnext Next;bool Ok=true;
     while(Ok&&(Next=xrtDirNext(Dir,&E))==XDIR_NEXT_ITEM){
         if(E.Name.Size>64||memchr(E.Name.Data,0,E.Name.Size)){Ok=false;break;}char Name[65],Relative[256];memcpy(Name,E.Name.Data,E.Name.Size);Name[E.Name.Size]=0;
-        if(!Prefix[0]&&!strcmp(Name,"SKILL.md"))continue;
+        if(!Prefix[0]&&((!strncmp(Root,"skills/",7)&&!strcmp(Name,"SKILL.md"))||(!strncmp(Root,"knowledge/",10)&&!strcmp(Name,"knowledge.json"))))continue;
         int N=snprintf(Relative,sizeof(Relative),"%s%s%s",Prefix,Prefix[0]?"/":"",Name);if(N<0||(size_t)N>=sizeof(Relative)||!MdoPackagePath(Relative)){Ok=false;break;}
         if(E.Info.Type==XFILE_TYPE_DIRECTORY)Ok=EcoNativeExportTree(Root,Relative,Extras,Total,Depth+1);
         else if(E.Info.Type==XFILE_TYPE_FILE)Ok=xrtValueCount(Extras)<128&&EcoNativeExportFile(Extras,Root,Relative,Total);

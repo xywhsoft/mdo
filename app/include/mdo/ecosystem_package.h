@@ -39,11 +39,11 @@ static bool MdoPackageKind(const char* kind)
     return kind&&(!strcmp(kind,"agents")||!strcmp(kind,"subagents")||!strcmp(kind,"tools")||
         !strcmp(kind,"skills")||!strcmp(kind,"mcp")||!strcmp(kind,"commands")||
         !strcmp(kind,"c-agents")||!strcmp(kind,"c-subagents")||!strcmp(kind,"modules")||
-        !strcmp(kind,"toolpacks")||!strcmp(kind,"plugins"));
+        !strcmp(kind,"toolpacks")||!strcmp(kind,"plugins")||!strcmp(kind,"knowledge"));
 }
 /* Categories with one independently installed resource per work. */
 static bool MdoPackageSingleKind(const char* kind)
-{return kind&&(!strcmp(kind,"skills")||!strcmp(kind,"tools")||!strcmp(kind,"commands")||!strcmp(kind,"mcp"));}
+{return kind&&(!strcmp(kind,"skills")||!strcmp(kind,"tools")||!strcmp(kind,"commands")||!strcmp(kind,"mcp")||!strcmp(kind,"knowledge"));}
 static const char* MdoPackageSystem(const char* kind)
 {return kind&&!strcmp(kind,"c-agents")?"agents":kind&&!strcmp(kind,"c-subagents")?"subagents":kind;}
 static bool MdoPackageV2(const xvalue* package)
@@ -90,6 +90,7 @@ static bool MdoPackageSamePath(const char* a,const char* b)
     for(;*a&&*b;a++,b++){unsigned char x=*a,y=*b;if(x>='A'&&x<='Z')x+=32;if(y>='A'&&y<='Z')y+=32;if(x!=y)return false;}return *a==*b;
 }
 #include "mcp_template.h"
+#include "knowledge_format.h"
 static bool MdoPackageValidate(const xvalue* package,char* error,size_t capacity)
 {
     const char* reason="Invalid extension package";
@@ -125,10 +126,10 @@ static bool MdoPackageValidate(const xvalue* package,char* error,size_t capacity
         for(size_t j=0;j<i;j++){const xvalue* q=xrtValueArrayGet(resources,j);if(!strcmp(kind,MdoPackageText(q,"kind",16))&&!strcmp(id,MdoPackageText(q,"id",64))){reason="Duplicate resource ID";goto bad;}}
         total+=strlen(content);if(total>sourceLimit){reason="Package decoded content exceeds its limit";goto bad;}
         const xvalue* files=xrtValueObjectGet(r,XRT_STR_LITERAL("files"));
-        if(files){reason="This resource cannot contain attached files";if((strcmp(kind,"skills")&&!module&&!plugin&&!toolpack)||xrtValueType(files)!=XVALUE_ARRAY||xrtValueCount(files)>128)goto bad;
+        if(files){reason="This resource cannot contain attached files";if((strcmp(kind,"skills")&&strcmp(kind,"knowledge")&&!module&&!plugin&&!toolpack)||xrtValueType(files)!=XVALUE_ARRAY||xrtValueCount(files)>128)goto bad;
             for(size_t j=0;j<xrtValueCount(files);j++){const xvalue* f=xrtValueArrayGet(files,j);const char* path=MdoPackageText(f,"path",220),*base64=MdoPackageText(f,"base64",v2?90u*1024u*1024u:180000u);
                 reason="Invalid attached file path or size";if(!MdoPackagePath(path)||(!strcmp(kind,"skills")&&MdoPackageSamePath(path,"SKILL.md"))||!base64)goto bad;
-                size_t prefix=plugin?8u+strlen(id)+11u+64u+7u:module?14u+strlen(id)+1u:toolpack?106u:8u+strlen(id);
+                size_t prefix=!strcmp(kind,"knowledge")?11u+strlen(id):plugin?8u+strlen(id)+11u+64u+7u:module?14u+strlen(id)+1u:toolpack?106u:8u+strlen(id);
                 if(prefix+strlen(path)>220u){reason="Installed file path exceeds the portable limit";goto bad;}
                 for(size_t k=0;k<j;k++)if(MdoPackageSamePath(path,MdoPackageText(xrtValueArrayGet(files,k),"path",220))){reason="Duplicate file path";goto bad;}
                 size_t size=0;void* bytes=xrtBase64DecodeNew(base64,strlen(base64),&size,NULL);bool ok=bytes&&size<=(v2?64u*1024u*1024u:131072u);xrtFree(bytes);if(!ok)goto bad;
@@ -155,6 +156,7 @@ static bool MdoPackageValidate(const xvalue* package,char* error,size_t capacity
             }
             xrtValueRelease(doc);if(!valid){reason=plugin?"Invalid mdo plugin manifest or frontend file":"Invalid command-line toolpack manifest";goto bad;}
         }
+        if(!strcmp(kind,"knowledge")&&!MdoKnowledgeResource(r,error,capacity))return false;
         if(!strcmp(kind,"mcp")){
             xvalue* doc=xrtJsonParse(xrtStrView(content));char why[256];bool ok=MdoMcpTemplateValidate(doc,id,why,sizeof(why));
             xrtValueRelease(doc);if(!ok){if(error&&capacity)snprintf(error,capacity,"%s",why);return false;}
