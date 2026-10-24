@@ -58,7 +58,8 @@ def probe(packed: Path) -> dict:
             base = Path(raw)
             directory, port = site(base, 'site', packed)
             home = base / 'home'
-            env = dict(os.environ, USE_WEBVIEW='0', USERPROFILE=str(base))
+            env = dict(os.environ, USE_WEBVIEW='0', USERPROFILE=str(base),
+                       MDO_GREP_FIXTURE_KEY='local-fixture-key')
 
             def launch():
                 instance = start(directory, packed, home, env)
@@ -72,7 +73,9 @@ def probe(packed: Path) -> dict:
 
             try:
                 process = launch()
-                setup_provider(port, server.server_port)
+                # This probe tests grep and follow-up recovery; Linux has no
+                # platform credential vault. Keep its synthetic key in memory.
+                setup_provider(port, server.server_port, secret_ref='env:MDO_GREP_FIXTURE_KEY')
                 session, _ = api(port, 'POST', '/api/v1/sessions', {
                     'project_id': 'default', 'agent_id': 'mdo.default',
                     'model_id': 'fixture-followup', 'protocol': 'openai-responses',

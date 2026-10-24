@@ -77,11 +77,13 @@ def terminal(port, run):
     raise AssertionError('follow-up exceeded bounded deadline')
 
 
-def setup_provider(port, provider_port):
+def setup_provider(port, provider_port, *, secret_ref=None):
     config, headers = api(port, 'GET', '/api/v1/models/config')
     supplier = {'id': 'fixture-followup', 'name': 'Fixture', 'builtin': False,
         'editable': True, 'removable': True, 'verify_peer': True, 'timeout_ms': 5000,
         'endpoints': {'responses': f'http://127.0.0.1:{provider_port}/v1/responses'}}
+    if secret_ref is not None:
+        supplier['credential'] = {'secret_ref': secret_ref}
     model = copy.deepcopy(config['items'][0])
     model.update(id='fixture-followup', name='Fixture', provider='fixture-followup',
         wire_model='fixture-followup', builtin=False, free=False, editable=True, removable=True,
@@ -92,8 +94,8 @@ def setup_provider(port, provider_port):
     patch = {key: config[key] for key in ('providers', 'items', 'default_model')}
     patch['providers'].append(supplier)
     patch['items'].append(model)
-    api(port, 'POST', '/api/v1/models/setup', {'patch': patch,
-        'keys': [{'provider': 'fixture-followup', 'value': 'local-fixture-key'}]}, headers['etag'])
+    keys = [] if secret_ref is not None else [{'provider': 'fixture-followup', 'value': 'local-fixture-key'}]
+    api(port, 'POST', '/api/v1/models/setup', {'patch': patch, 'keys': keys}, headers['etag'])
 
 
 def run(packed: Path, session_copy: Path | None):
