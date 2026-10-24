@@ -3,6 +3,66 @@ import assert from "node:assert/strict";
 import { TestElement, testDocument } from "./helpers/extension-dom.mjs";
 import { createExtensionBrowser, detailTabs, actionMenu, extensionToggle } from "../app/web/js/components/extension-browser.js";
 
+test("numbered pages and jump controls reach distant rows, validate input and preserve keyboard focus", () => {
+  const previous = globalThis.document; globalThis.document = testDocument();
+  try {
+    const browser = createExtensionBrowser({ kind: "toolpacks" });
+    const rows = Array.from({ length: 205 }, (_, i) => ({ key: String(i), title: `Tool ${i}` }));
+    const render = busy => browser.setItems(rows, { pageKey: "all", busy }); render(false);
+    const pager = () => browser.root.querySelector(".eb-pagination");
+    const number = value => pager().querySelectorAll("button").find(button => button.textContent === String(value));
+    const jump = value => { const input = pager().querySelector("input"); input.value = value; pager().querySelector("form").dispatchEvent(new Event("submit", { cancelable: true })); };
+    assert.equal(pager().querySelector(".eb-page-status").textContent, "共 205 条");
+    assert.deepEqual(pager().querySelectorAll(".eb-page-number").map(b => b.textContent), ["1", "2", "3", "4", "5", "21"]);
+    assert.equal(pager().querySelectorAll(".eb-page-gap").length, 1);
+    number(21).click(); assert.equal(browser.root.querySelector(".eb-name").textContent, "Tool 200");
+    assert.equal(document.activeElement.getAttribute("aria-current"), "page");
+    jump("11"); assert.equal(browser.root.querySelector(".eb-name").textContent, "Tool 100");
+    assert.deepEqual(pager().querySelectorAll(".eb-page-number").map(b => b.textContent), ["1", "9", "10", "11", "12", "13", "21"]);
+    assert.equal(pager().querySelectorAll(".eb-page-gap").length, 2);
+    assert.equal(document.activeElement, pager().querySelector("input"));
+    for (const value of ["", "-1", "2.5", "1e2", "NaN", "9007199254740992"]) {
+      jump(value); assert.equal(browser.root.querySelector(".eb-name").textContent, "Tool 100");
+      assert.equal(pager().querySelector("input").getAttribute("aria-invalid"), "true");
+      assert.equal(pager().querySelector(".eb-page-error").hidden, false);
+    }
+    jump("0"); assert.equal(browser.root.querySelector(".eb-name").textContent, "Tool 0");
+    jump("9999"); assert.equal(browser.root.querySelector(".eb-name").textContent, "Tool 200");
+    const input = pager().querySelector("input"); input.focus(); input.value = "12"; render(false);
+    assert.equal(pager().querySelector("input").value, "12", "polling preserves an unfinished keyboard jump");
+    browser.rememberFocus(); document.activeElement = document.body; render(false);
+    assert.equal(pager().querySelector("input").value, "12", "reparenting the list preserves the jump draft");
+    assert.equal(document.activeElement, pager().querySelector("input"));
+    render(true); assert(pager().querySelectorAll("button,input,select").every(control => control.disabled));
+    jump("2"); assert.equal(browser.root.querySelector(".eb-name").textContent, "Tool 200");
+    render(false); jump("2");
+    const size = pager().querySelector("select"); size.value = "50"; size.dispatchEvent(new Event("change"));
+    assert.equal(browser.root.querySelectorAll(".eb-row").length, 50); assert.equal(pager().querySelector("input").value, "1");
+    assert.equal(document.activeElement, pager().querySelector("select")); browser.destroy();
+  } finally { globalThis.document = previous; }
+});
+
+test("cursor append keeps every loaded page reachable and does not skip newly filled partial pages", () => {
+  const previous = globalThis.document; globalThis.document = testDocument();
+  try {
+    for (const initial of [0, 15, 20]) {
+      const browser = createExtensionBrowser(); let requested = 0;
+      const rows = length => Array.from({ length }, (_, i) => ({ key: String(i), title: `Tool ${i}` }));
+      const settings = busy => ({ pageKey: "all", busy, onNext: () => { requested++; browser.setItems(rows(initial), settings(true)); } });
+      browser.setItems(rows(initial), settings(false));
+      const next = () => browser.root.querySelector(".eb-pagination").querySelectorAll("button").find(b => b.textContent === "下一页");
+      if (initial > 10) next().click(); next().click();
+      assert.equal(requested, 1);
+      browser.setItems(rows(initial), settings(false));
+      assert.equal(browser.root.querySelector("input").value, String(Math.max(1, Math.ceil(initial / 10))), "failed fetch retains page");
+      next().click(); browser.setItems(rows(initial + 15), { pageKey: "all" });
+      assert.equal(browser.root.querySelector(".eb-name").textContent, `Tool ${Math.floor(initial / 10) * 10}`);
+      browser.root.querySelector(".eb-pagination").querySelectorAll("button").find(b => b.textContent === "1").click();
+      assert.equal(browser.root.querySelector(".eb-name").textContent, "Tool 0"); browser.destroy();
+    }
+  } finally { globalThis.document = previous; }
+});
+
 test("pagination bounds rendered rows, preserves a live page and resets filters without nested scrolling", () => {
   const previous = globalThis.document; globalThis.document = testDocument();
   try {

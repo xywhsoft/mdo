@@ -91,7 +91,7 @@ export function createExtensionBrowser({ kind, onClose } = {}) {
   pager.setAttribute("aria-label", browserText("pagination", "列表翻页")); pager.hidden = true;
   pane.setAttribute("aria-label", browserText("details", "扩展详情")); pane.hidden = true;
   root.append(list, pane, pager);
-  let rows = [], selected = null, rememberedFocus = null, page = 0, pageSize = 10, pageKey = null, options = {};
+  let rows = [], selected = null, rememberedFocus = null, rememberedPager = null, page = 0, pageSize = 10, pageKey = null, options = {}, awaitingNext = null;
   const closeDetail = (focus = true) => {
     const old = selected; selected = null; pane.hidden = true; pane.replaceChildren(); root.classList.remove("has-detail");
     for (const button of list.querySelectorAll(".eb-open")) button.setAttribute("aria-expanded", "false");
@@ -120,11 +120,22 @@ export function createExtensionBrowser({ kind, onClose } = {}) {
   root.addEventListener("scroll", event => { for (const menu of root.querySelectorAll(".eb-menu[open]")) if (!menu.contains(event.target)) menu.open = false; }, true);
   const browser = {
     root, open, showDetail, closeDetail,
-    rememberFocus() { rememberedFocus = list.contains(document.activeElement) ? document.activeElement?.dataset.ebFocus : null; },
+    rememberFocus() {
+      rememberedFocus = list.contains(document.activeElement) ? document.activeElement?.dataset.ebFocus : null;
+      const control = pager.contains(document.activeElement) ? document.activeElement : null;
+      rememberedPager = control ? { key: control.dataset.pageControl, value: control.value } : null;
+    },
     isSelected: key => selected === key,
     setItems(next, settings = {}) {
       options = settings; const { empty = browserText("empty", "没有匹配的扩展"), busy = false } = settings;
-      if (settings.pageKey !== pageKey) { page = settings.initialPage === "last" ? Math.max(0, Math.ceil(next.length / pageSize) - 1) : 0; pageKey = settings.pageKey; }
+      const sameKey = settings.pageKey === pageKey;
+      if (!sameKey) { page = settings.initialPage === "last" ? Math.max(0, Math.ceil(next.length / pageSize) - 1) : 0; pageKey = settings.pageKey; awaitingNext = null; }
+      else if (awaitingNext && !busy) {
+        // A cursor page may fill the last partial display page before adding
+        // another one. Show those new rows instead of skipping over them.
+        if (next.length > awaitingNext.length) page = Math.floor(awaitingNext.length / pageSize);
+        awaitingNext = null;
+      }
       page = Math.min(page, Math.max(0, Math.ceil(next.length / pageSize) - 1));
       const scroll = list.scrollTop, focused = list.contains(document.activeElement) ? document.activeElement?.dataset.ebFocus : rememberedFocus;
       rememberedFocus = null;
@@ -149,7 +160,7 @@ export function createExtensionBrowser({ kind, onClose } = {}) {
         list.append(entry);
       }
       if (!rows.length) list.append(el("p", "eb-empty", busy ? browserText("loading", "正在载入…") : empty));
-      list.scrollTop = scroll; renderPager();
+      list.scrollTop = scroll; renderPager(sameKey);
       if (selected && !rows.slice(page * pageSize, (page + 1) * pageSize).some(r => r.key === selected)) closeDetail(false);
       else if (selected && rows.find(r => r.key === selected)?.detail) showDetail(selected, rows.find(r => r.key === selected).detail());
       if (focused) {
@@ -158,33 +169,88 @@ export function createExtensionBrowser({ kind, onClose } = {}) {
         else queueMicrotask(() => { if (root.isConnected && document.activeElement === document.body) restore(); });
       }
     },
-    reset() { closeDetail(false); rows = []; page = 0; pageKey = null; list.replaceChildren(); list.scrollTop = 0; pager.replaceChildren(); pager.hidden = true; },
-    destroy() { closeDetail(false); root.remove(); rows = []; rememberedFocus = null; },
+    reset() { closeDetail(false); rows = []; page = 0; pageKey = null; awaitingNext = rememberedPager = null; list.replaceChildren(); list.scrollTop = 0; pager.replaceChildren(); pager.hidden = true; },
+    destroy() { closeDetail(false); root.remove(); rows = []; rememberedFocus = rememberedPager = null; },
   };
-  function turn(next) {
-    closeDetail(false); page = next; browser.setItems(rows, options);
+  function focusPageControl(key) {
+    const controls = [...pager.querySelectorAll("button,input,select")];
+    (controls.find(control => control.dataset.pageControl === key && !control.disabled)
+      || controls.find(control => control.getAttribute("aria-current") === "page"))?.focus({ preventScroll: true });
+  }
+  function turn(next, focus = "current") {
+    if (options.busy) return;
+    closeDetail(false); page = Math.max(0, Math.min(next, Math.ceil(rows.length / pageSize) - 1));
+    if (pager.contains(document.activeElement) && document.activeElement?.dataset.pageControl === "jump") document.activeElement.value = String((options.pageOffset || 0) + page + 1);
+    browser.setItems(rows, options);
+    focusPageControl(focus === "current" ? `page:${(options.pageOffset || 0) + page + 1}` : focus);
     root.scrollIntoView?.({ block: "start" });
   }
-  function renderPager() {
+  function renderPager(preserveFocus = false) {
     const count = Math.max(1, Math.ceil(rows.length / pageSize));
+    const focused = preserveFocus && pager.contains(document.activeElement) ? document.activeElement : null;
+    const controlKey = focused?.dataset.pageControl || (preserveFocus ? rememberedPager?.key : null);
+    const draft = controlKey === "jump" ? (focused?.value ?? rememberedPager?.value) : null;
+    rememberedPager = null;
     pager.replaceChildren(); pager.hidden = rows.length <= 10 && !options.onNext && !options.onPrevious;
     if (pager.hidden) return;
-    const previous = element("button", { text: browserText("previousPage", "上一页"), className: "secondary-button", attrs: { type: "button" } });
-    const next = element("button", { text: browserText("nextPage", "下一页"), className: "secondary-button", attrs: { type: "button" } });
+    const offset = options.pageOffset || 0, first = offset + 1, last = offset + count, current = offset + page + 1;
+    const summary = el("span", "eb-page-status", offset
+      ? browserText("pageOpen", "第 {page} 页", { page: current })
+      : browserText(options.onNext ? "loadedItems" : "totalItems", options.onNext ? "已加载 {count} 条" : "共 {count} 条", { count: rows.length }));
+    summary.setAttribute("aria-live", "polite");
+    const links = el("div", "eb-page-links");
+    const previous = element("button", { text: browserText("previousPage", "上一页"), className: "secondary-button eb-page-previous", attrs: { type: "button" } });
+    const next = element("button", { text: browserText("nextPage", "下一页"), className: "secondary-button eb-page-next", attrs: { type: "button" } });
+    previous.dataset.pageControl = "previous"; next.dataset.pageControl = "next";
+    previous.setAttribute("aria-label", previous.textContent); next.setAttribute("aria-label", next.textContent);
     previous.disabled = options.busy || (page === 0 && !options.onPrevious);
     next.disabled = options.busy || (page + 1 >= count && !options.onNext);
-    previous.addEventListener("click", () => { if (!previous.disabled) page ? turn(page - 1) : options.onPrevious?.(); });
-    next.addEventListener("click", () => { if (!next.disabled) page + 1 < count ? turn(page + 1) : options.onNext?.(count); });
-    const offset = options.pageOffset || 0;
-    const summary = el("span", "eb-page-status", options.onNext
-      ? browserText("pageOpen", "第 {page} 页", { page: offset + page + 1 })
-      : browserText("pageCount", "第 {page} / {pages} 页", { page: offset + page + 1, pages: offset + count }));
-    summary.setAttribute("aria-live", "polite");
+    previous.addEventListener("click", () => { if (!previous.disabled) page ? turn(page - 1, "previous") : options.onPrevious?.(); });
+    next.addEventListener("click", () => {
+      if (next.disabled) return;
+      if (page + 1 < count) turn(page + 1, "next");
+      else { awaitingNext = { length: rows.length }; options.onNext?.(count); }
+    });
+    links.append(previous);
+    const start = Math.max(first, Math.min(current - 2, last - 4)), end = Math.min(last, start + 4);
+    const numbers = new Set([first, last]);
+    for (let value = start; value <= end; value++) numbers.add(value);
+    let previousNumber = first - 1;
+    for (const value of [...numbers].sort((a, b) => a - b)) {
+      if (value - previousNumber > 1) { const gap = el("span", "eb-page-gap", "…"); gap.setAttribute("aria-hidden", "true"); links.append(gap); }
+      const button = element("button", { text: value, className: "secondary-button eb-page-number", attrs: { type: "button", "aria-label": browserText("goToPage", "第 {page} 页", { page: value }) } });
+      button.dataset.pageControl = `page:${value}`; button.disabled = Boolean(options.busy);
+      if (value === current) button.setAttribute("aria-current", "page");
+      button.addEventListener("click", () => { if (!button.disabled && value !== current) turn(value - first); });
+      links.append(button); previousNumber = value;
+    }
+    links.append(next);
     const size = element("select", { attrs: { "aria-label": browserText("pageSize", "每页条数") } });
     for (const value of [10, 20, 50]) { const option = el("option", "", browserText("perPage", "每页 {count} 条", { count: value })); option.value = String(value); size.append(option); }
-    size.value = String(pageSize); size.disabled = options.busy || Boolean(offset);
-    size.addEventListener("change", () => { const value = Number(size.value); if ([10, 20, 50].includes(value)) { pageSize = value; turn(0); } });
-    pager.append(previous, summary, next, size);
+    size.dataset.pageControl = "size"; size.value = String(pageSize); size.disabled = options.busy || Boolean(offset);
+    size.addEventListener("change", () => { const value = Number(size.value); if (!size.disabled && [10, 20, 50].includes(value)) { pageSize = value; turn(0, "size"); } });
+    const jump = el("form", "eb-page-jump"), label = el("label", "", browserText("jumpTo", "到第"));
+    const input = element("input", { attrs: { type: "text", inputmode: "numeric", maxlength: "10", "aria-label": browserText("jumpPage", "跳转页码"), title: browserText("jumpRange", "可跳转到第 {first}–{last} 页", { first, last }) } });
+    input.dataset.pageControl = "jump"; input.value = String(current); input.disabled = Boolean(options.busy);
+    const confirm = element("button", { text: browserText("confirmPage", "确定"), className: "secondary-button", attrs: { type: "submit" } });
+    confirm.disabled = Boolean(options.busy);
+    const error = el("span", "eb-page-error"); error.hidden = true; error.setAttribute("role", "status");
+    input.addEventListener("input", () => { input.removeAttribute("aria-invalid"); error.hidden = true; });
+    label.append(input); jump.append(label, el("span", "", browserText("pageUnit", "页")), confirm, error);
+    jump.addEventListener("submit", event => {
+      event.preventDefault(); if (options.busy) return;
+      const value = input.value.trim(), target = Number(value);
+      if (!/^\d+$/.test(value) || !Number.isSafeInteger(target)) {
+        input.setAttribute("aria-invalid", "true"); error.textContent = browserText("invalidPage", "请输入整数页码"); error.hidden = false; input.focus(); return;
+      }
+      const bounded = Math.max(first, Math.min(last, target)); input.value = String(bounded); turn(bounded - first, "jump");
+    });
+    pager.append(summary, links, size, jump);
+    if (draft !== null) input.value = draft;
+    if (controlKey) {
+      if (root.isConnected) focusPageControl(controlKey);
+      else queueMicrotask(() => { if (root.isConnected && document.activeElement === document.body) focusPageControl(controlKey); });
+    }
   }
   return browser;
 }

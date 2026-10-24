@@ -25,7 +25,7 @@ export function createSingleResourceStore(kind, onChange, onBrowse = () => {}, o
   const name = kind === "skills" ? "Skill" : "Agent 工具";
   const root = node("div", "", "single-resource-store"), statusRoot = element("p", { className: "extension-help", attrs: { role: "status" } });
   let visible = false, disposed = false, epoch = 0, controller = null, activeTarget = device();
-  let items = [], installed = {}, cursor = 0, query = "", busy = false, error = "", status = "";
+  let items = [], installed = {}, cursor = 0, query = "", catalogQuery = "", busy = false, error = "", status = "";
   let dialog = null, dirty = false, saving = false, loginRequired = false;
   let backgroundWrite = null, detailSerial = 0, detailController = null, stateFilter = "all";
   const browser = createExtensionBrowser({ kind, onClose: () => { ++detailSerial; detailController?.abort(); } });
@@ -52,12 +52,12 @@ export function createSingleResourceStore(kind, onChange, onBrowse = () => {}, o
   }
   async function load(append = false) {
     if (busy || disposed) return;
-    const id = ++epoch, target = device(); controller?.abort(); controller = new AbortController();
+    const id = ++epoch, target = device(), requestQuery = append ? catalogQuery : query; controller?.abort(); controller = new AbortController();
     busy = true; error = ""; render();
     try {
-      const [data, local] = await Promise.all([call({ action: "catalog", query, before: append ? cursor : 0 }), api.get("/ecosystem", { signal: controller.signal })]);
+      const [data, local] = await Promise.all([call({ action: "catalog", query: requestQuery, before: append ? cursor : 0 }), api.get("/ecosystem", { signal: controller.signal })]);
       if (!current(id, target)) return;
-      items = append ? [...items, ...data.items] : data.items; installed = local.data; cursor = data.next_before || 0;
+      items = append ? [...new Map([...items, ...data.items].map(row => [row.id, row])).values()] : data.items; installed = local.data; cursor = data.next_before || 0; catalogQuery = requestQuery;
     } catch (e) { if (current(id, target) && e.name !== "AbortError") report(e); }
     finally { if (current(id, target)) { busy = false; render(); } }
   }
@@ -89,9 +89,8 @@ export function createSingleResourceStore(kind, onChange, onBrowse = () => {}, o
       const credits=resourceCredits({...row,store_managed:true});
       return { key: String(row.id), kind, title: row.name, byline:credits.submitter, description: row.description, meta:credits.meta, badge: { text: same ? browserText("installed", "已安装") : receipt ? browserText("updates", "可更新") : "" }, primary, onSelect: () => loadDetail(row) };
     });
-    browser.setItems(rows, { busy, pageKey:JSON.stringify([query,stateFilter]), empty: items.length ? browserText("empty", "没有匹配的扩展") : `暂无公开${name}。可从本机列表分享你的作品。` });
+    browser.setItems(rows, { busy, pageKey:JSON.stringify([catalogQuery,stateFilter]), onNext: cursor ? () => { void load(true); } : null, empty: items.length ? browserText("empty", "没有匹配的扩展") : `暂无公开${name}。可从本机列表分享你的作品。` });
     root.replaceChildren(search, node("p", kind === "skills" ? "按需读取 Skill，包含说明与参考文件。" : "C 工具在本机执行；安装前请检查源码并确认信任。", "extension-help"), browser.root);
-    if (cursor) { const more = button("加载更多", () => load(true)); more.disabled = busy; root.append(more); }
     statusRoot.textContent = error || (busy ? status || "正在载入…" : status); statusRoot.hidden = !statusRoot.textContent; statusRoot.className = error ? "extension-error" : "extension-help";
     if (loginRequired) root.append(button("登录账户", () => { location.hash = "#/settings/account"; }));
     search.querySelectorAll("button").forEach(b => { b.disabled = busy; });

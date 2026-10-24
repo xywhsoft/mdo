@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { createExternalToolsPanel, externalToolAction } from "../app/web/js/features/notifications/external-tools.js";
 import { buildNotices } from "../app/web/js/features/notifications/model.js";
 
@@ -20,6 +21,40 @@ test("new registry does not recreate old missing-tool recommendation notificatio
 
 import { TestElement as Element, testDocument } from "./helpers/extension-dom.mjs";
 const all=e=>[e,...e.children.flatMap(all)];
+
+test("external store page numbers retain earlier batches, deduplicate results and survive failed refresh", async () => {
+ const saved=globalThis.document;globalThis.document=testDocument();
+ let panel,selected=null,fail=false,serial=0;const calls=[];
+ const tools=Array.from({length:35},(_,i)=>({id:i+1,tool_id:`tool.${i}`,name:`Tool ${i}`,version:"1.0.0",platform:"windows-x86_64"}));
+ let state={writable:true,platform:"windows-x86_64",guide:"accepted",items:[],store:{items:[]},tasks:[]};
+ globalThis.__externalPager={targetState:()=>({selected}),api:{post:async(path,body)=>{
+  calls.push(body);if(fail)throw Error("catalog unavailable");
+  state={...state,store:{request_id:`request-${++serial}`,query:body.query,before:body.before,items:body.before?tools.slice(19):tools.slice(0,20),next_before:body.before?0:16}};
+  return {data:state};
+ }}};
+ try{
+  const url=new URL("../app/web/js/features/notifications/external-tools.js",import.meta.url);
+  const source=readFileSync(url,"utf8")
+   .replace('import { api } from "../../api/client.js";',"const { api } = globalThis.__externalPager;")
+   .replace('import { targetState } from "../../api/target.js";',"const { targetState } = globalThis.__externalPager;")
+   .replace(/from "(\.[^"]+)"/g,(_,path)=>`from ${JSON.stringify(new URL(path,url).href)}`);
+  const {createExternalToolsPanel:make}=await import("data:text/javascript;base64,"+Buffer.from(source).toString("base64"));
+  panel=make({refresh:async()=>{},openFull:async()=>{},signedIn:()=>true});const body=new Element("div");panel.render(body,state);
+  all(body).find(n=>n.attributes.role==="tab"&&n.textContent==="Tool store").click();await new Promise(r=>setImmediate(r));
+  const pager=()=>body.querySelector(".eb-pagination");
+  const page=n=>pager().querySelectorAll("button").find(b=>b.textContent===String(n));
+  const next=()=>pager().querySelectorAll("button").find(b=>b.textContent==="下一页");
+  assert.equal(pager().querySelector(".eb-page-status").textContent,"已加载 20 条");page(2).click();
+  const search=body.querySelector("input");search.value="draft query";search.oninput();next().click();await new Promise(r=>setImmediate(r));
+  assert.equal(calls.at(-1).before,16);assert.equal(calls.at(-1).query,"","unsubmitted search text cannot change a live cursor query");assert.equal(body.querySelector(".eb-name").textContent,"Tool 20");
+  assert.equal(pager().querySelector(".eb-page-status").textContent,"共 35 条");page(1).click();assert.equal(body.querySelector(".eb-name").textContent,"Tool 0");
+  page(4).click();assert.equal(body.querySelectorAll(".eb-row").length,5);assert(next().disabled);
+  fail=true;all(body).find(n=>n.tagName==="BUTTON"&&n.textContent==="Refresh").click();await new Promise(r=>setImmediate(r));
+  assert(body.textContent.includes("catalog unavailable"));assert.equal(body.querySelector(".eb-name").textContent,"Tool 30");
+  selected={id:"another-device"};panel.render(body,{...state,store:{items:tools.slice(0,11)},items:[]});
+  assert.equal(body.querySelectorAll(".eb-row").length,0,"changing devices clears the old local list");
+ }finally{panel?.destroy();delete globalThis.__externalPager;globalThis.document=saved;}
+});
 test("local and store rows credit submitter usernames; details distinguish copyright holders and license",()=>{
  const saved=globalThis.document;globalThis.document=testDocument();
  try{

@@ -26,7 +26,7 @@ export function externalToolAction(row, installed) {
 export function createExternalToolsPanel({ refresh, openFull, signedIn, openDownloads=()=>{}, isMain=()=>true }) {
   let data={}, tab="local", query="", error="", context="", catalogRequested=false, editor=null, editing=null, mine=false, localQuery="", stateFilter="all";
   const browsers = new Map(), pending = new Set();
-  let catalogRequest=null, catalogHistory=[], catalogBefore=0, catalogOffset=0, catalogEpoch=0, catalogInitial=0;
+  let catalogRequest=null, catalogItems=[], catalogResult=null, catalogNext=0, catalogEpoch=0, catalogQuery="";
   const signatures=new WeakMap(), hosts=new Set();
   const c=i=>(labels[currentLocale()]??labels["en-US"])[i];
   const userDefined=tool=>["manual","local"].includes(tool?.source);
@@ -41,20 +41,27 @@ export function createExternalToolsPanel({ refresh, openFull, signedIn, openDown
     catch(e){if(own===(targetState().selected?.id??"local")){error=e.message;renderAll();}return false;}finally{pending.delete(key);if(own===context)renderAll();}
   }
   async function openBundle(){try{await openFull();}catch(e){error=e.message;renderAll();}}
-  async function fetchCatalog(before=0, direction="reset", pages=0) {
+  async function fetchCatalog(before=0, direction="reset") {
     if(catalogRequest)return false;
-    catalogRequest={before,query,direction,pages,previousId:data.store?.request_id,previousTasks:new Set((data.tasks||[]).map(t=>t.id))};renderAll();
-    if(!await command({action:"catalog",query,before})){catalogRequest=null;renderAll();return false;}
+    const requestQuery=direction==="next"?catalogQuery:query;
+    catalogRequest={before,query:requestQuery,direction,previousId:data.store?.request_id,previousTasks:new Set((data.tasks||[]).map(t=>t.id))};renderAll();
+    if(!await command({action:"catalog",query:requestQuery,before})){catalogRequest=null;renderAll();return false;}
     return true;
   }
   function settleCatalog() {
-    if(!catalogRequest)return;
-    const r=catalogRequest, result=data.store||{};
+    const result=data.store||{}, signature=JSON.stringify([result.request_id,result.query,result.before,result.items,result.next_before]);
+    // Old cached snapshots can lack request metadata. Keep their visible
+    // contents fresh while waiting for the identified catalog task to finish.
+    if(catalogRequest&&!result.request_id&&signature!==catalogResult){catalogItems=result.items||[];catalogNext=result.next_before||0;catalogQuery=result.query||"";catalogResult=signature;}
+    if(!catalogRequest){
+      if(signature!==catalogResult){catalogItems=result.items||[];catalogNext=result.next_before||0;catalogQuery=result.query||"";catalogResult=signature;}
+      return;
+    }
+    const r=catalogRequest;
     if(result.request_id&&result.request_id!==r.previousId&&result.query===r.query&&result.before===r.before){
-      if(r.direction==="next"){catalogHistory.push({before:catalogBefore,offset:catalogOffset});catalogOffset+=r.pages;}
-      else if(r.direction==="previous"){const previous=catalogHistory.pop();catalogOffset=previous?.offset||0;}
-      else {catalogHistory=[];catalogOffset=0;}
-      catalogBefore=r.before;catalogInitial=r.direction==="previous"?"last":0;catalogEpoch++;catalogRequest=null;
+      if(r.direction==="next")catalogItems=[...new Map([...catalogItems,...(result.items||[])].map(item=>[item.id,item])).values()];
+      else {catalogItems=result.items||[];catalogEpoch++;}
+      catalogNext=result.next_before||0;catalogQuery=r.query;catalogResult=signature;catalogRequest=null;
     }else{
       const failed=[...(data.tasks||[])].reverse().find(t=>!r.previousTasks.has(t.id)&&t.action==="catalog"&&t.request?.before===r.before&&t.request?.query===r.query&&["failed","cancelled","interrupted"].includes(t.state));
       if(failed){error=failed.error||failed.state;catalogRequest=null;}
@@ -101,7 +108,7 @@ export function createExternalToolsPanel({ refresh, openFull, signedIn, openDown
   }
   function render(body,snapshot={},updatesOnly=false){
     if(!body)return;hosts.add(body);body.dataset.cliUpdates=String(updatesOnly);data=snapshot;
-    const next=targetState().selected?.id??"local";if(context!==next){context=next;catalogRequested=false;catalogRequest=null;catalogHistory=[];catalogBefore=catalogOffset=catalogEpoch=0;tab="local";query=error="";mine=false;localQuery="";stateFilter="all";for(const browser of browsers.values())browser.reset();closeEditor();}
+    const next=targetState().selected?.id??"local";if(context!==next){context=next;catalogRequested=false;catalogRequest=null;catalogItems=[];catalogResult=null;catalogNext=catalogEpoch=0;tab="local";catalogQuery=query=error="";mine=false;localQuery="";stateFilter="all";for(const browser of browsers.values())browser.reset();closeEditor();}
     settleCatalog();
     const sig=JSON.stringify([!!catalogRequest,catalogEpoch,data,currentLocale(),tab,query,localQuery,stateFilter,error,mine,next,writable(),signedIn(),updatesOnly,isMain()]);if(signatures.get(body)===sig)return;signatures.set(body,sig);const focusedSearch=body.contains(document.activeElement)&&document.activeElement?.type==="search",selection=focusedSearch?[document.activeElement.selectionStart,document.activeElement.selectionEnd]:null;browsers.get(body)?.rememberFocus();body.replaceChildren();
     if(!data.platform){body.append(n("p","…"));return;}
@@ -130,20 +137,19 @@ export function createExternalToolsPanel({ refresh, openFull, signedIn, openDown
         if(custom&&!t.managed_root)actions.push(button(c(48),()=>{if(window.confirm(c(49)))void command({action:"import",id:t.id,name:t.name});},disabled||!t.present));
         const toggle=extensionToggle(button(c(t.enabled?7:6),()=>command({action:"enable",id:t.id,enabled:!t.enabled}),disabled||(!t.enabled&&!t.present)),t.enabled,t.name);
         return {key:`local:${t.id}`,title:t.name,byline:submitter(t),description:t.description||c(56),meta:[t.version,t.license],toggle,actions,badge:{text:job?taskLabel(job):!t.present?c(39):"",tone:!t.present?"error":""},detail:()=>toolDetail(t)};
-      }):(data.store?.items||[]).filter(t=>stateFilter==="all"||(stateFilter==="installed"?!externalToolAction(t,data.items||[]):stateFilter==="updates"?externalToolAction(t,data.items||[])==="update":externalToolAction(t,data.items||[])==="install")).map(t=>{
+      }):catalogItems.filter(t=>stateFilter==="all"||(stateFilter==="installed"?!externalToolAction(t,data.items||[]):stateFilter==="updates"?externalToolAction(t,data.items||[])==="update":externalToolAction(t,data.items||[])==="install")).map(t=>{
         const action=externalToolAction(t,data.items||[]),job=taskFor(t);
         const install=()=>button(c(android?29:action==="update"?12:11),()=>android?openBundle():command({action:"install",store_id:t.id,name:t.name}),disabled||t.platform!==data.platform||!!job);
         const primary=action?install():null;
         return {key:`store:${t.id}`,title:t.name,byline:submitter(t),description:t.description||c(56),meta:[t.version,t.platform],badge:{text:job?taskLabel(job):t.platform!==data.platform?c(42):!action?browserText("installed","已安装"):""},primary,detail:()=>toolDetail(t,action?install:null)};
       });
       browser.setItems(rows,{empty:c(16),busy:!!catalogRequest,
-        pageKey:JSON.stringify([tab,localQuery,stateFilter,tab==="store"?catalogEpoch:0]),initialPage:catalogInitial,pageOffset:tab==="store"?catalogOffset:0,
-        onNext:tab==="store"&&data.store?.next_before?pages=>{void fetchCatalog(data.store.next_before,"next",pages);}:null,
-        onPrevious:tab==="store"&&catalogHistory.length?()=>{void fetchCatalog(catalogHistory.at(-1).before,"previous");}:null});
+        pageKey:JSON.stringify([tab,localQuery,stateFilter,tab==="store"?catalogEpoch:0]),
+        onNext:tab==="store"&&catalogNext?()=>{void fetchCatalog(catalogNext,"next");}:null});
     };
     search.oninput=()=>{if(tab==="local"){localQuery=search.value;renderList();}else query=search.value;};
     search.onkeydown=e=>{if(tab==="store"&&e.key==="Enter"){e.preventDefault();void fetchCatalog();}};
-    filter.onchange=()=>{stateFilter=filter.value;if(tab==="store"&&catalogHistory.length)void fetchCatalog();else renderList();};
+    filter.onchange=()=>{stateFilter=filter.value;renderList();};
     toolbar.append(search,filter);if(tab==="store")toolbar.append(button(c(3),()=>fetchCatalog(),disabled));
     toolbar.append(button(c(4),()=>tab==="store"?fetchCatalog():refresh(),disabled),creator);
     body.append(toolbar);

@@ -6,6 +6,39 @@ import { TestElement as Node, descendants, testDocument } from "./helpers/extens
 const flush = () => new Promise(r => setImmediate(r));
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
 
+test("Skill and Agent tool stores use the shared numbered pager across cursor downloads", async () => {
+ const previous=globalThis.document;globalThis.document=testDocument();
+ const allItems=Array.from({length:35},(_,i)=>({id:i+1,owner:1,slug:`resource-${i}`,name:`Resource ${i}`,version:"1.0.0"}));
+ const url=new URL("../app/web/js/features/settings/single-resource-store.js",import.meta.url);
+ const calls=[];globalThis.__singlePager={api:{get:async()=>({data:{}}),post:async(path,body)=>{
+  calls.push(body);assert.equal(body.action,"catalog");return {data:{items:body.before?allItems.slice(19):allItems.slice(0,20),next_before:body.before?0:16}};
+ }},targetState:()=>({selected:null}),subscribeTarget:()=>()=>{}};
+ const source=readFileSync(url,"utf8")
+  .replace('import { api } from "../../api/client.js";',"const { api } = globalThis.__singlePager;")
+  .replace('import { targetState, subscribeTarget } from "../../api/target.js";',"const { targetState, subscribeTarget } = globalThis.__singlePager;")
+  .replace(/from "(\.[^"]+)"/g,(_,path)=>`from ${JSON.stringify(new URL(path,url).href)}`);
+ try{
+  const {createSingleResourceStore}=await import("data:text/javascript;base64,"+Buffer.from(source).toString("base64"));
+  for(const kind of ["skills","tools"]){
+   const store=createSingleResourceStore(kind,()=>{});
+   try{
+    store.activate(true);await flush();await flush();
+    const pager=()=>store.root.querySelector(".eb-pagination");
+    const page=n=>pager().querySelectorAll("button").find(b=>b.textContent===String(n));
+    assert.equal(pager().querySelector(".eb-page-status").textContent,"已加载 20 条");page(2).click();
+    const search=store.root.querySelector("input");search.value="draft query";search.dispatchEvent(new Event("input"));
+    pager().querySelectorAll("button").find(b=>b.textContent==="下一页").click();await flush();await flush();
+    assert.equal(calls.at(-1).single_kind,kind);assert.equal(calls.at(-1).before,16);assert.equal(calls.at(-1).query,"","a pending search draft must not be combined with the old cursor");
+    assert.equal(store.root.querySelector(".eb-name").textContent,"Resource 20");
+    assert.equal(pager().querySelector(".eb-page-status").textContent,"共 35 条");
+    page(1).click();assert.equal(store.root.querySelector(".eb-name").textContent,"Resource 0");
+    const input=pager().querySelector("input");input.value="4";pager().querySelector("form").dispatchEvent(new Event("submit",{cancelable:true}));
+    assert.equal(store.root.querySelector(".eb-name").textContent,"Resource 30");assert.equal(store.root.querySelectorAll(".eb-row").length,5);
+   }finally{store.destroy();}
+  }
+ }finally{delete globalThis.__singlePager;globalThis.document=previous;}
+});
+
 test("single-resource sharing retains drafts on connection notifications and cancels stale device work", async t => {
   const original = { document: globalThis.document, window: globalThis.window, confirm: globalThis.confirm };
   const body = new Node("body"), listeners = new Set(); let selected = null;
