@@ -46,6 +46,7 @@ def run():
         first=call('PUT','/extensions/knowledge/local-reference',dict(content=json.dumps(custom),files=files),revision='new')
         sdk=call('POST','/application/call',dict(method='extensions.list',params=dict(path=dict(kind='knowledge'))));assert sdk['status']==200 and len(sdk['data']['items'])==1
         assert first['valid']and first['enabled']and first['inject_prompt']and first['directory']=='@knowledge/local-reference'
+        assert not call('GET','/ecosystem'),'custom authoring does not leave an installation receipt'
         bundle=call('GET','/extensions/knowledge/local-reference/bundle');assert len(bundle['files'])==2 and bundle['bundle_revision']
         (home/'knowledge/local-reference/topic.md').write_text('changed outside app')
         call('PUT','/extensions/knowledge/local-reference',dict(content=json.dumps(custom),files=files,bundle_revision=bundle['bundle_revision']),revision=first['revision'],status=412)

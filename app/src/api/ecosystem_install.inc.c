@@ -189,7 +189,7 @@ static bool EcoLocalApply(const xvalue* entry,bool uninstall,char error[1024],xv
         for(size_t i=0;ok&&i<xrtValueCount(files);i++){const xvalue* f=xrtValueArrayGet(files,i);if(xrtValueType(xrtValueObjectGet(f,XRT_STR_LITERAL("new")))==XVALUE_NULL)continue;
             if(!strcmp(MdoPackageText(f,"path",255),"config/plugins.json"))continue;
             xvalue* item=xrtValueObject();ok=item&&xrtValueObjectSet(item,XRT_STR_LITERAL("path"),xrtValueObjectGet(f,XRT_STR_LITERAL("path")))&&xrtValueObjectSet(item,XRT_STR_LITERAL("sha256"),xrtValueObjectGet(f,XRT_STR_LITERAL("sha256")))&&xrtValueArrayAppend(inventory,item);xrtValueRelease(item);}
-        if(ok)ok=xrtValueObjectSet(record,XRT_STR_LITERAL("files"),inventory)&&xrtValueObjectSet(next,xrtStrView(key),record);}
+        if(ok)ok=xrtValueObjectSet(record,XRT_STR_LITERAL("files"),inventory)&&(Authoring||xrtValueObjectSet(next,xrtStrView(key),record));}
     xvalue* Preview=xrtValueObject(),*Changes=xrtValueArray();char PlanHash[65]={0};
     if(ok)ok=Preview&&Changes;
     for(size_t i=0;ok&&i<xrtValueCount(files);i++){
