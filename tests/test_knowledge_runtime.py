@@ -19,7 +19,7 @@ from knowledge_fixture import metadata,file,package
 
 def run():
     p=argparse.ArgumentParser();p.add_argument('--host',type=Path,default=ROOT/'.build/host/windows-server-glibc/xs.exe');p.add_argument('--packed',action='store_true');p.add_argument('--ui',action='store_true');args=p.parse_args()
-    base=Path(tempfile.mkdtemp(prefix='knowledge-',dir=ROOT/'.build'));app=base/'app';home=base/'home';home.mkdir();shutil.copytree(ROOT/'app',app)
+    base=Path(tempfile.mkdtemp(prefix='knowledge-',dir=ROOT/'.build' if os.name=='nt' else None));app=base/'app';home=base/'home';home.mkdir();app.mkdir() if args.packed else shutil.copytree(ROOT/'app',app)
     if args.packed:shutil.copy2(args.host,app/'mdo.exe');host=app/'mdo.exe'
     else:host=args.host.resolve()
     port=free_port();config=app/'xs.json';config.write_text(json.dumps(dict(services=[dict(enabled=True,name='knowledge',ip='127.0.0.1',port=port,**{'class':'http'},host_default=dict(enabled=True,name='mdo',path='web',devlang='c',devfile='generated/mdo_unity.c'))])))
@@ -41,6 +41,8 @@ def run():
                 if request(port,'GET','/api/v1/account')[0]==200:break
             except OSError:pass
             time.sleep(.1)
+        if args.packed:
+            code,_,asset=request(port,'GET','/js/features/settings/store-formats.js');assert code==200 and b'"plugins", "knowledge"].includes' in asset,'packed knowledge publisher is stale'
         assert call('GET','/extensions/knowledge')['items']==[]
         custom=metadata();files=[file('index.md','# Index\n[Topic](topic.md)'),file('topic.md','first version')]
         first=call('PUT','/extensions/knowledge/local-reference',dict(content=json.dumps(custom),files=files),revision='new')

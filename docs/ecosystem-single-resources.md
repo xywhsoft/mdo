@@ -1,4 +1,7 @@
-# Skill、Agent 工具、编辑器命令与 MCP 的独立分发
+# 知识库与其他扩展的独立分发
+
+知识库已作为第六个落地体系接入，使用 `single_kind=knowledge`；目录、提示词注入、创作审核及 SDK 见 [知识库](knowledge-libraries.md)。
+
 
 MCP 服务模板已接入同一链路，使用 `single_kind=mcp`。模板安装与设备连接分离，详见 [MCP 服务模板](mcp-service-templates.md)。下文原有三类源码资源的安装规则继续适用。
 

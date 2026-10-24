@@ -56,7 +56,7 @@ def run():
             time.sleep(.1)
         # Author a real local folder, then export only that library through the
         # same SDK-backed publication route used by the settings page.
-        recipe=knowledge_package();resource=recipe['resources'][0]
+        recipe=knowledge_package();recipe['format']='mdo.extension.v2';recipe['manifest']['min_build_id']=30000126;resource=recipe['resources'][0];resource['files'].append(file('large.md','x'*300000))
         client('PUT','/extensions/knowledge/xrt-reference',dict(content=resource['content'],files=resource['files']),revision='new')
         exported=store('export',references=[dict(kind='knowledge',id='xrt-reference')]);recipe['resources']=exported['resources']
         assert '{$path}' in recipe['resources'][0]['content'] and str(home) not in json.dumps(recipe)
@@ -79,7 +79,7 @@ def run():
         client('POST','/ecosystem',dict(action='export',single_kind='knowledge',references=[dict(kind='knowledge',id='xrt-reference')]),status=403)
         disabled=client('POST','/extensions/knowledge/xrt-reference/enabled',dict(enabled=False),revision=installed['revision']);assert not disabled['enabled']
         # A new pending version leaves the old public version intact.
-        update=copy.deepcopy(recipe);update['manifest']['version']='1.1.0';update['resources'][0]['files'][1]=file('reference/runtime.md','Updated reference sentinel')
+        update=copy.deepcopy(recipe);update['manifest']['version']='1.1.0';update['resources'][0]['files']=[file('reference/runtime.md','Updated reference sentinel')if f['path']=='reference/runtime.md'else f for f in update['resources'][0]['files']]
         pending=store('submit',package=update,publish=True,review_notes='Updated docs, original reference source and redistribution rights unchanged.');assert store('latest',id=identity)['id']==identity
         web('POST','/admin/api/mdo/ecosystem',dict(action='approve',id=pending['id'],revision=1,reason='Documentation update inspected'),auth=csrf,cookie=cookie)
         assert store('latest',id=identity)['id']==pending['id']

@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "version_name": "0.6.0",
+  "app_code_commit": "e0f3ffce4a36475a5290e8196c57eebadba06b54",
+  "site_commit": "ed3ae86e59d4d3c3c133707ed4f3c600718783ed",
+  "artifacts": {
+    "mdo.exe": {
+      "bytes": 6301063,
+      "sha256": "2ffb7fee32565571ecd085e23f6132fbbae0fb20e308ab7f500c848d81cfda18"
+    },
+    "mdo-server.exe": {
+      "bytes": 6042820,
+      "sha256": "8fdcf19e18fa8bd62806872a5fae5a8b219983fffa898da38b4dd47d396e5f3e"
+    },
+    "mdo-arm64-v8a.apk": {
+      "bytes": 5842241,
+      "sha256": "6a24d1c5592866523cdd80e04f245052b7aac5c9f9693fd814c7a952a01f31e2",
+      "certificate_sha256": "94b1947b60f3ce0852b19d9c37a47cc4a084fe9d601692c6a1f6b204c2174e84",
+      "app_pack_sha256": "e9ae43dcbe973bcea2357ccadc71fac24ea1f561c74f9a7c29cfe0f5d7ac0d8a",
+      "runtime_tools": []
+    },
+    "mdo-full-arm64-v8a.apk": {
+      "bytes": 149805215,
+      "sha256": "85941a6d38bafdd70bf5676e7cdc4f5e396cabca68e442b340d1f1a94d198765",
+      "certificate_sha256": "94b1947b60f3ce0852b19d9c37a47cc4a084fe9d601692c6a1f6b204c2174e84",
+      "app_pack_sha256": "e9ae43dcbe973bcea2357ccadc71fac24ea1f561c74f9a7c29cfe0f5d7ac0d8a",
+      "runtime_tools": [
+        "7zip",
+        "aria2",
+        "busybox",
+        "curl",
+        "ffmpeg",
+        "git",
+        "imagemagick",
+        "jq",
+        "openssh",
+        "poppler",
+        "python",
+        "ripgrep",
+        "sqlite"
+      ]
+    },
+    "linux/linux-x86_64-glibc-server/mdo-server": {
+      "bytes": 5804404,
+      "sha256": "7d3c56338873d28724aeccc5be7fcc8a381b9e56841c258979c04c2bc510e735"
+    }
+  },
+  "production": {
+    "service": "active",
+    "files_verified": 12,
+    "binary_config_unchanged": true,
+    "site_commit": "ed3ae86e59d4d3c3c133707ed4f3c600718783ed"
+  },
+  "client_auto_update_published": false,
+  "android_device_tested": false,
+  "tests": {
+    "native_package_vectors": 44,
+    "node_behavior": 14,
+    "frontend_contracts": 20,
+    "sdk_contracts": 6,
+    "reachable_modules": 230,
+    "real_native_and_packed_windows_linux": true,
+    "real_client_and_site_marketplace": true,
+    "website_private_submission_ui": true,
+    "mobile_css_width": 390,
+    "mobile_dpr": 3
+  },
+  "private_remote_backup": "/home/xs/mdo-knowledge-ecosystem-20261025",
+  "evidence_directory": ".build\\knowledge-ecosystem-20261025"
+}
