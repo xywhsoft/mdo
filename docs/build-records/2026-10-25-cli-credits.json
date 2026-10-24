@@ -1,0 +1,49 @@
+{
+  "app_commit": "124e09c956e218df3cc1c1b8a3500fc0c8ad81f8",
+  "preview": true,
+  "auto_update_published": false,
+  "android_device_tested": false,
+  "artifacts": [
+    {
+      "file": "mdo.exe",
+      "size": 6236307,
+      "sha256": "2fb75fdb0d6dabab9b549cd8840b28990cf960c18bf7264fde21ea8a60c8169d"
+    },
+    {
+      "file": "mdo-server.exe",
+      "size": 5978067,
+      "sha256": "fbbb0bb6b5a316adfa4d8536080404ecebc70c6a398cb0fdfd1723beb7fcfaa0"
+    },
+    {
+      "file": "mdo-arm64-v8a.apk",
+      "size": 5776705,
+      "sha256": "d9737f683f3c59872474737643db8161679de820aca23f2d1089f39bfda0e368"
+    },
+    {
+      "file": "mdo-full-arm64-v8a.apk",
+      "size": 150116761,
+      "sha256": "27b255155e9831e5241e9d96d50a11c66163738793af478160ee158aec5187a9"
+    }
+  ],
+  "site_commit": "066713464c9f3c5ca1f3dcc57afc54fef502a3c4",
+  "version": "0.6.0",
+  "site_deployed": false,
+  "verification": [
+    "10 extension-browser/external-tools frontend tests",
+    "20 frontend contract tests",
+    "220 frontend modules parsed",
+    "optional tool archive generation and copyright validation",
+    "native copyright roundtrip, omitted-field preservation, tamper rejection and exact-version backfill",
+    "private platform upload/review/copyright validation",
+    "private mdo-platform submit/review/download/install/execute roundtrip",
+    "legacy v1 schema migration and idempotent restart",
+    "browser local and store credit display, 390px detail view",
+    "Windows gui/server packed SDK",
+    "Android APK structure/alignment/formal signing certificate"
+  ],
+  "integration_environment": "Pinned client SDK; private website fixtures use the existing SMTP compile gate with mail already disabled, to isolate unrelated old-runtime header incompatibility.",
+  "screenshots": [
+    ".build\\cli-credits-20261025\\screenshots\\local-credits.jpg",
+    ".build\\cli-credits-20261025\\screenshots\\store-credits-narrow.jpg"
+  ]
+}
