@@ -54,7 +54,9 @@ done:
 }
 static bool EcoDownloadSource(xvalue* Data,MdoAccountLease* Lease,xcancel* Cancel,uint16* Status,char* Error,size_t Capacity)
 {
-    if(!xrtValueObjectGet(Data,XRT_STR_LITERAL("package_blob")))return true;int64 Size=0;cstr Hash=MdoPackageText(Data,"sha256",64);
+    if(!xrtValueObjectGet(Data,XRT_STR_LITERAL("package_blob")))return true;
+    int64 Size=0;
+    cstr Hash=MdoPackageText(Data,"sha256",64);
     if(!Hash||strlen(Hash)!=64||!MdoPackageNumber(Data,"package_bytes",&Size)||Size<1||Size>MDO_PACKAGE_LIMIT)return false;
     char* Text=xrtMalloc((size_t)Size);bool Ok=Text!=NULL;int64 Offset=0;
     while(Ok&&Offset<Size){char Path[240];snprintf(Path,sizeof(Path),"/api/v1/mdo/ecosystem/blob?hash=%s&offset=%lld",Hash,(long long)Offset);xvalue* R=EcoService(Path,"GET",NULL,Lease,Cancel,Status,Error,Capacity);int64 End=0,Total=0;size_t N=0;cstr Enc=MdoPackageText(R,"base64",90000);void* Bytes=Enc?xrtBase64DecodeNew(Enc,strlen(Enc),&N,NULL):NULL;

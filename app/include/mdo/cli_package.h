@@ -25,7 +25,8 @@ static inline bool MdoCliCommandName(cstr S)
 }
 static inline bool MdoCliCommandsValid(const xvalue* Commands,const xvalue* Files)
 {
-    if(!Commands)return true;if(xrtValueType(Commands)!=XVALUE_ARRAY||xrtValueCount(Commands)>64)return false;
+    if(!Commands)return true;
+    if(xrtValueType(Commands)!=XVALUE_ARRAY||xrtValueCount(Commands)>64)return false;
     for(size_t I=0;I<xrtValueCount(Commands);I++){
         const xvalue* C=xrtValueArrayGet(Commands,I);cstr Name=MdoPackageText(C,"name",64),Entry=MdoPackageText(C,"entry",220);
         if(!MdoCliCommandName(Name)||!Entry||!MdoPackagePath(Entry))return false;

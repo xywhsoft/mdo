@@ -64,7 +64,8 @@ static bool WbSave(const xvalue* S){
 static xvalue* WbEmpty(void){
     xvalue* V=xrtValueObject();SdkPutUInt(V,"schema_version",1);SdkPutUInt(V,"revision",0);
     const cstr Names[]={"types","panels","resources","layouts","browsers"};
-    for(size_t i=0;i<5;i++)xrtValueObjectSetNew(V,xrtStrView(Names[i]),xrtValueArray());return V;
+    for(size_t i=0;i<5;i++)xrtValueObjectSetNew(V,xrtStrView(Names[i]),xrtValueArray());
+    return V;
 }
 bool MdoApplicationWorkbenchInit(void){
     Workbench.Lock=xrtMutexCreate();Workbench.State=WbEmpty();Workbench.Runtime=xrtValueObject();Workbench.Ready=Workbench.Lock&&Workbench.State&&Workbench.Runtime;
@@ -207,7 +208,9 @@ bool MdoApplicationWorkbenchCall(const mdo_sdk_context_v1* C,cstr Method,const x
         if(!Old&&xrtValueCount(SdkGet(Next,"resources"))>=128){WbFail(E,"resource_limit","Resource registry is full",429);goto done;}
         char NewId[64];if(!Id){if(!SdkRandomId("resource-",NewId))goto done;Id=NewId;}
         xvalue* V=xrtValueClone(P);SdkPut(V,"id",Id);SdkPut(V,"owner",C->ExtensionId);xrtValueObjectSetNew(V,XRT_STR_LITERAL("context"),WbContext(C));WbBump(V);
-        if(Old)WbRemove(Next,"resources",Id);xrtValueArrayAppendNew(WbArray(Next,"resources"),V);*R=xrtValueClone(V);
+        if(Old)WbRemove(Next,"resources",Id);
+        xrtValueArrayAppendNew(WbArray(Next,"resources"),V);
+        *R=xrtValueClone(V);
     }else{
         cstr Kind=!strcmp(Method,"panel.unregister")?"types":!strcmp(Method,"resource.remove")?"resources":!strncmp(Method,"browser.",8)?"browsers":"panels";
         xvalue* V=WbFind(Next,Kind,Id);

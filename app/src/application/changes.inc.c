@@ -9,7 +9,8 @@ static void SdkGitChomp(char* Text){size_t N=Text?strlen(Text):0;if(N&&Text[N-1]
 static bool SdkGitRunWithIndex(const mdo_sdk_context_v1* C,cstr Root,const cstr* Args,size_t Count,xbytesview Input,size_t Limit,xprocessoutputproc Output,void* User,xprocessresult* R,mdo_error_v1* E,cstr PrivateIndex){
     const cstr Prefix[]={"--literal-pathspecs","-c","core.quotepath=false","-c","core.fsmonitor=false","-c","color.ui=false","-c","core.pager=cat","-c","gc.auto=0","-c","maintenance.auto=false"};
     cstr Argv[64];size_t At=0;if(Count+sizeof(Prefix)/sizeof(*Prefix)>64)return SdkGitFail(E,"git_arguments_invalid","Too many Git arguments",400);
-    for(size_t i=0;i<sizeof(Prefix)/sizeof(*Prefix);i++)Argv[At++]=Prefix[i];for(size_t i=0;i<Count;i++)Argv[At++]=Args[i];
+    for(size_t i=0;i<sizeof(Prefix)/sizeof(*Prefix);i++)Argv[At++]=Prefix[i];
+    for(size_t i=0;i<Count;i++)Argv[At++]=Args[i];
     const xprocessenv Env[]={{"GIT_OPTIONAL_LOCKS","0"},{"GIT_TERMINAL_PROMPT","0"},{"LC_ALL","C"},{"GIT_DIR",NULL},{"GIT_WORK_TREE",NULL},{"GIT_INDEX_FILE",PrivateIndex},{"GIT_COMMON_DIR",NULL},{"GIT_OBJECT_DIRECTORY",NULL},{"GIT_ALTERNATE_OBJECT_DIRECTORIES",NULL},{"GIT_CONFIG_COUNT",NULL},{"GIT_CONFIG_PARAMETERS",NULL}};
     xprocessconfig Config;xrtProcessConfigInit(&Config);Config.Program="git";Config.Args=Argv;Config.ArgCount=At;Config.WorkDir=Root;Config.HideWindow=true;Config.Env=Env;Config.EnvCount=sizeof(Env)/sizeof(*Env);
     Config.Stdin.Mode=Input.Data?XPROCESS_IO_PIPE:XPROCESS_IO_NULL;Config.Stdout.Mode=XPROCESS_IO_PIPE;Config.Stderr.Mode=XPROCESS_IO_PIPE;
@@ -42,7 +43,9 @@ static char* SdkGitText(const mdo_sdk_context_v1* C,cstr Root,const cstr* Args,s
 typedef struct SdkGitPrivateIndex {char Relative[128];char* Path;xroot Directory;} SdkGitPrivateIndex;
 static void SdkGitPrivateIndexUnit(SdkGitPrivateIndex* I){
     if(I->Directory){(void)xrtRootRemove(I->Directory,"index.lock");(void)xrtRootRemove(I->Directory,"index");xrtRootClose(I->Directory);}
-    if(I->Relative[0])(void)MdoHomeRemoveEmptyDirectory(I->Relative);xrtFree(I->Path);memset(I,0,sizeof(*I));
+    if(I->Relative[0])(void)MdoHomeRemoveEmptyDirectory(I->Relative);
+    xrtFree(I->Path);
+    memset(I,0,sizeof(*I));
 }
 static bool SdkGitPrivateIndexInit(const mdo_sdk_context_v1* C,cstr Root,cstr Head,SdkGitPrivateIndex* I,mdo_error_v1* E){
     if(!Head||!Head[0])return SdkGitFail(E,"git_head_missing","This comparison needs a valid HEAD commit",409);
@@ -80,7 +83,9 @@ static bool SdkGitPath(cstr Path){
     return xrtUtf8Valid(xrtStrView(Path),NULL);
 }
 static cstr SdkGitToken(const unsigned char* Bytes,size_t Size,size_t* At){
-    if(*At>=Size)return NULL;const unsigned char* End=memchr(Bytes+*At,0,Size-*At);if(!End)return NULL;
+    if(*At>=Size)return NULL;
+    const unsigned char* End=memchr(Bytes+*At,0,Size-*At);
+    if(!End)return NULL;
     cstr Token=(cstr)(Bytes+*At);*At=(size_t)(End-Bytes)+1;return Token;
 }
 static xvalue* SdkGitFind(xvalue* Files,cstr Path){
@@ -162,13 +167,16 @@ static bool SdkGitRangeInit(const mdo_sdk_context_v1* C,const xvalue* P,SdkGitRa
             xrtValueRelease(Baseline);return SdkGitFail(E,"git_baseline_context_changed","The captured baseline belongs to the session's original repository and workspace",409);}
         G->Base=xrtStrDup(Tree);SdkUInt(SdkGet(Baseline,"captured_at_us"),&G->CapturedAt);xrtValueRelease(Baseline);G->PrivateRepo=SdkGitSnapshotRepo(C->ProjectId);
         unsigned char Random[16];char Hex[33];if(!G->Base||!G->PrivateRepo||!xrtSecureRandom(Random,sizeof(Random)))return SdkNativeFailure(E,"git_snapshot");
-        for(size_t i=0;i<16;i++)snprintf(Hex+i*2,3,"%02x",Random[i]);char Ref[100];snprintf(Ref,sizeof(Ref),"refs/mdo-inspection/%s",Hex);
+        for(size_t i=0;i<16;i++)snprintf(Hex+i*2,3,"%02x",Random[i]);
+        char Ref[100];
+        snprintf(Ref,sizeof(Ref),"refs/mdo-inspection/%s",Hex);
         G->Current=SdkGitSnapshot(C,G->Root,G->PrivateRepo,Ref,E);
         const cstr Cleanup[]={"update-ref","-d",Ref};xprocessresult Result={0};mdo_error_v1 Ignored={0};(void)SdkGitRun(C,G->PrivateRepo,Cleanup,3,(xbytesview){0},1024,NULL,NULL,&Result,&Ignored);xrtProcessResultUnit(&Result);
         return G->Current!=NULL;
     }
     if(!strcmp(G->Scope,"branch")){G->Base=SdkGitResolve(C,G->Root,SdkField(P,"base"),E);if(!G->Base)return false;if(G->Unborn)return SdkGitFail(E,"git_head_missing","Branch comparison needs an initial commit",409);}
-    else if(G->Head)G->Base=xrtStrDup(G->Head);return true;
+    else if(G->Head)G->Base=xrtStrDup(G->Head);
+    return true;
 }
 static size_t SdkGitDiffArgs(const SdkGitRange* G,const char* Format,cstr* Args){
     size_t N=0;Args[N++]="diff";Args[N++]="--no-ext-diff";Args[N++]="--no-textconv";Args[N++]="--no-color";Args[N++]="--find-renames";Args[N++]=Format;

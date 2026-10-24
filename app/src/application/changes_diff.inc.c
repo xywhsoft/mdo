@@ -26,7 +26,8 @@ static void SdkGitDiffLine(SdkGitDiffPage* Page){
         if(xrtValueCount(Page->Rows)>=Page->Limit||Page->PageBytes+Page->Used>GIT_DIFF_PAGE_BYTES)Page->Full=true;
         else {
             xvalue* Row=xrtValueObject();SdkPut(Row,"kind",Kind);SdkPutUInt(Row,"offset",Page->Total);
-            if(Old)SdkPutUInt(Row,"old_line",Old);if(New)SdkPutUInt(Row,"new_line",New);
+            if(Old)SdkPutUInt(Row,"old_line",Old);
+            if(New)SdkPutUInt(Row,"new_line",New);
             if(xrtUtf8Valid(xrtStrViewN(Text,Page->Used),NULL))xrtValueObjectSetNew(Row,XRT_STR_LITERAL("text"),xrtValueString(xrtStrViewN(Text,Page->Used)));
             else {char* Encoded=SdkBase64(Text,Page->Used);SdkPut(Row,"base64",Encoded);xrtFree(Encoded);}
             if(Page->LineBytes>Page->Used){xrtValueObjectSetNew(Row,XRT_STR_LITERAL("truncated"),xrtValueBool(true));SdkPutUInt(Row,"bytes",Page->LineBytes);}

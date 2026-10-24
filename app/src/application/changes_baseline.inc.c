@@ -20,7 +20,9 @@ static bool SdkGitAppend(SdkGitBuffer* B,const void* Data,size_t Bytes){
     if(Bytes>GIT_SNAPSHOT_BUFFER-B->Size)return false;
     size_t Need=B->Size+Bytes;if(Need>B->Capacity){size_t N=B->Capacity?B->Capacity:8192;while(N<Need&&N<GIT_SNAPSHOT_BUFFER)N=N>GIT_SNAPSHOT_BUFFER/2?GIT_SNAPSHOT_BUFFER:N*2;
         char* P=xrtRealloc(B->Data,N);if(!P)return false;B->Data=P;B->Capacity=N;}
-    if(Bytes)memcpy(B->Data+B->Size,Data,Bytes);B->Size=Need;return true;
+    if(Bytes)memcpy(B->Data+B->Size,Data,Bytes);
+    B->Size=Need;
+    return true;
 }
 static bool SdkGitAppendText(SdkGitBuffer* B,cstr S){return SdkGitAppend(B,S,strlen(S));}
 static bool SdkGitQuoted(SdkGitBuffer* B,cstr Path){
@@ -111,9 +113,12 @@ static char* SdkGitSnapshot(const mdo_sdk_context_v1* C,cstr Root,cstr Repo,cstr
     if(!SdkGitSnapshotPaths(C,Root,&AfterNames,E))goto done;
     if(Names.StdoutSize!=AfterNames.StdoutSize||(Names.StdoutSize&&memcmp(Names.Stdout,AfterNames.Stdout,Names.StdoutSize)))goto changed;
     for(size_t i=0;i<Count;i++){
-        if(SdkCancelled(C))goto cancelled;xfileinfo After={0};bool Exists=xrtRootStat(Anchor,Paths[i],false,&After);
+        if(SdkCancelled(C))goto cancelled;
+        xfileinfo After={0};
+        bool Exists=xrtRootStat(Anchor,Paths[i],false,&After);
         if(!Exists&&xrtGetError()&&xrtErrorKind(xrtGetError())==XERR_NOT_FOUND){xrtClearError();if(Identities[i].Type==XFILE_TYPE_NONE)continue;goto changed;}
-        if(!Exists)goto native;if(!SdkGitStable(&Identities[i],&After))goto changed;
+        if(!Exists)goto native;
+        if(!SdkGitStable(&Identities[i],&After))goto changed;
         cstr Original=SdkField(Links,Paths[i]);if(Original){char* Commit=SdkGitSnapshotLink(C,Root,Paths[i],E);bool Same=Commit&&!strcmp(Original,Commit);xrtFree(Commit);if(!Same)goto changed;}
     }
     char Header[768];snprintf(Header,sizeof(Header),"reset %s\n\ncommit %s\ncommitter mdo <baseline@localhost> %lld +0000\ndata 0\n\ndeleteall\n",Ref,Ref,(long long)(MdoUtcUs()/1000000));
@@ -128,8 +133,18 @@ unsupported:SdkGitFail(E,"git_snapshot_entry_unsupported","Workspace contains an
 limit:SdkGitFail(E,"git_snapshot_limit","Baseline exceeds 20,000 entries, 16 MiB per file or 64 MiB of content",413);goto done;
 native:if(!E->Code[0])SdkNativeFailure(E,"git_snapshot");
 done:
-    if(Anchor)xrtRootClose(Anchor);for(size_t i=0;i<Count;i++)xrtFree(Paths?Paths[i]:NULL);xrtFree(Paths);xrtFree(Identities);xrtValueRelease(Seen);xrtValueRelease(Links);
-    if(Blobs.Data)xrtSecureZero(Blobs.Data,Blobs.Size);xrtFree(Blobs.Data);xrtFree(Files.Data);xrtProcessResultUnit(&Names);xrtProcessResultUnit(&AfterNames);xrtProcessResultUnit(&Result);
+    if(Anchor)xrtRootClose(Anchor);
+    for(size_t i=0;i<Count;i++)xrtFree(Paths?Paths[i]:NULL);
+    xrtFree(Paths);
+    xrtFree(Identities);
+    xrtValueRelease(Seen);
+    xrtValueRelease(Links);
+    if(Blobs.Data)xrtSecureZero(Blobs.Data,Blobs.Size);
+    xrtFree(Blobs.Data);
+    xrtFree(Files.Data);
+    xrtProcessResultUnit(&Names);
+    xrtProcessResultUnit(&AfterNames);
+    xrtProcessResultUnit(&Result);
     return Ok?Tree:NULL;
 }
 static bool SdkGitBaselinePath(cstr Project,cstr Session,char Out[512]){

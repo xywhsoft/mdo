@@ -69,7 +69,8 @@ static bool SdkTerminalSave(void){
 static bool SdkTerminalReceiptPath(const mdo_sdk_context_v1* C,cstr Key,char Path[128]){
     xvalue* Identity=xrtValueObject();SdkPut(Identity,"owner",C->ExtensionId);SdkPut(Identity,"project",C->ProjectId);SdkPut(Identity,"session",C->SessionId);SdkPut(Identity,"run",C->RunId);SdkPut(Identity,"workspace",C->Workspace);SdkPut(Identity,"key",Key);
     char* Json=SdkJson(Identity);char Hash[65];bool Ok=Json&&MdoExtensionHash(Json,Hash);xrtFree(Json);xrtValueRelease(Identity);
-    if(Ok)snprintf(Path,128,"data/application/terminal-receipts/%s.json",Hash);return Ok;
+    if(Ok)snprintf(Path,128,"data/application/terminal-receipts/%s.json",Hash);
+    return Ok;
 }
 static bool SdkTerminalReceiptExists(cstr Path,cstr Hash,mdo_error_v1* E){
     bool Exists=false;xfileinfo Info={0};
@@ -89,8 +90,10 @@ static bool SdkTerminalReceiptSave(cstr Path,const xvalue* Record){
 }
 static void SdkTerminalFree(SdkTerminal* T){
     if(T->Reader){xrtThreadWait(T->Reader);xrtThreadDestroy(T->Reader);}if(T->Writer){xrtThreadWait(T->Writer);xrtThreadDestroy(T->Writer);}if(T->Waiter){xrtThreadWait(T->Waiter);xrtThreadDestroy(T->Waiter);}
-    if(T->Process)xrtProcessDestroy(T->Process);if(T->Changed)xrtCondDestroy(T->Changed);
-    if(T->Output)xrtSecureZero(T->Output,SDK_TERMINAL_OUTPUT);if(T->Input)xrtSecureZero(T->Input,SDK_TERMINAL_INPUT);
+    if(T->Process)xrtProcessDestroy(T->Process);
+    if(T->Changed)xrtCondDestroy(T->Changed);
+    if(T->Output)xrtSecureZero(T->Output,SDK_TERMINAL_OUTPUT);
+    if(T->Input)xrtSecureZero(T->Input,SDK_TERMINAL_INPUT);
     xrtFree(T->Output);xrtFree(T->Input);MdoProjectLeaseRelease(T->Lease);xrtValueRelease(T->Record);xrtSecureZero(T,sizeof(*T));
 }
 static xvalue* SdkTerminalInfo(const SdkTerminal* T){
@@ -102,7 +105,8 @@ static xvalue* SdkTerminalInfo(const SdkTerminal* T){
     xrtValueObjectSetNew(R,XRT_STR_LITERAL("drained"),xrtValueBool(T->ReaderDone&&T->WriterDone&&T->WaiterDone&&!T->Starting));
     xrtValueObjectSetNew(R,XRT_STR_LITERAL("receipt_uncertain"),xrtValueBool(T->ReceiptUncertain));
     xrtValueObjectSetNew(R,XRT_STR_LITERAL("control_busy"),xrtValueBool(T->Token[0]&&!MdoDeadlineExpired(T->LeaseUntil)));
-    if(T->Error[0])SdkPut(R,"error",T->Error);return R;
+    if(T->Error[0])SdkPut(R,"error",T->Error);
+    return R;
 }
 static bool SdkTerminalLease(SdkTerminal* T,const xvalue* P,mdo_error_v1* E){
     if(!T->Token[0]||MdoDeadlineExpired(T->LeaseUntil)||!SdkTerminalEqual(SdkField(P,"client"),T->Client)||!SdkTerminalEqual(SdkField(P,"control_token"),T->Token)||!SdkTerminalEqual(SdkField(P,"input_epoch"),T->InputEpoch))return SdkTerminalFail(E,"terminal_control_expired","Acquire terminal control again; uncertain input must not be replayed",409);
@@ -113,6 +117,7 @@ static void SdkTerminalDropInput(SdkTerminal* T){
     T->InputDropped+=T->InputSize;if(T->Input)xrtSecureZero(T->Input,SDK_TERMINAL_INPUT);T->InputSize=T->InputStart=0;
 }
 static bool SdkTerminalPrepareIo(xprocess* Process){
+    (void)Process; /* Windows configures cancellable pipes inside xrt. */
 #if !defined(_WIN32) && !defined(_WIN64)
     /* A blocking master write can remain asleep even after the slave exits.
      * xrt exposes borrowed native descriptors; preserve their flags and opt
@@ -129,7 +134,9 @@ static int32 SdkTerminalReadPump(void* User){
     for(;;){int64 N=xrtProcessRead(T->Process,XPROCESS_STDOUT,Bytes,sizeof(Bytes));
         if(N<0&&xrtGetError()&&xrtErrorKind(xrtGetError())==XERR_AGAIN){
             xrtMutexLock(SdkTerminals.Lock);bool Stop=T->Closing||T->Exited||SdkTerminals.Stopping;if(Stop){T->ReaderDone=true;xrtCondBroadcast(T->Changed);}xrtMutexUnlock(SdkTerminals.Lock);
-            if(Stop)break;xrtSleep(25);continue;
+            if(Stop)break;
+            xrtSleep(25);
+            continue;
         }
         if(N<=0){
             xrtMutexLock(SdkTerminals.Lock);if(N<0&&!T->Closing&&!T->Exited&&xrtProcessState(T->Process)!=XPROCESS_EXITED){T->InputFailed=true;snprintf(T->Error,sizeof(T->Error),"%s",xrtGetError()?xrtErrorMessage(xrtGetError()):"Terminal output read failed");}
@@ -152,7 +159,8 @@ static int32 SdkTerminalWritePump(void* User){
         T->InputStart=(T->InputStart+Count)%SDK_TERMINAL_INPUT;T->InputSize-=Count;xrtMutexUnlock(SdkTerminals.Lock);
         size_t At=0;while(At<Count){int64 N=xrtProcessWrite(T->Process,Bytes+At,Count-At);
             if(N<0&&xrtGetError()&&xrtErrorKind(xrtGetError())==XERR_AGAIN){xrtMutexLock(SdkTerminals.Lock);bool Stop=T->Closing||T->Exited||SdkTerminals.Stopping;xrtMutexUnlock(SdkTerminals.Lock);if(Stop)break;xrtSleep(10);continue;}
-            if(N<=0)break;At+=(size_t)N;
+            if(N<=0)break;
+            At+=(size_t)N;
         }
         xrtSecureZero(Bytes,Count);xrtMutexLock(SdkTerminals.Lock);T->InputWritten+=At;
         if(At!=Count){T->InputDropped+=Count-At;bool Stopped=T->Closing||T->Exited||SdkTerminals.Stopping||xrtProcessState(T->Process)==XPROCESS_EXITED;T->InputFailed=!Stopped;SdkTerminalDropInput(T);if(!Stopped)snprintf(T->Error,sizeof(T->Error),"%s",xrtGetError()?xrtErrorMessage(xrtGetError()):"Terminal input write failed");T->WriterDone=true;xrtCondBroadcast(T->Changed);xrtMutexUnlock(SdkTerminals.Lock);break;}
@@ -170,7 +178,8 @@ static int32 SdkTerminalWaitPump(void* User){
     /* No callback can still be inside xrtProcessRead/Write here. Retiring the
      * owned endpoint closes the PTY (HUP on POSIX / ConPTY+Job on Windows),
      * including children left behind by an exited shell. */
-    if(Process)xrtProcessDestroy(Process);MdoProjectLeaseRelease(Lease);
+    if(Process)xrtProcessDestroy(Process);
+    MdoProjectLeaseRelease(Lease);
     xrtMutexLock(SdkTerminals.Lock);T->WaiterDone=true;xrtCondBroadcast(T->Changed);xrtMutexUnlock(SdkTerminals.Lock);return 0;
 }
 bool MdoApplicationTerminalsInit(void){
@@ -192,13 +201,17 @@ bool MdoApplicationTerminalsInit(void){
     xrtValueRelease(Root);SdkTerminals.Ready=Valid;return true;
 }
 void MdoApplicationTerminalsStop(void){
-    if(!SdkTerminals.Lock)return;xrtMutexLock(SdkTerminals.Lock);SdkTerminals.Stopping=true;
+    if(!SdkTerminals.Lock)return;
+    xrtMutexLock(SdkTerminals.Lock);
+    SdkTerminals.Stopping=true;
     for(size_t i=0;i<SDK_TERMINAL_SLOTS;i++){SdkTerminal* T=&SdkTerminals.Slots[i];if(T->Record){T->Closing=true;if(T->Changed)xrtCondBroadcast(T->Changed);}}
     xrtMutexUnlock(SdkTerminals.Lock);
     for(;;){xrtMutexLock(SdkTerminals.Lock);bool Starting=false;for(size_t i=0;i<SDK_TERMINAL_SLOTS;i++)if(SdkTerminals.Slots[i].Starting)Starting=true;xrtMutexUnlock(SdkTerminals.Lock);if(!Starting)break;xrtSleep(10);}
     xprocess* Processes[SDK_TERMINAL_SLOTS];xthread* Threads[SDK_TERMINAL_SLOTS*3];size_t Count=0,ThreadCount=0;xrtMutexLock(SdkTerminals.Lock);
     for(size_t i=0;i<SDK_TERMINAL_SLOTS;i++){SdkTerminal* T=&SdkTerminals.Slots[i];if(!T->Record||T->Releasing)continue;if(T->Process)Processes[Count++]=xrtProcessRef(T->Process);
-        if(T->Reader)Threads[ThreadCount++]=xrtThreadRef(T->Reader);if(T->Writer)Threads[ThreadCount++]=xrtThreadRef(T->Writer);if(T->Waiter)Threads[ThreadCount++]=xrtThreadRef(T->Waiter);
+        if(T->Reader)Threads[ThreadCount++]=xrtThreadRef(T->Reader);
+        if(T->Writer)Threads[ThreadCount++]=xrtThreadRef(T->Writer);
+        if(T->Waiter)Threads[ThreadCount++]=xrtThreadRef(T->Waiter);
     }xrtMutexUnlock(SdkTerminals.Lock);
     for(size_t i=0;i<Count;i++){(void)xrtProcessKillTree(Processes[i]);xrtProcessDestroy(Processes[i]);}
     /* ServiceUnit drains these callbacks BEFORE ProjectLifecycleUnit. Native
@@ -209,7 +222,11 @@ void MdoApplicationTerminalsStop(void){
     for(size_t i=0;i<LeaseCount;i++)MdoProjectLeaseRelease(Leases[i]);
 }
 void MdoApplicationTerminalsUnit(void){
-    if(!SdkTerminals.Lock)return;MdoApplicationTerminalsStop();for(size_t i=0;i<SDK_TERMINAL_SLOTS;i++)SdkTerminalFree(&SdkTerminals.Slots[i]);xrtMutexDestroy(SdkTerminals.Lock);memset(&SdkTerminals,0,sizeof(SdkTerminals));
+    if(!SdkTerminals.Lock)return;
+    MdoApplicationTerminalsStop();
+    for(size_t i=0;i<SDK_TERMINAL_SLOTS;i++)SdkTerminalFree(&SdkTerminals.Slots[i]);
+    xrtMutexDestroy(SdkTerminals.Lock);
+    memset(&SdkTerminals,0,sizeof(SdkTerminals));
 }
 xvalue* MdoApplicationTerminalsCatalog(void){
     xvalue* A=xrtValueArray();for(size_t i=0;i<sizeof(SdkTerminalMethods)/sizeof(*SdkTerminalMethods);i++){xvalue* Row=xrtValueObject();SdkPut(Row,"id",SdkTerminalMethods[i]);SdkPut(Row,"domain","terminal");SdkPut(Row,"transport","native");xrtValueArrayAppendNew(A,Row);}return A;
@@ -217,7 +234,8 @@ xvalue* MdoApplicationTerminalsCatalog(void){
 static char* SdkTerminalDefault(void){
 #if defined(_WIN32) || defined(_WIN64)
     char* System=xrtEnvGet("SystemRoot");char* Program=System&&System[0]?xrtPathJoin(System,"System32/WindowsPowerShell/v1.0/powershell.exe"):NULL;xrtFree(System);xfileinfo Info={0};
-    if(Program&&xrtPathStat(Program,true,&Info)&&Info.Type==XFILE_TYPE_FILE)return Program;xrtFree(Program);
+    if(Program&&xrtPathStat(Program,true,&Info)&&Info.Type==XFILE_TYPE_FILE)return Program;
+    xrtFree(Program);
     Program=xrtEnvGet("ComSpec");if(Program&&Program[0])return Program;xrtFree(Program);return xrtStrDup("cmd.exe");
 #elif defined(__ANDROID__)
     return xrtStrDup("/system/bin/sh");
@@ -261,12 +279,16 @@ static bool SdkTerminalCreateImpl(const mdo_sdk_context_v1* C,const xvalue* P,xv
     xrtMutexLock(SdkTerminals.Lock);bool Cancelled=T->Closing||SdkTerminals.Stopping||SdkCancelled(C);xrtMutexUnlock(SdkTerminals.Lock);
     xprocess* Process=Cancelled?NULL:xrtProcessSpawn(&Config);mdo_error_v1 SpawnError={0};bool IoReady=Process&&SdkTerminalPrepareIo(Process);
     if(Cancelled)SdkTerminalFail(&SpawnError,"sdk_cancelled","Terminal creation was cancelled before starting a process",499);
-    else if(!Process)SdkNativeFailure(&SpawnError,"terminal");else if(!IoReady)SdkTerminalFail(&SpawnError,"terminal_io_setup_failed","Cannot configure cancellable PTY I/O",500);xrtFree(Directory);xrtFree(Default);
+    else if(!Process)SdkNativeFailure(&SpawnError,"terminal");
+    else if(!IoReady)SdkTerminalFail(&SpawnError,"terminal_io_setup_failed","Cannot configure cancellable PTY I/O",500);
+    xrtFree(Directory);
+    xrtFree(Default);
     xrtMutexLock(SdkTerminals.Lock);T->Process=Process;bool Spawned=Process!=NULL;
     if(Process){if(IoReady){T->Reader=xrtThreadCreate(SdkTerminalReadPump,T,0);T->Writer=xrtThreadCreate(SdkTerminalWritePump,T,0);}T->Waiter=xrtThreadCreate(SdkTerminalWaitPump,T,0);T->ReaderDone=!T->Reader;T->WriterDone=!T->Writer;T->WaiterDone=!T->Waiter;Spawned=IoReady&&T->Reader&&T->Writer&&T->Waiter;}
     T->Starting=false;
     if(!Spawned||SdkTerminals.Stopping||T->Closing){T->Closing=true;if(!Process){T->Exited=T->ReaderDone=T->WriterDone=T->WaiterDone=true;SdkPut(T->Record,"state","ended");SdkPut(T->Record,"reason",Cancelled?"cancelled_before_start":"not_started");}else SdkPut(T->Record,"state","closing");
-        if(!Spawned)snprintf(T->Error,sizeof(T->Error),"%s",SpawnError.Message[0]?SpawnError.Message:"Terminal I/O could not start");if(T->Changed)xrtCondBroadcast(T->Changed);
+        if(!Spawned)snprintf(T->Error,sizeof(T->Error),"%s",SpawnError.Message[0]?SpawnError.Message:"Terminal I/O could not start");
+        if(T->Changed)xrtCondBroadcast(T->Changed);
     }else SdkPut(T->Record,"state","running");
     T->ReceiptUncertain=!SdkTerminalSave();*R=SdkTerminalInfo(T);bool Kill=Process&&T->Closing;if(Kill)T->Pins++;MdoProjectLease* UnstartedLease=NULL;if(!Process){UnstartedLease=T->Lease;T->Lease=NULL;}xrtMutexUnlock(SdkTerminals.Lock);MdoProjectLeaseRelease(UnstartedLease);
     if(Kill){(void)xrtProcessKillTree(Process);bool Exited=!T->Waiter&&xrtProcessWaitFor(Process,5000)==XWAIT_OK;xrtMutexLock(SdkTerminals.Lock);if(Exited){T->Exited=true;SdkPut(T->Record,"state","ended");}T->Pins--;xrtMutexUnlock(SdkTerminals.Lock);}
@@ -279,8 +301,14 @@ static bool SdkTerminalCreate(const mdo_sdk_context_v1* C,const xvalue* P,xvalue
     bool Ok=SdkTerminalCreateImpl(C,P,R,E);MdoProjectDefinitionRelease(Writer);MdoProjectLeaseRelease(Lease);return Ok;
 }
 bool MdoApplicationTerminalsProjectBusy(cstr Project){
-    if(!SdkTerminals.Lock)return false;bool Busy=false;char Key[65];size_t N=strlen(Project);if(N>=sizeof(Key))return true;
-    while(N&&Project[N-1]=='.')N--;for(size_t i=0;i<N;i++)Key[i]=Project[i]>='A'&&Project[i]<='Z'?Project[i]+'a'-'A':Project[i];Key[N]=0;
+    if(!SdkTerminals.Lock)return false;
+    bool Busy=false;
+    char Key[65];
+    size_t N=strlen(Project);
+    if(N>=sizeof(Key))return true;
+    while(N&&Project[N-1]=='.')N--;
+    for(size_t i=0;i<N;i++)Key[i]=Project[i]>='A'&&Project[i]<='Z'?Project[i]+'a'-'A':Project[i];
+    Key[N]=0;
     xrtMutexLock(SdkTerminals.Lock);
     for(size_t i=0;i<SDK_TERMINAL_SLOTS;i++){
         SdkTerminal* T=&SdkTerminals.Slots[i];if(!T->Record||T->Releasing)continue;
@@ -296,7 +324,8 @@ static bool SdkTerminalOrphaned(const SdkTerminal* T){
     const xvalue* Scope=SdkGet(T->Record,"context");cstr Project=SdkField(Scope,"project"),Workspace=SdkField(Scope,"workspace");
     if(!Project||!Project[0]||!strcmp(Project,"default")||!Workspace||!Workspace[0])return false;
     MdoProjectInfo Info={0};Info.Size=sizeof(Info);bool Found=false;xwork_error Error;
-    if(!MdoProjectGet(Project,&Info,&Found,&Error))return false;if(!Found)return true;
+    if(!MdoProjectGet(Project,&Info,&Found,&Error))return false;
+    if(!Found)return true;
     MdoProjectBinding Current={0};Current.Size=sizeof(Current);xfileinfo Previous={0};
     if(!MdoProjectBindingGet(Project,&Current,&Error)||!xrtPathStat(Workspace,true,&Previous)||Previous.Type!=XFILE_TYPE_DIRECTORY)return false;
     return Previous.Device!=Current.WorkspaceIdentity.Device||Previous.Identity!=Current.WorkspaceIdentity.Identity;
@@ -377,7 +406,10 @@ bool MdoApplicationTerminalsCall(const mdo_sdk_context_v1* C,cstr Method,const x
     }
     if(!strcmp(Method,"terminal.resize")){
         uint64 Columns=0,Rows=0;if(!SdkUInt(SdkGet(P,"columns"),&Columns)||!SdkUInt(SdkGet(P,"rows"),&Rows)||Columns<2||Columns>500||Rows<2||Rows>300){SdkTerminalFail(E,"terminal_arguments_invalid","Invalid terminal dimensions",400);goto done;}
-        if(!SdkTerminalLease(T,P,E))goto done;if(!T->Process||T->Closing||T->Exited){SdkTerminalFail(E,"terminal_not_writable","Terminal has ended",409);goto done;}
+        if(!SdkTerminalLease(T,P,E))goto done;
+        if(!T->Process||T->Closing||T->Exited){SdkTerminalFail(E,"terminal_not_writable","Terminal has ended",409);
+        goto done;
+        }
         T->Pins++;xprocess* Process=xrtProcessRef(T->Process);xrtMutexUnlock(SdkTerminals.Lock);bool Resized=xrtProcessResize(Process,(uint32)Columns,(uint32)Rows);xrtProcessDestroy(Process);xrtMutexLock(SdkTerminals.Lock);T->Pins--;
         if(!Resized){SdkNativeFailure(E,"terminal");goto done;}SdkPutUInt(T->Record,"columns",Columns);SdkPutUInt(T->Record,"rows",Rows);*R=SdkTerminalInfo(T);Ok=true;goto done;
     }

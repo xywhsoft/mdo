@@ -7,7 +7,8 @@ static bool SdkFileContains(cstr Text,cstr Query){
             unsigned char A=(unsigned char)Text[i+j],B=(unsigned char)Query[j];
             if(A>='A'&&A<='Z')A=(unsigned char)(A+'a'-'A');
             if(B>='A'&&B<='Z')B=(unsigned char)(B+'a'-'A');
-            if(A!=B)break;j++;
+            if(A!=B)break;
+            j++;
         }if(!Query[j])return true;
     }return !Query[0];
 }
@@ -83,7 +84,11 @@ static bool SdkFilesCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue* P
         xwork_error Error;MdoProjectLease* Lease=MdoProjectLeaseAcquire("default",MDO_PROJECT_LEASE_SHARED,&Error);
         if(!Lease)return MdoApplicationError(E,"sdk_project_busy",Error.sMessage,"filesystem",409,false);
         char* Directory=MdoHomeDefaultWorkspacePath(true);MdoProjectLeaseRelease(Lease);
-        if(!Directory)return SdkNativeFailure(E,"filesystem");*R=xrtValueObject();bool Ok=SdkPut(*R,"path",Directory);xrtFree(Directory);return Ok;
+        if(!Directory)return SdkNativeFailure(E,"filesystem");
+        *R=xrtValueObject();
+        bool Ok=SdkPut(*R,"path",Directory);
+        xrtFree(Directory);
+        return Ok;
     }
     if(!strcmp(Method,"files.search"))return SdkFileSearch(C,P,R,E);
     if(strcmp(Method,"files.directory")){

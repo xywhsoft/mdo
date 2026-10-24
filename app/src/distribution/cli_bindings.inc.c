@@ -15,7 +15,8 @@ static char* CliRelative(cstr Path)
         bool Inside=N&&Target&&strlen(Target)>N&&(Target[N]=='/'||Target[N]=='\\');
         for(size_t I=0;Inside&&I<N;I++){unsigned char A=Root[I],B=Target[I];if(A=='\\')A='/';if(B=='\\')B='/';
 #if defined(_WIN32) || defined(_WIN64)
-            if(A>='A'&&A<='Z')A+=32;if(B>='A'&&B<='Z')B+=32;
+            if(A>='A'&&A<='Z')A+=32;
+            if(B>='A'&&B<='Z')B+=32;
 #endif
             if(A!=B)Inside=false;}
         xrtFree(Root);xrtFree(Target);if(!Inside){xrtFree(R);return NULL;}}
@@ -30,7 +31,8 @@ static bool CliAliasesValid(const xvalue* R)
 }
 static bool CliStoredMapValid(const xvalue* Map)
 {
-    if(!Map)return true;if(xrtValueType(Map)!=XVALUE_OBJECT||xrtValueCount(Map)>1024)return false;
+    if(!Map)return true;
+    if(xrtValueType(Map)!=XVALUE_OBJECT||xrtValueCount(Map)>1024)return false;
     for(size_t I=0;I<xrtValueCount(Map);I++){xstrview Name;const xvalue* Row=xrtValueObjectAt(Map,I,&Name);if(memchr(Name.Data,0,Name.Size)||!MdoCliCommandName(Name.Data)||!CliRelativeValid(CliText(Row,"target",4096))||!MdoPackageId(CliText(Row,"tool_id",64)))return false;
         const xvalue* Args=xrtValueObjectGet(Row,XRT_STR_LITERAL("args"));if(xrtValueType(Args)!=XVALUE_ARRAY||xrtValueCount(Args)>64)return false;
         for(size_t J=0;J<xrtValueCount(Args);J++){xstrview V;if(!xrtValueGetString(xrtValueArrayGet(Args,J),&V)||V.Size>32768||memchr(V.Data,0,V.Size))return false;}}
