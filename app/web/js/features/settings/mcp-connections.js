@@ -11,11 +11,11 @@ const button = (text, action, primary = false) => {
 };
 
 export function createMcpConnections(onChange) {
-  let layer = null, dirty = false, saving = false;
+  let layer = null, dirty = false, saving = false, windowOwner=owner();
   const close = (force = false) => { if (!layer) return true; if (!force && (saving || dirty && !confirm("放弃未保存的连接配置？"))) return false; layer.dispose(); return true; };
   async function open({ item = null, receipt = null, template = null, project = "" } = {}) {
     if (!close()) return;
-    const target = owner();
+    const target = owner();windowOwner=target;
     const view = openLayer({ title: item ? `配置连接 · ${item.name || item.id}` : "从模板创建 MCP 连接", icon: "globe", width: "54rem", height: "85%",
       beforeClose: () => !saving && (!dirty || confirm("放弃未保存的连接配置？")),
       onClosed() { if (layer === view) { layer = null; dirty = saving = false; } } }); layer = view;view.element.classList.add("extension-authoring");
@@ -51,11 +51,11 @@ export function createMcpConnections(onChange) {
       const trust = element("input", { attrs: { type: "checkbox" } });
       const trustRow = element("label", { className: "store-code-consent" }, [trust, element("span", { text: "我已检查完整启动命令并信任本机服务代码。程序可使用当前设备权限；首次运行可能下载依赖。" })]); form.append(trustRow);
       const preview = element("pre", { className: "store-source", attrs: { "aria-label": "连接配置预览" } }); form.append(preview);
-      let controls = new Map(), approved = "", selectedTemplate, selectedVariant;
+      let clearSecrets=new Set(),controls = new Map(), approved = "", selectedTemplate, selectedVariant;
       function invalidate() { approved = ""; trust.checked = false; preview.textContent = "修改后请重新预览；凭据不显示在预览中。"; }
       function renderFields() {
         selectedTemplate = templates[Number(selection.value)]; selectedVariant = selectedTemplate.template.variants.find(v => v.id === variant.value);
-        controls = new Map(); fields.replaceChildren(); invalidate();
+        clearSecrets=new Set();controls = new Map(); fields.replaceChildren(); invalidate();
         const meta = mcpTemplateSummary({ variants: [selectedVariant] }); summary.textContent = `${meta.transports.join(" / ")} · ${meta.authentication.join(" / ")} · ${selectedVariant.requirements || "授权由服务所属设备完成"}`;
         trustRow.hidden = selectedVariant.config.transport.type !== "stdio";
         for (const input of mcpVariantInputs(selectedTemplate.template, selectedVariant)) {
@@ -64,13 +64,14 @@ export function createMcpConnections(onChange) {
           if (!input.secret) control.value = binding?.values?.[input.id] ?? input.default ?? "";
           if (input.secret && binding?.values?.[input.id]) control.placeholder = "已保存，留空保留；更换模板或目标需重填";
           if (input.min != null) control.min = input.min; if (input.max != null) control.max = input.max;
+          if(input.secret&&binding?.values?.[input.id]&&!input.required){const clear=element("input",{attrs:{type:"checkbox"}});clear.addEventListener("change",()=>{if(clear.checked)clearSecrets.add(input.id);else clearSecrets.delete(input.id);dirty=true;invalidate();});fields.append(element("label",{className:"store-choice"},[clear,element("span",{text:`清除已保存的 ${input.label}`})]));}
           controls.set(input.id, control); fields.append(element("label", { className: "extension-field" }, [element("span", { text: `${input.label}${input.required ? " · 必填" : ""}${input.secret ? " · 私密" : ""}` }), control, element("small", { text: input.description || "" })]));
         }
       }
       function variants() { const vs=templates[Number(selection.value)].template.variants;variant.replaceChildren(...vs.map(v => element("option", { text: v.label, attrs: { value: v.id } })));variant.value=vs[0].id; if (binding && templates[Number(selection.value)].receipt.key === binding.receipt.key) variant.value = binding.variant; renderFields(); }
       selection.addEventListener("change", variants); variant.addEventListener("change", renderFields); variants();
       form.addEventListener("input", event => { dirty = true; if (event.target !== trust) invalidate(); });
-      function body(action) { return { action, id: identity.value.trim(), name: name.value.trim(), variant: variant.value, receipt_key: selectedTemplate.receipt.key, ...(selectedTemplate.receipt.id > 0 ? { receipt_id: selectedTemplate.receipt.id } : {}), values: Object.fromEntries([...controls].map(([key, c]) => [key, c.value])), enabled: enabled.checked, confirm_launch: trust.checked, tools: { allow: allow.value.split(/\r?\n/).map(s => s.trim()).filter(Boolean), deny: deny.value.split(/\r?\n/).map(s => s.trim()).filter(Boolean) } }; }
+      function body(action) { return { action, id: identity.value.trim(), name: name.value.trim(), variant: variant.value, receipt_key: selectedTemplate.receipt.key, ...(selectedTemplate.receipt.id > 0 ? { receipt_id: selectedTemplate.receipt.id } : {}), values: Object.fromEntries([...controls].map(([key, c]) => [key, c.value])), enabled: enabled.checked, clear_secrets:[...clearSecrets],confirm_launch: trust.checked, tools: { allow: allow.value.split(/\r?\n/).map(s => s.trim()).filter(Boolean), deny: deny.value.split(/\r?\n/).map(s => s.trim()).filter(Boolean) } }; }
       async function perform(action) {
         if (!live() || saving) return;
         const payload = body(action), fingerprint = JSON.stringify({ ...payload, action: "save", confirm_launch: false });
@@ -88,6 +89,6 @@ export function createMcpConnections(onChange) {
       view.footer.append(button("预览配置", () => perform("preview")), button("保存连接", () => perform("save"), true), button("取消", () => view.close()));
     } catch (e) { if (live() && e.name !== "AbortError") message.textContent = errorMessage(e); }
   }
-  const stop = subscribeTarget(() => close(true));
+  const stop = subscribeTarget(() => {if(owner()!==windowOwner)close(true);});
   return { open, hasPendingChanges: () => Boolean(layer), destroy() { close(true); stop(); } };
 }

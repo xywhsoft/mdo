@@ -147,9 +147,11 @@ bool MdoApiMcpConnectionsRoute(MdoApiContext* C)
     bool SameTemplate=xrtValueEqual(T,xrtValueObjectGet(OldBinding,XRT_STR_LITERAL("template")))&&Variant&&MdoPackageText(OldBinding,"variant",64)&&!strcmp(Variant,MdoPackageText(OldBinding,"variant",64));
     for(size_t i=0;i<xrtValueCount(Inputs);i++){
         const xvalue* I=xrtValueArrayGet(Inputs,i);cstr Key=MdoPackageText(I,"id",64),S=MdoPackageText(Supplied,Key,4096);if(!McpConnectionUses(xrtValueObjectGet(Selected,XRT_STR_LITERAL("config")),Key))continue;bool Secret=MdoMcpTemplateFlag(I,"secret",false);
-        if(Secret&&(!S||!*S)&&SameTemplate){cstr Ref=MdoPackageText(OldValues,Key,256);if(Ref&&strncmp(Ref,"input:",6)&&MdoApiValueSetString(Values,Key,Ref))continue;}
+        bool Clear=false;const xvalue* Clears=xrtValueObjectGet(Body.Value,XRT_STR_LITERAL("clear_secrets"));for(size_t j=0;j<xrtValueCount(Clears);j++){xstrview V;if(xrtValueGetString(xrtValueArrayGet(Clears,j),&V)&&xrtStrEqual(V,xrtStrView(Key)))Clear=true;}
+        if(Secret&&!Clear&&(!S||!*S)&&SameTemplate){cstr Ref=MdoPackageText(OldValues,Key,256);if(Ref&&strncmp(Ref,"input:",6)&&MdoApiValueSetString(Values,Key,Ref))continue;}
         if(!S&&!Secret)S=MdoPackageText(OldValues,Key,4096);if(!S&&!Secret)S=MdoPackageText(I,"default",4096);if(!S)S="";
         if(!McpConnectionValue(I,S)){snprintf(Error,sizeof(Error),"Parameter '%s' is missing or invalid",Key);goto done;}
+        if(Secret&&!S[0]&&!MdoMcpTemplateFlag(I,"required",true)){if(!MdoApiValueSetString(Values,Key,""))goto done;continue;}
         if(Secret){if(Preview){char Ref[80];snprintf(Ref,sizeof(Ref),"env:MDO_PREVIEW_%zu",i);if(!MdoApiValueSetString(Values,Key,Ref))goto done;}
             else if(!xsCredentialProtectionAvailable()||RefCount>=32||!MdoSecretStore(S,References[RefCount])){snprintf(Error,sizeof(Error),"System credential protection is unavailable; no plaintext fallback is used");goto done;}
             else {if(!MdoApiValueSetString(Values,Key,References[RefCount++]))goto done;}}
@@ -159,10 +161,13 @@ bool MdoApiMcpConnectionsRoute(MdoApiContext* C)
     cstr Name=MdoPackageText(Body.Value,"name",256);bool Enable=MdoMcpTemplateFlag(Body.Value,"enabled",OldDoc?MdoMcpTemplateFlag(OldDoc,"enabled",false):false);
     if(!Doc||!MdoApiValueSetString(Doc,"id",Id)||!MdoApiValueSetBool(Doc,"enabled",Enable)||(Name&&(!*Name||!MdoApiValueSetString(Doc,"name",Name))))goto done;
     const xvalue* Tools=xrtValueObjectGet(Body.Value,XRT_STR_LITERAL("tools"));if(!Tools)Tools=xrtValueObjectGet(OldDoc,XRT_STR_LITERAL("tools"));if(Tools&&!xrtValueObjectSet(Doc,XRT_STR_LITERAL("tools"),Tools))goto done;
+    xvalue* MutableTransport=(xvalue*)xrtValueObjectGet(Doc,XRT_STR_LITERAL("transport"));
+    for(size_t k=0;k<2;k++){xvalue* A=(xvalue*)xrtValueObjectGet(MutableTransport,xrtStrView(k?"headers":"environment"));for(size_t j=0;j<xrtValueCount(A);){cstr Ref=MdoPackageText(xrtValueArrayGet(A,j),"secret_ref",256);if(Ref&&!Ref[0])xrtValueArrayRemove(A,j,1);else j++;}}
+    xvalue* OptionalOAuth=(xvalue*)xrtValueObjectGet(Doc,XRT_STR_LITERAL("oauth"));cstr OptionalSecret=MdoPackageText(OptionalOAuth,"client_secret_ref",256);if(OptionalSecret&&!OptionalSecret[0])xrtValueObjectRemove(OptionalOAuth,XRT_STR_LITERAL("client_secret_ref"));
     const xvalue* Transport=xrtValueObjectGet(Doc,XRT_STR_LITERAL("transport"));cstr Type=MdoPackageText(Transport,"type",32);
     bool Changed=OldDoc&&!McpConnectionSameTarget(OldDoc,Doc);
     if(Changed){/* A changed target must never receive a retained credential. */
-        for(size_t i=0;i<xrtValueCount(Inputs);i++){const xvalue* I=xrtValueArrayGet(Inputs,i);cstr Key=MdoPackageText(I,"id",64),S=MdoPackageText(Supplied,Key,4096);if(McpConnectionUses(xrtValueObjectGet(Selected,XRT_STR_LITERAL("config")),Key)&&MdoMcpTemplateFlag(I,"secret",false)&&(!S||!*S)){snprintf(Error,sizeof(Error),"Target changed; re-enter credentials before saving");goto done;}}}
+        for(size_t i=0;i<xrtValueCount(Inputs);i++){const xvalue* I=xrtValueArrayGet(Inputs,i);cstr Key=MdoPackageText(I,"id",64),S=MdoPackageText(Supplied,Key,4096);if(McpConnectionUses(xrtValueObjectGet(Selected,XRT_STR_LITERAL("config")),Key)&&MdoMcpTemplateFlag(I,"secret",false)&&(MdoMcpTemplateFlag(I,"required",true)||MdoPackageText(Values,Key,256)[0])&&(!S||!*S)){snprintf(Error,sizeof(Error),"Target changed; re-enter credentials before saving");goto done;}}}
     if(!Preview&&!strcmp(Type,"stdio")&&!MdoMcpTemplateFlag(Body.Value,"confirm_launch",false)){snprintf(Error,sizeof(Error),"Inspect the complete launch command and confirm local code trust");goto done;}
 #if defined(__ANDROID__)
     if(!strcmp(Type,"stdio")){cstr Program=MdoPackageText(Transport,"program",4096);if(Program&&strstr(Program,"data/ecosystem")){snprintf(Error,sizeof(Error),"Android native tools must be preinstalled by the full APK");goto done;}}

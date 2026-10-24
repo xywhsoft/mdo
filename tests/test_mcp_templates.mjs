@@ -26,6 +26,7 @@ test("MCP connection form requires a fresh preview and closes on device switches
   const key=nodes().find(n=>n.getAttribute?.("aria-label")==="Private key");assert.equal(key.type,"password");key.value="private-ui-sentinel";
   click("预览配置");await flush();assert.equal(calls.at(-1).body.action,"preview");assert(!nodes().find(n=>n.tagName==="PRE").textContent.includes(key.value));
   form.dispatchEvent(new Event("input"));click("保存连接");await flush();assert.equal(calls.length,1,"edits invalidate prior preview");
+  notify();assert.equal(manager.hasPendingChanges(),true,"same-device notifications keep the draft open");
   click("预览配置");await flush();target="another-device";notify();assert.equal(manager.hasPendingChanges(),false);assert(!document.body.querySelector("dialog")?.open);
  }finally{manager?.destroy();delete globalThis.__mcpForm;globalThis.document=previous;}
 });

@@ -113,7 +113,7 @@ INPUTS={
  'PaneLayout':document('sidebar_width:u sidebar_open:b',('sidebar_width','sidebar_open'),True),
  'SidebarLayout':deepcopy(DEFS['SidebarLayout']),
  'McpContext':document('session_id:s project_id:s action:s prompt:s arguments:j context:j'),
- 'McpConnection':document('action:s id:s name:s receipt_id:u receipt_key:s variant:s values:o enabled:b confirm_launch:b tools:o',('action','id'),True),
+ 'McpConnection':document('action:s id:s name:s receipt_id:u receipt_key:s variant:s values:o enabled:b confirm_launch:b tools:o clear_secrets:ss',('action','id'),True),
  'McpAuth':document('client_id:s client_secret:s redirect_uri:s scopes:ss state:s code:s error:s'),
  'Application':document('method:s params:j context:o',('method',),True),
 }

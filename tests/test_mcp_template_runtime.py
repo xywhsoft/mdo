@@ -7,6 +7,8 @@ from pathlib import Path
 import shutil
 import socket
 import subprocess
+import sys
+import uuid
 import tempfile
 import time
 import urllib.error
@@ -19,10 +21,13 @@ ROOT = Path(__file__).resolve().parents[1]
 def run():
     parser = argparse.ArgumentParser()
     parser.add_argument('--host', type=Path, default=ROOT / '.build/host/windows-server-glibc/xs.exe')
+    parser.add_argument('--packed', action='store_true')
     args = parser.parse_args()
     base = Path(tempfile.mkdtemp(prefix='mcp-template-', dir=ROOT / '.build'))
     app, home = base / 'app', base / 'home'
-    shutil.copytree(ROOT / 'app', app); home.mkdir()
+    if args.packed: app=base
+    else: shutil.copytree(ROOT / 'app', app)
+    home.mkdir()
     with socket.socket() as s:
         s.bind(('127.0.0.1', 0)); port = s.getsockname()[1]
     config = app / 'xs.json'
@@ -39,8 +44,10 @@ def run():
         except urllib.error.HTTPError as e: response = e
         raw = response.read(); assert response.status == status, (path, response.status, raw[:2000], str(base))
         return json.loads(raw).get('data'), response.headers
+    host=args.host.resolve()
+    if args.packed: shutil.copy2(host,base/'mdo.exe');host=base/'mdo.exe'
     with (base / 'runtime.log').open('wb') as log:
-        child = subprocess.Popen([str(args.host.resolve()), str(config)], cwd=app, env=dict(os.environ, MDO_HOME=str(home), USE_WEBVIEW='0', PRIVATE_CLIENT_SECRET='private-fixture', PRIVATE_HEADER='private-fixture'), stdout=log, stderr=log, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+        child = subprocess.Popen([str(host), *([] if args.packed else [str(config)]), "--", "--home", str(home)], cwd=app, env=dict(os.environ, MDO_HOME=str(home), USE_WEBVIEW='0', PRIVATE_CLIENT_SECRET='private-fixture', PRIVATE_HEADER='private-fixture'), stdout=log, stderr=log, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
         try:
             for _ in range(400):
                 if child.poll() is not None: break
@@ -53,6 +60,7 @@ def run():
             def store(action, **extra): return api('POST', '/ecosystem', dict(action=action, single_kind='mcp', **extra))[0]
             plan = store('plan_import', package=package)
             store('import', package=package, expected_plan=plan['sha256'])
+            sdk=api('POST','/application/call',dict(method='mcp.templates.list',params={}))[0];assert sdk['status']==200 and len(sdk['data']['items'])==1
             installed = api('GET', '/mcp/templates')[0]['items']; assert len(installed) == 1 and installed[0]['template'] == t
             # Populate a store receipt as an isolated download stand-in. Every
             # installed byte still passes the ordinary receipt hash checks.
@@ -113,6 +121,26 @@ def run():
             exported = store('export', references=[dict(kind='mcp', id='custom-export')])
             public = json.dumps(exported); assert secret not in public and 'PRIVATE_HEADER' not in public and 'PRIVATE_CLIENT_SECRET' not in public
             assert all('default' not in i for i in json.loads(exported['resources'][0]['content'])['inputs'])
+            optional=copy.deepcopy(key_package);optional['manifest']['slug']='optional-key';ot=template('optional-key','key');ot['inputs'][0]['required']=False;optional['resources'][0].update(id='optional-key',content=json.dumps(ot));store('import',package=optional)
+            empty=api('POST','/mcp/connections',dict(action='save',id='optional',receipt_key='local:optional-key',variant='default',values={}),revision='new')[0];assert not json.loads(empty['content'])['transport']['headers']
+            bound=api('POST','/mcp/connections',dict(action='save',id='optional',values=dict(token=secret)),revision=empty['revision'])[0]
+            cleared=api('POST','/mcp/connections',dict(action='save',id='optional',values={},clear_secrets=['token']),revision=bound['revision'])[0];assert not json.loads(cleared['content'])['transport']['headers']
+            # Local stdio recipes require explicit command consent. Saving and
+            # enabling remain cold; only an explicit test starts the peer.
+            stdio_package=copy.deepcopy(package);stdio_package['manifest']['slug']='stdio-template';stdio_package['resources'][0]['id']='cli-service'
+            cli=template('cli-service','stdio');record=base/'stdio-record.jsonl';cli['variants'][0]['config']['transport']['arguments']=[str(ROOT/'tests/fixtures/mcp-2025.py'),str(record)];stdio_package['resources'][0]['content']=json.dumps(cli)
+            store('import',package=stdio_package)
+            cli_body=dict(action='save',id='cli',receipt_key='local:stdio-template',variant='default',values=dict(program=sys.executable))
+            api('POST','/mcp/connections',cli_body,revision='new',status=409)
+            saved_cli=api('POST','/mcp/connections',dict(cli_body,confirm_launch=True),revision='new')[0];assert not record.exists()
+            api('POST','/extensions/mcp/cli/enabled',dict(enabled=True),revision=saved_cli['revision']);assert not record.exists()
+            api('POST','/mcp/cli/refresh',dict(operation_id='op-c-'+uuid.uuid4().hex),status=202)
+            for _ in range(80):
+                status=api('GET','/extensions/mcp/cli')[0]
+                if status.get('connected'):break
+                time.sleep(.1)
+            assert status['connected'] and status['tool_count']==1 and record.exists(),status
+            api('POST','/mcp/connections',dict(action='delete',id='cli'),revision=status['revision'])
             # Invalid public shapes fail before any writes.
             for mutate in [lambda x: x.update(token='secret'), lambda x: x['variants'][0]['config']['transport'].update(endpoint='https://user:secret@example.invalid/mcp')]:
                 invalid = copy.deepcopy(package); d = json.loads(invalid['resources'][0]['content']); mutate(d); invalid['resources'][0]['content'] = json.dumps(d)
