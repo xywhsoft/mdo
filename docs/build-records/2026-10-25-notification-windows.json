@@ -1,0 +1,44 @@
+{
+  "app_commit": "ecff3358fd8fe7b6e01653257019e9a5f8e3b725",
+  "preview": true,
+  "auto_update_published": false,
+  "android_device_tested": false,
+  "artifacts": [
+    {
+      "file": "mdo.exe",
+      "size": 6260577,
+      "sha256": "a383dde9253988bc574a303bd40b59c5489ece895be7c9078612694ce2bdb88d"
+    },
+    {
+      "file": "mdo-server.exe",
+      "size": 6002335,
+      "sha256": "fc2b4240eb790e1f7bfff8dc5904e9e8c60cebae7d584e56f6bba8477729230e"
+    },
+    {
+      "file": "mdo-arm64-v8a.apk",
+      "size": 5801281,
+      "sha256": "bc6964539266d14f43d2df92d3d45a08741c559267dbb432448eae190ed96e52"
+    },
+    {
+      "file": "mdo-full-arm64-v8a.apk",
+      "size": 150149529,
+      "sha256": "ccf2314462f275ea209347ff3be54af5d2f996dd04aeb783109899de5cdfcba5"
+    }
+  ],
+  "version": "0.6.0",
+  "javascript_tests": 34,
+  "frontend_contract_tests": 20,
+  "reachable_web_modules": 226,
+  "native_notification_lifetime_test": true,
+  "android_payloads_equal": true,
+  "test_services_stopped": true,
+  "browser_fixture": "Full isolated app, native notification lifetime, synthetic update metadata and notices",
+  "browser_checks": [
+    "direct destinations",
+    "later survives page reload",
+    "update badge remains",
+    "mandatory update rejects Escape",
+    "desktop light/dark",
+    "390x720 DPR3 no horizontal overflow"
+  ]
+}
