@@ -1,0 +1,69 @@
+{
+  "app_commit": "feed5418442c4ba0f19186a4a4b04794d75a472e",
+  "preview": true,
+  "auto_update_published": false,
+  "android_device_tested": false,
+  "artifacts": [
+    {
+      "file": "mdo.exe",
+      "size": 6233295,
+      "sha256": "76402a7afddd273ced89290babaa0436dd9d5188471114f3f225fd08976fa481"
+    },
+    {
+      "file": "mdo-server.exe",
+      "size": 5975054,
+      "sha256": "c2472aa88b6527aff42aca7ba4afc740d19bb034e6e2e722dd5edcbd402cc6e8"
+    },
+    {
+      "file": "mdo-arm64-v8a.apk",
+      "size": 5772609,
+      "sha256": "c18b0ba07d088685f04c8038b1ad7293f5f3217ae13c1b6765778d4fd5820791"
+    },
+    {
+      "file": "mdo-full-arm64-v8a.apk",
+      "size": 150116761,
+      "sha256": "365ab3ef4283f72191205876d2a666263062d9756154bddeb2ac61014b4a9aff"
+    }
+  ],
+  "version": "0.6.0",
+  "build_ids": {
+    "windows_build_id": 60000001,
+    "windows_server_build_id": 60000002,
+    "android_lite_build_id": 60000007,
+    "android_full_build_id": 60000008,
+    "linux_glibc_gui_build_id": 60000003,
+    "linux_glibc_server_build_id": 60000004,
+    "linux_musl_gui_build_id": 60000005,
+    "linux_musl_server_build_id": 60000006
+  },
+  "checks": {
+    "frontend_tests": 50,
+    "frontend_contract_tests": 20,
+    "reachable_web_modules": 220,
+    "single_resource_store_runtime": "passed",
+    "nine_system_runtime": "passed",
+    "external_tools_runtime": "passed",
+    "windows_packed_application_sdk": "passed_gui_and_server",
+    "android_package_and_certificate": "passed_lite_and_full",
+    "browser": [
+      "light theme",
+      "dark theme",
+      "source preview and refresh",
+      "native Skill install from UI",
+      "installed resource management",
+      "external tool edit and toggle",
+      "C trust gate",
+      "history",
+      "390px list/detail and back preserving query",
+      "no horizontal overflow at 390px"
+    ]
+  },
+  "screenshots": [
+    "desktop-light.jpg",
+    "desktop-dark.jpg",
+    "mobile-list.jpg",
+    "mobile-detail.jpg"
+  ],
+  "production_changed": false,
+  "public_update_published": false
+}
