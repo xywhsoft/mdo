@@ -77,7 +77,7 @@ def run(host):
         raise AssertionError("Creator task did not terminate")
     try:
         server = start(EXE, site / "xs.json", HOME); ready(server, port, "/api/v1/mdo/cli/catalog")
-        web("POST", "/api/v1/register", dict(username="creator_native", password="Fixture-2026-password"), status=201)
+        web("POST", "/api/v1/register", dict(username="creator_native", nickname="Different nickname", password="Fixture-2026-password"), status=201)
         login, _ = web("POST", "/api/v1/login", dict(identifier="creator_native", password="Fixture-2026-password"))
         auth = {"Authorization": "Bearer " + login["access_token"]}
         _, head = web("POST", "/admin/login", dict(username=admin_user, password=admin_password))
@@ -97,7 +97,7 @@ def run(host):
         subprocess.run([r"E:\software\w64devkit\bin\gcc.exe", "-Os", "-s", str(source), "-o", str(program)], check=True)
         snapshot = client("GET", "/cli-tools")
         tool = dict(id="creator-fixture", name="Creator Fixture", version="1.0.0", platform="windows-x86_64", path=str(program),
-                    description="USER_FACING_CREATOR_DESCRIPTION",prompt="Print a safe fixture marker.", license="MIT", links=[], enabled=True)
+                    description="USER_FACING_CREATOR_DESCRIPTION",copyright="Copyright 2026 Upstream Fixture Authors",prompt="Print a safe fixture marker.", license="MIT", links=[], enabled=True)
         client("POST", "/cli-tools", dict(action="save", revision=snapshot.get("revision",0), tool=tool))
         client("POST", "/cli-tools", dict(action="publish", id=tool["id"], name=tool["name"], publish=True,
                                            review_file=str(source), review_notes="Build with gcc. Prints a marker; no files or network access."))
@@ -113,6 +113,7 @@ def run(host):
         snapshot, _ = task()
         installed = next(t for t in snapshot["items"] if t.get("store_id") == submitted["id"])
         assert installed["description"]==tool["description"] and installed["prompt"]==tool["prompt"]
+        assert installed["copyright"]==tool["copyright"] and installed["submitter"]=="creator_native" and installed["author"]=="Different nickname"
         installed_path = Path(installed["path"])
         assert hashlib.sha256(installed_path.read_bytes()).digest() == hashlib.sha256(program.read_bytes()).digest()
         result = subprocess.run([str(installed_path)], capture_output=True, timeout=5, check=True)

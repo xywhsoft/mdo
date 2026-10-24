@@ -169,6 +169,9 @@ def package(stage, metadata, output):
     manifest={k:metadata[k] for k in ("id","name","version","platform","prompt","entry","license","links","commands")}
     descriptions=json.loads((Path(__file__).resolve().parents[3]/"app/default-home/cli-tools/official.json").read_text(encoding="utf-8"))["tools"]
     manifest["description"]=metadata.get("description", next((row["description"] for row in descriptions if row["id"]==metadata["id"]), ""))
+    copyright=metadata.get("copyright", "")
+    if not isinstance(copyright,str) or "\0" in copyright or len(copyright.encode("utf-8"))>4096: raise ValueError("Invalid copyright notice")
+    manifest["copyright"]=copyright
     manifest["files"]=files
     assert any(f["path"]==manifest["entry"] and f["size"] for f in files)
     assert all(any(f["path"]==c["entry"] and f["size"] for f in files) for c in manifest["commands"])

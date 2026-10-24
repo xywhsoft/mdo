@@ -10,6 +10,8 @@
 .eb-icon { width:36px; height:36px; flex:none; display:grid; place-items:center; border:1px solid var(--border); border-radius:10px; background:var(--surface); color:var(--muted); }
 .eb-icon .icon { width:19px; height:19px; }
 .eb-info { display:flex; flex:1; min-width:0; flex-direction:column; gap:5px; }
+.eb-title { display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 10px; min-width:0; }
+.eb-byline { color:var(--muted); font-size:11px; font-weight:400; line-height:1.4; overflow-wrap:anywhere; }
 .eb-name { font-size:14px; font-weight:600; overflow-wrap:anywhere; line-height:1.4; }
 .eb-description { color:var(--muted); font-size:12px; line-height:1.55; overflow:hidden; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow-wrap:anywhere; }
 .eb-meta { font-size:11px; color:var(--muted); overflow-wrap:anywhere; line-height:1.5; }

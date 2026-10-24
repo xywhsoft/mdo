@@ -13,12 +13,30 @@ static xvalue* CliService(cstr Path,cstr Method,const xvalue* Body,MdoAccountLea
     Result=xrtValueObjectTake(Envelope,XRT_STR_LITERAL("data"));
 done:xrtSecureZero(Auth,sizeof(Auth));xrtFree(Json);xsFetchResponseUnit(&Response);xrtValueRelease(Envelope);return Result;
 }
+/* Backfill old installed entries from their exact approved store version.
+ * Newer versions' copyright notices must never be applied to older binaries. */
+static void CliRefreshCredits(const xvalue* Catalog)
+{
+    if(!g_MdoCli.Writable)return;
+    xvalue* Previous=xrtValueDeepClone(g_MdoCli.State);if(!Previous)return;bool Changed=false;
+    const xvalue* Rows=xrtValueObjectGet(Catalog,XRT_STR_LITERAL("items"));
+    for(size_t I=0;I<xrtValueCount(CliItems());I++){
+        xvalue* Tool=xrtValueArrayGet(CliItems(),I);if(strcmp(CliText(Tool,"source",16),"store"))continue;
+        for(size_t J=0;J<xrtValueCount(Rows);J++){
+            const xvalue* R=xrtValueArrayGet(Rows,J);
+            if(MdoDistNumber(Tool,"store_id")!=MdoDistNumber(R,"id")||strcmp(CliText(Tool,"id",64),CliText(R,"tool_id",64))||strcmp(CliText(Tool,"version",64),CliText(R,"version",64))||strcmp(CliText(Tool,"platform",32),CliText(R,"platform",32)))continue;
+            const cstr Keys[]={"submitter","author","copyright"};for(size_t K=0;K<3;K++){cstr V=CliText(R,Keys[K],K==2?4096:100);if(V[0]&&(!CliText(Tool,Keys[K],K==2?4096:100)[0]||K==0)&&strcmp(V,CliText(Tool,Keys[K],K==2?4096:100)))Changed=CliSet(Tool,Keys[K],V)||Changed;}
+        }
+    }
+    if(Changed){xrtValueObjectSetNew(g_MdoCli.State,XRT_STR_LITERAL("revision"),xrtValueUInt(MdoDistNumber(g_MdoCli.State,"revision")+1));if(!CliSave()){xrtValueRelease(g_MdoCli.State);g_MdoCli.State=Previous;Previous=NULL;}}
+    xrtValueRelease(Previous);
+}
 static bool CliCatalog(MdoCliJob* Job,char* Error,size_t Capacity)
 {
     char Path[1000];cstr Query=CliText(Job->Input,"query",100);size_t N=0;char* Encoded=xrtPercentEncodeNew(Query,strlen(Query),xrtStrView(""),&N);
     snprintf(Path,sizeof(Path),"/api/v1/mdo/cli/catalog?platform=%s&q=%s&before=%llu",MdoToolPlatform(),Encoded?Encoded:"",(unsigned long long)(MdoDistNumber(Job->Input,"before")?MdoDistNumber(Job->Input,"before"):INT64_MAX));xrtFree(Encoded);
     xvalue* Catalog=CliService(Path,"GET",NULL,NULL,Job->Cancel,Error,Capacity);if(!Catalog)return false;
-    xrtMutexLock(g_MdoCli.Lock);xrtValueRelease(g_MdoCli.Catalog);(void)CliFillDescriptions(xrtValueObjectGet(Catalog,XRT_STR_LITERAL("items")));g_MdoCli.Catalog=Catalog;xrtMutexUnlock(g_MdoCli.Lock);return true;
+    xrtMutexLock(g_MdoCli.Lock);xrtValueRelease(g_MdoCli.Catalog);(void)CliFillDescriptions(xrtValueObjectGet(Catalog,XRT_STR_LITERAL("items")));CliRefreshCredits(Catalog);g_MdoCli.Catalog=Catalog;xrtMutexUnlock(g_MdoCli.Lock);return true;
 }
 static bool CliInstall(MdoCliJob* Job,char* Error,size_t Capacity)
 {

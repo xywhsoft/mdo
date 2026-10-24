@@ -18,10 +18,10 @@ ROOT=Path(__file__).resolve().parents[1]
 PLATFORM="windows-x86_64" if os.name=="nt" else "linux-x86_64"
 PAYLOAD=b"Not an executable; must never be run\n"
 MANIFEST=dict(id="fixture",name="Fixture CLI",version="1.0.0",platform=PLATFORM,description="USER_DESCRIPTION_SENTINEL",prompt="CLI_PROMPT_SENTINEL",
-              entry="bin/fixture.exe",license="MIT",links=["https://example.org"],
+              entry="bin/fixture.exe",license="MIT",copyright="Copyright 2026 Original Fixture Developers",links=["https://example.org"],
               files=[dict(path="bin/fixture.exe",size=len(PAYLOAD),sha256=hashlib.sha256(PAYLOAD).hexdigest(),mode=493)])
 TEXT=json.dumps(MANIFEST).encode();ARCHIVE=b"MDOCLI1\n"+struct.pack("<I",len(TEXT))+TEXT+PAYLOAD
-PRODUCT=dict(MANIFEST,id=1,slug="fixture",tool_id="official.fixture",sha256=hashlib.sha256(ARCHIVE).hexdigest(),size=len(ARCHIVE),state="published",author="Fixture")
+PRODUCT=dict(MANIFEST,id=1,slug="fixture",tool_id="official.fixture",sha256=hashlib.sha256(ARCHIVE).hexdigest(),size=len(ARCHIVE),state="published",author="Fixture nickname",submitter="fixture_publisher")
 
 def stage_forwarder(site):
     if os.name!="nt":return
@@ -30,11 +30,12 @@ def stage_forwarder(site):
     xs=build_mdo.find_xserver(None,build_mdo.load_object(build_mdo.LOCK_PATH))
     build_cli_forwarder.build(xs,site/"generated/native/windows/cli-forwarder.exe")
 
-LEGACY_MANIFEST={k:v for k,v in MANIFEST.items() if k!="description"}
+LEGACY_MANIFEST={k:v for k,v in MANIFEST.items() if k not in ("description","copyright")}
 LEGACY_TEXT=json.dumps(LEGACY_MANIFEST).encode();LEGACY_ARCHIVE=b"MDOCLI1\n"+struct.pack("<I",len(LEGACY_TEXT))+LEGACY_TEXT+PAYLOAD
 class Store(BaseHTTPRequestHandler):
     legacy=False
     wrong_description=False
+    wrong_copyright=False
     damaged=False
     slow=False
     blob_started=None
@@ -45,6 +46,7 @@ class Store(BaseHTTPRequestHandler):
         product=dict(PRODUCT,sha256=hashlib.sha256(archive).hexdigest(),size=len(archive))
         if self.legacy:product["description"]="Legacy catalog user description"
         if self.wrong_description:product["description"]="Wrong catalog description"
+        if self.wrong_copyright:product["copyright"]="Wrong copyright holder"
         if self.path.startswith("/api/v1/mdo/cli/blob"):
             data=bytes(len(archive)) if self.damaged else archive
             if self.blob_started is not None:
@@ -89,13 +91,15 @@ def run(host):
     try:
         assert get()["guide"]=="new" and not get()["items"]
         exe=base/"manual.exe";exe.write_bytes(PAYLOAD)
-        tool=dict(id="custom.fixture",name="Manual",version="1.0.0",path=str(exe),description="MANUAL_USER_DESCRIPTION",prompt="MANUAL_PROMPT_SENTINEL",license="MIT",platform=PLATFORM,enabled=True,links=[])
+        tool=dict(id="custom.fixture",name="Manual",version="1.0.0",path=str(exe),description="MANUAL_USER_DESCRIPTION",copyright="Copyright Manual Author",prompt="MANUAL_PROMPT_SENTINEL",license="MIT",platform=PLATFORM,enabled=True,links=[])
         post("save",tool={**tool,"source":"store"});assert get()["items"][0]["source"]=="manual","new registrations cannot choose their provenance"
         assert "MANUAL_PROMPT_SENTINEL" in prompt() and prompt().count("<mdo_tool_environment>")==1
         assert get()["items"][0]["description"]==tool["description"] and tool["description"] not in prompt()
-        old_edit={k:v for k,v in tool.items() if k!="description"};post("save",tool=old_edit,revision=get().get("revision",0));assert get()["items"][0]["description"]==tool["description"]
+        assert get()["items"][0]["copyright"]==tool["copyright"] and tool["copyright"] not in prompt()
+        old_edit={k:v for k,v in tool.items() if k not in ("description","copyright")};post("save",tool=old_edit,revision=get().get("revision",0));assert get()["items"][0]["description"]==tool["description"] and get()["items"][0]["copyright"]==tool["copyright"]
         for invalid in [None,[],"x"*2049,"nul\0text"]:post("save",status=422,tool={**tool,"description":invalid},revision=get().get("revision",0))
         assert get()["writable"] and get()["items"][0]["description"]==tool["description"]
+        for invalid in [None,[],"x"*4097,"nul\0text"]:post("save",status=422,tool={**tool,"copyright":invalid},revision=get()["revision"])
         post("enable",id=tool["id"],enabled=False);assert "MANUAL_PROMPT_SENTINEL" not in prompt()
         post("enable",id=tool["id"],enabled=True);exe.unlink();assert "MANUAL_PROMPT_SENTINEL" not in prompt()
         post("save",status=422,tool=tool,revision=get().get("revision",0));exe.write_bytes(PAYLOAD)
@@ -103,6 +107,7 @@ def run(host):
         post("dismiss");post("catalog");s=wait_task();assert s["store"]["items"][0]["id"]==1
         post("install",store_id=1,name="Fixture CLI");s=wait_task();assert s["tasks"][-1]["state"]=="complete",s
         t=s["items"][0];installed=Path(t["path"]);assert installed.read_bytes()==PAYLOAD and "CLI_PROMPT_SENTINEL" in prompt() and t["description"]=="USER_DESCRIPTION_SENTINEL" and "USER_DESCRIPTION_SENTINEL" not in prompt()
+        assert t["copyright"]==MANIFEST["copyright"] and t["submitter"]=="fixture_publisher" and t["author"]!=t["submitter"]
         before=get();durable=(home/"data/cli-tools/state.json").read_bytes()
         for source in ["store","manual","local",None]:
             forged={**t,"source":source,"name":"Forbidden edit","description":"Forbidden description","prompt":"Forbidden instructions"}
@@ -116,9 +121,12 @@ def run(host):
         for index,action in enumerate(["publish","import"],1):
             key=f"{index:032x}";stale.append(key)
             old_tasks.append(dict(id=key,state="interrupted",action=action,request=dict(action=action,id=t["id"],tool={**t,"source":"manual"})))
-        tasks.write_text(json.dumps(old_tasks));proc=start();before=get()
+        tasks.write_text(json.dumps(old_tasks));stored=home/"data/cli-tools/state.json";old_state=json.loads(stored.read_text())
+        for field in ["submitter","author","copyright"]:old_state["items"][0].pop(field,None)
+        stored.write_text(json.dumps(old_state));proc=start();before=get()
         for key in stale:post("retry",status=422,id=key)
         assert get()==before,"rejected old tasks must not be readmitted"
+        post("catalog");s=wait_task();assert s["items"][0]["submitter"]=="fixture_publisher" and s["items"][0]["copyright"]==MANIFEST["copyright"] and s["items"][0]["path"]==t["path"]
         # A valid queued user operation is rechecked before any archive or
         # account work if its registered tool disappears while waiting.
         Store.blob_started=threading.Event();Store.blob_release=threading.Event();post("install",store_id=1)
@@ -132,6 +140,7 @@ def run(host):
         (home/"fail-cli-save").write_bytes(b"1");post("enable",status=422,id=t["id"],enabled=True);assert not get()["items"][0]["enabled"],"failed state writes must restore nested values";(home/"fail-cli-save").unlink()
         post("enable",id=t["id"],enabled=False);post("install",store_id=1);s=wait_task();assert s["tasks"][-1]["state"]=="complete" and not s["items"][0]["enabled"]
         original=s["items"][0]["path"];Store.wrong_description=True;post("install",store_id=1);s=wait_task();assert s["tasks"][-1]["state"]=="failed" and s["items"][0]["path"]==original;Store.wrong_description=False
+        Store.wrong_copyright=True;post("install",store_id=1);s=wait_task();assert s["tasks"][-1]["state"]=="failed" and s["items"][0]["path"]==original;Store.wrong_copyright=False
         Store.legacy=True;post("install",store_id=1);s=wait_task();assert s["tasks"][-1]["state"]=="complete" and s["items"][0]["description"]=="Legacy catalog user description";Store.legacy=False
         post("install",store_id=1);s=wait_task();original=s["items"][0]["path"];Store.damaged=True;post("install",store_id=1);s=wait_task();assert s["tasks"][-1]["state"]=="failed" and s["items"][0]["path"]==original
         Store.damaged=False;Store.slow=True;post("install",store_id=1)

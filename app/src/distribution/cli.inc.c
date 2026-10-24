@@ -58,7 +58,7 @@ static bool CliUserRequest(const xvalue* Input,char* Error,size_t Capacity)
 static bool CliMeta(const xvalue* R)
 {
     uint32_t Version[3];cstr Id=CliText(R,"id",64),Path=CliText(R,"path",4096),Name=CliText(R,"name",120),Prompt=CliText(R,"prompt",16384);
-    return MdoCliDescriptionValid(R)&&MdoPackageId(Id)&&Name[0]&&Prompt[0]&&Path[0]&&(Path[0]=='/'||Path[0]=='\\'||(strlen(Path)>2&&Path[1]==':'))&&MdoPackageVersion(CliText(R,"version",64),Version)&&MdoCliPlatformValid(CliText(R,"platform",32))&&CliText(R,"license",512)[0]&&CliAliasesValid(R)&&(!CliText(R,"command",64)[0]||MdoCliCommandName(CliText(R,"command",64)))&&MdoCliCommandsValid(xrtValueObjectGet(R,XRT_STR_LITERAL("commands")),NULL);
+    return MdoCliDescriptionValid(R)&&MdoCliCopyrightValid(R)&&MdoPackageId(Id)&&Name[0]&&Prompt[0]&&Path[0]&&(Path[0]=='/'||Path[0]=='\\'||(strlen(Path)>2&&Path[1]==':'))&&MdoPackageVersion(CliText(R,"version",64),Version)&&MdoCliPlatformValid(CliText(R,"platform",32))&&CliText(R,"license",512)[0]&&CliAliasesValid(R)&&(!CliText(R,"command",64)[0]||MdoCliCommandName(CliText(R,"command",64)))&&MdoCliCommandsValid(xrtValueObjectGet(R,XRT_STR_LITERAL("commands")),NULL);
 }
 static void CliTaskStatus(cstr Id,cstr Status,cstr Error)
 {
@@ -92,10 +92,10 @@ static bool CliFillDescriptions(xvalue* Items)
 {
     xvalue* Official=MdoDistRead("cli-tools/official.json",131072);const xvalue* Definitions=xrtValueObjectGet(Official,XRT_STR_LITERAL("tools"));bool Changed=false;
     for(size_t I=0;I<xrtValueCount(Items);I++){
-        xvalue* R=xrtValueArrayGet(Items,I);if(!MdoCliDescriptionValid(R)||CliText(R,"description",2048)[0])continue;
+        xvalue* R=xrtValueArrayGet(Items,I);if(!MdoCliDescriptionValid(R))continue;
         cstr Description="";
-        for(size_t J=0;J<xrtValueCount(Definitions);J++){const xvalue* D=xrtValueArrayGet(Definitions,J);char Id[65];snprintf(Id,sizeof(Id),"official.%s",CliText(D,"id",48));if(!strcmp(Id,CliText(R,"tool_id",64))||(!strcmp(Id,CliText(R,"id",64))&&strcmp(CliText(R,"source",16),"manual"))){Description=CliText(D,"description",2048);break;}}
-        if(!xrtValueObjectGet(R,XRT_STR_LITERAL("description"))||Description[0])Changed=CliSet(R,"description",Description)||Changed;
+        for(size_t J=0;J<xrtValueCount(Definitions);J++){const xvalue* D=xrtValueArrayGet(Definitions,J);char Id[65];snprintf(Id,sizeof(Id),"official.%s",CliText(D,"id",48));if(!strcmp(Id,CliText(R,"tool_id",64))||(!strcmp(Id,CliText(R,"id",64))&&strcmp(CliText(R,"source",16),"manual"))){Description=CliText(D,"description",2048);cstr Source=CliText(R,"source",16);if((!strcmp(Source,"bundled")||!strcmp(Source,"legacy"))&&!CliText(R,"submitter",100)[0])Changed=CliSet(R,"submitter","墨斗")||Changed;break;}}
+        if(!CliText(R,"description",2048)[0]&&(!xrtValueObjectGet(R,XRT_STR_LITERAL("description"))||Description[0]))Changed=CliSet(R,"description",Description)||Changed;
     }
     xrtValueRelease(Official);return Changed;
 }
@@ -199,7 +199,7 @@ bool MdoCliCommand(const xvalue* Input,char* Error,size_t Capacity)
     if(!strcmp(Action,"save")){
         const xvalue* Item=xrtValueObjectGet(Input,XRT_STR_LITERAL("tool"));cstr Key=CliText(Item,"id",64);xvalue* Old=CliFind(Key);
         if(Old&&!CliUserDefined(Old)){snprintf(Error,Capacity,"Only user-added external tools can be edited");goto done;}
-        if(!CliMeta(Item)||strcmp(CliText(Item,"platform",32),MdoToolPlatform())||!CliPresent(CliText(Item,"path",4096))){snprintf(Error,Capacity,"Name, executable path, prompt, version, platform and license are required; description must be at most 2048 UTF-8 bytes; executable must exist");goto done;}
+        if(!CliMeta(Item)||strcmp(CliText(Item,"platform",32),MdoToolPlatform())||!CliPresent(CliText(Item,"path",4096))){snprintf(Error,Capacity,"Name, executable path, prompt, version, platform and license are required; description/copyright must be at most 2048/4096 UTF-8 bytes; executable must exist");goto done;}
         if(Old&&CliText(Old,"managed_root",160)[0]&&strcmp(CliText(Old,"path",4096),CliText(Item,"path",4096))){snprintf(Error,Capacity,"Managed program paths are controlled by installation; add a custom tool to use another program");goto done;}
 #if defined(__ANDROID__)
         if(!Old||strcmp(CliText(Old,"path",4096),CliText(Item,"path",4096))){snprintf(Error,Capacity,"Android programs must be supplied by the full APK");goto done;}
@@ -207,6 +207,8 @@ bool MdoCliCommand(const xvalue* Input,char* Error,size_t Capacity)
         if((!Old&&xrtValueCount(CliItems())>=256)||(Old&&MdoDistNumber(Input,"revision")!=MdoDistNumber(g_MdoCli.State,"revision"))){snprintf(Error,Capacity,"External-tool list changed or is full; reload before saving");goto done;}
         xvalue* Copy=xrtValueDeepClone(Item);xrtValueObjectRemove(Copy,XRT_STR_LITERAL("relative_path"));xrtValueObjectRemove(Copy,XRT_STR_LITERAL("store_id"));xrtValueObjectRemove(Copy,XRT_STR_LITERAL("managed_root"));xrtValueObjectRemove(Copy,XRT_STR_LITERAL("entry"));CliSet(Copy,"source",Old?CliText(Old,"source",16):"manual");
         if(Old&&!xrtValueObjectGet(Item,XRT_STR_LITERAL("description")))CliSet(Copy,"description",CliText(Old,"description",2048));
+        if(Old&&!xrtValueObjectGet(Item,XRT_STR_LITERAL("copyright")))CliSet(Copy,"copyright",CliText(Old,"copyright",4096));
+        xrtValueObjectRemove(Copy,XRT_STR_LITERAL("submitter"));xrtValueObjectRemove(Copy,XRT_STR_LITERAL("author"));
         if(Old){const xvalue* V=xrtValueObjectGet(Old,XRT_STR_LITERAL("store_id"));if(V)xrtValueObjectSet(Copy,XRT_STR_LITERAL("store_id"),V);V=xrtValueObjectGet(Old,XRT_STR_LITERAL("managed_root"));if(V)xrtValueObjectSet(Copy,XRT_STR_LITERAL("managed_root"),V);V=xrtValueObjectGet(Old,XRT_STR_LITERAL("entry"));if(V)xrtValueObjectSet(Copy,XRT_STR_LITERAL("entry"),V);}
         if(Old){for(size_t I=0;I<xrtValueCount(CliItems());I++)if(xrtValueArrayGet(CliItems(),I)==Old){xrtValueArraySet(CliItems(),I,Copy);break;}}else xrtValueArrayAppend(CliItems(),Copy);xrtValueRelease(Copy);Ok=true;
     }else if(!strcmp(Action,"enable")){xvalue* R=CliFind(Id);if(R){xrtValueObjectSetNew(R,XRT_STR_LITERAL("enabled"),xrtValueBool(CliBool(Input,"enabled",true)));Ok=true;}}

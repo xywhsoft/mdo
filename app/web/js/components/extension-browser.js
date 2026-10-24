@@ -130,8 +130,10 @@ export function createExtensionBrowser({ kind, onClose } = {}) {
         entry.classList.toggle("is-selected", selected === row.key);
         const openButton = element("button", { className: "eb-open", attrs: { type: "button", "aria-expanded": String(selected === row.key) } });
         openButton.dataset.key = row.key; openButton.dataset.ebFocus = `${row.key}:open`;
-        const info = el("span", "eb-info"), name = el("span", "eb-name", row.title);
-        info.append(name, el("span", "eb-description", row.description || browserText("noDescription", "暂无说明")), el("span", "eb-meta", (row.meta || []).filter(Boolean).join(" · ")));
+        const info = el("span", "eb-info"), title = el("span", "eb-title"), name = el("span", "eb-name", row.title);
+        title.append(name);
+        if (row.byline) title.append(el("small", "eb-byline", row.byline));
+        info.append(title, el("span", "eb-description", row.description || browserText("noDescription", "暂无说明")), el("span", "eb-meta", (row.meta || []).filter(Boolean).join(" · ")));
         openButton.append(extensionIcon(row.kind || kind), info); openButton.addEventListener("click", () => open(row.key));
         const controls = el("div", "eb-actions");
         if (row.badge?.text) controls.append(el("span", `eb-badge ${row.badge.tone === "error" ? "eb-error" : ""}`, row.badge.text));

@@ -14,6 +14,9 @@ labels["ru-RU"].push("Имя команды (по умолчанию имя пр
 labels["zh-CN"].push("描述","面向用户，说明这个工具能完成什么功能。列表将显示这段描述。","面向模型，说明何时使用工具、如何调用及注意事项；不会作为列表描述展示。","暂无描述");
 labels["en-US"].push("Description","For users: explain what this tool can do. This text appears in the list.","For the model: explain when and how to use this tool, including caveats. This is not the list description.","No description");
 labels["ru-RU"].push("Описание","Для пользователя: какие задачи решает инструмент. Этот текст отображается в списке.","Для модели: когда и как применять инструмент и какие ограничения учитывать. Не используется как описание списка.","Нет описания");
+labels["zh-CN"].push("提交者","版权声明","未提供版权声明，请参阅许可文件及上游项目链接。","本机添加","提交者未提供");
+labels["en-US"].push("Submitted by","Copyright notice","No copyright notice supplied. See the license files and upstream project links.","Added locally","Submitter not provided");
+labels["ru-RU"].push("Опубликовал","Авторские права","Сведения не предоставлены. См. файлы лицензий и ссылки на исходный проект.","Добавлено локально","Издатель не указан");
 const n = (tag, text, cls) => { const e=document.createElement(tag); if(text!=null)e.textContent=text; if(cls)e.className=cls; return e; };
 const active = t => ["queued","running","installing","uploading"].includes(t.state);
 export function externalToolAction(row, installed) {
@@ -26,6 +29,7 @@ export function createExternalToolsPanel({ refresh, openFull, openTools, signedI
   const signatures=new WeakMap(), hosts=new Set();
   const c=i=>(labels[currentLocale()]??labels["en-US"])[i];
   const userDefined=tool=>["manual","local"].includes(tool?.source);
+  const submitter=tool=>tool.submitter||tool.author||(userDefined(tool)?c(60):c(61));
   const writable=()=>{const t=targetState();return data.writable!==false&&(!t.selected||(t.connected&&!t.runtimeChanged&&t.selected.mode!=="view"));};
   const button=(text,fn,disabled=false)=>{const b=n("button",text,"secondary-button");b.type="button";b.disabled=disabled;b.onclick=fn;return b;};
   const guide=n("aside",null,"cli-first-use"), global=n("button",null,"secondary-button cli-download-entry");
@@ -45,10 +49,10 @@ export function createExternalToolsPanel({ refresh, openFull, openTools, signedI
     closeEditor();editing=tool.id??null;const own=context,revision=data.revision??0;
     editor=n("dialog",null,"cli-editor");const form=n("form"), message=n("p",null,"cli-error"), fields={};
     form.append(n("h3",c(tool.id?8:2)));
-    for(const [key,label,type] of [["name",18],["description",53,"textarea"],["path",19],["command",46],["aliases",47,"textarea"],["prompt",20,"textarea"],["version",21],["license",22],["links",23,"textarea"],["package_root",24]]){
+    for(const [key,label,type] of [["name",18],["description",53,"textarea"],["path",19],["command",46],["aliases",47,"textarea"],["prompt",20,"textarea"],["version",21],["copyright",58,"textarea"],["license",22],["links",23,"textarea"],["package_root",24]]){
       const wrap=n("label",null,"cli-field"),input=n(type??"input");input.name=key;
       input.value=key==="links"||key==="aliases"?(Array.isArray(tool[key])?tool[key]:[]).join("\n"):tool[key]??(key==="version"?"1.0.0":key==="license"?"Unknown":"");
-      input.required=["name","description","path","prompt","version","license"].includes(key);input.maxLength=key==="description"?512:key==="prompt"?16384:key==="path"||key==="package_root"?4096:key==="name"?120:key==="links"?16384:512;
+      input.required=["name","description","path","prompt","version","license"].includes(key);input.maxLength=key==="copyright"?1024:key==="description"?512:key==="prompt"?16384:key==="path"||key==="package_root"?4096:key==="name"?120:key==="links"?16384:512;
       if(key==="path"&&(data.platform?.startsWith("android")||tool.managed_root))input.readOnly=true;
       if(key==="command"&&tool.commands?.length)input.readOnly=true;
       wrap.append(n("span",c(label)),input);if(key==="description"||key==="prompt")wrap.append(n("small",c(key==="description"?54:55)));fields[key]=input;form.append(wrap);
@@ -69,7 +73,7 @@ export function createExternalToolsPanel({ refresh, openFull, openTools, signedI
     form.onsubmit=async e=>{e.preventDefault();if(own!==context)return closeEditor();const request={action:"publish",id:tool.id,name:tool.name,publish:publish.checked,...Object.fromEntries(Object.entries(fields).map(([k,v])=>[k,v.value.trim()]))};if(request.publish&&(request.review_notes.length<10||!request.source_url&&!request.review_file)){message.textContent=currentLocale()==="zh-CN"?"公布时请提供源码或可核验来源，并填写至少 10 个字符的构建及安全说明。":"Provide source/provenance and at least 10 characters of build/security notes.";return;}save.disabled=true;if(await command(request))closeEditor();else{message.textContent=error;save.disabled=false;}};
   }
   function toolDetail(tool, install) {
-    const description=n("div");description.append(n("p",tool.description||c(56)));
+    const description=n("div");description.append(n("p",tool.description||c(56)),detailFacts([[c(57),submitter(tool)],[c(58),tool.copyright||c(59)],[c(22),tool.license]]));
     const usage=n("div");usage.append(detailFacts([[c(19),tool.path],[c(50),(tool.exported_commands||[]).join(" · ")],[c(52),data.command_directory]]),n("h4",c(20)),n("p",tool.prompt));
     const source=n("div");source.append(detailFacts([[c(21),tool.version],[browserText("platform","支持平台"),tool.platform],[c(22),tool.license]]));
     let links=tool.links;try{if(typeof links==="string")links=JSON.parse(links);}catch{links=[];}
@@ -115,12 +119,12 @@ export function createExternalToolsPanel({ refresh, openFull, openTools, signedI
         if(custom)actions.push(button(c(10),()=>share(t),disabled||!signedIn()||!t.present));
         if(custom&&!t.managed_root)actions.push(button(c(48),()=>{if(window.confirm(c(49)))void command({action:"import",id:t.id,name:t.name});},disabled||!t.present));
         const toggle=extensionToggle(button(c(t.enabled?7:6),()=>command({action:"enable",id:t.id,enabled:!t.enabled}),disabled||(!t.enabled&&!t.present)),t.enabled,t.name);
-        return {key:`local:${t.id}`,title:t.name,description:t.description||c(56),meta:[t.version,t.license],toggle,actions,badge:{text:job?taskLabel(job):!t.present?c(39):"",tone:!t.present?"error":""},detail:()=>toolDetail(t)};
+        return {key:`local:${t.id}`,title:t.name,byline:submitter(t),description:t.description||c(56),meta:[t.version,t.license],toggle,actions,badge:{text:job?taskLabel(job):!t.present?c(39):"",tone:!t.present?"error":""},detail:()=>toolDetail(t)};
       }):(data.store?.items||[]).filter(t=>stateFilter==="all"||(stateFilter==="installed"?!externalToolAction(t,data.items||[]):stateFilter==="updates"?externalToolAction(t,data.items||[])==="update":externalToolAction(t,data.items||[])==="install")).map(t=>{
         const action=externalToolAction(t,data.items||[]),job=taskFor(t);
         const install=()=>button(c(android?29:action==="update"?12:11),()=>android?openBundle():command({action:"install",store_id:t.id,name:t.name}),disabled||t.platform!==data.platform||!!job);
         const primary=action?install():null;
-        return {key:`store:${t.id}`,title:t.name,description:t.description||c(56),meta:[t.author,t.version,t.platform],badge:{text:job?taskLabel(job):t.platform!==data.platform?c(42):!action?browserText("installed","已安装"):""},primary,detail:()=>toolDetail(t,action?install:null)};
+        return {key:`store:${t.id}`,title:t.name,byline:submitter(t),description:t.description||c(56),meta:[t.version,t.platform],badge:{text:job?taskLabel(job):t.platform!==data.platform?c(42):!action?browserText("installed","已安装"):""},primary,detail:()=>toolDetail(t,action?install:null)};
       });
       browser.setItems(rows,{empty:c(16)});
     };

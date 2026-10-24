@@ -20,6 +20,27 @@ test("new registry does not recreate old missing-tool recommendation notificatio
 
 import { TestElement as Element, testDocument } from "./helpers/extension-dom.mjs";
 const all=e=>[e,...e.children.flatMap(all)];
+test("local and store rows credit submitter usernames; details distinguish copyright holders and license",()=>{
+ const saved=globalThis.document;globalThis.document=testDocument();
+ try{
+  const panel=createExternalToolsPanel({refresh:async()=>{},openFull:async()=>{},openTools:()=>{},signedIn:()=>true}),body=new Element("div");
+  const tool={id:"community.fixture",name:"Fixture",source:"store",submitter:"<publisher>",author:"Publisher nickname",copyright:"Copyright 2026 Original Developer\nAdditional dependency owners",license:"MIT",version:"1.0.0",enabled:true,present:true};
+  panel.render(body,{writable:true,platform:"windows-x86_64",guide:"accepted",items:[tool],store:{items:[{...tool,id:7,tool_id:tool.id,platform:"windows-x86_64"}]},tasks:[]});
+  for(const view of ["Local tools","Tool store"]){
+   all(body).find(n=>n.attributes.role==="tab"&&n.textContent===view).click();
+   const row=body.querySelector(".eb-row");assert.equal(row.querySelector(".eb-name").textContent,tool.name);
+   assert.equal(row.querySelector(".eb-byline").textContent,tool.submitter);assert(!row.textContent.includes(tool.author));
+   row.querySelector(".eb-open").click();const detail=body.querySelector(".eb-detail");
+   assert(detail.textContent.includes("Submitted by"));assert(detail.textContent.includes(tool.submitter));
+   assert(detail.textContent.includes("Copyright notice"));assert(detail.textContent.includes(tool.copyright));assert(detail.textContent.includes("MIT"));
+   assert.equal(body.querySelectorAll("script").length,0);
+  }
+  panel.render(body,{writable:true,platform:"windows-x86_64",guide:"accepted",items:[],store:{items:[{id:8,tool_id:"old",name:"Old",author:"Legacy publisher",version:"1.0.0",platform:"windows-x86_64"}]},tasks:[]});
+  assert.equal(body.querySelector(".eb-byline").textContent,"Legacy publisher");body.querySelector(".eb-open").click();
+  assert(body.querySelector(".eb-detail").textContent.includes("No copyright notice supplied"));
+  panel.destroy();
+ }finally{globalThis.document=saved;}
+});
 test("only user-added external tools offer edit, share and copy; store tools retain uninstall and toggle",()=>{
  const saved=globalThis.document;globalThis.document=testDocument();
  try{
