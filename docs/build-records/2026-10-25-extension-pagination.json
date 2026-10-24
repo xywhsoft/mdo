@@ -1,0 +1,47 @@
+{
+  "app_commit": "43071cecce9e72f3ae5e322e8c5e140f5156cd3b",
+  "preview": true,
+  "auto_update_published": false,
+  "android_device_tested": false,
+  "artifacts": [
+    {
+      "file": "mdo.exe",
+      "size": 6250938,
+      "sha256": "6106e3399ac27299f1d770c744a23405dfa5b52412295d4516355b7f8f94a22c"
+    },
+    {
+      "file": "mdo-server.exe",
+      "size": 5992693,
+      "sha256": "9193f25e1fb459bc9dfa754e15055f2866af9f65a1fd1b88720b9ebcbdfd108d"
+    },
+    {
+      "file": "mdo-arm64-v8a.apk",
+      "size": 5793089,
+      "sha256": "ce79087a9e45eb538c2637d53265d75bbf546671c650241aaaecfc89ce628e6c"
+    },
+    {
+      "file": "mdo-full-arm64-v8a.apk",
+      "size": 150133145,
+      "sha256": "2fd5008411ba29269fea8981cc86887f899643630d04b301d796df189f28172e"
+    }
+  ],
+  "version": "0.6.0",
+  "implementation_commits": [
+    "3b1ede4d",
+    "43071cec"
+  ],
+  "verification": [
+    "39 extension JavaScript regressions",
+    "20 frontend contracts",
+    "223 frontend modules parsed and reachable",
+    "native isolated app desktop page numbers, Enter jump, input validation, page size and last-page boundaries",
+    "320px and 390px single-line compact pager; no horizontal overflow",
+    "Windows GUI/server packs",
+    "Android APK layout, native libraries, zipalign and formal release signing certificate"
+  ],
+  "screenshots": [
+    ".build/extension-pagination-20261025/screenshots/desktop-light.png",
+    ".build/extension-pagination-20261025/screenshots/desktop-dark.png",
+    ".build/extension-pagination-20261025/screenshots/mobile-dark-compact.png"
+  ]
+}
