@@ -22,6 +22,7 @@ def run():
     parser = argparse.ArgumentParser()
     parser.add_argument('--host', type=Path, default=ROOT / '.build/host/windows-server-glibc/xs.exe')
     parser.add_argument('--packed', action='store_true')
+    parser.add_argument('--without-vault', action='store_true')
     args = parser.parse_args()
     base = Path(tempfile.mkdtemp(prefix='mcp-template-', dir=ROOT / '.build'))
     app, home = base / 'app', base / 'home'
@@ -56,7 +57,7 @@ def run():
                 except (OSError, AssertionError): time.sleep(.1)
             assert token, (base / 'runtime.log').read_text(errors='replace')[-6000:]
             t = template('service')
-            package = dict(format='mdo.extension.v1', manifest=dict(slug='mcp-fixture', name='Fixture', version='1.0.0', description='Private template', readme='Inspect the endpoint.', license='MIT', platforms=['windows-x86_64']), resources=[dict(kind='mcp', id='service', content=json.dumps(t))])
+            package = dict(format='mdo.extension.v1', manifest=dict(slug='mcp-fixture', name='Fixture', version='1.0.0', description='Private template', readme='Inspect the endpoint.', license='MIT', platforms=['windows-x86_64','linux-x86_64','linux-x86_64-glibc']), resources=[dict(kind='mcp', id='service', content=json.dumps(t))])
             def store(action, **extra): return api('POST', '/ecosystem', dict(action=action, single_kind='mcp', **extra))[0]
             plan = store('plan_import', package=package)
             store('import', package=package, expected_plan=plan['sha256'])
@@ -97,21 +98,24 @@ def run():
             store('import', package=key_package)
             records = json.loads(receipts.read_text()); key_receipt = records.pop('local:key-template'); key_receipt.update(id=72, source='store', owner=7); records['72'] = key_receipt; receipts.write_text(json.dumps(records))
             secret = 'Private-fixture-credential-2026'
-            key_body = dict(id='private-key', action='save', receipt_id=72, variant='default', values=dict(token=secret))
-            key_preview = api('POST', '/mcp/connections', dict(key_body,action='preview'), revision='new')[0]
-            assert secret not in json.dumps(key_preview)
-            sealed = api('POST', '/mcp/connections', key_body, revision='new')[0]
-            assert secret not in json.dumps(sealed) and secret not in (home / 'mcp/private-key.json').read_text()
-            retained = api('POST', '/mcp/connections', dict(key_body, values={}), revision=sealed['revision'])[0]
-            assert json.loads(retained['content'])['transport']['headers'] == json.loads(sealed['content'])['transport']['headers']
-            # A target change must not forward a previously bound key.
-            changed = copy.deepcopy(key_package); changed['manifest']['slug'] = 'changed-target'; changed['resources'][0]['content'] = changed['resources'][0]['content'].replace('example.invalid', 'other.invalid')
-            store('import', package=changed)
-            records = json.loads(receipts.read_text()); r = records.pop('local:changed-target'); r.update(id=73, source='store', owner=7); records['73'] = r; receipts.write_text(json.dumps(records))
-            api('POST', '/mcp/connections', dict(key_body, receipt_id=73, values={}), revision=retained['revision'], status=409)
-            assert 'other.invalid' not in (home / 'mcp/private-key.json').read_text()
-            ref=json.loads(retained['content'])['mdo_template']['values']['token'];vault_file=home/('config/secrets/models/'+ref[6:]+'.key');assert vault_file.exists()
-            api('POST','/mcp/connections',dict(id='private-key',action='delete'),revision=retained['revision']);assert not vault_file.exists()
+            if not args.without_vault:
+                key_body = dict(id='private-key', action='save', receipt_id=72, variant='default', values=dict(token=secret))
+                key_preview = api('POST', '/mcp/connections', dict(key_body,action='preview'), revision='new')[0]
+                assert secret not in json.dumps(key_preview)
+                sealed = api('POST', '/mcp/connections', key_body, revision='new')[0]
+                assert secret not in json.dumps(sealed) and secret not in (home / 'mcp/private-key.json').read_text()
+                retained = api('POST', '/mcp/connections', dict(key_body, values={}), revision=sealed['revision'])[0]
+                assert json.loads(retained['content'])['transport']['headers'] == json.loads(sealed['content'])['transport']['headers']
+                # A target change must not forward a previously bound key.
+                changed = copy.deepcopy(key_package); changed['manifest']['slug'] = 'changed-target'; changed['resources'][0]['content'] = changed['resources'][0]['content'].replace('example.invalid', 'other.invalid')
+                store('import', package=changed)
+                records = json.loads(receipts.read_text()); r = records.pop('local:changed-target'); r.update(id=73, source='store', owner=7); records['73'] = r; receipts.write_text(json.dumps(records))
+                api('POST', '/mcp/connections', dict(key_body, receipt_id=73, values={}), revision=retained['revision'], status=409)
+                assert 'other.invalid' not in (home / 'mcp/private-key.json').read_text()
+                ref=json.loads(retained['content'])['mdo_template']['values']['token'];vault_file=home/('config/secrets/models/'+ref[6:]+'.key');assert vault_file.exists()
+                api('POST','/mcp/connections',dict(id='private-key',action='delete'),revision=retained['revision']);assert not vault_file.exists()
+            else:
+                api('POST','/mcp/connections',dict(id='private-key',action='save',receipt_id=72,variant='default',values=dict(token=secret)),revision='new',status=409)
             # Custom exports remove URL/argument/OAuth data and declare blank
             # parameters rather than copying any original device values.
             custom = copy.deepcopy(t['variants'][0]['config']); custom.update(id='custom-export', enabled=False, oauth=dict(enabled=True, client_id=secret, client_secret_ref='env:PRIVATE_CLIENT_SECRET'))
@@ -121,10 +125,11 @@ def run():
             exported = store('export', references=[dict(kind='mcp', id='custom-export')])
             public = json.dumps(exported); assert secret not in public and 'PRIVATE_HEADER' not in public and 'PRIVATE_CLIENT_SECRET' not in public
             assert all('default' not in i for i in json.loads(exported['resources'][0]['content'])['inputs'])
-            optional=copy.deepcopy(key_package);optional['manifest']['slug']='optional-key';ot=template('optional-key','key');ot['inputs'][0]['required']=False;optional['resources'][0].update(id='optional-key',content=json.dumps(ot));store('import',package=optional)
-            empty=api('POST','/mcp/connections',dict(action='save',id='optional',receipt_key='local:optional-key',variant='default',values={}),revision='new')[0];assert not json.loads(empty['content'])['transport']['headers']
-            bound=api('POST','/mcp/connections',dict(action='save',id='optional',values=dict(token=secret)),revision=empty['revision'])[0]
-            cleared=api('POST','/mcp/connections',dict(action='save',id='optional',values={},clear_secrets=['token']),revision=bound['revision'])[0];assert not json.loads(cleared['content'])['transport']['headers']
+            if not args.without_vault:
+                optional=copy.deepcopy(key_package);optional['manifest']['slug']='optional-key';ot=template('optional-key','key');ot['inputs'][0]['required']=False;optional['resources'][0].update(id='optional-key',content=json.dumps(ot));store('import',package=optional)
+                empty=api('POST','/mcp/connections',dict(action='save',id='optional',receipt_key='local:optional-key',variant='default',values={}),revision='new')[0];assert not json.loads(empty['content'])['transport']['headers']
+                bound=api('POST','/mcp/connections',dict(action='save',id='optional',values=dict(token=secret)),revision=empty['revision'])[0]
+                cleared=api('POST','/mcp/connections',dict(action='save',id='optional',values={},clear_secrets=['token']),revision=bound['revision'])[0];assert not json.loads(cleared['content'])['transport']['headers']
             # Local stdio recipes require explicit command consent. Saving and
             # enabling remain cold; only an explicit test starts the peer.
             stdio_package=copy.deepcopy(package);stdio_package['manifest']['slug']='stdio-template';stdio_package['resources'][0]['id']='cli-service'
