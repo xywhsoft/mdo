@@ -1,0 +1,57 @@
+"""APK payloads may share exact bytes, but library identity must never conflict."""
+import importlib.util
+import io
+import json
+from pathlib import Path
+import tempfile
+import unittest
+import zipfile
+
+ROOT = Path(__file__).resolve().parents[1]
+spec = importlib.util.spec_from_file_location("runtime_bundle", ROOT / "tools/android/runtime_bundle.py")
+bundle = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(bundle)
+
+
+class RuntimeAliases(unittest.TestCase):
+    def pack(self, rows, aliases=None):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            for name, data in {"busybox/busybox": b"\x7fELFbusybox", **rows}.items():
+                p = root / name; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(data)
+            if aliases is not None:
+                p = root / "git/native-aliases.json"; p.parent.mkdir(exist_ok=True); p.write_text(json.dumps(aliases))
+            out = io.BytesIO()
+            with zipfile.ZipFile(out, "w") as archive:
+                bundle.add_runtime(archive, root, "full", 50000017, 4)
+            with zipfile.ZipFile(out) as archive:
+                paths = archive.namelist()
+                meta = json.loads(archive.read("assets/mdo-runtime.json"))
+            return paths, {r["path"]: r for r in meta["files"]}
+
+    def test_identical_libraries_and_programs_share_payload(self):
+        paths, files = self.pack({"git/git": b"\x7fELFgit", "git/alias": b"\x7fELFgit", "git/libshared.so": b"\x7fELFlib", "ffmpeg/libshared.so": b"\x7fELFlib"}, {"git/libexec/git-core/git-add": "git/git"})
+        self.assertEqual(files["git/git"]["native"], files["git/alias"]["native"])
+        self.assertEqual(files["git/git"]["native"], files["git/libexec/git-core/git-add"]["native"])
+        self.assertEqual(files["git/libshared.so"]["native"], files["ffmpeg/libshared.so"]["native"])
+        self.assertEqual(len([p for p in paths if p.startswith("lib/")]), 3)
+
+    def test_conflicting_soname_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "conflicting native"):
+            self.pack({"git/libshared.so": b"\x7fELFa", "ffmpeg/libshared.so": b"\x7fELFb"})
+
+    def test_aliases_cannot_escape_or_replace_files(self):
+        for alias, target in [("git/../escape", "git/git"), ("other/alias", "git/git"), ("git/git", "git/git"), ("git/alias", "missing"), ("git/line\nbreak", "git/git")]:
+            with self.subTest(alias=alias), self.assertRaises(ValueError):
+                self.pack({"git/git": b"\x7fELFgit"}, {alias: target})
+
+    def test_lite_never_includes_tool_programs(self):
+        out = io.BytesIO()
+        with zipfile.ZipFile(out, "w") as archive:
+            bundle.add_runtime(archive, ROOT / "tools/runtime/android-arm64-v8a", "lite", 50000015, 4)
+        with zipfile.ZipFile(out) as archive:
+            self.assertEqual(archive.namelist(), ["assets/mdo-runtime.json"])
+            self.assertEqual(json.loads(archive.read("assets/mdo-runtime.json"))["files"], [])
+
+
+if __name__ == "__main__": unittest.main()
