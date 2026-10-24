@@ -13,7 +13,7 @@ import shutil
 import struct
 
 SYSTEM_DLLS = set("advapi32 bcrypt bcryptprimitives cabinet cfgmgr32 comctl32 comdlg32 crypt32 cryptbase cryptnet cryptsp d3d11 d3d12 dbghelp dnsapi dwmapi dxgi gdi32 gdiplus hid imagehlp imm32 iphlpapi kernel32 kernelbase mpr msvcrt ncrypt netapi32 normaliz ntdll ntmarta ole32 oleaut32 powrprof profapi propsys psapi rpcrt4 secur32 setupapi shell32 shlwapi sspicli ucrtbase user32 userenv usp10 uxtheme version winhttp wininet winmm winspool wintrust wldap32 ws2_32 wtsapi32".split())
-SYSTEM_DLLS.update(("d3dcompiler_47", "msimg32", "wsock32"))
+SYSTEM_DLLS.update(("d3dcompiler_47", "msimg32", "wsock32", "avicap32", "msvfw32"))
 
 
 def digest(path):
