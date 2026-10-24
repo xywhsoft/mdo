@@ -32,6 +32,9 @@ python3 tools/qa_release.py --xserver-root /path/to/xserver
 8. 对同一打包候选运行 12 项 Home、工作区、目录、实时连接、队列、备份、恢复、压缩、分支、编辑和恢复确认检查；
 9. Windows 上将单文件包复制到空临时目录，用唯一文件名打开原生 WebView2，确认旁边只生成 `mdo-home` 且浏览器数据在其 `data/cache/webview2` 中、没有按程序名写入 AppData；移动可执行文件与 Home 后重启，并检查 `MDO_HOME` 与 `--home` 覆盖；
 10. Windows 上运行 20 秒打包启动回归，确认 TCC 服务初始化后进程仍存活，且没有 crash、dump 或 `xsw.log`。
+11. Windows 上对同一打包候选运行五项原生右侧栏探针：四工具入口、浏览器承载层级和视口、
+    浏览器显隐／错误恢复及文件编辑、变更视图、真实终端。它们仅启动独立的临时窗口及 Home，
+    不依赖 Playwright，也不操作用户正在运行的 mdo。
 
 任一步失败都会返回非零退出码。构建产物与探针临时目录位于 `.build/qa-release/`，不进入版本控制。
 

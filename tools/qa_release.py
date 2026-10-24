@@ -196,6 +196,12 @@ def frontend_checks() -> None:
     run([node, "--test", *(str(path) for path in tests)])
 
 
+def native_workbench_probe_commands(packed: Path, output: Path) -> list[list[str]]:
+    return [[sys.executable, str(TESTS / "test_workbench_native_browser.py"),
+             "--packed", str(packed), "--" + mode, "--evidence", str(output / ("native-" + mode))]
+            for mode in ("start", "display", "application", "changes", "terminal")]
+
+
 def wait_alive(process: subprocess.Popen[bytes], seconds: int) -> None:
     deadline = time.monotonic() + seconds
     while time.monotonic() < deadline:
@@ -392,6 +398,8 @@ def main(argv: list[str] | None = None) -> int:
             run(command)
 
         if os.name == "nt" and not args.skip_gui_smoke:
+            for command in native_workbench_probe_commands(first, output_dir):
+                run(command)
             windows_single_file(first, args.observe_seconds)
             windows_packed_crash_gate(packer, max(args.observe_seconds, 20))
 
@@ -403,7 +411,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"[qa] PASS: {len(packed_commands)} packed-product probes")
         print(f"[qa] PASS: deterministic pack sha256={first_hash}")
         if os.name == "nt" and not args.skip_gui_smoke:
-            print("[qa] PASS: portable WebView2 Home and packed crash gates")
+            print("[qa] PASS: native workbench, portable WebView2 Home and packed crash gates")
         return 0
     except (GateError, build_mdo.BuildError, KeyError, OSError,
             subprocess.CalledProcessError, ValueError) as error:

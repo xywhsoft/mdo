@@ -14,6 +14,14 @@ from test_optional_tools_runtime import run as optional_tool_probe
 
 
 class ReleaseGateTests(unittest.TestCase):
+    def test_native_workbench_probes_use_the_packed_candidate(self):
+        commands = qa_release.native_workbench_probe_commands(Path("candidate.exe"), Path("evidence"))
+        self.assertEqual(len(commands), 5)
+        for mode, command in zip(("start", "display", "application", "changes", "terminal"), commands):
+            self.assertTrue(Path(command[1]).is_file())
+            self.assertEqual(command[2:5], ["--packed", "candidate.exe", "--" + mode])
+            self.assertEqual(command[5:], ["--evidence", str(Path("evidence") / ("native-" + mode))])
+
     def test_optional_tool_payload_probes_require_an_explicit_stage(self):
         class Inventory:
             def glob(self, _):

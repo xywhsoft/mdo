@@ -75,6 +75,15 @@ try{
  for(let i=0;i<50&&!(await nativeState()).visible;i++)await pause(100);
  if(!(await nativeState()).visible)throw Error('Background browser stayed invisible after opening its panel');
  const placed=await nativeState();if(!placed.viewport_attached||!placed.viewport_topmost||placed.controller_bounds.x!==0||placed.controller_bounds.y!==0||placed.controller_bounds.width!==placed.bounds.width)throw Error('Loaded content is behind the main WebView or outside its viewport');
+ const panelIds=async()=>JSON.stringify((await mdo.panel.list()).map(row=>row.id).sort()),beforeToggle=await panelIds();
+ const opener=document.querySelector('#new-workbench-tab');opener.click();
+ for(let i=0;i<50&&(await nativeState()).visible;i++)await pause(100);
+ if((await nativeState()).visible||opener.getAttribute('aria-expanded')!=='false')throw Error('Sidebar toggle did not hide native content');
+ if(await panelIds()!==beforeToggle)throw Error('Hiding the sidebar removed or created a panel');
+ opener.click();for(let i=0;i<50&&!(await nativeState()).visible;i++)await pause(100);
+ const restored=await nativeState();if(!restored.visible||!restored.viewport_attached||!restored.viewport_topmost)throw Error('Sidebar toggle did not restore the same native viewport');
+ if(await panelIds()!==beforeToggle)throw Error('Restoring the sidebar replaced its panels');
+ const retainedToggle=await perform('snapshot');if(!retainedToggle.value.text.includes('SDK to native browser'))throw Error('Sidebar toggle lost loaded browser content');
  document.querySelector('.wb-top [aria-label="工作区更多操作"]').click();await pause(150);
  if((await nativeState()).visible)throw Error('Native browser covered the workspace menu');
  document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));await pause(150);
@@ -116,7 +125,7 @@ try{
   for(let i=0;i<100;i++){await pause(100);if(view().textContent.includes('文件已删除或移动'))break;}
   if(!view().textContent.includes('文件已删除或移动'))throw Error('Native deletion lost its visible missing-file state');
  }finally{window.prompt=prompt;window.confirm=confirm;}
- await fetch(TARGET+'/result',{method:'POST',mode:'no-cors',body:JSON.stringify({passed:true,application:true,file_actions:true,screenshot_bytes:image.data.length})});
+ await fetch(TARGET+'/result',{method:'POST',mode:'no-cors',body:JSON.stringify({passed:true,application:true,file_actions:true,sidebar_toggle:true,screenshot_bytes:image.data.length})});
 }catch(error){await fetch(TARGET+'/result',{method:'POST',mode:'no-cors',body:JSON.stringify({passed:false,error:String(error.stack||error)})})}
 '''
 CHANGES_SCRIPT=r'''
