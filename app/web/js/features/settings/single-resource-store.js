@@ -1,3 +1,4 @@
+import { createExtensionBrowser, detailTabs, detailFacts, browserText } from "../../components/extension-browser.js";
 import { api } from "../../api/client.js";
 import { targetState, subscribeTarget } from "../../api/target.js";
 import { element, errorMessage, toast } from "../../utils/dom.js";
@@ -17,13 +18,15 @@ export const singleResource = (row, kind) => {
 
 // Each instance is bound to one resource type and one selected device. There
 // is deliberately no resource multi-select in this publication flow.
-export function createSingleResourceStore(kind, onChange) {
+export function createSingleResourceStore(kind, onChange, onBrowse = () => {}) {
   if (!["skills", "tools"].includes(kind)) throw Error("Unsupported resource store");
   const name = kind === "skills" ? "Skill" : "Agent 工具";
   const root = node("div", "", "single-resource-store"), statusRoot = element("p", { className: "extension-help", attrs: { role: "status" } });
   let visible = false, disposed = false, epoch = 0, controller = null, activeTarget = device();
   let items = [], installed = {}, cursor = 0, query = "", busy = false, error = "", status = "";
   let dialog = null, dirty = false, saving = false, loginRequired = false;
+  let detailSerial = 0, detailController = null, stateFilter = "all";
+  const browser = createExtensionBrowser({ kind, onClose: () => { ++detailSerial; detailController?.abort(); } });
   const call = async (body, signal = controller?.signal) => (await api.post("/ecosystem", { ...body, single_kind: kind }, { signal })).data;
   const current = (id, target) => !disposed && epoch === id && device() === target;
   function close(force = false) {
@@ -68,62 +71,73 @@ export function createSingleResourceStore(kind, onChange) {
   }
   const owned = row => Object.values(installed).find(r => r.source !== "local" && r.owner === row.owner && r.slug === row.slug);
   function render() {
-    const search = element("form", { className: "store-search" });
+    browser.rememberFocus();
+    const search = element("form", { className: "store-search eb-toolbar" });
     const input = element("input", { attrs: { type: "search", maxlength: "100", placeholder: `搜索${name}、作者或用途`, "aria-label": `搜索${name}` } }); input.value = query;
-    search.append(input, element("button", { text: "搜索", className: "secondary-button", attrs: { type: "submit" } }), button("刷新", () => load()), link("创作中心", `/mdo/creator?kind=${kind}`));
+    input.addEventListener("input", () => { query = input.value; });
+    const filter = element("select", { attrs: { "aria-label": browserText("status", "状态") } });
+    for (const [value, text] of [["all", browserText("all", "全部状态")], ["installed", browserText("installed", "已安装")], ["updates", browserText("updates", "可更新")], ["new", browserText("notInstalled", "未安装")]]) filter.append(element("option", { text, attrs: { value } }));
+    filter.value = stateFilter; filter.addEventListener("change", () => { stateFilter = filter.value; render(); });
+    search.append(input, element("button", { text: "搜索", className: "secondary-button", attrs: { type: "submit" } }), filter, button("刷新", () => load()), link("创作中心", `/mdo/creator?kind=${kind}`));
     search.addEventListener("submit", e => { e.preventDefault(); query = input.value.trim(); void load(); });
-    const rows = node("div", "", "extension-list");
-    for (const row of items) {
+    const rows = items.filter(row => stateFilter === "all" || (stateFilter === "installed" ? Boolean(owned(row)) : stateFilter === "updates" ? owned(row) && owned(row).id !== row.id : !owned(row))).map(row => {
       const receipt = owned(row), same = receipt?.id === row.id;
-      const actions = node("div", "", "resource-actions");
-      actions.append(button(same ? "查看已安装版本" : receipt ? "查看更新" : "详情与安装", () => detail(row)));
-      if (same) actions.append(node("span", "已安装", "store-badge"));
-      rows.append(element("article", { className: "resource-card" }, [node("h3", row.name), node("p", row.description), node("small", `${row.author} · ${row.version}`), actions]));
-    }
-    if (!items.length && !busy && !error) rows.append(node("p", `暂无公开${name}。可从本机列表分享你的作品。`, "empty-state"));
-    root.replaceChildren(search, node("p", `每个作品独立安装和更新；${kind === "skills" ? "包含 SKILL.md 及其参考文件。" : "安装前可检查 C 源码，确认信任后才会编译加载。"}`, "extension-help"), rows);
-    if (cursor) root.append(button("加载更多", () => load(true)));
+      const primary = button(same ? browserText("manage", "管理") : receipt ? browserText("update", "更新") : browserText("install", "安装"), () => detail(row), !same);
+      primary.disabled = busy;
+      return { key: String(row.id), kind, title: row.name, description: row.description, meta: [row.author, row.version], badge: { text: same ? browserText("installed", "已安装") : receipt ? browserText("updates", "可更新") : "" }, primary, onSelect: () => loadDetail(row) };
+    });
+    browser.setItems(rows, { busy, empty: items.length ? browserText("empty", "没有匹配的扩展") : `暂无公开${name}。可从本机列表分享你的作品。` });
+    root.replaceChildren(search, node("p", kind === "skills" ? "按需读取 Skill，包含说明与参考文件。" : "C 工具在本机执行；安装前请检查源码并确认信任。", "extension-help"), browser.root);
+    if (cursor) { const more = button("加载更多", () => load(true)); more.disabled = busy; root.append(more); }
     statusRoot.textContent = error || (busy ? status || "正在载入…" : status); statusRoot.hidden = !statusRoot.textContent; statusRoot.className = error ? "extension-error" : "extension-help";
     if (loginRequired) root.append(button("登录账户", () => { location.hash = "#/settings/account"; }));
-    root.querySelectorAll("button").forEach(b => { b.disabled = busy; });
+    search.querySelectorAll("button").forEach(b => { b.disabled = busy; });
   }
-  async function detail(row) {
-    if (busy) return;
-    const target = device(), id = epoch; busy = true; render();
+  function detail(row) {
+    onBrowse();
+    if (!items.some(r => r.id === row.id)) items = [row, ...items];
+    stateFilter = "all"; render(); browser.open(String(row.id));
+  }
+  async function loadDetail(row) {
+    const id = ++detailSerial, target = device(), key = String(row.id);
+    detailController?.abort(); detailController = new AbortController();
+    const signal = detailController.signal;
+    const valid = () => !disposed && device() === target && id === detailSerial && browser.isSelected(key);
+    const read = body => call(body, signal);
     try {
-      const data = await call({ action: "detail", id: row.id });
-      if (!current(id, target)) return;
+      const data = await read({ action: "detail", id: row.id }); if (!valid()) return;
       const p = data.package;
       if (!singleResource(p, kind)) throw Error(`作品必须只包含一个${name}`);
-      const d = modal(data.name); if (!d) return;
-      d.append(node("p", `${data.author} · ${data.version} · ${p.manifest.license} · ${p.manifest.platforms.join(" / ")}`));
-      d.append(renderSourceMarkdown(p.manifest.readme));
-      if (p.manifest.changelog) d.append(node("h3", "更新说明"), renderSourceMarkdown(p.manifest.changelog));
-      const source = node("details"); source.append(node("summary", "查看完整源码与参考文件"), node("pre", p.resources[0].content, "store-source"));
+      const description = node("div"); description.append(node("p", data.description || row.description), renderSourceMarkdown(p.manifest.readme));
+      if (p.manifest.changelog) description.append(node("h4", "更新说明"), renderSourceMarkdown(p.manifest.changelog));
+      const usage = node("div"); usage.append(detailFacts([["作者", data.author], ["版本", data.version], ["许可", p.manifest.license], ["支持平台", p.manifest.platforms.join(" / ")]]));
+      usage.append(node("p", kind === "skills" ? `$${p.resources[0].id} · /skill:${p.resources[0].id}` : "安装后在 Agent 工具页管理；模型通过结构化参数调用。"));
+      const source = node("div"); source.append(node("pre", p.resources[0].content, "store-source"));
       for (const file of p.resources[0].files || []) source.append(renderPackageAttachment(file, { download: "下载文件", binary: "二进制文件，请下载检查", truncated: "仅显示前 64 KiB，请下载完整文件" }));
-      d.append(source);
-      const versions = node("details"), history = node("div"); let historyLoaded = false, historyBusy = false, before = 0;
-      versions.append(node("summary", "版本历史"), history); d.append(versions);
+      const history = node("div"); let historyLoaded = false, historyBusy = false, before = 0;
       const moreHistory = async () => {
-        if (historyBusy) return; historyBusy = true;
-        try { const h = await call({ action: "history", id: row.id, before }); if (!current(id, target) || dialog !== d) return;
+        if (historyBusy || !valid()) return; historyBusy = true;
+        const message = node("p", "正在读取版本…"); history.append(message);
+        try {
+          const h = await read({ action: "history", id: row.id, before }); if (!valid()) return;
           for (const v of h.items) history.append(node("p", `${v.version} · ${v.state} · ${v.changelog || ""}`));
           before = h.next_before || 0; historyLoaded = true;
-          if (before) history.append(button("更多版本", async () => { history.lastChild.remove(); await moreHistory(); }));
-        } catch (e) { if (dialog === d) history.append(node("p", errorMessage(e), "extension-error")); }
-        finally { historyBusy = false; }
+          if (before) { const more = button("更多版本", () => { more.remove(); void moreHistory(); }); history.append(more); }
+          if (!h.items.length) history.append(node("p", "暂无历史版本"));
+        } catch (e) { if (valid() && e.name !== "AbortError") { history.append(node("p", errorMessage(e), "extension-error")); const retry = button("重试", () => { retry.remove(); void moreHistory(); }); history.append(retry); } }
+        finally { message.remove(); historyBusy = false; }
       };
-      versions.addEventListener("toggle", () => { if (versions.open && !historyLoaded) void moreHistory(); });
+      const tabs = detailTabs([{ id: "description", label: browserText("description", "说明"), content: description }, { id: "usage", label: browserText("usage", "使用方式"), content: usage }, { id: "versions", label: browserText("versions", "版本"), content: history, onSelect: () => { if (!historyLoaded) void moreHistory(); } }, { id: "source", label: browserText("sourceFiles", "源码与文件"), content: source }]);
+      const d = node("div"); d.append(tabs); browser.showDetail(key, d);
       if (data.state !== "published") return;
-      const plan = await call({ action: "plan", id: row.id });
-      if (!current(id, target) || dialog !== d) return;
-      const preview = node("details"); preview.open = true; preview.append(node("summary", "安装计划"));
+      const plan = await read({ action: "plan", id: row.id }); if (!valid()) return;
+      const preview = node("details"); preview.append(node("summary", "安装计划"));
       for (const f of plan.files) preview.append(node("p", `${f.operation} · ${f.path} · ${f.bytes} B`)); d.append(preview);
       let trusted = kind === "skills";
       const same = owned(row)?.id === row.id;
       const install = button(same ? "已安装" : owned(row) ? "更新到此版本" : "下载安装", () => {
-        if (!trusted || same) return;
-        close(true); void operate("下载安装", () => call({ action: "install", id: row.id, trust_code: trusted, expected_plan: plan.sha256 }));
+        if (!valid() || !trusted || same || busy) return;
+        browser.closeDetail(); void operate("下载安装", () => call({ action: "install", id: row.id, trust_code: trusted, expected_plan: plan.sha256 }));
       }, true); install.disabled = same || !trusted;
       if (kind === "tools") {
         const check = element("input", { attrs: { type: "checkbox" } });
@@ -131,8 +145,7 @@ export function createSingleResourceStore(kind, onChange) {
         d.append(element("label", { className: "store-code-consent" }, [check, node("span", "我已检查源码并信任作者。C 工具在 mdo 进程内运行，编译注册时也可能执行代码。") ]));
       }
       d.append(install);
-    } catch (e) { if (current(id, target)) { report(e); if (dialog) dialog.append(node("p", error, "extension-error")); } }
-    finally { if (current(id, target)) { busy = false; render(); } }
+    } catch (e) { if (valid() && e.name !== "AbortError") { const message = node("div"); message.append(node("p", errorMessage(e), "extension-error"), button("重试", () => loadDetail(row))); browser.showDetail(key, message); } }
   }
   async function publish(item, receipt = null) {
     if (busy || disposed) return;
@@ -192,8 +205,8 @@ export function createSingleResourceStore(kind, onChange) {
       void operate("卸载", () => call({ action: "uninstall", entry: { id: receipt.id, source: receipt.source || "store", slug: receipt.slug } }));
     })); return controls;
   }
-  const unsubscribe = subscribeTarget(() => { if (activeTarget === device()) return; activeTarget = device(); ++epoch; controller?.abort(); close(true); items = []; installed = {}; cursor = 0; busy = false; error = status = ""; if (visible) void load(); });
+  const unsubscribe = subscribeTarget(() => { if (activeTarget === device()) return; activeTarget = device(); ++epoch; controller?.abort(); browser.reset(); close(true); items = []; installed = {}; cursor = 0; busy = false; error = status = ""; if (visible) void load(); });
   render();
-  return { root, statusRoot, publish, localActions, activate(value) { visible = value; if (value && !busy) void load(); }, hasPendingChanges: () => Boolean(dialog) || dirty || saving || busy,
-    destroy() { disposed = true; ++epoch; controller?.abort(); unsubscribe(); close(true); } };
+  return { root, statusRoot, publish, localActions, activate(value) { visible = value; if (!value) browser.closeDetail(false); if (value && !busy) void load(); }, hasPendingChanges: () => Boolean(dialog) || dirty || saving || busy,
+    destroy() { disposed = true; ++epoch; controller?.abort(); browser.destroy(); unsubscribe(); close(true); } };
 }

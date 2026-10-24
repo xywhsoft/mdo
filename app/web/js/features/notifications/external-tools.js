@@ -1,3 +1,4 @@
+import { createExtensionBrowser, extensionToggle, detailTabs, detailFacts, browserText } from "../../components/extension-browser.js";
 import { api } from "../../api/client.js";
 import { currentLocale } from "../../i18n.js";
 import { targetState } from "../../api/target.js";
@@ -17,7 +18,8 @@ export function externalToolAction(row, installed) {
   return !local||!local.present?"install":local.version!==row.version?"update":null;
 }
 export function createExternalToolsPanel({ refresh, openFull, openTools, signedIn, isMain=()=>true }) {
-  let data={}, tab="local", query="", error="", context="", catalogRequested=false, editor=null, editing=null, mine=false;
+  let data={}, tab="local", query="", error="", context="", catalogRequested=false, editor=null, editing=null, mine=false, localQuery="", stateFilter="all";
+  const browsers = new Map(), pending = new Set();
   const signatures=new WeakMap(), hosts=new Set();
   const c=i=>(labels[currentLocale()]??labels["en-US"])[i];
   const writable=()=>{const t=targetState();return data.writable!==false&&(!t.selected||(t.connected&&!t.runtimeChanged&&t.selected.mode!=="view"));};
@@ -26,9 +28,9 @@ export function createExternalToolsPanel({ refresh, openFull, openTools, signedI
   guide.hidden=true;guide.setAttribute("aria-live","polite");global.type="button";global.hidden=true;global.onclick=()=>openTools();
   document.body.append(guide,global);
   async function command(request) {
-    if(!writable())return false;const own=context;
+    if(!writable())return false;const own=context,key=JSON.stringify(request);if(pending.has(key))return false;pending.add(key);
     try { const r=await api.post("/cli-tools",request);if(own!==(targetState().selected?.id??"local"))return false;data=r.data;error="";renderAll();void refresh();return true; }
-    catch(e){if(own===(targetState().selected?.id??"local")){error=e.message;renderAll();}return false;}
+    catch(e){if(own===(targetState().selected?.id??"local")){error=e.message;renderAll();}return false;}finally{pending.delete(key);if(own===context)renderAll();}
   }
   async function openBundle(){try{await openFull();}catch(e){error=e.message;renderAll();}}
   const fetchCatalog=(before=0)=>command({action:"catalog",query,before});
@@ -60,11 +62,14 @@ export function createExternalToolsPanel({ refresh, openFull, openTools, signedI
     const save=button(currentLocale()==="zh-CN"?"提交作品":"Submit",()=>form.requestSubmit()),close=button(c(26),closeEditor);form.append(message,save,close);editor.append(form);document.body.append(editor);editor.showModal();
     form.onsubmit=async e=>{e.preventDefault();if(own!==context)return closeEditor();const request={action:"publish",id:tool.id,name:tool.name,publish:publish.checked,...Object.fromEntries(Object.entries(fields).map(([k,v])=>[k,v.value.trim()]))};if(request.publish&&(request.review_notes.length<10||!request.source_url&&!request.review_file)){message.textContent=currentLocale()==="zh-CN"?"公布时请提供源码或可核验来源，并填写至少 10 个字符的构建及安全说明。":"Provide source/provenance and at least 10 characters of build/security notes.";return;}save.disabled=true;if(await command(request))closeEditor();else{message.textContent=error;save.disabled=false;}};
   }
-  function details(tool) {
-    closeEditor();editor=n("dialog",null,"cli-editor");editor.append(n("h3",tool.name),n("p",tool.prompt),n("p",`${tool.version} · ${tool.platform} · ${tool.license}`));
+  function toolDetail(tool, install) {
+    const description=n("div");description.append(n("p",tool.prompt||tool.description||""));
+    const usage=n("div");usage.append(detailFacts([[c(19),tool.path],[c(50),(tool.exported_commands||[]).join(" · ")],[c(52),data.command_directory]]),n("p",tool.prompt));
+    const source=n("div");source.append(detailFacts([[c(21),tool.version],[browserText("platform","支持平台"),tool.platform],[c(22),tool.license]]));
     let links=tool.links;try{if(typeof links==="string")links=JSON.parse(links);}catch{links=[];}
-    for(const url of Array.isArray(links)?links:[])if(/^https?:\/\//i.test(url)){const a=n("a",url);a.href=url;a.target="_blank";a.rel="noopener noreferrer";editor.append(a,n("br"));}
-    editor.append(button(c(26),closeEditor));document.body.append(editor);editor.showModal();
+    for(const url of Array.isArray(links)?links:[])if(/^https?:\/\//i.test(url)){const a=n("a",url);a.href=url;a.target="_blank";a.rel="noopener noreferrer";source.append(a,n("br"));}
+    const root=n("div");root.append(detailTabs([{id:"description",label:browserText("description","说明"),content:description},{id:"usage",label:browserText("usage","使用方式"),content:usage},{id:"source",label:browserText("sourceFiles","来源与文件"),content:source}]));
+    if(install)root.append(install());return root;
   }
   function tasks(body){
     const list=data.tasks??[];const box=n("details",null,"cli-tasks");box.open=list.some(active);box.append(n("summary",`${c(5)} (${list.filter(active).length}/${list.length})`));
@@ -76,8 +81,8 @@ export function createExternalToolsPanel({ refresh, openFull, openTools, signedI
   }
   function render(body,snapshot={},updatesOnly=false){
     if(!body)return;hosts.add(body);body.dataset.cliUpdates=String(updatesOnly);data=snapshot;
-    const next=targetState().selected?.id??"local";if(context!==next){context=next;catalogRequested=false;tab="local";query=error="";mine=false;closeEditor();}
-    const sig=JSON.stringify([data,currentLocale(),tab,query,error,mine,next,writable(),signedIn(),updatesOnly,isMain()]);if(signatures.get(body)===sig)return;signatures.set(body,sig);body.replaceChildren();
+    const next=targetState().selected?.id??"local";if(context!==next){context=next;catalogRequested=false;tab="local";query=error="";mine=false;localQuery="";stateFilter="all";for(const browser of browsers.values())browser.reset();closeEditor();}
+    const sig=JSON.stringify([data,currentLocale(),tab,query,localQuery,stateFilter,error,mine,next,writable(),signedIn(),updatesOnly,isMain()]);if(signatures.get(body)===sig)return;signatures.set(body,sig);browsers.get(body)?.rememberFocus();body.replaceChildren();
     if(!data.platform){body.append(n("p","…"));return;}
     const android=data.platform.startsWith("android"), disabled=!writable();
     guide.replaceChildren(n("p",c(33)),button(c(34),async()=>{if(android){if(await command({action:"accept"}))await openBundle();}else if(await command({action:"recommend"}))openTools();},disabled),button(c(35),()=>command({action:"dismiss"}),disabled));
@@ -85,35 +90,47 @@ export function createExternalToolsPanel({ refresh, openFull, openTools, signedI
     global.textContent=`↓ ${c(5)}${(data.tasks??[]).some(active)?" · "+(data.tasks??[]).filter(active).length:""}`;global.hidden=!(data.tasks??[]).length;
     if(updatesOnly){body.append(button(c(36),openTools));tasks(body);return;}
     const nav=n("div",null,"cli-tabs");nav.setAttribute("role","tablist");
-    for(const [id,text] of [["local",c(0)],["store",c(1)]]){const b=button(text,()=>{tab=id;mine=false;renderAll();if(id==="store"&&!catalogRequested){catalogRequested=true;void fetchCatalog();}});b.setAttribute("role","tab");b.setAttribute("aria-selected",String(tab===id));nav.append(b);}body.append(nav);const creator=n("a",currentLocale()==="zh-CN"?"创作中心：管理作品、审核资料与配额":"Creator center: works, reviews and capacity");creator.href="https://ai.xywhsoft.com/mdo/creator";creator.target="_blank";creator.rel="noopener noreferrer";body.append(creator);
+    for(const [id,text] of [["local",c(0)],["store",c(1)]]){const b=button(text,()=>{tab=id;mine=false;for(const browser of browsers.values())browser.reset();renderAll();if(id==="store"&&!catalogRequested){catalogRequested=true;void fetchCatalog();}});b.setAttribute("role","tab");b.setAttribute("aria-selected",String(tab===id));nav.append(b);}body.append(nav);const creator=n("a",browserText("creator","创作中心"),"secondary-button");creator.href="https://ai.xywhsoft.com/mdo/creator";creator.target="_blank";creator.rel="noopener noreferrer";
     if(error)body.append(n("p",error,"cli-error"));if(!data.writable)body.append(n("p",c(44),"cli-error"));
     if(android)body.append(n("p",c(30)),button(c(29),openBundle,disabled));
-    const toolbar=n("div",null,"cli-toolbar");
+    const toolbar=n("div",null,"cli-toolbar eb-toolbar");
+    let browser=browsers.get(body);if(!browser){browser=createExtensionBrowser({kind:"toolpacks"});browsers.set(body,browser);}
+    const filter=n("select");filter.setAttribute("aria-label",browserText("status","状态"));
+    for(const [id,text] of [["all",browserText("all","全部状态")],["enabled",c(6)],["disabled",c(7)],["error",browserText("needsAttention","需要处理")]]){const o=n("option",text);o.value=id;filter.append(o);}filter.value=stateFilter;
+    const search=n("input");search.type="search";search.value=tab==="local"?localQuery:query;search.placeholder=c(3);search.setAttribute("aria-label",c(3));
+    const taskFor=t=>(data.tasks||[]).find(job=>active(job)&&(job.request?.id&&job.request.id===t.id||job.request?.store_id&&(job.request.store_id===t.store_id||job.request.store_id===t.id)));
+    const renderList=()=>{
+      const needle=localQuery.toLocaleLowerCase();
+      const rows=tab==="local"?(data.items||[]).filter(t=>`${t.name} ${t.prompt} ${t.command||""}`.toLocaleLowerCase().includes(needle)).filter(t=>stateFilter==="all"||(stateFilter==="error"?!t.present:stateFilter==="enabled"?t.enabled:!t.enabled)).map(t=>{
+        const job=taskFor(t), actions=[button(c(8),()=>edit(t),disabled)];
+        if(t.source!=="bundled"&&!android)actions.push(button(c(9),()=>{if(window.confirm(c(32)))void command({action:"remove",id:t.id});},disabled));
+        if(!android)actions.push(button(c(10),()=>share(t),disabled||!signedIn()||!t.present));
+        if(!android&&!t.managed_root)actions.push(button(c(48),()=>{if(window.confirm(c(49)))void command({action:"import",id:t.id,name:t.name});},disabled||!t.present));
+        const toggle=extensionToggle(button(c(t.enabled?7:6),()=>command({action:"enable",id:t.id,enabled:!t.enabled}),disabled||(!t.enabled&&!t.present)),t.enabled,t.name);
+        return {key:`local:${t.id}`,title:t.name,description:t.prompt,meta:[t.version,t.license],toggle,actions,badge:{text:job?`${c(5)} · ${job.state}`:!t.present?c(39):"",tone:!t.present?"error":""},detail:()=>toolDetail(t)};
+      }):(data.store?.items||[]).map(t=>{
+        const action=externalToolAction(t,data.items||[]),job=taskFor(t);
+        const install=()=>button(c(android?29:action==="update"?12:11),()=>android?openBundle():command({action:"install",store_id:t.id,name:t.name}),disabled||t.platform!==data.platform||!!job);
+        const primary=action?install():null;
+        return {key:`store:${t.id}`,title:t.name,description:t.prompt,meta:[t.author,t.version,t.platform],badge:{text:job?`${c(5)} · ${job.state}`:t.platform!==data.platform?c(42):!action?browserText("installed","已安装"):""},primary,detail:()=>toolDetail(t,action?install:null)};
+      });
+      browser.setItems(rows,{empty:c(16)});
+    };
+    search.oninput=()=>{if(tab==="local"){localQuery=search.value;renderList();}else query=search.value;};
+    search.onkeydown=e=>{if(tab==="store"&&e.key==="Enter"){e.preventDefault();void fetchCatalog();}};
+    filter.onchange=()=>{stateFilter=filter.value;renderList();};
+    toolbar.append(search);if(tab==="local")toolbar.append(filter);else toolbar.append(button(c(3),()=>fetchCatalog(),disabled));
+    toolbar.append(button(c(4),()=>tab==="store"?fetchCatalog():refresh(),disabled),creator);
+    body.append(toolbar);
     if(tab==="local"){
-      toolbar.append(button(c(2),()=>edit(),disabled||android),button(c(27),()=>{mine=!mine;if(mine)void command({action:"mine"});renderAll();},disabled||!signedIn()));body.append(toolbar,n("p",c(40),"notice-description"));
-      if(!android&&data.command_directory)body.append(n("small",`${c(52)}: ${data.command_directory}`));
+      toolbar.append(button(c(2),()=>edit(),disabled||android),button(c(27),()=>{mine=!mine;if(mine)void command({action:"mine"});renderAll();},disabled||!signedIn()));
       if(data.binding_error)body.append(n("p",data.binding_error,"cli-error"));
-      for(const t of data.items??[]){const row=n("article",null,"cli-row"),main=n("div",null,"cli-info"),actions=n("div",null,"cli-actions");
-        main.append(n("strong",t.name),n("small",`${t.version} · ${t.platform} · ${t.license}`),n("code",t.path),n("small",c(t.present?38:39),t.present?null:"cli-error"));
-        if(t.exported_commands?.length)main.append(n("small",`${c(50)}: ${t.exported_commands.join(" · ")}`));
-        if(!android&&!t.portable)main.append(n("small",c(51)));
-        const prompt=n("details");prompt.append(n("summary",c(20)),n("p",t.prompt));main.append(prompt);
-        actions.append(button(c(t.enabled?7:6),()=>command({action:"enable",id:t.id,enabled:!t.enabled}),disabled||(!t.enabled&&!t.present)),button(c(8),()=>edit(t),disabled),button(c(41),()=>details(t)));
-        if(t.source!=="bundled")actions.append(button(c(9),()=>{if(window.confirm(c(32)))void command({action:"remove",id:t.id});},disabled));
-        if(!android)actions.append(button(c(10),()=>share(t),disabled||!signedIn()||!t.present));
-        if(!android&&!t.managed_root)actions.append(button(c(48),()=>{if(window.confirm(c(49)))void command({action:"import",id:t.id,name:t.name});},disabled||!t.present));
-        row.append(main,actions);body.append(row);
-      }
-      if(!(data.items??[]).length)body.append(n("p",c(16)));
+      renderList();body.append(browser.root);
       if(mine){const box=n("section");box.append(n("h3",c(27)));for(const t of data.store?.mine??[]){const row=n("div",null,"cli-row");row.append(n("span",`${t.name} ${t.version} · ${t.state}${t.reason?" · "+t.reason:""}`),button(c(28),async()=>{if(await command({action:"withdraw",store_id:t.id,revision:t.revision,name:t.name}))void command({action:"mine"});},disabled||!!t.withdrawn));box.append(row);}body.append(box);}
     }else{
-      const search=n("input");search.type="search";search.value=query;search.placeholder=c(3);search.setAttribute("aria-label",c(3));search.oninput=()=>{query=search.value;};search.onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();void fetchCatalog();}};
-      toolbar.append(search,button(c(3),()=>fetchCatalog(),disabled),button(c(4),()=>fetchCatalog(),disabled));body.append(toolbar);
-      for(const t of data.store?.items??[]){const row=n("article",null,"cli-row"),info=n("div",null,"cli-info"),action=externalToolAction(t,data.items??[]);info.append(n("strong",t.name),n("small",`${t.version} · ${t.platform} · ${t.author} · ${t.license}`),n("p",t.prompt));row.append(info,button(c(41),()=>details(t)));
-        if(action)row.append(button(c(android?29:action==="update"?12:11),()=>android?openBundle():command({action:"install",store_id:t.id,name:t.name}),disabled||t.platform!==data.platform));body.append(row);
-      }if(!(data.store?.items??[]).length)body.append(n("p",c(16)));
+      renderList();body.append(browser.root);
       if(data.store?.next_before)body.append(button(c(37),()=>fetchCatalog(data.store.next_before),disabled));
     }tasks(body);
   }
-  return {render,command,reset(){data={};context="";closeEditor();guide.hidden=true;global.hidden=true;},destroy(){closeEditor();guide.remove();global.remove();hosts.clear();}};
+  return {render,command,reset(){data={};context="";for(const browser of browsers.values())browser.reset();closeEditor();guide.hidden=true;global.hidden=true;},destroy(){for(const browser of browsers.values())browser.destroy();browsers.clear();closeEditor();guide.remove();global.remove();hosts.clear();}};
 }

@@ -1,3 +1,4 @@
+import { createExtensionBrowser, actionMenu, extensionToggle, detailTabs, browserText } from "../../components/extension-browser.js";
 import { createSingleResourceStore } from "./single-resource-store.js";
 import { createSkillWorkbench } from "./skill-workbench.js";
 import { createMcpContext } from "./mcp-context.js";
@@ -45,7 +46,7 @@ function inputField(form, name, text, value = "", { area = false, type = "text",
 }
 
 export function createExtensionPanels() {
-  const states = new Map(EXTENSION_KINDS.map(kind => [kind, { loaded: false, serial: 0, items: [], catalog: [], view: "builtin", error: "", busy: false, reading: false, filter: "", area: "local" }]));
+  const states = new Map(EXTENSION_KINDS.map(kind => [kind, { loaded: false, serial: 0, items: [], catalog: [], view: "all", stateFilter: "all", error: "", busy: false, reading: false, filter: "", area: "local" }]));
   const roots = new Map(EXTENSION_KINDS.map(kind => [kind, document.querySelector(`[data-extension-manager="${kind}"]`)]));
   let selected = "", editing = null, activeTarget = targetKey(), pendingResource = null;
   let disposed = false, paused = false;
@@ -55,8 +56,9 @@ export function createExtensionPanels() {
   const mcpAuthorization = createMcpAuthorization();
   const mcpWorkbench = createMcpWorkbench({ onChange: () => announceChange("mcp") });
   const commandWorkbench = createCommandWorkbench({ onChange: () => announceChange("commands") });
-  const stores = new Map(["skills", "tools"].map(kind => [kind, createSingleResourceStore(kind, () => { announceChange(kind); if (selected === kind) void load(kind); })]));
+  const stores = new Map(["skills", "tools"].map(kind => [kind, createSingleResourceStore(kind, () => { announceChange(kind); if (selected === kind) void load(kind); }, () => { states.get(kind).area = "store"; render(kind); })]));
   const actions = new Map();
+  const browsers = new Map(EXTENSION_KINDS.map(kind => [kind, createExtensionBrowser({ kind })]));
   const current = (kind, target) => !disposed && !paused && selected === kind && target === targetKey();
   function cancelReads() {
     reads.cancel();
@@ -123,7 +125,7 @@ export function createExtensionPanels() {
   function render(kind) {
     const root = roots.get(kind), state = states.get(kind);
     if (!root) return;
-    clear(root);
+    browsers.get(kind)?.rememberFocus(); clear(root);
     const store = stores.get(kind);
     if (store) {
       const tabs = element("div", { className: "store-tabs", attrs: { role: "tablist", "aria-label": title(kind) } });
@@ -156,28 +158,39 @@ export function createExtensionPanels() {
     const builtinView = kind === "tools" && state.view === "builtin";
     if (kind === "mcp") actions.push(button("项目 MCP", () => mcpWorkbench.open()));
     if (kind === "commands") actions.push(button("项目命令", () => commandWorkbench.open()));
-    const toolbar = element("div", { className: "extension-toolbar" }, builtinView ? [actions[2], ...(state.operation ? [actions[3]] : [])] : actions);
-    const categories = kind === "tools" ? element("div", { className: "extension-toolbar tool-categories" }, ["builtin", "custom"].map(view => {
-      const control = button(label(view === "builtin" ? "builtinTools" : "customTools", view === "builtin" ? "mdo 内建工具" : "自定义工具"), () => { state.view = view; render(kind); });
-      control.setAttribute("aria-pressed", String(state.view === view)); return control;
-    })) : null;
+    const toolbar = element("div", { className: "extension-toolbar eb-toolbar" });
+    const refresh = actions.find(control => control.tagName === "BUTTON" && control.textContent === label("refresh", "刷新"));
+    const creation = actions.filter(control => control.tagName === "BUTTON" && control !== refresh);
+    toolbar.append(refresh, actionMenu(creation, browserText("createImport", "创建 / 导入")), ...actions.filter(control => control.tagName === "INPUT"));
     toolbar.querySelectorAll("button").forEach(node => { node.disabled = state.busy; });
     const search = element("input", { className: "extension-search", attrs: { type: "search", placeholder: label("filter", "按名称或说明筛选"), "aria-label": label("filter", "按名称或说明筛选") } });
     search.value = state.filter;
-    const list = element("div", { className: "extension-list" });
+    const browser = browsers.get(kind), list = browser.root;
+    const statusFilter = element("select", { attrs: { "aria-label": browserText("status", "状态") } });
+    for (const [value, text] of [["all", browserText("all", "全部状态")], ["enabled", label("enabled", "已启用")], ["disabled", label("disabled", "已停用")], ["error", browserText("needsAttention", "需要处理")]]) statusFilter.append(element("option", { text, attrs: { value } }));
+    statusFilter.value = state.stateFilter;
+    const sourceFilter = kind === "tools" ? element("select", { attrs: { "aria-label": browserText("source", "来源") } }) : null;
+    if (sourceFilter) {
+      for (const [value, text] of [["all", browserText("allSources", "全部来源")], ["builtin", label("builtinTools", "mdo 内建工具")], ["custom", label("customTools", "自定义工具")]]) sourceFilter.append(element("option", { text, attrs: { value } }));
+      sourceFilter.value = state.view;
+      sourceFilter.addEventListener("change", () => { state.view = sourceFilter.value; renderItems(); });
+    }
+    statusFilter.addEventListener("change", () => { state.stateFilter = statusFilter.value; renderItems(); });
     const renderItems = () => {
-      clear(list);
-      const needle = state.filter.toLocaleLowerCase();
-      const sourceItems = builtinView ? state.catalog.filter(item => item.source === "builtin") : state.items;
-      const items = sourceItems.filter(item => `${item.id} ${item.name} ${item.description}`.toLocaleLowerCase().includes(needle));
-      if (!items.length) list.append(element("p", { className: "empty-state", text: state.busy ? label("loading", "正在载入…") : label("empty", "还没有资源。新建或导入一个即可开始。") }));
+      const needle = state.filter.toLocaleLowerCase(), rows = [];
+      const builtin = kind === "tools" ? state.catalog.filter(item => item.source === "builtin").map(item => ({ ...item, builtinTool: true })) : [];
+      const sourceItems = kind === "tools" ? state.view === "builtin" ? builtin : state.view === "custom" ? state.items : [...builtin, ...state.items] : state.items;
+      const items = sourceItems.filter(item => `${item.id} ${item.name} ${item.description}`.toLocaleLowerCase().includes(needle)).filter(item => {
+        if (state.stateFilter === "all") return true;
+        if (state.stateFilter === "error") return item.builtinTool ? !item.available : !item.valid || item.state === "failed";
+        const enabled = item.builtinTool ? item.available : item.enabled;
+        return state.stateFilter === "enabled" ? enabled : !enabled;
+      });
       for (const item of items) {
-        if (builtinView) {
-          const name = element("h3", { text: item.id });
-          if (item.member_only) name.append(element("span", { className: "tool-member-badge", text: label("member", "会员") }));
-          list.append(element("article", { className: "resource-card builtin-tool-card" }, [name,
-            element("p", { text: label(`toolDescription.${item.id}`, item.description) }),
-            element("small", { className: item.available ? "tool-available" : "tool-unavailable", text: availability(item) })]));
+        if (item.builtinTool) {
+          rows.push({ key: `builtin:${item.id}`, title: item.id, kind, description: label(`toolDescription.${item.id}`, item.description),
+            meta: [label("builtin", "内置"), item.member_only ? label("member", "会员") : ""], badge: { text: availability(item) },
+            detail: () => detailTabs([{ id: "description", label: browserText("description", "说明"), content: element("div", {}, [element("p", { text: label(`toolDescription.${item.id}`, item.description) }), element("p", { text: availability(item) }), element("p", { className: "extension-help", text: label("builtinToolsHelp", "内建工具由 mdo 维护。能否调用取决于登录、功能设置和当前任务权限。") })]) }]) });
           continue;
         }
         const meta = element("div", { className: "resource-meta" }, [
@@ -197,7 +210,7 @@ export function createExtensionPanels() {
         const toggle = button(item.enabled ? label("disable", "停用") : label("enable", "启用"), () => act(kind, async () => {
           await api.post(`${path(kind, item.id)}/enabled`, { enabled: !item.enabled }, revision(item));
         }));
-        const controls = [edit, ...(kind === "agents" && item.id === "default" ? [] : [toggle]), button(label("export", "导出"), () => exportItem(kind, item))];
+        const controls = [edit, button(label("export", "导出"), () => exportItem(kind, item))];
         if (store && item.valid) controls.push(button("分享到创作中心", () => store.publish(item, owner)), ...store.localActions(owner));
         if (kind === "skills") controls.push(button(label("improveSkill", "用 AI 改进"), () =>
           skillWorkbench.open({ builder: true, mode: "improve", id: item.id, scope: "user" })));
@@ -212,16 +225,27 @@ export function createExtensionPanels() {
           if (!window.confirm(kind === "agents" && item.id === "default" ? label("resetAgentConfirm", "恢复内置默认 Agent 配置？") : label("deleteConfirm", "删除 {name}？", { name: item.name }))) return;
           await api.delete(path(kind, item.id), revision(item));
         })));
-        const row = element("article", { className: "resource-card" }, [element("h3", { text: item.name || item.id }),
-          element("p", { text: item.description }), meta,
-          kind === "tools" ? element("div", { className: "tool-exports" }, (item.tools || []).map(tool => element("code", { text: tool.id }))) : null,
-          item.valid ? null : element("p", { className: "extension-error", text: item.error }),
-          element("div", { className: "resource-actions" }, controls)]);
-        row.querySelectorAll("button").forEach(node => { node.disabled = state.busy; }); list.append(row);
+        const canToggle = !(kind === "agents" && item.id === "default");
+        toggle.disabled = state.busy;
+        controls.forEach(control => { control.disabled = state.busy; });
+        const status = kind === "mcp" ? t(`resource.mcp${({ ready: "Ready", failed: "Failed", disabled: "Disabled", disconnected: "Disconnected" })[item.state] || "Disconnected"}`) : !item.valid ? browserText("needsAttention", "需要处理") : "";
+        rows.push({ key: item.id, kind, title: item.name || item.id, description: item.description,
+          meta: [owner?.author, owner?.version, item.external ? browserText("custom", "自定义") : label("builtin", "内置")],
+          badge: { text: status, tone: !item.valid || item.state === "failed" ? "error" : "" },
+          toggle: canToggle ? extensionToggle(toggle, item.enabled, item.name || item.id) : null, actions: controls,
+          detail: () => {
+            const description = element("div", {}, [element("p", { text: item.description }), !item.valid ? element("p", { className: "extension-error", text: item.error }) : null]);
+            const usage = element("div", {}, [element("p", { text: kind === "skills" ? `$${item.id} · /skill:${item.id}` : kind === "commands" ? `/${item.id}` : kind === "mcp" ? status : item.name || item.id }),
+              kind === "tools" ? element("div", { className: "tool-exports" }, (item.tools || []).map(tool => element("code", { text: tool.id }))) : null]);
+            const source = element("div", {}, [meta]);
+            return detailTabs([{ id: "description", label: browserText("description", "说明"), content: description }, { id: "usage", label: browserText("usage", "使用方式"), content: usage }, { id: "source", label: browserText("sourceFiles", "来源与文件"), content: source }]);
+          } });
       }
+      browser.setItems(rows, { busy: state.busy, empty: state.filter || state.stateFilter !== "all" ? browserText("empty", "没有匹配的扩展") : label("empty", "还没有资源。新建或导入一个即可开始。") });
     };
     search.addEventListener("input", () => { state.filter = search.value; renderItems(); });
-    renderItems(); root.append(...[categories, toolbar, search].filter(Boolean),
+    toolbar.prepend(search, statusFilter); if (sourceFilter) toolbar.insertBefore(sourceFilter, statusFilter);
+    renderItems(); root.append(toolbar,
       element("p", { className: "extension-help", text: label(builtinView ? "builtinToolsHelp" : `${kind}Help`, ({
         agents: "默认 Agent 可直接编辑。提示词留空使用系统默认规则；C 代码仅用于高级扩展。",
         tools: builtinView ? "内建工具由 mdo 维护。能否调用取决于登录、功能设置和当前任务权限。" : "C 文件保存在 mdo-home/tools。保存后自动编译注册；C 代码在本机进程执行，请审阅来源。",
@@ -554,7 +578,7 @@ export function createExtensionPanels() {
   const unsubscribeTarget = subscribeTarget(() => {
     if (activeTarget === targetKey()) return;
     cancelReads();
-    activeTarget = targetKey(); closeEditor(true);
+    activeTarget = targetKey(); closeEditor(true); for (const browser of browsers.values()) browser.reset();
     pendingResource=null;
     for (const state of states.values()) { ++state.serial; state.loaded = false; state.busy = false; state.items = []; state.catalog = []; state.error = ""; state.operation = null; }
     if (selected) void load(selected);
@@ -577,6 +601,6 @@ export function createExtensionPanels() {
       else if(pendingResource?.kind===selected)void openLinkedResource();
     },
     hasPendingChanges: () => [...stores.values()].some(s => s.hasPendingChanges()) || dirty() || skillWorkbench.hasPendingChanges() || mcpWorkbench.hasPendingChanges() || commandWorkbench.hasPendingChanges(),
-    destroy() { disposed = true; for (const store of stores.values()) store.destroy(); skillWorkbench.destroy(); mcpWorkbench.destroy(); commandWorkbench.destroy(); mcpAuthorization.destroy(); mcpContext.destroy(); cancelReads(); closeEditor(true); unsubscribeLocale(); unsubscribeTarget();window.removeEventListener("mdo-extensions-changed", invalidate);window.removeEventListener("mdo-open-resource",openResource);window.removeEventListener("pagehide",onHide);window.removeEventListener("pageshow",onShow); },
+    destroy() { disposed = true; for (const browser of browsers.values()) browser.destroy(); for (const store of stores.values()) store.destroy(); skillWorkbench.destroy(); mcpWorkbench.destroy(); commandWorkbench.destroy(); mcpAuthorization.destroy(); mcpContext.destroy(); cancelReads(); closeEditor(true); unsubscribeLocale(); unsubscribeTarget();window.removeEventListener("mdo-extensions-changed", invalidate);window.removeEventListener("mdo-open-resource",openResource);window.removeEventListener("pagehide",onHide);window.removeEventListener("pageshow",onShow); },
   });
 }

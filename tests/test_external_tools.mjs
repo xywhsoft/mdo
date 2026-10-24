@@ -18,17 +18,10 @@ test("new registry does not recreate old missing-tool recommendation notificatio
   }
 });
 
-class Element{
- constructor(tag){this.tag=tag;this.children=[];this.dataset={};this.attributes={};}
- append(...v){this.children.push(...v);}
- replaceChildren(...v){this.children=[...v];}
- setAttribute(k,v){this.attributes[k]=v;}
- remove(){this.removed=true;}
- addEventListener(){}
-}
+import { TestElement as Element, testDocument } from "./helpers/extension-dom.mjs";
 const all=e=>[e,...e.children.flatMap(all)];
 test("external manager has exactly two tabs, ordinary rows and a durable first-use prompt",()=>{
- const saved=globalThis.document;globalThis.document={body:new Element("body"),createElement:tag=>new Element(tag)};
+ const saved=globalThis.document;globalThis.document=testDocument();
  try{
   let main=true;const panel=createExternalToolsPanel({refresh:async()=>{},openFull:async()=>{},openTools:()=>{},signedIn:()=>false,isMain:()=>main}),body=new Element("div");
   const state={writable:true,guide:"new",platform:"windows-x86_64",edition:"desktop",items:[{id:"custom.one",name:"<script>literal</script>",path:"C:/cli/tool.exe",prompt:"use --example",version:"1.0.0",license:"MIT",enabled:true,present:true}],tasks:[],store:{items:[]}};
@@ -45,7 +38,7 @@ test("external manager has exactly two tabs, ordinary rows and a durable first-u
 });
 
 test("Android APK failures remain visible and do not escape the tool manager",async()=>{
- const saved=globalThis.document;globalThis.document={body:new Element("body"),createElement:tag=>new Element(tag)};
+ const saved=globalThis.document;globalThis.document=testDocument();
  try{
   const panel=createExternalToolsPanel({refresh:async()=>{},openTools:()=>{},signedIn:()=>false,openFull:async()=>{throw Error("APK service unavailable");}}),body=new Element("div");
   panel.render(body,{writable:true,guide:"accepted",platform:"android-arm64-v8a",edition:"lite",items:[],tasks:[],store:{items:[]}});
