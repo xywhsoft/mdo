@@ -1,0 +1,448 @@
+{
+  "tools": [
+    {
+      "id": "git",
+      "tool_id": "official.git",
+      "version": "2.56.3",
+      "upstream_version": "2.56.0.windows.3",
+      "platform": "windows-x86_64",
+      "file": "git-2.56.3-windows-x86_64.mdo-cli",
+      "size": 96311350,
+      "sha256": "2be8a92c7f7a2d26b03e4afe532b6c7f2f0b2f2122ad54a63ecf93c04b3f5b9b",
+      "license": "GPL-2.0-only; bundled dependency licenses included",
+      "links": [
+        "https://gitforwindows.org/mingit.html",
+        "https://github.com/git-for-windows/git/releases/tag/v2.56.0.windows.3",
+        "https://alpinelinux.org/",
+        "https://alpinelinux.org/",
+        "https://ai.xywhsoft.com/mdo-sources/optional-cli-20261024-sources.tar.gz"
+      ],
+      "recommended": false
+    },
+    {
+      "id": "sqlite",
+      "tool_id": "official.sqlite",
+      "version": "3.54.1",
+      "upstream_version": "3.54.1",
+      "platform": "windows-x86_64",
+      "file": "sqlite-3.54.1-windows-x86_64.mdo-cli",
+      "size": 4297251,
+      "sha256": "0966100d01c5d0a4ff611c84c67867ab0ab4cf16c38302c2623d5bd3fb4c3848",
+      "license": "Public Domain",
+      "links": [
+        "https://sqlite.org/cli.html",
+        "https://sqlite.org/2026/sqlite-amalgamation-3540100.zip",
+        "https://alpinelinux.org/",
+        "https://alpinelinux.org/",
+        "https://ai.xywhsoft.com/mdo-sources/optional-cli-20261024-sources.tar.gz"
+      ],
+      "recommended": false
+    },
+    {
+      "id": "imagemagick",
+      "tool_id": "official.imagemagick",
+      "version": "7.1.2034",
+      "upstream_version": "7.1.2-34",
+      "platform": "windows-x86_64",
+      "file": "imagemagick-7.1.2034-windows-x86_64.mdo-cli",
+      "size": 33769094,
+      "sha256": "f1db66990cfe55ac3acc8c14ce4abeeea7cc84c7c1478f06eff2b8860f2134e8",
+      "license": "ImageMagick; bundled dependency licenses included",
+      "links": [
+        "https://imagemagick.org/",
+        "https://download.imagemagick.org/archive/ImageMagick-7.1.2-34.tar.xz",
+        "https://alpinelinux.org/",
+        "https://alpinelinux.org/",
+        "https://ai.xywhsoft.com/mdo-sources/optional-cli-20261024-sources.tar.gz"
+      ],
+      "recommended": false
+    },
+    {
+      "id": "poppler",
+      "tool_id": "official.poppler",
+      "version": "26.9.0",
+      "upstream_version": "26.09.0",
+      "platform": "windows-x86_64",
+      "file": "poppler-26.9.0-windows-x86_64.mdo-cli",
+      "size": 74207891,
+      "sha256": "4c125f8da01953bd540ed773aca8d96f37de68d1481031579f5d8aebbd165df6",
+      "license": "GPL-2.0-or-later; bundled dependency licenses included",
+      "links": [
+        "https://poppler.freedesktop.org/",
+        "https://github.com/oschwartz10612/poppler-windows/releases/tag/v26.09.0-0",
+        "https://alpinelinux.org/",
+        "https://alpinelinux.org/",
+        "https://ai.xywhsoft.com/mdo-sources/optional-cli-20261024-sources.tar.gz"
+      ],
+      "recommended": false
+    },
+    {
+      "id": "git",
+      "tool_id": "official.git",
+      "version": "2.52.0",
+      "upstream_version": "2.52.0",
+      "platform": "linux-x86_64",
+      "file": "git-2.52.0-linux-x86_64.mdo-cli",
+      "size": 18905573,
+      "sha256": "ac6b429bb0c9ee05d7361c6e204d6aede7026e0d51e5d9f281bb88bab6efeef9",
+      "license": "GPL-2.0-only; bundled dependency licenses included",
+      "links": [
+        "https://gitforwindows.org/mingit.html",
+        "https://github.com/git-for-windows/git/releases/tag/v2.56.0.windows.3",
+        "https://alpinelinux.org/",
+        "https://alpinelinux.org/",
+        "https://ai.xywhsoft.com/mdo-sources/optional-cli-20261024-sources.tar.gz"
+      ],
+      "recommended": false
+    },
+    {
+      "id": "sqlite",
+      "tool_id": "official.sqlite",
+      "version": "3.53.4",
+      "upstream_version": "3.53.4",
+      "platform": "linux-x86_64",
+      "file": "sqlite-3.53.4-linux-x86_64.mdo-cli",
+      "size": 4276836,
+      "sha256": "abd12e47c07eccd61339fd7e111f64acdf68935297ffa8b5aa89bfce0b46e27e",
+      "license": "Public Domain",
+      "links": [
+        "https://sqlite.org/cli.html",
+        "https://sqlite.org/2026/sqlite-amalgamation-3540100.zip",
+        "https://alpinelinux.org/",
+        "https://alpinelinux.org/",
+        "https://ai.xywhsoft.com/mdo-sources/optional-cli-20261024-sources.tar.gz"
+      ],
+      "recommended": false
+    },
+    {
+      "id": "poppler",
+      "tool_id": "official.poppler",
+      "version": "25.12.0",
+      "upstream_version": "25.12.0",
+      "platform": "linux-x86_64",
+      "file": "poppler-25.12.0-linux-x86_64.mdo-cli",
+      "size": 30665247,
+      "sha256": "a7863cae596cb4fcd6f03a2b0f692e2d987f83c89bdffaae9afc3a5912c8f754",
+      "license": "GPL-2.0-or-later; bundled dependency licenses included",
+      "links": [
+        "https://poppler.freedesktop.org/",
+        "https://github.com/oschwartz10612/poppler-windows/releases/tag/v26.09.0-0",
+        "https://alpinelinux.org/",
+        "https://alpinelinux.org/",
+        "https://ai.xywhsoft.com/mdo-sources/optional-cli-20261024-sources.tar.gz"
+      ],
+      "recommended": false
+    },
+    {
+      "id": "imagemagick",
+      "tool_id": "official.imagemagick",
+      "version": "7.1.2034",
+      "upstream_version": "7.1.2034",
+      "platform": "linux-x86_64",
+      "file": "imagemagick-7.1.2034-linux-x86_64.mdo-cli",
+      "size": 58546820,
+      "sha256": "e67980e9fa7d123d19743501500908ee6baa73e462a2ba4eeb97baba69f97499",
+      "license": "ImageMagick; bundled dependency licenses included",
+      "links": [
+        "https://imagemagick.org/",
+        "https://download.imagemagick.org/archive/ImageMagick-7.1.2-34.tar.xz",
+        "https://alpinelinux.org/",
+        "https://alpinelinux.org/",
+        "https://ai.xywhsoft.com/mdo-sources/optional-cli-20261024-sources.tar.gz"
+      ],
+      "recommended": false
+    },
+    {
+      "id": "ffmpeg",
+      "tool_id": "official.ffmpeg",
+      "version": "9.0.2",
+      "upstream_version": "9.0.2",
+      "platform": "linux-x86_64",
+      "file": "ffmpeg-9.0.2-linux-x86_64.mdo-cli",
+      "size": 74656060,
+      "sha256": "283d9314cb84012553582fdfc01356666af091ca9403ba774b7ba13a9be7ecbb",
+      "license": "GPL-3.0-or-later; dependency notices and build configuration included",
+      "links": [
+        "https://ffmpeg.org/",
+        "https://github.com/FFmpeg/FFmpeg/tree/n9.0.2",
+        "https://ai.xywhsoft.com/mdo-sources/optional-cli-20261024-sources.tar.gz"
+      ],
+      "recommended": false
+    },
+    {
+      "id": "git",
+      "tool_id": "official.git",
+      "version": "2.56.0",
+      "upstream_version": "2.56.0",
+      "platform": "android-arm64-v8a",
+      "file": "git-2.56.0-android-arm64-v8a.mdo-cli",
+      "size": 20609168,
+      "sha256": "f8db92c339462bc7b19360180cc78f6f8b6fc1842ff90b6d1f58086eaac9cb00",
+      "license": "GPL-2.0-only; dependency notices included",
+      "links": [
+        "https://git-scm.com/",
+        "https://ai.xywhsoft.com/mdo-sources/optional-cli-20261024-sources.tar.gz"
+      ],
+      "recommended": false
+    },
+    {
+      "id": "sqlite",
+      "tool_id": "official.sqlite",
+      "version": "3.54.1",
+      "upstream_version": "3.54.1",
+      "platform": "android-arm64-v8a",
+      "file": "sqlite-3.54.1-android-arm64-v8a.mdo-cli",
+      "size": 1911145,
+      "sha256": "662cd1ca7b92db5ef3b8c63448142343bd4ab9ad02cb5e342a6442c0ea11b445",
+      "license": "Public Domain",
+      "links": [
+        "https://sqlite.org/cli.html",
+        "https://ai.xywhsoft.com/mdo-sources/optional-cli-20261024-sources.tar.gz"
+      ],
+      "recommended": false
+    },
+    {
+      "id": "ffmpeg",
+      "tool_id": "official.ffmpeg",
+      "version": "9.0.2",
+      "upstream_version": "9.0.2",
+      "platform": "android-arm64-v8a",
+      "file": "ffmpeg-9.0.2-android-arm64-v8a.mdo-cli",
+      "size": 46523612,
+      "sha256": "5335c938fe71028d4e82760eba3026cc8f562d65c5d68ae6a6fa5fe7ffea9e5d",
+      "license": "GPL-3.0-or-later; dependency notices and build configuration included",
+      "links": [
+        "https://ffmpeg.org/",
+        "https://github.com/FFmpeg/FFmpeg/tree/n9.0.2",
+        "https://ai.xywhsoft.com/mdo-sources/optional-cli-20261024-sources.tar.gz"
+      ],
+      "recommended": false
+    },
+    {
+      "id": "poppler",
+      "tool_id": "official.poppler",
+      "version": "26.4.0",
+      "upstream_version": "26.04.0",
+      "platform": "android-arm64-v8a",
+      "file": "poppler-26.4.0-android-arm64-v8a.mdo-cli",
+      "size": 28221295,
+      "sha256": "86546021d5a1090b50ac19d84daca7fba453afe629ead05fbc32f6169243ba14",
+      "license": "GPL-2.0-or-later; bundled dependency licenses included",
+      "links": [
+        "https://poppler.freedesktop.org/",
+        "https://github.com/oschwartz10612/poppler-windows/releases/tag/v26.09.0-0",
+        "https://alpinelinux.org/",
+        "https://alpinelinux.org/",
+        "https://ai.xywhsoft.com/mdo-sources/optional-cli-20261024-sources.tar.gz"
+      ],
+      "recommended": false
+    },
+    {
+      "id": "imagemagick",
+      "tool_id": "official.imagemagick",
+      "version": "7.1.2034",
+      "upstream_version": "7.1.2-34",
+      "platform": "android-arm64-v8a",
+      "file": "imagemagick-7.1.2034-android-arm64-v8a.mdo-cli",
+      "size": 22135030,
+      "sha256": "2da3f138aea9fc0c78d3b70df41c067564f05a85bc5c6bd3c2a37046846a41e3",
+      "license": "ImageMagick; bundled dependency licenses included",
+      "links": [
+        "https://imagemagick.org/",
+        "https://download.imagemagick.org/archive/ImageMagick-7.1.2-34.tar.xz",
+        "https://alpinelinux.org/",
+        "https://alpinelinux.org/",
+        "https://ai.xywhsoft.com/mdo-sources/optional-cli-20261024-sources.tar.gz"
+      ],
+      "recommended": false
+    },
+    {
+      "id": "ffmpeg",
+      "tool_id": "official.ffmpeg",
+      "version": "9.0.2",
+      "upstream_version": "9.0.2",
+      "platform": "windows-x86_64",
+      "file": "ffmpeg-9.0.2-windows-x86_64.mdo-cli",
+      "size": 56521897,
+      "sha256": "f45d4f9153a757e12c6c5793299283ba80e0a1e4b925f87565aa06a37314b155",
+      "license": "GPL-3.0-or-later; dependency notices and build configuration included",
+      "links": [
+        "https://ffmpeg.org/",
+        "https://github.com/FFmpeg/FFmpeg/tree/n9.0.2",
+        "https://ai.xywhsoft.com/mdo-sources/optional-cli-20261024-sources.tar.gz"
+      ],
+      "recommended": false
+    }
+  ],
+  "android_full": {
+    "size": 150100377,
+    "sha256": "f81254793fd23707f3a5b36171781411650d3e870f6e4f1dfb63a949b56c696b",
+    "build_id": 50000017,
+    "toolpack_revision": 4,
+    "version": "0.5.0",
+    "certificate_sha256": "94b1947b60f3ce0852b19d9c37a47cc4a084fe9d601692c6a1f6b204c2174e84"
+  },
+  "uploads": [
+    {
+      "name": "mdo-full-arm64-v8a.apk",
+      "size": 150100377,
+      "sha256": "f81254793fd23707f3a5b36171781411650d3e870f6e4f1dfb63a949b56c696b"
+    },
+    {
+      "name": "optional-cli-20261024-sources.tar.gz",
+      "size": 261174761,
+      "sha256": "18d75c3f90e5f52e3f764bd503d36882186a170338fc49aed65821665f2975b8"
+    },
+    {
+      "name": "release-artifacts.tar.gz",
+      "size": 234842659,
+      "sha256": "0ab9733c10e1ca8a6f33d528153cd729351fd8266c40de8a2d679dfd180f6fe8"
+    }
+  ],
+  "publication": {
+    "published_at": "2026-10-24T13:52:10+08:00",
+    "catalog_revision": 26,
+    "tools": [
+      {
+        "id": 25,
+        "slug": "git",
+        "platform": "windows-x86_64",
+        "sha256": "2be8a92c7f7a2d26b03e4afe532b6c7f2f0b2f2122ad54a63ecf93c04b3f5b9b",
+        "inserted": true
+      },
+      {
+        "id": 26,
+        "slug": "sqlite",
+        "platform": "windows-x86_64",
+        "sha256": "0966100d01c5d0a4ff611c84c67867ab0ab4cf16c38302c2623d5bd3fb4c3848",
+        "inserted": true
+      },
+      {
+        "id": 27,
+        "slug": "imagemagick",
+        "platform": "windows-x86_64",
+        "sha256": "f1db66990cfe55ac3acc8c14ce4abeeea7cc84c7c1478f06eff2b8860f2134e8",
+        "inserted": true
+      },
+      {
+        "id": 28,
+        "slug": "poppler",
+        "platform": "windows-x86_64",
+        "sha256": "4c125f8da01953bd540ed773aca8d96f37de68d1481031579f5d8aebbd165df6",
+        "inserted": true
+      },
+      {
+        "id": 29,
+        "slug": "git",
+        "platform": "linux-x86_64",
+        "sha256": "ac6b429bb0c9ee05d7361c6e204d6aede7026e0d51e5d9f281bb88bab6efeef9",
+        "inserted": true
+      },
+      {
+        "id": 30,
+        "slug": "sqlite",
+        "platform": "linux-x86_64",
+        "sha256": "abd12e47c07eccd61339fd7e111f64acdf68935297ffa8b5aa89bfce0b46e27e",
+        "inserted": true
+      },
+      {
+        "id": 31,
+        "slug": "poppler",
+        "platform": "linux-x86_64",
+        "sha256": "a7863cae596cb4fcd6f03a2b0f692e2d987f83c89bdffaae9afc3a5912c8f754",
+        "inserted": true
+      },
+      {
+        "id": 32,
+        "slug": "imagemagick",
+        "platform": "linux-x86_64",
+        "sha256": "e67980e9fa7d123d19743501500908ee6baa73e462a2ba4eeb97baba69f97499",
+        "inserted": true
+      },
+      {
+        "id": 33,
+        "slug": "ffmpeg",
+        "platform": "linux-x86_64",
+        "sha256": "283d9314cb84012553582fdfc01356666af091ca9403ba774b7ba13a9be7ecbb",
+        "inserted": true
+      },
+      {
+        "id": 34,
+        "slug": "git",
+        "platform": "android-arm64-v8a",
+        "sha256": "f8db92c339462bc7b19360180cc78f6f8b6fc1842ff90b6d1f58086eaac9cb00",
+        "inserted": true
+      },
+      {
+        "id": 35,
+        "slug": "sqlite",
+        "platform": "android-arm64-v8a",
+        "sha256": "662cd1ca7b92db5ef3b8c63448142343bd4ab9ad02cb5e342a6442c0ea11b445",
+        "inserted": true
+      },
+      {
+        "id": 36,
+        "slug": "ffmpeg",
+        "platform": "android-arm64-v8a",
+        "sha256": "5335c938fe71028d4e82760eba3026cc8f562d65c5d68ae6a6fa5fe7ffea9e5d",
+        "inserted": true
+      },
+      {
+        "id": 37,
+        "slug": "poppler",
+        "platform": "android-arm64-v8a",
+        "sha256": "86546021d5a1090b50ac19d84daca7fba453afe629ead05fbc32f6169243ba14",
+        "inserted": true
+      },
+      {
+        "id": 38,
+        "slug": "imagemagick",
+        "platform": "android-arm64-v8a",
+        "sha256": "2da3f138aea9fc0c78d3b70df41c067564f05a85bc5c6bd3c2a37046846a41e3",
+        "inserted": true
+      },
+      {
+        "id": 39,
+        "slug": "ffmpeg",
+        "platform": "windows-x86_64",
+        "sha256": "f45d4f9153a757e12c6c5793299283ba80e0a1e4b925f87565aa06a37314b155",
+        "inserted": true
+      }
+    ],
+    "complete_tls_downloads": 18,
+    "outside_verified": {
+      "platforms": [
+        {
+          "platform": "windows-x86_64",
+          "new_tools": 5,
+          "passed": true
+        },
+        {
+          "platform": "linux-x86_64",
+          "new_tools": 5,
+          "passed": true
+        },
+        {
+          "platform": "android-arm64-v8a",
+          "new_tools": 5,
+          "passed": true
+        }
+      ],
+      "downloads": [
+        {
+          "name": "Windows SQLite CLI",
+          "complete": true,
+          "size": 4297251,
+          "sha256": "0966100d01c5d0a4ff611c84c67867ab0ab4cf16c38302c2623d5bd3fb4c3848"
+        }
+      ],
+      "passed": true,
+      "android_full_build": 50000017
+    },
+    "service": "active",
+    "preserved_invariants": {
+      "/opt/www/xs": "b32fa5696b9950a0dc0fa4fd8277a112e27cbea093deb5d53948a35072d273fe",
+      "/opt/www/xs.json": "37ef1e67f55b1d04a19f75237ac0b26175d8bafd51d383e1bbf5ca449c320001"
+    }
+  }
+}
