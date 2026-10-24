@@ -1,0 +1,82 @@
+{
+  "app_commit": "bdf00fa95e112ff4d2e2ac4d474916e02719e6ef",
+  "preview": true,
+  "auto_update_published": false,
+  "android_device_tested": false,
+  "artifacts": [
+    {
+      "file": "mdo.exe",
+      "size": 6261751,
+      "sha256": "21b5fcb354934403cf0329cc7fcbc35dbc5db97ac33ae5f1cb4d9dec4ea805a9"
+    },
+    {
+      "file": "mdo-server.exe",
+      "size": 6003511,
+      "sha256": "d9315c0ad447ae16b2e2ddd83a7e7a3667ab77079d2e3a5f7f987b4466a8bd05"
+    },
+    {
+      "file": "mdo-arm64-v8a.apk",
+      "size": 5801281,
+      "sha256": "25f63331fab3e1eae66bffbf545196d41ce53dfc743da45e479eeb31cb326f0f"
+    },
+    {
+      "file": "mdo-full-arm64-v8a.apk",
+      "size": 150149529,
+      "sha256": "f7cffa5e3ef0eebceec1a3089936a9de63d8ed69b6011e863a285cfe6b1df4a9"
+    }
+  ],
+  "version": "0.6.0",
+  "javascript_tests": 74,
+  "frontend_contract_tests": 20,
+  "web_modules": 226,
+  "android_app_payload_matches": true,
+  "ui_evidence": [
+    "external-desktop.png",
+    "external-mobile.png",
+    "external-mobile-light.png",
+    "skill-builder-desktop.png",
+    "skill-builder-light.png",
+    "skill-builder-mobile.png",
+    "skill-share-desktop.png"
+  ],
+  "browser_qa": {
+    "isolation": "Private local Home; account, distribution and update origins point to a closed loopback port; no model calls",
+    "native_save_flows": [
+      "Agent C tool create and save",
+      "Skill create and save",
+      "Project Skill validate and save",
+      "Custom external tool required fields and Enter save",
+      "Skill builder creates a new unsent draft"
+    ],
+    "desktop_footer": {
+      "top_before_scroll": 583,
+      "top_after_scroll": 583,
+      "body_scroll_top": 796,
+      "footer_client_height": 63,
+      "footer_scroll_height": 63,
+      "overflow": "hidden"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 720,
+      "device_scale_factor": 3,
+      "footer_client_height": 59,
+      "footer_scroll_height": 59
+    },
+    "reduced_mobile_viewport": {
+      "width": 390,
+      "height": 360,
+      "footer_client_height": 59,
+      "footer_scroll_height": 59,
+      "body_client_height": 243,
+      "horizontal_overflow": false
+    },
+    "themes": [
+      "light",
+      "dark"
+    ],
+    "test_servers_stopped": true,
+    "test_tabs_closed": true,
+    "production_model_requests": 0
+  }
+}
