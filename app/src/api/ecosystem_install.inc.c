@@ -157,6 +157,7 @@ static bool EcoLocalApply(const xvalue* entry,bool uninstall,char error[1024],xv
     if(ok)ok=journal&&next&&record&&inventory&&xrtValueObjectSet(journal,XRT_STR_LITERAL("files"),files)&&xrtValueObjectSet(journal,XRT_STR_LITERAL("receipts"),receipts);
     if(ok&&priorKey[0])xrtValueObjectRemove(next,xrtStrView(priorKey));
     if(ok&&!uninstall){const char* keys[]={"id","owner","slug","name","version","author","sha256"};for(size_t i=0;ok&&i<7;i++)ok=xrtValueObjectSet(record,xrtStrView(keys[i]),xrtValueObjectGet(entry,xrtStrView(keys[i])));
+        const xvalue* Submitter=xrtValueObjectGet(entry,XRT_STR_LITERAL("submitter"));if(ok&&Submitter)ok=xrtValueObjectSet(record,XRT_STR_LITERAL("submitter"),Submitter);
         const xvalue* manifest=xrtValueObjectGet(package,XRT_STR_LITERAL("manifest"));
         ok=ok&&MdoApiValueSetString(record,"key",key)&&MdoApiValueSetString(record,"source",local?"local":"store")&&xrtValueObjectSet(record,XRT_STR_LITERAL("manifest"),manifest);
         if(ok&&pluginAfter)ok=xrtValueObjectSet(record,XRT_STR_LITERAL("plugin_revisions"),pluginAfter)&&MdoApiValueSetString(record,"activation","reload_required");
@@ -204,6 +205,24 @@ finished:
 }
 #include "ecosystem_drafts.inc.c"
 #include "ecosystem_export.inc.c"
+void MdoApiEcosystemRefreshCredits(const xvalue* Data)
+{
+    xrtMutexLock(g_MdoExtensionLock);bool Known=false;xvalue* Records=ExtensionStoreRead(&Known);bool Changed=false;
+    const xvalue* Items=xrtValueObjectGet(Data,XRT_STR_LITERAL("items"));size_t Count=Items?xrtValueCount(Items):1;
+    for(size_t i=0;Known&&i<Count;i++){
+        const xvalue* Row=Items?xrtValueArrayGet(Items,i):Data;int64 Id=0;if(!MdoPackageNumber(Row,"id",&Id)||Id<=0)continue;
+        char Key[32];snprintf(Key,sizeof(Key),"%lld",(long long)Id);xvalue* Record=(xvalue*)xrtValueObjectGet(Records,xrtStrView(Key));
+        cstr Source=MdoPackageText(Record,"source",16),Hash=MdoPackageText(Record,"sha256",64),Incoming=MdoPackageText(Row,"sha256",64);
+        if(!Record||(Source&&!strcmp(Source,"local"))||!Hash||!Incoming||strcmp(Hash,Incoming)||EcoLocalNumber(Record,"owner")!=EcoLocalNumber(Row,"owner"))continue;
+        const char* Identity[]={"slug","version"};bool Same=true;
+        for(size_t k=0;Same&&k<2;k++){cstr A=MdoPackageText(Record,Identity[k],64),B=MdoPackageText(Row,Identity[k],64);Same=A&&B&&!strcmp(A,B);}
+        if(!Same)continue;
+        const char* Keys[]={"submitter","author","copyright","license"};const size_t Limits[]={100,100,4096,80};
+        for(size_t k=0;k<4;k++){cstr Text=MdoPackageText(Row,Keys[k],Limits[k]),Old=MdoPackageText(Record,Keys[k],Limits[k]);
+            if(Text&&Text[0]&&(!Old||strcmp(Old,Text))&&MdoApiValueSetString(Record,Keys[k],Text))Changed=true;}
+    }
+    if(Changed)(void)EcoLocalSave(ECO_RECEIPTS,Records);xrtValueRelease(Records);xrtMutexUnlock(g_MdoExtensionLock);
+}
 bool MdoApiEcosystemLocal(MdoApiContext* c,const xvalue* input)
 {
     cstr action=MdoPackageText(input,"action",16);char error[1024]={0};bool ok=false;
@@ -248,6 +267,7 @@ bool MdoApiEcosystemLocal(MdoApiContext* c,const xvalue* input)
         const xvalue* refs=xrtValueObjectGet(input,XRT_STR_LITERAL("references"));xvalue* resources=xrtValueArray();
         ok=xrtValueType(refs)==XVALUE_ARRAY&&xrtValueCount(refs)>0&&xrtValueCount(refs)<=16&&resources;
         for(size_t i=0;ok&&i<xrtValueCount(refs);i++){const xvalue* ref=xrtValueArrayGet(refs,i);cstr kind=MdoPackageText(ref,"kind",16),id=MdoPackageText(ref,"id",64);char path[256];
+            if(kind&&id&&!xrtValueObjectHas(ref,XRT_STR_LITERAL("project"))&&!ExtensionStoreCanCustomize(c,kind,id)){xrtValueRelease(resources);xrtMutexUnlock(g_MdoExtensionLock);return true;}
             cstr Project=MdoPackageText(ref,"project",64);if(xrtValueObjectHas(ref,XRT_STR_LITERAL("project"))){xvalue* R=xrtValueObject();ok=kind&&!strcmp(kind,"skills")&&R&&EcoExportProjectSkill(Project,id,R)&&xrtValueArrayAppend(resources,R);xrtValueRelease(R);continue;}
             if(kind&&(!strcmp(kind,"plugins")||!strcmp(kind,"toolpacks"))){xvalue* R=xrtValueObject();ok=R&&EcoNativeExport(kind,id,R)&&xrtValueArrayAppend(resources,R);xrtValueRelease(R);continue;}
             ok=EcoLocalPath(kind,id,path);bool missing=false;char* content=ok?MdoExtensionRead(path,false,MDO_EXTENSION_TEXT_LIMIT,&missing):NULL;xvalue* resource=xrtValueObject();

@@ -2236,5 +2236,16 @@
   "downloads.state.cancelled": "已取消",
   "downloads.state.complete": "已完成",
   "downloads.state.interrupted": "已中断",
-  "downloads.legacy": "旧版工具包"
+  "downloads.legacy": "旧版工具包",
+  "extensionBrowser.storeReadOnly": "商店安装的资源仅支持启停、更新和卸载；不能编辑、复制或再次分享。",
+  "extensionBrowser.unknownSubmitter": "提交者信息未提供",
+  "extensionBrowser.localAdded": "本机添加",
+  "extensionBrowser.author": "作者",
+  "extensionBrowser.submitter": "提交者",
+  "extensionBrowser.copyright": "版权声明",
+  "extensionBrowser.notProvided": "未提供",
+  "extensionBrowser.copyrightUnknown": "未提供独立版权声明，请参阅许可及源码中的归属信息。",
+  "extensionBrowser.license": "许可",
+  "extensionBrowser.version": "版本",
+  "extensionBrowser.storeInstalled": "商店安装"
 }

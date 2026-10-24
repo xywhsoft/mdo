@@ -5,6 +5,7 @@ import { targetState, subscribeTarget } from "../../api/target.js";
 import { element, errorMessage, toast } from "../../utils/dom.js";
 import { makeStorePackage, STORE_PLATFORMS, packageFields, resourceReferences } from "./store-formats.js";
 import { renderSourceMarkdown, renderPackageAttachment } from "../../utils/source-markdown.js";
+import { customizableResource, resourceCredits, storeReadOnlyMessage } from "./resource-credits.js";
 
 const node = (tag, text, className) => element(tag, { text, className });
 const device = () => targetState().selected?.id || "local";
@@ -85,7 +86,8 @@ export function createSingleResourceStore(kind, onChange, onBrowse = () => {}, o
       const receipt = owned(row), same = receipt?.id === row.id;
       const primary = button(same ? browserText("manage", "管理") : receipt ? browserText("update", "更新") : browserText("install", "安装"), () => same && onManage ? onManage(receipt) : detail(row), !same);
       primary.disabled = busy;
-      return { key: String(row.id), kind, title: row.name, description: row.description, meta: [row.author, row.version], badge: { text: same ? browserText("installed", "已安装") : receipt ? browserText("updates", "可更新") : "" }, primary, onSelect: () => loadDetail(row) };
+      const credits=resourceCredits({...row,store_managed:true});
+      return { key: String(row.id), kind, title: row.name, byline:credits.submitter, description: row.description, meta:credits.meta, badge: { text: same ? browserText("installed", "已安装") : receipt ? browserText("updates", "可更新") : "" }, primary, onSelect: () => loadDetail(row) };
     });
     browser.setItems(rows, { busy, pageKey:JSON.stringify([query,stateFilter]), empty: items.length ? browserText("empty", "没有匹配的扩展") : `暂无公开${name}。可从本机列表分享你的作品。` });
     root.replaceChildren(search, node("p", kind === "skills" ? "按需读取 Skill，包含说明与参考文件。" : "C 工具在本机执行；安装前请检查源码并确认信任。", "extension-help"), browser.root);
@@ -109,9 +111,10 @@ export function createSingleResourceStore(kind, onChange, onBrowse = () => {}, o
       const data = await read({ action: "detail", id: row.id }); if (!valid()) return;
       const p = data.package;
       if (!singleResource(p, kind)) throw Error(`作品必须只包含一个${name}`);
-      const description = node("div"); description.append(node("p", data.description || row.description), renderSourceMarkdown(p.manifest.readme));
+      const credits=resourceCredits({...data,store_managed:true},{...data,manifest:p.manifest});
+      const description = node("div"); description.append(node("p", data.description || row.description),credits.facts(),renderSourceMarkdown(p.manifest.readme));
       if (p.manifest.changelog) description.append(node("h4", "更新说明"), renderSourceMarkdown(p.manifest.changelog));
-      const usage = node("div"); usage.append(detailFacts([["作者", data.author], ["版本", data.version], ["许可", p.manifest.license], ["支持平台", p.manifest.platforms.join(" / ")]]));
+      const usage = node("div"); usage.append(detailFacts([["作者", credits.author], ["版本", data.version], ["许可", credits.license], ["支持平台", p.manifest.platforms.join(" / ")]]));
       usage.append(node("p", kind === "skills" ? `$${p.resources[0].id} · /skill:${p.resources[0].id}` : "安装后在 Agent 工具页管理；模型通过结构化参数调用。"));
       const source = node("div"); source.append(node("pre", p.resources[0].content, "store-source"));
       for (const file of p.resources[0].files || []) source.append(renderPackageAttachment(file, { download: "下载文件", binary: "二进制文件，请下载检查", truncated: "仅显示前 64 KiB，请下载完整文件" }));
@@ -150,6 +153,7 @@ export function createSingleResourceStore(kind, onChange, onBrowse = () => {}, o
   }
   async function publish(item, receipt = null) {
     if (busy || disposed) return;
+    if(!customizableResource(item,receipt)){toast(storeReadOnlyMessage(),"error");return;}
     const id = epoch, target = device(); controller?.abort(); controller = new AbortController(); busy = true;
     try {
       const exported = await call({ action: "export", references: [{ kind, id: item.id, ...(item.project ? { project: item.project } : {}) }] });
@@ -159,7 +163,7 @@ export function createSingleResourceStore(kind, onChange, onBrowse = () => {}, o
       if (previous.version?.match(/^\d+\.\d+\.\d+$/)) previous.version = previous.version.replace(/\d+$/, n => String(Number(n) + 1));
       const d = modal(`分享${name} · ${item.name || item.id}`); if (!d) return;
       const form = element("form", { className: "store-publish-form" }), fields = {};
-      for (const [key, text, limit, area] of [["name", "作品名称", 100], ["slug", "作品 ID（小写英文，发布后不变）", 64], ["version", "版本（如 1.0.0）", 32], ["description", "简介", 600, true], ["readme", "使用说明", 32768, true], ["license", "许可证", 80], ["changelog", "更新说明", 8192, true], ["review_notes", "审核说明：用法、构建与权限（申请公布必填）", 8000, true], ["source_url", "源码或说明链接（HTTPS，可选）", 1000]]) {
+      for (const [key, text, limit, area] of [["name", "作品名称", 100], ["slug", "作品 ID（小写英文，发布后不变）", 64], ["version", "版本（如 1.0.0）", 32], ["description", "简介", 600, true], ["author", "作品作者（可选，与提交者账号不同）", 100], ["copyright", "版权声明（可选，保留原作者归属）", 4096, true], ["readme", "使用说明", 32768, true], ["license", "许可证", 80], ["changelog", "更新说明", 8192, true], ["review_notes", "审核说明：用法、构建与权限（申请公布必填）", 8000, true], ["source_url", "源码或说明链接（HTTPS，可选）", 1000]]) {
         const control = element(area ? "textarea" : "input", { attrs: { name: key, maxlength: String(limit), required: ["name", "slug", "version", "description", "readme", "license"].includes(key) ? "" : null } });
         control.value = previous[key] || ({ name: item.name || item.id, slug: `${kind === "skills" ? "skill" : "tool"}-${item.id}`.slice(0, 64), version: "1.0.0", description: item.description || "", license: "MIT" })[key] || "";
         fields[key] = control; form.append(element("label", {}, [node("span", text), control]));

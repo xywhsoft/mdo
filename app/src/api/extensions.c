@@ -97,7 +97,8 @@ static bool ExtensionReload(cstr Kind,cstr Id,bool Expected)
     } else return true;
     return Found==Expected;
 }
-static xvalue* ExtensionItem(cstr Kind,cstr Id,bool IncludeSource)
+#include "extension_store.inc.c"
+static xvalue* ExtensionItemRecord(cstr Kind,cstr Id,bool IncludeSource,const xvalue* Receipts,bool OwnershipKnown)
 {
     char Path[160],Hash[65],Error[1024];
     char* Text;
@@ -124,6 +125,8 @@ static xvalue* ExtensionItem(cstr Kind,cstr Id,bool IncludeSource)
         !MdoApiValueSetBool(Item,"enabled",Enabled) || !MdoApiValueSetBool(Item,"valid",Valid) ||
         !MdoApiValueSetString(Item,"error",Valid?"":Error) ||
         (IncludeSource && !MdoApiValueSetString(Item,"content",Text))) goto fail;
+    if(Doc&&(!strcmp(Kind,"skills")||!strcmp(Kind,"tools"))){const char* Keys[]={"author","copyright","license","version"};const size_t Limits[]={100,4096,80,32};
+        for(size_t i=0;i<4;i++){cstr Credit=MdoPackageText(Doc,Keys[i],Limits[i]);if(Credit&&!MdoApiValueSetString(Item,Keys[i],Credit))goto fail;}}
     if (!strcmp(Kind,"tools")) {
         MdoModuleCatalog* Catalog=MdoModuleCatalogSnapshot();
         xvalue* Tools=xrtValueArray(); size_t i,j; bool Loaded=false,Ok=Tools!=NULL;
@@ -134,7 +137,7 @@ static xvalue* ExtensionItem(cstr Kind,cstr Id,bool IncludeSource)
             MdoModuleInfo Module={0}; Module.Size=sizeof(Module);
             if (!MdoModuleCatalogModuleAt(Catalog,i,&Module) || strcmp(Module.SourcePath,Virtual) || strcmp(Module.SourceRevision,Hash)) continue;
             Loaded=true;
-            Ok=MdoApiValueSetString(Item,"name",Module.Name) && MdoApiValueSetString(Item,"description",Module.Description);
+            Ok=MdoApiValueSetString(Item,"name",Module.Name) && MdoApiValueSetString(Item,"description",Module.Description)&&MdoApiValueSetString(Item,"version",Module.Version?Module.Version:"");
             for (j=0u;Ok && j<MdoModuleCatalogToolCount(Catalog);++j) {
                 MdoModuleToolInfo Tool={0}; xvalue* Export=xrtValueObject(); Tool.Size=sizeof(Tool);
                 if (!MdoModuleCatalogToolAt(Catalog,j,&Tool) || strcmp(Tool.ModuleId,Module.Id)) { xrtValueRelease(Export); continue; }
@@ -165,15 +168,21 @@ static xvalue* ExtensionItem(cstr Kind,cstr Id,bool IncludeSource)
         xstrview Hint={0};(void)ExtensionString(Doc,"argument_hint",&Hint);
         if(!MdoApiValueSetStringView(Item,"argument_hint",Hint))goto fail;
     }
+    if((!strcmp(Kind,"skills")||!strcmp(Kind,"tools"))&&!ExtensionStoreInfo(Item,Path,Receipts,OwnershipKnown,IncludeSource))goto fail;
     xrtFree(Text); xrtValueRelease(Doc); return Item;
 fail:
     xrtFree(Text); xrtValueRelease(Doc); xrtValueRelease(Item); return NULL;
+}
+static xvalue* ExtensionItem(cstr Kind,cstr Id,bool IncludeSource)
+{
+    bool Known=false;xvalue* Records=ExtensionStoreRead(&Known);
+    xvalue* Item=ExtensionItemRecord(Kind,Id,IncludeSource,Records,Known);xrtValueRelease(Records);return Item;
 }
 static bool ExtensionList(MdoApiContext* C,cstr Kind)
 {
     char Root[80]; xdir Dir; xdirentry Entry; xdirnext Next;
     xvalue* Data=xrtValueObject(); xvalue* Items=xrtValueArray();
-    size_t Count=0u; bool Ok=Data != NULL && Items != NULL;
+    size_t Count=0u; bool Ok=Data != NULL && Items != NULL,Known=false;xvalue* Records=ExtensionStoreRead(&Known);
     snprintf(Root,sizeof(Root),"/app/default-home/%s",Kind);
     Dir=xrtVfsDirOpen(MdoHomeApplicationVfs(),Root,XDIR_STAT);
     if (Dir==NULL) {
@@ -193,13 +202,13 @@ static bool ExtensionList(MdoApiContext* C,cstr Kind)
         if (!MdoExtensionIdValid(Id)) continue;
         /* README is not a resource; lowercase IDs keep that invariant portable. */
         if (++Count>256u) { Ok=false; break; }
-        Item=ExtensionItem(Kind,Id,false);
+        Item=ExtensionItemRecord(Kind,Id,false,Records,Known);
         if (Item) { Ok=xrtValueArrayAppend(Items,Item); xrtValueRelease(Item); }
         else xrtClearError(); /* missing SKILL.md folders are not installed Skills */
     }
     if (Dir) { if (Ok && Next==XDIR_NEXT_ERROR) Ok=false; (void)xrtDirClose(Dir); }
     if (Ok) Ok=MdoApiValueSetTake(Data,"items",&Items);
-    xrtValueRelease(Items);
+    xrtValueRelease(Items);xrtValueRelease(Records);
     if (!Ok) { xrtValueRelease(Data); return MdoApiReplyError(C,503,"extensions_unavailable","Resource directory cannot be read",NULL); }
     return MdoApiReplySuccessTake(C,200,Data,NULL);
 }
@@ -560,12 +569,14 @@ bool MdoApiExtensionsRoute(MdoApiContext* C)
         if (Method==XHTTP_METHOD_GET || Method==XHTTP_METHOD_HEAD) {
             bool Bundle=C->Target.Path.Size>=7u && !memcmp(C->Target.Path.Data+C->Target.Path.Size-7u,"/bundle",7u);
             xvalue* Item=Bundle?NULL:ExtensionItem(Kind,Id,true);
-            if (Bundle) Result=!strcmp(Kind,"skills")?ExtensionBundle(C,Id):MdoApiReplyError(C,400,"extension_action_invalid","Bundles are only supported for Skills",NULL);
+            if (Bundle&&!ExtensionStoreCanCustomize(C,Kind,Id))Result=true;
+            else if (Bundle) Result=!strcmp(Kind,"skills")?ExtensionBundle(C,Id):MdoApiReplyError(C,400,"extension_action_invalid","Bundles are only supported for Skills",NULL);
             else Result=Item?MdoApiReplySuccessTake(C,200,Item,NULL):MdoApiReplyError(C,404,"extension_not_found","Resource not found",NULL);
         } else {
             Old=MdoExtensionRead(Path,false,MDO_EXTENSION_TEXT_LIMIT,&Missing);
             if (!Old && !Missing) Result=MdoApiReplyError(C,503,"extension_unreadable","Existing resource cannot be read safely",NULL);
             else if (!ExtensionMatch(C,Old)) Result=true;
+            else if ((Method==XHTTP_METHOD_PUT||Method==XHTTP_METHOD_DELETE)&&!ExtensionStoreCanCustomize(C,Kind,Id))Result=true;
             else if (Method==XHTTP_METHOD_PUT) Result=ExtensionWrite(C,Kind,Id,Path,Old);
             else if (!Old) Result=MdoApiReplyError(C,404,"extension_not_found","Resource not found",NULL);
             else if (Method==XHTTP_METHOD_DELETE) Result=ExtensionDelete(C,Kind,Id,Path,Old);

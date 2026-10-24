@@ -2236,5 +2236,16 @@
   "downloads.state.cancelled": "Отменено",
   "downloads.state.complete": "Завершено",
   "downloads.state.interrupted": "Прервано",
-  "downloads.legacy": "Прежний пакет программ"
+  "downloads.legacy": "Прежний пакет программ",
+  "extensionBrowser.storeReadOnly": "Ресурсы магазина можно включать, обновлять и удалять. Редактирование, копирование и повторная публикация недоступны.",
+  "extensionBrowser.unknownSubmitter": "Имя отправителя не указано",
+  "extensionBrowser.localAdded": "Добавлено локально",
+  "extensionBrowser.author": "Автор",
+  "extensionBrowser.submitter": "Отправитель",
+  "extensionBrowser.copyright": "Авторские права",
+  "extensionBrowser.notProvided": "Не указано",
+  "extensionBrowser.copyrightUnknown": "Отдельное уведомление об авторских правах отсутствует. См. лицензию и сведения в исходном коде.",
+  "extensionBrowser.license": "Лицензия",
+  "extensionBrowser.version": "Версия",
+  "extensionBrowser.storeInstalled": "Установлено из магазина"
 }

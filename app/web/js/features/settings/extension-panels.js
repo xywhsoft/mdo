@@ -1,5 +1,6 @@
 import { createExtensionBrowser, actionMenu, extensionToggle, detailTabs, browserText } from "../../components/extension-browser.js";
 import { createSingleResourceStore } from "./single-resource-store.js";
+import { customizableResource, resourceCredits, storeReadOnlyMessage } from "./resource-credits.js";
 import { createSkillWorkbench } from "./skill-workbench.js";
 import { createMcpContext } from "./mcp-context.js";
 import { createMcpAuthorization } from "./mcp-authorization.js";
@@ -135,7 +136,7 @@ export function createExtensionPanels() {
     if (store) {
       const tabs = element("div", { className: "store-tabs", attrs: { role: "tablist", "aria-label": title(kind) } });
       for (const [area, text] of [["local", kind === "skills" ? "本机 Skill" : "本机 Agent 工具"], ["store", kind === "skills" ? "Skill 商店" : "Agent 工具商店"]]) {
-        const tab = button(text, () => { if (state.busy || store.hasPendingChanges()) return; state.area = area; store.activate(area === "store"); render(kind); if (area === "local" && !state.loaded) void load(kind); });
+        const tab = button(text, () => { if (state.busy || store.hasPendingChanges()) return; state.area = area; store.activate(area === "store"); render(kind); if (area === "local") void load(kind); });
         tab.setAttribute("role", "tab"); tab.setAttribute("aria-selected", String(state.area === area)); tabs.append(tab);
       }
       root.append(tabs, store.statusRoot);
@@ -205,7 +206,8 @@ export function createExtensionPanels() {
           kind === "mcp" ? element("span", { text: t(`resource.mcp${({ ready: "Ready", failed: "Failed", disabled: "Disabled", disconnected: "Disconnected" })[item.state] || "Disconnected"}`) }) : null,
           kind === "mcp" ? element("span", { text: t("resource.toolCount", { count: item.tool_count || 0 }) }) : null,
         ]);
-        const owner=resourceOwner(state.packages,item.path);
+        const owner=resourceOwner(state.packages,item.path), protectedKind=["tools","skills"].includes(kind);
+        const editable=!protectedKind||customizableResource(item,owner), credits=protectedKind?resourceCredits(item,owner):null;
         if(owner)meta.append(button(`${owner.name} · ${owner.version} · ${owner.source==="local"?label("localImport","本地导入"):owner.author}`,()=>returnToPackage(receiptKey(owner))));
         const edit = button(label("edit", "编辑"), async () => {
           const target = targetKey(), isCurrent = () => current(kind, target);
@@ -215,9 +217,10 @@ export function createExtensionPanels() {
         const toggle = button(item.enabled ? label("disable", "停用") : label("enable", "启用"), () => act(kind, async () => {
           await api.post(`${path(kind, item.id)}/enabled`, { enabled: !item.enabled }, revision(item));
         }));
-        const controls = [edit, button(label("export", "导出"), () => exportItem(kind, item))];
-        if (store && item.valid) controls.push(button("分享到创作中心", () => store.publish(item, owner)), ...store.localActions(owner));
-        if (kind === "skills") controls.push(button(label("improveSkill", "用 AI 改进"), () =>
+        const controls = editable ? [edit, button(label("export", "导出"), () => exportItem(kind, item))] : [];
+        if (store && item.valid && editable) controls.push(button("分享到创作中心", () => store.publish(item, owner)));
+        if (store) controls.push(...store.localActions(owner));
+        if (kind === "skills" && editable) controls.push(button(label("improveSkill", "用 AI 改进"), () =>
           skillWorkbench.open({ builder: true, mode: "improve", id: item.id, scope: "user" })));
         if (kind === "mcp") controls.push(button(label("test", "测试连接"), () => act(kind, async scope => {
           await refreshMcp(item.id, scope);
@@ -226,7 +229,7 @@ export function createExtensionPanels() {
         if (kind === "mcp") controls.push(button("资源、提示词与诊断", () => mcpContext.open(item.id)));
         if (kind === "mcp" && item.has_oauth) controls.push(button("授权", () => mcpAuthorization.open(item.id)));
         if (kind === "mcp" && item.connected) controls.push(button(t("resource.disconnect"), () => act(kind, () => disconnectMcp(item.id))));
-        if (item.external) controls.push(button(label(kind === "agents" && item.id === "default" ? "resetAgent" : "delete", kind === "agents" && item.id === "default" ? "恢复默认" : "删除"), () => act(kind, async () => {
+        if (item.external && editable) controls.push(button(label(kind === "agents" && item.id === "default" ? "resetAgent" : "delete", kind === "agents" && item.id === "default" ? "恢复默认" : "删除"), () => act(kind, async () => {
           if (!window.confirm(kind === "agents" && item.id === "default" ? label("resetAgentConfirm", "恢复内置默认 Agent 配置？") : label("deleteConfirm", "删除 {name}？", { name: item.name }))) return;
           await api.delete(path(kind, item.id), revision(item));
         })));
@@ -234,12 +237,13 @@ export function createExtensionPanels() {
         toggle.disabled = state.busy;
         controls.forEach(control => { control.disabled = state.busy; });
         const status = kind === "mcp" ? t(`resource.mcp${({ ready: "Ready", failed: "Failed", disabled: "Disabled", disconnected: "Disconnected" })[item.state] || "Disconnected"}`) : !item.valid ? browserText("needsAttention", "需要处理") : "";
-        rows.push({ key: item.id, kind, title: item.name || item.id, description: item.description,
-          meta: [owner?.author, owner?.version, item.external ? browserText("custom", "自定义") : label("builtin", "内置")],
+        rows.push({ key: item.id, kind, title: item.name || item.id, description: item.description, byline: credits?.submitter,
+          meta: credits ? [...credits.meta, owner?.source === "store" || item.store_managed ? browserText("storeInstalled", "商店安装") : item.external ? browserText("custom", "自定义") : label("builtin", "内置")] : [owner?.author, owner?.version, item.external ? browserText("custom", "自定义") : label("builtin", "内置")],
           badge: { text: status, tone: !item.valid || item.state === "failed" ? "error" : "" },
           toggle: canToggle ? extensionToggle(toggle, item.enabled, item.name || item.id) : null, actions: controls,
           detail: () => {
             const description = element("div", {}, [element("p", { text: item.description }), !item.valid ? element("p", { className: "extension-error", text: item.error }) : null]);
+            if(credits)description.append(credits.facts());if(!editable)description.append(element("p",{className:"extension-help",text:storeReadOnlyMessage()}));
             const usage = element("div", {}, [element("p", { text: kind === "skills" ? `$${item.id} · /skill:${item.id}` : kind === "commands" ? `/${item.id}` : kind === "mcp" ? status : item.name || item.id }),
               kind === "tools" ? element("div", { className: "tool-exports" }, (item.tools || []).map(tool => element("code", { text: tool.id }))) : null]);
             const source = element("div", {}, [meta]), preview = element("div"); source.append(preview); let sourceLoaded = false;
@@ -256,7 +260,7 @@ export function createExtensionPanels() {
             return detailTabs([{ id: "description", label: browserText("description", "说明"), content: description }, { id: "usage", label: browserText("usage", "使用方式"), content: usage }, { id: "source", label: browserText("sourceFiles", "来源与文件"), content: source, onSelect: () => queueMicrotask(readSource) }]);
           } });
       }
-      browser.setItems(rows, { busy: state.busy, empty: state.filter || state.stateFilter !== "all" ? browserText("empty", "没有匹配的扩展") : label("empty", "还没有资源。新建或导入一个即可开始。") });
+      browser.setItems(rows, { busy: state.busy, pageKey:JSON.stringify([state.filter,state.stateFilter,state.view]), empty: state.filter || state.stateFilter !== "all" ? browserText("empty", "没有匹配的扩展") : label("empty", "还没有资源。新建或导入一个即可开始。") });
     };
     search.addEventListener("input", () => { state.filter = search.value; renderItems(); });
     toolbar.prepend(search, statusFilter); if (sourceFilter) toolbar.insertBefore(sourceFilter, statusFilter);
@@ -413,6 +417,7 @@ export function createExtensionPanels() {
     inputField(editing.form, "prompt", label(kind === "agents" ? "agentInstructions" : "instructions", kind === "agents" ? "系统提示词（留空使用默认规则）" : "指令"), values.prompt || "", { area: true, required: required("prompt") });
   }
   function openEditor(kind, item = null, imported = null, packageKey = null) {
+    if(item&&["tools","skills"].includes(kind)&&!customizableResource(item,resourceOwner(states.get(kind).packages,item.path))){toast(storeReadOnlyMessage(),"error");return;}
     reads.cancel("editor");
     if (editing && !closeEditor()) return;
     const initial = imported?.content ?? item?.content ?? (kind === "commands" ? newCommand() : kind === "tools" ? newTool() : kind === "mcp" ? JSON.stringify(newMcp(), null, 2) :

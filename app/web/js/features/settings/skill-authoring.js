@@ -1,5 +1,6 @@
 import { api } from "../../api/client.js";
 import { portableId } from "./extension-formats.js";
+import { customizableResource, storeReadOnlyMessage } from "./resource-credits.js";
 
 export function skillAuthoringPrompt({ directory, scope, mode = "create", id = "", request = "" }) {
   if (typeof directory !== "string" || !directory || directory.includes("\0"))
@@ -24,6 +25,10 @@ SKILL.md 使用 YAML front matter，至少包含 name 和 description，正文�
 
 export async function expandSkillAuthoringDraft(settings, options) {
   const args = skillAuthoringPrompt(settings);
+  if(settings.scope==="user"&&settings.id&&settings.mode!=="review"){
+    try { const {data}=await api.get(`/extensions/skills/${encodeURIComponent(settings.id)}`,options);if(!customizableResource(data))throw Error(storeReadOnlyMessage()); }
+    catch(error){if(error.status!==404)throw error;}
+  }
   if (new TextEncoder().encode(args).length > 16384) throw new Error("构建请求超过 16 KiB，请缩短需求或路径");
   const response = await api.post(`/skills/invoke?project=${encodeURIComponent(settings.projectId || "default")}`,
     { id: "skill-creator", arguments: args }, options);

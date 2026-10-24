@@ -61,7 +61,7 @@ def run():
     prefix = "/api/v1/mdo/ecosystem/"
     try:
         server = start(EXE, website / "xs.json", HOME); ready(server, port, prefix + "packages")
-        web("POST", "/api/v1/register", dict(username="single_author", password="Fixture-2026-password"), status=201)
+        web("POST", "/api/v1/register", dict(username="single_author",nickname="Account nickname",password="Fixture-2026-password"), status=201)
         login, _ = web("POST", "/api/v1/login", dict(identifier="single_author", password="Fixture-2026-password")); auth = {"Authorization": "Bearer " + login["access_token"]}
         _, head = web("POST", "/admin/login", dict(username=user, password=password)); cookie = "; ".join(v.split(";", 1)[0] for v in head["_cookies"])
         inventory, _ = web("GET", "/admin/api/mdo/ecosystem", cookie=cookie); csrf = {"X-CSRF-Token": inventory["csrf"]}
@@ -77,7 +77,7 @@ def run():
         tool = dict(kind="tools", id="single-tool", content=c)
         ids = {}
         for kind, resource in [("skills", skill), ("tools", tool)]:
-            p = dict(format="mdo.extension.v1", manifest=dict(slug="work-" + kind, name="Single " + kind, version="1.0.0", description="One independent resource", readme="Source and build instructions", license="MIT", platforms=["windows-x86_64", "android-arm64-v8a", "linux-x86_64"]), resources=[resource])
+            p = dict(format="mdo.extension.v1", manifest=dict(slug="work-" + kind, name="Single " + kind, version="1.0.0", description="One independent resource",author="Original Developers",copyright="Copyright 2026 Original Developers",submitter="forged_username",readme="Source and build instructions", license="MIT", platforms=["windows-x86_64", "android-arm64-v8a", "linux-x86_64"]), resources=[resource])
             # Private works are hidden from all public download paths.
             private = store(kind, "submit", package=p, publish=False, status=201); identity = private["id"]
             assert not store(kind, "catalog")["items"]
@@ -88,16 +88,35 @@ def run():
             web("POST", "/api/v1/mdo/creator/publish", dict(source="package", id=identity, revision=1, publish=True, review_notes="Complete source supplied. Read-only fixture with no network access."), auth=auth)
             store(kind, "install", id=identity, trust_code=True, status=409)
             web("POST", "/admin/api/mdo/ecosystem", dict(action="approve", id=identity, revision=2, reason="Inspected full source and fixture behavior"), auth=csrf, cookie=cookie)
-            assert store(kind, "catalog")["items"][0]["id"] == identity
+            catalog=store(kind,"catalog")["items"][0]
+            assert catalog["id"]==identity and catalog["submitter"]=="single_author" and catalog["author"]==p["manifest"]["author"] and catalog["copyright"]==p["manifest"]["copyright"] and catalog["license"]=="MIT"
+            detail=store(kind,"detail",id=identity);assert detail["submitter"]=="single_author" and detail["copyright"]==catalog["copyright"]
             wrong = "tools" if kind == "skills" else "skills"
             store(wrong, "plan", id=identity, status=404)
             if kind == "tools": store(kind, "install", id=identity, status=409)
             plan = store(kind, "plan", id=identity)
             store(kind, "install", id=identity, trust_code=True, expected_plan="0" * 64, status=409)
             store(kind, "install", id=identity, trust_code=True, expected_plan=plan["sha256"])
-            exported = store(kind, "export", references=[dict(kind=kind, id=resource["id"])])
-            assert exported["resources"][0] == resource
+            store(kind,"export",references=[dict(kind=kind,id=resource["id"])],status=403)
+            native_path=f'/extensions/{kind}/{resource["id"]}'
+            installed_item=client("GET",native_path);assert installed_item["store_managed"] and installed_item["management_known"] and installed_item["submitter"]=="single_author" and installed_item["copyright"]==catalog["copyright"]
+            revision={"If-Match":'"'+installed_item["revision"]+'"'}
+            def protected(method,suffix='',body=None,status=403):
+                headers={**revision,"X-Mdo-Write-Token":request(native_port,"GET","/api/v1/account")[1]["X-Mdo-Write-Token"]}
+                code,_,raw=request(native_port,method,"/api/v1"+native_path+suffix,body,headers=headers);assert code==status,(code,raw[:1000])
+            protected("PUT",body=dict(content=resource["content"]));protected("DELETE")
+            protected("POST","/enabled",dict(enabled=False),200);protected("POST","/enabled",dict(enabled=True),200)
+            receipts_file=home/'data/extensions/installed.json';saved_receipts=receipts_file.read_bytes();receipts_file.write_bytes(b'broken')
+            assert client("GET",native_path)["management_known"] is False
+            protected("PUT",body=dict(content=resource["content"]),status=503);receipts_file.write_bytes(saved_receipts)
+            legacy=json.loads(saved_receipts);legacy[str(identity)].pop("submitter",None);legacy[str(identity)]["sha256"]="0"*64;receipts_file.write_text(json.dumps(legacy))
+            store(kind,"catalog");assert not client("GET",native_path)["submitter"],"mismatched receipt hashes must never borrow catalog attribution"
+            legacy[str(identity)]["sha256"]=json.loads(saved_receipts)[str(identity)]["sha256"];receipts_file.write_text(json.dumps(legacy))
+            store(kind,"catalog");assert client("GET",native_path)["submitter"]=="single_author"
             if kind == "skills":
+                protected("GET","/bundle")
+                source=next(r for r in client("GET","/skills/sources?project=default")["items"] if r["origin"]=="personal" and r["id"]==resource["id"]);assert source["store_managed"]
+                client("POST","/skills/migrate?project=default",dict(origin="personal",provider="mdo",id=resource["id"],target_id="store-copy",scope="user"),status=403)
                 assert (home / "skills/single-skill/references/check.md").read_bytes() == b"Check the source."
                 invoked = client("POST", "/skills/invoke", dict(id="single-skill", arguments="sample")); assert "sample" in invoked["text"]
             else:
@@ -116,7 +135,7 @@ def run():
             store(kind, "install", id=pending["id"], trust_code=True)
             assert len(store(kind, "history", id=identity)["items"]) == 2
             receipt = client("GET", "/ecosystem")[str(pending["id"])]
-            assert receipt["resources"] == [dict(kind=kind, id=resource["id"])]
+            assert receipt["resources"] == [dict(kind=kind, id=resource["id"])] and receipt["submitter"]=="single_author" and receipt["manifest"]["copyright"]==p["manifest"]["copyright"]
             store(kind, "uninstall", entry=dict(id=pending["id"]))
             assert not target.exists()
             # Strict boundaries also apply to uploaded JSON and offline import.
@@ -149,11 +168,12 @@ def run():
         server.terminate(); server.wait(15); running.remove(server)
         with sqlite3.connect(dbfile) as db:
             assert db.execute("SELECT count(*) FROM package WHERE resource_count=1").fetchone()[0] == 4
-            db.execute("UPDATE package SET resource_count=-1")
+            db.execute("UPDATE package SET resource_count=-1,license='',copyright=''")
         server = start(EXE, website / "xs.json", HOME); ready(server, port, prefix + "packages")
         with sqlite3.connect(dbfile) as db: assert db.execute("SELECT count(*) FROM package WHERE resource_count=1").fetchone()[0] == 4
         for kind in ids:
             result, _ = web("GET", prefix + "packages?single=1&kind=" + kind); assert len(result["items"]) == 1
+            assert result["items"][0]["copyright"]=="Copyright 2026 Original Developers" and result["items"][0]["license"]=="MIT" and result["items"][0]["submitter"]=="single_author"
         print("PASS independent Skill/C-tool publication, private access, review, typed lists, source download, native install, Skill invocation, C registration, updates, conflicts, uninstall and migration")
         print("Evidence: " + str(base))
         if "--ui" in sys.argv:

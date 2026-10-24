@@ -28,6 +28,7 @@ static MdoSkillCatalog* SkillSourceCatalog(cstr Origin,cstr Provider,cstr Worksp
 bool MdoApiSkillSourcesRoute(MdoApiContext* C)
 {
     char* Workspace=NULL;if(!MdoApiSkillScope(C,&Workspace))return true;
+    bool OwnershipKnown=false;xvalue* Receipts=ExtensionStoreRead(&OwnershipKnown);
     xvalue *Data=xrtValueObject(),*Items=xrtValueArray(),*Issues=xrtValueArray();
     bool Ok=Data&&Items&&Issues,Truncated=false;const char* Origins[]={"personal","project","user"};
     for(size_t o=0;Ok&&o<3;o++)for(size_t p=0;Ok&&p<6;p++) {
@@ -49,6 +50,7 @@ bool MdoApiSkillSourcesRoute(MdoApiContext* C)
                 MdoApiValueSetString(Item,"source_path",Info.SourcePath)&&
                 MdoApiValueSetString(Item,"revision",Info.MetadataHash)&&
                 MdoApiValueSetUInt(Item,"resource_count",Info.ResourceCount)&&xrtValueArrayAppend(Items,Item);
+            if(Ok&&o==0){char Path[160];ExtensionPath("skills",Info.Id,Path);Ok=ExtensionStoreInfo(Item,Path,Receipts,OwnershipKnown,false);}
             xrtValueRelease(Item);
         }
         MdoSkillDiagnostics* Ds=MdoSkillCatalogDiagnostics(Catalog);
@@ -62,7 +64,7 @@ bool MdoApiSkillSourcesRoute(MdoApiContext* C)
     }
     char* UserDir=MdoHomeExternalPath("skills");char* ProjectDir=Workspace?xrtPathJoin(Workspace,".mdo/skills"):NULL;
     if(Ok)Ok=MdoApiValueSetString(Data,"user_directory",UserDir?UserDir:"")&&MdoApiValueSetString(Data,"project_directory",ProjectDir?ProjectDir:"");
-    xrtFree(UserDir);xrtFree(ProjectDir);xrtFree(Workspace);
+    xrtFree(UserDir);xrtFree(ProjectDir);xrtFree(Workspace);xrtValueRelease(Receipts);
     if(Ok)Ok=MdoApiValueSetBool(Data,"truncated",Truncated)&&xrtValueObjectSet(Data,XRT_STR_LITERAL("items"),Items)&&xrtValueObjectSet(Data,XRT_STR_LITERAL("diagnostics"),Issues);
     xrtValueRelease(Items);xrtValueRelease(Issues);
     if(!Ok){xrtValueRelease(Data);return MdoApiReplyError(C,422,"skill_sources_limit","Skill sources exceed the discovery limit",NULL);}
@@ -172,6 +174,9 @@ bool MdoApiSkillMigrateRoute(MdoApiContext* C)
     if(Ok&&Workspace){char Project[65];size_t N=0;xrtPercentDecode(xrtStrViewN(C->Target.Query.Data+8,C->Target.Query.Size-8),Project,64,&N);Project[N]=0;
         Lease=MdoProjectLeaseAcquire(Project,MDO_PROJECT_LEASE_SHARED,&Error);Ok=Lease!=NULL;}
     xrtMutexLock(g_MdoExtensionLock);
+    if(Ok&&!strcmp(Origin.Data,"personal")&&!strcmp(Provider.Data,"mdo")&&!ExtensionStoreCanCustomize(C,"skills",Id.Data)){
+        xrtMutexUnlock(g_MdoExtensionLock);MdoProjectLeaseRelease(Lease);xrtFree(Workspace);MdoApiJsonBodyUnit(&Body);return true;
+    }
     MdoSkillCatalog* Source=Ok?SkillSourceCatalog(Origin.Data,Provider.Data,Workspace):NULL;
     char* Root=Ok?(!strcmp(Scope.Data,"user")?MdoHomeExternalPath("skills"):xrtStrDup(Workspace)):NULL;
     if(Ok&&!strcmp(Scope.Data,"user")) {

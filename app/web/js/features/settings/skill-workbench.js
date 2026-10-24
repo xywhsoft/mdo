@@ -2,6 +2,7 @@ import { api } from "../../api/client.js";
 import { targetState, subscribeTarget } from "../../api/target.js";
 import { element, clear, errorMessage } from "../../utils/dom.js";
 import { expandSkillAuthoringDraft } from "./skill-authoring.js";
+import { customizableResource, storeReadOnlyMessage } from "./resource-credits.js";
 
 const targetKey = () => targetState().selected?.id || "local";
 const portable = value => /^[a-z][a-z0-9._-]{0,63}$/.test(value);
@@ -90,7 +91,7 @@ export function createSkillWorkbench({ onChange, onShare }) {
       for (const item of all.data.items || []) sources.append(element("article", { className: "resource-card" }, [
         element("h3", { text: `${item.name || item.id} · ${item.origin}/${item.provider}` }),
         element("code", { text: item.source_path }),
-        button("复制到所选范围", async () => {
+        ...(customizableResource(item)?[button("复制到所选范围", async () => {
           const targetId = window.prompt("新 Skill ID（目标已存在时拒绝覆盖）", item.id);
           if (targetId === null) return;
           if (!portable(targetId)) throw new Error("ID 必须以小写字母开头，仅含小写字母、数字、点、下划线或连字符，最多 64 个字符");
@@ -98,7 +99,7 @@ export function createSkillWorkbench({ onChange, onShare }) {
           if (!window.confirm(`复制 ${item.source_path} 到 ${destination}/${targetId}？\n原文件会保留，脚本不会执行。`)) return;
           await api.post(endpoint("/skills/migrate"), { origin: item.origin, provider: item.provider, id: item.id, target_id: targetId, scope: scope.value }, options());
           if (live()) { onChange(); await load(); status.textContent = "已复制。个人技能可在原列表编辑，项目技能在上方编辑。"; }
-        }),
+        })]:[element("p",{className:"extension-help",text:storeReadOnlyMessage()})]),
       ]));
       if (all.data.truncated) sources.append(element("p", { className: "extension-help", text: "来源较多，仅显示前 128 项；可通过原有文件夹导入入口选择其他技能。" }));
       for (const issue of all.data.diagnostics || []) sources.append(element("p", { className: "extension-error", text: `${issue.source_path || `${issue.origin}/${issue.provider}`}：${issue.message}` }));

@@ -14,12 +14,15 @@ export function makeStorePackage(fields, resources) {
   if (v2 && (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(fields.version) || fields.version.split(".").some(n => Number(n) > 4294967295))) throw new Error("Invalid version");
   if (!fields.name.trim() || !fields.description.trim() || !fields.readme.trim() || !fields.license.trim())
     throw new Error("Name, description, documentation and license are required");
+  for(const [key,limit] of [["author",100],["copyright",4096]])if(fields[key]!==undefined&&(typeof fields[key]!=="string"||fields[key].includes("\0")||new TextEncoder().encode(fields[key]).length>limit))throw new Error(`Invalid ${key}`);
   if (!resources.length || resources.length > 16 || !fields.platforms.length ||
       fields.platforms.some(p => !STORE_PLATFORMS.includes(p))) throw new Error("Select resources and supported platforms");
   const result = { format: v2 ? "mdo.extension.v2" : STORE_FORMAT, manifest: {
     slug: fields.slug, name: fields.name.trim(), version: fields.version,
     description: fields.description.trim(), readme: fields.readme.trim(),
     license: fields.license.trim(), platforms: fields.platforms,
+    ...(fields.author?.trim() ? { author:fields.author.trim() } : {}),
+    ...(fields.copyright?.trim() ? { copyright:fields.copyright.trim() } : {}),
     ...(v2 ? { min_build_id: Math.max(30000126, fields.min_build_id || 0) } : {}),
     ...(fields.changelog?.trim() ? { changelog: fields.changelog.trim() } : {}),
   }, resources };
@@ -50,5 +53,5 @@ export function resourceOwner(records, path) {
   return Object.values(records || {}).find(row => (row.files || []).some(file => file.path === path)) || null;
 }
 export function packageFields(manifest = {}) {
-  return { ...Object.fromEntries(["slug","name","version","description","readme","license","changelog"].map(k => [k,manifest[k] || (k === "version" ? "1.0.0" : k === "license" ? "MIT" : "")] ).concat([["platforms",[...(manifest.platforms || [])]]])), ...(manifest.min_build_id ? {min_build_id:manifest.min_build_id} : {}) };
+    return { ...Object.fromEntries(["slug","name","version","description","author","copyright","readme","license","changelog"].map(k => [k,manifest[k] || (k === "version" ? "1.0.0" : k === "license" ? "MIT" : "")] ).concat([["platforms",[...(manifest.platforms || [])]]])), ...(manifest.min_build_id ? {min_build_id:manifest.min_build_id} : {}) };
 }

@@ -6,6 +6,7 @@
 #include "../../include/mdo/distribution.h"
 #include "../../include/mdo/extension_files.h"
 bool MdoApiEcosystemLocal(MdoApiContext*,const xvalue*);
+void MdoApiEcosystemRefreshCredits(const xvalue*);
 
 /* Preview never enters a runtime manager. Both download and local import use
  * the same platform and explicit C trust checks before preparing any writes. */
@@ -108,6 +109,7 @@ static bool EcoHandleInput(MdoApiContext* c,xvalue* input)
     char serviceError[1001]={0};bool Uploaded=strcmp(action,"submit")||EcoUploadSource(input,&lease,c->SendCancel,&status,serviceError,sizeof(serviceError));
     xvalue* data=Uploaded?EcoService(path,method,body,&lease,c->SendCancel,&status,serviceError,sizeof(serviceError)):NULL;if(data&&!EcoDownloadSource(data,&lease,c->SendCancel,&status,serviceError,sizeof(serviceError))){xrtValueRelease(data);data=NULL;if(!serviceError[0])snprintf(serviceError,sizeof(serviceError),"Source download failed hash or format validation");}if(status==401&&Acquired)(void)MdoAccountRejectAccess(&lease);if(Acquired)MdoAccountRelease(&lease);
     if(!data){xrtValueRelease(input);return MdoApiReplyError(c,status>=400&&status<600?status:502,"ecosystem_service_failed",serviceError[0]?serviceError:status==409?"This version already exists; publish a new version":status==401?"Sign in again or wait for login renewal":"The extension service could not complete this request",NULL);}
+    MdoApiEcosystemRefreshCredits(data);
     if(!strcmp(action,"install")||!strcmp(action,"plan")){
         bool Planning=!strcmp(action,"plan");xvalue* Consent=Planning?xrtValueClone(input):NULL;if(Consent)MdoApiValueSetBool(Consent,"trust_code",true);
         const xvalue* package=xrtValueObjectGet(data,XRT_STR_LITERAL("package"));char error[256];bool compatible=MdoEcosystemPackageCompatible(package,Consent?Consent:input,error,sizeof(error));xrtValueRelease(Consent);

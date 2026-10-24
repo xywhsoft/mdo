@@ -95,6 +95,8 @@ static bool MdoPackageValidate(const xvalue* package,char* error,size_t capacity
     const char* name=MdoPackageText(m,"name",100),*version=MdoPackageText(m,"version",32);
     const char* description=MdoPackageText(m,"description",600),*readme=MdoPackageText(m,"readme",32768),*license=MdoPackageText(m,"license",80);
     if(xrtValueObjectGet(m,XRT_STR_LITERAL("changelog"))&&!MdoPackageText(m,"changelog",8192))goto bad;
+    if(xrtValueObjectGet(m,XRT_STR_LITERAL("author"))&&!MdoPackageText(m,"author",100))goto bad;
+    if(xrtValueObjectGet(m,XRT_STR_LITERAL("copyright"))&&!MdoPackageText(m,"copyright",4096))goto bad;
     bool v2=MdoPackageV2(package);size_t sourceLimit=v2?64u*1024u*1024u:524288u;
     if(!format||(strcmp(format,MDO_PACKAGE_FORMAT)&&!v2)||!MdoPackageId(slug)||!name||!name[0]||!version||!version[0]||
        !description||!description[0]||!readme||!readme[0]||!license||!license[0]||

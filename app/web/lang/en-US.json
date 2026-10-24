@@ -2236,5 +2236,16 @@
   "downloads.state.cancelled": "Cancelled",
   "downloads.state.complete": "Complete",
   "downloads.state.interrupted": "Interrupted",
-  "downloads.legacy": "Legacy tool package"
+  "downloads.legacy": "Legacy tool package",
+  "extensionBrowser.storeReadOnly": "Store resources support enabling, updates and uninstalling; editing, copying and resharing are unavailable.",
+  "extensionBrowser.unknownSubmitter": "Submitter not provided",
+  "extensionBrowser.localAdded": "Added locally",
+  "extensionBrowser.author": "Author",
+  "extensionBrowser.submitter": "Submitter",
+  "extensionBrowser.copyright": "Copyright",
+  "extensionBrowser.notProvided": "Not provided",
+  "extensionBrowser.copyrightUnknown": "No separate copyright notice provided. Refer to the license and source attribution.",
+  "extensionBrowser.license": "License",
+  "extensionBrowser.version": "Version",
+  "extensionBrowser.storeInstalled": "Installed from store"
 }

@@ -7,6 +7,7 @@ import { loadAgents } from "../../state/catalogs.js";
 import { loadResource } from "../../state/resources.js";
 import { makeStorePackage, STORE_KINDS, STORE_EDITOR_KINDS, STORE_PLATFORMS, containsCode, resourceReferences, receiptKey, packageFields } from "./store-formats.js";
 import { createStoreDraft } from "./store-draft.js";
+import { customizableResource } from "./resource-credits.js";
 import { renderSourceMarkdown, renderPackageAttachment } from "../../utils/source-markdown.js";
 import { reloadStorePluginRuntime } from "./store-activation.js";
 import { saveBlobFile } from "../../utils/file-download.js";
@@ -126,7 +127,9 @@ export function createStorePanel() {
             if (!latest || latest.id === row.id) toast(text("upToDate", "已是最新公开版本。"));else await detail(latest); }
           catch (e) { toast(errorMessage(e), "error"); }
         }));
-        actions.append(button(text("manageResources","管理资源"),()=>installedDetails(row)),button(text("editPackage","编辑插件包"),()=>publish({installedEntry:row})),button(text("uninstall", "卸载"), () => {
+        actions.append(button(text("manageResources","管理资源"),()=>installedDetails(row)));
+        if(row.source==="local"||!resourceReferences(row).some(r=>["tools","skills"].includes(r.kind)))actions.append(button(text("editPackage","编辑插件包"),()=>publish({installedEntry:row})));
+        actions.append(button(text("uninstall", "卸载"), () => {
           if (confirm(text("uninstallConfirm", "卸载此插件？安装后修改过的文件将保留为本地自定义资源。"))) void act(() => call({ action: "uninstall", entry: { id: row.id, source:row.source || "store",slug:row.slug } }));
         }));
       } else {
@@ -255,6 +258,7 @@ export function createStorePanel() {
       const choices = element("fieldset");choices.append(node("legend", text("selectResources", "选择要分享的资源（最多 16 项）")));const refs = [];
       for (const [k, list] of lists) for (const r of list) {
         if (k === "agents" && r.id === "default") continue;
+        if(["tools","skills"].includes(k)&&!customizableResource(r))continue;
         const label = node("label", "", "store-choice"), b = element("input", { attrs: { type: "checkbox" } });
         b.checked = selectedResources.some(old => old.kind === k && old.id === r.id);
         refs.push({ b, kind: k, id: r.id });label.append(b, node("span", `${kindName(k)} · ${r.name || r.id}`));choices.append(label);

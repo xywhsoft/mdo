@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { makeStorePackage, containsCode, STORE_KINDS } from "../app/web/js/features/settings/store-formats.js";
+import { makeStorePackage, containsCode, STORE_KINDS,packageFields } from "../app/web/js/features/settings/store-formats.js";
 const fields={slug:"review",name:"Review",version:"1.0.0",description:"Review code",readme:"Check changed files",license:"MIT",platforms:["windows-x86_64"]};
 const resources=[{kind:"commands",id:"review",content:'/* mdo-command {"id":"review","description":"Review"} */\nC source'}];
 test("source export remains portable and does not mutate edited resources",()=>{
@@ -11,6 +11,12 @@ test("publishing requires a real resource selection and platform declaration",()
   assert.throws(()=>makeStorePackage(fields,[]));assert.throws(()=>makeStorePackage({...fields,platforms:[]},resources));
   assert.throws(()=>makeStorePackage({...fields,platforms:["unknown"]},resources));assert.throws(()=>makeStorePackage({...fields,slug:"../x"},resources));
   assert.throws(()=>makeStorePackage({...fields,version:"1\n2"},resources));
+});
+test("author and copyright round-trip independently of account identity and retain byte limits",()=>{
+  const p=makeStorePackage({...fields,author:"Original Authors",copyright:"Copyright Original Authors"},resources);
+  const restored=packageFields(p.manifest);assert.equal(restored.author,"Original Authors");assert.equal(restored.copyright,"Copyright Original Authors");
+  assert(!Object.hasOwn(p.manifest,"submitter"));
+  for(const invalid of [null,[],"a\0b","字".repeat(1366)])assert.throws(()=>makeStorePackage({...fields,copyright:invalid},resources));
 });
 test("nine systems use portable v2 with a client build floor and numeric public versions",()=>{
   assert.equal(STORE_KINDS.length,9);
