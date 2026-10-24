@@ -2191,5 +2191,10 @@
   "extensionBrowser.platform": "Платформы",
   "extensionBrowser.retry": "Повторить",
   "extensionBrowser.filterModules": "Фильтр модулей C",
-  "extensionBrowser.agentTools": "Инструменты Agent"
+  "extensionBrowser.agentTools": "Инструменты Agent",
+  "extensionBrowser.task.queued": "В очереди",
+  "extensionBrowser.task.running": "Загрузка",
+  "extensionBrowser.task.installing": "Установка",
+  "extensionBrowser.task.uploading": "Отправка",
+  "ecosystem.allAgentToolsHelp": "Встроенные инструменты входят в mdo. Создавайте, импортируйте или устанавливайте инструменты C. Вызовы ограничены правами текущей задачи."
 }

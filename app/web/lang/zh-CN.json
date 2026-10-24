@@ -2191,5 +2191,10 @@
   "extensionBrowser.platform": "支持平台",
   "extensionBrowser.retry": "重试",
   "extensionBrowser.filterModules": "筛选 C 模块",
-  "extensionBrowser.agentTools": "Agent 工具"
+  "extensionBrowser.agentTools": "Agent 工具",
+  "extensionBrowser.task.queued": "排队中",
+  "extensionBrowser.task.running": "下载中",
+  "extensionBrowser.task.installing": "安装中",
+  "extensionBrowser.task.uploading": "上传中",
+  "ecosystem.allAgentToolsHelp": "内建工具随 mdo 提供；自定义 C 工具可以创建、导入或从商店安装。工具调用受当前任务权限限制。"
 }

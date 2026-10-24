@@ -1,4 +1,5 @@
 import { createExtensionBrowser, detailTabs, detailFacts, browserText } from "../../components/extension-browser.js";
+import { t } from "../../i18n.js";
 import { api } from "../../api/client.js";
 import { targetState, subscribeTarget } from "../../api/target.js";
 import { element, errorMessage, toast } from "../../utils/dom.js";
@@ -18,7 +19,7 @@ export const singleResource = (row, kind) => {
 
 // Each instance is bound to one resource type and one selected device. There
 // is deliberately no resource multi-select in this publication flow.
-export function createSingleResourceStore(kind, onChange, onBrowse = () => {}) {
+export function createSingleResourceStore(kind, onChange, onBrowse = () => {}, onManage = null) {
   if (!["skills", "tools"].includes(kind)) throw Error("Unsupported resource store");
   const name = kind === "skills" ? "Skill" : "Agent 工具";
   const root = node("div", "", "single-resource-store"), statusRoot = element("p", { className: "extension-help", attrs: { role: "status" } });
@@ -82,7 +83,7 @@ export function createSingleResourceStore(kind, onChange, onBrowse = () => {}) {
     search.addEventListener("submit", e => { e.preventDefault(); query = input.value.trim(); void load(); });
     const rows = items.filter(row => stateFilter === "all" || (stateFilter === "installed" ? Boolean(owned(row)) : stateFilter === "updates" ? owned(row) && owned(row).id !== row.id : !owned(row))).map(row => {
       const receipt = owned(row), same = receipt?.id === row.id;
-      const primary = button(same ? browserText("manage", "管理") : receipt ? browserText("update", "更新") : browserText("install", "安装"), () => detail(row), !same);
+      const primary = button(same ? browserText("manage", "管理") : receipt ? browserText("update", "更新") : browserText("install", "安装"), () => same && onManage ? onManage(receipt) : detail(row), !same);
       primary.disabled = busy;
       return { key: String(row.id), kind, title: row.name, description: row.description, meta: [row.author, row.version], badge: { text: same ? browserText("installed", "已安装") : receipt ? browserText("updates", "可更新") : "" }, primary, onSelect: () => loadDetail(row) };
     });
@@ -120,7 +121,7 @@ export function createSingleResourceStore(kind, onChange, onBrowse = () => {}) {
         const message = node("p", "正在读取版本…"); history.append(message);
         try {
           const h = await read({ action: "history", id: row.id, before }); if (!valid()) return;
-          for (const v of h.items) history.append(node("p", `${v.version} · ${v.state} · ${v.changelog || ""}`));
+          for (const v of h.items) history.append(node("p", `${v.version} · ${t(`store.state.${v.state}`, {}, v.state)} · ${v.changelog || ""}`));
           before = h.next_before || 0; historyLoaded = true;
           if (before) { const more = button("更多版本", () => { more.remove(); void moreHistory(); }); history.append(more); }
           if (!h.items.length) history.append(node("p", "暂无历史版本"));

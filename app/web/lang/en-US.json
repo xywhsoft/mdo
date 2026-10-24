@@ -2191,5 +2191,10 @@
   "extensionBrowser.platform": "Platforms",
   "extensionBrowser.retry": "Retry",
   "extensionBrowser.filterModules": "Filter C modules",
-  "extensionBrowser.agentTools": "Agent tools"
+  "extensionBrowser.agentTools": "Agent tools",
+  "extensionBrowser.task.queued": "Queued",
+  "extensionBrowser.task.running": "Downloading",
+  "extensionBrowser.task.installing": "Installing",
+  "extensionBrowser.task.uploading": "Uploading",
+  "ecosystem.allAgentToolsHelp": "Built-in tools ship with mdo. Create, import or install custom C tools. Calls follow the current task permissions."
 }

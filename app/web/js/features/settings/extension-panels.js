@@ -14,7 +14,7 @@ import { clear, element, errorMessage, toast } from "../../utils/dom.js";
 import { loadAgents } from "../../state/catalogs.js";
 import { refreshMcp, disconnectMcp, reloadCatalog } from "../../state/resources.js";
 import { EXTENSION_KINDS, portableId, promptFields, editPrompt, newMcp, prepareMcpCredentials, mcpImportDocuments, bytesToBase64 } from "./extension-formats.js";
-import { resourceOwner, receiptKey } from "./store-formats.js";
+import { resourceOwner, receiptKey, resourceReferences } from "./store-formats.js";
 import { saveBlobFile } from "../../utils/file-download.js";
 import { createExtensionReads } from "./extension-reads.js";
 import { awaitResourceOperation } from "../../state/resource-operation.js";
@@ -56,7 +56,12 @@ export function createExtensionPanels() {
   const mcpAuthorization = createMcpAuthorization();
   const mcpWorkbench = createMcpWorkbench({ onChange: () => announceChange("mcp") });
   const commandWorkbench = createCommandWorkbench({ onChange: () => announceChange("commands") });
-  const stores = new Map(["skills", "tools"].map(kind => [kind, createSingleResourceStore(kind, () => { announceChange(kind); if (selected === kind) void load(kind); }, () => { states.get(kind).area = "store"; render(kind); })]));
+  const stores = new Map(["skills", "tools"].map(kind => [kind, createSingleResourceStore(kind, () => { announceChange(kind); if (selected === kind) void load(kind); }, () => { states.get(kind).area = "store"; render(kind); }, async receipt => {
+    const ref = resourceReferences(receipt).find(ref => ref.kind === kind); if (!ref || selected !== kind) return;
+    const state = states.get(kind), target = targetKey(); state.area = "local"; state.view = "custom"; state.filter = "";
+    stores.get(kind).activate(false); render(kind); await load(kind);
+    if (current(kind, target)) browsers.get(kind).open(ref.id);
+  })]));
   const actions = new Map();
   const browsers = new Map(EXTENSION_KINDS.map(kind => [kind, createExtensionBrowser({ kind, onClose: () => reads.cancel(`detail:${kind}`) })]));
   const current = (kind, target) => !disposed && !paused && selected === kind && target === targetKey();
@@ -256,7 +261,7 @@ export function createExtensionPanels() {
     search.addEventListener("input", () => { state.filter = search.value; renderItems(); });
     toolbar.prepend(search, statusFilter); if (sourceFilter) toolbar.insertBefore(sourceFilter, statusFilter);
     renderItems(); root.append(toolbar,
-      element("p", { className: "extension-help", text: label(builtinView ? "builtinToolsHelp" : `${kind}Help`, ({
+      element("p", { className: "extension-help", text: label(kind === "tools" && state.view === "all" ? "allAgentToolsHelp" : builtinView ? "builtinToolsHelp" : `${kind}Help`, ({
         agents: "默认 Agent 可直接编辑。提示词留空使用系统默认规则；C 代码仅用于高级扩展。",
         tools: builtinView ? "内建工具由 mdo 维护。能否调用取决于登录、功能设置和当前任务权限。" : "C 文件保存在 mdo-home/tools。保存后自动编译注册；C 代码在本机进程执行，请审阅来源。",
         subagents: "独立委派任务；模型默认跟随主 Agent。子任务仍受父任务权限限制。",
