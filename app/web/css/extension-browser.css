@@ -54,6 +54,16 @@
 .eb-toolbar .eb-menu-items { max-height:60dvh; overflow:auto; }
 .eb-browser :focus-visible,.eb-menu :focus-visible { outline:2px solid var(--ink); outline-offset:3px; }
 .eb-task-note { margin-top:7px; font-size:11px; color:var(--muted); }
-@media(max-width:1000px) { .eb-browser.has-detail { grid-template-columns:minmax(0,1fr); }.eb-browser.has-detail>.eb-list { display:none; }.eb-detail { border-left:0; } }
+@media(max-width:1000px) {
+  .eb-browser.has-detail { grid-template-columns:minmax(0,1fr); }
+  .eb-browser.has-detail>.eb-list { display:none; }
+  .eb-detail { border-left:0; }
+  /* The phone detail view gets the available space. Controls stay mounted so
+     Back restores the exact query, filters and list position. */
+  [data-extension-manager]:has(.eb-browser.has-detail) > :is(.store-tabs,.extension-toolbar,.extension-help),
+  .single-resource-store:has(.eb-browser.has-detail) > :is(.store-search,.extension-help),
+  [data-settings-toolpacks]:has(.eb-browser.has-detail) > :is(.store-tabs,.cli-toolbar),
+  [data-extension-store]:has(.eb-browser.has-detail) > :is(.store-heading,.store-tabs,.store-search) { display:none; }
+}
 @media(max-width:600px) { .settings-content > .resource-section:has(.eb-browser) { width:calc(100% - 28px); }.eb-row { padding:14px 12px; gap:8px; flex-wrap:wrap; }.eb-actions { max-width:100%; margin-left:48px; }.eb-detail { padding:16px; }.eb-list,.eb-detail { max-height:70dvh; }.eb-toolbar input[type=search] { flex-basis:100%; } }
 @media(prefers-reduced-motion:reduce) { .eb-switch::after { transition:none; } }
