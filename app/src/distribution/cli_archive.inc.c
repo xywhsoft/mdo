@@ -43,6 +43,7 @@ static bool CliBuildArchive(MdoCliJob* Job,const xvalue* Tool,char Relative[160]
     else Ok=CliCollectFiles(Files,Root,EntryRelative,0,Job->Cancel,&Total);
     const cstr Keys[]={"id","name","version","platform","prompt","license"};
     for(size_t I=0;I<6;I++)CliSet(Manifest,Keys[I],CliText(Tool,Keys[I],I==4?16384:512));
+    CliSet(Manifest,"description",CliText(Tool,"description",2048));
     CliSet(Manifest,"entry",EntryRelative);const xvalue* Links=xrtValueObjectGet(Tool,XRT_STR_LITERAL("links"));if(Links)xrtValueObjectSet(Manifest,XRT_STR_LITERAL("links"),Links);
     xrtValueObjectSet(Manifest,XRT_STR_LITERAL("files"),Files);
     const xvalue* ExistingCommands=xrtValueObjectGet(Tool,XRT_STR_LITERAL("commands"));xvalue* Commands=ExistingCommands?xrtValueDeepClone(ExistingCommands):xrtValueArray();
@@ -92,7 +93,9 @@ static bool CliExtract(MdoCliJob* Job,const xvalue* Product,cstr Download,char R
         if(Ok)Ok=MdoHomeSetMode(Relative,(uint32)MdoDistNumber(F,"mode"));
 #endif
     }
-    if(Ok){*Out=xrtValueObject();const cstr Keys[]={"name","version","platform","prompt","license","links","commands"};for(size_t I=0;I<7;I++){const xvalue* V=xrtValueObjectGet(M,xrtStrView(Keys[I]));if(V)xrtValueObjectSet(*Out,xrtStrView(Keys[I]),V);}
+    if(Ok&&CliText(M,"description",2048)[0]&&xrtValueObjectGet(Product,XRT_STR_LITERAL("description")))Ok=!strcmp(CliText(M,"description",2048),CliText(Product,"description",2048));
+    if(Ok){*Out=xrtValueObject();const cstr Keys[]={"name","version","platform","prompt","license","links","commands","description"};for(size_t I=0;I<8;I++){const xvalue* V=xrtValueObjectGet(M,xrtStrView(Keys[I]));if(V)xrtValueObjectSet(*Out,xrtStrView(Keys[I]),V);}
+        if(!CliText(M,"description",2048)[0])CliSet(*Out,"description",CliText(Product,"description",2048));
         char Relative[384];snprintf(Relative,sizeof(Relative),"%s/%s",Root,CliText(M,"entry",220));char* Native=MdoHomeExternalPath(Relative);
         Ok=Native&&CliPresent(Native)&&CliSet(*Out,"path",Native)&&CliSet(*Out,"managed_root",Root)&&CliSet(*Out,"source","store")&&CliSet(*Out,"entry",CliText(M,"entry",220))&&CliSet(*Out,"id",CliText(Product,"tool_id",64));xrtFree(Native);
         xrtValueObjectSet(*Out,XRT_STR_LITERAL("store_id"),xrtValueObjectGet(Product,XRT_STR_LITERAL("id")));xrtValueObjectSetNew(*Out,XRT_STR_LITERAL("enabled"),xrtValueBool(true));}

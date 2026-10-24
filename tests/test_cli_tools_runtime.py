@@ -17,7 +17,7 @@ from test_api_runtime import free_port, request, wait_ready
 ROOT=Path(__file__).resolve().parents[1]
 PLATFORM="windows-x86_64" if os.name=="nt" else "linux-x86_64"
 PAYLOAD=b"Not an executable; must never be run\n"
-MANIFEST=dict(id="fixture",name="Fixture CLI",version="1.0.0",platform=PLATFORM,prompt="CLI_PROMPT_SENTINEL",
+MANIFEST=dict(id="fixture",name="Fixture CLI",version="1.0.0",platform=PLATFORM,description="USER_DESCRIPTION_SENTINEL",prompt="CLI_PROMPT_SENTINEL",
               entry="bin/fixture.exe",license="MIT",links=["https://example.org"],
               files=[dict(path="bin/fixture.exe",size=len(PAYLOAD),sha256=hashlib.sha256(PAYLOAD).hexdigest(),mode=493)])
 TEXT=json.dumps(MANIFEST).encode();ARCHIVE=b"MDOCLI1\n"+struct.pack("<I",len(TEXT))+TEXT+PAYLOAD
@@ -30,15 +30,23 @@ def stage_forwarder(site):
     xs=build_mdo.find_xserver(None,build_mdo.load_object(build_mdo.LOCK_PATH))
     build_cli_forwarder.build(xs,site/"generated/native/windows/cli-forwarder.exe")
 
+LEGACY_MANIFEST={k:v for k,v in MANIFEST.items() if k!="description"}
+LEGACY_TEXT=json.dumps(LEGACY_MANIFEST).encode();LEGACY_ARCHIVE=b"MDOCLI1\n"+struct.pack("<I",len(LEGACY_TEXT))+LEGACY_TEXT+PAYLOAD
 class Store(BaseHTTPRequestHandler):
+    legacy=False
+    wrong_description=False
     damaged=False
     slow=False
     def log_message(self,*args):pass
     def do_GET(self):
+        archive=LEGACY_ARCHIVE if self.legacy else ARCHIVE
+        product=dict(PRODUCT,sha256=hashlib.sha256(archive).hexdigest(),size=len(archive))
+        if self.legacy:product["description"]="Legacy catalog user description"
+        if self.wrong_description:product["description"]="Wrong catalog description"
         if self.path.startswith("/api/v1/mdo/cli/blob"):
-            data=bytes(len(ARCHIVE)) if self.damaged else ARCHIVE
+            data=bytes(len(archive)) if self.damaged else archive
         else:
-            data=json.dumps(dict(code=0,data=PRODUCT if "/detail?" in self.path else dict(items=[PRODUCT],next_before=0))).encode()
+            data=json.dumps(dict(code=0,data=product if "/detail?" in self.path else dict(items=[product],next_before=0))).encode()
         self.send_response(200);self.send_header("Content-Length",str(len(data)));self.end_headers()
         try:
             if self.slow and "/blob?" in self.path:
@@ -76,19 +84,25 @@ def run(host):
     try:
         assert get()["guide"]=="new" and not get()["items"]
         exe=base/"manual.exe";exe.write_bytes(PAYLOAD)
-        tool=dict(id="custom.fixture",name="Manual",version="1.0.0",path=str(exe),prompt="MANUAL_PROMPT_SENTINEL",license="MIT",platform=PLATFORM,enabled=True,links=[])
+        tool=dict(id="custom.fixture",name="Manual",version="1.0.0",path=str(exe),description="MANUAL_USER_DESCRIPTION",prompt="MANUAL_PROMPT_SENTINEL",license="MIT",platform=PLATFORM,enabled=True,links=[])
         post("save",tool=tool);assert "MANUAL_PROMPT_SENTINEL" in prompt() and prompt().count("<mdo_tool_environment>")==1
+        assert get()["items"][0]["description"]==tool["description"] and tool["description"] not in prompt()
+        old_edit={k:v for k,v in tool.items() if k!="description"};post("save",tool=old_edit,revision=get().get("revision",0));assert get()["items"][0]["description"]==tool["description"]
+        for invalid in [None,[],"x"*2049,"nul\0text"]:post("save",status=422,tool={**tool,"description":invalid},revision=get().get("revision",0))
+        assert get()["writable"] and get()["items"][0]["description"]==tool["description"]
         post("enable",id=tool["id"],enabled=False);assert "MANUAL_PROMPT_SENTINEL" not in prompt()
         post("enable",id=tool["id"],enabled=True);exe.unlink();assert "MANUAL_PROMPT_SENTINEL" not in prompt()
         post("save",status=422,tool=tool,revision=get().get("revision",0));exe.write_bytes(PAYLOAD)
         post("remove",id=tool["id"]);assert exe.read_bytes()==PAYLOAD
         post("dismiss");post("catalog");s=wait_task();assert s["store"]["items"][0]["id"]==1
         post("install",store_id=1,name="Fixture CLI");s=wait_task();assert s["tasks"][-1]["state"]=="complete",s
-        t=s["items"][0];installed=Path(t["path"]);assert installed.read_bytes()==PAYLOAD and "CLI_PROMPT_SENTINEL" in prompt()
+        t=s["items"][0];installed=Path(t["path"]);assert installed.read_bytes()==PAYLOAD and "CLI_PROMPT_SENTINEL" in prompt() and t["description"]=="USER_DESCRIPTION_SENTINEL" and "USER_DESCRIPTION_SENTINEL" not in prompt()
         isolated=json.loads(request(port,"GET","/fixture/isolation")[2])["data"];assert isolated["ok"] and isolated["before"]["items"][0]["enabled"] and not isolated["after"]["items"][0]["enabled"],"snapshots must not alias live nested containers"
         (home/"fail-cli-save").write_bytes(b"1");post("enable",status=422,id=t["id"],enabled=True);assert not get()["items"][0]["enabled"],"failed state writes must restore nested values";(home/"fail-cli-save").unlink()
         post("enable",id=t["id"],enabled=False);post("install",store_id=1);s=wait_task();assert s["tasks"][-1]["state"]=="complete" and not s["items"][0]["enabled"]
-        original=s["items"][0]["path"];Store.damaged=True;post("install",store_id=1);s=wait_task();assert s["tasks"][-1]["state"]=="failed" and s["items"][0]["path"]==original
+        original=s["items"][0]["path"];Store.wrong_description=True;post("install",store_id=1);s=wait_task();assert s["tasks"][-1]["state"]=="failed" and s["items"][0]["path"]==original;Store.wrong_description=False
+        Store.legacy=True;post("install",store_id=1);s=wait_task();assert s["tasks"][-1]["state"]=="complete" and s["items"][0]["description"]=="Legacy catalog user description";Store.legacy=False
+        post("install",store_id=1);s=wait_task();original=s["items"][0]["path"];Store.damaged=True;post("install",store_id=1);s=wait_task();assert s["tasks"][-1]["state"]=="failed" and s["items"][0]["path"]==original
         Store.damaged=False;Store.slow=True;post("install",store_id=1)
         deadline=time.monotonic()+10
         while get()["tasks"][-1]["state"]=="queued" and time.monotonic()<deadline:time.sleep(.01)

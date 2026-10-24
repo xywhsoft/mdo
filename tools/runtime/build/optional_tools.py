@@ -165,7 +165,10 @@ def package(stage, metadata, output):
         seen.add(name.lower())
         with path.open("rb") as source: magic=source.read(4)
         files.append(dict(path=name,size=path.stat().st_size,sha256=digest(path),mode=493 if magic.startswith((b"#!",b"\x7fELF",b"MZ")) else 420))
+    if "description" in metadata and (not isinstance(metadata["description"],str) or "\0" in metadata["description"] or len(metadata["description"].encode("utf-8"))>2048): raise ValueError("Invalid tool description")
     manifest={k:metadata[k] for k in ("id","name","version","platform","prompt","entry","license","links","commands")}
+    descriptions=json.loads((Path(__file__).resolve().parents[3]/"app/default-home/cli-tools/official.json").read_text(encoding="utf-8"))["tools"]
+    manifest["description"]=metadata.get("description", next((row["description"] for row in descriptions if row["id"]==metadata["id"]), ""))
     manifest["files"]=files
     assert any(f["path"]==manifest["entry"] and f["size"] for f in files)
     assert all(any(f["path"]==c["entry"] and f["size"] for f in files) for c in manifest["commands"])

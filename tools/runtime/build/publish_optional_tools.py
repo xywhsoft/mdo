@@ -87,6 +87,8 @@ def main():
         receipt = []
         with db:
             db.execute("BEGIN IMMEDIATE")
+            if 'description' not in {r[1] for r in db.execute("PRAGMA table_info(tool)")}:
+                db.execute("ALTER TABLE tool ADD COLUMN description TEXT NOT NULL DEFAULT ''")
             for row in rows:
                 current = db.execute("SELECT id,sha256,size,state,withdrawn FROM tool WHERE owner=0 AND slug=? AND version=? AND platform=?", (row["id"],row["version"],row["platform"])).fetchone()
                 if current:
@@ -94,8 +96,8 @@ def main():
                     receipt.append(dict(id=current[0], slug=row["id"], platform=row["platform"], sha256=row["sha256"], inserted=False))
                     continue
                 key = ".".join(f"{int(n):010d}" for n in row["version"].split("."))
-                cursor = db.execute("INSERT INTO tool(owner,slug,tool_id,name,version,version_key,platform,prompt,license,links,entry,sha256,size,author,state,reason,revision,created,recommended,withdrawn) VALUES(0,?,?,?,?,?,?,?,?,?,?,?,?,'墨斗','published',?,2,?,0,0)",
-                    (row["id"],row["tool_id"],row["name"],row["version"],key,row["platform"],row["prompt"],row["license"],json.dumps(row["links"],ensure_ascii=False),row["entry"],row["sha256"],row["size"],reason,now))
+                cursor = db.execute("INSERT INTO tool(owner,slug,tool_id,name,version,version_key,platform,prompt,license,links,entry,sha256,size,author,state,reason,revision,created,recommended,withdrawn,description) VALUES(0,?,?,?,?,?,?,?,?,?,?,?,?,'墨斗','published',?,2,?,0,0,?)",
+                    (row["id"],row["tool_id"],row["name"],row["version"],key,row["platform"],row["prompt"],row["license"],json.dumps(row["links"],ensure_ascii=False),row["entry"],row["sha256"],row["size"],reason,now,row.get("description", "")))
                 id = cursor.lastrowid
                 for action, revision in (("submit",1),("approve",2)):
                     db.execute("INSERT INTO audit(tool,actor,action,reason,sha256,revision,created) VALUES(?,0,?,?,?,?,?)", (id,action,reason,row["sha256"],revision,now))

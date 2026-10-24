@@ -47,7 +47,7 @@ static bool CliMutable(const xvalue* R){return R&&strcmp(CliText(R,"source",16),
 static bool CliMeta(const xvalue* R)
 {
     uint32_t Version[3];cstr Id=CliText(R,"id",64),Path=CliText(R,"path",4096),Name=CliText(R,"name",120),Prompt=CliText(R,"prompt",16384);
-    return MdoPackageId(Id)&&Name[0]&&Prompt[0]&&Path[0]&&(Path[0]=='/'||Path[0]=='\\'||(strlen(Path)>2&&Path[1]==':'))&&MdoPackageVersion(CliText(R,"version",64),Version)&&MdoCliPlatformValid(CliText(R,"platform",32))&&CliText(R,"license",512)[0]&&CliAliasesValid(R)&&(!CliText(R,"command",64)[0]||MdoCliCommandName(CliText(R,"command",64)))&&MdoCliCommandsValid(xrtValueObjectGet(R,XRT_STR_LITERAL("commands")),NULL);
+    return MdoCliDescriptionValid(R)&&MdoPackageId(Id)&&Name[0]&&Prompt[0]&&Path[0]&&(Path[0]=='/'||Path[0]=='\\'||(strlen(Path)>2&&Path[1]==':'))&&MdoPackageVersion(CliText(R,"version",64),Version)&&MdoCliPlatformValid(CliText(R,"platform",32))&&CliText(R,"license",512)[0]&&CliAliasesValid(R)&&(!CliText(R,"command",64)[0]||MdoCliCommandName(CliText(R,"command",64)))&&MdoCliCommandsValid(xrtValueObjectGet(R,XRT_STR_LITERAL("commands")),NULL);
 }
 static void CliTaskStatus(cstr Id,cstr Status,cstr Error)
 {
@@ -74,7 +74,19 @@ static bool CliEnqueue(const xvalue* Input,char* Error,size_t Capacity)
     xrtValueRelease(T);return Ok;
 }
 #include "cli_archive.inc.c"
+static bool CliFillDescriptions(xvalue* Items);
 #include "cli_worker.inc.c"
+static bool CliFillDescriptions(xvalue* Items)
+{
+    xvalue* Official=MdoDistRead("cli-tools/official.json",131072);const xvalue* Definitions=xrtValueObjectGet(Official,XRT_STR_LITERAL("tools"));bool Changed=false;
+    for(size_t I=0;I<xrtValueCount(Items);I++){
+        xvalue* R=xrtValueArrayGet(Items,I);if(!MdoCliDescriptionValid(R)||CliText(R,"description",2048)[0])continue;
+        cstr Description="";
+        for(size_t J=0;J<xrtValueCount(Definitions);J++){const xvalue* D=xrtValueArrayGet(Definitions,J);char Id[65];snprintf(Id,sizeof(Id),"official.%s",CliText(D,"id",48));if(!strcmp(Id,CliText(R,"tool_id",64))||(!strcmp(Id,CliText(R,"id",64))&&strcmp(CliText(R,"source",16),"manual"))){Description=CliText(D,"description",2048);break;}}
+        if(!xrtValueObjectGet(R,XRT_STR_LITERAL("description"))||Description[0])Changed=CliSet(R,"description",Description)||Changed;
+    }
+    xrtValueRelease(Official);return Changed;
+}
 static void CliMigrateLegacy(const xvalue* Legacy,const xvalue* Active,bool Force)
 {
     bool Changed=false;
@@ -83,7 +95,7 @@ static void CliMigrateLegacy(const xvalue* Legacy,const xvalue* Active,bool Forc
         for(size_t I=0;I<xrtValueCount(Definitions);I++){const xvalue* D=xrtValueArrayGet(Definitions,I);cstr Old=CliText(D,"legacy_id",64);
             for(size_t J=0;J<xrtValueCount(Legacy);J++){const xvalue* L=xrtValueArrayGet(Legacy,J);if(strcmp(Old,CliText(L,"id",64)))continue;
                 xvalue* R=xrtValueObject();char Id[65];snprintf(Id,sizeof(Id),"official.%s",CliText(D,"id",48));
-                CliSet(R,"id",Id);CliSet(R,"name",CliText(D,"name",120));CliSet(R,"path",CliText(L,"path",4096));CliSet(R,"prompt",CliText(D,"prompt",16384));
+                CliSet(R,"id",Id);CliSet(R,"name",CliText(D,"name",120));CliSet(R,"path",CliText(L,"path",4096));CliSet(R,"prompt",CliText(D,"prompt",16384));CliSet(R,"description",CliText(D,"description",2048));
                 const xvalue* Versions=xrtValueObjectGet(D,XRT_STR_LITERAL("versions"));uint32 Parts[3];cstr Version=CliText(L,"version",64);if(!MdoPackageVersion(Version,Parts)||!strcmp(Version,"0.0.0"))Version=CliText(Versions,MdoToolPlatform(),64);CliSet(R,"version",Version[0]?Version:"1.0.0");CliSet(R,"platform",MdoToolPlatform());CliSet(R,"source",!strcmp(MdoEdition(),"full")?"bundled":"legacy");CliSet(R,"license",CliText(D,"license",512));
                 xrtValueObjectSetNew(R,XRT_STR_LITERAL("enabled"),xrtValueBool(CliBool(D,"enabled_by_default",true)));xrtValueObjectSet(R,XRT_STR_LITERAL("links"),xrtValueObjectGet(D,XRT_STR_LITERAL("links")));
                 xvalue* Removed=xrtValueObjectGet(g_MdoCli.State,XRT_STR_LITERAL("removed_legacy"));bool Hidden=false;for(size_t H=0;H<xrtValueCount(Removed);H++){xstrview V;if(xrtValueGetString(xrtValueArrayGet(Removed,H),&V)&&xrtStrEqual(V,xrtStrView(Id)))Hidden=true;}
@@ -100,6 +112,7 @@ static void CliMigrateLegacy(const xvalue* Legacy,const xvalue* Active,bool Forc
             if(CliFind(Id))continue;
             bool Hidden=false;const xvalue* Removed=xrtValueObjectGet(g_MdoCli.State,XRT_STR_LITERAL("removed_legacy"));for(size_t H=0;H<xrtValueCount(Removed);H++){xstrview V;if(xrtValueGetString(xrtValueArrayGet(Removed,H),&V)&&xrtStrEqual(V,xrtStrView(Id)))Hidden=true;}if(Hidden)continue;
             xvalue* R=xrtValueObject();CliSet(R,"id",Id);CliSet(R,"name",CliText(C,"name",120));CliSet(R,"path",Path);CliSet(R,"version","1.0.0");CliSet(R,"source","legacy");CliSet(R,"platform",MdoToolPlatform());CliSet(R,"license","See extension publisher");
+            CliSet(R,"description",CliText(C,"description",2048));
             cstr Prompt=CliText(C,"description",16384);for(size_t J=0;J<xrtValueCount(Instructions);J++){const xvalue* D=xrtValueArrayGet(Instructions,J);if(!strcmp(CliText(D,"package",64),CliText(C,"package",64)))Prompt=CliText(D,"instructions",16384);}
             CliSet(R,"prompt",Prompt[0]?Prompt:"User-installed command-line tool");xrtValueObjectSetNew(R,XRT_STR_LITERAL("enabled"),xrtValueBool(true));xrtValueArrayAppend(CliItems(),R);xrtValueRelease(R);Changed=true;
         }
@@ -128,6 +141,7 @@ bool MdoCliInit(XS_ServerInfo* Server,const xvalue* Legacy,const xvalue* Active)
     for(size_t I=0;I<xrtValueCount(g_MdoCli.Tasks);I++){xvalue* T=xrtValueArrayGet(g_MdoCli.Tasks,I);cstr S=CliText(T,"state",16);if(!strcmp(S,"queued")||!strcmp(S,"running")||!strcmp(S,"installing")||!strcmp(S,"uploading")){CliSet(T,"state","interrupted");CliSet(T,"error","Application restarted; retry explicitly");}}
     g_MdoCli.Catalog=xrtValueObject();xrtValueObjectSetNew(g_MdoCli.Catalog,XRT_STR_LITERAL("items"),xrtValueArray());
     CliMigrateLegacy(Legacy,Active,false);
+    if(g_MdoCli.Writable)(void)CliFillDescriptions(CliItems());
     if(!g_MdoCli.Lock||!g_MdoCli.Cancel)return false;
     bool Rebased=false;
     for(size_t I=0;g_MdoCli.Writable&&I<xrtValueCount(CliItems());I++){xvalue* R=xrtValueArrayGet(CliItems(),I);cstr Root=CliText(R,"managed_root",160),Entry=CliText(R,"entry",220);if(strcmp(CliText(R,"source",16),"store")||strncmp(Root,"data/cli-tools/installed/",25)||!MdoPackagePath(Entry))continue;char Relative[384];snprintf(Relative,sizeof(Relative),"%s/%s",Root,Entry);char* Native=MdoHomeExternalPath(Relative);if(Native&&strcmp(Native,CliText(R,"path",4096))){CliSet(R,"path",Native);Rebased=true;}xrtFree(Native);}
@@ -172,13 +186,14 @@ bool MdoCliCommand(const xvalue* Input,char* Error,size_t Capacity)
     if(!g_MdoCli.Writable||g_MdoCli.Stopping){snprintf(Error,Capacity,"External-tool storage is unavailable or corrupt; original records retained");goto done;}
     if(!strcmp(Action,"save")){
         const xvalue* Item=xrtValueObjectGet(Input,XRT_STR_LITERAL("tool"));cstr Key=CliText(Item,"id",64);xvalue* Old=CliFind(Key);
-        if(!CliMeta(Item)||strcmp(CliText(Item,"platform",32),MdoToolPlatform())||!CliPresent(CliText(Item,"path",4096))){snprintf(Error,Capacity,"Name, executable path, prompt, version, platform and license are required; executable must exist");goto done;}
+        if(!CliMeta(Item)||strcmp(CliText(Item,"platform",32),MdoToolPlatform())||!CliPresent(CliText(Item,"path",4096))){snprintf(Error,Capacity,"Name, executable path, prompt, version, platform and license are required; description must be at most 2048 UTF-8 bytes; executable must exist");goto done;}
         if(Old&&CliText(Old,"managed_root",160)[0]&&strcmp(CliText(Old,"path",4096),CliText(Item,"path",4096))){snprintf(Error,Capacity,"Managed program paths are controlled by installation; add a custom tool to use another program");goto done;}
 #if defined(__ANDROID__)
         if(!Old||strcmp(CliText(Old,"path",4096),CliText(Item,"path",4096))){snprintf(Error,Capacity,"Android programs must be supplied by the full APK");goto done;}
 #endif
         if((!Old&&xrtValueCount(CliItems())>=256)||(Old&&MdoDistNumber(Input,"revision")!=MdoDistNumber(g_MdoCli.State,"revision"))){snprintf(Error,Capacity,"External-tool list changed or is full; reload before saving");goto done;}
         xvalue* Copy=xrtValueDeepClone(Item);xrtValueObjectRemove(Copy,XRT_STR_LITERAL("relative_path"));xrtValueObjectRemove(Copy,XRT_STR_LITERAL("store_id"));xrtValueObjectRemove(Copy,XRT_STR_LITERAL("managed_root"));xrtValueObjectRemove(Copy,XRT_STR_LITERAL("entry"));CliSet(Copy,"source",Old?CliText(Old,"source",16):"manual");
+        if(Old&&!xrtValueObjectGet(Item,XRT_STR_LITERAL("description")))CliSet(Copy,"description",CliText(Old,"description",2048));
         if(Old){const xvalue* V=xrtValueObjectGet(Old,XRT_STR_LITERAL("store_id"));if(V)xrtValueObjectSet(Copy,XRT_STR_LITERAL("store_id"),V);V=xrtValueObjectGet(Old,XRT_STR_LITERAL("managed_root"));if(V)xrtValueObjectSet(Copy,XRT_STR_LITERAL("managed_root"),V);V=xrtValueObjectGet(Old,XRT_STR_LITERAL("entry"));if(V)xrtValueObjectSet(Copy,XRT_STR_LITERAL("entry"),V);}
         if(Old){for(size_t I=0;I<xrtValueCount(CliItems());I++)if(xrtValueArrayGet(CliItems(),I)==Old){xrtValueArraySet(CliItems(),I,Copy);break;}}else xrtValueArrayAppend(CliItems(),Copy);xrtValueRelease(Copy);Ok=true;
     }else if(!strcmp(Action,"enable")){xvalue* R=CliFind(Id);if(R){xrtValueObjectSetNew(R,XRT_STR_LITERAL("enabled"),xrtValueBool(CliBool(Input,"enabled",true)));Ok=true;}}

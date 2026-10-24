@@ -97,7 +97,7 @@ def run(host):
         subprocess.run([r"E:\software\w64devkit\bin\gcc.exe", "-Os", "-s", str(source), "-o", str(program)], check=True)
         snapshot = client("GET", "/cli-tools")
         tool = dict(id="creator-fixture", name="Creator Fixture", version="1.0.0", platform="windows-x86_64", path=str(program),
-                    prompt="Print a safe fixture marker.", license="MIT", links=[], enabled=True)
+                    description="USER_FACING_CREATOR_DESCRIPTION",prompt="Print a safe fixture marker.", license="MIT", links=[], enabled=True)
         client("POST", "/cli-tools", dict(action="save", revision=snapshot.get("revision",0), tool=tool))
         client("POST", "/cli-tools", dict(action="publish", id=tool["id"], name=tool["name"], publish=True,
                                            review_file=str(source), review_notes="Build with gcc. Prints a marker; no files or network access."))
@@ -105,12 +105,14 @@ def run(host):
         assert submitted["state"] == "pending"
         catalog, _ = web("GET", "/api/v1/mdo/cli/catalog"); assert not catalog["items"]
         detail, _ = web("GET", "/admin/api/mdo/creator/detail?source=cli&id=" + str(submitted["id"]), cookie=cookie)
+        assert detail["description"]==tool["description"] and detail["prompt"]==tool["prompt"]
         assert detail["evidence_hash"] == hashlib.sha256(source.read_bytes()).hexdigest()
         web("POST", "/admin/api/mdo/cli/manage", dict(action="approve", id=submitted["id"], revision=1, reason="Fixture source and behavior verified"), headers=csrf, cookie=cookie)
         client("POST", "/cli-tools", dict(action="enable", id=tool["id"], enabled=False))
         client("POST", "/cli-tools", dict(action="install", store_id=submitted["id"], name=tool["name"]))
         snapshot, _ = task()
         installed = next(t for t in snapshot["items"] if t.get("store_id") == submitted["id"])
+        assert installed["description"]==tool["description"] and installed["prompt"]==tool["prompt"]
         installed_path = Path(installed["path"])
         assert hashlib.sha256(installed_path.read_bytes()).digest() == hashlib.sha256(program.read_bytes()).digest()
         result = subprocess.run([str(installed_path)], capture_output=True, timeout=5, check=True)

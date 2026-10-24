@@ -62,3 +62,20 @@ test("external filters and download badges use registered identities and keep ac
   panel.destroy();
  }finally{globalThis.document=saved;}
 });
+
+test("user descriptions drive local/store lists and search; model instructions stay separate",()=>{
+ const saved=globalThis.document;globalThis.document=testDocument();
+ try{
+  const panel=createExternalToolsPanel({refresh:async()=>{},openFull:async()=>{},openTools:()=>{},signedIn:()=>true}),body=new Element("div");
+  const tool={id:"custom.fixture",name:"Fixture",description:"Human-facing PDF conversion",prompt:"MODEL_PRIVATE_INSTRUCTIONS",version:"1.0.0",enabled:true,present:true};
+  panel.render(body,{writable:true,platform:"windows-x86_64",guide:"accepted",items:[tool,{...tool,id:"legacy",name:"Legacy",description:undefined}],store:{items:[{...tool,id:9,tool_id:"community.fixture",platform:"windows-x86_64"}]},tasks:[]});
+  assert.deepEqual(body.querySelectorAll(".eb-description").map(n=>n.textContent),[tool.description,"No description"]);
+  assert(!body.textContent.includes(tool.prompt));
+  const input=body.querySelector("input");input.value="MODEL_PRIVATE";input.oninput();assert.equal(body.querySelectorAll(".eb-row").length,0);
+  input.value="PDF";input.oninput();assert.equal(body.querySelectorAll(".eb-row").length,1);
+  body.querySelector(".eb-open").click();assert(body.querySelector(".eb-detail").textContent.includes(tool.prompt),"model instructions remain available in the usage detail");
+  all(body).find(n=>n.attributes.role==="tab"&&n.textContent==="Tool store").onclick();
+  assert.deepEqual(body.querySelectorAll(".eb-description").map(n=>n.textContent),[tool.description]);
+  assert(!body.textContent.includes(tool.prompt));panel.destroy();
+ }finally{globalThis.document=saved;}
+});

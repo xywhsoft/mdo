@@ -18,7 +18,7 @@ static bool CliCatalog(MdoCliJob* Job,char* Error,size_t Capacity)
     char Path[1000];cstr Query=CliText(Job->Input,"query",100);size_t N=0;char* Encoded=xrtPercentEncodeNew(Query,strlen(Query),xrtStrView(""),&N);
     snprintf(Path,sizeof(Path),"/api/v1/mdo/cli/catalog?platform=%s&q=%s&before=%llu",MdoToolPlatform(),Encoded?Encoded:"",(unsigned long long)(MdoDistNumber(Job->Input,"before")?MdoDistNumber(Job->Input,"before"):INT64_MAX));xrtFree(Encoded);
     xvalue* Catalog=CliService(Path,"GET",NULL,NULL,Job->Cancel,Error,Capacity);if(!Catalog)return false;
-    xrtMutexLock(g_MdoCli.Lock);xrtValueRelease(g_MdoCli.Catalog);g_MdoCli.Catalog=Catalog;xrtMutexUnlock(g_MdoCli.Lock);return true;
+    xrtMutexLock(g_MdoCli.Lock);xrtValueRelease(g_MdoCli.Catalog);(void)CliFillDescriptions(xrtValueObjectGet(Catalog,XRT_STR_LITERAL("items")));g_MdoCli.Catalog=Catalog;xrtMutexUnlock(g_MdoCli.Lock);return true;
 }
 static bool CliInstall(MdoCliJob* Job,char* Error,size_t Capacity)
 {
@@ -36,6 +36,7 @@ static bool CliInstall(MdoCliJob* Job,char* Error,size_t Capacity)
     if(!Ok){snprintf(Error,Capacity,"Tool download failed or content SHA-256 did not match");MdoHomeRemove(Download,false);goto done;}
     (void)Report;CliTaskStatus(Job->Id,"installing",NULL);Ok=CliExtract(Job,Product,Download,Root,&Tool,Error,Capacity);MdoHomeRemove(Download,false);
     if(!Ok)goto done;
+    xvalue* DescriptionItems=xrtValueArray();xrtValueArrayAppend(DescriptionItems,Tool);(void)CliFillDescriptions(DescriptionItems);xrtValueRelease(DescriptionItems);
     xrtMutexLock(g_MdoCli.Lock);xvalue* Previous=xrtValueDeepClone(g_MdoCli.State),*Old=CliFind(Key);bool Enable=CliBool(Job->Input,"enable",Old?CliBool(Old,"enabled",true):true);
     if(Old){/* A managed update never silently replaces a user-selected program. */
         if(strcmp(CliText(Old,"source",16),"store")&&strcmp(CliText(Old,"source",16),"legacy")){Ok=false;snprintf(Error,Capacity,"Tool identity belongs to a user-defined program");}

@@ -15,7 +15,8 @@
         "https://frippery.org/files/busybox/busybox-w64u-FRP-6075-g169694ebd.exe",
         "https://frippery.org/files/busybox/busybox-w32-FRP-6075-g169694ebd.tgz",
         "https://busybox.net/downloads/busybox-1.38.0.tar.bz2"
-      ]
+      ],
+      "description": "提供常用文件管理、文本处理和 shell 命令。"
     },
     {
       "id": "curl",
@@ -34,7 +35,8 @@
         "https://curl.se/download/curl-8.22.0.tar.xz",
         "https://github.com/openssl/openssl/releases/download/openssl-3.5.9/openssl-3.5.9.tar.gz",
         "https://zlib.net/fossils/zlib-1.3.1.tar.gz"
-      ]
+      ],
+      "description": "通过 HTTP、HTTPS 等协议下载文件或发送网络请求。"
     },
     {
       "id": "jq",
@@ -50,7 +52,8 @@
       "links": [
         "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-windows-amd64.exe",
         "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-1.8.2.tar.gz"
-      ]
+      ],
+      "description": "查看、筛选和转换 JSON 数据。"
     },
     {
       "id": "openssh",
@@ -68,7 +71,8 @@
         "https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-10.3p1.tar.gz",
         "https://github.com/openssl/openssl/releases/download/openssl-3.5.9/openssl-3.5.9.tar.gz",
         "https://zlib.net/fossils/zlib-1.3.1.tar.gz"
-      ]
+      ],
+      "description": "通过 SSH 连接远程设备，并使用 SCP、SFTP 传输文件。"
     },
     {
       "id": "aria2",
@@ -87,7 +91,8 @@
         "https://github.com/openssl/openssl/releases/download/openssl-3.5.9/openssl-3.5.9.tar.gz",
         "https://zlib.net/fossils/zlib-1.3.1.tar.gz",
         "https://curl.se/ca/cacert.pem"
-      ]
+      ],
+      "description": "支持多连接下载、断点续传、磁力链接和 BitTorrent 下载。"
     },
     {
       "id": "ripgrep",
@@ -103,7 +108,8 @@
       "links": [
         "https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-x86_64-pc-windows-msvc.zip",
         "https://github.com/BurntSushi/ripgrep/archive/refs/tags/15.2.0.tar.gz"
-      ]
+      ],
+      "description": "快速搜索文件内容，支持正则表达式和忽略规则。"
     },
     {
       "id": "7zip",
@@ -119,7 +125,8 @@
       "links": [
         "https://www.7-zip.org/a/7z2604-x64.exe",
         "https://www.7-zip.org/a/7z2604-src.7z"
-      ]
+      ],
+      "description": "创建、查看和解压多种格式的压缩文件。"
     },
     {
       "id": "python",
@@ -135,7 +142,8 @@
       "links": [
         "https://www.python.org/ftp/python/3.14.8/python-3.14.8-aarch64-linux-android.tar.gz",
         "https://curl.se/ca/cacert.pem"
-      ]
+      ],
+      "description": "运行 Python 脚本，处理数据并自动完成重复任务。"
     },
     {
       "id": "git",
@@ -155,7 +163,8 @@
         "https://github.com/git-for-windows/git/releases/tag/v2.56.0.windows.3",
         "https://alpinelinux.org/",
         "https://alpinelinux.org/"
-      ]
+      ],
+      "description": "管理源代码版本，查看修改记录并与远程仓库同步。"
     },
     {
       "id": "sqlite",
@@ -175,7 +184,8 @@
         "https://sqlite.org/2026/sqlite-amalgamation-3540100.zip",
         "https://alpinelinux.org/",
         "https://alpinelinux.org/"
-      ]
+      ],
+      "description": "查询和维护 SQLite 数据库，执行 SQL 并导入、导出数据。"
     },
     {
       "id": "poppler",
@@ -195,7 +205,8 @@
         "https://github.com/oschwartz10612/poppler-windows/releases/tag/v26.09.0-0",
         "https://alpinelinux.org/",
         "https://alpinelinux.org/"
-      ]
+      ],
+      "description": "提取 PDF 中的文字和图片，并将 PDF 页面转换为图片。"
     },
     {
       "id": "ffmpeg",
@@ -213,7 +224,8 @@
       "links": [
         "https://ffmpeg.org/",
         "https://github.com/FFmpeg/FFmpeg/tree/n9.0.2"
-      ]
+      ],
+      "description": "转换、剪辑和合并音视频，提取音轨或视频画面。"
     },
     {
       "id": "imagemagick",
@@ -233,7 +245,8 @@
         "https://download.imagemagick.org/archive/ImageMagick-7.1.2-34.tar.xz",
         "https://alpinelinux.org/",
         "https://alpinelinux.org/"
-      ]
+      ],
+      "description": "批量转换和编辑图片，调整尺寸、裁剪、合成及添加文字。"
     }
   ]
 }

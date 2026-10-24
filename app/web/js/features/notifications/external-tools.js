@@ -11,6 +11,9 @@ const labels = {
 labels["zh-CN"].push("命令名（留空使用程序名）","命令别名（每行一个）","复制到 mdo 工具目录","复制选定的程序及已填写的分享目录到 mdo，原文件保留。复制后可以通过统一命令目录调用，并随 mdo 一起迁移。","命令入口","外部位置；可复制到 mdo 以获得可迁移的命令入口。","mdo 子进程的命令目录（不修改系统 PATH）");
 labels["en-US"].push("Command name (defaults to executable name)","Command aliases (one per line)","Copy into mdo tools","Copy the executable and explicitly selected share directory into mdo? Originals are preserved. The copy can use the portable command directory and move with mdo.","Commands","External location; copy into mdo to create portable command entries.","Command directory for mdo child processes (system PATH is unchanged)");
 labels["ru-RU"].push("Имя команды (по умолчанию имя программы)","Псевдонимы (по одному на строку)","Копировать в mdo","Копировать программу и выбранный каталог в mdo? Исходные файлы сохранятся. Копия переносится вместе с mdo.","Команды","Внешний путь; скопируйте в mdo для переносимых команд.","Каталог команд дочерних процессов mdo (системный PATH не меняется)");
+labels["zh-CN"].push("描述","面向用户，说明这个工具能完成什么功能。列表将显示这段描述。","面向模型，说明何时使用工具、如何调用及注意事项；不会作为列表描述展示。","暂无描述");
+labels["en-US"].push("Description","For users: explain what this tool can do. This text appears in the list.","For the model: explain when and how to use this tool, including caveats. This is not the list description.","No description");
+labels["ru-RU"].push("Описание","Для пользователя: какие задачи решает инструмент. Этот текст отображается в списке.","Для модели: когда и как применять инструмент и какие ограничения учитывать. Не используется как описание списка.","Нет описания");
 const n = (tag, text, cls) => { const e=document.createElement(tag); if(text!=null)e.textContent=text; if(cls)e.className=cls; return e; };
 const active = t => ["queued","running","installing","uploading"].includes(t.state);
 export function externalToolAction(row, installed) {
@@ -40,13 +43,13 @@ export function createExternalToolsPanel({ refresh, openFull, openTools, signedI
     closeEditor();editing=tool.id??null;const own=context,revision=data.revision??0;
     editor=n("dialog",null,"cli-editor");const form=n("form"), message=n("p",null,"cli-error"), fields={};
     form.append(n("h3",c(tool.id?8:2)));
-    for(const [key,label,type] of [["name",18],["path",19],["command",46],["aliases",47,"textarea"],["prompt",20,"textarea"],["version",21],["license",22],["links",23,"textarea"],["package_root",24]]){
+    for(const [key,label,type] of [["name",18],["description",53,"textarea"],["path",19],["command",46],["aliases",47,"textarea"],["prompt",20,"textarea"],["version",21],["license",22],["links",23,"textarea"],["package_root",24]]){
       const wrap=n("label",null,"cli-field"),input=n(type??"input");input.name=key;
       input.value=key==="links"||key==="aliases"?(Array.isArray(tool[key])?tool[key]:[]).join("\n"):tool[key]??(key==="version"?"1.0.0":key==="license"?"Unknown":"");
-      input.required=["name","path","prompt","version","license"].includes(key);input.maxLength=key==="prompt"?16384:key==="path"||key==="package_root"?4096:key==="name"?120:key==="links"?16384:512;
+      input.required=["name","description","path","prompt","version","license"].includes(key);input.maxLength=key==="description"?512:key==="prompt"?16384:key==="path"||key==="package_root"?4096:key==="name"?120:key==="links"?16384:512;
       if(key==="path"&&(data.platform?.startsWith("android")||tool.managed_root))input.readOnly=true;
       if(key==="command"&&tool.commands?.length)input.readOnly=true;
-      wrap.append(n("span",c(label)),input);fields[key]=input;form.append(wrap);
+      wrap.append(n("span",c(label)),input);if(key==="description"||key==="prompt")wrap.append(n("small",c(key==="description"?54:55)));fields[key]=input;form.append(wrap);
     }
     const save=button(c(25),()=>form.requestSubmit()),close=button(c(26),closeEditor);form.append(message,save,close);editor.append(form);document.body.append(editor);
     form.onsubmit=async e=>{e.preventDefault();if(own!==context)return closeEditor();save.disabled=true;const t={id:tool.id??"custom."+crypto.randomUUID().replaceAll("-",""),platform:data.platform,enabled:tool.enabled??true};
@@ -63,8 +66,8 @@ export function createExternalToolsPanel({ refresh, openFull, openTools, signedI
     form.onsubmit=async e=>{e.preventDefault();if(own!==context)return closeEditor();const request={action:"publish",id:tool.id,name:tool.name,publish:publish.checked,...Object.fromEntries(Object.entries(fields).map(([k,v])=>[k,v.value.trim()]))};if(request.publish&&(request.review_notes.length<10||!request.source_url&&!request.review_file)){message.textContent=currentLocale()==="zh-CN"?"公布时请提供源码或可核验来源，并填写至少 10 个字符的构建及安全说明。":"Provide source/provenance and at least 10 characters of build/security notes.";return;}save.disabled=true;if(await command(request))closeEditor();else{message.textContent=error;save.disabled=false;}};
   }
   function toolDetail(tool, install) {
-    const description=n("div");description.append(n("p",tool.prompt||tool.description||""));
-    const usage=n("div");usage.append(detailFacts([[c(19),tool.path],[c(50),(tool.exported_commands||[]).join(" · ")],[c(52),data.command_directory]]),n("p",tool.prompt));
+    const description=n("div");description.append(n("p",tool.description||c(56)));
+    const usage=n("div");usage.append(detailFacts([[c(19),tool.path],[c(50),(tool.exported_commands||[]).join(" · ")],[c(52),data.command_directory]]),n("h4",c(20)),n("p",tool.prompt));
     const source=n("div");source.append(detailFacts([[c(21),tool.version],[browserText("platform","支持平台"),tool.platform],[c(22),tool.license]]));
     let links=tool.links;try{if(typeof links==="string")links=JSON.parse(links);}catch{links=[];}
     for(const url of Array.isArray(links)?links:[])if(/^https?:\/\//i.test(url)){const a=n("a",url);a.href=url;a.target="_blank";a.rel="noopener noreferrer";source.append(a,n("br"));}
@@ -102,18 +105,18 @@ export function createExternalToolsPanel({ refresh, openFull, openTools, signedI
     const taskFor=t=>(data.tasks||[]).find(job=>active(job)&&(job.request?.id&&job.request.id===t.id||job.request?.store_id&&(job.request.store_id===t.store_id||job.request.store_id===t.id)));
     const renderList=()=>{
       const needle=localQuery.toLocaleLowerCase();
-      const rows=tab==="local"?(data.items||[]).filter(t=>`${t.name} ${t.prompt} ${t.command||""}`.toLocaleLowerCase().includes(needle)).filter(t=>stateFilter==="all"||(stateFilter==="error"?!t.present:stateFilter==="enabled"?t.enabled:!t.enabled)).map(t=>{
+      const rows=tab==="local"?(data.items||[]).filter(t=>`${t.name} ${t.description||""} ${t.command||""}`.toLocaleLowerCase().includes(needle)).filter(t=>stateFilter==="all"||(stateFilter==="error"?!t.present:stateFilter==="enabled"?t.enabled:!t.enabled)).map(t=>{
         const job=taskFor(t), actions=[button(c(8),()=>edit(t),disabled)];
         if(t.source!=="bundled"&&!android)actions.push(button(c(9),()=>{if(window.confirm(c(32)))void command({action:"remove",id:t.id});},disabled));
         if(!android)actions.push(button(c(10),()=>share(t),disabled||!signedIn()||!t.present));
         if(!android&&!t.managed_root)actions.push(button(c(48),()=>{if(window.confirm(c(49)))void command({action:"import",id:t.id,name:t.name});},disabled||!t.present));
         const toggle=extensionToggle(button(c(t.enabled?7:6),()=>command({action:"enable",id:t.id,enabled:!t.enabled}),disabled||(!t.enabled&&!t.present)),t.enabled,t.name);
-        return {key:`local:${t.id}`,title:t.name,description:t.prompt,meta:[t.version,t.license],toggle,actions,badge:{text:job?taskLabel(job):!t.present?c(39):"",tone:!t.present?"error":""},detail:()=>toolDetail(t)};
+        return {key:`local:${t.id}`,title:t.name,description:t.description||c(56),meta:[t.version,t.license],toggle,actions,badge:{text:job?taskLabel(job):!t.present?c(39):"",tone:!t.present?"error":""},detail:()=>toolDetail(t)};
       }):(data.store?.items||[]).filter(t=>stateFilter==="all"||(stateFilter==="installed"?!externalToolAction(t,data.items||[]):stateFilter==="updates"?externalToolAction(t,data.items||[])==="update":externalToolAction(t,data.items||[])==="install")).map(t=>{
         const action=externalToolAction(t,data.items||[]),job=taskFor(t);
         const install=()=>button(c(android?29:action==="update"?12:11),()=>android?openBundle():command({action:"install",store_id:t.id,name:t.name}),disabled||t.platform!==data.platform||!!job);
         const primary=action?install():null;
-        return {key:`store:${t.id}`,title:t.name,description:t.prompt,meta:[t.author,t.version,t.platform],badge:{text:job?taskLabel(job):t.platform!==data.platform?c(42):!action?browserText("installed","已安装"):""},primary,detail:()=>toolDetail(t,action?install:null)};
+        return {key:`store:${t.id}`,title:t.name,description:t.description||c(56),meta:[t.author,t.version,t.platform],badge:{text:job?taskLabel(job):t.platform!==data.platform?c(42):!action?browserText("installed","已安装"):""},primary,detail:()=>toolDetail(t,action?install:null)};
       });
       browser.setItems(rows,{empty:c(16)});
     };

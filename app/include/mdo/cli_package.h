@@ -35,13 +35,17 @@ static inline bool MdoCliCommandsValid(const xvalue* Commands,const xvalue* File
         const xvalue* Args=xrtValueObjectGet(C,XRT_STR_LITERAL("args"));if(Args){if(xrtValueType(Args)!=XVALUE_ARRAY||xrtValueCount(Args)>64)return false;for(size_t J=0;J<xrtValueCount(Args);J++){xstrview V;if(!xrtValueGetString(xrtValueArrayGet(Args,J),&V)||V.Size>32768||memchr(V.Data,0,V.Size))return false;}}
     }return true;
 }
+/* Optional for legacy records and archives. Never derive user-facing text
+ * from the separately supplied model instructions. */
+static inline bool MdoCliDescriptionValid(const xvalue* M)
+{return !xrtValueObjectGet(M,XRT_STR_LITERAL("description"))||MdoPackageText(M,"description",2048)!=NULL;}
 static inline bool MdoCliManifestValid(const xvalue* M,char* Error,size_t Capacity)
 {
     cstr Id=MdoPackageText(M,"id",64),Name=MdoPackageText(M,"name",120),Version=MdoPackageText(M,"version",64);
     cstr Prompt=MdoPackageText(M,"prompt",16384),Entry=MdoPackageText(M,"entry",220),Platform=MdoPackageText(M,"platform",32);
     cstr License=MdoPackageText(M,"license",512);uint32_t V[3];const xvalue* Files=xrtValueObjectGet(M,XRT_STR_LITERAL("files"));
     const xvalue* Links=xrtValueObjectGet(M,XRT_STR_LITERAL("links"));uint64 Total=0;bool Found=false;
-    if(!MdoPackageId(Id)||!Name||!Name[0]||!Version||!MdoPackageVersion(Version,V)||!Prompt||!Prompt[0]||!Entry||!MdoPackagePath(Entry)||!MdoCliPlatformValid(Platform)||!License||!License[0])goto invalid;
+    if(!MdoCliDescriptionValid(M)||!MdoPackageId(Id)||!Name||!Name[0]||!Version||!MdoPackageVersion(Version,V)||!Prompt||!Prompt[0]||!Entry||!MdoPackagePath(Entry)||!MdoCliPlatformValid(Platform)||!License||!License[0])goto invalid;
     if(xrtValueType(Files)!=XVALUE_ARRAY||!xrtValueCount(Files)||xrtValueCount(Files)>MDO_CLI_FILES)goto invalid;
     for(size_t I=0;I<xrtValueCount(Files);I++){
         const xvalue* F=xrtValueArrayGet(Files,I);cstr P=MdoPackageText(F,"path",220),Hash=MdoPackageText(F,"sha256",64);int64 Size=0,Mode=0;
@@ -55,6 +59,6 @@ static inline bool MdoCliManifestValid(const xvalue* M,char* Error,size_t Capaci
     if(Links){if(xrtValueType(Links)!=XVALUE_ARRAY||xrtValueCount(Links)>8)goto invalid;
         for(size_t I=0;I<xrtValueCount(Links);I++){xstrview Link;if(!xrtValueGetString(xrtValueArrayGet(Links,I),&Link)||Link.Size>2048||memchr(Link.Data,0,Link.Size)||(!xrtStrStarts(Link,XRT_STR_LITERAL("https://"))&&!xrtStrStarts(Link,XRT_STR_LITERAL("http://"))))goto invalid;}}
     return true;
-invalid:if(Error&&Capacity)snprintf(Error,Capacity,"Invalid external tool identity, entry, prompt, platform, license, links or file manifest");return false;
+invalid:if(Error&&Capacity)snprintf(Error,Capacity,"Invalid external tool identity, description, entry, prompt, platform, license, links or file manifest");return false;
 }
 #endif

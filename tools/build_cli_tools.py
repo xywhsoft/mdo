@@ -90,7 +90,7 @@ def build(output,platforms):
                     files.append(dict(path=path,size=p.stat().st_size,sha256=digest(p),mode=493 if start[:2]==b"#!" or start==b"\x7fELF" or p.suffix.lower()==".exe" else 420))
                 entry=tool+"/"+record["entrypoints"][0]
                 manifest=dict(id=tool,name=definition["name"],version=version(record["version"]),platform=platform,
-                              prompt=definition["prompt"],entry=entry,license=record.get("license",definition["license"]),links=definition["links"],files=files)
+                              description=definition["description"],prompt=definition["prompt"],entry=entry,license=record.get("license",definition["license"]),links=definition["links"],files=files)
                 manifest["commands"]=[dict(name=Path(p).stem if p.lower().endswith('.exe') else Path(p).name,entry=tool+'/'+p,args=[]) for p in record["entrypoints"]]
                 if tool=="python":
                     names={c['name'] for c in manifest['commands']}
