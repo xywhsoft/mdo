@@ -25,11 +25,13 @@ class ApiContractTests(unittest.TestCase):
         self.assertIn('"/api/v1/bootstrap"', self.router)
         self.assertIn("MDO_API_RESPONSE_MAX_BYTES", self.internal)
         self.assertIn("MDO_API_REQUEST_MAX_BYTES", self.internal)
-        # The ecosystem download has a separate cap; every other JSON
-        # response still uses the ordinary small envelope limit.
+        # The 100 MiB ecosystem package and full conversation snapshot have
+        # separate caps; ordinary responses retain the small envelope limit.
         self.assertRegex(self.http, r'Limit = xrtStrEqual\(pContext->Target.Path,\s*'
             r'xrtStrView\("/api/v1/ecosystem"\)\)\s*'
-            r'\? 6u \* 1024u \* 1024u \+ 65536u : MDO_API_RESPONSE_MAX_BYTES;')
+            r'\? 100u \* 1024u \* 1024u \+ 65536u : MDO_API_RESPONSE_MAX_BYTES;')
+        self.assertIn("if (MdoApiConversationPath(pContext->Target.Path)) Limit = MDO_API_CONVERSATION_RESPONSE_MAX_BYTES;", self.http)
+        self.assertIn("#define MDO_API_CONVERSATION_RESPONSE_MAX_BYTES (8u * 1024u * 1024u + 16384u)", self.internal)
         self.assertIn("JsonSize > Limit", self.http)
         for resource in (
             "bootstrap", "settings", "models", "agents", "modules",

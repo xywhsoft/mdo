@@ -114,7 +114,9 @@ def strict_compile(cc: str, xserver: Path) -> None:
     run(command)
 
 
-def runtime_probe_command(probe: Path, host: Path, packed: Path) -> list[str]:
+def runtime_probe_command(probe: Path, host: Path, packed: Path, *,
+                          optional_tools_stage: Path | None = None,
+                          optional_tools_platform: str | None = None) -> list[str]:
     # The cleanup regression exercises the product pack, not an unpacked host.
     # Always pass this run's candidate instead of its default root mdo.exe.
     if probe.name == "test_debug_cleanup_runtime.py":
@@ -127,10 +129,14 @@ def runtime_probe_command(probe: Path, host: Path, packed: Path) -> list[str]:
     if probe.name in {"test_conversation_groups_runtime.py", "test_responses_followup_runtime.py",
                       "test_session_profile_errors_runtime.py"}:
         return [sys.executable, str(probe), "--packed", str(packed)]
+    if probe.name == "test_optional_tools_runtime.py":
+        platform = optional_tools_platform or ("windows-x86_64" if os.name == "nt" else "linux-x86_64")
+        return [sys.executable, str(probe), "--stage", str(optional_tools_stage or BUILD / "optional-tools"), "--platform", platform]
     return [sys.executable, str(probe), "--host", str(host)]
 
 
-def runtime_probes(host: Path, packed: Path) -> int:
+def runtime_probes(host: Path, packed: Path, *, optional_tools_stage: Path | None = None,
+                   optional_tools_platform: str | None = None) -> int:
     device_probes = {
         "test_android_conversation_runtime.py": "requires an isolated Android QA package and device",
         "test_android_device_runtime.py": "requires an explicitly selected Android device",
@@ -139,12 +145,18 @@ def runtime_probes(host: Path, packed: Path) -> int:
     for probe in sorted(TESTS.glob("test_*_runtime.py"), key=lambda path: path.name):
         if probe.name in device_probes:
             print(f"[qa] DEVICE CHECK NOT RUN: {probe.name}: {device_probes[probe.name]}", flush=True)
+        elif probe.name == "test_optional_tools_runtime.py" and optional_tools_stage is None:
+            print(f"[qa] ARTIFACT CHECK NOT RUN: {probe.name}: pass --optional-tools-stage for the staged tool payloads", flush=True)
         else:
             probes.append(probe)
     if not probes:
         raise GateError("no bounded runtime probes were found")
     for probe in probes:
-        run(runtime_probe_command(probe, host, packed))
+        if probe.name == "test_optional_tools_runtime.py":
+            run(runtime_probe_command(probe, host, packed, optional_tools_stage=optional_tools_stage,
+                                      optional_tools_platform=optional_tools_platform))
+        else:
+            run(runtime_probe_command(probe, host, packed))
     return len(probes)
 
 
@@ -318,6 +330,10 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
                         help="reuse .build/host after dependency verification")
     parser.add_argument("--skip-gui-smoke", action="store_true",
                         help="skip Windows-only single-file GUI checks")
+    parser.add_argument("--optional-tools-stage", type=Path,
+                        help="explicit independent tool payload stage containing input.json")
+    parser.add_argument("--optional-tools-platform",
+                        help="tool stage platform (defaults to the current Windows/Linux platform)")
     parser.add_argument("--observe-seconds", type=int, default=5,
                         choices=range(5, 61), metavar="5..60")
     return parser.parse_args(argv)
@@ -356,7 +372,8 @@ def main(argv: list[str] | None = None) -> int:
             # not an earlier release's ignored build cache.
             run([sys.executable, str(ROOT / "tools/build_toolpacks.py"),
                  "--packer", str(host)])
-        probe_count = runtime_probes(host, first)
+        probe_count = runtime_probes(host, first, optional_tools_stage=args.optional_tools_stage,
+                                    optional_tools_platform=args.optional_tools_platform)
         verify_release_inputs(inputs)
         # Reproduce the product staging too: build_mdo adds edition/platform
         # definitions and normalizes xs.json before packing. Packing raw app/

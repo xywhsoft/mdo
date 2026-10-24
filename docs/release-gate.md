@@ -35,6 +35,11 @@ python3 tools/qa_release.py --xserver-root /path/to/xserver
 
 任一步失败都会返回非零退出码。构建产物与探针临时目录位于 `.build/qa-release/`，不进入版本控制。
 
+独立可选工具的实际程序探针需要显式提供包含 `input.json` 的暂存目录：
+`--optional-tools-stage <stage> --optional-tools-platform windows-x86_64`（Linux 为
+`linux-x86_64`）。未提供目录时明确输出 `ARTIFACT CHECK NOT RUN`，不计为通过；
+发布这些工具前必须另行验证对应产物。平台或筛选条件没有选中任何工具时返回失败。
+
 门禁在运行前记录应用源码、依赖锁文件与宿主配置指纹，并在运行时探针结束和最终
 通过前复核；原生宿主哈希也必须保持不变。检查期间仍有其他任务修改这些输入时，
 应先完成修改，再重跑门禁，不能合并不同输入的通过结果。

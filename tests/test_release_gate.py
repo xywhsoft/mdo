@@ -10,9 +10,28 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 import qa_release
 import prepare_release
+from test_optional_tools_runtime import run as optional_tool_probe
 
 
 class ReleaseGateTests(unittest.TestCase):
+    def test_optional_tool_payload_probes_require_an_explicit_stage(self):
+        class Inventory:
+            def glob(self, _):
+                return [Path("test_optional_tools_runtime.py"), Path("test_api_runtime.py")]
+        with patch.object(qa_release, "TESTS", Inventory()), patch.object(qa_release, "run") as run, patch("builtins.print") as emit:
+            self.assertEqual(qa_release.runtime_probes(Path("host"), Path("packed")), 1)
+            self.assertTrue(any("ARTIFACT CHECK NOT RUN" in call.args[0] for call in emit.call_args_list))
+            run.reset_mock()
+            self.assertEqual(qa_release.runtime_probes(Path("host"), Path("packed"),
+                optional_tools_stage=Path("stage"), optional_tools_platform="windows-x86_64"), 2)
+            command = next(call.args[0] for call in run.call_args_list if "test_optional_tools_runtime.py" in call.args[0][1])
+            self.assertEqual(command[2:], ["--stage", "stage", "--platform", "windows-x86_64"])
+        with tempfile.TemporaryDirectory() as temporary:
+            stage = Path(temporary)
+            (stage / "input.json").write_text("[]", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "No optional tools selected"):
+                optional_tool_probe(stage, "windows-x86_64", None)
+
     def test_concurrent_release_input_changes_are_rejected(self):
         with tempfile.TemporaryDirectory(prefix="release-inputs-") as temporary:
             root = Path(temporary)

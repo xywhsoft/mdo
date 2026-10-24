@@ -67,8 +67,12 @@ def run(stage,platform,only):
                 assert {s["codec_name"] for s in info["streams"]}=={"h264","aac"}
                 execute(row,"ffmpeg","-v","error","-i","video.mp4","-frames:v","1","-y","frame.png")
                 assert (work/"frame.png").read_bytes().startswith(b"\x89PNG")
+            else:
+                raise ValueError("No runtime probe for optional tool: " + name)
             results.append(dict(id=name,platform=platform,passed=True))
             print("PASS",name,platform,flush=True)
+    if not results:
+        raise ValueError("No optional tools selected for platform: " + platform)
     return results
 
 
