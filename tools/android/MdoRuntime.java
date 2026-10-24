@@ -56,9 +56,19 @@ final class MdoRuntime {
             Os.setenv("LD_LIBRARY_PATH", nativeDir, true);
             Os.setenv("SSL_CERT_FILE", new File(root, "curl/cacert.pem").getAbsolutePath(), true);
             Os.setenv("CURL_CA_BUNDLE", new File(root, "curl/cacert.pem").getAbsolutePath(), true);
+            Os.setenv("GIT_EXEC_PATH", new File(root, "git/libexec/git-core").getAbsolutePath(), true);
+            Os.setenv("GIT_TEMPLATE_DIR", new File(root, "git/share/git-core/templates").getAbsolutePath(), true);
+            Os.setenv("GIT_SSL_CAINFO", new File(root, "curl/cacert.pem").getAbsolutePath(), true);
+            Os.setenv("MAGICK_HOME", new File(root, "imagemagick").getAbsolutePath(), true);
+            Os.setenv("MAGICK_CONFIGURE_PATH", new File(root, "imagemagick/etc/ImageMagick-7").getAbsolutePath(), true);
+            Os.setenv("POPPLER_DATADIR", new File(root, "poppler/share/poppler").getAbsolutePath(), true);
+            Os.setenv("FONTCONFIG_FILE", new File(root, "fonts/fonts.conf").getAbsolutePath(), true);
+            Os.setenv("FONTCONFIG_PATH", new File(root, "fonts").getAbsolutePath(), true);
             Os.setenv("PATH", new File(root, "busybox") + ":" + new File(root, "curl") + ":" +
                 new File(root, "jq") + ":" + new File(root, "openssh") + ":" + new File(root, "python/bin") + ":" +
-                new File(root, "aria2") + ":" + new File(root, "ripgrep") + ":" + new File(root, "7zip") + ":" + System.getenv("PATH"), true);
+                new File(root, "aria2") + ":" + new File(root, "ripgrep") + ":" + new File(root, "7zip") + ":" +
+                new File(root, "git") + ":" + new File(root, "sqlite") + ":" + new File(root, "poppler") + ":" +
+                new File(root, "ffmpeg") + ":" + new File(root, "imagemagick") + ":" + System.getenv("PATH"), true);
         }
     }
 }

@@ -136,6 +136,104 @@
         "https://www.python.org/ftp/python/3.14.8/python-3.14.8-aarch64-linux-android.tar.gz",
         "https://curl.se/ca/cacert.pem"
       ]
+    },
+    {
+      "id": "git",
+      "legacy_id": "git",
+      "name": "Git",
+      "prompt": "Git command-line version control: status, diff, log, branches, commit, clone, fetch and push. Prefer non-interactive commands and per-command -c settings. SSH transport requires an SSH client. GUI, Perl/SVN/email adapters are excluded.",
+      "recommended": false,
+      "enabled_by_default": false,
+      "license": "GPL-2.0-only; bundled dependency licenses included",
+      "versions": {
+        "windows-x86_64": "2.56.3",
+        "linux-x86_64": "2.52.0",
+        "android-arm64-v8a": "2.56.0"
+      },
+      "links": [
+        "https://gitforwindows.org/mingit.html",
+        "https://github.com/git-for-windows/git/releases/tag/v2.56.0.windows.3",
+        "https://alpinelinux.org/",
+        "https://alpinelinux.org/"
+      ]
+    },
+    {
+      "id": "sqlite",
+      "legacy_id": "sqlite",
+      "name": "SQLite CLI",
+      "prompt": "SQLite 3.54.1 command-line shell. Inspect schema and query databases; use -readonly for existing databases unless changes are requested. Supports JSON/CSV output, JSON SQL functions, FTS5 and RTree.",
+      "recommended": false,
+      "enabled_by_default": false,
+      "license": "Public Domain",
+      "versions": {
+        "windows-x86_64": "3.54.1",
+        "linux-x86_64": "3.53.4",
+        "android-arm64-v8a": "3.54.1"
+      },
+      "links": [
+        "https://sqlite.org/cli.html",
+        "https://sqlite.org/2026/sqlite-amalgamation-3540100.zip",
+        "https://alpinelinux.org/",
+        "https://alpinelinux.org/"
+      ]
+    },
+    {
+      "id": "poppler",
+      "legacy_id": "poppler",
+      "name": "Poppler",
+      "prompt": "Poppler PDF utilities: pdftotext extracts text, pdfinfo reports metadata, pdftoppm/pdftocairo render pages, pdfimages extracts images, pdffonts lists fonts, pdfseparate/pdfunite split/merge PDFs. Scanned pages need a separate OCR tool.",
+      "recommended": false,
+      "enabled_by_default": false,
+      "license": "GPL-2.0-or-later; bundled dependency licenses included",
+      "versions": {
+        "windows-x86_64": "26.9.0",
+        "linux-x86_64": "25.12.0",
+        "android-arm64-v8a": "26.4.0"
+      },
+      "links": [
+        "https://poppler.freedesktop.org/",
+        "https://github.com/oschwartz10612/poppler-windows/releases/tag/v26.09.0-0",
+        "https://alpinelinux.org/",
+        "https://alpinelinux.org/"
+      ]
+    },
+    {
+      "id": "ffmpeg",
+      "legacy_id": "ffmpeg",
+      "name": "FFmpeg",
+      "prompt": "FFmpeg and ffprobe for audio/video conversion, extraction, metadata and filters. Common H.264/H.265, VP8/VP9, AV1, AAC, MP3, Opus, subtitles, drawtext and HTTPS support. Use ffprobe before processing; choose explicit output paths. No GUI player or GPU shader toolchain.",
+      "recommended": false,
+      "enabled_by_default": false,
+      "license": "GPL-3.0-or-later; dependency notices included",
+      "versions": {
+        "windows-x86_64": "9.0.2",
+        "linux-x86_64": "9.0.2",
+        "android-arm64-v8a": "9.0.2"
+      },
+      "links": [
+        "https://ffmpeg.org/",
+        "https://github.com/FFmpeg/FFmpeg/tree/n9.0.2"
+      ]
+    },
+    {
+      "id": "imagemagick",
+      "legacy_id": "imagemagick",
+      "name": "ImageMagick",
+      "prompt": "ImageMagick 7.1.2-34 Q16. Use magick for image conversion, resize, crop, composition and batch processing; magick identify/compare/montage expose companion operations. PNG, JPEG, WebP and TIFF are supported. PDF reading may require an external delegate; prefer Poppler for PDF extraction/rendering.",
+      "recommended": false,
+      "enabled_by_default": false,
+      "license": "ImageMagick; bundled dependency licenses included",
+      "versions": {
+        "windows-x86_64": "7.1.2034",
+        "linux-x86_64": "7.1.2034",
+        "android-arm64-v8a": "7.1.2034"
+      },
+      "links": [
+        "https://imagemagick.org/",
+        "https://download.imagemagick.org/archive/ImageMagick-7.1.2-34.tar.xz",
+        "https://alpinelinux.org/",
+        "https://alpinelinux.org/"
+      ]
     }
   ]
 }

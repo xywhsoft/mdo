@@ -85,7 +85,7 @@ static void CliMigrateLegacy(const xvalue* Legacy,const xvalue* Active,bool Forc
                 xvalue* R=xrtValueObject();char Id[65];snprintf(Id,sizeof(Id),"official.%s",CliText(D,"id",48));
                 CliSet(R,"id",Id);CliSet(R,"name",CliText(D,"name",120));CliSet(R,"path",CliText(L,"path",4096));CliSet(R,"prompt",CliText(D,"prompt",16384));
                 const xvalue* Versions=xrtValueObjectGet(D,XRT_STR_LITERAL("versions"));uint32 Parts[3];cstr Version=CliText(L,"version",64);if(!MdoPackageVersion(Version,Parts)||!strcmp(Version,"0.0.0"))Version=CliText(Versions,MdoToolPlatform(),64);CliSet(R,"version",Version[0]?Version:"1.0.0");CliSet(R,"platform",MdoToolPlatform());CliSet(R,"source",!strcmp(MdoEdition(),"full")?"bundled":"legacy");CliSet(R,"license",CliText(D,"license",512));
-                xrtValueObjectSetNew(R,XRT_STR_LITERAL("enabled"),xrtValueBool(true));xrtValueObjectSet(R,XRT_STR_LITERAL("links"),xrtValueObjectGet(D,XRT_STR_LITERAL("links")));
+                xrtValueObjectSetNew(R,XRT_STR_LITERAL("enabled"),xrtValueBool(CliBool(D,"enabled_by_default",true)));xrtValueObjectSet(R,XRT_STR_LITERAL("links"),xrtValueObjectGet(D,XRT_STR_LITERAL("links")));
                 xvalue* Removed=xrtValueObjectGet(g_MdoCli.State,XRT_STR_LITERAL("removed_legacy"));bool Hidden=false;for(size_t H=0;H<xrtValueCount(Removed);H++){xstrview V;if(xrtValueGetString(xrtValueArrayGet(Removed,H),&V)&&xrtStrEqual(V,xrtStrView(Id)))Hidden=true;}
                 xvalue* Existing=CliFind(Id);
                 if(!Existing&&!Hidden){xrtValueArrayAppend(CliItems(),R);Changed=true;}

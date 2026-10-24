@@ -88,12 +88,12 @@ static void MdoDistFailure(cstr Stage,cstr Code,cstr Detail,cstr File)
 static xvalue* MdoDistTools(xvalue* Active,bool Probe)
 {
     (void)Probe;
-    static cstr Names[]={"busybox","curl","jq","ssh","python","scp","sftp","aria2c","rg","7zip"};
-    static cstr Products[]={"busybox","curl","jq","openssh","python","openssh","openssh","aria2","ripgrep","7zip"};
+    static cstr Names[]={"busybox","curl","jq","ssh","python","scp","sftp","aria2c","rg","7zip","git","sqlite","poppler","ffmpeg","imagemagick"};
+    static cstr Products[]={"busybox","curl","jq","openssh","python","openssh","openssh","aria2","ripgrep","7zip","git","sqlite","poppler","ffmpeg","imagemagick"};
 #if defined(_WIN32) || defined(_WIN64)
-    static cstr Files[]={"busybox/busybox.exe","curl/curl.exe","jq/jq.exe","openssh/ssh.exe","python/python.exe","openssh/scp.exe","openssh/sftp.exe","aria2/aria2c.exe","ripgrep/rg.exe","7zip/7z.exe"};
+    static cstr Files[]={"busybox/busybox.exe","curl/curl.exe","jq/jq.exe","openssh/ssh.exe","python/python.exe","openssh/scp.exe","openssh/sftp.exe","aria2/aria2c.exe","ripgrep/rg.exe","7zip/7z.exe","git/cmd/git.exe","sqlite/sqlite3.exe","poppler/bin/pdftotext.exe","ffmpeg/bin/ffmpeg.exe","imagemagick/magick.exe"};
 #else
-    static cstr Files[]={"busybox/busybox","curl/curl","jq/jq","openssh/ssh","python/bin/python3","openssh/scp","openssh/sftp","aria2/aria2c","ripgrep/rg","7zip/7zz"};
+    static cstr Files[]={"busybox/busybox","curl/curl","jq/jq","openssh/ssh","python/bin/python3","openssh/scp","openssh/sftp","aria2/aria2c","ripgrep/rg","7zip/7zz","git/git","sqlite/sqlite3","poppler/pdftotext","ffmpeg/ffmpeg","imagemagick/magick"};
 #endif
 #if defined(__ANDROID__)
     str Root=xrtEnvGet("MDO_TOOLS_ROOT");
@@ -101,7 +101,7 @@ static xvalue* MdoDistTools(xvalue* Active,bool Probe)
     str Root=NULL;
 #endif
     xvalue* Tools=xrtValueArray();
-    for(size_t I=0;I<10;I++){
+    for(size_t I=0;I<sizeof(Names)/sizeof(Names[0]);I++){
         cstr Group=I==4?"python":"core";str Base=Root?xrtStrDup(Root):MdoHomeExternalPath(MdoDistText(Active,Group));
         str Path=Base?xrtPathJoin(Base,Files[I]):NULL;
         if(Path&&(Root||MdoDistText(Active,Group)[0])&&xrtFileExists(Path)&&!xrtDirExists(Path)){
