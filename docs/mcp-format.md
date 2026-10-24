@@ -56,6 +56,12 @@ remote names that are not denied. Effects are selected from `read`,
 `workspace-write`, `process`, `network`, `external-service`, `secrets`,
 `schedule`, and `agent-delegation`.
 
+The native connection editor additionally owns the reserved `mdo_template`
+binding field. It records a validated immutable marketplace recipe and private
+device bindings, without changing the wire protocol or contributing prompts.
+Store bindings use `/api/v1/mcp/connections` instead of the raw source editor.
+See [service templates](mcp-service-templates.md).
+
 Schema v1 implements `stdio` and `streamable-http`; `streamable-http` is never silently treated as stdio,
 and stdio is never treated as HTTP. The HTTP shape is
 `{"type":"streamable-http","endpoint":"https://...","headers":[{"name":"Authorization","secret_ref":"env:API_TOKEN"}]}`.

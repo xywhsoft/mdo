@@ -1,4 +1,6 @@
-# Skill、Agent 工具与编辑器命令的独立分发
+# Skill、Agent 工具、编辑器命令与 MCP 的独立分发
+
+MCP 服务模板已接入同一链路，使用 `single_kind=mcp`。模板安装与设备连接分离，详见 [MCP 服务模板](mcp-service-templates.md)。下文原有三类源码资源的安装规则继续适用。
 
 Skill、Agent 工具和编辑器命令设置页分别提供「本机」与「商店」选项卡。每个作品只含一个同类资源；不需要先创建组合包。Skill 可包含 SKILL.md、参考资料和脚本文件；安装不执行脚本。Agent 工具分发完整 C 源码，使用既有 Application SDK，在安装前显示源码及文件计划，用户确认信任后才编译注册。
 

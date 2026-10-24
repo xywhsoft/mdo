@@ -1,0 +1,96 @@
+{
+  "feature": "MCP independent service templates, connections, marketplace and creator lifecycle",
+  "version": "0.6.0",
+  "app_code_commit": "17c04c38ba2b288c879017eb65436480b99c6b00",
+  "platform_commit": "4233faceb44b6fe7dd7cb3c09e0797d5a6ded2d8",
+  "platform_deployed": true,
+  "automatic_update_published": false,
+  "android_device_tested": false,
+  "linux_client_build": "native glibc QA; not a baseline-compatible public release",
+  "artifacts": [
+    {
+      "file": "mdo.exe",
+      "bytes": 6284461,
+      "sha256": "2592cf4487b083df015b221a95e7cdcba3efabacf61819d6aa041244faa458cb"
+    },
+    {
+      "file": "mdo-server.exe",
+      "bytes": 6026219,
+      "sha256": "c8238281a48344812f8dae99d38abd230910724b5cf47818ef76a459f807a4f6"
+    },
+    {
+      "file": "mdo-arm64-v8a.apk",
+      "bytes": 5825857,
+      "sha256": "eb948a92e37cd455f4ea855caf6821df212d8a4a4f83cfd655df63d94db8d99d"
+    },
+    {
+      "file": "mdo-full-arm64-v8a.apk",
+      "bytes": 149788831,
+      "sha256": "2bdf2cce07fa0580c7b0c5057a7f8c314caff8350ab7a7bdeaa2b7e702072a3f"
+    },
+    {
+      "file": "linux/linux-x86_64-glibc-server/mdo-server",
+      "bytes": 5787802,
+      "sha256": "5306081ca711ddcf1f67cff79c4c280dfa6b1c9f50d04c9c4fae86e92fce7b7a"
+    }
+  ],
+  "checks": {
+    "apk_application_pack_sha256": "dd3a0d515c4a492862efc8e966c9c83bdcc24832009dbf3333d466bcc914be49",
+    "android_runtime_tools": [
+      "7zip",
+      "aria2",
+      "busybox",
+      "curl",
+      "ffmpeg",
+      "git",
+      "imagemagick",
+      "jq",
+      "openssh",
+      "poppler",
+      "python",
+      "ripgrep",
+      "sqlite"
+    ],
+    "android_runtime_files": 731,
+    "android_certificate_sha256": "94b1947b60f3ce0852b19d9c37a47cc4a084fe9d601692c6a1f6b204c2174e84"
+  },
+  "production": {
+    "service": "active",
+    "all_deployed_hashes_match": true,
+    "binary_config_preserved": true,
+    "preflight": {
+      "passed": true,
+      "runtime": "b32fa5696b9950a0dc0fa4fd8277a112e27cbea093deb5d53948a35072d273fe",
+      "site_commit": "6a160bcfb2d28bdebb30079e80d0cb422efab9e9",
+      "time": 1792879744
+    },
+    "backup": "/home/xs/mdo-mcp-ecosystem-20261025",
+    "files": {
+      "plugin/mdo/modules/ecosystem/creator_core.inc.c": "a94cf8461be262c51b6b8dfc50d0134b11fe137fcc042971918bb0dc0e7a0ac9",
+      "plugin/mdo/modules/ecosystem/creator_routes.inc.c": "a88807a5548225b0dfc4983c085f6c6089709b2d5318121854100975cc2e29ee",
+      "plugin/mdo/modules/ecosystem/ecosystem_package.h": "cc9b3584fded0eee7218520dd0376b2ea2a85f10584f1675142e9f3e9b0e74b0",
+      "plugin/mdo/modules/ecosystem/main.c": "4ba0da79919542ce1a8c9977de545e30f5774824e13ecca3790e1d304d1e1fce",
+      "plugin/mdo/modules/ecosystem/mcp_metadata.inc.c": "cd35b9a67587ffb25399d6b3d5abb32cb59a1e420f2d4ab1311caee43037fc20",
+      "plugin/mdo/modules/ecosystem/mcp_template.h": "fd4fa4f7fa17e627b85252f10a19dd68b88d620ae1725b9309638e2895c8d43a",
+      "plugin/mdo/page/creator/admin.js": "aff6c5524d205bdb87b04a4095775b1448bab3853605a277f424c5b432ec281c",
+      "plugin/mdo/page/creator/center.html": "7f4d0902771af167d43bf2e3b0f18f63e8bbd1c95ee14b678c1e9f4a13d7cc65",
+      "plugin/mdo/page/creator/center.js": "a6baf660b7580f9add02fb404b4356423841f5b506b9973d5d71fcde617fe658",
+      "plugin/mdo/page/creator/mcp-builder.js": "38760768d23c1f1e38c2324145652eb1fbe2f37d05e86a602c2bb9f7de6efbae",
+      "plugin/mdo/page/creator/mcp-template.js": "bebceb199c6b4f6ecdb1cd340a83b7b76f05be6896b7dd9bf1a59821dd3e1100",
+      "plugin/mdo/page/ecosystem/store.js": "77be72803eb27eb7197baef9278416c122f14332c1c5a15d69e6d673f571a284"
+    }
+  },
+  "tests": [
+    "36 native package checks",
+    "native and packed MCP configuration, ownership, CAS, secret clearing/collection, stdio cold save and explicit connect",
+    "Windows and Linux packed-client regression; Linux unsupported-vault rejection",
+    "two-host client/creator/review/download/version/pinning/withdrawal round trip",
+    "OAuth PKCE, restart, refresh, 401, transient failure, logout",
+    "capability, concurrency, cancellation, deadline and invalid-tool isolation",
+    "nine-system install/rollback regression",
+    "9 Node UI tests, 20 frontend contracts, 6 Application SDK contracts, 228 reachable modules",
+    "desktop and mobile shared-window browser checks, webpage API-key template creation and private submission",
+    "Linux production-runtime isolated four single-resource categories, CLI store and legacy migration",
+    "signed APK verification and alignment; identical lite/full app pack; 13 full-edition tools"
+  ]
+}
