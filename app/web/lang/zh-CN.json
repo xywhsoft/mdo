@@ -267,6 +267,8 @@
   "settings.schedules": "计划任务",
   "settings.models": "模型管理",
   "settings.extensions": "插件",
+  "settings.knowledge": "知识库",
+  "settings.knowledgePlaceholder": "知识库功能正在规划中，后续逐步开放。",
   "settings.toolpacks": "外部工具",
   "settings.toolpacksDescription": "查看当前设备的命令行工具和安装方式。",
   "settings.diagnostics": "诊断与存储",

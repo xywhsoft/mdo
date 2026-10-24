@@ -281,6 +281,8 @@
   "settings.schedules": "Планировщик",
   "settings.models": "Управление моделями",
   "settings.extensions": "Плагины",
+  "settings.knowledge": "База знаний",
+  "settings.knowledgePlaceholder": "Возможности базы знаний находятся на этапе планирования и будут добавляться постепенно.",
   "settings.toolpacks": "Внешние инструменты",
   "settings.toolpacksDescription": "Командные инструменты и способы установки на текущем устройстве.",
   "settings.diagnostics": "Диагностика и хранилище",

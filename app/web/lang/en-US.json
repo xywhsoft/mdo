@@ -267,6 +267,8 @@
   "settings.schedules": "Scheduled tasks",
   "settings.models": "Model management",
   "settings.extensions": "Plugins",
+  "settings.knowledge": "Knowledge base",
+  "settings.knowledgePlaceholder": "Knowledge base features are being planned and will be introduced gradually.",
   "settings.toolpacks": "External tools",
   "settings.toolpacksDescription": "View command-line tools and installation options for the current device.",
   "settings.diagnostics": "Diagnostics and storage",
