@@ -211,7 +211,10 @@ export function createExtensionBrowser({ kind, onClose } = {}) {
       if (page + 1 < count) turn(page + 1, "next");
       else { awaitingNext = { length: rows.length }; options.onNext?.(count); }
     });
-    links.append(previous);
+    const compact = el("span", "eb-page-compact", options.onNext
+      ? browserText("pageOpen", "第 {page} 页", { page: current })
+      : browserText("pageCount", "第 {page} / {pages} 页", { page: current, pages: last }));
+    links.append(previous, compact);
     const start = Math.max(first, Math.min(current - 2, last - 4)), end = Math.min(last, start + 4);
     const numbers = new Set([first, last]);
     for (let value = start; value <= end; value++) numbers.add(value);

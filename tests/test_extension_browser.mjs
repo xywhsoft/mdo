@@ -18,6 +18,7 @@ test("numbered pages and jump controls reach distant rows, validate input and pr
     number(21).click(); assert.equal(browser.root.querySelector(".eb-name").textContent, "Tool 200");
     assert.equal(document.activeElement.getAttribute("aria-current"), "page");
     jump("11"); assert.equal(browser.root.querySelector(".eb-name").textContent, "Tool 100");
+    assert.equal(pager().querySelector(".eb-page-compact").textContent, "第 11 / 21 页");
     assert.deepEqual(pager().querySelectorAll(".eb-page-number").map(b => b.textContent), ["1", "9", "10", "11", "12", "13", "21"]);
     assert.equal(pager().querySelectorAll(".eb-page-gap").length, 2);
     assert.equal(document.activeElement, pager().querySelector("input"));
