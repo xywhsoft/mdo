@@ -1,0 +1,65 @@
+{
+  "app_commit": "05c8b0b8fe77e88713c524c37f5a0686acb96f8f",
+  "preview": true,
+  "auto_update_published": false,
+  "android_device_tested": false,
+  "artifacts": [
+    {
+      "file": "mdo.exe",
+      "size": 6262209,
+      "sha256": "5517b58d4d866af1e56bf188dca7bffa0a2952bbdaf37a0eddf1396c509b3dbb"
+    },
+    {
+      "file": "mdo-server.exe",
+      "size": 6003966,
+      "sha256": "9968c7ff23b90bfdf91fefd33f3f05fbcce629e905f4f76b8d3e89ae6e827cdd"
+    },
+    {
+      "file": "mdo-arm64-v8a.apk",
+      "size": 5801281,
+      "sha256": "285521c0b2828c21b0776fd0f946cec1c3cda1fbbb8c7b09231d5f7ce8fa9d9c"
+    },
+    {
+      "file": "mdo-full-arm64-v8a.apk",
+      "size": 150149529,
+      "sha256": "b9f706c46edd8c52da4f7903fd7a4e7898c1b8c88d123c552fc70a7ac2254a97"
+    }
+  ],
+  "version": "0.6.0",
+  "javascript_tests": 7,
+  "frontend_contract_tests": 20,
+  "web_modules": 226,
+  "android_app_payload_matches": true,
+  "knowledge_scope": "UI placeholder only; no native storage, search, model integration or platform catalog changes",
+  "browser_qa": {
+    "desktop": [
+      1280,
+      720
+    ],
+    "mobile": [
+      390,
+      720,
+      3
+    ],
+    "route": "#/settings/knowledge",
+    "extension_order": [
+      "agents",
+      "subagents",
+      "tools",
+      "mcp",
+      "skills",
+      "commands",
+      "toolpacks",
+      "knowledge",
+      "extensions",
+      "store"
+    ],
+    "mobile_selected": "knowledge",
+    "placeholder_visible": true,
+    "test_services_and_tabs_closed": true
+  },
+  "screenshots": [
+    "knowledge-desktop.png",
+    "knowledge-mobile.png"
+  ]
+}
