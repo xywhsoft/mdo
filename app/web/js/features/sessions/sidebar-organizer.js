@@ -3,6 +3,7 @@ import { t } from "../../i18n.js";
 import { currentPageWriteToken } from "../../api/client.js";
 import { targetState } from "../../api/target.js";
 import { moveSidebarItem, emptySidebarLayout } from "./sidebar-layout.js";
+import { openLayer } from "../../components/layers.js";
 
 const epoch = () => JSON.stringify([targetState().selected, targetState().runtimeChanged, currentPageWriteToken()]);
 export function createSidebarOrganizer({ container, store, render }) {
@@ -11,34 +12,49 @@ export function createSidebarOrganizer({ container, store, render }) {
     try { return await store.update(change); }
     catch (error) { if (error?.name !== "AbortError") toast(errorMessage(error), "error"); return false; }
   }
-  function close() { dialog?.close(); dialog?.remove(); dialog = null; }
+  function close() { const previous = dialog; dialog = null; previous?.dispose(); }
   function form(title, description, fields, commit, opener = document.activeElement) {
     close(); if (!store.writable()) return;
     const origin = epoch(), revision = store.get().revision;
     const focusKey = opener?.dataset.sidebarFocus;
-    const source = element("dialog", { className: "app-dialog sidebar-organizer-dialog" }); dialog = source;
-    const cancel = element("button", { text: t("sidebar.cancel"), attrs: { type: "button" } });
-    const submit = element("button", { className: "primary-button", text: t("sidebar.save"), attrs: { type: "submit" } });
-    const error = element("p", { className: "dialog-error", attrs: { role: "alert" } }); error.hidden = true;
-    const card = element("form", { className: "dialog-card" }, [element("header", {}, [element("h2", { text: title }), element("p", { text: description })]),
-      element("div", { className: "dialog-fields" }, fields), error, element("footer", {}, [cancel, submit])]);
-    source.append(card); source.setAttribute("aria-label", title); document.body.append(source);
-    cancel.addEventListener("click", () => source.close());
     let busy = false;
-    source.addEventListener("cancel", event => { if (busy) event.preventDefault(); });
-    source.addEventListener("close", () => { source.remove(); if (dialog === source) dialog = null;
-      const target = opener?.isConnected ? opener : [...container.querySelectorAll("[data-sidebar-focus]")]
-        .find(node => node.dataset.sidebarFocus === focusKey) || container.querySelector('[data-sidebar-focus="list-options"]');
-      target?.focus({ preventScroll: true }); });
+    let source;
+    source = openLayer({ title, icon: "folder", width: "28rem", height: "auto", owner: container, opener,
+      beforeClose: () => !busy,
+      onClosed({ reason }) {
+        if (dialog === source) dialog = null;
+        if (reason === "dispose") return;
+        const target = opener?.isConnected ? opener : [...container.querySelectorAll("[data-sidebar-focus]")]
+          .find(node => node.dataset.sidebarFocus === focusKey) || container.querySelector('[data-sidebar-focus="list-options"]');
+        target?.focus({ preventScroll: true });
+      } });
+    dialog = source; source.element.classList.add("sidebar-organizer-dialog");
+    const formId = `${source.element.id}-form`;
+    const cancel = element("button", { className: "secondary-button", text: t("sidebar.cancel"), attrs: { type: "button" } });
+    const submit = element("button", { className: "primary-button", text: t("sidebar.save"), attrs: { type: "submit", form: formId } });
+    const error = element("p", { className: "dialog-error", attrs: { role: "alert" } }); error.hidden = true;
+    const hint = element("p", { className: "sidebar-organizer-description", text: description, attrs: { id: `${formId}-description` } });
+    source.element.setAttribute("aria-describedby", hint.id);
+    const card = element("form", { className: "sidebar-organizer-form", attrs: { id: formId } },
+      [element("div", { className: "dialog-fields" }, fields), error]);
+    source.body.append(hint, card); source.footer.append(cancel, submit);
+    const options = { signal: source.signal };
+    cancel.addEventListener("click", () => { void source.close("cancel"); }, options);
     card.addEventListener("submit", async event => {
-      event.preventDefault(); if (busy) return;
+      event.preventDefault(); if (busy || dialog !== source || source.signal.aborted) return;
       if (origin !== epoch() || revision !== store.get().revision || !store.writable()) { error.textContent = t("sidebar.changed"); error.hidden = false; return; }
-      busy = true; submit.disabled = cancel.disabled = true;
-      try { if (await commit()) source.close(); }
-      catch (failure) { error.textContent = errorMessage(failure); error.hidden = false; }
-      finally { busy = false; submit.disabled = cancel.disabled = false; }
-    });
-    source.showModal(); const first = card.querySelector("input,select,button"); first?.focus(); first?.select?.();
+      busy = true; error.hidden = true; submit.disabled = cancel.disabled = source.closeButton.disabled = true;
+      try {
+        const saved = await commit();
+        if (dialog !== source || source.signal.aborted) return;
+        busy = false;
+        if (saved) await source.close("saved");
+        else { error.textContent = t("sidebar.changed"); error.hidden = false; }
+      }
+      catch (failure) { if (dialog === source && !source.signal.aborted) { error.textContent = errorMessage(failure); error.hidden = false; } }
+      finally { busy = false; if (!source.signal.aborted) submit.disabled = cancel.disabled = source.closeButton.disabled = false; }
+    }, options);
+    const first = card.querySelector("input,select") || submit; first.focus({ preventScroll: true }); first.select?.();
   }
   function groupForm(group = null) {
     const input = element("input", { attrs: { required: "", maxlength: "80", "aria-label": t("sidebar.groupName"), autocomplete: "off" } });

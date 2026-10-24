@@ -445,7 +445,10 @@ select:focus-visible,
 .sidebar-organize-toolbar button:last-child { flex: 0 0 28px; font-size: 18px; }
 .sidebar-organize-toolbar button:disabled { opacity: .45; cursor: default; }
 @media (pointer: coarse) { .sidebar-organize-toolbar button { min-height: 40px; } }
-.sidebar-organizer-dialog .dialog-card { width: min(420px, calc(100vw - 32px)); }
+.sidebar-organizer-form { width:100%; margin:0; padding:0; border:0; background:none; box-shadow:none; }
+.sidebar-organizer-dialog .dialog-fields { grid-template-columns:1fr; padding:0; }
+.sidebar-organizer-description { margin:0 0 18px; color:var(--muted); font-size:13px; line-height:1.6; }
+.sidebar-organizer-dialog .dialog-error { margin:12px 0 0; }
 .sidebar-organizer-dialog .dialog-fields > input, .sidebar-organizer-dialog .dialog-fields > select { width: 100%; min-height: 38px; }
 @media (hover: none) { .sidebar-drag-handle { opacity: 1; } }
 .session-item-row[data-status="archived"] .session-item-title,
