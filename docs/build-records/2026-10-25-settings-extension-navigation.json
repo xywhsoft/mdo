@@ -1,0 +1,40 @@
+{
+  "app_commit": "7b622f9d60b1becadb32886fccc68924e9d67f77",
+  "preview": true,
+  "auto_update_published": false,
+  "android_device_tested": false,
+  "artifacts": [
+    {
+      "file": "mdo.exe",
+      "size": 6248921,
+      "sha256": "2fcead4f3e4fbb5c7db999a0629d0bb8e13777280e8fda75819154f82f8b5061"
+    },
+    {
+      "file": "mdo-server.exe",
+      "size": 5990680,
+      "sha256": "d2fc99d69f0bd5f20f4f755157165917c25862419996c6ee13e45a974e64954b"
+    },
+    {
+      "file": "mdo-arm64-v8a.apk",
+      "size": 5788993,
+      "sha256": "079b057f891bdda1d720e565d2ba5203a9f3816132e714fad395f43b850e7e29"
+    },
+    {
+      "file": "mdo-full-arm64-v8a.apk",
+      "size": 150133145,
+      "sha256": "7b8d7c60710cdc2a61a7a62611e0a45aa2432a58c84e2b631b6d5d5841d5fec0"
+    }
+  ],
+  "version": "0.6.0",
+  "verification": [
+    "20 frontend contract tests",
+    "browser desktop order and renamed page titles",
+    "390px mobile selector uses the same nine-item order",
+    "Windows GUI/server packaged shared frontend",
+    "Android APK structure/alignment/native libraries/formal signing certificate"
+  ],
+  "screenshots": [
+    ".build\\settings-extension-navigation-20261025\\screenshots\\navigation-desktop.png",
+    ".build\\settings-extension-navigation-20261025\\screenshots\\navigation-mobile.png"
+  ]
+}
