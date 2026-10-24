@@ -17,6 +17,14 @@ static bool EcoExportProjectCommand(cstr Project,cstr Id,xvalue* Resource)
     bool Ok=Metadata&&MdoApiValueSetString(Resource,"kind","commands")&&MdoApiValueSetString(Resource,"id",Id)&&MdoApiValueSetString(Resource,"content",Text);
     xrtValueRelease(Metadata);xrtFree(Text);if(Root)xrtRootClose(Root);MdoProjectLeaseRelease(Lease);return Ok;
 }
+static bool EcoExportProjectMcp(cstr Project,cstr Id,xvalue* Resource)
+{
+    if(!MdoExtensionIdValid(Id)||!MdoPackageId(Project))return false;xwork_error Error;MdoProjectLease* Lease=MdoProjectLeaseAcquire(Project,MDO_PROJECT_LEASE_SHARED,&Error);char* Workspace=NULL;
+    if(Lease&&!strcmp(Project,"default"))Workspace=MdoHomeDefaultWorkspacePath(false);else if(Lease){MdoProjectInfo Info={0};Info.Size=sizeof(Info);bool Found=false;if(MdoProjectGet(Project,&Info,&Found,&Error)&&Found)Workspace=xrtPathAbs(Info.WorkspaceRoot);}
+    xroot Root=Workspace?xrtRootOpen(Workspace):NULL;xrtFree(Workspace);char Path[160];snprintf(Path,sizeof(Path),".mdo/mcp/%s.json",Id);xfileoptions O;xrtFileOptionsInit(&O);O.Flags=XFILE_READ|XFILE_NOFOLLOW;
+    char* Original=Root?CommandReadFile(xrtRootFileOpen(Root,Path,&O)):NULL;char* Text=Original?McpTemplateExport(Original,Id):NULL;
+    bool Ok=Text&&MdoApiValueSetString(Resource,"kind","mcp")&&MdoApiValueSetString(Resource,"id",Id)&&MdoApiValueSetString(Resource,"content",Text);xrtFree(Text);xrtFree(Original);if(Root)xrtRootClose(Root);MdoProjectLeaseRelease(Lease);return Ok;
+}
 /* Select a project by ID, and export only its .mdo Skill using rooted catalog
  * reads. Absolute paths, credentials and neighboring project files never enter
  * the portable work. */

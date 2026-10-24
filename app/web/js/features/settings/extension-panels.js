@@ -4,6 +4,7 @@ import { customizableResource, resourceCredits, storeReadOnlyMessage } from "./r
 import { createSkillWorkbench } from "./skill-workbench.js";
 import { createMcpContext } from "./mcp-context.js";
 import { createMcpAuthorization } from "./mcp-authorization.js";
+import { createMcpConnections } from "./mcp-connections.js";
 import { createMcpWorkbench } from "./mcp-workbench.js";
 import { newTool } from "./tool-template.js";
 import { newCommand } from "./command-template.js";
@@ -56,9 +57,11 @@ export function createExtensionPanels() {
   const skillWorkbench = createSkillWorkbench({ owner: roots.get("skills"), onChange: () => announceChange("skills"), onShare: item => stores.get("skills").publish(item) });
   const mcpContext = createMcpContext();
   const mcpAuthorization = createMcpAuthorization();
-  const mcpWorkbench = createMcpWorkbench({ onChange: () => announceChange("mcp") });
+  const mcpConnections = createMcpConnections(() => { announceChange("mcp"); if(selected==="mcp")void load("mcp"); });
+  const mcpWorkbench = createMcpWorkbench({ onChange: () => announceChange("mcp"), onConfigure:(item,project)=>mcpConnections.open({item,project}),onShare:item=>stores.get("mcp").publish(item) });
   const commandWorkbench = createCommandWorkbench({ owner: roots.get("commands"), onChange: () => announceChange("commands"), onShare: item => stores.get("commands").publish(item) });
-  const stores = new Map(["skills", "tools", "commands"].map(kind => [kind, createSingleResourceStore(kind, () => { announceChange(kind); if (selected === kind) void load(kind); }, () => { states.get(kind).area = "store"; render(kind); }, async receipt => {
+  const stores = new Map(["skills", "tools", "commands", "mcp"].map(kind => [kind, createSingleResourceStore(kind, () => { announceChange(kind); if (selected === kind) void load(kind); }, () => { states.get(kind).area = "store"; render(kind); }, async receipt => {
+    if(kind==="mcp"){await mcpConnections.open({receipt});return;}
     const ref = resourceReferences(receipt).find(ref => ref.kind === kind); if (!ref || selected !== kind) return;
     const state = states.get(kind), target = targetKey(); state.area = "local"; state.view = "custom"; state.filter = "";
     stores.get(kind).activate(false); render(kind); await load(kind);
@@ -86,18 +89,19 @@ export function createExtensionPanels() {
     const isCurrent = () => current(kind, target) && serial === state.serial;
     state.busy = state.reading = true; state.error = ""; render(kind);
     try {
-      const [response, catalog, packages] = await Promise.all([
+      const [response, catalog, packages, templates] = await Promise.all([
         reads.read("catalog", path(kind), { isCurrent }),
         kind === "tools" ? reads.read("catalog-tools", "/tools", { isCurrent }) : null,
         reads.read("packages", "/ecosystem", { isCurrent, retry: false }).catch(() => null),
+        kind==="mcp" ? reads.read("mcp-templates", "/mcp/templates", {isCurrent,retry:false}) : null,
       ]);
       if (!isCurrent()) return;
       state.catalog = catalog?.data.items ?? [];
-      state.packages = packages?.data || {};
+      state.packages = packages?.data || {}; state.templates=templates?.data.items||[];
       state.items = (response.data.items ?? []).sort((a, b) => a.id.localeCompare(b.id)); state.loaded = true;
     } catch (error) { if (isCurrent() && error?.name !== "AbortError") { state.loaded = false; state.error = errorMessage(error); } }
     finally { if (isCurrent()) {
-      for (const key of ["catalog", "catalog-tools", "packages"]) reads.cancel(key);
+      for (const key of ["catalog", "catalog-tools", "packages", "mcp-templates"]) reads.cancel(key);
       state.busy = state.reading = false; render(kind);if(pendingResource?.kind===kind)void openLinkedResource();
     } }
   }
@@ -163,7 +167,7 @@ export function createExtensionPanels() {
       actions.splice(2, 0, button(label("importFolder", "导入文件夹"), () => folder.click()), folder);
     }
     const builtinView = kind === "tools" && state.view === "builtin";
-    if (kind === "mcp") actions.push(button("项目 MCP", () => mcpWorkbench.open()));
+    if (kind === "mcp") actions.push(button("从模板创建连接", () => mcpConnections.open()),button("项目与配置迁移", () => mcpWorkbench.open()));
     if (kind === "commands") actions.push(button("项目命令", () => commandWorkbench.open()));
     const toolbar = element("div", { className: "extension-toolbar eb-toolbar" });
     const refresh = actions.find(control => control.tagName === "BUTTON" && control.textContent === label("refresh", "刷新"));
@@ -207,7 +211,7 @@ export function createExtensionPanels() {
           kind === "mcp" ? element("span", { text: t(`resource.mcp${({ ready: "Ready", failed: "Failed", disabled: "Disabled", disconnected: "Disconnected" })[item.state] || "Disconnected"}`) }) : null,
           kind === "mcp" ? element("span", { text: t("resource.toolCount", { count: item.tool_count || 0 }) }) : null,
         ]);
-        const owner=resourceOwner(state.packages,item.path), protectedKind=["tools","skills","commands"].includes(kind);
+        const owner=item.template_receipt||resourceOwner(state.packages,item.path), protectedKind=["tools","skills","commands","mcp"].includes(kind);
         const editable=!protectedKind||customizableResource(item,owner), credits=protectedKind?resourceCredits(item,owner):null;
         if(owner)meta.append(button(`${owner.name} · ${owner.version} · ${owner.source==="local"?label("localImport","本地导入"):owner.author}`,()=>returnToPackage(receiptKey(owner))));
         const edit = button(label("edit", "编辑"), async () => {
@@ -223,6 +227,7 @@ export function createExtensionPanels() {
         if (store) controls.push(...store.localActions(owner));
         if (kind === "skills" && editable) controls.push(button(label("improveSkill", "用 AI 改进"), () =>
           skillWorkbench.open({ builder: true, mode: "improve", id: item.id, scope: "user" })));
+        if (kind === "mcp" && item.template_connection) controls.push(button("配置连接", () => mcpConnections.open({item})),button("删除连接",()=>act(kind,async()=>{if(confirm(`删除连接 ${item.name||item.id}？`))await api.post("/mcp/connections",{action:"delete",id:item.id},revision(item));})));
         if (kind === "mcp") controls.push(button(label("test", "测试连接"), () => act(kind, async scope => {
           await refreshMcp(item.id, scope);
           if (scope.isCurrent()) toast(label("testOk", "连接测试完成"), "success");
@@ -237,7 +242,7 @@ export function createExtensionPanels() {
         const canToggle = !(kind === "agents" && item.id === "default");
         toggle.disabled = state.busy;
         controls.forEach(control => { control.disabled = state.busy; });
-        const status = kind === "mcp" ? t(`resource.mcp${({ ready: "Ready", failed: "Failed", disabled: "Disabled", disconnected: "Disconnected" })[item.state] || "Disconnected"}`) : !item.valid ? browserText("needsAttention", "需要处理") : "";
+        const status = kind === "mcp" ? ({ready:"已连接",failed:"连接失败",disabled:"已停用",disconnected:"未连接"})[item.state]||"未连接" : !item.valid ? browserText("needsAttention", "需要处理") : "";
         rows.push({ key: item.id, kind, title: item.name || item.id, description: item.description, byline: credits?.submitter,
           meta: credits ? [...credits.meta, owner?.source === "store" || item.store_managed ? browserText("storeInstalled", "商店安装") : item.external ? browserText("custom", "自定义") : label("builtin", "内置")] : [owner?.author, owner?.version, item.external ? browserText("custom", "自定义") : label("builtin", "内置")],
           badge: { text: status, tone: !item.valid || item.state === "failed" ? "error" : "" },
@@ -261,6 +266,8 @@ export function createExtensionPanels() {
             return detailTabs([{ id: "description", label: browserText("description", "说明"), content: description }, { id: "usage", label: browserText("usage", "使用方式"), content: usage }, { id: "source", label: browserText("sourceFiles", "来源与文件"), content: source, onSelect: () => queueMicrotask(readSource) }]);
           } });
       }
+      if(kind==="mcp")for(const entry of state.templates||[]){const r=entry.receipt;if(!`${r.name} ${r.submitter||""}`.toLocaleLowerCase().includes(needle))continue;
+        const credits=resourceCredits({store_managed:r.source!=="local"},r);rows.push({key:`template:${r.key}`,kind,title:r.name,byline:credits.submitter,description:r.manifest?.description||"",meta:[...credits.meta,"已安装的服务模板"],badge:{text:entry.valid?"可创建连接":"文件校验失败",tone:entry.valid?"":"error"},primary:button("创建连接",()=>mcpConnections.open({receipt:r,template:entry.template})),actions:stores.get("mcp").localActions(r),detail:()=>element("div",{},[element("p",{text:"模板可以建立多个账号或项目连接；每个连接独立选择版本。"}),credits.facts(),button("创建连接",()=>mcpConnections.open({receipt:r,template:entry.template}))])});}
       browser.setItems(rows, { busy: state.busy, pageKey:JSON.stringify([state.filter,state.stateFilter,state.view]), empty: state.filter || state.stateFilter !== "all" ? browserText("empty", "没有匹配的扩展") : label("empty", "还没有资源。新建或导入一个即可开始。") });
     };
     search.addEventListener("input", () => { state.filter = search.value; renderItems(); });
@@ -589,6 +596,7 @@ export function createExtensionPanels() {
   async function exportItem(kind, item) {
     const target = targetKey(), isCurrent = () => current(kind, target);
     try {
+      if(kind==="mcp"){const data=(await api.post("/ecosystem",{action:"export",single_kind:"mcp",references:[{kind,id:item.id}]})).data;if(isCurrent())download(`${item.id}.mcp-template.json`,data.resources[0].content);return;}
       const data = (await reads.read(`export:${kind}/${item.id}`, `${path(kind, item.id)}${kind === "skills" ? "/bundle" : ""}`, { isCurrent })).data;
       if (!isCurrent()) return;
       if (kind === "skills") download(`${item.id}.skill.json`, JSON.stringify({ kind, id: item.id, content: data.content, files: data.files }, null, 2));
@@ -626,7 +634,7 @@ export function createExtensionPanels() {
       if (selected && (!states.get(kind).loaded || kind === "tools") && !states.get(kind).busy) void load(kind);
       else if(pendingResource?.kind===selected)void openLinkedResource();
     },
-    hasPendingChanges: () => [...stores.values()].some(s => s.hasPendingChanges()) || dirty() || skillWorkbench.hasPendingChanges() || mcpWorkbench.hasPendingChanges() || commandWorkbench.hasPendingChanges(),
-    destroy() { disposed = true; for (const browser of browsers.values()) browser.destroy(); for (const store of stores.values()) store.destroy(); skillWorkbench.destroy(); mcpWorkbench.destroy(); commandWorkbench.destroy(); mcpAuthorization.destroy(); mcpContext.destroy(); cancelReads(); closeEditor(true); unsubscribeLocale(); unsubscribeTarget();window.removeEventListener("mdo-extensions-changed", invalidate);window.removeEventListener("mdo-open-resource",openResource);window.removeEventListener("pagehide",onHide);window.removeEventListener("pageshow",onShow); },
+    hasPendingChanges: () => [...stores.values()].some(s => s.hasPendingChanges()) || dirty() || skillWorkbench.hasPendingChanges() || mcpWorkbench.hasPendingChanges() || mcpConnections.hasPendingChanges() || commandWorkbench.hasPendingChanges(),
+    destroy() { disposed = true; for (const browser of browsers.values()) browser.destroy(); for (const store of stores.values()) store.destroy(); skillWorkbench.destroy(); mcpWorkbench.destroy(); mcpConnections.destroy(); commandWorkbench.destroy(); mcpAuthorization.destroy(); mcpContext.destroy(); cancelReads(); closeEditor(true); unsubscribeLocale(); unsubscribeTarget();window.removeEventListener("mdo-extensions-changed", invalidate);window.removeEventListener("mdo-open-resource",openResource);window.removeEventListener("pagehide",onHide);window.removeEventListener("pageshow",onShow); },
   });
 }

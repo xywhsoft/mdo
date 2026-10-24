@@ -93,6 +93,7 @@ static bool EcoHandleInput(MdoApiContext* c,xvalue* input)
         size_t n=0;char* encoded=xrtPercentEncodeNew(query?query:"",query?strlen(query):0,xrtStrView(""),&n);
         if(!encoded)valid=false;
         snprintf(path,sizeof(path),"/api/v1/mdo/ecosystem/packages?format=2&build_id=%llu&q=%s&kind=%s%s%s%lld",(unsigned long long)MdoBuildId(),encoded?encoded:"",kind?kind:"",!strcmp(action,"mine")?"&mine=1":"",before?"&before=":"&unused=",(long long)before);xrtFree(encoded);
+        if(valid&&kind&&!strcmp(kind,"mcp")){const char* Keys[]={"mcp_transport","mcp_auth","mcp_platform"};for(size_t i=0;i<3;i++){cstr Value=MdoPackageText(input,Keys[i],40);if(Value&&*Value){bool Safe=true;for(cstr P=Value;*P;P++)if(!((*P>='a'&&*P<='z')||(*P>='0'&&*P<='9')||*P=='-'||*P=='_'))Safe=false;size_t N=strlen(path);int W=Safe?snprintf(path+N,sizeof(path)-N,"&%s=%s",Keys[i],Value):-1;if(W<0||(size_t)W>=sizeof(path)-N)valid=false;}}}
     }else if(valid&&(!strcmp(action,"detail")||!strcmp(action,"latest")||!strcmp(action,"install")||!strcmp(action,"plan")||!strcmp(action,"history"))){valid=MdoPackageNumber(input,"id",&id)&&id>0;
         int64 before=0;if(xrtValueObjectGet(input,XRT_STR_LITERAL("before"))&&(!MdoPackageNumber(input,"before",&before)||before<0))valid=false;
         snprintf(path,sizeof(path),"/api/v1/mdo/ecosystem/%s?format=2&build_id=%llu&id=%lld%s&before=%lld",!strcmp(action,"history")?"history":"package",(unsigned long long)MdoBuildId(),(long long)id,!strcmp(action,"latest")?"&latest=1":"",(long long)(before?before:INT64_MAX));

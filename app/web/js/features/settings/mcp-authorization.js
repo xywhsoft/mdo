@@ -1,19 +1,20 @@
+import { openLayer } from "../../components/layers.js";
 import { api } from "../../api/client.js";
 import { targetState, subscribeTarget } from "../../api/target.js";
 import { element, errorMessage } from "../../utils/dom.js";
 
 export function createMcpAuthorization() {
-  let dialog, controller, unsubscribe, timer;
+  let view, dialog, controller, unsubscribe, timer;
   const close = () => {
     clearTimeout(timer); controller?.abort(); unsubscribe?.();
-    dialog?.close(); dialog?.remove(); dialog = null;
+    const previous=view;view=null;dialog=null;previous?.dispose();
   };
   function open(id) {
     close(); const owner = targetState().selected?.id || "local";
     controller = new AbortController(); const { signal } = controller;
     const current = () => dialog && !signal.aborted && owner === (targetState().selected?.id || "local");
     const path = `/mcp/${encodeURIComponent(id)}/oauth`;
-    dialog = element("dialog", { className: "extension-editor" });
+    view = openLayer({ title: `MCP 授权 · ${id}`, icon:"globe", width:"44rem", height:"80%", onClosed: close }); dialog=view.element;dialog.classList.add("extension-authoring");
     const status = element("p", { attrs: { role: "status" } });
     let busy = false, available = true;
     const buttons = [];
@@ -40,15 +41,16 @@ export function createMcpAuthorization() {
       } catch (error) { if (current()) status.textContent = errorMessage(error); }
     }
     const done = element("button", { text: "关闭", attrs: { type: "button" } }); done.addEventListener("click", close);
-    dialog.append(element("h2", { text: `MCP 授权 · ${id}` }),
+    view.body.append(element("h2", { text: `MCP 授权 · ${id}` }),
       element("p", { text: "授权网页将在该 MCP 所属设备的浏览器中打开。完成后返回墨斗；凭据保存在该设备的系统凭据保护下。" }),
       status, button("开始授权", () => api.post(`${path}/start`, {}, { signal })),
       button("打开授权网页", () => api.post(`${path}/open`, {}, { signal })),
       button("撤销本机授权", async () => {
         if (window.confirm("移除此设备保存的 MCP 授权？")) await api.delete(path, { signal });
-      }), done);
+      }));
+    view.footer.append(done);
     dialog.addEventListener("cancel", event => { event.preventDefault(); close(); });
-    document.body.append(dialog); dialog.showModal();
+
     unsubscribe = subscribeTarget(() => { if (!current()) close(); }); void poll();
   }
   return { open, destroy: close };

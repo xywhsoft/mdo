@@ -90,6 +90,8 @@ def run():
             records = json.loads(receipts.read_text()); key_receipt = records.pop('local:key-template'); key_receipt.update(id=72, source='store', owner=7); records['72'] = key_receipt; receipts.write_text(json.dumps(records))
             secret = 'Private-fixture-credential-2026'
             key_body = dict(id='private-key', action='save', receipt_id=72, variant='default', values=dict(token=secret))
+            key_preview = api('POST', '/mcp/connections', dict(key_body,action='preview'), revision='new')[0]
+            assert secret not in json.dumps(key_preview)
             sealed = api('POST', '/mcp/connections', key_body, revision='new')[0]
             assert secret not in json.dumps(sealed) and secret not in (home / 'mcp/private-key.json').read_text()
             retained = api('POST', '/mcp/connections', dict(key_body, values={}), revision=sealed['revision'])[0]

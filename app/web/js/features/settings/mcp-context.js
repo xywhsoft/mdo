@@ -1,11 +1,12 @@
+import { openLayer } from "../../components/layers.js";
 import { api } from "../../api/client.js";
 import { targetState, subscribeTarget } from "../../api/target.js";
 import { element, clear, errorMessage } from "../../utils/dom.js";
 import { mcpContextRead, mcpPromptText } from "../chat/mcp-context.js";
 
 export function createMcpContext() {
-  let dialog, controller, stop;
-  const close = () => { controller?.abort(); stop?.(); dialog?.close(); dialog?.remove(); dialog = null; };
+  let view, dialog, controller, stop;
+  const close = () => { controller?.abort(); stop?.(); const previous=view;view=null;dialog=null;previous?.dispose(); };
   function open(server) {
     close(); controller = new AbortController(); const { signal } = controller;
     const owner = targetState().selected?.id || "local";
@@ -13,7 +14,7 @@ export function createMcpContext() {
     const options = { signal, isCurrent: current, onProgress: info => {
       if (current() && Number.isFinite(info.progress)) status.textContent = `读取中 · ${info.progress}${info.total > 0 ? ` / ${info.total}` : ""}${info.message ? ` · ${info.message}` : ""}`;
     } };
-    dialog = element("dialog", { className: "extension-editor skill-workbench" });
+    view = openLayer({ title: `MCP 资源与提示词 · ${server}`, icon:"globe", width:"56rem", height:"80%", onClosed: close }); dialog=view.element;dialog.classList.add("extension-authoring");
     const status = element("p", { attrs: { role: "status" } }), rows = element("div"), form = element("div");
     const output = element("textarea", { className: "extension-source", attrs: { readonly: "", "aria-label": "MCP 结果" } });
     let busy = false, cursor = null, method = "resources/list";
@@ -57,13 +58,14 @@ export function createMcpContext() {
       if (cursor) rows.append(button("下一页", () => list(true)));
     }
     const done = element("button", { text: "关闭", attrs: { type: "button" } }); done.addEventListener("click", close);
-    dialog.append(element("h2", { text: `MCP 资源与提示词 · ${server}` }),
+    view.body.append(element("h2", { text: `MCP 资源与提示词 · ${server}` }),
       element("p", { text: "资源模板需填写实际 URI。提示词可在会话中通过 /mcp 服务器 提示词名称 {参数JSON} 调用；返回内容作为普通会话输入。" }),
       ...[["资源", "resources/list"], ["模板", "resources/templates/list"], ["提示词", "prompts/list"]].map(([label, name]) => button(label, () => { method = name; return list(); })),
       button("诊断", async () => { const { data } = await api.get(`/mcp/${encodeURIComponent(server)}/diagnostics`, { signal }); if (current()) output.value = JSON.stringify(data, null, 2); }),
-      rows, form, output, status, done);
+      rows, form, output, status);
+    view.footer.append(done);
     dialog.addEventListener("cancel", event => { event.preventDefault(); close(); });
-    document.body.append(dialog); dialog.showModal(); stop = subscribeTarget(() => { if (!current()) close(); });
+ stop = subscribeTarget(() => { if (!current()) close(); });
   }
   return { open, destroy: close };
 }

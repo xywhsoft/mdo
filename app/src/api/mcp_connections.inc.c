@@ -12,6 +12,12 @@ static bool McpConnectionCredits(xvalue* Item,const xvalue* Doc)
     const char* Keys[]={"submitter","author","copyright","license","version"};const size_t Limits[]={100,100,4096,80,32};
     for(size_t i=0;Ok&&i<5;i++){cstr S=MdoPackageText(i?M:R,Keys[i],Limits[i]);Ok=MdoApiValueSetString(Item,Keys[i],S?S:"");}return Ok;
 }
+static bool McpConnectionUses(const xvalue* V,cstr Id)
+{
+    if(xrtValueType(V)==XVALUE_OBJECT){cstr N=MdoPackageText(V,"input",64);if(N)return !strcmp(N,Id);xvalueiter It={0};xvaluekey K;xvalue* E;bool Found=false;if(xrtValueIterBegin(V,&It)){while(!Found&&(E=xrtValueIterNext(&It,&K)))Found=McpConnectionUses(E,Id);xrtValueIterEnd(&It);}return Found;}
+    if(xrtValueType(V)==XVALUE_ARRAY){for(size_t i=0;i<xrtValueCount(V);i++)if(McpConnectionUses(xrtValueArrayGet(V,i),Id))return true;}
+    xstrview S;return xrtValueGetString(V,&S)&&S.Size==strlen(Id)+6&&!memcmp(S.Data,"input:",6)&&!strcmp(S.Data+6,Id);
+}
 static xvalue* McpConnectionResolve(const xvalue* V,const xvalue* Values,unsigned Depth)
 {
     if(Depth>20)return NULL;
@@ -36,8 +42,9 @@ static bool McpConnectionValue(const xvalue* I,cstr S)
 static xvalue* McpConnectionTemplate(const xvalue* Body,const xvalue* Old,xvalue** Receipt)
 {
     int64 Id=0;*Receipt=NULL;
-    if(!MdoPackageNumber(Body,"receipt_id",&Id)){const xvalue* B=McpConnectionBinding(Old);*Receipt=xrtValueClone(xrtValueObjectGet(B,XRT_STR_LITERAL("receipt")));return xrtValueClone(xrtValueObjectGet(B,XRT_STR_LITERAL("template")));}
-    char Key[32];snprintf(Key,sizeof(Key),"%lld",(long long)Id);bool Known=false;xvalue* Records=ExtensionStoreRead(&Known);const xvalue* R=xrtValueObjectGet(Records,xrtStrView(Key)),*Files=xrtValueObjectGet(R,XRT_STR_LITERAL("files"));
+    cstr ReceiptKey=MdoPackageText(Body,"receipt_key",80);
+    if(!ReceiptKey&&!MdoPackageNumber(Body,"receipt_id",&Id)){const xvalue* B=McpConnectionBinding(Old);*Receipt=xrtValueClone(xrtValueObjectGet(B,XRT_STR_LITERAL("receipt")));return xrtValueClone(xrtValueObjectGet(B,XRT_STR_LITERAL("template")));}
+    char Key[81];if(ReceiptKey)snprintf(Key,sizeof(Key),"%s",ReceiptKey);else snprintf(Key,sizeof(Key),"%lld",(long long)Id);bool Known=false;xvalue* Records=ExtensionStoreRead(&Known);const xvalue* R=xrtValueObjectGet(Records,xrtStrView(Key)),*Files=xrtValueObjectGet(R,XRT_STR_LITERAL("files"));
     xvalue* T=NULL;
     for(size_t i=0;Known&&i<xrtValueCount(Files);i++){const xvalue* F=xrtValueArrayGet(Files,i);cstr Path=MdoPackageText(F,"path",255);if(!Path||strncmp(Path,"data/ecosystem/mcp/",19))continue;
         bool Missing=false;char* Text=EcoLocalUnchanged(F)?MdoExtensionRead(Path,true,131072,&Missing):NULL;T=Text?xrtJsonParse(xrtStrView(Text)):NULL;xrtFree(Text);if(T){*Receipt=xrtValueClone(R);break;}}
@@ -125,7 +132,7 @@ bool MdoApiMcpConnectionsRoute(MdoApiContext* C)
     const xvalue* OldBinding=McpConnectionBinding(OldDoc),*OldValues=xrtValueObjectGet(OldBinding,XRT_STR_LITERAL("values")),*Supplied=xrtValueObjectGet(Body.Value,XRT_STR_LITERAL("values")),*Inputs=xrtValueObjectGet(T,XRT_STR_LITERAL("inputs"));
     bool SameTemplate=xrtValueEqual(T,xrtValueObjectGet(OldBinding,XRT_STR_LITERAL("template")))&&Variant&&MdoPackageText(OldBinding,"variant",64)&&!strcmp(Variant,MdoPackageText(OldBinding,"variant",64));
     for(size_t i=0;i<xrtValueCount(Inputs);i++){
-        const xvalue* I=xrtValueArrayGet(Inputs,i);cstr Key=MdoPackageText(I,"id",64),S=MdoPackageText(Supplied,Key,4096);bool Secret=MdoMcpTemplateFlag(I,"secret",false);
+        const xvalue* I=xrtValueArrayGet(Inputs,i);cstr Key=MdoPackageText(I,"id",64),S=MdoPackageText(Supplied,Key,4096);if(!McpConnectionUses(xrtValueObjectGet(Selected,XRT_STR_LITERAL("config")),Key))continue;bool Secret=MdoMcpTemplateFlag(I,"secret",false);
         if(Secret&&(!S||!*S)&&SameTemplate){cstr Ref=MdoPackageText(OldValues,Key,256);if(Ref&&strncmp(Ref,"input:",6)&&MdoApiValueSetString(Values,Key,Ref))continue;}
         if(!S&&!Secret)S=MdoPackageText(OldValues,Key,4096);if(!S&&!Secret)S=MdoPackageText(I,"default",4096);if(!S)S="";
         if(!McpConnectionValue(I,S)){snprintf(Error,sizeof(Error),"Parameter '%s' is missing or invalid",Key);goto done;}
@@ -141,14 +148,17 @@ bool MdoApiMcpConnectionsRoute(MdoApiContext* C)
     const xvalue* Transport=xrtValueObjectGet(Doc,XRT_STR_LITERAL("transport"));cstr Type=MdoPackageText(Transport,"type",32);
     bool Changed=OldDoc&&!McpConnectionSameTarget(OldDoc,Doc);
     if(Changed){/* A changed target must never receive a retained credential. */
-        for(size_t i=0;i<xrtValueCount(Inputs);i++){const xvalue* I=xrtValueArrayGet(Inputs,i);cstr Key=MdoPackageText(I,"id",64),S=MdoPackageText(Supplied,Key,4096);if(MdoMcpTemplateFlag(I,"secret",false)&&(!S||!*S)){snprintf(Error,sizeof(Error),"Target changed; re-enter credentials before saving");goto done;}}}
+        for(size_t i=0;i<xrtValueCount(Inputs);i++){const xvalue* I=xrtValueArrayGet(Inputs,i);cstr Key=MdoPackageText(I,"id",64),S=MdoPackageText(Supplied,Key,4096);if(McpConnectionUses(xrtValueObjectGet(Selected,XRT_STR_LITERAL("config")),Key)&&MdoMcpTemplateFlag(I,"secret",false)&&(!S||!*S)){snprintf(Error,sizeof(Error),"Target changed; re-enter credentials before saving");goto done;}}}
     if(!Preview&&!strcmp(Type,"stdio")&&!MdoMcpTemplateFlag(Body.Value,"confirm_launch",false)){snprintf(Error,sizeof(Error),"Inspect the complete launch command and confirm local code trust");goto done;}
 #if defined(__ANDROID__)
     if(!strcmp(Type,"stdio")){cstr Program=MdoPackageText(Transport,"program",4096);if(Program&&strstr(Program,"data/ecosystem")){snprintf(Error,sizeof(Error),"Android native tools must be preinstalled by the full APK");goto done;}}
 #endif
     Binding=xrtValueObject();bool Ok=Binding&&xrtValueObjectSet(Binding,XRT_STR_LITERAL("template"),T)&&xrtValueObjectSet(Binding,XRT_STR_LITERAL("receipt"),Receipt)&&MdoApiValueSetString(Binding,"variant",Variant)&&xrtValueObjectSet(Binding,XRT_STR_LITERAL("values"),Values)&&xrtValueObjectSet(Doc,XRT_STR_LITERAL("mdo_template"),Binding);
-    Text=Ok?xrtJsonStringify(Doc,true,NULL):NULL;if(!Text||!MdoMcpValidateText(Id,Text,Error,sizeof(Error)))goto done;
+    Text=Ok?xrtJsonStringify(Doc,true,NULL):NULL;
+    char* Validation=NULL;if(Preview&&Doc){xvalue* Check=xrtValueClone(Doc);xvalue* Tr=(xvalue*)xrtValueObjectGet(Check,XRT_STR_LITERAL("transport")),*O=(xvalue*)xrtValueObjectGet(Check,XRT_STR_LITERAL("oauth"));if(xrtValueObjectHas(Tr,XRT_STR_LITERAL("headers")))xrtValueObjectSetNew(Tr,XRT_STR_LITERAL("headers"),xrtValueArray());if(xrtValueObjectHas(Tr,XRT_STR_LITERAL("environment")))xrtValueObjectSetNew(Tr,XRT_STR_LITERAL("environment"),xrtValueArray());if(xrtValueType(O)==XVALUE_OBJECT)xrtValueObjectRemove(O,XRT_STR_LITERAL("client_secret_ref"));Validation=xrtJsonStringify(Check,false,NULL);xrtValueRelease(Check);}
+    bool Valid=Text&&MdoMcpValidateText(Id,Validation?Validation:Text,Error,sizeof(Error));xrtFree(Validation);if(!Valid)goto done;
     if(Preview){xrtValueObjectRemove(Doc,XRT_STR_LITERAL("mdo_template"));for(size_t k=0;k<2;k++){xvalue* A=(xvalue*)xrtValueObjectGet(Transport,xrtStrView(k?"headers":"environment"));for(size_t i=0;i<xrtValueCount(A);i++)MdoApiValueSetString((xvalue*)xrtValueArrayGet(A,i),"secret_ref","[private credential]");}
+        xvalue* O=(xvalue*)xrtValueObjectGet(Doc,XRT_STR_LITERAL("oauth"));if(xrtValueType(O)==XVALUE_OBJECT&&xrtValueObjectHas(O,XRT_STR_LITERAL("client_secret_ref")))MdoApiValueSetString(O,"client_secret_ref","[private credential]");
         xvalue* Out=xrtValueObject();MdoApiValueSetBool(Out,"target_changed",Changed);xrtValueObjectSet(Out,XRT_STR_LITERAL("config"),Doc);Result=MdoApiReplySuccessTake(C,200,Out,NULL);goto done;}
     if(Changed)(void)MdoMcpAuthorizationForget(RuntimeId); /* Revoke before publishing a new target. */
     Saved=Workspace?SkillWrite(Root,Path,Text,strlen(Text)):MdoHomeAtomicWrite(Path,Text,strlen(Text),false);

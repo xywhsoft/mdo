@@ -1,3 +1,4 @@
+import { openLayer } from "../../components/layers.js";
 import { createMcpContext } from "./mcp-context.js";
 import { createMcpAuthorization } from "./mcp-authorization.js";
 import { api } from "../../api/client.js";
@@ -9,14 +10,14 @@ import { refreshMcp } from "../../state/resources.js";
 const targetKey = () => targetState().selected?.id || "local";
 const portable = id => /^[a-zA-Z][a-zA-Z0-9._-]{0,63}$/.test(id);
 
-export function createMcpWorkbench({ onChange }) {
+export function createMcpWorkbench({ onChange, onConfigure=()=>{}, onShare=()=>{} }) {
   const context = createMcpContext();
   const authorization = createMcpAuthorization();
-  let dialog = null, controller = null, unsubscribe = null;
+  let view=null, dialog = null, controller = null, unsubscribe = null;
   function close(force = false) {
     if (!dialog) return true;
     if (!force && dialog._pending() && !window.confirm("放弃未保存的 MCP 配置？")) return false;
-    context.destroy(); authorization.destroy(); controller?.abort(); unsubscribe?.(); dialog.close(); dialog.remove(); dialog = null; return true;
+    context.destroy(); authorization.destroy(); controller?.abort(); unsubscribe?.(); const previous=view;view=null;dialog=null;previous?.dispose(); return true;
   }
   function open() {
     if (!close()) return;
@@ -24,7 +25,7 @@ export function createMcpWorkbench({ onChange }) {
     const signal = controller.signal;
     const live = () => dialog && owner === targetKey() && !signal.aborted;
     const options = () => ({ signal });
-    dialog = element("dialog", { className: "extension-editor skill-workbench" });
+    view=openLayer({title:"项目 MCP 与配置迁移",icon:"globe",width:"58rem",height:"85%",beforeClose:()=>!dialog?._pending()||confirm("放弃未保存的 MCP 配置？"),onClosed:()=>close(true)});dialog=view.element;dialog.classList.add("extension-authoring");
     const project = element("select", { attrs: { "aria-label": "MCP 所属项目" } }, [
       element("option", { text: "默认项目", attrs: { value: "default" } })]);
     const status = element("p", { attrs: { role: "status" } });
@@ -64,7 +65,8 @@ export function createMcpWorkbench({ onChange }) {
           element("p", { text: `${item.id} · 项目配置 · ${item.enabled ? "已启用" : "已停用"}` }),
           item.valid ? null : element("p", { className: "extension-error", text: item.error }),
           element("div", { className: "resource-actions" }, [
-            button("编辑", () => edit(item)),
+            item.template_connection ? button("配置连接",()=>onConfigure(item,project.value),true) : button("编辑", () => edit(item)),
+            !item.template_connection&&item.valid ? button("分享到创作中心",()=>onShare({...item,project:project.value}),true) : null,
             button("资源、提示词与诊断", async () => { await api.post(endpoint(), {}, options()); if (live()) context.open(item.runtime_id); }),
             item.has_oauth ? button("授权", async () => {
               await api.post(endpoint(), {}, options()); if (live()) authorization.open(item.runtime_id);
@@ -81,7 +83,7 @@ export function createMcpWorkbench({ onChange }) {
             }),
             button("删除", async () => {
               if (!window.confirm(`删除项目 MCP ${item.id}？`)) return;
-              await api.delete(endpoint(item.id), { ...options(), ifMatch: `"${item.revision}"` });
+              if(item.template_connection)await api.post(`/mcp/connections?project=${encodeURIComponent(project.value)}`,{id:item.id,action:"delete"},{...options(),ifMatch:`"${item.revision}"`});else await api.delete(endpoint(item.id), { ...options(), ifMatch: `"${item.revision}"` });
               if (live()) { onChange(); await load(); }
             }),
           ]),
@@ -91,6 +93,7 @@ export function createMcpWorkbench({ onChange }) {
     }
     function edit(item = null) {
       if (dirty() && !window.confirm("放弃未保存的 MCP 配置？")) return;
+      view.footer.querySelector("[data-mcp-project-save]")?.remove();
       clear(editor); editId = item?.id || ""; editProject = project.value; revision = item?.revision || "new"; inputs = [];
       const id = element("input", { attrs: { "aria-label": "服务器 ID", placeholder: "server", value: editId } });
       idInput = id;
@@ -107,9 +110,10 @@ export function createMcpWorkbench({ onChange }) {
           if (!live()) return;
           source = null; inputs = []; clear(editor); onChange(); await load(); status.textContent = "已保存；尚未启动服务器";
         }));
+      const save=editor.lastElementChild;save?.setAttribute("data-mcp-project-save","");if(save)view.footer.prepend(save);
     }
     const imported = element("textarea", { attrs: { "aria-label": "导入 MCP JSON", placeholder: "粘贴 mcpServers JSON；凭据会存入本机凭据库", spellcheck: "false" } });
-    dialog.append(element("h2", { text: "项目 MCP" }), project,
+    view.body.append(project,
       element("p", { className: "extension-help", text: "配置保存在项目 .mdo/mcp；同名项目配置覆盖个人配置。保存和读取不会启动服务器，凭据仍保存在本机。" }),
       button("新增项目 MCP", () => edit()), list, editor,
       element("h3", { text: "从其他 Agent 迁移" }),
@@ -147,14 +151,15 @@ export function createMcpWorkbench({ onChange }) {
           await api.put(endpoint(item.id), { content: item.content, secrets: item.secrets }, { ...options(), ifMatch: '"new"' }); completed++;
         } } finally { if (live()) { onChange(); await load(); status.textContent = `已导入 ${completed}/${documents.length} 个服务器`; } }
         imported.value = "";
-      }), status, button("关闭", () => close(), true));
+      }), status);
+    view.footer.append(button("关闭", () => close(), true));
     project.addEventListener("change", () => {
       if (dirty() && !window.confirm("放弃未保存的 MCP 配置？")) { project.value = editProject; return; }
       source = null; inputs = []; clear(editor); void run(load);
       clear(external);
     });
     dialog.addEventListener("cancel", event => { event.preventDefault(); close(); });
-    document.body.append(dialog); dialog.showModal();
+
     unsubscribe = subscribeTarget(() => { if (owner !== targetKey()) close(true); });
     void run(async () => {
       const response = await api.get("/projects", options()); if (!live()) return;
