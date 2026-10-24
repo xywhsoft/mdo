@@ -1,0 +1,54 @@
+{
+  "app_commit": "7b0dbe940bebfaa8860e06413a2fc33bf6c4a7d0",
+  "preview": true,
+  "auto_update_published": false,
+  "android_device_tested": false,
+  "artifacts": [
+    {
+      "file": "mdo.exe",
+      "size": 6234862,
+      "sha256": "a86bc95280cc4eb611689c7c8377342db59a0f9d3b268395327fa112e0ac6bf7"
+    },
+    {
+      "file": "mdo-server.exe",
+      "size": 5976621,
+      "sha256": "0cb99cd1ec6521f1ea04c3959d19d6412b99bbd80a92732c95e2c7e66786a253"
+    },
+    {
+      "file": "mdo-arm64-v8a.apk",
+      "size": 5776705,
+      "sha256": "a8d204f4ec0bcd238adc7e1cff0b453b6db693dc456dc62f01600adbc6f0ac89"
+    },
+    {
+      "file": "mdo-full-arm64-v8a.apk",
+      "size": 150116761,
+      "sha256": "3b1591269ff86c9203a4868083588e15cdff48ecb3a144a0e78fd28f015e8751"
+    }
+  ],
+  "site_commit": "5b35841a6d549fa69e9d4aa03fc968689b929af1",
+  "version": "0.6.0",
+  "checks": {
+    "frontend_tests": 12,
+    "frontend_contract_tests": 20,
+    "archive_packaging_tests": 1,
+    "reachable_web_modules": 220,
+    "native_cli_descriptions_and_legacy_archive": "passed",
+    "native_creator_publish_review_install": "passed",
+    "packed_cli_bindings_and_portable_home": "passed",
+    "website_creator_quotas_and_acl": "passed",
+    "website_cli_user_and_admin_upload": "passed",
+    "website_v1_description_migration_restart": "passed",
+    "official_model_prompts_unchanged": 13,
+    "browser_edit_description_preserves_prompt": "passed",
+    "windows_packed_sdk": "passed_gui_and_server",
+    "android_signature_and_layout": "passed_lite_and_full"
+  },
+  "other_test_observations": [
+    {
+      "test": "home/tests/test_extension_components.py",
+      "result": "stopped_at_legacy_four_menu_assertion",
+      "note": "Current UI has retired menu routes. No menu changes in this feature; targeted upload/review/description routes covered separately."
+    }
+  ],
+  "production_changed": false
+}
