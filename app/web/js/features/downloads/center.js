@@ -3,6 +3,7 @@ import { targetState, subscribeTarget } from "../../api/target.js";
 import { downloadRegistry, downloadActive } from "../../state/downloads.js";
 import { t, subscribeLocale } from "../../i18n.js";
 import { element } from "../../utils/dom.js";
+import { openLayer } from "../../components/layers.js";
 
 const text = (key, args = {}) => t(`downloads.${key}`, args, key);
 const node = (tag, value, cls) => element(tag, { ...(value == null ? {} : { text: value }), className: cls });
@@ -10,12 +11,9 @@ const bytes = size => `${(size / 1048576).toFixed(1)} MiB`;
 export function createDownloadCenter({ updatePanel, navigation, registry = downloadRegistry, transport = api } = {}) {
   const entry = document.querySelector("#open-downloads");
   if (!entry) return null;
-  const dialog = element("dialog", { className: "download-center", attrs: { id: "downloads-dialog", "aria-labelledby": "downloads-title" } });
-  const heading = node("header"), title = element("h2", { attrs: { id: "downloads-title" } }), close = node("button", "", "secondary-button");
-  close.type = "button"; close.addEventListener("click", () => dialog.close()); heading.append(title, close);
-  const message = element("p", { className: "download-error", attrs: { role: "alert" } }), list = node("div"), clear = node("button", "", "secondary-button");
-  clear.type = "button"; dialog.append(heading, message, list, clear); document.body.append(dialog);
-  let pending = false, error = "", timer = 0, destroyed = false, polling = false, signature = "";
+  const message = element("p", { className: "download-error", attrs: { role: "alert" } }), list = node("div", null, "download-list"), clear = node("button", "", "secondary-button"), close = node("button", "", "secondary-button");
+  clear.type = close.type = "button";
+  let layer = null, pending = false, error = "", timer = 0, destroyed = false, polling = false, signature = "";
   const target = () => targetState().selected?.id || "local";
   const writable = () => { const s = targetState(); return !s.selected || s.connected && !s.runtimeChanged && s.selected.mode !== "view"; };
   async function refresh() {
@@ -24,28 +22,32 @@ export function createDownloadCenter({ updatePanel, navigation, registry = downl
     finally { polling = false; schedule(); }
   }
   function schedule() {
-    clearTimeout(timer); if (!destroyed && dialog.open) timer = setTimeout(refresh, registry.list(target()).some(downloadActive) ? 1000 : 5000);
+    clearTimeout(timer); if (!destroyed && layer) timer = setTimeout(refresh, registry.list(target()).some(downloadActive) ? 1000 : 5000);
   }
   async function act(work) {
-    if (pending || !writable()) return; const owner = target(); pending = true; error = ""; render();
+    if (destroyed || pending || !writable()) return; const owner = target(); pending = true; error = ""; render();
     try { await work(); }
     catch (e) { if (owner === target()) error = e.message; }
     finally { pending = false; if (!destroyed) { render(); void refresh(); } }
   }
   function action(row, label, work) {
-    const owner = target(), button = node("button", label, "secondary-button"); button.type = "button";
-    button.disabled = pending || !writable(); button.addEventListener("click", () => { if (target() === owner) void act(work); }); return button;
+    const owner = target(), view = layer, button = node("button", label, "secondary-button"); button.type = "button";
+    button.dataset.downloadAction = `${row.key}:${label}`;
+    button.disabled = pending || !writable(); button.addEventListener("click", () => { if (target() === owner && layer === view && layer) void act(work); }); return button;
   }
   function render() {
+    if (destroyed) return;
     const rows = registry.list(target()), active = rows.filter(downloadActive).length;
     entry.querySelector("[data-downloads-label]").textContent = text("title");
     const badge = entry.querySelector("[data-downloads-count]"); badge.textContent = String(active); badge.hidden = !active;
     entry.setAttribute("aria-label", text("entry", { count: active })); entry.title = text("title");
-    title.textContent = text("title"); close.textContent = text("close"); clear.textContent = text("clear");
+    close.textContent = text("close"); clear.textContent = text("clear");
     message.textContent = error; message.hidden = !error;
     clear.disabled = pending || !writable() || !rows.some(r => !downloadActive(r) && r.state !== "ready");
-    if (!dialog.open) return;
+    if (!layer) return;
+    layer.update({ title: text("title") });
     const next = JSON.stringify([rows, error, pending, writable(), text("title")]); if (signature === next) return; signature = next;
+    const scroll = layer.body.scrollTop, focused = list.contains(document.activeElement) ? document.activeElement.dataset.downloadAction : null;
     list.replaceChildren(); if (!rows.length) list.append(node("p", text("empty"), "download-empty"));
     for (const row of rows) {
       const item = node("article", null, "download-row"), top = node("div", null, "download-row-heading");
@@ -67,18 +69,41 @@ export function createDownloadCenter({ updatePanel, navigation, registry = downl
         if (downloadActive(row)) controls.append(action(row, text("cancel"), () => transport.post("/distribution", { action: "cancel", id: row.resourceId })));
       } else if (row.source === "update") {
         if (row.state === "downloading") controls.append(action(row, text("cancel"), () => transport.delete("/update/download")));
-        if (["ready", "failed", "cancelled", "unknown"].includes(row.state)) { const open = node("button", text("viewUpdate"), "secondary-button"); open.type = "button"; open.addEventListener("click", () => { dialog.close(); updatePanel?.open(); }); controls.append(open); }
+        if (["ready", "failed", "cancelled", "unknown"].includes(row.state)) controls.append(destination(row, text("viewUpdate"), () => updatePanel?.open()));
       } else if (["failed", "unknown"].includes(row.state)) {
-        const open = node("button", text("viewStore"), "secondary-button"); open.type = "button"; open.addEventListener("click", () => { dialog.close(); navigation?.openSettings("store"); }); controls.append(open);
+        controls.append(destination(row, text("viewStore"), () => navigation?.openSettings("store")));
       }
       item.append(controls); list.append(item);
     }
+    layer.body.scrollTop = scroll;
+    if (focused) ([...list.querySelectorAll("button")].find(button => button.dataset.downloadAction === focused && !button.disabled) || layer.closeButton).focus({ preventScroll: true });
   }
-  function open() { if (!dialog.open) dialog.showModal(); signature = ""; render(); void refresh(); }
-  entry.addEventListener("click", open); dialog.addEventListener("close", () => { clearTimeout(timer); signature = ""; });
-  clear.addEventListener("click", () => { const owner = target(); void act(async () => { await transport.post("/cli-tools", { action: "clear" }); if (owner === target()) registry.clear(owner); }); });
+  function destination(row, label, navigate) {
+    const owner = target(), view = layer, button = node("button", label, "secondary-button"); button.type = "button";
+    button.dataset.downloadAction = `${row.key}:${label}`;
+    button.addEventListener("click", () => { if (!destroyed && target() === owner && layer === view && layer) { void view.close(); navigate(); } });
+    return button;
+  }
+  function open() {
+    if (destroyed) return;
+    if (!layer) {
+      layer = openLayer({ title: text("title"), icon: "download", width: "48rem", height: "75%",
+        onClosed() { layer = null; clearTimeout(timer); signature = ""; entry.setAttribute("aria-expanded", "false"); } });
+      layer.element.id = "downloads-dialog"; layer.element.classList.add("download-center");
+      layer.body.append(message, list); layer.footer.append(clear, close);
+      entry.setAttribute("aria-expanded", "true");
+    }
+    signature = ""; render(); void refresh();
+  }
+  entry.addEventListener("click", open);
+  close.addEventListener("click", () => { void layer?.close(); });
+  clear.addEventListener("click", () => { if (!layer) return; const owner = target(); void act(async () => { await transport.post("/cli-tools", { action: "clear" }); if (owner === target()) registry.clear(owner); }); });
   const unsubscribe = registry.subscribe(render), locale = subscribeLocale(() => { signature = ""; render(); });
-  const targets = subscribeTarget(() => { error = ""; signature = ""; dialog.close(); render(); });
+  let selectedTarget = target();
+  const targets = subscribeTarget(() => {
+    if (selectedTarget !== target()) { selectedTarget = target(); error = ""; signature = ""; layer?.dispose(); }
+    render();
+  });
   render();
-  return { open, refresh, destroy() { destroyed = true; clearTimeout(timer); unsubscribe(); locale(); targets(); entry.removeEventListener("click", open); dialog.close(); dialog.remove(); } };
+  return { open, refresh, destroy() { destroyed = true; clearTimeout(timer); unsubscribe(); locale(); targets(); entry.removeEventListener("click", open); layer?.dispose(); } };
 }

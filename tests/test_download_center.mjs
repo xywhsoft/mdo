@@ -21,15 +21,68 @@ test("one global dialog combines source types and delegates cancellation, retry 
   const center = createDownloadCenter({ registry, updatePanel: { open: () => { updates++; } }, transport: { get: async () => ({ data: {} }), post: async (path, data) => { calls.push([path, data]); }, delete: async path => { calls.push([path]); } } });
   t.after(() => { center.destroy(); globalThis.document = previous; });
   center.open(); await flush();
-  const dialog = doc.body.querySelector("dialog"); assert(dialog.open); assert.equal(doc.body.querySelectorAll("dialog").length, 1);
+  let dialog = doc.body.querySelector("dialog"); assert(dialog.open); assert.equal(doc.body.querySelectorAll("dialog").length, 1);
+  assert(dialog.classList.contains("mdo-layer")); assert.equal(dialog.id,"downloads-dialog");
+  assert.equal(dialog.querySelector(".mdo-layer-title").textContent,"Downloads");
+  assert(dialog.querySelector(".mdo-layer-footer").textContent.includes("Clear finished"));
+  center.open(); assert.equal(doc.body.querySelector("dialog"),dialog,"Repeated opening reuses the public window");
   assert(dialog.textContent.includes("My Skill") && dialog.textContent.includes("mdo") && dialog.textContent.includes("Checksum mismatch"));
   assert.equal(entry.querySelector("[data-downloads-count]").textContent, "2");
   const buttons = label => descendants(dialog).filter(n => n.tagName === "BUTTON" && n.textContent === label);
   buttons("Cancel")[0].click(); await flush(); assert.deepEqual(calls.at(-1), ["/cli-tools", { action: "cancel", id: "active" }]);
   buttons("Retry")[0].click(); await flush(); assert.deepEqual(calls.at(-1), ["/cli-tools", { action: "retry", id: "retry" }]);
   buttons("View update")[0].click(); assert.equal(updates, 1); assert(!dialog.open);
-  complete(); await extension; center.open(); await flush();
+  complete(); await extension; center.open(); await flush(); dialog = doc.body.querySelector("dialog");
   buttons("Clear finished")[0].click(); await flush(); assert.deepEqual(calls.at(-1), ["/cli-tools", { action: "clear" }]);
   assert(!registry.list("local").some(row => row.name === "My Skill"));
   assert(registry.list("local").some(row => row.state === "ready"));
+});
+
+test("closing the public window leaves transfers running and late actions cannot reopen it", async t => {
+  const previous=globalThis.document,doc=testDocument(),entry=new TestElement("button");
+  for(const name of ["label","count"]){const span=new TestElement("span");span.setAttribute(`data-downloads-${name}`,"");entry.append(span);}
+  doc.querySelector=name=>name==="#open-downloads"?entry:null;globalThis.document=doc;
+  const registry=createDownloadRegistry(),calls=[];let release;
+  const queued=new Promise(resolve=>{release=resolve;});
+  const task={id:"running",name:"ripgrep",action:"install",state:"downloading",done:10,total:100};
+  registry.observe("/cli-tools",{tasks:[task]});
+  const center=createDownloadCenter({registry,transport:{get:async()=>({data:{}}),post:async(path,body)=>{calls.push([path,body]);await queued;}}});
+  t.after(()=>{center.destroy();globalThis.document=previous;});
+  center.open();await flush();let dialog=doc.body.querySelector("dialog");
+  const cancel=dialog.querySelector(".download-actions").querySelector("button");cancel.click();
+  dialog.querySelector(".mdo-layer-controls").lastChild.click();assert(!doc.body.querySelector("dialog"));
+  assert.equal(registry.list("local")[0].state,"downloading","Closing never cancels the transfer");
+  registry.observe("/cli-tools",{tasks:[{...task,done:65}]});release();await flush();
+  assert(!doc.body.querySelector("dialog"),"Late registry updates and write receipts cannot reopen the window");
+  assert.deepEqual(calls,[["/cli-tools",{action:"cancel",id:"running"}]]);
+  cancel.click();await flush();assert.equal(calls.length,1,"Detached controls cannot submit another cancellation");
+  center.open();dialog=doc.body.querySelector("dialog");assert.equal(dialog.querySelector("progress").value,65);
+  dialog.querySelector(".mdo-layer-body").scrollTop=80;
+  const focused=dialog.querySelector(".download-actions").querySelector("button");focused.focus();
+  registry.observe("/cli-tools",{tasks:[{...task,done:90}]});
+  assert.equal(dialog.querySelector(".mdo-layer-body").scrollTop,80);assert.equal(document.activeElement.textContent,"Cancel");
+  center.destroy();assert(!doc.body.querySelector("dialog"));center.open();assert(!doc.body.querySelector("dialog"));
+});
+
+test("same-device connection updates retain the window; switching device closes it and rejects old actions", async t => {
+  const previous=globalThis.document,doc=testDocument(),entry=new TestElement("button");
+  for(const name of ["label","count"]){const span=new TestElement("span");span.setAttribute(`data-downloads-${name}`,"");entry.append(span);}
+  doc.querySelector=name=>name==="#open-downloads"?entry:null;globalThis.document=doc;
+  let state={selected:{id:"first",mode:"control"},connected:true};const listeners=new Set(),calls=[];
+  globalThis.__downloadTargets={targetState:()=>state,subscribeTarget:fn=>{listeners.add(fn);fn();return()=>listeners.delete(fn);}};
+  const url=new URL("../app/web/js/features/downloads/center.js",import.meta.url);
+  const source=readFileSync(url,"utf8").replace('import { targetState, subscribeTarget } from "../../api/target.js";',"const { targetState, subscribeTarget } = globalThis.__downloadTargets;")
+    .replace(/from "(\.[^"]+)"/g,(_,path)=>`from ${JSON.stringify(new URL(path,url).href)}`);
+  const {createDownloadCenter:make}=await import("data:text/javascript;base64,"+Buffer.from(source).toString("base64"));
+  const registry=createDownloadRegistry();registry.observe("/cli-tools",{tasks:[{id:"old",name:"Old task",action:"install",state:"failed"}]},"first");
+  registry.observe("/cli-tools",{tasks:[{id:"new",name:"New task",action:"install",state:"failed"}]},"second");
+  const center=make({registry,transport:{get:async()=>({data:{}}),post:async(path,body)=>calls.push([path,body])}});
+  t.after(()=>{center.destroy();globalThis.document=previous;delete globalThis.__downloadTargets;});
+  center.open();const dialog=doc.body.querySelector("dialog"),old=dialog.querySelector(".download-actions").querySelector("button");
+  state={...state,connected:false};for(const notify of listeners)notify();assert.equal(doc.body.querySelector("dialog"),dialog);
+  assert(dialog.querySelector(".download-actions").querySelector("button").disabled);
+  state={...state,connected:true};for(const notify of listeners)notify();assert(!dialog.querySelector(".download-actions").querySelector("button").disabled);
+  state={selected:{id:"second",mode:"control"},connected:true};for(const notify of listeners)notify();
+  assert(!doc.body.querySelector("dialog"));old.click();await flush();assert.equal(calls.length,0);
+  center.open();assert(doc.body.querySelector("dialog").textContent.includes("New task"));assert(!doc.body.querySelector("dialog").textContent.includes("Old task"));
 });
