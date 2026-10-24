@@ -1,0 +1,43 @@
+{
+  "app_commit": "cd6748db85dffb30a9fc52590dbbcf7b2b930393",
+  "preview": true,
+  "auto_update_published": false,
+  "android_device_tested": false,
+  "artifacts": [
+    {
+      "file": "mdo.exe",
+      "size": 6257664,
+      "sha256": "0db0941e1b56ab28f94a32137130d45762fc3f5c2973db86f600fcc44ba5183c"
+    },
+    {
+      "file": "mdo-server.exe",
+      "size": 5999422,
+      "sha256": "6f5a174d0f326e4ad91befafd01f7bbef2da488c869b0a697c9d9386dde5d1ce"
+    },
+    {
+      "file": "mdo-arm64-v8a.apk",
+      "size": 5797185,
+      "sha256": "92f8d610461771f85aa238d58ff3a7c1ca8f74d9db2ba23e7a127257aab82be4"
+    },
+    {
+      "file": "mdo-full-arm64-v8a.apk",
+      "size": 150133145,
+      "sha256": "80d53f3672ee8e3937ec5a3f7c9b3caf3bfbe233639b90b8f57fb33dcd550ba2"
+    }
+  ],
+  "version": "0.6.0",
+  "tests": {
+    "download_and_layers_javascript_passed": 15,
+    "frontend_contract_passed": 20,
+    "frontend_modules": 224
+  },
+  "ui_fixture": {
+    "data": "isolated registry and simulated task transport",
+    "desktop_dark": "passed",
+    "mobile_390x844_dpr3_light": "passed",
+    "close_restores_entry_focus": "passed",
+    "retry_and_badge_updates": "passed"
+  },
+  "screenshot": ".build\\download-center-window-20261025\\desktop.png",
+  "android_app_xrtpack_sha256": "38b852139849f7de8d20c0362492323a321b08e470c52931f2790b2bd922a4f3"
+}
