@@ -21,6 +21,63 @@ test("new registry does not recreate old missing-tool recommendation notificatio
 
 import { TestElement as Element, testDocument } from "./helpers/extension-dom.mjs";
 const all=e=>[e,...e.children.flatMap(all)];
+const flush=()=>new Promise(resolve=>setImmediate(resolve));
+
+test("my submissions use one owned window, refresh asynchronous receipts and retain guarded withdrawal",async t=>{
+ const saved=globalThis.document;globalThis.document=testDocument();
+ let selected=null,signed=true,fail=false,hold;const calls=[];
+ const item={id:7,name:"<sample submission>",version:"1.0.0",state:"pending",revision:3,reason:"Review notes"};
+ let state={writable:true,platform:"windows-x86_64",guide:"accepted",items:[],tasks:[],store:{mine:[item]}};
+ globalThis.__externalSubmissions={targetState:()=>({selected,connected:true}),api:{post:async(_,body)=>{
+  calls.push(body);if(hold)await hold;if(fail)throw Error("Submission service unavailable");
+  if(body.action==="withdraw")state={...state,store:{mine:[{...item,withdrawn:true,revision:4,state:"withdrawn"}]}};
+  return {data:state};
+ }}};
+ const url=new URL("../app/web/js/features/notifications/external-tools.js",import.meta.url);
+ const source=readFileSync(url,"utf8")
+  .replace('import { api } from "../../api/client.js";',"const { api } = globalThis.__externalSubmissions;")
+  .replace('import { targetState } from "../../api/target.js";',"const { targetState } = globalThis.__externalSubmissions;")
+  .replace(/from "(\.[^"]+)"/g,(_,path)=>`from ${JSON.stringify(new URL(path,url).href)}`);
+ const {createExternalToolsPanel:make}=await import("data:text/javascript;base64,"+Buffer.from(source).toString("base64"));
+ const panel=make({refresh:async()=>{},openFull:async()=>{},signedIn:()=>signed}),body=new Element("div");
+ t.after(()=>{panel.destroy();globalThis.document=saved;delete globalThis.__externalSubmissions;});
+ const open=()=>all(body).find(node=>node.tagName==="BUTTON"&&node.textContent==="My submissions").click();
+ const window=()=>document.body.querySelector(".mdo-layer");
+ const footer=()=>window().querySelector(".mdo-layer-footer");
+ panel.render(body,state);open();open();await flush();
+ const first=window();assert(first.open);assert.equal(document.body.querySelectorAll(".mdo-layer").length,1);
+ assert.equal(first.querySelector("h2").textContent,"My submissions");assert(first.textContent.includes(item.name)&&first.textContent.includes(item.reason));
+ assert(!body.textContent.includes(item.name),"Submissions never append to the tool page");assert.equal(calls.length,1,"Repeated entry does not enqueue another read");
+ const withdraw=first.querySelector(".cli-submission-row").querySelector("button");withdraw.click();withdraw.click();await flush();
+ assert.deepEqual(calls.filter(row=>row.action==="withdraw"),[{action:"withdraw",store_id:7,revision:3,name:item.name}]);
+ assert.equal(calls.at(-1).action,"mine");assert(first.querySelector(".cli-submission-row").querySelector("button").disabled);
+ assert(first.textContent.includes("withdrawn"));assert.equal(window(),first,"Refresh retains the same window");
+ fail=true;footer().firstChild.click();await flush();
+ assert(first.textContent.includes("Submission service unavailable"));assert(first.textContent.includes(item.name),"A failed refresh retains cached submissions");
+ fail=false;state={...state,store:{mine:[]}};footer().firstChild.click();await flush();assert(first.textContent.includes("No submissions yet"));
+ // Closing during a delayed HTTP acknowledgement must not reopen the window.
+ let release;hold=new Promise(resolve=>{release=resolve;});footer().firstChild.click();
+ first.querySelector(".mdo-layer-controls").lastChild.click();assert(!window());assert.equal(document.activeElement,body.querySelector(".cli-create-menu").querySelector("summary"));
+ const reads=calls.filter(row=>row.action==="mine").length;open();assert(window());
+ assert.equal(calls.filter(row=>row.action==="mine").length,reads,"Reopening shares the pending read");
+ fail=true;release();await flush();hold=null;
+ assert(window().textContent.includes("Submission service unavailable"),"The new window sees failure of the shared read");
+ fail=false;footer().firstChild.click();await flush();window().querySelector(".mdo-layer-controls").lastChild.click();assert(!window());
+ // Queued native reads report failures through later task snapshots.
+ state={...state,tasks:[{id:"read-1",action:"mine",state:"running"}]};panel.render(body,state);open();await flush();
+ assert.equal(window().querySelector(".cli-submissions-list").getAttribute("aria-busy"),"true");
+ state={...state,tasks:[{id:"read-1",action:"mine",state:"failed",error:"Queued read failed"}]};panel.render(body,state);
+ assert(window().textContent.includes("Queued read failed"));assert(!footer().firstChild.disabled);
+ state={...state,tasks:[],store:{mine:[item]}};panel.render(body,state);footer().firstChild.click();await flush();
+ const stale=window().querySelector(".cli-submission-row").querySelector("button"),before=calls.length;
+ selected={id:"other-device",mode:"control"};panel.render(body,{...state,store:{mine:[]}});assert(!window());stale.click();await flush();assert.equal(calls.length,before,"Old withdrawal controls cannot act on a new device");
+ open();await flush();assert(window());signed=false;panel.render(body,state);assert(!window(),"Sign-out clears private submissions");
+ signed=true;state={...state,tasks:[{id:"withdraw-1",action:"withdraw",state:"running",request:{store_id:7}}]};panel.render(body,state);open();await flush();
+ assert(window().querySelector(".cli-submission-row").querySelector("button").disabled);
+ state={...state,tasks:[{id:"withdraw-1",action:"withdraw",state:"failed",error:"Queued withdrawal failed"}]};panel.render(body,state);
+ assert(window().textContent.includes("Queued withdrawal failed"));panel.reset();assert(!window());
+ panel.render(body,state);open();await flush();panel.destroy();assert(!window());
+});
 
 test("external store page numbers retain earlier batches, deduplicate results and survive failed refresh", async () => {
  const saved=globalThis.document;globalThis.document=testDocument();
