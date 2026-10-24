@@ -6,11 +6,13 @@ read-only preview. --apply backs up SQLite and inserts only absent versions;
 existing versions, recommendations and user-created works are never changed.
 """
 import argparse
+from contextlib import closing
 import hashlib
 import json
 from pathlib import Path
 import os
 import shutil
+import secrets
 import sqlite3
 import time
 
@@ -57,9 +59,16 @@ def main():
             return
         args.backup.parent.mkdir(parents=True, exist_ok=True)
         assert not args.backup.exists(), "Use a fresh backup path"
-        with sqlite3.connect(args.backup) as backup:
+        with closing(sqlite3.connect(args.backup)) as backup:
             db.backup(backup)
         os.chmod(args.backup, 0o600)
+        # The service may collect unreferenced objects while files are copied.
+        # Commit temporary upload references first; the final transaction swaps
+        # them for published tool references without a collection gap.
+        staged = [(secrets.token_hex(16), row) for row in rows]
+        with db:
+            db.executemany("INSERT INTO upload(id,owner,size,sha256,offset,state,created,purpose) VALUES(?,0,?,?,?,'sealed',?,'artifact')",
+                [(ident, row["size"], row["sha256"], row["size"], int(time.time())) for ident, row in staged])
         objects = args.database.parent/"objects"
         objects.mkdir(exist_ok=True)
         for row in rows:
@@ -91,6 +100,7 @@ def main():
                 for action, revision in (("submit",1),("approve",2)):
                     db.execute("INSERT INTO audit(tool,actor,action,reason,sha256,revision,created) VALUES(?,0,?,?,?,?,?)", (id,action,reason,row["sha256"],revision,now))
                 receipt.append(dict(id=id,slug=row["id"],platform=row["platform"],sha256=row["sha256"],inserted=True))
+            db.executemany("DELETE FROM upload WHERE id=? AND owner=0", [(ident,) for ident, row in staged])
         (args.incoming/"publication-receipt.json").write_text(json.dumps(receipt,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
         print("PUBLISHED", len(receipt), flush=True)
     finally:
