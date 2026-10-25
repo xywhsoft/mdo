@@ -191,7 +191,7 @@ def run(host, website_host, base, size_mib=65, interrupt=False, crash_commit=Fal
             return identifier,state
         single_id,single=transfer('session')
         assert (b.home/'sessions/default'/single['destination_session_id']/'snapshot.json').is_file()
-        copied=json.loads((b.home/'sessions/default'/single['destination_session_id']/'draft.json').read_text())
+        copied=json.loads((b.home/'sessions/default'/single['destination_session_id']/'draft.json').read_text(encoding='utf-8'))
         assert copied['text']=='Preserve unsent 草稿'
         queue=b.api('GET',f"/projects/default/sessions/{single['destination_session_id']}/queue")
         assert 'Do not automatically execute' in json.dumps(queue),queue
