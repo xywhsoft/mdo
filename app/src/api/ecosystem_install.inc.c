@@ -297,9 +297,9 @@ bool MdoApiEcosystemLocal(MdoApiContext* c,const xvalue* input)
             if(ok&&!strcmp(kind,"mcp")){char* Redacted=McpTemplateExport(content,id);xrtFree(content);content=Redacted;ok=content!=NULL;}
             if(ok)ok=MdoApiValueSetString(resource,"content",content);
             if(ok&&(!strcmp(kind,"skills")||!strcmp(kind,"knowledge"))){xvalue* extras=xrtValueArray();char directory[160];bool external=false;xfileinfo info;size_t total=0;snprintf(directory,sizeof(directory),"%s/%s",kind,id);
-                ok=extras&&MdoHomeExternalStat(directory,&external,&info)&&(external?EcoNativeExportTree(directory,"",extras,&total,0):ExtensionBundleFiles(directory,"",false,extras,&total,0))&&xrtValueObjectSet(resource,XRT_STR_LITERAL("files"),extras);xrtValueRelease(extras);}
+                ok=extras&&MdoHomeExternalStat(directory,&external,&info)&&(external?EcoNativeExportTree(directory,extras,&total):ExtensionBundleFiles(directory,"",false,extras,&total,0))&&xrtValueObjectSet(resource,XRT_STR_LITERAL("files"),extras);xrtValueRelease(extras);}
             if(ok&&!strcmp(kind,"modules")){xvalue* extras=xrtValueArray();char directory[160];bool external=false;xfileinfo info;size_t total=0;snprintf(directory,sizeof(directory),"modules/tools/%s",id);
-                ok=extras&&MdoHomeExternalStat(directory,&external,&info)&&(!external||EcoNativeExportTree(directory,"",extras,&total,0))&&xrtValueObjectSet(resource,XRT_STR_LITERAL("files"),extras);xrtValueRelease(extras);}
+                ok=extras&&MdoHomeExternalStat(directory,&external,&info)&&(!external||EcoNativeExportTree(directory,extras,&total))&&xrtValueObjectSet(resource,XRT_STR_LITERAL("files"),extras);xrtValueRelease(extras);}
             if(ok)ok=xrtValueArrayAppend(resources,resource);
             xrtFree(content);xrtValueRelease(resource);
         }

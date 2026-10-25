@@ -1,29 +1,22 @@
 /* Knowledge authoring uses the same durable file journal as store installation.
  * Only this internal path can replace a custom folder after checking its full
  * bundle revision. Store provenance is checked before entering this function. */
-static bool KnowledgeCollect(cstr Directory,cstr Prefix,xvalue* Files,size_t* Total,unsigned Depth)
+typedef struct KnowledgeFileContext {cstr Root;xvalue* Files;size_t Total;} KnowledgeFileContext;
+static bool KnowledgeCollectFile(cstr Relative,const xfileinfo* Entry,void* Data)
 {
-    if(Depth>8)return false;char Root[512];snprintf(Root,sizeof(Root),"%s%s%s",Directory,*Prefix?"/":"",Prefix);
-    xdir Dir=MdoHomeOpenDirectory(Root,XDIR_STAT);if(!Dir)return false;xdirentry E;xdirnext Next;bool Ok=true;
-    while(Ok&&(Next=xrtDirNext(Dir,&E))==XDIR_NEXT_ITEM){
-        if(!(E.Flags&XDIR_ENTRY_UTF8)||!E.Name.Size||E.Name.Size>64){Ok=false;break;}
-        char Path[256],Full[512];int N=snprintf(Path,sizeof(Path),"%s%s%.*s",Prefix,*Prefix?"/":"",(int)E.Name.Size,E.Name.Data);
-        if(N<0||(size_t)N>=sizeof(Path)||!MdoPackagePath(Path)){Ok=false;break;}
-        snprintf(Full,sizeof(Full),"%s/%s",Directory,Path);
-        if(E.Info.Type==XFILE_TYPE_DIRECTORY)Ok=KnowledgeCollect(Directory,Path,Files,Total,Depth+1);
-        else if(E.Info.Type==XFILE_TYPE_FILE){
-            xfile F=MdoHomeOpenRead(Full);xfileinfo Info;bool Read=F&&xrtFileStat(F,&Info)&&Info.Type==XFILE_TYPE_FILE&&Info.Size<=64u*1024u*1024u&&*Total+Info.Size<=64u*1024u*1024u&&xrtValueCount(Files)<129;
-            bytes B=Read?xrtMalloc((size_t)Info.Size+1):NULL;Read=Read&&B&&xrtReadFull(F,B,(size_t)Info.Size,NULL);if(F)xrtClose(F);
-            xvalue* Item=Read?EcoLocalFile(Full,B,(size_t)Info.Size):NULL;Ok=Item&&xrtValueArrayAppend(Files,Item);if(Ok)*Total+=(size_t)Info.Size;xrtValueRelease(Item);xrtFree(B);
-        }else Ok=false; /* No symlinks, devices, junctions or unreadable files. */
-    }
-    if(Next==XDIR_NEXT_ERROR)Ok=false;xrtDirClose(Dir);return Ok;
+    (void)Entry;KnowledgeFileContext* C=Data;char Full[512];int N=snprintf(Full,sizeof(Full),"%s/%s",C->Root,Relative);
+    if(N<0||(size_t)N>=sizeof(Full))return false;
+    xfile F=MdoHomeOpenRead(Full);xfileinfo Info;bool Read=F&&xrtFileStat(F,&Info)&&Info.Type==XFILE_TYPE_FILE&&Info.Size<=64u*1024u*1024u&&C->Total+Info.Size<=64u*1024u*1024u&&xrtValueCount(C->Files)<129;
+    bytes B=Read?xrtMalloc((size_t)Info.Size+1):NULL;Read=Read&&B&&xrtReadFull(F,B,(size_t)Info.Size,NULL);if(F&&!xrtClose(F))Read=false;
+    xvalue* Item=Read?EcoLocalFile(Full,B,(size_t)Info.Size):NULL;bool Ok=Item&&xrtValueArrayAppend(C->Files,Item);
+    if(Ok)C->Total+=(size_t)Info.Size;xrtValueRelease(Item);xrtFree(B);return Ok;
 }
 static xvalue* KnowledgeCurrentFiles(cstr Id)
 {
     char Root[96];snprintf(Root,sizeof(Root),"knowledge/%s",Id);bool Exists=false;xfileinfo Info;
-    if(!MdoHomeExternalStat(Root,&Exists,&Info))return NULL;xvalue* Files=xrtValueArray();size_t Total=0;
-    if(Files&&Exists&&(Info.Type!=XFILE_TYPE_DIRECTORY||!KnowledgeCollect(Root,"",Files,&Total,0))){xrtValueRelease(Files);return NULL;}return Files;
+    if(!MdoHomeExternalStat(Root,&Exists,&Info))return NULL;xvalue* Files=xrtValueArray();
+    KnowledgeFileContext Context={Root,Files,0};
+    if(Files&&Exists&&(Info.Type!=XFILE_TYPE_DIRECTORY||!MdoPortableTreeWalk(Root,KnowledgeCollectFile,&Context))){xrtValueRelease(Files);return NULL;}return Files;
 }
 static bool KnowledgeFilesRevision(const xvalue* Files,char Hash[65])
 {
@@ -49,21 +42,17 @@ static bool KnowledgeBundle(MdoApiContext* C,cstr Id)
     xrtValueRelease(Current);xrtValueRelease(Extras);
     if(!Ok){xrtValueRelease(Item);return MdoApiReplyError(C,413,"knowledge_bundle_unavailable","Knowledge folder is unreadable, contains links or exceeds 128 documents / 64 MiB",NULL);}return MdoApiReplySuccessTake(C,200,Item,NULL);
 }
-static bool KnowledgeInventory(cstr Root,cstr Prefix,xvalue* Files,unsigned Depth)
+static bool KnowledgeInventoryFile(cstr Relative,const xfileinfo* Info,void* Data)
 {
-    if(Depth>8)return false;char Directory[512];snprintf(Directory,sizeof(Directory),"%s%s%s",Root,*Prefix?"/":"",Prefix);
-    xdir Dir=MdoHomeOpenDirectory(Directory,XDIR_STAT);if(!Dir)return false;xdirentry E;xdirnext Next;bool Ok=true;
-    while(Ok&&(Next=xrtDirNext(Dir,&E))==XDIR_NEXT_ITEM){
-        if(!(E.Flags&XDIR_ENTRY_UTF8)||!E.Name.Size||E.Name.Size>64){Ok=false;break;}char Path[256];snprintf(Path,sizeof(Path),"%s%s%.*s",Prefix,*Prefix?"/":"",(int)E.Name.Size,E.Name.Data);
-        if(!MdoPackagePath(Path)){Ok=false;break;}if(!strcmp(Path,"knowledge.json"))continue;
-        if(E.Info.Type==XFILE_TYPE_DIRECTORY)Ok=KnowledgeInventory(Root,Path,Files,Depth+1);
-        else if(E.Info.Type==XFILE_TYPE_FILE){xvalue* F=xrtValueObject();Ok=xrtValueCount(Files)<128&&F&&MdoApiValueSetString(F,"path",Path)&&MdoApiValueSetUInt(F,"bytes",E.Info.Size)&&xrtValueArrayAppend(Files,F);xrtValueRelease(F);}else Ok=false;
-    }if(Next==XDIR_NEXT_ERROR)Ok=false;xrtDirClose(Dir);return Ok;
+    if(!strcmp(Relative,"knowledge.json"))return true;
+    xvalue* Files=Data; xvalue* F=xrtValueObject();
+    bool Ok=xrtValueCount(Files)<128&&F&&MdoApiValueSetString(F,"path",Relative)&&MdoApiValueSetUInt(F,"bytes",Info->Size)&&xrtValueArrayAppend(Files,F);
+    xrtValueRelease(F);return Ok;
 }
 static bool KnowledgeDocuments(MdoApiContext* C,cstr Id)
 {
     char Root[96],Path[221]={0};snprintf(Root,sizeof(Root),"knowledge/%s",Id);xvalue* Data=xrtValueObject(),*Files=xrtValueArray();
-    bool Ok=Data&&Files&&KnowledgeInventory(Root,"",Files,0)&&xrtValueObjectSet(Data,XRT_STR_LITERAL("files"),Files);xrtValueRelease(Files);
+    bool Ok=Data&&Files&&MdoPortableTreeWalk(Root,KnowledgeInventoryFile,Files)&&xrtValueObjectSet(Data,XRT_STR_LITERAL("files"),Files);xrtValueRelease(Files);
     if(C->Target.Query.Size){size_t N=0;xstrview Q=C->Target.Query;
         if(Q.Size<=5||memcmp(Q.Data,"path=",5)||memchr(Q.Data,'&',Q.Size)||!xrtPercentDecode(xrtStrViewN(Q.Data+5,Q.Size-5),Path,220,&N)||!N||memchr(Path,0,N)){xrtValueRelease(Data);return MdoApiReplyError(C,400,"knowledge_path_invalid","Provide one portable document path",NULL);}Path[N]=0;
         if(!MdoPackagePath(Path)||MdoPackageSamePath(Path,"knowledge.json")){xrtValueRelease(Data);return MdoApiReplyError(C,400,"knowledge_path_invalid","Only knowledge document paths are readable",NULL);}

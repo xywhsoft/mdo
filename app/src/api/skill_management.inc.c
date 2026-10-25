@@ -155,7 +155,7 @@ static bool SkillCopy(MdoSkillCatalog* Source,cstr Id,cstr RootPath,cstr Directo
         Ok=Ok&&Before&&After&&xrtPathRename(Before,After,false);xrtFree(Before);xrtFree(After);
         if(Ok)Created=false;
     }
-    if(Created){size_t Count=0;ExtensionTreeRemove(Root,Stage,0,&Count);}
+    if(Created){size_t Count=0;ExtensionTreeRemove(Root,Stage,&Count);}
     if(Root)xrtRootClose(Root);
     xrtFree(Document);return Ok;
 }
@@ -194,7 +194,7 @@ bool MdoApiSkillMigrateRoute(MdoApiContext* C)
     if(Ok&&!strcmp(Scope.Data,"user")&&!MdoSkillManagerReload()) {
         xroot Anchor=xrtRootOpen(Root);char TargetPath[160];size_t Count=0;
         snprintf(TargetPath,sizeof(TargetPath),"skills/%s",Target.Data);
-        bool Restored=Anchor&&ExtensionTreeRemove(Anchor,TargetPath,0,&Count);
+        bool Restored=Anchor&&ExtensionTreeRemove(Anchor,TargetPath,&Count);
         if(Anchor)xrtRootClose(Anchor);
         if(!Restored||!MdoSkillManagerReload())MdoHomeRequireRestart("Skill import rollback failed; restart before further edits");
         Ok=false;
@@ -300,7 +300,7 @@ static bool SkillProjectEdit(MdoApiContext* C,xroot Root,cstr Id)
                 MdoSkillCatalogRelease(Check);
                 char *From=Ok?xrtPathJoin(xrtRootPath(Root),Stage):NULL,*To=Ok?xrtPathJoin(xrtRootPath(Root),Directory):NULL;
                 Ok=Ok&&From&&To&&xrtPathRename(From,To,false);
-                if(Created&&!Ok){size_t Count=0;ExtensionTreeRemove(Root,Stage,0,&Count);}
+                if(Created&&!Ok){size_t Count=0;ExtensionTreeRemove(Root,Stage,&Count);}
                 xrtFree(From);xrtFree(To);
             }
         }

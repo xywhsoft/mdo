@@ -96,17 +96,14 @@ static bool EcoNativeExport(cstr Kind,cstr Id,xvalue* Resource)
     Ok=Ok&&Content&&MdoApiValueSetString(Resource,"kind",Kind)&&MdoApiValueSetString(Resource,"id",Id)&&MdoApiValueSetString(Resource,"content",Content)&&xrtValueObjectSet(Resource,XRT_STR_LITERAL("files"),Extras);
     xrtFree(Content);xrtValueRelease(Descriptor);xrtValueRelease(Extras);xrtValueRelease(Doc);return Ok;
 }
-static bool EcoNativeExportTree(cstr Root,cstr Prefix,xvalue* Extras,size_t* Total,size_t Depth)
+typedef struct EcoNativeExportContext {cstr Root;xvalue* Extras;size_t* Total;} EcoNativeExportContext;
+static bool EcoNativeExportTreeFile(cstr Relative,const xfileinfo* Info,void* Data)
 {
-    if(Depth>8)return false;
-    char Directory[512];snprintf(Directory,sizeof(Directory),"%s%s%s",Root,Prefix[0]?"/":"",Prefix);
-    xdir Dir=MdoHomeOpenDirectory(Directory,XDIR_STAT);if(!Dir)return false;xdirentry E;xdirnext Next;bool Ok=true;
-    while(Ok&&(Next=xrtDirNext(Dir,&E))==XDIR_NEXT_ITEM){
-        if(E.Name.Size>64||memchr(E.Name.Data,0,E.Name.Size)){Ok=false;break;}char Name[65],Relative[256];memcpy(Name,E.Name.Data,E.Name.Size);Name[E.Name.Size]=0;
-        if(!Prefix[0]&&((!strncmp(Root,"skills/",7)&&!strcmp(Name,"SKILL.md"))||(!strncmp(Root,"knowledge/",10)&&!strcmp(Name,"knowledge.json"))))continue;
-        int N=snprintf(Relative,sizeof(Relative),"%s%s%s",Prefix,Prefix[0]?"/":"",Name);if(N<0||(size_t)N>=sizeof(Relative)||!MdoPackagePath(Relative)){Ok=false;break;}
-        if(E.Info.Type==XFILE_TYPE_DIRECTORY)Ok=EcoNativeExportTree(Root,Relative,Extras,Total,Depth+1);
-        else if(E.Info.Type==XFILE_TYPE_FILE)Ok=xrtValueCount(Extras)<128&&EcoNativeExportFile(Extras,Root,Relative,Total);
-        else Ok=false;
-    }xrtDirClose(Dir);return Ok&&Next!=XDIR_NEXT_ERROR;
+    (void)Info;EcoNativeExportContext* C=Data;
+    if((!strncmp(C->Root,"skills/",7)&&!strcmp(Relative,"SKILL.md"))||(!strncmp(C->Root,"knowledge/",10)&&!strcmp(Relative,"knowledge.json")))return true;
+    return xrtValueCount(C->Extras)<128&&EcoNativeExportFile(C->Extras,C->Root,Relative,C->Total);
+}
+static bool EcoNativeExportTree(cstr Root,xvalue* Extras,size_t* Total)
+{
+    EcoNativeExportContext Context={Root,Extras,Total};return MdoPortableTreeWalk(Root,EcoNativeExportTreeFile,&Context);
 }

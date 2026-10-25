@@ -8,6 +8,7 @@
 #include "../../include/mdo/ecosystem.h"
 #include "../../include/mdo/ecosystem_package.h"
 #include "../../include/mdo/commands.h"
+#include "portable_tree.inc.c"
 
 /* File-backed editors share only storage/HTTP mechanics. Runtime ownership,
  * transport, execution and permissions remain with their existing managers. */
@@ -241,27 +242,34 @@ static bool ExtensionMatch(MdoApiContext* C,cstr Text)
     return true;
 }
 /* Cleanup is rooted at an already checked directory, bounded, and never follows
- * links. Used only for importer staging/deleted Skill or owned MCP secrets. */
-static bool ExtensionTreeRemove(xroot Root,cstr Path,unsigned Depth,size_t* Count)
+ * links. Used only for importer staging, deleted reference folders or owned
+ * MCP secrets. The budget matches portable authoring/export traversal. */
+static bool ExtensionTreeRemove(xroot Root,cstr Path,size_t* Count)
 {
-    xdir Dir; xdirentry Entry; xdirnext Next; bool Ok=true;
-    if (Depth>12u || ++*Count>1024u) return false;
-    Dir=xrtRootDirOpen(Root,Path,XDIR_STAT); if (!Dir) return false;
-    while ((Next=xrtDirNext(Dir,&Entry))==XDIR_NEXT_ITEM) {
-        char Child[1200]; int Length;
-        if (!(Entry.Flags&XDIR_ENTRY_UTF8)) { Ok=false; break; }
-        if ((Entry.Name.Size==1u && Entry.Name.Data[0]=='.') ||
-            (Entry.Name.Size==2u && !memcmp(Entry.Name.Data,"..",2u))) continue;
-        if (++*Count>1024u) { Ok=false; break; }
-        Length=snprintf(Child,sizeof(Child),"%s/%.*s",Path,(int)Entry.Name.Size,Entry.Name.Data);
-        if (Length<0 || (size_t)Length>=sizeof(Child)) { Ok=false; break; }
-        if (Entry.Info.Type==XFILE_TYPE_DIRECTORY) Ok=ExtensionTreeRemove(Root,Child,Depth+1u,Count);
-        else Ok=xrtRootRemove(Root,Child);
-        if (!Ok) break;
+    typedef struct {xdir Directory;char Path[1200];} RemoveFrame;
+    RemoveFrame* Frames=xrtCalloc(MDO_PORTABLE_TREE_DEPTH+1u,sizeof(*Frames));
+    if(!Frames)return false;
+    bool Ok=strlen(Path)<sizeof(Frames[0].Path)&&++*Count<=MDO_PORTABLE_TREE_ENTRIES;unsigned Level=0;
+    if(Ok){snprintf(Frames[0].Path,sizeof(Frames[0].Path),"%s",Path);Frames[0].Directory=xrtRootDirOpen(Root,Path,XDIR_STAT);Ok=Frames[0].Directory!=NULL;}
+    while(Ok){
+        RemoveFrame* Frame=&Frames[Level];xdirentry Entry;xdirnext Next=xrtDirNext(Frame->Directory,&Entry);
+        if(Next==XDIR_NEXT_END){
+            xrtDirClose(Frame->Directory);Frame->Directory=NULL;Ok=xrtRootRemove(Root,Frame->Path);
+            if(!Ok||!Level)break;--Level;continue;
+        }
+        if(Next!=XDIR_NEXT_ITEM||!(Entry.Flags&XDIR_ENTRY_UTF8)||!Entry.Name.Size||memchr(Entry.Name.Data,0,Entry.Name.Size)){Ok=false;break;}
+        if((Entry.Name.Size==1u&&Entry.Name.Data[0]=='.')||(Entry.Name.Size==2u&&!memcmp(Entry.Name.Data,"..",2u)))continue;
+        if(++*Count>MDO_PORTABLE_TREE_ENTRIES){Ok=false;break;}
+        char Child[1200];int Length=snprintf(Child,sizeof(Child),"%s/%.*s",Frame->Path,(int)Entry.Name.Size,Entry.Name.Data);
+        if(Length<0||(size_t)Length>=sizeof(Child)){Ok=false;break;}
+        if(Entry.Info.Type==XFILE_TYPE_DIRECTORY){
+            if(Level>=MDO_PORTABLE_TREE_DEPTH){Ok=false;break;}
+            ++Level;snprintf(Frames[Level].Path,sizeof(Frames[Level].Path),"%s",Child);
+            Frames[Level].Directory=xrtRootDirOpen(Root,Child,XDIR_STAT);Ok=Frames[Level].Directory!=NULL;
+        }else Ok=xrtRootRemove(Root,Child);
     }
-    if (Next==XDIR_NEXT_ERROR) Ok=false;
-    (void)xrtDirClose(Dir);
-    return Ok && xrtRootRemove(Root,Path);
+    for(unsigned I=0;I<=MDO_PORTABLE_TREE_DEPTH;I++)if(Frames[I].Directory)xrtDirClose(Frames[I].Directory);
+    xrtFree(Frames);return Ok;
 }
 static bool ExtensionRemoveDirectory(cstr Path)
 {
@@ -270,7 +278,7 @@ static bool ExtensionRemoveDirectory(cstr Path)
     if (!Slash || (Length=(size_t)(Slash-Path))>=sizeof(Parent)) return false;
     memcpy(Parent,Path,Length); Parent[Length]=0;
     Root=MdoHomeOpenStorageDirectory(Parent); if (!Root) return false;
-    Ok=ExtensionTreeRemove(Root,Slash+1u,0u,&Count); (void)xrtRootClose(Root); return Ok;
+    Ok=ExtensionTreeRemove(Root,Slash+1u,&Count); (void)xrtRootClose(Root); return Ok;
 }
 static bool ExtensionFilePath(xstrview Path)
 {

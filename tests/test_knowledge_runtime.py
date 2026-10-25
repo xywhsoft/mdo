@@ -19,7 +19,9 @@ from knowledge_fixture import metadata,file,package
 
 def run():
     p=argparse.ArgumentParser();p.add_argument('--host',type=Path,default=ROOT/'.build/host/windows-server-glibc/xs.exe');p.add_argument('--packed',action='store_true');p.add_argument('--ui',action='store_true');args=p.parse_args()
-    base=Path(tempfile.mkdtemp(prefix='knowledge-',dir=ROOT/'.build' if os.name=='nt' else None));app=base/'app';home=base/'home';home.mkdir();app.mkdir() if args.packed else shutil.copytree(ROOT/'app',app)
+    # Keep absolute fixture paths short: the pinned Windows host's atomic
+    # rename still has an absolute path limit, independent of tree depth.
+    base=Path(tempfile.mkdtemp(prefix='k-',dir=ROOT/'.build' if os.name=='nt' else None));app=base/'app';home=base/'home';home.mkdir();app.mkdir() if args.packed else shutil.copytree(ROOT/'app',app)
     if args.packed:shutil.copy2(args.host,app/'mdo.exe');host=app/'mdo.exe'
     else:host=args.host.resolve()
     port=free_port();config=app/'xs.json';config.write_text(json.dumps(dict(services=[dict(enabled=True,name='knowledge',ip='127.0.0.1',port=port,**{'class':'http'},host_default=dict(enabled=True,name='mdo',path='web',devlang='c',devfile='generated/mdo_unity.c'))])))
@@ -101,6 +103,49 @@ def run():
             preference.write_bytes(saved_preference);assert not warnings()
         exported=call('POST','/ecosystem',dict(action='export',single_kind='knowledge',references=[dict(kind='knowledge',id='local-reference')]))
         assert exported['resources'][0]['files']==files or sorted(exported['resources'][0]['files'],key=lambda f:f['path'])==files
+        # The writer has always allowed portable paths deeper than eight levels.
+        # Exercise both a nine-level index and the longest installed file path,
+        # including CAS edits, export and a complete package round trip.
+        deep_index='/'.join(['level']*9+['index.md'])
+        relative_limit=220-(11+len('deep'))
+        levels=(relative_limit-4)//2
+        deep_path='a/'*levels+'x'*(relative_limit-2*levels-3)+'.md'
+        assert len(deep_path)==relative_limit and levels>8
+        deep_doc={**metadata(),'index':deep_index}
+        deep_files=[file(deep_index,'# Deep index'),file(deep_path,'Deep sentinel')]
+        deep=call('PUT','/extensions/knowledge/deep',dict(content=json.dumps(deep_doc),files=deep_files),revision='new')
+        assert deep['valid']
+        inventory=call('GET','/extensions/knowledge/deep/documents')
+        assert {f['path']for f in inventory['files']}=={deep_index,deep_path}
+        from urllib.parse import quote
+        assert call('GET','/extensions/knowledge/deep/documents?path='+quote(deep_path,safe=''))['text']=='Deep sentinel'
+        bundle=call('GET','/extensions/knowledge/deep/bundle');assert len(bundle['files'])==2
+        deep_files[1]=file(deep_path,'Edited deep sentinel')
+        deep=call('PUT','/extensions/knowledge/deep',dict(content=json.dumps(deep_doc),files=deep_files,bundle_revision=bundle['bundle_revision']),revision=deep['revision'])
+        exported_deep=call('POST','/ecosystem',dict(action='export',single_kind='knowledge',references=[dict(kind='knowledge',id='deep')]))
+        assert sorted(exported_deep['resources'][0]['files'],key=lambda f:f['path'])==sorted(deep_files,key=lambda f:f['path'])
+        outside=base/'outside';outside.mkdir();sentinel=outside/'private.md';sentinel.write_text('Outside sentinel')
+        linked=home/'knowledge/deep/linked';has_link=False
+        try:linked.symlink_to(outside,target_is_directory=True);has_link=True
+        except OSError:
+            if os.name=='nt':
+                made=subprocess.run(['cmd','/c','mklink','/J',str(linked),str(outside)],capture_output=True,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+                has_link=made.returncode==0
+            if not has_link:print('SKIP link creation unavailable; rooted path traversal rejection remains covered')
+        if has_link:
+            call('GET','/extensions/knowledge/deep/documents',status=404)
+            call('GET','/extensions/knowledge/deep/bundle',status=413)
+            call('POST','/ecosystem',dict(action='export',single_kind='knowledge',references=[dict(kind='knowledge',id='deep')]),status=422)
+        call('DELETE','/extensions/knowledge/deep',revision=deep['revision'])
+        assert sentinel.read_text()=='Outside sentinel','cleanup must remove a link, never its target'
+        assert not(home/'knowledge/deep').exists()
+        deep_package=package();deep_package['manifest']['slug']='deep-reference';deep_package['resources']=exported_deep['resources']
+        plan=call('POST','/ecosystem',dict(action='plan_import',single_kind='knowledge',package=deep_package))
+        call('POST','/ecosystem',dict(action='import',single_kind='knowledge',package=deep_package,expected_plan=plan['sha256']))
+        assert call('GET','/extensions/knowledge/deep/documents?path='+quote(deep_path,safe=''))['text']=='Edited deep sentinel'
+        assert len(call('GET','/extensions/knowledge/deep/bundle')['files'])==2
+        call('POST','/ecosystem',dict(action='uninstall',entry=dict(source='local',slug='deep-reference')))
+        print('PASS nine-level index, maximum portable path, deep inventory, preview, bundle CAS, export and package round trip')
         large=call('PUT','/extensions/knowledge/large-reference',dict(content=json.dumps(custom),files=[file('index.md','# Large index'),file('large.md','x'*300000),dict(path='sample.bin',base64='AAEC/w==')]),revision='new')
         assert call('GET','/extensions/knowledge/large-reference/documents?path=large.md')['truncated']
         assert call('GET','/extensions/knowledge/large-reference/documents?path=sample.bin')['binary']
