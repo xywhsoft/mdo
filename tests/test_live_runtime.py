@@ -141,6 +141,17 @@ class WebSocket:
     def send(self, value):
         self.send_frame(json.dumps(value).encode())
 
+    def close_frame(self):
+        # State notifications may already be queued after the ready frame,
+        # before this peer sends a close or malformed frame. Keep checking the
+        # protocol close itself rather than depending on scheduler ordering.
+        for _ in range(8):
+            opcode, payload = self.frame()
+            if opcode == 8:
+                return opcode, payload
+            assert opcode == 1 and json.loads(payload)["type"] in {"changed", "ping"}, (opcode, payload)
+        raise AssertionError("WebSocket close was not received within eight frames")
+
     def select(self, session, after=0, selection=1):
         self.send({"type": "subscribe", "project_id": "default", "session_id": session,
             "after": after, "selection": selection})
@@ -303,9 +314,9 @@ def probe(host: Path | None, packed: Path | None):
             assert not (home / "workspace/approval.txt").exists()
             # Bounded malformed-frame rejection and orderly connection close.
             bad = connect(); bad.send_frame(b"{}", masked=False)
-            opcode, payload = bad.frame(); assert opcode == 8 and struct.unpack("!H", payload[:2])[0] == 1002
+            opcode, payload = bad.close_frame(); assert opcode == 8 and struct.unpack("!H", payload[:2])[0] == 1002, (opcode, payload)
             closing = connect(); closing.send_frame(struct.pack("!H", 1000), opcode=8)
-            assert closing.frame() == (8, struct.pack("!H", 1000))
+            assert closing.close_frame() == (8, struct.pack("!H", 1000))
             if not packed:
                 idle = connect()
                 deadline = time.monotonic() + 2
