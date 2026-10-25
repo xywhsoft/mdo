@@ -19,6 +19,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "tools"))
 SPEC = importlib.util.spec_from_file_location("mdo_build", ROOT / "tools" / "build_mdo.py")
 assert SPEC is not None and SPEC.loader is not None
 BUILD = importlib.util.module_from_spec(SPEC)
@@ -217,6 +218,7 @@ class BuildContractTests(unittest.TestCase):
             "src/models/catalog.c",
             "src/skills/manager.c",
             "src/skills/tools.c",
+            "src/knowledge/manager.c",
             "src/memory/manager.c",
             "src/memory/transfer.c",
             "src/migration/manager.c",
