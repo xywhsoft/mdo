@@ -113,7 +113,10 @@ def native_contracts():
         if action=='write':fields.update(text=string,base64=string)
         add('stream.'+action,'Operate on a stream handle. A would-block failure accepts no bytes; close preserves buffered data until EOF.',fields,('handle',))
     add('plugin.list','List installed VFS plugins and recovery status')
-    add('plugin.apply','Stage an immutable revision and publish a VFS overlay. Module/core source changes require runtime.reload.',{'id':string,'frontend':string,'files':{'type':'array','minItems':1,'maxItems':128,'items':{'type':'object','properties':{'path':string,'text':string,'base64':string},'required':['path']}}},('id','files'))
+    add('plugin.apply','Stage an immutable plugin revision. Modern plugins default to disabled; application mappings and optional entries are declared in manifest.',{'id':string,'frontend':string,'manifest':obj,'enabled':boolean,'files':{'type':'array','minItems':1,'maxItems':128,'items':{'type':'object','properties':{'path':string,'text':string,'base64':string},'required':['path']}}},('id','files'))
+    plugin_changes={'type':'array','maxItems':32,'items':{'type':'object','properties':{'id':string,'enabled':boolean,'revision':string,'remove':boolean},'required':['id'],'additionalProperties':False}}
+    add('plugin.plan','Validate the final plugin set, exclusive slots, declared conflicts, dependency bounds and immutable file ownership.',{'changes':plugin_changes},('changes',))
+    add('plugin.commit','Commit exactly the reviewed plugin selection; stale plans are rejected.',{'changes':plugin_changes,'expected_revision':string,'expected_plan':string},('changes','expected_revision','expected_plan'))
     for action in ('enable','disable','remove','rollback'):add('plugin.'+action,'Change plugin activation while retaining immutable revision backups',{'id':string},('id',))
     add('runtime.reload','Reload modules or submit a host source reload. Host reload completion is queried separately.',{'domain':{'type':'string','enum':['modules','host']}},('domain',))
     add('runtime.reload.status','Read a native host reload receipt',{'id':uint},('id',))
