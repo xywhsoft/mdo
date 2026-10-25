@@ -51,3 +51,12 @@ def contracts(add):
     for action in ('resume','abandon'):
         add('instance.'+action,'Explicitly continue or finish an interrupted turn at the current member revision; effects are never silently replayed',
             {**member,'expected_revision':uint,'decisions':{'type':'array','items':decision,'maxItems':64}},('id','message_id','expected_revision'))
+    work={'namespace':string,'id':string,'title':string,'description':string,'depends_on':{'type':'array','items':string,'maxItems':32},
+        'expected_revision':uint,'worker':string,'claim_id':string,'claim_token':string,'result':{},'reason':string}
+    add('work.create','Create one shared task, depending only on existing tasks; repeated identical creation is safe',work,('id','title'))
+    add('work.get','Read a shared task and its result; claim tokens are not disclosed',work,('id',))
+    add('work.list','Page shared task metadata and optionally only ready tasks',{'namespace':string,'offset':uint,'limit':{**uint,'minimum':1,'maximum':64},'ready_only':{'type':'boolean'},'expected_revision':uint})
+    add('work.claim','Atomically claim a ready task at its revision; reuse worker/claim_id to recover its current token',work,('id','expected_revision','worker','claim_id'))
+    add('work.complete','Submit a result using the current claim token; repeated identical completion is safe',work,('id','claim_token','result'))
+    add('work.release','Explicitly make a claimed task available again, invalidating late completion when next claimed',work,('id','claim_token'))
+    add('work.cancel','Cancel a shared task at its current revision; invalidates its claim token',work,('id','expected_revision'))

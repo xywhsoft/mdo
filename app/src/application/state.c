@@ -6,7 +6,7 @@
 #define SDK_STATE_RECORDS 1024u
 typedef struct SdkMemberActive {char Identity[65];xcancel* Cancel;} SdkMemberActive;
 static struct {xmutex* Lock;xcond* Drained;char Epoch[33];SdkMemberActive Members[8];bool Stopping;} SdkState;
-static const cstr SdkStateMethods[]={"state.get","state.list","state.put","state.compare_exchange","state.remove","state.transaction","state.receipt.get","lease.acquire","lease.inspect","lease.validate","lease.renew","lease.release","mailbox.send","mailbox.get","mailbox.read","mailbox.ack","mailbox.wait","instance.create","instance.get","instance.list","instance.send","instance.step","instance.cancel","instance.close","instance.result","instance.wait","instance.resume","instance.abandon"};
+static const cstr SdkStateMethods[]={"state.get","state.list","state.put","state.compare_exchange","state.remove","state.transaction","state.receipt.get","lease.acquire","lease.inspect","lease.validate","lease.renew","lease.release","mailbox.send","mailbox.get","mailbox.read","mailbox.ack","mailbox.wait","instance.create","instance.get","instance.list","instance.send","instance.step","instance.cancel","instance.close","instance.result","instance.wait","instance.resume","instance.abandon","work.create","work.get","work.list","work.claim","work.complete","work.release","work.cancel"};
 bool MdoApplicationStateInit(void){SdkState.Lock=xrtMutexCreate();SdkState.Drained=xrtCondCreate();return SdkState.Lock&&SdkState.Drained&&SdkCallIdentity(SdkState.Epoch);}
 void MdoApplicationInstancesStop(void){
     if(!SdkState.Lock)return;xrtMutexLock(SdkState.Lock);SdkState.Stopping=true;
@@ -132,9 +132,10 @@ static bool SdkStateRemember(xvalue* Root,const xvalue* P,cstr Hash,const xvalue
 #include "state_leases.inc.c"
 #include "state_mailbox.inc.c"
 #include "state_instances.inc.c"
+#include "state_work.inc.c"
 xvalue* MdoApplicationStateCatalog(void){
     xvalue* A=xrtValueArray();for(size_t I=0;I<sizeof(SdkStateMethods)/sizeof(*SdkStateMethods);I++){
-        xvalue* V=xrtValueObject();SdkPut(V,"id",SdkStateMethods[I]);SdkPut(V,"domain",!strncmp(SdkStateMethods[I],"instance.",9)?"instance":!strncmp(SdkStateMethods[I],"mailbox.",8)?"mailbox":!strncmp(SdkStateMethods[I],"lease.",6)?"lease":"state");SdkPut(V,"transport","native");xrtValueArrayAppendNew(A,V);
+        xvalue* V=xrtValueObject();SdkPut(V,"id",SdkStateMethods[I]);SdkPut(V,"domain",!strncmp(SdkStateMethods[I],"work.",5)?"work":!strncmp(SdkStateMethods[I],"instance.",9)?"instance":!strncmp(SdkStateMethods[I],"mailbox.",8)?"mailbox":!strncmp(SdkStateMethods[I],"lease.",6)?"lease":"state");SdkPut(V,"transport","native");xrtValueArrayAppendNew(A,V);
     }return A;
 }
 bool MdoApplicationStateCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue* P,xvalue** R,mdo_error_v1* E,bool* Found){
@@ -147,7 +148,10 @@ bool MdoApplicationStateCall(const mdo_sdk_context_v1* C,cstr Method,const xvalu
     xrtMutexLock(SdkState.Lock);xvalue* Root=SdkStateLoad(C,P,Path,E);
     if(!Root){xrtMutexUnlock(SdkState.Lock);return false;}
     const xvalue* Records=SdkGet(Root,"records");
-    if(!strncmp(Method,"mailbox.",8)){
+    if(!strncmp(Method,"work.",5)){
+        Ok=SdkWorkApply(Method,P,Root,R,E,&Changed);if(Ok&&Changed)Ok=SdkStateSave(Path,Root,E);if(!Ok){xrtValueRelease(*R);*R=NULL;}
+    }
+    else if(!strncmp(Method,"mailbox.",8)){
         Ok=SdkMailboxApply(C,Method,P,Root,R,E,&Changed);
         if(Ok&&Changed)Ok=SdkStateSave(Path,Root,E);
         if(!Ok){xrtValueRelease(*R);*R=NULL;}
@@ -186,6 +190,6 @@ bool MdoApplicationStateCall(const mdo_sdk_context_v1* C,cstr Method,const xvalu
     xvalue* Event=Ok&&Changed?xrtValueObject():NULL;
     if(Event){SdkPut(Event,"namespace",SdkField(Root,"namespace"));SdkPutUInt(Event,"revision",SdkStateRevision(Root));}
     xrtValueRelease(Root);xrtMutexUnlock(SdkState.Lock);
-    if(Event){MdoApplicationEvent(!strncmp(Method,"mailbox.",8)?"mailbox.changed":!strncmp(Method,"lease.",6)?"lease.changed":"state.changed",C,Event);xrtValueRelease(Event);}
+    if(Event){MdoApplicationEvent(!strncmp(Method,"work.",5)?"work.changed":!strncmp(Method,"mailbox.",8)?"mailbox.changed":!strncmp(Method,"lease.",6)?"lease.changed":"state.changed",C,Event);xrtValueRelease(Event);}
     return Ok&&*R;
 }
