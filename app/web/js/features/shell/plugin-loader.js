@@ -1,9 +1,9 @@
 // Window-local execution. The host reserves compatibility slots before import
 // and releases them only after every owned cleanup has actually completed.
 export function createPluginLoader({ client, api, createScope, canCall = () => true,
-  stopped = () => false, importModule = url => import(url) }) {
+  stopped = () => false, onStateChanged = () => {}, importModule = url => import(url) }) {
   const page = `page-${crypto.randomUUID()}`, active = new Map(), attempted = new Set();
-  let hello = false, loaded = false, cursor = {}, running = null, disposed = false;
+  let stateKey="", hello = false, loaded = false, cursor = {}, running = null, disposed = false;
   const identity = plugin => ({ client, page, id: plugin.id, revision: plugin.revision });
   const warning = async (plugin, phase) => {
     try { await api().call("plugin.frontend.fail", { ...identity(plugin), phase }); } catch { /* Keep the local attempt fence. */ }
@@ -26,12 +26,13 @@ export function createPluginLoader({ client, api, createScope, canCall = () => t
     if (disposed || stopped() || !canCall()) return;
     if (!hello) { await api().call("plugin.frontend.hello", { client, page }); hello = true; }
     let result = await api().call("plugin.list");
-    if (disposed || stopped() || result.recovery_mode) return;
-    loaded = true; let retired = false;
+    if (disposed || stopped()) return;
+    const notify=value=>{const key=JSON.stringify([value.pending,value.recovery_mode,value.items?.map(p=>[p.id,p.revision,p.enabled,p.state])]);if(key!==stateKey){stateKey=key;onStateChanged(value);}};
+    notify(result);loaded = true; let retired = false;
     const outgoing=new Set();
     for(const record of active.values()){
       const next=result.items.find(item=>item.id===record.plugin.id);
-      if((record.cleaned&&!record.activated)||!next?.enabled||next.error||next.revision!==record.plugin.revision)outgoing.add(record.plugin.id);
+      if(result.recovery_mode||(record.cleaned&&!record.activated)||!next?.enabled||next.error||next.revision!==record.plugin.revision)outgoing.add(record.plugin.id);
     }
     for(let pass=0;pass<active.size;pass++)for(const record of active.values())
       if(record.plugin.manifest?.requires?.some(dep=>outgoing.has(dep.id)))outgoing.add(record.plugin.id);
@@ -40,8 +41,8 @@ export function createPluginLoader({ client, api, createScope, canCall = () => t
       const dependent=[...active.values()].some(other=>other!==record&&other.plugin.manifest?.requires?.some(dep=>dep.id===record.plugin.id));
       if(!dependent)retired=await retire(record)||retired;
     }
-    if (retired) result = await api().call("plugin.list");
-    if (disposed || stopped() || result.pending) return;
+    if (retired) {result = await api().call("plugin.list");notify(result);}
+    if (disposed || stopped() || result.pending || result.recovery_mode) return;
     // Dependency order is local to the same window. Native dependencies are
     // already ready in the host before it makes this selection effective.
     const remaining = result.items.filter(p => p.enabled && !p.error && p.frontend?.startsWith("web/"));

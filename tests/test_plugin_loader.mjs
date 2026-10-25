@@ -76,3 +76,9 @@ test("a transient retirement acknowledgement is retried without running cleanup 
  })});
  await loader.poll();phase=1;await loader.poll();await loader.poll();assert.equal(stops,1);assert.equal(leaves,2);await loader.destroy();
 });
+
+test("a connected window cleans its previous frontend when the host enters recovery",async()=>{
+ const starts=[];let stops=0;const f=fixture(async()=>({activate(sdk){starts.push(sdk.id);}}),async()=>{stops++;});
+ await f.loader.poll();f.change({items:[f.a],recovery_mode:true});await f.loader.poll();
+ assert.equal(stops,1);assert.deepEqual(starts,["a"]);assert(f.calls.some(c=>c.method==="plugin.frontend.leave"));await f.loader.destroy();
+});

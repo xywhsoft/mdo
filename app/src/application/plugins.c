@@ -220,7 +220,12 @@ bool MdoApplicationPluginsCall(const mdo_sdk_context_v1* C,cstr Method,const xva
     if(!strncmp(Method,"plugin.preset.",14))return SdkPluginPresetCall(Method,P,R,E);
     if(!strcmp(Method,"plugin.file.read"))return SdkPluginFileCall(P,R,E);
     if(!strcmp(Method,"plugin.get")){SdkPlugin Plugin={0};bool Ok=SdkPluginLookup(SdkField(P,"id"),SdkField(P,"revision"),&Plugin,E);if(Ok){*R=Plugin.Manifest;Plugin.Manifest=NULL;}SdkPluginDrop(&Plugin);return Ok;}
-    if(!strncmp(Method,"plugin.frontend.",16))return SdkPluginFrontendCall(Method,P,R,E);
+    if(!strncmp(Method,"plugin.frontend.",16)){
+        xrtMutexLock(SdkPlugins.Lock);bool Pending=SdkPlugins.Pending;xrtMutexUnlock(SdkPlugins.Lock);
+        bool Ok=SdkPluginFrontendCall(Method,P,R,E);
+        if(Ok&&Pending&&SdkField(*R,"state")&&!strcmp(SdkField(*R,"state"),"ready"))MdoApplicationEvent("plugin.changed",C,NULL);
+        return Ok;
+    }
     if(!strcmp(Method,"plugin.plan")){
         xrtMutexLock(SdkPlugins.Lock);xvalue* Config=xrtValueClone(SdkPlugins.Config);bool Recovery=SdkPlugins.Recovery;xrtMutexUnlock(SdkPlugins.Lock);
         (void)Recovery;
@@ -245,7 +250,9 @@ bool MdoApplicationPluginsCall(const mdo_sdk_context_v1* C,cstr Method,const xva
     xvalue* Config=xrtValueArray();for(size_t i=0;i<xrtValueCount(SdkPlugins.Config);i++)if(i!=Index)xrtValueArrayAppend(Config,xrtValueArrayGet(SdkPlugins.Config,i));xrtMutexUnlock(SdkPlugins.Lock);
     bool Remove=!strcmp(Method,"plugin.remove"),Ok=true;xvalue* Manifest=NULL;SdkPlugin Candidate={0};xvalue* Map=NULL;
     bool Managed=Old&&SdkField(Old,"source")&&!strcmp(SdkField(Old,"source"),"store");
-    if(Managed&&(!strcmp(Method,"plugin.apply")||!strcmp(Method,"plugin.remove")||!strcmp(Method,"plugin.rollback")))Ok=MdoApplicationError(E,"store_resource_readonly","Use the store update or uninstall flow for managed plugins","plugin",403,false);
+    cstr Expected=SdkField(P,"expected_revision");
+    if(!strcmp(Method,"plugin.apply")&&Expected&&((Old&&strcmp(Expected,SdkField(Old,"revision")))||(!Old&&*Expected)))Ok=MdoApplicationError(E,"sdk_plugin_revision_changed","Plugin changed while editing; read the current revision before saving","plugin",412,false);
+    else if(Managed&&(!strcmp(Method,"plugin.apply")||!strcmp(Method,"plugin.remove")||!strcmp(Method,"plugin.rollback")))Ok=MdoApplicationError(E,"store_resource_readonly","Use the store update or uninstall flow for managed plugins","plugin",403,false);
     else if(!strcmp(Method,"plugin.apply")){Ok=SdkPluginStage(C,P,&Manifest,E);if(Ok&&Old&&!SdkGet(P,"enabled"))xrtValueObjectSet(Manifest,XRT_STR_LITERAL("enabled"),SdkGet(Old,"enabled"));}
     else if(!Old)Ok=MdoApplicationError(E,"sdk_plugin_missing","Plugin is not installed","plugin",404,false);
     else {Manifest=xrtValueClone(Old);if(!strcmp(Method,"plugin.rollback")){cstr Previous=SdkField(Old,"previous");if(!Previous||strlen(Previous)!=64)Ok=MdoApplicationError(E,"sdk_plugin_no_previous","No previous revision is retained","plugin",409,false);else {

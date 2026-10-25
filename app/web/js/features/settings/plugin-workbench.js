@@ -156,7 +156,7 @@ export function createPluginWorkbench(root) {
       if (item && !editable(item)) throw Error("商店插件不支持编辑或再次分享");
       if (full && !full.manifest) throw Error("旧格式插件请先从原项目整理为 plugin.json 后导入；原文件和历史记录会保留。");
       const spec = structuredClone(imported?.manifest || full?.manifest || { format: "mdo.plugin.v1", id: "my-plugin", name: "我的插件", version: "1.0.0", description: "", license: "MIT" });
-      let files = imported?.files?.map(f => ({ ...f })) || full?.files.map(f => ({ path: f.path, bytes: f.bytes, sha256: f.sha256, original: true })) || [], saving = false, dirty = false;
+      let files = imported?.files?.map(f => ({ ...f })) || full?.files.map(f => ({ path: f.path, bytes: f.bytes, sha256: f.sha256, original: true })) || [], saving = false, dirty = false, reading = 0;
       const d = layer({ title: item ? "编辑插件" : "新建插件", width: "64rem", beforeClose: () => !saving && (!dirty || confirm("放弃未保存的插件修改？")), onClosed() { if (editor === d) editor = null; } }); editor = d;
       const form = element("form", { className: "extension-form plugin-editor extension-authoring" }), fields = {};
       for (const [key, name] of [["id", "插件 ID"], ["name", "名称"], ["version", "版本"], ["description", "简介"], ["author", "作者"], ["copyright", "版权声明"], ["license", "许可"]]) fields[key] = field(form, name, spec[key] || "", ["description", "copyright"].includes(key));
@@ -187,7 +187,7 @@ export function createPluginWorkbench(root) {
           f.footer.append(button("保存", () => { file.data = new TextEncoder().encode(input.value); file.bytes = file.data.length; file.original = false; dirty = true; f.dispose(); }, true), button("取消", () => f.close("cancel")));
         } catch (e) { if (f.isCurrent()) { f.body.replaceChildren(node("p", errorMessage(e), "extension-error")); f.footer.append(button("关闭", () => f.close("close"))); } }
       }
-      picker.addEventListener("change", async () => { try { let total=files.reduce((n,f)=>n+f.bytes,0);for (const f of picker.files) {total+=f.size;if(total>64*1024*1024)throw Error("插件文件总量不能超过 64 MiB");add({ path: f.name, bytes: f.size, data: new Uint8Array(await f.arrayBuffer()) });} } catch (e) { message.textContent = errorMessage(e); } finally { picker.value = ""; } });
+      picker.addEventListener("change", async () => { if(saving||!d.isCurrent())return;reading++;save.disabled=true;try { let total=files.reduce((n,f)=>n+f.bytes,0);for (const f of picker.files) {total+=f.size;if(total>64*1024*1024)throw Error("插件文件总量不能超过 64 MiB");const bytes=new Uint8Array(await f.arrayBuffer());if(!d.isCurrent())return;add({ path: f.name, bytes: f.size, data: bytes });} } catch (e) { message.textContent = errorMessage(e); } finally { reading--;picker.value = "";if(d.isCurrent())save.disabled=saving||reading>0; } });
       const newText = button("新建文本文件", () => {
         const f = layer({ title: "新建插件文件", width: "40rem", height: "auto" }), path = field(f.body, "插件内相对路径", "files/example.txt");
         f.footer.append(button("添加", () => { try { add({ path: path.value.trim(), bytes: 0, data: new Uint8Array() }); f.dispose(); } catch (e) { toast(errorMessage(e), "error"); } }, true), button("取消", () => f.close("cancel")));
@@ -197,7 +197,7 @@ export function createPluginWorkbench(root) {
         button("添加 C 入口范例", () => { try { const source = nativeScript(fields.id.value.trim()); add({ path: "runtime/plugin.c", data: new TextEncoder().encode(source), bytes: source.length }); native.value = "runtime/plugin.c"; } catch (e) { message.textContent = errorMessage(e); } })]), picker, fileList, message);
       form.addEventListener("input", () => { dirty = true; }); drawFiles();
       const save = button("保存插件", async () => {
-        if (saving || !d.isCurrent()) return; const own = epoch, uploads = []; saving = true;
+        if (saving || reading || !d.isCurrent()) return; const own = epoch, uploads = []; saving = true;
         for (const control of form.querySelectorAll("input,textarea,button,select")) control.disabled = true; save.disabled = cancel.disabled = d.closeButton.disabled = true;
         try {
           const relationship = JSON.parse(relations.value);
@@ -219,7 +219,7 @@ export function createPluginWorkbench(root) {
             }
             payload.push({ path: file.path, storage_path, bytes: bytes.length, sha256: hash });
           }
-          message.textContent = "正在保存…"; await call("plugin.apply", { id: doc.id, manifest: doc, files: payload }, own);
+          message.textContent = "正在保存…"; await call("plugin.apply", { id: doc.id, expected_revision: full?.revision || "", manifest: doc, files: payload }, own);
           dirty = false; saving = false; d.dispose(); changed(); toast("插件已保存；启用时会检查完整组合");
         } catch (e) { if (d.isCurrent()) message.textContent = errorMessage(e); }
         finally {
@@ -283,6 +283,8 @@ export function createPluginWorkbench(root) {
     });
     browser.setItems(rows, { pageKey: JSON.stringify([query, filter]), empty: "暂无本机插件，可以创建插件或前往插件商店。" }); root.append(browser.root);
   }
+  const runtimeChanged=()=>{if(active&&owner==="local"&&!editor&&!busy)void load();};
+  window.addEventListener("mdo-plugin-runtime-state",runtimeChanged);
   const unsubscribe = subscribeTarget(() => { if (owner === target()) return; owner = target(); epoch++; controller?.abort(); for (const d of layers) d.dispose(); layers.clear(); editor = null; browser.reset(); data = { items: [] }; receipts = {}; ownershipKnown = false; error = ""; if (active) void load(); });
-  return Object.freeze({ selectSection(section) { active = section === "extensions"; if (!active) { controller?.abort(); browser.closeDetail(false); for (const d of layers) d.dispose(); } store.activate(active && area === "store"); if (active && area === "local") void load(); }, hasPendingChanges: () => Boolean(editor) || busy || store.hasPendingChanges(), destroy() { disposed = true; epoch++; controller?.abort(); unsubscribe(); for (const d of layers) d.dispose(); store.destroy(); browser.destroy(); } });
+  return Object.freeze({ selectSection(section) { active = section === "extensions"; if (!active) { controller?.abort(); browser.closeDetail(false); for (const d of layers) d.dispose(); } store.activate(active && area === "store"); if (active && area === "local") void load(); }, hasPendingChanges: () => Boolean(editor) || busy || store.hasPendingChanges(), destroy() { disposed = true; epoch++; controller?.abort(); unsubscribe(); window.removeEventListener("mdo-plugin-runtime-state",runtimeChanged); for (const d of layers) d.dispose(); store.destroy(); browser.destroy(); } });
 }

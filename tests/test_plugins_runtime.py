@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import shutil
 import tempfile
 
 class PluginTemporaryDirectory(tempfile.TemporaryDirectory):
@@ -21,12 +22,19 @@ from test_api_runtime import ROOT, free_port, request, wait_ready, write_site
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--host',type=Path,default=ROOT/'.build/host/xs.exe')
+    parser.add_argument('--packed',type=Path,help='Verify the standalone product with no external application files')
     args=parser.parse_args()
     with PluginTemporaryDirectory(dir=ROOT/'.build',prefix='plugins-runtime-') as tmp:
-        base=Path(tmp);port=free_port();config=write_site(base,port)
+        base=Path(tmp);port=free_port();site=base
+        if args.packed:
+            site=base/'site';site.mkdir();shutil.copy2(args.packed,site/args.packed.name)
+            config=site/'xs.json';config.write_text(json.dumps(dict(engine=dict(workers=1),services=[dict(enabled=True,**{'class':'http'},name='plugins-packed',ip='127.0.0.1',port=port,recv_limit=8388608,body_limit=8388608,host_default=dict(enabled=True,name='mdo',path='web',devlang='c',devfile='generated/mdo_unity.c'))])))
+        else:config=write_site(base,port)
+        def spawn(log):
+            command=[str(site/args.packed.name),'--','--home',str(base/'home')] if args.packed else [str(args.host.resolve()),str(config),'--','--home',str(base/'home')]
+            return subprocess.Popen(command,cwd=site,env=dict(os.environ,USE_WEBVIEW='0'),stdout=log,stderr=log,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
         with (base/'probe.log').open('wb') as log:
-            child=subprocess.Popen([str(args.host.resolve()),str(config),'--','--home',str(base/'home')],cwd=base,stdout=log,stderr=log,
-                creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+            child=spawn(log)
             try:
                 try: wait_ready(port,child)
                 except Exception:
@@ -110,7 +118,7 @@ const mdo_module_v1* mdoModuleEntry(void){return &M;}
                 assert call('runtime.reload',dict(domain='host'),409)['code']=='sdk_plugin_restart_required'
                 call('qa.plugin.counter',status=404)
                 child.terminate();child.wait(timeout=10)
-                child=subprocess.Popen([str(args.host.resolve()),str(config),'--','--home',str(base/'home')],cwd=base,stdout=log,stderr=log,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+                child=spawn(log)
                 try: wait_ready(port,child)
                 except Exception:
                     log.flush();raise RuntimeError((base/'probe.log').read_text(encoding='utf-8',errors='replace')[-8000:])
@@ -141,6 +149,7 @@ const mdo_module_v1* mdoModuleEntry(void){return &M;}
                 installed=call('plugin.apply',dict(id='uploaded',manifest=upload_doc,files=files));assert next(r['revision'] for r in installed['items'] if r['id']=='uploaded')==rev
                 next_doc=dict(upload_doc,version='2.0.0')
                 call('plugin.apply',dict(id='uploaded',manifest=next_doc,files=[dict(path=deep,plugin_revision=rev,bytes=len(payload),sha256=hashlib.sha256(payload).hexdigest())]))
+                call('plugin.apply',dict(id='uploaded',expected_revision=rev,manifest=upload_doc,files=[dict(path=deep,text='stale edit')]),412)
                 restored=call('plugin.rollback',dict(id='uploaded'));assert next(r for r in restored['items'] if r['id']=='uploaded')['manifest']['version']=='1.0.0'
                 files[0]['sha256']='0'*64;call('plugin.apply',dict(id='uploaded',manifest=upload_doc,files=files),409)
                 files[0]['storage_path']='../escape';call('plugin.apply',dict(id='uploaded',manifest=upload_doc,files=files),422)
@@ -154,12 +163,12 @@ const mdo_module_v1* mdoModuleEntry(void){return &M;}
                     commit([dict(id=r['id'],enabled=r['id']==badid or (mode=='duplicate' and r['id']=='native-fixture')) for r in call('plugin.list')['items']])
                     original=(base/'home/config/plugins.json').read_bytes()
                     child.terminate();child.wait(timeout=10)
-                    child=subprocess.Popen([str(args.host.resolve()),str(config),'--','--home',str(base/'home')],cwd=base,stdout=log,stderr=log,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0));wait_ready(port,child)
+                    child=spawn(log);wait_ready(port,child)
                     assert call('plugin.list')['recovery_mode'],mode
                     assert (base/'home/config/plugins.json').read_bytes()==original
                     commit([dict(id=badid,enabled=False)])
                     child.terminate();child.wait(timeout=10)
-                    child=subprocess.Popen([str(args.host.resolve()),str(config),'--','--home',str(base/'home')],cwd=base,stdout=log,stderr=log,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0));wait_ready(port,child)
+                    child=spawn(log);wait_ready(port,child)
                     assert not call('plugin.list')['recovery_mode']
                 # Resource readers, the runtime catalogue and editor ownership
                 # must agree even when a real user file exists underneath.
@@ -170,7 +179,7 @@ const mdo_module_v1* mdoModuleEntry(void){return &M;}
                 call('plugin.apply',dict(id='resource-owner',manifest=resource_doc,files=[dict(path='skill.md',text=plugin_skill)]))
                 assert commit([dict(id='resource-owner',enabled=True)])['restart_required']
                 child.terminate();child.wait(timeout=10)
-                child=subprocess.Popen([str(args.host.resolve()),str(config),'--','--home',str(base/'home')],cwd=base,stdout=log,stderr=log,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0));wait_ready(port,child)
+                child=spawn(log);wait_ready(port,child)
                 item=json.loads(request(port,'GET','/api/v1/extensions/skills/owned-skill')[2])['data']
                 assert item['plugin_owned'] and item['content']==plugin_skill,item
                 invoked=json.loads(request(port,'POST','/api/v1/skills/invoke',body=json.dumps(dict(id='owned-skill')).encode(),headers={'Content-Type':'application/json'})[2])['data'];assert 'Plugin instructions.' in invoked['text'],invoked
@@ -186,27 +195,30 @@ const mdo_module_v1* mdoModuleEntry(void){return &M;}
                 call('plugin.apply',dict(id='core-fixture',manifest=core_doc,files=[dict(path='core.c',text=core_source)]))
                 commit([dict(id='core-fixture',enabled=True)])
                 child.terminate();child.wait(timeout=10)
-                child=subprocess.Popen([str(args.host.resolve()),str(config),'--','--home',str(base/'home')],cwd=base,stdout=log,stderr=log,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0));wait_ready(port,child)
+                child=spawn(log);wait_ready(port,child)
                 bootstrap=json.loads(request(port,'GET','/api/v1/bootstrap')[2])['data']
                 assert bootstrap['version']=='core-fixture',(bootstrap,(base/'probe.log').read_text(encoding='utf-8',errors='replace')[-2500:])
                 assert call('qa.plugin.counter')==11,'Core delegation must not replay native Register'
                 core_doc['version']='2.0.0'
                 call('plugin.apply',dict(id='core-fixture',manifest=core_doc,files=[dict(path='core.c',text='this is not C;')]))
                 child.terminate();child.wait(timeout=10)
-                child=subprocess.Popen([str(args.host.resolve()),str(config),'--','--home',str(base/'home')],cwd=base,stdout=log,stderr=log,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0));wait_ready(port,child)
+                child=spawn(log);wait_ready(port,child)
                 assert call('plugin.list')['recovery_mode']
                 assert json.loads(request(port,'GET','/api/v1/bootstrap')[2])['data']['version']=='0.7.0'
                 call('qa.plugin.counter',status=404)
                 # Corrupt registry recovery never overwrites the original file.
                 registry=base/'home/config/plugins.json';registry.write_bytes(b'[{"id":null}]')
                 child.terminate();child.wait(timeout=10)
-                child=subprocess.Popen([str(args.host.resolve()),str(config),'--','--home',str(base/'home')],cwd=base,stdout=log,stderr=log,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0));wait_ready(port,child)
+                child=spawn(log);wait_ready(port,child)
                 assert call('plugin.list')['config_broken']
                 call('plugin.apply',dict(id='should-not-save',manifest=core_doc,files=[dict(path='core.c',text='anything')]),409)
                 assert registry.read_bytes()==b'[{"id":null}]'
                 print('Plugins: immutable mappings, mutual exclusion, one-sided conflicts, dependency bounds/cycles, atomic switching and stale plans PASS',flush=True)
             finally:
                 child.terminate();child.wait(timeout=10)
+                if args.packed:
+                    from test_packed_home_lease import release_packed_copies
+                    release_packed_copies(site/args.packed.name)
 
 
 if __name__=='__main__':main()

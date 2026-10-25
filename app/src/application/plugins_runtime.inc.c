@@ -48,7 +48,8 @@ static bool SdkPluginFrontendCall(cstr Method,const xvalue* P,xvalue** R,mdo_err
     cstr Client=SdkField(P,"client"),Page=SdkField(P,"page"),Id=SdkField(P,"id"),Revision=SdkField(P,"revision");
     if(!SdkIdValid(Client)||!SdkIdValid(Page))return MdoApplicationError(E,"sdk_arguments_invalid","A window client and document identity are required","plugin",422,false);
     xrtMutexLock(SdkPlugins.Lock);
-    if(SdkPlugins.Busy||SdkPlugins.Recovery){xrtMutexUnlock(SdkPlugins.Lock);return MdoApplicationError(E,"sdk_plugin_busy","Plugin manager is changing or recovering","plugin",409,false);}
+    bool CleanupControl=!strcmp(Method,"plugin.frontend.hello")||!strcmp(Method,"plugin.frontend.leave")||!strcmp(Method,"plugin.frontend.fail");
+    if(SdkPlugins.Busy||(SdkPlugins.Recovery&&!CleanupControl)){xrtMutexUnlock(SdkPlugins.Lock);return MdoApplicationError(E,"sdk_plugin_busy","Plugin manager is changing or recovering","plugin",409,false);}
     bool Hello=!strcmp(Method,"plugin.frontend.hello"),Leave=!strcmp(Method,"plugin.frontend.leave"),Fail=!strcmp(Method,"plugin.frontend.fail"),Ok=true;
     if(!Hello&&(!MdoPackageId(Id)||!Revision||strlen(Revision)!=64)){xrtMutexUnlock(SdkPlugins.Lock);return MdoApplicationError(E,"sdk_arguments_invalid","A plugin identity and revision are required","plugin",422,false);}
     xvalue* Next=xrtValueArray();bool Existing=false;
