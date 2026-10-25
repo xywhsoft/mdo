@@ -41,8 +41,6 @@ void MdoApplicationEvent(cstr Topic,const mdo_sdk_context_v1* C,const xvalue* Da
     xvalue* V=xrtValueObject();if(!V)return;
     SdkPut(V,"topic",Topic);SdkPut(V,"extension",C?C->ExtensionId:"");SdkPut(V,"invocation",C?C->InvocationId:"");
     SdkPut(V,"project",C?C->ProjectId:"");SdkPut(V,"session",C?C->SessionId:"");
-    MdoApplicationInvocation* Invocation=C?C->Opaque:NULL;
-    SdkPut(V,"trace_id",Invocation?Invocation->TraceId:"");SdkPut(V,"call_id",Invocation?Invocation->CallId:"");SdkPut(V,"parent_call_id",Invocation?Invocation->ParentCallId:"");
     char* Payload=Data?SdkJson(Data):NULL;size_t PayloadBytes=Payload?strlen(Payload):0;
     xrtValueObjectSetNew(V,XRT_STR_LITERAL("data"),Data&&PayloadBytes<=8192?xrtValueClone(Data):xrtValueNull());
     if(PayloadBytes>8192){xrtValueObjectSetNew(V,XRT_STR_LITERAL("data_omitted"),xrtValueBool(true));SdkPutUInt(V,"data_bytes",PayloadBytes);}

@@ -88,10 +88,8 @@ def main():
         try:
             result=fixture.call('qa.trace')
             before,after,nested=result['before'],result['after'],result['nested']['before']
-            assert len(before['trace_id'])==32 and before['trace_id']==after['trace_id']==nested['trace_id']
-            assert before['parent_call_id']==after['parent_call_id']
-            assert before['call_id']!=after['call_id'] and nested['parent_call_id']!=before['parent_call_id']
-            assert fixture.call('qa.trace')['before']['trace_id']!=before['trace_id']
+            assert before==after and before['project']==nested['project']=='default'
+            assert not any(name in before for name in ('trace_id','call_id','parent_call_id'))
             assert before['deadline_unit']=='monotonic_microseconds'
             assert fixture.call('qa.trace', {'cancel':True},499)['code']=='qa_cancelled'
             assert fixture.call('qa.trace', {'timeout':True},504)['code']=='qa_timeout'
@@ -101,10 +99,8 @@ def main():
             assert fixture.call('operation.wait',{'id':job['id'],'timeout_ms':2000})['outcome']=='succeeded'
             async_context=fixture.call('operation.result',{'id':job['id']})
             events=fixture.call('events.read')['items']
-            start=next(e for e in events if e['topic']=='service.before' and e['data'].get('method')=='operation.start')
-            assert async_context['trace_id']==start['trace_id'] and async_context['parent_call_id']==start['call_id']
+            assert async_context['project']=='default' and not any(name in async_context for name in ('trace_id','call_id','parent_call_id'))
             fixture.call('operation.release',{'id':job['id']})
-            assert any(e['topic']=='service.before' and e['trace_id']==before['trace_id'] for e in events)
             for i in range(40):fixture.call('events.emit',{'topic':'qa.page','data':{'n':i,'text':'x'*2048}})
             cursor=0;values=[];pages=0
             while True:
@@ -115,7 +111,7 @@ def main():
             assert values==list(range(40)) and pages>=3
             assert fixture.call('events.emit',{'topic':'qa.large','data':'x'*8193},413)['code']=='sdk_event_limit'
             forged=fixture.call('sdk.context',context={'project':'default','trace_id':'forged'})
-            assert forged['trace_id']!='forged'
+            assert 'trace_id' not in forged
             last=fixture.call('events.read')['latest']
             waiting=fixture.call('operation.start',{'method':'events.wait','params':{'after':last,'topic':'qa.wake','timeout_ms':3000}})
             fixture.call('events.emit',{'topic':'qa.wake','data':{'awake':True}})
@@ -242,7 +238,7 @@ def main():
 
         finally:
             fixture.stop()
-    print('PASS orchestration identity/outcomes, paged events, atomic CAS/transactions, durable receipts, fencing leases, reliable mailbox/atomic ack, backpressure and restart recovery')
+    print('PASS orchestration context/outcomes, paged events, atomic CAS/transactions, durable receipts, fencing leases, reliable mailbox/atomic ack, backpressure and restart recovery')
 
 
 if __name__=='__main__':

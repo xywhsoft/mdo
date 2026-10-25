@@ -8,7 +8,6 @@ typedef struct MdoApplicationInvocation {
     xcancel* Cancel;
     xvalue* Actions;
     unsigned Depth;
-    char TraceId[33], CallId[33], ParentCallId[33]; /* invocation-local; never caller supplied */
     void* Catalog; /* retained module generation for an asynchronous invocation */
     char WriteToken[64]; /* original HTTP admission generation, never returned */
 } MdoApplicationInvocation;

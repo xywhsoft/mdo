@@ -11,8 +11,6 @@ static const struct {cstr Id,Description;} SdkBuiltins[]={
     {"sdk.describe","Describe a service and its call contract"},
     {"sdk.context","Read the immutable caller context"},
     {"sdk.native","Discover typed product functions for in-process native modules"},
-    {"sdk.capabilities","Discover implemented feature contracts and resource limits"},
-    {"sdk.require","Preflight required services, native symbols and feature versions"},
     {"model.complete","Call a configured model with managed credentials, tools, parts, usage and optional stream"},
     {"tool.call","Execute one tool with the selected session's live permission scope and result rules"},
     {"session.compact","Compact the bound managed session and retain its original transcript"},
@@ -121,14 +119,11 @@ xvalue* MdoApplicationCatalogFor(const mdo_sdk_context_v1* C){
     xrtValueRelease(Custom);xrtValueRelease(A);return Merged;
 }
 xvalue* MdoApplicationCatalog(void){return MdoApplicationCatalogFor(NULL);}
-#include "capabilities.inc.c"
 static mdo_result SdkInvoke(const mdo_sdk_context_v1* C,cstr Method,const xvalue* P,xvalue** R,mdo_error_v1* E){
     bool Found=false;bool CustomOk=MdoApplicationCustomCall(C,Method,P,R,E,&Found);
     if(Found)return CustomOk?MDO_RESULT_OK:SdkErrorResult(E);
     if(!SdkValidateContract(Method,P,E))return MDO_RESULT_ERROR;
     if(!strcmp(Method,"sdk.native")){*R=SdkNativeCatalog();return *R?MDO_RESULT_OK:MDO_RESULT_ERROR;}
-    if(!strcmp(Method,"sdk.capabilities")){*R=SdkCapabilities();return *R?MDO_RESULT_OK:MDO_RESULT_ERROR;}
-    if(!strcmp(Method,"sdk.require"))return SdkRequire(C,P,R,E)?MDO_RESULT_OK:MDO_RESULT_ERROR;
     if(!strcmp(Method,"model.complete"))return SdkModelCall(C,P,R,E)?MDO_RESULT_OK:MDO_RESULT_ERROR;
     if(!strcmp(Method,"tool.call"))return SdkToolCall(C,P,R,E)?MDO_RESULT_OK:MDO_RESULT_ERROR;
     if(!strcmp(Method,"session.compact"))return SdkCompactCall(C,R,E)?MDO_RESULT_OK:MDO_RESULT_ERROR;
@@ -137,7 +132,6 @@ static mdo_result SdkInvoke(const mdo_sdk_context_v1* C,cstr Method,const xvalue
         *R=xrtValueObject();SdkPut(*R,"extension",C->ExtensionId);SdkPut(*R,"invocation",C->InvocationId);
         SdkPut(*R,"device",C->DeviceId);SdkPut(*R,"project",C->ProjectId);SdkPut(*R,"session",C->SessionId);
         SdkPut(*R,"run",C->RunId);SdkPut(*R,"workspace",C->Workspace);SdkPutUInt(*R,"deadline",C->Deadline);
-        MdoApplicationInvocation* I=C->Opaque;SdkPut(*R,"trace_id",I?I->TraceId:"");SdkPut(*R,"call_id",I?I->CallId:"");SdkPut(*R,"parent_call_id",I?I->ParentCallId:"");
         SdkPut(*R,"deadline_unit","monotonic_microseconds");return MDO_RESULT_OK;
     }
     if(!strcmp(Method,"events.read")){*R=MdoApplicationEvents(P,E);return *R?MDO_RESULT_OK:MDO_RESULT_ERROR;}
@@ -196,9 +190,6 @@ mdo_result MdoApplicationCall(const mdo_sdk_context_v1* C,cstr Method,const xval
     MdoApplicationInvocation* I=&Frame;
     if(I->Depth>=32){MdoApplicationError(E,"sdk_recursion_limit","Service recursion exceeded 32 nested calls","dispatch",409,false);return MDO_RESULT_LIMIT;}
     I->Depth++;
-    snprintf(I->ParentCallId,sizeof(I->ParentCallId),"%s",Parent?Parent->CallId:"");
-    if(!SdkCallIdentity(I->CallId)||(!I->TraceId[0]&&!SdkCallIdentity(I->TraceId))){
-        MdoApplicationError(E,"sdk_identity_failed","Cannot allocate invocation identity","dispatch",500,false);return MDO_RESULT_ERROR;}
 
     xvalue* Input=P&&xrtValueType(P)!=XVALUE_NULL?xrtValueClone(P):xrtValueObject();
     bool Hooked=strncmp(Method,"sdk.",4)&&strcmp(Method,"events.read")&&strcmp(Method,"events.wait");

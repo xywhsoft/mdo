@@ -11,7 +11,7 @@
 #define SDK_ACTIVE_JOBS 8u
 typedef struct SdkJob {
     char Id[37],Hash[65];
-    char WriteToken[64],TraceId[33],ParentCallId[33];
+    char WriteToken[64];
     char *Extension,*Project,*Session,*Run,*Workspace,*Method;
     xvalue *Params,*Info,*Result;
     char* Json;
@@ -88,7 +88,6 @@ static void SdkJobDispose(SdkJob* J){
 }
 static int32 SdkJobRun(void* User){
     SdkJob* J=User;MdoApplicationInvocation I={0};I.Cancel=J->Cancel;I.Catalog=J->Modules;snprintf(I.WriteToken,sizeof(I.WriteToken),"%s",J->WriteToken);
-    snprintf(I.TraceId,sizeof(I.TraceId),"%s",J->TraceId);snprintf(I.CallId,sizeof(I.CallId),"%s",J->ParentCallId);
     mdo_sdk_context_v1 C;MdoApplicationContext(&C,&I,J->Extension,J->Id,J->Project,J->Session,J->Run,J->Workspace,J->Deadline);
     mdo_error_v1 E={0};xvalue* Result=NULL;mdo_result Code=MdoApplicationCall(&C,J->Method,J->Params,&Result,&E);
     char* Json=Result?SdkJson(Result):NULL;size_t Size=Json?strlen(Json):0;
@@ -163,7 +162,7 @@ bool MdoApplicationJobsCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue
             J->Lease=Lease;
             J->Extension=xrtStrDup(C->ExtensionId);J->Project=xrtStrDup(C->ProjectId);J->Session=xrtStrDup(C->SessionId);J->Run=xrtStrDup(C->RunId);J->Workspace=xrtStrDup(C->Workspace);J->Method=xrtStrDup(Target);
             J->Params=SdkGet(P,"params")?xrtValueClone(SdkGet(P,"params")):xrtValueObject();J->Cancel=xrtCancelCreate();J->Modules=MdoModuleCatalogSnapshot();J->Deadline=C->Deadline;J->Info=xrtValueObject();
-            MdoApplicationInvocation* Caller=C->Opaque;if(Caller){snprintf(J->WriteToken,sizeof(J->WriteToken),"%s",Caller->WriteToken);snprintf(J->TraceId,sizeof(J->TraceId),"%s",Caller->TraceId);snprintf(J->ParentCallId,sizeof(J->ParentCallId),"%s",Caller->CallId);}
+            MdoApplicationInvocation* Caller=C->Opaque;if(Caller)snprintf(J->WriteToken,sizeof(J->WriteToken),"%s",Caller->WriteToken);
             SdkPut(J->Info,"id",Id);SdkPut(J->Info,"request_hash",Hash);SdkPut(J->Info,"method",Target);SdkPut(J->Info,"extension",C->ExtensionId);SdkPut(J->Info,"state","running");SdkPutUInt(J->Info,"started_us",MdoMonotonicUs());
             xrtValueObjectSetNew(J->Info,XRT_STR_LITERAL("terminal"),xrtValueBool(false));
             bool Ok=J->Extension&&J->Project&&J->Session&&J->Run&&J->Workspace&&J->Method&&J->Params&&J->Cancel&&J->Info&&SdkJobSave(J);

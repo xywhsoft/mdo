@@ -6,7 +6,7 @@
 #define SDK_STATE_RECORDS 1024u
 typedef struct SdkMemberActive {char Identity[65];xcancel* Cancel;} SdkMemberActive;
 static struct {xmutex* Lock;xcond* Drained;char Epoch[33];SdkMemberActive Members[8];bool Stopping;} SdkState;
-static const cstr SdkStateMethods[]={"state.get","state.list","state.put","state.compare_exchange","state.remove","state.transaction","state.receipt.get","lease.acquire","lease.inspect","lease.validate","lease.renew","lease.release","mailbox.send","mailbox.get","mailbox.read","mailbox.ack","mailbox.wait","instance.create","instance.get","instance.list","instance.send","instance.step","instance.cancel","instance.close","instance.rebind"};
+static const cstr SdkStateMethods[]={"state.get","state.list","state.put","state.compare_exchange","state.remove","state.transaction","state.receipt.get","lease.acquire","lease.inspect","lease.validate","lease.renew","lease.release","mailbox.send","mailbox.get","mailbox.read","mailbox.ack","mailbox.wait","instance.create","instance.get","instance.list","instance.send","instance.step","instance.cancel","instance.close"};
 bool MdoApplicationStateInit(void){SdkState.Lock=xrtMutexCreate();SdkState.Drained=xrtCondCreate();return SdkState.Lock&&SdkState.Drained&&SdkCallIdentity(SdkState.Epoch);}
 void MdoApplicationInstancesStop(void){
     if(!SdkState.Lock)return;xrtMutexLock(SdkState.Lock);SdkState.Stopping=true;

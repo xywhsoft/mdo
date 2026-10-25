@@ -116,11 +116,6 @@ def main():
       time.sleep(.025)
      raise AssertionError((method,'deadline',(base/'host.log').read_text(encoding='utf-8',errors='replace')))
     ids=invoke('sdk.services',{},'ids');assert len(ids)>200 and 'qa.echo' in ids,ids
-    capabilities=invoke('sdk.capabilities');assert capabilities['features']['mailbox.atomic_ack']==1 and capabilities['limits']['event_payload_bytes']==8192,capabilities
-    assert invoke('sdk.require',{'services':['qa.echo','state.transaction'],'native':['MdoSessionCreate'],'features':{'state.atomic':1}})=={'satisfied':True,'missing':[]}
-    missing=invoke('sdk.require',{'services':['qa.missing'],'native':['DoesNotExist'],'features':{'state.atomic':2,'unimplemented':1}})
-    assert not missing['satisfied'] and len(missing['missing'])==4,missing
-    assert invoke('sdk.require',{'features':{'state.atomic':0}},'catch')['status']==400
     assert {'account.logout','session.create','product.update.install.post','product.device_transfers.post'}<=set(ids)
     assert invoke('sdk.context')['project']=='default'
     contract=invoke('sdk.describe',{'id':'project.create'})['input_schema']

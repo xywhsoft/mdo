@@ -40,7 +40,7 @@ def main():
         with tempfile.TemporaryDirectory(dir=ROOT/'.build',prefix='member-sdk-') as tmp:
             f=Fixture(a.host.resolve(),Path(tmp));roles=f.home/'subagents';roles.mkdir(parents=True)
             (f.home/'modules/tools/scope.c').write_text(SCOPE_MODULE,encoding='utf-8')
-            (roles/'member.md').write_text('---\nname: Member QA\nmodel: qa-local-model\ntools: []\nread_only: true\n---\nReply briefly.\n',encoding='utf-8')
+            (roles/'member.md').write_text('---\nschema: mdo.agent.v1\nname: Member QA\nmodel: qa-local-model\ntools: []\nread_only: true\n---\nReply briefly.\n',encoding='utf-8')
             f.start()
             try:
                 cfg=f.call('product.models.config.get');patch={k:v for k,v in cfg['data'].items() if k!='runtime_override'}
@@ -67,7 +67,8 @@ def main():
                 call('send',message_id='turn3',prompt='After restart');result=call('step');assert result['last_outcome']['outcome']=='succeeded',result
                 users=[m['content'] for m in mock.last_request['messages'] if m['role']=='user'];assert len(users)>=3,users
                 (roles/'member.md').write_text((roles/'member.md').read_text(encoding='utf-8')+'Updated.\n',encoding='utf-8');f.call('runtime.reload',{'domain':'modules'})
-                f.call('instance.step',base,409);call('rebind');assert call('step')['no_work']
+                call('send',message_id='updated',prompt='Use the updated role');assert call('step')['last_outcome']['outcome']=='succeeded'
+                assert any('Updated.' in m.get('content','') for m in mock.last_request['messages'] if m['role']=='system')
                 assert len(f.call('instance.list',{'namespace':'qa.members'}))==1
                 assert call('close')['state']=='closed';f.call('instance.send',{**base,'message_id':'turn4','prompt':'closed'},409)
                 crashed={**base,'id':'interrupted'}
@@ -82,5 +83,5 @@ def main():
                 assert f.call('instance.close',crashed)['state']=='closed'
             finally:f.stop()
     finally:mock.shutdown();mock.server_close();worker.join()
-    print('PASS native SubAgent member identity, inbox dedup, multi-turn ledger, restart, code rebind and close')
+    print('PASS native SubAgent member identity, inbox dedup, multi-turn ledger, restart, live role reload and close')
 if __name__=='__main__':main()

@@ -4,14 +4,6 @@
 
 /* Durable member identity and inbox are independent of in-process operation
  * handles. Each explicit step claims one turn; ambiguous turns never replay. */
-static bool SdkInstanceFingerprint(MdoModuleCatalog* Catalog,char Hash[65]){
-    xvalue* Sources=xrtValueArray();bool Ok=Sources!=NULL;
-    for(size_t I=0;Ok&&I<MdoModuleCatalogModuleCount(Catalog);I++){
-        MdoModuleInfo Info={0};Info.Size=sizeof(Info);Ok=MdoModuleCatalogModuleAt(Catalog,I,&Info);
-        if(Ok){xvalue* Item=xrtValueObject();SdkPut(Item,"id",Info.Id);SdkPut(Item,"source",Info.SourceHash);SdkPut(Item,"version",Info.Version);Ok=xrtValueArrayAppendNew(Sources,Item);}
-    }
-    if(Ok)Ok=SdkMailboxHash(Sources,Hash);xrtValueRelease(Sources);return Ok;
-}
 static xvalue* SdkInstanceValue(xvalue* Root,cstr Key){return (xvalue*)SdkGet(SdkGet(SdkGet(Root,"records"),Key),"value");}
 static bool SdkInstanceStore(xvalue* Root,cstr Key,xvalue* V,mdo_error_v1* E){
     uint64 Revision=SdkStateRevision(Root);const xvalue* Records=SdkGet(Root,"records");
@@ -33,14 +25,13 @@ static int SdkInstanceActive(cstr Identity){for(int I=0;I<8;I++)if(SdkState.Memb
 static bool SdkInstanceNotify(const mdo_sdk_context_v1* C,const xvalue* V){MdoApplicationEvent("instance.changed",C,V);return true;}
 static bool SdkInstanceStep(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E){
     cstr Id=SdkField(P,"id");char Key[128],Path[160],Identity[65],Directory[160];snprintf(Key,sizeof(Key),"sys.instance.%s",Id);
-    MdoModuleCatalog* Modules=MdoModuleCatalogSnapshot();char Fingerprint[65];
-    if(!Modules||!SdkInstanceFingerprint(Modules,Fingerprint)){MdoModuleCatalogRelease(Modules);return MdoApplicationError(E,"sdk_instance_role","Cannot capture member code generation","instance",503,false);}
+    MdoModuleCatalog* Modules=MdoModuleCatalogSnapshot();
+    if(!Modules)return MdoApplicationError(E,"sdk_instance_role","Role catalog is unavailable","instance",503,false);
     xcancel* Cancel=xrtCancelCreate();xvalue *Config=NULL,*Message=NULL,*MailParams=xrtValueObject(),*Root=NULL;int Slot=-1;bool Ok=false,Claimed=false;
     if(!Cancel||!MailParams)goto done;
     xrtMutexLock(SdkState.Lock);Root=SdkStateLoad(C,P,Path,E);xvalue* Member=Root?SdkInstanceValue(Root,Key):NULL;
     if(!Member){MdoApplicationError(E,"sdk_instance_missing","Member is unavailable","instance",404,false);goto unlock;}
     if(!SdkField(Member,"state")||strcmp(SdkField(Member,"state"),"idle")){MdoApplicationError(E,"sdk_instance_not_idle","Member is running, closed or requires explicit recovery review","instance",409,false);goto unlock;}
-    if(!SdkField(Member,"fingerprint")||strcmp(SdkField(Member,"fingerprint"),Fingerprint)){MdoApplicationError(E,"sdk_instance_code_changed","Role dependencies changed; inspect and explicitly rebind the idle member","instance",409,false);goto unlock;}
     if(SdkState.Stopping){MdoApplicationError(E,"sdk_stopping","Member service is stopping","instance",503,false);goto unlock;}
     for(int I=0;I<8;I++)if(!SdkState.Members[I].Cancel){Slot=I;break;}
     if(Slot<0){MdoApplicationError(E,"sdk_instance_busy","Eight member turns are already active; wait for idle notification","instance",429,false);goto unlock;}
@@ -121,11 +112,11 @@ done:
     xrtCancelDestroy(Cancel);MdoModuleCatalogRelease(Modules);xrtValueRelease(Config);xrtValueRelease(Message);xrtValueRelease(MailParams);return Ok;
 }
 static bool SdkInstanceCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue* P,xvalue** R,mdo_error_v1* E){
-    cstr Id=SdkField(P,"id");bool List=!strcmp(Method,"instance.list"),Create=!strcmp(Method,"instance.create"),Rebind=!strcmp(Method,"instance.rebind");
+    cstr Id=SdkField(P,"id");bool List=!strcmp(Method,"instance.list"),Create=!strcmp(Method,"instance.create");
     if(!List&&(!SdkStateKey(Id)||strlen(Id)>64))return MdoApplicationError(E,"sdk_instance_arguments","A portable member id of at most 64 characters is required","instance",400,false);
     if(!strcmp(Method,"instance.step"))return SdkInstanceStep(C,P,R,E);
-    MdoModuleCatalog* Modules=NULL;char Fingerprint[65]={0};MdoModuleAgentInfo Role={0};Role.Size=sizeof(Role);
-    if(Create||Rebind){Modules=MdoModuleCatalogSnapshot();if(!Modules||!SdkInstanceFingerprint(Modules,Fingerprint)){MdoModuleCatalogRelease(Modules);return false;}}
+    MdoModuleCatalog* Modules=Create?MdoModuleCatalogSnapshot():NULL;MdoModuleAgentInfo Role={0};Role.Size=sizeof(Role);
+    if(Create&&!Modules)return MdoApplicationError(E,"sdk_instance_role","Role catalog is unavailable","instance",503,false);
     char Key[128],Path[160];snprintf(Key,sizeof(Key),"sys.instance.%s",Id?Id:"");bool Ok=false,Changed=false;
     xrtMutexLock(SdkState.Lock);xvalue* Root=SdkStateLoad(C,P,Path,E);xvalue* Member=Root?SdkInstanceValue(Root,Key):NULL;
     if(!Root)goto done;
@@ -139,7 +130,7 @@ static bool SdkInstanceCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue
         if(Member){Ok=SdkField(Member,"intent_hash")&&!strcmp(SdkField(Member,"intent_hash"),Hash);xrtValueRelease(Intent);if(Ok)*R=SdkInstanceInfo(Member);else MdoApplicationError(E,"sdk_identity_conflict","Member id belongs to different creation intent","instance",409,false);goto done;}
         size_t Count=0;const xvalue* Records=SdkGet(Root,"records");for(size_t I=0;I<xrtValueCount(Records);I++)if(!strncmp(SdkKey(Records,I),"sys.instance.",13))Count++;
         if(Count>=64){xrtValueRelease(Intent);MdoApplicationError(E,"sdk_instance_limit","Namespace retains 64 members; use an execution namespace","instance",413,false);goto done;}
-        char Box[96];snprintf(Box,sizeof(Box),"instance.%s",Id);SdkPut(Intent,"mailbox",Box);SdkPut(Intent,"intent_hash",Hash);SdkPut(Intent,"fingerprint",Fingerprint);SdkPut(Intent,"state","idle");SdkPut(Intent,"epoch",SdkState.Epoch);
+        char Box[96];snprintf(Box,sizeof(Box),"instance.%s",Id);SdkPut(Intent,"mailbox",Box);SdkPut(Intent,"intent_hash",Hash);SdkPut(Intent,"state","idle");SdkPut(Intent,"epoch",SdkState.Epoch);
         Ok=SdkInstanceStore(Root,Key,Intent,E);if(Ok)*R=SdkInstanceInfo(Intent);xrtValueRelease(Intent);Changed=Ok;
     }else if(!Member){MdoApplicationError(E,"sdk_instance_missing","Member is unavailable","instance",404,false);}
     else if(!strcmp(Method,"instance.get")){*R=SdkInstanceInfo(Member);Ok=*R!=NULL;}
@@ -149,10 +140,6 @@ static bool SdkInstanceCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue
         if(!Open){MdoApplicationError(E,"sdk_instance_not_open","Member is closed or requires review","instance",409,false);goto done;}
         xvalue* Q=xrtValueObject(),*Body=xrtValueObject();SdkPut(Body,"prompt",Prompt);SdkPut(Q,"mailbox",SdkField(Member,"mailbox"));SdkPut(Q,"message_id",SdkField(P,"message_id"));xrtValueObjectSetNew(Q,XRT_STR_LITERAL("body"),Body);
         Ok=SdkMailboxApply(C,"mailbox.send",Q,Root,R,E,&Changed);xrtValueRelease(Q);
-    }else if(Rebind){
-        if(strcmp(SdkField(Member,"state"),"idle")){MdoApplicationError(E,"sdk_instance_not_idle","Only an idle member can accept inspected new role code","instance",409,false);goto done;}
-        if(!MdoModuleCatalogAgentFind(Modules,SdkField(Member,"agent_id"),&Role)){MdoApplicationError(E,"sdk_instance_role","Member role is unavailable","instance",409,false);goto done;}
-        Ok=SdkPut(Member,"fingerprint",Fingerprint)&&SdkInstanceStore(Root,Key,Member,E);Changed=Ok;if(Ok)*R=SdkInstanceInfo(Member);
     }else{
         char Identity[65],Directory[160];SdkInstancePaths(Path,Id,Identity,Directory);int Active=SdkInstanceActive(Identity);
         if(!strcmp(Method,"instance.cancel")){
