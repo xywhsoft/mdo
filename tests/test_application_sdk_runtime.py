@@ -222,6 +222,9 @@ def main():
     created=invoke('session.create',{'body':{'project_id':'default','title':'Created using public SDK'}})
     assert created['status']==201 and created['transport']=='native',created
     session=created['data']['id'];scope={'project':'default','session':session}
+    http_status,_,http_body=request(port,'POST','/api/v1/application/call',body=json.dumps({'method':'tool.call','params':{'project':'default','session':session,'tool':'qa.context','arguments':{}},'context':scope}).encode(),headers={'Content-Type':'application/json'})
+    assert http_status==200,(http_status,http_body)
+    assert json.loads(http_body)['data']['success']
     assert invoke('example.agent.inspect',{'project':'default','session':session})['tools']>10
     tool=invoke('tool.call',{'project':'default','session':session,'tool':'qa.context','arguments':{}})
     assert tool['success'],tool
