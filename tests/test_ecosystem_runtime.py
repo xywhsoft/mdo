@@ -72,7 +72,9 @@ def run(ui=False,host=None,website_host=None):
             time.sleep(.1)
         assert account["state"]=="signed_in",account
         def store(action,**kw):
-            if action=="submit":kw.update(publish=True,review_notes="Portable source, build and permission review fixture.")
+            # This legacy multi-resource fixture belongs to the Agent category;
+            # the first resource's command category now requires single works.
+            if action=="submit":kw.update(kind="agents",publish=True,review_notes="Portable source, build and permission review fixture.")
             return app("POST","/ecosystem",dict(action=action,**kw),status=201 if action=="submit" else 200)
         p={"format":"mdo.extension.v1","manifest":{"slug":"native-suite","name":"Native Suite","version":"1.0.0","description":"Integration fixture","readme":"Portable source package","license":"MIT","platforms":["windows-x86_64","android-arm64-v8a"]},"resources":[
             {"kind":"commands","id":"eco-review","content":c_command("eco-review","Review")},
@@ -90,7 +92,7 @@ def run(ui=False,host=None,website_host=None):
         store("install",id=identity,trust_code=True)
         assert (home/"skills/eco-skill/references/check.md").read_bytes()==b"Check the build."
         assert str(identity) in app("GET","/ecosystem")
-        exported=store("export",references=[{"kind":"skills","id":"eco-skill"},{"kind":"commands","id":"eco-review"}]);assert len(exported["resources"])==2 and exported["resources"][0]["files"]
+        app("POST","/ecosystem",{"action":"export","references":[{"kind":"skills","id":"eco-skill"},{"kind":"commands","id":"eco-review"}]},status=403)
         # Partial publication drafts are portable and protected by revision CAS.
         draft={"id":"fixture-draft","fields":{"slug":"draft-test","name":"","version":"1.0.0","description":"","readme":"Draft work","license":"MIT","changelog":"","platforms":[]},"references":[]}
         saved=store("draft_save",draft=draft,revision="")

@@ -151,7 +151,10 @@ def run():
         call('DELETE','/extensions/knowledge/large-reference',revision=large['revision'])
         data=package()
         def store(action,**extra):return call('POST','/ecosystem',dict(action=action,single_kind='knowledge',**extra))
-        local_build=json.loads((ROOT/'app/release.json').read_text(encoding='utf-8'))['windows_build_id'if os.name=='nt'else'linux_glibc_server_build_id']
+        release=json.loads((ROOT/'app/release.json').read_text(encoding='utf-8'))
+        # The same probe targets GUI/server and glibc/musl products, each with
+        # its own installation serial. Use a floor newer than every product.
+        local_build=max(value for key,value in release.items() if key.endswith('build_id'))
         for minimum in (None,30000126,60000001,60000002,60000008,local_build+1):
             incompatible=copy.deepcopy(data)
             if minimum is None:incompatible['manifest'].pop('min_build_id',None)
