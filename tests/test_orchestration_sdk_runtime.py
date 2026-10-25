@@ -14,10 +14,12 @@ MODULE = r'''
 #include "mdo/execution.h"
 #include "mdo/state.h"
 #include "mdo/lease.h"
+#include "mdo/mailbox.h"
 #include <string.h>
 static mdo_result Capture(void* U,const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E){
  const mdo_values_v1* V=C->Api->Values;(void)U;
  if(V->Get(P,"state"))return mdoStateGet(C,P,R,E);
+ if(V->Get(P,"mailbox_read"))return mdoMailboxRead(C,P,R,E);
  if(V->Get(P,"cancel")){E->Status=499;strcpy(E->Code,"qa_cancelled");return MDO_RESULT_CANCELLED;}
  if(V->Get(P,"timeout")){E->Status=504;strcpy(E->Code,"qa_timeout");return MDO_RESULT_TIMEOUT;}
  if(V->Get(P,"uncertain")){E->Status=503;E->MayHaveCompleted=true;strcpy(E->Code,"qa_uncertain");return MDO_RESULT_ERROR;}
@@ -194,6 +196,42 @@ def main():
             after_restart=fixture.call('lease.acquire',{**lease_params,'request_id':'lease-after-restart'})
             assert after_restart['fence']>next_lease['fence']
             fixture.call('state.put',dict(namespace='qa.state',key='sys.lease.leader',expected_revision=0,value='forge'),400)
+
+            def mail(method,**params):return fixture.call('mailbox.'+method,dict(namespace='qa.state',**params))
+            message=dict(namespace='qa.state',mailbox='worker-1',message_id='message-1',body={'b':2,'a':1})
+            accepted=fixture.call('mailbox.send',message)
+            assert fixture.call('mailbox.send',{**message,'body':{'a':1,'b':2}})==accepted
+            fixture.call('mailbox.send',{**message,'body':'changed'},409)
+            assert mail('read',mailbox='worker-1')['items'][0]['body']=={'a':1,'b':2}
+            assert fixture.call('qa.trace',{'namespace':'qa.state','mailbox':'worker-1','mailbox_read':True})['items'][0]['message_id']=='message-1'
+            ack=dict(namespace='qa.state',mailbox='worker-1',message_id='message-1',writes=[dict(key='delivered',expected_revision=0,value=True)])
+            acknowledged=fixture.call('mailbox.ack',ack)
+            assert state('get',key='delivered')['value'] is True
+            assert fixture.call('mailbox.ack',ack)==acknowledged
+            assert fixture.call('mailbox.send',message)==accepted
+            fixture.call('mailbox.ack',{**ack,'writes':[dict(key='delivered',expected_revision=0,value=False)]},409)
+            assert not mail('read',mailbox='worker-1')['items']
+            mail('send',mailbox='worker-1',message_id='message-2',body='pending')
+            fixture.call('mailbox.ack',{**ack,'message_id':'message-2'},409)
+            assert mail('get',mailbox='worker-1',message_id='message-2')['state']=='pending'
+            fixture.stop();fixture.start()
+            assert mail('read',mailbox='worker-1')['items'][0]['message_id']=='message-2'
+            assert fixture.call('mailbox.send',message)==accepted
+            for i in range(40):mail('send',mailbox='paged',message_id='page-'+str(i),body={'n':i,'text':'x'*2048})
+            cursor=0;numbers=[]
+            while True:
+                page=mail('read',mailbox='paged',after=cursor,limit=20)
+                assert len(json.dumps(page))<40000
+                numbers.extend(m['body']['n'] for m in page['items']);cursor=page['cursor']
+                if not page['has_more']:break
+            assert numbers==list(range(40))
+            pending=fixture.call('operation.start',{'method':'mailbox.wait','params':{'namespace':'qa.state','mailbox':'wakeup','timeout_ms':2000}})
+            mail('send',mailbox='wakeup',message_id='wake-1',body='awake')
+            assert fixture.call('operation.wait',{'id':pending['id'],'timeout_ms':1000})['outcome']=='succeeded'
+            assert fixture.call('operation.result',{'id':pending['id']})['items'][0]['body']=='awake'
+            fixture.call('operation.release',{'id':pending['id']})
+            for i in range(32):mail('send',mailbox='bounded',message_id='bounded-'+str(i),body='x'*8000)
+            fixture.call('mailbox.send',dict(namespace='qa.state',mailbox='bounded',message_id='overflow',body='x'*8000),429)
             files=list((fixture.home/'data/application/state').glob('*.json'));assert len(files)==1
             original=files[0].read_bytes();files[0].write_bytes(original.replace(b'false',b'true',1))
             assert fixture.call('state.get',{'namespace':'qa.state','key':'counter'},422)['code']=='sdk_state_corrupt'
@@ -204,7 +242,7 @@ def main():
 
         finally:
             fixture.stop()
-    print('PASS orchestration identity/outcomes, paged events, atomic CAS/transactions, durable receipts, fencing leases, expiry and corrupt/restart recovery')
+    print('PASS orchestration identity/outcomes, paged events, atomic CAS/transactions, durable receipts, fencing leases, reliable mailbox/atomic ack, backpressure and restart recovery')
 
 
 if __name__=='__main__':

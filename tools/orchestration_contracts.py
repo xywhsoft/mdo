@@ -26,3 +26,13 @@ def contracts(add):
     add('lease.validate','Validate the fence/token; atomic state writes must instead use lease_guard',lease,('id','fence','token'))
     for method in ('lease.renew','lease.release'):
         add(method,'Renew or release only a currently live lease; repeated request_id returns its original receipt',lease,('id','fence','token','request_id'))
+
+    mail={'namespace':string,'mailbox':string,'message_id':string,'body':{},'after':uint,
+          'limit':{**uint,'minimum':1,'maximum':64},'timeout_ms':{**uint,'maximum':60000},
+          'lease_guard':guard,'writes':{'type':'array','minItems':1,'maxItems':64,'items':write},
+          'checks':{'type':'array','maxItems':64,'items':check}}
+    add('mailbox.send','Durably admit one bounded message; message_id deduplicates canonical content and sender',mail,('mailbox','message_id','body'))
+    add('mailbox.get','Inspect message delivery/ack state; acknowledged payloads are discarded',mail,('mailbox','message_id'))
+    add('mailbox.read','Read pending messages without consuming them; page by cursor with a 32 KiB response budget',mail,('mailbox',))
+    add('mailbox.ack','Atomically acknowledge and optionally commit state writes; mismatched repeated ack is rejected',mail,('mailbox','message_id'))
+    add('mailbox.wait','Wait for durable pending messages; notifications are hints and state is rechecked',mail,('mailbox',))
