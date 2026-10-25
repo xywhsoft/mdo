@@ -15,9 +15,9 @@ test("notice filters include lower and exclude upper version/time boundaries",()
 const copy={update:"Update",toolsUpdate:"Tools update",install:"Install",login:"Sign in"};
 test("updates remain visible; run-scoped hidden notices and revision reset",()=>{
  const args={distribution:{...device,tools:[],installed:{core:"old",core_revision:1},toolpacks:[{id:"core",revision:2}],notices:[{...notice,starts_at:0,ends_at:0},{...notice,id:"offer",icon:"coupon",starts_at:0,ends_at:0}]},update:{available:true,sha256:"hash"},account:{state:"signed_out"},locale:"zh-CN",copy};
- assert.deepEqual(buildNotices(args).map(n=>n.id),["app-update","tools-guide","account-guide","offer","old"]);
+ assert.deepEqual(buildNotices(args).map(n=>n.id),["app-update","system-warnings","tools-guide","account-guide","offer"]);
  const preferences={"app-update":{hidden:buildNotices(args)[0].revision,read:"hash"},"tools-guide":{hidden:1},old:{hidden:1},marketing:false};
- const ids=buildNotices({...args,preferences}).map(n=>n.id);assert(ids.includes("app-update"));assert(ids.includes("old"));assert(!ids.includes("tools-guide"));assert(!ids.includes("offer"));
+ const ids=buildNotices({...args,preferences}).map(n=>n.id);assert(ids.includes("app-update"));assert(ids.includes("system-warnings"));assert(!ids.includes("tools-guide"));assert(!ids.includes("offer"));
  assert(!buildNotices({...args,update:{available:false},account:{state:"refreshing"}}).some(n=>["account-guide","app-update"].includes(n.id)));
 });
 test("tool operations respect target admission, dependencies, withdrawal and compatibility",()=>{

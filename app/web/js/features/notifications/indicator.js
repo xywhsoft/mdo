@@ -74,7 +74,7 @@ export function createNoticeIndicators({ hosts, copy, onOpen }) {
     const owner = scope;
     const button = document.createElement("button"); button.type = "button";
     button.className = "notification-indicator"; button.dataset.noticeId = n.id;
-    button.dataset.tone = noticeTone(n); button.setAttribute("aria-controls", n.action === "update" && !n.online ? "update-dialog" : "notice-content-dialog"); button.setAttribute("aria-haspopup", "dialog");
+    button.dataset.tone = noticeTone(n); button.setAttribute("aria-controls", n.action === "warnings" && !n.online ? "warning-details-dialog" : n.action === "update" && !n.online ? "update-dialog" : "notice-content-dialog"); button.setAttribute("aria-haspopup", "dialog");
     button.setAttribute("aria-label", n.title);
     if (noticeTone(n) === "update") button.textContent = copy().updateBadge;
     else button.append(createNoticeIcon(n));

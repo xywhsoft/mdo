@@ -20,6 +20,12 @@
 .notification-bubble strong { display:block; margin-bottom:6px; font-size:13px; line-height:1.4; }
 .notification-bubble > span { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:4; overflow:hidden; white-space:pre-wrap; overflow-wrap:anywhere; font-size:12px; line-height:1.7; color:var(--muted); }
 .notice-description { white-space:pre-wrap; line-height:1.7; overflow-wrap:anywhere; }
+.warning-entry { padding:16px 0; border-bottom:1px solid var(--border); }
+.warning-entry:first-child { padding-top:0; }
+.warning-entry h3 { margin:0 0 8px; font-size:1rem; }
+.warning-entry p { margin:8px 0; }
+.warning-path { color:var(--muted); font-size:.875rem; overflow-wrap:anywhere; }
+.warning-entry-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
 .toolpack-row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin:16px 0; }
 [data-settings-toolpacks] code { display:block; font-size:12px; overflow-wrap:anywhere; }
 .toolpack-section { padding:14px 0; border-bottom:1px solid var(--border); }

@@ -34,10 +34,10 @@ async function fixture(t) {
   doc.querySelector=selector=>selector==="[data-settings-toolpacks]"?tools:selector==="dialog[open]"?doc.body.querySelectorAll("dialog").find(d=>d.open):doc.body.querySelector(selector);
   let state={selected:null,connected:true}; const listeners=new Set(),calls=[];
   const model={distribution:{notification_session:runtime,platform:"windows-x86_64",build_id:30000142,notices:[
-    {id:"admin",revision:1,title:"Admin notice",body:"<script>literal</script>\nSecond line",icon:"warning",persistent:true,action:"update"},
+    {id:"admin",revision:1,title:"Admin notice",body:"<script>literal</script>\nSecond line",icon:"message",persistent:true,action:"update"},
     ...Array.from({length:4},(_,i)=>({id:`extra-${i}`,revision:1,title:`Notice ${i}`,body:`Body ${i}`}))]},
-    update:{enabled:true,available:true,status:"available",sha256:"hash",notes:"Update notes"},account:{state:"signed_out"}};
-  const stubs={api:{get:async path=>({data:path==="/distribution"?model.distribution:path==="/update"?model.update:path==="/account"?model.account:{platform:"windows-x86_64",tasks:[]}})},
+    update:{enabled:true,available:true,status:"available",sha256:"hash",notes:"Update notes"},account:{state:"signed_out"},diagnostics:{items:[]}};
+  const stubs={api:{get:async path=>({data:path==="/distribution"?model.distribution:path==="/update"?model.update:path==="/account"?model.account:path==="/diagnostics"?model.diagnostics:{platform:"windows-x86_64",tasks:[]}})},
     targetState:()=>state,subscribeTarget:fn=>{listeners.add(fn);fn(state);return()=>listeners.delete(fn);},
     createExternalToolsPanel:()=>({render(){},reset(){},destroy(){}}),createToolPanel:()=>({render(){}})};
   globalThis.__noticeWindows=stubs;
@@ -91,4 +91,29 @@ test("late update policy from the previous target cannot block the new target or
     assert(!env.doc.body.querySelector("dialog"));panel.open();const dialog=env.doc.body.querySelector("dialog");
     assert.equal(dialog.dataset.required,"false");assert(dialog.querySelector("[data-update-action=download]").hidden);
   } finally {panel.destroy();}
+});
+
+test("one warning window shows all current issues, keeps the footer fixed and clears resolved rows",async t=>{
+  const env=await fixture(t);
+  env.model.diagnostics.items=[{domain:"knowledge",code:"invalid_metadata",subject_id:"reference",path:"knowledge/reference/knowledge.json",message:"Bad metadata"},{domain:"mcp",stage:"parse",subject_id:"server",path:"mcp/server.json",message:"<script>literal warning</script>"}];
+  env.model.distribution.notices.push({id:"online-warning",revision:1,title:"Platform warning",body:"Online body",icon:"warning"});
+  await env.center.refresh();assert.equal(env.host.children.filter(b=>b.dataset.tone==="warning").length,1);
+  const opener=env.host.children.find(b=>b.dataset.noticeId==="system-warnings");assert.equal(opener.getAttribute("aria-controls"),"warning-details-dialog");opener.click();
+  const dialog=env.doc.body.querySelector("dialog"),body=dialog.querySelector(".mdo-layer-body"),footer=dialog.querySelector(".mdo-layer-footer");
+  assert.equal(dialog.id,"warning-details-dialog");assert.equal(dialog.querySelectorAll(".warning-entry").length,3);assert.equal(footer.children.length,2);assert(!body.contains(footer));
+  assert(dialog.textContent.includes("knowledge/reference/knowledge.json"));assert(dialog.textContent.includes("<script>literal warning</script>"));assert(!dialog.querySelector("script"));
+  await env.center.refresh();assert.equal(body,dialog.querySelector(".mdo-layer-body"));assert.equal(dialog.querySelectorAll(".warning-entry").length,3);
+  dialog.querySelector("[data-warning-action=later]").click();assert.equal(dialog.querySelectorAll(".warning-entry").length,2);
+  env.model.diagnostics.items=[];await env.center.refresh();assert(!env.doc.body.querySelector("dialog"));assert(!env.host.children.some(b=>b.dataset.noticeId==="system-warnings"));
+});
+
+test("failed checks keep the previous warning; target changes reject late checks and old window actions",async t=>{
+  const env=await fixture(t),issue={domain:"knowledge",code:"root_not_directory",path:"knowledge",message:"Root conflict"};
+  env.model.diagnostics.items=[issue];await env.center.refresh();env.host.children.find(b=>b.dataset.noticeId==="system-warnings").click();
+  const original=env.stubs.api.get;env.stubs.api.get=path=>path==="/diagnostics"?Promise.reject(Error("offline")):original(path);
+  assert.equal(await env.center.refresh(),false);assert.equal(env.doc.body.querySelectorAll(".warning-entry").length,2);
+  let resolve;const late=new Promise(done=>resolve=done);env.stubs.api.get=path=>path==="/diagnostics"?late:original(path);
+  const oldButton=env.doc.body.querySelector("dialog").querySelector(".mdo-layer-footer").firstChild;oldButton.click();
+  env.switchTarget({id:"remote",owner:"9"});env.model.diagnostics.items=[];env.stubs.api.get=original;resolve({data:{items:[issue]}});await flush();await flush();
+  assert(!env.doc.body.querySelector("dialog"));assert(!env.host.children.some(b=>b.dataset.noticeId==="system-warnings"));oldButton.click();await flush();assert(!env.doc.body.querySelector("dialog"));
 });

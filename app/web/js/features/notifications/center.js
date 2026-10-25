@@ -7,6 +7,7 @@ import { openLayer } from "../../components/layers.js";
 import { createNoticePreferences } from "./preferences.js";
 import { createExternalToolsPanel } from "./external-tools.js";
 import { createToolPanel } from "./tool-panel.js";
+import { createWarningPanel } from "./warning-panel.js";
 
 const words = {
   "zh-CN": { title: "通知", update: "应用更新", updateBody: "安装后保留配置、项目和会话。", toolsUpdate: "扩展工具包更新", install: "扩展工具包安装", login: "登录账号", toolsBody: "扩展工具包提供 BusyBox 常用命令、curl 网络下载、jq 数据处理和 SSH/SCP/SFTP 远程连接。Python 可用于脚本和数据处理。请从 设置 → 扩展能力 → 扩展工具包 进入安装和更新。", accountBody: "登录后可使用联网搜索、自己的设备中继、在线模型及用量查询。账号令牌保存在本机服务中。点击账号即可直接登录。", android: "Android 不支持单独安装、更新或卸载扩展工具包。系统限制在可写目录中执行原生程序，因此工具必须随完整版 APK 安装和更新。请安装同签名、版本号更大的完整版，覆盖升级会保留配置、项目和会话。", later: "稍后提醒", close: "关闭", tools: "扩展工具包", check: "检查更新", core: "常用工具包", python: "Python（可选）", full: "查看完整版更新", busy: "正在处理…", missing: "尚未安装", installed: "已安装", failure: "操作失败，请重试" },
@@ -30,7 +31,7 @@ Object.assign(words["ru-RU"],{expectedHash:"Ожидаемый SHA-256",actualHa
 export function createNotificationCenter({ updatePanel, navigation, openAccount = () => navigation.openSettings("account"), openDownloads = () => {} }) {
   const toolsBody = document.querySelector("[data-settings-toolpacks]");
   const entries = document.querySelectorAll("[data-notifications-open]");
-  let cli = {}, distribution = {cli:{}}, update = null, account = null, pending = false, timer, destroyed = false, epoch = 0, view = null;
+  let cli = {}, distribution = {cli:{}}, update = null, account = null, diagnostics = null, diagnosticsFailed = false, pending = false, timer, destroyed = false, epoch = 0, view = null;
   const choices = createNoticePreferences();
   const copy = () => words[currentLocale()] ?? words["en-US"];
   const toolPanel=createToolPanel({copy,target:targetState,command,openFull:async()=>{
@@ -43,13 +44,16 @@ export function createNotificationCenter({ updatePanel, navigation, openAccount 
   const indicators = createNoticeIndicators({ hosts: entries, copy, onOpen: openNotice });
   const key = () => targetState().selected ? `${targetState().selected.owner}/${targetState().selected.id}` : "local";
   const preferences = () => choices.forRun(key(), distribution.notification_session);
-  const notices = () => buildNotices({ distribution, update, account, locale: currentLocale(), preferences: preferences(), copy: copy() });
+  const notices = () => buildNotices({ distribution, update, account, diagnostics, diagnosticsFailed, locale: currentLocale(), preferences: preferences(), copy: copy() });
+  const warningPanel=createWarningPanel({scope:()=>`${key()}/${distribution.notification_session||""}`,refresh,
+    onLater:n=>{choices.record(key(),distribution.notification_session,n,true);render();},onSettings:section=>navigation.openSettings(section)});
   function button(text, action) { const e = node("button", text, "secondary-button"); e.type = "button"; e.addEventListener("click", action); return e; }
-  function close() { const own = view; view = null; own?.layer.dispose(); }
+  function close() { const own = view; view = null; own?.layer.dispose(); warningPanel.close(); }
   function openNotice(n) {
     if (destroyed || !n) return;
     indicators.hide(); close(); choices.record(key(), distribution.notification_session, n); render(); indicators.hide();
     if (!n.online) {
+      if (n.action === "warnings") { warningPanel.open(n); return; }
       if (n.action === "update") { updatePanel?.open(); return; }
       if (n.action === "tools") { openTools(); return; }
       if (n.action === "account") { openAccount(); return; }
@@ -76,6 +80,7 @@ export function createNotificationCenter({ updatePanel, navigation, openAccount 
   function render() {
     const list = notices(), c = copy();
     indicators.render(list, preferences(), `${key()}/${distribution.notification_session || ""}`);
+    warningPanel.sync(list.find(n=>n.id==="system-warnings"));
     if (view) {
       const n = list.find(n => n.id === view.notice.id && n.revision === view.notice.revision);
       if (!n || view.scope !== key() || view.runtime !== distribution.notification_session) close();
@@ -97,21 +102,28 @@ export function createNotificationCenter({ updatePanel, navigation, openAccount 
     catch (error) { distribution.message = copy().failure + " · " + error.message; render(); }
   }
   async function refresh() {
-    if (pending || destroyed) return; pending = true; const generation = epoch;
+    if (pending || destroyed) return false; pending = true; const generation = epoch;
     try {
-      const results = await Promise.allSettled([api.get("/distribution"), api.get("/update"), api.get("/account"), api.get("/cli-tools")]);
+      const results = await Promise.allSettled([api.get("/distribution"), api.get("/update"), api.get("/account"), api.get("/cli-tools"), api.get("/diagnostics")]);
       if (generation !== epoch || destroyed) return;
-      if (results[0].status === "fulfilled") distribution = results[0].value.data;
+      if (results[0].status === "fulfilled") {
+        const next=results[0].value.data;
+        if(distribution.notification_session&&next.notification_session&&distribution.notification_session!==next.notification_session)diagnostics=null;
+        distribution=next;
+      }
       if (results[1].status === "fulfilled") update = results[1].value.data;
       if (results[2].status === "fulfilled") account = results[2].value.data;
       if (results[3].status === "fulfilled") cli=results[3].value.data;distribution.cli=cli;
+      diagnosticsFailed=results[4].status!=="fulfilled";
+      if(!diagnosticsFailed)diagnostics=results[4].value.data;
       render();
+      return !diagnosticsFailed;
     } finally { pending = false; clearTimeout(timer); if (!destroyed && generation!==epoch) queueMicrotask(refresh);else if (!destroyed) timer = setTimeout(refresh, distribution.busy || update?.busy || (cli.tasks??[]).some(t=>["queued","running","installing","uploading"].includes(t.state)) ? 1000 : 30000); }
   }
   let scope = key();
   const locale = subscribeLocale(render), target = subscribeTarget(() => {
     if (scope === key()) { render(); return; }
-    scope = key(); epoch++; close(); externalPanel.reset(); cli={}; distribution = {cli:{}}; update = account = null; render(); void refresh();
+    scope = key(); epoch++; close(); externalPanel.reset(); cli={}; distribution = {cli:{}}; update = account = diagnostics = null; diagnosticsFailed=false; render(); void refresh();
   });
   const route = navigation.subscribe(state => { renderTools();if (state.view === "settings" && state.settingsSection === "toolpacks") void refresh(); });
   const foreground = () => { if (!document.hidden) void refresh(); }; document.addEventListener("visibilitychange", foreground);

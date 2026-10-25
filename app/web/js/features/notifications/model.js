@@ -1,4 +1,5 @@
 export const noticeIcons = { message: "ⓘ", warning: "⚠", error: "❗", success: "✓", coupon: "◇", update: "↑", tools: "ⓘ", account: "ⓘ" };
+import { warningNotice } from "./warnings.js";
 export function matchesNotice(n, device, locale, signedIn, now = Date.now()) {
   return n && typeof n.id === "string" && typeof n.title === "string" && typeof n.body === "string"
     && (!n.min_build || device.build_id >= n.min_build)
@@ -9,7 +10,7 @@ export function matchesNotice(n, device, locale, signedIn, now = Date.now()) {
     && (!n.starts_at || now >= n.starts_at * 1000) && (!n.ends_at || now < n.ends_at * 1000)
     && (n.audience !== "signed_in" || signedIn) && (n.audience !== "signed_out" || !signedIn);
 }
-export function buildNotices({ distribution = {}, update, account, locale, preferences = {}, now = Date.now(), copy }) {
+export function buildNotices({ distribution = {}, update, account, diagnostics, diagnosticsFailed = false, locale, preferences = {}, now = Date.now(), copy }) {
   const notices = [], tools = distribution.tools ?? [], installed = distribution.installed ?? {};
   const updates=[];
   for (const pack of distribution.cli ? [] : distribution.toolpacks ?? []) {
@@ -22,8 +23,13 @@ export function buildNotices({ distribution = {}, update, account, locale, prefe
   if (!distribution.cli && tools.filter(t => ["busybox", "curl", "jq", "ssh"].includes(t.id)).length < 4)
     notices.push({ id: "tools-guide", revision: 1, title: copy.install, body: copy.toolsBody, icon: "tools", rank: 2, action: "tools" });
   if (account?.state === "signed_out") notices.push({ id: "account-guide", revision: 1, title: copy.login, body: copy.accountBody, icon: "account", rank: 3, action: "account" });
-  for (const n of distribution.notices ?? []) if (matchesNotice(n, distribution, locale, account?.state === "signed_in", now) && !(n.icon === "coupon" && preferences.marketing === false))
-    notices.push({ ...n, rank: 4, online: true, persistent: false });
+  const warnings=[];
+  for (const n of distribution.notices ?? []) if (matchesNotice(n, distribution, locale, account?.state === "signed_in", now) && !(n.icon === "coupon" && preferences.marketing === false)) {
+    const row={...n,rank:4,online:true,persistent:false};
+    if(n.icon==="warning"){if(preferences[n.id]?.hidden!==n.revision)warnings.push(row);}
+    else notices.push(row);
+  }
+  const grouped=warningNotice({diagnostics,failed:diagnosticsFailed,online:warnings,locale});if(grouped)notices.push(grouped);
   return notices.filter(n => n.persistent || preferences[n.id]?.hidden !== n.revision)
     .sort((a, b) => a.rank - b.rank || (b.priority ?? 0) - (a.priority ?? 0) || (b.starts_at ?? 0) - (a.starts_at ?? 0) || a.id.localeCompare(b.id));
 }
