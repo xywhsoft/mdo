@@ -34,6 +34,9 @@ def main():
     args = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix="role-package-", dir=ROOT / ".build") as raw:
         base = Path(raw); port = free_port(); config = write_site(base, port); home = base / "home"; home.mkdir()
+        program=home/"modules/agents/standalone.c";program.parent.mkdir(parents=True)
+        source=(ROOT/"examples/agents/code-reviewer.c").read_text(encoding="utf-8").replace("agent.code-reviewer","agent.standalone")
+        program.write_text(source,encoding="utf-8",newline="\n")
         def app(method, path, body=None, status=200, revision=None):
             headers = {}
             if revision: headers["If-Match"] = '"' + revision + '"'
@@ -50,6 +53,16 @@ def main():
                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
             try:
                 wait_ready(port, proc)
+                standalone=app("GET","/extensions/agents/standalone")
+                assert standalone["code_only"] and standalone["valid"] and standalone["program_source"]==source,standalone
+                assert any(i["id"]=="standalone" for i in app("GET","/extensions/agents")["items"])
+                exported=app("POST","/ecosystem",dict(action="export",single_kind="agents",references=[dict(kind="agents",id="standalone")]))["resources"][0]
+                assert json.loads(exported["content"])["code"] and exported["files"][0]["path"]=="program.c"
+                app("POST","/extensions/agents/standalone/enabled",dict(enabled=False),revision=standalone["revision"])
+                assert not app("GET","/extensions/agents/standalone")["shareable"]
+                app("POST","/extensions/agents/standalone/enabled",dict(enabled=True),revision=standalone["revision"])
+                app("DELETE","/extensions/agents/standalone",revision=standalone["revision"])
+                assert not program.exists()
                 for kind in ("agents", "subagents"):
                     p = package(kind, "portable-" + kind, True); role = p["resources"][0]; identity = role["id"]
                     plan = store("plan_import", p)

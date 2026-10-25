@@ -135,7 +135,9 @@ static bool EcoRoleExport(cstr Kind,cstr Id,xvalue* Resource)
 {
     if(!MdoPackageRoleKind(Kind)||!MdoPackageId(Id)||(!strcmp(Kind,"agents")&&!strcmp(Id,"default")))return false;
     char Path[256];snprintf(Path,sizeof(Path),"%s/%s.md",Kind,Id);
-    char* Raw=MdoExtensionRead(Path,false,MDO_EXTENSION_TEXT_LIMIT,NULL);
+    bool Missing=false;char* Raw=MdoExtensionRead(Path,false,MDO_EXTENSION_TEXT_LIMIT,&Missing);
+    if(!Raw&&Missing){snprintf(Path,sizeof(Path),"modules/%s/%s.c",Kind,Id);char* Code=MdoExtensionRead(Path,false,MDO_EXTENSION_TEXT_LIMIT,NULL);
+        bool Enabled=true;MdoExtensionEnabled(Kind,Id,&Enabled);if(Enabled&&Code)Raw=ExtensionRoleCodeConfig(Kind,Id,Code);xrtFree(Code);}
     xvalue* D=Raw?MdoPackageRoleDocument(Raw,NULL,0):NULL;xrtFree(Raw);
     xvalue* Files=xrtValueArray();bool Ok=D&&Files&&MdoAgentConfigSetText(D,"schema","mdo.agent.v1");size_t Total=0;
     const char* Lists[]={"skills","mcp_servers"};

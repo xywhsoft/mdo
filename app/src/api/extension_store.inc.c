@@ -32,7 +32,9 @@ static bool ExtensionStoreCanCustomize(MdoApiContext* C,cstr Kind,cstr Id)
         if(Managed){MdoApiReplyError(C,403,"store_resource_readonly","Configure this MCP connection through its template; editing, exporting and republishing store templates is unavailable",NULL);return false;}}
 
     char Path[160];ExtensionPath(Kind,Id,Path);bool Known=false;xvalue* Records=ExtensionStoreRead(&Known);
-    bool Managed=ExtensionStoreOwner(Records,Path)!=NULL;xrtValueRelease(Records);
+    bool Managed=ExtensionStoreOwner(Records,Path)!=NULL;
+    if(MdoPackageRoleKind(Kind)){snprintf(Path,sizeof(Path),"modules/%s/%s.c",Kind,Id);Managed=Managed||ExtensionStoreOwner(Records,Path)!=NULL;}
+    xrtValueRelease(Records);
     if(!Known){MdoApiReplyError(C,503,"ecosystem_receipts","Cannot verify resource ownership; restore installation receipts before customizing",NULL);return false;}
     if(Managed){MdoApiReplyError(C,403,"store_resource_readonly","Store resources support enable, update and uninstall; editing, copying and republishing are unavailable",NULL);return false;}
     return true;

@@ -105,17 +105,23 @@ static bool ExtensionReload(cstr Kind,cstr Id,bool Expected)
     return Found==Expected;
 }
 #include "extension_store.inc.c"
+#include "role_code.inc.c"
 static xvalue* ExtensionItemRecord(cstr Kind,cstr Id,bool IncludeSource,const xvalue* Receipts,bool OwnershipKnown)
 {
     char Path[160],Hash[65],Error[1024];
     char* Text;
-    bool Missing=false,Enabled=true,External=false,Valid;
+    bool Missing=false,Enabled=true,External=false,Valid,CodeOnly=false;
+    char* ProgramSource=NULL;
     xfileinfo Info;
     xvalue* Item=xrtValueObject();
     xvalue* Doc=NULL;
     xstrview Name={0},Description={0};
     ExtensionPath(Kind,Id,Path);
     Text=MdoExtensionRead(Path,false,MDO_EXTENSION_TEXT_LIMIT,&Missing);
+    if(!Text&&Missing&&MdoPackageRoleKind(Kind)){
+        snprintf(Path,sizeof(Path),"modules/%s/%s.c",Kind,Id);ProgramSource=MdoExtensionRead(Path,false,MDO_EXTENSION_TEXT_LIMIT,NULL);
+        Text=ProgramSource?ExtensionRoleCodeConfig(Kind,Id,ProgramSource):NULL;CodeOnly=Text!=NULL;
+    }
     if (Text==NULL || Item==NULL || !MdoHomeExternalStat(Path,&External,&Info) ||
         !MdoExtensionEnabled(Kind,Id,&Enabled)) goto fail;
     Valid=ExtensionValidate(Kind,Id,Text,Error);
@@ -126,7 +132,7 @@ static xvalue* ExtensionItemRecord(cstr Kind,cstr Id,bool IncludeSource,const xv
     else if (MdoPackageRoleKind(Kind)) Doc=MdoPackageRoleDocument(Text,NULL,0u);
     else if (strcmp(Kind,"tools")) Doc=MdoPromptParse(Text,true,NULL,0u);
     if (Doc) { (void)ExtensionString(Doc,"name",&Name); (void)ExtensionString(Doc,"description",&Description); }
-    if (!MdoExtensionHash(Text,Hash) || !MdoApiValueSetString(Item,"id",Id) ||
+    if (!MdoExtensionHash(CodeOnly?ProgramSource:Text,Hash) || !MdoApiValueSetBool(Item,"code_only",CodeOnly) || !MdoApiValueSetBool(Item,"shareable",!CodeOnly||Enabled) || (CodeOnly&&IncludeSource&&!MdoApiValueSetString(Item,"program_source",ProgramSource)) || !MdoApiValueSetString(Item,"id",Id) ||
         !MdoApiValueSetString(Item,"kind",Kind) || !MdoApiValueSetStringView(Item,"name",Name.Size?Name:xrtStrView(Id)) ||
         !MdoApiValueSetStringView(Item,"description",Description) || !MdoApiValueSetString(Item,"path",Path) ||
         !MdoApiValueSetString(Item,"revision",Hash) || !MdoApiValueSetBool(Item,"external",External) ||
@@ -185,9 +191,9 @@ static xvalue* ExtensionItemRecord(cstr Kind,cstr Id,bool IncludeSource,const xv
     }
     if(MdoPackageSingleKind(Kind)&&!ExtensionStoreInfo(Item,Path,Receipts,OwnershipKnown,IncludeSource))goto fail;
     if(!strcmp(Kind,"mcp")&&!McpConnectionCredits(Item,Doc))goto fail;
-    xrtFree(Text); xrtValueRelease(Doc); return Item;
+    xrtFree(ProgramSource); xrtFree(Text); xrtValueRelease(Doc); return Item;
 fail:
-    xrtFree(Text); xrtValueRelease(Doc); xrtValueRelease(Item); return NULL;
+    xrtFree(ProgramSource); xrtFree(Text); xrtValueRelease(Doc); xrtValueRelease(Item); return NULL;
 }
 static xvalue* ExtensionItem(cstr Kind,cstr Id,bool IncludeSource)
 {
@@ -223,10 +229,25 @@ static bool ExtensionList(MdoApiContext* C,cstr Kind)
         else xrtClearError(); /* missing SKILL.md folders are not installed Skills */
     }
     if (Dir) { if (Ok && Next==XDIR_NEXT_ERROR) Ok=false; (void)xrtDirClose(Dir); }
+    if (Ok&&MdoPackageRoleKind(Kind)) Ok=ExtensionRoleCodeList(Kind,Items,Records,Known,&Count);
     if (Ok) Ok=MdoApiValueSetTake(Data,"items",&Items);
     xrtValueRelease(Items);xrtValueRelease(Records);
     if (!Ok) { xrtValueRelease(Data); return MdoApiReplyError(C,503,"extensions_unavailable","Resource directory cannot be read",NULL); }
     return MdoApiReplySuccessTake(C,200,Data,NULL);
+}
+static bool ExtensionRoleCodeList(cstr Kind,xvalue* Items,const xvalue* Records,bool Known,size_t* Count)
+{
+    char Root[160];snprintf(Root,sizeof(Root),"/app/default-home/modules/%s",Kind);
+    xdir Dir=xrtVfsDirOpen(MdoHomeApplicationVfs(),Root,XDIR_STAT);if(!Dir){const xerror* E=xrtGetError();if(E&&xrtErrorKind(E)==XERR_NOT_FOUND){xrtClearError();return true;}return false;}
+    xdirentry Entry;xdirnext Next;bool Ok=true;
+    while(Ok&&(Next=xrtDirNext(Dir,&Entry))==XDIR_NEXT_ITEM){
+        size_t N=Entry.Name.Size;if(!(Entry.Flags&XDIR_ENTRY_UTF8)||Entry.Info.Type!=XFILE_TYPE_FILE||N<=2||N>66||memcmp(Entry.Name.Data+N-2,".c",2))continue;
+        char Id[65];memcpy(Id,Entry.Name.Data,N-2);Id[N-2]=0;if(!MdoExtensionIdValid(Id))continue;
+        bool Seen=false;for(size_t I=0;I<xrtValueCount(Items);I++)if(!strcmp(MdoPackageText(xrtValueArrayGet(Items,I),"id",64),Id))Seen=true;
+        if(Seen)continue;if(++*Count>256){Ok=false;break;}
+        xvalue* Item=ExtensionItemRecord(Kind,Id,false,Records,Known);if(Item){Ok=xrtValueArrayAppend(Items,Item);xrtValueRelease(Item);}
+    }
+    xrtDirClose(Dir);return Ok&&Next!=XDIR_NEXT_ERROR;
 }
 static bool ExtensionMatch(MdoApiContext* C,cstr Text)
 {
@@ -515,7 +536,7 @@ static bool ExtensionDelete(MdoApiContext* C,cstr Kind,cstr Id,cstr Path,cstr Ol
     {
         bool Missing=false; char* Fallback=MdoExtensionRead(Path,false,MDO_EXTENSION_TEXT_LIMIT,&Missing); bool Enabled=true;
         if (strcmp(Kind,"mcp")) (void)MdoExtensionEnabled(Kind,Id,&Enabled);
-        Ok=ExtensionReload(Kind,Id,Fallback != NULL && Enabled); xrtFree(Fallback);
+        Ok=MdoPackageRoleKind(Kind)?MdoModuleManagerReload():ExtensionReload(Kind,Id,Fallback != NULL && Enabled); xrtFree(Fallback);
     }
     if (!Ok) {
         bool Restored=Moved?MdoHomeRenameNoReplace(Trash,Directory):MdoHomeAtomicWrite(Path,Old,strlen(Old),false);
@@ -602,6 +623,9 @@ bool MdoApiExtensionsRoute(MdoApiContext* C)
             else Result=Item?MdoApiReplySuccessTake(C,200,Item,NULL):MdoApiReplyError(C,404,"extension_not_found","Resource not found",NULL);
         } else {
             Old=MdoExtensionRead(Path,false,MDO_EXTENSION_TEXT_LIMIT,&Missing);
+            if(!Old&&Missing&&Method!=XHTTP_METHOD_PUT&&MdoPackageRoleKind(Kind)){
+                snprintf(Path,sizeof(Path),"modules/%s/%s.c",Kind,Id);Old=MdoExtensionRead(Path,false,MDO_EXTENSION_TEXT_LIMIT,&Missing);
+            }
             if (!Old && !Missing) Result=MdoApiReplyError(C,503,"extension_unreadable","Existing resource cannot be read safely",NULL);
             else if (!ExtensionMatch(C,Old)) Result=true;
             else if ((Method==XHTTP_METHOD_PUT||Method==XHTTP_METHOD_DELETE)&&!ExtensionStoreCanCustomize(C,Kind,Id))Result=true;
