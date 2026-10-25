@@ -59,6 +59,7 @@ def main():
                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
             try:
                 wait_ready(port, proc)
+                original_role=next(r for r in app("GET","/agents")["items"] if r["id"]=="agent.standalone")
                 standalone=app("GET","/extensions/agents/standalone")
                 assert standalone["code_only"] and standalone["valid"] and standalone["program_source"]==source,standalone
                 assert any(i["id"]=="standalone" for i in app("GET","/extensions/agents")["items"])
@@ -68,6 +69,13 @@ def main():
                 assert not app("GET","/extensions/agents/standalone")["shareable"]
                 app("POST","/extensions/agents/standalone/enabled",dict(enabled=True),revision=standalone["revision"])
                 app("DELETE","/extensions/agents/standalone",revision=standalone["revision"])
+                assert not program.exists()
+                clone=package(identity="standalone");clone["resources"]=[exported]
+                store("import",clone,trust_code=True)
+                installed_role=next(r for r in app("GET","/agents")["items"] if r["id"]=="agent.standalone")
+                for key in ("flags","allowed_effects","tools","skills","model","reasoning_effort","permission_profile","context_window_tokens","max_input_tokens","max_output_tokens","max_turns","timeout_ms","max_final_bytes","max_depth","system_prompt_bytes"):
+                    assert installed_role[key]==original_role[key],(key,original_role,installed_role)
+                app("POST","/ecosystem",dict(action="uninstall",entry=dict(source="local",slug="standalone")))
                 assert not program.exists()
                 for kind in ("agents", "subagents"):
                     p = package(kind, "portable-" + kind, True); role = p["resources"][0]; identity = role["id"]

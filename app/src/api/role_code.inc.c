@@ -21,7 +21,15 @@ static char* ExtensionRoleCodeConfig(cstr Kind,cstr Id,cstr Source)
     if(Ok&&Owned){
         if(A.Model&&A.Model[0])Ok=MdoAgentConfigSetText(D,"model",A.Model);
         if(Ok&&A.ReasoningEffort&&A.ReasoningEffort[0])Ok=MdoAgentConfigSetText(D,"reasoning_effort",A.ReasoningEffort);
-        if(Ok)Ok=xrtValueObjectSetNew(D,XRT_STR_LITERAL("read_only"),xrtValueBool((A.Flags&MDO_AGENT_READ_ONLY)!=0));
+        const char* Keys[]={"read_only","allow_background","allow_delegation","require_verification_after_write"};
+        const mdo_agent_flags Bits[]={MDO_AGENT_READ_ONLY,MDO_AGENT_ALLOW_BACKGROUND,MDO_AGENT_ALLOW_DELEGATION,MDO_AGENT_REQUIRE_VERIFICATION_AFTER_WRITE};
+        for(size_t J=0;Ok&&J<4;J++)Ok=xrtValueObjectSetNew(D,xrtStrView(Keys[J]),xrtValueBool((A.Flags&Bits[J])!=0));
+        if(Ok&&A.PermissionProfile&&A.PermissionProfile[0])Ok=MdoAgentConfigSetText(D,"permission_profile",A.PermissionProfile);
+        xvalue* Limits=xrtValueObject();
+        const char* Names[]={"context_tokens","input_tokens","output_tokens","max_turns","timeout_ms","max_final_bytes","max_depth"};
+        const uint64 Values[]={A.ContextWindowTokens,A.MaxInputTokens,A.MaxOutputTokens,A.MaxTurns,A.TimeoutMilliseconds,A.MaxFinalBytes,A.MaxDepth};
+        for(size_t J=0;Ok&&J<7;J++)Ok=Limits&&xrtValueObjectSetNew(Limits,xrtStrView(Names[J]),xrtValueUInt(Values[J]));
+        if(Ok)Ok=xrtValueObjectSet(D,XRT_STR_LITERAL("runtime"),Limits);xrtValueRelease(Limits);
     }
     char* Text=Ok?xrtJsonStringify(D,true,NULL):NULL;xrtValueRelease(D);MdoModuleCatalogRelease(C);return Text;
 }
