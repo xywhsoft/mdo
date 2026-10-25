@@ -14,12 +14,16 @@ static const mdo_host_services_v1* Host;
 static mdo_result Event(void* Data,mdo_agent_phase Phase,const mdo_agent_context_v1* Context,char* Error,size_t Capacity){
     (void)Data;(void)Error;(void)Capacity;
     if(Phase==MDO_AGENT_CONTEXT){
+        if(!xrtValueObjectSetNew(mdoAgentState(Context),xrtStrView("instance_owner"),xrtValueString(xrtStrView(Context->AgentId))))return MDO_RESULT_ERROR;
         xvalue* Source=mdoAgentContextSource(Context,"system");xstrview Text;
         if(!Source || !xrtValueGetString(xrtValueObjectGet(Source,xrtStrView("text")),&Text))return MDO_RESULT_ERROR;
         char* Next=xrtFormat("%s BINDING-V1",Text.Data);bool Ok=Next&&mdoAgentSetContextText(Context,"system",Next);xrtFree(Next);
         if(!Ok)return MDO_RESULT_ERROR;
     }
     if(Phase==MDO_AGENT_BEFORE_REQUEST){
+        xstrview Owner;
+        if(!xrtValueGetString(xrtValueObjectGet(mdoAgentState(Context),xrtStrView("instance_owner")),&Owner) ||
+           !xrtStrEqual(Owner,xrtStrView(Context->AgentId))){snprintf(Error,Capacity,"role instance state leaked across parent/child");return MDO_RESULT_ERROR;}
         xwork_agent_extension_context* Native=mdoAgentNative(Context);
         Native->pRequest->bHasTemperature=true;Native->pRequest->fTemperature=0.25;
     }
