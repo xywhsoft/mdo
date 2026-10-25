@@ -1,0 +1,173 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-25",
+  "version": "0.6.0",
+  "version_code": "05000600",
+  "product_fixes": {
+    "android_host_receipt": "29ce7992",
+    "android_cpp_runtime": "83d5d9f2",
+    "sdk_unlimited_deadline": "2d1341b6"
+  },
+  "test_commits": [
+    "199b1f5a",
+    "2275f505",
+    "c20ea2ca",
+    "23f96535",
+    "48a0b621"
+  ],
+  "platform_test_commit": "1b3c3118",
+  "checks": {
+    "windows_python": {
+      "total": 182,
+      "pass": 177,
+      "skip": 5,
+      "fail": 0
+    },
+    "linux_build_contract": {
+      "total": 11,
+      "pass": 10,
+      "skip": 1,
+      "fail": 0
+    },
+    "linux_gtk": {
+      "total": 1,
+      "pass": 1,
+      "fail": 0
+    },
+    "node": {
+      "total": 1187,
+      "pass": 1187,
+      "skip": 0,
+      "fail": 0
+    },
+    "reachable_modules": 232,
+    "strict_c": true,
+    "real_package_vectors": 44,
+    "desktop_sdk_direct_and_worker": true,
+    "platform_delivery": true,
+    "windows_packed_long_home": true
+  },
+  "device": {
+    "model": "RMX5090",
+    "android": "16",
+    "abi": "arm64-v8a"
+  },
+  "android_package": "org.xleaves.mdo.qa.knowledge",
+  "android": {
+    "knowledge_checks": [
+      "Same-package lite/full upgrade preserves knowledge and Home marker",
+      "APK JNI/TCC custom knowledge, nine-level index and maximum portable document path",
+      "Atomic overwrite, stale-revision rejection and portable path containment",
+      "Broken knowledge is diagnosed and a repaired library clears its warning",
+      "Enable state, knowledge v1 compatibility floor, export, recursive deletion and import",
+      "Force-stop and cold restart retain knowledge documents and Home data",
+      "Full APK retains all thirteen external tool registrations",
+      "All thirteen bundled tool groups execute under the real APK UID, including the C++ dependencies"
+    ],
+    "sdk_checks": [
+      "JNI host, TCC directory, typed product contracts and native exports",
+      "Invalid handles, bounded stream wraparound, EOF and stale handles",
+      "APK UID Unicode filesystem and exact empty process arguments",
+      "ARM64 native module exports, service/hook registration and isolated C command RPC",
+      "Managed tool executor and product identity in native tool SDK callbacks",
+      "Native model boundary, local synthetic SSE stream and token usage",
+      "Canonical operation deduplication, cancellation and project lease lifetime",
+      "Android VFS publication, activation toggles and retained rollback",
+      "APK credential vault store/read/remove",
+      "Real WebView plugin activation, panel render, client ACK and plugin storage namespace",
+      "Independent QA cleanup; daily mdo installation untouched"
+    ],
+    "conversation_cases": [
+      {
+        "name": "retry",
+        "requests": 3,
+        "state": "succeeded",
+        "errors": 0
+      },
+      {
+        "name": "network",
+        "requests": 2,
+        "state": "succeeded",
+        "errors": 0
+      },
+      {
+        "name": "partial",
+        "requests": 2,
+        "state": "succeeded",
+        "errors": 0
+      },
+      {
+        "name": "quota",
+        "requests": 1,
+        "state": "failed",
+        "errors": 1,
+        "error_kind": "daily_token_limit"
+      },
+      {
+        "name": "cancel_backoff",
+        "requests_before_resume": 1,
+        "state": "cancelled",
+        "cancel_ms": 97
+      },
+      {
+        "name": "resume_continue_restart",
+        "resumed": true,
+        "credential_retained": true,
+        "draft_retained": true,
+        "errors": 0
+      }
+    ],
+    "tool_exits": {
+      "busybox": 0,
+      "curl": 0,
+      "jq": 0,
+      "ssh": 0,
+      "python": 0,
+      "aria2c": 0,
+      "rg": 0,
+      "7zip": 0,
+      "git": 0,
+      "sqlite": 0,
+      "poppler": 0,
+      "ffmpeg": 0,
+      "imagemagick": 0
+    },
+    "passed": true,
+    "paid_model_calls": 0,
+    "daily_package_version_unchanged": "0.1.1 / 30000090",
+    "forward_reverse_cleanup_verified": true
+  },
+  "artifacts": [
+    {
+      "path": ".build/knowledge-android-20261025/mdo-lite-final.apk",
+      "bytes": 5846337,
+      "sha256": "e12079f1ee7d873806510f98bbc1364f4c54902e9ad7cb9d6dd63d1c906651a9",
+      "app_pack_sha256": "c4ba717c2349d3d30e3595ba0f82f73686c7321aebd2a7e287ef1a8e3fba1449",
+      "native_sha256": "4b0f76bcafecdd4e67d50cdb94d6df1d9763baf0cc6d6a31a9ded6bfd8f7135f",
+      "edition": "lite",
+      "build_id": "60000023",
+      "runtime_entries": 0
+    },
+    {
+      "path": ".build/knowledge-android-20261025/mdo-qa-full-final.apk",
+      "bytes": 149735000,
+      "sha256": "c766c5b56205dba7adac6203e5a8a6dc4ec68e04b9b5f3357e74d40f9cc23359",
+      "app_pack_sha256": "c4ba717c2349d3d30e3595ba0f82f73686c7321aebd2a7e287ef1a8e3fba1449",
+      "native_sha256": "4b0f76bcafecdd4e67d50cdb94d6df1d9763baf0cc6d6a31a9ded6bfd8f7135f",
+      "edition": "full",
+      "build_id": "60000024",
+      "runtime_entries": 731
+    },
+    {
+      "path": ".build/knowledge-android-20261025/windows/mdo.exe",
+      "bytes": 6312854,
+      "sha256": "25ce117d9475d7a1e4695d1baec4edeb60390522e2cd0e53aa15bcb553f4c4c8"
+    }
+  ],
+  "production_deployed": false,
+  "client_update_published": false,
+  "remaining_scope": [
+    "Linux old-distro glibc ABI baseline and full multi-platform publication gate are not part of this code/Android stage"
+  ],
+  "evidence_directory": ".build/knowledge-android-20261025"
+}
