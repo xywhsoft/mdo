@@ -118,11 +118,12 @@ def running(host: Path, base: Path):
 
 def crash(probe: ReceiptProbe, origin: dict, fault: int, checkpoint: str) -> None:
     errors: list[BaseException] = []
+    results: list[dict] = []
     probe.fault(fault)
 
     def execute() -> None:
         try:
-            probe.execute(origin)
+            results.append(probe.execute(origin))
         except BaseException as error:
             errors.append(error)
 
@@ -131,7 +132,7 @@ def crash(probe: ReceiptProbe, origin: dict, fault: int, checkpoint: str) -> Non
     deadline = time.monotonic() + 3
     marker = "purge_receipt_checkpoint=" + checkpoint
     while marker not in probe.log_path.read_text(encoding="utf-8", errors="replace"):
-        assert time.monotonic() < deadline, marker
+        assert time.monotonic() < deadline, (marker, results, [str(error) for error in errors])
         time.sleep(0.01)
     probe.stop()
     thread.join(timeout=5)

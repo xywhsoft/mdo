@@ -26,8 +26,9 @@ def run_probe(host: Path) -> None:
                     probe.control("fault-rollback")
                 before = probe.files()
                 result = subprocess.run([node, str(ROOT / "tests/fixtures/project-purge-frontend-runtime.mjs"),
-                    f"http://127.0.0.1:{probe.port}", mode], cwd=ROOT, check=True,
+                    f"http://127.0.0.1:{probe.port}", mode], cwd=ROOT,
                     capture_output=True, text=True, encoding="utf-8", timeout=15)
+                assert result.returncode == 0, (mode, result.stdout, result.stderr)
                 summary = json.loads(result.stdout.strip())
                 assert summary["mode"] == mode, summary
                 after = probe.files()
