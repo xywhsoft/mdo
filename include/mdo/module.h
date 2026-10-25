@@ -181,6 +181,49 @@ typedef mdo_result (*mdo_agent_acquire_v1)(void* UserData,
     size_t ErrorCapacity);
 typedef void (*mdo_agent_release_v1)(void* UserData);
 
+typedef enum mdo_agent_phase {
+    MDO_AGENT_CONTEXT = 1,
+    MDO_AGENT_BEFORE_REQUEST,
+    MDO_AGENT_AFTER_RESPONSE,
+    MDO_AGENT_BEFORE_TOOL,
+    MDO_AGENT_AFTER_TOOL,
+    MDO_AGENT_BEFORE_DELEGATE,
+    MDO_AGENT_AFTER_DELEGATE,
+    MDO_AGENT_INSTANCE_RELEASE
+} mdo_agent_phase;
+
+/* ContextPlan and State are xvalue objects when using the native SDK. Native
+ * is an xwork_agent_extension_context. Borrowed only during this callback.
+ * State is private to this Agent instance, never shared with sibling tasks. */
+typedef struct mdo_agent_context_v1 {
+    uint32_t Size;
+    uint32_t AbiVersion;
+    const char* AgentId;
+    const char* ProjectId;
+    const char* SessionId;
+    const char* WorkspaceRoot;
+    const char* ConfigurationJson;
+    const struct mdo_sdk_context_v1* Application;
+    const void* CancelToken;
+    uint64_t Deadline;
+    void* ContextPlan;
+    void* State;
+    void* Native;
+} mdo_agent_context_v1;
+
+typedef mdo_result (*mdo_agent_event_v1)(void* UserData,
+    mdo_agent_phase Phase, const mdo_agent_context_v1* Context,
+    char* ErrorMessage, size_t ErrorCapacity);
+typedef mdo_result (*mdo_agent_drive_v1)(void* UserData,
+    const mdo_agent_context_v1* Context, char* ErrorMessage, size_t ErrorCapacity);
+
+typedef struct mdo_agent_program_v1 {
+    uint32_t Size;
+    uint32_t AbiVersion;
+    mdo_agent_event_v1 OnEvent;
+    mdo_agent_drive_v1 Run;
+} mdo_agent_program_v1;
+
 typedef struct mdo_agent_v1 {
     uint32_t Size;
     uint32_t AbiVersion;
@@ -209,6 +252,7 @@ typedef struct mdo_agent_v1 {
     mdo_agent_release_v1 Release;
     /* Optional normalized mdo.agent.v1 options. Copied by the host. */
     const char* ConfigurationJson;
+    const mdo_agent_program_v1* Program;
 } mdo_agent_v1;
 
 typedef enum mdo_log_level {

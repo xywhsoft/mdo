@@ -134,7 +134,7 @@ BODY_GROUPS={
  'Memory':'MemoryCollectionRoute','Draft':'DraftRoute','Submission':'DraftSubmissionAppendRoute DraftSubmissionRoute',
  'PromptHistoryEntry':'PromptHistoryRoute',
  'Queue':'QueueRoute QueueItemRoute','QueueAction':'QueueActionsRoute','Config':'SettingsPreviewRoute SettingsMutationRoute',
- 'Extension':'ExtensionsRoute CommandProjectRoute SkillProjectRoute McpProjectRoute',
+ 'Extension':'ExtensionsRoute AgentPlanRoute CommandProjectRoute SkillProjectRoute McpProjectRoute',
  'Command':'CommandInvocationRoute','SkillInvoke':'SkillInvokeRoute','SkillValidate':'SkillValidateRoute',
  'Migrate':'LegacyMigrationsRoute SkillMigrateRoute McpMigrateRoute','ModelProbe':'ModelDiscoverRoute ModelTestRoute',
  'ModelSetup':'ModelSetupRoute','AccountLogin':'AccountRoute','Remote':'RemoteRoute',
@@ -168,6 +168,7 @@ RESULT_GROUPS={
  'Preview':'BackupPreviewStartRoute BackupPreviewRoute','Restore':'BackupRestoreReviewRoute BackupRestoreApplyRoute BackupRestoreRoute',
  'Config':'SettingsRoute ModelConfigRoute SettingsPreviewRoute SettingsMutationRoute ModelSetupRoute','Ecosystem':'EcosystemRoute',
  'Directory':'DirectoriesRoute',
+ 'Document':'AgentPlanRoute',
  'Attachment':'AttachmentsRoute AttachmentInfoRoute',
  'SkillInvocation':'SkillInvokeRoute',
  'PaneLayout':'PaneLayoutRoute',
@@ -184,7 +185,7 @@ QUERY_GROUPS={
  'after:u topics:s project:s session:s':'LiveRoute',
  'after:u':'ApplicationRoute',
  'state:s code:s error:s':'McpAuthRoute',
- 'project:s path:s scope:s':'ExtensionsRoute',
+ 'project:s path:s scope:s':'ExtensionsRoute AgentPlanRoute',
 }
 QUERY={handler:spec for spec,handlers in QUERY_GROUPS.items() for handler in handlers.split()}
 

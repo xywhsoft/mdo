@@ -55,8 +55,8 @@
     "xwork": {
       "version": "3.11.0",
       "source_commit": "0dc70638b0faa00b89a6cdb4e73eac35ad2213e3",
-      "production_tree_sha256": "c311517c511f7807cbf5f649770a55b6016d8db8903efce2e4bc184a7bae3eba",
-      "abi_version": 8,
+      "production_tree_sha256": "58e935cc44396f0173a9f67f542c456b7ba859c1e77a28e8d0a5502236f9afdd",
+      "abi_version": 9,
       "event_schema_version": 3
     }
   },
@@ -71,9 +71,9 @@
   },
   "sdk_overlay": {
     "path": "tools/dependencies/xwork-mcp.patch",
-    "sha256": "bbf47c296cd2f3f2b8d5cfd6ba4e8978cb2ce2fd2e6f1f63c14802134c806acc",
+    "sha256": "debb9cb1f27c3a450d326c4d919ebc6548e13ff4009588189758f373091425a3",
     "base_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
-    "purpose": "MCP compatibility, Android entrypoints, native browser panels and anchored long-path atomic file replacement",
+    "purpose": "MCP and platform compatibility, native browser panels, atomic file replacement and symmetric role runtime hooks",
     "xrt_single_header_sha256": "36d536851fa9c09d82d4d0196b75f30beff38fe8799bf9c1b86b63eecba04c6a"
   }
 }

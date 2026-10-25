@@ -88,6 +88,8 @@ typedef struct MdoModuleAgentInfo {
     size_t MaxFinalBytes;
     uint32 MaxDepth;
     const char* ConfigurationJson;
+    bool HasProgram;
+    bool HasDriver;
 } MdoModuleAgentInfo;
 
 typedef struct MdoModuleDiagnosticInfo {
@@ -126,6 +128,10 @@ bool MdoModuleCatalogAgentAcquire(const MdoModuleCatalog* pCatalog,
     const char* AgentId, char* ErrorMessage, size_t ErrorCapacity);
 void MdoModuleCatalogAgentRelease(const MdoModuleCatalog* pCatalog,
     const char* AgentId);
+bool MdoModuleCatalogAgentEvent(const MdoModuleCatalog*, const char*,
+    mdo_agent_phase, mdo_agent_context_v1*, xwork_error*);
+xwork_result MdoModuleCatalogAgentDrive(const MdoModuleCatalog*,const char*,
+    mdo_agent_context_v1*,xwork_error*);
 
 MdoModuleDiagnostics* MdoModuleDiagnosticsSnapshot(void);
 MdoModuleDiagnostics* MdoModuleDiagnosticsRef(

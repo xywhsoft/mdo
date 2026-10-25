@@ -1,3 +1,295 @@
+--- a/lib/xoauth2/xoauth2.c
++++ b/lib/xoauth2/xoauth2.c
+@@ -1,4 +1,36 @@
+-/* xoauth2 unity TU。 */
++/* Pinned xoauth2 uses Unix microseconds and microsecond waits. Adapt its
++ * private transport to this product SDK's civil milliseconds and relative-ms
++ * waits; no public xrt symbols or ABI are replaced. */
++#include "src/xoauth2_internal.h"
++typedef uint64_t xdeadline;
++static uint64_t mdo_xoauth_clock_us(void) {
++    double Now=xrtTimer()*1000000.0;
++    return !(Now>=0.0)?0u:Now>=(double)(UINT64_MAX-1u)?UINT64_MAX-1u:(uint64_t)Now;
++}
++static xdeadline mdo_xoauth_after(uint64_t Duration) {
++    uint64_t Now=mdo_xoauth_clock_us();
++    return Duration>=UINT64_MAX-Now?UINT64_MAX:Now+Duration;
++}
++static uint64_t mdo_xoauth_remaining(xdeadline Deadline) {
++    uint64_t Now=mdo_xoauth_clock_us();
++    return Deadline==UINT64_MAX?UINT64_MAX:Deadline>Now?Deadline-Now:0u;
++}
++static bool mdo_xoauth_expired(xdeadline Deadline) {
++    return Deadline!=UINT64_MAX&&mdo_xoauth_remaining(Deadline)==0u;
++}
++static xwaitresult mdo_xoauth_wait(xfuture* Future,uint64_t Microseconds) {
++    uint64_t Milliseconds=Microseconds/1000u+(Microseconds%1000u!=0u);
++    return xrtFutureWaitFor(Future,Microseconds==UINT64_MAX?XRT_WAIT_FOREVER:
++        Milliseconds>INT64_MAX?INT64_MAX:(int64_t)Milliseconds);
++}
++static int64_t mdo_xoauth_unix_us(void) {
++    return (xrtNow()-XRT_TIME_UNIX_EPOCH)*INT64_C(1000);
++}
++#define xrtDeadlineAfter mdo_xoauth_after
++#define xrtDeadlineRemaining mdo_xoauth_remaining
++#define xrtDeadlineExpired mdo_xoauth_expired
++#define xrtFutureWaitFor mdo_xoauth_wait
++#define xrtNow mdo_xoauth_unix_us
+ #include "src/xoauth2_core.c"
+ #include "src/xoauth2_flow.c"
+ #include "src/xoauth2_http.c"
+--- a/lib/xrt.h
++++ b/lib/xrt.h
+@@ -313500,7 +313500,8 @@
+ 			);
+ 			goto cleanup;
+ 		}
+-		iFlags |= CREATE_NEW_PROCESS_GROUP | CREATE_SUSPENDED;
++		/* ConPTY owns its console; Job still owns the process tree. */
++		iFlags |= CREATE_SUSPENDED;
+ 	}
+ 	if ( !CreateProcessW(
+ 		sProgram,
+--- a/lib/xwork/src/xwork_agent.c
++++ b/lib/xwork/src/xwork_agent.c
+@@ -361,7 +361,9 @@
+     xwork_error tDescriptorError;
+     xwork_permission_decision eDecision;
+     bool bOwnWriter = false;
+-    if ( pAgent->eApprovalMode == XWORK_APPROVAL_READ_ONLY &&
++    bool bManagedDelegation=pAgent->OnExtension && !strcmp(pTool->sName,"agent") &&
++        pTool->uEffects==XWORK_TOOL_EFFECT_AGENT_DELEGATION;
++    if ( !bManagedDelegation && pAgent->eApprovalMode == XWORK_APPROVAL_READ_ONLY &&
+          (pTool->uEffects & ~((xwork_tool_effects)XWORK_TOOL_EFFECT_READ)) != 0u ) {
+         return false;
+     }
+@@ -427,7 +429,8 @@
+         if ( eDecision != XWORK_PERMISSION_DEFAULT ) return false;
+     }
+     if ( (pTool->uEffects & ~((xwork_tool_effects)XWORK_TOOL_EFFECT_READ)) == 0u ) return true;
+-    if ( pAgent->eApprovalMode == XWORK_APPROVAL_AUTO ) return true;
++    if ( pAgent->eApprovalMode == XWORK_APPROVAL_AUTO ||
++        (bManagedDelegation && pAgent->eApprovalMode==XWORK_APPROVAL_READ_ONLY)) return true;
+     if ( pAgent->OnApproval && pAgent->pCallbackLock &&
+          xrtMutexLock(pAgent->pCallbackLock) ) {
+         bool bAllowed = pAgent->OnApproval(
+@@ -532,7 +535,7 @@
+             if ( !xworkToolOutputSet(&tOutput, false, sFailure) ) goto oom;
+         } else if ( !xworkToolOutputSet(&tOutput, false, "tool execution denied by approval policy") ) goto oom;
+     } else {
+-        if ( pAgent->OnHook ) {
++        if ( pAgent->OnHook || pAgent->OnExtension ) {
+             memset(&tHook, 0, sizeof(tHook));
+             tHook.ePhase = XWORK_HOOK_BEFORE_TOOL;
+             tHook.uAgentTurn = uTurn;
+@@ -541,7 +544,15 @@
+             tHook.sArgumentsJson = pCall->sArgumentsJson ? pCall->sArgumentsJson : "{}";
+             if ( !pAgent->pCallbackLock ||
+                  !xrtMutexLock(pAgent->pCallbackLock) ) goto oom;
+-            eHookAction = pAgent->OnHook(pAgent->pHookUserData, &tHook);
++            eHookAction = pAgent->OnHook ? pAgent->OnHook(pAgent->pHookUserData, &tHook) : XWORK_HOOK_CONTINUE;
++            if(eHookAction==XWORK_HOOK_CONTINUE && pAgent->OnExtension){
++                xwork_agent_extension_context Extension={0};
++                Extension.ePhase=tHook.ePhase==XWORK_HOOK_BEFORE_TOOL?XWORK_AGENT_EXTENSION_BEFORE_TOOL:XWORK_AGENT_EXTENSION_AFTER_TOOL;
++                Extension.pToolEvent=&tHook;Extension.pToolOutput=&tOutput;
++                xwork_error HookError; xworkErrorInit(&HookError);
++                xwork_result HookResult=xwork__agent_extension(pAgent,&Extension,&HookError);
++                if(HookResult!=XWORK_RESULT_OK)eHookAction=HookResult==XWORK_RESULT_CANCELLED?XWORK_HOOK_CANCEL:XWORK_HOOK_DENY;
++            }
+             (void)xrtMutexUnlock(pAgent->pCallbackLock);
+             if ( eHookAction == XWORK_HOOK_DENY ) {
+                 if ( !xworkToolOutputSet(&tOutput, false, "tool execution denied by before-tool hook") ) goto oom;
+@@ -650,7 +661,7 @@
+             goto tool_ready;
+         }
+         if ( pbEffectApplied ) *pbEffectApplied = tOutput.bSuccess;
+-        if ( pAgent->OnHook ) {
++        if ( pAgent->OnHook || pAgent->OnExtension ) {
+             memset(&tHook, 0, sizeof(tHook));
+             tHook.ePhase = XWORK_HOOK_AFTER_TOOL;
+             tHook.uAgentTurn = uTurn;
+@@ -661,7 +672,15 @@
+             tHook.bSuccess = tOutput.bSuccess;
+             if ( !pAgent->pCallbackLock ||
+                  !xrtMutexLock(pAgent->pCallbackLock) ) goto oom;
+-            eHookAction = pAgent->OnHook(pAgent->pHookUserData, &tHook);
++            eHookAction = pAgent->OnHook ? pAgent->OnHook(pAgent->pHookUserData, &tHook) : XWORK_HOOK_CONTINUE;
++            if(eHookAction==XWORK_HOOK_CONTINUE && pAgent->OnExtension){
++                xwork_agent_extension_context Extension={0};
++                Extension.ePhase=tHook.ePhase==XWORK_HOOK_BEFORE_TOOL?XWORK_AGENT_EXTENSION_BEFORE_TOOL:XWORK_AGENT_EXTENSION_AFTER_TOOL;
++                Extension.pToolEvent=&tHook;Extension.pToolOutput=&tOutput;
++                xwork_error HookError; xworkErrorInit(&HookError);
++                xwork_result HookResult=xwork__agent_extension(pAgent,&Extension,&HookError);
++                if(HookResult!=XWORK_RESULT_OK)eHookAction=HookResult==XWORK_RESULT_CANCELLED?XWORK_HOOK_CANCEL:XWORK_HOOK_DENY;
++            }
+             (void)xrtMutexUnlock(pAgent->pCallbackLock);
+             if ( eHookAction == XWORK_HOOK_DENY ) {
+                 if ( !xwork__buf_append_cstr(&tHookOutput,
+@@ -1026,7 +1045,7 @@
+     return true;
+ }
+ 
+-xwork_result xwork__agent_run_claimed(
++static xwork_result xwork__agent_run_default(
+     xwork_agent* pAgent,
+     const char* sPrompt,
+     const xllm_message* pUserMessage,
+@@ -1296,6 +1315,11 @@
+             bRecoverPendingTools = false;
+             bNeedNewTurn = true;
+         }
++        {
++            xwork_agent_extension_context Context={0};Context.ePhase=XWORK_AGENT_EXTENSION_CONTEXT;
++            eResult=xwork__agent_extension(pAgent,&Context,pError);
++            if(eResult!=XWORK_RESULT_OK)goto cleanup;
++        }
+         eResult = xwork__compact_if_needed(pAgent, uTurn, &tRun, false, pError);
+         if ( eResult != XWORK_RESULT_OK ) goto cleanup;
+         if ( bNeedNewTurn ) {
+@@ -1336,6 +1360,15 @@
+         }
+         tRequest.bParallelToolCalls = true;
+         tRequest.eToolChoice = XLLM_TOOL_CHOICE_AUTO;
++        {
++            xwork_agent_extension_context Extension={0};Extension.ePhase=XWORK_AGENT_EXTENSION_REQUEST;
++            Extension.pRequest=&tRequest;
++            eResult=xwork__agent_extension(pAgent,&Extension,pError);
++            if(eResult!=XWORK_RESULT_OK){xllmRequestUnit(&tRequest);goto cleanup;}
++            /* A mutable hook cannot replace its managed cancellation owner. */
++            xllmRequestSetCancel(&tRequest,xwork__active_cancel(pAgent));
++            xllmRequestSetDeadline(&tRequest,xwork__active_deadline(pAgent));
++        }
+         memset(&tEvent, 0, sizeof(tEvent));
+         {
+             char sRequestFingerprint[17];
+@@ -1392,6 +1425,12 @@
+             xwork__copy_model_error(pError, &tModelError);
+             eResult = XWORK_RESULT_ERROR;
+             goto cleanup;
++        }
++        {
++            xwork_agent_extension_context Extension={0};Extension.ePhase=XWORK_AGENT_EXTENSION_RESPONSE;
++            Extension.pResponse=pResponse;
++            eResult=xwork__agent_extension(pAgent,&Extension,pError);
++            if(eResult!=XWORK_RESULT_OK){xllmResponseDestroy(pResponse);goto cleanup;}
+         }
+         if ( !xwork__usable_model_response(pResponse) ) {
+             xllmErrorInit(&tModelError);
+@@ -1612,6 +1651,24 @@
+     return eResult;
+ }
+ 
++xwork_result xwork__agent_run_claimed(xwork_agent* Agent,const char* Prompt,
++    const xllm_message* UserMessage,bool Resume,const xwork_resume_options* ResumeOptions,
++    xwork_run_result* Result,xwork_error* Error)
++{
++    if(Agent && Agent->OnExtension){
++        xwork_agent_extension_context Context={0};Context.ePhase=XWORK_AGENT_EXTENSION_RUN;
++        Context.sPrompt=Prompt;Context.pUserMessage=UserMessage;Context.bResume=Resume;
++        Context.pResumeOptions=ResumeOptions;Context.pResult=Result;Context.DefaultRun=xwork__agent_run_default;
++        if(Result)memset(Result,0,sizeof(*Result));
++        xwork_result Status=xwork__agent_extension(Agent,&Context,Error);
++        if(Status!=XWORK_RESULT_OK || Context.bHandled){
++            if(Status==XWORK_RESULT_OK && !xwork__save(Agent,Error))return XWORK_RESULT_ERROR;
++            return Status;
++        }
++    }
++    return xwork__agent_run_default(Agent,Prompt,UserMessage,Resume,ResumeOptions,Result,Error);
++}
++
+ xwork_result xworkAgentRun(xwork_agent* pAgent, const char* sPrompt, xwork_run_result* pResult, xwork_error* pError)
+ {
+     xwork_result eResult;
+--- a/lib/xwork/src/xwork_core.c
++++ b/lib/xwork/src/xwork_core.c
+@@ -1021,6 +1021,8 @@
+     pAgent->pEventUserData = pConfig->pEventUserData;
+     pAgent->OnModelComplete = pConfig->OnModelComplete;
+     pAgent->pModelUserData = pConfig->pModelUserData;
++    pAgent->OnExtension=pConfig->OnExtension;
++    pAgent->pExtensionUserData=pConfig->pExtensionUserData;
+     pAgent->pOwnerUserData = pConfig->pOwnerUserData;
+     pAgent->OnOwnerRetain = pConfig->OnOwnerRetain;
+     pAgent->OnOwnerRelease = pConfig->OnOwnerRelease;
+@@ -1074,6 +1076,10 @@
+ 
+ static void xwork__agent_free(xwork_agent* pAgent)
+ {
++    if(pAgent->OnExtension && pAgent->bOwnerRetained){
++        xwork_agent_extension_context Context={0};Context.ePhase=XWORK_AGENT_EXTENSION_RELEASE;
++        xwork_error Error;xworkErrorInit(&Error);(void)xwork__agent_extension(pAgent,&Context,&Error);
++    }
+     size_t i;
+     if ( !pAgent ) return;
+     for ( i = 0u; i < pAgent->iPathMountCount; ++i ) {
+@@ -1085,6 +1091,9 @@
+     xworkSubagentCatalogRelease(pAgent->pSubagentCatalog);
+     xwork__delegation_scope_release(pAgent->pDelegationScope);
+     free(pAgent->sWorkspaceRoot);
++    for ( size_t iScope = 0u; iScope < pAgent->iMcpServerScopeCount; ++iScope )
++        free(pAgent->psMcpServerScope[iScope]);
++    free(pAgent->psMcpServerScope);
+     free(pAgent->sSystemPrompt);
+     free(pAgent->sSessionPath);
+     free(pAgent->sArtifactDirectory);
+@@ -1240,3 +1249,12 @@
+     free(pResult->sFinalText);
+     memset(pResult, 0, sizeof(*pResult));
+ }
++
++xwork_result xwork__agent_extension(xwork_agent* Agent,xwork_agent_extension_context* Context,xwork_error* Error)
++{
++    if (!Agent || !Agent->OnExtension) return XWORK_RESULT_OK;
++    Context->pAgent=Agent;Context->pSession=Agent->pSession;
++    Context->sDefinitionId=Agent->pDefinition?Agent->pDefinition->sId:NULL;
++    Context->pCancel=xwork__active_cancel(Agent);Context->uDeadline=xwork__active_deadline(Agent);
++    return Agent->OnExtension(Agent->pExtensionUserData,Context,Error);
++}
+--- a/lib/xwork/src/xwork_internal.h
++++ b/lib/xwork/src/xwork_internal.h
+@@ -106,6 +106,8 @@
+     bool bReadOnly;
+     bool bAllowBackground;
+     bool bAllowDelegation;
++    bool bExplicitTools;
++    bool bRequireVerificationAfterWrite;
+ } xwork_subagent_entry;
+ 
+ struct xwork_subagent_catalog {
+@@ -261,6 +263,8 @@
+     size_t iMcpServerCap;
+     xnetengine* pMcpNetEngine;
+     xhttpclient* pMcpHttpClient;
++    xwork_mcp_authorization_fn OnMcpAuthorize;
++    void* pMcpAuthorizationData;
+     xmutex* pSchedulerLock;
+     xwork_schedule_entry** ppSchedules; /* stable until runtime destruction */
+     size_t iScheduleCount;
+@@ -407,6 +411,9 @@
+     xllm_client* pClient;
+     xllm_session* pSession;
+     char* sWorkspaceRoot;
++    bool bMcpServerScope;
++    char** psMcpServerScope;
++    size_t iMcpServerScopeCount;
+     struct { char* sAlias; char* sDirectory; } PathMounts[8];
+     size_t iPathMountCount;
+     bool bFileMountsSealed;
+@@ -433,6 +440,8 @@
+     void* pEventUserData;
+     xwork_model_complete_fn OnModelComplete;
+     void* pModelUserData;
++    xwork_agent_extension_fn OnExtension;
++    void* pExtensionUserData;
+     void* pOwnerUserData;
+     xwork_agent_owner_retain_fn OnOwnerRetain;
+     xwork_agent_owner_release_fn OnOwnerRelease;
+@@ -779,3 +788,5 @@
+ }
+ 
+ #endif
++
++xwork_result xwork__agent_extension(xwork_agent*,xwork_agent_extension_context*,xwork_error*);
 --- a/lib/xwork/src/xwork_mcp.c
 +++ b/lib/xwork/src/xwork_mcp.c
 @@ -16,6 +16,7 @@
@@ -1195,9 +1487,268 @@
  }
  
  void xwork__runtime_mcp_unit(xwork_runtime* pRuntime)
+--- a/lib/xwork/src/xwork_runtime.c
++++ b/lib/xwork/src/xwork_runtime.c
+@@ -480,6 +480,8 @@
+     pConfig->pEventUserData = pOptions->pEventUserData;
+     pConfig->OnModelComplete = pOptions->OnModelComplete;
+     pConfig->pModelUserData = pOptions->pModelUserData;
++    pConfig->OnExtension=pOptions->OnExtension;
++    pConfig->pExtensionUserData=pOptions->pExtensionUserData;
+     pConfig->pOwnerUserData = pOptions->pOwnerUserData;
+     pConfig->OnOwnerRetain = pOptions->OnOwnerRetain;
+     pConfig->OnOwnerRelease = pOptions->OnOwnerRelease;
+--- a/lib/xwork/src/xwork_subagent.c
++++ b/lib/xwork/src/xwork_subagent.c
+@@ -137,18 +137,20 @@
+     pEntry->uContextWindowTokens = pConfig->uContextWindowTokens;
+     pEntry->uMaxInputTokens = pConfig->uMaxInputTokens;
+     pEntry->uMaxTurns = pConfig->uMaxTurns ? pConfig->uMaxTurns : 8u;
+-    pEntry->uTimeoutMs = pConfig->uTimeoutMs ? pConfig->uTimeoutMs : 120000u;
++    pEntry->uTimeoutMs = pConfig->uTimeoutMs;
+     pEntry->uMaxOutputTokens = pConfig->uMaxOutputTokens;
+     pEntry->iMaxFinalBytes = pConfig->iMaxFinalBytes
+         ? pConfig->iMaxFinalBytes : 64u * 1024u;
+     pEntry->uAllowedEffects = pConfig->uAllowedEffects;
+     if ( pConfig->bReadOnly ) {
+-        pEntry->uAllowedEffects &= XWORK_TOOL_EFFECT_READ;
++        pEntry->uAllowedEffects &= XWORK_TOOL_EFFECT_READ | XWORK_TOOL_EFFECT_AGENT_DELEGATION;
+     }
+     pEntry->uMaxDepth = pConfig->uMaxDepth;
+     pEntry->bReadOnly = pConfig->bReadOnly;
+     pEntry->bAllowBackground = pConfig->bAllowBackground;
+     pEntry->bAllowDelegation = pConfig->bAllowDelegation;
++    pEntry->bExplicitTools=pConfig->bExplicitTools;
++    pEntry->bRequireVerificationAfterWrite=pConfig->bRequireVerificationAfterWrite;
+     return true;
+ }
+ 
+@@ -177,6 +179,8 @@
+     tConfig.bReadOnly = pSource->bReadOnly;
+     tConfig.bAllowBackground = pSource->bAllowBackground;
+     tConfig.bAllowDelegation = pSource->bAllowDelegation;
++    tConfig.bExplicitTools=pSource->bExplicitTools;
++    tConfig.bRequireVerificationAfterWrite=pSource->bRequireVerificationAfterWrite;
+     return xwork__subagent_entry_from_config(pTarget, &tConfig);
+ }
+ 
+@@ -434,7 +438,7 @@
+ {
+     size_t i;
+     if ( !pEntry || !sName ) return false;
+-    if ( !pEntry->psTools ) return true;
++    if ( !pEntry->psTools ) return !pEntry->bExplicitTools;
+     for ( i = 0u; i < pEntry->iToolCount; ++i ) {
+         if ( strcmp(pEntry->psTools[i], sName) == 0 ) return true;
+     }
+@@ -528,7 +532,7 @@
+     xwork_error* pError)
+ {
+     xwork_tool_catalog* pCandidateTools;
+-    if ( !xwork__subagent_catalog_tools_valid(
++    if ( !pAgent->OnExtension && !xwork__subagent_catalog_tools_valid(
+             pAgent->pToolCatalog, pCandidate, pError) ) return false;
+     pCandidateTools = xwork__subagent_roster_tool_catalog(
+         pAgent, pAgent->pToolCatalog, pCandidate, pError);
+@@ -608,6 +612,7 @@
+ 
+ typedef struct xwork_delegate_args {
+     xwork_agent* pParent;
++    xllm_session_snapshot* pParentSnapshot;
+     xwork_subagent_catalog* pCatalog;   /* pins pType and the inherited roster */
+     xwork_tool_catalog* pParentTools;   /* matching pinned parent tool generation */
+     const xwork_subagent_entry* pType;  /* borrowed from pCatalog */
+@@ -631,6 +636,7 @@
+     if ( pArgs->bOwnCancel ) xrtCancelDestroy(pArgs->pCancel);
+     if ( pArgs->bScopeEntered ) xwork__delegation_scope_leave(pArgs->pScope);
+     xwork__delegation_scope_release(pArgs->pScope);
++    xllmSessionSnapshotRelease(pArgs->pParentSnapshot);
+     xworkSubagentCatalogRelease(pArgs->pCatalog);
+     xworkToolCatalogRelease(pArgs->pParentTools);
+     free(pArgs->sPrompt);
+@@ -672,17 +678,14 @@
+         xwork__set_error(pError, XWORK_ERROR_CONTEXT, "failed to clone the session config");
+         return false;
+     }
+-    if ( pType->uContextWindowTokens &&
+-         pType->uContextWindowTokens < tSessionConfig.uContextWindowTokens ) {
++    tSessionConfig.sSnapshotPath=NULL; /* Never reuse a parent checkpoint path. */
++    if ( pType->uContextWindowTokens ) {
+         tSessionConfig.uContextWindowTokens = pType->uContextWindowTokens;
+     }
+-    if ( pType->uMaxInputTokens &&
+-         (!tSessionConfig.uMaxInputTokens ||
+-          pType->uMaxInputTokens < tSessionConfig.uMaxInputTokens) ) {
++    if ( pType->uMaxInputTokens ) {
+         tSessionConfig.uMaxInputTokens = pType->uMaxInputTokens;
+     }
+-    if ( pType->uMaxOutputTokens &&
+-        pType->uMaxOutputTokens < tSessionConfig.uMaxOutputTokens ) {
++    if ( pType->uMaxOutputTokens ) {
+         tSessionConfig.uMaxOutputTokens = pType->uMaxOutputTokens;
+     }
+     if ( tSessionConfig.uMaxInputTokens >
+@@ -702,6 +705,7 @@
+         uint32_t uOutput = xllmSessionComputeOutputReserve(
+             tSessionConfig.uContextWindowTokens,
+             tSessionConfig.uMaxOutputTokens);
++        if(uSafety>tSessionConfig.uContextWindowTokens/16u)uSafety=tSessionConfig.uContextWindowTokens/16u;
+         if ( tSessionConfig.uSafetyReserveTokens > uSafety ) {
+             tSessionConfig.uSafetyReserveTokens =
+                 uSafety > UINT32_MAX ? UINT32_MAX : (uint32_t)uSafety;
+@@ -772,7 +776,7 @@
+         pArgs->pParent->bAllowArtifactWrites &&
+         (!pType->bReadOnly || pArgs->pParent->pArtifactStore != NULL);
+     tDefinitionConfig.bRequireVerificationAfterWrite =
+-        pArgs->pParent->bRequireVerificationAfterWrite;
++        pArgs->pParent->bRequireVerificationAfterWrite || pType->bRequireVerificationAfterWrite;
+     tDefinitionConfig.bInjectSystemPrompt = true;
+     pDefinition = xworkAgentDefinitionCreate(&tDefinitionConfig, pError);
+     if ( !pDefinition ) goto cleanup;
+@@ -794,12 +798,17 @@
+     tOptions.pEventUserData = pArgs->pParent->pEventUserData;
+     tOptions.OnModelComplete = pArgs->pParent->OnModelComplete;
+     tOptions.pModelUserData = pArgs->pParent->pModelUserData;
++    tOptions.OnExtension=pArgs->pParent->OnExtension;
++    tOptions.pExtensionUserData=pArgs->pParent->pExtensionUserData;
+     tOptions.pOwnerUserData = pArgs->pParent->pOwnerUserData;
+     tOptions.OnOwnerRetain = pArgs->pParent->OnOwnerRetain;
+     tOptions.OnOwnerRelease = pArgs->pParent->OnOwnerRelease;
+     pChild = xworkAgentCreateWithRuntime(pArgs->pParent->pRuntime,
+         pDefinition, &tOptions, pError);
+     if ( !pChild ) goto cleanup;
++    if ( pArgs->pParent->bMcpServerScope && !xworkAgentSetMcpServers(pChild,
++            (const char* const*)pArgs->pParent->psMcpServerScope,
++            pArgs->pParent->iMcpServerScopeCount, pError) ) goto cleanup;
+     if ( pArgs->pParent->pFileScope ) {
+         if ( !xworkAgentSetFileScope(pChild, pArgs->pParent->pFileScope, pError) ) goto cleanup;
+     } else if ( !xworkAgentAllowExternalPaths(pChild,
+@@ -820,12 +829,20 @@
+         ? pArgs->pEntry->uId : pArgs->pParent->uParentTaskId;
+     pChild->bAllowSubagentDelegation = pType->bAllowDelegation;
+ 
++    xwork_agent_extension_context Extension={0};Extension.ePhase=XWORK_AGENT_EXTENSION_CHILD;
++    Extension.pParent=pArgs->pParent;Extension.pParentSnapshot=pArgs->pParentSnapshot;
++    Extension.psDelegationPrompt=&pArgs->sPrompt;Extension.pDelegationTools=pArgs->pParentTools;
++    Extension.pDelegationToolOwner=pArgs->pParent;
++    if(xwork__agent_extension(pChild,&Extension,pError)!=XWORK_RESULT_OK)goto cleanup;
++    if(Extension.bOverrideDelegationApproval && !pType->bReadOnly)
++        pChild->eApprovalMode=Extension.eDelegationApproval;
+     /* 3. Pin the parent's tool generation, then apply the child's ceilings. */
++    const char* EmptyTools[1]={NULL};
+     pFilteredTools = xwork__tool_catalog_filter_subagent(
+-        pArgs->pParentTools,
++        Extension.pDelegationTools,
+         xwork__runtime_next_catalog_generation(pArgs->pParent->pRuntime),
+-        (const char* const*)pType->psTools, pType->iToolCount,
+-        pType->uAllowedEffects, pArgs->pParent, pChild, pError);
++        pType->bExplicitTools && !pType->iToolCount ? EmptyTools : (const char* const*)pType->psTools, pType->iToolCount,
++        pType->uAllowedEffects, Extension.pDelegationToolOwner, pChild, pError);
+     if ( !pFilteredTools ) goto cleanup;
+     uEffectiveDepth = pArgs->pScope->uMaxDepth;
+     if ( pType->uMaxDepth && pType->uMaxDepth < uEffectiveDepth ) {
+@@ -862,6 +879,8 @@
+     xwork__delegation_scope_release(pOldChildScope);
+     pOldChildScope = NULL;
+ 
++    Extension.ePhase=XWORK_AGENT_EXTENSION_CHILD_READY;
++    if(xwork__agent_extension(pChild,&Extension,pError)!=XWORK_RESULT_OK)goto cleanup;
+     /* 4. The normal xwork loop preserves model/reasoning overrides and tags. */
+     pArgs->eResult = xworkAgentRun(
+         pChild, pArgs->sPrompt, &tRunResult, pError);
+@@ -1267,6 +1286,11 @@
+     pDelegate->bScopeEntered = true;
+     pDelegate->eResult = XWORK_RESULT_ERROR;
+     pDelegate->pParent = xwork__agent_ref(pAgent);
++    if(pAgent->OnExtension){
++        xllm_error SnapshotError;
++        pDelegate->pParentSnapshot=xllmSessionSnapshotCreate(pAgent->pSession,&SnapshotError);
++        if(!pDelegate->pParentSnapshot)goto oom;
++    }
+     pDelegate->pCatalog = pCatalog;
+     pCatalog = NULL;
+     pDelegate->pParentTools = pParentTools;
 --- a/lib/xwork/xwork.h
 +++ b/lib/xwork/xwork.h
-@@ -1071,6 +1071,19 @@
+@@ -24,7 +24,7 @@
+ #define XWORK_VERSION_MINOR 11
+ #define XWORK_VERSION_PATCH 0
+ #define XWORK_VERSION_TEXT "3.11.0"
+-#define XWORK_ABI_VERSION 8u
++#define XWORK_ABI_VERSION 9u
+ #define XWORK_EVENT_SCHEMA_VERSION 3u
+ #define XWORK_EVENT_SNAPSHOT_MAX_RECORDS 1024u
+ #define XWORK_ARTIFACT_READ_DEFAULT_BYTES (64u * 1024u)
+@@ -516,6 +516,50 @@
+ typedef bool (*xwork_agent_owner_retain_fn)(void* pUserData);
+ typedef void (*xwork_agent_owner_release_fn)(void* pUserData);
+ 
++/* Host-owned role hooks. Values are borrowed only for the callback. The
++ * callback owner is pinned by the normal Agent owner callbacks. */
++typedef enum xwork_agent_extension_phase {
++    XWORK_AGENT_EXTENSION_RUN = 1,
++    XWORK_AGENT_EXTENSION_REQUEST,
++    XWORK_AGENT_EXTENSION_RESPONSE,
++    XWORK_AGENT_EXTENSION_CHILD,
++    XWORK_AGENT_EXTENSION_BEFORE_TOOL,
++    XWORK_AGENT_EXTENSION_AFTER_TOOL,
++    XWORK_AGENT_EXTENSION_CONTEXT,
++    XWORK_AGENT_EXTENSION_RELEASE,
++    XWORK_AGENT_EXTENSION_CHILD_READY
++} xwork_agent_extension_phase;
++struct xwork_run_result;
++typedef xwork_result (*xwork_agent_default_run_fn)(xwork_agent*,const char*,
++    const xllm_message*,bool,const xwork_resume_options*,struct xwork_run_result*,xwork_error*);
++typedef struct xwork_agent_extension_context {
++    xwork_agent_extension_phase ePhase;
++    xwork_agent* pAgent;
++    xwork_agent* pParent;
++    const xllm_session_snapshot* pParentSnapshot;
++    char** psDelegationPrompt; /* replacement uses malloc/free ownership */
++    const char* sDefinitionId;
++    xllm_session* pSession;
++    xcancel* pCancel;
++    uint64_t uDeadline;
++    xllm_request* pRequest;
++    xllm_response* pResponse;
++    const xwork_hook_event* pToolEvent;
++    xwork_tool_output* pToolOutput;
++    const char* sPrompt;
++    const xllm_message* pUserMessage;
++    bool bResume;
++    const xwork_resume_options* pResumeOptions;
++    struct xwork_run_result* pResult;
++    xwork_agent_default_run_fn DefaultRun;
++    bool bHandled;
++    const xwork_tool_catalog* pDelegationTools;
++    const void* pDelegationToolOwner;
++    bool bOverrideDelegationApproval;
++    xwork_approval_mode eDelegationApproval;
++} xwork_agent_extension_context;
++typedef xwork_result (*xwork_agent_extension_fn)(void*,xwork_agent_extension_context*,xwork_error*);
++
+ typedef struct xwork_agent_config {
+     /* Borrowed dependencies; they must outlive the agent. */
+     xllm_client* pClient;
+@@ -544,6 +588,8 @@
+ 
+     xwork_model_complete_fn OnModelComplete;
+     void* pModelUserData;
++    xwork_agent_extension_fn OnExtension;
++    void* pExtensionUserData;
+ 
+     uint32_t uCommandTimeoutMs;
+     uint32_t uMaxAgentTurns;          /* 0 means unlimited. */
+@@ -653,6 +699,8 @@
+     void* pEventUserData;
+     xwork_model_complete_fn OnModelComplete;
+     void* pModelUserData;
++    xwork_agent_extension_fn OnExtension;
++    void* pExtensionUserData;
+     void* pOwnerUserData;
+     xwork_agent_owner_retain_fn OnOwnerRetain;
+     xwork_agent_owner_release_fn OnOwnerRelease;
+@@ -1071,6 +1119,19 @@
  );
  bool xworkMcpClientGetInfo(const xwork_mcp_client* pClient, xwork_mcp_info* pInfo);
  void xworkMcpClientDestroy(xwork_mcp_client* pClient);
@@ -1217,7 +1768,7 @@
  
  void xworkMcpServerConfigInit(xwork_mcp_server_config* pConfig);
  void xworkMcpServerInfoInit(xwork_mcp_server_info* pInfo);
-@@ -1101,6 +1114,11 @@
+@@ -1101,6 +1162,11 @@
      xwork_error* pError);
  /* Adds only the compact discovery pair. Remote schemas enter the agent
   * catalog individually through tool_load or the explicit host API. */
@@ -1229,51 +1780,166 @@
  bool xworkAgentRegisterMcpDiscoveryTools(
      xwork_agent* pAgent, xwork_error* pError);
  bool xworkAgentLoadMcpTool(xwork_agent* pAgent,
---- a/lib/xwork/src/xwork_internal.h
-+++ b/lib/xwork/src/xwork_internal.h
-@@ -261,6 +261,8 @@
-     size_t iMcpServerCap;
-     xnetengine* pMcpNetEngine;
-     xhttpclient* pMcpHttpClient;
-+    xwork_mcp_authorization_fn OnMcpAuthorize;
-+    void* pMcpAuthorizationData;
-     xmutex* pSchedulerLock;
-     xwork_schedule_entry** ppSchedules; /* stable until runtime destruction */
-     size_t iScheduleCount;
-@@ -407,6 +409,9 @@
-     xllm_client* pClient;
-     xllm_session* pSession;
-     char* sWorkspaceRoot;
-+    bool bMcpServerScope;
-+    char** psMcpServerScope;
-+    size_t iMcpServerScopeCount;
-     struct { char* sAlias; char* sDirectory; } PathMounts[8];
-     size_t iPathMountCount;
-     bool bFileMountsSealed;
---- a/lib/xwork/src/xwork_core.c
-+++ b/lib/xwork/src/xwork_core.c
-@@ -1085,6 +1085,9 @@
-     xworkSubagentCatalogRelease(pAgent->pSubagentCatalog);
-     xwork__delegation_scope_release(pAgent->pDelegationScope);
-     free(pAgent->sWorkspaceRoot);
-+    for ( size_t iScope = 0u; iScope < pAgent->iMcpServerScopeCount; ++iScope )
-+        free(pAgent->psMcpServerScope[iScope]);
-+    free(pAgent->psMcpServerScope);
-     free(pAgent->sSystemPrompt);
-     free(pAgent->sSessionPath);
-     free(pAgent->sArtifactDirectory);
---- a/lib/xwork/src/xwork_subagent.c
-+++ b/lib/xwork/src/xwork_subagent.c
-@@ -800,6 +800,9 @@
-     pChild = xworkAgentCreateWithRuntime(pArgs->pParent->pRuntime,
-         pDefinition, &tOptions, pError);
-     if ( !pChild ) goto cleanup;
-+    if ( pArgs->pParent->bMcpServerScope && !xworkAgentSetMcpServers(pChild,
-+            (const char* const*)pArgs->pParent->psMcpServerScope,
-+            pArgs->pParent->iMcpServerScopeCount, pError) ) goto cleanup;
-     if ( pArgs->pParent->pFileScope ) {
-         if ( !xworkAgentSetFileScope(pChild, pArgs->pParent->pFileScope, pError) ) goto cleanup;
-     } else if ( !xworkAgentAllowExternalPaths(pChild,
+@@ -1502,10 +1568,10 @@
+     size_t iSkillCount;
+     const char* sModel;            /* NULL inherits the parent model. */
+     const char* sReasoningEffort;  /* NULL inherits the parent setting. */
+-    uint64_t uContextWindowTokens; /* 0 inherits; nonzero may only narrow. */
+-    uint64_t uMaxInputTokens;      /* 0 inherits; nonzero may only narrow. */
++    uint64_t uContextWindowTokens; /* 0 inherits; host validates the selected model. */
++    uint64_t uMaxInputTokens;      /* 0 inherits; host validates the selected model. */
+     uint32_t uMaxTurns;            /* 0 selects 8. */
+-    uint32_t uTimeoutMs;           /* 0 selects 120000. */
++    uint32_t uTimeoutMs;           /* 0 means no task lifetime deadline. */
+     uint32_t uMaxOutputTokens;     /* 0 inherits the parent session cap. */
+     size_t iMaxFinalBytes;         /* 0 selects 64 KiB. */
+     xwork_tool_effects uAllowedEffects; /* Init selects READ. */
+@@ -1513,6 +1579,8 @@
+     bool bReadOnly;                /* Further clamps effects to READ. */
+     bool bAllowBackground;
+     bool bAllowDelegation;         /* Child may receive `agent` when depth permits. */
++    bool bExplicitTools;
++    bool bRequireVerificationAfterWrite;
+ } xwork_subagent_definition_config;
+ 
+ /* Every pointer below is a borrowed view into a retained catalog. Keep the
+--- a/src/core/root_rename.h
++++ b/src/core/root_rename.h
+@@ -10,13 +10,13 @@
+ #endif
+ #endif
+ #define XS_ROOT_ERROR_RENAME ((xrooterror)30001)
+-typedef struct { xroot Root; cstr TargetPath; } XSRootRenameSource;
+-typedef struct { xrootnative SourceParent; cstr SourceName; } XSRootRenameTarget;
++typedef struct { xroot Root; cstr TargetPath; bool Replace; } XSRootRenameSource;
++typedef struct { xrootnative SourceParent; cstr SourceName; bool Replace; } XSRootRenameTarget;
+ #if defined(_WIN32) || defined(_WIN64)
+ typedef struct { BOOLEAN ReplaceIfExists; HANDLE RootDirectory;
+     DWORD FileNameLength; WCHAR FileName[1]; } XSRootFileNameInfo;
+-static bool XSRootNativeRenameNoReplace(xrootnative SourceParent,
+-	cstr sSource, xrootnative TargetParent, cstr sTarget)
++static bool XSRootNativeRename(xrootnative SourceParent,
++	cstr sSource, xrootnative TargetParent, cstr sTarget, bool bReplace)
+ {
+ 	HANDLE hSource;
+ 	NTSTATUS Status;
+@@ -33,8 +33,8 @@
+ 		FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+ 		FILE_OPEN,
+ 		FILE_SYNCHRONOUS_IO_NONALERT |
+-			FILE_OPEN_FOR_BACKUP_INTENT | FILE_OPEN_REPARSE_POINT,
+-		0u, false, &hSource, &Status) ) {
++			FILE_OPEN_FOR_BACKUP_INTENT | (bReplace ? FILE_NON_DIRECTORY_FILE : FILE_OPEN_REPARSE_POINT),
++		bReplace ? OBJ_DONT_REPARSE : 0u, false, &hSource, &Status) ) {
+ 		return false;
+ 	}
+ 	if ( !__xrtRootNtSuccess(Status) ) {
+@@ -68,7 +68,7 @@
+ 		(void)CloseHandle(hSource);
+ 		return false;
+ 	}
+-	pInfo->ReplaceIfExists = FALSE;
++	pInfo->ReplaceIfExists = bReplace ? TRUE : FALSE;
+ 	pInfo->RootDirectory = TargetParent;
+ 	pInfo->FileNameLength = (DWORD)(iUnits * sizeof(WCHAR));
+ 	memcpy(pInfo->FileName, pWide, iUnits * sizeof(WCHAR));
+@@ -94,20 +94,21 @@
+ 			__xrtRootNtErrorCode(Status));
+ 		return false;
+ 	}
+-	if ( !CloseHandle(hSource) ) {
+-		int iCode = (int)GetLastError();
+-
+-		__xrtRootSetError(XROOT_ERROR_CLOSE, "rename-close",
+-			"the object was renamed but its handle did not close", iCode);
+-		return false;
+-	}
++	/* Rename is committed: a close failure cannot turn it into a failed write. */
++	(void)CloseHandle(hSource);
+ 	return true;
+ }
+ #else
+-static bool XSRootNativeRenameNoReplace(xrootnative SourceParent,
+-	cstr sSource, xrootnative TargetParent, cstr sTarget)
++static bool XSRootNativeRename(xrootnative SourceParent,
++	cstr sSource, xrootnative TargetParent, cstr sTarget, bool bReplace)
+ {
+ 	int iResult;
++	if ( bReplace ) {
++		iResult = renameat(SourceParent, sSource, TargetParent, sTarget);
++		if ( iResult == 0 ) return true;
++		__xrtRootSetError(XS_ROOT_ERROR_RENAME, "rename", "failed to atomically replace the root-relative file", errno);
++		return false;
++	}
+ 
+ 	#if defined(__linux__) && defined(SYS_renameat2)
+ 		iResult = (int)syscall(SYS_renameat2, SourceParent, sSource,
+@@ -160,18 +161,21 @@
+ 	Step = __xrtRootNativeStat(Parent, sName, false,
+ 		false, &Info, pLink);
+ 	if ( Step == XROOT_STEP_DONE ) {
+-		__xrtRootError(XERR_EXISTS, XS_ROOT_ERROR_RENAME,
+-			"rename", "the rename target already exists");
+-		return XROOT_STEP_ERROR;
+-	}
+-	pError = xrtGetError();
+-	if ( (Step != XROOT_STEP_ERROR) || (pError == NULL) ||
+-		 (xrtErrorKind(pError) != XERR_NOT_FOUND) ) {
+-		return XROOT_STEP_ERROR;
+-	}
+-	xrtClearError();
+-	return XSRootNativeRenameNoReplace(pSource->SourceParent,
+-		pSource->SourceName, Parent, sName) ?
++		if ( !pSource->Replace ) {
++			__xrtRootError(XERR_EXISTS, XS_ROOT_ERROR_RENAME, "rename", "the rename target already exists");
++			return XROOT_STEP_ERROR;
++		}
++		if ( Info.Type != XFILE_TYPE_FILE ) {
++			__xrtRootError(XERR_TYPE, XS_ROOT_ERROR_RENAME, "rename", "replacement target must be a regular file");
++			return XROOT_STEP_ERROR;
++		}
++	} else {
++		pError = xrtGetError();
++		if ( Step != XROOT_STEP_ERROR || !pError || xrtErrorKind(pError) != XERR_NOT_FOUND ) return XROOT_STEP_ERROR;
++		xrtClearError();
++	}
++	return XSRootNativeRename(pSource->SourceParent,
++		pSource->SourceName, Parent, sName, pSource->Replace) ?
+ 		XROOT_STEP_DONE : XROOT_STEP_ERROR;
+ }
+ 
+@@ -188,6 +192,12 @@
+ 			"rename", "the source must name a root-relative object");
+ 		return XROOT_STEP_ERROR;
+ 	}
++	if ( pTarget->Replace ) {
++		xfileinfo Info; xrootstep Step=__xrtRootNativeStat(Parent,sName,false,false,&Info,pLink);
++		if(Step!=XROOT_STEP_DONE)return Step;
++		if(Info.Type!=XFILE_TYPE_FILE){__xrtRootError(XERR_TYPE,XS_ROOT_ERROR_RENAME,"rename","replacement source must be a regular file");return XROOT_STEP_ERROR;}
++	}
++	Source.Replace = pTarget->Replace;
+ 	Source.SourceParent = Parent;
+ 	Source.SourceName = sName;
+ 	return __xrtRootResolve(pTarget->Root, pTarget->TargetPath,
+@@ -209,8 +219,17 @@
+ 	}
+ 	Data.Root = Root;
+ 	Data.TargetPath = sTarget;
++	Data.Replace = false;
+ 	return __xrtRootResolve(Root, sSource,
+ 		0u, false,
+ 		XSRootRenameSourceProc, &Data);
+ }
+-#endif
++/* Atomic regular-file replacement anchored at both parent directory handles.
++ * No absolute path lookup and no following source/target reparse points. */
++bool xsRootReplaceFile(xroot Root,cstr Source,cstr Target)
++{
++    if(!Root||!Source||!*Source||!Target||!*Target){__xrtErrorSetInvalidArgument();return false;}
++    XSRootRenameSource Data={Root,Target,true};
++    return __xrtRootResolve(Root,Source,0u,false,XSRootRenameSourceProc,&Data);
++}
++#endif
 --- a/src/script/import_xwork.inc
 +++ b/src/script/import_xwork.inc
 @@ -104,6 +104,9 @@
@@ -1291,46 +1957,16 @@
  XS_XWORK_SYMBOL(xworkFileScopeExternal)
  XS_XWORK_SYMBOL(xworkAgentSetFileScope)
 +XS_XWORK_SYMBOL(xworkAgentSetMcpServers)
---- a/lib/xoauth2/xoauth2.c
-+++ b/lib/xoauth2/xoauth2.c
-@@ -1,4 +1,36 @@
--/* xoauth2 unity TU。 */
-+/* Pinned xoauth2 uses Unix microseconds and microsecond waits. Adapt its
-+ * private transport to this product SDK's civil milliseconds and relative-ms
-+ * waits; no public xrt symbols or ABI are replaced. */
-+#include "src/xoauth2_internal.h"
-+typedef uint64_t xdeadline;
-+static uint64_t mdo_xoauth_clock_us(void) {
-+    double Now=xrtTimer()*1000000.0;
-+    return !(Now>=0.0)?0u:Now>=(double)(UINT64_MAX-1u)?UINT64_MAX-1u:(uint64_t)Now;
-+}
-+static xdeadline mdo_xoauth_after(uint64_t Duration) {
-+    uint64_t Now=mdo_xoauth_clock_us();
-+    return Duration>=UINT64_MAX-Now?UINT64_MAX:Now+Duration;
-+}
-+static uint64_t mdo_xoauth_remaining(xdeadline Deadline) {
-+    uint64_t Now=mdo_xoauth_clock_us();
-+    return Deadline==UINT64_MAX?UINT64_MAX:Deadline>Now?Deadline-Now:0u;
-+}
-+static bool mdo_xoauth_expired(xdeadline Deadline) {
-+    return Deadline!=UINT64_MAX&&mdo_xoauth_remaining(Deadline)==0u;
-+}
-+static xwaitresult mdo_xoauth_wait(xfuture* Future,uint64_t Microseconds) {
-+    uint64_t Milliseconds=Microseconds/1000u+(Microseconds%1000u!=0u);
-+    return xrtFutureWaitFor(Future,Microseconds==UINT64_MAX?XRT_WAIT_FOREVER:
-+        Milliseconds>INT64_MAX?INT64_MAX:(int64_t)Milliseconds);
-+}
-+static int64_t mdo_xoauth_unix_us(void) {
-+    return (xrtNow()-XRT_TIME_UNIX_EPOCH)*INT64_C(1000);
-+}
-+#define xrtDeadlineAfter mdo_xoauth_after
-+#define xrtDeadlineRemaining mdo_xoauth_remaining
-+#define xrtDeadlineExpired mdo_xoauth_expired
-+#define xrtFutureWaitFor mdo_xoauth_wait
-+#define xrtNow mdo_xoauth_unix_us
- #include "src/xoauth2_core.c"
- #include "src/xoauth2_flow.c"
- #include "src/xoauth2_http.c"
+--- a/src/script/tcc_host.h
++++ b/src/script/tcc_host.h
+@@ -85,6 +85,7 @@
+ 	XS_API_SYMBOL(xsBackgroundLeaseRenew)
+ 	XS_API_SYMBOL(xsBackgroundLeaseRelease)
+ 	XS_API_SYMBOL(xsRootRenameNoReplace)
++	XS_API_SYMBOL(xsRootReplaceFile)
+ 	XS_API_SYMBOL(xsFetch)
+ 	XS_API_SYMBOL(xsFetchResponseUnit)
+ 	XS_API_SYMBOL(xsExtensionEnabled)
 --- a/src/sdk/xs_host.h
 +++ b/src/sdk/xs_host.h
 @@ -24,7 +24,15 @@
@@ -1349,6 +1985,17 @@
  void xsHostRequestStop(void);
  
  #ifdef __cplusplus
+--- a/src/sdk/xsbase.h
++++ b/src/sdk/xsbase.h
+@@ -381,6 +381,8 @@
+ /* Atomic no-replace move of a file, directory or final link within an
+  * anchored root. Both parents are resolved without escaping Root. */
+ XS_API bool xsRootRenameNoReplace(xroot Root, cstr Source, cstr Target);
++/* Atomic regular-file replacement using anchored parent handles; rejects links. */
++XS_API bool xsRootReplaceFile(xroot Root, cstr Source, cstr Target);
+ 
+ XS_API bool xsFetch(const XS_FetchRequest* pRequest, XS_FetchResponse* pResponse);
+ /* Accepts only a successful xsFetch response or a zero-initialized response. */
 --- a/src/webview/webview_impl.cpp
 +++ b/src/webview/webview_impl.cpp
 @@ -9,6 +9,7 @@
@@ -1440,108 +2087,6 @@
  				xrtFree(g_tWindows[i].sProfileDir);
  				g_tWindows[i].sProfileDir = NULL;
  			}
---- a/src/webview/xs_window_profile.h
-+++ b/src/webview/xs_window_profile.h
-@@ -90,10 +90,10 @@
- /* A supplied profile path is an explicit storage decision. Invalid input must
-  * not fall back to the library's per-exe AppData default. Relative strings
-  * are confined to the app directory; the object form follows an app Home. */
--static bool app_cfg_profile_dir(xvalue* pWin, char** ppPath)
-+static bool app_cfg_window_path(xvalue* pWin, const char* sKey, char** ppPath)
- {
- 	xvalue* pValue = xrtValueObjectGet(pWin,
--		XRT_STR_LITERAL("profile_dir"));
-+		xrtStrView(sKey));
- 	char* sRaw = NULL;
- 	char* sJoined = NULL;
- 	char* sResult = NULL;
-@@ -104,7 +104,7 @@
- 		*ppPath = app_cfg_profile_home(pValue);
- 		return *ppPath != NULL;
- 	}
--	sRaw = app_cfg_profile_text(pWin, "profile_dir");
-+	sRaw = app_cfg_profile_text(pWin, sKey);
- 	if ( sRaw == NULL ) return false;
- 	if ( xrtPathIsAbs(sRaw) ) sResult = xrtPathAbs(sRaw);
- 	else if ( xrtPathIsLocal(xrtStrView(sRaw), XPATH_NATIVE) ) {
-@@ -121,5 +121,7 @@
- 	return true;
- }
- 
-+static bool app_cfg_profile_dir(xvalue* pWin,char** ppPath)
-+{return app_cfg_window_path(pWin,"profile_dir",ppPath);}
- 
- #endif
---- a/src/webview/xs_linux_window.c
-+++ b/src/webview/xs_linux_window.c
-@@ -123,11 +123,13 @@
-         XS_ServerInfo* Server = App->Servers[Index];
-         if (!Server || !Server->Enabled || !XS_ServerIsApp(Server)) continue;
-         xvalue* Config = Server->Custom ? xrtValueObjectGet(Server->Custom, XRT_STR_LITERAL("window")) : NULL;
--        char* Profile = NULL;
-+        char* Profile = NULL;char* StateFile = NULL;
-         if (Config && !app_cfg_profile_dir(Config, &Profile)) {
-             printf("[xs] invalid window.profile_dir; using browser/service mode\n"); continue;
-         }
-         if (!Profile) Profile = xrtPathJoin(xsAppPath(), ".xs/cache/webkit");
-+        if(Config&&!app_cfg_window_path(Config,"state_file",&StateFile))
-+            printf("[xs] invalid window.state_file; placement persistence disabled\n");
-         char* Helper = Profile ? WindowHelper(Profile) : NULL;
-         char* Title = Config ? app_cfg_profile_text(Config, "title") : NULL;
-         char* Close = Config ? app_cfg_profile_text(Config, "close") : NULL;
-@@ -142,7 +144,7 @@
-             if (Config) xrtValueGetBool(xrtValueObjectGet(Config, XRT_STR_LITERAL("devtools")), &Debug);
-             char* Arguments[] = {Helper, Profile, Title ? Title : Server->Name,
-                 Width, Height, MinWidth, MinHeight, Debug ? "1" : "0",
--                Close ? Close : "stop", NULL};
-+                Close ? Close : "stop", StateFile ? StateFile : "", NULL};
-             posix_spawn_file_actions_t Actions;
-             int Error = posix_spawn_file_actions_init(&Actions);
-             bool Initialized = Error == 0;
-@@ -162,7 +164,7 @@
-                 printf("[xs] Linux window could not start: %s\n", strerror(Error));
-             }
-         } else printf("[xs] Linux window extraction/socket failed; using browser/service mode\n");
--        xrtFree(Helper); xrtFree(Profile); xrtFree(Title); xrtFree(Close);
-+        xrtFree(StateFile); xrtFree(Helper); xrtFree(Profile); xrtFree(Title); xrtFree(Close);
-     }
- }
- 
---- a/src/webview/xs_linux_ui.c
-+++ b/src/webview/xs_linux_ui.c
-@@ -14,6 +14,7 @@
- #include "xs_linux_webkit.h"
- 
- static GtkWidget* AppWindow;
-+#include "xs_window_state_gtk.h"
- static WebKitWebView* View;
- static GByteArray* Input;
- static char* Origin;
-@@ -159,7 +160,7 @@
- 
- int main(int argc, char** argv)
- {
--    if (argc != 9 || fcntl(198, F_GETFD) < 0) return 2;
-+    if ((argc != 9 && argc != 10) || fcntl(198, F_GETFD) < 0) return 2;
-     /* The control descriptor must not leak into WebKit children or xdg-open. */
-     fcntl(198, F_SETFD, FD_CLOEXEC);
-     gchar* Cache = g_build_filename(argv[1], "cache", NULL);
-@@ -186,6 +187,7 @@
-     gtk_window_set_default_size(GTK_WINDOW(AppWindow), atoi(argv[3]), atoi(argv[4]));
-     GdkGeometry Geometry = {0}; Geometry.min_width = atoi(argv[5]); Geometry.min_height = atoi(argv[6]);
-     gtk_window_set_geometry_hints(GTK_WINDOW(AppWindow), NULL, &Geometry, GDK_HINT_MIN_SIZE);
-+    WindowStateInstall(argc==10?argv[9]:NULL,Geometry.min_width,Geometry.min_height);
-     HideOnClose = !strcmp(argv[8], "hide");
-     View = WEBKIT_WEB_VIEW(webkit_web_view_new_with_context(Context));
-     WebKitSettings* Settings = webkit_web_view_get_settings(View);
-@@ -204,6 +206,7 @@
-     g_unix_signal_add(SIGINT, StopSignal, NULL);
-     webkit_web_view_load_html(View, "<!doctype html><meta charset=utf-8><style>body{background:#202020;color:#eee;font:16px sans-serif;padding:40px}</style><p>Starting application…</p>", NULL);
-     gtk_widget_show_all(AppWindow); Notify('R'); gtk_main();
-+    WindowStateFinish();
-     gtk_widget_destroy(AppWindow); g_object_unref(Context);
-     g_byte_array_unref(Input); g_free(Origin); g_free(LastUrl); close(198);
-     return 0;
 --- /dev/null
 +++ b/src/webview/xs_browser.inc.hpp
 @@ -0,0 +1,263 @@
@@ -1808,6 +2353,76 @@
 +  {std::lock_guard<std::mutex> lock(xb_hosts_mutex);auto found=xb_hosts.find(view);if(found==xb_hosts.end())return;host=found->second;xb_hosts.erase(found);}
 +  host->alive=false;host->views.clear();host->main=nullptr;
 +}
+--- a/src/webview/xs_linux_ui.c
++++ b/src/webview/xs_linux_ui.c
+@@ -14,6 +14,7 @@
+ #include "xs_linux_webkit.h"
+ 
+ static GtkWidget* AppWindow;
++#include "xs_window_state_gtk.h"
+ static WebKitWebView* View;
+ static GByteArray* Input;
+ static char* Origin;
+@@ -159,7 +160,7 @@
+ 
+ int main(int argc, char** argv)
+ {
+-    if (argc != 9 || fcntl(198, F_GETFD) < 0) return 2;
++    if ((argc != 9 && argc != 10) || fcntl(198, F_GETFD) < 0) return 2;
+     /* The control descriptor must not leak into WebKit children or xdg-open. */
+     fcntl(198, F_SETFD, FD_CLOEXEC);
+     gchar* Cache = g_build_filename(argv[1], "cache", NULL);
+@@ -186,6 +187,7 @@
+     gtk_window_set_default_size(GTK_WINDOW(AppWindow), atoi(argv[3]), atoi(argv[4]));
+     GdkGeometry Geometry = {0}; Geometry.min_width = atoi(argv[5]); Geometry.min_height = atoi(argv[6]);
+     gtk_window_set_geometry_hints(GTK_WINDOW(AppWindow), NULL, &Geometry, GDK_HINT_MIN_SIZE);
++    WindowStateInstall(argc==10?argv[9]:NULL,Geometry.min_width,Geometry.min_height);
+     HideOnClose = !strcmp(argv[8], "hide");
+     View = WEBKIT_WEB_VIEW(webkit_web_view_new_with_context(Context));
+     WebKitSettings* Settings = webkit_web_view_get_settings(View);
+@@ -204,6 +206,7 @@
+     g_unix_signal_add(SIGINT, StopSignal, NULL);
+     webkit_web_view_load_html(View, "<!doctype html><meta charset=utf-8><style>body{background:#202020;color:#eee;font:16px sans-serif;padding:40px}</style><p>Starting application…</p>", NULL);
+     gtk_widget_show_all(AppWindow); Notify('R'); gtk_main();
++    WindowStateFinish();
+     gtk_widget_destroy(AppWindow); g_object_unref(Context);
+     g_byte_array_unref(Input); g_free(Origin); g_free(LastUrl); close(198);
+     return 0;
+--- a/src/webview/xs_linux_window.c
++++ b/src/webview/xs_linux_window.c
+@@ -123,11 +123,13 @@
+         XS_ServerInfo* Server = App->Servers[Index];
+         if (!Server || !Server->Enabled || !XS_ServerIsApp(Server)) continue;
+         xvalue* Config = Server->Custom ? xrtValueObjectGet(Server->Custom, XRT_STR_LITERAL("window")) : NULL;
+-        char* Profile = NULL;
++        char* Profile = NULL;char* StateFile = NULL;
+         if (Config && !app_cfg_profile_dir(Config, &Profile)) {
+             printf("[xs] invalid window.profile_dir; using browser/service mode\n"); continue;
+         }
+         if (!Profile) Profile = xrtPathJoin(xsAppPath(), ".xs/cache/webkit");
++        if(Config&&!app_cfg_window_path(Config,"state_file",&StateFile))
++            printf("[xs] invalid window.state_file; placement persistence disabled\n");
+         char* Helper = Profile ? WindowHelper(Profile) : NULL;
+         char* Title = Config ? app_cfg_profile_text(Config, "title") : NULL;
+         char* Close = Config ? app_cfg_profile_text(Config, "close") : NULL;
+@@ -142,7 +144,7 @@
+             if (Config) xrtValueGetBool(xrtValueObjectGet(Config, XRT_STR_LITERAL("devtools")), &Debug);
+             char* Arguments[] = {Helper, Profile, Title ? Title : Server->Name,
+                 Width, Height, MinWidth, MinHeight, Debug ? "1" : "0",
+-                Close ? Close : "stop", NULL};
++                Close ? Close : "stop", StateFile ? StateFile : "", NULL};
+             posix_spawn_file_actions_t Actions;
+             int Error = posix_spawn_file_actions_init(&Actions);
+             bool Initialized = Error == 0;
+@@ -162,7 +164,7 @@
+                 printf("[xs] Linux window could not start: %s\n", strerror(Error));
+             }
+         } else printf("[xs] Linux window extraction/socket failed; using browser/service mode\n");
+-        xrtFree(Helper); xrtFree(Profile); xrtFree(Title); xrtFree(Close);
++        xrtFree(StateFile); xrtFree(Helper); xrtFree(Profile); xrtFree(Title); xrtFree(Close);
+     }
+ }
+ 
 --- /dev/null
 +++ b/src/webview/xs_window_geometry.h
 @@ -0,0 +1,52 @@
@@ -1863,6 +2478,111 @@
 +    g.WorkX=x;g.WorkY=y;g.WorkWidth=w;g.WorkHeight=h;g.Dpi=dpi;return g;
 +}
 +#endif
+--- a/src/webview/xs_window_profile.h
++++ b/src/webview/xs_window_profile.h
+@@ -90,10 +90,10 @@
+ /* A supplied profile path is an explicit storage decision. Invalid input must
+  * not fall back to the library's per-exe AppData default. Relative strings
+  * are confined to the app directory; the object form follows an app Home. */
+-static bool app_cfg_profile_dir(xvalue* pWin, char** ppPath)
++static bool app_cfg_window_path(xvalue* pWin, const char* sKey, char** ppPath)
+ {
+ 	xvalue* pValue = xrtValueObjectGet(pWin,
+-		XRT_STR_LITERAL("profile_dir"));
++		xrtStrView(sKey));
+ 	char* sRaw = NULL;
+ 	char* sJoined = NULL;
+ 	char* sResult = NULL;
+@@ -104,7 +104,7 @@
+ 		*ppPath = app_cfg_profile_home(pValue);
+ 		return *ppPath != NULL;
+ 	}
+-	sRaw = app_cfg_profile_text(pWin, "profile_dir");
++	sRaw = app_cfg_profile_text(pWin, sKey);
+ 	if ( sRaw == NULL ) return false;
+ 	if ( xrtPathIsAbs(sRaw) ) sResult = xrtPathAbs(sRaw);
+ 	else if ( xrtPathIsLocal(xrtStrView(sRaw), XPATH_NATIVE) ) {
+@@ -121,5 +121,7 @@
+ 	return true;
+ }
+ 
++static bool app_cfg_profile_dir(xvalue* pWin,char** ppPath)
++{return app_cfg_window_path(pWin,"profile_dir",ppPath);}
+ 
+ #endif
+--- /dev/null
++++ b/src/webview/xs_window_state_gtk.h
+@@ -0,0 +1,70 @@
++/* GTK owns placement in its UI process. Wayland controls absolute position;
++ * there we restore size/maximization and leave positioning to the compositor. */
++#include "xs_window_geometry.h"
++#include <glib/gstdio.h>
++#include <sys/stat.h>
++static char* WindowStatePath;
++static XsWindowGeometry WindowGeometry;
++static guint WindowSaveTimer;
++static gboolean WindowGeometryReady,WindowSaveWarned;
++static void WindowCapture(void){
++    if(!WindowStatePath||!WindowGeometryReady)return;
++    GdkWindow* native=gtk_widget_get_window(AppWindow);if(!native)return;
++    GdkWindowState state=gdk_window_get_state(native);
++    if(state&(GDK_WINDOW_STATE_ICONIFIED|GDK_WINDOW_STATE_MAXIMIZED|GDK_WINDOW_STATE_FULLSCREEN))return;
++    int x=0,y=0,w=0,h=0;gtk_window_get_size(GTK_WINDOW(AppWindow),&w,&h);
++    if(GDK_IS_X11_DISPLAY(gdk_display_get_default()))gtk_window_get_position(GTK_WINDOW(AppWindow),&x,&y);
++    GdkMonitor* monitor=gdk_display_get_monitor_at_window(gdk_display_get_default(),native);if(!monitor)return;
++    GdkRectangle work;gdk_monitor_get_workarea(monitor,&work);
++    XsWindowGeometry g={2,x,y,w,h,WindowGeometry.Maximized,96,work.x,work.y,work.width,work.height};
++    if(xwg_valid(&g))WindowGeometry=g;
++}
++static gboolean WindowSave(gpointer unused){
++    (void)unused;WindowSaveTimer=0;if(!WindowStatePath||!WindowGeometryReady)return G_SOURCE_REMOVE;
++    char text[256];int size=xwg_format(&WindowGeometry,text);if(!size)return G_SOURCE_REMOVE;
++    char* parent=g_path_get_dirname(WindowStatePath);int ok=g_mkdir_with_parents(parent,0700)==0;g_free(parent);
++    char* temp=g_strconcat(WindowStatePath,".pending-XXXXXX",NULL);int fd=ok?g_mkstemp_full(temp,O_RDWR|O_CLOEXEC,0600):-1;size_t at=0;
++    if(fd>=0){
++        while(at<(size_t)size){ssize_t n=write(fd,text+at,(size_t)size-at);if(n<0&&errno==EINTR)continue;if(n<=0)break;at+=(size_t)n;}
++        ok=at==(size_t)size&&fsync(fd)==0;if(close(fd))ok=0;
++        if(ok)ok=g_rename(temp,WindowStatePath)==0;
++    }else ok=0;
++    if(!ok){g_unlink(temp);if(!WindowSaveWarned)g_printerr("[xs-window] placement could not be saved; continuing without persistence\n");WindowSaveWarned=TRUE;}
++    else WindowSaveWarned=FALSE;
++    g_free(temp);return G_SOURCE_REMOVE;
++}
++static void WindowSchedule(void){if(WindowSaveTimer)g_source_remove(WindowSaveTimer);WindowSaveTimer=g_timeout_add(350,WindowSave,NULL);}
++static gboolean WindowConfigure(GtkWidget* widget,GdkEvent* event,gpointer unused){
++    (void)widget;(void)event;(void)unused;WindowCapture();WindowSchedule();return FALSE;
++}
++static gboolean WindowStateChange(GtkWidget* widget,GdkEventWindowState* event,gpointer unused){
++    (void)widget;(void)unused;
++    if((event->changed_mask&GDK_WINDOW_STATE_MAXIMIZED)&&!(event->new_window_state&GDK_WINDOW_STATE_ICONIFIED))WindowGeometry.Maximized=!!(event->new_window_state&GDK_WINDOW_STATE_MAXIMIZED);
++    WindowSchedule();return FALSE;
++}
++static void WindowStateInstall(const char* path,int minw,int minh){
++    if(!path||!*path)return;
++    WindowStatePath=g_strdup(path);
++    int fd=g_open(path,O_RDONLY|O_CLOEXEC|O_NONBLOCK,0);XsWindowGeometry g={0};
++    if(fd>=0){
++        struct stat stat;char text[514];ssize_t size=-1;
++        if(!fstat(fd,&stat)&&S_ISREG(stat.st_mode)&&stat.st_size<=512)size=read(fd,text,513);
++        if(size>=0){text[size]=0;if(!xwg_parse(text,(size_t)size,2,&g))memset(&g,0,sizeof(g));}close(fd);
++    }
++    if(g.Backend==2){
++        GdkDisplay* display=gdk_display_get_default();GdkMonitor* monitor=gdk_display_get_monitor_at_point(display,g.X,g.Y);
++        if(monitor){GdkRectangle work;gdk_monitor_get_workarea(monitor,&work);g=xwg_fit(g,work.x,work.y,work.width,work.height,96,minw,minh);
++            gtk_window_set_default_size(GTK_WINDOW(AppWindow),g.Width,g.Height);
++            if(GDK_IS_X11_DISPLAY(display))gtk_window_move(GTK_WINDOW(AppWindow),g.X,g.Y);
++            if(g.Maximized)gtk_window_maximize(GTK_WINDOW(AppWindow));
++            WindowGeometry=g;
++        }
++    }
++    WindowGeometryReady=TRUE;
++    g_signal_connect(AppWindow,"configure-event",G_CALLBACK(WindowConfigure),NULL);
++    g_signal_connect(AppWindow,"window-state-event",G_CALLBACK(WindowStateChange),NULL);
++}
++static void WindowStateFinish(void){
++    if(WindowSaveTimer){g_source_remove(WindowSaveTimer);WindowSaveTimer=0;}
++    WindowCapture();WindowSave(NULL);g_free(WindowStatePath);WindowStatePath=NULL;
++}
 --- /dev/null
 +++ b/src/webview/xs_window_state_win.h
 @@ -0,0 +1,82 @@
@@ -1948,246 +2668,3 @@
 +    }
 +    if(!SetWindowSubclass(window,xws_proc,(UINT_PTR)state,(DWORD_PTR)state)){xrtFree(state->Parent);free(state->Path);free(state);}
 +}
---- /dev/null
-+++ b/src/webview/xs_window_state_gtk.h
-@@ -0,0 +1,70 @@
-+/* GTK owns placement in its UI process. Wayland controls absolute position;
-+ * there we restore size/maximization and leave positioning to the compositor. */
-+#include "xs_window_geometry.h"
-+#include <glib/gstdio.h>
-+#include <sys/stat.h>
-+static char* WindowStatePath;
-+static XsWindowGeometry WindowGeometry;
-+static guint WindowSaveTimer;
-+static gboolean WindowGeometryReady,WindowSaveWarned;
-+static void WindowCapture(void){
-+    if(!WindowStatePath||!WindowGeometryReady)return;
-+    GdkWindow* native=gtk_widget_get_window(AppWindow);if(!native)return;
-+    GdkWindowState state=gdk_window_get_state(native);
-+    if(state&(GDK_WINDOW_STATE_ICONIFIED|GDK_WINDOW_STATE_MAXIMIZED|GDK_WINDOW_STATE_FULLSCREEN))return;
-+    int x=0,y=0,w=0,h=0;gtk_window_get_size(GTK_WINDOW(AppWindow),&w,&h);
-+    if(GDK_IS_X11_DISPLAY(gdk_display_get_default()))gtk_window_get_position(GTK_WINDOW(AppWindow),&x,&y);
-+    GdkMonitor* monitor=gdk_display_get_monitor_at_window(gdk_display_get_default(),native);if(!monitor)return;
-+    GdkRectangle work;gdk_monitor_get_workarea(monitor,&work);
-+    XsWindowGeometry g={2,x,y,w,h,WindowGeometry.Maximized,96,work.x,work.y,work.width,work.height};
-+    if(xwg_valid(&g))WindowGeometry=g;
-+}
-+static gboolean WindowSave(gpointer unused){
-+    (void)unused;WindowSaveTimer=0;if(!WindowStatePath||!WindowGeometryReady)return G_SOURCE_REMOVE;
-+    char text[256];int size=xwg_format(&WindowGeometry,text);if(!size)return G_SOURCE_REMOVE;
-+    char* parent=g_path_get_dirname(WindowStatePath);int ok=g_mkdir_with_parents(parent,0700)==0;g_free(parent);
-+    char* temp=g_strconcat(WindowStatePath,".pending-XXXXXX",NULL);int fd=ok?g_mkstemp_full(temp,O_RDWR|O_CLOEXEC,0600):-1;size_t at=0;
-+    if(fd>=0){
-+        while(at<(size_t)size){ssize_t n=write(fd,text+at,(size_t)size-at);if(n<0&&errno==EINTR)continue;if(n<=0)break;at+=(size_t)n;}
-+        ok=at==(size_t)size&&fsync(fd)==0;if(close(fd))ok=0;
-+        if(ok)ok=g_rename(temp,WindowStatePath)==0;
-+    }else ok=0;
-+    if(!ok){g_unlink(temp);if(!WindowSaveWarned)g_printerr("[xs-window] placement could not be saved; continuing without persistence\n");WindowSaveWarned=TRUE;}
-+    else WindowSaveWarned=FALSE;
-+    g_free(temp);return G_SOURCE_REMOVE;
-+}
-+static void WindowSchedule(void){if(WindowSaveTimer)g_source_remove(WindowSaveTimer);WindowSaveTimer=g_timeout_add(350,WindowSave,NULL);}
-+static gboolean WindowConfigure(GtkWidget* widget,GdkEvent* event,gpointer unused){
-+    (void)widget;(void)event;(void)unused;WindowCapture();WindowSchedule();return FALSE;
-+}
-+static gboolean WindowStateChange(GtkWidget* widget,GdkEventWindowState* event,gpointer unused){
-+    (void)widget;(void)unused;
-+    if((event->changed_mask&GDK_WINDOW_STATE_MAXIMIZED)&&!(event->new_window_state&GDK_WINDOW_STATE_ICONIFIED))WindowGeometry.Maximized=!!(event->new_window_state&GDK_WINDOW_STATE_MAXIMIZED);
-+    WindowSchedule();return FALSE;
-+}
-+static void WindowStateInstall(const char* path,int minw,int minh){
-+    if(!path||!*path)return;
-+    WindowStatePath=g_strdup(path);
-+    int fd=g_open(path,O_RDONLY|O_CLOEXEC|O_NONBLOCK,0);XsWindowGeometry g={0};
-+    if(fd>=0){
-+        struct stat stat;char text[514];ssize_t size=-1;
-+        if(!fstat(fd,&stat)&&S_ISREG(stat.st_mode)&&stat.st_size<=512)size=read(fd,text,513);
-+        if(size>=0){text[size]=0;if(!xwg_parse(text,(size_t)size,2,&g))memset(&g,0,sizeof(g));}close(fd);
-+    }
-+    if(g.Backend==2){
-+        GdkDisplay* display=gdk_display_get_default();GdkMonitor* monitor=gdk_display_get_monitor_at_point(display,g.X,g.Y);
-+        if(monitor){GdkRectangle work;gdk_monitor_get_workarea(monitor,&work);g=xwg_fit(g,work.x,work.y,work.width,work.height,96,minw,minh);
-+            gtk_window_set_default_size(GTK_WINDOW(AppWindow),g.Width,g.Height);
-+            if(GDK_IS_X11_DISPLAY(display))gtk_window_move(GTK_WINDOW(AppWindow),g.X,g.Y);
-+            if(g.Maximized)gtk_window_maximize(GTK_WINDOW(AppWindow));
-+            WindowGeometry=g;
-+        }
-+    }
-+    WindowGeometryReady=TRUE;
-+    g_signal_connect(AppWindow,"configure-event",G_CALLBACK(WindowConfigure),NULL);
-+    g_signal_connect(AppWindow,"window-state-event",G_CALLBACK(WindowStateChange),NULL);
-+}
-+static void WindowStateFinish(void){
-+    if(WindowSaveTimer){g_source_remove(WindowSaveTimer);WindowSaveTimer=0;}
-+    WindowCapture();WindowSave(NULL);g_free(WindowStatePath);WindowStatePath=NULL;
-+}
---- a/lib/xrt.h
-+++ b/lib/xrt.h
-@@ -313500,7 +313500,8 @@
- 			);
- 			goto cleanup;
- 		}
--		iFlags |= CREATE_NEW_PROCESS_GROUP | CREATE_SUSPENDED;
-+		/* ConPTY owns its console; Job still owns the process tree. */
-+		iFlags |= CREATE_SUSPENDED;
- 	}
- 	if ( !CreateProcessW(
- 		sProgram,
---- a/src/core/root_rename.h
-+++ b/src/core/root_rename.h
-@@ -10,13 +10,13 @@
- #endif
- #endif
- #define XS_ROOT_ERROR_RENAME ((xrooterror)30001)
--typedef struct { xroot Root; cstr TargetPath; } XSRootRenameSource;
--typedef struct { xrootnative SourceParent; cstr SourceName; } XSRootRenameTarget;
-+typedef struct { xroot Root; cstr TargetPath; bool Replace; } XSRootRenameSource;
-+typedef struct { xrootnative SourceParent; cstr SourceName; bool Replace; } XSRootRenameTarget;
- #if defined(_WIN32) || defined(_WIN64)
- typedef struct { BOOLEAN ReplaceIfExists; HANDLE RootDirectory;
-     DWORD FileNameLength; WCHAR FileName[1]; } XSRootFileNameInfo;
--static bool XSRootNativeRenameNoReplace(xrootnative SourceParent,
--	cstr sSource, xrootnative TargetParent, cstr sTarget)
-+static bool XSRootNativeRename(xrootnative SourceParent,
-+	cstr sSource, xrootnative TargetParent, cstr sTarget, bool bReplace)
- {
- 	HANDLE hSource;
- 	NTSTATUS Status;
-@@ -33,8 +33,8 @@
- 		FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
- 		FILE_OPEN,
- 		FILE_SYNCHRONOUS_IO_NONALERT |
--			FILE_OPEN_FOR_BACKUP_INTENT | FILE_OPEN_REPARSE_POINT,
--		0u, false, &hSource, &Status) ) {
-+			FILE_OPEN_FOR_BACKUP_INTENT | (bReplace ? FILE_NON_DIRECTORY_FILE : FILE_OPEN_REPARSE_POINT),
-+		bReplace ? OBJ_DONT_REPARSE : 0u, false, &hSource, &Status) ) {
- 		return false;
- 	}
- 	if ( !__xrtRootNtSuccess(Status) ) {
-@@ -68,7 +68,7 @@
- 		(void)CloseHandle(hSource);
- 		return false;
- 	}
--	pInfo->ReplaceIfExists = FALSE;
-+	pInfo->ReplaceIfExists = bReplace ? TRUE : FALSE;
- 	pInfo->RootDirectory = TargetParent;
- 	pInfo->FileNameLength = (DWORD)(iUnits * sizeof(WCHAR));
- 	memcpy(pInfo->FileName, pWide, iUnits * sizeof(WCHAR));
-@@ -94,20 +94,21 @@
- 			__xrtRootNtErrorCode(Status));
- 		return false;
- 	}
--	if ( !CloseHandle(hSource) ) {
--		int iCode = (int)GetLastError();
--
--		__xrtRootSetError(XROOT_ERROR_CLOSE, "rename-close",
--			"the object was renamed but its handle did not close", iCode);
--		return false;
--	}
-+	/* Rename is committed: a close failure cannot turn it into a failed write. */
-+	(void)CloseHandle(hSource);
- 	return true;
- }
- #else
--static bool XSRootNativeRenameNoReplace(xrootnative SourceParent,
--	cstr sSource, xrootnative TargetParent, cstr sTarget)
-+static bool XSRootNativeRename(xrootnative SourceParent,
-+	cstr sSource, xrootnative TargetParent, cstr sTarget, bool bReplace)
- {
- 	int iResult;
-+	if ( bReplace ) {
-+		iResult = renameat(SourceParent, sSource, TargetParent, sTarget);
-+		if ( iResult == 0 ) return true;
-+		__xrtRootSetError(XS_ROOT_ERROR_RENAME, "rename", "failed to atomically replace the root-relative file", errno);
-+		return false;
-+	}
- 
- 	#if defined(__linux__) && defined(SYS_renameat2)
- 		iResult = (int)syscall(SYS_renameat2, SourceParent, sSource,
-@@ -160,18 +161,21 @@
- 	Step = __xrtRootNativeStat(Parent, sName, false,
- 		false, &Info, pLink);
- 	if ( Step == XROOT_STEP_DONE ) {
--		__xrtRootError(XERR_EXISTS, XS_ROOT_ERROR_RENAME,
--			"rename", "the rename target already exists");
--		return XROOT_STEP_ERROR;
--	}
--	pError = xrtGetError();
--	if ( (Step != XROOT_STEP_ERROR) || (pError == NULL) ||
--		 (xrtErrorKind(pError) != XERR_NOT_FOUND) ) {
--		return XROOT_STEP_ERROR;
--	}
--	xrtClearError();
--	return XSRootNativeRenameNoReplace(pSource->SourceParent,
--		pSource->SourceName, Parent, sName) ?
-+		if ( !pSource->Replace ) {
-+			__xrtRootError(XERR_EXISTS, XS_ROOT_ERROR_RENAME, "rename", "the rename target already exists");
-+			return XROOT_STEP_ERROR;
-+		}
-+		if ( Info.Type != XFILE_TYPE_FILE ) {
-+			__xrtRootError(XERR_TYPE, XS_ROOT_ERROR_RENAME, "rename", "replacement target must be a regular file");
-+			return XROOT_STEP_ERROR;
-+		}
-+	} else {
-+		pError = xrtGetError();
-+		if ( Step != XROOT_STEP_ERROR || !pError || xrtErrorKind(pError) != XERR_NOT_FOUND ) return XROOT_STEP_ERROR;
-+		xrtClearError();
-+	}
-+	return XSRootNativeRename(pSource->SourceParent,
-+		pSource->SourceName, Parent, sName, pSource->Replace) ?
- 		XROOT_STEP_DONE : XROOT_STEP_ERROR;
- }
- 
-@@ -188,6 +192,12 @@
- 			"rename", "the source must name a root-relative object");
- 		return XROOT_STEP_ERROR;
- 	}
-+	if ( pTarget->Replace ) {
-+		xfileinfo Info; xrootstep Step=__xrtRootNativeStat(Parent,sName,false,false,&Info,pLink);
-+		if(Step!=XROOT_STEP_DONE)return Step;
-+		if(Info.Type!=XFILE_TYPE_FILE){__xrtRootError(XERR_TYPE,XS_ROOT_ERROR_RENAME,"rename","replacement source must be a regular file");return XROOT_STEP_ERROR;}
-+	}
-+	Source.Replace = pTarget->Replace;
- 	Source.SourceParent = Parent;
- 	Source.SourceName = sName;
- 	return __xrtRootResolve(pTarget->Root, pTarget->TargetPath,
-@@ -209,8 +219,17 @@
- 	}
- 	Data.Root = Root;
- 	Data.TargetPath = sTarget;
-+	Data.Replace = false;
- 	return __xrtRootResolve(Root, sSource,
- 		0u, false,
- 		XSRootRenameSourceProc, &Data);
- }
--#endif
-+/* Atomic regular-file replacement anchored at both parent directory handles.
-+ * No absolute path lookup and no following source/target reparse points. */
-+bool xsRootReplaceFile(xroot Root,cstr Source,cstr Target)
-+{
-+    if(!Root||!Source||!*Source||!Target||!*Target){__xrtErrorSetInvalidArgument();return false;}
-+    XSRootRenameSource Data={Root,Target,true};
-+    return __xrtRootResolve(Root,Source,0u,false,XSRootRenameSourceProc,&Data);
-+}
-+#endif
---- a/src/sdk/xsbase.h
-+++ b/src/sdk/xsbase.h
-@@ -381,6 +381,8 @@
- /* Atomic no-replace move of a file, directory or final link within an
-  * anchored root. Both parents are resolved without escaping Root. */
- XS_API bool xsRootRenameNoReplace(xroot Root, cstr Source, cstr Target);
-+/* Atomic regular-file replacement using anchored parent handles; rejects links. */
-+XS_API bool xsRootReplaceFile(xroot Root, cstr Source, cstr Target);
- 
- XS_API bool xsFetch(const XS_FetchRequest* pRequest, XS_FetchResponse* pResponse);
- /* Accepts only a successful xsFetch response or a zero-initialized response. */
---- a/src/script/tcc_host.h
-+++ b/src/script/tcc_host.h
-@@ -85,6 +85,7 @@
- 	XS_API_SYMBOL(xsBackgroundLeaseRenew)
- 	XS_API_SYMBOL(xsBackgroundLeaseRelease)
- 	XS_API_SYMBOL(xsRootRenameNoReplace)
-+	XS_API_SYMBOL(xsRootReplaceFile)
- 	XS_API_SYMBOL(xsFetch)
- 	XS_API_SYMBOL(xsFetchResponseUnit)
- 	XS_API_SYMBOL(xsExtensionEnabled)

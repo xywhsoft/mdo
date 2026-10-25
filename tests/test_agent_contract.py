@@ -58,7 +58,7 @@ class AgentContractTests(unittest.TestCase):
         source = (ROOT / "app/src/agents/runtime.c").read_text(encoding="utf-8")
         self.assertIn("Agent output limit exceeds the selected model profile", source)
         self.assertIn("Agent context override exceeds the selected model profile", source)
-        self.assertIn("subagent model or context override exceeds its parent ceiling", source)
+        self.assertIn("subagent context override exceeds its selected model profile", source)
         self.assertIn("selected Skill requires a tool outside the Agent allowlist", source)
         self.assertIn("selected Skill prompt exceeds the Agent context injection limit", source)
         self.assertIn("Info->ModelGeneration = Session->ModelGeneration", source)
@@ -69,7 +69,7 @@ class AgentContractTests(unittest.TestCase):
         lock = json.loads((ROOT / "deps.lock").read_text(encoding="utf-8"))
         libraries = lock["libraries"]
         self.assertEqual(libraries["xwork"]["version"], "3.11.0")
-        self.assertEqual(libraries["xwork"]["abi_version"], 8)
+        self.assertEqual(libraries["xwork"]["abi_version"], 9)
         self.assertNotEqual(
             libraries["xllm"]["source_commit"],
             libraries["xwork"]["source_commit"],

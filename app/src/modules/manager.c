@@ -78,6 +78,7 @@ typedef struct MdoModuleAgentBinding {
     mdo_agent_acquire_v1 Acquire;
     mdo_agent_release_v1 Release;
     char* ConfigurationJson;
+    mdo_agent_program_v1 Program;
 } MdoModuleAgentBinding;
 
 struct MdoModuleGeneration {
@@ -1119,7 +1120,7 @@ static bool MdoModulesAgentCopy(MdoModuleGeneration* pGeneration,
         MdoModulesCopyError(Error, ErrorCapacity,"Agent requires a primary or subagent mode");
         return false;
     }
-    const char* Configuration = pAgent->Size >= sizeof(*pAgent) ? pAgent->ConfigurationJson : NULL;
+    const char* Configuration = pAgent->Size >= offsetof(mdo_agent_v1, Program) ? pAgent->ConfigurationJson : NULL;
     if (Configuration) {
         xvalue* Parsed=xrtJsonParse(xrtStrView(Configuration));
         bool Valid=Parsed && MdoAgentConfigValidate(Parsed,Error,ErrorCapacity);
@@ -1147,7 +1148,7 @@ static bool MdoModulesAgentCopy(MdoModuleGeneration* pGeneration,
     }
     if ( !MdoModulesCopyStringArray(&pTarget->Tools, pAgent->ToolCount,
             pAgent->Tools, MDO_MODULE_AGENT_TOOL_LIMIT,
-            MDO_MODULE_ID_LIMIT, true) ) {
+            MDO_MODULE_ID_LIMIT, false) ) {
         MdoModulesCopyError(Error, ErrorCapacity,
             "Agent tool list exceeds a count, string, or memory limit");
         MdoModulesAgentUnit(pTarget);
@@ -1190,6 +1191,12 @@ static bool MdoModulesAgentCopy(MdoModuleGeneration* pGeneration,
                 }
             }
         }
+    }
+    if(pAgent->Size>=sizeof(*pAgent) && pAgent->Program){
+        if(pAgent->Program->Size<sizeof(mdo_agent_program_v1) || pAgent->Program->AbiVersion!=MDO_MODULE_ABI_VERSION){
+            MdoModulesCopyError(Error,ErrorCapacity,"invalid Agent program ABI");MdoModulesAgentUnit(pTarget);return false;
+        }
+        pTarget->Program=*pAgent->Program;
     }
     pTarget->Owner = pGeneration;
     pTarget->ContextWindowTokens = pAgent->ContextWindowTokens;
@@ -1548,6 +1555,7 @@ static bool MdoModulesValidateCatalog(MdoModuleCatalog* pCatalog,
                 pAgent->Tools[j]);
             xwork_tool_effects uEffects = 0u;
             if ( pTool != NULL ) uEffects = (xwork_tool_effects)pTool->Effects;
+            else if (strchr(pAgent->Tools[j],'*')) continue;
             else if ( !MdoModulesRuntimeTool(pAgent->Tools[j], &uEffects) ) {
                 (void)MdoModulesDiagnosticAdd(pDiagnostics,
                     MDO_MODULE_DIAGNOSTIC_VALIDATE,
@@ -1855,14 +1863,39 @@ static bool MdoModulesApplyProfiles(MdoModuleCatalog* Catalog,MdoModuleDiagnosti
          * ordinary profile onto its C owner so callbacks keep their TCC lifetime.
          * C mode owns the base prompt/lifecycle/budgets; the UI owns tool scope. */
         if (Profile->UseCode) {
-            Config->Flags |= Native->Flags & MDO_AGENT_REQUIRE_VERIFICATION_AFTER_WRITE;
-            xrtFree(Config->SystemPrompt); Config->SystemPrompt=Native->SystemPrompt; Native->SystemPrompt=NULL;
-            Config->UserData=Native->UserData; Config->Acquire=Native->Acquire; Config->Release=Native->Release;
-            Config->ContextWindowTokens=Native->ContextWindowTokens; Config->MaxInputTokens=Native->MaxInputTokens;
-            Config->MaxOutputTokens=Native->MaxOutputTokens; Config->MaxTurns=Native->MaxTurns;
-            Config->TimeoutMilliseconds=Native->TimeoutMilliseconds; Config->MaxFinalBytes=Native->MaxFinalBytes;
+            xvalue* Options=Config->ConfigurationJson?xrtJsonParse(xrtStrView(Config->ConfigurationJson)):NULL;
+            const xvalue* Runtime=MdoAgentConfigGet(Options,"runtime");
+            cstr Body=MdoAgentConfigText(Options,"prompt"),PromptMode=MdoAgentConfigText(Options,"prompt_mode");
+            char* Prompt=MdoAgentConfigText(Options,"schema") && Body && Body[0]?
+                (PromptMode && !strcmp(PromptMode,"replace")?xrtStrDup(Body):xrtFormat("%s\n\n%s",Native->SystemPrompt,Body)):xrtStrDup(Native->SystemPrompt);
+            if(!Prompt){xrtValueRelease(Options);return false;}
+            xrtFree(Config->SystemPrompt);Config->SystemPrompt=Prompt;
+            if(!MdoAgentConfigGet(Options,"require_verification_after_write"))Config->Flags |= Native->Flags & MDO_AGENT_REQUIRE_VERIFICATION_AFTER_WRITE;
+            if(!MdoAgentConfigGet(Options,"allow_delegation"))Config->Flags |= Native->Flags & MDO_AGENT_ALLOW_DELEGATION;
+            Config->UserData=Native->UserData;Config->Acquire=Native->Acquire;Config->Release=Native->Release;Config->Program=Native->Program;
+#define MDO_NATIVE_LIMIT(key,field) do {if(!MdoAgentConfigGet(Runtime,key) && Native->field)Config->field=Native->field;}while(0)
+            MDO_NATIVE_LIMIT("context_tokens",ContextWindowTokens);MDO_NATIVE_LIMIT("input_tokens",MaxInputTokens);
+            MDO_NATIVE_LIMIT("output_tokens",MaxOutputTokens);MDO_NATIVE_LIMIT("max_turns",MaxTurns);
+            MDO_NATIVE_LIMIT("timeout_ms",TimeoutMilliseconds);MDO_NATIVE_LIMIT("max_final_bytes",MaxFinalBytes);
+            MDO_NATIVE_LIMIT("max_depth",MaxDepth);
+#undef MDO_NATIVE_LIMIT
             Config->AllowedEffects &= Native->AllowedEffects;
-            if (Native->MaxDepth<Config->MaxDepth) Config->MaxDepth=Native->MaxDepth;
+            if(!Config->PermissionProfile && Native->PermissionProfile){Config->PermissionProfile=Native->PermissionProfile;Native->PermissionProfile=NULL;}
+            cstr ToolMode=MdoAgentConfigText(Options,"tools");
+            if(!MdoAgentConfigGet(Options,"tools") || (ToolMode && !strcmp(ToolMode,"inherit"))){
+                MdoModulesStringArrayUnit(Config->Tools,Config->ToolCount);Config->Tools=Native->Tools;Config->ToolCount=Native->ToolCount;Native->Tools=NULL;Native->ToolCount=0;
+                Config->Flags=(Config->Flags&~MDO_AGENT_EXPLICIT_TOOLS)|(Native->Flags&MDO_AGENT_EXPLICIT_TOOLS);
+            }
+            if(!MdoAgentConfigGet(Options,"skills")){
+                MdoModulesStringArrayUnit(Config->Skills,Config->SkillCount);Config->Skills=Native->Skills;Config->SkillCount=Native->SkillCount;Native->Skills=NULL;Native->SkillCount=0;
+            }
+            if(Native->ConfigurationJson){
+                xvalue* Base=xrtJsonParse(xrtStrView(Native->ConfigurationJson));
+                bool Merged=Base && Options && MdoAgentConfigMerge(Base,Options,0);
+                char* Json=Merged?xrtJsonStringify(Base,false,NULL):NULL;xrtValueRelease(Base);
+                if(!Json){xrtValueRelease(Options);return false;}xrtFree(Config->ConfigurationJson);Config->ConfigurationJson=Json;
+            }
+            xrtValueRelease(Options);
         }
         MdoModulesAgentUnit(Native); *Native=*Config; Native->Owner=Owner;
         memset(Config,0,sizeof(*Config)); Profile->AgentCount=0u;
@@ -2256,6 +2289,8 @@ bool MdoModuleCatalogAgentAt(const MdoModuleCatalog* pCatalog,
     pInfo->MaxFinalBytes = pAgent->MaxFinalBytes;
     pInfo->MaxDepth = pAgent->MaxDepth;
     pInfo->ConfigurationJson = pAgent->ConfigurationJson;
+    pInfo->HasProgram = pAgent->Program.OnEvent != NULL || pAgent->Program.Run != NULL;
+    pInfo->HasDriver = pAgent->Program.Run != NULL;
     return true;
 }
 
@@ -2336,4 +2371,40 @@ bool MdoModuleDiagnosticsAt(const MdoModuleDiagnostics* pDiagnostics,
     pInfo->SourceHash = pEntry->SourceHash;
     pInfo->Message = pEntry->Message;
     return true;
+}
+
+static void MdoModulesAgentApplication(MdoModuleAgentBinding* Binding,mdo_agent_context_v1* Frame,
+    mdo_sdk_context_v1* Application,MdoApplicationInvocation* Invocation)
+{
+    *Application=Binding->Owner->Application;memset(Invocation,0,sizeof(*Invocation));
+    Invocation->Cancel=(xcancel*)Frame->CancelToken;Application->Opaque=Invocation;
+    Application->InvocationId=Frame->AgentId;Application->Workspace=Frame->WorkspaceRoot;
+    Application->ProjectId=Frame->ProjectId;Application->SessionId=Frame->SessionId;
+    Application->Deadline=Frame->Deadline;Frame->Application=Application;
+}
+bool MdoModuleCatalogAgentEvent(const MdoModuleCatalog* Catalog,cstr Id,mdo_agent_phase Phase,
+    mdo_agent_context_v1* Frame,xwork_error* Error)
+{
+    MdoModuleAgentBinding* Binding=MdoModulesFindAgent(Catalog,Id);
+    if(!Binding)return false;
+    if(!Binding->Program.OnEvent)return true;
+    mdo_sdk_context_v1 Application;MdoApplicationInvocation Invocation;
+    MdoModulesAgentApplication(Binding,Frame,&Application,&Invocation);
+    char Message[1024]={0};mdo_result Result=Binding->Program.OnEvent(Binding->UserData,Phase,Frame,Message,sizeof(Message));
+    Frame->Application=NULL;
+    if(Result==MDO_RESULT_OK)return true;
+    xworkErrorInit(Error);if(Error){Error->eCode=Result==MDO_RESULT_CANCELLED?XWORK_ERROR_CANCELLED:Result==MDO_RESULT_TIMEOUT?XWORK_ERROR_TIMEOUT:Result==MDO_RESULT_LIMIT?XWORK_ERROR_LIMIT:XWORK_ERROR_CONTEXT;snprintf(Error->sMessage,sizeof(Error->sMessage),"%s",Message[0]?Message:"Agent event callback failed");}
+    return false;
+}
+xwork_result MdoModuleCatalogAgentDrive(const MdoModuleCatalog* Catalog,cstr Id,
+    mdo_agent_context_v1* Frame,xwork_error* Error)
+{
+    MdoModuleAgentBinding* Binding=MdoModulesFindAgent(Catalog,Id);
+    if(!Binding || !Binding->Program.Run)return XWORK_RESULT_ERROR;
+    mdo_sdk_context_v1 Application;MdoApplicationInvocation Invocation;
+    MdoModulesAgentApplication(Binding,Frame,&Application,&Invocation);
+    char Message[1024]={0};mdo_result Result=Binding->Program.Run(Binding->UserData,Frame,Message,sizeof(Message));
+    Frame->Application=NULL;
+    if(Result!=MDO_RESULT_OK && Error){xworkErrorInit(Error);Error->eCode=Result==MDO_RESULT_CANCELLED?XWORK_ERROR_CANCELLED:Result==MDO_RESULT_TIMEOUT?XWORK_ERROR_TIMEOUT:Result==MDO_RESULT_LIMIT?XWORK_ERROR_LIMIT:XWORK_ERROR_CONTEXT;snprintf(Error->sMessage,sizeof(Error->sMessage),"%s",Message[0]?Message:"Agent driver failed");}
+    return MdoModulesResult(Result);
 }

@@ -183,6 +183,10 @@ PROBE_SOURCE = rf'''
  * isolated fixture has no MCP manager or configured MCP servers. */
 bool MdoMcpConfigureAgent(xwork_agent* agent, const char* workspace, xwork_error* error)
 {{ (void)agent; (void)workspace; (void)error; return true; }}
+bool MdoMcpConfigureRole(xwork_agent* agent,const char* workspace,const char* const* ids,size_t count,xwork_error* error)
+{{ (void)ids;(void)count;return MdoMcpConfigureAgent(agent,workspace,error); }}
+str MdoMcpRolePrompt(const char* workspace,const char* const* ids,size_t count,bool restrict_scope,xwork_error* error)
+{{ (void)workspace;(void)ids;(void)count;(void)restrict_scope;(void)error;return xrtStrDup(""); }}
 
 xwork_runtime *MdoBootstrapRuntime(void) {{ return NULL; }}
 /* This isolated Agent fixture has no executable distribution manager. The

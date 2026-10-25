@@ -158,7 +158,7 @@ def generate_native(root: Path):
     target=root/'app/generated/application-native.inc.h'
     if not target.exists() or target.read_text(encoding='utf-8')!=text:target.write_text(text,encoding='utf-8')
     fingerprint=hashlib.sha256()
-    for header in headers+[root/'include/mdo/sdk.h',root/'include/mdo/module.h',root/'include/mdo/workbench.h']:
+    for header in headers+[root/'include/mdo/sdk.h',root/'include/mdo/module.h',root/'include/mdo/workbench.h',root/'include/mdo/agent.h']:
         fingerprint.update(header.name.encode()+b'\0'+header.read_bytes()+b'\0')
     target=root/'app/generated/application-sdk-fingerprint.inc.h'
     text='#define MDO_APPLICATION_SDK_FINGERPRINT "'+fingerprint.hexdigest()+'"\n'

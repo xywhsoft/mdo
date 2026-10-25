@@ -157,6 +157,7 @@ void MdoApiModelProbesUnit(void);
 bool MdoApiModelDiscoverRoute(MdoApiContext* Context);
 bool MdoApiModelTestRoute(MdoApiContext* Context);
 bool MdoApiAgentsRoute(MdoApiContext* pContext);
+bool MdoApiAgentPlanRoute(MdoApiContext* Context);
 bool MdoApiModulesRoute(MdoApiContext* pContext);
 bool MdoApiExtensionsInit(void);
 void MdoApiExtensionsUnit(void);

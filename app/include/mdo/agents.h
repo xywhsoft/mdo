@@ -10,6 +10,13 @@
 typedef struct MdoAgentSession MdoAgentSession;
 typedef struct MdoAgentRun MdoAgentRun;
 
+/* Read-only authoring inspection: no C lifecycle or role callbacks execute.
+ * Text=NULL inspects an already-published role by its full ID. A draft uses
+ * its portable file ID and the same parser as installation. Caller owns JSON. */
+xvalue* MdoAgentDefinitionInspect(const char* Id,const char* Text,bool Main,
+    const char* Workspace,const char* ProjectId,xwork_error* Error);
+xvalue* MdoAgentSessionInspect(MdoAgentSession* Session,xwork_error* Error);
+
 #define MDO_AGENT_RECOVERY_TOKEN_CAPACITY 65u
 
 typedef struct MdoAgentSessionOptions {

@@ -615,6 +615,7 @@ bool MdoApiExtensionsRoute(MdoApiContext* C)
 }
 
 #include "skill_management.inc.c"
+#include "agent_authoring.inc.c"
 #include "mcp_management.inc.c"
 #include "mcp_connections.inc.c"
 #include "mcp_import.inc.c"

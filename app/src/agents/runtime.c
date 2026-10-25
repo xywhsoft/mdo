@@ -16,6 +16,8 @@
 #include "../../include/mdo/project_lifecycle.h"
 #include "../../include/mdo/skills.h"
 #include "../../include/mdo/knowledge.h"
+#include "../../include/mdo/agent_config.h"
+#include "../../include/mdo/agent_file.h"
 
 #define MDO_AGENT_DEFAULT_ID "mdo.default"
 #define MDO_AGENT_PROMPT_LIMIT (512u * 1024u)
@@ -29,6 +31,37 @@ typedef struct MdoAgentRoute {
     uint32 MaxOutputTokens;
     xllm_client* Client;
 } MdoAgentRoute;
+
+typedef struct MdoAgentResolvedModel {
+    MdoModelInfo Info;
+    MdoModelProtocol Protocol;
+    const char* ReasoningEffort;
+    uint32 MaxOutputTokens;
+} MdoAgentResolvedModel;
+
+typedef struct MdoAgentInstance {
+    xwork_agent* Agent;
+    MdoModuleAgentInfo Definition;
+    MdoAgentResolvedModel Model;
+    const xllm_request* CurrentRequest;
+    xvalue* Configuration;
+    xvalue* Plan;
+    xvalue* SourcePlan;
+    xvalue* State;
+    xvalue* RequestPreview;
+    char* LegacyPrompt;
+    uint64 ModelCalls;
+    uint64 RunModelCalls;
+    uint64 RunStartSequence,HistoryFloor;
+    xllm_session_hooks HistoryHooks;
+    bool HistoryConfigured;
+    struct MdoAgentInstance* Next;
+} MdoAgentInstance;
+
+static xwork_result MdoAgentsExtension(void*,xwork_agent_extension_context*,xwork_error*);
+static bool MdoAgentsPattern(cstr,cstr);
+static bool MdoAgentsCanDelegate(const MdoModuleAgentInfo*,const MdoModuleAgentInfo*);
+static bool MdoAgentsApplyMcpSelection(xwork_agent*,cstr,const MdoModuleAgentInfo*,xwork_error*);
 
 typedef struct MdoAgentOwner {
     xatomic32 Refs;
@@ -52,6 +85,16 @@ typedef struct MdoAgentOwner {
     xwork_agent_owner_release_fn ExternalOwnerRelease;
     bool ExternalOwnerRetained;
     char ProductProject[128],ProductSession[128];
+    char* Workspace;
+    xmutex* InstanceLock;
+    xmutex* LifecycleLock;
+    MdoAgentInstance* Instances;
+    xwork_tool_catalog* DelegationTools;
+    xwork_agent* RootAgent;
+    MdoAgentResolvedModel RootModel;
+    xwork_approval_mode DelegationApproval;
+    xwork_tool_effects DelegationEffects;
+    bool IndependentDelegation;
     xwork_event_fn ExternalEvent;
     void* ExternalEventData;
 } MdoAgentOwner;
@@ -104,12 +147,7 @@ static bool MdoAgentsForwardEvent(MdoAgentOwner* Owner,xwork_event_fn Forward,vo
 static bool MdoAgentsOwnerEvent(void* User,const xwork_event* Event){MdoAgentOwner* Owner=User;return MdoAgentsForwardEvent(Owner,Owner->ExternalEvent,Owner->ExternalEventData,Event);}
 static bool MdoAgentsRunEvent(void* User,const xwork_event* Event){MdoAgentRun* Run=User;return MdoAgentsForwardEvent(Run->Session->Owner,Run->ExternalEvent,Run->ExternalEventData,Event);}
 
-typedef struct MdoAgentResolvedModel {
-    MdoModelInfo Info;
-    MdoModelProtocol Protocol;
-    const char* ReasoningEffort;
-    uint32 MaxOutputTokens;
-} MdoAgentResolvedModel;
+
 
 static void MdoAgentsError(xwork_error* Error, xwork_error_code Code,
     const char* Message)
@@ -248,11 +286,17 @@ static bool MdoAgentsSessionConfig(const xllm_model_profile* Profile,
     /* A narrower Agent window needs reserves derived from that same window;
      * retaining the provider recommendation can make recovery impossible. */
     if ( Config->uContextWindowTokens != Profile->uContextWindowTokens ||
-         Config->uMaxOutputTokens != Profile->uMaxOutputTokens )
+         Config->uMaxOutputTokens != Profile->uMaxOutputTokens ) {
         Config->uOutputReserveTokens = xllmSessionComputeOutputReserve(
             Config->uContextWindowTokens, Config->uMaxOutputTokens);
+        uint64 Safety=xllmSessionComputeSafetyReserve(Config->uContextWindowTokens);
+        if(Safety>Config->uContextWindowTokens/16u)Safety=Config->uContextWindowTokens/16u;
+        Config->uSafetyReserveTokens=Safety>UINT32_MAX?UINT32_MAX:(uint32)Safety;
+    }
     if ( Config->uSummaryMaxTokens > Config->uMaxOutputTokens )
         Config->uSummaryMaxTokens = Config->uMaxOutputTokens;
+    if(Config->uSummaryMinTokens>Config->uSummaryMaxTokens)
+        Config->uSummaryMinTokens=Config->uSummaryMaxTokens;
     return true;
 }
 
@@ -279,6 +323,10 @@ static void MdoAgentOwnerRelease(MdoAgentOwner* Owner)
     if ( Previous > 1u ) return;
     if ( Previous == 0u ) abort();
     MdoModuleAgentIdentityEnd(Owner,0);
+    while(Owner->Instances){MdoAgentInstance* I=Owner->Instances;Owner->Instances=I->Next;xrtValueRelease(I->Configuration);xrtValueRelease(I->Plan);xrtValueRelease(I->SourcePlan);xrtValueRelease(I->State);xrtValueRelease(I->RequestPreview);xrtFree(I->LegacyPrompt);xrtFree(I);}
+    if(Owner->InstanceLock)xrtMutexDestroy(Owner->InstanceLock);
+    if(Owner->LifecycleLock)xrtMutexDestroy(Owner->LifecycleLock);
+    xrtFree(Owner->Workspace);xworkToolCatalogRelease(Owner->DelegationTools);
     if ( Owner->LlmSession != NULL ) {
         xllmSessionDisableJournal(Owner->LlmSession);
         xllmSessionDestroy(Owner->LlmSession);
@@ -383,8 +431,14 @@ static xllm_result MdoAgentsComplete(void* UserData,
         return XLLM_RESULT_ERROR;
     }
     *Response = NULL;
+    cstr ExactModel=NULL;MdoModelProtocol ExactProtocol=0;
+    xrtMutexLock(Owner->InstanceLock);
+    for(MdoAgentInstance* I=Owner->Instances;I;I=I->Next)if(I->CurrentRequest==Request){ExactModel=I->Model.Info.Id;ExactProtocol=I->Model.Protocol;break;}
+    xrtMutexUnlock(Owner->InstanceLock);
+    xrtMutexLock(Owner->RouteLock);
     for ( i = 0u; i < Owner->RouteCount; ++i ) {
         MdoAgentRoute* Route = &Owner->Routes[i];
+        if(ExactModel && (strcmp(ExactModel,Route->ModelId) || ExactProtocol!=Route->Protocol))continue;
         if ( Request->sModel != NULL &&
              strcmp(Request->sModel, Route->WireModel) != 0 ) continue;
         if ( Request->sReasoningEffort != NULL &&
@@ -394,6 +448,7 @@ static xllm_result MdoAgentsComplete(void* UserData,
         Match = Route;
         ++Matches;
     }
+    xrtMutexUnlock(Owner->RouteLock);
     if ( Match == NULL || Matches != 1u ) {
         if ( Error != NULL ) {
             xllmErrorInit(Error);
@@ -417,7 +472,7 @@ static xllm_result MdoAgentsComplete(void* UserData,
     return Result;
 }
 
-static bool MdoAgentOwnerAcquireAgent(MdoAgentOwner* Owner,
+static bool MdoAgentOwnerAcquireAgentLocked(MdoAgentOwner* Owner,
     const char* AgentId, xwork_error* Error)
 {
     size_t i;
@@ -450,7 +505,13 @@ static bool MdoAgentOwnerAcquireAgent(MdoAgentOwner* Owner,
     return true;
 }
 
-static bool MdoAgentOwnerEnsureRoute(MdoAgentOwner* Owner,
+static bool MdoAgentOwnerAcquireAgent(MdoAgentOwner* Owner,const char* Id,xwork_error* Error)
+{
+    xrtMutexLock(Owner->LifecycleLock);bool Ok=MdoAgentOwnerAcquireAgentLocked(Owner,Id,Error);
+    xrtMutexUnlock(Owner->LifecycleLock);return Ok;
+}
+
+static bool MdoAgentOwnerEnsureRouteLocked(MdoAgentOwner* Owner,
     const MdoAgentResolvedModel* Model, xwork_error* Error)
 {
     MdoAgentRoute* Route;
@@ -460,12 +521,7 @@ static bool MdoAgentOwnerEnsureRoute(MdoAgentOwner* Owner,
         if ( strcmp(Route->WireModel, Model->Info.WireModel) != 0 ||
              strcmp(Route->ReasoningEffort,
                 Model->ReasoningEffort) != 0 ) continue;
-        if ( strcmp(Route->ModelId, Model->Info.Id) != 0 ||
-             Route->Protocol != Model->Protocol ) {
-            MdoAgentsError(Error, XWORK_ERROR_INVALID_ARGUMENT,
-                "two model profiles produce an ambiguous Agent wire route");
-            return false;
-        }
+        if ( strcmp(Route->ModelId, Model->Info.Id) != 0 || Route->Protocol != Model->Protocol ) continue;
         return true;
     }
     if ( !MdoAgentsGrow((void**)&Owner->Routes, &Owner->RouteCapacity,
@@ -491,13 +547,20 @@ static bool MdoAgentOwnerEnsureRoute(MdoAgentOwner* Owner,
     return true;
 }
 
+static bool MdoAgentOwnerEnsureRoute(MdoAgentOwner* Owner,const MdoAgentResolvedModel* Model,xwork_error* Error)
+{
+    xrtMutexLock(Owner->RouteLock);
+    bool Ok=Owner->RouteCount<4096u && MdoAgentOwnerEnsureRouteLocked(Owner,Model,Error);
+    xrtMutexUnlock(Owner->RouteLock);return Ok;
+}
+
 static bool MdoAgentsToolSelected(const MdoModuleAgentInfo* Agent,
     const char* Tool)
 {
     size_t i;
     if ( Agent->ToolCount == 0u ) return (Agent->Flags & MDO_AGENT_EXPLICIT_TOOLS) == 0u;
     for ( i = 0u; i < Agent->ToolCount; ++i )
-        if ( strcmp(Agent->Tools[i], Tool) == 0 ) return true;
+        if ( MdoAgentsPattern(Agent->Tools[i], Tool) ) return true;
     return false;
 }
 
@@ -708,6 +771,8 @@ static bool MdoAgentsReplyLanguage(char** Prompt, xwork_error* Error)
     return MdoAgentsAppendPrompt(Prompt, Fragment, strlen(Fragment), Error);
 }
 
+#include "context.inc.c"
+
 static xwork_approval_mode MdoAgentsApproval(const char* Profile,
     bool ReadOnly, bool* Valid)
 {
@@ -785,31 +850,36 @@ static bool MdoAgentsValidateSkillToolsForDefinition(
     MdoSkillInfo Skill;
     size_t i;
     size_t j;
+    xvalue* Configuration=Definition->ConfigurationJson?xrtJsonParse(xrtStrView(Definition->ConfigurationJson)):NULL;
+    const xvalue* Spec=MdoAgentsSourceSpec(Configuration,"skills.preload");
+    bool Preload=MdoAgentsSourceEnabled(Spec,true);
+    if(!Preload){xrtValueRelease(Configuration);return true;}
     for ( i = 0u; i < Definition->SkillCount; ++i ) {
+        if(!MdoAgentsSelection(Spec,Definition->Skills[i]))continue;
         memset(&Skill, 0, sizeof(Skill));
         Skill.Size = sizeof(Skill);
         if ( !MdoSkillCatalogFind(Skills, Definition->Skills[i], &Skill) ) {
             MdoAgentsError(Error, XWORK_ERROR_CONTEXT,
                 "Agent references a missing Skill");
-            return false;
+            xrtValueRelease(Configuration);return false;
         }
         for ( j = 0u; j < Skill.RequiredToolCount; ++j ) {
             if ( !MdoAgentsCatalogHasTool(Tools, Skill.RequiredTools[j],
                     AllowedEffects) ) {
                 MdoAgentsError(Error, XWORK_ERROR_POLICY,
                     "selected Skill requires a tool unavailable to its Agent");
-                return false;
+                xrtValueRelease(Configuration);return false;
             }
         }
     }
-    return true;
+    xrtValueRelease(Configuration);return true;
 }
 
 static bool MdoAgentsValidateSkillTools(MdoAgentOwner* Owner,
     xwork_agent* Agent, const MdoModuleAgentInfo* Main,
     xwork_tool_effects MainEffects, xwork_error* Error)
 {
-    xwork_tool_catalog* Tools = xworkAgentToolCatalogSnapshot(Agent);
+    xwork_tool_catalog* Tools = Owner->DelegationTools?xworkToolCatalogRef(Owner->DelegationTools):xworkAgentToolCatalogSnapshot(Agent);
     size_t i;
     bool Ok = false;
     if ( Tools == NULL ) {
@@ -817,16 +887,18 @@ static bool MdoAgentsValidateSkillTools(MdoAgentOwner* Owner,
             "cannot validate the effective Agent tool catalog");
         return false;
     }
-    if ( !MdoAgentsValidateSkillToolsForDefinition(Main, Owner->Skills,
-            Tools, MainEffects, Error) ) goto done;
+    xwork_tool_catalog* MainTools=xworkAgentToolCatalogSnapshot(Agent);
+    bool MainValid=MainTools && MdoAgentsValidateSkillToolsForDefinition(Main,Owner->Skills,MainTools,MainEffects,Error);
+    xworkToolCatalogRelease(MainTools);
+    if(!MainValid)goto done;
     for ( i = 0u; i < MdoModuleCatalogAgentCount(Owner->Modules); ++i ) {
         MdoModuleAgentInfo Subagent;
         xwork_tool_effects Effects;
         memset(&Subagent, 0, sizeof(Subagent));
         Subagent.Size = sizeof(Subagent);
         if ( !MdoModuleCatalogAgentAt(Owner->Modules, i, &Subagent) ||
-             (Subagent.Flags & MDO_AGENT_SUBAGENT) == 0u ) continue;
-        Effects = (xwork_tool_effects)Subagent.AllowedEffects & MainEffects;
+             (Subagent.Flags & MDO_AGENT_SUBAGENT) == 0u || !MdoAgentsCanDelegate(Main,&Subagent)) continue;
+        Effects = (xwork_tool_effects)Subagent.AllowedEffects & Owner->DelegationEffects;
         if ( (Subagent.Flags & MDO_AGENT_READ_ONLY) != 0u ||
              (Subagent.PermissionProfile != NULL &&
               strcmp(Subagent.PermissionProfile, "read-only") == 0) )
@@ -876,7 +948,7 @@ static bool MdoAgentsPublishSubagents(MdoAgentOwner* Owner,
         memset(&Subagent, 0, sizeof(Subagent));
         Subagent.Size = sizeof(Subagent);
         if ( !MdoModuleCatalogAgentAt(Owner->Modules, i, &Subagent) ||
-             (Subagent.Flags & MDO_AGENT_SUBAGENT) == 0u ) continue;
+             (Subagent.Flags & MDO_AGENT_SUBAGENT) == 0u || !MdoAgentsCanDelegate(Main,&Subagent)) continue;
         if ( !MdoAgentsGrow((void**)&Definitions, &Capacity, Count + 1u,
                 sizeof(*Definitions)) ||
              !MdoAgentsGrow((void**)&Prompts, &PromptCapacity, Count + 1u,
@@ -887,38 +959,25 @@ static bool MdoAgentsPublishSubagents(MdoAgentOwner* Owner,
         }
         Prompts[Count] = NULL;
         if ( !MdoAgentOwnerAcquireAgent(Owner, Subagent.Id, Error) ) goto done;
-        Prompts[Count] = MdoAgentsComposePrompt(&Subagent, Owner->Skills,
-            Error);
+        /* Build selected sources when this role actually runs, after its own
+         * context policy. Eager preloading ignores disabled/filtered Skills. */
+        Prompts[Count] = xrtStrDup(Subagent.SystemPrompt);
         if ( Prompts[Count] == NULL ) goto done;
         ++PromptCount;
-        if ( !MdoAgentsReplyLanguage(&Prompts[Count], Error) || !MdoToolPrompt(&Prompts[Count]) ||
-             !MdoSkillCatalogAppendPrompt(MdoAgentsToolSelected(&Subagent,"skill") ? Owner->Skills : NULL, &Prompts[Count]) || !MdoKnowledgeAppendPrompt(&Prompts[Count]) ) goto done;
         ModelId = Subagent.Model != NULL && Subagent.Model[0] != '\0' ?
             Subagent.Model : MainModel->Info.Id;
         Reasoning = Subagent.ReasoningEffort != NULL &&
             Subagent.ReasoningEffort[0] != '\0' ?
-            Subagent.ReasoningEffort : MainModel->ReasoningEffort;
+            Subagent.ReasoningEffort : (strcmp(ModelId,MainModel->Info.Id)?NULL:MainModel->ReasoningEffort);
         MaxOutput = Subagent.MaxOutputTokens != 0u ?
-            Subagent.MaxOutputTokens : MainModel->MaxOutputTokens;
+            Subagent.MaxOutputTokens : (strcmp(ModelId,MainModel->Info.Id)?0u:MainModel->MaxOutputTokens);
         Protocol = strcmp(ModelId, MainModel->Info.Id) == 0 ?
             MainModel->Protocol : 0;
         if ( !MdoAgentsResolveModel(Owner->Models, ModelId, Protocol,
                 Reasoning, MaxOutput, &Model, Error) ||
              !MdoAgentOwnerEnsureRoute(Owner, &Model, Error) ) goto done;
-        {
-            uint64 MainContext = Main->ContextWindowTokens != 0u ?
-                Main->ContextWindowTokens : MainModel->Info.ContextWindowTokens;
-            uint64 MainInput = Main->MaxInputTokens != 0u ?
-                Main->MaxInputTokens : MainModel->Info.MaxInputTokens;
-            if ( Subagent.ContextWindowTokens > Model.Info.ContextWindowTokens ||
-                 Subagent.ContextWindowTokens > MainContext ||
-                 Subagent.MaxInputTokens > Model.Info.MaxInputTokens ||
-                 Subagent.MaxInputTokens > MainInput ||
-                 Model.MaxOutputTokens > MainModel->MaxOutputTokens ) {
-                MdoAgentsError(Error, XWORK_ERROR_INVALID_ARGUMENT,
-                    "subagent model or context override exceeds its parent ceiling");
-                goto done;
-            }
+        if (Subagent.ContextWindowTokens>Model.Info.ContextWindowTokens || Subagent.MaxInputTokens>Model.Info.MaxInputTokens) {
+            MdoAgentsError(Error,XWORK_ERROR_INVALID_ARGUMENT,"subagent context override exceeds its selected model profile");goto done;
         }
         if ( Subagent.PermissionProfile != NULL &&
              strcmp(Subagent.PermissionProfile, "read-only") != 0 &&
@@ -933,36 +992,30 @@ static bool MdoAgentsPublishSubagents(MdoAgentOwner* Owner,
         Target->sName = Subagent.Id;
         Target->sDescription = Subagent.Description;
         Target->sSystemPrompt = Prompts[Count];
-        Target->psTools = Subagent.Tools;
-        Target->iToolCount = Subagent.ToolCount;
+        /* The product adapter applies exact names, wildcards and explicit
+         * empty lists after the child receives its authorized base catalog. */
+        Target->psTools = NULL;
+        Target->iToolCount = 0;
         Target->psSkills = Subagent.Skills;
         Target->iSkillCount = Subagent.SkillCount;
         Target->sModel = Model.Info.WireModel;
         Target->sReasoningEffort = Model.ReasoningEffort;
-        Target->uContextWindowTokens = Model.Info.ContextWindowTokens <
-            (Main->ContextWindowTokens != 0u ? Main->ContextWindowTokens :
-             MainModel->Info.ContextWindowTokens) ?
-            Model.Info.ContextWindowTokens :
-            (Main->ContextWindowTokens != 0u ? Main->ContextWindowTokens :
-             MainModel->Info.ContextWindowTokens);
-        if ( Subagent.ContextWindowTokens != 0u &&
-             Subagent.ContextWindowTokens < Target->uContextWindowTokens )
-            Target->uContextWindowTokens = Subagent.ContextWindowTokens;
-        Target->uMaxInputTokens = Model.Info.MaxInputTokens <
-            (Main->MaxInputTokens != 0u ? Main->MaxInputTokens :
-             MainModel->Info.MaxInputTokens) ? Model.Info.MaxInputTokens :
-            (Main->MaxInputTokens != 0u ? Main->MaxInputTokens :
-             MainModel->Info.MaxInputTokens);
-        if ( Subagent.MaxInputTokens != 0u &&
-             Subagent.MaxInputTokens < Target->uMaxInputTokens )
-            Target->uMaxInputTokens = Subagent.MaxInputTokens;
+        Target->uContextWindowTokens=Subagent.ContextWindowTokens?Subagent.ContextWindowTokens:Model.Info.ContextWindowTokens;
+        Target->uMaxInputTokens=Subagent.MaxInputTokens?Subagent.MaxInputTokens:Model.Info.MaxInputTokens;
+        if(Target->uMaxInputTokens>Target->uContextWindowTokens)Target->uMaxInputTokens=Target->uContextWindowTokens;
         Target->uMaxTurns = Subagent.MaxTurns;
-        Target->uTimeoutMs = Subagent.TimeoutMilliseconds;
+        xvalue* ChildOptions=Subagent.ConfigurationJson?xrtJsonParse(xrtStrView(Subagent.ConfigurationJson)):NULL;
+        uint64 ChildTimeout=MdoAgentConfigText(ChildOptions,"schema")?0u:Subagent.TimeoutMilliseconds;
+        MdoAgentConfigNumber(MdoAgentConfigGet(ChildOptions,"runtime"),"task_timeout_ms",ChildTimeout,86400000u,&ChildTimeout);
+        Target->uTimeoutMs=(uint32)ChildTimeout;
+        Target->bExplicitTools=false;
+        Target->bRequireVerificationAfterWrite=(Subagent.Flags&MDO_AGENT_REQUIRE_VERIFICATION_AFTER_WRITE)!=0;
+        xrtValueRelease(ChildOptions);
         Target->uMaxOutputTokens = Model.MaxOutputTokens;
         Target->iMaxFinalBytes = Subagent.MaxFinalBytes;
         Target->uAllowedEffects =
             (xwork_tool_effects)Subagent.AllowedEffects &
-            (xwork_tool_effects)Main->AllowedEffects;
+            Owner->DelegationEffects;
         ReadOnly = (Subagent.Flags & MDO_AGENT_READ_ONLY) != 0u ||
             (Subagent.PermissionProfile != NULL &&
              strcmp(Subagent.PermissionProfile, "read-only") == 0);
@@ -983,6 +1036,9 @@ done:
     xrtFree(Definitions);
     return Ok;
 }
+
+#include "history.inc.c"
+#include "program.inc.c"
 
 void MdoAgentSessionOptionsInit(MdoAgentSessionOptions* Options)
 {
@@ -1113,8 +1169,13 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
             MDO_PROJECT_LEASE_SHARED, Error);
         if ( Owner->ProjectLease == NULL ) goto fail;
     }
+    Owner->LifecycleLock=xrtMutexCreate();
+    Owner->InstanceLock=xrtMutexCreate();
+    Owner->Workspace=xrtPathAbs(Options->WorkspaceRoot && Options->WorkspaceRoot[0]?Options->WorkspaceRoot:".");
+    if(!Owner->InstanceLock || !Owner->LifecycleLock || !Owner->Workspace)goto fail;
+    Owner->Routes=xrtCalloc(4096u,sizeof(*Owner->Routes));Owner->RouteCapacity=4096u;
     Owner->RouteLock = xrtMutexCreate();
-    if ( Owner->RouteLock == NULL ) {
+    if ( Owner->RouteLock == NULL || Owner->Routes==NULL ) {
         MdoAgentsError(Error, XWORK_ERROR_OUT_OF_MEMORY,
             "cannot allocate Agent model route lock");
         goto fail;
@@ -1165,6 +1226,16 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
         goto fail;
     }
     if ( !MdoAgentOwnerAcquireAgent(Owner, AgentInfo.Id, Error) ) goto fail;
+    bool GlobalValid=false;
+    Owner->DelegationApproval=MdoAgentsApproval(Options->PermissionProfile && Options->PermissionProfile[0]?Options->PermissionProfile:Settings.PermissionProfile,false,&GlobalValid);
+    if(!GlobalValid)goto fail;
+    xvalue* RoleConfig=AgentInfo.ConfigurationJson?xrtJsonParse(xrtStrView(AgentInfo.ConfigurationJson)):NULL;
+    Owner->IndependentDelegation=AgentInfo.HasProgram || MdoAgentConfigText(RoleConfig,"schema") || MdoAgentConfigGet(RoleConfig,"delegation");
+    Owner->DelegationEffects=Owner->IndependentDelegation?MDO_TOOL_EFFECT_ALL:AgentInfo.AllowedEffects;
+    uint64 DelegationEffects=Owner->DelegationEffects;
+    if(!MdoAgentConfigNumber(MdoAgentConfigGet(RoleConfig,"delegation"),"allowed_effects",DelegationEffects,MDO_TOOL_EFFECT_ALL,&DelegationEffects)){xrtValueRelease(RoleConfig);goto fail;}
+    Owner->DelegationEffects=DelegationEffects;xrtValueRelease(RoleConfig);
+    if(Owner->DelegationApproval==XWORK_APPROVAL_READ_ONLY)Owner->DelegationEffects &= XWORK_TOOL_EFFECT_READ|XWORK_TOOL_EFFECT_AGENT_DELEGATION;
     ModelId = Options->ModelId != NULL && Options->ModelId[0] != '\0' ?
         Options->ModelId : AgentInfo.Model;
     Reasoning = Options->ReasoningEffort != NULL &&
@@ -1315,7 +1386,7 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
             MdoAgentsError(Error, XWORK_ERROR_OUT_OF_MEMORY, "cannot allocate the live permission scope");
             goto fail;
         }
-        if ( !MdoApprovalScopeInitialize(Owner->ApprovalScope, Approval == XWORK_APPROVAL_AUTO) ) {
+        if ( !MdoApprovalScopeInitialize(Owner->ApprovalScope, Owner->DelegationApproval == XWORK_APPROVAL_AUTO) ) {
             MdoAgentsError(Error, XWORK_ERROR_CONTEXT, "cannot initialize the live permission scope");
             goto fail;
         }
@@ -1413,12 +1484,15 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
     AgentOptions.pEventUserData = Owner;
     AgentOptions.OnModelComplete = MdoAgentsComplete;
     AgentOptions.pModelUserData = Owner;
+    AgentOptions.OnExtension=MdoAgentsExtension;
+    AgentOptions.pExtensionUserData=Owner;
     AgentOptions.pOwnerUserData = Owner;
     AgentOptions.OnOwnerRetain = MdoAgentsOwnerRetainCallback;
     AgentOptions.OnOwnerRelease = MdoAgentsOwnerReleaseCallback;
     Session->Agent = xworkAgentCreateWithRuntime(Runtime, Definition,
         &AgentOptions, Error);
     if ( Session->Agent == NULL ) goto fail;
+    Owner->RootAgent=Session->Agent;Owner->RootModel=Model;
     if(!MdoModuleAgentBindContext(Session->Agent,Options->ProjectId,Options->ProductSessionId)){
         MdoAgentsError(Error,XWORK_ERROR_OUT_OF_MEMORY,"Cannot bind Agent application identity");goto fail;
     }
@@ -1435,6 +1509,8 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
           !MdoMemoryConfigureFileTools(Session->Agent, Options->ProjectId, Error)) ||
          !MdoAgentsPublishSubagents(Owner, Session->Agent, &AgentInfo, &Model,
             &Session->SubagentCount, Error) ||
+         !(Owner->DelegationTools=xworkAgentToolCatalogSnapshot(Session->Agent)) ||
+         !MdoAgentsApplyMcpSelection(Session->Agent,Owner->Workspace,&AgentInfo,Error) ||
          !MdoAgentsApplyToolPolicy(Session->Agent, &AgentInfo, AllowedEffects,
             &Session->ToolCount, &Session->ToolCatalogGeneration, Error) ||
          !MdoAgentsValidateSkillTools(Owner, Session->Agent, &AgentInfo,
@@ -2067,3 +2143,5 @@ void MdoAgentRunDestroy(MdoAgentRun* Run)
     memset(Run, 0, sizeof(*Run));
     xrtFree(Run);
 }
+
+#include "inspect.inc.c"
