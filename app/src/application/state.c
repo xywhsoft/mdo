@@ -4,9 +4,9 @@
 #define SDK_STATE_BYTES (4u*1024u*1024u)
 #define SDK_STATE_RECORD_BYTES 16384u
 #define SDK_STATE_RECORDS 1024u
-static struct {xmutex* Lock;} SdkState;
-static const cstr SdkStateMethods[]={"state.get","state.list","state.put","state.compare_exchange","state.remove","state.transaction","state.receipt.get"};
-bool MdoApplicationStateInit(void){SdkState.Lock=xrtMutexCreate();return SdkState.Lock!=NULL;}
+static struct {xmutex* Lock;char Epoch[33];} SdkState;
+static const cstr SdkStateMethods[]={"state.get","state.list","state.put","state.compare_exchange","state.remove","state.transaction","state.receipt.get","lease.acquire","lease.inspect","lease.validate","lease.renew","lease.release"};
+bool MdoApplicationStateInit(void){SdkState.Lock=xrtMutexCreate();return SdkState.Lock&&SdkCallIdentity(SdkState.Epoch);}
 void MdoApplicationStateUnit(void){if(SdkState.Lock)xrtMutexDestroy(SdkState.Lock);memset(&SdkState,0,sizeof(SdkState));}
 static uint64 SdkStateRevision(const xvalue* V){uint64 N=0;SdkUInt(SdkGet(V,"revision"),&N);return N;}
 static bool SdkStateDeleted(const xvalue* V){bool Deleted=false;xrtValueGetBool(SdkGet(V,"deleted"),&Deleted);return Deleted;}
@@ -68,6 +68,7 @@ static bool SdkStateKey(cstr Key){return SdkIdValid(Key)&&strlen(Key)<=128;}
 static bool SdkStateCheck(const xvalue* Records,const xvalue* Check,mdo_error_v1* E){
     cstr Key=SdkField(Check,"key");uint64 Expected=0;
     if(!SdkStateKey(Key)||!SdkUInt(SdkGet(Check,"expected_revision"),&Expected))return MdoApplicationError(E,"sdk_state_arguments","Each check/write needs key and expected_revision","state",400,false);
+    if(!strncmp(Key,"sys.",4))return MdoApplicationError(E,"sdk_state_reserved","System records are managed through their typed services","state",400,false);
     return SdkStateRevision(SdkGet(Records,Key))==Expected||MdoApplicationError(E,"sdk_state_conflict","State revision changed; reread before updating","state",409,false);
 }
 static bool SdkStateApply(xvalue* Root,const xvalue* Writes,const xvalue* Checks,xvalue** Out,mdo_error_v1* E){
@@ -121,6 +122,7 @@ static bool SdkStateRemember(xvalue* Root,const xvalue* P,cstr Hash,const xvalue
     xvalue* Entry=xrtValueObject();bool Ok=Entry&&SdkPut(Entry,"hash",Hash)&&xrtValueObjectSetNew(Entry,XRT_STR_LITERAL("result"),xrtValueClone(Result))&&
         xrtValueObjectSet((xvalue*)SdkGet(Root,"requests"),xrtStrView(Id),Entry);xrtValueRelease(Entry);return Ok;
 }
+#include "state_leases.inc.c"
 xvalue* MdoApplicationStateCatalog(void){
     xvalue* A=xrtValueArray();for(size_t I=0;I<sizeof(SdkStateMethods)/sizeof(*SdkStateMethods);I++){
         xvalue* V=xrtValueObject();SdkPut(V,"id",SdkStateMethods[I]);SdkPut(V,"domain","state");SdkPut(V,"transport","native");xrtValueArrayAppendNew(A,V);
@@ -130,11 +132,16 @@ bool MdoApplicationStateCall(const mdo_sdk_context_v1* C,cstr Method,const xvalu
     *Found=false;for(size_t I=0;I<sizeof(SdkStateMethods)/sizeof(*SdkStateMethods);I++)if(!strcmp(Method,SdkStateMethods[I]))*Found=true;
     if(!*Found)return true;
     if(!SdkState.Lock)return MdoApplicationError(E,"sdk_unavailable","State service unavailable","state",503,false);
-    char Path[160];bool Read=!strcmp(Method,"state.get"),List=!strcmp(Method,"state.list"),Ok=false;
+    char Path[160];bool Read=!strcmp(Method,"state.get"),List=!strcmp(Method,"state.list"),Ok=false,Changed=false;
     xrtMutexLock(SdkState.Lock);xvalue* Root=SdkStateLoad(C,P,Path,E);
     if(!Root){xrtMutexUnlock(SdkState.Lock);return false;}
     const xvalue* Records=SdkGet(Root,"records");
-    if(Read){cstr Key=SdkField(P,"key");Ok=SdkStateKey(Key);if(Ok)*R=SdkStateEntry(Key,SdkGet(Records,Key));else MdoApplicationError(E,"sdk_state_arguments","A valid key is required","state",400,false);}
+    if(!strncmp(Method,"lease.",6)){
+        Ok=SdkLeaseApply(Method,P,Root,R,E,&Changed);
+        if(Ok&&Changed)Ok=SdkStateSave(Path,Root,E);
+        if(!Ok){xrtValueRelease(*R);*R=NULL;}
+    }
+    else if(Read){cstr Key=SdkField(P,"key");Ok=SdkStateKey(Key)&&strncmp(Key,"sys.",4);if(Ok)*R=SdkStateEntry(Key,SdkGet(Records,Key));else MdoApplicationError(E,"sdk_state_arguments","A valid key is required","state",400,false);}
     else if(!strcmp(Method,"state.receipt.get")){
         cstr Id=SdkField(P,"request_id");const xvalue* Receipt=SdkStateKey(Id)?SdkGet(SdkGet(Root,"requests"),Id):NULL;
         if(Receipt){*R=xrtValueClone(Receipt);Ok=*R!=NULL;}else MdoApplicationError(E,"sdk_receipt_missing","Request receipt is unavailable","state",404,false);
@@ -145,7 +152,7 @@ bool MdoApplicationStateCall(const mdo_sdk_context_v1* C,cstr Method,const xvalu
         if(!Ok)MdoApplicationError(E,"sdk_state_arguments","Invalid list offset or limit","state",400,false);
         else if(SdkGet(P,"expected_revision")&&(!SdkUInt(SdkGet(P,"expected_revision"),&Expected)||Expected!=SdkStateRevision(Root)))Ok=MdoApplicationError(E,"sdk_state_conflict","Namespace changed during pagination","state",409,false);
         if(Ok){*R=xrtValueObject();xvalue* Items=xrtValueArray();size_t Count=xrtValueCount(Records);uint64 At=Offset;
-            while(At<Count&&xrtValueCount(Items)<Limit){cstr Key=SdkKey(Records,(size_t)At++);const xvalue* Entry=SdkGet(Records,Key);if(SdkStateDeleted(Entry))continue;
+            while(At<Count&&xrtValueCount(Items)<Limit){cstr Key=SdkKey(Records,(size_t)At++);const xvalue* Entry=SdkGet(Records,Key);if(SdkStateDeleted(Entry)||!strncmp(Key,"sys.",4))continue;
                 xvalue* Item=xrtValueObject();SdkPut(Item,"key",Key);SdkPutUInt(Item,"revision",SdkStateRevision(Entry));xrtValueArrayAppendNew(Items,Item);}
             SdkPutUInt(*R,"revision",SdkStateRevision(Root));SdkPutUInt(*R,"next",At);xrtValueObjectSetNew(*R,XRT_STR_LITERAL("has_more"),xrtValueBool(At<Count));xrtValueObjectSetNew(*R,XRT_STR_LITERAL("items"),Items);
         }
@@ -155,12 +162,12 @@ bool MdoApplicationStateCall(const mdo_sdk_context_v1* C,cstr Method,const xvalu
         xvalue* Writes=NULL;const xvalue* Checks=SdkGet(P,"checks");
         if(!strcmp(Method,"state.transaction"))Writes=xrtValueClone(SdkGet(P,"writes"));
         else {Writes=xrtValueArray();xvalue* W=xrtValueClone(P);if(!strcmp(Method,"state.remove"))xrtValueObjectSetNew(W,XRT_STR_LITERAL("remove"),xrtValueBool(true));xrtValueArrayAppendNew(Writes,W);}
-        Ok=SdkStateApply(Root,Writes,Checks,R,E);xrtValueRelease(Writes);
+        Ok=(!SdkGet(P,"lease_guard")||SdkLeaseGuard(Root,SdkGet(P,"lease_guard"),E))&&SdkStateApply(Root,Writes,Checks,R,E);xrtValueRelease(Writes);
         if(Ok&&!SdkStateRemember(Root,P,Hash,*R))Ok=MdoApplicationError(E,"sdk_state_allocation","Cannot construct receipt; no changes published","state",500,false);
-        if(Ok)Ok=SdkStateSave(Path,Root,E);
+        if(Ok){Ok=SdkStateSave(Path,Root,E);Changed=Ok;}
         if(!Ok){xrtValueRelease(*R);*R=NULL;}
     }
-    xvalue* Event=Ok&&!Read&&!List&&strcmp(Method,"state.receipt.get")?xrtValueObject():NULL;
+    xvalue* Event=Ok&&Changed?xrtValueObject():NULL;
     if(Event){SdkPut(Event,"namespace",SdkField(Root,"namespace"));SdkPutUInt(Event,"revision",SdkStateRevision(Root));}
     xrtValueRelease(Root);xrtMutexUnlock(SdkState.Lock);
     if(Event){MdoApplicationEvent("state.changed",C,Event);xrtValueRelease(Event);}

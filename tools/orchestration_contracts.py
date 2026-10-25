@@ -3,7 +3,8 @@
 def contracts(add):
     string={'type':'string'}
     uint={'type':'integer','minimum':0}
-    common={'namespace':string,'key':string,'expected_revision':uint,'request_id':string}
+    guard={'type':'object','properties':{'id':string,'fence':uint,'token':string},'required':['id','fence','token']}
+    common={'namespace':string,'key':string,'expected_revision':uint,'request_id':string,'lease_guard':guard}
     add('state.get','Read a project/extension-scoped value, including missing/tombstone revision',common,('key',))
     add('state.list','List key metadata at a namespace revision without duplicating stored values',
         {'namespace':string,'offset':uint,'limit':{**uint,'minimum':1,'maximum':256},'expected_revision':uint})
@@ -14,7 +15,14 @@ def contracts(add):
     write={'type':'object','properties':{**common,'value':{},'remove':{'type':'boolean'}},'required':['key','expected_revision']}
     check={'type':'object','properties':{'key':string,'expected_revision':uint},'required':['key','expected_revision']}
     add('state.transaction','Check and publish 1..64 writes in one checksummed atomic document; any conflict publishes nothing',
-        {'namespace':string,'request_id':string,'writes':{'type':'array','minItems':1,'maxItems':64,'items':write},
+        {'namespace':string,'request_id':string,'lease_guard':guard,'writes':{'type':'array','minItems':1,'maxItems':64,'items':write},
          'checks':{'type':'array','maxItems':64,'items':check}},('writes',))
 
     add('state.receipt.get','Read a retained atomic mutation receipt without replaying its effect',{'namespace':string,'request_id':string},('request_id',))
+
+    lease={'namespace':string,'id':string,'owner':string,'request_id':string,'fence':uint,'token':string,'ttl_ms':{**uint,'minimum':1,'maximum':300000}}
+    add('lease.acquire','Acquire an expiring process-epoch lease with a durable monotonically increasing fence',lease,('id','owner','request_id'))
+    add('lease.inspect','Inspect live owner/fence without disclosing the lease token',lease,('id',))
+    add('lease.validate','Validate the fence/token; atomic state writes must instead use lease_guard',lease,('id','fence','token'))
+    for method in ('lease.renew','lease.release'):
+        add(method,'Renew or release only a currently live lease; repeated request_id returns its original receipt',lease,('id','fence','token','request_id'))

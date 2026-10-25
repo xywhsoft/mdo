@@ -6,12 +6,14 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+import time
 
 from test_api_runtime import ROOT, free_port, request, wait_ready, write_site
 
 MODULE = r'''
 #include "mdo/execution.h"
 #include "mdo/state.h"
+#include "mdo/lease.h"
 #include <string.h>
 static mdo_result Capture(void* U,const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E){
  const mdo_values_v1* V=C->Api->Values;(void)U;
@@ -153,6 +155,29 @@ def main():
             fixture.stop();fixture.start()
             assert fixture.call('state.put',original_request)==admitted
             assert fixture.call('state.receipt.get',{'namespace':'qa.state','request_id':'once-1'})['result']==admitted
+
+            lease_params=dict(namespace='qa.state',id='leader',owner='worker-1',request_id='lease-first',ttl_ms=30000)
+            lease=fixture.call('lease.acquire',lease_params)
+            assert lease['valid'] and lease['fence']>0
+            assert fixture.call('lease.acquire',lease_params)==lease
+            fixture.call('lease.acquire',{**lease_params,'owner':'worker-2','request_id':'lease-conflict'},409)
+            assert 'token' not in fixture.call('lease.inspect',{'namespace':'qa.state','id':'leader'})
+            guard={k:lease[k] for k in ('id','fence','token')}
+            write=dict(namespace='qa.state',key='guarded',value=1,expected_revision=0,lease_guard=guard)
+            guarded=fixture.call('state.put',write)
+            fixture.call('lease.release',dict(namespace='qa.state',**guard,request_id='lease-release'))
+            fixture.call('state.put',{**write,'expected_revision':guarded['revision'],'value':2},409)
+            next_lease=fixture.call('lease.acquire',{**lease_params,'owner':'worker-2','request_id':'lease-next'})
+            assert next_lease['fence']>lease['fence'] and next_lease['token']!=lease['token']
+            tiny=fixture.call('lease.acquire',{**lease_params,'id':'tiny','request_id':'lease-tiny','ttl_ms':10})
+            time.sleep(.04)
+            fixture.call('lease.renew',dict(namespace='qa.state',id='tiny',fence=tiny['fence'],token=tiny['token'],request_id='lease-too-late'),409)
+            fixture.stop();fixture.start()
+            assert not fixture.call('lease.inspect',{'namespace':'qa.state','id':'leader'})['valid']
+            fixture.call('lease.validate',dict(namespace='qa.state',id='leader',fence=next_lease['fence'],token=next_lease['token']),409)
+            after_restart=fixture.call('lease.acquire',{**lease_params,'request_id':'lease-after-restart'})
+            assert after_restart['fence']>next_lease['fence']
+            fixture.call('state.put',dict(namespace='qa.state',key='sys.lease.leader',expected_revision=0,value='forge'),400)
             files=list((fixture.home/'data/application/state').glob('*.json'));assert len(files)==1
             original=files[0].read_bytes();files[0].write_bytes(original.replace(b'false',b'true',1))
             assert fixture.call('state.get',{'namespace':'qa.state','key':'counter'},422)['code']=='sdk_state_corrupt'
@@ -163,7 +188,7 @@ def main():
 
         finally:
             fixture.stop()
-    print('PASS orchestration identity/outcomes, paged events, atomic CAS/transactions, tombstones, concurrent claims and corrupt/restart recovery')
+    print('PASS orchestration identity/outcomes, paged events, atomic CAS/transactions, durable receipts, fencing leases, expiry and corrupt/restart recovery')
 
 
 if __name__=='__main__':
