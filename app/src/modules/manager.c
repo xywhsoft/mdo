@@ -110,6 +110,7 @@ struct MdoModuleGeneration {
     mdo_module_unregister_v1 Stop;
     xatomic32 Stopped;
     bool UnregisterReady;
+    bool PluginEntry;
     mdo_host_core_v1 HostCore;
     mdo_host_services_v1 HostServices;
     mdo_sdk_context_v1 Application;
@@ -940,6 +941,7 @@ static MdoModuleGeneration* MdoModulesCompile(const MdoModuleSource* pSource,
     pGeneration->Generation = Generation;
     pGeneration->Kind = pSource->Kind;
     pGeneration->External = pSource->External;
+    pGeneration->PluginEntry = pSource->Plugin != NULL;
     pGeneration->SourcePath = xrtStrDup(pSource->VirtualPath);
     if ( pGeneration->SourcePath == NULL ||
          !MdoExtensionHashBytes(pBytes,iBytes,pGeneration->SourceRevision) ||
@@ -981,7 +983,8 @@ static MdoModuleGeneration* MdoModulesCompile(const MdoModuleSource* pSource,
         return NULL;
     }
     tcc_define_symbol(pGeneration->Tcc, "MDO_MODULE_BUILD", "1");
-    if(pSource->Plugin){char* Parent=xrtPathParent(pSource->VirtualPath);bool Ok=Parent&&tcc_add_quote_include_path(pGeneration->Tcc,Parent)>=0;xrtFree(Parent);if(!Ok){xrtFree(pBytes);MdoModulesGenerationRelease(pGeneration);return NULL;}}
+    if(pSource->Plugin){char* Parent=xrtPathParent(pSource->VirtualPath);bool Ok=Parent&&tcc_add_quote_include_path(pGeneration->Tcc,Parent)>=0;xrtFree(Parent);if(!Ok){xrtFree(pBytes);MdoModulesGenerationRelease(pGeneration);return NULL;}
+        char Id[100],Version[40];snprintf(Id,sizeof(Id),"\"plugin.%s\"",MdoPackageText(pSource->Plugin,"id",64));snprintf(Version,sizeof(Version),"\"%s\"",MdoPackageText(pSource->Plugin,"version",32));tcc_define_symbol(pGeneration->Tcc,"MDO_PLUGIN_ID",Id);tcc_define_symbol(pGeneration->Tcc,"MDO_PLUGIN_VERSION",Version);}
     if ( tcc_compile_string(pGeneration->Tcc, (const char*)pBytes) < 0 ||
          tcc_relocate(pGeneration->Tcc) < 0 ) {
         (void)MdoModulesDiagnosticAdd(pDiagnostics,
@@ -1376,10 +1379,10 @@ static bool MdoModulesRegister(MdoModuleGeneration* pGeneration,
             (sError[0] != '\0' ? sError : "module Register callback failed"));
         return false;
     }
-    if ( (pGeneration->Kind == MDO_MODULE_TOOLS &&
+    if ( !pGeneration->PluginEntry && ((pGeneration->Kind == MDO_MODULE_TOOLS &&
           pGeneration->ToolCount == 0u && pGeneration->ServiceCount==0u && pGeneration->HookCount==0u && pGeneration->LifecycleCount==0u) ||
          (pGeneration->Kind != MDO_MODULE_TOOLS &&
-          pGeneration->AgentCount == 0u) ) {
+          pGeneration->AgentCount == 0u)) ) {
         (void)MdoModulesDiagnosticAdd(pDiagnostics,
             MDO_MODULE_DIAGNOSTIC_VALIDATE, pGeneration->SourcePath,
             pGeneration->SourceHash,
@@ -1966,9 +1969,10 @@ invalid:
     return true;
 }
 
-static MdoModuleCatalog* MdoModulesBuildCandidate(uint64 Generation,
-    MdoModuleDiagnostics* pDiagnostics)
+static MdoModuleCatalog* MdoModulesBuildCandidateBody(uint64 Generation,
+    MdoModuleDiagnostics* pDiagnostics,bool* Recoverable)
 {
+    *Recoverable=true;
     MdoModuleSource* pSources = NULL;
     size_t iSourceCount = 0u;
     bytes pHeader = NULL;
@@ -2017,11 +2021,16 @@ static MdoModuleCatalog* MdoModulesBuildCandidate(uint64 Generation,
     }
     if ( !MdoModulesRegistrationOrder(pCatalog, pOrder, pDiagnostics) )
         goto failed;
-    for ( i = 0u; i < iSourceCount; ++i ) {
-        size_t iModule = pOrder[i];
-        if ( !pSources[iModule].Declarative && pRegisters[iModule] &&
-             !MdoModulesRegister(pCatalog->Modules[iModule],
-                pRegisters[iModule], pDiagnostics) ) goto failed;
+    /* Plugin entry callbacks precede base callbacks. If a plugin entry fails
+     * on initial boot, retire this candidate and build the base once, without
+     * replaying plugin Register. Reloads retain the existing live catalog. */
+    for(size_t Phase=0;Phase<2;Phase++){
+        if(Phase)*Recoverable=false;
+        for(i=0;i<iSourceCount;i++){
+            size_t iModule=pOrder[i];if((pSources[iModule].Plugin!=NULL)!=(Phase==0))continue;
+            if(!pSources[iModule].Declarative&&pRegisters[iModule]&&
+               !MdoModulesRegister(pCatalog->Modules[iModule],pRegisters[iModule],pDiagnostics))goto failed;
+        }
     }
     if ( !MdoModulesApplyProfiles(pCatalog,pDiagnostics) || !MdoModulesValidateCatalog(pCatalog, pDiagnostics) ) {
         if ( pDiagnostics->Count == 0u )
@@ -2045,6 +2054,12 @@ failed:
     xrtFree(pHeader);
     MdoModuleCatalogRelease(pCatalog);
     return NULL;
+}
+
+static MdoModuleCatalog* MdoModulesBuildCandidate(uint64 Generation,MdoModuleDiagnostics* Diagnostics,bool* Recoverable){
+    MdoApplicationPluginViewBegin();
+    MdoModuleCatalog* Result=MdoModulesBuildCandidateBody(Generation,Diagnostics,Recoverable);
+    MdoApplicationPluginViewEnd();return Result;
 }
 
 static void MdoModulesPublishDiagnosticsLocked(
@@ -2090,8 +2105,10 @@ bool MdoModuleManagerReload(void)
     }
     uint64 CandidateGeneration=g_MdoModules.NextGeneration;
     xrtMutexUnlock(g_MdoModules.Lock);
-    pCandidate = MdoModulesBuildCandidate(CandidateGeneration,
-        pDiagnostics);
+    bool Recoverable=false;
+    pCandidate = MdoModulesBuildCandidate(CandidateGeneration,pDiagnostics,&Recoverable);
+    if(!pCandidate&&Recoverable&&!g_MdoModules.Catalog&&MdoApplicationPluginsRecover())
+        pCandidate=MdoModulesBuildCandidate(CandidateGeneration,pDiagnostics,&Recoverable);
     xrtMutexLock(g_MdoModules.Lock);
     if ( pCandidate != NULL ) {
         pDefinitions = MdoModulesDefinitions(pCandidate);

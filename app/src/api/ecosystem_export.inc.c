@@ -68,9 +68,9 @@ static bool EcoNativeSourceList(xvalue* Items)
         Ok=Id&&R&&MdoApiValueSetString(R,"kind","plugins")&&MdoApiValueSetString(R,"id",Id)&&MdoApiValueSetString(R,"name",Id)&&xrtValueArrayAppend(Items,R);xrtValueRelease(R);
     }xrtValueRelease(Config);return Ok;
 }
-static bool EcoNativeExportFile(xvalue* Extras,cstr Root,cstr Name,size_t* Total)
+static bool EcoNativeExportFile(xvalue* Extras,cstr Root,cstr Name,size_t* Total,bool Plugin)
 {
-    if(!MdoPackagePath(Name))return false;
+    if(!(Plugin?MdoPluginPath(Name):MdoPackagePath(Name)))return false;
     char Path[512];int N=snprintf(Path,sizeof(Path),"%s/%s",Root,Name);if(N<=0||(size_t)N>=sizeof(Path))return false;
     xfile F=MdoHomeOpenRead(Path);xfileinfo Info={0};bool Ok=F&&xrtFileStat(F,&Info)&&Info.Type==XFILE_TYPE_FILE&&Info.Size<=64u*1024u*1024u&&*Total+Info.Size<=64u*1024u*1024u;
     bytes Data=Ok?xrtMalloc((size_t)Info.Size+1):NULL;Ok=Ok&&Data&&xrtReadFull(F,Data,(size_t)Info.Size,NULL);if(F)xrtClose(F);
@@ -91,10 +91,11 @@ static bool EcoNativeExport(cstr Kind,cstr Id,xvalue* Resource)
     Raw=MdoExtensionRead(Path,false,1048576u,&Missing);Doc=Raw?xrtJsonParse(xrtStrView(Raw)):NULL;xrtFree(Raw);xrtValueRelease(Config);
     if(!Plugin){cstr R=MdoPackageText(Doc,"root",220);if(!R||strncmp(R,"data/ecosystem/toolpacks/",24)||!MdoPackagePath(R)){xrtValueRelease(Doc);return false;}snprintf(Root,sizeof(Root),"%s",R);}
     const xvalue* Inventory=xrtValueObjectGet(Doc,XRT_STR_LITERAL("files"));xvalue* Extras=xrtValueArray();bool Ok=Doc&&Extras&&xrtValueType(Inventory)==XVALUE_ARRAY&&xrtValueCount(Inventory)<=128;size_t Total=0;
-    for(size_t i=0;Ok&&i<xrtValueCount(Inventory);i++)Ok=EcoNativeExportFile(Extras,Root,MdoPackageText(xrtValueArrayGet(Inventory,i),"path",220),&Total);
-    xvalue* Descriptor=Plugin?xrtValueObject():xrtValueClone(Doc);
-    if(Plugin){const xvalue* F=xrtValueObjectGet(Doc,XRT_STR_LITERAL("frontend"));if(F)Ok=Ok&&xrtValueObjectSet(Descriptor,XRT_STR_LITERAL("frontend"),F);}
-    else {const char* Keys[]={"id","root","revision","enabled","files"};for(size_t i=0;i<5;i++)xrtValueObjectRemove(Descriptor,xrtStrView(Keys[i]));}
+    for(size_t i=0;Ok&&i<xrtValueCount(Inventory);i++)Ok=EcoNativeExportFile(Extras,Root,MdoPackageText(xrtValueArrayGet(Inventory,i),"path",220),&Total,Plugin);
+    const xvalue* PluginManifest=xrtValueObjectGet(Doc,XRT_STR_LITERAL("manifest"));
+    xvalue* Descriptor=Plugin?(PluginManifest?xrtValueClone(PluginManifest):xrtValueObject()):xrtValueClone(Doc);
+    if(Plugin&&!PluginManifest){const xvalue* F=xrtValueObjectGet(Doc,XRT_STR_LITERAL("frontend"));if(F)Ok=Ok&&xrtValueObjectSet(Descriptor,XRT_STR_LITERAL("frontend"),F);}
+    else if(!Plugin){const char* Keys[]={"id","root","revision","enabled","files"};for(size_t i=0;i<5;i++)xrtValueObjectRemove(Descriptor,xrtStrView(Keys[i]));}
     char* Content=Descriptor?xrtJsonStringify(Descriptor,false,NULL):NULL;
     Ok=Ok&&Content&&MdoApiValueSetString(Resource,"kind",Kind)&&MdoApiValueSetString(Resource,"id",Id)&&MdoApiValueSetString(Resource,"content",Content)&&xrtValueObjectSet(Resource,XRT_STR_LITERAL("files"),Extras);
     xrtFree(Content);xrtValueRelease(Descriptor);xrtValueRelease(Extras);xrtValueRelease(Doc);return Ok;
@@ -104,7 +105,7 @@ static bool EcoNativeExportTreeFile(cstr Relative,const xfileinfo* Info,void* Da
 {
     (void)Info;EcoNativeExportContext* C=Data;
     if((!strncmp(C->Root,"skills/",7)&&!strcmp(Relative,"SKILL.md"))||(!strncmp(C->Root,"knowledge/",10)&&!strcmp(Relative,"knowledge.json")))return true;
-    return xrtValueCount(C->Extras)<128&&EcoNativeExportFile(C->Extras,C->Root,Relative,C->Total);
+    return xrtValueCount(C->Extras)<128&&EcoNativeExportFile(C->Extras,C->Root,Relative,C->Total,false);
 }
 static bool EcoNativeExportTree(cstr Root,xvalue* Extras,size_t* Total)
 {
@@ -158,7 +159,7 @@ static bool EcoRoleExport(cstr Kind,cstr Id,xvalue* Resource)
     for(size_t I=0;Ok&&I<xrtValueCount(Context);I++)Ok=EcoRoleExportReference((xvalue*)xrtValueObjectAt(Context,I,NULL),"file",Kind,Id,Files,&Total);
     if(Ok&&MdoAgentConfigBool(D,"code",false)){
         snprintf(Path,sizeof(Path),"modules/%s",Kind);char Name[80];snprintf(Name,sizeof(Name),"%s.c",Id);
-        Ok=EcoNativeExportFile(Files,Path,Name,&Total);
+        Ok=EcoNativeExportFile(Files,Path,Name,&Total,false);
         if(Ok)Ok=MdoApiValueSetString((xvalue*)xrtValueArrayGet(Files,xrtValueCount(Files)-1),"path","program.c");
     }
     char* Content=Ok?xrtJsonStringify(D,true,NULL):NULL;

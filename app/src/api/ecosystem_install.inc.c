@@ -18,6 +18,12 @@ static bool EcoLocalPath(cstr kind,cstr id,char path[256])
 }
 static bool EcoLocalAllowed(cstr path)
 {
+    if(path&&!strncmp(path,"plugins/",8)){
+        const char* Id=path+8,*Slash=strchr(Id,'/');if(!Slash||Slash-Id>64)return false;
+        char Name[65];memcpy(Name,Id,Slash-Id);Name[Slash-Id]=0;if(!MdoPackageId(Name)||strncmp(Slash,"/revisions/",11))return false;
+        const char* Hash=Slash+11;for(size_t I=0;I<64;I++)if(!Hash[I]||!strchr("0123456789abcdef",Hash[I]))return false;
+        const char* Tail=Hash+64;return !strcmp(Tail,"/manifest.json")||(!strncmp(Tail,"/files/",7)&&MdoPluginPath(Tail+7));
+    }
     if(!MdoPackagePath(path))return false;
     return !strncmp(path,"agents/",7)||!strncmp(path,"subagents/",10)||!strncmp(path,"tools/",6)||
         !strncmp(path,"knowledge/",10)||!strncmp(path,"skills/",7)||!strncmp(path,"mcp/",4)||!strncmp(path,"commands/",9)||
@@ -37,8 +43,8 @@ bool MdoEcosystemRecover(void)
     xvalue* journal=xrtJsonRead(xrtStrView(text),&limits);xrtFree(text);
     const xvalue* files=xrtValueObjectGet(journal,XRT_STR_LITERAL("files"));bool ok=journal&&xrtValueType(files)==XVALUE_ARRAY&&xrtValueCount(files)<=5000;
     /* Validate all journal destinations before restoring any of them. */
-    for(size_t i=0;ok&&i<xrtValueCount(files);i++)ok=EcoLocalAllowed(MdoPackageText(xrtValueArrayGet(files,i),"path",255));
-    for(size_t i=0;ok&&i<xrtValueCount(files);i++){const xvalue* f=xrtValueArrayGet(files,i);cstr path=MdoPackageText(f,"path",255);
+    for(size_t i=0;ok&&i<xrtValueCount(files);i++)ok=EcoLocalAllowed(MdoPackageText(xrtValueArrayGet(files,i),"path",599));
+    for(size_t i=0;ok&&i<xrtValueCount(files);i++){const xvalue* f=xrtValueArrayGet(files,i);cstr path=MdoPackageText(f,"path",599);
         const xvalue* old=xrtValueObjectGet(f,XRT_STR_LITERAL("old"));ok=old&&xrtValueType(old)!=XVALUE_NULL?EcoLocalPut(path,old):MdoHomeRemove(path,false);}
     if(ok){const xvalue* old=xrtValueObjectGet(journal,XRT_STR_LITERAL("receipts"));ok=old&&xrtValueType(old)==XVALUE_OBJECT&&EcoLocalSave(ECO_RECEIPTS,old);}
     if(ok)ok=MdoHomeRemove(ECO_JOURNAL,false);
@@ -54,7 +60,7 @@ static xvalue* EcoLocalFile(cstr path,const void* data,size_t size)
 }
 static bool EcoLocalAppend(xvalue* files,cstr path,const void* data,size_t size)
 {
-    for(size_t i=0;i<xrtValueCount(files);i++)if(MdoPackageSamePath(path,MdoPackageText(xrtValueArrayGet(files,i),"path",255)))return false;
+    for(size_t i=0;i<xrtValueCount(files);i++)if(MdoPackageSamePath(path,MdoPackageText(xrtValueArrayGet(files,i),"path",599)))return false;
     xvalue* f=EcoLocalFile(path,data,size);bool ok=f&&xrtValueArrayAppend(files,f);xrtValueRelease(f);return ok;
 }
 #include "ecosystem_native.inc.c"
@@ -83,12 +89,12 @@ static xvalue* EcoLocalFiles(const xvalue* package,char error[1024])
     if(!ok){if(!error[0])snprintf(error,1024,"Invalid resource file or duplicate destination");xrtValueRelease(files);return NULL;}return files;
 }
 static const xvalue* EcoLocalFind(const xvalue* files,cstr path)
-{for(size_t i=0;i<xrtValueCount(files);i++){const xvalue* f=xrtValueArrayGet(files,i);if(MdoPackageSamePath(path,MdoPackageText(f,"path",255)))return f;}return NULL;}
+{for(size_t i=0;i<xrtValueCount(files);i++){const xvalue* f=xrtValueArrayGet(files,i);if(MdoPackageSamePath(path,MdoPackageText(f,"path",599)))return f;}return NULL;}
 static int64 EcoLocalNumber(const xvalue* object,cstr key)
 {int64 n=0;(void)MdoPackageNumber(object,key,&n);return n;}
 static bool EcoLocalUnchanged(const xvalue* owned)
 {
-    cstr path=MdoPackageText(owned,"path",255),expected=MdoPackageText(owned,"sha256",64);
+    cstr path=MdoPackageText(owned,"path",599),expected=MdoPackageText(owned,"sha256",64);
     if(!path||!expected)return false;
     bool exists=false;xfileinfo info;
     if(!MdoHomeExternalStat(path,&exists,&info)||!exists||info.Type!=XFILE_TYPE_FILE||!(info.Available&XFILE_INFO_SIZE)||info.Size>64u*1024u*1024u)return false;
@@ -164,19 +170,19 @@ static bool EcoLocalApply(const xvalue* entry,bool uninstall,char error[1024],xv
     xvalue* files=uninstall?xrtValueArray():EcoLocalFiles(package,error);
     const xvalue* oldFiles=xrtValueObjectGet(prior,XRT_STR_LITERAL("files"));bool ok=files!=NULL;
     xvalue *pluginBefore=NULL,*pluginAfter=NULL;bool pluginReserved=false,pluginPublished=false;
-    if(ok)ok=EcoNativePrepare(files,package,prior,uninstall,&pluginBefore,&pluginAfter,&pluginReserved,error);
+    if(ok)ok=EcoNativePrepare(files,package,prior,uninstall,local,&pluginBefore,&pluginAfter,&pluginReserved,error);
     /* An edited Skill is retained as a complete local resource. Removing its
      * unchanged SKILL.md while retaining an edited attachment would orphan it. */
     char keptSkills[16][256];size_t keptCount=0;
     for(size_t i=0;uninstall&&i<xrtValueCount(oldFiles);i++){
         const xvalue* old=xrtValueArrayGet(oldFiles,i);char prefix[256];
-        if(EcoLocalSkillPrefix(MdoPackageText(old,"path",255),prefix)&&!EcoLocalUnchanged(old)){
+        if(EcoLocalSkillPrefix(MdoPackageText(old,"path",599),prefix)&&!EcoLocalUnchanged(old)){
             bool seen=false;for(size_t j=0;j<keptCount;j++)if(!strcmp(keptSkills[j],prefix))seen=true;
             if(!seen&&keptCount<16)strcpy(keptSkills[keptCount++],prefix);
         }
     }
-    for(size_t i=0;ok&&i<xrtValueCount(files);i++){xvalue* f=(xvalue*)xrtValueArrayGet(files,i);cstr path=MdoPackageText(f,"path",255);ok=EcoLocalCurrent(path,f,EcoLocalFind(oldFiles,path),error);}
-    for(size_t i=0;ok&&i<xrtValueCount(oldFiles);i++){const xvalue* old=xrtValueArrayGet(oldFiles,i);cstr path=MdoPackageText(old,"path",255);if(EcoLocalFind(files,path))continue;
+    for(size_t i=0;ok&&i<xrtValueCount(files);i++){xvalue* f=(xvalue*)xrtValueArrayGet(files,i);cstr path=MdoPackageText(f,"path",599);ok=EcoLocalCurrent(path,f,EcoLocalFind(oldFiles,path),error);}
+    for(size_t i=0;ok&&i<xrtValueCount(oldFiles);i++){const xvalue* old=xrtValueArrayGet(oldFiles,i);cstr path=MdoPackageText(old,"path",599);if(EcoLocalFind(files,path))continue;
         /* Immutable plugin revisions remain available to retained UI/code
          * generations and explicit rollback after removal or update. */
         if(path&&(!strncmp(path,"plugins/",8)||(!strncmp(path,"data/ecosystem/mcp/",19)&&EcoMcpFileRetained(receipts,priorKey,path))))continue;
@@ -198,7 +204,7 @@ static bool EcoLocalApply(const xvalue* entry,bool uninstall,char error[1024],xv
         if(ok)ok=xrtValueObjectSet(record,XRT_STR_LITERAL("resources"),refs);
         xrtValueRelease(refs);
         for(size_t i=0;ok&&i<xrtValueCount(files);i++){const xvalue* f=xrtValueArrayGet(files,i);if(xrtValueType(xrtValueObjectGet(f,XRT_STR_LITERAL("new")))==XVALUE_NULL)continue;
-            if(!strcmp(MdoPackageText(f,"path",255),"config/plugins.json"))continue;
+            if(!strcmp(MdoPackageText(f,"path",599),"config/plugins.json"))continue;
             xvalue* item=xrtValueObject();ok=item&&xrtValueObjectSet(item,XRT_STR_LITERAL("path"),xrtValueObjectGet(f,XRT_STR_LITERAL("path")))&&xrtValueObjectSet(item,XRT_STR_LITERAL("sha256"),xrtValueObjectGet(f,XRT_STR_LITERAL("sha256")))&&xrtValueArrayAppend(inventory,item);xrtValueRelease(item);}
         if(ok)ok=xrtValueObjectSet(record,XRT_STR_LITERAL("files"),inventory)&&(Authoring||xrtValueObjectSet(next,xrtStrView(key),record));}
     bool DependenciesReady=true;
@@ -224,7 +230,7 @@ static bool EcoLocalApply(const xvalue* entry,bool uninstall,char error[1024],xv
     if(Plan){if(ok){*Plan=Preview;Preview=NULL;}goto finished;}
     if(ok&&!DependenciesReady){snprintf(error,1024,"Required role dependencies are missing or disabled; inspect the installation plan and configure them first");ok=false;}
     bool begun=ok&&EcoLocalSave(ECO_JOURNAL,journal);ok=begun;
-    for(size_t i=0;ok&&i<xrtValueCount(files);i++){const xvalue* f=xrtValueArrayGet(files,i);const xvalue* incoming=xrtValueObjectGet(f,XRT_STR_LITERAL("new"));cstr path=MdoPackageText(f,"path",255);
+    for(size_t i=0;ok&&i<xrtValueCount(files);i++){const xvalue* f=xrtValueArrayGet(files,i);const xvalue* incoming=xrtValueObjectGet(f,XRT_STR_LITERAL("new"));cstr path=MdoPackageText(f,"path",599);
         ok=xrtValueType(incoming)==XVALUE_NULL?MdoHomeRemove(path,false):EcoLocalPut(path,incoming);}
     if(ok&&pluginReserved){ok=MdoApplicationPluginsStorePublish(pluginAfter,error,1024);pluginPublished=ok;}
     if(ok)ok=EcoLocalReload()&&(uninstall||EcoRolePublished(package,error))&&EcoNativeModes(files)&&EcoLocalSave(ECO_RECEIPTS,next)&&MdoHomeRemove(ECO_JOURNAL,false);

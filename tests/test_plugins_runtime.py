@@ -1,10 +1,20 @@
 """Unified plugins through a real isolated XS/TCC host; no provider requests."""
+import hashlib
+import base64
 import argparse
 import json
 import os
 from pathlib import Path
 import subprocess
 import tempfile
+
+class PluginTemporaryDirectory(tempfile.TemporaryDirectory):
+    @classmethod
+    def _rmtree(cls,name,*args,**kwargs):
+        if os.name=="nt" and not name.startswith("\\\\?\\"):
+            name="\\\\?\\"+str(Path(name).resolve())
+        return super()._rmtree(name,*args,**kwargs)
+
 from test_api_runtime import ROOT, free_port, request, wait_ready, write_site
 
 
@@ -12,13 +22,15 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--host',type=Path,default=ROOT/'.build/host/xs.exe')
     args=parser.parse_args()
-    with tempfile.TemporaryDirectory(dir=ROOT/'.build',prefix='plugins-runtime-') as tmp:
+    with PluginTemporaryDirectory(dir=ROOT/'.build',prefix='plugins-runtime-') as tmp:
         base=Path(tmp);port=free_port();config=write_site(base,port)
         with (base/'probe.log').open('wb') as log:
             child=subprocess.Popen([str(args.host.resolve()),str(config),'--','--home',str(base/'home')],cwd=base,stdout=log,stderr=log,
                 creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
             try:
-                wait_ready(port,child)
+                try: wait_ready(port,child)
+                except Exception:
+                    log.flush();raise RuntimeError((base/'probe.log').read_text(encoding='utf-8',errors='replace')[-8000:])
                 def call(method,params=None,status=200):
                     code,_,raw=request(port,'POST','/api/v1/application/call',body=json.dumps(dict(method=method,params=params or {})).encode(),headers={'Content-Type':'application/json'})
                     value=json.loads(raw);assert code==status,(method,code,value)
@@ -98,7 +110,9 @@ const mdo_module_v1* mdoModuleEntry(void){return &M;}
                 call('qa.plugin.counter',status=404)
                 child.terminate();child.wait(timeout=10)
                 child=subprocess.Popen([str(args.host.resolve()),str(config),'--','--home',str(base/'home')],cwd=base,stdout=log,stderr=log,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
-                wait_ready(port,child)
+                try: wait_ready(port,child)
+                except Exception:
+                    log.flush();raise RuntimeError((base/'probe.log').read_text(encoding='utf-8',errors='replace')[-8000:])
                 assert call('qa.plugin.counter')==11
                 call('runtime.reload',dict(domain='modules'))
                 assert call('qa.plugin.counter')==11,'An unchanged native plugin was registered twice'
@@ -114,6 +128,34 @@ const mdo_module_v1* mdoModuleEntry(void){return &M;}
                 info=call('plugin.get',dict(id='native-fixture'))
                 f=call('plugin.file.read',dict(id='native-fixture',path='runtime/plugin.c',offset=0,limit=17))
                 assert f['next']==17 and f['total']==len(native_source.encode()) and info['files']
+                # Upload references use the caller namespace, bounded reads and hashes.
+                upload=base/'home/data/extensions/local-client/uploads/large.bin'
+                upload.parent.mkdir(parents=True,exist_ok=True);payload=b'bounded upload'*(90*1024);upload.write_bytes(payload)
+                deep='docs/.knowledge/'+('/'.join(['folder'*8]*3))+'/index.md'
+                upload_doc=dict(format='mdo.plugin.v1',id='uploaded',name='Uploaded',version='1.0.0',description='Upload fixture',overrides=[dict(source=deep,target='web/deep/index.md')])
+                files=[dict(path=deep,storage_path='uploads/large.bin',bytes=len(payload),sha256=hashlib.sha256(payload).hexdigest())]
+                installed=call('plugin.apply',dict(id='uploaded',manifest=upload_doc,files=files));rev=next(r['revision'] for r in installed['items'] if r['id']=='uploaded')
+                other=upload.with_name('same.bin');other.write_bytes(payload);files[0]['storage_path']='uploads/same.bin'
+                installed=call('plugin.apply',dict(id='uploaded',manifest=upload_doc,files=files));assert next(r['revision'] for r in installed['items'] if r['id']=='uploaded')==rev
+                files[0]['sha256']='0'*64;call('plugin.apply',dict(id='uploaded',manifest=upload_doc,files=files),409)
+                files[0]['storage_path']='../escape';call('plugin.apply',dict(id='uploaded',manifest=upload_doc,files=files),422)
+                # Broken native code must leave a usable recovery UI and preserve
+                # the durable desired selection. Repair never replays that code.
+                for mode in ['syntax','register']:
+                    badid='broken-'+mode
+                    source='this is not C;' if mode=='syntax' else native_source.replace('Starts++;','Starts++; return MDO_RESULT_ERROR;').replace('plugin.native-fixture','plugin.'+badid)
+                    doc=dict(format='mdo.plugin.v1',id=badid,name='Broken',version='1.0.0',description='Recovery fixture',entry=dict(native='runtime/plugin.c'))
+                    call('plugin.apply',dict(id=badid,manifest=doc,files=[dict(path='runtime/plugin.c',text=source),dict(path='runtime/extra.h',text='#define EXTRA 10\n')]))
+                    commit([dict(id=r['id'],enabled=r['id']==badid) for r in call('plugin.list')['items']])
+                    original=(base/'home/config/plugins.json').read_bytes()
+                    child.terminate();child.wait(timeout=10)
+                    child=subprocess.Popen([str(args.host.resolve()),str(config),'--','--home',str(base/'home')],cwd=base,stdout=log,stderr=log,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0));wait_ready(port,child)
+                    assert call('plugin.list')['recovery_mode'],mode
+                    assert (base/'home/config/plugins.json').read_bytes()==original
+                    commit([dict(id=badid,enabled=False)])
+                    child.terminate();child.wait(timeout=10)
+                    child=subprocess.Popen([str(args.host.resolve()),str(config),'--','--home',str(base/'home')],cwd=base,stdout=log,stderr=log,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0));wait_ready(port,child)
+                    assert not call('plugin.list')['recovery_mode']
                 print('Plugins: immutable mappings, mutual exclusion, one-sided conflicts, dependency bounds/cycles, atomic switching and stale plans PASS',flush=True)
             finally:
                 child.terminate();child.wait(timeout=10)

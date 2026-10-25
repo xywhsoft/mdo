@@ -1,5 +1,5 @@
 static const xvalue* SdkPluginFind(const xvalue* Config,cstr Id){
-    for(size_t I=0;Id&&I<xrtValueCount(Config);I++){const xvalue* R=xrtValueArrayGet(Config,I);if(!strcmp(Id,SdkField(R,"id")))return R;}return NULL;
+    for(size_t I=0;Id&&I<xrtValueCount(Config);I++){const xvalue* R=xrtValueArrayGet(Config,I);if(SdkField(R,"id")&&!strcmp(Id,SdkField(R,"id")))return R;}return NULL;
 }
 static bool SdkPluginHash(const xvalue* V,char Out[65]){char* Text=SdkJson(V);bool Ok=Text&&MdoExtensionHash(Text,Out);xrtFree(Text);return Ok;}
 static bool SdkPluginIssue(xvalue* Issues,cstr Code,cstr Id,cstr Other,cstr Detail){
@@ -44,6 +44,8 @@ static bool SdkPluginTarget(const xvalue* Current,const xvalue* Changes,xvalue**
     for(size_t I=0;I<xrtValueCount(Changes);I++){
         const xvalue* R=xrtValueArrayGet(Changes,I);cstr Id=SdkField(R,"id");const cstr Keys[]={"id","enabled","revision","remove"};
         if(!MdoPackageId(Id)||!MdoPluginKeys(R,Keys,4)||!SdkPluginFind(Current,Id))return MdoApplicationError(E,"sdk_plugin_missing","Plugin change refers to an uninstalled plugin or invalid fields","plugin",404,false);
+        const xvalue* Installed=SdkPluginFind(Current,Id);cstr Source=SdkField(Installed,"source"),Revision=SdkField(R,"revision");bool Remove=false;xrtValueGetBool(SdkGet(R,"remove"),&Remove);
+        if(Source&&!strcmp(Source,"store")&&(Remove||(Revision&&strcmp(Revision,SdkField(Installed,"revision")))))return MdoApplicationError(E,"store_resource_readonly","Install the saved store version through its update flow before switching this combination","plugin",403,false);
         for(size_t J=0;J<I;J++)if(!strcmp(Id,SdkField(xrtValueArrayGet(Changes,J),"id")))return MdoApplicationError(E,"sdk_arguments_invalid","Duplicate plugin change","plugin",422,false);
     }
     xvalue* Result=xrtValueArray();bool Ok=Result!=NULL;
@@ -59,6 +61,7 @@ static bool SdkPluginTarget(const xvalue* Current,const xvalue* Changes,xvalue**
             if(!Saved||strcmp(Id,SdkField(Saved,"id")?SdkField(Saved,"id"):"")){xrtValueRelease(Saved);xrtValueRelease(Next);Ok=false;break;}
             xrtValueObjectRemove(Saved,XRT_STR_LITERAL("files"));
             xrtValueObjectSet(Saved,XRT_STR_LITERAL("enabled"),SdkGet(Old,"enabled"));
+            if(SdkGet(Old,"source"))xrtValueObjectSet(Saved,XRT_STR_LITERAL("source"),SdkGet(Old,"source"));
             if(strcmp(Revision,SdkField(Old,"revision")))SdkPut(Saved,"previous",SdkField(Old,"revision"));
             xrtValueRelease(Next);Next=Saved;
         }

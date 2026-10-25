@@ -7,6 +7,23 @@
 #define MDO_PLUGIN_COUNT 32u
 #define MDO_PLUGIN_FILES 128u
 #define MDO_PLUGIN_BYTES (64u*1024u*1024u)
+static bool MdoPluginPath(const char* path)
+{
+    if(!path||!path[0]||strlen(path)>220||strchr(path,'\\')||strchr(path,':')||path[0]=='/')return false;
+    const char* p=path;
+    for(;;){const char* slash=strchr(p,'/');size_t n=slash?(size_t)(slash-p):strlen(p);char component[221];
+        if(!n||n>220||(n==1&&p[0]=='.')||(n==2&&p[0]=='.'&&p[1]=='.')||p[n-1]=='.'||p[n-1]==' ')return false;
+        memcpy(component,p,n);component[n]=0;
+        /* Case-insensitive filesystem aliases and control bytes are rejected. */
+        for(size_t i=0;i<n;i++){unsigned char c=(unsigned char)component[i];if(c<32||c==127||strchr("<>\"|?*",c))return false;}
+        char lower[221];for(size_t i=0;i<=n;i++)lower[i]=(component[i]>='A'&&component[i]<='Z')?component[i]+32:component[i];
+        size_t b=strcspn(lower,".");lower[b]=0;
+        if(!strcmp(lower,"con")||!strcmp(lower,"prn")||!strcmp(lower,"aux")||!strcmp(lower,"nul")||
+           (b==4&&(!strncmp(lower,"com",3)||!strncmp(lower,"lpt",3))&&lower[3]>='1'&&lower[3]<='9'))return false;
+        if(!slash)break;
+        p=slash+1;
+    }return true;
+}
 static const xvalue* MdoPluginGet(const xvalue* V,const char* K)
 {return xrtValueObjectGet(V,xrtStrView(K));}
 static bool MdoPluginFail(char* E,size_t N,const char* Why)
@@ -39,6 +56,7 @@ static bool MdoPluginModern(const xvalue* Doc)
 static bool MdoPluginVersionMatches(const xvalue* Relation,const char* Version)
 {
     const char* Min=MdoPackageText(Relation,"min_version",32),*Max=MdoPackageText(Relation,"max_version_exclusive",32);
+    if(!Min&&!Max)return true;
     if(!MdoPackageVersion(Version,NULL))return false;
     return (!Min||MdoPackageVersionCompare(Version,Min)>=0)&&(!Max||MdoPackageVersionCompare(Version,Max)<0);
 }
@@ -69,7 +87,7 @@ static bool MdoPluginValidate(const xvalue* Doc,const xvalue* Files,const char* 
     if(xrtValueType(Files)!=XVALUE_ARRAY||!xrtValueCount(Files)||xrtValueCount(Files)>MDO_PLUGIN_FILES)return MdoPluginFail(E,N,"Plugin needs 1..128 inventory files");
     for(size_t I=0;I<xrtValueCount(Files);I++){
         const char* Path=MdoPackageText(xrtValueArrayGet(Files,I),"path",220);
-        if(!MdoPackagePath(Path))return MdoPluginFail(E,N,"Invalid plugin inventory path");
+        if(!MdoPluginPath(Path))return MdoPluginFail(E,N,"Invalid plugin inventory path");
         for(size_t J=0;J<I;J++)if(MdoPluginPathOverlap(Path,MdoPackageText(xrtValueArrayGet(Files,J),"path",220)))return MdoPluginFail(E,N,"Plugin file paths overlap or alias");
     }
     const xvalue* Overrides=MdoPluginGet(Doc,"overrides");
@@ -77,7 +95,7 @@ static bool MdoPluginValidate(const xvalue* Doc,const xvalue* Files,const char* 
     const char* const MappingKeys[]={"source","target"};
     for(size_t I=0;I<xrtValueCount(Overrides);I++){
         const xvalue* O=xrtValueArrayGet(Overrides,I);const char* S=MdoPackageText(O,"source",220),*T=MdoPackageText(O,"target",220);
-        if(!MdoPluginKeys(O,MappingKeys,2)||!MdoPackagePath(T)||!MdoPluginFile(Files,S))return MdoPluginFail(E,N,"Plugin mapping needs an inventory source and portable app-relative target");
+        if(!MdoPluginKeys(O,MappingKeys,2)||!MdoPluginPath(T)||!MdoPluginFile(Files,S))return MdoPluginFail(E,N,"Plugin mapping needs an inventory source and portable app-relative target");
         /* Private loader addresses are allocated by the host, never by a plugin. */
         if(MdoPluginPathOverlap(T,"web/__mdo_plugins")||MdoPluginPathOverlap(T,"__mdo_plugins"))return MdoPluginFail(E,N,"Plugin target uses a loader-owned address");
         for(size_t J=0;J<I;J++)if(MdoPluginPathOverlap(T,MdoPackageText(xrtValueArrayGet(Overrides,J),"target",220)))return MdoPluginFail(E,N,"Plugin target mappings overlap or alias");

@@ -10,7 +10,7 @@ static bool SdkPluginLookup(cstr Id,cstr Revision,SdkPlugin* Plugin,mdo_error_v1
     return Ok||MdoApplicationError(E,"sdk_plugin_revision_invalid","Plugin revision files could not be verified","plugin",409,false);
 }
 static bool SdkPluginFileCall(const xvalue* P,xvalue** R,mdo_error_v1* E){
-    cstr Id=SdkField(P,"id"),Path=SdkField(P,"path");SdkPlugin Plugin={0};if(!MdoPackageId(Id)||!MdoPackagePath(Path))return MdoApplicationError(E,"sdk_arguments_invalid","Choose an installed plugin inventory file","plugin",422,false);
+    cstr Id=SdkField(P,"id"),Path=SdkField(P,"path");SdkPlugin Plugin={0};if(!MdoPackageId(Id)||!MdoPluginPath(Path))return MdoApplicationError(E,"sdk_arguments_invalid","Choose an installed plugin inventory file","plugin",422,false);
     if(!SdkPluginLookup(Id,SdkField(P,"revision"),&Plugin,E))return false;
     const xvalue* F=MdoPluginFile(SdkGet(Plugin.Manifest,"files"),Path);uint64 Offset=0,Limit=65536,Size=0;SdkUInt(SdkGet(P,"offset"),&Offset);SdkUInt(SdkGet(P,"limit"),&Limit);SdkUInt(SdkGet(F,"bytes"),&Size);
     bool Ok=F&&Limit&&Limit<=65536&&Offset<=Size;char Native[600];snprintf(Native,sizeof(Native),"plugins/%s/revisions/%s/files/%s",Id,SdkField(Plugin.Manifest,"revision"),Path);
@@ -22,7 +22,19 @@ static bool SdkPluginFileCall(const xvalue* P,xvalue** R,mdo_error_v1* E){
 static xvalue* SdkPluginPresetsRead(void){
     bool Missing=false;char* Text=MdoExtensionRead("config/plugin-combinations.json",true,1048576,&Missing);xvalue* Doc=SdkParse(Text);xrtFree(Text);
     if(!Doc&&Missing){Doc=xrtValueObject();SdkPut(Doc,"format","mdo.plugin-combinations.v1");xrtValueObjectSetNew(Doc,XRT_STR_LITERAL("items"),xrtValueArray());}
-    if(!Doc||!SdkField(Doc,"format")||strcmp(SdkField(Doc,"format"),"mdo.plugin-combinations.v1")||xrtValueType(SdkGet(Doc,"items"))!=XVALUE_ARRAY||xrtValueCount(SdkGet(Doc,"items"))>32){xrtValueRelease(Doc);return NULL;}return Doc;
+    if(!Doc||!SdkField(Doc,"format")||strcmp(SdkField(Doc,"format"),"mdo.plugin-combinations.v1")||xrtValueType(SdkGet(Doc,"items"))!=XVALUE_ARRAY||xrtValueCount(SdkGet(Doc,"items"))>32){xrtValueRelease(Doc);return NULL;}
+    const xvalue* Items=SdkGet(Doc,"items");bool Ok=true;
+    for(size_t I=0;Ok&&I<xrtValueCount(Items);I++){
+        const xvalue* R=xrtValueArrayGet(Items,I),*Pins=SdkGet(R,"plugins");cstr Id=SdkField(R,"id"),Name=SdkField(R,"name");
+        Ok=MdoPackageId(Id)&&Name&&strlen(Name)<=100&&xrtValueType(Pins)==XVALUE_ARRAY&&xrtValueCount(Pins)<=32;
+        for(size_t J=0;Ok&&J<I;J++)if(!strcmp(Id,SdkField(xrtValueArrayGet(Items,J),"id")))Ok=false;
+        for(size_t J=0;Ok&&J<xrtValueCount(Pins);J++){
+            const xvalue* P=xrtValueArrayGet(Pins,J);cstr Pid=SdkField(P,"id"),Rev=SdkField(P,"revision");bool Enabled;
+            Ok=MdoPackageId(Pid)&&Rev&&strlen(Rev)==64&&xrtValueGetBool(SdkGet(P,"enabled"),&Enabled);
+            for(size_t K=0;Ok&&K<64;K++)if(!strchr("0123456789abcdef",Rev[K]))Ok=false;
+            for(size_t K=0;Ok&&K<J;K++)if(!strcmp(Pid,SdkField(xrtValueArrayGet(Pins,K),"id")))Ok=false;
+        }
+    }if(!Ok){xrtValueRelease(Doc);return NULL;}return Doc;
 }
 static bool SdkPluginPresetMatches(const xvalue* Plugins,const xvalue* Current){
     if(xrtValueCount(Plugins)!=xrtValueCount(Current))return false;

@@ -19,16 +19,18 @@ static bool EcoNativeFiles(xvalue* Files,const xvalue* Resource,char Error[1024]
         const xvalue* File=xrtValueArrayGet(Extras,i);cstr Name=MdoPackageText(File,"path",220),Encoded=MdoPackageText(File,"base64",90u*1024u*1024u);
         size_t Size=0;bytes Data=Encoded?xrtBase64DecodeNew(Encoded,strlen(Encoded),&Size,NULL):NULL;char Hash[65];
         int Written=snprintf(Path,sizeof(Path),Plugin?"%s/files/%s":"%s/%s",Root,Name);
-        Ok=Data&&Written>0&&(size_t)Written<sizeof(Path)&&strlen(Path)<=220&&MdoExtensionHashBytes(Data,Size,Hash)&&EcoLocalAppend(Files,Path,Data,Size);
+        Ok=Data&&Written>0&&(size_t)Written<sizeof(Path)&&(Plugin||strlen(Path)<=220)&&MdoExtensionHashBytes(Data,Size,Hash)&&EcoLocalAppend(Files,Path,Data,Size);
         if(Ok){xvalue* Item=xrtValueObject();Ok=Item&&MdoApiValueSetString(Item,"path",Name)&&MdoApiValueSetString(Item,"sha256",Hash)&&MdoApiValueSetUInt(Item,"bytes",Size)&&xrtValueArrayAppend(Inventory,Item);xrtValueRelease(Item);}
         if(Plugin&&(!strncmp(Name,"src/",4)||!strncmp(Name,"include/",8)||!strncmp(Name,"generated/",10)||!strcmp(Name,"main.c")||!strcmp(Name,"sources.json")))Core=true;
         xrtFree(Data);
     }
     if(Ok&&Plugin){
-        xvalue* Manifest=xrtValueObject();cstr Frontend=MdoPackageText(Descriptor,"frontend",220);
+        xvalue* Manifest=xrtValueObject();bool Modern=MdoPluginModern(Descriptor);cstr Frontend=MdoPackageText(Modern?MdoPluginGet(Descriptor,"entry"):Descriptor,"frontend",220);
+        if(Modern){Core=false;const xvalue* Overrides=MdoPluginGet(Descriptor,"overrides");for(size_t I=0;I<xrtValueCount(Overrides);I++){cstr T=MdoPackageText(xrtValueArrayGet(Overrides,I),"target",220);if(!strncmp(T,"src/",4)||!strncmp(T,"include/",8)||!strncmp(T,"generated/",10)||!strcmp(T,"main.c")||!strcmp(T,"sources.json"))Core=true;}}
         Ok=Manifest&&MdoApiValueSetString(Manifest,"id",Id)&&MdoApiValueSetString(Manifest,"revision",Revision)&&
-            MdoApiValueSetString(Manifest,"frontend",Frontend?Frontend:"")&&MdoApiValueSetBool(Manifest,"enabled",true)&&
+            MdoApiValueSetString(Manifest,"frontend",Frontend?Frontend:"")&&MdoApiValueSetBool(Manifest,"enabled",!Modern)&&
             MdoApiValueSetBool(Manifest,"source_reload_required",Core)&&xrtValueObjectSet(Manifest,XRT_STR_LITERAL("files"),Inventory);
+        if(Ok&&Modern)Ok=xrtValueObjectSet(Manifest,XRT_STR_LITERAL("manifest"),Descriptor);
         snprintf(Path,sizeof(Path),"%s/manifest.json",Root);if(Ok)Ok=EcoNativeJsonFile(Files,Path,Manifest);xrtValueRelease(Manifest);
     }else if(Ok){
         Ok=MdoApiValueSetString(Descriptor,"id",Id)&&MdoApiValueSetString(Descriptor,"root",Root)&&
@@ -52,7 +54,7 @@ static bool EcoNativeOwns(const xvalue* Prior,cstr Id)
         if(Kind&&Existing&&!strcmp(Kind,"plugins")&&!strcmp(Id,Existing))return true;}
     return false;
 }
-static bool EcoNativePrepare(xvalue* Files,const xvalue* Package,const xvalue* Prior,bool Uninstall,
+static bool EcoNativePrepare(xvalue* Files,const xvalue* Package,const xvalue* Prior,bool Uninstall,bool Local,
     xvalue** Before,xvalue** After,bool* Reserved,char Error[1024])
 {
     const xvalue* Resources=Uninstall?NULL:xrtValueObjectGet(Package,XRT_STR_LITERAL("resources"));
@@ -76,34 +78,20 @@ static bool EcoNativePrepare(xvalue* Files,const xvalue* Package,const xvalue* P
         if(EcoNativeFind(*Before,Id)&&!EcoNativeOwns(Prior,Id)){snprintf(Error,1024,"Plugin ID belongs to another installation: %s",Id);return false;}
         char* Raw=xrtJsonStringify(Resource,false,NULL);char Hash[65],Path[256];Ok=Raw&&MdoExtensionHash(Raw,Hash);xrtFree(Raw);if(!Ok)break;
         snprintf(Path,sizeof(Path),"plugins/%s/revisions/%s/manifest.json",Id,Hash);
-        const xvalue* File=NULL;for(size_t j=0;j<xrtValueCount(Files);j++)if(!strcmp(Path,MdoPackageText(xrtValueArrayGet(Files,j),"path",255)))File=xrtValueArrayGet(Files,j);
+        const xvalue* File=NULL;for(size_t j=0;j<xrtValueCount(Files);j++)if(!strcmp(Path,MdoPackageText(xrtValueArrayGet(Files,j),"path",599)))File=xrtValueArrayGet(Files,j);
         xstrview Encoded;size_t Size=0;bytes Decoded=File&&xrtValueGetString(xrtValueObjectGet(File,XRT_STR_LITERAL("new")),&Encoded)?xrtBase64DecodeNew(Encoded.Data,Encoded.Size,&Size,NULL):NULL;
         xvalue* Manifest=Decoded?xrtJsonParse(xrtStrViewN((cstr)Decoded,Size)):NULL;xrtFree(Decoded);
         const xvalue* Old=EcoNativeFind(*Before,Id);cstr Previous=MdoPackageText(Old,"revision",64);
         if(Manifest&&Previous&&strcmp(Previous,Hash))Ok=MdoApiValueSetString(Manifest,"previous",Previous);
+        if(Manifest&&Old)xrtValueObjectSet(Manifest,XRT_STR_LITERAL("enabled"),xrtValueObjectGet(Old,XRT_STR_LITERAL("enabled")));
+        if(Manifest)Ok=Ok&&MdoApiValueSetString(Manifest,"source",Local?"local":"store");
         if(Manifest)xrtValueObjectRemove(Manifest,XRT_STR_LITERAL("files"));
         Ok=Ok&&Manifest&&xrtValueArrayAppend(*After,Manifest);xrtValueRelease(Manifest);
     }
-    /* Two independent overlays must not silently compete for one app path.
-     * Replacing built-in files is an explicit plugin capability; replacing
-     * another installed plugin requires removing that plugin first. */
-    for(size_t i=0;Ok&&i<xrtValueCount(Resources);i++){
-        const xvalue* R=xrtValueArrayGet(Resources,i);cstr Kind=MdoPackageText(R,"kind",16),Id=MdoPackageText(R,"id",64);if(strcmp(Kind,"plugins"))continue;
-        const xvalue* NewFiles=xrtValueObjectGet(R,XRT_STR_LITERAL("files"));
-        for(size_t j=0;Ok&&j<xrtValueCount(*After);j++){
-            const xvalue* Other=xrtValueArrayGet(*After,j);cstr OtherId=MdoPackageText(Other,"id",64),Revision=MdoPackageText(Other,"revision",64);if(!OtherId||!strcmp(Id,OtherId)||!Revision)continue;
-            const xvalue* OtherFiles=NULL;xvalue* Manifest=NULL;
-            for(size_t k=0;k<xrtValueCount(Resources);k++){const xvalue* Candidate=xrtValueArrayGet(Resources,k);cstr K=MdoPackageText(Candidate,"kind",16),I=MdoPackageText(Candidate,"id",64);if(K&&I&&!strcmp(K,"plugins")&&!strcmp(I,OtherId))OtherFiles=xrtValueObjectGet(Candidate,XRT_STR_LITERAL("files"));}
-            if(!OtherFiles){char Path[256];snprintf(Path,sizeof(Path),"plugins/%s/revisions/%s/manifest.json",OtherId,Revision);bool Missing=false;char* Raw=MdoExtensionRead(Path,false,1048576u,&Missing);Manifest=Raw?xrtJsonParse(xrtStrView(Raw)):NULL;xrtFree(Raw);OtherFiles=xrtValueObjectGet(Manifest,XRT_STR_LITERAL("files"));if(!OtherFiles)Ok=false;}
-            for(size_t a=0;Ok&&a<xrtValueCount(NewFiles);a++)for(size_t b=0;Ok&&b<xrtValueCount(OtherFiles);b++){
-                cstr A=MdoPackageText(xrtValueArrayGet(NewFiles,a),"path",220),B=MdoPackageText(xrtValueArrayGet(OtherFiles,b),"path",220);
-                if(!A||!B||MdoPackageSamePath(A,B)){snprintf(Error,1024,"Plugin VFS path conflicts with %s: %s",OtherId,A?A:"");Ok=false;}
-            }
-            xrtValueRelease(Manifest);
-        }
-    }
+    /* Active mappings and compatibility are validated by the common plugin
+     * publisher after staging; disabled plugins may share payload filenames. */
     if(Ok){
-        bool Missing=false;char* Raw=MdoExtensionRead("config/plugins.json",true,262144,&Missing);
+        bool Missing=false;char* Raw=MdoExtensionRead("config/plugins.json",true,16777216,&Missing);
         xvalue* Current=Raw?xrtJsonParse(xrtStrView(Raw)):Missing?xrtValueArray():NULL;
         Ok=Current&&xrtValueEqual(Current,*Before)&&EcoNativeJsonFile(Files,"config/plugins.json",*After);
         if(Ok){xvalue* Change=(xvalue*)xrtValueArrayGet(Files,xrtValueCount(Files)-1);
@@ -121,7 +109,7 @@ static bool EcoNativeNeedsConfiguration(const xvalue* Package)
 static bool EcoNativeModes(const xvalue* Files)
 {
 #if !defined(_WIN32) && !defined(_WIN64) && !defined(__ANDROID__)
-    for(size_t i=0;i<xrtValueCount(Files);i++){const xvalue* F=xrtValueArrayGet(Files,i);cstr Path=MdoPackageText(F,"path",255);
+    for(size_t i=0;i<xrtValueCount(Files);i++){const xvalue* F=xrtValueArrayGet(Files,i);cstr Path=MdoPackageText(F,"path",599);
         if(!strncmp(Path,"data/ecosystem/toolpacks/",24)&&xrtValueType(xrtValueObjectGet(F,XRT_STR_LITERAL("new")))!=XVALUE_NULL&&!MdoHomeSetMode(Path,0755u))return false;}
 #else
     (void)Files;

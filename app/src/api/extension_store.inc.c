@@ -9,7 +9,7 @@ static xvalue* ExtensionStoreRead(bool* Known)
     xvalueiter It={0};xvaluekey Key;xvalue* R;bool Ok=true;
     if(xrtValueIterBegin(Records,&It)){while((R=xrtValueIterNext(&It,&Key))){const xvalue* Files=xrtValueObjectGet(R,XRT_STR_LITERAL("files"));
         if(xrtValueType(R)!=XVALUE_OBJECT||xrtValueType(Files)!=XVALUE_ARRAY){Ok=false;break;}
-        for(size_t i=0;Ok&&i<xrtValueCount(Files);i++)Ok=MdoPackageText(xrtValueArrayGet(Files,i),"path",255)!=NULL;
+        for(size_t i=0;Ok&&i<xrtValueCount(Files);i++)Ok=MdoPackageText(xrtValueArrayGet(Files,i),"path",599)!=NULL;
         if(!Ok)break;
     }xrtValueIterEnd(&It);}
     if(!Ok){xrtValueRelease(Records);return NULL;}*Known=true;return Records;
@@ -20,7 +20,7 @@ static const xvalue* ExtensionStoreOwner(const xvalue* Records,cstr Path)
     if(xrtValueIterBegin(Records,&It)){while((R=xrtValueIterNext(&It,&Key))){cstr Source=MdoPackageText(R,"source",16);
         if(Source&&!strcmp(Source,"local"))continue;
         const xvalue* Files=xrtValueObjectGet(R,XRT_STR_LITERAL("files"));
-        for(size_t i=0;i<xrtValueCount(Files);i++)if(MdoPackageSamePath(Path,MdoPackageText(xrtValueArrayGet(Files,i),"path",255))){Owner=R;break;}
+        for(size_t i=0;i<xrtValueCount(Files);i++)if(MdoPackageSamePath(Path,MdoPackageText(xrtValueArrayGet(Files,i),"path",599))){Owner=R;break;}
         if(Owner)break;
     }xrtValueIterEnd(&It);}return Owner;
 }
@@ -34,6 +34,12 @@ static bool ExtensionStoreCanCustomize(MdoApiContext* C,cstr Kind,cstr Id)
 
     char Path[160];ExtensionPath(Kind,Id,Path);bool Known=false;xvalue* Records=ExtensionStoreRead(&Known);
     bool Managed=ExtensionStoreOwner(Records,Path)!=NULL;
+    if(!strcmp(Kind,"plugins")){
+        xvalueiter It={0};xvaluekey Key;xvalue* Row;
+        if(xrtValueIterBegin(Records,&It)){while((Row=xrtValueIterNext(&It,&Key))){cstr Source=MdoPackageText(Row,"source",16);if(Source&&!strcmp(Source,"local"))continue;
+            const xvalue* Rs=xrtValueObjectGet(Row,XRT_STR_LITERAL("resources"));for(size_t I=0;I<xrtValueCount(Rs);I++){const xvalue* R=xrtValueArrayGet(Rs,I);cstr K=MdoPackageText(R,"kind",16),RId=MdoPackageText(R,"id",64);if(K&&RId&&!strcmp(K,"plugins")&&!strcmp(RId,Id))Managed=true;}
+        }xrtValueIterEnd(&It);}
+    }
     if(MdoPackageRoleKind(Kind)){snprintf(Path,sizeof(Path),"modules/%s/%s.c",Kind,Id);Managed=Managed||ExtensionStoreOwner(Records,Path)!=NULL;}
     xrtValueRelease(Records);
     if(!Known){MdoApiReplyError(C,503,"ecosystem_receipts","Cannot verify resource ownership; restore installation receipts before customizing",NULL);return false;}

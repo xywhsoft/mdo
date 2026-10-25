@@ -132,7 +132,7 @@ static bool MdoPackageValidate(const xvalue* package,char* error,size_t capacity
         const xvalue* files=xrtValueObjectGet(r,XRT_STR_LITERAL("files"));
         if(files){reason="This resource cannot contain attached files";if((strcmp(kind,"skills")&&strcmp(kind,"knowledge")&&!MdoPackageRoleKind(kind)&&!module&&!plugin&&!toolpack)||xrtValueType(files)!=XVALUE_ARRAY||xrtValueCount(files)>128)goto bad;
             for(size_t j=0;j<xrtValueCount(files);j++){const xvalue* f=xrtValueArrayGet(files,j);const char* path=MdoPackageText(f,"path",220),*base64=MdoPackageText(f,"base64",MdoPackageRoleKind(kind)?180000u:v2?90u*1024u*1024u:180000u);
-                reason="Invalid attached file path or size";if(!MdoPackagePath(path)||(!strcmp(kind,"skills")&&MdoPackageSamePath(path,"SKILL.md"))||!base64)goto bad;
+                reason="Invalid attached file path or size";if(!(!strcmp(kind,"plugins")?MdoPluginPath(path):MdoPackagePath(path))||(!strcmp(kind,"skills")&&MdoPackageSamePath(path,"SKILL.md"))||!base64)goto bad;
                 size_t prefix=!strcmp(kind,"knowledge")?11u+strlen(id):plugin?8u+strlen(id)+11u+64u+7u:module?14u+strlen(id)+1u:toolpack?106u:MdoPackageRoleKind(kind)?strlen(kind)+strlen(id)+2u:8u+strlen(id);
                 if(!plugin&&prefix+strlen(path)>220u){reason="Installed file path exceeds the portable limit";goto bad;}
                 for(size_t k=0;k<j;k++)if(MdoPackageSamePath(path,MdoPackageText(xrtValueArrayGet(files,k),"path",220))){reason="Duplicate file path";goto bad;}

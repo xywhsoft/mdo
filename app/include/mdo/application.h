@@ -50,6 +50,9 @@ bool MdoApplicationTerminalsCall(const mdo_sdk_context_v1*,cstr,const xvalue*,xv
 bool MdoApplicationPluginsInit(void);
 xvalue* MdoApplicationPluginNativeSources(void);
 bool MdoApplicationPluginWarnings(xvalue* Items);
+bool MdoApplicationPluginsRecover(void);
+void MdoApplicationPluginViewBegin(void);
+void MdoApplicationPluginViewEnd(void);
 void MdoApplicationPluginsUnit(void);
 xvalue* MdoApplicationPluginsCatalog(void);
 bool MdoApplicationPluginsCall(const mdo_sdk_context_v1*,cstr,const xvalue*,xvalue**,mdo_error_v1*,bool*);
