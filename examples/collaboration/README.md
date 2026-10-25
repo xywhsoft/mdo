@@ -32,7 +32,7 @@ V->Release(Result);
 V->Release(P);
 ```
 
-成员内调用 state/mailbox/work 时可以省略 namespace；它们共用当前协作空间。`C->MemberId` 是当前成员，`C->Namespace` 是空间，父用户会话仍通过 `C->SessionId` 标识。`sdk.services/describe` 是既有接口目录，可查看具体参数。
+成员内调用 state/mailbox/work 时可以省略 namespace；它们共用当前协作空间。`C->MemberId` 是当前成员，`C->Namespace` 是空间，父用户会话仍通过 `C->SessionId` 标识。需要跨轮保存的 C 数据使用 `state.*`；回调的 State 是当前原生实例的临时数据。`sdk.services/describe` 是既有接口目录，可查看具体参数。
 
 需要 C 主控并发时，复用已有 `operation.start` 调用 `instance.step`，完成后按既有规则释放 operation；成员身份、邮箱和结果不依赖 operation 的寿命。无需额外团队运行时。模型路由使用角色现有 model/model_options；目录隔离使用现有项目/工作区能力。
 
