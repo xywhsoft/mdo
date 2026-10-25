@@ -2,6 +2,7 @@
 
 Uses two disposable real TCC hosts; no production accounts or model calls.
 """
+import argparse
 import base64
 import copy
 import json
@@ -23,6 +24,10 @@ from test_api_runtime import free_port
 
 
 def run():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--host", type=Path, default=ROOT / ".build/host/xs.exe")
+    parser.add_argument("--ui", action="store_true")
+    args = parser.parse_args()
     base, website, port, user, password = fixture("mdo-single-resources")
     origin = f"http://127.0.0.1:{port}"
     (website / "db/identity.json").write_text(json.dumps({"public_origin": origin}))
@@ -66,7 +71,7 @@ def run():
         login, _ = web("POST", "/api/v1/login", dict(identifier="single_author", password="Fixture-2026-password")); auth = {"Authorization": "Bearer " + login["access_token"]}
         _, head = web("POST", "/admin/login", dict(username=user, password=password)); cookie = "; ".join(v.split(";", 1)[0] for v in head["_cookies"])
         inventory, _ = web("GET", "/admin/api/mdo/ecosystem", cookie=cookie); csrf = {"X-CSRF-Token": inventory["csrf"]}
-        native = start(ROOT / ".build/host/xs.exe", app / "xs.json", app, home); ready(native, native_port, "/api/v1/account")
+        native = start(args.host.resolve(), app / "xs.json", app, home); ready(native, native_port, "/api/v1/account")
         client("POST", "/account/login", dict(identifier="single_author", password="Fixture-2026-password", remember=False))
         for _ in range(100):
             account = client("GET", "/account")

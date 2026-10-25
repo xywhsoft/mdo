@@ -1,4 +1,5 @@
 """Two real isolated hosts: mdo -> marketplace -> review -> private binding."""
+import argparse
 import copy
 import json
 import os
@@ -16,6 +17,10 @@ from test_api_runtime import free_port
 
 
 def run():
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--host',type=Path,default=ROOT/'.build/host/windows-server-glibc/xs.exe')
+    parser.add_argument('--ui',action='store_true')
+    args=parser.parse_args()
     base,site,port,user,password=fixture('mdo-mcp-marketplace'+('-ui' if '--ui' in sys.argv else ''))
     origin=f'http://127.0.0.1:{port}';(site/'db/identity.json').write_text(json.dumps(dict(public_origin=origin)))
     local=Path(tempfile.mkdtemp(prefix='client-',dir=base));app=local/'app';home=local/'home';home.mkdir();shutil.copytree(ROOT/'app',app)
@@ -49,7 +54,7 @@ def run():
         login,_=web('POST','/api/v1/login',dict(identifier='mcp_author',password='Fixture-2026-password'));auth={'Authorization':'Bearer '+login['access_token']}
         _,head=web('POST','/admin/login',dict(username=user,password=password));cookie='; '.join(c.split(';',1)[0] for c in head['_cookies'])
         inventory,_=web('GET','/admin/api/mdo/ecosystem',cookie=cookie);csrf={'X-CSRF-Token':inventory['csrf']}
-        native=start(ROOT/'.build/host/windows-server-glibc/xs.exe',config,app,home);ready(native,native_port,'/api/v1/account')
+        native=start(args.host.resolve(),config,app,home);ready(native,native_port,'/api/v1/account')
         client('POST','/account/login',dict(identifier='mcp_author',password='Fixture-2026-password',remember=False))
         for _ in range(100):
             if client('GET','/account')['state']=='signed_in':break
