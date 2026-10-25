@@ -24,6 +24,7 @@ static bool SdkBuiltinService(cstr Method){
     for(size_t i=0;i<sizeof(SdkRuntimeMethods)/sizeof(*SdkRuntimeMethods);i++)if(!strcmp(Method,SdkRuntimeMethods[i].Id))return true;
     const struct {const cstr* Names;size_t Count;} Groups[]={
         {SdkJobMethods,sizeof(SdkJobMethods)/sizeof(*SdkJobMethods)},
+        {SdkStateMethods,sizeof(SdkStateMethods)/sizeof(*SdkStateMethods)},
         {SdkStreamMethods,sizeof(SdkStreamMethods)/sizeof(*SdkStreamMethods)},
         {SdkTerminalMethods,sizeof(SdkTerminalMethods)/sizeof(*SdkTerminalMethods)},
         {SdkPluginMethods,sizeof(SdkPluginMethods)/sizeof(*SdkPluginMethods)},
@@ -86,6 +87,9 @@ xvalue* MdoApplicationCatalog(void){
     xvalue* Jobs=MdoApplicationJobsCatalog();
     for(size_t i=0;i<xrtValueCount(Jobs);i++)xrtValueArrayAppend(A,xrtValueArrayGet(Jobs,i));
     xrtValueRelease(Jobs);
+    xvalue* State=MdoApplicationStateCatalog();
+    for(size_t i=0;i<xrtValueCount(State);i++)xrtValueArrayAppend(A,xrtValueArrayGet(State,i));
+    xrtValueRelease(State);
     xvalue* Streams=MdoApplicationStreamsCatalog();
     for(size_t i=0;i<xrtValueCount(Streams);i++)xrtValueArrayAppend(A,xrtValueArrayGet(Streams,i));
     xrtValueRelease(Streams);
@@ -150,6 +154,8 @@ static mdo_result SdkInvoke(const mdo_sdk_context_v1* C,cstr Method,const xvalue
     if(Found)return RuntimeOk?MDO_RESULT_OK:MDO_RESULT_ERROR;
     bool JobOk=MdoApplicationJobsCall(C,Method,P,R,E,&Found);
     if(Found)return JobOk?MDO_RESULT_OK:MDO_RESULT_ERROR;
+    bool StateOk=MdoApplicationStateCall(C,Method,P,R,E,&Found);
+    if(Found)return StateOk?MDO_RESULT_OK:MDO_RESULT_ERROR;
     bool StreamOk=MdoApplicationStreamsCall(C,Method,P,R,E,&Found);
     if(Found)return StreamOk?MDO_RESULT_OK:MDO_RESULT_ERROR;
     bool TerminalOk=MdoApplicationTerminalsCall(C,Method,P,R,E,&Found);

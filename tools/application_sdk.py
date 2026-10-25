@@ -126,6 +126,8 @@ def native_contracts():
     add('model.complete','Managed model boundary with messages, tools, multimodal parts, usage and optional newline-delimited stream events',{'model':string,'protocol':{**uint,'maximum':3},'reasoning_effort':string,'max_output_tokens':uint,'messages':{'type':'array','minItems':1,'maxItems':4096,'items':obj},'tools':{'type':'array','maxItems':256,'items':obj},'extra_body':obj,'stream':string},('messages',))
     add('tool.call','Execute a tool through a recovered session and its live permission scope; a tool-level failure is a successful SDK result with success:false',{'project':string,'session':string,'tool':string,'arguments':obj},('tool',))
     add('session.compact','Compact the immutable invocation session; original history remains available')
+    from orchestration_contracts import contracts as orchestration_contracts
+    orchestration_contracts(add)
     from workbench_contracts import contracts as workbench_contracts
     workbench_contracts(add)
     return result

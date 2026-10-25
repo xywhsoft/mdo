@@ -38,7 +38,7 @@ class ApplicationSdkContractTests(unittest.TestCase):
         names=set()
         for source in (ROOT/'app/src/application').glob('*.c'):
             text=source.read_text(encoding='utf-8')
-            for block in re.findall(r'Sdk(?:Builtins|RuntimeMethods|JobMethods|StreamMethods|TerminalMethods|PluginMethods|UiMethods|WorkbenchMethods)\[\]\s*=\s*\{(.*?)\};',text,re.S):
+            for block in re.findall(r'Sdk(?:Builtins|RuntimeMethods|JobMethods|StateMethods|StreamMethods|TerminalMethods|PluginMethods|UiMethods|WorkbenchMethods)\[\]\s*=\s*\{(.*?)\};',text,re.S):
                 names.update(re.findall(r'"([a-z]+\.[a-z._]+)"',block))
         self.assertGreater(len(names),50)
         self.assertEqual(names,set(application_sdk.native_contracts()))

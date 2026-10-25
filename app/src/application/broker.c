@@ -14,10 +14,11 @@ bool MdoApplicationInit(XS_ServerInfo* Server){
     SdkEventLock=xrtMutexCreate();SdkServer=xsServerRetain(Server);
     unsigned char Epoch[16];if(!xrtSecureRandom(Epoch,sizeof(Epoch))){MdoApplicationUnit();return false;}
     for(size_t i=0;i<16;i++)snprintf(SdkEventEpoch+i*2,3,"%02x",Epoch[i]);
-    if(!SdkEventLock||!SdkServer||!MdoApplicationChangesInit()||!MdoApplicationStreamsInit()||!MdoApplicationJobsInit()||!MdoApplicationTerminalsInit()||!MdoApplicationPluginsInit()||!MdoApplicationUiInit()||!MdoApplicationWorkbenchInit()){MdoApplicationUnit();return false;}return true;
+    if(!SdkEventLock||!SdkServer||!MdoApplicationChangesInit()||!MdoApplicationStreamsInit()||!MdoApplicationJobsInit()||!MdoApplicationStateInit()||!MdoApplicationTerminalsInit()||!MdoApplicationPluginsInit()||!MdoApplicationUiInit()||!MdoApplicationWorkbenchInit()){MdoApplicationUnit();return false;}return true;
 }
 void MdoApplicationUnit(void){
     MdoApplicationJobsUnit();
+    MdoApplicationStateUnit();
     MdoApplicationTerminalsUnit();
     MdoApplicationStreamsUnit();
     MdoApplicationPluginsUnit();

@@ -39,6 +39,7 @@
     "src/application/broker.c",
     "src/application/runtime.c",
     "src/application/jobs.c",
+    "src/application/state.c",
     "src/application/streams.c",
     "src/application/terminals.c",
     "src/application/plugins.c",

@@ -1,0 +1,20 @@
+"""Discoverable contracts for the shared orchestration services."""
+
+def contracts(add):
+    string={'type':'string'}
+    uint={'type':'integer','minimum':0}
+    common={'namespace':string,'key':string,'expected_revision':uint,'request_id':string}
+    add('state.get','Read a project/extension-scoped value, including missing/tombstone revision',common,('key',))
+    add('state.list','List key metadata at a namespace revision without duplicating stored values',
+        {'namespace':string,'offset':uint,'limit':{**uint,'minimum':1,'maximum':256},'expected_revision':uint})
+    for method in ('state.put','state.compare_exchange'):
+        add(method,'Atomically write a value only at its expected revision; null is an ordinary value',
+            {**common,'value':{}},('key','expected_revision','value'))
+    add('state.remove','Publish a tombstone at the expected revision; recreation cannot reset the revision',common,('key','expected_revision'))
+    write={'type':'object','properties':{**common,'value':{},'remove':{'type':'boolean'}},'required':['key','expected_revision']}
+    check={'type':'object','properties':{'key':string,'expected_revision':uint},'required':['key','expected_revision']}
+    add('state.transaction','Check and publish 1..64 writes in one checksummed atomic document; any conflict publishes nothing',
+        {'namespace':string,'request_id':string,'writes':{'type':'array','minItems':1,'maxItems':64,'items':write},
+         'checks':{'type':'array','maxItems':64,'items':check}},('writes',))
+
+    add('state.receipt.get','Read a retained atomic mutation receipt without replaying its effect',{'namespace':string,'request_id':string},('request_id',))
