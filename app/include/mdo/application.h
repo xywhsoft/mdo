@@ -79,6 +79,7 @@ bool MdoApiApplicationInvoke(const mdo_sdk_context_v1*,cstr Method,cstr Target,
 bool MdoApplicationRouteInvoke(const mdo_sdk_context_v1*,const MdoApplicationRoute*,const xvalue*,xvalue**,mdo_error_v1*);
 void MdoApplicationEvent(cstr Topic,const mdo_sdk_context_v1*,const xvalue*);
 xvalue* MdoApplicationEvents(const xvalue*,mdo_error_v1*);
+xvalue* MdoApplicationEventsWait(const mdo_sdk_context_v1*,const xvalue*,mdo_error_v1*);
 bool MdoApplicationCustomCall(const mdo_sdk_context_v1*,cstr,const xvalue*,xvalue**,mdo_error_v1*,bool* Found);
 xvalue* MdoApplicationCustomCatalog(void);
 bool MdoApplicationHooks(const mdo_sdk_context_v1*,cstr,xvalue**,mdo_error_v1*);

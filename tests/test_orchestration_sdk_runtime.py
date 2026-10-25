@@ -114,6 +114,22 @@ def main():
             assert fixture.call('events.emit',{'topic':'qa.large','data':'x'*8193},413)['code']=='sdk_event_limit'
             forged=fixture.call('sdk.context',context={'project':'default','trace_id':'forged'})
             assert forged['trace_id']!='forged'
+            last=fixture.call('events.read')['latest']
+            waiting=fixture.call('operation.start',{'method':'events.wait','params':{'after':last,'topic':'qa.wake','timeout_ms':3000}})
+            fixture.call('events.emit',{'topic':'qa.wake','data':{'awake':True}})
+            assert fixture.call('operation.wait',{'id':waiting['id'],'timeout_ms':2000})['outcome']=='succeeded'
+            awakened=fixture.call('operation.result',{'id':waiting['id']})
+            assert awakened['items'][0]['data']['awake'] is True
+            fixture.call('operation.release',{'id':waiting['id']})
+            last=fixture.call('events.read')['latest']
+            empty=fixture.call('events.wait',{'after':last,'topic':'qa.never','timeout_ms':20})
+            assert not empty['items']
+            assert fixture.call('events.wait',{'after':last,'epoch':'old-process','timeout_ms':3000})['resync_required']
+            pending=fixture.call('operation.start',{'method':'events.wait','params':{'after':last,'topic':'qa.never','timeout_ms':3000}})
+            fixture.call('operation.cancel',{'id':pending['id']})
+            assert fixture.call('operation.wait',{'id':pending['id'],'timeout_ms':1000})['outcome']=='cancelled'
+            fixture.call('operation.release',{'id':pending['id']})
+
             def state(method, **params):return fixture.call('state.'+method,dict(namespace='qa.state',**params))
             assert state('get',key='counter')=={'key':'counter','revision':0,'exists':False}
             first=state('put',key='counter',expected_revision=0,value=1)['revision']

@@ -15,6 +15,7 @@ static const struct {cstr Id,Description;} SdkBuiltins[]={
     {"tool.call","Execute one tool with the selected session's live permission scope and result rules"},
     {"session.compact","Compact the bound managed session and retain its original transcript"},
     {"events.read","Read the bounded event journal with a resumable cursor"},
+    {"events.wait","Wait for a filtered event without losing a notification between reading and sleeping"},
     {"events.emit","Publish an extension event for journal subscribers"}
 };
 static bool SdkBuiltinService(cstr Method){
@@ -134,6 +135,7 @@ static mdo_result SdkInvoke(const mdo_sdk_context_v1* C,cstr Method,const xvalue
         SdkPut(*R,"deadline_unit","monotonic_microseconds");return MDO_RESULT_OK;
     }
     if(!strcmp(Method,"events.read")){*R=MdoApplicationEvents(P,E);return *R?MDO_RESULT_OK:MDO_RESULT_ERROR;}
+    if(!strcmp(Method,"events.wait")){*R=MdoApplicationEventsWait(C,P,E);return *R?MDO_RESULT_OK:SdkErrorResult(E);}
     if(!strcmp(Method,"events.emit")){cstr Topic=SdkField(P,"topic");if(!SdkIdValid(Topic)){MdoApplicationError(E,"sdk_arguments_invalid","A valid event topic is required","events",400,false);return MDO_RESULT_ERROR;}char* Payload=SdkGet(P,"data")?SdkJson(SdkGet(P,"data")):NULL;size_t Bytes=Payload?strlen(Payload):0;xrtFree(Payload);
         if(Bytes>8192){MdoApplicationError(E,"sdk_event_limit","Event payload exceeds 8 KiB; store the resource and emit its identity","events",413,false);return MDO_RESULT_LIMIT;}
         MdoApplicationEvent(Topic,C,SdkGet(P,"data"));*R=xrtValueObject();return MDO_RESULT_OK;}
@@ -193,7 +195,7 @@ mdo_result MdoApplicationCall(const mdo_sdk_context_v1* C,cstr Method,const xval
         MdoApplicationError(E,"sdk_identity_failed","Cannot allocate invocation identity","dispatch",500,false);return MDO_RESULT_ERROR;}
 
     xvalue* Input=P&&xrtValueType(P)!=XVALUE_NULL?xrtValueClone(P):xrtValueObject();
-    bool Hooked=strncmp(Method,"sdk.",4)&&strcmp(Method,"events.read");
+    bool Hooked=strncmp(Method,"sdk.",4)&&strcmp(Method,"events.read")&&strcmp(Method,"events.wait");
     xvalue* Facts=xrtValueObject();SdkPut(Facts,"method",Method);
     if(Hooked)MdoApplicationEvent("service.before",C,Facts);
     mdo_result Code=(!Hooked||MdoApplicationHooks(C,"service.before",&Input,E))?SdkInvoke(C,Method,Input,R,E):MDO_RESULT_ERROR;

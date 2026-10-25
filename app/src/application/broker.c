@@ -5,18 +5,22 @@
 #include "internal.h"
 static XS_ServerInfo* SdkServer;
 static xmutex* SdkEventLock;
+static xcond* SdkEventCondition;
+static bool SdkEventStopping;
+static size_t SdkEventWaiters;
 static xvalue* SdkEventRing[256];
 static uint64 SdkEventSequence;
 static char SdkEventEpoch[33];
 XS_ServerInfo* MdoApplicationServer(void){return SdkServer;}
 bool MdoApplicationInit(XS_ServerInfo* Server){
     if(SdkServer)return true;
-    SdkEventLock=xrtMutexCreate();SdkServer=xsServerRetain(Server);
+    SdkEventLock=xrtMutexCreate();SdkEventCondition=xrtCondCreate();SdkEventStopping=false;SdkServer=xsServerRetain(Server);
     unsigned char Epoch[16];if(!xrtSecureRandom(Epoch,sizeof(Epoch))){MdoApplicationUnit();return false;}
     for(size_t i=0;i<16;i++)snprintf(SdkEventEpoch+i*2,3,"%02x",Epoch[i]);
-    if(!SdkEventLock||!SdkServer||!MdoApplicationChangesInit()||!MdoApplicationStreamsInit()||!MdoApplicationJobsInit()||!MdoApplicationStateInit()||!MdoApplicationTerminalsInit()||!MdoApplicationPluginsInit()||!MdoApplicationUiInit()||!MdoApplicationWorkbenchInit()){MdoApplicationUnit();return false;}return true;
+    if(!SdkEventLock||!SdkEventCondition||!SdkServer||!MdoApplicationChangesInit()||!MdoApplicationStreamsInit()||!MdoApplicationJobsInit()||!MdoApplicationStateInit()||!MdoApplicationTerminalsInit()||!MdoApplicationPluginsInit()||!MdoApplicationUiInit()||!MdoApplicationWorkbenchInit()){MdoApplicationUnit();return false;}return true;
 }
 void MdoApplicationUnit(void){
+    if(SdkEventLock){xrtMutexLock(SdkEventLock);SdkEventStopping=true;if(SdkEventCondition)xrtCondBroadcast(SdkEventCondition);xrtMutexUnlock(SdkEventLock);}
     MdoApplicationJobsUnit();
     MdoApplicationStateUnit();
     MdoApplicationTerminalsUnit();
@@ -25,7 +29,9 @@ void MdoApplicationUnit(void){
     MdoApplicationUiUnit();
     MdoApplicationWorkbenchUnit();
     MdoApplicationChangesUnit();
+    if(SdkEventLock&&SdkEventCondition){xrtMutexLock(SdkEventLock);while(SdkEventWaiters)xrtCondWait(SdkEventCondition,SdkEventLock);xrtMutexUnlock(SdkEventLock);}
     for(size_t i=0;i<256;i++){xrtValueRelease(SdkEventRing[i]);SdkEventRing[i]=NULL;}
+    if(SdkEventCondition)xrtCondDestroy(SdkEventCondition);SdkEventCondition=NULL;
     if(SdkEventLock)xrtMutexDestroy(SdkEventLock);
     SdkEventLock=NULL;
     xsServerRelease(SdkServer);SdkServer=NULL;SdkEventSequence=0;
@@ -42,7 +48,7 @@ void MdoApplicationEvent(cstr Topic,const mdo_sdk_context_v1* C,const xvalue* Da
     if(PayloadBytes>8192){xrtValueObjectSetNew(V,XRT_STR_LITERAL("data_omitted"),xrtValueBool(true));SdkPutUInt(V,"data_bytes",PayloadBytes);}
     xrtFree(Payload);
     xrtMutexLock(SdkEventLock);uint64 N=++SdkEventSequence;SdkPutUInt(V,"sequence",N);SdkPutUInt(V,"time_us",SdkClock());
-    size_t I=(size_t)(N%256u);xrtValueRelease(SdkEventRing[I]);SdkEventRing[I]=V;xrtMutexUnlock(SdkEventLock);
+    size_t I=(size_t)(N%256u);xrtValueRelease(SdkEventRing[I]);SdkEventRing[I]=V;if(SdkEventCondition)xrtCondBroadcast(SdkEventCondition);xrtMutexUnlock(SdkEventLock);
 }
 xvalue* MdoApplicationEvents(const xvalue* P,mdo_error_v1* E){
     if(!SdkEventLock){MdoApplicationError(E,"sdk_unavailable","Event journal is unavailable","events",503,false);return NULL;}
@@ -65,6 +71,31 @@ xvalue* MdoApplicationEvents(const xvalue* P,mdo_error_v1* E){
     xrtValueObjectSetNew(R,XRT_STR_LITERAL("resync_required"),xrtValueBool((Epoch&&strcmp(Epoch,SdkEventEpoch))||After>Last||(After&&First>After&&First-After>1)));
     xrtMutexUnlock(SdkEventLock);xrtValueObjectSetNew(R,XRT_STR_LITERAL("items"),Items);return R;
 }
+/* Predicate + sequence recheck closes the read/wait lost-wakeup race. Wait
+ * slices exist only to observe a borrowed cancellation token promptly. */
+xvalue* MdoApplicationEventsWait(const mdo_sdk_context_v1* C,const xvalue* P,mdo_error_v1* E){
+    uint64 Timeout=0;if((SdkGet(P,"timeout_ms")&&!SdkUInt(SdkGet(P,"timeout_ms"),&Timeout))||Timeout>60000){MdoApplicationError(E,"sdk_arguments_invalid","timeout_ms must be 0..60000","events",400,false);return NULL;}
+    if(!SdkEventLock||!SdkEventCondition){MdoApplicationError(E,"sdk_unavailable","Event waiting is unavailable","events",503,false);return NULL;}
+    xrtMutexLock(SdkEventLock);if(SdkEventStopping){xrtMutexUnlock(SdkEventLock);MdoApplicationError(E,"sdk_stopping","Event service is stopping","events",503,false);return NULL;}SdkEventWaiters++;xrtMutexUnlock(SdkEventLock);
+    uint64 End=MdoDeadlineAfterUs(Timeout*1000);xvalue* Result=NULL;
+    for(;;){
+        if(SdkCancelled(C)){MdoApplicationInvocation* I=C->Opaque;bool Cancelled=I&&I->Cancel&&xrtCancelRequested(I->Cancel);
+            MdoApplicationError(E,Cancelled?"sdk_cancelled":"sdk_deadline_expired",Cancelled?"Event wait cancelled":"Event wait deadline expired","events",Cancelled?499:504,false);break;}
+        Result=MdoApplicationEvents(P,E);if(!Result)break;
+        bool Resync=false;xrtValueGetBool(SdkGet(Result,"resync_required"),&Resync);uint64 Last=0;SdkUInt(SdkGet(Result,"latest"),&Last);
+        if(Resync||xrtValueCount(SdkGet(Result,"items"))||!Timeout||MdoDeadlineExpired(End))break;
+        xrtValueRelease(Result);Result=NULL;
+        xrtMutexLock(SdkEventLock);bool Stopping=SdkEventStopping;bool WaitFailed=false;
+        if(!Stopping&&SdkEventSequence==Last){
+            uint64 Remaining=MdoDeadlineRemainingUs(End);if(C->Deadline){uint64 Caller=MdoDeadlineRemainingUs(C->Deadline);if(Caller<Remaining)Remaining=Caller;}
+            int64 Ms=MdoDurationMs(Remaining);if(Ms>100)Ms=100;if(Ms>0){xwaitresult Wait=xrtCondWaitFor(SdkEventCondition,SdkEventLock,Ms);WaitFailed=Wait==XWAIT_ERROR||Wait==XWAIT_CLOSED;}
+        }xrtMutexUnlock(SdkEventLock);
+        if(WaitFailed){MdoApplicationError(E,"sdk_event_wait_failed","Native event wait failed","events",503,false);break;}
+        if(Stopping){MdoApplicationError(E,"sdk_stopping","Event service is stopping","events",503,false);break;}
+    }
+    xrtMutexLock(SdkEventLock);SdkEventWaiters--;xrtCondBroadcast(SdkEventCondition);xrtMutexUnlock(SdkEventLock);return Result;
+}
+
 typedef struct SdkResponse {unsigned Status;char *Body,*Type,*Revision;size_t Bytes;} SdkResponse;
 static bool SdkResponseHead(const xhttp1head* H,void* U){
     SdkResponse* R=U;R->Status=H->Status;
