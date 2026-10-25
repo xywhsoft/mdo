@@ -14,7 +14,7 @@ bool MdoEcosystemPackageCompatible(const xvalue* package,const xvalue* input,cha
 {
     if(!MdoPackageValidate(package,error,capacity))return false;
     const xvalue* manifest=xrtValueObjectGet(package,XRT_STR_LITERAL("manifest"));
-    int64 MinBuild=0;if(MdoPackageV2(package)&&(!MdoPackageNumber(manifest,"min_build_id",&MinBuild)||(uint64)MinBuild>MdoBuildId())){snprintf(error,capacity,"Update mdo before installing this package");return false;}
+    int64 MinBuild=0;if((MdoPackageV2(package)||xrtValueObjectHas(manifest,XRT_STR_LITERAL("min_build_id")))&&(!MdoPackageNumber(manifest,"min_build_id",&MinBuild)||(uint64)MinBuild>MdoBuildId())){snprintf(error,capacity,"Update mdo before installing this package");return false;}
     const xvalue* platforms=xrtValueObjectGet(manifest,XRT_STR_LITERAL("platforms"));bool compatible=false,code=false,trust=false;
     for(size_t i=0;i<xrtValueCount(platforms);i++){xstrview p;if(xrtValueGetString(xrtValueArrayGet(platforms,i),&p)&&xrtStrEqual(p,xrtStrView(MdoToolPlatform())))compatible=true;}
     const xvalue* resources=xrtValueObjectGet(package,XRT_STR_LITERAL("resources"));

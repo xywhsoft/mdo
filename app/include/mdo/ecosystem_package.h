@@ -121,6 +121,8 @@ static bool MdoPackageValidate(const xvalue* package,char* error,size_t capacity
         const xvalue* r=xrtValueArrayGet(resources,i);const char* kind=MdoPackageText(r,"kind",16),*id=MdoPackageText(r,"id",64),*content=MdoPackageText(r,"content",131072);
         reason="Invalid resource kind, ID or content";
         if(!MdoPackageKind(kind)||!MdoPackageId(id)||!content||!content[0]||(!strcmp(kind,"agents")&&!strcmp(id,"default")))goto bad;
+        if(!strcmp(kind,"knowledge")){int64 build=0;reason="Knowledge v1 requires a compatible minimum client build";
+            if(!MdoPackageNumber(m,"min_build_id",&build)||build<MDO_KNOWLEDGE_MIN_BUILD||build>99999999)goto bad;}
         bool module=!strcmp(kind,"modules"),plugin=!strcmp(kind,"plugins"),toolpack=!strcmp(kind,"toolpacks");
         if((module||plugin||toolpack)&&!v2){reason="This resource needs the v2 package format";goto bad;}
         for(size_t j=0;j<i;j++){const xvalue* q=xrtValueArrayGet(resources,j);if(!strcmp(kind,MdoPackageText(q,"kind",16))&&!strcmp(id,MdoPackageText(q,"id",64))){reason="Duplicate resource ID";goto bad;}}

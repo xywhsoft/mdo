@@ -4,6 +4,7 @@
 /* Included after the portable package primitives. Knowledge contains inert
  * documents, never installers, process definitions or machine paths. */
 #define MDO_KNOWLEDGE_FORMAT "mdo.knowledge.v1"
+#define MDO_KNOWLEDGE_MIN_BUILD 60000009u
 static bool MdoKnowledgeMetadata(const xvalue* Doc,char* Error,size_t Capacity)
 {
     const char* Format=MdoPackageText(Doc,"format",32),*Name=MdoPackageText(Doc,"name",100);

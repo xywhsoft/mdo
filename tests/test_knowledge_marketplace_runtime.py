@@ -1,5 +1,6 @@
 """Two real isolated hosts: mdo -> marketplace -> review -> private binding."""
 import copy
+import argparse
 import json
 import os
 from pathlib import Path
@@ -16,6 +17,7 @@ from test_api_runtime import free_port
 
 
 def run():
+    parser=argparse.ArgumentParser();parser.add_argument('--host',type=Path,default=ROOT/'.build/host/windows-server-glibc/xs.exe');parser.add_argument('--ui',action='store_true');args=parser.parse_args()
     base,site,port,user,password=fixture('mdo-knowledge-marketplace'+('-ui' if '--ui' in sys.argv else ''))
     origin=f'http://127.0.0.1:{port}';(site/'db/identity.json').write_text(json.dumps(dict(public_origin=origin)))
     local=Path(tempfile.mkdtemp(prefix='client-',dir=base));app=local/'app';home=local/'home';home.mkdir();shutil.copytree(ROOT/'app',app)
@@ -49,14 +51,14 @@ def run():
         login,_=web('POST','/api/v1/login',dict(identifier='knowledge_author',password='Fixture-2026-password'));auth={'Authorization':'Bearer '+login['access_token']}
         _,head=web('POST','/admin/login',dict(username=user,password=password));cookie='; '.join(c.split(';',1)[0] for c in head['_cookies'])
         inventory,_=web('GET','/admin/api/mdo/ecosystem',cookie=cookie);csrf={'X-CSRF-Token':inventory['csrf']}
-        native=start(ROOT/'.build/host/windows-server-glibc/xs.exe',config,app,home);ready(native,native_port,'/api/v1/account')
+        native=start(args.host.resolve(),config,app,home);ready(native,native_port,'/api/v1/account')
         client('POST','/account/login',dict(identifier='knowledge_author',password='Fixture-2026-password',remember=False))
         for _ in range(100):
             if client('GET','/account')['state']=='signed_in':break
             time.sleep(.1)
         # Author a real local folder, then export only that library through the
         # same SDK-backed publication route used by the settings page.
-        recipe=knowledge_package();recipe['format']='mdo.extension.v2';recipe['manifest']['min_build_id']=30000126;resource=recipe['resources'][0];resource['files'].append(file('large.md','x'*300000))
+        recipe=knowledge_package();recipe['format']='mdo.extension.v2';recipe['manifest']['min_build_id']=60000009;resource=recipe['resources'][0];resource['files'].append(file('large.md','x'*300000))
         client('PUT','/extensions/knowledge/xrt-reference',dict(content=resource['content'],files=resource['files']),revision='new')
         exported=store('export',references=[dict(kind='knowledge',id='xrt-reference')]);recipe['resources']=exported['resources']
         assert '{$path}' in recipe['resources'][0]['content'] and str(home) not in json.dumps(recipe)
@@ -65,6 +67,7 @@ def run():
         web('POST','/api/v1/mdo/creator/publish',dict(source='package',id=identity,revision=1,publish=True,review_notes='Static documentation, original sources and redistribution permission supplied.'),auth=auth)
         web('POST','/admin/api/mdo/ecosystem',dict(action='approve',id=identity,revision=2,reason='Inspected reference documents, prompt and copyright'),auth=csrf,cookie=cookie)
         listing=store('catalog');assert len(listing['items'])==1 and listing['items'][0]['submitter']=='knowledge_author'
+        old,_=web('GET',prefix+'packages?format=2&build_id=60000002&kind=knowledge&single_resource=1');assert not old['items'],'old MCP test builds must not see knowledge packages'
         detail=store('detail',id=identity);assert detail['package']==recipe
         original=client('GET','/extensions/knowledge/xrt-reference');client('DELETE','/extensions/knowledge/xrt-reference',revision=original['revision'])
         # Removing local authoring can leave its receipt; the explicit local

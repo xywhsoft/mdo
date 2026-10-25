@@ -1,4 +1,5 @@
 export const KNOWLEDGE_FORMAT = "mdo.knowledge.v1";
+export const KNOWLEDGE_MIN_BUILD = 60000009;
 export const KNOWLEDGE_LIMIT = 64 * 1024 * 1024;
 export function knowledgePath(path) {
   return typeof path === "string" && path.length <= 220 && path.split("/").every(part => part && part.length <= 64 && !part.startsWith(".") && !/[. ]$/.test(part) && !/[\\:\x00-\x1f\x7f<>"|?*]/.test(part) && !/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(part));

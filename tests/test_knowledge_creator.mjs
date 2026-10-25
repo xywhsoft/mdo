@@ -14,7 +14,7 @@ test("web knowledge creation resets the index and builds a Windows-compatible in
   const field=title=>descendants(box).find(n=>n.tagName==="LABEL"&&n.textContent===title).children.at(-1);
   assert.equal(field("版本（1.0.0）").value,"1.0.0");assert.equal(field("索引文档路径").value,"index.md");assert(field("索引正文（使用默认单文档时可直接编辑；导入目录后按原文档保留）").value.includes("知识库索引"));
   for(const [title,value]of[["作品 ID（小写英文，发布后不变）","browser-library"],["知识库名称","Library"],["描述：面向用户说明内容用途","User description"],["使用说明与资料来源","Original test-only documents"]])field(title).value=value;
-  const file=builder.artifact(),p=JSON.parse(await file.text());assert.equal(p.resources.length,1);assert.equal(p.resources[0].kind,"knowledge");assert(p.manifest.min_build_id<=60000001);assert.equal(p.resources[0].files[0].path,"index.md");assert(JSON.parse(p.resources[0].content).inject_prompt);
+  const file=builder.artifact(),p=JSON.parse(await file.text());assert.equal(p.resources.length,1);assert.equal(p.resources[0].kind,"knowledge");assert.equal(p.manifest.min_build_id,60000009);assert.equal(JSON.parse(p.resources[0].content).format,"mdo.knowledge.v1");assert.equal(p.resources[0].files[0].path,"index.md");assert(JSON.parse(p.resources[0].content).inject_prompt);
   builder.reset();assert.equal(field("知识库名称").value,"");assert.equal(field("索引文档路径").value,"index.md");
  }finally{globalThis.document=previous;}
 });

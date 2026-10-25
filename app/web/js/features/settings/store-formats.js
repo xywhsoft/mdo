@@ -1,3 +1,4 @@
+import { KNOWLEDGE_MIN_BUILD } from "./knowledge-format.js";
 export const STORE_FORMAT = "mdo.extension.v1";
 export const STORE_EDITOR_KINDS = ["agents", "subagents", "tools", "skills", "mcp", "commands", "knowledge"];
 export const STORE_KINDS = [...STORE_EDITOR_KINDS, "modules", "toolpacks", "plugins"];
@@ -8,6 +9,7 @@ export const containsCode = resources => resources.some(r => ["tools", "commands
 // are also redacted by the native exporter, before reaching this UI.
 export function makeStorePackage(fields, resources) {
   const v2 = fields.min_build_id || resources.some(r => ["modules", "toolpacks", "plugins", "knowledge"].includes(r.kind));
+  const minimumBuild = Math.max(fields.min_build_id || 0, resources.some(r => r.kind === "knowledge") ? KNOWLEDGE_MIN_BUILD : 0);
   if (!/^[a-z0-9][a-z0-9._-]{0,63}$/.test(fields.slug) || fields.slug.includes(".."))
     throw new Error("Invalid package ID");
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$/.test(fields.version)) throw new Error("Invalid version");
@@ -23,13 +25,13 @@ export function makeStorePackage(fields, resources) {
     license: fields.license.trim(), platforms: fields.platforms,
     ...(fields.author?.trim() ? { author:fields.author.trim() } : {}),
     ...(fields.copyright?.trim() ? { copyright:fields.copyright.trim() } : {}),
-    ...(v2 ? { min_build_id: Math.max(30000126, fields.min_build_id || 0) } : {}),
+    ...(v2 ? { min_build_id: Math.max(30000126, minimumBuild) } : {}),
     ...(fields.changelog?.trim() ? { changelog: fields.changelog.trim() } : {}),
   }, resources };
   const bytes = new TextEncoder().encode(JSON.stringify(result)).length;
   if (bytes > 1024 * 1024) {
     result.format = "mdo.extension.v2";
-    result.manifest.min_build_id = Math.max(bytes > 6 * 1024 * 1024 ? 50000009 : 30000126, fields.min_build_id || 0);
+    result.manifest.min_build_id = Math.max(bytes > 6 * 1024 * 1024 ? 50000009 : 30000126, minimumBuild);
   }
   if (new TextEncoder().encode(JSON.stringify(result)).length > 100 * 1024 * 1024)
     throw new Error("Package exceeds 100 MiB");

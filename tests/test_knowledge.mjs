@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {readFileSync} from "node:fs";
 import {testDocument,descendants} from "./helpers/extension-dom.mjs";
-import {knowledgeMetadata,parseKnowledge,knowledgeBase64,knowledgeText,knowledgeFolder,validateKnowledgeFiles} from "../app/web/js/features/settings/knowledge-format.js";
+import {KNOWLEDGE_MIN_BUILD,knowledgeMetadata,parseKnowledge,knowledgeBase64,knowledgeText,knowledgeFolder,validateKnowledgeFiles} from "../app/web/js/features/settings/knowledge-format.js";
 import {makeStorePackage} from "../app/web/js/features/settings/store-formats.js";
 const file=(path,text)=>({path,base64:knowledgeBase64(new TextEncoder().encode(text))});
 const doc=()=>knowledgeMetadata({name:"XRT",description:"Reference"});
@@ -38,5 +38,14 @@ test("knowledge editor keeps drafts on conflicts and same-device notifications; 
 test("knowledge sharing uses v2 even when a 300 KiB document fits inside a 1 MiB JSON",()=>{
  const r={kind:"knowledge",id:"reference",content:JSON.stringify(doc()),files:[file("index.md","# Index"),file("reference.md","x".repeat(300000))]};
  const p=makeStorePackage({slug:"reference",name:"Reference",description:"Docs",readme:"Original documents",license:"MIT",version:"1.0.0",platforms:["windows-x86_64"]},[r]);
- assert.equal(p.format,"mdo.extension.v2");assert(p.manifest.min_build_id>=30000126);
+ assert.equal(p.format,"mdo.extension.v2");assert.equal(p.manifest.min_build_id,KNOWLEDGE_MIN_BUILD);
+});
+test("knowledge v1 keeps one compatibility floor across tiny, large and explicitly newer works",()=>{
+ const fields={slug:"reference",name:"Reference",description:"Docs",readme:"Original",license:"MIT",version:"1.0.0",platforms:["windows-x86_64"]};
+ for(const size of [1,900000,5*1024*1024]){
+  const resource={kind:"knowledge",id:"reference",content:JSON.stringify(doc()),files:[file("index.md","# Index"),file("body.md","x".repeat(size))]};
+  const p=makeStorePackage(fields,[resource]);assert.equal(p.manifest.min_build_id,60000009);assert.equal(JSON.parse(resource.content).format,"mdo.knowledge.v1");
+ }
+ const resource={kind:"knowledge",id:"reference",content:JSON.stringify(doc()),files:[file("index.md","# Index")]};
+ assert.equal(makeStorePackage({...fields,min_build_id:60000017},[resource]).manifest.min_build_id,60000017);
 });
