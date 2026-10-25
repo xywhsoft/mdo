@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-25",
+  "version_name": "0.6.0",
+  "version_code": "05000600",
+  "commits": {
+    "client_compatibility": "c1ca6a5c",
+    "native_storage": "8cc2a605",
+    "selected_host_probes": "19e890cc",
+    "platform": "6f3800addcdd41a25c483ef1755980472bcbe62a"
+  },
+  "knowledge_format": "mdo.knowledge.v1",
+  "knowledge_min_build": 60000009,
+  "sdk_overlay_sha256": "bbf47c296cd2f3f2b8d5cfd6ba4e8978cb2ce2fd2e6f1f63c14802134c806acc",
+  "artifacts": [
+    {
+      "path": ".build\\longpath-fix-20261025\\mdo.exe",
+      "bytes": 6312808,
+      "sha256": "0cce81c5c323db7865665e76d33f3ee0b289ca7aea2467e1673310b5a3512dcd",
+      "platform": "windows",
+      "source_commit": "19e890cc1f420037e41b30b3a5c0afac94271583"
+    },
+    {
+      "path": ".build\\longpath-fix-20261025\\mdo-server-linux",
+      "bytes": 5815642,
+      "sha256": "75c3695a5877b9c6621615db77f625c70bdb8cf7095fc8c78e4fc4447e4ed613",
+      "platform": "linux",
+      "source_commit": "19e890cc1f420037e41b30b3a5c0afac94271583"
+    }
+  ],
+  "platform_deployed": true,
+  "client_formally_published": false,
+  "android_rebuilt": false,
+  "production": {
+    "passed": true,
+    "site_commit": "6f3800addcdd41a25c483ef1755980472bcbe62a",
+    "after": {
+      "files": {
+        "plugin/mdo/modules/ecosystem/ecosystem_package.h": "3a562394ec10a54c8a99edcee9d8d935f08736585628fb10f815625ee5bddd81",
+        "plugin/mdo/modules/ecosystem/knowledge_format.h": "e5abf3b4876f06841362fc633250369a3e8d6c68dcd38ca96a7beaf5856ac2eb",
+        "plugin/mdo/page/creator/knowledge-format.js": "29f5f57a2ce31186bb14366ae399a72c65d4c22dcf18e3119f8babf23886e3fd",
+        "plugin/mdo/page/creator/knowledge-builder.js": "0ebec3b08d93735b3bbf790c122eefb30427080ba339964cd5f15d27fe0941c8"
+      },
+      "service": {
+        "/opt/www/xs": "b32fa5696b9950a0dc0fa4fd8277a112e27cbea093deb5d53948a35072d273fe",
+        "/opt/www/xs.json": "6971820ba5f8650754340b97cbd7de60b0eae91dc937f6284a16bbc5af830ee8"
+      }
+    },
+    "time": 1792913242,
+    "files": [
+      "plugin/mdo/modules/ecosystem/ecosystem_package.h",
+      "plugin/mdo/modules/ecosystem/knowledge_format.h",
+      "plugin/mdo/page/creator/knowledge-format.js",
+      "plugin/mdo/page/creator/knowledge-builder.js"
+    ]
+  },
+  "public_verification": {
+    "/mdo/knowledge-format.js": 4336,
+    "/mdo/knowledge-builder.js": 5583,
+    "old_build_catalog_empty": true
+  },
+  "verified": [
+    "windows_source_long_home",
+    "windows_packed_long_home",
+    "linux_source_long_home",
+    "linux_packed_long_home",
+    "windows_linux_home_atomic_backup_and_no_replace",
+    "knowledge_creator_review_download_update_withdraw",
+    "mcp_creator_review_download_update_withdraw",
+    "skill_agent_tool_command_creator_review_download_update_withdraw",
+    "node_knowledge_10",
+    "module_graph_contracts_2",
+    "native_overlay_receipt_1",
+    "host_build_contracts_3",
+    "desktop_runtime_probe_dispatch"
+  ],
+  "limits": [
+    "Linux QA built against native glibc; old-distro ABI not checked",
+    "No Android native rebuild or device test",
+    "Targeted checks, not a complete formal release gate"
+  ]
+}
