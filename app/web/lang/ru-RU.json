@@ -814,7 +814,7 @@
   "resource.defaultAgentModuleDescription": "Встроенный профиль агента по умолчанию.",
   "resource.echoModuleDescription": "Минимальный встроенный модуль для проверки полного пути ABI модулей.",
   "resource.todoModuleDescription": "Публикует краткий снимок плана в панели текущего диалога.",
-  "resource.extensionsDescription": "Просмотр и перекомпиляция модулей C. Agent, SubAgent и инструменты настраиваются на отдельных страницах.",
+  "resource.extensionsDescription": "Управление файлами приложения, точками входа JS/C и наборами плагинов.",
   "resource.diagnosticsDescription": "Проверка переносимого Home, состояния программы и проблем, требующих действий.",
   "resource.catalogRefreshed": "Каталог {name} обновлён",
   "resource.refresh": "Обновить",

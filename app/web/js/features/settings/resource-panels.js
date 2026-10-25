@@ -1,14 +1,11 @@
-import { createExtensionBrowser, detailFacts, browserText } from "../../components/extension-browser.js";
 import { element, clear, errorMessage, toast } from "../../utils/dom.js";
 import { subscribeLocale, t } from "../../i18n.js";
 import {
-  reloadCatalog,
   applyLegacyMigration, ensureSettingsResources,
 } from "../../state/resources.js";
 import { createModelConfigPanel } from "./model-config-panel.js";
 import { createExtensionPanels } from "./extension-panels.js";
-import { awaitResourceOperation, resourceOperationEpoch } from "../../state/resource-operation.js";
-import { subscribeTarget } from "../../api/target.js";
+import { createPluginWorkbench } from "./plugin-workbench.js";
 
 function card(title, description, meta = [], actions = []) {
   const body = [element("h3", { text: title }), element("p", {
@@ -129,35 +126,16 @@ export function createResourcePanels({ agentsStore, stores, reload }) {
   const extensionsContainer = document.querySelector("#settings-extensions-list");
   const diagnosticsContainer = document.querySelector("#settings-diagnostics-list");
   const unsubscribers = [];
-  const extensionActions = trackedActions(extensionsContainer, "data-extension-action");
+  const pluginPanel = createPluginWorkbench(extensionsContainer);
   const diagnosticActions = trackedActions(diagnosticsContainer, "data-diagnostic-action");
   let confirmingSource = "";
   let migrationResult = null;
   let migrationBusy = false;
-  let activeSection = "", moduleController = null, moduleOperation = null;
-  let operationTarget = resourceOperationEpoch();
 
   async function reloadChecked(name) {
     await reload(name);
     const state = stores[name].get();
     if (state.status === "error") throw state.error || new Error(t("resource.reloadFailed", {}, "目录刷新失败"));
-  }
-
-  async function refreshCatalog(name) {
-    const controller = new AbortController(), section = activeSection, owner = resourceOperationEpoch();
-    moduleController?.abort(); moduleController = controller;
-    const scope = { signal: controller.signal, isCurrent: () => !controller.signal.aborted && section === activeSection && owner === resourceOperationEpoch() };
-    const operation = moduleOperation; moduleOperation = null;
-    try {
-      if (operation) await awaitResourceOperation(operation, scope);
-      else await reloadCatalog(name, scope);
-      if (!scope.isCurrent()) return;
-      await reloadChecked(name);
-      if (scope.isCurrent()) toast(t("resource.catalogRefreshed", { name }, `${name} 目录已刷新`));
-    } catch (error) {
-      if (owner === resourceOperationEpoch() && error?.operation) moduleOperation = error.operation;
-      if (scope.isCurrent() && error?.name !== "AbortError") throw error;
-    } finally { if (moduleController === controller) { moduleController = null; renderExtensions(); } }
   }
 
   const modelPanel = createModelConfigPanel(modelsContainer);
@@ -177,27 +155,6 @@ export function createResourcePanels({ agentsStore, stores, reload }) {
       return false;
     }
     return true;
-  }
-
-  const moduleBrowser = createExtensionBrowser({ kind: "modules" });
-  let moduleQuery = "";
-  function renderExtensions() {
-    const focusedKey = extensionsContainer.contains(document.activeElement)
-      ? document.activeElement?.dataset.extensionAction : "";
-    moduleBrowser.rememberFocus(); clear(extensionsContainer);
-    const modules = stores.modules.get();
-    extensionsContainer.append(heading("Module", extensionActions.create("modules-reload",
-      moduleOperation ? t("resource.recheckOperation", {}, "重新读取状态") : t("resource.rebuild", {}, "重新编译"), () => refreshCatalog("modules"))));
-    const modulesReady = showReadState(extensionsContainer, modules, extensionActions, "modules");
-    const search = element("input", { className: "extension-search", attrs: { type: "search", placeholder: browserText("filterModules", "筛选 C 模块"), "aria-label": browserText("filterModules", "筛选 C 模块") } }); search.value = moduleQuery;
-    const renderRows = () => moduleBrowser.setItems((modulesReady ? modules.data?.modules ?? [] : []).filter(module => module.source_path?.endsWith(".c") && `${module.name} ${module.id} ${module.description}`.toLocaleLowerCase().includes(moduleQuery.toLocaleLowerCase())).map(module => ({
-      key: module.id, title: module.name || module.id, description: resourceDescription("module", module),
-      meta: [module.version, module.external ? t("resource.externalTcc", {}, "外部 TCC") : t("resource.builtin", {}, "内置")],
-      detail: () => detailFacts([[browserText("sourceFiles", "来源与文件"), module.source_path], [browserText("versions", "版本"), module.version], ["Agent", module.agent_count], [browserText("agentTools", "Agent 工具"), module.tool_count]]),
-    })), { busy: modules.loading });
-    search.addEventListener("input", () => { moduleQuery = search.value; renderRows(); }); renderRows();
-    extensionsContainer.append(search, moduleBrowser.root);
-    if (focusedKey) extensionActions.find(focusedKey)?.focus({ preventScroll: true });
   }
 
   function renderDiagnostics() {
@@ -318,32 +275,24 @@ export function createResourcePanels({ agentsStore, stores, reload }) {
     }
   }
 
-  unsubscribers.push(agentsStore.subscribe(renderExtensions));
-  unsubscribers.push(stores.modules.subscribe(renderExtensions));
   unsubscribers.push(stores.storage.subscribe(renderDiagnostics));
   unsubscribers.push(stores.diagnostics.subscribe(renderDiagnostics));
   unsubscribers.push(stores.migrations.subscribe(renderDiagnostics));
   unsubscribers.push(subscribeLocale(() => {
-    renderExtensions();
     renderDiagnostics();
   }));
-  unsubscribers.push(subscribeTarget(() => {
-    const next = resourceOperationEpoch(); if (next === operationTarget) return;
-    operationTarget = next; moduleBrowser.reset(); moduleOperation = null; moduleController?.abort(); renderExtensions();
-  }));
+
 
   return Object.freeze({
-    hasPendingChanges: () => extensionPanels.hasPendingChanges(),
+    hasPendingChanges: () => extensionPanels.hasPendingChanges() || pluginPanel.hasPendingChanges(),
     selectSection(section) {
-      if (section !== activeSection) moduleController?.abort();
-      activeSection = section;
       extensionPanels.selectSection(section);
+      pluginPanel.selectSection(section);
       if (section === "models") void modelPanel.ensureLoaded();
-      else void ensureSettingsResources(section);
+      else if (section !== "extensions") void ensureSettingsResources(section);
     },
     destroy() {
-      moduleController?.abort();
-      moduleBrowser.destroy();
+      pluginPanel.destroy();
       extensionPanels.destroy();
       modelPanel.destroy();
       unsubscribers.forEach((unsubscribe) => unsubscribe());

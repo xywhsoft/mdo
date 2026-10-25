@@ -1,0 +1,12 @@
+{
+  "format": "mdo.plugin.v1",
+  "id": "example.native",
+  "name": "原生插件范例",
+  "version": "1.0.0",
+  "description": "通过 C 入口注册一个 Application SDK 服务。",
+  "author": "mdo",
+  "license": "MIT",
+  "entry": {
+    "native": "runtime/plugin.c"
+  }
+}

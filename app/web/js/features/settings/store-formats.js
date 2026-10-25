@@ -5,13 +5,22 @@ export const STORE_EDITOR_KINDS = ["agents", "subagents", "tools", "skills", "mc
 export const STORE_KINDS = [...STORE_EDITOR_KINDS, "modules", "toolpacks", "plugins"];
 export const STORE_PLATFORMS = ["windows-x86_64", "android-arm64-v8a", "linux-x86_64", "macos-arm64"];
 export const containsCode = resources => resources.some(r => ["tools", "commands", "modules", "toolpacks", "plugins"].includes(r.kind) || r.kind.startsWith("c-") || isRoleKind(r.kind) && (r.files || []).some(f => f.path === "program.c"));
+export const PLUGIN_MIN_BUILD = 70000049;
+const pluginDocument = resource => { try { return JSON.parse(resource.content); } catch { return null; } };
 
 // Publication includes only explicitly selected resource files. Credentials
 // are also redacted by the native exporter, before reaching this UI.
 export function makeStorePackage(fields, resources) {
+  resources = resources.map(r => {
+    if (r.kind !== "plugins") return r;
+    const doc = pluginDocument(r);
+    if (doc?.format !== "mdo.plugin.v1") return r;
+    return { ...r, content: JSON.stringify({ ...doc, version: fields.version, name: fields.name.trim(), description: fields.description.trim(), author: fields.author || doc.author || "", copyright: fields.copyright || doc.copyright || "", license: fields.license.trim() }) };
+  });
   const roles = resources.some(r => isRoleKind(r.kind));
   const v2 = roles || fields.min_build_id || resources.some(r => ["modules", "toolpacks", "plugins", "knowledge"].includes(r.kind));
-  const minimumBuild = Math.max(fields.min_build_id || 0, roles ? ROLE_MIN_BUILD : 0, resources.some(r => r.kind === "knowledge") ? KNOWLEDGE_MIN_BUILD : 0);
+  const modernPlugins = resources.some(r => r.kind === "plugins" && pluginDocument(r)?.format === "mdo.plugin.v1");
+  const minimumBuild = Math.max(fields.min_build_id || 0, roles ? ROLE_MIN_BUILD : 0, resources.some(r => r.kind === "knowledge") ? KNOWLEDGE_MIN_BUILD : 0, modernPlugins ? PLUGIN_MIN_BUILD : 0);
   if (!/^[a-z0-9][a-z0-9._-]{0,63}$/.test(fields.slug) || fields.slug.includes(".."))
     throw new Error("Invalid package ID");
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$/.test(fields.version)) throw new Error("Invalid version");

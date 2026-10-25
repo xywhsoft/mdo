@@ -24,8 +24,8 @@ export const singleResource = (row, kind) => {
 // Each instance is bound to one resource type and one selected device. There
 // is deliberately no resource multi-select in this publication flow.
 export function createSingleResourceStore(kind, onChange, onBrowse = () => {}, onManage = null) {
-  if (!["agents", "subagents", "skills", "tools", "commands", "mcp", "knowledge"].includes(kind)) throw Error("Unsupported resource store");
-  const name = ({ agents: "Agent", subagents: "SubAgent", skills: "Skill", tools: "Agent 工具", commands: "编辑器命令", mcp: "MCP 服务", knowledge: "知识库" })[kind];
+  if (!["agents", "subagents", "skills", "tools", "commands", "mcp", "knowledge", "plugins"].includes(kind)) throw Error("Unsupported resource store");
+  const name = ({ agents: "Agent", subagents: "SubAgent", skills: "Skill", tools: "Agent 工具", commands: "编辑器命令", mcp: "MCP 服务", knowledge: "知识库", plugins: "插件" })[kind];
   const root = node("div", "", "single-resource-store"), statusRoot = element("p", { className: "extension-help", attrs: { role: "status" } });
   let visible = false, disposed = false, epoch = 0, controller = null, activeTarget = device();
   let items = [], installed = {}, cursor = 0, query = "", catalogQuery = "", busy = false, error = "", status = "";
@@ -93,7 +93,7 @@ export function createSingleResourceStore(kind, onChange, onBrowse = () => {}, o
       return { key: String(row.id), kind, title: row.name, byline:credits.submitter, description: row.description, meta:kind==="mcp"?[...credits.meta,row.mcp_operator,row.mcp_transport?.replaceAll(","," "),row.mcp_auth?.replaceAll(","," ")]:credits.meta, badge: { text: same ? browserText("installed", "已安装") : receipt ? browserText("updates", "可更新") : "" }, primary, onSelect: () => loadDetail(row) };
     });
     browser.setItems(rows, { busy, pageKey:JSON.stringify([catalogQuery,stateFilter]), onNext: cursor ? () => { void load(true); } : null, empty: items.length ? browserText("empty", "没有匹配的扩展") : `暂无公开${name}。可从本机列表分享你的作品。` });
-    root.replaceChildren(search, ...(kind==="mcp"?[advanced]:[]), node("p", isRoleKind(kind) ? "配置式与 C 角色使用相同开发接口；安装前查看依赖、权限、源码及文件计划。" : kind === "knowledge" ? "文档按需检索，可选择注入检索提示。" : kind === "mcp" ? "安装服务模板后创建连接；账号与密钥只保存在服务所属设备。" : kind === "skills" ? "按需读取 Skill，包含说明与参考文件。" : kind === "commands" ? "输入 / 选择命令并传递参数；C 代码在调用时编译运行，安装前请检查源码并确认信任。" : "C 工具在本机执行；安装前请检查源码并确认信任。", "extension-help"), browser.root);
+    root.replaceChildren(search, ...(kind==="mcp"?[advanced]:[]), node("p", isRoleKind(kind) ? "配置式与 C 角色使用相同开发接口；安装前查看依赖、权限、源码及文件计划。" : kind === "knowledge" ? "文档按需检索，可选择注入检索提示。" : kind === "mcp" ? "安装服务模板后创建连接；账号与密钥只保存在服务所属设备。" : kind === "skills" ? "按需读取 Skill，包含说明与参考文件。" : kind === "commands" ? "输入 / 选择命令并传递参数；C 代码在调用时编译运行，安装前请检查源码并确认信任。" : kind === "plugins" ? "插件可以覆盖应用文件并选择加载代码；安装后请在本机列表检查兼容关系并启用。" : "C 工具在本机执行；安装前请检查源码并确认信任。", "extension-help"), browser.root);
     statusRoot.textContent = error || (busy ? status || "正在载入…" : status); statusRoot.hidden = !statusRoot.textContent; statusRoot.className = error ? "extension-error" : "extension-help";
     if (loginRequired) root.append(button("登录账户", () => { location.hash = "#/settings/account"; }));
     search.querySelectorAll("button").forEach(b => { b.disabled = busy; });
@@ -115,9 +115,18 @@ export function createSingleResourceStore(kind, onChange, onBrowse = () => {}, o
       if (!singleResource(p, kind)) throw Error(`作品必须只包含一个${name}`);
       const credits=resourceCredits({...data,store_managed:true},{...data,manifest:p.manifest});
       const description = node("div"); description.append(node("p", data.description || row.description),credits.facts(),renderSourceMarkdown(p.manifest.readme));
+      if(kind==="plugins"){
+        const spec=JSON.parse(p.resources[0].content),relations=node("div");
+        relations.append(detailFacts([
+          ["前端入口",spec.entry?.frontend||spec.frontend||"无"], ["原生入口",spec.entry?.native||"无"],
+          ["独占功能",(spec.exclusive||[]).join(" / ")||"无"], ["必需插件",(spec.requires||[]).map(r=>r.id).join(" / ")||"无"],
+          ["明确冲突",(spec.conflicts||[]).map(r=>r.id).join(" / ")||"无"],
+        ]));
+        description.append(relations,node("p","安装保留停用状态，可在本机插件列表检查关系并启用；原生入口变更需要重启生效。","extension-help"));
+      }
       if (p.manifest.changelog) description.append(node("h4", "更新说明"), renderSourceMarkdown(p.manifest.changelog));
       const usage = node("div"); usage.append(detailFacts([["作者", credits.author], ["版本", data.version], ["许可", credits.license], ["支持平台", p.manifest.platforms.join(" / ")]]));
-      usage.append(node("p", isRoleKind(kind) ? "角色只能在当前用户授权范围内运行；依赖引用按安装设备的配置解析。" : kind === "knowledge" ? "启用后仅注入可选检索提示，文档按需读取；不会整体注入，也不会执行文档文件。" : kind === "mcp" ? "下载模板不连接或执行服务。创建连接后填写参数；授权独立于 mdo 账号，由所属设备完成。" : kind === "skills" ? `$${p.resources[0].id} · /skill:${p.resources[0].id}` : kind === "commands" ? `/${p.resources[0].id} [参数] · 支持引号分词或 JSON 数组，参数通过 xvalue array 传入 C 命令。` : "安装后在 Agent 工具页管理；模型通过结构化参数调用。"));
+      usage.append(node("p", isRoleKind(kind) ? "角色只能在当前用户授权范围内运行；依赖引用按安装设备的配置解析。" : kind === "knowledge" ? "启用后仅注入可选检索提示，文档按需读取；不会整体注入，也不会执行文档文件。" : kind === "mcp" ? "下载模板不连接或执行服务。创建连接后填写参数；授权独立于 mdo 账号，由所属设备完成。" : kind === "skills" ? `$${p.resources[0].id} · /skill:${p.resources[0].id}` : kind === "commands" ? `/${p.resources[0].id} [参数] · 支持引号分词或 JSON 数组，参数通过 xvalue array 传入 C 命令。` : kind === "plugins" ? "安装后在本机插件页启用和管理；使用插件自己的文件、入口与兼容声明。" : "安装后在 Agent 工具页管理；模型通过结构化参数调用。"));
       if(isRoleKind(kind)){
         usage.append(detailFacts(roleSummary(p.resources[0])),node("p",kind==="agents"?"安装并启用后，在对话中选择此 Agent。":"安装并启用后，可由具有委派能力且允许该角色的 Agent 调用。"));
         for(const dep of roleDependencies(p.resources[0]))usage.append(node("p",`${dep.required?"必需依赖":"可选选择器"} · ${dep.kind}/${dep.id}`));
@@ -145,6 +154,7 @@ export function createSingleResourceStore(kind, onChange, onBrowse = () => {}, o
       const preview = node("details"); preview.append(node("summary", "安装计划"));
       for (const f of plan.files) preview.append(node("p", `${f.operation} · ${f.path} · ${f.bytes} B`)); d.append(preview);
       for(const dep of plan.dependencies || [])d.append(node("p",`${dep.required?"必需":"可选"} · ${dep.kind}/${dep.id} · ${dep.checked===false?"运行时按选择器解析":dep.available?"已配置":"未配置或未启用"}`,dep.required&&!dep.available?"extension-error":"extension-help"));
+      for(const issue of plan.plugin_issues||[])d.append(node("p",`${issue.id} ${issue.other}：${issue.detail}`,"extension-error"));
       const ready=plan.can_install!==false;
       if(!ready)d.append(node("p","请先安装或配置必需依赖，再重新打开此详情。","extension-error"));
       let trusted = !containsCode(p.resources);
@@ -156,7 +166,7 @@ export function createSingleResourceStore(kind, onChange, onBrowse = () => {}, o
       if (containsCode(p.resources)) {
         const check = element("input", { attrs: { type: "checkbox" } });
         check.addEventListener("change", () => { trusted = check.checked; install.disabled = same || !trusted || !ready; });
-        d.append(element("label", { className: "store-code-consent" }, [check, node("span", isRoleKind(kind) ? "我已检查源码并信任作者。C 角色在 mdo 进程内运行，编译注册时也可能执行代码；拥有所声明的 Application SDK 能力。" : kind === "commands" ? "我已检查源码并信任作者。C 命令在调用时由独立工作进程编译运行，可通过 Application SDK 操作 mdo 和本机资源。" : "我已检查源码并信任作者。C 工具在 mdo 进程内运行，编译注册时也可能执行代码。") ]));
+        d.append(element("label", { className: "store-code-consent" }, [check, node("span", isRoleKind(kind) ? "我已检查源码并信任作者。C 角色在 mdo 进程内运行，编译注册时也可能执行代码；拥有所声明的 Application SDK 能力。" : kind === "commands" ? "我已检查源码并信任作者。C 命令在调用时由独立工作进程编译运行，可通过 Application SDK 操作 mdo 和本机资源。" : kind === "plugins" ? "我已检查全部文件并信任作者。插件可以覆盖应用文件，JS/C 入口可通过 Application SDK 操作 mdo 和本机资源。" : "我已检查源码并信任作者。C 工具在 mdo 进程内运行，编译注册时也可能执行代码。") ]));
       }
       d.append(install);if(same&&kind==="mcp"&&onManage)d.append(button("创建连接",()=>onManage(owned(row))));
     } catch (e) { if (valid() && e.name !== "AbortError") { const message = node("div"); message.append(node("p", errorMessage(e), "extension-error"), button("重试", () => loadDetail(row))); browser.showDetail(key, message); } }
@@ -175,7 +185,7 @@ export function createSingleResourceStore(kind, onChange, onBrowse = () => {}, o
       const form = element("form", { className: "store-publish-form" }), fields = {};
       for (const [key, text, limit, area] of [["name", "作品名称", 100], ["slug", "作品 ID（小写英文，发布后不变）", 64], ["version", "版本（如 1.0.0）", 32], ["description", "简介", 600, true], ["author", "作品作者（可选，与提交者账号不同）", 100], ["copyright", "版权声明（可选，保留原作者归属）", 4096, true], ["readme", "使用说明", 32768, true], ["license", "许可证", 80], ["changelog", "更新说明", 8192, true], ["review_notes", "审核说明：用法、构建与权限（申请公布必填）", 8000, true], ["source_url", "源码或说明链接（HTTPS，可选）", 1000]]) {
         const control = element(area ? "textarea" : "input", { attrs: { name: key, maxlength: String(limit), required: ["name", "slug", "version", "description", "readme", "license"].includes(key) ? "" : null } });
-        control.value = previous[key] || ({ name: item.name || item.id, slug: `${kind === "agents" ? "agent" : kind === "subagents" ? "subagent" : kind === "skills" ? "skill" : kind === "commands" ? "command" : kind==="mcp"?"mcp":kind==="knowledge"?"knowledge":"tool"}-${item.id}`.slice(0, 64), version: "1.0.0", description: item.description || "", author:item.author||"", copyright:item.copyright||"", license:kind==="knowledge"?(item.license||""):"MIT" })[key] || "";
+        control.value = previous[key] || ({ name: item.name || item.id, slug: `${kind === "agents" ? "agent" : kind === "subagents" ? "subagent" : kind === "skills" ? "skill" : kind === "commands" ? "command" : kind==="mcp"?"mcp":kind==="knowledge"?"knowledge":kind==="plugins"?"plugin":"tool"}-${item.id}`.slice(0, 64), version: kind === "plugins" ? item.version || "1.0.0" : "1.0.0", description: item.description || "", author:item.author||"", copyright:item.copyright||"", license:kind==="knowledge"?(item.license||""):"MIT" })[key] || "";
         fields[key] = control; form.append(element("label", {}, [node("span", text), control]));
       }
       if(isRoleKind(kind)){
@@ -247,6 +257,7 @@ export function createSingleResourceStore(kind, onChange, onBrowse = () => {}, o
       message.textContent=p.manifest.name;
       for(const f of plan.files)d.body.append(node("p",`${f.operation} · ${f.path} · ${f.bytes} B`));
       for(const dep of plan.dependencies||[])d.body.append(node("p",`${dep.required?"必需":"可选"} · ${dep.kind}/${dep.id} · ${dep.checked===false?"运行时按选择器解析":dep.available?"已配置":"未配置或未启用"}`,dep.required&&!dep.available?"extension-error":"extension-help"));
+      for(const issue of plan.plugin_issues||[])d.body.append(node("p",`${issue.id} ${issue.other}：${issue.detail}`,"extension-error"));
       let trusted=!containsCode(p.resources);const ready=plan.can_install!==false;
       const submit=button("导入",()=>{
         if(!trusted||!ready||dialog!==d)return;close(true);

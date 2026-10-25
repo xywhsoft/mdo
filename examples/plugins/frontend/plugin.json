@@ -1,0 +1,12 @@
+{
+  "format": "mdo.plugin.v1",
+  "id": "example.frontend",
+  "name": "前端插件范例",
+  "version": "1.0.0",
+  "description": "通过 Application SDK 添加菜单和公共窗口。",
+  "author": "mdo",
+  "license": "MIT",
+  "entry": {
+    "frontend": "runtime/main.js"
+  }
+}

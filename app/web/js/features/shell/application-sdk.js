@@ -9,7 +9,8 @@ export function createApplicationUi({ navigation, executeActions, canCall = () =
   let clientId = `ui-${crypto.randomUUID()}`;
   try {
     const saved = sessionStorage.getItem("mdo.sdk.client");
-    if (/^ui-[a-f0-9-]{36}$/.test(saved || "")) clientId = saved;
+    const reload=globalThis.performance?.getEntriesByType?.("navigation")?.[0]?.type==="reload";
+    if (reload && /^ui-[a-f0-9-]{36}$/.test(saved || "")) clientId = saved;
     else sessionStorage.setItem("mdo.sdk.client", clientId);
   } catch { /* Effects still require the separate intent journal below. */ }
   const api = createApplicationClient(() => ({ project: navigation.preferredProject(), session: navigation.workspace().sessionId || "", client: clientId }));

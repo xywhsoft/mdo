@@ -232,7 +232,7 @@ static bool EcoLocalApply(const xvalue* entry,bool uninstall,char error[1024],xv
     if(ok&&ExpectedPlan&&strcmp(ExpectedPlan,PlanHash)){snprintf(error,1024,"Installation plan changed; inspect the new plan before confirming");ok=false;}
     if(ok)ok=MdoApiValueSetString(Preview,"sha256",PlanHash);
     if(Plan){if(ok){*Plan=Preview;Preview=NULL;}goto finished;}
-    if(ok&&!PluginReady){snprintf(error,1024,"Plugin combination is incompatible; inspect the plugin issues in the installation plan");ok=false;}
+    if(ok&&!PluginReady){const xvalue* Issue=xrtValueArrayGet(PluginIssues,0);snprintf(error,1024,"Plugin combination is incompatible: %s / %s (%s)",MdoPackageText(Issue,"id",64),MdoPackageText(Issue,"other",64),MdoPackageText(Issue,"detail",600));ok=false;}
     if(ok&&!DependenciesReady){snprintf(error,1024,"Required role dependencies are missing or disabled; inspect the installation plan and configure them first");ok=false;}
     bool begun=ok&&EcoLocalSave(ECO_JOURNAL,journal);ok=begun;
     for(size_t i=0;ok&&i<xrtValueCount(files);i++){const xvalue* f=xrtValueArrayGet(files,i);const xvalue* incoming=xrtValueObjectGet(f,XRT_STR_LITERAL("new"));cstr path=MdoPackageText(f,"path",599);

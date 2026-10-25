@@ -56,3 +56,23 @@ test("failed cleanup retains the old reservation and cannot start its replacemen
   assert.equal(f.calls.filter(c => c.method === "plugin.frontend.fail" && c.params.phase === "cleanup").length, 1);
   await f.loader.destroy();
 });
+
+test("a successful plugin can be explicitly disabled and enabled again",async()=>{
+ const started=[];const f=fixture(async()=>({activate(sdk){started.push(sdk.id);}}));
+ await f.loader.poll();f.change({items:[{...f.a,enabled:false}]});await f.loader.poll();
+ f.change({items:[f.a]});await f.loader.poll();assert.deepEqual(started,["a","a"]);await f.loader.destroy();
+});
+test("dependency replacement cleans dependents first and starts them after the new dependency",async()=>{
+ const log=[];const f=fixture(async()=>({activate(sdk){log.push("start:"+sdk.id);}}),async p=>{log.push("stop:"+p.id);});
+ const child={...f.b,manifest:{requires:[{id:"a"}]}};f.change({items:[child,f.a]});await f.loader.poll();
+ assert.deepEqual(log,["start:a","start:b"]);
+ f.change({items:[{...f.a,revision:"new-a"},child],pending:true});await f.loader.poll();
+ assert.deepEqual(log,["start:a","start:b","stop:b","stop:a","start:a","start:b"]);await f.loader.destroy();
+});
+test("a transient retirement acknowledgement is retried without running cleanup twice",async()=>{
+ let stops=0,leaves=0,phase=0;const p=plugin("one");
+ const loader=createPluginLoader({client:"window",importModule:async()=>({activate(){}}),createScope:()=>({sdk:{},own(){},dispose:async()=>{stops++;}}),api:()=>({
+  call:async method=>{if(method==="plugin.list")return {items:[{...p,enabled:!phase}]};if(method==="plugin.frontend.leave"&&++leaves===1)throw Object.assign(Error("busy"),{status:409});return{};},events:async()=>({items:[{}]})
+ })});
+ await loader.poll();phase=1;await loader.poll();await loader.poll();assert.equal(stops,1);assert.equal(leaves,2);await loader.destroy();
+});

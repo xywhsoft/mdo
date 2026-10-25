@@ -184,6 +184,49 @@ def run():
         # The default quota admitted three distinct works and all their versions.
         # Grant the isolated fixture creator capacity before the legacy work.
         web("POST", "/admin/api/mdo/creator/grant", dict(owner=catalog["owner"], reason="Isolated legacy interoperability fixture"), auth=csrf, cookie=cookie)
+        # Unified plugins reuse creator admission, review, immutable packages,
+        # native transactions and source protections rather than a second store.
+        def sdk(method,params=None,status=200):
+            return client("POST","/application/call",dict(method=method,params=params or {}),status)
+        plugdoc=dict(format="mdo.plugin.v1",id="single-plugin",name="Fixture plugin",version="1.0.0",description="Independent plugin fixture",author="Original Developers",license="MIT",entry=dict(frontend="runtime/main.js"),overrides=[dict(source="docs/.hidden/index.md",target="web/plugin-store/index.md")],exclusive=["qa.plugin.slot"])
+        localfiles=[dict(path="runtime/main.js",text="export function activate(sdk){return ()=>{};}"),dict(path="docs/.hidden/index.md",text="Immutable store document.")]
+        sdk("plugin.apply",dict(id=plugdoc["id"],manifest=plugdoc,files=localfiles))
+        exported=store("plugins","export",references=[dict(kind="plugins",id=plugdoc["id"])])
+        assert json.loads(exported["resources"][0]["content"])==plugdoc
+        sdk("plugin.remove",dict(id=plugdoc["id"]))
+        pluginpackage=dict(format="mdo.extension.v2",manifest=dict(slug="work-plugins",name="Single plugin",version="1.0.0",description="Plugin fixture",author="Original Developers",copyright="Copyright 2026 Original Developers",readme="Complete source is supplied. Activate to add a private fixture page.",license="MIT",min_build_id=70000049,platforms=["windows-x86_64","linux-x86_64","android-arm64-v8a"]),resources=exported["resources"])
+        private=store("plugins","submit",package=pluginpackage,publish=False,status=201);pid=private["id"]
+        web("GET",prefix+"package?id="+str(pid),status=404)
+        web("POST","/api/v1/mdo/creator/publish",dict(source="package",id=pid,revision=1,publish=True,review_notes="Complete source, reviewed mappings and lifecycle cleanup are supplied."),auth=auth)
+        web("POST","/admin/api/mdo/ecosystem",dict(action="approve",id=pid,revision=2,reason="Reviewed plugin mappings, native and frontend entries and compatibility declarations"),auth=csrf,cookie=cookie)
+        preview,_=web("GET","/admin/api/mdo/creator/works?kind=plugins&state=published&page=1&limit=20",cookie=cookie)
+        assert preview["total"]==1
+        store("plugins","install",id=pid,status=409)
+        installplan=store("plugins","plan",id=pid)
+        store("plugins","install",id=pid,trust_code=True,expected_plan=installplan["sha256"])
+        selected=next(r for r in sdk("plugin.list")["items"] if r["id"]==plugdoc["id"]);assert not selected["enabled"] and selected["source"]=="store"
+        store("plugins","export",references=[dict(kind="plugins",id=plugdoc["id"])],status=403)
+        sdk("plugin.apply",dict(id=plugdoc["id"],manifest=plugdoc,files=localfiles),403)
+        sdk("plugin.remove",dict(id=plugdoc["id"]),403)
+        sdk("plugin.enable",dict(id=plugdoc["id"]))
+        assert sdk("vfs.read",dict(path="/app/web/plugin-store/index.md"))["text"]==localfiles[1]["text"]
+        updated=copy.deepcopy(pluginpackage);updated["manifest"]["version"]="1.1.0";d=json.loads(updated["resources"][0]["content"]);d["version"]="1.1.0";updated["resources"][0]["content"]=json.dumps(d)
+        pending=store("plugins","submit",package=updated,publish=True,review_notes="Updated metadata; full source and file mappings retained.",status=201)
+        assert store("plugins","latest",id=pid)["id"]==pid
+        web("POST","/admin/api/mdo/ecosystem",dict(action="approve",id=pending["id"],revision=1,reason="Updated plugin source reviewed"),auth=csrf,cookie=cookie)
+        store("plugins","install",id=pending["id"],trust_code=True)
+        selected=next(r for r in sdk("plugin.list")["items"] if r["id"]==plugdoc["id"]);assert selected["enabled"]
+        broken=copy.deepcopy(updated);broken["manifest"]["version"]="1.2.0";spec=json.loads(broken["resources"][0]["content"]);spec["version"]="1.2.0";spec["requires"]=[dict(id="not-installed")];broken["resources"][0]["content"]=json.dumps(spec)
+        rejected=store("plugins","submit",package=broken,publish=True,review_notes="Dependency update fixture with the complete source supplied.",status=201)
+        web("POST","/admin/api/mdo/ecosystem",dict(action="approve",id=rejected["id"],revision=1,reason="Dependency semantics test"),auth=csrf,cookie=cookie)
+        unchanged=(home/"config/plugins.json").read_bytes();blocked=store("plugins","plan",id=rejected["id"])
+        assert not blocked["can_install"] and blocked["plugin_issues"][0]["code"]=="requires"
+        store("plugins","install",id=rejected["id"],trust_code=True,status=409)
+        assert (home/"config/plugins.json").read_bytes()==unchanged
+        store("plugins","uninstall",entry=dict(id=pending["id"]))
+        assert all(r["id"]!=plugdoc["id"] for r in sdk("plugin.list")["items"])
+        assert (home/"plugins/single-plugin/revisions").is_dir(),"Uninstall must retain private immutable revisions"
+        print("PASS unified plugin authoring, export, private submission, review, catalog, trust, install, readonly ownership, enable, reviewed update and uninstall",flush=True)
         # A previously supported combined work remains accessible through the
         # legacy catalog, but never appears in either independent store.
         from test_ecosystem_runtime import c_command
@@ -198,10 +241,10 @@ def run():
         dbfile = website / "plugin_data/mdo/cli-tools/catalog.db"
         server.terminate(); server.wait(15); running.remove(server)
         with sqlite3.connect(dbfile) as db:
-            assert db.execute("SELECT count(*) FROM package WHERE resource_count=1").fetchone()[0] == 6
+            assert db.execute("SELECT count(*) FROM package WHERE resource_count=1").fetchone()[0] == 9
             db.execute("UPDATE package SET resource_count=-1,license='',copyright=''")
         server = start(EXE, website / "xs.json", HOME); ready(server, port, prefix + "packages")
-        with sqlite3.connect(dbfile) as db: assert db.execute("SELECT count(*) FROM package WHERE resource_count=1").fetchone()[0] == 6
+        with sqlite3.connect(dbfile) as db: assert db.execute("SELECT count(*) FROM package WHERE resource_count=1").fetchone()[0] == 9
         for kind in ids:
             result, _ = web("GET", prefix + "packages?single=1&kind=" + kind); assert len(result["items"]) == 1
             assert result["items"][0]["copyright"]=="Copyright 2026 Original Developers" and result["items"][0]["license"]=="MIT" and result["items"][0]["submitter"]=="single_author"

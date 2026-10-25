@@ -800,7 +800,7 @@
   "resource.defaultAgentModuleDescription": "Built-in default Agent profile.",
   "resource.echoModuleDescription": "A minimal built-in module used to verify the complete module ABI path.",
   "resource.todoModuleDescription": "Publishes a compact plan snapshot for the session conversation dock.",
-  "resource.extensionsDescription": "Inspect and recompile advanced C modules. Configure Agents, SubAgents and tools on their own pages.",
+  "resource.extensionsDescription": "Manage application file overrides, optional JS/C entries and plugin combinations.",
   "resource.diagnosticsDescription": "Inspect the portable Home, runtime status, and actionable diagnostics.",
   "resource.catalogRefreshed": "{name} catalog refreshed",
   "resource.refresh": "Refresh",

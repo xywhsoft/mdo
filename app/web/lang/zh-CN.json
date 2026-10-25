@@ -800,7 +800,7 @@
   "resource.defaultAgentModuleDescription": "mdo 内置的默认 Agent 配置。",
   "resource.echoModuleDescription": "用于验证完整 Module ABI 流程的最小内置模块。",
   "resource.todoModuleDescription": "向会话停靠区发布精简的计划快照。",
-  "resource.extensionsDescription": "查看和重新编译高级 C 模块；Agent、SubAgent、工具等在各自的管理页配置。",
+  "resource.extensionsDescription": "管理应用文件覆盖、可选 JS/C 入口与插件组合。",
   "resource.diagnosticsDescription": "检查便携 Home、运行状态和可操作诊断。",
   "resource.catalogRefreshed": "{name} 目录已刷新",
   "resource.refresh": "刷新",

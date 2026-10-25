@@ -1,0 +1,15 @@
+{
+  "format": "mdo.plugin.v1",
+  "id": "example.files",
+  "name": "文件映射范例",
+  "version": "1.0.0",
+  "description": "将自己的文件映射到 mdo 应用文件空间。",
+  "author": "mdo",
+  "license": "MIT",
+  "overrides": [
+    {
+      "source": "assets/info.txt",
+      "target": "web/plugin-example.txt"
+    }
+  ]
+}

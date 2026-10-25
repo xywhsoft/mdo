@@ -52,3 +52,8 @@
 .agent-tool-option code { overflow-wrap: anywhere; min-width: 0; }
 .agent-tool-option small { color: var(--muted); margin-left: auto; font-size: 10px; }
 @media (max-width: 600px) { .extension-editor { padding: 14px; max-height: calc(100dvh - 16px); } .extension-list .resource-actions { flex-wrap: wrap; } .extension-toolbar .secondary-button { padding: 7px 10px; } }
+
+/* Plugin workbench shares full-width lists and fixed-footer authoring layers. */
+.settings-content .plugin-workbench > .eb-toolbar { width:100%;max-width:none;padding:0;margin:24px 0; }
+.mdo-layer .plugin-editor { display:block;width:100%;max-width:none;padding:0;margin:0; }
+.plugin-editor .extension-field > :is(input,textarea,select) { width:100%;box-sizing:border-box; }
