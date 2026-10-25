@@ -81,6 +81,11 @@ class ReleaseGateTests(unittest.TestCase):
         release = {"version_name": "0.1.0", "toolpack_revision": 2}
         lock = {"xserver": {"commit": "current"}, "xrt": {"commit": "runtime"}}
         prepare_release.verify_record(record, release, lock, "source", "profile")
+        modern = {**release, "version_name": "0.6.1", "version_code": "60000601"}
+        modern_record = {**record, "version_name": "0.6.1", "version_code": "60000601"}
+        prepare_release.verify_record(modern_record, modern, lock, "source", "profile")
+        with self.assertRaisesRegex(ValueError, "version code"):
+            prepare_release.verify_record({**modern_record, "version_code": "60000600"}, modern, lock, "source", "profile")
         for changed in ({**record, "xs_commit": "old"}, {**record, "version_name": "0.1.0-dev"},
                         {**record, "xrt_commit": "old"}, {**record, "host_profile_sha256": "old-profile"},
                         {**record, "toolpack_revision": 1},

@@ -16,6 +16,10 @@ import sys
 import tarfile
 import tempfile
 from pathlib import Path
+try:
+    from version_code import release_code
+except ModuleNotFoundError:  # Imported as a module by the build contract suite.
+    from tools.version_code import release_code
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -395,12 +399,16 @@ def source_list() -> list[str]:
 
 def generated_unity(lock: dict, sources: list[str]) -> str:
     release=load_object(APP / "release.json")
+    code=release_code(release)
     ids=[release[key] for key in ("windows_build_id","windows_server_build_id","android_lite_build_id","android_full_build_id",
         "linux_glibc_gui_build_id","linux_glibc_server_build_id","linux_musl_gui_build_id","linux_musl_server_build_id")]
     if any(type(i) is not int or not 10000000 <= i <= 99999999 for i in ids) or len(set(ids))!=len(ids):
         raise BuildError("release build IDs must be distinct eight-digit integers")
     lines = [
         f'#define MDO_VERSION_TEXT {json.dumps(release["version_name"])}',
+        '#ifndef MDO_VERSION_CODE',
+        f'#define MDO_VERSION_CODE 0x{code}u',
+        '#endif',
         '#ifndef MDO_BUILD_ID',
         f'#define MDO_BUILD_ID {release["windows_build_id"]}u',
         '#endif',
@@ -653,6 +661,7 @@ def build(args: argparse.Namespace, xserver: Path, lock: dict) -> None:
                 digest.update(path.relative_to(package).as_posix().encode() + b'\0')
                 digest.update(hashlib.sha256(path.read_bytes()).digest())
         product = {"schema_version": 1, "platform": "windows" if os.name == "nt" else "linux",
+                   "version_code": release_code(load_object(APP / "release.json")),
                    "edition": edition, "libc": "mingw" if os.name == "nt" else libc,
                    "xs_commit": lock['xserver']['commit'], "mdo_commit": git_head(ROOT),
                    "packaged_app_sha256": digest.hexdigest(),

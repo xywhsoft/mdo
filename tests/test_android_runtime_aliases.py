@@ -51,7 +51,10 @@ class RuntimeAliases(unittest.TestCase):
             bundle.add_runtime(archive, ROOT / "tools/runtime/android-arm64-v8a", "lite", 50000015, 4)
         with zipfile.ZipFile(out) as archive:
             self.assertEqual(archive.namelist(), ["assets/mdo-runtime.json"])
-            self.assertEqual(json.loads(archive.read("assets/mdo-runtime.json"))["files"], [])
+            metadata = json.loads(archive.read("assets/mdo-runtime.json"))
+            self.assertEqual(metadata["files"], [])
+            self.assertEqual(metadata["build_id"], "50000015")
+            self.assertEqual(metadata["version_code"], json.loads((ROOT / "app/release.json").read_text())["version_code"])
 
 
 if __name__ == "__main__": unittest.main()

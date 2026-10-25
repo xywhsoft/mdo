@@ -1,5 +1,6 @@
 #include "../../include/mdo/time.h"
 #include "../../include/mdo/distribution.h"
+#include "../../include/mdo/version.h"
 #include <stdio.h>
 #include <string.h>
 #include "../../include/mdo/update.h"
@@ -97,7 +98,7 @@ static void MdoUpdateComplete(MdoUpdateStatus* Status,cstr State,cstr Message)
 #include "policy.inc.c"
 static void MdoUpdateDoCheck(MdoUpdateStatus* Status)
 {
-    char Url[160]; MdoUpdateStatus Next;
+    char Url[192]; MdoUpdateStatus Next;
     XS_FetchResponse Response; xvalue* Root = NULL; xjsonreadconfig Config;
     bool Ok;
     if (!Status->LocalHash[0] &&
@@ -105,7 +106,8 @@ static void MdoUpdateDoCheck(MdoUpdateStatus* Status)
         MdoUpdateComplete(Status,"error","Cannot hash the running package"); return;
     }
     Next = *Status;
-    snprintf(Url,sizeof(Url),MDO_UPDATE_ORIGIN "/update/version?platform=%s&edition=%s&build_id=%llu",Status->Platform,Status->Edition,(unsigned long long)MdoBuildId());
+    char VersionCode[9]; MdoVersionCodeFormat(MDO_VERSION_CODE,VersionCode);
+    snprintf(Url,sizeof(Url),MDO_UPDATE_ORIGIN "/update/version?platform=%s&edition=%s&build_id=%llu&version_format=hex24&version_code=%s",Status->Platform,Status->Edition,(unsigned long long)MdoBuildId(),VersionCode);
     Ok = MdoUpdateFetch(Url,8192,&Response);
     if (Ok && Response.Status == 404) {
         /* Absence is not an authenticated policy revocation. Keep a known
@@ -126,7 +128,7 @@ static void MdoUpdateDoCheck(MdoUpdateStatus* Status)
     Root = xrtJsonRead(xrtStrViewN((cstr)Response.Body,Response.BodySize),&Config);
     Ok = MdoUpdatePolicyParse(Root,&Next) && !strcmp(Next.Edition,Status->Edition);
     if (!Ok) { MdoUpdateComplete(Status,"error","Invalid update metadata"); goto done; }
-    Next.Available = strcmp(Status->LocalHash,Next.Hash) != 0 && (!Next.BuildId || Next.BuildId>MdoBuildId());
+    Next.Available = strcmp(Status->LocalHash,Next.Hash) != 0 && MdoUpdatePolicyNewer(&Next);
     Next.Ready = Next.Available && Status->Ready && !strcmp(Status->Hash,Next.Hash);
     Ok = MdoUpdatePolicySave(&Next);
     *Status = Next;
@@ -274,6 +276,7 @@ static void MdoUpdateSelectEdition(MdoUpdateStatus* Status, cstr Edition)
      * under the new label or reuse its ready/install state. */
     Status->Hash[0] = Status->DownloadPath[0] = Status->Notes[0] = 0;
     Status->BuildId = 0u; Status->Bytes = 0u;
+    Status->VersionCode = 0u; Status->HasVersionCode = false;
     Status->Ready = Status->Available = Status->Required = false;
 }
 bool MdoUpdateCheckEdition(cstr Edition)

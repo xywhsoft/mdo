@@ -1,10 +1,12 @@
 #include "internal.h"
 #include "../../include/mdo/update.h"
+#include "../../include/mdo/version.h"
 
 static bool MdoApiUpdateStatus(MdoApiContext* Context)
 {
     MdoUpdateStatus Status;
     if (!MdoUpdateGetStatus(&Status)) return MdoApiReplyError(Context,503,"update_unavailable","Update manager unavailable",NULL);
+    char Code[9],LocalCode[9]; MdoVersionCodeFormat(Status.VersionCode,Code); MdoVersionCodeFormat(MDO_VERSION_CODE,LocalCode);
     xvalue* Data = xrtValueObject();
     bool Ok = Data && MdoApiValueSetBool(Data,"enabled",Status.Enabled) &&
         MdoApiValueSetBool(Data,"busy",Status.Busy) && MdoApiValueSetBool(Data,"ready",Status.Ready) &&
@@ -14,6 +16,8 @@ static bool MdoApiUpdateStatus(MdoApiContext* Context)
         MdoApiValueSetString(Data,"status",Status.State) &&
         MdoApiValueSetString(Data,"platform",Status.Platform) &&
         MdoApiValueSetString(Data,"edition",Status.Edition) && MdoApiValueSetUInt(Data,"build_id",Status.BuildId) &&
+        MdoApiValueSetString(Data,"local_version_code",LocalCode) &&
+        MdoApiValueSetString(Data,"version_code",Status.HasVersionCode?Code:"") &&
         MdoApiValueSetString(Data,"local_sha256",Status.LocalHash) &&
         MdoApiValueSetString(Data,"sha256",Status.Hash) &&
         MdoApiValueSetUInt(Data,"size",Status.Bytes) && MdoApiValueSetString(Data,"notes",Status.Notes) &&

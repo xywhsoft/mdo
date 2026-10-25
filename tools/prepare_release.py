@@ -8,6 +8,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+from version_code import release_code
 ROOT=Path(__file__).resolve().parents[1];OUTPUT=ROOT/".build/releases"
 
 def require(condition, message):
@@ -23,6 +24,8 @@ def application_fingerprint():
 
 def verify_record(record, release, lock, source_hash, profile_hash):
     require(record.get("version_name") == release["version_name"], "stale release version in build record")
+    if "version_code" in release:
+        require(record.get("version_code") == release_code(release), "stale release version code in build record")
     require(record.get("xs_commit") == lock["xserver"]["commit"], "stale native dependency in build record")
     require(record.get("xrt_commit") == lock["xrt"]["commit"], "stale runtime dependency in build record")
     require(record.get("application_source_sha256") == source_hash, "application changed after the recorded build")
@@ -42,6 +45,7 @@ TARGETS = [
 ]
 def main():
     release=json.loads((ROOT/"app/release.json").read_text(encoding="utf-8"));rows=[]
+    code=release_code(release)
     record=json.loads((ROOT/"mdo-builds.json").read_text(encoding="utf-8"))
     lock=json.loads((ROOT/"deps.lock").read_text(encoding="utf-8"))
     verify_record(record, release, lock, application_fingerprint(),
@@ -58,6 +62,7 @@ def main():
             with zipfile.ZipFile(file) as apk:
                 metadata=json.loads(apk.read("assets/mdo-runtime.json"))
                 require(int(metadata["build_id"])==release[key] and metadata["edition"]==edition, "APK edition or build ID mismatch: " + name)
+                require(metadata.get("version_code")==code, "APK release version code mismatch: " + name)
                 require(hashlib.sha256(apk.read("lib/arm64-v8a/libxs.so")).hexdigest() == record["host_sha256"], "APK native host mismatch: " + name)
         else:
             require(data[:2]==b"MZ" if platform.startswith("windows-") else data[:6]==b"\x7fELF\x02\x01", "invalid executable: " + name)
@@ -67,13 +72,15 @@ def main():
                 subprocess.run([str(ROOT/".build/host/xs.exe"),"pack","--extract",str(file),"-d",folder],check=True)
                 unity=(Path(folder)/"generated/mdo_unity.c").read_text(encoding="utf-8")
                 require(int(re.search(r"^#define MDO_BUILD_ID (\d+)u",unity,re.M)[1])==release[key], "embedded build ID mismatch: " + name)
+                require(f'#define MDO_VERSION_CODE 0x{code}u' in unity, "embedded release version code mismatch: " + name)
                 require(f'#define MDO_PRODUCT_EDITION "{edition}"' in unity, "embedded edition mismatch: " + name)
                 require(f'#define MDO_BUILD_XSERVER_COMMIT "{lock["xserver"]["commit"]}"' in unity, "embedded dependency mismatch: " + name)
         shutil.copyfile(file,OUTPUT/name)
         row={"id":id,"platform":platform,"edition":edition,"build_id":release[key],"sha256":sha,"size":len(data),"notes":f"mdo {release['version_name']}：完全访问文件读取与记忆读取恢复；工具及模型异常连续失败恢复，改善会话稳定性。","required":False,"status":"staged","file":name}
+        row["version_code"]=code;row["version_name"]=release["version_name"]
         if edition=="full":row["toolpack_revision"]=release["toolpack_revision"]
         rows.append(row)
-    result={"version_name":release["version_name"],"status":"verified-not-published","releases":rows,
+    result={"version_name":release["version_name"],"version_code":code,"status":"verified-not-published","releases":rows,
             "android_release_signed": all(records[t[3]].get("release_signed", False) for t in TARGETS if t[1].startswith("android-"))}
     if (OUTPUT/"toolpacks/catalog.json").exists():
         packages=json.loads((OUTPUT/"toolpacks/catalog.json").read_text(encoding="utf-8"))["toolpacks"]

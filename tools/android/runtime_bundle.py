@@ -56,4 +56,5 @@ def add_runtime(archive, root: Path, edition: str, build_id: int, revision: int)
         busybox = next(item["native"] for item in files if item["path"] == "busybox/busybox")
         for applet in ("sh", "ash", "awk", "sed", "grep", "find", "cat", "head", "tail", "sort", "wc", "cp", "mv", "rm", "mkdir", "rmdir", "touch", "tar", "gzip", "gunzip", "unzip", "xargs", "tee", "tr", "which", "basename", "dirname"):
             files.append({"path": "busybox/" + applet, "native": busybox})
-    archive.writestr("assets/mdo-runtime.json", json.dumps({"edition": edition, "build_id": str(build_id), "revision": revision, "files": files}))
+    release = json.loads((Path(__file__).resolve().parents[2] / "app/release.json").read_text(encoding="utf-8"))
+    archive.writestr("assets/mdo-runtime.json", json.dumps({"edition": edition, "build_id": str(build_id), "version_code": release["version_code"].replace(".", "").upper(), "revision": revision, "files": files}))

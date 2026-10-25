@@ -47,6 +47,7 @@ def inspect(edition, release, path=None):
         metadata = json.loads(apk.read("assets/mdo-runtime.json"))
         assert metadata["edition"] == edition
         assert int(metadata["build_id"]) == release[f"android_{edition}_build_id"]
+        assert metadata["version_code"] == release["version_code"].replace(".", "").upper()
         assert metadata["revision"] == release["toolpack_revision"]
         native = {n.rsplit("/", 1)[1]: n for n in names if n.startswith("lib/")}
         assert native and all(n.startswith("lib/arm64-v8a/lib") and n.endswith(".so") for n in native.values())

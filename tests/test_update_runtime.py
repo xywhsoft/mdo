@@ -21,11 +21,15 @@ class Published(BaseHTTPRequestHandler):
     package = SOURCE
     mode = "normal"
     required = None
+    version_code = None
+    build_id = None
+    last_query = ""
     def log_message(self, *args): pass
     def do_GET(self):
         digest = hashlib.sha256(type(self).package).hexdigest()
         url = "/update/download/windows-x86_64/" + digest
         if self.path.startswith("/update/version?"):
+            type(self).last_query = self.path
             if self.mode == "offline":
                 self.send_response(503); self.send_header("Content-Length", "0"); self.end_headers(); return
             if self.mode == "missing":
@@ -34,6 +38,8 @@ class Published(BaseHTTPRequestHandler):
                                    size=len(self.package), notes="Test update",
                                    url="https://invalid.example/package" if self.mode == "external" else url)
             if self.required is not None: metadata["required"] = self.required
+            if self.version_code is not None: metadata["version_code"] = self.version_code
+            if self.build_id is not None: metadata["build_id"] = self.build_id
             body = json.dumps(metadata).encode()
         elif self.path == url:
             body = bytes(len(self.package)) if self.mode == "damaged" else self.package
@@ -55,16 +61,18 @@ def run(host):
         port = free_port()
         (site / "probe.c").write_text(
             '#define MDO_DISTRIBUTION_HOST \"127.0.0.1\"\n#define MDO_DISTRIBUTION_SECURE false\n#define MDO_DISTRIBUTION_PORT ' + str(publisher.server_port) + '\n'
-            '#define MDO_UPDATE_ORIGIN "http://127.0.0.1:' + str(publisher.server_port) + '"\n'
+            '#define MDO_UPDATE_ORIGIN "http://127.0.0.1:' + str(publisher.server_port) + '"\n#define MDO_VERSION_CODE 0x60000000u\n'
             '#define RequestProc ProductRequestProc\n#define ServiceInit ProductServiceInit\n#include "generated/mdo_unity.c"\n#undef ServiceInit\n#undef RequestProc\n'
             'void ServiceInit(XS_HostInfo* host) {\n ProductServiceInit(host); MdoUpdateUnit(); MdoUpdateSetEngine(host->Server->Engine);\n'
             'MdoUpdateStatus selected={0}; strcpy(selected.Edition,"lite"); strcpy(selected.Hash,"previous");\n'
             'strcpy(selected.DownloadPath,"/old-package"); strcpy(selected.LocalHash,"running");\n'
-            'selected.Ready=true; selected.Available=true; selected.Bytes=100; selected.BuildId=30000001;\n'
+            'selected.Ready=true; selected.Available=true; selected.Bytes=100; selected.BuildId=30000001;selected.HasVersionCode=true;selected.VersionCode=0x601;\n'
             'MdoUpdateSelectEdition(&selected,"lite"); if(!selected.Ready)abort();\n'
             'MdoUpdateSelectEdition(&selected,"full");\n'
-            'if(selected.Ready||selected.Available||selected.Required||selected.Bytes||selected.BuildId||\n'
+            'if(selected.Ready||selected.Available||selected.Required||selected.Bytes||selected.BuildId||selected.HasVersionCode||selected.VersionCode||\n'
             'selected.Hash[0]||selected.DownloadPath[0]||strcmp(selected.LocalHash,"running"))abort();\n'
+            'MdoUpdateStatus android={0};strcpy(android.Platform,"android-arm64-v8a");android.HasVersionCode=true;android.VersionCode=0xFFFFFFFFu;android.BuildId=MdoBuildId();\n'
+            'if(MdoUpdatePolicyNewer(&android))abort();android.BuildId++;if(!MdoUpdatePolicyNewer(&android))abort();\n'
             'g_MdoUpdate.Lock=xrtMutexCreate(); g_MdoUpdate.Source=xrtStrDup("' + (site / "fixture.exe").as_posix() + '");\n'
             'g_MdoUpdate.Status.Enabled=true; strcpy(g_MdoUpdate.Status.Platform,"windows-x86_64"); strcpy(g_MdoUpdate.Status.Edition,"desktop");\n'
             'MdoUpdatePolicyLoad(&g_MdoUpdate.Status);\n'
@@ -108,6 +116,21 @@ def run(host):
                 assert not home.exists(), "startup checks must not create Home"
                 print("PASS matching hash; startup is read only")
                 Published.package = NEXT
+                local_build = json.loads((ROOT / "app/release.json").read_text())["windows_build_id"]
+                assert "version_code=60000000" in Published.last_query, Published.last_query
+                for code, build, available in (("00000601", local_build+1, True),
+                        ("60.00.06.01", local_build+1, True), ("00010000", local_build+1, True),
+                        ("FFFFFFFF", local_build-1, True), ("60000000", local_build, False),
+                        ("00000000", local_build, False), ("00000000", local_build+1, True)):
+                    Published.version_code, Published.build_id = code, build
+                    post(""); value = settled()
+                    assert value["available"] is available, (code, build, value)
+                    assert value["local_version_code"] == "60000000"
+                for invalid in ("0000060G", "000006010", "0x00000601", 60000000, "00000601\u0000", "00000601\n"):
+                    Published.version_code = invalid
+                    post(""); assert settled()["status"] == "error", invalid
+                Published.version_code = None; Published.build_id = None
+                print("PASS hex ordering, cleared prefix, 1.0 boundary, equal-version repacks and malformed metadata")
                 post(""); assert settled()["status"] == "available"
                 Published.mode = "external"
                 post(""); assert settled()["status"] == "error"
@@ -137,10 +160,12 @@ def run(host):
                 post(""); assert settled()["status"] == "no-package"
                 print("PASS unpublished platform has no update prompt")
                 Published.mode = "normal"; Published.required = True
+                Published.version_code = "00000601"; Published.build_id = local_build+1
                 post(""); value = settled()
                 assert value["blocked"] and value["required"] and value["available"], value
                 cache = home / "data/update/policy.json"
                 assert json.loads(cache.read_text())["required"] is True
+                assert json.loads(cache.read_text())["version_code"] == "00000601"
                 st, _, body = request(port,"POST","/api/v1/projects",body=b"{}")
                 assert st == 409 and json.loads(body)["error"]["code"] == "update_required", (st, body)
                 assert request(port,"GET","/api/v1/bootstrap")[0] == 200

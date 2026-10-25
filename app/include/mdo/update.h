@@ -7,6 +7,8 @@ typedef struct MdoUpdateStatus {
     bool Available, Required;
     char State[24], Platform[32], LocalHash[65], Hash[65], Notes[1025], Message[256];
     uint64 Bytes, BuildId;
+    uint32 VersionCode;
+    bool HasVersionCode;
     char DownloadPath[160], Edition[16];
     char LastInstallMessage[256];
 } MdoUpdateStatus;

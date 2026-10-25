@@ -1,5 +1,15 @@
 /* Only fully validated manifests replace a known policy. The cache is local
  * continuity across offline restarts, not a substitute for HTTPS authenticity. */
+static bool MdoUpdatePolicyNewer(const MdoUpdateStatus* Status)
+{
+    /* Android itself forbids a lower/equal installation serial. */
+    if (!strncmp(Status->Platform,"android-",8) && Status->BuildId && Status->BuildId<=MdoBuildId()) return false;
+    if (Status->HasVersionCode) {
+        int Order=MdoVersionCodeCompare(Status->VersionCode,MDO_VERSION_CODE);
+        return Order>0 || (Order==0 && Status->BuildId>MdoBuildId());
+    }
+    return !Status->BuildId || Status->BuildId>MdoBuildId();
+}
 static bool MdoUpdatePolicyParse(xvalue* Root,MdoUpdateStatus* Status)
 {
     char Platform[32], Download[160], Expected[160]; uint64 Size = 0; int64 Signed;
@@ -26,6 +36,12 @@ static bool MdoUpdatePolicyParse(xvalue* Root,MdoUpdateStatus* Status)
     Status->BuildId=0;
     xvalue* Build=xrtValueObjectGet(Root,XRT_STR_LITERAL("build_id"));
     if(Build) {if(!xrtValueGetUInt(Build,&Status->BuildId)) {int64 Id=0; if(!xrtValueGetInt(Build,&Id)||Id<10000000)return false; Status->BuildId=(uint64)Id;} if(Status->BuildId<10000000||Status->BuildId>99999999)return false;}
+    Status->VersionCode=0; Status->HasVersionCode=false;
+    if(xrtValueObjectGet(Root,XRT_STR_LITERAL("version_code"))) {
+        char Code[12];
+        if(!Status->BuildId || !MdoUpdateText(Root,"version_code",Code,sizeof(Code)) || !MdoVersionCodeParse(Code,&Status->VersionCode))return false;
+        Status->HasVersionCode=true;
+    }
     char Edition[16];
     if(xrtValueObjectGet(Root,XRT_STR_LITERAL("edition"))) {
         if(!MdoUpdateText(Root,"edition",Edition,sizeof(Edition)) ||
@@ -41,7 +57,8 @@ static bool MdoUpdatePolicySave(const MdoUpdateStatus* Status)
     /* No filesystem writes for ordinary startup checks. Once cached, persist
      * explicit revocations as well, so stale required=true cannot reappear. */
     if (!Status->Required && !Exists) return true;
-    xvalue* Root = xrtValueObject(); size_t Size = 0; char Url[128]; str Json = NULL;
+    xvalue* Root = xrtValueObject(); size_t Size = 0; char Url[128],Code[9]; str Json = NULL;
+    MdoVersionCodeFormat(Status->VersionCode,Code);
     snprintf(Url,sizeof(Url),"%s",Status->DownloadPath);
     bool Ok = Root &&
         xrtValueObjectSetNew(Root,XRT_STR_LITERAL("platform"),xrtValueString(xrtStrView(Status->Platform))) &&
@@ -51,6 +68,7 @@ static bool MdoUpdatePolicySave(const MdoUpdateStatus* Status)
         xrtValueObjectSetNew(Root,XRT_STR_LITERAL("notes"),xrtValueString(xrtStrView(Status->Notes))) &&
         xrtValueObjectSetNew(Root,XRT_STR_LITERAL("size"),xrtValueUInt(Status->Bytes)) &&
         (!Status->BuildId || xrtValueObjectSetNew(Root,XRT_STR_LITERAL("build_id"),xrtValueUInt(Status->BuildId))) &&
+        (!Status->HasVersionCode || xrtValueObjectSetNew(Root,XRT_STR_LITERAL("version_code"),xrtValueString(xrtStrView(Code)))) &&
         xrtValueObjectSetNew(Root,XRT_STR_LITERAL("required"),xrtValueBool(Status->Required));
     if (Ok) Json = xrtJsonStringify(Root,false,&Size);
     Ok = Json && MdoHomeAtomicWrite("data/update/policy.json",Json,Size,false);
@@ -70,7 +88,7 @@ static void MdoUpdatePolicyLoad(MdoUpdateStatus* Status)
     if (MdoUpdatePolicyParse(Root,&Next)) {
         bool HasHash = MdoUpdateFileHash(g_MdoUpdate.Source,Next.LocalHash,
             !strcmp(Next.Platform,"windows-x86_64"));
-        Next.Available = (!HasHash || strcmp(Next.LocalHash,Next.Hash) != 0) && (!Next.BuildId || Next.BuildId>MdoBuildId());
+        Next.Available = (!HasHash || strcmp(Next.LocalHash,Next.Hash) != 0) && MdoUpdatePolicyNewer(&Next);
         /* Reuse a downloaded package only after independently checking disk. */
         str Path = MdoHomeExternalPath(MdoUpdateDownloadRelative()); char Hash[65];
         Next.Ready = Next.Available && Path && MdoUpdateFileHash(Path,Hash,false) && !strcmp(Hash,Next.Hash);
