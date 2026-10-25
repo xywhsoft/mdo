@@ -1,58 +1,78 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-10-24T07:28:57.888512+00:00",
-  "version_name": "0.5.0",
-  "source_head_at_recording": "d569603d2fbfd71937aa99cb1a53f15ef035b6c0",
-  "validated_application_commit": "07ce5feb9eb197c2fddaa2d540b87607ac62e28b",
-  "includes_uncommitted_application_changes": false,
-  "application_source_sha256": "2ef7dad402b216a9feaf63348c77b511411af4f602be717f1552313aaef3b85f",
+  "generated_at": "2026-10-25T08:39:38.301906+00:00",
+  "version_name": "0.6.0",
+  "version_code": "05000600",
+  "source_head_at_recording": "db59a5538755fd21a469e1b8b8bc091795dd0354",
+  "validated_application_commit": "2d1341b614d30439079139ed2ed0052e2d487128",
+  "includes_uncommitted_application_changes": true,
+  "uncommitted_application_note": "Existing app/xs.json desktop window geometry; release staging normalizes configuration.",
+  "application_source_sha256": "2d8807dfeb79bebedccac573507223909b972d787d8fa1fbe186bd05796819d0",
   "host_profile_sha256": "7211b5374543682c5b5833fe96dac27c8261a966d77650e6f1e1b14510f2e695",
   "xrt_commit": "3d55ec41e13f0884ffe840d44a57a0189d9310f3",
   "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
+  "sdk_overlay_sha256": "bbf47c296cd2f3f2b8d5cfd6ba4e8978cb2ce2fd2e6f1f63c14802134c806acc",
   "toolpack_revision": 4,
   "release_status": "published",
   "products": [
     {
+      "bytes": 6312853,
+      "sha256": "188febb4ad13dc0972ad056d8bb612eaa9c96ee864128c1de3053a18d33d8b4d",
+      "host_bytes": 4029952,
+      "host_sha256": "ed1ab630353928bc1f6ee29a019f0ad1f3ca0242e65238669ac1c1e51592fb0e",
+      "libc": "mingw",
+      "architecture": "x86_64",
+      "packaged_app_sha256": "7a8696050d6834a61005582c5700af176a987605ca625d47be502beb68fd3a7f",
       "filename": "mdo.exe",
       "platform": "windows",
       "edition": "desktop",
-      "build_id": 50000018,
-      "bytes": 6214112,
-      "sha256": "9342baca24ecbc8a5001f356cb1e9a187e179c6d4056d9e949dcd2b7ce5a8f6c",
-      "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
-      "host_bytes": 4029440,
-      "host_sha256": "401d999017282f2a104fe56530206c2496375c0b82c06c7895eba311de8a4f8e",
-      "libc": "mingw",
-      "architecture": "x86_64",
-      "packaged_app_sha256": "286538e05fad5065f2b1515015fad6d50fbf27069b2cd8333ec3691f52d883d8"
+      "build_id": 60000017,
+      "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401"
     },
     {
+      "bytes": 6054615,
+      "sha256": "88d0828144f75d29946e7d54e99414e127f2cd597d54cb7f2029b4ab6016d93b",
+      "host_bytes": 3771904,
+      "host_sha256": "f1cbb0a74297556d86e3786bff3276dcda110d2f3469645366e259a51331531d",
+      "libc": "mingw",
+      "architecture": "x86_64",
+      "packaged_app_sha256": "7b6ba43fa5c42e604658d38c8b1d6b6728ff0eb5bfe8c42b73c09d8006bdc5d7",
       "filename": "mdo-server.exe",
       "platform": "windows",
       "edition": "server",
-      "build_id": 50000019,
-      "bytes": 5955894,
-      "sha256": "879c06b42c58414ce6d848f6ca0ca2a0200df44d8fb9eee6e1fc2efc2f9ecbb2",
-      "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
-      "host_bytes": 3771392,
-      "host_sha256": "16dc3152c44fbef85f1b4247c8e5cb17a174d80c5a2036224ee8e166d2b0fd19",
-      "libc": "mingw",
-      "architecture": "x86_64",
-      "packaged_app_sha256": "61560f84edcab2a666dde3fe04fb99e3b0652864510de40b44f274fc1a0dffaa"
+      "build_id": 60000018,
+      "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401"
     },
     {
+      "bytes": 5776666,
+      "sha256": "7cc93a981ce4a1e59a9df546a3b1ad3badf351cd5d54ef0d869a6f0adab04a8c",
+      "host_bytes": 3631896,
+      "host_sha256": "9ffac3513f31214d331c57bff7ff0059f512c52df167a2656dff03e510bc8360",
+      "libc": "glibc",
+      "architecture": "x86_64",
+      "packaged_app_sha256": "94d78510f51fdb47d3eba4b6ce86a6167dbfcc767c645004075f32a872d38741",
+      "glibc_required": "2.28",
+      "static_core": false,
+      "elf_needed": [
+        "libdl.so.2",
+        "libpthread.so.0",
+        "libm.so.6",
+        "libc.so.6"
+      ],
       "filename": "mdo-linux-x86_64-glibc",
       "platform": "linux",
       "edition": "desktop",
-      "build_id": 50000020,
-      "bytes": 5678033,
-      "sha256": "b7b0fc3288354eb78f361a3ba7ee4be727ab18b86448dfd0f4d399bfec2e3f4a",
-      "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
-      "host_bytes": 3631896,
-      "host_sha256": "cbc4e24fe60a777d283be261ac6a6f6d0bf86cdc4471a0fd1aec964bb55cddfe",
+      "build_id": 60000019,
+      "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401"
+    },
+    {
+      "bytes": 5739576,
+      "sha256": "1d0e90a5abdf8b26dbf916b65bff5dace801703d139b66158b9f05c7db02ea92",
+      "host_bytes": 3595000,
+      "host_sha256": "ef42e3773f7939aea295a483fa51a863db4338cd847bb69409afbf4e26c85624",
       "libc": "glibc",
       "architecture": "x86_64",
-      "packaged_app_sha256": "6b9be77b131ec794d7ee329cc623d2cfd7effbd7870b21a34b6944bba2a3c63a",
+      "packaged_app_sha256": "c76c0feeebeebca6df2ab6a31c1e9e8227cf9fe06749f1f77a1f326ec1f07df3",
       "glibc_required": "2.28",
       "static_core": false,
       "elf_needed": [
@@ -60,882 +80,87 @@
         "libpthread.so.0",
         "libm.so.6",
         "libc.so.6"
-      ]
-    },
-    {
+      ],
       "filename": "mdo-server-linux-x86_64-glibc",
       "platform": "linux",
       "edition": "server",
-      "build_id": 50000021,
-      "bytes": 5640909,
-      "sha256": "14c286272dabc01ccc156a25cd748abb75e0061fe5ecb2f5d9b457b8d1531b70",
-      "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
-      "host_bytes": 3594968,
-      "host_sha256": "6a30aa9cb6ea1c6e0c7d8f42e27e1c8cd09669668bcc2202ed71940714b4f289",
-      "libc": "glibc",
-      "architecture": "x86_64",
-      "packaged_app_sha256": "8e0da82f2d06facebc04625afa6ec4c31c16b543da55741dd79dc0884f405fb1",
-      "glibc_required": "2.28",
-      "static_core": false,
-      "elf_needed": [
-        "libdl.so.2",
-        "libpthread.so.0",
-        "libm.so.6",
-        "libc.so.6"
-      ]
+      "build_id": 60000020,
+      "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401"
     },
     {
+      "bytes": 7515674,
+      "sha256": "25cdcce25083ae5ec399aa04fe6080233908dcca97f6e03254c1fdf89604b320",
+      "host_bytes": 5370904,
+      "host_sha256": "89a1f4cd4c4d9f806b4cfab7f71753d86eae7c2388aa2bf67113bca9854c818a",
+      "libc": "musl",
+      "architecture": "x86_64",
+      "packaged_app_sha256": "093ff49d4acd47f57a29778e0d19de4b04cc2dcd36cab9d315a2148a3c209682",
+      "glibc_required": null,
+      "static_core": true,
+      "elf_needed": [],
       "filename": "mdo-linux-x86_64-musl",
       "platform": "linux",
       "edition": "desktop",
-      "build_id": 50000022,
-      "bytes": 7417040,
-      "sha256": "8ddbeb300c0db01b8f6d14114142a1b3a53ece9b09ffcd8cef45e105a02d18f6",
-      "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
-      "host_bytes": 5370904,
-      "host_sha256": "3b6a8b9adb801343179eb24328d40daa44a92b2e07f930eba88feb71af944de1",
-      "libc": "musl",
-      "architecture": "x86_64",
-      "packaged_app_sha256": "043ebd9e91659dc962a9bdab69dcb79db15f0878006af1b15efeadcfa3d08549",
-      "glibc_required": null,
-      "static_core": true,
-      "elf_needed": []
+      "build_id": 60000021,
+      "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401"
     },
     {
+      "bytes": 7478615,
+      "sha256": "e7e958afe3d55e8abe7b890098f58bf098147748625c3a931a3606282aa37091",
+      "host_bytes": 5334040,
+      "host_sha256": "e44fd75c973ab208e5ff71d32e6b564b191f6891483c7d67c4653ac36eec94e5",
+      "libc": "musl",
+      "architecture": "x86_64",
+      "packaged_app_sha256": "920574566055bd91c72f81f0af4c875d517c698506fbf9589102d79a0e602d09",
+      "glibc_required": null,
+      "static_core": true,
+      "elf_needed": [],
       "filename": "mdo-server-linux-x86_64-musl",
       "platform": "linux",
       "edition": "server",
-      "build_id": 50000023,
-      "bytes": 7379981,
-      "sha256": "9ab320106dea4e944da69cd5a37170b88212c8c958e5cd359c0191b43073700d",
-      "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
-      "host_bytes": 5334040,
-      "host_sha256": "ce869c416665d5c91c64f08b2b5e8dd7b1dd31d4483bdb3cce85cf5e2f606457",
-      "libc": "musl",
-      "architecture": "x86_64",
-      "packaged_app_sha256": "53aa4e10451e825e2c5a3d290f1ee78dd9d1872ff853240342ebaba8ec18ad75",
-      "glibc_required": null,
-      "static_core": true,
-      "elf_needed": []
+      "build_id": 60000022,
+      "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401"
     },
     {
+      "bytes": 5854529,
+      "sha256": "afea81b25e1aeb6da15ddb0f20fdc321c7ab8fd068b650c97ae6898b034de742",
+      "host_bytes": 3533744,
+      "host_sha256": "4b0f76bcafecdd4e67d50cdb94d6df1d9763baf0cc6d6a31a9ded6bfd8f7135f",
+      "app_pack_sha256": "c4ba717c2349d3d30e3595ba0f82f73686c7321aebd2a7e287ef1a8e3fba1449",
+      "release_signed": true,
+      "signature_sha256": "94b1947b60f3ce0852b19d9c37a47cc4a084fe9d601692c6a1f6b204c2174e84",
       "filename": "mdo-arm64-v8a.apk",
       "platform": "android",
       "edition": "lite",
-      "build_id": 50000024,
-      "bytes": 5756225,
-      "sha256": "784806e46c3afcff103bf63614d4273cdb17ea3a61a4f0b88bda71c2888a5384",
-      "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
-      "host_bytes": 3533032,
-      "host_sha256": "93a8dd7dfe0c28a21ea111ec7a0f89672c700dca315d45c8f6b662ceb071c09f",
-      "release_signed": true,
-      "signature_sha256": "94b1947b60f3ce0852b19d9c37a47cc4a084fe9d601692c6a1f6b204c2174e84",
-      "app_pack_sha256": "8ca6932514fc8705b326eb2355542e75c1b98ed9485e2be3671025e36d11cba2"
+      "build_id": 60000023,
+      "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401"
     },
     {
+      "bytes": 150198679,
+      "sha256": "d37a99ead1dd4e63c337ab59889e848281f85fd166812bfbdd80fae5efa7ad94",
+      "host_bytes": 3533744,
+      "host_sha256": "4b0f76bcafecdd4e67d50cdb94d6df1d9763baf0cc6d6a31a9ded6bfd8f7135f",
+      "app_pack_sha256": "c4ba717c2349d3d30e3595ba0f82f73686c7321aebd2a7e287ef1a8e3fba1449",
+      "release_signed": true,
+      "signature_sha256": "94b1947b60f3ce0852b19d9c37a47cc4a084fe9d601692c6a1f6b204c2174e84",
       "filename": "mdo-full-arm64-v8a.apk",
       "platform": "android",
       "edition": "full",
-      "build_id": 50000025,
-      "bytes": 150100377,
-      "sha256": "bd4498047d53107d179e3a1f7e57f46f0f8ac37bee794426350464240c22baf5",
-      "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
-      "host_bytes": 3533032,
-      "host_sha256": "93a8dd7dfe0c28a21ea111ec7a0f89672c700dca315d45c8f6b662ceb071c09f",
-      "release_signed": true,
-      "signature_sha256": "94b1947b60f3ce0852b19d9c37a47cc4a084fe9d601692c6a1f6b204c2174e84",
-      "app_pack_sha256": "8ca6932514fc8705b326eb2355542e75c1b98ed9485e2be3671025e36d11cba2"
+      "build_id": 60000024,
+      "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401"
     }
   ],
+  "published_at": "2026-10-25T09:07:37.792356+00:00",
+  "publication_catalog_revision": 28,
+  "publication_record": "docs/build-records/2026-10-25-release-0.6.0.json",
   "validation": {
-    "windows_pre_release": {
-      "passed": true,
-      "source_commit": "07ce5feb9eb197c2fddaa2d540b87607ac62e28b",
-      "version": {
-        "version_name": "0.5.0",
-        "windows_build_id": 50000018,
-        "windows_server_build_id": 50000019,
-        "android_lite_build_id": 50000024,
-        "android_full_build_id": 50000025,
-        "toolpack_revision": 4,
-        "linux_glibc_gui_build_id": 50000020,
-        "linux_glibc_server_build_id": 50000021,
-        "linux_musl_gui_build_id": 50000022,
-        "linux_musl_server_build_id": 50000023
-      },
-      "release_inputs": {
-        "application": "2ef7dad402b216a9feaf63348c77b511411af4f602be717f1552313aaef3b85f",
-        "dependency lock": "56f66001e253aeba6951a3039a8cb54e5affee1bd0a6018cf2f2fab8fec1846e",
-        "host profile": "7211b5374543682c5b5833fe96dac27c8261a966d77650e6f1e1b14510f2e695"
-      },
-      "windows_python": {
-        "tests": 173,
-        "skipped": 5
-      },
-      "node": {
-        "tests": 1112,
-        "passed": 1112
-      },
-      "windows_runtime_probes": 111,
-      "packed_product_probes": 13,
-      "native_workbench": {
-        "start": {
-          "passed": true,
-          "scope": "native WebView2 four launchers",
-          "tools": [
-            "打开浏览器",
-            "打开文件",
-            "打开终端",
-            "打开变更"
-          ],
-          "empty_home": true,
-          "terminal_ended": true
-        },
-        "display": {
-          "passed": true,
-          "scope": "native visible sidebar viewport",
-          "state": {
-            "bounds": {
-              "height": 810,
-              "width": 479,
-              "x": 961,
-              "y": 90
-            },
-            "can_go_back": false,
-            "can_go_forward": false,
-            "controller_bounds": {
-              "height": 810,
-              "width": 479,
-              "x": 0,
-              "y": 0
-            },
-            "error": "",
-            "error_code": 0,
-            "loading": false,
-            "manual": false,
-            "platform": "webview2",
-            "process_failed": false,
-            "title": "Visible browser QA",
-            "url": "http://127.0.0.1:58598/paint",
-            "viewport_attached": true,
-            "viewport_topmost": true,
-            "visible": true
-          },
-          "dom": {
-            "x": 961,
-            "y": 90.390625,
-            "width": 479,
-            "height": 809.609375,
-            "scale": 1
-          }
-        },
-        "application": {
-          "passed": true,
-          "application": true,
-          "file_actions": true,
-          "sidebar_toggle": true,
-          "screenshot_bytes": 15960
-        },
-        "changes": {
-          "passed": true,
-          "scope": "native WebView2 changes UI",
-          "continuous": true,
-          "session_baseline": true,
-          "width": 479,
-          "index_unchanged": true
-        },
-        "terminal": {
-          "passed": true,
-          "scope": "native WebView2 terminal UI",
-          "width": 479,
-          "columns": 66,
-          "rows": 51,
-          "unicode": true,
-          "ended": true
-        }
-      },
-      "deterministic_pack_sha256": "9342baca24ecbc8a5001f356cb1e9a187e179c6d4056d9e949dcd2b7ce5a8f6c",
-      "windows_gui_bytes": 6214112,
-      "windows_server_sdk_passed": true,
-      "android": {
-        "passed": true,
-        "release_signed": true,
-        "device_tested": false,
-        "apks": [
-          {
-            "edition": "lite",
-            "bytes": 5756225,
-            "native_elf_files": 2,
-            "runtime_paths": 0,
-            "build_id": 50000024,
-            "sha256": "26ecb611ba6f71afe0b509326e92e5feba998fe7178b5ff9f8b60f53e1449cfa",
-            "certificate_sha256": "94b1947b60f3ce0852b19d9c37a47cc4a084fe9d601692c6a1f6b204c2174e84"
-          },
-          {
-            "edition": "full",
-            "bytes": 150100377,
-            "native_elf_files": 150,
-            "runtime_paths": 734,
-            "build_id": 50000025,
-            "sha256": "29734ee8c864e109b4fe8893ee25843f7f5274c3653b58b9b06086a6a29dfdf6",
-            "certificate_sha256": "94b1947b60f3ce0852b19d9c37a47cc4a084fe9d601692c6a1f6b204c2174e84"
-          }
-        ]
-      },
-      "linux_runtime": [
-        {
-          "probe": "test_workbench_files_runtime.py",
-          "exit": 0
-        },
-        {
-          "probe": "test_workbench_terminal_runtime.py",
-          "exit": 0
-        },
-        {
-          "probe": "test_workbench_baseline_runtime.py",
-          "exit": 0
-        }
-      ],
-      "linux_packed_sdk_passed": true,
-      "android_device_tested": false,
-      "linux_full_release_gate_run": false,
-      "published": false
-    },
-    "linux_release": {
-      "passed": true,
-      "fresh_baseline_build": true,
-      "glibc_max": "2.28",
-      "musl_static_core": true,
-      "products": [
-        {
-          "libc": "glibc",
-          "edition": "gui",
-          "packed_probes": 13,
-          "public_sdk": true,
-          "elf": {
-            "static_core": false,
-            "elf_needed": [
-              "libdl.so.2",
-              "libpthread.so.0",
-              "libm.so.6",
-              "libc.so.6"
-            ],
-            "glibc_required": "2.28",
-            "glibc_max": "2.28"
-          }
-        },
-        {
-          "libc": "glibc",
-          "edition": "server",
-          "packed_probes": 13,
-          "public_sdk": true,
-          "elf": {
-            "static_core": false,
-            "elf_needed": [
-              "libdl.so.2",
-              "libpthread.so.0",
-              "libm.so.6",
-              "libc.so.6"
-            ],
-            "glibc_required": "2.28",
-            "glibc_max": "2.28"
-          }
-        },
-        {
-          "libc": "musl",
-          "edition": "gui",
-          "packed_probes": 13,
-          "public_sdk": true,
-          "elf": {
-            "static_core": true,
-            "elf_needed": [],
-            "glibc_required": null,
-            "glibc_max": "2.28"
-          }
-        },
-        {
-          "libc": "musl",
-          "edition": "server",
-          "packed_probes": 13,
-          "public_sdk": true,
-          "elf": {
-            "static_core": true,
-            "elf_needed": [],
-            "glibc_required": null,
-            "glibc_max": "2.28"
-          }
-        }
-      ],
-      "packed_checks": 52,
-      "sdk_checks": 4,
-      "workbench_files_pty_baseline": true,
-      "linux_desktop_visual_check": false,
-      "full_gate_passed": false,
-      "full_gate_limit": "Cross-repository fixture hard-codes a Windows xs.exe; baseline compiler/GTK isolation diagnostics retained; no failed invocation counted as pass."
-    },
-    "final_android": {
-      "passed": true,
-      "release_signed": true,
-      "device_tested": false,
-      "apks": [
-        {
-          "edition": "lite",
-          "bytes": 5756225,
-          "native_elf_files": 2,
-          "runtime_paths": 0,
-          "build_id": 50000024,
-          "sha256": "784806e46c3afcff103bf63614d4273cdb17ea3a61a4f0b88bda71c2888a5384",
-          "certificate_sha256": "94b1947b60f3ce0852b19d9c37a47cc4a084fe9d601692c6a1f6b204c2174e84"
-        },
-        {
-          "edition": "full",
-          "bytes": 150100377,
-          "native_elf_files": 150,
-          "runtime_paths": 734,
-          "build_id": 50000025,
-          "sha256": "bd4498047d53107d179e3a1f7e57f46f0f8ac37bee794426350464240c22baf5",
-          "certificate_sha256": "94b1947b60f3ce0852b19d9c37a47cc4a084fe9d601692c6a1f6b204c2174e84"
-        }
-      ]
-    },
-    "exact_source_server_sdk": true,
-    "android_device_checks_run": false,
-    "public-verification": {
-      "passed": true,
-      "version_name": "0.5.0",
-      "checks": [
-        {
-          "url": "https://ai.xywhsoft.com/mdo/blob/9342baca24ecbc8a5001f356cb1e9a187e179c6d4056d9e949dcd2b7ce5a8f6c",
-          "bytes": 6214112,
-          "sha256": "9342baca24ecbc8a5001f356cb1e9a187e179c6d4056d9e949dcd2b7ce5a8f6c",
-          "passed": true
-        },
-        {
-          "url": "https://ai.xywhsoft.com/update/download/windows-x86_64/9342baca24ecbc8a5001f356cb1e9a187e179c6d4056d9e949dcd2b7ce5a8f6c",
-          "bytes": 6214112,
-          "sha256": "9342baca24ecbc8a5001f356cb1e9a187e179c6d4056d9e949dcd2b7ce5a8f6c",
-          "passed": true
-        },
-        {
-          "url": "https://ai.xywhsoft.com/mdo/blob/879c06b42c58414ce6d848f6ca0ca2a0200df44d8fb9eee6e1fc2efc2f9ecbb2",
-          "bytes": 5955894,
-          "sha256": "879c06b42c58414ce6d848f6ca0ca2a0200df44d8fb9eee6e1fc2efc2f9ecbb2",
-          "passed": true
-        },
-        {
-          "url": "https://ai.xywhsoft.com/update/download/windows-x86_64/879c06b42c58414ce6d848f6ca0ca2a0200df44d8fb9eee6e1fc2efc2f9ecbb2",
-          "bytes": 5955894,
-          "sha256": "879c06b42c58414ce6d848f6ca0ca2a0200df44d8fb9eee6e1fc2efc2f9ecbb2",
-          "passed": true
-        },
-        {
-          "url": "https://ai.xywhsoft.com/mdo/blob/b7b0fc3288354eb78f361a3ba7ee4be727ab18b86448dfd0f4d399bfec2e3f4a",
-          "bytes": 5678033,
-          "sha256": "b7b0fc3288354eb78f361a3ba7ee4be727ab18b86448dfd0f4d399bfec2e3f4a",
-          "passed": true
-        },
-        {
-          "url": "https://ai.xywhsoft.com/update/download/linux-x86_64-glibc/b7b0fc3288354eb78f361a3ba7ee4be727ab18b86448dfd0f4d399bfec2e3f4a",
-          "bytes": 5678033,
-          "sha256": "b7b0fc3288354eb78f361a3ba7ee4be727ab18b86448dfd0f4d399bfec2e3f4a",
-          "passed": true
-        },
-        {
-          "url": "https://ai.xywhsoft.com/mdo/blob/14c286272dabc01ccc156a25cd748abb75e0061fe5ecb2f5d9b457b8d1531b70",
-          "bytes": 5640909,
-          "sha256": "14c286272dabc01ccc156a25cd748abb75e0061fe5ecb2f5d9b457b8d1531b70",
-          "passed": true
-        },
-        {
-          "url": "https://ai.xywhsoft.com/update/download/linux-x86_64-glibc/14c286272dabc01ccc156a25cd748abb75e0061fe5ecb2f5d9b457b8d1531b70",
-          "bytes": 5640909,
-          "sha256": "14c286272dabc01ccc156a25cd748abb75e0061fe5ecb2f5d9b457b8d1531b70",
-          "passed": true
-        },
-        {
-          "url": "https://ai.xywhsoft.com/mdo/blob/8ddbeb300c0db01b8f6d14114142a1b3a53ece9b09ffcd8cef45e105a02d18f6",
-          "bytes": 7417040,
-          "sha256": "8ddbeb300c0db01b8f6d14114142a1b3a53ece9b09ffcd8cef45e105a02d18f6",
-          "passed": true
-        },
-        {
-          "url": "https://ai.xywhsoft.com/update/download/linux-x86_64-musl/8ddbeb300c0db01b8f6d14114142a1b3a53ece9b09ffcd8cef45e105a02d18f6",
-          "bytes": 7417040,
-          "sha256": "8ddbeb300c0db01b8f6d14114142a1b3a53ece9b09ffcd8cef45e105a02d18f6",
-          "passed": true
-        },
-        {
-          "url": "https://ai.xywhsoft.com/mdo/blob/9ab320106dea4e944da69cd5a37170b88212c8c958e5cd359c0191b43073700d",
-          "bytes": 7379981,
-          "sha256": "9ab320106dea4e944da69cd5a37170b88212c8c958e5cd359c0191b43073700d",
-          "passed": true
-        },
-        {
-          "url": "https://ai.xywhsoft.com/update/download/linux-x86_64-musl/9ab320106dea4e944da69cd5a37170b88212c8c958e5cd359c0191b43073700d",
-          "bytes": 7379981,
-          "sha256": "9ab320106dea4e944da69cd5a37170b88212c8c958e5cd359c0191b43073700d",
-          "passed": true
-        },
-        {
-          "url": "https://ai.xywhsoft.com/mdo/blob/784806e46c3afcff103bf63614d4273cdb17ea3a61a4f0b88bda71c2888a5384",
-          "bytes": 5756225,
-          "sha256": "784806e46c3afcff103bf63614d4273cdb17ea3a61a4f0b88bda71c2888a5384",
-          "passed": true
-        },
-        {
-          "url": "https://ai.xywhsoft.com/update/download/android-arm64-v8a/784806e46c3afcff103bf63614d4273cdb17ea3a61a4f0b88bda71c2888a5384",
-          "bytes": 5756225,
-          "sha256": "784806e46c3afcff103bf63614d4273cdb17ea3a61a4f0b88bda71c2888a5384",
-          "passed": true
-        },
-        {
-          "url": "https://ai.xywhsoft.com/mdo/blob/bd4498047d53107d179e3a1f7e57f46f0f8ac37bee794426350464240c22baf5",
-          "bytes": 150100377,
-          "sha256": "bd4498047d53107d179e3a1f7e57f46f0f8ac37bee794426350464240c22baf5",
-          "passed": true
-        },
-        {
-          "file": "mdo-full-arm64-v8a.apk",
-          "legacy_large_package_limit": true,
-          "http_status": 404
-        },
-        {
-          "url": "https://mdo.xywhsoft.com/download/files/mdo-arm64-v8a.apk?release=50000018",
-          "bytes": 5756225,
-          "sha256": "784806e46c3afcff103bf63614d4273cdb17ea3a61a4f0b88bda71c2888a5384",
-          "passed": true
-        },
-        {
-          "url": "https://mdo.xywhsoft.com/download/files/mdo-full-arm64-v8a.apk?release=50000018",
-          "bytes": 150100377,
-          "sha256": "bd4498047d53107d179e3a1f7e57f46f0f8ac37bee794426350464240c22baf5",
-          "passed": true
-        },
-        {
-          "url": "https://mdo.xywhsoft.com/download/files/mdo-linux-x86_64-glibc?release=50000018",
-          "bytes": 5678033,
-          "sha256": "b7b0fc3288354eb78f361a3ba7ee4be727ab18b86448dfd0f4d399bfec2e3f4a",
-          "passed": true
-        },
-        {
-          "url": "https://mdo.xywhsoft.com/download/files/mdo-linux-x86_64-musl?release=50000018",
-          "bytes": 7417040,
-          "sha256": "8ddbeb300c0db01b8f6d14114142a1b3a53ece9b09ffcd8cef45e105a02d18f6",
-          "passed": true
-        },
-        {
-          "url": "https://mdo.xywhsoft.com/download/files/mdo-server-linux-x86_64-glibc?release=50000018",
-          "bytes": 5640909,
-          "sha256": "14c286272dabc01ccc156a25cd748abb75e0061fe5ecb2f5d9b457b8d1531b70",
-          "passed": true
-        },
-        {
-          "url": "https://mdo.xywhsoft.com/download/files/mdo-server-linux-x86_64-musl?release=50000018",
-          "bytes": 7379981,
-          "sha256": "9ab320106dea4e944da69cd5a37170b88212c8c958e5cd359c0191b43073700d",
-          "passed": true
-        },
-        {
-          "url": "https://mdo.xywhsoft.com/download/files/mdo-server.exe?release=50000018",
-          "bytes": 5955894,
-          "sha256": "879c06b42c58414ce6d848f6ca0ca2a0200df44d8fb9eee6e1fc2efc2f9ecbb2",
-          "passed": true
-        },
-        {
-          "url": "https://mdo.xywhsoft.com/download/files/mdo.exe?release=50000018",
-          "bytes": 6214112,
-          "sha256": "9342baca24ecbc8a5001f356cb1e9a187e179c6d4056d9e949dcd2b7ce5a8f6c",
-          "passed": true
-        },
-        {
-          "url": "https://mdo.xywhsoft.com/download/index.html?release=50000018",
-          "bytes": 17934,
-          "sha256": "28108cc8458912f32aba3cf6055b5670b14385a784c6ea3197a7b33137bf845c",
-          "passed": true
-        },
-        {
-          "url": "https://mdo.xywhsoft.com/download/release-notes-0.1.0.html?release=50000018",
-          "bytes": 1291,
-          "sha256": "b003725e1ce54e2993b86d871643c4e8b61e4528fb6f23f195f1861ae53e51e2",
-          "passed": true
-        },
-        {
-          "url": "https://mdo.xywhsoft.com/download/release-notes-0.1.0.md?release=50000018",
-          "bytes": 960,
-          "sha256": "86fc101abfab61ec4a189b1d41956a75ec8801d83bdea572b05cad19b73585ed",
-          "passed": true
-        },
-        {
-          "url": "https://mdo.xywhsoft.com/download/release-notes-0.1.1.html?release=50000018",
-          "bytes": 2634,
-          "sha256": "a4527c92a6ca2e62311126afc5c6b11db6c3d56ed82308677f093c7978863ac1",
-          "passed": true
-        },
-        {
-          "url": "https://mdo.xywhsoft.com/download/release-notes-0.2.0.html?release=50000018",
-          "bytes": 2904,
-          "sha256": "0171ba34fd96fb03d232f8206fb32fa39ba6233f0a874aba2e8b67ce0f02600d",
-          "passed": true
-        },
-        {
-          "url": "https://mdo.xywhsoft.com/download/release-notes-0.2.1.html?release=50000018",
-          "bytes": 3311,
-          "sha256": "362f9db1e138a77f735a6b4746f49520a9c096970bb75941146dfa4b4883c1a4",
-          "passed": true
-        },
-        {
-          "url": "https://mdo.xywhsoft.com/download/release-notes-0.2.4.html?release=50000018",
-          "bytes": 3414,
-          "sha256": "ea9c9af7975b40eb0132d23d7f8b31ac33e2e7203da6463ac07ef82456375109",
-          "passed": true
-        },
-        {
-          "url": "https://mdo.xywhsoft.com/download/release-notes-0.2.5.html?release=50000018",
-          "bytes": 4022,
-          "sha256": "b7d294922eb6bb0cca968043a1a40ea296486e773f21dd126bb9fc1a2a83a125",
-          "passed": true
-        },
-        {
-          "url": "https://mdo.xywhsoft.com/download/release-notes-0.2.6.html?release=50000018",
-          "bytes": 3273,
-          "sha256": "000f563b11a287bddd167900d3e6d7c84264ad70678a7314d4dd14c2cefb6ea5",
-          "passed": true
-        },
-        {
-          "url": "https://mdo.xywhsoft.com/download/release-notes-0.3.0.html?release=50000018",
-          "bytes": 3161,
-          "sha256": "9179bef098cb24b42cf6a8f5c91ad76bb01551a917756ab14fce47a42b61c3b1",
-          "passed": true
-        },
-        {
-          "url": "https://mdo.xywhsoft.com/download/release-notes-0.5.0.html?release=50000018",
-          "bytes": 4095,
-          "sha256": "67b9a0b8b8d21b415e28c65af2764bee53fad938747f1ec850626860d1698029",
-          "passed": true
-        },
-        {
-          "url": "https://mdo.xywhsoft.com/en/download/index.html?release=50000018",
-          "bytes": 18243,
-          "sha256": "7aa25cb2413c5d2ffa64cf119c3e6ef64da7bec3cdcf1a49f380768e82f01824",
-          "passed": true
-        },
-        {
-          "url": "https://mdo.xywhsoft.com/en/guide.html?release=50000018",
-          "bytes": 16737,
-          "sha256": "5f790ec1f7fb016664fded6a76cdca3c80e8594d63043636db7c89c1fdd0c656",
-          "passed": true
-        },
-        {
-          "url": "https://mdo.xywhsoft.com/en/index.html?release=50000018",
-          "bytes": 31280,
-          "sha256": "cd5da143beccc429892304d5edcbddca6be13945869effe5f3826ba52ce8a747",
-          "passed": true
-        },
-        {
-          "url": "https://mdo.xywhsoft.com/favicon.ico?release=50000018",
-          "bytes": 4024,
-          "sha256": "492b2b2574edec703c864075d2a16e4e7580512fdbbb8510f2a147a77136c73d",
-          "passed": true
-        },
-        {
-          "url": "https://mdo.xywhsoft.com/guide.html?release=50000018",
-          "bytes": 16078,
-          "sha256": "5ea751a01e9f175d69f189fd7649357c54b1bd111b46e23bde3034ecd80d9c98",
-          "passed": true
-        },
-        {
-          "url": "https://mdo.xywhsoft.com/index.html?release=50000018",
-          "bytes": 30385,
-          "sha256": "572684e81c64d55a3bd67ee04ebb24434999f0325dc4bfef28ff0a2b0dc07ea5",
-          "passed": true
-        },
-        {
-          "url": "https://mdo.xywhsoft.com/res/css/style.css?release=50000018",
-          "bytes": 33333,
-          "sha256": "36f005e88fbbfa98197004d075fe96c00299c81e7dff58b6210cca24ab33b2ea",
-          "passed": true
-        },
-        {
-          "url": "https://mdo.xywhsoft.com/res/img/apple-touch-icon.png?release=50000018",
-          "bytes": 17267,
-          "sha256": "8a42fcaa5c8f355e644564904f358b04aae896514e9360a0c700027dd63fc5ce",
-          "passed": true
-        },
-        {
-          "url": "https://mdo.xywhsoft.com/res/img/logo.png?release=50000018",
-          "bytes": 2961,
-          "sha256": "8eea92b2fa37ea30364488ca41880cc3443458fd6d7d68fac581f63316e99289",
-          "passed": true
-        },
-        {
-          "url": "https://mdo.xywhsoft.com/res/img/og.png?release=50000018",
-          "bytes": 53761,
-          "sha256": "030a3c0d63b4649bcf9f08399cf5f325e33050c7b102659e4bc3a5cd4e8353f0",
-          "passed": true
-        },
-        {
-          "url": "https://mdo.xywhsoft.com/res/js/script.js?release=50000018",
-          "bytes": 5984,
-          "sha256": "dadccf2e99195bf451d909c6bb0a0d61eca533c6aa8b5713b8d73a48e87d5710",
-          "passed": true
-        },
-        {
-          "url": "https://mdo.xywhsoft.com/robots.txt?release=50000018",
-          "bytes": 70,
-          "sha256": "0e8872d085884002205fdef2ef04cf0768a00b7d0812bae7caa3bfacda007170",
-          "passed": true
-        },
-        {
-          "url": "https://mdo.xywhsoft.com/ru/download/index.html?release=50000018",
-          "bytes": 21490,
-          "sha256": "508cb8f5dd01443fa25eb330954efa7dd0096c92d69b59d98e3d23c66da30d2d",
-          "passed": true
-        },
-        {
-          "url": "https://mdo.xywhsoft.com/ru/guide.html?release=50000018",
-          "bytes": 23249,
-          "sha256": "ff017cb549ead498ecc6de35ea577a7a3e5d5139e31e8dca9d9c26a6f6e57e98",
-          "passed": true
-        },
-        {
-          "url": "https://mdo.xywhsoft.com/ru/index.html?release=50000018",
-          "bytes": 40853,
-          "sha256": "8e286b6904b762a5cef0b2e7717bfe69ed0fbd6a1948e0a066db6641f3e03532",
-          "passed": true
-        },
-        {
-          "url": "https://mdo.xywhsoft.com/site-facts.json?release=50000018",
-          "bytes": 2694,
-          "sha256": "94b276072dd69afb80e62c9c4d75d9c078d753e963d71f235aacf17e35ed7a77",
-          "passed": true
-        },
-        {
-          "url": "https://mdo.xywhsoft.com/sitemap.xml?release=50000018",
-          "bytes": 1680,
-          "sha256": "4d6600f11967bd62d78fcd2ab119f57a14cbbae9f75f1bb03692c8bc9131bab1",
-          "passed": true
-        }
-      ],
-      "full_downloads": 51,
-      "all_eight_update_channels": true,
-      "legacy_routes": true,
-      "source_downloads_removed": true
-    },
-    "local-public-verification": {
-      "passed": true,
-      "all_eight_update_channels": true,
-      "metadata": [
-        {
-          "id": "desktop",
-          "build_id": 50000018,
-          "passed": true
-        },
-        {
-          "id": "windows-server",
-          "build_id": 50000019,
-          "passed": true
-        },
-        {
-          "id": "linux-glibc-gui",
-          "build_id": 50000020,
-          "passed": true
-        },
-        {
-          "id": "linux-glibc-server",
-          "build_id": 50000021,
-          "passed": true
-        },
-        {
-          "id": "linux-musl-gui",
-          "build_id": 50000022,
-          "passed": true
-        },
-        {
-          "id": "linux-musl-server",
-          "build_id": 50000023,
-          "passed": true
-        },
-        {
-          "id": "lite",
-          "build_id": 50000024,
-          "passed": true
-        },
-        {
-          "id": "full",
-          "build_id": 50000025,
-          "passed": true
-        }
-      ],
-      "downloads": [
-        {
-          "id": "desktop",
-          "bytes": 6214112,
-          "sha256": "9342baca24ecbc8a5001f356cb1e9a187e179c6d4056d9e949dcd2b7ce5a8f6c",
-          "passed": true,
-          "evidence": "Earlier sequential verifier passed this complete file before entering Android full"
-        },
-        {
-          "id": "windows-server",
-          "bytes": 5955894,
-          "sha256": "879c06b42c58414ce6d848f6ca0ca2a0200df44d8fb9eee6e1fc2efc2f9ecbb2",
-          "passed": true,
-          "evidence": "Earlier sequential verifier passed this complete file before entering Android full"
-        },
-        {
-          "id": "linux-glibc-gui",
-          "bytes": 5678033,
-          "sha256": "b7b0fc3288354eb78f361a3ba7ee4be727ab18b86448dfd0f4d399bfec2e3f4a",
-          "passed": true,
-          "evidence": "Earlier sequential verifier passed this complete file before entering Android full"
-        },
-        {
-          "id": "linux-glibc-server",
-          "bytes": 5640909,
-          "sha256": "14c286272dabc01ccc156a25cd748abb75e0061fe5ecb2f5d9b457b8d1531b70",
-          "passed": true,
-          "evidence": "Earlier sequential verifier passed this complete file before entering Android full"
-        },
-        {
-          "id": "linux-musl-gui",
-          "bytes": 7417040,
-          "sha256": "8ddbeb300c0db01b8f6d14114142a1b3a53ece9b09ffcd8cef45e105a02d18f6",
-          "passed": true,
-          "evidence": "Earlier sequential verifier passed this complete file before entering Android full"
-        },
-        {
-          "id": "linux-musl-server",
-          "bytes": 7379981,
-          "sha256": "9ab320106dea4e944da69cd5a37170b88212c8c958e5cd359c0191b43073700d",
-          "passed": true,
-          "evidence": "Earlier sequential verifier passed this complete file before entering Android full"
-        },
-        {
-          "id": "lite",
-          "bytes": 5756225,
-          "sha256": "784806e46c3afcff103bf63614d4273cdb17ea3a61a4f0b88bda71c2888a5384",
-          "passed": true,
-          "evidence": "Earlier sequential verifier passed this complete file before entering Android full"
-        }
-      ],
-      "full_download_count": 7,
-      "android_full_public_prefix": {
-        "passed": true,
-        "build_id": 50000025,
-        "bytes_checked": 32686080,
-        "prefix_sha256": "8eb72a11921e1a1ec1bdb08c2ce32a97787b2492892e1735b22b90000474b4aa",
-        "reference_prefix_sha256": "8eb72a11921e1a1ec1bdb08c2ce32a97787b2492892e1735b22b90000474b4aa",
-        "complete_download": false,
-        "evidence": "The sequential public verifier reached its eighth product after seven completed size/SHA-256 checks; this current partial file matches the exact published APK prefix."
-      },
-      "android_full_whole_file_verified_on_production_tls": true,
-      "pages": [
-        {
-          "file": "download/index.html",
-          "passed": true
-        },
-        {
-          "file": "en/download/index.html",
-          "passed": true
-        },
-        {
-          "file": "ru/download/index.html",
-          "passed": true
-        },
-        {
-          "file": "download/release-notes-0.5.0.html",
-          "passed": true
-        }
-      ],
-      "website_version": "0.5.0",
-      "download_pages": 3,
-      "transport": "Windows curl with system TLS verification",
-      "limitation": "Slow public link: full APK public download was intentionally bounded after matching the received prefix; no complete external full-APK download claimed."
-    },
-    "artifact-sources": {
-      "passed": true,
-      "products": [
-        {
-          "file": "mdo.exe",
-          "source_files_verified": 581,
-          "pack_sha256": "8b7a5deadb700ebb636da2f629292a90a618587728700119b0a23b291ac56b95",
-          "sha256": "9342baca24ecbc8a5001f356cb1e9a187e179c6d4056d9e949dcd2b7ce5a8f6c",
-          "passed": true
-        },
-        {
-          "file": "mdo-server.exe",
-          "source_files_verified": 581,
-          "pack_sha256": "0186c5feca7832703374865e46c2d184edea519684598359f3ee5e2d06fc9640",
-          "sha256": "879c06b42c58414ce6d848f6ca0ca2a0200df44d8fb9eee6e1fc2efc2f9ecbb2",
-          "passed": true
-        },
-        {
-          "file": "mdo-linux-x86_64-glibc",
-          "source_files_verified": 581,
-          "pack_sha256": "5d00d4c83aa4932c78ccc12c4b4964f8ef64efdf45f49bba24c515fc7eb5aa41",
-          "sha256": "b7b0fc3288354eb78f361a3ba7ee4be727ab18b86448dfd0f4d399bfec2e3f4a",
-          "passed": true
-        },
-        {
-          "file": "mdo-server-linux-x86_64-glibc",
-          "source_files_verified": 581,
-          "pack_sha256": "c84ef8934c4fee3d031718415fe1b093b2cc2eec6012a17a82383f54aef3edab",
-          "sha256": "14c286272dabc01ccc156a25cd748abb75e0061fe5ecb2f5d9b457b8d1531b70",
-          "passed": true
-        },
-        {
-          "file": "mdo-linux-x86_64-musl",
-          "source_files_verified": 581,
-          "pack_sha256": "a4a68ca638840465f44e28cd42a2a15f6fa9c98639a5409153b40bd55c69dd4c",
-          "sha256": "8ddbeb300c0db01b8f6d14114142a1b3a53ece9b09ffcd8cef45e105a02d18f6",
-          "passed": true
-        },
-        {
-          "file": "mdo-server-linux-x86_64-musl",
-          "source_files_verified": 581,
-          "pack_sha256": "deb30b5a8af7fbec75589be4b0c0592d3da96a8da087f11c2897308cd626f89b",
-          "sha256": "9ab320106dea4e944da69cd5a37170b88212c8c958e5cd359c0191b43073700d",
-          "passed": true
-        },
-        {
-          "file": "mdo-arm64-v8a.apk",
-          "source_files_verified": 581,
-          "pack_sha256": "8ca6932514fc8705b326eb2355542e75c1b98ed9485e2be3671025e36d11cba2",
-          "sha256": "784806e46c3afcff103bf63614d4273cdb17ea3a61a4f0b88bda71c2888a5384",
-          "passed": true
-        },
-        {
-          "file": "mdo-full-arm64-v8a.apk",
-          "source_files_verified": 581,
-          "pack_sha256": "8ca6932514fc8705b326eb2355542e75c1b98ed9485e2be3671025e36d11cba2",
-          "sha256": "bd4498047d53107d179e3a1f7e57f46f0f8ac37bee794426350464240c22baf5",
-          "passed": true
-        }
-      ]
-    },
-    "publication": {
-      "version_name": "0.5.0",
-      "website": true,
-      "applications": true,
-      "service_restarted": false,
-      "started_at": 1792827736,
-      "catalog_revision": 27,
-      "passed": true,
-      "website_inode_preserved": true,
-      "source_downloads_removed": [],
-      "website_backup": "/home/xs/mdo-release-0.5.0-20261024-50000018/backup/website",
-      "artifacts": 8,
-      "temporary_credentials_removed": true,
-      "original_admin_credentials_unchanged": true
-    },
-    "service_after": {
-      "service_active": true,
-      "service_pid": "421693",
-      "prior_pid": "401914",
-      "program_unchanged": true,
-      "config_unchanged": false,
-      "concurrent_configuration_or_restart_observed": true
-    }
-  },
-  "source_downloads": "withdrawn at user request; no mdo application source archive published",
-  "publication_backup": "/home/xs/mdo-release-0.5.0-20261024-50000018/backup"
+    "windows_runtime_probes": 116,
+    "windows_packed_probes": 13,
+    "native_webview_probes": 5,
+    "linux_packed_probes": 60,
+    "old_glibc_runtime": "2.28",
+    "production_signed_apks": 2,
+    "production_https_complete_downloads": 34,
+    "public_https_update_channels": 8
+  }
 }
