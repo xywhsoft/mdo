@@ -198,6 +198,16 @@ def main():
     first=invoke('plugin.apply',{'id':'qa-sdk','files':[{'path':plugin_path,'text':'revision one'}]})
     assert first['items'][0]['enabled'],first
     assert invoke('vfs.read',{'path':'/app/'+plugin_path})['text']=='revision one'
+    # The provider maps exact inventory files, not an entire parent directory.
+    rogue=home/'plugins/qa-sdk/revisions'/first['items'][0]['revision']/'files/web/plugins/qa-sdk/unlisted.txt'
+    rogue.write_text('not in the inventory',encoding='utf-8')
+    assert invoke('vfs.read',{'path':'/app/web/plugins/qa-sdk/unlisted.txt'},'catch')['status']==404
+    before=(home/'config/plugins.json').read_bytes()
+    collision=invoke('plugin.apply',{'id':'qa-collision','files':[{'path':plugin_path,'text':'must not publish'}]},'catch')
+    assert collision['status']==409,collision
+    assert (home/'config/plugins.json').read_bytes()==before
+    assert invoke('vfs.read',{'path':'/app/'+plugin_path})['text']=='revision one'
+    assert len(invoke('plugin.list')['items'])==1
     second_payload={'id':'qa-sdk','files':[{'path':plugin_path,'text':'revision two'}]}
     invoke('plugin.apply',second_payload)
     assert invoke('vfs.read',{'path':'/app/'+plugin_path})['text']=='revision two'

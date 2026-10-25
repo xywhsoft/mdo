@@ -79,7 +79,7 @@ static bool MdoPluginValidate(const xvalue* Doc,const xvalue* Files,const char* 
         const xvalue* O=xrtValueArrayGet(Overrides,I);const char* S=MdoPackageText(O,"source",220),*T=MdoPackageText(O,"target",220);
         if(!MdoPluginKeys(O,MappingKeys,2)||!MdoPackagePath(T)||!MdoPluginFile(Files,S))return MdoPluginFail(E,N,"Plugin mapping needs an inventory source and portable app-relative target");
         /* Private loader addresses are allocated by the host, never by a plugin. */
-        if(!strncmp(T,"web/__mdo_plugins/",18)||!strncmp(T,"__mdo_plugins/",14))return MdoPluginFail(E,N,"Plugin target uses a loader-owned address");
+        if(MdoPluginPathOverlap(T,"web/__mdo_plugins")||MdoPluginPathOverlap(T,"__mdo_plugins"))return MdoPluginFail(E,N,"Plugin target uses a loader-owned address");
         for(size_t J=0;J<I;J++)if(MdoPluginPathOverlap(T,MdoPackageText(xrtValueArrayGet(Overrides,J),"target",220)))return MdoPluginFail(E,N,"Plugin target mappings overlap or alias");
     }
     const xvalue* Entry=MdoPluginGet(Doc,"entry");const char* const EntryKeys[]={"frontend","native"};
