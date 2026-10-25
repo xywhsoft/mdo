@@ -10,6 +10,7 @@ typedef struct MdoModuleCatalog MdoModuleCatalog;
 struct mdo_application_v1;
 void MdoModuleManagerAttachApplication(const struct mdo_application_v1* Api);
 bool MdoModuleAgentBindContext(xwork_agent*,const char* Project,const char* Session);
+void MdoModuleAgentSetMemberContext(xwork_agent*,void* Owner,uint64 AgentId,const char* Namespace,const char* MemberId);
 void MdoModuleAgentUnbindContext(xwork_agent*);
 bool MdoModuleAgentIdentityBegin(void* Owner,uint64 AgentId,const char* Project,const char* Session);
 void MdoModuleAgentIdentityEnd(void* Owner,uint64 AgentId);

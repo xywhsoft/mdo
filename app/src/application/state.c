@@ -20,7 +20,7 @@ static bool SdkStateDeleted(const xvalue* V){bool Deleted=false;xrtValueGetBool(
 /* One checksummed atomic document per namespace: a transaction never publishes
  * a subset of its keys. Tombstones retain revisions across remove/recreate. */
 static xvalue* SdkStateLoad(const mdo_sdk_context_v1* C,const xvalue* P,char Path[160],mdo_error_v1* E){
-    cstr Name=SdkField(P,"namespace");if(!Name)Name=C->ExtensionId;
+    cstr Name=SdkField(P,"namespace");if(!Name)Name=C->Namespace&&C->Namespace[0]?C->Namespace:C->ExtensionId;
     cstr Project=C->ProjectId&&C->ProjectId[0]?C->ProjectId:"default";
     if(!SdkIdValid(Name)||strlen(Name)>128||!SdkIdValid(Project)){MdoApplicationError(E,"sdk_state_namespace","Select a valid namespace and project","state",400,false);return NULL;}
     char* Identity=xrtFormat("%s\n%s",Project,Name);char Hash[65];bool Hashed=Identity&&MdoExtensionHash(Identity,Hash);xrtFree(Identity);

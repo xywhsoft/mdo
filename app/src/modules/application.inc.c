@@ -73,6 +73,7 @@ bool MdoModuleCatalogLifecycle(const MdoModuleCatalog* Source,mdo_agent_phase Ph
     mdo_sdk_context_v1 Application={0};Application.Size=sizeof(Application);Application.Version=MDO_SDK_VERSION;Application.Api=g_MdoModuleApplication;
     Application.Opaque=&Invocation;Application.ExtensionId="lifecycle";Application.InvocationId=Frame->AgentId;Application.DeviceId="local";
     Application.ProjectId=Frame->ProjectId;Application.SessionId=Frame->SessionId;Application.Workspace=Frame->WorkspaceRoot;Application.Deadline=Frame->Deadline;
+    Application.Namespace=Frame->Namespace;Application.MemberId=Frame->MemberId;
     Frame->Application=&Application;
     for(size_t I=0;Ok&&I<Count;I++){
         const mdo_lifecycle_v1* H=List[I].Hook;Application.ExtensionId=List[I].Module;

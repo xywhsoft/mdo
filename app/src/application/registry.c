@@ -132,6 +132,7 @@ static mdo_result SdkInvoke(const mdo_sdk_context_v1* C,cstr Method,const xvalue
         *R=xrtValueObject();SdkPut(*R,"extension",C->ExtensionId);SdkPut(*R,"invocation",C->InvocationId);
         SdkPut(*R,"device",C->DeviceId);SdkPut(*R,"project",C->ProjectId);SdkPut(*R,"session",C->SessionId);
         SdkPut(*R,"run",C->RunId);SdkPut(*R,"workspace",C->Workspace);SdkPutUInt(*R,"deadline",C->Deadline);
+        SdkPut(*R,"namespace",C->Namespace);SdkPut(*R,"member",C->MemberId);
         SdkPut(*R,"deadline_unit","monotonic_microseconds");return MDO_RESULT_OK;
     }
     if(!strcmp(Method,"events.read")){*R=MdoApplicationEvents(P,E);return *R?MDO_RESULT_OK:MDO_RESULT_ERROR;}

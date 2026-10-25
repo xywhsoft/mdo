@@ -54,6 +54,7 @@ static void MdoAgentsFrame(MdoAgentOwner* Owner,MdoAgentInstance* Instance,
     Frame->AgentId=Instance->Definition.Id;Frame->ProjectId=Owner->ProductProject;
     Frame->SessionId=Owner->ProductSession;Frame->WorkspaceRoot=Owner->Workspace;
     Frame->ConfigurationJson=Instance->Definition.ConfigurationJson;
+    Frame->Namespace=Owner->Namespace;Frame->MemberId=Owner->MemberId;
     Frame->CancelToken=Native->pCancel;Frame->Deadline=Native->uDeadline;
     Frame->State=Instance->State;Frame->ContextPlan=Plan;Frame->Native=Native;
 }

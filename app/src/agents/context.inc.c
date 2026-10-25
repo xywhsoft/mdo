@@ -144,6 +144,7 @@ static bool MdoAgentsContextCollect(MdoAgentOwner* Owner,MdoAgentInstance* Insta
         MdoAgentsPlanPut(Plan,"agent_id",Definition->Id) &&
         MdoAgentsPlanPut(Variables,"agent.id",Definition->Id) && MdoAgentsPlanPut(Variables,"project.id",Owner->ProductProject) &&
         MdoAgentsPlanPut(Variables,"session.id",Owner->ProductSession) && MdoAgentsPlanPut(Variables,"workspace.path",Owner->Workspace) &&
+        MdoAgentsPlanPut(Variables,"instance.id",Owner->MemberId) && MdoAgentsPlanPut(Variables,"namespace",Owner->Namespace) &&
         xrtValueObjectSet(Plan,XRT_STR_LITERAL("variables"),Variables) && xrtValueObjectSet(Plan,XRT_STR_LITERAL("sources"),Sources);
     xrtValueRelease(Variables);xrtValueRelease(Sources);
     if(!Ok)goto done;

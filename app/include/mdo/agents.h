@@ -58,6 +58,7 @@ typedef struct MdoAgentSessionOptions {
     xwork_agent_owner_release_fn OnOwnerRelease;
     bool AllowSubagentDefinition; /* Explicit owned member session, never a main-role fallback. */
     MdoModuleCatalog* ModuleCatalog; /* Optional retained code generation for owned execution. */
+    const char *Namespace,*MemberId; /* Shared SDK state and persistent member identity. */
 } MdoAgentSessionOptions;
 
 typedef struct MdoAgentSessionInfo {

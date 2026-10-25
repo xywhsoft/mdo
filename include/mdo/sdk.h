@@ -65,6 +65,7 @@ struct mdo_sdk_context_v1 {
     void* Opaque;
     const char *ExtensionId,*InvocationId,*DeviceId,*ProjectId,*SessionId,*RunId,*Workspace,*Method;
     uint64_t Deadline;
+    const char *Namespace,*MemberId; /* Optional shared execution group and current member. */
 };
 /* All arguments are borrowed for the call. Results are owned and released by
  * Values->Release. Set/Append retain their value; no CRT/allocator crosses ABI. */

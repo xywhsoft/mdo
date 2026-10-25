@@ -61,7 +61,7 @@ static bool SdkMailboxApply(const mdo_sdk_context_v1* C,cstr Method,const xvalue
         const xvalue* Body=SdkGet(P,"body");char* Encoded=Body?SdkJson(Body):NULL;size_t Size=Encoded?strlen(Encoded):0;xrtFree(Encoded);
         if(!Body)return MdoApplicationError(E,"sdk_mailbox_arguments","Message body is required","mailbox",400,false);
         if(Size>8192)return MdoApplicationError(E,"sdk_mailbox_limit","Message body exceeds 8 KiB; send an artifact reference","mailbox",413,false);
-        cstr Sender=C->SessionId&&C->SessionId[0]?C->SessionId:C->ExtensionId;
+        cstr Sender=C->MemberId&&C->MemberId[0]?C->MemberId:C->SessionId&&C->SessionId[0]?C->SessionId:C->ExtensionId;
         xvalue* Identity=xrtValueObject();SdkPut(Identity,"mailbox",Box);SdkPut(Identity,"message_id",SdkField(P,"message_id"));SdkPut(Identity,"sender",Sender);xrtValueObjectSet(Identity,XRT_STR_LITERAL("body"),Body);
         char Hash[65];bool Hashed=SdkMailboxHash(Identity,Hash);xrtValueRelease(Identity);if(!Hashed)return false;
         if(Old){

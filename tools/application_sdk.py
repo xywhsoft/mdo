@@ -73,7 +73,7 @@ def native_contracts():
         result[name]=(description,{'type':'object','properties':properties or {},'required':list(required)},output or obj)
     for name in ('sdk.services','sdk.native'):add(name,'Discover registered services or typed native product function declarations',output=arr)
     add('sdk.describe','Read the exact registered service descriptor',{'id':string},('id',))
-    add('sdk.context','Read the immutable invocation, device, project, session, workspace and deadline')
+    add('sdk.context','Read the invocation, project, session, workspace, deadline and optional shared namespace/current member')
     add('events.read','Read events with epoch/cursor loss detection; resync on overflow or restart',{'after':uint,'epoch':string,'topic':string,'limit':{**uint,'minimum':1,'maximum':256}})
     add('events.wait','Wait up to 60 seconds for a matching event, cancellation or epoch/cursor gap; timeout returns an empty page',{'after':uint,'epoch':string,'topic':string,'limit':{**uint,'minimum':1,'maximum':256},'timeout_ms':{**uint,'maximum':60000}})
     add('events.emit','Publish an extension event; event data is visible to trusted application subscribers',{'topic':string,'data':{}},('topic',))

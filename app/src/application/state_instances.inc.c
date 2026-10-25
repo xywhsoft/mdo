@@ -76,6 +76,7 @@ unlock:
     xwork_error Error;xworkErrorInit(&Error);MdoAgentSession* Session=NULL;MdoAgentRun* Run=NULL;MdoApprovalScope* Scope=NULL;
     MdoAgentSessionOptions Options;MdoAgentSessionOptionsInit(&Options);
     Options.AgentId=SdkField(Config,"agent_id");Options.ModelId=SdkField(Config,"model_id");Options.ProjectId=C->ProjectId;
+    Options.Namespace=SdkField(Config,"namespace");Options.MemberId=Id;
     char* DefaultWorkspace=C->ProjectId&&!strcmp(C->ProjectId,"default")?MdoHomeDefaultWorkspacePath(true):NULL;
     char QuestionScope[33];memcpy(QuestionScope,Identity,32);QuestionScope[32]=0;
     Options.ProductSessionId=SdkField(Config,"parent_session");Options.AskScopeId=Options.ProductSessionId&&Options.ProductSessionId[0]?Options.ProductSessionId:QuestionScope;Options.WorkspaceRoot=DefaultWorkspace?DefaultWorkspace:SdkField(Config,"workspace");
@@ -174,7 +175,7 @@ static bool SdkInstanceCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue
         if(Member){Ok=SdkField(Member,"intent_hash")&&!strcmp(SdkField(Member,"intent_hash"),Hash);xrtValueRelease(Intent);if(Ok)*R=SdkInstanceInfo(Member);else MdoApplicationError(E,"sdk_identity_conflict","Member id belongs to different creation intent","instance",409,false);goto done;}
         size_t Count=0;const xvalue* Records=SdkGet(Root,"records");for(size_t I=0;I<xrtValueCount(Records);I++)if(!strncmp(SdkKey(Records,I),"sys.instance.",13))Count++;
         if(Count>=64){xrtValueRelease(Intent);MdoApplicationError(E,"sdk_instance_limit","Namespace retains 64 members; use an execution namespace","instance",413,false);goto done;}
-        char Box[96];snprintf(Box,sizeof(Box),"instance.%s",Id);SdkPut(Intent,"mailbox",Box);SdkPut(Intent,"intent_hash",Hash);SdkPut(Intent,"state","idle");SdkPut(Intent,"epoch",SdkState.Epoch);
+        char Box[96];snprintf(Box,sizeof(Box),"instance.%s",Id);SdkPut(Intent,"mailbox",Box);SdkPut(Intent,"namespace",SdkField(Root,"namespace"));SdkPut(Intent,"intent_hash",Hash);SdkPut(Intent,"state","idle");SdkPut(Intent,"epoch",SdkState.Epoch);
         Ok=SdkInstanceStore(Root,Key,Intent,E);if(Ok)*R=SdkInstanceInfo(Intent);xrtValueRelease(Intent);Changed=Ok;
     }else if(!Member){MdoApplicationError(E,"sdk_instance_missing","Member is unavailable","instance",404,false);}
     else if(!strcmp(Method,"instance.get")){*R=SdkInstanceInfo(Member);Ok=*R!=NULL;}

@@ -224,6 +224,7 @@ typedef struct mdo_agent_context_v1 {
     bool OutcomeAvailable;
     mdo_result Outcome;
     const void* Error; /* callback-local xwork_error after a complete run */
+    const char *Namespace,*MemberId;
 } mdo_agent_context_v1;
 
 typedef mdo_result (*mdo_agent_event_v1)(void* UserData,

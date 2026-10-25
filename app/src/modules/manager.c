@@ -161,7 +161,7 @@ typedef struct MdoModuleRegistrarContext {
     char Message[MDO_MODULE_ERROR_LIMIT];
 } MdoModuleRegistrarContext;
 
-typedef struct MdoModuleAgentScope {xwork_agent* Agent;void* Owner;uint64 AgentId;char Project[128],Session[128];struct MdoModuleAgentScope* Next;} MdoModuleAgentScope;
+typedef struct MdoModuleAgentScope {xwork_agent* Agent;void* Owner;uint64 AgentId;char Project[128],Session[128],Namespace[129],MemberId[65];struct MdoModuleAgentScope* Next;} MdoModuleAgentScope;
 typedef struct MdoModuleState {
     xmutex* Lock;
     xmutex* ReloadLock;
@@ -197,6 +197,12 @@ void MdoModuleAgentUnbindContext(xwork_agent* Agent){
     if(!g_MdoModules.Lock)return;
     xrtMutexLock(g_MdoModules.Lock);MdoModuleAgentScope** At=&g_MdoModules.Scopes;
     while(*At){if((*At)->Agent==Agent){MdoModuleAgentScope* Scope=*At;*At=Scope->Next;xrtFree(Scope);break;}At=&(*At)->Next;}
+    xrtMutexUnlock(g_MdoModules.Lock);
+}
+void MdoModuleAgentSetMemberContext(xwork_agent* Agent,void* Owner,uint64 AgentId,cstr Namespace,cstr MemberId){
+    if(!g_MdoModules.Lock)return;xrtMutexLock(g_MdoModules.Lock);
+    for(MdoModuleAgentScope* S=g_MdoModules.Scopes;S;S=S->Next)if((Agent&&S->Agent==Agent)||(Owner&&S->Owner==Owner&&S->AgentId==AgentId)){
+        snprintf(S->Namespace,sizeof(S->Namespace),"%s",Namespace?Namespace:"");snprintf(S->MemberId,sizeof(S->MemberId),"%s",MemberId?MemberId:"");break;}
     xrtMutexUnlock(g_MdoModules.Lock);
 }
 
@@ -1601,7 +1607,7 @@ static xwork_result MdoModulesResult(mdo_result Result)
     }
 }
 
-typedef struct MdoModuleCallScope {mdo_sdk_context_v1 Application;MdoApplicationInvocation Invocation;char Run[32],Project[128],Session[128];} MdoModuleCallScope;
+typedef struct MdoModuleCallScope {mdo_sdk_context_v1 Application;MdoApplicationInvocation Invocation;char Run[32],Project[128],Session[128],Namespace[129],MemberId[65];} MdoModuleCallScope;
 static void MdoModulesToolContext(mdo_tool_context_v1* pTarget,
     const MdoModuleToolBinding* pTool, const xwork_tool_context* pSource,MdoModuleCallScope* Scope)
 {
@@ -1622,8 +1628,9 @@ static void MdoModulesToolContext(mdo_tool_context_v1* pTarget,
     Scope->Application.InvocationId=pSource->sToolCallId;Scope->Application.Workspace=pSource->sWorkspaceRoot;
     Scope->Application.Deadline=pSource->uDeadline;snprintf(Scope->Run,sizeof(Scope->Run),"%llu",(unsigned long long)pSource->uRunId);
     Scope->Application.RunId=Scope->Run;pTarget->Application=&Scope->Application;
-    if(g_MdoModules.Lock){xrtMutexLock(g_MdoModules.Lock);for(MdoModuleAgentScope* S=g_MdoModules.Scopes;S;S=S->Next)if((S->Agent&&S->Agent==pSource->pAgent)||(S->AgentId&&S->AgentId==pSource->uAgentId)){snprintf(Scope->Project,sizeof(Scope->Project),"%s",S->Project);snprintf(Scope->Session,sizeof(Scope->Session),"%s",S->Session);break;}xrtMutexUnlock(g_MdoModules.Lock);}
+    if(g_MdoModules.Lock){xrtMutexLock(g_MdoModules.Lock);for(MdoModuleAgentScope* S=g_MdoModules.Scopes;S;S=S->Next)if((S->Agent&&S->Agent==pSource->pAgent)||(S->AgentId&&S->AgentId==pSource->uAgentId)){snprintf(Scope->Project,sizeof(Scope->Project),"%s",S->Project);snprintf(Scope->Session,sizeof(Scope->Session),"%s",S->Session);snprintf(Scope->Namespace,sizeof(Scope->Namespace),"%s",S->Namespace);snprintf(Scope->MemberId,sizeof(Scope->MemberId),"%s",S->MemberId);break;}xrtMutexUnlock(g_MdoModules.Lock);}
     Scope->Application.ProjectId=Scope->Project;Scope->Application.SessionId=Scope->Session;
+    Scope->Application.Namespace=Scope->Namespace;Scope->Application.MemberId=Scope->MemberId;
 }
 
 static bool MdoModulesPermissionAdd(void* pContext,
@@ -2387,6 +2394,7 @@ static void MdoModulesAgentApplication(MdoModuleAgentBinding* Binding,mdo_agent_
     Invocation->Cancel=(xcancel*)Frame->CancelToken;Invocation->Catalog=(void*)Catalog;Application->Opaque=Invocation;
     Application->InvocationId=Frame->AgentId;Application->Workspace=Frame->WorkspaceRoot;
     Application->ProjectId=Frame->ProjectId;Application->SessionId=Frame->SessionId;
+    Application->Namespace=Frame->Namespace;Application->MemberId=Frame->MemberId;
     Application->Deadline=Frame->Deadline;Frame->Application=Application;
 }
 bool MdoModuleCatalogAgentEvent(const MdoModuleCatalog* Catalog,cstr Id,mdo_agent_phase Phase,

@@ -10,7 +10,23 @@ SCOPE_MODULE=r'''
 #include "mdo/sdk.h"
 #include "mdo/native/sessions.h"
 #include "mdo/native/approvals.h"
+#include "mdo/agent.h"
+#include "mdo/work.h"
+#include "mdo/mailbox.h"
+#include <stdio.h>
 static MdoApprovalScope* Scope;
+static mdo_result Worker(void* U,const mdo_agent_context_v1* C,char* Error,size_t N){
+ const mdo_sdk_context_v1* S=C->Application;const mdo_values_v1* V=S->Api->Values;xvalue* P=V->Parse("{\"id\":\"from-c-worker\",\"title\":\"Created from the C member\"}"),*R=NULL;mdo_error_v1 E={0};
+ mdo_result Code=mdoWorkCreate(S,P,&R,&E);V->Release(P);V->Release(R);if(Code!=MDO_RESULT_OK)return Code;
+ xwork_error X;Code=mdoAgentRunDefault(C,&X);if(Code!=MDO_RESULT_OK)snprintf(Error,N,"%s",X.sMessage);return Code;
+}
+static const mdo_agent_program_v1 Program={sizeof(Program),1,NULL,Worker};
+static const mdo_agent_v1 Role={.Size=sizeof(mdo_agent_v1),.AbiVersion=1,.Id="subagent.c-worker",.Name="C worker",.Description="Member implemented with public C SDK",.Model="qa-local-model",.SystemPrompt="C worker reply briefly.",.AllowedEffects=MDO_TOOL_EFFECT_ALL,.Flags=MDO_AGENT_SUBAGENT|MDO_AGENT_READ_ONLY,.Program=&Program};
+static mdo_result Tool(void* U,const mdo_tool_context_v1* C,const char* Args,mdo_result_writer_v1* W,char* Error,size_t N){
+ const mdo_sdk_context_v1* S=C->Application;const mdo_values_v1* V=S->Api->Values;xvalue* R=NULL;mdo_error_v1 E={0};
+ xvalue* P=V->Parse("{\"mailbox\":\"team\",\"message_id\":\"member-active\",\"body\":\"ready\"}");mdo_result Code=mdoMailboxSend(S,P,&R,&E);V->Release(P);V->Release(R);R=NULL;if(Code!=MDO_RESULT_OK)return Code;
+ Code=mdoCall(S,"sdk.context",NULL,&R,&E);char* Text=Code==MDO_RESULT_OK?V->Json(R):NULL;bool Ok=Text&&W->WriteText(W->Context,Text)&&W->SetSuccess(W->Context,true);V->Free(Text);V->Release(R);return Ok?MDO_RESULT_OK:MDO_RESULT_ERROR;
+}
 static mdo_result Call(void* U,const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E){
  const mdo_values_v1* V=C->Api->Values;const char* S=V->Text(V->Get(P,"session"));const char* A=V->Text(V->Get(P,"action"));xwork_error X;
  if(!strcmp(A,"acquire"))Scope=MdoSessionPermissionScopeAcquire("default",S,&X);
@@ -20,9 +36,21 @@ static mdo_result Call(void* U,const mdo_sdk_context_v1* C,const xvalue* P,xvalu
  *R=V->Bool(Scope&&xworkFileScopeExternal(Scope->Files));return MDO_RESULT_OK;
 }
 static mdo_result Register(const mdo_host_services_v1* H,const mdo_registrar_v1* R,void** D,char* E,size_t N){
- mdo_service_v1 S={sizeof(S),1,"qa.scope","Scope test","{}","{}",MDO_TOOL_EFFECT_READ,NULL,Call};return R->AddService(R->Context,&S,E,N);
+#ifdef MEMBER_ROLE_ONLY
+ return R->AddAgent(R->Context,&Role,E,N);
+#else
+ mdo_service_v1 S={sizeof(S),1,"qa.scope","Scope test","{}","{}",MDO_TOOL_EFFECT_READ,NULL,Call};if(R->AddService(R->Context,&S,E,N)!=MDO_RESULT_OK)return MDO_RESULT_ERROR;
+ mdo_tool_v1 T={0};T.Size=sizeof(T);T.AbiVersion=1;T.Id="qa.context";T.Name="Member context";T.Description="Read current context";T.ParametersJson="{\"type\":\"object\"}";T.Effects=MDO_TOOL_EFFECT_READ;T.MaxResultBytes=8192;T.Execute=Tool;
+ return R->AddTool(R->Context,&T,E,N);
+#endif
 }
-MDO_EXPORT const mdo_module_v1* mdoModuleEntry(void){static const mdo_module_v1 M={sizeof(M),1,"qa.scope","Scope QA","QA","1",MDO_CAPABILITY_ALL,NULL,0,Register,NULL};return &M;}
+MDO_EXPORT const mdo_module_v1* mdoModuleEntry(void){static const mdo_module_v1 M={sizeof(M),1,
+#ifdef MEMBER_ROLE_ONLY
+ "qa.worker",
+#else
+ "qa.scope",
+#endif
+ "Scope QA","QA","1",MDO_CAPABILITY_ALL,NULL,0,Register,NULL};return &M;}
 '''
 
 class DelayedModel(ModelHandler):
@@ -40,7 +68,8 @@ def main():
         with tempfile.TemporaryDirectory(dir=ROOT/'.build',prefix='member-sdk-') as tmp:
             f=Fixture(a.host.resolve(),Path(tmp));roles=f.home/'subagents';roles.mkdir(parents=True)
             (f.home/'modules/tools/scope.c').write_text(SCOPE_MODULE,encoding='utf-8')
-            (roles/'member.md').write_text('---\nschema: mdo.agent.v1\nname: Member QA\nmodel: qa-local-model\ntools: []\nread_only: true\n---\nReply briefly.\n',encoding='utf-8')
+            native=f.home/'modules/subagents/worker.c';native.parent.mkdir(parents=True);native.write_text('#define MEMBER_ROLE_ONLY\n'+SCOPE_MODULE,encoding='utf-8')
+            (roles/'member.md').write_text('---\nschema: mdo.agent.v1\nname: Member QA\nmodel: qa-local-model\ntools: [qa.context]\nread_only: true\n---\nReply briefly.\n',encoding='utf-8')
             f.start()
             try:
                 cfg=f.call('product.models.config.get');patch={k:v for k,v in cfg['data'].items() if k!='runtime_override'}
@@ -76,7 +105,13 @@ def main():
                 (roles/'member.md').write_text((roles/'member.md').read_text(encoding='utf-8')+'Updated.\n',encoding='utf-8');f.call('runtime.reload',{'domain':'modules'})
                 call('send',message_id='updated',prompt='Use the updated role');assert call('step')['last_outcome']['outcome']=='succeeded'
                 assert any('Updated.' in m.get('content','') for m in mock.last_request['messages'] if m['role']=='system')
+                mock.child_scope=True;call('send',message_id='member-context',prompt='Inspect current member');assert call('step')['last_outcome']['outcome']=='succeeded';mock.child_scope=False
+                reply=next(m['content'] for m in mock.last_request['messages'] if m['role']=='tool');context=json.loads(reply[reply.index('{'):reply.rindex('}')+1]);assert context['namespace']=='qa.members' and context['member']=='researcher',context
+                assert f.call('mailbox.read',{'namespace':'qa.members','mailbox':'team'})['items'][0]['sender']=='researcher'
                 assert len(f.call('instance.list',{'namespace':'qa.members'}))==1
+                c_worker={**base,'id':'native-worker'};f.call('instance.create',{**c_worker,'agent_id':'subagent.c-worker'});f.call('instance.send',{**c_worker,'message_id':'c-turn','prompt':'Run C worker'})
+                assert f.call('instance.step',c_worker)['last_outcome']['outcome']=='succeeded'
+                assert f.call('work.get',{'namespace':'qa.members','id':'from-c-worker'})['ready']
                 assert call('close')['state']=='closed';f.call('instance.send',{**base,'message_id':'turn4','prompt':'closed'},409)
                 crashed={**base,'id':'interrupted'}
                 f.call('instance.create',{**crashed,'agent_id':'subagent.member'});f.call('instance.send',{**crashed,'message_id':'lost','prompt':'Do not replay after crash'})

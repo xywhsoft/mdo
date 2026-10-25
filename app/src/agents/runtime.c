@@ -96,6 +96,7 @@ typedef struct MdoAgentOwner {
     xwork_agent_owner_release_fn ExternalOwnerRelease;
     bool ExternalOwnerRetained;
     char ProductProject[128],ProductSession[128];
+    char Namespace[129],MemberId[65];
     char* Workspace;
     xmutex* InstanceLock;
     xmutex* LifecycleLock;
@@ -154,6 +155,7 @@ struct MdoAgentRun {
 static bool MdoAgentsForwardEvent(MdoAgentOwner* Owner,xwork_event_fn Forward,void* Data,const xwork_event* Event){
     if(Event->eKind==XWORK_EVENT_AGENT_START&&Event->uAgentId&&
         !MdoModuleAgentIdentityBegin(Owner,Event->uAgentId,Owner->ProductProject,Owner->ProductSession))xrtClearError();
+    if(Event->eKind==XWORK_EVENT_AGENT_START&&Event->uAgentId)MdoModuleAgentSetMemberContext(NULL,Owner,Event->uAgentId,Owner->Namespace,Owner->MemberId);
     MdoAgentsLifecycleRuntime(Owner,Event);
     bool Ok=!Forward||Forward(Data,Event);
     if(Event->eKind==XWORK_EVENT_AGENT_DONE&&Event->uAgentId)MdoModuleAgentIdentityEnd(Owner,Event->uAgentId);
@@ -1152,6 +1154,8 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
         Options = &Defaults;
     }
     if ( Runtime == NULL || Options->Size < sizeof(*Options) ||
+         (Options->Namespace && strlen(Options->Namespace)>128) ||
+         (Options->MemberId && strlen(Options->MemberId)>64) ||
          (Options->Recover &&
           (Options->SessionPath == NULL || Options->SessionPath[0] == '\0' ||
            Options->JournalPath == NULL || Options->JournalPath[0] == '\0')) ||
@@ -1213,6 +1217,7 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
     Owner->ExternalModelData = Options->ModelUserData;
     snprintf(Owner->ProductProject,sizeof(Owner->ProductProject),"%s",Options->ProjectId?Options->ProjectId:"");
     snprintf(Owner->ProductSession,sizeof(Owner->ProductSession),"%s",Options->ProductSessionId?Options->ProductSessionId:"");
+    snprintf(Owner->Namespace,sizeof(Owner->Namespace),"%s",Options->Namespace?Options->Namespace:"");snprintf(Owner->MemberId,sizeof(Owner->MemberId),"%s",Options->MemberId?Options->MemberId:"");
     Owner->ExternalEvent=Options->OnEvent;Owner->ExternalEventData=Options->EventUserData;
     Owner->ExternalOwnerData = Options->OwnerUserData;
     Owner->ExternalOwnerRelease = Options->OnOwnerRelease;
@@ -1529,6 +1534,7 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
     if(!MdoModuleAgentBindContext(Session->Agent,Options->ProjectId,Options->ProductSessionId)){
         MdoAgentsError(Error,XWORK_ERROR_OUT_OF_MEMORY,"Cannot bind Agent application identity");goto fail;
     }
+    MdoModuleAgentSetMemberContext(Session->Agent,NULL,0,Owner->Namespace,Owner->MemberId);
     if ( !MdoMcpConfigureAgent(Session->Agent, AgentOptions.sWorkspaceRoot, Error) ) goto fail;
     if ( Owner->ApprovalScope ) {
         if ( !xworkAgentSetFileScope(Session->Agent, Owner->ApprovalScope->Files, Error) ) goto fail;
