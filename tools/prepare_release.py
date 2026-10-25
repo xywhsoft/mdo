@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Verify eight root products and stage a publication manifest without networking."""
 import hashlib
+import argparse
 import json
 from pathlib import Path
 import zipfile
@@ -44,7 +45,12 @@ TARGETS = [
     ("full", "android-arm64-v8a", "full", "mdo-full-arm64-v8a.apk", "android_full_build_id"),
 ]
 def main():
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--notes-file',type=Path,help='UTF-8 public update notes for all eight channels')
+    args=parser.parse_args()
     release=json.loads((ROOT/"app/release.json").read_text(encoding="utf-8"));rows=[]
+    notes=args.notes_file.read_text(encoding='utf-8').strip() if args.notes_file else f"mdo {release['version_name']} 更新。完整说明请参阅官网下载页面。"
+    require(notes and len(notes.encode('utf-8'))<=4096,'update notes must contain 1 to 4096 UTF-8 bytes')
     code=release_code(release)
     record=json.loads((ROOT/"mdo-builds.json").read_text(encoding="utf-8"))
     lock=json.loads((ROOT/"deps.lock").read_text(encoding="utf-8"))
@@ -76,18 +82,12 @@ def main():
                 require(f'#define MDO_PRODUCT_EDITION "{edition}"' in unity, "embedded edition mismatch: " + name)
                 require(f'#define MDO_BUILD_XSERVER_COMMIT "{lock["xserver"]["commit"]}"' in unity, "embedded dependency mismatch: " + name)
         shutil.copyfile(file,OUTPUT/name)
-        row={"id":id,"platform":platform,"edition":edition,"build_id":release[key],"sha256":sha,"size":len(data),"notes":f"mdo {release['version_name']}：完全访问文件读取与记忆读取恢复；工具及模型异常连续失败恢复，改善会话稳定性。","required":False,"status":"staged","file":name}
+        row={"id":id,"platform":platform,"edition":edition,"build_id":release[key],"sha256":sha,"size":len(data),"notes":notes,"required":False,"status":"staged","file":name}
         row["version_code"]=code;row["version_name"]=release["version_name"]
         if edition=="full":row["toolpack_revision"]=release["toolpack_revision"]
         rows.append(row)
     result={"version_name":release["version_name"],"version_code":code,"status":"verified-not-published","releases":rows,
             "android_release_signed": all(records[t[3]].get("release_signed", False) for t in TARGETS if t[1].startswith("android-"))}
-    if (OUTPUT/"toolpacks/catalog.json").exists():
-        packages=json.loads((OUTPUT/"toolpacks/catalog.json").read_text(encoding="utf-8"))["toolpacks"]
-        for row in packages:
-            row["file"]="toolpacks/"+row["file"]
-            row["status"]="staged"
-        result["toolpacks"]=packages
     (OUTPUT/"manifest.json").write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding="utf-8")
     print(OUTPUT/"manifest.json")
 if __name__=="__main__":main()
