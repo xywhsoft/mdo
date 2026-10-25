@@ -107,6 +107,7 @@ const mdo_module_v1* mdoModuleEntry(void){return &M;}
                 call('plugin.apply',dict(id='native-fixture',manifest=doc,files=[dict(path='runtime/plugin.c',text=native_source),dict(path='runtime/extra.h',text='#define EXTRA 10\n')]))
                 result=commit([dict(id='native-fixture',enabled=True)])
                 assert result['pending'] and result['restart_required'],result
+                assert call('runtime.reload',dict(domain='host'),409)['code']=='sdk_plugin_restart_required'
                 call('qa.plugin.counter',status=404)
                 child.terminate();child.wait(timeout=10)
                 child=subprocess.Popen([str(args.host.resolve()),str(config),'--','--home',str(base/'home')],cwd=base,stdout=log,stderr=log,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))

@@ -199,14 +199,17 @@ static bool SdkPluginStage(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** 
         else if(Ok){char* Text=SdkJson(Disk);Ok=Missing&&Text&&MdoHomeAtomicWrite(Path,Text,strlen(Text),false);xrtFree(Text);}
         xrtFree(Existing);xrtValueRelease(Disk);
     }
-    for(size_t I=0;I<128;I++){xrtSecureZero(Decoded[I].Bytes,Decoded[I].Size);xrtFree(Decoded[I].Bytes);}xrtValueRelease(Inventory);
+    for(size_t I=0;I<128;I++){if(Decoded[I].Bytes)xrtSecureZero(Decoded[I].Bytes,Decoded[I].Size);xrtFree(Decoded[I].Bytes);}xrtValueRelease(Inventory);
     if(!Ok&&!E->Code[0])MdoApplicationError(E,"sdk_plugin_stage_failed","Plugin files could not be staged or an immutable revision was changed","plugin",422,false);return Ok;
 }
 bool MdoApplicationPluginsCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue* P,xvalue** R,mdo_error_v1* E,bool* Found){
     (void)C;*Found=false;for(size_t i=0;i<sizeof(SdkPluginMethods)/sizeof(*SdkPluginMethods);i++)if(!strcmp(Method,SdkPluginMethods[i]))*Found=true;if(!*Found)return true;
     if(!strcmp(Method,"runtime.reload")){cstr Domain=SdkField(P,"domain");bool Ok=false;
         if(Domain&&!strcmp(Domain,"modules"))Ok=MdoModuleManagerReload();
-        else if(Domain&&!strcmp(Domain,"host")){XS_ServerInfo* Server=MdoApplicationServer();uint64 Id=Server?xsReloadServerSubmit(Server->Name):0;if(Id){*R=xrtValueObject();SdkPutUInt(*R,"id",Id);return true;}}
+        else if(Domain&&!strcmp(Domain,"host")){
+            xrtMutexLock(SdkPlugins.Lock);bool Restart=SdkPluginNativeChanged(SdkPlugins.Effective,SdkPlugins.Config);xrtMutexUnlock(SdkPlugins.Lock);
+            if(Restart)return MdoApplicationError(E,"sdk_plugin_restart_required","A pending native/code plugin change requires a full application restart","plugin",409,false);
+            XS_ServerInfo* Server=MdoApplicationServer();uint64 Id=Server?xsReloadServerSubmit(Server->Name):0;if(Id){*R=xrtValueObject();SdkPutUInt(*R,"id",Id);return true;}}
         else return MdoApplicationError(E,"sdk_arguments_invalid","Reload domain must be modules or host","reload",400,false);
         if(!Ok)return MdoApplicationError(E,"sdk_reload_failed","Candidate was rejected; inspect module diagnostics","reload",409,false);
         *R=xrtValueObject();return true;
