@@ -1,6 +1,6 @@
 #ifndef MDO_PUBLIC_LIFECYCLE_H
 #define MDO_PUBLIC_LIFECYCLE_H
-#include "agent.h"
+#include "sdk.h"
 /* Registration belongs to an immutable module generation. No manager lock is
  * held while callbacks run. Finished/error/cancelled notifications have a
  * complete result; they cannot veto an effect that already happened. */

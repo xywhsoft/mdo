@@ -71,7 +71,7 @@ def main():
         site=Path(tmp)/'site';fixture.write_site(site)
         for name in ('agent.h','sdk.h','lifecycle.h'):
             shutil.copy2(fixture.ROOT/'include/mdo'/name,site/'generated/module-sdk/mdo'/name)
-        module=roles.MODULE.replace('#include "mdo/agent.h"','#include "mdo/lifecycle.h"')
+        module=roles.MODULE.replace('#include "mdo/agent.h"','#include "mdo/agent.h"\n#include "mdo/lifecycle.h"')
         module=module.replace('static mdo_result Register(',LIFECYCLE+'\nstatic mdo_result Register(')
         module=module.replace('(void)Data;Host=H;mdo_result Result=',
             '(void)Data;Host=H;mdo_lifecycle_v1 L={sizeof(L),1,"global",NULL,10,false,MDO_AGENT_PHASES_ALL,NULL,Lifecycle};if(mdoRegisterLifecycle(R,&L,Error,Capacity)!=MDO_RESULT_OK)return MDO_RESULT_ERROR;mdo_result Result=')

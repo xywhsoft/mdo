@@ -85,6 +85,13 @@ class ModuleContractTests(unittest.TestCase):
 #include "mdo/module.h"
 #include "mdo/sdk.h"
 #include "mdo/command.h"
+#include "mdo/execution.h"
+#include "mdo/state.h"
+#include "mdo/lease.h"
+#include "mdo/mailbox.h"
+#include "mdo/instance.h"
+#include "mdo/work.h"
+#include "mdo/lifecycle.h"
 static mdo_result execute(void *data, const mdo_tool_context_v1 *context,
     const char *arguments, mdo_result_writer_v1 *writer,
     char *error, size_t error_capacity) {
