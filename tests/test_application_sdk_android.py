@@ -39,9 +39,12 @@ def main():
     p.add_argument('--adb',type=Path,required=True);p.add_argument('--adb-port',type=int,default=5037)
     p.add_argument('--serial',required=True);p.add_argument('--package',required=True)
     p.add_argument('--evidence',type=Path,required=True)
+    p.add_argument('--home-name',default='sdk-qa-home')
     a=p.parse_args()
     if not re.fullmatch(r'org\.xleaves\.mdo\.qa\.[a-z][a-z0-9_]*',a.package):
         raise ValueError('Use an independent org.xleaves.mdo.qa.* package')
+    if not re.fullmatch(r'[a-z][a-z0-9_-]{0,63}',a.home_name):
+        raise ValueError('The QA Home must be a simple private directory name')
     a.evidence.mkdir(parents=True,exist_ok=False)
     report={'package':a.package,'checks':[],'paid_model_calls':0,'passed':False}
     command=[str(a.adb.resolve()),'-P',str(a.adb_port),'-s',a.serial]
@@ -52,11 +55,11 @@ def main():
         return r.stdout.decode(errors='replace').strip()
     def launch():
         adb('shell','am','force-stop',a.package)
-        adb('shell','run-as',a.package,'rm','-f','files/sdk-qa-home/native.log',check=False)
+        adb('shell','run-as',a.package,'rm','-f','files/'+a.home_name+'/native.log',check=False)
         adb('shell','am','start','-n',a.package+'/org.xserver.android.XsActivity')
         deadline=time.monotonic()+45
         while time.monotonic()<deadline:
-            log=adb('shell','run-as',a.package,'cat','files/sdk-qa-home/native.log',check=False)
+            log=adb('shell','run-as',a.package,'cat','files/'+a.home_name+'/native.log',check=False)
             matches=re.findall(r'http bound on 127\.0\.0\.1:(\d+)',log)
             if matches and adb('shell','pidof',a.package,check=False):return int(matches[-1])
             time.sleep(.25)
