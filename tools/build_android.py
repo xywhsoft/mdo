@@ -93,6 +93,10 @@ def main(argv: list[str] | None = None) -> int:
                 "--build-dir", str(ROOT / ".build/host-objects"),
                 *build_mdo.host_profile_arguments(args.full_host),
                 *(["--icon", str(build_mdo.ICON_PATH)] if os.name == "nt" else [])], cwd=sdk_source, check=True)
+            console_host = host.with_name("xs.exe" if os.name == "nt" else "xs")
+            build_mdo.stamp_host_overlay(console_host, lock)
+            if host != console_host:
+                build_mdo.stamp_host_overlay(host, lock)
         if not host.is_file():
             raise build_mdo.BuildError("missing pack host: " + str(host))
         build_mdo.verify_host_receipt(host, lock, args.full_host, icon=os.name == "nt")
