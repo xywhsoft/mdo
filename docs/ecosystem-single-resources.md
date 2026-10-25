@@ -1,3 +1,7 @@
+# Agent 与 SubAgent
+
+Agent/SubAgent 已接入独立资源商店，共用配置式和 C 开发能力。分发单元、自有文件、依赖、信任和兼容规则见 [角色独立生态](agent-ecosystem.md)。
+
 # 知识库与其他扩展的独立分发
 
 知识库已作为第六个落地体系接入，使用 `single_kind=knowledge`；目录、提示词注入、创作审核及 SDK 见 [知识库](knowledge-libraries.md)。
