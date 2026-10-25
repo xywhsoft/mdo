@@ -19,7 +19,8 @@ static bool EcoExportProjectCommand(cstr Project,cstr Id,xvalue* Resource)
 }
 static bool EcoExportProjectMcp(cstr Project,cstr Id,xvalue* Resource)
 {
-    if(!MdoExtensionIdValid(Id)||!MdoPackageId(Project))return false;xwork_error Error;MdoProjectLease* Lease=MdoProjectLeaseAcquire(Project,MDO_PROJECT_LEASE_SHARED,&Error);char* Workspace=NULL;
+    if(!MdoExtensionIdValid(Id)||!MdoPackageId(Project))return false;
+    xwork_error Error;MdoProjectLease* Lease=MdoProjectLeaseAcquire(Project,MDO_PROJECT_LEASE_SHARED,&Error);char* Workspace=NULL;
     if(Lease&&!strcmp(Project,"default"))Workspace=MdoHomeDefaultWorkspacePath(false);else if(Lease){MdoProjectInfo Info={0};Info.Size=sizeof(Info);bool Found=false;if(MdoProjectGet(Project,&Info,&Found,&Error)&&Found)Workspace=xrtPathAbs(Info.WorkspaceRoot);}
     xroot Root=Workspace?xrtRootOpen(Workspace):NULL;xrtFree(Workspace);char Path[160];snprintf(Path,sizeof(Path),".mdo/mcp/%s.json",Id);xfileoptions O;xrtFileOptionsInit(&O);O.Flags=XFILE_READ|XFILE_NOFOLLOW;
     char* Original=Root?CommandReadFile(xrtRootFileOpen(Root,Path,&O)):NULL;char* Text=Original?McpTemplateExport(Original,Id):NULL;
@@ -41,9 +42,11 @@ static bool EcoExportProjectSkill(cstr Project,cstr Id,xvalue* Resource)
         MdoSkillResourceInfo R={0};R.Size=sizeof(R);MdoSkillResourceContent Content={0};Content.Size=sizeof(Content);
         Ok=MdoSkillCatalogResourceAt(Catalog,Id,i,&R)&&MdoSkillCatalogLoadResource(Catalog,Id,R.Path,MDO_SKILL_FILE_LIMIT,&Content)&&Content.Bytes<=64u*1024u*1024u-Total;
         char* B64=Ok?xrtBase64EncodeNew(Content.Data,Content.Bytes,NULL):NULL;xvalue* F=xrtValueObject();Ok=Ok&&B64&&F&&MdoApiValueSetString(F,"path",R.Path)&&MdoApiValueSetString(F,"base64",B64)&&xrtValueArrayAppend(Extras,F);
-        if(Ok)Total+=Content.Bytes;xrtFree(B64);xrtValueRelease(F);MdoSkillResourceContentUnit(&Content);
+        if(Ok)Total+=Content.Bytes;
+        xrtFree(B64);xrtValueRelease(F);MdoSkillResourceContentUnit(&Content);
     }
-    if(Ok)Ok=xrtValueObjectSet(Resource,XRT_STR_LITERAL("files"),Extras);xrtValueRelease(Extras);xrtFree(Text);MdoSkillCatalogRelease(Catalog);return Ok;
+    if(Ok)Ok=xrtValueObjectSet(Resource,XRT_STR_LITERAL("files"),Extras);
+    xrtValueRelease(Extras);xrtFree(Text);MdoSkillCatalogRelease(Catalog);return Ok;
 }
 /* Local authoring is available without a service session. Export exact files,
  * never machine credentials, absolute roots or executable installation hooks. */

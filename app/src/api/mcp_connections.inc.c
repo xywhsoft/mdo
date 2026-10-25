@@ -66,7 +66,8 @@ static bool McpConnectionReferenceExists(cstr Reference,xroot Root,cstr Director
     while(!Found&&(Next=xrtDirNext(D,&E))==XDIR_NEXT_ITEM){if(E.Name.Size<6||E.Name.Size>69||memcmp(E.Name.Data+E.Name.Size-5,".json",5))continue;
         if(++Count>256){Found=true;break;}char Path[192];snprintf(Path,sizeof(Path),"%s/%.*s",Directory,(int)E.Name.Size,E.Name.Data);bool Missing=false;
         char* Text=Root?SkillRead(Root,Path,&Missing):MdoExtensionRead(Path,true,MDO_EXTENSION_TEXT_LIMIT,&Missing);Found=!Text||strstr(Text,Reference)!=NULL;xrtFree(Text);}
-    if(Next==XDIR_NEXT_ERROR)Found=true;xrtDirClose(D);return Found;
+    if(Next==XDIR_NEXT_ERROR)Found=true;
+    xrtDirClose(D);return Found;
 }
 static bool McpConnectionScopeReference(cstr Reference,cstr Workspace)
 {
@@ -79,7 +80,8 @@ static bool McpConnectionReferenced(cstr Reference)
     MdoProjectInfo Projects[MDO_PROJECT_LIST_LIMIT];size_t Count=0,Invalid=0;bool Truncated=false;xwork_error E;
     if(!MdoProjectList(Projects,MDO_PROJECT_LIST_LIMIT,&Count,&Invalid,&Truncated,&E)||Truncated||Invalid)return true;
     char* Default=MdoHomeDefaultWorkspacePath(false);bool Found=Default&&McpConnectionScopeReference(Reference,Default);xrtFree(Default);
-    for(size_t i=0;!Found&&i<Count;i++)Found=McpConnectionScopeReference(Reference,Projects[i].WorkspaceRoot);return Found;
+    for(size_t i=0;!Found&&i<Count;i++)Found=McpConnectionScopeReference(Reference,Projects[i].WorkspaceRoot);
+    return Found;
 }
 static void McpConnectionCleanTemplate(const xvalue* Old)
 {
@@ -149,7 +151,9 @@ bool MdoApiMcpConnectionsRoute(MdoApiContext* C)
         const xvalue* I=xrtValueArrayGet(Inputs,i);cstr Key=MdoPackageText(I,"id",64),S=MdoPackageText(Supplied,Key,4096);if(!McpConnectionUses(xrtValueObjectGet(Selected,XRT_STR_LITERAL("config")),Key))continue;bool Secret=MdoMcpTemplateFlag(I,"secret",false);
         bool Clear=false;const xvalue* Clears=xrtValueObjectGet(Body.Value,XRT_STR_LITERAL("clear_secrets"));for(size_t j=0;j<xrtValueCount(Clears);j++){xstrview V;if(xrtValueGetString(xrtValueArrayGet(Clears,j),&V)&&xrtStrEqual(V,xrtStrView(Key)))Clear=true;}
         if(Secret&&!Clear&&(!S||!*S)&&SameTemplate){cstr Ref=MdoPackageText(OldValues,Key,256);if(Ref&&strncmp(Ref,"input:",6)&&MdoApiValueSetString(Values,Key,Ref))continue;}
-        if(!S&&!Secret)S=MdoPackageText(OldValues,Key,4096);if(!S&&!Secret)S=MdoPackageText(I,"default",4096);if(!S)S="";
+        if(!S&&!Secret)S=MdoPackageText(OldValues,Key,4096);
+        if(!S&&!Secret)S=MdoPackageText(I,"default",4096);
+        if(!S)S="";
         if(!McpConnectionValue(I,S)){snprintf(Error,sizeof(Error),"Parameter '%s' is missing or invalid",Key);goto done;}
         if(Secret&&!S[0]&&!MdoMcpTemplateFlag(I,"required",true)){if(!MdoApiValueSetString(Values,Key,""))goto done;continue;}
         if(Secret){if(Preview){char Ref[80];snprintf(Ref,sizeof(Ref),"env:MDO_PREVIEW_%zu",i);if(!MdoApiValueSetString(Values,Key,Ref))goto done;}
@@ -188,5 +192,7 @@ done:
     if(!Saved)for(size_t i=0;i<RefCount;i++)MdoSecretDiscard(References[i]);
     if(!Result)Result=MdoApiReplyError(C,409,"mcp_connection_invalid",Error[0]?Error:"Connection could not be configured",NULL);
     if(Text){xrtSecureZero(Text,strlen(Text));xrtFree(Text);}xrtFree(Old);xrtValueRelease(OldDoc);xrtValueRelease(Receipt);xrtValueRelease(T);xrtValueRelease(Values);xrtValueRelease(Doc);xrtValueRelease(Binding);
-    if(Lock)xrtClose(Lock);if(Root)xrtRootClose(Root);xrtMutexUnlock(g_MdoExtensionLock);if(Lease)MdoProjectLeaseRelease(Lease);xrtFree(Workspace);ExtensionBodyUnit(&Body);return Result;
+    if(Lock)xrtClose(Lock);
+    if(Root)xrtRootClose(Root);
+    xrtMutexUnlock(g_MdoExtensionLock);if(Lease)MdoProjectLeaseRelease(Lease);xrtFree(Workspace);ExtensionBodyUnit(&Body);return Result;
 }

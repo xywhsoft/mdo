@@ -9,12 +9,14 @@ static bool KnowledgeCollectFile(cstr Relative,const xfileinfo* Entry,void* Data
     xfile F=MdoHomeOpenRead(Full);xfileinfo Info;bool Read=F&&xrtFileStat(F,&Info)&&Info.Type==XFILE_TYPE_FILE&&Info.Size<=64u*1024u*1024u&&C->Total+Info.Size<=64u*1024u*1024u&&xrtValueCount(C->Files)<129;
     bytes B=Read?xrtMalloc((size_t)Info.Size+1):NULL;Read=Read&&B&&xrtReadFull(F,B,(size_t)Info.Size,NULL);if(F&&!xrtClose(F))Read=false;
     xvalue* Item=Read?EcoLocalFile(Full,B,(size_t)Info.Size):NULL;bool Ok=Item&&xrtValueArrayAppend(C->Files,Item);
-    if(Ok)C->Total+=(size_t)Info.Size;xrtValueRelease(Item);xrtFree(B);return Ok;
+    if(Ok)C->Total+=(size_t)Info.Size;
+    xrtValueRelease(Item);xrtFree(B);return Ok;
 }
 static xvalue* KnowledgeCurrentFiles(cstr Id)
 {
     char Root[96];snprintf(Root,sizeof(Root),"knowledge/%s",Id);bool Exists=false;xfileinfo Info;
-    if(!MdoHomeExternalStat(Root,&Exists,&Info))return NULL;xvalue* Files=xrtValueArray();
+    if(!MdoHomeExternalStat(Root,&Exists,&Info))return NULL;
+    xvalue* Files=xrtValueArray();
     KnowledgeFileContext Context={Root,Files,0};
     if(Files&&Exists&&(Info.Type!=XFILE_TYPE_DIRECTORY||!MdoPortableTreeWalk(Root,KnowledgeCollectFile,&Context))){xrtValueRelease(Files);return NULL;}return Files;
 }
@@ -31,7 +33,8 @@ static bool KnowledgeExtras(cstr Id,const xvalue* Current,xvalue* Extras)
     char Base[96],Manifest[128];snprintf(Base,sizeof(Base),"knowledge/%s/",Id);snprintf(Manifest,sizeof(Manifest),"%sknowledge.json",Base);bool Ok=true;
     for(size_t i=0;Ok&&i<xrtValueCount(Current);i++){
         const xvalue* F=xrtValueArrayGet(Current,i);cstr Path=MdoPackageText(F,"path",255);if(!strcmp(Path,Manifest))continue;
-        if(strncmp(Path,Base,strlen(Base)))return false;xvalue* Item=xrtValueObject();
+        if(strncmp(Path,Base,strlen(Base)))return false;
+        xvalue* Item=xrtValueObject();
         Ok=Item&&MdoApiValueSetString(Item,"path",Path+strlen(Base))&&xrtValueObjectSet(Item,XRT_STR_LITERAL("base64"),xrtValueObjectGet(F,XRT_STR_LITERAL("new")))&&xrtValueArrayAppend(Extras,Item);xrtValueRelease(Item);
     }return Ok;
 }

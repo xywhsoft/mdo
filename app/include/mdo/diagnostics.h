@@ -22,6 +22,7 @@ static inline bool MdoDiagnosticWarning(xvalue* Items,cstr Domain,cstr Code,
     const char* Keys[]={"domain","stage","code","subject_id","path","message","remedy","settings_section"};
     const char* Values[]={Domain,"check",Code,Subject,Path,Message,Remedy,Section};bool Ok=Row!=NULL;
     for(size_t i=0;Ok&&i<8;i++)Ok=xrtValueObjectSetNew(Row,xrtStrView(Keys[i]),xrtValueString(xrtStrView(Values[i]?Values[i]:"")));
-    if(Ok)Ok=xrtValueArrayAppend(Items,Row);xrtValueRelease(Row);return Ok;
+    if(Ok)Ok=xrtValueArrayAppend(Items,Row);
+    xrtValueRelease(Row);return Ok;
 }
 #endif

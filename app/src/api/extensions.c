@@ -255,7 +255,8 @@ static bool ExtensionTreeRemove(xroot Root,cstr Path,size_t* Count)
         RemoveFrame* Frame=&Frames[Level];xdirentry Entry;xdirnext Next=xrtDirNext(Frame->Directory,&Entry);
         if(Next==XDIR_NEXT_END){
             xrtDirClose(Frame->Directory);Frame->Directory=NULL;Ok=xrtRootRemove(Root,Frame->Path);
-            if(!Ok||!Level)break;--Level;continue;
+            if(!Ok||!Level)break;
+            --Level;continue;
         }
         if(Next!=XDIR_NEXT_ITEM||!(Entry.Flags&XDIR_ENTRY_UTF8)||!Entry.Name.Size||memchr(Entry.Name.Data,0,Entry.Name.Size)){Ok=false;break;}
         if((Entry.Name.Size==1u&&Entry.Name.Data[0]=='.')||(Entry.Name.Size==2u&&!memcmp(Entry.Name.Data,"..",2u)))continue;

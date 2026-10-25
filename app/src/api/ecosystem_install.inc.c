@@ -69,7 +69,8 @@ static xvalue* EcoLocalFiles(const xvalue* package,char error[1024])
             if(strcmp(kind,"mcp"))ok=ExtensionValidate(kind,id,content,error);
             else {char hash[65];ok=MdoExtensionHash(content,hash);
                 snprintf(path,sizeof(path),"data/ecosystem/mcp/%s/%s/template.json",id,hash);
-                if(ok)ok=EcoLocalAppend(files,path,content,strlen(content));continue;}
+                if(ok)ok=EcoLocalAppend(files,path,content,strlen(content));
+                continue;}
 
         }
         if(ok)ok=EcoLocalAppend(files,path,content,strlen(content));
@@ -241,7 +242,8 @@ void MdoApiEcosystemRefreshCredits(const xvalue* Data)
         for(size_t k=0;k<4;k++){cstr Text=MdoPackageText(Row,Keys[k],Limits[k]),Old=MdoPackageText(Record,Keys[k],Limits[k]);
             if(Text&&Text[0]&&(!Old||strcmp(Old,Text))&&MdoApiValueSetString(Record,Keys[k],Text))Changed=true;}
     }
-    if(Changed)(void)EcoLocalSave(ECO_RECEIPTS,Records);xrtValueRelease(Records);xrtMutexUnlock(g_MdoExtensionLock);
+    if(Changed)(void)EcoLocalSave(ECO_RECEIPTS,Records);
+    xrtValueRelease(Records);xrtMutexUnlock(g_MdoExtensionLock);
 }
 bool MdoApiEcosystemLocal(MdoApiContext* c,const xvalue* input)
 {

@@ -10,7 +10,8 @@ static bool MdoMcpTemplateKeys(const xvalue* V,cstr Keys)
     if(xrtValueIterBegin(V,&It)){while((E=xrtValueIterNext(&It,&K))){char Key[100];
         if(!K.String.Size||K.String.Size>96){Ok=false;break;}
         for(size_t i=0;i<K.String.Size;i++){unsigned char C=K.String.Data[i];if(!((C>='a'&&C<='z')||(C>='A'&&C<='Z')||(C>='0'&&C<='9')||C=='_'))Ok=false;}
-        if(!Ok)break;snprintf(Key,sizeof(Key),"|%.*s|",(int)K.String.Size,K.String.Data);
+        if(!Ok)break;
+        snprintf(Key,sizeof(Key),"|%.*s|",(int)K.String.Size,K.String.Data);
         if(!strstr(Keys,Key)){Ok=false;break;}}
         xrtValueIterEnd(&It);}return Ok;
 }
