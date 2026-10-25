@@ -34,6 +34,9 @@ static mdo_result Echo(void* U,const mdo_sdk_context_v1* C,const xvalue* P,xvalu
  size_t Count=MdoModelCatalogModelCount(Models);MdoModelCatalogRelease(Models);
  if(!Count)return MDO_RESULT_ERROR;
  uint64_t Delay=0;if(C->Api->Values->Unsigned(C->Api->Values->Get(P,"delay_ms"),&Delay)&&Delay<=2000)xrtSleep((int64)Delay);
+ bool Discovery=false;if(C->Api->Values->Boolean(C->Api->Values->Get(P,"discovery"),&Discovery)&&Discovery){
+  xvalue* Q=C->Api->Values->Parse("{\"id\":\"qa.echo\"}");mdo_result Code=mdoCall(C,"sdk.describe",Q,R,E);C->Api->Values->Release(Q);return Code;
+ }
  *R=C->Api->Values->Clone(P);return MDO_RESULT_OK;
 }
 static mdo_result Hook(void* U,const mdo_sdk_context_v1* C,const char* T,const xvalue* P,xvalue** R,mdo_error_v1* E){
@@ -113,6 +116,11 @@ def main():
       time.sleep(.025)
      raise AssertionError((method,'deadline',(base/'host.log').read_text(encoding='utf-8',errors='replace')))
     ids=invoke('sdk.services',{},'ids');assert len(ids)>200 and 'qa.echo' in ids,ids
+    capabilities=invoke('sdk.capabilities');assert capabilities['features']['mailbox.atomic_ack']==1 and capabilities['limits']['event_payload_bytes']==8192,capabilities
+    assert invoke('sdk.require',{'services':['qa.echo','state.transaction'],'native':['MdoSessionCreate'],'features':{'state.atomic':1}})=={'satisfied':True,'missing':[]}
+    missing=invoke('sdk.require',{'services':['qa.missing'],'native':['DoesNotExist'],'features':{'state.atomic':2,'unimplemented':1}})
+    assert not missing['satisfied'] and len(missing['missing'])==4,missing
+    assert invoke('sdk.require',{'features':{'state.atomic':0}},'catch')['status']==400
     assert {'account.logout','session.create','product.update.install.post','product.device_transfers.post'}<=set(ids)
     assert invoke('sdk.context')['project']=='default'
     contract=invoke('sdk.describe',{'id':'project.create'})['input_schema']
@@ -274,11 +282,18 @@ def main():
     override.unlink();invoke('runtime.reload',{'domain':'modules'})
     assert 'monotonic_us' in invoke('runtime.clock')
     pending=invoke('operation.start',{'method':'qa.echo','params':{'delay_ms':500,'old_generation':True}})['id']
-    (modules/'sdk.c').write_text(MODULE.replace('*R=C->Api->Values->Clone(P);return MDO_RESULT_OK;','*R=C->Api->Values->Object();return MDO_RESULT_OK;'),encoding='utf-8')
+    discovery=invoke('operation.start',{'method':'qa.echo','params':{'delay_ms':1000,'discovery':True}})['id']
+    old_generation=invoke('sdk.describe',{'id':'qa.echo'})['generation']
+    (modules/'sdk.c').write_text(MODULE.replace('"SDK echo"','"SDK echo new"').replace('*R=C->Api->Values->Clone(P);return MDO_RESULT_OK;','*R=C->Api->Values->Object();return MDO_RESULT_OK;'),encoding='utf-8')
     invoke('runtime.reload',{'domain':'modules'})
     assert invoke('operation.wait',{'id':pending,'timeout_ms':2000})['state']=='succeeded'
     assert invoke('operation.result',{'id':pending})['old_generation']
+    assert invoke('sdk.describe',{'id':'qa.echo'})['description']=='SDK echo new'
+    assert invoke('operation.wait',{'id':discovery,'timeout_ms':2000})['state']=='succeeded'
+    discovered=invoke('operation.result',{'id':discovery})
+    assert discovered['description']=='SDK echo' and discovered['generation']==old_generation,discovered
     invoke('operation.release',{'id':pending})
+    invoke('operation.release',{'id':discovery})
     (modules/'sdk.c').write_text(MODULE,encoding='utf-8');invoke('runtime.reload',{'domain':'modules'})
    finally:
     child.terminate()

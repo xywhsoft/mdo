@@ -21,6 +21,7 @@ bool MdoApplicationChangesInit(void);
 void MdoApplicationChangesUnit(void);
 void MdoApplicationCaptureChanges(cstr Project,cstr Session,cstr Workspace);
 xvalue* MdoApplicationCatalog(void);
+xvalue* MdoApplicationCatalogFor(const mdo_sdk_context_v1* Context);
 /* Product handlers own their lifecycle coordination, including exclusive
  * purge/restore operations. Native/custom jobs pin their invocation project. */
 bool MdoApplicationProductService(cstr Method);
@@ -82,6 +83,7 @@ xvalue* MdoApplicationEvents(const xvalue*,mdo_error_v1*);
 xvalue* MdoApplicationEventsWait(const mdo_sdk_context_v1*,const xvalue*,mdo_error_v1*);
 bool MdoApplicationCustomCall(const mdo_sdk_context_v1*,cstr,const xvalue*,xvalue**,mdo_error_v1*,bool* Found);
 xvalue* MdoApplicationCustomCatalog(void);
+xvalue* MdoApplicationCustomCatalogFor(const mdo_sdk_context_v1* Context);
 bool MdoApplicationHooks(const mdo_sdk_context_v1*,cstr,xvalue**,mdo_error_v1*);
 static inline bool MdoApplicationError(mdo_error_v1* E,cstr Code,cstr Message,cstr Stage,uint32 Status,bool Uncertain){
     if(E){memset(E,0,sizeof(*E));E->Size=sizeof(*E);snprintf(E->Code,sizeof(E->Code),"%s",Code?Code:"sdk_error");

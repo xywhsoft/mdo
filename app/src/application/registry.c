@@ -11,6 +11,8 @@ static const struct {cstr Id,Description;} SdkBuiltins[]={
     {"sdk.describe","Describe a service and its call contract"},
     {"sdk.context","Read the immutable caller context"},
     {"sdk.native","Discover typed product functions for in-process native modules"},
+    {"sdk.capabilities","Discover implemented feature contracts and resource limits"},
+    {"sdk.require","Preflight required services, native symbols and feature versions"},
     {"model.complete","Call a configured model with managed credentials, tools, parts, usage and optional stream"},
     {"tool.call","Execute one tool with the selected session's live permission scope and result rules"},
     {"session.compact","Compact the bound managed session and retain its original transcript"},
@@ -73,7 +75,7 @@ static xvalue* SdkDescription(const MdoApplicationRoute* R,bool Detailed){
     xrtValueObjectSetNew(V,XRT_STR_LITERAL("mutation"),xrtValueBool(strcmp(R->Method,"GET")!=0));
     return V;
 }
-xvalue* MdoApplicationCatalog(void){
+xvalue* MdoApplicationCatalogFor(const mdo_sdk_context_v1* C){
     xvalue* A=xrtValueArray();if(!A)return NULL;
     for(size_t i=0;i<sizeof(SdkBuiltins)/sizeof(*SdkBuiltins);i++){
         xvalue* V=xrtValueObject();SdkPut(V,"id",SdkBuiltins[i].Id);SdkPut(V,"description",SdkBuiltins[i].Description);
@@ -106,7 +108,7 @@ xvalue* MdoApplicationCatalog(void){
     xvalue* WorkbenchCatalog=MdoApplicationWorkbenchCatalog();
     for(size_t i=0;i<xrtValueCount(WorkbenchCatalog);i++)xrtValueArrayAppend(A,xrtValueArrayGet(WorkbenchCatalog,i));
     xrtValueRelease(WorkbenchCatalog);
-    xvalue* Custom=MdoApplicationCustomCatalog(),*Merged=xrtValueArray();
+    xvalue* Custom=MdoApplicationCustomCatalogFor(C),*Merged=xrtValueArray();
     for(size_t i=0;i<xrtValueCount(A);i++){const xvalue* Item=xrtValueArrayGet(A,i);bool Replaced=false;
         for(size_t k=0;k<sizeof(SdkContracts)/sizeof(*SdkContracts);k++)if(!strcmp(SdkField(Item,"id"),SdkContracts[k].Id)){
             xvalue* Description=(xvalue*)Item;SdkPut(Description,"description",SdkContracts[k].Description);
@@ -118,15 +120,19 @@ xvalue* MdoApplicationCatalog(void){
     for(size_t i=0;i<xrtValueCount(Custom);i++)xrtValueArrayAppend(Merged,xrtValueArrayGet(Custom,i));
     xrtValueRelease(Custom);xrtValueRelease(A);return Merged;
 }
+xvalue* MdoApplicationCatalog(void){return MdoApplicationCatalogFor(NULL);}
+#include "capabilities.inc.c"
 static mdo_result SdkInvoke(const mdo_sdk_context_v1* C,cstr Method,const xvalue* P,xvalue** R,mdo_error_v1* E){
     bool Found=false;bool CustomOk=MdoApplicationCustomCall(C,Method,P,R,E,&Found);
     if(Found)return CustomOk?MDO_RESULT_OK:SdkErrorResult(E);
     if(!SdkValidateContract(Method,P,E))return MDO_RESULT_ERROR;
     if(!strcmp(Method,"sdk.native")){*R=SdkNativeCatalog();return *R?MDO_RESULT_OK:MDO_RESULT_ERROR;}
+    if(!strcmp(Method,"sdk.capabilities")){*R=SdkCapabilities();return *R?MDO_RESULT_OK:MDO_RESULT_ERROR;}
+    if(!strcmp(Method,"sdk.require"))return SdkRequire(C,P,R,E)?MDO_RESULT_OK:MDO_RESULT_ERROR;
     if(!strcmp(Method,"model.complete"))return SdkModelCall(C,P,R,E)?MDO_RESULT_OK:MDO_RESULT_ERROR;
     if(!strcmp(Method,"tool.call"))return SdkToolCall(C,P,R,E)?MDO_RESULT_OK:MDO_RESULT_ERROR;
     if(!strcmp(Method,"session.compact"))return SdkCompactCall(C,R,E)?MDO_RESULT_OK:MDO_RESULT_ERROR;
-    if(!strcmp(Method,"sdk.services")){*R=MdoApplicationCatalog();return *R?MDO_RESULT_OK:MDO_RESULT_ERROR;}
+    if(!strcmp(Method,"sdk.services")){*R=MdoApplicationCatalogFor(C);return *R?MDO_RESULT_OK:MDO_RESULT_ERROR;}
     if(!strcmp(Method,"sdk.context")){
         *R=xrtValueObject();SdkPut(*R,"extension",C->ExtensionId);SdkPut(*R,"invocation",C->InvocationId);
         SdkPut(*R,"device",C->DeviceId);SdkPut(*R,"project",C->ProjectId);SdkPut(*R,"session",C->SessionId);
@@ -141,7 +147,7 @@ static mdo_result SdkInvoke(const mdo_sdk_context_v1* C,cstr Method,const xvalue
         MdoApplicationEvent(Topic,C,SdkGet(P,"data"));*R=xrtValueObject();return MDO_RESULT_OK;}
     if(!strcmp(Method,"sdk.describe")){
         cstr Id=SdkField(P,"id");
-        xvalue* Catalog=MdoApplicationCatalog();
+        xvalue* Catalog=MdoApplicationCatalogFor(C);
         for(size_t i=0;Id&&i<xrtValueCount(Catalog);i++){
             const xvalue* Item=xrtValueArrayGet(Catalog,i);
             if(!strcmp(Id,SdkField(Item,"id"))){

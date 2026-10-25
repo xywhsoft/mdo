@@ -86,8 +86,9 @@ bool MdoModuleCatalogLifecycle(const MdoModuleCatalog* Source,mdo_agent_phase Ph
     if(!Ok&&Error&&Error->eCode==XWORK_ERROR_NONE){xworkErrorInit(Error);Error->eCode=XWORK_ERROR_OUT_OF_MEMORY;snprintf(Error->sMessage,sizeof(Error->sMessage),"Cannot collect lifecycle callbacks");}
     return Ok;
 }
-xvalue* MdoApplicationCustomCatalog(void){
-    xvalue* A=xrtValueArray();MdoModuleCatalog* Catalog=MdoModuleCatalogSnapshot();
+xvalue* MdoApplicationCustomCatalogFor(const mdo_sdk_context_v1* C){
+    MdoApplicationInvocation* Invocation=C?C->Opaque:NULL;
+    xvalue* A=xrtValueArray();MdoModuleCatalog* Catalog=Invocation&&Invocation->Catalog?MdoModuleCatalogRef(Invocation->Catalog):MdoModuleCatalogSnapshot();
     for(size_t i=0;Catalog&&i<Catalog->ModuleCount;i++){
         MdoModuleGeneration* M=Catalog->Modules[i];
         for(size_t j=0;M&&j<M->ServiceCount;j++){
@@ -100,6 +101,7 @@ xvalue* MdoApplicationCustomCatalog(void){
         }
     }MdoModuleCatalogRelease(Catalog);return A;
 }
+xvalue* MdoApplicationCustomCatalog(void){return MdoApplicationCustomCatalogFor(NULL);}
 bool MdoApplicationCustomCall(const mdo_sdk_context_v1* C,cstr Id,const xvalue* P,xvalue** R,mdo_error_v1* E,bool* Found){
     MdoApplicationInvocation* Invocation=C->Opaque;
     *Found=false;MdoModuleCatalog* Catalog=Invocation&&Invocation->Catalog?MdoModuleCatalogRef(Invocation->Catalog):MdoModuleCatalogSnapshot();mdo_service_v1* Service=NULL;
