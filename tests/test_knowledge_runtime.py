@@ -44,6 +44,16 @@ def run():
         if args.packed:
             code,_,asset=request(port,'GET','/js/features/settings/store-formats.js');assert code==200 and b'"plugins", "knowledge"].includes' in asset,'packed knowledge publisher is stale'
         assert call('GET','/extensions/knowledge')['items']==[]
+        warnings=lambda:[d for d in call('GET','/diagnostics')['items']if d['domain']=='knowledge']
+        assert not warnings(),'An optional absent knowledge directory is healthy'
+        root_conflict=home/'knowledge';root_conflict.write_text('Preserve this existing file')
+        assert [d['code']for d in warnings()]==['root_not_directory']
+        sdk_warnings=call('POST','/application/call',dict(method='product.diagnostics.get',params={}))
+        assert sdk_warnings['status']==200 and any(d.get('code')=='root_not_directory'for d in sdk_warnings['data']['items'])
+        if not args.packed:
+            degraded=call('GET','/fixture/knowledge');assert '<mdo_knowledge>'not in degraded['prompt']and not degraded['read']
+        assert root_conflict.read_text()=='Preserve this existing file'
+        root_conflict.unlink();assert not warnings(),'A fresh check clears a resolved condition'
         custom=metadata();files=[file('index.md','# Index\n[Topic](topic.md)'),file('topic.md','first version')]
         first=call('PUT','/extensions/knowledge/local-reference',dict(content=json.dumps(custom),files=files),revision='new')
         sdk=call('POST','/application/call',dict(method='extensions.list',params=dict(path=dict(kind='knowledge'))));assert sdk['status']==200 and len(sdk['data']['items'])==1
@@ -80,6 +90,15 @@ def run():
         if not args.packed:
             (home/'knowledge/broken').mkdir();(home/'knowledge/broken/knowledge.json').write_text('{invalid')
             assert 'Test base prompt'in call('GET','/fixture/knowledge')['prompt']
+            assert any(d['code']=='invalid_metadata'and d['subject_id']=='broken'for d in warnings())
+            (home/'knowledge/broken/knowledge.json').write_text(json.dumps(custom))
+            assert any(d['code']=='index_unavailable'and d['subject_id']=='broken'for d in warnings())
+            (home/'knowledge/broken/index.md').write_text('# Repaired')
+            assert not warnings()
+            preference=home/'config/extensions.json';saved_preference=preference.read_bytes()
+            preference.write_text('{invalid')
+            assert [d['code']for d in warnings()]==['config_unavailable'],'One shared preference failure must not become one warning per library'
+            preference.write_bytes(saved_preference);assert not warnings()
         exported=call('POST','/ecosystem',dict(action='export',single_kind='knowledge',references=[dict(kind='knowledge',id='local-reference')]))
         assert exported['resources'][0]['files']==files or sorted(exported['resources'][0]['files'],key=lambda f:f['path'])==files
         large=call('PUT','/extensions/knowledge/large-reference',dict(content=json.dumps(custom),files=[file('index.md','# Large index'),file('large.md','x'*300000),dict(path='sample.bin',base64='AAEC/w==')]),revision='new')

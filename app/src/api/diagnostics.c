@@ -6,6 +6,7 @@
 #include "../../include/mdo/schedules.h"
 #include "../../include/mdo/sessions.h"
 #include "../../include/mdo/skills.h"
+#include "../../include/mdo/knowledge.h"
 
 #define MDO_API_DIAGNOSTIC_LIMIT 256u
 
@@ -75,6 +76,7 @@ bool MdoApiDiagnosticsRoute(MdoApiContext* Context)
     MdoScheduleCatalog* Schedules;
     xvalue* Data = xrtValueObject();
     xvalue* Items = xrtValueArray();
+    xvalue* Knowledge = MdoKnowledgeDiagnostics();
     size_t Total = 0u;
     size_t Added = 0u;
     size_t Index;
@@ -85,11 +87,16 @@ bool MdoApiDiagnosticsRoute(MdoApiContext* Context)
     memset(&Error, 0, sizeof(Error));
     Schedules = MdoScheduleCatalogSnapshot(&Error);
     Ok = Modules != NULL && Skills != NULL && Mcp != NULL &&
-        Sessions != NULL && Schedules != NULL && Data != NULL && Items != NULL;
+        Sessions != NULL && Schedules != NULL && Data != NULL && Items != NULL && Knowledge != NULL;
     if ( Ok ) Total = MdoModuleDiagnosticsCount(Modules) +
         MdoSkillDiagnosticsCount(Skills) + MdoMcpDiagnosticsCount(Mcp) +
         MdoSessionCatalogDiagnosticCount(Sessions) +
-        MdoScheduleCatalogDiagnosticCount(Schedules);
+        MdoScheduleCatalogDiagnosticCount(Schedules) + xrtValueCount(Knowledge);
+
+    /* Live storage checks come first so an old module diagnostic backlog does
+     * not hide a currently unavailable optional library. */
+    for(Index=0;Ok&&Added<MDO_API_DIAGNOSTIC_LIMIT&&Index<xrtValueCount(Knowledge);Index++,Added++)
+        Ok=xrtValueArrayAppend(Items,xrtValueArrayGet(Knowledge,Index));
 
     for ( Index = 0u; Ok && Added < MDO_API_DIAGNOSTIC_LIMIT &&
           Index < MdoModuleDiagnosticsCount(Modules); Index++, Added++ ) {
@@ -141,6 +148,7 @@ bool MdoApiDiagnosticsRoute(MdoApiContext* Context)
         MdoApiValueSetBool(Data, "truncated", Total > Added) &&
         MdoApiValueSetTake(Data, "items", &Items);
     xrtValueRelease(Items);
+    xrtValueRelease(Knowledge);
     MdoScheduleCatalogRelease(Schedules);
     MdoSessionCatalogRelease(Sessions);
     MdoMcpDiagnosticsRelease(Mcp);
