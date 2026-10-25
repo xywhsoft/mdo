@@ -1,0 +1,139 @@
+{
+  "schema_version": 1,
+  "version_name": "0.7.0",
+  "version_code": "05000700",
+  "app_code_commit": "307caeed7a00690dce3381fc9e347fb879026ba2",
+  "site_commit": "c0ae20a9d7868ad83b8ab3a00ef0a712107c38b0",
+  "role_store_min_build_id": 70000009,
+  "sdk_overlay_sha256": "16f28b0bd9ecf791b505bbff9001a0c18bbaf398e29d906dc01df967818bcb84",
+  "artifacts": {
+    "windows/mdo.exe": {
+      "bytes": 6365900,
+      "sha256": "66a9c0e29e1a3a6bb5087f7cfd75a929273582ebd97fc4329c2f957b753bc301",
+      "packaged_app_sha256": "0951b1f665dc9e5d3a3cb1f33e9a51605e53a1d2f6abb2579f923e3410c7d868",
+      "mdo_commit": "307caeed7a00690dce3381fc9e347fb879026ba2",
+      "version_code": "05000700"
+    },
+    "linux/linux-x86_64-glibc-server/mdo-server": {
+      "bytes": 5870782,
+      "sha256": "c25497616351427fbba99f416936064dd04b3739a15baab55638a5fdd8e35c84",
+      "packaged_app_sha256": "494e1179b02205f93e1d74854badb839a996012269cf4f4c089d25d2c4892e00",
+      "mdo_commit": "307caeed7a00690dce3381fc9e347fb879026ba2",
+      "version_code": "05000700",
+      "glibc_required": "2.38",
+      "glibc_max": null
+    },
+    "mdo-arm64-v8a.apk": {
+      "bytes": 5903681,
+      "sha256": "df9896b10844b8e3735429027e6648962f7ce2410e79a7726fc2f27cddfda41b",
+      "build_id": 70000047,
+      "certificate_sha256": "94b1947b60f3ce0852b19d9c37a47cc4a084fe9d601692c6a1f6b204c2174e84",
+      "app_pack_sha256": "d401f610316a742c11d743b397435f89c6d718ffcf52f2cb49753815e5169a1f",
+      "native_sha256": "e9df8cf571bd0022fbeeeda710d3ec6c812459503cfb29912bf579116d0da2e3",
+      "signature_v2": true,
+      "signature_v3": true,
+      "zipalign_16k": true,
+      "runtime_tools": [],
+      "runtime_files_verified": 0
+    },
+    "mdo-full-arm64-v8a.apk": {
+      "bytes": 150247831,
+      "sha256": "b90938adb8753ae8cffb4d91adb4613940735091a5ee11f7971ecb7959a507e5",
+      "build_id": 70000048,
+      "certificate_sha256": "94b1947b60f3ce0852b19d9c37a47cc4a084fe9d601692c6a1f6b204c2174e84",
+      "app_pack_sha256": "d401f610316a742c11d743b397435f89c6d718ffcf52f2cb49753815e5169a1f",
+      "native_sha256": "e9df8cf571bd0022fbeeeda710d3ec6c812459503cfb29912bf579116d0da2e3",
+      "signature_v2": true,
+      "signature_v3": true,
+      "zipalign_16k": true,
+      "runtime_tools": [
+        "7zip",
+        "aria2",
+        "busybox",
+        "curl",
+        "ffmpeg",
+        "git",
+        "imagemagick",
+        "jq",
+        "openssh",
+        "poppler",
+        "python",
+        "ripgrep",
+        "sqlite"
+      ],
+      "runtime_files_verified": 734
+    }
+  },
+  "production": {
+    "service": "active",
+    "files_verified": 12,
+    "source_files": {
+      "plugin/mdo/modules/ecosystem/agent_config_format.h": "213b135cd7de395dce444583664288603fa7be86d21b08a99f87204d8a558407",
+      "plugin/mdo/modules/ecosystem/agent_package.h": "cf1ec126b23ca6d7563b49b54a236253fa806fb3ac708496dcce835fffdbd00f",
+      "plugin/mdo/modules/ecosystem/creator_routes.inc.c": "31d3b001402e67ac626f15cbe8592785ca9177b45d82c8e153c1fd65137e6359",
+      "plugin/mdo/modules/ecosystem/ecosystem_package.h": "a1a0ea3ef296bca99222b3f3a9190bb17dc2b73c18c26790a7cf1de1e9785c03",
+      "plugin/mdo/modules/ecosystem/extension_identity.h": "3dc6c68da4c3d592aa6edd79a48b0d731687c9ee3c3912b7813a0e98a9ebc8f0",
+      "plugin/mdo/modules/ecosystem/main.c": "d5ca39823218be7b36d3549175e9def94ed2090fad66202f359dec9e056972c6",
+      "plugin/mdo/modules/ecosystem/prompt_file.h": "63960b7e17cc1a777630e98aaa4a9236293480ee65a9b41225b0d4f8fa3d503a",
+      "plugin/mdo/page/creator/admin.js": "1def4a754fdc40d24d34b68b01761b3f74dc433ea242bf3e0a5ac1054f8d1158",
+      "plugin/mdo/page/creator/center.js": "a5d6e1f085d37bb92058adca5b173d7b6dcbcf500ad532259f5f712f1a2e8124",
+      "plugin/mdo/page/creator/role-package.js": "b2a995284a69c42013fcd0fd21a65f73f3c52ed6b0a6bc1f6e86581fcd77afa8",
+      "plugin/mdo/page/creator/role-preview.js": "8884a8eb6d1e544737c347988acf82e8f51c10b4c003594e19882a336b7d9f64",
+      "plugin/mdo/page/ecosystem/store.js": "7909d0e79a607a65cab2d3e85fd88530ffd43294d94c785e1a243a08da49a91b"
+    },
+    "service_files": {
+      "/opt/www/xs": "b32fa5696b9950a0dc0fa4fd8277a112e27cbea093deb5d53948a35072d273fe",
+      "/opt/www/xs.json": "6971820ba5f8650754340b97cbd7de60b0eae91dc937f6284a16bbc5af830ee8"
+    },
+    "binary_config_unchanged": true,
+    "postflight_time": 1792946164,
+    "https_routes_verified": 7
+  },
+  "tests": {
+    "native_package_vectors": 58,
+    "node_frontend_behavior": 55,
+    "role_authoring": 29,
+    "module_header_contracts": 6,
+    "sdk_contracts": 6,
+    "real_client_and_site_marketplace": true,
+    "real_downloaded_config_delegates_downloaded_c": true,
+    "role_roundtrip_descriptor_fields": 15,
+    "windows_packed_roles": true,
+    "linux_packed_roles": true,
+    "packed_extensions": {
+      "passed": true,
+      "model_requests": {
+        "custom_tool": 2,
+        "skill": 4,
+        "delegation": 3,
+        "profiles": 3,
+        "mcp": 4,
+        "builder": 6
+      },
+      "final_model_errors": 0,
+      "mcp_2025_methods": [
+        "initialize",
+        "notifications/initialized",
+        "tools/list",
+        "tools/call"
+      ],
+      "mcp_schemas_lazy": true,
+      "packed_sha256": "66a9c0e29e1a3a6bb5087f7cfd75a929273582ebd97fc4329c2f957b753bc301"
+    },
+    "windows_packed_sdk": true,
+    "android_signature_v2_v3": true,
+    "android_zipalign_16k": true,
+    "android_runtime_manifest_entries_verified": 734,
+    "android_runtime_manifest_hashes_verified": 377,
+    "android_native_tool_entries_verified": 357
+  },
+  "client_auto_update_published": false,
+  "client_official_downloads_replaced": false,
+  "android_device_tested": false,
+  "linux_old_glibc_release_validated": false,
+  "private_remote_backups": [
+    "/home/xs/mdo-role-ecosystem-20261025",
+    "/home/xs/mdo-role-ecosystem-20261025-final"
+  ],
+  "evidence_directory": ".build/role-ecosystem-20261025"
+}
