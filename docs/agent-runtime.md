@@ -43,12 +43,12 @@ MdoAgentRun
 4. model profile 的默认协议、reasoning 与预算。
 
 模型 profile 是硬上限。Agent 与调用方只能收窄 context、input 和 output
-预算。子 Agent 还必须同时服从自身模型上限和父 Agent 的有效上限。未知
+预算。子 Agent 使用自身模型的窗口和输出额度，并共享用户授权、取消、截止时间与执行资源限制。未知
 model、协议、reasoning、权限档位和任何越权预算都在 session 创建阶段失败。
 
-每条模型 route 由 `(wire model, reasoning)` 唯一选择。两个不同 profile 或
-协议若产生无法从 xllm request 区分的 route，session 创建会失败，不会把请求
-猜测性地发送给任一 provider。
+托管角色的模型 route 由角色实际选择的 profile、协议与 reasoning 决定。
+即使 wire model 名称相同，也不会把两个供应商混用。没有角色绑定的底层
+SDK 请求仍要求可以从请求唯一确定 route，否则明确报告歧义。
 
 ## Tool、Skill 与子 Agent
 
@@ -79,9 +79,10 @@ Skill 会附加不可信 reference 提示。Skill 声明的每个必需工具必
 任一条件不满足都拒绝创建 session。这样不会出现“提示词要求使用某工具，
 运行时却已因权限被删掉”的半有效 Agent。
 
-所有带 `MDO_AGENT_SUBAGENT` 的 descriptor 会组成一次不可变 roster。子 Agent
-只能收窄 model budget、tool、Skill、effect、深度与后台执行能力，不能放宽
-父 Agent 的权限。主 Agent 未声明 delegation 时发布空 roster。
+所有带 `MDO_AGENT_SUBAGENT` 的 descriptor 按当前角色的 delegation allow/deny
+组成 roster；嵌套委派使用各角色自己的选择。v1 角色的自身工具、模型预算与
+委派授权分开，均受用户授权与共享深度/并行资源限制。主 Agent 未声明 delegation
+时发布空 roster。完整开发接口、格式及示例见 [Agent 开发](agent-authoring.md)。
 
 ## 回调所有权
 

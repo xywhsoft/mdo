@@ -13,7 +13,7 @@ export function validateExtensionId(kind, id) {
 export function requiredExtensionFields(kind, transport = "stdio") {
   if (kind === "mcp") return ["name", "description", transport === "stdio" ? "program" : "endpoint"];
   if (kind === "commands") return ["source"];
-  if (kind === "subagents") return ["name", "description", "prompt"];
+  if (kind === "subagents") return ["name", "description"];
   return ["agents", "skills"].includes(kind) ? ["name", "description"] : [];
 }
 export function parseExtensionJson(text, field = "source") {

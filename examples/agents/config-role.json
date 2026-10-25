@@ -1,0 +1,21 @@
+{
+  "schema": "mdo.agent.v1",
+  "name": "文档助手",
+  "description": "读取文档和已启用的知识库，给出带来源的答复。",
+  "mode": "both",
+  "extends": "mdo.general",
+  "tools": ["read", "ls", "glob", "grep"],
+  "read_only": true,
+  "prompt": "先检查相关文档，区分原文事实和自己的推断。",
+  "context": {
+    "memory.global": false,
+    "external_tools": false,
+    "environment": true,
+    "knowledge": { "enabled": true, "max_bytes": 32768 },
+    "custom.role": { "role": "system", "order": 15, "template": "当前角色：{{agent.id}}；工作区：{{workspace.path}}" }
+  },
+  "runtime": { "max_turns": 64, "max_model_calls": 96 },
+  "history": { "mode": "recent", "keep_recent_turns": 4, "include_summary": true },
+  "model_options": { "temperature": 0.3, "parallel_tool_calls": true },
+  "mcp_servers": []
+}

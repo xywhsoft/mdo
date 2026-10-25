@@ -141,7 +141,8 @@ def main() -> int:
         source = (site / "probe.c").read_text(encoding="utf-8")
         source = source.replace("void ServiceInit(", PROBE + "\nvoid ServiceInit(")
         insert = "\n".join(f'    MdoHomeAtomicWrite({json.dumps(path)}, {json.dumps(text)}, {len(text.encode())}u, false);'
-                           for path, text in [("modules/agents/mod.c", MODULE), ("agents/mod-main.md", MAIN), ("subagents/mod-child.md", CHILD)])
+                           for path, text in [("modules/agents/mod.c", MODULE), ("agents/mod-main.md", MAIN), ("subagents/mod-child.md", CHILD),
+                                              ("modules/agents/code-reviewer.c", (fixture.ROOT / "examples/agents/code-reviewer.c").read_text(encoding="utf-8"))])
         source = source.replace("xworkRuntimeConfigInit(&runtime_config);", insert + "\n    xworkRuntimeConfigInit(&runtime_config);")
         source = source.replace("MdoMemoryWriteOptionsInit(&memory_write);", "ModProbe(runtime);\n    MdoMemoryWriteOptionsInit(&memory_write);")
         source = source.replace('PrintRuntimeError("init_error", &error);', 'MdoModuleDiagnostics* D=MdoModuleDiagnosticsSnapshot();for(size_t I=0;I<MdoModuleDiagnosticsCount(D);I++){MdoModuleDiagnosticInfo Info={0};Info.Size=sizeof(Info);MdoModuleDiagnosticsAt(D,I,&Info);printf("module_diagnostic=%s:%s\\n",Info.SourcePath,Info.Message);}MdoModuleDiagnosticsRelease(D);PrintRuntimeError("init_error", &error);')

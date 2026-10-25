@@ -31,6 +31,9 @@ function scalar(text) {
   try { return JSON.parse(text); } catch { return text.replace(/^'(.*)'$/, "$1").replace(/''/g, "'"); }
 }
 export function promptFields(source) {
+  if (String(source).trimStart().startsWith("{")) {
+    try { const doc = JSON.parse(source); if (doc?.schema === "mdo.agent.v1") return { ...doc, prompt: doc.prompt || "" }; } catch { /* report malformed sources through the source editor */ }
+  }
   const { header, body } = splitPrompt(source);
   const fields = { prompt: body };
   const lines = header.split("\n");
@@ -52,6 +55,15 @@ export function promptFields(source) {
   return fields;
 }
 export function editPrompt(source, fields) {
+  if (String(source).trimStart().startsWith("{")) {
+    const doc = JSON.parse(source);
+    if (doc?.schema === "mdo.agent.v1") {
+      for (const [key,value] of Object.entries(fields)) {
+        if (value === undefined || value === "" && key !== "prompt") delete doc[key]; else doc[key] = value;
+      }
+      return JSON.stringify(doc, null, 2);
+    }
+  }
   const { header } = splitPrompt(source);
   const lines = header ? header.split("\n") : [];
   const keys = new Set(Object.keys(fields).filter((key) => key !== "prompt"));

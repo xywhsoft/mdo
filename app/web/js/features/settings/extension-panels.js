@@ -10,6 +10,7 @@ import { createMcpWorkbench } from "./mcp-workbench.js";
 import { newTool } from "./tool-template.js";
 import { newCommand } from "./command-template.js";
 import { createCommandWorkbench } from "./command-workbench.js";
+import { newRole, roleAdvanced, parseRoleAdvanced, ROLE_ADVANCED_KEYS, openRolePlan, roleProgramTemplate } from "./agent-authoring.js";
 import { api } from "../../api/client.js";
 import { targetState, subscribeTarget } from "../../api/target.js";
 import { subscribeLocale, t } from "../../i18n.js";
@@ -230,6 +231,7 @@ export function createExtensionPanels() {
           await api.post(`${path(kind, item.id)}/enabled`, { enabled: !item.enabled }, revision(item));
         }));
         const controls = editable ? [edit, button(label("export", "导出"), () => exportItem(kind, item))] : [];
+        if (["agents","subagents"].includes(kind)) controls.push(button("上下文预览",()=>openRolePlan({kind,id:item.id,owner:roots.get(kind)})));
         if (store && item.valid && editable) controls.push(button("分享到创作中心", () => store.publish(item, owner)));
         if (store) controls.push(...store.localActions(owner));
         if (kind === "skills" && editable) controls.push(button(label("improveSkill", "用 AI 改进"), () =>
@@ -317,13 +319,14 @@ export function createExtensionPanels() {
     return Object.fromEntries([...editing.form.elements].filter(node => node.name).map(node => [node.name,
       node.type === "checkbox" ? node.checked : node.value]));
   }
-  function toolPicker(value) {
+  function toolPicker(value, schema) {
     const editor = editing, target = targetKey();
     const raw = Array.isArray(value) ? value : String(value || "").replace(/^\[|\]$/g, "").replace(/["']/g, "").split(/[,\s]+/).filter(Boolean);
     const aliases = { Read: "read", Grep: "grep", Glob: "glob", Bash: "exec", Edit: "edit", Write: "write", WebSearch: "web_search", WebFetch: "web_open", Skill: "skill" };
-    const chosen = new Set(raw.map(id => Object.hasOwn(aliases,id) ? aliases[id] : id));
+    const special = ["inherit","all","none"].includes(value);
+    const chosen = new Set((special?[]:raw).map(id => Object.hasOwn(aliases,id) ? aliases[id] : id));
     const group = element("fieldset", { className: "agent-tool-picker" }, [element("legend", { text: label("tools", "工具") })]);
-    const inherit = element("input", { attrs: { type: "checkbox" } }); inherit.checked = chosen.size === 0;
+    const inherit = element("input", { attrs: { type: "checkbox" } }); inherit.checked = value === "inherit" || value === "all" || value !== "none" && !schema && chosen.size === 0 || value == null;
     const filter = element("input", { attrs: { type: "search", placeholder: label("filterTools", "筛选工具"), "aria-label": label("filterTools", "筛选工具") } });
     const list = element("div", { className: "agent-tool-list" });
     const status = element("small", { attrs: { role: "status" } });
@@ -384,11 +387,15 @@ export function createExtensionPanels() {
     if (["agents", "subagents"].includes(editing.kind)) {
       fields.model = values.model || "inherit"; fields.reasoning_effort = values.reasoning_effort; fields.thoughtLevel = "";
       fields.read_only = values.read_only; fields.allow_delegation = values.allow_delegation;
+      fields.schema = "mdo.agent.v1"; fields.extends = values.extends; fields.mode = values.mode;
+      fields.permission_profile = values.permission_profile; fields.prompt_mode = values.prompt_mode || "append";
+      fields.allow_background = values.allow_background; fields.require_verification_after_write = values.require_verification_after_write;
       // Hidden search results remain selected. Filtering changes visibility,
       // never the persisted allowlist.
-      fields.tools = editing.inheritTools.checked ? [] : editing.getSelectedTools();
-      if (!editing.inheritTools.checked && !fields.tools.length) throw new Error(label("chooseTool", "请选择至少一个工具，或启用继承全部工具。"));
-      if (editing.kind === "agents") fields.code = values.code;
+      fields.tools = editing.inheritTools.checked ? "inherit" : editing.getSelectedTools();
+      fields.code = values.code;
+      const advanced = parseRoleAdvanced(values.role_options);
+      for (const key of ROLE_ADVANCED_KEYS) fields[key] = advanced[key] ?? undefined;
     }
     return editPrompt(editing.source.value, fields);
   }
@@ -431,12 +438,19 @@ export function createExtensionPanels() {
     if (kind !== "commands") inputField(editing.form, "name", label("name", "名称"), values.name || "", { required: required("name") });
     inputField(editing.form, "description", label("description", "说明"), values.description || "", { required: required("description") });
     if (["agents", "subagents"].includes(kind)) {
+      inputField(editing.form,"extends","继承角色（可选）",values.extends || "",{hint:"mdo.general、agent.<id> 或 subagent.<id>；对象逐项合并，数组整体替换。"});
+      inputField(editing.form,"mode","运行模式",values.mode || (kind === "agents"?"primary":"subagent"),{hint:"primary、subagent 或 both；主角色与子角色使用同一套开发接口。"});
       inputField(editing.form, "model", label("model", "模型"), values.model || "inherit", { hint: label("modelHint", "inherit 跟随主 Agent；或填写模型 ID。") });
       inputField(editing.form, "reasoning_effort", label("effort", "思考强度（可选）"), values.reasoning_effort || values.thoughtLevel || "");
-      toolPicker(values.tools);
-      if (kind === "agents") inputField(editing.form, "code", label("codeAgent", "使用 C Agent 生成提示词"), values.code === true || values.code === "true", { type: "checkbox", hint: label("codeAgentHint", "可选：由 modules/agents 中同 ID 的 C Agent 生成基础提示词和生命周期回调；下方指令仅在普通模式下使用。") });
+      toolPicker(values.tools, values.schema);
+      inputField(editing.form, "code", "结合 C 角色程序", values.code === true || values.code === "true", { type: "checkbox", hint: `在 mdo-home/modules/${kind}/ 放置同角色 ID 的 C 程序，使用 mdo/agent.h。支持上下文、模型请求、响应、工具、委派回调和完整驱动；下面的配置继续生效。` });
+      inputField(editing.form,"permission_profile","权限配置（可选）",values.permission_profile || "",{hint:"inherit、read-only、balanced 或 full-access；始终受用户当前授权限制。"});
+      inputField(editing.form,"prompt_mode","与继承/C 基础提示词组合",values.prompt_mode || "append",{hint:"append 追加，replace 替换。"});
       inputField(editing.form, "read_only", label("readOnly", "只读任务"), values.read_only === true || values.read_only === "true", { type: "checkbox" });
       inputField(editing.form, "allow_delegation", label("delegation", "允许再次委派"), values.allow_delegation === true || values.allow_delegation === "true", { type: "checkbox" });
+      inputField(editing.form,"allow_background","允许后台委派",values.allow_background !== false && values.allow_background !== "false",{type:"checkbox"});
+      inputField(editing.form,"require_verification_after_write","修改后要求验证",values.require_verification_after_write === true || values.require_verification_after_write === "true",{type:"checkbox"});
+      inputField(editing.form,"role_options","高级配置（JSON）",JSON.stringify(roleAdvanced(source),null,2),{area:true,hint:"context：各来源的启停、筛选、顺序、角色、模板、字节上限及刷新；runtime：执行与模型额度；delegation：可委派角色及上下文；history：历史与图片策略；model_options：采样；mcp_servers、skills：能力选择。取消继承全部工具后不选择任何工具，表示禁用所有工具。"});
     }
     if (kind === "commands") inputField(editing.form, "argument_hint", label("argumentHint", "参数提示（可选）"), values["argument-hint"] || "");
     inputField(editing.form, "prompt", label(kind === "agents" ? "agentInstructions" : "instructions", kind === "agents" ? "系统提示词（留空使用默认规则）" : "指令"), values.prompt || "", { area: true, required: required("prompt") });
@@ -446,7 +460,7 @@ export function createExtensionPanels() {
     if(item&&["tools","skills","commands","knowledge"].includes(kind)&&!customizableResource(item,resourceOwner(states.get(kind).packages,item.path))){toast(storeReadOnlyMessage(),"error");return;}
     reads.cancel("editor");
     if (editing && !closeEditor()) return;
-    const initial = imported?.content ?? item?.content ?? (kind === "commands" ? newCommand() : kind === "tools" ? newTool() : kind === "mcp" ? JSON.stringify(newMcp(), null, 2) :
+    const initial = imported?.content ?? item?.content ?? (kind === "commands" ? newCommand() : kind === "tools" ? newTool() : ["agents","subagents"].includes(kind) ? newRole(kind) : kind === "mcp" ? JSON.stringify(newMcp(), null, 2) :
       editPrompt("", { name: kind === "commands" ? undefined : "", description: "", prompt: "" }));
     let editor;
     const layer = openLayer({ title: `${item ? label("edit", "编辑") : label("create", "新建")} ${title(kind)}`,
@@ -485,6 +499,16 @@ export function createExtensionPanels() {
       imported?.files?.length ? element("p", { text: label("fileCount", "包含 {count} 个附属文件", { count: imported.files.length }) }) : "",
       status);
     layer.footer.append(save, cancel);
+    if(["agents","subagents"].includes(kind))layer.footer.prepend(button("上下文预览",()=>{
+      try{validateExtensionId(kind,id.value.trim());void openRolePlan({kind,id:id.value.trim(),content:currentSource(),owner:dialog});}
+      catch(error){showEditorError(editor,error);}
+    }));
+    if(["agents","subagents"].includes(kind))layer.body.append(button("下载 C 开发模板",()=>{
+      try{
+        validateExtensionId(kind,id.value.trim());download(`${id.value.trim()}.c`,roleProgramTemplate(kind,id.value.trim()));
+        editor.status.textContent=`将 C 文件放入 mdo-home/modules/${kind}/，启用“结合 C 角色程序”并保存；刷新列表即可加载。配置式角色仅需保存当前表单。`;
+      }catch(error){showEditorError(editor,error);}
+    }));
     form.addEventListener("submit", event => { event.preventDefault(); void saveEditor(); });
     const clearValidation = () => {
       if (editing?.dialog === dialog) clearEditorValidation(editing);
@@ -586,6 +610,9 @@ export function createExtensionPanels() {
         openEditor(kind, null, { id: file.name.replace(/\.c$/i, "").toLowerCase(), content });
       } else if (/\.json$/i.test(file.name)) {
         const bundle = JSON.parse(content);
+        if(["agents","subagents"].includes(kind) && bundle.schema === "mdo.agent.v1"){
+          openEditor(kind,null,{id:file.name.replace(/\.json$/i,"").toLowerCase(),content});return;
+        }
         if (bundle.kind !== kind || typeof bundle.content !== "string") throw new Error(label("wrongKind", "文件类型与当前分类不符。"));
         openEditor(kind, null, { ...bundle, id: bundle.id });
       } else {

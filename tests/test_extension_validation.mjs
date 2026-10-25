@@ -8,11 +8,11 @@ const rejected = (action, key, field) => assert.throws(action, error =>
 const agent = { name: "Helper", description: "Read files", prompt: "Inspect files." };
 const mcp = { name: "Server", description: "Local server", transport: "stdio", program: "python", arguments: "[]", environment: "[]" };
 
-test("missing and whitespace-only SubAgent fields are identified before serialization", () => {
-  for (const field of ["name", "description", "prompt"])
+test("SubAgent name and description are validated while inherited/default instructions remain optional", () => {
+  for (const field of ["name", "description"])
     for (const value of ["", " \t\n"])
       rejected(() => validateExtensionForm("subagents", { ...agent, [field]: value }), "fieldRequired", field);
-  assert.doesNotThrow(() => validateExtensionForm("subagents", agent));
+  assert.doesNotThrow(() => validateExtensionForm("subagents", {...agent,prompt:""}));
 });
 test("default Agent instructions and Skill bodies remain optional; commands require C source", () => {
   for (const kind of ["agents", "skills"]) {
