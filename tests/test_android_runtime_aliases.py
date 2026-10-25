@@ -40,6 +40,13 @@ class RuntimeAliases(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "conflicting native"):
             self.pack({"git/libshared.so": b"\x7fELFa", "ffmpeg/libshared.so": b"\x7fELFb"})
 
+    def test_cpp_shared_library_keeps_its_loader_identity(self):
+        paths, files = self.pack({"ffmpeg/libmdo_ext_c++_shared.so": b"\x7fELFC++"})
+        self.assertEqual(files["ffmpeg/libmdo_ext_c++_shared.so"]["native"], "libmdo_ext_c++_shared.so")
+        self.assertIn("lib/arm64-v8a/libmdo_ext_c++_shared.so", paths)
+        with self.assertRaisesRegex(ValueError, "invalid native runtime name"):
+            self.pack({"ffmpeg/libbad name.so": b"\x7fELFbad"})
+
     def test_aliases_cannot_escape_or_replace_files(self):
         for alias, target in [("git/../escape", "git/git"), ("other/alias", "git/git"), ("git/git", "git/git"), ("git/alias", "missing"), ("git/line\nbreak", "git/git")]:
             with self.subTest(alias=alias), self.assertRaises(ValueError):

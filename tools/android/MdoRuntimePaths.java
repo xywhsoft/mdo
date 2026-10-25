@@ -39,7 +39,7 @@ final class MdoRuntimePaths {
     }
 
     static File nativeSource(File directory, String name) throws IOException {
-        if (name == null || !name.matches("lib[A-Za-z0-9_.-]+\\.so")) throw new IOException("Invalid native runtime name");
+        if (name == null || !name.matches("lib[A-Za-z0-9_.+-]+\\.so")) throw new IOException("Invalid native runtime name");
         File root = directory.getCanonicalFile();
         File source = new File(root, name).getCanonicalFile();
         if (!source.getPath().startsWith(root.getPath() + File.separator) || !source.isFile())

@@ -1,6 +1,7 @@
 """APK native/data mapping; Android native executables must be lib*.so entries."""
 import hashlib
 import json
+import re
 from pathlib import Path
 import zipfile
 
@@ -20,6 +21,8 @@ def add_runtime(archive, root: Path, edition: str, build_id: int, revision: int)
                 # Preserve DT_NEEDED library names; extension modules have unique
                 # APK-safe names and get their CPython names through symlinks.
                 name = file.name if file.name.startswith("lib") and file.suffix == ".so" else "libmdo_" + path.replace("/", "_").replace(".", "_") + ".so"
+                if not re.fullmatch(r"lib[A-Za-z0-9_.+-]+\.so", name):
+                    raise ValueError("invalid native runtime name: " + name)
                 with file.open("rb") as source:
                     digest = hashlib.file_digest(source, "sha256").hexdigest()
                 library = file.name.startswith("lib") and file.suffix == ".so"

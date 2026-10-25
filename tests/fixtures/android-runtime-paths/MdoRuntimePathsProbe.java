@@ -26,6 +26,9 @@ public final class MdoRuntimePathsProbe {
         check(!target.getCanonicalPath().startsWith(root.getCanonicalPath() + "/"), "Fixture must reproduce the original false rejection");
         check(MdoRuntimePaths.target(MdoRuntimePaths.root(files.toFile(), 2), "busybox/busybox").equals(target), "Second initialization must accept an installed native link");
         check(MdoRuntimePaths.nativeSource(oldNative.toFile(), "libmdo_busybox.so").toPath().equals(oldTool), "Native source must resolve inside PackageManager's directory");
+        Path cpp = Files.write(newNative.resolve("libmdo_ext_c++_shared.so"), new byte[]{5, 6});
+        check(MdoRuntimePaths.nativeSource(newNative.toFile(), "libmdo_ext_c++_shared.so").toPath().equals(cpp), "C++ runtime SONAME must remain usable");
+        reject(() -> MdoRuntimePaths.nativeSource(newNative.toFile(), "libbad name.so"));
 
         Files.delete(oldTool); // APK upgrade removes its previous native directory.
         check(MdoRuntimePaths.target(root, "busybox/busybox").equals(target), "Dangling link must remain replaceable");
