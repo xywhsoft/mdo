@@ -76,12 +76,24 @@ def main():
         module=module.replace('(void)Data;Host=H;mdo_result Result=',
             '(void)Data;Host=H;mdo_lifecycle_v1 L={sizeof(L),1,"global",NULL,10,false,MDO_AGENT_PHASES_ALL,NULL,Lifecycle};if(mdoRegisterLifecycle(R,&L,Error,Capacity)!=MDO_RESULT_OK)return MDO_RESULT_ERROR;mdo_result Result=')
         probe=roles.PROBE.replace('    char* At=Old?', '    char* Version=Old?strstr(Old,"LIFECYCLE-V1"):NULL;if(Version)Version[11]=\'2\';\n    char* At=Old?')
+        main_profile=roles.MAIN
         if args.background:
             # Reuse the caller stack after session creation. Resolved profile
             # strings must remain valid for a child starting on another thread.
             probe='static void ReuseSelectionStack(void){volatile char Bytes[16384];for(size_t I=0;I<sizeof(Bytes);I++)Bytes[I]=(char)0x5a;}\n'+probe
             probe=probe.replace('    if(!Session){','    ReuseSelectionStack();\n    if(!Session){')
             module=module.replace('.Flags=MDO_AGENT_SUBAGENT,','.Flags=MDO_AGENT_SUBAGENT|MDO_AGENT_ALLOW_BACKGROUND,')
+            module=module.replace('.Id="subagent.mod-child",','.Id="subagent.mod-child",.ReasoningEffort="medium",')
+            module=module.replace('static mdo_result Register(', 'static const mdo_agent_v1 Extra={.Size=sizeof(Extra),.AbiVersion=1,.Id="subagent.roster-low",.Name="Low reasoning",.Description="Roster ownership regression",.SystemPrompt="LOW",.ReasoningEffort="low",.Flags=MDO_AGENT_SUBAGENT,.AllowedEffects=MDO_TOOL_EFFECT_READ};\nstatic mdo_result Register(')
+            module=module.replace('(void)Data;Host=H;', '(void)Data;Host=H;if(R->AddAgent(R->Context,&Extra,Error,Capacity)!=MDO_RESULT_OK)return MDO_RESULT_ERROR;')
+            main_profile=main_profile.replace('"allow":["mod-child"]','"allow":["mod-child","roster-low"]')
+            check=r'''xwork_subagent_catalog* Roster=xworkAgentSubagentCatalogSnapshot(Session->Agent);unsigned RosterMask=0;
+    for(size_t I=0;Roster&&I<xworkSubagentCatalogCount(Roster);I++){xwork_subagent_definition_info Info;xworkSubagentDefinitionInfoInit(&Info);if(xworkSubagentCatalogDefinitionAt(Roster,I,&Info)){
+    if(!strcmp(Info.sName,"subagent.mod-child")&&!strcmp(Info.sReasoningEffort,"medium"))RosterMask|=1;
+    if(!strcmp(Info.sName,"subagent.roster-low")&&!strcmp(Info.sReasoningEffort,"low"))RosterMask|=2;}}
+    xworkSubagentCatalogRelease(Roster);printf("life_roster_reasoning=%u\n",RosterMask);
+    '''
+            probe=probe.replace('    /* A reload must',check+'    /* A reload must')
             probe=probe.replace('Write the result file\\\"}', 'Write the result file\\\",\\\"background\\\":true}')
             probe=probe.replace('++ModChildCalls;bool Write=false;','++ModChildCalls;xrtSleep(75);bool Write=false;')
             wait=r'''xwork_task_snapshot* T=xworkRuntimeTaskSnapshot(Runtime,0,&Error);
@@ -92,7 +104,7 @@ def main():
             probe=probe.replace('    printf("mod_result=',wait+'printf("mod_result=')
         source=(site/'probe.c').read_text(encoding='utf-8')
         source=source.replace('void ServiceInit(',probe+'\n'+EXTRA+'\nvoid ServiceInit(')
-        files=[('modules/agents/mod.c',module),('modules/tools/lifecycle.c',OBSERVER),('agents/mod-main.md',roles.MAIN),('subagents/mod-child.md',roles.CHILD)]
+        files=[('modules/agents/mod.c',module),('modules/tools/lifecycle.c',OBSERVER),('agents/mod-main.md',main_profile),('subagents/mod-child.md',roles.CHILD)]
         for identity in ('life-config','life-denied'):
             files.append(('agents/'+identity+'.md','---\nschema: mdo.agent.v1\nname: Config lifecycle\ntools: none\n---\nConfig lifecycle role'))
         insertion='\n'.join(f'    MdoHomeAtomicWrite({json.dumps(p)}, {json.dumps(t)}, {len(t.encode())}u, false);' for p,t in files)
@@ -106,6 +118,7 @@ def main():
         assert 'LIFECYCLE-V2 finished:agent.life-config:mod-complete' in output,output
         assert 'lifecycle-child-actually-finished:subagent.mod-child:1' in output,output
         if args.background:
+            assert 'life_roster_reasoning=3' in output,output
             assert 'life_background_wait=0' in output,output
             assert output.index('finished:agent.mod-main:')<output.index('finished:subagent.mod-child:'),output
         assert 'lifecycle-observer-error-isolated' in output,output

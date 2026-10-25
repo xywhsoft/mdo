@@ -950,6 +950,8 @@ static bool MdoAgentsPublishSubagents(MdoAgentOwner* Owner,
 {
     xwork_subagent_definition_config* Definitions = NULL;
     char** Prompts = NULL;
+    char** Reasonings = NULL;
+    size_t ReasoningCount = 0u;
     size_t Count = 0u;
     size_t PromptCount = 0u;
     size_t Capacity = 0u;
@@ -959,6 +961,8 @@ static bool MdoAgentsPublishSubagents(MdoAgentOwner* Owner,
     *Published = 0u;
     if ( (Main->Flags & MDO_AGENT_ALLOW_DELEGATION) == 0u )
         return xworkAgentReplaceSubagentDefinitions(Agent, NULL, 0u, Error);
+    Reasonings=xrtCalloc(MdoModuleCatalogAgentCount(Owner->Modules)+1u,sizeof(*Reasonings));
+    if(!Reasonings){MdoAgentsError(Error,XWORK_ERROR_OUT_OF_MEMORY,"cannot allocate owned subagent reasoning selections");goto done;}
     for ( i = 0u; i < MdoModuleCatalogAgentCount(Owner->Modules); ++i ) {
         MdoModuleAgentInfo Subagent;
         MdoAgentResolvedModel Model;
@@ -1022,7 +1026,11 @@ static bool MdoAgentsPublishSubagents(MdoAgentOwner* Owner,
         Target->psSkills = Subagent.Skills;
         Target->iSkillCount = Subagent.SkillCount;
         Target->sModel = Model.Info.WireModel;
-        Target->sReasoningEffort = Model.ReasoningEffort;
+        /* Definitions are published after the loop, when each temporary
+         * resolved Model is gone. Keep every selection until publication. */
+        Reasonings[Count]=xrtStrDup(Model.ReasoningEffort);ReasoningCount=Count+1u;
+        if(!Reasonings[Count]){MdoAgentsError(Error,XWORK_ERROR_OUT_OF_MEMORY,"cannot copy subagent reasoning selection");goto done;}
+        Target->sReasoningEffort = Reasonings[Count];
         Target->uContextWindowTokens=Subagent.ContextWindowTokens?Subagent.ContextWindowTokens:Model.Info.ContextWindowTokens;
         Target->uMaxInputTokens=Subagent.MaxInputTokens?Subagent.MaxInputTokens:Model.Info.MaxInputTokens;
         if(Target->uMaxInputTokens>Target->uContextWindowTokens)Target->uMaxInputTokens=Target->uContextWindowTokens;
@@ -1056,6 +1064,7 @@ static bool MdoAgentsPublishSubagents(MdoAgentOwner* Owner,
     Ok = true;
 done:
     MdoAgentsSubagentPromptsUnit(Prompts, PromptCount);
+    MdoAgentsSubagentPromptsUnit(Reasonings, ReasoningCount);
     xrtFree(Definitions);
     return Ok;
 }
