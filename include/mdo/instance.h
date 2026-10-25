@@ -18,4 +18,10 @@ static inline mdo_result mdoInstanceResume(const mdo_sdk_context_v1* C,const xva
 {return mdoCall(C,"instance.resume",P,R,E);}
 static inline mdo_result mdoInstanceAbandon(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
 {return mdoCall(C,"instance.abandon",P,R,E);}
+static inline mdo_result mdoInstanceGet(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
+{return mdoCall(C,"instance.get",P,R,E);}
+static inline mdo_result mdoInstanceCancel(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
+{return mdoCall(C,"instance.cancel",P,R,E);}
+static inline mdo_result mdoInstanceClose(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
+{return mdoCall(C,"instance.close",P,R,E);}
 #endif

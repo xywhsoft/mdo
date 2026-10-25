@@ -14,4 +14,8 @@ static inline mdo_result mdoWorkComplete(const mdo_sdk_context_v1* C,const xvalu
 {return mdoCall(C,"work.complete",P,R,E);}
 static inline mdo_result mdoWorkRelease(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
 {return mdoCall(C,"work.release",P,R,E);}
+static inline mdo_result mdoWorkGet(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
+{return mdoCall(C,"work.get",P,R,E);}
+static inline mdo_result mdoWorkCancel(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
+{return mdoCall(C,"work.cancel",P,R,E);}
 #endif

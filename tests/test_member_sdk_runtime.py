@@ -68,6 +68,7 @@ def main():
         with tempfile.TemporaryDirectory(dir=ROOT/'.build',prefix='member-sdk-') as tmp:
             f=Fixture(a.host.resolve(),Path(tmp));roles=f.home/'subagents';roles.mkdir(parents=True)
             (f.home/'modules/tools/scope.c').write_text(SCOPE_MODULE,encoding='utf-8')
+            (f.home/'modules/tools/collaboration.c').write_text((ROOT/'examples/collaboration/tools.c').read_text(encoding='utf-8'),encoding='utf-8')
             native=f.home/'modules/subagents/worker.c';native.parent.mkdir(parents=True);native.write_text('#define MEMBER_ROLE_ONLY\n'+SCOPE_MODULE,encoding='utf-8')
             (roles/'member.md').write_text('---\nschema: mdo.agent.v1\nname: Member QA\nmodel: qa-local-model\ntools: [qa.context]\nread_only: true\n---\nReply briefly.\n',encoding='utf-8')
             f.start()
@@ -80,6 +81,16 @@ def main():
                 def scope(action):return f.call('qa.scope',{'session':parent,'action':action})
                 assert scope('acquire') is False;assert scope('full-access') is True
                 assert scope('bounce') is True;assert scope('balanced') is False;scope('release')
+                demo=f.call('session.create',{'body':{'project_id':'default','model_id':'qa-local-model','permission_profile':'full-access'}})['data']['id']
+                def example(tool,action,args):
+                    value=f.call('tool.call',{'project':'default','session':demo,'tool':tool,'arguments':{'action':action,'args':args}})
+                    assert value['success'],value
+                    text=value['text'];return json.loads(text[text.index('{'):text.rindex('}')+1])
+                assert example('members','create',{'id':'example-worker','agent_id':'subagent.member'})['state']=='idle'
+                example('members','send',{'id':'example-worker','message_id':'example-turn','prompt':'Run using the optional example tools'})
+                assert example('members','run',{'id':'example-worker'})['last_outcome']['outcome']=='succeeded'
+                assert example('shared_work','create',{'id':'example-task','title':'A shared task'})['ready']
+                assert f.call('work.get',{'namespace':'session.'+demo,'id':'example-task'})['title']=='A shared task'
                 base={'namespace':'qa.members','id':'researcher'}
                 def call(action,**params):return f.call('instance.'+action,{**base,**params})
                 first=call('create',agent_id='subagent.member');assert first['state']=='idle',first
@@ -109,6 +120,7 @@ def main():
                 reply=next(m['content'] for m in mock.last_request['messages'] if m['role']=='tool');context=json.loads(reply[reply.index('{'):reply.rindex('}')+1]);assert context['namespace']=='qa.members' and context['member']=='researcher',context
                 assert f.call('mailbox.read',{'namespace':'qa.members','mailbox':'team'})['items'][0]['sender']=='researcher'
                 assert len(f.call('instance.list',{'namespace':'qa.members'}))==1
+                summary=f.call('instance.list',{'namespace':'qa.members'})[0];assert 'last_outcome' not in summary and summary['outcome']=='succeeded',summary
                 c_worker={**base,'id':'native-worker'};f.call('instance.create',{**c_worker,'agent_id':'subagent.c-worker'});f.call('instance.send',{**c_worker,'message_id':'c-turn','prompt':'Run C worker'})
                 assert f.call('instance.step',c_worker)['last_outcome']['outcome']=='succeeded'
                 assert f.call('work.get',{'namespace':'qa.members','id':'from-c-worker'})['ready']
