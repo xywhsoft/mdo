@@ -33,6 +33,7 @@ PROBE_SOURCE = r'''
 #include "src/security/secrets.c"
 #include "src/models/catalog.c"
 #include "src/skills/manager.c"
+#include "src/knowledge/manager.c"
 #include "src/memory/manager.c"
 #include "src/modules/manager.c"
 #include "src/approvals/manager.c"
@@ -826,6 +827,7 @@ def write_site(site: Path) -> None:
         "src/security/secrets.c",
         "src/models/catalog.c",
         "src/skills/manager.c",
+        "src/knowledge/manager.c",
         "src/memory/manager.c",
         "src/modules/manager.c",
         "src/agents/runtime.c",
