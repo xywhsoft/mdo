@@ -61,6 +61,11 @@ def main():
                 wait_ready(port, proc)
                 original_role=next(r for r in app("GET","/agents")["items"] if r["id"]=="agent.standalone")
                 standalone=app("GET","/extensions/agents/standalone")
+                minimal=app("PUT","/extensions/agents/standalone",dict(content=json.dumps(dict(schema="mdo.agent.v1",name="Paired C role",mode="both",code=True))),revision="new")
+                paired=next(r for r in app("GET","/agents")["items"] if r["id"]=="agent.standalone")
+                for key in ("flags","allowed_effects","tools","skills","model","reasoning_effort","permission_profile","context_window_tokens","max_input_tokens","max_output_tokens","max_turns","timeout_ms","max_final_bytes","max_depth","system_prompt_bytes"):
+                    assert paired[key]==original_role[key],(key,original_role,paired)
+                app("DELETE","/extensions/agents/standalone",revision=minimal["revision"])
                 assert standalone["code_only"] and standalone["valid"] and standalone["program_source"]==source,standalone
                 assert any(i["id"]=="standalone" for i in app("GET","/extensions/agents")["items"])
                 exported=app("POST","/ecosystem",dict(action="export",single_kind="agents",references=[dict(kind="agents",id="standalone")]))["resources"][0]

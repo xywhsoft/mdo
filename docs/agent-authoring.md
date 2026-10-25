@@ -117,3 +117,5 @@ context: {"memory.global":false,"environment":true}
 配置预览不会执行继承 C 程序。实际运行中 `MdoAgentSessionInspect()` 可以读取最近一次来源计划和请求投影，包括模型、工具、输入估算和输出上限；图片仅给出 parts 数量，不复制二进制。请求预览文本有 1 MiB 上限，包含用户原文和记忆，只应用于本机诊断，不应主动上传日志。
 
 Agent/SubAgent 的商店、创作中心、审核和独立发布规则见 [角色独立生态](agent-ecosystem.md)。
+
+配置覆盖 C 角色时，未明确填写的行为位、模型、推理级别与预算继承 C 描述符；`false` 行为位和 `0` 预算同样保留。只有显式配置的字段才覆盖原声明；`model: inherit`、`permission_profile: inherit` 可明确选择会话或用户配置。

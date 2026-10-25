@@ -1870,17 +1870,20 @@ static bool MdoModulesApplyProfiles(MdoModuleCatalog* Catalog,MdoModuleDiagnosti
                 (PromptMode && !strcmp(PromptMode,"replace")?xrtStrDup(Body):xrtFormat("%s\n\n%s",Native->SystemPrompt,Body)):xrtStrDup(Native->SystemPrompt);
             if(!Prompt){xrtValueRelease(Options);return false;}
             xrtFree(Config->SystemPrompt);Config->SystemPrompt=Prompt;
-            if(!MdoAgentConfigGet(Options,"require_verification_after_write"))Config->Flags |= Native->Flags & MDO_AGENT_REQUIRE_VERIFICATION_AFTER_WRITE;
-            if(!MdoAgentConfigGet(Options,"allow_delegation"))Config->Flags |= Native->Flags & MDO_AGENT_ALLOW_DELEGATION;
+            const char* FlagKeys[]={"read_only","allow_background","allow_delegation","require_verification_after_write"};
+            const mdo_agent_flags FlagBits[]={MDO_AGENT_READ_ONLY,MDO_AGENT_ALLOW_BACKGROUND,MDO_AGENT_ALLOW_DELEGATION,MDO_AGENT_REQUIRE_VERIFICATION_AFTER_WRITE};
+            for(size_t F=0;F<4;F++)if(!MdoAgentConfigGet(Options,FlagKeys[F]))Config->Flags=(Config->Flags&~FlagBits[F])|(Native->Flags&FlagBits[F]);
+            if(!MdoAgentConfigGet(Options,"model")&&Native->Model){xrtFree(Config->Model);Config->Model=Native->Model;Native->Model=NULL;}
+            if(!MdoAgentConfigGet(Options,"reasoning_effort")&&!MdoAgentConfigGet(Options,"thoughtLevel")&&Native->ReasoningEffort){xrtFree(Config->ReasoningEffort);Config->ReasoningEffort=Native->ReasoningEffort;Native->ReasoningEffort=NULL;}
             Config->UserData=Native->UserData;Config->Acquire=Native->Acquire;Config->Release=Native->Release;Config->Program=Native->Program;
-#define MDO_NATIVE_LIMIT(key,field) do {if(!MdoAgentConfigGet(Runtime,key) && Native->field)Config->field=Native->field;}while(0)
+#define MDO_NATIVE_LIMIT(key,field) do {if(!MdoAgentConfigGet(Runtime,key))Config->field=Native->field;}while(0)
             MDO_NATIVE_LIMIT("context_tokens",ContextWindowTokens);MDO_NATIVE_LIMIT("input_tokens",MaxInputTokens);
             MDO_NATIVE_LIMIT("output_tokens",MaxOutputTokens);MDO_NATIVE_LIMIT("max_turns",MaxTurns);
             MDO_NATIVE_LIMIT("timeout_ms",TimeoutMilliseconds);MDO_NATIVE_LIMIT("max_final_bytes",MaxFinalBytes);
             MDO_NATIVE_LIMIT("max_depth",MaxDepth);
 #undef MDO_NATIVE_LIMIT
             Config->AllowedEffects &= Native->AllowedEffects;
-            if(!Config->PermissionProfile && Native->PermissionProfile){Config->PermissionProfile=Native->PermissionProfile;Native->PermissionProfile=NULL;}
+            if(!MdoAgentConfigGet(Options,"permission_profile")&&!Config->PermissionProfile && Native->PermissionProfile){Config->PermissionProfile=Native->PermissionProfile;Native->PermissionProfile=NULL;}
             cstr ToolMode=MdoAgentConfigText(Options,"tools");
             if(!MdoAgentConfigGet(Options,"tools") || (ToolMode && !strcmp(ToolMode,"inherit"))){
                 MdoModulesStringArrayUnit(Config->Tools,Config->ToolCount);Config->Tools=Native->Tools;Config->ToolCount=Native->ToolCount;Native->Tools=NULL;Native->ToolCount=0;
