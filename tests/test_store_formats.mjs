@@ -18,8 +18,9 @@ test("author and copyright round-trip independently of account identity and reta
   assert(!Object.hasOwn(p.manifest,"submitter"));
   for(const invalid of [null,[],"a\0b","字".repeat(1366)])assert.throws(()=>makeStorePackage({...fields,copyright:invalid},resources));
 });
-test("nine systems use portable v2 with a client build floor and numeric public versions",()=>{
-  assert.equal(STORE_KINDS.length,9);
+test("ten extension systems include knowledge and keep portable v2 numeric versions",()=>{
+  assert.equal(STORE_KINDS.length,10);
+  assert(STORE_KINDS.includes("knowledge"));
   for(const kind of ["modules","toolpacks","plugins"]){
     const resource={kind,id:"fixture",content:"fixture"};
     const p=makeStorePackage({...fields,version:"1.10.0"},[resource]);
