@@ -125,6 +125,8 @@ def main(argv: list[str] | None = None) -> int:
             target_run(sdk_source / "tools/android/build_native.py", [*lock["xserver"]["required_extensions"],
                 "--sdk", args.sdk, "--out", path(native), "--cc", args.cc,
                 *([] if args.full_host else ["--profile", path(build_mdo.HOST_PROFILE_PATH)])])
+        if not args.skip_native_build:
+            build_mdo.stamp_host_overlay(native / "libxs.so", lock)
         build_mdo.verify_host_receipt(native / "libxs.so", lock, args.full_host)
         for edition, output, code in outputs:
             target_run(ROOT / "tools/android/build_apk.py", ["--sdk", args.sdk, "--java-home", args.java_home,

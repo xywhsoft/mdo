@@ -71,9 +71,9 @@
   },
   "sdk_overlay": {
     "path": "tools/dependencies/xwork-mcp.patch",
-    "sha256": "dfef6e54083a1c4c6c89fb05246632fe752d6a977251803b07e44aab702620a6",
+    "sha256": "bbf47c296cd2f3f2b8d5cfd6ba4e8978cb2ce2fd2e6f1f63c14802134c806acc",
     "base_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
-    "purpose": "MCP compatibility, Android embedding entrypoints and native browser panels",
+    "purpose": "MCP compatibility, Android entrypoints, native browser panels and anchored long-path atomic file replacement",
     "xrt_single_header_sha256": "36d536851fa9c09d82d4d0196b75f30beff38fe8799bf9c1b86b63eecba04c6a"
   }
 }

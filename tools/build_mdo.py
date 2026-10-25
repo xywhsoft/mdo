@@ -480,6 +480,16 @@ def host_profile_digest(full_host: bool) -> str:
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
+def stamp_host_overlay(host: Path, lock: dict) -> None:
+    """Bind a freshly built native binary to the verified SDK compatibility patch."""
+    receipt_path = host.with_name(host.name + ".build.json")
+    receipt = load_object(receipt_path)
+    if receipt.get("binary_sha256") != hashlib.sha256(host.read_bytes()).hexdigest():
+        raise BuildError("cannot stamp changed native host: " + str(host))
+    receipt["sdk_overlay_sha256"] = lock.get("sdk_overlay", {}).get("sha256", "")
+    write_if_changed(receipt_path, (json.dumps(receipt, indent=2) + "\n").encode())
+
+
 def verify_host_receipt(host: Path, lock: dict, full_host: bool, *, icon: bool = False) -> None:
     """A locked dependency alone cannot prove a reused binary matches it."""
     receipt_path = host.with_name(host.name + ".build.json")
@@ -490,6 +500,7 @@ def verify_host_receipt(host: Path, lock: dict, full_host: bool, *, icon: bool =
                  and receipt.get("profile_sha256") == host_profile_digest(full_host)
                  and re.fullmatch(r"[0-9a-f]{7,40}", revision) is not None
                  and lock["xserver"]["commit"].startswith(revision)
+                 and receipt.get("sdk_overlay_sha256", "") == lock.get("sdk_overlay", {}).get("sha256", "")
                  and set(lock["xserver"]["required_extensions"]).issubset(receipt.get("extensions", []))
                  and receipt.get("binary_sha256") == hashlib.sha256(host.read_bytes()).hexdigest())
         if icon:
@@ -611,6 +622,10 @@ def build(args: argparse.Namespace, xserver: Path, lock: dict) -> None:
     if not args.dry_run and not packer.is_file():
         raise BuildError(f"pack host was not built: {packer}")
     if not args.dry_run:
+        if not args.skip_host_build:
+            stamp_host_overlay(host, lock)
+            if packer != host:
+                stamp_host_overlay(packer, lock)
         verify_host_receipt(packer, lock, args.full_host, icon=os.name == "nt")
         if libc == "musl":
             verify_musl_host_stack(host)

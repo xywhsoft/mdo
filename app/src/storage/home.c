@@ -933,15 +933,7 @@ done:
 
 static bool MdoHomePublishTempLocked(cstr Temporary, cstr Target)
 {
-    char* sTemporary = xrtPathJoin(g_MdoHome.Path, Temporary);
-    char* sTarget = xrtPathJoin(g_MdoHome.Path, Target);
-    bool bOk = false;
-
-    if ( sTemporary != NULL && sTarget != NULL )
-        bOk = xrtPathRename(sTemporary, sTarget, true);
-    xrtFree(sTemporary);
-    xrtFree(sTarget);
-    return bOk;
+    return xsRootReplaceFile(g_MdoHome.Root, Temporary, Target);
 }
 
 static bool MdoHomeBackupLocked(cstr Path)

@@ -50,6 +50,7 @@ void ServiceInit(XS_HostInfo* pHost)
     bool bRead;
     bool bWrite = false;
     bool bRename = false;
+    bool bAtomic = false;
     bool bMaterialized = false;
     bool bReserved = true;
     (void)pHost;
@@ -72,6 +73,14 @@ void ServiceInit(XS_HostInfo* pHost)
             xrtFlush(File) && xrtClose(File);
     }
     bMaterialized = MdoResourceMaterialize("config/defaults.json");
+    bAtomic = MdoHomeAtomicWrite("sessions/atomic.txt","first",5,false) &&
+        MdoHomeAtomicWrite("sessions/atomic.txt","second",6,true);
+    bAtomic = bAtomic &&
+        !xsRootReplaceFile(g_MdoHome.Root, "sessions", "sessions/atomic.txt");
+    xrtClearError();
+    bAtomic = bAtomic &&
+        !xsRootReplaceFile(g_MdoHome.Root, "sessions/atomic.txt", "sessions");
+    xrtClearError();
     if ( bWrite && MdoHomeRemove("sessions/moved.txt", false) ) {
         bRename = MdoHomeRenameNoReplace("sessions/probe.txt",
             "sessions/moved.txt") &&
@@ -91,6 +100,7 @@ void ServiceInit(XS_HostInfo* pHost)
     printf("probe_resource=%s\n", sResource);
     printf("probe_reserved=%d\n", bReserved ? 1 : 0);
     printf("probe_rename=%d\n", bRename ? 1 : 0);
+    printf("probe_atomic=%d\n", bAtomic ? 1 : 0);
     printf("probe_ok=%d mode=%d overlay=%d materialized=%d\n",
         bWrite ? 1 : 0,
         MdoHomeGetSnapshot(&Snapshot) ? (int)Snapshot.Persistence : -1,
@@ -239,7 +249,8 @@ def main() -> int:
         return 2
 
     (ROOT / ".build").mkdir(exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix="home-runtime-", dir=ROOT / ".build") as raw:
+    # Linux no-replace rename needs a native filesystem, not a WSL DrvFS mount.
+    with tempfile.TemporaryDirectory(prefix="home-runtime-", dir=ROOT / ".build" if os.name == "nt" else None) as raw:
         base = Path(raw)
         site = base / "site"
         home = base / "state"
@@ -250,6 +261,9 @@ def main() -> int:
         assert "probe_resource=builtin-default" in output, output
         assert "probe_reserved=1" in output, output
         assert "probe_rename=1" in output, output
+        assert "probe_atomic=1" in output, output
+        assert (home / "sessions/atomic.txt").read_bytes() == b"second"
+        assert (home / "sessions/atomic.txt.bak").read_bytes() == b"first"
         assert "probe_ok=1 mode=1 overlay=1 materialized=1" in output, output
         assert (home / "sessions" / "moved.txt").read_text(
             encoding="utf-8") == "durable-session"

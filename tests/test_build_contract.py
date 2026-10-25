@@ -109,6 +109,7 @@ class BuildContractTests(unittest.TestCase):
             (app / "entry.c").write_text('const char* text = "https://example.test/xrtTextOnly()"; void f(void) { xrtFree(0); }', encoding="utf-8")
             (app / "sdk.h").write_text("XRT_API str xrtHeaderOnly(void);", encoding="utf-8")
             receipt = {"schema_version": 1, "profile_sha256": BUILD.host_profile_digest(False),
+                       "sdk_overlay_sha256": self.lock.get("sdk_overlay", {}).get("sha256", ""),
                        "revision": self.lock["xserver"]["commit"],
                        "extensions": self.lock["xserver"]["required_extensions"],
                        "icon_sha256": hashlib.sha256(BUILD.ICON_PATH.read_bytes()).hexdigest(),
@@ -119,6 +120,7 @@ class BuildContractTests(unittest.TestCase):
                 path.write_text(json.dumps(receipt))
                 BUILD.verify_host_receipt(host, self.lock, False, icon=True)
                 for key, value in (("profile_sha256", "full"), ("revision", "0000000"),
+                                   ("sdk_overlay_sha256", "previous-overlay"),
                                    ("icon_sha256", "0" * 64), ("binary_sha256", "0" * 64),
                                    ("extensions", []), ("xrt_symbols", [])):
                     with self.subTest(key=key):

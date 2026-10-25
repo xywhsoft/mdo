@@ -18,10 +18,8 @@ from test_mdo_delivery import request
 from knowledge_fixture import metadata,file,package
 
 def run():
-    p=argparse.ArgumentParser();p.add_argument('--host',type=Path,default=ROOT/'.build/host/windows-server-glibc/xs.exe');p.add_argument('--packed',action='store_true');p.add_argument('--ui',action='store_true');args=p.parse_args()
-    # Keep absolute fixture paths short: the pinned Windows host's atomic
-    # rename still has an absolute path limit, independent of tree depth.
-    base=Path(tempfile.mkdtemp(prefix='k-',dir=ROOT/'.build' if os.name=='nt' else None));app=base/'app';home=base/'home';home.mkdir();app.mkdir() if args.packed else shutil.copytree(ROOT/'app',app)
+    p=argparse.ArgumentParser();p.add_argument('--host',type=Path,default=ROOT/'.build/host/windows-server-glibc/xs.exe');p.add_argument('--packed',action='store_true');p.add_argument('--ui',action='store_true');p.add_argument('--long-home',action='store_true');args=p.parse_args()
+    base=Path(tempfile.mkdtemp(prefix='knowledge-',dir=ROOT/'.build' if os.name=='nt' else None));app=base/'app';home=base/('home-'+('x'*140)if args.long_home else'home');home.mkdir();app.mkdir() if args.packed else shutil.copytree(ROOT/'app',app)
     if args.packed:shutil.copy2(args.host,app/'mdo.exe');host=app/'mdo.exe'
     else:host=args.host.resolve()
     port=free_port();config=app/'xs.json';config.write_text(json.dumps(dict(services=[dict(enabled=True,name='knowledge',ip='127.0.0.1',port=port,**{'class':'http'},host_default=dict(enabled=True,name='mdo',path='web',devlang='c',devfile='generated/mdo_unity.c'))])))
@@ -111,6 +109,7 @@ def run():
         levels=(relative_limit-4)//2
         deep_path='a/'*levels+'x'*(relative_limit-2*levels-3)+'.md'
         assert len(deep_path)==relative_limit and levels>8
+        if args.long_home:assert len(str(home/('knowledge/deep/'+deep_path)))>350
         deep_doc={**metadata(),'index':deep_index}
         deep_files=[file(deep_index,'# Deep index'),file(deep_path,'Deep sentinel')]
         deep=call('PUT','/extensions/knowledge/deep',dict(content=json.dumps(deep_doc),files=deep_files),revision='new')
@@ -152,6 +151,12 @@ def run():
         call('DELETE','/extensions/knowledge/large-reference',revision=large['revision'])
         data=package()
         def store(action,**extra):return call('POST','/ecosystem',dict(action=action,single_kind='knowledge',**extra))
+        local_build=json.loads((ROOT/'app/release.json').read_text(encoding='utf-8'))['windows_build_id'if os.name=='nt'else'linux_glibc_server_build_id']
+        for minimum in (None,30000126,60000001,60000002,60000008,local_build+1):
+            incompatible=copy.deepcopy(data)
+            if minimum is None:incompatible['manifest'].pop('min_build_id',None)
+            else:incompatible['manifest']['min_build_id']=minimum
+            call('POST','/ecosystem',dict(action='plan_import',single_kind='knowledge',package=incompatible),status=409)
         plan=store('plan_import',package=data);assert len(plan['files'])==3
         store('import',package=data,expected_plan=plan['sha256'])
         # Turn the isolated local receipt into a downloaded-resource stand-in.

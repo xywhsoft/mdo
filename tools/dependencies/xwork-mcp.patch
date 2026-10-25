@@ -2033,3 +2033,161 @@
  	}
  	if ( !CreateProcessW(
  		sProgram,
+--- a/src/core/root_rename.h
++++ b/src/core/root_rename.h
+@@ -10,13 +10,13 @@
+ #endif
+ #endif
+ #define XS_ROOT_ERROR_RENAME ((xrooterror)30001)
+-typedef struct { xroot Root; cstr TargetPath; } XSRootRenameSource;
+-typedef struct { xrootnative SourceParent; cstr SourceName; } XSRootRenameTarget;
++typedef struct { xroot Root; cstr TargetPath; bool Replace; } XSRootRenameSource;
++typedef struct { xrootnative SourceParent; cstr SourceName; bool Replace; } XSRootRenameTarget;
+ #if defined(_WIN32) || defined(_WIN64)
+ typedef struct { BOOLEAN ReplaceIfExists; HANDLE RootDirectory;
+     DWORD FileNameLength; WCHAR FileName[1]; } XSRootFileNameInfo;
+-static bool XSRootNativeRenameNoReplace(xrootnative SourceParent,
+-	cstr sSource, xrootnative TargetParent, cstr sTarget)
++static bool XSRootNativeRename(xrootnative SourceParent,
++	cstr sSource, xrootnative TargetParent, cstr sTarget, bool bReplace)
+ {
+ 	HANDLE hSource;
+ 	NTSTATUS Status;
+@@ -33,8 +33,8 @@
+ 		FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+ 		FILE_OPEN,
+ 		FILE_SYNCHRONOUS_IO_NONALERT |
+-			FILE_OPEN_FOR_BACKUP_INTENT | FILE_OPEN_REPARSE_POINT,
+-		0u, false, &hSource, &Status) ) {
++			FILE_OPEN_FOR_BACKUP_INTENT | (bReplace ? FILE_NON_DIRECTORY_FILE : FILE_OPEN_REPARSE_POINT),
++		bReplace ? OBJ_DONT_REPARSE : 0u, false, &hSource, &Status) ) {
+ 		return false;
+ 	}
+ 	if ( !__xrtRootNtSuccess(Status) ) {
+@@ -68,7 +68,7 @@
+ 		(void)CloseHandle(hSource);
+ 		return false;
+ 	}
+-	pInfo->ReplaceIfExists = FALSE;
++	pInfo->ReplaceIfExists = bReplace ? TRUE : FALSE;
+ 	pInfo->RootDirectory = TargetParent;
+ 	pInfo->FileNameLength = (DWORD)(iUnits * sizeof(WCHAR));
+ 	memcpy(pInfo->FileName, pWide, iUnits * sizeof(WCHAR));
+@@ -94,20 +94,21 @@
+ 			__xrtRootNtErrorCode(Status));
+ 		return false;
+ 	}
+-	if ( !CloseHandle(hSource) ) {
+-		int iCode = (int)GetLastError();
+-
+-		__xrtRootSetError(XROOT_ERROR_CLOSE, "rename-close",
+-			"the object was renamed but its handle did not close", iCode);
+-		return false;
+-	}
++	/* Rename is committed: a close failure cannot turn it into a failed write. */
++	(void)CloseHandle(hSource);
+ 	return true;
+ }
+ #else
+-static bool XSRootNativeRenameNoReplace(xrootnative SourceParent,
+-	cstr sSource, xrootnative TargetParent, cstr sTarget)
++static bool XSRootNativeRename(xrootnative SourceParent,
++	cstr sSource, xrootnative TargetParent, cstr sTarget, bool bReplace)
+ {
+ 	int iResult;
++	if ( bReplace ) {
++		iResult = renameat(SourceParent, sSource, TargetParent, sTarget);
++		if ( iResult == 0 ) return true;
++		__xrtRootSetError(XS_ROOT_ERROR_RENAME, "rename", "failed to atomically replace the root-relative file", errno);
++		return false;
++	}
+ 
+ 	#if defined(__linux__) && defined(SYS_renameat2)
+ 		iResult = (int)syscall(SYS_renameat2, SourceParent, sSource,
+@@ -160,18 +161,21 @@
+ 	Step = __xrtRootNativeStat(Parent, sName, false,
+ 		false, &Info, pLink);
+ 	if ( Step == XROOT_STEP_DONE ) {
+-		__xrtRootError(XERR_EXISTS, XS_ROOT_ERROR_RENAME,
+-			"rename", "the rename target already exists");
+-		return XROOT_STEP_ERROR;
+-	}
+-	pError = xrtGetError();
+-	if ( (Step != XROOT_STEP_ERROR) || (pError == NULL) ||
+-		 (xrtErrorKind(pError) != XERR_NOT_FOUND) ) {
+-		return XROOT_STEP_ERROR;
+-	}
+-	xrtClearError();
+-	return XSRootNativeRenameNoReplace(pSource->SourceParent,
+-		pSource->SourceName, Parent, sName) ?
++		if ( !pSource->Replace ) {
++			__xrtRootError(XERR_EXISTS, XS_ROOT_ERROR_RENAME, "rename", "the rename target already exists");
++			return XROOT_STEP_ERROR;
++		}
++		if ( Info.Type != XFILE_TYPE_FILE ) {
++			__xrtRootError(XERR_TYPE, XS_ROOT_ERROR_RENAME, "rename", "replacement target must be a regular file");
++			return XROOT_STEP_ERROR;
++		}
++	} else {
++		pError = xrtGetError();
++		if ( Step != XROOT_STEP_ERROR || !pError || xrtErrorKind(pError) != XERR_NOT_FOUND ) return XROOT_STEP_ERROR;
++		xrtClearError();
++	}
++	return XSRootNativeRename(pSource->SourceParent,
++		pSource->SourceName, Parent, sName, pSource->Replace) ?
+ 		XROOT_STEP_DONE : XROOT_STEP_ERROR;
+ }
+ 
+@@ -188,6 +192,12 @@
+ 			"rename", "the source must name a root-relative object");
+ 		return XROOT_STEP_ERROR;
+ 	}
++	if ( pTarget->Replace ) {
++		xfileinfo Info; xrootstep Step=__xrtRootNativeStat(Parent,sName,false,false,&Info,pLink);
++		if(Step!=XROOT_STEP_DONE)return Step;
++		if(Info.Type!=XFILE_TYPE_FILE){__xrtRootError(XERR_TYPE,XS_ROOT_ERROR_RENAME,"rename","replacement source must be a regular file");return XROOT_STEP_ERROR;}
++	}
++	Source.Replace = pTarget->Replace;
+ 	Source.SourceParent = Parent;
+ 	Source.SourceName = sName;
+ 	return __xrtRootResolve(pTarget->Root, pTarget->TargetPath,
+@@ -209,8 +219,17 @@
+ 	}
+ 	Data.Root = Root;
+ 	Data.TargetPath = sTarget;
++	Data.Replace = false;
+ 	return __xrtRootResolve(Root, sSource,
+ 		0u, false,
+ 		XSRootRenameSourceProc, &Data);
+ }
+-#endif
++/* Atomic regular-file replacement anchored at both parent directory handles.
++ * No absolute path lookup and no following source/target reparse points. */
++bool xsRootReplaceFile(xroot Root,cstr Source,cstr Target)
++{
++    if(!Root||!Source||!*Source||!Target||!*Target){__xrtErrorSetInvalidArgument();return false;}
++    XSRootRenameSource Data={Root,Target,true};
++    return __xrtRootResolve(Root,Source,0u,false,XSRootRenameSourceProc,&Data);
++}
++#endif
+--- a/src/sdk/xsbase.h
++++ b/src/sdk/xsbase.h
+@@ -381,6 +381,8 @@
+ /* Atomic no-replace move of a file, directory or final link within an
+  * anchored root. Both parents are resolved without escaping Root. */
+ XS_API bool xsRootRenameNoReplace(xroot Root, cstr Source, cstr Target);
++/* Atomic regular-file replacement using anchored parent handles; rejects links. */
++XS_API bool xsRootReplaceFile(xroot Root, cstr Source, cstr Target);
+ 
+ XS_API bool xsFetch(const XS_FetchRequest* pRequest, XS_FetchResponse* pResponse);
+ /* Accepts only a successful xsFetch response or a zero-initialized response. */
+--- a/src/script/tcc_host.h
++++ b/src/script/tcc_host.h
+@@ -85,6 +85,7 @@
+ 	XS_API_SYMBOL(xsBackgroundLeaseRenew)
+ 	XS_API_SYMBOL(xsBackgroundLeaseRelease)
+ 	XS_API_SYMBOL(xsRootRenameNoReplace)
++	XS_API_SYMBOL(xsRootReplaceFile)
+ 	XS_API_SYMBOL(xsFetch)
+ 	XS_API_SYMBOL(xsFetchResponseUnit)
+ 	XS_API_SYMBOL(xsExtensionEnabled)
