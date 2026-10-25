@@ -8,6 +8,7 @@ export function roleDescriptor(resource) {
   if (!value || Array.isArray(value) || value.schema !== "mdo.agent.v1") throw Error("角色作品需要 mdo.agent.v1 配置");
   const mode = value.mode || (resource.kind === "agents" ? "primary" : "subagent");
   if (!["both", resource.kind === "agents" ? "primary" : "subagent"].includes(mode)) throw Error("角色运行模式与分类不符");
+  if (![true,false,"true","false"].includes(value.code)) throw Error("角色作品需要明确声明 code: true 或 false");
   const code = value.code === true || value.code === "true";
   if (code !== Boolean(resource.files?.some(f => f.path === "program.c"))) throw Error("C 角色需要包含 program.c 源码");
   return { ...value, mode, code };

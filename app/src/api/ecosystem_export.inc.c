@@ -143,7 +143,7 @@ static bool EcoRoleExport(cstr Kind,cstr Id,xvalue* Resource)
     if(Ok&&!MdoAgentConfigGet(D,"code")){
         char* Own=xrtJsonStringify(D,false,NULL);MdoAgentFile Resolved={0};char Why[1024];
         Ok=Own&&MdoAgentFileParse(Id,Own,!strcmp(Kind,"agents"),&Resolved,Why,sizeof(Why));
-        if(Ok&&Resolved.UseCode)Ok=xrtValueObjectSetNew(D,XRT_STR_LITERAL("code"),xrtValueBool(true));
+        if(Ok)Ok=xrtValueObjectSetNew(D,XRT_STR_LITERAL("code"),xrtValueBool(Resolved.UseCode));
         xrtFree(Own);MdoAgentFileUnit(&Resolved);
     }
     const char* Lists[]={"skills","mcp_servers"};

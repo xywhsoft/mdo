@@ -20,14 +20,14 @@ Agent 与 SubAgent 分别提供本机、商店两个入口，共用作品、投�
 {
   "kind": "agents",
   "id": "reviewer",
-  "content": "{\"schema\":\"mdo.agent.v1\",\"name\":\"审查员\",\"mode\":\"both\",\"tools\":[\"read\"],\"prompt_file\":\"reviewer/assets/prompt.md\"}",
+  "content": "{\"schema\":\"mdo.agent.v1\",\"name\":\"审查员\",\"mode\":\"both\",\"code\":false,\"tools\":[\"read\"],\"prompt_file\":\"reviewer/assets/prompt.md\"}",
   "files": [{"path":"assets/prompt.md","base64":"UmV2aWV3IGNhcmVmdWxseS4="}]
 }
 ```
 
 - 配置安装到 `<kind>/<id>.md`，JSON 内容可由本地角色解析器直接读取。
 - `assets/<relative>` 安装到 `<kind>/<id>/assets/<relative>`。`prompt_file` 和上下文 `file` 必须引用所附的同角色目录文件。导出重写路径，只读取作者明确引用的文件，不导出渲染后的上下文、项目目录、记忆、会话或凭据。
-- C 角色设置 `code:true` 并附 `program.c`，安装到 `modules/<kind>/<id>.c`，使用与配置相同的角色 ID。附件仅接受有界 UTF-8 文档或源码，不分发宿主二进制。当前每文件最多 128 KiB、每角色最多 128 个附件。
+- 分发配置明确设置 `code:false` 或 `code:true`，避免继承环境暗中改变开发方式。C 角色设置 `code:true` 并附 `program.c`，安装到 `modules/<kind>/<id>.c`，使用与配置相同的角色 ID。附件仅接受有界 UTF-8 文档或源码，不分发宿主二进制。当前每文件最多 128 KiB、每角色最多 128 个附件。
 - `mode:both` 允许同一个角色用于主会话及委派任务，作品仍归属于作者选择的一个商店分类。
 - 独立 C 角色从已发布的本地模块描述符获得展示信息；GET 和导出不会执行生命周期回调。停用的独立 C 角色可管理，重新启用并验证后才显示分享入口。
 - “导出”得到 `.role.json`，包含配置与自有文件，可在对应本机页面导入。含附件的导入走同一个安装计划和持久事务；不会把附件丢给普通单文件编辑器。

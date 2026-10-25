@@ -4,6 +4,7 @@ import base64
 import copy
 import json
 import os
+import shutil
 from pathlib import Path
 import subprocess
 import tempfile
@@ -12,7 +13,7 @@ from test_api_runtime import ROOT, free_port, request, wait_ready, write_site
 
 
 def package(kind="agents", identity="portable-reviewer", code=False):
-    config = dict(schema="mdo.agent.v1", name="Portable reviewer", description="Review a local project",
+    config = dict(schema="mdo.agent.v1",code=code, name="Portable reviewer", description="Review a local project",
                   mode="both", tools=["read"], prompt_file=identity + "/assets/review.md",
                   context={"custom.guide": dict(file=identity + "/assets/guide.md")})
     files = [dict(path="assets/" + name, base64=base64.b64encode(text.encode()).decode())
@@ -31,9 +32,14 @@ def package(kind="agents", identity="portable-reviewer", code=False):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", type=Path, default=ROOT / ".build/host/xs.exe")
+    parser.add_argument("--packed",type=Path)
     args = parser.parse_args()
-    with tempfile.TemporaryDirectory(prefix="role-package-", dir=ROOT / ".build") as raw:
-        base = Path(raw); port = free_port(); config = write_site(base, port); home = base / "home"; home.mkdir()
+    with tempfile.TemporaryDirectory(prefix="role-package-", dir=ROOT / ".build" if os.name=="nt" else None) as raw:
+        base = Path(raw); port = free_port(); home = base / "home"; home.mkdir()
+        if args.packed:
+            config=base/"xs.json";config.write_text(json.dumps(dict(services=[dict(enabled=True,name="packed-roles",ip="127.0.0.1",port=port,**{"class":"http"},host_default=dict(enabled=True,name="mdo",path="web",devlang="c",devfile="generated/mdo_unity.c"))])))
+            host=base/args.packed.name;shutil.copy2(args.packed,host)
+        else:config=write_site(base,port);host=args.host.resolve()
         program=home/"modules/agents/standalone.c";program.parent.mkdir(parents=True)
         source=(ROOT/"examples/agents/code-reviewer.c").read_text(encoding="utf-8").replace("agent.code-reviewer","agent.standalone")
         program.write_text(source,encoding="utf-8",newline="\n")
@@ -48,7 +54,7 @@ def main():
         def store(action, p, status=200, **kw):
             return app("POST", "/ecosystem", dict(action=action, single_kind=p["resources"][0]["kind"], package=p, **kw), status)
         with (base / "host.log").open("wb") as log:
-            proc = subprocess.Popen([str(args.host.resolve()), str(config), "--", "--home", str(home)], cwd=base,
+            proc = subprocess.Popen([str(host), *([] if args.packed else [str(config)]), "--", "--home", str(home)], cwd=base,
                 env=dict(os.environ, USE_WEBVIEW="0", MDO_BUILD_ID="70000009"), stdout=log, stderr=log,
                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
             try:

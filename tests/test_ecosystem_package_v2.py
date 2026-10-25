@@ -90,7 +90,7 @@ def main():
     value=copy.deepcopy(kb);meta=json.loads(value["resources"][0]["content"]);meta["install"]="run a command";value["resources"][0]["content"]=json.dumps(meta);add("knowledge-inert-only",value,False)
     value=copy.deepcopy(kb);meta=json.loads(value["resources"][0]["content"]);meta["prompt"]="x"*8193;value["resources"][0]["content"]=json.dumps(meta);add("knowledge-prompt-limit",value,False)
     role=package("agents");role["manifest"]["min_build_id"]=70000009
-    role["resources"][0]["content"]=json.dumps(dict(schema="mdo.agent.v1",name="Reviewer",mode="both",prompt="Inspect"))
+    role["resources"][0]["content"]=json.dumps(dict(schema="mdo.agent.v1",code=False,name="Reviewer",mode="both",prompt="Inspect"))
     add("role-portable-config",role,True)
     def bad_role(name, mutate):
         value=copy.deepcopy(role);mutate(value);add("role-"+name,value,False)
@@ -102,7 +102,7 @@ def main():
     code_role=copy.deepcopy(role);code_role["resources"][0].update(content='{"schema":"mdo.agent.v1","code":true}',files=[dict(path="program.c",base64=base64.b64encode(b"/* Reviewed C source */").decode())])
     add("role-c-source",code_role,True)
     value=copy.deepcopy(code_role);value["resources"][0]["files"][0]["base64"]="AA==";add("role-binary-source",value,False)
-    value=copy.deepcopy(role);value["resources"][0].update(content='{"schema":"mdo.agent.v1","prompt_file":"qa-resource/assets/a.md"}',files=[dict(path="assets/a.md",base64="SGVsbG8=")]);add("role-owned-prompt",value,True)
+    value=copy.deepcopy(role);value["resources"][0].update(content='{"schema":"mdo.agent.v1","code":false,"prompt_file":"qa-resource/assets/a.md"}',files=[dict(path="assets/a.md",base64="SGVsbG8=")]);add("role-owned-prompt",value,True)
     value=copy.deepcopy(role);value["resources"][0]["files"]=[dict(path="assets/docs",base64="SGVsbG8="),dict(path="assets/docs/index.md",base64="SGVsbG8=")];add("role-file-directory-collision",value,False)
     value=copy.deepcopy(role);value["resources"][0]["files"]=[dict(path="program.c",base64="LyogYyAqLw==")];add("role-code-without-declaration",value,False)
     value=copy.deepcopy(role);value["resources"][0]["files"]=[dict(path="assets/large.md",base64=base64.b64encode(b"x"*131073).decode())];add("role-document-size",value,False)
