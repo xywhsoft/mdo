@@ -21,6 +21,7 @@ class ModelSdkBuildTests(unittest.TestCase):
             app = base / 'app'; app.mkdir()
             host = base / 'xs.exe'; host.write_bytes(b'fixture-host')
             receipt = {'schema_version': 1, 'profile_sha256': BUILD.host_profile_digest(False),
+                'sdk_overlay_sha256': lock['sdk_overlay']['sha256'],
                 'revision': lock['xserver']['commit'], 'extensions': lock['xserver']['required_extensions'],
                 'binary_sha256': hashlib.sha256(host.read_bytes()).hexdigest(), 'xrt_symbols': ['xrtFree']}
             host.with_name(host.name + '.build.json').write_text(json.dumps(receipt), encoding='utf8')
@@ -41,6 +42,7 @@ class ModelSdkBuildTests(unittest.TestCase):
             source = app / 'client.c'
             source.write_text('void f(void){xrtRudpEndpointBind();xrtFree(0);}\n', encoding='utf8')
             receipt = {'schema_version': 1, 'profile_sha256': BUILD.host_profile_digest(False),
+                'sdk_overlay_sha256': lock['sdk_overlay']['sha256'],
                 'revision': lock['xserver']['commit'], 'extensions': lock['xserver']['required_extensions'],
                 'binary_sha256': hashlib.sha256(host.read_bytes()).hexdigest(), 'xrt_symbols': ['xrtFree'],
                 'extension_symbols': {'xrudp': ['xrtRudpEndpointBind']}}
