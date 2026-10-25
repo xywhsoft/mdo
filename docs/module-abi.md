@@ -7,8 +7,9 @@ fixed `mdoModuleEntry` function. The entry returns a static `mdo_module_v1`.
 The user-facing local tool editor manages `tools/<id>.c`; legacy module paths
 continue to work. Built-in tool IDs cannot be replaced by managed C tools.
 Ordinary Agent/SubAgent Markdown profiles use the same descriptor catalog and
-runtime. Main profiles can optionally use a same-ID C Agent for their base
-prompt/lifecycle while retaining the UI tool scope. See [local tools](local-tools.md).
+runtime. Both main and child profiles can use a same-ID C role with `code: true`.
+See [role authoring](agent-authoring.md) for configuration inheritance, context
+sources, native programs, scopes and runnable examples.
 
 Every descriptor and host table starts with `Size` and `AbiVersion`. A module
 sets them with `MDO_V1_HEADER(type)`. The host copies every descriptor string
@@ -38,7 +39,15 @@ free `DescribePermissions` callback, or declares one constant
 non-read effects require the callback. Result writers copy input before they
 return and are valid only during the callback.
 
-Agent and Subagent definitions share `mdo_agent_v1`. The directory sets the
-maximum role: `agents` may register main Agents and Subagents;
-`subagents` may register only Subagents. Module unload waits until every
+Agent and Subagent definitions share `mdo_agent_v1`. Descriptor flags select
+primary, subagent or both modes; either role directory accepts the same API.
+Module unload waits until every
 catalog, active call, and other owner reference to its generation is released.
+
+Optional descriptor tail fields `ConfigurationJson` and `Program` add normalized
+options and `mdo_agent_program_v1` callbacks. Older descriptor prefixes remain
+accepted. Include `mdo/agent.h` for source/state/request helpers and the one-file
+`MDO_AGENT_MODULE(Role)` export. Programs receive instance-private state and a
+scoped Application SDK context; shared module resources retain Acquire/Release.
+The pinned native xwork overlay uses ABI 9; build hosts and packed headers must
+be regenerated together through the dependency lock.

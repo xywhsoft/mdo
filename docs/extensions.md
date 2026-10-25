@@ -2,18 +2,20 @@
 
 管理入口：设置 → 扩展能力。资源分别有列表、新建、编辑、导入和导出；自定义资源可启停、删除，默认 Agent 可编辑、恢复默认，内建工具清单只读；MCP 另有测试连接。界面使用原生 HTML/JavaScript，手机端使用同一套页面。工具与主 Agent 的详细约定见 [本地工具与 Agent 配置](local-tools.md)。
 
+0.7.0 的 Agent/SubAgent 使用统一的配置与 C 程序开发接口，支持继承、独立上下文来源、精细委派和只读预览。当前接口以 [角色开发指南](agent-authoring.md) 为准。
+
 ## 文件与运行方式
 
 所有持久文件都在当前设备的 `mdo-home` 中；外部文件覆盖打包内置资源。只查看资源列表不会写入资源配置。内置 Skill 等文件资源可停用或保存外部自定义版本，内建工具清单只读，默认 Agent 保持启用；删除外部覆盖后，内置资源会重新出现。
 
 | 类型 | 路径 | 运行方式 |
 | --- | --- | --- |
-| Agent | `agents/<id>.md` | 系统生成普通提示词，可选同 ID C Agent |
-| SubAgent | `subagents/<id>.md` | 转成现有 Agent 描述符，使用已有委派运行器 |
+| Agent | `agents/<id>.md` | Markdown/JSON 配置，可结合同 ID C 角色程序 |
+| SubAgent | `subagents/<id>.md` | 相同的配置/C 接口，使用隔离账本及托管委派运行器 |
 | 自定义工具 | `tools/<id>.c` | TCC 注册，按回调执行和收集结果 |
 | Skill | `skills/<id>/SKILL.md` | 元数据发现；指令和附属文件按需读取 |
 | MCP | `mcp/<id>.json` | 现有 stdio / Streamable HTTP 连接管理 |
-| 命令 | `commands/<id>.md` | 展开普通聊天草稿，确认后发送 |
+| 命令 | `commands/<id>.c` | TCC 执行编辑器命令，参数使用 xvalue array |
 
 ID 使用 1–64 个小写字母、数字、点、短横线或下划线，不允许 Windows 保留文件名、连续点或路径分隔符。已有 C Agent、SubAgent 继续使用 `modules/agents`、`modules/subagents`。
 
