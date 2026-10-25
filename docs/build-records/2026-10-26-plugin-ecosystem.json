@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "mdo_commit": "0e188a38a25f9e9d918d94a1028d97bc0f005301",
+  "sdk_overlay_sha256": "16f28b0bd9ecf791b505bbff9001a0c18bbaf398e29d906dc01df967818bcb84",
+  "artifacts": {
+    "windows/mdo.exe": {
+      "bytes": 6422059,
+      "sha256": "0484b91ac6e8dca619cad16a187416d7fd05d2d1cdeabfc3167ab9b267a5c1b8",
+      "packaged_app_sha256": "91453d148d1333336b0282ca5b25cd40ed9546965edc2bc39261f8c33b827d3a",
+      "mdo_commit": "0e188a38a25f9e9d918d94a1028d97bc0f005301",
+      "version_code": "05000700"
+    },
+    "linux/linux-x86_64-glibc-server/mdo-server": {
+      "bytes": 5926939,
+      "sha256": "3bc638dd1a0b65f249fff233f5f0b8fad0a9ec38ea606947951b3fd2a279cbcc",
+      "packaged_app_sha256": "2a07059d080145e439bc03dd5f6e68434c7dcc54e75d671d8e0538d3bddfe63a",
+      "mdo_commit": "0e188a38a25f9e9d918d94a1028d97bc0f005301",
+      "version_code": "05000700",
+      "glibc_required": "2.38",
+      "glibc_max": null
+    },
+    "mdo-arm64-v8a.apk": {
+      "bytes": 5961025,
+      "sha256": "893a4803b92f0ca483ad9ae20cc41af9b792281754bd82dfd208810161ff98a9",
+      "build_id": 70000055,
+      "certificate_sha256": "94b1947b60f3ce0852b19d9c37a47cc4a084fe9d601692c6a1f6b204c2174e84",
+      "app_pack_sha256": "74c55d54add7c6d33f36f83efe4103cb17bf9e282c25acacc293c3a13333f81f",
+      "native_sha256": "e9df8cf571bd0022fbeeeda710d3ec6c812459503cfb29912bf579116d0da2e3",
+      "signature_v2": true,
+      "signature_v3": true,
+      "zipalign_16k": true,
+      "runtime_tools": [],
+      "runtime_files_verified": 0
+    },
+    "mdo-full-arm64-v8a.apk": {
+      "bytes": 150296983,
+      "sha256": "aed3606240feea0b6ebf3ac2793fc2f5eb007eda02b5540dc6248546935ab00e",
+      "build_id": 70000056,
+      "certificate_sha256": "94b1947b60f3ce0852b19d9c37a47cc4a084fe9d601692c6a1f6b204c2174e84",
+      "app_pack_sha256": "74c55d54add7c6d33f36f83efe4103cb17bf9e282c25acacc293c3a13333f81f",
+      "native_sha256": "e9df8cf571bd0022fbeeeda710d3ec6c812459503cfb29912bf579116d0da2e3",
+      "signature_v2": true,
+      "signature_v3": true,
+      "zipalign_16k": true,
+      "runtime_tools": [
+        "7zip",
+        "aria2",
+        "busybox",
+        "curl",
+        "ffmpeg",
+        "git",
+        "imagemagick",
+        "jq",
+        "openssh",
+        "poppler",
+        "python",
+        "ripgrep",
+        "sqlite"
+      ],
+      "runtime_files_verified": 734
+    }
+  },
+  "packed_extensions": {
+    "passed": true,
+    "model_requests": {
+      "custom_tool": 2,
+      "skill": 4,
+      "delegation": 3,
+      "profiles": 3,
+      "mcp": 4,
+      "builder": 6
+    },
+    "final_model_errors": 0,
+    "mcp_2025_methods": [
+      "initialize",
+      "notifications/initialized",
+      "tools/list",
+      "tools/call"
+    ],
+    "mcp_schemas_lazy": true,
+    "packed_sha256": "0484b91ac6e8dca619cad16a187416d7fd05d2d1cdeabfc3167ab9b267a5c1b8"
+  },
+  "version_name": "0.7.0",
+  "version_code": "05000700",
+  "plugin_min_build_id": 70000049,
+  "site_commit": "99f9495755d238a54efa2e2d9662f57e219e9fc3",
+  "platform": {
+    "server": {
+      "passed": true,
+      "service": "active",
+      "site_commit": "99f9495755d238a54efa2e2d9662f57e219e9fc3",
+      "deployed_files": 11,
+      "runtime_and_config_preserved": true
+    },
+    "https": {
+      "/mdo/plugin-preview.js": {
+        "status": 200,
+        "sha256": "a73a3ad14f40f316fd90538154faa83988927ea429165828616af13a2420c0d7"
+      },
+      "/mdo/creator.js": {
+        "status": 200,
+        "sha256": "ad1853f1c7df53af99aecd31354c239a9a74e5198719b20a314c2661a80a0731"
+      },
+      "plugin_catalog": {
+        "status": 200,
+        "items": 0
+      }
+    }
+  },
+  "linux_tests": {
+    "passed": true,
+    "sha256": "3bc638dd1a0b65f249fff233f5f0b8fad0a9ec38ea606947951b3fd2a279cbcc",
+    "fixture": "/tmp/mdo-plugins-qa-v_b9w6a0"
+  },
+  "client_downloads_published": false,
+  "android_hardware_tested": false
+}
