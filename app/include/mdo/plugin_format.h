@@ -37,6 +37,10 @@ static bool MdoPluginKeys(const xvalue* V,const char* const* Keys,size_t Count)
         if(!Known){Ok=false;break;}
     }xrtValueIterEnd(&It);}return Ok;
 }
+static bool MdoPluginCoreTarget(const char* T){
+    if(!T||!strncmp(T,"default-home/",13))return false;size_t N=strlen(T);
+    return !strncmp(T,"src/",4)||!strncmp(T,"include/",8)||!strncmp(T,"generated/",10)||!strcmp(T,"main.c")||!strcmp(T,"sources.json")||(N>2&&(!strcmp(T+N-2,".c")||!strcmp(T+N-2,".h")));
+}
 static bool MdoPluginPathOverlap(const char* A,const char* B)
 {
     if(!A||!B)return false;

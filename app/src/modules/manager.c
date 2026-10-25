@@ -1559,7 +1559,7 @@ static bool MdoModulesValidateCatalog(MdoModuleCatalog* pCatalog,
     }
     for ( i = 0u; i < pCatalog->ToolCount; ++i ) {
         size_t j;
-        if (strncmp(pCatalog->Tools[i]->Owner->SourcePath, "/app/default-home/tools/", sizeof("/app/default-home/tools/") - 1u) == 0 &&
+        if ((pCatalog->Tools[i]->Owner->PluginEntry || strncmp(pCatalog->Tools[i]->Owner->SourcePath, "/app/default-home/tools/", sizeof("/app/default-home/tools/") - 1u) == 0) &&
             MdoBuiltinToolFind(MdoBuiltinToolCanonicalId(pCatalog->Tools[i]->Id)) != NULL) {
             (void)MdoModulesDiagnosticAdd(pDiagnostics, MDO_MODULE_DIAGNOSTIC_VALIDATE,
                 pCatalog->Tools[i]->Owner->SourcePath, pCatalog->Tools[i]->Owner->SourceHash,
@@ -2032,7 +2032,20 @@ static MdoModuleCatalog* MdoModulesBuildCandidateBody(uint64 Generation,
                !MdoModulesRegister(pCatalog->Modules[iModule],pRegisters[iModule],pDiagnostics))goto failed;
         }
     }
-    if ( !MdoModulesApplyProfiles(pCatalog,pDiagnostics) || !MdoModulesValidateCatalog(pCatalog, pDiagnostics) ) {
+    bool Valid=MdoModulesApplyProfiles(pCatalog,pDiagnostics)&&MdoModulesValidateCatalog(pCatalog,pDiagnostics);
+    /* A registration collision must not make the management UI disappear.
+     * Pure entry plugins can be retired without recompiling or replaying any
+     * base Register callbacks. Core overrides use the explicit recovery path. */
+    if(!Valid&&!g_MdoModules.Catalog&&MdoApplicationPluginEntriesOnly()&&MdoApplicationPluginsRecover()){
+        for(size_t J=pCatalog->ModuleCount;J>0;J--)if(pCatalog->Modules[J-1]->PluginEntry){
+            MdoModulesGenerationRelease(pCatalog->Modules[J-1]);
+            memmove(pCatalog->Modules+J-1,pCatalog->Modules+J,(pCatalog->ModuleCount-J)*sizeof(*pCatalog->Modules));pCatalog->ModuleCount--;
+        }
+        xrtFree(pCatalog->Tools);pCatalog->Tools=NULL;pCatalog->ToolCount=0;
+        xrtFree(pCatalog->Agents);pCatalog->Agents=NULL;pCatalog->AgentCount=0;
+        Valid=MdoModulesValidateCatalog(pCatalog,pDiagnostics);
+    }
+    if ( !Valid ) {
         if ( pDiagnostics->Count == 0u )
             (void)MdoModulesDiagnosticAdd(pDiagnostics,
                 MDO_MODULE_DIAGNOSTIC_VALIDATE, NULL, NULL,

@@ -3,7 +3,7 @@
 static bool EcoNativeJsonFile(xvalue* Files,cstr Path,const xvalue* Value)
 {
     size_t Size=0;char* Text=xrtJsonStringify(Value,false,&Size);
-    bool Ok=Text&&Size<=1048576u&&EcoLocalAppend(Files,Path,Text,Size);xrtFree(Text);return Ok;
+    bool Ok=Text&&Size<=(!strcmp(Path,"config/plugins.json")?16777216u:1048576u)&&EcoLocalAppend(Files,Path,Text,Size);xrtFree(Text);return Ok;
 }
 static bool EcoNativeFiles(xvalue* Files,const xvalue* Resource,char Error[1024])
 {
@@ -26,7 +26,7 @@ static bool EcoNativeFiles(xvalue* Files,const xvalue* Resource,char Error[1024]
     }
     if(Ok&&Plugin){
         xvalue* Manifest=xrtValueObject();bool Modern=MdoPluginModern(Descriptor);cstr Frontend=MdoPackageText(Modern?MdoPluginGet(Descriptor,"entry"):Descriptor,"frontend",220);
-        if(Modern){Core=false;const xvalue* Overrides=MdoPluginGet(Descriptor,"overrides");for(size_t I=0;I<xrtValueCount(Overrides);I++){cstr T=MdoPackageText(xrtValueArrayGet(Overrides,I),"target",220);if(!strncmp(T,"src/",4)||!strncmp(T,"include/",8)||!strncmp(T,"generated/",10)||!strcmp(T,"main.c")||!strcmp(T,"sources.json"))Core=true;}}
+        if(Modern){Core=false;const xvalue* Overrides=MdoPluginGet(Descriptor,"overrides");for(size_t I=0;I<xrtValueCount(Overrides);I++){cstr T=MdoPackageText(xrtValueArrayGet(Overrides,I),"target",220);if(MdoPluginCoreTarget(T))Core=true;}}
         Ok=Manifest&&MdoApiValueSetString(Manifest,"id",Id)&&MdoApiValueSetString(Manifest,"revision",Revision)&&
             MdoApiValueSetString(Manifest,"frontend",Frontend?Frontend:"")&&MdoApiValueSetBool(Manifest,"enabled",!Modern)&&
             MdoApiValueSetBool(Manifest,"source_reload_required",Core)&&xrtValueObjectSet(Manifest,XRT_STR_LITERAL("files"),Inventory);

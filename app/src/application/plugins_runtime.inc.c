@@ -1,11 +1,16 @@
 /* Desired selections are durable. The effective view is retained until every
  * outgoing window acknowledges cleanup. Native/core changes use a full host
  * restart rather than pretending that arbitrary native effects are reversible. */
+static bool SdkPluginCore(const xvalue* M){
+    const xvalue* Doc=SdkGet(M,"manifest");if(Doc){const xvalue* Rows=SdkGet(Doc,"overrides");for(size_t I=0;I<xrtValueCount(Rows);I++)if(MdoPluginCoreTarget(SdkField(xrtValueArrayGet(Rows,I),"target")))return true;return false;}
+    bool Core=false;return xrtValueGetBool(SdkGet(M,"source_reload_required"),&Core)&&Core;
+}
 static bool SdkPluginNative(const xvalue* M){
     if(SdkField(SdkGet(SdkGet(M,"manifest"),"entry"),"native"))return true;
-    bool Core=false;if(xrtValueGetBool(SdkGet(M,"source_reload_required"),&Core)&&Core)return true;
+    if(SdkPluginCore(M))return true;
     const xvalue* Rows=SdkGet(SdkGet(M,"manifest"),"overrides");
     for(size_t I=0;I<xrtValueCount(Rows);I++){cstr T=SdkField(xrtValueArrayGet(Rows,I),"target");size_t N=T?strlen(T):0;
+        if(T&&!strncmp(T,"default-home/",13))return true;
         if(T&&!strncmp(T,"web/",4)&&((N>3&&!strcmp(T+N-3,".js"))||(N>4&&!strcmp(T+N-4,".css"))||(N>5&&!strcmp(T+N-5,".html"))))return true;
     }return false;
 }
@@ -78,6 +83,8 @@ bool MdoApplicationPluginWarnings(xvalue* Items){
     for(size_t I=0;Ok&&I<32;I++)if(SdkPlugins.Plugins[I].Error[0])Ok=MdoDiagnosticWarning(Items,"plugins","invalid_revision",SdkField(SdkPlugins.Plugins[I].Manifest,"id"),"",SdkPlugins.Plugins[I].Error,"Disable or restore the affected plugin revision","extensions");
     for(size_t I=0;Ok&&I<xrtValueCount(SdkPlugins.Failures);I++){
         const xvalue* F=xrtValueArrayGet(SdkPlugins.Failures,I);bool Cleanup=SdkField(F,"phase")&&!strcmp(SdkField(F,"phase"),"cleanup");
+        const xvalue* Selected=SdkPluginFind(SdkPlugins.Config,SdkField(F,"id"));
+        if(!Cleanup&&(!Selected||!SdkPluginEnabled(Selected)||strcmp(SdkField(Selected,"revision"),SdkField(F,"revision"))))continue;
         Ok=MdoDiagnosticWarning(Items,"plugins",Cleanup?"frontend_cleanup":"frontend_activation",SdkField(F,"id"),"",Cleanup?"A plugin window did not finish cleanup; its replacement is held":"A plugin frontend failed to start; it will not be automatically executed again","Refresh the affected window or disable/update the plugin; restart mdo if a window cannot retire","extensions");
     }xrtMutexUnlock(SdkPlugins.Lock);return Ok;
 }
@@ -95,3 +102,37 @@ bool MdoApplicationPluginsRecover(void){
 
 void MdoApplicationPluginViewBegin(void){if(SdkPlugins.Lock){xrtMutexLock(SdkPlugins.Lock);SdkPlugins.Readers++;xrtMutexUnlock(SdkPlugins.Lock);}}
 void MdoApplicationPluginViewEnd(void){if(SdkPlugins.Lock){xrtMutexLock(SdkPlugins.Lock);if(SdkPlugins.Readers)SdkPlugins.Readers--;SdkPluginReconcile();xrtMutexUnlock(SdkPlugins.Lock);}}
+
+bool MdoApplicationPluginEntriesOnly(void){
+    if(!SdkPlugins.Lock)return false;bool Only=true;xrtMutexLock(SdkPlugins.Lock);
+    for(size_t I=0;I<xrtValueCount(SdkPlugins.Effective);I++){
+        const xvalue* R=xrtValueArrayGet(SdkPlugins.Effective,I);if(!SdkPluginEnabled(R))continue;
+        if(!SdkGet(R,"manifest")||xrtValueCount(SdkGet(SdkGet(R,"manifest"),"overrides")))Only=false;
+    }xrtMutexUnlock(SdkPlugins.Lock);return Only;
+}
+
+bool MdoApplicationPluginsRecovery(void){if(!SdkPlugins.Lock)return false;xrtMutexLock(SdkPlugins.Lock);bool R=SdkPlugins.Recovery;xrtMutexUnlock(SdkPlugins.Lock);return R;}
+
+bool MdoApplicationPluginCoreRequired(void){
+    if(!SdkPlugins.Lock)return false;bool Required=false;xrtMutexLock(SdkPlugins.Lock);
+    for(size_t I=0;!SdkPlugins.Recovery&&I<xrtValueCount(SdkPlugins.Config);I++){
+        const xvalue* R=xrtValueArrayGet(SdkPlugins.Config,I);
+        if(SdkPluginEnabled(R)&&SdkPluginCore(R))Required=true;
+    }xrtMutexUnlock(SdkPlugins.Lock);return Required;
+}
+bool MdoApplicationPluginHasFile(cstr Path){
+    if(!SdkPlugins.Lock||!Path)return false;bool Found=false;if(!strncmp(Path,"/app/",5))Path+=5;
+    xrtMutexLock(SdkPlugins.Lock);for(size_t I=0;I<xrtValueCount(SdkPlugins.Map);I++)if(!strcmp(Path,SdkField(xrtValueArrayGet(SdkPlugins.Map,I),"target")))Found=true;
+    xrtMutexUnlock(SdkPlugins.Lock);return Found;
+}
+xvalue* MdoApplicationPluginFileOwner(cstr Path){
+    if(!SdkPlugins.Lock||!Path)return NULL;if(!strncmp(Path,"/app/",5))Path+=5;xvalue* Owner=NULL;
+    xrtMutexLock(SdkPlugins.Lock);
+    for(size_t I=0;I<xrtValueCount(SdkPlugins.Map);I++){
+        const xvalue* R=xrtValueArrayGet(SdkPlugins.Map,I);if(!MdoPluginPathOverlap(Path,SdkField(R,"target")))continue;
+        cstr Id=SdkField(R,"id");const xvalue* M=SdkPluginFind(SdkPlugins.Effective,Id);if(!M)continue;
+        Owner=xrtValueObject();SdkPut(Owner,"id",Id);SdkPut(Owner,"revision",SdkField(R,"revision"));
+        const xvalue* Doc=SdkGet(M,"manifest");const cstr Keys[]={"name","author","copyright","license","version"};
+        for(size_t J=0;J<5;J++)if(SdkField(Doc,Keys[J]))SdkPut(Owner,Keys[J],SdkField(Doc,Keys[J]));break;
+    }xrtMutexUnlock(SdkPlugins.Lock);return Owner;
+}

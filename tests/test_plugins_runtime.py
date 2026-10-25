@@ -135,18 +135,22 @@ const mdo_module_v1* mdoModuleEntry(void){return &M;}
                 upload_doc=dict(format='mdo.plugin.v1',id='uploaded',name='Uploaded',version='1.0.0',description='Upload fixture',overrides=[dict(source=deep,target='web/deep/index.md')])
                 files=[dict(path=deep,storage_path='uploads/large.bin',bytes=len(payload),sha256=hashlib.sha256(payload).hexdigest())]
                 installed=call('plugin.apply',dict(id='uploaded',manifest=upload_doc,files=files));rev=next(r['revision'] for r in installed['items'] if r['id']=='uploaded')
+                reused=call('plugin.apply',dict(id='uploaded',manifest=upload_doc,files=[dict(path=deep,plugin_revision=rev,bytes=len(payload),sha256=hashlib.sha256(payload).hexdigest())]));assert next(r['revision'] for r in reused['items'] if r['id']=='uploaded')==rev
                 other=upload.with_name('same.bin');other.write_bytes(payload);files[0]['storage_path']='uploads/same.bin'
                 installed=call('plugin.apply',dict(id='uploaded',manifest=upload_doc,files=files));assert next(r['revision'] for r in installed['items'] if r['id']=='uploaded')==rev
+                next_doc=dict(upload_doc,version='2.0.0')
+                call('plugin.apply',dict(id='uploaded',manifest=next_doc,files=[dict(path=deep,plugin_revision=rev,bytes=len(payload),sha256=hashlib.sha256(payload).hexdigest())]))
+                restored=call('plugin.rollback',dict(id='uploaded'));assert next(r for r in restored['items'] if r['id']=='uploaded')['manifest']['version']=='1.0.0'
                 files[0]['sha256']='0'*64;call('plugin.apply',dict(id='uploaded',manifest=upload_doc,files=files),409)
                 files[0]['storage_path']='../escape';call('plugin.apply',dict(id='uploaded',manifest=upload_doc,files=files),422)
                 # Broken native code must leave a usable recovery UI and preserve
                 # the durable desired selection. Repair never replays that code.
-                for mode in ['syntax','register']:
+                for mode in ['syntax','register','duplicate']:
                     badid='broken-'+mode
-                    source='this is not C;' if mode=='syntax' else native_source.replace('Starts++;','Starts++; return MDO_RESULT_ERROR;').replace('plugin.native-fixture','plugin.'+badid)
+                    source='this is not C;' if mode=='syntax' else native_source.replace('Starts++;','Starts++; return MDO_RESULT_ERROR;' if mode=='register' else 'Starts++;').replace('plugin.native-fixture','plugin.'+badid)
                     doc=dict(format='mdo.plugin.v1',id=badid,name='Broken',version='1.0.0',description='Recovery fixture',entry=dict(native='runtime/plugin.c'))
                     call('plugin.apply',dict(id=badid,manifest=doc,files=[dict(path='runtime/plugin.c',text=source),dict(path='runtime/extra.h',text='#define EXTRA 10\n')]))
-                    commit([dict(id=r['id'],enabled=r['id']==badid) for r in call('plugin.list')['items']])
+                    commit([dict(id=r['id'],enabled=r['id']==badid or (mode=='duplicate' and r['id']=='native-fixture')) for r in call('plugin.list')['items']])
                     original=(base/'home/config/plugins.json').read_bytes()
                     child.terminate();child.wait(timeout=10)
                     child=subprocess.Popen([str(args.host.resolve()),str(config),'--','--home',str(base/'home')],cwd=base,stdout=log,stderr=log,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0));wait_ready(port,child)
@@ -156,6 +160,49 @@ const mdo_module_v1* mdoModuleEntry(void){return &M;}
                     child.terminate();child.wait(timeout=10)
                     child=subprocess.Popen([str(args.host.resolve()),str(config),'--','--home',str(base/'home')],cwd=base,stdout=log,stderr=log,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0));wait_ready(port,child)
                     assert not call('plugin.list')['recovery_mode']
+                # Resource readers, the runtime catalogue and editor ownership
+                # must agree even when a real user file exists underneath.
+                original_skill="---\nname: owned-skill\ndescription: Original fixture\n---\nOriginal instructions."
+                target=base/'home/skills/owned-skill/SKILL.md';target.parent.mkdir(parents=True);target.write_text(original_skill,encoding='utf-8')
+                plugin_skill=original_skill.replace('Original','Plugin')
+                resource_doc=dict(format='mdo.plugin.v1',id='resource-owner',name='Resource owner',version='1.0.0',description='Owned resource fixture',overrides=[dict(source='skill.md',target='default-home/skills/owned-skill/SKILL.md')])
+                call('plugin.apply',dict(id='resource-owner',manifest=resource_doc,files=[dict(path='skill.md',text=plugin_skill)]))
+                assert commit([dict(id='resource-owner',enabled=True)])['restart_required']
+                child.terminate();child.wait(timeout=10)
+                child=subprocess.Popen([str(args.host.resolve()),str(config),'--','--home',str(base/'home')],cwd=base,stdout=log,stderr=log,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0));wait_ready(port,child)
+                item=json.loads(request(port,'GET','/api/v1/extensions/skills/owned-skill')[2])['data']
+                assert item['plugin_owned'] and item['content']==plugin_skill,item
+                invoked=json.loads(request(port,'POST','/api/v1/skills/invoke',body=json.dumps(dict(id='owned-skill')).encode(),headers={'Content-Type':'application/json'})[2])['data'];assert 'Plugin instructions.' in invoked['text'],invoked
+                for method in ['PUT','DELETE']:
+                    code,_,body=request(port,method,'/api/v1/extensions/skills/owned-skill',body=json.dumps(dict(content=original_skill)).encode(),headers={'Content-Type':'application/json','If-Match':'"'+item['revision']+'"'})
+                    assert code==403,(method,code,body)
+                assert target.read_text(encoding='utf-8')==original_skill
+                # Core overlays are compiled before native registration, rather
+                # than merely looking enabled in a VFS read.
+                core_source=(ROOT/'app/src/api/resources.c').read_text(encoding='utf-8').replace('MdoApiValueSetString(Data, "version", MDO_VERSION_TEXT)','MdoApiValueSetString(Data, "version", "core-fixture")')
+                assert '"core-fixture"' in core_source
+                core_doc=dict(format='mdo.plugin.v1',id='core-fixture',name='Core fixture',version='1.0.0',description='Core compilation fixture',overrides=[dict(source='core.c',target='src/api/resources.c')])
+                call('plugin.apply',dict(id='core-fixture',manifest=core_doc,files=[dict(path='core.c',text=core_source)]))
+                commit([dict(id='core-fixture',enabled=True)])
+                child.terminate();child.wait(timeout=10)
+                child=subprocess.Popen([str(args.host.resolve()),str(config),'--','--home',str(base/'home')],cwd=base,stdout=log,stderr=log,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0));wait_ready(port,child)
+                bootstrap=json.loads(request(port,'GET','/api/v1/bootstrap')[2])['data']
+                assert bootstrap['version']=='core-fixture',(bootstrap,(base/'probe.log').read_text(encoding='utf-8',errors='replace')[-2500:])
+                assert call('qa.plugin.counter')==11,'Core delegation must not replay native Register'
+                core_doc['version']='2.0.0'
+                call('plugin.apply',dict(id='core-fixture',manifest=core_doc,files=[dict(path='core.c',text='this is not C;')]))
+                child.terminate();child.wait(timeout=10)
+                child=subprocess.Popen([str(args.host.resolve()),str(config),'--','--home',str(base/'home')],cwd=base,stdout=log,stderr=log,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0));wait_ready(port,child)
+                assert call('plugin.list')['recovery_mode']
+                assert json.loads(request(port,'GET','/api/v1/bootstrap')[2])['data']['version']=='0.7.0'
+                call('qa.plugin.counter',status=404)
+                # Corrupt registry recovery never overwrites the original file.
+                registry=base/'home/config/plugins.json';registry.write_bytes(b'[{"id":null}]')
+                child.terminate();child.wait(timeout=10)
+                child=subprocess.Popen([str(args.host.resolve()),str(config),'--','--home',str(base/'home')],cwd=base,stdout=log,stderr=log,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0));wait_ready(port,child)
+                assert call('plugin.list')['config_broken']
+                call('plugin.apply',dict(id='should-not-save',manifest=core_doc,files=[dict(path='core.c',text='anything')]),409)
+                assert registry.read_bytes()==b'[{"id":null}]'
                 print('Plugins: immutable mappings, mutual exclusion, one-sided conflicts, dependency bounds/cycles, atomic switching and stale plans PASS',flush=True)
             finally:
                 child.terminate();child.wait(timeout=10)

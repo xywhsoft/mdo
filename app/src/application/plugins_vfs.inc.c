@@ -90,3 +90,11 @@ static xvfslookup SdkPluginDirOpen(void* Context,xvfscase Case,xstrview Path,uin
     Dir->Ops=&SdkPluginDirectoryOps;Dir->State=D;return XVFS_LOOKUP_OPENED;
 }
 static const xvfsprovider_v1 SdkPluginProvider={sizeof(xvfsprovider_v1),1,XVFS_PROVIDER_STAT|XVFS_PROVIDER_DIRECTORY,NULL,NULL,SdkPluginOpen,SdkPluginStat,SdkPluginDirOpen,NULL};
+
+/* xrt resolves the longest mount prefix first. Bind the same immutable view at
+ * the Home application-resource prefix too, above its existing disk mount. */
+static xstrview SdkPluginHomePath(xstrview P,char B[600]){int N=snprintf(B,600,"default-home%s%.*s",P.Size?"/":"",(int)P.Size,P.Data?P.Data:"");return xrtStrViewN(B,N>0&&N<600?(size_t)N:0);}
+static xvfslookup SdkPluginHomeOpen(void* C,xvfscase K,xstrview P,const xfileoptions* O,xvfsfile_v1* F){char B[600];xstrview V=SdkPluginHomePath(P,B);return V.Size?SdkPluginOpen(C,K,V,O,F):XVFS_LOOKUP_MISS;}
+static xvfslookup SdkPluginHomeStat(void* C,xvfscase K,xstrview P,bool Follow,xfileinfo* I){char B[600];xstrview V=SdkPluginHomePath(P,B);return V.Size?SdkPluginStat(C,K,V,Follow,I):XVFS_LOOKUP_MISS;}
+static xvfslookup SdkPluginHomeDir(void* C,xvfscase K,xstrview P,uint32 F,xvfsdir_v1* D){char B[600];xstrview V=SdkPluginHomePath(P,B);return V.Size?SdkPluginDirOpen(C,K,V,F,D):XVFS_LOOKUP_MISS;}
+static const xvfsprovider_v1 SdkPluginHomeProvider={sizeof(xvfsprovider_v1),1,XVFS_PROVIDER_STAT|XVFS_PROVIDER_DIRECTORY,NULL,NULL,SdkPluginHomeOpen,SdkPluginHomeStat,SdkPluginHomeDir,NULL};

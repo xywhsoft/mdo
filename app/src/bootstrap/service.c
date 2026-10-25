@@ -19,11 +19,14 @@ static bool MdoServiceHomeBusy(void)
     return domain && xrtErrorKind(error) == XERR_AGAIN && !strcmp(domain,"mdo.home");
 }
 
+#include "plugin_bootstrap.inc.c"
+
 static void MdoServiceRetry(void* User)
 {
     XS_HostInfo* host = User;
     g_MdoServiceRetryTimer = 0u;
     if (xrtAtomic32Load(&g_MdoServiceState,XMEMORY_ACQUIRE) != MDO_SERVICE_WAITING) return;
+    if(MdoPluginBootstrapTry(host)){xrtAtomic32Store(&g_MdoServiceState,MDO_SERVICE_READY,XMEMORY_RELEASE);return;}
     if (MdoBootstrapInit(host)) {
         (void)MdoApiQueueStart();
         (void)MdoRemoteInit(host->Server);
@@ -42,6 +45,7 @@ static void MdoServiceRetry(void* User)
 
 bool ServiceSwap(XS_HostInfo* Host, xvalue** Shared)
 {
+    if(MdoPluginBoot.Tcc)return MdoPluginBoot.Swap(Host,Shared);
     (void)Host;
     if (!Shared) return false;
     *Shared = xrtValueObject();
@@ -54,6 +58,7 @@ bool ServiceSwap(XS_HostInfo* Host, xvalue** Shared)
 
 void ServiceInit(XS_HostInfo* pHost)
 {
+    if(MdoPluginBootstrapTry(pHost))return;
     xvalue* shared = xsSwapTake(pHost);
     bool handover = false;
     (void)xrtValueGetBool(xrtValueObjectGet(shared,XRT_STR_LITERAL("mdo_home_handover")),&handover);
@@ -78,6 +83,7 @@ void ServiceInit(XS_HostInfo* pHost)
 
 void ServiceUnit(XS_HostInfo* pHost)
 {
+    if(MdoPluginBoot.Tcc){MdoPluginBoot.Unit(pHost);xsDestroyTCC(MdoPluginBoot.Tcc);MdoPluginBoot.Tcc=NULL;return;}
     (void)pHost;
     xrtAtomic32Store(&g_MdoServiceState,MDO_SERVICE_FAILED,XMEMORY_RELEASE);
     if (g_MdoServiceRetryTimer) (void)xsTimerCancel(g_MdoServiceRetryTimer);
@@ -98,6 +104,7 @@ void ServiceUnit(XS_HostInfo* pHost)
 
 XS_RequestResult RequestProc(XS_HttpReq* pRequest)
 {
+    if(MdoPluginBoot.Tcc)return MdoPluginBoot.Request(pRequest);
     int state = xrtAtomic32Load(&g_MdoServiceState,XMEMORY_ACQUIRE);
     if (state != MDO_SERVICE_READY && pRequest && pRequest->head) {
         MdoApiContext context = {0}; context.Request = pRequest;

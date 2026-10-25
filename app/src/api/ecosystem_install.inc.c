@@ -121,6 +121,7 @@ static bool EcoLocalSkillPrefix(cstr path,char prefix[256])
 static bool EcoLocalCurrent(cstr path,xvalue* change,const xvalue* owned,char error[1024])
 {
     if(!EcoLocalAllowed(path))return false;
+    xvalue* Plugin=ExtensionPluginOwner(path);if(Plugin){snprintf(error,1024,"Resource is owned by plugin %s; change that plugin first",MdoPackageText(Plugin,"id",64));xrtValueRelease(Plugin);return false;}
     if(!strcmp(path,"config/plugins.json"))return xrtValueObjectHas(change,XRT_STR_LITERAL("old"));
     bool exists=false;xfileinfo info;if(!MdoHomeExternalStat(path,&exists,&info))return false;
     if(!exists){if(owned){snprintf(error,1024,"Installed file is missing: %s",path);return false;}
@@ -171,6 +172,9 @@ static bool EcoLocalApply(const xvalue* entry,bool uninstall,char error[1024],xv
     const xvalue* oldFiles=xrtValueObjectGet(prior,XRT_STR_LITERAL("files"));bool ok=files!=NULL;
     xvalue *pluginBefore=NULL,*pluginAfter=NULL;bool pluginReserved=false,pluginPublished=false;
     if(ok)ok=EcoNativePrepare(files,package,prior,uninstall,local,&pluginBefore,&pluginAfter,&pluginReserved,error);
+    xvalue* PluginIssues=ok&&pluginReserved?MdoApplicationPluginsStoreIssues(pluginAfter,files):xrtValueArray();
+    if(ok&&!PluginIssues)ok=false;
+    bool PluginReady=PluginIssues&&!xrtValueCount(PluginIssues);
     /* An edited Skill is retained as a complete local resource. Removing its
      * unchanged SKILL.md while retaining an edited attachment would orphan it. */
     char keptSkills[16][256];size_t keptCount=0;
@@ -210,7 +214,7 @@ static bool EcoLocalApply(const xvalue* entry,bool uninstall,char error[1024],xv
     bool DependenciesReady=true;
     xvalue* Dependencies=uninstall?xrtValueArray():EcoRoleDependencies(package,&DependenciesReady);
     xvalue* Preview=xrtValueObject(),*Changes=xrtValueArray();char PlanHash[65]={0};
-    if(ok)ok=Preview&&Changes&&Dependencies&&xrtValueObjectSet(Preview,XRT_STR_LITERAL("dependencies"),Dependencies)&&MdoApiValueSetBool(Preview,"can_install",DependenciesReady);
+    if(ok)ok=Preview&&Changes&&Dependencies&&xrtValueObjectSet(Preview,XRT_STR_LITERAL("dependencies"),Dependencies)&&MdoApiValueSetBool(Preview,"can_install",DependenciesReady&&PluginReady)&&xrtValueObjectSet(Preview,XRT_STR_LITERAL("plugin_issues"),PluginIssues);
     for(size_t i=0;ok&&i<xrtValueCount(files);i++){
         const xvalue* F=xrtValueArrayGet(files,i);xvalue* Change=xrtValueObject();
         const xvalue* New=xrtValueObjectGet(F,XRT_STR_LITERAL("new"));xstrview Encoded={0};size_t Size=0;
@@ -228,6 +232,7 @@ static bool EcoLocalApply(const xvalue* entry,bool uninstall,char error[1024],xv
     if(ok&&ExpectedPlan&&strcmp(ExpectedPlan,PlanHash)){snprintf(error,1024,"Installation plan changed; inspect the new plan before confirming");ok=false;}
     if(ok)ok=MdoApiValueSetString(Preview,"sha256",PlanHash);
     if(Plan){if(ok){*Plan=Preview;Preview=NULL;}goto finished;}
+    if(ok&&!PluginReady){snprintf(error,1024,"Plugin combination is incompatible; inspect the plugin issues in the installation plan");ok=false;}
     if(ok&&!DependenciesReady){snprintf(error,1024,"Required role dependencies are missing or disabled; inspect the installation plan and configure them first");ok=false;}
     bool begun=ok&&EcoLocalSave(ECO_JOURNAL,journal);ok=begun;
     for(size_t i=0;ok&&i<xrtValueCount(files);i++){const xvalue* f=xrtValueArrayGet(files,i);const xvalue* incoming=xrtValueObjectGet(f,XRT_STR_LITERAL("new"));cstr path=MdoPackageText(f,"path",599);
@@ -238,7 +243,7 @@ static bool EcoLocalApply(const xvalue* entry,bool uninstall,char error[1024],xv
         if(!restored||!EcoLocalReload())(void)MdoHomeRequireRestart("Extension package rollback failed; restart required");}
     if(!ok&&!error[0])snprintf(error,1024,"Package installation failed; previous resources restored. Check configuration and tool references.");
 finished:
-    xrtValueRelease(Dependencies);xrtValueRelease(Preview);xrtValueRelease(Changes);
+    xrtValueRelease(PluginIssues);xrtValueRelease(Dependencies);xrtValueRelease(Preview);xrtValueRelease(Changes);
     if(pluginReserved)MdoApplicationPluginsStoreEnd();
     xrtValueRelease(pluginBefore);xrtValueRelease(pluginAfter);
     xrtValueRelease(Authored);xrtValueRelease(receipts);xrtValueRelease(files);xrtValueRelease(journal);xrtValueRelease(next);xrtValueRelease(record);xrtValueRelease(inventory);return ok;

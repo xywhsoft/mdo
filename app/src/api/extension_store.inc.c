@@ -24,6 +24,7 @@ static const xvalue* ExtensionStoreOwner(const xvalue* Records,cstr Path)
         if(Owner)break;
     }xrtValueIterEnd(&It);}return Owner;
 }
+static xvalue* ExtensionPluginOwner(cstr Path){char Target[700];snprintf(Target,sizeof(Target),"default-home/%s",Path);return MdoApplicationPluginFileOwner(Target);}
 static bool ExtensionStoreCanCustomize(MdoApiContext* C,cstr Kind,cstr Id)
 {
     Kind=MdoPackageSystem(Kind);
@@ -32,7 +33,10 @@ static bool ExtensionStoreCanCustomize(MdoApiContext* C,cstr Kind,cstr Id)
         const xvalue* B=McpConnectionBinding(D);const xvalue* R=xrtValueObjectGet(B,XRT_STR_LITERAL("receipt"));cstr Source=MdoPackageText(R,"source",16);bool Managed=B&&(!Source||strcmp(Source,"local"));xrtFree(S);xrtValueRelease(D);
         if(Managed){MdoApiReplyError(C,403,"store_resource_readonly","Configure this MCP connection through its template; editing, exporting and republishing store templates is unavailable",NULL);return false;}}
 
-    char Path[160];ExtensionPath(Kind,Id,Path);bool Known=false;xvalue* Records=ExtensionStoreRead(&Known);
+    char Path[160];ExtensionPath(Kind,Id,Path);xvalue* Plugin=ExtensionPluginOwner(Path);
+    if(!Plugin&&MdoPackageRoleKind(Kind)){char Module[180];snprintf(Module,sizeof(Module),"modules/%s/%s.c",Kind,Id);Plugin=ExtensionPluginOwner(Module);}
+    if(Plugin){xrtValueRelease(Plugin);MdoApiReplyError(C,403,"plugin_resource_readonly","This resource is owned by a plugin; edit, update or disable the owning plugin instead",NULL);return false;}
+    bool Known=false;xvalue* Records=ExtensionStoreRead(&Known);
     bool Managed=ExtensionStoreOwner(Records,Path)!=NULL;
     if(!strcmp(Kind,"plugins")){
         xvalueiter It={0};xvaluekey Key;xvalue* Row;
@@ -48,6 +52,8 @@ static bool ExtensionStoreCanCustomize(MdoApiContext* C,cstr Kind,cstr Id)
 }
 static bool ExtensionStoreInfo(xvalue* Item,cstr Path,const xvalue* Records,bool Known,bool Full)
 {
+    xvalue* Plugin=ExtensionPluginOwner(Path);
+    if(Plugin){bool Ok=MdoApiValueSetBool(Item,"management_known",Known)&&MdoApiValueSetBool(Item,"store_managed",false)&&MdoApiValueSetBool(Item,"plugin_owned",true)&&xrtValueObjectSet(Item,XRT_STR_LITERAL("plugin"),Plugin);xrtValueRelease(Plugin);return Ok;}
     const xvalue* Owner=ExtensionStoreOwner(Records,Path);
     bool Ok=MdoApiValueSetBool(Item,"management_known",Known)&&MdoApiValueSetBool(Item,"store_managed",Owner!=NULL);
     if(!Owner)return Ok;

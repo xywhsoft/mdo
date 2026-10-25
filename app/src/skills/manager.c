@@ -570,7 +570,7 @@ static xfile MdoSkillsOpen(const MdoSkillSource* pSource, cstr Path,
         xrtFileOptionsInit(&Options);Options.Flags=XFILE_READ|XFILE_NOFOLLOW;
         if(Root){File=xrtRootFileOpen(Root,Relative,&Options);xrtRootClose(Root);}
     } else if ( pSource->External ) {
-        File = MdoHomeOpenRead(Relative);
+        File = MdoResourceOpenRead(Relative);
     } else {
         xrtFileOptionsInit(&Options);
         Options.Flags = XFILE_READ;
@@ -1037,8 +1037,11 @@ static bool MdoSkillsScanResources(const MdoSkillSource* Source,
         xroot Root=xrtRootOpen(Source->NativeRoot);
         Dir=Root?xrtRootDirOpen(Root,Directory,XDIR_STAT):NULL;
         if(Root)xrtRootClose(Root);
-    } else Dir = Source->External ? MdoHomeOpenDirectory(Directory, XDIR_STAT) :
-        xrtVfsDirOpen(MdoHomeApplicationVfs(), Directory, XDIR_STAT);
+    } else {
+        char Virtual[MDO_SKILL_PATH_LIMIT+180];snprintf(Virtual,sizeof(Virtual),"/app/default-home/%s",Directory);
+        xvalue* Owner=Source->External?MdoApplicationPluginFileOwner(Virtual):NULL;
+        Dir=Source->External&&!Owner?MdoHomeOpenDirectory(Directory,XDIR_STAT):xrtVfsDirOpen(MdoHomeApplicationVfs(),Owner?Virtual:Directory,XDIR_STAT);xrtValueRelease(Owner);
+    }
     if (Dir == NULL) return false;
     while ((Next = xrtDirNext(Dir, &Item)) == XDIR_NEXT_ITEM) {
         char Path[MDO_SKILL_PATH_LIMIT + 1u];

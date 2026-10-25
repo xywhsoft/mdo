@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "../../include/mdo/home.h"
+#include "../../include/mdo/application.h"
 #include "../../include/mdo/home_import.h"
 #include "../../include/mdo/home_purge.h"
 #include "../../include/mdo/home_restore.h"
@@ -525,6 +526,9 @@ xfile MdoResourceOpenRead(cstr Path)
     if ( sVirtual == NULL ) return NULL;
     xrtFileOptionsInit(&Options);
     Options.Flags = XFILE_READ;
+    if(MdoApplicationPluginHasFile(sVirtual)){
+        File=xrtVfsOpen(g_MdoHome.ApplicationVfs,sVirtual,&Options);xrtFree(sVirtual);return File;
+    }
     xrtMutexLock(g_MdoHome.Lock);
     if ( g_MdoHome.Root != NULL ) {
         File = xrtRootFileOpen(g_MdoHome.Root, Path, &Options);
