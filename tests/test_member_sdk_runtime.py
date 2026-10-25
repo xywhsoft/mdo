@@ -32,6 +32,7 @@ static mdo_result Call(void* U,const mdo_sdk_context_v1* C,const xvalue* P,xvalu
  if(!strcmp(A,"acquire"))Scope=MdoSessionPermissionScopeAcquire("default",S,&X);
  else if(!strcmp(A,"release")){MdoSessionPermissionScopeRelease("default",S,Scope);Scope=NULL;}
  else if(!strcmp(A,"bounce")){MdoSessionRuntimeOptions O;MdoSessionRuntimeOptionsInit(&O);MdoSession* H=MdoSessionOpen("default",S,&O,&X);if(!H)return MDO_RESULT_ERROR;MdoSessionRelease(H);}
+ else if(!strcmp(A,"trash")){MdoSession* H=MdoSessionLoad("default",S,&X);bool Ok=H&&MdoSessionMoveToTrash(H,&X);MdoSessionRelease(H);*R=V->Bool(Ok);return MDO_RESULT_OK;}
  else {MdoSession* H=MdoSessionLoad("default",S,&X);bool Ok=H&&MdoSessionSetPermission(H,A,&X);MdoSessionRelease(H);if(!Ok)return MDO_RESULT_ERROR;}
  *R=V->Bool(Scope&&xworkFileScopeExternal(Scope->Files));return MDO_RESULT_OK;
 }
@@ -80,7 +81,8 @@ def main():
                 parent=f.call('session.create',{'body':{'project_id':'default','model_id':'qa-local-model','permission_profile':'balanced'}})['data']['id']
                 def scope(action):return f.call('qa.scope',{'session':parent,'action':action})
                 assert scope('acquire') is False;assert scope('full-access') is True
-                assert scope('bounce') is True;assert scope('balanced') is False;scope('release')
+                assert scope('bounce') is True;assert scope('balanced') is False
+                assert scope('trash') is False;scope('release');assert scope('trash') is True
                 demo=f.call('session.create',{'body':{'project_id':'default','model_id':'qa-local-model','permission_profile':'full-access'}})['data']['id']
                 def example(tool,action,args):
                     value=f.call('tool.call',{'project':'default','session':demo,'tool':tool,'arguments':{'action':action,'args':args}})

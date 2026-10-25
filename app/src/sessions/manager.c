@@ -1929,8 +1929,8 @@ bool MdoSessionSetArchived(MdoSession* Session, bool Archived,
     xrtMutexLock(Session->Lock);
     xrtMutexLock(g_MdoSessions.Lock);
     if ( !MdoSessionsValidateCurrent(Session, Error) ) Ok = false;
-    else if ( Archived && MdoSessionsActiveFind(Session->Info.ProjectId,
-            Session->Info.Id) != SIZE_MAX ) {
+    else if ( Archived && (MdoSessionsActiveFind(Session->Info.ProjectId,
+            Session->Info.Id) != SIZE_MAX || MdoSessionsBorrowedFind(Session->Info.ProjectId,Session->Info.Id)) ) {
         MdoSessionsError(Error, XWORK_ERROR_CONTEXT,
             "release the active session runtime before archiving");
         Ok = false;
@@ -1963,7 +1963,7 @@ bool MdoSessionMoveToTrash(MdoSession* Session, xwork_error* Error)
     xrtMutexLock(g_MdoSessions.Lock);
     if ( !MdoSessionsValidateCurrent(Session, Error) ) Ok = false;
     else if ( MdoSessionsActiveFind(Session->Info.ProjectId,
-            Session->Info.Id) != SIZE_MAX ) {
+            Session->Info.Id) != SIZE_MAX || MdoSessionsBorrowedFind(Session->Info.ProjectId,Session->Info.Id) ) {
         MdoSessionsError(Error, XWORK_ERROR_CONTEXT,
             "release the active session runtime before moving it to trash");
         Ok = false;
