@@ -244,7 +244,7 @@ static bool EcoLocalApply(const xvalue* entry,bool uninstall,char error[1024],xv
     if(!ok&&!error[0])snprintf(error,1024,"Package installation failed; previous resources restored. Check configuration and tool references.");
 finished:
     xrtValueRelease(PluginIssues);xrtValueRelease(Dependencies);xrtValueRelease(Preview);xrtValueRelease(Changes);
-    if(pluginReserved)MdoApplicationPluginsStoreEnd();
+    if(pluginReserved){MdoApplicationPluginsStoreEnd();if(!Plan)MdoApplicationEvent("plugin.changed",NULL,NULL);}
     xrtValueRelease(pluginBefore);xrtValueRelease(pluginAfter);
     xrtValueRelease(Authored);xrtValueRelease(receipts);xrtValueRelease(files);xrtValueRelease(journal);xrtValueRelease(next);xrtValueRelease(record);xrtValueRelease(inventory);return ok;
 }

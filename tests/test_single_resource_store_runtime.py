@@ -203,7 +203,11 @@ def run():
         assert preview["total"]==1
         store("plugins","install",id=pid,status=409)
         installplan=store("plugins","plan",id=pid)
+        eventcursor=sdk("events.read",dict(topic="plugin.changed"))
         store("plugins","install",id=pid,trust_code=True,expected_plan=installplan["sha256"])
+        notification=sdk("events.read",dict(topic="plugin.changed",after=eventcursor["cursor"],epoch=eventcursor["epoch"]))
+        assert any(r["topic"]=="plugin.changed" for r in notification["items"]),"All windows must hear store-driven plugin changes"
+
         selected=next(r for r in sdk("plugin.list")["items"] if r["id"]==plugdoc["id"]);assert not selected["enabled"] and selected["source"]=="store"
         store("plugins","export",references=[dict(kind="plugins",id=plugdoc["id"])],status=403)
         sdk("plugin.apply",dict(id=plugdoc["id"],manifest=plugdoc,files=localfiles),403)
