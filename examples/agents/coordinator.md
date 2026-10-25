@@ -4,7 +4,7 @@ name: 开发协调员
 description: 委派实现与审查，将结果汇总给用户。
 mode: primary
 extends: mdo.general
-tools: [agent, read, ls, ask_user]
+tools: [agent, read, ls, poll, wait, ask_user]
 read_only: true
 allow_delegation: true
 delegation: {"allow":["worker","reviewer"],"context":"recent","max_context_bytes":32768}

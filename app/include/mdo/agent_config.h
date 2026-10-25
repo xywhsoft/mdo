@@ -14,7 +14,7 @@ static inline const xvalue* MdoAgentConfigGet(const xvalue* Object, cstr Key)
 static inline cstr MdoAgentConfigText(const xvalue* Object, cstr Key)
 {
     xstrview Text;
-    return xrtValueGetString(MdoAgentConfigGet(Object, Key), &Text) ? Text.Data : NULL;
+    return xrtValueGetString(MdoAgentConfigGet(Object, Key), &Text) && !memchr(Text.Data,0,Text.Size) && xrtUtf8Valid(Text,NULL) ? Text.Data : NULL;
 }
 
 static inline bool MdoAgentConfigBool(const xvalue* Object, cstr Key, bool Default)
@@ -31,8 +31,12 @@ static inline bool MdoAgentConfigNumber(const xvalue* Object, cstr Key,
 {
     const xvalue* Value = MdoAgentConfigGet(Object, Key);
     int64 Number = 0; xstrview Text;
+    uint64 Unsigned=0;
     *Output = Default;
     if (!Value) return true;
+    if(xrtValueGetUInt(Value,&Unsigned)){
+        if(Unsigned>Maximum)return false;*Output=Unsigned;return true;
+    }
     if (xrtValueGetInt(Value, &Number)) {
         if (Number < 0 || (uint64)Number > Maximum) return false;
         *Output = (uint64)Number; return true;
@@ -127,7 +131,7 @@ static inline bool MdoAgentConfigKeys(const xvalue* Object,cstr Keys)
 {
     for(size_t I=0;I<xrtValueCount(Object);I++){
         xstrview Key;xrtValueObjectAt(Object,I,&Key);
-        char Token[160];if(Key.Size>150u)return false;
+        char Token[160];if(Key.Size>150u || memchr(Key.Data,0,Key.Size))return false;
         snprintf(Token,sizeof(Token),"|%s|",Key.Data);
         if(!strstr(Keys,Token))return false;
     }
@@ -162,6 +166,7 @@ static inline bool MdoAgentConfigChoice(const xvalue* Object,cstr Key,cstr Choic
 static inline bool MdoAgentConfigValidate(const xvalue* Object, char* Error, size_t Capacity)
 {
     cstr Failure = "invalid Agent configuration";
+    if(xrtValueType(Object)!=XVALUE_OBJECT){Failure="Agent configuration must be an object";goto failed;}
     static const char* Strings[]={"schema","mode","extends","name","description","prompt","prompt_mode","prompt_file","model","reasoning_effort","permission_profile"};
     for(size_t I=0;I<sizeof(Strings)/sizeof(*Strings);I++)if(MdoAgentConfigGet(Object,Strings[I]) && !MdoAgentConfigText(Object,Strings[I])){
         Failure="Agent text fields must be strings";goto failed;
@@ -252,7 +257,8 @@ static inline bool MdoAgentConfigValidate(const xvalue* Object, char* Error, siz
     }
     const xvalue* Options=MdoAgentConfigGet(Object,"model_options");
     if(!MdoAgentConfigKeys(Options,"|temperature||top_p||parallel_tool_calls||extra_body||tool_choice|") ||
-       !MdoAgentConfigBooleanValid(Options,"parallel_tool_calls")){
+       !MdoAgentConfigBooleanValid(Options,"parallel_tool_calls") ||
+       (MdoAgentConfigGet(Options,"tool_choice")&&!MdoAgentConfigText(Options,"tool_choice"))){
         Failure="unknown or invalid model option";goto failed;
     }
     const char* Floats[]={"temperature","top_p"};

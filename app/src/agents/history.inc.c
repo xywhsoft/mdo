@@ -49,7 +49,7 @@ static bool MdoAgentsHistoryConfigure(MdoAgentInstance* Instance,xwork_agent_ext
         Instance->HistoryConfigured=true;
     }
     cstr Mode=MdoAgentConfigText(Policy,"mode");uint64 Recent=0;
-    if(!MdoAgentConfigNumber(Policy,"keep_recent_turns",0,100000,&Recent))return false;
+    if(!MdoAgentConfigNumber(Policy,"keep_recent_turns",Mode&&!strcmp(Mode,"recent")?2u:0u,100000,&Recent))return false;
     Instance->HistoryFloor=0;
     if(Mode&&!strcmp(Mode,"current"))Instance->HistoryFloor=Instance->RunStartSequence+1u;
     else if(Recent){

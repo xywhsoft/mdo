@@ -23,6 +23,22 @@ static mdo_result Event(void* Data,mdo_agent_phase Phase,const mdo_agent_context
         xwork_agent_extension_context* Native=mdoAgentNative(Context);
         Native->pRequest->bHasTemperature=true;Native->pRequest->fTemperature=0.25;
     }
+    if(Phase==MDO_AGENT_BEFORE_TOOL){
+        xwork_agent_extension_context* Native=mdoAgentNative(Context);
+        if(Native->pToolEvent && !strcmp(Native->pToolEvent->sToolName,"read")){
+            snprintf(Error,Capacity,"role_fixture_read_denied");return MDO_RESULT_ERROR;
+        }
+    }
+    if(Phase==MDO_AGENT_AFTER_TOOL){
+        xwork_agent_extension_context* Native=mdoAgentNative(Context);
+        if(Native->pToolEvent && !strcmp(Native->pToolEvent->sToolName,"agent") &&
+           !xworkToolOutputSet(Native->pToolOutput,true,"replaced delegation result"))return MDO_RESULT_ERROR;
+    }
+    if(Phase==MDO_AGENT_AFTER_DELEGATE){
+        xwork_agent_extension_context* Native=mdoAgentNative(Context);
+        if(Native->pToolEvent && Native->pToolEvent->sOutput && !strcmp(Native->pToolEvent->sOutput,"replaced delegation result"))
+            Host->Core->Log(Host->Core->Context,MDO_LOG_INFO,"program-after-delegate-current=1");
+    }
     if(Phase==MDO_AGENT_INSTANCE_RELEASE && Host && Host->Core)
         Host->Core->Log(Host->Core->Context,MDO_LOG_INFO,"program-instance-released");
     return MDO_RESULT_OK;
@@ -76,7 +92,7 @@ context: {"memory.global":false,"memory.project":false,"external_tools":false,"s
 '''
 
 PROBE = r'''
-static unsigned ModMainCalls,ModChildCalls;static bool ModSawHook,ModSawIndependentTools,ModSawChildBudget,ModSawUserContext;
+static unsigned ModMainCalls,ModChildCalls;static bool ModSawHook,ModSawIndependentTools,ModSawChildBudget,ModSawUserContext,ModSawHookReason;
 static xllm_response* ModTool(const char* Id,const char* Name,const char* Args){
     xllm_response* R=Response("");if(!R)return NULL;
     R->pToolCalls=calloc(1,sizeof(*R->pToolCalls));R->iToolCallCount=1;
@@ -87,7 +103,7 @@ static xllm_result ModComplete(void* Data,const xllm_request* Request,const xllm
     (void)Data;(void)Callbacks;(void)Error;bool Child=false;
     for(size_t I=0;I<Request->iMessageCount;I++){
         const char* Text=Request->pMessages[I].sContent;
-        if(Request->pMessages[I].eRole==XLLM_ROLE_TOOL)printf("mod_tool=%s\n",Text?Text:"");
+        if(Request->pMessages[I].eRole==XLLM_ROLE_TOOL && Text&&strstr(Text,"role_fixture_read_denied"))ModSawHookReason=true;
         if(Text&&strstr(Text,"C-CHILD"))Child=true;
         if(Text&&strstr(Text,"BINDING-V1"))ModSawHook=true;
         if(Text&&strstr(Text,"role=agent.mod-main"))ModSawUserContext=true;
@@ -96,7 +112,11 @@ static xllm_result ModComplete(void* Data,const xllm_request* Request,const xllm
         ++ModChildCalls;bool Write=false;for(size_t I=0;I<Request->iToolCount;I++)if(!strcmp(Request->pTools[I].sName,"write"))Write=true;
         ModSawIndependentTools=Write && Request->iToolCount==2;
         ModSawChildBudget=Request->uMaxOutputTokens==4096;
-        *ResponseOut=ModChildCalls==1?ModTool("write-1","write","{\"path\":\"mod-result.txt\",\"content\":\"delegated-write-ok\"}"):Response("child-complete");
+        if(ModChildCalls==1){
+            char* Path=xrtPathAbs("../mod-result.txt");xvalue* Value=xrtValueString(xrtStrView(Path));char* Json=xrtJsonStringify(Value,false,NULL);
+            char* Args=xrtFormat("{\"path\":%s,\"content\":\"delegated-write-ok\"}",Json);
+            *ResponseOut=ModTool("write-1","write",Args);xrtFree(Args);xrtFree(Json);xrtValueRelease(Value);xrtFree(Path);
+        }else *ResponseOut=ModChildCalls==2?ModTool("read-1","read","{\"path\":\"mod-result.txt\"}"):Response("child-complete");
     } else {
         ++ModMainCalls;
         *ResponseOut=ModMainCalls==1?ModTool("delegate-1","agent","{\"name\":\"subagent.mod-child\",\"prompt\":\"Write the result file\"}"):Response("mod-complete");
@@ -120,9 +140,10 @@ static void ModProbe(xwork_runtime* Runtime){
     xwork_result Status=MdoAgentRunWait(Run,MdoDeadlineAfterUs(10000000),&Result,&Error);
     printf("mod_result=%d:%s error:%s\n",Status,Result.sFinalText?Result.sFinalText:"",Error.sMessage);
     printf("mod_checks=main:%u child:%u hook:%d tools:%d budget:%d user:%d\n",ModMainCalls,ModChildCalls,ModSawHook,ModSawIndependentTools,ModSawChildBudget,ModSawUserContext);
+    printf("mod_hook_reason=%d\n",ModSawHookReason);
     xvalue* View=MdoAgentSessionInspect(Session,&Error);
     printf("mod_inspect=%d\n",View && MdoAgentConfigGet(View,"context") && MdoAgentConfigGet(View,"request"));xrtValueRelease(View);
-    char* Text=MdoAgentsContextRead(".","mod-result.txt");printf("mod_file=%d\n",Text && !strcmp(Text,"delegated-write-ok"));xrtFree(Text);
+    char* Text=MdoAgentsContextRead("..","mod-result.txt");printf("mod_file=%d\n",Text && !strcmp(Text,"delegated-write-ok"));xrtFree(Text);
 done:
     xworkRunResultUnit(&Result);MdoAgentRunDestroy(Run);MdoAgentSessionRelease(Session);
 }
@@ -150,7 +171,9 @@ def main() -> int:
         (site / "probe.c").write_text(source, encoding="utf-8")
         output = fixture.run_probe(args.host.resolve(), site, Path(raw) / "home")
         assert "mod_result=0:mod-complete" in output, output
-        assert "mod_checks=main:2 child:2 hook:1 tools:1 budget:1 user:1" in output, output
+        assert "mod_checks=main:2 child:3 hook:1 tools:1 budget:1 user:1" in output, output
+        assert "mod_hook_reason=1" in output, output
+        assert "program-after-delegate-current=1" in output, output
         assert "mod_inspect=1" in output and "mod_file=1" in output, output
         assert "mod_error=" not in output and "program-instance-released" in output, output
     print("C/config role programs: delegated write, independent budgets, hooks, inspection and reload pinning PASS")

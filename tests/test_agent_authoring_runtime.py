@@ -38,6 +38,18 @@ static void AuthoringChecks(void) {
     CHECK(!MdoAgentFileParse("bad","{\"context\":{\"missing\":true}}",true,&F,E,sizeof(E)));MdoAgentFileUnit(&F);
     CHECK(!MdoAgentFileParse("bad","{\"context\":{\"custom.test\":{\"file\":\"../secret\"}}}",true,&F,E,sizeof(E)));MdoAgentFileUnit(&F);
     CHECK(!MdoAgentFileParse("bad","{\"read_only\":\"perhaps\"}",true,&F,E,sizeof(E)));MdoAgentFileUnit(&F);
+    CHECK(!MdoAgentFileParse("bad","{\"schema\": 1}",true,&F,E,sizeof(E)));MdoAgentFileUnit(&F);
+    CHECK(!MdoAgentFileParse("bad","{\"runtime\": {\"max_model_calls\": -1}}",true,&F,E,sizeof(E)));MdoAgentFileUnit(&F);
+    CHECK(!MdoAgentFileParse("bad","{\"runtime\": {\"invented\": 1}}",true,&F,E,sizeof(E)));MdoAgentFileUnit(&F);
+    CHECK(!MdoAgentFileParse("bad","{\"history\": {\"mode\": \"unsafe\"}}",true,&F,E,sizeof(E)));MdoAgentFileUnit(&F);
+    CHECK(!MdoAgentFileParse("bad","{\"history\": {\"include_summary\": \"yes\"}}",true,&F,E,sizeof(E)));MdoAgentFileUnit(&F);
+    CHECK(!MdoAgentFileParse("bad","{\"model_options\": {\"temperature\": 3}}",true,&F,E,sizeof(E)));MdoAgentFileUnit(&F);
+    CHECK(!MdoAgentFileParse("bad","{\"model_options\": {\"extra_body\": {\"messages\": []}}}",true,&F,E,sizeof(E)));MdoAgentFileUnit(&F);
+    CHECK(!MdoAgentFileParse("bad","{\"model_options\": {\"tool_choice\": 3}}",true,&F,E,sizeof(E)));MdoAgentFileUnit(&F);
+    CHECK(!MdoAgentFileParse("bad","{\"context\": {\"system\": {\"enabled\": \"yes\"}}}",true,&F,E,sizeof(E)));MdoAgentFileUnit(&F);
+    CHECK(!MdoAgentFileParse("bad","{\"tools\": [\"read*unsafe\"]}",true,&F,E,sizeof(E)));MdoAgentFileUnit(&F);
+    CHECK(!MdoAgentFileParse("bad","{\"delegation\": {\"context\": \"everything\"}}",true,&F,E,sizeof(E)));MdoAgentFileUnit(&F);
+    CHECK(!MdoAgentFileParse("bad","{\"name\": \"bad\\u0000name\"}",true,&F,E,sizeof(E)));MdoAgentFileUnit(&F);
     printf("authoring_checks=%u/%u\n",Passed,Total);
 #undef CHECK
 }
@@ -56,9 +68,9 @@ def main() -> int:
         source = source.replace("xworkRuntimeConfigInit(&runtime_config);", "AuthoringChecks();\n    xworkRuntimeConfigInit(&runtime_config);")
         (site / "probe.c").write_text(source, encoding="utf-8")
         output = fixture.run_probe(args.host.resolve(), site, Path(raw) / "home")
-        assert "authoring_checks=17/17" in output and "authoring_failure=" not in output, output
+        assert "authoring_checks=29/29" in output and "authoring_failure=" not in output, output
         assert "probe_done=1" in output, output
-    print("Agent authoring runtime: 17 checks PASS")
+    print("Agent authoring runtime: 29 checks PASS")
     return 0
 
 

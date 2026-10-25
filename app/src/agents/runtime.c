@@ -1230,7 +1230,8 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
     Owner->DelegationApproval=MdoAgentsApproval(Options->PermissionProfile && Options->PermissionProfile[0]?Options->PermissionProfile:Settings.PermissionProfile,false,&GlobalValid);
     if(!GlobalValid)goto fail;
     xvalue* RoleConfig=AgentInfo.ConfigurationJson?xrtJsonParse(xrtStrView(AgentInfo.ConfigurationJson)):NULL;
-    Owner->IndependentDelegation=AgentInfo.HasProgram || MdoAgentConfigText(RoleConfig,"schema") || MdoAgentConfigGet(RoleConfig,"delegation");
+    bool StructuredRole=AgentInfo.HasProgram || MdoAgentConfigText(RoleConfig,"schema") || MdoAgentConfigGet(RoleConfig,"context");
+    Owner->IndependentDelegation=StructuredRole || MdoAgentConfigGet(RoleConfig,"delegation");
     Owner->DelegationEffects=Owner->IndependentDelegation?MDO_TOOL_EFFECT_ALL:AgentInfo.AllowedEffects;
     uint64 DelegationEffects=Owner->DelegationEffects;
     if(!MdoAgentConfigNumber(MdoAgentConfigGet(RoleConfig,"delegation"),"allowed_effects",DelegationEffects,MDO_TOOL_EFFECT_ALL,&DelegationEffects)){xrtValueRelease(RoleConfig);goto fail;}
@@ -1294,6 +1295,17 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
             "cannot attach the Agent session journal");
         goto fail;
     }
+    if(StructuredRole){
+        MdoAgentInstance Draft={0};xwork_agent_extension_context Native={0};xvalue* Plan=NULL;
+        Draft.Definition=AgentInfo;Draft.Configuration=AgentInfo.ConfigurationJson?xrtJsonParse(xrtStrView(AgentInfo.ConfigurationJson)):xrtValueObject();
+        bool Collected=Draft.Configuration && MdoAgentsContextCollect(Owner,&Draft,&AgentInfo,&Native,&Plan,Error);
+        Prompt=Collected?MdoAgentsContextRender(Plan,"system",Error):NULL;
+        xrtValueRelease(Plan);xrtValueRelease(Draft.Configuration);MemoryGeneration=MdoMemoryManagerGeneration();
+        if(!Prompt)goto fail;
+        if(Options->Recover && !xllmSessionSetSystemPrompt(Owner->LlmSession,Prompt,&ModelError)){
+            MdoAgentsModelError(Error,&ModelError,"cannot restore the role context");goto fail;
+        }
+    } else {
     {
         const char* RecoveredPrompt = Options->Recover ?
             xllmSessionGetSystemPrompt(Owner->LlmSession) : NULL;
@@ -1352,13 +1364,18 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
                     MemoryPrompt, MemoryPromptBytes, Error) ) goto fail;
         }
     }
+    } /* legacy prompt assembly */
     Permission = Options->PermissionProfile != NULL &&
         Options->PermissionProfile[0] != '\0' ? Options->PermissionProfile :
         (AgentInfo.PermissionProfile != NULL &&
         AgentInfo.PermissionProfile[0] != '\0' ? AgentInfo.PermissionProfile :
         Settings.PermissionProfile);
-    if ( (AgentInfo.Flags & MDO_AGENT_READ_ONLY) != 0u )
+    if ( (AgentInfo.Flags & MDO_AGENT_READ_ONLY) != 0u ||
+         (AgentInfo.PermissionProfile && !strcmp(AgentInfo.PermissionProfile,"read-only")) ||
+         Owner->DelegationApproval==XWORK_APPROVAL_READ_ONLY )
         Permission = "read-only";
+    else if(Owner->DelegationApproval==XWORK_APPROVAL_CALLBACK && !strcmp(Permission,"full-access"))
+        Permission="balanced";
     Approval = MdoAgentsApproval(Permission,
         (AgentInfo.Flags & MDO_AGENT_READ_ONLY) != 0u, &ValidApproval);
     if ( !ValidApproval ) {
@@ -1366,7 +1383,7 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
             "Agent permission profile is unknown");
         goto fail;
     }
-    {
+    if(!StructuredRole){
         const char* FileAccess =
             "\n\n<file_access>\nThe user can change permissions while a task is running. "
             "In full access mode, use read directly for user-specified native paths outside the workspace; "
@@ -1500,7 +1517,7 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
     if ( Owner->ApprovalScope ) {
         if ( !xworkAgentSetFileScope(Session->Agent, Owner->ApprovalScope->Files, Error) ) goto fail;
     } else if ( !xworkAgentAllowExternalPaths(Session->Agent,
-            Approval == XWORK_APPROVAL_AUTO, Error) ) goto fail;
+            Owner->DelegationApproval == XWORK_APPROVAL_AUTO, Error) ) goto fail;
     if ( !MdoKnowledgeConfigureFileTools(Session->Agent, Error) ||
          !MdoAskRegisterTool(Session->Agent, Options->ProjectId,
             Options->AskScopeId != NULL ? Options->AskScopeId :

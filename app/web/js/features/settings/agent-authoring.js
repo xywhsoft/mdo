@@ -19,7 +19,7 @@ export function newRole(kind) {
     extends: "mdo.general", tools: "inherit", read_only: false, allow_delegation: false, prompt: "" });
 }
 export function roleProgramTemplate(kind,id) {
-  const roleId=kind === "agents" ? `agent.${id}` : `subagent.${id}`;
+  const roleId=kind === "agents" ? id === "default" ? "mdo.default" : `agent.${id}` : `subagent.${id}`;
   return `#include "mdo/agent.h"
 
 /* Optional callbacks. Every pointer is borrowed for this invocation only.

@@ -79,7 +79,9 @@ static bool MdoAgentsFilterMetadata(char** Text,const xvalue* Spec)
     xvalue* Selected=xrtValueArray();bool Ok=Parsed && Items && Selected;
     for(size_t I=0;Ok && I<xrtValueCount(Items);I++){
         const xvalue* Item=xrtValueArrayGet(Items,I);
-        cstr Id=MdoAgentConfigText(Item,"id");if(!Id)Id=MdoAgentConfigText(Item,"name");
+        cstr Id=MdoAgentConfigText(Item,"id"),Path=MdoAgentConfigText(Item,"path");
+        if(!Id && Path&&!strncmp(Path,"@knowledge/",11))Id=Path+11;
+        if(!Id)Id=MdoAgentConfigText(Item,"name");
         if(Id && MdoAgentsSelection(Spec,Id))Ok=xrtValueArrayAppend(Selected,(xvalue*)Item);
     }
     xvalue* Output=Selected;
@@ -160,6 +162,7 @@ static bool MdoAgentsContextCollect(MdoAgentOwner* Owner,MdoAgentInstance* Insta
         if(!strcmp(Id,"skills.discovery"))Default=MdoAgentsToolSelected(Definition,"skill");
         if(!strncmp(Id,"memory.",7))Default=Settings.MemoryEnabled;
         bool Enabled=MdoAgentsSourceEnabled(Spec,Default);
+        if(!strncmp(Id,"memory.",7) && !Settings.MemoryEnabled)Enabled=false;
         char* Text=xrtStrDup("");
         if(!Text){Ok=false;break;}
         if(Enabled){
@@ -231,7 +234,16 @@ static char* MdoAgentsContextRender(const xvalue* Plan,cstr Role,xwork_error* Er
 {
     const xvalue* Sources=MdoAgentConfigGet(Plan,"sources");const xvalue* Sorted[128];size_t N=xrtValueCount(Sources);
     if(xrtValueType(Sources)!=XVALUE_ARRAY || N>128){MdoAgentsError(Error,XWORK_ERROR_CONTEXT,"Agent context requires at most 128 sources");return NULL;}
-    for(size_t I=0;I<N;I++)Sorted[I]=xrtValueArrayGet(Sources,I);
+    for(size_t I=0;I<N;I++){
+        Sorted[I]=xrtValueArrayGet(Sources,I);cstr Id=MdoAgentConfigText(Sorted[I],"id");uint64 Order;
+        if(!Id || !MdoAgentConfigSourceKnown(Id) || !MdoAgentConfigNumber(Sorted[I],"order",0,100000,&Order) ||
+           !MdoAgentConfigBooleanValid(Sorted[I],"enabled")){
+            MdoAgentsError(Error,XWORK_ERROR_CONTEXT,"invalid context source identity, order or enabled flag");return NULL;
+        }
+        for(size_t J=0;J<I;J++)if(!strcmp(Id,MdoAgentConfigText(Sorted[J],"id"))){
+            MdoAgentsError(Error,XWORK_ERROR_CONTEXT,"duplicate context source identity");return NULL;
+        }
+    }
     qsort(Sorted,N,sizeof(*Sorted),MdoAgentsContextCompare);
     char* Text=xrtStrDup("");
     for(size_t I=0;Text && I<N;I++){

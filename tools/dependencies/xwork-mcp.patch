@@ -82,11 +82,12 @@
              memset(&tHook, 0, sizeof(tHook));
              tHook.ePhase = XWORK_HOOK_BEFORE_TOOL;
              tHook.uAgentTurn = uTurn;
-@@ -541,7 +544,15 @@
+@@ -541,10 +544,19 @@
              tHook.sArgumentsJson = pCall->sArgumentsJson ? pCall->sArgumentsJson : "{}";
              if ( !pAgent->pCallbackLock ||
                   !xrtMutexLock(pAgent->pCallbackLock) ) goto oom;
 -            eHookAction = pAgent->OnHook(pAgent->pHookUserData, &tHook);
++            char ExtensionFailure[1024]={0};
 +            eHookAction = pAgent->OnHook ? pAgent->OnHook(pAgent->pHookUserData, &tHook) : XWORK_HOOK_CONTINUE;
 +            if(eHookAction==XWORK_HOOK_CONTINUE && pAgent->OnExtension){
 +                xwork_agent_extension_context Extension={0};
@@ -94,12 +95,16 @@
 +                Extension.pToolEvent=&tHook;Extension.pToolOutput=&tOutput;
 +                xwork_error HookError; xworkErrorInit(&HookError);
 +                xwork_result HookResult=xwork__agent_extension(pAgent,&Extension,&HookError);
-+                if(HookResult!=XWORK_RESULT_OK)eHookAction=HookResult==XWORK_RESULT_CANCELLED?XWORK_HOOK_CANCEL:XWORK_HOOK_DENY;
++                if(HookResult!=XWORK_RESULT_OK){eHookAction=HookResult==XWORK_RESULT_CANCELLED?XWORK_HOOK_CANCEL:XWORK_HOOK_DENY;snprintf(ExtensionFailure,sizeof(ExtensionFailure),"%s",HookError.sMessage);}
 +            }
              (void)xrtMutexUnlock(pAgent->pCallbackLock);
              if ( eHookAction == XWORK_HOOK_DENY ) {
-                 if ( !xworkToolOutputSet(&tOutput, false, "tool execution denied by before-tool hook") ) goto oom;
-@@ -650,7 +661,7 @@
+-                if ( !xworkToolOutputSet(&tOutput, false, "tool execution denied by before-tool hook") ) goto oom;
++                if ( !xworkToolOutputSet(&tOutput, false, ExtensionFailure[0]?ExtensionFailure:"tool execution denied by before-tool hook") ) goto oom;
+                 goto tool_ready;
+             }
+             if ( eHookAction == XWORK_HOOK_CANCEL ) {
+@@ -650,7 +662,7 @@
              goto tool_ready;
          }
          if ( pbEffectApplied ) *pbEffectApplied = tOutput.bSuccess;
@@ -108,11 +113,12 @@
              memset(&tHook, 0, sizeof(tHook));
              tHook.ePhase = XWORK_HOOK_AFTER_TOOL;
              tHook.uAgentTurn = uTurn;
-@@ -661,7 +672,15 @@
+@@ -661,11 +673,21 @@
              tHook.bSuccess = tOutput.bSuccess;
              if ( !pAgent->pCallbackLock ||
                   !xrtMutexLock(pAgent->pCallbackLock) ) goto oom;
 -            eHookAction = pAgent->OnHook(pAgent->pHookUserData, &tHook);
++            char ExtensionFailure[1024]={0};
 +            eHookAction = pAgent->OnHook ? pAgent->OnHook(pAgent->pHookUserData, &tHook) : XWORK_HOOK_CONTINUE;
 +            if(eHookAction==XWORK_HOOK_CONTINUE && pAgent->OnExtension){
 +                xwork_agent_extension_context Extension={0};
@@ -120,12 +126,19 @@
 +                Extension.pToolEvent=&tHook;Extension.pToolOutput=&tOutput;
 +                xwork_error HookError; xworkErrorInit(&HookError);
 +                xwork_result HookResult=xwork__agent_extension(pAgent,&Extension,&HookError);
-+                if(HookResult!=XWORK_RESULT_OK)eHookAction=HookResult==XWORK_RESULT_CANCELLED?XWORK_HOOK_CANCEL:XWORK_HOOK_DENY;
++                if(HookResult!=XWORK_RESULT_OK){eHookAction=HookResult==XWORK_RESULT_CANCELLED?XWORK_HOOK_CANCEL:XWORK_HOOK_DENY;snprintf(ExtensionFailure,sizeof(ExtensionFailure),"%s",HookError.sMessage);}
 +            }
              (void)xrtMutexUnlock(pAgent->pCallbackLock);
              if ( eHookAction == XWORK_HOOK_DENY ) {
-                 if ( !xwork__buf_append_cstr(&tHookOutput,
-@@ -1026,7 +1045,7 @@
+-                if ( !xwork__buf_append_cstr(&tHookOutput,
+-                        "after-tool hook rejected this result; the tool may already have completed side effects\n--- original result ---\n") ||
++                if ( !xwork__buf_append_cstr(&tHookOutput,ExtensionFailure) ||
++                     !xwork__buf_append_cstr(&tHookOutput,
++                        "\nafter-tool hook rejected this result; the tool may already have completed side effects\n--- original result ---\n") ||
+                      !xwork__buf_append_cstr(&tHookOutput, tOutput.sContent) ||
+                      !xworkToolOutputSet(&tOutput, false, tHookOutput.pData) ) goto oom;
+             } else if ( eHookAction == XWORK_HOOK_CANCEL ) {
+@@ -1026,7 +1048,7 @@
      return true;
  }
  
@@ -134,7 +147,15 @@
      xwork_agent* pAgent,
      const char* sPrompt,
      const xllm_message* pUserMessage,
-@@ -1296,6 +1315,11 @@
+@@ -1041,6 +1063,7 @@
+     uint64_t uPreviousBatchHash = 0u;
+     uint32_t uRepeatedBatches = 0u;
+     uint32_t uConsecutiveToolFailures = 0u;
++    uint32_t uExtensionCompactions = 0u;
+     uint32_t uVerificationPrompts = 0u;
+     bool bNeedNewTurn = false;
+     bool bRecoverPendingTools = false;
+@@ -1296,6 +1319,11 @@
              bRecoverPendingTools = false;
              bNeedNewTurn = true;
          }
@@ -146,7 +167,7 @@
          eResult = xwork__compact_if_needed(pAgent, uTurn, &tRun, false, pError);
          if ( eResult != XWORK_RESULT_OK ) goto cleanup;
          if ( bNeedNewTurn ) {
-@@ -1336,6 +1360,15 @@
+@@ -1336,6 +1364,25 @@
          }
          tRequest.bParallelToolCalls = true;
          tRequest.eToolChoice = XLLM_TOOL_CHOICE_AUTO;
@@ -155,6 +176,16 @@
 +            Extension.pRequest=&tRequest;
 +            eResult=xwork__agent_extension(pAgent,&Extension,pError);
 +            if(eResult!=XWORK_RESULT_OK){xllmRequestUnit(&tRequest);goto cleanup;}
++            if(Extension.bCompactAndRetry){
++                xllmRequestUnit(&tRequest);
++                if(uExtensionCompactions++){
++                    xwork__set_error(pError,XWORK_ERROR_CONTEXT,"role context and tool schemas still exceed the input budget after safe compaction");
++                    eResult=XWORK_RESULT_LIMIT;goto cleanup;
++                }
++                eResult=xwork__compact_if_needed(pAgent,uTurn,&tRun,true,pError);
++                if(eResult!=XWORK_RESULT_OK)goto cleanup;
++                continue;
++            }
 +            /* A mutable hook cannot replace its managed cancellation owner. */
 +            xllmRequestSetCancel(&tRequest,xwork__active_cancel(pAgent));
 +            xllmRequestSetDeadline(&tRequest,xwork__active_deadline(pAgent));
@@ -162,20 +193,28 @@
          memset(&tEvent, 0, sizeof(tEvent));
          {
              char sRequestFingerprint[17];
-@@ -1392,6 +1425,12 @@
-             xwork__copy_model_error(pError, &tModelError);
+@@ -1393,6 +1440,12 @@
              eResult = XWORK_RESULT_ERROR;
              goto cleanup;
-+        }
+         }
 +        {
 +            xwork_agent_extension_context Extension={0};Extension.ePhase=XWORK_AGENT_EXTENSION_RESPONSE;
 +            Extension.pResponse=pResponse;
 +            eResult=xwork__agent_extension(pAgent,&Extension,pError);
 +            if(eResult!=XWORK_RESULT_OK){xllmResponseDestroy(pResponse);goto cleanup;}
-         }
++        }
          if ( !xwork__usable_model_response(pResponse) ) {
              xllmErrorInit(&tModelError);
-@@ -1612,6 +1651,24 @@
+             tModelError.eCode = XLLM_ERROR_PROTOCOL;
+@@ -1406,6 +1459,7 @@
+             eResult = XWORK_RESULT_ERROR;
+             goto cleanup;
+         }
++        uExtensionCompactions=0u;
+         tRun.tLastUsage = pResponse->tUsage;
+         if ( !xllmSessionAddAssistantResponse(pAgent->pSession, uTurn, pResponse) ) {
+             xllmResponseDestroy(pResponse);
+@@ -1612,6 +1666,24 @@
      return eResult;
  }
  
@@ -232,7 +271,23 @@
      free(pAgent->sSystemPrompt);
      free(pAgent->sSessionPath);
      free(pAgent->sArtifactDirectory);
-@@ -1240,3 +1249,12 @@
+@@ -1224,6 +1233,15 @@
+     xllm_error* pError
+ )
+ {
++    if(pAgent->OnExtension){
++        xwork_agent_extension_context Context={0};xwork_error Error;
++        Context.ePhase=XWORK_AGENT_EXTENSION_MODEL_DISPATCH;Context.pRequest=(xllm_request*)pRequest;
++        xworkErrorInit(&Error);
++        if(xwork__agent_extension(pAgent,&Context,&Error)!=XWORK_RESULT_OK){
++            if(pError){xllmErrorInit(pError);pError->eCode=XLLM_ERROR_HOOK;snprintf(pError->sMessage,sizeof(pError->sMessage),"%s",Error.sMessage);}
++            return XLLM_RESULT_ERROR;
++        }
++    }
+     if ( pAgent->OnModelComplete ) {
+         return pAgent->OnModelComplete(pAgent->pModelUserData, pRequest, pCallbacks, ppResponse, pError);
+     }
+@@ -1240,3 +1258,12 @@
      free(pResult->sFinalText);
      memset(pResult, 0, sizeof(*pResult));
  }
@@ -1679,7 +1734,7 @@
  #define XWORK_EVENT_SCHEMA_VERSION 3u
  #define XWORK_EVENT_SNAPSHOT_MAX_RECORDS 1024u
  #define XWORK_ARTIFACT_READ_DEFAULT_BYTES (64u * 1024u)
-@@ -516,6 +516,50 @@
+@@ -516,6 +516,52 @@
  typedef bool (*xwork_agent_owner_retain_fn)(void* pUserData);
  typedef void (*xwork_agent_owner_release_fn)(void* pUserData);
  
@@ -1694,7 +1749,8 @@
 +    XWORK_AGENT_EXTENSION_AFTER_TOOL,
 +    XWORK_AGENT_EXTENSION_CONTEXT,
 +    XWORK_AGENT_EXTENSION_RELEASE,
-+    XWORK_AGENT_EXTENSION_CHILD_READY
++    XWORK_AGENT_EXTENSION_CHILD_READY,
++    XWORK_AGENT_EXTENSION_MODEL_DISPATCH
 +} xwork_agent_extension_phase;
 +struct xwork_run_result;
 +typedef xwork_result (*xwork_agent_default_run_fn)(xwork_agent*,const char*,
@@ -1720,6 +1776,7 @@
 +    struct xwork_run_result* pResult;
 +    xwork_agent_default_run_fn DefaultRun;
 +    bool bHandled;
++    bool bCompactAndRetry; /* REQUEST: one bounded rebuild before dispatch */
 +    const xwork_tool_catalog* pDelegationTools;
 +    const void* pDelegationToolOwner;
 +    bool bOverrideDelegationApproval;
@@ -1730,7 +1787,7 @@
  typedef struct xwork_agent_config {
      /* Borrowed dependencies; they must outlive the agent. */
      xllm_client* pClient;
-@@ -544,6 +588,8 @@
+@@ -544,6 +590,8 @@
  
      xwork_model_complete_fn OnModelComplete;
      void* pModelUserData;
@@ -1739,7 +1796,7 @@
  
      uint32_t uCommandTimeoutMs;
      uint32_t uMaxAgentTurns;          /* 0 means unlimited. */
-@@ -653,6 +699,8 @@
+@@ -653,6 +701,8 @@
      void* pEventUserData;
      xwork_model_complete_fn OnModelComplete;
      void* pModelUserData;
@@ -1748,7 +1805,7 @@
      void* pOwnerUserData;
      xwork_agent_owner_retain_fn OnOwnerRetain;
      xwork_agent_owner_release_fn OnOwnerRelease;
-@@ -1071,6 +1119,19 @@
+@@ -1071,6 +1121,19 @@
  );
  bool xworkMcpClientGetInfo(const xwork_mcp_client* pClient, xwork_mcp_info* pInfo);
  void xworkMcpClientDestroy(xwork_mcp_client* pClient);
@@ -1768,7 +1825,7 @@
  
  void xworkMcpServerConfigInit(xwork_mcp_server_config* pConfig);
  void xworkMcpServerInfoInit(xwork_mcp_server_info* pInfo);
-@@ -1101,6 +1162,11 @@
+@@ -1101,6 +1164,11 @@
      xwork_error* pError);
  /* Adds only the compact discovery pair. Remote schemas enter the agent
   * catalog individually through tool_load or the explicit host API. */
@@ -1780,7 +1837,7 @@
  bool xworkAgentRegisterMcpDiscoveryTools(
      xwork_agent* pAgent, xwork_error* pError);
  bool xworkAgentLoadMcpTool(xwork_agent* pAgent,
-@@ -1502,10 +1568,10 @@
+@@ -1502,10 +1570,10 @@
      size_t iSkillCount;
      const char* sModel;            /* NULL inherits the parent model. */
      const char* sReasoningEffort;  /* NULL inherits the parent setting. */
@@ -1794,7 +1851,7 @@
      uint32_t uMaxOutputTokens;     /* 0 inherits the parent session cap. */
      size_t iMaxFinalBytes;         /* 0 selects 64 KiB. */
      xwork_tool_effects uAllowedEffects; /* Init selects READ. */
-@@ -1513,6 +1579,8 @@
+@@ -1513,6 +1581,8 @@
      bool bReadOnly;                /* Further clamps effects to READ. */
      bool bAllowBackground;
      bool bAllowDelegation;         /* Child may receive `agent` when depth permits. */

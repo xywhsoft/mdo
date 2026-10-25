@@ -172,6 +172,12 @@ static xwork_result MdoAgentsExtension(void* Data,xwork_agent_extension_context*
     if(!Native->sDefinitionId || !MdoModuleCatalogAgentFind(Owner->Modules,Native->sDefinitionId,&Known))return XWORK_RESULT_OK;
     MdoAgentInstance* Instance=MdoAgentsInstance(Owner,Native,Error);
     if(!Instance)return XWORK_RESULT_ERROR;
+    if(Native->ePhase==XWORK_AGENT_EXTENSION_MODEL_DISPATCH){
+        /* Includes compaction meta-requests, which must use the same role's
+         * provider even when two profiles share a wire model name. */
+        xrtMutexLock(Owner->InstanceLock);Instance->CurrentRequest=Native->pRequest;xrtMutexUnlock(Owner->InstanceLock);
+        return XWORK_RESULT_OK;
+    }
     if(Native->ePhase==XWORK_AGENT_EXTENSION_CHILD){
         if(!MdoAgentsDelegationContext(Owner,Instance,Native,Error))return XWORK_RESULT_ERROR;
         Native->pDelegationTools=Owner->DelegationTools;Native->pDelegationToolOwner=Owner->RootAgent;
@@ -245,6 +251,17 @@ static xwork_result MdoAgentsExtension(void* Data,xwork_agent_extension_context*
         }
         xworkToolCatalogRelease(Catalog);
         xvalue* Preview=MdoAgentsRequestPreview(Native->pRequest);if(!Preview)return XWORK_RESULT_ERROR;
+        xllm_session_budget Budget;xllmSessionBudgetInit(&Budget);uint64 Input=0;
+        if(!xllmSessionGetBudget(Native->pSession,&Budget) ||
+           !MdoAgentConfigNumber(Preview,"estimated_input_tokens",0,UINT64_MAX,&Input)){
+            xrtValueRelease(Preview);MdoAgentsError(Error,XWORK_ERROR_CONTEXT,"cannot inspect the role request budget");return XWORK_RESULT_ERROR;
+        }
+        if(Native->pRequest->uMaxOutputTokens>Instance->Model.MaxOutputTokens){
+            xrtValueRelease(Preview);MdoAgentsError(Error,XWORK_ERROR_LIMIT,"role request exceeds its model output limit");return XWORK_RESULT_LIMIT;
+        }
+        if(Input>Budget.uInputBudgetTokens){
+            Native->bCompactAndRetry=true;xrtValueRelease(Preview);return XWORK_RESULT_OK;
+        }
         xrtMutexLock(Owner->InstanceLock);xvalue* Old=Instance->RequestPreview;Instance->RequestPreview=Preview;Instance->CurrentRequest=Native->pRequest;++Instance->ModelCalls;++Instance->RunModelCalls;xrtMutexUnlock(Owner->InstanceLock);xrtValueRelease(Old);
         return XWORK_RESULT_OK;
     }
@@ -253,8 +270,12 @@ static xwork_result MdoAgentsExtension(void* Data,xwork_agent_extension_context*
     if(Native->ePhase==XWORK_AGENT_EXTENSION_BEFORE_TOOL || Native->ePhase==XWORK_AGENT_EXTENSION_AFTER_TOOL){
         bool Before=Native->ePhase==XWORK_AGENT_EXTENSION_BEFORE_TOOL;
         if(!MdoAgentsProgramEvent(Owner,Instance,Native,Instance->Plan,Before?MDO_AGENT_BEFORE_TOOL:MDO_AGENT_AFTER_TOOL,Error))return XWORK_RESULT_ERROR;
-        if(Native->pToolEvent && !strcmp(Native->pToolEvent->sToolName,"agent") &&
-            !MdoAgentsProgramEvent(Owner,Instance,Native,Instance->Plan,Before?MDO_AGENT_BEFORE_DELEGATE:MDO_AGENT_AFTER_DELEGATE,Error))return XWORK_RESULT_ERROR;
+        if(Native->pToolEvent && !strcmp(Native->pToolEvent->sToolName,"agent")){
+            xwork_agent_extension_context Current=*Native;xwork_hook_event Event=*Native->pToolEvent;
+            if(!Before && Native->pToolOutput){Event.sOutput=Native->pToolOutput->sContent;Event.bSuccess=Native->pToolOutput->bSuccess;}
+            Current.pToolEvent=&Event;
+            if(!MdoAgentsProgramEvent(Owner,Instance,&Current,Instance->Plan,Before?MDO_AGENT_BEFORE_DELEGATE:MDO_AGENT_AFTER_DELEGATE,Error))return XWORK_RESULT_ERROR;
+        }
     }
     return XWORK_RESULT_OK;
 }
