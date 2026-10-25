@@ -1,15 +1,17 @@
+import { ROLE_MIN_BUILD, isRoleKind } from "./role-package.js";
 import { KNOWLEDGE_MIN_BUILD } from "./knowledge-format.js";
 export const STORE_FORMAT = "mdo.extension.v1";
 export const STORE_EDITOR_KINDS = ["agents", "subagents", "tools", "skills", "mcp", "commands", "knowledge"];
 export const STORE_KINDS = [...STORE_EDITOR_KINDS, "modules", "toolpacks", "plugins"];
 export const STORE_PLATFORMS = ["windows-x86_64", "android-arm64-v8a", "linux-x86_64", "macos-arm64"];
-export const containsCode = resources => resources.some(r => ["tools", "commands", "modules", "toolpacks", "plugins"].includes(r.kind) || r.kind.startsWith("c-"));
+export const containsCode = resources => resources.some(r => ["tools", "commands", "modules", "toolpacks", "plugins"].includes(r.kind) || r.kind.startsWith("c-") || isRoleKind(r.kind) && (r.files || []).some(f => f.path === "program.c"));
 
 // Publication includes only explicitly selected resource files. Credentials
 // are also redacted by the native exporter, before reaching this UI.
 export function makeStorePackage(fields, resources) {
-  const v2 = fields.min_build_id || resources.some(r => ["modules", "toolpacks", "plugins", "knowledge"].includes(r.kind));
-  const minimumBuild = Math.max(fields.min_build_id || 0, resources.some(r => r.kind === "knowledge") ? KNOWLEDGE_MIN_BUILD : 0);
+  const roles = resources.some(r => isRoleKind(r.kind));
+  const v2 = roles || fields.min_build_id || resources.some(r => ["modules", "toolpacks", "plugins", "knowledge"].includes(r.kind));
+  const minimumBuild = Math.max(fields.min_build_id || 0, roles ? ROLE_MIN_BUILD : 0, resources.some(r => r.kind === "knowledge") ? KNOWLEDGE_MIN_BUILD : 0);
   if (!/^[a-z0-9][a-z0-9._-]{0,63}$/.test(fields.slug) || fields.slug.includes(".."))
     throw new Error("Invalid package ID");
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$/.test(fields.version)) throw new Error("Invalid version");

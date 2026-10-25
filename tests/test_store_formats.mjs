@@ -29,3 +29,12 @@ test("ten extension systems include knowledge and keep portable v2 numeric versi
     assert.throws(()=>makeStorePackage({...fields,version:"4294967296.0.0"},[resource]));
   }
 });
+
+
+test("configuration and C roles declare the same minimum client and distinct code consent",()=>{
+  for(const kind of ["agents","subagents"]){
+    const r={kind,id:"reviewer",content:JSON.stringify({schema:"mdo.agent.v1",tools:[]})};
+    const p=makeStorePackage(fields,[r]);assert.equal(p.format,"mdo.extension.v2");assert.equal(p.manifest.min_build_id,70000001);assert(!containsCode([r]));
+    const coded={...r,files:[{path:"program.c",base64:"LyogYyAqLw=="}]};assert(containsCode([coded]));
+  }
+});

@@ -19,7 +19,7 @@ test("Skill and Agent tool stores use the shared numbered pager across cursor do
   .replace(/from "(\.[^"]+)"/g,(_,path)=>`from ${JSON.stringify(new URL(path,url).href)}`);
  try{
   const {createSingleResourceStore}=await import("data:text/javascript;base64,"+Buffer.from(source).toString("base64"));
-  for(const kind of ["skills","tools","commands"]){
+  for(const kind of ["agents","subagents","skills","tools","commands"]){
    const store=createSingleResourceStore(kind,()=>{});
    try{
     assert(!descendants(store.root).some(n=>n.tagName==="A"&&n.textContent==="创作中心"));
@@ -92,12 +92,12 @@ test("single-resource sharing retains drafts on connection notifications and can
   exportGate.resolve(); await pending; assert.equal(body.children.length, 0, "late export must not reveal the previous device's source");
 });
 
-for (const kind of ["tools", "commands"]) test(`${kind} store details reject late selections and require C trust plus the exact installation plan`, async t => {
+for (const kind of ["agents", "subagents", "tools", "commands"]) test(`${kind} store details reject late selections and require C trust plus the exact installation plan`, async t => {
   const original = { document: globalThis.document, window: globalThis.window, confirm: globalThis.confirm };
   globalThis.document = testDocument(); globalThis.window = new EventTarget(); globalThis.confirm = () => true;
   const first = deferred(), calls = [], items = [1, 2].map(id => ({ id, owner: 7, slug: `tool-${id}`, name: `Tool ${id}`, author: "Fixture", version: "1.0.0", description: "C source" }));
   let installed = {}, managed = null, installation = deferred(), installOptions, catalogGate = null;
-  const pack = id => ({ name: `Tool ${id}`, state: "published", author: "Fixture", version: "1.0.0", package: { manifest: { license: "MIT", platforms: ["windows-x86_64"], readme: "Read the source." }, resources: [{ kind, id: `tool-${id}`, content: "/* source */" }] } });
+  const pack = id => ({ name: `Tool ${id}`, state: "published", author: "Fixture", version: "1.0.0", package: { manifest: { license: "MIT", platforms: ["windows-x86_64"], readme: "Read the source." }, resources: [{ kind, id: `tool-${id}`, content: ["agents","subagents"].includes(kind)?JSON.stringify({schema:"mdo.agent.v1",code:true}):"/* source */", ...(["agents","subagents"].includes(kind)?{files:[{path:"program.c",base64:"Lyogc291cmNlICov"}]}:{}) }] } });
   globalThis.__singleStoreDetails = {
     api: { get: async () => ({ data: installed }), post: async (_, body, options) => {
       calls.push(body);

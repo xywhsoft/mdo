@@ -82,7 +82,7 @@ static bool MdoPackageRoleValidate(const xvalue* R,bool Strict,char* Error,size_
     bool Ok=(!Mode||!strcmp(Mode,"both")||!strcmp(Mode,!strcmp(Kind,"agents")?"primary":"subagent"));
     if(!Ok){Why="Role mode does not match its store category";goto done;}
     if(!Strict&&!Files)goto done;
-    Ok=Schema&&!strcmp(Schema,"mdo.agent.v1");if(!Ok){Why="Portable roles require mdo.agent.v1";goto done;}
+    Ok=Schema&&!strcmp(Schema,"mdo.agent.v1")&&xrtStrTrim(xrtStrView(Text)).Data[0]=='{';if(!Ok){Why="Portable roles require mdo.agent.v1";goto done;}
     Ok=Code==MdoPackageRoleFile(Files,"program.c");if(!Ok){Why="C roles must include program.c; configuration roles must not include it";goto done;}
     Ok=MdoPackageRoleReference(Files,Id,MdoAgentConfigText(D,"prompt_file"));
     const xvalue* Context=MdoAgentConfigGet(D,"context");

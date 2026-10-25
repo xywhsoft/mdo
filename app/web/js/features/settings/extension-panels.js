@@ -18,7 +18,7 @@ import { clear, element, errorMessage, toast } from "../../utils/dom.js";
 import { loadAgents } from "../../state/catalogs.js";
 import { refreshMcp, disconnectMcp, reloadCatalog } from "../../state/resources.js";
 import { EXTENSION_KINDS, portableId, promptFields, editPrompt, newMcp, prepareMcpCredentials, mcpImportDocuments, bytesToBase64 } from "./extension-formats.js";
-import { resourceOwner, receiptKey, resourceReferences } from "./store-formats.js";
+import { resourceOwner, receiptKey, resourceReferences, makeStorePackage, STORE_PLATFORMS } from "./store-formats.js";
 import { saveBlobFile } from "../../utils/file-download.js";
 import { createExtensionReads } from "./extension-reads.js";
 import { openLayer } from "../../components/layers.js";
@@ -63,7 +63,7 @@ export function createExtensionPanels() {
   const mcpConnections = createMcpConnections(() => { announceChange("mcp"); if(selected==="mcp")void load("mcp"); });
   const mcpWorkbench = createMcpWorkbench({ onChange: () => announceChange("mcp"), onConfigure:(item,project)=>mcpConnections.open({item,project}),onShare:item=>stores.get("mcp").publish(item) });
   const commandWorkbench = createCommandWorkbench({ owner: roots.get("commands"), onChange: () => announceChange("commands"), onShare: item => stores.get("commands").publish(item) });
-  const stores = new Map(["skills", "tools", "commands", "mcp", "knowledge"].map(kind => [kind, createSingleResourceStore(kind, () => { announceChange(kind); if (selected === kind) void load(kind); }, () => { states.get(kind).area = "store"; render(kind); }, async receipt => {
+  const stores = new Map(["agents", "subagents", "skills", "tools", "commands", "mcp", "knowledge"].map(kind => [kind, createSingleResourceStore(kind, () => { announceChange(kind); if (selected === kind) void load(kind); }, () => { states.get(kind).area = "store"; render(kind); }, async receipt => {
     if(kind==="mcp"){await mcpConnections.open({receipt});return;}
     const ref = resourceReferences(receipt).find(ref => ref.kind === kind); if (!ref || selected !== kind) return;
     const state = states.get(kind), target = targetKey(); state.area = "local"; state.view = "custom"; state.filter = "";
@@ -219,12 +219,12 @@ export function createExtensionPanels() {
           kind === "mcp" ? element("span", { text: t(`resource.mcp${({ ready: "Ready", failed: "Failed", disabled: "Disabled", disconnected: "Disconnected" })[item.state] || "Disconnected"}`) }) : null,
           kind === "mcp" ? element("span", { text: t("resource.toolCount", { count: item.tool_count || 0 }) }) : null,
         ]);
-        const owner=item.template_receipt||resourceOwner(state.packages,item.path), protectedKind=["tools","skills","commands","mcp","knowledge"].includes(kind);
+        const owner=item.template_receipt||resourceOwner(state.packages,item.path), protectedKind=["agents","subagents","tools","skills","commands","mcp","knowledge"].includes(kind);
         const editable=!protectedKind||customizableResource(item,owner), credits=protectedKind?resourceCredits(item,owner):null;
         if(owner)meta.append(button(`${owner.name} · ${owner.version} · ${owner.source==="local"?label("localImport","本地导入"):owner.author}`,()=>returnToPackage(receiptKey(owner))));
         const edit = button(label("edit", "编辑"), async () => {
           const target = targetKey(), isCurrent = () => current(kind, target);
-          try { const data = (await reads.read("editor", path(kind, item.id), { isCurrent })).data; if (isCurrent()) openEditor(kind, data,null,owner?receiptKey(owner):null); }
+          try { const data = (await reads.read("editor", path(kind, item.id), { isCurrent })).data; if (isCurrent()) data.code_only ? openEditor(kind,null,{id:data.id,content:data.content}) : openEditor(kind, data,null,owner?receiptKey(owner):null); }
           catch (error) { if (isCurrent() && error?.name !== "AbortError") toast(errorMessage(error), "error"); }
         });
         const toggle = button(item.enabled ? label("disable", "停用") : label("enable", "启用"), () => act(kind, async () => {
@@ -232,7 +232,7 @@ export function createExtensionPanels() {
         }));
         const controls = editable ? [edit, button(label("export", "导出"), () => exportItem(kind, item))] : [];
         if (["agents","subagents"].includes(kind)) controls.push(button("上下文预览",()=>openRolePlan({kind,id:item.id,owner:roots.get(kind)})));
-        if (store && item.valid && editable) controls.push(button("分享到创作中心", () => store.publish(item, owner)));
+        if (store && item.valid && item.shareable!==false && editable && !(kind==="agents"&&item.id==="default")) controls.push(button("分享到创作中心", () => store.publish(item, owner)));
         if (store) controls.push(...store.localActions(owner));
         if (kind === "skills" && editable) controls.push(button(label("improveSkill", "用 AI 改进"), () =>
           skillWorkbench.open({ builder: true, mode: "improve", id: item.id, scope: "user" })));
@@ -270,6 +270,7 @@ export function createExtensionPanels() {
                 const data = (await reads.read(`detail:${kind}`, path(kind, item.id), { isCurrent })).data;
                 if (!isCurrent()) return;
                 preview.replaceChildren(element("pre", { className: "store-source", text: data.content || "" }));
+                if(data.program_source)preview.append(element("pre",{className:"store-source",text:data.program_source}));
                 if(kind==="knowledge"){
                   const listing=(await api.get(`${path(kind,item.id)}/documents`)).data;if(!isCurrent())return;
                   const select=element("select",{attrs:{"aria-label":"知识库文档"}}),documentText=element("pre",{className:"store-source"});
@@ -588,7 +589,7 @@ export function createExtensionPanels() {
     if(kind==="knowledge"){await knowledgeEditor.importFile(file);return;}
     const target = targetKey();
     try {
-      if (file.size > 250000) throw new Error(label("importLimit", "导入内容过大；请直接复制资源目录到 mdo-home 后刷新。"));
+      if (file.size > (["agents","subagents"].includes(kind)?100*1024*1024:250000)) throw new Error(label("importLimit", "导入内容过大；请直接复制资源目录到 mdo-home 后刷新。"));
       const content = await file.text();
       if (target !== targetKey()) return;
       if (kind === "mcp") {
@@ -610,6 +611,13 @@ export function createExtensionPanels() {
         openEditor(kind, null, { id: file.name.replace(/\.c$/i, "").toLowerCase(), content });
       } else if (/\.json$/i.test(file.name)) {
         const bundle = JSON.parse(content);
+        if(["agents","subagents"].includes(kind) && bundle.format?.startsWith("mdo.extension.")){
+          await stores.get(kind).importPackage(bundle);return;
+        }
+        if(["agents","subagents"].includes(kind) && bundle.kind===kind && Array.isArray(bundle.files)){
+          const d=JSON.parse(bundle.content),p=makeStorePackage({slug:`${kind}-${bundle.id}`.slice(0,64),name:d.name||bundle.id,version:"1.0.0",description:d.description||"本地角色导入",readme:"本地角色及自有文件",license:d.license||"UNLICENSED",platforms:STORE_PLATFORMS},[bundle]);
+          await stores.get(kind).importPackage(p);return;
+        }
         if(["agents","subagents"].includes(kind) && bundle.schema === "mdo.agent.v1"){
           openEditor(kind,null,{id:file.name.replace(/\.json$/i,"").toLowerCase(),content});return;
         }
@@ -642,6 +650,10 @@ export function createExtensionPanels() {
   async function exportItem(kind, item) {
     const target = targetKey(), isCurrent = () => current(kind, target);
     try {
+      if(["agents","subagents"].includes(kind)){
+        const data=(await api.post("/ecosystem",{action:"export",single_kind:kind,references:[{kind,id:item.id}]})).data;
+        if(isCurrent())download(`${item.id}.role.json`,JSON.stringify(data.resources[0],null,2));return;
+      }
       if(kind==="knowledge"){const data=(await api.get(`${path(kind,item.id)}/bundle`)).data;download(`${item.id}.knowledge.json`,JSON.stringify({kind,id:item.id,content:data.content,files:data.files},null,2));return;}
       if(kind==="mcp"){const data=(await api.post("/ecosystem",{action:"export",single_kind:"mcp",references:[{kind,id:item.id}]})).data;if(isCurrent())download(`${item.id}.mcp-template.json`,data.resources[0].content);return;}
       const data = (await reads.read(`export:${kind}/${item.id}`, `${path(kind, item.id)}${kind === "skills" ? "/bundle" : ""}`, { isCurrent })).data;
