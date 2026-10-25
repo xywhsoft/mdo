@@ -7,7 +7,6 @@ import {
 } from "../../state/resources.js";
 import { createModelConfigPanel } from "./model-config-panel.js";
 import { createExtensionPanels } from "./extension-panels.js";
-import { createStorePanel } from "./store-panel.js";
 import { awaitResourceOperation, resourceOperationEpoch } from "../../state/resource-operation.js";
 import { subscribeTarget } from "../../api/target.js";
 
@@ -126,7 +125,6 @@ export function resourceDescription(kind, item) {
 
 export function createResourcePanels({ agentsStore, stores, reload }) {
   const extensionPanels = createExtensionPanels();
-  const storePanel = createStorePanel();
   const modelsContainer = document.querySelector("#settings-models-list");
   const extensionsContainer = document.querySelector("#settings-extensions-list");
   const diagnosticsContainer = document.querySelector("#settings-diagnostics-list");
@@ -335,12 +333,11 @@ export function createResourcePanels({ agentsStore, stores, reload }) {
   }));
 
   return Object.freeze({
-    hasPendingChanges: () => extensionPanels.hasPendingChanges() || storePanel.hasPendingChanges(),
+    hasPendingChanges: () => extensionPanels.hasPendingChanges(),
     selectSection(section) {
       if (section !== activeSection) moduleController?.abort();
       activeSection = section;
       extensionPanels.selectSection(section);
-      storePanel.selectSection(section);
       if (section === "models") void modelPanel.ensureLoaded();
       else void ensureSettingsResources(section);
     },
@@ -348,7 +345,6 @@ export function createResourcePanels({ agentsStore, stores, reload }) {
       moduleController?.abort();
       moduleBrowser.destroy();
       extensionPanels.destroy();
-      storePanel.destroy();
       modelPanel.destroy();
       unsubscribers.forEach((unsubscribe) => unsubscribe());
     },

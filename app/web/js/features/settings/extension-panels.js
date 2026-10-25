@@ -111,10 +111,9 @@ export function createExtensionPanels() {
   async function openLinkedResource() {
     const ref=pendingResource;if(!ref||states.get(ref.kind)?.busy)return;pendingResource=null;
     const target=targetKey(), isCurrent=()=>current(ref.kind,target);
-    try{const data=(await reads.read("editor",path(ref.kind,ref.id),{isCurrent})).data;if(isCurrent())openEditor(ref.kind,data,null,ref.packageKey);}
+    try{const data=(await reads.read("editor",path(ref.kind,ref.id),{isCurrent})).data;if(isCurrent())openEditor(ref.kind,data);}
     catch(e){if(isCurrent()&&e?.name!=="AbortError")toast(errorMessage(e),"error");}
   }
-  function returnToPackage(key) { window.dispatchEvent(new CustomEvent("mdo-open-package",{detail:{key}}));location.hash="#/settings/store"; }
   async function act(kind, action) {
     const state = states.get(kind);
     if (state.busy || editing?.saving) return;
@@ -456,7 +455,7 @@ export function createExtensionPanels() {
     if (kind === "commands") inputField(editing.form, "argument_hint", label("argumentHint", "参数提示（可选）"), values["argument-hint"] || "");
     inputField(editing.form, "prompt", label(kind === "agents" ? "agentInstructions" : "instructions", kind === "agents" ? "系统提示词（留空使用默认规则）" : "指令"), values.prompt || "", { area: true, required: required("prompt") });
   }
-  function openEditor(kind, item = null, imported = null, packageKey = null) {
+  function openEditor(kind, item = null, imported = null) {
     if(kind==="knowledge"){void knowledgeEditor.open({item,imported});return;}
     if(item&&["tools","skills","commands","knowledge"].includes(kind)&&!customizableResource(item,resourceOwner(states.get(kind).packages,item.path))){toast(storeReadOnlyMessage(),"error");return;}
     reads.cancel("editor");
@@ -479,7 +478,6 @@ export function createExtensionPanels() {
     const sourceMode = button(label("source", "源文件"), () => changeMode(true));
     const save = button(label("save", "保存"), saveEditor, true);
     const cancel = button(label("cancel", "取消"), () => closeEditor());
-    if(packageKey)layer.footer.append(button(label("returnPackage","返回插件"),()=>{if(closeEditor())returnToPackage(packageKey);}));
     editing = editor = { kind, item, dialog, layer, target: targetKey(), id, source, form, status, save, cancel, formMode,
       baseline: initial, originalId: id.value, sourceMode: ["tools", "commands"].includes(kind), toolCatalog: null, saving: false, files: imported?.files ?? [],
       secrets: imported?.secrets ?? [] };

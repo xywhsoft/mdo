@@ -66,6 +66,18 @@ test("utility pages retain the composer owner while a real workspace selection c
     navigation.openSettings("models");
     assert.equal(navigation.get().sessionId, "");
     assert.deepEqual(navigation.workspace(), first);
+    navigation.openSettings("store");
+    assert.equal(navigation.get().settingsSection, "extensions");
+    assert.equal(location.hash, "#/settings/extensions");
+    assert.deepEqual(navigation.workspace(), first);
+    // Old saved links are canonicalized on startup without erasing the
+    // conversation recorded on the history entry.
+    location.hash = "#/settings/store";
+    const { navigation: fromLegacy } = await import(
+      "../app/web/js/state/navigation.js?legacy-package-page-test");
+    assert.equal(fromLegacy.get().settingsSection, "extensions");
+    assert.equal(location.hash, "#/settings/extensions");
+    assert.deepEqual(fromLegacy.workspace(), first);
     navigation.openSchedules();
     assert.deepEqual(navigation.workspace(), first);
     const { navigation: refreshed } = await import(

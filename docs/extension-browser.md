@@ -4,8 +4,8 @@
 
 ## 界面约定
 
-- 设置的“扩展能力”导航顺序固定为：Agent、SubAgent、Agent 工具、MCP、Skill、编辑器命令、外部工具、插件、扩展包。桌面导航与手机选择器共用这一顺序；编辑器命令沿用 commands，插件沿用 extensions，扩展包沿用 store 的现有路由及存储。
-- Agent、SubAgent、Agent 工具、Skill、MCP、命令、本机 C 模块，以及扩展中心与外部工具管理，共用 `extension-browser.js` 与主题样式。
+- 设置的“扩展能力”导航顺序固定为：Agent、SubAgent、Agent 工具、MCP、Skill、编辑器命令、外部工具、知识库、插件。桌面导航与手机选择器共用这一顺序；编辑器命令沿用 commands，插件沿用 extensions。“扩展包”的导航与内容页已移除，旧 store 路由归到插件页。
+- Agent、SubAgent、Agent 工具、Skill、MCP、命令、本机 C 模块与外部工具管理，共用 `extension-browser.js` 与主题样式。插件统一文件覆盖和可选代码加载；当前实现边界及后续机制见 [扩展定义与插件设计](extensions.md#插件定义加载与文件管理设计)。
 - 列表显示图标、名称、两行简介、作者或来源、版本及当前状态。名称后的浅色小字显示平台确认的提交者用户名，作者与版权声明单独展示，不能用账号昵称冒充用户名，也不能把提交者推断为版权人；缺失信息明确说明未提供。长版权在列表节选，详情保留完整内容。商店资源提供按需加载的版本历史。
 - 本机启停采用开关；编辑、导出、分享和移除放入更多操作。创建、文件导入和构建器放在创建菜单。内置 Agent 工具不提供卸载或全局启停，默认 Agent 不提供停用。
 - Skill、Agent 工具与外部工具保留各自的本机及商店选项卡。列表不设置内部纵向滚动，使用设置内容的外层滚动及底部分页；详情使用公共弹窗，标题栏固定，仅正文在内容超高时滚动。搜索、状态和来源筛选改变后回到第一页。下载任务统一从顶部“查看快捷键”左侧进入，各扩展页不再添加任务区。
@@ -34,6 +34,6 @@
 
 ## 回归
 
-`test_extension_browser.mjs`、`test_store_panel_browsing.mjs`、`test_single_resource_store.mjs`、`test_external_tools.mjs` 覆盖选择和滚动恢复、键盘菜单、内置工具边界、迟到响应、C 信任与安装计划、失败刷新、重连、Android 限制、状态筛选及下载任务对应关系。
+`test_extension_browser.mjs`、`test_single_resource_store.mjs`、`test_external_tools.mjs` 覆盖选择和滚动恢复、键盘菜单、内置工具边界、迟到响应、C 信任与安装计划、失败刷新、重连、Android 限制、状态筛选及下载任务对应关系。旧组合包界面及其专属测试已移除，共用格式与安装收据测试保留；`test_navigation_refresh.mjs` 验证旧 store 链接进入插件页且会话位置不丢失。
 
 `test_single_resource_store_runtime.py` 使用隔离的原生客户端和网站服务，验证发布、私有权限、审核、分类目录、源码下载、真实安装与注册、更新冲突、卸载保留修改以及迁移。浏览器回归使用同一隔离数据，检查深浅主题、390 像素布局、源码详情、编辑和启停，不访问生产账号或创建线上作品。

@@ -21,7 +21,13 @@ function parseHash() {
   if (location.hash === "#/schedules")
     return { view: "schedules", projectId: "", sessionId: "", settingsSection: "" };
   const settings = /^#\/settings\/([a-z][a-z0-9-]*)$/.exec(location.hash);
-  if (settings) return { view: "settings", projectId: "", sessionId: "", settingsSection: settings[1] };
+  if (settings) {
+    // The former package page is now part of plugins. Preserve old bookmarks
+    // without mounting the retired store UI or losing the retained workspace.
+    const section = settings[1] === "store" ? "extensions" : settings[1];
+    if (section !== settings[1]) history.replaceState(history.state, "", `#/settings/${section}`);
+    return { view: "settings", projectId: "", sessionId: "", settingsSection: section };
+  }
   const newTask = /^#\/projects\/([^/]+)\/new$/.exec(location.hash);
   if (newTask) {
     try {
