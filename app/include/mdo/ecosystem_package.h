@@ -43,7 +43,7 @@ static bool MdoPackageKind(const char* kind)
 }
 /* Categories with one independently installed resource per work. */
 static bool MdoPackageSingleKind(const char* kind)
-{return kind&&(!strcmp(kind,"agents")||!strcmp(kind,"subagents")||!strcmp(kind,"skills")||!strcmp(kind,"tools")||!strcmp(kind,"commands")||!strcmp(kind,"mcp")||!strcmp(kind,"knowledge"));}
+{return kind&&(!strcmp(kind,"agents")||!strcmp(kind,"subagents")||!strcmp(kind,"skills")||!strcmp(kind,"tools")||!strcmp(kind,"commands")||!strcmp(kind,"mcp")||!strcmp(kind,"knowledge")||!strcmp(kind,"plugins"));}
 static const char* MdoPackageSystem(const char* kind)
 {return kind&&!strcmp(kind,"c-agents")?"agents":kind&&!strcmp(kind,"c-subagents")?"subagents":kind;}
 static bool MdoPackageV2(const xvalue* package)
@@ -92,6 +92,7 @@ static bool MdoPackageSamePath(const char* a,const char* b)
 #include "mcp_template.h"
 #include "knowledge_format.h"
 #include "agent_package.h"
+#include "plugin_format.h"
 static bool MdoPackageValidate(const xvalue* package,char* error,size_t capacity)
 {
     const char* reason="Invalid extension package";
@@ -133,7 +134,7 @@ static bool MdoPackageValidate(const xvalue* package,char* error,size_t capacity
             for(size_t j=0;j<xrtValueCount(files);j++){const xvalue* f=xrtValueArrayGet(files,j);const char* path=MdoPackageText(f,"path",220),*base64=MdoPackageText(f,"base64",MdoPackageRoleKind(kind)?180000u:v2?90u*1024u*1024u:180000u);
                 reason="Invalid attached file path or size";if(!MdoPackagePath(path)||(!strcmp(kind,"skills")&&MdoPackageSamePath(path,"SKILL.md"))||!base64)goto bad;
                 size_t prefix=!strcmp(kind,"knowledge")?11u+strlen(id):plugin?8u+strlen(id)+11u+64u+7u:module?14u+strlen(id)+1u:toolpack?106u:MdoPackageRoleKind(kind)?strlen(kind)+strlen(id)+2u:8u+strlen(id);
-                if(prefix+strlen(path)>220u){reason="Installed file path exceeds the portable limit";goto bad;}
+                if(!plugin&&prefix+strlen(path)>220u){reason="Installed file path exceeds the portable limit";goto bad;}
                 for(size_t k=0;k<j;k++)if(MdoPackageSamePath(path,MdoPackageText(xrtValueArrayGet(files,k),"path",220))){reason="Duplicate file path";goto bad;}
                 size_t size=0;void* bytes=xrtBase64DecodeNew(base64,strlen(base64),&size,NULL);bool ok=bytes&&size<=(MdoPackageRoleKind(kind)?131072u:v2?64u*1024u*1024u:131072u);xrtFree(bytes);if(!ok)goto bad;
                 total+=size;if(total>sourceLimit){reason="Package decoded content exceeds its limit";goto bad;}
@@ -141,7 +142,10 @@ static bool MdoPackageValidate(const xvalue* package,char* error,size_t capacity
         }
         if(plugin||toolpack){
             xvalue* doc=xrtJsonParse(xrtStrView(content));bool valid=xrtValueType(doc)==XVALUE_OBJECT;
-            if(plugin){const char* frontend=MdoPackageText(doc,"frontend",220);
+            if(plugin&&MdoPluginModern(doc)){
+                int64 Build=0;MdoPackageNumber(m,"min_build_id",&Build);
+                valid=Build>=MDO_PLUGIN_MIN_BUILD&&MdoPluginValidate(doc,files,id,error,capacity)&&!strcmp(version,MdoPackageText(doc,"version",32));
+            }else if(plugin){const char* frontend=MdoPackageText(doc,"frontend",220);
                 valid=valid&&files&&xrtValueCount(files)&&(!frontend||!frontend[0]||(MdoPackagePath(frontend)&&!strncmp(frontend,"web/",4)));
                 if(valid&&frontend&&frontend[0]){bool found=false;for(size_t j=0;j<xrtValueCount(files);j++)if(!strcmp(frontend,MdoPackageText(xrtValueArrayGet(files,j),"path",220)))found=true;valid=found;}
             }else{

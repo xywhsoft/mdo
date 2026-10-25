@@ -108,6 +108,27 @@ def main():
     value=copy.deepcopy(role);value["resources"][0]["files"]=[dict(path="assets/large.md",base64=base64.b64encode(b"x"*131073).decode())];add("role-document-size",value,False)
     value=copy.deepcopy(role);value["manifest"]["min_build_id"]=30000126;add("role-old-floor-with-json",value,False)
     value=copy.deepcopy(role);value["format"]="mdo.extension.v1";add("role-old-format",value,False)
+    modern=package("plugins");modern["manifest"]["min_build_id"]=70000049
+    plugin=dict(format="mdo.plugin.v1",id="qa-resource",name="Plugin",version="1.0.0",description="Plugin fixture",
+                overrides=[dict(source="web/qa.js",target="web/qa.js")],exclusive=["mdo.ui.chat-layout"])
+    modern["resources"][0]["content"]=json.dumps(plugin);add("plugin-modern",modern,True)
+    def invalid_plugin(name,mutate):
+        value=copy.deepcopy(modern);doc=copy.deepcopy(plugin);mutate(doc);value["resources"][0]["content"]=json.dumps(doc);add("plugin-"+name,value,False)
+    invalid_plugin("unknown-key",lambda d:d.update(install="run"))
+    invalid_plugin("wrong-id",lambda d:d.update(id="another"))
+    invalid_plugin("wrong-version",lambda d:d.update(version="2.0.0"))
+    invalid_plugin("missing-source",lambda d:d["overrides"][0].update(source="missing.js"))
+    invalid_plugin("target-escape",lambda d:d["overrides"][0].update(target="../outside"))
+    invalid_plugin("target-parent",lambda d:d["overrides"].append(dict(source="web/qa.js",target="web/qa.js/child")))
+    invalid_plugin("entry-missing",lambda d:d.update(entry=dict(native="runtime/plugin.c")))
+    invalid_plugin("double-entry",lambda d:d.update(entry=dict(frontend="web/qa.js")))
+    invalid_plugin("duplicate-tag",lambda d:d["exclusive"].append("mdo.ui.chat-layout"))
+    invalid_plugin("bad-tag",lambda d:d.update(exclusive=["invalid/slot"]))
+    invalid_plugin("self-require",lambda d:d.update(requires=[dict(id="qa-resource")]))
+    invalid_plugin("version-range",lambda d:d.update(requires=[dict(id="base",min_version="2.0.0",max_version_exclusive="1.0.0")]))
+    invalid_plugin("relation-unknown",lambda d:d.update(conflicts=[dict(id="base",silent=True)]))
+    entry=copy.deepcopy(modern);entry_doc=copy.deepcopy(plugin);entry_doc.pop("overrides");entry_doc["entry"]={"frontend":"web/qa.js"};entry["resources"][0]["content"]=json.dumps(entry_doc);add("plugin-entry-only",entry,True)
+    old=copy.deepcopy(modern);old["manifest"]["min_build_id"]=70000048;add("plugin-old-floor",old,False)
     (ROOT / ".build").mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="ecosystem-contract-", dir=ROOT / ".build") as temporary:
         base = Path(temporary); (base / "web").mkdir()
@@ -116,7 +137,7 @@ def main():
         (base / "ecosystem_package.h").write_bytes((ROOT / "app/include/mdo/ecosystem_package.h").read_bytes())
         (base / "mcp_template.h").write_bytes((ROOT / "app/include/mdo/mcp_template.h").read_bytes())
         (base / "knowledge_format.h").write_bytes((ROOT / "app/include/mdo/knowledge_format.h").read_bytes())
-        for name in ("agent_package.h", "agent_config_format.h", "prompt_file.h", "extension_identity.h"):
+        for name in ("agent_package.h", "agent_config_format.h", "prompt_file.h", "extension_identity.h", "plugin_format.h"):
             (base / name).write_bytes((ROOT / "app/include/mdo" / name).read_bytes())
         source = '#include <xsbase.h>\n#include "ecosystem_package.h"\n' + r'''
 void ServiceInit(XS_HostInfo* Host) {
