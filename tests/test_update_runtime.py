@@ -61,7 +61,7 @@ def run(host):
         port = free_port()
         (site / "probe.c").write_text(
             '#define MDO_DISTRIBUTION_HOST \"127.0.0.1\"\n#define MDO_DISTRIBUTION_SECURE false\n#define MDO_DISTRIBUTION_PORT ' + str(publisher.server_port) + '\n'
-            '#define MDO_UPDATE_ORIGIN "http://127.0.0.1:' + str(publisher.server_port) + '"\n#define MDO_VERSION_CODE 0x60000000u\n'
+            '#define MDO_UPDATE_ORIGIN "http://127.0.0.1:' + str(publisher.server_port) + '"\n#define MDO_VERSION_CODE 0x05000600u\n'
             '#define RequestProc ProductRequestProc\n#define ServiceInit ProductServiceInit\n#include "generated/mdo_unity.c"\n#undef ServiceInit\n#undef RequestProc\n'
             'void ServiceInit(XS_HostInfo* host) {\n ProductServiceInit(host); MdoUpdateUnit(); MdoUpdateSetEngine(host->Server->Engine);\n'
             'MdoUpdateStatus selected={0}; strcpy(selected.Edition,"lite"); strcpy(selected.Hash,"previous");\n'
@@ -117,15 +117,16 @@ def run(host):
                 print("PASS matching hash; startup is read only")
                 Published.package = NEXT
                 local_build = json.loads((ROOT / "app/release.json").read_text())["windows_build_id"]
-                assert "version_code=60000000" in Published.last_query, Published.last_query
+                assert "version_code=05000600" in Published.last_query, Published.last_query
                 for code, build, available in (("00000601", local_build+1, True),
                         ("60.00.06.01", local_build+1, True), ("00010000", local_build+1, True),
-                        ("FFFFFFFF", local_build-1, True), ("60000000", local_build, False),
-                        ("00000000", local_build, False), ("00000000", local_build+1, True)):
+                        ("FFFFFFFF", local_build-1, True), ("05000600", local_build, False),
+                        ("00000600", local_build, False), ("00000600", local_build+1, True),
+                        ("050005FF", local_build+1, False), ("60000000", local_build+1, False)):
                     Published.version_code, Published.build_id = code, build
                     post(""); value = settled()
                     assert value["available"] is available, (code, build, value)
-                    assert value["local_version_code"] == "60000000"
+                    assert value["local_version_code"] == "05000600"
                 for invalid in ("0000060G", "000006010", "0x00000601", 60000000, "00000601\u0000", "00000601\n"):
                     Published.version_code = invalid
                     post(""); assert settled()["status"] == "error", invalid

@@ -7,7 +7,7 @@
 
 /* Hexadecimal release identity, independent of legacy/Android install order. */
 #ifndef MDO_VERSION_CODE
-#define MDO_VERSION_CODE 0x60000000u
+#define MDO_VERSION_CODE 0x05000600u
 #endif
 #include "version_code.h"
 

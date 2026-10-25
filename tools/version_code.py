@@ -20,8 +20,7 @@ def release_code(release):
     if max(major, minor, patch) > 255:
         raise ValueError("version components must fit in a byte (0..255)")
     order = (major << 16) | (minor << 8) | patch
-    expected = order | (0x60000000 if order < VERSION_1_0 else 0)
-    # User-selected one-time baseline for introducing the new comparison rule.
-    if code != expected and not (name == "0.6.0" and code == 0x60000000):
+    expected = order | (0x05000000 if order < VERSION_1_0 else 0)
+    if code != expected:
         raise ValueError(f"version_code does not match {name}; expected {expected:08X}")
     return f"{code:08X}"
