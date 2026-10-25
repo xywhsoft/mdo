@@ -17,6 +17,12 @@ static xvalue* SdkInstanceInfo(const xvalue* V){
     if(State&&!strcmp(State,"running")&&(!Epoch||strcmp(Epoch,SdkState.Epoch)||!Identity||SdkInstanceActive(Identity)<0))SdkPut(R,"state","requires_review");
     return R;
 }
+static xvalue* SdkInstanceListInfo(const xvalue* V){
+    xvalue* Current=SdkInstanceInfo(V),*R=xrtValueObject();const cstr Fields[]={"id","agent_id","model_id","state","active_message"};
+    for(size_t I=0;I<sizeof(Fields)/sizeof(*Fields);I++)if(SdkGet(Current,Fields[I]))SdkPut(R,Fields[I],SdkField(Current,Fields[I]));
+    SdkPutUInt(R,"revision",SdkStateRevision(Current));cstr Outcome=SdkField(SdkGet(Current,"last_outcome"),"outcome");if(Outcome)SdkPut(R,"outcome",Outcome);
+    xrtValueRelease(Current);return R;
+}
 static bool SdkInstancePaths(cstr StatePath,cstr Id,char Identity[65],char Directory[160]){
     char* Text=xrtFormat("%s\n%s",StatePath,Id);bool Ok=Text&&MdoExtensionHash(Text,Identity);xrtFree(Text);
     if(Ok)snprintf(Directory,160,"data/application/instances/%s",Identity);return Ok;
@@ -165,9 +171,10 @@ static bool SdkInstanceCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue
     char Key[128],Path[160];snprintf(Key,sizeof(Key),"sys.instance.%s",Id?Id:"");bool Ok=false,Changed=false;
     xrtMutexLock(SdkState.Lock);xvalue* Root=SdkStateLoad(C,P,Path,E);xvalue* Member=Root?SdkInstanceValue(Root,Key):NULL;
     if(!Root)goto done;
-    if(List){*R=xrtValueArray();const xvalue* Records=SdkGet(Root,"records");for(size_t I=0;I<xrtValueCount(Records);I++){cstr K=SdkKey(Records,I);if(!strncmp(K,"sys.instance.",13))xrtValueArrayAppendNew(*R,SdkInstanceInfo(SdkInstanceValue(Root,K)));}Ok=*R!=NULL;goto done;}
+    if(List){*R=xrtValueArray();const xvalue* Records=SdkGet(Root,"records");for(size_t I=0;I<xrtValueCount(Records);I++){cstr K=SdkKey(Records,I);if(!strncmp(K,"sys.instance.",13))xrtValueArrayAppendNew(*R,SdkInstanceListInfo(SdkInstanceValue(Root,K)));}Ok=*R!=NULL;goto done;}
     if(Create){
         cstr Agent=SdkField(P,"agent_id"),Model=SdkField(P,"model_id"),Permission=SdkField(P,"permission_profile");if(!Agent)Agent="mdo.default";if(!Permission)Permission="balanced";
+        if(Model&&Model[0]&&(!SdkStateKey(Model)||strlen(Model)>128)){MdoApplicationError(E,"sdk_instance_arguments","model_id must be a portable model identity","instance",400,false);goto done;}
         if(!MdoModuleCatalogAgentFind(Modules,Agent,&Role)||!(Role.Flags&(MDO_AGENT_MAIN|MDO_AGENT_SUBAGENT))||
             (strcmp(Permission,"read-only")&&strcmp(Permission,"balanced")&&strcmp(Permission,"full-access"))){MdoApplicationError(E,"sdk_instance_role","Select an available role and permission profile","instance",400,false);goto done;}
         xvalue* Intent=xrtValueObject();SdkPut(Intent,"id",Id);SdkPut(Intent,"agent_id",Agent);SdkPut(Intent,"model_id",Model);SdkPut(Intent,"permission_profile",Permission);
