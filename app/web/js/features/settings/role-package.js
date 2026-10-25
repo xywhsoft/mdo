@@ -1,6 +1,6 @@
 // Portable declarations only. This module never resolves or renders private
 // instructions, memory, model credentials or MCP authorization state.
-export const ROLE_MIN_BUILD = 70000001;
+export const ROLE_MIN_BUILD = 70000009;
 export const isRoleKind = kind => kind === "agents" || kind === "subagents";
 export function roleDescriptor(resource) {
   if (!isRoleKind(resource?.kind)) throw Error("请选择 Agent 或 SubAgent 作品");

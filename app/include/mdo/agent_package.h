@@ -4,7 +4,7 @@
 
 /* Pure portable validation, also compiled by the website. It never resolves
  * inheritance against a user's Home or executes a module. */
-#define MDO_ROLE_MIN_BUILD 70000001u
+#define MDO_ROLE_MIN_BUILD 70000009u
 static bool MdoPackageRoleKind(cstr Kind)
 {return Kind&&(!strcmp(Kind,"agents")||!strcmp(Kind,"subagents"));}
 static xvalue* MdoPackageRoleDocument(cstr Text,char* Error,size_t Capacity)
@@ -93,11 +93,17 @@ static bool MdoPackageRoleValidate(const xvalue* R,bool Strict,char* Error,size_
     if(!Ok){Why="Role file references must name included files in this role's own directory";goto done;}
     for(size_t I=0;Ok&&I<xrtValueCount(Files);I++){
         const xvalue* F=xrtValueArrayGet(Files,I);cstr Path=MdoPackageText(F,"path",220);size_t N=0;
-        void* Bytes=xrtBase64DecodeNew(MdoPackageText(F,"base64",90u*1024u*1024u),strlen(MdoPackageText(F,"base64",90u*1024u*1024u)),&N,NULL);
+        cstr B64=MdoPackageText(F,"base64",90u*1024u*1024u);
+        void* Bytes=B64?xrtBase64DecodeNew(B64,strlen(B64),&N,NULL):NULL;
         Ok=Bytes&&N<=MDO_EXTENSION_TEXT_LIMIT&&!memchr(Bytes,0,N)&&xrtUtf8Valid(xrtStrViewN(Bytes,N),NULL);
         /* All role attachments are reviewable source/documents, never native binaries. */
         if(Ok&&strcmp(Path,"program.c"))Ok=strncmp(Path,"assets/",7)==0;
         xrtFree(Bytes);
+        for(size_t J=0;Ok&&J<I;J++){
+            cstr Other=MdoPackageText(xrtValueArrayGet(Files,J),"path",220);size_t A=strlen(Path),B=strlen(Other),Short=A<B?A:B;
+            char Prefix[221];cstr Longer=A<B?Other:Path,Smaller=A<B?Path:Other;memcpy(Prefix,Longer,Short);Prefix[Short]=0;
+            if(Longer[Short]=='/'&&MdoPackageSamePath(Prefix,Smaller))Ok=false;
+        }
     }
     if(!Ok)Why="Role attachments must be UTF-8 program.c or assets/ documents within 128 KiB each";
 done:

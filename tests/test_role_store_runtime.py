@@ -59,7 +59,7 @@ def run():
     def start(host, config, cwd, mdo_home=None):
         log = (base / ("native.log" if mdo_home else "site.log")).open("wb"); logs.append(log)
         env = dict(os.environ, USE_WEBVIEW="0", MDO_ROLE_TEST_KEY="fixture-not-a-secret")
-        if mdo_home: env.update(MDO_HOME=str(mdo_home), MDO_BUILD_ID="70000001")
+        if mdo_home: env.update(MDO_HOME=str(mdo_home), MDO_BUILD_ID="70000009")
         p = subprocess.Popen([str(host.resolve()), str(config)], cwd=cwd, env=env, stdout=log, stderr=log,
             creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0)); processes.append(p); return p
     def ready(p, target, path):
@@ -150,7 +150,7 @@ def run():
         assert run["state"]=="succeeded",run
         assert len(Model.calls)==3 and any(p.get("temperature")==.2 for p in Model.calls),Model.calls
         assert "CHILD_OK" in json.dumps(Model.calls[-1])
-        for kind,(identity_id,identity) in ids.items():
+        for kind,(identity_id,identity) in ([] if args.ui else ids.items()):
             store(kind,"uninstall",entry=dict(id=identity_id));assert not(home/kind/(identity+".md")).exists()
             works,_=web("GET",f"/api/v1/mdo/creator/works?kind={kind}",auth=auth)
             row=works["rows"][0]

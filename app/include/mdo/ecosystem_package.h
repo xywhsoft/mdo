@@ -130,12 +130,12 @@ static bool MdoPackageValidate(const xvalue* package,char* error,size_t capacity
         total+=strlen(content);if(total>sourceLimit){reason="Package decoded content exceeds its limit";goto bad;}
         const xvalue* files=xrtValueObjectGet(r,XRT_STR_LITERAL("files"));
         if(files){reason="This resource cannot contain attached files";if((strcmp(kind,"skills")&&strcmp(kind,"knowledge")&&!MdoPackageRoleKind(kind)&&!module&&!plugin&&!toolpack)||xrtValueType(files)!=XVALUE_ARRAY||xrtValueCount(files)>128)goto bad;
-            for(size_t j=0;j<xrtValueCount(files);j++){const xvalue* f=xrtValueArrayGet(files,j);const char* path=MdoPackageText(f,"path",220),*base64=MdoPackageText(f,"base64",v2?90u*1024u*1024u:180000u);
+            for(size_t j=0;j<xrtValueCount(files);j++){const xvalue* f=xrtValueArrayGet(files,j);const char* path=MdoPackageText(f,"path",220),*base64=MdoPackageText(f,"base64",MdoPackageRoleKind(kind)?180000u:v2?90u*1024u*1024u:180000u);
                 reason="Invalid attached file path or size";if(!MdoPackagePath(path)||(!strcmp(kind,"skills")&&MdoPackageSamePath(path,"SKILL.md"))||!base64)goto bad;
-                size_t prefix=!strcmp(kind,"knowledge")?11u+strlen(id):plugin?8u+strlen(id)+11u+64u+7u:module?14u+strlen(id)+1u:toolpack?106u:8u+strlen(id);
+                size_t prefix=!strcmp(kind,"knowledge")?11u+strlen(id):plugin?8u+strlen(id)+11u+64u+7u:module?14u+strlen(id)+1u:toolpack?106u:MdoPackageRoleKind(kind)?strlen(kind)+strlen(id)+2u:8u+strlen(id);
                 if(prefix+strlen(path)>220u){reason="Installed file path exceeds the portable limit";goto bad;}
                 for(size_t k=0;k<j;k++)if(MdoPackageSamePath(path,MdoPackageText(xrtValueArrayGet(files,k),"path",220))){reason="Duplicate file path";goto bad;}
-                size_t size=0;void* bytes=xrtBase64DecodeNew(base64,strlen(base64),&size,NULL);bool ok=bytes&&size<=(v2?64u*1024u*1024u:131072u);xrtFree(bytes);if(!ok)goto bad;
+                size_t size=0;void* bytes=xrtBase64DecodeNew(base64,strlen(base64),&size,NULL);bool ok=bytes&&size<=(MdoPackageRoleKind(kind)?131072u:v2?64u*1024u*1024u:131072u);xrtFree(bytes);if(!ok)goto bad;
                 total+=size;if(total>sourceLimit){reason="Package decoded content exceeds its limit";goto bad;}
             }
         }

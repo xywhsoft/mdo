@@ -144,7 +144,7 @@ export function createSingleResourceStore(kind, onChange, onBrowse = () => {}, o
       const plan = await read({ action: "plan", id: row.id }); if (!valid()) return;
       const preview = node("details"); preview.append(node("summary", "安装计划"));
       for (const f of plan.files) preview.append(node("p", `${f.operation} · ${f.path} · ${f.bytes} B`)); d.append(preview);
-      for(const dep of plan.dependencies || [])d.append(node("p",`${dep.required?"必需":"可选"} · ${dep.kind}/${dep.id} · ${dep.available?"已具备":"未配置或未启用"}`,dep.required&&!dep.available?"extension-error":"extension-help"));
+      for(const dep of plan.dependencies || [])d.append(node("p",`${dep.required?"必需":"可选"} · ${dep.kind}/${dep.id} · ${dep.checked===false?"运行时按选择器解析":dep.available?"已配置":"未配置或未启用"}`,dep.required&&!dep.available?"extension-error":"extension-help"));
       const ready=plan.can_install!==false;
       if(!ready)d.append(node("p","请先安装或配置必需依赖，再重新打开此详情。","extension-error"));
       let trusted = !containsCode(p.resources);
@@ -246,7 +246,7 @@ export function createSingleResourceStore(kind, onChange, onBrowse = () => {}, o
       if(!current(id,target)||dialog!==d)return;
       message.textContent=p.manifest.name;
       for(const f of plan.files)d.body.append(node("p",`${f.operation} · ${f.path} · ${f.bytes} B`));
-      for(const dep of plan.dependencies||[])d.body.append(node("p",`${dep.required?"必需":"可选"} · ${dep.kind}/${dep.id} · ${dep.available?"已具备":"未配置或未启用"}`,dep.required&&!dep.available?"extension-error":"extension-help"));
+      for(const dep of plan.dependencies||[])d.body.append(node("p",`${dep.required?"必需":"可选"} · ${dep.kind}/${dep.id} · ${dep.checked===false?"运行时按选择器解析":dep.available?"已配置":"未配置或未启用"}`,dep.required&&!dep.available?"extension-error":"extension-help"));
       let trusted=!containsCode(p.resources);const ready=plan.can_install!==false;
       const submit=button("导入",()=>{
         if(!trusted||!ready||dialog!==d)return;close(true);

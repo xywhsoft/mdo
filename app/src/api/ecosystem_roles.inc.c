@@ -9,7 +9,15 @@ static bool EcoRoleAvailable(cstr Kind,cstr Id)
     else if(!strcmp(Kind,"mcp")){MdoMcpCatalog* C=MdoMcpCatalogSnapshot();MdoMcpServerInfo I={0};I.Size=sizeof(I);Found=MdoMcpCatalogFind(C,Id,&I)&&I.Enabled;MdoMcpCatalogRelease(C);}
     else if(MdoPackageRoleKind(Kind)){char Full[96];snprintf(Full,sizeof(Full),"%s.%s",!strcmp(Kind,"agents")?"agent":"subagent",Id);
         MdoModuleCatalog* C=MdoModuleCatalogSnapshot();MdoModuleAgentInfo I={0};I.Size=sizeof(I);Found=MdoModuleCatalogAgentFind(C,Full,&I);MdoModuleCatalogRelease(C);}
-    /* Optional selectors can contain patterns; these are informational. */
+    else if(!strcmp(Kind,"roles")){
+        MdoModuleCatalog* C=MdoModuleCatalogSnapshot();size_t N=strlen(Id);bool Wild=N&&Id[N-1]=='*';
+        for(size_t J=0;!Found&&J<MdoModuleCatalogAgentCount(C);J++){
+            MdoModuleAgentInfo I={0};I.Size=sizeof(I);
+            if(MdoModuleCatalogAgentAt(C,J,&I)&&(I.Flags&MDO_AGENT_SUBAGENT))Found=Wild?!strncmp(Id,I.Id,N-1):!strcmp(Id,I.Id);
+        }MdoModuleCatalogRelease(C);
+    }
+    /* Optional knowledge/CLI selectors are resolved by the task's scoped
+     * catalog. A global install preview must not report them as absent. */
     return Found;
 }
 static xvalue* EcoRoleDependencies(const xvalue* Package,bool* Ready)
@@ -28,7 +36,8 @@ static xvalue* EcoRoleDependencies(const xvalue* Package,bool* Ready)
                 const xvalue* Other=xrtValueArrayGet(Rs,N);Found=!strcmp(K,MdoPackageText(Other,"kind",16))&&!strcmp(Id,MdoPackageText(Other,"id",64));
             }
             if(!Found&&MdoAgentConfigBool(Dep,"required",false))*Ready=false;
-            Ok=MdoApiValueSetBool(Dep,"available",Found)&&xrtValueArrayAppend(Out,Dep);
+            bool Checked=strcmp(K,"knowledge")&&strcmp(K,"external-tools");
+            Ok=MdoApiValueSetBool(Dep,"checked",Checked)&&MdoApiValueSetBool(Dep,"available",Found)&&xrtValueArrayAppend(Out,Dep);
         }
         xrtValueRelease(Deps);xrtValueRelease(D);
     }

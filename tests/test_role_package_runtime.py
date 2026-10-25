@@ -24,7 +24,7 @@ def package(kind="agents", identity="portable-reviewer", code=False):
         files.append(dict(path="program.c", base64=base64.b64encode(source.encode()).decode()))
     return dict(format="mdo.extension.v2", manifest=dict(slug=identity, name="Role fixture", version="1.0.0",
                 description="Portable role fixture", readme="Inspect this role before use", license="MIT",
-                platforms=["windows-x86_64", "linux-x86_64"], min_build_id=70000001),
+                platforms=["windows-x86_64", "linux-x86_64"], min_build_id=70000009),
                 resources=[dict(kind=kind, id=identity, content=json.dumps(config), files=files)])
 
 
@@ -49,7 +49,7 @@ def main():
             return app("POST", "/ecosystem", dict(action=action, single_kind=p["resources"][0]["kind"], package=p, **kw), status)
         with (base / "host.log").open("wb") as log:
             proc = subprocess.Popen([str(args.host.resolve()), str(config), "--", "--home", str(home)], cwd=base,
-                env=dict(os.environ, USE_WEBVIEW="0", MDO_BUILD_ID="70000001"), stdout=log, stderr=log,
+                env=dict(os.environ, USE_WEBVIEW="0", MDO_BUILD_ID="70000009"), stdout=log, stderr=log,
                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
             try:
                 wait_ready(port, proc)
@@ -94,6 +94,14 @@ def main():
                     app("POST", "/ecosystem", dict(action="uninstall", entry=dict(source="local", slug=identity)))
                     assert asset.read_text() == "User edits" and (home / kind / (identity + ".md")).exists()
                     assert (home / "modules" / kind / (identity + ".c")).exists()
+                retained=app("GET","/extensions/agents/portable-agents")
+                app("POST","/extensions/agents/portable-agents/enabled",dict(enabled=True),revision=retained["revision"])
+                selectors=package(identity="selectors");sd=json.loads(selectors["resources"][0]["content"])
+                sd.update(delegation=dict(allow=["agent.portable-agents"]))
+                sd["context"].update(knowledge=dict(include=["xrt*"]),external_tools=dict(include=["git"]))
+                selectors["resources"][0]["content"]=json.dumps(sd);sp=store("plan_import",selectors)
+                assert sp["can_install"] and next(d for d in sp["dependencies"] if d["kind"]=="roles")["available"]
+                assert all(not d["checked"] for d in sp["dependencies"] if d["kind"] in ("knowledge","external-tools"))
                 p = package(identity="missing-deps"); d = json.loads(p["resources"][0]["content"])
                 d.update(extends="agent.absent", skills=["absent-skill"], model="absent-model", mcp_servers=["absent-mcp"])
                 p["resources"][0]["content"] = json.dumps(d)
@@ -104,7 +112,7 @@ def main():
                 assert not (home / "agents/missing-deps.md").exists()
                 old = package(); old["manifest"]["min_build_id"] = 60000016
                 store("plan_import", old, status=409)
-                future = package(); future["manifest"]["min_build_id"] = 70000002
+                future = package(); future["manifest"]["min_build_id"] = 70000010
                 store("plan_import", future, status=409)
             finally:
                 proc.terminate(); proc.wait(15)

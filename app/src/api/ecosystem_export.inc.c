@@ -140,6 +140,12 @@ static bool EcoRoleExport(cstr Kind,cstr Id,xvalue* Resource)
         bool Enabled=true;MdoExtensionEnabled(Kind,Id,&Enabled);if(Enabled&&Code)Raw=ExtensionRoleCodeConfig(Kind,Id,Code);xrtFree(Code);}
     xvalue* D=Raw?MdoPackageRoleDocument(Raw,NULL,0):NULL;xrtFree(Raw);
     xvalue* Files=xrtValueArray();bool Ok=D&&Files&&MdoAgentConfigSetText(D,"schema","mdo.agent.v1");size_t Total=0;
+    if(Ok&&!MdoAgentConfigGet(D,"code")){
+        char* Own=xrtJsonStringify(D,false,NULL);MdoAgentFile Resolved={0};char Why[1024];
+        Ok=Own&&MdoAgentFileParse(Id,Own,!strcmp(Kind,"agents"),&Resolved,Why,sizeof(Why));
+        if(Ok&&Resolved.UseCode)Ok=xrtValueObjectSetNew(D,XRT_STR_LITERAL("code"),xrtValueBool(true));
+        xrtFree(Own);MdoAgentFileUnit(&Resolved);
+    }
     const char* Lists[]={"skills","mcp_servers"};
     for(size_t I=0;Ok&&I<2;I++)if(MdoAgentConfigText(D,Lists[I])){
         char* Items[128]={0};size_t Count=0;xvalue* List=xrtValueArray();
