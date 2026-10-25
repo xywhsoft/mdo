@@ -10,4 +10,12 @@ static inline mdo_result mdoInstanceSend(const mdo_sdk_context_v1* C,const xvalu
 {return mdoCall(C,"instance.send",P,R,E);}
 static inline mdo_result mdoInstanceStep(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
 {return mdoCall(C,"instance.step",P,R,E);}
+static inline mdo_result mdoInstanceResult(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
+{return mdoCall(C,"instance.result",P,R,E);}
+static inline mdo_result mdoInstanceWait(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
+{return mdoCall(C,"instance.wait",P,R,E);}
+static inline mdo_result mdoInstanceResume(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
+{return mdoCall(C,"instance.resume",P,R,E);}
+static inline mdo_result mdoInstanceAbandon(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
+{return mdoCall(C,"instance.abandon",P,R,E);}
 #endif

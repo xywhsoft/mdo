@@ -44,3 +44,10 @@ def contracts(add):
         add('instance.'+action,'Read or control an owned member',member,('id',))
     add('instance.send','Durably queue a bounded prompt, deduplicated by message_id; does not run the model',member,('id','message_id','prompt'))
     add('instance.step','Claim and execute at most one inbox turn, checkpoint then settle; interrupted turns require review',member,('id',))
+    for action in ('result','wait'):
+        add('instance.'+action,'Read/wait for one durable message result; waiting never starts a model call',
+            {**member,'timeout_ms':{**uint,'maximum':60000}},('id','message_id'))
+    decision={'type':'object','properties':{'tool_call_id':string,'action':{'type':'string','enum':['retry','record_uncertain']}},'required':['tool_call_id','action']}
+    for action in ('resume','abandon'):
+        add('instance.'+action,'Explicitly continue or finish an interrupted turn at the current member revision; effects are never silently replayed',
+            {**member,'expected_revision':uint,'decisions':{'type':'array','items':decision,'maxItems':64}},('id','message_id','expected_revision'))

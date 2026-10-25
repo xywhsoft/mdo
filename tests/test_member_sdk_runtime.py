@@ -60,8 +60,15 @@ def main():
                 sent=call('send',message_id='turn1',prompt='Remember the first turn');assert call('send',message_id='turn1',prompt='Remember the first turn')==sent
                 result=call('step');assert result['state']=='idle' and result['last_outcome']['outcome']=='succeeded',result
                 assert result['last_outcome']['text']=='sdk-model-ok',result
+                assert call('result',message_id='turn1')['result']==result['last_outcome']
+                assert call('wait',message_id='turn1',timeout_ms=100)['completed']
                 assert call('step')['no_work']
-                call('send',message_id='turn2',prompt='Second turn');result=call('step');assert result['last_outcome']['outcome']=='succeeded',result
+                call('send',message_id='turn2',prompt='Second turn')
+                assert not call('wait',message_id='turn2',timeout_ms=20)['completed']
+                pending=f.call('operation.start',{'method':'instance.wait','params':{**base,'message_id':'turn2','timeout_ms':3000}})
+                result=call('step');assert result['last_outcome']['outcome']=='succeeded',result
+                assert f.call('operation.wait',{'id':pending['id'],'timeout_ms':1000})['outcome']=='succeeded'
+                assert f.call('operation.result',{'id':pending['id']})['result']==result['last_outcome'];f.call('operation.release',{'id':pending['id']})
                 users=[m['content'] for m in mock.last_request['messages'] if m['role']=='user'];assert 'Remember the first turn' in users and 'Second turn' in users,users
                 f.stop();f.start();assert call('get')['last_outcome']==result['last_outcome']
                 call('send',message_id='turn3',prompt='After restart');result=call('step');assert result['last_outcome']['outcome']=='succeeded',result
@@ -80,8 +87,24 @@ def main():
                 assert f.call('instance.get',crashed)['state']=='requires_review'
                 f.call('instance.step',crashed,409);f.call('instance.send',{**crashed,'message_id':'another','prompt':'must not queue'},409)
                 time.sleep(.1);assert mock.calls==calls,'Restart replayed a model effect'
+                interrupted=f.call('instance.get',crashed)
+                assert f.call('instance.wait',{**crashed,'message_id':'lost','timeout_ms':3000})['result']['outcome']=='requires_review'
+                resumed=f.call('instance.resume',{**crashed,'message_id':'lost','expected_revision':interrupted['revision']})
+                assert resumed['state']=='idle' and resumed['last_outcome']['outcome']=='succeeded',resumed
+                f.call('instance.resume',{**crashed,'message_id':'lost','expected_revision':interrupted['revision']},409)
+                users=[m['content'] for m in mock.last_request['messages'] if m['role']=='user'];assert users.count('Do not replay after crash')==1,users
+                # Explicitly abandoning a second interrupted turn sends no model request.
+                f.call('instance.send',{**crashed,'message_id':'abandoned','prompt':'Finish this interrupted response'})
+                mock.blocked=True;mock.entered.clear();mock.release.clear();f.call('operation.start',{'method':'instance.step','params':crashed});assert mock.entered.wait(3)
+                f.stop();calls=mock.calls;mock.blocked=False;mock.release.set();f.start();interrupted=f.call('instance.get',crashed)
+                abandoned=f.call('instance.abandon',{**crashed,'message_id':'abandoned','expected_revision':interrupted['revision']})
+                assert abandoned['state']=='idle' and abandoned['last_outcome']['outcome']=='cancelled',abandoned
+                assert mock.calls==calls,'Abandon unexpectedly invoked a model'
+                f.call('instance.send',{**crashed,'message_id':'next','prompt':'A new turn after abandon'});assert f.call('instance.step',crashed)['last_outcome']['outcome']=='succeeded'
+                f.call('instance.send',{**crashed,'message_id':'not-started','prompt':'Close with pending work'})
                 assert f.call('instance.close',crashed)['state']=='closed'
+                assert f.call('instance.wait',{**crashed,'message_id':'not-started','timeout_ms':100})['result']['outcome']=='cancelled'
             finally:f.stop()
     finally:mock.shutdown();mock.server_close();worker.join()
-    print('PASS native SubAgent member identity, inbox dedup, multi-turn ledger, restart, live role reload and close')
+    print('PASS native members: multi-turn ledger, durable results/waits, restart without replay, explicit resume/abandon, live permissions/reload and close')
 if __name__=='__main__':main()
