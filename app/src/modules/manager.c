@@ -77,6 +77,7 @@ typedef struct MdoModuleAgentBinding {
     void* UserData;
     mdo_agent_acquire_v1 Acquire;
     mdo_agent_release_v1 Release;
+    char* ConfigurationJson;
 } MdoModuleAgentBinding;
 
 struct MdoModuleGeneration {
@@ -306,6 +307,7 @@ static void MdoModulesAgentUnit(MdoModuleAgentBinding* pAgent)
     xrtFree(pAgent->Model);
     xrtFree(pAgent->ReasoningEffort);
     xrtFree(pAgent->SystemPrompt);
+    xrtFree(pAgent->ConfigurationJson);
     xrtFree(pAgent->PermissionProfile);
     MdoModulesStringArrayUnit(pAgent->Tools, pAgent->ToolCount);
     MdoModulesStringArrayUnit(pAgent->Skills, pAgent->SkillCount);
@@ -1102,7 +1104,7 @@ static bool MdoModulesAgentCopy(MdoModuleGeneration* pGeneration,
     mdo_agent_flags uRoles;
 
     memset(pTarget, 0, sizeof(*pTarget));
-    if ( pAgent == NULL || pAgent->Size < sizeof(*pAgent) ||
+    if ( pAgent == NULL || pAgent->Size < offsetof(mdo_agent_v1, ConfigurationJson) ||
          pAgent->AbiVersion != MDO_MODULE_ABI_VERSION ||
          !MdoModulesIdValid(pAgent->Id) ||
          (pAgent->Flags & ~MDO_AGENT_FLAGS_V1) != 0u ||
@@ -1113,18 +1115,16 @@ static bool MdoModulesAgentCopy(MdoModuleGeneration* pGeneration,
         return false;
     }
     uRoles = pAgent->Flags & (MDO_AGENT_MAIN | MDO_AGENT_SUBAGENT);
-    if ((pAgent->Flags & MDO_AGENT_REQUIRE_VERIFICATION_AFTER_WRITE) &&
-        !(uRoles & MDO_AGENT_MAIN)) {
-        MdoModulesCopyError(Error, ErrorCapacity,
-            "completion verification is configured on the main Agent; SubAgents inherit it");
+    if (!uRoles) {
+        MdoModulesCopyError(Error, ErrorCapacity,"Agent requires a primary or subagent mode");
         return false;
     }
-    if ( uRoles == 0u ||
-         (pGeneration->Kind == MDO_MODULE_SUBAGENTS &&
-          (uRoles != MDO_AGENT_SUBAGENT)) ) {
-        MdoModulesCopyError(Error, ErrorCapacity,
-            "Agent role exceeds the source directory role");
-        return false;
+    const char* Configuration = pAgent->Size >= sizeof(*pAgent) ? pAgent->ConfigurationJson : NULL;
+    if (Configuration) {
+        xvalue* Parsed=xrtJsonParse(xrtStrView(Configuration));
+        bool Valid=Parsed && MdoAgentConfigValidate(Parsed,Error,ErrorCapacity);
+        xrtValueRelease(Parsed);
+        if (!Valid || !MdoModulesStringCopy(&pTarget->ConfigurationJson,Configuration,MDO_MODULE_PROMPT_LIMIT,false)) return false;
     }
     if ( !MdoModulesStringCopy(&pTarget->Id, pAgent->Id,
             MDO_MODULE_ID_LIMIT, true) ||
@@ -1810,7 +1810,7 @@ static MdoModuleGeneration* MdoModulesReadAgentProfile(const MdoModuleSource* So
     if (Module == NULL) goto failed;
     xrtAtomic32Init(&Module->Refs, 1u);
     Module->Generation = Generation; Module->Kind = Source->Kind;
-    Module->Profile=Source->Kind==MDO_MODULE_AGENTS; Module->UseCode=File.UseCode;
+    Module->Profile=true; Module->UseCode=File.UseCode;
     Module->External = Source->External;
     { char ModuleId[128]; snprintf(ModuleId,sizeof(ModuleId),"%s%s",Module->Profile?"profile.":"",File.Id);
       Module->Id = xrtStrDup(ModuleId); }
@@ -1850,7 +1850,7 @@ static bool MdoModulesApplyProfiles(MdoModuleCatalog* Catalog,MdoModuleDiagnosti
                 }
         }
         if (!Native) { if (Profile->UseCode) goto invalid; continue; }
-        if (!(Native->Flags&MDO_AGENT_MAIN)) goto invalid;
+        if (!(Native->Flags & Config->Flags & (MDO_AGENT_MAIN|MDO_AGENT_SUBAGENT))) goto invalid;
         /* Both descriptors are owned by this unpublished candidate. Move the
          * ordinary profile onto its C owner so callbacks keep their TCC lifetime.
          * C mode owns the base prompt/lifecycle/budgets; the UI owns tool scope. */
@@ -1869,7 +1869,7 @@ static bool MdoModulesApplyProfiles(MdoModuleCatalog* Catalog,MdoModuleDiagnosti
         continue;
 invalid:
         (void)MdoModulesDiagnosticAdd(Diagnostics,MDO_MODULE_DIAGNOSTIC_VALIDATE,Profile->SourcePath,Profile->SourceHash,
-            "C mode requires exactly one C Agent with the same ID; check modules/agents and the Agent role");
+            "C mode requires exactly one C role with the same ID and compatible mode; check modules/agents or modules/subagents");
         return false;
     }
     /* A disabled canonical main profile must also suppress its C counterpart;
@@ -1878,9 +1878,10 @@ invalid:
         MdoModuleGeneration* Module=Catalog->Modules[i];
         for (j=0u;j<Module->AgentCount;) {
             MdoModuleAgentBinding* Agent=&Module->Agents[j];
-            cstr Id=!strcmp(Agent->Id,"mdo.default")?"default":!strncmp(Agent->Id,"agent.",6u)?Agent->Id+6u:NULL;
+            cstr Kind=!strncmp(Agent->Id,"subagent.",9u)?"subagents":"agents";
+            cstr Id=!strcmp(Agent->Id,"mdo.default")?"default":!strncmp(Agent->Id,"agent.",6u)?Agent->Id+6u:!strncmp(Agent->Id,"subagent.",9u)?Agent->Id+9u:NULL;
             bool Enabled=true;
-            if (Id && (Agent->Flags&MDO_AGENT_MAIN) && !MdoExtensionEnabled("agents",Id,&Enabled)) return false;
+            if (Id && !MdoExtensionEnabled(Kind,Id,&Enabled)) return false;
             if (Enabled) { ++j; continue; }
             MdoModulesAgentUnit(Agent);
             --Module->AgentCount;
@@ -2254,6 +2255,7 @@ bool MdoModuleCatalogAgentAt(const MdoModuleCatalog* pCatalog,
     pInfo->TimeoutMilliseconds = pAgent->TimeoutMilliseconds;
     pInfo->MaxFinalBytes = pAgent->MaxFinalBytes;
     pInfo->MaxDepth = pAgent->MaxDepth;
+    pInfo->ConfigurationJson = pAgent->ConfigurationJson;
     return true;
 }
 

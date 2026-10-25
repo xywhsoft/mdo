@@ -495,7 +495,7 @@ static bool MdoAgentsToolSelected(const MdoModuleAgentInfo* Agent,
     const char* Tool)
 {
     size_t i;
-    if ( Agent->ToolCount == 0u ) return true;
+    if ( Agent->ToolCount == 0u ) return (Agent->Flags & MDO_AGENT_EXPLICIT_TOOLS) == 0u;
     for ( i = 0u; i < Agent->ToolCount; ++i )
         if ( strcmp(Agent->Tools[i], Tool) == 0 ) return true;
     return false;

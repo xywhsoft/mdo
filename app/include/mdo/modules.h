@@ -87,6 +87,7 @@ typedef struct MdoModuleAgentInfo {
     uint32 TimeoutMilliseconds;
     size_t MaxFinalBytes;
     uint32 MaxDepth;
+    const char* ConfigurationJson;
 } MdoModuleAgentInfo;
 
 typedef struct MdoModuleDiagnosticInfo {

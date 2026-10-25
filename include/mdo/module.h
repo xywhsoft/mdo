@@ -167,11 +167,13 @@ typedef enum mdo_agent_flag {
     MDO_AGENT_ALLOW_DELEGATION = UINT32_C(1) << 4,
     /* Main-Agent opt-in: require an executable verification after each write.
      * Delegated runs inherit their main Agent's completion policy. */
-    MDO_AGENT_REQUIRE_VERIFICATION_AFTER_WRITE = UINT32_C(1) << 5
+    MDO_AGENT_REQUIRE_VERIFICATION_AFTER_WRITE = UINT32_C(1) << 5,
+    /* An empty tool list means no tools, rather than legacy all-tools. */
+    MDO_AGENT_EXPLICIT_TOOLS = UINT32_C(1) << 6
 } mdo_agent_flag;
 #define MDO_AGENT_FLAGS_V1 (MDO_AGENT_MAIN | MDO_AGENT_SUBAGENT | \
     MDO_AGENT_READ_ONLY | MDO_AGENT_ALLOW_BACKGROUND | \
-    MDO_AGENT_ALLOW_DELEGATION | MDO_AGENT_REQUIRE_VERIFICATION_AFTER_WRITE)
+    MDO_AGENT_ALLOW_DELEGATION | MDO_AGENT_REQUIRE_VERIFICATION_AFTER_WRITE | MDO_AGENT_EXPLICIT_TOOLS)
 
 struct mdo_host_services_v1;
 typedef mdo_result (*mdo_agent_acquire_v1)(void* UserData,
@@ -205,6 +207,8 @@ typedef struct mdo_agent_v1 {
     void* UserData;
     mdo_agent_acquire_v1 Acquire;
     mdo_agent_release_v1 Release;
+    /* Optional normalized mdo.agent.v1 options. Copied by the host. */
+    const char* ConfigurationJson;
 } mdo_agent_v1;
 
 typedef enum mdo_log_level {
