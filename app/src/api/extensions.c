@@ -123,6 +123,7 @@ static xvalue* ExtensionItemRecord(cstr Kind,cstr Id,bool IncludeSource,const xv
         Doc=xrtJsonParse(xrtStrView(Text));
         if (Doc) (void)xrtValueGetBool(xrtValueObjectGet(Doc,XRT_STR_LITERAL("enabled")),&Enabled);
     } else if(!strcmp(Kind,"commands")){char Diagnostic[512];Doc=MdoCommandMetadata(Id,Text,Diagnostic);}
+    else if (MdoPackageRoleKind(Kind)) Doc=MdoPackageRoleDocument(Text,NULL,0u);
     else if (strcmp(Kind,"tools")) Doc=MdoPromptParse(Text,true,NULL,0u);
     if (Doc) { (void)ExtensionString(Doc,"name",&Name); (void)ExtensionString(Doc,"description",&Description); }
     if (!MdoExtensionHash(Text,Hash) || !MdoApiValueSetString(Item,"id",Id) ||

@@ -43,7 +43,7 @@ static bool MdoPackageKind(const char* kind)
 }
 /* Categories with one independently installed resource per work. */
 static bool MdoPackageSingleKind(const char* kind)
-{return kind&&(!strcmp(kind,"skills")||!strcmp(kind,"tools")||!strcmp(kind,"commands")||!strcmp(kind,"mcp")||!strcmp(kind,"knowledge"));}
+{return kind&&(!strcmp(kind,"agents")||!strcmp(kind,"subagents")||!strcmp(kind,"skills")||!strcmp(kind,"tools")||!strcmp(kind,"commands")||!strcmp(kind,"mcp")||!strcmp(kind,"knowledge"));}
 static const char* MdoPackageSystem(const char* kind)
 {return kind&&!strcmp(kind,"c-agents")?"agents":kind&&!strcmp(kind,"c-subagents")?"subagents":kind;}
 static bool MdoPackageV2(const xvalue* package)
@@ -91,6 +91,7 @@ static bool MdoPackageSamePath(const char* a,const char* b)
 }
 #include "mcp_template.h"
 #include "knowledge_format.h"
+#include "agent_package.h"
 static bool MdoPackageValidate(const xvalue* package,char* error,size_t capacity)
 {
     const char* reason="Invalid extension package";
@@ -128,7 +129,7 @@ static bool MdoPackageValidate(const xvalue* package,char* error,size_t capacity
         for(size_t j=0;j<i;j++){const xvalue* q=xrtValueArrayGet(resources,j);if(!strcmp(kind,MdoPackageText(q,"kind",16))&&!strcmp(id,MdoPackageText(q,"id",64))){reason="Duplicate resource ID";goto bad;}}
         total+=strlen(content);if(total>sourceLimit){reason="Package decoded content exceeds its limit";goto bad;}
         const xvalue* files=xrtValueObjectGet(r,XRT_STR_LITERAL("files"));
-        if(files){reason="This resource cannot contain attached files";if((strcmp(kind,"skills")&&strcmp(kind,"knowledge")&&!module&&!plugin&&!toolpack)||xrtValueType(files)!=XVALUE_ARRAY||xrtValueCount(files)>128)goto bad;
+        if(files){reason="This resource cannot contain attached files";if((strcmp(kind,"skills")&&strcmp(kind,"knowledge")&&!MdoPackageRoleKind(kind)&&!module&&!plugin&&!toolpack)||xrtValueType(files)!=XVALUE_ARRAY||xrtValueCount(files)>128)goto bad;
             for(size_t j=0;j<xrtValueCount(files);j++){const xvalue* f=xrtValueArrayGet(files,j);const char* path=MdoPackageText(f,"path",220),*base64=MdoPackageText(f,"base64",v2?90u*1024u*1024u:180000u);
                 reason="Invalid attached file path or size";if(!MdoPackagePath(path)||(!strcmp(kind,"skills")&&MdoPackageSamePath(path,"SKILL.md"))||!base64)goto bad;
                 size_t prefix=!strcmp(kind,"knowledge")?11u+strlen(id):plugin?8u+strlen(id)+11u+64u+7u:module?14u+strlen(id)+1u:toolpack?106u:8u+strlen(id);
@@ -158,6 +159,7 @@ static bool MdoPackageValidate(const xvalue* package,char* error,size_t capacity
             }
             xrtValueRelease(doc);if(!valid){reason=plugin?"Invalid mdo plugin manifest or frontend file":"Invalid command-line toolpack manifest";goto bad;}
         }
+        if(MdoPackageRoleKind(kind)){int64 roleBuild=0;MdoPackageNumber(m,"min_build_id",&roleBuild);if((roleBuild>=MDO_ROLE_MIN_BUILD||files)&&!MdoPackageRoleValidate(r,true,error,capacity))return false;}
         if(!strcmp(kind,"knowledge")&&!MdoKnowledgeResource(r,error,capacity))return false;
         if(!strcmp(kind,"mcp")){
             xvalue* doc=xrtJsonParse(xrtStrView(content));char why[256];bool ok=MdoMcpTemplateValidate(doc,id,why,sizeof(why));

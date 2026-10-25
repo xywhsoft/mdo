@@ -110,3 +110,51 @@ static bool EcoNativeExportTree(cstr Root,xvalue* Extras,size_t* Total)
 {
     EcoNativeExportContext Context={Root,Extras,Total};return MdoPortableTreeWalk(Root,EcoNativeExportTreeFile,&Context);
 }
+
+static bool EcoRoleExportReference(xvalue* Spec,cstr Key,cstr Kind,cstr Id,xvalue* Files,size_t* Total)
+{
+    cstr Original=MdoAgentConfigText(Spec,Key);if(!Original)return true;
+    if(!MdoAgentConfigPathValid(Original))return false;
+    cstr Origin=MdoAgentConfigText(Spec,"origin");if(!Origin)Origin=Kind;
+    char Source[1400],Name[221],Target[320];
+    snprintf(Source,sizeof(Source),"%s/%s",Origin,Original);
+    size_t N=strlen(Id);int W=!strncmp(Original,Id,N)&&Original[N]=='/'&&!strncmp(Original+N+1,"assets/",7)?
+        snprintf(Name,sizeof(Name),"%s",Original+N+1):snprintf(Name,sizeof(Name),"assets/%s",Original);
+    if(W<0||(size_t)W>=sizeof(Name)||!MdoPackagePath(Name))return false;
+    char* Text=MdoExtensionRead(Source,false,MDO_EXTENSION_TEXT_LIMIT,NULL);if(!Text)return false;
+    bool Ok=true;
+    if(!MdoPackageRoleFile(Files,Name)){
+        char* B64=xrtBase64EncodeNew(Text,strlen(Text),NULL);xvalue* F=xrtValueObject();
+        Ok=xrtValueCount(Files)<128&&*Total+strlen(Text)<=64u*1024u*1024u&&B64&&F&&MdoApiValueSetString(F,"path",Name)&&MdoApiValueSetString(F,"base64",B64)&&xrtValueArrayAppend(Files,F);
+        if(Ok)*Total+=strlen(Text);xrtFree(B64);xrtValueRelease(F);
+    }
+    xrtFree(Text);snprintf(Target,sizeof(Target),"%s/%s",Id,Name);
+    return Ok&&MdoAgentConfigSetText(Spec,Key,Target)&&(!strcmp(Key,"file")?MdoAgentConfigSetText(Spec,"origin",Kind):true);
+}
+static bool EcoRoleExport(cstr Kind,cstr Id,xvalue* Resource)
+{
+    if(!MdoPackageRoleKind(Kind)||!MdoPackageId(Id)||(!strcmp(Kind,"agents")&&!strcmp(Id,"default")))return false;
+    char Path[256];snprintf(Path,sizeof(Path),"%s/%s.md",Kind,Id);
+    char* Raw=MdoExtensionRead(Path,false,MDO_EXTENSION_TEXT_LIMIT,NULL);
+    xvalue* D=Raw?MdoPackageRoleDocument(Raw,NULL,0):NULL;xrtFree(Raw);
+    xvalue* Files=xrtValueArray();bool Ok=D&&Files&&MdoAgentConfigSetText(D,"schema","mdo.agent.v1");size_t Total=0;
+    const char* Lists[]={"skills","mcp_servers"};
+    for(size_t I=0;Ok&&I<2;I++)if(MdoAgentConfigText(D,Lists[I])){
+        char* Items[128]={0};size_t Count=0;xvalue* List=xrtValueArray();
+        Ok=List&&MdoAgentFileList(D,Lists[I],Items,&Count);
+        for(size_t J=0;J<Count;J++){if(Ok)Ok=xrtValueArrayAppendNew(List,xrtValueString(xrtStrView(Items[J])));xrtFree(Items[J]);}
+        if(Ok)Ok=xrtValueObjectSet(D,xrtStrView(Lists[I]),List);xrtValueRelease(List);
+    }
+    if(Ok)Ok=EcoRoleExportReference(D,"prompt_file",Kind,Id,Files,&Total);
+    const xvalue* Context=MdoAgentConfigGet(D,"context");
+    for(size_t I=0;Ok&&I<xrtValueCount(Context);I++)Ok=EcoRoleExportReference((xvalue*)xrtValueObjectAt(Context,I,NULL),"file",Kind,Id,Files,&Total);
+    if(Ok&&MdoAgentConfigBool(D,"code",false)){
+        snprintf(Path,sizeof(Path),"modules/%s",Kind);char Name[80];snprintf(Name,sizeof(Name),"%s.c",Id);
+        Ok=EcoNativeExportFile(Files,Path,Name,&Total);
+        if(Ok)Ok=MdoApiValueSetString((xvalue*)xrtValueArrayGet(Files,xrtValueCount(Files)-1),"path","program.c");
+    }
+    char* Content=Ok?xrtJsonStringify(D,true,NULL):NULL;
+    Ok=Content&&strlen(Content)<=MDO_EXTENSION_TEXT_LIMIT&&MdoApiValueSetString(Resource,"kind",Kind)&&MdoApiValueSetString(Resource,"id",Id)&&
+        MdoApiValueSetString(Resource,"content",Content)&&xrtValueObjectSet(Resource,XRT_STR_LITERAL("files"),Files)&&MdoPackageRoleValidate(Resource,true,NULL,0);
+    xrtFree(Content);xrtValueRelease(D);xrtValueRelease(Files);return Ok;
+}

@@ -89,6 +89,20 @@ def main():
     value=copy.deepcopy(kb);value["resources"][0]["files"].append(knowledge_file("Knowledge.json/topic.md","reserved"));add("knowledge-reserved-manifest",value,False)
     value=copy.deepcopy(kb);meta=json.loads(value["resources"][0]["content"]);meta["install"]="run a command";value["resources"][0]["content"]=json.dumps(meta);add("knowledge-inert-only",value,False)
     value=copy.deepcopy(kb);meta=json.loads(value["resources"][0]["content"]);meta["prompt"]="x"*8193;value["resources"][0]["content"]=json.dumps(meta);add("knowledge-prompt-limit",value,False)
+    role=package("agents");role["manifest"]["min_build_id"]=70000001
+    role["resources"][0]["content"]=json.dumps(dict(schema="mdo.agent.v1",name="Reviewer",mode="both",prompt="Inspect"))
+    add("role-portable-config",role,True)
+    def bad_role(name, mutate):
+        value=copy.deepcopy(role);mutate(value);add("role-"+name,value,False)
+    bad_role("wrong-mode",lambda p:p["resources"][0].update(content='{"schema":"mdo.agent.v1","mode":"subagent"}'))
+    bad_role("unknown-source",lambda p:p["resources"][0].update(content='{"schema":"mdo.agent.v1","context":{"unknown":true}}'))
+    bad_role("missing-program",lambda p:p["resources"][0].update(content='{"schema":"mdo.agent.v1","code":true}'))
+    bad_role("missing-prompt",lambda p:p["resources"][0].update(content='{"schema":"mdo.agent.v1","prompt_file":"qa-resource/assets/a.md"}'))
+    bad_role("unowned-reference",lambda p:p["resources"][0].update(content='{"schema":"mdo.agent.v1","prompt_file":"neighbor.md"}'))
+    code_role=copy.deepcopy(role);code_role["resources"][0].update(content='{"schema":"mdo.agent.v1","code":true}',files=[dict(path="program.c",base64=base64.b64encode(b"/* Reviewed C source */").decode())])
+    add("role-c-source",code_role,True)
+    value=copy.deepcopy(code_role);value["resources"][0]["files"][0]["base64"]="AA==";add("role-binary-source",value,False)
+    value=copy.deepcopy(role);value["resources"][0].update(content='{"schema":"mdo.agent.v1","prompt_file":"qa-resource/assets/a.md"}',files=[dict(path="assets/a.md",base64="SGVsbG8=")]);add("role-owned-prompt",value,True)
     (ROOT / ".build").mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="ecosystem-contract-", dir=ROOT / ".build") as temporary:
         base = Path(temporary); (base / "web").mkdir()
@@ -97,6 +111,8 @@ def main():
         (base / "ecosystem_package.h").write_bytes((ROOT / "app/include/mdo/ecosystem_package.h").read_bytes())
         (base / "mcp_template.h").write_bytes((ROOT / "app/include/mdo/mcp_template.h").read_bytes())
         (base / "knowledge_format.h").write_bytes((ROOT / "app/include/mdo/knowledge_format.h").read_bytes())
+        for name in ("agent_package.h", "agent_config_format.h", "prompt_file.h", "extension_identity.h"):
+            (base / name).write_bytes((ROOT / "app/include/mdo" / name).read_bytes())
         source = '#include <xsbase.h>\n#include "ecosystem_package.h"\n' + r'''
 void ServiceInit(XS_HostInfo* Host) {
     (void)Host; size_t length=0;bytes raw=xsAppReadAll("cases.json",&length);

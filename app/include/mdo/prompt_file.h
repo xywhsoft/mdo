@@ -3,7 +3,7 @@
 
 #include <stdio.h>
 #include <string.h>
-#include "extension_files.h"
+#include "extension_identity.h"
 
 /* Bounded Markdown frontmatter reader. No YAML evaluation, aliases or tags.
  * Unknown metadata is preserved in the original file, not interpreted. */
