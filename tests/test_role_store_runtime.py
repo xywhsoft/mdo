@@ -119,6 +119,7 @@ def run():
             client("PUT",path,dict(content=r["content"]),status=403,revision=item["revision"])
             client("DELETE",path,status=403,revision=item["revision"])
             store(kind,"export",references=[dict(kind=kind,id=identity)],status=403)
+            if code:client("POST","/ecosystem",dict(action="export",references=[dict(kind="c-"+kind,id=identity)]),status=403)
             # Updating a version keeps the published version until the new review.
             update=copy.deepcopy(p); update["manifest"]["version"]="1.1.0"
             pending=store(kind,"submit",package=update,publish=True,review_notes="Same role with revised documentation; complete source provided.",status=201)

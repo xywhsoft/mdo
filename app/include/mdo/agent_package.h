@@ -15,6 +15,13 @@ static xvalue* MdoPackageRoleDocument(cstr Text,char* Error,size_t Capacity)
     if(!D||!MdoAgentConfigValidate(D,Error,Capacity)){xrtValueRelease(D);return NULL;}
     return D;
 }
+static bool MdoPackageRoleModern(const xvalue* R)
+{
+    if(xrtValueObjectGet(R,XRT_STR_LITERAL("files")))return true;
+    cstr Text=MdoPackageText(R,"content",131072);if(!Text)return false;
+    xstrview Trim=xrtStrTrim(xrtStrView(Text));if(Trim.Size&&Trim.Data[0]=='{')return true;
+    xvalue* D=MdoPromptParse(Text,true,NULL,0);bool Modern=D&&MdoAgentConfigGet(D,"schema")!=NULL;xrtValueRelease(D);return Modern;
+}
 static bool MdoPackageRoleCode(const xvalue* R)
 {
     if(!MdoPackageRoleKind(MdoPackageText(R,"kind",16)))return false;

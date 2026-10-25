@@ -159,7 +159,9 @@ static bool MdoPackageValidate(const xvalue* package,char* error,size_t capacity
             }
             xrtValueRelease(doc);if(!valid){reason=plugin?"Invalid mdo plugin manifest or frontend file":"Invalid command-line toolpack manifest";goto bad;}
         }
-        if(MdoPackageRoleKind(kind)){int64 roleBuild=0;MdoPackageNumber(m,"min_build_id",&roleBuild);if((roleBuild>=MDO_ROLE_MIN_BUILD||files)&&!MdoPackageRoleValidate(r,true,error,capacity))return false;}
+        if(MdoPackageRoleKind(kind)){int64 roleBuild=0;MdoPackageNumber(m,"min_build_id",&roleBuild);bool Modern=MdoPackageRoleModern(r);
+            if(Modern&&(!v2||roleBuild<MDO_ROLE_MIN_BUILD)){reason="Portable role resources require v2 and a role-capable minimum client build";goto bad;}
+            if((roleBuild>=MDO_ROLE_MIN_BUILD||Modern)&&!MdoPackageRoleValidate(r,true,error,capacity))return false;}
         if(!strcmp(kind,"knowledge")&&!MdoKnowledgeResource(r,error,capacity))return false;
         if(!strcmp(kind,"mcp")){
             xvalue* doc=xrtJsonParse(xrtStrView(content));char why[256];bool ok=MdoMcpTemplateValidate(doc,id,why,sizeof(why));

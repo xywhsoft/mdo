@@ -26,6 +26,7 @@ static const xvalue* ExtensionStoreOwner(const xvalue* Records,cstr Path)
 }
 static bool ExtensionStoreCanCustomize(MdoApiContext* C,cstr Kind,cstr Id)
 {
+    Kind=MdoPackageSystem(Kind);
     if(!MdoPackageSingleKind(Kind))return true;
     if(!strcmp(Kind,"mcp")){char P[160];ExtensionPath(Kind,Id,P);bool Missing=false;char* S=MdoExtensionRead(P,false,MDO_EXTENSION_TEXT_LIMIT,&Missing);xvalue* D=S?xrtJsonParse(xrtStrView(S)):NULL;
         const xvalue* B=McpConnectionBinding(D);const xvalue* R=xrtValueObjectGet(B,XRT_STR_LITERAL("receipt"));cstr Source=MdoPackageText(R,"source",16);bool Managed=B&&(!Source||strcmp(Source,"local"));xrtFree(S);xrtValueRelease(D);

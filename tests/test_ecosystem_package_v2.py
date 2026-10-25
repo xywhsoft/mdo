@@ -106,6 +106,8 @@ def main():
     value=copy.deepcopy(role);value["resources"][0]["files"]=[dict(path="assets/docs",base64="SGVsbG8="),dict(path="assets/docs/index.md",base64="SGVsbG8=")];add("role-file-directory-collision",value,False)
     value=copy.deepcopy(role);value["resources"][0]["files"]=[dict(path="program.c",base64="LyogYyAqLw==")];add("role-code-without-declaration",value,False)
     value=copy.deepcopy(role);value["resources"][0]["files"]=[dict(path="assets/large.md",base64=base64.b64encode(b"x"*131073).decode())];add("role-document-size",value,False)
+    value=copy.deepcopy(role);value["manifest"]["min_build_id"]=30000126;add("role-old-floor-with-json",value,False)
+    value=copy.deepcopy(role);value["format"]="mdo.extension.v1";add("role-old-format",value,False)
     (ROOT / ".build").mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="ecosystem-contract-", dir=ROOT / ".build") as temporary:
         base = Path(temporary); (base / "web").mkdir()
