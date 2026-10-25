@@ -34,10 +34,15 @@ typedef struct MdoSessionManagerState {
     MdoSessionActive* Active;
     size_t ActiveCount;
     size_t ActiveCapacity;
+    struct MdoSessionBorrowedScope* BorrowedScopes;
     MdoSessionRestoreReservation* Restores;
     size_t RestoreCount;
     bool Initialized;
 } MdoSessionManagerState;
+typedef struct MdoSessionBorrowedScope {
+    char Project[MDO_PROJECT_ID_CAPACITY],Session[MDO_SESSION_ID_CAPACITY];
+    MdoApprovalScope* Scope;size_t Holders;struct MdoSessionBorrowedScope* Next;
+} MdoSessionBorrowedScope;
 
 struct MdoSession {
     xatomic32 Refs;
@@ -568,6 +573,34 @@ static size_t MdoSessionsActiveFind(const char* ProjectId,
     }
     return SIZE_MAX;
 }
+static MdoSessionBorrowedScope* MdoSessionsBorrowedFind(const char* Project,const char* Session){
+    for(MdoSessionBorrowedScope* B=g_MdoSessions.BorrowedScopes;B;B=B->Next)if(!strcmp(Project,B->Project)&&!strcmp(Session,B->Session))return B;return NULL;
+}
+MdoApprovalScope* MdoSessionPermissionScopeAcquire(const char* ProjectId,const char* SessionId,xwork_error* Error){
+    if(!g_MdoSessions.Lock||!ProjectId||!SessionId)return NULL;
+    xworkErrorInit(Error);xrtMutexLock(g_MdoSessions.Lock);MdoSessionInfo Info;MdoApprovalScope* Scope=NULL;
+    if(!MdoSessionsMetaRead(ProjectId,SessionId,&Info)||Info.Status!=MDO_SESSION_ACTIVE)goto done;
+    MdoSessionBorrowedScope* B=MdoSessionsBorrowedFind(ProjectId,SessionId);
+    if(!B){
+        size_t Count=0;for(MdoSessionBorrowedScope* P=g_MdoSessions.BorrowedScopes;P;P=P->Next)Count++;
+        if(Count>=64)goto done;
+        B=xrtCalloc(1,sizeof(*B));if(!B)goto done;size_t Index=MdoSessionsActiveFind(ProjectId,SessionId);
+        B->Scope=Index==SIZE_MAX?MdoApprovalScopeCreate():MdoApprovalScopeRef(g_MdoSessions.Active[Index].PermissionScope);
+        if(!B->Scope||!MdoApprovalScopeInitialize(B->Scope,!strcmp(Info.PermissionProfile,"full-access"))){MdoApprovalScopeRelease(B->Scope);xrtFree(B);goto done;}
+        snprintf(B->Project,sizeof(B->Project),"%s",ProjectId);snprintf(B->Session,sizeof(B->Session),"%s",SessionId);B->Next=g_MdoSessions.BorrowedScopes;g_MdoSessions.BorrowedScopes=B;
+    }
+    Scope=MdoApprovalScopeRef(B->Scope);if(Scope)B->Holders++;
+done:
+    xrtMutexUnlock(g_MdoSessions.Lock);if(!Scope)MdoSessionsError(Error,XWORK_ERROR_CONTEXT,"cannot acquire the member parent's live permission scope");return Scope;
+}
+void MdoSessionPermissionScopeRelease(const char* Project,const char* Session,MdoApprovalScope* Scope){
+    if(!Scope)return;
+    if(g_MdoSessions.Lock){xrtMutexLock(g_MdoSessions.Lock);MdoSessionBorrowedScope** Link=&g_MdoSessions.BorrowedScopes;
+        while(*Link){MdoSessionBorrowedScope* B=*Link;if(B->Scope==Scope&&!strcmp(Project,B->Project)&&!strcmp(Session,B->Session)){
+            if(B->Holders&&!--B->Holders){*Link=B->Next;MdoApprovalScopeRelease(B->Scope);xrtFree(B);}break;}Link=&B->Next;}
+        xrtMutexUnlock(g_MdoSessions.Lock);}
+    MdoApprovalScopeRelease(Scope);
+}
 
 static bool MdoSessionsActiveAdd(const char* ProjectId,
     const char* SessionId)
@@ -581,7 +614,8 @@ static bool MdoSessionsActiveAdd(const char* ProjectId,
             sizeof(*g_MdoSessions.Active)) ) return false;
     Active = &g_MdoSessions.Active[g_MdoSessions.ActiveCount];
     memset(Active, 0, sizeof(*Active));
-    Active->PermissionScope = MdoApprovalScopeCreate();
+    MdoSessionBorrowedScope* Borrowed=MdoSessionsBorrowedFind(ProjectId,SessionId);
+    Active->PermissionScope = Borrowed?MdoApprovalScopeRef(Borrowed->Scope):MdoApprovalScopeCreate();
     if ( Active->PermissionScope == NULL ) return false;
     ++g_MdoSessions.ActiveCount;
     snprintf(Active->ProjectId, sizeof(Active->ProjectId), "%s", ProjectId);
@@ -643,6 +677,7 @@ void MdoSessionManagerUnit(void)
             MdoApprovalScopeRelease(g_MdoSessions.Active[i].PermissionScope);
     }
     g_MdoSessions.Initialized = false;
+    while(g_MdoSessions.BorrowedScopes){MdoSessionBorrowedScope* B=g_MdoSessions.BorrowedScopes;g_MdoSessions.BorrowedScopes=B->Next;MdoApprovalScopeRelease(B->Scope);xrtFree(B);}
     MdoSessionDataUnit();
     if ( g_MdoSessions.Runtime != NULL )
         xworkRuntimeRelease(g_MdoSessions.Runtime);
@@ -1658,7 +1693,8 @@ bool MdoSessionSetPermission(MdoSession* Session, const char* Permission,
     snprintf(Candidate.PermissionProfile, sizeof(Candidate.PermissionProfile), "%s", Permission);
     Active = MdoSessionsActiveFind(Candidate.ProjectId, Candidate.Id);
     Commit.Session = Session; Commit.Candidate = &Candidate; Commit.Error = Error;
-    Ok = MdoApprovalScopeUpdate(Active == SIZE_MAX ? NULL :
+    MdoSessionBorrowedScope* Borrowed=MdoSessionsBorrowedFind(Candidate.ProjectId,Candidate.Id);
+    Ok = MdoApprovalScopeUpdate(Active == SIZE_MAX ? (Borrowed?Borrowed->Scope:NULL) :
         g_MdoSessions.Active[Active].PermissionScope,
         strcmp(Permission, "full-access") == 0, MdoSessionsPermissionCommit, &Commit);
     if ( !Ok && Error && Error->eCode == XWORK_ERROR_NONE )
@@ -1715,6 +1751,7 @@ bool MdoSessionSetProfile(MdoSession* Session, const char* ModelId,
         goto unlock_manager;
     if ( Session->Info.Status != MDO_SESSION_ACTIVE ||
          Session->Agent != NULL ||
+         MdoSessionsBorrowedFind(Session->Info.ProjectId,Session->Info.Id) != NULL ||
          MdoSessionsActiveFind(Session->Info.ProjectId,
             Session->Info.Id) != SIZE_MAX ) {
         MdoSessionsError(Error, XWORK_ERROR_CONTEXT,

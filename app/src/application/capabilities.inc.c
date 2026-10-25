@@ -3,7 +3,8 @@ static const struct {cstr Id;uint32 Version;} SdkFeatures[]={
     {"execution.lineage",1},{"execution.outcomes",1},{"discovery.generation_bound",1},
     {"state.atomic",1},{"state.receipts",1},{"lease.fencing",1},
     {"mailbox.durable",1},{"mailbox.atomic_ack",1},{"events.wait",1},
-    {"lifecycle.global",1},{"lifecycle.actual_completion",1}
+    {"lifecycle.global",1},{"lifecycle.actual_completion",1},
+    {"instance.multiturn",1},{"instance.review_gate",1}
 };
 static xvalue* SdkCapabilities(void){
     xvalue* R=xrtValueObject(),*Features=xrtValueObject(),*Limits=xrtValueObject();

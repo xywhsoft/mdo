@@ -248,6 +248,7 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
 
 void MdoBootstrapUnit(void)
 {
+    MdoApplicationInstancesStop();
     MdoModuleManagerStop();
     MdoCommandManagerUnit();
     MdoUpdateUnit();

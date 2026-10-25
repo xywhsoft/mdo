@@ -9,6 +9,7 @@
 
 typedef struct MdoAgentSession MdoAgentSession;
 typedef struct MdoAgentRun MdoAgentRun;
+typedef struct MdoModuleCatalog MdoModuleCatalog;
 
 /* Read-only authoring inspection: no C lifecycle or role callbacks execute.
  * Text=NULL inspects an already-published role by its full ID. A draft uses
@@ -55,6 +56,8 @@ typedef struct MdoAgentSessionOptions {
     void* OwnerUserData;
     xwork_agent_owner_retain_fn OnOwnerRetain;
     xwork_agent_owner_release_fn OnOwnerRelease;
+    bool AllowSubagentDefinition; /* Explicit owned member session, never a main-role fallback. */
+    MdoModuleCatalog* ModuleCatalog; /* Optional retained code generation for owned execution. */
 } MdoAgentSessionOptions;
 
 typedef struct MdoAgentSessionInfo {

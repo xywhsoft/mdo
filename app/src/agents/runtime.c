@@ -1203,7 +1203,7 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
     }
     xrtAtomic32Init(&Session->Refs, 1u);
     Owner->Models = MdoModelCatalogSnapshot();
-    Owner->Modules = MdoModuleCatalogSnapshot();
+    Owner->Modules = Options->ModuleCatalog?MdoModuleCatalogRef(Options->ModuleCatalog):MdoModuleCatalogSnapshot();
     if ((!Options->WorkspaceRoot || !Options->WorkspaceRoot[0]) &&
         Options->ProjectId && !strcmp(Options->ProjectId,"default"))
         DefaultWorkspace=MdoHomeDefaultWorkspacePath(true);
@@ -1235,7 +1235,8 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
     memset(&AgentInfo, 0, sizeof(AgentInfo));
     AgentInfo.Size = sizeof(AgentInfo);
     if ( !MdoModuleCatalogAgentFind(Owner->Modules, AgentId, &AgentInfo) ||
-         (AgentInfo.Flags & MDO_AGENT_MAIN) == 0u ) {
+         ((AgentInfo.Flags & MDO_AGENT_MAIN) == 0u &&
+          !(Options->AllowSubagentDefinition && (AgentInfo.Flags & MDO_AGENT_SUBAGENT))) ) {
         MdoAgentsError(Error, XWORK_ERROR_INVALID_ARGUMENT,
             "selected main Agent was not found");
         goto fail;

@@ -33,6 +33,7 @@ void MdoApplicationJobsUnit(void);
 xvalue* MdoApplicationJobsCatalog(void);
 bool MdoApplicationJobsCall(const mdo_sdk_context_v1*,cstr,const xvalue*,xvalue**,mdo_error_v1*,bool*);
 bool MdoApplicationStateInit(void);
+void MdoApplicationInstancesStop(void);
 void MdoApplicationStateUnit(void);
 xvalue* MdoApplicationStateCatalog(void);
 bool MdoApplicationStateCall(const mdo_sdk_context_v1*,cstr,const xvalue*,xvalue**,mdo_error_v1*,bool*);

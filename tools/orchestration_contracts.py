@@ -36,3 +36,11 @@ def contracts(add):
     add('mailbox.read','Read pending messages without consuming them; page by cursor with a 32 KiB response budget',mail,('mailbox',))
     add('mailbox.ack','Atomically acknowledge and optionally commit state writes; mismatched repeated ack is rejected',mail,('mailbox','message_id'))
     add('mailbox.wait','Wait for durable pending messages; notifications are hints and state is rechecked',mail,('mailbox',))
+
+    member={'namespace':string,'id':string,'agent_id':string,'model_id':string,'permission_profile':{'type':'string','enum':['read-only','balanced','full-access']},'message_id':string,'prompt':string}
+    add('instance.create','Establish a durable multi-turn member identity; no model call occurs',member,('id',))
+    add('instance.list','List up to 64 retained member identities in this execution namespace',{'namespace':string},output={'type':'array'})
+    for action in ('get','cancel','close','rebind'):
+        add('instance.'+action,'Inspect/control an owned member; rebind explicitly accepts changed role dependencies',member,('id',))
+    add('instance.send','Durably queue a bounded prompt, deduplicated by message_id; does not run the model',member,('id','message_id','prompt'))
+    add('instance.step','Claim and execute at most one inbox turn, checkpoint then settle; interrupted turns require review',member,('id',))

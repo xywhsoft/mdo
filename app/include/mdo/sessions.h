@@ -201,6 +201,10 @@ MdoSession* MdoSessionLoad(const char* ProjectId, const char* SessionId,
 MdoSession* MdoSessionRef(MdoSession* Session);
 void MdoSessionRelease(MdoSession* Session);
 bool MdoSessionGetInfo(MdoSession* Session, MdoSessionInfo* Info);
+/* Member execution shares the parent's live permission mode even when the
+ * parent's own runtime closes. Each acquire needs the matching release. */
+MdoApprovalScope* MdoSessionPermissionScopeAcquire(const char* ProjectId,const char* SessionId,xwork_error* Error);
+void MdoSessionPermissionScopeRelease(const char* ProjectId,const char* SessionId,MdoApprovalScope* Scope);
 MdoAgentSession* MdoSessionAgentRef(MdoSession* Session);
 
 bool MdoSessionRename(MdoSession* Session, const char* Title,

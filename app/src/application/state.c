@@ -4,10 +4,17 @@
 #define SDK_STATE_BYTES (4u*1024u*1024u)
 #define SDK_STATE_RECORD_BYTES 16384u
 #define SDK_STATE_RECORDS 1024u
-static struct {xmutex* Lock;char Epoch[33];} SdkState;
-static const cstr SdkStateMethods[]={"state.get","state.list","state.put","state.compare_exchange","state.remove","state.transaction","state.receipt.get","lease.acquire","lease.inspect","lease.validate","lease.renew","lease.release","mailbox.send","mailbox.get","mailbox.read","mailbox.ack","mailbox.wait"};
-bool MdoApplicationStateInit(void){SdkState.Lock=xrtMutexCreate();return SdkState.Lock&&SdkCallIdentity(SdkState.Epoch);}
-void MdoApplicationStateUnit(void){if(SdkState.Lock)xrtMutexDestroy(SdkState.Lock);memset(&SdkState,0,sizeof(SdkState));}
+typedef struct SdkMemberActive {char Identity[65];xcancel* Cancel;} SdkMemberActive;
+static struct {xmutex* Lock;xcond* Drained;char Epoch[33];SdkMemberActive Members[8];bool Stopping;} SdkState;
+static const cstr SdkStateMethods[]={"state.get","state.list","state.put","state.compare_exchange","state.remove","state.transaction","state.receipt.get","lease.acquire","lease.inspect","lease.validate","lease.renew","lease.release","mailbox.send","mailbox.get","mailbox.read","mailbox.ack","mailbox.wait","instance.create","instance.get","instance.list","instance.send","instance.step","instance.cancel","instance.close","instance.rebind"};
+bool MdoApplicationStateInit(void){SdkState.Lock=xrtMutexCreate();SdkState.Drained=xrtCondCreate();return SdkState.Lock&&SdkState.Drained&&SdkCallIdentity(SdkState.Epoch);}
+void MdoApplicationInstancesStop(void){
+    if(!SdkState.Lock)return;xrtMutexLock(SdkState.Lock);SdkState.Stopping=true;
+    for(size_t I=0;I<8;I++)if(SdkState.Members[I].Cancel)xrtCancelRequest(SdkState.Members[I].Cancel);
+    for(;;){bool Active=false;for(size_t I=0;I<8;I++)if(SdkState.Members[I].Cancel)Active=true;if(!Active)break;xrtCondWait(SdkState.Drained,SdkState.Lock);}
+    xrtMutexUnlock(SdkState.Lock);
+}
+void MdoApplicationStateUnit(void){MdoApplicationInstancesStop();if(SdkState.Drained)xrtCondDestroy(SdkState.Drained);if(SdkState.Lock)xrtMutexDestroy(SdkState.Lock);memset(&SdkState,0,sizeof(SdkState));}
 static uint64 SdkStateRevision(const xvalue* V){uint64 N=0;SdkUInt(SdkGet(V,"revision"),&N);return N;}
 static bool SdkStateDeleted(const xvalue* V){bool Deleted=false;xrtValueGetBool(SdkGet(V,"deleted"),&Deleted);return Deleted;}
 /* One checksummed atomic document per namespace: a transaction never publishes
@@ -124,15 +131,17 @@ static bool SdkStateRemember(xvalue* Root,const xvalue* P,cstr Hash,const xvalue
 }
 #include "state_leases.inc.c"
 #include "state_mailbox.inc.c"
+#include "state_instances.inc.c"
 xvalue* MdoApplicationStateCatalog(void){
     xvalue* A=xrtValueArray();for(size_t I=0;I<sizeof(SdkStateMethods)/sizeof(*SdkStateMethods);I++){
-        xvalue* V=xrtValueObject();SdkPut(V,"id",SdkStateMethods[I]);SdkPut(V,"domain",!strncmp(SdkStateMethods[I],"mailbox.",8)?"mailbox":!strncmp(SdkStateMethods[I],"lease.",6)?"lease":"state");SdkPut(V,"transport","native");xrtValueArrayAppendNew(A,V);
+        xvalue* V=xrtValueObject();SdkPut(V,"id",SdkStateMethods[I]);SdkPut(V,"domain",!strncmp(SdkStateMethods[I],"instance.",9)?"instance":!strncmp(SdkStateMethods[I],"mailbox.",8)?"mailbox":!strncmp(SdkStateMethods[I],"lease.",6)?"lease":"state");SdkPut(V,"transport","native");xrtValueArrayAppendNew(A,V);
     }return A;
 }
 bool MdoApplicationStateCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue* P,xvalue** R,mdo_error_v1* E,bool* Found){
     *Found=false;for(size_t I=0;I<sizeof(SdkStateMethods)/sizeof(*SdkStateMethods);I++)if(!strcmp(Method,SdkStateMethods[I]))*Found=true;
     if(!*Found)return true;
     if(!SdkState.Lock)return MdoApplicationError(E,"sdk_unavailable","State service unavailable","state",503,false);
+    if(!strncmp(Method,"instance.",9))return SdkInstanceCall(C,Method,P,R,E);
     if(!strcmp(Method,"mailbox.wait"))return SdkMailboxWait(C,P,R,E);
     char Path[160];bool Read=!strcmp(Method,"state.get"),List=!strcmp(Method,"state.list"),Ok=false,Changed=false;
     xrtMutexLock(SdkState.Lock);xvalue* Root=SdkStateLoad(C,P,Path,E);
