@@ -450,6 +450,8 @@ def prepare(lock: dict, connection: Path | None = None) -> None:
                      (ROOT / "include/mdo/agent.h").read_bytes())
     write_if_changed(GENERATED_MODULE_HEADER_PATH.with_name("command.h"),
                      (ROOT / "include/mdo/command.h").read_bytes())
+    write_if_changed(GENERATED_MODULE_HEADER_PATH.with_name("execution.h"),
+                     (ROOT / "include/mdo/execution.h").read_bytes())
     write_if_changed(GENERATED_MODULE_HEADER_PATH.with_name("sdk.h"),
                      (ROOT / "include/mdo/sdk.h").read_bytes())
     import application_sdk

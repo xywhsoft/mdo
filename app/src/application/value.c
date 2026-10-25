@@ -30,3 +30,16 @@ void MdoApplicationContext(mdo_sdk_context_v1* C,MdoApplicationInvocation* I,cst
     C->ExtensionId=Extension?Extension:"";C->InvocationId=Invocation?Invocation:"";C->DeviceId="local";
     C->ProjectId=Project?Project:"";C->SessionId=Session?Session:"";C->RunId=Run?Run:"";C->Workspace=Workspace?Workspace:"";C->Deadline=Deadline;
 }
+
+static bool SdkCallIdentity(char Id[33]){
+    unsigned char Bytes[16];static const char Hex[]="0123456789abcdef";
+    if(!xrtSecureRandom(Bytes,sizeof(Bytes)))return false;
+    for(size_t i=0;i<16;i++){Id[i*2]=Hex[Bytes[i]>>4];Id[i*2+1]=Hex[Bytes[i]&15];}Id[32]=0;return true;
+}
+static mdo_result SdkErrorResult(const mdo_error_v1* Error){
+    if(Error&&Error->MayHaveCompleted)return MDO_RESULT_ERROR;
+    if(Error&&Error->Status==499)return MDO_RESULT_CANCELLED;
+    if(Error&&Error->Status==504)return MDO_RESULT_TIMEOUT;
+    if(Error&&(Error->Status==429||Error->Status==413))return MDO_RESULT_LIMIT;
+    return MDO_RESULT_ERROR;
+}

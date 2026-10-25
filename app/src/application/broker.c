@@ -34,19 +34,32 @@ void MdoApplicationEvent(cstr Topic,const mdo_sdk_context_v1* C,const xvalue* Da
     xvalue* V=xrtValueObject();if(!V)return;
     SdkPut(V,"topic",Topic);SdkPut(V,"extension",C?C->ExtensionId:"");SdkPut(V,"invocation",C?C->InvocationId:"");
     SdkPut(V,"project",C?C->ProjectId:"");SdkPut(V,"session",C?C->SessionId:"");
-    xrtValueObjectSetNew(V,XRT_STR_LITERAL("data"),Data?xrtValueClone(Data):xrtValueNull());
+    MdoApplicationInvocation* Invocation=C?C->Opaque:NULL;
+    SdkPut(V,"trace_id",Invocation?Invocation->TraceId:"");SdkPut(V,"call_id",Invocation?Invocation->CallId:"");SdkPut(V,"parent_call_id",Invocation?Invocation->ParentCallId:"");
+    char* Payload=Data?SdkJson(Data):NULL;size_t PayloadBytes=Payload?strlen(Payload):0;
+    xrtValueObjectSetNew(V,XRT_STR_LITERAL("data"),Data&&PayloadBytes<=8192?xrtValueClone(Data):xrtValueNull());
+    if(PayloadBytes>8192){xrtValueObjectSetNew(V,XRT_STR_LITERAL("data_omitted"),xrtValueBool(true));SdkPutUInt(V,"data_bytes",PayloadBytes);}
+    xrtFree(Payload);
     xrtMutexLock(SdkEventLock);uint64 N=++SdkEventSequence;SdkPutUInt(V,"sequence",N);SdkPutUInt(V,"time_us",SdkClock());
     size_t I=(size_t)(N%256u);xrtValueRelease(SdkEventRing[I]);SdkEventRing[I]=V;xrtMutexUnlock(SdkEventLock);
 }
 xvalue* MdoApplicationEvents(const xvalue* P,mdo_error_v1* E){
     if(!SdkEventLock){MdoApplicationError(E,"sdk_unavailable","Event journal is unavailable","events",503,false);return NULL;}
     uint64 After=0;const xvalue* A=SdkGet(P,"after");if(A&&!SdkUInt(A,&After)){MdoApplicationError(E,"sdk_arguments_invalid","after must be an unsigned sequence","events",400,false);return NULL;}
+    uint64 Limit=64;if((SdkGet(P,"limit")&&!SdkUInt(SdkGet(P,"limit"),&Limit))||!Limit||Limit>256){MdoApplicationError(E,"sdk_arguments_invalid","limit must be 1..256","events",400,false);return NULL;}
     cstr Topic=SdkField(P,"topic");xvalue* R=xrtValueObject(),*Items=xrtValueArray();
     if(!R||!Items){xrtValueRelease(R);xrtValueRelease(Items);return NULL;}
     xrtMutexLock(SdkEventLock);uint64 Last=SdkEventSequence,First=Last>=256?Last-255:1;
+    uint64 Cursor=After>Last?Last:After<First?First-1:After;size_t Bytes=0;
     for(uint64 N=First;N<=Last;N++)if(N>After){const xvalue* V=SdkEventRing[N%256];
-        if(V&&(!Topic||!strcmp(Topic,SdkField(V,"topic"))))xrtValueArrayAppend(Items,V);}
-    SdkPutUInt(R,"cursor",Last);SdkPutUInt(R,"oldest",First);SdkPut(R,"epoch",SdkEventEpoch);
+        if(V&&(!Topic||!strcmp(Topic,SdkField(V,"topic")))){
+            char* Json=SdkJson(V);size_t Size=Json?strlen(Json):32769;xrtFree(Json);
+            if(xrtValueCount(Items)>=Limit||Size>32768-Bytes)break;
+            if(!xrtValueArrayAppend(Items,V))break;Bytes+=Size;
+        }Cursor=N;
+    }
+    SdkPutUInt(R,"cursor",Cursor);SdkPutUInt(R,"latest",Last);SdkPutUInt(R,"oldest",First);SdkPut(R,"epoch",SdkEventEpoch);
+    xrtValueObjectSetNew(R,XRT_STR_LITERAL("has_more"),xrtValueBool(Cursor<Last));
     cstr Epoch=SdkField(P,"epoch");
     xrtValueObjectSetNew(R,XRT_STR_LITERAL("resync_required"),xrtValueBool((Epoch&&strcmp(Epoch,SdkEventEpoch))||After>Last||(After&&First>After&&First-After>1)));
     xrtMutexUnlock(SdkEventLock);xrtValueObjectSetNew(R,XRT_STR_LITERAL("items"),Items);return R;

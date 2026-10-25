@@ -115,7 +115,7 @@ xvalue* MdoApplicationCatalog(void){
 }
 static mdo_result SdkInvoke(const mdo_sdk_context_v1* C,cstr Method,const xvalue* P,xvalue** R,mdo_error_v1* E){
     bool Found=false;bool CustomOk=MdoApplicationCustomCall(C,Method,P,R,E,&Found);
-    if(Found)return CustomOk?MDO_RESULT_OK:MDO_RESULT_ERROR;
+    if(Found)return CustomOk?MDO_RESULT_OK:SdkErrorResult(E);
     if(!SdkValidateContract(Method,P,E))return MDO_RESULT_ERROR;
     if(!strcmp(Method,"sdk.native")){*R=SdkNativeCatalog();return *R?MDO_RESULT_OK:MDO_RESULT_ERROR;}
     if(!strcmp(Method,"model.complete"))return SdkModelCall(C,P,R,E)?MDO_RESULT_OK:MDO_RESULT_ERROR;
@@ -125,10 +125,14 @@ static mdo_result SdkInvoke(const mdo_sdk_context_v1* C,cstr Method,const xvalue
     if(!strcmp(Method,"sdk.context")){
         *R=xrtValueObject();SdkPut(*R,"extension",C->ExtensionId);SdkPut(*R,"invocation",C->InvocationId);
         SdkPut(*R,"device",C->DeviceId);SdkPut(*R,"project",C->ProjectId);SdkPut(*R,"session",C->SessionId);
-        SdkPut(*R,"run",C->RunId);SdkPut(*R,"workspace",C->Workspace);SdkPutUInt(*R,"deadline",C->Deadline);return MDO_RESULT_OK;
+        SdkPut(*R,"run",C->RunId);SdkPut(*R,"workspace",C->Workspace);SdkPutUInt(*R,"deadline",C->Deadline);
+        MdoApplicationInvocation* I=C->Opaque;SdkPut(*R,"trace_id",I?I->TraceId:"");SdkPut(*R,"call_id",I?I->CallId:"");SdkPut(*R,"parent_call_id",I?I->ParentCallId:"");
+        SdkPut(*R,"deadline_unit","monotonic_microseconds");return MDO_RESULT_OK;
     }
     if(!strcmp(Method,"events.read")){*R=MdoApplicationEvents(P,E);return *R?MDO_RESULT_OK:MDO_RESULT_ERROR;}
-    if(!strcmp(Method,"events.emit")){cstr Topic=SdkField(P,"topic");if(!SdkIdValid(Topic)){MdoApplicationError(E,"sdk_arguments_invalid","A valid event topic is required","events",400,false);return MDO_RESULT_ERROR;}MdoApplicationEvent(Topic,C,SdkGet(P,"data"));*R=xrtValueObject();return MDO_RESULT_OK;}
+    if(!strcmp(Method,"events.emit")){cstr Topic=SdkField(P,"topic");if(!SdkIdValid(Topic)){MdoApplicationError(E,"sdk_arguments_invalid","A valid event topic is required","events",400,false);return MDO_RESULT_ERROR;}char* Payload=SdkGet(P,"data")?SdkJson(SdkGet(P,"data")):NULL;size_t Bytes=Payload?strlen(Payload):0;xrtFree(Payload);
+        if(Bytes>8192){MdoApplicationError(E,"sdk_event_limit","Event payload exceeds 8 KiB; store the resource and emit its identity","events",413,false);return MDO_RESULT_LIMIT;}
+        MdoApplicationEvent(Topic,C,SdkGet(P,"data"));*R=xrtValueObject();return MDO_RESULT_OK;}
     if(!strcmp(Method,"sdk.describe")){
         cstr Id=SdkField(P,"id");
         xvalue* Catalog=MdoApplicationCatalog();
@@ -167,13 +171,21 @@ mdo_result MdoApplicationCall(const mdo_sdk_context_v1* C,cstr Method,const xval
     if(E){memset(E,0,sizeof(*E));E->Size=sizeof(*E);}
     if(!C||C->Size<sizeof(*C)||C->Version!=MDO_SDK_VERSION||!R||!SdkIdValid(Method)){
         MdoApplicationError(E,"sdk_arguments_invalid","A current SDK context, method and result pointer are required","dispatch",400,false);return MDO_RESULT_ERROR;}
-    if(SdkCancelled(C)){MdoApplicationError(E,"sdk_cancelled","Call was cancelled or its deadline expired","dispatch",499,false);return MDO_RESULT_CANCELLED;}
-    MdoApplicationInvocation Local={0};mdo_sdk_context_v1 Bound=*C;
-    if(!Bound.Opaque)Bound.Opaque=&Local;
-    Bound.Method=Method;C=&Bound;
-    MdoApplicationInvocation* I=C->Opaque;
-    if(I&&I->Depth>=32){MdoApplicationError(E,"sdk_recursion_limit","Service recursion exceeded 32 nested calls","dispatch",409,false);return MDO_RESULT_LIMIT;}
-    if(I)I->Depth++;
+    if(SdkCancelled(C)){
+        MdoApplicationInvocation* I=C->Opaque;bool Cancelled=I&&I->Cancel&&xrtCancelRequested(I->Cancel);
+        MdoApplicationError(E,Cancelled?"sdk_cancelled":"sdk_deadline_expired",Cancelled?"Call was cancelled":"Call deadline expired","dispatch",Cancelled?499:504,false);
+        return Cancelled?MDO_RESULT_CANCELLED:MDO_RESULT_TIMEOUT;
+    }
+    MdoApplicationInvocation* Parent=C->Opaque;
+    MdoApplicationInvocation Frame=Parent?*Parent:(MdoApplicationInvocation){0};
+    mdo_sdk_context_v1 Bound=*C;Bound.Opaque=&Frame;Bound.Method=Method;C=&Bound;
+    MdoApplicationInvocation* I=&Frame;
+    if(I->Depth>=32){MdoApplicationError(E,"sdk_recursion_limit","Service recursion exceeded 32 nested calls","dispatch",409,false);return MDO_RESULT_LIMIT;}
+    I->Depth++;
+    snprintf(I->ParentCallId,sizeof(I->ParentCallId),"%s",Parent?Parent->CallId:"");
+    if(!SdkCallIdentity(I->CallId)||(!I->TraceId[0]&&!SdkCallIdentity(I->TraceId))){
+        MdoApplicationError(E,"sdk_identity_failed","Cannot allocate invocation identity","dispatch",500,false);return MDO_RESULT_ERROR;}
+
     xvalue* Input=P&&xrtValueType(P)!=XVALUE_NULL?xrtValueClone(P):xrtValueObject();
     bool Hooked=strncmp(Method,"sdk.",4)&&strcmp(Method,"events.read");
     xvalue* Facts=xrtValueObject();SdkPut(Facts,"method",Method);
@@ -183,6 +195,6 @@ mdo_result MdoApplicationCall(const mdo_sdk_context_v1* C,cstr Method,const xval
     if(Code!=MDO_RESULT_OK&&E&&!E->Code[0])MdoApplicationError(E,"sdk_extension_failed","Extension returned a failure without details","extension",500,E->MayHaveCompleted);
     if(Hooked){SdkPutUInt(Facts,"status",E?E->Status:0);MdoApplicationEvent("service.after",C,Facts);}
     xrtValueRelease(Input);xrtValueRelease(Facts);
-    if(I)I->Depth--;
+    if(Code!=MDO_RESULT_OK)Code=SdkErrorResult(E);
     return Code;
 }

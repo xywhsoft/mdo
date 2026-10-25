@@ -74,7 +74,7 @@ def native_contracts():
     for name in ('sdk.services','sdk.native'):add(name,'Discover registered services or typed native product function declarations',output=arr)
     add('sdk.describe','Read the exact registered service descriptor',{'id':string},('id',))
     add('sdk.context','Read the immutable invocation, device, project, session, workspace and deadline')
-    add('events.read','Read events with epoch/cursor loss detection; resync on overflow or restart',{'after':uint,'epoch':string,'topic':string})
+    add('events.read','Read events with epoch/cursor loss detection; resync on overflow or restart',{'after':uint,'epoch':string,'topic':string,'limit':{**uint,'minimum':1,'maximum':256}})
     add('events.emit','Publish an extension event; event data is visible to trusted application subscribers',{'topic':string,'data':{}},('topic',))
     for name in ('runtime.info','runtime.clock'):add(name,'Read application identity and native runtime metadata')
     add('runtime.log','Write at most 16 KiB of diagnostic text',{'message':string},('message',))
