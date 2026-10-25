@@ -15,7 +15,7 @@ def main():
     with tempfile.TemporaryDirectory(dir=ROOT/'.build',prefix='plugins-runtime-') as tmp:
         base=Path(tmp);port=free_port();config=write_site(base,port)
         with (base/'probe.log').open('wb') as log:
-            child=subprocess.Popen([str(args.host.resolve()),str(config),'--'],cwd=base,stdout=log,stderr=log,
+            child=subprocess.Popen([str(args.host.resolve()),str(config),'--','--home',str(base/'home')],cwd=base,stdout=log,stderr=log,
                 creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
             try:
                 wait_ready(port,child)
@@ -34,7 +34,7 @@ def main():
                     return call('plugin.commit',dict(changes=changes,expected_revision=p['base_revision'],expected_plan=p['plan_revision']))
                 install('base')
                 a=install('alpha',exclusive=['mdo.agent.default-orchestrator'])
-                assert all(not r['enabled'] for r in a['items'])
+                assert all(not r['enabled'] for r in a['items']),a
                 install('beta',exclusive=['mdo.agent.default-orchestrator'])
                 commit([dict(id='alpha',enabled=True)])
                 p=plan([dict(id='beta',enabled=True)])
@@ -61,6 +61,59 @@ def main():
                 call('plugin.apply',dict(id='base',manifest=doc,files=[dict(path='value.txt',text='new')]),409)
                 assert call('plugin.list')==previous,'A rejected update changed the published plugin set'
                 commit([dict(id='worker',enabled=False),dict(id='base',enabled=False)])
+                def frontend(id):
+                    doc=dict(format='mdo.plugin.v1',id=id,name=id,version='1.0.0',description='Frontend fixture',entry=dict(frontend='runtime/main.js'),exclusive=['mdo.ui.chat-layout'])
+                    result=call('plugin.apply',dict(id=id,manifest=doc,files=[dict(path='runtime/main.js',text='export function activate(sdk) {}')]))
+                    return next(r for r in result['items'] if r['id']==id)['revision']
+                ra=frontend('front-a');rb=frontend('front-b')
+                commit([dict(id='front-a',enabled=True)])
+                def window(action,client,id,revision):return call('plugin.frontend.'+action,dict(client=client,page='page-one',id=id,revision=revision))
+                window('enter','window-a','front-a',ra);window('enter','window-b','front-a',ra)
+                result=commit([dict(id='front-a',enabled=False),dict(id='front-b',enabled=True)])
+                assert result['pending'] and not result['restart_required'],result
+                call('plugin.frontend.enter',dict(client='window-c',page='page-one',id='front-b',revision=rb),409)
+                window('leave','window-a','front-a',ra);assert call('plugin.list')['pending']
+                window('leave','window-b','front-a',ra);assert not call('plugin.list')['pending']
+                window('enter','window-c','front-b',rb)
+                call('plugin.frontend.hello',dict(client='window-c',page='new-document'))
+                native_source=r'''
+#include "mdo/sdk.h"
+#include "extra.h"
+static unsigned Starts;
+static mdo_result Counter(void* U,const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E){
+ (void)U;(void)P;(void)E;*R=C->Api->Values->UInt(Starts+EXTRA);return MDO_RESULT_OK;
+}
+static mdo_result Register(const mdo_host_services_v1* H,const mdo_registrar_v1* R,void** D,char* E,size_t N){
+ (void)H;(void)D;Starts++;
+ mdo_service_v1 S={sizeof(S),1,"qa.plugin.counter","Plugin counter","{}","{}",MDO_TOOL_EFFECT_READ,NULL,Counter};
+ return R->AddService(R->Context,&S,E,N);
+}
+static const mdo_module_v1 M={MDO_V1_HEADER(mdo_module_v1),"plugin.native-fixture","Plugin fixture","Fixture","1.0.0",MDO_CAPABILITY_APPLICATION,NULL,0,Register,NULL};
+const mdo_module_v1* mdoModuleEntry(void){return &M;}
+'''
+                doc=dict(format='mdo.plugin.v1',id='native-fixture',name='Native',version='1.0.0',description='Native fixture',entry=dict(native='runtime/plugin.c'))
+                call('plugin.apply',dict(id='native-fixture',manifest=doc,files=[dict(path='runtime/plugin.c',text=native_source),dict(path='runtime/extra.h',text='#define EXTRA 10\n')]))
+                result=commit([dict(id='native-fixture',enabled=True)])
+                assert result['pending'] and result['restart_required'],result
+                call('qa.plugin.counter',status=404)
+                child.terminate();child.wait(timeout=10)
+                child=subprocess.Popen([str(args.host.resolve()),str(config),'--','--home',str(base/'home')],cwd=base,stdout=log,stderr=log,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+                wait_ready(port,child)
+                assert call('qa.plugin.counter')==11
+                call('runtime.reload',dict(domain='modules'))
+                assert call('qa.plugin.counter')==11,'An unchanged native plugin was registered twice'
+                presets=call('plugin.preset.list')
+                saved=call('plugin.preset.save',dict(id='development',name='Development',expected_revision=presets['revision']))
+                assert saved['items'][0]['plugins'] and all(set(p)=={'id','revision','enabled'} for p in saved['items'][0]['plugins'])
+                call('plugin.preset.save',dict(id='other',name='Other',expected_revision=presets['revision']),412)
+                commit([dict(id='beta',enabled=False)])
+                assert not call('plugin.preset.list')['items'][0]['matches']
+                p=call('plugin.preset.plan',dict(id='development'));assert p['allowed'],p
+                call('plugin.commit',dict(changes=p['changes'],expected_revision=p['base_revision'],expected_plan=p['plan_revision']))
+                assert call('plugin.preset.list')['items'][0]['matches']
+                info=call('plugin.get',dict(id='native-fixture'))
+                f=call('plugin.file.read',dict(id='native-fixture',path='runtime/plugin.c',offset=0,limit=17))
+                assert f['next']==17 and f['total']==len(native_source.encode()) and info['files']
                 print('Plugins: immutable mappings, mutual exclusion, one-sided conflicts, dependency bounds/cycles, atomic switching and stale plans PASS',flush=True)
             finally:
                 child.terminate();child.wait(timeout=10)

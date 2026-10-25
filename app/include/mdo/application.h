@@ -48,6 +48,8 @@ bool MdoApplicationTerminalsProjectBusy(cstr Project);
 xvalue* MdoApplicationTerminalsCatalog(void);
 bool MdoApplicationTerminalsCall(const mdo_sdk_context_v1*,cstr,const xvalue*,xvalue**,mdo_error_v1*,bool*);
 bool MdoApplicationPluginsInit(void);
+xvalue* MdoApplicationPluginNativeSources(void);
+bool MdoApplicationPluginWarnings(xvalue* Items);
 void MdoApplicationPluginsUnit(void);
 xvalue* MdoApplicationPluginsCatalog(void);
 bool MdoApplicationPluginsCall(const mdo_sdk_context_v1*,cstr,const xvalue*,xvalue**,mdo_error_v1*,bool*);

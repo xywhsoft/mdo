@@ -3,6 +3,7 @@ import { isRemoteTarget, targetState } from "../../api/target.js";
 import { toast } from "../../utils/dom.js";
 import { createPanelManager } from "../workbench/panel-manager.js";
 import { openLayer } from "../../components/layers.js";
+import { createPluginLoader } from "./plugin-loader.js";
 
 export function createApplicationUi({ navigation, executeActions, canCall = () => true, addContext }) {
   let clientId = `ui-${crypto.randomUUID()}`;
@@ -14,10 +15,9 @@ export function createApplicationUi({ navigation, executeActions, canCall = () =
   const api = createApplicationClient(() => ({ project: navigation.preferredProject(), session: navigation.workspace().sessionId || "", client: clientId }));
   const localApi = createLocalApplicationClient(() => ({ project: "default", client: clientId }));
   const panels = new Map(), menus = new Map(), renderers = new Map(), actions = new Map(), openDialogs = new Map(), disposers = [];
-  const pluginScopes = new Map(); let pluginCursor = {};
   const shell = document.querySelector("#app-shell");
   const workbench = shell ? createPanelManager({ shell, api, layoutApi: isRemoteTarget() ? localApi : api, navigation, clientId, addContext, renderers }) : null;
-  let stopped = false, timer = null, registered = false, pluginsLoaded = false, pluginLoading = null, registeredScope = "";
+  let stopped = false, timer = null, registered = false, registeredScope = "";
   const register = (map, id, value) => {
     if (stopped) throw new Error("Application UI instance has been disposed");
     if (!/^[A-Za-z0-9_.-]+$/.test(id) || map.has(id)) throw new Error("Duplicate or invalid SDK contribution ID");
@@ -44,7 +44,7 @@ export function createApplicationUi({ navigation, executeActions, canCall = () =
     let active = true, scopedSdk; const owned = [], ownedLayers = new Set();
     const check = () => { if (!active || stopped) throw new Error("Application UI instance has been disposed"); };
     const own = cleanup => {
-      let retained = true; const dispose = () => { if (retained) { retained = false; cleanup(); } };
+      let retained = true; const dispose = () => { if (retained) { retained = false; return cleanup(); } };
       if (!active || stopped) dispose(); else owned.push(dispose); return dispose;
     };
     own(() => { for (const layer of ownedLayers) layer.dispose(); ownedLayers.clear(); });
@@ -126,9 +126,24 @@ export function createApplicationUi({ navigation, executeActions, canCall = () =
     },
     });
     scopedSdk = Object.freeze({ ...clientApi, ui, clientId, context: () => navigation.get() });
-    return { sdk: scopedSdk, own, dispose() { if (!active) return; active = false; for (const dispose of owned.reverse()) { try { dispose(); } catch { /* Finish every owned cleanup. */ } } if (!stopped && workbench) void workbench.retireOwner(clientApi).catch(error => toast(`插件资源清理未完成：${error.message}`, "error")); } };
+    let retirement;
+    return { sdk: scopedSdk, own, dispose() {
+      if (retirement) return retirement; active = false; const pending = [];
+      for (const dispose of owned.reverse()) { try { pending.push(Promise.resolve(dispose())); } catch (error) { pending.push(Promise.reject(error)); } }
+      if (!stopped && workbench) pending.push(workbench.retireOwner(clientApi));
+      retirement = Promise.allSettled(pending).then(results => { if (results.some(r => r.status === "rejected")) throw Error("Plugin cleanup did not complete"); });
+      return retirement;
+    } };
   };
   const rootScope = createScope(api), sdk = rootScope.sdk, ui = sdk.ui; disposers.push(() => rootScope.dispose());
+  const pluginLoader = createPluginLoader({ client: clientId, api: () => isRemoteTarget() ? localApi : api,
+    canCall, stopped: () => stopped, createScope(plugin) {
+      const scopedApi = createApplicationClient(() => ({ project: navigation.preferredProject(), session: navigation.workspace().sessionId || "", client: clientId, extension: `plugin.${plugin.id}` }));
+      return createScope(scopedApi);
+    } });
+  const pluginsChanged = () => { pluginLoader.invalidate(); void pluginLoader.poll(); };
+  window.addEventListener("mdo-plugins-changed", pluginsChanged);
+  disposers.push(() => { window.removeEventListener("mdo-plugins-changed", pluginsChanged); return pluginLoader.destroy(); });
   const leaseTimer = setInterval(() => {
     if (stopped || !registered || !canCall()) return;
     void api.call("client.hello", { client: clientId, context: navigation.get() }).catch(() => { registered = false; });
@@ -156,25 +171,8 @@ export function createApplicationUi({ navigation, executeActions, canCall = () =
       if (workbench) await workbench.ensure();
       // Activation may await a browser/UI receipt. Keep servicing the window
       // while it runs, otherwise activation and the UI queue deadlock.
-      if (!pluginsLoaded && !pluginLoading) pluginLoading = loadPlugins().catch(() => {}).finally(() => { pluginLoading = null; });
+      void pluginLoader.poll();
       if (stopped || !canCall()) return;
-      if (workbench && pluginScopes.size) {
-        const pluginApi = isRemoteTarget() ? localApi : api;
-        const changes = await pluginApi.events({ ...pluginCursor, topic: "plugin.changed" });
-        pluginCursor = { after: changes.cursor, epoch: changes.epoch };
-        const ids = new Set((changes.items || []).map(item => item.data?.id));
-        if (changes.resync_required) for (const id of pluginScopes.keys()) ids.add(id);
-        if (ids.size) {
-          const current = await pluginApi.call("plugin.list");
-          for (const id of ids) {
-            const active = pluginScopes.get(id), next = current.items.find(item => item.id === id);
-            if (active && (!next?.enabled || next.error || next.revision !== active.revision)) {
-              active.scope.dispose(); pluginScopes.delete(id);
-              if (next?.enabled) toast(`插件 ${id} 已更新，请重新载入界面以启用新版`, "info");
-            }
-          }
-        }
-      }
       const pending = await api.call("client.poll", { client: clientId });
       if (stopped) return;
       for (const action of pending) {
@@ -189,26 +187,6 @@ export function createApplicationUi({ navigation, executeActions, canCall = () =
     } catch { registered = false; }
     finally { if (!stopped) timer = setTimeout(poll, document.hidden ? 10000 : 1500); }
   };
-  // Installed local UI code runs in the displaying client's DOM. Its SDK calls
-  // still use the explicitly selected target through the standard API adapter.
-  const loadPlugins = async () => {
-    const result = await (isRemoteTarget() ? localApi : api).call("plugin.list"); if (result.recovery_mode || stopped) return;
-    // Once activation starts, never automatically repeat its effects. Failed
-    // directory reads can recover through poll; an activation failure cannot.
-    pluginsLoaded = true;
-    for (const plugin of result.items) if (plugin.enabled && !plugin.error && plugin.frontend?.startsWith("web/")) {
-      let scope;
-      try {
-        const module = await import(`/${plugin.frontend.slice(4)}?revision=${encodeURIComponent(plugin.revision)}`);
-        if (stopped) return;
-        if (typeof module.activate !== "function") throw new Error("Plugin frontend must export activate(sdk)");
-        const scopedApi = createApplicationClient(() => ({ project: navigation.preferredProject(), session: navigation.workspace().sessionId || "", client: clientId, extension: `plugin.${plugin.id}` }));
-        scope = createScope(scopedApi); disposers.push(() => scope.dispose());
-        const dispose = await module.activate(scope.sdk); if (typeof dispose === "function") scope.own(dispose);
-        pluginScopes.set(plugin.id, { scope, revision: plugin.revision });
-      } catch (error) { scope?.dispose(); console.error(`Plugin ${plugin.id} failed`, error); toast(`插件 ${plugin.id} 启动失败：${error.message}`, "error"); }
-    }
-  };
   void poll();
-  return Object.freeze({ sdk, canLeave: () => workbench?.canLeave() ?? true, destroy() { if (stopped) return; stopped = true; clearTimeout(timer); clearInterval(leaseTimer); workbench?.destroy(); for (const dispose of disposers.reverse()) { try { dispose(); } catch { /* Finish other cleanup. */ } } } });
+  return Object.freeze({ sdk, canLeave: () => workbench?.canLeave() ?? true, destroy() { if (stopped) return; stopped = true; clearTimeout(timer); clearInterval(leaseTimer); workbench?.destroy(); for (const dispose of disposers.reverse()) { try { Promise.resolve(dispose()).catch(() => {}); } catch { /* Finish other cleanup. */ } } } });
 }

@@ -77,6 +77,7 @@ bool MdoApiDiagnosticsRoute(MdoApiContext* Context)
     xvalue* Data = xrtValueObject();
     xvalue* Items = xrtValueArray();
     xvalue* Knowledge = MdoKnowledgeDiagnostics();
+    if(Knowledge&&!MdoApplicationPluginWarnings(Knowledge)){xrtValueRelease(Knowledge);Knowledge=NULL;}
     size_t Total = 0u;
     size_t Added = 0u;
     size_t Index;

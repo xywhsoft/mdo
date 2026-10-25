@@ -153,6 +153,7 @@ typedef struct MdoModuleSource {
     bool Declarative;
     char* VirtualPath;
     char* RelativePath;
+    xvalue* Plugin;
 } MdoModuleSource;
 
 typedef struct MdoModuleRegistrarContext {
@@ -522,6 +523,7 @@ static void MdoModulesSourceUnit(MdoModuleSource* pSource)
     if ( pSource == NULL ) return;
     xrtFree(pSource->VirtualPath);
     xrtFree(pSource->RelativePath);
+    xrtValueRelease(pSource->Plugin);
     memset(pSource, 0, sizeof(*pSource));
 }
 
@@ -697,6 +699,14 @@ static bool MdoModulesDiscover(MdoModuleSource** ppSources, size_t* pCount,
         *pCount = 0u;
         return false;
     }
+    xvalue* Plugins=MdoApplicationPluginNativeSources();
+    for(size_t I=0;I<xrtValueCount(Plugins);I++){
+        const xvalue* Row=xrtValueArrayGet(Plugins,I);cstr Path=MdoPackageText(Row,"path",599);
+        if(!Path||!MdoModulesGrow((void**)ppSources,&iCapacity,*pCount+1,sizeof(**ppSources),MDO_MODULE_COUNT_LIMIT)){xrtValueRelease(Plugins);MdoModulesSourcesUnit(*ppSources,*pCount);*ppSources=NULL;*pCount=0;return false;}
+        MdoModuleSource* Source=&(*ppSources)[*pCount];memset(Source,0,sizeof(*Source));Source->Kind=MDO_MODULE_TOOLS;Source->External=true;
+        Source->VirtualPath=xrtStrDup(Path);Source->RelativePath=xrtStrDup(Path+5);Source->Plugin=xrtValueClone(Row);
+        if(!Source->VirtualPath||!Source->RelativePath||!Source->Plugin){MdoModulesSourceUnit(Source);xrtValueRelease(Plugins);MdoModulesSourcesUnit(*ppSources,*pCount);*ppSources=NULL;*pCount=0;return false;}(*pCount)++;
+    }xrtValueRelease(Plugins);
     if ( *pCount > 1u ) qsort(*ppSources, *pCount, sizeof(**ppSources),
         MdoModulesSourceCompare);
     return true;
@@ -971,6 +981,7 @@ static MdoModuleGeneration* MdoModulesCompile(const MdoModuleSource* pSource,
         return NULL;
     }
     tcc_define_symbol(pGeneration->Tcc, "MDO_MODULE_BUILD", "1");
+    if(pSource->Plugin){char* Parent=xrtPathParent(pSource->VirtualPath);bool Ok=Parent&&tcc_add_quote_include_path(pGeneration->Tcc,Parent)>=0;xrtFree(Parent);if(!Ok){xrtFree(pBytes);MdoModulesGenerationRelease(pGeneration);return NULL;}}
     if ( tcc_compile_string(pGeneration->Tcc, (const char*)pBytes) < 0 ||
          tcc_relocate(pGeneration->Tcc) < 0 ) {
         (void)MdoModulesDiagnosticAdd(pDiagnostics,
@@ -1004,6 +1015,22 @@ static MdoModuleGeneration* MdoModulesCompile(const MdoModuleSource* pSource,
         return NULL;
     }
     *pRegister = pModule->Register;
+    if(pSource->Plugin){
+        char Expected[96];snprintf(Expected,sizeof(Expected),"plugin.%s",MdoPackageText(pSource->Plugin,"id",64));
+        if(strcmp(Expected,pGeneration->Id)){MdoModulesDiagnosticAdd(pDiagnostics,MDO_MODULE_DIAGNOSTIC_VALIDATE,pSource->VirtualPath,pGeneration->SourceHash,"Plugin native module ID must be plugin.<plugin-id>");MdoModulesGenerationRelease(pGeneration);return NULL;}
+        const xvalue* Requires=xrtValueObjectGet(pSource->Plugin,XRT_STR_LITERAL("requires"));
+        xvalue* Native=MdoApplicationPluginNativeSources();
+        for(size_t I=0;I<xrtValueCount(Requires);I++){
+            cstr Id=MdoPackageText(xrtValueArrayGet(Requires,I),"id",64);bool IsNative=false;
+            for(size_t J=0;J<xrtValueCount(Native);J++)if(!strcmp(Id,MdoPackageText(xrtValueArrayGet(Native,J),"id",64)))IsNative=true;
+            if(!IsNative)continue;snprintf(Expected,sizeof(Expected),"plugin.%s",Id);bool Found=false;
+            for(size_t J=0;J<pGeneration->DependencyCount;J++)if(!strcmp(Expected,pGeneration->Dependencies[J]))Found=true;
+            if(Found)continue;
+            char** Next=pGeneration->DependencyCount<64?xrtRealloc(pGeneration->Dependencies,(pGeneration->DependencyCount+1)*sizeof(char*)):NULL;
+            if(!Next){xrtValueRelease(Native);MdoModulesGenerationRelease(pGeneration);return NULL;}pGeneration->Dependencies=Next;
+            char* Copy=xrtStrDup(Expected);if(!Copy){xrtValueRelease(Native);MdoModulesGenerationRelease(pGeneration);return NULL;}Next[pGeneration->DependencyCount++]=Copy;
+        }xrtValueRelease(Native);
+    }
     return pGeneration;
 
 memory_failed:
@@ -1975,6 +2002,13 @@ static MdoModuleCatalog* MdoModulesBuildCandidate(uint64 Generation,
         if ( pRegisters == NULL ) goto memory_failed;
     }
     for ( i = 0u; i < iSourceCount; ++i ) {
+        if(pSources[i].Plugin){MdoModuleCatalog* Old=MdoModuleCatalogSnapshot();
+            for(size_t J=0;Old&&J<Old->ModuleCount;J++){
+                MdoModuleGeneration* G=Old->Modules[J];if(strcmp(G->SourcePath,pSources[i].VirtualPath))continue;
+                size_t Bytes=0;bytes Source=xrtVfsReadAllLimit(MdoHomeApplicationVfs(),pSources[i].VirtualPath,MDO_MODULE_SOURCE_LIMIT,&Bytes);char Hash[65];
+                bool Same=Source&&MdoExtensionHashBytes(Source,Bytes,Hash)&&!strcmp(Hash,G->SourceRevision)&&!xrtAtomic32Load(&G->Stopped,XMEMORY_ACQUIRE);xrtFree(Source);
+                if(Same&&MdoModulesGenerationRef(G))pCatalog->Modules[i]=G;break;
+            }MdoModuleCatalogRelease(Old);if(pCatalog->Modules[i])continue;}
         pCatalog->Modules[i] = pSources[i].Declarative
             ? MdoModulesReadAgentProfile(&pSources[i], Generation, pDiagnostics)
             : MdoModulesCompile(&pSources[i], Generation,
@@ -1985,7 +2019,7 @@ static MdoModuleCatalog* MdoModulesBuildCandidate(uint64 Generation,
         goto failed;
     for ( i = 0u; i < iSourceCount; ++i ) {
         size_t iModule = pOrder[i];
-        if ( !pSources[iModule].Declarative &&
+        if ( !pSources[iModule].Declarative && pRegisters[iModule] &&
              !MdoModulesRegister(pCatalog->Modules[iModule],
                 pRegisters[iModule], pDiagnostics) ) goto failed;
     }
@@ -2099,7 +2133,11 @@ bool MdoModuleManagerReload(void)
     }
     (void)xrtMutexUnlock(g_MdoModules.Lock);
     xrtFree(pDefinitions);
-    MdoModulesCatalogStop(pOldCatalog);
+    for(size_t I=0;pOldCatalog&&I<pOldCatalog->ModuleCount;I++){
+        MdoModuleGeneration* Old=pOldCatalog->Modules[I];bool Kept=false;
+        for(size_t J=0;g_MdoModules.Catalog&&J<g_MdoModules.Catalog->ModuleCount;J++)if(g_MdoModules.Catalog->Modules[J]==Old)Kept=true;
+        if(!Kept)MdoModulesGenerationStop(Old);
+    }
     MdoModuleCatalogRelease(pCandidate);
     MdoModuleCatalogRelease(pOldCatalog);
     MdoModuleDiagnosticsRelease(pOldDiagnostics);

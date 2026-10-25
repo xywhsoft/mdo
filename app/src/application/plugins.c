@@ -5,8 +5,8 @@
 #include "../../include/mdo/time.h"
 
 typedef struct SdkPlugin {xvalue* Manifest;char Error[256];} SdkPlugin;
-static struct {xmutex* Lock;xvalue* Config;SdkPlugin Plugins[32];xvalue* Map;xvfsmount Mount;bool Busy,Recovery;} SdkPlugins;
-static const cstr SdkPluginMethods[]={"plugin.list","plugin.apply","plugin.enable","plugin.disable","plugin.remove","plugin.rollback","plugin.plan","plugin.commit","runtime.reload","runtime.reload.status"};
+static struct {xmutex* Lock;xvalue* Config;SdkPlugin Plugins[32];xvalue *Map,*Effective,*Frontends,*Failures;xvfsmount Mount;bool Busy,Recovery,Pending;} SdkPlugins;
+static const cstr SdkPluginMethods[]={"plugin.list","plugin.get","plugin.file.read","plugin.apply","plugin.enable","plugin.disable","plugin.remove","plugin.rollback","plugin.plan","plugin.commit","plugin.preset.list","plugin.preset.save","plugin.preset.remove","plugin.preset.plan","plugin.frontend.hello","plugin.frontend.enter","plugin.frontend.leave","plugin.frontend.fail","runtime.reload","runtime.reload.status"};
 static void SdkPluginDrop(SdkPlugin* P){
     xrtValueRelease(P->Manifest);memset(P,0,sizeof(*P));
 }
@@ -42,6 +42,8 @@ static bool SdkPluginMountRevision(SdkPlugin* P,const xvalue* Manifest){
     xrtValueRelease(M);return Ok;
 }
 #include "plugins_plan.inc.c"
+#include "plugins_runtime.inc.c"
+#include "plugins_manage.inc.c"
 static bool SdkPluginConfigSave(const xvalue* Config){char* Text=SdkJson(Config);bool Ok=Text&&MdoHomeAtomicWrite("config/plugins.json",Text,strlen(Text),true);xrtFree(Text);return Ok;}
 bool MdoApplicationPluginsStoreBegin(xvalue** Config,char* Error,size_t Capacity){
     if(!Config||!SdkPlugins.Lock)return false;
@@ -66,7 +68,7 @@ bool MdoApplicationPluginsStorePublish(const xvalue* Config,char* Error,size_t C
         if(!SdkPlugins.Busy)Ok=false;
         else{for(size_t i=0;i<32;i++){SdkPluginDrop(&SdkPlugins.Plugins[i]);SdkPlugins.Plugins[i]=Candidates[i];memset(&Candidates[i],0,sizeof(Candidates[i]));}
             xrtValueRelease(SdkPlugins.Config);SdkPlugins.Config=Next;Next=NULL;}
-        if(Ok){xrtValueRelease(SdkPlugins.Map);SdkPlugins.Map=Map;Map=NULL;}
+        if(Ok){SdkPlugins.Pending=!SdkPluginCanPublish(SdkPlugins.Config);if(!SdkPlugins.Pending){xrtValueRelease(SdkPlugins.Map);SdkPlugins.Map=Map;Map=NULL;xrtValueRelease(SdkPlugins.Effective);SdkPlugins.Effective=xrtValueClone(SdkPlugins.Config);}}
         xrtMutexUnlock(SdkPlugins.Lock);
     }
     if(Candidates){for(size_t i=0;i<32;i++)SdkPluginDrop(&Candidates[i]);xrtFree(Candidates);}xrtValueRelease(Next);xrtValueRelease(Map);
@@ -75,6 +77,7 @@ bool MdoApplicationPluginsStorePublish(const xvalue* Config,char* Error,size_t C
 }
 bool MdoApplicationPluginsInit(void){
     SdkPlugins.Lock=xrtMutexCreate();if(!SdkPlugins.Lock)return false;
+    SdkPlugins.Frontends=xrtValueArray();SdkPlugins.Failures=xrtValueArray();
     char* Mode=xrtEnvGet("MDO_PLUGINS_DISABLED");SdkPlugins.Recovery=Mode&&strcmp(Mode,"0");xrtFree(Mode);
     bool Missing=false;char* Text=MdoExtensionRead("config/plugins.json",true,262144,&Missing);
     SdkPlugins.Config=Text?SdkParse(Text):xrtValueArray();xrtFree(Text);
@@ -87,14 +90,16 @@ bool MdoApplicationPluginsInit(void){
     }
     mdo_error_v1 E={0};SdkPlugins.Map=SdkPluginSetCheck(SdkPlugins.Plugins,&E)?SdkPluginMapBuild(SdkPlugins.Plugins):NULL;
     if(!SdkPlugins.Map){SdkPlugins.Recovery=true;SdkPlugins.Map=xrtValueArray();}
+    SdkPlugins.Effective=SdkPlugins.Recovery?xrtValueArray():xrtValueClone(SdkPlugins.Config);
     SdkPlugins.Mount=xrtVfsMount(MdoHomeApplicationVfs(),"/app",2000,XVFS_CASE_SENSITIVE,&SdkPluginProvider,NULL,0);
-    return SdkPlugins.Map&&SdkPlugins.Mount;
+    return SdkPlugins.Map&&SdkPlugins.Mount&&SdkPlugins.Effective&&SdkPlugins.Frontends&&SdkPlugins.Failures;
 }
-void MdoApplicationPluginsUnit(void){if(!SdkPlugins.Lock)return;if(SdkPlugins.Mount){xrtVfsUnmount(SdkPlugins.Mount);xrtVfsMountDestroy(SdkPlugins.Mount);}for(size_t i=0;i<32;i++)SdkPluginDrop(&SdkPlugins.Plugins[i]);xrtValueRelease(SdkPlugins.Config);xrtValueRelease(SdkPlugins.Map);xrtMutexDestroy(SdkPlugins.Lock);memset(&SdkPlugins,0,sizeof(SdkPlugins));}
+void MdoApplicationPluginsUnit(void){if(!SdkPlugins.Lock)return;if(SdkPlugins.Mount){xrtVfsUnmount(SdkPlugins.Mount);xrtVfsMountDestroy(SdkPlugins.Mount);}for(size_t i=0;i<32;i++)SdkPluginDrop(&SdkPlugins.Plugins[i]);xrtValueRelease(SdkPlugins.Config);xrtValueRelease(SdkPlugins.Map);xrtValueRelease(SdkPlugins.Effective);xrtValueRelease(SdkPlugins.Frontends);xrtValueRelease(SdkPlugins.Failures);xrtMutexDestroy(SdkPlugins.Lock);memset(&SdkPlugins,0,sizeof(SdkPlugins));}
 xvalue* MdoApplicationPluginsCatalog(void){xvalue* A=xrtValueArray();for(size_t i=0;i<sizeof(SdkPluginMethods)/sizeof(*SdkPluginMethods);i++){xvalue* V=xrtValueObject();SdkPut(V,"id",SdkPluginMethods[i]);SdkPut(V,"domain","plugin");SdkPut(V,"transport","native");xrtValueArrayAppendNew(A,V);}return A;}
 static xvalue* SdkPluginList(void){
     xvalue* R=xrtValueObject(),*Items=xrtValueArray();xrtMutexLock(SdkPlugins.Lock);
-    for(size_t i=0;i<32;i++)if(SdkPlugins.Plugins[i].Manifest){xvalue* M=xrtValueClone(SdkPlugins.Plugins[i].Manifest);SdkPut(M,"error",SdkPlugins.Plugins[i].Error);xrtValueArrayAppendNew(Items,M);}
+    for(size_t i=0;i<32;i++)if(SdkPlugins.Plugins[i].Manifest){xvalue* M=xrtValueClone(SdkPlugins.Plugins[i].Manifest);SdkPut(M,"error",SdkPlugins.Plugins[i].Error);const xvalue* Active=SdkPluginFind(SdkPlugins.Effective,SdkField(M,"id"));bool Enabled=Active&&SdkPluginEnabled(Active);SdkPut(M,"effective_revision",Enabled?SdkField(Active,"revision"):"");xrtValueObjectSetNew(M,XRT_STR_LITERAL("effective_enabled"),xrtValueBool(Enabled));SdkPut(M,"state",SdkPlugins.Plugins[i].Error[0]?"failed":SdkPlugins.Pending?"pending":SdkPluginEnabled(M)?"enabled":"disabled");xrtValueArrayAppendNew(Items,M);}
+    xrtValueObjectSetNew(R,XRT_STR_LITERAL("pending"),xrtValueBool(SdkPlugins.Pending));xrtValueObjectSetNew(R,XRT_STR_LITERAL("restart_required"),xrtValueBool(SdkPluginNativeChanged(SdkPlugins.Effective,SdkPlugins.Config)));
     xrtValueObjectSetNew(R,XRT_STR_LITERAL("recovery_mode"),xrtValueBool(SdkPlugins.Recovery));xrtMutexUnlock(SdkPlugins.Lock);xrtValueObjectSetNew(R,XRT_STR_LITERAL("items"),Items);return R;
 }
 static bool SdkPluginStage(const xvalue* P,xvalue** Manifest,mdo_error_v1* E){
@@ -137,6 +142,10 @@ bool MdoApplicationPluginsCall(const mdo_sdk_context_v1* C,cstr Method,const xva
     if(!strcmp(Method,"runtime.reload.status")){uint64 Id=0;XS_ReloadResult Result={0};if(!SdkUInt(SdkGet(P,"id"),&Id)||!xsReloadQuery(Id,&Result))return MdoApplicationError(E,"sdk_reload_missing","Reload receipt is unavailable","reload",404,false);*R=xrtValueObject();SdkPutUInt(*R,"state",Result.State);SdkPut(*R,"message",Result.Message);return true;}
     if(!SdkPlugins.Lock)return MdoApplicationError(E,"sdk_unavailable","Plugin manager unavailable","plugin",503,false);
     if(!strcmp(Method,"plugin.list")){*R=SdkPluginList();return true;}
+    if(!strncmp(Method,"plugin.preset.",14))return SdkPluginPresetCall(Method,P,R,E);
+    if(!strcmp(Method,"plugin.file.read"))return SdkPluginFileCall(P,R,E);
+    if(!strcmp(Method,"plugin.get")){SdkPlugin Plugin={0};bool Ok=SdkPluginLookup(SdkField(P,"id"),SdkField(P,"revision"),&Plugin,E);if(Ok){*R=Plugin.Manifest;Plugin.Manifest=NULL;}SdkPluginDrop(&Plugin);return Ok;}
+    if(!strncmp(Method,"plugin.frontend.",16))return SdkPluginFrontendCall(Method,P,R,E);
     if(!strcmp(Method,"plugin.plan")){
         xrtMutexLock(SdkPlugins.Lock);xvalue* Config=xrtValueClone(SdkPlugins.Config);bool Recovery=SdkPlugins.Recovery;xrtMutexUnlock(SdkPlugins.Lock);
         if(Recovery){xrtValueRelease(Config);return MdoApplicationError(E,"sdk_plugin_recovery","Leave plugin recovery mode before changing plugins","plugin",409,false);}
@@ -183,7 +192,7 @@ bool MdoApplicationPluginsCall(const mdo_sdk_context_v1* C,cstr Method,const xva
     if(Ok){for(size_t i=0;i<32;i++)if(SdkPlugins.Plugins[i].Manifest&&!strcmp(Id,SdkField(SdkPlugins.Plugins[i].Manifest,"id")))SdkPluginDrop(&SdkPlugins.Plugins[i]);
         if(!Remove){for(size_t i=0;i<32;i++)if(!SdkPlugins.Plugins[i].Manifest){SdkPlugins.Plugins[i]=Candidate;memset(&Candidate,0,sizeof(Candidate));break;}}
         xrtValueRelease(SdkPlugins.Config);SdkPlugins.Config=Config;Config=NULL;}
-    if(Ok){xrtValueRelease(SdkPlugins.Map);SdkPlugins.Map=Map;Map=NULL;}
+    if(Ok){SdkPlugins.Pending=!SdkPluginCanPublish(SdkPlugins.Config);if(!SdkPlugins.Pending){xrtValueRelease(SdkPlugins.Map);SdkPlugins.Map=Map;Map=NULL;xrtValueRelease(SdkPlugins.Effective);SdkPlugins.Effective=xrtValueClone(SdkPlugins.Config);}}
     SdkPlugins.Busy=false;xrtMutexUnlock(SdkPlugins.Lock);SdkPluginDrop(&Candidate);xrtValueRelease(Config);xrtValueRelease(Old);xrtValueRelease(Manifest);xrtValueRelease(Map);
     if(!Ok){if(!E->Code[0])MdoApplicationError(E,"sdk_plugin_publish_failed","Plugin was not published; previous configuration is retained","plugin",500,false);return false;}
     xvalue* Change=xrtValueObject();SdkPut(Change,"id",Id);SdkPut(Change,"method",Method);MdoApplicationEvent("plugin.changed",C,Change);xrtValueRelease(Change);
