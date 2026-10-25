@@ -35,7 +35,9 @@ typedef struct MdoAgentRoute {
 typedef struct MdoAgentResolvedModel {
     MdoModelInfo Info;
     MdoModelProtocol Protocol;
-    const char* ReasoningEffort;
+    /* Resolved profiles are copied into parent/child instances and outlive
+     * the settings/selection stack frame that supplied this string. */
+    char ReasoningEffort[33];
     uint32 MaxOutputTokens;
 } MdoAgentResolvedModel;
 
@@ -260,11 +262,15 @@ static bool MdoAgentsResolveModel(const MdoModelCatalog* Catalog,
             "selected model does not support the requested wire protocol");
         return false;
     }
-    Result->ReasoningEffort = Reasoning != NULL && Reasoning[0] != '\0' ?
+    const char* SelectedReasoning = Reasoning != NULL && Reasoning[0] != '\0' ?
         Reasoning : Result->Info.DefaultReasoningEffort;
     /* A shared preference must not add unsupported wire fields to a model
      * whose service catalog has no reasoning controls. */
-    if ( Result->Info.ReasoningEffortCount == 0u ) Result->ReasoningEffort = "";
+    if ( Result->Info.ReasoningEffortCount == 0u ) SelectedReasoning = "";
+    if(SelectedReasoning&&strlen(SelectedReasoning)>=sizeof(Result->ReasoningEffort)){
+        MdoAgentsProfileError(Error,"profile_reasoning_unsupported","the selected reasoning effort exceeds the supported length");return false;
+    }
+    snprintf(Result->ReasoningEffort,sizeof(Result->ReasoningEffort),"%s",SelectedReasoning?SelectedReasoning:"");
     if ( !MdoAgentsReasoningSupported(&Result->Info,
             Result->ReasoningEffort) ) {
         MdoAgentsProfileError(Error, "profile_reasoning_unsupported",

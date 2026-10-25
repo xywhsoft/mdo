@@ -77,12 +77,17 @@ def main():
             '(void)Data;Host=H;mdo_lifecycle_v1 L={sizeof(L),1,"global",NULL,10,false,MDO_AGENT_PHASES_ALL,NULL,Lifecycle};if(mdoRegisterLifecycle(R,&L,Error,Capacity)!=MDO_RESULT_OK)return MDO_RESULT_ERROR;mdo_result Result=')
         probe=roles.PROBE.replace('    char* At=Old?', '    char* Version=Old?strstr(Old,"LIFECYCLE-V1"):NULL;if(Version)Version[11]=\'2\';\n    char* At=Old?')
         if args.background:
+            # Reuse the caller stack after session creation. Resolved profile
+            # strings must remain valid for a child starting on another thread.
+            probe='static void ReuseSelectionStack(void){volatile char Bytes[16384];for(size_t I=0;I<sizeof(Bytes);I++)Bytes[I]=(char)0x5a;}\n'+probe
+            probe=probe.replace('    if(!Session){','    ReuseSelectionStack();\n    if(!Session){')
             module=module.replace('.Flags=MDO_AGENT_SUBAGENT,','.Flags=MDO_AGENT_SUBAGENT|MDO_AGENT_ALLOW_BACKGROUND,')
             probe=probe.replace('Write the result file\\\"}', 'Write the result file\\\",\\\"background\\\":true}')
             probe=probe.replace('++ModChildCalls;bool Write=false;','++ModChildCalls;xrtSleep(75);bool Write=false;')
             wait=r'''xwork_task_snapshot* T=xworkRuntimeTaskSnapshot(Runtime,0,&Error);
     uint64_t Task=0;for(size_t I=0;T&&I<xworkTaskSnapshotCount(T);I++){xwork_task_info Info;xworkTaskInfoInit(&Info);if(xworkTaskSnapshotTaskAt(T,I,&Info)&&Info.eKind==XWORK_TASK_AGENT)Task=Info.uTaskId;}
-    xworkTaskSnapshotRelease(T);if(Task){uint64_t Done=0;printf("life_background_wait=%d\n",xworkRuntimeWaitTasks(Runtime,&Task,1,XWORK_TASK_WAIT_ALL,MdoDeadlineAfterUs(5000000),NULL,&Done,&Error));}
+    xworkTaskSnapshotRelease(T);if(Task){uint64_t Done=0;printf("life_background_wait=%d\n",xworkRuntimeWaitTasks(Runtime,&Task,1,XWORK_TASK_WAIT_ALL,MdoDeadlineAfterUs(5000000),NULL,&Done,&Error));
+    xwork_task_output Output;xworkTaskOutputInit(&Output);if(xworkRuntimeReadTaskOutput(Runtime,Task,0,0,0,8192,&Output,&Error))printf("life_background_result=%.*s stderr=%.*s\n",(int)Output.iResultSize,Output.sResult?Output.sResult:"",(int)Output.iStderrSize,Output.pStderr?(char*)Output.pStderr:"");xworkTaskOutputUnit(&Output);}
     '''
             probe=probe.replace('    printf("mod_result=',wait+'printf("mod_result=')
         source=(site/'probe.c').read_text(encoding='utf-8')
