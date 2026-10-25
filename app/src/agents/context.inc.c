@@ -174,7 +174,7 @@ static bool MdoAgentsContextCollect(MdoAgentOwner* Owner,MdoAgentInstance* Insta
             else if(!strcmp(Id,"external_tools"))Ok=MdoToolPrompt(&Text) && MdoAgentsFilterMetadata(&Text,Spec);
             else if(!strcmp(Id,"skills.discovery"))Ok=MdoSkillCatalogAppendPrompt(Owner->Skills,&Text) && MdoAgentsFilterMetadata(&Text,Spec);
             else if(!strcmp(Id,"knowledge"))Ok=MdoKnowledgeAppendPrompt(&Text) && MdoAgentsFilterMetadata(&Text,Spec);
-            else if(!strcmp(Id,"memory.global")){xrtFree(Text);Text=MdoMemoryBuildPrompt(NULL,NULL,NULL,Error);}
+            else if(!strcmp(Id,"memory.global")){xrtFree(Text);Text=MdoMemoryBuildGlobalPrompt(Error);}
             else if(!strcmp(Id,"memory.project")){
                 if(Owner->ProductProject[0]){xrtFree(Text);Text=MdoMemoryBuildProjectPrompt(Owner->ProductProject,Error);}
             } else if(!strcmp(Id,"file_access")){

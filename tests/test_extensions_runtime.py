@@ -163,6 +163,18 @@ def main():
                 for kind in ('agents', 'subagents', 'skills', 'mcp', 'commands', 'tools'):
                     status, data = call('GET', kind)
                     assert status == 200, data
+                # Authoring inspection runs no code/model and materializes no
+                # role, project-memory or provider files, even for a new Home.
+                status, plan = call('POST', 'agents/preview/plan', {'content': json.dumps({
+                    'schema': 'mdo.agent.v1', 'prompt': 'PLAN-FIXTURE', 'tools': [],
+                    'context': {'system': {'order': 9}, 'custom.user': {'role': 'user', 'template': 'agent={{agent.id}}'}}})})
+                assert status == 200, plan
+                assert 'PLAN-FIXTURE' in plan['data']['system_prompt'] and 'agent=agent.preview' in plan['data']['user_context'], plan
+                assert plan['data']['code_callbacks_executed'] is False
+                assert not (base/'home/memory/global').exists(), 'preview created global memory'
+                assert call('POST', 'agents/preview/plan', {'content':'{"runtime":{"invented":1}}'})[0] == 422
+                assert call('POST', 'agents/preview/plan', {'content':'{"context":{"custom.x":{"template":"{{undefined}}"}}}'})[0] == 422
+                assert call('GET', 'tools/preview/plan')[0] == 400
                 # Startup tool preflight can persist its own notification. Reads
                 # must never materialize extension files or enablement settings.
                 for name in ('agents', 'subagents', 'skills', 'mcp', 'commands', 'tools', 'config/extensions.json'):

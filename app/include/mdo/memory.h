@@ -118,6 +118,7 @@ bool MdoMemoryImportDirectory(const MdoMemoryImportOptions* Options,
  * maintenance instructions and bounded MEMORY.md indices enter the prompt.
  * Legacy JSON records remain available to the host UI and are copied into
  * Markdown on first use, without replacing user-maintained Markdown files. */
+str MdoMemoryBuildGlobalPrompt(xwork_error* Error);
 str MdoMemoryBuildProjectPrompt(const char*,xwork_error*);
 str MdoMemoryBuildPrompt(const char* ProjectId, size_t* Bytes,
     uint64* Generation, xwork_error* Error);
