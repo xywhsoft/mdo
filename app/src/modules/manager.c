@@ -117,6 +117,7 @@ struct MdoModuleGeneration {
     size_t ServiceCount;
     mdo_hook_v1* Hooks;
     size_t HookCount;
+    mdo_lifecycle_v1* Lifecycles;size_t LifecycleCount;
     char CompilerLog[4096];
     size_t CompilerLogLength;
 };
@@ -358,6 +359,8 @@ static void MdoModulesGenerationRelease(MdoModuleGeneration* pGeneration)
     }
     for(i=0;i<pGeneration->HookCount;i++){xrtFree((void*)pGeneration->Hooks[i].Id);xrtFree((void*)pGeneration->Hooks[i].Topic);}
     xrtFree(pGeneration->Services);xrtFree(pGeneration->Hooks);
+    for(i=0;i<pGeneration->LifecycleCount;i++){xrtFree((void*)pGeneration->Lifecycles[i].Id);xrtFree((void*)pGeneration->Lifecycles[i].AgentPattern);}
+    xrtFree(pGeneration->Lifecycles);
     for ( i = 0u; i < pGeneration->ToolCount; ++i )
         MdoModulesToolUnit(&pGeneration->Tools[i]);
     for ( i = 0u; i < pGeneration->AgentCount; ++i )
@@ -1326,6 +1329,7 @@ static bool MdoModulesRegister(MdoModuleGeneration* pGeneration,
     Registrar.AddAgent = MdoModulesRegistrarAddAgent;
     Registrar.AddService = MdoModulesRegistrarAddService;
     Registrar.AddHook = MdoModulesRegistrarAddHook;
+    Registrar.AddLifecycle = MdoModulesRegistrarAddLifecycle;
     memset(sError, 0, sizeof(sError));
     Result = Register(&pGeneration->HostServices, &Registrar,
         &pGeneration->ModuleData, sError, sizeof(sError));
@@ -1340,7 +1344,7 @@ static bool MdoModulesRegister(MdoModuleGeneration* pGeneration,
         return false;
     }
     if ( (pGeneration->Kind == MDO_MODULE_TOOLS &&
-          pGeneration->ToolCount == 0u && pGeneration->ServiceCount==0u && pGeneration->HookCount==0u) ||
+          pGeneration->ToolCount == 0u && pGeneration->ServiceCount==0u && pGeneration->HookCount==0u && pGeneration->LifecycleCount==0u) ||
          (pGeneration->Kind != MDO_MODULE_TOOLS &&
           pGeneration->AgentCount == 0u) ) {
         (void)MdoModulesDiagnosticAdd(pDiagnostics,
@@ -2377,10 +2381,10 @@ bool MdoModuleDiagnosticsAt(const MdoModuleDiagnostics* pDiagnostics,
 }
 
 static void MdoModulesAgentApplication(MdoModuleAgentBinding* Binding,mdo_agent_context_v1* Frame,
-    mdo_sdk_context_v1* Application,MdoApplicationInvocation* Invocation)
+    mdo_sdk_context_v1* Application,MdoApplicationInvocation* Invocation,const MdoModuleCatalog* Catalog)
 {
     *Application=Binding->Owner->Application;memset(Invocation,0,sizeof(*Invocation));
-    Invocation->Cancel=(xcancel*)Frame->CancelToken;Application->Opaque=Invocation;
+    Invocation->Cancel=(xcancel*)Frame->CancelToken;Invocation->Catalog=(void*)Catalog;Application->Opaque=Invocation;
     Application->InvocationId=Frame->AgentId;Application->Workspace=Frame->WorkspaceRoot;
     Application->ProjectId=Frame->ProjectId;Application->SessionId=Frame->SessionId;
     Application->Deadline=Frame->Deadline;Frame->Application=Application;
@@ -2390,12 +2394,15 @@ bool MdoModuleCatalogAgentEvent(const MdoModuleCatalog* Catalog,cstr Id,mdo_agen
 {
     MdoModuleAgentBinding* Binding=MdoModulesFindAgent(Catalog,Id);
     if(!Binding)return false;
+    bool Notification=Phase>=MDO_AGENT_RUN_STARTED;
+    if(!MdoModuleCatalogLifecycle(Catalog,Phase,Frame,Notification,Error))return false;
     if(!Binding->Program.OnEvent)return true;
     mdo_sdk_context_v1 Application;MdoApplicationInvocation Invocation;
-    MdoModulesAgentApplication(Binding,Frame,&Application,&Invocation);
+    MdoModulesAgentApplication(Binding,Frame,&Application,&Invocation,Catalog);
     char Message[1024]={0};mdo_result Result=Binding->Program.OnEvent(Binding->UserData,Phase,Frame,Message,sizeof(Message));
     Frame->Application=NULL;
     if(Result==MDO_RESULT_OK)return true;
+    if(Notification){MdoModulesLifecycleWarning(&Application,Id,Phase,Message[0]?Message:"Agent lifecycle observer failed");return true;}
     xworkErrorInit(Error);if(Error){Error->eCode=Result==MDO_RESULT_CANCELLED?XWORK_ERROR_CANCELLED:Result==MDO_RESULT_TIMEOUT?XWORK_ERROR_TIMEOUT:Result==MDO_RESULT_LIMIT?XWORK_ERROR_LIMIT:XWORK_ERROR_CONTEXT;snprintf(Error->sMessage,sizeof(Error->sMessage),"%s",Message[0]?Message:"Agent event callback failed");}
     return false;
 }
@@ -2405,7 +2412,7 @@ xwork_result MdoModuleCatalogAgentDrive(const MdoModuleCatalog* Catalog,cstr Id,
     MdoModuleAgentBinding* Binding=MdoModulesFindAgent(Catalog,Id);
     if(!Binding || !Binding->Program.Run)return XWORK_RESULT_ERROR;
     mdo_sdk_context_v1 Application;MdoApplicationInvocation Invocation;
-    MdoModulesAgentApplication(Binding,Frame,&Application,&Invocation);
+    MdoModulesAgentApplication(Binding,Frame,&Application,&Invocation,Catalog);
     char Message[1024]={0};mdo_result Result=Binding->Program.Run(Binding->UserData,Frame,Message,sizeof(Message));
     Frame->Application=NULL;
     if(Result!=MDO_RESULT_OK && Error){xworkErrorInit(Error);Error->eCode=Result==MDO_RESULT_CANCELLED?XWORK_ERROR_CANCELLED:Result==MDO_RESULT_TIMEOUT?XWORK_ERROR_TIMEOUT:Result==MDO_RESULT_LIMIT?XWORK_ERROR_LIMIT:XWORK_ERROR_CONTEXT;snprintf(Error->sMessage,sizeof(Error->sMessage),"%s",Message[0]?Message:"Agent driver failed");}

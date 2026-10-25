@@ -450,6 +450,8 @@ def prepare(lock: dict, connection: Path | None = None) -> None:
                      (ROOT / "include/mdo/agent.h").read_bytes())
     write_if_changed(GENERATED_MODULE_HEADER_PATH.with_name("command.h"),
                      (ROOT / "include/mdo/command.h").read_bytes())
+    write_if_changed(GENERATED_MODULE_HEADER_PATH.with_name("lifecycle.h"),
+                     (ROOT / "include/mdo/lifecycle.h").read_bytes())
     write_if_changed(GENERATED_MODULE_HEADER_PATH.with_name("mailbox.h"),
                      (ROOT / "include/mdo/mailbox.h").read_bytes())
     write_if_changed(GENERATED_MODULE_HEADER_PATH.with_name("lease.h"),

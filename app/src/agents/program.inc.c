@@ -63,6 +63,64 @@ static bool MdoAgentsProgramEvent(MdoAgentOwner* Owner,MdoAgentInstance* Instanc
     mdo_agent_context_v1 Frame;MdoAgentsFrame(Owner,Instance,Native,Plan,&Frame);
     return MdoModuleCatalogAgentEvent(Owner->Modules,Instance->Definition.Id,Phase,&Frame,Error);
 }
+static bool MdoAgentsRefreshContext(MdoAgentOwner*,MdoAgentInstance*,xwork_agent_extension_context*,bool,xwork_error*);
+static bool MdoAgentsHistoryConfigure(MdoAgentInstance*,xwork_agent_extension_context*,bool);
+static void MdoAgentsLifecycleNotify(MdoAgentOwner* Owner,MdoAgentActiveFrame* Active,mdo_agent_phase Phase,const xwork_event* Event){
+    mdo_agent_context_v1 Frame;MdoAgentsFrame(Owner,Active->Instance,Active->Native,Active->Instance->Plan,&Frame);Frame.Event=Event;
+    if((Phase>=MDO_AGENT_RUN_FINISHED&&Phase<=MDO_AGENT_RUN_CANCELLED)||Phase==MDO_AGENT_DELEGATE_FINISHED){
+        Frame.OutcomeAvailable=true;Frame.Outcome=Active->Status==XWORK_RESULT_OK?MDO_RESULT_OK:Active->Status==XWORK_RESULT_CANCELLED?MDO_RESULT_CANCELLED:Active->Status==XWORK_RESULT_TIMEOUT?MDO_RESULT_TIMEOUT:Active->Status==XWORK_RESULT_LIMIT?MDO_RESULT_LIMIT:MDO_RESULT_ERROR;
+        Frame.Error=Active->Error;
+    }
+    xwork_error Ignored;xworkErrorInit(&Ignored);(void)MdoModuleCatalogAgentEvent(Owner->Modules,Frame.AgentId,Phase,&Frame,&Ignored);
+}
+static void MdoAgentsLifecycleRuntime(MdoAgentOwner* Owner,const xwork_event* Event){
+    mdo_agent_phase Phase=0;
+    switch(Event->eKind){
+    case XWORK_EVENT_AGENT_START:Phase=MDO_AGENT_RUN_STARTED;break;
+    case XWORK_EVENT_AGENT_DONE:Phase=Event->bSuccess?MDO_AGENT_RUN_FINISHED:MDO_AGENT_RUN_FAILED;break;
+    case XWORK_EVENT_COMPACTION_START:Phase=MDO_AGENT_COMPACTION_STARTED;break;
+    case XWORK_EVENT_COMPACTION_DONE:Phase=MDO_AGENT_COMPACTION_FINISHED;break;
+    case XWORK_EVENT_COMPACTION_REJECTED:Phase=MDO_AGENT_COMPACTION_REJECTED;break;
+    default:return;
+    }
+    /* The active stack binds callbacks to their actual synchronous run scope.
+     * Nested foreground children push a new frame; background children own a
+     * different thread. No workspace or role-name guessing is involved. */
+    uint64 Thread=xrtThreadCurrentId();MdoAgentActiveFrame* Active=NULL;
+    xrtMutexLock(Owner->InstanceLock);
+    for(MdoAgentActiveFrame* A=Owner->ActiveFrames;A;A=A->Next)if(A->Thread==Thread){Active=A;break;}
+    bool Notify=Active!=NULL;
+    if(Active&&Phase==MDO_AGENT_RUN_STARTED){Notify=!Active->Started;Active->Started=true;}
+    if(Active&&Event->eKind==XWORK_EVENT_AGENT_DONE){
+        Active->Settled=true;Notify=false;
+        xwork_event* D=&Active->Completion;memset(D,0,sizeof(*D));D->eKind=Event->eKind;D->uSchemaVersion=Event->uSchemaVersion;D->uEventId=Event->uEventId;
+        D->uAgentId=Event->uAgentId;D->uRunId=Event->uRunId;D->uParentRunId=Event->uParentRunId;D->uAgentDepth=Event->uAgentDepth;D->uTaskId=Event->uTaskId;D->uDelegationId=Event->uDelegationId;
+        D->bSuccess=Event->bSuccess;D->iOccurredAtUs=Event->iOccurredAtUs;D->tUsage=Event->tUsage;D->bMetadataTruncated=true;
+    }
+    xrtMutexUnlock(Owner->InstanceLock);
+    if(Notify){
+        if(Phase==MDO_AGENT_RUN_STARTED&&Active->Instance->Agent!=Owner->RootAgent)MdoAgentsLifecycleNotify(Owner,Active,MDO_AGENT_DELEGATE_ACCEPTED,Event);
+        MdoAgentsLifecycleNotify(Owner,Active,Phase,Event);
+    }
+}
+static xwork_result MdoAgentsLifecycleRun(MdoAgentOwner* Owner,MdoAgentInstance* Instance,xwork_agent_extension_context* Native,xwork_error* Error){
+    MdoAgentActiveFrame Active={0};Active.Instance=Instance;Active.Native=Native;Active.Thread=xrtThreadCurrentId();Active.Error=Error;
+    xrtMutexLock(Owner->InstanceLock);Active.Next=Owner->ActiveFrames;Owner->ActiveFrames=&Active;xrtMutexUnlock(Owner->InstanceLock);
+    Native->bHandled=true;Instance->RunModelCalls=0;xwork_result Status=XWORK_RESULT_ERROR;
+    if(MdoAgentsProgramEvent(Owner,Instance,Native,Instance->Plan,MDO_AGENT_RUN_PREPARE,Error)&&
+        MdoAgentsHistoryConfigure(Instance,Native,true)&&MdoAgentsRefreshContext(Owner,Instance,Native,true,Error)){
+        if(Instance->Definition.HasDriver){
+            Active.Started=true;if(Instance->Agent!=Owner->RootAgent)MdoAgentsLifecycleNotify(Owner,&Active,MDO_AGENT_DELEGATE_ACCEPTED,NULL);MdoAgentsLifecycleNotify(Owner,&Active,MDO_AGENT_RUN_STARTED,NULL);
+            mdo_agent_context_v1 Frame;MdoAgentsFrame(Owner,Instance,Native,Instance->Plan,&Frame);
+            Status=MdoModuleCatalogAgentDrive(Owner->Modules,Frame.AgentId,&Frame,Error);
+        }else Status=Native->DefaultRun(Native->pAgent,Native->sPrompt,Native->pUserMessage,Native->bResume,Native->pResumeOptions,Native->pResult,Error);
+    }
+    Active.Status=Status;mdo_agent_phase Phase=Status==XWORK_RESULT_OK?MDO_AGENT_RUN_FINISHED:Status==XWORK_RESULT_CANCELLED?MDO_AGENT_RUN_CANCELLED:MDO_AGENT_RUN_FAILED;
+    MdoAgentsLifecycleNotify(Owner,&Active,Phase,Active.Settled?&Active.Completion:NULL);
+    if(Instance->Agent!=Owner->RootAgent)MdoAgentsLifecycleNotify(Owner,&Active,MDO_AGENT_DELEGATE_FINISHED,Active.Settled?&Active.Completion:NULL);
+    xrtMutexLock(Owner->InstanceLock);MdoAgentActiveFrame** At=&Owner->ActiveFrames;while(*At&&*At!=&Active)At=&(*At)->Next;if(*At)*At=Active.Next;xrtMutexUnlock(Owner->InstanceLock);return Status;
+}
+
 static bool MdoAgentsRefreshContext(MdoAgentOwner* Owner,MdoAgentInstance* Instance,
     xwork_agent_extension_context* Native,bool Force,xwork_error* Error)
 {
@@ -223,15 +281,7 @@ static xwork_result MdoAgentsExtension(void* Data,xwork_agent_extension_context*
         xrtValueRelease(Instance->Configuration);xrtValueRelease(Instance->Plan);xrtValueRelease(Instance->SourcePlan);xrtValueRelease(Instance->State);xrtValueRelease(Instance->RequestPreview);xrtFree(Instance->LegacyPrompt);xrtFree(Instance);
         return XWORK_RESULT_OK;
     }
-    if(Native->ePhase==XWORK_AGENT_EXTENSION_RUN){
-        Instance->RunModelCalls=0;
-        if(!MdoAgentsHistoryConfigure(Instance,Native,true) || !MdoAgentsRefreshContext(Owner,Instance,Native,true,Error))return XWORK_RESULT_ERROR;
-        if(Instance->Definition.HasDriver){
-            mdo_agent_context_v1 Frame;MdoAgentsFrame(Owner,Instance,Native,Instance->Plan,&Frame);Native->bHandled=true;
-            return MdoModuleCatalogAgentDrive(Owner->Modules,Instance->Definition.Id,&Frame,Error);
-        }
-        return XWORK_RESULT_OK;
-    }
+    if(Native->ePhase==XWORK_AGENT_EXTENSION_RUN)return MdoAgentsLifecycleRun(Owner,Instance,Native,Error);
     if(Native->ePhase==XWORK_AGENT_EXTENSION_REQUEST){
         uint64 Limit=0;
         if(!MdoAgentConfigNumber(MdoAgentConfigGet(Instance->Configuration,"runtime"),"max_model_calls",0,100000,&Limit) || (Limit && Instance->RunModelCalls>=Limit)){

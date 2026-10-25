@@ -189,7 +189,18 @@ typedef enum mdo_agent_phase {
     MDO_AGENT_AFTER_TOOL,
     MDO_AGENT_BEFORE_DELEGATE,
     MDO_AGENT_AFTER_DELEGATE,
-    MDO_AGENT_INSTANCE_RELEASE
+    MDO_AGENT_INSTANCE_RELEASE,
+    MDO_AGENT_RUN_PREPARE,
+    MDO_AGENT_RUN_STARTED,
+    MDO_AGENT_RUN_FINISHED,
+    MDO_AGENT_RUN_FAILED,
+    MDO_AGENT_RUN_CANCELLED,
+    MDO_AGENT_COMPACTION_STARTED,
+    MDO_AGENT_COMPACTION_FINISHED,
+    MDO_AGENT_COMPACTION_REJECTED,
+    MDO_AGENT_DELEGATE_ACCEPTED,
+    MDO_AGENT_DELEGATE_FINISHED,
+    MDO_AGENT_PHASE_COUNT
 } mdo_agent_phase;
 
 /* ContextPlan and State are xvalue objects when using the native SDK. Native
@@ -209,6 +220,10 @@ typedef struct mdo_agent_context_v1 {
     void* ContextPlan;
     void* State;
     void* Native;
+    const void* Event; /* callback-local xwork_event for runtime notifications */
+    bool OutcomeAvailable;
+    mdo_result Outcome;
+    const void* Error; /* callback-local xwork_error after a complete run */
 } mdo_agent_context_v1;
 
 typedef mdo_result (*mdo_agent_event_v1)(void* UserData,
@@ -255,6 +270,22 @@ typedef struct mdo_agent_v1 {
     const mdo_agent_program_v1* Program;
 } mdo_agent_v1;
 
+/* Global lifecycle hooks are pinned with the Agent catalog. Observer failures
+ * are reported and isolated. Control hooks may reject preparation/request/tool
+ * phases; completed/released runtime notifications are always observational. */
+#define MDO_AGENT_PHASE_BIT(Phase) (UINT64_C(1) << ((unsigned)(Phase)-1u))
+#define MDO_AGENT_PHASES_ALL ((UINT64_C(1) << (MDO_AGENT_PHASE_COUNT-1u))-1u)
+typedef struct mdo_lifecycle_v1 {
+    uint32_t Size,AbiVersion;
+    const char* Id;
+    const char* AgentPattern; /* exact id or one trailing '*'; NULL selects all */
+    int32_t Priority;
+    bool ObserveOnly;
+    uint64_t Phases;
+    void* UserData;
+    mdo_agent_event_v1 OnEvent;
+} mdo_lifecycle_v1;
+
 typedef enum mdo_log_level {
     MDO_LOG_DEBUG = 0,
     MDO_LOG_INFO,
@@ -290,6 +321,7 @@ typedef struct mdo_registrar_v1 {
         char* ErrorMessage, size_t ErrorCapacity);
     mdo_result (*AddService)(void* Context, const struct mdo_service_v1*, char*, size_t);
     mdo_result (*AddHook)(void* Context, const struct mdo_hook_v1*, char*, size_t);
+    mdo_result (*AddLifecycle)(void* Context,const mdo_lifecycle_v1*,char*,size_t);
 } mdo_registrar_v1;
 
 typedef mdo_result (*mdo_module_register_v1)(

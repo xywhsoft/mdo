@@ -141,4 +141,6 @@ size_t MdoModuleDiagnosticsCount(const MdoModuleDiagnostics* pDiagnostics);
 bool MdoModuleDiagnosticsAt(const MdoModuleDiagnostics* pDiagnostics,
     size_t iIndex, MdoModuleDiagnosticInfo* pInfo);
 
+bool MdoModuleCatalogLifecycle(const MdoModuleCatalog*,mdo_agent_phase,mdo_agent_context_v1*,bool,xwork_error*);
+
 #endif

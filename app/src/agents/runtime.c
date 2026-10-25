@@ -63,6 +63,17 @@ static bool MdoAgentsPattern(cstr,cstr);
 static bool MdoAgentsCanDelegate(const MdoModuleAgentInfo*,const MdoModuleAgentInfo*);
 static bool MdoAgentsApplyMcpSelection(xwork_agent*,cstr,const MdoModuleAgentInfo*,xwork_error*);
 
+typedef struct MdoAgentActiveFrame {
+    MdoAgentInstance* Instance;
+    xwork_agent_extension_context* Native;
+    uint64 Thread;
+    bool Started,Settled;
+    xwork_result Status;
+    const xwork_error* Error;
+    xwork_event Completion;
+    struct MdoAgentActiveFrame* Next;
+} MdoAgentActiveFrame;
+
 typedef struct MdoAgentOwner {
     xatomic32 Refs;
     xwork_runtime* Runtime;
@@ -89,6 +100,7 @@ typedef struct MdoAgentOwner {
     xmutex* InstanceLock;
     xmutex* LifecycleLock;
     MdoAgentInstance* Instances;
+    MdoAgentActiveFrame* ActiveFrames;
     xwork_tool_catalog* DelegationTools;
     xwork_agent* RootAgent;
     MdoAgentResolvedModel RootModel;
@@ -98,6 +110,8 @@ typedef struct MdoAgentOwner {
     xwork_event_fn ExternalEvent;
     void* ExternalEventData;
 } MdoAgentOwner;
+
+static void MdoAgentsLifecycleRuntime(MdoAgentOwner*,const xwork_event*);
 
 struct MdoAgentSession {
     xatomic32 Refs;
@@ -140,6 +154,7 @@ struct MdoAgentRun {
 static bool MdoAgentsForwardEvent(MdoAgentOwner* Owner,xwork_event_fn Forward,void* Data,const xwork_event* Event){
     if(Event->eKind==XWORK_EVENT_AGENT_START&&Event->uAgentId&&
         !MdoModuleAgentIdentityBegin(Owner,Event->uAgentId,Owner->ProductProject,Owner->ProductSession))xrtClearError();
+    MdoAgentsLifecycleRuntime(Owner,Event);
     bool Ok=!Forward||Forward(Data,Event);
     if(Event->eKind==XWORK_EVENT_AGENT_DONE&&Event->uAgentId)MdoModuleAgentIdentityEnd(Owner,Event->uAgentId);
     return Ok;

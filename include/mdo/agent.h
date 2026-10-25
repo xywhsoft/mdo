@@ -37,6 +37,10 @@ static inline mdo_result mdoAgentRunDefault(const mdo_agent_context_v1* Context,
     return (mdo_result)Native->DefaultRun(Native->pAgent,Native->sPrompt,Native->pUserMessage,
         Native->bResume,Native->pResumeOptions,Native->pResult,Error);
 }
+static inline const xwork_event* mdoAgentEvent(const mdo_agent_context_v1* Context)
+{return Context?(const xwork_event*)Context->Event:NULL;}
+static inline const xwork_error* mdoAgentError(const mdo_agent_context_v1* Context)
+{return Context?(const xwork_error*)Context->Error:NULL;}
 /* A one-file role needs only a descriptor and this export. Use the ordinary
  * module entry instead when registering multiple roles, tools or services. */
 #define MDO_AGENT_MODULE(Descriptor) \
