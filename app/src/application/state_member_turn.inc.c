@@ -176,13 +176,24 @@ bool MdoApplicationMemberTurnFinish(MdoApplicationMemberTurn* T,xwork_result Sta
     const mdo_sdk_context_v1* C=&T->Context;const xvalue* P=T->Params;xwork_error Error,Check;xworkErrorInit(&Error);if(Failure)Error=*Failure;xworkErrorInit(&Check);
     bool Recovery=false;bool Checkpoint=T->Session&&MdoAgentSessionWithQuiescentCheckpoint(T->Session,NULL,NULL,&Check);
     if(Checkpoint&&!MdoAgentSessionRecoveryRequired(T->Session,&Recovery,&Check))Checkpoint=false;
+    /* Stop is already an explicit decision to end a pure model turn. With no
+     * unresolved tool calls there is no effect to replay or ask about again. */
+    if(Checkpoint&&Recovery&&(Status==XWORK_RESULT_CANCELLED||Status==XWORK_RESULT_TIMEOUT)){
+        xwork_recovery_snapshot* Pending=MdoAgentSessionRecoverySnapshot(T->Session,&Check);
+        if(Pending&&!xworkRecoverySnapshotCount(Pending)){
+            uint64 Sequence=0,Finished=0;
+            Checkpoint=MdoAgentSessionLastSequence(T->Session,&Sequence,&Check)&&MdoAgentSessionFinishInterrupted(T->Session,Sequence,&Finished,&Check)&&
+                MdoAgentSessionRecoveryRequired(T->Session,&Recovery,&Check);
+        }
+        xworkRecoverySnapshotRelease(Pending);
+    }
     if(!Checkpoint&&Error.eCode==XWORK_ERROR_NONE)Error=Check;
     xvalue* Outcome=xrtValueObject();cstr State=Status==XWORK_RESULT_OK?"succeeded":Status==XWORK_RESULT_CANCELLED?"cancelled":Status==XWORK_RESULT_TIMEOUT?"timed_out":Status==XWORK_RESULT_LIMIT?"limited":"failed";
     if(!Checkpoint||Recovery)State="requires_review";
     SdkPut(Outcome,"outcome",State);SdkPut(Outcome,"message_id",SdkField(T->Message,"message_id"));SdkPut(Outcome,"error",Status==XWORK_RESULT_OK?"":Error.sMessage);SdkPutUInt(Outcome,"error_code",Error.eCode);
     if(Recovery&&T->Session){xwork_recovery_snapshot* Pending=MdoAgentSessionRecoverySnapshot(T->Session,&Check);xvalue* Calls=xrtValueArray();
         for(size_t I=0;Pending&&I<xworkRecoverySnapshotCount(Pending)&&I<64;I++){xwork_recovery_call_info Call;xworkRecoveryCallInfoInit(&Call);if(xworkRecoverySnapshotAt(Pending,I,&Call)){
-            xvalue* V=xrtValueObject();SdkPut(V,"tool_call_id",Call.sToolCallId);SdkPut(V,"tool",Call.sToolName);xrtValueObjectSetNew(V,XRT_STR_LITERAL("automatic_retry_safe"),xrtValueBool(Call.bAutomaticRetrySafe));xrtValueArrayAppendNew(Calls,V);}}
+            xvalue* V=xrtValueObject();SdkPut(V,"tool_call_id",Call.sToolCallId);SdkPut(V,"tool",Call.sToolName);SdkPutUInt(V,"effect_mask",Call.uEffects);xrtValueObjectSetNew(V,XRT_STR_LITERAL("automatic_retry_safe"),xrtValueBool(Call.bAutomaticRetrySafe));xrtValueArrayAppendNew(Calls,V);}}
         xworkRecoverySnapshotRelease(Pending);xrtValueObjectSetNew(Outcome,XRT_STR_LITERAL("pending_tools"),Calls);}
     cstr Text=Result&&Result->sFinalText?Result->sFinalText:"";size_t Bytes=strlen(Text),Keep=Bytes>8192?8192:Bytes;while(Keep<Bytes&&Keep&&(Text[Keep]&0xc0)==0x80)Keep--;
     xrtValueObjectSetNew(Outcome,XRT_STR_LITERAL("text"),xrtValueString(xrtStrViewN(Text,Keep)));xrtValueObjectSetNew(Outcome,XRT_STR_LITERAL("text_truncated"),xrtValueBool(Bytes>Keep));
