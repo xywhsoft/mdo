@@ -1,6 +1,7 @@
 /* One native execution lease, shared by explicit instance steps and routed
  * interactive runs. Admission is durable before C/model code is entered. */
 struct MdoApplicationMemberTurn {
+    SdkMemberHistoryWriter* History; /* Borrowed from the owned native Session. */
     mdo_sdk_context_v1 Context;
     MdoApplicationInvocation Invocation;
     char* Strings[10];
@@ -159,6 +160,7 @@ unlock:
         if(Valid){O.OnEvent=SdkMemberHistoryEvent;O.EventUserData=History;O.OwnerUserData=History;O.OnOwnerRetain=SdkMemberHistoryRetain;O.OnOwnerRelease=SdkMemberHistoryRelease;}
     }
     if(Valid)T->Session=MdoAgentSessionCreateWithRuntime(MdoBootstrapRuntime(),&O,Error);
+    if(T->Session)T->History=History;
     SdkMemberHistoryRelease(History);xrtFree(NativeSnapshot);xrtFree(NativeJournal);xrtFree(Default);
     bool Required=false;Valid=T->Session&&MdoAgentSessionRecoveryRequired(T->Session,&Required,Error);
     cstr Token=SdkField(P,"expected_recovery_token");
@@ -203,8 +205,30 @@ bool MdoApplicationMemberTurnFinish(MdoApplicationMemberTurn* T,xwork_result Sta
         xworkRecoverySnapshotRelease(Pending);xrtValueObjectSetNew(Outcome,XRT_STR_LITERAL("pending_tools"),Calls);}
     cstr Text=Result&&Result->sFinalText?Result->sFinalText:"";size_t Bytes=strlen(Text),Keep=Bytes>8192?8192:Bytes;while(Keep<Bytes&&Keep&&(Text[Keep]&0xc0)==0x80)Keep--;
     xrtValueObjectSetNew(Outcome,XRT_STR_LITERAL("text"),xrtValueString(xrtStrViewN(Text,Keep)));xrtValueObjectSetNew(Outcome,XRT_STR_LITERAL("text_truncated"),xrtValueBool(Bytes>Keep));
+    xvalue* Context=NULL;
+    if(T->History){
+        SdkMemberHistoryWriter* W=T->History;MdoAgentSessionInfo Info={0};Info.Size=sizeof(Info);
+        bool Profile=MdoAgentSessionGetInfo(T->Session,&Info);xrtMutexLock(W->Lock);
+        if(Profile&&(W->HasContext||W->HasUsage)){
+            Context=xrtValueObject();SdkPut(Context,"model_id",Info.ModelId);SdkPut(Context,"reasoning_effort",Info.ReasoningEffort);
+            SdkPut(Context,"message_id",SdkField(T->Message,"message_id"));
+            SdkPutUInt(Context,"context_window_tokens",Info.ContextWindowTokens);
+            SdkPutUInt(Context,"input_tokens",W->InputTokens);SdkPutUInt(Context,"output_tokens",W->OutputTokens);
+            xrtValueObjectSetNew(Context,XRT_STR_LITERAL("usage_available"),xrtValueBool(W->HasUsage));
+            if(W->HasContext){
+                const xllm_session_stats* S=&W->Context;uint64 Fill=S->bFillExactValid?S->uFillExact:0,Growth=S->bFillExactValid?S->uIncrementMax:0;
+                xvalue* Stats=xrtValueObject();xrtValueObjectSetNew(Stats,XRT_STR_LITERAL("exact"),xrtValueBool(S->bFillExactValid));
+                SdkPutUInt(Stats,"fill_tokens",Fill);SdkPutUInt(Stats,"growth_tokens",Growth);
+                SdkPutUInt(Stats,"estimated_input_tokens",S->bFillExactValid?(Fill>UINT64_MAX-Growth?UINT64_MAX:Fill+Growth):S->uRenderedActiveTokens);
+                SdkPutUInt(Stats,"input_budget_tokens",S->uInputBudgetTokens);SdkPutUInt(Stats,"compact_threshold_tokens",S->uCompactThresholdTokens);
+                xrtValueObjectSetNew(Context,XRT_STR_LITERAL("context"),Stats);
+            }
+        }
+        xrtMutexUnlock(W->Lock);
+    }
     char Path[160];bool Ok=false;xrtMutexLock(SdkState.Lock);xvalue* Root=SdkStateLoad(C,P,Path,E),*Member=Root?SdkInstanceValue(Root,T->Key):NULL;
     if(Member){
+        if(Context)xrtValueObjectSet(Member,XRT_STR_LITERAL("context_checkpoint"),Context);
         xvalue* Ack=xrtValueObject();SdkPut(Ack,"mailbox",SdkField(T->Config,"mailbox"));SdkPut(Ack,"message_id",SdkField(T->Message,"message_id"));xvalue* Receipt=NULL;bool Changed=false;
         Ok=SdkMailboxApply(C,"mailbox.ack",Ack,Root,&Receipt,E,&Changed);xrtValueRelease(Receipt);
         if(Ok){char MailKey[128];SdkMailboxIdentity(Ack,MailKey);xvalue* Mail=SdkInstanceValue(Root,MailKey);
@@ -216,6 +240,6 @@ bool MdoApplicationMemberTurnFinish(MdoApplicationMemberTurn* T,xwork_result Sta
             SdkPut(T->Notification,"state",SdkField(Member,"state"));SdkPutUInt(T->Notification,"revision",SdkStateRevision(Member));
         }
     }
-    xrtValueRelease(Root);xrtMutexUnlock(SdkState.Lock);xrtValueRelease(Outcome);T->Finished=true;
+    xrtValueRelease(Root);xrtMutexUnlock(SdkState.Lock);xrtValueRelease(Context);xrtValueRelease(Outcome);T->Finished=true;
     return Ok;
 }

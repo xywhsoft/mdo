@@ -15,6 +15,8 @@ typedef struct MdoApplicationInvocation {
 typedef struct MdoApplicationMemberTurn MdoApplicationMemberTurn;
 typedef struct MdoAgentSession MdoAgentSession;
 typedef struct MdoSession MdoSession;
+typedef struct MdoSessionInfo MdoSessionInfo;
+bool MdoApplicationSessionExecution(const mdo_sdk_context_v1*,const MdoSessionInfo*,xvalue**,mdo_error_v1*);
 /* Internal shared member execution lease. Public plugins use instance.* and
  * run.route hooks; synchronous steps and interactive runs share this claim. */
 MdoApplicationMemberTurn* MdoApplicationMemberTurnOpen(const mdo_sdk_context_v1*,cstr,const xvalue*,MdoSession*,bool*,xwork_error*,mdo_error_v1*);

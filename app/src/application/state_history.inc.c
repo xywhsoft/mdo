@@ -11,6 +11,9 @@ typedef struct SdkMemberHistoryWriter {
     char MessageId[129];
     char Source[16],Sender[257];
     MdoSessionEventSink Forward;
+    xllm_session_stats Context;
+    uint64 InputTokens, OutputTokens;
+    bool HasContext, HasUsage;
 } SdkMemberHistoryWriter;
 
 static cstr SdkMemberHistoryKind(xwork_event_kind Kind){
@@ -78,6 +81,12 @@ static void SdkMemberHistoryRelease(void* User){
 }
 static bool SdkMemberHistoryEvent(void* User,const xwork_event* Event){
     SdkMemberHistoryWriter* W=User;cstr Kind=SdkMemberHistoryKind(Event->eKind);
+    xrtMutexLock(W->Lock);
+    if(Event->uAgentDepth==0u&&Event->tSessionStats.uContextWindowTokens){W->Context=Event->tSessionStats;W->HasContext=true;}
+    if(Event->uAgentDepth==0u&&Event->eKind==XWORK_EVENT_MODEL_DONE&&Event->bSuccess){
+        W->InputTokens=Event->tUsage.uInputTokens;W->OutputTokens=Event->tUsage.uOutputTokens;W->HasUsage=true;
+    }
+    xrtMutexUnlock(W->Lock);
     if(!Kind)return !W->Forward.OnEvent||W->Forward.OnEvent(W->Forward.UserData,Event);
     const char* Text=Event->sText?Event->sText:"";
     size_t Size=Event->sText?(Event->iTextLength==SIZE_MAX?strlen(Text):Event->iTextLength):0;

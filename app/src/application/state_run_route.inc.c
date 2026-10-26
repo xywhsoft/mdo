@@ -1,5 +1,44 @@
 #include "../../include/mdo/runs.h"
 
+/* Read projection only. A plugin selects a persistent member; the host
+ * resolves its actual immutable binding and checks conversation ownership. */
+bool MdoApplicationSessionExecution(const mdo_sdk_context_v1* C,const MdoSessionInfo* Given,xvalue** R,mdo_error_v1* E){
+    MdoSessionInfo Info={0};Info.Size=sizeof(Info);
+    if(Given)Info=*Given;
+    else{
+        xwork_error Error;MdoSession* Session=MdoSessionLoad(C->ProjectId,C->SessionId,&Error);
+        bool Ok=Session&&MdoSessionGetInfo(Session,&Info);MdoSessionRelease(Session);
+        if(!Ok)return MdoApplicationError(E,"sdk_session_missing","Select an existing conversation","execution",404,false);
+    }
+    xvalue* Facts=xrtValueObject();SdkPut(Facts,"agent_id",Info.AgentId);SdkPut(Facts,"model_id",Info.ModelId);
+    SdkPut(Facts,"reasoning_effort",Info.ReasoningEffort);
+    bool Ok=MdoApplicationHooks(C,"session.execution",&Facts,E);const xvalue* Target=SdkGet(Facts,"target");
+    xvalue* Member=NULL;
+    if(Ok&&Target){
+        cstr Namespace=SdkField(Target,"namespace"),Id=SdkField(Target,"id");
+        if(!SdkIdValid(Namespace)||strlen(Namespace)>128||!SdkStateKey(Id)||strlen(Id)>64)
+            Ok=MdoApplicationError(E,"sdk_execution_target","An execution target needs a valid namespace and member identity","execution",400,false);
+        bool Found=false;if(Ok)Ok=MdoApplicationStateCall(C,"instance.get",Target,&Member,E,&Found)&&Found;
+        if(Ok&&!SdkMemberHistoryAllowed(C,Member))Ok=MdoApplicationError(E,"sdk_execution_scope","Execution target belongs to another conversation","execution",403,false);
+    }
+    if(Ok){
+        *R=xrtValueObject();xrtValueObjectSetNew(*R,XRT_STR_LITERAL("available"),xrtValueBool(true));
+        SdkPut(*R,"agent_id",Member?SdkField(Member,"agent_id"):Info.AgentId);
+        SdkPut(*R,"model_id",Member?SdkField(Member,"model_id"):Info.ModelId);
+        cstr Effort=Member?SdkField(SdkGet(Member,"context_checkpoint"),"reasoning_effort"):Info.ReasoningEffort;
+        SdkPut(*R,"reasoning_effort",Effort);
+        if(Member){
+            xvalue* Scope=xrtValueObject();SdkPut(Scope,"namespace",SdkField(Member,"namespace"));SdkPut(Scope,"id",SdkField(Member,"id"));
+            SdkPut(Scope,"state",SdkField(Member,"state"));SdkPutUInt(Scope,"revision",SdkStateRevision(Member));
+            xrtValueObjectSetNew(*R,XRT_STR_LITERAL("target"),Scope);
+            const xvalue* Checkpoint=SdkGet(Member,"context_checkpoint");
+            cstr Captured=SdkField(Checkpoint,"message_id"),Active=SdkField(Member,"active_message");
+            if(Captured&&Active&&!strcmp(Captured,Active))xrtValueObjectSet(*R,XRT_STR_LITERAL("checkpoint"),Checkpoint);
+        }
+    }
+    xrtValueRelease(Member);xrtValueRelease(Facts);return Ok;
+}
+
 struct MdoApplicationRunRoute {
     mdo_sdk_context_v1 Context;
     MdoApplicationInvocation Invocation;

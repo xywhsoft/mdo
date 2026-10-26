@@ -333,6 +333,13 @@ static bool MdoApiSessionReply(MdoApiContext* Context, uint16 Status,
         return MdoApiReplyError(Context, 500u, "session_result_unavailable",
             "The session result could not be created", NULL);
     }
+    mdo_sdk_context_v1 Scope;MdoApplicationInvocation Invocation={0};mdo_error_v1 Failure={0};xvalue* Execution=NULL;
+    MdoApplicationContext(&Scope,&Invocation,"product","session-view",Info->ProjectId,Info->Id,"",Info->WorkspaceRoot,0);Scope.Origin=MDO_ORIGIN_USER;
+    if(!MdoApplicationSessionExecution(&Scope,Info,&Execution,&Failure)){
+        Execution=xrtValueObject();xrtValueObjectSetNew(Execution,XRT_STR_LITERAL("available"),xrtValueBool(false));
+        SdkPut(Execution,"error",Failure.Code);SdkPut(Execution,"message",Failure.Message);
+    }
+    xrtValueObjectSetNew(Data,XRT_STR_LITERAL("execution"),Execution);
     return MdoApiReplySuccessTakeEntityTag(Context, Status, Data, EntityTag);
 }
 
