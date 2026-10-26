@@ -144,6 +144,9 @@ static xvalue* CommandHostCall(CommandJob* J,const xvalue* Q,char Error[512]) {
         mdo_sdk_context_v1 C;MdoApplicationInvocation Invocation={0};Invocation.Cancel=J->Cancel;Invocation.Actions=J->Actions;
         MdoApplicationContext(&C,&Invocation,CommandText(J->Input,"command_id"),J->Id,CommandText(J->Input,"project_id"),
             CommandText(J->Input,"session_id"),CommandText(J->Input,"run_id"),J->Workspace,J->Deadline);
+        uint64 Origin=0;int64 SignedOrigin=0;const xvalue* Source=xrtValueObjectGet(J->Input,XRT_STR_LITERAL("call_origin"));
+        if(!xrtValueGetUInt(Source,&Origin)&&xrtValueGetInt(Source,&SignedOrigin)&&SignedOrigin>=0)Origin=(uint64)SignedOrigin;
+        C.Origin=Origin<=MDO_ORIGIN_EXTENSION?(uint32)Origin:MDO_ORIGIN_UNKNOWN;
         mdo_error_v1 E={0};xvalue* Result=NULL;cstr Service=CommandText(Params,"method");
         mdo_result Code=MdoApplicationCall(&C,Service,xrtValueObjectGet(Params,XRT_STR_LITERAL("params")),&Result,&E);
         xvalue* Frame=xrtValueObject(),*Failure=xrtValueObject();

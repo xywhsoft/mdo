@@ -4,6 +4,8 @@
 
 HTTP 用户入口为 user，模型工具、C Agent 的 Run/OnEvent 和全局 Agent 生命周期为 agent，模块注册为 extension。根 C Agent 即使没有 RunId 或 MemberId，也具有 agent 来源。后台 operation 复制并纳入准入身份，不能因丢失 RunId 而成为 user。JSON 中自行提供 origin 不会覆盖宿主来源。编辑器命令沿用实际发起入口。
 
+编辑器命令的 run_id 是关联信息，不能代替调用来源。命令准入由 HTTP/SDK 路由写入内部 call_origin，主进程 RPC 与命令工作进程均保留它；用户在运行关联会话时执行命令仍为 user，C Agent 发起没有 run_id 的命令仍为 agent。用户请求体不能自行提交内部 call_origin。
+
 `sdk.context` 返回可读的 origin。`instance.send` 将用户输入标为 user，其余来源标为 agent；插件的恢复、交接等需人类决定的操作应明确要求 `MDO_ORIGIN_USER`，不能仅以 RunId 是否为空判断。旧上下文缺少此字段时，存在 RunId/MemberId 可判断为 agent；其余为 unknown，不推断人类授权。
 
 验收使用 Mohists 唯一开发实例中的真实根 C 角色：无 RunId/MemberId、后台传递来源、被动消息标记、用户专属恢复拒绝、一次本地模型回复。未创建隔离环境或调用供应商模型。

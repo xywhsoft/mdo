@@ -47,6 +47,7 @@ bool MdoApiCommandInvocationRoute(MdoApiContext* C) {
     char Error[512]={0};cstr Raw=CommandText(Input,"raw_arguments");
     xvalue* Arguments=Ok?MdoCommandArguments(Raw,Error):NULL;
     Ok=Ok&&Arguments&&CommandSet(Input,"project_id",Project);
+    if(Ok)Ok=xrtValueObjectSetNew(Input,XRT_STR_LITERAL("call_origin"),xrtValueUInt(C->ApplicationContext?mdoCallOrigin(C->ApplicationContext):MDO_ORIGIN_USER));
     if(Ok){Ok=xrtValueObjectSetNew(Input,XRT_STR_LITERAL("arguments"),Arguments);Arguments=NULL;}
     xrtValueRelease(Arguments);
     MdoApiJsonBodyUnit(&Body);xvalue* Result=Ok?MdoCommandStart(Input,Workspace,Error):NULL;
