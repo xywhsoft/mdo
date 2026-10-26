@@ -30,6 +30,7 @@ static bool SdkInstancePaths(cstr StatePath,cstr Id,char Identity[65],char Direc
 static int SdkInstanceActive(cstr Identity){for(int I=0;I<8;I++)if(SdkState.Members[I].Cancel&&!strcmp(SdkState.Members[I].Identity,Identity))return I;return -1;}
 static bool SdkInstanceNotify(const mdo_sdk_context_v1* C,const xvalue* V){MdoApplicationEvent("instance.changed",C,V);return true;}
 #include "state_history.inc.c"
+#include "state_recovery.inc.c"
 static bool SdkMemberFinal(void* U,const MdoAgentNativeContext* Native,xwork_error* E){
     xwork_run_result* R=U;size_t Count=xllmSessionEntryCount(Native->History);(void)E;
     if(Count){xllm_session_entry_view Last={0};Last.iSize=sizeof(Last);if(!xllmSessionEntryAt(Native->History,Count-1,&Last))return false;
@@ -68,6 +69,7 @@ static bool SdkInstanceStep(const mdo_sdk_context_v1* C,cstr Method,const xvalue
     for(int I=0;I<8;I++)if(!SdkState.Members[I].Cancel){Slot=I;break;}
     if(Slot<0){MdoApplicationError(E,"sdk_instance_busy","Eight member turns are already active; wait for idle notification","instance",429,false);goto unlock;}
     if(!SdkInstancePaths(Path,Id,Identity,Directory))goto unlock;
+    if(SdkInstanceActive(Identity)>=0){MdoApplicationError(E,"sdk_instance_busy","Member is being inspected or run by another operation","instance",409,false);goto unlock;}
     SdkPut(MailParams,"mailbox",SdkField(Member,"mailbox"));SdkPutUInt(MailParams,"limit",1);xvalue* Page=NULL;bool Changed=false;
     if(Recover)SdkPut(MailParams,"message_id",SdkField(Member,"active_message"));
     if(!SdkMailboxApply(C,Recover?"mailbox.get":"mailbox.read",MailParams,Root,&Page,E,&Changed)){xrtValueRelease(Page);goto unlock;}
@@ -103,6 +105,7 @@ unlock:
     Ready=Ready&&NativeSnapshot&&NativeJournal;
     if(!Ready&&Error.eCode==XWORK_ERROR_NONE){Error.eCode=XWORK_ERROR_IO;snprintf(Error.sMessage,sizeof(Error.sMessage),"Cannot validate member parent or private snapshot directory");}
     Options.SessionPath=NativeSnapshot;Options.JournalPath=NativeJournal;Options.ArtifactDirectory=Directory;Options.Recover=Exists||JournalExists;
+    Options.PreserveRecoveryLedger=Recover;
     SdkMemberHistoryWriter* History=NULL;
     if(Ready&&!Abandon){
         History=SdkMemberHistoryCreate(Directory,Message);Ready=History!=NULL;
@@ -115,6 +118,14 @@ unlock:
      * descendants, rather than borrowing this step's stack frame. */
     SdkMemberHistoryRelease(History);
     bool Recovery=false;Ready=Session&&MdoAgentSessionRecoveryRequired(Session,&Recovery,&Error);
+    cstr ExpectedToken=SdkField(P,"expected_recovery_token");
+    if(Ready&&Resume&&ExpectedToken){
+        uint64 Sequence=0;xwork_recovery_snapshot* Pending=MdoAgentSessionRecoverySnapshot(Session,&Error);
+        char Token[MDO_AGENT_RECOVERY_TOKEN_CAPACITY],Epoch[65];
+        Ready=(Pending||Error.eCode==XWORK_ERROR_NONE)&&SdkMemberRecoveryEpoch(Config,Epoch)&&MdoAgentSessionLastSequence(Session,&Sequence,&Error)&&MdoAgentRecoverySnapshotToken(Pending,Recovery,Sequence,Epoch,Token)&&!strcmp(ExpectedToken,Token);
+        xworkRecoverySnapshotRelease(Pending);
+        if(!Ready){Error.eCode=XWORK_ERROR_RECOVERY_REQUIRED;snprintf(Error.sMessage,sizeof(Error.sMessage),"Recovery details changed; inspect the native calls again before deciding");}
+    }
     if(Ready&&!Recover&&Recovery)Ready=false;
     /* An initial checkpoint makes even the first model turn recoverable. */
     if(Ready)Ready=MdoAgentSessionCheckpoint(Session,&Error);
@@ -176,6 +187,7 @@ static bool SdkInstanceCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue
     cstr Id=SdkField(P,"id");bool List=!strcmp(Method,"instance.list"),Create=!strcmp(Method,"instance.create");
     if(!List&&(!SdkStateKey(Id)||strlen(Id)>64))return MdoApplicationError(E,"sdk_instance_arguments","A portable member id of at most 64 characters is required","instance",400,false);
     if(!strcmp(Method,"instance.history"))return SdkMemberHistory(C,P,R,E);
+    if(!strcmp(Method,"instance.recovery"))return SdkMemberRecovery(C,P,R,E);
     if(!strcmp(Method,"instance.wait"))return SdkInstanceWait(C,P,R,E);
     if(!strcmp(Method,"instance.step")||!strcmp(Method,"instance.resume")||!strcmp(Method,"instance.abandon"))return SdkInstanceStep(C,Method,P,R,E);
     MdoModuleCatalog* Modules=Create?MdoModuleCatalogSnapshot():NULL;MdoModuleAgentInfo Role={0};Role.Size=sizeof(Role);

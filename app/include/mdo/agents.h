@@ -59,6 +59,7 @@ typedef struct MdoAgentSessionOptions {
     bool AllowSubagentDefinition; /* Explicit owned member session, never a main-role fallback. */
     MdoModuleCatalog* ModuleCatalog; /* Optional retained code generation for owned execution. */
     const char *Namespace,*MemberId; /* Shared SDK state and persistent member identity. */
+    bool PreserveRecoveryLedger; /* Open an exact recovery view without rebuilding the recorded system context. */
 } MdoAgentSessionOptions;
 
 typedef struct MdoAgentSessionInfo {

@@ -1331,7 +1331,10 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
             "cannot attach the Agent session journal");
         goto fail;
     }
-    if(StructuredRole){
+    if(Options->Recover && Options->PreserveRecoveryLedger){
+        Prompt=xrtStrDup(xllmSessionGetSystemPrompt(Owner->LlmSession));
+        if(!Prompt){MdoAgentsError(Error,XWORK_ERROR_OUT_OF_MEMORY,"cannot retain the recovered system context");goto fail;}
+    } else if(StructuredRole){
         MdoAgentInstance Draft={0};xwork_agent_extension_context Native={0};xvalue* Plan=NULL;
         Draft.Definition=AgentInfo;Draft.Configuration=AgentInfo.ConfigurationJson?xrtJsonParse(xrtStrView(AgentInfo.ConfigurationJson)):xrtValueObject();
         bool Collected=Draft.Configuration && MdoAgentsContextCollect(Owner,&Draft,&AgentInfo,&Native,&Plan,Error);
@@ -1419,7 +1422,7 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
             "Agent permission profile is unknown");
         goto fail;
     }
-    if(!StructuredRole){
+    if(!StructuredRole && !(Options->Recover && Options->PreserveRecoveryLedger)){
         const char* FileAccess =
             "\n\n<file_access>\nThe user can change permissions while a task is running. "
             "In full access mode, use read directly for user-specified native paths outside the workspace; "

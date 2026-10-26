@@ -3,6 +3,8 @@
 def contracts(add):
     string={'type':'string'}
     uint={'type':'integer','minimum':0}
+    add('instance.recovery','Read bounded actual native unresolved calls and an exact recovery token; never runs a model or tool. Owning session/member only; refuses an active run.',
+        {'namespace':string,'id':string},('id',))
     add('instance.history','Read actual visible member events without running a model. Owner-session scope, UTF-8 chunks and committed byte cursors; no hidden reasoning. Legacy members explicitly report incomplete historical coverage.',
         {'namespace':string,'id':string,'after':uint,'limit':{**uint,'minimum':1,'maximum':64}},('id',))
     guard={'type':'object','properties':{'id':string,'fence':uint,'token':string},'required':['id','fence','token']}
@@ -52,7 +54,7 @@ def contracts(add):
     decision={'type':'object','properties':{'tool_call_id':string,'action':{'type':'string','enum':['retry','record_uncertain']}},'required':['tool_call_id','action']}
     for action in ('resume','abandon'):
         add('instance.'+action,'Explicitly continue or finish an interrupted turn at the current member revision; effects are never silently replayed',
-            {**member,'expected_revision':uint,'decisions':{'type':'array','items':decision,'maxItems':64}},('id','message_id','expected_revision'))
+            {**member,'expected_revision':uint,'expected_recovery_token':string,'decisions':{'type':'array','items':decision,'maxItems':64}},('id','message_id','expected_revision'))
     work={'namespace':string,'id':string,'title':string,'description':string,'depends_on':{'type':'array','items':string,'maxItems':32},
         'expected_revision':uint,'worker':string,'claim_id':string,'claim_token':string,'result':{},'reason':string}
     add('work.create','Create one shared task, depending only on existing tasks; repeated identical creation is safe',work,('id','title'))
