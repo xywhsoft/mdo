@@ -12,15 +12,28 @@ export function estimateInputTokens(text) {
   return Math.ceil(ascii / 4) + other;
 }
 
-export function contextCheckpoint(events) {
+export function contextCheckpoint(events, target = null) {
   const boundary = events.findLastIndex(event => event.kind === "history_truncated");
-  const retained = events.slice(boundary + 1).filter(event => !Number(event.agent_depth));
+  const retained = events.slice(boundary + 1).filter(event => !Number(event.agent_depth) && (target
+    ? event.source?.namespace === target.namespace && event.source?.member === target.id
+    : !event.source?.member));
   const latestCall = retained.findLast(event => event.kind === "model_done" &&
     event.success !== false && (event.input_tokens || event.output_tokens));
   const contextEvent = retained.findLast(event => event.context &&
     ["estimated_input_tokens", "input_budget_tokens", "compact_threshold_tokens"].every(key =>
       Number.isSafeInteger(event.context[key]) && event.context[key] >= 0));
   return { latestCall, contextEvent };
+}
+
+export function executionCheckpoint(events, execution, running = false) {
+  if (execution?.available === false) return {};
+  const current = contextCheckpoint(events, execution?.target);
+  const saved = execution?.target && execution.checkpoint;
+  // A delegated turn need not have appeared in the main timeline. Its durable
+  // native checkpoint is authoritative once this main conversation is idle.
+  if (saved && !running) return { latestCall: saved.usage_available ? saved : undefined,
+    contextEvent: saved.context ? saved : current.contextEvent };
+  return current;
 }
 
 export function createTokenMeter({ root, trigger, ring, panel, estimate, prompt,
@@ -45,13 +58,18 @@ export function createTokenMeter({ root, trigger, ring, panel, estimate, prompt,
       : t("token.estimateTitle", {}, "按输入文本粗略估算");
     const session = sessionStore.get().data;
     const models = modelsStore.get().data?.models ?? [];
-    const model = findModel(models, modelSelect.value || session?.model_id);
+    const execution = session?.execution;
+    const unavailable = execution?.available === false;
+    const target = !unavailable && execution?.target;
+    const model = unavailable ? null : findModel(models, target ? execution.model_id : modelSelect.value || session?.model_id);
     const timeline = timelineStore.get().data;
     const events = session && timeline?.projectId === session.project_id &&
       timeline?.sessionId === session.id ? timeline.events ?? [] : [];
     const calls = events.filter((event) =>
       event.kind === "model_done" && (event.input_tokens || event.output_tokens));
-    const { latestCall, contextEvent } = contextCheckpoint(events);
+    const running = (runsStore?.get().data?.items ?? []).some(run => run.project_id === session?.project_id &&
+      run.session_id === session?.id && !run.terminal && !["succeeded", "failed", "cancelled", "timed_out"].includes(run.state));
+    const { latestCall, contextEvent } = executionCheckpoint(events, execution, running);
     const reference = contextEvent || latestCall;
     const latestInput = Number(latestCall?.input_tokens || 0);
     const latestOutput = Number(latestCall?.output_tokens || 0);
@@ -70,7 +88,7 @@ export function createTokenMeter({ root, trigger, ring, panel, estimate, prompt,
       reference?.model || "—";
     const totalInput = calls.reduce((sum, item) => sum + Number(item.input_tokens || 0), 0);
     const totalOutput = calls.reduce((sum, item) => sum + Number(item.output_tokens || 0), 0);
-    const windowTokens = Number(model?.context_window_tokens || 0);
+    const windowTokens = Number(target && execution.checkpoint?.context_window_tokens || model?.context_window_tokens || 0);
     const lastWindowTokens = Number(reference?.context_window_tokens || 0) ||
       Number(latestModel?.context_window_tokens || 0) || (!reference ? windowTokens : 0);
     const base = contextEvent ? contextEvent.context.estimated_input_tokens : latestInput + latestOutput;
@@ -96,6 +114,7 @@ export function createTokenMeter({ root, trigger, ring, panel, estimate, prompt,
     ]);
     const details = element("dl");
     const rows = [
+      ...(target ? [[t("token.mainSpeaker", {}, "当前主讲"), `${target.id} · ${execution.agent_id}`]] : []),
       [t("token.model", {}, "输入区模型"), model?.name || model?.id || "—"],
       [t("token.contextLimit", {}, "输入区上下文上限"),
         windowTokens ? number(windowTokens) : "—"],
@@ -123,6 +142,7 @@ export function createTokenMeter({ root, trigger, ring, panel, estimate, prompt,
     panel.append(heading, details,
       element("p", { text: t("token.note", {},
         "预计输入与自动压缩共用上下文检查点：上次服务端输入与输出，加上此后新增内容及草稿估算。输出预留与安全余量已计入压缩阈值；累计用量只包含可见调用。") }));
+    if (unavailable) panel.append(element("p", { text: execution.message || t("token.targetUnavailable", {}, "当前主讲配置无法读取，未使用其他上下文的用量替代。") }));
     if (hasImages)
       panel.append(element("p", { text: t("token.imageEstimateNote", {},
         "图片按每张 4,096 token 估算，实际用量取决于模型。") }));

@@ -14,6 +14,11 @@ const EFFORT_LABEL = Object.freeze({
   max: ["reasoning.max", "最大"],
 });
 
+function reasoningChoice(model, preferred = "") {
+  const efforts = Array.isArray(model?.reasoning_efforts) ? model.reasoning_efforts : (preferred ? [preferred] : []);
+  return efforts.includes(preferred) ? preferred : efforts.includes(model?.default_reasoning_effort)
+    ? model.default_reasoning_effort : efforts[0] || "";
+}
 export function fillReasoningOptions(select, model, preferred = "") {
   const efforts = Array.isArray(model?.reasoning_efforts)
     ? model.reasoning_efforts : (preferred ? [preferred] : []);
@@ -22,9 +27,7 @@ export function fillReasoningOptions(select, model, preferred = "") {
     select.append(element("option", { text: EFFORT_LABEL[effort]
       ? t(EFFORT_LABEL[effort][0], {}, EFFORT_LABEL[effort][1]) : effort,
       attrs: { value: effort } }));
-  const chosen = efforts.includes(preferred) ? preferred
-    : efforts.includes(model?.default_reasoning_effort)
-      ? model.default_reasoning_effort : efforts[0] || "";
+  const chosen = reasoningChoice(model, preferred);
   select.value = chosen;
   select.disabled = efforts.length === 0;
   return chosen;
@@ -46,6 +49,7 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
   const draftVersions = new Map();
   let runActive = false;
   let locked = false;
+  let underlyingProfile = null;
 
   function models() { return modelsStore.get().data?.models ?? []; }
   function selectedKey() {
@@ -122,8 +126,14 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
     const deferred = saved && { ...saved, permission_profile: agentPermission(session) };
     const selected = changing.get(key) || deferred;
     const catalog = models();
-    const requested = selected?.model_id || session?.model_id || pending.model_id ||
+    const rootRequested = selected?.model_id || session?.model_id || pending.model_id ||
       defaultModelId();
+    const rootModel = selectedModel(catalog, rootRequested);
+    const rootEffort = selected?.reasoning_effort || session?.reasoning_effort || pending.reasoning_effort ||
+      (!session && defaultAgent()?.reasoning_effort) || rootModel?.default_reasoning_effort || "";
+    const execution = session?.execution, member = execution?.available !== false && execution?.target;
+    underlyingProfile = { model_id: rootModel?.id || rootRequested, reasoning_effort: reasoningChoice(rootModel, rootEffort) };
+    const requested = member ? execution.model_id : rootRequested;
     const id = selectedModel(catalog, requested)?.id || requested;
     clear(modelSelect);
     for (const model of catalog) {
@@ -137,10 +147,7 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
       modelSelect.append(element("option", { text: id, attrs: { value: id } }));
     modelSelect.value = id;
     const model = selectedModel(catalog, id);
-    const effort = selected?.reasoning_effort || session?.reasoning_effort ||
-      pending.reasoning_effort ||
-      (!session && defaultAgent()?.reasoning_effort) ||
-      model?.default_reasoning_effort || "";
+    const effort = member ? execution.reasoning_effort || model?.default_reasoning_effort || "" : rootEffort;
     fillReasoningOptions(reasoningSelect, model, effort);
     permissionSelect.value = selected?.permission_profile ||
       (session ? agentPermission(session) :
@@ -150,8 +157,8 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
       (Boolean(navigation.get().sessionId) && !session) ||
       (session && (session.status !== "active" ||
         (draftStore && !draftStore.isLoaded(key))));
-    modelSelect.disabled = disabled || catalog.length === 0;
-    reasoningSelect.disabled = disabled || !reasoningSelect.options.length;
+    modelSelect.disabled = disabled || Boolean(member) || execution?.available === false || catalog.length === 0;
+    reasoningSelect.disabled = disabled || Boolean(member) || execution?.available === false || !reasoningSelect.options.length;
     permissionSelect.disabled = disabled;
     if (resetButton) {
       resetButton.hidden = Boolean(navigation.get().sessionId) ||
@@ -164,9 +171,11 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
         !sameProfile(deferred, sessionProfile(session));
       const saveState = draftStore?.profileSaveState(session ? key :
         projectDraftKey(projectId)) ?? "saved";
-      status.hidden = !nextRun && saveState === "saved";
+      status.hidden = !member && execution?.available !== false && !nextRun && saveState === "saved";
       status.dataset.state = saveState;
-      status.textContent = saveState === "error"
+      status.textContent = execution?.available === false ? execution.message || t("profile.targetUnavailable", {}, "当前主讲不可用")
+        : member ? t("profile.memberBinding", { member: member.id }, `主讲 ${member.id} 的模型绑定固定；返回协调者后可修改协调者模型。`)
+        : saveState === "error"
         ? session ? t("profile.notSaved", {}, "后续配置未保存")
           : t("profile.draftNotSaved", {}, "新任务配置未保存")
         : saveState === "saving"
@@ -179,6 +188,8 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
 
   async function changed(field) {
     const session = current();
+    const execution = session?.execution;
+    if (field !== "permission" && (execution?.target || execution?.available === false)) { sync(); return; }
     const projectId = navigation.get().projectId || "default";
     if (navigation.get().sessionId && !session) { sync(); return; }
     if (!session && (locked || resetting.has(projectId))) { sync(); return; }
@@ -186,8 +197,8 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
     const effort = fillReasoningOptions(reasoningSelect, model,
       reasoningSelect.value);
     const profile = {
-      model_id: modelSelect.value,
-      reasoning_effort: effort,
+      model_id: execution?.target ? underlyingProfile.model_id : modelSelect.value,
+      reasoning_effort: execution?.target ? underlyingProfile.reasoning_effort : effort,
       permission_profile: permissionSelect.value,
     };
     if (!session) {
@@ -362,8 +373,10 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
   if (settingsStore) unsubscribers.push(settingsStore.subscribe(sync));
   return Object.freeze({
     selection: () => ({
-      model_id: modelSelect.value,
-      reasoning_effort: reasoningSelect.value,
+      // Queue requests still carry the coordinator's saved profile. Displaying
+      // a member must never overwrite the coordinator's persistent selection.
+      model_id: current()?.execution?.target ? underlyingProfile.model_id : modelSelect.value,
+      reasoning_effort: current()?.execution?.target ? underlyingProfile.reasoning_effort : reasoningSelect.value,
       permission_profile: permissionSelect.value,
     }),
     setRunActive(value, blockChanges = false) {

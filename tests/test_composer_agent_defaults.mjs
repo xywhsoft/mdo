@@ -65,6 +65,24 @@ test("a known non-reasoning model clears a previous thinking preference", () => 
   assert.equal(fillReasoningOptions(select, null, "high"), "high");
 });
 
+test("a main member's visible model is pinned while requests preserve the coordinator profile", async () => {
+  const detail = { id: "s", project_id: "p", status: "active", model_id: "code", reasoning_effort: "high", permission_profile: "balanced",
+    execution: { available: true, model_id: "text", reasoning_effort: "medium", target: { namespace: "team", id: "member" } } };
+  const sessionStore = createResourceStore(detail), modelSelect = new Select(), reasoningSelect = new Select(), permissionSelect = new Select(["balanced", "full-access"]);
+  let saves = 0;
+  const profile = createComposerProfile({ modelSelect, reasoningSelect, permissionSelect,
+    navigation: { get: () => ({ projectId: "p", sessionId: "s" }), subscribe: () => () => {} }, sessionStore,
+    modelsStore: createResourceStore({ models }), agentsStore: createResourceStore({ items: [] }), projectsStore: createResourceStore({ items: [] }),
+    onBusyChange() {}, updateProfile: async () => { saves++; } });
+  assert.equal(modelSelect.value, "text"); assert.equal(modelSelect.disabled, true); assert.equal(reasoningSelect.disabled, true);
+  assert.deepEqual(profile.selection(), { model_id: "code", reasoning_effort: "high", permission_profile: "balanced" });
+  modelSelect.value = "code"; modelSelect.dispatchEvent(new Event("change")); await new Promise(setImmediate);
+  assert.equal(saves, 0); assert.equal(modelSelect.value, "text");
+  sessionStore.setData({ ...detail, execution: { available: true, model_id: "code" } });
+  assert.equal(modelSelect.value, "code"); assert.equal(reasoningSelect.value, "high"); assert.equal(modelSelect.disabled, false);
+  profile.destroy();
+});
+
 test("retired built-in references resolve in project defaults without shadowing a custom model", () => {
   const builtin = { id: "ornith-1.5-35b", aliases: ["ling-3.0-tiny", "ling-gpu"], default_reasoning_effort: "medium" };
   assert.equal(findModel([builtin], "ling-3.0-tiny"), builtin);

@@ -14,6 +14,21 @@ globalThis.fetch=async(url,options={})=>{
   return Response.json({ok:true,data},{headers:{"X-Mdo-Write-Token":"a".repeat(32)+"-0"}});
 };
 const { createApplicationUi }=await import("../app/web/js/features/shell/application-sdk.js");
+test("conversation refresh uses the bound displaying host without issuing a target UI RPC",async()=>{
+ const original=document.querySelector,host=new Node("section");let route={projectId:"p",sessionId:"first",view:"workspace"},bound;const refreshed=[];
+ document.querySelector=selector=>selector==="#sdk-conversation-views"?host:original(selector);
+ const navigation={preferredProject:()=>route.projectId,workspace:()=>route,get:()=>route};
+ const app=createApplicationUi({navigation,executeActions:async()=>{},refreshSession:async context=>refreshed.push(context)});
+ try{
+  app.sdk.ui.registerConversationView("qa.refresh",{mount(root,{sdk}){bound=sdk;}});
+  for(let i=0;i<10&&!bound;i++)await new Promise(setImmediate);
+  assert.ok(bound);route={...route,sessionId:"second"};const before=calls.length;
+  await bound.ui.refreshSession();
+  assert.equal(refreshed[0].session,"first");assert.equal(refreshed[0].project,"p");
+  assert.equal(calls.slice(before).includes("ui.invoke"),false);
+ }finally{app.destroy();document.querySelector=original;}
+ assert.throws(()=>bound.ui.refreshSession(),/disposed/);
+});
 test("UI contribution lifecycle closes owned panels and releases menus/keybindings",async()=>{
   const navigation={preferredProject:()=>"default",workspace:()=>({projectId:"default",sessionId:"s"}),get:()=>({projectId:"default",sessionId:"s"})};
   const app=createApplicationUi({navigation,executeActions:async()=>{}});let cleaned=0,menuCalls=0;

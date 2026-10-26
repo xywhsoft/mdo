@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createTokenMeter, contextCheckpoint, estimateInputTokens } from "../app/web/js/features/chat/token-meter.js";
+import { createTokenMeter, contextCheckpoint, executionCheckpoint, estimateInputTokens } from "../app/web/js/features/chat/token-meter.js";
 import { createKeyboardShortcuts } from
   "../app/web/js/features/shell/keyboard-shortcuts.js";
 
@@ -36,6 +36,22 @@ function resource(data) {
     return () => {};
   } };
 }
+
+test("context meters select the exact member scope and use its committed delegated checkpoint", () => {
+  const target = { namespace: "team.g1", id: "writer" };
+  const root = { kind: "model_done", input_tokens: 100, output_tokens: 10 };
+  const own = { kind: "model_done", input_tokens: 200, output_tokens: 20, source: { namespace: target.namespace, member: target.id } };
+  const other = { kind: "model_done", input_tokens: 90000, output_tokens: 900, source: { namespace: "team.g2", member: target.id } };
+  const events = [root, own, other];
+  assert.equal(contextCheckpoint(events).latestCall, root);
+  assert.equal(contextCheckpoint(events, target).latestCall, own);
+  const checkpoint = { model_id: "small", usage_available: true, input_tokens: 300, output_tokens: 30,
+    context: { exact: true, estimated_input_tokens: 330, input_budget_tokens: 1000, compact_threshold_tokens: 900 } };
+  assert.equal(executionCheckpoint(events, { target, checkpoint }).latestCall, checkpoint);
+  assert.equal(executionCheckpoint(events, { target, checkpoint }, true).latestCall, own);
+  assert.equal(executionCheckpoint(events, { target }).latestCall, own);
+  assert.deepEqual(executionCheckpoint(events, { available: false }), {});
+});
 
 test("Token meter Escape closes the panel before the global stop shortcut", () => {
   const previousDocument = globalThis.document;

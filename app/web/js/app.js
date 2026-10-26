@@ -921,6 +921,10 @@ export async function boot() {
     onExecute: executeApplicationActions,
   });
   const applicationUi = createApplicationUi({ navigation, executeActions: executeApplicationActions,
+    refreshSession: async context => {
+      const selected = navigation.workspace(), project = context.project || context.projectId || "default", session = context.session || context.sessionId;
+      if (session && project === selected.projectId && session === selected.sessionId) await loadSession(project, session);
+    },
     addContext: item => composerContext?.add(newPromptContext("quote", item.title, { content: item.content, path: item.source, project: item.context?.project || "default", session: item.context?.session || "" })),
     canCall: () => !purgeRecovery.isPaused() && !localServiceReconnecting });
   Object.defineProperty(globalThis, "mdo", { value: applicationUi.sdk, configurable: true });
