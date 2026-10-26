@@ -228,7 +228,7 @@ def main():
             fixture.call('operation.release',{'id':pending['id']})
             for i in range(32):mail('send',mailbox='bounded',message_id='bounded-'+str(i),body='x'*8000)
             fixture.call('mailbox.send',dict(namespace='qa.state',mailbox='bounded',message_id='overflow',body='x'*8000),429)
-            files=list((fixture.home/'data/application/state').glob('*.json'));assert len(files)==1
+            files=list((fixture.home/'data/application/state').rglob('*.json'));assert len(files)==1
             original=files[0].read_bytes();files[0].write_bytes(original.replace(b'false',b'true',1))
             assert fixture.call('state.get',{'namespace':'qa.state','key':'counter'},422)['code']=='sdk_state_corrupt'
             fixture.call('state.put',dict(namespace='qa.state',key='counter',expected_revision=recreated,value='overwrite'),422)

@@ -5,6 +5,8 @@
 #define SDK_STATE_BYTES (4u*1024u*1024u)
 #define SDK_STATE_RECORD_BYTES 16384u
 #define SDK_STATE_RECORDS 1024u
+#define SDK_STATE_SHARD_FILES 256u
+#define SDK_STATE_SHARD_BYTES (16u*1024u*1024u)
 typedef struct SdkMemberActive {char Identity[65];xcancel* Cancel;} SdkMemberActive;
 static struct {xmutex* Lock;xcond* Drained;char Epoch[33];SdkMemberActive Members[8];bool Stopping;} SdkState;
 static const cstr SdkStateMethods[]={"state.get","state.list","state.put","state.compare_exchange","state.remove","state.transaction","state.receipt.get","lease.acquire","lease.inspect","lease.validate","lease.renew","lease.release","mailbox.send","mailbox.get","mailbox.read","mailbox.ack","mailbox.wait","instance.create","instance.get","instance.list","instance.history","instance.recovery","instance.send","instance.step","instance.cancel","instance.close","instance.result","instance.wait","instance.resume","instance.abandon","work.create","work.get","work.list","work.claim","work.complete","work.release","work.cancel"};
@@ -18,6 +20,39 @@ void MdoApplicationInstancesStop(void){
 void MdoApplicationStateUnit(void){MdoApplicationInstancesStop();if(SdkState.Drained)xrtCondDestroy(SdkState.Drained);if(SdkState.Lock)xrtMutexDestroy(SdkState.Lock);memset(&SdkState,0,sizeof(SdkState));}
 static uint64 SdkStateRevision(const xvalue* V){uint64 N=0;SdkUInt(SdkGet(V,"revision"),&N);return N;}
 static bool SdkStateDeleted(const xvalue* V){bool Deleted=false;xrtValueGetBool(SdkGet(V,"deleted"),&Deleted);return Deleted;}
+/* Keep the logical flat path stable: persistent member directory identities
+ * already derive from it. Only the state document's physical location changes.
+ * Existing flat documents stay in place; new documents use 256 bounded shards. */
+static bool SdkStatePhysical(cstr Logical,char Physical[160],bool* Legacy,mdo_error_v1* E){
+    cstr Leaf=strrchr(Logical,'/');Leaf=Leaf?Leaf+1:Logical;
+    if(strlen(Leaf)!=69||strcmp(Leaf+64,".json"))return MdoApplicationError(E,"sdk_state_path","Invalid namespace storage identity","state",500,false);
+    char Shard[160];snprintf(Shard,sizeof(Shard),"data/application/state/%.2s/%s",Leaf,Leaf);
+    bool FlatExists=false,ShardExists=false;xfileinfo Info;
+    if(!MdoHomeExternalStat(Logical,&FlatExists,&Info)||!MdoHomeExternalStat(Shard,&ShardExists,&Info))
+        return MdoApplicationError(E,"sdk_state_unreadable","Cannot inspect namespace storage","state",503,false);
+    if(FlatExists&&ShardExists)return MdoApplicationError(E,"sdk_state_ambiguous","Both legacy and sharded state exist; neither copy was overwritten","state",409,false);
+    *Legacy=FlatExists;snprintf(Physical,160,"%s",FlatExists?Logical:Shard);return true;
+}
+static bool SdkStateShardBudget(cstr Physical,size_t Bytes,mdo_error_v1* E){
+    char DirectoryPath[160];snprintf(DirectoryPath,sizeof(DirectoryPath),"%s",Physical);char* Slash=strrchr(DirectoryPath,'/');
+    cstr Leaf=strrchr(Physical,'/');if(!Slash||!Leaf)return false;*Slash=0;Leaf++;
+    char* Native=MdoHomeExternalPath(DirectoryPath);xdir Directory=Native?xrtDirOpen(Native,XDIR_STAT):NULL;xrtFree(Native);
+    if(!Directory){const xerror* Error=xrtGetError();bool Missing=Error&&xrtErrorKind(Error)==XERR_NOT_FOUND;xrtClearError();
+        return Missing||MdoApplicationError(E,"sdk_state_unreadable","Cannot inspect namespace shard","state",503,false);}
+    xdirentry Item;xdirnext Next=XDIR_NEXT_ERROR;size_t Count=0,OtherBytes=0;bool Existing=false,Ok=true;
+    while((Next=xrtDirNext(Directory,&Item))==XDIR_NEXT_ITEM){
+        if(Item.Info.Type!=XFILE_TYPE_FILE||!(Item.Info.Available&XFILE_INFO_SIZE)||Item.Info.Size>SDK_STATE_SHARD_BYTES){Ok=false;break;}
+        Count++;if(xrtStrEqual(Item.Name,xrtStrView(Leaf)))Existing=true;
+        else if(Item.Info.Size>SDK_STATE_SHARD_BYTES-OtherBytes){Ok=false;break;}
+        else OtherBytes+=(size_t)Item.Info.Size;
+        if(Count>SDK_STATE_SHARD_FILES){Ok=false;break;}
+    }
+    bool Closed=xrtDirClose(Directory);
+    if(!Ok||!Closed||Next!=XDIR_NEXT_END)return MdoApplicationError(E,"sdk_state_unreadable","Namespace shard contains unsupported or unreadable storage","state",503,false);
+    if((!Existing&&Count>=SDK_STATE_SHARD_FILES)||Bytes>SDK_STATE_SHARD_BYTES-OtherBytes)
+        return MdoApplicationError(E,"sdk_state_limit","Namespace shard reached its 256-file or 16 MiB budget; existing state was preserved","state",413,false);
+    return true;
+}
 /* One checksummed atomic document per namespace: a transaction never publishes
  * a subset of its keys. Tombstones retain revisions across remove/recreate. */
 static xvalue* SdkStateLoad(const mdo_sdk_context_v1* C,const xvalue* P,char Path[160],mdo_error_v1* E){
@@ -27,7 +62,8 @@ static xvalue* SdkStateLoad(const mdo_sdk_context_v1* C,const xvalue* P,char Pat
     char* Identity=xrtFormat("%s\n%s",Project,Name);char Hash[65];bool Hashed=Identity&&MdoExtensionHash(Identity,Hash);xrtFree(Identity);
     if(!Hashed)return NULL;
     snprintf(Path,160,"data/application/state/%s.json",Hash);
-    bool Missing=false;char* Text=MdoExtensionRead(Path,true,SDK_STATE_BYTES*2u+4096u,&Missing);
+    char Physical[160];bool Legacy=false;if(!SdkStatePhysical(Path,Physical,&Legacy,E))return NULL;
+    bool Missing=false;char* Text=MdoExtensionRead(Physical,true,SDK_STATE_BYTES*2u+4096u,&Missing);
     if(!Text&&Missing){
         xvalue* Root=xrtValueObject();SdkPut(Root,"schema","mdo.state.v1");SdkPut(Root,"namespace",Name);SdkPut(Root,"project",Project);
         SdkPutUInt(Root,"revision",0);xrtValueObjectSetNew(Root,XRT_STR_LITERAL("records"),xrtValueObject());xrtValueObjectSetNew(Root,XRT_STR_LITERAL("requests"),xrtValueObject());return Root;
@@ -58,13 +94,9 @@ static bool SdkStateSave(cstr Path,const xvalue* Root,mdo_error_v1* E){
     xvalue* Envelope=xrtValueObject();Ok=MdoExtensionHash(Payload,Hash)&&SdkPut(Envelope,"payload",Payload)&&SdkPut(Envelope,"sha256",Hash);xrtFree(Payload);
     char* Text=Ok?SdkJson(Envelope):NULL;xrtValueRelease(Envelope);
     if(!Text)return MdoApplicationError(E,"sdk_state_allocation","Cannot serialize state; no changes published","state",500,false);
-    if(SdkStateRevision(Root)==1){
-        char* Native=MdoHomeExternalPath("data/application/state");xdir Directory=Native?xrtDirOpen(Native,0):NULL;xrtFree(Native);
-        if(Directory){xdirentry Item;size_t Count=0;xdirnext Next;while((Next=xrtDirNext(Directory,&Item))==XDIR_NEXT_ITEM)Count++;
-            bool Closed=xrtDirClose(Directory);if(!Closed||Next==XDIR_NEXT_ERROR||Count>=256){xrtFree(Text);return MdoApplicationError(E,"sdk_state_limit","Namespace storage is unavailable or has reached 256 files","state",413,false);}
-        }else {const xerror* Error=xrtGetError();if(Error&&xrtErrorKind(Error)!=XERR_NOT_FOUND){xrtFree(Text);return MdoApplicationError(E,"sdk_state_unreadable","Cannot inspect namespace storage","state",503,false);}xrtClearError();}
-    }
-    Ok=MdoHomeAtomicWrite(Path,Text,strlen(Text),false);xrtFree(Text);
+    char Physical[160];bool Legacy=false;
+    if(!SdkStatePhysical(Path,Physical,&Legacy,E)||(!Legacy&&!SdkStateShardBudget(Physical,strlen(Text),E))){xrtFree(Text);return false;}
+    Ok=MdoHomeAtomicWrite(Physical,Text,strlen(Text),false);xrtFree(Text);
     return Ok||MdoApplicationError(E,"sdk_state_commit_failed","Atomic state publication failed; inspect revisions before retrying","state",503,true);
 }
 static xvalue* SdkStateEntry(cstr Key,const xvalue* Entry){
