@@ -457,9 +457,18 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
   };
   window.addEventListener("mdo-browser-shortcut", nativeShortcut);
   return Object.freeze({ ensure, open: async (...args) => { await ensure(); return open(...args); }, newTab: async () => { await ensure(); return newTab(); },
-    register(id, descriptor) { discovered.delete(id); definitions.set(id, descriptor); return () => {
+    register(id, descriptor) { discovered.delete(id); definitions.set(id, descriptor);
+      // Restored rows can mount before asynchronous plugin activation. Replace
+      // their temporary missing-renderer view when the real definition arrives.
+      for (const [key, row] of entries) if (row.type === id) remount(key);
+      return () => {
       if (definitions.get(id) !== descriptor) return; definitions.delete(id);
-      for (const [key, row] of entries) if (row.type === id) { disposeMount(key); void bound(row).call("panel.close", { id: key }).catch(error => toast(error.message, "error")); }
+      for (const [key, row] of entries) if (row.type === id) {
+        disposeMount(key);
+        // Page shutdown detaches visual mounts, while the saved layout keeps
+        // durable rows for reload. A live plugin retirement still closes them.
+        if (!stopped) void bound(row).call("panel.close", { id: key }).catch(error => toast(error.message, "error"));
+      }
     }; },
     rendererChanged(id) { for (const [key, row] of entries) if (row.type === id || definitions.get(row.type)?.frontend === id) remount(key); },
     canLeave: () => !bridge.busy() && ![...mounts.values()].some(mounted => mounted.dirty?.()),
