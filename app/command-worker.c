@@ -159,6 +159,7 @@ void ServiceInit(XS_HostInfo* H) {
             mdo_sdk_context_v1 Application={0};Application.Size=sizeof(Application);Application.Version=MDO_SDK_VERSION;Application.Api=&CWSdkApi;
             Application.ExtensionId=C.CommandId;Application.InvocationId=C.InvocationId;Application.ProjectId=C.ProjectId;
             Application.SessionId=C.SessionId;Application.RunId=C.RunId;Application.Workspace=C.Workspace;Application.DeviceId="local";Application.Deadline=C.Deadline;
+            Application.Origin=C.RunId&&C.RunId[0]?MDO_ORIGIN_AGENT:MDO_ORIGIN_USER;
             C.Application=&Application;
             Code=Entry.F(&C,CWGet(Input,"arguments"),&Result);
         }else snprintf(CWError,sizeof(CWError),"Missing mdoCommandRun entry point");

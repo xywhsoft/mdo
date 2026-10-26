@@ -8,6 +8,10 @@ extern "C" {
 #define MDO_SDK_VERSION 1u
 typedef struct xvalue xvalue;
 typedef struct mdo_sdk_context_v1 mdo_sdk_context_v1;
+typedef enum mdo_call_origin {
+    MDO_ORIGIN_UNKNOWN = 0, MDO_ORIGIN_USER = 1,
+    MDO_ORIGIN_AGENT = 2, MDO_ORIGIN_EXTENSION = 3
+} mdo_call_origin;
 typedef enum mdo_value_kind {
     MDO_VALUE_NULL, MDO_VALUE_BOOL, MDO_VALUE_INT, MDO_VALUE_UINT,
     MDO_VALUE_NUMBER, MDO_VALUE_STRING, MDO_VALUE_ARRAY, MDO_VALUE_OBJECT,
@@ -66,7 +70,18 @@ struct mdo_sdk_context_v1 {
     const char *ExtensionId,*InvocationId,*DeviceId,*ProjectId,*SessionId,*RunId,*Workspace,*Method;
     uint64_t Deadline;
     const char *Namespace,*MemberId; /* Optional shared execution group and current member. */
+    uint32_t Origin; /* Host-set provenance; never accepted from request JSON. */
 };
+/* Provenance describes who initiated the call, not a permission grant. Native
+ * plugins are trusted code. Legacy contexts remain readable by Size. */
+static inline mdo_call_origin mdoCallOrigin(const mdo_sdk_context_v1* C) {
+    if(!C)return MDO_ORIGIN_UNKNOWN;
+    if(C->Size>=offsetof(mdo_sdk_context_v1,Origin)+sizeof(C->Origin) && C->Origin)
+        return (mdo_call_origin)C->Origin;
+    if((C->RunId&&C->RunId[0]) || (C->Size>=offsetof(mdo_sdk_context_v1,MemberId)+sizeof(C->MemberId) && C->MemberId&&C->MemberId[0]))
+        return MDO_ORIGIN_AGENT;
+    return MDO_ORIGIN_UNKNOWN;
+}
 /* All arguments are borrowed for the call. Results are owned and released by
  * Values->Release. Set/Append retain their value; no CRT/allocator crosses ABI. */
 static inline mdo_result mdoCall(const mdo_sdk_context_v1* C,const char* M,

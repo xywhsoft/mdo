@@ -901,6 +901,7 @@ static bool MdoModulesCopyDescriptor(MdoModuleGeneration* pGeneration,
     pGeneration->Application.InvocationId="";pGeneration->Application.DeviceId="local";
     pGeneration->Application.ProjectId="";pGeneration->Application.SessionId="";
     pGeneration->Application.RunId="";pGeneration->Application.Workspace="";
+    pGeneration->Application.Origin=MDO_ORIGIN_EXTENSION;
     pGeneration->HostServices.Application=&pGeneration->Application;
     return true;
 }
@@ -1658,6 +1659,7 @@ static void MdoModulesToolContext(mdo_tool_context_v1* pTarget,
     Scope->Application.InvocationId=pSource->sToolCallId;Scope->Application.Workspace=pSource->sWorkspaceRoot;
     Scope->Application.Deadline=pSource->uDeadline;snprintf(Scope->Run,sizeof(Scope->Run),"%llu",(unsigned long long)pSource->uRunId);
     Scope->Application.RunId=Scope->Run;pTarget->Application=&Scope->Application;
+    Scope->Application.Origin=MDO_ORIGIN_AGENT;
     if(g_MdoModules.Lock){xrtMutexLock(g_MdoModules.Lock);for(MdoModuleAgentScope* S=g_MdoModules.Scopes;S;S=S->Next)if((S->Agent&&S->Agent==pSource->pAgent)||(S->AgentId&&S->AgentId==pSource->uAgentId)){snprintf(Scope->Project,sizeof(Scope->Project),"%s",S->Project);snprintf(Scope->Session,sizeof(Scope->Session),"%s",S->Session);snprintf(Scope->Namespace,sizeof(Scope->Namespace),"%s",S->Namespace);snprintf(Scope->MemberId,sizeof(Scope->MemberId),"%s",S->MemberId);break;}xrtMutexUnlock(g_MdoModules.Lock);}
     Scope->Application.ProjectId=Scope->Project;Scope->Application.SessionId=Scope->Session;
     Scope->Application.Namespace=Scope->Namespace;Scope->Application.MemberId=Scope->MemberId;
@@ -2464,6 +2466,7 @@ static void MdoModulesAgentApplication(MdoModuleAgentBinding* Binding,mdo_agent_
     Application->ProjectId=Frame->ProjectId;Application->SessionId=Frame->SessionId;
     Application->Namespace=Frame->Namespace;Application->MemberId=Frame->MemberId;
     Application->Deadline=Frame->Deadline;Frame->Application=Application;
+    Application->Origin=MDO_ORIGIN_AGENT;
 }
 bool MdoModuleCatalogAgentEvent(const MdoModuleCatalog* Catalog,cstr Id,mdo_agent_phase Phase,
     mdo_agent_context_v1* Frame,xwork_error* Error)

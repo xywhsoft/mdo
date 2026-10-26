@@ -133,6 +133,7 @@ static mdo_result SdkInvoke(const mdo_sdk_context_v1* C,cstr Method,const xvalue
         SdkPut(*R,"device",C->DeviceId);SdkPut(*R,"project",C->ProjectId);SdkPut(*R,"session",C->SessionId);
         SdkPut(*R,"run",C->RunId);SdkPut(*R,"workspace",C->Workspace);SdkPutUInt(*R,"deadline",C->Deadline);
         SdkPut(*R,"namespace",C->Namespace);SdkPut(*R,"member",C->MemberId);
+        SdkPut(*R,"origin",mdoCallOrigin(C)==MDO_ORIGIN_USER?"user":mdoCallOrigin(C)==MDO_ORIGIN_AGENT?"agent":mdoCallOrigin(C)==MDO_ORIGIN_EXTENSION?"extension":"unknown");
         SdkPut(*R,"deadline_unit","monotonic_microseconds");return MDO_RESULT_OK;
     }
     if(!strcmp(Method,"events.read")){*R=MdoApplicationEvents(P,E);return *R?MDO_RESULT_OK:MDO_RESULT_ERROR;}
@@ -178,7 +179,7 @@ mdo_result MdoApplicationCall(const mdo_sdk_context_v1* C,cstr Method,const xval
     if(!E)E=&LocalError;
     if(R)*R=NULL;
     if(E){memset(E,0,sizeof(*E));E->Size=sizeof(*E);}
-    if(!C||C->Size<sizeof(*C)||C->Version!=MDO_SDK_VERSION||!R||!SdkIdValid(Method)){
+    if(!C||C->Size<offsetof(mdo_sdk_context_v1,Origin)||C->Version!=MDO_SDK_VERSION||!R||!SdkIdValid(Method)){
         MdoApplicationError(E,"sdk_arguments_invalid","A current SDK context, method and result pointer are required","dispatch",400,false);return MDO_RESULT_ERROR;}
     if(SdkCancelled(C)){
         MdoApplicationInvocation* I=C->Opaque;bool Cancelled=I&&I->Cancel&&xrtCancelRequested(I->Cancel);
@@ -187,7 +188,8 @@ mdo_result MdoApplicationCall(const mdo_sdk_context_v1* C,cstr Method,const xval
     }
     MdoApplicationInvocation* Parent=C->Opaque;
     MdoApplicationInvocation Frame=Parent?*Parent:(MdoApplicationInvocation){0};
-    mdo_sdk_context_v1 Bound=*C;Bound.Opaque=&Frame;Bound.Method=Method;C=&Bound;
+    mdo_sdk_context_v1 Bound={0};memcpy(&Bound,C,C->Size<sizeof(Bound)?C->Size:sizeof(Bound));
+    Bound.Origin=mdoCallOrigin(C);Bound.Size=sizeof(Bound);Bound.Opaque=&Frame;Bound.Method=Method;C=&Bound;
     MdoApplicationInvocation* I=&Frame;
     if(I->Depth>=32){MdoApplicationError(E,"sdk_recursion_limit","Service recursion exceeded 32 nested calls","dispatch",409,false);return MDO_RESULT_LIMIT;}
     I->Depth++;

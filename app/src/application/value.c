@@ -29,6 +29,7 @@ void MdoApplicationContext(mdo_sdk_context_v1* C,MdoApplicationInvocation* I,cst
     memset(C,0,sizeof(*C));C->Size=sizeof(*C);C->Version=MDO_SDK_VERSION;C->Api=&SdkApi;C->Opaque=I;
     C->ExtensionId=Extension?Extension:"";C->InvocationId=Invocation?Invocation:"";C->DeviceId="local";
     C->ProjectId=Project?Project:"";C->SessionId=Session?Session:"";C->RunId=Run?Run:"";C->Workspace=Workspace?Workspace:"";C->Deadline=Deadline;
+    C->Origin=Run&&Run[0]?MDO_ORIGIN_AGENT:MDO_ORIGIN_USER;
 }
 
 static bool SdkCallIdentity(char Id[33]){

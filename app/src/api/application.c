@@ -28,6 +28,7 @@ bool MdoApiApplicationRoute(MdoApiContext* C){
         Workspace=xrtPathAbs(Info.WorkspaceRoot);
     }
     MdoApplicationContext(&Native,&I,Extension?Extension:"local-client",C->RequestId,Project,SdkField(Scope,"session"),SdkField(Scope,"run"),Workspace,0);
+    Native.Origin=MDO_ORIGIN_USER;
     xvalue* R=NULL;mdo_error_v1 E={0};mdo_result Code=MdoApplicationCall(C->ApplicationContext?C->ApplicationContext:&Native,Method,SdkGet(Body.Value,"params"),&R,&E);
     MdoApiJsonBodyUnit(&Body);
     xrtFree(Workspace);

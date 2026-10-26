@@ -21,6 +21,7 @@ typedef struct SdkJob {
     MdoModuleCatalog* Modules;
     MdoProjectLease* Lease;
     uint64 Deadline;
+    uint32 Origin;
     bool Terminal,Disposing;
 } SdkJob;
 static struct {xmutex* Lock;SdkJob Jobs[SDK_JOBS];bool Stopping;} SdkJobs;
@@ -91,6 +92,7 @@ static int32 SdkJobRun(void* User){
     SdkJob* J=User;MdoApplicationInvocation I={0};I.Cancel=J->Cancel;I.Catalog=J->Modules;snprintf(I.WriteToken,sizeof(I.WriteToken),"%s",J->WriteToken);
     mdo_sdk_context_v1 C;MdoApplicationContext(&C,&I,J->Extension,J->Id,J->Project,J->Session,J->Run,J->Workspace,J->Deadline);
     C.Namespace=J->Namespace;C.MemberId=J->MemberId;
+    C.Origin=J->Origin;
     mdo_error_v1 E={0};xvalue* Result=NULL;mdo_result Code=MdoApplicationCall(&C,J->Method,J->Params,&Result,&E);
     char* Json=Result?SdkJson(Result):NULL;size_t Size=Json?strlen(Json):0;
     if(Size>16u*1024u*1024u){MdoApplicationError(&E,"sdk_result_limit","Result exceeded 16 MiB; use range reads or streams","result",413,true);Code=MDO_RESULT_LIMIT;xrtValueRelease(Result);Result=NULL;xrtSecureZero(Json,Size);xrtFree(Json);Json=NULL;Size=0;}
@@ -141,6 +143,7 @@ bool MdoApplicationJobsCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue
         if(!SdkIdValid(Target)||!strncmp(Target,"operation.",10))return MdoApplicationError(E,"sdk_arguments_invalid","Supply a non-operation service method","operation",400,false);
         xvalue* Admission=xrtValueObject();SdkPut(Admission,"method",Target);SdkPut(Admission,"extension",C->ExtensionId);SdkPut(Admission,"project",C->ProjectId);SdkPut(Admission,"session",C->SessionId);SdkPut(Admission,"run",C->RunId);SdkPut(Admission,"workspace",C->Workspace);
         SdkPut(Admission,"namespace",C->Namespace);SdkPut(Admission,"member",C->MemberId);
+        SdkPutUInt(Admission,"origin",mdoCallOrigin(C));
         const xvalue* Params=SdkGet(P,"params");xrtValueObjectSetNew(Admission,XRT_STR_LITERAL("params"),Params&&xrtValueType(Params)!=XVALUE_NULL?xrtValueClone(Params):xrtValueObject());
         xvalue* Canonical=SdkCanonicalValue(Admission,0);char* Text=Canonical?SdkJson(Canonical):NULL;xrtValueRelease(Canonical);xrtValueRelease(Admission);
         bool Ok=Text&&MdoExtensionHash(Text,Hash);if(Text)xrtSecureZero(Text,strlen(Text));xrtFree(Text);
@@ -165,6 +168,7 @@ bool MdoApplicationJobsCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue
             J->Lease=Lease;
             J->Extension=xrtStrDup(C->ExtensionId);J->Project=xrtStrDup(C->ProjectId);J->Session=xrtStrDup(C->SessionId);J->Run=xrtStrDup(C->RunId);J->Workspace=xrtStrDup(C->Workspace);J->Method=xrtStrDup(Target);
             J->Namespace=xrtStrDup(C->Namespace?C->Namespace:"");J->MemberId=xrtStrDup(C->MemberId?C->MemberId:"");
+            J->Origin=mdoCallOrigin(C);
             MdoApplicationInvocation* Caller=C->Opaque;
             J->Params=SdkGet(P,"params")?xrtValueClone(SdkGet(P,"params")):xrtValueObject();J->Cancel=xrtCancelCreate();J->Modules=Caller&&Caller->Catalog?MdoModuleCatalogRef(Caller->Catalog):MdoModuleCatalogSnapshot();J->Deadline=C->Deadline;J->Info=xrtValueObject();
             if(Caller)snprintf(J->WriteToken,sizeof(J->WriteToken),"%s",Caller->WriteToken);

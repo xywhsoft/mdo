@@ -225,7 +225,7 @@ static bool SdkInstanceCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue
         xvalue* Current=SdkInstanceInfo(Member);bool Open=!strcmp(SdkField(Current,"state"),"idle")||!strcmp(SdkField(Current,"state"),"running");xrtValueRelease(Current);
         if(!Open){MdoApplicationError(E,"sdk_instance_not_open","Member is closed or requires review","instance",409,false);goto done;}
         xvalue* Q=xrtValueObject(),*Body=xrtValueObject();SdkPut(Body,"prompt",Prompt);
-        SdkPut(Body,"origin",(C->MemberId&&C->MemberId[0])||(C->RunId&&C->RunId[0])?"agent":"user");
+        SdkPut(Body,"origin",mdoCallOrigin(C)==MDO_ORIGIN_USER?"user":"agent");
         SdkPut(Q,"mailbox",SdkField(Member,"mailbox"));SdkPut(Q,"message_id",SdkField(P,"message_id"));xrtValueObjectSetNew(Q,XRT_STR_LITERAL("body"),Body);
         Ok=SdkMailboxApply(C,"mailbox.send",Q,Root,R,E,&Changed);xrtValueRelease(Q);
     }else{
