@@ -20,4 +20,6 @@
 
 `run.finished` hook 在原生成员结算后执行，输入保留 route，并附 started、settled、state、error、member。收到 external_settlement=true 表示已有上层显式恢复调用负责插件任务结算，应避免再次预留预算。完成回调清理取消与期限，以便在 Stop 后保存任务结果；调用来源保持原样。回调不得自行再次运行模型或工具。
 
+idle 只在成员的原生会话、历史写入锁和回调 owner 释放后可见；完成观察者还在执行时，其他调用仍看到 running。资源释放后发出 instance.changed 并调用 instance.released hook，参数为 id/namespace/state/revision。后者可继续调度先前明确请求运行的队列，不能据此创建未请求的新工作。该回调也保留原始来源，同时移除已结束的取消/期限。
+
 确定性验收：原生实例预热 → 长主输入/完整回复 → 图片与真实 read 工具 → 成员取消 → 实际宿主退出 → token 确认恢复并继续主聊天 → 返回协调者。只发送预期的八次本地模型请求。此接口是执行与事件基础设施；墨者的用户交接和编排接线、跨上下文编辑/分支等产品验收仍需另行完成。

@@ -14,6 +14,7 @@ static int SdkInstanceActive(cstr Identity);
 static xvalue* SdkInstanceInfo(const xvalue* V){
     xvalue* R=xrtValueClone(V);cstr State=SdkField(V,"state"),Epoch=SdkField(V,"epoch");
     cstr Identity=SdkField(V,"runtime_identity");
+    if(State&&Identity&&SdkInstanceActive(Identity)>=0&&(!strcmp(State,"idle")||!strcmp(State,"requires_review")))SdkPut(R,"state","running");
     if(State&&!strcmp(State,"running")&&(!Epoch||strcmp(Epoch,SdkState.Epoch)||!Identity||SdkInstanceActive(Identity)<0))SdkPut(R,"state","requires_review");
     return R;
 }

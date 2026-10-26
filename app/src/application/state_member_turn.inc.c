@@ -4,7 +4,7 @@ struct MdoApplicationMemberTurn {
     mdo_sdk_context_v1 Context;
     MdoApplicationInvocation Invocation;
     char* Strings[10];
-    xvalue *Params,*Config,*Message;
+    xvalue *Params,*Config,*Message,*Notification;
     char* Prompt;
     xllm_message UserMessage;
     bool HasUserMessage;
@@ -22,8 +22,14 @@ void MdoApplicationMemberTurnRelease(MdoApplicationMemberTurn* T){
     MdoSessionPermissionScopeRelease(T->Context.ProjectId,SdkField(T->Config,"parent_session"),T->Scope);
     if(T->Slot>=0){xrtMutexLock(SdkState.Lock);SdkState.Members[T->Slot].Cancel=NULL;SdkState.Members[T->Slot].Identity[0]=0;
         xrtCondBroadcast(SdkState.Drained);xrtMutexUnlock(SdkState.Lock);}
+    if(T->Notification){
+        SdkInstanceNotify(&T->Context,T->Notification);
+        T->Invocation.Cancel=NULL;T->Context.Deadline=0;
+        xvalue* Released=xrtValueClone(T->Notification);mdo_error_v1 HookError={0};
+        if(Released)MdoApplicationHooks(&T->Context,"instance.released",&Released,&HookError);xrtValueRelease(Released);
+    }
     xrtCancelDestroy(T->Cancel);xrtCancelDestroy(T->ParentCancel);MdoModuleCatalogRelease(T->Modules);
-    xrtValueRelease(T->Params);xrtValueRelease(T->Config);xrtValueRelease(T->Message);
+    xrtValueRelease(T->Params);xrtValueRelease(T->Config);xrtValueRelease(T->Message);xrtValueRelease(T->Notification);
     xrtFree(T->Prompt);if(T->HasUserMessage)xllmMessageUnit(&T->UserMessage);
     for(size_t I=0;I<10;I++)xrtFree(T->Strings[I]);xrtFree(T);
 }
@@ -204,9 +210,12 @@ bool MdoApplicationMemberTurnFinish(MdoApplicationMemberTurn* T,xwork_result Sta
         if(Ok){char MailKey[128];SdkMailboxIdentity(Ack,MailKey);xvalue* Mail=SdkInstanceValue(Root,MailKey);
             Ok=xrtValueObjectSet(Mail,XRT_STR_LITERAL("outcome"),Outcome)&&SdkPut(Member,"state",!strcmp(State,"requires_review")?"requires_review":"idle")&&
                 xrtValueObjectSet(Member,XRT_STR_LITERAL("last_outcome"),Outcome)&&SdkInstanceStore(Root,T->Key,Member,E)&&SdkStateSave(Path,Root,E);}
-        xrtValueRelease(Ack);if(Ok)*R=SdkInstanceInfo(Member);
+        xrtValueRelease(Ack);if(Ok){
+            *R=xrtValueClone(Member);T->Notification=xrtValueObject();
+            SdkPut(T->Notification,"id",SdkField(Member,"id"));SdkPut(T->Notification,"namespace",SdkField(Member,"namespace"));
+            SdkPut(T->Notification,"state",SdkField(Member,"state"));SdkPutUInt(T->Notification,"revision",SdkStateRevision(Member));
+        }
     }
-    if(T->Slot>=0){SdkState.Members[T->Slot].Cancel=NULL;SdkState.Members[T->Slot].Identity[0]=0;T->Slot=-1;xrtCondBroadcast(SdkState.Drained);}
     xrtValueRelease(Root);xrtMutexUnlock(SdkState.Lock);xrtValueRelease(Outcome);T->Finished=true;
-    if(Ok)SdkInstanceNotify(C,*R);return Ok;
+    return Ok;
 }
