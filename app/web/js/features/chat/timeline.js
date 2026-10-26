@@ -96,6 +96,7 @@ export function eventsToTimeline(events, historyLost = false,
   const runUsages = new Map();
   const streams = new Map();
   const promptsByRun = new Map();
+  const promptsBySource = new Map();
   const promptsByEpoch = new Map();
   const recoveryStarts = new Map();
   const resumableTools = new Map();
@@ -121,6 +122,8 @@ export function eventsToTimeline(events, historyLost = false,
       state: "done", time: 0 });
   }
   for (const event of events) {
+    const sourceKey = event.source?.member ? `${event.source.namespace}/${event.source.member}` : "";
+    latestMainPrompt = promptsBySource.get(sourceKey) || null;
     const itemCount = items.length;
     const runKey = String(event.run_id || event.agent_id || event.event_id);
     const epoch = runEpochs.get(runKey) ?? 0;
@@ -466,6 +469,8 @@ export function eventsToTimeline(events, historyLost = false,
           if (discarded(latestMainPrompt)) latestMainPrompt = null;
           for (const [key, prompt] of promptsByRun)
             if (discarded(prompt)) promptsByRun.delete(key);
+          for (const [key, prompt] of promptsBySource)
+            if (discarded(prompt)) promptsBySource.delete(key);
         }
         if (!showHistoryTruncations &&
             (!event.text || event.text === "会话历史已截断") &&
@@ -503,9 +508,14 @@ export function eventsToTimeline(events, historyLost = false,
       items[index].runKey ??= runKey;
       items[index].runEpoch ??= event.kind === "agent_start" ? Number(event.event_id) || 0 : epoch;
       items[index].agentDepth ??= event.agent_depth || 0;
+      if (event.source?.member) items[index].executionSource ??= { ...event.source };
     }
+    if (latestMainPrompt) promptsBySource.set(sourceKey, latestMainPrompt);
+    else promptsBySource.delete(sourceKey);
   }
+  const memberHistory = events.some(event => event.source?.member && !(event.agent_depth > 0));
   for (const item of items) {
+    item.historyReadOnly = memberHistory;
     item.turnState = terminalRuns.get(`${item.runKey}:${item.runEpoch}`) ?? "running";
     const start = recoveryStarts.get(promptsByEpoch.get(`${item.runKey}:${item.runEpoch}`));
     if (!(item.agentDepth > 0) && start &&
@@ -632,6 +642,8 @@ function foldableNode(item, openState, previewOpen, previewScroll, projectId, se
   details.append(element("summary", { className: "timeline-fold-summary" }, [
     element("span", { className: "timeline-fold-marker", attrs: { "aria-hidden": "true" } }),
     element("span", { className: "timeline-role", text: item.role }),
+    item.executionSource?.member ? element("span", { className: "timeline-role", text: item.executionSource.member,
+      attrs: { title: `${item.executionSource.agent} · ${item.executionSource.namespace}` } }) : null,
     summaryPreview,
     element("span", { className: "timeline-fold-status", text: foldStatus }),
     timeNode(item.time),
@@ -737,7 +749,10 @@ function timelineNode(item, handlers, projectId, sessionId, writable,
     return foldableNode(item, openState, previewOpen, previewScroll,
       projectId, sessionId, toolTextCache);
   const time = timeNode(item.time);
+  const source = item.executionSource;
   const header = element("div", { className: "timeline-item-header" }, [
+    source?.member && item.kind === "assistant" ? element("span", { className: "timeline-role",
+      text: source.member, attrs: { title: `${source.agent} · ${source.namespace}` } }) :
     item.kind === "user" || item.kind === "assistant" ? null :
       element("span", { className: "timeline-role", text: item.role }),
     time,
@@ -857,7 +872,7 @@ function timelineNode(item, handlers, projectId, sessionId, writable,
       });
       actions.append(copy);
     }
-    if (writable && item.kind === "user" &&
+    if (writable && !item.historyReadOnly && item.kind === "user" &&
         Number.isSafeInteger(item.userMessageSequence) &&
         item.userMessageSequence > 0) {
       const edit = commandButton(t("timeline.edit", {}, "编辑"),
@@ -868,14 +883,14 @@ function timelineNode(item, handlers, projectId, sessionId, writable,
       actions.append(edit);
     }
     if (item.kind === "assistant") {
-      if (writable && "forkThroughSequence" in item) {
+      if (writable && !item.historyReadOnly && "forkThroughSequence" in item) {
         const fork = commandButton(t("timeline.fork", {}, "分叉"),
           t("timeline.forkFromReply", {}, "从此回复分叉会话"), "branch", `${item.key}/fork`,
           handlers, sessionKey, () => handlers.onFork(item.forkThroughSequence, owner));
         actions.append(fork);
       }
       const retryPrompt = item.retryPrompt;
-      if (writable && retryPrompt && Number.isSafeInteger(retryPrompt.sequence) &&
+      if (writable && !item.historyReadOnly && retryPrompt && Number.isSafeInteger(retryPrompt.sequence) &&
           retryPrompt.sequence > 0 && (retryPrompt.text || retryPrompt.attachments?.length)) {
         const retry = commandButton(t("timeline.retry", {}, "重试"),
           t("timeline.retryTurn", {}, "重试此回合"), "retry", `${item.key}/retry`,

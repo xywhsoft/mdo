@@ -815,6 +815,42 @@ fail:
     return NULL;
 }
 
+/* Member sequence numbers belong to another ledger. Until an operation can
+ * capture every participating ledger atomically, fail before changing any of
+ * them instead of interpreting those numbers against the coordinator. */
+static bool MdoEventsSingleLedger(const char* Project, const char* Session,
+    const char* Data, size_t Size, xwork_error* Error)
+{
+    size_t Start = 0u;
+    while (Start < Size) {
+        const char* End = memchr(Data + Start, '\n', Size - Start);
+        if (!End) break;
+        size_t Length = (size_t)(End - Data - Start); MdoSessionEventOwned Entry;
+        if (Length && Length <= MDO_SESSION_EVENT_RECORD_LIMIT &&
+            MdoEventsParse(Project, Session, xrtStrViewN(Data + Start, Length), &Entry)) {
+            bool Member = Entry.Info.AgentDepth == 0u && Entry.Info.Source.Member[0];
+            MdoEventsOwnedUnit(&Entry);
+            if (Member) {
+                MdoEventsError(Error, XWORK_ERROR_CONTEXT, MDO_SESSION_MEMBER_HISTORY_ERROR);
+                return false;
+            }
+        } else xrtClearError();
+        Start += Length + 1u;
+    }
+    return true;
+}
+bool MdoSessionEventBridgeSingleLedger(MdoSessionEventBridge* Bridge, xwork_error* Error)
+{
+    if (!Bridge) return false;
+    char* Data = NULL; size_t Size = 0u; bool Exists = false, Ok = false; xfileinfo Info;
+    xrtMutexLock(Bridge->Lock);
+    if (!MdoHomeExternalStat(Bridge->Path, &Exists, &Info) ||
+        (Exists && !MdoEventsRead(Bridge->Path, &Data, &Size)))
+        MdoEventsXrtError(Error, "cannot inspect the conversation's ledger ownership");
+    else Ok = MdoEventsSingleLedger(Bridge->ProjectId, Bridge->SessionId, Data, Size, Error);
+    xrtFree(Data); xrtMutexUnlock(Bridge->Lock); return Ok;
+}
+
 /* Forks are prepared before the child Agent is published. Rebuild the UI
  * journal under the child's identity, keeping only completed source runs
  * before the requested user-message boundary. The result is published in one
@@ -1048,6 +1084,7 @@ MdoSessionEventTrimPlan* MdoSessionEventTrimPrepare(
          (Exists && (Info.Type != XFILE_TYPE_FILE ||
           (Info.Available & XFILE_INFO_SIZE) == 0u ||
           !MdoEventsRead(Bridge->Path, &Data, &Size))) ) goto io;
+    if (!MdoEventsSingleLedger(Bridge->ProjectId, Bridge->SessionId, Data, Size, Error)) goto fail;
     /* Validate against the unmodified journal, including a first-message edit
      * whose trim plan is Clear. Manager serialization spans this check and the
      * mutation, so another history edit cannot replace the source in between. */

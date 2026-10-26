@@ -13,6 +13,8 @@
 #define MDO_SESSION_REASONING_CAPACITY 33u
 #define MDO_SESSION_WORKSPACE_CAPACITY 2049u
 #define MDO_SESSION_PATH_CAPACITY 256u
+#define MDO_SESSION_MEMBER_HISTORY_ERROR \
+    "This conversation contains persistent member contexts. Editing, retrying, clearing or forking only one ledger is unsafe; continue with a new message or create a new conversation."
 
 typedef struct MdoSession MdoSession;
 typedef struct MdoSessionCatalog MdoSessionCatalog;

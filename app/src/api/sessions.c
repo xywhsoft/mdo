@@ -507,6 +507,8 @@ static bool MdoApiSessionMutationFailure(MdoApiContext* Context,
     if ( Stale )
         return MdoApiReplyError(Context, 412u, "revision_conflict",
             "The session changed; reload it before updating", NULL);
+    if (Error && Error->eCode == XWORK_ERROR_CONTEXT && !strcmp(Error->sMessage, MDO_SESSION_MEMBER_HISTORY_ERROR))
+        return MdoApiReplyError(Context, 409u, "session_member_history", MDO_SESSION_MEMBER_HISTORY_ERROR, NULL);
     if ( Error != NULL && Error->eCode == XWORK_ERROR_INVALID_ARGUMENT )
         return MdoApiReplyError(Context, 422u, "session_update_invalid",
             "The session update is invalid", NULL);

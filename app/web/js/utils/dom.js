@@ -282,6 +282,7 @@ const API_ERROR_COPY = Object.freeze({
     "清理记录未能保存，图片仍在草稿中。请重试。"],
   image_cleanup_full: ["error.imageCleanupFull",
     "待清理图片已达上限，图片仍在草稿中。请先处理其他图片。"],
+  session_member_history: ["error.sessionMemberHistory", "此会话包含成员独立上下文，暂不支持跨上下文编辑、重试、清空或分叉。请追加消息，或新建会话；中断的成员请在成员窗口恢复。"],
   session_state_conflict: ["error.sessionStateConflict",
     "会话状态已变化，请刷新后重试。"],
   session_purge_busy: ["error.sessionPurgeBusy",

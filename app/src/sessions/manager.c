@@ -1332,6 +1332,7 @@ MdoSession* MdoSessionFork(MdoSession* Source,
         goto done;
     }
     snprintf(ProjectId, sizeof(ProjectId), "%s", Source->Info.ProjectId);
+    if (Options->ThroughSequence != 0u && !MdoSessionEventBridgeSingleLedger(Source->Bridge, Error)) goto done;
     snprintf(Title, sizeof(Title), "%s", Options->Title != NULL ?
         Options->Title : Source->Info.Title);
     SessionId = Options->RequestedId != NULL ?
