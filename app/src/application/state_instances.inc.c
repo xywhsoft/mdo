@@ -47,129 +47,36 @@ static bool SdkMemberResumeOptions(const xvalue* P,xwork_resume_options* O,xwork
         xworkRecoveryDecisionInit(&Decisions[I]);Decisions[I].sToolCallId=Id;Decisions[I].eAction=!strcmp(Action,"retry")?XWORK_RECOVERY_RETRY:XWORK_RECOVERY_RECORD_UNCERTAIN;
     }return true;
 }
+#include "state_member_turn.inc.c"
 static bool SdkInstanceStep(const mdo_sdk_context_v1* C,cstr Method,const xvalue* P,xvalue** R,mdo_error_v1* E){
-    bool Resume=!strcmp(Method,"instance.resume"),Abandon=!strcmp(Method,"instance.abandon"),Recover=Resume||Abandon;
+    bool Resume=!strcmp(Method,"instance.resume"),Abandon=!strcmp(Method,"instance.abandon");
     xwork_resume_options ResumeOptions;xwork_recovery_decision Decisions[64];
     if(Resume&&!SdkMemberResumeOptions(P,&ResumeOptions,Decisions,E))return false;
-    cstr Id=SdkField(P,"id");char Key[128],Path[160],Identity[65],Directory[160];snprintf(Key,sizeof(Key),"sys.instance.%s",Id);
-    MdoModuleCatalog* Modules=MdoModuleCatalogSnapshot();
-    if(!Modules)return MdoApplicationError(E,"sdk_instance_role","Role catalog is unavailable","instance",503,false);
-    xcancel* Cancel=xrtCancelCreate();xvalue *Config=NULL,*Message=NULL,*MailParams=xrtValueObject(),*Root=NULL;int Slot=-1;bool Ok=false,Claimed=false;
-    if(!Cancel||!MailParams)goto done;
-    xrtMutexLock(SdkState.Lock);Root=SdkStateLoad(C,P,Path,E);xvalue* Member=Root?SdkInstanceValue(Root,Key):NULL;
-    if(!Root)goto unlock;
-    if(!Member){MdoApplicationError(E,"sdk_instance_missing","Member is unavailable","instance",404,false);goto unlock;}
-    xvalue* Current=SdkInstanceInfo(Member);cstr CurrentState=SdkField(Current,"state");
-    bool Allowed=CurrentState&&!strcmp(CurrentState,Recover?"requires_review":"idle");xrtValueRelease(Current);
-    if(!Allowed){MdoApplicationError(E,"sdk_instance_not_idle","Member is running, closed or needs an explicit resume/abandon decision","instance",409,false);goto unlock;}
-    if(Recover){uint64 Expected=0,Revision=0;SdkUInt(SdkGet(Member,"revision"),&Revision);cstr MessageId=SdkField(P,"message_id"),Active=SdkField(Member,"active_message");
-        if(!SdkUInt(SdkGet(P,"expected_revision"),&Expected)||Expected!=Revision||!Active||!MessageId||strcmp(MessageId,Active)){
-            MdoApplicationError(E,"sdk_instance_conflict","Recovery requires the current member revision and active_message","instance",409,false);goto unlock;}}
-    if(SdkState.Stopping){MdoApplicationError(E,"sdk_stopping","Member service is stopping","instance",503,false);goto unlock;}
-    for(int I=0;I<8;I++)if(!SdkState.Members[I].Cancel){Slot=I;break;}
-    if(Slot<0){MdoApplicationError(E,"sdk_instance_busy","Eight member turns are already active; wait for idle notification","instance",429,false);goto unlock;}
-    if(!SdkInstancePaths(Path,Id,Identity,Directory))goto unlock;
-    if(SdkInstanceActive(Identity)>=0){MdoApplicationError(E,"sdk_instance_busy","Member is being inspected or run by another operation","instance",409,false);goto unlock;}
-    SdkPut(MailParams,"mailbox",SdkField(Member,"mailbox"));SdkPutUInt(MailParams,"limit",1);xvalue* Page=NULL;bool Changed=false;
-    if(Recover)SdkPut(MailParams,"message_id",SdkField(Member,"active_message"));
-    if(!SdkMailboxApply(C,Recover?"mailbox.get":"mailbox.read",MailParams,Root,&Page,E,&Changed)){xrtValueRelease(Page);goto unlock;}
-    const xvalue* Next=Recover?Page:xrtValueArrayGet(SdkGet(Page,"items"),0);
-    if(!Next){*R=SdkInstanceInfo(Member);xrtValueObjectSetNew(*R,XRT_STR_LITERAL("no_work"),xrtValueBool(true));Ok=*R!=NULL;xrtValueRelease(Page);goto unlock;}
-    Message=xrtValueClone(Next);xrtValueRelease(Page);Config=xrtValueClone(Member);
-    SdkPut(Member,"state","running");SdkPut(Member,"epoch",SdkState.Epoch);SdkPut(Member,"runtime_identity",Identity);SdkPut(Member,"active_message",SdkField(Message,"message_id"));
-    Claimed=SdkInstanceStore(Root,Key,Member,E)&&SdkStateSave(Path,Root,E);
-    if(Claimed){snprintf(SdkState.Members[Slot].Identity,65,"%s",Identity);SdkState.Members[Slot].Cancel=Cancel;}
-unlock:
-    xrtValueRelease(Root);Root=NULL;xrtMutexUnlock(SdkState.Lock);if(!Claimed)goto done;
-    /* No state/catalog mutex is held while creating or executing C/model code. */
-    xwork_error Error;xworkErrorInit(&Error);MdoAgentSession* Session=NULL;MdoAgentRun* Run=NULL;MdoApprovalScope* Scope=NULL;
-    MdoAgentSessionOptions Options;MdoAgentSessionOptionsInit(&Options);
-    Options.AgentId=SdkField(Config,"agent_id");Options.ModelId=SdkField(Config,"model_id");Options.ProjectId=C->ProjectId;
-    Options.Namespace=SdkField(Config,"namespace");Options.MemberId=Id;
-    char* DefaultWorkspace=C->ProjectId&&!strcmp(C->ProjectId,"default")?MdoHomeDefaultWorkspacePath(true):NULL;
-    char QuestionScope[33];memcpy(QuestionScope,Identity,32);QuestionScope[32]=0;
-    Options.ProductSessionId=SdkField(Config,"parent_session");Options.AskScopeId=Options.ProductSessionId&&Options.ProductSessionId[0]?Options.ProductSessionId:QuestionScope;Options.WorkspaceRoot=DefaultWorkspace?DefaultWorkspace:SdkField(Config,"workspace");
-    Options.PermissionProfile=SdkField(Config,"permission_profile");Options.AllowSubagentDefinition=true;Options.ModuleCatalog=Modules;
-    Options.Cancel=Cancel;Options.Deadline=C->Deadline?C->Deadline:MDO_DEADLINE_NEVER;Options.UseRunPermissionScope=true;Options.OnPermission=MdoApprovalOnPermission;
-    cstr Parent=Options.ProductSessionId;MdoSessionInfo ParentInfo={0};ParentInfo.Size=sizeof(ParentInfo);
-    bool Ready=true;
-    if(Parent&&Parent[0]){
-        MdoSession* Owner=MdoSessionLoad(C->ProjectId,Parent,&Error);Ready=Owner&&MdoSessionGetInfo(Owner,&ParentInfo)&&ParentInfo.Status==MDO_SESSION_ACTIVE;MdoSessionRelease(Owner);
-        if(Ready){Options.PermissionProfile=ParentInfo.PermissionProfile;Scope=MdoSessionPermissionScopeAcquire(C->ProjectId,Parent,&Error);Options.LivePermissionScope=Scope;Ready=Scope!=NULL;}
+    bool Ready=false;xwork_error Error;xworkErrorInit(&Error);
+    MdoApplicationMemberTurn* T=MdoApplicationMemberTurnOpen(C,Method,P,&Ready,&Error,E);
+    if(!T){
+        if(E&&!strcmp(E->Code,"sdk_instance_no_work")){
+            bool Found=false,Ok=MdoApplicationStateCall(C,"instance.get",P,R,E,&Found);
+            if(Ok){xrtValueObjectSetNew(*R,XRT_STR_LITERAL("no_work"),xrtValueBool(true));memset(E,0,sizeof(*E));E->Size=sizeof(*E);}return Ok;
+        }
+        return false;
     }
-    char Snapshot[192],Journal[192];snprintf(Snapshot,sizeof(Snapshot),"%s/snapshot.json",Directory);snprintf(Journal,sizeof(Journal),"%s/journal.jsonl",Directory);
-    bool DirectoryExists=false; xfileinfo DirectoryStat={0};
-    bool DirectoryReady=MdoHomeCreateDirectory(Directory)||(MdoHomeExternalStat(Directory,&DirectoryExists,&DirectoryStat)&&DirectoryExists&&DirectoryStat.Type==XFILE_TYPE_DIRECTORY);
-    bool Exists=false,JournalExists=false;xfileinfo Stat={0};Ready=Ready&&DirectoryReady&&MdoHomeExternalStat(Snapshot,&Exists,&Stat)&&MdoHomeExternalStat(Journal,&JournalExists,&Stat);
-    char *NativeSnapshot=MdoHomeExternalPath(Snapshot),*NativeJournal=MdoHomeExternalPath(Journal);
-    Ready=Ready&&NativeSnapshot&&NativeJournal;
-    if(!Ready&&Error.eCode==XWORK_ERROR_NONE){Error.eCode=XWORK_ERROR_IO;snprintf(Error.sMessage,sizeof(Error.sMessage),"Cannot validate member parent or private snapshot directory");}
-    Options.SessionPath=NativeSnapshot;Options.JournalPath=NativeJournal;Options.ArtifactDirectory=Directory;Options.Recover=Exists||JournalExists;
-    Options.PreserveRecoveryLedger=Recover;
-    SdkMemberHistoryWriter* History=NULL;
-    if(Ready&&!Abandon){
-        History=SdkMemberHistoryCreate(Directory,Message);Ready=History!=NULL;
-        if(Ready){Options.OnEvent=SdkMemberHistoryEvent;Options.EventUserData=History;
-            Options.OwnerUserData=History;Options.OnOwnerRetain=SdkMemberHistoryRetain;Options.OnOwnerRelease=SdkMemberHistoryRelease;}
-        else {Error.eCode=XWORK_ERROR_IO;snprintf(Error.sMessage,sizeof(Error.sMessage),"Cannot open the member's visible conversation journal");}
-    }
-    if(Ready&&NativeSnapshot&&NativeJournal)Session=MdoAgentSessionCreateWithRuntime(MdoBootstrapRuntime(),&Options,&Error);
-    /* Callback ownership follows the native session, including any pinned
-     * descendants, rather than borrowing this step's stack frame. */
-    SdkMemberHistoryRelease(History);
-    bool Recovery=false;Ready=Session&&MdoAgentSessionRecoveryRequired(Session,&Recovery,&Error);
-    cstr ExpectedToken=SdkField(P,"expected_recovery_token");
-    if(Ready&&Resume&&ExpectedToken){
-        uint64 Sequence=0;xwork_recovery_snapshot* Pending=MdoAgentSessionRecoverySnapshot(Session,&Error);
-        char Token[MDO_AGENT_RECOVERY_TOKEN_CAPACITY],Epoch[65];
-        Ready=(Pending||Error.eCode==XWORK_ERROR_NONE)&&SdkMemberRecoveryEpoch(Config,Epoch)&&MdoAgentSessionLastSequence(Session,&Sequence,&Error)&&MdoAgentRecoverySnapshotToken(Pending,Recovery,Sequence,Epoch,Token)&&!strcmp(ExpectedToken,Token);
-        xworkRecoverySnapshotRelease(Pending);
-        if(!Ready){Error.eCode=XWORK_ERROR_RECOVERY_REQUIRED;snprintf(Error.sMessage,sizeof(Error.sMessage),"Recovery details changed; inspect the native calls again before deciding");}
-    }
-    if(Ready&&!Recover&&Recovery)Ready=false;
-    /* An initial checkpoint makes even the first model turn recoverable. */
-    if(Ready)Ready=MdoAgentSessionCheckpoint(Session,&Error);
-    xwork_result Status=XWORK_RESULT_ERROR;xwork_run_result Result={0};
+    MdoAgentSession* Session=T->Session;MdoAgentRun* Run=NULL;xwork_run_result Result={0};xwork_result Status=XWORK_RESULT_ERROR;
+    bool Recovery=false;
+    if(Ready)Ready=MdoAgentSessionRecoveryRequired(Session,&Recovery,&Error);
     if(Ready&&Abandon){uint64 Sequence=0,Finished=0;Ready=MdoAgentSessionLastSequence(Session,&Sequence,&Error)&&(!Recovery||MdoAgentSessionFinishInterrupted(Session,Sequence,&Finished,&Error));if(Ready)Status=XWORK_RESULT_CANCELLED;}
     else if(Ready&&Resume&&!Recovery){Ready=MdoAgentSessionDriveNative(Session,SdkMemberFinal,&Result,&Error);if(Ready)Status=XWORK_RESULT_OK;}
-    else if(Ready){MdoAgentRunOptions Turn;MdoAgentRunOptionsInit(&Turn);Turn.Prompt=SdkField(SdkGet(Message,"body"),"prompt");Turn.Cancel=Cancel;Turn.Deadline=Options.Deadline;Turn.Resume=Resume;Turn.ResumeOptions=Resume?&ResumeOptions:NULL;
+    else if(Ready){MdoAgentRunOptions Turn;MdoAgentRunOptionsInit(&Turn);Turn.Prompt=MdoApplicationMemberTurnPrompt(T);Turn.Cancel=T->Cancel;Turn.Deadline=C->Deadline?C->Deadline:MDO_DEADLINE_NEVER;Turn.Resume=Resume;Turn.ResumeOptions=Resume?&ResumeOptions:NULL;
         Run=MdoAgentRunCreate(Session,&Turn,&Error);Ready=Run&&MdoAgentRunStart(Run,&Error);}
     if(Ready&&Run){
         for(;;){MdoAgentRunInfo Info={0};Info.Size=sizeof(Info);if(!MdoAgentRunGetInfo(Run,&Info))break;
             if(Info.Run.eState!=XWORK_RUN_CREATED&&Info.Run.eState!=XWORK_RUN_RUNNING){Status=MdoAgentRunWait(Run,MDO_DEADLINE_NEVER,&Result,&Error);break;}
-            if(SdkCancelled(C))xrtCancelRequest(Cancel);xrtSleep(20);
+            if(SdkCancelled(C))xrtCancelRequest(T->Cancel);xrtSleep(20);
         }
     }
-    MdoAgentRunDestroy(Run); /* Releases run claim before checkpoint/idle publication. */
-    xwork_error CheckpointError;xworkErrorInit(&CheckpointError);
-    bool Checkpoint=Session&&MdoAgentSessionWithQuiescentCheckpoint(Session,NULL,NULL,&CheckpointError);
-    if(Checkpoint&&!MdoAgentSessionRecoveryRequired(Session,&Recovery,&CheckpointError))Checkpoint=false;
-    if(!Checkpoint&&Error.eCode==XWORK_ERROR_NONE)Error=CheckpointError;
-    xvalue* Outcome=xrtValueObject();cstr State=Status==XWORK_RESULT_OK?"succeeded":Status==XWORK_RESULT_CANCELLED?"cancelled":Status==XWORK_RESULT_TIMEOUT?"timed_out":Status==XWORK_RESULT_LIMIT?"limited":"failed";
-    if(!Checkpoint||Recovery)State="requires_review";
-    SdkPut(Outcome,"outcome",State);SdkPut(Outcome,"message_id",SdkField(Message,"message_id"));SdkPut(Outcome,"error",Status==XWORK_RESULT_OK?"":Error.sMessage);
-    SdkPutUInt(Outcome,"error_code",Error.eCode);
-    if(Recovery&&Session){xwork_recovery_snapshot* Pending=MdoAgentSessionRecoverySnapshot(Session,&CheckpointError);xvalue* Calls=xrtValueArray();
-        for(size_t I=0;Pending&&I<xworkRecoverySnapshotCount(Pending)&&I<64;I++){xwork_recovery_call_info Call;xworkRecoveryCallInfoInit(&Call);if(xworkRecoverySnapshotAt(Pending,I,&Call)){
-            xvalue* V=xrtValueObject();SdkPut(V,"tool_call_id",Call.sToolCallId);SdkPut(V,"tool",Call.sToolName);xrtValueObjectSetNew(V,XRT_STR_LITERAL("automatic_retry_safe"),xrtValueBool(Call.bAutomaticRetrySafe));xrtValueArrayAppendNew(Calls,V);}}
-        xworkRecoverySnapshotRelease(Pending);xrtValueObjectSetNew(Outcome,XRT_STR_LITERAL("pending_tools"),Calls);}
-    size_t Bytes=Result.sFinalText?strlen(Result.sFinalText):0,Keep=Bytes>8192?8192:Bytes;while(Keep<Bytes&&Keep&&(Result.sFinalText[Keep]&0xc0)==0x80)Keep--;
-    xrtValueObjectSetNew(Outcome,XRT_STR_LITERAL("text"),xrtValueString(xrtStrViewN(Result.sFinalText?Result.sFinalText:"",Keep)));
-    xrtValueObjectSetNew(Outcome,XRT_STR_LITERAL("text_truncated"),xrtValueBool(Bytes>Keep));
-    xworkRunResultUnit(&Result);MdoAgentSessionRelease(Session);MdoSessionPermissionScopeRelease(C->ProjectId,Parent,Scope);xrtFree(NativeSnapshot);xrtFree(NativeJournal);xrtFree(DefaultWorkspace);
-    xrtMutexLock(SdkState.Lock);Root=SdkStateLoad(C,P,Path,E);Member=Root?SdkInstanceValue(Root,Key):NULL;
-    if(Member){
-        xvalue* Ack=xrtValueObject();SdkPut(Ack,"mailbox",SdkField(Config,"mailbox"));SdkPut(Ack,"message_id",SdkField(Message,"message_id"));xvalue* Receipt=NULL;bool Changed=false;
-        Ok=SdkMailboxApply(C,"mailbox.ack",Ack,Root,&Receipt,E,&Changed);xrtValueRelease(Receipt);xrtValueRelease(Ack);
-        if(Ok){char MailKey[128];SdkPut(MailParams,"message_id",SdkField(Message,"message_id"));SdkMailboxIdentity(MailParams,MailKey);xvalue* Mail=SdkInstanceValue(Root,MailKey);
-            Ok=xrtValueObjectSet(Mail,XRT_STR_LITERAL("outcome"),Outcome)&&SdkPut(Member,"state",!strcmp(State,"requires_review")?"requires_review":"idle")&&
-                xrtValueObjectSet(Member,XRT_STR_LITERAL("last_outcome"),Outcome)&&SdkInstanceStore(Root,Key,Member,E)&&SdkStateSave(Path,Root,E);}
-        if(Ok)*R=SdkInstanceInfo(Member);
-    }else Ok=false;
-    xrtValueRelease(Root);Root=NULL;SdkState.Members[Slot].Cancel=NULL;SdkState.Members[Slot].Identity[0]=0;xrtCondBroadcast(SdkState.Drained);xrtMutexUnlock(SdkState.Lock);
-    xrtValueRelease(Outcome);if(Ok)SdkInstanceNotify(C,*R);
-done:
-    xrtCancelDestroy(Cancel);MdoModuleCatalogRelease(Modules);xrtValueRelease(Config);xrtValueRelease(Message);xrtValueRelease(MailParams);return Ok;
+    MdoAgentRunDestroy(Run);
+    bool Ok=MdoApplicationMemberTurnFinish(T,Status,&Result,&Error,R,E);
+    xworkRunResultUnit(&Result);MdoApplicationMemberTurnRelease(T);return Ok;
 }
 static bool SdkInstanceWait(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E){
     uint64 Timeout=0;if((SdkGet(P,"timeout_ms")&&!SdkUInt(SdkGet(P,"timeout_ms"),&Timeout))||Timeout>60000)return MdoApplicationError(E,"sdk_instance_arguments","timeout_ms must be 0..60000","instance",400,false);

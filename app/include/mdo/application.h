@@ -1,6 +1,7 @@
 #ifndef MDO_APPLICATION_H
 #define MDO_APPLICATION_H
 #include <xsbase.h>
+#include <xwork.h>
 #include <stdio.h>
 #include <string.h>
 #include "../../generated/module-sdk/mdo/sdk.h"
@@ -11,6 +12,15 @@ typedef struct MdoApplicationInvocation {
     void* Catalog; /* retained module generation for an asynchronous invocation */
     char WriteToken[64]; /* original HTTP admission generation, never returned */
 } MdoApplicationInvocation;
+typedef struct MdoApplicationMemberTurn MdoApplicationMemberTurn;
+typedef struct MdoAgentSession MdoAgentSession;
+/* Internal shared member execution lease. Public plugins use instance.* and
+ * run.route hooks; synchronous steps and interactive runs share this claim. */
+MdoApplicationMemberTurn* MdoApplicationMemberTurnOpen(const mdo_sdk_context_v1*,cstr,const xvalue*,bool*,xwork_error*,mdo_error_v1*);
+MdoAgentSession* MdoApplicationMemberTurnAgentRef(MdoApplicationMemberTurn*);
+const char* MdoApplicationMemberTurnPrompt(MdoApplicationMemberTurn*);
+bool MdoApplicationMemberTurnFinish(MdoApplicationMemberTurn*,xwork_result,const xwork_run_result*,const xwork_error*,xvalue**,mdo_error_v1*);
+void MdoApplicationMemberTurnRelease(MdoApplicationMemberTurn*);
 const mdo_application_v1* MdoApplicationApi(void);
 void MdoApplicationContext(mdo_sdk_context_v1*,MdoApplicationInvocation*,cstr Extension,
     cstr Invocation,cstr Project,cstr Session,cstr Run,cstr Workspace,uint64 Deadline);
