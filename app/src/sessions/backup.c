@@ -7,6 +7,7 @@
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/session_file_policy.h"
 #include "../../include/mdo/session_backup.h"
+#include "../../include/mdo/session_external.h"
 #include "internal.h"
 #include "backup_internal.h"
 
@@ -95,6 +96,7 @@ static bool MdoBackupSuffix(const char* Text, const char* Suffix)
 
 size_t MdoBackupPathLimit(const char* Path, bool Directory)
 {
+    if (!Directory && !strcmp(Path,"external-state.json")) return 0u;
     return MdoSessionFileLimit(Path, Directory);
 }
 
@@ -250,6 +252,7 @@ const MdoBackupOwnedFile* MdoBackupFind(const MdoSessionBackup* Backup, const ch
 
 static bool MdoBackupCaptureRead(const MdoSessionInfo* Info, void* UserData, xwork_error* Error)
 {
+    if (!MdoSessionExternalStatePortable(Info->ProjectId,Info->Id,Error)) return false;
     MdoSessionBackup* Backup = (MdoSessionBackup*)UserData;
     char Base[MDO_SESSION_PATH_CAPACITY];
     int Written = snprintf(Base, sizeof(Base), "sessions/%s/%s", Info->ProjectId, Info->Id);

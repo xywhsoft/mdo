@@ -283,6 +283,7 @@ const API_ERROR_COPY = Object.freeze({
   image_cleanup_full: ["error.imageCleanupFull",
     "待清理图片已达上限，图片仍在草稿中。请先处理其他图片。"],
   session_member_history: ["error.sessionMemberHistory", "此会话包含成员独立上下文，暂不支持跨上下文编辑、重试、清空或分叉。请追加消息，或新建会话；中断的成员请在成员窗口恢复。"],
+  session_external_state: ["error.sessionExternalState", "此会话的成员上下文或扩展状态保存在会话目录之外，当前备份和设备传输尚不能完整携带。请保留完整的 mdo 数据目录，避免丢失协作数据。"],
   session_state_conflict: ["error.sessionStateConflict",
     "会话状态已变化，请刷新后重试。"],
   session_purge_busy: ["error.sessionPurgeBusy",

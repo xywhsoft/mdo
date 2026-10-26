@@ -5,6 +5,7 @@
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/projects.h"
 #include "../../include/mdo/sessions.h"
+#include "../../include/mdo/session_external.h"
 #include "../../include/mdo/models.h"
 #include "../sessions/internal.h"
 #include "project_references.h"
@@ -346,6 +347,8 @@ static bool MdoApiSessionReply(MdoApiContext* Context, uint16 Status,
 static bool MdoApiSessionActiveFailure(MdoApiContext* Context,
     const xwork_error* Error)
 {
+    if (Error && !strcmp(Error->sMessage,MDO_SESSION_EXTERNAL_STATE_ERROR))
+        return MdoApiReplyError(Context,409u,"session_external_state",MDO_SESSION_EXTERNAL_STATE_ERROR,NULL);
     const xerror* Cause = xrtGetError();
     xerrkind Kind = Cause != NULL ? xrtErrorKind(Cause) : XERR_NONE;
     xrtClearError();
@@ -371,6 +374,20 @@ static bool MdoApiSessionActiveFailure(MdoApiContext* Context,
             "The session service is not ready for this operation", NULL);
     return MdoApiReplyError(Context, 500u, "session_operation_failed",
         "The session operation could not be completed", NULL);
+}
+
+/* Report a durable boundary before opening the root Agent. Its defining
+ * plugin may already be disabled. The actual capture checks again under its
+ * exclusive data lease; this early read never authorizes a capture. */
+static bool MdoApiSessionExternalCaptureFailure(MdoApiContext* Context,bool* Reply)
+{
+    char Project[MDO_PROJECT_ID_CAPACITY],Session[MDO_SESSION_ID_CAPACITY];xwork_error Error;
+    if (MdoApiSessionPath(Context,Project,Session) &&
+        !MdoSessionExternalStatePortable(Project,Session,&Error) &&
+        !strcmp(Error.sMessage,MDO_SESSION_EXTERNAL_STATE_ERROR)) {
+        *Reply=MdoApiReplyError(Context,409u,"session_external_state",MDO_SESSION_EXTERNAL_STATE_ERROR,NULL);return true;
+    }
+    return false;
 }
 
 static MdoSession* MdoApiSessionOpenActive(MdoApiContext* Context,
@@ -1051,6 +1068,7 @@ bool MdoApiSessionExportRoute(MdoApiContext* Context)
     bool ReplyResult;
     bool Result;
 
+    if (MdoApiSessionExternalCaptureFailure(Context,&ReplyResult)) return ReplyResult;
     Session = MdoApiSessionOpenActive(Context, false, &Info,
         &ExpectedRevision, &ReplyResult);
     if ( Session == NULL ) return ReplyResult;
@@ -1092,6 +1110,7 @@ bool MdoApiSessionBackupRoute(MdoApiContext* Context)
     bool ReplyResult;
     if ( !MdoApiSessionNoBody(Context) ) return MdoApiReplyError(Context, 400u,
         "body_not_allowed", "Session backup does not accept a request body", NULL);
+    if (MdoApiSessionExternalCaptureFailure(Context,&ReplyResult)) return ReplyResult;
     Session = MdoApiSessionOpenActive(Context, false, &Info, &ExpectedRevision, &ReplyResult);
     return Session != NULL ? MdoApiSessionBackupStart(Context, Session) : ReplyResult;
 }

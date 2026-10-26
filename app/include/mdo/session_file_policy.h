@@ -55,6 +55,9 @@ static inline size_t MdoSessionFileLimit(const char* Path, bool Directory)
             MdoSessionFileDecimal(Path + 14u, 20u) ? 1u : 0u;
     }
     if ( strcmp(Path, "meta.json") == 0 ) return 64u * 1024u;
+    /* Private rollback must retain the declaration. Portable capture/decoding
+     * explicitly rejects it instead of treating these files as a full backup. */
+    if ( strcmp(Path, "external-state.json") == 0 ) return 1024u;
     if ( strcmp(Path, "snapshot.json") == 0 || strcmp(Path, "journal.jsonl") == 0 )
         return (32u * 1024u * 1024u);
     if ( strcmp(Path, "ui-events.jsonl") == 0 ) return 16u * 1024u * 1024u;

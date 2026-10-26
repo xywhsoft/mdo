@@ -4,6 +4,7 @@
 
 #include "internal.h"
 #include "../../include/mdo/session_backup.h"
+#include "../../include/mdo/session_external.h"
 
 #define MDO_DOWNLOAD_CHUNK 16384u
 #define MDO_DOWNLOAD_TIMEOUT_US 30000000u
@@ -106,6 +107,8 @@ static void MdoDownloadDrop(ptr Value, ptr UserData)
 
 static bool MdoDownloadFailure(MdoApiContext* Context, const xwork_error* Error)
 {
+    if (Error && !strcmp(Error->sMessage,MDO_SESSION_EXTERNAL_STATE_ERROR))
+        return MdoApiReplyError(Context,409u,"session_external_state",MDO_SESSION_EXTERNAL_STATE_ERROR,NULL);
     if ( Error->eCode == XWORK_ERROR_CONTEXT ) return MdoApiReplyError(Context,
         409u, "session_capture_busy", "Session data is changing; retry the backup", NULL);
     if ( Error->eCode == XWORK_ERROR_LIMIT ) return MdoApiReplyError(Context,

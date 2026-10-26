@@ -1,4 +1,5 @@
 #include "../../include/mdo/application.h"
+#include "../../include/mdo/session_external.h"
 #include "internal.h"
 #include "../../generated/application-routes.inc.h"
 #include "../../generated/application-contracts.inc.h"
@@ -12,6 +13,7 @@ static const struct {cstr Id,Description;} SdkBuiltins[]={
     {"sdk.context","Read the immutable caller context"},
     {"sdk.native","Discover typed product functions for in-process native modules"},
     {"session.execution","Read the current main speaker, immutable model binding and native context checkpoint"},
+    {"session.mark_external_state","Declare durable conversation data stored outside the portable session directory"},
     {"model.complete","Call a configured model with managed credentials, tools, parts, usage and optional stream"},
     {"tool.call","Execute one tool with the selected session's live permission scope and result rules"},
     {"session.compact","Compact the bound managed session and retain its original transcript"},
@@ -129,6 +131,12 @@ static mdo_result SdkInvoke(const mdo_sdk_context_v1* C,cstr Method,const xvalue
     if(!strcmp(Method,"tool.call"))return SdkToolCall(C,P,R,E)?MDO_RESULT_OK:MDO_RESULT_ERROR;
     if(!strcmp(Method,"session.compact"))return SdkCompactCall(C,R,E)?MDO_RESULT_OK:MDO_RESULT_ERROR;
     if(!strcmp(Method,"session.execution"))return MdoApplicationSessionExecution(C,NULL,R,E)?MDO_RESULT_OK:MDO_RESULT_ERROR;
+    if(!strcmp(Method,"session.mark_external_state")){
+        xwork_error Error;xworkErrorInit(&Error);
+        if(!MdoSessionExternalStateMark(C->ProjectId&&C->ProjectId[0]?C->ProjectId:"default",C->SessionId,&Error)){
+            MdoApplicationError(E,"sdk_session_external_state",Error.sMessage,"session",Error.eCode==XWORK_ERROR_INVALID_ARGUMENT?400:409,false);return MDO_RESULT_ERROR;}
+        *R=SdkParse("{\"marked\":true,\"portable\":false}");return *R?MDO_RESULT_OK:MDO_RESULT_ERROR;
+    }
     if(!strcmp(Method,"sdk.services")){*R=MdoApplicationCatalogFor(C);return *R?MDO_RESULT_OK:MDO_RESULT_ERROR;}
     if(!strcmp(Method,"sdk.context")){
         *R=xrtValueObject();SdkPut(*R,"extension",C->ExtensionId);SdkPut(*R,"invocation",C->InvocationId);

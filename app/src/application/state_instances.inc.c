@@ -104,15 +104,21 @@ static bool SdkInstanceCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue
     if(!strcmp(Method,"instance.step")||!strcmp(Method,"instance.resume")||!strcmp(Method,"instance.abandon"))return SdkInstanceStep(C,Method,P,R,E);
     MdoModuleCatalog* Modules=Create?MdoModuleCatalogSnapshot():NULL;MdoModuleAgentInfo Role={0};Role.Size=sizeof(Role);
     if(Create&&!Modules)return MdoApplicationError(E,"sdk_instance_role","Role catalog is unavailable","instance",503,false);
+    cstr Agent=SdkField(P,"agent_id"),Model=SdkField(P,"model_id"),Permission=SdkField(P,"permission_profile");if(!Agent)Agent="mdo.default";if(!Permission)Permission="balanced";
+    if(Create){
+        if(Model&&Model[0]&&(!SdkStateKey(Model)||strlen(Model)>128)){MdoModuleCatalogRelease(Modules);return MdoApplicationError(E,"sdk_instance_arguments","model_id must be a portable model identity","instance",400,false);}
+        bool Valid=MdoModuleCatalogAgentFind(Modules,Agent,&Role)&&(Role.Flags&(MDO_AGENT_MAIN|MDO_AGENT_SUBAGENT))&&
+            (!strcmp(Permission,"read-only")||!strcmp(Permission,"balanced")||!strcmp(Permission,"full-access"));
+        if(!Valid){MdoModuleCatalogRelease(Modules);return MdoApplicationError(E,"sdk_instance_role","Select an available role, model identity and permission profile","instance",400,false);}
+        if(C->SessionId&&C->SessionId[0]){xwork_error Error;xworkErrorInit(&Error);
+            if(!MdoSessionExternalStateMark(C->ProjectId&&C->ProjectId[0]?C->ProjectId:"default",C->SessionId,&Error)){
+                MdoModuleCatalogRelease(Modules);return MdoApplicationError(E,"sdk_session_external_state",Error.sMessage,"instance",409,false);}}
+    }
     char Key[128],Path[160];snprintf(Key,sizeof(Key),"sys.instance.%s",Id?Id:"");bool Ok=false,Changed=false;
     xrtMutexLock(SdkState.Lock);xvalue* Root=SdkStateLoad(C,P,Path,E);xvalue* Member=Root?SdkInstanceValue(Root,Key):NULL;
     if(!Root)goto done;
     if(List){*R=xrtValueArray();const xvalue* Records=SdkGet(Root,"records");for(size_t I=0;I<xrtValueCount(Records);I++){cstr K=SdkKey(Records,I);if(!strncmp(K,"sys.instance.",13))xrtValueArrayAppendNew(*R,SdkInstanceListInfo(SdkInstanceValue(Root,K)));}Ok=*R!=NULL;goto done;}
     if(Create){
-        cstr Agent=SdkField(P,"agent_id"),Model=SdkField(P,"model_id"),Permission=SdkField(P,"permission_profile");if(!Agent)Agent="mdo.default";if(!Permission)Permission="balanced";
-        if(Model&&Model[0]&&(!SdkStateKey(Model)||strlen(Model)>128)){MdoApplicationError(E,"sdk_instance_arguments","model_id must be a portable model identity","instance",400,false);goto done;}
-        if(!MdoModuleCatalogAgentFind(Modules,Agent,&Role)||!(Role.Flags&(MDO_AGENT_MAIN|MDO_AGENT_SUBAGENT))||
-            (strcmp(Permission,"read-only")&&strcmp(Permission,"balanced")&&strcmp(Permission,"full-access"))){MdoApplicationError(E,"sdk_instance_role","Select an available role and permission profile","instance",400,false);goto done;}
         xvalue* Intent=xrtValueObject();SdkPut(Intent,"id",Id);SdkPut(Intent,"agent_id",Agent);SdkPut(Intent,"model_id",Model);SdkPut(Intent,"permission_profile",Permission);
         SdkPut(Intent,"workspace",C->Workspace);SdkPut(Intent,"parent_session",C->SessionId);SdkPut(Intent,"owner",C->ExtensionId);char Hash[65];SdkMailboxHash(Intent,Hash);
         if(Member){Ok=SdkField(Member,"intent_hash")&&!strcmp(SdkField(Member,"intent_hash"),Hash);xrtValueRelease(Intent);if(Ok)*R=SdkInstanceInfo(Member);else MdoApplicationError(E,"sdk_identity_conflict","Member id belongs to different creation intent","instance",409,false);goto done;}

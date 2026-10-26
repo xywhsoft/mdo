@@ -141,6 +141,8 @@ VFS 的挂载发布具有文件级原子性，多个文件不构成全局读事�
 
 `sdk.ui.refreshSession()` 只刷新当前绑定会话的宿主详情投影，不改草稿、不重载聊天流。会话贡献和面板回调中的 SDK 保留原项目/会话，宿主拒绝用旧视图的刷新替换新会话。远程会话仍通过展示窗口的读取适配器刷新，不向远端发送 UI 执行动作。原生 `session.execution` 及同名只读转换 hook 用于解析当前主讲成员的实际模型、上下文检查点；完整约束见 [原生成员执行](member-execution.md)。
 
+扩展在会话目录外保存任务、状态或上下文前，应调用绑定会话的 `session.mark_external_state {}`。这是幂等的持久声明，不调用模型、不改变配置或成员 revision；原生 `instance.create` 自动声明。当前便携会话格式不能完整携带这些数据，因此备份、旧模型导出和设备传输的 stored capture 会明确拒绝，提示保留完整 Home。声明在插件停用/卸载后仍有效，也不会由停止或完成任务组清除。它不是外部数据的备份实现，不应把被拒绝的迁移描述成已支持。原生辅助接口见 `mdo/native/session_external.h`。
+
 `tests/test_application_sdk_runtime.py --packed <程序>` 使用独立 Home 验证 C 命令、模块服务/钩子、产品调用、模型/子 Agent、流、异步回执和生命周期。默认项目与具名项目均验证操作持有租约，以及取消、拒绝入场后释放租约。`test_application_sdk_ui.mjs` 验证插件作用域、启动门禁和清理。
 
 Linux musl 产品通过 `PT_GNU_STACK` 将默认原生线程栈设置为 8 MiB；嵌套 Agent 工具批次需要超过 musl 默认的 128 KiB。构建时会检查实际 ELF，旧的缓存宿主也不能绕过此检查。Android 的可选 Git 祖先发现遇到上级目录权限边界即停止，仍严格校验实际工作区内的 Skill 配置。

@@ -2,6 +2,8 @@
 #include <string.h>
 
 #include "data_gate.h"
+#include "../../include/mdo/home.h"
+#include "../../include/mdo/session_external.h"
 
 #define MDO_SESSION_DATA_ID_CAPACITY 65u
 #define MDO_SESSION_DATA_KEY_CAPACITY (2u * MDO_SESSION_DATA_ID_CAPACITY)
@@ -184,4 +186,52 @@ void MdoSessionDataRelease(MdoSessionDataLease* Lease)
     xrtMutexUnlock(Registry->Lock);
     xrtFree(Lease);
     if ( Dispose ) MdoSessionDataDispose(Registry);
+}
+
+static bool MdoSessionExternalPath(const char* ProjectId, const char* SessionId,
+    const char* Name, char Path[256], xwork_error* Error)
+{
+    char Project[MDO_SESSION_DATA_ID_CAPACITY],Session[MDO_SESSION_DATA_ID_CAPACITY];
+    if (!MdoSessionDataId(ProjectId,Project) || !MdoSessionDataId(SessionId,Session)) {
+        MdoSessionDataError(Error,XWORK_ERROR_INVALID_ARGUMENT,"Select a valid owning conversation");return false;
+    }
+    int N=snprintf(Path,256,"sessions/%s/%s/%s",ProjectId,SessionId,Name);
+    return N>0 && N<256;
+}
+
+bool MdoSessionExternalStateMark(const char* ProjectId, const char* SessionId, xwork_error* Error)
+{
+    char Path[256];bool Exists=false,Ok=false;xfileinfo Info;
+    xworkErrorInit(Error);
+    if (!MdoSessionExternalPath(ProjectId,SessionId,"meta.json",Path,Error)) return false;
+    MdoSessionDataLease* Lease=MdoSessionDataAcquire(ProjectId,SessionId,MDO_SESSION_DATA_WRITE,Error);
+    if (!Lease) return false;
+    if (!MdoHomeExternalStat(Path,&Exists,&Info) || !Exists || Info.Type!=XFILE_TYPE_FILE) {
+        MdoSessionDataError(Error,XWORK_ERROR_CONTEXT,"The owning conversation is unavailable");goto done;
+    }
+    if (!MdoSessionExternalPath(ProjectId,SessionId,"external-state.json",Path,Error) ||
+        !MdoHomeExternalStat(Path,&Exists,&Info)) goto failed;
+    /* Presence is conservative even when an old marker is unreadable. Never
+     * overwrite an existing declaration merely to make capture succeed. */
+    if (Exists) {Ok=true;goto done;}
+    static const char Marker[]="{\"format\":\"mdo.session.external-state.v1\"}\n";
+    Ok=MdoHomeAtomicWrite(Path,Marker,sizeof(Marker)-1,false);
+    if (!Ok) goto failed;
+    goto done;
+failed:
+    MdoSessionDataError(Error,XWORK_ERROR_IO,"Cannot retain the session's external-state declaration");
+done:
+    MdoSessionDataRelease(Lease);return Ok;
+}
+
+bool MdoSessionExternalStatePortable(const char* ProjectId, const char* SessionId, xwork_error* Error)
+{
+    xworkErrorInit(Error);
+    char Path[256];bool Exists=false;xfileinfo Info;
+    if (!MdoSessionExternalPath(ProjectId,SessionId,"external-state.json",Path,Error)) return false;
+    if (!MdoHomeExternalStat(Path,&Exists,&Info)) {
+        MdoSessionDataError(Error,XWORK_ERROR_IO,"Cannot inspect the session's external-state declaration");return false;
+    }
+    if (Exists) {MdoSessionDataError(Error,XWORK_ERROR_POLICY,MDO_SESSION_EXTERNAL_STATE_ERROR);return false;}
+    return true;
 }

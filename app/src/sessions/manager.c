@@ -7,6 +7,7 @@
 #include "../../include/mdo/home_restore.h"
 #include "../../include/mdo/attachments.h"
 #include "../../include/mdo/sessions.h"
+#include "../../include/mdo/session_external.h"
 #include "internal.h"
 
 #define MDO_SESSION_META_LIMIT (64u * 1024u)
@@ -2186,6 +2187,7 @@ typedef struct MdoSessionExportCapture {
 static bool MdoSessionsExportCapture(const MdoSessionInfo* Info,
     void* UserData, xwork_error* Error)
 {
+    if (!MdoSessionExternalStatePortable(Info->ProjectId,Info->Id,Error)) return false;
     MdoSessionExportCapture* Capture = (MdoSessionExportCapture*)UserData;
     MdoSession* Session = Capture->Session;
     static const char Middle[] = ",\"snapshot\":";

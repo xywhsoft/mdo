@@ -1308,6 +1308,7 @@
   "error.imageCleanupUnavailable": "The cleanup record could not be saved. The image is still in your draft. Try again.",
   "error.imageCleanupFull": "Too many images await cleanup. The image is still in your draft. Clear other images first.",
   "error.sessionMemberHistory": "This conversation contains independent member contexts. Editing, retrying, clearing and forking across contexts are not supported. Send a new message or create a conversation; resume interrupted members in their member window.",
+  "error.sessionExternalState": "This conversation has member contexts or extension state outside its session directory. Portable backup and transfer cannot include them yet. Keep the complete mdo data directory to preserve collaboration.",
   "error.sessionStateConflict": "The session state changed. Refresh and try again.",
   "error.preconditionRequired": "The current revision is missing. Refresh the page and try again.",
   "error.settingsUnavailable": "The settings service is unavailable. Restart mdo and check your settings; unsaved changes are kept.",

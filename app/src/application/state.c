@@ -1,5 +1,6 @@
 #include "internal.h"
 #include "../../include/mdo/extension_files.h"
+#include "../../include/mdo/session_external.h"
 
 #define SDK_STATE_BYTES (4u*1024u*1024u)
 #define SDK_STATE_RECORD_BYTES 16384u
