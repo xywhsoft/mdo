@@ -3,6 +3,8 @@
 def contracts(add):
     string={'type':'string'}
     uint={'type':'integer','minimum':0}
+    add('instance.history','Read actual visible member events without running a model. Owner-session scope, UTF-8 chunks and committed byte cursors; no hidden reasoning. Legacy members explicitly report incomplete historical coverage.',
+        {'namespace':string,'id':string,'after':uint,'limit':{**uint,'minimum':1,'maximum':64}},('id',))
     guard={'type':'object','properties':{'id':string,'fence':uint,'token':string},'required':['id','fence','token']}
     common={'namespace':string,'key':string,'expected_revision':uint,'request_id':string,'lease_guard':guard}
     add('state.get','Read a project/extension-scoped value, including missing/tombstone revision',common,('key',))

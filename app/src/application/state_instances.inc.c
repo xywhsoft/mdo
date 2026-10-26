@@ -29,6 +29,7 @@ static bool SdkInstancePaths(cstr StatePath,cstr Id,char Identity[65],char Direc
 }
 static int SdkInstanceActive(cstr Identity){for(int I=0;I<8;I++)if(SdkState.Members[I].Cancel&&!strcmp(SdkState.Members[I].Identity,Identity))return I;return -1;}
 static bool SdkInstanceNotify(const mdo_sdk_context_v1* C,const xvalue* V){MdoApplicationEvent("instance.changed",C,V);return true;}
+#include "state_history.inc.c"
 static bool SdkMemberFinal(void* U,const MdoAgentNativeContext* Native,xwork_error* E){
     xwork_run_result* R=U;size_t Count=xllmSessionEntryCount(Native->History);(void)E;
     if(Count){xllm_session_entry_view Last={0};Last.iSize=sizeof(Last);if(!xllmSessionEntryAt(Native->History,Count-1,&Last))return false;
@@ -102,7 +103,17 @@ unlock:
     Ready=Ready&&NativeSnapshot&&NativeJournal;
     if(!Ready&&Error.eCode==XWORK_ERROR_NONE){Error.eCode=XWORK_ERROR_IO;snprintf(Error.sMessage,sizeof(Error.sMessage),"Cannot validate member parent or private snapshot directory");}
     Options.SessionPath=NativeSnapshot;Options.JournalPath=NativeJournal;Options.ArtifactDirectory=Directory;Options.Recover=Exists||JournalExists;
+    SdkMemberHistoryWriter* History=NULL;
+    if(Ready&&!Abandon){
+        History=SdkMemberHistoryCreate(Directory,Message);Ready=History!=NULL;
+        if(Ready){Options.OnEvent=SdkMemberHistoryEvent;Options.EventUserData=History;
+            Options.OwnerUserData=History;Options.OnOwnerRetain=SdkMemberHistoryRetain;Options.OnOwnerRelease=SdkMemberHistoryRelease;}
+        else {Error.eCode=XWORK_ERROR_IO;snprintf(Error.sMessage,sizeof(Error.sMessage),"Cannot open the member's visible conversation journal");}
+    }
     if(Ready&&NativeSnapshot&&NativeJournal)Session=MdoAgentSessionCreateWithRuntime(MdoBootstrapRuntime(),&Options,&Error);
+    /* Callback ownership follows the native session, including any pinned
+     * descendants, rather than borrowing this step's stack frame. */
+    SdkMemberHistoryRelease(History);
     bool Recovery=false;Ready=Session&&MdoAgentSessionRecoveryRequired(Session,&Recovery,&Error);
     if(Ready&&!Recover&&Recovery)Ready=false;
     /* An initial checkpoint makes even the first model turn recoverable. */
@@ -164,6 +175,7 @@ static bool SdkInstanceWait(const mdo_sdk_context_v1* C,const xvalue* P,xvalue**
 static bool SdkInstanceCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue* P,xvalue** R,mdo_error_v1* E){
     cstr Id=SdkField(P,"id");bool List=!strcmp(Method,"instance.list"),Create=!strcmp(Method,"instance.create");
     if(!List&&(!SdkStateKey(Id)||strlen(Id)>64))return MdoApplicationError(E,"sdk_instance_arguments","A portable member id of at most 64 characters is required","instance",400,false);
+    if(!strcmp(Method,"instance.history"))return SdkMemberHistory(C,P,R,E);
     if(!strcmp(Method,"instance.wait"))return SdkInstanceWait(C,P,R,E);
     if(!strcmp(Method,"instance.step")||!strcmp(Method,"instance.resume")||!strcmp(Method,"instance.abandon"))return SdkInstanceStep(C,Method,P,R,E);
     MdoModuleCatalog* Modules=Create?MdoModuleCatalogSnapshot():NULL;MdoModuleAgentInfo Role={0};Role.Size=sizeof(Role);
@@ -182,7 +194,7 @@ static bool SdkInstanceCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue
         if(Member){Ok=SdkField(Member,"intent_hash")&&!strcmp(SdkField(Member,"intent_hash"),Hash);xrtValueRelease(Intent);if(Ok)*R=SdkInstanceInfo(Member);else MdoApplicationError(E,"sdk_identity_conflict","Member id belongs to different creation intent","instance",409,false);goto done;}
         size_t Count=0;const xvalue* Records=SdkGet(Root,"records");for(size_t I=0;I<xrtValueCount(Records);I++)if(!strncmp(SdkKey(Records,I),"sys.instance.",13))Count++;
         if(Count>=64){xrtValueRelease(Intent);MdoApplicationError(E,"sdk_instance_limit","Namespace retains 64 members; use an execution namespace","instance",413,false);goto done;}
-        char Box[96];snprintf(Box,sizeof(Box),"instance.%s",Id);SdkPut(Intent,"mailbox",Box);SdkPut(Intent,"namespace",SdkField(Root,"namespace"));SdkPut(Intent,"intent_hash",Hash);SdkPut(Intent,"state","idle");SdkPut(Intent,"epoch",SdkState.Epoch);
+        char Box[96];snprintf(Box,sizeof(Box),"instance.%s",Id);SdkPut(Intent,"mailbox",Box);SdkPut(Intent,"namespace",SdkField(Root,"namespace"));SdkPut(Intent,"intent_hash",Hash);SdkPut(Intent,"state","idle");SdkPut(Intent,"epoch",SdkState.Epoch);SdkPut(Intent,"history_format","mdo.instance.history.v1");
         Ok=SdkInstanceStore(Root,Key,Intent,E);if(Ok)*R=SdkInstanceInfo(Intent);xrtValueRelease(Intent);Changed=Ok;
     }else if(!Member){MdoApplicationError(E,"sdk_instance_missing","Member is unavailable","instance",404,false);}
     else if(!strcmp(Method,"instance.get")){*R=SdkInstanceInfo(Member);Ok=*R!=NULL;}
@@ -200,7 +212,9 @@ static bool SdkInstanceCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue
         cstr Prompt=SdkField(P,"prompt");if(!Prompt||!Prompt[0]){MdoApplicationError(E,"sdk_instance_arguments","A nonempty prompt is required","instance",400,false);goto done;}
         xvalue* Current=SdkInstanceInfo(Member);bool Open=!strcmp(SdkField(Current,"state"),"idle")||!strcmp(SdkField(Current,"state"),"running");xrtValueRelease(Current);
         if(!Open){MdoApplicationError(E,"sdk_instance_not_open","Member is closed or requires review","instance",409,false);goto done;}
-        xvalue* Q=xrtValueObject(),*Body=xrtValueObject();SdkPut(Body,"prompt",Prompt);SdkPut(Q,"mailbox",SdkField(Member,"mailbox"));SdkPut(Q,"message_id",SdkField(P,"message_id"));xrtValueObjectSetNew(Q,XRT_STR_LITERAL("body"),Body);
+        xvalue* Q=xrtValueObject(),*Body=xrtValueObject();SdkPut(Body,"prompt",Prompt);
+        SdkPut(Body,"origin",(C->MemberId&&C->MemberId[0])||(C->RunId&&C->RunId[0])?"agent":"user");
+        SdkPut(Q,"mailbox",SdkField(Member,"mailbox"));SdkPut(Q,"message_id",SdkField(P,"message_id"));xrtValueObjectSetNew(Q,XRT_STR_LITERAL("body"),Body);
         Ok=SdkMailboxApply(C,"mailbox.send",Q,Root,R,E,&Changed);xrtValueRelease(Q);
     }else{
         char Identity[65],Directory[160];SdkInstancePaths(Path,Id,Identity,Directory);int Active=SdkInstanceActive(Identity);

@@ -102,6 +102,15 @@ def main():
                 sent=call('send',message_id='turn1',prompt='Remember the first turn');assert call('send',message_id='turn1',prompt='Remember the first turn')==sent
                 result=call('step');assert result['state']=='idle' and result['last_outcome']['outcome']=='succeeded',result
                 assert result['last_outcome']['text']=='sdk-model-ok',result
+                history=call('history',limit=1);visible=[];cursor=0
+                while True:
+                    history=call('history',after=cursor,limit=1)
+                    assert len(history['items'])<=1 and history['complete_from_creation']
+                    visible.extend(history['items']);cursor=history['next_cursor']
+                    if not history['has_more']:break
+                assert any(item['kind']=='agent_start' and 'Remember the first turn' in item['text'] for item in visible)
+                assert ''.join(item['text'] for item in visible if item['kind']=='model_text_delta')=='sdk-model-ok'
+                assert all(item['kind']!='model_reasoning_delta' for item in visible)
                 assert call('result',message_id='turn1')['result']==result['last_outcome']
                 assert call('wait',message_id='turn1',timeout_ms=100)['completed']
                 assert call('step')['no_work']
