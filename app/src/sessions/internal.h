@@ -77,6 +77,7 @@ MdoSessionEventBridge* MdoSessionEventBridgeCreate(
 bool MdoSessionEventBridgeRef(void* Value);
 void MdoSessionEventBridgeRelease(void* Value);
 bool MdoSessionEventBridgeOnEvent(void* Value, const xwork_event* Event);
+bool MdoSessionEventBridgeSetSource(MdoSessionEventBridge*,const MdoSessionEventSource*);
 bool MdoSessionEventBridgePendingSet(MdoSessionEventBridge* Bridge,
     uint64 RunId, const char Ids[4][33], size_t Count,
     bool EmptyPrompt, const char* QueueItemId);

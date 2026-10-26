@@ -1609,6 +1609,25 @@ MdoAgentSession* MdoSessionAgentRef(MdoSession* Session)
     xrtMutexUnlock(Session->Lock);
     return Agent;
 }
+bool MdoSessionVisibleSink(MdoSession* Session,MdoSessionEventSink* Sink){
+    if(!Session||!Sink)return false;
+    xrtMutexLock(Session->Lock);Sink->OnEvent=MdoSessionEventBridgeOnEvent;Sink->UserData=Session->Bridge;
+    Sink->Retain=MdoSessionEventBridgeRef;Sink->Release=MdoSessionEventBridgeRelease;
+    bool Ok=Session->Bridge!=NULL;xrtMutexUnlock(Session->Lock);return Ok;
+}
+bool MdoSessionUseAgent(MdoSession* Session,MdoAgentSession* Agent,cstr Namespace,cstr Member,xwork_error* Error){
+    if(!Session||!Agent||!Namespace||strlen(Namespace)>128||!Member||!Member[0]||strlen(Member)>64)return false;
+    MdoAgentSessionInfo Info={0};Info.Size=sizeof(Info);if(!MdoAgentSessionGetInfo(Agent,&Info))return false;
+    MdoSessionEventSource Source={0};snprintf(Source.Namespace,sizeof(Source.Namespace),"%s",Namespace);
+    snprintf(Source.Member,sizeof(Source.Member),"%s",Member);snprintf(Source.Agent,sizeof(Source.Agent),"%s",Info.AgentId);
+    MdoAgentSession* Next=MdoAgentSessionRef(Agent);if(!Next)return false;
+    xrtMutexLock(Session->Lock);MdoAgentSession* Old=Session->Agent;
+    /* The caller owns the managed session reservation, before creating a Run. */
+    bool Ok=Old&&MdoSessionEventBridgeSetProfile(Session->Bridge,Info.ModelId,Info.ContextWindowTokens)&&
+        MdoSessionEventBridgeSetSource(Session->Bridge,&Source);
+    if(Ok)Session->Agent=Next;xrtMutexUnlock(Session->Lock);
+    if(Ok)MdoAgentSessionRelease(Old);else MdoAgentSessionRelease(Next);return Ok;
+}
 
 static bool MdoSessionsCommit(MdoSession* Session,
     const MdoSessionInfo* Candidate, xwork_error* Error)

@@ -193,38 +193,8 @@ static bool MdoApiRunQueueId(const xvalue* Object, char Id[33],
     return true;
 }
 
-static bool MdoApiRunBuildMessage(const char* Project, const char* Session,
-    const char* Prompt, char Ids[4][33], size_t Count,
-    xllm_message* Message)
-{
-    xllm_part Part;
-    size_t Total = 0u;
-    size_t i;
-    bool Ok;
-    xllmMessageInit(Message, XLLM_ROLE_USER);
-    xllmPartInit(&Part, XLLM_PART_TEXT);
-    Ok = xllmPartSetText(&Part, Prompt) &&
-        xllmMessageAddPart(Message, &Part);
-    xllmPartUnit(&Part);
-    for ( i = 0u; Ok && i < Count; ++i ) {
-        char* Bytes = NULL;
-        size_t Size = 0u;
-        cstr Mime = NULL;
-        Ok = MdoAttachmentReadForRun(Project, Session, Ids[i],
-            &Bytes, &Size, &Mime) &&
-            Size <= 16u * 1024u * 1024u - Total;
-        if ( Ok ) {
-            xllmPartInit(&Part, XLLM_PART_IMAGE);
-            Ok = xllmPartSetImageData(&Part, Bytes, Size, Mime) &&
-                xllmMessageAddPart(Message, &Part);
-            xllmPartUnit(&Part);
-            Total += Size;
-        }
-        xrtFree(Bytes);
-    }
-    if ( !Ok ) xllmMessageUnit(Message);
-    return Ok;
-}
+static bool MdoApiRunBuildMessage(const char* Project,const char* Session,const char* Prompt,char Ids[4][33],size_t Count,xllm_message* Message)
+{return MdoSessionAttachmentBuildMessage(Project,Session,Prompt,Ids,Count,Message);}
 
 static bool MdoApiRunStartFailure(MdoApiContext* Context,
     const xwork_error* Error)
@@ -372,6 +342,7 @@ bool MdoApiRunStartRoute(MdoApiContext* Context)
     if ( BodyStatus != MDO_API_BODY_OK )
         return MdoApiReplyBodyError(Context, BodyStatus);
     MdoRunStartOptionsInit(&Options);
+    Options.Origin = Context->ApplicationContext ? mdoCallOrigin(Context->ApplicationContext) : MDO_ORIGIN_USER;
     PromptValue = xrtValueType(Body.Value) == XVALUE_OBJECT ?
         xrtValueObjectGet(Body.Value, XRT_STR_LITERAL("prompt")) : NULL;
     Valid = xrtValueType(Body.Value) == XVALUE_OBJECT &&

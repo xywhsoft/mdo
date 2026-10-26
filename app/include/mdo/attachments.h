@@ -2,6 +2,9 @@
 #define MDO_ATTACHMENTS_H
 
 #include <xsbase.h>
+#include <xllm.h>
+bool MdoAttachmentReadForRun(const char*,const char*,const char*,char**,size_t*,const char**);
+bool MdoSessionAttachmentBuildMessage(const char*,const char*,const char*,const char Ids[4][33],size_t,xllm_message*);
 
 /* Display names are UTF-8 metadata, never filesystem paths. Both API readers
  * and fork copying use this bound for v1/v2 attachment sidecars. */

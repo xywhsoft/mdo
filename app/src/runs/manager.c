@@ -5,6 +5,7 @@
 #include "../../include/mdo/runs.h"
 #include "../../include/mdo/attachments.h"
 #include "../../include/mdo/update.h"
+#include "../../include/mdo/application.h"
 
 #define MDO_RUN_POLL_DEFAULT 50u
 #define MDO_RUN_POLL_MIN 25u
@@ -19,6 +20,7 @@ typedef struct MdoRunEntry {
     MdoRunInfo Info;
     MdoSession* Session;
     MdoAgentRun* Run;
+    MdoApplicationRunRoute* Route;
     xcancel* Cancel;
     char* FinalText;
     bool Starting;
@@ -28,6 +30,10 @@ typedef struct MdoRunEntry {
 typedef struct MdoRunCleanup {
     MdoSession* Session;
     MdoAgentRun* Run;
+    MdoApplicationRunRoute* Route;
+    xwork_run_result Result;
+    xwork_error Error;
+    xwork_result Status;
     xcancel* Cancel;
     char Id[MDO_RUN_ID_CAPACITY];
     xwork_run_state State;
@@ -180,6 +186,11 @@ static size_t MdoRunsFindLocked(const char* RunId)
     }
     return SIZE_MAX;
 }
+bool MdoRunGetInfo(const char* Id,MdoRunInfo* Info){
+    if(!g_MdoRuns.Lock||!Id||!Info||Info->Size<sizeof(*Info))return false;
+    xrtMutexLock(g_MdoRuns.Lock);size_t At=MdoRunsFindLocked(Id);bool Found=At!=SIZE_MAX;
+    if(Found){uint32 Size=Info->Size;*Info=g_MdoRuns.Entries[At].Info;Info->Size=Size;}xrtMutexUnlock(g_MdoRuns.Lock);return Found;
+}
 
 static bool MdoRunsGrowLocked(void)
 {
@@ -275,8 +286,17 @@ static void MdoRunsCleanup(MdoRunCleanup* Items, size_t Count,
     for ( i = 0u; i < Count; ++i ) {
         if ( RequestCancel && Items[i].Cancel != NULL )
             (void)xrtCancelRequest(Items[i].Cancel);
+        if(RequestCancel&&Items[i].Route&&Items[i].Run)
+            Items[i].Status=MdoAgentRunWait(Items[i].Run,MDO_DEADLINE_NEVER,&Items[i].Result,&Items[i].Error);
         MdoAgentRunDestroy(Items[i].Run);
+        if(Items[i].Route){
+            if(!MdoApplicationRunRouteFinish(Items[i].Route,Items[i].Status,&Items[i].Result,&Items[i].Error,true)){
+                Items[i].Failed=true;Items[i].State=XWORK_RUN_FAILED;
+            }
+            xworkRunResultUnit(&Items[i].Result);
+        }
         MdoSessionRelease(Items[i].Session);
+        MdoApplicationRunRouteRelease(Items[i].Route);
         xrtCancelDestroy(Items[i].Cancel);
         if ( !RequestCancel ) {
             size_t Index;
@@ -321,6 +341,7 @@ void MdoRunStartOptionsInit(MdoRunStartOptions* Options)
     if ( Options == NULL ) return;
     memset(Options, 0, sizeof(*Options));
     Options->Size = sizeof(*Options);
+    Options->Origin = MDO_ORIGIN_USER;
 }
 
 bool MdoRunManagerPump(size_t* Completed, xwork_error* Error)
@@ -400,8 +421,10 @@ bool MdoRunManagerPump(size_t* Completed, xwork_error* Error)
                  Entry->Info.ErrorCode == XWORK_ERROR_NONE )
                 Entry->Info.ErrorCode = XWORK_ERROR_OUT_OF_MEMORY;
         }
-        xworkRunResultUnit(&Result);
+        if(Entry->Route){Cleanup[CleanupCount].Result=Result;Cleanup[CleanupCount].Error=WaitError;Cleanup[CleanupCount].Status=WaitResult;}
+        else xworkRunResultUnit(&Result);
         Cleanup[CleanupCount].Run = Entry->Run;
+        Cleanup[CleanupCount].Route = Entry->Route;
         Cleanup[CleanupCount].Session = Entry->Session;
         Cleanup[CleanupCount].Cancel = Entry->Cancel;
         snprintf(Cleanup[CleanupCount].Id, sizeof(Cleanup[CleanupCount].Id),
@@ -412,6 +435,7 @@ bool MdoRunManagerPump(size_t* Completed, xwork_error* Error)
         Entry->Finishing = true;
         ++g_MdoRuns.FinishingCount;
         Entry->Run = NULL;
+        Entry->Route = NULL;
         Entry->Session = NULL;
         Entry->Cancel = NULL;
         ++CompletedValue;
@@ -547,6 +571,7 @@ void MdoRunManagerUnit(void)
     }
     for ( i = 0u; i < Count; ++i ) {
         Cleanup[i].Run = Entries[i].Run;
+        Cleanup[i].Route = Entries[i].Route;
         Cleanup[i].Session = Entries[i].Session;
         Cleanup[i].Cancel = Entries[i].Cancel;
         xrtFree(Entries[i].FinalText);
@@ -575,6 +600,7 @@ bool MdoRunStartWithOutcome(const MdoRunStartOptions* Options,
     MdoSession* Session = NULL;
     MdoAgentSession* Agent = NULL;
     MdoAgentRun* Run = NULL;
+    MdoApplicationRunRoute* Route = NULL;
     xcancel* Cancel = NULL;
     xcancel* StartCancel = NULL;
     MdoRunEntry* Entry;
@@ -586,6 +612,7 @@ bool MdoRunStartWithOutcome(const MdoRunStartOptions* Options,
     bool StartingOwned = false;
     bool Stopping = false;
     uint64 ImageRunId = 0u;
+    bool Entered = false;
     if ( MayHaveExecuted != NULL ) *MayHaveExecuted = false;
     xworkErrorInit(Error);
     if ( MdoUpdateBlocked() || MdoUpdateInstalling() ) {
@@ -724,17 +751,20 @@ bool MdoRunStartWithOutcome(const MdoRunStartOptions* Options,
     Session = MdoSessionOpen(Options->ProjectId, Options->SessionId,
         &RuntimeOptions, Error);
     if ( Session == NULL ) goto publish;
+    if(!MdoApplicationRunRoutePrepare(Options,Reserved.Id,Session,StartCancel,Deadline,&Route,Error))goto publish;
     Agent = MdoSessionAgentRef(Session);
     if ( Agent == NULL ) {
         MdoRunsError(Error, XWORK_ERROR_CONTEXT,
             "managed session has no active Agent runtime");
         goto publish;
     }
-    if ( Options->Resume && !MdoRunsRecoveryTokenValid(Agent,
+    if ( Options->Resume && !MdoApplicationRunRouteMember(Route) && !MdoRunsRecoveryTokenValid(Agent,
             Options, Error) ) goto publish;
     MdoAgentRunOptionsInit(&RunOptions);
     RunOptions.Prompt = Options->Prompt;
     RunOptions.UserMessage = Options->UserMessage;
+    MdoApplicationMemberTurn* Member=MdoApplicationRunRouteMember(Route);
+    if(Member){RunOptions.Prompt=MdoApplicationMemberTurnPrompt(Member);RunOptions.UserMessage=MdoApplicationMemberTurnUserMessage(Member);}
     RunOptions.Resume = Options->Resume;
     RunOptions.Cancel = StartCancel;
     RunOptions.Deadline = Deadline;
@@ -774,6 +804,7 @@ bool MdoRunStartWithOutcome(const MdoRunStartOptions* Options,
     /* From this call onward a worker may have crossed the execution
      * boundary, including when Start itself reports failure. */
     if ( MayHaveExecuted != NULL ) *MayHaveExecuted = true;
+    Entered = true;
     if ( !MdoAgentRunStart(Run, Error) ) {
         MdoSessionAttachmentPendingClear(Session, ImageRunId);
         goto publish;
@@ -835,6 +866,7 @@ publish:
             AgentInfo.ReasoningEffort != NULL ? AgentInfo.ReasoningEffort : "");
         Entry->Session = Session;
         Entry->Run = Run;
+        Entry->Route = Route; Route = NULL;
         Entry->Starting = false;
         Session = NULL;
         Run = NULL;
@@ -876,7 +908,9 @@ done:
         }
         if ( Cancel != NULL ) (void)xrtCancelRequest(Cancel);
         MdoAgentRunDestroy(Run);
+        if(Route)MdoApplicationRunRouteFinish(Route,XWORK_RESULT_ERROR,NULL,Error,Entered);
         MdoSessionRelease(Session);
+        MdoApplicationRunRouteRelease(Route);
         xrtCancelDestroy(Cancel);
     }
     xrtCancelDestroy(StartCancel);

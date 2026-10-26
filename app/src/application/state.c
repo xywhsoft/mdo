@@ -193,3 +193,4 @@ bool MdoApplicationStateCall(const mdo_sdk_context_v1* C,cstr Method,const xvalu
     if(Event){MdoApplicationEvent(!strncmp(Method,"work.",5)?"work.changed":!strncmp(Method,"mailbox.",8)?"mailbox.changed":!strncmp(Method,"lease.",6)?"lease.changed":"state.changed",C,Event);xrtValueRelease(Event);}
     return Ok&&*R;
 }
+#include "state_run_route.inc.c"

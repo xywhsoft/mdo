@@ -11,6 +11,18 @@
 #define MDO_IMAGE_FILE_MAX (8u * 1024u * 1024u)
 #define MDO_IMAGE_META_MAX MDO_ATTACHMENT_META_MAX_BYTES
 #define MDO_IMAGE_TRIM_LIMIT 65536u
+bool MdoSessionAttachmentBuildMessage(cstr Project,cstr Session,cstr Prompt,const char Ids[4][33],size_t Count,xllm_message* Message){
+    if(!Message||!Prompt||Count>4||(Count&&!Ids))return false;
+    xllm_part Part;size_t Total=0;xllmMessageInit(Message,XLLM_ROLE_USER);xllmPartInit(&Part,XLLM_PART_TEXT);
+    bool Ok=xllmPartSetText(&Part,Prompt)&&xllmMessageAddPart(Message,&Part);xllmPartUnit(&Part);
+    for(size_t I=0;Ok&&I<Count;I++){
+        char* Bytes=NULL;size_t Size=0;cstr Mime=NULL;
+        Ok=MdoAttachmentReadForRun(Project,Session,Ids[I],&Bytes,&Size,&Mime)&&Size<=16u*1024u*1024u-Total;
+        if(Ok){xllmPartInit(&Part,XLLM_PART_IMAGE);Ok=xllmPartSetImageData(&Part,Bytes,Size,Mime)&&xllmMessageAddPart(Message,&Part);xllmPartUnit(&Part);Total+=Size;}
+        xrtFree(Bytes);
+    }
+    if(!Ok)xllmMessageUnit(Message);return Ok;
+}
 
 typedef struct MdoImageRemovedRange {
     uint64 First;

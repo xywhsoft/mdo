@@ -10,6 +10,7 @@ typedef struct SdkMemberHistoryWriter {
     xfile File,Lease;
     char MessageId[129];
     char Source[16],Sender[257];
+    MdoSessionEventSink Forward;
 } SdkMemberHistoryWriter;
 
 static cstr SdkMemberHistoryKind(xwork_event_kind Kind){
@@ -59,6 +60,7 @@ static bool SdkMemberHistoryOpen(SdkMemberHistoryWriter* W,cstr Directory,const 
     return xrtSeek(W->File,0,XSEEK_END,NULL);
 }
 static void SdkMemberHistoryDestroy(SdkMemberHistoryWriter* W){
+    if(W->Forward.Release)W->Forward.Release(W->Forward.UserData);
     if(W->File)xrtClose(W->File);if(W->Lease)xrtClose(W->Lease);if(W->Lock)xrtMutexDestroy(W->Lock);xrtFree(W);
 }
 static SdkMemberHistoryWriter* SdkMemberHistoryCreate(cstr Directory,const xvalue* Message){
@@ -75,7 +77,8 @@ static void SdkMemberHistoryRelease(void* User){
     SdkMemberHistoryWriter* W=User;if(W&&xrtAtomic32FetchSub(&W->Refs,1,XMEMORY_ACQ_REL)==1)SdkMemberHistoryDestroy(W);
 }
 static bool SdkMemberHistoryEvent(void* User,const xwork_event* Event){
-    SdkMemberHistoryWriter* W=User;cstr Kind=SdkMemberHistoryKind(Event->eKind);if(!Kind)return true;
+    SdkMemberHistoryWriter* W=User;cstr Kind=SdkMemberHistoryKind(Event->eKind);
+    if(!Kind)return !W->Forward.OnEvent||W->Forward.OnEvent(W->Forward.UserData,Event);
     const char* Text=Event->sText?Event->sText:"";
     size_t Size=Event->sText?(Event->iTextLength==SIZE_MAX?strlen(Text):Event->iTextLength):0;
     /* Non-display events never disclose diagnostic/provider text. */
@@ -102,7 +105,8 @@ static bool SdkMemberHistoryEvent(void* User,const xwork_event* Event){
         Ok=Json&&Bytes<=SDK_MEMBER_HISTORY_RECORD&&xrtWriteFull(W->File,Json,Bytes+1,NULL)&&xrtFlush(W->File);xrtFree(Json);
         At+=N;if(At>=Size)break;if(!N){Ok=false;break;}
     }
-    xrtMutexUnlock(W->Lock);if(!Ok)xrtSetErrorKind(XERR_IO);return Ok;
+    xrtMutexUnlock(W->Lock);if(Ok&&W->Forward.OnEvent)Ok=W->Forward.OnEvent(W->Forward.UserData,Event);
+    if(!Ok)xrtSetErrorKind(XERR_IO);return Ok;
 }
 static bool SdkMemberHistoryAllowed(const mdo_sdk_context_v1* C,const xvalue* Member){
     cstr Parent=SdkField(Member,"parent_session"),Owner=SdkField(Member,"owner");

@@ -50,10 +50,11 @@ static bool SdkMemberResumeOptions(const xvalue* P,xwork_resume_options* O,xwork
 #include "state_member_turn.inc.c"
 static bool SdkInstanceStep(const mdo_sdk_context_v1* C,cstr Method,const xvalue* P,xvalue** R,mdo_error_v1* E){
     bool Resume=!strcmp(Method,"instance.resume"),Abandon=!strcmp(Method,"instance.abandon");
+    if(Resume){bool Handled=false;bool Ok=MdoApplicationMemberResumeManaged(C,P,R,E,&Handled);if(Handled)return Ok;}
     xwork_resume_options ResumeOptions;xwork_recovery_decision Decisions[64];
     if(Resume&&!SdkMemberResumeOptions(P,&ResumeOptions,Decisions,E))return false;
     bool Ready=false;xwork_error Error;xworkErrorInit(&Error);
-    MdoApplicationMemberTurn* T=MdoApplicationMemberTurnOpen(C,Method,P,&Ready,&Error,E);
+    MdoApplicationMemberTurn* T=MdoApplicationMemberTurnOpen(C,Method,P,NULL,&Ready,&Error,E);
     if(!T){
         if(E&&!strcmp(E->Code,"sdk_instance_no_work")){
             bool Found=false,Ok=MdoApplicationStateCall(C,"instance.get",P,R,E,&Found);
@@ -64,9 +65,12 @@ static bool SdkInstanceStep(const mdo_sdk_context_v1* C,cstr Method,const xvalue
     MdoAgentSession* Session=T->Session;MdoAgentRun* Run=NULL;xwork_run_result Result={0};xwork_result Status=XWORK_RESULT_ERROR;
     bool Recovery=false;
     if(Ready)Ready=MdoAgentSessionRecoveryRequired(Session,&Recovery,&Error);
+    if(Ready&&Resume&&!Recovery&&SdkField(SdkGet(T->Message,"body"),"input_file")&&!SdkMemberRoutedCompleted(T)){
+        Ready=false;Error.eCode=XWORK_ERROR_CONTEXT;snprintf(Error.sMessage,sizeof(Error.sMessage),"No completed turn belongs to this routed input. Review the member history and resubmit explicitly; previous replies will not be reused.");
+    }
     if(Ready&&Abandon){uint64 Sequence=0,Finished=0;Ready=MdoAgentSessionLastSequence(Session,&Sequence,&Error)&&(!Recovery||MdoAgentSessionFinishInterrupted(Session,Sequence,&Finished,&Error));if(Ready)Status=XWORK_RESULT_CANCELLED;}
     else if(Ready&&Resume&&!Recovery){Ready=MdoAgentSessionDriveNative(Session,SdkMemberFinal,&Result,&Error);if(Ready)Status=XWORK_RESULT_OK;}
-    else if(Ready){MdoAgentRunOptions Turn;MdoAgentRunOptionsInit(&Turn);Turn.Prompt=MdoApplicationMemberTurnPrompt(T);Turn.Cancel=T->Cancel;Turn.Deadline=C->Deadline?C->Deadline:MDO_DEADLINE_NEVER;Turn.Resume=Resume;Turn.ResumeOptions=Resume?&ResumeOptions:NULL;
+    else if(Ready){MdoAgentRunOptions Turn;MdoAgentRunOptionsInit(&Turn);Turn.Prompt=MdoApplicationMemberTurnPrompt(T);Turn.UserMessage=MdoApplicationMemberTurnUserMessage(T);Turn.Cancel=T->Cancel;Turn.Deadline=C->Deadline?C->Deadline:MDO_DEADLINE_NEVER;Turn.Resume=Resume;Turn.ResumeOptions=Resume?&ResumeOptions:NULL;
         Run=MdoAgentRunCreate(Session,&Turn,&Error);Ready=Run&&MdoAgentRunStart(Run,&Error);}
     if(Ready&&Run){
         for(;;){MdoAgentRunInfo Info={0};Info.Size=sizeof(Info);if(!MdoAgentRunGetInfo(Run,&Info))break;

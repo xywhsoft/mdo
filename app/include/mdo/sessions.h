@@ -17,6 +17,15 @@
 typedef struct MdoSession MdoSession;
 typedef struct MdoSessionCatalog MdoSessionCatalog;
 typedef struct MdoSessionEventSnapshot MdoSessionEventSnapshot;
+typedef struct MdoSessionEventSource {
+    char Namespace[129],Member[65],Agent[129];
+} MdoSessionEventSource;
+typedef struct MdoSessionEventSink {
+    xwork_event_fn OnEvent;
+    void* UserData;
+    xwork_agent_owner_retain_fn Retain;
+    xwork_agent_owner_release_fn Release;
+} MdoSessionEventSink;
 
 typedef enum MdoSessionStatus {
     MDO_SESSION_ACTIVE = 1,
@@ -175,6 +184,7 @@ typedef struct MdoSessionEventInfo {
     char ModelFinishReason[129];
     uint32 ModelToolCallCount;
     uint32 ModelAttempts;
+    MdoSessionEventSource Source; /* Actual persistent member, empty for ordinary runs. */
 } MdoSessionEventInfo;
 
 /* Product bootstrap (or an embedder) initializes MdoProjectLifecycle before
@@ -206,6 +216,11 @@ bool MdoSessionGetInfo(MdoSession* Session, MdoSessionInfo* Info);
 MdoApprovalScope* MdoSessionPermissionScopeAcquire(const char* ProjectId,const char* SessionId,xwork_error* Error);
 void MdoSessionPermissionScopeRelease(const char* ProjectId,const char* SessionId,MdoApprovalScope* Scope);
 MdoAgentSession* MdoSessionAgentRef(MdoSession* Session);
+/* Native adapters for an interactive run backed by an owned member. Sink is
+ * borrowed until Retain succeeds. Rebinding changes only this live runtime,
+ * never the session's configured Agent or the global default. */
+bool MdoSessionVisibleSink(MdoSession*,MdoSessionEventSink*);
+bool MdoSessionUseAgent(MdoSession*,MdoAgentSession*,const char* Namespace,const char* Member,xwork_error*);
 
 bool MdoSessionRename(MdoSession* Session, const char* Title,
     xwork_error* Error);

@@ -65,6 +65,8 @@ typedef struct MdoRunStartOptions {
     bool (*OnPrepared)(void* UserData, const char* RunId,
         uint64 AgentRunId);
     void* PreparedUserData;
+    uint32 Origin; /* Host provenance; unrelated to the selected runtime role. */
+    const xvalue* MemberRoute; /* Native adapter: explicit owned-member recovery. */
 } MdoRunStartOptions;
 
 typedef struct MdoRunInfo {
@@ -138,6 +140,7 @@ bool MdoRunStartWithOutcome(const MdoRunStartOptions* Options,
 /* Cancellation is idempotent. A retained terminal run is returned unchanged. */
 bool MdoRunCancel(const char* RunId, MdoRunInfo* Info,
     xwork_error* Error);
+bool MdoRunGetInfo(const char* RunId,MdoRunInfo* Info);
 
 MdoRunSnapshot* MdoRunSnapshotCreate(xwork_error* Error);
 MdoRunSnapshot* MdoRunSnapshotRef(MdoRunSnapshot* Snapshot);

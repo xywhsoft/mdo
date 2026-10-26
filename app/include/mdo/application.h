@@ -14,13 +14,23 @@ typedef struct MdoApplicationInvocation {
 } MdoApplicationInvocation;
 typedef struct MdoApplicationMemberTurn MdoApplicationMemberTurn;
 typedef struct MdoAgentSession MdoAgentSession;
+typedef struct MdoSession MdoSession;
 /* Internal shared member execution lease. Public plugins use instance.* and
  * run.route hooks; synchronous steps and interactive runs share this claim. */
-MdoApplicationMemberTurn* MdoApplicationMemberTurnOpen(const mdo_sdk_context_v1*,cstr,const xvalue*,bool*,xwork_error*,mdo_error_v1*);
+MdoApplicationMemberTurn* MdoApplicationMemberTurnOpen(const mdo_sdk_context_v1*,cstr,const xvalue*,MdoSession*,bool*,xwork_error*,mdo_error_v1*);
 MdoAgentSession* MdoApplicationMemberTurnAgentRef(MdoApplicationMemberTurn*);
 const char* MdoApplicationMemberTurnPrompt(MdoApplicationMemberTurn*);
+const xllm_message* MdoApplicationMemberTurnUserMessage(MdoApplicationMemberTurn*);
+xcancel* MdoApplicationMemberTurnCancelRef(MdoApplicationMemberTurn*);
 bool MdoApplicationMemberTurnFinish(MdoApplicationMemberTurn*,xwork_result,const xwork_run_result*,const xwork_error*,xvalue**,mdo_error_v1*);
 void MdoApplicationMemberTurnRelease(MdoApplicationMemberTurn*);
+typedef struct MdoApplicationRunRoute MdoApplicationRunRoute;
+typedef struct MdoRunStartOptions MdoRunStartOptions;
+bool MdoApplicationRunRoutePrepare(const MdoRunStartOptions*,cstr,MdoSession*,xcancel*,uint64,MdoApplicationRunRoute**,xwork_error*);
+MdoApplicationMemberTurn* MdoApplicationRunRouteMember(MdoApplicationRunRoute*);
+bool MdoApplicationRunRouteFinish(MdoApplicationRunRoute*,xwork_result,const xwork_run_result*,const xwork_error*,bool);
+void MdoApplicationRunRouteRelease(MdoApplicationRunRoute*);
+bool MdoApplicationMemberResumeManaged(const mdo_sdk_context_v1*,const xvalue*,xvalue**,mdo_error_v1*,bool*);
 const mdo_application_v1* MdoApplicationApi(void);
 void MdoApplicationContext(mdo_sdk_context_v1*,MdoApplicationInvocation*,cstr Extension,
     cstr Invocation,cstr Project,cstr Session,cstr Run,cstr Workspace,uint64 Deadline);

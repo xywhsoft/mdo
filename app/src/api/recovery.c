@@ -456,6 +456,7 @@ bool MdoApiSessionResumeRoute(MdoApiContext* Context)
     ResumeOptions.pDecisions = Decisions;
     ResumeOptions.iDecisionCount = Count;
     MdoRunStartOptionsInit(&Options);
+    Options.Origin = Context->ApplicationContext ? mdoCallOrigin(Context->ApplicationContext) : MDO_ORIGIN_USER;
     Options.ProjectId = Project;
     Options.SessionId = SessionId;
     Options.Resume = true;

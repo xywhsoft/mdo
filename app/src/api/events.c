@@ -198,6 +198,12 @@ static bool MdoApiSessionEventValueLimit(const MdoSessionEventInfo* Event,
     if (Ok) Ok = MdoApiValueSetUInt(Item, "input_tokens", Event->InputTokens) &&
         MdoApiValueSetUInt(Item, "output_tokens", Event->OutputTokens) &&
         MdoApiValueSetUInt(Item, "total_tokens", Event->TotalTokens);
+    if(Ok&&Event->Source.Member[0]){
+        xvalue* Source=xrtValueObject();
+        Ok=Source&&MdoApiValueSetString(Source,"namespace",Event->Source.Namespace)&&
+            MdoApiValueSetString(Source,"member",Event->Source.Member)&&MdoApiValueSetString(Source,"agent",Event->Source.Agent)&&
+            MdoApiValueSetTake(Item,"source",&Source);xrtValueRelease(Source);
+    }
     if (Ok && Event->ContextAvailable) {
         xvalue* Usage = xrtValueObject();
         Ok = Usage && MdoApiValueSetBool(Usage, "exact", Event->ContextExact) &&
