@@ -585,6 +585,9 @@ select:focus-visible,
 .session-heading h1 { margin: 0; overflow: hidden; font-size: 14px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
 .session-heading p { margin: 2px 0 0; overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .header-actions { display: flex; align-items: center; gap: 9px; }
+.sdk-conversation-actions { display: flex; align-items: center; gap: 4px; }
+.sdk-conversation-actions:empty, .sdk-conversation-views:empty { display: none; }
+.sdk-conversation-view { min-width: 0; }
 .run-status { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 11px; }
 
 .conversation {

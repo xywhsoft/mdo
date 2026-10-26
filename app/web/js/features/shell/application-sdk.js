@@ -4,6 +4,7 @@ import { toast } from "../../utils/dom.js";
 import { createPanelManager } from "../workbench/panel-manager.js";
 import { openLayer } from "../../components/layers.js";
 import { createPluginLoader } from "./plugin-loader.js";
+import { createConversationContributions } from "./conversation-contributions.js";
 
 export function createApplicationUi({ navigation, executeActions, canCall = () => true, addContext }) {
   let clientId = `ui-${crypto.randomUUID()}`;
@@ -51,9 +52,14 @@ export function createApplicationUi({ navigation, executeActions, canCall = () =
     own(() => { for (const layer of ownedLayers) layer.dispose(); ownedLayers.clear(); });
     const viewSdk = options => !options.context ? scopedSdk : Object.freeze({ ...scopedSdk, ...options.sdk,
       context: () => Object.freeze({ ...options.context }),
-      ui: Object.freeze({ ...ui, openPanel: (id, params) => openPanel(id, params, options.sdk),
-        openEditor: args => ui.openEditor(args, options.sdk), newTab: () => workbench.open("mdo.new-tab", { title: "新标签页" }, options.sdk) }) });
+      ui: Object.freeze({ ...ui, openPanel: (id, params) => { check(); return openPanel(id, params, options.sdk); },
+        openEditor: args => ui.openEditor(args, options.sdk), newTab: () => { check(); return workbench.open("mdo.new-tab", { title: "新标签页" }, options.sdk); } }) });
+    const conversations = createConversationContributions({ navigation, onError: error => toast(error.message, "error"),
+      sdkFor: (sdk, context) => viewSdk({ sdk, context }) });
+    own(() => conversations.destroy());
     const ui = Object.freeze({
+    registerConversationAction: (id, descriptor) => { check(); return own(conversations.registerAction(id, descriptor, clientApi)); },
+    registerConversationView: (id, descriptor) => { check(); return own(conversations.registerView(id, descriptor, clientApi)); },
     registerPanel: (id, descriptor) => {
       check();
       const callback = descriptor.mount || descriptor.render;
@@ -131,8 +137,10 @@ export function createApplicationUi({ navigation, executeActions, canCall = () =
     return { sdk: scopedSdk, own, dispose() {
       if (retirement) return retirement; active = false; const pending = [];
       for (const dispose of owned.reverse()) { try { pending.push(Promise.resolve(dispose())); } catch (error) { pending.push(Promise.reject(error)); } }
-      if (!stopped && workbench) pending.push(workbench.retireOwner(clientApi));
-      retirement = Promise.allSettled(pending).then(results => { if (results.some(r => r.status === "rejected")) throw Error("Plugin cleanup did not complete"); });
+      retirement = Promise.allSettled(pending).then(async results => {
+        if (!stopped && workbench) await workbench.retireOwner(clientApi);
+        if (results.some(r => r.status === "rejected")) throw Error("Plugin cleanup did not complete");
+      });
       return retirement;
     } };
   };
