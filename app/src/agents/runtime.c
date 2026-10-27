@@ -248,6 +248,11 @@ static bool MdoAgentsResolveModel(const MdoModelCatalog* Catalog,
     MdoModelProtocolFlags Flag;
     memset(Result, 0, sizeof(*Result));
     Result->Info.Size = sizeof(Result->Info);
+    xllm_error LoginError;
+    if(!MdoModelCatalogCheckLogin(Catalog,ModelId,&LoginError)){
+        MdoAgentsModelError(Error,&LoginError,"account model catalog is not ready");
+        return false;
+    }
     if ( !((ModelId != NULL && ModelId[0] != '\0') ?
             MdoModelCatalogModelFind(Catalog, ModelId, &Result->Info) :
             MdoModelCatalogDefault(Catalog, &Result->Info)) ) {

@@ -46,6 +46,7 @@ typedef struct MdoModelInfo {
     bool Free;
     bool Editable;
     bool Removable;
+    bool RequiresLogin;
     const char* Id;
     const char* Name;
     const char* ProviderId;
@@ -87,14 +88,25 @@ typedef struct MdoModelClientInfo {
 
 /* Account-owned authentication and cancellation for one online model call. */
 typedef struct MdoModelOnlineAccess { const char* Token; xcancel* Cancel; void* Handle; } MdoModelOnlineAccess;
+
+typedef enum MdoModelLoginState {
+    MDO_MODEL_LOGIN_READY,
+    MDO_MODEL_LOGIN_PENDING,
+    MDO_MODEL_LOGIN_REQUIRED,
+    MDO_MODEL_LOGIN_UNAVAILABLE
+} MdoModelLoginState;
 typedef struct MdoModelOnlineAuthority {
     const char* Origin;
     /* Deadline bounds credential renewal as well as the HTTP request. */
     bool (*Acquire)(xcancel*,uint64 Deadline,MdoModelOnlineAccess*);
     void (*Release)(MdoModelOnlineAccess*,int);
+    MdoModelLoginState (*State)(void);
 } MdoModelOnlineAuthority;
 void MdoModelManagerSetOnlineAuthority(const MdoModelOnlineAuthority* Authority);
 bool MdoModelManagerSetOnlineCatalog(const xvalue* Catalog);
+MdoModelLoginState MdoModelCatalogLoginState(const MdoModelCatalog*);
+const char* MdoModelLoginStateName(MdoModelLoginState);
+bool MdoModelCatalogCheckLogin(const MdoModelCatalog*,const char*,xllm_error*);
 bool MdoModelIsOnline(const MdoModelCatalog*,const char* ModelId);
 xllm_result MdoModelOnlineComplete(const MdoModelCatalog*,const MdoModelClientOptions*,
     const xllm_request*,const xllm_stream_callbacks*,xllm_response**,xllm_error*);

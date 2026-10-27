@@ -115,6 +115,8 @@ import { api, ApiError, setApiWriteGuard, currentPageWriteToken, setApiWriteConf
 import { clear, element, errorMessage, isImeKey, refreshRelativeTimes, toast } from "./utils/dom.js";
 import { subscribeLocale, t } from "./i18n.js";
 import { copyText } from "./utils/clipboard.js";
+import { modelLoginBlock } from "./utils/models.js";
+import { modelErrorMessage } from "./utils/model-errors.js";
 
 const $ = (selector) => {
   const node = document.querySelector(selector);
@@ -459,6 +461,8 @@ export async function boot() {
     onUnreadChange: (keys) => sessionList.setUnread(keys) });
 
   function assertReplacementProfile(attachments) {
+    const loginBlock = composerProfile.loginBlock();
+    if (loginBlock) throw localComposerError(`model.error.${loginBlock}`, "", `model_${loginBlock}`);
     if (composerProfile.isBusy())
       throw new Error(t("composer.profileBusy", {}, "请等待会话配置更新完成"));
     if (attachments.length && !composerImages.supportsCurrentModel())
@@ -1127,6 +1131,7 @@ export async function boot() {
       void loadRecovery({ retry: true });
     },
   });
+  $("#composer-model").addEventListener("change", () => setRun(activeRun));
   newTaskController = createNewTaskController({
     isWritePaused: purgeRecovery.isPaused,
     draftStore, newId: () => promptQueue.newId(), createSession,
@@ -1247,7 +1252,7 @@ export async function boot() {
   createRecoveryDock({
     ...conversationDocks.recovery,
     store: recoveryStore,
-    canAutoResume: data => !purgeRecovery.isPaused() && !localServiceReconnecting &&
+    canAutoResume: data => !composerProfile.loginBlock() && !purgeRecovery.isPaused() && !localServiceReconnecting &&
       (!isRemoteTarget() || (targetState().connected && !targetState().runtimeChanged &&
         targetState().selected.mode === "control")) && !activeRun && !submittingCurrent() &&
       recoveryMatchesWorkspace(data, navigation.get()),
@@ -1388,6 +1393,7 @@ export async function boot() {
     const pendingCatalog = [modelsStore, agentsStore].map(store => store.get())
       .find(state => state.updatedAt === 0 && state.status !== "ready");
     const pendingSettings = settingsStore.get().data === null ? settingsStore.get() : null;
+    const loginBlock = composerProfile.loginBlock();
     const targetBlocked = isRemoteTarget() && (!targetState().connected || targetState().runtimeChanged || targetState().selected.mode === "view");
     if (newTaskController?.isPreparing() || migratingNewTask)
       newTaskComposerFocus.capture();
@@ -1398,7 +1404,7 @@ export async function boot() {
       newTaskController?.isPreparing() ||
       (!sessionWritable && !creatingSession) || migratingNewTask;
     newTaskComposerFocus.restore();
-    sendBlockedByState = Boolean(pendingCatalog || pendingSettings) || serviceFailed || targetBlocked || localServiceReconnecting || purgeRecovery.isPaused() || !(sessionWritable || creatingSession) ||
+    sendBlockedByState = Boolean(loginBlock || pendingCatalog || pendingSettings) || serviceFailed || targetBlocked || localServiceReconnecting || purgeRecovery.isPaused() || !(sessionWritable || creatingSession) ||
       messageActionBusy ||
       !draftStore.isLoaded(selectedDraftKey) ||
       selectingProjectDraft ||
@@ -1424,6 +1430,7 @@ export async function boot() {
         : t(purgeRecovery.get().writeConflictReason === "restart" ? "shell.serviceRestartedTitle" : "error.purgeReviewRequired")
       : localServiceReconnecting ? t("shell.connecting", {}, "正在连接本地服务…") : messageActionBusy
       ? t("messageAction.busy", {}, "请等待当前消息操作完成")
+      : loginBlock ? modelErrorMessage(loginBlock, "")
       : pendingCatalog ? pendingCatalog.status === "error"
         ? errorMessage(pendingCatalog.error)
         : t("resource.loading", {}, "正在载入资源…")
@@ -1456,7 +1463,21 @@ export async function boot() {
     setRun(activeRun);
     if (state.status === "ready") void resumeSettingsLocaleInitialization();
   });
-  modelsStore.subscribe(() => setRun(activeRun));
+  let readyModelCatalog = "";
+  modelsStore.subscribe(state => {
+    setRun(activeRun);
+    if (state.status !== "ready") return;
+    if (state.data?.login_state !== "ready") { readyModelCatalog = ""; return; }
+    const generation = String(state.data.generation);
+    if (readyModelCatalog === generation) return;
+    readyModelCatalog = generation;
+    const { projectId, sessionId } = navigation.get();
+    if (!sessionId) return;
+    // Recovery can precede account restoration. Reinspect after publication;
+    // never replay a user submission or change its saved model here.
+    void Promise.all([loadSession(projectId, sessionId), loadRecovery({ retry: true })])
+      .then(() => { setRun(activeRun); void dispatchQueued(); });
+  });
   agentsStore.subscribe(() => setRun(activeRun));
   let purgeWasPaused = purgeRecovery.isPaused();
   purgeRecovery.subscribe(() => {
@@ -1779,7 +1800,7 @@ export async function boot() {
   }
 
   async function dispatchQueued() {
-    if (purgeRecovery.isPaused() || localServiceReconnecting) return;
+    if (purgeRecovery.isPaused() || localServiceReconnecting || composerProfile.loginBlock()) return;
     const selected = navigation.get();
     if (promptQueue.isManaged(selected.projectId, selected.sessionId)) return;
     const key = `${selected.projectId}/${selected.sessionId}`;
@@ -1800,6 +1821,7 @@ export async function boot() {
           navigation.get().sessionId === selected.sessionId;
         const entry = promptQueue.peek(selected.projectId, selected.sessionId);
         if (messageActionBusy || !entry || entry.state !== "pending") return;
+        if (modelLoginBlock(modelsStore.get().data, entry.profile?.model_id)) return;
         try {
           await ensurePromptReady(selected.projectId, selected.sessionId,
             Boolean(entry.priority));
@@ -2313,6 +2335,8 @@ export async function boot() {
     // Commands act on the UI and keep an unsent image draft. They must stay
     // usable while an attachment is still being stored.
     if (fromComposer && slashCommands.consumeExact(text)) return;
+    const loginBlock = composerProfile.loginBlock();
+    if (loginBlock) { setRun(activeRun); return; }
     if (fromComposer && (text.startsWith("/") || text.startsWith("$"))) {
       try { if (await slashCommands.expandIntoComposer(text)) return; }
       catch (error) { showComposerError(error); return; }

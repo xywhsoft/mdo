@@ -57,6 +57,39 @@ const models = [
     default_reasoning_effort: "medium" },
 ];
 
+test("restored online selections wait for login and the authoritative catalog without changing the draft", () => {
+  const online = "mdo-online.glm-5.3";
+  const detail = { id: "s", project_id: "p", status: "active", model_id: online,
+    reasoning_effort: "high", permission_profile: "balanced" };
+  const modelsStore = createResourceStore({ login_state: "pending", models });
+  const modelSelect = new Select();
+  const profile = createComposerProfile({ modelSelect, reasoningSelect: new Select(),
+    permissionSelect: new Select(["balanced"]),
+    navigation: { get: () => ({ projectId: "p", sessionId: "s" }), subscribe: () => () => {} },
+    sessionStore: createResourceStore(detail), modelsStore,
+    agentsStore: createResourceStore({ items: [] }), projectsStore: createResourceStore({ items: [] }),
+    onBusyChange() {} });
+  const original = profile.selection();
+  assert.equal(profile.loginBlock(), "profile_login_pending");
+  assert.equal(modelSelect.value, online);
+  const loaded = { id: online, requires_login: true, reasoning_efforts: ["high"] };
+  modelsStore.setData({ login_state: "pending", models: [...models, loaded] });
+  assert.equal(profile.loginBlock(), "profile_login_pending");
+  modelsStore.setData({ login_state: "ready", models: [...models, loaded] });
+  assert.equal(profile.loginBlock(), "");
+  assert.deepEqual(profile.selection(), original);
+  modelsStore.setData({ login_state: "unavailable", models });
+  assert.equal(profile.loginBlock(), "profile_login_unavailable");
+  modelsStore.setData({ login_state: "signed_out", models });
+  assert.equal(profile.loginBlock(), "profile_login_required");
+  // A confirmed removal is handled by native profile validation, rather than
+  // leaving a disappeared model waiting indefinitely for another login.
+  modelsStore.setData({ login_state: "ready", models });
+  assert.equal(profile.loginBlock(), "");
+  assert.deepEqual(profile.selection(), original);
+  profile.destroy();
+});
+
 test("a known non-reasoning model clears a previous thinking preference", () => {
   const select = new Select();
   assert.equal(fillReasoningOptions(select, { reasoning_efforts: [] }, "high"), "");

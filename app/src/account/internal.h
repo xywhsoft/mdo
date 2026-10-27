@@ -61,6 +61,7 @@ typedef struct MdoAccountManager {
     uint64 NextProfile, NextRefresh;
     unsigned RefreshFailures;
     uint16 ModelsStatus;
+    uint16 CatalogStatus;
     uint16 BalanceStatus;
     char OnlineVersion[65];
     char Origin[MDO_ACCOUNT_ORIGIN_LIMIT];

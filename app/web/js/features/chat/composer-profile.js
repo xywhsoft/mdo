@@ -2,7 +2,7 @@ import { updateSessionProfile, updateSessionPermission } from "../../state/sessi
 import { projectDraftKey } from "./draft-store.js";
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
 import { subscribeLocale, t } from "../../i18n.js";
-import { findModel as selectedModel } from "../../utils/models.js";
+import { findModel as selectedModel, modelLoginBlock } from "../../utils/models.js";
 
 const EFFORT_LABEL = Object.freeze({
   none: ["reasoning.none", "无思考"],
@@ -385,6 +385,7 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
       sync();
     },
     isBusy: () => busy.has(selectedKey()),
+    loginBlock: () => modelLoginBlock(modelsStore.get().data, modelSelect.value),
     hasInFlight: () => busy.size !== 0,
     sync,
     destroy() {

@@ -60,11 +60,23 @@ async function setup(t){
   ['import { connectorRequest, connectorJob } from "../../api/connector.js";',"const { connectorRequest, connectorJob } = globalThis.__accountWindows;"],
   ['import { targetState, subscribeTarget, requestTargetSwitch, initializeTarget } from "../../api/target.js";',"const { targetState, subscribeTarget, requestTargetSwitch, initializeTarget } = globalThis.__accountWindows;"],
   ['import { createLoginWindow } from "../account/login-window.js";',"const { createLoginWindow } = globalThis.__accountWindows;"]]);
- const account=accountModule.createAccount({navigation:{openSettings:page=>navigations.push(page)}}),chooser=devicesModule.createDevices();
+ const modelChanges=[];
+ const account=accountModule.createAccount({navigation:{openSettings:page=>navigations.push(page)},onModelsChange:()=>modelChanges.push(true)}),chooser=devicesModule.createDevices();
  t.after(()=>{account.dispose();chooser.dispose();Object.assign(globalThis,previous);delete globalThis.__accountWindows;});
- await flush();return {doc,ids,model,calls,navigations,account,chooser,stub,notify};
+ await flush();return {doc,ids,model,calls,navigations,account,chooser,stub,notify,modelChanges};
 }
 function submit(doc){const dialog=doc.body.querySelector("dialog");dialog.querySelector("[name=identifier]").value="fixture-user";const password=dialog.querySelector("[name=password]");password.value="fixture-password";dialog.querySelector("form").dispatchEvent(new Event("submit",{cancelable:true}));assert.equal(password.value,"");return dialog;}
+
+test("account readiness refreshes models even when login state changes without a catalog generation",async t=>{
+ const env=await setup(t),before=env.modelChanges.length;
+ env.model.target={...signedIn(9),model_generation:7,model_catalog_state:"pending"};
+ await env.account.refresh();assert.equal(env.modelChanges.length,before+1);
+ env.model.target={...env.model.target,model_catalog_state:"unavailable"};
+ await env.account.refresh();assert.equal(env.modelChanges.length,before+2);
+ env.model.target={...env.model.target,model_catalog_state:"ready"};
+ await env.account.refresh();assert.equal(env.modelChanges.length,before+3);
+ await env.account.refresh();assert.equal(env.modelChanges.length,before+3);
+});
 
 test("signed-out sidebar opens the shared login without navigation, then signed-in sidebar opens account settings",async t=>{
  const env=await setup(t);env.ids.get("open-account").click();assert.equal(env.doc.body.querySelector("dialog").id,"account-login-dialog");assert.deepEqual(env.navigations,[]);

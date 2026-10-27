@@ -1,6 +1,44 @@
 void MdoModelManagerSetOnlineAuthority(const MdoModelOnlineAuthority* Authority)
 {g_MdoModelsOnline=Authority?*Authority:(MdoModelOnlineAuthority){0};}
 
+const char* MdoModelLoginStateName(MdoModelLoginState State)
+{
+    switch(State){
+    case MDO_MODEL_LOGIN_PENDING:return "pending";
+    case MDO_MODEL_LOGIN_REQUIRED:return "signed_out";
+    case MDO_MODEL_LOGIN_UNAVAILABLE:return "unavailable";
+    default:return "ready";
+    }
+}
+
+MdoModelLoginState MdoModelCatalogLoginState(const MdoModelCatalog* Catalog)
+{
+    if(!g_MdoModelsOnline.State)return MDO_MODEL_LOGIN_READY;
+    MdoModelLoginState State=g_MdoModelsOnline.State();
+    /* An old snapshot cannot prove removal after a new catalog is published. */
+    if(State==MDO_MODEL_LOGIN_READY&&(!Catalog||!Catalog->LoginCatalogReady))
+        return MDO_MODEL_LOGIN_PENDING;
+    return State;
+}
+
+bool MdoModelCatalogCheckLogin(const MdoModelCatalog* Catalog,const char* ModelId,xllm_error* Error)
+{
+    const char* Id=ModelId&&*ModelId?ModelId:
+        (Catalog&&Catalog->DefaultModelIndex<Catalog->ModelCount?Catalog->Models[Catalog->DefaultModelIndex].Id:"");
+    const MdoModelEntry* Model=Catalog?MdoModelsLookup(Catalog,Id):NULL;
+    /* Online entries are transient; saved identities survive a restart.
+     * An exact personal model takes precedence over the online namespace. */
+    bool Required=Model?(Model->RequiresLogin||MdoModelIsOnline(Catalog,Model->Id)):
+        !strncmp(Id,"mdo-online.",11);
+    if(!Required)return true;
+    MdoModelLoginState State=MdoModelCatalogLoginState(Catalog);
+    if(State==MDO_MODEL_LOGIN_READY)return true;
+    const char* Kind=State==MDO_MODEL_LOGIN_PENDING?"profile_login_pending":
+        State==MDO_MODEL_LOGIN_REQUIRED?"profile_login_required":"profile_login_unavailable";
+    MdoModelProfileErrorInit(Error,Kind,"account model catalog is not ready");
+    return false;
+}
+
 bool MdoModelManagerSetOnlineCatalog(const xvalue* Catalog)
 {
     if(!g_MdoModels.Initialized)return false;

@@ -168,6 +168,7 @@ bool MdoApiModelsRoute(MdoApiContext* Context)
             MdoApiValueSetUInt(Item, "generation", Info.Generation) &&
             MdoApiValueSetBool(Item, "builtin", Info.Builtin) &&
             MdoApiValueSetBool(Item, "free", Info.Free) &&
+            MdoApiValueSetBool(Item, "requires_login", Info.RequiresLogin) &&
             MdoApiValueSetBool(Item, "editable", Info.Editable) &&
             MdoApiValueSetBool(Item, "removable", Info.Removable) &&
             MdoApiValueSetUInt(Item, "protocols", Info.Protocols) &&
@@ -191,7 +192,8 @@ bool MdoApiModelsRoute(MdoApiContext* Context)
         xrtValueRelease(Item);
     }
     if ( Ok ) Ok =
-        MdoApiValueSetUInt(Data, "generation", MdoModelManagerGeneration()) &&
+        MdoApiValueSetUInt(Data, "generation", Default.Generation) &&
+        MdoApiValueSetString(Data, "login_state", MdoModelLoginStateName(MdoModelCatalogLoginState(Catalog))) &&
         MdoApiValueSetString(Data, "default_model_id", Default.Id) &&
         MdoApiValueSetTake(Data, "providers", &Providers) &&
         MdoApiValueSetTake(Data, "models", &Models);

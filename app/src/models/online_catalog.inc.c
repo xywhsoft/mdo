@@ -48,7 +48,7 @@ static bool MdoModelsMergeOnline(MdoModelCatalog* Catalog,const xvalue* Value)
         if(Model && !Builtin){xrtFree(LocalId);return false;}
         if(Model)MdoModelsModelUnit(Model);else{Model=&Models[Catalog->ModelCount++];memset(Model,0,sizeof(*Model));}
         Model->Id=LocalId;Model->Name=xrtStrDupN(Title.Data,Title.Size);Model->ProviderId=xrtStrDup("mdo-online");Model->WireModel=xrtStrDupN(Id.Data,Id.Size);
-        Model->Builtin=true;Model->Free=Free&&!Member;
+        Model->Builtin=true;Model->Free=Free&&!Member;Model->RequiresLogin=true;
         Model->WindowMode=XLLM_WINDOW_SHARED_CONTEXT;Model->ContextWindowTokens=Context;Model->MaxInputTokens=Context;
         Model->MaxOutputTokens=(uint32)Output;Model->OutputReserveTokens=(uint32)Output;Model->SummaryTokens=Output<8192?(uint32)Output:8192;
         Model->Capabilities=XLLM_CAP_TEXT_IN|XLLM_CAP_TEXT_OUT|XLLM_CAP_STREAM|XLLM_CAP_JSON_OUT;
@@ -75,5 +75,5 @@ static bool MdoModelsMergeOnline(MdoModelCatalog* Catalog,const xvalue* Value)
         Model->DefaultReasoningEffort=xrtStrDup(Effort);
         if(Model->ReasoningEffortCount)Model->Capabilities|=XLLM_CAP_REASONING_OUT|XLLM_CAP_REASONING_CONTROL;
         if(!Model->Name||!Model->ProviderId||!Model->WireModel||!Model->DefaultReasoningEffort)return false;
-    }return true;
+    }Catalog->LoginCatalogReady=true;return true;
 }

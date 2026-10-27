@@ -14,7 +14,8 @@ bool MdoApiReplyModelProfileFailure(MdoApiContext* Context,
     char Code[64];
     if (!strncmp(Kind, "profile_", 8u)) {
         snprintf(Code, sizeof(Code), "model_%s", Kind);
-        return MdoApiReplyError(Context, 422u, Code,
+        bool LoginPending=!strcmp(Kind,"profile_login_pending")||!strcmp(Kind,"profile_login_unavailable");
+        return MdoApiReplyError(Context, LoginPending?503u:422u, Code,
             MdoModelErrorMessage(Error), NULL);
     }
     if (Error && (Error->eCode == XLLM_ERROR_AUTH ||

@@ -46,6 +46,27 @@ static xvalue* MdoAccountAllowance(const xvalue* Data,uint64 Id)
     if(!Ok){xrtValueRelease(Out);return NULL;}return Out;
 }
 
+static MdoModelLoginState MdoAccountModelStateLocked(void)
+{
+    bool Live=g_MdoAccount.Tokens.Access[0]&&!MdoDeadlineExpired(g_MdoAccount.Tokens.Expires);
+    bool Pending=g_MdoAccount.Authorization.State[0]||
+        g_MdoAccount.Work.Kind==MDO_ACCOUNT_WORK_PASSWORD||g_MdoAccount.Work.Kind==MDO_ACCOUNT_WORK_EXCHANGE||
+        g_MdoAccount.Work.Kind==MDO_ACCOUNT_WORK_REFRESH||
+        (g_MdoAccount.Busy&&(g_MdoAccount.BusyKind==MDO_ACCOUNT_WORK_PASSWORD||
+            g_MdoAccount.BusyKind==MDO_ACCOUNT_WORK_EXCHANGE||g_MdoAccount.BusyKind==MDO_ACCOUNT_WORK_REFRESH));
+    if(Pending||(!Live&&g_MdoAccount.Tokens.Refresh[0]))return MDO_MODEL_LOGIN_PENDING;
+    if(!Live)return MDO_MODEL_LOGIN_REQUIRED;
+    if(g_MdoAccount.OnlineVersion[0])return MDO_MODEL_LOGIN_READY;
+    return g_MdoAccount.CatalogStatus?MDO_MODEL_LOGIN_UNAVAILABLE:MDO_MODEL_LOGIN_PENDING;
+}
+static MdoModelLoginState MdoAccountModelState(void)
+{
+    if(!g_MdoAccount.Initialized)return MDO_MODEL_LOGIN_REQUIRED;
+    xrtMutexLock(g_MdoAccount.Lock);
+    MdoModelLoginState State=MdoAccountModelStateLocked();
+    xrtMutexUnlock(g_MdoAccount.Lock);return State;
+}
+
 static bool MdoAccountModelAccess(xcancel* Cancel,uint64 Deadline,MdoModelOnlineAccess* Access)
 {
     MdoAccountLease* Lease=xrtCalloc(1,sizeof(*Lease));if(!Lease||!g_MdoAccount.Initialized){xrtFree(Lease);return false;}
@@ -86,6 +107,6 @@ static void MdoAccountModelRelease(MdoModelOnlineAccess* Access,int Status)
 static void MdoAccountClearModelsLocked(void)
 {
     xrtValueRelease(g_MdoAccount.Allowance);g_MdoAccount.Allowance=NULL;
-    g_MdoAccount.OnlineVersion[0]=0;g_MdoAccount.ModelsStatus=0;g_MdoAccount.NextProfile=0;
+    g_MdoAccount.OnlineVersion[0]=0;g_MdoAccount.ModelsStatus=0;g_MdoAccount.CatalogStatus=0;g_MdoAccount.NextProfile=0;
     (void)MdoModelManagerSetOnlineCatalog(NULL);
 }

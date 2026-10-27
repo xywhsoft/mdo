@@ -53,6 +53,7 @@ typedef struct MdoModelEntry {
     bool Free;
     bool Editable;
     bool Removable;
+    bool RequiresLogin;
 } MdoModelEntry;
 
 struct MdoModelCatalog {
@@ -63,6 +64,7 @@ struct MdoModelCatalog {
     MdoModelEntry* Models;
     size_t ModelCount;
     size_t DefaultModelIndex;
+    bool LoginCatalogReady;
 };
 
 typedef struct MdoModelState {
@@ -761,6 +763,7 @@ static bool MdoModelsModelInfo(const MdoModelCatalog* pCatalog,
     pInfo->Generation = pCatalog->Generation;
     pInfo->Builtin = pModel->Builtin;
     pInfo->Free = pModel->Free;
+    pInfo->RequiresLogin = pModel->RequiresLogin || MdoModelIsOnline(pCatalog,pModel->Id);
     pInfo->Editable = pModel->Editable;
     pInfo->Removable = pModel->Removable;
     pInfo->Id = pModel->Id;
@@ -905,6 +908,7 @@ bool MdoModelCatalogProfile(const MdoModelCatalog* pCatalog,
         MdoModelsProfileError(pError, "catalog and profile output are required");
         return false;
     }
+    if(!MdoModelCatalogCheckLogin(pCatalog,ModelId,pError))return false;
     if ( ModelId == NULL || ModelId[0] == '\0' ) {
         if ( pCatalog->DefaultModelIndex < pCatalog->ModelCount )
             pModel = &pCatalog->Models[pCatalog->DefaultModelIndex];
@@ -1139,6 +1143,7 @@ static xllm_client* MdoModelClientCreateAuth(const MdoModelCatalog* pCatalog,
         memset(pInfo, 0, sizeof(*pInfo));
         pInfo->Size = Size;
     }
+    if(!MdoModelCatalogCheckLogin(pCatalog,pOptions->ModelId,pError))return NULL;
     if ( pOptions->ModelId == NULL || pOptions->ModelId[0] == '\0' ) {
         if ( pCatalog->DefaultModelIndex < pCatalog->ModelCount )
             pModel = &pCatalog->Models[pCatalog->DefaultModelIndex];

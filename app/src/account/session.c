@@ -99,7 +99,7 @@ static int32 MdoAccountWorker(void* Unused)
     for (;;) {
         MdoAccountWork work; xcancel* cancel; uint16 status = 0, usage_status = 0;
         xvalue *body=NULL,*data=NULL,*profile=NULL,*usage=NULL,*allowance=NULL,*catalog=NULL,*balance=NULL;
-        uint16 models_status=0;
+        uint16 models_status=0,catalog_status=0;
         uint16 balance_status=0;
         MdoAccountTokens tokens; bool ok = false;
         memset(&work, 0, sizeof(work)); memset(&tokens, 0, sizeof(tokens));
@@ -153,7 +153,6 @@ static int32 MdoAccountWorker(void* Unused)
             data=MdoAccountClient(work.Origin,"/api/v1/ai/allowance","GET",NULL,work.Tokens.Access,cancel,&models_status);
             allowance=MdoAccountAllowance(data,work.Tokens.MemberId);xrtValueRelease(data);data=NULL;
             if(!allowance&&models_status==200)models_status=502;
-            uint16 catalog_status=0;
             catalog=MdoAccountClient(work.Origin,"/api/v1/ai/catalog","GET",NULL,work.Tokens.Access,cancel,&catalog_status);
             if(catalog_status!=200){xrtValueRelease(catalog);catalog=NULL;}
             data = MdoAccountClient(work.Origin, "/api/v1/billing/account", "GET", NULL,
@@ -213,7 +212,12 @@ static int32 MdoAccountWorker(void* Unused)
                 if ( balance ) { xrtValueRelease(g_MdoAccount.Balance); g_MdoAccount.Balance = balance; balance = NULL; }
                 g_MdoAccount.BalanceStatus = balance_status;
                 cstr version=MdoAccountText(catalog,"version",64);
-                if(version&&strlen(version)==64&&strcmp(version,g_MdoAccount.OnlineVersion)&&MdoModelManagerSetOnlineCatalog(catalog))strcpy(g_MdoAccount.OnlineVersion,version);
+                bool catalog_ok=version&&strlen(version)==64;
+                if(catalog_ok&&strcmp(version,g_MdoAccount.OnlineVersion)){
+                    catalog_ok=MdoModelManagerSetOnlineCatalog(catalog);
+                    if(catalog_ok)strcpy(g_MdoAccount.OnlineVersion,version);
+                }
+                g_MdoAccount.CatalogStatus=catalog_ok?200u:(catalog_status&&catalog_status!=200u?catalog_status:502u);
                 /* Profile reads never invalidate a working token on transient
                  * network failures. Search handles a real 401 with one refresh. */
             } else if (work.Kind == MDO_ACCOUNT_WORK_LOGOUT && status != 200) {
@@ -252,7 +256,7 @@ bool MdoAccountInit(void)
     (void)MdoAccountAuthorizationLoad(&g_MdoAccount.Authorization);
     if (g_MdoAccount.Authorization.State[0]) xrtSecureZero(&g_MdoAccount.Work, sizeof(g_MdoAccount.Work));
     xrtMutexUnlock(g_MdoAccount.Lock);
-    MdoModelOnlineAuthority authority={MDO_ACCOUNT_SERVICE_ORIGIN,MdoAccountModelAccess,MdoAccountModelRelease};
+    MdoModelOnlineAuthority authority={MDO_ACCOUNT_SERVICE_ORIGIN,MdoAccountModelAccess,MdoAccountModelRelease,MdoAccountModelState};
     MdoModelManagerSetOnlineAuthority(&authority);
     g_MdoAccount.Worker = xrtThreadCreate(MdoAccountWorker, NULL, 0);
     if (g_MdoAccount.Worker) return true;
@@ -312,6 +316,7 @@ xvalue* MdoAccountSnapshot(void)
     if(ok&&live&&g_MdoAccount.Balance)ok=xrtValueObjectSetNew(out,XRT_STR_LITERAL("balance"),xrtValueClone(g_MdoAccount.Balance));
     if(ok)ok=MdoAccountSetUInt(out,"balance_status",g_MdoAccount.BalanceStatus);
     if(ok)ok=MdoAccountSetUInt(out,"models_status",g_MdoAccount.ModelsStatus)&&MdoAccountSetUInt(out,"model_generation",MdoModelManagerGeneration());
+    if(ok)ok=MdoAccountSetString(out,"model_catalog_state",MdoModelLoginStateName(MdoAccountModelStateLocked()));
     for (i = 0; ok && i < MDO_ACCOUNT_WAIT_MAX; i++) if (g_MdoAccount.Waiters[i].Id && !g_MdoAccount.Waiters[i].Skipped) {
         xvalue* item = xrtValueObject();
         ok = item && MdoAccountSetUInt(item, "id", g_MdoAccount.Waiters[i].Id) &&

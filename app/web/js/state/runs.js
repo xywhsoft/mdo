@@ -17,6 +17,7 @@ const rejectedBeforeExecution = new Set([
   "model_profile_context_limit", "model_profile_credential_unavailable",
   "model_profile_proxy_unavailable", "model_profile_ca_unavailable",
   "model_profile_endpoint_invalid",
+  "model_profile_login_required",
 ]);
 
 export function loadRuns({ retry = false } = {}) {
@@ -74,8 +75,10 @@ export async function startRun(projectId, sessionId, prompt, attachments = [],
       } catch (failure) { error.confirmationError = failure; }
     }
     if (uncertain) error.runAdmissionUncertain = true;
-    else if (submitted && error instanceof ApiError && error.status === 422 &&
-        rejectedBeforeExecution.has(error.code)) error.runAdmissionRejected = true;
+    else if (submitted && error instanceof ApiError &&
+        ((error.status === 422 && rejectedBeforeExecution.has(error.code)) ||
+         (error.status === 503 && ["model_profile_login_pending", "model_profile_login_unavailable"].includes(error.code))))
+      error.runAdmissionRejected = true;
     throw error;
   } finally { recovery.dispose(); }
 }

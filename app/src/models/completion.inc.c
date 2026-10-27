@@ -21,6 +21,9 @@ static const struct {
     const char* Kind;
     const char* Message;
 } MdoModelsProfileErrors[] = {
+    { "profile_login_pending", "Restoring account login and loading online models. Please wait before continuing." },
+    { "profile_login_required", "Sign in to use the selected online model, or choose another model." },
+    { "profile_login_unavailable", "The online model list could not be loaded. Check the connection and retry account refresh." },
     { "profile_image_unsupported", "The selected model cannot view images in this conversation. Choose a model with image input to continue." },
     { "profile_model_missing", "The selected model is no longer in the model list. Refresh the list or choose another model." },
     { "profile_protocol_unsupported", "The selected model does not support this API protocol. Check the model protocol or choose another model." },

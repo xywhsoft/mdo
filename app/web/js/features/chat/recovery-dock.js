@@ -6,6 +6,7 @@ import { renderToolPreview, renderToolArguments } from "../approvals/tool-previe
 import { createRecoveryDecisions, defaultRecoveryAction } from "../approvals/recovery-decisions.js";
 import { isTransientReadError } from "../../api/read-recovery.js";
 import { createAutomaticRecovery } from "./automatic-recovery.js";
+import { modelErrorMessage } from "../../utils/model-errors.js";
 
 export function createRecoveryDock({ container, summary, store, onResume, onAbandon, canAutoResume }) {
   let state = store.get();
@@ -143,7 +144,9 @@ export function createRecoveryDock({ container, summary, store, onResume, onAban
     clear(summary);
     clear(container);
     if (state.status === "error" && isTransientReadError(state.error)) {
-      summary.textContent = t("shell.connecting", {}, "正在连接本地服务…");
+      summary.textContent = ["model_profile_login_pending", "model_profile_login_unavailable"].includes(state.error?.code)
+        ? modelErrorMessage(state.error.code.slice(6), state.error.message)
+        : t("shell.connecting", {}, "正在连接本地服务…");
       restoreFocus(focused);
       return;
     }

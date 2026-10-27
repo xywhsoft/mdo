@@ -194,8 +194,9 @@ export function createAccount({ navigation, onModelsChange = () => {} }) {
         snapshot = renewed;
       }
       render();
-      if (modelGeneration !== snapshot.model_generation) {
-        modelGeneration = snapshot.model_generation; void Promise.resolve(onModelsChange()).catch(() => {});
+      const nextModels = `${snapshot.model_generation}/${snapshot.model_catalog_state ?? ""}`;
+      if (modelGeneration !== nextModels) {
+        modelGeneration = nextModels; void Promise.resolve(onModelsChange()).catch(() => {});
       }
     }
     catch { /* Local host reconnection uses the existing global connection UI. */ }
