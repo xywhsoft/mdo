@@ -7,6 +7,7 @@ import re
 import shutil
 import uuid
 from native_product_runner import product
+from extension_zip_fixture import platform_store_source
 
 ROOT = Path(__file__).resolve().parents[1]
 PLATFORM = ROOT.parent / 'home/host/xywhsoft_ai/plugin/mdo/modules/ecosystem'
@@ -84,9 +85,7 @@ def main():
     (local / 'SKILL.md').write_text('---\nname: client-archive\ndescription: Native transport fixture\n---\nTest skill\n', encoding='utf-8')
     (local / '.hidden.bin').write_bytes(os.urandom(1536000))
     shutil.copyfile(ROOT / '.build/sdk-overlays/16f28b0bd9ecf791b505bbff9001a0c18bbaf398e29d906dc01df967818bcb84/lib/sqlite3.h', fixture / 'sqlite3.h')
-    core = (PLATFORM / 'directory_store.inc.c').read_text(encoding='utf-8').replace('#include "extension_manifest.h"', '#include "/app/include/mdo/extension_manifest.h"').replace('#include <sqlite3.h>', '#include "/app/qa/sqlite3.h"')
-    for name in ('directory_lifecycle.inc.c', 'directory_versions.inc.c'):
-        core = core.replace(f'#include "{name}"', (PLATFORM / name).read_text(encoding='utf-8'))
+    core = platform_store_source(PLATFORM)
     client = (ROOT / 'app/src/extensions/service.c').read_text(encoding='utf-8')
     client = re.sub(r'^#include .*$', '', client, flags=re.M)
     client = re.sub(r'\b(MdoExtService\w+|MdoExtensionService\w+)\b', r'Qa\1', client)

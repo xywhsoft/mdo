@@ -6,6 +6,7 @@ import shutil
 import uuid
 import zipfile
 from native_product_runner import product
+from extension_zip_fixture import platform_store_source
 
 ROOT=Path(__file__).resolve().parents[1]
 PLATFORM=Path('D:/GIT/home/host/xywhsoft_ai')
@@ -71,10 +72,9 @@ def main():
     for name in ('extension_manifest.h','extension_identity.h','extension_path.h','extension_casefold.h','extension_zip.h'):shutil.copyfile(ECO/name,fixture/name)
     with zipfile.ZipFile(fixture/'command.zip','w',zipfile.ZIP_DEFLATED) as z:
         z.writestr('extension.json',json.dumps(dict(kind='commands',name='Route command',alias='qa-directory-command',entry='command.c',platforms=['any'],copyright='Fixture author',license='MIT')))
-        z.writestr('command.c','/* qa-directory-command - inert source preview */\n')
+        z.writestr('command.c','/* mdo-command {"id":"qa-directory-command","description":"Inert source preview"} */\n')
         z.writestr('.hidden/deep/dependency.txt','dependency\n')
-    core=(ECO/'directory_store.inc.c').read_text(encoding='utf-8')
-    for name in ('directory_lifecycle.inc.c','directory_versions.inc.c'):core=core.replace(f'#include "{name}"',(ECO/name).read_text(encoding='utf-8'))
+    core=platform_store_source(ECO,None)
     routes=(ECO/'directory_routes.inc.c').read_text(encoding='utf-8').replace('#include "directory_store.inc.c"',core)
     try:
         names=('initialize','bind_int','bind_text','prepare_v2','finalize','step','exec','column_count','column_name','column_type','column_int64','column_int','column_text','column_bytes','bind_int64','open','busy_timeout','close','changes')

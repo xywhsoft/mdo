@@ -6,6 +6,7 @@ import shutil
 import uuid
 import zipfile
 from native_product_runner import product
+from extension_zip_fixture import directory_zip, platform_store_source
 
 ROOT=Path(__file__).resolve().parents[1]
 PLATFORM=Path('D:/GIT/home/host/xywhsoft_ai/plugin/mdo/modules/ecosystem')
@@ -86,6 +87,9 @@ xvalue* QaProductContract(const xvalue* P,xvfs V){
  const char RawProof[]="expiry-payload-601";char ProofHash[65],Expired[33]={0},Fresh[33]={0};bool Swept=MdoExtensionHash(RawProof,ProofHash);xvalue* ProofStart=SdkParse("{\"purpose\":\"review\"}");SdkPutUInt(ProofStart,"bytes",sizeof(RawProof)-1);MdStorePut(ProofStart,"sha256",ProofHash);char* RequestKey=xrtXidMakeString();MdStorePut(ProofStart,"request_id",RequestKey);Swept=Swept&&MdStoreBegin(&Store,9011,false,ProofStart,&Out,Error);if(Swept)snprintf(Expired,33,"%s",MdoExtensionText(Out,"xid",32));xrtValueRelease(Out);Out=NULL;Swept=Swept&&MdStoreChunk(&Store,9011,Expired,0,RawProof,1,&Out,Error);xrtValueRelease(Out);Out=NULL;
  sqlite3_stmt* Expire=MdStoreSql(&Store,"UPDATE upload SET created=strftime('%s','now')-86410 WHERE xid=?");if(Expire)MdStoreBind(Expire,1,Expired);Swept=Swept&&MdStoreDone(Expire);xvalue* FreshStart=xrtValueClone(ProofStart);xrtValueObjectRemove(FreshStart,XRT_STR_LITERAL("request_id"));Swept=Swept&&MdStoreBegin(&Store,9011,false,FreshStart,&Out,Error);if(Swept)snprintf(Fresh,33,"%s",MdoExtensionText(Out,"xid",32));xrtValueRelease(Out);Out=NULL;char* OldPart=xrtFormat("uploads/%s.part",Expired);bool HasPart=true;xfileinfo ExpiredInfo;Swept=Swept&&MdStoreStat(&Store,OldPart,&HasPart,&ExpiredInfo)&&!HasPart;Out=MdStoreUpload(&Store,Expired,9011);Swept=Swept&&Out&&!strcmp(MdoExtensionText(Out,"state",16),"expired");xrtValueRelease(Out);Out=NULL;Swept=Swept&&!MdStoreBegin(&Store,9011,false,ProofStart,&Out,Error);xrtValueRelease(Out);Out=NULL;QaStoreFlag(R,"expired_parts_removed_and_admission_not_replayed",Swept);xrtFree(OldPart);xrtFree(RequestKey);xrtValueRelease(ProofStart);xrtValueRelease(FreshStart);
  bool Limited=MdStoreChunk(&Store,9011,Fresh,0,RawProof,sizeof(RawProof)-1,&Out,Error);xrtValueRelease(Out);Out=NULL;MdStoreUse First={0},Second={0};First.Next=&Second;Store.Uses=&First;Limited=Limited&&!MdStoreSeal(&Store,9011,Fresh,NULL,&Out,Error);Store.Uses=NULL;xrtValueRelease(Out);Out=NULL;QaStoreFlag(R,"archive_validation_has_two_worker_ceiling",Limited);bool Collected=MdStoreSeal(&Store,9011,Fresh,NULL,&Out,Error);xrtValueRelease(Out);Out=NULL;char* UnusedObject=xrtFormat("objects/%s",ProofHash);bool HasObject=false;Collected=Collected&&MdStoreStat(&Store,UnusedObject,&HasObject,&ExpiredInfo)&&HasObject&&MdStoreCancel(&Store,9011,Fresh,Error)&&MdStoreStat(&Store,UnusedObject,&HasObject,&ExpiredInfo)&&!HasObject;QaStoreFlag(R,"cancelled_sealed_upload_releases_unreferenced_object",Collected);xrtFree(UnusedObject);
+ bool RejectedRecipes=true;const cstr InvalidKinds[]={"mcp","external-tools","knowledge","plugins","skills","commands"};
+ for(size_t I=0;RejectedRecipes&&I<6;I++){char Upload[33];char* Bad=xrtFormat("%s/invalid-%s.zip",SdkField(P,"root"),InvalidKinds[I]);RejectedRecipes=!QaStoreFinish(&Store,9020,InvalidKinds[I],Bad,Upload,Error);xrtFree(Bad);xvalue* Receipt=MdStoreUpload(&Store,Upload,9020);cstr Hash=MdoExtensionText(Receipt,"sha256",64);char* Object=Hash?xrtFormat("objects/%s",Hash):NULL;bool Present=true;xfileinfo Info;RejectedRecipes=RejectedRecipes&&Object&&MdStoreStat(&Store,Object,&Present,&Info)&&!Present;xrtFree(Object);xrtValueRelease(Receipt);}
+ QaStoreFlag(R,"invalid_type_recipes_never_enter_objects",RejectedRecipes);
  SdkPut(R,"error",Error);MdStoreUnit(&Store);return R;
 }
 '''
@@ -96,18 +100,27 @@ def main():
     shutil.copyfile(ROOT/'.build/sdk-overlays/16f28b0bd9ecf791b505bbff9001a0c18bbaf398e29d906dc01df967818bcb84/lib/sqlite3.h',fixture/'sqlite3.h')
     kinds=('agents','subagents','tools','mcp','skills','commands','external-tools','knowledge','plugins')
     for kind in kinds:
-        with zipfile.ZipFile(fixture/(kind+'.zip'),'w',zipfile.ZIP_DEFLATED) as z:
-            z.writestr('extension.json',json.dumps(dict(kind=kind,name='ZIP store fixture',alias='zip-fixture',entry='entry.txt',platforms=['any'])))
-            z.writestr('entry.txt','Stored as a real file\n')
-            z.writestr('.hidden/deep/data.bin',bytes(range(256))*7)
-            z.writestr('empty/',b'')
+        directory_zip(fixture/(kind+'.zip'),kind)
+    for kind in ('mcp','external-tools','knowledge','plugins','skills','commands'):
+        with zipfile.ZipFile(fixture/(kind+'.zip')) as archive:
+            files={info.filename:archive.read(info) for info in archive.infolist()}
+        meta=json.loads(files['extension.json']); entry=meta['entry']
+        if kind in ('mcp','external-tools','knowledge','plugins'):
+            config=json.loads(files[entry])
+            if kind=='mcp': config['variants'][0]['config']['transport']['headers']=[dict(name='Authorization',value='inert-unapproved-secret')]
+            elif kind=='external-tools': config['program']='missing.exe'
+            elif kind=='knowledge': config['index']='missing.md'
+            else: config['entry']['frontend']='missing.js'
+            files[entry]=json.dumps(config)
+        elif kind=='skills': files[entry]='---\nname: WrongAlias\ndescription: Fixture\n---\nReference'
+        else: files[entry]='/* mdo-command {"id":"WrongAlias","description":"Invalid"} */\n'
+        with zipfile.ZipFile(fixture/('invalid-'+kind+'.zip'),'w',zipfile.ZIP_DEFLATED) as archive:
+            for name,data in files.items(): archive.writestr(name,data)
     for variant in ('generic','musl'):
         with zipfile.ZipFile(fixture/f'linux-{variant}.zip','w',zipfile.ZIP_STORED) as z:
             z.writestr('extension.json',json.dumps(dict(kind='skills',name='Linux package',alias='Linux-Alias',entry='SKILL.md',platforms=['linux-x86_64' if variant=='generic' else 'linux-x86_64-musl'],version=variant)))
-            z.writestr('SKILL.md','---\nname: Linux\ndescription: Fixture\n---\nReference')
-    core=(PLATFORM/'directory_store.inc.c').read_text(encoding='utf-8').replace('#include "extension_manifest.h"','#include "/app/include/mdo/extension_manifest.h"').replace('#include <sqlite3.h>','#include "/app/qa/sqlite3.h"')
-    core=core.replace('#include "directory_lifecycle.inc.c"',(PLATFORM/'directory_lifecycle.inc.c').read_text(encoding='utf-8'))
-    core=core.replace('#include "directory_versions.inc.c"',(PLATFORM/'directory_versions.inc.c').read_text(encoding='utf-8'))
+            z.writestr('SKILL.md','---\nname: Linux-Alias\ndescription: Fixture\n---\nReference')
+    core=platform_store_source(PLATFORM)
     try:
         names=('initialize','bind_int','bind_text','prepare_v2','finalize','step','exec','column_count','column_name','column_type','column_int64','column_text','column_bytes','bind_int64','open','busy_timeout','close','changes')
         setup='QaSqlite=LoadLibraryW(L"C:/Program Files/Python312/DLLs/sqlite3.dll");if(!QaSqlite){snprintf(QaLog,sizeof(QaLog),"SQLite loader failed %lu",GetLastError());xsDestroyTCC(T);T=NULL;}'
