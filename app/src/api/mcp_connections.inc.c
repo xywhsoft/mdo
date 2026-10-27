@@ -97,7 +97,7 @@ static void McpConnectionReleaseCredentials(const xvalue* Old)
         if(Ref&&*Ref&&!McpConnectionReferenced(Ref))(void)MdoSecretDiscard(Ref);
     }
 }
-bool MdoApiMcpTemplatesRoute(MdoApiContext* C)
+static bool McpLegacyTemplatesRoute(MdoApiContext* C)
 {
     xrtMutexLock(g_MdoExtensionLock);bool Known=false;xvalue* Records=ExtensionStoreRead(&Known),*Items=xrtValueArray();
     xvalueiter It={0};xvaluekey K;xvalue* R;bool Ok=Known&&Items;
@@ -110,7 +110,7 @@ bool MdoApiMcpTemplatesRoute(MdoApiContext* C)
     xvalue* Data=xrtValueObject();Ok=Ok&&Data&&xrtValueObjectSet(Data,XRT_STR_LITERAL("items"),Items);xrtValueRelease(Items);xrtValueRelease(Records);xrtMutexUnlock(g_MdoExtensionLock);
     if(!Ok){xrtValueRelease(Data);return MdoApiReplyError(C,503,"mcp_templates_unavailable","Template receipts cannot be verified",NULL);}return MdoApiReplySuccessTake(C,200,Data,NULL);
 }
-bool MdoApiMcpConnectionsRoute(MdoApiContext* C)
+static bool McpLegacyConnectionsRoute(MdoApiContext* C)
 {
     MdoApiJsonBody Body={0};MdoApiBodyStatus Read=MdoApiJsonBodyRead(C,&Body);if(Read!=MDO_API_BODY_OK)return MdoApiReplyBodyError(C,Read);
     cstr Id=MdoPackageText(Body.Value,"id",64),Action=MdoPackageText(Body.Value,"action",16);char Error[1024]={0},Path[160],RuntimeId[129];bool Result=false;

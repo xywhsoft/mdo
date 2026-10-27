@@ -18,8 +18,11 @@ static bool MdoArchiveApiInstall(MdoApiContext* C,cstr Id,const xvalue* Input){
  if(Ok){xvalue* Finished=NULL;char ReceiptError[512]={0};if(MdoExtensionTaskComplete(Id,Result,&Finished,ReceiptError))xrtValueObjectSet(Result,XRT_STR_LITERAL("task"),Finished);else MdoExtArchivePut(Result,"transfer_receipt_error",ReceiptError);xrtValueRelease(Finished);}
  xrtValueRelease(Request);xrtValueRelease(Task);xrtFree(Archive);MdoExtensionTaskUseEnd(Use);return MdoArchiveApiResult(C,Ok,Result,Error);
 }
+static void MdoArchiveApiSecrets(xvalue* Input){
+ const xvalue* Secrets=xrtValueObjectGet(Input,XRT_STR_LITERAL("secrets"));for(size_t I=0;I<xrtValueCount(Secrets);I++){xstrview Key={0},Value={0};const xvalue* V=xrtValueObjectAt(Secrets,I,&Key);if(xrtValueGetString(V,&Value))xrtSecureZero((void*)Value.Data,Value.Size);}
+}
 static void MdoArchiveApiDrop(ptr Value,ptr User){
- (void)User;MdoArchiveApiJob* J=Value;MdoApiWriteLeave(&J->Context);xrtValueRelease(J->Input);
+ (void)User;MdoArchiveApiJob* J=Value;MdoApiWriteLeave(&J->Context);if(J->Operation==4)MdoArchiveApiSecrets(J->Input);xrtValueRelease(J->Input);
  if(J->Request.tls){if(J->Sent)xrtTlsStreamClose(J->Request.tls);else xrtTlsStreamAbort(J->Request.tls);xrtTlsStreamDestroy(J->Request.tls);}
  if(J->Request.tcp){if(J->Sent)xrtNetStreamClose(J->Request.tcp);else xrtNetStreamAbort(J->Request.tcp);xrtNetStreamDestroy(J->Request.tcp);}
  xrtMutexLock(MdoArchiveApi.Lock);if(MdoArchiveApi.Count)MdoArchiveApi.Count--;xrtMutexUnlock(MdoArchiveApi.Lock);xrtFree(J);
@@ -28,7 +31,7 @@ static xtaskoutcome MdoArchiveApiRun(xcancel* Cancel,ptr Value,xtaskvalue* Resul
  (void)Result;MdoArchiveApiJob* J=Value;J->Context.SendCancel=Cancel;if(!MdoApiDownloadLive(&J->Context))return XTASK_CANCELLED;
  char Error[512]={0};xvalue* Out=NULL;
  if(J->Operation==1)J->Sent=MdoArchiveApiInstall(&J->Context,J->Id,J->Input);
- else if(J->Operation>=2){bool Ok=J->Operation==3?MdoExtensionTaskPack(MdoExtensionText(J->Input,"kind",32),MdoExtensionText(J->Input,"id",96),Cancel,&Out,Error):MdoExtensionsManage(J->Input,NULL,Cancel,&Out,Error);J->Sent=MdoArchiveApiResult(&J->Context,Ok,Out,Error);}
+ else if(J->Operation>=2){bool Ok=J->Operation==4?MdoMcpConnectionManage(J->Input,Cancel,&Out,Error):J->Operation==3?MdoExtensionTaskPack(MdoExtensionText(J->Input,"kind",32),MdoExtensionText(J->Input,"id",96),Cancel,&Out,Error):MdoExtensionsManage(J->Input,NULL,Cancel,&Out,Error);J->Sent=MdoArchiveApiResult(&J->Context,Ok,Out,Error);}
  else{bool Ok=MdoExtensionTaskSeal(J->Id,Cancel,&Out,Error);J->Sent=MdoArchiveApiResult(&J->Context,Ok,Out,Error);}
  MdoApiLiveChanged(NULL);return J->Sent?XTASK_SUCCESS:XTASK_FAILED;
 }
@@ -40,7 +43,7 @@ static bool MdoArchiveApiStart(MdoApiContext* C,cstr Id,const xvalue* Input,unsi
  if(Input&&!J->Input)goto failed;xrtMutexLock(MdoArchiveApi.Lock);
  if(!MdoArchiveApi.Stopping&&MdoArchiveApi.Count<3){if(!MdoArchiveApi.Pool){xtaskpoolconfig Config={0};Config.Threads=1;Config.QueueLimit=2;MdoArchiveApi.Pool=xrtTaskPoolCreate(&Config);}if(MdoArchiveApi.Pool){xtaskargs Args={0};Args.Destroy=MdoArchiveApiDrop;MdoArchiveApi.Count++;Future=xrtTaskSubmit(MdoArchiveApi.Pool,MdoArchiveApiRun,J,&Args);if(!Future)MdoArchiveApi.Count--;}}
  xrtMutexUnlock(MdoArchiveApi.Lock);if(Future){C->WriteShared=C->WriteExclusive=false;C->Takeover=true;xrtFutureDestroy(Future);return true;}
-failed:if(J){xrtTlsStreamDestroy(J->Request.tls);xrtNetStreamDestroy(J->Request.tcp);xrtValueRelease(J->Input);xrtFree(J);}return MdoApiReplyError(C,503,"extension_archive_busy","Another archive operation is still finishing",NULL);
+failed:if(J){xrtTlsStreamDestroy(J->Request.tls);xrtNetStreamDestroy(J->Request.tcp);if(J->Operation==4)MdoArchiveApiSecrets(J->Input);xrtValueRelease(J->Input);xrtFree(J);}return MdoApiReplyError(C,503,"extension_archive_busy","Another archive operation is still finishing",NULL);
 }
 static bool MdoApiDirectoryOperation(MdoApiContext* C,const xvalue* Input,bool Pack){
  if(C->ApplicationResponse){char Error[512]={0};xvalue* Out=NULL;bool Ok=Pack?MdoExtensionTaskPack(MdoExtensionText(Input,"kind",32),MdoExtensionText(Input,"id",96),C->SendCancel,&Out,Error):MdoExtensionsManage(Input,NULL,C->SendCancel,&Out,Error);return MdoArchiveApiResult(C,Ok,Out,Error);}

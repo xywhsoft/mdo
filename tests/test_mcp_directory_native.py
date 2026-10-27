@@ -12,12 +12,9 @@ from mcp_template_fixture import template
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT = r'''
 static bool QaMcpConnection(cstr Id,cstr Marker,cstr Digest,bool Enabled){
-    xvalue* C=xrtValueObject(),*Values=xrtValueObject();
-    bool Ok=C&&Values&&SdkPut(C,"id",Id)&&SdkPut(C,"extension_id","0123456789ABCDEFGHJKMNPQRSTVWXYZ")&&SdkPut(C,"variant","default")&&
-        SdkPut(C,"name",Id)&&SdkPut(C,"approval_digest",Digest)&&SdkPut(Values,"marker",Marker)&&SdkPut(Values,"token","env:MDO_QA_MCP_TOKEN")&&
-        xrtValueObjectSetNew(C,XRT_STR_LITERAL("enabled"),xrtValueBool(Enabled))&&xrtValueObjectSet(C,XRT_STR_LITERAL("values"),Values);
-    char* Path=xrtFormat("data/mcp/connections/%s.json",Id),*Text=Ok?xrtJsonStringify(C,false,NULL):NULL;
-    Ok=Text&&Path&&MdoHomeAtomicWrite(Path,Text,strlen(Text),false);xrtFree(Path);xrtFree(Text);xrtValueRelease(C);xrtValueRelease(Values);return Ok;
+    char Error[512];xvalue* Old=MdoMcpConnections(Id,Error),*Input=SdkParse("{\"action\":\"save\",\"extension_id\":\"0123456789ABCDEFGHJKMNPQRSTVWXYZ\",\"variant\":\"default\",\"values\":{},\"secret_refs\":{\"token\":\"env:MDO_QA_MCP_TOKEN\"}}"),*Out=NULL;
+    bool Ok=Input&&SdkPut(Input,"id",Id)&&SdkPut(Input,"expected_revision",Old?SdkField(Old,"revision"):"")&&SdkPut(Input,"approval_digest",Digest)&&SdkPut(xrtValueObjectGet(Input,XRT_STR_LITERAL("values")),"marker",Marker)&&xrtValueObjectSetNew(Input,XRT_STR_LITERAL("enabled"),xrtValueBool(Enabled))&&MdoMcpConnectionManage(Input,NULL,&Out,Error);
+    xrtValueRelease(Old);xrtValueRelease(Input);xrtValueRelease(Out);return Ok;
 }
 static bool QaMcpMarker(cstr Id,cstr Expected){
     char* Result=NULL;xwork_error Error;xworkErrorInit(&Error);bool Ok=MdoMcpRead(Id,"resources/read","{\"uri\":\"fixture://marker\"}",NULL,MdoDeadlineAfterUs(10000000),&Result,&Error);
@@ -27,6 +24,9 @@ xvalue* QaProductContract(const xvalue* P,xvfs V){
     cstr Root=SdkField(P,"root"),App=SdkField(P,"app");xvalue* R=xrtValueObject();char Error[512]={0},Digest[65]={0};
     bool Home=QaProductHome(Root,App,V),Ok=Home&&MdoExtensionsInit()&&MdoExtensionsFingerprint("mcp","0123456789ABCDEFGHJKMNPQRSTVWXYZ",Digest,NULL,Error);
     Ok=Ok&&xrtEnvSet("MDO_QA_MCP_TOKEN","private-fixture-token")&&QaMcpConnection("qa-one","alpha-private-only",Digest,true)&&QaMcpConnection("qa-two","beta-private-only",Digest,true);
+    xvalue* PrivateDoc=MdoMcpConnections("qa-one",Error);bool Redacted=PrivateDoc&&!SdkGet(SdkGet(PrivateDoc,"values"),"token")&&MdoExtOpBool(SdkGet(PrivateDoc,"secrets_set"),"token",false);xrtValueObjectSetNew(R,XRT_STR_LITERAL("private_read_redacts_credential_references"),xrtValueBool(Redacted));xrtValueRelease(PrivateDoc);
+    xvalue* Stale=SdkParse("{\"action\":\"remove\",\"id\":\"qa-one\",\"expected_revision\":\"\"}"),*Unused=NULL;
+    xrtValueObjectSetNew(R,XRT_STR_LITERAL("private_stale_edit_rejected"),xrtValueBool(!MdoMcpConnectionManage(Stale,NULL,&Unused,Error)));xrtValueRelease(Stale);xrtValueRelease(Unused);
     xwork_runtime_config Config;xworkRuntimeConfigInit(&Config);xwork_error Work;xworkErrorInit(&Work);xwork_runtime* Runtime=Ok?xworkRuntimeCreate(&Config,&Work):NULL;
     Ok=Ok&&Runtime&&MdoMcpManagerInit(Runtime);xrtValueObjectSetNew(R,XRT_STR_LITERAL("loaded"),xrtValueBool(Ok));
     if(!Ok&&xrtGetError())SdkPut(R,"load_error",xrtErrorMessage(xrtGetError()));
@@ -39,9 +39,18 @@ xvalue* QaProductContract(const xvalue* P,xvfs V){
     xrtValueObjectSetNew(R,XRT_STR_LITERAL("zip_packed"),xrtValueBool(Packed));
     xvalue* Removed=NULL;bool Pinned=Ok&&!MdoExtensionsRemove("mcp","0123456789ABCDEFGHJKMNPQRSTVWXYZ",&Removed,Error);xrtValueRelease(Removed);
     xrtValueObjectSetNew(R,XRT_STR_LITERAL("running_process_pins_directory"),xrtValueBool(Pinned));
+    bool Persisted=Ok&&MdoMcpManagerSetEnabled("qa-one",false,&Work);PrivateDoc=MdoMcpConnections("qa-one",Error);Persisted=Persisted&&PrivateDoc&&!MdoExtOpBool(PrivateDoc,"enabled",true);xrtValueRelease(PrivateDoc);Persisted=Persisted&&MdoMcpManagerReload()&&MdoMcpManagerSetEnabled("qa-one",true,&Work)&&QaMcpMarker("qa-one","alpha-private-only");xrtValueObjectSetNew(R,XRT_STR_LITERAL("activation_is_durable_and_credentials_retained"),xrtValueBool(Persisted));
+    xvalue* PreviewInput=SdkParse("{\"action\":\"preview\",\"id\":\"qa-preview\",\"extension_id\":\"0123456789ABCDEFGHJKMNPQRSTVWXYZ\",\"variant\":\"default\",\"values\":{\"marker\":\"preview-only\"}}");xvalue* PreviewOut=NULL;
+    bool Cold=MdoMcpConnectionManage(PreviewInput,NULL,&PreviewOut,Error)&&SdkField(PreviewOut,"approval_digest");bool PreviewExists=false;xfileinfo PreviewInfo;Cold=Cold&&MdoHomeExternalStat("data/mcp/connections/qa-preview.json",&PreviewExists,&PreviewInfo)&&!PreviewExists;xrtValueObjectSetNew(R,XRT_STR_LITERAL("preview_is_cold_and_requires_no_real_secret"),xrtValueBool(Cold));xrtValueRelease(PreviewInput);xrtValueRelease(PreviewOut);
     bool Changed=Ok&&MdoHomeAtomicWrite("mcp/0123456789ABCDEFGHJKMNPQRSTVWXYZ/support/banner.txt","updated support",15,false)&&MdoMcpManagerReload();
     C=Changed?MdoMcpCatalogSnapshot():NULL;Changed=Changed&&C&&C->Count==0;MdoMcpCatalogRelease(C);
     xrtValueObjectSetNew(R,XRT_STR_LITERAL("changed_directory_requires_approval"),xrtValueBool(Changed));
+    PrivateDoc=MdoMcpConnections("qa-one",Error);xvalue* Reuse=SdkParse("{\"action\":\"save\",\"id\":\"qa-one\",\"extension_id\":\"0123456789ABCDEFGHJKMNPQRSTVWXYZ\",\"variant\":\"default\",\"enabled\":true,\"values\":{\"marker\":\"alpha-private-only\"}}");char NewDigest[65];MdoExtensionsFingerprint("mcp","0123456789ABCDEFGHJKMNPQRSTVWXYZ",NewDigest,NULL,Error);SdkPut(Reuse,"expected_revision",SdkField(PrivateDoc,"revision"));SdkPut(Reuse,"approval_digest",NewDigest);PreviewOut=NULL;
+    bool Refused=!MdoMcpConnectionManage(Reuse,NULL,&PreviewOut,Error);xrtValueObjectSetNew(R,XRT_STR_LITERAL("changed_program_cannot_retain_old_credentials"),xrtValueBool(Refused));xrtValueRelease(PrivateDoc);xrtValueRelease(Reuse);xrtValueRelease(PreviewOut);
+    XS_ServerInfo Server={0};Server.Name="mcp-api-fixture";Server.Port=58013;SdkServer=&Server;g_MdoApiInitialized=true;bool Api=MdoApiWriteInit()&&MdoApiExtensionTasksInit();mdo_sdk_context_v1 Sdk={0};Sdk.Size=sizeof(Sdk);Sdk.Version=MDO_SDK_VERSION;Sdk.Api=MdoApplicationApi();Sdk.ExtensionId="mcp-api-fixture";Sdk.Origin=MDO_ORIGIN_USER;mdo_error_v1 Failure={0};xvalue* Req=SdkParse("{\"path\":{\"connection\":\"qa-one\"}}");
+    Api=Api&&mdoCall(&Sdk,"product.mcp.connections.by_connection.get",Req,&PreviewOut,&Failure)==MDO_RESULT_OK&&!SdkGet(SdkGet(SdkGet(PreviewOut,"data"),"values"),"token");xrtValueRelease(PreviewOut);PreviewOut=NULL;xrtValueRelease(Req);
+    Req=xrtValueObject();Api=Api&&mdoCall(&Sdk,"product.mcp.templates.get",Req,&PreviewOut,&Failure)==MDO_RESULT_OK&&xrtValueCount(SdkGet(SdkGet(PreviewOut,"data"),"items"))==1;xrtValueRelease(PreviewOut);PreviewOut=NULL;xrtValueRelease(Req);
+    xrtValueObjectSetNew(R,XRT_STR_LITERAL("directory_templates_and_private_connection_api"),xrtValueBool(Api));g_MdoApiInitialized=false;SdkServer=NULL;MdoApiExtensionTasksUnit();MdoApiWriteUnit();
     bool Reapproved=Changed&&MdoExtensionsFingerprint("mcp","0123456789ABCDEFGHJKMNPQRSTVWXYZ",Digest,NULL,Error)&&
         QaMcpConnection("qa-one","alpha-private-only",Digest,true)&&QaMcpConnection("qa-two","beta-private-only",Digest,true)&&MdoMcpManagerReload()&&QaMcpMarker("qa-one","alpha-private-only");
     xrtValueObjectSetNew(R,XRT_STR_LITERAL("approval_and_reconnect"),xrtValueBool(Reapproved));
@@ -76,7 +85,7 @@ def main():
     (directory / 'mcp.json').write_text(json.dumps(recipe), encoding='utf-8')
     try:
         result = product(args, fixture, CONTRACT, out / 'result.json')
-        for key in ('loaded', 'two_private_connections', 'first_real_protocol', 'second_real_protocol', 'zip_packed', 'running_process_pins_directory', 'changed_directory_requires_approval', 'approval_and_reconnect', 'whole_directory_uninstalled', 'private_state_separate', 'processes_and_bindings_retired'):
+        for key in ('private_read_redacts_credential_references','private_stale_edit_rejected','loaded', 'two_private_connections', 'first_real_protocol', 'second_real_protocol', 'zip_packed', 'running_process_pins_directory', 'changed_directory_requires_approval', 'directory_templates_and_private_connection_api','approval_and_reconnect','activation_is_durable_and_credentials_retained','preview_is_cold_and_requires_no_real_secret','changed_program_cannot_retain_old_credentials', 'whole_directory_uninstalled', 'private_state_separate', 'processes_and_bindings_retired'):
             assert result.get(key), (key, result)
         archive = fixture / 'data/extension-tasks/export/mcp.zip'
         with zipfile.ZipFile(archive) as z:

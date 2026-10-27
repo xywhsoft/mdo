@@ -74,10 +74,9 @@ static bool McpDirectoryReservedEnvironment(xvalue* Transport)
         if(!Name||!strcmp(Name,"MDO_EXTENSION_ROOT")||!strcmp(Name,"MDO_EXTENSION_ID")||!strcmp(Name,"MDO_EXTENSION_DIGEST"))return false;
     }return true;
 }
-static char* McpDirectoryResolve(MdoMcpSource* Source,char Error[MDO_MCP_ERROR_LIMIT])
+static char* McpDirectoryResolveDocument(MdoMcpSource* Source,const xvalue* Connection,char Error[MDO_MCP_ERROR_LIMIT])
 {
-    char Why[512]={0},Digest[65]={0};char* Text=MdoExtensionRead(Source->RelativePath,true,MDO_MCP_FILE_LIMIT,NULL);
-    xvalue* Connection=Text?xrtJsonParse(xrtStrView(Text)):NULL;xrtFree(Text);
+    char Why[512]={0},Digest[65]={0};char* Text=NULL;
     cstr DirectoryId=MdoExtensionText(Connection,"extension_id",96),Id=MdoExtensionText(Connection,"id",96),VariantId=MdoExtensionText(Connection,"variant",64);
     cstr Approved=MdoExtensionText(Connection,"approval_digest",64),Project=MdoExtensionText(Connection,"project_id",64);
     const xvalue* Values=xrtValueObjectGet(Connection,XRT_STR_LITERAL("values"));bool Enabled=false;
@@ -121,7 +120,13 @@ static char* McpDirectoryResolve(MdoMcpSource* Source,char Error[MDO_MCP_ERROR_L
         Ok=Source->Directory&&Source->ProjectId&&(!Enabled||Source->DirectoryLease);}
     char* Result=Ok?xrtJsonStringify(Config,false,NULL):NULL;if(Result&&strlen(Result)>MDO_MCP_FILE_LIMIT){xrtFree(Result);Result=NULL;}
     if(!Result)snprintf(Error,MDO_MCP_ERROR_LIMIT,"%s",Why[0]?Why:"MCP connection requires an installed directory, valid private values, matching approval and a supported variant");
-    xrtFree(Path);xrtFree(Native);xrtValueRelease(Connection);xrtValueRelease(Meta);xrtValueRelease(Template);xrtValueRelease(Config);return Result;
+    xrtFree(Path);xrtFree(Native);xrtValueRelease(Meta);xrtValueRelease(Template);xrtValueRelease(Config);return Result;
+}
+static char* McpDirectoryResolve(MdoMcpSource* Source,char Error[MDO_MCP_ERROR_LIMIT])
+{
+    char* Text=MdoExtensionRead(Source->RelativePath,true,MDO_MCP_FILE_LIMIT,NULL);
+    xvalue* Connection=Text?xrtJsonParse(xrtStrView(Text)):NULL;xrtFree(Text);
+    char* Result=McpDirectoryResolveDocument(Source,Connection,Error);xrtValueRelease(Connection);return Result;
 }
 #include "../../include/mdo/extension_files.h"
 /* Host-owned connection values never belong to the distributed directory.

@@ -610,5 +610,6 @@ static bool ExtensionBundle(MdoApiContext* C,cstr Id)
 #include "agent_authoring.inc.c"
 #include "mcp_management.inc.c"
 #include "mcp_connections.inc.c"
+#include "mcp_directory_connections.inc.c"
 #include "mcp_import.inc.c"
 #include "mcp_auth_routes.inc.c"

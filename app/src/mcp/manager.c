@@ -1745,9 +1745,12 @@ bool MdoMcpManagerGetStatus(cstr ServerId, MdoMcpServerStatus* pStatus)
 bool MdoMcpManagerSetEnabled(cstr ServerId, bool Enabled,
     xwork_error* pError)
 {
-    return g_MdoMcp.Initialized &&
-        xworkRuntimeSetMcpServerEnabled(g_MdoMcp.Runtime, ServerId, Enabled,
-            pError);
+    char Error[512]={0};xvalue* Current=g_MdoMcp.Initialized?MdoMcpConnections(ServerId,Error):NULL,*Input=xrtValueObject(),*Result=NULL;
+    const cstr Fields[]={"id","extension_id","variant","approval_digest","values","name","project_id"};bool Ok=Current&&Input;
+    for(size_t I=0;Ok&&I<7;I++){const xvalue* Value=xrtValueObjectGet(Current,xrtStrView(Fields[I]));if(Value)Ok=xrtValueObjectSet(Input,xrtStrView(Fields[I]),Value);}
+    Ok=Ok&&McpDirectoryPut(Input,"action","save")&&McpDirectoryPut(Input,"expected_revision",MdoExtensionText(Current,"revision",64))&&xrtValueObjectSetNew(Input,XRT_STR_LITERAL("enabled"),xrtValueBool(Enabled))&&MdoMcpConnectionManage(Input,NULL,&Result,Error);
+    xrtValueRelease(Current);xrtValueRelease(Input);xrtValueRelease(Result);
+    if(!Ok&&pError){xworkErrorInit(pError);pError->eCode=XWORK_ERROR_CONTEXT;snprintf(pError->sMessage,sizeof(pError->sMessage),"%s",Error[0]?Error:"MCP connection could not be enabled");}return Ok;
 }
 
 bool MdoMcpManagerDisconnect(cstr ServerId, xwork_error* pError)
@@ -1795,6 +1798,7 @@ bool MdoMcpDiagnosticsAt(const MdoMcpDiagnostics* pDiagnostics,
 }
 
 #include "scopes.inc.c"
+#include "connections.inc.c"
 
 bool MdoMcpRead(cstr Server,cstr Method,cstr Params,xcancel* Cancel,uint64 Deadline,char** Result,xwork_error* Error)
 {

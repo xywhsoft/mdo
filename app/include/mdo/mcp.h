@@ -85,6 +85,10 @@ bool MdoMcpManagerInit(xwork_runtime* pRuntime);
 void MdoMcpManagerUnit(void);
 bool MdoMcpManagerReload(void);
 bool MdoMcpRemoveDirectoryConnections(cstr DirectoryId,char Error[512]);
+xvalue* MdoMcpConnections(cstr Id,char Error[512]);
+/* Private device bindings only; archive manifests never contain these values.
+ * Preview is cold. Save requires the reviewed whole-directory approval digest. */
+bool MdoMcpConnectionManage(const xvalue* Input,xcancel* Cancel,xvalue** Result,char Error[512]);
 uint64 MdoMcpManagerGeneration(void);
 
 MdoMcpCatalog* MdoMcpCatalogSnapshot(void);
