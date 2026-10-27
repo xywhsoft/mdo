@@ -13,29 +13,29 @@ xvalue* QaProductContract(const xvalue* P,xvfs V){
     bool Home=QaProductHome(Root,App,V),Ok=Home&&MdoExtensionsInit()&&MdoExtensionsRecover(Error)&&MdoExtensionsSeedBuiltins(Error)&&MdoSkillManagerInit();
     xrtValueObjectSetNew(R,XRT_STR_LITERAL("loaded"),xrtValueBool(Ok));
     char* Workspace=MdoHomeExternalPath("workspace");MdoSkillCatalog* C=Ok?MdoSkillCatalogForWorkspace(Workspace):NULL;
-    MdoSkillInfo Info={0};Info.Size=sizeof(Info);bool Found=C&&MdoSkillCatalogFind(C,"catalog-alias",&Info);
+    MdoSkillInfo Info={0};Info.Size=sizeof(Info);bool Found=C&&MdoSkillCatalogFind(C,"Catalog-Alias",&Info);
     Found=Found&&Info.DirectoryId&&!strcmp(Info.DirectoryId,"0123456789ABCDEFGHJKMNPQRSTVWXYZ")&&strstr(Info.SourcePath,"/instructions.md");
     xrtValueObjectSetNew(R,XRT_STR_LITERAL("skill_xid_and_custom_entry"),xrtValueBool(Found));
-    xvalue* Check=xrtJsonParse(XRT_STR_LITERAL("{\"name\":\"catalog-alias\",\"scope\":\"user\"}")),*Report=xrtValueObject();bool Valid=false;
+    xvalue* Check=xrtJsonParse(XRT_STR_LITERAL("{\"name\":\"Catalog-Alias\",\"scope\":\"user\"}")),*Report=xrtValueObject();bool Valid=false;
     bool Checked=Check&&Report&&MdoSkillCheckRequest(Check,Workspace,Report)&&xrtValueGetBool(SdkGet(Report,"valid"),&Valid)&&Valid;
     xrtValueObjectSetNew(R,XRT_STR_LITERAL("skill_validation_uses_directory"),xrtValueBool(Checked));xrtValueRelease(Check);xrtValueRelease(Report);
-    MdoSkillContent Body={0};Body.Size=sizeof(Body);char* Base=Found?MdoSkillCatalogBaseDirectory(C,"catalog-alias"):NULL;
-    bool Read=Found&&Base&&strstr(Base,"0123456789ABCDEFGHJKMNPQRSTVWXYZ")&&MdoSkillCatalogLoadBody(C,"catalog-alias",&Body)&&strstr(Body.Text,"Use directory reference");
+    MdoSkillContent Body={0};Body.Size=sizeof(Body);char* Base=Found?MdoSkillCatalogBaseDirectory(C,"Catalog-Alias"):NULL;
+    bool Read=Found&&Base&&strstr(Base,"0123456789ABCDEFGHJKMNPQRSTVWXYZ")&&MdoSkillCatalogLoadBody(C,"Catalog-Alias",&Body)&&strstr(Body.Text,"Use directory reference");
     xrtValueObjectSetNew(R,XRT_STR_LITERAL("skill_body_and_resource_root"),xrtValueBool(Read));xrtFree(Base);MdoSkillContentUnit(&Body);
     MdoSkillResourceContent Content={0};Content.Size=sizeof(Content);
-    bool Hidden=Found&&MdoSkillCatalogLoadResource(C,"catalog-alias",".hidden/reference.txt",1024,&Content)&&Content.Bytes==16&&!memcmp(Content.Data,"hidden reference",16);
+    bool Hidden=Found&&MdoSkillCatalogLoadResource(C,"Catalog-Alias",".hidden/reference.txt",1024,&Content)&&Content.Bytes==16&&!memcmp(Content.Data,"hidden reference",16);
     MdoSkillResourceContentUnit(&Content);xrtValueObjectSetNew(R,XRT_STR_LITERAL("hidden_resource"),xrtValueBool(Hidden));
     cstr Deep="refs/a/b/c/d/e/f/g/h/i/j/k/l/deep.txt";Content.Size=sizeof(Content);
-    bool DeepRead=Found&&MdoSkillCatalogLoadResource(C,"catalog-alias",Deep,1024,&Content)&&Content.Bytes==14&&!memcmp(Content.Data,"deep reference",14);
+    bool DeepRead=Found&&MdoSkillCatalogLoadResource(C,"Catalog-Alias",Deep,1024,&Content)&&Content.Bytes==14&&!memcmp(Content.Data,"deep reference",14);
     MdoSkillResourceContentUnit(&Content);xrtValueObjectSetNew(R,XRT_STR_LITERAL("deep_resource"),xrtValueBool(DeepRead));
     Info.Size=sizeof(Info);bool Foreign=C&&!MdoSkillCatalogFind(C,"foreign-uninstalled",&Info);
     xrtValueObjectSetNew(R,XRT_STR_LITERAL("foreign_project_not_discovered"),xrtValueBool(Foreign));
-    bool Selection=MdoHomeAtomicWrite("workspace/.mdo/skills.json","{\"catalog-alias\":false}",23,false);
+    bool Selection=MdoHomeAtomicWrite("workspace/.mdo/skills.json","{\"Catalog-Alias\":false}",23,false);
     MdoSkillCatalog* Selected=Selection?MdoSkillCatalogForWorkspace(Workspace):NULL;Info.Size=sizeof(Info);
-    Selection=Selection&&Selected&&!MdoSkillCatalogFind(Selected,"catalog-alias",&Info);MdoSkillCatalogRelease(Selected);
+    Selection=Selection&&Selected&&!MdoSkillCatalogFind(Selected,"Catalog-Alias",&Info);MdoSkillCatalogRelease(Selected);
     xrtValueObjectSetNew(R,XRT_STR_LITERAL("project_selection_only"),xrtValueBool(Selection));
     bool Disabled=MdoExtensionsSetEnabled("skills","0123456789ABCDEFGHJKMNPQRSTVWXYZ",false,Error);Body.Size=sizeof(Body);
-    Disabled=Disabled&&!MdoSkillCatalogLoadBody(C,"catalog-alias",&Body)&&MdoSkillManagerReload();MdoSkillContentUnit(&Body);
+    Disabled=Disabled&&!MdoSkillCatalogLoadBody(C,"Catalog-Alias",&Body)&&MdoSkillManagerReload();MdoSkillContentUnit(&Body);
     xrtValueObjectSetNew(R,XRT_STR_LITERAL("disabled_cached_skill_blocked"),xrtValueBool(Disabled));MdoSkillCatalogRelease(C);
     char* Prompt=xrtStrDup("system");bool Knowledge=Prompt&&MdoKnowledgeAppendPrompt(&Prompt)&&strstr(Prompt,"@knowledge/ABCDEFGHJKMNPQRSTVWXYZ0123456789")&&strstr(Prompt,".references/a/b/index.md");
     xrtValueObjectSetNew(R,XRT_STR_LITERAL("knowledge_xid_prompt"),xrtValueBool(Knowledge));xrtFree(Prompt);
@@ -66,7 +66,7 @@ def main():
     def put(path, text):
         file = fixture / path; file.parent.mkdir(parents=True, exist_ok=True); file.write_text(text, encoding='utf-8')
     skill = 'skills/0123456789ABCDEFGHJKMNPQRSTVWXYZ/'
-    put(skill + 'extension.json', json.dumps({'kind': 'skills', 'name': 'Reference skill', 'alias': 'catalog-alias', 'entry': 'instructions.md', 'platforms': ['any']}))
+    put(skill + 'extension.json', json.dumps({'kind': 'skills', 'name': 'Reference skill', 'alias': 'Catalog-Alias', 'entry': 'instructions.md', 'platforms': ['any']}))
     put(skill + 'instructions.md', '---\nname: Reference skill\ndescription: Directory skill regression\n---\nUse directory reference ${MDO_SKILL_DIR}\n')
     put(skill + '.hidden/reference.txt', 'hidden reference')
     put(skill + 'refs/a/b/c/d/e/f/g/h/i/j/k/l/deep.txt', 'deep reference')

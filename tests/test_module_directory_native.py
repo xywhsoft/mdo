@@ -33,9 +33,13 @@ xvalue* QaProductContract(const xvalue* P,xvfs V){
  if(!Ok&&xrtGetError())SdkPut(R,"load_error",xrtErrorMessage(xrtGetError()));
  MdoModuleCatalog* Catalog=Ok?MdoModuleCatalogSnapshot():NULL;
  xrtValueObjectSetNew(R,XRT_STR_LITERAL("tool_executed_with_resource"),xrtValueBool(Ok&&QaTool(Catalog)));
- xrtValueObjectSetNew(R,XRT_STR_LITERAL("agent_driver"),xrtValueBool(Ok&&QaRole(Catalog,"agent.craftsman",17)));
- xrtValueObjectSetNew(R,XRT_STR_LITERAL("subagent_driver"),xrtValueBool(Ok&&QaRole(Catalog,"subagent.worker",17)));
- MdoModuleAgentBinding* Child=MdoModulesFindAgent(Catalog,"agent.craftsman");
+ xrtValueObjectSetNew(R,XRT_STR_LITERAL("agent_driver"),xrtValueBool(Ok&&QaRole(Catalog,"agent.Craftsman",17)));
+ xrtValueObjectSetNew(R,XRT_STR_LITERAL("subagent_driver"),xrtValueBool(Ok&&QaRole(Catalog,"subagent.Worker",17)));
+
+ XS_ServerInfo ApiServer={0};ApiServer.Name="role-alias-fixture";ApiServer.Port=58013;SdkServer=&ApiServer;g_MdoApiInitialized=true;bool Inspected=MdoApiWriteInit()&&MdoConfigInit()&&MdoSkillManagerInit();
+ mdo_sdk_context_v1 ApiContext={0};ApiContext.Size=sizeof(ApiContext);ApiContext.Version=MDO_SDK_VERSION;ApiContext.Api=MdoApplicationApi();ApiContext.ExtensionId="role-alias-fixture";ApiContext.Origin=MDO_ORIGIN_USER;mdo_error_v1 ApiError={0};xvalue* Query=SdkParse("{\"path\":{\"kind\":\"agents\",\"id\":\"0123456789ABCDEFGHJKMNPQRSTVWXYZ\"}}"),*Reply=NULL;
+ Inspected=Inspected&&mdoCall(&ApiContext,"product.extensions.by_kind.by_id.plan.get",Query,&Reply,&ApiError)==MDO_RESULT_OK;QaRole(Catalog,"agent.Craftsman",17);xrtValueObjectSetNew(R,XRT_STR_LITERAL("role_plan_uses_alias_for_physical_xid"),xrtValueBool(Inspected));if(!Inspected)SdkPut(R,"plan_error",ApiError.Message);xrtValueRelease(Query);xrtValueRelease(Reply);MdoSkillManagerUnit();MdoConfigUnit();MdoApiWriteUnit();g_MdoApiInitialized=false;SdkServer=NULL;
+ MdoModuleAgentBinding* Child=MdoModulesFindAgent(Catalog,"agent.Craftsman");
  xvalue* Definition=Child&&Child->ConfigurationJson?xrtJsonParse(xrtStrView(Child->ConfigurationJson)):NULL;
  const xvalue* Context=MdoAgentConfigGet(Definition,"context");
  cstr ParentOrigin=MdoAgentConfigText(MdoAgentConfigGet(Context,"custom.parent"),"origin"),ChildOrigin=MdoAgentConfigText(MdoAgentConfigGet(Context,"custom.child"),"origin");
@@ -45,13 +49,13 @@ xvalue* QaProductContract(const xvalue* P,xvfs V){
  char Hash[65]={0};MdoModuleGeneration* Owner=Child?Child->Owner:NULL;if(Owner)snprintf(Hash,sizeof(Hash),"%s",Owner->SourceHash);
  MdoModuleCatalogRelease(Catalog);Catalog=NULL;
  bool Edited=Ok&&MdoHomeAtomicWrite("agents/0123456789ABCDEFGHJKMNPQRSTVWXYZ/helper.h","#define QA_NUMBER 29\n",20,false)&&
-   MdoHomeAtomicWrite("subagents/worker-directory/helper.h","#define QA_NUMBER 29\n",20,false)&&MdoModuleManagerReload();
- Catalog=Edited?MdoModuleCatalogSnapshot():NULL;Child=MdoModulesFindAgent(Catalog,"agent.craftsman");
- Edited=Edited&&Child&&strcmp(Hash,Child->Owner->SourceHash)&&QaRole(Catalog,"agent.craftsman",29)&&QaRole(Catalog,"subagent.worker",29);
+   MdoHomeAtomicWrite("subagents/Worker-directory/helper.h","#define QA_NUMBER 29\n",20,false)&&MdoModuleManagerReload();
+ Catalog=Edited?MdoModuleCatalogSnapshot():NULL;Child=MdoModulesFindAgent(Catalog,"agent.Craftsman");
+ Edited=Edited&&Child&&strcmp(Hash,Child->Owner->SourceHash)&&QaRole(Catalog,"agent.Craftsman",29)&&QaRole(Catalog,"subagent.Worker",29);
  xrtValueObjectSetNew(R,XRT_STR_LITERAL("auxiliary_header_reloaded"),xrtValueBool(Edited));MdoModuleCatalogRelease(Catalog);Catalog=NULL;
  bool Disabled=MdoExtensionsSetEnabled("agents","0123456789ABCDEFGHJKMNPQRSTVWXYZ",false,Error)&&MdoModuleManagerReload();
  Catalog=Disabled?MdoModuleCatalogSnapshot():NULL;
- Disabled=Disabled&&!MdoModulesFindAgent(Catalog,"agent.craftsman");MdoModuleCatalogRelease(Catalog);
+ Disabled=Disabled&&!MdoModulesFindAgent(Catalog,"agent.Craftsman");MdoModuleCatalogRelease(Catalog);
  xrtValueObjectSetNew(R,XRT_STR_LITERAL("whole_role_disable"),xrtValueBool(Disabled));
  const xerror* Native=xrtGetError();if(Native)SdkPut(R,"native_error",xrtErrorMessage(Native));
  MdoModuleDiagnostics* D=MdoModuleDiagnosticsSnapshot();xvalue* Messages=xrtValueArray();
@@ -104,11 +108,11 @@ def main():
     parent = {'schema': 'mdo.agent.v1', 'name': 'Parent role', 'description': 'Parent role', 'context': {'custom.parent': {'file': 'parent.txt'}}, 'prompt': 'parent prompt'}
     add('agents', 'parent-directory', 'parent', 'agent.json', {'agent.json': json.dumps(parent), 'parent.txt': 'parent context'})
     child = {'schema': 'mdo.agent.v1', 'name': 'Craftsman', 'description': 'Child C role', 'code': True, 'extends': 'agent.parent', 'prompt_file': 'prompts/base.txt', 'context': {'custom.child': {'file': 'child.txt'}}}
-    code = ROLE.replace('ROLE_ID', 'agent.craftsman').replace('ROLE_FLAG', 'MDO_AGENT_MAIN').replace('MODULE_ID', 'qa.agent.module')
-    add('agents', '0123456789ABCDEFGHJKMNPQRSTVWXYZ', 'craftsman', 'agent.json', {'agent.json': json.dumps(child), 'agent.c': code,
+    code = ROLE.replace('ROLE_ID', 'agent.Craftsman').replace('ROLE_FLAG', 'MDO_AGENT_MAIN').replace('MODULE_ID', 'qa.agent.module')
+    add('agents', '0123456789ABCDEFGHJKMNPQRSTVWXYZ', 'Craftsman', 'agent.json', {'agent.json': json.dumps(child), 'agent.c': code,
         'prompts/base.txt': 'child prompt file', 'child.txt': 'child context', 'helper.h': '#define QA_NUMBER 17\n'}, native='agent.c')
-    code = ROLE.replace('ROLE_ID', 'subagent.worker').replace('ROLE_FLAG', 'MDO_AGENT_SUBAGENT').replace('MODULE_ID', 'qa.subagent.module')
-    add('subagents', 'worker-directory', 'worker', 'agent.c', {'agent.c': code, 'helper.h': '#define QA_NUMBER 17\n'})
+    code = ROLE.replace('ROLE_ID', 'subagent.Worker').replace('ROLE_FLAG', 'MDO_AGENT_SUBAGENT').replace('MODULE_ID', 'qa.subagent.module')
+    add('subagents', 'Worker-directory', 'Worker', 'agent.c', {'agent.c': code, 'helper.h': '#define QA_NUMBER 17\n'})
     tool = (ROOT / 'tests/fixtures/modules/local-tool.c').read_text(encoding='utf-8')
     tool = tool.replace('#include "mdo/module.h"', '#include "mdo/module.h"\n#include "mdo/sdk.h"\n#include <xsbase.h>\n#include "helper.h"')
     tool = tool.replace('    return Writer->WriteText(Writer->Context, "LOCAL TOOL CALLBACK RESULT") &&', '''    char* Path=xrtPathJoin(Context->Application->ExtensionRoot,"resource.txt");size_t Length=0;
@@ -117,7 +121,7 @@ def main():
     add('tools', 'tool-directory', 'fixture', 'tool.c', {'tool.c': tool, 'resource.txt': 'tool resource', 'helper.h': '#define QA_NUMBER 17\n'})
     try:
         result = product(args, fixture, CONTRACT, out / 'result.json')
-        for key in ('loaded', 'tool_executed_with_resource', 'agent_driver', 'subagent_driver', 'inherited_and_own_resource_roots', 'auxiliary_header_reloaded', 'whole_role_disable', 'uninstalled_after_runtime_release'):
+        for key in ('loaded', 'role_plan_uses_alias_for_physical_xid', 'tool_executed_with_resource', 'agent_driver', 'subagent_driver', 'inherited_and_own_resource_roots', 'auxiliary_header_reloaded', 'whole_role_disable', 'uninstalled_after_runtime_release'):
             assert result.get(key), (key, result)
         print(json.dumps(result, ensure_ascii=False))
     finally:

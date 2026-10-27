@@ -113,7 +113,7 @@ static inline bool MdoAgentConfigSourceKnown(cstr Id)
         "project_rules", "mcp.instructions" };
     for (size_t i = 0; i < sizeof(Names)/sizeof(*Names); ++i)
         if (!strcmp(Id, Names[i])) return true;
-    return !strncmp(Id, "custom.", 7u) && MdoExtensionIdValid(Id + 7u);
+    return !strncmp(Id, "custom.", 7u) && MdoExtensionAlias(Id + 7u);
 }
 
 static inline bool MdoAgentConfigKeys(const xvalue* Object,cstr Keys)

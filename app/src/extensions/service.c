@@ -45,7 +45,9 @@ bool MdoExtensionServiceRead(const xvalue* Input,xcancel* Cancel,xvalue** Result
  if(!strcmp(Action,"catalog"))Base=xrtStrDup(MDO_EXT_SERVICE "/catalog");
  else if(!strcmp(Action,"mine")||!strcmp(Action,"profile")||!strcmp(Action,"requests"))Base=xrtFormat(MDO_EXT_SERVICE "/creator?scope=%s",!strcmp(Action,"mine")?"works":Action);
  else if((!strcmp(Action,"detail")||!strcmp(Action,"files")||!strcmp(Action,"preview"))&&MdoExtServiceId(Version))Base=xrtFormat(MDO_EXT_SERVICE "/%s?version=%s",Action,Version);
- if(!Base)return MdoExtServiceError(Error,"Unsupported extension read; no arbitrary service URL is accepted");char* Path=MdoExtServiceQuery(Base,Input);xrtFree(Base);MdoAccountLease Lease={0};bool Ok=Path&&MdoExtServiceLease(Cancel,Required,&Lease,Error);if(Ok)*Result=MdoExtServiceJson(Path,"GET",NULL,&Lease,Cancel,Error);MdoAccountRelease(&Lease);xrtFree(Path);return *Result!=NULL;
+ if(!Base)return MdoExtServiceError(Error,"Unsupported extension read; no arbitrary service URL is accepted");char* Path=MdoExtServiceQuery(Base,Input);xrtFree(Base);
+ if(Path&&!strcmp(Action,"catalog")&&!xrtValueObjectHas(Input,XRT_STR_LITERAL("platform"))){char* Filtered=xrtFormat("%s%cplatform=%s",Path,strchr(Path,'?')?'&':'?',MdoExtensionRuntimePlatform());xrtFree(Path);Path=Filtered;}
+ MdoAccountLease Lease={0};bool Ok=Path&&MdoExtServiceLease(Cancel,Required,&Lease,Error);if(Ok)*Result=MdoExtServiceJson(Path,"GET",NULL,&Lease,Cancel,Error);MdoAccountRelease(&Lease);xrtFree(Path);return *Result!=NULL;
 }
 static xvalue* MdoExtServiceOrigin(const xvalue* Entry){
  const cstr Names[]={"kind","xid","version_id","sha256","bytes","owner","submitter","author","copyright","license","name","alias","platforms","state","version"};xvalue* Origin=xrtValueObject();bool Ok=Origin!=NULL;

@@ -90,7 +90,7 @@ static inline bool MdoAgentFileParseAt(cstr Id, cstr Text, bool Main,cstr Root,
     bool Ok;
     bool RequireVerification = false;
     memset(File, 0, sizeof(*File));
-    if (!MdoExtensionIdValid(Id)) return false;
+    if (!MdoExtensionAlias(Id)) return false;
     Document = Root?MdoAgentConfigResolveAt(Id,Text,Main,Root,Error,Capacity):MdoAgentConfigResolve(Id,Text,Main,Error,Capacity);
     if (Document == NULL) return false;
     RequireVerification = MdoAgentConfigBool(Document,"require_verification_after_write",false);

@@ -185,16 +185,7 @@ static bool MdoSkillsGrow(void** ppItems, size_t* pCapacity,
 
 static bool MdoSkillsIdValid(cstr Id)
 {
-    size_t i = 0u;
-    if ( Id == NULL || !Id[0] || Id[0]=='.' ) return false;
-    while ( Id[i] != '\0' ) {
-        unsigned char c = (unsigned char)Id[i];
-        if ( i >= MDO_SKILL_ID_LIMIT ||
-             !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
-               c == '.' || c == '_' || c == '-') ) return false;
-        i++;
-    }
-    return i != 0u && Id[i-1]!='.' && !strstr(Id,"..");
+    return MdoExtensionAlias(Id);
 }
 
 static bool MdoSkillsViewEqual(xstrview View, cstr Text)

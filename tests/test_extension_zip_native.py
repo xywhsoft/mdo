@@ -23,7 +23,7 @@ def headers():
     folder = ROOT / 'app/include/mdo'
     def inline(name):
         text = (folder / name).read_text(encoding='utf-8')
-        for child in ('extension_zip.h', 'extension_path.h', 'extension_casefold.h'):
+        for child in ('extension_zip.h', 'extension_path.h', 'extension_casefold.h', 'extension_identity.h'):
             if '#include "' + child + '"' in text:
                 text = text.replace('#include "' + child + '"', inline(child))
         return text

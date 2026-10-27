@@ -1,22 +1,42 @@
 #ifndef MDO_EXTENSION_MANIFEST_H
 #define MDO_EXTENSION_MANIFEST_H
 #include "extension_zip.h"
+#include "extension_identity.h"
 
 #define MDO_EXTENSION_MANIFEST_BYTES (64u*1024u)
 static cstr MdoExtensionText(const xvalue* O,cstr Key,size_t Limit)
 {
     xstrview V={0};return xrtValueGetString(xrtValueObjectGet(O,xrtStrView(Key)),&V)&&V.Size<=Limit&&!memchr(V.Data,0,V.Size)&&xrtUtf8Valid(V,NULL)?V.Data:NULL;
 }
-static bool MdoExtensionAlias(cstr Name)
-{
-    size_t N=Name?strlen(Name):0;if(!N||N>64)return false;
-    for(size_t I=0;I<N;I++){unsigned char C=Name[I];if(!((C>='a'&&C<='z')||(C>='A'&&C<='Z')||(C>='0'&&C<='9')||C=='-'||C=='_'||C=='.'))return false;}
-    return Name[0]!='.'&&Name[N-1]!='.'&&!strstr(Name,"..");
-}
 static bool MdoExtensionPlatform(cstr P)
 {
     const char* const Names[]={"any","windows-x86_64","linux-x86_64","linux-x86_64-glibc","linux-x86_64-musl","linux-arm64","android-arm64-v8a","macos-arm64"};
     for(size_t I=0;I<sizeof(Names)/sizeof(*Names);I++)if(P&&!strcmp(P,Names[I]))return true;return false;
+}
+static bool MdoExtensionSupportsPlatform(const xvalue* Manifest,cstr Platform)
+{
+    if(!Platform)return false;const xvalue* Ps=xrtValueObjectGet(Manifest,XRT_STR_LITERAL("platforms"));
+    for(size_t I=0;I<xrtValueCount(Ps);I++){xstrview P={0};if(!xrtValueGetString(xrtValueArrayGet(Ps,I),&P))continue;
+        if(xrtStrEqual(P,XRT_STR_LITERAL("any"))||xrtStrEqual(P,xrtStrView(Platform))||(!strncmp(Platform,"linux-x86_64-",13)&&xrtStrEqual(P,XRT_STR_LITERAL("linux-x86_64"))))return true;}
+    return false;
+}
+static cstr MdoExtensionRuntimePlatform(void)
+{
+#if defined(__ANDROID__)
+    return "android-arm64-v8a";
+#elif defined(_WIN32) || defined(_WIN64)
+    return "windows-x86_64";
+#elif defined(__linux__) && defined(__x86_64__) && defined(MDO_PRODUCT_LIBC)
+    return "linux-x86_64-" MDO_PRODUCT_LIBC;
+#elif defined(__linux__) && defined(__x86_64__)
+    return "linux-x86_64";
+#elif defined(__linux__) && defined(__aarch64__)
+    return "linux-arm64";
+#elif defined(__APPLE__) && defined(__aarch64__)
+    return "macos-arm64";
+#else
+    return "unsupported";
+#endif
 }
 static bool MdoExtensionManifest(const xvalue* M,char* Error,size_t Capacity)
 {

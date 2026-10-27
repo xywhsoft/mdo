@@ -189,6 +189,7 @@ bool MdoExtensionsFingerprint(cstr Kind,cstr Id,char Hash[65],xcancel* Cancel,ch
 static bool MdoExtVerify(cstr Kind,cstr Id,const xvalue* State,xcancel* Cancel,char Error[512])
 {
     xvalue* M=MdoExtRead(Kind,Id,State,Error);if(!M)return false;
+    if(!MdoExtensionSupportsPlatform(M,MdoExtensionRuntimePlatform())){xrtValueRelease(M);return MdoExtError(Error,"This extension does not support the current device platform");}
     cstr Source=MdoExtensionText(M,"source",16);bool Ok=!Cancel||!xrtCancelRequested(Cancel);
     if(Ok&&Source&&strcmp(Source,"manual")){
         const xvalue* Record=xrtValueObjectGet(M,XRT_STR_LITERAL("installation"));cstr Expected=MdoExtensionText(Record,"directory_digest",64),Root=MdoExtensionText(M,"root",MDO_EXTENSION_PATH_BYTES);
@@ -408,6 +409,7 @@ bool MdoExtensionsInstall(cstr Kind,cstr Id,cstr Archive,const xvalue* Credits,b
     xfile Input=MdoHomeOpenRead(Archive);MdoZip Z={0};xvalue* Meta=NULL,*Record=NULL;char Digest[65]={0};uint64 Bytes=0;
     bool Ok=Input&&MdoZipOpen(&Z,Input);if(Ok)Meta=MdoExtensionZipManifest(&Z,Cancel);
     Ok=Ok&&Meta&&!strcmp(Kind,MdoExtensionText(Meta,"kind",32));
+    if(Ok&&!MdoExtensionSupportsPlatform(Meta,MdoExtensionRuntimePlatform())){MdoExtError(Error,"This extension ZIP does not support the current device platform");Ok=false;}
     if(Ok&&MdoExtRequiresTrust(Meta)&&!Trust){MdoExtError(Error,"Explicit code approval is required for this extension directory");Ok=false;}
     cstr Source=MdoExtensionText(Credits,"source",16);if(!Source)Source="manual";
     cstr Expected=MdoExtensionText(Credits,"sha256",64);
@@ -492,7 +494,7 @@ bool MdoExtensionsSetActivation(cstr Kind,const xvalue* Changes,char Error[512])
         xrtValueRelease(Meta);xrtValueRelease(Record);xrtFree(Key);
     }
     if(Ok)Ok=MdoExtSaveJson(MDO_EXT_STATE,State,MDO_EXT_STATE_LIMIT);xrtValueRelease(State);xrtMutexUnlock(MdoExtLock);
-    if(Ok){if(Error)Error[0]=0;return true;}return MdoExtError(Error,"Cannot update extension activation state");
+    if(Ok){if(Error)Error[0]=0;return true;}if(Error&&!Error[0])MdoExtError(Error,"Cannot update extension activation state");return false;
 }
 bool MdoExtensionsSetEnabled(cstr Kind,cstr Id,bool Enabled,char Error[512])
 {

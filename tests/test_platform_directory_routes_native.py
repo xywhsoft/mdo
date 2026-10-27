@@ -68,7 +68,7 @@ def main():
     for name in ('xs_plugin.h','xs_plugin_work.h','plugin_support.h','value_util.h'):shutil.copyfile(PLATFORM/'plugin_sdk'/name,sdk/name)
     shutil.copyfile(PLATFORM/'include/xadmin/time.h',fixture/'include/xadmin/time.h')
     shutil.copyfile(ROOT/'.build/sdk-overlays/16f28b0bd9ecf791b505bbff9001a0c18bbaf398e29d906dc01df967818bcb84/lib/sqlite3.h',sdk/'sqlite3.h')
-    for name in ('extension_manifest.h','extension_path.h','extension_casefold.h','extension_zip.h'):shutil.copyfile(ECO/name,fixture/name)
+    for name in ('extension_manifest.h','extension_identity.h','extension_path.h','extension_casefold.h','extension_zip.h'):shutil.copyfile(ECO/name,fixture/name)
     with zipfile.ZipFile(fixture/'command.zip','w',zipfile.ZIP_DEFLATED) as z:
         z.writestr('extension.json',json.dumps(dict(kind='commands',name='Route command',alias='qa-directory-command',entry='command.c',platforms=['any'],copyright='Fixture author',license='MIT')))
         z.writestr('command.c','/* qa-directory-command - inert source preview */\n')

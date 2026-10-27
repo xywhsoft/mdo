@@ -25,7 +25,7 @@ static bool QaExecute(cstr Directory,cstr Source,cstr Include,int64 Expected){
  union{void* P;mdo_command_run_v1 F;} Entry={0};bool Ok=tcc_compile_string(T,Source)==0&&tcc_relocate(T)==0;
  if(Ok)Entry.P=tcc_get_symbol(T,MDO_COMMAND_ENTRY);
  mdo_command_context_v1 Context={0};Context.Size=sizeof(Context);Context.AbiVersion=1;
- Context.CommandId="qa-alias";Context.DirectoryId="0123456789ABCDEFGHJKMNPQRSTVWXYZ";Context.ExtensionRoot=Native;
+ Context.CommandId="QA-Alias";Context.DirectoryId="0123456789ABCDEFGHJKMNPQRSTVWXYZ";Context.ExtensionRoot=Native;
  xvalue* Result=NULL;Ok=Ok&&Entry.F&&Entry.F(&Context,NULL,&Result)==MDO_RESULT_OK;int64 N=0;
  xstrview Text={0};Ok=Ok&&xrtValueGetInt(xrtValueObjectGet(Result,XRT_STR_LITERAL("value")),&N)&&N==Expected&&
   xrtValueGetString(xrtValueObjectGet(Result,XRT_STR_LITERAL("text")),&Text)&&xrtStrEqual(Text,XRT_STR_LITERAL("resource from directory"));
@@ -37,7 +37,7 @@ MDO_EXPORT mdo_result mdoCommandRun(const mdo_command_context_v1* C,const xvalue
  xrtValueGetString(xrtValueObjectGet(P,XRT_STR_LITERAL("include")),&Include);
  QaRoot=xrtRootOpen(Root.Data);if(!QaRoot||!MdoExtensionsInit())return MDO_RESULT_ERROR;
  *R=xrtValueObject();char Error[512]={0},Revision[65]={0},After[65]={0};char* Source=NULL;xvalue* Meta=NULL;
- bool Ok=MdoCommandResolve(NULL,"qa-alias",&Source,&Meta,Revision,Error);
+ bool Ok=MdoCommandResolve(NULL,"QA-Alias",&Source,&Meta,Revision,Error);
  cstr Id=CommandText(Meta,"directory_id");
  bool Alias=Ok&&Id&&!strcmp(Id,"0123456789ABCDEFGHJKMNPQRSTVWXYZ")&&strstr(CommandText(Meta,"path"),"/nested/command.c");
  xrtValueObjectSetNew(*R,XRT_STR_LITERAL("xid_keeps_alias"),xrtValueBool(Alias));
@@ -55,7 +55,7 @@ MDO_EXPORT mdo_result mdoCommandRun(const mdo_command_context_v1* C,const xvalue
  bool Duplicate=Description&&MdoHomeAtomicWrite("commands/other-directory/extension.json",Description,strlen(Description),false)&&
    MdoHomeAtomicWrite("commands/other-directory/nested/command.c",Source,strlen(Source),false);
  xvalue* Catalog=Duplicate?MdoCommandCatalog(NULL):NULL;bool Valid=true;
- xrtValueGetBool(xrtValueObjectGet(xrtValueObjectGet(Catalog,XRT_STR_LITERAL("qa-alias")),XRT_STR_LITERAL("valid")),&Valid);
+ xrtValueGetBool(xrtValueObjectGet(xrtValueObjectGet(Catalog,XRT_STR_LITERAL("QA-Alias")),XRT_STR_LITERAL("valid")),&Valid);
  xrtValueObjectSetNew(*R,XRT_STR_LITERAL("duplicate_alias_blocked"),xrtValueBool(Duplicate&&Catalog&&!Valid));xrtValueRelease(Catalog);
  xrtFree(Description);xrtFree(Entry);xrtValueRelease(Meta);xrtFree(Source);Source=NULL;Meta=NULL;
  bool Legacy=!MdoCommandResolve(NULL,"legacy-flat",&Source,&Meta,After,Error);xrtFree(Source);xrtValueRelease(Meta);
@@ -79,9 +79,9 @@ def main():
     out = ROOT / '.build/command-directory-native'; out.mkdir(parents=True, exist_ok=True)
     fixture = out / ('home-' + uuid.uuid4().hex[:12]); fixture.mkdir()
     directory = fixture / 'commands/0123456789ABCDEFGHJKMNPQRSTVWXYZ'; (directory / 'nested').mkdir(parents=True)
-    manifest = {'kind': 'commands', 'name': 'Directory QA', 'alias': 'qa-alias', 'entry': 'nested/command.c', 'platforms': ['any']}
+    manifest = {'kind': 'commands', 'name': 'Directory QA', 'alias': 'QA-Alias', 'entry': 'nested/command.c', 'platforms': ['any']}
     (directory / 'extension.json').write_text(json.dumps(manifest), encoding='utf-8')
-    meta = {'id': 'qa-alias', 'description': 'Native auxiliary C command', 'effects': ['read']}
+    meta = {'id': 'QA-Alias', 'description': 'Native auxiliary C command', 'effects': ['read']}
     command = '/* mdo-command ' + json.dumps(meta) + ' */\n' + r'''
 #include "mdo/command.h"
 #include <xsbase.h>
@@ -96,7 +96,7 @@ MDO_EXPORT mdo_result mdoCommandRun(const mdo_command_context_v1* C,const xvalue
     (directory / 'nested/command.c').write_text(command, encoding='utf-8')
     (directory / 'helper.h').write_text('#define QA_VALUE 17\n', encoding='utf-8')
     (directory / 'resources').mkdir(); (directory / 'resources/note.txt').write_bytes(b'resource from directory')
-    (fixture / 'commands/legacy-flat.c').write_text(command.replace('qa-alias', 'legacy-flat'), encoding='utf-8')
+    (fixture / 'commands/legacy-flat.c').write_text(command.replace('QA-Alias', 'legacy-flat'), encoding='utf-8')
     ident = 'command-directory-qa-' + uuid.uuid4().hex[:12]
     inner = '#include "/app/sdk/mdo/command.h"\n#include <xsbase.h>\n#include <libtcc.h>\n'
     for path in ('include/mdo/extensions.h', 'include/mdo/home.h', 'include/mdo/extension_manifest.h'):

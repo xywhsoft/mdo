@@ -268,17 +268,7 @@ static bool MdoModulesStringCopy(char** pTarget, cstr Source, size_t Limit,
 
 static bool MdoModulesIdValid(cstr Id)
 {
-    const unsigned char* p = (const unsigned char*)Id;
-    size_t iLength = 0u;
-
-    if ( p == NULL || !(p[0] >= 'a' && p[0] <= 'z') ) return false;
-    for ( ; p[iLength] != '\0'; ++iLength ) {
-        unsigned char c = p[iLength];
-        if ( iLength >= MDO_MODULE_ID_LIMIT ||
-             !((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') ||
-               c == '.' || c == '_' || c == '-') ) return false;
-    }
-    return iLength != 0u;
+    return MdoExtensionIdentifier(Id,MDO_MODULE_ID_LIMIT);
 }
 
 static bool MdoModulesOneBit(uint64 Value)

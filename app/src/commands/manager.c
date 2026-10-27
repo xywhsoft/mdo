@@ -361,7 +361,7 @@ bool MdoCommandCancel(cstr Id) {
 }
 xvalue* MdoCommandStart(const xvalue* Input,cstr Workspace,char Error[512]) {
     Error[0]=0;cstr Id=CommandText(Input,"invocation_id"),Command=CommandText(Input,"command_id"),Project=CommandText(Input,"project_id");
-    if(!CommandManager.Lock||!MdoCommandInvocationIdValid(Id)||!MdoExtensionIdValid(Command)||!MdoExtensionIdValid(Project))goto invalid;
+    if(!CommandManager.Lock||!MdoCommandInvocationIdValid(Id)||!MdoExtensionAlias(Command)||!MdoExtensionIdValid(Project))goto invalid;
     if(CommandManager.StorageBlocked){snprintf(Error,512,"Command receipt storage needs recovery before admitting new commands");return NULL;}
     char* Json=xrtJsonStringify(Input,false,NULL);char Hash[65];bool HasHash=Json&&MdoExtensionHash(Json,Hash);xrtFree(Json);if(!HasHash)goto invalid;
     xvalue* Existing=MdoCommandGet(Id);

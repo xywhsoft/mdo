@@ -42,6 +42,12 @@ xvalue* QaProductContract(const xvalue* P,xvfs V){
  xvalue* Warnings=xrtValueArray();bool Warning=MdoExtensionsWarnings(Warnings)&&xrtValueCount(Warnings)==1&&!strcmp(SdkField(xrtValueArrayGet(Warnings,0),"code"),"uninstall_changed");QaFlag(R,"deferred_problem_joins_common_warning",Warning);xrtValueRelease(Warnings);
  bool Cancel=mdoCall(&C,"extension.cancel_remove",Request,&Out,&E)==MDO_RESULT_OK&&!MdoExtOpBool(Out,"pending_remove",false);xrtValueRelease(Out);Out=NULL;QaFlag(R,"pending_uninstall_can_be_cancelled",Cancel);
  MdoExtensionsFingerprint("skills","sdk-local",Hash,NULL,Error);SdkPut(Request,"expected_revision",Hash);QaFlag(R,"sdk_directory_removed",mdoCall(&C,"extension.remove",Request,&Out,&E)==MDO_RESULT_OK&&MdoExtOpBool(Out,"removed",false));xrtValueRelease(Out);xrtValueRelease(Request);
+
+ xvalue* Platform=SdkParse("{\"platforms\":[\"linux-x86_64\"]}");bool PlatformMatch=MdoExtensionSupportsPlatform(Platform,"linux-x86_64-glibc")&&MdoExtensionSupportsPlatform(Platform,"linux-x86_64-musl")&&!MdoExtensionSupportsPlatform(Platform,"windows-x86_64");xrtValueRelease(Platform);Platform=SdkParse("{\"platforms\":[\"linux-x86_64-musl\"]}");PlatformMatch=PlatformMatch&&MdoExtensionSupportsPlatform(Platform,"linux-x86_64-musl")&&!MdoExtensionSupportsPlatform(Platform,"linux-x86_64-glibc");xrtValueRelease(Platform);QaFlag(R,"platform_and_libc_selection",PlatformMatch);
+ xvalue* WrongManifest=SdkParse("{\"kind\":\"skills\",\"name\":\"Other platform\",\"alias\":\"1.Mixed_Alias\",\"entry\":\"SKILL.md\",\"platforms\":[\"macos-arm64\"]}");bool WrongPlatform=MdoExtensionsCreate("skills","other-platform",WrongManifest,"---\nname: Other\ndescription: fixture\n---\nTest",45,false,&Out,Error);xrtValueRelease(Out);Out=NULL;
+ WrongPlatform=WrongPlatform&&!MdoExtensionsSetEnabled("skills","other-platform",true,Error)&&strstr(Error,"platform");QaFlag(R,"foreign_platform_cannot_be_enabled",WrongPlatform);xrtValueRelease(WrongManifest);
+ char WrongHash[65];uint64 WrongBytes=0;bool Cross=MdoExtensionsPack("skills","other-platform","data/extension-tasks/cross-platform.zip",NULL,WrongHash,&WrongBytes,Error)&&!MdoExtensionsInstall("skills","cross-platform","data/extension-tasks/cross-platform.zip",NULL,false,NULL,&Out,Error)&&strstr(Error,"platform");QaFlag(R,"foreign_zip_rejected_before_install",Cross);xrtValueRelease(Out);Out=NULL;
+
  SdkPut(R,"error",Error);MdoExtensionTasksUnit();MdoExtensionsUnit();if(Home)MdoHomeUnit();return R;
 }
 '''

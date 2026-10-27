@@ -32,7 +32,7 @@ static inline xvalue* MdoAgentConfigResolveDepth(cstr Id, cstr Text, bool Main,
             if (!strncmp(Parent,"agent.",6)) { ParentMain=true; ParentId=Parent+6; }
             else if (!strncmp(Parent,"subagent.",9)) { ParentMain=false; ParentId=Parent+9; }
             else if (!strcmp(Parent,"mdo.default")) { ParentMain=true; ParentId="default"; }
-            if (!MdoExtensionIdValid(ParentId)) goto failed;
+            if (!MdoExtensionAlias(ParentId)) goto failed;
             char Why[512]={0};xvalue* ParentDirectory=MdoExtensionsFindAlias(ParentMain?"agents":"subagents",ParentId,Why);
             cstr ParentRoot=MdoAgentConfigText(ParentDirectory,"root"),ParentEntry=MdoAgentConfigText(ParentDirectory,"entry");
             char* Path=ParentRoot&&ParentEntry?xrtFormat("%s/%s",ParentRoot,ParentEntry):NULL;

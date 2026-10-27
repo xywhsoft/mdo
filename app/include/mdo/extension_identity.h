@@ -5,6 +5,15 @@
 
 #define MDO_EXTENSION_TEXT_LIMIT (128u * 1024u)
 
+/* A callable alias is independent of the physical directory identity. */
+static inline bool MdoExtensionIdentifier(cstr Name,size_t Limit)
+{
+    size_t N=Name?strlen(Name):0;if(!N||N>Limit||Name[0]=='.'||Name[N-1]=='.'||strstr(Name,".."))return false;
+    for(size_t I=0;I<N;I++){unsigned char C=Name[I];if(!((C>='a'&&C<='z')||(C>='A'&&C<='Z')||(C>='0'&&C<='9')||C=='-'||C=='_'||C=='.'))return false;}
+    return true;
+}
+static inline bool MdoExtensionAlias(cstr Name){return MdoExtensionIdentifier(Name,64);}
+
 /* Shared file conventions only; each resource keeps its existing runtime. */
 static inline bool MdoExtensionIdValid(cstr Id)
 {

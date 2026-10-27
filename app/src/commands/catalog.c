@@ -125,7 +125,7 @@ xvalue* MdoCommandProjectSettings(xroot Root) {
         Schema==1&&xrtValueType(Disabled)==XVALUE_OBJECT&&xrtValueCount(Disabled)<=MDO_COMMAND_LIMIT;
     for(size_t i=0;Ok&&i<xrtValueCount(Disabled);i++){
         xstrview Key={0};const xvalue* Item=xrtValueObjectAt(Disabled,i,&Key);bool Value=false;
-        Ok=Key.Size>0&&Key.Size<=64&&!memchr(Key.Data,0,Key.Size)&&MdoExtensionIdValid(Key.Data)&&xrtValueGetBool(Item,&Value);
+        Ok=Key.Size>0&&Key.Size<=64&&!memchr(Key.Data,0,Key.Size)&&MdoExtensionAlias(Key.Data)&&xrtValueGetBool(Item,&Value);
     }
     if(!Ok){xrtValueRelease(V);return NULL;}return V;
 }
