@@ -1,0 +1,11 @@
+{
+  "kind": "commands",
+  "name": "settings",
+  "alias": "settings",
+  "entry": "command.c",
+  "description": "打开设置",
+  "platforms": [
+    "any"
+  ],
+  "author": "墨斗"
+}

@@ -1,5 +1,7 @@
 #include "../../include/mdo/commands.h"
 #include <ctype.h>
+#include "../../include/mdo/extensions.h"
+#include "../../include/mdo/extension_manifest.h"
 
 static cstr CommandText(const xvalue* V,cstr Key)
 {
@@ -19,7 +21,7 @@ static bool CommandUInt(const xvalue* V,uint64* N) {
 xvalue* MdoCommandMetadata(cstr Id,cstr Source,char Error[512])
 {
     if(Error)Error[0]=0;
-    if(!MdoExtensionIdValid(Id)||!Source||strlen(Source)>MDO_COMMAND_TEXT_LIMIT||
+    if(!MdoExtensionAlias(Id)||!Source||strlen(Source)>MDO_COMMAND_TEXT_LIMIT||
         !xrtUtf8Valid(xrtStrView(Source),NULL))goto invalid;
     while(*Source==' '||*Source=='\r'||*Source=='\n'||*Source=='\t')Source++;
     cstr Prefix="/* mdo-command";
@@ -113,20 +115,6 @@ static char* CommandReadFile(xfile F)
     if(Ok){Text[Size]=0;if(memchr(Text,0,(size_t)Size))Ok=false;}
     if(!Ok){xrtFree(Text);return NULL;}return Text;
 }
-static void CommandPut(xvalue* Map,cstr Id,cstr Source,cstr Scope,cstr Path,bool Enabled)
-{
-    if(!MdoExtensionIdValid(Id))return;
-    char Error[512]={0},Hash[65]={0};
-    xvalue* Item=Source?MdoCommandMetadata(Id,Source,Error):NULL;bool Valid=Item!=NULL;
-    if(!Item)Item=xrtValueObject();
-    if(!Item)return;
-    if(Source)MdoExtensionHash(Source,Hash);
-    CommandSet(Item,"id",Id);CommandSet(Item,"scope",Scope);CommandSet(Item,"path",Path);
-    CommandSet(Item,"revision",Hash);CommandSet(Item,"diagnostic",Error[0]?Error:Source?"":"Command source cannot be read safely");
-    xrtValueObjectSetNew(Item,XRT_STR_LITERAL("enabled"),xrtValueBool(Enabled));
-    xrtValueObjectSetNew(Item,XRT_STR_LITERAL("valid"),xrtValueBool(Valid));
-    xrtValueObjectSetNew(Map,xrtStrView(Id),Item);
-}
 xvalue* MdoCommandProjectSettings(xroot Root) {
     xfileoptions O;xrtFileOptionsInit(&O);O.Flags=XFILE_READ|XFILE_NOFOLLOW;
     xfile F=xrtRootFileOpen(Root,".mdo/commands.json",&O);
@@ -143,86 +131,57 @@ xvalue* MdoCommandProjectSettings(xroot Root) {
 }
 xvalue* MdoCommandCatalog(cstr Workspace)
 {
-    xvalue* Map=xrtValueObject();if(!Map)return NULL;
-    xdir Dir=xrtVfsDirOpen(MdoHomeApplicationVfs(),"/app/default-home/commands",XDIR_STAT);
-    if(!Dir&&!CommandMissing()){xrtValueRelease(Map);return NULL;}
-    xdirentry E;xdirnext Next=XDIR_NEXT_END;size_t Count=0;
-    while(Dir&&(Next=xrtDirNext(Dir,&E))==XDIR_NEXT_ITEM){
-        if(!(E.Flags&XDIR_ENTRY_UTF8)||E.Name.Size<3||E.Name.Size>66||
-            memcmp(E.Name.Data+E.Name.Size-2,".c",2))continue;
-        if(++Count>MDO_COMMAND_LIMIT)goto fail;
-        char Id[65],Path[160];memcpy(Id,E.Name.Data,E.Name.Size-2);Id[E.Name.Size-2]=0;
-        if(!MdoExtensionIdValid(Id))continue;
-        snprintf(Path,sizeof(Path),"commands/%s.c",Id);bool Missing=false,Enabled=true;
-        char* Text=MdoExtensionRead(Path,false,MDO_COMMAND_TEXT_LIMIT,&Missing);
-        bool External=false;xfileinfo Info={0};(void)MdoHomeExternalStat(Path,&External,&Info);
-        if(!MdoExtensionEnabled("commands",Id,&Enabled)){xrtFree(Text);goto fail;}
-        CommandPut(Map,Id,Text,External?"user":"builtin",Path,Enabled);xrtFree(Text);
-    }
-    if(Dir&&!xrtDirClose(Dir)){Dir=NULL;goto fail;}Dir=NULL;
-    if(Next==XDIR_NEXT_ERROR)goto fail;
-    if(Workspace&&Workspace[0]){
-        xroot Root=xrtRootOpen(Workspace);if(!Root){if(CommandMissing())goto no_project;goto fail;}
-        xvalue* Settings=MdoCommandProjectSettings(Root);
-        if(!Settings){xrtRootClose(Root);goto fail;}
-        Dir=xrtRootDirOpen(Root,".mdo/commands",XDIR_STAT);
-        if(!Dir&&!CommandMissing()){xrtValueRelease(Settings);xrtRootClose(Root);goto fail;}
-        Next=XDIR_NEXT_END;
-        while(Dir&&(Next=xrtDirNext(Dir,&E))==XDIR_NEXT_ITEM){
-            if(!(E.Flags&XDIR_ENTRY_UTF8)||E.Name.Size<3||E.Name.Size>66||
-                memcmp(E.Name.Data+E.Name.Size-2,".c",2))continue;
-            if(++Count>2*MDO_COMMAND_LIMIT){xrtValueRelease(Settings);xrtRootClose(Root);goto fail;}
-            char Id[65],Path[160];memcpy(Id,E.Name.Data,E.Name.Size-2);Id[E.Name.Size-2]=0;
-            if(!MdoExtensionIdValid(Id))continue;
-            snprintf(Path,sizeof(Path),".mdo/commands/%s.c",Id);
-            xfileoptions O;xrtFileOptionsInit(&O);O.Flags=XFILE_READ|XFILE_NOFOLLOW;
-            char* Text=CommandReadFile(xrtRootFileOpen(Root,Path,&O));
-            CommandPut(Map,Id,Text,"project",Path,true);xrtFree(Text);
+    char Error[512]={0};xvalue* Rows=MdoExtensionsList("commands",Error),*Map=xrtValueObject();
+    if(!Rows||!Map||xrtValueCount(Rows)>MDO_COMMAND_LIMIT)goto fail;
+    for(size_t I=0;I<xrtValueCount(Rows);I++){
+        const xvalue* Row=xrtValueArrayGet(Rows,I);cstr Id=CommandText(Row,"id"),Alias=CommandText(Row,"alias");
+        bool Valid=false,Enabled=false;xrtValueGetBool(xrtValueObjectGet(Row,XRT_STR_LITERAL("valid")),&Valid);
+        xrtValueGetBool(xrtValueObjectGet(Row,XRT_STR_LITERAL("enabled")),&Enabled);
+        if(!Alias||!MdoExtensionAlias(Alias))continue;
+        char* Path=Valid?MdoExtensionsEntryPath("commands",Id,Error):NULL;
+        bool Missing=false;char* Source=Path?MdoExtensionRead(Path,true,MDO_COMMAND_TEXT_LIMIT,&Missing):NULL;
+        xvalue* Item=Source?MdoCommandMetadata(Alias,Source,Error):NULL;Valid=Item!=NULL;
+        if(!Item)Item=xrtValueObject();char Revision[65]={0};
+        if(Valid)Valid=MdoExtensionsFingerprint("commands",Id,Revision,NULL,Error);
+        bool Ok=Item&&CommandSet(Item,"id",Alias)&&CommandSet(Item,"directory_id",Id)&&CommandSet(Item,"scope",CommandText(Row,"source"))&&
+            CommandSet(Item,"directory_root",CommandText(Row,"root"))&&CommandSet(Item,"path",Path)&&CommandSet(Item,"revision",Revision)&&
+            CommandSet(Item,"diagnostic",Valid?"":Error[0]?Error:"Command directory is invalid")&&
+            xrtValueObjectSetNew(Item,XRT_STR_LITERAL("enabled"),xrtValueBool(Enabled))&&
+            xrtValueObjectSetNew(Item,XRT_STR_LITERAL("valid"),xrtValueBool(Valid));
+        const xvalue* Previous=xrtValueObjectGet(Map,xrtStrView(Alias));
+        if(Previous){
+            Ok=Ok&&xrtValueObjectSetNew(Item,XRT_STR_LITERAL("valid"),xrtValueBool(false))&&
+                CommandSet(Item,"diagnostic","Multiple installed directories declare this command alias; rename or uninstall one");
         }
+        if(Ok)Ok=xrtValueObjectSet(Map,xrtStrView(Alias),Item);
+        xrtValueRelease(Item);xrtFree(Source);xrtFree(Path);if(!Ok)goto fail;
+    }
+    if(Workspace&&Workspace[0]){
+        xroot Root=xrtRootOpen(Workspace);if(!Root){if(CommandMissing())goto done;goto fail;}
+        xvalue* Settings=MdoCommandProjectSettings(Root);xrtRootClose(Root);if(!Settings)goto fail;
         const xvalue* Disabled=xrtValueObjectGet(Settings,XRT_STR_LITERAL("disabled"));
-        for(size_t i=0;i<xrtValueCount(Disabled);i++){
-            xstrview Key={0};bool Value=false;xrtValueGetBool(xrtValueObjectAt(Disabled,i,&Key),&Value);
+        for(size_t I=0;I<xrtValueCount(Disabled);I++){
+            xstrview Key={0};bool Value=false;xrtValueGetBool(xrtValueObjectAt(Disabled,I,&Key),&Value);
             xvalue* Item=xrtValueObjectGet(Map,Key);if(Item&&Value)xrtValueObjectSetNew(Item,XRT_STR_LITERAL("enabled"),xrtValueBool(false));
         }
         xrtValueRelease(Settings);
-        xrtRootClose(Root);
-        if(Dir&&!xrtDirClose(Dir)){Dir=NULL;goto fail;}Dir=NULL;
-        if(Next==XDIR_NEXT_ERROR)goto fail;
     }
-no_project: ;
-    bool Missing=false;char* Report=MdoExtensionRead("data/commands/migration-report.json",true,MDO_COMMAND_TEXT_LIMIT,&Missing);
-    xvalue* Rows=Report?xrtJsonParse(xrtStrView(Report)):NULL;xrtFree(Report);
-    for(size_t i=0;i<xrtValueCount(Rows);i++){
-        const xvalue* Row=xrtValueArrayGet(Rows,i);cstr Id=CommandText(Row,"id"),State=CommandText(Row,"state");
-        const xvalue* Existing=Id?xrtValueObjectGet(Map,xrtStrView(Id)):NULL;
-        cstr Scope=CommandText(Existing,"scope");
-        if(Id&&State&&!strcmp(State,"needs_attention")&&(!Scope||!strcmp(Scope,"builtin"))){
-            char Path[160];snprintf(Path,sizeof(Path),"commands/%s.md",Id);CommandPut(Map,Id,NULL,"user",Path,true);
-            CommandSet(xrtValueObjectGet(Map,xrtStrView(Id)),"diagnostic",CommandText(Row,"message"));
-        }
-    }
-    xrtValueRelease(Rows);
-    if(xrtValueCount(Map)>MDO_COMMAND_LIMIT)goto fail;
-    return Map;
-fail:if(Dir)xrtDirClose(Dir);xrtValueRelease(Map);return NULL;
+done:xrtValueRelease(Rows);return Map;
+fail:xrtValueRelease(Rows);xrtValueRelease(Map);return NULL;
 }
 bool MdoCommandResolve(cstr Workspace,cstr Id,char** Source,xvalue** Metadata,char Revision[65],char Error[512])
 {
-    *Source=NULL;*Metadata=NULL;xvalue* Map=MdoCommandCatalog(Workspace);
+    *Source=NULL;*Metadata=NULL;Error[0]=0;xvalue* Map=MdoCommandCatalog(Workspace);
     const xvalue* Item=xrtValueObjectGet(Map,xrtStrView(Id));bool Enabled=false,Valid=false;
     xrtValueGetBool(xrtValueObjectGet(Item,XRT_STR_LITERAL("enabled")),&Enabled);
     xrtValueGetBool(xrtValueObjectGet(Item,XRT_STR_LITERAL("valid")),&Valid);
-    if(!Item||!Enabled||!Valid){snprintf(Error,512,"Command is missing, disabled or invalid");xrtValueRelease(Map);return false;}
-    cstr Scope=CommandText(Item,"scope"),Path=CommandText(Item,"path");
-    if(Scope&&!strcmp(Scope,"project")){
-        xroot Root=xrtRootOpen(Workspace);xfileoptions O;xrtFileOptionsInit(&O);O.Flags=XFILE_READ|XFILE_NOFOLLOW;
-        *Source=Root?CommandReadFile(xrtRootFileOpen(Root,Path,&O)):NULL;if(Root)xrtRootClose(Root);
-    }else{bool Missing=false;*Source=MdoExtensionRead(Path,false,MDO_COMMAND_TEXT_LIMIT,&Missing);}
-    char Hash[65]={0};bool Ok=*Source&&MdoExtensionHash(*Source,Hash)&&!strcmp(Hash,CommandText(Item,"revision"));
-    *Metadata=Ok?MdoCommandMetadata(Id,*Source,Error):NULL;
-    if(*Metadata)snprintf(Revision,65,"%s",Hash);
+    if(!Item||!Enabled||!Valid){snprintf(Error,512,"Command is missing, disabled, ambiguous or invalid");xrtValueRelease(Map);return false;}
+    cstr Directory=CommandText(Item,"directory_id"),Path=CommandText(Item,"path"),Expected=CommandText(Item,"revision");
+    bool Ok=MdoExtensionsVerify("commands",Directory,NULL,Error),Missing=false;
+    if(Ok)*Source=MdoExtensionRead(Path,true,MDO_COMMAND_TEXT_LIMIT,&Missing);
+    char Hash[65]={0};Ok=Ok&&*Source&&MdoExtensionsFingerprint("commands",Directory,Hash,NULL,Error)&&Expected&&!strcmp(Hash,Expected);
+    if(Ok){*Metadata=xrtValueClone(Item);snprintf(Revision,65,"%s",Hash);}
     xrtValueRelease(Map);
-    if(!*Metadata){xrtFree(*Source);*Source=NULL;if(!Error[0])snprintf(Error,512,"Command changed while reading; retry discovery");}
+    if(!*Metadata){xrtFree(*Source);*Source=NULL;if(!Error[0])snprintf(Error,512,"Command directory changed while reading; refresh the catalog");}
     return *Metadata!=NULL;
 }
-

@@ -17,6 +17,7 @@ typedef struct CommandJob {
     xprocess* Process;
     xcancel* Cancel;
     MdoProjectLease* Lease;
+    MdoExtensionLease* ExtensionLease;
     uint64 Deadline,Sequence;
     bool Terminal,TimedOut;
 } CommandJob;
@@ -73,7 +74,7 @@ static CommandJob* CommandFind(cstr Id) {
 static void CommandDispose(CommandJob* J) {
     if(J->Thread){xrtThreadWait(J->Thread);xrtThreadDestroy(J->Thread);}
     xrtValueRelease(J->Input);xrtValueRelease(J->Info);xrtValueRelease(J->Actions);
-    xrtCancelDestroy(J->Cancel);xrtFree(J->Workspace);MdoProjectLeaseRelease(J->Lease);memset(J,0,sizeof(*J));
+    xrtCancelDestroy(J->Cancel);xrtFree(J->Workspace);MdoProjectLeaseRelease(J->Lease);MdoExtensionsRelease(J->ExtensionLease);memset(J,0,sizeof(*J));
 }
 static void CommandCleanup(CommandJob* J,unsigned Count) {
     const char* Names[]={"input.json","command.c","worker.c","xs.json","web/index.html","mdo/command.h","mdo/module.h","mdo/sdk.h","mdo/workbench.h","final.json"};
@@ -144,6 +145,7 @@ static xvalue* CommandHostCall(CommandJob* J,const xvalue* Q,char Error[512]) {
         mdo_sdk_context_v1 C;MdoApplicationInvocation Invocation={0};Invocation.Cancel=J->Cancel;Invocation.Actions=J->Actions;
         MdoApplicationContext(&C,&Invocation,CommandText(J->Input,"command_id"),J->Id,CommandText(J->Input,"project_id"),
             CommandText(J->Input,"session_id"),CommandText(J->Input,"run_id"),J->Workspace,J->Deadline);
+        C.ExtensionKind="commands";C.DirectoryId=CommandText(J->Input,"directory_id");C.ExtensionRoot=CommandText(J->Input,"extension_root");
         uint64 Origin=0;int64 SignedOrigin=0;const xvalue* Source=xrtValueObjectGet(J->Input,XRT_STR_LITERAL("call_origin"));
         if(!xrtValueGetUInt(Source,&Origin)&&xrtValueGetInt(Source,&SignedOrigin)&&SignedOrigin>=0)Origin=(uint64)SignedOrigin;
         C.Origin=Origin<=MDO_ORIGIN_EXTENSION?(uint32)Origin:MDO_ORIGIN_UNKNOWN;
@@ -279,7 +281,7 @@ finish:
     }
     xrtValueObjectSetNew(J->Info,XRT_STR_LITERAL("terminal"),xrtValueBool(true));
     if(!CommandSave(J)){CommandSet(J->Info,"error","Command finished but its receipt could not be saved; do not repeat a mutation blindly");}
-    MdoProjectLeaseRelease(J->Lease);J->Lease=NULL;J->Terminal=true;
+    MdoProjectLeaseRelease(J->Lease);J->Lease=NULL;MdoExtensionsRelease(J->ExtensionLease);J->ExtensionLease=NULL;J->Terminal=true;
     xrtValueRelease(Final);xrtMutexUnlock(CommandManager.Lock);return 0;
 }
 static int32 CommandWatch(void* Unused) {
@@ -371,9 +373,12 @@ xvalue* MdoCommandStart(const xvalue* Input,cstr Workspace,char Error[512]) {
     bool NeedsSession=false;xrtValueGetBool(xrtValueObjectGet(Meta,XRT_STR_LITERAL("requires_session")),&NeedsSession);
     cstr Session=CommandText(Input,"session_id");
     if(NeedsSession&&(!Session||!Session[0])){xrtFree(Source);xrtValueRelease(Meta);snprintf(Error,512,"This command requires a session");return NULL;}
-    uint64 Timeout=30000;xrtValueGetUInt(xrtValueObjectGet(Meta,XRT_STR_LITERAL("timeout_ms")),&Timeout);xrtValueRelease(Meta);
+    uint64 Timeout=30000;xrtValueGetUInt(xrtValueObjectGet(Meta,XRT_STR_LITERAL("timeout_ms")),&Timeout);
+    cstr DirectoryId=CommandText(Meta,"directory_id"),DirectoryRoot=CommandText(Meta,"directory_root"),Entry=CommandText(Meta,"path");
+    MdoExtensionLease* ExtensionLease=MdoExtensionsAcquire("commands",DirectoryId,Error);
+    if(!ExtensionLease){xrtFree(Source);xrtValueRelease(Meta);return NULL;}
     xwork_error LeaseError;MdoProjectLease* Lease=MdoProjectLeaseAcquire(Project,MDO_PROJECT_LEASE_SHARED,&LeaseError);
-    if(!Lease){xrtFree(Source);snprintf(Error,512,"Project is busy or unavailable");return NULL;}
+    if(!Lease){xrtFree(Source);xrtValueRelease(Meta);MdoExtensionsRelease(ExtensionLease);snprintf(Error,512,"Project is busy or unavailable");return NULL;}
     xrtMutexLock(CommandManager.Lock);size_t Active=0;CommandJob* Slot=NULL;
     for(size_t i=0;i<COMMAND_JOBS;i++){
         CommandJob* J=&CommandManager.Jobs[i];if(J->Id[0]&&!J->Terminal)Active++;
@@ -387,27 +392,33 @@ xvalue* MdoCommandStart(const xvalue* Input,cstr Workspace,char Error[512]) {
         snprintf(Slot->Directory,sizeof(Slot->Directory),"data/cache/command-workers/%s",Id);
         Slot->Input=xrtValueClone(Input);Slot->Info=xrtValueObject();Slot->Actions=xrtValueArray();Slot->Cancel=xrtCancelCreate();
         Slot->Workspace=xrtStrDup(Workspace?Workspace:"");Slot->Lease=Lease;Lease=NULL;Slot->Sequence=++CommandManager.Sequence;
+        Slot->ExtensionLease=ExtensionLease;ExtensionLease=NULL;
+        char* NativeRoot=MdoHomeExternalPath(DirectoryRoot);
+        cstr RelativeEntry=Entry&&DirectoryRoot&&!strncmp(Entry,DirectoryRoot,strlen(DirectoryRoot))&&Entry[strlen(DirectoryRoot)]=='/'?Entry+strlen(DirectoryRoot)+1:NULL;
         Slot->Deadline=MdoDeadlineAfterUs(Timeout*1000u);
         Ok=Slot->Input&&Slot->Info&&Slot->Actions&&Slot->Cancel&&Slot->Workspace&&CommandSet(Slot->Input,"workspace",Slot->Workspace)&&
             xrtValueObjectSetNew(Slot->Input,XRT_STR_LITERAL("watch_parent"),xrtValueBool(true))&&
-            CommandSet(Slot->Input,"revision",Revision)&&
+            CommandSet(Slot->Input,"revision",Revision)&&NativeRoot&&RelativeEntry&&
+            CommandSet(Slot->Input,"directory_id",DirectoryId)&&CommandSet(Slot->Input,"extension_root",NativeRoot)&&CommandSet(Slot->Input,"extension_entry",RelativeEntry)&&
             xrtValueObjectSetNew(Slot->Input,XRT_STR_LITERAL("deadline"),xrtValueUInt(Slot->Deadline))&&
             CommandSet(Slot->Info,"id",Id)&&CommandSet(Slot->Info,"command_id",Command)&&CommandSet(Slot->Info,"project_id",Project)&&
             CommandSet(Slot->Info,"session_id",Session)&&CommandSet(Slot->Info,"revision",Revision)&&CommandSet(Slot->Info,"request_hash",Hash)&&
             CommandSet(Slot->Info,"state","pending")&&xrtValueObjectSetNew(Slot->Info,XRT_STR_LITERAL("terminal"),xrtValueBool(false))&&
             CommandJobWrite(Slot,"command.c",Source)&&CommandSave(Slot);
+        xrtFree(NativeRoot);
         if(Ok){
             Slot->Thread=xrtThreadCreate(CommandExecute,Slot,0);
             if(!Slot->Thread){
                 CommandSet(Slot->Info,"state","failed");CommandSet(Slot->Info,"error","Worker thread could not start; no command was executed");
                 xrtValueObjectSetNew(Slot->Info,XRT_STR_LITERAL("terminal"),xrtValueBool(true));Slot->Terminal=true;(void)CommandSave(Slot);
                 MdoProjectLeaseRelease(Slot->Lease);Slot->Lease=NULL;CommandCleanup(Slot,0);
+                MdoExtensionsRelease(Slot->ExtensionLease);Slot->ExtensionLease=NULL;
             }
         }
         if(!Ok){CommandCleanup(Slot,0);CommandDispose(Slot);}
     }
     xvalue* Result=Ok?xrtValueClone(Slot->Info):NULL;
-    xrtMutexUnlock(CommandManager.Lock);MdoProjectLeaseRelease(Lease);xrtFree(Source);
+    xrtMutexUnlock(CommandManager.Lock);MdoProjectLeaseRelease(Lease);MdoExtensionsRelease(ExtensionLease);xrtFree(Source);xrtValueRelease(Meta);
     if(!Ok)snprintf(Error,512,"Command admission failed (busy, storage unavailable, or duplicate submission); check the invocation receipt before resubmitting");
     return Result;
 conflict:snprintf(Error,512,"Invocation ID belongs to a different command request");return NULL;

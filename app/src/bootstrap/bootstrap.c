@@ -1,6 +1,7 @@
 #include "../../include/mdo/distribution.h"
 #include <stdio.h>
 #include "../../include/mdo/ecosystem.h"
+#include "../../include/mdo/extensions.h"
 #include <string.h>
 
 #include "../../include/mdo/approvals.h"
@@ -63,14 +64,16 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
         MdoBootstrapFail("Home initialization failed");
         return false;
     }
-    if ( !MdoEcosystemRecover() ) {
+    char ExtensionError[512]={0};
+    if ( !MdoExtensionsInit() || !MdoExtensionsRecover(ExtensionError) ||
+         !MdoExtensionsSeedBuiltins(ExtensionError) ) {
+        if(ExtensionError[0])fprintf(stderr,"[mdo] extensions: %s\n",ExtensionError);
         MdoBootstrapFail("Extension installation recovery failed");
         return false;
     }
     if(!MdoApplicationInit(pHost->Server)){MdoBootstrapFail("Application SDK initialization failed");return false;}
     MdoProjectRuntimeGuardSet(MdoApplicationTerminalsProjectBusy);
     MdoModuleManagerAttachApplication(MdoApplicationApi());
-    if(!MdoCommandMigrateLegacy())fprintf(stderr,"[mdo] legacy command migration needs attention; originals retained\n");
     if ( !MdoProjectLifecycleInit() ) {
         MdoBootstrapFail("project lifecycle initialization failed");
         return false;
@@ -276,6 +279,7 @@ void MdoBootstrapUnit(void)
     MdoProjectLifecycleUnit();
     MdoApplicationUnit();
     MdoModuleManagerAttachApplication(NULL);
+    MdoExtensionsUnit();
     MdoHomeUnit();
     memset(&g_MdoBootstrap, 0, sizeof(g_MdoBootstrap));
 }

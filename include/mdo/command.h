@@ -41,6 +41,7 @@ struct mdo_command_context_v1 {
     char* Error;
     size_t ErrorCapacity;
     const struct mdo_sdk_context_v1* Application;
+    const char *ExtensionRoot,*DirectoryId; /* Host-resolved native resource root. */
 };
 typedef mdo_result (*mdo_command_run_v1)(const mdo_command_context_v1*,
     const xvalue* Arguments, xvalue** Result);

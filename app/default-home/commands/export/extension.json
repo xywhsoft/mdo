@@ -1,0 +1,11 @@
+{
+  "kind": "commands",
+  "name": "export",
+  "alias": "export",
+  "entry": "command.c",
+  "description": "导出当前会话 Markdown",
+  "platforms": [
+    "any"
+  ],
+  "author": "墨斗"
+}

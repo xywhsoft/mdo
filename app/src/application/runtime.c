@@ -5,8 +5,14 @@
 #include "../../include/mdo/version.h"
 #include "../../include/mdo/time.h"
 #include "../../include/mdo/project_lifecycle.h"
+#include "../../include/mdo/extensions.h"
+#include "../../include/mdo/extension_path.h"
 
 static const struct {cstr Id,Description;} SdkRuntimeMethods[]={
+    {"extension.current","Read this invocation's physical extension directory and native resource root"},
+    {"extension.list","List installed directories of one extension type"},
+    {"extension.read","Read one directory manifest and its host-owned installation state"},
+    {"extension.fingerprint","Verify and fingerprint the entire extension directory, including auxiliary files"},
     {"runtime.info","Application version, paths, platform and power state"},
     {"runtime.log","Write an extension log message"},{"runtime.clock","Read monotonic and wall clocks"},
     {"runtime.sleep","Cancellable wait in milliseconds"},{"runtime.env.get","Read a process environment variable"},
@@ -87,6 +93,11 @@ static char* SdkNativePath(const mdo_sdk_context_v1* C,const xvalue* P,bool Stor
         if(!SdkPortablePath(Path)||!C->ExtensionId||!SdkIdValid(C->ExtensionId))goto bad;
         char* Relative=xrtFormat("data/extensions/%s/%s",C->ExtensionId,Path);char* Native=Relative?MdoHomeExternalPath(Relative):NULL;xrtFree(Relative);return Native;
     }
+    if(Space&&!strcmp(Space,"extension")){
+        if(!C->ExtensionKind||!C->DirectoryId||!MdoExtensionRelativePath(Path))goto bad;
+        char* Root=MdoExtensionsRoot(C->ExtensionKind,C->DirectoryId),*Relative=Root?xrtFormat("%s/%s",Root,Path):NULL;
+        char* Native=Relative?MdoHomeExternalPath(Relative):NULL;xrtFree(Root);xrtFree(Relative);return Native;
+    }
     if(Space&&!strcmp(Space,"home"))return MdoHomeExternalPath(Path);
     if(Space&&!strcmp(Space,"application"))return xrtPathJoin(MdoHomeApplicationRoot(),Path);
     if(Space&&strcmp(Space,"native")&&strcmp(Space,"workspace"))goto bad;
@@ -94,6 +105,24 @@ static char* SdkNativePath(const mdo_sdk_context_v1* C,const xvalue* P,bool Stor
     char* Base=C->Workspace&&C->Workspace[0]?xrtStrDup(C->Workspace):MdoHomeDefaultWorkspacePath(false);
     char* Result=Base?xrtPathJoin(Base,Path):NULL;xrtFree(Base);return Result;
 bad:MdoApplicationError(E,"sdk_arguments_invalid","A valid path and resource space are required","resolve",400,false);return NULL;
+}
+static bool SdkExtensionCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue* P,xvalue** R,mdo_error_v1* E)
+{
+    cstr Kind=SdkField(P,"kind"),Id=SdkField(P,"id");char Why[512]={0};
+    if(!strcmp(Method,"extension.current")){Kind=C->ExtensionKind;Id=C->DirectoryId;}
+    else {if(!Kind)Kind=C->ExtensionKind;if(!Id)Id=C->DirectoryId;}
+    if(!strcmp(Method,"extension.list"))*R=MdoExtensionsList(Kind,Why);
+    else if(!strcmp(Method,"extension.fingerprint")){
+        char Hash[65]={0};MdoApplicationInvocation* I=C->Opaque;xcancel* Cancel=I?I->Cancel:NULL;
+        if(MdoExtensionsVerify(Kind,Id,Cancel,Why)&&MdoExtensionsFingerprint(Kind,Id,Hash,Cancel,Why)){
+            *R=xrtValueObject();SdkPut(*R,"sha256",Hash);SdkPut(*R,"kind",Kind);SdkPut(*R,"id",Id);
+        }
+    }else{
+        *R=MdoExtensionsRead(Kind,Id,Why);
+        if(*R){char* Relative=MdoExtensionsRoot(Kind,Id),*Native=Relative?MdoHomeExternalPath(Relative):NULL;
+            if(Native)SdkPut(*R,"native_root",Native);xrtFree(Relative);xrtFree(Native);}
+    }
+    return *R!=NULL||MdoApplicationError(E,"sdk_extension_unavailable",Why[0]?Why:"No installed directory is bound to this invocation","extension",409,false);
 }
 static xvalue* SdkFileInfo(const xfileinfo* I){
     xvalue* R=xrtValueObject();SdkPutUInt(R,"size",I->Size);SdkPutUInt(R,"type",I->Type);
@@ -219,6 +248,7 @@ bool MdoApplicationRuntimeCall(const mdo_sdk_context_v1* C,cstr Method,const xva
     *Found=false;for(size_t i=0;i<sizeof(SdkRuntimeMethods)/sizeof(*SdkRuntimeMethods);i++)if(!strcmp(Method,SdkRuntimeMethods[i].Id))*Found=true;
     if(!*Found)return true;
     if(P&&xrtValueType(P)!=XVALUE_OBJECT)return MdoApplicationError(E,"sdk_arguments_invalid","Runtime service parameters must be an object","resolve",400,false);
+    if(!strncmp(Method,"extension.",10))return SdkExtensionCall(C,Method,P,R,E);
     if(!strncmp(Method,"fs.",3)||!strncmp(Method,"vfs.",4)||!strncmp(Method,"storage.",8))return SdkFileCall(C,Method,P,R,E);
     if(!strncmp(Method,"files.",6))return SdkFilesCall(C,Method,P,R,E);
     if(!strncmp(Method,"changes.",8))return SdkChangesCall(C,Method,P,R,E);

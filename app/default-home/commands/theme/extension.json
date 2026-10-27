@@ -1,0 +1,11 @@
+{
+  "kind": "commands",
+  "name": "theme",
+  "alias": "theme",
+  "entry": "command.c",
+  "description": "切换深浅主题",
+  "platforms": [
+    "any"
+  ],
+  "author": "墨斗"
+}

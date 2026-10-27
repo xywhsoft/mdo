@@ -1,0 +1,11 @@
+{
+  "kind": "commands",
+  "name": "model",
+  "alias": "model",
+  "entry": "command.c",
+  "description": "切换模型；可选模型 ID",
+  "platforms": [
+    "any"
+  ],
+  "author": "墨斗"
+}

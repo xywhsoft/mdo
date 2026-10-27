@@ -1,0 +1,11 @@
+{
+  "kind": "commands",
+  "name": "help",
+  "alias": "help",
+  "entry": "command.c",
+  "description": "查看命令和快捷键",
+  "platforms": [
+    "any"
+  ],
+  "author": "墨斗"
+}

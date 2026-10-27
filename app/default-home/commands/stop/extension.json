@@ -1,0 +1,11 @@
+{
+  "kind": "commands",
+  "name": "stop",
+  "alias": "stop",
+  "entry": "command.c",
+  "description": "停止运行中的任务或命令",
+  "platforms": [
+    "any"
+  ],
+  "author": "墨斗"
+}

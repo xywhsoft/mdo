@@ -1,0 +1,11 @@
+{
+  "kind": "commands",
+  "name": "fork",
+  "alias": "fork",
+  "entry": "command.c",
+  "description": "创建当前会话的分支",
+  "platforms": [
+    "any"
+  ],
+  "author": "墨斗"
+}

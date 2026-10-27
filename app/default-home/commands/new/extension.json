@@ -1,0 +1,11 @@
+{
+  "kind": "commands",
+  "name": "new",
+  "alias": "new",
+  "entry": "command.c",
+  "description": "新建会话",
+  "platforms": [
+    "any"
+  ],
+  "author": "墨斗"
+}

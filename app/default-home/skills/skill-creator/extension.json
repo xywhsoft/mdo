@@ -1,0 +1,10 @@
+{
+  "kind": "skills",
+  "name": "skill-creator",
+  "alias": "skill-creator",
+  "entry": "SKILL.md",
+  "platforms": [
+    "any"
+  ],
+  "author": "墨斗"
+}

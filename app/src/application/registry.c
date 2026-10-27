@@ -143,6 +143,7 @@ static mdo_result SdkInvoke(const mdo_sdk_context_v1* C,cstr Method,const xvalue
         SdkPut(*R,"device",C->DeviceId);SdkPut(*R,"project",C->ProjectId);SdkPut(*R,"session",C->SessionId);
         SdkPut(*R,"run",C->RunId);SdkPut(*R,"workspace",C->Workspace);SdkPutUInt(*R,"deadline",C->Deadline);
         SdkPut(*R,"namespace",C->Namespace);SdkPut(*R,"member",C->MemberId);
+        SdkPut(*R,"extension_kind",C->ExtensionKind);SdkPut(*R,"directory_id",C->DirectoryId);SdkPut(*R,"extension_root",C->ExtensionRoot);
         SdkPut(*R,"origin",mdoCallOrigin(C)==MDO_ORIGIN_USER?"user":mdoCallOrigin(C)==MDO_ORIGIN_AGENT?"agent":mdoCallOrigin(C)==MDO_ORIGIN_EXTENSION?"extension":"unknown");
         SdkPut(*R,"deadline_unit","monotonic_microseconds");return MDO_RESULT_OK;
     }

@@ -83,7 +83,11 @@ def native_contracts():
     add('runtime.env.get','Read a native environment variable',{'name':string},('name',))
     add('runtime.env.set','Set an environment variable; omit value to remove it',{'name':string,'value':string},('name',))
     add('system.open','Ask the OS to open a native file or URL',{'target':string},('target',))
-    path={'path':string,'space':{'type':'string','enum':['native','workspace','home','application']}}
+    add('extension.current','Read the host-bound extension manifest, physical directory identity and native resource root')
+    add('extension.list','List the installed directories of one of the nine extension types',{'kind':string},('kind',),arr)
+    for action in ('read','fingerprint'):
+        add('extension.'+action,'Read or verify a whole directory; omitted kind/id use the host-bound current extension',{'kind':string,'id':string})
+    path={'path':string,'space':{'type':'string','enum':['native','workspace','home','application','extension']}}
     for prefix in ('fs','vfs','storage'):
         names={'fs':['resolve','stat','read','write','append','list','mkdir','remove','copy','move'],'vfs':['read','list'],'storage':['read','write','remove']}[prefix]
         for action in names:

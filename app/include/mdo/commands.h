@@ -17,7 +17,6 @@ bool MdoCommandResolve(cstr Workspace,cstr Id,char** Source,xvalue** Metadata,
 bool MdoCommandManagerInit(XS_ServerInfo* Server);
 void MdoCommandManagerUnit(void);
 bool MdoCommandInvocationIdValid(cstr Id);
-bool MdoCommandMigrateLegacy(void);
 xvalue* MdoCommandStart(const xvalue* Input,cstr Workspace,char Error[512]);
 xvalue* MdoCommandGet(cstr Id);
 bool MdoCommandCancel(cstr Id);

@@ -1,0 +1,11 @@
+{
+  "kind": "commands",
+  "name": "compact",
+  "alias": "compact",
+  "entry": "command.c",
+  "description": "压缩当前会话的模型上下文，保留原始会话记录",
+  "platforms": [
+    "any"
+  ],
+  "author": "墨斗"
+}

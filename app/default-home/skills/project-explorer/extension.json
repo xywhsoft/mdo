@@ -1,0 +1,10 @@
+{
+  "kind": "skills",
+  "name": "project-explorer",
+  "alias": "project-explorer",
+  "entry": "SKILL.md",
+  "platforms": [
+    "any"
+  ],
+  "author": "墨斗"
+}

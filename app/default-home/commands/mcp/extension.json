@@ -1,0 +1,11 @@
+{
+  "kind": "commands",
+  "name": "mcp",
+  "alias": "mcp",
+  "entry": "command.c",
+  "description": "读取 MCP 提示词并填入输入框",
+  "platforms": [
+    "any"
+  ],
+  "author": "墨斗"
+}

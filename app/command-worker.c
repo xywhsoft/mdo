@@ -138,9 +138,22 @@ void ServiceInit(XS_HostInfo* H) {
     xthread* Watch=Monitor?xrtThreadCreate(CWParentWatch,NULL,0):NULL;
     char* SourcePath=CWPath("command.c");size_t Length=0;
     char* Source=(char*)xrtFileReadAllLimit(SourcePath,128u*1024u,&Length);xrtFree(SourcePath);
-    xs_tcc_config Config;xsTccConfigInit(&Config);Config.Flags=0;Config.ApplicationRoot=CWRoot;
-    TCCState* Tcc=xsCreateTCCEx(&Config,NULL);mdo_result Code=MDO_RESULT_ERROR;
-    if(Tcc){tcc_set_error_func(Tcc,NULL,CWCompileError);tcc_add_include_path(Tcc,CWRoot);}
+    /* Expose resources to TCC explicitly. An include path outside the worker
+     * application root is not readable through XS's application VFS. */
+    cstr ExtensionRoot=CWText(Input,"extension_root"),ExtensionEntry=CWText(Input,"extension_entry");
+    xvfs CompileVfs=xrtVfsCreate();xvfsdisk WorkerDisk=xrtVfsDiskCreate(CWRoot,XVFS_DISK_READ);
+    xvfsdisk ExtensionDisk=ExtensionRoot&&ExtensionRoot[0]?xrtVfsDiskCreate(ExtensionRoot,XVFS_DISK_READ):NULL;
+    xvfsmount WorkerMount=CompileVfs&&WorkerDisk?xrtVfsDiskMount(CompileVfs,"/app",0,XVFS_CASE_SENSITIVE,WorkerDisk,0):NULL;
+    xvfsmount ExtensionMount=CompileVfs&&ExtensionDisk?xrtVfsDiskMount(CompileVfs,"/app/extension",10,XVFS_CASE_SENSITIVE,ExtensionDisk,0):NULL;
+    xs_tcc_config Config;xsTccConfigInit(&Config);Config.Flags=0;Config.ApplicationRoot=CWRoot;Config.ApplicationVfs=CompileVfs;
+    TCCState* Tcc=WorkerMount&&ExtensionMount?xsCreateTCCEx(&Config,NULL):NULL;mdo_result Code=MDO_RESULT_ERROR;
+    if(Tcc){
+        tcc_set_error_func(Tcc,NULL,CWCompileError);tcc_add_include_path(Tcc,"/app");
+        char* VirtualEntry=ExtensionEntry&&ExtensionEntry[0]?xrtFormat("/app/extension/%s",ExtensionEntry):NULL;
+        char* Parent=VirtualEntry?xrtPathParent(VirtualEntry):NULL;xrtFree(VirtualEntry);
+        tcc_add_include_path(Tcc,"/app/extension");
+        if(Parent)tcc_add_include_path(Tcc,Parent);xrtFree(Parent);
+    }
     union {void* P;mdo_command_run_v1 F;} Entry={0};bool Compiled=false;
     if(Input&&Source&&Tcc&&JobReady&&(!Monitor||Watch)&&tcc_compile_string(Tcc,Source)>=0&&tcc_relocate(Tcc)>=0) {
         Compiled=true;
@@ -163,7 +176,15 @@ void ServiceInit(XS_HostInfo* H) {
             if(!xrtValueGetUInt(CWGet(Input,"call_origin"),&Origin)&&xrtValueGetInt(CWGet(Input,"call_origin"),&SignedOrigin)&&SignedOrigin>=0)Origin=(uint64)SignedOrigin;
             Application.Origin=Origin<=MDO_ORIGIN_EXTENSION?(uint32)Origin:MDO_ORIGIN_UNKNOWN;
             C.Application=&Application;
-            Code=Entry.F(&C,CWGet(Input,"arguments"),&Result);
+            C.ExtensionRoot=CWText(Input,"extension_root");C.DirectoryId=CWText(Input,"directory_id");
+            Application.ExtensionKind="commands";Application.DirectoryId=C.DirectoryId;Application.ExtensionRoot=C.ExtensionRoot;
+            /* Headers are compiled from the pinned installation. Recheck the
+             * entire directory after relocation, before calling any code. */
+            xvalue* Fingerprint=NULL;mdo_error_v1 Check={0};
+            bool Current=mdoCall(&Application,"extension.fingerprint",NULL,&Fingerprint,&Check)==MDO_RESULT_OK&&
+                !strcmp(C.SourceRevision,CWText(Fingerprint,"sha256"));xrtValueRelease(Fingerprint);
+            if(Current)Code=Entry.F(&C,CWGet(Input,"arguments"),&Result);
+            else snprintf(CWError,sizeof(CWError),"Command directory changed during compilation; refresh and retry");
         }else snprintf(CWError,sizeof(CWError),"Missing mdoCommandRun entry point");
     }
     if(Code!=MDO_RESULT_OK&&!CWError[0])snprintf(CWError,sizeof(CWError),"%s (%d)",Compiled?"Command returned an error":"Command worker setup or compilation failed",Code);
@@ -184,6 +205,8 @@ void ServiceInit(XS_HostInfo* H) {
     if(Watch){xrtThreadWait(Watch);xrtThreadDestroy(Watch);}
     xrtValueRelease(Result);xrtValueRelease(Output);xrtValueRelease(Input);xrtFree(Source);
     if(Tcc)tcc_delete(Tcc);
+    if(ExtensionMount)xrtVfsMountDestroy(ExtensionMount);if(WorkerMount)xrtVfsMountDestroy(WorkerMount);
+    if(ExtensionDisk)xrtVfsDiskDestroy(ExtensionDisk);if(WorkerDisk)xrtVfsDiskDestroy(WorkerDisk);if(CompileVfs)xrtVfsDestroy(CompileVfs);
     xrtFree(CWRoot);CWRoot=NULL;
     xsAppRequestStop();
 }

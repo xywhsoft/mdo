@@ -71,6 +71,9 @@ struct mdo_sdk_context_v1 {
     uint64_t Deadline;
     const char *Namespace,*MemberId; /* Optional shared execution group and current member. */
     uint32_t Origin; /* Host-set provenance; never accepted from request JSON. */
+    /* Host-resolved physical installation, independent of its callable alias.
+     * Root is a native directory. Per-device mutable state stays in storage.*. */
+    const char *ExtensionKind,*DirectoryId,*ExtensionRoot;
 };
 /* Provenance describes who initiated the call, not a permission grant. Native
  * plugins are trusted code. Legacy contexts remain readable by Size. */

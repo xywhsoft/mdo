@@ -1,0 +1,11 @@
+{
+  "kind": "commands",
+  "name": "clear",
+  "alias": "clear",
+  "entry": "command.c",
+  "description": "清空当前会话历史",
+  "platforms": [
+    "any"
+  ],
+  "author": "墨斗"
+}
