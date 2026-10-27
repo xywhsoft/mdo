@@ -15,6 +15,7 @@ static const struct {cstr Id,Description;} SdkRuntimeMethods[]={
     {"extension.files","List all portable paths owned by one installed directory"},
     {"extension.fingerprint","Verify and fingerprint the entire extension directory, including auxiliary files"},
     {"extension.create","Create one disabled local extension directory with its manifest and text entry"},
+    {"extension.save","Atomically save a local manifest and text edits while retaining all other directory files"},
     {"extension.import","Import an entire anchored native directory as one local extension"},
     {"extension.pack","Create a standard ZIP task from the complete local extension directory"},
     {"extension.install","Install one complete local directory ZIP; active directories remain protected"},
@@ -130,7 +131,7 @@ static bool SdkExtensionCall(const mdo_sdk_context_v1* C,cstr Method,const xvalu
         if(MdoExtensionsVerify(Kind,Id,Cancel,Why)&&MdoExtensionsFingerprint(Kind,Id,Hash,Cancel,Why)){
             *R=xrtValueObject();SdkPut(*R,"sha256",Hash);SdkPut(*R,"kind",Kind);SdkPut(*R,"id",Id);
         }
-    }else if(!strcmp(Method,"extension.create")||!strcmp(Method,"extension.import")||!strcmp(Method,"extension.install")||!strcmp(Method,"extension.enable")||!strcmp(Method,"extension.remove")||!strcmp(Method,"extension.cancel_remove")||!strncmp(Method,"extension.file.",15)){
+    }else if(!strcmp(Method,"extension.create")||!strcmp(Method,"extension.save")||!strcmp(Method,"extension.import")||!strcmp(Method,"extension.install")||!strcmp(Method,"extension.enable")||!strcmp(Method,"extension.remove")||!strcmp(Method,"extension.cancel_remove")||!strncmp(Method,"extension.file.",15)){
         xvalue* Input=xrtValueClone(P);MdoApplicationInvocation* I=C->Opaque;
         bool Ok=Input&&SdkPut(Input,"kind",Kind)&&SdkPut(Input,"id",Id)&&SdkPut(Input,"action",Method+10)&&MdoExtensionsManage(Input,NULL,I?I->Cancel:NULL,R,Why);xrtValueRelease(Input);(void)Ok;
     }else if(!strcmp(Method,"extension.pack")){

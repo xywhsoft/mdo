@@ -74,6 +74,9 @@ bool MdoHomeRemoveEmptyDirectory(cstr Path);
  * its data parent cannot be moved or replaced through this API.
  * No Home or parent directory is created. */
 bool MdoHomeRenameNoReplace(cstr Source, cstr Target);
+/* Anchored, no-replace hard link for transaction snapshots. Unsupported
+ * filesystems return false so callers can perform a bounded file copy. */
+bool MdoHomeLinkNoReplace(cstr Source,cstr Target);
 
 /* Returns an owned native path below the configured external Home. This does
  * not create Home or any parent. It exists for libraries whose persistence

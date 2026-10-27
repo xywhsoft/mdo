@@ -290,6 +290,14 @@ static bool MdoExtRecord(cstr Kind,cstr Id,const xvalue* Value)
     if(Ok){if(Value&&xrtValueType(Value)!=XVALUE_NULL)Ok=xrtValueObjectSet(State,xrtStrView(Key),Value);else xrtValueObjectRemove(State,xrtStrView(Key));}
     Ok=Ok&&MdoExtSaveJson(MDO_EXT_STATE,State,MDO_EXT_STATE_LIMIT);xrtFree(Key);xrtValueRelease(State);return Ok;
 }
+/* A staging intent is written before copying files. Recovery can discard only
+ * these owned pre-transaction directories, leaving uploads and exports alone. */
+static bool MdoExtStage(cstr Base,cstr Kind,cstr Id)
+{
+    char* Path=xrtFormat("%s/stage.json",Base);xvalue* Intent=xrtValueObject();
+    bool Ok=Path&&Intent&&MdoExtEnsure(Base)&&MdoExtPut(Intent,"operation","stage")&&MdoExtPut(Intent,"kind",Kind)&&MdoExtPut(Intent,"id",Id)&&MdoExtSaveJson(Path,Intent,4096);
+    xrtValueRelease(Intent);xrtFree(Path);return Ok;
+}
 /* Recover from directory presence, not an in-place progress counter. The
  * journal never contains archive bytes or a caller-selected deletion path. */
 static bool MdoExtRecoverTask(cstr Task,char Error[512])
@@ -297,7 +305,13 @@ static bool MdoExtRecoverTask(cstr Task,char Error[512])
     if(!MdoExtensionDirectoryId(Task))return MdoExtError(Error,"Invalid extension recovery task");
     char *Base=xrtFormat(MDO_EXT_TASKS "/%s",Task),*Journal=Base?xrtFormat("%s/transaction.json",Base):NULL;
     bool Exists=false;xfileinfo Info;if(!Base||!Journal||!MdoExtStat(Journal,&Exists,&Info)){xrtFree(Base);xrtFree(Journal);return false;}
-    if(!Exists){xrtFree(Base);xrtFree(Journal);return true;} /* An unsealed download/export task. */
+    if(!Exists){
+        char* Stage=xrtFormat("%s/stage.json",Base);bool Found=false;bool Ok=Stage&&MdoExtStat(Stage,&Found,&Info);
+        if(Ok&&Found){xvalue* Intent=MdoExtReadJson(Stage,4096,false);cstr Operation=MdoExtensionText(Intent,"operation",16);
+            Ok=Intent&&Operation&&!strcmp(Operation,"stage")&&MdoExtensionDirectoryKind(MdoExtensionText(Intent,"kind",32))&&MdoExtensionDirectoryId(MdoExtensionText(Intent,"id",96));
+            if(Ok)Ok=MdoExtRemoveTree(Base);xrtValueRelease(Intent);}
+        xrtFree(Stage);xrtFree(Base);xrtFree(Journal);if(!Ok)MdoExtError(Error,"Unfinished extension stage could not be recovered; its files were preserved");return Ok;
+    }
     xvalue* J=MdoExtReadJson(Journal,MDO_EXT_STATE_LIMIT,false);
     cstr Kind=MdoExtensionText(J,"kind",32),Id=MdoExtensionText(J,"id",96),Phase=MdoExtensionText(J,"phase",16),Operation=MdoExtensionText(J,"operation",16);
     bool Old=false,Known=xrtValueGetBool(xrtValueObjectGet(J,XRT_STR_LITERAL("old_exists")),&Old);
@@ -400,7 +414,7 @@ bool MdoExtensionsInstall(cstr Kind,cstr Id,cstr Archive,const xvalue* Credits,b
     Ok=Ok&&(!strcmp(Source,"manual")||!strcmp(Source,"store")||!strcmp(Source,"builtin"))&&MdoExtFileDigest(Input,Cancel,Digest,&Bytes)&&(!Expected||!strcmp(Expected,Digest));
     if(Ok&&!strcmp(Source,"store"))Ok=Expected&&strlen(Expected)==64;
     char* Task=Ok?xrtXidMakeString():NULL,*Base=Task?xrtFormat(MDO_EXT_TASKS "/%s",Task):NULL,*Incoming=Base?xrtFormat("%s/incoming",Base):NULL;
-    Ok=Ok&&Task&&Base&&Incoming&&MdoExtExtractZip(&Z,Incoming,Cancel,Error);
+    Ok=Ok&&Task&&Base&&Incoming&&MdoExtStage(Base,Kind,Id)&&MdoExtExtractZip(&Z,Incoming,Cancel,Error);
     if(Ok){char Check[65];uint64 Current=0;Ok=MdoExtFileDigest(Input,Cancel,Check,&Current)&&Current==Bytes&&!strcmp(Check,Digest);}
     if(Ok){char DirectoryDigest[65];MdoExtTree Tree={0};Ok=MdoExtCollect(Incoming,&Tree,Cancel,Error)&&MdoExtFingerprint(Incoming,&Tree,DirectoryDigest,Cancel);MdoExtTreeUnit(&Tree);
         xvalue* State=MdoExtReadJson(MDO_EXT_STATE,MDO_EXT_STATE_LIMIT,true);char* Key=MdoExtKey(Kind,Id);const xvalue* Old=State&&Key?xrtValueObjectGet(State,xrtStrView(Key)):NULL;
@@ -518,7 +532,7 @@ bool MdoExtensionsCreate(cstr Kind,cstr Id,const xvalue* Manifest,const void* En
     xrtMutexLock(MdoExtLock);char* Root=MdoExtensionsRoot(Kind,Id);bool Exists=false;xfileinfo Info;bool Ok=Root&&MdoExtStat(Root,&Exists,&Info)&&!Exists;
     char *Task=Ok?xrtXidMakeString():NULL,*Base=Task?xrtFormat(MDO_EXT_TASKS "/%s",Task):NULL,*Incoming=Base?xrtFormat("%s/incoming",Base):NULL;
     char *MetaPath=Incoming?xrtFormat("%s/extension.json",Incoming):NULL,*EntryPath=Incoming?xrtFormat("%s/%s",Incoming,MdoExtensionText(Manifest,"entry",4096)):NULL;
-    Ok=Ok&&Task&&Base&&Incoming&&MetaPath&&EntryPath&&MdoExtEnsure(Incoming)&&MdoExtSaveJson(MetaPath,Manifest,MDO_EXTENSION_MANIFEST_BYTES)&&MdoHomeAtomicWrite(EntryPath,Entry,Bytes,false);
+    Ok=Ok&&Task&&Base&&Incoming&&MetaPath&&EntryPath&&MdoExtStage(Base,Kind,Id)&&MdoExtEnsure(Incoming)&&MdoExtSaveJson(MetaPath,Manifest,MDO_EXTENSION_MANIFEST_BYTES)&&MdoHomeAtomicWrite(EntryPath,Entry,Bytes,false);
     /* Creation cannot claim native/frontend/readme files it did not create. */
     const cstr Extra[]={"native","frontend","readme"};for(size_t I=0;Ok&&I<3;I++){cstr P=MdoExtensionText(Manifest,Extra[I],4096);if(P&&strcmp(P,MdoExtensionText(Manifest,"entry",4096)))Ok=false;}
     MdoExtTree Tree={0};char Hash[65];Ok=Ok&&MdoExtCollect(Incoming,&Tree,NULL,Error)&&MdoExtFingerprint(Incoming,&Tree,Hash,NULL);MdoExtTreeUnit(&Tree);
@@ -558,3 +572,5 @@ bool MdoExtensionsEdit(cstr Kind,cstr Id,cstr Action,cstr Path,cstr Target,const
     xrtValueRelease(State);xrtValueRelease(Meta);xrtFree(Root);xrtFree(Full);xrtFree(Destination);xrtMutexUnlock(MdoExtLock);
     if(Ok&&Error)Error[0]=0;if(!Ok&&Error&&!Error[0])MdoExtError(Error,"Directory is managed, busy, changed, over its limit, or the requested edit could not be written; inspect it again");return Ok;
 }
+
+#include "directory_save.inc.c"

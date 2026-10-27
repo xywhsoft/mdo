@@ -32,21 +32,21 @@ bool MdoExtensionsManage(const xvalue* Input,const xvalue* Credits,xcancel* Canc
  *Result=NULL;if(Error)Error[0]=0;cstr Kind=MdoExtensionText(Input,"kind",32),Id=MdoExtensionText(Input,"id",96),Action=MdoExtensionText(Input,"action",32),Expected=MdoExtensionText(Input,"expected_revision",64);
  if(!MdoExtensionDirectoryKind(Kind)||!MdoExtensionDirectoryId(Id)||!Action||xrtValueType(Input)!=XVALUE_OBJECT)return MdoExtOpFailure(Error,"Choose an extension type, directory and operation");
  const cstr Flags[]={"enabled","trust_code"};for(size_t I=0;I<2;I++){bool Flag;const xvalue* V=xrtValueObjectGet(Input,xrtStrView(Flags[I]));if(V&&!xrtValueGetBool(V,&Flag))return MdoExtOpFailure(Error,"Activation and code approval must be boolean values");}
- bool Create=!strcmp(Action,"create"),Import=!strcmp(Action,"import"),Install=!strcmp(Action,"install"),Remove=!strcmp(Action,"remove"),Enable=!strcmp(Action,"enable"),Edit=!strncmp(Action,"file.",5),CancelRemove=!strcmp(Action,"cancel_remove");
- if(!Create&&!Import&&!Install&&!Remove&&!Enable&&!Edit&&!CancelRemove)return MdoExtOpFailure(Error,"Unknown directory operation");
+ bool Create=!strcmp(Action,"create"),Save=!strcmp(Action,"save"),Import=!strcmp(Action,"import"),Install=!strcmp(Action,"install"),Remove=!strcmp(Action,"remove"),Enable=!strcmp(Action,"enable"),Edit=!strncmp(Action,"file.",5),CancelRemove=!strcmp(Action,"cancel_remove");
+ if(!Create&&!Save&&!Import&&!Install&&!Remove&&!Enable&&!Edit&&!CancelRemove)return MdoExtOpFailure(Error,"Unknown directory operation");
  if(Cancel&&xrtCancelRequested(Cancel))return MdoExtOpFailure(Error,"Extension operation cancelled before changing files");
  if(!MdoExtensionsMutationBegin())return MdoExtOpFailure(Error,"Another extension operation is still running");
  bool Ok=false,Trust=MdoExtOpBool(Input,"trust_code",false),WasEnabled=false,Suspended=false;char RuntimeError[512]={0};xvalue* Before=MdoExtOpItem(Kind,Id,RuntimeError);
  if(Before)WasEnabled=MdoExtOpBool(Before,"enabled",false);
  cstr Source=MdoExtensionText(Before,"source",16);
- if(Edit&&(!Before||!Source||strcmp(Source,"manual"))){MdoExtOpFailure(Error,"Only locally authored manual extensions can be edited");goto done;}
+ if((Edit||(Save&&Before))&&(!Before||!Source||strcmp(Source,"manual"))){MdoExtOpFailure(Error,"Only locally authored manual extensions can be edited");goto done;}
  if((Import||Install)&&Source&&!strcmp(Source,"store")){cstr NewSource=MdoExtensionText(Credits,"source",16);if(!NewSource||strcmp(NewSource,"store")){MdoExtOpFailure(Error,"Managed store installations can only be replaced with a verified store update");goto done;}}
- if(!Before&&!Create&&!Import&&!Install){MdoExtOpFailure(Error,"Extension directory is not installed");goto done;}
+ if(!Before&&!Create&&!Save&&!Import&&!Install){MdoExtOpFailure(Error,"Extension directory is not installed");goto done;}
  if(CancelRemove){Ok=MdoExtensionsCancelRemove(Kind,Id,Error);if(Ok)*Result=MdoExtOpItem(Kind,Id,Error);goto done;}
  if(Enable){bool Enabled=MdoExtOpBool(Input,"enabled",true);Ok=MdoExtOpRestore(Kind,Id,Enabled,Error);
   if(!Ok){char Rollback[512];if(!MdoExtOpRestore(Kind,Id,WasEnabled,Rollback)&&Error)snprintf(Error,512,"Activation failed and its runtime needs recovery: %.400s",Rollback);}else *Result=MdoExtOpItem(Kind,Id,Error);goto done;}
- if((Remove||Edit||(Before&&(Import||Install)))&&(!Expected||strlen(Expected)!=64)){MdoExtOpFailure(Error,"Inspect the current directory and supply its fingerprint before replacing, editing or uninstalling it");goto done;}
- if((Remove||Edit||(Before&&(Import||Install)))&&Expected){char Actual[65];if(!MdoExtensionsFingerprint(Kind,Id,Actual,Cancel,Error)||strcmp(Actual,Expected)){MdoExtOpFailure(Error,"Extension directory changed; refresh it before applying this operation");goto done;}}
+ if((Remove||Edit||(Before&&(Save||Import||Install)))&&(!Expected||strlen(Expected)!=64)){MdoExtOpFailure(Error,"Inspect the current directory and supply its fingerprint before replacing, editing or uninstalling it");goto done;}
+ if((Remove||Edit||(Before&&(Save||Import||Install)))&&Expected){char Actual[65];if(!MdoExtensionsFingerprint(Kind,Id,Actual,Cancel,Error)||strcmp(Actual,Expected)){MdoExtOpFailure(Error,"Extension directory changed; refresh it before applying this operation");goto done;}}
  if(Before&&!Create){
   if(!MdoExtOpRestore(Kind,Id,false,Error)){char Ignored[512];(void)MdoExtOpRestore(Kind,Id,WasEnabled,Ignored);goto done;}Suspended=true;
   if(MdoExtensionsInUse(Kind,Id)){
@@ -55,6 +55,7 @@ bool MdoExtensionsManage(const xvalue* Input,const xvalue* Credits,xcancel* Canc
   }
  }
  if(Create){cstr Text=MdoExtensionText(Input,"entry_text",1048576);Ok=MdoExtensionsCreate(Kind,Id,xrtValueObjectGet(Input,XRT_STR_LITERAL("manifest")),Text,Text?strlen(Text):0,Trust,Result,Error);}
+ else if(Save)Ok=MdoExtensionsSave(Kind,Id,xrtValueObjectGet(Input,XRT_STR_LITERAL("manifest")),xrtValueObjectGet(Input,XRT_STR_LITERAL("edits")),Expected?Expected:"",Trust,Cancel,Result,Error);
  else if(Import)Ok=MdoExtensionsImportDirectory(Kind,Id,MdoExtensionText(Input,"directory",4096),Expected?Expected:"",Trust,Cancel,Result,Error);
  else if(Install){xvalue* Provenance=Credits?xrtValueClone(Credits):xrtValueObject();Ok=Provenance!=NULL;if(!Credits)Ok=Ok&&MdoExtOpPut(Provenance,"source","manual");
   Ok=Ok&&MdoExtOpPut(Provenance,"expected_revision",Expected?Expected:"")&&MdoExtensionsInstall(Kind,Id,MdoExtensionText(Input,"archive",4096),Provenance,Trust,Cancel,Result,Error);xrtValueRelease(Provenance);}
@@ -63,7 +64,7 @@ bool MdoExtensionsManage(const xvalue* Input,const xvalue* Credits,xcancel* Canc
   Ok=MdoExtensionsEdit(Kind,Id,Action+5,MdoExtensionText(Input,"path",4096),MdoExtensionText(Input,"destination",4096),Text,Text?strlen(Text):0,Expected,Result,Error);}
  if(Ok){Suspended=false;
   if(Remove&&!strcmp(Kind,"mcp")&&!MdoMcpRemoveDirectoryConnections(Id,RuntimeError)&&*Result){xrtValueObjectSetNew(*Result,XRT_STR_LITERAL("cleanup_pending"),xrtValueBool(true));MdoExtOpPut(*Result,"cleanup_error",RuntimeError);RuntimeError[0]=0;}
-  bool Wanted=!Remove&&!Create&&MdoExtOpBool(Input,"enabled",Before?WasEnabled:strcmp(Kind,"plugins")!=0);
+  bool Wanted=!Remove&&!Create&&!(Save&&!Before)&&MdoExtOpBool(Input,"enabled",Before?WasEnabled:strcmp(Kind,"plugins")!=0);
   RuntimeError[0]=0;bool Live=Remove?MdoExtOpReload(Kind,RuntimeError):MdoExtOpRestore(Kind,Id,Wanted,RuntimeError);
   if(!Live){char Ignored[512];if(!Remove)(void)MdoExtOpRestore(Kind,Id,false,Ignored);if(*Result)MdoExtOpPut(*Result,"runtime_error",RuntimeError);}
   if(*Result){xrtValueObjectSetNew(*Result,XRT_STR_LITERAL("enabled"),xrtValueBool(Live&&Wanted));xrtValueObjectSetNew(*Result,XRT_STR_LITERAL("runtime_ready"),xrtValueBool(Live));}

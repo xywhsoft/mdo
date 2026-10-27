@@ -39,6 +39,7 @@ bool MdoHomeRenameNoReplace(cstr From,cstr To){
  char* A=xrtPathJoin(xrtRootPath(QaRoot),From),*B=xrtPathJoin(xrtRootPath(QaRoot),To);bool Ok=A&&B&&xrtPathRename(A,B,false);xrtFree(A);xrtFree(B);return Ok;
 }
 bool MdoHomeSetMode(cstr Path,uint32 Mode){(void)Path;(void)Mode;return true;}
+bool MdoHomeLinkNoReplace(cstr From,cstr To){return QaParents(To)&&xrtRootLinkHard(QaRoot,From,To);}
 '''
 TEST = r'''
 static bool QaJournal(cstr Task,cstr Id,cstr Phase,cstr Operation,bool Old){

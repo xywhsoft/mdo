@@ -862,25 +862,39 @@ static bool MdoHomeRootFileExistsLocked(cstr Path, bool* pExists)
     return false;
 }
 
-static bool MdoHomeWriteTempLocked(cstr Path, const void* pData, size_t iSize)
+/* A sibling chosen independently of the target basename also works for a
+ * 255-byte filename. Never reuse target.tmp: it may be an extension resource
+ * (and a hardlink to an unchanged file in the original directory). */
+static char* MdoHomeTemporaryPath(cstr Path)
+{
+    cstr Slash = strrchr(Path, '/');
+    char* Id = xrtXidMakeString();
+    char* Result = Id ? xrtFormat("%.*s.mdo-tmp-%s",
+        (int)(Slash ? Slash - Path + 1 : 0), Path, Id) : NULL;
+    xrtFree(Id);
+    return Result;
+}
+
+static bool MdoHomeWriteTempLocked(cstr Path, const void* pData, size_t iSize, bool* Created)
 {
     xfileoptions Options;
     xfile File;
     bool bOk;
 
-    (void)xrtRootRemove(g_MdoHome.Root, Path);
-    xrtClearError();
+    *Created = false;
     xrtFileOptionsInit(&Options);
     Options.Flags = XFILE_WRITE | XFILE_CREATE | XFILE_EXCLUSIVE |
         XFILE_SYNC | XFILE_NOFOLLOW;
     File = xrtRootFileOpen(g_MdoHome.Root, Path, &Options);
     if ( File == NULL ) return false;
+    *Created = true;
     bOk = (iSize == 0u || xrtWriteFull(File, pData, iSize, NULL)) &&
         xrtFlush(File);
     if ( !xrtClose(File) ) bOk = false;
     if ( !bOk ) {
         xerror* pSaved = xrtTakeError();
         (void)xrtRootRemove(g_MdoHome.Root, Path);
+        *Created = false;
         xrtClearError();
         if ( pSaved != NULL ) xrtSetErrorTake(pSaved);
     }
@@ -894,18 +908,18 @@ static bool MdoHomeCopyFileLocked(cstr Source, cstr Target)
     xfile Input = NULL;
     xfile Output = NULL;
     bool bOk = false;
+    bool Created = false;
 
     xrtFileOptionsInit(&Options);
     Options.Flags = XFILE_READ | XFILE_NOFOLLOW;
     Input = xrtRootFileOpen(g_MdoHome.Root, Source, &Options);
     if ( Input == NULL ) goto done;
-    (void)xrtRootRemove(g_MdoHome.Root, Target);
-    xrtClearError();
     xrtFileOptionsInit(&Options);
     Options.Flags = XFILE_WRITE | XFILE_CREATE | XFILE_EXCLUSIVE |
         XFILE_SYNC | XFILE_NOFOLLOW;
     Output = xrtRootFileOpen(g_MdoHome.Root, Target, &Options);
     if ( Output == NULL ) goto done;
+    Created = true;
     for ( ; ; ) {
         size_t iRead = 0u;
         if ( !xrtRead(Input, arrBuffer, sizeof(arrBuffer), &iRead) ) goto done;
@@ -927,7 +941,7 @@ done:
             pSaved = xrtTakeError();
         }
         if ( !bOk ) {
-            (void)xrtRootRemove(g_MdoHome.Root, Target);
+            if (Created) (void)xrtRootRemove(g_MdoHome.Root, Target);
             xrtClearError();
             if ( pSaved != NULL ) xrtSetErrorTake(pSaved);
         }
@@ -943,16 +957,18 @@ static bool MdoHomePublishTempLocked(cstr Temporary, cstr Target)
 static bool MdoHomeBackupLocked(cstr Path)
 {
     char* sBackup = MdoHomeSiblingPath(Path, ".bak");
-    char* sTemporary = MdoHomeSiblingPath(Path, ".bak.tmp");
+    char* sTemporary = MdoHomeTemporaryPath(Path);
     bool bOk = false;
+    bool Created = false;
 
     if ( sBackup == NULL || sTemporary == NULL ) goto done;
     if ( !MdoHomeCopyFileLocked(Path, sTemporary) ) goto done;
+    Created = true;
     if ( !MdoHomePublishTempLocked(sTemporary, sBackup) ) goto done;
     bOk = true;
 
 done:
-    if ( !bOk && sTemporary != NULL ) {
+    if ( !bOk && Created ) {
         xerror* pSaved = xrtTakeError();
         (void)xrtRootRemove(g_MdoHome.Root, sTemporary);
         xrtClearError();
@@ -963,12 +979,19 @@ done:
     return bOk;
 }
 
+bool MdoHomeLinkNoReplace(cstr Source,cstr Target)
+{
+    if(!MdoHomePathValid(Source)||!MdoHomePathValid(Target)||!g_MdoHome.Initialized)return false;
+    xrtMutexLock(g_MdoHome.Lock);bool Exists=false;bool Ok=MdoHomeEnsureLocked()&&MdoHomeEnsureParents(g_MdoHome.Root,Target)&&MdoHomeRootFileExistsLocked(Source,&Exists)&&Exists;
+    if(Ok)Ok=xrtRootLinkHard(g_MdoHome.Root,Source,Target);xrtMutexUnlock(g_MdoHome.Lock);return Ok;
+}
 bool MdoHomeAtomicWrite(cstr Path, const void* pData, size_t iSize,
     bool Backup)
 {
     char* sTemporary = NULL;
     bool bExists = false;
     bool bOk = false;
+    bool Created = false;
 
     if ( !MdoHomePathValid(Path) || (pData == NULL && iSize != 0u) ||
          !g_MdoHome.Initialized ) {
@@ -976,13 +999,13 @@ bool MdoHomeAtomicWrite(cstr Path, const void* pData, size_t iSize,
             "invalid atomic Home write request");
         return false;
     }
-    sTemporary = MdoHomeSiblingPath(Path, ".tmp");
+    sTemporary = MdoHomeTemporaryPath(Path);
     if ( sTemporary == NULL ) return false;
     xrtMutexLock(g_MdoHome.Lock);
     if ( !MdoHomeEnsureLocked() ||
          !MdoHomeEnsureParents(g_MdoHome.Root, Path) ||
          !MdoHomeRootFileExistsLocked(Path, &bExists) ||
-         !MdoHomeWriteTempLocked(sTemporary, pData, iSize) ) goto done;
+         !MdoHomeWriteTempLocked(sTemporary, pData, iSize, &Created) ) goto done;
     if ( Backup && bExists && !MdoHomeBackupLocked(Path) ) goto done;
     if ( !MdoHomePublishTempLocked(sTemporary, Path) ) goto done;
     bOk = true;
@@ -990,7 +1013,7 @@ bool MdoHomeAtomicWrite(cstr Path, const void* pData, size_t iSize,
 done:
     if ( !bOk ) {
         xerror* pSaved = xrtTakeError();
-        if ( g_MdoHome.Root != NULL && g_MdoHome.Import == NULL &&
+        if ( Created && g_MdoHome.Root != NULL && g_MdoHome.Import == NULL &&
              !g_MdoHome.RestartRequired )
             (void)xrtRootRemove(g_MdoHome.Root, sTemporary);
         xrtClearError();

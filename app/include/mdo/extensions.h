@@ -33,6 +33,9 @@ bool MdoExtensionsSetActivation(cstr Kind,const xvalue* Changes,char Error[512])
  * It never registers an absolute executable path or follows links. */
 bool MdoExtensionsImportDirectory(cstr Kind,cstr Id,cstr NativeRoot,cstr Expected,bool Trust,xcancel* Cancel,xvalue** Result,char Error[512]);
 bool MdoExtensionsCreate(cstr Kind,cstr Id,const xvalue* Manifest,const void* Entry,size_t Bytes,bool Trust,xvalue** Result,char Error[512]);
+/* Atomically save manifest + bounded text edits while retaining all other
+ * directory files. This is an editor operation, never a publication format. */
+bool MdoExtensionsSave(cstr Kind,cstr Id,const xvalue* Manifest,const xvalue* Edits,cstr Expected,bool Trust,xcancel* Cancel,xvalue** Result,char Error[512]);
 /* Manual directories only. Expected is the last whole-directory fingerprint. */
 bool MdoExtensionsEdit(cstr Kind,cstr Id,cstr Action,cstr Path,cstr Target,const void* Data,size_t Bytes,cstr Expected,xvalue** Result,char Error[512]);
 /* Serialize multi-manager operations without blocking the UI network worker. */
