@@ -401,15 +401,25 @@ bool MdoExtensionsRemove(cstr Kind,cstr Id,xvalue** Result,char Error[512])
     if(!Ok&&Base){char* Journal=xrtFormat("%s/transaction.json",Base);bool Exists=false;xfileinfo Info;if(Journal&&MdoExtStat(Journal,&Exists,&Info)&&!Exists)(void)MdoExtRemoveTree(Base);xrtFree(Journal);}
     xrtFree(Task);xrtFree(Base);xrtMutexUnlock(MdoExtLock);return Ok;
 }
+bool MdoExtensionsSetActivation(cstr Kind,const xvalue* Changes,char Error[512])
+{
+    if(Error)Error[0]=0;if(!MdoExtLock||!MdoExtensionDirectoryKind(Kind)||xrtValueType(Changes)!=XVALUE_ARRAY||xrtValueCount(Changes)>8192)return MdoExtError(Error,"Choose installed extension directories and activation states");
+    xrtMutexLock(MdoExtLock);xvalue* State=MdoExtReadJson(MDO_EXT_STATE,MDO_EXT_STATE_LIMIT,true);bool Ok=State&&xrtValueType(State)==XVALUE_OBJECT;
+    for(size_t I=0;Ok&&I<xrtValueCount(Changes);I++){
+        const xvalue* Change=xrtValueArrayGet(Changes,I);cstr Id=MdoExtensionText(Change,"id",96);bool Enabled=false;
+        Ok=MdoExtensionDirectoryId(Id)&&xrtValueGetBool(xrtValueObjectGet(Change,XRT_STR_LITERAL("enabled")),&Enabled)&&MdoExtCanonical(Kind,Id);
+        for(size_t J=0;Ok&&J<I;J++)if(!strcmp(Id,MdoExtensionText(xrtValueArrayGet(Changes,J),"id",96)))Ok=false;
+        xvalue* Meta=Ok&&Enabled?MdoExtRead(Kind,Id,State,Error):NULL;if(Ok&&Enabled)Ok=Meta&&MdoExtVerify(Kind,Id,State,NULL,Error);
+        char* Key=Ok?MdoExtKey(Kind,Id):NULL;const xvalue* Before=Key?xrtValueObjectGet(State,xrtStrView(Key)):NULL;xvalue* Record=Before?xrtValueClone(Before):xrtValueObject();
+        if(Ok&&!Before)Ok=MdoExtPut(Record,"source","manual");
+        Ok=Ok&&Record&&xrtValueObjectSetNew(Record,XRT_STR_LITERAL("enabled"),xrtValueBool(Enabled))&&xrtValueObjectSet(State,xrtStrView(Key),Record);
+        xrtValueRelease(Meta);xrtValueRelease(Record);xrtFree(Key);
+    }
+    if(Ok)Ok=MdoExtSaveJson(MDO_EXT_STATE,State,MDO_EXT_STATE_LIMIT);xrtValueRelease(State);xrtMutexUnlock(MdoExtLock);
+    if(Ok){if(Error)Error[0]=0;return true;}return MdoExtError(Error,"Cannot update extension activation state");
+}
 bool MdoExtensionsSetEnabled(cstr Kind,cstr Id,bool Enabled,char Error[512])
 {
-    if(Error)Error[0]=0;if(!MdoExtLock||!MdoExtensionDirectoryKind(Kind)||!MdoExtensionDirectoryId(Id))return MdoExtError(Error,"Choose an installed extension directory");
-    xrtMutexLock(MdoExtLock);xvalue* State=MdoExtReadJson(MDO_EXT_STATE,MDO_EXT_STATE_LIMIT,true);xvalue* Meta=State&&MdoExtCanonical(Kind,Id)?MdoExtRead(Kind,Id,State,Error):NULL;
-    char* Key=MdoExtKey(Kind,Id);const xvalue* Before=State&&Key?xrtValueObjectGet(State,xrtStrView(Key)):NULL;xvalue* Record=Before?xrtValueClone(Before):xrtValueObject();
-    bool Ok=State&&xrtValueType(State)==XVALUE_OBJECT&&Record&&(Enabled?Meta!=NULL:MdoExtCanonical(Kind,Id));
-    if(Ok&&Enabled)Ok=MdoExtVerify(Kind,Id,State,NULL,Error);
-    if(Ok&&!Before)Ok=MdoExtPut(Record,"source","manual");
-    Ok=Ok&&xrtValueObjectSetNew(Record,XRT_STR_LITERAL("enabled"),xrtValueBool(Enabled))&&MdoExtRecord(Kind,Id,Record);
-    xrtValueRelease(State);xrtValueRelease(Meta);xrtValueRelease(Record);xrtFree(Key);xrtMutexUnlock(MdoExtLock);
-    if(Ok){if(Error)Error[0]=0;return true;}return MdoExtError(Error,"Cannot update extension activation state");
+    xvalue* Changes=xrtValueArray(),*Row=xrtValueObject();bool Ok=Changes&&Row&&MdoExtPut(Row,"id",Id)&&xrtValueObjectSetNew(Row,XRT_STR_LITERAL("enabled"),xrtValueBool(Enabled))&&xrtValueArrayAppend(Changes,Row)&&MdoExtensionsSetActivation(Kind,Changes,Error);
+    xrtValueRelease(Row);xrtValueRelease(Changes);return Ok;
 }

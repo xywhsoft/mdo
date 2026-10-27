@@ -28,5 +28,6 @@ bool MdoExtensionsInstall(cstr Kind,cstr Id,cstr Archive,const xvalue* Credits,b
 bool MdoExtensionsRemove(cstr Kind,cstr Id,xvalue** Result,char Error[512]);
 bool MdoExtensionsRecover(char Error[512]);
 bool MdoExtensionsSetEnabled(cstr Kind,cstr Id,bool Enabled,char Error[512]);
+bool MdoExtensionsSetActivation(cstr Kind,const xvalue* Changes,char Error[512]);
 
 #endif

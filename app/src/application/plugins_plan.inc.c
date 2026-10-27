@@ -12,6 +12,7 @@ static bool SdkPluginSetValidate(SdkPlugin* All,xvalue* Issues){
         const xvalue* M=All[I].Manifest,*D=SdkGet(M,"manifest");cstr Id=SdkField(M,"id");
         for(size_t J=0;J<I;J++)if(Active[J]){
             const xvalue* Other=All[J].Manifest,*OD=SdkGet(Other,"manifest");cstr OId=SdkField(Other,"id");
+            if(!strcmp(SdkField(M,"alias"),SdkField(Other,"alias")))SdkPluginIssue(Issues,"alias",Id,OId,"Two enabled plugins have the same callable alias");
             const xvalue* A=SdkGet(D,"exclusive"),*B=SdkGet(OD,"exclusive");
             for(size_t X=0;X<xrtValueCount(A);X++)for(size_t Y=0;Y<xrtValueCount(B);Y++)if(xrtValueEqual(xrtValueArrayGet(A,X),xrtValueArrayGet(B,Y)))SdkPluginIssue(Issues,"exclusive",Id,OId,SdkText(xrtValueArrayGet(A,X)));
         }
@@ -20,9 +21,9 @@ static bool SdkPluginSetValidate(SdkPlugin* All,xvalue* Issues){
             const xvalue* Rows=SdkGet(D,Relations[K]);
             for(size_t J=0;J<xrtValueCount(Rows);J++){
                 const xvalue* R=xrtValueArrayGet(Rows,J);cstr Other=SdkField(R,"id");size_t Found=32;
-                for(size_t X=0;X<32;X++)if(Active[X]&&!strcmp(Other,SdkField(All[X].Manifest,"id")))Found=X;
-                bool Match=Found<32&&MdoPluginVersionMatches(R,SdkField(SdkGet(All[Found].Manifest,"manifest"),"version"));
-                if(!K){if(!Match)SdkPluginIssue(Issues,"requires",Id,Other,"Required plugin is missing, disabled, or outside the allowed version range");else Edge[I][Found]=true;}
+                for(size_t X=0;X<32;X++)if(Active[X]&&(!strcmp(Other,SdkField(All[X].Manifest,"id"))||!strcmp(Other,SdkField(All[X].Manifest,"alias"))))Found=X;
+                bool Match=Found<32;
+                if(!K){if(!Match)SdkPluginIssue(Issues,"requires",Id,Other,"Required plugin is missing or disabled");else Edge[I][Found]=true;}
                 else if(Match)SdkPluginIssue(Issues,"conflicts",Id,Other,SdkField(R,"reason")?SdkField(R,"reason"):"Declared incompatible plugins");
             }
         }
@@ -40,40 +41,22 @@ static bool SdkPluginSetCheck(SdkPlugin* All,mdo_error_v1* E){
     xrtValueRelease(Issues);return Ok;
 }
 static bool SdkPluginTarget(const xvalue* Current,const xvalue* Changes,xvalue** Target,mdo_error_v1* E){
-    *Target=NULL;if(xrtValueType(Changes)!=XVALUE_ARRAY||xrtValueCount(Changes)>32)return MdoApplicationError(E,"sdk_arguments_invalid","Plugin changes must be an array of at most 32 entries","plugin",422,false);
-    for(size_t I=0;I<xrtValueCount(Changes);I++){
-        const xvalue* R=xrtValueArrayGet(Changes,I);cstr Id=SdkField(R,"id");const cstr Keys[]={"id","enabled","revision","remove"};
-        if(!MdoPackageId(Id)||!MdoPluginKeys(R,Keys,4)||!SdkPluginFind(Current,Id))return MdoApplicationError(E,"sdk_plugin_missing","Plugin change refers to an uninstalled plugin or invalid fields","plugin",404,false);
-        const xvalue* Installed=SdkPluginFind(Current,Id);cstr Source=SdkField(Installed,"source"),Revision=SdkField(R,"revision");bool Remove=false;xrtValueGetBool(SdkGet(R,"remove"),&Remove);
-        if(Source&&!strcmp(Source,"store")&&(Remove||(Revision&&strcmp(Revision,SdkField(Installed,"revision")))))return MdoApplicationError(E,"store_resource_readonly","Install the saved store version through its update flow before switching this combination","plugin",403,false);
-        for(size_t J=0;J<I;J++)if(!strcmp(Id,SdkField(xrtValueArrayGet(Changes,J),"id")))return MdoApplicationError(E,"sdk_arguments_invalid","Duplicate plugin change","plugin",422,false);
-    }
-    xvalue* Result=xrtValueArray();bool Ok=Result!=NULL;
-    for(size_t I=0;Ok&&I<xrtValueCount(Current);I++){
-        const xvalue* Old=xrtValueArrayGet(Current,I);cstr Id=SdkField(Old,"id");const xvalue* Change=SdkPluginFind(Changes,Id);bool Remove=false;
-        if(SdkGet(Change,"remove")&&!xrtValueGetBool(SdkGet(Change,"remove"),&Remove)){Ok=false;break;}
-        if(Remove){if(SdkGet(Change,"revision")||SdkGet(Change,"enabled")){Ok=false;break;}continue;}
-        xvalue* Next=xrtValueClone(Old);cstr Revision=SdkField(Change,"revision");
-        if(SdkGet(Change,"revision")){
-            bool Valid=Revision&&strlen(Revision)==64;for(size_t J=0;Valid&&J<64;J++)if(!strchr("0123456789abcdef",Revision[J]))Valid=false;
-            char Path[256];snprintf(Path,sizeof(Path),"plugins/%s/revisions/%s/manifest.json",Id,Valid?Revision:"invalid");bool Missing=false;
-            char* Text=Valid?MdoExtensionRead(Path,true,1048576,&Missing):NULL;xvalue* Saved=SdkParse(Text);xrtFree(Text);
-            if(!Saved||strcmp(Id,SdkField(Saved,"id")?SdkField(Saved,"id"):"")){xrtValueRelease(Saved);xrtValueRelease(Next);Ok=false;break;}
-            xrtValueObjectRemove(Saved,XRT_STR_LITERAL("files"));
-            xrtValueObjectSet(Saved,XRT_STR_LITERAL("enabled"),SdkGet(Old,"enabled"));
-            if(SdkGet(Old,"source"))xrtValueObjectSet(Saved,XRT_STR_LITERAL("source"),SdkGet(Old,"source"));
-            if(strcmp(Revision,SdkField(Old,"revision")))SdkPut(Saved,"previous",SdkField(Old,"revision"));
-            xrtValueRelease(Next);Next=Saved;
-        }
-        bool Enabled=false;if(SdkGet(Change,"enabled")){if(!xrtValueGetBool(SdkGet(Change,"enabled"),&Enabled)){xrtValueRelease(Next);Ok=false;break;}xrtValueObjectSetNew(Next,XRT_STR_LITERAL("enabled"),xrtValueBool(Enabled));}
-        Ok=Next&&xrtValueArrayAppend(Result,Next);xrtValueRelease(Next);
-    }
-    if(!Ok){xrtValueRelease(Result);return MdoApplicationError(E,"sdk_arguments_invalid","Invalid plugin change or unavailable revision","plugin",422,false);}*Target=Result;return true;
+ *Target=NULL;if(xrtValueType(Changes)!=XVALUE_ARRAY||xrtValueCount(Changes)>32)return MdoApplicationError(E,"sdk_arguments_invalid","Plugin changes must be an array of at most 32 activation flags","plugin",422,false);
+ const cstr Keys[]={"id","enabled"};
+ for(size_t I=0;I<xrtValueCount(Changes);I++){const xvalue* F=xrtValueArrayGet(Changes,I);cstr Id=SdkField(F,"id");bool Enabled;
+  if(!MdoPluginKeys(F,Keys,2)||!MdoExtensionDirectoryId(Id)||!SdkPluginFind(Current,Id)||!xrtValueGetBool(SdkGet(F,"enabled"),&Enabled))return MdoApplicationError(E,"sdk_arguments_invalid","Choose an installed plugin and enabled flag; revision switching and partial removal are not supported","plugin",422,false);
+  for(size_t J=0;J<I;J++)if(!strcmp(Id,SdkField(xrtValueArrayGet(Changes,J),"id")))return MdoApplicationError(E,"sdk_arguments_invalid","Duplicate plugin change","plugin",422,false);
+ }
+ xvalue* Result=xrtValueArray();bool Ok=Result!=NULL;
+ for(size_t I=0;Ok&&I<xrtValueCount(Current);I++){const xvalue* Old=xrtValueArrayGet(Current,I);xvalue* Next=xrtValueClone(Old);const xvalue* F=SdkPluginFind(Changes,SdkField(Old,"id"));
+  Ok=Next&&(!F||xrtValueObjectSet(Next,XRT_STR_LITERAL("enabled"),SdkGet(F,"enabled")))&&xrtValueArrayAppend(Result,Next);xrtValueRelease(Next);
+ }
+ if(!Ok){xrtValueRelease(Result);return false;}*Target=Result;return true;
 }
 static xvalue* SdkPluginPlan(const xvalue* Current,const xvalue* Changes,xvalue** Desired,mdo_error_v1* E){
     xvalue* Target=NULL;if(!SdkPluginTarget(Current,Changes,&Target,E))return NULL;
     SdkPlugin* All=xrtCalloc(32,sizeof(*All));xvalue* Issues=xrtValueArray(),*Result=xrtValueObject();bool Ok=All&&Issues&&Result;
-    for(size_t I=0;Ok&&I<xrtValueCount(Target);I++)if(!SdkPluginMountRevision(&All[I],xrtValueArrayGet(Target,I)))SdkPluginIssue(Issues,"invalid_revision",SdkField(xrtValueArrayGet(Target,I),"id"),"","Installed plugin revision could not be verified");
+    for(size_t I=0;Ok&&I<xrtValueCount(Target);I++)if(!SdkPluginMountDirectory(&All[I],xrtValueArrayGet(Target,I))&&SdkPluginEnabled(xrtValueArrayGet(Target,I)))SdkPluginIssue(Issues,"invalid_directory",SdkField(xrtValueArrayGet(Target,I),"id"),"","Installed plugin directory could not be verified");
     if(Ok)SdkPluginSetValidate(All,Issues);
     xvalue* Map=Ok&&!xrtValueCount(Issues)?SdkPluginMapBuild(All):NULL;
     if(Ok&&!xrtValueCount(Issues)&&!Map){cstr Why="Plugin targets overlap";for(size_t I=0;I<32;I++)if(All[I].Error[0])Why=All[I].Error;SdkPluginIssue(Issues,"files","","",Why);}

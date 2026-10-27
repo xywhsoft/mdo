@@ -26,7 +26,7 @@ static bool MdoPluginBootstrapTry(XS_HostInfo* Host){
 #else
     if(MdoPluginBoot.Tried)return MdoPluginBoot.Tcc!=NULL;
     /* A reload candidate waits for the previous exclusive Home owner first. */
-    if(!MdoHomeInit()||!MdoEcosystemRecover())return false;
+    char DirectoryError[512];if(!MdoHomeInit()||!MdoExtensionsInit()||!MdoExtensionsRecover(DirectoryError))return false;
     MdoPluginBoot.Tried=true;
     if(!MdoApplicationPluginsInit()||!MdoApplicationPluginCoreRequired())return false;
     xs_tcc_config Config;xsTccConfigInit(&Config);

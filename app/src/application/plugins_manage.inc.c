@@ -1,33 +1,17 @@
 static bool SdkPluginLookup(cstr Id,cstr Revision,SdkPlugin* Plugin,mdo_error_v1* E){
-    xrtMutexLock(SdkPlugins.Lock);const xvalue* Row=SdkPluginFind(SdkPlugins.Config,Id);xvalue* Summary=Row?xrtValueClone(Row):NULL;xrtMutexUnlock(SdkPlugins.Lock);
-    if(!Summary)return MdoApplicationError(E,"sdk_plugin_missing","Plugin is not installed","plugin",404,false);
-    if(Revision&&strcmp(Revision,SdkField(Summary,"revision"))){
-        bool Valid=strlen(Revision)==64;for(size_t I=0;Valid&&I<64;I++)if(!strchr("0123456789abcdef",Revision[I]))Valid=false;
-        char Path[256];snprintf(Path,sizeof(Path),"plugins/%s/revisions/%s/manifest.json",Id,Valid?Revision:"invalid");bool Missing=false;
-        char* Text=Valid?MdoExtensionRead(Path,true,1048576,&Missing):NULL;xvalue* Saved=SdkParse(Text);xrtFree(Text);
-        if(!Saved||!SdkField(Saved,"id")||strcmp(Id,SdkField(Saved,"id"))){xrtValueRelease(Saved);xrtValueRelease(Summary);return MdoApplicationError(E,"sdk_plugin_revision_invalid","Plugin revision is unavailable","plugin",404,false);}
-        if(SdkGet(Summary,"source"))xrtValueObjectSet(Saved,XRT_STR_LITERAL("source"),SdkGet(Summary,"source"));
-        xrtValueRelease(Summary);Summary=Saved;
-    }
-    bool Ok=SdkPluginMountRevision(Plugin,Summary);xrtValueRelease(Summary);
-    return Ok||MdoApplicationError(E,"sdk_plugin_revision_invalid","Plugin revision files could not be verified","plugin",409,false);
+ char Error[512];xvalue* Summary=MdoExtensionsRead("plugins",Id,Error);
+ if(!Summary)return MdoApplicationError(E,"sdk_plugin_missing","Plugin directory is not installed","plugin",404,false);
+ bool Ok=SdkPluginMountDirectory(Plugin,Summary);xrtValueRelease(Summary);
+ if(Ok&&Revision&&strcmp(Revision,SdkField(Plugin->Manifest,"revision")))Ok=false;
+ return Ok||MdoApplicationError(E,"sdk_plugin_directory_changed","Plugin directory changed; read its current metadata","plugin",409,false);
 }
 static bool SdkPluginFileCall(const xvalue* P,xvalue** R,mdo_error_v1* E){
-    cstr Id=SdkField(P,"id"),Path=SdkField(P,"path");SdkPlugin Plugin={0};if(!MdoPackageId(Id)||!MdoPluginPath(Path))return MdoApplicationError(E,"sdk_arguments_invalid","Choose an installed plugin inventory file","plugin",422,false);
-    /* Current inventories were verified during publication/get. Do not hash
-     * every file in the package again for every 64 KiB range. The reader gets
-     * the immutable expected digest and verifies the assembled file. */
-    cstr Revision=SdkField(P,"revision");xrtMutexLock(SdkPlugins.Lock);
-    for(size_t I=0;I<32;I++){SdkPlugin* Cached=&SdkPlugins.Plugins[I];cstr Cid=SdkField(Cached->Manifest,"id");
-        if(Cid&&!strcmp(Cid,Id)&&!Cached->Error[0]&&(!Revision||!strcmp(Revision,SdkField(Cached->Manifest,"revision")))){Plugin.Manifest=xrtValueClone(Cached->Manifest);break;}}
-    xrtMutexUnlock(SdkPlugins.Lock);
-    if(!Plugin.Manifest&&!SdkPluginLookup(Id,Revision,&Plugin,E))return false;
-    const xvalue* F=MdoPluginFile(SdkGet(Plugin.Manifest,"files"),Path);uint64 Offset=0,Limit=65536,Size=0;SdkUInt(SdkGet(P,"offset"),&Offset);SdkUInt(SdkGet(P,"limit"),&Limit);SdkUInt(SdkGet(F,"bytes"),&Size);
-    bool Ok=F&&Limit&&Limit<=65536&&Offset<=Size;char Native[600];snprintf(Native,sizeof(Native),"plugins/%s/revisions/%s/files/%s",Id,SdkField(Plugin.Manifest,"revision"),Path);
-    xfile File=Ok?MdoHomeOpenRead(Native):NULL;xfileinfo Info={0};Ok=Ok&&File&&xrtFileStat(File,&Info)&&Info.Type==XFILE_TYPE_FILE&&Info.Size==Size;size_t Count=Size-Offset<Limit?(size_t)(Size-Offset):(size_t)Limit;bytes Data=File?xrtMalloc(Count+1):NULL;
-    Ok=Ok&&File&&Data&&xrtReadAtFull(File,Offset,Data,Count,NULL);if(File)Ok=xrtClose(File)&&Ok;
-    if(Ok){char* Encoded=xrtBase64EncodeNew(Data,Count,NULL);*R=xrtValueObject();Ok=Encoded&&*R&&SdkPut(*R,"base64",Encoded)&&SdkPutUInt(*R,"next",Offset+Count)&&SdkPutUInt(*R,"total",Size)&&SdkPut(*R,"sha256",SdkField(F,"sha256"));xrtFree(Encoded);}
-    xrtFree(Data);SdkPluginDrop(&Plugin);return Ok||MdoApplicationError(E,"sdk_plugin_file_missing","The inventory file or requested byte range is unavailable","plugin",404,false);
+ cstr Id=SdkField(P,"id"),Path=SdkField(P,"path");if(!MdoExtensionDirectoryId(Id)||!MdoPluginPath(Path))return MdoApplicationError(E,"sdk_arguments_invalid","Choose an installed plugin file","plugin",422,false);
+ SdkPlugin V={0};if(!SdkPluginLookup(Id,SdkField(P,"revision"),&V,E)){SdkPluginDrop(&V);return false;}
+ bool Ok=MdoPluginFile(SdkGet(V.Manifest,"files"),Path)!=NULL;char* Relative=Ok?xrtFormat("plugins/%s/%s",Id,Path):NULL;
+ char* Text=Relative?MdoExtensionRead(Relative,true,1048576,NULL):NULL;Ok=Text&&xrtUtf8Valid(xrtStrView(Text),NULL);*R=Ok?xrtValueObject():NULL;
+ if(Ok)Ok=*R&&SdkPut(*R,"text",Text)&&SdkPut(*R,"revision",SdkField(V.Manifest,"revision"));
+ xrtFree(Relative);xrtFree(Text);SdkPluginDrop(&V);return Ok||MdoApplicationError(E,"sdk_plugin_file_not_text","Use the common binary file endpoint for non-text files or files over 1 MiB","plugin",422,false);
 }
 static xvalue* SdkPluginPresetsRead(void){
     bool Missing=false;char* Text=MdoExtensionRead("config/plugin-combinations.json",true,1048576,&Missing);xvalue* Doc=SdkParse(Text);xrtFree(Text);
@@ -39,9 +23,8 @@ static xvalue* SdkPluginPresetsRead(void){
         Ok=MdoPackageId(Id)&&Name&&strlen(Name)<=100&&xrtValueType(Pins)==XVALUE_ARRAY&&xrtValueCount(Pins)<=32;
         for(size_t J=0;Ok&&J<I;J++)if(!strcmp(Id,SdkField(xrtValueArrayGet(Items,J),"id")))Ok=false;
         for(size_t J=0;Ok&&J<xrtValueCount(Pins);J++){
-            const xvalue* P=xrtValueArrayGet(Pins,J);cstr Pid=SdkField(P,"id"),Rev=SdkField(P,"revision");bool Enabled;
-            Ok=MdoPackageId(Pid)&&Rev&&strlen(Rev)==64&&xrtValueGetBool(SdkGet(P,"enabled"),&Enabled);
-            for(size_t K=0;Ok&&K<64;K++)if(!strchr("0123456789abcdef",Rev[K]))Ok=false;
+            const xvalue* P=xrtValueArrayGet(Pins,J);cstr Pid=SdkField(P,"id");bool Enabled;
+            Ok=MdoExtensionDirectoryId(Pid)&&xrtValueGetBool(SdkGet(P,"enabled"),&Enabled)&&!SdkGet(P,"revision");
             for(size_t K=0;Ok&&K<J;K++)if(!strcmp(Pid,SdkField(xrtValueArrayGet(Pins,K),"id")))Ok=false;
         }
     }if(!Ok){xrtValueRelease(Doc);return NULL;}return Doc;
@@ -49,7 +32,7 @@ static xvalue* SdkPluginPresetsRead(void){
 static bool SdkPluginPresetMatches(const xvalue* Plugins,const xvalue* Current){
     if(xrtValueCount(Plugins)!=xrtValueCount(Current))return false;
     for(size_t I=0;I<xrtValueCount(Plugins);I++){const xvalue* R=xrtValueArrayGet(Plugins,I),*C=SdkPluginFind(Current,SdkField(R,"id"));
-        if(!C||!SdkField(R,"revision")||strcmp(SdkField(R,"revision"),SdkField(C,"revision"))||SdkPluginEnabled(R)!=SdkPluginEnabled(C))return false;}return true;
+        if(!C||SdkPluginEnabled(R)!=SdkPluginEnabled(C))return false;}return true;
 }
 static bool SdkPluginPresetCall(cstr Method,const xvalue* P,xvalue** R,mdo_error_v1* E){
     xvalue* Current=NULL;if(!MdoApplicationPluginsStoreBegin(&Current,E->Message,sizeof(E->Message)))return MdoApplicationError(E,"sdk_plugin_busy","Plugin manager is busy or recovering","plugin",409,false);
@@ -65,10 +48,10 @@ static bool SdkPluginPresetCall(cstr Method,const xvalue* P,xvalue** R,mdo_error
         if(!Selected){Ok=MdoApplicationError(E,"sdk_plugin_preset_missing","Plugin combination is unavailable","plugin",404,false);goto done;}
         xvalue* Changes=xrtValueArray(),*Issues=xrtValueArray();const xvalue* Pins=SdkGet(Selected,"plugins");
         for(size_t I=0;I<xrtValueCount(Pins);I++){
-            const xvalue* Pin=xrtValueArrayGet(Pins,I);if(!SdkPluginFind(Current,SdkField(Pin,"id")))SdkPluginIssue(Issues,"missing_plugin",SdkField(Pin,"id"),"","Install the saved plugin revision before applying this combination");
+            const xvalue* Pin=xrtValueArrayGet(Pins,I);if(!SdkPluginFind(Current,SdkField(Pin,"id")))SdkPluginIssue(Issues,"missing_plugin",SdkField(Pin,"id"),"","Install the saved plugin before applying this combination");
         }
         for(size_t I=0;I<xrtValueCount(Current);I++){
-            const xvalue* C=xrtValueArrayGet(Current,I),*Pin=SdkPluginFind(Pins,SdkField(C,"id"));xvalue* Change=xrtValueObject();SdkPut(Change,"id",SdkField(C,"id"));xrtValueObjectSetNew(Change,XRT_STR_LITERAL("enabled"),xrtValueBool(Pin&&SdkPluginEnabled(Pin)));if(Pin)SdkPut(Change,"revision",SdkField(Pin,"revision"));xrtValueArrayAppendNew(Changes,Change);
+            const xvalue* C=xrtValueArrayGet(Current,I),*Pin=SdkPluginFind(Pins,SdkField(C,"id"));xvalue* Change=xrtValueObject();SdkPut(Change,"id",SdkField(C,"id"));xrtValueObjectSetNew(Change,XRT_STR_LITERAL("enabled"),xrtValueBool(Pin&&SdkPluginEnabled(Pin)));xrtValueArrayAppendNew(Changes,Change);
         }
         if(xrtValueCount(Issues)){*R=xrtValueObject();xrtValueObjectSetNew(*R,XRT_STR_LITERAL("allowed"),xrtValueBool(false));xrtValueObjectSet(*R,XRT_STR_LITERAL("issues"),Issues);}
         else *R=SdkPluginPlan(Current,Changes,NULL,E);
@@ -80,7 +63,7 @@ static bool SdkPluginPresetCall(cstr Method,const xvalue* P,xvalue** R,mdo_error
     xvalue* NewItems=xrtValueArray();for(size_t I=0;I<xrtValueCount(Items);I++){const xvalue* Row=xrtValueArrayGet(Items,I);if(strcmp(Id,SdkField(Row,"id")))xrtValueArrayAppend(NewItems,Row);}
     if(!Remove){
         xvalue* Row=xrtValueObject(),*Pins=xrtValueArray();SdkPut(Row,"id",Id);SdkPut(Row,"name",Name);
-        for(size_t I=0;I<xrtValueCount(Current);I++){const xvalue* C=xrtValueArrayGet(Current,I);xvalue* Pin=xrtValueObject();SdkPut(Pin,"id",SdkField(C,"id"));SdkPut(Pin,"revision",SdkField(C,"revision"));xrtValueObjectSetNew(Pin,XRT_STR_LITERAL("enabled"),xrtValueBool(SdkPluginEnabled(C)));xrtValueArrayAppendNew(Pins,Pin);}
+        for(size_t I=0;I<xrtValueCount(Current);I++){const xvalue* C=xrtValueArrayGet(Current,I);xvalue* Pin=xrtValueObject();SdkPut(Pin,"id",SdkField(C,"id"));xrtValueObjectSetNew(Pin,XRT_STR_LITERAL("enabled"),xrtValueBool(SdkPluginEnabled(C)));xrtValueArrayAppendNew(Pins,Pin);}
         xrtValueObjectSetNew(Row,XRT_STR_LITERAL("plugins"),Pins);xrtValueArrayAppendNew(NewItems,Row);
     }
     Ok=xrtValueCount(NewItems)<=32&&xrtValueObjectSet(Doc,XRT_STR_LITERAL("items"),NewItems);xrtValueRelease(NewItems);

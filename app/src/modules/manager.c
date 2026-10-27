@@ -589,11 +589,12 @@ static bool MdoModulesDiscover(MdoModuleSource** ppSources, size_t* pCount,
     }
     xvalue* Plugins=MdoApplicationPluginNativeSources();
     for(size_t I=0;I<xrtValueCount(Plugins);I++){
-        const xvalue* Row=xrtValueArrayGet(Plugins,I);cstr Path=MdoPackageText(Row,"path",599);
+        const xvalue* Row=xrtValueArrayGet(Plugins,I);cstr Path=MdoExtensionText(Row,"path",4607);
         if(!Path||!MdoModulesGrow((void**)ppSources,&iCapacity,*pCount+1,sizeof(**ppSources),MDO_MODULE_COUNT_LIMIT)){xrtValueRelease(Plugins);MdoModulesSourcesUnit(*ppSources,*pCount);*ppSources=NULL;*pCount=0;return false;}
         MdoModuleSource* Source=&(*ppSources)[*pCount];memset(Source,0,sizeof(*Source));Source->Kind=MDO_MODULE_TOOLS;Source->External=true;
         Source->VirtualPath=xrtStrDup(Path);Source->RelativePath=xrtStrDup(Path+5);Source->Plugin=xrtValueClone(Row);
-        if(!Source->VirtualPath||!Source->RelativePath||!Source->Plugin){MdoModulesSourceUnit(Source);xrtValueRelease(Plugins);MdoModulesSourcesUnit(*ppSources,*pCount);*ppSources=NULL;*pCount=0;return false;}(*pCount)++;
+        char Why[512];Source->Directory=MdoExtensionsRead("plugins",MdoExtensionText(Row,"directory_id",96),Why);
+        if(!Source->VirtualPath||!Source->RelativePath||!Source->Plugin||!Source->Directory){MdoModulesSourceUnit(Source);xrtValueRelease(Plugins);MdoModulesSourcesUnit(*ppSources,*pCount);*ppSources=NULL;*pCount=0;return false;}(*pCount)++;
     }xrtValueRelease(Plugins);
     if ( *pCount > 1u ) qsort(*ppSources, *pCount, sizeof(**ppSources),
         MdoModulesSourceCompare);
@@ -1897,6 +1898,8 @@ static MdoModuleCatalog* MdoModulesBuildCandidateBody(uint64 Generation,
                 MdoModuleGeneration* G=Old->Modules[J];if(strcmp(G->SourcePath,pSources[i].VirtualPath))continue;
                 size_t Bytes=0;bytes Source=xrtVfsReadAllLimit(MdoHomeApplicationVfs(),pSources[i].VirtualPath,MDO_MODULE_SOURCE_LIMIT,&Bytes);char Hash[65];
                 bool Same=Source&&MdoExtensionHashBytes(Source,Bytes,Hash)&&!strcmp(Hash,G->SourceRevision)&&!xrtAtomic32Load(&G->Stopped,XMEMORY_ACQUIRE);xrtFree(Source);
+                if(Same&&pSources[i].Directory){char Why[512],Digest[65];Same=MdoExtensionsFingerprint(MdoExtensionText(pSources[i].Directory,"kind",32),MdoExtensionText(pSources[i].Directory,"id",96),Digest,NULL,Why)&&!strcmp(Digest,G->DirectoryDigest);}
+                if(!Same){MdoModulesDiagnosticAdd(pDiagnostics,MDO_MODULE_DIAGNOSTIC_VALIDATE,pSources[i].VirtualPath,G->SourceHash,"Active native plugin directory changed; restart the host before loading its replacement");MdoModuleCatalogRelease(Old);goto failed;}
                 if(Same&&MdoModulesGenerationRef(G))pCatalog->Modules[i]=G;break;
             }MdoModuleCatalogRelease(Old);if(pCatalog->Modules[i])continue;}
         pCatalog->Modules[i] = pSources[i].Declarative

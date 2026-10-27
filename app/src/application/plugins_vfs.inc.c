@@ -10,25 +10,27 @@ static xvalue* SdkPluginMapBuild(SdkPlugin* Plugins){
     for(size_t I=0;Ok&&I<MDO_PLUGIN_COUNT;I++){
         const xvalue* M=Plugins[I].Manifest;if(!M||Plugins[I].Error[0])continue;
         cstr Id=SdkField(M,"id"),Revision=SdkField(M,"revision");const xvalue* Files=SdkGet(M,"files"),*Doc=SdkGet(M,"manifest");
+        if(!SdkPluginEnabled(M))continue;
         for(size_t J=0;Ok&&J<xrtValueCount(Files);J++){
             const xvalue* F=xrtValueArrayGet(Files,J);cstr Name=SdkField(F,"path");uint64 Size=0;SdkUInt(SdkGet(F,"bytes"),&Size);
-            char Source[600],Target[600];snprintf(Source,sizeof(Source),"plugins/%s/revisions/%s/files/%s",Id,Revision,Name);
+            bool Directory=false;xrtValueGetBool(SdkGet(F,"directory"),&Directory);if(Directory)continue;
+            char Source[4608],Target[4608];snprintf(Source,sizeof(Source),"plugins/%s/%s",Id,Name);
             snprintf(Target,sizeof(Target),"web/__mdo_plugins/%s/%s/%s",Id,Revision,Name);
             Ok=SdkPluginMapAppend(Map,Target,Source,Id,Revision,Size);
             snprintf(Target,sizeof(Target),"__mdo_plugins/%s/%s/%s",Id,Revision,Name);
             Ok=Ok&&SdkPluginMapAppend(Map,Target,Source,Id,Revision,Size);
         }
         if(!SdkPluginEnabled(M)||Plugins[I].Error[0])continue;
-        const xvalue* Overrides=SdkGet(Doc,"overrides");bool Modern=MdoPluginModern(Doc);
-        for(size_t J=0;Ok&&J<(Modern?xrtValueCount(Overrides):xrtValueCount(Files));J++){
-            const xvalue* O=xrtValueArrayGet(Modern?Overrides:Files,J);cstr Target=SdkField(O,Modern?"target":"path"),Name=SdkField(O,Modern?"source":"path");
+        const xvalue* Overrides=SdkGet(Doc,"overrides");
+        for(size_t J=0;Ok&&J<xrtValueCount(Overrides);J++){
+            const xvalue* O=xrtValueArrayGet(Overrides,J);cstr Target=SdkField(O,"target"),Name=SdkField(O,"source");
             const xvalue* F=MdoPluginFile(Files,Name);uint64 Size=0;SdkUInt(SdkGet(F,"bytes"),&Size);
             for(size_t K=0;Ok&&K<xrtValueCount(Map);K++){
                 const xvalue* Prior=xrtValueArrayGet(Map,K);cstr Other=SdkField(Prior,"id"),P=SdkField(Prior,"target");
                 if(MdoPluginPathOverlap(Target,P))Ok=false;
                 if(!Ok)snprintf(Plugins[I].Error,sizeof(Plugins[I].Error),"File target conflicts with %s: %s",Other,Target);
             }
-            char Source[600];snprintf(Source,sizeof(Source),"plugins/%s/revisions/%s/files/%s",Id,Revision,Name);
+            char Source[4608];snprintf(Source,sizeof(Source),"plugins/%s/%s",Id,Name);
             Ok=Ok&&SdkPluginMapAppend(Map,Target,Source,Id,Revision,Size);
         }
     }
@@ -93,8 +95,8 @@ static const xvfsprovider_v1 SdkPluginProvider={sizeof(xvfsprovider_v1),1,XVFS_P
 
 /* xrt resolves the longest mount prefix first. Bind the same immutable view at
  * the Home application-resource prefix too, above its existing disk mount. */
-static xstrview SdkPluginHomePath(xstrview P,char B[600]){int N=snprintf(B,600,"default-home%s%.*s",P.Size?"/":"",(int)P.Size,P.Data?P.Data:"");return xrtStrViewN(B,N>0&&N<600?(size_t)N:0);}
-static xvfslookup SdkPluginHomeOpen(void* C,xvfscase K,xstrview P,const xfileoptions* O,xvfsfile_v1* F){char B[600];xstrview V=SdkPluginHomePath(P,B);return V.Size?SdkPluginOpen(C,K,V,O,F):XVFS_LOOKUP_MISS;}
-static xvfslookup SdkPluginHomeStat(void* C,xvfscase K,xstrview P,bool Follow,xfileinfo* I){char B[600];xstrview V=SdkPluginHomePath(P,B);return V.Size?SdkPluginStat(C,K,V,Follow,I):XVFS_LOOKUP_MISS;}
-static xvfslookup SdkPluginHomeDir(void* C,xvfscase K,xstrview P,uint32 F,xvfsdir_v1* D){char B[600];xstrview V=SdkPluginHomePath(P,B);return V.Size?SdkPluginDirOpen(C,K,V,F,D):XVFS_LOOKUP_MISS;}
+static xstrview SdkPluginHomePath(xstrview P,char B[4608]){int N=snprintf(B,4608,"default-home%s%.*s",P.Size?"/":"",(int)P.Size,P.Data?P.Data:"");return xrtStrViewN(B,N>0&&N<4608?(size_t)N:0);}
+static xvfslookup SdkPluginHomeOpen(void* C,xvfscase K,xstrview P,const xfileoptions* O,xvfsfile_v1* F){char B[4608];xstrview V=SdkPluginHomePath(P,B);return V.Size?SdkPluginOpen(C,K,V,O,F):XVFS_LOOKUP_MISS;}
+static xvfslookup SdkPluginHomeStat(void* C,xvfscase K,xstrview P,bool Follow,xfileinfo* I){char B[4608];xstrview V=SdkPluginHomePath(P,B);return V.Size?SdkPluginStat(C,K,V,Follow,I):XVFS_LOOKUP_MISS;}
+static xvfslookup SdkPluginHomeDir(void* C,xvfscase K,xstrview P,uint32 F,xvfsdir_v1* D){char B[4608];xstrview V=SdkPluginHomePath(P,B);return V.Size?SdkPluginDirOpen(C,K,V,F,D):XVFS_LOOKUP_MISS;}
 static const xvfsprovider_v1 SdkPluginHomeProvider={sizeof(xvfsprovider_v1),1,XVFS_PROVIDER_STAT|XVFS_PROVIDER_DIRECTORY,NULL,NULL,SdkPluginHomeOpen,SdkPluginHomeStat,SdkPluginHomeDir,NULL};
