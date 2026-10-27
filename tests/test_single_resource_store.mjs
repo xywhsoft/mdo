@@ -38,3 +38,10 @@ test("store managed items cannot be published or accept old JSON import packages
  const restore=environment();let requests=0;const api={post:async()=>{requests++;throw Error("No request expected");}};
  let store;try{const {createSingleResourceStore}=await loadStore(api);store=createSingleResourceStore("mcp",()=>{});await store.publish({id:"store-id",source:"store",editable:false});assert.equal(requests,0);await assert.rejects(store.importPackage({manifest:{kind:"mcp"},resources:[]}),/ZIP/);}finally{store?.destroy();restore();}
 });
+
+test("store updates carry the inspected directory fingerprint and preserve its activation state",async()=>{
+ const restore=environment(),writes=[],row={kind:"skills",xid:"work-xid",version_id:"new-version",name:"Updated skill",manifest:{},state:"published"};
+ const previous={kind:"skills",id:row.xid,source:"store",enabled:false,revision:"d".repeat(64),installation:{version_id:"old-version"}};
+ const api={get:async path=>({data:path==="/ecosystem"?{[row.xid]:previous}:previous}),post:async(path,body)=>{if(path.includes("/install")){writes.push(body);return{data:{}};}if(body.action==="catalog")return{data:{items:[row],total:1}};if(body.action==="detail")return{data:row};if(body.action==="files")return{data:{items:[],total:0}};if(body.action==="download")return{data:{id:"0123456789ABCDEFGHJKMNPQRSTVWXYZ"}};throw Error("Unexpected request");}};
+ let store;try{store=(await loadStore(api)).createSingleResourceStore("skills",()=>{});store.activate(true);await flush();descendants(store.root).find(n=>n.tagName==="BUTTON"&&n.textContent==="更新").click();await flush();const view=document.body.querySelector("dialog");descendants(view).find(n=>n.tagName==="BUTTON"&&n.textContent==="下载并安装").click();await flush();assert.equal(writes.length,1);assert.equal(writes[0].expected_revision,previous.revision);assert(!Object.hasOwn(writes[0],"enabled"));}finally{store?.destroy();restore();}
+});

@@ -15,10 +15,12 @@ function environment(t) {
 test("custom external tool forms use shared fixed actions, retain failed input and reject duplicate/late saves",async t=>{
   const restore=environment(t);let target=null,gate,fail=false;const calls=[];
   let state={writable:true,platform:"windows-x86_64",revision:8,guide:"accepted",items:[],tasks:[],store:{items:[]}};
-  globalThis.__authoringExternal={targetState:()=>({selected:target,connected:true}),api:{post:async(_,body)=>{
-    calls.push(body);if(gate)await gate;if(fail)throw Error("Fixture save failed");return {data:state};
-  }}};
-  const url=new URL("../app/web/js/features/notifications/external-tools.js",import.meta.url);
+  globalThis.__authoringExternal={targetState:()=>({selected:target,connected:true}),api:{get:async()=>({data:state})}};
+  t.mock.method(globalThis,"fetch",async(url,options)=>{
+    if(url==="/api/v1/application/call") {const body=JSON.parse(options.body);if(body.method==="operation.start"){calls.push(body.params);if(gate)await gate;if(fail)return Response.json({ok:false,error:{message:"Fixture save failed"}},{status:403});return Response.json({ok:true,data:{id:"sdk-"+"1".repeat(32),terminal:true,state:"succeeded"}});}return Response.json({ok:true,data:{}});}
+    return Response.json({ok:true,data:{items:[]}});
+  });
+  const url=new URL("../app/web/js/features/notifications/external-directory-tools.js",import.meta.url);
   const source=readFileSync(url,"utf8")
     .replace('import { api } from "../../api/client.js";',"const {api}=globalThis.__authoringExternal;")
     .replace('import { targetState } from "../../api/target.js";',"const {targetState}=globalThis.__authoringExternal;")
@@ -26,19 +28,19 @@ test("custom external tool forms use shared fixed actions, retain failed input a
   const {createExternalToolsPanel}=await import("data:text/javascript;base64,"+Buffer.from(source).toString("base64"));
   const panel=createExternalToolsPanel({refresh:async()=>{},signedIn:()=>true}),root=new TestElement("div");document.body.append(root);
   t.after(()=>{panel.destroy();delete globalThis.__authoringExternal;restore();});
-  const open=()=>button(root,"Add custom tool").click(),dialog=()=>document.body.querySelector("dialog");
+  const open=()=>button(root,"添加自定义工具").click(),dialog=()=>document.body.querySelector("dialog");
   panel.render(root,state);open();const first=dialog(),form=first.querySelector("form"),footer=first.querySelector("footer");
   assert(first.classList.contains("mdo-layer"));assert(!form.contains(footer));assert.equal(footer.firstChild.getAttribute("form"),form.id);
-  for(const input of form.elements)if(input.name)input.value=({name:"My CLI",path:"D:/tools/cli.exe",description:"Human description",prompt:"Model instructions"})[input.name]||input.value;
-  fail=true;submit(form);await flush();assert.equal(dialog(),first);assert.equal(form.querySelector("input").value,"My CLI");assert(first.textContent.includes("Fixture save failed"));
+  for(const input of form.elements)if(input.name)input.value=({id:"my-cli",name:"My CLI",directory:"D:/tools",program:"cli.exe",description:"Human description",prompt:"Model instructions"})[input.name]||input.value;
+  fail=true;submit(form);await flush();assert.equal(dialog(),first);assert.equal(form.querySelector("input").value,"my-cli");assert(first.textContent.includes("Fixture save failed"));
   fail=false;let release;gate=new Promise(resolve=>{release=resolve;});submit(form);submit(form);await flush();assert.equal(calls.length,2);
   first.dispatchEvent(new Event("cancel",{cancelable:true}));await flush();assert.equal(dialog(),first);assert(footer.firstChild.disabled);
   // Forced owner teardown can happen during a write. A late response cannot close a replacement form.
   panel.reset();target={id:"next",mode:"control"};panel.render(root,state);open();const replacement=dialog();release();await flush();assert.equal(dialog(),replacement);
-  assert.equal(calls[1].revision,8);assert.equal(calls[1].tool.description,"Human description");assert.equal(calls[1].tool.prompt,"Model instructions");
+  assert.equal(calls[1].method,"extension.import");assert.equal(calls[1].params.directory,"D:/tools");assert.equal(calls[1].params.manifest.description,"Human description");assert.equal(JSON.parse(calls[1].params.entry_text).prompt,"Model instructions");assert.equal(calls[1].params.enabled,false);
   submit(form);await flush();assert.equal(calls.length,2);
   replacement.querySelector("footer").lastChild.click();await flush();assert(!dialog());
-  target=null;gate=null;panel.reset();panel.render(root,state);open();submit(dialog().querySelector("form"));await flush();assert(!dialog(),"Successful save closes only its form");
+  target=null;gate=null;panel.reset();panel.render(root,state);open();for(const input of dialog().querySelector("form").elements)if(input.name)input.value=({id:"second-cli",name:"My CLI",directory:"D:/tools",program:"cli.exe",description:"Human description",prompt:"Model instructions"})[input.name]||input.value;submit(dialog().querySelector("form"));await flush();assert(!dialog(),"Successful save closes only its form");
 });
 
 test("Skill and C tool editors keep validation and save recovery inside shared body with bottom actions",async t=>{

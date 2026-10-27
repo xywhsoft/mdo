@@ -5,7 +5,7 @@ import { buildNotices } from "./model.js";
 import { createNoticeIndicators } from "./indicator.js";
 import { openLayer } from "../../components/layers.js";
 import { createNoticePreferences } from "./preferences.js";
-import { createExternalToolsPanel } from "./external-tools.js";
+import { createExternalToolsPanel } from "./external-directory-tools.js";
 import { createToolPanel } from "./tool-panel.js";
 import { createWarningPanel } from "./warning-panel.js";
 

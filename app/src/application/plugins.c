@@ -107,6 +107,7 @@ xvalue* MdoApplicationPluginsCatalog(void){xvalue* A=xrtValueArray();for(size_t 
 static xvalue* SdkPluginList(void){
  xvalue* R=xrtValueObject(),*Items=xrtValueArray();xrtMutexLock(SdkPlugins.Lock);
  for(size_t I=0;I<32;I++)if(SdkPlugins.Plugins[I].Manifest){xvalue* M=xrtValueClone(SdkPlugins.Plugins[I].Manifest);SdkPut(M,"error",SdkPlugins.Plugins[I].Error);const xvalue* Active=SdkPluginFind(SdkPlugins.Effective,SdkField(M,"id"));
+  SdkPutUInt(M,"file_count",xrtValueCount(SdkGet(M,"files")));xrtValueObjectRemove(M,XRT_STR_LITERAL("files"));
   xrtValueObjectSetNew(M,XRT_STR_LITERAL("effective_enabled"),xrtValueBool(Active&&SdkPluginEnabled(Active)));SdkPut(M,"effective_revision",Active?SdkField(Active,"revision"):"");SdkPut(M,"state",SdkPlugins.Plugins[I].Error[0]?"failed":SdkPlugins.Recovery?"recovery":SdkPlugins.Pending?"pending":SdkPluginEnabled(M)?"enabled":"disabled");xrtValueArrayAppendNew(Items,M);}
  xrtValueObjectSetNew(R,XRT_STR_LITERAL("items"),Items);xrtValueObjectSetNew(R,XRT_STR_LITERAL("pending"),xrtValueBool(SdkPlugins.Pending));xrtValueObjectSetNew(R,XRT_STR_LITERAL("restart_required"),xrtValueBool(SdkPlugins.Recovery||SdkPluginNativeChanged(SdkPlugins.Effective,SdkPlugins.Config)));xrtValueObjectSetNew(R,XRT_STR_LITERAL("recovery_mode"),xrtValueBool(SdkPlugins.Recovery));xrtMutexUnlock(SdkPlugins.Lock);return R;
 }

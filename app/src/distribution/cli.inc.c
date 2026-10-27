@@ -33,8 +33,7 @@ static xvalue* CliDirectoryItems(char Error[512])
             Present=false;memset(&Info,0,sizeof(Info));Valid=CommandPath&&MdoHomeExternalStat(CommandPath,&Present,&Info)&&Present&&Info.Type==XFILE_TYPE_FILE&&Info.Size;
             if(!Valid)snprintf(Why,sizeof(Why),"Command target is missing or not a regular file: %.400s",Target);xrtFree(CommandPath);
         }
-        const xvalue* Platforms=xrtValueObjectGet(Meta,XRT_STR_LITERAL("platforms"));bool Supported=false;
-        for(size_t J=0;J<xrtValueCount(Platforms);J++){xstrview P={0};if(xrtValueGetString(xrtValueArrayGet(Platforms,J),&P)&&(xrtStrEqual(P,XRT_STR_LITERAL("any"))||xrtStrEqual(P,xrtStrView(MdoToolPlatform()))))Supported=true;}
+        bool Supported=MdoExtensionSupportsPlatform(Meta,MdoExtensionRuntimePlatform());
         Valid=Valid&&Supported;
         Ok=Row&&CliSet(Row,"id",Id)&&CliSet(Row,"managed_root",Root)&&CliSet(Row,"platform",MdoToolPlatform())&&
             CliSet(Row,"entry",Program)&&CliSet(Row,"path",Native?Native:"")&&CliSet(Row,"relative_path",Relative?Relative:"")&&
@@ -88,8 +87,6 @@ bool MdoCliCommand(const xvalue* Input,char* Error,size_t Capacity)
     xrtMutexLock(g_MdoCli.Lock);
     if(!g_MdoCli.Writable||g_MdoCli.Stopping)snprintf(Why,sizeof(Why),"External tool command registry is unavailable");
     else if(!strcmp(Action,"reload")||!strcmp(Action,"refresh"))Ok=CliReloadLocked(Why);
-    else if(!strcmp(Action,"enable")){bool Enabled=CliBool(Input,"enabled",true);Ok=MdoExtensionsSetEnabled("external-tools",Id,Enabled,Why)&&CliReloadLocked(Why);}
-    else if(!strcmp(Action,"remove")){xvalue* Removed=NULL;Ok=MdoExtensionsRemove("external-tools",Id,&Removed,Why);xrtValueRelease(Removed);if(Ok)Ok=CliReloadLocked(Why);}
     else if(!strcmp(Action,"dismiss")||!strcmp(Action,"accept")){Ok=CliSet(g_MdoCli.State,"guide",!strcmp(Action,"dismiss")?"dismissed":"accepted")&&CliSave();}
     else snprintf(Why,sizeof(Why),"Use the common extension directory and ZIP task APIs for creation, downloads and publication");
     if(!Ok&&Error&&Capacity)snprintf(Error,Capacity,"%s",Why[0]?Why:g_MdoCli.BindingError);xrtMutexUnlock(g_MdoCli.Lock);return Ok;

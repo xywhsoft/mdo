@@ -39,6 +39,7 @@ bool MdoExtensionsManage(const xvalue* Input,const xvalue* Credits,xcancel* Canc
  bool Ok=false,Trust=MdoExtOpBool(Input,"trust_code",false),WasEnabled=false,Suspended=false;char RuntimeError[512]={0};xvalue* Before=MdoExtOpItem(Kind,Id,RuntimeError);
  if(Before)WasEnabled=MdoExtOpBool(Before,"enabled",false);
  cstr Source=MdoExtensionText(Before,"source",16);
+ if(Install&&Before&&Source&&strcmp(Source,"store")&&MdoExtensionText(Credits,"source",16)&&!strcmp(MdoExtensionText(Credits,"source",16),"store")){MdoExtOpFailure(Error,"A local extension already owns this directory identity; store installation will not overwrite it");goto done;}
  if((Edit||(Save&&Before))&&(!Before||!Source||strcmp(Source,"manual"))){MdoExtOpFailure(Error,"Only locally authored manual extensions can be edited");goto done;}
  if((Import||Install)&&Source&&!strcmp(Source,"store")){cstr NewSource=MdoExtensionText(Credits,"source",16);if(!NewSource||strcmp(NewSource,"store")){MdoExtOpFailure(Error,"Managed store installations can only be replaced with a verified store update");goto done;}}
  if(!Before&&!Create&&!Save&&!Import&&!Install){MdoExtOpFailure(Error,"Extension directory is not installed");goto done;}
@@ -56,7 +57,7 @@ bool MdoExtensionsManage(const xvalue* Input,const xvalue* Credits,xcancel* Canc
  }
  if(Create){cstr Text=MdoExtensionText(Input,"entry_text",1048576);Ok=MdoExtensionsCreate(Kind,Id,xrtValueObjectGet(Input,XRT_STR_LITERAL("manifest")),Text,Text?strlen(Text):0,Trust,Result,Error);}
  else if(Save)Ok=MdoExtensionsSave(Kind,Id,xrtValueObjectGet(Input,XRT_STR_LITERAL("manifest")),xrtValueObjectGet(Input,XRT_STR_LITERAL("edits")),Expected?Expected:"",Trust,Cancel,Result,Error);
- else if(Import)Ok=MdoExtensionsImportDirectoryManifest(Kind,Id,MdoExtensionText(Input,"directory",4096),xrtValueObjectGet(Input,XRT_STR_LITERAL("manifest")),Expected?Expected:"",Trust,Cancel,Result,Error);
+ else if(Import)Ok=MdoExtensionsImportDirectoryEntry(Kind,Id,MdoExtensionText(Input,"directory",4096),xrtValueObjectGet(Input,XRT_STR_LITERAL("manifest")),MdoExtensionText(Input,"entry_text",1048576),Expected?Expected:"",Trust,Cancel,Result,Error);
  else if(Install){xvalue* Provenance=Credits?xrtValueClone(Credits):xrtValueObject();Ok=Provenance!=NULL;if(!Credits)Ok=Ok&&MdoExtOpPut(Provenance,"source","manual");
   Ok=Ok&&MdoExtOpPut(Provenance,"expected_revision",Expected?Expected:"")&&MdoExtensionsInstall(Kind,Id,MdoExtensionText(Input,"archive",4096),Provenance,Trust,Cancel,Result,Error);xrtValueRelease(Provenance);}
  else if(Remove)Ok=MdoExtensionsRemove(Kind,Id,Result,Error);

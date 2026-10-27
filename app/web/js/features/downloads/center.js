@@ -64,9 +64,10 @@ export function createDownloadCenter({ updatePanel, navigation, registry = downl
       const controls = node("div", null, "download-actions");
       if (row.source === "archive") {
         if (!["complete", "cancelled", "expired"].includes(row.state)) controls.append(action(row, text("cancel"), () => transport.delete(`/extension-tasks/${row.taskId}`)));
-        if (row.state === "ready" && row.action === "install") controls.append(action(row, "安装", () => {
+        if (row.state === "ready" && row.action === "install") controls.append(action(row, "安装", async () => {
           if (!confirm("已检查归档内容并信任其来源，允许安装此扩展？")) return;
-          return transport.post(`/extension-tasks/${row.taskId}/install`, { trust_code: true, ...(row.store ? {} : { id: row.directoryId || `import-${row.taskId}` }) });
+          let previous=null;if(row.store){try{previous=(await transport.get(`/extensions/${row.kind}/${encodeURIComponent(row.store.xid)}`)).data;}catch(e){if(e.status!==404)throw e;}}
+          return transport.post(`/extension-tasks/${row.taskId}/install`, { trust_code: true, expected_revision:previous?.revision||"",...(row.store ? {} : { id: row.directoryId || `import-${row.taskId}` }) });
         }));
         if (row.state === "ready" && row.publication) controls.append(action(row, text("retry"), () => {
           const { upload, nonce, proof_upload, ...metadata } = row.publication;

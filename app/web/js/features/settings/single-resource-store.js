@@ -15,7 +15,7 @@ export const singleResource = (row, kind) => (row?.kind || row?.manifest?.kind) 
 
 // All types share real directory archives. No resource bodies or files are
 // reconstructed from catalog JSON; text previews request one selected file.
-export function createSingleResourceStore(kind, onChange, onBrowse=()=>{}, onManage=null) {
+export function createSingleResourceStore(kind, onChange, onBrowse=()=>{}, onManage=null, policy={}) {
   if (!names[kind]) throw Error("Unsupported extension type");
   const root=text("div","","single-resource-store"),statusRoot=element("p",{className:"extension-help",attrs:{role:"status"}});
   const browser=createExtensionBrowser({kind,onClose:()=>{++detailEpoch;detailAbort?.abort();}});
@@ -57,9 +57,10 @@ export function createSingleResourceStore(kind, onChange, onBrowse=()=>{}, onMan
       if(data.manifest?.readme){const readme=await call({action:"preview",version_id:key,path:data.manifest.readme},signal);if(!valid())return;if(!readme.binary)description.append(renderSourceMarkdown(readme.text));}
       const files=text("div",""),tabs=detailTabs([{id:"description",label:"说明",content:description},{id:"files",label:"源码与文件",content:files}]);browser.showDetail(key,tabs);void filesView(data,files,signal,valid);
       let trusted=!["agents","subagents","tools","commands","mcp","plugins","external-tools"].includes(kind);const same=owned(data)?.installation?.version_id===key;
-      const install=button(same?"已安装":"下载并安装",async()=>{if(!valid()||!trusted||busy||same)return;busy=true;install.disabled=true;try{
+      const install=button(same?"已安装":policy.installLabel?.()||"下载并安装",async()=>{if(!valid()||!trusted||busy||same)return;if(policy.beforeInstall&&!await policy.beforeInstall())return;busy=true;install.disabled=true;try{
+        let previous=null;try{previous=(await api.get(`/extensions/${kind}/${encodeURIComponent(data.xid)}`,{signal})).data;}catch(e){if(e.status!==404)throw e;}
         const task=await call({action:"download",version_id:key},signal);if(!valid())return;
-        await api.post(`/extension-tasks/${task.id}/install`,{trust_code:trusted,enabled:kind!=="plugins"},{signal});if(!valid())return;browser.closeDetail();onChange();busy=false;await load();
+        await api.post(`/extension-tasks/${task.id}/install`,{trust_code:trusted,expected_revision:previous?.revision||"",...(!previous?{enabled:kind!=="plugins"}:{})},{signal});if(!valid())return;browser.closeDetail();onChange();busy=false;await load();
       }catch(e){if(valid()&&e.name!=="AbortError")report(e);}finally{busy=false;install.disabled=same||!trusted;}},true);install.disabled=same||!trusted;
       if(!trusted){const check=element("input",{attrs:{type:"checkbox"}});check.addEventListener("change",()=>{trusted=check.checked;install.disabled=!trusted||same;});description.append(element("label",{className:"store-code-consent"},[check,text("span","我已检查文件并信任作者，允许此扩展在设备上运行。") ]));}
       browser.setActions(key,install,button("关闭",()=>browser.closeDetail()));
@@ -87,6 +88,7 @@ export function createSingleResourceStore(kind, onChange, onBrowse=()=>{}, onMan
   }
   function localActions(receipt){if(receipt?.source!=="store"||receipt.kind!==kind)return[];return[button("检查商店更新",()=>{query=receipt.alias||receipt.name||"";void load();onBrowse();})];}
   async function importPackage(file){
+    if(policy.beforeInstall&&!await policy.beforeInstall())return;
     if(!(file instanceof Blob))throw Error("请选择整个扩展目录的 ZIP 文件；JSON 包已停止支持");const view=modal(`导入${names[kind]} ZIP`);if(!view)return;const message=text("p",`${file.name||"extension.zip"} · ${file.size} B`),identity=element("input",{attrs:{maxlength:"96",placeholder:"本机目录名称"}}),trust=element("input",{attrs:{type:"checkbox"}});view.body.append(message,identity,element("label",{},[trust,text("span","我已检查此 ZIP 并信任其内容") ]));
     const install=button("导入",async()=>{if(saving||!trust.checked)return;if(!/^[A-Za-z0-9_-][A-Za-z0-9._-]{0,95}$/.test(identity.value.trim()))throw Error("请填写有效的本机目录名称");saving=true;install.disabled=true;try{const task=await stageExtensionFile(file,{kind,signal:view.signal});await api.post(`/extension-tasks/${task.id}/install`,{id:identity.value.trim(),trust_code:true,enabled:false},{signal:view.signal});saving=false;close(true);onChange();await load();}catch(e){message.textContent=errorMessage(e);}finally{saving=false;install.disabled=false;}},true);view.footer.append(install,button("取消",()=>view.close()));
   }

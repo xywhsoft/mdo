@@ -6,15 +6,13 @@ import { saveBlobFile } from "../../utils/file-download.js";
 import { openLayer } from "../../components/layers.js";
 import { createExtensionBrowser, extensionToggle, actionMenu, detailFacts, detailTabs } from "../../components/extension-browser.js";
 import { createSingleResourceStore } from "./single-resource-store.js";
-import { resourceReferences } from "./store-formats.js";
+import { createDirectoryEditor } from "./directory-editor.js";
+import { directoryManifest, changeDirectory } from "./directory-documents.js";
 import { resourceCredits } from "./resource-credits.js";
 
 const node = (tag, text = "", className = "") => element(tag, { text, className });
 const button = (text, run, primary = false) => { const b = element("button", { text, className: primary ? "primary-button" : "secondary-button", attrs: { type: "button" } }); b.addEventListener("click", () => { Promise.resolve().then(run).catch(e => { if(e?.name!=="AbortError") toast(errorMessage(e),"error"); }); }); return b; };
 const target = () => targetState().selected?.id || "local";
-const encode = bytes => { let result = ""; for (let i = 0; i < bytes.length; i += 32768) result += String.fromCharCode(...bytes.subarray(i, i + 32768)); return btoa(result); };
-const decode = text => Uint8Array.from(atob(text), c => c.charCodeAt(0));
-const textOf = bytes => { try { if (bytes.includes(0)) return null; return new TextDecoder("utf-8", { fatal: true }).decode(bytes); } catch { return null; } };
 const statusText = { enabled: "已启用", disabled: "已停用", failed: "加载失败", recovery: "恢复模式", pending: "等待生效" };
 const slotName = key => ({ "mdo.agent.default-orchestrator": "默认 Agent 编排", "mdo.ui.chat-layout": "对话布局接管" })[key] || key;
 const defaultScript = "export function activate(sdk) {\n  // 使用 sdk.ui 注册面板、菜单和快捷键；可以返回清理函数。\n  return () => {};\n}\n";
@@ -30,8 +28,9 @@ export function createPluginWorkbench(root) {
   const call = async (method, params = {}, own = epoch) => { if (!current(own)) throw new DOMException("Device changed", "AbortError"); const result = await sdk.call(method, params); if (!current(own)) throw new DOMException("Device changed", "AbortError"); return result; };
   const changed = () => { window.dispatchEvent(new CustomEvent("mdo-plugins-changed")); if (active) void load(); };
   const store = createSingleResourceStore("plugins", changed, () => { area = "store"; render(); }, async () => { area = "local"; await load(); });
-  const receipt = item => Object.values(receipts).find(row => resourceReferences(row).some(r => r.kind === "plugins" && r.id === item.id));
-  const editable = item => ownershipKnown && item.source !== "store" && (!receipt(item) || receipt(item).source === "local");
+  const receipt = item => receipts[`plugins:${item.id}`]||null;
+  const editable = item => ownershipKnown && item.source === "manual";
+  const directoryEditor=createDirectoryEditor({owner:root,onChange:changed});
   const showError = e => { if (e.name !== "AbortError") toast(errorMessage(e), "error"); };
   const layer = options => {
     const own = epoch; let view;
@@ -51,41 +50,9 @@ export function createPluginWorkbench(root) {
     } catch (e) { if (current(own) && e.name !== "AbortError") { ownershipKnown = false; error = errorMessage(e); } }
     if (current(own)) render();
   }
-  async function fileBytes(item, path, maximum = 64 * 1024 * 1024) {
-    const own = epoch, file = item.files.find(f => f.path === path);
-    if (!file || file.bytes > maximum) throw Error("文件超过本次查看或编辑的大小限制");
-    const bytes = new Uint8Array(file.bytes); let offset = 0;
-    while (offset < bytes.length) {
-      const chunk = await call("plugin.file.read", { id: item.id, revision: item.revision, path, offset, limit: 65536 }, own), part = decode(chunk.base64);
-      if (!part.length || chunk.next !== offset + part.length || chunk.total !== bytes.length || chunk.next > bytes.length) throw Error("插件文件返回了无效的范围");
-      bytes.set(part, offset); offset = chunk.next;
-    }
-    const digest=[...new Uint8Array(await crypto.subtle.digest("SHA-256",bytes))].map(b=>b.toString(16).padStart(2,"0")).join("");
-    if(!current(own))throw new DOMException("Device changed","AbortError");
-    if(digest!==file.sha256)throw Error("插件文件摘要已改变，请重新检查该修订");return bytes;
-  }
-  async function inspectFile(item, file) {
-    const d = layer({ title: file.path, width: "64rem" }); d.body.append(node("p", "正在读取…"));
-    d.footer.append(button("下载文件",async()=>{const bytes=await fileBytes(item,file.path);await saveBlobFile({blob:new Blob([bytes]),filename:file.path.split("/").at(-1)});}),button("关闭",()=>d.close("close")));
-    if(file.bytes>1024*1024){d.body.replaceChildren(node("p","此文件超过 1 MiB，请下载后查看。"));return;}
-    try {
-      const bytes = await fileBytes(item, file.path, 1024 * 1024); if (!d.isCurrent()) return;
-      const text = textOf(bytes); d.body.replaceChildren(text === null ? node("p", "二进制文件，请下载后查看。") : node("pre", text, "store-source"));
-
-    } catch (e) { if (d.isCurrent()) d.body.replaceChildren(node("p", errorMessage(e), "extension-error")); }
-
-  }
-  async function compare(item){
-    const d=layer({title:"对比上一修订",width:"64rem"});d.body.append(node("p","正在读取修订…"));d.footer.append(button("关闭",()=>d.close("close")));
-    try{
-      const previous=await call("plugin.get",{id:item.id,revision:item.previous});if(!d.isCurrent())return;
-      d.body.replaceChildren(node("pre",JSON.stringify({previous:previous.manifest,current:item.manifest},null,2),"store-source"));
-      const paths=[...new Set([...(previous.files||[]),...(item.files||[])].map(f=>f.path))];let count=0;
-      for(const path of paths){const before=previous.files.find(f=>f.path===path),after=item.files.find(f=>f.path===path);if(before?.sha256===after?.sha256)continue;count++;
-        const row=element("section",{className:"warning-entry"},[node("h4",path),node("p",!before?"新增":!after?"删除":"内容改变")]);
-        if(before)row.append(button("查看旧文件",()=>inspectFile(previous,before)));if(after)row.append(button("查看当前文件",()=>inspectFile(item,after)));d.body.append(row);
-      }if(!count)d.body.append(node("p","文件内容相同；清单或兼容声明发生变化。"));
-    }catch(e){if(d.isCurrent())d.body.replaceChildren(node("p",errorMessage(e),"extension-error"));}
+  async function inspectFile(item,file){
+    const d=layer({title:file.path,width:"64rem"});d.footer.append(button("关闭",()=>d.close()));
+    try{const data=(await api.get(`/extensions/plugins/${encodeURIComponent(item.id)}/file?path=${encodeURIComponent(file.path)}`,{signal:d.signal})).data;if(d.isCurrent())d.body.append(node("pre",data.binary?"二进制或超过预览上限，请导出完整 ZIP 查看。":data.text,"store-source"));}catch(e){if(d.isCurrent())d.body.append(node("p",errorMessage(e),"extension-error"));}
   }
   async function details(item) {
     const own = epoch, id = item.id;
@@ -97,13 +64,10 @@ export function createPluginWorkbench(root) {
       for (const f of full.files || []) { const targets = spec?.overrides?.filter(r => r.source === f.path).map(r => r.target) || []; files.append(element("div", { className: "resource-actions" }, [button(f.path, () => inspectFile(full, f)), node("small", `${f.bytes.toLocaleString()} 字节${targets.length ? ` → ${targets.join(" / ")}` : " · 插件私有文件"}`)])); }
       const relations = node("div"); relations.append(node("h4", "独占功能"), node("p", (spec?.exclusive || []).map(slotName).join("、") || "无"));
       for (const [key, title] of [["requires", "必需插件"], ["conflicts", "明确冲突"]]) {
-        relations.append(node("h4", title)); for (const r of spec?.[key] || []) relations.append(node("p", `${r.id} · ${r.min_version ? `≥ ${r.min_version}` : ""} ${r.max_version_exclusive ? `< ${r.max_version_exclusive}` : ""} ${r.reason || ""}`));
+        relations.append(node("h4", title)); for (const r of spec?.[key] || []) relations.append(node("p", `${r.id} · ${r.reason || ""}`));
       }
       const users = data.items.filter(r => r.manifest?.requires?.some(dep => dep.id === id)); relations.append(node("h4", "被以下插件依赖"), node("p", users.map(r => r.manifest.name).join("、") || "无"));
-      const versions = element("div", {}, [node("p", `当前版本：${spec?.version || "旧格式"}`), node("p", full.previous ? `保留的上一修订：${full.previous}` : "没有上一修订")]);
-      if(full.previous)versions.append(button("对比上一修订",()=>compare(full)));
-      if (editable(item) && full.previous) versions.append(button("回滚到上一修订", () => review([{ id, revision: full.previous }], "回滚插件")));
-      browser.showDetail(id, detailTabs([{ id: "description", label: "说明", content: description }, { id: "files", label: "文件与入口", content: files }, { id: "relations", label: "兼容关系", content: relations }, { id: "versions", label: "版本", content: versions }]));
+      browser.showDetail(id,detailTabs([{id:"description",label:"说明",content:description},{id:"files",label:"文件与入口",content:files},{id:"relations",label:"依赖与冲突",content:relations}]));
     } catch (e) { if (current(own) && browser.isSelected(id)) browser.showDetail(id, node("p", errorMessage(e), "extension-error")); }
   }
   async function toggle(item){
@@ -149,85 +113,10 @@ export function createPluginWorkbench(root) {
     const input = element(area ? "textarea" : "input", { attrs: { type: area ? null : "text", spellcheck: "false", autocomplete: "off" } }); input.value = value;
     form.append(element("label", { className: "extension-field" }, [node("span", text), input])); return input;
   }
-  async function edit(item = null, imported = null) {
-    if (editor || busy) return; busy = true;
-    try {
-      const full = item ? await call("plugin.get", { id: item.id }) : null;
-      if (item && !editable(item)) throw Error("商店插件不支持编辑或再次分享");
-      if (full && !full.manifest) throw Error("旧格式插件请先从原项目整理为 plugin.json 后导入；原文件和历史记录会保留。");
-      const spec = structuredClone(imported?.manifest || full?.manifest || { format: "mdo.plugin.v1", id: "my-plugin", name: "我的插件", version: "1.0.0", description: "", license: "MIT" });
-      let files = imported?.files?.map(f => ({ ...f })) || full?.files.map(f => ({ path: f.path, bytes: f.bytes, sha256: f.sha256, original: true })) || [], saving = false, dirty = false, reading = 0;
-      const d = layer({ title: item ? "编辑插件" : "新建插件", width: "64rem", beforeClose: () => !saving && (!dirty || confirm("放弃未保存的插件修改？")), onClosed() { if (editor === d) editor = null; } }); editor = d;
-      const form = element("form", { className: "extension-form plugin-editor extension-authoring" }), fields = {};
-      for (const [key, name] of [["id", "插件 ID"], ["name", "名称"], ["version", "版本"], ["description", "简介"], ["author", "作者"], ["copyright", "版权声明"], ["license", "许可"]]) fields[key] = field(form, name, spec[key] || "", ["description", "copyright"].includes(key));
-      fields.id.disabled = Boolean(item);
-      const fileList = node("div"), frontend = field(form, "前端入口（可选，插件内 .js 路径）", spec.entry?.frontend || ""), native = field(form, "原生入口（可选，插件内 .c 路径）", spec.entry?.native || "");
-      const exclusive = field(form, "独占功能标记（每行一个，只有接管默认行为才需要）", (spec.exclusive || []).join("\n"), true);
-      const relations = field(form, "依赖与冲突（JSON，包含 requires 和 conflicts 数组）", JSON.stringify({ requires: spec.requires || [], conflicts: spec.conflicts || [] }, null, 2), true);
-      const mappings = new Map((spec.overrides || []).map(r => [r.source, r.target]));
-      const message = node("p", "", "extension-help"), picker = element("input", { attrs: { type: "file", multiple: "" } }); picker.hidden = true;
-      const add = file => { if (files.some(f => f.path === file.path)) throw Error(`文件已存在：${file.path}`); files.push(file); dirty = true; drawFiles(); };
-      function drawFiles() {
-        fileList.replaceChildren(node("h3", "插件文件"));
-        for (const file of files) {
-          const row = node("div", "", "extension-field"); row.append(node("strong", file.path));
-          const destination = element("input", { attrs: { type: "text", placeholder: "应用覆盖目标；留空则为插件私有文件", "aria-label": `${file.path} 的覆盖目标` } }); destination.value = mappings.get(file.path) || "";
-          destination.addEventListener("input", () => { dirty = true; const value = destination.value.trim(); if (value) mappings.set(file.path, value); else mappings.delete(file.path); });
-          row.append(destination, element("div", { className: "resource-actions" }, [button("查看 / 编辑", () => editFile(file)), button("移除", () => { files = files.filter(f => f !== file); mappings.delete(file.path); dirty = true; drawFiles(); })])); fileList.append(row);
-        }
-      }
-      async function editFile(file) {
-        const f = layer({ title: file.path, width: "64rem" }); f.body.append(node("p", "正在读取…"));
-        try {
-          if(file.bytes>1024*1024){f.body.replaceChildren(node("p","此文件超过编辑预览大小，可移除后重新添加替换。"));f.footer.append(button("关闭",()=>f.close("close")));return;}
-          const bytes = file.data || (file.original ? await fileBytes(full, file.path) : new Uint8Array()); if (!f.isCurrent()) return;
-          const text = textOf(bytes);
-          if (text === null || bytes.length > 1024 * 1024) { f.body.replaceChildren(node("p", "此文件以二进制或大文件管理，可移除后重新添加替换。")); f.footer.append(button("关闭", () => f.close("close"))); return; }
-          const input = element("textarea", { className: "extension-source", attrs: { spellcheck: "false", "aria-label": file.path } }); input.value = text; f.body.replaceChildren(input);
-          f.footer.append(button("保存", () => { file.data = new TextEncoder().encode(input.value); file.bytes = file.data.length; file.original = false; dirty = true; f.dispose(); }, true), button("取消", () => f.close("cancel")));
-        } catch (e) { if (f.isCurrent()) { f.body.replaceChildren(node("p", errorMessage(e), "extension-error")); f.footer.append(button("关闭", () => f.close("close"))); } }
-      }
-      picker.addEventListener("change", async () => { if(saving||!d.isCurrent())return;reading++;save.disabled=true;try { let total=files.reduce((n,f)=>n+f.bytes,0);for (const f of picker.files) {total+=f.size;if(total>64*1024*1024)throw Error("插件文件总量不能超过 64 MiB");const bytes=new Uint8Array(await f.arrayBuffer());if(!d.isCurrent())return;add({ path: f.name, bytes: f.size, data: bytes });} } catch (e) { message.textContent = errorMessage(e); } finally { reading--;picker.value = "";if(d.isCurrent())save.disabled=saving||reading>0; } });
-      const newText = button("新建文本文件", () => {
-        const f = layer({ title: "新建插件文件", width: "40rem", height: "auto" }), path = field(f.body, "插件内相对路径", "files/example.txt");
-        f.footer.append(button("添加", () => { try { add({ path: path.value.trim(), bytes: 0, data: new Uint8Array() }); f.dispose(); } catch (e) { toast(errorMessage(e), "error"); } }, true), button("取消", () => f.close("cancel")));
-      });
-      form.append(node("p", "所有目标相对于 mdo 应用文件空间。执行入口保持私有，无须再添加覆盖目标。", "extension-help"), element("div", { className: "resource-actions" }, [button("添加文件", () => picker.click()), newText,
-        button("添加 JS 入口范例", () => { try { add({ path: "runtime/main.js", data: new TextEncoder().encode(defaultScript), bytes: new TextEncoder().encode(defaultScript).length }); frontend.value = "runtime/main.js"; } catch (e) { message.textContent = errorMessage(e); } }),
-        button("添加 C 入口范例", () => { try { const source = nativeScript(fields.id.value.trim()); add({ path: "runtime/plugin.c", data: new TextEncoder().encode(source), bytes: source.length }); native.value = "runtime/plugin.c"; } catch (e) { message.textContent = errorMessage(e); } })]), picker, fileList, message);
-      form.addEventListener("input", () => { dirty = true; }); drawFiles();
-      const save = button("保存插件", async () => {
-        if (saving || reading || !d.isCurrent()) return; const own = epoch, uploads = []; saving = true;
-        for (const control of form.querySelectorAll("input,textarea,button,select")) control.disabled = true; save.disabled = cancel.disabled = d.closeButton.disabled = true;
-        try {
-          const relationship = JSON.parse(relations.value);
-          if (!relationship || Object.keys(relationship).some(k => !["requires", "conflicts"].includes(k))) throw Error("兼容关系仅支持 requires 和 conflicts");
-          const doc = { format: "mdo.plugin.v1", ...Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, v.value.trim()])), overrides: [...mappings].map(([source, destination]) => ({ source, target: destination })), entry: {}, exclusive: exclusive.value.split(/[\s,，]+/).filter(Boolean), ...relationship };
-          if (frontend.value.trim()) doc.entry.frontend = frontend.value.trim(); if (native.value.trim()) doc.entry.native = native.value.trim();
-          const payload = []; let total = 0, inline = 0;
-          for (const file of files) {
-            if (!d.isCurrent()) throw new DOMException("Device changed", "AbortError");
-            if(file.original){total+=file.bytes;if(total>64*1024*1024)throw Error("插件文件总量不能超过 64 MiB");payload.push({path:file.path,plugin_revision:full.revision,bytes:file.bytes,sha256:file.sha256});continue;}
-            const bytes = file.data || new Uint8Array(); total += bytes.length;
-            if (total > 64 * 1024 * 1024) throw Error("插件文件总量不能超过 64 MiB");
-            if (inline+bytes.length <= 256 * 1024) { inline+=bytes.length;payload.push({ path: file.path, base64: encode(bytes) }); continue; }
-            const storage_path = `plugin-uploads/${crypto.randomUUID()}`, hash = [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))].map(b => b.toString(16).padStart(2, "0")).join(""); uploads.push(storage_path);
-            for (let offset = 0; offset < bytes.length; offset += 256 * 1024) {
-              message.textContent = `正在准备 ${file.path}：${Math.min(bytes.length, offset + 256 * 1024)} / ${bytes.length}`;
-              if (!offset) await call("storage.write", { path: storage_path, base64: encode(bytes.subarray(offset, offset + 256 * 1024)) }, own);
-              else await call("fs.append", { space: "home", path: `data/extensions/mdo.plugin-manager/${storage_path}`, base64: encode(bytes.subarray(offset, offset + 256 * 1024)) }, own);
-            }
-            payload.push({ path: file.path, storage_path, bytes: bytes.length, sha256: hash });
-          }
-          message.textContent = "正在保存…"; await call("plugin.apply", { id: doc.id, expected_revision: full?.revision || "", manifest: doc, files: payload }, own);
-          dirty = false; saving = false; d.dispose(); changed(); toast("插件已保存；启用时会检查完整组合");
-        } catch (e) { if (d.isCurrent()) message.textContent = errorMessage(e); }
-        finally {
-          saving = false; for (const path of uploads) if (current(own)) { try { await call("storage.remove", { path }, own); } catch { /* Incomplete private uploads may be removed later. */ } }
-          if (d.isCurrent()) { for (const control of form.querySelectorAll("input,textarea,button,select")) control.disabled = false; fields.id.disabled = Boolean(item); save.disabled = cancel.disabled = d.closeButton.disabled = false; }
-        }
-      }, true), cancel = button("取消", () => d.close("cancel")); d.footer.append(save, cancel); d.body.append(form);
-    } catch (e) { showError(e); } finally { busy = false; }
+  async function edit(item=null,native=false){
+    if(item){if(!editable(item))throw Error("商店插件不支持编辑或再次分享");await directoryEditor.open({kind:"plugins",item});return;}
+    const entry=native?"runtime/plugin.c":"runtime/main.js",manifest=directoryManifest("plugins","my-plugin",{name:"我的插件",version:"1.0.0",license:"MIT",[native?"native":"frontend"]:entry});
+    await directoryEditor.open({kind:"plugins",manifest,text:JSON.stringify({entry:{[native?"native":"frontend"]:entry},overrides:[],exclusive:[],requires:[],conflicts:[]},null,2),edits:[{path:entry,text:native?nativeScript("my-plugin"):defaultScript}]});
   }
   async function combinations() {
     const d = layer({ title: "插件组合方案", width: "48rem" });
@@ -244,19 +133,7 @@ export function createPluginWorkbench(root) {
     }
     d.footer.append(button("刷新", refresh), button("关闭", () => d.close("close"))); await refresh();
   }
-  async function importFile(file) {
-    try { const value = JSON.parse(await file.text()); await store.importPackage(value); } catch (e) { showError(e); }
-  }
-  async function importDirectory(files) {
-    try {
-      const manifestFile = [...files].find(f => f.webkitRelativePath?.split("/").length === 2 && f.name === "plugin.json"); if (!manifestFile) throw Error("选择的目录根部需要有 plugin.json");
-      const manifest = JSON.parse(await manifestFile.text()), prefix = manifestFile.webkitRelativePath.slice(0, -"plugin.json".length), payload = [];
-      if (files.length > 129) throw Error("每个插件最多支持 128 个文件");
-      if ([...files].reduce((n,f)=>n+f.size,0)>64*1024*1024) throw Error("插件文件总量不能超过 64 MiB");
-      for (const file of files) if (file !== manifestFile) payload.push({ path: file.webkitRelativePath.slice(prefix.length), bytes: file.size, data: new Uint8Array(await file.arrayBuffer()) });
-      await edit(null, { manifest, files: payload });
-    } catch (e) { showError(e); }
-  }
+  async function importFile(file){try{await store.importPackage(file);}catch(e){showError(e);}}
   function render() {
     if (!root || disposed) return;
     browser.rememberFocus(); const tabs = element("div", { className: "store-tabs", attrs: { role: "tablist" } });
@@ -264,11 +141,11 @@ export function createPluginWorkbench(root) {
     root.replaceChildren(tabs, store.statusRoot); if (area === "store") { root.append(store.root); return; }
     const search = element("form", { className: "store-search eb-toolbar" }), input = element("input", { attrs: { type: "search", placeholder: "搜索插件、作者或用途", "aria-label": "搜索插件" } }); input.value = query;
     const select = element("select", { attrs: { "aria-label": "插件状态" } }); for (const [value, text] of [["all", "全部状态"], ["enabled", "已启用"], ["disabled", "已停用"], ["pending", "等待生效"], ["failed", "加载失败"],["recovery","恢复模式"]]) select.append(element("option", { text, attrs: { value } })); select.value = filter; select.addEventListener("change", () => { filter = select.value; render(); });
-    const picker = element("input", { attrs: { type: "file", accept: ".json" } }), directory = element("input", { attrs: { type: "file", webkitdirectory: "", multiple: "" } }); picker.hidden = directory.hidden = true;
-    picker.addEventListener("change", () => { if (picker.files[0]) void importFile(picker.files[0]); }); directory.addEventListener("change", () => { if (directory.files.length) void importDirectory(directory.files); });
-    search.append(input, select, button("搜索", () => { query = input.value.trim(); render(); }), button("刷新", load), button("组合方案", combinations), actionMenu([button("新建插件", () => edit()), button("导入插件项目目录", () => directory.click()), button("导入安装文件", () => picker.click())], "创建 / 导入"));
+    const picker = element("input", { attrs: { type: "file", accept: ".zip" } }); picker.hidden = true;
+    picker.addEventListener("change", () => { if (picker.files[0]) void importFile(picker.files[0]); });
+    search.append(input, select, button("搜索", () => { query = input.value.trim(); render(); }), button("刷新", load), button("组合方案", combinations), actionMenu([button("新建插件", () => edit()), button("新建 C 插件",()=>edit(null,true)), button("导入安装文件", () => picker.click())], "创建 / 导入"));
     search.addEventListener("submit", e => { e.preventDefault(); query = input.value.trim(); render(); });
-    root.append(search, picker, directory);
+    root.append(search, picker);
     if (error) root.append(node("p", error, "extension-error"));
     if(data.config_broken)root.append(node("p","插件登记文件损坏。请修复或恢复 config/plugins.json 后重启；原文件与插件目录均保留，当前不会覆盖它。","extension-error"));
     if (data.recovery_mode) root.append(node("p", "插件恢复模式已开启，覆盖和代码入口均暂停。请修复配置后重新启动 mdo。", "extension-error"));
@@ -276,15 +153,15 @@ export function createPluginWorkbench(root) {
     if (data.pending) root.append(node("p", data.restart_required ? "插件选择已保存，包含代码或资源目录变更，请重启 mdo 生效。" : "插件选择已保存，正在等待其他窗口清理旧插件；必要时刷新相关窗口。", "extension-help"));
     const rows = data.items.filter(p => (filter === "all" || p.state === filter) && `${p.id} ${p.manifest?.name || ""} ${p.manifest?.description || ""} ${p.manifest?.author || ""}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())).map(item => {
       const spec = item.manifest || {}, record = receipt(item), credits = resourceCredits({ ...item, ...spec, external: true, store_managed: item.source === "store" || record && record.source !== "local" }, record), actions = [];
-      if (editable(item)) actions.push(button("编辑", () => edit(item)), button("分享到创作中心", () => store.publish({ id: item.id, ...spec, name: spec.name || item.id }, record)));
-      actions.push(...store.localActions(record));
-      if (!record && editable(item)) actions.push(button("卸载", () => review([{ id: item.id, remove: true }], "卸载插件")));
+      if (editable(item)) actions.push(button("编辑", () => edit(item)), button("分享到创作中心", () => store.publish({...item,name:item.name||spec.name||item.id},record)));
+      actions.push(...store.localActions(item));
+      actions.push(button("卸载",async()=>{if(!confirm(`卸载 ${item.name||spec.name||item.id} 的整个目录？`))return;const result=await changeDirectory("plugins",item,"remove");changed();toast(result.pending_remove?"已停用，重启 mdo 后删除整个目录":"插件目录已卸载");}));
       return { key: item.id, title: spec.name || item.id, byline: credits.submitter, description: spec.description || "旧格式插件", meta: [...new Set([spec.version, ...credits.meta].filter(Boolean))], badge: { text: statusText[item.state] || item.state, tone: item.state === "failed" ? "error" : "" }, primary: extensionToggle(button(item.enabled ? "停用" : "启用", () => toggle(item)), item.enabled, spec.name || item.id), actions, onSelect: () => details(item) };
     });
     browser.setItems(rows, { pageKey: JSON.stringify([query, filter]), empty: "暂无本机插件，可以创建插件或前往插件商店。" }); root.append(browser.root);
   }
   const runtimeChanged=()=>{if(active&&owner==="local"&&!editor&&!busy)void load();};
   window.addEventListener("mdo-plugin-runtime-state",runtimeChanged);
-  const unsubscribe = subscribeTarget(() => { if (owner === target()) return; owner = target(); epoch++; controller?.abort(); for (const d of layers) d.dispose(); layers.clear(); editor = null; browser.reset(); data = { items: [] }; receipts = {}; ownershipKnown = false; error = ""; if (active) void load(); });
-  return Object.freeze({ selectSection(section) { active = section === "extensions"; if (!active) { controller?.abort(); browser.closeDetail(false); for (const d of layers) d.dispose(); } store.activate(active && area === "store"); if (active && area === "local") void load(); }, hasPendingChanges: () => Boolean(editor) || busy || store.hasPendingChanges(), destroy() { disposed = true; epoch++; controller?.abort(); unsubscribe(); window.removeEventListener("mdo-plugin-runtime-state",runtimeChanged); for (const d of layers) d.dispose(); store.destroy(); browser.destroy(); } });
+  const unsubscribe = subscribeTarget(() => { if (owner === target()) return; owner = target(); epoch++; controller?.abort(); for (const d of layers) d.dispose(); directoryEditor.close(true);layers.clear(); editor = null; browser.reset(); data = { items: [] }; receipts = {}; ownershipKnown = false; error = ""; if (active) void load(); });
+  return Object.freeze({ selectSection(section) { active = section === "extensions"; if (!active) { controller?.abort(); browser.closeDetail(false); for (const d of layers) d.dispose(); } store.activate(active && area === "store"); if (active && area === "local") void load(); }, hasPendingChanges: () => directoryEditor.hasPendingChanges() || busy || store.hasPendingChanges(), destroy() { disposed = true; epoch++; controller?.abort(); unsubscribe(); window.removeEventListener("mdo-plugin-runtime-state",runtimeChanged); for (const d of layers) d.dispose(); directoryEditor.destroy();store.destroy(); browser.destroy(); } });
 }
