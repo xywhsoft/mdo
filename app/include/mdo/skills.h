@@ -60,6 +60,7 @@ typedef struct MdoSkillInfo {
     const char* Scope;
     const char* const* ArgumentNames;
     size_t ArgumentCount;
+    const char* DirectoryId; /* Physical installation; Id remains callable alias. */
 } MdoSkillInfo;
 
 typedef struct MdoSkillResourceInfo {

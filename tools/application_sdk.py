@@ -87,6 +87,7 @@ def native_contracts():
     add('extension.list','List the installed directories of one of the nine extension types',{'kind':string},('kind',),arr)
     for action in ('read','fingerprint'):
         add('extension.'+action,'Read or verify a whole directory; omitted kind/id use the host-bound current extension',{'kind':string,'id':string})
+    add('extension.files','List portable files and empty directories, including hidden and deep paths',{'kind':string,'id':string},output=arr)
     path={'path':string,'space':{'type':'string','enum':['native','workspace','home','application','extension']}}
     for prefix in ('fs','vfs','storage'):
         names={'fs':['resolve','stat','read','write','append','list','mkdir','remove','copy','move'],'vfs':['read','list'],'storage':['read','write','remove']}[prefix]

@@ -200,6 +200,19 @@ void MdoExtensionsRelease(MdoExtensionLease* L)
     if(!L||!MdoExtLock)return;xrtMutexLock(MdoExtLock);MdoExtensionLease** P=&MdoExtLeases;
     while(*P&&*P!=L)P=&(*P)->Next;if(*P){*P=L->Next;xrtFree(L->Key);xrtFree(L);}xrtMutexUnlock(MdoExtLock);
 }
+xvalue* MdoExtensionsFiles(cstr Kind,cstr Id,xcancel* Cancel,char Error[512])
+{
+    if(Error)Error[0]=0;if(!MdoExtLock||!MdoExtensionDirectoryKind(Kind)||!MdoExtensionDirectoryId(Id)){MdoExtError(Error,"Choose an installed directory");return NULL;}
+    xrtMutexLock(MdoExtLock);char* Root=MdoExtensionsRoot(Kind,Id);MdoExtTree Tree={0};xvalue* Rows=xrtValueArray();
+    bool Ok=Root&&Rows&&MdoExtCanonical(Kind,Id)&&MdoExtCollect(Root,&Tree,Cancel,Error);
+    for(size_t I=0;Ok&&I<Tree.Count;I++){
+        MdoExtFile* F=&Tree.Files[I];xvalue* Row=xrtValueObject();
+        Ok=Row&&MdoExtPut(Row,"path",F->Path)&&xrtValueObjectSetNew(Row,XRT_STR_LITERAL("directory"),xrtValueBool(F->Directory))&&
+            xrtValueObjectSetNew(Row,XRT_STR_LITERAL("bytes"),xrtValueUInt(F->Info.Size))&&xrtValueObjectSetNew(Row,XRT_STR_LITERAL("mode"),xrtValueUInt(F->Info.Mode))&&xrtValueArrayAppend(Rows,Row);
+        xrtValueRelease(Row);
+    }
+    MdoExtTreeUnit(&Tree);xrtFree(Root);xrtMutexUnlock(MdoExtLock);if(!Ok){xrtValueRelease(Rows);MdoExtError(Error,"Cannot safely enumerate the extension directory");return NULL;}return Rows;
+}
 static bool MdoExtFileDigest(xfile File,xcancel* Cancel,char Hash[65],uint64* Size)
 {
     uint8 Buffer[65536],Digest[32];xsha256 Sha;xrtSha256Init(&Sha);uint64 At=0;bool Ok=xrtFileSize(File,Size);

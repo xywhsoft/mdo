@@ -12,6 +12,7 @@ static const struct {cstr Id,Description;} SdkRuntimeMethods[]={
     {"extension.current","Read this invocation's physical extension directory and native resource root"},
     {"extension.list","List installed directories of one extension type"},
     {"extension.read","Read one directory manifest and its host-owned installation state"},
+    {"extension.files","List all portable paths owned by one installed directory"},
     {"extension.fingerprint","Verify and fingerprint the entire extension directory, including auxiliary files"},
     {"runtime.info","Application version, paths, platform and power state"},
     {"runtime.log","Write an extension log message"},{"runtime.clock","Read monotonic and wall clocks"},
@@ -112,6 +113,7 @@ static bool SdkExtensionCall(const mdo_sdk_context_v1* C,cstr Method,const xvalu
     if(!strcmp(Method,"extension.current")){Kind=C->ExtensionKind;Id=C->DirectoryId;}
     else {if(!Kind)Kind=C->ExtensionKind;if(!Id)Id=C->DirectoryId;}
     if(!strcmp(Method,"extension.list"))*R=MdoExtensionsList(Kind,Why);
+    else if(!strcmp(Method,"extension.files")){MdoApplicationInvocation* I=C->Opaque;*R=MdoExtensionsFiles(Kind,Id,I?I->Cancel:NULL,Why);}
     else if(!strcmp(Method,"extension.fingerprint")){
         char Hash[65]={0};MdoApplicationInvocation* I=C->Opaque;xcancel* Cancel=I?I->Cancel:NULL;
         if(MdoExtensionsVerify(Kind,Id,Cancel,Why)&&MdoExtensionsFingerprint(Kind,Id,Hash,Cancel,Why)){

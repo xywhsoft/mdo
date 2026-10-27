@@ -79,7 +79,7 @@ static xwork_result MdoSkillExecute(void* Data, const xwork_tool_context* Contex
         if (Ok && Path.Size == 0u) {
             MdoSkillContent Body = {0};
             xvalue* Files = xrtValueArray();
-            size_t i;
+            size_t i=0,FileNamesBytes=0;
             Body.Size = sizeof(Body);
             Ok = Files != NULL && MdoSkillCatalogLoadBody(Catalog, Id, &Body);
             if(Ok){char* Rendered=MdoSkillRenderArguments(Body.Text,Base,Parameters.Data,Info.ArgumentNames,Info.ArgumentCount);Ok=Rendered!=NULL;
@@ -87,13 +87,17 @@ static xwork_result MdoSkillExecute(void* Data, const xwork_tool_context* Contex
                 else if(xrtGetError()){snprintf(Failure,sizeof(Failure),"%s",xrtErrorMessage(xrtGetError()));Message=Failure;}}
             for (i = 0u; Ok && i < Info.ResourceCount; ++i) {
                 MdoSkillResourceInfo Item = {0}; Item.Size = sizeof(Item);
-                Ok = MdoSkillCatalogResourceAt(Catalog, Id, i, &Item) &&
-                    xrtValueArrayAppendNew(Files, xrtValueString(xrtStrView(Item.Path)));
+                Ok = MdoSkillCatalogResourceAt(Catalog, Id, i, &Item);if(!Ok)break;
+                size_t Cost=strlen(Item.Path)*6u+4u;
+                if(i>=128||Cost>16384u-FileNamesBytes)break;
+                Ok=xrtValueArrayAppendNew(Files,xrtValueString(xrtStrView(Item.Path)));FileNamesBytes+=Cost;
             }
             if (Ok) Ok = MdoSkillParameterInfo(Result,&Info) &&
                 xrtValueObjectSetNew(Result, XRT_STR_LITERAL("arguments"),xrtValueString(xrtStrView(Parameters.Data?Parameters.Data:""))) &&
                 xrtValueObjectSetNew(Result, XRT_STR_LITERAL("instructions"), xrtValueString(xrtStrViewN(Body.Text, Body.Bytes))) &&
                 xrtValueObjectSet(Result, XRT_STR_LITERAL("files"), Files) &&
+                xrtValueObjectSetNew(Result,XRT_STR_LITERAL("file_count"),xrtValueUInt(Info.ResourceCount))&&
+                xrtValueObjectSetNew(Result,XRT_STR_LITERAL("files_truncated"),xrtValueBool(i<Info.ResourceCount))&&
                 xrtValueObjectSetNew(Result, XRT_STR_LITERAL("source"), xrtValueString(xrtStrView(Info.SourcePath)));
             xrtValueRelease(Files); MdoSkillContentUnit(&Body);
         } else if (Ok) {

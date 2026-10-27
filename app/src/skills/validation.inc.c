@@ -18,7 +18,7 @@ bool MdoSkillCheckRequest(const xvalue* Input,cstr Workspace,xvalue* Report)
         if(xrtValueObjectGet(Input,xrtStrView(LoadOnly[i])))Request=false;
     char* Id=Request&&Name.Size?xrtStrDupN(Name.Data,Name.Size):NULL;
     cstr Selected=Scope.Size?Scope.Data:Workspace?"project":"user";
-    if(!Draft)Request=Request&&Id&&MdoExtensionIdValid(Id)&&Id[0]>='a'&&Id[0]<='z'&&
+    if(!Draft)Request=Request&&Id&&MdoSkillsIdValid(Id)&&
         (!strcmp(Selected,"user")||(!strcmp(Selected,"project")&&Workspace));
     if(!Request){xrtFree(Id);MdoSkillsSetError("Validate a content string up to 128 KiB, or a portable name with scope user/project; never supply arbitrary paths");return false;}
 
@@ -39,31 +39,14 @@ bool MdoSkillCheckRequest(const xvalue* Input,cstr Workspace,xvalue* Report)
         }
         if(Ok)Ok=xrtValueArrayAppendNew(Warnings,xrtValueString(XRT_STR_LITERAL("Document check only: save the files and validate the installed folder to check resource paths and limits.")));
     } else if(Ok) {
-        MdoHomeSnapshot Home={0};Home.Size=sizeof(Home);
-        cstr Root=Workspace;
-        if(!strcmp(Selected,"user")){Ok=MdoHomeGetSnapshot(&Home)&&Home.Path;Root=Home.Path;}
-        char* Directory=Ok?xrtFormat("%s/%s",!strcmp(Selected,"user")?"skills":".mdo/skills",Id):NULL;
-        MdoSkillDiagnostics* Ds=Ok?MdoSkillsDiagnosticsCreate():NULL;
-        MdoSkillEntry Entry={0};MdoSkillSource Source={0};
-        SourcePath=Directory?xrtPathJoin(Root,Directory):NULL;
-        Ok=Ok&&Directory&&Ds&&SourcePath;
-        if(Ok) {
-            Source.External=true;Source.Id=Id;Source.NativeRoot=(char*)Root;
-            Source.RelativeDirectory=Directory;Source.VirtualDirectory=SourcePath;Source.Scope=Selected;
-            MdoSkillLoadStatus Status=MdoSkillsLoad(&Source,&Entry,Ds);
-            Valid=Status==MDO_SKILL_LOAD_OK;Resources=Valid;ResourceCount=Entry.ResourceCount;
-            if(Status==MDO_SKILL_LOAD_FATAL)Ok=false;
-            if(Valid&&!MdoSkillsCacheBody(&Entry)) {
-                Valid=false;Resources=false;
-                Ok=xrtValueArrayAppendNew(Errors,xrtValueString(xrtStrView(xrtGetError()?xrtErrorMessage(xrtGetError()):"Skill body could not be read safely")));
-            }
-            if(Ok&&Valid&&!xrtStrTrim(xrtStrView(Entry.CachedBody)).Size)
-                Ok=xrtValueArrayAppendNew(Warnings,xrtValueString(XRT_STR_LITERAL("The Skill body is empty; add its workflow and expected output.")));
-            for(size_t i=0;Ok&&i<Ds->Count;i++)
-                Ok=xrtValueArrayAppendNew(Errors,xrtValueString(xrtStrView(Ds->Entries[i].Message)));
-            if(Ok&&!Valid&&!xrtValueCount(Errors))Ok=xrtValueArrayAppendNew(Errors,xrtValueString(XRT_STR_LITERAL("Skill folder is unavailable or invalid; check its SKILL.md and resource paths.")));
-        }
-        MdoSkillsEntryUnit(&Entry);MdoSkillDiagnosticsRelease(Ds);xrtFree(Directory);
+        MdoSkillCatalog* Catalog=!strcmp(Selected,"project")?MdoSkillCatalogForWorkspace(Workspace):MdoSkillCatalogSnapshot();
+        const MdoSkillEntry* Entry=Catalog?MdoSkillsFind(Catalog,Id):NULL;
+        MdoSkillContent Body={0};Body.Size=sizeof(Body);
+        Valid=Entry&&MdoSkillsInstalledAvailable(Entry)&&MdoSkillCatalogLoadBody(Catalog,Id,&Body);Resources=Valid;
+        if(Entry){ResourceCount=Entry->ResourceCount;SourcePath=xrtStrDup(Entry->SourcePath);Ok=SourcePath!=NULL;}
+        if(Ok&&!Valid)Ok=xrtValueArrayAppendNew(Errors,xrtValueString(xrtStrView(xrtGetError()?xrtErrorMessage(xrtGetError()):"Select an enabled Skill installed in Home; project directories are import sources only.")));
+        if(Ok&&Valid&&!xrtStrTrim(xrtStrView(Body.Text)).Size)Ok=xrtValueArrayAppendNew(Warnings,xrtValueString(XRT_STR_LITERAL("The Skill body is empty; add its workflow and expected output.")));
+        MdoSkillContentUnit(&Body);MdoSkillCatalogRelease(Catalog);
     }
     if(Ok)Ok=xrtValueObjectSetNew(Report,XRT_STR_LITERAL("valid"),xrtValueBool(Valid))&&
         xrtValueObjectSetNew(Report,XRT_STR_LITERAL("resources_checked"),xrtValueBool(Resources))&&

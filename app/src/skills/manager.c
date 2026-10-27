@@ -3,6 +3,8 @@
 #include <string.h>
 
 #include "../../include/mdo/home.h"
+#include "../../include/mdo/extensions.h"
+#include "../../include/mdo/extension_manifest.h"
 #include "../../include/mdo/skills.h"
 #include "../../include/mdo/prompt_file.h"
 #include "../../include/mdo/tool_catalog.h"
@@ -15,12 +17,12 @@
 #define MDO_SKILL_FRONTMATTER_LIMIT (64u * 1024u)
 #define MDO_SKILL_RESOURCE_LIMIT (8u * 1024u * 1024u)
 #define MDO_SKILL_DEPENDENCY_LIMIT 128u
-#define MDO_SKILL_RESOURCE_COUNT_LIMIT 128u
+#define MDO_SKILL_RESOURCE_COUNT_LIMIT MDO_EXTENSION_DIRECTORY_ENTRIES
 #define MDO_SKILL_ID_LIMIT 96u
 #define MDO_SKILL_NAME_LIMIT 256u
 #define MDO_SKILL_DESCRIPTION_LIMIT 4096u
 #define MDO_SKILL_SCALAR_LIMIT 1024u
-#define MDO_SKILL_PATH_LIMIT 1024u
+#define MDO_SKILL_PATH_LIMIT MDO_EXTENSION_PATH_BYTES
 #define MDO_SKILL_ERROR_LIMIT 1024u
 
 typedef struct MdoSkillStringList {
@@ -43,6 +45,8 @@ typedef struct MdoSkillEntry {
     bool Visible;
     const char* Scope;
     char* NativeRoot;
+    char *DirectoryId,*EntryFile;
+    MdoExtensionLease* DirectoryLease;
     bool AutoInvoke,UserInvocable;
     char* ArgumentHint;
     char* Id;
@@ -97,6 +101,7 @@ typedef struct MdoSkillSource {
     bool External;
     const char* Scope;
     char* NativeRoot;
+    char *DirectoryId,*EntryFile;
     char* Id;
     char* VirtualDirectory;
     char* RelativeDirectory;
@@ -181,15 +186,15 @@ static bool MdoSkillsGrow(void** ppItems, size_t* pCapacity,
 static bool MdoSkillsIdValid(cstr Id)
 {
     size_t i = 0u;
-    if ( Id == NULL || Id[0] < 'a' || Id[0] > 'z' ) return false;
+    if ( Id == NULL || !Id[0] || Id[0]=='.' ) return false;
     while ( Id[i] != '\0' ) {
         unsigned char c = (unsigned char)Id[i];
         if ( i >= MDO_SKILL_ID_LIMIT ||
-             !((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') ||
+             !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
                c == '.' || c == '_' || c == '-') ) return false;
         i++;
     }
-    return i != 0u;
+    return i != 0u && Id[i-1]!='.' && !strstr(Id,"..");
 }
 
 static bool MdoSkillsViewEqual(xstrview View, cstr Text)
@@ -291,7 +296,7 @@ static void MdoSkillsEntryUnit(MdoSkillEntry* pEntry)
     xrtFree(pEntry->ArgumentHint);
     xrtFree(pEntry->VirtualDirectory);
     xrtFree(pEntry->RelativeDirectory);
-    xrtFree(pEntry->NativeRoot);
+    xrtFree(pEntry->NativeRoot);xrtFree(pEntry->DirectoryId);xrtFree(pEntry->EntryFile);MdoExtensionsRelease(pEntry->DirectoryLease);
     xrtFree(pEntry->CachedBody);
     memset(pEntry, 0, sizeof(*pEntry));
 }
@@ -419,7 +424,7 @@ static void MdoSkillsSourceUnit(MdoSkillSource* pSource)
     xrtFree(pSource->Id);
     xrtFree(pSource->VirtualDirectory);
     xrtFree(pSource->RelativeDirectory);
-    xrtFree(pSource->NativeRoot);
+    xrtFree(pSource->NativeRoot);xrtFree(pSource->DirectoryId);xrtFree(pSource->EntryFile);
     memset(pSource, 0, sizeof(*pSource));
 }
 
@@ -447,110 +452,26 @@ static bool MdoSkillsJoin(char** pOutput, cstr Left, cstr Right)
     return true;
 }
 
-static bool MdoSkillsDiscover(MdoSkillSource** ppSources, size_t* pCount,
-    MdoSkillDiagnostics* pDiagnostics)
+static bool MdoSkillsDiscover(MdoSkillSource** Sources,size_t* Count,MdoSkillDiagnostics* Diagnostics)
 {
-    static const char* VirtualRoot = "/app/default-home/skills";
-    static const char* RelativeRoot = "skills";
-    MdoSkillSource* pSources = NULL;
-    size_t Count = 0u;
-    size_t Capacity = 0u;
-    xdir Dir = xrtVfsDirOpen(MdoHomeApplicationVfs(), VirtualRoot, XDIR_STAT);
-    xdirentry Entry;
-    xdirnext Next;
-    char* Relative = NULL;
-    char* Virtual = NULL;
-    char* Id = NULL;
-
-    *ppSources = NULL;
-    *pCount = 0u;
-    if ( Dir == NULL ) {
-        const xerror* pError = xrtGetError();
-        if ( pError != NULL && xrtErrorKind(pError) == XERR_NOT_FOUND ) {
-            xrtClearError();
-            return true;
-        }
-        (void)MdoSkillsDiagnosticAdd(pDiagnostics,
-            MDO_SKILL_DIAGNOSTIC_DISCOVERY, NULL, VirtualRoot,
-            pError != NULL ? xrtErrorMessage(pError) :
-            "Skill directory cannot be opened");
-        return false;
+    *Sources=NULL;*Count=0;size_t Capacity=0;char Error[512]={0};xvalue* Rows=MdoExtensionsList("skills",Error);bool Ok=Rows!=NULL;
+    for(size_t I=0;Ok&&I<xrtValueCount(Rows);I++){
+        const xvalue* Row=xrtValueArrayGet(Rows,I);bool Valid=false,Enabled=false;
+        xrtValueGetBool(xrtValueObjectGet(Row,XRT_STR_LITERAL("valid")),&Valid);xrtValueGetBool(xrtValueObjectGet(Row,XRT_STR_LITERAL("enabled")),&Enabled);
+        cstr Id=MdoExtensionText(Row,"id",96),Alias=MdoExtensionText(Row,"alias",64),Root=MdoExtensionText(Row,"root",MDO_EXTENSION_PATH_BYTES);
+        if(!Valid){MdoSkillsDiagnosticAdd(Diagnostics,MDO_SKILL_DIAGNOSTIC_DISCOVERY,Id,Root,MdoExtensionText(Row,"error",511));continue;}
+        if(!Enabled)continue;
+        xvalue* Unique=MdoExtensionsFindAlias("skills",Alias,Error);bool Callable=Unique&&MdoSkillsIdValid(Alias);xrtValueRelease(Unique);
+        if(!Callable){MdoSkillsDiagnosticAdd(Diagnostics,MDO_SKILL_DIAGNOSTIC_DISCOVERY,Alias,Root,"Skill alias is invalid or declared by multiple enabled directories");continue;}
+        if(!MdoSkillsGrow((void**)Sources,&Capacity,*Count+1,sizeof(**Sources),MDO_SKILL_COUNT_LIMIT)){Ok=false;break;}
+        MdoSkillSource* Source=&(*Sources)[*Count];memset(Source,0,sizeof(*Source));Source->External=true;
+        cstr Origin=MdoExtensionText(Row,"source",16);Source->Scope=Origin&&!strcmp(Origin,"builtin")?"builtin":Origin&&!strcmp(Origin,"store")?"store":"user";
+        Source->Id=xrtStrDup(Alias);Source->DirectoryId=xrtStrDup(Id);Source->EntryFile=xrtStrDup(MdoExtensionText(Row,"entry",MDO_EXTENSION_PATH_BYTES));
+        Source->RelativeDirectory=xrtStrDup(Root);Source->VirtualDirectory=xrtFormat("/app/default-home/%s",Root);
+        if(!Source->Id||!Source->DirectoryId||!Source->EntryFile||!Source->RelativeDirectory||!Source->VirtualDirectory){MdoSkillsSourceUnit(Source);Ok=false;break;}(*Count)++;
     }
-    memset(&Entry, 0, sizeof(Entry));
-    while ( (Next = xrtDirNext(Dir, &Entry)) == XDIR_NEXT_ITEM ) {
-        MdoSkillSource Source;
-        xfileinfo ExternalInfo;
-        bool External = false;
-        bool Exists = false;
-        if ( (Entry.Flags & XDIR_ENTRY_UTF8) == 0u ) continue;
-        Relative = NULL;
-        Virtual = NULL;
-        Id = NULL;
-        Id = xrtStrDupN(Entry.Name.Data, Entry.Name.Size);
-        if ( Id == NULL ) goto fatal;
-        if ( !MdoSkillsJoin(&Relative, RelativeRoot, Id) ||
-             !MdoSkillsJoin(&Virtual, VirtualRoot, Id) ) goto fatal;
-        memset(&ExternalInfo, 0, sizeof(ExternalInfo));
-        if ( !MdoHomeExternalStat(Relative, &Exists, &ExternalInfo) )
-            goto fatal;
-        External = Exists;
-        if ( Entry.Info.Type != XFILE_TYPE_DIRECTORY ) {
-            if ( External && MdoSkillsIdValid(Id) &&
-                 !MdoSkillsDiagnosticAdd(pDiagnostics,
-                    MDO_SKILL_DIAGNOSTIC_DISCOVERY, Id, Virtual,
-                    "external Skill path is not a directory") ) goto fatal;
-            xrtFree(Id); xrtFree(Relative); xrtFree(Virtual);
-            Id = NULL; Relative = NULL; Virtual = NULL;
-            continue;
-        }
-        if ( !MdoSkillsIdValid(Id) ) {
-            if ( !MdoSkillsDiagnosticAdd(pDiagnostics,
-                    MDO_SKILL_DIAGNOSTIC_DISCOVERY, Id, Virtual,
-                    "Skill directory has an invalid ID") ) goto fatal;
-            xrtFree(Id); xrtFree(Relative); xrtFree(Virtual);
-            Id = NULL; Relative = NULL; Virtual = NULL;
-            continue;
-        }
-        if ( External && ExternalInfo.Type != XFILE_TYPE_DIRECTORY ) {
-            if ( !MdoSkillsDiagnosticAdd(pDiagnostics,
-                    MDO_SKILL_DIAGNOSTIC_DISCOVERY, Id, Virtual,
-                    "external Skill shadow is not a directory") ) goto fatal;
-            xrtFree(Id); xrtFree(Relative); xrtFree(Virtual);
-            Id = NULL; Relative = NULL; Virtual = NULL;
-            continue;
-        }
-        if ( !MdoSkillsGrow((void**)&pSources, &Capacity, Count + 1u,
-                sizeof(*pSources), MDO_SKILL_COUNT_LIMIT) ) goto fatal;
-        memset(&Source, 0, sizeof(Source));
-        Source.External = External;
-        Source.Id = Id;
-        Source.VirtualDirectory = Virtual;
-        Source.RelativeDirectory = Relative;
-        pSources[Count++] = Source;
-        Id = NULL; Relative = NULL; Virtual = NULL;
-    }
-    if ( Next == XDIR_NEXT_ERROR ) {
-        (void)xrtDirClose(Dir);
-        goto fatal_closed;
-    }
-    if ( !xrtDirClose(Dir) ) goto fatal_closed;
-    if ( Count > 1u ) qsort(pSources, Count, sizeof(*pSources),
-        MdoSkillsSourceCompare);
-    *ppSources = pSources;
-    *pCount = Count;
-    return true;
-
-fatal:
-    xrtFree(Id);
-    xrtFree(Relative);
-    xrtFree(Virtual);
-    (void)xrtDirClose(Dir);
-fatal_closed:
-    (void)MdoSkillsDiagnosticAdd(pDiagnostics,
-        MDO_SKILL_DIAGNOSTIC_DISCOVERY, NULL, VirtualRoot,
-        "Skill discovery failed due to I/O, capacity, or memory limits");
-    MdoSkillsSourcesUnit(pSources, Count);
-    return false;
+    xrtValueRelease(Rows);if(!Ok){MdoSkillsSourcesUnit(*Sources,*Count);*Sources=NULL;*Count=0;return false;}
+    if(*Count>1)qsort(*Sources,*Count,sizeof(**Sources),MdoSkillsSourceCompare);return true;
 }
 
 static xfile MdoSkillsOpen(const MdoSkillSource* pSource, cstr Path,
@@ -570,7 +491,7 @@ static xfile MdoSkillsOpen(const MdoSkillSource* pSource, cstr Path,
         xrtFileOptionsInit(&Options);Options.Flags=XFILE_READ|XFILE_NOFOLLOW;
         if(Root){File=xrtRootFileOpen(Root,Relative,&Options);xrtRootClose(Root);}
     } else if ( pSource->External ) {
-        File = MdoResourceOpenRead(Relative);
+        File = MdoHomeOpenRead(Relative);
     } else {
         xrtFileOptionsInit(&Options);
         Options.Flags = XFILE_READ;
@@ -591,10 +512,17 @@ static xfile MdoSkillsOpenEntry(const MdoSkillEntry* pEntry, cstr Path,
     memset(&Source, 0, sizeof(Source));
     Source.External = pEntry->External;
     Source.NativeRoot = pEntry->NativeRoot;
-    Source.Id = pEntry->Id;
+    Source.Id = pEntry->Id;Source.DirectoryId=pEntry->DirectoryId;Source.EntryFile=pEntry->EntryFile;
     Source.VirtualDirectory = pEntry->VirtualDirectory;
     Source.RelativeDirectory = pEntry->RelativeDirectory;
     return MdoSkillsOpen(&Source, Path, pVirtualPath);
+}
+static bool MdoSkillsInstalledAvailable(const MdoSkillEntry* Entry)
+{
+    if(!Entry->DirectoryId)return true;char Error[512]={0};xvalue* Row=MdoExtensionsRead("skills",Entry->DirectoryId,Error);bool Enabled=false;
+    xrtValueGetBool(xrtValueObjectGet(Row,XRT_STR_LITERAL("enabled")),&Enabled);
+    bool Ok=Row&&Enabled&&MdoExtensionsVerify("skills",Entry->DirectoryId,NULL,Error);xrtValueRelease(Row);
+    if(!Ok)MdoSkillsSetError(Error[0]?Error:"Skill directory is disabled or unavailable");return Ok;
 }
 
 static bool MdoSkillsSameFile(const xfileinfo* pExpected,
@@ -775,33 +703,10 @@ static MdoSkillField MdoSkillsField(xstrview Key)
     return MDO_SKILL_FIELD_NONE;
 }
 
-static bool MdoSkillsPathValid(cstr Path, MdoSkillResourceKind Kind)
+static bool MdoSkillsPathValid(cstr Path,MdoSkillResourceKind Kind)
 {
-    cstr Prefix = Kind == MDO_SKILL_RESOURCE_REFERENCE ? "" : Kind == MDO_SKILL_RESOURCE_SCRIPT ? "scripts/" :
-        (Kind == MDO_SKILL_RESOURCE_TEMPLATE ? "templates/" : "assets/");
-    size_t PrefixLength = strlen(Prefix);
-    size_t Length;
-    size_t Start;
-    size_t i;
-
-    if ( Path == NULL || strncmp(Path, Prefix, PrefixLength) != 0 )
-        return false;
-    Length = strlen(Path);
-    if ( Length <= PrefixLength || Length > MDO_SKILL_PATH_LIMIT ||
-         Path[Length - 1u] == '/' ||
-         !xrtUtf8Valid((xstrview){ Path, Length }, NULL) ) return false;
-    Start = 0u;
-    for ( i = 0u; i <= Length; ++i ) {
-        unsigned char c = (unsigned char)Path[i];
-        if ( c == '\\' || c == ':' || (i < Length && c < 0x20u) )
-            return false;
-        if ( c != '/' && c != '\0' ) continue;
-        if ( i == Start || (i - Start == 1u && Path[Start] == '.') ||
-             (i - Start == 2u && Path[Start] == '.' &&
-              Path[Start + 1u] == '.') ) return false;
-        Start = i + 1u;
-    }
-    return true;
+    cstr Prefix=Kind==MDO_SKILL_RESOURCE_REFERENCE?"":Kind==MDO_SKILL_RESOURCE_SCRIPT?"scripts/":Kind==MDO_SKILL_RESOURCE_TEMPLATE?"templates/":"assets/";
+    return Path&&strlen(Path)<=MDO_SKILL_PATH_LIMIT&&MdoExtensionRelativePath(Path)&&!strncmp(Path,Prefix,strlen(Prefix));
 }
 
 static bool MdoSkillsResourceAdd(MdoSkillEntry* pEntry,
@@ -1024,6 +929,16 @@ static bool MdoSkillsHash(const void* Data, size_t Size, char Output[65])
 static bool MdoSkillsScanResources(const MdoSkillSource* Source,
     MdoSkillEntry* Entry, cstr Prefix, unsigned Depth)
 {
+    if(Source->DirectoryId){
+        char Error[512]={0};xvalue* Files=MdoExtensionsFiles("skills",Source->DirectoryId,NULL,Error);bool Ok=Files!=NULL;
+        for(size_t I=0;Ok&&I<xrtValueCount(Files);I++){
+            const xvalue* File=xrtValueArrayGet(Files,I);cstr Path=MdoExtensionText(File,"path",MDO_EXTENSION_PATH_BYTES);bool Directory=false;uint64 Size=0;
+            xrtValueGetBool(xrtValueObjectGet(File,XRT_STR_LITERAL("directory")),&Directory);xrtValueGetUInt(xrtValueObjectGet(File,XRT_STR_LITERAL("bytes")),&Size);
+            if(Directory||!Path||!strcmp(Path,Source->EntryFile)||!strcmp(Path,"extension.json")||Size>MDO_SKILL_RESOURCE_LIMIT)continue;
+            MdoSkillResourceKind Kind=!strncmp(Path,"scripts/",8)?MDO_SKILL_RESOURCE_SCRIPT:!strncmp(Path,"templates/",10)?MDO_SKILL_RESOURCE_TEMPLATE:!strncmp(Path,"assets/",7)?MDO_SKILL_RESOURCE_ASSET:MDO_SKILL_RESOURCE_REFERENCE;
+            char* Copy=xrtStrDup(Path);Ok=Copy&&MdoSkillsResourceAdd(Entry,Kind,Copy);if(!Ok)xrtFree(Copy);
+        }xrtValueRelease(Files);return Ok;
+    }
     char Directory[MDO_SKILL_PATH_LIMIT + 128u];
     xdir Dir;
     xdirentry Item;
@@ -1124,11 +1039,15 @@ static MdoSkillLoadStatus MdoSkillsLoad(const MdoSkillSource* pSource,
     pEntry->Scope=pSource->Scope?pSource->Scope:(pSource->External?"user":"builtin");
     pEntry->NativeRoot=pSource->NativeRoot?xrtStrDup(pSource->NativeRoot):NULL;
     pEntry->Id = xrtStrDup(pSource->Id);
+    pEntry->DirectoryId=pSource->DirectoryId?xrtStrDup(pSource->DirectoryId):NULL;
+    pEntry->EntryFile=xrtStrDup(pSource->EntryFile?pSource->EntryFile:"SKILL.md");
+    if(pSource->DirectoryId){pEntry->DirectoryLease=MdoExtensionsAcquire("skills",pSource->DirectoryId,Error);
+        if(!pEntry->DirectoryId||!pEntry->DirectoryLease){MdoSkillsDiagnosticAdd(pDiagnostics,MDO_SKILL_DIAGNOSTIC_OPEN,pSource->Id,pSource->RelativeDirectory,Error);return MDO_SKILL_LOAD_INVALID;}}
     pEntry->VirtualDirectory = xrtStrDup(pSource->VirtualDirectory);
     pEntry->RelativeDirectory = xrtStrDup(pSource->RelativeDirectory);
-    Document = MdoSkillsOpen(pSource, "SKILL.md", &pEntry->SourcePath);
+    Document = MdoSkillsOpen(pSource, pEntry->EntryFile, &pEntry->SourcePath);
     if ( pEntry->Id == NULL || pEntry->VirtualDirectory == NULL ||
-         pEntry->RelativeDirectory == NULL || (pSource->NativeRoot && !pEntry->NativeRoot) ) {
+         pEntry->RelativeDirectory == NULL || !pEntry->EntryFile || (pSource->NativeRoot && !pEntry->NativeRoot) ) {
         if ( Document != NULL ) (void)xrtClose(Document);
         return MDO_SKILL_LOAD_FATAL;
     }
@@ -1181,15 +1100,6 @@ static MdoSkillLoadStatus MdoSkillsLoad(const MdoSkillSource* pSource,
         return MDO_SKILL_LOAD_INVALID;
     }
     Status = MdoSkillsOpenResources(pSource, pEntry, pDiagnostics);
-    size_t Total = FileSize;
-    for (size_t i=0; Status==MDO_SKILL_LOAD_OK && i<pEntry->ResourceCount; ++i) {
-        Total += pEntry->Resources[i].Bytes;
-        if (Total>16u*1024u*1024u) {
-            (void)MdoSkillsDiagnosticAdd(pDiagnostics,MDO_SKILL_DIAGNOSTIC_RESOURCE,
-                pEntry->Id,pEntry->SourcePath,"Skill files exceed the 16 MiB total limit");
-            Status=MDO_SKILL_LOAD_INVALID;
-        }
-    }
     return Status;
 }
 
@@ -1207,9 +1117,6 @@ static MdoSkillCatalog* MdoSkillsBuildCandidate(uint64 Generation,
     if ( pCatalog == NULL ) goto fatal;
     for ( i = 0u; i < SourceCount; ++i ) {
         MdoSkillEntry Entry;
-        bool Enabled;
-        if (!MdoExtensionEnabled("skills", pSources[i].Id, &Enabled)) goto fatal;
-        if (!Enabled) continue;
         MdoSkillLoadStatus Status = MdoSkillsLoad(&pSources[i], &Entry,
             pDiagnostics);
         if ( Status == MDO_SKILL_LOAD_FATAL ) {
@@ -1416,6 +1323,7 @@ static void MdoSkillsInfo(const MdoSkillCatalog* pCatalog,
     pInfo->Visible=pEntry->Visible;pInfo->Scope=pEntry->Scope;
     pInfo->ArgumentNames=(const char* const*)pEntry->Arguments.Items;
     pInfo->ArgumentCount=pEntry->Arguments.Count;
+    pInfo->DirectoryId=pEntry->DirectoryId;
 }
 
 size_t MdoSkillCatalogCount(const MdoSkillCatalog* pCatalog)
@@ -1496,7 +1404,7 @@ static bool MdoSkillsCacheBody(MdoSkillEntry* pEntry)
     if ( pEntry->CachedBody != NULL ) return true;
     memset(&Info, 0, sizeof(Info));
     memset(Error, 0, sizeof(Error));
-    File = MdoSkillsOpenEntry(pEntry, "SKILL.md", &Virtual);
+    File = MdoSkillsOpenEntry(pEntry, pEntry->EntryFile, &Virtual);
     if ( File == NULL || !xrtFileStat(File, &Info) ||
          !MdoSkillsSameFile(&pEntry->DocumentInfo, &Info) ) {
         MdoSkillsSetError("Skill source changed; reload the Skill catalog");
@@ -1583,7 +1491,7 @@ bool MdoSkillCatalogLoadBody(const MdoSkillCatalog* pCatalog,
     if ( pCatalog == NULL || pContent == NULL ||
          pContent->Size < sizeof(*pContent) ) return false;
     pEntry = (MdoSkillEntry*)MdoSkillsFind(pCatalog, SkillId);
-    if ( pEntry == NULL ) return false;
+    if ( pEntry == NULL || !MdoSkillsInstalledAvailable(pEntry) ) return false;
     if ( !xrtMutexLock(pCatalog->CacheLock) ) return false;
     if ( !MdoSkillsCacheBody(pEntry) ) {
         (void)xrtMutexUnlock(pCatalog->CacheLock);
@@ -1624,7 +1532,7 @@ bool MdoSkillCatalogLoadResource(const MdoSkillCatalog* pCatalog,
          pContent->Size < sizeof(*pContent) || Path == NULL || Limit == 0u )
         return false;
     pEntry = (MdoSkillEntry*)MdoSkillsFind(pCatalog, SkillId);
-    if ( pEntry == NULL ) return false;
+    if ( pEntry == NULL || !MdoSkillsInstalledAvailable(pEntry) ) return false;
     for ( i = 0u; i < pEntry->ResourceCount; ++i ) {
         if ( strcmp(pEntry->Resources[i].Path, Path) == 0 ) {
             pResource = &pEntry->Resources[i];

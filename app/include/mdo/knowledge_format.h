@@ -1,5 +1,6 @@
 #ifndef MDO_KNOWLEDGE_FORMAT_H
 #define MDO_KNOWLEDGE_FORMAT_H
+#include "extension_path.h"
 
 /* Included after the portable package primitives. Knowledge contains inert
  * documents, never installers, process definitions or machine paths. */
@@ -8,10 +9,10 @@
 static bool MdoKnowledgeMetadata(const xvalue* Doc,char* Error,size_t Capacity)
 {
     const char* Format=MdoPackageText(Doc,"format",32),*Name=MdoPackageText(Doc,"name",100);
-    const char* Description=MdoPackageText(Doc,"description",600),*Index=MdoPackageText(Doc,"index",220);
+    const char* Description=MdoPackageText(Doc,"description",600),*Index=MdoPackageText(Doc,"index",MDO_EXTENSION_PATH_BYTES);
     const char* Prompt=MdoPackageText(Doc,"prompt",8192);bool Inject=false;
     bool Ok=xrtValueType(Doc)==XVALUE_OBJECT&&Format&&!strcmp(Format,MDO_KNOWLEDGE_FORMAT)&&Name&&*Name&&
-        Description&&*Description&&Index&&MdoPackagePath(Index)&&!MdoPackageSamePath(Index,"knowledge.json")&&
+        Description&&*Description&&Index&&MdoExtensionRelativePath(Index)&&!MdoPackageSamePath(Index,"knowledge.json")&&
         Prompt&&xrtValueGetBool(xrtValueObjectGet(Doc,XRT_STR_LITERAL("inject_prompt")),&Inject);
     const char* Credits[]={"author","copyright","license","version"};const size_t Sizes[]={100,4096,80,32};
     for(size_t i=0;Ok&&i<4;i++)if(xrtValueObjectHas(Doc,xrtStrView(Credits[i])))Ok=MdoPackageText(Doc,Credits[i],Sizes[i])!=NULL;

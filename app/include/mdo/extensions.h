@@ -10,6 +10,7 @@ void MdoExtensionsUnit(void);
 xvalue* MdoExtensionsList(cstr Kind,char Error[512]);
 xvalue* MdoExtensionsRead(cstr Kind,cstr Id,char Error[512]);
 xvalue* MdoExtensionsFindAlias(cstr Kind,cstr Alias,char Error[512]);
+xvalue* MdoExtensionsFiles(cstr Kind,cstr Id,xcancel* Cancel,char Error[512]);
 char* MdoExtensionsEntryPath(cstr Kind,cstr Id,char Error[512]);
 char* MdoExtensionsRoot(cstr Kind,cstr Id);
 bool MdoExtensionsFingerprint(cstr Kind,cstr Id,char Hash[65],xcancel* Cancel,char Error[512]);

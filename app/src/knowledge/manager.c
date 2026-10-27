@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <string.h>
 #include "../../include/mdo/knowledge.h"
+#include "../../include/mdo/extensions.h"
+#include "../../include/mdo/extension_manifest.h"
 #include "../../include/mdo/extension_files.h"
 #include "../../include/mdo/ecosystem_package.h"
 #include "../../include/mdo/diagnostics.h"
@@ -50,35 +52,34 @@ static char* KnowledgeRender(cstr Prompt,cstr Path)
 }
 static bool KnowledgeCollectReferences(xvalue* Items,xvalue* Warnings)
 {
-    xdir Dir=NULL;if(!KnowledgeOpenRoot(&Dir,Warnings))return false;if(!Dir)return true;
-    xdirentry E;xdirnext Next=XDIR_NEXT_END;size_t Budget=0,Count=0,Skipped=0;bool Ok=true;
-    while((Next=xrtDirNext(Dir,&E))==XDIR_NEXT_ITEM){
-        if(E.Info.Type!=XFILE_TYPE_DIRECTORY||E.Name.Size>64||!E.Name.Size||E.Name.Data[0]=='.')continue;
-        if(++Count>256){Ok=KnowledgeWarning(Warnings,"scan_limit","","knowledge","Only the first 256 library directories were checked.");break;}
-        char Id[65],Path[320],Alias[96],Why[256];memcpy(Id,E.Name.Data,E.Name.Size);Id[E.Name.Size]=0;
-        bool Enabled=false;if(!MdoPackageId(Id))continue;
-        if(!MdoExtensionEnabled("knowledge",Id,&Enabled)){
-            Ok=KnowledgeStorageFailure(Warnings,"config_unavailable","","config/extensions.json","The extension enable/disable configuration cannot be read; knowledge hints were skipped.");if(!Ok)break;continue;
-        }if(!Enabled)continue;
-        snprintf(Path,sizeof(Path),"knowledge/%s/knowledge.json",Id);char* Text=MdoExtensionRead(Path,true,131072,NULL);xvalue* Doc=Text?xrtJsonParse(xrtStrView(Text)):NULL;xrtFree(Text);
-        bool Inject=false;const char* Hint=MdoPackageText(Doc,"prompt",8192),*Index=MdoPackageText(Doc,"index",220);
+    char Error[512]={0};xvalue* Rows=MdoExtensionsList("knowledge",Error);size_t Budget=0,Skipped=0;bool Ok=true;
+    if(!Rows)return KnowledgeStorageFailure(Warnings,"root_unavailable","","knowledge",Error[0]?Error:"The knowledge directory cannot be read.");
+    for(size_t I=0;Ok&&I<xrtValueCount(Rows);I++){
+        const xvalue* Row=xrtValueArrayGet(Rows,I);cstr Id=MdoExtensionText(Row,"id",96),Root=MdoExtensionText(Row,"root",MDO_EXTENSION_PATH_BYTES);
+        bool Valid=false,Enabled=false;xrtValueGetBool(xrtValueObjectGet(Row,XRT_STR_LITERAL("valid")),&Valid);xrtValueGetBool(xrtValueObjectGet(Row,XRT_STR_LITERAL("enabled")),&Enabled);
+        if(!Valid){Ok=KnowledgeWarning(Warnings,"invalid_directory",Id,Root?Root:"knowledge","Knowledge requires a valid extension directory manifest and entry.");continue;}
+        if(!Enabled)continue;
+        if(!MdoExtensionsVerify("knowledge",Id,NULL,Error)){Ok=KnowledgeStorageFailure(Warnings,"directory_changed",Id,Root,Error);continue;}
+        char* Path=xrtFormat("%s/%s",Root,MdoExtensionText(Row,"entry",MDO_EXTENSION_PATH_BYTES));
+        char* Text=Path?MdoExtensionRead(Path,true,131072,NULL):NULL;xvalue* Doc=Text?xrtJsonParse(xrtStrView(Text)):NULL;xrtFree(Text);
+        char Why[256]={0};bool Inject=false;cstr Hint=MdoPackageText(Doc,"prompt",8192),Index=MdoPackageText(Doc,"index",MDO_EXTENSION_PATH_BYTES);
         if(!MdoKnowledgeMetadata(Doc,Why,sizeof(Why))){
-            Ok=KnowledgeStorageFailure(Warnings,"invalid_metadata",Id,Path,"The knowledge metadata is missing, unreadable or invalid; this library was skipped.");xrtValueRelease(Doc);if(!Ok)break;continue;
+            Ok=KnowledgeStorageFailure(Warnings,"invalid_metadata",Id,Path?Path:Root,"The knowledge metadata is missing, unreadable or invalid; this library was skipped.");xrtFree(Path);xrtValueRelease(Doc);continue;
         }
-        snprintf(Path,sizeof(Path),"knowledge/%s/%s",Id,Index);xfile File=MdoHomeOpenRead(Path);xfileinfo Info;char Byte;
+        xrtFree(Path);Path=xrtFormat("%s/%s",Root,Index);xfile File=Path?MdoHomeOpenRead(Path):NULL;xfileinfo Info;char Byte;
         bool Readable=File&&xrtFileStat(File,&Info)&&Info.Type==XFILE_TYPE_FILE&&(Info.Available&XFILE_INFO_SIZE)&&Info.Size&&Info.Size<=4u*1024u*1024u&&xrtReadFull(File,&Byte,1,NULL);if(File)xrtClose(File);
-        if(!Readable){Ok=KnowledgeStorageFailure(Warnings,"index_unavailable",Id,Path,"The knowledge index is missing, unreadable, empty or exceeds 4 MiB; this library was skipped.");xrtValueRelease(Doc);if(!Ok)break;continue;}
-        xrtValueGetBool(xrtValueObjectGet(Doc,XRT_STR_LITERAL("inject_prompt")),&Inject);
+        if(!Readable){Ok=KnowledgeStorageFailure(Warnings,"index_unavailable",Id,Path?Path:Root,"The knowledge index is missing, unreadable, empty or exceeds 4 MiB; this library was skipped.");xrtFree(Path);xrtValueRelease(Doc);continue;}
+        xrtFree(Path);xrtValueGetBool(xrtValueObjectGet(Doc,XRT_STR_LITERAL("inject_prompt")),&Inject);
         if(!Inject||!Hint||!*Hint){xrtValueRelease(Doc);continue;}
-        snprintf(Alias,sizeof(Alias),"@knowledge/%s",Id);char* Rendered=KnowledgeRender(Hint,Alias);xvalue* Item=xrtValueObject();
+        char* Alias=xrtFormat("@knowledge/%s",Id),*Rendered=Alias?KnowledgeRender(Hint,Alias):NULL;xvalue* Item=xrtValueObject();
         Ok=Rendered&&Item&&xrtValueObjectSetNew(Item,XRT_STR_LITERAL("name"),xrtValueString(xrtStrView(MdoPackageText(Doc,"name",100))))&&
             xrtValueObjectSetNew(Item,XRT_STR_LITERAL("path"),xrtValueString(xrtStrView(Alias)))&&xrtValueObjectSetNew(Item,XRT_STR_LITERAL("index"),xrtValueString(xrtStrView(Index)))&&
             xrtValueObjectSetNew(Item,XRT_STR_LITERAL("hint"),xrtValueString(xrtStrView(Rendered)));
         char* Json=Ok?xrtJsonStringify(Item,false,NULL):NULL;if(!Json)Ok=false;
         if(Ok&&Budget+strlen(Json)<=131072){Ok=xrtValueArrayAppend(Items,Item);Budget+=strlen(Json);}else if(Ok)Skipped++;
-        xrtFree(Json);xrtFree(Rendered);xrtValueRelease(Item);xrtValueRelease(Doc);if(!Ok)break;
+        xrtFree(Json);xrtFree(Alias);xrtFree(Rendered);xrtValueRelease(Item);xrtValueRelease(Doc);
     }
-    xrtDirClose(Dir);if(Ok&&Next==XDIR_NEXT_ERROR)Ok=KnowledgeStorageFailure(Warnings,"scan_failed","","knowledge","Reading the knowledge directory was interrupted; unchecked libraries were skipped.");
+    xrtValueRelease(Rows);
     if(Ok&&Skipped)Ok=KnowledgeWarning(Warnings,"hint_limit","","knowledge","Some knowledge hints exceeded the 128 KiB prompt budget and were omitted.");
     return Ok;
 }

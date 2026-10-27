@@ -23,49 +23,6 @@ static bool MdoSkillsScopedPut(MdoSkillCatalog* Catalog, const MdoSkillSource* S
 static int MdoSkillsEntryCompare(const void* A,const void* B)
 {return strcmp(((const MdoSkillEntry*)A)->Id,((const MdoSkillEntry*)B)->Id);}
 
-/* Package receipts give stable qualified names without implementing client
- * plugins here. Bare names remain callable for existing Agent bindings. */
-static bool MdoSkillsPackageNames(MdoSkillCatalog* Catalog)
-{
-    bool Missing=false;
-    char* Text=MdoExtensionRead("data/extensions/installed.json",true,1024u*1024u,&Missing);
-    if (!Text) return Missing;
-    xvalue* Records=xrtJsonParse(xrtStrView(Text));xrtFree(Text);
-    bool Ok=Records && xrtValueType(Records)==XVALUE_OBJECT;
-    size_t Original=Catalog->Count;
-    for(size_t r=0;Ok&&r<xrtValueCount(Records);r++) {
-        xstrview Key={0},Slug={0};
-        const xvalue* Record=xrtValueObjectAt(Records,r,&Key);
-        const xvalue* Resources=xrtValueObjectGet(Record,XRT_STR_LITERAL("resources"));
-        Ok=xrtValueGetString(xrtValueObjectGet(Record,XRT_STR_LITERAL("slug")),&Slug) &&
-            Slug.Size && Slug.Size<=64 && !memchr(Slug.Data,0,Slug.Size);
-        char* Namespace=Ok?xrtStrDupN(Slug.Data,Slug.Size):NULL;
-        Ok=Ok && Namespace && MdoSkillsIdValid(Namespace);
-        for(size_t i=0;Ok&&i<xrtValueCount(Resources);i++) {
-            const xvalue* Resource=xrtValueArrayGet(Resources,i);xstrview Kind={0},Id={0};
-            if(!xrtValueGetString(xrtValueObjectGet(Resource,XRT_STR_LITERAL("kind")),&Kind) ||
-                !MdoSkillsViewEqual(Kind,"skills"))continue;
-            if(!xrtValueGetString(xrtValueObjectGet(Resource,XRT_STR_LITERAL("id")),&Id)) {Ok=false;break;}
-            for(size_t j=0;Ok&&j<Original;j++) {
-                MdoSkillEntry* E=&Catalog->Entries[j];
-                if(!E->External || strlen(E->Id)!=Id.Size || memcmp(E->Id,Id.Data,Id.Size))continue;
-                char* Qualified=xrtFormat("%s:%s",Namespace,E->Id);
-                if(!Qualified || strlen(Qualified)>192) {xrtFree(Qualified);Ok=false;break;}
-                for(size_t k=0;k<Catalog->Count;k++)if(!strcmp(Catalog->Entries[k].Id,Qualified))Ok=false;
-                MdoSkillSource Source={0};Source.External=true;Source.Id=Qualified;
-                Source.RelativeDirectory=E->RelativeDirectory;Source.VirtualDirectory=E->VirtualDirectory;
-                Source.Scope="plugin";
-                if(Ok)Ok=MdoSkillsScopedPut(Catalog,&Source,true);
-                /* ScopedPut may move the entries allocation. */
-                if(Ok)Catalog->Entries[j].Visible=false;
-                xrtFree(Qualified);
-            }
-        }
-        xrtFree(Namespace);
-    }
-    xrtValueRelease(Records);return Ok;
-}
-
 static bool MdoSkillsProjectDirectory(MdoSkillCatalog* Catalog,cstr Root,cstr Directory,
     const xvalue* Settings)
 {
@@ -96,65 +53,33 @@ static bool MdoSkillsProjectDirectory(MdoSkillCatalog* Catalog,cstr Root,cstr Di
     return Ok;
 }
 
-static bool MdoSkillsProjectRoot(MdoSkillCatalog* Catalog,cstr Root)
-{
-    static const char* Dirs[]={".opencode/skills",".zcode/skills",".codex/skills",".claude/skills",".agents/skills",".mdo/skills"};
-    xroot Anchor=xrtRootOpen(Root);if(!Anchor)return false;
-    xfileoptions Opt;xrtFileOptionsInit(&Opt);Opt.Flags=XFILE_READ|XFILE_NOFOLLOW;
-    xfile File=xrtRootFileOpen(Anchor,".mdo/skills.json",&Opt);xrtRootClose(Anchor);
-    xvalue* Settings=NULL;bool Ok=true;
-    if(File) {
-        uint64 Size=0;size_t Got=0;char* Text=NULL;
-        Ok=xrtFileSize(File,&Size)&&Size<=65536;
-        Text=Ok?xrtMalloc((size_t)Size+1):NULL;
-        Ok=Ok&&Text&&xrtReadAtFull(File,0,Text,(size_t)Size,&Got)&&Got==Size;
-        if(Ok){Text[Size]=0;Settings=xrtJsonParse(xrtStrViewN(Text,(size_t)Size));Ok=Settings&&xrtValueType(Settings)==XVALUE_OBJECT;}
-        xrtFree(Text);if(!xrtClose(File))Ok=false;
-    } else if(xrtGetError()&&xrtErrorKind(xrtGetError())==XERR_NOT_FOUND)xrtClearError();
-    else Ok=false;
-    for(size_t i=0;Ok&&i<sizeof(Dirs)/sizeof(*Dirs);i++)Ok=MdoSkillsProjectDirectory(Catalog,Root,Dirs[i],Settings);
-    xrtValueRelease(Settings);return Ok;
-}
-
 MdoSkillCatalog* MdoSkillCatalogForWorkspace(cstr Workspace)
 {
-    MdoSkillCatalog* Base=MdoSkillCatalogSnapshot();
-    if(!Base)return NULL;
-    MdoSkillCatalog* Catalog=MdoSkillsCatalogCreate(Base->Generation);
-    bool Ok=Catalog!=NULL;
-    if(Ok){Catalog->Diagnostics=MdoSkillsDiagnosticsCreate();Ok=Catalog->Diagnostics!=NULL;}
-    for(size_t i=0;Ok&&i<Base->Count;i++) {
-        const MdoSkillEntry* E=&Base->Entries[i];MdoSkillSource S={0};
-        S.External=E->External;S.Id=E->Id;S.VirtualDirectory=E->VirtualDirectory;S.RelativeDirectory=E->RelativeDirectory;
+    MdoSkillCatalog* Base=MdoSkillCatalogSnapshot();if(!Base||!Workspace||!Workspace[0])return Base;
+    xroot Root=xrtRootOpen(Workspace);if(!Root){MdoSkillCatalogRelease(Base);return NULL;}
+    xfileoptions Options;xrtFileOptionsInit(&Options);Options.Flags=XFILE_READ|XFILE_NOFOLLOW;
+    xfile File=xrtRootFileOpen(Root,".mdo/skills.json",&Options);xrtRootClose(Root);
+    if(!File){
+        if(xrtGetError()&&xrtErrorKind(xrtGetError())==XERR_NOT_FOUND){xrtClearError();return Base;}
+        MdoSkillCatalogRelease(Base);return NULL;
+    }
+    uint64 Bytes=0;bool Ok=xrtFileSize(File,&Bytes)&&Bytes<=65536;char* Text=Ok?xrtMalloc((size_t)Bytes+1):NULL;
+    Ok=Text&&xrtReadFull(File,Text,(size_t)Bytes,NULL);if(!xrtClose(File))Ok=false;
+    xvalue* Settings=Ok?xrtJsonParse(xrtStrViewN(Text,(size_t)Bytes)):NULL;xrtFree(Text);
+    Ok=Settings&&xrtValueType(Settings)==XVALUE_OBJECT;
+    for(size_t I=0;Ok&&I<xrtValueCount(Settings);I++){bool Flag=false;Ok=xrtValueGetBool(xrtValueObjectAt(Settings,I,NULL),&Flag);}
+    MdoSkillCatalog* Catalog=Ok?MdoSkillsCatalogCreate(Base->Generation):NULL;
+    if(Catalog)Catalog->Diagnostics=MdoSkillsDiagnosticsCreate();Ok=Ok&&Catalog&&Catalog->Diagnostics;
+    for(size_t I=0;Ok&&I<Base->Count;I++){
+        MdoSkillEntry* E=&Base->Entries[I];bool Enabled=true;const xvalue* Flag=xrtValueObjectGet(Settings,xrtStrView(E->Id));
+        if(Flag)xrtValueGetBool(Flag,&Enabled);if(!Enabled)continue;
+        MdoSkillSource S={0};S.External=E->External;S.Id=E->Id;S.Scope=E->Scope;S.NativeRoot=E->NativeRoot;
+        S.DirectoryId=E->DirectoryId;S.EntryFile=E->EntryFile;S.VirtualDirectory=E->VirtualDirectory;S.RelativeDirectory=E->RelativeDirectory;
         Ok=MdoSkillsScopedPut(Catalog,&S,true);
     }
-    if(Ok)Ok=MdoSkillsPackageNames(Catalog);
-    char* Roots[33]={0};size_t Count=0;bool Git=false;
-    if(Ok&&Workspace&&Workspace[0]) {
-        Roots[Count++]=xrtPathReal(Workspace);Ok=Roots[0]!=NULL;
-        while(Ok&&Count<=32) {
-            xroot Anchor=xrtRootOpen(Roots[Count-1]);xfileinfo Info={0};
-            Ok=Anchor!=NULL;
-            if(Ok&&xrtRootStat(Anchor,".git",false,&Info)){Git=true;xrtRootClose(Anchor);break;}
-            if(Anchor)xrtRootClose(Anchor);
-            /* Parent directories are optional discovery, not Skill inputs.
-             * Android apps can use their workspace but cannot inspect .git
-             * in /data/user/0. Stop at that boundary; the exact workspace
-             * still gets its full, strict validation below. */
-            if(Count>1&&xrtGetError()&&xrtErrorKind(xrtGetError())==XERR_PERMISSION){Ok=true;xrtClearError();break;}
-            if(Ok&&xrtGetError()&&xrtErrorKind(xrtGetError())!=XERR_NOT_FOUND){Ok=false;break;}
-            xrtClearError();char* Parent=xrtPathParent(Roots[Count-1]);
-            if(!Parent||!strcmp(Parent,Roots[Count-1])){xrtFree(Parent);break;}
-            Roots[Count++]=Parent;
-        }
-        /* Outside a repository only the exact workspace is eligible. */
-        for(size_t n=Git?Count:1;Ok&&n>0;n--)Ok=MdoSkillsProjectRoot(Catalog,Roots[n-1]);
-    }
-    for(size_t i=0;i<Count;i++)xrtFree(Roots[i]);
-    MdoSkillCatalogRelease(Base);
-    if(!Ok){MdoSkillCatalogRelease(Catalog);MdoSkillsSetError("Cannot build scoped Skills; check project paths, package receipts, limits and .mdo/skills.json");return NULL;}
-    if(Catalog->Count>1)qsort(Catalog->Entries,Catalog->Count,sizeof(*Catalog->Entries),MdoSkillsEntryCompare);
-    return Catalog;
+    xrtValueRelease(Settings);MdoSkillCatalogRelease(Base);
+    if(!Ok){MdoSkillCatalogRelease(Catalog);MdoSkillsSetError("Cannot read project Skill selection; only installed Home directories can be selected");return NULL;}
+    if(Catalog->Count>1)qsort(Catalog->Entries,Catalog->Count,sizeof(*Catalog->Entries),MdoSkillsEntryCompare);return Catalog;
 }
 
 MdoSkillDiagnostics* MdoSkillCatalogDiagnostics(const MdoSkillCatalog* Catalog)
@@ -187,8 +112,9 @@ MdoSkillCatalog* MdoSkillCatalogSingle(cstr Root,cstr Directory,cstr Id)
 char* MdoSkillCatalogDocument(const MdoSkillCatalog* Catalog,cstr Id)
 {
     const MdoSkillEntry* Entry=MdoSkillsFind(Catalog,Id);
+    if(Entry&&!MdoSkillsInstalledAvailable(Entry))return NULL;
     char *Path=NULL,*Text=NULL;size_t Got=0;xfileinfo Info={0};
-    xfile File=Entry?MdoSkillsOpenEntry(Entry,"SKILL.md",&Path):NULL;
+    xfile File=Entry?MdoSkillsOpenEntry(Entry,Entry->EntryFile,&Path):NULL;
     bool Ok=File&&xrtFileStat(File,&Info)&&MdoSkillsSameFile(&Entry->DocumentInfo,&Info);
     if(Ok)Text=xrtMalloc((size_t)Info.Size+1);
     Ok=Ok&&Text&&xrtReadAtFull(File,0,Text,(size_t)Info.Size,&Got)&&Got==Info.Size;
