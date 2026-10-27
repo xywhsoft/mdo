@@ -6,6 +6,8 @@
 #include <libtcc.h>
 
 #include "../../include/mdo/home.h"
+#include "../../include/mdo/extensions.h"
+#include "../../include/mdo/extension_manifest.h"
 #include "../../include/mdo/modules.h"
 #include "../../include/mdo/application.h"
 #include "../application/internal.h"
@@ -94,6 +96,10 @@ struct MdoModuleGeneration {
     char* Description;
     char* Version;
     char* SourcePath;
+    xvalue* Directory;
+    char* DirectoryNative;
+    char DirectoryDigest[65];
+    MdoExtensionLease* DirectoryLease;
     char SourceHash[65];
     char SourceRevision[65];
     mdo_capabilities Capabilities;
@@ -155,6 +161,7 @@ typedef struct MdoModuleSource {
     char* VirtualPath;
     char* RelativePath;
     xvalue* Plugin;
+    xvalue* Directory;
 } MdoModuleSource;
 
 typedef struct MdoModuleRegistrarContext {
@@ -382,6 +389,7 @@ static void MdoModulesGenerationRelease(MdoModuleGeneration* pGeneration)
     xrtFree(pGeneration->Description);
     xrtFree(pGeneration->Version);
     xrtFree(pGeneration->SourcePath);
+    xrtFree(pGeneration->DirectoryNative);xrtValueRelease(pGeneration->Directory);MdoExtensionsRelease(pGeneration->DirectoryLease);
     memset(pGeneration, 0, sizeof(*pGeneration));
     xrtFree(pGeneration);
 }
@@ -524,7 +532,7 @@ static void MdoModulesSourceUnit(MdoModuleSource* pSource)
     if ( pSource == NULL ) return;
     xrtFree(pSource->VirtualPath);
     xrtFree(pSource->RelativePath);
-    xrtValueRelease(pSource->Plugin);
+    xrtValueRelease(pSource->Plugin);xrtValueRelease(pSource->Directory);
     memset(pSource, 0, sizeof(*pSource));
 }
 
@@ -542,132 +550,29 @@ static int MdoModulesSourceCompare(const void* pLeft, const void* pRight)
     return strcmp(pA->VirtualPath, pB->VirtualPath);
 }
 
-static bool MdoModulesExternalSource(cstr RelativePath, bool* pExternal)
+static bool MdoModulesDirectorySource(MdoModuleKind Kind,const xvalue* Meta,cstr Entry,bool Declarative,
+    MdoModuleSource** Sources,size_t* Count,size_t* Capacity)
 {
-    xfile File = MdoHomeOpenRead(RelativePath);
-    const xerror* pError;
-
-    *pExternal = false;
-    if ( File != NULL ) {
-        bool bClosed = xrtClose(File);
-        if ( !bClosed ) return false;
-        *pExternal = true;
-        return true;
-    }
-    pError = xrtGetError();
-    if ( pError != NULL && xrtErrorKind(pError) == XERR_NOT_FOUND ) {
-        xrtClearError();
-        return true;
-    }
-    return false;
+    cstr Root=MdoExtensionText(Meta,"root",MDO_EXTENSION_PATH_BYTES);
+    if(!Root||!Entry||!MdoModulesGrow((void**)Sources,Capacity,*Count+1,sizeof(**Sources),MDO_MODULE_COUNT_LIMIT))return false;
+    MdoModuleSource* S=&(*Sources)[*Count];memset(S,0,sizeof(*S));S->Kind=Kind;S->External=true;S->Declarative=Declarative;
+    S->Directory=xrtValueClone(Meta);S->RelativePath=xrtFormat("%s/%s",Root,Entry);S->VirtualPath=S->RelativePath?xrtFormat("/app/default-home/%s",S->RelativePath):NULL;
+    if(!S->Directory||!S->RelativePath||!S->VirtualPath){MdoModulesSourceUnit(S);return false;}(*Count)++;return true;
 }
-
-static bool MdoModulesDiscoverDirectory(MdoModuleKind Kind, cstr Directory,
-    cstr RelativeDirectory, MdoModuleSource** ppSources, size_t* pCount,
-    size_t* pCapacity, MdoModuleDiagnostics* pDiagnostics)
+static bool MdoModulesDiscoverDirectory(MdoModuleKind Kind,cstr Type,MdoModuleSource** Sources,size_t* Count,size_t* Capacity,MdoModuleDiagnostics* Diagnostics)
 {
-    xvfs Vfs = MdoHomeApplicationVfs();
-    xdir Dir;
-    xdirentry Entry;
-    xdirnext Next;
-
-    Dir = Vfs != NULL ? xrtVfsDirOpen(Vfs, Directory, XDIR_STAT) : NULL;
-    if ( Dir == NULL ) {
-        const xerror* pError = xrtGetError();
-        if ( pError != NULL && xrtErrorKind(pError) == XERR_NOT_FOUND ) {
-            xrtClearError();
-            return true;
-        }
-        (void)MdoModulesDiagnosticAdd(pDiagnostics,
-            MDO_MODULE_DIAGNOSTIC_DISCOVERY, Directory, NULL,
-            pError != NULL ? xrtErrorMessage(pError) :
-            "module directory cannot be opened");
-        return false;
+    char Error[512]={0};xvalue* Rows=MdoExtensionsList(Type,Error);bool Ok=Rows!=NULL;
+    for(size_t I=0;Ok&&I<xrtValueCount(Rows);I++){
+        const xvalue* Meta=xrtValueArrayGet(Rows,I);bool Valid=false,Enabled=false;
+        xrtValueGetBool(xrtValueObjectGet(Meta,XRT_STR_LITERAL("valid")),&Valid);xrtValueGetBool(xrtValueObjectGet(Meta,XRT_STR_LITERAL("enabled")),&Enabled);
+        if(!Valid){MdoModulesDiagnosticAdd(Diagnostics,MDO_MODULE_DIAGNOSTIC_DISCOVERY,MdoExtensionText(Meta,"id",96),NULL,MdoExtensionText(Meta,"error",511));continue;}
+        if(!Enabled)continue;cstr Entry=MdoExtensionText(Meta,"entry",MDO_EXTENSION_PATH_BYTES),Native=MdoExtensionText(Meta,"native",MDO_EXTENSION_PATH_BYTES);
+        bool Code=Entry&&strlen(Entry)>2&&!strcmp(Entry+strlen(Entry)-2,".c");
+        if(Kind==MDO_MODULE_TOOLS&&!Code){snprintf(Error,sizeof(Error),"Agent tool directory requires a C entry");Ok=false;break;}
+        Ok=MdoModulesDirectorySource(Kind,Meta,Entry,!Code,Sources,Count,Capacity);
+        if(Ok&&Native&&strcmp(Native,Entry))Ok=MdoModulesDirectorySource(Kind,Meta,Native,false,Sources,Count,Capacity);
     }
-    memset(&Entry, 0, sizeof(Entry));
-    while ( (Next = xrtDirNext(Dir, &Entry)) == XDIR_NEXT_ITEM ) {
-        MdoModuleSource* pSource;
-        size_t iName = Entry.Name.Size;
-        size_t iVirtual = strlen(Directory);
-        size_t iRelative = strlen(RelativeDirectory);
-
-        bool Declarative = strcmp(RelativeDirectory, "subagents") == 0 || strcmp(RelativeDirectory,"agents")==0;
-        if ( (Entry.Flags & XDIR_ENTRY_UTF8) == 0u ||
-             Entry.Info.Type != XFILE_TYPE_FILE || iName <= (Declarative ? 3u : 2u) ||
-             strcmp(Entry.Name.Data + iName - (Declarative ? 3u : 2u),
-                 Declarative ? ".md" : ".c") != 0 ) continue;
-        if (Declarative || strcmp(RelativeDirectory, "tools") == 0) {
-            char Id[65];
-            bool Enabled;
-            size_t Suffix = Declarative ? 3u : 2u;
-            if (iName - Suffix >= sizeof(Id)) continue;
-            memcpy(Id, Entry.Name.Data, iName - Suffix); Id[iName - Suffix] = '\0';
-            if (!MdoExtensionIdValid(Id)) continue;
-            if (!MdoExtensionEnabled(Declarative ? RelativeDirectory : "tools", Id, &Enabled)) {
-                (void)xrtDirClose(Dir); return false;
-            }
-            if (!Enabled) continue;
-        }
-        if ( *pCount >= MDO_MODULE_COUNT_LIMIT ||
-             iVirtual > SIZE_MAX - iName - 2u ||
-             iRelative > SIZE_MAX - iName - 2u ||
-             !MdoModulesGrow((void**)ppSources, pCapacity, *pCount + 1u,
-                sizeof(**ppSources), MDO_MODULE_COUNT_LIMIT) ) {
-            (void)xrtDirClose(Dir);
-            (void)MdoModulesDiagnosticAdd(pDiagnostics,
-                MDO_MODULE_DIAGNOSTIC_DISCOVERY, Directory, NULL,
-                "module source count or memory limit was exceeded");
-            return false;
-        }
-        pSource = &(*ppSources)[*pCount];
-        memset(pSource, 0, sizeof(*pSource));
-        pSource->Kind = Kind;
-        pSource->Declarative = Declarative;
-        pSource->VirtualPath = (char*)xrtMalloc(iVirtual + iName + 2u);
-        pSource->RelativePath = (char*)xrtMalloc(iRelative + iName + 2u);
-        if ( pSource->VirtualPath == NULL || pSource->RelativePath == NULL ) {
-            MdoModulesSourceUnit(pSource);
-            (void)xrtDirClose(Dir);
-            (void)MdoModulesDiagnosticAdd(pDiagnostics,
-                MDO_MODULE_DIAGNOSTIC_DISCOVERY, Directory, NULL,
-                "failed to copy a module source path");
-            return false;
-        }
-        snprintf(pSource->VirtualPath, iVirtual + iName + 2u, "%s/%s",
-            Directory, Entry.Name.Data);
-        snprintf(pSource->RelativePath, iRelative + iName + 2u, "%s/%s",
-            RelativeDirectory, Entry.Name.Data);
-        if ( !MdoModulesExternalSource(pSource->RelativePath,
-                &pSource->External) ) {
-            const xerror* pError = xrtGetError();
-            (void)MdoModulesDiagnosticAdd(pDiagnostics,
-                MDO_MODULE_DIAGNOSTIC_DISCOVERY, pSource->VirtualPath, NULL,
-                pError != NULL ? xrtErrorMessage(pError) :
-                "external module source cannot be inspected");
-            MdoModulesSourceUnit(pSource);
-            (void)xrtDirClose(Dir);
-            return false;
-        }
-        (*pCount)++;
-    }
-    if ( Next == XDIR_NEXT_ERROR ) {
-        const xerror* pError = xrtGetError();
-        (void)MdoModulesDiagnosticAdd(pDiagnostics,
-            MDO_MODULE_DIAGNOSTIC_DISCOVERY, Directory, NULL,
-            pError != NULL ? xrtErrorMessage(pError) :
-            "module directory enumeration failed");
-        (void)xrtDirClose(Dir);
-        return false;
-    }
-    if ( !xrtDirClose(Dir) ) {
-        const xerror* pError = xrtGetError();
-        (void)MdoModulesDiagnosticAdd(pDiagnostics,
-            MDO_MODULE_DIAGNOSTIC_DISCOVERY, Directory, NULL,
-            pError != NULL ? xrtErrorMessage(pError) :
-            "module directory close failed");
-        return false;
-    }
-    return true;
+    xrtValueRelease(Rows);if(!Ok)MdoModulesDiagnosticAdd(Diagnostics,MDO_MODULE_DIAGNOSTIC_DISCOVERY,Type,NULL,Error[0]?Error:"Cannot enumerate extension directory entries");return Ok;
 }
 
 static bool MdoModulesDiscover(MdoModuleSource** ppSources, size_t* pCount,
@@ -677,28 +582,10 @@ static bool MdoModulesDiscover(MdoModuleSource** ppSources, size_t* pCount,
 
     *ppSources = NULL;
     *pCount = 0u;
-    if ( !MdoModulesDiscoverDirectory(MDO_MODULE_TOOLS,
-            "/app/default-home/modules/tools", "modules/tools",
-            ppSources, pCount, &iCapacity, pDiagnostics) ||
-         !MdoModulesDiscoverDirectory(MDO_MODULE_TOOLS,
-            "/app/default-home/tools", "tools",
-            ppSources, pCount, &iCapacity, pDiagnostics) ||
-         !MdoModulesDiscoverDirectory(MDO_MODULE_AGENTS,
-            "/app/default-home/agents", "agents",
-            ppSources, pCount, &iCapacity, pDiagnostics) ||
-         !MdoModulesDiscoverDirectory(MDO_MODULE_AGENTS,
-            "/app/default-home/modules/agents", "modules/agents",
-            ppSources, pCount, &iCapacity, pDiagnostics) ||
-         !MdoModulesDiscoverDirectory(MDO_MODULE_SUBAGENTS,
-            "/app/default-home/modules/subagents", "modules/subagents",
-            ppSources, pCount, &iCapacity, pDiagnostics) ||
-         !MdoModulesDiscoverDirectory(MDO_MODULE_SUBAGENTS,
-            "/app/default-home/subagents", "subagents",
-            ppSources, pCount, &iCapacity, pDiagnostics) ) {
-        MdoModulesSourcesUnit(*ppSources, *pCount);
-        *ppSources = NULL;
-        *pCount = 0u;
-        return false;
+    if(!MdoModulesDiscoverDirectory(MDO_MODULE_TOOLS,"tools",ppSources,pCount,&iCapacity,pDiagnostics)||
+       !MdoModulesDiscoverDirectory(MDO_MODULE_AGENTS,"agents",ppSources,pCount,&iCapacity,pDiagnostics)||
+       !MdoModulesDiscoverDirectory(MDO_MODULE_SUBAGENTS,"subagents",ppSources,pCount,&iCapacity,pDiagnostics)){
+        MdoModulesSourcesUnit(*ppSources,*pCount);*ppSources=NULL;*pCount=0;return false;
     }
     xvalue* Plugins=MdoApplicationPluginNativeSources();
     for(size_t I=0;I<xrtValueCount(Plugins);I++){
@@ -722,7 +609,7 @@ static bool MdoModulesHashField(xsha256* pHash, const void* pData,
 }
 
 static bool MdoModulesSourceHash(cstr Path, const void* pSource,
-    size_t iSource, const void* pHeader, size_t iHeader, char Output[65])
+    size_t iSource, const void* pHeader, size_t iHeader,cstr DirectoryDigest, char Output[65])
 {
     static const char Hex[] = "0123456789abcdef";
     unsigned char Digest[32];
@@ -731,6 +618,7 @@ static bool MdoModulesSourceHash(cstr Path, const void* pSource,
 
     xrtSha256Init(&Hash);
     if ( !MdoModulesHashField(&Hash, Path, strlen(Path)) ||
+         !MdoModulesHashField(&Hash,DirectoryDigest?DirectoryDigest:"",DirectoryDigest?strlen(DirectoryDigest):0) ||
          !MdoModulesHashField(&Hash, pSource, iSource) ||
          !MdoModulesHashField(&Hash, pHeader, iHeader) ||
          !MdoModulesHashField(&Hash, MDO_APPLICATION_SDK_FINGERPRINT,64) ||
@@ -902,6 +790,9 @@ static bool MdoModulesCopyDescriptor(MdoModuleGeneration* pGeneration,
     pGeneration->Application.ProjectId="";pGeneration->Application.SessionId="";
     pGeneration->Application.RunId="";pGeneration->Application.Workspace="";
     pGeneration->Application.Origin=MDO_ORIGIN_EXTENSION;
+    pGeneration->Application.ExtensionKind=MdoExtensionText(pGeneration->Directory,"kind",32);
+    pGeneration->Application.DirectoryId=MdoExtensionText(pGeneration->Directory,"id",96);
+    pGeneration->Application.ExtensionRoot=pGeneration->DirectoryNative;
     pGeneration->HostServices.Application=&pGeneration->Application;
     return true;
 }
@@ -944,10 +835,21 @@ static MdoModuleGeneration* MdoModulesCompile(const MdoModuleSource* pSource,
     pGeneration->External = pSource->External;
     pGeneration->PluginEntry = pSource->Plugin != NULL;
     pGeneration->SourcePath = xrtStrDup(pSource->VirtualPath);
+    if(pSource->Directory){
+        pGeneration->Directory=xrtValueClone(pSource->Directory);
+        pGeneration->DirectoryNative=MdoHomeExternalPath(MdoExtensionText(pSource->Directory,"root",MDO_EXTENSION_PATH_BYTES));
+        cstr Kind=MdoExtensionText(pSource->Directory,"kind",32),Id=MdoExtensionText(pSource->Directory,"id",96);
+        pGeneration->DirectoryLease=MdoExtensionsAcquire(Kind,Id,sError);
+        if(!pGeneration->Directory||!pGeneration->DirectoryNative||!pGeneration->DirectoryLease||!MdoExtensionsFingerprint(Kind,Id,pGeneration->DirectoryDigest,NULL,sError))goto memory_failed;
+        /* Bind the entry snapshot to the pinned directory fingerprint too. */
+        size_t FreshSize=0;bytes Fresh=xrtVfsReadAllLimit(MdoHomeApplicationVfs(),pSource->VirtualPath,MDO_MODULE_SOURCE_LIMIT,&FreshSize);
+        if(!Fresh||MdoModulesContainsZero(Fresh,FreshSize)){xrtFree(Fresh);goto memory_failed;}
+        xrtFree(pBytes);pBytes=Fresh;iBytes=FreshSize;
+    }
     if ( pGeneration->SourcePath == NULL ||
          !MdoExtensionHashBytes(pBytes,iBytes,pGeneration->SourceRevision) ||
          !MdoModulesSourceHash(pSource->VirtualPath, pBytes, iBytes,
-            pHeader, iHeader, pGeneration->SourceHash) ) goto memory_failed;
+            pHeader, iHeader,pGeneration->DirectoryDigest, pGeneration->SourceHash) ) goto memory_failed;
 
     xsTccConfigInit(&Config);
     Config.ApplicationVfs = MdoHomeApplicationVfs();
@@ -983,6 +885,12 @@ static MdoModuleGeneration* MdoModulesCompile(const MdoModuleSource* pSource,
         MdoModulesGenerationRelease(pGeneration);
         return NULL;
     }
+    if(pSource->Directory){
+        char* Root=xrtFormat("/app/default-home/%s",MdoExtensionText(pSource->Directory,"root",MDO_EXTENSION_PATH_BYTES));
+        char* Parent=xrtPathParent(pSource->VirtualPath);
+        bool Includes=Root&&Parent&&tcc_add_quote_include_path(pGeneration->Tcc,Parent)>=0&&tcc_add_quote_include_path(pGeneration->Tcc,Root)>=0&&tcc_add_include_path(pGeneration->Tcc,Root)>=0;
+        xrtFree(Root);xrtFree(Parent);if(!Includes){xrtFree(pBytes);MdoModulesGenerationRelease(pGeneration);return NULL;}
+    }
     tcc_define_symbol(pGeneration->Tcc, "MDO_MODULE_BUILD", "1");
     if(pSource->Plugin){char* Parent=xrtPathParent(pSource->VirtualPath);bool Ok=Parent&&tcc_add_quote_include_path(pGeneration->Tcc,Parent)>=0;xrtFree(Parent);if(!Ok){xrtFree(pBytes);MdoModulesGenerationRelease(pGeneration);return NULL;}
         char Id[100],Version[40];snprintf(Id,sizeof(Id),"\"plugin.%s\"",MdoPackageText(pSource->Plugin,"id",64));snprintf(Version,sizeof(Version),"\"%s\"",MdoPackageText(pSource->Plugin,"version",32));tcc_define_symbol(pGeneration->Tcc,"MDO_PLUGIN_ID",Id);tcc_define_symbol(pGeneration->Tcc,"MDO_PLUGIN_VERSION",Version);}
@@ -998,6 +906,9 @@ static MdoModuleGeneration* MdoModulesCompile(const MdoModuleSource* pSource,
         return NULL;
     }
     xrtFree(pBytes);
+    if(pSource->Directory){char Current[65];cstr Kind=MdoExtensionText(pSource->Directory,"kind",32),Id=MdoExtensionText(pSource->Directory,"id",96);
+        if(!MdoExtensionsFingerprint(Kind,Id,Current,NULL,sError)||strcmp(Current,pGeneration->DirectoryDigest)){
+            MdoModulesDiagnosticAdd(pDiagnostics,MDO_MODULE_DIAGNOSTIC_COMPILE,pSource->VirtualPath,pGeneration->SourceHash,"Extension directory changed during compilation");MdoModulesGenerationRelease(pGeneration);return NULL;}}
     EntryCast.Pointer = tcc_get_symbol(pGeneration->Tcc,
         MDO_MODULE_ENTRY_SYMBOL);
     Entry = EntryCast.Function;
@@ -1162,10 +1073,12 @@ static bool MdoModulesAgentCopy(MdoModuleGeneration* pGeneration,
     }
     const char* Configuration = pAgent->Size >= offsetof(mdo_agent_v1, Program) ? pAgent->ConfigurationJson : NULL;
     if (Configuration) {
-        xvalue* Parsed=xrtJsonParse(xrtStrView(Configuration));
-        bool Valid=Parsed && MdoAgentConfigValidate(Parsed,Error,ErrorCapacity);
-        xrtValueRelease(Parsed);
-        if (!Valid || !MdoModulesStringCopy(&pTarget->ConfigurationJson,Configuration,MDO_MODULE_PROMPT_LIMIT,false)) return false;
+        cstr Root=MdoExtensionText(pGeneration->Directory,"root",MDO_EXTENSION_PATH_BYTES),Alias=MdoExtensionText(pGeneration->Directory,"alias",64);
+        xvalue* Parsed=!pGeneration->Profile&&Root&&Alias?
+            MdoAgentConfigResolveAt(Alias,Configuration,(uRoles&MDO_AGENT_MAIN)!=0,Root,Error,ErrorCapacity):xrtJsonParse(xrtStrView(Configuration));
+        bool Valid=Parsed&&MdoAgentConfigValidate(Parsed,Error,ErrorCapacity);
+        char* Resolved=Valid?xrtJsonStringify(Parsed,false,NULL):NULL;xrtValueRelease(Parsed);
+        bool Copied=Resolved&&MdoModulesStringCopy(&pTarget->ConfigurationJson,Resolved,MDO_MODULE_PROMPT_LIMIT,false);xrtFree(Resolved);if(!Copied)return false;
     }
     if ( !MdoModulesStringCopy(&pTarget->Id, pAgent->Id,
             MDO_MODULE_ID_LIMIT, true) ||
@@ -1842,46 +1755,30 @@ static xwork_tool_definition* MdoModulesDefinitions(
 }
 
 static MdoModuleGeneration* MdoModulesReadAgentProfile(const MdoModuleSource* Source,
-    uint64 Generation, MdoModuleDiagnostics* Diagnostics)
+    uint64 Generation,MdoModuleDiagnostics* Diagnostics)
 {
-    char Id[65], Error[MDO_MODULE_ERROR_LIMIT] = {0};
-    const char* Base = strrchr(Source->RelativePath, '/');
-    char* Text = MdoExtensionRead(Source->RelativePath, false, MDO_EXTENSION_TEXT_LIMIT, NULL);
-    MdoModuleGeneration* Module = NULL;
-    MdoAgentFile File;
-    MdoModuleRegistrarContext Registrar;
-    size_t Length = Base != NULL ? strlen(Base + 1) : 0u;
-    bool Parsed = false;
-    memset(&File, 0, sizeof(File));
-    if (Length < 4u || Length - 3u >= sizeof(Id) || Text == NULL) goto failed;
-    memcpy(Id, Base + 1, Length - 3u); Id[Length - 3u] = '\0';
-    if (!MdoAgentFileParse(Id, Text,Source->Kind==MDO_MODULE_AGENTS, &File, Error, sizeof(Error))) goto failed;
-    Parsed = true;
-    Module = (MdoModuleGeneration*)xrtCalloc(1u, sizeof(*Module));
-    if (Module == NULL) goto failed;
-    xrtAtomic32Init(&Module->Refs, 1u);
-    Module->Generation = Generation; Module->Kind = Source->Kind;
-    Module->Profile=true; Module->UseCode=File.UseCode;
-    Module->External = Source->External;
-    { char ModuleId[128]; snprintf(ModuleId,sizeof(ModuleId),"%s%s",Module->Profile?"profile.":"",File.Id);
-      Module->Id = xrtStrDup(ModuleId); }
-    Module->Name = xrtStrDup(File.Name);
-    Module->Description = xrtStrDup(File.Description);
-    Module->Version = xrtStrDup("1");
-    Module->SourcePath = xrtStrDup(Source->VirtualPath);
-    if (Module->Id == NULL || Module->Name == NULL || Module->Description == NULL ||
-        Module->Version == NULL || Module->SourcePath == NULL ||
-        !MdoExtensionHash(Text, Module->SourceHash) || !MdoExtensionHash(Text,Module->SourceRevision)) goto failed;
-    memset(&Registrar, 0, sizeof(Registrar)); Registrar.Generation = Module;
-    if (MdoModulesRegistrarAddAgent(&Registrar, &File.Agent, Error, sizeof(Error)) != MDO_RESULT_OK)
-        goto failed;
-    MdoAgentFileUnit(&File); xrtFree(Text); return Module;
+    char Error[MDO_MODULE_ERROR_LIMIT]={0},After[65]={0};char* Text=NULL;MdoAgentFile File;bool Parsed=false;
+    memset(&File,0,sizeof(File));MdoModuleRegistrarContext Registrar;
+    cstr Id=MdoExtensionText(Source->Directory,"alias",64),Root=MdoExtensionText(Source->Directory,"root",MDO_EXTENSION_PATH_BYTES);
+    cstr Kind=MdoExtensionText(Source->Directory,"kind",32),DirectoryId=MdoExtensionText(Source->Directory,"id",96);
+    MdoModuleGeneration* Module=xrtCalloc(1,sizeof(*Module));if(!Module)goto failed;
+    xrtAtomic32Init(&Module->Refs,1);Module->Generation=Generation;Module->Kind=Source->Kind;Module->Profile=true;Module->External=true;
+    Module->Directory=xrtValueClone(Source->Directory);Module->DirectoryNative=Root?MdoHomeExternalPath(Root):NULL;
+    Module->DirectoryLease=MdoExtensionsAcquire(Kind,DirectoryId,Error);
+    if(!Id||!Root||!Module->Directory||!Module->DirectoryNative||!Module->DirectoryLease||!MdoExtensionsFingerprint(Kind,DirectoryId,Module->DirectoryDigest,NULL,Error))goto failed;
+    Text=MdoExtensionRead(Source->RelativePath,true,MDO_EXTENSION_TEXT_LIMIT,NULL);
+    if(!Text||!MdoAgentFileParseAt(Id,Text,Source->Kind==MDO_MODULE_AGENTS,Root,&File,Error,sizeof(Error)))goto failed;
+    Parsed=true;Module->UseCode=File.UseCode;Module->Id=xrtFormat("profile.%s",File.Id);
+    Module->Name=xrtStrDup(File.Name);Module->Description=xrtStrDup(File.Description);Module->Version=xrtStrDup("1");Module->SourcePath=xrtStrDup(Source->VirtualPath);
+    if(!Module->Id||!Module->Name||!Module->Description||!Module->Version||!Module->SourcePath||
+       !MdoModulesSourceHash(Source->VirtualPath,Text,strlen(Text),"",0,Module->DirectoryDigest,Module->SourceHash)||!MdoExtensionHash(Text,Module->SourceRevision))goto failed;
+    memset(&Registrar,0,sizeof(Registrar));Registrar.Generation=Module;
+    if(MdoModulesRegistrarAddAgent(&Registrar,&File.Agent,Error,sizeof(Error))!=MDO_RESULT_OK||
+       !MdoExtensionsFingerprint(Kind,DirectoryId,After,NULL,Error)||strcmp(After,Module->DirectoryDigest))goto failed;
+    MdoAgentFileUnit(&File);xrtFree(Text);return Module;
 failed:
-    if (Parsed) MdoAgentFileUnit(&File);
-    xrtFree(Text); MdoModulesGenerationRelease(Module);
-    (void)MdoModulesDiagnosticAdd(Diagnostics, MDO_MODULE_DIAGNOSTIC_VALIDATE,
-        Source->VirtualPath, NULL, Error[0] != '\0' ? Error : "Cannot read Agent definition");
-    return NULL;
+    if(Parsed)MdoAgentFileUnit(&File);xrtFree(Text);MdoModulesGenerationRelease(Module);
+    MdoModulesDiagnosticAdd(Diagnostics,MDO_MODULE_DIAGNOSTIC_VALIDATE,Source->VirtualPath,NULL,Error[0]?Error:"Agent directory changed or its definition cannot be read");return NULL;
 }
 
 static bool MdoModulesApplyProfiles(MdoModuleCatalog* Catalog,MdoModuleDiagnostics* Diagnostics)
@@ -1895,7 +1792,9 @@ static bool MdoModulesApplyProfiles(MdoModuleCatalog* Catalog,MdoModuleDiagnosti
         for (j=0u;j<Catalog->ModuleCount;++j) {
             if (Catalog->Modules[j]->Profile) continue;
             for (k=0u;k<Catalog->Modules[j]->AgentCount;++k)
-                if (!strcmp(Catalog->Modules[j]->Agents[k].Id,Config->Id)) {
+                if (!strcmp(Catalog->Modules[j]->Agents[k].Id,Config->Id) &&
+                    Profile->Directory&&Catalog->Modules[j]->Directory&&
+                    !strcmp(MdoExtensionText(Profile->Directory,"root",MDO_EXTENSION_PATH_BYTES),MdoExtensionText(Catalog->Modules[j]->Directory,"root",MDO_EXTENSION_PATH_BYTES))) {
                     if (Native) goto invalid;
                     Native=&Catalog->Modules[j]->Agents[k]; Owner=Catalog->Modules[j];
                 }
@@ -1948,26 +1847,11 @@ static bool MdoModulesApplyProfiles(MdoModuleCatalog* Catalog,MdoModuleDiagnosti
         continue;
 invalid:
         (void)MdoModulesDiagnosticAdd(Diagnostics,MDO_MODULE_DIAGNOSTIC_VALIDATE,Profile->SourcePath,Profile->SourceHash,
-            "C mode requires exactly one C role with the same ID and compatible mode; check modules/agents or modules/subagents");
+            "C mode requires exactly one native role in the same extension directory with the same alias and compatible mode");
         return false;
     }
-    /* A disabled canonical main profile must also suppress its C counterpart;
-     * otherwise disabling a restrictive profile could expose a broader Agent. */
-    for (i=0u;i<Catalog->ModuleCount;++i) {
-        MdoModuleGeneration* Module=Catalog->Modules[i];
-        for (j=0u;j<Module->AgentCount;) {
-            MdoModuleAgentBinding* Agent=&Module->Agents[j];
-            cstr Kind=!strncmp(Agent->Id,"subagent.",9u)?"subagents":"agents";
-            cstr Id=!strcmp(Agent->Id,"mdo.default")?"default":!strncmp(Agent->Id,"agent.",6u)?Agent->Id+6u:!strncmp(Agent->Id,"subagent.",9u)?Agent->Id+9u:NULL;
-            bool Enabled=true;
-            if (Id && !MdoExtensionEnabled(Kind,Id,&Enabled)) return false;
-            if (Enabled) { ++j; continue; }
-            MdoModulesAgentUnit(Agent);
-            --Module->AgentCount;
-            memmove(Agent,Agent+1u,(Module->AgentCount-j)*sizeof(*Agent));
-            memset(&Module->Agents[Module->AgentCount],0,sizeof(*Agent));
-        }
-    }
+    /* Discovery filters the whole physical directory, including both profile
+     * and C entry. Disabled profiles cannot leave an executable counterpart. */
     return true;
 }
 

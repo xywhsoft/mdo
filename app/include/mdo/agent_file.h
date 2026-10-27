@@ -82,7 +82,7 @@ static inline bool MdoAgentFileList(const xvalue* Object, cstr Key,
     return true;
 }
 
-static inline bool MdoAgentFileParse(cstr Id, cstr Text, bool Main,
+static inline bool MdoAgentFileParseAt(cstr Id, cstr Text, bool Main,cstr Root,
     MdoAgentFile* File, char* Error, size_t Capacity)
 {
     xvalue* Document;
@@ -91,7 +91,7 @@ static inline bool MdoAgentFileParse(cstr Id, cstr Text, bool Main,
     bool RequireVerification = false;
     memset(File, 0, sizeof(*File));
     if (!MdoExtensionIdValid(Id)) return false;
-    Document = MdoAgentConfigResolve(Id, Text, Main, Error, Capacity);
+    Document = Root?MdoAgentConfigResolveAt(Id,Text,Main,Root,Error,Capacity):MdoAgentConfigResolve(Id,Text,Main,Error,Capacity);
     if (Document == NULL) return false;
     RequireVerification = MdoAgentConfigBool(Document,"require_verification_after_write",false);
     File->Agent.Size = sizeof(File->Agent);
@@ -178,4 +178,6 @@ static inline bool MdoAgentFileParse(cstr Id, cstr Text, bool Main,
     return Ok;
 }
 
+static inline bool MdoAgentFileParse(cstr Id,cstr Text,bool Main,MdoAgentFile* File,char* Error,size_t Capacity)
+{return MdoAgentFileParseAt(Id,Text,Main,NULL,File,Error,Capacity);}
 #endif

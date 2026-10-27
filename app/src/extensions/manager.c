@@ -101,6 +101,18 @@ char* MdoExtensionsEntryPath(cstr Kind,cstr Id,char Error[512])
     xvalue* M=MdoExtensionsRead(Kind,Id,Error);cstr Entry=MdoExtensionText(M,"entry",MDO_EXTENSION_PATH_BYTES),Root=MdoExtensionText(M,"root",MDO_EXTENSION_PATH_BYTES);
     char* Path=Entry&&Root?xrtFormat("%s/%s",Root,Entry):NULL;xrtValueRelease(M);return Path;
 }
+xvalue* MdoExtensionsFindAlias(cstr Kind,cstr Alias,char Error[512])
+{
+    if(Error)Error[0]=0;if(!MdoExtensionAlias(Alias)){MdoExtError(Error,"Choose a valid extension alias");return NULL;}
+    xvalue* Rows=MdoExtensionsList(Kind,Error),*Found=NULL;bool Ambiguous=false;
+    for(size_t I=0;I<xrtValueCount(Rows);I++){
+        const xvalue* Row=xrtValueArrayGet(Rows,I);cstr Name=MdoExtensionText(Row,"alias",64);bool Valid=false,Enabled=false;
+        xrtValueGetBool(xrtValueObjectGet(Row,XRT_STR_LITERAL("valid")),&Valid);xrtValueGetBool(xrtValueObjectGet(Row,XRT_STR_LITERAL("enabled")),&Enabled);
+        if(Name&&!strcmp(Name,Alias)&&Valid&&Enabled){if(Found){Ambiguous=true;break;}Found=xrtValueClone(Row);}
+    }
+    xrtValueRelease(Rows);if(Ambiguous){xrtValueRelease(Found);Found=NULL;MdoExtError(Error,"Multiple enabled directories declare the same alias");}
+    if(!Found&&Error&&!Error[0])MdoExtError(Error,"No enabled extension directory declares this alias");return Found;
+}
 typedef struct MdoExtFile {char* Path;xfileinfo Info;bool Directory;} MdoExtFile;
 typedef struct MdoExtTree {MdoExtFile* Files;size_t Count,Capacity;uint64 Bytes;} MdoExtTree;
 static void MdoExtTreeUnit(MdoExtTree* T)

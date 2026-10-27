@@ -200,8 +200,8 @@ static bool MdoAgentsContextCollect(MdoAgentOwner* Owner,MdoAgentInstance* Insta
             cstr File=MdoAgentConfigText(Spec,"file");
             if(File && strcmp(Id,"project_rules")){
                 cstr Origin=MdoAgentConfigText(Spec,"origin");
-                char* Path=xrtFormat("%s/%s",Origin?Origin:!strncmp(Definition->Id,"subagent.",9)?"subagents":"agents",File);
-                char* Read=Path?MdoExtensionRead(Path,false,MDO_EXTENSION_TEXT_LIMIT,NULL):NULL;xrtFree(Path);
+                char* Path=xrtFormat("%s/%s",Origin?Origin:"invalid-role-directory",File);
+                char* Read=Path?MdoExtensionRead(Path,true,MDO_EXTENSION_TEXT_LIMIT,NULL):NULL;xrtFree(Path);
                 if(Read){xrtFree(Text);Text=Read;}
                 else if(MdoAgentConfigBool(Spec,"required",true)){MdoAgentsError(Error,XWORK_ERROR_CONTEXT,"required role context file cannot be read");Ok=false;}
                 else xrtClearError();
@@ -216,7 +216,7 @@ static bool MdoAgentsContextCollect(MdoAgentOwner* Owner,MdoAgentInstance* Insta
         bool Frozen=false;Ok=MdoAgentsFrozenSource(Instance,Plan,Key.Data,Spec,&Frozen);if(!Ok||Frozen)continue;
         char* Text=xrtStrDup("");cstr File=MdoAgentConfigText(Spec,"file");
         bool Enabled=MdoAgentsSourceEnabled(Spec,true);
-        if(Enabled && File){cstr Origin=MdoAgentConfigText(Spec,"origin");char* Path=xrtFormat("%s/%s",Origin?Origin:!strncmp(Definition->Id,"subagent.",9)?"subagents":"agents",File);xrtFree(Text);Text=Path?MdoExtensionRead(Path,false,MDO_EXTENSION_TEXT_LIMIT,NULL):NULL;xrtFree(Path);if(!Text&&!MdoAgentConfigBool(Spec,"required",true)){xrtClearError();Text=xrtStrDup("");}}
+        if(Enabled && File){cstr Origin=MdoAgentConfigText(Spec,"origin");char* Path=xrtFormat("%s/%s",Origin?Origin:"invalid-role-directory",File);xrtFree(Text);Text=Path?MdoExtensionRead(Path,true,MDO_EXTENSION_TEXT_LIMIT,NULL):NULL;xrtFree(Path);if(!Text&&!MdoAgentConfigBool(Spec,"required",true)){xrtClearError();Text=xrtStrDup("");}}
         Ok=MdoAgentsPlanSource(Plan,Key.Data,Text,Spec,2000u+I,Enabled,File?File:Key.Data,Error);
     }
     (void)Native;

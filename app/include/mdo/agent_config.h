@@ -2,9 +2,10 @@
 #define MDO_AGENT_CONFIG_H
 #include "extension_files.h"
 #include "agent_config_format.h"
+#include "extensions.h"
 
 static inline xvalue* MdoAgentConfigResolveDepth(cstr Id, cstr Text, bool Main,
-    const char** Stack, unsigned Depth, char* Error, size_t Capacity)
+    cstr Root,const char** Stack, unsigned Depth, char* Error, size_t Capacity)
 {
     xvalue* Own = NULL; xvalue* Base = NULL; char* ParentText = NULL;
     cstr Failure = "invalid, missing or cyclic Agent inheritance";
@@ -19,7 +20,7 @@ static inline xvalue* MdoAgentConfigResolveDepth(cstr Id, cstr Text, bool Main,
     const xvalue* OwnContext=MdoAgentConfigGet(Own,"context");
     for(size_t I=0;I<xrtValueCount(OwnContext);I++){
         xvalue* Spec=(xvalue*)xrtValueObjectAt(OwnContext,I,NULL);
-        if(MdoAgentConfigText(Spec,"file") && !MdoAgentConfigSetText(Spec,"origin",Main?"agents":"subagents"))goto failed;
+        if(MdoAgentConfigText(Spec,"file") && (!Root||!MdoAgentConfigSetText(Spec,"origin",Root)))goto failed;
     }
     cstr Parent = MdoAgentConfigText(Own,"extends");
     if (Parent && Parent[0]) {
@@ -32,10 +33,12 @@ static inline xvalue* MdoAgentConfigResolveDepth(cstr Id, cstr Text, bool Main,
             else if (!strncmp(Parent,"subagent.",9)) { ParentMain=false; ParentId=Parent+9; }
             else if (!strcmp(Parent,"mdo.default")) { ParentMain=true; ParentId="default"; }
             if (!MdoExtensionIdValid(ParentId)) goto failed;
-            char Path[160]; snprintf(Path,sizeof(Path),"%s/%s.md",ParentMain?"agents":"subagents",ParentId);
-            ParentText=MdoExtensionRead(Path,false,MDO_EXTENSION_TEXT_LIMIT,NULL);
-            if (!ParentText) goto failed;
-            Base=MdoAgentConfigResolveDepth(ParentId,ParentText,ParentMain,Stack,Depth+1u,Error,Capacity);
+            char Why[512]={0};xvalue* ParentDirectory=MdoExtensionsFindAlias(ParentMain?"agents":"subagents",ParentId,Why);
+            cstr ParentRoot=MdoAgentConfigText(ParentDirectory,"root"),ParentEntry=MdoAgentConfigText(ParentDirectory,"entry");
+            char* Path=ParentRoot&&ParentEntry?xrtFormat("%s/%s",ParentRoot,ParentEntry):NULL;
+            ParentText=Path?MdoExtensionRead(Path,true,MDO_EXTENSION_TEXT_LIMIT,NULL):NULL;xrtFree(Path);
+            if(ParentText)Base=MdoAgentConfigResolveDepth(ParentId,ParentText,ParentMain,ParentRoot,Stack,Depth+1u,Error,Capacity);
+            xrtValueRelease(ParentDirectory);
             xrtFree(ParentText); ParentText=NULL;
         }
         if (!Base) goto failed;
@@ -53,8 +56,8 @@ static inline xvalue* MdoAgentConfigResolveDepth(cstr Id, cstr Text, bool Main,
     cstr PromptFile=ReadPromptFile?MdoAgentConfigText(Own,"prompt_file"):NULL;
     if (PromptFile) {
         if (!MdoAgentConfigPathValid(PromptFile)) {Failure="prompt_file requires a portable relative path";goto failed;}
-        char* Path=xrtFormat("%s/%s",Main?"agents":"subagents",PromptFile);
-        char* Body=Path?MdoExtensionRead(Path,false,MDO_EXTENSION_TEXT_LIMIT,NULL):NULL;xrtFree(Path);
+        char* Path=Root?xrtFormat("%s/%s",Root,PromptFile):NULL;
+        char* Body=Path?MdoExtensionRead(Path,true,MDO_EXTENSION_TEXT_LIMIT,NULL):NULL;xrtFree(Path);
         if (!Body || !MdoAgentConfigSetText(Own,"prompt",Body)) {xrtFree(Body);Failure="cannot read Agent prompt_file";goto failed;}
         xrtFree(Body);
     }
@@ -66,11 +69,17 @@ failed:
     return NULL;
 }
 
-static inline xvalue* MdoAgentConfigResolve(cstr Id,cstr Text,bool Main,char* Error,size_t Capacity)
+static inline xvalue* MdoAgentConfigResolveAt(cstr Id,cstr Text,bool Main,cstr Root,char* Error,size_t Capacity)
 {
     const char* Stack[16]={0};
-    if (Error && Capacity) Error[0]=0;
-    return MdoAgentConfigResolveDepth(Id,Text,Main,Stack,0,Error,Capacity);
+    if(Error&&Capacity)Error[0]=0;
+    return MdoAgentConfigResolveDepth(Id,Text,Main,Root,Stack,0,Error,Capacity);
+}
+static inline xvalue* MdoAgentConfigResolve(cstr Id,cstr Text,bool Main,char* Error,size_t Capacity)
+{
+    char Why[512]={0};xvalue* Directory=MdoExtensionsFindAlias(Main?"agents":"subagents",Id,Why);
+    xvalue* Result=MdoAgentConfigResolveAt(Id,Text,Main,MdoAgentConfigText(Directory,"root"),Error,Capacity);
+    xrtValueRelease(Directory);return Result;
 }
 
 #endif

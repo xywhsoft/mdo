@@ -40,3 +40,14 @@
 - 内置 ZIP 原生测试验证 11 个命令和两个 Skill 安装目录、完整性、卸载与停用后重新初始化不复活。证据分别在 .build/command-directory-native、command-worker-directory、builtin-directory-native、extension-directory-native。
 
 剩余：其他八类运行时和全部管理/发布 API、客户端 UI、平台/创作中心/后台、官方外部工具归档、跨平台及端到端验收。生产尚未切换。
+
+## 阶段三之二：Agent、SubAgent、Agent 工具目录运行时（已验证）
+
+- 三类只从 Home 的独立扩展目录发现入口，可包含配置与原生 C 入口；原 modules/agents、modules/subagents、modules/tools 和散文件不参与发现。默认 Agent 也合入单一目录。
+- 原生编译提供入口所在目录及扩展根的 include 路径，SDK 回调绑定物理目录与资源根；整个目录摘要参与编译标识，编译前后核对实际内容。
+- 角色配置的 prompt_file、上下文附件及继承分别保留所属目录。配置与 C 角色只有位于同一扩展目录时才能组合，停用会同时移除二者。
+- 已加载的代际持有目录租约，SDK 回调、工具及角色引用释放后才允许移除目录。
+- 新增不启动应用的原生产品测试：使用当前完整 unity 源码及实际 Home/模块/SDK 实现，只为小型夹具挂接文件根。实际执行 Agent 工具、主 Agent 与 SubAgent 的 C 回调，验证资源读取、目录身份、父子上下文来源、辅助头文件修改后从 17 改为 29、整体停用和释放运行时后的卸载。
+- 当前完整应用原生编译通过；三类上述运行回归全部通过，证据在 .build/module-directory-native/result.json。未调用模型或供应商。
+
+本阶段只完成运行时；三类编辑/发布管理接口与前端仍需统一，其他五类运行时及平台链路继续实施，尚未上线。

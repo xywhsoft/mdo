@@ -1,0 +1,12 @@
+{
+  "kind": "agents",
+  "name": "Default",
+  "alias": "default",
+  "entry": "agent.md",
+  "native": "agent.c",
+  "platforms": [
+    "any"
+  ],
+  "author": "墨斗",
+  "description": "General coding and knowledge-work Agent with inherited model settings."
+}
