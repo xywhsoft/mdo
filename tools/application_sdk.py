@@ -88,6 +88,13 @@ def native_contracts():
     for action in ('read','fingerprint'):
         add('extension.'+action,'Read or verify a whole directory; omitted kind/id use the host-bound current extension',{'kind':string,'id':string})
     add('extension.files','List portable files and empty directories, including hidden and deep paths',{'kind':string,'id':string},output=arr)
+    identity={'kind':string,'id':string}
+    add('extension.create','Create a disabled local directory; approve executable content explicitly. No published archive bytes are embedded in JSON.',{**identity,'manifest':obj,'entry_text':string,'trust_code':boolean},('kind','id','manifest','entry_text'))
+    add('extension.import','Import all files of an explicitly selected native extension directory through a standard ZIP; links are rejected.',{**identity,'directory':string,'expected_revision':string,'trust_code':boolean},('kind','id','directory'))
+    add('extension.pack','Produce a task-owned standard ZIP path, SHA-256 and byte count; managed store content cannot be republished.',identity,('kind','id'))
+    add('extension.install','Install a complete local ZIP. Running directories remain pinned; no installer or hook is executed.',{**identity,'archive':string,'expected_revision':string,'trust_code':boolean},('kind','id','archive'))
+    for action in ('write','mkdir','move','remove'):
+        add('extension.file.'+action,'Edit an idle manual directory with a whole-directory revision precondition; declared entry files cannot be removed.',{**identity,'path':string,'text':string,'destination':string,'expected_revision':string},('kind','id','path','expected_revision')+(('text',) if action=='write' else ('destination',) if action=='move' else ()))
     path={'path':string,'space':{'type':'string','enum':['native','workspace','home','application','extension']}}
     for prefix in ('fs','vfs','storage'):
         names={'fs':['resolve','stat','read','write','append','list','mkdir','remove','copy','move'],'vfs':['read','list'],'storage':['read','write','remove']}[prefix]

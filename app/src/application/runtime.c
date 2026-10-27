@@ -14,6 +14,14 @@ static const struct {cstr Id,Description;} SdkRuntimeMethods[]={
     {"extension.read","Read one directory manifest and its host-owned installation state"},
     {"extension.files","List all portable paths owned by one installed directory"},
     {"extension.fingerprint","Verify and fingerprint the entire extension directory, including auxiliary files"},
+    {"extension.create","Create one disabled local extension directory with its manifest and text entry"},
+    {"extension.import","Import an entire anchored native directory as one local extension"},
+    {"extension.pack","Create a standard ZIP task from the complete local extension directory"},
+    {"extension.install","Install one complete local directory ZIP; active directories remain protected"},
+    {"extension.file.write","Atomically edit a local text file with a directory fingerprint precondition"},
+    {"extension.file.mkdir","Create a local extension resource directory"},
+    {"extension.file.move","Move a local extension resource file without replacing another entry"},
+    {"extension.file.remove","Remove a local extension resource file"},
     {"runtime.info","Application version, paths, platform and power state"},
     {"runtime.log","Write an extension log message"},{"runtime.clock","Read monotonic and wall clocks"},
     {"runtime.sleep","Cancellable wait in milliseconds"},{"runtime.env.get","Read a process environment variable"},
@@ -119,11 +127,31 @@ static bool SdkExtensionCall(const mdo_sdk_context_v1* C,cstr Method,const xvalu
         if(MdoExtensionsVerify(Kind,Id,Cancel,Why)&&MdoExtensionsFingerprint(Kind,Id,Hash,Cancel,Why)){
             *R=xrtValueObject();SdkPut(*R,"sha256",Hash);SdkPut(*R,"kind",Kind);SdkPut(*R,"id",Id);
         }
-    }else{
+    }else if(!strcmp(Method,"extension.create")){
+        cstr Text=SdkField(P,"entry_text");bool Trust=false;xrtValueGetBool(SdkGet(P,"trust_code"),&Trust);
+        MdoExtensionsCreate(Kind,Id,SdkGet(P,"manifest"),Text,Text?strlen(Text):0,Trust,R,Why);
+    }else if(!strcmp(Method,"extension.import")){
+        bool Trust=false;xrtValueGetBool(SdkGet(P,"trust_code"),&Trust);MdoApplicationInvocation* I=C->Opaque;
+        MdoExtensionsImportDirectory(Kind,Id,SdkField(P,"directory"),SdkField(P,"expected_revision"),Trust,I?I->Cancel:NULL,R,Why);
+    }else if(!strcmp(Method,"extension.pack")){
+        char* Task=xrtXidMakeString(),*Base=Task?xrtFormat("data/extension-tasks/%s",Task):NULL,*Path=Base?xrtFormat("%s/extension.zip",Base):NULL;
+        xroot Directory=Base?MdoHomeOpenStorageDirectory(Base):NULL;bool Ok=Directory!=NULL;if(Directory)xrtRootClose(Directory);char Hash[65];uint64 Bytes=0;MdoApplicationInvocation* I=C->Opaque;
+        Ok=Ok&&Path&&MdoExtensionsPack(Kind,Id,Path,I?I->Cancel:NULL,Hash,&Bytes,Why);
+        if(Ok){*R=xrtValueObject();SdkPut(*R,"task",Task);SdkPut(*R,"archive",Path);SdkPut(*R,"sha256",Hash);SdkPutUInt(*R,"bytes",Bytes);}else if(Base)MdoHomeRemove(Base,false);
+        xrtFree(Task);xrtFree(Base);xrtFree(Path);
+    }else if(!strcmp(Method,"extension.install")){
+        bool Trust=false;xrtValueGetBool(SdkGet(P,"trust_code"),&Trust);MdoApplicationInvocation* I=C->Opaque;xvalue* Credits=xrtValueObject();SdkPut(Credits,"source","manual");
+        if(SdkField(P,"expected_revision"))SdkPut(Credits,"expected_revision",SdkField(P,"expected_revision"));
+        MdoExtensionsInstall(Kind,Id,SdkField(P,"archive"),Credits,Trust,I?I->Cancel:NULL,R,Why);xrtValueRelease(Credits);
+    }else if(!strncmp(Method,"extension.file.",15)){
+        cstr Action=Method+15,Text=SdkField(P,"text");
+        if(!strcmp(Action,"write")&&!Text)return MdoApplicationError(E,"sdk_arguments_invalid","A text write needs text; upload binary resources through the common file endpoint or import their directory","extension",422,false);
+        MdoExtensionsEdit(Kind,Id,Action,SdkField(P,"path"),SdkField(P,"destination"),Text,Text?strlen(Text):0,SdkField(P,"expected_revision"),R,Why);
+    }else if(!strcmp(Method,"extension.current")||!strcmp(Method,"extension.read")){
         *R=MdoExtensionsRead(Kind,Id,Why);
         if(*R){char* Relative=MdoExtensionsRoot(Kind,Id),*Native=Relative?MdoHomeExternalPath(Relative):NULL;
             if(Native)SdkPut(*R,"native_root",Native);xrtFree(Relative);xrtFree(Native);}
-    }
+    }else return MdoApplicationError(E,"sdk_service_missing","Unknown extension service","extension",404,false);
     return *R!=NULL||MdoApplicationError(E,"sdk_extension_unavailable",Why[0]?Why:"No installed directory is bound to this invocation","extension",409,false);
 }
 static xvalue* SdkFileInfo(const xfileinfo* I){
