@@ -1,6 +1,7 @@
 #include "../../include/mdo/extensions.h"
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/extension_manifest.h"
+#include "tasks_internal.h"
 
 #define MDO_EXT_STATE "data/extensions/state.json"
 #define MDO_EXT_STATE_LIMIT (8u*1024u*1024u)

@@ -31,7 +31,7 @@ static xvalue* MdoExtArchiveLoad(cstr Id,char Error[512]){
  char* Path=MdoExtArchivePath(Id,"task.json");xfile F=Path?MdoHomeOpenRead(Path):NULL;xrtFree(Path);uint64 N=0;bool Ok=F&&xrtFileSize(F,&N)&&N&&N<=MDO_ARCHIVE_TASK_RECORD;
  char* Text=Ok?xrtMalloc((size_t)N+1):NULL;Ok=Text&&xrtReadFull(F,Text,(size_t)N,NULL);xrtClose(F);xvalue* V=Ok&&!memchr(Text,0,(size_t)N)?xrtJsonParse(xrtStrViewN(Text,(size_t)N)):NULL;xrtFree(Text);
  cstr Stored=MdoExtensionText(V,"id",32),Hash=MdoExtensionText(V,"sha256",64),State=MdoExtensionText(V,"state",24),Kind=MdoExtensionText(V,"kind",32),Purpose=MdoExtensionText(V,"purpose",16);uint64 Size=0,Created=0;
- bool Review=Purpose&&!strcmp(Purpose,"review");Ok=V&&Stored&&Id&&!strcmp(Stored,Id)&&MdoExtArchiveHash(Hash)&&MdoExtArchiveNumber(V,"bytes",&Size)&&Size&&Size<=MDO_EXTENSION_ARCHIVE_BYTES&&MdoExtArchiveNumber(V,"created",&Created)&&Created&&Created<=INT64_MAX-MDO_ARCHIVE_TASK_TTL&&
+ bool Review=Purpose&&(!strcmp(Purpose,"review")||!strcmp(Purpose,"file"));Ok=V&&Stored&&Id&&!strcmp(Stored,Id)&&MdoExtArchiveHash(Hash)&&MdoExtArchiveNumber(V,"bytes",&Size)&&Size&&Size<=MDO_EXTENSION_ARCHIVE_BYTES&&MdoExtArchiveNumber(V,"created",&Created)&&Created&&Created<=INT64_MAX-MDO_ARCHIVE_TASK_TTL&&
   Purpose&&(Review||!strcmp(Purpose,"install")||!strcmp(Purpose,"publish"))&&(Review||MdoExtensionDirectoryKind(Kind))&&State&&(!strcmp(State,"receiving")||!strcmp(State,"ready")||!strcmp(State,"failed")||!strcmp(State,"cancel_requested")||!strcmp(State,"cancelled")||!strcmp(State,"complete"));
  if(!Ok){xrtValueRelease(V);MdoExtArchiveError(Error,"Archive task is missing or invalid");return NULL;}return V;
 }
@@ -69,7 +69,7 @@ xvalue* MdoExtensionTasksList(char Error[512]){if(Error)Error[0]=0;if(!MdoExtArc
 xvalue* MdoExtensionTaskRead(cstr Id,char Error[512]){if(Error)Error[0]=0;if(!MdoExtArchiveTasksLock||!MdoExtArchiveId(Id)){MdoExtArchiveError(Error,"Choose an archive task");return NULL;}xrtMutexLock(MdoExtArchiveTasksLock);xvalue* T=MdoExtArchiveLoad(Id,Error),*R=T?MdoExtArchiveInfo(T):NULL;xrtValueRelease(T);xrtMutexUnlock(MdoExtArchiveTasksLock);return R;}
 bool MdoExtensionTaskBegin(const xvalue* Input,xvalue** Result,char Error[512]){
  *Result=NULL;if(Error)Error[0]=0;cstr Purpose=MdoExtensionText(Input,"purpose",16),Kind=MdoExtensionText(Input,"kind",32),Hash=MdoExtensionText(Input,"sha256",64);uint64 Size=0;
- bool Review=Purpose&&!strcmp(Purpose,"review");
+ bool Review=Purpose&&(!strcmp(Purpose,"review")||!strcmp(Purpose,"file"));
  if(!MdoExtArchiveTasksLock||!Purpose||(!Review&&strcmp(Purpose,"install")&&strcmp(Purpose,"publish"))||(!Review&&!MdoExtensionDirectoryKind(Kind))||!MdoExtArchiveHash(Hash)||!MdoExtArchiveNumber(Input,"bytes",&Size)||!Size||Size>MDO_EXTENSION_ARCHIVE_BYTES)return MdoExtArchiveError(Error,"Choose an archive purpose, type, SHA-256 and size up to 512 MiB");
  xrtMutexLock(MdoExtArchiveTasksLock);xvalue* Items=MdoExtArchiveList(Error);uint64 Reserved=0;size_t Active=0;
  if(Items&&xrtValueCount(Items)==128){const xvalue* Oldest=NULL;uint64 OldTime=UINT64_MAX;
@@ -133,7 +133,7 @@ bool MdoExtensionTaskSeal(cstr Id,xcancel* Cancel,xvalue** Result,char Error[512
   * while the control mutex stays free for progress reads and cancellation. */
  bool DigestRead=Ok&&!Ready&&F&&xrtFileSize(F,&Size)&&Size==Expected&&MdoExtArchiveDigest(F,Stop,Hash);
  bool Invalid=false;if(Ok&&!Ready){Ok=DigestRead&&!strcmp(Hash,MdoExtensionText(T,"sha256",64));Invalid=DigestRead&&!Ok;}
- bool Review=T&&!strcmp(MdoExtensionText(T,"purpose",16),"review");MdoZip Z={0};xvalue* Meta=NULL;
+ cstr Purpose=MdoExtensionText(T,"purpose",16);bool Review=Purpose&&(!strcmp(Purpose,"review")||!strcmp(Purpose,"file"));MdoZip Z={0};xvalue* Meta=NULL;
  if(Ok&&!Ready&&!Review){Ok=MdoZipOpen(&Z,F);if(Ok)Meta=MdoExtensionZipManifest(&Z,Stop);Ok=Ok&&Meta&&!strcmp(MdoExtensionText(Meta,"kind",32),MdoExtensionText(T,"kind",32));
   for(size_t I=0;Ok&&I<Z.Count;I++)Ok=MdoZipEntryRead(&Z,I,NULL,NULL,Stop,NULL);if(!Ok&&!xrtCancelRequested(Stop))Invalid=true;}
  MdoZipClose(&Z);xrtClose(F);
