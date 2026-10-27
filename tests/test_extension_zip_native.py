@@ -23,11 +23,11 @@ def headers():
     folder = ROOT / 'app/include/mdo'
     def inline(name):
         text = (folder / name).read_text(encoding='utf-8')
-        for child in ('extension_path.h', 'extension_casefold.h'):
+        for child in ('extension_zip.h', 'extension_path.h', 'extension_casefold.h'):
             if '#include "' + child + '"' in text:
                 text = text.replace('#include "' + child + '"', inline(child))
         return text
-    return inline('extension_zip.h')
+    return inline('extension_manifest.h')
 
 
 def main():
@@ -102,6 +102,23 @@ def main():
     data = bytearray(path.read_bytes()); data[6] |= 1; at = data.index(b'PK\x01\x02'); data[at + 8] |= 1; path.write_bytes(data); cases[-1]['expected'] = False
     path = fixture('oversized-declaration', [('x', b'abc', regular)])
     data = bytearray(path.read_bytes()); at = data.index(b'PK\x01\x02'); struct.pack_into('<I', data, at + 24, 0x70000000); path.write_bytes(data); cases[-1]['expected'] = False
+    entries = {'agents': 'agent.md', 'subagents': 'agent.c', 'tools': 'tool.c', 'mcp': 'mcp.json', 'skills': 'SKILL.md', 'commands': 'command.c', 'external-tools': 'bin/qa', 'knowledge': 'knowledge.json', 'plugins': 'plugin.json'}
+    for kind, entry in entries.items():
+        manifest = {'kind': kind, 'name': 'QA extension', 'alias': 'qa-name', 'entry': entry, 'platforms': ['any']}
+        fixture('manifest-' + kind, [('extension.json', json.dumps(manifest).encode(), regular), (entry, b'not executed', regular)])
+        cases[-1]['describe'] = True
+    def manifest_fixture(name, changes, extra=()):
+        m = {'kind': 'mcp', 'name': 'QA', 'alias': 'qa', 'entry': 'mcp.json', 'platforms': ['any']}
+        m.update(changes)
+        fixture(name, [('extension.json', json.dumps(m).encode(), regular), ('mcp.json', b'{}', regular), *extra], False)
+        cases[-1]['describe'] = True
+    manifest_fixture('manifest-missing-entry', {'entry': 'missing.c'})
+    manifest_fixture('manifest-old-envelope', {'resources': []})
+    manifest_fixture('manifest-old-type', {'kind': 'toolpacks'})
+    manifest_fixture('manifest-missing-native', {'native': 'missing.c'})
+    manifest_fixture('manifest-self-entry', {'entry': 'extension.json'})
+    manifest_fixture('manifest-invalid-alias', {'alias': '../escape'})
+    fixture('manifest-wrapper', [('payload/extension.json', b'{}', regular)], False); cases[-1]['describe'] = True
     binary = bytes(range(256)) * 1025
     source_file = out / 'source.bin'; source_file.write_bytes(binary)
     written = out / 'native-written.zip'
@@ -117,6 +134,8 @@ MDO_EXPORT mdo_result mdoCommandRun(const mdo_command_context_v1* C,const xvalue
  for(size_t I=0;I<xrtValueCount(Cases);I++){
   const xvalue* Item=xrtValueArrayGet(Cases,I);xstrview Path={0};xrtValueGetString(xrtValueObjectGet(Item,XRT_STR_LITERAL("path")),&Path);
   xfile F=xrtOpen(Path.Data,XFILE_READ);MdoZip Z={0};bool Ok=MdoZipOpen(&Z,F);if(Ok)Ok=MdoZipValidate(&Z,NULL);
+  bool Describe=false;xrtValueGetBool(xrtValueObjectGet(Item,XRT_STR_LITERAL("describe")),&Describe);
+  if(Ok&&Describe){xvalue* Manifest=MdoExtensionZipManifest(&Z,NULL);Ok=Manifest!=NULL;xrtValueRelease(Manifest);}
   xvalue* Row=xrtValueObject();xrtValueObjectSet(Row,XRT_STR_LITERAL("name"),xrtValueObjectGet(Item,XRT_STR_LITERAL("name")));
   xrtValueObjectSetNew(Row,XRT_STR_LITERAL("accepted"),xrtValueBool(Ok));xrtValueObjectSetNew(Row,XRT_STR_LITERAL("error"),xrtValueString(xrtStrView(Z.Error)));xrtValueArrayAppendNew(Rows,Row);MdoZipClose(&Z);xrtClose(F);
  }
