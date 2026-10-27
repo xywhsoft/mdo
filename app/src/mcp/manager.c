@@ -4,6 +4,10 @@
 #include <string.h>
 
 #include "../../include/mdo/home.h"
+#include "../../include/mdo/extensions.h"
+#include "../../include/mdo/extension_files.h"
+#include "../../include/mdo/extension_manifest.h"
+#include "../../include/mdo/projects.h"
 #include "../../include/mdo/mcp.h"
 #include "../../include/mdo/secrets.h"
 #include "../../include/mdo/ecosystem_package.h"
@@ -33,6 +37,8 @@ typedef struct MdoMcpHttpHeaderEntry {
 } MdoMcpHttpHeaderEntry;
 
 typedef struct MdoMcpServerEntry {
+    char *DirectoryId,*ProjectId;
+    MdoExtensionLease* DirectoryLease;
     char* RuntimeId;
     char* OAuthJson;
     bool External;
@@ -96,6 +102,10 @@ typedef struct MdoMcpSource {
     char* Id;
     char* VirtualPath;
     char* RelativePath;
+    xvalue* Directory;
+    char* ProjectId;
+    char DirectoryDigest[65];
+    MdoExtensionLease* DirectoryLease;
 } MdoMcpSource;
 
 typedef struct MdoMcpState {
@@ -258,6 +268,7 @@ static void MdoMcpServerUnit(MdoMcpServerEntry* pEntry)
 {
     size_t i;
     if ( pEntry == NULL ) return;
+    xrtFree(pEntry->DirectoryId);xrtFree(pEntry->ProjectId);MdoExtensionsRelease(pEntry->DirectoryLease);
     xrtFree(pEntry->RuntimeId);
     xrtFree(pEntry->OAuthJson);
     xrtFree(pEntry->Id);
@@ -432,7 +443,7 @@ static void MdoMcpSourceUnit(MdoMcpSource* pSource)
     if ( pSource == NULL ) return;
     xrtFree(pSource->Id);
     xrtFree(pSource->VirtualPath);
-    xrtFree(pSource->RelativePath);
+    xrtFree(pSource->RelativePath);xrtValueRelease(pSource->Directory);xrtFree(pSource->ProjectId);MdoExtensionsRelease(pSource->DirectoryLease);
     memset(pSource, 0, sizeof(*pSource));
 }
 
@@ -450,181 +461,37 @@ static int MdoMcpSourceCompare(const void* Left, const void* Right)
     return strcmp(pLeft->Id, pRight->Id);
 }
 
-static bool MdoMcpDiscover(MdoMcpSource** ppSources, size_t* pCount,
-    MdoMcpDiagnostics* pDiagnostics)
+#include "directory.inc.c"
+static bool MdoMcpDiscover(MdoMcpSource** Sources,size_t* Count,MdoMcpDiagnostics* Diagnostics)
 {
-    xvfs Vfs = MdoHomeApplicationVfs();
-    xdir Directory;
-    xdirentry Entry;
-    xdirnext Next;
-    size_t Capacity = 0u;
-
-    *ppSources = NULL;
-    *pCount = 0u;
-    Directory = Vfs != NULL ? xrtVfsDirOpen(Vfs, MDO_MCP_DIRECTORY,
-        XDIR_STAT) : NULL;
-    if ( Directory == NULL ) {
-        const xerror* pError = xrtGetError();
-        if ( pError != NULL && xrtErrorKind(pError) == XERR_NOT_FOUND ) {
-            xrtClearError();
-            return true;
-        }
-        (void)MdoMcpDiagnosticAdd(pDiagnostics,
-            MDO_MCP_DIAGNOSTIC_DISCOVERY, NULL, MDO_MCP_DIRECTORY, NULL,
-            pError != NULL ? xrtErrorMessage(pError) :
-            "MCP directory cannot be opened");
-        return false;
+    *Sources=NULL;*Count=0;size_t Capacity=0;xdir D=MdoHomeOpenDirectory(MDO_MCP_CONNECTIONS,XDIR_STAT);
+    if(!D){if(xrtGetError()&&xrtErrorKind(xrtGetError())==XERR_NOT_FOUND){xrtClearError();return true;}return false;}
+    bool Ok=true;xdirentry E;xdirnext Next=XDIR_NEXT_END;
+    while(Ok&&(Next=xrtDirNext(D,&E))==XDIR_NEXT_ITEM){
+        if(!(E.Flags&XDIR_ENTRY_UTF8)||E.Name.Size<6||E.Name.Size>101||memcmp(E.Name.Data+E.Name.Size-5,".json",5))continue;
+        char* Id=xrtStrDupN(E.Name.Data,E.Name.Size-5);if(!Id){Ok=false;break;}
+        if(!MdoMcpIdValid(Id)){MdoMcpDiagnosticAdd(Diagnostics,MDO_MCP_DIAGNOSTIC_DISCOVERY,Id,MDO_MCP_CONNECTIONS,NULL,"Invalid private MCP connection identity");xrtFree(Id);continue;}
+        if(!MdoMcpGrow((void**)Sources,&Capacity,*Count+1,sizeof(**Sources),MDO_MCP_SERVER_LIMIT)){xrtFree(Id);Ok=false;break;}
+        MdoMcpSource* S=&(*Sources)[*Count];memset(S,0,sizeof(*S));S->Id=Id;S->External=true;
+        S->RelativePath=xrtFormat(MDO_MCP_CONNECTIONS "/%s.json",Id);S->VirtualPath=S->RelativePath?xrtFormat("/app/default-home/%s",S->RelativePath):NULL;
+        if(!S->RelativePath||!S->VirtualPath){MdoMcpSourceUnit(S);Ok=false;break;}(*Count)++;
     }
-    memset(&Entry, 0, sizeof(Entry));
-    while ( (Next = xrtDirNext(Directory, &Entry)) == XDIR_NEXT_ITEM ) {
-        MdoMcpSource* pSource;
-        bool Exists = false;
-        xfileinfo ExternalInfo;
-        size_t NameSize = Entry.Name.Size;
-        size_t VirtualSize = strlen(MDO_MCP_DIRECTORY);
-        size_t RelativeSize = strlen(MDO_MCP_RELATIVE_DIRECTORY);
-        size_t IdSize;
-        char* Id = NULL;
-
-        if ( (Entry.Flags & XDIR_ENTRY_UTF8) == 0u || NameSize <= 5u ||
-             memcmp(Entry.Name.Data + NameSize - 5u, ".json", 5u) != 0 )
-            continue;
-        IdSize = NameSize - 5u;
-        Id = xrtStrDupN(Entry.Name.Data, IdSize);
-        if ( Id == NULL ) goto fail;
-        if ( !MdoMcpIdValid(Id) ) {
-            char Path[MDO_MCP_STRING_LIMIT];
-            (void)snprintf(Path, sizeof(Path), "%s/%s", MDO_MCP_DIRECTORY,
-                Entry.Name.Data);
-            if ( !MdoMcpDiagnosticAdd(pDiagnostics,
-                    MDO_MCP_DIAGNOSTIC_DISCOVERY, NULL, Path, NULL,
-                    "MCP file name is not a valid server id") ) {
-                xrtFree(Id);
-                goto fail;
-            }
-            xrtFree(Id);
-            continue;
-        }
-        if ( *pCount >= MDO_MCP_SERVER_LIMIT ||
-             VirtualSize > SIZE_MAX - NameSize - 2u ||
-             RelativeSize > SIZE_MAX - NameSize - 2u ||
-             !MdoMcpGrow((void**)ppSources, &Capacity, *pCount + 1u,
-                sizeof(**ppSources), MDO_MCP_SERVER_LIMIT) ) {
-            xrtFree(Id);
-            goto fail;
-        }
-        pSource = &(*ppSources)[*pCount];
-        memset(pSource, 0, sizeof(*pSource));
-        pSource->Id = Id;
-        pSource->VirtualPath = (char*)xrtMalloc(
-            VirtualSize + NameSize + 2u);
-        pSource->RelativePath = (char*)xrtMalloc(
-            RelativeSize + NameSize + 2u);
-        if ( pSource->VirtualPath == NULL || pSource->RelativePath == NULL )
-            goto fail;
-        (void)snprintf(pSource->VirtualPath, VirtualSize + NameSize + 2u,
-            "%s/%s", MDO_MCP_DIRECTORY, Entry.Name.Data);
-        (void)snprintf(pSource->RelativePath, RelativeSize + NameSize + 2u,
-            "%s/%s", MDO_MCP_RELATIVE_DIRECTORY, Entry.Name.Data);
-        memset(&ExternalInfo, 0, sizeof(ExternalInfo));
-        if ( !MdoHomeExternalStat(pSource->RelativePath, &Exists,
-                &ExternalInfo) ) goto fail;
-        pSource->External = Exists;
-        if ( Entry.Info.Type != XFILE_TYPE_FILE ||
-             (Exists && ExternalInfo.Type != XFILE_TYPE_FILE) ) {
-            if ( !MdoMcpDiagnosticAdd(pDiagnostics,
-                    MDO_MCP_DIAGNOSTIC_READ, pSource->Id,
-                    pSource->VirtualPath, NULL,
-                    "MCP source is not a regular file") ) goto fail;
-            MdoMcpSourceUnit(pSource);
-            continue;
-        }
-        ++*pCount;
-    }
-    if ( Next == XDIR_NEXT_ERROR || !xrtDirClose(Directory) ) {
-        const xerror* pError = xrtGetError();
-        (void)MdoMcpDiagnosticAdd(pDiagnostics,
-            MDO_MCP_DIAGNOSTIC_DISCOVERY, NULL, MDO_MCP_DIRECTORY, NULL,
-            pError != NULL ? xrtErrorMessage(pError) :
-            "MCP directory enumeration failed");
-        MdoMcpSourcesUnit(*ppSources, *pCount);
-        *ppSources = NULL;
-        *pCount = 0u;
-        return false;
-    }
-    if ( *pCount > 1u ) qsort(*ppSources, *pCount, sizeof(**ppSources),
-        MdoMcpSourceCompare);
-    return true;
-
-fail:
-    (void)xrtDirClose(Directory);
-    if ( *pCount < Capacity && *ppSources != NULL )
-        MdoMcpSourceUnit(&(*ppSources)[*pCount]);
-    MdoMcpSourcesUnit(*ppSources, *pCount);
-    *ppSources = NULL;
-    *pCount = 0u;
-    (void)MdoMcpDiagnosticAdd(pDiagnostics,
-        MDO_MCP_DIAGNOSTIC_DISCOVERY, NULL, MDO_MCP_DIRECTORY, NULL,
-        "MCP discovery exceeded its count or memory limit");
-    return false;
+    if(!xrtDirClose(D)||Next==XDIR_NEXT_ERROR)Ok=false;
+    if(!Ok){MdoMcpSourcesUnit(*Sources,*Count);*Sources=NULL;*Count=0;return false;}
+    if(*Count>1)qsort(*Sources,*Count,sizeof(**Sources),MdoMcpSourceCompare);return true;
 }
-
-static bool MdoMcpReadSource(const MdoMcpSource* pSource, char** ppText,
-    size_t* pSize, char Error[MDO_MCP_ERROR_LIMIT])
+static bool MdoMcpReadSource(MdoMcpSource* Source,char** Text,size_t* Size,char Error[MDO_MCP_ERROR_LIMIT])
+{*Text=McpDirectoryResolve(Source,Error);*Size=*Text?strlen(*Text):0;return *Text!=NULL;}
+static bool McpDirectoryBindRuntime(MdoMcpServerEntry* Entry,const MdoMcpSource* Source)
 {
-    xfile File;
-    xfileinfo Info;
-    char* pText;
-    size_t Size;
-    bool Ok = true;
-
-    *ppText = NULL;
-    *pSize = 0u;
-    File = pSource->External ? MdoHomeOpenRead(pSource->RelativePath) :
-        MdoResourceOpenRead(pSource->RelativePath);
-    if ( File == NULL ) {
-        const xerror* pError = xrtGetError();
-        MdoMcpFormatError(Error, MDO_MCP_ERROR_LIMIT, "%s",
-            pError != NULL ? xrtErrorMessage(pError) :
-            "MCP source cannot be opened");
-        return false;
-    }
-    memset(&Info, 0, sizeof(Info));
-    if ( !xrtFileStat(File, &Info) ||
-         (Info.Available & XFILE_INFO_SIZE) == 0u ||
-         Info.Size == 0u || Info.Size > MDO_MCP_FILE_LIMIT ||
-         Info.Size > SIZE_MAX - 1u ) {
-        MdoMcpFormatError(Error, MDO_MCP_ERROR_LIMIT,
-            "MCP source must be between 1 and %u bytes",
-            (unsigned)MDO_MCP_FILE_LIMIT);
-        Ok = false;
-        goto done;
-    }
-    Size = (size_t)Info.Size;
-    pText = (char*)xrtMalloc(Size + 1u);
-    if ( pText == NULL ) {
-        Ok = false;
-        goto done;
-    }
-    if ( !xrtReadFull(File, pText, Size, NULL) ) {
-        xrtFree(pText);
-        MdoMcpFormatError(Error, MDO_MCP_ERROR_LIMIT,
-            "MCP source cannot be read completely");
-        Ok = false;
-        goto done;
-    }
-    pText[Size] = '\0';
-    *ppText = pText;
-    *pSize = Size;
-
-done:
-    if ( !xrtClose(File) ) Ok = false;
-    if ( !Ok && *ppText != NULL ) {
-        xrtFree(*ppText);
-        *ppText = NULL;
-        *pSize = 0u;
-    }
-    return Ok;
+    if(Entry->Transport!=MDO_MCP_TRANSPORT_STDIO)return true;
+    cstr Id=MdoExtensionText(Source->Directory,"id",96),Root=MdoExtensionText(Source->Directory,"root",MDO_EXTENSION_PATH_BYTES);
+    char* Native=Root?MdoHomeExternalPath(Root):NULL;const char* Names[]={"MDO_EXTENSION_ROOT","MDO_EXTENSION_ID","MDO_EXTENSION_DIGEST"};
+    const char* Values[]={Native,Id,Source->DirectoryDigest};bool Ok=Native&&Entry->EnvironmentCount<=MDO_MCP_ENVIRONMENT_LIMIT-3;
+    MdoMcpEnvironmentEntry* Next=Ok?xrtRealloc(Entry->Environment,(Entry->EnvironmentCount+3)*sizeof(*Next)):NULL;
+    if(!Next){xrtFree(Native);return false;}Entry->Environment=Next;
+    for(size_t I=0;Ok&&I<3;I++){MdoMcpEnvironmentEntry* E=&Next[Entry->EnvironmentCount++];memset(E,0,sizeof(*E));E->Name=xrtStrDup(Names[I]);E->Value=xrtStrDup(Values[I]);Ok=E->Name&&E->Value;}
+    xrtFree(Native);return Ok;
 }
 
 static const xvalue* MdoMcpObjectGet(const xvalue* pObject, cstr Name)
@@ -1246,7 +1113,7 @@ static bool MdoMcpParseServer(const MdoMcpSource* pSource,
         "schema_version", "id", "name", "description", "enabled",
         "transport", "protocol_version", "startup_timeout_ms",
         "request_timeout_ms", "limits", "tools", "security",
-        "auto_reconnect", "oauth", "mdo_template"
+        "auto_reconnect", "oauth"
     };
     static const char* const LimitKeys[] = { "message_bytes", "tools" };
     static const char* const ToolKeys[] = { "allow", "deny" };
@@ -1280,9 +1147,6 @@ static bool MdoMcpParseServer(const MdoMcpSource* pSource,
     if ( !MdoMcpObjectKeys(pRoot, RootKeys,
             sizeof(RootKeys) / sizeof(RootKeys[0]), "MCP document", Error) )
         goto done;
-    const xvalue* Binding=xrtValueObjectGet(pRoot,XRT_STR_LITERAL("mdo_template"));
-    if(Binding){const xvalue* T=xrtValueObjectGet(Binding,XRT_STR_LITERAL("template")),*R=xrtValueObjectGet(Binding,XRT_STR_LITERAL("receipt")),*Values=xrtValueObjectGet(Binding,XRT_STR_LITERAL("values"));cstr Id=MdoPackageText(T,"id",64);char Why[256];
-        if(!Id||!MdoMcpTemplateKeys(Binding,"|template||receipt||variant||values|")||!MdoMcpTemplateValidate(T,Id,Why,sizeof(Why))||xrtValueType(R)!=XVALUE_OBJECT||!MdoPackageText(R,"key",80)||!MdoPackageText(Binding,"variant",64)||xrtValueType(Values)!=XVALUE_OBJECT||xrtValueCount(Values)>32){MdoMcpFormatError(Error,MDO_MCP_ERROR_LIMIT,"Invalid MCP template binding");goto done;}}
     if ( !MdoMcpValueUnsigned(MdoMcpObjectGet(pRoot, "schema_version"),
             &Number) || Number != MDO_MCP_CONFIG_SCHEMA_VERSION ) {
         MdoMcpFormatError(Error, MDO_MCP_ERROR_LIMIT,
@@ -1510,6 +1374,12 @@ static bool MdoMcpBuildCandidate(uint64 Generation,
         }
         Parsed = MdoMcpParseServer(&Sources[i], Text, TextSize, &Entry,
             &Stage, Error);
+        if(Parsed){
+            Entry.DirectoryId=xrtStrDup(MdoExtensionText(Sources[i].Directory,"id",96));Entry.ProjectId=xrtStrDup(Sources[i].ProjectId?Sources[i].ProjectId:"");
+            Entry.DirectoryLease=Sources[i].DirectoryLease;Sources[i].DirectoryLease=NULL;
+            char* Combined=xrtFormat("%s\n%s",Text,Sources[i].DirectoryDigest);
+            Parsed=Entry.DirectoryId&&Entry.ProjectId&&Combined&&MdoMcpHash(Combined,strlen(Combined),Entry.SourceHash)&&McpDirectoryBindRuntime(&Entry,&Sources[i]);xrtFree(Combined);
+        }
         xrtFree(Text);
         if ( !Parsed ) {
             bool Fatal = MdoMcpMemoryError();
@@ -1814,6 +1684,7 @@ static bool MdoMcpServerInfoCopy(const MdoMcpCatalog* pCatalog,
     pInfo->MaxMessageBytes = pEntry->MaxMessageBytes;
     pInfo->MaxTools = pEntry->MaxTools;
     pInfo->DefaultEffects = pEntry->DefaultEffects;
+    pInfo->DirectoryId=pEntry->DirectoryId;pInfo->ProjectId=pEntry->ProjectId;
     return true;
 }
 

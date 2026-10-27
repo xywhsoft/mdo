@@ -1,7 +1,9 @@
 #ifndef MDO_MCP_TEMPLATE_H
 #define MDO_MCP_TEMPLATE_H
-/* Public, inert service recipes. Shared verbatim with the marketplace. No
- * runtime credentials, device paths, hooks or executable payloads belong here. */
+#include "extension_path.h"
+/* Public service recipes inside an extension directory. Programs and their
+ * dependencies are ordinary sibling files; credentials belong to private
+ * connection state. The recipe never embeds file contents. */
 #define MDO_MCP_TEMPLATE_FORMAT "mdo.mcp-template.v1"
 static bool MdoMcpTemplateKeys(const xvalue* V,cstr Keys)
 {
@@ -42,7 +44,7 @@ static bool MdoMcpTemplateLeaf(const xvalue* T,const xvalue* V,bool Secret,bool 
         return MdoMcpTemplateKeys(V,"|input|")&&I&&MdoMcpTemplateFlag(I,"secret",false)==Secret;}
     xstrview S;if(Secret||!xrtValueGetString(V,&S)||S.Size>4096||memchr(S.Data,0,S.Size)||!MdoMcpTemplateString(S.Data))return false;
     if(Url)return MdoMcpTemplateUrl(S.Data);
-    if(Program)return S.Size&&!strpbrk(S.Data,"/\\:");
+    if(Program)return S.Size&&MdoExtensionRelativePath(S.Data);
     return true;
 }
 static bool MdoMcpTemplateValidate(const xvalue* T,cstr Id,char* Error,size_t Capacity)
@@ -93,7 +95,10 @@ static bool MdoMcpTemplateValidate(const xvalue* T,cstr Id,char* Error,size_t Ca
             const xvalue* A=xrtValueObjectGet(Tr,XRT_STR_LITERAL("arguments"));if(xrtValueType(A)!=XVALUE_ARRAY||xrtValueCount(A)>256)goto bad;
             for(size_t j=0;j<xrtValueCount(A);j++)if(!MdoMcpTemplateLeaf(T,xrtValueArrayGet(A,j),false,false,false))goto bad;
             const xvalue* Cwd=xrtValueObjectGet(Tr,XRT_STR_LITERAL("working_directory"));
-            if(Cwd&&xrtValueType(Cwd)!=XVALUE_NULL&&(xrtValueType(Cwd)!=XVALUE_OBJECT||!MdoMcpTemplateLeaf(T,Cwd,false,false,false)))goto bad;
+            if(Cwd&&xrtValueType(Cwd)!=XVALUE_NULL){
+                xstrview Path={0};bool Relative=xrtValueGetString(Cwd,&Path)&&(!strcmp(Path.Data,".")||MdoExtensionRelativePath(Path.Data));
+                if(!Relative&&(xrtValueType(Cwd)!=XVALUE_OBJECT||!MdoMcpTemplateLeaf(T,Cwd,false,false,false)))goto bad;
+            }
         }else goto bad;
         for(size_t k=0;k<2;k++){
             const xvalue* A=xrtValueObjectGet(Tr,xrtStrView(k?"headers":"environment"));

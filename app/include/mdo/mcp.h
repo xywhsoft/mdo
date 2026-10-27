@@ -53,6 +53,7 @@ typedef struct MdoMcpServerInfo {
     size_t MaxMessageBytes;
     size_t MaxTools;
     xwork_tool_effects DefaultEffects;
+    const char *DirectoryId,*ProjectId;
 } MdoMcpServerInfo;
 
 typedef struct MdoMcpServerStatus {
