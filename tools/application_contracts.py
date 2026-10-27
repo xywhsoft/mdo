@@ -32,7 +32,6 @@ DEFS={
  'Operation':document('id:s state:s terminal:b method:s kind:s phase:s result:j error:j cancel_requested:b created_at:i started_at:i ended_at:i'),
  'Schedule':document('id:s label:s project_id:s agent_id:s model_id:s protocol:s reasoning_effort:s workspace_root:s input:s frequency:s interval:u start_at:i weekday_mask:u timezone:s utc_offset_seconds:i fold_policy:s misfire_policy:s misfire_grace_seconds:u max_catch_up:u overlap_policy:s max_concurrent_runs:u enabled:b notify:s max_output_tokens:u revision:u'),
  'MemoryEntry':document('id:s title:s content:s tags:ss pinned:b revision:u created_at:i updated_at:i'),
- 'ExtensionFile':document('path:s content:s text:s base64:s'),
  'Draft':document('schema_version:u project_id:s session_id:s text:s attachments:ss composer_profile:j new_task:j submission:j submissions:a run_admission_uncertain:b revision:u'),
  'PromptHistory':document('schema_version:u items:a'),
  'QueueItem':document('id:s text:s attachments:ss profile:Profile state:s first:b priority:b revision:u run_id:s stage:b start_claimed:b'),
@@ -89,7 +88,7 @@ INPUTS={
  'QueueAction':document('id:s kind:s item:s before:s revision:u draft_revision:u',('id','kind','item','before','revision','draft_revision'),True),
  'QueueState':document('state:s',('state',),True),
  'Config':document('schema_version:u patch:o',('schema_version','patch'),True),
- 'Extension':document('content:s disabled:b enabled:b revision:s files:ExtensionFiles'),
+ 'RolePreview':document('content:s',('content',),True),
  'Command':document('invocation_id:s command_id:s raw_arguments:s session_id:s run_id:s revision:s',('invocation_id','command_id'),True),
  'SkillInvoke':document('id:s arguments:s',('id',),True),
  'SkillValidate':document('content:s'),
@@ -103,7 +102,7 @@ INPUTS={
  'Remote':document('allow_remote:b name:s action:s device_id:s mode:s job_id:s'),
  'Update':document('edition:s',closed=True),
  'Transfer':document('action:s mode:s kind:s project_id:s session_id:s device_id:s device_name:s title:s target_project_id:s target_directory:s source_device:s manifest_sha256:s manifest_bytes:u manifest:o id:s offset:u files:a allow_receive:b'),
- 'Ecosystem':document('action:s id:s kind:s source:s version:s trust:b approved:b replace:b revision:s files:ExtensionFiles draft_id:s'),
+ 'Ecosystem':document('action:s kind:s version_id:s version:s platform:s q:s state:s work:s path:s offset:u limit:u task:s proof_task:s publish:b review_notes:s source_url:s source_included:b expected_revision:u type:s requested:u reason:s',('action',),True),
  'Purge':document('purge_request_id:s project_id:s revision:u created_at:i confirmation:s'),
  'BackupUpload':document('id:s bytes:u sha256:s',('id','bytes'),True),
  'ExtensionDirectory':document('action:s manifest:o edits:a expected_revision:s trust_code:b enabled:b path:s destination:s text:s',closed=True),
@@ -119,7 +118,6 @@ INPUTS={
  'McpAuth':document('client_id:s client_secret:s redirect_uri:s scopes:ss state:s code:s error:s'),
  'Application':document('method:s params:j context:o',('method',),True),
 }
-DEFS['ExtensionFiles']=array(ref('ExtensionFile'))
 # Schedule create/replace share one complete definition; id is optional at
 # create time and supplied by the path on replace.
 INPUTS['Schedule']['required']=['label','input','start_at']
@@ -136,7 +134,7 @@ BODY_GROUPS={
  'Memory':'MemoryCollectionRoute','Draft':'DraftRoute','Submission':'DraftSubmissionAppendRoute DraftSubmissionRoute',
  'PromptHistoryEntry':'PromptHistoryRoute',
  'Queue':'QueueRoute QueueItemRoute','QueueAction':'QueueActionsRoute','Config':'SettingsPreviewRoute SettingsMutationRoute',
- 'Extension':'AgentPlanRoute CommandProjectRoute SkillProjectRoute McpProjectRoute',
+ 'RolePreview':'AgentPlanRoute',
  'Command':'CommandInvocationRoute','SkillInvoke':'SkillInvokeRoute','SkillValidate':'SkillValidateRoute',
  'Migrate':'LegacyMigrationsRoute SkillMigrateRoute McpMigrateRoute','ModelProbe':'ModelDiscoverRoute ModelTestRoute',
  'ModelSetup':'ModelSetupRoute','AccountLogin':'AccountRoute','Remote':'RemoteRoute',
@@ -148,6 +146,8 @@ BODY_GROUPS={
 }
 BODY={handler:name for name,handlers in BODY_GROUPS.items() for handler in handlers.split()}
 BODY['ExtensionTasksRoute']='ExtensionTask'
+BODY['CommandProjectRoute']='Enabled'
+BODY['SkillProjectRoute']='Enabled'
 BODY['ExtensionsRoute']='ExtensionDirectory'
 NO_BODY=set('''CommandsRoute DistributionRoute CliToolsRoute LiveRoute DirectRoute UpdateExitRoute BootstrapRoute SettingsRoute
 ModelsRoute ModelConfigRoute AgentsRoute BackupUploadRoute BackupUploadSealRoute BackupPreviewsRoute BackupPreviewRoute UpdateDownloadRoute UpdateInstallRoute
@@ -181,7 +181,7 @@ RESULT_GROUPS={
 RESULT={handler:name for name,handlers in RESULT_GROUPS.items() for handler in handlers.split()}
 
 QUERY_GROUPS={
- 'project:s':'CommandsRoute CommandProjectRoute CommandInvocationRoute SkillsRoute SkillSourcesRoute SkillProjectRoute SkillInvokeRoute McpRoute McpSourcesRoute McpProjectRoute McpConnectionsRoute',
+ 'project:s':'CommandsRoute CommandProjectRoute CommandInvocationRoute SkillsRoute SkillSourcesRoute SkillProjectRoute SkillInvokeRoute McpRoute McpSourcesRoute McpProjectRoute AgentPlanRoute',
  'q:s limit:u include_directories:u':'WorkspaceFilesRoute ProjectWorkspaceFilesRoute',
  'path:s':'DirectoriesRoute',
  'after:u limit:u':'SessionEventsRoute SessionConversationRoute SessionTurnsRoute SessionHistoryRoute ScheduleHistoryRoute TaskOutputRoute',
@@ -190,7 +190,6 @@ QUERY_GROUPS={
  'after:u':'ApplicationRoute',
  'state:s code:s error:s':'McpAuthRoute',
  'project:s path:s q:s state:s offset:u limit:u':'ExtensionsRoute',
- 'project:s':'AgentPlanRoute',
 }
 QUERY={handler:spec for spec,handlers in QUERY_GROUPS.items() for handler in handlers.split()}
 

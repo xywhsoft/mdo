@@ -79,6 +79,19 @@ class ApplicationSdkContractTests(unittest.TestCase):
         self.assertEqual(account['$defs']['EmptyInput']['properties'],{})
         self.assertIn('body',account['required'])
 
+    def test_project_selection_and_directory_distribution_contracts(self):
+        rows={row['id']:row for row in application_sdk.services(ROOT)}
+        for name in ('product.commands.project.get','product.commands.project.by_command.enabled.post','product.skills.project.by_id.enabled.post'):
+            schema,_=application_contracts.contract(rows[name])
+            self.assertIn('project',schema['properties']['query']['properties'])
+        self.assertNotIn('product.commands.project.by_command.put',rows)
+        self.assertNotIn('product.skills.project.by_id.put',rows)
+        schema,_=application_contracts.contract(rows['product.ecosystem.post'])
+        body=schema['$defs']['EcosystemInput']['properties']
+        self.assertIn('task',body);self.assertIn('version_id',body)
+        self.assertNotIn('files',body);self.assertNotIn('package',body)
+        self.assertFalse(schema['$defs']['EcosystemInput']['additionalProperties'])
+
     def test_extension_archives_use_file_backed_raw_sdk_bodies(self):
         rows={row['id']:row for row in application_sdk.services(ROOT)}
         upload,_=application_contracts.contract(rows['product.extension_tasks.by_task.chunks.by_offset.put'])
@@ -89,3 +102,5 @@ class ApplicationSdkContractTests(unittest.TestCase):
         methods=application_sdk.native_contracts()
         self.assertNotIn('plugin.apply',methods);self.assertNotIn('plugin.rollback',methods)
         self.assertIn('extension.create',methods);self.assertIn('extension.remove',methods)
+
+

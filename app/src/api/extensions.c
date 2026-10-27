@@ -606,6 +606,7 @@ static bool ExtensionBundle(MdoApiContext* C,cstr Id)
 
 #include "directory_management.inc.c"
 
+#include "project_extension_selection.inc.c"
 #include "skill_management.inc.c"
 #include "agent_authoring.inc.c"
 #include "mcp_management.inc.c"
