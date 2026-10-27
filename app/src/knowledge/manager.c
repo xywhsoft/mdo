@@ -4,7 +4,7 @@
 #include "../../include/mdo/extensions.h"
 #include "../../include/mdo/extension_manifest.h"
 #include "../../include/mdo/extension_files.h"
-#include "../../include/mdo/ecosystem_package.h"
+#include "../../include/mdo/knowledge_format.h"
 #include "../../include/mdo/diagnostics.h"
 
 static bool KnowledgeWarning(xvalue* Warnings,cstr Code,cstr Id,cstr Path,cstr Message)
@@ -62,7 +62,7 @@ static bool KnowledgeCollectReferences(xvalue* Items,xvalue* Warnings)
         if(!MdoExtensionsVerify("knowledge",Id,NULL,Error)){Ok=KnowledgeStorageFailure(Warnings,"directory_changed",Id,Root,Error);continue;}
         char* Path=xrtFormat("%s/%s",Root,MdoExtensionText(Row,"entry",MDO_EXTENSION_PATH_BYTES));
         char* Text=Path?MdoExtensionRead(Path,true,131072,NULL):NULL;xvalue* Doc=Text?xrtJsonParse(xrtStrView(Text)):NULL;xrtFree(Text);
-        char Why[256]={0};bool Inject=false;cstr Hint=MdoPackageText(Doc,"prompt",8192),Index=MdoPackageText(Doc,"index",MDO_EXTENSION_PATH_BYTES);
+        char Why[256]={0};bool Inject=false;cstr Hint=MdoExtensionText(Doc,"prompt",8192),Index=MdoExtensionText(Doc,"index",MDO_EXTENSION_PATH_BYTES);
         if(!MdoKnowledgeMetadata(Doc,Why,sizeof(Why))){
             Ok=KnowledgeStorageFailure(Warnings,"invalid_metadata",Id,Path?Path:Root,"The knowledge metadata is missing, unreadable or invalid; this library was skipped.");xrtFree(Path);xrtValueRelease(Doc);continue;
         }
@@ -72,7 +72,7 @@ static bool KnowledgeCollectReferences(xvalue* Items,xvalue* Warnings)
         xrtFree(Path);xrtValueGetBool(xrtValueObjectGet(Doc,XRT_STR_LITERAL("inject_prompt")),&Inject);
         if(!Inject||!Hint||!*Hint){xrtValueRelease(Doc);continue;}
         char* Alias=xrtFormat("@knowledge/%s",Id),*Rendered=Alias?KnowledgeRender(Hint,Alias):NULL;xvalue* Item=xrtValueObject();
-        Ok=Rendered&&Item&&xrtValueObjectSetNew(Item,XRT_STR_LITERAL("name"),xrtValueString(xrtStrView(MdoPackageText(Doc,"name",100))))&&
+        Ok=Rendered&&Item&&xrtValueObjectSetNew(Item,XRT_STR_LITERAL("name"),xrtValueString(xrtStrView(MdoExtensionText(Doc,"name",100))))&&
             xrtValueObjectSetNew(Item,XRT_STR_LITERAL("path"),xrtValueString(xrtStrView(Alias)))&&xrtValueObjectSetNew(Item,XRT_STR_LITERAL("index"),xrtValueString(xrtStrView(Index)))&&
             xrtValueObjectSetNew(Item,XRT_STR_LITERAL("hint"),xrtValueString(xrtStrView(Rendered)));
         char* Json=Ok?xrtJsonStringify(Item,false,NULL):NULL;if(!Json)Ok=false;

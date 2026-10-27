@@ -143,11 +143,12 @@ xvalue* MdoCommandCatalog(cstr Workspace)
         xvalue* Item=Source?MdoCommandMetadata(Alias,Source,Error):NULL;Valid=Item!=NULL;
         if(!Item)Item=xrtValueObject();char Revision[65]={0};
         if(Valid)Valid=MdoExtensionsFingerprint("commands",Id,Revision,NULL,Error);
-        bool Ok=Item&&CommandSet(Item,"id",Alias)&&CommandSet(Item,"directory_id",Id)&&CommandSet(Item,"scope",CommandText(Row,"source"))&&
+        bool Ok=Item&&CommandSet(Item,"id",Alias)&&CommandSet(Item,"directory_id",Id)&&CommandSet(Item,"scope",CommandText(Row,"source"))&&CommandSet(Item,"source",CommandText(Row,"source"))&&
             CommandSet(Item,"directory_root",CommandText(Row,"root"))&&CommandSet(Item,"path",Path)&&CommandSet(Item,"revision",Revision)&&
             CommandSet(Item,"diagnostic",Valid?"":Error[0]?Error:"Command directory is invalid")&&
             xrtValueObjectSetNew(Item,XRT_STR_LITERAL("enabled"),xrtValueBool(Enabled))&&
             xrtValueObjectSetNew(Item,XRT_STR_LITERAL("valid"),xrtValueBool(Valid));
+        const cstr CreditKeys[]={"installation","submitter","author","copyright","license","version"};for(size_t J=0;Ok&&J<sizeof(CreditKeys)/sizeof(*CreditKeys);J++){const xvalue* Value=xrtValueObjectGet(Row,xrtStrView(CreditKeys[J]));if(Value)Ok=xrtValueObjectSet(Item,xrtStrView(CreditKeys[J]),Value);}
         const xvalue* Previous=xrtValueObjectGet(Map,xrtStrView(Alias));
         if(Previous){
             Ok=Ok&&xrtValueObjectSetNew(Item,XRT_STR_LITERAL("valid"),xrtValueBool(false))&&

@@ -6,7 +6,6 @@
 
 #include "../../include/mdo/api.h"
 #include "profile.h"
-#include "../../include/mdo/ecosystem.h"
 #include "../../include/mdo/application.h"
 
 #define MDO_API_RESPONSE_MAX_BYTES (256u * 1024u)

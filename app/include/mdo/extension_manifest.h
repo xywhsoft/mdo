@@ -8,6 +8,11 @@ static cstr MdoExtensionText(const xvalue* O,cstr Key,size_t Limit)
 {
     xstrview V={0};return xrtValueGetString(xrtValueObjectGet(O,xrtStrView(Key)),&V)&&V.Size<=Limit&&!memchr(V.Data,0,V.Size)&&xrtUtf8Valid(V,NULL)?V.Data:NULL;
 }
+static bool MdoExtensionNumber(const xvalue* Object,cstr Key,int64* Result)
+{
+    const xvalue* Value=xrtValueObjectGet(Object,xrtStrView(Key));uint64 N=0;
+    if(xrtValueGetInt(Value,Result))return true;if(!xrtValueGetUInt(Value,&N)||N>INT64_MAX)return false;*Result=(int64)N;return true;
+}
 static bool MdoExtensionPlatform(cstr P)
 {
     const char* const Names[]={"any","windows-x86_64","linux-x86_64","linux-x86_64-glibc","linux-x86_64-musl","linux-arm64","android-arm64-v8a","macos-arm64"};

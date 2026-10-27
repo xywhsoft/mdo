@@ -8,7 +8,7 @@ import zipfile
 from native_product_runner import product
 
 ROOT = Path(__file__).resolve().parents[1]
-ID = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'
+ID = '0123456789ABCDEFGHJKMNPQRSTVWXYZ' * 3
 CONTRACT = r'''
 static char QaOutput[100];
 static bool QaWrite(void* U,cstr T){(void)U;snprintf(QaOutput,sizeof(QaOutput),"%s",T);return true;}
@@ -25,7 +25,7 @@ xvalue* QaProductContract(const xvalue* P,xvfs V){
  size_t N=0;bytes Overlay=xrtVfsReadAllLimit(V,"/app/web/qa-overlay.txt",1024,&N);QaBool(R,"physical_directory_overlay",Overlay&&N==14&&!memcmp(Overlay,"plugin overlay",14));xrtFree(Overlay);
  xvalue* Owner=MdoApplicationPluginFileOwner("web/qa-overlay.txt");QaBool(R,"credits",Owner&&!strcmp(SdkField(Owner,"id"),"0123456789ABCDEFGHJKMNPQRSTVWXYZ")&&!strcmp(SdkField(Owner,"author"),"QA author"));xrtValueRelease(Owner);
  xwork_runtime_config Config;xworkRuntimeConfigInit(&Config);xwork_error E;xworkErrorInit(&E);xwork_runtime* Runtime=Ok?xworkRuntimeCreate(&Config,&E):NULL;MdoModuleManagerAttachApplication(MdoApplicationApi());
- Ok=Ok&&Runtime&&MdoModuleManagerInit(Runtime);MdoModuleCatalog* Catalog=Ok?MdoModuleCatalogSnapshot():NULL;QaBool(R,"real_native_entry",Ok&&QaExecute(Catalog,"17:plugin resource"));MdoModuleCatalogRelease(Catalog);
+ Ok=Ok&&Runtime&&MdoModuleManagerInit(Runtime);MdoModuleCatalog* Catalog=Ok?MdoModuleCatalogSnapshot():NULL;QaBool(R,"real_native_entry",Ok&&QaExecute(Catalog,"17:plugin resource"));xvalue* Meta=MdoExtensionsRead("plugins","0123456789ABCDEFGHJKMNPQRSTVWXYZ",Error);QaBool(R,"native_macro_preserves_display_version",Catalog&&Catalog->ToolCount==1&&Meta&&!strcmp(Catalog->Tools[0]->Owner->Version,SdkField(Meta,"version")));xrtValueRelease(Meta);MdoModuleCatalogRelease(Catalog);
  xvalue* Removed=NULL;QaBool(R,"active_directory_pinned",!MdoExtensionsRemove("plugins","0123456789ABCDEFGHJKMNPQRSTVWXYZ",&Removed,Error));xrtValueRelease(Removed);
  xvalue* Changes=SdkParse("[{\"id\":\"other\",\"enabled\":true}]");mdo_error_v1 Failure={0};xvalue* Plan=SdkPluginPlan(SdkPlugins.Config,Changes,NULL,&Failure);bool Allowed=true;xrtValueGetBool(SdkGet(Plan,"allowed"),&Allowed);QaBool(R,"exclusive_conflict",Plan&&!Allowed);xrtValueRelease(Plan);xrtValueRelease(Changes);
  char Hash[65];uint64 Bytes;QaBool(R,"whole_directory_zip",MdoExtensionsPack("plugins","0123456789ABCDEFGHJKMNPQRSTVWXYZ","data/extension-tasks/export/plugin.zip",NULL,Hash,&Bytes,Error));
@@ -56,18 +56,18 @@ def main():
     out = ROOT / '.build/plugin-directory-native'; out.mkdir(parents=True, exist_ok=True); fixture = out / ('home-' + uuid.uuid4().hex[:12]); directory = fixture / 'plugins' / ID; directory.mkdir(parents=True)
     tool = (ROOT / 'tests/fixtures/modules/local-tool.c').read_text()
     tool = tool.replace('#include "mdo/module.h"', '#include "mdo/module.h"\n#include "mdo/sdk.h"\n#include <xsbase.h>\n#include <stdio.h>\n#include "helper.h"')
-    tool = tool.replace('"user.tools.fixture"', 'MDO_PLUGIN_ID')
+    tool = tool.replace('"user.tools.fixture"', 'MDO_PLUGIN_ID').replace('"1.0.0"', 'MDO_PLUGIN_VERSION')
     tool = tool.replace('    return Writer->WriteText(Writer->Context, "LOCAL TOOL CALLBACK RESULT") &&', '''    char* Path=xrtPathJoin(Context->Application->ExtensionRoot,"resource.txt");size_t N=0;char* Text=(char*)xrtFileReadAllLimit(Path,1024,&N);xrtFree(Path);char Output[100];if(!Text)return MDO_RESULT_ERROR;snprintf(Output,sizeof(Output),"%d:%s",QA_NUMBER,Text);xrtFree(Text);
     return Writer->WriteText(Writer->Context,Output) &&''')
-    (directory / 'extension.json').write_text(json.dumps(dict(kind='plugins', name='QA plugin', alias='qa-plugin', entry='plugin.json', platforms=['any'], author='QA author')), encoding='utf-8')
+    (directory / 'extension.json').write_text(json.dumps(dict(kind='plugins', name='QA plugin', alias='qa-plugin', entry='plugin.json', platforms=['any'], author='QA author',version='2026.10 \"directory\" \\ build')), encoding='utf-8')
     recipe = dict(entry=dict(native='plugin.c', frontend='frontend.js'), overrides=[dict(source='overlay.txt', target='web/qa-overlay.txt')], exclusive=['qa-layout'])
     for name, content in {'plugin.json': json.dumps(recipe), 'plugin.c': tool, 'helper.h': '#define QA_NUMBER 17\n', 'resource.txt': 'plugin resource', 'frontend.js': 'export function activate(){}', 'overlay.txt': 'plugin overlay'}.items(): (directory / name).write_text(content, encoding='utf-8')
     (directory / '.empty').mkdir()
     other = fixture / 'plugins/other'; other.mkdir(); (other / 'extension.json').write_text(json.dumps(dict(kind='plugins', name='Other', alias='other', entry='plugin.json', platforms=['any'])))
     (other / 'plugin.json').write_text(json.dumps(dict(entry=dict(frontend='entry.js'), exclusive=['qa-layout']))); (other / 'entry.js').write_text('export function activate(){}')
     try:
-        result = product(a, fixture, CONTRACT, out / 'result.json')
-        for key in ('loaded', 'physical_directory_overlay', 'credits', 'real_native_entry', 'active_directory_pinned', 'exclusive_conflict', 'whole_directory_zip', 'changed_native_requires_restart', 'header_after_restart', 'native_uninstall_deferred_honestly', 'whole_directory_removed', 'frontend_cleanup_before_uninstall', 'restart_no_resurrection'): assert result.get(key), (key, result)
+        result = product(a, fixture, CONTRACT.replace('0123456789ABCDEFGHJKMNPQRSTVWXYZ',ID), out / 'result.json')
+        for key in ('loaded', 'physical_directory_overlay', 'credits', 'real_native_entry', 'native_macro_preserves_display_version', 'active_directory_pinned', 'exclusive_conflict', 'whole_directory_zip', 'changed_native_requires_restart', 'header_after_restart', 'native_uninstall_deferred_honestly', 'whole_directory_removed', 'frontend_cleanup_before_uninstall', 'restart_no_resurrection'): assert result.get(key), (key, result)
         with zipfile.ZipFile(fixture / 'data/extension-tasks/export/plugin.zip') as z:
             assert z.testzip() is None and 'plugin.c' in z.namelist() and '.empty/' in z.namelist()
             assert not any('revisions/' in name or name.startswith('files/') for name in z.namelist())

@@ -24,7 +24,7 @@ static xvalue* McpDirectoryInput(const xvalue* Template,const xvalue* Values,cst
         cstr P=Text;bool Negative=*P=='-';if(Negative)P++;uint64 N=0;if(!*P)return NULL;
         for(;*P;P++){if(*P<'0'||*P>'9'||N>((uint64)INT64_MAX-(uint64)(*P-'0'))/10)return NULL;N=N*10+(*P-'0');}
         int64 Number=Negative?-(int64)N:(int64)N,Bound=0;
-        if((MdoPackageNumber(Input,"min",&Bound)&&Number<Bound)||(MdoPackageNumber(Input,"max",&Bound)&&Number>Bound))return NULL;
+        if((MdoExtensionNumber(Input,"min",&Bound)&&Number<Bound)||(MdoExtensionNumber(Input,"max",&Bound)&&Number>Bound))return NULL;
     }
     return xrtValueClone(Value);
 }

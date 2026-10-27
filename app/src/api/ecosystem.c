@@ -6,11 +6,6 @@
 #include "internal.h"
 #include "write_admission.h"
 
-/* Reject remaining legacy internal callers while their type-specific editors
- * are converted. There is no JSON package network or install path. */
-bool MdoEcosystemPackageCompatible(const xvalue* Package,const xvalue* Input,char* Error,size_t Capacity){
- (void)Package;(void)Input;if(Capacity)snprintf(Error,Capacity,"JSON extension packages are unsupported; use a complete directory ZIP");return false;
-}
 static bool EcoHandleInput(MdoApiContext* C,xvalue* Input){
  char Error[512]={0};xvalue* Out=NULL;cstr Action=MdoExtensionText(Input,"action",24);bool Ok=false;
  const cstr Retired[]={"package","resources","files","base64","format","min_build_id","single_kind","artifact","references"};for(size_t I=0;I<sizeof(Retired)/sizeof(*Retired);I++)if(xrtValueObjectHas(Input,xrtStrView(Retired[I]))){xrtValueRelease(Input);return MdoApiReplyError(C,422,"extension_json_retired","Extensions are complete directory ZIP files; embedded file payloads and legacy package fields are unsupported",NULL);}

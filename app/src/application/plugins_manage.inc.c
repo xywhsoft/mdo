@@ -20,7 +20,7 @@ static xvalue* SdkPluginPresetsRead(void){
     const xvalue* Items=SdkGet(Doc,"items");bool Ok=true;
     for(size_t I=0;Ok&&I<xrtValueCount(Items);I++){
         const xvalue* R=xrtValueArrayGet(Items,I),*Pins=SdkGet(R,"plugins");cstr Id=SdkField(R,"id"),Name=SdkField(R,"name");
-        Ok=MdoPackageId(Id)&&Name&&strlen(Name)<=100&&xrtValueType(Pins)==XVALUE_ARRAY&&xrtValueCount(Pins)<=32;
+        Ok=MdoExtensionAlias(Id)&&Name&&strlen(Name)<=100&&xrtValueType(Pins)==XVALUE_ARRAY&&xrtValueCount(Pins)<=32;
         for(size_t J=0;Ok&&J<I;J++)if(!strcmp(Id,SdkField(xrtValueArrayGet(Items,J),"id")))Ok=false;
         for(size_t J=0;Ok&&J<xrtValueCount(Pins);J++){
             const xvalue* P=xrtValueArrayGet(Pins,J);cstr Pid=SdkField(P,"id");bool Enabled;
@@ -43,7 +43,7 @@ static bool SdkPluginPresetCall(cstr Method,const xvalue* P,xvalue** R,mdo_error
         *R=xrtValueClone(Doc);SdkPut(*R,"revision",Revision);xvalue* Out=(xvalue*)SdkGet(*R,"items");
         for(size_t I=0;I<xrtValueCount(Out);I++){xvalue* Row=(xvalue*)xrtValueArrayGet(Out,I);xrtValueObjectSetNew(Row,XRT_STR_LITERAL("matches"),xrtValueBool(SdkPluginPresetMatches(SdkGet(Row,"plugins"),Current)));}goto done;
     }
-    if(!MdoPackageId(Id)){Ok=MdoApplicationError(E,"sdk_arguments_invalid","Choose a portable combination ID","plugin",422,false);goto done;}
+    if(!MdoExtensionAlias(Id)){Ok=MdoApplicationError(E,"sdk_arguments_invalid","Choose a portable combination ID","plugin",422,false);goto done;}
     if(!strcmp(Method,"plugin.preset.plan")){
         if(!Selected){Ok=MdoApplicationError(E,"sdk_plugin_preset_missing","Plugin combination is unavailable","plugin",404,false);goto done;}
         xvalue* Changes=xrtValueArray(),*Issues=xrtValueArray();const xvalue* Pins=SdkGet(Selected,"plugins");

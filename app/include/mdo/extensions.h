@@ -32,6 +32,9 @@ bool MdoExtensionsSetActivation(cstr Kind,const xvalue* Changes,char Error[512])
 /* Explicit import copies an entire anchored local directory through a real ZIP.
  * It never registers an absolute executable path or follows links. */
 bool MdoExtensionsImportDirectory(cstr Kind,cstr Id,cstr NativeRoot,cstr Expected,bool Trust,xcancel* Cancel,xvalue** Result,char Error[512]);
+/* Explicit authoring adapter: copy a third-party directory and add/replace its
+ * root manifest in the generated ZIP. The source directory is never edited. */
+bool MdoExtensionsImportDirectoryManifest(cstr Kind,cstr Id,cstr NativeRoot,const xvalue* Manifest,cstr Expected,bool Trust,xcancel* Cancel,xvalue** Result,char Error[512]);
 bool MdoExtensionsCreate(cstr Kind,cstr Id,const xvalue* Manifest,const void* Entry,size_t Bytes,bool Trust,xvalue** Result,char Error[512]);
 /* Atomically save manifest + bounded text edits while retaining all other
  * directory files. This is an editor operation, never a publication format. */

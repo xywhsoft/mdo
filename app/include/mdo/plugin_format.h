@@ -6,8 +6,6 @@
 #define MDO_PLUGIN_COUNT 32u
 #define MDO_PLUGIN_FILES MDO_EXTENSION_DIRECTORY_ENTRIES
 #define MDO_PLUGIN_BYTES MDO_EXTENSION_DIRECTORY_BYTES
-/* Removed outer-package code still compiles during the staged replacement. */
-#define MDO_PLUGIN_MIN_BUILD 0u
 static bool MdoPluginPath(cstr P){return MdoExtensionRelativePath(P);}
 static const xvalue* MdoPluginGet(const xvalue* V,cstr K){return xrtValueObjectGet(V,xrtStrView(K));}
 static bool MdoPluginFail(char* E,size_t N,cstr Why){if(E&&N)snprintf(E,N,"%s",Why);return false;}
@@ -29,7 +27,6 @@ static bool MdoPluginPathOverlap(cstr A,cstr B){
 static const xvalue* MdoPluginFile(const xvalue* Files,cstr Path){
  for(size_t I=0;Path&&I<xrtValueCount(Files);I++){const xvalue* F=xrtValueArrayGet(Files,I);cstr P=MdoExtensionText(F,"path",MDO_EXTENSION_PATH_BYTES);bool D=false;xrtValueGetBool(MdoPluginGet(F,"directory"),&D);if(!D&&P&&!strcmp(P,Path))return F;}return NULL;
 }
-static bool MdoPluginModern(const xvalue* Doc){return xrtValueType(Doc)==XVALUE_OBJECT;}
 static bool MdoPluginRelations(const xvalue* D,cstr Kind,cstr Self,char* E,size_t N){
  const xvalue* Rows=MdoPluginGet(D,Kind);if(!Rows)return true;
  if(xrtValueType(Rows)!=XVALUE_ARRAY||xrtValueCount(Rows)>32)return MdoPluginFail(E,N,"Plugin relations allow at most 32 entries");

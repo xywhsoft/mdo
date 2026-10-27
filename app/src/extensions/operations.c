@@ -56,7 +56,7 @@ bool MdoExtensionsManage(const xvalue* Input,const xvalue* Credits,xcancel* Canc
  }
  if(Create){cstr Text=MdoExtensionText(Input,"entry_text",1048576);Ok=MdoExtensionsCreate(Kind,Id,xrtValueObjectGet(Input,XRT_STR_LITERAL("manifest")),Text,Text?strlen(Text):0,Trust,Result,Error);}
  else if(Save)Ok=MdoExtensionsSave(Kind,Id,xrtValueObjectGet(Input,XRT_STR_LITERAL("manifest")),xrtValueObjectGet(Input,XRT_STR_LITERAL("edits")),Expected?Expected:"",Trust,Cancel,Result,Error);
- else if(Import)Ok=MdoExtensionsImportDirectory(Kind,Id,MdoExtensionText(Input,"directory",4096),Expected?Expected:"",Trust,Cancel,Result,Error);
+ else if(Import)Ok=MdoExtensionsImportDirectoryManifest(Kind,Id,MdoExtensionText(Input,"directory",4096),xrtValueObjectGet(Input,XRT_STR_LITERAL("manifest")),Expected?Expected:"",Trust,Cancel,Result,Error);
  else if(Install){xvalue* Provenance=Credits?xrtValueClone(Credits):xrtValueObject();Ok=Provenance!=NULL;if(!Credits)Ok=Ok&&MdoExtOpPut(Provenance,"source","manual");
   Ok=Ok&&MdoExtOpPut(Provenance,"expected_revision",Expected?Expected:"")&&MdoExtensionsInstall(Kind,Id,MdoExtensionText(Input,"archive",4096),Provenance,Trust,Cancel,Result,Error);xrtValueRelease(Provenance);}
  else if(Remove)Ok=MdoExtensionsRemove(Kind,Id,Result,Error);

@@ -25,7 +25,7 @@ void MdoModuleManagerAttachApplication(const mdo_application_v1* Api){g_MdoModul
 #define MDO_MODULE_DEPENDENCY_LIMIT 64u
 #define MDO_MODULE_AGENT_TOOL_LIMIT 256u
 #define MDO_MODULE_AGENT_SKILL_LIMIT 128u
-#define MDO_MODULE_ID_LIMIT 96u
+#define MDO_MODULE_ID_LIMIT 128u /* plugin. + a 96-byte physical directory ID */
 #define MDO_MODULE_NAME_LIMIT 256u
 #define MDO_MODULE_DESCRIPTION_LIMIT 4096u
 #define MDO_MODULE_SCHEMA_LIMIT (128u * 1024u)
@@ -884,7 +884,10 @@ static MdoModuleGeneration* MdoModulesCompile(const MdoModuleSource* pSource,
     }
     tcc_define_symbol(pGeneration->Tcc, "MDO_MODULE_BUILD", "1");
     if(pSource->Plugin){char* Parent=xrtPathParent(pSource->VirtualPath);bool Ok=Parent&&tcc_add_quote_include_path(pGeneration->Tcc,Parent)>=0;xrtFree(Parent);if(!Ok){xrtFree(pBytes);MdoModulesGenerationRelease(pGeneration);return NULL;}
-        char Id[100],Version[40];snprintf(Id,sizeof(Id),"\"plugin.%s\"",MdoPackageText(pSource->Plugin,"id",64));snprintf(Version,sizeof(Version),"\"%s\"",MdoPackageText(pSource->Plugin,"version",32));tcc_define_symbol(pGeneration->Tcc,"MDO_PLUGIN_ID",Id);tcc_define_symbol(pGeneration->Tcc,"MDO_PLUGIN_VERSION",Version);}
+        cstr Physical=MdoExtensionText(pSource->Plugin,"id",96),Version=MdoExtensionText(pSource->Plugin,"version",128);char* Qualified=Physical?xrtFormat("plugin.%s",Physical):NULL;
+        xvalue* IdValue=Qualified?xrtValueString(xrtStrView(Qualified)):NULL,*VersionValue=xrtValueString(xrtStrView(Version&&Version[0]?Version:"0"));char* IdLiteral=IdValue?xrtJsonStringify(IdValue,false,NULL):NULL,*VersionLiteral=VersionValue?xrtJsonStringify(VersionValue,false,NULL):NULL;
+        bool Literals=IdLiteral&&VersionLiteral;if(Literals){tcc_define_symbol(pGeneration->Tcc,"MDO_PLUGIN_ID",IdLiteral);tcc_define_symbol(pGeneration->Tcc,"MDO_PLUGIN_VERSION",VersionLiteral);}xrtValueRelease(IdValue);xrtValueRelease(VersionValue);xrtFree(Qualified);xrtFree(IdLiteral);xrtFree(VersionLiteral);
+        if(!Literals){xrtFree(pBytes);MdoModulesGenerationRelease(pGeneration);return NULL;}}
     if ( tcc_compile_string(pGeneration->Tcc, (const char*)pBytes) < 0 ||
          tcc_relocate(pGeneration->Tcc) < 0 ) {
         (void)MdoModulesDiagnosticAdd(pDiagnostics,
@@ -922,13 +925,13 @@ static MdoModuleGeneration* MdoModulesCompile(const MdoModuleSource* pSource,
     }
     *pRegister = pModule->Register;
     if(pSource->Plugin){
-        char Expected[96];snprintf(Expected,sizeof(Expected),"plugin.%s",MdoPackageText(pSource->Plugin,"id",64));
+        char Expected[128];snprintf(Expected,sizeof(Expected),"plugin.%s",MdoExtensionText(pSource->Plugin,"id",96));
         if(strcmp(Expected,pGeneration->Id)){MdoModulesDiagnosticAdd(pDiagnostics,MDO_MODULE_DIAGNOSTIC_VALIDATE,pSource->VirtualPath,pGeneration->SourceHash,"Plugin native module ID must be plugin.<plugin-id>");MdoModulesGenerationRelease(pGeneration);return NULL;}
         const xvalue* Requires=xrtValueObjectGet(pSource->Plugin,XRT_STR_LITERAL("requires"));
         xvalue* Native=MdoApplicationPluginNativeSources();
         for(size_t I=0;I<xrtValueCount(Requires);I++){
-            cstr Id=MdoPackageText(xrtValueArrayGet(Requires,I),"id",64);bool IsNative=false;
-            for(size_t J=0;J<xrtValueCount(Native);J++)if(!strcmp(Id,MdoPackageText(xrtValueArrayGet(Native,J),"id",64)))IsNative=true;
+            cstr Id=MdoExtensionText(xrtValueArrayGet(Requires,I),"id",96);bool IsNative=false;
+            for(size_t J=0;J<xrtValueCount(Native);J++)if(!strcmp(Id,MdoExtensionText(xrtValueArrayGet(Native,J),"id",96)))IsNative=true;
             if(!IsNative)continue;snprintf(Expected,sizeof(Expected),"plugin.%s",Id);bool Found=false;
             for(size_t J=0;J<pGeneration->DependencyCount;J++)if(!strcmp(Expected,pGeneration->Dependencies[J]))Found=true;
             if(Found)continue;

@@ -2,6 +2,8 @@
 import re
 import sys
 import unittest
+import shutil
+import uuid
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'tools'))
@@ -9,6 +11,26 @@ import application_sdk
 import application_contracts
 
 class ApplicationSdkContractTests(unittest.TestCase):
+    def test_generated_sdk_removes_retired_source_headers_and_symbols(self):
+        directory=ROOT/'.build'/('sdk-generation-contract-'+uuid.uuid4().hex)
+        public=directory/'app/include/mdo';public.mkdir(parents=True)
+        base=directory/'include/mdo';base.mkdir(parents=True)
+        for name in ('sdk.h','module.h','workbench.h','agent.h'):(base/name).write_text('/* Minimal generation fixture */\n',encoding='utf-8')
+        old=public/'retired.h';old.write_text('bool MdoRetired(void);\n',encoding='utf-8')
+        try:
+            application_sdk.generate_native(directory)
+            target=directory/'app/generated/module-sdk/mdo/native/retired.h'
+            self.assertTrue(target.exists())
+            old.unlink();(public/'current.h').write_text('bool MdoCurrent(void);\n',encoding='utf-8')
+            application_sdk.generate_native(directory)
+            self.assertFalse(target.exists())
+            self.assertTrue((target.parent/'current.h').exists())
+            symbols=(directory/'app/generated/application-native.inc.h').read_text(encoding='utf-8')
+            self.assertIn('MdoCurrent',symbols);self.assertNotIn('MdoRetired',symbols)
+        finally:
+            self.assertEqual(directory.resolve().parent,(ROOT/'.build').resolve())
+            shutil.rmtree(directory)
+
     def test_directory_covers_every_product_route_and_mutation(self):
         records=application_sdk.services(ROOT)
         source=(ROOT/'app/src/api/router.c').read_text(encoding='utf-8')
@@ -102,5 +124,3 @@ class ApplicationSdkContractTests(unittest.TestCase):
         methods=application_sdk.native_contracts()
         self.assertNotIn('plugin.apply',methods);self.assertNotIn('plugin.rollback',methods)
         self.assertIn('extension.create',methods);self.assertIn('extension.remove',methods)
-
-

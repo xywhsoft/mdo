@@ -91,7 +91,7 @@ def native_contracts():
     identity={'kind':string,'id':string}
     add('extension.create','Create a disabled local directory; approve executable content explicitly. No published archive bytes are embedded in JSON.',{**identity,'manifest':obj,'entry_text':string,'trust_code':boolean},('kind','id','manifest','entry_text'))
     add('extension.save','Atomically save a manifest and up to 32 edits, each using either UTF-8 text or a sealed raw file task; other resources are preserved. Empty expected_revision creates a disabled directory.',{**identity,'manifest':obj,'edits':{'type':'array','maxItems':32,'items':{'type':'object','properties':{'path':string,'text':string,'task':string,'executable':boolean},'required':['path'],'additionalProperties':False}},'expected_revision':string,'trust_code':boolean},('kind','id','manifest','edits','expected_revision'))
-    add('extension.import','Import all files of an explicitly selected native extension directory through a standard ZIP; links are rejected.',{**identity,'directory':string,'expected_revision':string,'trust_code':boolean},('kind','id','directory'))
+    add('extension.import','Import all files of an explicitly selected native extension directory through a standard ZIP; links are rejected.',{**identity,'directory':string,'manifest':obj,'expected_revision':string,'trust_code':boolean},('kind','id','directory'))
     add('extension.pack','Produce a task-owned standard ZIP path, SHA-256 and byte count; managed store content cannot be republished.',identity,('kind','id'))
     add('extension.install','Install a complete local ZIP. Running directories remain pinned; no installer or hook is executed.',{**identity,'archive':string,'expected_revision':string,'trust_code':boolean},('kind','id','archive'))
     add('extension.enable','Change activation and rebuild its owning runtime. Pending removals must first be cancelled.',{**identity,'enabled':boolean},('kind','id','enabled'))
@@ -177,7 +177,14 @@ def native_symbols(root: Path):
 
 def generate_native(root: Path):
     directory=root/'app/generated/module-sdk/mdo/native';directory.mkdir(parents=True,exist_ok=True)
+    if not directory.resolve().is_relative_to(root.resolve()):
+        raise ValueError('Generated native SDK directory must stay inside the project')
     headers=sorted((root/'app/include/mdo').glob('*.h'))
+    names={header.name for header in headers if header.name!='application.h'}
+    # This directory is derived solely from the current public headers. Overlay
+    # copies must not leave retired APIs/protocols in the shipped SDK/VFS.
+    for stale in directory.glob('*.h'):
+        if stale.name not in names:stale.unlink()
     for header in headers:
         if header.name=='application.h':continue
         source=header.read_text(encoding='utf-8').replace('../../generated/module-sdk/mdo/module.h','../module.h').replace('../../generated/module-sdk/mdo/sdk.h','../sdk.h')

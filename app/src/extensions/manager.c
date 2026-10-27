@@ -503,29 +503,33 @@ bool MdoExtensionsSetEnabled(cstr Kind,cstr Id,bool Enabled,char Error[512])
     xrtValueRelease(Row);xrtValueRelease(Changes);return Ok;
 }
 
-bool MdoExtensionsImportDirectory(cstr Kind,cstr Id,cstr NativeRoot,cstr Expected,bool Trust,xcancel* Cancel,xvalue** Result,char Error[512])
+bool MdoExtensionsImportDirectoryManifest(cstr Kind,cstr Id,cstr NativeRoot,const xvalue* Manifest,cstr Expected,bool Trust,xcancel* Cancel,xvalue** Result,char Error[512])
 {
     *Result=NULL;if(Error)Error[0]=0;
     if(!MdoExtLock||!MdoExtensionDirectoryKind(Kind)||!MdoExtensionDirectoryId(Id)||!NativeRoot||!xrtPathIsRooted(NativeRoot))return MdoExtError(Error,"Select one complete local extension directory");
     xroot Anchor=xrtRootOpen(NativeRoot);if(!Anchor)return MdoExtError(Error,"Cannot anchor the source directory; links and unavailable paths are not imported");
-    xfile Description=MdoExtOpenSource("extension.json",Anchor);uint64 DescriptionBytes=0;bool Header=Description&&xrtFileSize(Description,&DescriptionBytes)&&DescriptionBytes&&DescriptionBytes<=MDO_EXTENSION_MANIFEST_BYTES;
+    xfile Description=Manifest?NULL:MdoExtOpenSource("extension.json",Anchor);uint64 DescriptionBytes=0;bool Header=Description&&xrtFileSize(Description,&DescriptionBytes)&&DescriptionBytes&&DescriptionBytes<=MDO_EXTENSION_MANIFEST_BYTES;
     char* DescriptionText=Header?xrtMalloc((size_t)DescriptionBytes+1):NULL;Header=DescriptionText&&xrtReadFull(Description,DescriptionText,(size_t)DescriptionBytes,NULL);xrtClose(Description);
-    xvalue* DescriptionValue=Header&&!memchr(DescriptionText,0,(size_t)DescriptionBytes)?xrtJsonParse(xrtStrViewN(DescriptionText,(size_t)DescriptionBytes)):NULL;
-    Header=Header&&DescriptionValue&&MdoExtensionManifest(DescriptionValue,Error,512)&&!strcmp(Kind,MdoExtensionText(DescriptionValue,"kind",32));xrtFree(DescriptionText);xrtValueRelease(DescriptionValue);
+    xvalue* DescriptionValue=Manifest?xrtValueClone(Manifest):Header&&!memchr(DescriptionText,0,(size_t)DescriptionBytes)?xrtJsonParse(xrtStrViewN(DescriptionText,(size_t)DescriptionBytes)):NULL;
+    Header=DescriptionValue&&MdoExtensionManifest(DescriptionValue,Error,512)&&!strcmp(Kind,MdoExtensionText(DescriptionValue,"kind",32));xrtFree(DescriptionText);xrtValueRelease(DescriptionValue);
     if(!Header){xrtRootClose(Anchor);return MdoExtError(Error,"The selected directory must contain its own valid extension.json for this extension type");}
     char* Task=xrtXidMakeString(),*Base=Task?xrtFormat(MDO_EXT_TASKS "/%s",Task):NULL,*Archive=Base?xrtFormat("%s/import.zip",Base):NULL;
-    xrtMutexLock(MdoExtLock);MdoExtTree Tree={0},After={0};char BeforeHash[65],AfterHash[65];bool Ok=Base&&Archive&&MdoExtEnsure(Base)&&MdoExtCollectFrom("",Anchor,&Tree,Cancel,Error)&&MdoExtFingerprintFrom("",Anchor,&Tree,BeforeHash,Cancel);
+    xrtMutexLock(MdoExtLock);MdoExtTree Tree={0},After={0};char BeforeHash[65],AfterHash[65];bool Ok=Base&&Archive&&MdoExtStage(Base,Kind,Id)&&MdoExtCollectFrom("",Anchor,&Tree,Cancel,Error)&&MdoExtFingerprintFrom("",Anchor,&Tree,BeforeHash,Cancel);
     xfile Output=Ok?MdoHomeOpenWrite(Archive,XFILE_WRITE|XFILE_CREATE|XFILE_EXCLUSIVE):NULL;MdoZipWriter Writer;MdoZipWriterInit(&Writer,Output);Ok=Ok&&Output;
-    for(size_t I=0;Ok&&I<Tree.Count;I++){const MdoExtFile* F=&Tree.Files[I];xfile Input=F->Directory?NULL:MdoExtOpenSource(F->Path,Anchor);
+    char* Metadata=Manifest&&Base?xrtFormat("%s/manifest.json",Base):NULL;
+    if(Ok&&Manifest){Ok=Metadata&&MdoExtSaveJson(Metadata,Manifest,MDO_EXTENSION_MANIFEST_BYTES);xfile Input=Ok?MdoHomeOpenRead(Metadata):NULL;Ok=Ok&&Input&&MdoZipWriterAdd(&Writer,"extension.json",false,0600,Input,Cancel);xrtClose(Input);}
+    for(size_t I=0;Ok&&I<Tree.Count;I++){const MdoExtFile* F=&Tree.Files[I];if(Manifest&&!strcmp(F->Path,"extension.json"))continue;xfile Input=F->Directory?NULL:MdoExtOpenSource(F->Path,Anchor);
         Ok=(F->Directory||Input)&&MdoZipWriterAdd(&Writer,F->Path,F->Directory,F->Info.Mode,Input,Cancel);xrtClose(Input);}
     Ok=Ok&&MdoZipWriterFinish(&Writer);MdoZipWriterUnit(&Writer);xrtClose(Output);
     Ok=Ok&&MdoExtCollectFrom("",Anchor,&After,Cancel,Error)&&MdoExtFingerprintFrom("",Anchor,&After,AfterHash,Cancel)&&!strcmp(BeforeHash,AfterHash);
     MdoExtTreeUnit(&Tree);MdoExtTreeUnit(&After);xrtMutexUnlock(MdoExtLock);xrtRootClose(Anchor);
-    xvalue* Credits=xrtValueObject();Ok=Ok&&Credits&&MdoExtPut(Credits,"source","manual");if(Ok&&Expected)Ok=MdoExtPut(Credits,"expected_revision",Expected);
+    xrtFree(Metadata);xvalue* Credits=xrtValueObject();Ok=Ok&&Credits&&MdoExtPut(Credits,"source","manual");if(Ok&&Expected)Ok=MdoExtPut(Credits,"expected_revision",Expected);
     if(Ok)Ok=MdoExtensionsInstall(Kind,Id,Archive,Credits,Trust,Cancel,Result,Error);
     xrtValueRelease(Credits);if(Base)MdoExtRemoveTree(Base);xrtFree(Base);xrtFree(Archive);xrtFree(Task);
     if(!Ok&&Error&&!Error[0])MdoExtError(Error,"Source directory changed or contains unsupported files; nothing was installed");return Ok;
 }
+bool MdoExtensionsImportDirectory(cstr Kind,cstr Id,cstr NativeRoot,cstr Expected,bool Trust,xcancel* Cancel,xvalue** Result,char Error[512])
+{return MdoExtensionsImportDirectoryManifest(Kind,Id,NativeRoot,NULL,Expected,Trust,Cancel,Result,Error);}
 
 bool MdoExtensionsCreate(cstr Kind,cstr Id,const xvalue* Manifest,const void* Entry,size_t Bytes,bool Trust,xvalue** Result,char Error[512])
 {

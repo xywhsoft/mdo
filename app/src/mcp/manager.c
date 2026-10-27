@@ -10,7 +10,7 @@
 #include "../../include/mdo/projects.h"
 #include "../../include/mdo/mcp.h"
 #include "../../include/mdo/secrets.h"
-#include "../../include/mdo/ecosystem_package.h"
+#include "../../include/mdo/mcp_template.h"
 
 #define MDO_MCP_SOURCE "mdo.mcp.config"
 #define MDO_MCP_DIRECTORY "/app/default-home/mcp"

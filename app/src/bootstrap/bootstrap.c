@@ -1,6 +1,5 @@
 #include "../../include/mdo/distribution.h"
 #include <stdio.h>
-#include "../../include/mdo/ecosystem.h"
 #include "../../include/mdo/extensions.h"
 #include "../../include/mdo/extension_tasks.h"
 #include <string.h>
