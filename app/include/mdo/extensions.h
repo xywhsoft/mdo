@@ -35,5 +35,17 @@ bool MdoExtensionsImportDirectory(cstr Kind,cstr Id,cstr NativeRoot,cstr Expecte
 bool MdoExtensionsCreate(cstr Kind,cstr Id,const xvalue* Manifest,const void* Entry,size_t Bytes,bool Trust,xvalue** Result,char Error[512]);
 /* Manual directories only. Expected is the last whole-directory fingerprint. */
 bool MdoExtensionsEdit(cstr Kind,cstr Id,cstr Action,cstr Path,cstr Target,const void* Data,size_t Bytes,cstr Expected,xvalue** Result,char Error[512]);
+/* Serialize multi-manager operations without blocking the UI network worker. */
+bool MdoExtensionsMutationBegin(void);
+void MdoExtensionsMutationEnd(void);
+bool MdoExtensionsInUse(cstr Kind,cstr Id);
+/* Native plugins can retain their directory until host restart. The deferred
+ * delete is content-bound and is finished during startup recovery. */
+bool MdoExtensionsScheduleRemove(cstr Kind,cstr Id,cstr Expected,xvalue** Result,char Error[512]);
+bool MdoExtensionsCancelRemove(cstr Kind,cstr Id,char Error[512]);
+/* Product/SDK management coordinates catalogue retirement around storage.
+ * Credits is host-verified store metadata, never a public request field. */
+bool MdoExtensionsManage(const xvalue* Input,const xvalue* Credits,xcancel* Cancel,xvalue** Result,char Error[512]);
+bool MdoExtensionsWarnings(xvalue* Items);
 
 #endif

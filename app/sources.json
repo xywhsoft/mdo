@@ -4,6 +4,7 @@
     "src/storage/home.c",
     "src/extensions/manager.c",
     "src/extensions/builtins.c",
+    "src/extensions/operations.c",
     "src/projects/lifecycle.c",
     "src/config/config.c",
     "src/config/service.c",

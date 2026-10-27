@@ -7,6 +7,7 @@
 #include "../../include/mdo/sessions.h"
 #include "../../include/mdo/skills.h"
 #include "../../include/mdo/knowledge.h"
+#include "../../include/mdo/extensions.h"
 
 #define MDO_API_DIAGNOSTIC_LIMIT 256u
 
@@ -78,6 +79,7 @@ bool MdoApiDiagnosticsRoute(MdoApiContext* Context)
     xvalue* Items = xrtValueArray();
     xvalue* Knowledge = MdoKnowledgeDiagnostics();
     if(Knowledge&&!MdoApplicationPluginWarnings(Knowledge)){xrtValueRelease(Knowledge);Knowledge=NULL;}
+    if(Knowledge&&!MdoExtensionsWarnings(Knowledge)){xrtValueRelease(Knowledge);Knowledge=NULL;}
     size_t Total = 0u;
     size_t Added = 0u;
     size_t Index;

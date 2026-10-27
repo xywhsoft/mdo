@@ -47,10 +47,12 @@ xvalue* QaProductContract(const xvalue* P,xvfs V){
     xrtValueObjectSetNew(R,XRT_STR_LITERAL("approval_and_reconnect"),xrtValueBool(Reapproved));
     MdoMcpDiagnostics* D=MdoMcpDiagnosticsSnapshot();xvalue* Messages=xrtValueArray();for(size_t I=0;D&&I<D->Count;I++)xrtValueArrayAppendNew(Messages,xrtValueString(xrtStrView(D->Entries[I].Message)));
     xrtValueObjectSetNew(R,XRT_STR_LITERAL("diagnostics"),Messages);MdoMcpDiagnosticsRelease(D);
-    MdoMcpManagerUnit();if(Runtime)xworkRuntimeRelease(Runtime);Removed=NULL;
-    bool Gone=MdoExtensionsRemove("mcp","0123456789ABCDEFGHJKMNPQRSTVWXYZ",&Removed,Error);xrtValueRelease(Removed);xrtValueObjectSetNew(R,XRT_STR_LITERAL("whole_directory_uninstalled"),xrtValueBool(Gone));
     bool Exists=false;xfileinfo Info;bool Private=MdoHomeExternalStat("data/mcp/connections/qa-one.json",&Exists,&Info)&&Exists;
-    xrtValueObjectSetNew(R,XRT_STR_LITERAL("private_state_separate"),xrtValueBool(Private));SdkPut(R,"error",Error);
+    xrtValueObjectSetNew(R,XRT_STR_LITERAL("private_state_separate"),xrtValueBool(Private));
+    xvalue* Input=xrtValueObject();SdkPut(Input,"kind","mcp");SdkPut(Input,"id","0123456789ABCDEFGHJKMNPQRSTVWXYZ");SdkPut(Input,"action","remove");SdkPut(Input,"expected_revision",Digest);Removed=NULL;
+    bool Gone=MdoExtensionsManage(Input,NULL,NULL,&Removed,Error);xrtValueRelease(Removed);xrtValueRelease(Input);xrtValueObjectSetNew(R,XRT_STR_LITERAL("whole_directory_uninstalled"),xrtValueBool(Gone));
+    bool Clean=MdoHomeExternalStat("data/mcp/connections/qa-one.json",&Exists,&Info)&&!Exists;C=MdoMcpCatalogSnapshot();Clean=Clean&&C&&C->Count==0;MdoMcpCatalogRelease(C);xrtValueObjectSetNew(R,XRT_STR_LITERAL("processes_and_bindings_retired"),xrtValueBool(Clean));
+    MdoMcpManagerUnit();if(Runtime)xworkRuntimeRelease(Runtime);SdkPut(R,"error",Error);
     xrtEnvSet("MDO_QA_MCP_TOKEN",NULL);MdoExtensionsUnit();if(Home)MdoHomeUnit();return R;
 }
 '''
@@ -74,7 +76,7 @@ def main():
     (directory / 'mcp.json').write_text(json.dumps(recipe), encoding='utf-8')
     try:
         result = product(args, fixture, CONTRACT, out / 'result.json')
-        for key in ('loaded', 'two_private_connections', 'first_real_protocol', 'second_real_protocol', 'zip_packed', 'running_process_pins_directory', 'changed_directory_requires_approval', 'approval_and_reconnect', 'whole_directory_uninstalled', 'private_state_separate'):
+        for key in ('loaded', 'two_private_connections', 'first_real_protocol', 'second_real_protocol', 'zip_packed', 'running_process_pins_directory', 'changed_directory_requires_approval', 'approval_and_reconnect', 'whole_directory_uninstalled', 'private_state_separate', 'processes_and_bindings_retired'):
             assert result.get(key), (key, result)
         archive = fixture / 'data/extension-tasks/export/mcp.zip'
         with zipfile.ZipFile(archive) as z:

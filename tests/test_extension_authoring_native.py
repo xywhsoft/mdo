@@ -34,8 +34,14 @@ xvalue* QaProductContract(const xvalue* P,xvfs V){
  mdo_sdk_context_v1 C={0};C.Size=sizeof(C);C.Version=MDO_SDK_VERSION;C.Api=MdoApplicationApi();C.ExtensionId="qa-author";mdo_error_v1 E={0};
  xvalue* Request=SdkParse("{\"kind\":\"skills\",\"id\":\"sdk-local\",\"manifest\":{\"kind\":\"skills\",\"name\":\"SDK Skill\",\"alias\":\"sdk-skill\",\"entry\":\"SKILL.md\",\"platforms\":[\"any\"]},\"entry_text\":\"---\\nname: sdk-skill\\ndescription: SDK example\\n---\\nUse the directory.\\n\"}");Out=NULL;
  bool Sdk=mdoCall(&C,"extension.create",Request,&Out,&E)==MDO_RESULT_OK;xrtValueRelease(Out);Out=NULL;
- Sdk=Sdk&&mdoCall(&C,"extension.pack",Request,&Out,&E)==MDO_RESULT_OK&&SdkField(Out,"archive")&&SdkField(Out,"sha256");QaFlag(R,"sdk_create_and_zip_path",Sdk);xrtValueRelease(Out);Out=NULL;xrtValueRelease(Request);
- QaFlag(R,"sdk_directory_removed",MdoExtensionsRemove("skills","sdk-local",&Out,Error));xrtValueRelease(Out);
+ Sdk=Sdk&&mdoCall(&C,"extension.pack",Request,&Out,&E)==MDO_RESULT_OK&&SdkField(Out,"archive")&&SdkField(Out,"sha256");QaFlag(R,"sdk_create_and_zip_path",Sdk);xrtValueRelease(Out);Out=NULL;
+ char* Metadata=SdkJson(SdkGet(Request,"manifest"));bool Repair=MdoHomeAtomicWrite("skills/sdk-local/extension.json","{",1,false)&&MdoExtensionsFingerprint("skills","sdk-local",Hash,NULL,Error);
+ SdkPut(Request,"path","extension.json");SdkPut(Request,"text",Metadata);SdkPut(Request,"expected_revision",Hash);Repair=Repair&&mdoCall(&C,"extension.file.write",Request,&Out,&E)==MDO_RESULT_OK;QaFlag(R,"corrupt_manual_metadata_can_be_repaired",Repair);xrtFree(Metadata);xrtValueRelease(Out);Out=NULL;
+ bool Deferred=MdoExtensionsFingerprint("skills","sdk-local",Hash,NULL,Error)&&MdoExtensionsScheduleRemove("skills","sdk-local",Hash,&Out,Error);xrtValueRelease(Out);Out=NULL;
+ Deferred=Deferred&&MdoHomeAtomicWrite("skills/sdk-local/new-resource.txt","new",3,false)&&MdoExtensionsRecover(Error);Item=MdoExtensionsRead("skills","sdk-local",Error);Deferred=Deferred&&Item&&SdkField(Item,"pending_error");xrtValueRelease(Item);QaFlag(R,"deferred_delete_does_not_delete_changed_directory",Deferred);
+ xvalue* Warnings=xrtValueArray();bool Warning=MdoExtensionsWarnings(Warnings)&&xrtValueCount(Warnings)==1&&!strcmp(SdkField(xrtValueArrayGet(Warnings,0),"code"),"uninstall_changed");QaFlag(R,"deferred_problem_joins_common_warning",Warning);xrtValueRelease(Warnings);
+ bool Cancel=mdoCall(&C,"extension.cancel_remove",Request,&Out,&E)==MDO_RESULT_OK&&!MdoExtOpBool(Out,"pending_remove",false);xrtValueRelease(Out);Out=NULL;QaFlag(R,"pending_uninstall_can_be_cancelled",Cancel);
+ MdoExtensionsFingerprint("skills","sdk-local",Hash,NULL,Error);SdkPut(Request,"expected_revision",Hash);QaFlag(R,"sdk_directory_removed",mdoCall(&C,"extension.remove",Request,&Out,&E)==MDO_RESULT_OK&&MdoExtOpBool(Out,"removed",false));xrtValueRelease(Out);xrtValueRelease(Request);
  SdkPut(R,"error",Error);MdoExtensionsUnit();if(Home)MdoHomeUnit();return R;
 }
 '''

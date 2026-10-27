@@ -84,6 +84,7 @@ typedef struct MdoMcpDiagnosticInfo {
 bool MdoMcpManagerInit(xwork_runtime* pRuntime);
 void MdoMcpManagerUnit(void);
 bool MdoMcpManagerReload(void);
+bool MdoMcpRemoveDirectoryConnections(cstr DirectoryId,char Error[512]);
 uint64 MdoMcpManagerGeneration(void);
 
 MdoMcpCatalog* MdoMcpCatalogSnapshot(void);

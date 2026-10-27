@@ -93,6 +93,11 @@ bool MdoApplicationPluginsInit(void){
  SdkPlugins.HomeMount=xrtVfsMount(MdoHomeApplicationVfs(),"/app/default-home",2000,XVFS_CASE_SENSITIVE,&SdkPluginHomeProvider,NULL,0);
  return SdkPlugins.Map&&SdkPlugins.Mount&&SdkPlugins.HomeMount&&SdkPlugins.Config&&SdkPlugins.Effective&&SdkPlugins.Frontends&&SdkPlugins.Failures;
 }
+bool MdoApplicationPluginsReload(char* Error,size_t Capacity){
+ if(!SdkPlugins.Lock)return true;xvalue* Before=NULL;if(!MdoApplicationPluginsStoreBegin(&Before,Error,Capacity))return false;
+ char Why[512]={0};xvalue* Rows=MdoExtensionsList("plugins",Why);bool Ok=Rows&&MdoApplicationPluginsStorePublish(Rows,Error,Capacity);xrtValueRelease(Rows);xrtValueRelease(Before);MdoApplicationPluginsStoreEnd();
+ if(!Ok&&Error&&Capacity&&!Error[0])snprintf(Error,Capacity,"%s",Why[0]?Why:"Plugin catalogue could not be refreshed");return Ok;
+}
 void MdoApplicationPluginsUnit(void){
  if(!SdkPlugins.Lock)return;if(SdkPlugins.HomeMount){xrtVfsUnmount(SdkPlugins.HomeMount);xrtVfsMountDestroy(SdkPlugins.HomeMount);}if(SdkPlugins.Mount){xrtVfsUnmount(SdkPlugins.Mount);xrtVfsMountDestroy(SdkPlugins.Mount);}
  for(size_t I=0;I<32;I++){SdkPluginDrop(&SdkPlugins.Plugins[I]);MdoExtensionsRelease(SdkPlugins.Pins[I]);}

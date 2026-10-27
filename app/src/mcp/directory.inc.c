@@ -123,3 +123,19 @@ static char* McpDirectoryResolve(MdoMcpSource* Source,char Error[MDO_MCP_ERROR_L
     if(!Result)snprintf(Error,MDO_MCP_ERROR_LIMIT,"%s",Why[0]?Why:"MCP connection requires an installed directory, valid private values, matching approval and a supported variant");
     xrtFree(Path);xrtFree(Native);xrtValueRelease(Connection);xrtValueRelease(Meta);xrtValueRelease(Template);xrtValueRelease(Config);return Result;
 }
+#include "../../include/mdo/extension_files.h"
+/* Host-owned connection values never belong to the distributed directory.
+ * Remove only bindings for the explicitly uninstalled installation; shared
+ * credential-vault entries are retained rather than guessed at here. */
+bool MdoMcpRemoveDirectoryConnections(cstr DirectoryId,char Error[512]){
+ if(!MdoExtensionDirectoryId(DirectoryId))return false;xdir D=MdoHomeOpenDirectory("data/mcp/connections",XDIR_STAT);
+ if(!D){const xerror* E=xrtGetError();if(E&&xrtErrorKind(E)==XERR_NOT_FOUND){xrtClearError();return true;}return false;}
+ bool Ok=true;xdirentry E;xdirnext Next=XDIR_NEXT_END;size_t Count=0;
+ while((Next=xrtDirNext(D,&E))==XDIR_NEXT_ITEM){
+  if(++Count>4096){Ok=false;break;}if(E.Info.Type!=XFILE_TYPE_FILE||!(E.Flags&XDIR_ENTRY_UTF8)||E.Name.Size<6||E.Name.Size>101||memcmp(E.Name.Data+E.Name.Size-5,".json",5))continue;
+  char* Path=xrtFormat("data/mcp/connections/%.*s",(int)E.Name.Size,E.Name.Data);char* Text=Path?MdoExtensionRead(Path,true,262144,NULL):NULL;
+  xvalue* Doc=Text?xrtJsonParse(xrtStrView(Text)):NULL;cstr Id=MdoExtensionText(Doc,"extension_id",96);
+  if(!Doc)Ok=false;else if(Id&&!strcmp(Id,DirectoryId)&&!MdoHomeRemove(Path,false))Ok=false;
+  if(Text){xrtSecureZero(Text,strlen(Text));xrtFree(Text);}xrtValueRelease(Doc);xrtFree(Path);
+ }if(Next==XDIR_NEXT_ERROR)Ok=false;if(!xrtDirClose(D))Ok=false;if(!Ok&&Error)snprintf(Error,512,"The extension directory was removed, but one or more private MCP bindings require cleanup");return Ok;
+}

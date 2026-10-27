@@ -33,8 +33,10 @@ xvalue* QaProductContract(const xvalue* P,xvfs V){
  bool Rejected=Edited&&!MdoModuleManagerReload();Catalog=MdoModuleCatalogSnapshot();QaBool(R,"changed_native_requires_restart",Rejected&&QaExecute(Catalog,"17:plugin resource"));MdoModuleCatalogRelease(Catalog);
  MdoModuleManagerUnit();MdoApplicationPluginsUnit();Ok=MdoApplicationPluginsInit()&&MdoModuleManagerInit(Runtime);Catalog=Ok?MdoModuleCatalogSnapshot():NULL;QaBool(R,"header_after_restart",Ok&&QaExecute(Catalog,"29:plugin resource"));MdoModuleCatalogRelease(Catalog);
  MdoModuleDiagnostics* D=MdoModuleDiagnosticsSnapshot();xvalue* Messages=xrtValueArray();for(size_t I=0;D&&I<D->Count;I++)xrtValueArrayAppendNew(Messages,xrtValueString(xrtStrView(D->Entries[I].Message)));xrtValueObjectSetNew(R,XRT_STR_LITERAL("diagnostics"),Messages);MdoModuleDiagnosticsRelease(D);
+ xvalue* Delete=xrtValueObject();SdkPut(Delete,"kind","plugins");SdkPut(Delete,"id","0123456789ABCDEFGHJKMNPQRSTVWXYZ");SdkPut(Delete,"action","remove");MdoExtensionsFingerprint("plugins","0123456789ABCDEFGHJKMNPQRSTVWXYZ",Hash,NULL,Error);SdkPut(Delete,"expected_revision",Hash);
+ Removed=NULL;bool Scheduled=MdoExtensionsManage(Delete,NULL,NULL,&Removed,Error)&&MdoExtOpBool(Removed,"pending_remove",false)&&!MdoExtOpBool(Removed,"removed",true);QaBool(R,"native_uninstall_deferred_honestly",Scheduled);xrtValueRelease(Delete);xrtValueRelease(Removed);
  MdoModuleManagerUnit();MdoModuleManagerAttachApplication(NULL);MdoApplicationPluginsUnit();if(Runtime)xworkRuntimeRelease(Runtime);
- Removed=NULL;QaBool(R,"whole_directory_removed",MdoExtensionsRemove("plugins","0123456789ABCDEFGHJKMNPQRSTVWXYZ",&Removed,Error));xrtValueRelease(Removed);
+ bool Exists=false;xfileinfo Info;QaBool(R,"whole_directory_removed",MdoExtensionsRecover(Error)&&MdoHomeExternalStat("plugins/0123456789ABCDEFGHJKMNPQRSTVWXYZ",&Exists,&Info)&&!Exists);
  bool Frontend=MdoExtensionsSetEnabled("plugins","other",true,Error)&&MdoApplicationPluginsInit();const xvalue* Other=SdkPluginFind(SdkPlugins.Config,"other");
  xvalue* Input=SdkParse("{\"client\":\"qa-client\",\"page\":\"qa-page\",\"id\":\"other\"}"),*Reply=NULL;SdkPut(Input,"revision",SdkField(Other,"revision"));
  Frontend=Frontend&&SdkPluginFrontendCall("plugin.frontend.enter",Input,&Reply,&Failure);xrtValueRelease(Reply);Reply=NULL;
@@ -65,7 +67,7 @@ def main():
     (other / 'plugin.json').write_text(json.dumps(dict(entry=dict(frontend='entry.js'), exclusive=['qa-layout']))); (other / 'entry.js').write_text('export function activate(){}')
     try:
         result = product(a, fixture, CONTRACT, out / 'result.json')
-        for key in ('loaded', 'physical_directory_overlay', 'credits', 'real_native_entry', 'active_directory_pinned', 'exclusive_conflict', 'whole_directory_zip', 'changed_native_requires_restart', 'header_after_restart', 'whole_directory_removed', 'frontend_cleanup_before_uninstall', 'restart_no_resurrection'): assert result.get(key), (key, result)
+        for key in ('loaded', 'physical_directory_overlay', 'credits', 'real_native_entry', 'active_directory_pinned', 'exclusive_conflict', 'whole_directory_zip', 'changed_native_requires_restart', 'header_after_restart', 'native_uninstall_deferred_honestly', 'whole_directory_removed', 'frontend_cleanup_before_uninstall', 'restart_no_resurrection'): assert result.get(key), (key, result)
         with zipfile.ZipFile(fixture / 'data/extension-tasks/export/plugin.zip') as z:
             assert z.testzip() is None and 'plugin.c' in z.namelist() and '.empty/' in z.namelist()
             assert not any('revisions/' in name or name.startswith('files/') for name in z.namelist())
