@@ -19,13 +19,12 @@ version: 1.0.0
 
 设置入口会给出目标父目录、模式和已有 Skill ID，以那些信息为准。
 直接在聊天中调用时，用 `skill` 工具发现已有技能，读取来源路径；新建默认放在
-当前工作区 `.mdo/skills/<skill-id>/`，用户明确要求跨项目复用时放到个人 Home 的
-`skills/<skill-id>/`。个人 Home 是 mdo 配置的存储目录，不要猜成系统用户主目录。
-若不知道个人目录，可请用户从设置入口选择个人范围。
+当前 mdo Home 的 `skills/<目录名>/`。项目仅保存启停选择，不再创建项目源码副本。
+Home 是 mdo 配置的存储目录，不要猜成系统用户主目录；可通过 Application SDK 查询。
 
 新建前检查同名目录，拒绝覆盖。改进已有技能时先读正文和所需资源，保留 ID、
-调用控制、用户维护的内容与资源；改动前保存可恢复副本。不要直接修改打包资源或
-包缓存，使用可写的同名个人或项目覆盖，并说明覆盖关系。
+调用控制、用户维护的内容与资源。商店安装目录不可编辑或再次分享，应通过商店更新。
+手工创作目录的修改使用 Application SDK 的目录保存及修订检查，不覆盖无关修改。
 
 ## 编写
 
@@ -33,6 +32,15 @@ version: 1.0.0
 只写对任务有帮助的内容：触发条件、步骤、输入输出示例、验证和失败后的恢复。
 description 写清用途与适用情境，便于模型发现；正文保持精简，把长资料放在 references。
 脚本只在确实能减少重复工作时提供，资源引用相对于 Skill 目录。
+
+根部同时包含 `extension.json`，例如：
+
+```json
+{"kind":"skills","name":"示例技能","alias":"example","entry":"SKILL.md","platforms":["any"]}
+```
+
+可添加 author、copyright、license、version、readme。SKILL.md 的 name 与 alias 一致；
+目录名独立，可以是平台 XID。发布打包整个目录为普通 ZIP，不使用 JSON 文件容器。
 
 默认使用 `\$ARGUMENTS` 接收自然语言。需要分组时才声明参数；参数提示不等于必填。
 缺少信息时根据任务需要补问，不因为可选参数为空中断工作。
@@ -51,10 +59,10 @@ description 写清用途与适用情境，便于模型发现；正文保持精�
 保存后校验实际目录，确认资源完整：
 
 ```json
-{"action":"validate","name":"example","scope":"project"}
+{"action":"validate","name":"example","scope":"user"}
 ```
 
-个人技能使用 `scope: "user"`。校验失败会返回 `valid: false` 和 errors；
+校验名称使用根清单中的 alias。校验失败会返回 `valid: false` 和 errors；
 据此修正后再检查。只读检查不会运行脚本、安装依赖或创建/启用技能。
 `resources_checked: false` 表示还没有验证完整目录，不能声称资源校验完成。
 空正文等 warnings 也要评估和处理。格式通过不代表模型效果通过。

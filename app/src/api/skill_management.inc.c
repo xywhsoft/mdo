@@ -61,9 +61,9 @@ bool MdoApiSkillSourcesRoute(MdoApiContext* C)
         }
         MdoSkillDiagnosticsRelease(Ds);MdoSkillCatalogRelease(Catalog);
     }
-    char* UserDir=MdoHomeExternalPath("skills");char* ProjectDir=Workspace?xrtPathJoin(Workspace,".mdo/skills"):NULL;
-    if(Ok)Ok=MdoApiValueSetString(Data,"user_directory",UserDir?UserDir:"")&&MdoApiValueSetString(Data,"project_directory",ProjectDir?ProjectDir:"");
-    xrtFree(UserDir);xrtFree(ProjectDir);xrtFree(Workspace);
+    char* UserDir=MdoHomeExternalPath("skills");
+    if(Ok)Ok=MdoApiValueSetString(Data,"user_directory",UserDir?UserDir:"");
+    xrtFree(UserDir);xrtFree(Workspace);
     if(Ok)Ok=MdoApiValueSetBool(Data,"truncated",Truncated)&&xrtValueObjectSet(Data,XRT_STR_LITERAL("items"),Items)&&xrtValueObjectSet(Data,XRT_STR_LITERAL("diagnostics"),Issues);
     xrtValueRelease(Items);xrtValueRelease(Issues);
     if(!Ok){xrtValueRelease(Data);return MdoApiReplyError(C,422,"skill_sources_limit","Skill sources exceed the discovery limit",NULL);}

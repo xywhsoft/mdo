@@ -1,8 +1,9 @@
 # mdo Skill 编写约定
 
-Skill 是一个含 UTF-8 `SKILL.md` 的目录，可带 references、scripts、templates、assets。
+Skill 是一个含 extension.json 和 UTF-8 `SKILL.md` 的目录，可带 references、scripts、templates、assets。
 新 ID 推荐小写字母和连字符，最多 64 字符，避开 Windows 保留名与已有目录。
-name 和 description 必填；优先让 name 与 ID 一致。不要填入密钥、令牌或私人会话原文。
+name 和 description 必填；SKILL.md 的 name 必须与根清单 alias 一致，目录 ID 独立。
+不要填入密钥、令牌或私人会话原文。
 
 ## 最小结构
 
@@ -27,13 +28,14 @@ paths、disallowed-tools 等执行行为字段不受支持；正文中的 shell 
 
 SKILL.md 最多 128 KiB；输入参数最多 16 KiB；聊天内联展开还受 64 KiB 草稿限制。
 保持正文短小，长资料放 references，模型可以分段读资源。
-资源最多 128 个文件，深度最多 8，单文件 8 MiB、总计 16 MiB。
+目录资源遵循统一归档限制：最多 50,000 项、文件 512 MiB、目录合计 1 GiB；
+平台每版本容量以账号额度为准，普通用户 10 MiB、创作者 100 MiB（含审核附件）。
 路径不可用绝对路径、反斜线、冒号、.. 或符号链接；脚本不会因安装而自动执行。
 声明了旧式 scripts/templates/assets 列表时，只能访问列表内资源，且文件必须存在。
 
 ## 安装范围
 
-项目新建：工作区 `.mdo/skills/<id>/`；个人新建：指定 mdo Home 下 `skills/<id>/`。
-项目同名 Skill 覆盖个人定义；在兼容目录中 mdo 自己的目录优先。
-个人同名定义覆盖内置内容。迁移、改名、覆盖、启停都应有明确用途，不能为修复一个
-文件而改动其他项目、其他设备或无关资源。
+唯一安装目录是指定 mdo Home 下 `skills/<目录名或XID>/`。项目仅保存启停偏好。
+其他程序的技能来源可显式导入完整目录；原目录不会作为 mdo 的运行时安装位置。
+调用名称在根清单 alias 中声明，同名别名冲突需要用户处理，不能偷偷覆盖其他定义。
+发布和导出使用整个目录的标准 ZIP，安装解压到一个目录，卸载移除整个目录。

@@ -17,8 +17,8 @@ export function mcpHttpEndpointValid(value) {
   return /^(?:localhost|127\.0\.0\.1|\[::1\])(?::[0-9]+)?$/i.test(authority ?? "");
 }
 export function portableId(id) {
-  return /^[a-z0-9_-][a-z0-9._-]{0,63}$/.test(id) && !id.endsWith(".") && !id.includes("..") &&
-    !/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/.test(id);
+  return /^[A-Za-z0-9_-][A-Za-z0-9._-]{0,63}$/.test(id) && !id.endsWith(".") && !id.includes("..") &&
+    !/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(id);
 }
 export function splitPrompt(source) {
   const text = String(source).replace(/^\uFEFF/, "").replace(/\r\n/g, "\n");

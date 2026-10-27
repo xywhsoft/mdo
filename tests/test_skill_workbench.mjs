@@ -38,20 +38,10 @@ test("Skill workbench uses project-scoped reads, protects edits and emits an uns
     const footer=dialog.querySelector("footer"),content=dialog.querySelector(".mdo-layer-body");
     assert(!content.contains(footer));assert.equal(footer.lastChild.textContent,"关闭");
     const buttons = () => descendants(dialog).filter(node => node.tagName === "BUTTON");
-    buttons().find(node => node.textContent === "新建项目 Skill").dispatchEvent(new Event("click")); await flush();
-    const editor = descendants(dialog).find(node => node.tagName === "TEXTAREA"); editor.value = "Unsent edits";
-    assert(footer.textContent.includes("保存到项目"));assert(!descendants(content).some(n=>n.tagName==="BUTTON"&&n.textContent==="保存到项目"));
-    buttons().find(node=>node.textContent==="检查格式").dispatchEvent(new Event("click"));await flush();
-    assert.equal(editor.value,"Unsent edits");assert.ok(descendants(dialog).some(node=>node.textContent?.includes("Add name and description")));
-    const project = descendants(dialog).find(node => node.attributes["aria-label"] === "项目");
-    project.value = "work"; project.dispatchEvent(new Event("change")); await flush();
-    assert.equal(project.value, "default"); assert.equal(editor.value, "Unsent edits");
-    assert.equal(workbench.hasPendingChanges(), true);
-    buttons().find(node => node.textContent === "用 AI 编写 Skill").dispatchEvent(new Event("click")); await flush();
-    assert.equal(intents.length, 0); discard = true;
-    buttons().find(node => node.textContent === "用 AI 编写 Skill").dispatchEvent(new Event("click")); await flush();
-    assert.equal(intents.length, 0);
-    const requirements = descendants(dialog).find(node => node.attributes["aria-label"] === "构建需求");
+    buttons().find(node => node.textContent === "用 AI 编写 Skill").dispatchEvent(new Event("click"));await flush();
+    const requirements=descendants(dialog).find(node=>node.attributes["aria-label"]==="构建需求");requirements.value="Unsent edits";
+    const project=descendants(dialog).find(node=>node.attributes["aria-label"]==="项目");project.value="work";project.dispatchEvent(new Event("change"));await flush();
+    assert.equal(project.value,"default");assert.equal(requirements.value,"Unsent edits");assert(workbench.hasPendingChanges());
     assert(footer.textContent.includes("打开构建对话"));assert(!content.textContent.includes("打开构建对话"));
     requirements.value = "Generate a reusable review checklist";
     buttons().find(node => node.textContent === "打开构建对话").dispatchEvent(new Event("click")); await flush();
@@ -120,25 +110,9 @@ test("a failed project lookup cannot reuse another project's builder directory",
   } finally {workbench.destroy();globalThis.document=original.document;globalThis.window=original.window;}
 });
 
-test("project saves keep bottom actions and drafts on failure; busy guards and teardown isolate late responses",async context=>{
-  const original={document:globalThis.document,window:globalThis.window};
-  globalThis.document=testDocument();globalThis.window=new EventTarget();window.confirm=()=>true;
-  let fail=true,gate,changes=0;const writes=[];
-  context.mock.method(globalThis,"fetch",async(url,options)=>{
-    if(options.method==="PUT") {writes.push(JSON.parse(options.body));if(gate)await gate;return fail?Response.json({ok:false,error:{message:"Project write unavailable"}},{status:403}):Response.json({ok:true,data:{revision:"saved"}});}
-    return Response.json({ok:true,data:url.includes("/skills/sources")?{items:[],user_directory:"D:/home/skills",project_directory:"D:/default/.mdo/skills"}:{items:[]}});
-  });
-  const workbench=createSkillWorkbench({onChange(){changes++;}});
-  try {
-    await workbench.open();let dialog=document.body.querySelector("dialog");
-    const button=(root,text)=>descendants(root).find(n=>n.tagName==="BUTTON"&&n.textContent===text);
-    button(dialog,"新建项目 Skill").click();await flush();
-    dialog.querySelector("input").value="project-fixture";const content=dialog.querySelector("textarea");content.value="Retain this source";
-    const footer=dialog.querySelector("footer");button(footer,"保存到项目").click();await flush();
-    assert.equal(content.value,"Retain this source");assert(dialog.textContent.includes("Project write unavailable"));assert.equal(changes,0);
-    fail=false;let release;gate=new Promise(resolve=>{release=resolve;});button(footer,"保存到项目").click();button(footer,"保存到项目").click();await flush();
-    assert.equal(writes.length,2);dialog.dispatchEvent(new Event("cancel",{cancelable:true}));await flush();assert(dialog.open);
-    workbench.destroy();const next=workbench.open();const replacement=document.body.querySelector("dialog");release();gate=null;await next;await flush();
-    assert.equal(document.body.querySelector("dialog"),replacement);assert.equal(changes,0);assert(!replacement.textContent.includes("已保存"));
-  }finally{workbench.destroy();Object.assign(globalThis,original);}
+test("new Skills delegate to the Home editor without project source writes",async context=>{
+  const original={document:globalThis.document,window:globalThis.window};globalThis.document=testDocument();globalThis.window=new EventTarget();window.confirm=()=>true;
+  let edits=0,writes=0;context.mock.method(globalThis,"fetch",async(url,options)=>{if(options.method!=="GET")writes++;return Response.json({ok:true,data:url.includes("/skills/sources")?{items:[],user_directory:"D:/home/skills"}:{items:[]}});});
+  const workbench=createSkillWorkbench({onChange(){},onEdit(){edits++;}});
+  try{await workbench.open();const dialog=document.body.querySelector("dialog"),controls=descendants(dialog);assert(!controls.some(n=>n.textContent==="新建项目 Skill"));controls.find(n=>n.textContent==="新建 Home Skill").click();await flush();assert.equal(edits,1);assert.equal(writes,0);assert(!document.body.querySelector("dialog"));}finally{workbench.destroy();Object.assign(globalThis,original);}
 });

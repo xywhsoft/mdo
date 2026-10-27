@@ -63,6 +63,6 @@ test("Skill and C tool editors keep validation and save recovery inside shared b
     fail=false;let release;gate=new Promise(resolve=>{release=resolve;});footer.firstChild.click();footer.firstChild.click();await flush();
     const before=writes.length;dialog.dispatchEvent(new Event("cancel",{cancelable:true}));await flush();assert(dialog.open);assert(footer.firstChild.disabled);
     release();gate=null;await flush();assert(!document.body.querySelector("dialog"));assert.equal(writes.length,before);
-    assert.equal(writes.at(-1).url,`/api/v1/extensions/${kind}/fixture-${kind}`);assert(writes.at(-1).body.content.includes(kind==="tools"?"mdo/module.h":kind==="commands"?"mdo/command.h":"Fixture skill"));
+    assert.equal(writes.at(-1).url,`/api/v1/extensions/${kind}/fixture-${kind}`);const payload=writes.at(-1).body;assert.equal(payload.manifest.kind,kind);assert.equal(payload.manifest.alias,`fixture-${kind}`);assert.equal(payload.expected_revision,"");assert(payload.edits[0].text.includes(kind==="tools"?"mdo/module.h":kind==="commands"?"mdo/command.h":"Fixture skill"));assert(!Object.hasOwn(payload,"content"));assert(!Object.hasOwn(payload,"files"));
   }
 });

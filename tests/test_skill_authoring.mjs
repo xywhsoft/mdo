@@ -34,7 +34,7 @@ test("target changes and nonempty destination drafts cannot overwrite content", 
 });
 
 test("authoring prompts retain literal directory variables and declare supported controls", () => {
-  const prompt = skillAuthoringPrompt({ directory: "D:/some path/skills", scope: "project" });
+  const prompt = skillAuthoringPrompt({ directory: "D:/some path/skills", scope: "user" });
   assert.ok(prompt.includes('"D:/some path/skills"')); assert.ok(prompt.includes("${MDO_SKILL_DIR}"));
   assert.ok(prompt.includes("disable-model-invocation")); assert.ok(prompt.includes("不要覆盖"));
   assert.ok(prompt.includes("$ARGUMENTS[0]")); assert.ok(prompt.includes("arguments: [file, focus]"));
@@ -58,7 +58,7 @@ test("builder modes preserve explicit targets and make reviews read-only", () =>
 });
 
 test("builder prepares the actual installed creator as an unsent bounded draft", async context => {
-  const settings = { directory: "D:/work/.mdo/skills", scope: "project", projectId: "work", request: "Build a review checklist" };
+  const settings = { directory: "D:/mdo-home/skills", scope: "user", projectId: "work", request: "Build a review checklist" };
   context.mock.method(globalThis, "fetch", async (url, options) => {
     assert.equal(url, "/api/v1/skills/invoke?project=work");
     assert.equal(JSON.parse(options.body).id, "skill-creator");
@@ -69,7 +69,7 @@ test("builder prepares the actual installed creator as an unsent bounded draft",
 });
 
 test("failed or oversized creator expansion never falls back to an unverified draft", async context => {
-  const settings = { directory: "D:/work/.mdo/skills", scope: "project" };
+  const settings = { directory: "D:/mdo-home/skills", scope: "user" };
   context.mock.method(globalThis, "fetch", async () => Response.json({ ok: true, data: { text: "x".repeat(65537) } }));
   await assert.rejects(expandSkillAuthoringDraft(settings), /64 KiB/);
   context.mock.method(globalThis, "fetch", async () => Response.json({ ok: false, error: { code: "disabled", message: "Creator disabled" } }, { status: 403 }));

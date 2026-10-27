@@ -2,14 +2,15 @@ import { createExtensionBrowser, actionMenu, extensionToggle, detailTabs, browse
 import { createSingleResourceStore } from "./single-resource-store.js";
 import { customizableResource, resourceCredits, storeReadOnlyMessage } from "./resource-credits.js";
 import { createSkillWorkbench } from "./skill-workbench.js";
-import { createKnowledgeEditor } from "./knowledge-editor.js";
+import { createDirectoryEditor } from "./directory-editor.js";
+import { directoryId, directoryManifest, readDirectoryEntry, saveDirectory, changeDirectory } from "./directory-documents.js";
 import { createMcpContext } from "./mcp-context.js";
 import { createMcpAuthorization } from "./mcp-authorization.js";
-import { createMcpConnections } from "./mcp-connections.js";
-import { createMcpWorkbench } from "./mcp-workbench.js";
+import { createMcpConnections } from "./mcp-directory-connections.js";
+
 import { newTool } from "./tool-template.js";
 import { newCommand } from "./command-template.js";
-import { createCommandWorkbench } from "./command-workbench.js";
+import { createCommandWorkbench } from "./command-projects.js";
 import { newRole, roleAdvanced, parseRoleAdvanced, ROLE_ADVANCED_KEYS, openRolePlan, roleProgramTemplate } from "./agent-authoring.js";
 import { api } from "../../api/client.js";
 import { targetState, subscribeTarget } from "../../api/target.js";
@@ -17,8 +18,10 @@ import { subscribeLocale, t } from "../../i18n.js";
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
 import { loadAgents } from "../../state/catalogs.js";
 import { refreshMcp, disconnectMcp, reloadCatalog } from "../../state/resources.js";
-import { EXTENSION_KINDS, portableId, promptFields, editPrompt, newMcp, prepareMcpCredentials, mcpImportDocuments, bytesToBase64 } from "./extension-formats.js";
-import { resourceOwner, receiptKey, resourceReferences, makeStorePackage, STORE_PLATFORMS } from "./store-formats.js";
+import { EXTENSION_KINDS, portableId, promptFields, editPrompt } from "./extension-formats.js";
+import { newMcpTemplate } from "./mcp-template.js";
+import { exportDirectoryZip } from "../../api/extension-export.js";
+
 import { saveBlobFile } from "../../utils/file-download.js";
 import { createExtensionReads } from "./extension-reads.js";
 import { openLayer } from "../../components/layers.js";
@@ -56,19 +59,18 @@ export function createExtensionPanels() {
   let selected = "", editing = null, activeTarget = targetKey(), pendingResource = null;
   let disposed = false, paused = false;
   const reads = createExtensionReads();
-  const knowledgeEditor = createKnowledgeEditor({owner:roots.get("knowledge"),onChange:()=>{announceChange("knowledge");if(selected==="knowledge")void load("knowledge");}});
-  const skillWorkbench = createSkillWorkbench({ owner: roots.get("skills"), onChange: () => announceChange("skills"), onShare: item => stores.get("skills").publish(item) });
+  const directoryEditor = createDirectoryEditor({onChange:kind=>{announceChange(kind);if(selected===kind)void load(kind);}});
+  const skillWorkbench = createSkillWorkbench({ owner: roots.get("skills"), onChange: () => announceChange("skills"), onShare: item => stores.get("skills").publish(item),onEdit:()=>openEditor("skills") });
   const mcpContext = createMcpContext();
   const mcpAuthorization = createMcpAuthorization();
   const mcpConnections = createMcpConnections(() => { announceChange("mcp"); if(selected==="mcp")void load("mcp"); });
-  const mcpWorkbench = createMcpWorkbench({ onChange: () => announceChange("mcp"), onConfigure:(item,project)=>mcpConnections.open({item,project}),onShare:item=>stores.get("mcp").publish(item) });
+
   const commandWorkbench = createCommandWorkbench({ owner: roots.get("commands"), onChange: () => announceChange("commands"), onShare: item => stores.get("commands").publish(item) });
   const stores = new Map(["agents", "subagents", "skills", "tools", "commands", "mcp", "knowledge"].map(kind => [kind, createSingleResourceStore(kind, () => { announceChange(kind); if (selected === kind) void load(kind); }, () => { states.get(kind).area = "store"; render(kind); }, async receipt => {
-    if(kind==="mcp"){await mcpConnections.open({receipt});return;}
-    const ref = resourceReferences(receipt).find(ref => ref.kind === kind); if (!ref || selected !== kind) return;
-    const state = states.get(kind), target = targetKey(); state.area = "local"; state.view = "custom"; state.filter = "";
-    stores.get(kind).activate(false); render(kind); await load(kind);
-    if (current(kind, target)) browsers.get(kind).open(ref.id);
+    if(receipt.kind!==kind||selected!==kind)return;
+    const state=states.get(kind);state.area="local";state.view="custom";state.filter="";
+    stores.get(kind).activate(false);render(kind);await load(kind);
+    browsers.get(kind).open(receipt.id);
   })]));
   const actions = new Map();
   const browsers = new Map(EXTENSION_KINDS.map(kind => [kind, createExtensionBrowser({ kind, onClose: () => reads.cancel(`detail:${kind}`) })]));
@@ -86,22 +88,19 @@ export function createExtensionPanels() {
     window.dispatchEvent(new CustomEvent("mdo-extensions-changed", { detail: { kind } }));
     if (["agents", "subagents", "tools"].includes(kind)) void loadAgents();
   }
-  async function load(kind) {
+  async function load(kind,append=false) {
     if (!current(kind, targetKey())) return;
     const state = states.get(kind), serial = ++state.serial, target = targetKey();
     const isCurrent = () => current(kind, target) && serial === state.serial;
     state.busy = state.reading = true; state.error = ""; render(kind);
     try {
-      const [response, catalog, packages, templates] = await Promise.all([
-        reads.read("catalog", path(kind), { isCurrent }),
+      const [response, catalog] = await Promise.all([
+        reads.read("catalog", `${path(kind)}?offset=${append?state.items.length:0}&limit=100`, { isCurrent }),
         kind === "tools" ? reads.read("catalog-tools", "/tools", { isCurrent }) : null,
-        reads.read("packages", "/ecosystem", { isCurrent, retry: false }).catch(() => null),
-        kind==="mcp" ? reads.read("mcp-templates", "/mcp/templates", {isCurrent,retry:false}) : null,
       ]);
       if (!isCurrent()) return;
       state.catalog = catalog?.data.items ?? [];
-      state.packages = packages?.data || {}; state.templates=templates?.data.items||[];
-      state.items = (response.data.items ?? []).sort((a, b) => a.id.localeCompare(b.id)); state.loaded = true;
+      state.items=append?[...new Map([...state.items,...response.data.items].map(row=>[row.id,row])).values()]:response.data.items||[];state.total=response.data.total??state.items.length;state.loaded=true;
     } catch (error) { if (isCurrent() && error?.name !== "AbortError") { state.loaded = false; state.error = errorMessage(error); } }
     finally { if (isCurrent()) {
       for (const key of ["catalog", "catalog-tools", "packages", "mcp-templates"]) reads.cancel(key);
@@ -111,7 +110,7 @@ export function createExtensionPanels() {
   async function openLinkedResource() {
     const ref=pendingResource;if(!ref||states.get(ref.kind)?.busy)return;pendingResource=null;
     const target=targetKey(), isCurrent=()=>current(ref.kind,target);
-    try{const data=(await reads.read("editor",path(ref.kind,ref.id),{isCurrent})).data;if(isCurrent())openEditor(ref.kind,data);}
+    try{const data=await readDirectoryEntry(ref.kind,ref.id);if(isCurrent())openEditor(ref.kind,data);}
     catch(e){if(isCurrent()&&e?.name!=="AbortError")toast(errorMessage(e),"error");}
   }
   async function act(kind, action) {
@@ -150,7 +149,7 @@ export function createExtensionPanels() {
       if (state.area === "store") { root.append(store.root); return; }
     }
     const add = button(label("create", "新建"), () => openEditor(kind));
-    const file = element("input", { attrs: { type: "file", accept: ["tools", "commands"].includes(kind) ? ".c" : ["mcp","knowledge"].includes(kind) ? ".json" : ".md,.json", "aria-label": label("import", "导入") } });
+    const file = element("input", { attrs: { type: "file", accept: ".zip", "aria-label": label("import", "导入") } });
     file.hidden = true; file.addEventListener("change", () => { void importFile(kind, file.files?.[0]); });
     const pick = button(label("import", "导入"), () => file.click());
     const actions = [add, pick, button(label("refresh", "刷新"), () => act(kind, async scope => {
@@ -164,17 +163,9 @@ export function createExtensionPanels() {
     if (kind === "skills") {
       actions.push(button(label("skillBuilder", "Skill 构建器"), () => skillWorkbench.open({ builder: true })));
       actions.push(button(label("skillSources", "来源、项目与 AI 创建"), () => skillWorkbench.open()));
-      const folder = element("input", { attrs: { type: "file", webkitdirectory: "", multiple: "", "aria-label": label("importFolder", "导入文件夹") } });
-      folder.hidden = true; folder.addEventListener("change", () => { void importFolder([...folder.files]); });
-      actions.splice(2, 0, button(label("importFolder", "导入文件夹"), () => folder.click()), folder);
-    }
-    if(kind==="knowledge"){
-      const folder=element("input",{attrs:{type:"file",webkitdirectory:"",multiple:"","aria-label":"导入知识库目录"}});folder.hidden=true;
-      folder.addEventListener("change",()=>{void knowledgeEditor.importFolder([...folder.files]);});
-      actions.push(button("导入目录",()=>folder.click()),folder);
     }
     const builtinView = kind === "tools" && state.view === "builtin";
-    if (kind === "mcp") actions.push(button("从模板创建连接", () => mcpConnections.open()),button("项目与配置迁移", () => mcpWorkbench.open()));
+    if (kind === "mcp") actions.push(button("管理连接", () => mcpConnections.open()));
     if (kind === "commands") actions.push(button("项目命令", () => commandWorkbench.open()));
     const toolbar = element("div", { className: "extension-toolbar eb-toolbar" });
     const refresh = actions.find(control => control.tagName === "BUTTON" && control.textContent === label("refresh", "刷新"));
@@ -218,34 +209,27 @@ export function createExtensionPanels() {
           kind === "mcp" ? element("span", { text: t(`resource.mcp${({ ready: "Ready", failed: "Failed", disabled: "Disabled", disconnected: "Disconnected" })[item.state] || "Disconnected"}`) }) : null,
           kind === "mcp" ? element("span", { text: t("resource.toolCount", { count: item.tool_count || 0 }) }) : null,
         ]);
-        const owner=item.template_receipt||resourceOwner(state.packages,item.path), protectedKind=["agents","subagents","tools","skills","commands","mcp","knowledge"].includes(kind);
+        const owner=null, protectedKind=["agents","subagents","tools","skills","commands","mcp","knowledge"].includes(kind);
         const editable=!protectedKind||customizableResource(item,owner), credits=protectedKind?resourceCredits(item,owner):null;
-        if(owner)meta.append(button(`${owner.name} · ${owner.version} · ${owner.source==="local"?label("localImport","本地导入"):owner.author}`,()=>returnToPackage(receiptKey(owner))));
         const edit = button(label("edit", "编辑"), async () => {
           const target = targetKey(), isCurrent = () => current(kind, target);
-          try { const data = (await reads.read("editor", path(kind, item.id), { isCurrent })).data; if (isCurrent()) data.code_only ? openEditor(kind,null,{id:data.id,content:data.content}) : openEditor(kind, data,null,owner?receiptKey(owner):null); }
+          try { const data = await readDirectoryEntry(kind,item.id); if (isCurrent()) openEditor(kind,data); }
           catch (error) { if (isCurrent() && error?.name !== "AbortError") toast(errorMessage(error), "error"); }
         });
         const toggle = button(item.enabled ? label("disable", "停用") : label("enable", "启用"), () => act(kind, async () => {
-          await api.post(`${path(kind, item.id)}/enabled`, { enabled: !item.enabled }, revision(item));
+          await api.post(`${path(kind, item.id)}/enabled`, { enabled: !item.enabled });
         }));
         const controls = editable ? [edit, button(label("export", "导出"), () => exportItem(kind, item))] : [];
         if (["agents","subagents"].includes(kind)) controls.push(button("上下文预览",()=>openRolePlan({kind,id:item.id,owner:roots.get(kind)})));
         if (store && item.valid && item.shareable!==false && editable && !(kind==="agents"&&item.id==="default")) controls.push(button("分享到创作中心", () => store.publish(item, owner)));
-        if (store) controls.push(...store.localActions(owner));
+        if (store) controls.push(...store.localActions(item));
+        controls.push(button("目录与文件",()=>directoryEditor.open({kind,item})));
         if (kind === "skills" && editable) controls.push(button(label("improveSkill", "用 AI 改进"), () =>
           skillWorkbench.open({ builder: true, mode: "improve", id: item.id, scope: "user" })));
-        if (kind === "mcp" && item.template_connection) controls.push(button("配置连接", () => mcpConnections.open({item})),button("删除连接",()=>act(kind,async()=>{if(confirm(`删除连接 ${item.name||item.id}？`))await api.post("/mcp/connections",{action:"delete",id:item.id},revision(item));})));
-        if (kind === "mcp") controls.push(button(label("test", "测试连接"), () => act(kind, async scope => {
-          await refreshMcp(item.id, scope);
-          if (scope.isCurrent()) toast(label("testOk", "连接测试完成"), "success");
-        })));
-        if (kind === "mcp") controls.push(button("资源、提示词与诊断", () => mcpContext.open(item.id)));
-        if (kind === "mcp" && item.has_oauth) controls.push(button("授权", () => mcpAuthorization.open(item.id)));
-        if (kind === "mcp" && item.connected) controls.push(button(t("resource.disconnect"), () => act(kind, () => disconnectMcp(item.id))));
-        if (item.external && editable) controls.push(button(label(kind === "agents" && item.id === "default" ? "resetAgent" : "delete", kind === "agents" && item.id === "default" ? "恢复默认" : "删除"), () => act(kind, async () => {
-          if (!window.confirm(kind === "agents" && item.id === "default" ? label("resetAgentConfirm", "恢复内置默认 Agent 配置？") : label("deleteConfirm", "删除 {name}？", { name: item.name }))) return;
-          await api.delete(path(kind, item.id), revision(item));
+        if(kind==="mcp")controls.push(button("创建连接",()=>mcpConnections.open({templateId:item.id})));
+        controls.push(button("卸载",()=>act(kind,async()=>{
+          if(!confirm(`卸载 ${item.name||item.id} 的整个目录？`))return;
+          await changeDirectory(kind,item,"remove");
         })));
         const canToggle = !(kind === "agents" && item.id === "default");
         toggle.disabled = state.busy;
@@ -258,7 +242,7 @@ export function createExtensionPanels() {
           detail: () => {
             const description = element("div", {}, [element("p", { text: item.description }), !item.valid ? element("p", { className: "extension-error", text: item.error }) : null]);
             if(credits)description.append(credits.facts());if(!editable)description.append(element("p",{className:"extension-help",text:storeReadOnlyMessage()}));
-            const usage = element("div", {}, [element("p", { text: kind === "skills" ? `$${item.id} · /skill:${item.id}` : kind === "commands" ? `/${item.id}` : kind === "mcp" ? status : kind === "knowledge" ? `${item.directory}/${item.index}\n${item.inject_prompt ? item.prompt : "已关闭提示词注入"}` : item.name || item.id }),
+            const usage = element("div", {}, [element("p", { text: kind === "skills" ? `$${item.alias} · /skill:${item.alias}` : kind === "commands" ? `/${item.alias}` : kind === "mcp" ? status : kind === "knowledge" ? `${item.directory}/${item.index}\n${item.inject_prompt ? item.prompt : "已关闭提示词注入"}` : item.name || item.id }),
               kind === "tools" ? element("div", { className: "tool-exports" }, (item.tools || []).map(tool => element("code", { text: tool.id }))) : null]);
             const source = element("div", {}, [meta]), preview = element("div"); source.append(preview); let sourceLoaded = false;
             const readSource = async () => {
@@ -266,27 +250,16 @@ export function createExtensionPanels() {
               const target = targetKey(), isCurrent = () => current(kind, target) && browser.isSelected(item.id) && source.isConnected;
               preview.replaceChildren(element("p", { text: browserText("loading", "正在载入…") }));
               try {
-                const data = (await reads.read(`detail:${kind}`, path(kind, item.id), { isCurrent })).data;
-                if (!isCurrent()) return;
-                preview.replaceChildren(element("pre", { className: "store-source", text: data.content || "" }));
-                if(data.program_source)preview.append(element("pre",{className:"store-source",text:data.program_source}));
-                if(kind==="knowledge"){
-                  const listing=(await api.get(`${path(kind,item.id)}/documents`)).data;if(!isCurrent())return;
-                  const select=element("select",{attrs:{"aria-label":"知识库文档"}}),documentText=element("pre",{className:"store-source"});
-                  for(const f of listing.files)select.append(element("option",{text:`${f.path} · ${f.bytes} B`,attrs:{value:f.path}}));
-                  select.value=item.index;let documentSerial=0;
-                  const showDocument=async()=>{const serial=++documentSerial;try{const d=(await api.get(`${path(kind,item.id)}/documents?path=${encodeURIComponent(select.value)}`)).data;if(isCurrent()&&serial===documentSerial)documentText.textContent=d.binary?"二进制文档，预览保留原始内容，不执行文件。":d.text+(d.truncated?"\n\n仅预览前 64 KiB。模型可使用 read 分页读取完整文件。":"");}catch(e){if(isCurrent())documentText.textContent=errorMessage(e);}};
-                  select.addEventListener("change",()=>void showDocument());preview.append(select,documentText);void showDocument();
-                }
+                const data=await readDirectoryEntry(kind,item.id);
+                if(!isCurrent())return;
+                preview.replaceChildren(element("pre",{className:"store-source",text:data.content}),button("浏览完整目录",()=>directoryEditor.open({kind,item})));
                 sourceLoaded = true;
               } catch (error) { if (isCurrent() && error?.name !== "AbortError") preview.replaceChildren(element("p", { className: "extension-error", text: errorMessage(error) }), button(browserText("retry", "重试"), readSource)); }
             };
             return detailTabs([{ id: "description", label: browserText("description", "说明"), content: description }, { id: "usage", label: browserText("usage", "使用方式"), content: usage }, { id: "source", label: browserText("sourceFiles", "来源与文件"), content: source, onSelect: () => queueMicrotask(readSource) }]);
           } });
       }
-      if(kind==="mcp")for(const entry of state.templates||[]){const r=entry.receipt;if(!`${r.name} ${r.submitter||""}`.toLocaleLowerCase().includes(needle))continue;
-        const credits=resourceCredits({store_managed:r.source!=="local"},r);rows.push({key:`template:${r.key}`,kind,title:r.name,byline:credits.submitter,description:r.manifest?.description||"",meta:[...credits.meta,"已安装的服务模板"],badge:{text:entry.valid?"可创建连接":"文件校验失败",tone:entry.valid?"":"error"},primary:button("创建连接",()=>mcpConnections.open({receipt:r,template:entry.template})),actions:stores.get("mcp").localActions(r),detail:()=>element("div",{},[element("p",{text:"模板可以建立多个账号或项目连接；每个连接独立选择版本。"}),credits.facts(),button("创建连接",()=>mcpConnections.open({receipt:r,template:entry.template}))])});}
-      browser.setItems(rows, { busy: state.busy, pageKey:JSON.stringify([state.filter,state.stateFilter,state.view]), empty: state.filter || state.stateFilter !== "all" ? browserText("empty", "没有匹配的扩展") : label("empty", "还没有资源。新建或导入一个即可开始。") });
+      browser.setItems(rows, { busy: state.busy, pageKey:JSON.stringify([state.filter,state.stateFilter,state.view]),onNext:state.items.length<state.total?()=>load(kind,true):null, empty: state.filter || state.stateFilter !== "all" ? browserText("empty", "没有匹配的扩展") : label("empty", "还没有资源。新建或导入一个即可开始。") });
     };
     search.addEventListener("input", () => { state.filter = search.value; renderItems(); });
     toolbar.prepend(search, statusFilter); if (sourceFilter) toolbar.insertBefore(sourceFilter, statusFilter);
@@ -304,7 +277,7 @@ export function createExtensionPanels() {
   }
   function dirty() {
     if (!editing) return false;
-    try { return editing.saving || editing.files?.length > 0 || editing.secrets?.length > 0 ||
+    try { return editing.saving || editing.manifest.value!==editing.manifestBaseline ||
       editing.id.value !== editing.originalId || currentSource() !== editing.baseline; }
     catch { return true; }
   }
@@ -364,24 +337,6 @@ export function createExtensionPanels() {
   function currentSource() {
     if (editing.sourceMode) return editing.source.value;
     const values = fieldValues();
-    if (editing.kind === "mcp") {
-      const doc = parseExtensionJson(editing.source.value);
-      doc.id = editing.id.value; doc.name = values.name; doc.description = values.description;
-      doc.enabled = values.enabled;
-      const old = doc.transport;
-      doc.transport = values.transport === "stdio" ? {
-        type: "stdio", program: values.program, arguments: parseExtensionJson(values.arguments || "[]", "arguments"),
-        working_directory: values.working_directory || null, inherit_environment: true,
-        environment: parseExtensionJson(values.environment || "[]", "environment"),
-      } : { type: "streamable-http", endpoint: values.endpoint, headers: parseExtensionJson(values.headers || "[]", "headers") };
-      if (old?.type === "stdio" && doc.transport.type === "stdio") doc.transport.inherit_environment = old.inherit_environment ?? true;
-      if (values.transport === "streamable-http" && values.oauth_enabled) {
-        doc.oauth = { ...(typeof doc.oauth === "object" ? doc.oauth : {}), enabled: true };
-        if (values.oauth_client_id) doc.oauth.client_id = values.oauth_client_id; else delete doc.oauth.client_id;
-        if (values.oauth_scope) doc.oauth.scope = values.oauth_scope; else delete doc.oauth.scope;
-      } else delete doc.oauth;
-      return JSON.stringify(doc, null, 2);
-    }
     const fields = { name: values.name, description: values.description, prompt: values.prompt };
     if (editing.kind === "commands") { delete fields.name; fields["argument-hint"] = values.argument_hint; }
     if (["agents", "subagents"].includes(editing.kind)) {
@@ -404,36 +359,6 @@ export function createExtensionPanels() {
     const kind = editing.kind;
     editing.syncTransport = null;
     const required = name => requiredExtensionFields(kind).includes(name);
-    if (kind === "mcp") {
-      const doc = parseExtensionJson(source), transport = doc?.transport;
-      if (!transport || !["stdio", "streamable-http"].includes(transport.type)) throw extensionFieldError("fieldTransport", "source");
-      inputField(editing.form, "name", label("name", "名称"), doc.name, { required: true });
-      inputField(editing.form, "description", label("description", "说明"), doc.description, { required: true });
-      inputField(editing.form, "enabled", label("enable", "启用"), doc.enabled, { type: "checkbox" });
-      const select = element("select", { attrs: { name: "transport" } }, [
-        element("option", { text: "stdio", attrs: { value: "stdio" } }),
-        element("option", { text: "Streamable HTTP", attrs: { value: "streamable-http" } }),
-      ]); select.value = transport.type;
-      editing.form.append(element("label", { className: "extension-field" }, [element("span", { text: label("transport", "连接方式") }), select]));
-      const stdio = element("div", { className: "extension-transport" });
-      inputField(stdio, "program", label("program", "程序"), transport.program || "", { required: true, hint: label("programHint", "填写目标设备上已安装的程序路径或名称，例如 npx、uvx；Android 通常使用 HTTP MCP。") });
-      inputField(stdio, "arguments", label("arguments", "参数（JSON 数组）"), JSON.stringify(transport.arguments || []));
-      inputField(stdio, "working_directory", label("workingDirectory", "工作目录（可选）"), transport.working_directory || "");
-      inputField(stdio, "environment", label("environment", "环境变量（JSON）"), JSON.stringify(transport.environment || [], null, 2), { area: true, hint: label("secretHint", "使用 secret_ref 引用 env:、file: 或已保存的 vault: 凭据。导入普通配置中的凭据会自动加密保存。") });
-      const http = element("div", { className: "extension-transport" });
-      inputField(http, "endpoint", label("endpoint", "服务器地址"), transport.endpoint || "", { type: "url", required: true });
-      inputField(http, "headers", label("headers", "请求头（JSON）"), JSON.stringify(transport.headers || [], null, 2), { area: true, hint: label("secretHint", "普通 JSON 对象的值会自动加密保存；原生数组使用 secret_ref 引用 env:、file: 或 vault: 凭据。") });
-      inputField(http, "oauth_enabled", "使用浏览器 OAuth 授权", doc.oauth === true || (doc.oauth && doc.oauth.enabled !== false), { type: "checkbox" });
-      inputField(http, "oauth_client_id", "OAuth client ID（可选）", doc.oauth?.client_id || "", { hint: "留空时尝试动态注册。高级授权参数可在 JSON 中设置。" });
-      inputField(http, "oauth_scope", "OAuth scope（可选）", doc.oauth?.scope || "");
-      editing.form.append(stdio, http);
-      const sync = () => {
-        stdio.hidden = select.value !== "stdio"; http.hidden = !stdio.hidden;
-        for (const group of [stdio, http]) group.querySelectorAll("input,textarea").forEach(node => { node.disabled = group.hidden; });
-      };
-      editing.syncTransport = sync;
-      select.addEventListener("change", sync); sync(); return;
-    }
     const values = promptFields(source);
     if (kind !== "commands") inputField(editing.form, "name", label("name", "名称"), values.name || "", { required: required("name") });
     inputField(editing.form, "description", label("description", "说明"), values.description || "", { required: required("description") });
@@ -443,7 +368,7 @@ export function createExtensionPanels() {
       inputField(editing.form, "model", label("model", "模型"), values.model || "inherit", { hint: label("modelHint", "inherit 跟随主 Agent；或填写模型 ID。") });
       inputField(editing.form, "reasoning_effort", label("effort", "思考强度（可选）"), values.reasoning_effort || values.thoughtLevel || "");
       toolPicker(values.tools, values.schema);
-      inputField(editing.form, "code", "结合 C 角色程序", values.code === true || values.code === "true", { type: "checkbox", hint: `在 mdo-home/modules/${kind}/ 放置同角色 ID 的 C 程序，使用 mdo/agent.h。支持上下文、模型请求、响应、工具、委派回调和完整驱动；下面的配置继续生效。` });
+      inputField(editing.form, "code", "结合 C 角色程序", values.code === true || values.code === "true", { type: "checkbox", hint: `在本角色目录添加 C 程序并通过根清单 native 字段指定，使用 mdo/agent.h。支持上下文、模型请求、响应、工具、委派回调和完整驱动；下面的配置继续生效。` });
       inputField(editing.form,"permission_profile","权限配置（可选）",values.permission_profile || "",{hint:"inherit、read-only、balanced 或 full-access；始终受用户当前授权限制。"});
       inputField(editing.form,"prompt_mode","与继承/C 基础提示词组合",values.prompt_mode || "append",{hint:"append 追加，replace 替换。"});
       inputField(editing.form, "read_only", label("readOnly", "只读任务"), values.read_only === true || values.read_only === "true", { type: "checkbox" });
@@ -456,11 +381,16 @@ export function createExtensionPanels() {
     inputField(editing.form, "prompt", label(kind === "agents" ? "agentInstructions" : "instructions", kind === "agents" ? "系统提示词（留空使用默认规则）" : "指令"), values.prompt || "", { area: true, required: required("prompt") });
   }
   function openEditor(kind, item = null, imported = null) {
-    if(kind==="knowledge"){void knowledgeEditor.open({item,imported});return;}
-    if(item&&["tools","skills","commands","knowledge"].includes(kind)&&!customizableResource(item,resourceOwner(states.get(kind).packages,item.path))){toast(storeReadOnlyMessage(),"error");return;}
+    if(item&&!customizableResource(item)){toast(storeReadOnlyMessage(),"error");return;}
+    if(item&&["agents","subagents"].includes(kind)&&/\.c$/i.test(item.manifest?.entry||"")){void directoryEditor.open({kind,item});return;}
+    if(kind==="mcp"||kind==="knowledge"){
+      const text=kind==="mcp"?JSON.stringify(newMcpTemplate(),null,2):JSON.stringify({format:"mdo.knowledge.v1",name:"my-knowledge",description:"知识库",index:"index.md",prompt:"涉及相关内容时参考 {$path}，index.md 是索引。",inject_prompt:true},null,2);
+      void directoryEditor.open({kind,item,manifest:item?.manifest||directoryManifest(kind,kind==="mcp"?"my-server":"my-knowledge"),text,edits:kind==="knowledge"?[{path:"index.md",text:"# 知识库索引\n"}]:[]});return;
+    }
+    if(item&&["tools","skills","commands","knowledge"].includes(kind)&&!customizableResource(item)){toast(storeReadOnlyMessage(),"error");return;}
     reads.cancel("editor");
     if (editing && !closeEditor()) return;
-    const initial = imported?.content ?? item?.content ?? (kind === "commands" ? newCommand() : kind === "tools" ? newTool() : ["agents","subagents"].includes(kind) ? newRole(kind) : kind === "mcp" ? JSON.stringify(newMcp(), null, 2) :
+    const initial = imported?.content ?? item?.content ?? (kind === "commands" ? newCommand() : kind === "tools" ? newTool() : ["agents","subagents"].includes(kind) ? newRole(kind) :
       editPrompt("", { name: kind === "commands" ? undefined : "", description: "", prompt: "" }));
     let editor;
     const layer = openLayer({ title: `${item ? label("edit", "编辑") : label("create", "新建")} ${title(kind)}`,
@@ -468,8 +398,11 @@ export function createExtensionPanels() {
       beforeClose: () => editing !== editor || !editor.saving && (!dirty() || window.confirm(label("discardConfirm", "放弃未保存的编辑？"))),
       onClosed() { if (editing === editor) { reads.cancel("tool-picker"); editing = null; } } });
     const dialog = layer.element; dialog.classList.add("extension-authoring");
-    const id = element("input", { attrs: { name: "extension_id", maxlength: 64, autocomplete: "off", spellcheck: "false", required: "", placeholder: "my-resource", "data-field-label": label("id", "文件 ID") } });
+    const id = element("input", { attrs: { name: "extension_id", maxlength: 96, autocomplete: "off", spellcheck: "false", required: "", placeholder: "my-resource", "data-field-label": label("id", "文件 ID") } });
     id.value = imported?.id ?? item?.id ?? ""; id.disabled = Boolean(item);
+    const manifest=element("textarea",{attrs:{"aria-label":"extension.json",maxlength:"65536",rows:"8"}});
+    manifest.value=JSON.stringify(item?.manifest||directoryManifest(kind,id.value||"my-extension"),null,2);
+    const manifestBaseline=manifest.value;
     const form = element("form", { className: "extension-form", attrs: { novalidate: "" } });
     const source = element("textarea", { className: "extension-source", attrs: { spellcheck: "false", "aria-label": label("source", "源文件"), "data-field-label": label("source", "源文件"), maxlength: 131072 } });
     source.value = initial; source.hidden = true;
@@ -479,8 +412,7 @@ export function createExtensionPanels() {
     const save = button(label("save", "保存"), saveEditor, true);
     const cancel = button(label("cancel", "取消"), () => closeEditor());
     editing = editor = { kind, item, dialog, layer, target: targetKey(), id, source, form, status, save, cancel, formMode,
-      baseline: initial, originalId: id.value, sourceMode: ["tools", "commands"].includes(kind), toolCatalog: null, saving: false, files: imported?.files ?? [],
-      secrets: imported?.secrets ?? [] };
+      baseline: initial, originalId: id.value, sourceMode: ["tools", "commands"].includes(kind), toolCatalog: null, saving: false, manifest,manifestBaseline };
     try { if (kind !== "tools") fillForm(initial); }
     catch { editing.sourceMode = true; source.hidden = false; form.hidden = true; }
     if (["tools", "commands"].includes(kind)) {
@@ -496,16 +428,17 @@ export function createExtensionPanels() {
       element("small", { text: label("idHint", "小写字母、数字、点、短横线或下划线；创建后不改名。") })]),
       element("div", { className: "extension-toolbar" }, [formMode, sourceMode]), form, source,
       imported?.files?.length ? element("p", { text: label("fileCount", "包含 {count} 个附属文件", { count: imported.files.length }) }) : "",
-      status);
+      element("label",{className:"extension-field"},[element("span",{text:"根清单：名称、别名、入口、平台、作者、版权和许可"}),manifest]),status);
     layer.footer.append(save, cancel);
     if(["agents","subagents"].includes(kind))layer.footer.prepend(button("上下文预览",()=>{
-      try{validateExtensionId(kind,id.value.trim());void openRolePlan({kind,id:id.value.trim(),content:currentSource(),owner:dialog});}
+      try{if(!directoryId(id.value.trim()))throw Error("目录名称无效");void openRolePlan({kind,id:id.value.trim(),content:currentSource(),owner:dialog});}
       catch(error){showEditorError(editor,error);}
     }));
-    if(["agents","subagents"].includes(kind))layer.body.append(button("下载 C 开发模板",()=>{
+    if(["agents","subagents"].includes(kind))layer.body.append(button("添加 C 角色程序",()=>{
       try{
-        validateExtensionId(kind,id.value.trim());download(`${id.value.trim()}.c`,roleProgramTemplate(kind,id.value.trim()));
-        editor.status.textContent=`将 C 文件放入 mdo-home/modules/${kind}/，启用“结合 C 角色程序”并保存；刷新列表即可加载。配置式角色仅需保存当前表单。`;
+        const meta=JSON.parse(manifest.value);if(!portableId(meta.alias))throw Error("请先填写有效调用别名");
+        editor.nativeText=roleProgramTemplate(kind,meta.alias);meta.native=meta.native||"agent.c";manifest.value=JSON.stringify(meta,null,2);
+        editor.status.textContent="保存时将 C 程序与配置一起写入本角色目录；之后可通过目录与文件窗口继续编辑。";
       }catch(error){showEditorError(editor,error);}
     }));
     form.addEventListener("submit", event => { event.preventDefault(); void saveEditor(); });
@@ -551,28 +484,24 @@ export function createExtensionPanels() {
     if (!editor || editor.saving || editor.layer.signal.aborted || editor.target !== targetKey()) return;
     try {
       const id = editor.id.value.trim();
-      validateExtensionId(editor.kind, id);
+      if(!directoryId(id))throw extensionFieldError("idInvalid","extension_id");
       if (!editor.sourceMode) validateExtensionForm(editor.kind, fieldValues());
       if (["tools", "commands"].includes(editor.kind) && !editor.source.value.trim()) throw extensionFieldError("fieldRequired", "source");
-      let content = currentSource();
-      let secrets = editor.secrets;
-      if (editor.kind === "mcp") {
-        const doc = parseExtensionJson(content);
-        if (!doc || typeof doc !== "object" || Array.isArray(doc) || !doc.transport)
-          throw extensionFieldError("fieldTransport", "source");
-        doc.id = id;
-        ({ content, secrets } = prepareMcpCredentials(doc, secrets));
+      let content=currentSource();const manifest=JSON.parse(editor.manifest.value);
+      if(!editor.item&&editor.manifest.value===editor.manifestBaseline){manifest.name=promptFields(content).name||id;manifest.alias=id;manifest.description=promptFields(content).description||"";}
+      if(editor.kind==="skills"&&!editor.sourceMode)content=editPrompt(content,{name:manifest.alias});
+      if(["agents","subagents"].includes(editor.kind)&&!editor.sourceMode){
+        if(fieldValues().code&&!manifest.native){manifest.native="agent.c";editor.nativeText=roleProgramTemplate(editor.kind,manifest.alias);}
+        if(!fieldValues().code)delete manifest.native;
       }
-      const body = { content };
-      if (editor.files.length) body.files = editor.files;
-      if (secrets.length) body.secrets = secrets;
-      if (new TextEncoder().encode(JSON.stringify(body)).length > 250000) throw new Error(label("importLimit", "导入内容过大；请直接复制资源目录到 mdo-home 后刷新。"));
+      const edits=[{path:manifest.entry,text:content}];
+      if(editor.nativeText&&manifest.native)edits.push({path:manifest.native,text:editor.nativeText});
       editor.saving = true; editor.dialog.querySelectorAll("input,textarea,select,button").forEach(node => { node.disabled = true; });
       editor.status.textContent = label("saving", "正在保存…");
-      await api.put(path(editor.kind, id), body, revision(editor.item));
+      const result=await saveDirectory(editor.kind,id,manifest,edits,editor.item?.revision||"",{signal:editor.layer.signal});
       if (editing !== editor || editor.layer.signal.aborted || editor.target !== targetKey()) return;
       editor.saving = false; closeEditor(true); announceChange(editor.kind); await load(editor.kind);
-      toast(label("saved", "已保存并生效"), "success");
+      toast(result.runtime_error?`文件已保存，运行时需要处理：${result.runtime_error}`:editor.item?"目录已保存":"目录已保存，请启用后使用", "success");
     } catch (error) {
       if (editing !== editor || editor.layer.signal.aborted || editor.target !== targetKey()) return;
       editor.saving = false; editor.dialog.querySelectorAll("input,textarea,select,button").forEach(node => { node.disabled = false; }); editor.id.disabled = Boolean(editor.item);
@@ -582,89 +511,12 @@ export function createExtensionPanels() {
       else showEditorError(editor, error);
     }
   }
-  async function importFile(kind, file) {
-    if (!file) return;
-    if(kind==="knowledge"){await knowledgeEditor.importFile(file);return;}
-    const target = targetKey();
-    try {
-      if (file.size > (["agents","subagents"].includes(kind)?100*1024*1024:250000)) throw new Error(label("importLimit", "导入内容过大；请直接复制资源目录到 mdo-home 后刷新。"));
-      const content = await file.text();
-      if (target !== targetKey()) return;
-      if (kind === "mcp") {
-        const documents = mcpImportDocuments(content);
-        if (documents.length === 1) openEditor(kind, null, documents[0]);
-        else {
-          // Multi-server import is explicit, and each completed save is reported.
-          if (!window.confirm(label("importServers", "导入 {count} 个 MCP 服务器？同名资源不会覆盖。", { count: documents.length }))) return;
-          await act(kind, async () => {
-            let saved = 0;
-            for (const doc of documents) {
-              try { await api.put(path(kind, doc.id), { content: doc.content, secrets: doc.secrets }, revision(null)); ++saved; }
-              catch (error) { throw new Error(label("partialImport", "已导入 {count} 个；其余未导入。", { count: saved }) + " " + errorMessage(error)); }
-            }
-          });
-        }
-      } else if (["tools", "commands"].includes(kind)) {
-        if (!/\.c$/i.test(file.name)) throw new Error(label("cOnly", "请选择 .c 工具源文件。"));
-        openEditor(kind, null, { id: file.name.replace(/\.c$/i, "").toLowerCase(), content });
-      } else if (/\.json$/i.test(file.name)) {
-        const bundle = JSON.parse(content);
-        if(["agents","subagents"].includes(kind) && bundle.format?.startsWith("mdo.extension.")){
-          await stores.get(kind).importPackage(bundle);return;
-        }
-        if(["agents","subagents"].includes(kind) && bundle.kind===kind && Array.isArray(bundle.files)){
-          const d=JSON.parse(bundle.content),p=makeStorePackage({slug:`${kind}-${bundle.id}`.slice(0,64),name:d.name||bundle.id,version:"1.0.0",description:d.description||"本地角色导入",readme:"本地角色及自有文件",license:d.license||"UNLICENSED",platforms:STORE_PLATFORMS},[bundle]);
-          await stores.get(kind).importPackage(p);return;
-        }
-        if(["agents","subagents"].includes(kind) && bundle.schema === "mdo.agent.v1"){
-          openEditor(kind,null,{id:file.name.replace(/\.json$/i,"").toLowerCase(),content});return;
-        }
-        if (bundle.kind !== kind || typeof bundle.content !== "string") throw new Error(label("wrongKind", "文件类型与当前分类不符。"));
-        openEditor(kind, null, { ...bundle, id: bundle.id });
-      } else {
-        const fields = promptFields(content);
-        const id = kind === "skills" && file.name.toLowerCase() === "skill.md" ? fields.name || "" : file.name.replace(/\.md$/i, "").toLowerCase();
-        openEditor(kind, null, { id, content });
-      }
-    } catch (error) { toast(errorMessage(error), "error"); }
-  }
-  async function importFolder(files) {
-    if (!files.length) return;
-    const target = targetKey();
-    try {
-      const skill = files.find(file => /^[^/]+\/SKILL\.md$/.test(file.webkitRelativePath));
-      if (!skill) throw new Error(label("skillMissing", "所选文件夹的根目录必须有 SKILL.md。"));
-      const root = skill.webkitRelativePath.split("/")[0];
-      const resources = files.filter(file => file !== skill && file.webkitRelativePath.startsWith(`${root}/`) &&
-        !file.webkitRelativePath.slice(root.length + 1).split("/").some(part => part.startsWith(".")));
-      if (resources.length > 128 || files.reduce((sum, file) => sum + file.size, 0) > 128 * 1024) throw new Error(label("importLimit", "导入内容过大；请直接复制资源目录到 mdo-home 后刷新。"));
-      const content = await skill.text();
-      const bundle = [];
-      for (const file of resources) bundle.push({ path: file.webkitRelativePath.slice(root.length + 1), base64: bytesToBase64(new Uint8Array(await file.arrayBuffer())) });
-      if (target !== targetKey()) return;
-      openEditor("skills", null, { id: root.toLowerCase(), content, files: bundle });
-    } catch (error) { toast(errorMessage(error), "error"); }
-  }
-  async function exportItem(kind, item) {
-    const target = targetKey(), isCurrent = () => current(kind, target);
-    try {
-      if(["agents","subagents"].includes(kind)){
-        const data=(await api.post("/ecosystem",{action:"export",single_kind:kind,references:[{kind,id:item.id}]})).data;
-        if(isCurrent())download(`${item.id}.role.json`,JSON.stringify(data.resources[0],null,2));return;
-      }
-      if(kind==="knowledge"){const data=(await api.get(`${path(kind,item.id)}/bundle`)).data;download(`${item.id}.knowledge.json`,JSON.stringify({kind,id:item.id,content:data.content,files:data.files},null,2));return;}
-      if(kind==="mcp"){const data=(await api.post("/ecosystem",{action:"export",single_kind:"mcp",references:[{kind,id:item.id}]})).data;if(isCurrent())download(`${item.id}.mcp-template.json`,data.resources[0].content);return;}
-      const data = (await reads.read(`export:${kind}/${item.id}`, `${path(kind, item.id)}${kind === "skills" ? "/bundle" : ""}`, { isCurrent })).data;
-      if (!isCurrent()) return;
-      if (kind === "skills") download(`${item.id}.skill.json`, JSON.stringify({ kind, id: item.id, content: data.content, files: data.files }, null, 2));
-      else download(`${item.id}${["tools", "commands"].includes(kind) ? ".c" : kind === "mcp" ? ".json" : ".md"}`, data.content);
-      if (kind === "mcp") toast(label("exportSecrets", "凭据不会导出。换设备导入后，请重新配置凭据。"));
-    } catch (error) { if (isCurrent() && error?.name !== "AbortError") toast(errorMessage(error), "error"); }
-  }
+  async function importFile(kind,file){if(!file)return;try{await stores.get(kind).importPackage(file);}catch(e){toast(errorMessage(e),"error");}}
+  async function exportItem(kind,item){try{await exportDirectoryZip(kind,item.id);}catch(e){toast(errorMessage(e),"error");}}
   const unsubscribeLocale = subscribeLocale(() => { for (const kind of EXTENSION_KINDS) render(kind); });
   const invalidate = event => { const state = states.get(event.detail?.kind);if (state) state.loaded = false; };
   window.addEventListener("mdo-extensions-changed", invalidate);
-  const openResource=event=>{const ref=event.detail;if(!EXTENSION_KINDS.includes(ref?.kind)||!portableId(ref?.id))return;pendingResource=ref;if(stores.has(ref.kind))states.get(ref.kind).area="local";if(ref.kind==="tools")states.get("tools").view="custom";if(selected===ref.kind)void openLinkedResource();};
+  const openResource=event=>{const ref=event.detail;if(!EXTENSION_KINDS.includes(ref?.kind)||!directoryId(ref?.id))return;pendingResource=ref;if(stores.has(ref.kind))states.get(ref.kind).area="local";if(ref.kind==="tools")states.get("tools").view="custom";if(selected===ref.kind)void openLinkedResource();};
   window.addEventListener("mdo-open-resource",openResource);
   const unsubscribeTarget = subscribeTarget(() => {
     if (activeTarget === targetKey()) return;
@@ -691,7 +543,7 @@ export function createExtensionPanels() {
       if (selected && (!states.get(kind).loaded || kind === "tools") && !states.get(kind).busy) void load(kind);
       else if(pendingResource?.kind===selected)void openLinkedResource();
     },
-    hasPendingChanges: () => [...stores.values()].some(s => s.hasPendingChanges()) || dirty() || knowledgeEditor.hasPendingChanges() || skillWorkbench.hasPendingChanges() || mcpWorkbench.hasPendingChanges() || mcpConnections.hasPendingChanges() || commandWorkbench.hasPendingChanges(),
-    destroy() { disposed = true; for (const browser of browsers.values()) browser.destroy(); for (const store of stores.values()) store.destroy(); knowledgeEditor.destroy(); skillWorkbench.destroy(); mcpWorkbench.destroy(); mcpConnections.destroy(); commandWorkbench.destroy(); mcpAuthorization.destroy(); mcpContext.destroy(); cancelReads(); closeEditor(true); unsubscribeLocale(); unsubscribeTarget();window.removeEventListener("mdo-extensions-changed", invalidate);window.removeEventListener("mdo-open-resource",openResource);window.removeEventListener("pagehide",onHide);window.removeEventListener("pageshow",onShow); },
+    hasPendingChanges: () => [...stores.values()].some(s => s.hasPendingChanges()) || dirty() || directoryEditor.hasPendingChanges() || skillWorkbench.hasPendingChanges() || mcpConnections.hasPendingChanges() || commandWorkbench.hasPendingChanges(),
+    destroy() { disposed = true; for (const browser of browsers.values()) browser.destroy(); for (const store of stores.values()) store.destroy(); directoryEditor.destroy(); skillWorkbench.destroy(); mcpConnections.destroy(); commandWorkbench.destroy(); mcpAuthorization.destroy(); mcpContext.destroy(); cancelReads(); closeEditor(true); unsubscribeLocale(); unsubscribeTarget();window.removeEventListener("mdo-extensions-changed", invalidate);window.removeEventListener("mdo-open-resource",openResource);window.removeEventListener("pagehide",onHide);window.removeEventListener("pageshow",onShow); },
   });
 }

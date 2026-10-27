@@ -1,5 +1,11 @@
 // Pure recipe helpers, also used by creator-center previews. Never resolve or
 // serialize device credentials here; private bindings belong to the native API.
+export function newMcpTemplate(id="my-server") {
+  return {format:"mdo.mcp-template.v1",id,operator:"",inputs:[{id:"endpoint",type:"text",label:"服务地址",description:"HTTPS MCP 端点",required:true,secret:false}],
+    variants:[{id:"default",label:"HTTP 服务",platforms:["any"],config:{schema_version:1,name:"MCP 服务",description:"MCP 服务连接",protocol_version:"2025-11-25",startup_timeout_ms:10000,request_timeout_ms:60000,
+      limits:{message_bytes:1048576,tools:128},tools:{allow:[],deny:[]},security:{default_effects:["external-service"],permission_profile:"balanced",trust_read_only_annotations:false},auto_reconnect:true,
+      transport:{type:"streamable-http",endpoint:{input:"endpoint"},headers:[]}}}]};
+}
 export function mcpVariantInputs(template, variant) {
   const used = new Set();
   function walk(value) {

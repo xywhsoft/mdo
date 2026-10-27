@@ -4,11 +4,13 @@ import { element, clear, errorMessage } from "../../utils/dom.js";
 import { expandSkillAuthoringDraft } from "./skill-authoring.js";
 import { customizableResource, storeReadOnlyMessage } from "./resource-credits.js";
 import { openLayer } from "../../components/layers.js";
+import { renderProjectExtensions } from "./project-extension-selector.js";
+import { directoryId } from "./directory-documents.js";
 
 const targetKey = () => targetState().selected?.id || "local";
-const portable = value => /^[a-z][a-z0-9._-]{0,63}$/.test(value);
+const portable = value => directoryId(value,64);
 
-export function createSkillWorkbench({ onChange, onShare, owner: pageOwner }) {
+export function createSkillWorkbench({ onChange, onShare, onEdit=()=>{}, owner: pageOwner }) {
   let dialog = null, controller = null, stopTarget = null;
   function close(force = false) {
     if (!dialog) return true;
@@ -27,7 +29,7 @@ export function createSkillWorkbench({ onChange, onShare, owner: pageOwner }) {
     dialog = view; view.element.classList.add("extension-authoring", "skill-workbench");
     const project = element("select", { attrs: { "aria-label": "项目" } }, [element("option", { text: "默认项目", attrs: { value: "default" } })]);
     const scope = element("select", { attrs: { "aria-label": "保存范围" } }, [
-      element("option", { text: "个人技能", attrs: { value: "user" } }), element("option", { text: "所选项目", attrs: { value: "project" } })]);
+      element("option", { text: "Home 技能目录", attrs: { value: "user" } })]);
     project.value = "default"; scope.value = "user";
     const status = element("p", { attrs: { role: "status" } });
     const location = element("p", { className: "extension-help" });
@@ -74,45 +76,21 @@ export function createSkillWorkbench({ onChange, onShare, owner: pageOwner }) {
     async function load() {
       const selected = project.value;
       roots = {}; location.textContent = "正在读取技能目录…"; clear(sources); clear(owned);
-      const [all, local] = await Promise.all([api.get(endpoint("/skills/sources"), options()), api.get(endpoint("/skills/project"), options())]);
-      if (!live() || selected !== project.value) return;
-      roots = all.data;
-      location.textContent = `个人：${roots.user_directory || "不可用"} · 项目：${roots.project_directory || "不可用"}`;
-      clear(sources); clear(owned);
-      for (const item of local.data.items || []) owned.append(element("article", { className: "resource-card" }, [
-        element("h3", { text: item.name || item.id }), element("code", { text: item.path }),
-        element("p", { text: `${item.enabled === false ? "已停用" : "已启用"}${item.valid ? "" : " · 格式或资源无效"}` }),
-        button("编辑", async () => { if (!discardEditor()) return; await edit(item.id); }),
-        button("检查", async () => {
-          const report = (await api.post(endpoint("/skills/validate"), { name: item.id, scope: "project" }, options())).data;
-          if (live()) showReport(report);
-        }),
-        ...(onShare && item.valid ? [button("分享到创作中心", async () => { if (!discardEditor()) return; const projectId = project.value; close(true); await onShare({ ...item, project: projectId }); })] : []),
-        button("用 AI 改进", () => openBuilder({ mode: "improve", id: item.id, saveScope: "project" })),
-        button(item.enabled === false ? "启用" : "停用", async () => {
-          const data = (await api.get(endpoint(`/skills/project/${encodeURIComponent(item.id)}`), options())).data;
-          await api.post(endpoint(`/skills/project/${encodeURIComponent(item.id)}/enabled`), { enabled: !data.enabled }, { ...options(), ifMatch: `"${data.revision}"` });
-          if (live()) { onChange(); await load(); }
-        }),
-        button("移除", async () => {
-          if (!window.confirm(`移除项目技能 ${item.id}？文件会保留在项目 .mdo/skill-trash 中。`)) return;
-          const data = (await api.get(endpoint(`/skills/project/${encodeURIComponent(item.id)}`), options())).data;
-          await api.delete(endpoint(`/skills/project/${encodeURIComponent(item.id)}`), { ...options(), ifMatch: `"${data.revision}"` });
-          if (live()) { onChange(); if (idControl?.value === item.id) resetEditor(); await load(); }
-        }),
-      ]));
-      if (!(local.data.items || []).length) owned.append(element("p", { text: "所选项目尚未创建 .mdo Skill。" }));
+      const all=await api.get(endpoint("/skills/sources"),options());
+      if(!live()||selected!==project.value)return;
+      roots=all.data;location.textContent=`Home 技能目录：${roots.user_directory||"不可用"}；项目仅选择启停，不另存源码。`;
+      await renderProjectExtensions(owned,{kind:"skills",project:selected,signal:requestController.signal,isCurrent:()=>live()&&selected===project.value,onChange});
       for (const item of all.data.items || []) sources.append(element("article", { className: "resource-card" }, [
         element("h3", { text: `${item.name || item.id} · ${item.origin}/${item.provider}` }),
         element("code", { text: item.source_path }),
-        ...(customizableResource(item)?[button("复制到所选范围", async () => {
+        ...(customizableResource(item)?[button("导入到 Home", async () => {
           const targetId = window.prompt("新 Skill ID（目标已存在时拒绝覆盖）", item.id);
           if (targetId === null) return;
           if (!portable(targetId)) throw new Error("ID 必须以小写字母开头，仅含小写字母、数字、点、下划线或连字符，最多 64 个字符");
-          const destination = scope.value === "project" ? roots.project_directory : roots.user_directory;
+          const destination = roots.user_directory;
           if (!window.confirm(`复制 ${item.source_path} 到 ${destination}/${targetId}？\n原文件会保留，脚本不会执行。`)) return;
-          await api.post(endpoint("/skills/migrate"), { origin: item.origin, provider: item.provider, id: item.id, target_id: targetId, scope: scope.value }, options());
-          if (live()) { onChange(); await load(); status.textContent = "已复制。个人技能可在原列表编辑，项目技能在上方编辑。"; }
+          await api.post(endpoint("/skills/migrate"), { origin: item.origin, provider: item.provider, id: item.id, target_id: targetId, scope: "user" }, options());
+          if (live()) { onChange(); await load(); status.textContent = "完整目录已导入 Home，可在本机列表编辑并启用。"; }
         })]:[element("p",{className:"extension-help",text:storeReadOnlyMessage()})]),
       ]));
       if (all.data.truncated) sources.append(element("p", { className: "extension-help", text: "来源较多，仅显示前 128 项；可通过原有文件夹导入入口选择其他技能。" }));
@@ -128,7 +106,7 @@ export function createSkillWorkbench({ onChange, onShare, owner: pageOwner }) {
     function openBuilder({ mode = "create", id = "", saveScope } = {}) {
       if (!discardEditor()) return;
       if (builderDirty() && !window.confirm("放弃未发送的构建需求？")) return;
-      if (saveScope) scope.value = saveScope;
+      scope.value="user";
       resetEditor();
       clear(builder);
       const taskMode = element("select", { attrs: { "aria-label": "构建模式" } }, [
@@ -147,7 +125,7 @@ export function createSkillWorkbench({ onChange, onShare, owner: pageOwner }) {
       footer("Skill 构建器", [button("返回来源", showSources), button("打开构建对话", async () => {
           if (!discardEditor()) return;
           const projectId = project.value, selectedScope = scope.value, selectedMode = taskMode.value;
-          const text = await expandSkillAuthoringDraft({ directory: selectedScope === "project" ? roots.project_directory : roots.user_directory,
+          const text = await expandSkillAuthoringDraft({ directory: roots.user_directory,
             scope: selectedScope, mode: selectedMode, id: skillId.value, request: requirements.value, projectId }, options());
           if (!live() || project.value !== projectId || scope.value !== selectedScope) return;
           close(true);
@@ -156,45 +134,17 @@ export function createSkillWorkbench({ onChange, onShare, owner: pageOwner }) {
         })]);
       requirements.focus(); controls();
     }
-    async function edit(id = "") {
-      const selected = project.value;
-      const item = id ? (await api.get(endpoint(`/skills/project/${encodeURIComponent(id)}`), options())).data : null;
-      if (!live() || selected !== project.value) return;
-      if (builderDirty() && !window.confirm("放弃未发送的构建需求？")) return;
-      clear(builder); builderFields = null;
-      clear(editor); editingProject = selected;
-      idControl = element("input", { attrs: { "aria-label": "Skill ID", placeholder: "skill-id", maxlength: 64 } });
-      idControl.value = id; idControl.disabled = Boolean(item); revision = item?.revision || "new";
-      sourceControl = element("textarea", { attrs: { "aria-label": "SKILL.md", rows: 16, spellcheck: "false" } });
-      sourceControl.value = item?.content || "---\nname: New Skill\ndescription: Describe when to use this Skill.\n---\n\nWrite the workflow here.\n";
-      baseline = item?.content || "";
-      editor.append(element("p", { text: `保存到项目 ${selected} 的 .mdo/skills 目录` }),
-        element("label", { className: "extension-field" }, [element("span", { text: "Skill ID" }), idControl]),
-        element("label", { className: "extension-field" }, [element("span", { text: "SKILL.md" }), sourceControl]));
-      footer(id ? "编辑项目 Skill" : "新建项目 Skill", [button("返回来源", showSources),
-        button("检查格式", async () => { const data = (await api.post("/skills/validate", { content: sourceControl.value }, options())).data; if (live()) showReport(data); }),
-        button("保存到项目", async () => {
-        if (!portable(idControl.value)) throw new Error("请使用有效的 Skill ID");
-        const text = sourceControl.value, id = idControl.value;
-        const data = (await api.put(`/skills/project/${encodeURIComponent(id)}?project=${encodeURIComponent(editingProject)}`, { content: text },
-          { ...options(), ifMatch: `"${revision}"` })).data;
-        if (!live()) return;
-        revision = data.revision; baseline = text; idControl.disabled = true;
-        view.update({ title: "编辑项目 Skill" });
-        onChange(); await load(); status.textContent = "已保存；项目技能在下次任务或调用时生效。";
-      })]);
-    }
     let previous = "default";
     project.addEventListener("change", () => {
-      if (!discardEditor()) { project.value = previous; return; }
+      if (!discardEditor() || builderDirty() && !window.confirm("更换构建对话所属项目？当前需求将保留。")) { project.value = previous; return; }
       previous = project.value;
       if (sourceControl) { resetEditor(); footer("Skill 来源与项目管理"); }
       void run(load);
     });
     sourceSection.append(element("h3", { text: "项目技能" }), owned, element("h3", { text: "可迁移的技能来源" }), sources);
-    view.body.append(element("p", { text: "浏览当前设备上的技能来源，复制到个人或所选项目。所有导入均保留原文件并检查格式。" }),
+    view.body.append(element("p", { text: "浏览当前设备的第三方技能来源，显式导入完整目录到 Home。项目只选择 Home 技能的启停；AI 构建也写入 Home。" }),
       element("div", { className: "extension-toolbar" }, [project, scope,
-        button("刷新来源", load), button("新建项目 Skill", async () => { if (discardEditor()) await edit(); }),
+        button("刷新来源", load), button("新建 Home Skill", async () => { if(discardEditor()){close(true);await onEdit();} }),
         button("用 AI 编写 Skill", () => openBuilder())]), location, status, builder, editor, sourceSection);
     footer("Skill 来源与项目管理");
     stopTarget = subscribeTarget(() => { if (targetKey() !== owner) close(true); });
@@ -203,7 +153,7 @@ export function createSkillWorkbench({ onChange, onShare, owner: pageOwner }) {
       for (const item of response.data.items || []) if (item.id !== "default") project.append(element("option", { text: item.name || item.id, attrs: { value: item.id } }));
       await load();
     });
-    if (live() && showBuilder) { scope.value = initialScope; openBuilder({ mode: initialMode, id: initialId }); }
+    if (live() && showBuilder) { scope.value = "user"; openBuilder({ mode: initialMode, id: initialId }); }
   }
   return { open, close, hasPendingChanges: () => Boolean(dialog?._pending?.()), destroy: () => close(true) };
 }
