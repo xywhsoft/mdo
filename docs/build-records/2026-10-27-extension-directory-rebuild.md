@@ -74,3 +74,13 @@
 - 原生打包生成的 ZIP 由 Python 独立校验，根部直接包含清单、模板、bin/server.exe、源码和 support；逐文件检查未含连接私有值、测试凭据或凭据引用。证据在 .build/mcp-directory-native/result.json 和 exported-mcp.zip。
 
 MCP 管理 API、客户端表单、发布/下载和平台仍待切换；外部工具、插件运行时及整体验收也未完成。不能据此宣布整轮任务完成或发布半成品。
+
+## 阶段三之五：外部工具目录与可迁移命令入口（Windows 已验证）
+
+- 外部工具从 external-tools/目录中的 extension.json 与 tool.json 发现，后者只描述相对程序路径、模型提示词、命令/别名和参数；用户描述与许可位于共用元数据。主程序和各命令目标须确实存在，不探测或试运行程序来猜测能力。
+- 转发器、命令映射与启蒙提示状态放在 data/external-tools，程序本体留在唯一的扩展目录。移除旧 MDOCLI 安装器、工具包生命周期与旧目录自动补登；通知目录的读取、推送和缓存独立保留。
+- Windows 转发器仅接受 external-tools 相对目标，硬链接/释放入口跟随统一映射；Linux 包装脚本继续按自身位置找 Home。Android 的完整 APK 原生程序预置接线仍待独立验证，不能据桌面测试宣布其完成。
+- 新原生产品测试实际发现 XID 目录、注入独立提示词、执行带前缀和别名的程序、打包普通 ZIP、移动整个 Home 后调用、停用/卸载清理入口及重启不复活。证据在 .build/external-directory-native。
+- 转发器原生回归通过：可复现构建、Unicode/引号/空参数、二进制输入输出、工作目录与退出码、异常路径/递归拒绝、Ctrl-C、进程树及 Home 迁移。证据在 .build/cli-forwarder-development/windows-regression.json。当前完整应用编译与重定位通过。
+
+此提交只切换运行时，不部署半成品。插件运行时、九类管理/编辑/任务与发布 API、客户端 UI、平台全链路和跨平台验收继续实施。

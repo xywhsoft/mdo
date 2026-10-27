@@ -80,7 +80,7 @@ int wmain(int argc,wchar_t** argv)
     const xvalue* Entry=xrtValueObjectGet(Commands,xrtStrView(Name));cstr Relative=ForwardText(Entry,"target",4096);
     Failure="Command is disabled or no longer installed";Detail=Name;if(!Relative)goto done;
     Failure="Command target escapes mdo Home";
-    if(!xrtPathIsLocal(xrtStrView(Relative),XPATH_NATIVE)||!strncmp(Relative,"data/cli-tools/bin/",19)||!strncmp(Relative,"data/cli-tools/forwarders/",26))goto done;
+    if(!xrtPathIsLocal(xrtStrView(Relative),XPATH_NATIVE)||strncmp(Relative,"external-tools/",15))goto done;
     Target=xrtPathJoin(Home,Relative);RealHome=xrtPathReal(Home);RealTarget=Target?xrtPathReal(Target):NULL;
     Failure="Command program is missing or inaccessible";Detail=Relative;if(!RealHome||!RealTarget)goto done;
     Failure="Command target escapes mdo Home";if(!ForwardInside(RealHome,RealTarget)||!_stricmp(Self,RealTarget))goto done;

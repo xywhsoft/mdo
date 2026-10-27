@@ -34,17 +34,18 @@ def alive(pid):
 
 def run():
     if os.name!='nt':print('SKIP Windows-only executable; Linux wrappers have a separate native regression');return
-    lock=build_mdo.load_object(build_mdo.LOCK_PATH);xs=build_mdo.find_xserver(None,lock)
-    helper=ROOT/'.build/cli-forwarder-development/forwarder.exe';receipt=build_cli_forwarder.build(xs,helper)
+    lock=build_mdo.load_object(build_mdo.LOCK_PATH);xs=build_mdo.find_xserver(ROOT/'.build/sdk-overlays/16f28b0bd9ecf791b505bbff9001a0c18bbaf398e29d906dc01df967818bcb84',lock)
+    cc='E:/software/w64devkit/bin/gcc.exe'
+    helper=ROOT/'.build/cli-forwarder-development/forwarder.exe';receipt=build_cli_forwarder.build(xs,helper,cc)
     with tempfile.TemporaryDirectory(prefix='forwarder-native-',dir=ROOT/'.build') as temp:
-        rebuilt=Path(temp)/'forwarder.exe';build_cli_forwarder.build(xs,rebuilt);assert rebuilt.read_bytes()==helper.read_bytes(),'forwarder must be reproducible in different output directories'
-        base=Path(temp);home=base/'home 中文';folder=home/'data/cli-tools';bin=folder/'bin';bin.mkdir(parents=True);(home/'installed').mkdir()
-        source=base/'child.c';source.write_text(CHILD,encoding='utf-8');target=home/'installed/child.exe'
-        subprocess.run(['gcc','-Os','-s','-municode',str(source),'-o',str(target)],check=True)
+        rebuilt=Path(temp)/'forwarder.exe';build_cli_forwarder.build(xs,rebuilt,cc);assert rebuilt.read_bytes()==helper.read_bytes(),'forwarder must be reproducible in different output directories'
+        base=Path(temp);home=base/'home 中文';folder=home/'data/external-tools';bin=folder/'bin';bin.mkdir(parents=True);(home/'external-tools/fixture/bin').mkdir(parents=True)
+        source=base/'child.c';source.write_text(CHILD,encoding='utf-8');target=home/'external-tools/fixture/bin/child.exe'
+        subprocess.run([cc,'-Os','-s','-municode',str(source),'-o',str(target)],check=True)
         for name in ('probe','other','tree','signal','missing','escape','loop','daemon'):shutil.copy2(helper,bin/(name+'.exe'))
         os.link(bin/'probe.exe',bin/'linked.exe')
-        commands={n:{'target':'installed/child.exe','args':[]} for n in ('probe','other','linked')}
-        commands.update(tree={'target':'installed/child.exe','args':['--tree']},signal={'target':'installed/child.exe','args':['--interrupt']},missing={'target':'installed/absent.exe'},escape={'target':'../outside.exe'},loop={'target':'data/cli-tools/bin/loop.exe'})
+        commands={n:{'target':'external-tools/fixture/bin/child.exe','args':[]} for n in ('probe','other','linked')}
+        commands.update(tree={'target':'external-tools/fixture/bin/child.exe','args':['--tree']},signal={'target':'external-tools/fixture/bin/child.exe','args':['--interrupt']},missing={'target':'external-tools/fixture/bin/absent.exe'},escape={'target':'../outside.exe'},loop={'target':'data/external-tools/bin/loop.exe'})
         config=folder/'state.json';config.write_text(json.dumps({'commands':commands}),encoding='utf-8')
         cwd=base/'work space';cwd.mkdir();args=['','a b','q"x','中文','tail\\','%PATH%','a&b','line\nbreak']
         def invoke(name,extra=args,**options):return subprocess.run([str(bin/(name+'.exe')),*extra],cwd=cwd,input=b'input\x00\r\n',capture_output=True,timeout=10,**options)
@@ -64,7 +65,7 @@ def run():
         assert invoke('probe',[],env={**os.environ,'MDO_CLI_FORWARD_DEPTH':'4'}).returncode==126
         config.write_text('{"commands":{"probe":{},"probe":{}}}');assert invoke('probe',[]).returncode==126
         config.write_text(json.dumps({'commands':commands}),encoding='utf-8')
-        commands['daemon']={'target':'installed/child.exe','args':['--daemon']};config.write_text(json.dumps({'commands':commands}),encoding='utf-8');marker=base/'daemon-receipt';daemon_pid=0
+        commands['daemon']={'target':'external-tools/fixture/bin/child.exe','args':['--daemon']};config.write_text(json.dumps({'commands':commands}),encoding='utf-8');marker=base/'daemon-receipt';daemon_pid=0
         try:
             result=subprocess.run([str(bin/'daemon.exe')],env={**os.environ,'FORWARD_TEST_RECEIPT':str(marker)},stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=5);assert result.returncode==0
             daemon_pid=int(marker.with_suffix('.grandchild').read_text());assert alive(daemon_pid),'normal target exit must preserve intentionally detached workers (e.g. ssh-agent)'
@@ -89,7 +90,7 @@ def run():
         marker=base/'interrupt-receipt'
         control=subprocess.run([str(target),'--control',str(bin/'signal.exe')],cwd=cwd,env={**os.environ,'FORWARD_TEST_RECEIPT':str(marker)},capture_output=True,timeout=15)
         assert control.returncode==23,(control.returncode,control.stderr);assert marker.with_suffix('.interrupt').exists()
-        moved=base/'moved location';shutil.copytree(home,moved);bin=moved/'data/cli-tools/bin';check(invoke('probe'),args)
+        moved=base/'moved location';home.rename(moved);bin=moved/'data/external-tools/bin';check(invoke('probe'),args)
         report={'passed':True,'bytes':receipt['bytes'],'checks':['deterministic builds','relative target and independent cwd','empty/unicode/quote/backslash/metacharacter args','prefix args and hardlinked aliases','binary stdin/stdout and exact stderr/exit status','missing/escape/recursive targets and duplicate JSON reject','normal completion preserves intentional daemons','parent death contains descendants','Ctrl-C forwarding with hidden console','Home relocation']}
         out=ROOT/'.build/cli-forwarder-development/windows-regression.json';out.write_text(json.dumps(report,indent=2)+'\n');print(json.dumps(report))
 
