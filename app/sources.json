@@ -6,6 +6,7 @@
     "src/extensions/builtins.c",
     "src/extensions/operations.c",
     "src/extensions/tasks.c",
+    "src/extensions/service.c",
     "src/projects/lifecycle.c",
     "src/config/config.c",
     "src/config/service.c",

@@ -2,6 +2,7 @@
 #include "write_admission.h"
 #include "../../include/mdo/extension_tasks.h"
 #include "../../include/mdo/extensions.h"
+#include "../../include/mdo/extension_service.h"
 #include "../../include/mdo/extension_manifest.h"
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/time.h"
@@ -13,6 +14,8 @@ static bool MdoArchiveApiResult(MdoApiContext* C,bool Ok,xvalue* Result,cstr Err
  if(Ok)return MdoApiReplySuccessTake(C,200,Result,NULL);xrtValueRelease(Result);return MdoApiReplyError(C,422,"extension_archive_failed",Error&&Error[0]?Error:"Archive operation could not complete",NULL);
 }
 static bool MdoArchiveApiInstall(MdoApiContext* C,cstr Id,const xvalue* Input){
+ char ProbeError[512]={0};xvalue* Receipt=MdoExtensionTaskRead(Id,ProbeError);bool Store=Receipt&&xrtValueObjectHas(Receipt,XRT_STR_LITERAL("store"));xrtValueRelease(Receipt);
+ if(Store){xvalue* Result=NULL;bool Ok=MdoExtensionServiceInstall(Id,Input,C->SendCancel,&Result,ProbeError);return MdoArchiveApiResult(C,Ok,Result,ProbeError);}
  char Error[512]={0};MdoExtensionTaskUse* Use=MdoExtensionTaskUseBegin(Id,false,C->SendCancel,Error);char* Archive=Use?MdoExtensionTaskArchive(Id,Error):NULL;xvalue* Task=Archive?MdoExtensionTaskRead(Id,Error):NULL,*Request=Input?xrtValueClone(Input):xrtValueObject(),*Result=NULL;
  cstr Kind=MdoExtensionText(Task,"kind",32);bool Ok=Archive&&Task&&Request&&Kind&&MdoExtensionDirectoryKind(Kind)&&MdoExtArchivePut(Request,"action","install")&&MdoExtArchivePut(Request,"kind",Kind)&&MdoExtArchivePut(Request,"archive",Archive)&&MdoExtensionsManage(Request,NULL,MdoExtensionTaskUseCancel(Use),&Result,Error);
  if(Ok){xvalue* Finished=NULL;char ReceiptError[512]={0};if(MdoExtensionTaskComplete(Id,Result,&Finished,ReceiptError))xrtValueObjectSet(Result,XRT_STR_LITERAL("task"),Finished);else MdoExtArchivePut(Result,"transfer_receipt_error",ReceiptError);xrtValueRelease(Finished);}

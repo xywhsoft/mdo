@@ -40,6 +40,16 @@ xvalue* QaProductContract(const xvalue* P,xvfs V){
  bool Clear=MdoExtensionTaskForget(Id,Error)&&MdoExtensionTaskCancel(BadId,&Out,Error);xrtValueRelease(Out);Out=NULL;Clear=Clear&&MdoExtensionTaskForget(BadId,Error)&&MdoExtensionTaskCancel(Third,&Out,Error);xrtValueRelease(Out);Out=NULL;Clear=Clear&&MdoExtensionTaskForget(Third,Error);
  xvalue* List=MdoExtensionTasksList(Error);Clear=Clear&&List&&!xrtValueCount(List);xrtValueRelease(List);QaTaskFlag(R,"explicit_cleanup",Clear);
  QaTaskFlag(R,"task_path_escape_rejected",!MdoExtensionTaskRead("../outside",Error));
+ char Owned[33]={0};bool OwnedOk=QaBeginTask("install","skills",Data,(size_t)Bytes,Owned,Error);MdoExtensionTaskUse* Owner=OwnedOk?MdoExtensionTaskUseBegin(Owned,true,NULL,Error):NULL;
+ bool Blocked=Owner&&!MdoExtensionTaskWrite(Owned,0,Data,(size_t)Bytes,&Out,Error);xrtValueRelease(Out);Out=NULL;
+ OwnedOk=Blocked&&MdoExtensionTaskUseWrite(Owner,0,Data,(size_t)Bytes,&Out,Error);xrtValueRelease(Out);Out=NULL;
+ QaTaskFlag(R,"only_active_receiver_can_write_owned_task",OwnedOk);
+ xvalue* Origin=SdkParse("{\"kind\":\"skills\",\"xid\":\"0123456789ABCDEFGHJKMNPQRSTVWXYZ\",\"version_id\":\"1123456789ABCDEFGHJKMNPQRSTVWXYZ\",\"unexpected_secret\":\"fixture\"}");char OwnedHash[65];MdoExtensionHashBytes(Data,(size_t)Bytes,OwnedHash);SdkPut(Origin,"sha256",OwnedHash);
+ bool OriginOk=Owner&&!MdoExtensionTaskOrigin(Owner,Origin,Error);xrtValueObjectRemove(Origin,XRT_STR_LITERAL("unexpected_secret"));OriginOk=OriginOk&&MdoExtensionTaskOrigin(Owner,Origin,Error);xrtValueRelease(Origin);QaTaskFlag(R,"verified_origin_rejects_unexpected_fields",OriginOk);
+ MdoExtensionTaskUseEnd(Owner);OwnedOk=OwnedOk&&MdoExtensionTaskSeal(Owned,NULL,&Out,Error);xrtValueRelease(Out);Out=NULL;Owner=OwnedOk?MdoExtensionTaskUseBegin(Owned,false,NULL,Error):NULL;
+ bool Progress=Owner&&MdoExtensionTaskTransfer(Owner,Bytes,"submitting",Error)&&!MdoExtensionTaskTransfer(Owner,Bytes+1,"uploading",Error)&&MdoExtensionTaskCancel(Owned,&Out,Error);xrtValueRelease(Out);Out=NULL;
+ Progress=Progress&&!MdoExtensionTaskTransfer(Owner,Bytes,"submitting",Error);MdoExtensionTaskUseEnd(Owner);Progress=Progress&&MdoExtensionTaskForget(Owned,Error);QaTaskFlag(R,"progress_persists_and_honors_cancellation",Progress);
+
  /* Exercise the actual product router, write admission, body decoder and SDK
   * adapter. Only the server identity is supplied; no service/socket is made. */
  XS_ServerInfo Server={0};Server.Name="archive-fixture";Server.Port=58013;SdkServer=&Server;g_MdoApiInitialized=true;bool Api=MdoApiWriteInit()&&MdoApiExtensionTasksInit();

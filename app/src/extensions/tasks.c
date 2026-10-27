@@ -81,9 +81,9 @@ bool MdoExtensionTaskBegin(const xvalue* Input,xvalue** Result,char Error[512]){
  if(Ok)*Result=MdoExtArchiveInfo(T);Ok=Ok&&*Result;if(!Ok&&Base)MdoHomeRemoveEmptyDirectory(Base);xrtValueRelease(T);xrtValueRelease(Items);xrtFree(Id);xrtFree(Base);xrtMutexUnlock(MdoExtArchiveTasksLock);
  if(!Ok&&Error&&!Error[0])MdoExtArchiveError(Error,"Archive task storage is full or unavailable; cancel unused tasks first");return Ok;
 }
-bool MdoExtensionTaskWrite(cstr Id,uint64 Offset,const void* Data,size_t Bytes,xvalue** Result,char Error[512]){
+static bool MdoExtArchiveWrite(cstr Id,MdoExtensionTaskUse* Use,uint64 Offset,const void* Data,size_t Bytes,xvalue** Result,char Error[512]){
  *Result=NULL;if(Error)Error[0]=0;if(!MdoExtArchiveTasksLock||!MdoExtArchiveId(Id)||!Data||!Bytes||Bytes>MDO_EXTENSION_TASK_CHUNK)return MdoExtArchiveError(Error,"Write one raw binary archive chunk of at most 1 MiB");
- xrtMutexLock(MdoExtArchiveTasksLock);xvalue* T=MdoExtArchiveLoad(Id,Error);uint64 Expected=0;bool Ok=T&&!MdoExtArchiveUse(Id)&&MdoExtArchiveLive(T)&&MdoExtArchiveNumber(T,"bytes",&Expected)&&Offset<=Expected&&Bytes<=Expected-Offset&&!strcmp(MdoExtensionText(T,"state",24),"receiving");
+ xrtMutexLock(MdoExtArchiveTasksLock);xvalue* T=MdoExtArchiveLoad(Id,Error);uint64 Expected=0;bool Ok=T&&(Use?MdoExtArchiveUse(Id)==Use:!MdoExtArchiveUse(Id))&&(!Use||!xrtCancelRequested(Use->Cancel))&&MdoExtArchiveLive(T)&&MdoExtArchiveNumber(T,"bytes",&Expected)&&Offset<=Expected&&Bytes<=Expected-Offset&&!strcmp(MdoExtensionText(T,"state",24),"receiving");
  char* Path=Ok?MdoExtArchivePath(Id,"archive.part"):NULL,*Final=Ok?MdoExtArchivePath(Id,"archive.zip"):NULL;bool Exists=false,Sealed=false;xfileinfo Info;Ok=Ok&&MdoExtArchiveStat(Final,&Sealed,&Info)&&!Sealed&&MdoExtArchiveStat(Path,&Exists,&Info)&&(!Exists||Info.Type==XFILE_TYPE_FILE);uint64 Current=Exists?Info.Size:0;xrtFree(Final);
  xfile File=Ok?MdoHomeOpenWrite(Path,XFILE_READ|XFILE_WRITE|XFILE_CREATE):NULL;Ok=Ok&&File&&Offset<=Current&&Current<=Expected;
  /* A repeated request must match every byte already on disk. If a process
@@ -92,6 +92,22 @@ bool MdoExtensionTaskWrite(cstr Id,uint64 Offset,const void* Data,size_t Bytes,x
  for(size_t At=0;Ok&&At<Overlap;){size_t N=Overlap-At<sizeof(Buffer)?Overlap-At:sizeof(Buffer);Ok=xrtReadAtFull(File,Offset+At,Buffer,N,NULL)&&!memcmp(Buffer,(const uint8*)Data+At,N);At+=N;}
  if(Ok&&Overlap<Bytes)Ok=xrtWriteAtFull(File,Offset+Overlap,(const uint8*)Data+Overlap,Bytes-Overlap,NULL)&&xrtFlush(File);if(File&&!xrtClose(File))Ok=false;
  if(Ok)*Result=MdoExtArchiveInfo(T);Ok=Ok&&*Result;xrtFree(Path);xrtValueRelease(T);xrtMutexUnlock(MdoExtArchiveTasksLock);if(!Ok&&Error&&!Error[0])MdoExtArchiveError(Error,"Archive chunk conflicts with the received bytes or cannot be written; read the current offset before retrying");return Ok;
+}
+bool MdoExtensionTaskWrite(cstr Id,uint64 Offset,const void* Data,size_t Bytes,xvalue** Result,char Error[512]){return MdoExtArchiveWrite(Id,NULL,Offset,Data,Bytes,Result,Error);}
+bool MdoExtensionTaskUseWrite(MdoExtensionTaskUse* Use,uint64 Offset,const void* Data,size_t Bytes,xvalue** Result,char Error[512]){if(!Use){*Result=NULL;return MdoExtArchiveError(Error,"An owned archive transfer is required");}return MdoExtArchiveWrite(Use->Id,Use,Offset,Data,Bytes,Result,Error);}
+bool MdoExtensionTaskOrigin(MdoExtensionTaskUse* Use,const xvalue* Origin,char Error[512]){
+ if(!Use||xrtValueType(Origin)!=XVALUE_OBJECT)return false;cstr Kind=MdoExtensionText(Origin,"kind",32),Id=MdoExtensionText(Origin,"xid",32),Version=MdoExtensionText(Origin,"version_id",32),Hash=MdoExtensionText(Origin,"sha256",64);char* Text=xrtJsonStringify(Origin,false,NULL);
+ bool Valid=Text&&strlen(Text)<=8192&&MdoExtensionDirectoryKind(Kind)&&MdoExtArchiveId(Id)&&MdoExtArchiveId(Version)&&MdoExtArchiveHash(Hash);xrtFree(Text);if(!Valid)return MdoExtArchiveError(Error,"Invalid verified store origin");
+ const cstr Fields[]={"kind","xid","version_id","sha256","bytes","owner","submitter","author","copyright","license","name","alias","platforms","state","version"};
+ for(size_t I=0;I<xrtValueCount(Origin);I++){xstrview Key={0};xrtValueObjectAt(Origin,I,&Key);bool Known=false;for(size_t J=0;J<sizeof(Fields)/sizeof(*Fields);J++)if(xrtStrEqual(Key,xrtStrView(Fields[J])))Known=true;if(!Known)return MdoExtArchiveError(Error,"Unexpected field in verified store origin");}
+ xrtMutexLock(MdoExtArchiveTasksLock);xvalue* Task=MdoExtArchiveLoad(Use->Id,Error);cstr State=MdoExtensionText(Task,"state",24);bool Ok=Task&&MdoExtArchiveUse(Use->Id)==Use&&State&&!strcmp(State,"receiving")&&!xrtCancelRequested(Use->Cancel)&&!strcmp(Kind,MdoExtensionText(Task,"kind",32))&&!strcmp(Hash,MdoExtensionText(Task,"sha256",64))&&xrtValueObjectSet(Task,XRT_STR_LITERAL("store"),Origin)&&MdoExtArchivePut(Task,"directory_id",Id)&&MdoExtArchiveSave(Task);
+ xrtValueRelease(Task);xrtMutexUnlock(MdoExtArchiveTasksLock);return Ok||MdoExtArchiveError(Error,"Archive transfer changed before its store origin could be recorded");
+}
+bool MdoExtensionTaskTransfer(MdoExtensionTaskUse* Use,uint64 Sent,cstr Phase,char Error[512]){
+ if(!Use||!Phase||(strcmp(Phase,"uploading")&&strcmp(Phase,"submitting")))return MdoExtArchiveError(Error,"Invalid archive transfer phase");
+ xrtMutexLock(MdoExtArchiveTasksLock);xvalue* Task=MdoExtArchiveLoad(Use->Id,Error);cstr State=MdoExtensionText(Task,"state",24);uint64 Bytes=0;
+ bool Ok=Task&&MdoExtArchiveUse(Use->Id)==Use&&State&&!strcmp(State,"ready")&&!xrtCancelRequested(Use->Cancel)&&MdoExtArchiveNumber(Task,"bytes",&Bytes)&&Sent<=Bytes&&MdoExtArchivePut(Task,"phase",Phase)&&xrtValueObjectSetNew(Task,XRT_STR_LITERAL("sent"),xrtValueUInt(Sent))&&MdoExtArchiveSave(Task);
+ xrtValueRelease(Task);xrtMutexUnlock(MdoExtArchiveTasksLock);return Ok||MdoExtArchiveError(Error,"Archive transfer was cancelled or changed");
 }
 static bool MdoExtArchiveDigest(xfile F,xcancel* Cancel,char Hash[65]){
  uint64 Size=0;bool Ok=F&&xrtFileSize(F,&Size)&&Size<=MDO_EXTENSION_ARCHIVE_BYTES;xsha256 S;xrtSha256Init(&S);uint8 B[65536],Digest[32];
