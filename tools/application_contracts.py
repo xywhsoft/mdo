@@ -106,6 +106,7 @@ INPUTS={
  'Ecosystem':document('action:s id:s kind:s source:s version:s trust:b approved:b replace:b revision:s files:ExtensionFiles draft_id:s'),
  'Purge':document('purge_request_id:s project_id:s revision:u created_at:i confirmation:s'),
  'BackupUpload':document('id:s bytes:u sha256:s',('id','bytes'),True),
+ 'ExtensionDirectory':document('action:s manifest:o edits:a expected_revision:s trust_code:b enabled:b path:s destination:s text:s',closed=True),
  'ExtensionTask':document('purpose:s kind:s sha256:s bytes:u id:s expected_revision:s trust_code:b enabled:b'),
  'BackupPreview':document('upload_id:s id:s'),
  'BackupReview':document('project_id:s session_id:s title:s preview_id:s'),
@@ -135,7 +136,7 @@ BODY_GROUPS={
  'Memory':'MemoryCollectionRoute','Draft':'DraftRoute','Submission':'DraftSubmissionAppendRoute DraftSubmissionRoute',
  'PromptHistoryEntry':'PromptHistoryRoute',
  'Queue':'QueueRoute QueueItemRoute','QueueAction':'QueueActionsRoute','Config':'SettingsPreviewRoute SettingsMutationRoute',
- 'Extension':'ExtensionsRoute AgentPlanRoute CommandProjectRoute SkillProjectRoute McpProjectRoute',
+ 'Extension':'AgentPlanRoute CommandProjectRoute SkillProjectRoute McpProjectRoute',
  'Command':'CommandInvocationRoute','SkillInvoke':'SkillInvokeRoute','SkillValidate':'SkillValidateRoute',
  'Migrate':'LegacyMigrationsRoute SkillMigrateRoute McpMigrateRoute','ModelProbe':'ModelDiscoverRoute ModelTestRoute',
  'ModelSetup':'ModelSetupRoute','AccountLogin':'AccountRoute','Remote':'RemoteRoute',
@@ -147,6 +148,7 @@ BODY_GROUPS={
 }
 BODY={handler:name for name,handlers in BODY_GROUPS.items() for handler in handlers.split()}
 BODY['ExtensionTasksRoute']='ExtensionTask'
+BODY['ExtensionsRoute']='ExtensionDirectory'
 NO_BODY=set('''CommandsRoute DistributionRoute CliToolsRoute LiveRoute DirectRoute UpdateExitRoute BootstrapRoute SettingsRoute
 ModelsRoute ModelConfigRoute AgentsRoute BackupUploadRoute BackupUploadSealRoute BackupPreviewsRoute BackupPreviewRoute UpdateDownloadRoute UpdateInstallRoute
 BackupRestoreApplyRoute BackupRestoresRoute BackupRestoreRoute BackupPreviewStartRoute ModulesRoute ToolsRoute SkillsRoute McpRoute DirectoriesRoute
@@ -187,7 +189,8 @@ QUERY_GROUPS={
  'after:u topics:s project:s session:s':'LiveRoute',
  'after:u':'ApplicationRoute',
  'state:s code:s error:s':'McpAuthRoute',
- 'project:s path:s scope:s':'ExtensionsRoute AgentPlanRoute',
+ 'project:s path:s q:s state:s offset:u limit:u':'ExtensionsRoute',
+ 'project:s':'AgentPlanRoute',
 }
 QUERY={handler:spec for spec,handlers in QUERY_GROUPS.items() for handler in handlers.split()}
 

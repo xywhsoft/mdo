@@ -135,11 +135,8 @@ static bool SdkExtensionCall(const mdo_sdk_context_v1* C,cstr Method,const xvalu
         xvalue* Input=xrtValueClone(P);MdoApplicationInvocation* I=C->Opaque;
         bool Ok=Input&&SdkPut(Input,"kind",Kind)&&SdkPut(Input,"id",Id)&&SdkPut(Input,"action",Method+10)&&MdoExtensionsManage(Input,NULL,I?I->Cancel:NULL,R,Why);xrtValueRelease(Input);(void)Ok;
     }else if(!strcmp(Method,"extension.pack")){
-        char* Task=xrtXidMakeString(),*Base=Task?xrtFormat("data/extension-tasks/%s",Task):NULL,*Path=Base?xrtFormat("%s/extension.zip",Base):NULL;
-        xroot Directory=Base?MdoHomeOpenStorageDirectory(Base):NULL;bool Ok=Directory!=NULL;if(Directory)xrtRootClose(Directory);char Hash[65];uint64 Bytes=0;MdoApplicationInvocation* I=C->Opaque;
-        Ok=Ok&&Path&&MdoExtensionsPack(Kind,Id,Path,I?I->Cancel:NULL,Hash,&Bytes,Why);
-        if(Ok){*R=xrtValueObject();SdkPut(*R,"task",Task);SdkPut(*R,"archive",Path);SdkPut(*R,"sha256",Hash);SdkPutUInt(*R,"bytes",Bytes);}else if(Base)MdoHomeRemoveEmptyDirectory(Base);
-        xrtFree(Task);xrtFree(Base);xrtFree(Path);
+        MdoApplicationInvocation* I=C->Opaque;
+        if(MdoExtensionTaskPack(Kind,Id,I?I->Cancel:NULL,R,Why)&&*R){char* Path=MdoExtensionTaskArchive(SdkField(*R,"id"),Why);SdkPut(*R,"archive",Path);xrtFree(Path);}
     }else if(!strcmp(Method,"extension.current")||!strcmp(Method,"extension.read")){
         *R=MdoExtensionsRead(Kind,Id,Why);
         if(*R){char* Relative=MdoExtensionsRoot(Kind,Id),*Native=Relative?MdoHomeExternalPath(Relative):NULL;

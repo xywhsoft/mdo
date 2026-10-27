@@ -7,7 +7,7 @@
 #include "../../include/mdo/time.h"
 #include "../extensions/tasks_internal.h"
 
-typedef struct MdoArchiveApiJob {MdoApiContext Context;XS_HttpReq Request;xhttp1head Head;char Id[33];xvalue* Input;bool Install,Sent;} MdoArchiveApiJob;
+typedef struct MdoArchiveApiJob {MdoApiContext Context;XS_HttpReq Request;xhttp1head Head;char Id[33];xvalue* Input;unsigned Operation;bool Sent;} MdoArchiveApiJob;
 static struct {xmutex* Lock;xtaskpool* Pool;size_t Count;bool Stopping;} MdoArchiveApi;
 static bool MdoArchiveApiResult(MdoApiContext* C,bool Ok,xvalue* Result,cstr Error){
  if(Ok)return MdoApiReplySuccessTake(C,200,Result,NULL);xrtValueRelease(Result);return MdoApiReplyError(C,422,"extension_archive_failed",Error&&Error[0]?Error:"Archive operation could not complete",NULL);
@@ -27,19 +27,24 @@ static void MdoArchiveApiDrop(ptr Value,ptr User){
 static xtaskoutcome MdoArchiveApiRun(xcancel* Cancel,ptr Value,xtaskvalue* Result){
  (void)Result;MdoArchiveApiJob* J=Value;J->Context.SendCancel=Cancel;if(!MdoApiDownloadLive(&J->Context))return XTASK_CANCELLED;
  char Error[512]={0};xvalue* Out=NULL;
- if(J->Install)J->Sent=MdoArchiveApiInstall(&J->Context,J->Id,J->Input);
+ if(J->Operation==1)J->Sent=MdoArchiveApiInstall(&J->Context,J->Id,J->Input);
+ else if(J->Operation>=2){bool Ok=J->Operation==3?MdoExtensionTaskPack(MdoExtensionText(J->Input,"kind",32),MdoExtensionText(J->Input,"id",96),Cancel,&Out,Error):MdoExtensionsManage(J->Input,NULL,Cancel,&Out,Error);J->Sent=MdoArchiveApiResult(&J->Context,Ok,Out,Error);}
  else{bool Ok=MdoExtensionTaskSeal(J->Id,Cancel,&Out,Error);J->Sent=MdoArchiveApiResult(&J->Context,Ok,Out,Error);}
  MdoApiLiveChanged(NULL);return J->Sent?XTASK_SUCCESS:XTASK_FAILED;
 }
-static bool MdoArchiveApiStart(MdoApiContext* C,cstr Id,const xvalue* Input,bool Install){
+static bool MdoArchiveApiStart(MdoApiContext* C,cstr Id,const xvalue* Input,unsigned Operation){
  MdoArchiveApiJob* J=xrtCalloc(1,sizeof(*J));xfuture* Future=NULL;if(!J||!MdoArchiveApi.Lock)goto failed;
  J->Head.MethodCode=XHTTP_METHOD_POST;J->Request.head=&J->Head;if(C->Request->tls)J->Request.tls=xrtTlsStreamRef(C->Request->tls);else if(C->Request->tcp)J->Request.tcp=xrtNetStreamRef(C->Request->tcp);
  if(!J->Request.tls&&!J->Request.tcp)goto failed;J->Context.Request=&J->Request;J->Context.CloseResponse=true;J->Context.SendDeadline=MdoDeadlineAfterUs(UINT64_C(1200000000));
- memcpy(J->Context.RequestId,C->RequestId,sizeof(C->RequestId));snprintf(J->Id,sizeof(J->Id),"%s",Id);J->Context.WriteShared=C->WriteShared;J->Context.WriteExclusive=C->WriteExclusive;J->Install=Install;J->Input=Input?xrtValueClone(Input):NULL;
+ memcpy(J->Context.RequestId,C->RequestId,sizeof(C->RequestId));snprintf(J->Id,sizeof(J->Id),"%s",Id);J->Context.WriteShared=C->WriteShared;J->Context.WriteExclusive=C->WriteExclusive;J->Operation=Operation;J->Input=Input?xrtValueClone(Input):NULL;
  if(Input&&!J->Input)goto failed;xrtMutexLock(MdoArchiveApi.Lock);
  if(!MdoArchiveApi.Stopping&&MdoArchiveApi.Count<3){if(!MdoArchiveApi.Pool){xtaskpoolconfig Config={0};Config.Threads=1;Config.QueueLimit=2;MdoArchiveApi.Pool=xrtTaskPoolCreate(&Config);}if(MdoArchiveApi.Pool){xtaskargs Args={0};Args.Destroy=MdoArchiveApiDrop;MdoArchiveApi.Count++;Future=xrtTaskSubmit(MdoArchiveApi.Pool,MdoArchiveApiRun,J,&Args);if(!Future)MdoArchiveApi.Count--;}}
  xrtMutexUnlock(MdoArchiveApi.Lock);if(Future){C->WriteShared=C->WriteExclusive=false;C->Takeover=true;xrtFutureDestroy(Future);return true;}
 failed:if(J){xrtTlsStreamDestroy(J->Request.tls);xrtNetStreamDestroy(J->Request.tcp);xrtValueRelease(J->Input);xrtFree(J);}return MdoApiReplyError(C,503,"extension_archive_busy","Another archive operation is still finishing",NULL);
+}
+static bool MdoApiDirectoryOperation(MdoApiContext* C,const xvalue* Input,bool Pack){
+ if(C->ApplicationResponse){char Error[512]={0};xvalue* Out=NULL;bool Ok=Pack?MdoExtensionTaskPack(MdoExtensionText(Input,"kind",32),MdoExtensionText(Input,"id",96),C->SendCancel,&Out,Error):MdoExtensionsManage(Input,NULL,C->SendCancel,&Out,Error);return MdoArchiveApiResult(C,Ok,Out,Error);}
+ return MdoArchiveApiStart(C,"",Input,Pack?3:2);
 }
 bool MdoApiExtensionTasksInit(void){if(MdoArchiveApi.Lock)return MdoExtensionTasksInit();MdoArchiveApi.Lock=xrtMutexCreate();if(!MdoArchiveApi.Lock)return false;if(!MdoExtensionTasksInit()){xrtMutexDestroy(MdoArchiveApi.Lock);memset(&MdoArchiveApi,0,sizeof(MdoArchiveApi));return false;}return true;}
 void MdoApiExtensionTasksUnit(void){if(!MdoArchiveApi.Lock)return;xrtMutexLock(MdoArchiveApi.Lock);MdoArchiveApi.Stopping=true;xtaskpool* Pool=MdoArchiveApi.Pool;xrtMutexUnlock(MdoArchiveApi.Lock);if(Pool){xrtTaskPoolCancel(Pool);xrtTaskPoolWait(Pool);xrtTaskPoolDestroy(Pool);}xrtMutexDestroy(MdoArchiveApi.Lock);memset(&MdoArchiveApi,0,sizeof(MdoArchiveApi));}

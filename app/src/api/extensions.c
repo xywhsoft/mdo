@@ -604,40 +604,7 @@ static bool ExtensionBundle(MdoApiContext* C,cstr Id)
 #include "ecosystem_install.inc.c"
 #include "knowledge_management.inc.c"
 
-bool MdoApiExtensionsRoute(MdoApiContext* C)
-{
-    char Kind[16],Id[65],Path[160]; char* Old=NULL; bool Missing=false,Result;
-    xhttpmethod Method=C->Request->head->MethodCode;
-    if (!ExtensionParams(C,Kind,Id)) return MdoApiReplyError(C,400,"extension_path_invalid","Unknown resource kind or non-portable ID",NULL);
-    xrtMutexLock(g_MdoExtensionLock);
-    if (!Id[0]) Result=ExtensionList(C,Kind);
-    else {
-        ExtensionPath(Kind,Id,Path);
-        if (Method==XHTTP_METHOD_GET || Method==XHTTP_METHOD_HEAD) {
-            bool Documents=C->Target.Path.Size>=10u && !memcmp(C->Target.Path.Data+C->Target.Path.Size-10u,"/documents",10u);
-            bool Bundle=C->Target.Path.Size>=7u && !memcmp(C->Target.Path.Data+C->Target.Path.Size-7u,"/bundle",7u);
-            xvalue* Item=Bundle?NULL:ExtensionItem(Kind,Id,true);
-            if(Documents){xrtValueRelease(Item);Result=!strcmp(Kind,"knowledge")?KnowledgeDocuments(C,Id):MdoApiReplyError(C,400,"extension_action_invalid","Document browsing is only supported for knowledge libraries",NULL);}
-            else if (Bundle&&!ExtensionStoreCanCustomize(C,Kind,Id))Result=true;
-            else if (Bundle) Result=!strcmp(Kind,"knowledge")?KnowledgeBundle(C,Id):!strcmp(Kind,"skills")?ExtensionBundle(C,Id):MdoApiReplyError(C,400,"extension_action_invalid","Bundles are only supported for Skills",NULL);
-            else Result=Item?MdoApiReplySuccessTake(C,200,Item,NULL):MdoApiReplyError(C,404,"extension_not_found","Resource not found",NULL);
-        } else {
-            Old=MdoExtensionRead(Path,false,MDO_EXTENSION_TEXT_LIMIT,&Missing);
-            if(!Old&&Missing&&Method!=XHTTP_METHOD_PUT&&MdoPackageRoleKind(Kind)){
-                snprintf(Path,sizeof(Path),"modules/%s/%s.c",Kind,Id);Old=MdoExtensionRead(Path,false,MDO_EXTENSION_TEXT_LIMIT,&Missing);
-            }
-            if (!Old && !Missing) Result=MdoApiReplyError(C,503,"extension_unreadable","Existing resource cannot be read safely",NULL);
-            else if (!ExtensionMatch(C,Old)) Result=true;
-            else if ((Method==XHTTP_METHOD_PUT||Method==XHTTP_METHOD_DELETE)&&!ExtensionStoreCanCustomize(C,Kind,Id))Result=true;
-            else if (Method==XHTTP_METHOD_PUT) Result=!strcmp(Kind,"knowledge")?KnowledgeWrite(C,Id):ExtensionWrite(C,Kind,Id,Path,Old);
-            else if (!Old) Result=MdoApiReplyError(C,404,"extension_not_found","Resource not found",NULL);
-            else if (Method==XHTTP_METHOD_DELETE) Result=ExtensionDelete(C,Kind,Id,Path,Old);
-            else Result=ExtensionEnable(C,Kind,Id);
-            xrtFree(Old);
-        }
-    }
-    xrtMutexUnlock(g_MdoExtensionLock); return Result;
-}
+#include "directory_management.inc.c"
 
 #include "skill_management.inc.c"
 #include "agent_authoring.inc.c"

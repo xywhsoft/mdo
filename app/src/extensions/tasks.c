@@ -1,6 +1,7 @@
 #include "../../include/mdo/extension_tasks.h"
 #include "../../include/mdo/extension_manifest.h"
 #include "../../include/mdo/home.h"
+#include "../../include/mdo/extensions.h"
 #include "../../include/mdo/time.h"
 #include "tasks_internal.h"
 
@@ -156,4 +157,18 @@ char* MdoExtensionTaskArchive(cstr Id,char Error[512]){
  if(Error)Error[0]=0;if(!MdoExtArchiveTasksLock||!MdoExtArchiveId(Id)){MdoExtArchiveError(Error,"Choose a sealed task");return NULL;}xrtMutexLock(MdoExtArchiveTasksLock);xvalue* T=MdoExtArchiveLoad(Id,Error);cstr State=MdoExtensionText(T,"state",24);char* Path=State&&MdoExtArchiveLive(T)&&!strcmp(State,"ready")?MdoExtArchivePath(Id,"archive.zip"):NULL;
  uint64 Expected=0;bool Exists=false;xfileinfo Info;if(Path&&(!MdoExtArchiveNumber(T,"bytes",&Expected)||!MdoExtArchiveStat(Path,&Exists,&Info)||!Exists||Info.Type!=XFILE_TYPE_FILE||Info.Size!=Expected)){xrtFree(Path);Path=NULL;}
  xrtValueRelease(T);xrtMutexUnlock(MdoExtArchiveTasksLock);if(!Path)MdoExtArchiveError(Error,"Archive task is not sealed, has expired, was cancelled or its file is unavailable");return Path;
+}
+
+bool MdoExtensionTaskPack(cstr Kind,cstr DirectoryId,xcancel* Cancel,xvalue** Result,char Error[512]){
+ *Result=NULL;if(Error)Error[0]=0;if(!MdoExtensionDirectoryKind(Kind)||!MdoExtensionDirectoryId(DirectoryId))return MdoExtArchiveError(Error,"Choose a local extension directory to export");
+ xvalue* Input=xrtValueObject(),*Task=NULL;char Zero[65];memset(Zero,'0',64);Zero[64]=0;
+ bool Ok=Input&&MdoExtArchivePut(Input,"kind",Kind)&&MdoExtArchivePut(Input,"purpose","publish")&&MdoExtArchivePut(Input,"sha256",Zero)&&xrtValueObjectSetNew(Input,XRT_STR_LITERAL("bytes"),xrtValueUInt(MDO_EXTENSION_ARCHIVE_BYTES))&&MdoExtensionTaskBegin(Input,&Task,Error);xrtValueRelease(Input);
+ char Id[33]={0};if(Ok)snprintf(Id,sizeof(Id),"%s",MdoExtensionText(Task,"id",32));xrtValueRelease(Task);Task=NULL;
+ MdoExtensionTaskUse* Use=Ok?MdoExtensionTaskUseBegin(Id,true,Cancel,Error):NULL;char* Path=Use?MdoExtArchivePath(Id,"archive.part"):NULL;Ok=Ok&&Use&&Path;
+ char Hash[65];uint64 Bytes=0;if(Ok)Ok=MdoExtensionsPack(Kind,DirectoryId,Path,MdoExtensionTaskUseCancel(Use),Hash,&Bytes,Error);
+ if(Ok){xrtMutexLock(MdoExtArchiveTasksLock);Task=MdoExtArchiveLoad(Id,Error);cstr State=MdoExtensionText(Task,"state",24);
+  Ok=Task&&State&&!strcmp(State,"receiving")&&!xrtCancelRequested(MdoExtensionTaskUseCancel(Use))&&MdoExtArchivePut(Task,"sha256",Hash)&&MdoExtArchivePut(Task,"directory_id",DirectoryId)&&xrtValueObjectSetNew(Task,XRT_STR_LITERAL("bytes"),xrtValueUInt(Bytes))&&MdoExtArchiveSave(Task);xrtValueRelease(Task);xrtMutexUnlock(MdoExtArchiveTasksLock);}
+ xrtFree(Path);MdoExtensionTaskUseEnd(Use);
+ if(Ok)Ok=MdoExtensionTaskSeal(Id,Cancel,Result,Error);
+ if(!Ok&&Id[0]){xvalue* Ignored=NULL;char Cleanup[512];(void)MdoExtensionTaskCancel(Id,&Ignored,Cleanup);xrtValueRelease(Ignored);}return Ok;
 }

@@ -8,6 +8,7 @@ void MdoExtensionTasksUnit(void);
 xvalue* MdoExtensionTasksList(char Error[512]);
 xvalue* MdoExtensionTaskRead(cstr Id,char Error[512]);
 bool MdoExtensionTaskBegin(const xvalue* Input,xvalue** Result,char Error[512]);
+bool MdoExtensionTaskPack(cstr Kind,cstr DirectoryId,xcancel* Cancel,xvalue** Result,char Error[512]);
 bool MdoExtensionTaskWrite(cstr Id,uint64 Offset,const void* Data,size_t Bytes,xvalue** Result,char Error[512]);
 bool MdoExtensionTaskSeal(cstr Id,xcancel* Cancel,xvalue** Result,char Error[512]);
 bool MdoExtensionTaskCancel(cstr Id,xvalue** Result,char Error[512]);

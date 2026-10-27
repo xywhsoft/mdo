@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CONTRACT = r'''
 static void QaFlag(xvalue* R,cstr K,bool V){xrtValueObjectSetNew(R,xrtStrView(K),xrtValueBool(V));}
 xvalue* QaProductContract(const xvalue* P,xvfs V){
- xvalue* R=xrtValueObject();char Error[512]={0},Hash[65],Old[65];bool Home=QaProductHome(SdkField(P,"root"),SdkField(P,"app"),V);bool Ok=Home&&MdoExtensionsInit();
+ xvalue* R=xrtValueObject();char Error[512]={0},Hash[65],Old[65];bool Home=QaProductHome(SdkField(P,"root"),SdkField(P,"app"),V);bool Ok=Home&&MdoExtensionsInit()&&MdoExtensionTasksInit();
  xvalue* Manifest=SdkParse("{\"kind\":\"tools\",\"name\":\"Local C tool\",\"alias\":\"qa-tool\",\"entry\":\"src/tool.c\",\"platforms\":[\"any\"]}"),*Out=NULL;
  bool Unapproved=!MdoExtensionsCreate("tools","qa-local",Manifest,"// source\n",10,false,&Out,Error);xrtValueRelease(Out);Out=NULL;QaFlag(R,"code_approval",Unapproved);
  Ok=Ok&&MdoExtensionsCreate("tools","qa-local",Manifest,"// source\n",10,true,&Out,Error);xrtValueRelease(Out);Out=NULL;QaFlag(R,"atomic_creation",Ok);
@@ -42,7 +42,7 @@ xvalue* QaProductContract(const xvalue* P,xvfs V){
  xvalue* Warnings=xrtValueArray();bool Warning=MdoExtensionsWarnings(Warnings)&&xrtValueCount(Warnings)==1&&!strcmp(SdkField(xrtValueArrayGet(Warnings,0),"code"),"uninstall_changed");QaFlag(R,"deferred_problem_joins_common_warning",Warning);xrtValueRelease(Warnings);
  bool Cancel=mdoCall(&C,"extension.cancel_remove",Request,&Out,&E)==MDO_RESULT_OK&&!MdoExtOpBool(Out,"pending_remove",false);xrtValueRelease(Out);Out=NULL;QaFlag(R,"pending_uninstall_can_be_cancelled",Cancel);
  MdoExtensionsFingerprint("skills","sdk-local",Hash,NULL,Error);SdkPut(Request,"expected_revision",Hash);QaFlag(R,"sdk_directory_removed",mdoCall(&C,"extension.remove",Request,&Out,&E)==MDO_RESULT_OK&&MdoExtOpBool(Out,"removed",false));xrtValueRelease(Out);xrtValueRelease(Request);
- SdkPut(R,"error",Error);MdoExtensionsUnit();if(Home)MdoHomeUnit();return R;
+ SdkPut(R,"error",Error);MdoExtensionTasksUnit();MdoExtensionsUnit();if(Home)MdoHomeUnit();return R;
 }
 '''
 
