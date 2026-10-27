@@ -44,6 +44,7 @@ static xvalue* MdoExtArchiveInfo(const xvalue* Task){
  xvalue* Out=xrtValueClone(Task);cstr Id=MdoExtensionText(Task,"id",32);char* Path=MdoExtArchivePath(Id,"archive.zip");bool Exists=false;xfileinfo Info;bool Ok=Out&&MdoExtArchiveStat(Path,&Exists,&Info);xrtFree(Path);
  if(Ok&&!Exists){Path=MdoExtArchivePath(Id,"archive.part");Ok=MdoExtArchiveStat(Path,&Exists,&Info);xrtFree(Path);}uint64 Received=Exists?Info.Size:0;const cstr State=MdoExtensionText(Task,"state",24);if(State&&!strcmp(State,"complete"))MdoExtArchiveNumber(Task,"bytes",&Received);
  if(Ok)Ok=(!Exists||Info.Type==XFILE_TYPE_FILE)&&xrtValueObjectSetNew(Out,XRT_STR_LITERAL("stored_bytes"),xrtValueUInt(Exists?Info.Size:0))&&xrtValueObjectSetNew(Out,XRT_STR_LITERAL("received"),xrtValueUInt(Received));
+ if(Ok)Ok=xrtValueObjectSetNew(Out,XRT_STR_LITERAL("active"),xrtValueBool(MdoExtArchiveUse(Id)!=NULL));
  if(Ok&&!MdoExtArchiveLive(Task)){MdoExtArchivePut(Out,"state","expired");MdoExtArchivePut(Out,"error","Archive task expired");}
  if(!Ok){xrtValueRelease(Out);return NULL;}return Out;
 }
@@ -102,6 +103,13 @@ bool MdoExtensionTaskOrigin(MdoExtensionTaskUse* Use,const xvalue* Origin,char E
  for(size_t I=0;I<xrtValueCount(Origin);I++){xstrview Key={0};xrtValueObjectAt(Origin,I,&Key);bool Known=false;for(size_t J=0;J<sizeof(Fields)/sizeof(*Fields);J++)if(xrtStrEqual(Key,xrtStrView(Fields[J])))Known=true;if(!Known)return MdoExtArchiveError(Error,"Unexpected field in verified store origin");}
  xrtMutexLock(MdoExtArchiveTasksLock);xvalue* Task=MdoExtArchiveLoad(Use->Id,Error);cstr State=MdoExtensionText(Task,"state",24);bool Ok=Task&&MdoExtArchiveUse(Use->Id)==Use&&State&&!strcmp(State,"receiving")&&!xrtCancelRequested(Use->Cancel)&&!strcmp(Kind,MdoExtensionText(Task,"kind",32))&&!strcmp(Hash,MdoExtensionText(Task,"sha256",64))&&xrtValueObjectSet(Task,XRT_STR_LITERAL("store"),Origin)&&MdoExtArchivePut(Task,"directory_id",Id)&&MdoExtArchiveSave(Task);
  xrtValueRelease(Task);xrtMutexUnlock(MdoExtArchiveTasksLock);return Ok||MdoExtArchiveError(Error,"Archive transfer changed before its store origin could be recorded");
+}
+bool MdoExtensionTaskPublication(MdoExtensionTaskUse* Use,const xvalue* Request,char Error[512]){
+ if(!Use||!Request)return MdoExtArchiveError(Error,"Missing publication request");char* Text=xrtJsonStringify(Request,false,NULL);bool Valid=Text&&strlen(Text)<=12000;const cstr Allowed[]={"action","upload","nonce","proof_upload","publish","review_notes","source_url","source_included","work","expected_revision"};
+ for(size_t I=0;Valid&&I<xrtValueCount(Request);I++){xstrview Key={0};xrtValueObjectAt(Request,I,&Key);bool Known=false;for(size_t J=0;J<sizeof(Allowed)/sizeof(*Allowed);J++)if(xrtStrEqual(Key,xrtStrView(Allowed[J])))Known=true;Valid=Known;}
+ xrtMutexLock(MdoExtArchiveTasksLock);xvalue* Task=Valid?MdoExtArchiveLoad(Use->Id,Error):NULL;const xvalue* Previous=xrtValueObjectGet(Task,XRT_STR_LITERAL("publication"));char* Prior=Previous?xrtJsonStringify(Previous,false,NULL):NULL;
+ cstr State=MdoExtensionText(Task,"state",24);bool Ok=Task&&MdoExtArchiveUse(Use->Id)==Use&&State&&!strcmp(State,"ready")&&!xrtCancelRequested(Use->Cancel)&&(!Previous||(Prior&&!strcmp(Prior,Text)))&&xrtValueObjectSet(Task,XRT_STR_LITERAL("publication"),Request)&&MdoExtArchiveSave(Task);
+ xrtFree(Text);xrtFree(Prior);xrtValueRelease(Task);xrtMutexUnlock(MdoExtArchiveTasksLock);return Ok||MdoExtArchiveError(Error,"A retried publication must keep its original review metadata; cancel and repack to change it");
 }
 bool MdoExtensionTaskTransfer(MdoExtensionTaskUse* Use,uint64 Sent,cstr Phase,char Error[512]){
  if(!Use||!Phase||(strcmp(Phase,"uploading")&&strcmp(Phase,"submitting")))return MdoExtArchiveError(Error,"Invalid archive transfer phase");

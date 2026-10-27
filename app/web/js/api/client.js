@@ -258,7 +258,17 @@ export async function uploadBackupChunk(id, offset, chunk, options = {}) {
   if (!/^[0-9a-f]{32}$/.test(id) || !Number.isSafeInteger(offset) || offset < 0 ||
       !(chunk instanceof Uint8Array) || !chunk.byteLength || chunk.byteLength > 262144)
     throw new TypeError("Invalid backup chunk");
-  const path = `/session-backups/uploads/${id}/chunks/${offset}`;
+  return uploadBinaryChunk(`/session-backups/uploads/${id}/chunks/${offset}`, chunk, options);
+}
+
+export async function uploadExtensionChunk(id, offset, chunk, options = {}) {
+  if (!/^[A-Za-z0-9_-]{32}$/.test(id) || !Number.isSafeInteger(offset) || offset < 0 ||
+      !(chunk instanceof Uint8Array) || !chunk.byteLength || chunk.byteLength > 1048576)
+    throw new TypeError("Invalid extension archive chunk");
+  return uploadBinaryChunk(`/extension-tasks/${id}/chunks/${offset}`, chunk, options);
+}
+
+async function uploadBinaryChunk(path, chunk, options) {
   checkSignal(options.signal);
   checkWrite(path, { method: "PUT" });
   return trackWrite(() => withSignal(options.signal, async () => {
@@ -273,7 +283,7 @@ export async function uploadBackupChunk(id, offset, chunk, options = {}) {
       if (error?.name === "AbortError") throw error;
       if (error?.code) throw new ApiError(error.message, error);
       networkErrorHandler?.();
-      throw new ApiError("Cannot upload backup chunk", { code: "network_error" });
+      throw new ApiError("Cannot upload file chunk", { code: "network_error" });
     }
     return readEnvelope(response, path, "PUT", options.signal);
   }));

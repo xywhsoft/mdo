@@ -171,10 +171,12 @@ bool MdoApplicationRouteInvoke(const mdo_sdk_context_v1* C,const MdoApplicationR
     if(strcmp(Route->Method,"GET")){if(Caller&&Caller->WriteToken[0])snprintf(Token,sizeof(Token),"%s",Caller->WriteToken);else Ok=Ok&&MdoApiWriteToken(Token);Headers[Count++]=(XS_FetchHeader){"X-Mdo-Write-Token",Token};}
     if(Revision)Headers[Count++]=(XS_FetchHeader){"If-Match",Revision};
     if(Json)Headers[Count++]=(XS_FetchHeader){"Content-Type","application/json"};
+    else if(ArchiveRoute&&Binary)Headers[Count++]=(XS_FetchHeader){"Content-Type","application/octet-stream"};
     MdoRemoteHttpRequest Request={0};Request.Method=Route->Method;Request.Target=Target;Request.Headers=Headers;Request.HeaderCount=Count;
     Request.Body=(xbytesview){Binary?Binary:(const unsigned char*)Json,Binary?BinarySize:Json?strlen(Json):0};
     MdoApplicationInvocation* I=C->Opaque;SdkResponse Reply={0};MdoRemoteHttpSink Sink={SdkResponseHead,SdkResponseBody,&Reply};
     xvalue* NativeHeaders=Fields?xrtValueClone(Fields):xrtValueObject();if(Revision)SdkPut(NativeHeaders,"If-Match",Revision);
+    if(ArchiveRoute&&Binary)SdkPut(NativeHeaders,"Content-Type","application/octet-stream");
     MdoApplicationResponse Captured={0};
     bool Native=Ok&&MdoApiApplicationInvoke(C,Route->Method,Target,Body,NativeHeaders,
         (xbytesview){Binary,BinarySize},&Captured,E);

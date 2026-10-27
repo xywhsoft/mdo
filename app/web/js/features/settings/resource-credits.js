@@ -1,7 +1,7 @@
 import { browserText, detailFacts } from "../../components/extension-browser.js";
 
-export const storeResource = (item, receipt) => item?.store_managed === true || Boolean(receipt && receipt.source !== "local");
-export const customizableResource = (item, receipt) => !item?.plugin_owned && item?.management_known !== false && !storeResource(item, receipt);
+export const storeResource = (item, receipt) => item?.store_managed === true || item?.source === "store" || receipt?.source === "store";
+export const customizableResource = (item, receipt) => !item?.plugin_owned && item?.management_known !== false && item?.editable !== false && (!item?.source || item.source === "manual") && !storeResource(item, receipt);
 export const storeReadOnlyMessage = () => browserText("storeReadOnly", "商店安装的资源仅支持启停、更新和卸载；不能编辑、复制或再次分享。");
 export function resourceCredits(item = {}, receipt = null) {
   const manifest = item.plugin_owned ? item.plugin || {} : receipt?.manifest || {}, managed = storeResource(item, receipt);

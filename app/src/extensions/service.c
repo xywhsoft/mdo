@@ -106,6 +106,7 @@ bool MdoExtensionServicePublish(const xvalue* Input,xcancel* Cancel,xvalue** Res
  xvalue* Body=xrtValueObject();const cstr Fields[]={"publish","review_notes","source_url","source_included","work","expected_revision"};
  for(size_t I=0;Body&&I<sizeof(Fields)/sizeof(*Fields);I++){const xvalue* Value=xrtValueObjectGet(Input,xrtStrView(Fields[I]));if(Value&&!xrtValueObjectSet(Body,xrtStrView(Fields[I]),Value)){xrtValueRelease(Body);Body=NULL;break;}}
  Ok=Ok&&Body&&MdoExtServicePut(Body,"action","submit")&&MdoExtServicePut(Body,"upload",Id)&&MdoExtServicePut(Body,"nonce",Id)&&(!Proof||MdoExtServicePut(Body,"proof_upload",Proof));
+ if(Ok)Ok=MdoExtensionTaskPublication(Use,Body,Error);
  MdoAccountLease ProofLease={0};if(Ok&&Proof)Ok=MdoExtServiceLease(MdoExtensionTaskUseCancel(ProofUse),true,&ProofLease,Error)&&ProofLease.Generation==Lease.Generation&&ProofLease.MemberId==Lease.MemberId;
  if(Ok)Ok=MdoExtServiceUpload(Id,Use,&Lease,Error)&&(!Proof||MdoExtServiceUpload(Proof,ProofUse,&ProofLease,Error));
  if(Ok)*Result=MdoExtServiceJson(MDO_EXT_SERVICE "/creator","POST",Body,&Lease,Cancel,Error);Ok=Ok&&*Result;

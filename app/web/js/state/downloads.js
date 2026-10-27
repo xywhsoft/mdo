@@ -26,6 +26,16 @@ export function createDownloadRegistry(storage = null) {
   const list = target => [...records.values()].filter(r => r.target === target && !r.hidden).sort((a, b) => b.started - a.started);
   function observe(path, data, target = "local") {
     if (!data || typeof data !== "object") return;
+    if (path === "/extension-tasks" || path.startsWith("/extension-tasks/")) {
+      for (const task of Array.isArray(data) ? data : [data]) {
+        if (!/^[A-Za-z0-9_-]{32}$/.test(task.id || "") || !task.state) continue;
+        const state = task.state === "receiving" ? task.store ? "downloading" : "uploading" : task.state === "cancel_requested" ? "cancelling" : task.state === "ready" && task.active ? task.phase || "running" : task.state;
+        put(`${target}:archive:${task.id}`, { target, source: "archive", taskId: task.id, action: task.purpose, kind: task.kind, directoryId: task.directory_id,
+          name: task.name || task.alias || task.directory_id || task.id, state: state === "submitting" ? "uploading" : state,
+          done: task.phase === "uploading" || task.phase === "submitting" ? task.sent || 0 : task.received || 0, total: task.bytes || 0,
+          error: String(task.error || "").slice(0, 1000), store: task.store || null, publication: task.publication || null });
+      }
+    }
     if (path === "/cli-tools" && Array.isArray(data.tasks)) {
       const live = new Set();
       for (const task of data.tasks) {
@@ -73,6 +83,7 @@ export function createDownloadRegistry(storage = null) {
     catch (error) { put(key, { state: !error?.status || error?.name === "AbortError" ? "unknown" : "failed", error: String(error?.message || "").slice(0, 1000) }); throw error; }
   }
   return { list, observe, run, subscribe(fn) { listeners.add(fn); fn(); return () => listeners.delete(fn); },
+    hide(key) { const row=records.get(key);if(row){records.set(key,{...row,hidden:true});publish();} },
     clear(target) { for (const row of records.values()) if (row.target === target && !downloadActive(row) && row.state !== "ready") records.set(row.key, { ...row, hidden: true }); publish(); } };
 }
 let storage = null; try { storage = globalThis.sessionStorage; } catch {}

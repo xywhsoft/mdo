@@ -423,7 +423,7 @@ bool MdoExtensionsInstall(cstr Kind,cstr Id,cstr Archive,const xvalue* Credits,b
         cstr OldSource=MdoExtensionText(Old,"source",16);if(OldSource&&!strcmp(OldSource,"store")&&strcmp(Source,"store"))Ok=false;
         Record=xrtValueObject();Ok=Ok&&State&&xrtValueType(State)==XVALUE_OBJECT&&Record&&MdoExtPut(Record,"source",Source)&&MdoExtPut(Record,"sha256",Digest)&&MdoExtPut(Record,"directory_digest",DirectoryDigest)&&MdoExtPut(Record,"kind",Kind)&&MdoExtPut(Record,"id",Id)&&
             xrtValueObjectSetNew(Record,XRT_STR_LITERAL("enabled"),xrtValueBool(Enabled));xrtValueRelease(State);xrtFree(Key);
-        const char* const Names[]={"owner","submitter","author","copyright","license","xid"};
+        const char* const Names[]={"owner","submitter","author","copyright","license","xid","version_id","version"};
         for(size_t I=0;Ok&&I<sizeof(Names)/sizeof(*Names);I++){const xvalue* V=xrtValueObjectGet(Credits,xrtStrView(Names[I]));if(V)Ok=xrtValueObjectSet(Record,xrtStrView(Names[I]),V);}}
     if(Ok)Ok=MdoExtPublish(Kind,Id,Task,false,Record,Cancel,Result,Error);
     if(!Ok&&Base){char* Journal=xrtFormat("%s/transaction.json",Base);bool Exists=false;xfileinfo Info;

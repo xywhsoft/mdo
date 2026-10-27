@@ -1,276 +1,95 @@
-import { isRoleKind, roleSummary, roleDependencies } from "./role-package.js";
 import { createExtensionBrowser, detailTabs, detailFacts, browserText } from "../../components/extension-browser.js";
-import { t } from "../../i18n.js";
 import { api } from "../../api/client.js";
+import { stageExtensionFile } from "../../api/extension-archives.js";
 import { targetState, subscribeTarget } from "../../api/target.js";
 import { element, errorMessage, toast } from "../../utils/dom.js";
-import { makeStorePackage, containsCode, STORE_PLATFORMS, packageFields, resourceReferences } from "./store-formats.js";
-import { renderSourceMarkdown, renderPackageAttachment } from "../../utils/source-markdown.js";
 import { customizableResource, resourceCredits, storeReadOnlyMessage } from "./resource-credits.js";
-import { parseMcpTemplate, mcpVariantInputs, mcpTemplateSummary } from "./mcp-template.js";
 import { openLayer } from "../../components/layers.js";
+import { renderSourceMarkdown } from "../../utils/source-markdown.js";
 
-const node = (tag, text, className) => element(tag, { text, className });
+const names = { agents:"Agent", subagents:"SubAgent", tools:"Agent 工具", mcp:"MCP 服务", skills:"Skill", commands:"编辑器命令", "external-tools":"外部工具", knowledge:"知识库", plugins:"插件" };
+const text = (tag, value, className = "") => element(tag, { text: value, className });
 const device = () => targetState().selected?.id || "local";
-const button = (text, action, primary = false) => {
-  const b = element("button", { text, className: primary ? "primary-button" : "secondary-button", attrs: { type: "button" } });
-  b.addEventListener("click", () => { void action(); }); return b;
-};
-export const singleResource = (row, kind) => {
-  const refs = resourceReferences(row);
-  return refs.length === 1 && refs[0].kind === kind;
-};
+const button = (label, action, primary = false) => { const b=element("button", {text:label,className:primary?"primary-button":"secondary-button",attrs:{type:"button"}});b.addEventListener("click",()=>{void Promise.resolve().then(action).catch(e=>toast(errorMessage(e),"error"));});return b; };
+export const singleResource = (row, kind) => (row?.kind || row?.manifest?.kind) === kind;
 
-// Each instance is bound to one resource type and one selected device. There
-// is deliberately no resource multi-select in this publication flow.
-export function createSingleResourceStore(kind, onChange, onBrowse = () => {}, onManage = null) {
-  if (!["agents", "subagents", "skills", "tools", "commands", "mcp", "knowledge", "plugins"].includes(kind)) throw Error("Unsupported resource store");
-  const name = ({ agents: "Agent", subagents: "SubAgent", skills: "Skill", tools: "Agent 工具", commands: "编辑器命令", mcp: "MCP 服务", knowledge: "知识库", plugins: "插件" })[kind];
-  const root = node("div", "", "single-resource-store"), statusRoot = element("p", { className: "extension-help", attrs: { role: "status" } });
-  let visible = false, disposed = false, epoch = 0, controller = null, activeTarget = device();
-  let items = [], installed = {}, cursor = 0, query = "", catalogQuery = "", busy = false, error = "", status = "";
-  let dialog = null, dirty = false, saving = false, loginRequired = false;
-  let mcpFilters={},appliedMcpFilters={},moreFilters=false;
-  let backgroundWrite = null, detailSerial = 0, detailController = null, stateFilter = "all";
-  const browser = createExtensionBrowser({ kind, onClose: () => { ++detailSerial; detailController?.abort(); } });
-  const call = async (body, signal = controller?.signal, download) => (await api.post("/ecosystem", { ...body, single_kind: kind }, { signal, download })).data;
-  const current = (id, target) => !disposed && epoch === id && device() === target;
-  function close(force = false) {
-    if (!dialog) return true;
-    if (!force && (saving || (dirty && !confirm("放弃未提交的作品信息？")))) return false;
-    dialog.dispose({ restoreFocus: true }); return true;
+// All types share real directory archives. No resource bodies or files are
+// reconstructed from catalog JSON; text previews request one selected file.
+export function createSingleResourceStore(kind, onChange, onBrowse=()=>{}, onManage=null) {
+  if (!names[kind]) throw Error("Unsupported extension type");
+  const root=text("div","","single-resource-store"),statusRoot=element("p",{className:"extension-help",attrs:{role:"status"}});
+  const browser=createExtensionBrowser({kind,onClose:()=>{++detailEpoch;detailAbort?.abort();}});
+  let items=[],installed={},query="",applied="",state="all",total=0,epoch=0,detailEpoch=0,controller=null,detailAbort=null,dialog=null,busy=false,saving=false,dirty=false,visible=false,disposed=false,activeTarget=device();
+  const live=(n,target)=>!disposed&&n===epoch&&target===device();
+  const call=async(body,signal=controller?.signal)=>(await api.post("/ecosystem",{kind,...body},{signal})).data;
+  const owned=row=>Object.values(installed).find(local=>local.kind===kind&&local.id===row.xid&&local.source==="store");
+  function report(error){statusRoot.textContent=errorMessage(error);statusRoot.className="extension-error";}
+  function close(force=false){if(!dialog)return true;if(!force&&(saving||dirty&&!confirm("放弃未提交的信息？")))return false;dialog.dispose();dialog=null;dirty=saving=false;return true;}
+  function modal(title){if(!close())return null;const view=openLayer({title,icon:kind==="skills"?"spark":"folder",width:"48rem",height:"80%",beforeClose:()=>!saving&&(!dirty||confirm("放弃未提交的信息？")),onClosed(){if(dialog===view){dialog=null;dirty=saving=false;}}});dialog=view;return view;}
+  async function load(append=false){
+    if(busy||disposed)return;const n=++epoch,target=device();controller?.abort();controller=new AbortController();busy=true;render();
+    try{const q=append?applied:query;const [data,local]=await Promise.all([call({action:"catalog",q,offset:append?items.length:0,limit:100}),api.get("/ecosystem",{signal:controller.signal})]);if(!live(n,target))return;
+      items=append?[...new Map([...items,...data.items].map(row=>[row.version_id,row])).values()]:data.items;total=data.total;installed=local.data;applied=q;statusRoot.textContent="";
+    }catch(e){if(live(n,target)&&e.name!=="AbortError")report(e);}finally{if(live(n,target)){busy=false;render();}}
   }
-  function modal(title) {
-    if (!close()) return null;
-    const view = openLayer({ title, icon: kind === "skills" ? "spark" : "terminal", width: "48rem", height: "80%",
-      beforeClose: () => !saving && (!dirty || confirm("放弃未提交的作品信息？")),
-      onClosed() { if (dialog === view) { dialog = null; dirty = saving = false; } } });
-    dialog = view; view.element.classList.add("extension-authoring"); return view;
-  }
-  function report(e) {
-    loginRequired = e.status === 401;
-    error = loginRequired ? "请先在账户页登录，再发布或管理作品。" : errorMessage(e);
-  }
-  async function load(append = false) {
-    if (busy || disposed) return;
-    const id = ++epoch, target = device(), requestQuery = append ? catalogQuery : query; controller?.abort(); controller = new AbortController();
-    busy = true; error = ""; render();
-    try {
-      const [data, local] = await Promise.all([call({ action: "catalog", query: requestQuery, before: append ? cursor : 0, ...(append?appliedMcpFilters:mcpFilters) }), api.get("/ecosystem", { signal: controller.signal })]);
-      if (!current(id, target)) return;
-      items = append ? [...new Map([...items, ...data.items].map(row => [row.id, row])).values()] : data.items; installed = local.data; cursor = data.next_before || 0; catalogQuery = requestQuery;if(!append)appliedMcpFilters={...mcpFilters};
-    } catch (e) { if (current(id, target) && e.name !== "AbortError") report(e); }
-    finally { if (current(id, target)) { busy = false; render(); } }
-  }
-  async function operate(label, work, background = false) {
-    if (busy || disposed) return;
-    const id = ++epoch, target = device(); controller?.abort(); controller = new AbortController();
-    if(background)backgroundWrite=id;busy = true; error = ""; status = `${label}…`; render();
-    try {
-      await work(); if (!current(id, target)) return;
-      status = `${label}完成`; onChange(); busy = false; await load();
-    } catch (e) { if (current(id, target) && e.name !== "AbortError") { report(e); status = `${label}未完成，请刷新核对状态后重试。`; } }
-    finally { if(backgroundWrite===id)backgroundWrite=null;if (current(id, target)) { busy = false; render(); } }
-  }
-  const owned = row => Object.values(installed).find(r => r.source !== "local" && r.owner === row.owner && r.slug === row.slug);
-  function render() {
-    browser.rememberFocus();
-    const search = element("form", { className: "store-search eb-toolbar" });
-    const input = element("input", { attrs: { type: "search", maxlength: "100", placeholder: `搜索${name}、作者或用途`, "aria-label": `搜索${name}` } }); input.value = query;
-    input.addEventListener("input", () => { query = input.value; });
-    const filter = element("select", { attrs: { "aria-label": browserText("status", "状态") } });
-    for (const [value, text] of [["all", browserText("all", "全部状态")], ["installed", browserText("installed", "已安装")], ["updates", browserText("updates", "可更新")], ["new", browserText("notInstalled", "未安装")]]) filter.append(element("option", { text, attrs: { value } }));
-    filter.value = stateFilter; filter.addEventListener("change", () => { stateFilter = filter.value; render(); });
-    search.append(input, filter, element("button", { text: "搜索", className: "secondary-button", attrs: { type: "submit" } }), button("刷新", () => load()));
-    const advanced=node("div","","eb-toolbar");advanced.hidden=!moreFilters;
-    if(kind==="mcp"){search.append(button("更多选项",()=>{moreFilters=!moreFilters;render();}));for(const [key,title,entries]of [["mcp_transport","连接方式",[["","全部连接方式"],["streamable-http","远程 HTTP"],["stdio","本机 stdio"]]],["mcp_auth","鉴权方式",[["","全部鉴权"],["none","无需授权"],["key","密钥 / 环境变量"],["oauth","OAuth"]]],["mcp_platform","平台",[["","全部平台"],["windows-x86_64","Windows"],["linux-x86_64","Linux"],["android-arm64-v8a","Android"]]]]){const select=element("select",{attrs:{"aria-label":title}});for(const [value,text]of entries)select.append(element("option",{text,attrs:{value}}));select.value=mcpFilters[key]||"";select.addEventListener("change",()=>{mcpFilters[key]=select.value;});advanced.append(select);}advanced.append(button("应用筛选",()=>load()));}
-    search.addEventListener("submit", e => { e.preventDefault(); query = input.value.trim(); void load(); });
-    const rows = items.filter(row => stateFilter === "all" || (stateFilter === "installed" ? Boolean(owned(row)) : stateFilter === "updates" ? owned(row) && owned(row).id !== row.id : !owned(row))).map(row => {
-      const receipt = owned(row), same = receipt?.id === row.id;
-      const primary = button(same ? browserText("manage", "管理") : receipt ? browserText("update", "更新") : browserText("install", "安装"), () => same && onManage ? onManage(receipt) : detail(row), !same);
-      primary.disabled = busy;
-      const credits=resourceCredits({...row,store_managed:true});
-      return { key: String(row.id), kind, title: row.name, byline:credits.submitter, description: row.description, meta:kind==="mcp"?[...credits.meta,row.mcp_operator,row.mcp_transport?.replaceAll(","," "),row.mcp_auth?.replaceAll(","," ")]:credits.meta, badge: { text: same ? browserText("installed", "已安装") : receipt ? browserText("updates", "可更新") : "" }, primary, onSelect: () => loadDetail(row) };
+  function render(){
+    browser.rememberFocus();const form=element("form",{className:"store-search eb-toolbar"}),input=element("input",{attrs:{type:"search",maxlength:"240",placeholder:`搜索${names[kind]}、作者或用途`,"aria-label":`搜索${names[kind]}`}});input.value=query;input.addEventListener("input",()=>{query=input.value;});
+    const select=element("select",{attrs:{"aria-label":"状态"}});for(const [value,label]of [["all","全部状态"],["installed","已安装"],["updates","可更新"],["new","未安装"]])select.append(element("option",{text:label,attrs:{value}}));select.value=state;select.addEventListener("change",()=>{state=select.value;render();});
+    form.append(input,select,element("button",{text:"搜索",className:"secondary-button",attrs:{type:"submit"}}),button("刷新",()=>load()));form.addEventListener("submit",e=>{e.preventDefault();query=input.value.trim();void load();});for(const b of form.querySelectorAll("button"))b.disabled=busy;
+    const rows=items.filter(row=>{const local=owned(row),same=local?.installation?.version_id===row.version_id;return state==="all"||state==="installed"&&local||state==="updates"&&local&&!same||state==="new"&&!local;}).map(row=>{
+      const local=owned(row),same=local?.installation?.version_id===row.version_id,credits=resourceCredits({...row,source:"store"});const primary=button(same?"管理":local?"更新":"安装",()=>same&&onManage?onManage(local):detail(row));primary.disabled=busy;
+      return {key:row.version_id,kind,title:row.name,byline:credits.submitter,description:row.description,meta:credits.meta,badge:{text:same?"已安装":local?"可更新":""},primary,onSelect:()=>loadDetail(row)};
     });
-    browser.setItems(rows, { busy, pageKey:JSON.stringify([catalogQuery,stateFilter]), onNext: cursor ? () => { void load(true); } : null, empty: items.length ? browserText("empty", "没有匹配的扩展") : `暂无公开${name}。可从本机列表分享你的作品。` });
-    root.replaceChildren(search, ...(kind==="mcp"?[advanced]:[]), node("p", isRoleKind(kind) ? "配置式与 C 角色使用相同开发接口；安装前查看依赖、权限、源码及文件计划。" : kind === "knowledge" ? "文档按需检索，可选择注入检索提示。" : kind === "mcp" ? "安装服务模板后创建连接；账号与密钥只保存在服务所属设备。" : kind === "skills" ? "按需读取 Skill，包含说明与参考文件。" : kind === "commands" ? "输入 / 选择命令并传递参数；C 代码在调用时编译运行，安装前请检查源码并确认信任。" : kind === "plugins" ? "插件可以覆盖应用文件并选择加载代码；安装后请在本机列表检查兼容关系并启用。" : "C 工具在本机执行；安装前请检查源码并确认信任。", "extension-help"), browser.root);
-    statusRoot.textContent = error || (busy ? status || "正在载入…" : status); statusRoot.hidden = !statusRoot.textContent; statusRoot.className = error ? "extension-error" : "extension-help";
-    if (loginRequired) root.append(button("登录账户", () => { location.hash = "#/settings/account"; }));
-    search.querySelectorAll("button").forEach(b => { b.disabled = busy; });
+    browser.setItems(rows,{busy,pageKey:JSON.stringify([applied,state]),onNext:items.length<total?()=>load(true):null,empty:`暂无匹配的${names[kind]}。`});root.replaceChildren(form,browser.root);
   }
-  function detail(row) {
-    onBrowse();
-    if (!items.some(r => r.id === row.id)) items = [row, ...items];
-    stateFilter = "all"; render(); browser.open(String(row.id));
+  function detail(row){onBrowse();if(!items.some(r=>r.version_id===row.version_id))items.unshift(row);state="all";render();browser.open(row.version_id);}
+  async function filesView(row,host,signal,valid){
+    let offset=0;const more=button("更多文件",()=>next()),list=text("div","");host.replaceChildren(list,more);
+    async function next(){more.disabled=true;try{const page=await call({action:"files",version_id:row.version_id,offset,limit:50},signal);if(!valid())return;
+      for(const f of page.items){const line=text("div","","eb-toolbar"),label=`${f.path}${f.directory?"/":""} · ${f.bytes} B`;line.append(f.directory?text("span",label):button(label,async()=>{const file=await call({action:"preview",version_id:row.version_id,path:f.path},signal);if(!valid())return;const v=modal(f.path);if(!v)return;v.body.append(file.binary?text("p","此文件为二进制或超过文本预览上限，请通过 ZIP 下载检查。"):text("pre",file.text,"store-source"));v.footer.append(button("关闭",()=>v.close()));}));list.append(line);}
+      offset+=page.items.length;more.hidden=offset>=page.total;
+    }catch(e){if(valid()&&e.name!=="AbortError")host.append(text("p",errorMessage(e),"extension-error"));}finally{more.disabled=false;}}
+    await next();
   }
-  async function loadDetail(row) {
-    const id = ++detailSerial, target = device(), key = String(row.id);
-    detailController?.abort(); detailController = new AbortController();
-    const signal = detailController.signal;
-    const valid = () => !disposed && device() === target && id === detailSerial && browser.isSelected(key);
-    const read = body => call(body, signal);
-    try {
-      const data = await read({ action: "detail", id: row.id }); if (!valid()) return;
-      const p = data.package;
-      if (!singleResource(p, kind)) throw Error(`作品必须只包含一个${name}`);
-      const credits=resourceCredits({...data,store_managed:true},{...data,manifest:p.manifest});
-      const description = node("div"); description.append(node("p", data.description || row.description),credits.facts(),renderSourceMarkdown(p.manifest.readme));
-      if(kind==="plugins"){
-        const spec=JSON.parse(p.resources[0].content),relations=node("div");
-        relations.append(detailFacts([
-          ["前端入口",spec.entry?.frontend||spec.frontend||"无"], ["原生入口",spec.entry?.native||"无"],
-          ["独占功能",(spec.exclusive||[]).join(" / ")||"无"], ["必需插件",(spec.requires||[]).map(r=>r.id).join(" / ")||"无"],
-          ["明确冲突",(spec.conflicts||[]).map(r=>r.id).join(" / ")||"无"],
-        ]));
-        description.append(relations,node("p","安装保留停用状态，可在本机插件列表检查关系并启用；原生入口变更需要重启生效。","extension-help"));
-      }
-      if (p.manifest.changelog) description.append(node("h4", "更新说明"), renderSourceMarkdown(p.manifest.changelog));
-      const usage = node("div"); usage.append(detailFacts([["作者", credits.author], ["版本", data.version], ["许可", credits.license], ["支持平台", p.manifest.platforms.join(" / ")]]));
-      usage.append(node("p", isRoleKind(kind) ? "角色只能在当前用户授权范围内运行；依赖引用按安装设备的配置解析。" : kind === "knowledge" ? "启用后仅注入可选检索提示，文档按需读取；不会整体注入，也不会执行文档文件。" : kind === "mcp" ? "下载模板不连接或执行服务。创建连接后填写参数；授权独立于 mdo 账号，由所属设备完成。" : kind === "skills" ? `$${p.resources[0].id} · /skill:${p.resources[0].id}` : kind === "commands" ? `/${p.resources[0].id} [参数] · 支持引号分词或 JSON 数组，参数通过 xvalue array 传入 C 命令。` : kind === "plugins" ? "安装后在本机插件页启用和管理；使用插件自己的文件、入口与兼容声明。" : "安装后在 Agent 工具页管理；模型通过结构化参数调用。"));
-      if(isRoleKind(kind)){
-        usage.append(detailFacts(roleSummary(p.resources[0])),node("p",kind==="agents"?"安装并启用后，在对话中选择此 Agent。":"安装并启用后，可由具有委派能力且允许该角色的 Agent 调用。"));
-        for(const dep of roleDependencies(p.resources[0]))usage.append(node("p",`${dep.required?"必需依赖":"可选选择器"} · ${dep.kind}/${dep.id}`));
-      }
-      if(kind==="mcp"){const recipe=parseMcpTemplate(p.resources[0].content), info=mcpTemplateSummary(recipe);usage.append(detailFacts([["服务运营者",recipe.operator||"未提供"],["连接方式",info.transports.join(" / ")],["授权方式",info.authentication.join(" / ")],["主页",recipe.homepage||"未提供"]]));for(const v of recipe.variants){usage.append(node("h4",v.label),node("p",v.requirements||""));for(const i of mcpVariantInputs(recipe,v))usage.append(node("p",`${i.label} · ${i.secret?"设备私密凭据":i.type} · ${i.description}`));}if(recipe.capabilities?.length)usage.append(node("h4","作者声明的能力"),node("p",recipe.capabilities.join("\n")),node("p","实际工具和权限以连接后的实时发现和任务设置为准。"));}
-      const source = node("div"); source.append(node("pre", p.resources[0].content, "store-source"));
-      for (const file of p.resources[0].files || []) source.append(renderPackageAttachment(file, { download: "下载文件", binary: "二进制文件，请下载检查", truncated: "仅显示前 64 KiB，请下载完整文件" }));
-      const history = node("div"); let historyLoaded = false, historyBusy = false, before = 0;
-      const moreHistory = async () => {
-        if (historyBusy || !valid()) return; historyBusy = true;
-        const message = node("p", "正在读取版本…"); history.append(message);
-        try {
-          const h = await read({ action: "history", id: row.id, before }); if (!valid()) return;
-          for (const v of h.items) history.append(node("p", `${v.version} · ${t(`store.state.${v.state}`, {}, v.state)} · ${v.changelog || ""}`));
-          before = h.next_before || 0; historyLoaded = true;
-          if (before) { const more = button("更多版本", () => { more.remove(); void moreHistory(); }); history.append(more); }
-          if (!h.items.length) history.append(node("p", "暂无历史版本"));
-        } catch (e) { if (valid() && e.name !== "AbortError") { history.append(node("p", errorMessage(e), "extension-error")); const retry = button("重试", () => { retry.remove(); void moreHistory(); }); history.append(retry); } }
-        finally { message.remove(); historyBusy = false; }
-      };
-      const tabs = detailTabs([{ id: "description", label: browserText("description", "说明"), content: description }, { id: "usage", label: browserText("usage", "使用方式"), content: usage }, { id: "versions", label: browserText("versions", "版本"), content: history, onSelect: () => { if (!historyLoaded) void moreHistory(); } }, { id: "source", label: browserText("sourceFiles", "源码与文件"), content: source }]);
-      const d = node("div"); d.append(tabs); browser.showDetail(key, d);
-      if (data.state !== "published") return;
-      const plan = await read({ action: "plan", id: row.id }); if (!valid()) return;
-      const preview = node("details"); preview.append(node("summary", "安装计划"));
-      for (const f of plan.files) preview.append(node("p", `${f.operation} · ${f.path} · ${f.bytes} B`)); d.append(preview);
-      for(const dep of plan.dependencies || [])d.append(node("p",`${dep.required?"必需":"可选"} · ${dep.kind}/${dep.id} · ${dep.checked===false?"运行时按选择器解析":dep.available?"已配置":"未配置或未启用"}`,dep.required&&!dep.available?"extension-error":"extension-help"));
-      for(const issue of plan.plugin_issues||[])d.append(node("p",`${issue.id} ${issue.other}：${issue.detail}`,"extension-error"));
-      const ready=plan.can_install!==false;
-      if(!ready)d.append(node("p","请先安装或配置必需依赖，再重新打开此详情。","extension-error"));
-      let trusted = !containsCode(p.resources);
-      const same = owned(row)?.id === row.id;
-      const install = button(same ? "已安装" : owned(row) ? "更新到此版本" : "下载安装", () => {
-        if (!valid() || !trusted || !ready || same || busy) return;
-        browser.closeDetail(); void operate("下载安装", () => call({ action: "install", id: row.id, trust_code: trusted, expected_plan: plan.sha256 }, null, { name: row.name }), true);
-      }, true); install.disabled = same || !trusted || !ready;
-      if (containsCode(p.resources)) {
-        const check = element("input", { attrs: { type: "checkbox" } });
-        check.addEventListener("change", () => { trusted = check.checked; install.disabled = same || !trusted || !ready; });
-        d.append(element("label", { className: "store-code-consent" }, [check, node("span", isRoleKind(kind) ? "我已检查源码并信任作者。C 角色在 mdo 进程内运行，编译注册时也可能执行代码；拥有所声明的 Application SDK 能力。" : kind === "commands" ? "我已检查源码并信任作者。C 命令在调用时由独立工作进程编译运行，可通过 Application SDK 操作 mdo 和本机资源。" : kind === "plugins" ? "我已检查全部文件并信任作者。插件可以覆盖应用文件，JS/C 入口可通过 Application SDK 操作 mdo 和本机资源。" : "我已检查源码并信任作者。C 工具在 mdo 进程内运行，编译注册时也可能执行代码。") ]));
-      }
-      d.append(install);if(same&&kind==="mcp"&&onManage)d.append(button("创建连接",()=>onManage(owned(row))));
-    } catch (e) { if (valid() && e.name !== "AbortError") { const message = node("div"); message.append(node("p", errorMessage(e), "extension-error"), button("重试", () => loadDetail(row))); browser.showDetail(key, message); } }
+  async function loadDetail(row){
+    const n=++detailEpoch,target=device(),key=row.version_id;detailAbort?.abort();detailAbort=new AbortController();const signal=detailAbort.signal,valid=()=>!disposed&&n===detailEpoch&&target===device()&&browser.isSelected(key);
+    try{const data=await call({action:"detail",version_id:key},signal);if(!valid())return;const credits=resourceCredits({...data,source:"store"}),description=text("div","");description.append(text("p",data.description||""),credits.facts(),detailFacts([["别名",data.alias],["支持平台",data.platforms?.join(" / ")],["归档大小",`${data.bytes} B`],["SHA-256",data.sha256]]));
+      if(data.manifest?.readme){const readme=await call({action:"preview",version_id:key,path:data.manifest.readme},signal);if(!valid())return;if(!readme.binary)description.append(renderSourceMarkdown(readme.text));}
+      const files=text("div",""),tabs=detailTabs([{id:"description",label:"说明",content:description},{id:"files",label:"源码与文件",content:files}]);browser.showDetail(key,tabs);void filesView(data,files,signal,valid);
+      let trusted=!["agents","subagents","tools","commands","mcp","plugins","external-tools"].includes(kind);const same=owned(data)?.installation?.version_id===key;
+      const install=button(same?"已安装":"下载并安装",async()=>{if(!valid()||!trusted||busy||same)return;busy=true;install.disabled=true;try{
+        const task=await call({action:"download",version_id:key},signal);if(!valid())return;
+        await api.post(`/extension-tasks/${task.id}/install`,{trust_code:trusted,enabled:kind!=="plugins"},{signal});if(!valid())return;browser.closeDetail();onChange();busy=false;await load();
+      }catch(e){if(valid()&&e.name!=="AbortError")report(e);}finally{busy=false;install.disabled=same||!trusted;}},true);install.disabled=same||!trusted;
+      if(!trusted){const check=element("input",{attrs:{type:"checkbox"}});check.addEventListener("change",()=>{trusted=check.checked;install.disabled=!trusted||same;});description.append(element("label",{className:"store-code-consent"},[check,text("span","我已检查文件并信任作者，允许此扩展在设备上运行。") ]));}
+      browser.setActions(key,install,button("关闭",()=>browser.closeDetail()));
+    }catch(e){if(valid()&&e.name!=="AbortError")browser.showDetail(key,text("p",errorMessage(e),"extension-error"));}
   }
-  async function publish(item, receipt = null) {
-    if (busy || disposed) return;
-    if(!customizableResource(item,receipt)){toast(storeReadOnlyMessage(),"error");return;}
-    const id = epoch, target = device(); controller?.abort(); controller = new AbortController(); busy = true;
-    try {
-      const exported = await call({ action: "export", references: [{ kind, id: item.id, ...(item.project ? { project: item.project } : {}) }] });
-      if (!current(id, target)) return;
-      if (!singleResource(exported, kind)) throw Error("导出结果必须只有一个资源");
-      const previous = singleResource(receipt || {}, kind) ? packageFields(receipt.manifest) : {};
-      if (previous.version?.match(/^\d+\.\d+\.\d+$/)) previous.version = previous.version.replace(/\d+$/, n => String(Number(n) + 1));
-      const d = modal(`分享${name} · ${item.name || item.id}`); if (!d) return;
-      const form = element("form", { className: "store-publish-form" }), fields = {};
-      for (const [key, text, limit, area] of [["name", "作品名称", 100], ["slug", "作品 ID（小写英文，发布后不变）", 64], ["version", "版本（如 1.0.0）", 32], ["description", "简介", 600, true], ["author", "作品作者（可选，与提交者账号不同）", 100], ["copyright", "版权声明（可选，保留原作者归属）", 4096, true], ["readme", "使用说明", 32768, true], ["license", "许可证", 80], ["changelog", "更新说明", 8192, true], ["review_notes", "审核说明：用法、构建与权限（申请公布必填）", 8000, true], ["source_url", "源码或说明链接（HTTPS，可选）", 1000]]) {
-        const control = element(area ? "textarea" : "input", { attrs: { name: key, maxlength: String(limit), required: ["name", "slug", "version", "description", "readme", "license"].includes(key) ? "" : null } });
-        control.value = previous[key] || ({ name: item.name || item.id, slug: `${kind === "agents" ? "agent" : kind === "subagents" ? "subagent" : kind === "skills" ? "skill" : kind === "commands" ? "command" : kind==="mcp"?"mcp":kind==="knowledge"?"knowledge":kind==="plugins"?"plugin":"tool"}-${item.id}`.slice(0, 64), version: kind === "plugins" ? item.version || "1.0.0" : "1.0.0", description: item.description || "", author:item.author||"", copyright:item.copyright||"", license:kind==="knowledge"?(item.license||""):"MIT" })[key] || "";
-        fields[key] = control; form.append(element("label", {}, [node("span", text), control]));
-      }
-      if(isRoleKind(kind)){
-        form.append(node("h3","将要分享的角色与依赖"),detailFacts(roleSummary(exported.resources[0])));
-        for(const dep of roleDependencies(exported.resources[0]))form.append(node("p",`${dep.required?"必需":"可选"} · ${dep.kind}/${dep.id}`));
-        const source=node("details");source.append(node("summary","检查实际上传的配置与源码"),node("pre",JSON.stringify(exported.resources[0],null,2),"store-source"));form.append(source);
-      }
-      let recipeSource=null;
-      if(kind==="mcp"){
-        recipeSource=element("textarea",{className:"extension-source",attrs:{"aria-label":"公开 MCP 服务模板",spellcheck:"false"}});recipeSource.value=exported.resources[0].content;
-        const preview=node("div");form.append(node("h3","公开模板与参数"),node("p","本机地址、参数和授权信息已清空。将通用参数改成公开常量，保留需要安装用户填写的输入。请检查最终上传的全部 JSON。"),recipeSource,button("预览安装表单",()=>{try{const recipe=parseMcpTemplate(recipeSource.value);preview.replaceChildren();for(const v of recipe.variants){preview.append(node("h4",v.label));for(const i of mcpVariantInputs(recipe,v)){const c=element(i.type==="select"?"select":"input",{attrs:{type:i.secret?"password":"text",placeholder:i.secret?"用户在本机填写":i.default||""}});if(i.type==="select")for(const o of i.options||[])c.append(element("option",{text:o}));preview.append(element("label",{},[node("span",`${i.label}${i.required?" · 必填":""}${i.secret?" · 私密":""}`),c,node("small",i.description||"")]));}}}catch(e){preview.replaceChildren(node("p",errorMessage(e),"extension-error"));}}),preview);
-      }
-      const platforms = element("fieldset"), selected = []; platforms.append(node("legend", "支持平台（仅选择已验证的平台）"));
-      for (const value of STORE_PLATFORMS) { const check = element("input", { attrs: { type: "checkbox", value } }); check.checked = previous.platforms?.includes(value) || false; selected.push(check); platforms.append(element("label", { className: "store-choice" }, [check, node("span", value)])); }
-      form.append(platforms, node("p", `仅提交当前${name}及其参考文件。源文件随作品提供审核；请先检查其中的私密信息。配额与管理在创作中心。`, "store-note"));
-      const publicly = element("input", { attrs: { type: "checkbox" } }); publicly.checked = true;
-      form.append(element("label", { className: "store-choice" }, [publicly, node("span", "申请公布（审核后可供其他用户下载；取消则保存为私有作品）")]));
-      form.id = `${d.element.id}-form`;
-      const submit = element("button", { text: "提交作品", className: "primary-button", attrs: { type: "submit", form: form.id } });
-      const cancel = button("取消", () => { void d.close("cancel"); });
-      const message = element("p", { attrs: { role: "status" } }); form.append(message);
-      d.footer.append(submit, cancel);
-      form.addEventListener("input", () => { dirty = true; });
-      form.addEventListener("submit", async e => {
-        e.preventDefault(); if (saving || dialog !== d || d.signal.aborted || !current(id, target)) return;
-        try {
-          const values = Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, v.value.trim()])); values.platforms = selected.filter(c => c.checked).map(c => c.value);
-          if (!/^\d+\.\d+\.\d+$/.test(values.version)) throw Error("请使用 1.0.0 格式的版本号");
-          if (publicly.checked && values.review_notes.length < 10) throw Error("申请公布时请填写至少 10 个字符的审核说明");
-          if (values.source_url && !/^https:\/\//i.test(values.source_url)) throw Error("源码链接须为 HTTPS");
-          if(recipeSource)exported.resources[0].content=JSON.stringify(parseMcpTemplate(recipeSource.value));
-          const p = makeStorePackage(values, exported.resources);
-          saving = true; submit.disabled = cancel.disabled = d.closeButton.disabled = true;
-          message.textContent = "正在上传与提交…"; for (const control of form.elements) control.disabled = true;
-          const result = await call({ action: "submit", package: p, publish: publicly.checked, review_notes: values.review_notes, source_url: values.source_url });
-          if (!current(id, target) || dialog !== d) return;
-          dirty = false; saving = false; status = result.state === "pending" ? "作品已提交审核，审核通过后公开。" : "作品已保存为私有，可在创作中心管理。";
-          close(true); toast(status, "success"); render();
-        } catch (e) { if (current(id, target) && dialog === d) message.textContent = errorMessage(e); }
-        finally { if (dialog === d) { saving = false; submit.disabled = cancel.disabled = d.closeButton.disabled = false; for (const control of form.elements) control.disabled = false; } }
-      });
-      d.body.append(form);
-    } catch (e) { if (current(id, target)) toast(errorMessage(e), "error"); }
-    finally { if (current(id, target)) busy = false; }
+  async function publish(item){
+    if(busy||disposed)return;if(!customizableResource(item)){toast(storeReadOnlyMessage(),"error");return;}
+    const view=modal(`分享${names[kind]} · ${item.name||item.id}`);if(!view)return;const target=device(),form=element("form",{className:"store-publish-form"}),message=text("p","正在读取账号配额…");form.id=`${view.element.id}-publish`;view.body.append(form,message);let task=null,proofTask=null;
+    const add=(label,control)=>{form.append(element("label",{className:"extension-field"},[text("span",label),control]));return control;};
+    const notes=add("审核说明：用途、构建与所需权限",element("textarea",{attrs:{maxlength:"8000"}})),source=add("源码链接（HTTPS，可选）",element("input",{attrs:{maxlength:"2000",type:"url"}})),included=add("ZIP 中包含源码或审核资料",element("input",{attrs:{type:"checkbox"}})),proof=add("审核附件（可选）",element("input",{attrs:{type:"file"}})),publicly=add("申请公布（审核通过后公开）",element("input",{attrs:{type:"checkbox"}})),work=add("作品",element("select"));publicly.checked=true;work.append(element("option",{text:"创建新作品",attrs:{value:""}}));
+    const submit=element("button",{text:"提交作品",className:"primary-button",attrs:{type:"submit",form:form.id}});submit.disabled=true;view.footer.append(submit,button("取消",()=>view.close()));form.addEventListener("input",()=>{dirty=true;});
+    try{const [profile,mine]=await Promise.all([call({action:"profile"},view.signal),call({action:"mine",kind,limit:100},view.signal)]);if(dialog!==view||device()!==target)return;
+      message.textContent=`${profile.works}/${profile.work_limit} 个作品；每版本 ZIP 与审核附件合计最多 ${Math.floor(profile.version_bytes/1048576)} MiB。发布整个扩展目录，请先在本机编辑其名称、描述、作者、许可和版本。`;
+      const unique=new Map(mine.items.map(row=>[row.xid,row]));for(const row of unique.values())work.append(element("option",{text:`更新 ${row.name} · ${row.xid}`,attrs:{value:row.xid,"data-revision":row.work_revision}}));submit.disabled=false;
+    }catch(e){if(dialog===view)message.textContent=errorMessage(e);}
+    form.addEventListener("submit",async e=>{e.preventDefault();if(saving||dialog!==view||device()!==target)return;
+      if(publicly.checked&&(!notes.value.trim()||!included.checked&&!source.value.trim()&&!proof.files[0])){message.textContent="申请公布需要审核说明，以及源码、源码链接或审核附件。";return;}
+      saving=true;view.closeButton.disabled=true;for(const c of form.elements)c.disabled=true;submit.disabled=true;const current=()=>dialog===view&&!view.signal.aborted&&device()===target;
+      try{message.textContent="正在打包完整目录并上传…";if(!task)task=(await api.post(`/extensions/${kind}/${encodeURIComponent(item.id)}/pack`,{}, {signal:view.signal})).data;
+        if(proof.files[0]&&!proofTask)proofTask=await stageExtensionFile(proof.files[0],{purpose:"review",signal:view.signal});
+        const selected=work.selectedOptions[0],result=await call({action:"submit",task:task.id,...(proofTask?{proof_task:proofTask.id}:{}),publish:publicly.checked,review_notes:notes.value.trim(),source_url:source.value.trim(),source_included:included.checked,...(work.value?{work:work.value,expected_revision:Number(selected.dataset.revision)}:{})},view.signal);
+        if(!current())return;dirty=false;saving=false;close(true);toast(result.state==="pending"?"作品已提交审核":"私有作品已保存","success");
+      }catch(e){if(current())message.textContent=`${errorMessage(e)}。归档任务已保留，可重试；也可在下载任务中取消。`;}finally{if(current()){saving=false;view.closeButton.disabled=false;submit.disabled=false;for(const c of form.elements)c.disabled=false;}}
+    });
   }
-  function localActions(receipt) {
-    if (!receipt || !singleResource(receipt, kind)) return [];
-    const controls = [];
-    if (receipt.source !== "local") controls.push(button("检查更新", async () => {
-      if (busy) return; const id = epoch, target = device(); controller?.abort(); controller = new AbortController(); busy = true;
-      try { const latest = await call({ action: "latest", id: receipt.id }); if (!current(id, target)) return; busy = false;
-        if (latest.id === receipt.id) toast("已是最新公开版本"); else await detail(latest);
-      } catch (e) { if (current(id, target)) toast(errorMessage(e), "error"); }
-      finally { if (current(id, target)) busy = false; }
-    }));
-    controls.push(button("卸载商店资源", () => {
-      if (!confirm(kind==="mcp"?"移除此已安装模板的商店记录？已创建的连接保留其选定版本并继续可用。":"卸载此资源？本机修改过的文件会保留为自定义资源。")) return;
-      void operate("卸载", () => call({ action: "uninstall", entry: { id: receipt.id, source: receipt.source || "store", slug: receipt.slug } }));
-    })); return controls;
+  function localActions(receipt){if(receipt?.source!=="store"||receipt.kind!==kind)return[];return[button("检查商店更新",()=>{query=receipt.alias||receipt.name||"";void load();onBrowse();})];}
+  async function importPackage(file){
+    if(!(file instanceof Blob))throw Error("请选择整个扩展目录的 ZIP 文件；JSON 包已停止支持");const view=modal(`导入${names[kind]} ZIP`);if(!view)return;const message=text("p",`${file.name||"extension.zip"} · ${file.size} B`),identity=element("input",{attrs:{maxlength:"96",placeholder:"本机目录名称"}}),trust=element("input",{attrs:{type:"checkbox"}});view.body.append(message,identity,element("label",{},[trust,text("span","我已检查此 ZIP 并信任其内容") ]));
+    const install=button("导入",async()=>{if(saving||!trust.checked)return;if(!/^[A-Za-z0-9_-][A-Za-z0-9._-]{0,95}$/.test(identity.value.trim()))throw Error("请填写有效的本机目录名称");saving=true;install.disabled=true;try{const task=await stageExtensionFile(file,{kind,signal:view.signal});await api.post(`/extension-tasks/${task.id}/install`,{id:identity.value.trim(),trust_code:true,enabled:false},{signal:view.signal});saving=false;close(true);onChange();await load();}catch(e){message.textContent=errorMessage(e);}finally{saving=false;install.disabled=false;}},true);view.footer.append(install,button("取消",()=>view.close()));
   }
-  async function importPackage(p) {
-    if(busy||disposed)return;
-    if(!singleResource(p,kind))throw Error("请选择当前分类的单个作品");
-    const id=epoch,target=device(),d=modal(`导入${name}`);if(!d)return;
-    const message=node("p","正在检查文件和依赖…");d.body.append(message);
-    try{
-      const plan=await call({action:"plan_import",package:p});
-      if(!current(id,target)||dialog!==d)return;
-      message.textContent=p.manifest.name;
-      for(const f of plan.files)d.body.append(node("p",`${f.operation} · ${f.path} · ${f.bytes} B`));
-      for(const dep of plan.dependencies||[])d.body.append(node("p",`${dep.required?"必需":"可选"} · ${dep.kind}/${dep.id} · ${dep.checked===false?"运行时按选择器解析":dep.available?"已配置":"未配置或未启用"}`,dep.required&&!dep.available?"extension-error":"extension-help"));
-      for(const issue of plan.plugin_issues||[])d.body.append(node("p",`${issue.id} ${issue.other}：${issue.detail}`,"extension-error"));
-      let trusted=!containsCode(p.resources);const ready=plan.can_install!==false;
-      const submit=button("导入",()=>{
-        if(!trusted||!ready||dialog!==d)return;close(true);
-        void operate("导入",()=>call({action:"import",package:p,trust_code:trusted,expected_plan:plan.sha256}),true);
-      },true);
-      submit.disabled=!trusted||!ready;
-      if(!trusted){const check=element("input",{attrs:{type:"checkbox"}});check.addEventListener("change",()=>{trusted=check.checked;submit.disabled=!trusted||!ready;});d.body.append(element("label",{},[check,node("span","我已检查源码并信任作者。C 角色在 mdo 进程内运行，编译注册时也可能执行代码。") ]));}
-      if(!ready)d.body.append(node("p","请先配置必需依赖，然后重新导入。","extension-error"));
-      d.footer.append(submit,button("取消",()=>d.close("cancel")));
-    }catch(e){if(current(id,target)&&dialog===d){message.textContent=errorMessage(e);message.className="extension-error";d.footer.append(button("关闭",()=>d.close("cancel")));}}
-  }
-  const unsubscribe = subscribeTarget(() => { if (activeTarget === device()) return; activeTarget = device(); ++epoch; controller?.abort(); browser.reset(); close(true); items = []; installed = {}; cursor = 0; busy = false; error = status = ""; if (visible) void load(); });
-  render();
-  return { root, statusRoot, publish, localActions, importPackage, activate(value) { visible = value; if (!value) browser.closeDetail(false); if (value && !busy) void load(); }, hasPendingChanges: () => Boolean(dialog) || dirty || saving || (busy && backgroundWrite === null),
-    destroy() { disposed = true; ++epoch; controller?.abort(); browser.destroy(); unsubscribe(); close(true); } };
+  const unsubscribe=subscribeTarget(()=>{if(device()===activeTarget)return;activeTarget=device();++epoch;++detailEpoch;controller?.abort();detailAbort?.abort();browser.reset();close(true);items=[];installed={};total=0;busy=false;if(visible)void load();});render();
+  return {root,statusRoot,publish,localActions,importPackage,activate(value){visible=value;if(!value)browser.closeDetail(false);else if(!busy)void load();},hasPendingChanges:()=>Boolean(dialog)||saving,destroy(){disposed=true;++epoch;controller?.abort();detailAbort?.abort();browser.destroy();unsubscribe();close(true);}};
 }

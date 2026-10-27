@@ -5,7 +5,7 @@ import { t } from "../i18n.js";
 
 export const browserText = (key, fallback, args = {}) => t(`extensionBrowser.${key}`, args, fallback);
 const el = (tag, cls, text) => element(tag, { className: cls, ...(text === undefined ? {} : { text }) });
-const icons = { knowledge: "folder", agents: "brain", subagents: "branch", tools: "code", skills: "spark", mcp: "globe", commands: "terminal", modules: "code", plugins: "settings", toolpacks: "terminal" };
+const icons = { knowledge: "folder", agents: "brain", subagents: "branch", tools: "code", skills: "spark", mcp: "globe", commands: "terminal", plugins: "settings", "external-tools": "terminal" };
 let sequence = 0;
 export function extensionIcon(kind) {
   const icon = element("span", { className: "icon", attrs: { "data-icon": icons[kind] || "folder", "aria-hidden": "true" } });
@@ -122,12 +122,13 @@ export function createExtensionBrowser({ kind, onClose } = {}) {
     for (const entry of list.children) entry.classList.toggle("is-selected", entry.dataset.key === key);
     for (const button of list.querySelectorAll(".eb-open")) button.setAttribute("aria-expanded", String(button.dataset.key === key));
     const loading = el("p", "eb-empty", browserText("loading", "正在读取详情…")); loading.setAttribute("role", "status");
-    showDetail(key, row.detail ? row.detail() : loading, { focus }); row.onSelect?.();
+    showDetail(key, row.detail ? row.detail() : loading, { focus });detailLayer?.footer.replaceChildren();row.onSelect?.();
   }
   root.addEventListener("click", event => { for (const menu of root.querySelectorAll(".eb-menu[open]")) if (!menu.contains(event.target)) menu.open = false; });
   root.addEventListener("scroll", event => { for (const menu of root.querySelectorAll(".eb-menu[open]")) if (!menu.contains(event.target)) menu.open = false; }, true);
   const browser = {
     root, open, showDetail, closeDetail,
+    setActions(key, ...actions) { if (selected !== key || !detailLayer) return false;detailLayer.footer.replaceChildren(...actions);return true; },
     rememberFocus() {
       rememberedFocus = list.contains(document.activeElement) ? document.activeElement?.dataset.ebFocus : null;
       const control = pager.contains(document.activeElement) ? document.activeElement : null;

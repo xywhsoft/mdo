@@ -1,142 +1,40 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-
-import { TestElement as Node, descendants, testDocument } from "./helpers/extension-dom.mjs";
-const flush = () => new Promise(r => setImmediate(r));
-const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
-
-test("Skill and Agent tool stores use the shared numbered pager across cursor downloads", async () => {
- const previous=globalThis.document;globalThis.document=testDocument();
- const allItems=Array.from({length:35},(_,i)=>({id:i+1,owner:1,slug:`resource-${i}`,name:`Resource ${i}`,version:"1.0.0"}));
+import { descendants, testDocument } from "./helpers/extension-dom.mjs";
+const flush=async()=>{for(let i=0;i<8;i++)await new Promise(resolve=>setImmediate(resolve));};
+async function loadStore(api, device=()=>({selected:null}), subscribe=()=>()=>{}) {
  const url=new URL("../app/web/js/features/settings/single-resource-store.js",import.meta.url);
- const calls=[];globalThis.__singlePager={api:{get:async()=>({data:{}}),post:async(path,body)=>{
-  calls.push(body);assert.equal(body.action,"catalog");return {data:{items:body.before?allItems.slice(19):allItems.slice(0,20),next_before:body.before?0:16}};
- }},targetState:()=>({selected:null}),subscribeTarget:()=>()=>{}};
- const source=readFileSync(url,"utf8")
-  .replace('import { api } from "../../api/client.js";',"const { api } = globalThis.__singlePager;")
-  .replace('import { targetState, subscribeTarget } from "../../api/target.js";',"const { targetState, subscribeTarget } = globalThis.__singlePager;")
-  .replace(/from "(\.[^"]+)"/g,(_,path)=>`from ${JSON.stringify(new URL(path,url).href)}`);
- try{
-  const {createSingleResourceStore}=await import("data:text/javascript;base64,"+Buffer.from(source).toString("base64"));
-  for(const kind of ["agents","subagents","skills","tools","commands"]){
-   const store=createSingleResourceStore(kind,()=>{});
-   try{
-    assert(!descendants(store.root).some(n=>n.tagName==="A"&&n.textContent==="创作中心"));
-    store.activate(true);await flush();await flush();
-    const pager=()=>store.root.querySelector(".eb-pagination");
-    const page=n=>pager().querySelectorAll("button").find(b=>b.textContent===String(n));
-    assert.equal(pager().querySelector(".eb-page-status").textContent,"已加载 20 条");page(2).click();
-    const search=store.root.querySelector("input");search.value="draft query";search.dispatchEvent(new Event("input"));
-    pager().querySelectorAll("button").find(b=>b.textContent==="下一页").click();await flush();await flush();
-    assert.equal(calls.at(-1).single_kind,kind);assert.equal(calls.at(-1).before,16);assert.equal(calls.at(-1).query,"","a pending search draft must not be combined with the old cursor");
-    assert.equal(store.root.querySelector(".eb-name").textContent,"Resource 20");
-    assert.equal(pager().querySelector(".eb-page-status").textContent,"共 35 条");
-    page(1).click();assert.equal(store.root.querySelector(".eb-name").textContent,"Resource 0");
-    const input=pager().querySelector("input");input.value="4";pager().querySelector("form").dispatchEvent(new Event("submit",{cancelable:true}));
-    assert.equal(store.root.querySelector(".eb-name").textContent,"Resource 30");assert.equal(store.root.querySelectorAll(".eb-row").length,5);
-   }finally{store.destroy();}
-  }
- }finally{delete globalThis.__singlePager;globalThis.document=previous;}
+ globalThis.__zipStore={api,targetState:device,subscribeTarget:subscribe};
+ const source=readFileSync(url,"utf8").replace('import { api } from "../../api/client.js";',"const { api }=globalThis.__zipStore;").replace('import { targetState, subscribeTarget } from "../../api/target.js";',"const { targetState, subscribeTarget }=globalThis.__zipStore;").replace(/from "(\.[^"]+)"/g,(_,path)=>`from ${JSON.stringify(new URL(path,url).href)}`);
+ return import("data:text/javascript;base64,"+Buffer.from(source+`\n// ${Math.random()}`).toString("base64"));
+}
+function environment(){const previous={document:globalThis.document,window:globalThis.window,confirm:globalThis.confirm};globalThis.document=testDocument();globalThis.window=new EventTarget();globalThis.confirm=()=>true;return()=>{Object.assign(globalThis,previous);delete globalThis.__zipStore;};}
+
+test("all nine stores use directory metadata and the shared numbered pager",async()=>{
+ const restore=environment(),calls=[];const rows=Array.from({length:35},(_,i)=>({xid:`work-${i}`,version_id:`version-${i}`,name:`Resource ${i}`,owner:1,alias:`resource-${i}`}));
+ const api={get:async()=>({data:{}}),post:async(path,body)=>{calls.push(body);assert.equal(body.action,"catalog");return{data:{items:rows.slice(body.offset,body.offset+20),total:35}};}};
+ try{const {createSingleResourceStore}=await loadStore(api);for(const kind of ["agents","subagents","tools","mcp","skills","commands","external-tools","knowledge","plugins"]){const store=createSingleResourceStore(kind,()=>{});try{
+   store.activate(true);await flush();const pager=()=>store.root.querySelector(".eb-pagination");const page=n=>pager().querySelectorAll("button").find(b=>b.textContent===String(n));page(2).click();
+   const search=store.root.querySelector("input");search.value="draft query";search.dispatchEvent(new Event("input"));pager().querySelectorAll("button").find(b=>b.textContent==="下一页").click();await flush();
+   assert.equal(calls.at(-1).kind,kind);assert.equal(calls.at(-1).offset,20);assert.equal(calls.at(-1).q,"");assert(!Object.hasOwn(calls.at(-1),"single_kind"));
+   assert.equal(store.root.querySelector(".eb-name").textContent,"Resource 20");assert.equal(pager().querySelector(".eb-page-status").textContent,"共 35 条");
+   const toolbar=store.root.querySelector("form");assert.deepEqual(toolbar.children.map(n=>n.tagName),["INPUT","SELECT","BUTTON","BUTTON"]);
+   assert(!descendants(store.root).some(n=>n.textContent==="创作中心"));
+ }finally{store.destroy();}}}finally{restore();}
 });
 
-test("single-resource sharing retains drafts on connection notifications and cancels stale device work", async t => {
-  const original = { document: globalThis.document, window: globalThis.window, confirm: globalThis.confirm };
-  const body = new Node("body"), listeners = new Set(); let selected = null;
-  globalThis.document = { ...testDocument(), body };
-  globalThis.window = new EventTarget(); globalThis.confirm = () => true;
-  const resource = { kind: "skills", id: "test", content: "---\nname: test\ndescription: Fixture\n---\nRead files." };
-  const calls = []; let exportGate = null, submitGate = null;
-  globalThis.__singleStoreTest = {
-    api: { post: async (path, value, options) => {
-      calls.push({ path, value, options });
-      if (value.action === "export") { if (exportGate) await exportGate.promise; return { data: { resources: [resource] } }; }
-      if (value.action === "submit") { if (submitGate) await submitGate.promise; return { data: { state: "pending" } }; }
-      throw Error("Unexpected store action");
-    } },
-    targetState: () => ({ selected }), subscribeTarget: fn => { listeners.add(fn); fn(); return () => listeners.delete(fn); },
-  };
-  // Replace only transport/device imports; run the real form, portable format
-  // validator, DOM helper and asynchronous store continuations.
-  const url = new URL("../app/web/js/features/settings/single-resource-store.js", import.meta.url);
-  const source = readFileSync(url, "utf8")
-    .replace('import { api } from "../../api/client.js";', "const { api } = globalThis.__singleStoreTest;")
-    .replace('import { targetState, subscribeTarget } from "../../api/target.js";', "const { targetState, subscribeTarget } = globalThis.__singleStoreTest;")
-    .replace(/from "(\.[^"]+)"/g, (_, path) => `from ${JSON.stringify(new URL(path, url).href)}`);
-  const { createSingleResourceStore } = await import("data:text/javascript;base64," + Buffer.from(source).toString("base64"));
-  const store = createSingleResourceStore("skills", () => {});
-  t.after(() => { store.destroy(); Object.assign(globalThis, original); delete globalThis.__singleStoreTest; });
-  const notify = () => { for (const fn of listeners) fn(); };
-  await store.publish({ id: "test", description: "Fixture", project: "default" });
-  const dialog = body.children[0]; assert.equal(dialog.open, true);
-  const form = descendants(dialog).find(n => n.tagName === "FORM");
-  assert(dialog.classList.contains("mdo-layer"));
-  const footer=dialog.querySelector("footer");assert(!form.contains(footer));assert.equal(footer.firstChild.getAttribute("form"),form.id);
-  form.dispatchEvent(new Event("input")); notify();
-  assert.equal(dialog.open, true, "same-device reconnect must not discard a publication form");
-  assert.deepEqual(calls[0].value.references, [{ kind: "skills", id: "test", project: "default" }]);
-  const field = name => form.elements.find(n => n.name === name);
-  field("readme").value = "Use the complete Skill source.";
-  field("review_notes").value = "Source-only read-only fixture, no network.";
-  form.elements.find(n => n.type === "checkbox" && n.value === "windows-x86_64").checked = true;
-  submitGate = deferred(); form.dispatchEvent(new Event("submit", { cancelable: true })); await flush();
-  assert(footer.firstChild.disabled);dialog.dispatchEvent(new Event("cancel",{cancelable:true}));await flush();assert(dialog.open);
-  const submit = calls.find(c => c.value.action === "submit");
-  assert.equal(submit.value.single_kind, "skills"); assert.equal(submit.value.package.resources.length, 1);
-  notify(); assert.equal(submit.options.signal.aborted, false);
-  selected = { id: "next-device" }; notify(); assert.equal(submit.options.signal.aborted, true);
-  submitGate.resolve(); await flush(); assert.equal(body.children.length, 0);
-  assert.equal(store.hasPendingChanges(), false, "late submission must not reopen a form on the new device");
-  exportGate = deferred(); const pending = store.publish({ id: "test" }); await flush();
-  const read = calls.at(-1); selected = null; notify(); assert.equal(read.options.signal.aborted, true);
-  exportGate.resolve(); await pending; assert.equal(body.children.length, 0, "late export must not reveal the previous device's source");
+test("publication packs the real directory and sends only task and review metadata",async()=>{
+ const restore=environment(),calls=[];
+ const api={post:async(path,body)=>{calls.push({path,body});if(path==="/extensions/skills/authored/pack")return{data:{id:"V--fixture-publication-task-00000"}};if(body.action==="profile")return{data:{works:0,work_limit:3,version_bytes:10485760}};if(body.action==="mine")return{data:{items:[]}};if(body.action==="submit")return{data:{state:"pending"}};throw Error(`Unexpected ${path}`);}};
+ let store;try{const {createSingleResourceStore}=await loadStore(api);store=createSingleResourceStore("skills",()=>{});await store.publish({id:"authored",name:"Fixture",source:"manual"});const layer=document.body.children[0],form=layer.querySelector("form");
+  assert(layer.classList.contains("mdo-layer"));assert(layer.querySelector(".mdo-layer-footer").querySelectorAll("button").some(b=>b.textContent==="提交作品"));
+  form.querySelector("textarea").value="Source and usage reviewed";const checks=form.querySelectorAll("input").filter(n=>n.type==="checkbox");checks[0].checked=true;for(const file of form.querySelectorAll("input").filter(n=>n.type==="file"))file.files=[];form.querySelector("select").selectedOptions=[{dataset:{}}];
+  form.dispatchEvent(new Event("submit",{cancelable:true}));await flush();assert(calls.some(c=>c.path==="/extensions/skills/authored/pack"));const submit=calls.find(c=>c.body.action==="submit");assert(submit);assert.equal(submit.body.task,"V--fixture-publication-task-00000");assert.equal(submit.body.publish,true);assert.equal(submit.body.source_included,true);for(const field of ["package","resources","files","base64"])assert(!Object.hasOwn(submit.body,field));
+ }finally{store?.destroy();restore();}
 });
 
-for (const kind of ["agents", "subagents", "tools", "commands"]) test(`${kind} store details reject late selections and require C trust plus the exact installation plan`, async t => {
-  const original = { document: globalThis.document, window: globalThis.window, confirm: globalThis.confirm };
-  globalThis.document = testDocument(); globalThis.window = new EventTarget(); globalThis.confirm = () => true;
-  const first = deferred(), calls = [], items = [1, 2].map(id => ({ id, owner: 7, slug: `tool-${id}`, name: `Tool ${id}`, author: "Fixture", version: "1.0.0", description: "C source" }));
-  let installed = {}, managed = null, installation = deferred(), installOptions, catalogGate = null;
-  const pack = id => ({ name: `Tool ${id}`, state: "published", author: "Fixture", version: "1.0.0", package: { manifest: { license: "MIT", platforms: ["windows-x86_64"], readme: "Read the source." }, resources: [{ kind, id: `tool-${id}`, content: ["agents","subagents"].includes(kind)?JSON.stringify({schema:"mdo.agent.v1",code:true}):"/* source */", ...(["agents","subagents"].includes(kind)?{files:[{path:"program.c",base64:"Lyogc291cmNlICov"}]}:{}) }] } });
-  globalThis.__singleStoreDetails = {
-    api: { get: async () => ({ data: installed }), post: async (_, body, options) => {
-      calls.push(body);
-      if (body.action === "catalog") { if(catalogGate) await catalogGate.promise; return { data: { items } }; }
-      if (body.action === "detail") { if (body.id === 1) await first.promise; return { data: pack(body.id) }; }
-      if (body.action === "plan") return { data: { sha256: "exact-plan-hash", files: [{ operation: "create", path: `${kind}/tool-2.c`, bytes: 12 }] } };
-      if (body.action === "install") { installOptions = options; await installation.promise; installed = { two: { ...items[1], source: "store", resources: [{ kind, id: "tool-2" }] } }; return { data: {} }; }
-      throw Error(`Unexpected ${body.action}`);
-    } }, targetState: () => ({ selected: null }), subscribeTarget: () => () => {},
-  };
-  const url = new URL("../app/web/js/features/settings/single-resource-store.js", import.meta.url);
-  const source = readFileSync(url, "utf8").replace('import { api } from "../../api/client.js";', "const { api } = globalThis.__singleStoreDetails;")
-    .replace('import { targetState, subscribeTarget } from "../../api/target.js";', "const { targetState, subscribeTarget } = globalThis.__singleStoreDetails;")
-    .replace(/from "(\.[^"]+)"/g, (_, path) => `from ${JSON.stringify(new URL(path, url).href)}`);
-  const { createSingleResourceStore } = await import("data:text/javascript;base64," + Buffer.from(source + `
-// ${kind}`).toString("base64"));
-  const store = createSingleResourceStore(kind, () => {}, () => {}, receipt => { managed = receipt; });
-  t.after(() => { store.destroy(); Object.assign(globalThis, original); delete globalThis.__singleStoreDetails; });
-  store.activate(true); await flush(); await flush();
-  const rows = store.root.querySelectorAll(".eb-open"); assert.equal(rows.length, 2);
-  rows[0].click(); rows[1].click(); await flush(); await flush();
-  const pane = document.body.querySelector(".eb-detail");
-  assert.equal(document.body.querySelector(".mdo-layer-title").textContent, "Tool 2");
-  const install = pane.querySelectorAll("button").find(b => b.textContent === "下载安装");
-  if (kind === "commands") assert.match(pane.textContent, /独立工作进程/);
-  assert(install.disabled); install.click(); assert(!calls.some(c => c.action === "install"));
-  first.resolve(); await flush(); assert.equal(document.body.querySelector(".mdo-layer-title").textContent, "Tool 2");
-  const check = pane.querySelector("input"); check.checked = true; check.dispatchEvent(new Event("change"));
-  assert.equal(install.disabled, false); install.click(); await flush();
-  const request = calls.find(c => c.action === "install"); assert.equal(request.id, 2); assert.equal(request.single_kind, kind);
-  assert.equal(request.trust_code, true); assert.equal(request.expected_plan, "exact-plan-hash");
-  assert.equal(installOptions.signal, null); assert.equal(installOptions.download.name, "Tool 2");
-  assert.equal(store.hasPendingChanges(), false, "background installation permits leaving the extension page");
-  store.activate(false); assert.equal(installOptions.signal, null, "leaving details must not abort the installation");
-  installation.resolve();
-  await flush(); await flush();
-  store.root.querySelectorAll("button").find(b => b.textContent === "管理").click();
-  assert.equal(managed.id, 2, "installed management opens the actual local receipt");
-  catalogGate=deferred(); store.activate(true); await flush();
-  assert.equal(store.hasPendingChanges(), true, "later reads are not mistaken for the finished background install");
-  catalogGate.resolve(); await flush();
+test("store managed items cannot be published or accept old JSON import packages",async()=>{
+ const restore=environment();let requests=0;const api={post:async()=>{requests++;throw Error("No request expected");}};
+ let store;try{const {createSingleResourceStore}=await loadStore(api);store=createSingleResourceStore("mcp",()=>{});await store.publish({id:"store-id",source:"store",editable:false});assert.equal(requests,0);await assert.rejects(store.importPackage({manifest:{kind:"mcp"},resources:[]}),/ZIP/);}finally{store?.destroy();restore();}
 });

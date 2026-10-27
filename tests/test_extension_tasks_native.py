@@ -54,6 +54,8 @@ xvalue* QaProductContract(const xvalue* P,xvfs V){
   * adapter. Only the server identity is supplied; no service/socket is made. */
  XS_ServerInfo Server={0};Server.Name="archive-fixture";Server.Port=58013;SdkServer=&Server;g_MdoApiInitialized=true;bool Api=MdoApiWriteInit()&&MdoApiExtensionTasksInit();
  mdo_sdk_context_v1 C={0};C.Size=sizeof(C);C.Version=MDO_SDK_VERSION;C.Api=MdoApplicationApi();C.ExtensionId="archive-fixture";C.Origin=MDO_ORIGIN_USER;mdo_error_v1 Failure={0};
+ xvalue* LegacyBody=SdkParse("{\"body\":{\"action\":\"import\",\"package\":{\"format\":\"mdo.extension.v2\",\"resources\":[]}}}");bool Retired=mdoCall(&C,"product.ecosystem.post",LegacyBody,&Out,&Failure)!=MDO_RESULT_OK;QaTaskFlag(R,"ecosystem_rejects_json_distribution",Retired);xrtValueRelease(Out);Out=NULL;xrtValueRelease(LegacyBody);
+
  char Hash[65];MdoExtensionHashBytes(Data,(size_t)Bytes,Hash);xvalue* Body=xrtValueObject(),*Request=xrtValueObject();SdkPut(Body,"purpose","install");SdkPut(Body,"kind","skills");SdkPut(Body,"sha256",Hash);SdkPutUInt(Body,"bytes",Bytes);xrtValueObjectSet(Request,XRT_STR_LITERAL("body"),Body);
  Api=Api&&mdoCall(&C,"product.extension_tasks.post",Request,&Out,&Failure)==MDO_RESULT_OK;char SdkId[33]={0};if(Api)snprintf(SdkId,sizeof(SdkId),"%s",SdkField(SdkGet(Out,"data"),"id"));xrtValueRelease(Out);Out=NULL;xrtValueRelease(Body);xrtValueRelease(Request);
  Request=SdkParse("{\"path\":{\"offset\":\"0\"}}");xvalue* Path=xrtValueObjectGet(Request,XRT_STR_LITERAL("path"));SdkPut(Path,"task",SdkId);char* Native=xrtFormat("%s/payload.zip",SdkField(P,"root"));SdkPut(Request,"body_file",Native);xrtFree(Native);SdkPutUInt(Request,"body_bytes",Bytes);

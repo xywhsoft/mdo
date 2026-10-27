@@ -18,7 +18,7 @@ export function createDownloadCenter({ updatePanel, navigation, registry = downl
   const writable = () => { const s = targetState(); return !s.selected || s.connected && !s.runtimeChanged && s.selected.mode !== "view"; };
   async function refresh() {
     if (destroyed || polling) return; polling = true;
-    try { await Promise.allSettled([transport.get("/cli-tools"), transport.get("/update"), transport.get("/distribution"), transport.get("/ecosystem")]); }
+    try { await Promise.allSettled([transport.get("/extension-tasks"), transport.get("/update"), transport.get("/distribution")]); }
     finally { polling = false; schedule(); }
   }
   function schedule() {
@@ -62,7 +62,21 @@ export function createDownloadCenter({ updatePanel, navigation, registry = downl
       if (row.state === "unknown") item.append(node("p", text("uncertain"), "download-meta"));
       if (row.submission) item.append(node("p", `${text("submission")} #${row.submission.id} · ${row.submission.state}`, "download-meta"));
       const controls = node("div", null, "download-actions");
-      if (row.source === "cli") {
+      if (row.source === "archive") {
+        if (!["complete", "cancelled", "expired"].includes(row.state)) controls.append(action(row, text("cancel"), () => transport.delete(`/extension-tasks/${row.taskId}`)));
+        if (row.state === "ready" && row.action === "install") controls.append(action(row, "安装", () => {
+          if (!confirm("已检查归档内容并信任其来源，允许安装此扩展？")) return;
+          return transport.post(`/extension-tasks/${row.taskId}/install`, { trust_code: true, ...(row.store ? {} : { id: row.directoryId || `import-${row.taskId}` }) });
+        }));
+        if (row.state === "ready" && row.publication) controls.append(action(row, text("retry"), () => {
+          const { upload, nonce, proof_upload, ...metadata } = row.publication;
+          return transport.post("/ecosystem", { ...metadata, action: "submit", task: row.taskId, ...(proof_upload ? { proof_task: proof_upload } : {}) });
+        }));
+        if (["complete", "cancelled", "failed", "expired"].includes(row.state)) controls.append(action(row, "清除", async () => {
+          if (row.state === "expired") await transport.delete(`/extension-tasks/${row.taskId}`);
+          await transport.delete(`/extension-tasks/${row.taskId}/forget`);registry.hide?.(row.key);
+        }));
+      } else if (row.source === "cli") {
         if (downloadActive(row)) controls.append(action(row, text("cancel"), () => transport.post("/cli-tools", { action: "cancel", id: row.taskId })));
         else if (["failed", "cancelled", "interrupted"].includes(row.state)) controls.append(action(row, text("retry"), () => transport.post("/cli-tools", { action: "retry", id: row.taskId })));
       } else if (row.source === "legacy") {
