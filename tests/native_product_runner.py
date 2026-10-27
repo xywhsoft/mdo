@@ -16,7 +16,7 @@ static bool QaProductHome(cstr Root,cstr App,xvfs V){
 '''
 
 
-def product(args, fixture, contract, evidence):
+def product(args, fixture, contract, evidence, compiler_setup='', compiler_prelude='', compiler_cleanup=''):
     (fixture / 'contract.c').write_text(HOME + contract, encoding='utf-8')
     ident = 'product-directory-qa-' + uuid.uuid4().hex[:12]
     source = '/* mdo-command ' + json.dumps({'id': ident, 'description': 'Product directory native regression', 'effects': ['read', 'workspace-write'], 'timeout_ms': 60000}) + ' */\n' + r'''
@@ -39,4 +39,10 @@ MDO_EXPORT mdo_result mdoCommandRun(const mdo_command_context_v1* C,const xvalue
  return MDO_RESULT_OK;
 }
 '''
+    if compiler_setup:
+        source=source.replace('if(T){tcc_set_error_func(T,NULL,QaError);','if(T){tcc_set_error_func(T,NULL,QaError);'+compiler_setup+'}\nif(T){')
+    if compiler_prelude:
+        source=source.replace('#include <libtcc.h>','#include <libtcc.h>\n'+compiler_prelude)
+    if compiler_cleanup:
+        source=source.replace('if(T)xsDestroyTCC(T);','if(T)xsDestroyTCC(T);'+compiler_cleanup)
     return run(args, ident, source, {'root': str(fixture), 'app': str(ROOT / 'app')}, evidence)
