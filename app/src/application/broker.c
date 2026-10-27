@@ -146,6 +146,13 @@ bool MdoApplicationRouteInvoke(const mdo_sdk_context_v1* C,const MdoApplicationR
     const xvalue *Body=SdkGet(P,"body"),*Fields=SdkGet(P,"headers");cstr Revision=SdkField(P,"revision");
     char* Json=Body?SdkJson(Body):NULL;XS_FetchHeader Headers[20];size_t Count=0;
     cstr BinaryText=SdkField(P,"body_base64");unsigned char* Binary=NULL;size_t BinarySize=0;
+    bool ArchiveRoute=!strncmp(Route->Path,"/api/v1/extension-tasks",23);cstr BodyFile=SdkField(P,"body_file"),ResponseFile=SdkField(P,"response_file");
+    if(ArchiveRoute&&BinaryText){xrtFree(Json);return MdoApplicationError(E,"sdk_arguments_invalid","Archive bytes use native body_file/response_file or raw HTTP, never a Base64 JSON container","resolve",400,false);}
+    if(ArchiveRoute&&BodyFile){uint64 Offset=0,Bytes=0;bool Valid=!Body&&!BinaryText&&xrtPathIsRooted(BodyFile)&&SdkUInt(SdkGet(P,"body_bytes"),&Bytes)&&Bytes&&Bytes<=1048576;
+        if(SdkGet(P,"body_offset")&&!SdkUInt(SdkGet(P,"body_offset"),&Offset))Valid=false;
+        xfile File=Valid?xrtOpen(BodyFile,XFILE_READ|XFILE_NOFOLLOW):NULL;uint64 Size=0;Valid=Valid&&File&&xrtFileSize(File,&Size)&&Offset<=Size&&Bytes<=Size-Offset;Binary=Valid?xrtMalloc((size_t)Bytes):NULL;
+        Valid=Valid&&Binary&&xrtReadAtFull(File,Offset,Binary,(size_t)Bytes,NULL);xrtClose(File);if(!Valid){xrtFree(Binary);xrtFree(Json);return MdoApplicationError(E,"sdk_arguments_invalid","Archive source file or byte range is unavailable; chunks must be at most 1 MiB","resolve",400,false);}BinarySize=(size_t)Bytes;
+    }
     if(BinaryText){
         bool Valid=!Body&&xrtBase64Decode(BinaryText,strlen(BinaryText),NULL,0,&BinarySize,NULL)&&BinarySize<=MDO_REMOTE_HTTP_BODY_MAX;
         Binary=Valid?xrtMalloc(BinarySize+1):NULL;
@@ -186,8 +193,16 @@ bool MdoApplicationRouteInvoke(const mdo_sdk_context_v1* C,const MdoApplicationR
         if(E&&E->Code[0])return false;
         return MdoApplicationError(E,"sdk_transport_failed","Service transport failed; inspect the operation receipt before repeating a mutation","transport",503,strcmp(Route->Method,"GET")!=0);
     }
+    bool RawArchive=ArchiveRoute&&strstr(Route->Path,"/file/")!=NULL;bool Success=Reply.Status>=200&&Reply.Status<300;
+    if(RawArchive&&Success){uint64 Offset=0;bool Valid=ResponseFile&&xrtPathIsRooted(ResponseFile)&&Reply.Bytes<=1048576;
+        if(SdkGet(P,"response_offset")&&!SdkUInt(SdkGet(P,"response_offset"),&Offset))Valid=false;
+        Valid=Valid&&Offset<=UINT64_C(512)*1024*1024&&Reply.Bytes<=UINT64_C(512)*1024*1024-Offset;
+        xfile File=Valid?xrtOpen(ResponseFile,XFILE_WRITE|XFILE_CREATE|XFILE_NOFOLLOW|(Offset?0:XFILE_TRUNCATE)):NULL;uint64 Current=0;Valid=Valid&&File&&xrtFileSize(File,&Current)&&Offset<=Current&&xrtWriteAtFull(File,Offset,Reply.Body,Reply.Bytes,NULL)&&xrtFlush(File);xrtClose(File);
+        if(Valid){*Out=xrtValueObject();xvalue* Info=xrtValueObject();SdkPut(Info,"path",ResponseFile);SdkPutUInt(Info,"bytes",Reply.Bytes);SdkPutUInt(Info,"offset",Offset);xrtValueObjectSetNew(*Out,XRT_STR_LITERAL("data"),Info);SdkPutUInt(*Out,"status",Reply.Status);SdkPut(*Out,"revision",Reply.Revision);SdkPut(*Out,"content_type",Reply.Type);SdkPut(*Out,"transport",Native?"native":"http-stream");}
+        if(Reply.Body)xrtSecureZero(Reply.Body,Reply.Bytes);xrtFree(Reply.Body);xrtFree(Reply.Type);xrtFree(Reply.Revision);return Valid||MdoApplicationError(E,"sdk_archive_destination_failed","Raw archive range could not be written to response_file; inspect it before retrying","filesystem",500,true);
+    }
     xvalue* Parsed=Reply.Body?xrtJsonParse(xrtStrViewN(Reply.Body,Reply.Bytes)):NULL;
-    *Out=xrtValueObject();bool Success=Reply.Status>=200&&Reply.Status<300;
+    *Out=xrtValueObject();
     SdkPutUInt(*Out,"status",Reply.Status);SdkPut(*Out,"revision",Reply.Revision);SdkPut(*Out,"content_type",Reply.Type);
     SdkPut(*Out,"transport",Native?"native":"http-stream");
     if(Parsed){const xvalue* Data=SdkGet(Parsed,"data");xrtValueObjectSetNew(*Out,XRT_STR_LITERAL("data"),xrtValueClone(Data?Data:Parsed));}

@@ -129,20 +129,19 @@ def native_contracts():
         add('stream.'+action,'Operate on a stream handle. A would-block failure accepts no bytes; close preserves buffered data until EOF.',fields,('handle',))
     add('plugin.list','List installed VFS plugins and recovery status')
     add('plugin.get','Read one verified plugin inventory and manifest.',{'id':string,'revision':string},('id',))
-    add('plugin.file.read','Read an immutable plugin inventory file in bounded byte ranges.',{'id':string,'revision':string,'path':string,'offset':uint,'limit':{**uint,'minimum':1,'maximum':65536}},('id','path'))
-    add('plugin.apply','Stage an immutable plugin revision. Files may reference an own immutable revision or a checksummed upload in the caller storage namespace. Modern plugins default to disabled.',{'id':string,'expected_revision':string,'frontend':string,'manifest':obj,'enabled':boolean,'files':{'type':'array','minItems':1,'maxItems':128,'items':{'type':'object','properties':{'path':string,'text':string,'base64':string,'storage_path':string,'plugin_revision':string,'bytes':uint,'sha256':string},'required':['path']}}},('id','files'))
-    plugin_changes={'type':'array','maxItems':32,'items':{'type':'object','properties':{'id':string,'enabled':boolean,'revision':string,'remove':boolean},'required':['id'],'additionalProperties':False}}
-    add('plugin.plan','Validate the final plugin set, exclusive slots, declared conflicts, dependency bounds and immutable file ownership.',{'changes':plugin_changes},('changes',))
+    add('plugin.file.read','Read a current plugin text file up to 1 MiB. Binary files use the common file endpoint.',{'id':string,'revision':string,'path':string},('id','path'))
+    plugin_changes={'type':'array','maxItems':32,'items':{'type':'object','properties':{'id':string,'enabled':boolean},'required':['id','enabled'],'additionalProperties':False}}
+    add('plugin.plan','Validate the final plugin set, exclusive markers, declared conflicts, dependency presence and file ownership.',{'changes':plugin_changes},('changes',))
     add('plugin.commit','Commit exactly the reviewed plugin selection; stale plans are rejected.',{'changes':plugin_changes,'expected_revision':string,'expected_plan':string},('changes','expected_revision','expected_plan'))
     add('plugin.frontend.hello','Register a fresh document for one window; old document contributions have ceased.',{'client':string,'page':string},('client','page'))
     for action in ('enter','leave'):
         add('plugin.frontend.'+action,'Reserve a frontend instance before execution, or acknowledge completed cleanup. An outgoing instance retains exclusivity until cleanup.',{'client':string,'page':string,'id':string,'revision':string},('client','page','id','revision'))
     add('plugin.frontend.fail','Report an activation or cleanup failure to the shared warnings indicator. No raw exception, token or response is retained.',{'client':string,'page':string,'id':string,'revision':string,'phase':{'type':'string','enum':['activation','cleanup']}},('client','page','id','revision','phase'))
     add('plugin.preset.list','List local pinned plugin combinations without credentials or runtime data.')
-    add('plugin.preset.save','Save the current plugin identities, revisions and enabled selections.',{'id':string,'name':string,'expected_revision':string},('id','name','expected_revision'))
+    add('plugin.preset.save','Save current plugin identities and enabled selections.',{'id':string,'name':string,'expected_revision':string},('id','name','expected_revision'))
     add('plugin.preset.remove','Remove one local combination using the observed list revision.',{'id':string,'expected_revision':string},('id','expected_revision'))
-    add('plugin.preset.plan','Plan the exact saved combination; missing plugins/revisions are never silently substituted.',{'id':string},('id',))
-    for action in ('enable','disable','remove','rollback'):add('plugin.'+action,'Change plugin activation while retaining immutable revision backups',{'id':string},('id',))
+    add('plugin.preset.plan','Plan the saved activation combination against currently installed directories.',{'id':string},('id',))
+    for action in ('enable','disable'):add('plugin.'+action,'Change plugin activation; use extension.remove for complete directory uninstall.',{'id':string},('id',))
     add('runtime.reload','Reload modules or submit a host source reload. Host reload completion is queried separately.',{'domain':{'type':'string','enum':['modules','host']}},('domain',))
     add('runtime.reload.status','Read a native host reload receipt',{'id':uint},('id',))
     add('client.hello','Register or renew a target window lease',{'client':string,'context':obj},('client',))
@@ -155,6 +154,8 @@ def native_contracts():
     add('model.complete','Managed model boundary with messages, tools, multimodal parts, usage and optional newline-delimited stream events',{'model':string,'protocol':{**uint,'maximum':3},'reasoning_effort':string,'max_output_tokens':uint,'messages':{'type':'array','minItems':1,'maxItems':4096,'items':obj},'tools':{'type':'array','maxItems':256,'items':obj},'extra_body':obj,'stream':string},('messages',))
     add('tool.call','Execute a tool through a recovered session and its live permission scope; a tool-level failure is a successful SDK result with success:false',{'project':string,'session':string,'tool':string,'arguments':obj},('tool',))
     add('session.compact','Compact the immutable invocation session; original history remains available')
+    add('session.execution','Read the current main speaker, immutable model binding and native context checkpoint')
+    add('session.mark_external_state','Declare durable conversation state outside the portable session directory')
     from orchestration_contracts import contracts as orchestration_contracts
     orchestration_contracts(add)
     from workbench_contracts import contracts as workbench_contracts

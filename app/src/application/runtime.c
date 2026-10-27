@@ -137,7 +137,7 @@ static bool SdkExtensionCall(const mdo_sdk_context_v1* C,cstr Method,const xvalu
         char* Task=xrtXidMakeString(),*Base=Task?xrtFormat("data/extension-tasks/%s",Task):NULL,*Path=Base?xrtFormat("%s/extension.zip",Base):NULL;
         xroot Directory=Base?MdoHomeOpenStorageDirectory(Base):NULL;bool Ok=Directory!=NULL;if(Directory)xrtRootClose(Directory);char Hash[65];uint64 Bytes=0;MdoApplicationInvocation* I=C->Opaque;
         Ok=Ok&&Path&&MdoExtensionsPack(Kind,Id,Path,I?I->Cancel:NULL,Hash,&Bytes,Why);
-        if(Ok){*R=xrtValueObject();SdkPut(*R,"task",Task);SdkPut(*R,"archive",Path);SdkPut(*R,"sha256",Hash);SdkPutUInt(*R,"bytes",Bytes);}else if(Base)MdoHomeRemove(Base,false);
+        if(Ok){*R=xrtValueObject();SdkPut(*R,"task",Task);SdkPut(*R,"archive",Path);SdkPut(*R,"sha256",Hash);SdkPutUInt(*R,"bytes",Bytes);}else if(Base)MdoHomeRemoveEmptyDirectory(Base);
         xrtFree(Task);xrtFree(Base);xrtFree(Path);
     }else if(!strcmp(Method,"extension.current")||!strcmp(Method,"extension.read")){
         *R=MdoExtensionsRead(Kind,Id,Why);

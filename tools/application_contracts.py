@@ -106,6 +106,7 @@ INPUTS={
  'Ecosystem':document('action:s id:s kind:s source:s version:s trust:b approved:b replace:b revision:s files:ExtensionFiles draft_id:s'),
  'Purge':document('purge_request_id:s project_id:s revision:u created_at:i confirmation:s'),
  'BackupUpload':document('id:s bytes:u sha256:s',('id','bytes'),True),
+ 'ExtensionTask':document('purpose:s kind:s sha256:s bytes:u id:s expected_revision:s trust_code:b enabled:b'),
  'BackupPreview':document('upload_id:s id:s'),
  'BackupReview':document('project_id:s session_id:s title:s preview_id:s'),
  'SharedFiles':document('share_id:s file_id:s',('share_id','file_id'),True),
@@ -145,6 +146,7 @@ BODY_GROUPS={
  'McpContext':'McpContextRoute','McpAuth':'McpAuthRoute','McpConnection':'McpConnectionsRoute',
 }
 BODY={handler:name for name,handlers in BODY_GROUPS.items() for handler in handlers.split()}
+BODY['ExtensionTasksRoute']='ExtensionTask'
 NO_BODY=set('''CommandsRoute DistributionRoute CliToolsRoute LiveRoute DirectRoute UpdateExitRoute BootstrapRoute SettingsRoute
 ModelsRoute ModelConfigRoute AgentsRoute BackupUploadRoute BackupUploadSealRoute BackupPreviewsRoute BackupPreviewRoute UpdateDownloadRoute UpdateInstallRoute
 BackupRestoreApplyRoute BackupRestoresRoute BackupRestoreRoute BackupPreviewStartRoute ModulesRoute ToolsRoute SkillsRoute McpRoute DirectoriesRoute
@@ -241,4 +243,16 @@ def contract(row):
     if handler=='ApplicationRoute':
         output['properties']['data']=array(ref('Document')) if path.endswith('/services') else ref('JsonValue')
     if handler=='ExtensionsRoute' and path.endswith('/bundle'):output['properties']['data']=ref('Document')
+    if handler=='ExtensionTasksRoute':
+        output['properties'].pop('base64',None)
+        if path.endswith('/seal'):
+            properties.pop('body',None);required=[key for key in required if key!='body']
+        if method=='PUT':
+            properties.pop('body',None)
+            required=[key for key in required if key!='body']
+            properties.update(body_file={**S,'description':'Absolute native ZIP/source file; bytes stream from this file, never a JSON/Base64 field'},body_offset=U,body_bytes={**U,'minimum':1,'maximum':1048576})
+            required.extend(['body_file','body_bytes'])
+        if '/file/' in path:
+            properties.update(response_file={**S,'description':'Absolute destination file for the raw byte range'},response_offset=U)
+            required.append('response_file');output['properties']['data']=document('path:s bytes:u offset:u')
     return attach_defs(obj(properties,required,True)),attach_defs(output)

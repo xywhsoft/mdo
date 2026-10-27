@@ -23,7 +23,7 @@ static bool MdoPluginCoreTarget(cstr T){
 }
 static bool MdoPluginPathOverlap(cstr A,cstr B){
  if(!A||!B)return false;char *KA=MdoExtensionPathKey(A),*KB=MdoExtensionPathKey(B);bool Overlap=false;
- if(KA&&KB){size_t N=strlen(KA),M=strlen(KB);Overlap=(N==M&&!strcmp(KA,KB))||(N<M&&!memcmp(KA,KB,N)&&KB[N]=='/')||(M<N&&!memcmp(KA,KB,M)&&KA[M]=='/');}
+ if(KA&&KB){size_t N=strlen(KA),M=strlen(KB);Overlap=(N==M&&!strcmp(KA,KB))||(N<M&&!memcmp(KA,KB,N)&&KB[N]=='/')||(M<N&&!memcmp(KA,KB,M)&&KA[M]=='/');}else Overlap=true;
  xrtFree(KA);xrtFree(KB);return Overlap;
 }
 static const xvalue* MdoPluginFile(const xvalue* Files,cstr Path){

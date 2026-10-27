@@ -78,3 +78,14 @@ class ApplicationSdkContractTests(unittest.TestCase):
         account,_=application_contracts.contract(rows['account.logout'])
         self.assertEqual(account['$defs']['EmptyInput']['properties'],{})
         self.assertIn('body',account['required'])
+
+    def test_extension_archives_use_file_backed_raw_sdk_bodies(self):
+        rows={row['id']:row for row in application_sdk.services(ROOT)}
+        upload,_=application_contracts.contract(rows['product.extension_tasks.by_task.chunks.by_offset.put'])
+        self.assertIn('body_file',upload['required']);self.assertIn('body_bytes',upload['required'])
+        self.assertNotIn('body_base64',upload['properties'])
+        download,result=application_contracts.contract(rows['product.extension_tasks.by_task.file.by_offset.get'])
+        self.assertIn('response_file',download['required']);self.assertNotIn('base64',result['properties'])
+        methods=application_sdk.native_contracts()
+        self.assertNotIn('plugin.apply',methods);self.assertNotIn('plugin.rollback',methods)
+        self.assertIn('extension.create',methods);self.assertIn('extension.remove',methods)

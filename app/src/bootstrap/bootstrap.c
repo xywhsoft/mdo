@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include "../../include/mdo/ecosystem.h"
 #include "../../include/mdo/extensions.h"
+#include "../../include/mdo/extension_tasks.h"
 #include <string.h>
 
 #include "../../include/mdo/approvals.h"
@@ -65,7 +66,7 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
         return false;
     }
     char ExtensionError[512]={0};
-    if ( !MdoExtensionsInit() || !MdoExtensionsRecover(ExtensionError) ||
+    if ( !MdoExtensionsInit() || !MdoExtensionTasksInit() || !MdoExtensionsRecover(ExtensionError) ||
          !MdoExtensionsSeedBuiltins(ExtensionError) ) {
         if(ExtensionError[0])fprintf(stderr,"[mdo] extensions: %s\n",ExtensionError);
         MdoBootstrapFail("Extension installation recovery failed");
@@ -279,6 +280,7 @@ void MdoBootstrapUnit(void)
     MdoProjectLifecycleUnit();
     MdoApplicationUnit();
     MdoModuleManagerAttachApplication(NULL);
+    MdoExtensionTasksUnit();
     MdoExtensionsUnit();
     MdoHomeUnit();
     memset(&g_MdoBootstrap, 0, sizeof(g_MdoBootstrap));

@@ -18,8 +18,8 @@ static bool McpConnectionCredits(xvalue*,const xvalue*);
 static bool McpConnectionReferenced(cstr);
 static xvalue* KnowledgeCurrentFiles(cstr);
 static bool KnowledgeWrite(MdoApiContext*,cstr);
-bool MdoApiExtensionsInit(void) { g_MdoExtensionLock = xrtMutexCreate(); return g_MdoExtensionLock != NULL; }
-void MdoApiExtensionsUnit(void) { if (g_MdoExtensionLock) xrtMutexDestroy(g_MdoExtensionLock); g_MdoExtensionLock = NULL; }
+bool MdoApiExtensionsInit(void) { g_MdoExtensionLock = xrtMutexCreate(); return g_MdoExtensionLock != NULL&&MdoApiExtensionTasksInit(); }
+void MdoApiExtensionsUnit(void) { MdoApiExtensionTasksUnit();if (g_MdoExtensionLock) xrtMutexDestroy(g_MdoExtensionLock); g_MdoExtensionLock = NULL; }
 
 static bool ExtensionKind(cstr Kind)
 {

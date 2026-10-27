@@ -11,7 +11,7 @@ static struct {
  xvalue *Map,*Effective,*Frontends,*Failures;xvfsmount Mount,HomeMount;
  size_t Readers;bool Busy,Recovery,Pending,ConfigBroken;
 } SdkPlugins;
-static const cstr SdkPluginMethods[]={"plugin.list","plugin.get","plugin.file.read","plugin.enable","plugin.disable","plugin.remove","plugin.plan","plugin.commit","plugin.preset.list","plugin.preset.save","plugin.preset.remove","plugin.preset.plan","plugin.frontend.hello","plugin.frontend.enter","plugin.frontend.leave","plugin.frontend.fail","runtime.reload","runtime.reload.status"};
+static const cstr SdkPluginMethods[]={"plugin.list","plugin.get","plugin.file.read","plugin.enable","plugin.disable","plugin.plan","plugin.commit","plugin.preset.list","plugin.preset.save","plugin.preset.remove","plugin.preset.plan","plugin.frontend.hello","plugin.frontend.enter","plugin.frontend.leave","plugin.frontend.fail","runtime.reload","runtime.reload.status"};
 static void SdkPluginDrop(SdkPlugin* P){xrtValueRelease(P->Manifest);memset(P,0,sizeof(*P));}
 static bool SdkPluginEnabled(const xvalue* M){bool Enabled=true;xrtValueGetBool(SdkGet(M,"enabled"),&Enabled);return Enabled;}
 #include "plugins_vfs.inc.c"
@@ -124,7 +124,6 @@ bool MdoApplicationPluginsCall(const mdo_sdk_context_v1* C,cstr Method,const xva
  if(!strcmp(Method,"plugin.get")){SdkPlugin V={0};bool Ok=SdkPluginLookup(SdkField(P,"id"),SdkField(P,"revision"),&V,E);if(Ok){*R=V.Manifest;V.Manifest=NULL;}SdkPluginDrop(&V);return Ok;}
  if(!strncmp(Method,"plugin.frontend.",16))return SdkPluginFrontendCall(Method,P,R,E);
  if(!strcmp(Method,"plugin.plan")){xrtMutexLock(SdkPlugins.Lock);xvalue* Config=xrtValueClone(SdkPlugins.Config);xrtMutexUnlock(SdkPlugins.Lock);*R=Config?SdkPluginPlan(Config,SdkGet(P,"changes"),NULL,E):NULL;xrtValueRelease(Config);return *R!=NULL;}
- if(!strcmp(Method,"plugin.remove"))return MdoApplicationError(E,"extension_directory_required","Uninstall this plugin through the common extension directory API; active native code may require restart","plugin",409,false);
  xvalue* Before=NULL,*Desired=NULL,*Plan=NULL,*Changes=NULL;
  if(!MdoApplicationPluginsStoreBegin(&Before,E->Message,sizeof(E->Message)))return MdoApplicationError(E,"sdk_plugin_busy","Plugin manager is busy","plugin",409,false);
  if(!strcmp(Method,"plugin.commit"))Changes=xrtValueClone(SdkGet(P,"changes"));
