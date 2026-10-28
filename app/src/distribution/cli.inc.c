@@ -1,5 +1,6 @@
 #include "../../include/mdo/external_tool.h"
 #include "../../include/mdo/extensions.h"
+#include "../../include/mdo/android_tools.h"
 
 struct MdoCliUse {size_t References,Count;MdoExtensionLease** Leases;};
 static struct {
@@ -59,6 +60,13 @@ static xvalue* CliDirectoryItems(char Error[512])
         }
         bool Supported=MdoExtensionSupportsPlatform(Meta,MdoExtensionRuntimePlatform());
         Valid=Valid&&Supported;
+        if(Valid&&MdoAndroidToolsActive()){
+            Valid=MdoAndroidToolPrepare(Id,Why);char* Executable=Valid?MdoAndroidToolProgram(Id,Program):NULL;
+            if(!Executable)Valid=false;else{xrtFree(Native);Native=Executable;}
+        }
+#if defined(__ANDROID__)
+        if(!MdoAndroidToolsActive()){Valid=false;snprintf(Why,sizeof(Why),"External programs require the full Android APK");}
+#endif
         Ok=Row&&CliSet(Row,"id",Id)&&CliSet(Row,"managed_root",Root)&&CliSet(Row,"platform",MdoToolPlatform())&&
             CliSet(Row,"entry",Program)&&CliSet(Row,"path",Native?Native:"")&&CliSet(Row,"relative_path",Relative?Relative:"")&&
             CliSet(Row,"prompt",CliText(Config,"prompt",16384))&&CliSet(Row,"command",CliText(Config,"command",64)[0]?CliText(Config,"command",64):CliText(Meta,"alias",64))&&

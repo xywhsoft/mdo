@@ -7,6 +7,7 @@
 #include "../../include/mdo/distribution.h"
 #include "../../include/mdo/application.h"
 #include "../../include/mdo/diagnostics.h"
+#include "../../include/mdo/android_tools.h"
 
 static bool MdoExtOpFailure(char Error[512],cstr Message){if(Error)snprintf(Error,512,"%s",Message);return false;}
 static bool MdoExtOpBool(const xvalue* V,cstr Key,bool Default){bool B=Default;xrtValueGetBool(xrtValueObjectGet(V,xrtStrView(Key)),&B);return B;}
@@ -33,6 +34,9 @@ bool MdoExtensionsManage(const xvalue* Input,const xvalue* Credits,xcancel* Canc
  if(!MdoExtensionDirectoryKind(Kind)||!MdoExtensionDirectoryId(Id)||!Action||xrtValueType(Input)!=XVALUE_OBJECT)return MdoExtOpFailure(Error,"Choose an extension type, directory and operation");
  const cstr Flags[]={"enabled","trust_code"};for(size_t I=0;I<2;I++){bool Flag;const xvalue* V=xrtValueObjectGet(Input,xrtStrView(Flags[I]));if(V&&!xrtValueGetBool(V,&Flag))return MdoExtOpFailure(Error,"Activation and code approval must be boolean values");}
  bool Create=!strcmp(Action,"create"),Save=!strcmp(Action,"save"),Import=!strcmp(Action,"import"),Install=!strcmp(Action,"install"),Remove=!strcmp(Action,"remove"),Enable=!strcmp(Action,"enable"),Edit=!strncmp(Action,"file.",5),CancelRemove=!strcmp(Action,"cancel_remove");
+#if defined(__ANDROID__)
+ if(!strcmp(Kind,"external-tools")&&(Create||Save||Import||Install||Edit))return MdoExtOpFailure(Error,"Android external programs are installed and updated through the full APK");
+#endif
  if(!Create&&!Save&&!Import&&!Install&&!Remove&&!Enable&&!Edit&&!CancelRemove)return MdoExtOpFailure(Error,"Unknown directory operation");
  if(Cancel&&xrtCancelRequested(Cancel))return MdoExtOpFailure(Error,"Extension operation cancelled before changing files");
  if(!MdoExtensionsMutationBegin())return MdoExtOpFailure(Error,"Another extension operation is still running");
@@ -64,6 +68,7 @@ bool MdoExtensionsManage(const xvalue* Input,const xvalue* Credits,xcancel* Canc
  else if(Edit){cstr Text=MdoExtensionText(Input,"text",1048576);if(!strcmp(Action,"file.write")&&!Text){MdoExtOpFailure(Error,"Text writes require a text value; import binary resources through the complete directory or binary upload endpoint");goto done;}
   Ok=MdoExtensionsEdit(Kind,Id,Action+5,MdoExtensionText(Input,"path",4096),MdoExtensionText(Input,"destination",4096),Text,Text?strlen(Text):0,Expected,Result,Error);}
  if(Ok){Suspended=false;
+  if(Remove&&!strcmp(Kind,"external-tools")&&MdoAndroidToolsActive()&&!MdoAndroidToolClean(Id)&&*Result){xrtValueObjectSetNew(*Result,XRT_STR_LITERAL("cleanup_pending"),xrtValueBool(true));MdoExtOpPut(*Result,"cleanup_error","Cannot remove derived Android command links");}
   if(Remove&&!strcmp(Kind,"mcp")&&!MdoMcpRemoveDirectoryConnections(Id,RuntimeError)&&*Result){xrtValueObjectSetNew(*Result,XRT_STR_LITERAL("cleanup_pending"),xrtValueBool(true));MdoExtOpPut(*Result,"cleanup_error",RuntimeError);RuntimeError[0]=0;}
   bool Wanted=!Remove&&!Create&&!(Save&&!Before)&&MdoExtOpBool(Input,"enabled",Before?WasEnabled:strcmp(Kind,"plugins")!=0);
   RuntimeError[0]=0;bool Live=Remove?MdoExtOpReload(Kind,RuntimeError):MdoExtOpRestore(Kind,Id,Wanted,RuntimeError);
@@ -76,6 +81,7 @@ done:
 }
 bool MdoExtensionsWarnings(xvalue* Items){
  if(!Items)return false;
+ cstr AndroidWarning=MdoAndroidToolsWarning();if(AndroidWarning&&!MdoDiagnosticWarning(Items,"extensions","android_tools_unavailable","external-tools","external-tools",AndroidWarning,"Install the full APK again or free storage, then restart","external-tools"))return false;
  for(size_t K=0;K<9;K++){cstr Kind=MdoExtensionKinds[K];char Error[512]={0};xvalue* Rows=MdoExtensionsList(Kind,Error);
   if(!Rows){if(!MdoDiagnosticWarning(Items,"extensions","catalog_unavailable",Kind,Kind,Error,"Check the extension directory and host installation state","extensions"))return false;continue;}
   for(size_t I=0;I<xrtValueCount(Rows);I++){

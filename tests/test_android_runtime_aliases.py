@@ -27,7 +27,16 @@ class RuntimeAliases(unittest.TestCase):
             with zipfile.ZipFile(out) as archive:
                 paths = archive.namelist()
                 meta = json.loads(archive.read("assets/mdo-runtime.json"))
-            return paths, {r["path"]: r for r in meta["files"]}
+                for extension in meta['extensions']:
+                    payload=archive.read(extension['asset'])
+                    self.assertEqual(__import__('hashlib').sha256(payload).hexdigest(),extension['sha256'])
+                    with zipfile.ZipFile(io.BytesIO(payload)) as tool:
+                        self.assertIsNone(tool.testzip())
+                        manifest=json.loads(tool.read('extension.json'))
+                        self.assertEqual(manifest['kind'],'external-tools')
+                        self.assertIn('tool.json',tool.namelist())
+                        self.assertNotIn('files',manifest)
+            return paths, {r['tool']+'/'+r["path"]: r for r in meta["files"]}
 
     def test_identical_libraries_and_programs_share_payload(self):
         paths, files = self.pack({"git/git": b"\x7fELFgit", "git/alias": b"\x7fELFgit", "git/libshared.so": b"\x7fELFlib", "ffmpeg/libshared.so": b"\x7fELFlib"}, {"git/libexec/git-core/git-add": "git/git"})
@@ -60,6 +69,7 @@ class RuntimeAliases(unittest.TestCase):
             self.assertEqual(archive.namelist(), ["assets/mdo-runtime.json"])
             metadata = json.loads(archive.read("assets/mdo-runtime.json"))
             self.assertEqual(metadata["files"], [])
+            self.assertEqual(metadata['extensions'],[])
             self.assertEqual(metadata["build_id"], "50000015")
             self.assertEqual(metadata["version_code"], json.loads((ROOT / "app/release.json").read_text())["version_code"])
 

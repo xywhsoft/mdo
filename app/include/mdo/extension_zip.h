@@ -96,10 +96,10 @@ static bool MdoZipLocal(MdoZip* Z,MdoZipEntry* E)
         else return MdoZipFail(Z,"ZIP descriptor mismatch");
     }return true;
 }
-static bool MdoZipOpen(MdoZip* Z,xfile File)
+static bool MdoZipOpenContainer(MdoZip* Z,xfile File,bool Apk)
 {
     memset(Z,0,sizeof(*Z));Z->File=File;
-    if(!File||!xrtFileSize(File,&Z->Bytes)||Z->Bytes<22||Z->Bytes>MDO_EXTENSION_ARCHIVE_BYTES)return MdoZipFail(Z,"Invalid ZIP size");
+    if(!File||!xrtFileSize(File,&Z->Bytes)||Z->Bytes<22||Z->Bytes>(Apk?UINT64_C(2147483648):MDO_EXTENSION_ARCHIVE_BYTES))return MdoZipFail(Z,"Invalid ZIP size");
     size_t TailSize=Z->Bytes<65557?(size_t)Z->Bytes:65557;uint8* Tail=xrtMalloc(TailSize);if(!Tail)return false;
     if(!MdoZipReadAt(Z,Z->Bytes-TailSize,Tail,TailSize)){xrtFree(Tail);return MdoZipFail(Z,"Cannot read ZIP directory");}
     size_t At=TailSize-22;bool Found=false;
@@ -136,11 +136,21 @@ static bool MdoZipOpen(MdoZip* Z,xfile File)
     {MdoZipEntry** Order=xrtMalloc(Z->Count*sizeof(*Order));if(!Order)goto bad;
         for(size_t I=0;I<Z->Count;I++)Order[I]=&Z->Entries[I];qsort(Order,Z->Count,sizeof(*Order),MdoZipOffsetCompare);
         uint64 Next=0;for(size_t I=0;I<Z->Count;I++){if(Order[I]->Offset!=Next){xrtFree(Order);goto bad;}Next=Order[I]->End;}
-        xrtFree(Order);if(Next!=Z->Central)goto bad;}
+        xrtFree(Order);
+        if(Next!=Z->Central){
+            /* Only the signed APK container may have its standard signing
+             * block immediately before the central directory. Extension ZIPs
+             * remain strictly contiguous. PackageManager verifies signatures. */
+            uint8 Head[8],Tail[24];uint64 Gap=Z->Central-Next;
+            if(!Apk||Next>Z->Central||Gap<32||Gap>16u*1024u*1024u||
+               !MdoZipReadAt(Z,Next,Head,8)||!MdoZipReadAt(Z,Z->Central-24,Tail,24)||
+               MdoZip64(Head)!=Gap-8||MdoZip64(Tail)!=Gap-8||memcmp(Tail+8,"APK Sig Block 42",16))goto bad;
+        }}
     return true;
 bad:MdoZipFail(Z,"Invalid ZIP entries, paths, types, sizes or overlapping data");
 failed:MdoZipClose(Z);return false;
 }
+static bool MdoZipOpen(MdoZip* Z,xfile File){return MdoZipOpenContainer(Z,File,false);}
 typedef struct MdoZipDecode {MdoZipSink Sink;void* User;uint64 Bytes,Limit;uint32 Crc;xsha256 Sha;} MdoZipDecode;
 static bool MdoZipDecoded(xbytesview B,void* User)
 {

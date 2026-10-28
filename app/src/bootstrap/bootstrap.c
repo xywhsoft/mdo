@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include "../../include/mdo/extensions.h"
 #include "../../include/mdo/extension_tasks.h"
+#include "../../include/mdo/android_tools.h"
 #include <string.h>
 
 #include "../../include/mdo/approvals.h"
@@ -71,6 +72,7 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
         MdoBootstrapFail("Extension installation recovery failed");
         return false;
     }
+    if(!MdoAndroidToolsInit(ExtensionError))fprintf(stderr,"[mdo] optional Android tools: %s\n",ExtensionError);
     if(!MdoApplicationInit(pHost->Server)){MdoBootstrapFail("Application SDK initialization failed");return false;}
     MdoProjectRuntimeGuardSet(MdoApplicationTerminalsProjectBusy);
     MdoModuleManagerAttachApplication(MdoApplicationApi());
@@ -282,6 +284,7 @@ void MdoBootstrapUnit(void)
     MdoDistributionUnit();
     MdoModuleManagerAttachApplication(NULL);
     MdoExtensionTasksUnit();
+    MdoAndroidToolsUnit();
     MdoExtensionsUnit();
     MdoHomeUnit();
     memset(&g_MdoBootstrap, 0, sizeof(g_MdoBootstrap));

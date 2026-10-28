@@ -58,6 +58,7 @@
     "src/commands/manager.c",
     "src/operations/manager.c",
     "src/distribution/manager.c",
+    "src/distribution/android_tools.c",
     "src/agents/runtime.c",
     "src/asks/manager.c",
     "src/projects/manager.c",

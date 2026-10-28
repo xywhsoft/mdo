@@ -58,7 +58,6 @@ static bool CliMapAdd(xvalue* Map,const xvalue* Tool,cstr Name,cstr Relative,con
 static xvalue* CliCommandMap(void)
 {
     xvalue* Map=xrtValueObject();if(!Map)return NULL;
-#if !defined(__ANDROID__)
     for(size_t I=0;I<xrtValueCount(CliItems());I++){
         const xvalue* R=xrtValueArrayGet(CliItems(),I);if(!CliBool(R,"valid",false)||!CliBool(R,"enabled",true))continue;
         bool Ok=CliAliasesValid(R);cstr Root=CliText(R,"managed_root",4096),Relative=CliText(R,"relative_path",4096);
@@ -74,7 +73,6 @@ static xvalue* CliCommandMap(void)
         for(size_t J=0;Ok&&J<xrtValueCount(Aliases);J++){xstrview Name={0};xrtValueGetString(xrtValueArrayGet(Aliases,J),&Name);Ok=CliMapAdd(Map,R,Name.Data,Relative,NULL);}
         if(!Ok){xrtValueRelease(Map);return NULL;}
     }
-#endif
     return Map;
 }
 static char* CliWrapper(const xvalue* Row)
@@ -107,7 +105,9 @@ static void CliAliasPath(char Out[128],xstrview Name)
 static bool CliOwnedAlias(cstr Path,const xvalue* Row,const void* Image,size_t Size)
 {
     if(!Row)return false;
-#if defined(_WIN32) || defined(_WIN64)
+#if defined(__ANDROID__)
+    (void)Image;(void)Size;char* Native=MdoAndroidForwarder();bool Ok=Native&&MdoAndroidToolOwnedLink(Path,Native);xrtFree(Native);return Ok;
+#elif defined(_WIN32) || defined(_WIN64)
     if(CliFileMatches(Path,Image,Size))return true;
     cstr Expected=CliText(Row,"launcher_sha256",64);if(!MdoCliHashValid(Expected))return false;
     xfile F=MdoHomeOpenRead(Path);uint64 Length=0;bool Ok=F&&xrtFileSize(F,&Length)&&Length<=2097152;uint8 Buffer[32768],Digest[32];xsha256 Sha;xrtSha256Init(&Sha);
@@ -124,7 +124,9 @@ static bool CliPrepareBindings(xvalue* Map,const xvalue* Previous,const void* Im
         xstrview Name;xvalue* Row=xrtValueObjectAt(Map,I,&Name);const xvalue* Old=xrtValueObjectGet(Previous,Name);if(!Old)Old=xrtValueObjectGet(xrtValueObjectGet(g_MdoCli.Published,XRT_STR_LITERAL("retired_commands")),Name);char Path[128];CliAliasPath(Path,Name);bool Exists=false;xfileinfo Info;
         if(!MdoHomeExternalStat(Path,&Exists,&Info))return false;
         if(Exists&&!CliOwnedAlias(Path,Old,Image,Size)&&!CliOwnedAlias(Path,Row,Image,Size)){if(Restore)continue;snprintf(g_MdoCli.BindingError,sizeof(g_MdoCli.BindingError),"Command entry '%.*s' is occupied by an unrecognized file; original file retained",(int)Name.Size,Name.Data);return false;}
-#if defined(_WIN32) || defined(_WIN64)
+#if defined(__ANDROID__)
+        char* Native=MdoAndroidForwarder();bool Linked=Native&&MdoAndroidToolLink(Path,Native);xrtFree(Native);if(!Linked)return false;
+#elif defined(_WIN32) || defined(_WIN64)
         char Hash[65],Master[140];uint8 Digest[32];if(!xrtSha256(Image,Size,Digest))return false;CliHex(Digest,Hash);
         if(!Exists){snprintf(Master,sizeof(Master),"data/external-tools/forwarders/%s.exe",Hash);
             if(!CliFileMatches(Master,Image,Size)&&!MdoHomeAtomicWrite(Master,Image,Size,false))return false;
@@ -155,20 +157,18 @@ static bool CliSave(void)
 #if defined(_WIN32) || defined(_WIN64)
     if(xrtValueCount(Map)||xrtValueCount(Old)){Image=xrtVfsReadAllLimit(MdoHomeApplicationVfs(),"/app/generated/native/windows/cli-forwarder.exe",2097152,&Size);if(!Image||Size<2||Image[0]!='M'||Image[1]!='Z'){snprintf(g_MdoCli.BindingError,sizeof(g_MdoCli.BindingError),"Windows command forwarder is missing from the application VFS");Ok=false;}}
 #endif
-#if !defined(__ANDROID__)
     if(Ok)Ok=CliPrepareBindings(Map,Old,Image,Size,false);
-#endif
     xvalue* Saved=Ok?xrtValueDeepClone(g_MdoCli.State):NULL;if(!Saved)Ok=false;
     if(Ok){xvalue* Retired=CliRetiredBindings(Map,Old);Ok=Retired&&xrtValueObjectSetNew(Saved,XRT_STR_LITERAL("retired_commands"),Retired);}
     if(Ok){xrtValueObjectSet(Saved,XRT_STR_LITERAL("commands"),Map);xvalue* Items=xrtValueObjectGet(Saved,XRT_STR_LITERAL("items"));
-        for(size_t I=0;I<xrtValueCount(Items);I++){xvalue* R=xrtValueArrayGet(Items,I);char* Relative=CliRelative(CliText(R,"path",4096));if(Relative){CliSet(R,"relative_path",Relative);xrtValueObjectRemove(R,XRT_STR_LITERAL("path"));}else xrtValueObjectRemove(R,XRT_STR_LITERAL("relative_path"));xrtFree(Relative);}
+        for(size_t I=0;I<xrtValueCount(Items);I++){xvalue* R=xrtValueArrayGet(Items,I);if(!CliRelativeValid(CliText(R,"relative_path",4096)))xrtValueObjectRemove(R,XRT_STR_LITERAL("relative_path"));xrtValueObjectRemove(R,XRT_STR_LITERAL("path"));}
         size_t Length=0;char* Json=xrtJsonStringify(Saved,false,&Length);xjsonreadconfig Check;xrtJsonReadConfigInit(&Check);Check.MaxInputBytes=1048576;Check.MaxValues=50000;Check.MaxDepth=24;Check.MaxStringBytes=65536;
         xvalue* Verified=Json&&Length<=1048576?xrtJsonRead(xrtStrViewN(Json,Length),&Check):NULL;Ok=Verified!=NULL;xrtFree(Json);xrtValueRelease(Verified);
         if(!Ok)snprintf(g_MdoCli.BindingError,sizeof(g_MdoCli.BindingError),"Tool registry exceeds command index resource limits");
-        if(Ok)Ok=MdoDistSave("data/external-tools/state.json",Saved);}
+        if(Ok)Ok=MdoAndroidToolsEnvironment(CliItems())&&MdoDistSave("data/external-tools/state.json",Saved);}
     if(Ok){xrtValueObjectSet(g_MdoCli.State,XRT_STR_LITERAL("commands"),Map);xrtValueObjectSet(g_MdoCli.State,XRT_STR_LITERAL("retired_commands"),xrtValueObjectGet(Saved,XRT_STR_LITERAL("retired_commands")));CliRemoveBindings(xrtValueObjectGet(Saved,XRT_STR_LITERAL("retired_commands")),Map,Image,Size);xrtValueRelease(g_MdoCli.Published);g_MdoCli.Published=Saved;Saved=NULL;}
     else{
-#if !defined(_WIN32) && !defined(_WIN64) && !defined(__ANDROID__)
+#if !defined(_WIN32) && !defined(_WIN64)
         if(!CliPrepareBindings(Old,Map,Image,Size,true))g_MdoCli.Writable=false;
 #endif
         CliRemoveBindings(Map,Old,Image,Size);if(!g_MdoCli.BindingError[0])snprintf(g_MdoCli.BindingError,sizeof(g_MdoCli.BindingError),"Cannot publish portable command entries; check file permissions and storage");}
@@ -176,7 +176,6 @@ static bool CliSave(void)
 }
 static bool CliPathInit(void)
 {
-#if !defined(__ANDROID__)
     g_MdoCli.OriginalPath=xrtEnvGet("PATH");char* Bin=MdoHomeExternalPath("data/external-tools/bin");if(!Bin)return false;
     size_t N=strlen(Bin)+(g_MdoCli.OriginalPath?strlen(g_MdoCli.OriginalPath):0)+2;g_MdoCli.ProcessPath=xrtMalloc(N);
     if(g_MdoCli.ProcessPath)snprintf(g_MdoCli.ProcessPath,N,"%s%c%s",Bin,
@@ -186,9 +185,6 @@ static bool CliPathInit(void)
         ':',
 #endif
         g_MdoCli.OriginalPath?g_MdoCli.OriginalPath:"");xrtFree(Bin);return g_MdoCli.ProcessPath&&xrtEnvSet("PATH",g_MdoCli.ProcessPath);
-#else
-    return true;
-#endif
 }
 static void CliPathUnit(void)
 {

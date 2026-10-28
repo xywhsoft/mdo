@@ -50,10 +50,14 @@ def zip_info(path,mode):
     info=zipfile.ZipInfo(path,(1980,1,1,0,0,0));info.create_system=3;info.external_attr=mode<<16|(16 if path.endswith('/') else 0);info.compress_type=zipfile.ZIP_DEFLATED
     return info
 
-def package_tool(stage,metadata,output):
+def package_tool(stage,metadata,output,extra_directories=None):
     stage=Path(stage);output=Path(output);meta,config=tool_documents(metadata);files=[];seen=set();total=0
-    for path in sorted(stage.rglob('*')):
-        relative=path.relative_to(stage).as_posix();mode=path.lstat().st_mode
+    sources=[(path.relative_to(stage).as_posix(),path) for path in stage.rglob('*')]
+    for prefix,directory in (extra_directories or {}).items():
+        directory=Path(directory);sources.append((prefix,directory))
+        sources.extend((prefix+'/'+p.relative_to(directory).as_posix(),p) for p in directory.rglob('*'))
+    for relative,path in sorted(sources):
+        mode=path.lstat().st_mode
         if stat.S_ISLNK(mode) or not (stat.S_ISDIR(mode) or stat.S_ISREG(mode)):raise ValueError('Unsupported directory entry: '+relative)
         if relative in ('extension.json','tool.json'):raise ValueError('Tool build source already contains reserved publication documents')
         name=relative+('/' if path.is_dir() else '');key=unicodedata.normalize('NFC',relative).casefold()
