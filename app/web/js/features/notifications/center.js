@@ -6,7 +6,6 @@ import { createNoticeIndicators } from "./indicator.js";
 import { openLayer } from "../../components/layers.js";
 import { createNoticePreferences } from "./preferences.js";
 import { createExternalToolsPanel } from "./external-directory-tools.js";
-import { createToolPanel } from "./tool-panel.js";
 import { createWarningPanel } from "./warning-panel.js";
 
 const words = {
@@ -34,10 +33,6 @@ export function createNotificationCenter({ updatePanel, navigation, openAccount 
   let cli = {}, distribution = {cli:{}}, update = null, account = null, diagnostics = null, diagnosticsFailed = false, pending = false, timer, destroyed = false, epoch = 0, view = null;
   const choices = createNoticePreferences();
   const copy = () => words[currentLocale()] ?? words["en-US"];
-  const toolPanel=createToolPanel({copy,target:targetState,command,openFull:async()=>{
-    try { await api.post("/update",{edition:"full"});await updatePanel?.refresh();updatePanel?.open(); }
-    catch(error){distribution.message=copy().failure+" · "+error.message;renderTools();}
-  }});
   const externalPanel=createExternalToolsPanel({refresh,openDownloads,signedIn:()=>account?.state==="signed_in",isMain:()=>navigation.get().view==="workspace",openFull:async()=>{
     await api.post("/update",{edition:"full"});await updatePanel?.refresh();updatePanel?.open();
   }});
@@ -92,15 +87,9 @@ export function createNotificationCenter({ updatePanel, navigation, openAccount 
     renderTools();
   }
   function renderTools() {
-    const data={...distribution,message:serviceMessages[currentLocale()]?.[distribution.message]??distribution.message};
-    if(cli.platform){externalPanel.render(toolsBody,cli);}
-    else {toolPanel.render(toolsBody,data);}
+    externalPanel.render(toolsBody,cli);
   }
   function openTools() { indicators.hide(); close(); navigation.openSettings("toolpacks"); }
-  async function command(action, id) {
-    try { await api.post("/distribution", { action, id }); await refresh(); }
-    catch (error) { distribution.message = copy().failure + " · " + error.message; render(); }
-  }
   async function refresh() {
     if (pending || destroyed) return false; pending = true; const generation = epoch;
     try {

@@ -5,7 +5,7 @@ from pathlib import Path
 from test_android_distribution import inspect,ROOT
 
 def run(products,host):
-    image=ROOT/'.build/cli-forwarder-development/forwarder.exe';release=json.loads((ROOT/'app/release.json').read_text());rows=[]
+    image=None;release=json.loads((ROOT/'app/release.json').read_text());rows=[]
     targets=[('windows',products/'windows/mdo.exe'),('windows',products/'windows/mdo-server.exe')]
     targets += [('linux',products/f'linux/linux-x86_64-{libc}-{edition}'/('mdo' if edition=='gui' else 'mdo-server')) for libc in ('glibc','musl') for edition in ('gui','server')]
     targets += [(edition,products/f'android/mdo-{edition}.apk') for edition in ('lite','full')]
@@ -18,17 +18,18 @@ def run(products,host):
                 with zipfile.ZipFile(path) as apk:
                     packed=folder/'app.xrtpack';packed.write_bytes(apk.read('assets/app.xrtpack'))
                     assert not any(n.endswith('.exe') for n in apk.namelist())
-                    if platform=='full':
-                        dex=b''.join(apk.read(n) for n in apk.namelist() if n.endswith('.dex'))
-                        assert all(p.encode() in dex for p in ('aria2','ripgrep','7zip'))
+                    if platform=='full':assert {'assets/mdo-extensions/aria2.zip','assets/mdo-extensions/ripgrep.zip','assets/mdo-extensions/7zip.zip'}<=set(apk.namelist())
             else:row={}
             unpack=folder/'unpacked';subprocess.run([str(host),'pack','--extract',str(packed),'-d',str(unpack)],check=True,capture_output=True)
             helper=unpack/'generated/native/windows/cli-forwarder.exe';assert helper.is_file()==(platform=='windows'),path
-            if helper.is_file():assert helper.read_bytes()==image.read_bytes(),path
-            for relative in ('src/distribution/cli_bindings.inc.c','src/distribution/cli.inc.c','src/distribution/cli_archive.inc.c','include/mdo/cli_package.h'):
+            if helper.is_file():
+                if image is None:image=helper.read_bytes()
+                else:assert helper.read_bytes()==image,path
+            for relative in ('src/distribution/cli_bindings.inc.c','src/distribution/cli.inc.c','src/distribution/android_tools.c','include/mdo/extension_zip.h'):
                 assert (unpack/relative).read_bytes()==(ROOT/'app'/relative).read_bytes(),(path,'stale source',relative)
+            for retired in ('src/distribution/cli_archive.inc.c','include/mdo/cli_package.h','include/mdo/ecosystem_package.h'):assert not (unpack/retired).exists(),(path,'retired protocol',retired)
             rows.append({**row,'platform':platform,'file':str(path.relative_to(products)),'bytes':path.stat().st_size,'sha256':hashlib.sha256(path.read_bytes()).hexdigest()})
-    result={'passed':True,'forwarder_bytes':image.stat().st_size,'forwarder_sha256':hashlib.sha256(image.read_bytes()).hexdigest(),'products':rows}
+    result={'passed':True,'forwarder_bytes':len(image),'forwarder_sha256':hashlib.sha256(image).hexdigest(),'products':rows}
     (products/'validation.json').write_text(json.dumps(result,indent=2)+'\n',encoding='utf-8');print(json.dumps(result))
 
 if __name__=='__main__':

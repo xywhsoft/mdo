@@ -57,7 +57,7 @@ test("both role editors save explicit no-tools and expose identical C/configurat
     const inherit=dialog.querySelector("fieldset").querySelector("input");inherit.checked=false;inherit.dispatchEvent(new Event("change"));
     button(dialog,"保存").click();await flush();
     assert.equal(writes.at(-1).url,`/api/v1/extensions/${kind}/config-${kind}`);
-    assert.deepEqual(promptFields(writes.at(-1).body.content).tools,[]);
+    assert.deepEqual(promptFields(writes.at(-1).body.edits.find(file=>file.path==="agent.md").text).tools,[]);
     assert.equal(document.body.querySelector("dialog"),null);
   }
 });

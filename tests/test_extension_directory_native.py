@@ -12,6 +12,15 @@ from test_extension_zip_native import headers
 ROOT = Path(__file__).resolve().parents[1]
 HOME_STUBS = r'''
 static xroot QaRoot;
+/* These filesystem/command contracts never consume transfer tasks. The actual
+ * binary-task lifecycle is exercised by the full-product save/task tests. */
+bool MdoExtensionTaskComplete(cstr Id,const xvalue* Outcome,xvalue** Result,char Error[512]){(void)Id;(void)Outcome;*Result=NULL;snprintf(Error,512,"Transfer task completion is outside this filesystem fixture");return false;}
+struct MdoExtensionTaskUse;
+struct MdoExtensionTaskUse* MdoExtensionTaskUseBegin(cstr Id,bool Write,xcancel* Cancel,char Error[512]){(void)Id;(void)Write;(void)Cancel;snprintf(Error,512,"Transfer tasks are outside this filesystem fixture");return NULL;}
+void MdoExtensionTaskUseEnd(struct MdoExtensionTaskUse* Use){(void)Use;}
+xcancel* MdoExtensionTaskUseCancel(struct MdoExtensionTaskUse* Use){(void)Use;return NULL;}
+xvalue* MdoExtensionTaskRead(cstr Id,char Error[512]){(void)Id;(void)Error;return NULL;}
+char* MdoExtensionTaskArchive(cstr Id,char Error[512]){(void)Id;(void)Error;return NULL;}
 static bool QaParents(cstr Path){
  char* Copy=xrtStrDup(Path);if(!Copy)return false;bool Ok=true;
  for(char* P=Copy;Ok&&*P;P++)if(*P=='/'){*P=0;xfileinfo I;

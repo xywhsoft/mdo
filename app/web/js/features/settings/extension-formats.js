@@ -152,8 +152,3 @@ export function expandCommand(prompt, args) {
   return text.includes("$ARGUMENTS") ? text.replaceAll("$ARGUMENTS", () => String(args)) :
     args ? `${text}\n\n${args}` : text;
 }
-export function bytesToBase64(bytes) {
-  let binary = "";
-  for (let offset = 0; offset < bytes.length; offset += 8192) binary += String.fromCharCode(...bytes.subarray(offset, offset + 8192));
-  return btoa(binary);
-}

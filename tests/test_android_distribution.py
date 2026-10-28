@@ -48,10 +48,10 @@ def inspect(edition, release, path=None):
         assert metadata["edition"] == edition
         assert int(metadata["build_id"]) == release[f"android_{edition}_build_id"]
         assert metadata["version_code"] == release["version_code"].replace(".", "").upper()
-        assert metadata["revision"] == release["toolpack_revision"]
+        assert 'revision' not in metadata and 'extensions' in metadata
         native = {n.rsplit("/", 1)[1]: n for n in names if n.startswith("lib/")}
         assert native and all(n.startswith("lib/arm64-v8a/lib") and n.endswith(".so") for n in native.values())
-        host_files = {"libxs.so", "libmdo_command_worker.so"}
+        host_files = {"libxs.so", "libmdo_command_worker.so", "libmdo_cli_forwarder.so"}
         assert host_files <= native.keys(), "C command runtime/helper missing"
         for name in native.values():
             info = apk.getinfo(name)
@@ -65,27 +65,34 @@ def inspect(edition, release, path=None):
             missing = elf_dependencies(apk.read(name), name) - native.keys() - SYSTEM_LIBRARIES
             assert not missing, (name, missing)
         mapped = set()
-        logical_paths = set()
+        logical_paths = set();commands=set()
+        for tool in metadata['extensions']:
+            payload=apk.read(tool['asset']);assert len(payload)==tool['bytes'] and hashlib.sha256(payload).hexdigest()==tool['sha256']
+            with zipfile.ZipFile(__import__('io').BytesIO(payload)) as bundle:
+                assert bundle.testzip() is None and len(bundle.namelist())==len(set(bundle.namelist()))
+                manifest=json.loads(bundle.read('extension.json'));assert manifest['kind']=='external-tools' and manifest['alias']==tool['id']
+                assert not {'format','files','resources','payload','min_build_id'} & manifest.keys()
+                recipe=json.loads(bundle.read(manifest['entry']));assert recipe['program'] in bundle.namelist()
+                commands.update(c['name'] for c in recipe['commands'])
+                logical_paths.update(tool['id']+'/'+p for p in bundle.namelist())
+        native_paths=set()
         for record in metadata["files"]:
-            relative = record["path"]
-            assert relative not in logical_paths and not relative.startswith("/") and ".." not in relative.split("/")
-            logical_paths.add(relative)
-            if "native" in record:
-                assert record["native"] in native, record
-                mapped.add(record["native"])
-            else:
-                data = apk.read("assets/mdo-runtime/" + relative)
-                assert not data.startswith(b"\x7fELF"), relative
-                assert hashlib.sha256(data).hexdigest() == record["sha256"], relative
+            relative = record['tool']+'/'+record["path"]
+            assert relative not in native_paths and not relative.startswith("/") and ".." not in relative.split("/");native_paths.add(relative)
+            assert record["native"] in native, record
+            assert hashlib.sha256(apk.read(native[record['native']])).hexdigest()==record['sha256']
+            assert record.get('alias') or relative in logical_paths
+            mapped.add(record["native"])
         assert mapped == native.keys() - host_files, "unmapped native tools"
         if edition == "lite":
-            assert len(native) == len(host_files) and not metadata["files"]
+            assert len(native) == len(host_files) and not metadata["files"] and not metadata['extensions']
         else:
-            assert {"busybox/busybox", "busybox/sh", "curl/curl", "jq/jq", "openssh/ssh", "openssh/scp", "openssh/sftp", "python/bin/python3", "aria2/aria2c", "ripgrep/rg", "7zip/7zz"} <= logical_paths
+            assert {"busybox/busybox", "curl/curl", "jq/jq", "openssh/ssh", "openssh/scp", "openssh/sftp", "python/bin/python3", "aria2/aria2c", "ripgrep/rg", "7zip/7zz"} <= logical_paths
+            assert {'sh','awk','python','python3','git','rg','7zz'}<=commands
             assert len(native) > 5
             if release["toolpack_revision"] >= 4:
                 assert {"git/git", "sqlite/sqlite3", "poppler/pdftotext", "poppler/pdftoppm",
-                        "ffmpeg/ffmpeg", "ffmpeg/ffprobe", "imagemagick/magick", "fonts/fonts.conf"} <= logical_paths
+                        "ffmpeg/ffmpeg", "ffmpeg/ffprobe", "imagemagick/magick", "poppler/fonts/fonts.conf"} <= logical_paths
                 assert not {"liblzma.so", "libcrypto.so", "libssl.so"} & native.keys(), "external libraries shadow Android framework dependencies"
         return {"edition": edition, "bytes": path.stat().st_size, "native_elf_files": len(native), "runtime_paths": len(logical_paths)}
 

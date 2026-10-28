@@ -73,6 +73,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--key-password-env", help="runtime environment variable containing the release key password")
     parser.add_argument("--version-code", type=int, default=None)
     parser.add_argument("--debuggable", action="store_true")
+    parser.add_argument("--package",default="org.xleaves.mdo",help="application ID; use a separate ID for device acceptance")
+    parser.add_argument("--label",default="@string/app_name")
+    parser.add_argument("--home-name",default="mdo-home")
     parser.add_argument("--edition", choices=("both", "lite", "full"), default="both",
                         help="build both editions by default; select one for a custom output or build ID")
     args = parser.parse_args(argv)
@@ -86,11 +89,13 @@ def main(argv: list[str] | None = None) -> int:
         build_mdo.verify_dependencies(sdk_source, lock)
         build_mdo.prepare(lock, args.builtin_connection)
         directory = args.build_dir.resolve(); directory.mkdir(parents=True, exist_ok=True)
-        host = args.host_dir.resolve() / ("xsw.exe" if os.name == "nt" else "xs")
+        # Packing does not need a GUI entry point. Reuse the verified console
+        # host, including its overlay/profile receipt, on every platform.
+        host = args.host_dir.resolve() / ("xs.exe" if os.name == "nt" else "xs")
         if not args.skip_host_build:
             subprocess.run([sys.executable, str(sdk_source / "tools/build.py"), *lock["xserver"]["required_extensions"],
                 "--output", str(host.with_name("xs.exe" if os.name == "nt" else "xs")),
-                "--build-dir", str(ROOT / ".build/host-objects"),
+                "--build-dir", str(args.host_dir.resolve() / "objects"),"--frontend","none",
                 *build_mdo.host_profile_arguments(args.full_host),
                 *(["--icon", str(build_mdo.ICON_PATH)] if os.name == "nt" else [])], cwd=sdk_source, check=True)
             console_host = host.with_name("xs.exe" if os.name == "nt" else "xs")
@@ -136,7 +141,7 @@ def main(argv: list[str] | None = None) -> int:
             target_run(ROOT / "tools/android/build_apk.py", ["--sdk", args.sdk, "--java-home", args.java_home,
                 "--library", path(native / "libxs.so"), "--pack", path(pack), "--output", path(output),
                 "--app-link", "https://ai.xywhsoft.com/app/mdo/callback",
-                "--package", "org.xleaves.mdo", "--label", "@string/app_name", "--home-name", "mdo-home",
+                "--package", args.package, "--label", args.label, "--home-name", args.home_name,
                 "--resources", path(ROOT / "assets/branding/android/res"),
                 "--package-install",
                 "--version", release["version_name"], "--version-code", str(code), "--keystore", path(args.keystore),
