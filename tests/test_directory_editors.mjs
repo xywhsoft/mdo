@@ -36,7 +36,23 @@ test("directory editor preserves unopened resources, uses raw file tasks and fre
 test("store directory browser exposes files but cannot save, rename or replace resources",async()=>{
  const restore=environment(),item={id:"STORE-XID",source:"store",editable:false,revision:"b".repeat(64),manifest:{kind:"skills",entry:"SKILL.md"}},mock={targetState:()=>({selected:null}),subscribeTarget:()=>()=>{},directoryPath:(k,id)=>`/extensions/${k}/${id}`,directoryId:()=>true,directoryManifest:()=>item.manifest,
  api:{get:async p=>({data:p.includes("/files?")?{items:[],total:0}:p.includes("/file?")?{path:"SKILL.md",text:"Store skill"}:item})},saveDirectory:async()=>assert.fail("read-only save"),stageExtensionFile:async()=>assert.fail("read-only upload")};
- let editor;try{editor=(await load("directory-editor",mock)).createDirectoryEditor();await editor.open({kind:"skills",item});const view=document.body.querySelector("dialog");for(const name of ["保存目录","重命名","删除文件","添加资源"])assert(button(view,name).disabled);assert(view.querySelector('[aria-label="文件内容"]').readOnly);button(view,"关闭").click();await flush();assert(!document.body.querySelector("dialog"));}finally{editor?.destroy();delete globalThis.__directoryUI;restore();}
+ let editor;try{editor=(await load("directory-editor",mock)).createDirectoryEditor();await editor.open({kind:"skills",item});const view=document.body.querySelector("dialog");for(const name of ["保存目录","重命名","删除文件","添加资源","新建目录"])assert(button(view,name).disabled);assert(view.querySelector('[aria-label="文件内容"]').readOnly);button(view,"关闭").click();await flush();assert(!document.body.querySelector("dialog"));}finally{editor?.destroy();delete globalThis.__directoryUI;restore();}
+});
+
+test("missing manual manifest stays repairable, and discarded binary staging is cancelled",async()=>{
+ const restore=environment(),calls=[],item={id:"broken",name:"Broken",source:"manual",editable:true,revision:"d".repeat(64)};
+ const mock={targetState:()=>({selected:null}),subscribeTarget:()=>()=>{},directoryPath:(k,id)=>`/extensions/${k}/${id}`,directoryId:()=>true,directoryManifest:(kind,id)=>({kind,alias:id,entry:"mcp.json",platforms:["any"]}),api:{get:async p=>({data:p.includes("/files?")?{items:[{path:"bin/server",bytes:3}],total:1}:item}),post:async(p,b)=>{calls.push({p,b});return{data:{}};}},stageExtensionFile:async()=>({id:"discard-owned-file"})};
+ let editor;try{editor=(await load("directory-editor",mock)).createDirectoryEditor();await editor.open({kind:"mcp",item});const view=document.body.querySelector("dialog");assert(view.textContent.includes("根清单缺失或损坏"));assert.equal(JSON.parse(view.querySelector('[aria-label="extension.json（名称、别名、入口、平台、作者、版权与许可）"]').value).kind,"mcp");
+  const upload=view.querySelector('[aria-label="添加资源文件"]');upload.files=[new File([new Uint8Array([0,255])],"server")];upload.dispatchEvent(new Event("change"));await flush();button(view,"关闭").click();await flush();assert(calls.some(c=>c.p==="/extension-tasks/discard-owned-file/cancel"));
+ }finally{editor?.destroy();delete globalThis.__directoryUI;restore();}
+});
+
+test("a new directory atomically saves its first binary and empty resources without replacing the selected config",async()=>{
+ const restore=environment(),writes=[],cancelled=[],manifest={kind:"mcp",name:"New MCP",alias:"new-mcp",entry:"mcp.json",platforms:["any"]};let staged=0;
+ const mock={targetState:()=>({selected:null}),subscribeTarget:()=>()=>{},directoryPath:(k,id)=>`/extensions/${k}/${id}`,directoryId:()=>true,directoryManifest:()=>manifest,api:{post:async p=>{cancelled.push(p);}},stageExtensionFile:async()=>{staged++;return{id:"new-binary-task"};},saveDirectory:async(...args)=>{writes.push(args);return{};}};
+ let editor;try{editor=(await load("directory-editor",mock)).createDirectoryEditor();await editor.open({kind:"mcp",manifest,text:"{}"});const view=document.body.querySelector("dialog"),upload=view.querySelector('[aria-label="添加资源文件"]');upload.files=[new File([new Uint8Array([0,255])],"server.exe"),new File([],"empty")];upload.dispatchEvent(new Event("change"));await flush();button(view,"保存目录").click();await flush();
+  assert.equal(staged,1);assert.equal(writes[0][4],"");assert.deepEqual(writes[0][3],[{path:"mcp.json",text:"{}"},{path:"server.exe",task:"new-binary-task"},{path:"empty",text:""}]);assert.equal(cancelled.length,0);
+ }finally{editor?.destroy();delete globalThis.__directoryUI;restore();}
 });
 
 test("MCP connections use installed directory IDs, private revisions and preview-bound approvals, without publishing credentials",async()=>{

@@ -15,7 +15,7 @@ import uuid
 import zipfile
 from extension_archives import digest,tool_documents,valid_path,zip_info,MAX_ARCHIVE,MAX_DIRECTORY
 
-def convert(source,output,expected_hash=None):
+def convert(source,output,expected_hash=None,definitions=None,replace_derived=False):
     source,output=Path(source),Path(output)
     if source.resolve()==output.resolve():raise ValueError('Never overwrite an original object')
     original_hash=digest(source)
@@ -29,6 +29,14 @@ def convert(source,output,expected_hash=None):
             if not 0<length<=1048576:raise ValueError('Invalid bounded legacy index')
             meta=json.loads(stream.read(length))
             if not isinstance(meta,dict):raise ValueError('Legacy index is not an object')
+            if definitions is not None:
+                definition=definitions.get(meta.get('id'))
+                if not definition or not definition.get('description'):raise ValueError('No current human description for this official tool')
+                # Description is for people. Never turn an old model prompt
+                # into list copy or alter the recorded program/usage/license.
+                meta={**meta,'description':definition['description']}
+                for key in ('author','copyright'):
+                    if definition.get(key):meta[key]=definition[key]
             manifest,config=tool_documents(meta);files=meta.get('files');seen=set();total=0
             if not isinstance(files,list) or not 0<len(files)<=49998:raise ValueError('Invalid legacy file count')
             for row in files:
@@ -55,14 +63,24 @@ def convert(source,output,expected_hash=None):
                 if check.testzip() is not None:raise ValueError('New ZIP integrity failed')
         if digest(source)!=original_hash:raise ValueError('Original object changed during conversion')
         if output.exists():
-            if digest(output)!=digest(temporary):raise ValueError('Destination has different contents')
+            before=digest(output)
+            if before!=digest(temporary):
+                if not replace_derived:raise ValueError('Destination has different contents')
+                with zipfile.ZipFile(output) as old:
+                    info=old.getinfo('extension.json')
+                    if info.file_size>65536:raise ValueError('Invalid previous derived manifest')
+                    previous=json.loads(old.read(info))
+                    if previous.get('kind')!='external-tools' or previous.get('alias')!=manifest['alias']:raise ValueError('Refuse to replace an unrelated derived archive')
+                if digest(output)!=before:raise ValueError('Derived archive changed concurrently')
+                temporary.replace(output)
         else:temporary.replace(output)
         return {**manifest,'manifest':manifest,'platform':meta['platform'],'file':output.name,'sha256':digest(output),'size':output.stat().st_size,'legacy_sha256':original_hash}
     finally:
         temporary.unlink(missing_ok=True)
 
 def main():
-    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--database',type=Path,required=True);parser.add_argument('--output',type=Path,required=True);args=parser.parse_args()
+    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--database',type=Path,required=True);parser.add_argument('--output',type=Path,required=True);parser.add_argument('--official-definitions',type=Path);parser.add_argument('--replace-derived',action='store_true');args=parser.parse_args()
+    definitions={row['id']:row for row in json.loads(args.official_definitions.read_text(encoding='utf-8'))['tools']} if args.official_definitions else None
     if not args.database.is_file():raise ValueError('Old catalogue is missing')
     args.output.mkdir(parents=True,exist_ok=True);rows=[];identities=set()
     with closing(sqlite3.connect(args.database.resolve().as_uri()+'?mode=ro',uri=True)) as db:
@@ -76,7 +94,7 @@ def main():
             if source.stat().st_size!=record['size']:raise ValueError('Old object size changed')
             name=f"{record['slug']}-{record['platform']}.zip"
             if Path(name).name!=name or not valid_path(name):raise ValueError('Invalid published identity')
-            row=convert(source,args.output/name,sha)
+            row=convert(source,args.output/name,sha,definitions,args.replace_derived)
             if row['alias']!=record['slug'] or row['platform']!=record['platform']:raise ValueError('Old identity does not match its archive')
             rows.append(row);print('CONVERTED',row['alias'],row['platform'],row['size'],flush=True)
     (args.output/'catalog.json').write_text(json.dumps({'tools':rows},ensure_ascii=False,indent=2)+'\n',encoding='utf-8')

@@ -30,6 +30,12 @@ class ArchiveBuilders(unittest.TestCase):
    with zipfile.ZipFile(root/'new.zip') as archive:
     self.assertEqual(archive.read('bin/fixture.exe'),data);self.assertEqual(set(archive.namelist()),{'extension.json','tool.json','bin/fixture.exe'});self.assertEqual(json.loads(archive.read('tool.json'))['program'],'bin/fixture.exe');self.assertIsNone(archive.testzip())
    self.assertEqual(row['sha256'],hashlib.sha256((root/'new.zip').read_bytes()).hexdigest());convert(source,root/'new.zip')
+   definitions={'fixture':{'description':'Current human description'}}
+   with self.assertRaises(ValueError):convert(source,root/'new.zip',definitions=definitions)
+   convert(source,root/'new.zip',definitions=definitions,replace_derived=True)
+   with zipfile.ZipFile(root/'new.zip') as archive:
+    self.assertEqual(json.loads(archive.read('extension.json'))['description'],'Current human description');self.assertEqual(json.loads(archive.read('tool.json'))['prompt'],'For the model');self.assertEqual(archive.read('bin/fixture.exe'),data)
+   self.assertEqual(source.read_bytes(),before)
    source.write_bytes(before[:-1]+b'X')
    with self.assertRaises(ValueError):convert(source,root/'bad.zip')
    self.assertFalse((root/'bad.zip').exists());self.assertFalse((root/'bad.converting').exists())

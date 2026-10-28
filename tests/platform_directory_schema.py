@@ -1,9 +1,8 @@
 """Use the actual C store's SQLite schema in offline operator tests."""
-import json
 from pathlib import Path
-import re
+import sys
 ROOT=Path(__file__).resolve().parents[1]
+if str(ROOT/'tools') not in sys.path:sys.path.insert(0,str(ROOT/'tools'))
+from init_directory_store import schema as read_schema
 def schema():
- source=(ROOT.parent/'home/host/xywhsoft_ai/plugin/mdo/modules/ecosystem/directory_store.inc.c').read_text(encoding='utf-8')
- block=source.split('static bool MdStoreInit',1)[1].split('sqlite3_exec(S->Db,',1)[1].split(',NULL,NULL,NULL)',1)[0]
- return ''.join(json.loads(token) for token in re.findall(r'"(?:\\.|[^"\\])*"',block))
+ return read_schema(ROOT.parent/'home/host/xywhsoft_ai/plugin/mdo/modules/ecosystem/directory_store.inc.c')
