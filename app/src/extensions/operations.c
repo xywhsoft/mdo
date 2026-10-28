@@ -76,6 +76,12 @@ bool MdoExtensionsManage(const xvalue* Input,const xvalue* Credits,xcancel* Canc
   if(*Result){xrtValueObjectSetNew(*Result,XRT_STR_LITERAL("enabled"),xrtValueBool(Live&&Wanted));xrtValueObjectSetNew(*Result,XRT_STR_LITERAL("runtime_ready"),xrtValueBool(Live));}
  }
 done:
+ if(Ok&&*Result&&!strcmp(Kind,"plugins")){
+  bool Restart=false,Pending=MdoApplicationPluginsPending(&Restart);
+  xrtValueObjectSetNew(*Result,XRT_STR_LITERAL("pending"),xrtValueBool(Pending));
+  xrtValueObjectSetNew(*Result,XRT_STR_LITERAL("restart_required"),xrtValueBool(Restart));
+  if(Pending)xrtValueObjectSetNew(*Result,XRT_STR_LITERAL("runtime_ready"),xrtValueBool(false));
+ }
  if(Suspended){char Rollback[512]={0};if(!MdoExtOpRestore(Kind,Id,WasEnabled,Rollback)&&Error)snprintf(Error,512,"The operation did not complete; runtime recovery is required: %.380s",Rollback);}
  xrtValueRelease(Before);MdoExtensionsMutationEnd();return Ok&&*Result;
 }

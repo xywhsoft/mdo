@@ -35,11 +35,6 @@ MDO_EXPORT mdo_result mdoCommandRun(const mdo_command_context_v1* C,const xvalue
 }
 '''.replace('QA_APP', json.dumps((root / 'app').as_posix())).replace('QA_FIXTURE', json.dumps(fixture.as_posix()))
     encoded = source.encode('utf-8')
-    command = args.home / 'commands' / (ident + '.c')
-    if command.exists():
-        raise AssertionError('Refusing to replace an existing command')
-    command.parent.mkdir(parents=True, exist_ok=True)
-    command.write_bytes(encoded)
     def request(method, path, value=None):
         headers = {}
         if method == 'POST':
@@ -54,6 +49,22 @@ MDO_EXPORT mdo_result mdoCommandRun(const mdo_command_context_v1* C,const xvalue
             raise AssertionError((error.code, error.read().decode('utf-8'))) from error
     def call(method, params):
         return request('POST', '/api/v1/application/call', {'method': method, 'params': params, 'context': {'project': args.project}})['data']
+    # Current products only discover complete Home directories. The older
+    # existing acceptance host is still usable while testing a source upgrade.
+    try:
+        with urllib.request.urlopen(args.url + '/api/v1/extensions/commands',timeout=5) as response:
+            directory_mode = response.status == 200
+    except urllib.error.HTTPError as error:
+        if error.code != 404: raise
+        directory_mode = False
+    directory = args.home / 'commands' / ident if directory_mode else None
+    command = directory / 'command.c' if directory else args.home / 'commands' / (ident + '.c')
+    if command.exists() or (directory and directory.exists()):
+        raise AssertionError('Refusing to replace an existing command')
+    command.parent.mkdir(parents=True,exist_ok=True)
+    manifest = json.dumps(dict(kind='commands',name=ident,alias=ident,entry='command.c',platforms=['any'])).encode()
+    if directory: (directory / 'extension.json').write_bytes(manifest)
+    command.write_bytes(encoded)
     try:
         invocation = 'cmd-' + uuid.uuid4().hex
         body = {'invocation_id': invocation, 'command_id': ident, 'raw_arguments': json.dumps([argument], ensure_ascii=False)}
@@ -69,5 +80,8 @@ MDO_EXPORT mdo_result mdoCommandRun(const mdo_command_context_v1* C,const xvalue
     finally:
         if command.exists() and hashlib.sha256(command.read_bytes()).digest() == hashlib.sha256(encoded).digest():
             command.unlink()
+            if directory and (directory / 'extension.json').read_bytes() == manifest:
+                (directory / 'extension.json').unlink()
+                directory.rmdir()
         if fixture and fixture.parent == root / '.build/native-contracts':
             shutil.rmtree(fixture)

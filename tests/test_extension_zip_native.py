@@ -149,52 +149,21 @@ MDO_EXPORT mdo_result mdoCommandRun(const mdo_command_context_v1* C,const xvalue
  xrtValueObjectSetNew(*R,XRT_STR_LITERAL("native_roundtrip"),xrtValueBool(Readable));return MDO_RESULT_OK;
 }
 '''
-    command = args.home / 'commands' / (ident + '.c')
-    command.parent.mkdir(parents=True, exist_ok=True)
-    encoded = source.encode('utf-8'); command.write_bytes(encoded)
-    def request(method, path, value=None):
-        headers_ = {}
-        if method == 'POST':
-            with urllib.request.urlopen(args.url + '/api/v1/bootstrap', timeout=15) as r:
-                headers_['X-Mdo-Write-Token'] = r.headers.get('X-Mdo-Write-Token', '')
-            headers_['Content-Type'] = 'application/json'
-        req = urllib.request.Request(args.url + path, data=json.dumps(value).encode() if value is not None else None, method=method, headers=headers_)
-        try:
-            with urllib.request.urlopen(req, timeout=90) as r:
-                return json.load(r)
-        except urllib.error.HTTPError as error:
-            raise AssertionError((error.code, error.read().decode('utf-8'))) from error
-    def call(method, params):
-        data = request('POST', '/api/v1/application/call', {'method': method, 'params': params, 'context': {'project': args.project}})
-        return data['data']
-    try:
-        invocation = 'cmd-' + uuid.uuid4().hex
-        body = {'invocation_id': invocation, 'command_id': ident, 'raw_arguments': json.dumps([{'cases': cases, 'writer_input': str(source_file), 'writer_output': str(written)}], ensure_ascii=False)}
-        call('product.command_invocations.post', {'query': {'project': args.project}, 'body': body})
-        for _ in range(300):
-            status = call('product.command_invocations.by_invocation.get', {'path': {'invocation': invocation}})['data']
-            if status.get('terminal'):
-                break
-            time.sleep(.2)
-        (out / 'native-result.json').write_text(json.dumps(status, ensure_ascii=False, indent=2), encoding='utf-8')
-        assert status.get('state') == 'succeeded', status
-        result = status['result']
-        assert result['directory_contract'], result
-        by_name = {r['name']: r for r in result['cases']}
-        for case in cases:
-            assert by_name[case['name']]['accepted'] == case['expected'], (case, by_name[case['name']])
-        assert result['written'], result
-        assert result['native_roundtrip'], result
-        with zipfile.ZipFile(written) as z:
-            assert z.testzip() is None
-            assert z.read('lib/数据.bin') == binary
-            assert z.getinfo('empty/').is_dir()
-            assert z.getinfo('lib/数据.bin').external_attr >> 16 & 0o777 == 0o755
-        print(json.dumps({'cases': len(cases), 'writer_roundtrip': True, 'native_command_bytes': len(encoded)}))
-    finally:
-        if command.exists() and hashlib.sha256(command.read_bytes()).digest() == hashlib.sha256(encoded).digest():
-            command.unlink()
+    from native_extension_runner import run
+    encoded = source.encode('utf-8')
+    result = run(args,ident,source,{'cases':cases,'writer_input':str(source_file),'writer_output':str(written)},out/'native-result.json')
+    assert result['directory_contract'], result
+    by_name = {r['name']: r for r in result['cases']}
+    for case in cases:
+        assert by_name[case['name']]['accepted'] == case['expected'], (case, by_name[case['name']])
+    assert result['written'], result
+    assert result['native_roundtrip'], result
+    with zipfile.ZipFile(written) as z:
+        assert z.testzip() is None
+        assert z.read('lib/数据.bin') == binary
+        assert z.getinfo('empty/').is_dir()
+        assert z.getinfo('lib/数据.bin').external_attr >> 16 & 0o777 == 0o755
+    print(json.dumps({'cases': len(cases), 'writer_roundtrip': True, 'native_command_bytes': len(encoded)}))
 
 
-if __name__ == '__main__':
-    main()
+if __name__ == "__main__": main()

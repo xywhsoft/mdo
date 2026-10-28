@@ -117,6 +117,12 @@ bool MdoApplicationPluginEntriesOnly(void){
 }
 
 bool MdoApplicationPluginsRecovery(void){if(!SdkPlugins.Lock)return false;xrtMutexLock(SdkPlugins.Lock);bool R=SdkPlugins.Recovery;xrtMutexUnlock(SdkPlugins.Lock);return R;}
+bool MdoApplicationPluginsPending(bool* RestartRequired){
+    if(RestartRequired)*RestartRequired=false;if(!SdkPlugins.Lock)return false;
+    xrtMutexLock(SdkPlugins.Lock);bool Pending=SdkPlugins.Pending||SdkPlugins.Recovery;
+    if(RestartRequired)*RestartRequired=SdkPlugins.Recovery||SdkPluginNativeChanged(SdkPlugins.Effective,SdkPlugins.Config);
+    xrtMutexUnlock(SdkPlugins.Lock);return Pending;
+}
 
 bool MdoApplicationPluginCoreRequired(void){
     if(!SdkPlugins.Lock)return false;bool Required=false;xrtMutexLock(SdkPlugins.Lock);

@@ -21,6 +21,10 @@ static bool QaExecute(MdoModuleCatalog* Catalog,cstr Expected){
 static void QaBool(xvalue* R,cstr K,bool B){xrtValueObjectSetNew(R,xrtStrView(K),xrtValueBool(B));}
 xvalue* QaProductContract(const xvalue* P,xvfs V){
  char Error[512]={0};xvalue* R=xrtValueObject();bool Home=QaProductHome(SdkField(P,"root"),SdkField(P,"app"),V);
+ bool Started=Home&&MdoExtensionsInit()&&MdoExtensionsSetEnabled("plugins","other",false,Error)&&MdoExtensionsSetEnabled("plugins","fresh",false,Error)&&MdoApplicationPluginsInit();
+ xvalue* Enable=SdkParse("{\"kind\":\"plugins\",\"id\":\"fresh\",\"action\":\"enable\",\"enabled\":true}"),*Pending=NULL;
+ bool Waiting=Started&&MdoExtensionsManage(Enable,NULL,NULL,&Pending,Error)&&MdoExtOpBool(Pending,"restart_required",false)&&MdoExtOpBool(Pending,"pending",false)&&!MdoExtOpBool(Pending,"runtime_ready",true);
+ QaBool(R,"native_activation_reports_restart",Waiting);xrtValueRelease(Pending);Pending=NULL;xrtValueObjectSetNew(Enable,XRT_STR_LITERAL("enabled"),xrtValueBool(false));MdoExtensionsManage(Enable,NULL,NULL,&Pending,Error);xrtValueRelease(Pending);xrtValueRelease(Enable);MdoApplicationPluginsUnit();
  bool Ok=Home&&MdoExtensionsInit()&&MdoExtensionsSetEnabled("plugins","other",false,Error)&&MdoApplicationPluginsInit();QaBool(R,"loaded",Ok&&!MdoApplicationPluginsRecovery());
  size_t N=0;bytes Overlay=xrtVfsReadAllLimit(V,"/app/web/qa-overlay.txt",1024,&N);QaBool(R,"physical_directory_overlay",Overlay&&N==14&&!memcmp(Overlay,"plugin overlay",14));xrtFree(Overlay);
  xvalue* Owner=MdoApplicationPluginFileOwner("web/qa-overlay.txt");QaBool(R,"credits",Owner&&!strcmp(SdkField(Owner,"id"),"0123456789ABCDEFGHJKMNPQRSTVWXYZ")&&!strcmp(SdkField(Owner,"author"),"QA author"));xrtValueRelease(Owner);
@@ -46,7 +50,7 @@ xvalue* QaProductContract(const xvalue* P,xvfs V){
  Removed=NULL;Frontend=Frontend&&!MdoExtensionsRemove("plugins","other",&Removed,Error);xrtValueRelease(Removed);Removed=NULL;
  Frontend=Frontend&&SdkPluginFrontendCall("plugin.frontend.leave",Input,&Reply,&Failure)&&!SdkPlugins.Pending&&MdoExtensionsRemove("plugins","other",&Removed,Error);QaBool(R,"frontend_cleanup_before_uninstall",Frontend);
  xrtValueRelease(Removed);xrtValueRelease(Input);xrtValueRelease(Reply);xrtValueRelease(Changes);xrtValueRelease(Before);xrtValueRelease(Desired);xrtValueRelease(Plan);MdoApplicationPluginsUnit();
- QaBool(R,"restart_no_resurrection",MdoApplicationPluginsInit()&&!xrtValueCount(SdkPlugins.Config));MdoApplicationPluginsUnit();SdkPut(R,"error",Error);MdoExtensionsUnit();if(Home)MdoHomeUnit();return R;
+ QaBool(R,"restart_no_resurrection",MdoApplicationPluginsInit()&&xrtValueCount(SdkPlugins.Config)==1);MdoApplicationPluginsUnit();SdkPut(R,"error",Error);MdoExtensionsUnit();if(Home)MdoHomeUnit();return R;
 }
 '''
 
@@ -64,11 +68,13 @@ def main():
     recipe = dict(entry=dict(native='plugin.c', frontend='frontend.js'), overrides=[dict(source='overlay.txt', target='web/qa-overlay.txt')], exclusive=['qa-layout'])
     for name, content in {'plugin.json': json.dumps(recipe), 'plugin.c': tool, 'helper.h': '#define QA_NUMBER 17\n', 'resource.txt': 'plugin resource', 'frontend.js': 'export function activate(){}', 'overlay.txt': 'plugin overlay'}.items(): (directory / name).write_text(content, encoding='utf-8')
     (directory / '.empty').mkdir()
+    fresh=fixture/'plugins/fresh';fresh.mkdir();(fresh/'extension.json').write_text(json.dumps(dict(kind='plugins',name='Fresh',alias='fresh',entry='plugin.json',platforms=['any'])))
+    (fresh/'plugin.json').write_text(json.dumps(dict(entry=dict(native='native.c'))));(fresh/'native.c').write_text('/* Native selection must wait for restart; never compiled by this test. */')
     other = fixture / 'plugins/other'; other.mkdir(); (other / 'extension.json').write_text(json.dumps(dict(kind='plugins', name='Other', alias='other', entry='plugin.json', platforms=['any'])))
     (other / 'plugin.json').write_text(json.dumps(dict(entry=dict(frontend='entry.js'), exclusive=['qa-layout']))); (other / 'entry.js').write_text('export function activate(){}')
     try:
         result = product(a, fixture, CONTRACT.replace('0123456789ABCDEFGHJKMNPQRSTVWXYZ',ID), out / 'result.json')
-        for key in ('loaded', 'physical_directory_overlay', 'credits', 'real_native_entry', 'plugin_registers_roles', 'native_macro_preserves_display_version', 'active_directory_pinned', 'exclusive_conflict', 'whole_directory_zip', 'changed_native_requires_restart', 'header_after_restart', 'native_uninstall_deferred_honestly', 'whole_directory_removed', 'frontend_cleanup_before_uninstall', 'restart_no_resurrection'): assert result.get(key), (key, result)
+        for key in ('native_activation_reports_restart', 'loaded', 'physical_directory_overlay', 'credits', 'real_native_entry', 'plugin_registers_roles', 'native_macro_preserves_display_version', 'active_directory_pinned', 'exclusive_conflict', 'whole_directory_zip', 'changed_native_requires_restart', 'header_after_restart', 'native_uninstall_deferred_honestly', 'whole_directory_removed', 'frontend_cleanup_before_uninstall', 'restart_no_resurrection'): assert result.get(key), (key, result)
         with zipfile.ZipFile(fixture / 'data/extension-tasks/export/plugin.zip') as z:
             assert z.testzip() is None and 'plugin.c' in z.namelist() and '.empty/' in z.namelist()
             assert not any('revisions/' in name or name.startswith('files/') for name in z.namelist())
