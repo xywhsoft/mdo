@@ -376,8 +376,8 @@ def main(argv: list[str] | None = None) -> int:
         if os.name == "nt":
             # Distribution probes require catalog/archives from this source,
             # not an earlier release's ignored build cache.
-            run([sys.executable, str(ROOT / "tools/build_toolpacks.py"),
-                 "--packer", str(host)])
+            run([sys.executable, str(ROOT / "tools/build_cli_tools.py"),
+                 "--platform", "windows-x86_64"])
         probe_count = runtime_probes(host, first, optional_tools_stage=args.optional_tools_stage,
                                     optional_tools_platform=args.optional_tools_platform)
         verify_release_inputs(inputs)

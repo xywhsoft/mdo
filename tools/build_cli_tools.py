@@ -9,6 +9,7 @@ import shutil
 import struct
 import tempfile
 from runtime.build.python_runtime import prepare_windows_python
+from extension_archives import package_tool
 
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -68,7 +69,7 @@ def linux_files(stage,tool,runtime):
     shutil.copy2(runtime/"provenance.json",stage/"provenance.json")
 
 def build(output,platforms):
-    definitions=json.loads((ROOT/"app/default-home/cli-tools/official.json").read_text(encoding="utf-8"))["tools"]
+    definitions=json.loads((ROOT/"tools/runtime/official.json").read_text(encoding="utf-8"))["tools"]
     catalog=json.loads((ROOT/"tools/runtime/catalog.json").read_text(encoding="utf-8"))["tools"]
     output.mkdir(parents=True,exist_ok=True);rows=[]
     for platform in platforms:
@@ -81,16 +82,9 @@ def build(output,platforms):
                 stage=Path(raw);shutil.copytree(runtime/tool,stage/tool)
                 if platform=="windows-x86_64" and tool=="python":prepare_windows_python(stage/tool)
                 if platform=="linux-x86_64":linux_files(stage,tool,runtime)
-                files=[]
-                for p in sorted(stage.rglob("*")):
-                    if not p.is_file():continue
-                    path=p.relative_to(stage).as_posix()
-                    if any(v.startswith(".") for v in path.split("/")):raise ValueError("Hidden archive component: "+path)
-                    start=p.read_bytes()[:4]
-                    files.append(dict(path=path,size=p.stat().st_size,sha256=digest(p),mode=493 if start[:2]==b"#!" or start==b"\x7fELF" or p.suffix.lower()==".exe" else 420))
                 entry=tool+"/"+record["entrypoints"][0]
                 manifest=dict(id=tool,name=definition["name"],version=version(record["version"]),platform=platform,
-                              description=definition["description"],copyright=record.get("copyright",definition.get("copyright","")),prompt=definition["prompt"],entry=entry,license=record.get("license",definition["license"]),links=definition["links"],files=files)
+                              description=definition["description"],copyright=record.get("copyright",definition.get("copyright","")),prompt=definition["prompt"],entry=entry,license=record.get("license",definition["license"]),links=definition["links"],recommended=definition["recommended"],upstream_version=record["version"])
                 manifest["commands"]=[dict(name=Path(p).stem if p.lower().endswith('.exe') else Path(p).name,entry=tool+'/'+p,args=[]) for p in record["entrypoints"]]
                 if tool=="python":
                     names={c['name'] for c in manifest['commands']}
@@ -99,16 +93,8 @@ def build(output,platforms):
                 if tool=="busybox":
                     for name in ('sh','ash','awk','sed','grep','find','cat','head','tail','sort','wc','cp','mv','rm','mkdir','rmdir','touch','tar','gzip','gunzip','unzip','xargs','tee','tr','which','basename','dirname','ls','pwd','echo'):
                         manifest['commands'].append(dict(name=name,entry=entry,args=[name]))
-                encoded=json.dumps(manifest,ensure_ascii=False,separators=(",",":")).encode()
-                path=output/f"{tool}-{manifest['version']}-{platform}.mdo-cli"
-                with path.open("wb") as f:
-                    f.write(b"MDOCLI1\n"+struct.pack("<I",len(encoded))+encoded)
-                    for row in files:
-                        with (stage/row["path"]).open("rb") as source:shutil.copyfileobj(source,f,1048576)
-                assert path.stat().st_size<=512*1048576 and len(encoded)<=1048576 and len(files)<=4096
-                rows.append(dict(manifest,tool_id="official."+tool,sha256=digest(path),size=path.stat().st_size,
-                                 recommended=definition["recommended"],file=path.name,upstream_version=record["version"]))
-                print(f"Built {path.name}: {path.stat().st_size} bytes, {len(files)} files",flush=True)
+                row=package_tool(stage,manifest,output);rows.append(row)
+                print(f"Built {row['file']}: {row['size']} ZIP bytes",flush=True)
     (output/"catalog.json").write_text(json.dumps(dict(tools=rows),ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
 
 if __name__=="__main__":

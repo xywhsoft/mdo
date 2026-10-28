@@ -2,7 +2,6 @@
   "tools": [
     {
       "id": "busybox",
-      "legacy_id": "busybox",
       "name": "BusyBox",
       "prompt": "Common shell commands. Invoke an explicit applet, for example busybox sh -c ...; do not assume Unix commands are on PATH.",
       "recommended": true,
@@ -20,7 +19,6 @@
     },
     {
       "id": "curl",
-      "legacy_id": "curl",
       "name": "curl",
       "prompt": "HTTP requests and downloads. Retain HTTPS certificate verification.",
       "recommended": true,
@@ -40,7 +38,6 @@
     },
     {
       "id": "jq",
-      "legacy_id": "jq",
       "name": "jq",
       "prompt": "Read, filter and transform JSON.",
       "recommended": true,
@@ -57,7 +54,6 @@
     },
     {
       "id": "openssh",
-      "legacy_id": "ssh",
       "name": "OpenSSH",
       "prompt": "SSH remote access. scp and sftp are in the same directory as this ssh executable; pass this ssh path with their -S option when needed.",
       "recommended": true,
@@ -76,7 +72,6 @@
     },
     {
       "id": "aria2",
-      "legacy_id": "aria2c",
       "name": "aria2",
       "prompt": "Batch and large downloads. Use an explicit destination and HTTPS verification. On Android the adjacent cacert.pem can be supplied with --ca-certificate.",
       "recommended": true,
@@ -96,7 +91,6 @@
     },
     {
       "id": "ripgrep",
-      "legacy_id": "rg",
       "name": "ripgrep",
       "prompt": "Search code and text with rg -n or --json; rg --files lists files. Default ignore rules apply; use --hidden or --no-ignore only when needed.",
       "recommended": true,
@@ -113,7 +107,6 @@
     },
     {
       "id": "7zip",
-      "legacy_id": "7zip",
       "name": "7-Zip",
       "prompt": "List (l), test (t), create (a) and extract (x) archives. Choose an explicit output directory.",
       "recommended": true,
@@ -130,7 +123,6 @@
     },
     {
       "id": "python",
-      "legacy_id": "python",
       "name": "Python",
       "prompt": "Run Python scripts, -c or -m. Do not assume pip, third-party modules or development headers are installed.",
       "recommended": false,
@@ -147,7 +139,6 @@
     },
     {
       "id": "git",
-      "legacy_id": "git",
       "name": "Git",
       "prompt": "Git command-line version control: status, diff, log, branches, commit, clone, fetch and push. Prefer non-interactive commands and per-command -c settings. SSH transport requires an SSH client. GUI, Perl/SVN/email adapters are excluded.",
       "recommended": false,
@@ -168,7 +159,6 @@
     },
     {
       "id": "sqlite",
-      "legacy_id": "sqlite",
       "name": "SQLite CLI",
       "prompt": "SQLite 3.54.1 command-line shell. Inspect schema and query databases; use -readonly for existing databases unless changes are requested. Supports JSON/CSV output, JSON SQL functions, FTS5 and RTree.",
       "recommended": false,
@@ -189,7 +179,6 @@
     },
     {
       "id": "poppler",
-      "legacy_id": "poppler",
       "name": "Poppler",
       "prompt": "Poppler PDF utilities: pdftotext extracts text, pdfinfo reports metadata, pdftoppm/pdftocairo render pages, pdfimages extracts images, pdffonts lists fonts, pdfseparate/pdfunite split/merge PDFs. Scanned pages need a separate OCR tool.",
       "recommended": false,
@@ -210,7 +199,6 @@
     },
     {
       "id": "ffmpeg",
-      "legacy_id": "ffmpeg",
       "name": "FFmpeg",
       "prompt": "FFmpeg and ffprobe for audio/video conversion, extraction, metadata and filters. Common H.264/H.265, VP8/VP9, AV1, AAC, MP3, Opus, subtitles, drawtext and HTTPS support. Use ffprobe before processing; choose explicit output paths. No GUI player or GPU shader toolchain.",
       "recommended": false,
@@ -229,7 +217,6 @@
     },
     {
       "id": "imagemagick",
-      "legacy_id": "imagemagick",
       "name": "ImageMagick",
       "prompt": "ImageMagick 7.1.2-34 Q16. Use magick for image conversion, resize, crop, composition and batch processing; magick identify/compare/montage expose companion operations. PNG, JPEG, WebP and TIFF are supported. PDF reading may require an external delegate; prefer Poppler for PDF extraction/rendering.",
       "recommended": false,

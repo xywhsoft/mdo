@@ -154,38 +154,14 @@ def valid_path(name):
 
 
 def package(stage, metadata, output):
-    if not re.fullmatch(r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)",metadata["version"]):
-        raise ValueError("A three-component package version is required")
-    files=[];seen=set()
-    for path in sorted(stage.rglob("*")):
-        if not path.is_file(): continue
-        name=path.relative_to(stage).as_posix()
-        if not valid_path(name) or name.lower() in seen: raise ValueError("Unsafe or aliased file: "+name)
-        if not path.resolve().is_relative_to(stage.resolve()): raise ValueError("File leaves staging directory")
-        seen.add(name.lower())
-        with path.open("rb") as source: magic=source.read(4)
-        files.append(dict(path=name,size=path.stat().st_size,sha256=digest(path),mode=493 if magic.startswith((b"#!",b"\x7fELF",b"MZ")) else 420))
-    if "description" in metadata and (not isinstance(metadata["description"],str) or "\0" in metadata["description"] or len(metadata["description"].encode("utf-8"))>2048): raise ValueError("Invalid tool description")
-    manifest={k:metadata[k] for k in ("id","name","version","platform","prompt","entry","license","links","commands")}
-    descriptions=json.loads((Path(__file__).resolve().parents[3]/"app/default-home/cli-tools/official.json").read_text(encoding="utf-8"))["tools"]
-    manifest["description"]=metadata.get("description", next((row["description"] for row in descriptions if row["id"]==metadata["id"]), ""))
-    copyright=metadata.get("copyright", "")
-    if not isinstance(copyright,str) or "\0" in copyright or len(copyright.encode("utf-8"))>4096: raise ValueError("Invalid copyright notice")
-    manifest["copyright"]=copyright
-    manifest["files"]=files
-    assert any(f["path"]==manifest["entry"] and f["size"] for f in files)
-    assert all(any(f["path"]==c["entry"] and f["size"] for f in files) for c in manifest["commands"])
-    encoded=json.dumps(manifest,ensure_ascii=False,separators=(",",":")).encode()
-    assert 0<len(files)<=4096 and len(encoded)<=1048576 and sum(f["size"] for f in files)+len(encoded)+12<=512*1048576
-    output.mkdir(parents=True,exist_ok=True)
-    path=output/f"{metadata['id']}-{metadata['version']}-{metadata['platform']}.mdo-cli"
-    pending=path.with_suffix(".pending")
-    with pending.open("wb") as target:
-        target.write(b"MDOCLI1\n"+struct.pack("<I",len(encoded))+encoded)
-        for row in files:
-            with (stage/row["path"]).open("rb") as source: shutil.copyfileobj(source,target,1048576)
-    pending.replace(path)
-    return {**manifest,"file":path.name,"sha256":digest(path),"size":path.stat().st_size,"tool_id":"official."+manifest["id"],"recommended":False,"upstream_version":metadata.get("upstream_version",metadata["version"])}
+    from importlib.util import spec_from_file_location, module_from_spec
+    source=Path(__file__).resolve().parents[2]/"extension_archives.py"
+    spec=spec_from_file_location("mdo_extension_archives",source);helper=module_from_spec(spec);spec.loader.exec_module(helper)
+    descriptions=json.loads((Path(__file__).resolve().parents[2]/"runtime/official.json").read_text(encoding="utf-8"))["tools"]
+    metadata=dict(metadata)
+    metadata.setdefault("description",next((row["description"] for row in descriptions if row["id"]==metadata["id"]),""))
+    metadata.setdefault("copyright","")
+    return helper.package_tool(stage,metadata,output)
 
 
 def main():

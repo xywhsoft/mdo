@@ -8,7 +8,9 @@
 | `build.py` | 默认生成根目录桌面版及 Android 精简版、完整版；批处理调用此入口 |
 | `build_mdo.py` | 验证依赖、检查 C 源码引用、生成 unity、构建宿主与打包 |
 | `build_android.py` | 默认同时构建 ARM64 精简版与完整版，复用宿主、原生库和默认 Home |
-| `build_toolpacks.py` | 构建 Windows 常用工具包与可选 Python 包 |
+| `build_cli_tools.py` | 将各平台工具完整目录分别构建为标准 ZIP |
+| `extension_archives.py` | 官方工具 ZIP 清单、依赖文件与路径校验 |
+| `convert_legacy_external_archives.py` | 一次性将现有服务器官方对象转换为 ZIP，不打包进产品 |
 | `prepare_release.py` | 核对八个平台产物、当前源码指纹和宿主版本，生成本地待发布清单 |
 | `host-profile.json` | mdo 专用 xrt 根与 Windows SDK 选择；默认启用精简宿主 |
 | `qa_release.py` | Windows/Linux 有界发布门禁，不运行压力或高负载测试 |
