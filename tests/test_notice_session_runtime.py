@@ -8,7 +8,13 @@ import shutil
 import subprocess
 import tempfile
 from test_api_runtime import free_port, request, wait_ready
-from test_cli_tools_runtime import stage_forwarder
+def stage_forwarder(site):
+    if os.name != "nt": return
+    import sys
+    sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"tools"))
+    import build_mdo,build_cli_forwarder
+    xs=build_mdo.find_xserver(None,build_mdo.load_object(build_mdo.LOCK_PATH))
+    build_cli_forwarder.build(xs,site/"generated/native/windows/cli-forwarder.exe")
 
 ROOT = Path(__file__).resolve().parents[1]
 

@@ -1219,7 +1219,7 @@ static mdo_result MdoModulesRegistrarAddAgent(void* pContext,
     if ( pRegistrar == NULL || pRegistrar->Generation == NULL ||
          pRegistrar->Failed ) return MDO_RESULT_ERROR;
     pGeneration = pRegistrar->Generation;
-    if ( pGeneration->Kind == MDO_MODULE_TOOLS ) {
+    if ( pGeneration->Kind == MDO_MODULE_TOOLS && !pGeneration->PluginEntry ) {
         MdoModulesCopyError(Error, ErrorCapacity,
             "this module directory cannot register Agents");
         goto failed;

@@ -1,0 +1,10 @@
+{
+  "kind": "skills",
+  "name": "community-review-guide",
+  "alias": "community-review-guide",
+  "entry": "SKILL.md",
+  "platforms": [
+    "any"
+  ],
+  "license": "MIT"
+}

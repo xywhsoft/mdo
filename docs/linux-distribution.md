@@ -6,7 +6,7 @@ PATH、软件包或共享库。Android 工具仍随完整版 APK 更新。
 
 常用包提供 BusyBox、curl、jq、SSH/SCP/SFTP、aria2c、rg、7-Zip；Python
 单独安装。各入口通过私有 musl 加载器运行所带的依赖库，证书路径也指向包内。
-安装位置是 `mdo-home/data/toolpacks`，每次安装建立新代，校验整包及每个文件
+安装位置是 `mdo-home/external-tools/<id>/`，每项使用普通整目录 ZIP，校验整包及每个文件
 SHA-256、设置明确的 0644/0755 权限并试运行，成功后才激活。现有卸载、修复、
 回退和旧代清理入口继续适用。服务版可通过浏览器进入相同设置页面。
 
@@ -14,7 +14,7 @@ SHA-256、设置明确的 0644/0755 权限并试运行，成功后才激活。�
 
 ```sh
 python3 tools/runtime/build/stage_linux.py
-python3 tools/build_linux_toolpacks.py --packer .build/host/linux-server-glibc/xs
+python3 tools/build_cli_tools.py --help
 ```
 
 普通构建只使用 `tools/runtime/build/linux.lock.json` 中固定的 Alpine 3.23

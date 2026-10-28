@@ -21,7 +21,7 @@ MCP 是第五个独立分发的扩展类型。商店作品是一份服务模板�
 
 ## 模板格式
 
-单资源作品恰好包含一个 `kind=mcp` 资源，content 是 `mdo.mcp-template.v1` JSON。外层仍使用 `mdo.extension.v1/v2`，模板格式与 MCP 协议版本独立。
+每个 MCP 服务是 `mdo-home/mcp/<id>/` 整目录，根 extension.json 声明 kind=mcp、alias、entry=mcp.json 和平台。mcp.json 使用 mdo.mcp-template.v1，实际程序、脚本及依赖作为普通文件同包。发布普通 ZIP，下载后解压到作品 XID 目录；不得把文件编码进配置。详见 [目录商店](ecosystem-store.md)。
 
 ```json
 {

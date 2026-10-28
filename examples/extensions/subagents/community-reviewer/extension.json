@@ -1,0 +1,10 @@
+{
+  "kind": "subagents",
+  "name": "community-reviewer",
+  "alias": "community-reviewer",
+  "entry": "agent.md",
+  "platforms": [
+    "any"
+  ],
+  "license": "MIT"
+}
