@@ -38,18 +38,6 @@
  #include "src/xoauth2_core.c"
  #include "src/xoauth2_flow.c"
  #include "src/xoauth2_http.c"
---- a/lib/xrt.h
-+++ b/lib/xrt.h
-@@ -313500,7 +313500,8 @@
- 			);
- 			goto cleanup;
- 		}
--		iFlags |= CREATE_NEW_PROCESS_GROUP | CREATE_SUSPENDED;
-+		/* ConPTY owns its console; Job still owns the process tree. */
-+		iFlags |= CREATE_SUSPENDED;
- 	}
- 	if ( !CreateProcessW(
- 		sProgram,
 --- a/lib/xwork/src/xwork_core.c
 +++ b/lib/xwork/src/xwork_core.c
 @@ -1021,6 +1021,8 @@
@@ -2167,6 +2155,85 @@
 +    }
 +    if(!SetWindowSubclass(window,xws_proc,(UINT_PTR)state,(DWORD_PTR)state)){xrtFree(state->Parent);free(state->Path);free(state);}
 +}
+diff --git a/lib/xrt.h b/lib/xrt.h
+--- a/lib/xrt.h
++++ b/lib/xrt.h
+@@ -62383,6 +62383,7 @@
+ 		DWORD Id;
+ 	#else
+ 		pid_t Id;
++		bool ExitObserved; /* WNOWAIT pins this PID until final tree cleanup. */
+ 		int Stdin;
+ 		int Stdout;
+ 		int Stderr;
+@@ -312246,7 +312247,7 @@
+ 		return false;
+ 	}
+ 	(void)xrtMutexLock(&pProcess->Lock);
+-	if ( pProcess->State == XPROCESS_EXITED ) {
++	if ( pProcess->State == XPROCESS_EXITED && Stop != XPROCESS_STOP_KILL_TREE ) {
+ 		(void)xrtMutexUnlock(&pProcess->Lock);
+ 		return true;
+ 	}
+@@ -313500,7 +313501,8 @@
+ 			);
+ 			goto cleanup;
+ 		}
+-		iFlags |= CREATE_NEW_PROCESS_GROUP | CREATE_SUSPENDED;
++		/* ConPTY owns its console; Job still owns the process tree. */
++		iFlags |= CREATE_SUSPENDED;
+ 	}
+ 	if ( !CreateProcessW(
+ 		sProgram,
+@@ -315406,12 +315408,20 @@
+ 	xprocessstatus* pStatus
+ )
+ {
+-	int iStatus;
+-	pid_t iResult;
+-
++	int iStatus = 0;
++	int iResult;
++	siginfo_t Info;
++	memset(&Info, 0, sizeof(Info));
++	/* Observe without reaping. A completed owned handle must keep its PID
++	 * reserved, otherwise a later killpg could hit an unrelated reused ID. */
+ 	do {
+-		iResult = waitpid(pProcess->Id, &iStatus, 0);
++		iResult = waitid(P_PID, (id_t)pProcess->Id, &Info, WEXITED | WNOWAIT);
+ 	} while ( (iResult < 0) && (errno == EINTR) );
++	if (iResult == 0) {
++		pProcess->ExitObserved = true;
++		iStatus = Info.si_code == CLD_EXITED ? Info.si_status << 8 :
++			(Info.si_status & 0x7f) | (Info.si_code == CLD_DUMPED ? 0x80 : 0);
++	}
+ 	if ( iResult < 0 ) {
+ 		int iError = errno;
+ 
+@@ -315601,6 +315611,12 @@
+ /* 释放全部 POSIX 父端 fd。 */
+ void __xrtProcessPlatformUnit(xprocess* pProcess)
+ {
++	if (pProcess->ExitObserved && pProcess->Id > 0) {
++		/* No waiter or user remains; the zombie still pins the process group. */
++		if (pProcess->NewGroup) (void)kill(-pProcess->Id, SIGKILL);
++		while (waitpid(pProcess->Id, NULL, 0) < 0 && errno == EINTR) {}
++		pProcess->ExitObserved = false;
++	}
+ 	__xrtProcessFdClose(&pProcess->Stdin);
+ 	__xrtProcessFdClose(&pProcess->Stdout);
+ 	__xrtProcessFdClose(&pProcess->Stderr);
+@@ -316360,6 +316376,10 @@
+ 			__xrtProcessRunFail(&State, xrtTakeError());
+ 		}
+ 	}
++	/* A leader may exit with descendants still holding its output pipes.
++	 * This run owns a group: stop it before joining the pipe pumps. */
++	if (Config.NewGroup && !xrtProcessKillTree(pProcess))
++		__xrtProcessRunFail(&State, xrtTakeError());
+ 	if ( !__xrtProcessRunThreadsJoin(&State) ) {
+ 		__xrtProcessRunFail(&State, xrtTakeError());
+ 	}
 diff --git a/tools/test_extensions.py b/tools/test_extensions.py
 --- a/tools/test_extensions.py
 +++ b/tools/test_extensions.py
@@ -2789,7 +2856,26 @@ diff --git a/lib/xwork/src/xwork_subagent.c b/lib/xwork/src/xwork_subagent.c
 diff --git a/lib/xwork/src/xwork_tools.c b/lib/xwork/src/xwork_tools.c
 --- a/lib/xwork/src/xwork_tools.c
 +++ b/lib/xwork/src/xwork_tools.c
-@@ -853,6 +853,7 @@
+@@ -756,6 +756,7 @@
+     }
+     return pCapture;
+ fail:
++    (void)xrtProcessKillTree(pProcess);
+     if ( pCapture->tStdout.pThread ) {
+         (void)xrtProcessClose(pProcess, XPROCESS_STDOUT);
+         (void)xrtThreadWait(pCapture->tStdout.pThread);
+@@ -843,8 +844,9 @@
+             xrtCancelDestroy(pEntry->pChildCancel);
+         }
+     } else if ( pEntry->pProcess ) {
++        /* Completed leaders can leave descendants holding capture pipes. */
++        (void)xrtProcessKillTree(pEntry->pProcess);
+         if ( xwork__process_running(pEntry->pProcess) ) {
+-            (void)xrtProcessKillTree(pEntry->pProcess);
+             if ( xrtProcessWaitFor(pEntry->pProcess, 3000) != XWAIT_OK ) {
+                 (void)xrtProcessKill(pEntry->pProcess);
+                 (void)xrtProcessWait(pEntry->pProcess);
+@@ -853,6 +855,7 @@
          xwork__process_capture_destroy(pEntry->pCapture);
          xrtProcessDestroy(pEntry->pProcess);
      }
@@ -2797,7 +2883,7 @@ diff --git a/lib/xwork/src/xwork_tools.c b/lib/xwork/src/xwork_tools.c
      if ( pEntry->pStateLock ) {
          (void)xrtMutexLock(pEntry->pStateLock);
          free(pEntry->sResult);
-@@ -1565,6 +1566,12 @@
+@@ -1565,6 +1568,12 @@
      if ( !xwork__build_env(tArgs, &pEnv, &iEnvCount, &psEnvStorage, &iEnvStorageCount) ) goto oom;
      pEntry = xwork__process_add(pAgent, pContext, XWORK_TASK_PROCESS);
      if ( !pEntry ) { eResult = xwork__tool_fail(pOutput, "managed task limit reached; stop or release an existing task"); goto cleanup; }
@@ -2810,7 +2896,7 @@ diff --git a/lib/xwork/src/xwork_tools.c b/lib/xwork/src/xwork_tools.c
      pEntry->sCommand = xwork__argv_preview(psArgv, iArgvCount);
      if ( !pEntry->sCommand ) goto oom;
      pEntry->sLabel = xwork__strdup(pEntry->sCommand);
-@@ -1863,7 +1870,13 @@
+@@ -1863,7 +1872,13 @@
      tOptions.StdoutLimit = pAgent->iMaxCapturedCommandBytes;
      tOptions.StderrLimit = pAgent->iMaxCapturedCommandBytes;
      tOptions.Overflow = XPROCESS_OVERFLOW_KEEP_LAST;

@@ -17,6 +17,7 @@
     "ENVIRONMENT",
     "FILE",
     "FILE_LOCK",
+    "FILE_LINK",
     "FILE_ROOT",
     "FILE_TREE",
     "FILE_WHOLE",

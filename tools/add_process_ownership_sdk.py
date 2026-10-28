@@ -30,7 +30,7 @@ def refresh_patch(sdk,base_repository):
   match=re.match(r'--- [^\n]+\n\+\+\+ b/([^\n]+)',section)
   if not match or match[1] not in replacements:rebuilt.append(section)
  rebuilt.extend(replacements.values());patch=''.join(rebuilt);sha=hashlib.sha256(patch.encode()).hexdigest()
- lock['libraries']['xwork']['production_tree_sha256']=build_mdo.production_tree_sha256(sdk/'lib/xwork');lock['sdk_overlay']['sha256']=sha;lock['sdk_overlay']['purpose']+='; paired external process resource ownership'
+ lock['libraries']['xwork']['production_tree_sha256']=build_mdo.production_tree_sha256(sdk/'lib/xwork');lock['sdk_overlay']['sha256']=sha;lock['sdk_overlay']['xrt_single_header_sha256']=build_mdo.source_file_sha256(sdk/'lib/xrt.h');lock['sdk_overlay']['purpose']+='; paired external process ownership and PID-safe tree cleanup'
  (ROOT/lock['sdk_overlay']['path']).write_text(patch,encoding='utf-8',newline='\n');(ROOT/'deps.lock').write_text(json.dumps(lock,indent=2)+'\n',encoding='utf-8');(sdk/'.mdo-sdk-overlay.json').write_text(json.dumps(lock['sdk_overlay'],indent=2)+'\n',encoding='utf-8');build_mdo.verify_dependencies(sdk,lock)
  destination=sdk.parent/sha
  if sdk.parent.resolve()!=(ROOT/'.build/sdk-overlays').resolve() or destination!=sdk and destination.exists():raise ValueError('Refuse an unsafe SDK rename')

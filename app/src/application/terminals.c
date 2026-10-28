@@ -171,7 +171,10 @@ static int32 SdkTerminalWritePump(void* User){
 }
 static int32 SdkTerminalWaitPump(void* User){
     SdkTerminal* T=User;xwaitresult Wait=xrtProcessWait(T->Process);xprocessstatus Status={0};bool Has=Wait==XWAIT_OK&&xrtProcessStatus(T->Process,&Status);
-    xrtMutexLock(SdkTerminals.Lock);T->Exited=true;SdkPut(T->Record,"state","ended");SdkPut(T->Record,"reason",SdkTerminals.Stopping?"service_stopped":T->Closing?"closed":"process_exited");
+    /* A completed shell may leave children holding the PTY open. The process
+     * handle still owns its Job/group; finish it before waiting on I/O pumps. */
+    bool TreeClean=Wait!=XWAIT_OK||xrtProcessKillTree(T->Process);
+    xrtMutexLock(SdkTerminals.Lock);if(!TreeClean&&!T->Error[0])snprintf(T->Error,sizeof(T->Error),"Cannot finish terminal descendants");T->Exited=true;SdkPut(T->Record,"state","ended");SdkPut(T->Record,"reason",SdkTerminals.Stopping?"service_stopped":T->Closing?"closed":"process_exited");
     if(Has){xrtValueObjectSetNew(T->Record,XRT_STR_LITERAL("exit_code"),xrtValueInt(Status.Code));xrtValueObjectSetNew(T->Record,XRT_STR_LITERAL("signal"),xrtValueInt(Status.Signal));}
     else if(!T->Error[0])snprintf(T->Error,sizeof(T->Error),"Terminal process wait failed");
     T->Token[0]=0;SdkTerminalDropInput(T);xrtCondBroadcast(T->Changed);T->ReceiptUncertain=!SdkTerminalSave();
