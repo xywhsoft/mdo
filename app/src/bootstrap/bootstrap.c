@@ -257,7 +257,6 @@ void MdoBootstrapUnit(void)
     MdoUpdateUnit();
     MdoScheduleExecutorUnit();
     MdoRunManagerUnit();
-    MdoDistributionUnit();
     MdoPowerManagerUnit();
     MdoAskManagerUnit();
     MdoApprovalManagerUnit();
@@ -278,6 +277,9 @@ void MdoBootstrapUnit(void)
     MdoConfigUnit();
     MdoProjectLifecycleUnit();
     MdoApplicationUnit();
+    /* Process/terminal owners release their external directory catalogues
+     * before distribution retires its registry and lease lock. */
+    MdoDistributionUnit();
     MdoModuleManagerAttachApplication(NULL);
     MdoExtensionTasksUnit();
     MdoExtensionsUnit();

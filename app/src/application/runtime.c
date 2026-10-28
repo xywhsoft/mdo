@@ -6,6 +6,7 @@
 #include "../../include/mdo/time.h"
 #include "../../include/mdo/project_lifecycle.h"
 #include "../../include/mdo/extensions.h"
+#include "../../include/mdo/distribution.h"
 #include "../../include/mdo/extension_path.h"
 
 static const struct {cstr Id,Description;} SdkRuntimeMethods[]={
@@ -240,7 +241,8 @@ static bool SdkProcessCall(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** 
     if(Timeout&&(Options.Timeout<0||Options.Timeout>(int64)Timeout))Options.Timeout=(int64)Timeout;
     Options.Input=(xbytesview){(const unsigned char*)Input,Input?strlen(Input):0};Options.StdoutLimit=16384;Options.StderrLimit=16384;Options.Overflow=XPROCESS_OVERFLOW_KEEP_FIRST;
     bool Stream=false;xrtValueGetBool(SdkGet(P,"stream"),&Stream);if(Stream){Options.Output=SdkProcessOutput;Options.UserData=(void*)C;}
-    xprocessresult Result={0};bool Ok=xrtProcessRun(&Config,&Options,&Result);xrtFree(Argv);
+    MdoCliUse* Use=NULL;char CommandError[512]={0};if(!MdoCliUseBegin(&Use,CommandError)){xrtFree(Argv);return MdoApplicationError(E,"sdk_commands_unavailable",CommandError,"process",503,false);}
+    xprocessresult Result={0};bool Ok=xrtProcessRun(&Config,&Options,&Result);MdoCliUseEnd(Use);xrtFree(Argv);
     if(Ok){*R=xrtValueObject();xrtValueObjectSetNew(*R,XRT_STR_LITERAL("exit_code"),xrtValueInt(Result.Status.Code));
         xrtValueObjectSetNew(*R,XRT_STR_LITERAL("signal"),xrtValueInt(Result.Status.Signal));
         xvalue* Out=xrtValueObject(),*Err=xrtValueObject();SdkByteValue(Out,Result.Stdout,Result.StdoutSize);SdkByteValue(Err,Result.Stderr,Result.StderrSize);

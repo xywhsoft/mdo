@@ -5,6 +5,7 @@
 #include "../../include/mdo/project_lifecycle.h"
 #include "../../include/mdo/projects.h"
 #include "../../include/mdo/project_binding.h"
+#include "../../include/mdo/distribution.h"
 #if !defined(_WIN32) && !defined(_WIN64)
 #if defined(__TINYC__) && defined(__linux__)
 /* Same stable libc ABI used by the optional POSIX power adapter. The compact
@@ -39,6 +40,7 @@ typedef struct SdkTerminal {
     xthread *Reader,*Writer,*Waiter;
     xcond* Changed;
     MdoProjectLease* Lease;
+    MdoCliUse* Commands;
     unsigned char *Output,*Input;
     size_t OutputStart,OutputSize,InputStart,InputSize;
     uint64 OutputTotal,InputAdmitted,InputWritten,InputDropped;
@@ -94,7 +96,7 @@ static void SdkTerminalFree(SdkTerminal* T){
     if(T->Changed)xrtCondDestroy(T->Changed);
     if(T->Output)xrtSecureZero(T->Output,SDK_TERMINAL_OUTPUT);
     if(T->Input)xrtSecureZero(T->Input,SDK_TERMINAL_INPUT);
-    xrtFree(T->Output);xrtFree(T->Input);MdoProjectLeaseRelease(T->Lease);xrtValueRelease(T->Record);xrtSecureZero(T,sizeof(*T));
+    xrtFree(T->Output);xrtFree(T->Input);MdoProjectLeaseRelease(T->Lease);MdoCliUseEnd(T->Commands);xrtValueRelease(T->Record);xrtSecureZero(T,sizeof(*T));
 }
 static xvalue* SdkTerminalInfo(const SdkTerminal* T){
     xvalue* R=xrtValueClone(T->Record);SdkPut(R,"epoch",SdkTerminals.Epoch);
@@ -174,11 +176,12 @@ static int32 SdkTerminalWaitPump(void* User){
     else if(!T->Error[0])snprintf(T->Error,sizeof(T->Error),"Terminal process wait failed");
     T->Token[0]=0;SdkTerminalDropInput(T);xrtCondBroadcast(T->Changed);T->ReceiptUncertain=!SdkTerminalSave();
     while(!T->ReaderDone||!T->WriterDone||T->Pins)xrtCondWaitFor(T->Changed,SdkTerminals.Lock,25);
-    xprocess* Process=T->Process;T->Process=NULL;MdoProjectLease* Lease=T->Lease;T->Lease=NULL;xrtMutexUnlock(SdkTerminals.Lock);
+    xprocess* Process=T->Process;T->Process=NULL;MdoProjectLease* Lease=T->Lease;T->Lease=NULL;MdoCliUse* Commands=T->Commands;T->Commands=NULL;xrtMutexUnlock(SdkTerminals.Lock);
     /* No callback can still be inside xrtProcessRead/Write here. Retiring the
      * owned endpoint closes the PTY (HUP on POSIX / ConPTY+Job on Windows),
      * including children left behind by an exited shell. */
     if(Process)xrtProcessDestroy(Process);
+    MdoCliUseEnd(Commands);
     MdoProjectLeaseRelease(Lease);
     xrtMutexLock(SdkTerminals.Lock);T->WaiterDone=true;xrtCondBroadcast(T->Changed);xrtMutexUnlock(SdkTerminals.Lock);return 0;
 }
@@ -277,13 +280,16 @@ static bool SdkTerminalCreateImpl(const mdo_sdk_context_v1* C,const xvalue* P,xv
     const xprocessenv Env[]={{"TERM","xterm-256color"},{"COLORTERM","truecolor"},{"TERM_PROGRAM","mdo"}};
     xprocessconfig Config;xrtProcessConfigInit(&Config);Config.Program=Program;Config.Args=Argv;Config.ArgCount=xrtValueCount(Args);Config.WorkDir=Directory;Config.HideWindow=false;Config.NewGroup=true;Config.Terminal=true;Config.Columns=(uint32)Columns;Config.Rows=(uint32)Rows;Config.Env=Env;Config.EnvCount=sizeof(Env)/sizeof(*Env);Config.Stdin.Mode=Config.Stdout.Mode=XPROCESS_IO_PIPE;Config.Stderr.Mode=XPROCESS_IO_MERGE;
     xrtMutexLock(SdkTerminals.Lock);bool Cancelled=T->Closing||SdkTerminals.Stopping||SdkCancelled(C);xrtMutexUnlock(SdkTerminals.Lock);
-    xprocess* Process=Cancelled?NULL:xrtProcessSpawn(&Config);mdo_error_v1 SpawnError={0};bool IoReady=Process&&SdkTerminalPrepareIo(Process);
+    MdoCliUse* Commands=NULL;char CommandError[512]={0};bool CommandsReady=Cancelled||MdoCliUseBegin(&Commands,CommandError);
+    xprocess* Process=Cancelled||!CommandsReady?NULL:xrtProcessSpawn(&Config);mdo_error_v1 SpawnError={0};bool IoReady=Process&&SdkTerminalPrepareIo(Process);
     if(Cancelled)SdkTerminalFail(&SpawnError,"sdk_cancelled","Terminal creation was cancelled before starting a process",499);
+    else if(!CommandsReady)SdkTerminalFail(&SpawnError,"sdk_commands_unavailable",CommandError,503);
     else if(!Process)SdkNativeFailure(&SpawnError,"terminal");
     else if(!IoReady)SdkTerminalFail(&SpawnError,"terminal_io_setup_failed","Cannot configure cancellable PTY I/O",500);
     xrtFree(Directory);
     xrtFree(Default);
-    xrtMutexLock(SdkTerminals.Lock);T->Process=Process;bool Spawned=Process!=NULL;
+    if(!Process){MdoCliUseEnd(Commands);Commands=NULL;}
+    xrtMutexLock(SdkTerminals.Lock);T->Process=Process;T->Commands=Commands;bool Spawned=Process!=NULL;
     if(Process){if(IoReady){T->Reader=xrtThreadCreate(SdkTerminalReadPump,T,0);T->Writer=xrtThreadCreate(SdkTerminalWritePump,T,0);}T->Waiter=xrtThreadCreate(SdkTerminalWaitPump,T,0);T->ReaderDone=!T->Reader;T->WriterDone=!T->Writer;T->WaiterDone=!T->Waiter;Spawned=IoReady&&T->Reader&&T->Writer&&T->Waiter;}
     T->Starting=false;
     if(!Spawned||SdkTerminals.Stopping||T->Closing){T->Closing=true;if(!Process){T->Exited=T->ReaderDone=T->WriterDone=T->WaiterDone=true;SdkPut(T->Record,"state","ended");SdkPut(T->Record,"reason",Cancelled?"cancelled_before_start":"not_started");}else SdkPut(T->Record,"state","closing");

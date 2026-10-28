@@ -33,6 +33,11 @@ void MdoCliUnit(void);
 xvalue* MdoCliSnapshot(void);
 bool MdoCliCommand(const xvalue* Input,char* Error,size_t Capacity);
 bool MdoCliToolPrompt(char** Prompt);
+typedef struct MdoCliUse MdoCliUse;
+/* A verified command catalogue pins its directory files. A running process
+ * borrows that catalogue until its complete process tree has stopped. */
+bool MdoCliUseBegin(MdoCliUse** Use,char Error[512]);
+void MdoCliUseEnd(MdoCliUse* Use);
 bool MdoApiWriteRetainBackground(void);
 void MdoApiWriteReleaseBackground(void);
 #endif

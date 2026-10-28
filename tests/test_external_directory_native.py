@@ -12,6 +12,13 @@ ROOT = Path(__file__).resolve().parents[1]
 ID = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'
 CONTRACT = r'''
 static bool SdkPutBool(xvalue* R,cstr K,bool B){return xrtValueObjectSetNew(R,xrtStrView(K),xrtValueBool(B));}
+static bool QaProcessOk;
+static int32 QaProcessUse(void* Data){
+ mdo_sdk_context_v1 Context={0};Context.Size=sizeof(Context);Context.ExtensionId="qa-process";Context.Workspace=Data;
+ xvalue* Args=SdkParse("{\"program\":\"cmd.exe\",\"args\":[\"/D\",\"/C\",\"ping -n 3 127.0.0.1 >nul\"],\"timeout_ms\":5000}");xvalue* Result=NULL;mdo_error_v1 E={0};
+ QaProcessOk=SdkProcessCall(&Context,Args,&Result,&E)&&Result;
+ xrtValueRelease(Args);xrtValueRelease(Result);return 0;
+}
 xvalue* QaProductContract(const xvalue* P,xvfs V){
  xvalue* R=xrtValueObject();char Error[512]={0};bool Home=QaProductHome(SdkField(P,"root"),SdkField(P,"app"),V);
  bool Ok=Home&&MdoExtensionsInit()&&MdoCliInit(NULL);SdkPutBool(R,"initialized",Ok);
@@ -21,7 +28,15 @@ xvalue* QaProductContract(const xvalue* P,xvfs V){
  char* Prompt=xrtStrDup("system");bool Injected=MdoCliToolPrompt(&Prompt)&&strstr(Prompt,"author model usage")&&!strstr(Prompt,"user description text");
  SdkPutBool(R,"prompt_is_separate",Injected);xrtFree(Prompt);
  if(SdkField(P,"action")&&!strcmp(SdkField(P,"action"),"remove")){
+  mdo_sdk_context_v1 TerminalContext={0};TerminalContext.Size=sizeof(TerminalContext);TerminalContext.ExtensionId="qa-terminal";TerminalContext.Workspace=SdkField(P,"root");mdo_error_v1 TerminalError={0};xvalue* TerminalResult=NULL;
+  xvalue* TerminalArgs=SdkParse("{\"key\":\"qa-directory-lifetime\",\"program\":\"cmd.exe\",\"args\":[\"/D\",\"/Q\",\"/C\",\"ping -n 30 127.0.0.1 >nul\"]}");
+  bool TerminalReady=MdoApplicationTerminalsInit()&&SdkTerminalCreateImpl(&TerminalContext,TerminalArgs,&TerminalResult,&TerminalError);xrtValueRelease(TerminalArgs);xrtValueRelease(TerminalResult);
+  xthread* Running=xrtThreadCreate(QaProcessUse,(void*)SdkField(P,"root"),0);bool Active=false;
+  for(size_t I=0;Running&&I<300;I++){xrtMutexLock(g_MdoCli.Lock);Active=g_MdoCli.ActiveUses>(TerminalReady?1:0);xrtMutexUnlock(g_MdoCli.Lock);if(Active)break;xrtSleep(10);}
   Ok=Ok&&MdoExtensionsSetEnabled("external-tools","0123456789ABCDEFGHJKMNPQRSTVWXYZ",false,Error)&&MdoCliReload();
+  xvalue* Blocked=NULL;bool Protected=Active&&MdoExtensionsInUse("external-tools","0123456789ABCDEFGHJKMNPQRSTVWXYZ")&&!MdoExtensionsRemove("external-tools","0123456789ABCDEFGHJKMNPQRSTVWXYZ",&Blocked,Error);xrtValueRelease(Blocked);
+  if(Running){xrtThreadWait(Running);xrtThreadDestroy(Running);}Protected=Protected&&QaProcessOk;SdkPutBool(R,"sdk_process_tree_pins_retired_directory",Protected);
+  bool TerminalProtected=TerminalReady&&MdoExtensionsInUse("external-tools","0123456789ABCDEFGHJKMNPQRSTVWXYZ");MdoApplicationTerminalsUnit();TerminalProtected=TerminalProtected&&!MdoExtensionsInUse("external-tools","0123456789ABCDEFGHJKMNPQRSTVWXYZ");SdkPutBool(R,"terminal_retains_directory_until_pty_tree_drained",TerminalProtected);SdkPut(R,"terminal_error",TerminalError.Message);
   bool Exists=false;xfileinfo Info;Ok=Ok&&MdoHomeExternalStat("data/external-tools/bin/qa-probe.exe",&Exists,&Info)&&!Exists;
   SdkPutBool(R,"disabled_bindings_removed",Ok);
   xvalue* Gone=NULL;Ok=Ok&&MdoExtensionsRemove("external-tools","0123456789ABCDEFGHJKMNPQRSTVWXYZ",&Gone,Error)&&MdoCliReload();xrtValueRelease(Gone);
@@ -61,12 +76,13 @@ def main():
         run(fixture / 'data/external-tools/bin/qa-probe.exe', ['prefix', 'unicode-中文', 'a b'])
         contract = CONTRACT.replace('if(SdkField(P,"action")&&!strcmp(SdkField(P,"action"),"remove"))', 'if(true)')
         removed = product(a, fixture, contract, out / 'removed.json')
-        for key in ('disabled_bindings_removed', 'whole_directory_removed', 'restart_no_resurrection'): assert removed.get(key), (key, removed)
+        for key in ('disabled_bindings_removed', 'whole_directory_removed', 'restart_no_resurrection', 'sdk_process_tree_pins_retired_directory', 'terminal_retains_directory_until_pty_tree_drained'): assert removed.get(key), (key, removed)
         assert not (fixture / 'external-tools' / ID).exists()
         assert not (fixture / 'data/external-tools/bin/qa-alias.exe').exists()
-        print(json.dumps(dict(passed=True, checks=['directory discovery', 'prompt vs description', 'real executable and prefix/alias', 'ordinary ZIP', 'move Home', 'disable/uninstall command cleanup', 'restart no resurrection']), ensure_ascii=False))
+        print(json.dumps(dict(passed=True, checks=['directory discovery', 'prompt vs description', 'real executable and prefix/alias', 'ordinary ZIP', 'move Home', 'SDK process and terminal directory lifetime', 'disable/uninstall command cleanup', 'restart no resurrection']), ensure_ascii=False))
     finally:
         if fixture.resolve().parent == out.resolve() and fixture.name.startswith('home-'): shutil.rmtree(fixture)
 
 
 if __name__ == '__main__': main()
+

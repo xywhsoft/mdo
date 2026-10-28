@@ -1,6 +1,7 @@
 /* Git is executed with typed argv and literal paths. Read services never use
  * the user's index as scratch space or enable external diff/textconv hooks. */
 #include "../../include/mdo/extension_files.h"
+#include "../../include/mdo/distribution.h"
 #define GIT_METADATA_LIMIT (4u*1024u*1024u)
 #define GIT_FILE_LIMIT 20000u
 static bool SdkGitFail(mdo_error_v1* E,cstr Code,cstr Message,unsigned Status){return MdoApplicationError(E,Code,Message,"git",Status,false);}
@@ -17,7 +18,8 @@ static bool SdkGitRunWithIndex(const mdo_sdk_context_v1* C,cstr Root,const cstr*
     xprocessrunoptions Options;xrtProcessRunOptionsInit(&Options);Options.Input=Input;Options.StdoutLimit=Limit;Options.StderrLimit=8192;Options.Overflow=XPROCESS_OVERFLOW_KEEP_FIRST;Options.Output=Output;Options.UserData=User;
     Options.Timeout=C->Deadline?MdoDeadlineWaitMs(C->Deadline):15000;MdoApplicationInvocation* I=C->Opaque;Options.Cancel=I?I->Cancel:NULL;
     if(Options.Timeout<0||Options.Timeout>15000)Options.Timeout=15000;
-    if(!xrtProcessRun(&Config,&Options,R))return SdkNativeFailure(E,"git");
+    MdoCliUse* Use=NULL;char CommandError[512]={0};if(!MdoCliUseBegin(&Use,CommandError))return SdkGitFail(E,"sdk_commands_unavailable",CommandError,503);
+    bool Ran=xrtProcessRun(&Config,&Options,R);MdoCliUseEnd(Use);if(!Ran)return SdkNativeFailure(E,"git");
     if(R->Wait!=XWAIT_OK){bool Timed=R->Wait==XWAIT_TIMEOUT||(C->Deadline&&MdoDeadlineExpired(C->Deadline));return SdkGitFail(E,Timed?"git_timeout":"sdk_cancelled",Timed?"Git inspection timed out; no repository state was changed":"Git inspection cancelled",Timed?504:499);}
     if(!Output&&R->StdoutTruncated)return SdkGitFail(E,"git_result_too_large","Git metadata exceeds 4 MiB; narrow the repository or comparison",413);
     return true;

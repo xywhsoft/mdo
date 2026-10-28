@@ -1,9 +1,11 @@
 #include "../../include/mdo/external_tool.h"
 #include "../../include/mdo/extensions.h"
 
+struct MdoCliUse {size_t References,Count;MdoExtensionLease** Leases;};
 static struct {
     xmutex* Lock;xvalue *State,*Published;bool Writable,Stopping;
     char BindingError[256];char *OriginalPath,*ProcessPath;
+    MdoCliUse* Catalogue;xcond* Drained;size_t ActiveUses;
 } g_MdoCli;
 static cstr CliText(const xvalue* V,cstr K,size_t Max)
 {cstr S=MdoExtensionText(V,K,Max);return S?S:"";}
@@ -14,6 +16,28 @@ static xvalue* CliItems(void){return xrtValueObjectGet(g_MdoCli.State,XRT_STR_LI
 static bool CliPresent(cstr Path){return Path&&Path[0]&&xrtFileExists(Path)&&!xrtDirExists(Path);}
 static void CliHex(const uint8 Digest[32],char Out[65]){for(size_t I=0;I<32;I++)snprintf(Out+I*2,3,"%02x",Digest[I]);}
 #include "cli_bindings.inc.c"
+
+static void CliUseReleaseLocked(MdoCliUse* Use){
+    if(!Use||--Use->References)return;
+    for(size_t I=0;I<Use->Count;I++)MdoExtensionsRelease(Use->Leases[I]);xrtFree(Use->Leases);xrtFree(Use);
+}
+static MdoCliUse* CliUseCreate(xvalue* Items){
+    MdoCliUse* Use=xrtCalloc(1,sizeof(*Use));if(!Use)return NULL;Use->References=1;
+    Use->Leases=xrtCalloc(xrtValueCount(Items)+1,sizeof(*Use->Leases));if(!Use->Leases){xrtFree(Use);return NULL;}
+    for(size_t I=0;I<xrtValueCount(Items);I++){
+        xvalue* Item=xrtValueArrayGet(Items,I);if(!CliBool(Item,"valid",false)||!CliBool(Item,"enabled",true))continue;
+        char Error[512]={0};MdoExtensionLease* Lease=MdoExtensionsAcquire("external-tools",CliText(Item,"id",96),Error);
+        if(Lease)Use->Leases[Use->Count++]=Lease;
+        else{CliSet(Item,"error",Error);xrtValueObjectSetNew(Item,XRT_STR_LITERAL("valid"),xrtValueBool(false));xrtValueObjectSetNew(Item,XRT_STR_LITERAL("present"),xrtValueBool(false));}
+    }return Use;
+}
+bool MdoCliUseBegin(MdoCliUse** Use,char Error[512]){
+    if(!Use)return false;*Use=NULL;if(!g_MdoCli.Lock)return true;
+    xrtMutexLock(g_MdoCli.Lock);bool Ok=!g_MdoCli.Stopping&&g_MdoCli.Writable&&g_MdoCli.Catalogue;
+    if(Ok){*Use=g_MdoCli.Catalogue;(*Use)->References++;g_MdoCli.ActiveUses++;}xrtMutexUnlock(g_MdoCli.Lock);
+    if(!Ok&&Error)snprintf(Error,512,"External command catalogue is unavailable or stopping; repair it before starting a process");return Ok;
+}
+void MdoCliUseEnd(MdoCliUse* Use){if(Use&&g_MdoCli.Lock){xrtMutexLock(g_MdoCli.Lock);CliUseReleaseLocked(Use);g_MdoCli.ActiveUses--;if(!g_MdoCli.ActiveUses)xrtCondBroadcast(g_MdoCli.Drained);xrtMutexUnlock(g_MdoCli.Lock);}}
 
 static xvalue* CliDirectoryItems(char Error[512])
 {
@@ -47,8 +71,10 @@ static xvalue* CliDirectoryItems(char Error[512])
 }
 static bool CliReloadLocked(char Error[512])
 {
-    xvalue* Items=CliDirectoryItems(Error);if(!Items)return false;
-    bool Ok=xrtValueObjectSetNew(g_MdoCli.State,XRT_STR_LITERAL("items"),Items)&&CliSave();
+    xvalue* Items=CliDirectoryItems(Error);if(!Items)return false;MdoCliUse* Next=CliUseCreate(Items);xvalue* Previous=g_MdoCli.State;
+    g_MdoCli.State=xrtValueDeepClone(Previous);bool Ok=Next&&g_MdoCli.State&&xrtValueObjectSet(g_MdoCli.State,XRT_STR_LITERAL("items"),Items)&&CliSave();xrtValueRelease(Items);
+    if(Ok){xrtValueRelease(Previous);MdoCliUse* Old=g_MdoCli.Catalogue;g_MdoCli.Catalogue=Next;Next=NULL;CliUseReleaseLocked(Old);}
+    else{xrtValueRelease(g_MdoCli.State);g_MdoCli.State=Previous;}CliUseReleaseLocked(Next);
     if(!Ok&&Error&&!Error[0])snprintf(Error,512,"%s",g_MdoCli.BindingError[0]?g_MdoCli.BindingError:"Cannot update portable command entries");return Ok;
 }
 bool MdoCliReload(void)
@@ -58,7 +84,7 @@ bool MdoCliReload(void)
 }
 bool MdoCliInit(XS_ServerInfo* Server)
 {
-    (void)Server;if(g_MdoCli.Lock)return true;g_MdoCli.Lock=xrtMutexCreate();if(!g_MdoCli.Lock)return false;
+    (void)Server;if(g_MdoCli.Lock)return true;g_MdoCli.Lock=xrtMutexCreate();if(!g_MdoCli.Lock)return false;g_MdoCli.Drained=xrtCondCreate();if(!g_MdoCli.Drained){MdoCliUnit();return false;}
     g_MdoCli.Writable=true;g_MdoCli.Published=MdoDistRead("data/external-tools/state.json",1048576);
     if(!g_MdoCli.Published){bool Exists=false;xfileinfo Info={0};if(!MdoHomeExternalStat("data/external-tools/state.json",&Exists,&Info)||Exists)g_MdoCli.Writable=false;g_MdoCli.Published=xrtValueObject();}
     if(!CliStoredMapValid(xrtValueObjectGet(g_MdoCli.Published,XRT_STR_LITERAL("commands")))||!CliStoredMapValid(xrtValueObjectGet(g_MdoCli.Published,XRT_STR_LITERAL("retired_commands"))))g_MdoCli.Writable=false;
@@ -71,12 +97,11 @@ bool MdoCliInit(XS_ServerInfo* Server)
 void MdoCliStop(void){if(g_MdoCli.Lock){xrtMutexLock(g_MdoCli.Lock);g_MdoCli.Stopping=true;xrtMutexUnlock(g_MdoCli.Lock);}}
 void MdoCliUnit(void)
 {
-    if(!g_MdoCli.Lock)return;MdoCliStop();CliPathUnit();xrtValueRelease(g_MdoCli.State);xrtValueRelease(g_MdoCli.Published);xrtMutexDestroy(g_MdoCli.Lock);memset(&g_MdoCli,0,sizeof(g_MdoCli));
+    if(!g_MdoCli.Lock)return;MdoCliStop();xrtMutexLock(g_MdoCli.Lock);while(g_MdoCli.ActiveUses)xrtCondWait(g_MdoCli.Drained,g_MdoCli.Lock);CliUseReleaseLocked(g_MdoCli.Catalogue);g_MdoCli.Catalogue=NULL;xrtMutexUnlock(g_MdoCli.Lock);CliPathUnit();xrtValueRelease(g_MdoCli.State);xrtValueRelease(g_MdoCli.Published);if(g_MdoCli.Drained)xrtCondDestroy(g_MdoCli.Drained);xrtMutexDestroy(g_MdoCli.Lock);memset(&g_MdoCli,0,sizeof(g_MdoCli));
 }
 xvalue* MdoCliSnapshot(void)
 {
-    if(!g_MdoCli.Lock)return NULL;xrtMutexLock(g_MdoCli.Lock);char Error[512]={0};xvalue* R=xrtValueDeepClone(g_MdoCli.State),*Items=CliDirectoryItems(Error);
-    if(R&&Items)xrtValueObjectSet(R,XRT_STR_LITERAL("items"),Items);xrtValueRelease(Items);
+    if(!g_MdoCli.Lock)return NULL;xrtMutexLock(g_MdoCli.Lock);xvalue* R=xrtValueDeepClone(g_MdoCli.State);
     if(R){CliSet(R,"platform",MdoToolPlatform());CliSet(R,"edition",MdoEdition());CliSet(R,"binding_error",g_MdoCli.BindingError);
         xrtValueObjectSetNew(R,XRT_STR_LITERAL("writable"),xrtValueBool(g_MdoCli.Writable));char* Bin=MdoHomeExternalPath("data/external-tools/bin");CliSet(R,"bin_path",Bin?Bin:"");xrtFree(Bin);}
     xrtMutexUnlock(g_MdoCli.Lock);return R;
