@@ -31,7 +31,8 @@ bool MdoExtensionsSeedBuiltins(char Error[512])
             xfile Output=Input&&Relative?MdoHomeOpenWrite(Relative,XFILE_WRITE|XFILE_CREATE|XFILE_EXCLUSIVE):NULL;
             bool Created=Output!=NULL;unsigned char Buffer[65536];size_t N=0;Ok=Ok&&Input&&Output;
             while(Ok){Ok=xrtRead(Input,Buffer,sizeof(Buffer),&N);if(!Ok||!N)break;Ok=xrtWriteFull(Output,Buffer,N,NULL);}
-            if(Output&&!xrtClose(Output))Ok=false;if(Input&&!xrtClose(Input))Ok=false;
+            if(Output&&!xrtClose(Output))Ok=false;
+            if(Input&&!xrtClose(Input))Ok=false;
             xvalue* Credits=xrtValueObject(),*Result=NULL;
             Ok=Ok&&Credits&&xrtValueObjectSetNew(Credits,XRT_STR_LITERAL("source"),xrtValueString(XRT_STR_LITERAL("builtin")))&&
                 xrtValueObjectSetNew(Credits,XRT_STR_LITERAL("sha256"),xrtValueString(xrtStrView(Sha)))&&

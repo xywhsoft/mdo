@@ -20,7 +20,8 @@ static xvalue* SdkLeaseInfo(cstr Id,const xvalue* Value,bool Token){
     uint64 Fence=0,Expires=0;SdkUInt(SdkGet(Value,"fence"),&Fence);SdkUInt(SdkGet(Value,"expires_us"),&Expires);
     SdkPutUInt(R,"fence",Fence);SdkPutUInt(R,"expires_us",Expires);SdkPut(R,"epoch",SdkField(Value,"epoch"));SdkPut(R,"owner",SdkField(Value,"owner"));
     xrtValueObjectSetNew(R,XRT_STR_LITERAL("valid"),xrtValueBool(SdkLeaseLive(Value)));
-    if(Token)SdkPut(R,"token",SdkField(Value,"token"));return R;
+    if(Token)SdkPut(R,"token",SdkField(Value,"token"));
+    return R;
 }
 static bool SdkLeaseApply(cstr Method,const xvalue* P,xvalue* Root,xvalue** R,mdo_error_v1* E,bool* Changed){
     cstr Id=SdkField(P,"id");char Key[128];*Changed=false;

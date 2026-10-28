@@ -141,7 +141,10 @@ static bool SdkExtensionCall(const mdo_sdk_context_v1* C,cstr Method,const xvalu
     }else if(!strcmp(Method,"extension.current")||!strcmp(Method,"extension.read")){
         *R=MdoExtensionsRead(Kind,Id,Why);
         if(*R){char* Relative=MdoExtensionsRoot(Kind,Id),*Native=Relative?MdoHomeExternalPath(Relative):NULL;
-            if(Native)SdkPut(*R,"native_root",Native);xrtFree(Relative);xrtFree(Native);}
+            if(Native)SdkPut(*R,"native_root",Native);
+            xrtFree(Relative);
+            xrtFree(Native);
+            }
     }else return MdoApplicationError(E,"sdk_service_missing","Unknown extension service","extension",404,false);
     return *R!=NULL||MdoApplicationError(E,"sdk_extension_unavailable",Why[0]?Why:"No installed directory is bound to this invocation","extension",409,false);
 }

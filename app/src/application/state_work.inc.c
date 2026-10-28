@@ -17,7 +17,8 @@ static xvalue* SdkWorkInfo(const xvalue* Root,const xvalue* Work,bool Detailed,b
     SdkPutUInt(R,"revision",SdkStateRevision(Work));xrtValueObjectSetNew(R,XRT_STR_LITERAL("ready"),xrtValueBool(SdkWorkReady(Root,Work)));
     xrtValueObjectSet(R,XRT_STR_LITERAL("depends_on"),SdkGet(Work,"depends_on"));
     if(Detailed&&SdkGet(Work,"result"))xrtValueObjectSet(R,XRT_STR_LITERAL("result"),SdkGet(Work,"result"));
-    if(Token)SdkPut(R,"claim_token",SdkField(Work,"claim_token"));return R;
+    if(Token)SdkPut(R,"claim_token",SdkField(Work,"claim_token"));
+    return R;
 }
 static bool SdkWorkSave(xvalue* Root,cstr Id,xvalue* Work,mdo_error_v1* E){
     char Key[128];snprintf(Key,sizeof(Key),"sys.work.%s",Id);uint64 Revision=SdkStateRevision(Root);const xvalue* Records=SdkGet(Root,"records");
@@ -57,7 +58,10 @@ static bool SdkWorkApply(cstr Method,const xvalue* P,xvalue* Root,xvalue** R,mdo
         size_t Count=0;for(size_t I=0;I<xrtValueCount(Records);I++)if(!strncmp(SdkKey(Records,I),"sys.work.",9))Count++;
         if(Count>=128){xrtValueRelease(Intent);return MdoApplicationError(E,"sdk_work_limit","Execution namespace retains at most 128 tasks","work",413,false);}
         Ok=SdkPut(Intent,"intent_hash",Hash)&&SdkPut(Intent,"state","pending")&&SdkWorkSave(Root,Id,Intent,E);
-        if(Ok)*R=SdkWorkInfo(Root,Intent,true,false);xrtValueRelease(Intent);*Changed=Ok;return Ok&&*R;
+        if(Ok)*R=SdkWorkInfo(Root,Intent,true,false);
+        xrtValueRelease(Intent);
+        *Changed=Ok;
+        return Ok&&*R;
     }
     if(!Work)return MdoApplicationError(E,"sdk_work_missing","Shared task is unavailable","work",404,false);
     if(!strcmp(Method,"work.get")){*R=SdkWorkInfo(Root,Work,true,false);return *R!=NULL;}

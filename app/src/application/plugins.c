@@ -27,7 +27,8 @@ static bool SdkPluginMountDirectory(SdkPlugin* P,const xvalue* Summary){
   const cstr Keys[]={"name","author","copyright","license","version"};for(size_t I=0;Ok&&I<5;I++)if(SdkField(Meta,Keys[I]))Ok=SdkPut(Doc,Keys[I],SdkField(Meta,Keys[I]));
   const xvalue* Flag=SdkGet(Summary,"enabled");if(Flag)Ok=Ok&&xrtValueObjectSet(P->Manifest,XRT_STR_LITERAL("enabled"),Flag);
   cstr Frontend=SdkField(SdkGet(Doc,"entry"),"frontend");char* Virtual=Frontend?xrtFormat("web/__mdo_plugins/%s/%s/%s",Id,Hash,Frontend):NULL;
-  if(Frontend)Ok=Ok&&Virtual&&SdkPut(P->Manifest,"frontend",Virtual);xrtFree(Virtual);
+  if(Frontend)Ok=Ok&&Virtual&&SdkPut(P->Manifest,"frontend",Virtual);
+  xrtFree(Virtual);
  }
  if(!Ok){SdkPluginDrop(P);P->Manifest=xrtValueClone(Summary);snprintf(P->Error,sizeof(P->Error),"%.255s",Error[0]?Error:"Plugin recipe or directory is invalid");}
  xrtValueRelease(Meta);xrtValueRelease(Doc);xrtValueRelease(Files);return Ok;
@@ -40,7 +41,12 @@ static bool SdkPluginPublishView(xvalue* Map,xvalue* Effective){
   char Error[512];Pins[I]=MdoExtensionsAcquire("plugins",SdkField(xrtValueArrayGet(Effective,I),"id"),Error);Ok=Pins[I]!=NULL;}
  if(Ok){for(size_t I=0;I<32;I++){MdoExtensionsRelease(SdkPlugins.Pins[I]);SdkPlugins.Pins[I]=Pins[I];Pins[I]=NULL;}
   xrtValueRelease(SdkPlugins.Map);SdkPlugins.Map=NewMap;NewMap=NULL;xrtValueRelease(SdkPlugins.Effective);SdkPlugins.Effective=NewEffective;NewEffective=NULL;}
- for(size_t I=0;I<32;I++)MdoExtensionsRelease(Pins[I]);xrtValueRelease(NewMap);xrtValueRelease(NewEffective);return Ok;
+ for(size_t I=0;
+ I<32;
+ I++)MdoExtensionsRelease(Pins[I]);
+ xrtValueRelease(NewMap);
+ xrtValueRelease(NewEffective);
+ return Ok;
 }
 #include "plugins_plan.inc.c"
 #include "plugins_runtime.inc.c"
@@ -51,35 +57,57 @@ static bool SdkPluginConfigSave(const xvalue* Config){
  char Error[512];Ok=Ok&&MdoExtensionsSetActivation("plugins",Flags,Error);xrtValueRelease(Flags);return Ok;
 }
 bool MdoApplicationPluginsStoreBegin(xvalue** Config,char* Error,size_t Capacity){
- if(!Config||!SdkPlugins.Lock)return false;*Config=NULL;xrtMutexLock(SdkPlugins.Lock);
+ if(!Config||!SdkPlugins.Lock)return false;
+ *Config=NULL;
+ xrtMutexLock(SdkPlugins.Lock);
  bool Ok=!SdkPlugins.Busy&&!SdkPlugins.Readers&&!SdkPlugins.ConfigBroken;
  if(Ok){*Config=xrtValueClone(SdkPlugins.Config);Ok=*Config!=NULL;if(Ok)SdkPlugins.Busy=true;}xrtMutexUnlock(SdkPlugins.Lock);
- if(!Ok&&Error&&Capacity)snprintf(Error,Capacity,"Plugin manager is busy; wait for active readers");return Ok;
+ if(!Ok&&Error&&Capacity)snprintf(Error,Capacity,"Plugin manager is busy; wait for active readers");
+ return Ok;
 }
 void MdoApplicationPluginsStoreEnd(void){if(SdkPlugins.Lock){xrtMutexLock(SdkPlugins.Lock);SdkPlugins.Busy=false;xrtMutexUnlock(SdkPlugins.Lock);}}
 xvalue* MdoApplicationPluginsStoreIssues(const xvalue* Config,const xvalue* Prepared){
  xvalue* Issues=xrtValueArray();SdkPlugin All[32]={0};bool Ok=Issues&&xrtValueType(Config)==XVALUE_ARRAY&&xrtValueCount(Config)<=32;
  if(Ok&&xrtValueCount(Prepared))SdkPluginIssue(Issues,"directory_zip_required","","","Install a complete plugin directory ZIP with the common extension API");
  for(size_t I=0;Ok&&I<xrtValueCount(Config);I++)if(!SdkPluginMountDirectory(&All[I],xrtValueArrayGet(Config,I))&&SdkPluginEnabled(xrtValueArrayGet(Config,I)))SdkPluginIssue(Issues,"invalid_directory",SdkField(xrtValueArrayGet(Config,I),"id"),"",All[I].Error);
- if(Ok)SdkPluginSetValidate(All,Issues);xvalue* Map=Ok&&!xrtValueCount(Issues)?SdkPluginMapBuild(All):NULL;
+ if(Ok)SdkPluginSetValidate(All,Issues);
+ xvalue* Map=Ok&&!xrtValueCount(Issues)?SdkPluginMapBuild(All):NULL;
  if(Ok&&!Map&&!xrtValueCount(Issues))SdkPluginIssue(Issues,"files","","","Plugin target mappings overlap");
- for(size_t I=0;I<32;I++)SdkPluginDrop(&All[I]);xrtValueRelease(Map);if(!Ok){xrtValueRelease(Issues);return NULL;}return Issues;
+ for(size_t I=0;
+ I<32;
+ I++)SdkPluginDrop(&All[I]);
+ xrtValueRelease(Map);
+ if(!Ok){xrtValueRelease(Issues);
+ return NULL;
+ }
+ return Issues;
 }
 bool MdoApplicationPluginsStorePublish(const xvalue* Config,char* Error,size_t Capacity){
  if(!SdkPlugins.Lock||xrtValueType(Config)!=XVALUE_ARRAY||xrtValueCount(Config)>32)return false;
  SdkPlugin All[32]={0};bool Ok=true;for(size_t I=0;Ok&&I<xrtValueCount(Config);I++)if(!SdkPluginMountDirectory(&All[I],xrtValueArrayGet(Config,I))&&SdkPluginEnabled(xrtValueArrayGet(Config,I)))Ok=false;
  mdo_error_v1 E={0};if(Ok)Ok=SdkPluginSetCheck(All,&E);xvalue* Map=Ok?SdkPluginMapBuild(All):NULL,*Next=Ok?xrtValueArray():NULL;
- for(size_t I=0;Ok&&I<xrtValueCount(Config);I++)Ok=xrtValueArrayAppend(Next,All[I].Manifest);Ok=Ok&&Map&&Next;
+ for(size_t I=0;
+ Ok&&I<xrtValueCount(Config);
+ I++)Ok=xrtValueArrayAppend(Next,All[I].Manifest);
+ Ok=Ok&&Map&&Next;
  if(Ok){xrtMutexLock(SdkPlugins.Lock);Ok=SdkPlugins.Busy&&!SdkPlugins.Readers;
   bool Pending=Ok&&!SdkPluginCanPublish(Next);if(Ok&&!Pending)Ok=SdkPluginPublishView(Map,Next);
   if(Ok){for(size_t I=0;I<32;I++){SdkPluginDrop(&SdkPlugins.Plugins[I]);SdkPlugins.Plugins[I]=All[I];memset(&All[I],0,sizeof(All[I]));}
    xrtValueRelease(SdkPlugins.Config);SdkPlugins.Config=Next;Next=NULL;SdkPlugins.Pending=Pending;}
   xrtMutexUnlock(SdkPlugins.Lock);}
- for(size_t I=0;I<32;I++)SdkPluginDrop(&All[I]);xrtValueRelease(Map);xrtValueRelease(Next);
- if(!Ok&&Error&&Capacity)snprintf(Error,Capacity,"%s",E.Message[0]?E.Message:"Plugin directory could not be activated; previous runtime retained");return Ok;
+ for(size_t I=0;
+ I<32;
+ I++)SdkPluginDrop(&All[I]);
+ xrtValueRelease(Map);
+ xrtValueRelease(Next);
+ if(!Ok&&Error&&Capacity)snprintf(Error,Capacity,"%s",E.Message[0]?E.Message:"Plugin directory could not be activated; previous runtime retained");
+ return Ok;
 }
 bool MdoApplicationPluginsInit(void){
- if(SdkPlugins.Lock)return true;if(!MdoExtensionsInit())return false;SdkPlugins.Lock=xrtMutexCreate();if(!SdkPlugins.Lock)return false;
+ if(SdkPlugins.Lock)return true;
+ if(!MdoExtensionsInit())return false;
+ SdkPlugins.Lock=xrtMutexCreate();
+ if(!SdkPlugins.Lock)return false;
  SdkPlugins.Frontends=xrtValueArray();SdkPlugins.Failures=xrtValueArray();SdkPlugins.Config=xrtValueArray();SdkPlugins.Effective=xrtValueArray();SdkPlugins.Map=xrtValueArray();
  char* Mode=xrtEnvGet("MDO_PLUGINS_DISABLED");SdkPlugins.Recovery=Mode&&strcmp(Mode,"0");xrtFree(Mode);char Error[512]={0};xvalue* Rows=MdoExtensionsList("plugins",Error);
  if(!Rows||xrtValueCount(Rows)>32){SdkPlugins.Recovery=true;SdkPlugins.ConfigBroken=true;}
@@ -94,12 +122,21 @@ bool MdoApplicationPluginsInit(void){
  return SdkPlugins.Map&&SdkPlugins.Mount&&SdkPlugins.HomeMount&&SdkPlugins.Config&&SdkPlugins.Effective&&SdkPlugins.Frontends&&SdkPlugins.Failures;
 }
 bool MdoApplicationPluginsReload(char* Error,size_t Capacity){
- if(!SdkPlugins.Lock)return true;xvalue* Before=NULL;if(!MdoApplicationPluginsStoreBegin(&Before,Error,Capacity))return false;
+ if(!SdkPlugins.Lock)return true;
+ xvalue* Before=NULL;
+ if(!MdoApplicationPluginsStoreBegin(&Before,Error,Capacity))return false;
  char Why[512]={0};xvalue* Rows=MdoExtensionsList("plugins",Why);bool Ok=Rows&&MdoApplicationPluginsStorePublish(Rows,Error,Capacity);xrtValueRelease(Rows);xrtValueRelease(Before);MdoApplicationPluginsStoreEnd();
- if(!Ok&&Error&&Capacity&&!Error[0])snprintf(Error,Capacity,"%s",Why[0]?Why:"Plugin catalogue could not be refreshed");return Ok;
+ if(!Ok&&Error&&Capacity&&!Error[0])snprintf(Error,Capacity,"%s",Why[0]?Why:"Plugin catalogue could not be refreshed");
+ return Ok;
 }
 void MdoApplicationPluginsUnit(void){
- if(!SdkPlugins.Lock)return;if(SdkPlugins.HomeMount){xrtVfsUnmount(SdkPlugins.HomeMount);xrtVfsMountDestroy(SdkPlugins.HomeMount);}if(SdkPlugins.Mount){xrtVfsUnmount(SdkPlugins.Mount);xrtVfsMountDestroy(SdkPlugins.Mount);}
+ if(!SdkPlugins.Lock)return;
+ if(SdkPlugins.HomeMount){xrtVfsUnmount(SdkPlugins.HomeMount);
+ xrtVfsMountDestroy(SdkPlugins.HomeMount);
+ }
+ if(SdkPlugins.Mount){xrtVfsUnmount(SdkPlugins.Mount);
+ xrtVfsMountDestroy(SdkPlugins.Mount);
+ }
  for(size_t I=0;I<32;I++){SdkPluginDrop(&SdkPlugins.Plugins[I]);MdoExtensionsRelease(SdkPlugins.Pins[I]);}
  xrtValueRelease(SdkPlugins.Config);xrtValueRelease(SdkPlugins.Map);xrtValueRelease(SdkPlugins.Effective);xrtValueRelease(SdkPlugins.Frontends);xrtValueRelease(SdkPlugins.Failures);xrtMutexDestroy(SdkPlugins.Lock);memset(&SdkPlugins,0,sizeof(SdkPlugins));
 }

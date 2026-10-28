@@ -462,7 +462,8 @@ static bool MdoSkillsDiscover(MdoSkillSource** Sources,size_t* Count,MdoSkillDia
         if(!Source->Id||!Source->DirectoryId||!Source->EntryFile||!Source->RelativeDirectory||!Source->VirtualDirectory){MdoSkillsSourceUnit(Source);Ok=false;break;}(*Count)++;
     }
     xrtValueRelease(Rows);if(!Ok){MdoSkillsSourcesUnit(*Sources,*Count);*Sources=NULL;*Count=0;return false;}
-    if(*Count>1)qsort(*Sources,*Count,sizeof(**Sources),MdoSkillsSourceCompare);return true;
+    if(*Count>1)qsort(*Sources,*Count,sizeof(**Sources),MdoSkillsSourceCompare);
+    return true;
 }
 
 static xfile MdoSkillsOpen(const MdoSkillSource* pSource, cstr Path,
@@ -510,10 +511,15 @@ static xfile MdoSkillsOpenEntry(const MdoSkillEntry* pEntry, cstr Path,
 }
 static bool MdoSkillsInstalledAvailable(const MdoSkillEntry* Entry)
 {
-    if(!Entry->DirectoryId)return true;char Error[512]={0};xvalue* Row=MdoExtensionsRead("skills",Entry->DirectoryId,Error);bool Enabled=false;
+    if(!Entry->DirectoryId)return true;
+    char Error[512]={0}
+    ;
+    xvalue* Row=MdoExtensionsRead("skills",Entry->DirectoryId,Error);
+    bool Enabled=false;
     xrtValueGetBool(xrtValueObjectGet(Row,XRT_STR_LITERAL("enabled")),&Enabled);
     bool Ok=Row&&Enabled&&MdoExtensionsVerify("skills",Entry->DirectoryId,NULL,Error);xrtValueRelease(Row);
-    if(!Ok)MdoSkillsSetError(Error[0]?Error:"Skill directory is disabled or unavailable");return Ok;
+    if(!Ok)MdoSkillsSetError(Error[0]?Error:"Skill directory is disabled or unavailable");
+    return Ok;
 }
 
 static bool MdoSkillsSameFile(const xfileinfo* pExpected,

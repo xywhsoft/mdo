@@ -4,9 +4,15 @@ bool MdoApiMcpTemplatesRoute(MdoApiContext* C){
   const xvalue* Row=xrtValueArrayGet(Rows,I);cstr Id=MdoExtensionText(Row,"id",96),Alias=MdoExtensionText(Row,"alias",64);char* Entry=Id?MdoExtensionsEntryPath("mcp",Id,Error):NULL,*Text=Entry?MdoExtensionRead(Entry,true,MDO_MCP_FILE_LIMIT,NULL):NULL;
   xvalue* Template=Text?xrtJsonParse(xrtStrView(Text)):NULL,*Item=xrtValueClone(Row);bool Valid=Template&&MdoMcpTemplateValidate(Template,Alias,Error,sizeof(Error));
   Ok=Item&&MdoDirectoryApiItemFlags(Item)&&MdoApiValueSetBool(Item,"template_valid",Valid);if(Ok&&Valid)Ok=xrtValueObjectSet(Item,XRT_STR_LITERAL("template"),Template);else if(Ok)Ok=MdoApiValueSetString(Item,"template_error",Error[0]?Error:"Invalid service recipe");
-  if(Ok)Ok=xrtValueArrayAppend(Items,Item);xrtValueRelease(Item);xrtValueRelease(Template);xrtFree(Text);xrtFree(Entry);
+  if(Ok)Ok=xrtValueArrayAppend(Items,Item);
+  xrtValueRelease(Item);
+  xrtValueRelease(Template);
+  xrtFree(Text);
+  xrtFree(Entry);
  }
- if(Ok)Ok=xrtValueObjectSet(Data,XRT_STR_LITERAL("items"),Items);xrtValueRelease(Rows);xrtValueRelease(Items);
+ if(Ok)Ok=xrtValueObjectSet(Data,XRT_STR_LITERAL("items"),Items);
+ xrtValueRelease(Rows);
+ xrtValueRelease(Items);
  if(!Ok){xrtValueRelease(Data);return MdoApiReplyError(C,422,"mcp_templates_unavailable",Error[0]?Error:"Cannot read installed MCP directories",NULL);}return MdoApiReplySuccessTake(C,200,Data,NULL);
 }
 bool MdoApiMcpConnectionsRoute(MdoApiContext* C){

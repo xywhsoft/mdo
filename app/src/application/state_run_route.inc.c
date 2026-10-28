@@ -48,7 +48,11 @@ struct MdoApplicationRunRoute {
     char Project[65],Session[129],Run[49],Workspace[2049];
 };
 void MdoApplicationRunRouteRelease(MdoApplicationRunRoute* Route){
-    if(!Route)return;MdoApplicationMemberTurnRelease(Route->Member);MdoModuleCatalogRelease(Route->Modules);xrtValueRelease(Route->Facts);xrtFree(Route);
+    if(!Route)return;
+    MdoApplicationMemberTurnRelease(Route->Member);
+    MdoModuleCatalogRelease(Route->Modules);
+    xrtValueRelease(Route->Facts);
+    xrtFree(Route);
 }
 MdoApplicationMemberTurn* MdoApplicationRunRouteMember(MdoApplicationRunRoute* Route){return Route?Route->Member:NULL;}
 bool MdoApplicationRunRoutePrepare(const MdoRunStartOptions* O,cstr Id,MdoSession* View,xcancel* Cancel,uint64 Deadline,
@@ -87,7 +91,11 @@ failed:
 }
 bool MdoApplicationRunRouteFinish(MdoApplicationRunRoute* R,xwork_result Status,const xwork_run_result* Result,
     const xwork_error* Error,bool Started){
-    if(!R)return true;mdo_error_v1 E={0};xvalue* Member=NULL;bool Settled=true;
+    if(!R)return true;
+    mdo_error_v1 E={0}
+    ;
+    xvalue* Member=NULL;
+    bool Settled=true;
     if(R->Member)Settled=MdoApplicationMemberTurnFinish(R->Member,Status,Result,Error,&Member,&E);
     /* Completion must settle durable work even after Stop/deadline. It cannot
      * grant a new user decision; the original provenance is retained. */
@@ -123,7 +131,8 @@ bool MdoApplicationMemberResumeManaged(const mdo_sdk_context_v1* C,const xvalue*
         if(SdkCancelled(C))MdoRunCancel(Info.Id,NULL,&Error);
         MdoRunInfo Current={0};Current.Size=sizeof(Current);
         if(!MdoRunGetInfo(Info.Id,&Current))return MdoApplicationError(E,"sdk_instance_main_run","Managed recovery receipt is unavailable; inspect the member before repeating","instance",410,true);
-        if(Current.Terminal)break;xrtSleep(20);
+        if(Current.Terminal)break;
+        xrtSleep(20);
     }
     bool Found=false;Ok=MdoApplicationStateCall(C,"instance.get",P,R,E,&Found);if(Ok)SdkPut(*R,"managed_run_id",Info.Id);return Ok;
 }

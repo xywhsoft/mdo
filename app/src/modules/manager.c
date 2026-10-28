@@ -209,7 +209,8 @@ void MdoModuleAgentUnbindContext(xwork_agent* Agent){
     xrtMutexUnlock(g_MdoModules.Lock);
 }
 void MdoModuleAgentSetMemberContext(xwork_agent* Agent,void* Owner,uint64 AgentId,cstr Namespace,cstr MemberId){
-    if(!g_MdoModules.Lock)return;xrtMutexLock(g_MdoModules.Lock);
+    if(!g_MdoModules.Lock)return;
+    xrtMutexLock(g_MdoModules.Lock);
     for(MdoModuleAgentScope* S=g_MdoModules.Scopes;S;S=S->Next)if((Agent&&S->Agent==Agent)||(Owner&&S->Owner==Owner&&S->AgentId==AgentId)){
         snprintf(S->Namespace,sizeof(S->Namespace),"%s",Namespace?Namespace:"");snprintf(S->MemberId,sizeof(S->MemberId),"%s",MemberId?MemberId:"");break;}
     xrtMutexUnlock(g_MdoModules.Lock);
@@ -556,7 +557,8 @@ static bool MdoModulesDiscoverDirectory(MdoModuleKind Kind,cstr Type,MdoModuleSo
         const xvalue* Meta=xrtValueArrayGet(Rows,I);bool Valid=false,Enabled=false;
         xrtValueGetBool(xrtValueObjectGet(Meta,XRT_STR_LITERAL("valid")),&Valid);xrtValueGetBool(xrtValueObjectGet(Meta,XRT_STR_LITERAL("enabled")),&Enabled);
         if(!Valid){MdoModulesDiagnosticAdd(Diagnostics,MDO_MODULE_DIAGNOSTIC_DISCOVERY,MdoExtensionText(Meta,"id",96),NULL,MdoExtensionText(Meta,"error",511));continue;}
-        if(!Enabled)continue;cstr Entry=MdoExtensionText(Meta,"entry",MDO_EXTENSION_PATH_BYTES),Native=MdoExtensionText(Meta,"native",MDO_EXTENSION_PATH_BYTES);
+        if(!Enabled)continue;
+        cstr Entry=MdoExtensionText(Meta,"entry",MDO_EXTENSION_PATH_BYTES),Native=MdoExtensionText(Meta,"native",MDO_EXTENSION_PATH_BYTES);
         bool Code=Entry&&strlen(Entry)>2&&!strcmp(Entry+strlen(Entry)-2,".c");
         if(Kind==MDO_MODULE_TOOLS&&!Code){snprintf(Error,sizeof(Error),"Agent tool directory requires a C entry");Ok=false;break;}
         Ok=MdoModulesDirectorySource(Kind,Meta,Entry,!Code,Sources,Count,Capacity);
@@ -932,7 +934,9 @@ static MdoModuleGeneration* MdoModulesCompile(const MdoModuleSource* pSource,
         for(size_t I=0;I<xrtValueCount(Requires);I++){
             cstr Id=MdoExtensionText(xrtValueArrayGet(Requires,I),"id",96);bool IsNative=false;
             for(size_t J=0;J<xrtValueCount(Native);J++)if(!strcmp(Id,MdoExtensionText(xrtValueArrayGet(Native,J),"id",96)))IsNative=true;
-            if(!IsNative)continue;snprintf(Expected,sizeof(Expected),"plugin.%s",Id);bool Found=false;
+            if(!IsNative)continue;
+            snprintf(Expected,sizeof(Expected),"plugin.%s",Id);
+            bool Found=false;
             for(size_t J=0;J<pGeneration->DependencyCount;J++)if(!strcmp(Expected,pGeneration->Dependencies[J]))Found=true;
             if(Found)continue;
             char** Next=pGeneration->DependencyCount<64?xrtRealloc(pGeneration->Dependencies,(pGeneration->DependencyCount+1)*sizeof(char*)):NULL;
@@ -1771,7 +1775,9 @@ static MdoModuleGeneration* MdoModulesReadAgentProfile(const MdoModuleSource* So
        !MdoExtensionsFingerprint(Kind,DirectoryId,After,NULL,Error)||strcmp(After,Module->DirectoryDigest))goto failed;
     MdoAgentFileUnit(&File);xrtFree(Text);return Module;
 failed:
-    if(Parsed)MdoAgentFileUnit(&File);xrtFree(Text);MdoModulesGenerationRelease(Module);
+    if(Parsed)MdoAgentFileUnit(&File);
+    xrtFree(Text);
+    MdoModulesGenerationRelease(Module);
     MdoModulesDiagnosticAdd(Diagnostics,MDO_MODULE_DIAGNOSTIC_VALIDATE,Source->VirtualPath,NULL,Error[0]?Error:"Agent directory changed or its definition cannot be read");return NULL;
 }
 
@@ -1893,7 +1899,8 @@ static MdoModuleCatalog* MdoModulesBuildCandidateBody(uint64 Generation,
                 bool Same=Source&&MdoExtensionHashBytes(Source,Bytes,Hash)&&!strcmp(Hash,G->SourceRevision)&&!xrtAtomic32Load(&G->Stopped,XMEMORY_ACQUIRE);xrtFree(Source);
                 if(Same&&pSources[i].Directory){char Why[512],Digest[65];Same=MdoExtensionsFingerprint(MdoExtensionText(pSources[i].Directory,"kind",32),MdoExtensionText(pSources[i].Directory,"id",96),Digest,NULL,Why)&&!strcmp(Digest,G->DirectoryDigest);}
                 if(!Same){MdoModulesDiagnosticAdd(pDiagnostics,MDO_MODULE_DIAGNOSTIC_VALIDATE,pSources[i].VirtualPath,G->SourceHash,"Active native plugin directory changed; restart the host before loading its replacement");MdoModuleCatalogRelease(Old);goto failed;}
-                if(Same&&MdoModulesGenerationRef(G))pCatalog->Modules[i]=G;break;
+                if(Same&&MdoModulesGenerationRef(G))pCatalog->Modules[i]=G;
+                break;
             }MdoModuleCatalogRelease(Old);if(pCatalog->Modules[i])continue;}
         pCatalog->Modules[i] = pSources[i].Declarative
             ? MdoModulesReadAgentProfile(&pSources[i], Generation, pDiagnostics)

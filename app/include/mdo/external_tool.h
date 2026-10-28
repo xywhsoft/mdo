@@ -36,7 +36,12 @@ static bool MdoExternalToolConfig(const xvalue* Config,char Error[512])
         for(size_t I=0;Ok&&I<xrtValueCount(Links);I++){xstrview S={0};Ok=xrtValueGetString(xrtValueArrayGet(Links,I),&S)&&S.Size<=2048&&!memchr(S.Data,0,S.Size)&&(xrtStrStarts(S,XRT_STR_LITERAL("https://"))||xrtStrStarts(S,XRT_STR_LITERAL("http://")));}}
     const char* const Fields[]={"program","prompt","command","commands","aliases","links"};
     for(size_t I=0;Ok&&I<xrtValueCount(Config);I++){xstrview K={0};xrtValueObjectAt(Config,I,&K);bool Known=false;
-        for(size_t J=0;J<sizeof(Fields)/sizeof(*Fields);J++)if(xrtStrEqual(K,xrtStrView(Fields[J])))Known=true;Ok=Known;}
-    if(!Ok&&Error)snprintf(Error,512,"External tool configuration requires a relative program, model prompt and valid command names; file contents belong to the directory ZIP");return Ok;
+        for(size_t J=0;
+        J<sizeof(Fields)/sizeof(*Fields);
+        J++)if(xrtStrEqual(K,xrtStrView(Fields[J])))Known=true;
+        Ok=Known;
+        }
+    if(!Ok&&Error)snprintf(Error,512,"External tool configuration requires a relative program, model prompt and valid command names; file contents belong to the directory ZIP");
+    return Ok;
 }
 #endif

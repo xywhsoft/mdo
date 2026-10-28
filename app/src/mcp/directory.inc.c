@@ -18,7 +18,11 @@ static xvalue* McpDirectoryInput(const xvalue* Template,const xvalue* Values,cst
     if(MdoMcpTemplateFlag(Input,"secret",false)&&Text[0]&&!MdoSecretReferenceSyntaxValid(xrtStrView(Text)))return NULL;
     cstr Type=MdoExtensionText(Input,"type",16);
     if(Type&&!strcmp(Type,"select")){bool Found=false;const xvalue* Options=xrtValueObjectGet(Input,XRT_STR_LITERAL("options"));
-        for(size_t I=0;I<xrtValueCount(Options);I++)if(xrtValueEqual(Value,xrtValueArrayGet(Options,I)))Found=true;if(!Found)return NULL;}
+        for(size_t I=0;
+        I<xrtValueCount(Options);
+        I++)if(xrtValueEqual(Value,xrtValueArrayGet(Options,I)))Found=true;
+        if(!Found)return NULL;
+        }
     if(Type&&!strcmp(Type,"boolean")&&strcmp(Text,"true")&&strcmp(Text,"false"))return NULL;
     if(Type&&!strcmp(Type,"number")){
         cstr P=Text;bool Negative=*P=='-';if(Negative)P++;uint64 N=0;if(!*P)return NULL;
@@ -102,7 +106,8 @@ static char* McpDirectoryResolveDocument(MdoMcpSource* Source,const xvalue* Conn
             char* Relative=xrtFormat("%s/%s",Root,Program);bool Exists=false;xfileinfo Info;
             Ok=Relative&&MdoHomeExternalStat(Relative,&Exists,&Info);
             if(Ok&&Exists){char* Full=MdoHomeExternalPath(Relative);Ok=Info.Type==XFILE_TYPE_FILE&&Full&&McpDirectoryPut(Transport,"program",Full);xrtFree(Full);}
-            else if(Ok&&strchr(Program,'/'))Ok=false;xrtFree(Relative);
+            else if(Ok&&strchr(Program,'/'))Ok=false;
+            xrtFree(Relative);
         }
         if(Ok&&(!Cwd||!strcmp(Cwd,".")))Ok=McpDirectoryPut(Transport,"working_directory",Native);
         else if(Ok&&Cwd&&!xrtPathIsRooted(Cwd)){
@@ -133,7 +138,8 @@ static char* McpDirectoryResolve(MdoMcpSource* Source,char Error[MDO_MCP_ERROR_L
  * Remove only bindings for the explicitly uninstalled installation; shared
  * credential-vault entries are retained rather than guessed at here. */
 bool MdoMcpRemoveDirectoryConnections(cstr DirectoryId,char Error[512]){
- if(!MdoExtensionDirectoryId(DirectoryId))return false;xdir D=MdoHomeOpenDirectory("data/mcp/connections",XDIR_STAT);
+ if(!MdoExtensionDirectoryId(DirectoryId))return false;
+ xdir D=MdoHomeOpenDirectory("data/mcp/connections",XDIR_STAT);
  if(!D){const xerror* E=xrtGetError();if(E&&xrtErrorKind(E)==XERR_NOT_FOUND){xrtClearError();return true;}return false;}
  bool Ok=true;xdirentry E;xdirnext Next=XDIR_NEXT_END;size_t Count=0;
  while((Next=xrtDirNext(D,&E))==XDIR_NEXT_ITEM){

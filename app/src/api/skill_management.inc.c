@@ -81,7 +81,8 @@ bool MdoApiSkillMigrateRoute(MdoApiContext* C)
     char* Directory=Ok?MdoSkillCatalogBaseDirectory(Source,Id):NULL;xvalue* Manifest=xrtValueObject(),*Platforms=SdkParse("[\"any\"]"),*Input=xrtValueObject();
     Ok=Ok&&Directory&&Manifest&&Platforms&&Input&&MdoApiValueSetString(Manifest,"kind","skills")&&MdoApiValueSetString(Manifest,"name",Info.Name?Info.Name:Target)&&MdoApiValueSetString(Manifest,"alias",Target)&&MdoApiValueSetString(Manifest,"entry",Entry)&&MdoApiValueSetString(Manifest,"description",Info.Description?Info.Description:"")&&xrtValueObjectSet(Manifest,XRT_STR_LITERAL("platforms"),Platforms);
     const cstr CreditFields[]={"author","copyright","homepage","readme","platforms"};for(size_t I=0;Ok&&I<5;I++){const xvalue* Value=xrtValueObjectGet(Owner,xrtStrView(CreditFields[I]));if(Value)Ok=xrtValueObjectSet(Manifest,xrtStrView(CreditFields[I]),Value);}xrtValueRelease(Owner);
-    if(Ok&&Info.License)Ok=MdoApiValueSetString(Manifest,"license",Info.License);if(Ok&&Info.Version)Ok=MdoApiValueSetString(Manifest,"version",Info.Version);
+    if(Ok&&Info.License)Ok=MdoApiValueSetString(Manifest,"license",Info.License);
+    if(Ok&&Info.Version)Ok=MdoApiValueSetString(Manifest,"version",Info.Version);
     Ok=Ok&&MdoApiValueSetString(Input,"action","import")&&MdoApiValueSetString(Input,"kind","skills")&&MdoApiValueSetString(Input,"id",Target)&&MdoApiValueSetString(Input,"directory",Directory)&&MdoApiValueSetString(Input,"expected_revision","")&&xrtValueObjectSet(Input,XRT_STR_LITERAL("manifest"),Manifest);
     MdoApiJsonBodyUnit(&Body);MdoSkillCatalogRelease(Source);xrtFree(Directory);xrtFree(Workspace);xrtValueRelease(Manifest);xrtValueRelease(Platforms);
     bool Sent=Ok?MdoApiDirectoryOperation(C,Input,false):MdoApiReplyError(C,422,"skill_import_invalid",Error[0]?Error:"Choose an explicit source and new Home directory; project pages only select installed extensions",NULL);xrtValueRelease(Input);return Sent;

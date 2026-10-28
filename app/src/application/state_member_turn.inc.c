@@ -27,12 +27,16 @@ void MdoApplicationMemberTurnRelease(MdoApplicationMemberTurn* T){
         SdkInstanceNotify(&T->Context,T->Notification);
         T->Invocation.Cancel=NULL;T->Context.Deadline=0;
         xvalue* Released=xrtValueClone(T->Notification);mdo_error_v1 HookError={0};
-        if(Released)MdoApplicationHooks(&T->Context,"instance.released",&Released,&HookError);xrtValueRelease(Released);
+        if(Released)MdoApplicationHooks(&T->Context,"instance.released",&Released,&HookError);
+        xrtValueRelease(Released);
     }
     xrtCancelDestroy(T->Cancel);xrtCancelDestroy(T->ParentCancel);MdoModuleCatalogRelease(T->Modules);
     xrtValueRelease(T->Params);xrtValueRelease(T->Config);xrtValueRelease(T->Message);xrtValueRelease(T->Notification);
     xrtFree(T->Prompt);if(T->HasUserMessage)xllmMessageUnit(&T->UserMessage);
-    for(size_t I=0;I<10;I++)xrtFree(T->Strings[I]);xrtFree(T);
+    for(size_t I=0;
+    I<10;
+    I++)xrtFree(T->Strings[I]);
+    xrtFree(T);
 }
 MdoAgentSession* MdoApplicationMemberTurnAgentRef(MdoApplicationMemberTurn* T){return T?MdoAgentSessionRef(T->Session):NULL;}
 const char* MdoApplicationMemberTurnPrompt(MdoApplicationMemberTurn* T){return T?(T->Prompt?T->Prompt:SdkField(SdkGet(T->Message,"body"),"prompt")):NULL;}
@@ -59,7 +63,8 @@ static bool SdkMemberRoutedCompleted(MdoApplicationMemberTurn* T){
     char Path[192];snprintf(Path,sizeof(Path),"%s/visible.jsonl",T->Directory);xfile File=MdoHomeOpenRead(Path);if(!File)return false;
     xfileinfo Info={0};bool Ok=xrtFileStat(File,&Info)&&Info.Size;size_t N=Ok&&Info.Size>SDK_MEMBER_HISTORY_RECORD+2?SDK_MEMBER_HISTORY_RECORD+2:(Ok?(size_t)Info.Size:0);
     char* Tail=N?xrtMalloc(N+1):NULL;if(!Tail)Ok=false;
-    if(Ok)Ok=xrtSeek(File,(int64)(Info.Size-N),XSEEK_START,NULL)&&xrtReadFull(File,Tail,N,NULL);xrtClose(File);
+    if(Ok)Ok=xrtSeek(File,(int64)(Info.Size-N),XSEEK_START,NULL)&&xrtReadFull(File,Tail,N,NULL);
+    xrtClose(File);
     xvalue* Record=NULL;
     if(Ok){size_t End=N;while(End&&Tail[End-1]!='\n')--End;if(End)--End;size_t Start=End;while(Start&&Tail[Start-1]!='\n')--Start;
         if(End>Start&&(Start||Info.Size==N)){Tail[End]=0;Record=SdkParse(Tail+Start);}}

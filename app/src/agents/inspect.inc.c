@@ -51,7 +51,8 @@ xvalue* MdoAgentSessionInspect(MdoAgentSession* Session,xwork_error* Error)
             if(I->Plan)Ok=xrtValueObjectSetNew(Data,XRT_STR_LITERAL("context"),MdoAgentConfigClone(I->Plan));
             if(Ok && I->RequestPreview)Ok=xrtValueObjectSetNew(Data,XRT_STR_LITERAL("request"),MdoAgentConfigClone(I->RequestPreview));
         }
-        if(Ok)Ok=xrtValueArrayAppend(Children,Item);xrtValueRelease(Item);
+        if(Ok)Ok=xrtValueArrayAppend(Children,Item);
+        xrtValueRelease(Item);
     }
     xrtMutexUnlock(Owner->InstanceLock);
     if(Ok)Ok=MdoAgentsPlanPut(Data,"inspection","runtime") && MdoAgentsPlanPut(Data,"agent_id",Session->AgentId) &&

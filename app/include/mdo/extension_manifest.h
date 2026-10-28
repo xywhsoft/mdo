@@ -11,16 +11,23 @@ static cstr MdoExtensionText(const xvalue* O,cstr Key,size_t Limit)
 static bool MdoExtensionNumber(const xvalue* Object,cstr Key,int64* Result)
 {
     const xvalue* Value=xrtValueObjectGet(Object,xrtStrView(Key));uint64 N=0;
-    if(xrtValueGetInt(Value,Result))return true;if(!xrtValueGetUInt(Value,&N)||N>INT64_MAX)return false;*Result=(int64)N;return true;
+    if(xrtValueGetInt(Value,Result))return true;
+    if(!xrtValueGetUInt(Value,&N)||N>INT64_MAX)return false;
+    *Result=(int64)N;
+    return true;
 }
 static bool MdoExtensionPlatform(cstr P)
 {
     const char* const Names[]={"any","windows-x86_64","linux-x86_64","linux-x86_64-glibc","linux-x86_64-musl","linux-arm64","android-arm64-v8a","macos-arm64"};
-    for(size_t I=0;I<sizeof(Names)/sizeof(*Names);I++)if(P&&!strcmp(P,Names[I]))return true;return false;
+    for(size_t I=0;
+    I<sizeof(Names)/sizeof(*Names);
+    I++)if(P&&!strcmp(P,Names[I]))return true;
+    return false;
 }
 static bool MdoExtensionSupportsPlatform(const xvalue* Manifest,cstr Platform)
 {
-    if(!Platform)return false;const xvalue* Ps=xrtValueObjectGet(Manifest,XRT_STR_LITERAL("platforms"));
+    if(!Platform)return false;
+    const xvalue* Ps=xrtValueObjectGet(Manifest,XRT_STR_LITERAL("platforms"));
     for(size_t I=0;I<xrtValueCount(Ps);I++){xstrview P={0};if(!xrtValueGetString(xrtValueArrayGet(Ps,I),&P))continue;
         if(xrtStrEqual(P,XRT_STR_LITERAL("any"))||xrtStrEqual(P,xrtStrView(Platform))||(!strncmp(Platform,"linux-x86_64-",13)&&xrtStrEqual(P,XRT_STR_LITERAL("linux-x86_64"))))return true;}
     return false;

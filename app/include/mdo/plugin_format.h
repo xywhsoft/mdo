@@ -12,15 +12,22 @@ static bool MdoPluginFail(char* E,size_t N,cstr Why){if(E&&N)snprintf(E,N,"%s",W
 static bool MdoPluginKeys(const xvalue* V,const cstr* Keys,size_t Count){
  if(xrtValueType(V)!=XVALUE_OBJECT)return false;
  for(size_t I=0;I<xrtValueCount(V);I++){xstrview K={0};xrtValueObjectAt(V,I,&K);bool Known=false;
-  for(size_t J=0;J<Count;J++)if(xrtStrEqual(K,xrtStrView(Keys[J])))Known=true;if(!Known)return false;}
+  for(size_t J=0;
+  J<Count;
+  J++)if(xrtStrEqual(K,xrtStrView(Keys[J])))Known=true;
+  if(!Known)return false;
+  }
  return true;
 }
 static bool MdoPluginCoreTarget(cstr T){
- if(!T||!strncmp(T,"default-home/",13))return false;size_t N=strlen(T);
+ if(!T||!strncmp(T,"default-home/",13))return false;
+ size_t N=strlen(T);
  return !strncmp(T,"src/",4)||!strncmp(T,"include/",8)||!strncmp(T,"generated/",10)||!strcmp(T,"main.c")||!strcmp(T,"sources.json")||(N>2&&(!strcmp(T+N-2,".c")||!strcmp(T+N-2,".h")));
 }
 static bool MdoPluginPathOverlap(cstr A,cstr B){
- if(!A||!B)return false;char *KA=MdoExtensionPathKey(A),*KB=MdoExtensionPathKey(B);bool Overlap=false;
+ if(!A||!B)return false;
+ char *KA=MdoExtensionPathKey(A),*KB=MdoExtensionPathKey(B);
+ bool Overlap=false;
  if(KA&&KB){size_t N=strlen(KA),M=strlen(KB);Overlap=(N==M&&!strcmp(KA,KB))||(N<M&&!memcmp(KA,KB,N)&&KB[N]=='/')||(M<N&&!memcmp(KA,KB,M)&&KA[M]=='/');}else Overlap=true;
  xrtFree(KA);xrtFree(KB);return Overlap;
 }
@@ -47,7 +54,8 @@ static bool MdoPluginValidate(const xvalue* D,const xvalue* Files,cstr ExpectedA
  const xvalue* Entry=MdoPluginGet(D,"entry");const cstr EntryKeys[]={"frontend","native"};bool HasEntry=false;
  if(Entry&&!MdoPluginKeys(Entry,EntryKeys,2))return MdoPluginFail(E,N,"Plugin entries support frontend and native only");
  for(size_t I=0;I<2;I++)if(MdoPluginGet(Entry,EntryKeys[I])){cstr P=MdoExtensionText(Entry,EntryKeys[I],MDO_EXTENSION_PATH_BYTES);size_t L=P?strlen(P):0,S=I?2:3;
-  if(!MdoPluginFile(Files,P)||L<=S||strcmp(P+L-S,I?".c":".js"))return MdoPluginFail(E,N,"An entry must refer to an own .c or .js file");HasEntry=true;
+  if(!MdoPluginFile(Files,P)||L<=S||strcmp(P+L-S,I?".c":".js"))return MdoPluginFail(E,N,"An entry must refer to an own .c or .js file");
+  HasEntry=true;
   for(size_t J=0;J<xrtValueCount(Overrides);J++)if(!strcmp(P,MdoExtensionText(xrtValueArrayGet(Overrides,J),"source",MDO_EXTENSION_PATH_BYTES)))return MdoPluginFail(E,N,"An entry cannot also be an override");}
  if(!HasEntry&&!xrtValueCount(Overrides))return MdoPluginFail(E,N,"A plugin needs an override or an execution entry");
  const xvalue* Exclusive=MdoPluginGet(D,"exclusive");if(Exclusive&&(xrtValueType(Exclusive)!=XVALUE_ARRAY||xrtValueCount(Exclusive)>16))return MdoPluginFail(E,N,"Invalid exclusive markers");

@@ -36,7 +36,9 @@ static inline bool MdoAgentConfigNumber(const xvalue* Object, cstr Key,
     *Output = Default;
     if (!Value) return true;
     if(xrtValueGetUInt(Value,&Unsigned)){
-        if(Unsigned>Maximum)return false;*Output=Unsigned;return true;
+        if(Unsigned>Maximum)return false;
+        *Output=Unsigned;
+        return true;
     }
     if (xrtValueGetInt(Value, &Number)) {
         if (Number < 0 || (uint64)Number > Maximum) return false;
@@ -148,7 +150,8 @@ static inline bool MdoAgentConfigChoice(const xvalue* Object,cstr Key,cstr Choic
 {
     const xvalue* V=MdoAgentConfigGet(Object,Key);if(!V)return true;
     cstr S=MdoAgentConfigText(Object,Key);char Token[128];
-    if(!S||strlen(S)>120)return false;snprintf(Token,sizeof(Token),"|%s|",S);
+    if(!S||strlen(S)>120)return false;
+    snprintf(Token,sizeof(Token),"|%s|",S);
     return strstr(Choices,Token)!=NULL;
 }
 

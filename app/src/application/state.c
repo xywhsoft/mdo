@@ -12,7 +12,9 @@ static struct {xmutex* Lock;xcond* Drained;char Epoch[33];SdkMemberActive Member
 static const cstr SdkStateMethods[]={"state.get","state.list","state.put","state.compare_exchange","state.remove","state.transaction","state.receipt.get","lease.acquire","lease.inspect","lease.validate","lease.renew","lease.release","mailbox.send","mailbox.get","mailbox.read","mailbox.ack","mailbox.wait","instance.create","instance.get","instance.list","instance.history","instance.recovery","instance.send","instance.step","instance.cancel","instance.close","instance.result","instance.wait","instance.resume","instance.abandon","work.create","work.get","work.list","work.claim","work.complete","work.release","work.cancel"};
 bool MdoApplicationStateInit(void){SdkState.Lock=xrtMutexCreate();SdkState.Drained=xrtCondCreate();return SdkState.Lock&&SdkState.Drained&&SdkCallIdentity(SdkState.Epoch);}
 void MdoApplicationInstancesStop(void){
-    if(!SdkState.Lock)return;xrtMutexLock(SdkState.Lock);SdkState.Stopping=true;
+    if(!SdkState.Lock)return;
+    xrtMutexLock(SdkState.Lock);
+    SdkState.Stopping=true;
     for(size_t I=0;I<8;I++)if(SdkState.Members[I].Cancel)xrtCancelRequest(SdkState.Members[I].Cancel);
     for(;;){bool Active=false;for(size_t I=0;I<8;I++)if(SdkState.Members[I].Cancel)Active=true;if(!Active)break;xrtCondWait(SdkState.Drained,SdkState.Lock);}
     xrtMutexUnlock(SdkState.Lock);
@@ -102,7 +104,8 @@ static bool SdkStateSave(cstr Path,const xvalue* Root,mdo_error_v1* E){
 static xvalue* SdkStateEntry(cstr Key,const xvalue* Entry){
     xvalue* R=xrtValueObject();SdkPut(R,"key",Key);SdkPutUInt(R,"revision",SdkStateRevision(Entry));
     bool Exists=Entry&&!SdkStateDeleted(Entry);xrtValueObjectSetNew(R,XRT_STR_LITERAL("exists"),xrtValueBool(Exists));
-    if(Exists)xrtValueObjectSetNew(R,XRT_STR_LITERAL("value"),xrtValueClone(SdkGet(Entry,"value")));return R;
+    if(Exists)xrtValueObjectSetNew(R,XRT_STR_LITERAL("value"),xrtValueClone(SdkGet(Entry,"value")));
+    return R;
 }
 static bool SdkStateKey(cstr Key){return SdkIdValid(Key)&&strlen(Key)<=128;}
 static bool SdkStateCheck(const xvalue* Records,const xvalue* Check,mdo_error_v1* E){
@@ -136,7 +139,8 @@ static bool SdkStateApply(xvalue* Root,const xvalue* Writes,const xvalue* Checks
         const xvalue* W=xrtValueArrayGet(Writes,I);cstr Key=SdkField(W,"key");bool Remove=false;xrtValueGetBool(SdkGet(W,"remove"),&Remove);
         xvalue* Entry=xrtValueObject();Ok=Entry&&SdkPutUInt(Entry,"revision",Revision)&&xrtValueObjectSetNew(Entry,XRT_STR_LITERAL("deleted"),xrtValueBool(Remove));
         if(Ok&&!Remove)Ok=xrtValueObjectSetNew(Entry,XRT_STR_LITERAL("value"),xrtValueClone(SdkGet(W,"value")));
-        if(Ok)Ok=xrtValueObjectSet(Records,xrtStrView(Key),Entry)&&xrtValueArrayAppendNew(Results,SdkStateEntry(Key,Entry));xrtValueRelease(Entry);
+        if(Ok)Ok=xrtValueObjectSet(Records,xrtStrView(Key),Entry)&&xrtValueArrayAppendNew(Results,SdkStateEntry(Key,Entry));
+        xrtValueRelease(Entry);
     }
     if(Ok)Ok=SdkPutUInt(Root,"revision",Revision);
     if(!Ok){xrtValueRelease(Results);return MdoApplicationError(E,"sdk_state_allocation","Cannot construct transaction; no changes published","state",500,false);}

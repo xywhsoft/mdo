@@ -39,7 +39,8 @@ xvalue* MdoApplicationPluginNativeSources(void){
     xvalue* Rows=xrtValueArray();if(!SdkPlugins.Lock)return Rows;xrtMutexLock(SdkPlugins.Lock);
     for(size_t I=0;I<xrtValueCount(SdkPlugins.Effective);I++){
         const xvalue* M=xrtValueArrayGet(SdkPlugins.Effective,I);cstr Native=SdkField(SdkGet(SdkGet(M,"manifest"),"entry"),"native");
-        if(!Native||!SdkPluginEnabled(M))continue;char* Path=xrtFormat("/app/__mdo_plugins/%s/%s/%s",SdkField(M,"id"),SdkField(M,"revision"),Native);
+        if(!Native||!SdkPluginEnabled(M))continue;
+        char* Path=xrtFormat("/app/__mdo_plugins/%s/%s/%s",SdkField(M,"id"),SdkField(M,"revision"),Native);
         xvalue* R=xrtValueObject();SdkPut(R,"path",Path);SdkPut(R,"id",SdkField(M,"alias"));SdkPut(R,"directory_id",SdkField(M,"id"));SdkPut(R,"version",SdkField(M,"version")?SdkField(M,"version"):"0.0.0");
         const xvalue* Requires=SdkGet(SdkGet(M,"manifest"),"requires");xvalue* Resolved=xrtValueArray();
         for(size_t J=0;J<xrtValueCount(Requires);J++){cstr Ref=SdkField(xrtValueArrayGet(Requires,J),"id");const xvalue* Other=SdkPluginFind(SdkPlugins.Effective,Ref);
@@ -73,7 +74,9 @@ static bool SdkPluginFrontendCall(cstr Method,const xvalue* P,xvalue** R,mdo_err
     if(Hello||Fail){
         xvalue* Failures=xrtValueArray();
         for(size_t I=0;I<xrtValueCount(SdkPlugins.Failures);I++){const xvalue* F=xrtValueArrayGet(SdkPlugins.Failures,I);
-            if(!strcmp(Client,SdkField(F,"client"))&&(Hello||!strcmp(Id,SdkField(F,"id"))))continue;xrtValueArrayAppend(Failures,F);}
+            if(!strcmp(Client,SdkField(F,"client"))&&(Hello||!strcmp(Id,SdkField(F,"id"))))continue;
+            xrtValueArrayAppend(Failures,F);
+            }
         if(Fail&&xrtValueCount(Failures)<1024){xvalue* F=xrtValueObject();SdkPut(F,"client",Client);SdkPut(F,"page",Page);SdkPut(F,"id",Id);SdkPut(F,"revision",Revision);SdkPut(F,"phase",SdkField(P,"phase"));xrtValueArrayAppendNew(Failures,F);}
         xrtValueRelease(SdkPlugins.Failures);SdkPlugins.Failures=Failures;
     }
@@ -83,7 +86,9 @@ static bool SdkPluginFrontendCall(cstr Method,const xvalue* P,xvalue** R,mdo_err
 }
 #include "../../include/mdo/diagnostics.h"
 bool MdoApplicationPluginWarnings(xvalue* Items){
-    if(!SdkPlugins.Lock)return true;bool Ok=true;xrtMutexLock(SdkPlugins.Lock);
+    if(!SdkPlugins.Lock)return true;
+    bool Ok=true;
+    xrtMutexLock(SdkPlugins.Lock);
     if(SdkPlugins.Recovery)Ok=MdoDiagnosticWarning(Items,"plugins","recovery","","config/plugins.json","Plugin recovery mode is active; plugin overlays and entries are disabled","Restore the plugin selection or start without MDO_PLUGINS_DISABLED after repairing it","extensions");
     for(size_t I=0;Ok&&I<32;I++)if(SdkPlugins.Plugins[I].Error[0])Ok=MdoDiagnosticWarning(Items,"plugins","invalid_revision",SdkField(SdkPlugins.Plugins[I].Manifest,"id"),"",SdkPlugins.Plugins[I].Error,"Disable or restore the affected plugin revision","extensions");
     for(size_t I=0;Ok&&I<xrtValueCount(SdkPlugins.Failures);I++){
@@ -97,7 +102,8 @@ bool MdoApplicationPluginWarnings(xvalue* Items){
 /* Used only at initial boot, after the rejected candidate has retired. Never
  * rewrite the user's selection, and never replay a plugin entry in recovery. */
 bool MdoApplicationPluginsRecover(void){
-    if(!SdkPlugins.Lock)return false;xrtMutexLock(SdkPlugins.Lock);
+    if(!SdkPlugins.Lock)return false;
+    xrtMutexLock(SdkPlugins.Lock);
     bool Changed=!SdkPlugins.Recovery&&xrtValueCount(SdkPlugins.Effective)>0;
     xvalue* Empty=Changed?xrtValueArray():NULL,*Effective=Changed?xrtValueArray():NULL;
     if(Changed&&Empty&&Effective){xrtValueRelease(SdkPlugins.Map);SdkPlugins.Map=Empty;xrtValueRelease(SdkPlugins.Effective);SdkPlugins.Effective=Effective;for(size_t I=0;I<32;I++){MdoExtensionsRelease(SdkPlugins.Pins[I]);SdkPlugins.Pins[I]=NULL;}SdkPlugins.Recovery=true;SdkPlugins.Pending=true;}
@@ -109,7 +115,9 @@ void MdoApplicationPluginViewBegin(void){if(SdkPlugins.Lock){xrtMutexLock(SdkPlu
 void MdoApplicationPluginViewEnd(void){if(SdkPlugins.Lock){xrtMutexLock(SdkPlugins.Lock);if(SdkPlugins.Readers)SdkPlugins.Readers--;SdkPluginReconcile();xrtMutexUnlock(SdkPlugins.Lock);}}
 
 bool MdoApplicationPluginEntriesOnly(void){
-    if(!SdkPlugins.Lock)return false;bool Only=true;xrtMutexLock(SdkPlugins.Lock);
+    if(!SdkPlugins.Lock)return false;
+    bool Only=true;
+    xrtMutexLock(SdkPlugins.Lock);
     for(size_t I=0;I<xrtValueCount(SdkPlugins.Effective);I++){
         const xvalue* R=xrtValueArrayGet(SdkPlugins.Effective,I);if(!SdkPluginEnabled(R))continue;
         if(!SdkGet(R,"manifest")||xrtValueCount(SdkGet(SdkGet(R,"manifest"),"overrides")))Only=false;
@@ -118,32 +126,42 @@ bool MdoApplicationPluginEntriesOnly(void){
 
 bool MdoApplicationPluginsRecovery(void){if(!SdkPlugins.Lock)return false;xrtMutexLock(SdkPlugins.Lock);bool R=SdkPlugins.Recovery;xrtMutexUnlock(SdkPlugins.Lock);return R;}
 bool MdoApplicationPluginsPending(bool* RestartRequired){
-    if(RestartRequired)*RestartRequired=false;if(!SdkPlugins.Lock)return false;
+    if(RestartRequired)*RestartRequired=false;
+    if(!SdkPlugins.Lock)return false;
     xrtMutexLock(SdkPlugins.Lock);bool Pending=SdkPlugins.Pending||SdkPlugins.Recovery;
     if(RestartRequired)*RestartRequired=SdkPlugins.Recovery||SdkPluginNativeChanged(SdkPlugins.Effective,SdkPlugins.Config);
     xrtMutexUnlock(SdkPlugins.Lock);return Pending;
 }
 
 bool MdoApplicationPluginCoreRequired(void){
-    if(!SdkPlugins.Lock)return false;bool Required=false;xrtMutexLock(SdkPlugins.Lock);
+    if(!SdkPlugins.Lock)return false;
+    bool Required=false;
+    xrtMutexLock(SdkPlugins.Lock);
     for(size_t I=0;!SdkPlugins.Recovery&&I<xrtValueCount(SdkPlugins.Config);I++){
         const xvalue* R=xrtValueArrayGet(SdkPlugins.Config,I);
         if(SdkPluginEnabled(R)&&SdkPluginCore(R))Required=true;
     }xrtMutexUnlock(SdkPlugins.Lock);return Required;
 }
 bool MdoApplicationPluginHasFile(cstr Path){
-    if(!SdkPlugins.Lock||!Path)return false;bool Found=false;if(!strncmp(Path,"/app/",5))Path+=5;
+    if(!SdkPlugins.Lock||!Path)return false;
+    bool Found=false;
+    if(!strncmp(Path,"/app/",5))Path+=5;
     xrtMutexLock(SdkPlugins.Lock);for(size_t I=0;I<xrtValueCount(SdkPlugins.Map);I++)if(!strcmp(Path,SdkField(xrtValueArrayGet(SdkPlugins.Map,I),"target")))Found=true;
     xrtMutexUnlock(SdkPlugins.Lock);return Found;
 }
 xvalue* MdoApplicationPluginFileOwner(cstr Path){
-    if(!SdkPlugins.Lock||!Path)return NULL;if(!strncmp(Path,"/app/",5))Path+=5;xvalue* Owner=NULL;
+    if(!SdkPlugins.Lock||!Path)return NULL;
+    if(!strncmp(Path,"/app/",5))Path+=5;
+    xvalue* Owner=NULL;
     xrtMutexLock(SdkPlugins.Lock);
     for(size_t I=0;I<xrtValueCount(SdkPlugins.Map);I++){
         const xvalue* R=xrtValueArrayGet(SdkPlugins.Map,I);if(!MdoPluginPathOverlap(Path,SdkField(R,"target")))continue;
         cstr Id=SdkField(R,"id");const xvalue* M=SdkPluginFind(SdkPlugins.Effective,Id);if(!M)continue;
         Owner=xrtValueObject();SdkPut(Owner,"id",Id);SdkPut(Owner,"revision",SdkField(R,"revision"));
         const xvalue* Doc=SdkGet(M,"manifest");const cstr Keys[]={"name","author","copyright","license","version"};
-        for(size_t J=0;J<5;J++)if(SdkField(Doc,Keys[J]))SdkPut(Owner,Keys[J],SdkField(Doc,Keys[J]));break;
+        for(size_t J=0;
+        J<5;
+        J++)if(SdkField(Doc,Keys[J]))SdkPut(Owner,Keys[J],SdkField(Doc,Keys[J]));
+        break;
     }xrtMutexUnlock(SdkPlugins.Lock);return Owner;
 }

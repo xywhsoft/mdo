@@ -75,12 +75,19 @@ static size_t MdoZipLower(MdoZipEntry** Order,size_t Count,cstr Key,size_t Lengt
 {
     size_t Low=0,High=Count;
     while(Low<High){size_t Mid=Low+(High-Low)/2;int C=strncmp(Order[Mid]->Key,Key,Length);
-        if(!C&&Order[Mid]->Key[Length])C=1;if(C<0)Low=Mid+1;else High=Mid;}return Low;
+        if(!C&&Order[Mid]->Key[Length])C=1;
+        if(C<0)Low=Mid+1;
+        else High=Mid;
+        }
+        return Low;
 }
 static bool MdoZipPaths(MdoZip* Z)
 {
     MdoZipEntry** Order=xrtMalloc(Z->Count*sizeof(*Order));if(!Order)return MdoZipFail(Z,"Cannot allocate ZIP index");
-    for(size_t I=0;I<Z->Count;I++)Order[I]=&Z->Entries[I];qsort(Order,Z->Count,sizeof(*Order),MdoZipKeyCompare);
+    for(size_t I=0;
+    I<Z->Count;
+    I++)Order[I]=&Z->Entries[I];
+    qsort(Order,Z->Count,sizeof(*Order),MdoZipKeyCompare);
     bool Ok=true;
     for(size_t I=0;Ok&&I<Z->Count;I++){
         MdoZipEntry* E=Order[I];if(I&&!strcmp(Order[I-1]->Key,E->Key)){Ok=false;break;}
@@ -175,7 +182,10 @@ static bool MdoZipOpenContainer(MdoZip* Z,xfile File,bool Apk)
     }
     if(Position!=Z->Central+CentralSize||!MdoZipPaths(Z))goto bad;
     {MdoZipEntry** Order=xrtMalloc(Z->Count*sizeof(*Order));if(!Order)goto bad;
-        for(size_t I=0;I<Z->Count;I++)Order[I]=&Z->Entries[I];qsort(Order,Z->Count,sizeof(*Order),MdoZipOffsetCompare);
+        for(size_t I=0;
+        I<Z->Count;
+        I++)Order[I]=&Z->Entries[I];
+        qsort(Order,Z->Count,sizeof(*Order),MdoZipOffsetCompare);
         uint64 Next=0;for(size_t I=0;I<Z->Count;I++){if(Order[I]->Offset!=Next){xrtFree(Order);goto bad;}Next=Order[I]->End;}
         xrtFree(Order);
         if(Next!=Z->Central){
@@ -201,7 +211,8 @@ static bool MdoZipDecoded(xbytesview B,void* User)
 }
 static bool MdoZipEntryRead(MdoZip* Z,size_t Index,MdoZipSink Sink,void* User,xcancel* Cancel,char Hash[65])
 {
-    if(Index>=Z->Count)return MdoZipFail(Z,"ZIP entry not found");MdoZipEntry* E=&Z->Entries[Index];
+    if(Index>=Z->Count)return MdoZipFail(Z,"ZIP entry not found");
+    MdoZipEntry* E=&Z->Entries[Index];
     MdoZipDecode D={0};D.Sink=Sink;D.User=User;D.Limit=E->Bytes;xrtSha256Init(&D.Sha);
     xinflate* Inflate=NULL;bool Ok=true;uint8 Buffer[65536];uint64 At=0;
     if(E->Method==8){xinflateconfig C;xrtInflateConfigInit(&C);C.Format=XINFLATE_RAW;C.OutputLimit=E->Bytes?E->Bytes:1;Inflate=xrtInflateCreate(&C);Ok=Inflate!=NULL;}
@@ -252,7 +263,8 @@ bad:W->Failed=true;return MdoZipFail(&W->Index,"Cannot write ZIP entry: path, in
 }
 static bool MdoZipWriterFinish(MdoZipWriter* W)
 {
-    if(W->Failed||!W->Index.Count||!MdoZipPaths(&W->Index))return false;uint64 Start=W->Position;
+    if(W->Failed||!W->Index.Count||!MdoZipPaths(&W->Index))return false;
+    uint64 Start=W->Position;
     for(size_t I=0;I<W->Index.Count;I++){MdoZipEntry* E=&W->Index.Entries[I];uint8 H[46]={0};MdoZipSet32(H,0x02014b50u);MdoZipSet16(H+4,(3u<<8)|20u);MdoZipSet16(H+6,20);MdoZipSet16(H+8,E->Flags);MdoZipSet16(H+10,E->Method);MdoZipSet16(H+14,33);
         MdoZipSet32(H+16,E->Crc);MdoZipSet32(H+20,(uint32)E->Packed);MdoZipSet32(H+24,(uint32)E->Bytes);MdoZipSet16(H+28,(uint16)(strlen(E->Path)+(E->Directory?1:0)));
         MdoZipSet32(H+38,((E->Mode|(E->Directory?0040000:0100000))<<16)|(E->Directory?0x10:0));MdoZipSet32(H+42,(uint32)E->Offset);

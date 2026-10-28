@@ -31,7 +31,9 @@ static xvalue* MdoExtReadJson(cstr Path,size_t Limit,bool Empty)
 static char* MdoExtJson(const xvalue* V,size_t Limit)
 {
     xjsonwriteconfig C;xrtJsonWriteConfigInit(&C);C.MaxOutputBytes=Limit;xjsonwriter* W=xrtJsonWriterCreate(&C);char* Text=NULL;
-    if(W&&xrtJsonWriterValue(W,V)&&xrtJsonWriterFinish(W))Text=xrtJsonWriterTake(W,NULL);xrtJsonWriterFree(W);return Text;
+    if(W&&xrtJsonWriterValue(W,V)&&xrtJsonWriterFinish(W))Text=xrtJsonWriterTake(W,NULL);
+    xrtJsonWriterFree(W);
+    return Text;
 }
 static bool MdoExtSaveJson(cstr Path,const xvalue* V,size_t Limit)
 {char* Text=MdoExtJson(V,Limit);bool Ok=Text&&MdoHomeAtomicWrite(Path,Text,strlen(Text),false);xrtFree(Text);return Ok;}
@@ -79,15 +81,22 @@ void MdoExtensionsMutationEnd(void){if(MdoExtMutationLock)xrtMutexUnlock(MdoExtM
 bool MdoExtensionsInUse(cstr Kind,cstr Id){if(!MdoExtLock)return false;xrtMutexLock(MdoExtLock);bool Busy=MdoExtensionDirectoryKind(Kind)&&MdoExtensionDirectoryId(Id)&&MdoExtBusy(Kind,Id);xrtMutexUnlock(MdoExtLock);return Busy;}
 xvalue* MdoExtensionsRead(cstr Kind,cstr Id,char Error[512])
 {
-    if(Error)Error[0]=0;if(!MdoExtensionDirectoryKind(Kind)||!MdoExtensionDirectoryId(Id)){MdoExtError(Error,"Choose a type and an installed directory");return NULL;}
+    if(Error)Error[0]=0;
+    if(!MdoExtensionDirectoryKind(Kind)||!MdoExtensionDirectoryId(Id)){MdoExtError(Error,"Choose a type and an installed directory");
+    return NULL;
+    }
     if(!MdoExtLock){MdoExtError(Error,"Extension manager is not initialized");return NULL;}
     xrtMutexLock(MdoExtLock);xvalue* State=MdoExtReadJson(MDO_EXT_STATE,MDO_EXT_STATE_LIMIT,true);
     xvalue* Row=State&&xrtValueType(State)==XVALUE_OBJECT&&MdoExtCanonical(Kind,Id)?MdoExtRead(Kind,Id,State,Error):NULL;xrtValueRelease(State);xrtMutexUnlock(MdoExtLock);
-    if(!Row&&Error&&!Error[0])MdoExtError(Error,"Cannot verify extension installation state");return Row;
+    if(!Row&&Error&&!Error[0])MdoExtError(Error,"Cannot verify extension installation state");
+    return Row;
 }
 xvalue* MdoExtensionsList(cstr Kind,char Error[512])
 {
-    if(Error)Error[0]=0;if(!MdoExtLock||!MdoExtensionDirectoryKind(Kind)){MdoExtError(Error,"Choose one of the nine extension types");return NULL;}
+    if(Error)Error[0]=0;
+    if(!MdoExtLock||!MdoExtensionDirectoryKind(Kind)){MdoExtError(Error,"Choose one of the nine extension types");
+    return NULL;
+    }
     xrtMutexLock(MdoExtLock);xvalue* State=MdoExtReadJson(MDO_EXT_STATE,MDO_EXT_STATE_LIMIT,true),*Rows=xrtValueArray();
     bool Ok=State&&xrtValueType(State)==XVALUE_OBJECT&&Rows;xdir D=Ok?MdoHomeOpenDirectory(Kind,XDIR_STAT):NULL;
     if(Ok&&!D&&!MdoExtMissing())Ok=false;
@@ -103,7 +112,10 @@ xvalue* MdoExtensionsList(cstr Kind,char Error[512])
             xrtFree(Key);xrtFree(Root);}
         Ok=Ok&&xrtValueArrayAppend(Rows,Row);xrtValueRelease(Row);
     }
-    if(Next==XDIR_NEXT_ERROR)Ok=false;if(D&&!xrtDirClose(D))Ok=false;xrtValueRelease(State);xrtMutexUnlock(MdoExtLock);
+    if(Next==XDIR_NEXT_ERROR)Ok=false;
+    if(D&&!xrtDirClose(D))Ok=false;
+    xrtValueRelease(State);
+    xrtMutexUnlock(MdoExtLock);
     if(!Ok){xrtValueRelease(Rows);MdoExtError(Error,"Cannot read extension directory or installation state");return NULL;}return Rows;
 }
 char* MdoExtensionsEntryPath(cstr Kind,cstr Id,char Error[512])
@@ -113,7 +125,10 @@ char* MdoExtensionsEntryPath(cstr Kind,cstr Id,char Error[512])
 }
 xvalue* MdoExtensionsFindAlias(cstr Kind,cstr Alias,char Error[512])
 {
-    if(Error)Error[0]=0;if(!MdoExtensionAlias(Alias)){MdoExtError(Error,"Choose a valid extension alias");return NULL;}
+    if(Error)Error[0]=0;
+    if(!MdoExtensionAlias(Alias)){MdoExtError(Error,"Choose a valid extension alias");
+    return NULL;
+    }
     xvalue* Rows=MdoExtensionsList(Kind,Error),*Found=NULL;bool Ambiguous=false;
     for(size_t I=0;I<xrtValueCount(Rows);I++){
         const xvalue* Row=xrtValueArrayGet(Rows,I);cstr Name=MdoExtensionText(Row,"alias",64);bool Valid=false,Enabled=false;
@@ -121,7 +136,8 @@ xvalue* MdoExtensionsFindAlias(cstr Kind,cstr Alias,char Error[512])
         if(Name&&!strcmp(Name,Alias)&&Valid&&Enabled){if(Found){Ambiguous=true;break;}Found=xrtValueClone(Row);}
     }
     xrtValueRelease(Rows);if(Ambiguous){xrtValueRelease(Found);Found=NULL;MdoExtError(Error,"Multiple enabled directories declare the same alias");}
-    if(!Found&&Error&&!Error[0])MdoExtError(Error,"No enabled extension directory declares this alias");return Found;
+    if(!Found&&Error&&!Error[0])MdoExtError(Error,"No enabled extension directory declares this alias");
+    return Found;
 }
 typedef struct MdoExtFile {char* Path;xfileinfo Info;bool Directory;} MdoExtFile;
 typedef struct MdoExtTree {MdoExtFile* Files;size_t Count,Capacity;uint64 Bytes;} MdoExtTree;
@@ -138,7 +154,10 @@ static int MdoExtFileCompare(const void* A,const void* B){return strcmp(((const 
 static bool MdoExtTreePaths(const MdoExtTree* T,cstr Additional,bool Directory,char Error[512]){
     MdoZip Index={0};Index.Count=T->Count+(Additional?1:0);Index.Entries=xrtCalloc(Index.Count?Index.Count:1,sizeof(*Index.Entries));bool Ok=Index.Entries!=NULL;
     for(size_t I=0;Ok&&I<Index.Count;I++){cstr Path=I<T->Count?T->Files[I].Path:Additional;Index.Entries[I].Path=xrtStrDup(Path);Index.Entries[I].Key=MdoExtensionPathKey(Path);Index.Entries[I].Directory=I<T->Count?T->Files[I].Directory:Directory;Ok=Index.Entries[I].Path&&Index.Entries[I].Key;}
-    if(Ok&&Index.Count)Ok=MdoZipPaths(&Index);if(!Ok&&Error)snprintf(Error,512,"%s",Index.Error[0]?Index.Error:"Cannot validate extension paths");MdoZipClose(&Index);return Ok;
+    if(Ok&&Index.Count)Ok=MdoZipPaths(&Index);
+    if(!Ok&&Error)snprintf(Error,512,"%s",Index.Error[0]?Index.Error:"Cannot validate extension paths");
+    MdoZipClose(&Index);
+    return Ok;
 }
 static bool MdoExtCollectFrom(cstr Root,xroot Anchor,MdoExtTree* T,xcancel* Cancel,char Error[512])
 {
@@ -151,9 +170,11 @@ static bool MdoExtCollectFrom(cstr Root,xroot Anchor,MdoExtTree* T,xcancel* Canc
             if((Cancel&&xrtCancelRequested(Cancel))||!(E.Flags&XDIR_ENTRY_UTF8)||!E.Name.Size||memchr(E.Name.Data,0,E.Name.Size)){Ok=false;break;}
             char* Name=xrtStrDupN(E.Name.Data,E.Name.Size),*Path=Name?(Relative.Size?xrtFormat("%s/%s",Relative.Data,Name):xrtStrDup(Name)):NULL;xrtFree(Name);
             Ok=Path&&MdoExtTreeAppend(T,Path,&E.Info);if(!Ok&&Error&&Path)snprintf(Error,512,"Unsupported extension file or path: %.240s",Path);
-            if(Ok&&E.Info.Type==XFILE_TYPE_DIRECTORY)Ok=xrtValueArrayAppendNew(Queue,xrtValueString(xrtStrView(Path)));xrtFree(Path);
+            if(Ok&&E.Info.Type==XFILE_TYPE_DIRECTORY)Ok=xrtValueArrayAppendNew(Queue,xrtValueString(xrtStrView(Path)));
+            xrtFree(Path);
         }
-        if(Next==XDIR_NEXT_ERROR)Ok=false;if(!xrtDirClose(D))Ok=false;
+        if(Next==XDIR_NEXT_ERROR)Ok=false;
+        if(!xrtDirClose(D))Ok=false;
     }xrtValueRelease(Queue);if(!Ok){if(Error&&!Error[0])MdoExtError(Error,"Extension tree contains an unsupported path, link, type, size or cancelled operation");return false;}
     qsort(T->Files,T->Count,sizeof(*T->Files),MdoExtFileCompare);return MdoExtTreePaths(T,NULL,false,Error);
 }
@@ -164,7 +185,11 @@ static bool MdoExtSameFile(const xfileinfo* A,const xfileinfo* B)
         (!(A->Available&B->Available&XFILE_INFO_MODIFY_TIME)||A->Modified==B->Modified)&&(!(A->Available&B->Available&XFILE_INFO_CHANGE_TIME)||A->Changed==B->Changed);
 }
 static xfile MdoExtOpenSource(cstr Path,xroot Anchor){
-    if(!Anchor)return MdoHomeOpenRead(Path);xfileoptions Options;xrtFileOptionsInit(&Options);Options.Flags=XFILE_READ|XFILE_NOFOLLOW;return xrtRootFileOpen(Anchor,Path,&Options);
+    if(!Anchor)return MdoHomeOpenRead(Path);
+    xfileoptions Options;
+    xrtFileOptionsInit(&Options);
+    Options.Flags=XFILE_READ|XFILE_NOFOLLOW;
+    return xrtRootFileOpen(Anchor,Path,&Options);
 }
 static bool MdoExtFingerprintFrom(cstr Root,xroot Anchor,const MdoExtTree* T,char Hash[65],xcancel* Cancel)
 {
@@ -183,7 +208,11 @@ static bool MdoExtFingerprintFrom(cstr Root,xroot Anchor,const MdoExtTree* T,cha
 static bool MdoExtFingerprint(cstr Root,const MdoExtTree* T,char Hash[65],xcancel* Cancel){return MdoExtFingerprintFrom(Root,NULL,T,Hash,Cancel);}
 bool MdoExtensionsFingerprint(cstr Kind,cstr Id,char Hash[65],xcancel* Cancel,char Error[512])
 {
-    if(Error)Error[0]=0;char* Root=MdoExtensionsRoot(Kind,Id);if(!Root||!MdoExtLock){xrtFree(Root);return MdoExtError(Error,"Choose an installed extension directory");}
+    if(Error)Error[0]=0;
+    char* Root=MdoExtensionsRoot(Kind,Id);
+    if(!Root||!MdoExtLock){xrtFree(Root);
+    return MdoExtError(Error,"Choose an installed extension directory");
+    }
     xrtMutexLock(MdoExtLock);MdoExtTree T={0};bool Ok=MdoExtCollect(Root,&T,Cancel,Error)&&MdoExtFingerprint(Root,&T,Hash,Cancel);MdoExtTreeUnit(&T);xrtMutexUnlock(MdoExtLock);xrtFree(Root);
     return Ok||MdoExtError(Error,"Cannot fingerprint a stable extension directory");
 }
@@ -200,13 +229,17 @@ static bool MdoExtVerify(cstr Kind,cstr Id,const xvalue* State,xcancel* Cancel,c
 }
 bool MdoExtensionsVerify(cstr Kind,cstr Id,xcancel* Cancel,char Error[512])
 {
-    if(Error)Error[0]=0;if(!MdoExtLock||!MdoExtensionDirectoryKind(Kind)||!MdoExtensionDirectoryId(Id))return MdoExtError(Error,"Choose an installed extension directory");
+    if(Error)Error[0]=0;
+    if(!MdoExtLock||!MdoExtensionDirectoryKind(Kind)||!MdoExtensionDirectoryId(Id))return MdoExtError(Error,"Choose an installed extension directory");
     xrtMutexLock(MdoExtLock);xvalue* State=MdoExtReadJson(MDO_EXT_STATE,MDO_EXT_STATE_LIMIT,true);
     bool Ok=State&&xrtValueType(State)==XVALUE_OBJECT&&MdoExtCanonical(Kind,Id)&&MdoExtVerify(Kind,Id,State,Cancel,Error);xrtValueRelease(State);xrtMutexUnlock(MdoExtLock);return Ok;
 }
 MdoExtensionLease* MdoExtensionsAcquire(cstr Kind,cstr Id,char Error[512])
 {
-    if(Error)Error[0]=0;if(!MdoExtLock||!MdoExtensionDirectoryKind(Kind)||!MdoExtensionDirectoryId(Id)){MdoExtError(Error,"Choose an installed extension directory");return NULL;}
+    if(Error)Error[0]=0;
+    if(!MdoExtLock||!MdoExtensionDirectoryKind(Kind)||!MdoExtensionDirectoryId(Id)){MdoExtError(Error,"Choose an installed extension directory");
+    return NULL;
+    }
     xrtMutexLock(MdoExtLock);xvalue* State=MdoExtReadJson(MDO_EXT_STATE,MDO_EXT_STATE_LIMIT,true);
     xvalue* Row=State&&MdoExtCanonical(Kind,Id)?MdoExtRead(Kind,Id,State,Error):NULL;bool Enabled=false;
     xrtValueGetBool(xrtValueObjectGet(Row,XRT_STR_LITERAL("enabled")),&Enabled);
@@ -214,16 +247,27 @@ MdoExtensionLease* MdoExtensionsAcquire(cstr Kind,cstr Id,char Error[512])
     MdoExtensionLease* L=Ok?xrtCalloc(1,sizeof(*L)):NULL;
     if(L){L->Key=MdoExtKey(Kind,Id);if(L->Key){L->Next=MdoExtLeases;MdoExtLeases=L;}else{xrtFree(L);L=NULL;}}
     xrtValueRelease(State);xrtValueRelease(Row);xrtMutexUnlock(MdoExtLock);
-    if(!L&&Error&&!Error[0])MdoExtError(Error,"Extension is missing, disabled, changed or unavailable");return L;
+    if(!L&&Error&&!Error[0])MdoExtError(Error,"Extension is missing, disabled, changed or unavailable");
+    return L;
 }
 void MdoExtensionsRelease(MdoExtensionLease* L)
 {
-    if(!L||!MdoExtLock)return;xrtMutexLock(MdoExtLock);MdoExtensionLease** P=&MdoExtLeases;
-    while(*P&&*P!=L)P=&(*P)->Next;if(*P){*P=L->Next;xrtFree(L->Key);xrtFree(L);}xrtMutexUnlock(MdoExtLock);
+    if(!L||!MdoExtLock)return;
+    xrtMutexLock(MdoExtLock);
+    MdoExtensionLease** P=&MdoExtLeases;
+    while(*P&&*P!=L)P=&(*P)->Next;
+    if(*P){*P=L->Next;
+    xrtFree(L->Key);
+    xrtFree(L);
+    }
+    xrtMutexUnlock(MdoExtLock);
 }
 xvalue* MdoExtensionsFiles(cstr Kind,cstr Id,xcancel* Cancel,char Error[512])
 {
-    if(Error)Error[0]=0;if(!MdoExtLock||!MdoExtensionDirectoryKind(Kind)||!MdoExtensionDirectoryId(Id)){MdoExtError(Error,"Choose an installed directory");return NULL;}
+    if(Error)Error[0]=0;
+    if(!MdoExtLock||!MdoExtensionDirectoryKind(Kind)||!MdoExtensionDirectoryId(Id)){MdoExtError(Error,"Choose an installed directory");
+    return NULL;
+    }
     xrtMutexLock(MdoExtLock);char* Root=MdoExtensionsRoot(Kind,Id);MdoExtTree Tree={0};xvalue* Rows=xrtValueArray();
     bool Ok=Root&&Rows&&MdoExtCanonical(Kind,Id)&&MdoExtCollect(Root,&Tree,Cancel,Error);
     for(size_t I=0;Ok&&I<Tree.Count;I++){
@@ -311,7 +355,9 @@ static bool MdoExtRecoverTask(cstr Task,char Error[512])
         char* Stage=xrtFormat("%s/stage.json",Base);bool Found=false;bool Ok=Stage&&MdoExtStat(Stage,&Found,&Info);
         if(Ok&&Found){xvalue* Intent=MdoExtReadJson(Stage,4096,false);cstr Operation=MdoExtensionText(Intent,"operation",16);
             Ok=Intent&&Operation&&!strcmp(Operation,"stage")&&MdoExtensionDirectoryKind(MdoExtensionText(Intent,"kind",32))&&MdoExtensionDirectoryId(MdoExtensionText(Intent,"id",96));
-            if(Ok)Ok=MdoExtRemoveTree(Base);xrtValueRelease(Intent);}
+            if(Ok)Ok=MdoExtRemoveTree(Base);
+            xrtValueRelease(Intent);
+            }
         xrtFree(Stage);xrtFree(Base);xrtFree(Journal);if(!Ok)MdoExtError(Error,"Unfinished extension stage could not be recovered; its files were preserved");return Ok;
     }
     xvalue* J=MdoExtReadJson(Journal,MDO_EXT_STATE_LIMIT,false);
@@ -343,11 +389,13 @@ static bool MdoExtRecoverTask(cstr Task,char Error[512])
 static bool MdoExtRecoverRemovals(char Error[512]);
 bool MdoExtensionsRecover(char Error[512])
 {
-    if(Error)Error[0]=0;if(!MdoExtLock)return MdoExtError(Error,"Extension manager is not initialized");
+    if(Error)Error[0]=0;
+    if(!MdoExtLock)return MdoExtError(Error,"Extension manager is not initialized");
     xrtMutexLock(MdoExtLock);xdir D=MdoHomeOpenDirectory(MDO_EXT_TASKS,XDIR_STAT);bool Ok=D||MdoExtMissing();xvalue* Tasks=xrtValueArray();xdirentry E;xdirnext Next=XDIR_NEXT_END;
     while(Ok&&D&&(Next=xrtDirNext(D,&E))==XDIR_NEXT_ITEM){if(E.Info.Type!=XFILE_TYPE_DIRECTORY||!(E.Flags&XDIR_ENTRY_UTF8)||!E.Name.Size||E.Name.Size>96)continue;
         if(xrtValueCount(Tasks)>=4096){Ok=false;break;}Ok=xrtValueArrayAppendNew(Tasks,xrtValueString(xrtStrViewN(E.Name.Data,E.Name.Size)));}
-    if(Next==XDIR_NEXT_ERROR)Ok=false;if(D&&!xrtDirClose(D))Ok=false;
+    if(Next==XDIR_NEXT_ERROR)Ok=false;
+    if(D&&!xrtDirClose(D))Ok=false;
     for(size_t I=0;Ok&&I<xrtValueCount(Tasks);I++){xstrview Name={0};xrtValueGetString(xrtValueArrayGet(Tasks,I),&Name);Ok=MdoExtRecoverTask(Name.Data,Error);}
     xrtValueRelease(Tasks);if(Ok)Ok=MdoExtRecoverRemovals(Error);xrtMutexUnlock(MdoExtLock);return Ok;
 }
@@ -361,7 +409,8 @@ static bool MdoExtExtractSink(const void* Data,size_t Size,void* User)
 {MdoExtExtract* S=User;return (!S->Cancel||!xrtCancelRequested(S->Cancel))&&xrtWriteFull(S->File,Data,Size,NULL);}
 static bool MdoExtExtractZip(MdoZip* Z,cstr Root,xcancel* Cancel,char Error[512])
 {
-    if(!MdoHomeCreateDirectory(Root))return false;bool Ok=true;
+    if(!MdoHomeCreateDirectory(Root))return false;
+    bool Ok=true;
     for(size_t I=0;Ok&&I<Z->Count;I++){
         MdoZipEntry* E=&Z->Entries[I];char* Path=xrtFormat("%s/%s",Root,E->Path);if(!Path){Ok=false;break;}
         if(Cancel&&xrtCancelRequested(Cancel))Ok=false;
@@ -406,7 +455,13 @@ bool MdoExtensionsInstall(cstr Kind,cstr Id,cstr Archive,const xvalue* Credits,b
     cstr ExpectedRevision=MdoExtensionText(Credits,"expected_revision",64);
     if(ExpectedRevision){char* Existing=MdoExtensionsRoot(Kind,Id);bool Exists=false;xfileinfo Info;char Actual[65];MdoExtTree Tree={0};bool Match=Existing&&MdoExtStat(Existing,&Exists,&Info);
         if(Match&&ExpectedRevision[0])Match=Exists&&strlen(ExpectedRevision)==64&&MdoExtCollect(Existing,&Tree,Cancel,Error)&&MdoExtFingerprint(Existing,&Tree,Actual,Cancel)&&!strcmp(ExpectedRevision,Actual);
-        else if(Match)Match=!Exists;MdoExtTreeUnit(&Tree);xrtFree(Existing);if(!Match){xrtMutexUnlock(MdoExtLock);return MdoExtError(Error,"Extension directory changed; inspect the current files before installing");}}
+        else if(Match)Match=!Exists;
+        MdoExtTreeUnit(&Tree);
+        xrtFree(Existing);
+        if(!Match){xrtMutexUnlock(MdoExtLock);
+        return MdoExtError(Error,"Extension directory changed; inspect the current files before installing");
+        }
+        }
     xfile Input=MdoHomeOpenRead(Archive);MdoZip Z={0};xvalue* Meta=NULL,*Record=NULL;char Digest[65]={0};uint64 Bytes=0;
     bool Ok=Input&&MdoZipOpen(&Z,Input);if(Ok)Meta=MdoExtensionZipManifest(&Z,Cancel);
     Ok=Ok&&Meta&&!strcmp(Kind,MdoExtensionText(Meta,"kind",32));
@@ -430,7 +485,9 @@ bool MdoExtensionsInstall(cstr Kind,cstr Id,cstr Archive,const xvalue* Credits,b
         for(size_t I=0;Ok&&I<sizeof(Names)/sizeof(*Names);I++){const xvalue* V=xrtValueObjectGet(Credits,xrtStrView(Names[I]));if(V)Ok=xrtValueObjectSet(Record,xrtStrView(Names[I]),V);}}
     if(Ok)Ok=MdoExtPublish(Kind,Id,Task,false,Record,Cancel,Result,Error);
     if(!Ok&&Base){char* Journal=xrtFormat("%s/transaction.json",Base);bool Exists=false;xfileinfo Info;
-        if(Journal&&MdoExtStat(Journal,&Exists,&Info)&&!Exists)(void)MdoExtRemoveTree(Base);xrtFree(Journal);}
+        if(Journal&&MdoExtStat(Journal,&Exists,&Info)&&!Exists)(void)MdoExtRemoveTree(Base);
+        xrtFree(Journal);
+        }
     if(!Ok&&Error&&!Error[0])MdoExtError(Error,Z.Error[0]?Z.Error:"Extension ZIP kind, approval, source or digest check failed");
     MdoZipClose(&Z);xrtClose(Input);xrtValueRelease(Meta);xrtValueRelease(Record);xrtFree(Task);xrtFree(Base);xrtFree(Incoming);xrtMutexUnlock(MdoExtLock);return Ok;
 }
@@ -450,12 +507,19 @@ static bool MdoExtRecoverRemovals(char Error[512])
         xstrview Key={0};const xvalue* Record=xrtValueObjectAt(State,I,&Key);bool Pending=false;xrtValueGetBool(xrtValueObjectGet(Record,XRT_STR_LITERAL("pending_remove")),&Pending);if(!Pending)continue;
         cstr Kind=MdoExtensionText(Record,"kind",32),Id=MdoExtensionText(Record,"id",96),Expected=MdoExtensionText(Record,"remove_digest",64);char* ActualKey=MdoExtKey(Kind,Id);
         bool Valid=ActualKey&&Expected&&strlen(Expected)==64&&xrtStrEqual(Key,xrtStrView(ActualKey));xrtFree(ActualKey);if(!Valid){Ok=false;MdoExtError(Error,"Invalid pending extension uninstall record was preserved");break;}
-        if(MdoExtBusy(Kind,Id))continue;char* Root=MdoExtensionsRoot(Kind,Id);bool Exists=false;xfileinfo Info;Ok=Root&&MdoExtStat(Root,&Exists,&Info);
+        if(MdoExtBusy(Kind,Id))continue;
+        char* Root=MdoExtensionsRoot(Kind,Id);
+        bool Exists=false;
+        xfileinfo Info;
+        Ok=Root&&MdoExtStat(Root,&Exists,&Info);
         if(Ok&&!Exists){Ok=MdoExtRecord(Kind,Id,NULL);xrtFree(Root);continue;}
         MdoExtTree Tree={0};char Hash[65],Why[512]={0};bool Match=Ok&&MdoExtCollect(Root,&Tree,NULL,Why)&&MdoExtFingerprint(Root,&Tree,Hash,NULL)&&!strcmp(Hash,Expected);MdoExtTreeUnit(&Tree);xrtFree(Root);
         if(Ok&&!Match){xvalue* Changed=xrtValueClone(Record);Ok=Changed&&MdoExtPut(Changed,"pending_error","Directory changed after uninstall was requested; inspect it and cancel or request uninstall again")&&MdoExtRecord(Kind,Id,Changed);xrtValueRelease(Changed);continue;}
         char* Task=Ok?xrtXidMakeString():NULL,*Base=Task?xrtFormat(MDO_EXT_TASKS "/%s",Task):NULL;xvalue* Result=NULL;
-        if(Ok)Ok=Base&&MdoExtEnsure(Base)&&MdoExtPublish(Kind,Id,Task,true,NULL,NULL,&Result,Error);xrtValueRelease(Result);xrtFree(Task);xrtFree(Base);
+        if(Ok)Ok=Base&&MdoExtEnsure(Base)&&MdoExtPublish(Kind,Id,Task,true,NULL,NULL,&Result,Error);
+        xrtValueRelease(Result);
+        xrtFree(Task);
+        xrtFree(Base);
     }
     xrtValueRelease(State);return Ok;
 }
@@ -470,18 +534,22 @@ bool MdoExtensionsScheduleRemove(cstr Kind,cstr Id,cstr Expected,xvalue** Result
     if(Ok){xrtValueObjectRemove(Record,XRT_STR_LITERAL("pending_error"));Ok=MdoExtRecord(Kind,Id,Record);}
     if(Ok){*Result=xrtValueObject();Ok=*Result&&MdoExtPut(*Result,"kind",Kind)&&MdoExtPut(*Result,"id",Id)&&xrtValueObjectSetNew(*Result,XRT_STR_LITERAL("removed"),xrtValueBool(false))&&xrtValueObjectSetNew(*Result,XRT_STR_LITERAL("pending_remove"),xrtValueBool(true))&&xrtValueObjectSetNew(*Result,XRT_STR_LITERAL("restart_required"),xrtValueBool(true));}
     xrtValueRelease(State);xrtValueRelease(Record);xrtFree(Key);xrtFree(Root);xrtMutexUnlock(MdoExtLock);
-    if(!Ok&&Error&&!Error[0])MdoExtError(Error,"Extension changed; pending uninstall was not recorded");return Ok;
+    if(!Ok&&Error&&!Error[0])MdoExtError(Error,"Extension changed; pending uninstall was not recorded");
+    return Ok;
 }
 bool MdoExtensionsCancelRemove(cstr Kind,cstr Id,char Error[512])
 {
-    if(Error)Error[0]=0;if(!MdoExtLock||!MdoExtensionDirectoryKind(Kind)||!MdoExtensionDirectoryId(Id))return MdoExtError(Error,"Choose an installed directory");xrtMutexLock(MdoExtLock);
+    if(Error)Error[0]=0;
+    if(!MdoExtLock||!MdoExtensionDirectoryKind(Kind)||!MdoExtensionDirectoryId(Id))return MdoExtError(Error,"Choose an installed directory");
+    xrtMutexLock(MdoExtLock);
     xvalue* State=MdoExtReadJson(MDO_EXT_STATE,MDO_EXT_STATE_LIMIT,true);char* Key=MdoExtKey(Kind,Id);const xvalue* Before=State&&Key?xrtValueObjectGet(State,xrtStrView(Key)):NULL;xvalue* Record=Before?xrtValueClone(Before):NULL;bool Ok=State&&Record;
     if(Ok){xrtValueObjectRemove(Record,XRT_STR_LITERAL("pending_remove"));xrtValueObjectRemove(Record,XRT_STR_LITERAL("pending_error"));xrtValueObjectRemove(Record,XRT_STR_LITERAL("remove_digest"));Ok=MdoExtRecord(Kind,Id,Record);}
     xrtValueRelease(Record);xrtValueRelease(State);xrtFree(Key);xrtMutexUnlock(MdoExtLock);return Ok||MdoExtError(Error,"Pending uninstall could not be cancelled");
 }
 bool MdoExtensionsSetActivation(cstr Kind,const xvalue* Changes,char Error[512])
 {
-    if(Error)Error[0]=0;if(!MdoExtLock||!MdoExtensionDirectoryKind(Kind)||xrtValueType(Changes)!=XVALUE_ARRAY||xrtValueCount(Changes)>8192)return MdoExtError(Error,"Choose installed extension directories and activation states");
+    if(Error)Error[0]=0;
+    if(!MdoExtLock||!MdoExtensionDirectoryKind(Kind)||xrtValueType(Changes)!=XVALUE_ARRAY||xrtValueCount(Changes)>8192)return MdoExtError(Error,"Choose installed extension directories and activation states");
     xrtMutexLock(MdoExtLock);xvalue* State=MdoExtReadJson(MDO_EXT_STATE,MDO_EXT_STATE_LIMIT,true);bool Ok=State&&xrtValueType(State)==XVALUE_OBJECT;
     for(size_t I=0;Ok&&I<xrtValueCount(Changes);I++){
         const xvalue* Change=xrtValueArrayGet(Changes,I);cstr Id=MdoExtensionText(Change,"id",96);bool Enabled=false;
@@ -494,7 +562,9 @@ bool MdoExtensionsSetActivation(cstr Kind,const xvalue* Changes,char Error[512])
         Ok=Ok&&Record&&xrtValueObjectSetNew(Record,XRT_STR_LITERAL("enabled"),xrtValueBool(Enabled))&&xrtValueObjectSet(State,xrtStrView(Key),Record);
         xrtValueRelease(Meta);xrtValueRelease(Record);xrtFree(Key);
     }
-    if(Ok)Ok=MdoExtSaveJson(MDO_EXT_STATE,State,MDO_EXT_STATE_LIMIT);xrtValueRelease(State);xrtMutexUnlock(MdoExtLock);
+    if(Ok)Ok=MdoExtSaveJson(MDO_EXT_STATE,State,MDO_EXT_STATE_LIMIT);
+    xrtValueRelease(State);
+    xrtMutexUnlock(MdoExtLock);
     if(Ok){if(Error)Error[0]=0;return true;}if(Error&&!Error[0])MdoExtError(Error,"Cannot update extension activation state");return false;
 }
 bool MdoExtensionsSetEnabled(cstr Kind,cstr Id,bool Enabled,char Error[512])
@@ -528,7 +598,8 @@ bool MdoExtensionsImportDirectoryEntry(cstr Kind,cstr Id,cstr NativeRoot,const x
     xrtFree(Metadata);xrtFree(Generated);xvalue* Credits=xrtValueObject();Ok=Ok&&Credits&&MdoExtPut(Credits,"source","manual");if(Ok&&Expected)Ok=MdoExtPut(Credits,"expected_revision",Expected);
     if(Ok)Ok=MdoExtensionsInstall(Kind,Id,Archive,Credits,Trust,Cancel,Result,Error);
     xrtValueRelease(Credits);if(Base)MdoExtRemoveTree(Base);xrtFree(Base);xrtFree(Archive);xrtFree(Task);
-    if(!Ok&&Error&&!Error[0])MdoExtError(Error,"Source directory changed or contains unsupported files; nothing was installed");return Ok;
+    if(!Ok&&Error&&!Error[0])MdoExtError(Error,"Source directory changed or contains unsupported files; nothing was installed");
+    return Ok;
 }
 bool MdoExtensionsImportDirectoryManifest(cstr Kind,cstr Id,cstr NativeRoot,const xvalue* Manifest,cstr Expected,bool Trust,xcancel* Cancel,xvalue** Result,char Error[512])
 {return MdoExtensionsImportDirectoryEntry(Kind,Id,NativeRoot,Manifest,NULL,Expected,Trust,Cancel,Result,Error);}
@@ -551,7 +622,8 @@ bool MdoExtensionsCreate(cstr Kind,cstr Id,const xvalue* Manifest,const void* En
     if(Ok)Ok=MdoExtPublish(Kind,Id,Task,false,Record,NULL,Result,Error);
     if(!Ok&&Base){char* Journal=xrtFormat("%s/transaction.json",Base);bool HasJournal=false;if(Journal&&MdoExtStat(Journal,&HasJournal,&Info)&&!HasJournal)MdoExtRemoveTree(Base);xrtFree(Journal);}
     xrtValueRelease(Record);xrtFree(Root);xrtFree(Task);xrtFree(Base);xrtFree(Incoming);xrtFree(MetaPath);xrtFree(EntryPath);xrtMutexUnlock(MdoExtLock);
-    if(!Ok&&Error&&!Error[0])MdoExtError(Error,Exists?"An extension already occupies this directory":"Could not create the complete extension directory");return Ok;
+    if(!Ok&&Error&&!Error[0])MdoExtError(Error,Exists?"An extension already occupies this directory":"Could not create the complete extension directory");
+    return Ok;
 }
 
 bool MdoExtensionsEdit(cstr Kind,cstr Id,cstr Action,cstr Path,cstr Target,const void* Data,size_t Bytes,cstr Expected,xvalue** Result,char Error[512])
@@ -581,7 +653,9 @@ bool MdoExtensionsEdit(cstr Kind,cstr Id,cstr Action,cstr Path,cstr Target,const
     MdoExtTreeUnit(&Tree);
     if(Ok){MdoExtTree Current={0};Ok=MdoExtCollect(Root,&Current,NULL,Error)&&MdoExtFingerprint(Root,&Current,Hash,NULL);MdoExtTreeUnit(&Current);if(Ok){*Result=xrtValueObject();Ok=*Result&&MdoExtPut(*Result,"kind",Kind)&&MdoExtPut(*Result,"id",Id)&&MdoExtPut(*Result,"revision",Hash);}}
     xrtValueRelease(State);xrtValueRelease(Meta);xrtFree(Root);xrtFree(Full);xrtFree(Destination);xrtMutexUnlock(MdoExtLock);
-    if(Ok&&Error)Error[0]=0;if(!Ok&&Error&&!Error[0])MdoExtError(Error,"Directory is managed, busy, changed, over its limit, or the requested edit could not be written; inspect it again");return Ok;
+    if(Ok&&Error)Error[0]=0;
+    if(!Ok&&Error&&!Error[0])MdoExtError(Error,"Directory is managed, busy, changed, over its limit, or the requested edit could not be written; inspect it again");
+    return Ok;
 }
 
 #include "directory_save.inc.c"

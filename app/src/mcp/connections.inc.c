@@ -17,7 +17,15 @@ static xvalue* McpPrivatePublic(const xvalue* Doc,cstr Raw){
  xrtValueRelease(Meta);xrtFree(Entry);xrtFree(Text);xrtValueRelease(Template);xrtValueRelease(Values);xrtValueRelease(Secrets);if(!Ok){xrtValueRelease(Out);return NULL;}return Out;
 }
 xvalue* MdoMcpConnections(cstr Id,char Error[512]){
- if(Error)Error[0]=0;if(Id){char* Raw=NULL;bool Missing=false;xvalue* Doc=McpPrivateLoad(Id,&Raw,&Missing),*Result=Doc?McpPrivatePublic(Doc,Raw):NULL;xrtValueRelease(Doc);McpPrivateTextUnit(Raw);if(!Result)McpPrivateError(Error,"MCP connection is unavailable");return Result;}
+ if(Error)Error[0]=0;
+ if(Id){char* Raw=NULL;
+ bool Missing=false;
+ xvalue* Doc=McpPrivateLoad(Id,&Raw,&Missing),*Result=Doc?McpPrivatePublic(Doc,Raw):NULL;
+ xrtValueRelease(Doc);
+ McpPrivateTextUnit(Raw);
+ if(!Result)McpPrivateError(Error,"MCP connection is unavailable");
+ return Result;
+ }
  xvalue* Out=xrtValueArray();xdir D=Out?MdoHomeOpenDirectory(MDO_MCP_CONNECTIONS,XDIR_STAT):NULL;bool Ok=Out!=NULL;
  if(!D){const xerror* E=xrtGetError();if(E&&xrtErrorKind(E)==XERR_NOT_FOUND)xrtClearError();else Ok=false;}
  xdirentry Entry;xdirnext Next=XDIR_NEXT_END;size_t Count=0;
@@ -28,7 +36,8 @@ xvalue* MdoMcpConnections(cstr Id,char Error[512]){
  }if(Next==XDIR_NEXT_ERROR)Ok=false;if(D&&!xrtDirClose(D))Ok=false;if(!Ok){xrtValueRelease(Out);McpPrivateError(Error,"Cannot list private MCP connections");return NULL;}return Out;
 }
 static bool McpPrivateReload(char Error[512]){
- if(!g_MdoMcp.Initialized)return true;return MdoMcpManagerReload()||McpPrivateError(Error,"MCP runtime could not apply the private connection");
+ if(!g_MdoMcp.Initialized)return true;
+ return MdoMcpManagerReload()||McpPrivateError(Error,"MCP runtime could not apply the private connection");
 }
 bool MdoMcpConnectionManage(const xvalue* Input,xcancel* Cancel,xvalue** Result,char Error[512]){
  *Result=NULL;if(Error)Error[0]=0;cstr Id=MdoExtensionText(Input,"id",96),Action=MdoExtensionText(Input,"action",16),Expected=MdoExtensionText(Input,"expected_revision",64);
@@ -40,7 +49,8 @@ bool MdoMcpConnectionManage(const xvalue* Input,xcancel* Cancel,xvalue** Result,
  char* OldRaw=NULL,*NewRaw=NULL;bool Missing=false,Committed=false;xvalue* Old=McpPrivateLoad(Id,&OldRaw,&Missing),*Doc=NULL,*Values=NULL,*Meta=NULL,*Template=NULL,*Rendered=NULL;
  char* Path=xrtFormat(MDO_MCP_CONNECTIONS "/%s.json",Id),*Entry=NULL,*Text=NULL,*Native=NULL;char Revision[65]={0},Digest[65]={0},NewRefs[32][MDO_SECRET_VAULT_REFERENCE_CAPACITY];size_t RefCount=0;
  bool Ok=Path&&(!OldRaw||Old)&&(!Cancel||!xrtCancelRequested(Cancel));
- if(!Missing&&!OldRaw)Ok=false;if(Ok&&!Preview)Ok=OldRaw?(Expected[0]&&MdoExtensionHash(OldRaw,Revision)&&!strcmp(Revision,Expected)):!Expected[0];
+ if(!Missing&&!OldRaw)Ok=false;
+ if(Ok&&!Preview)Ok=OldRaw?(Expected[0]&&MdoExtensionHash(OldRaw,Revision)&&!strcmp(Revision,Expected)):!Expected[0];
  if(!Ok){McpPrivateError(Error,"Connection changed or cannot be read; refresh it before saving");goto done;}
  if(Remove){Ok=Old&&MdoHomeRemove(Path,false);if(Ok&&!McpPrivateReload(Error)){if(!MdoHomeAtomicWrite(Path,OldRaw,strlen(OldRaw),false)||!McpPrivateReload(NULL))(void)MdoHomeRequireRestart("MCP connection removal rollback needs recovery");Ok=false;}
   if(Ok){(void)MdoMcpAuthorizationForget(Id);*Result=xrtValueObject();Committed=true;}goto done;}
@@ -48,7 +58,10 @@ bool MdoMcpConnectionManage(const xvalue* Input,xcancel* Cancel,xvalue** Result,
  Meta=MdoExtensionsRead("mcp",Directory,Error);Entry=Meta?MdoExtensionsEntryPath("mcp",Directory,Error):NULL;Text=Entry?MdoExtensionRead(Entry,true,MDO_MCP_FILE_LIMIT,NULL):NULL;Template=Text?xrtJsonParse(xrtStrView(Text)):NULL;
  cstr Alias=MdoExtensionText(Meta,"alias",64),Root=MdoExtensionText(Meta,"root",4096);Native=Root?MdoHomeExternalPath(Root):NULL;
  Ok=Meta&&Template&&Native&&Variant&&MdoMcpTemplateValidate(Template,Alias,Error,512)&&MdoExtensionsVerify("mcp",Directory,Cancel,Error)&&MdoExtensionsFingerprint("mcp",Directory,Digest,Cancel,Error);
- if(!Ok)goto done;if(!Preview&&(!Approval||strcmp(Approval,Digest))){Ok=McpPrivateError(Error,"Preview the current program/target and confirm its directory digest before saving");goto done;}
+ if(!Ok)goto done;
+ if(!Preview&&(!Approval||strcmp(Approval,Digest))){Ok=McpPrivateError(Error,"Preview the current program/target and confirm its directory digest before saving");
+ goto done;
+ }
  const xvalue* Inputs=xrtValueObjectGet(Template,XRT_STR_LITERAL("inputs")),*Supplied=xrtValueObjectGet(Input,XRT_STR_LITERAL("values")),*Secrets=xrtValueObjectGet(Input,XRT_STR_LITERAL("secrets")),*References=xrtValueObjectGet(Input,XRT_STR_LITERAL("secret_refs"));
  if((Supplied&&xrtValueType(Supplied)!=XVALUE_OBJECT)||(Secrets&&xrtValueType(Secrets)!=XVALUE_OBJECT)||(References&&xrtValueType(References)!=XVALUE_OBJECT)){Ok=McpPrivateError(Error,"Connection parameters and secret fields must be objects");goto done;}
  const xvalue* Sets[]={Supplied,Secrets,References};for(size_t S=0;Ok&&S<3;S++)for(size_t I=0;I<xrtValueCount(Sets[S]);I++){xstrview Key={0};xrtValueObjectAt(Sets[S],I,&Key);char* Name=xrtStrDupN(Key.Data,Key.Size);const xvalue* Definition=MdoMcpTemplateInput(Template,Name);bool Secret=MdoMcpTemplateFlag(Definition,"secret",false);Ok=Definition&&(S?Secret:!Secret);xrtFree(Name);}
@@ -63,7 +76,9 @@ bool MdoMcpConnectionManage(const xvalue* Input,xcancel* Cancel,xvalue** Result,
    if(Value&&Value[0]&&!MdoSecretReferenceSyntaxValid(xrtStrView(Value))){Ok=McpPrivateError(Error,"Invalid credential reference");break;}
    if(!Value&&Preview&&MdoMcpTemplateFlag(Definition,"required",true))Value="env:MDO_PREVIEW_SECRET";
   }else if(!Value&&Same)Value=MdoExtensionText(xrtValueObjectGet(Old,XRT_STR_LITERAL("values")),Key,4096);
-  if(!Value)Value=MdoExtensionText(Definition,"default",4096);if(!Value)Value="";Ok=McpDirectoryPut(Values,Key,Value);
+  if(!Value)Value=MdoExtensionText(Definition,"default",4096);
+  if(!Value)Value="";
+  Ok=McpDirectoryPut(Values,Key,Value);
  }
  Doc=xrtValueObject();Ok=Ok&&Doc&&McpDirectoryPut(Doc,"id",Id)&&McpDirectoryPut(Doc,"extension_id",Directory)&&McpDirectoryPut(Doc,"variant",Variant)&&McpDirectoryPut(Doc,"approval_digest",Digest)&&xrtValueObjectSet(Doc,XRT_STR_LITERAL("values"),Values);
  bool Enabled=MdoMcpTemplateFlag(Input,"enabled",Old?MdoMcpTemplateFlag(Old,"enabled",false):false);if(Ok)Ok=xrtValueObjectSetNew(Doc,XRT_STR_LITERAL("enabled"),xrtValueBool(Enabled));
@@ -79,5 +94,6 @@ bool MdoMcpConnectionManage(const xvalue* Input,xcancel* Cancel,xvalue** Result,
 done:
  if(!Committed)for(size_t I=0;I<RefCount;I++)MdoSecretDiscard(NewRefs[I]);
  McpPrivateTextUnit(OldRaw);McpPrivateTextUnit(NewRaw);xrtFree(Path);xrtFree(Entry);xrtFree(Text);xrtFree(Native);xrtValueRelease(Old);xrtValueRelease(Doc);xrtValueRelease(Values);xrtValueRelease(Meta);xrtValueRelease(Template);xrtValueRelease(Rendered);MdoExtensionsMutationEnd();
- if(!Ok&&Error&&!Error[0])McpPrivateError(Error,"MCP connection could not be configured");return Ok;
+ if(!Ok&&Error&&!Error[0])McpPrivateError(Error,"MCP connection could not be configured");
+ return Ok;
 }

@@ -4,7 +4,8 @@ static void MdoMcpRoleError(xwork_error* Error,xwork_error_code Code,cstr Messag
 {if(Error){xworkErrorInit(Error);Error->eCode=Code;snprintf(Error->sMessage,sizeof(Error->sMessage),"%s",Message);}}
 static bool McpDirectoryProjectMatches(const MdoMcpServerEntry* Entry,cstr Workspace)
 {
-    if(!Entry->ProjectId||!Entry->ProjectId[0])return true;if(!Workspace||!Workspace[0])return false;
+    if(!Entry->ProjectId||!Entry->ProjectId[0])return true;
+    if(!Workspace||!Workspace[0])return false;
     char* Path=NULL;
     if(!strcmp(Entry->ProjectId,"default"))Path=MdoHomeDefaultWorkspacePath(false);
     else{MdoProjectInfo Project={0};Project.Size=sizeof(Project);bool Found=false;xwork_error Error;
@@ -44,7 +45,9 @@ static bool MdoMcpConfigureSelection(xwork_agent* Agent,cstr Workspace,
             }xrtValueRelease(Info);xrtFree(Json);xrtClearError();
         }
     }
-    if(Ok&&Agent)Ok=xworkAgentSetMcpServers(Agent,Allowed,Count,Error);MdoMcpCatalogRelease(Catalog);return Ok;
+    if(Ok&&Agent)Ok=xworkAgentSetMcpServers(Agent,Allowed,Count,Error);
+    MdoMcpCatalogRelease(Catalog);
+    return Ok;
 }
 bool MdoMcpConfigureAgent(xwork_agent* Agent,cstr Workspace,xwork_error* Error)
 {return MdoMcpConfigureSelection(Agent,Workspace,NULL,0,false,NULL,Error);}

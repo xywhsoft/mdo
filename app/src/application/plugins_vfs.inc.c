@@ -65,7 +65,10 @@ static xvfslookup SdkPluginStat(void* Context,xvfscase Case,xstrview Path,bool F
     (void)Context;(void)Case;(void)Follow;bool Directory=false;char* Source=SdkPluginResolve(Path);
     if(Source){xfile F=MdoHomeOpenRead(Source);xrtFree(Source);bool Ok=F&&xrtFileStat(F,Info);if(F)Ok=xrtClose(F)&&Ok;return Ok?XVFS_LOOKUP_OPENED:XVFS_LOOKUP_ERROR;}
     xrtMutexLock(SdkPlugins.Lock);for(size_t I=0;I<xrtValueCount(SdkPlugins.Map);I++)if(SdkPluginPrefix(Path,SdkField(xrtValueArrayGet(SdkPlugins.Map,I),"target"))){Directory=true;break;}xrtMutexUnlock(SdkPlugins.Lock);
-    if(!Directory)return XVFS_LOOKUP_MISS;memset(Info,0,sizeof(*Info));Info->Type=XFILE_TYPE_DIRECTORY;return XVFS_LOOKUP_OPENED;
+    if(!Directory)return XVFS_LOOKUP_MISS;
+    memset(Info,0,sizeof(*Info));
+    Info->Type=XFILE_TYPE_DIRECTORY;
+    return XVFS_LOOKUP_OPENED;
 }
 static bool SdkPluginDirNext(void* State,xdirentry* Entry,bool* End){
     SdkPluginDirectory* D=State;*End=D->Next>=xrtValueCount(D->Entries);if(*End)return true;
@@ -82,7 +85,8 @@ static xvfslookup SdkPluginDirOpen(void* Context,xvfscase Case,xstrview Path,uin
     for(size_t I=0;Ok&&I<xrtValueCount(SdkPlugins.Map);I++){
         const xvalue* R=xrtValueArrayGet(SdkPlugins.Map,I);cstr Target=SdkField(R,"target");if(!SdkPluginPrefix(Path,Target))continue;Found=true;
         cstr Start=Target+(Path.Size?Path.Size+1:0),End=strchr(Start,'/');size_t N=End?(size_t)(End-Start):strlen(Start);xstrview Name=xrtStrViewN(Start,N);
-        if(xrtValueObjectGet(Seen,Name))continue;xvalue* Row=xrtValueObject();
+        if(xrtValueObjectGet(Seen,Name))continue;
+        xvalue* Row=xrtValueObject();
         Ok=Row&&xrtValueObjectSetNew(Row,XRT_STR_LITERAL("name"),xrtValueString(Name))&&xrtValueObjectSetNew(Seen,Name,xrtValueBool(true));
         if(End)Ok=Ok&&xrtValueObjectSetNew(Row,XRT_STR_LITERAL("directory"),xrtValueBool(true));
         else Ok=Ok&&xrtValueObjectSet(Row,XRT_STR_LITERAL("bytes"),SdkGet(R,"bytes"));

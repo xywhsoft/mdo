@@ -61,12 +61,13 @@ static bool MdoAndroidToolsLoad(cstr Apk,cstr Native,char Error[512]){
         if(Ok&&(First||Update)){
             Ok=!Update||MdoExtensionsVerify("external-tools",Id,NULL,Error);int64 Entry=MdoZipFind(&Z,Asset),Bytes=0;MdoExtensionNumber(T,"bytes",&Bytes);
             char* Task=xrtXidMakeString(),*Relative=Task?xrtFormat("data/extension-tasks/%s/android.zip",Task):NULL;
-            xfile Out=Ok&&Entry>=0&&Z.Entries[Entry].Bytes==Bytes&&Relative?MdoHomeOpenWrite(Relative,XFILE_WRITE|XFILE_CREATE|XFILE_EXCLUSIVE):NULL;char Actual[65]={0};bool Created=Out!=NULL;
+            xfile Out=Ok&&Entry>=0&&Bytes>0&&Z.Entries[Entry].Bytes==(uint64)Bytes&&Relative?MdoHomeOpenWrite(Relative,XFILE_WRITE|XFILE_CREATE|XFILE_EXCLUSIVE):NULL;char Actual[65]={0};bool Created=Out!=NULL;
             Ok=Out&&MdoZipEntryRead(&Z,(size_t)Entry,AndroidWrite,Out,NULL,Actual)&&!strcmp(Actual,Sha);if(Out&&!xrtClose(Out))Ok=false;if(!Ok)AndroidFail(Error,"Cannot stage the APK external-tool ZIP or its SHA-256 does not match");
             xvalue* Credits=xrtValueObject(),*Result=NULL;Ok=Ok&&Credits&&AndroidSet(Credits,"source","builtin")&&AndroidSet(Credits,"sha256",Sha)&&MdoExtensionsInstall("external-tools",Id,Relative,Credits,true,NULL,&Result,Error);
             xrtValueRelease(Credits);xrtValueRelease(Result);if(Created)(void)MdoHomeRemove(Relative,false);char* Parent=Relative?xrtPathParent(Relative):NULL;if(Parent)(void)MdoHomeRemoveEmptyDirectory(Parent);xrtFree(Parent);xrtFree(Relative);xrtFree(Task);
         }
-        if(Ok)Ok=AndroidSet(Receipts,Id,Sha);xrtValueRelease(Before);
+        if(Ok)Ok=AndroidSet(Receipts,Id,Sha);
+        xrtValueRelease(Before);
     }
     Text=Ok?xrtJsonStringify(Receipts,false,NULL):NULL;Ok=Text&&MdoHomeAtomicWrite("data/extensions/android-builtins.json",Text,strlen(Text),false);xrtFree(Text);xrtValueRelease(Receipts);
     if(Ok){MdoAndroid.Index=Index;Index=NULL;MdoAndroid.Native=xrtStrDup(Native);Ok=MdoAndroid.Native!=NULL;}
@@ -89,7 +90,10 @@ bool MdoAndroidToolOwnedLink(cstr Relative,cstr NativeTarget){
 bool MdoAndroidToolLink(cstr Relative,cstr Target){
     if(!MdoExtensionRelativePath(Relative)||strncmp(Relative,"data/external-tools/",20)||!Target)return false;
     char* Parent=AndroidParent(Relative);xroot R=Parent?MdoHomeOpenStorageDirectory(Parent):NULL;xrtFree(Parent);if(!R)return false;xrtRootClose(R);
-    if(MdoAndroidToolOwnedLink(Relative,Target))return true;bool Exists=false;xfileinfo Info;if(!MdoHomeExternalStat(Relative,&Exists,&Info)||Exists&&Info.Type!=XFILE_TYPE_LINK)return false;
+    if(MdoAndroidToolOwnedLink(Relative,Target))return true;
+    bool Exists=false;
+    xfileinfo Info;
+    if(!MdoHomeExternalStat(Relative,&Exists,&Info)||(Exists&&Info.Type!=XFILE_TYPE_LINK))return false;
     char* Suffix=xrtXidMakeString(),*Pending=Suffix?xrtFormat("%s.%s.pending",Relative,Suffix):NULL,*P=Pending?MdoHomeExternalPath(Pending):NULL,*Dest=MdoHomeExternalPath(Relative);
     bool Ok=P&&Dest&&xrtLinkCreate(Target,P,false)&&xrtPathRename(P,Dest,true);xerror* Cause=!Ok?xrtErrorRef(xrtGetError()):NULL;if(Pending)(void)MdoHomeRemove(Pending,false);xrtFree(P);xrtFree(Pending);xrtFree(Dest);xrtFree(Suffix);if(Cause){xrtSetError(Cause);xrtErrorFree(Cause);}return Ok;
 }
@@ -113,7 +117,11 @@ bool MdoAndroidToolPrepare(cstr Id,char Error[512]){
 }
 char* MdoAndroidForwarder(void){return MdoAndroid.Native?xrtPathJoin(MdoAndroid.Native,"libmdo_cli_forwarder.so"):NULL;}
 bool MdoAndroidToolsEnvironment(const xvalue* Items){
-    if(!MdoAndroidToolsActive())return true;MdoHomeSnapshot H={0};H.Size=sizeof(H);if(!MdoHomeGetSnapshot(&H)||!H.Path||!xrtEnvSet("MDO_CLI_HOME",H.Path))return false;
+    if(!MdoAndroidToolsActive())return true;
+    MdoHomeSnapshot H={0}
+    ;
+    H.Size=sizeof(H);
+    if(!MdoHomeGetSnapshot(&H)||!H.Path||!xrtEnvSet("MDO_CLI_HOME",H.Path))return false;
     const cstr Vars[]={"PYTHONHOME","MDO_PYTHON_HOME","SSL_CERT_FILE","CURL_CA_BUNDLE","GIT_EXEC_PATH","GIT_TEMPLATE_DIR","GIT_SSL_CAINFO","MAGICK_HOME","MAGICK_CONFIGURE_PATH","POPPLER_DATADIR","FONTCONFIG_FILE","FONTCONFIG_PATH"};
     const cstr Tools[]={"python","python","curl","curl","git","git","curl","imagemagick","imagemagick","poppler","poppler","poppler"};
     const cstr Paths[]={".",".","cacert.pem","cacert.pem","libexec/git-core","share/git-core/templates","cacert.pem",".","etc/ImageMagick-7","share/poppler","fonts/fonts.conf","fonts"};
@@ -123,7 +131,14 @@ bool MdoAndroidToolsEnvironment(const xvalue* Items){
     }return Ok;
 }
 bool MdoAndroidToolClean(cstr Id){
-    if(!MdoExtensionDirectoryId(Id))return false;xroot R=MdoHomeOpenStorageDirectory("data/external-tools/android");if(!R)return false;xfileinfo Info;if(!xrtRootStat(R,Id,false,&Info)){bool Missing=xrtErrorKind(xrtGetError())==XERR_NOT_FOUND;xrtRootClose(R);return Missing;}
+    if(!MdoExtensionDirectoryId(Id))return false;
+    xroot R=MdoHomeOpenStorageDirectory("data/external-tools/android");
+    if(!R)return false;
+    xfileinfo Info;
+    if(!xrtRootStat(R,Id,false,&Info)){bool Missing=xrtErrorKind(xrtGetError())==XERR_NOT_FOUND;
+    xrtRootClose(R);
+    return Missing;
+    }
     xvalue* Queue=xrtValueArray();bool Ok=Queue&&xrtValueArrayAppendNew(Queue,xrtValueString(xrtStrView(Id)));size_t Count=0;
     for(size_t I=0;Ok&&I<xrtValueCount(Queue);I++){xstrview Path;xrtValueGetString(xrtValueArrayGet(Queue,I),&Path);xdir D=xrtRootDirOpen(R,Path.Data,XDIR_STAT);xdirentry E;xdirnext Next=XDIR_NEXT_ERROR;Ok=D!=NULL;
         while(Ok&&(Next=xrtDirNext(D,&E))==XDIR_NEXT_ITEM){char* Child=xrtFormat("%s/%.*s",Path.Data,(int)E.Name.Size,E.Name.Data);Ok=++Count<=MDO_EXTENSION_DIRECTORY_ENTRIES+4096&&Child&&(E.Info.Type==XFILE_TYPE_DIRECTORY?xrtValueArrayAppendNew(Queue,xrtValueString(xrtStrView(Child))):xrtRootRemove(R,Child));xrtFree(Child);}if(Next==XDIR_NEXT_ERROR)Ok=false;if(D)xrtDirClose(D);

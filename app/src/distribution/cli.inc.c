@@ -20,7 +20,11 @@ static void CliHex(const uint8 Digest[32],char Out[65]){for(size_t I=0;I<32;I++)
 
 static void CliUseReleaseLocked(MdoCliUse* Use){
     if(!Use||--Use->References)return;
-    for(size_t I=0;I<Use->Count;I++)MdoExtensionsRelease(Use->Leases[I]);xrtFree(Use->Leases);xrtFree(Use);
+    for(size_t I=0;
+    I<Use->Count;
+    I++)MdoExtensionsRelease(Use->Leases[I]);
+    xrtFree(Use->Leases);
+    xrtFree(Use);
 }
 static MdoCliUse* CliUseCreate(xvalue* Items){
     MdoCliUse* Use=xrtCalloc(1,sizeof(*Use));if(!Use)return NULL;Use->References=1;
@@ -33,10 +37,13 @@ static MdoCliUse* CliUseCreate(xvalue* Items){
     }return Use;
 }
 bool MdoCliUseBegin(MdoCliUse** Use,char Error[512]){
-    if(!Use)return false;*Use=NULL;if(!g_MdoCli.Lock)return true;
+    if(!Use)return false;
+    *Use=NULL;
+    if(!g_MdoCli.Lock)return true;
     xrtMutexLock(g_MdoCli.Lock);bool Ok=!g_MdoCli.Stopping&&g_MdoCli.Writable&&g_MdoCli.Catalogue;
     if(Ok){*Use=g_MdoCli.Catalogue;(*Use)->References++;g_MdoCli.ActiveUses++;}xrtMutexUnlock(g_MdoCli.Lock);
-    if(!Ok&&Error)snprintf(Error,512,"External command catalogue is unavailable or stopping; repair it before starting a process");return Ok;
+    if(!Ok&&Error)snprintf(Error,512,"External command catalogue is unavailable or stopping; repair it before starting a process");
+    return Ok;
 }
 void MdoCliUseEnd(MdoCliUse* Use){if(Use&&g_MdoCli.Lock){xrtMutexLock(g_MdoCli.Lock);CliUseReleaseLocked(Use);g_MdoCli.ActiveUses--;if(!g_MdoCli.ActiveUses)xrtCondBroadcast(g_MdoCli.Drained);xrtMutexUnlock(g_MdoCli.Lock);}}
 
@@ -56,7 +63,8 @@ static xvalue* CliDirectoryItems(char Error[512])
         for(size_t J=0;Valid&&J<xrtValueCount(Commands);J++){
             cstr Target=CliText(xrtValueArrayGet(Commands,J),"entry",4096);char* CommandPath=xrtFormat("%s/%s",Root,Target);
             Present=false;memset(&Info,0,sizeof(Info));Valid=CommandPath&&MdoHomeExternalStat(CommandPath,&Present,&Info)&&Present&&Info.Type==XFILE_TYPE_FILE&&Info.Size;
-            if(!Valid)snprintf(Why,sizeof(Why),"Command target is missing or not a regular file: %.400s",Target);xrtFree(CommandPath);
+            if(!Valid)snprintf(Why,sizeof(Why),"Command target is missing or not a regular file: %.400s",Target);
+            xrtFree(CommandPath);
         }
         bool Supported=MdoExtensionSupportsPlatform(Meta,MdoExtensionRuntimePlatform());
         Valid=Valid&&Supported;
@@ -73,7 +81,11 @@ static xvalue* CliDirectoryItems(char Error[512])
             xrtValueObjectSetNew(Row,XRT_STR_LITERAL("valid"),xrtValueBool(Valid))&&xrtValueObjectSetNew(Row,XRT_STR_LITERAL("present"),xrtValueBool(Valid))&&
             CliSet(Row,"error",Valid?"":Why[0]?Why:Supported?"The registered program is missing or not a regular file":"This tool directory does not support the current platform");
         const char* Keys[]={"commands","aliases","links"};for(size_t J=0;Ok&&J<3;J++){const xvalue* Value=xrtValueObjectGet(Config,xrtStrView(Keys[J]));if(Value)Ok=xrtValueObjectSet(Row,xrtStrView(Keys[J]),Value);}
-        if(Ok)Ok=xrtValueArrayAppend(Items,Row);xrtValueRelease(Row);xrtValueRelease(Config);xrtFree(Relative);xrtFree(Native);
+        if(Ok)Ok=xrtValueArrayAppend(Items,Row);
+        xrtValueRelease(Row);
+        xrtValueRelease(Config);
+        xrtFree(Relative);
+        xrtFree(Native);
     }
     xrtValueRelease(Directories);if(!Ok){xrtValueRelease(Items);return NULL;}return Items;
 }
@@ -83,11 +95,15 @@ static bool CliReloadLocked(char Error[512])
     g_MdoCli.State=xrtValueDeepClone(Previous);bool Ok=Next&&g_MdoCli.State&&xrtValueObjectSet(g_MdoCli.State,XRT_STR_LITERAL("items"),Items)&&CliSave();xrtValueRelease(Items);
     if(Ok){xrtValueRelease(Previous);MdoCliUse* Old=g_MdoCli.Catalogue;g_MdoCli.Catalogue=Next;Next=NULL;CliUseReleaseLocked(Old);}
     else{xrtValueRelease(g_MdoCli.State);g_MdoCli.State=Previous;}CliUseReleaseLocked(Next);
-    if(!Ok&&Error&&!Error[0])snprintf(Error,512,"%s",g_MdoCli.BindingError[0]?g_MdoCli.BindingError:"Cannot update portable command entries");return Ok;
+    if(!Ok&&Error&&!Error[0])snprintf(Error,512,"%s",g_MdoCli.BindingError[0]?g_MdoCli.BindingError:"Cannot update portable command entries");
+    return Ok;
 }
 bool MdoCliReload(void)
 {
-    if(!g_MdoCli.Lock)return true;char Error[512]={0};xrtMutexLock(g_MdoCli.Lock);
+    if(!g_MdoCli.Lock)return true;
+    char Error[512]={0}
+    ;
+    xrtMutexLock(g_MdoCli.Lock);
     bool Ok=!g_MdoCli.Stopping&&g_MdoCli.Writable&&CliReloadLocked(Error);xrtMutexUnlock(g_MdoCli.Lock);return Ok;
 }
 bool MdoCliInit(XS_ServerInfo* Server)
@@ -105,28 +121,50 @@ bool MdoCliInit(XS_ServerInfo* Server)
 void MdoCliStop(void){if(g_MdoCli.Lock){xrtMutexLock(g_MdoCli.Lock);g_MdoCli.Stopping=true;xrtMutexUnlock(g_MdoCli.Lock);}}
 void MdoCliUnit(void)
 {
-    if(!g_MdoCli.Lock)return;MdoCliStop();xrtMutexLock(g_MdoCli.Lock);while(g_MdoCli.ActiveUses)xrtCondWait(g_MdoCli.Drained,g_MdoCli.Lock);CliUseReleaseLocked(g_MdoCli.Catalogue);g_MdoCli.Catalogue=NULL;xrtMutexUnlock(g_MdoCli.Lock);CliPathUnit();xrtValueRelease(g_MdoCli.State);xrtValueRelease(g_MdoCli.Published);if(g_MdoCli.Drained)xrtCondDestroy(g_MdoCli.Drained);xrtMutexDestroy(g_MdoCli.Lock);memset(&g_MdoCli,0,sizeof(g_MdoCli));
+    if(!g_MdoCli.Lock)return;
+    MdoCliStop();
+    xrtMutexLock(g_MdoCli.Lock);
+    while(g_MdoCli.ActiveUses)xrtCondWait(g_MdoCli.Drained,g_MdoCli.Lock);
+    CliUseReleaseLocked(g_MdoCli.Catalogue);
+    g_MdoCli.Catalogue=NULL;
+    xrtMutexUnlock(g_MdoCli.Lock);
+    CliPathUnit();
+    xrtValueRelease(g_MdoCli.State);
+    xrtValueRelease(g_MdoCli.Published);
+    if(g_MdoCli.Drained)xrtCondDestroy(g_MdoCli.Drained);
+    xrtMutexDestroy(g_MdoCli.Lock);
+    memset(&g_MdoCli,0,sizeof(g_MdoCli));
 }
 xvalue* MdoCliSnapshot(void)
 {
-    if(!g_MdoCli.Lock)return NULL;xrtMutexLock(g_MdoCli.Lock);xvalue* R=xrtValueDeepClone(g_MdoCli.State);
+    if(!g_MdoCli.Lock)return NULL;
+    xrtMutexLock(g_MdoCli.Lock);
+    xvalue* R=xrtValueDeepClone(g_MdoCli.State);
     if(R){CliSet(R,"platform",MdoToolPlatform());CliSet(R,"edition",MdoEdition());CliSet(R,"binding_error",g_MdoCli.BindingError);
         xrtValueObjectSetNew(R,XRT_STR_LITERAL("writable"),xrtValueBool(g_MdoCli.Writable));char* Bin=MdoHomeExternalPath("data/external-tools/bin");CliSet(R,"bin_path",Bin?Bin:"");xrtFree(Bin);}
     xrtMutexUnlock(g_MdoCli.Lock);return R;
 }
 bool MdoCliCommand(const xvalue* Input,char* Error,size_t Capacity)
 {
-    if(!g_MdoCli.Lock)return false;cstr Action=CliText(Input,"action",16),Id=CliText(Input,"id",96);char Why[512]={0};bool Ok=false;
+    if(!g_MdoCli.Lock)return false;
+    cstr Action=CliText(Input,"action",16);
+    char Why[512]={0}
+    ;
+    bool Ok=false;
     xrtMutexLock(g_MdoCli.Lock);
     if(!g_MdoCli.Writable||g_MdoCli.Stopping)snprintf(Why,sizeof(Why),"External tool command registry is unavailable");
     else if(!strcmp(Action,"reload")||!strcmp(Action,"refresh"))Ok=CliReloadLocked(Why);
     else if(!strcmp(Action,"dismiss")||!strcmp(Action,"accept")){Ok=CliSet(g_MdoCli.State,"guide",!strcmp(Action,"dismiss")?"dismissed":"accepted")&&CliSave();}
     else snprintf(Why,sizeof(Why),"Use the common extension directory and ZIP task APIs for creation, downloads and publication");
-    if(!Ok&&Error&&Capacity)snprintf(Error,Capacity,"%s",Why[0]?Why:g_MdoCli.BindingError);xrtMutexUnlock(g_MdoCli.Lock);return Ok;
+    if(!Ok&&Error&&Capacity)snprintf(Error,Capacity,"%s",Why[0]?Why:g_MdoCli.BindingError);
+    xrtMutexUnlock(g_MdoCli.Lock);
+    return Ok;
 }
 bool MdoCliToolPrompt(char** Prompt)
 {
-    if(!Prompt||!*Prompt)return false;cstr Start="\n\n<mdo_tool_environment>\n",End="</mdo_tool_environment>\n";char* At;
+    if(!Prompt||!*Prompt)return false;
+    cstr Start="\n\n<mdo_tool_environment>\n",End="</mdo_tool_environment>\n";
+    char* At;
     while((At=strstr(*Prompt,Start))){char* Last=strstr(At,End);if(!Last)return false;Last+=strlen(End);memmove(At,Last,strlen(Last)+1);}
     xvalue* Snapshot=MdoCliSnapshot(),*Tools=xrtValueArray();const xvalue* Items=xrtValueObjectGet(Snapshot,XRT_STR_LITERAL("items"));size_t Budget=0,Skipped=0;
     for(size_t I=0;I<xrtValueCount(Items);I++){

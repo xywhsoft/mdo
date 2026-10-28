@@ -61,7 +61,13 @@ static xvalue* MdoExtArchiveList(char Error[512]){
         if(Expired&&!MdoExtArchiveUse(Id)){bool A=MdoExtArchiveRemoveFile(Id,"archive.part"),B=MdoExtArchiveRemoveFile(Id,"archive.zip");if(A&&B){char* Record=MdoExtArchivePath(Id,"task.json"),*Base=xrtFormat(MDO_ARCHIVE_TASK_ROOT "/%s",Id);Ok=Record&&MdoHomeRemove(Record,false);if(Ok)(void)MdoHomeRemoveEmptyDirectory(Base);xrtFree(Record);xrtFree(Base);xrtValueRelease(Task);continue;}else {xrtValueObjectSetNew(Task,XRT_STR_LITERAL("cleanup_pending"),xrtValueBool(true));Ok=MdoExtArchiveSave(Task);}}
   (void)State;xvalue* Row=Ok?MdoExtArchiveInfo(Task):NULL;Ok=Ok&&Row&&xrtValueCount(Items)<128&&xrtValueArrayAppend(Items,Row);xrtValueRelease(Row);xrtValueRelease(Task);
  }
- if(Next==XDIR_NEXT_ERROR)Ok=false;if(D&&!xrtDirClose(D))Ok=false;if(!Ok){xrtValueRelease(Items);MdoExtArchiveError(Error,"Archive tasks could not be read safely or exceed the retained task limit");return NULL;}return Items;
+ if(Next==XDIR_NEXT_ERROR)Ok=false;
+ if(D&&!xrtDirClose(D))Ok=false;
+ if(!Ok){xrtValueRelease(Items);
+ MdoExtArchiveError(Error,"Archive tasks could not be read safely or exceed the retained task limit");
+ return NULL;
+ }
+ return Items;
 }
 bool MdoExtensionTasksInit(void){if(MdoExtArchiveTasksLock)return !MdoExtArchiveTasksStopping;MdoExtArchiveTasksLock=xrtMutexCreate();MdoExtArchiveTasksCondition=xrtCondCreate();MdoExtArchiveTasksStopping=false;if(!MdoExtArchiveTasksLock||!MdoExtArchiveTasksCondition){if(MdoExtArchiveTasksLock)xrtMutexDestroy(MdoExtArchiveTasksLock);if(MdoExtArchiveTasksCondition)xrtCondDestroy(MdoExtArchiveTasksCondition);MdoExtArchiveTasksLock=NULL;MdoExtArchiveTasksCondition=NULL;return false;}return true;}
 void MdoExtensionTasksUnit(void){if(!MdoExtArchiveTasksLock)return;xrtMutexLock(MdoExtArchiveTasksLock);MdoExtArchiveTasksStopping=true;for(MdoExtensionTaskUse* U=MdoArchiveUses;U;U=U->Next)xrtCancelRequest(U->Cancel);while(MdoArchiveUses)xrtCondWait(MdoExtArchiveTasksCondition,MdoExtArchiveTasksLock);xrtMutexUnlock(MdoExtArchiveTasksLock);xrtCondDestroy(MdoExtArchiveTasksCondition);xrtMutexDestroy(MdoExtArchiveTasksLock);MdoExtArchiveTasksCondition=NULL;MdoExtArchiveTasksLock=NULL;}
@@ -79,8 +85,16 @@ bool MdoExtensionTaskBegin(const xvalue* Input,xvalue** Result,char Error[512]){
  bool Ok=!MdoExtArchiveTasksStopping&&Items&&xrtValueCount(Items)<128&&Active<3&&Reserved<=MDO_ARCHIVE_TASK_QUOTA&&Size<=MDO_ARCHIVE_TASK_QUOTA-Reserved;char* Id=Ok?xrtXidMakeString():NULL,*Base=Id?xrtFormat(MDO_ARCHIVE_TASK_ROOT "/%s",Id):NULL;
  xroot Directory=Base?MdoHomeOpenStorageDirectory(Base):NULL;Ok=Ok&&Directory;if(Directory)xrtRootClose(Directory);xvalue* T=xrtValueObject();
  Ok=Ok&&T&&MdoExtArchivePut(T,"id",Id)&&MdoExtArchivePut(T,"kind",Kind?Kind:"")&&MdoExtArchivePut(T,"purpose",Purpose)&&MdoExtArchivePut(T,"sha256",Hash)&&MdoExtArchivePut(T,"state","receiving")&&xrtValueObjectSetNew(T,XRT_STR_LITERAL("bytes"),xrtValueUInt(Size))&&xrtValueObjectSetNew(T,XRT_STR_LITERAL("created"),xrtValueUInt((uint64)MdoExtArchiveNow()))&&MdoExtArchiveSave(T);
- if(Ok)*Result=MdoExtArchiveInfo(T);Ok=Ok&&*Result;if(!Ok&&Base)MdoHomeRemoveEmptyDirectory(Base);xrtValueRelease(T);xrtValueRelease(Items);xrtFree(Id);xrtFree(Base);xrtMutexUnlock(MdoExtArchiveTasksLock);
- if(!Ok&&Error&&!Error[0])MdoExtArchiveError(Error,"Archive task storage is full or unavailable; cancel unused tasks first");return Ok;
+ if(Ok)*Result=MdoExtArchiveInfo(T);
+ Ok=Ok&&*Result;
+ if(!Ok&&Base)MdoHomeRemoveEmptyDirectory(Base);
+ xrtValueRelease(T);
+ xrtValueRelease(Items);
+ xrtFree(Id);
+ xrtFree(Base);
+ xrtMutexUnlock(MdoExtArchiveTasksLock);
+ if(!Ok&&Error&&!Error[0])MdoExtArchiveError(Error,"Archive task storage is full or unavailable; cancel unused tasks first");
+ return Ok;
 }
 static bool MdoExtArchiveWrite(cstr Id,MdoExtensionTaskUse* Use,uint64 Offset,const void* Data,size_t Bytes,xvalue** Result,char Error[512]){
  *Result=NULL;if(Error)Error[0]=0;if(!MdoExtArchiveTasksLock||!MdoExtArchiveId(Id)||!Data||!Bytes||Bytes>MDO_EXTENSION_TASK_CHUNK)return MdoExtArchiveError(Error,"Write one raw binary archive chunk of at most 1 MiB");
@@ -91,13 +105,22 @@ static bool MdoExtArchiveWrite(cstr Id,MdoExtensionTaskUse* Use,uint64 Offset,co
   * stopped during one chunk, its matching prefix can be completed safely. */
  size_t Overlap=Ok&&Current>Offset?(size_t)((Current-Offset)<Bytes?(Current-Offset):Bytes):0;uint8 Buffer[65536];
  for(size_t At=0;Ok&&At<Overlap;){size_t N=Overlap-At<sizeof(Buffer)?Overlap-At:sizeof(Buffer);Ok=xrtReadAtFull(File,Offset+At,Buffer,N,NULL)&&!memcmp(Buffer,(const uint8*)Data+At,N);At+=N;}
- if(Ok&&Overlap<Bytes)Ok=xrtWriteAtFull(File,Offset+Overlap,(const uint8*)Data+Overlap,Bytes-Overlap,NULL)&&xrtFlush(File);if(File&&!xrtClose(File))Ok=false;
- if(Ok)*Result=MdoExtArchiveInfo(T);Ok=Ok&&*Result;xrtFree(Path);xrtValueRelease(T);xrtMutexUnlock(MdoExtArchiveTasksLock);if(!Ok&&Error&&!Error[0])MdoExtArchiveError(Error,"Archive chunk conflicts with the received bytes or cannot be written; read the current offset before retrying");return Ok;
+ if(Ok&&Overlap<Bytes)Ok=xrtWriteAtFull(File,Offset+Overlap,(const uint8*)Data+Overlap,Bytes-Overlap,NULL)&&xrtFlush(File);
+ if(File&&!xrtClose(File))Ok=false;
+ if(Ok)*Result=MdoExtArchiveInfo(T);
+ Ok=Ok&&*Result;
+ xrtFree(Path);
+ xrtValueRelease(T);
+ xrtMutexUnlock(MdoExtArchiveTasksLock);
+ if(!Ok&&Error&&!Error[0])MdoExtArchiveError(Error,"Archive chunk conflicts with the received bytes or cannot be written; read the current offset before retrying");
+ return Ok;
 }
 bool MdoExtensionTaskWrite(cstr Id,uint64 Offset,const void* Data,size_t Bytes,xvalue** Result,char Error[512]){return MdoExtArchiveWrite(Id,NULL,Offset,Data,Bytes,Result,Error);}
 bool MdoExtensionTaskUseWrite(MdoExtensionTaskUse* Use,uint64 Offset,const void* Data,size_t Bytes,xvalue** Result,char Error[512]){if(!Use){*Result=NULL;return MdoExtArchiveError(Error,"An owned archive transfer is required");}return MdoExtArchiveWrite(Use->Id,Use,Offset,Data,Bytes,Result,Error);}
 bool MdoExtensionTaskOrigin(MdoExtensionTaskUse* Use,const xvalue* Origin,char Error[512]){
- if(!Use||xrtValueType(Origin)!=XVALUE_OBJECT)return false;cstr Kind=MdoExtensionText(Origin,"kind",32),Id=MdoExtensionText(Origin,"xid",32),Version=MdoExtensionText(Origin,"version_id",32),Hash=MdoExtensionText(Origin,"sha256",64);char* Text=xrtJsonStringify(Origin,false,NULL);
+ if(!Use||xrtValueType(Origin)!=XVALUE_OBJECT)return false;
+ cstr Kind=MdoExtensionText(Origin,"kind",32),Id=MdoExtensionText(Origin,"xid",32),Version=MdoExtensionText(Origin,"version_id",32),Hash=MdoExtensionText(Origin,"sha256",64);
+ char* Text=xrtJsonStringify(Origin,false,NULL);
  bool Valid=Text&&strlen(Text)<=8192&&MdoExtensionDirectoryKind(Kind)&&MdoExtArchiveId(Id)&&MdoExtArchiveId(Version)&&MdoExtArchiveHash(Hash);xrtFree(Text);if(!Valid)return MdoExtArchiveError(Error,"Invalid verified store origin");
  const cstr Fields[]={"kind","xid","version_id","sha256","bytes","owner","submitter","author","copyright","license","name","alias","platforms","state","version"};
  for(size_t I=0;I<xrtValueCount(Origin);I++){xstrview Key={0};xrtValueObjectAt(Origin,I,&Key);bool Known=false;for(size_t J=0;J<sizeof(Fields)/sizeof(*Fields);J++)if(xrtStrEqual(Key,xrtStrView(Fields[J])))Known=true;if(!Known)return MdoExtArchiveError(Error,"Unexpected field in verified store origin");}
@@ -105,7 +128,11 @@ bool MdoExtensionTaskOrigin(MdoExtensionTaskUse* Use,const xvalue* Origin,char E
  xrtValueRelease(Task);xrtMutexUnlock(MdoExtArchiveTasksLock);return Ok||MdoExtArchiveError(Error,"Archive transfer changed before its store origin could be recorded");
 }
 bool MdoExtensionTaskPublication(MdoExtensionTaskUse* Use,const xvalue* Request,char Error[512]){
- if(!Use||!Request)return MdoExtArchiveError(Error,"Missing publication request");char* Text=xrtJsonStringify(Request,false,NULL);bool Valid=Text&&strlen(Text)<=12000;const cstr Allowed[]={"action","upload","nonce","proof_upload","publish","review_notes","source_url","source_included","work","expected_revision"};
+ if(!Use||!Request)return MdoExtArchiveError(Error,"Missing publication request");
+ char* Text=xrtJsonStringify(Request,false,NULL);
+ bool Valid=Text&&strlen(Text)<=12000;
+ const cstr Allowed[]={"action","upload","nonce","proof_upload","publish","review_notes","source_url","source_included","work","expected_revision"}
+ ;
  for(size_t I=0;Valid&&I<xrtValueCount(Request);I++){xstrview Key={0};xrtValueObjectAt(Request,I,&Key);bool Known=false;for(size_t J=0;J<sizeof(Allowed)/sizeof(*Allowed);J++)if(xrtStrEqual(Key,xrtStrView(Allowed[J])))Known=true;Valid=Known;}
  xrtMutexLock(MdoExtArchiveTasksLock);xvalue* Task=Valid?MdoExtArchiveLoad(Use->Id,Error):NULL;const xvalue* Previous=xrtValueObjectGet(Task,XRT_STR_LITERAL("publication"));char* Prior=Previous?xrtJsonStringify(Previous,false,NULL):NULL;
  cstr State=MdoExtensionText(Task,"state",24);bool Ok=Task&&MdoExtArchiveUse(Use->Id)==Use&&State&&!strcmp(State,"ready")&&!xrtCancelRequested(Use->Cancel)&&(!Previous||(Prior&&!strcmp(Prior,Text)))&&xrtValueObjectSet(Task,XRT_STR_LITERAL("publication"),Request)&&MdoExtArchiveSave(Task);
@@ -135,14 +162,19 @@ bool MdoExtensionTaskSeal(cstr Id,xcancel* Cancel,xvalue** Result,char Error[512
  bool Invalid=false;if(Ok&&!Ready){Ok=DigestRead&&!strcmp(Hash,MdoExtensionText(T,"sha256",64));Invalid=DigestRead&&!Ok;}
  cstr Purpose=MdoExtensionText(T,"purpose",16);bool Review=Purpose&&(!strcmp(Purpose,"review")||!strcmp(Purpose,"file"));MdoZip Z={0};xvalue* Meta=NULL;
  if(Ok&&!Ready&&!Review){Ok=MdoZipOpen(&Z,F);if(Ok)Meta=MdoExtensionZipManifest(&Z,Stop);Ok=Ok&&Meta&&!strcmp(MdoExtensionText(Meta,"kind",32),MdoExtensionText(T,"kind",32));
-  for(size_t I=0;Ok&&I<Z.Count;I++)Ok=MdoZipEntryRead(&Z,I,NULL,NULL,Stop,NULL);if(!Ok&&!xrtCancelRequested(Stop))Invalid=true;}
+  for(size_t I=0;
+  Ok&&I<Z.Count;
+  I++)Ok=MdoZipEntryRead(&Z,I,NULL,NULL,Stop,NULL);
+  if(!Ok&&!xrtCancelRequested(Stop))Invalid=true;
+  }
  MdoZipClose(&Z);xrtClose(F);
  xrtMutexLock(MdoExtArchiveTasksLock);xvalue* Current=MdoExtArchiveLoad(Id,Error);cstr CurrentState=MdoExtensionText(Current,"state",24);
  bool Cancelled=xrtCancelRequested(Stop)||(CurrentState&&!strcmp(CurrentState,"cancel_requested"));
  Ok=Ok&&Current&&CurrentState&&!Cancelled&&MdoExtArchiveLive(Current)&&(!strcmp(CurrentState,"receiving")||!strcmp(CurrentState,"ready"))&&!strcmp(MdoExtensionText(Current,"sha256",64),MdoExtensionText(T,"sha256",64));
  if(Ok&&!Ready&&!Exists)Ok=MdoHomeRenameNoReplace(Part,Final);
  if(Ok&&!Ready){if(Meta)Ok=MdoExtArchivePut(Current,"name",MdoExtensionText(Meta,"name",240))&&MdoExtArchivePut(Current,"alias",MdoExtensionText(Meta,"alias",64));Ok=Ok&&MdoExtArchivePut(Current,"state","ready")&&MdoExtArchiveSave(Current);}
- if(Ok)*Result=MdoExtArchiveInfo(Current);Ok=Ok&&*Result;
+ if(Ok)*Result=MdoExtArchiveInfo(Current);
+ Ok=Ok&&*Result;
  if(!Ok&&Current&&!Ready&&Invalid&&!Cancelled){MdoExtArchivePut(Current,"state","failed");MdoExtArchivePut(Current,"error",Z.Error[0]?Z.Error:"Archive has the wrong type or failed its hash/ZIP checks");(void)MdoExtArchiveSave(Current);}
  if(!Ok&&Error&&!Error[0])MdoExtArchiveError(Error,Cancelled?"Archive validation was cancelled":"Archive did not pass its size, SHA-256, ZIP entries and root manifest checks");
  xrtValueRelease(Current);xrtValueRelease(Meta);xrtValueRelease(T);xrtFree(Final);xrtFree(Part);xrtMutexUnlock(MdoExtArchiveTasksLock);MdoExtensionTaskUseEnd(Use);return Ok;
@@ -152,33 +184,62 @@ bool MdoExtensionTaskCancel(cstr Id,xvalue** Result,char Error[512]){
  MdoExtensionTaskUse* Use=MdoExtArchiveUse(Id);cstr State=MdoExtensionText(T,"state",24);bool Complete=State&&!strcmp(State,"complete");
  bool Ok=T&&MdoExtArchivePut(T,"state",Complete?"complete":Use?"cancel_requested":"cancelled")&&MdoExtArchiveSave(T);if(Ok&&Use&&!Complete)xrtCancelRequest(Use->Cancel);
  if(Ok&&!Use){bool A=MdoExtArchiveRemoveFile(Id,"archive.part"),B=MdoExtArchiveRemoveFile(Id,"archive.zip");xrtValueObjectSetNew(T,XRT_STR_LITERAL("cleanup_pending"),xrtValueBool(!A||!B));Ok=MdoExtArchiveSave(T);}
- if(Ok)*Result=MdoExtArchiveInfo(T);Ok=Ok&&*Result;xrtValueRelease(T);xrtMutexUnlock(MdoExtArchiveTasksLock);return Ok||MdoExtArchiveError(Error,"Task cancellation could not be recorded");
+ if(Ok)*Result=MdoExtArchiveInfo(T);
+ Ok=Ok&&*Result;
+ xrtValueRelease(T);
+ xrtMutexUnlock(MdoExtArchiveTasksLock);
+ return Ok||MdoExtArchiveError(Error,"Task cancellation could not be recorded");
 }
 bool MdoExtensionTaskForget(cstr Id,char Error[512]){
- if(Error)Error[0]=0;if(!MdoExtArchiveTasksLock||!MdoExtArchiveId(Id))return MdoExtArchiveError(Error,"Choose an archive task");xrtMutexLock(MdoExtArchiveTasksLock);xvalue* T=MdoExtArchiveLoad(Id,NULL);cstr State=MdoExtensionText(T,"state",24);
+ if(Error)Error[0]=0;
+ if(!MdoExtArchiveTasksLock||!MdoExtArchiveId(Id))return MdoExtArchiveError(Error,"Choose an archive task");
+ xrtMutexLock(MdoExtArchiveTasksLock);
+ xvalue* T=MdoExtArchiveLoad(Id,NULL);
+ cstr State=MdoExtensionText(T,"state",24);
  bool Ok=!MdoExtArchiveUse(Id)&&(!T||(State&&(!strcmp(State,"cancelled")||!strcmp(State,"complete")||!strcmp(State,"failed"))))&&MdoExtArchiveForget(Id);xrtValueRelease(T);xrtMutexUnlock(MdoExtArchiveTasksLock);return Ok||MdoExtArchiveError(Error,"Cancel the task before clearing its retained files and receipt");
 }
 bool MdoExtensionTaskComplete(cstr Id,const xvalue* Outcome,xvalue** Result,char Error[512]){
  *Result=NULL;if(Error)Error[0]=0;if(!MdoExtArchiveTasksLock||!MdoExtArchiveId(Id))return MdoExtArchiveError(Error,"Choose a sealed archive task");xrtMutexLock(MdoExtArchiveTasksLock);xvalue* T=MdoExtArchiveLoad(Id,Error);cstr State=MdoExtensionText(T,"state",24);
  bool Ok=T&&State&&(!strcmp(State,"ready")||!strcmp(State,"cancel_requested")||!strcmp(State,"complete"));cstr Target=MdoExtensionText(Outcome,"id",96),Problem=MdoExtensionText(Outcome,"runtime_error",512);
- if(Ok&&Target)Ok=MdoExtArchivePut(T,"directory_id",Target);if(Ok&&Problem)Ok=MdoExtArchivePut(T,"error",Problem);
+ if(Ok&&Target)Ok=MdoExtArchivePut(T,"directory_id",Target);
+ if(Ok&&Problem)Ok=MdoExtArchivePut(T,"error",Problem);
  Ok=Ok&&MdoExtArchivePut(T,"state","complete")&&MdoExtArchiveSave(T);
  if(Ok){bool A=MdoExtArchiveRemoveFile(Id,"archive.part"),B=MdoExtArchiveRemoveFile(Id,"archive.zip");xrtValueObjectSetNew(T,XRT_STR_LITERAL("cleanup_pending"),xrtValueBool(!A||!B));Ok=MdoExtArchiveSave(T);}
- if(Ok)*Result=MdoExtArchiveInfo(T);Ok=Ok&&*Result;xrtValueRelease(T);xrtMutexUnlock(MdoExtArchiveTasksLock);return Ok||MdoExtArchiveError(Error,"Installation finished but its transfer receipt or temporary-file cleanup needs attention");
+ if(Ok)*Result=MdoExtArchiveInfo(T);
+ Ok=Ok&&*Result;
+ xrtValueRelease(T);
+ xrtMutexUnlock(MdoExtArchiveTasksLock);
+ return Ok||MdoExtArchiveError(Error,"Installation finished but its transfer receipt or temporary-file cleanup needs attention");
 }
 MdoExtensionTaskUse* MdoExtensionTaskUseBegin(cstr Id,bool Sealing,xcancel* Parent,char Error[512]){
- if(Error)Error[0]=0;if(!MdoExtArchiveTasksLock||!MdoExtArchiveId(Id)){MdoExtArchiveError(Error,"Choose an archive task");return NULL;}xrtMutexLock(MdoExtArchiveTasksLock);xvalue* T=MdoExtArchiveLoad(Id,Error);cstr State=MdoExtensionText(T,"state",24);
+ if(Error)Error[0]=0;
+ if(!MdoExtArchiveTasksLock||!MdoExtArchiveId(Id)){MdoExtArchiveError(Error,"Choose an archive task");
+ return NULL;
+ }
+ xrtMutexLock(MdoExtArchiveTasksLock);
+ xvalue* T=MdoExtArchiveLoad(Id,Error);
+ cstr State=MdoExtensionText(T,"state",24);
  bool Ok=!MdoExtArchiveTasksStopping&&T&&State&&MdoExtArchiveLive(T)&&!MdoExtArchiveUse(Id)&&(!strcmp(State,"ready")||(Sealing&&!strcmp(State,"receiving")));MdoExtensionTaskUse* Use=Ok?xrtCalloc(1,sizeof(*Use)):NULL;
  if(Use){Use->Cancel=Parent?xrtCancelChild(Parent):xrtCancelCreate();if(!Use->Cancel){xrtFree(Use);Use=NULL;}else{snprintf(Use->Id,sizeof(Use->Id),"%s",Id);Use->Sealing=Sealing;Use->Next=MdoArchiveUses;MdoArchiveUses=Use;}}
  xrtValueRelease(T);xrtMutexUnlock(MdoExtArchiveTasksLock);if(!Use&&Error&&!Error[0])MdoExtArchiveError(Error,"Archive task is busy, cancelled, expired or not ready");return Use;
 }
 xcancel* MdoExtensionTaskUseCancel(MdoExtensionTaskUse* Use){return Use?Use->Cancel:NULL;}
 void MdoExtensionTaskUseEnd(MdoExtensionTaskUse* Use){
- if(!Use||!MdoExtArchiveTasksLock)return;xrtMutexLock(MdoExtArchiveTasksLock);MdoExtensionTaskUse** Link=&MdoArchiveUses;while(*Link&&*Link!=Use)Link=&(*Link)->Next;
+ if(!Use||!MdoExtArchiveTasksLock)return;
+ xrtMutexLock(MdoExtArchiveTasksLock);
+ MdoExtensionTaskUse** Link=&MdoArchiveUses;
+ while(*Link&&*Link!=Use)Link=&(*Link)->Next;
  if(*Link){*Link=Use->Next;xvalue* T=MdoExtArchiveLoad(Use->Id,NULL);cstr State=MdoExtensionText(T,"state",24);if(State&&!strcmp(State,"cancel_requested")){bool A=MdoExtArchiveRemoveFile(Use->Id,"archive.part"),B=MdoExtArchiveRemoveFile(Use->Id,"archive.zip");MdoExtArchivePut(T,"state","cancelled");xrtValueObjectSetNew(T,XRT_STR_LITERAL("cleanup_pending"),xrtValueBool(!A||!B));(void)MdoExtArchiveSave(T);}xrtValueRelease(T);xrtCancelDestroy(Use->Cancel);xrtFree(Use);xrtCondBroadcast(MdoExtArchiveTasksCondition);}xrtMutexUnlock(MdoExtArchiveTasksLock);
 }
 char* MdoExtensionTaskArchive(cstr Id,char Error[512]){
- if(Error)Error[0]=0;if(!MdoExtArchiveTasksLock||!MdoExtArchiveId(Id)){MdoExtArchiveError(Error,"Choose a sealed task");return NULL;}xrtMutexLock(MdoExtArchiveTasksLock);xvalue* T=MdoExtArchiveLoad(Id,Error);cstr State=MdoExtensionText(T,"state",24);char* Path=State&&MdoExtArchiveLive(T)&&!strcmp(State,"ready")?MdoExtArchivePath(Id,"archive.zip"):NULL;
+ if(Error)Error[0]=0;
+ if(!MdoExtArchiveTasksLock||!MdoExtArchiveId(Id)){MdoExtArchiveError(Error,"Choose a sealed task");
+ return NULL;
+ }
+ xrtMutexLock(MdoExtArchiveTasksLock);
+ xvalue* T=MdoExtArchiveLoad(Id,Error);
+ cstr State=MdoExtensionText(T,"state",24);
+ char* Path=State&&MdoExtArchiveLive(T)&&!strcmp(State,"ready")?MdoExtArchivePath(Id,"archive.zip"):NULL;
  uint64 Expected=0;bool Exists=false;xfileinfo Info;if(Path&&(!MdoExtArchiveNumber(T,"bytes",&Expected)||!MdoExtArchiveStat(Path,&Exists,&Info)||!Exists||Info.Type!=XFILE_TYPE_FILE||Info.Size!=Expected)){xrtFree(Path);Path=NULL;}
  xrtValueRelease(T);xrtMutexUnlock(MdoExtArchiveTasksLock);if(!Path)MdoExtArchiveError(Error,"Archive task is not sealed, has expired, was cancelled or its file is unavailable");return Path;
 }

@@ -3,14 +3,27 @@
 #include "../../include/mdo/extension_tasks.h"
 
 static bool MdoDirectoryApiParams(MdoApiContext* C,char Kind[33],char Id[97]){
- if(!C->ParamCount||C->Params[0].Size>32)return false;memcpy(Kind,C->Params[0].Data,C->Params[0].Size);Kind[C->Params[0].Size]=0;Id[0]=0;
- if(!MdoExtensionDirectoryKind(Kind))return false;if(C->ParamCount>=2){if(C->Params[1].Size>96)return false;memcpy(Id,C->Params[1].Data,C->Params[1].Size);Id[C->Params[1].Size]=0;if(!MdoExtensionDirectoryId(Id))return false;}return true;
+ if(!C->ParamCount||C->Params[0].Size>32)return false;
+ memcpy(Kind,C->Params[0].Data,C->Params[0].Size);
+ Kind[C->Params[0].Size]=0;
+ Id[0]=0;
+ if(!MdoExtensionDirectoryKind(Kind))return false;
+ if(C->ParamCount>=2){if(C->Params[1].Size>96)return false;
+ memcpy(Id,C->Params[1].Data,C->Params[1].Size);
+ Id[C->Params[1].Size]=0;
+ if(!MdoExtensionDirectoryId(Id))return false;
+ }
+ return true;
 }
 static xvalue* MdoDirectoryApiQuery(MdoApiContext* C){
  xvalue* Out=xrtValueObject();bool Ok=Out!=NULL;for(size_t At=0;Ok&&At<C->Target.Query.Size;){size_t End=At,Equal=At;while(End<C->Target.Query.Size&&C->Target.Query.Data[End]!='&')End++;while(Equal<End&&C->Target.Query.Data[Equal]!='=')Equal++;
-  size_t KN=0,VN=0;char* K=Equal<End?xrtPercentDecodeNew(xrtStrViewN(C->Target.Query.Data+At,Equal-At),&KN):NULL,*V=Equal<End?xrtPercentDecodeNew(xrtStrViewN(C->Target.Query.Data+Equal+1,End-Equal-1),&VN):NULL;
+  size_t KN=0,VN=0;char* K=Equal<End?(char*)xrtPercentDecodeNew(xrtStrViewN(C->Target.Query.Data+At,Equal-At),&KN):NULL,*V=Equal<End?(char*)xrtPercentDecodeNew(xrtStrViewN(C->Target.Query.Data+Equal+1,End-Equal-1),&VN):NULL;
   Ok=K&&V&&KN&&KN<=16&&VN<=4096&&!memchr(K,0,KN)&&!memchr(V,0,VN)&&xrtUtf8Valid(xrtStrViewN(V,VN),NULL)&&(!strcmp(K,"offset")||!strcmp(K,"limit")||!strcmp(K,"path")||!strcmp(K,"q")||!strcmp(K,"state")||!strcmp(K,"project"))&&!xrtValueObjectHas(Out,xrtStrView(K));
-  if(Ok)Ok=MdoApiValueSetString(Out,K,V);xrtFree(K);xrtFree(V);At=End+1;}
+  if(Ok)Ok=MdoApiValueSetString(Out,K,V);
+  xrtFree(K);
+  xrtFree(V);
+  At=End+1;
+  }
  if(!Ok){xrtValueRelease(Out);return NULL;}return Out;
 }
 static bool MdoDirectoryApiPage(const xvalue* Q,size_t* Offset,size_t* Limit){
@@ -42,7 +55,9 @@ static bool MdoDirectoryApiFile(MdoApiContext* C,cstr Kind,cstr Id,const xvalue*
  bool Read=Text&&xrtReadFull(F,Text,(size_t)Info.Size,NULL);if(Text)Text[Info.Size]=0;xrtClose(F);xrtFree(Full);xrtFree(Root);xrtValueRelease(Item);
  xvalue* Data=Ok?xrtValueObject():NULL;Ok=Ok&&Data&&MdoApiValueSetString(Data,"path",Path)&&MdoApiValueSetUInt(Data,"bytes",Info.Size);
  bool Utf8=Read&&!memchr(Text,0,(size_t)Info.Size)&&xrtUtf8Valid(xrtStrViewN(Text,(size_t)Info.Size),NULL);
- if(Ok)Ok=MdoApiValueSetBool(Data,"binary",!Utf8);if(Ok&&Utf8)Ok=MdoApiValueSetString(Data,"text",Text);xrtFree(Text);
+ if(Ok)Ok=MdoApiValueSetBool(Data,"binary",!Utf8);
+ if(Ok&&Utf8)Ok=MdoApiValueSetString(Data,"text",Text);
+ xrtFree(Text);
  if(!Ok){xrtValueRelease(Data);return MdoApiReplyError(C,404,"extension_file_unavailable","File is unavailable; preview is limited to 1 MiB of UTF-8 text",NULL);}return MdoApiReplySuccessTake(C,200,Data,NULL);
 }
 bool MdoApiExtensionsRoute(MdoApiContext* C){
@@ -53,7 +68,11 @@ bool MdoApiExtensionsRoute(MdoApiContext* C){
   else if(MdoArchiveApiSuffix(C,"/file"))Result=MdoDirectoryApiFile(C,Kind,Id,Q);
   else{xvalue* Item=MdoDirectoryApiItem(Kind,Id,Error);char Hash[65];if(Item&&MdoExtensionsFingerprint(Kind,Id,Hash,C->SendCancel,Error))MdoApiValueSetString(Item,"revision",Hash);
    char* Root=Item?MdoExtensionsRoot(Kind,Id):NULL,*Path=Root?xrtFormat("%s/extension.json",Root):NULL,*Text=Path?MdoExtensionRead(Path,true,MDO_EXTENSION_MANIFEST_BYTES,NULL):NULL;xvalue* Manifest=Text?xrtJsonParse(xrtStrView(Text)):NULL;
-   if(Manifest&&Item)xrtValueObjectSet(Item,XRT_STR_LITERAL("manifest"),Manifest);xrtValueRelease(Manifest);xrtFree(Text);xrtFree(Path);xrtFree(Root);
+   if(Manifest&&Item)xrtValueObjectSet(Item,XRT_STR_LITERAL("manifest"),Manifest);
+   xrtValueRelease(Manifest);
+   xrtFree(Text);
+   xrtFree(Path);
+   xrtFree(Root);
    Result=Item?MdoApiReplySuccessTake(C,200,Item,NULL):MdoApiReplyError(C,404,"extension_not_found",Error[0]?Error:"Extension directory is not installed",NULL);}
  }else{
   MdoApiJsonBody Body={0};MdoApiBodyStatus Status=MdoApiJsonBodyRead(C,&Body);

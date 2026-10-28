@@ -24,7 +24,8 @@
 
 static bool MdoAgentsProcessAcquire(void* User,void** Lease){
     (void)User;MdoCliUse* Use=NULL;char Error[512]={0};bool Ok=MdoCliUseBegin(&Use,Error);*Lease=Use;
-    if(!Ok)xrtSetErrorInfo(XERR_STATE,"mdo.external-tools",0,Error);return Ok;
+    if(!Ok)xrtSetErrorInfo(XERR_STATE,"mdo.external-tools",0,Error);
+    return Ok;
 }
 static void MdoAgentsProcessRelease(void* User,void* Lease){(void)User;MdoCliUseEnd(Lease);}
 

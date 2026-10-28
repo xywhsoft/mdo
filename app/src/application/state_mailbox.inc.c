@@ -2,7 +2,8 @@ static bool SdkMailboxIdentity(const xvalue* P,char Key[128]){
     cstr Box=SdkField(P,"mailbox"),Id=SdkField(P,"message_id");
     if(!SdkStateKey(Box)||strlen(Box)>96||!SdkStateKey(Id))return false;
     char* Text=xrtFormat("%s\n%s",Box,Id);char Hash[65];bool Ok=Text&&MdoExtensionHash(Text,Hash);xrtFree(Text);
-    if(Ok)snprintf(Key,128,"sys.mail.%s",Hash);return Ok;
+    if(Ok)snprintf(Key,128,"sys.mail.%s",Hash);
+    return Ok;
 }
 static bool SdkMailboxHash(const xvalue* P,char Hash[65]){
     xvalue* Canonical=SdkCanonicalValue(P,0);char* Text=Canonical?SdkJson(Canonical):NULL;
@@ -13,7 +14,8 @@ static xvalue* SdkMailboxInfo(const xvalue* Message,bool Body){
     for(size_t I=0;I<4;I++)SdkPut(R,Names[I],SdkField(Message,Names[I]));
     uint64 Sequence=0,Ack=0;SdkUInt(SdkGet(Message,"sequence"),&Sequence);SdkUInt(SdkGet(Message,"ack_revision"),&Ack);
     SdkPutUInt(R,"sequence",Sequence);SdkPutUInt(R,"ack_revision",Ack);
-    if(Body&&SdkGet(Message,"body"))xrtValueObjectSetNew(R,XRT_STR_LITERAL("body"),xrtValueClone(SdkGet(Message,"body")));return R;
+    if(Body&&SdkGet(Message,"body"))xrtValueObjectSetNew(R,XRT_STR_LITERAL("body"),xrtValueClone(SdkGet(Message,"body")));
+    return R;
 }
 static xvalue* SdkMailboxAccepted(const xvalue* Message){
     xvalue* R=xrtValueObject();SdkPut(R,"mailbox",SdkField(Message,"mailbox"));SdkPut(R,"message_id",SdkField(Message,"message_id"));
@@ -79,7 +81,10 @@ static bool SdkMailboxApply(const mdo_sdk_context_v1* C,cstr Method,const xvalue
         if(Pending>=128||Bytes>262144||Size>262144-Bytes)return MdoApplicationError(E,"sdk_mailbox_full","Recipient unread budget reached; acknowledge or drain messages","mailbox",429,false);
         xvalue* M=xrtValueObject();bool Ok=SdkPut(M,"mailbox",Box)&&SdkPut(M,"message_id",SdkField(P,"message_id"))&&SdkPut(M,"sender",Sender)&&SdkPut(M,"state","pending")&&
             SdkPut(M,"hash",Hash)&&SdkPutUInt(M,"sequence",Revision+1)&&SdkPutUInt(M,"body_bytes",Size)&&xrtValueObjectSet(M,XRT_STR_LITERAL("body"),Body)&&SdkMailboxStore(Root,Key,M,Revision+1,E);
-        if(Ok)*R=SdkMailboxAccepted(M);xrtValueRelease(M);*Changed=Ok;return Ok&&*R;
+        if(Ok)*R=SdkMailboxAccepted(M);
+        xrtValueRelease(M);
+        *Changed=Ok;
+        return Ok&&*R;
     }
     if(!Old)return MdoApplicationError(E,"sdk_message_missing","Message is unavailable","mailbox",404,false);
     char Hash[65];if(!SdkMailboxHash(P,Hash))return false;

@@ -26,7 +26,8 @@ static xvalue* SdkInstanceListInfo(const xvalue* V){
 }
 static bool SdkInstancePaths(cstr StatePath,cstr Id,char Identity[65],char Directory[160]){
     char* Text=xrtFormat("%s\n%s",StatePath,Id);bool Ok=Text&&MdoExtensionHash(Text,Identity);xrtFree(Text);
-    if(Ok)snprintf(Directory,160,"data/application/instances/%s",Identity);return Ok;
+    if(Ok)snprintf(Directory,160,"data/application/instances/%s",Identity);
+    return Ok;
 }
 static int SdkInstanceActive(cstr Identity){for(int I=0;I<8;I++)if(SdkState.Members[I].Cancel&&!strcmp(SdkState.Members[I].Identity,Identity))return I;return -1;}
 static bool SdkInstanceNotify(const mdo_sdk_context_v1* C,const xvalue* V){MdoApplicationEvent("instance.changed",C,V);return true;}
@@ -76,7 +77,8 @@ static bool SdkInstanceStep(const mdo_sdk_context_v1* C,cstr Method,const xvalue
     if(Ready&&Run){
         for(;;){MdoAgentRunInfo Info={0};Info.Size=sizeof(Info);if(!MdoAgentRunGetInfo(Run,&Info))break;
             if(Info.Run.eState!=XWORK_RUN_CREATED&&Info.Run.eState!=XWORK_RUN_RUNNING){Status=MdoAgentRunWait(Run,MDO_DEADLINE_NEVER,&Result,&Error);break;}
-            if(SdkCancelled(C))xrtCancelRequest(T->Cancel);xrtSleep(20);
+            if(SdkCancelled(C))xrtCancelRequest(T->Cancel);
+            xrtSleep(20);
         }
     }
     MdoAgentRunDestroy(Run);
@@ -136,7 +138,10 @@ static bool SdkInstanceCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue
         if(!Outcome&&State&&(!strcmp(State,"closed")||!strcmp(State,"requires_review"))){Fallback=xrtValueObject();SdkPut(Fallback,"outcome",!strcmp(State,"closed")?"cancelled":"requires_review");SdkPut(Fallback,"message_id",SdkField(P,"message_id"));SdkPut(Fallback,"text","");Outcome=Fallback;}
         *R=xrtValueObject();SdkPut(*R,"message_id",SdkField(P,"message_id"));SdkPut(*R,"state",State);
         xrtValueObjectSetNew(*R,XRT_STR_LITERAL("completed"),xrtValueBool(Outcome!=NULL));
-        if(Outcome)xrtValueObjectSet(*R,XRT_STR_LITERAL("result"),Outcome);xrtValueRelease(Fallback);xrtValueRelease(Current);Ok=*R!=NULL;
+        if(Outcome)xrtValueObjectSet(*R,XRT_STR_LITERAL("result"),Outcome);
+        xrtValueRelease(Fallback);
+        xrtValueRelease(Current);
+        Ok=*R!=NULL;
     }
     else if(!strcmp(Method,"instance.send")){
         cstr Prompt=SdkField(P,"prompt");if(!Prompt||!Prompt[0]){MdoApplicationError(E,"sdk_instance_arguments","A nonempty prompt is required","instance",400,false);goto done;}
@@ -149,7 +154,10 @@ static bool SdkInstanceCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue
     }else{
         char Identity[65],Directory[160];SdkInstancePaths(Path,Id,Identity,Directory);int Active=SdkInstanceActive(Identity);
         if(!strcmp(Method,"instance.cancel")){
-            if(Active>=0)xrtCancelRequest(SdkState.Members[Active].Cancel);*R=SdkInstanceInfo(Member);xrtValueObjectSetNew(*R,XRT_STR_LITERAL("cancel_requested"),xrtValueBool(Active>=0));Ok=*R!=NULL;
+            if(Active>=0)xrtCancelRequest(SdkState.Members[Active].Cancel);
+            *R=SdkInstanceInfo(Member);
+            xrtValueObjectSetNew(*R,XRT_STR_LITERAL("cancel_requested"),xrtValueBool(Active>=0));
+            Ok=*R!=NULL;
         }else if(Active>=0){MdoApplicationError(E,"sdk_instance_busy","Cancel and await the active turn before closing","instance",409,false);}
         else {Ok=SdkPut(Member,"state","closed")&&SdkInstanceStore(Root,Key,Member,E);Changed=Ok;if(Ok)*R=SdkInstanceInfo(Member);}
     }

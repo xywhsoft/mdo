@@ -7,7 +7,8 @@ bool MdoApiAgentPlanRoute(MdoApiContext* C)
     if(!MdoDirectoryApiParams(C,Kind,Id) || !Id[0] || (strcmp(Kind,"agents") && strcmp(Kind,"subagents")))
         return MdoApiReplyError(C,400,"agent_plan_invalid","Select an Agent or SubAgent definition",NULL);
     char Why[512]={0};xvalue* Installed=MdoExtensionsRead(Kind,Id,Why);cstr InstalledAlias=MdoExtensionText(Installed,"alias",64);
-    if(InstalledAlias)snprintf(Alias,sizeof(Alias),"%s",InstalledAlias);xrtValueRelease(Installed);
+    if(InstalledAlias)snprintf(Alias,sizeof(Alias),"%s",InstalledAlias);
+    xrtValueRelease(Installed);
     char* Workspace=NULL;
     if(!MdoApiSkillScopeMode(C,&Workspace,false))return true;
     char Project[65]="";

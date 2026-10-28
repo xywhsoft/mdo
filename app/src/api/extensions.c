@@ -13,7 +13,8 @@ void MdoApiExtensionsUnit(void){MdoApiExtensionTasksUnit();if(g_MdoExtensionLock
 static void ExtensionBodyUnit(MdoApiJsonBody* Body){
  const xvalue* Secrets=xrtValueObjectGet(Body->Value,XRT_STR_LITERAL("secrets"));
  for(size_t I=0;I<xrtValueCount(Secrets);I++){const xvalue* V=xrtValueType(Secrets)==XVALUE_OBJECT?xrtValueObjectAt(Secrets,I,NULL):xrtValueArrayGet(Secrets,I);xstrview S={0};if(xrtValueGetString(V,&S))xrtSecureZero((void*)S.Data,S.Size);}
- if(Body->Document)xrtSecureZero(Body->Document,Body->Size);MdoApiJsonBodyUnit(Body);
+ if(Body->Document)xrtSecureZero(Body->Document,Body->Size);
+ MdoApiJsonBodyUnit(Body);
 }
 static bool ExtensionString(const xvalue* Object,cstr Key,xstrview* Text)
 {

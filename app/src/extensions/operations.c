@@ -20,7 +20,8 @@ static bool MdoExtOpReload(cstr Kind,char Error[512]){
  else if(!strcmp(Kind,"mcp")){MdoMcpCatalog* C=MdoMcpCatalogSnapshot();bool Live=C!=NULL;MdoMcpCatalogRelease(C);if(Live)Ok=MdoMcpManagerReload();}
  else if(!strcmp(Kind,"external-tools"))Ok=MdoCliReload();
  else if(!strcmp(Kind,"plugins"))Ok=MdoApplicationPluginsReload(Error,512);
- if(!Ok&&Error&&!Error[0])snprintf(Error,512,"The runtime could not retire or load this extension; finish its active calls or inspect its configuration");return Ok;
+ if(!Ok&&Error&&!Error[0])snprintf(Error,512,"The runtime could not retire or load this extension; finish its active calls or inspect its configuration");
+ return Ok;
 }
 static xvalue* MdoExtOpItem(cstr Kind,cstr Id,char Error[512]){
  xvalue* M=MdoExtensionsRead(Kind,Id,Error);if(M)return M;
@@ -56,7 +57,8 @@ bool MdoExtensionsManage(const xvalue* Input,const xvalue* Credits,xcancel* Canc
   if(!MdoExtOpRestore(Kind,Id,false,Error)){char Ignored[512];(void)MdoExtOpRestore(Kind,Id,WasEnabled,Ignored);goto done;}Suspended=true;
   if(MdoExtensionsInUse(Kind,Id)){
    if(Remove&&!strcmp(Kind,"plugins")){Ok=MdoExtensionsScheduleRemove(Kind,Id,Expected,Result,Error);if(Ok)Suspended=false;}
-   else MdoExtOpFailure(Error,!strcmp(Kind,"plugins")?"Stop and restart this native plugin before updating or editing its directory":"This extension still has active calls; finish them before changing its directory");goto done;
+   else MdoExtOpFailure(Error,!strcmp(Kind,"plugins")?"Stop and restart this native plugin before updating or editing its directory":"This extension still has active calls; finish them before changing its directory");
+   goto done;
   }
  }
  if(Create){cstr Text=MdoExtensionText(Input,"entry_text",1048576);Ok=MdoExtensionsCreate(Kind,Id,xrtValueObjectGet(Input,XRT_STR_LITERAL("manifest")),Text,Text?strlen(Text):0,Trust,Result,Error);}

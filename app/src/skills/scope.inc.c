@@ -69,17 +69,20 @@ MdoSkillCatalog* MdoSkillCatalogForWorkspace(cstr Workspace)
     Ok=Settings&&xrtValueType(Settings)==XVALUE_OBJECT;
     for(size_t I=0;Ok&&I<xrtValueCount(Settings);I++){bool Flag=false;Ok=xrtValueGetBool(xrtValueObjectAt(Settings,I,NULL),&Flag);}
     MdoSkillCatalog* Catalog=Ok?MdoSkillsCatalogCreate(Base->Generation):NULL;
-    if(Catalog)Catalog->Diagnostics=MdoSkillsDiagnosticsCreate();Ok=Ok&&Catalog&&Catalog->Diagnostics;
+    if(Catalog)Catalog->Diagnostics=MdoSkillsDiagnosticsCreate();
+    Ok=Ok&&Catalog&&Catalog->Diagnostics;
     for(size_t I=0;Ok&&I<Base->Count;I++){
         MdoSkillEntry* E=&Base->Entries[I];bool Enabled=true;const xvalue* Flag=xrtValueObjectGet(Settings,xrtStrView(E->Id));
-        if(Flag)xrtValueGetBool(Flag,&Enabled);if(!Enabled)continue;
+        if(Flag)xrtValueGetBool(Flag,&Enabled);
+        if(!Enabled)continue;
         MdoSkillSource S={0};S.External=E->External;S.Id=E->Id;S.Scope=E->Scope;S.NativeRoot=E->NativeRoot;
         S.DirectoryId=E->DirectoryId;S.EntryFile=E->EntryFile;S.VirtualDirectory=E->VirtualDirectory;S.RelativeDirectory=E->RelativeDirectory;
         Ok=MdoSkillsScopedPut(Catalog,&S,true);
     }
     xrtValueRelease(Settings);MdoSkillCatalogRelease(Base);
     if(!Ok){MdoSkillCatalogRelease(Catalog);MdoSkillsSetError("Cannot read project Skill selection; only installed Home directories can be selected");return NULL;}
-    if(Catalog->Count>1)qsort(Catalog->Entries,Catalog->Count,sizeof(*Catalog->Entries),MdoSkillsEntryCompare);return Catalog;
+    if(Catalog->Count>1)qsort(Catalog->Entries,Catalog->Count,sizeof(*Catalog->Entries),MdoSkillsEntryCompare);
+    return Catalog;
 }
 
 MdoSkillDiagnostics* MdoSkillCatalogDiagnostics(const MdoSkillCatalog* Catalog)

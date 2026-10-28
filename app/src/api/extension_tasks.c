@@ -11,7 +11,9 @@
 typedef struct MdoArchiveApiJob {MdoApiContext Context;XS_HttpReq Request;xhttp1head Head;char Id[33];xvalue* Input;unsigned Operation;bool Sent;} MdoArchiveApiJob;
 static struct {xmutex* Lock;xtaskpool* Pool;size_t Count;bool Stopping;} MdoArchiveApi;
 static bool MdoArchiveApiResult(MdoApiContext* C,bool Ok,xvalue* Result,cstr Error){
- if(Ok)return MdoApiReplySuccessTake(C,200,Result,NULL);xrtValueRelease(Result);return MdoApiReplyError(C,422,"extension_archive_failed",Error&&Error[0]?Error:"Archive operation could not complete",NULL);
+ if(Ok)return MdoApiReplySuccessTake(C,200,Result,NULL);
+ xrtValueRelease(Result);
+ return MdoApiReplyError(C,422,"extension_archive_failed",Error&&Error[0]?Error:"Archive operation could not complete",NULL);
 }
 static bool MdoArchiveApiInstall(MdoApiContext* C,cstr Id,const xvalue* Input){
  char ProbeError[512]={0};xvalue* Receipt=MdoExtensionTaskRead(Id,ProbeError);bool Store=Receipt&&xrtValueObjectHas(Receipt,XRT_STR_LITERAL("store"));xrtValueRelease(Receipt);
@@ -41,9 +43,13 @@ static xtaskoutcome MdoArchiveApiRun(xcancel* Cancel,ptr Value,xtaskvalue* Resul
 static bool MdoArchiveApiStart(MdoApiContext* C,cstr Id,const xvalue* Input,unsigned Operation){
  MdoArchiveApiJob* J=xrtCalloc(1,sizeof(*J));xfuture* Future=NULL;if(!J||!MdoArchiveApi.Lock)goto failed;
  J->Head.MethodCode=XHTTP_METHOD_POST;J->Request.head=&J->Head;if(C->Request->tls)J->Request.tls=xrtTlsStreamRef(C->Request->tls);else if(C->Request->tcp)J->Request.tcp=xrtNetStreamRef(C->Request->tcp);
- if(!J->Request.tls&&!J->Request.tcp)goto failed;J->Context.Request=&J->Request;J->Context.CloseResponse=true;J->Context.SendDeadline=MdoDeadlineAfterUs(UINT64_C(1200000000));
+ if(!J->Request.tls&&!J->Request.tcp)goto failed;
+ J->Context.Request=&J->Request;
+ J->Context.CloseResponse=true;
+ J->Context.SendDeadline=MdoDeadlineAfterUs(UINT64_C(1200000000));
  memcpy(J->Context.RequestId,C->RequestId,sizeof(C->RequestId));snprintf(J->Id,sizeof(J->Id),"%s",Id);J->Context.WriteShared=C->WriteShared;J->Context.WriteExclusive=C->WriteExclusive;J->Operation=Operation;J->Input=Input?xrtValueClone(Input):NULL;
- if(Input&&!J->Input)goto failed;xrtMutexLock(MdoArchiveApi.Lock);
+ if(Input&&!J->Input)goto failed;
+ xrtMutexLock(MdoArchiveApi.Lock);
  if(!MdoArchiveApi.Stopping&&MdoArchiveApi.Count<3){if(!MdoArchiveApi.Pool){xtaskpoolconfig Config={0};Config.Threads=1;Config.QueueLimit=2;MdoArchiveApi.Pool=xrtTaskPoolCreate(&Config);}if(MdoArchiveApi.Pool){xtaskargs Args={0};Args.Destroy=MdoArchiveApiDrop;MdoArchiveApi.Count++;Future=xrtTaskSubmit(MdoArchiveApi.Pool,MdoArchiveApiRun,J,&Args);if(!Future)MdoArchiveApi.Count--;}}
  xrtMutexUnlock(MdoArchiveApi.Lock);if(Future){C->WriteShared=C->WriteExclusive=false;C->Takeover=true;xrtFutureDestroy(Future);return true;}
 failed:if(J){xrtTlsStreamDestroy(J->Request.tls);xrtNetStreamDestroy(J->Request.tcp);if(J->Operation==4)MdoArchiveApiSecrets(J->Input);xrtValueRelease(J->Input);xrtFree(J);}return MdoApiReplyError(C,503,"extension_archive_busy","Another archive operation is still finishing",NULL);
@@ -60,7 +66,9 @@ bool MdoApiExtensionTasksRoute(MdoApiContext* C){
  char Error[512]={0},Id[33]={0};xvalue* Out=NULL;bool Ok=false;xhttpmethod Method=C->Request->head->MethodCode;
  if(!C->ParamCount){if(Method==XHTTP_METHOD_GET){Out=MdoExtensionTasksList(Error);return MdoArchiveApiResult(C,Out!=NULL,Out,Error);}
   MdoApiJsonBody Body={0};MdoApiBodyStatus Read=MdoApiJsonBodyRead(C,&Body);if(Read!=MDO_API_BODY_OK)return MdoApiReplyBodyError(C,Read);Ok=MdoExtensionTaskBegin(Body.Value,&Out,Error);MdoApiJsonBodyUnit(&Body);return MdoArchiveApiResult(C,Ok,Out,Error);}
- if(C->Params[0].Size!=32)return MdoApiReplyError(C,400,"extension_task_invalid","Expected an archive task identity",NULL);memcpy(Id,C->Params[0].Data,32);if(!MdoExtArchiveId(Id))return MdoApiReplyError(C,400,"extension_task_invalid","Invalid archive task identity",NULL);
+ if(C->Params[0].Size!=32)return MdoApiReplyError(C,400,"extension_task_invalid","Expected an archive task identity",NULL);
+ memcpy(Id,C->Params[0].Data,32);
+ if(!MdoExtArchiveId(Id))return MdoApiReplyError(C,400,"extension_task_invalid","Invalid archive task identity",NULL);
  if(C->ParamCount==2){uint64 Offset=0;if(!MdoArchiveApiOffset(C->Params[1],&Offset))return MdoApiReplyError(C,400,"extension_task_offset","Invalid byte offset",NULL);
   if(Method==XHTTP_METHOD_PUT){const xhttpfield* Type=NULL;if(xrtHttpFieldGetUnique(C->Request->head->Fields,C->Request->head->FieldCount,XRT_STR_LITERAL("Content-Type"),&Type)!=XHTTP_NEXT_ITEM||!xrtStrCaseEqual(xrtStrTrim(Type->Value),XRT_STR_LITERAL("application/octet-stream")))return MdoApiReplyError(C,415,"extension_raw_required","Archive chunks must be raw application/octet-stream bytes",NULL);
    char* Data=NULL;size_t Bytes=0;MdoApiBodyStatus Read=MdoApiBinaryBodyRead(C,MDO_EXTENSION_TASK_CHUNK,&Data,&Bytes);if(Read!=MDO_API_BODY_OK)return MdoApiReplyBodyError(C,Read);Ok=MdoExtensionTaskWrite(Id,Offset,Data,Bytes,&Out,Error);xrtFree(Data);return MdoArchiveApiResult(C,Ok,Out,Error);}

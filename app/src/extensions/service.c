@@ -45,7 +45,9 @@ bool MdoExtensionServiceRead(const xvalue* Input,xcancel* Cancel,xvalue** Result
  if(!strcmp(Action,"catalog"))Base=xrtStrDup(MDO_EXT_SERVICE "/catalog");
  else if(!strcmp(Action,"mine")||!strcmp(Action,"profile")||!strcmp(Action,"requests"))Base=xrtFormat(MDO_EXT_SERVICE "/creator?scope=%s",!strcmp(Action,"mine")?"works":Action);
  else if((!strcmp(Action,"detail")||!strcmp(Action,"files")||!strcmp(Action,"preview"))&&MdoExtServiceId(Version))Base=xrtFormat(MDO_EXT_SERVICE "/%s?version=%s",Action,Version);
- if(!Base)return MdoExtServiceError(Error,"Unsupported extension read; no arbitrary service URL is accepted");char* Path=MdoExtServiceQuery(Base,Input);xrtFree(Base);
+ if(!Base)return MdoExtServiceError(Error,"Unsupported extension read; no arbitrary service URL is accepted");
+ char* Path=MdoExtServiceQuery(Base,Input);
+ xrtFree(Base);
  if(Path&&!strcmp(Action,"catalog")&&!xrtValueObjectHas(Input,XRT_STR_LITERAL("platform"))){char* Filtered=xrtFormat("%s%cplatform=%s",Path,strchr(Path,'?')?'&':'?',MdoExtensionRuntimePlatform());xrtFree(Path);Path=Filtered;}
  MdoAccountLease Lease={0};bool Ok=Path&&MdoExtServiceLease(Cancel,Required,&Lease,Error);if(Ok)*Result=MdoExtServiceJson(Path,"GET",NULL,&Lease,Cancel,Error);MdoAccountRelease(&Lease);xrtFree(Path);return *Result!=NULL;
 }
@@ -87,7 +89,8 @@ static bool MdoExtServiceUpload(cstr Id,MdoExtensionTaskUse* Use,const MdoAccoun
  char* Archive=Use?MdoExtensionTaskArchive(Id,Error):NULL;xfile F=Archive?MdoHomeOpenRead(Archive):NULL;xrtFree(Archive);bool Review=Purpose&&!strcmp(Purpose,"review");
  bool Ok=Task&&F&&!xrtValueObjectHas(Task,XRT_STR_LITERAL("store"))&&Purpose&&(Review||!strcmp(Purpose,"publish"))&&MdoExtServiceNumber(Task,"bytes",&Bytes);
  xvalue* Begin=xrtValueObject(),*Remote=NULL;Ok=Ok&&Begin&&MdoExtServicePut(Begin,"action","begin")&&MdoExtServicePut(Begin,"request_id",Id)&&MdoExtServicePut(Begin,"purpose",Review?"review":"archive")&&MdoExtServicePut(Begin,"kind",Kind?Kind:"")&&MdoExtServicePut(Begin,"sha256",Hash)&&xrtValueObjectSetNew(Begin,XRT_STR_LITERAL("bytes"),xrtValueUInt(Bytes));
- if(Ok)Remote=MdoExtServiceJson(MDO_EXT_SERVICE "/uploads","POST",Begin,Lease,MdoExtensionTaskUseCancel(Use),Error);xrtValueRelease(Begin);
+ if(Ok)Remote=MdoExtServiceJson(MDO_EXT_SERVICE "/uploads","POST",Begin,Lease,MdoExtensionTaskUseCancel(Use),Error);
+ xrtValueRelease(Begin);
  cstr State=MdoExtensionText(Remote,"state",16);bool Finished=State&&(!strcmp(State,"sealed")||!strcmp(State,"consumed"));Ok=Ok&&Remote&&State&&!strcmp(MdoExtensionText(Remote,"xid",32)?MdoExtensionText(Remote,"xid",32):"",Id)&&(Finished||!strcmp(State,"receiving"));xrtValueRelease(Remote);Remote=NULL;
  uint64 Offset=0;if(Ok&&!Finished){char* Path=xrtFormat(MDO_EXT_SERVICE "/uploads?id=%s",Id);Remote=Path?MdoExtServiceJson(Path,"GET",NULL,Lease,MdoExtensionTaskUseCancel(Use),Error):NULL;xrtFree(Path);Ok=Remote&&MdoExtServiceNumber(Remote,"received",&Offset)&&Offset<=Bytes;xrtValueRelease(Remote);Remote=NULL;}
  uint8* Buffer=Ok&&!Finished?xrtMalloc(MDO_EXTENSION_TASK_CHUNK):NULL;if(Ok&&!Finished&&!Buffer)Ok=false;
@@ -97,7 +100,10 @@ static bool MdoExtServiceUpload(cstr Id,MdoExtensionTaskUse* Use,const MdoAccoun
  }
  xrtFree(Buffer);xrtClose(F);
  if(Ok&&!Finished){xvalue* Seal=xrtValueObject();Ok=Seal&&MdoExtServicePut(Seal,"action","seal")&&MdoExtServicePut(Seal,"id",Id);if(Ok)Remote=MdoExtServiceJson(MDO_EXT_SERVICE "/uploads","POST",Seal,Lease,MdoExtensionTaskUseCancel(Use),Error);xrtValueRelease(Seal);State=MdoExtensionText(Remote,"state",16);Ok=Ok&&State&&!strcmp(State,"sealed");xrtValueRelease(Remote);}
- if(Ok)Ok=MdoExtensionTaskTransfer(Use,Bytes,"submitting",Error);xrtValueRelease(Task);if(!Ok&&Error&&!Error[0])MdoExtServiceError(Error,"The owned archive upload could not be resumed, transferred or verified");return Ok;
+ if(Ok)Ok=MdoExtensionTaskTransfer(Use,Bytes,"submitting",Error);
+ xrtValueRelease(Task);
+ if(!Ok&&Error&&!Error[0])MdoExtServiceError(Error,"The owned archive upload could not be resumed, transferred or verified");
+ return Ok;
 }
 bool MdoExtensionServicePublish(const xvalue* Input,xcancel* Cancel,xvalue** Result,char Error[512]){
  *Result=NULL;if(Error)Error[0]=0;cstr Id=MdoExtensionText(Input,"task",32),Proof=MdoExtensionText(Input,"proof_task",32);if(!MdoExtServiceId(Id)||(Proof&&(!MdoExtServiceId(Proof)||!strcmp(Id,Proof))))return MdoExtServiceError(Error,"Choose a sealed local publication task and optional separate review file task");
@@ -111,7 +117,8 @@ bool MdoExtensionServicePublish(const xvalue* Input,xcancel* Cancel,xvalue** Res
  if(Ok)Ok=MdoExtensionTaskPublication(Use,Body,Error);
  MdoAccountLease ProofLease={0};if(Ok&&Proof)Ok=MdoExtServiceLease(MdoExtensionTaskUseCancel(ProofUse),true,&ProofLease,Error)&&ProofLease.Generation==Lease.Generation&&ProofLease.MemberId==Lease.MemberId;
  if(Ok)Ok=MdoExtServiceUpload(Id,Use,&Lease,Error)&&(!Proof||MdoExtServiceUpload(Proof,ProofUse,&ProofLease,Error));
- if(Ok)*Result=MdoExtServiceJson(MDO_EXT_SERVICE "/creator","POST",Body,&Lease,Cancel,Error);Ok=Ok&&*Result;
+ if(Ok)*Result=MdoExtServiceJson(MDO_EXT_SERVICE "/creator","POST",Body,&Lease,Cancel,Error);
+ Ok=Ok&&*Result;
  if(Ok){const cstr Ids[]={Id,Proof};for(size_t I=0;I<2;I++)if(Ids[I]){xvalue* Receipt=NULL;char Why[512]={0};if(!MdoExtensionTaskComplete(Ids[I],NULL,&Receipt,Why))MdoExtServicePut(*Result,"transfer_receipt_error",Why);xrtValueRelease(Receipt);}}
  xrtValueRelease(Body);MdoAccountRelease(&ProofLease);MdoAccountRelease(&Lease);MdoExtensionTaskUseEnd(ProofUse);MdoExtensionTaskUseEnd(Use);if(!Ok&&Error&&!Error[0])MdoExtServiceError(Error,"Publication exceeds the account quota or its local tasks are unavailable");return Ok;
 }

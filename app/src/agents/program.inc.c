@@ -171,7 +171,10 @@ static bool MdoAgentsRequestContext(MdoAgentInstance* Instance,xllm_request* Req
     if(!User)return false;
     if(!User[0]){xrtFree(User);return true;}
     xllm_request Copy;if(!MdoAgentsRequestCopy(Request,&Copy)){xllmRequestUnit(&Copy);xrtFree(User);return false;}
-    for(size_t I=0;I<Copy.iMessageCount;I++)xllmMessageUnit(&Copy.pMessages[I]);Copy.iMessageCount=0;
+    for(size_t I=0;
+    I<Copy.iMessageCount;
+    I++)xllmMessageUnit(&Copy.pMessages[I]);
+    Copy.iMessageCount=0;
     bool Added=false,Ok=true;
     for(size_t I=0;Ok && I<Request->iMessageCount;I++){
         if(!Added && Request->pMessages[I].eRole!=XLLM_ROLE_SYSTEM){Ok=xllmRequestAddTextMessage(&Copy,XLLM_ROLE_USER,User);Added=true;}
@@ -278,7 +281,9 @@ static xwork_result MdoAgentsExtension(void* Data,xwork_agent_extension_context*
         (void)MdoAgentsProgramEvent(Owner,Instance,Native,Instance->Plan,MDO_AGENT_INSTANCE_RELEASE,Error);
         if(Instance->HistoryConfigured)xllmSessionSetHooks(Native->pSession,NULL);
         xrtMutexLock(Owner->InstanceLock);MdoAgentInstance** At=&Owner->Instances;
-        while(*At && *At!=Instance)At=&(*At)->Next;if(*At)*At=Instance->Next;xrtMutexUnlock(Owner->InstanceLock);
+        while(*At && *At!=Instance)At=&(*At)->Next;
+        if(*At)*At=Instance->Next;
+        xrtMutexUnlock(Owner->InstanceLock);
         xrtValueRelease(Instance->Configuration);xrtValueRelease(Instance->Plan);xrtValueRelease(Instance->SourcePlan);xrtValueRelease(Instance->State);xrtValueRelease(Instance->RequestPreview);xrtFree(Instance->LegacyPrompt);xrtFree(Instance);
         return XWORK_RESULT_OK;
     }

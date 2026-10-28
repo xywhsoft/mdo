@@ -88,7 +88,9 @@ static int32 MdoDistWorker(void* Data)
 }
 bool MdoDistributionInit(XS_ServerInfo* Server)
 {
-    if(g_MdoDistribution.Lock)return true;unsigned char Session[16];if(!xrtSecureRandom(Session,sizeof(Session)))return false;
+    if(g_MdoDistribution.Lock)return true;
+    unsigned char Session[16];
+    if(!xrtSecureRandom(Session,sizeof(Session)))return false;
     for(size_t I=0;I<16;I++)snprintf(g_MdoDistribution.NotificationSession+I*2,3,"%02x",Session[I]);
     g_MdoDistribution.Lock=xrtMutexCreate();g_MdoDistribution.Cancel=xrtCancelCreate();g_MdoDistribution.Server=Server;
     g_MdoDistribution.Catalog=MdoDistRead("data/notifications/catalog.json",1048576);
@@ -111,7 +113,9 @@ bool MdoDistributionRequest(cstr Action,cstr Id)
 }
 xvalue* MdoDistributionSnapshot(void)
 {
-    if(!g_MdoDistribution.Lock)return NULL;xrtMutexLock(g_MdoDistribution.Lock);xvalue* R=xrtValueDeepClone(g_MdoDistribution.Catalog);
+    if(!g_MdoDistribution.Lock)return NULL;
+    xrtMutexLock(g_MdoDistribution.Lock);
+    xvalue* R=xrtValueDeepClone(g_MdoDistribution.Catalog);
     if(R){xrtValueObjectSetNew(R,XRT_STR_LITERAL("busy"),xrtValueBool(g_MdoDistribution.Busy));MdoDistSet(R,"message",g_MdoDistribution.Message);MdoDistSet(R,"stage",g_MdoDistribution.Stage);MdoDistSet(R,"notification_session",g_MdoDistribution.NotificationSession);}
     xrtMutexUnlock(g_MdoDistribution.Lock);if(R){xrtValueObjectSetNew(R,XRT_STR_LITERAL("build_id"),xrtValueUInt(MdoBuildId()));MdoDistSet(R,"edition",MdoEdition());MdoDistSet(R,"platform",MdoToolPlatform());}return R;
 }

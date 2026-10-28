@@ -141,7 +141,9 @@ xvalue* MdoCommandCatalog(cstr Workspace)
         char* Path=Valid?MdoExtensionsEntryPath("commands",Id,Error):NULL;
         bool Missing=false;char* Source=Path?MdoExtensionRead(Path,true,MDO_COMMAND_TEXT_LIMIT,&Missing):NULL;
         xvalue* Item=Source?MdoCommandMetadata(Alias,Source,Error):NULL;Valid=Item!=NULL;
-        if(!Item)Item=xrtValueObject();char Revision[65]={0};
+        if(!Item)Item=xrtValueObject();
+        char Revision[65]={0}
+        ;
         if(Valid)Valid=MdoExtensionsFingerprint("commands",Id,Revision,NULL,Error);
         bool Ok=Item&&CommandSet(Item,"id",Alias)&&CommandSet(Item,"directory_id",Id)&&CommandSet(Item,"scope",CommandText(Row,"source"))&&CommandSet(Item,"source",CommandText(Row,"source"))&&
             CommandSet(Item,"directory_root",CommandText(Row,"root"))&&CommandSet(Item,"path",Path)&&CommandSet(Item,"revision",Revision)&&

@@ -21,7 +21,8 @@ bool MdoSessionAttachmentBuildMessage(cstr Project,cstr Session,cstr Prompt,cons
         if(Ok){xllmPartInit(&Part,XLLM_PART_IMAGE);Ok=xllmPartSetImageData(&Part,Bytes,Size,Mime)&&xllmMessageAddPart(Message,&Part);xllmPartUnit(&Part);Total+=Size;}
         xrtFree(Bytes);
     }
-    if(!Ok)xllmMessageUnit(Message);return Ok;
+    if(!Ok)xllmMessageUnit(Message);
+    return Ok;
 }
 
 typedef struct MdoImageRemovedRange {

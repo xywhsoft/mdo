@@ -575,7 +575,10 @@ static size_t MdoSessionsActiveFind(const char* ProjectId,
     return SIZE_MAX;
 }
 static MdoSessionBorrowedScope* MdoSessionsBorrowedFind(const char* Project,const char* Session){
-    for(MdoSessionBorrowedScope* B=g_MdoSessions.BorrowedScopes;B;B=B->Next)if(!strcmp(Project,B->Project)&&!strcmp(Session,B->Session))return B;return NULL;
+    for(MdoSessionBorrowedScope* B=g_MdoSessions.BorrowedScopes;
+    B;
+    B=B->Next)if(!strcmp(Project,B->Project)&&!strcmp(Session,B->Session))return B;
+    return NULL;
 }
 MdoApprovalScope* MdoSessionPermissionScopeAcquire(const char* ProjectId,const char* SessionId,xwork_error* Error){
     if(!g_MdoSessions.Lock||!ProjectId||!SessionId)return NULL;
@@ -1618,6 +1621,7 @@ bool MdoSessionVisibleSink(MdoSession* Session,MdoSessionEventSink* Sink){
     bool Ok=Session->Bridge!=NULL;xrtMutexUnlock(Session->Lock);return Ok;
 }
 bool MdoSessionUseAgent(MdoSession* Session,MdoAgentSession* Agent,cstr Namespace,cstr Member,xwork_error* Error){
+    (void)Error;
     if(!Session||!Agent||!Namespace||strlen(Namespace)>128||!Member||!Member[0]||strlen(Member)>64)return false;
     MdoAgentSessionInfo Info={0};Info.Size=sizeof(Info);if(!MdoAgentSessionGetInfo(Agent,&Info))return false;
     MdoSessionEventSource Source={0};snprintf(Source.Namespace,sizeof(Source.Namespace),"%s",Namespace);
@@ -1627,7 +1631,8 @@ bool MdoSessionUseAgent(MdoSession* Session,MdoAgentSession* Agent,cstr Namespac
     /* The caller owns the managed session reservation, before creating a Run. */
     bool Ok=Old&&MdoSessionEventBridgeSetProfile(Session->Bridge,Info.ModelId,Info.ContextWindowTokens)&&
         MdoSessionEventBridgeSetSource(Session->Bridge,&Source);
-    if(Ok)Session->Agent=Next;xrtMutexUnlock(Session->Lock);
+    if(Ok)Session->Agent=Next;
+    xrtMutexUnlock(Session->Lock);
     if(Ok)MdoAgentSessionRelease(Old);else MdoAgentSessionRelease(Next);return Ok;
 }
 

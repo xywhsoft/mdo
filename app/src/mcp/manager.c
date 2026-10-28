@@ -478,7 +478,8 @@ static bool MdoMcpDiscover(MdoMcpSource** Sources,size_t* Count,MdoMcpDiagnostic
     }
     if(!xrtDirClose(D)||Next==XDIR_NEXT_ERROR)Ok=false;
     if(!Ok){MdoMcpSourcesUnit(*Sources,*Count);*Sources=NULL;*Count=0;return false;}
-    if(*Count>1)qsort(*Sources,*Count,sizeof(**Sources),MdoMcpSourceCompare);return true;
+    if(*Count>1)qsort(*Sources,*Count,sizeof(**Sources),MdoMcpSourceCompare);
+    return true;
 }
 static bool MdoMcpReadSource(MdoMcpSource* Source,char** Text,size_t* Size,char Error[MDO_MCP_ERROR_LIMIT])
 {*Text=McpDirectoryResolve(Source,Error);*Size=*Text?strlen(*Text):0;return *Text!=NULL;}

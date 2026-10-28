@@ -64,7 +64,10 @@ static bool SdkMemberHistoryOpen(SdkMemberHistoryWriter* W,cstr Directory,const 
 }
 static void SdkMemberHistoryDestroy(SdkMemberHistoryWriter* W){
     if(W->Forward.Release)W->Forward.Release(W->Forward.UserData);
-    if(W->File)xrtClose(W->File);if(W->Lease)xrtClose(W->Lease);if(W->Lock)xrtMutexDestroy(W->Lock);xrtFree(W);
+    if(W->File)xrtClose(W->File);
+    if(W->Lease)xrtClose(W->Lease);
+    if(W->Lock)xrtMutexDestroy(W->Lock);
+    xrtFree(W);
 }
 static SdkMemberHistoryWriter* SdkMemberHistoryCreate(cstr Directory,const xvalue* Message){
     SdkMemberHistoryWriter* W=xrtCalloc(1,sizeof(*W));if(!W)return NULL;
@@ -74,7 +77,9 @@ static SdkMemberHistoryWriter* SdkMemberHistoryCreate(cstr Directory,const xvalu
 static bool SdkMemberHistoryRetain(void* User){
     SdkMemberHistoryWriter* W=User;uint32 Refs=xrtAtomic32Load(&W->Refs,XMEMORY_ACQUIRE);
     for(;;){uint32 Expected=Refs;if(!Refs||Refs==UINT32_MAX)return false;
-        if(xrtAtomic32CompareExchange(&W->Refs,&Expected,Refs+1,XMEMORY_ACQ_REL,XMEMORY_ACQUIRE))return true;Refs=Expected;}
+        if(xrtAtomic32CompareExchange(&W->Refs,&Expected,Refs+1,XMEMORY_ACQ_REL,XMEMORY_ACQUIRE))return true;
+        Refs=Expected;
+        }
 }
 static void SdkMemberHistoryRelease(void* User){
     SdkMemberHistoryWriter* W=User;if(W&&xrtAtomic32FetchSub(&W->Refs,1,XMEMORY_ACQ_REL)==1)SdkMemberHistoryDestroy(W);
@@ -115,7 +120,8 @@ static bool SdkMemberHistoryEvent(void* User,const xwork_event* Event){
         At+=N;if(At>=Size)break;if(!N){Ok=false;break;}
     }
     xrtMutexUnlock(W->Lock);if(Ok&&W->Forward.OnEvent)Ok=W->Forward.OnEvent(W->Forward.UserData,Event);
-    if(!Ok)xrtSetErrorKind(XERR_IO);return Ok;
+    if(!Ok)xrtSetErrorKind(XERR_IO);
+    return Ok;
 }
 static bool SdkMemberHistoryAllowed(const mdo_sdk_context_v1* C,const xvalue* Member){
     cstr Parent=SdkField(Member,"parent_session"),Owner=SdkField(Member,"owner");
@@ -142,7 +148,10 @@ static bool SdkMemberHistory(const mdo_sdk_context_v1* C,const xvalue* P,xvalue*
     if(!MdoHomeExternalStat(Path,&Exists,&Info)){xrtValueRelease(Current);return MdoApplicationError(E,"sdk_instance_history_io","Cannot inspect member history","instance",503,false);}
     xfile File=Exists?MdoHomeOpenRead(Path):NULL;
     if(Exists&&(!File||!xrtFileStat(File,&Info)||Info.Type!=XFILE_TYPE_FILE||Info.Size>INT64_MAX)){
-        if(File)xrtClose(File);xrtValueRelease(Current);return MdoApplicationError(E,"sdk_instance_history_io","Cannot open member history","instance",503,false);}
+        if(File)xrtClose(File);
+        xrtValueRelease(Current);
+        return MdoApplicationError(E,"sdk_instance_history_io","Cannot open member history","instance",503,false);
+        }
     uint64 Size=Exists?Info.Size:0;bool Ok=After<=Size;char Previous=0;
     if(Ok&&After)Ok=xrtSeek(File,(int64)After-1,XSEEK_START,NULL)&&xrtReadFull(File,&Previous,1,NULL)&&Previous=='\n';
     if(!Ok){if(File)xrtClose(File);xrtValueRelease(Current);return MdoApplicationError(E,"sdk_instance_history_cursor","History cursor changed or is not a committed record boundary","instance",409,false);}

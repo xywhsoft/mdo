@@ -33,7 +33,8 @@ static bool MdoExtensionRelativePath(cstr Path)
         if(B<=4){for(size_t I=0;I<B;I++)Name[I]=P[I]>='A'&&P[I]<='Z'?P[I]+32:P[I];
             if(!strcmp(Name,"con")||!strcmp(Name,"prn")||!strcmp(Name,"aux")||!strcmp(Name,"nul")||
                 (B==4&&(!memcmp(Name,"com",3)||!memcmp(Name,"lpt",3))&&Name[3]>='1'&&Name[3]<='9'))return false;}
-        if(!End)return true;P=End+1;
+        if(!End)return true;
+        P=End+1;
     }
 }
 static bool MdoExtensionDirectoryId(cstr Id)
@@ -45,7 +46,10 @@ static char* MdoExtensionDirectoryPath(cstr Kind,cstr Id)
  * then full fold also catches Win32 aliases such as I/dotless-i. */
 static char* MdoExtensionPathKey(cstr Path)
 {
-    if(!MdoExtensionRelativePath(Path))return NULL;size_t N=strlen(Path),At=0;char* Key=xrtMalloc(N*3+1);if(!Key)return NULL;
+    if(!MdoExtensionRelativePath(Path))return NULL;
+    size_t N=strlen(Path),At=0;
+    char* Key=xrtMalloc(N*3+1);
+    if(!Key)return NULL;
     const unsigned char* P=(const unsigned char*)Path;
     while(*P){uint32 C=*P++;if(C>=0xc0){unsigned More=C<0xe0?1:C<0xf0?2:3;C&=(1u<<(6-More))-1u;while(More--)C=(C<<6)|(*P++&63);}
         size_t Low=0,High=sizeof(MdoExtensionFolds)/sizeof(*MdoExtensionFolds);

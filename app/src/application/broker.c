@@ -31,7 +31,8 @@ void MdoApplicationUnit(void){
     MdoApplicationChangesUnit();
     if(SdkEventLock&&SdkEventCondition){xrtMutexLock(SdkEventLock);while(SdkEventWaiters)xrtCondWait(SdkEventCondition,SdkEventLock);xrtMutexUnlock(SdkEventLock);}
     for(size_t i=0;i<256;i++){xrtValueRelease(SdkEventRing[i]);SdkEventRing[i]=NULL;}
-    if(SdkEventCondition)xrtCondDestroy(SdkEventCondition);SdkEventCondition=NULL;
+    if(SdkEventCondition)xrtCondDestroy(SdkEventCondition);
+    SdkEventCondition=NULL;
     if(SdkEventLock)xrtMutexDestroy(SdkEventLock);
     SdkEventLock=NULL;
     xsServerRelease(SdkServer);SdkServer=NULL;SdkEventSequence=0;
@@ -60,7 +61,8 @@ xvalue* MdoApplicationEvents(const xvalue* P,mdo_error_v1* E){
         if(V&&(!Topic||!strcmp(Topic,SdkField(V,"topic")))){
             char* Json=SdkJson(V);size_t Size=Json?strlen(Json):32769;xrtFree(Json);
             if(xrtValueCount(Items)>=Limit||Size>32768-Bytes)break;
-            if(!xrtValueArrayAppend(Items,V))break;Bytes+=Size;
+            if(!xrtValueArrayAppend(Items,V))break;
+            Bytes+=Size;
         }Cursor=N;
     }
     SdkPutUInt(R,"cursor",Cursor);SdkPutUInt(R,"latest",Last);SdkPutUInt(R,"oldest",First);SdkPut(R,"epoch",SdkEventEpoch);
@@ -201,7 +203,11 @@ bool MdoApplicationRouteInvoke(const mdo_sdk_context_v1* C,const MdoApplicationR
         Valid=Valid&&Offset<=UINT64_C(512)*1024*1024&&Reply.Bytes<=UINT64_C(512)*1024*1024-Offset;
         xfile File=Valid?xrtOpen(ResponseFile,XFILE_WRITE|XFILE_CREATE|XFILE_NOFOLLOW|(Offset?0:XFILE_TRUNCATE)):NULL;uint64 Current=0;Valid=Valid&&File&&xrtFileSize(File,&Current)&&Offset<=Current&&xrtWriteAtFull(File,Offset,Reply.Body,Reply.Bytes,NULL)&&xrtFlush(File);xrtClose(File);
         if(Valid){*Out=xrtValueObject();xvalue* Info=xrtValueObject();SdkPut(Info,"path",ResponseFile);SdkPutUInt(Info,"bytes",Reply.Bytes);SdkPutUInt(Info,"offset",Offset);xrtValueObjectSetNew(*Out,XRT_STR_LITERAL("data"),Info);SdkPutUInt(*Out,"status",Reply.Status);SdkPut(*Out,"revision",Reply.Revision);SdkPut(*Out,"content_type",Reply.Type);SdkPut(*Out,"transport",Native?"native":"http-stream");}
-        if(Reply.Body)xrtSecureZero(Reply.Body,Reply.Bytes);xrtFree(Reply.Body);xrtFree(Reply.Type);xrtFree(Reply.Revision);return Valid||MdoApplicationError(E,"sdk_archive_destination_failed","Raw archive range could not be written to response_file; inspect it before retrying","filesystem",500,true);
+        if(Reply.Body)xrtSecureZero(Reply.Body,Reply.Bytes);
+        xrtFree(Reply.Body);
+        xrtFree(Reply.Type);
+        xrtFree(Reply.Revision);
+        return Valid||MdoApplicationError(E,"sdk_archive_destination_failed","Raw archive range could not be written to response_file; inspect it before retrying","filesystem",500,true);
     }
     xvalue* Parsed=Reply.Body?xrtJsonParse(xrtStrViewN(Reply.Body,Reply.Bytes)):NULL;
     *Out=xrtValueObject();

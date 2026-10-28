@@ -1408,7 +1408,11 @@ bool MdoSessionEventBridgeSetProfile(MdoSessionEventBridge* Bridge,
 }
 
 bool MdoSessionEventBridgeSetSource(MdoSessionEventBridge* Bridge,const MdoSessionEventSource* Source){
-    if(!Bridge||!Source)return false;xrtMutexLock(Bridge->Lock);Bridge->Source=*Source;xrtMutexUnlock(Bridge->Lock);return true;
+    if(!Bridge||!Source)return false;
+    xrtMutexLock(Bridge->Lock);
+    Bridge->Source=*Source;
+    xrtMutexUnlock(Bridge->Lock);
+    return true;
 }
 bool MdoSessionEventBridgePendingSet(MdoSessionEventBridge* Bridge,
     uint64 RunId, const char Ids[4][33], size_t Count,

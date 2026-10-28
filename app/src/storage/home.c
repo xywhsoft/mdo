@@ -983,7 +983,9 @@ bool MdoHomeLinkNoReplace(cstr Source,cstr Target)
 {
     if(!MdoHomePathValid(Source)||!MdoHomePathValid(Target)||!g_MdoHome.Initialized)return false;
     xrtMutexLock(g_MdoHome.Lock);bool Exists=false;bool Ok=MdoHomeEnsureLocked()&&MdoHomeEnsureParents(g_MdoHome.Root,Target)&&MdoHomeRootFileExistsLocked(Source,&Exists)&&Exists;
-    if(Ok)Ok=xrtRootLinkHard(g_MdoHome.Root,Source,Target);xrtMutexUnlock(g_MdoHome.Lock);return Ok;
+    if(Ok)Ok=xrtRootLinkHard(g_MdoHome.Root,Source,Target);
+    xrtMutexUnlock(g_MdoHome.Lock);
+    return Ok;
 }
 bool MdoHomeAtomicWrite(cstr Path, const void* pData, size_t iSize,
     bool Backup)
