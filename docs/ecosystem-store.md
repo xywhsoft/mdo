@@ -14,7 +14,7 @@ alias 是调用名称，独立于安装目录 ID。entry 必须指向目录内�
 
 设置每类均提供本机/商店列表、筛选、分页、作者与版权、详情弹窗和固定底部按钮。商店内容禁止编辑、复制为本机作品、导出再次分发；本机创作支持完整目录编辑、ZIP 导入导出和投稿。项目只保存选择，源码仍在唯一 Home 目录。
 
-平台公开 API：`/api/v1/mdo/extensions/catalog|detail|files|preview|archive`；创作 API：同前缀的 `creator|uploads`；后台：`/admin/api/mdo/extensions`。九类后台页面为 `/admin/mdo/extensions/<kind>`，使用 `_component + layui table`。网页商店 `/mdo/extensions`，创作中心 `/mdo/creator`。
+平台公开 API：`/api/v1/mdo/extensions/catalog|detail|files|preview|archive`；创作 API：同前缀的 `creator|uploads`；后台：`/admin/api/mdo/extensions`。九类后台页面为 `/admin/mdo/extensions/<kind>`，使用 `_component + layui table`。网页商店 `/mdo/ecosystem`，创作中心 `/mdo/creator`。
 
 普通作者默认 3 件作品，每版本 ZIP + 审核附件合计 10 MiB；创作者 20 件、100 MiB。支持资格和数量扩容申请、管理员审批或直接授予。申请公布及更新需提交源码/构建/权限说明或审核附件；新版本审核时旧版本继续公开。下架撤回公开及待审版本，审核附件仅作者与有权限的管理员可读。Cookie 写入验证 CSRF；Bearer 使用既有账户身份。
 
