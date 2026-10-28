@@ -1,3 +1,4 @@
+from locked_sdk import sdk_root
 """Compile current platform startup and check registered authority/menus/pages."""
 import argparse
 import json
@@ -37,7 +38,7 @@ def main():
     out=ROOT/'.build/platform-directory-startup-native';out.mkdir(parents=True,exist_ok=True);fixture=out/('home-'+uuid.uuid4().hex[:12]);fixture.mkdir();sdk=fixture/'plugin_sdk';sdk.mkdir();(fixture/'include/xadmin').mkdir(parents=True)
     for name in ('xs_plugin.h','xs_plugin_work.h','plugin_support.h','value_util.h'):shutil.copyfile(PLATFORM/'plugin_sdk'/name,sdk/name)
     shutil.copyfile(PLATFORM/'include/xadmin/time.h',fixture/'include/xadmin/time.h')
-    shutil.copyfile(ROOT/'.build/sdk-overlays/16f28b0bd9ecf791b505bbff9001a0c18bbaf398e29d906dc01df967818bcb84/lib/sqlite3.h',sdk/'sqlite3.h')
+    shutil.copyfile(sdk_root()/'lib/sqlite3.h',sdk/'sqlite3.h')
     for name in ('extension_manifest.h','extension_identity.h','extension_path.h','extension_casefold.h','extension_zip.h'):shutil.copyfile(ECO/name,fixture/name)
     core=platform_store_source(ECO,None);routes=(ECO/'directory_routes.inc.c').read_text(encoding='utf-8').replace('#include "directory_store.inc.c"',core)
     startup=(ECO/'main.c').read_text(encoding='utf-8').replace('#include "directory_routes.inc.c"',routes)

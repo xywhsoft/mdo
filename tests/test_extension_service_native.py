@@ -1,3 +1,4 @@
+from locked_sdk import sdk_root
 """Actual client ZIP workers against actual platform SQLite core; HTTP is stubbed."""
 import argparse
 import json
@@ -84,7 +85,7 @@ def main():
     (local / 'extension.json').write_text(json.dumps(dict(kind='skills', name='Client archive', alias='client-archive', entry='SKILL.md', platforms=['any'])), encoding='utf-8')
     (local / 'SKILL.md').write_text('---\nname: client-archive\ndescription: Native transport fixture\n---\nTest skill\n', encoding='utf-8')
     (local / '.hidden.bin').write_bytes(os.urandom(1536000))
-    shutil.copyfile(ROOT / '.build/sdk-overlays/16f28b0bd9ecf791b505bbff9001a0c18bbaf398e29d906dc01df967818bcb84/lib/sqlite3.h', fixture / 'sqlite3.h')
+    shutil.copyfile(sdk_root() / 'lib/sqlite3.h', fixture / 'sqlite3.h')
     core = platform_store_source(PLATFORM)
     client = (ROOT / 'app/src/extensions/service.c').read_text(encoding='utf-8')
     client = re.sub(r'^#include .*$', '', client, flags=re.M)

@@ -1,3 +1,4 @@
+from locked_sdk import sdk_root
 """Native Windows forwarder behavior, isolated from all installed tools/accounts."""
 from pathlib import Path
 import ctypes,json,os,shutil,struct,subprocess,sys,tempfile,time
@@ -34,7 +35,7 @@ def alive(pid):
 
 def run():
     if os.name!='nt':print('SKIP Windows-only executable; Linux wrappers have a separate native regression');return
-    lock=build_mdo.load_object(build_mdo.LOCK_PATH);xs=build_mdo.find_xserver(ROOT/'.build/sdk-overlays/16f28b0bd9ecf791b505bbff9001a0c18bbaf398e29d906dc01df967818bcb84',lock)
+    lock=build_mdo.load_object(build_mdo.LOCK_PATH);xs=build_mdo.find_xserver(sdk_root(),lock)
     cc='E:/software/w64devkit/bin/gcc.exe'
     helper=ROOT/'.build/cli-forwarder-development/forwarder.exe';receipt=build_cli_forwarder.build(xs,helper,cc)
     with tempfile.TemporaryDirectory(prefix='forwarder-native-',dir=ROOT/'.build') as temp:

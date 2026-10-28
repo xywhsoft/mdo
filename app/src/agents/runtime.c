@@ -22,6 +22,12 @@
 #define MDO_AGENT_DEFAULT_ID "mdo.default"
 #define MDO_AGENT_PROMPT_LIMIT (512u * 1024u)
 
+static bool MdoAgentsProcessAcquire(void* User,void** Lease){
+    (void)User;MdoCliUse* Use=NULL;char Error[512]={0};bool Ok=MdoCliUseBegin(&Use,Error);*Lease=Use;
+    if(!Ok)xrtSetErrorInfo(XERR_STATE,"mdo.external-tools",0,Error);return Ok;
+}
+static void MdoAgentsProcessRelease(void* User,void* Lease){(void)User;MdoCliUseEnd(Lease);}
+
 typedef struct MdoAgentRoute {
     const char* ModelId;
     const char* ProviderId;
@@ -1553,6 +1559,7 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
     Session->Agent = xworkAgentCreateWithRuntime(Runtime, Definition,
         &AgentOptions, Error);
     if ( Session->Agent == NULL ) goto fail;
+    if(!xworkAgentSetProcessOwner(Session->Agent,MdoAgentsProcessAcquire,MdoAgentsProcessRelease,NULL,Error))goto fail;
     Owner->RootAgent=Session->Agent;Owner->RootModel=Model;
     if(!MdoModuleAgentBindContext(Session->Agent,Options->ProjectId,Options->ProductSessionId)){
         MdoAgentsError(Error,XWORK_ERROR_OUT_OF_MEMORY,"Cannot bind Agent application identity");goto fail;

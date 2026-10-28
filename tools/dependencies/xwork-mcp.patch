@@ -50,195 +50,6 @@
  	}
  	if ( !CreateProcessW(
  		sProgram,
---- a/lib/xwork/src/xwork_agent.c
-+++ b/lib/xwork/src/xwork_agent.c
-@@ -361,7 +361,9 @@
-     xwork_error tDescriptorError;
-     xwork_permission_decision eDecision;
-     bool bOwnWriter = false;
--    if ( pAgent->eApprovalMode == XWORK_APPROVAL_READ_ONLY &&
-+    bool bManagedDelegation=pAgent->OnExtension && !strcmp(pTool->sName,"agent") &&
-+        pTool->uEffects==XWORK_TOOL_EFFECT_AGENT_DELEGATION;
-+    if ( !bManagedDelegation && pAgent->eApprovalMode == XWORK_APPROVAL_READ_ONLY &&
-          (pTool->uEffects & ~((xwork_tool_effects)XWORK_TOOL_EFFECT_READ)) != 0u ) {
-         return false;
-     }
-@@ -427,7 +429,8 @@
-         if ( eDecision != XWORK_PERMISSION_DEFAULT ) return false;
-     }
-     if ( (pTool->uEffects & ~((xwork_tool_effects)XWORK_TOOL_EFFECT_READ)) == 0u ) return true;
--    if ( pAgent->eApprovalMode == XWORK_APPROVAL_AUTO ) return true;
-+    if ( pAgent->eApprovalMode == XWORK_APPROVAL_AUTO ||
-+        (bManagedDelegation && pAgent->eApprovalMode==XWORK_APPROVAL_READ_ONLY)) return true;
-     if ( pAgent->OnApproval && pAgent->pCallbackLock &&
-          xrtMutexLock(pAgent->pCallbackLock) ) {
-         bool bAllowed = pAgent->OnApproval(
-@@ -532,7 +535,7 @@
-             if ( !xworkToolOutputSet(&tOutput, false, sFailure) ) goto oom;
-         } else if ( !xworkToolOutputSet(&tOutput, false, "tool execution denied by approval policy") ) goto oom;
-     } else {
--        if ( pAgent->OnHook ) {
-+        if ( pAgent->OnHook || pAgent->OnExtension ) {
-             memset(&tHook, 0, sizeof(tHook));
-             tHook.ePhase = XWORK_HOOK_BEFORE_TOOL;
-             tHook.uAgentTurn = uTurn;
-@@ -541,10 +544,19 @@
-             tHook.sArgumentsJson = pCall->sArgumentsJson ? pCall->sArgumentsJson : "{}";
-             if ( !pAgent->pCallbackLock ||
-                  !xrtMutexLock(pAgent->pCallbackLock) ) goto oom;
--            eHookAction = pAgent->OnHook(pAgent->pHookUserData, &tHook);
-+            char ExtensionFailure[1024]={0};
-+            eHookAction = pAgent->OnHook ? pAgent->OnHook(pAgent->pHookUserData, &tHook) : XWORK_HOOK_CONTINUE;
-+            if(eHookAction==XWORK_HOOK_CONTINUE && pAgent->OnExtension){
-+                xwork_agent_extension_context Extension={0};
-+                Extension.ePhase=tHook.ePhase==XWORK_HOOK_BEFORE_TOOL?XWORK_AGENT_EXTENSION_BEFORE_TOOL:XWORK_AGENT_EXTENSION_AFTER_TOOL;
-+                Extension.pToolEvent=&tHook;Extension.pToolOutput=&tOutput;
-+                xwork_error HookError; xworkErrorInit(&HookError);
-+                xwork_result HookResult=xwork__agent_extension(pAgent,&Extension,&HookError);
-+                if(HookResult!=XWORK_RESULT_OK){eHookAction=HookResult==XWORK_RESULT_CANCELLED?XWORK_HOOK_CANCEL:XWORK_HOOK_DENY;snprintf(ExtensionFailure,sizeof(ExtensionFailure),"%s",HookError.sMessage);}
-+            }
-             (void)xrtMutexUnlock(pAgent->pCallbackLock);
-             if ( eHookAction == XWORK_HOOK_DENY ) {
--                if ( !xworkToolOutputSet(&tOutput, false, "tool execution denied by before-tool hook") ) goto oom;
-+                if ( !xworkToolOutputSet(&tOutput, false, ExtensionFailure[0]?ExtensionFailure:"tool execution denied by before-tool hook") ) goto oom;
-                 goto tool_ready;
-             }
-             if ( eHookAction == XWORK_HOOK_CANCEL ) {
-@@ -650,7 +662,7 @@
-             goto tool_ready;
-         }
-         if ( pbEffectApplied ) *pbEffectApplied = tOutput.bSuccess;
--        if ( pAgent->OnHook ) {
-+        if ( pAgent->OnHook || pAgent->OnExtension ) {
-             memset(&tHook, 0, sizeof(tHook));
-             tHook.ePhase = XWORK_HOOK_AFTER_TOOL;
-             tHook.uAgentTurn = uTurn;
-@@ -661,11 +673,21 @@
-             tHook.bSuccess = tOutput.bSuccess;
-             if ( !pAgent->pCallbackLock ||
-                  !xrtMutexLock(pAgent->pCallbackLock) ) goto oom;
--            eHookAction = pAgent->OnHook(pAgent->pHookUserData, &tHook);
-+            char ExtensionFailure[1024]={0};
-+            eHookAction = pAgent->OnHook ? pAgent->OnHook(pAgent->pHookUserData, &tHook) : XWORK_HOOK_CONTINUE;
-+            if(eHookAction==XWORK_HOOK_CONTINUE && pAgent->OnExtension){
-+                xwork_agent_extension_context Extension={0};
-+                Extension.ePhase=tHook.ePhase==XWORK_HOOK_BEFORE_TOOL?XWORK_AGENT_EXTENSION_BEFORE_TOOL:XWORK_AGENT_EXTENSION_AFTER_TOOL;
-+                Extension.pToolEvent=&tHook;Extension.pToolOutput=&tOutput;
-+                xwork_error HookError; xworkErrorInit(&HookError);
-+                xwork_result HookResult=xwork__agent_extension(pAgent,&Extension,&HookError);
-+                if(HookResult!=XWORK_RESULT_OK){eHookAction=HookResult==XWORK_RESULT_CANCELLED?XWORK_HOOK_CANCEL:XWORK_HOOK_DENY;snprintf(ExtensionFailure,sizeof(ExtensionFailure),"%s",HookError.sMessage);}
-+            }
-             (void)xrtMutexUnlock(pAgent->pCallbackLock);
-             if ( eHookAction == XWORK_HOOK_DENY ) {
--                if ( !xwork__buf_append_cstr(&tHookOutput,
--                        "after-tool hook rejected this result; the tool may already have completed side effects\n--- original result ---\n") ||
-+                if ( !xwork__buf_append_cstr(&tHookOutput,ExtensionFailure) ||
-+                     !xwork__buf_append_cstr(&tHookOutput,
-+                        "\nafter-tool hook rejected this result; the tool may already have completed side effects\n--- original result ---\n") ||
-                      !xwork__buf_append_cstr(&tHookOutput, tOutput.sContent) ||
-                      !xworkToolOutputSet(&tOutput, false, tHookOutput.pData) ) goto oom;
-             } else if ( eHookAction == XWORK_HOOK_CANCEL ) {
-@@ -1026,7 +1048,7 @@
-     return true;
- }
- 
--xwork_result xwork__agent_run_claimed(
-+static xwork_result xwork__agent_run_default(
-     xwork_agent* pAgent,
-     const char* sPrompt,
-     const xllm_message* pUserMessage,
-@@ -1041,6 +1063,7 @@
-     uint64_t uPreviousBatchHash = 0u;
-     uint32_t uRepeatedBatches = 0u;
-     uint32_t uConsecutiveToolFailures = 0u;
-+    uint32_t uExtensionCompactions = 0u;
-     uint32_t uVerificationPrompts = 0u;
-     bool bNeedNewTurn = false;
-     bool bRecoverPendingTools = false;
-@@ -1296,6 +1319,11 @@
-             bRecoverPendingTools = false;
-             bNeedNewTurn = true;
-         }
-+        {
-+            xwork_agent_extension_context Context={0};Context.ePhase=XWORK_AGENT_EXTENSION_CONTEXT;
-+            eResult=xwork__agent_extension(pAgent,&Context,pError);
-+            if(eResult!=XWORK_RESULT_OK)goto cleanup;
-+        }
-         eResult = xwork__compact_if_needed(pAgent, uTurn, &tRun, false, pError);
-         if ( eResult != XWORK_RESULT_OK ) goto cleanup;
-         if ( bNeedNewTurn ) {
-@@ -1336,6 +1364,25 @@
-         }
-         tRequest.bParallelToolCalls = true;
-         tRequest.eToolChoice = XLLM_TOOL_CHOICE_AUTO;
-+        {
-+            xwork_agent_extension_context Extension={0};Extension.ePhase=XWORK_AGENT_EXTENSION_REQUEST;
-+            Extension.pRequest=&tRequest;
-+            eResult=xwork__agent_extension(pAgent,&Extension,pError);
-+            if(eResult!=XWORK_RESULT_OK){xllmRequestUnit(&tRequest);goto cleanup;}
-+            if(Extension.bCompactAndRetry){
-+                xllmRequestUnit(&tRequest);
-+                if(uExtensionCompactions++){
-+                    xwork__set_error(pError,XWORK_ERROR_CONTEXT,"role context and tool schemas still exceed the input budget after safe compaction");
-+                    eResult=XWORK_RESULT_LIMIT;goto cleanup;
-+                }
-+                eResult=xwork__compact_if_needed(pAgent,uTurn,&tRun,true,pError);
-+                if(eResult!=XWORK_RESULT_OK)goto cleanup;
-+                continue;
-+            }
-+            /* A mutable hook cannot replace its managed cancellation owner. */
-+            xllmRequestSetCancel(&tRequest,xwork__active_cancel(pAgent));
-+            xllmRequestSetDeadline(&tRequest,xwork__active_deadline(pAgent));
-+        }
-         memset(&tEvent, 0, sizeof(tEvent));
-         {
-             char sRequestFingerprint[17];
-@@ -1393,6 +1440,12 @@
-             eResult = XWORK_RESULT_ERROR;
-             goto cleanup;
-         }
-+        {
-+            xwork_agent_extension_context Extension={0};Extension.ePhase=XWORK_AGENT_EXTENSION_RESPONSE;
-+            Extension.pResponse=pResponse;
-+            eResult=xwork__agent_extension(pAgent,&Extension,pError);
-+            if(eResult!=XWORK_RESULT_OK){xllmResponseDestroy(pResponse);goto cleanup;}
-+        }
-         if ( !xwork__usable_model_response(pResponse) ) {
-             xllmErrorInit(&tModelError);
-             tModelError.eCode = XLLM_ERROR_PROTOCOL;
-@@ -1406,6 +1459,7 @@
-             eResult = XWORK_RESULT_ERROR;
-             goto cleanup;
-         }
-+        uExtensionCompactions=0u;
-         tRun.tLastUsage = pResponse->tUsage;
-         if ( !xllmSessionAddAssistantResponse(pAgent->pSession, uTurn, pResponse) ) {
-             xllmResponseDestroy(pResponse);
-@@ -1612,6 +1666,24 @@
-     return eResult;
- }
- 
-+xwork_result xwork__agent_run_claimed(xwork_agent* Agent,const char* Prompt,
-+    const xllm_message* UserMessage,bool Resume,const xwork_resume_options* ResumeOptions,
-+    xwork_run_result* Result,xwork_error* Error)
-+{
-+    if(Agent && Agent->OnExtension){
-+        xwork_agent_extension_context Context={0};Context.ePhase=XWORK_AGENT_EXTENSION_RUN;
-+        Context.sPrompt=Prompt;Context.pUserMessage=UserMessage;Context.bResume=Resume;
-+        Context.pResumeOptions=ResumeOptions;Context.pResult=Result;Context.DefaultRun=xwork__agent_run_default;
-+        if(Result)memset(Result,0,sizeof(*Result));
-+        xwork_result Status=xwork__agent_extension(Agent,&Context,Error);
-+        if(Status!=XWORK_RESULT_OK || Context.bHandled){
-+            if(Status==XWORK_RESULT_OK && !xwork__save(Agent,Error))return XWORK_RESULT_ERROR;
-+            return Status;
-+        }
-+    }
-+    return xwork__agent_run_default(Agent,Prompt,UserMessage,Resume,ResumeOptions,Result,Error);
-+}
-+
- xwork_result xworkAgentRun(xwork_agent* pAgent, const char* sPrompt, xwork_run_result* pResult, xwork_error* pError)
- {
-     xwork_result eResult;
 --- a/lib/xwork/src/xwork_core.c
 +++ b/lib/xwork/src/xwork_core.c
 @@ -1021,6 +1021,8 @@
@@ -300,51 +111,6 @@
 +    Context->pCancel=xwork__active_cancel(Agent);Context->uDeadline=xwork__active_deadline(Agent);
 +    return Agent->OnExtension(Agent->pExtensionUserData,Context,Error);
 +}
---- a/lib/xwork/src/xwork_internal.h
-+++ b/lib/xwork/src/xwork_internal.h
-@@ -106,6 +106,8 @@
-     bool bReadOnly;
-     bool bAllowBackground;
-     bool bAllowDelegation;
-+    bool bExplicitTools;
-+    bool bRequireVerificationAfterWrite;
- } xwork_subagent_entry;
- 
- struct xwork_subagent_catalog {
-@@ -261,6 +263,8 @@
-     size_t iMcpServerCap;
-     xnetengine* pMcpNetEngine;
-     xhttpclient* pMcpHttpClient;
-+    xwork_mcp_authorization_fn OnMcpAuthorize;
-+    void* pMcpAuthorizationData;
-     xmutex* pSchedulerLock;
-     xwork_schedule_entry** ppSchedules; /* stable until runtime destruction */
-     size_t iScheduleCount;
-@@ -407,6 +411,9 @@
-     xllm_client* pClient;
-     xllm_session* pSession;
-     char* sWorkspaceRoot;
-+    bool bMcpServerScope;
-+    char** psMcpServerScope;
-+    size_t iMcpServerScopeCount;
-     struct { char* sAlias; char* sDirectory; } PathMounts[8];
-     size_t iPathMountCount;
-     bool bFileMountsSealed;
-@@ -433,6 +440,8 @@
-     void* pEventUserData;
-     xwork_model_complete_fn OnModelComplete;
-     void* pModelUserData;
-+    xwork_agent_extension_fn OnExtension;
-+    void* pExtensionUserData;
-     void* pOwnerUserData;
-     xwork_agent_owner_retain_fn OnOwnerRetain;
-     xwork_agent_owner_release_fn OnOwnerRelease;
-@@ -779,3 +788,5 @@
- }
- 
- #endif
-+
-+xwork_result xwork__agent_extension(xwork_agent*,xwork_agent_extension_context*,xwork_error*);
 --- a/lib/xwork/src/xwork_mcp.c
 +++ b/lib/xwork/src/xwork_mcp.c
 @@ -16,6 +16,7 @@
@@ -1553,313 +1319,6 @@
      pConfig->pOwnerUserData = pOptions->pOwnerUserData;
      pConfig->OnOwnerRetain = pOptions->OnOwnerRetain;
      pConfig->OnOwnerRelease = pOptions->OnOwnerRelease;
---- a/lib/xwork/src/xwork_subagent.c
-+++ b/lib/xwork/src/xwork_subagent.c
-@@ -137,18 +137,20 @@
-     pEntry->uContextWindowTokens = pConfig->uContextWindowTokens;
-     pEntry->uMaxInputTokens = pConfig->uMaxInputTokens;
-     pEntry->uMaxTurns = pConfig->uMaxTurns ? pConfig->uMaxTurns : 8u;
--    pEntry->uTimeoutMs = pConfig->uTimeoutMs ? pConfig->uTimeoutMs : 120000u;
-+    pEntry->uTimeoutMs = pConfig->uTimeoutMs;
-     pEntry->uMaxOutputTokens = pConfig->uMaxOutputTokens;
-     pEntry->iMaxFinalBytes = pConfig->iMaxFinalBytes
-         ? pConfig->iMaxFinalBytes : 64u * 1024u;
-     pEntry->uAllowedEffects = pConfig->uAllowedEffects;
-     if ( pConfig->bReadOnly ) {
--        pEntry->uAllowedEffects &= XWORK_TOOL_EFFECT_READ;
-+        pEntry->uAllowedEffects &= XWORK_TOOL_EFFECT_READ | XWORK_TOOL_EFFECT_AGENT_DELEGATION;
-     }
-     pEntry->uMaxDepth = pConfig->uMaxDepth;
-     pEntry->bReadOnly = pConfig->bReadOnly;
-     pEntry->bAllowBackground = pConfig->bAllowBackground;
-     pEntry->bAllowDelegation = pConfig->bAllowDelegation;
-+    pEntry->bExplicitTools=pConfig->bExplicitTools;
-+    pEntry->bRequireVerificationAfterWrite=pConfig->bRequireVerificationAfterWrite;
-     return true;
- }
- 
-@@ -177,6 +179,8 @@
-     tConfig.bReadOnly = pSource->bReadOnly;
-     tConfig.bAllowBackground = pSource->bAllowBackground;
-     tConfig.bAllowDelegation = pSource->bAllowDelegation;
-+    tConfig.bExplicitTools=pSource->bExplicitTools;
-+    tConfig.bRequireVerificationAfterWrite=pSource->bRequireVerificationAfterWrite;
-     return xwork__subagent_entry_from_config(pTarget, &tConfig);
- }
- 
-@@ -434,7 +438,7 @@
- {
-     size_t i;
-     if ( !pEntry || !sName ) return false;
--    if ( !pEntry->psTools ) return true;
-+    if ( !pEntry->psTools ) return !pEntry->bExplicitTools;
-     for ( i = 0u; i < pEntry->iToolCount; ++i ) {
-         if ( strcmp(pEntry->psTools[i], sName) == 0 ) return true;
-     }
-@@ -528,7 +532,7 @@
-     xwork_error* pError)
- {
-     xwork_tool_catalog* pCandidateTools;
--    if ( !xwork__subagent_catalog_tools_valid(
-+    if ( !pAgent->OnExtension && !xwork__subagent_catalog_tools_valid(
-             pAgent->pToolCatalog, pCandidate, pError) ) return false;
-     pCandidateTools = xwork__subagent_roster_tool_catalog(
-         pAgent, pAgent->pToolCatalog, pCandidate, pError);
-@@ -608,6 +612,7 @@
- 
- typedef struct xwork_delegate_args {
-     xwork_agent* pParent;
-+    xllm_session_snapshot* pParentSnapshot;
-     xwork_subagent_catalog* pCatalog;   /* pins pType and the inherited roster */
-     xwork_tool_catalog* pParentTools;   /* matching pinned parent tool generation */
-     const xwork_subagent_entry* pType;  /* borrowed from pCatalog */
-@@ -631,6 +636,7 @@
-     if ( pArgs->bOwnCancel ) xrtCancelDestroy(pArgs->pCancel);
-     if ( pArgs->bScopeEntered ) xwork__delegation_scope_leave(pArgs->pScope);
-     xwork__delegation_scope_release(pArgs->pScope);
-+    xllmSessionSnapshotRelease(pArgs->pParentSnapshot);
-     xworkSubagentCatalogRelease(pArgs->pCatalog);
-     xworkToolCatalogRelease(pArgs->pParentTools);
-     free(pArgs->sPrompt);
-@@ -672,17 +678,14 @@
-         xwork__set_error(pError, XWORK_ERROR_CONTEXT, "failed to clone the session config");
-         return false;
-     }
--    if ( pType->uContextWindowTokens &&
--         pType->uContextWindowTokens < tSessionConfig.uContextWindowTokens ) {
-+    tSessionConfig.sSnapshotPath=NULL; /* Never reuse a parent checkpoint path. */
-+    if ( pType->uContextWindowTokens ) {
-         tSessionConfig.uContextWindowTokens = pType->uContextWindowTokens;
-     }
--    if ( pType->uMaxInputTokens &&
--         (!tSessionConfig.uMaxInputTokens ||
--          pType->uMaxInputTokens < tSessionConfig.uMaxInputTokens) ) {
-+    if ( pType->uMaxInputTokens ) {
-         tSessionConfig.uMaxInputTokens = pType->uMaxInputTokens;
-     }
--    if ( pType->uMaxOutputTokens &&
--        pType->uMaxOutputTokens < tSessionConfig.uMaxOutputTokens ) {
-+    if ( pType->uMaxOutputTokens ) {
-         tSessionConfig.uMaxOutputTokens = pType->uMaxOutputTokens;
-     }
-     if ( tSessionConfig.uMaxInputTokens >
-@@ -702,6 +705,7 @@
-         uint32_t uOutput = xllmSessionComputeOutputReserve(
-             tSessionConfig.uContextWindowTokens,
-             tSessionConfig.uMaxOutputTokens);
-+        if(uSafety>tSessionConfig.uContextWindowTokens/16u)uSafety=tSessionConfig.uContextWindowTokens/16u;
-         if ( tSessionConfig.uSafetyReserveTokens > uSafety ) {
-             tSessionConfig.uSafetyReserveTokens =
-                 uSafety > UINT32_MAX ? UINT32_MAX : (uint32_t)uSafety;
-@@ -772,7 +776,7 @@
-         pArgs->pParent->bAllowArtifactWrites &&
-         (!pType->bReadOnly || pArgs->pParent->pArtifactStore != NULL);
-     tDefinitionConfig.bRequireVerificationAfterWrite =
--        pArgs->pParent->bRequireVerificationAfterWrite;
-+        pArgs->pParent->bRequireVerificationAfterWrite || pType->bRequireVerificationAfterWrite;
-     tDefinitionConfig.bInjectSystemPrompt = true;
-     pDefinition = xworkAgentDefinitionCreate(&tDefinitionConfig, pError);
-     if ( !pDefinition ) goto cleanup;
-@@ -794,12 +798,17 @@
-     tOptions.pEventUserData = pArgs->pParent->pEventUserData;
-     tOptions.OnModelComplete = pArgs->pParent->OnModelComplete;
-     tOptions.pModelUserData = pArgs->pParent->pModelUserData;
-+    tOptions.OnExtension=pArgs->pParent->OnExtension;
-+    tOptions.pExtensionUserData=pArgs->pParent->pExtensionUserData;
-     tOptions.pOwnerUserData = pArgs->pParent->pOwnerUserData;
-     tOptions.OnOwnerRetain = pArgs->pParent->OnOwnerRetain;
-     tOptions.OnOwnerRelease = pArgs->pParent->OnOwnerRelease;
-     pChild = xworkAgentCreateWithRuntime(pArgs->pParent->pRuntime,
-         pDefinition, &tOptions, pError);
-     if ( !pChild ) goto cleanup;
-+    if ( pArgs->pParent->bMcpServerScope && !xworkAgentSetMcpServers(pChild,
-+            (const char* const*)pArgs->pParent->psMcpServerScope,
-+            pArgs->pParent->iMcpServerScopeCount, pError) ) goto cleanup;
-     if ( pArgs->pParent->pFileScope ) {
-         if ( !xworkAgentSetFileScope(pChild, pArgs->pParent->pFileScope, pError) ) goto cleanup;
-     } else if ( !xworkAgentAllowExternalPaths(pChild,
-@@ -820,12 +829,20 @@
-         ? pArgs->pEntry->uId : pArgs->pParent->uParentTaskId;
-     pChild->bAllowSubagentDelegation = pType->bAllowDelegation;
- 
-+    xwork_agent_extension_context Extension={0};Extension.ePhase=XWORK_AGENT_EXTENSION_CHILD;
-+    Extension.pParent=pArgs->pParent;Extension.pParentSnapshot=pArgs->pParentSnapshot;
-+    Extension.psDelegationPrompt=&pArgs->sPrompt;Extension.pDelegationTools=pArgs->pParentTools;
-+    Extension.pDelegationToolOwner=pArgs->pParent;
-+    if(xwork__agent_extension(pChild,&Extension,pError)!=XWORK_RESULT_OK)goto cleanup;
-+    if(Extension.bOverrideDelegationApproval && !pType->bReadOnly)
-+        pChild->eApprovalMode=Extension.eDelegationApproval;
-     /* 3. Pin the parent's tool generation, then apply the child's ceilings. */
-+    const char* EmptyTools[1]={NULL};
-     pFilteredTools = xwork__tool_catalog_filter_subagent(
--        pArgs->pParentTools,
-+        Extension.pDelegationTools,
-         xwork__runtime_next_catalog_generation(pArgs->pParent->pRuntime),
--        (const char* const*)pType->psTools, pType->iToolCount,
--        pType->uAllowedEffects, pArgs->pParent, pChild, pError);
-+        pType->bExplicitTools && !pType->iToolCount ? EmptyTools : (const char* const*)pType->psTools, pType->iToolCount,
-+        pType->uAllowedEffects, Extension.pDelegationToolOwner, pChild, pError);
-     if ( !pFilteredTools ) goto cleanup;
-     uEffectiveDepth = pArgs->pScope->uMaxDepth;
-     if ( pType->uMaxDepth && pType->uMaxDepth < uEffectiveDepth ) {
-@@ -862,6 +879,8 @@
-     xwork__delegation_scope_release(pOldChildScope);
-     pOldChildScope = NULL;
- 
-+    Extension.ePhase=XWORK_AGENT_EXTENSION_CHILD_READY;
-+    if(xwork__agent_extension(pChild,&Extension,pError)!=XWORK_RESULT_OK)goto cleanup;
-     /* 4. The normal xwork loop preserves model/reasoning overrides and tags. */
-     pArgs->eResult = xworkAgentRun(
-         pChild, pArgs->sPrompt, &tRunResult, pError);
-@@ -1267,6 +1286,11 @@
-     pDelegate->bScopeEntered = true;
-     pDelegate->eResult = XWORK_RESULT_ERROR;
-     pDelegate->pParent = xwork__agent_ref(pAgent);
-+    if(pAgent->OnExtension){
-+        xllm_error SnapshotError;
-+        pDelegate->pParentSnapshot=xllmSessionSnapshotCreate(pAgent->pSession,&SnapshotError);
-+        if(!pDelegate->pParentSnapshot)goto oom;
-+    }
-     pDelegate->pCatalog = pCatalog;
-     pCatalog = NULL;
-     pDelegate->pParentTools = pParentTools;
---- a/lib/xwork/xwork.h
-+++ b/lib/xwork/xwork.h
-@@ -24,7 +24,7 @@
- #define XWORK_VERSION_MINOR 11
- #define XWORK_VERSION_PATCH 0
- #define XWORK_VERSION_TEXT "3.11.0"
--#define XWORK_ABI_VERSION 8u
-+#define XWORK_ABI_VERSION 9u
- #define XWORK_EVENT_SCHEMA_VERSION 3u
- #define XWORK_EVENT_SNAPSHOT_MAX_RECORDS 1024u
- #define XWORK_ARTIFACT_READ_DEFAULT_BYTES (64u * 1024u)
-@@ -516,6 +516,52 @@
- typedef bool (*xwork_agent_owner_retain_fn)(void* pUserData);
- typedef void (*xwork_agent_owner_release_fn)(void* pUserData);
- 
-+/* Host-owned role hooks. Values are borrowed only for the callback. The
-+ * callback owner is pinned by the normal Agent owner callbacks. */
-+typedef enum xwork_agent_extension_phase {
-+    XWORK_AGENT_EXTENSION_RUN = 1,
-+    XWORK_AGENT_EXTENSION_REQUEST,
-+    XWORK_AGENT_EXTENSION_RESPONSE,
-+    XWORK_AGENT_EXTENSION_CHILD,
-+    XWORK_AGENT_EXTENSION_BEFORE_TOOL,
-+    XWORK_AGENT_EXTENSION_AFTER_TOOL,
-+    XWORK_AGENT_EXTENSION_CONTEXT,
-+    XWORK_AGENT_EXTENSION_RELEASE,
-+    XWORK_AGENT_EXTENSION_CHILD_READY,
-+    XWORK_AGENT_EXTENSION_MODEL_DISPATCH
-+} xwork_agent_extension_phase;
-+struct xwork_run_result;
-+typedef xwork_result (*xwork_agent_default_run_fn)(xwork_agent*,const char*,
-+    const xllm_message*,bool,const xwork_resume_options*,struct xwork_run_result*,xwork_error*);
-+typedef struct xwork_agent_extension_context {
-+    xwork_agent_extension_phase ePhase;
-+    xwork_agent* pAgent;
-+    xwork_agent* pParent;
-+    const xllm_session_snapshot* pParentSnapshot;
-+    char** psDelegationPrompt; /* replacement uses malloc/free ownership */
-+    const char* sDefinitionId;
-+    xllm_session* pSession;
-+    xcancel* pCancel;
-+    uint64_t uDeadline;
-+    xllm_request* pRequest;
-+    xllm_response* pResponse;
-+    const xwork_hook_event* pToolEvent;
-+    xwork_tool_output* pToolOutput;
-+    const char* sPrompt;
-+    const xllm_message* pUserMessage;
-+    bool bResume;
-+    const xwork_resume_options* pResumeOptions;
-+    struct xwork_run_result* pResult;
-+    xwork_agent_default_run_fn DefaultRun;
-+    bool bHandled;
-+    bool bCompactAndRetry; /* REQUEST: one bounded rebuild before dispatch */
-+    const xwork_tool_catalog* pDelegationTools;
-+    const void* pDelegationToolOwner;
-+    bool bOverrideDelegationApproval;
-+    xwork_approval_mode eDelegationApproval;
-+} xwork_agent_extension_context;
-+typedef xwork_result (*xwork_agent_extension_fn)(void*,xwork_agent_extension_context*,xwork_error*);
-+
- typedef struct xwork_agent_config {
-     /* Borrowed dependencies; they must outlive the agent. */
-     xllm_client* pClient;
-@@ -544,6 +590,8 @@
- 
-     xwork_model_complete_fn OnModelComplete;
-     void* pModelUserData;
-+    xwork_agent_extension_fn OnExtension;
-+    void* pExtensionUserData;
- 
-     uint32_t uCommandTimeoutMs;
-     uint32_t uMaxAgentTurns;          /* 0 means unlimited. */
-@@ -653,6 +701,8 @@
-     void* pEventUserData;
-     xwork_model_complete_fn OnModelComplete;
-     void* pModelUserData;
-+    xwork_agent_extension_fn OnExtension;
-+    void* pExtensionUserData;
-     void* pOwnerUserData;
-     xwork_agent_owner_retain_fn OnOwnerRetain;
-     xwork_agent_owner_release_fn OnOwnerRelease;
-@@ -1071,6 +1121,19 @@
- );
- bool xworkMcpClientGetInfo(const xwork_mcp_client* pClient, xwork_mcp_info* pInfo);
- void xworkMcpClientDestroy(xwork_mcp_client* pClient);
-+/* Restrict lazy discovery and calls to this immutable run's effective servers.
-+ * An empty list disables MCP. Subagents inherit the parent's restriction. */
-+bool xworkAgentSetMcpServers(xwork_agent* pAgent,
-+    const char* const* psServerIds, size_t iCount, xwork_error* pError);
-+/* Host-owned credentials are resolved for every HTTP request. Returning an
-+ * empty header leaves ordinary configured headers unchanged. A 401 may request
-+ * one refresh before a single replay; transport errors never replay a call. */
-+typedef bool (*xwork_mcp_authorization_fn)(void* pData,
-+    const char* sServerId, const char* sEndpoint, bool bRefresh,
-+    xcancel* pCancel, uint64_t uDeadline, char* sHeader, size_t iCapacity,
-+    xwork_error* pError);
-+bool xworkRuntimeSetMcpAuthorizationProvider(xwork_runtime* pRuntime,
-+    xwork_mcp_authorization_fn OnAuthorize, void* pData);
- 
- void xworkMcpServerConfigInit(xwork_mcp_server_config* pConfig);
- void xworkMcpServerInfoInit(xwork_mcp_server_info* pInfo);
-@@ -1101,6 +1164,11 @@
-     xwork_error* pError);
- /* Adds only the compact discovery pair. Remote schemas enter the agent
-  * catalog individually through tool_load or the explicit host API. */
-+/* Bounded context-only methods; result JSON is caller-owned (xrtFree).
-+ * Context operations never issue tools/call or replay a failed POST. */
-+bool xworkRuntimeMcpRead(xwork_runtime* Runtime,const char* Server,const char* Method,
-+    const char* Params,xcancel* Cancel,uint64_t Deadline,char** Result,xwork_error* Error);
-+char* xworkRuntimeMcpDescribe(xwork_runtime* Runtime,const char* Server,xwork_error* Error);
- bool xworkAgentRegisterMcpDiscoveryTools(
-     xwork_agent* pAgent, xwork_error* pError);
- bool xworkAgentLoadMcpTool(xwork_agent* pAgent,
-@@ -1502,10 +1570,10 @@
-     size_t iSkillCount;
-     const char* sModel;            /* NULL inherits the parent model. */
-     const char* sReasoningEffort;  /* NULL inherits the parent setting. */
--    uint64_t uContextWindowTokens; /* 0 inherits; nonzero may only narrow. */
--    uint64_t uMaxInputTokens;      /* 0 inherits; nonzero may only narrow. */
-+    uint64_t uContextWindowTokens; /* 0 inherits; host validates the selected model. */
-+    uint64_t uMaxInputTokens;      /* 0 inherits; host validates the selected model. */
-     uint32_t uMaxTurns;            /* 0 selects 8. */
--    uint32_t uTimeoutMs;           /* 0 selects 120000. */
-+    uint32_t uTimeoutMs;           /* 0 means no task lifetime deadline. */
-     uint32_t uMaxOutputTokens;     /* 0 inherits the parent session cap. */
-     size_t iMaxFinalBytes;         /* 0 selects 64 KiB. */
-     xwork_tool_effects uAllowedEffects; /* Init selects READ. */
-@@ -1513,6 +1581,8 @@
-     bool bReadOnly;                /* Further clamps effects to READ. */
-     bool bAllowBackground;
-     bool bAllowDelegation;         /* Child may receive `agent` when depth permits. */
-+    bool bExplicitTools;
-+    bool bRequireVerificationAfterWrite;
- } xwork_subagent_definition_config;
- 
- /* Every pointer below is a borrowed view into a retained catalog. Keep the
 --- a/src/core/root_rename.h
 +++ b/src/core/root_rename.h
 @@ -10,13 +10,13 @@
@@ -1997,23 +1456,6 @@
 +    return __xrtRootResolve(Root,Source,0u,false,XSRootRenameSourceProc,&Data);
 +}
 +#endif
---- a/src/script/import_xwork.inc
-+++ b/src/script/import_xwork.inc
-@@ -104,6 +104,9 @@
- XS_XWORK_SYMBOL(xworkRuntimeFinishScheduledTask)
- XS_XWORK_SYMBOL(xworkRuntimeMcpServerCount)
- XS_XWORK_SYMBOL(xworkRuntimeMcpServerGetInfo)
-+XS_XWORK_SYMBOL(xworkRuntimeSetMcpAuthorizationProvider)
-+XS_XWORK_SYMBOL(xworkRuntimeMcpRead)
-+XS_XWORK_SYMBOL(xworkRuntimeMcpDescribe)
- XS_XWORK_SYMBOL(xworkRuntimeReadArtifact)
- XS_XWORK_SYMBOL(xworkRuntimeReadTaskEvents)
- XS_XWORK_SYMBOL(xworkRuntimeReadTaskOutput)
-@@ -186,3 +189,4 @@
- XS_XWORK_SYMBOL(xworkFileScopeSetExternal)
- XS_XWORK_SYMBOL(xworkFileScopeExternal)
- XS_XWORK_SYMBOL(xworkAgentSetFileScope)
-+XS_XWORK_SYMBOL(xworkAgentSetMcpServers)
 --- a/src/script/tcc_host.h
 +++ b/src/script/tcc_host.h
 @@ -85,6 +85,7 @@
@@ -2725,3 +2167,714 @@
 +    }
 +    if(!SetWindowSubclass(window,xws_proc,(UINT_PTR)state,(DWORD_PTR)state)){xrtFree(state->Parent);free(state->Path);free(state);}
 +}
+diff --git a/tools/test_extensions.py b/tools/test_extensions.py
+--- a/tools/test_extensions.py
++++ b/tools/test_extensions.py
+@@ -286,7 +286,7 @@
+         apis = set(re.findall(r"^[A-Za-z_][A-Za-z0-9_ *]*?\**\s*(xwork[A-Z]\w*)\s*\(",
+                               header, re.MULTILINE))
+         symbols = re.findall(r"XS_XWORK_SYMBOL\((\w+)\)", imports)
+-        self.assertEqual(len(symbols), 179)
++        self.assertEqual(len(symbols), 190)
+         self.assertEqual(len(symbols), len(set(symbols)))
+         self.assertEqual(set(symbols), apis)
+ 
+diff --git a/lib/xwork/xwork.h b/lib/xwork/xwork.h
+--- a/lib/xwork/xwork.h
++++ b/lib/xwork/xwork.h
+@@ -24,7 +24,7 @@
+ #define XWORK_VERSION_MINOR 11
+ #define XWORK_VERSION_PATCH 0
+ #define XWORK_VERSION_TEXT "3.11.0"
+-#define XWORK_ABI_VERSION 8u
++#define XWORK_ABI_VERSION 9u
+ #define XWORK_EVENT_SCHEMA_VERSION 3u
+ #define XWORK_EVENT_SNAPSHOT_MAX_RECORDS 1024u
+ #define XWORK_ARTIFACT_READ_DEFAULT_BYTES (64u * 1024u)
+@@ -516,6 +516,52 @@
+ typedef bool (*xwork_agent_owner_retain_fn)(void* pUserData);
+ typedef void (*xwork_agent_owner_release_fn)(void* pUserData);
+ 
++/* Host-owned role hooks. Values are borrowed only for the callback. The
++ * callback owner is pinned by the normal Agent owner callbacks. */
++typedef enum xwork_agent_extension_phase {
++    XWORK_AGENT_EXTENSION_RUN = 1,
++    XWORK_AGENT_EXTENSION_REQUEST,
++    XWORK_AGENT_EXTENSION_RESPONSE,
++    XWORK_AGENT_EXTENSION_CHILD,
++    XWORK_AGENT_EXTENSION_BEFORE_TOOL,
++    XWORK_AGENT_EXTENSION_AFTER_TOOL,
++    XWORK_AGENT_EXTENSION_CONTEXT,
++    XWORK_AGENT_EXTENSION_RELEASE,
++    XWORK_AGENT_EXTENSION_CHILD_READY,
++    XWORK_AGENT_EXTENSION_MODEL_DISPATCH
++} xwork_agent_extension_phase;
++struct xwork_run_result;
++typedef xwork_result (*xwork_agent_default_run_fn)(xwork_agent*,const char*,
++    const xllm_message*,bool,const xwork_resume_options*,struct xwork_run_result*,xwork_error*);
++typedef struct xwork_agent_extension_context {
++    xwork_agent_extension_phase ePhase;
++    xwork_agent* pAgent;
++    xwork_agent* pParent;
++    const xllm_session_snapshot* pParentSnapshot;
++    char** psDelegationPrompt; /* replacement uses malloc/free ownership */
++    const char* sDefinitionId;
++    xllm_session* pSession;
++    xcancel* pCancel;
++    uint64_t uDeadline;
++    xllm_request* pRequest;
++    xllm_response* pResponse;
++    const xwork_hook_event* pToolEvent;
++    xwork_tool_output* pToolOutput;
++    const char* sPrompt;
++    const xllm_message* pUserMessage;
++    bool bResume;
++    const xwork_resume_options* pResumeOptions;
++    struct xwork_run_result* pResult;
++    xwork_agent_default_run_fn DefaultRun;
++    bool bHandled;
++    bool bCompactAndRetry; /* REQUEST: one bounded rebuild before dispatch */
++    const xwork_tool_catalog* pDelegationTools;
++    const void* pDelegationToolOwner;
++    bool bOverrideDelegationApproval;
++    xwork_approval_mode eDelegationApproval;
++} xwork_agent_extension_context;
++typedef xwork_result (*xwork_agent_extension_fn)(void*,xwork_agent_extension_context*,xwork_error*);
++
+ typedef struct xwork_agent_config {
+     /* Borrowed dependencies; they must outlive the agent. */
+     xllm_client* pClient;
+@@ -544,6 +590,8 @@
+ 
+     xwork_model_complete_fn OnModelComplete;
+     void* pModelUserData;
++    xwork_agent_extension_fn OnExtension;
++    void* pExtensionUserData;
+ 
+     uint32_t uCommandTimeoutMs;
+     uint32_t uMaxAgentTurns;          /* 0 means unlimited. */
+@@ -653,6 +701,8 @@
+     void* pEventUserData;
+     xwork_model_complete_fn OnModelComplete;
+     void* pModelUserData;
++    xwork_agent_extension_fn OnExtension;
++    void* pExtensionUserData;
+     void* pOwnerUserData;
+     xwork_agent_owner_retain_fn OnOwnerRetain;
+     xwork_agent_owner_release_fn OnOwnerRelease;
+@@ -912,6 +962,16 @@
+ /* Legacy agent-local mutation/enumeration adapters. Mutation is failure-atomic
+  * and rejected during a run. ToolCount/ToolAt return a borrowed view for the
+  * owning thread; cross-thread readers use xworkAgentToolCatalogSnapshot. */
++/* Configure before running this owned agent. Children inherit these callbacks.
++ * Acquire is called before exec/spawn; release follows synchronous process-tree
++ * cleanup or managed-task release. Completed task records can retain native
++ * process resources: release them explicitly. Callbacks own no xwork memory,
++ * are paired, thread-safe, and their code/data must outlive the agent/tasks. */
++typedef bool (*xwork_process_owner_acquire_fn)(void* User,void** Lease);
++typedef void (*xwork_process_owner_release_fn)(void* User,void* Lease);
++bool xworkAgentSetProcessOwner(xwork_agent* Agent,
++    xwork_process_owner_acquire_fn Acquire,xwork_process_owner_release_fn Release,
++    void* User,xwork_error* Error);
+ bool xworkAgentRegisterTool(xwork_agent* pAgent, const xwork_tool_definition* pDefinition, xwork_error* pError);
+ bool xworkAgentConfigureToolConcurrency(xwork_agent* pAgent,
+     const xwork_tool_concurrency_config* pConfig, xwork_error* pError);
+@@ -1071,6 +1131,19 @@
+ );
+ bool xworkMcpClientGetInfo(const xwork_mcp_client* pClient, xwork_mcp_info* pInfo);
+ void xworkMcpClientDestroy(xwork_mcp_client* pClient);
++/* Restrict lazy discovery and calls to this immutable run's effective servers.
++ * An empty list disables MCP. Subagents inherit the parent's restriction. */
++bool xworkAgentSetMcpServers(xwork_agent* pAgent,
++    const char* const* psServerIds, size_t iCount, xwork_error* pError);
++/* Host-owned credentials are resolved for every HTTP request. Returning an
++ * empty header leaves ordinary configured headers unchanged. A 401 may request
++ * one refresh before a single replay; transport errors never replay a call. */
++typedef bool (*xwork_mcp_authorization_fn)(void* pData,
++    const char* sServerId, const char* sEndpoint, bool bRefresh,
++    xcancel* pCancel, uint64_t uDeadline, char* sHeader, size_t iCapacity,
++    xwork_error* pError);
++bool xworkRuntimeSetMcpAuthorizationProvider(xwork_runtime* pRuntime,
++    xwork_mcp_authorization_fn OnAuthorize, void* pData);
+ 
+ void xworkMcpServerConfigInit(xwork_mcp_server_config* pConfig);
+ void xworkMcpServerInfoInit(xwork_mcp_server_info* pInfo);
+@@ -1101,6 +1174,11 @@
+     xwork_error* pError);
+ /* Adds only the compact discovery pair. Remote schemas enter the agent
+  * catalog individually through tool_load or the explicit host API. */
++/* Bounded context-only methods; result JSON is caller-owned (xrtFree).
++ * Context operations never issue tools/call or replay a failed POST. */
++bool xworkRuntimeMcpRead(xwork_runtime* Runtime,const char* Server,const char* Method,
++    const char* Params,xcancel* Cancel,uint64_t Deadline,char** Result,xwork_error* Error);
++char* xworkRuntimeMcpDescribe(xwork_runtime* Runtime,const char* Server,xwork_error* Error);
+ bool xworkAgentRegisterMcpDiscoveryTools(
+     xwork_agent* pAgent, xwork_error* pError);
+ bool xworkAgentLoadMcpTool(xwork_agent* pAgent,
+@@ -1502,10 +1580,10 @@
+     size_t iSkillCount;
+     const char* sModel;            /* NULL inherits the parent model. */
+     const char* sReasoningEffort;  /* NULL inherits the parent setting. */
+-    uint64_t uContextWindowTokens; /* 0 inherits; nonzero may only narrow. */
+-    uint64_t uMaxInputTokens;      /* 0 inherits; nonzero may only narrow. */
++    uint64_t uContextWindowTokens; /* 0 inherits; host validates the selected model. */
++    uint64_t uMaxInputTokens;      /* 0 inherits; host validates the selected model. */
+     uint32_t uMaxTurns;            /* 0 selects 8. */
+-    uint32_t uTimeoutMs;           /* 0 selects 120000. */
++    uint32_t uTimeoutMs;           /* 0 means no task lifetime deadline. */
+     uint32_t uMaxOutputTokens;     /* 0 inherits the parent session cap. */
+     size_t iMaxFinalBytes;         /* 0 selects 64 KiB. */
+     xwork_tool_effects uAllowedEffects; /* Init selects READ. */
+@@ -1513,6 +1591,8 @@
+     bool bReadOnly;                /* Further clamps effects to READ. */
+     bool bAllowBackground;
+     bool bAllowDelegation;         /* Child may receive `agent` when depth permits. */
++    bool bExplicitTools;
++    bool bRequireVerificationAfterWrite;
+ } xwork_subagent_definition_config;
+ 
+ /* Every pointer below is a borrowed view into a retained catalog. Keep the
+diff --git a/lib/xwork/src/xwork_agent.c b/lib/xwork/src/xwork_agent.c
+--- a/lib/xwork/src/xwork_agent.c
++++ b/lib/xwork/src/xwork_agent.c
+@@ -361,7 +361,9 @@
+     xwork_error tDescriptorError;
+     xwork_permission_decision eDecision;
+     bool bOwnWriter = false;
+-    if ( pAgent->eApprovalMode == XWORK_APPROVAL_READ_ONLY &&
++    bool bManagedDelegation=pAgent->OnExtension && !strcmp(pTool->sName,"agent") &&
++        pTool->uEffects==XWORK_TOOL_EFFECT_AGENT_DELEGATION;
++    if ( !bManagedDelegation && pAgent->eApprovalMode == XWORK_APPROVAL_READ_ONLY &&
+          (pTool->uEffects & ~((xwork_tool_effects)XWORK_TOOL_EFFECT_READ)) != 0u ) {
+         return false;
+     }
+@@ -427,7 +429,8 @@
+         if ( eDecision != XWORK_PERMISSION_DEFAULT ) return false;
+     }
+     if ( (pTool->uEffects & ~((xwork_tool_effects)XWORK_TOOL_EFFECT_READ)) == 0u ) return true;
+-    if ( pAgent->eApprovalMode == XWORK_APPROVAL_AUTO ) return true;
++    if ( pAgent->eApprovalMode == XWORK_APPROVAL_AUTO ||
++        (bManagedDelegation && pAgent->eApprovalMode==XWORK_APPROVAL_READ_ONLY)) return true;
+     if ( pAgent->OnApproval && pAgent->pCallbackLock &&
+          xrtMutexLock(pAgent->pCallbackLock) ) {
+         bool bAllowed = pAgent->OnApproval(
+@@ -532,7 +535,7 @@
+             if ( !xworkToolOutputSet(&tOutput, false, sFailure) ) goto oom;
+         } else if ( !xworkToolOutputSet(&tOutput, false, "tool execution denied by approval policy") ) goto oom;
+     } else {
+-        if ( pAgent->OnHook ) {
++        if ( pAgent->OnHook || pAgent->OnExtension ) {
+             memset(&tHook, 0, sizeof(tHook));
+             tHook.ePhase = XWORK_HOOK_BEFORE_TOOL;
+             tHook.uAgentTurn = uTurn;
+@@ -541,10 +544,19 @@
+             tHook.sArgumentsJson = pCall->sArgumentsJson ? pCall->sArgumentsJson : "{}";
+             if ( !pAgent->pCallbackLock ||
+                  !xrtMutexLock(pAgent->pCallbackLock) ) goto oom;
+-            eHookAction = pAgent->OnHook(pAgent->pHookUserData, &tHook);
++            char ExtensionFailure[1024]={0};
++            eHookAction = pAgent->OnHook ? pAgent->OnHook(pAgent->pHookUserData, &tHook) : XWORK_HOOK_CONTINUE;
++            if(eHookAction==XWORK_HOOK_CONTINUE && pAgent->OnExtension){
++                xwork_agent_extension_context Extension={0};
++                Extension.ePhase=tHook.ePhase==XWORK_HOOK_BEFORE_TOOL?XWORK_AGENT_EXTENSION_BEFORE_TOOL:XWORK_AGENT_EXTENSION_AFTER_TOOL;
++                Extension.pToolEvent=&tHook;Extension.pToolOutput=&tOutput;
++                xwork_error HookError; xworkErrorInit(&HookError);
++                xwork_result HookResult=xwork__agent_extension(pAgent,&Extension,&HookError);
++                if(HookResult!=XWORK_RESULT_OK){eHookAction=HookResult==XWORK_RESULT_CANCELLED?XWORK_HOOK_CANCEL:XWORK_HOOK_DENY;snprintf(ExtensionFailure,sizeof(ExtensionFailure),"%s",HookError.sMessage);}
++            }
+             (void)xrtMutexUnlock(pAgent->pCallbackLock);
+             if ( eHookAction == XWORK_HOOK_DENY ) {
+-                if ( !xworkToolOutputSet(&tOutput, false, "tool execution denied by before-tool hook") ) goto oom;
++                if ( !xworkToolOutputSet(&tOutput, false, ExtensionFailure[0]?ExtensionFailure:"tool execution denied by before-tool hook") ) goto oom;
+                 goto tool_ready;
+             }
+             if ( eHookAction == XWORK_HOOK_CANCEL ) {
+@@ -650,7 +662,7 @@
+             goto tool_ready;
+         }
+         if ( pbEffectApplied ) *pbEffectApplied = tOutput.bSuccess;
+-        if ( pAgent->OnHook ) {
++        if ( pAgent->OnHook || pAgent->OnExtension ) {
+             memset(&tHook, 0, sizeof(tHook));
+             tHook.ePhase = XWORK_HOOK_AFTER_TOOL;
+             tHook.uAgentTurn = uTurn;
+@@ -661,11 +673,21 @@
+             tHook.bSuccess = tOutput.bSuccess;
+             if ( !pAgent->pCallbackLock ||
+                  !xrtMutexLock(pAgent->pCallbackLock) ) goto oom;
+-            eHookAction = pAgent->OnHook(pAgent->pHookUserData, &tHook);
++            char ExtensionFailure[1024]={0};
++            eHookAction = pAgent->OnHook ? pAgent->OnHook(pAgent->pHookUserData, &tHook) : XWORK_HOOK_CONTINUE;
++            if(eHookAction==XWORK_HOOK_CONTINUE && pAgent->OnExtension){
++                xwork_agent_extension_context Extension={0};
++                Extension.ePhase=tHook.ePhase==XWORK_HOOK_BEFORE_TOOL?XWORK_AGENT_EXTENSION_BEFORE_TOOL:XWORK_AGENT_EXTENSION_AFTER_TOOL;
++                Extension.pToolEvent=&tHook;Extension.pToolOutput=&tOutput;
++                xwork_error HookError; xworkErrorInit(&HookError);
++                xwork_result HookResult=xwork__agent_extension(pAgent,&Extension,&HookError);
++                if(HookResult!=XWORK_RESULT_OK){eHookAction=HookResult==XWORK_RESULT_CANCELLED?XWORK_HOOK_CANCEL:XWORK_HOOK_DENY;snprintf(ExtensionFailure,sizeof(ExtensionFailure),"%s",HookError.sMessage);}
++            }
+             (void)xrtMutexUnlock(pAgent->pCallbackLock);
+             if ( eHookAction == XWORK_HOOK_DENY ) {
+-                if ( !xwork__buf_append_cstr(&tHookOutput,
+-                        "after-tool hook rejected this result; the tool may already have completed side effects\n--- original result ---\n") ||
++                if ( !xwork__buf_append_cstr(&tHookOutput,ExtensionFailure) ||
++                     !xwork__buf_append_cstr(&tHookOutput,
++                        "\nafter-tool hook rejected this result; the tool may already have completed side effects\n--- original result ---\n") ||
+                      !xwork__buf_append_cstr(&tHookOutput, tOutput.sContent) ||
+                      !xworkToolOutputSet(&tOutput, false, tHookOutput.pData) ) goto oom;
+             } else if ( eHookAction == XWORK_HOOK_CANCEL ) {
+@@ -1026,7 +1048,7 @@
+     return true;
+ }
+ 
+-xwork_result xwork__agent_run_claimed(
++static xwork_result xwork__agent_run_default(
+     xwork_agent* pAgent,
+     const char* sPrompt,
+     const xllm_message* pUserMessage,
+@@ -1041,6 +1063,7 @@
+     uint64_t uPreviousBatchHash = 0u;
+     uint32_t uRepeatedBatches = 0u;
+     uint32_t uConsecutiveToolFailures = 0u;
++    uint32_t uExtensionCompactions = 0u;
+     uint32_t uVerificationPrompts = 0u;
+     bool bNeedNewTurn = false;
+     bool bRecoverPendingTools = false;
+@@ -1296,6 +1319,11 @@
+             bRecoverPendingTools = false;
+             bNeedNewTurn = true;
+         }
++        {
++            xwork_agent_extension_context Context={0};Context.ePhase=XWORK_AGENT_EXTENSION_CONTEXT;
++            eResult=xwork__agent_extension(pAgent,&Context,pError);
++            if(eResult!=XWORK_RESULT_OK)goto cleanup;
++        }
+         eResult = xwork__compact_if_needed(pAgent, uTurn, &tRun, false, pError);
+         if ( eResult != XWORK_RESULT_OK ) goto cleanup;
+         if ( bNeedNewTurn ) {
+@@ -1336,6 +1364,25 @@
+         }
+         tRequest.bParallelToolCalls = true;
+         tRequest.eToolChoice = XLLM_TOOL_CHOICE_AUTO;
++        {
++            xwork_agent_extension_context Extension={0};Extension.ePhase=XWORK_AGENT_EXTENSION_REQUEST;
++            Extension.pRequest=&tRequest;
++            eResult=xwork__agent_extension(pAgent,&Extension,pError);
++            if(eResult!=XWORK_RESULT_OK){xllmRequestUnit(&tRequest);goto cleanup;}
++            if(Extension.bCompactAndRetry){
++                xllmRequestUnit(&tRequest);
++                if(uExtensionCompactions++){
++                    xwork__set_error(pError,XWORK_ERROR_CONTEXT,"role context and tool schemas still exceed the input budget after safe compaction");
++                    eResult=XWORK_RESULT_LIMIT;goto cleanup;
++                }
++                eResult=xwork__compact_if_needed(pAgent,uTurn,&tRun,true,pError);
++                if(eResult!=XWORK_RESULT_OK)goto cleanup;
++                continue;
++            }
++            /* A mutable hook cannot replace its managed cancellation owner. */
++            xllmRequestSetCancel(&tRequest,xwork__active_cancel(pAgent));
++            xllmRequestSetDeadline(&tRequest,xwork__active_deadline(pAgent));
++        }
+         memset(&tEvent, 0, sizeof(tEvent));
+         {
+             char sRequestFingerprint[17];
+@@ -1393,6 +1440,12 @@
+             eResult = XWORK_RESULT_ERROR;
+             goto cleanup;
+         }
++        {
++            xwork_agent_extension_context Extension={0};Extension.ePhase=XWORK_AGENT_EXTENSION_RESPONSE;
++            Extension.pResponse=pResponse;
++            eResult=xwork__agent_extension(pAgent,&Extension,pError);
++            if(eResult!=XWORK_RESULT_OK){xllmResponseDestroy(pResponse);goto cleanup;}
++        }
+         if ( !xwork__usable_model_response(pResponse) ) {
+             xllmErrorInit(&tModelError);
+             tModelError.eCode = XLLM_ERROR_PROTOCOL;
+@@ -1406,6 +1459,7 @@
+             eResult = XWORK_RESULT_ERROR;
+             goto cleanup;
+         }
++        uExtensionCompactions=0u;
+         tRun.tLastUsage = pResponse->tUsage;
+         if ( !xllmSessionAddAssistantResponse(pAgent->pSession, uTurn, pResponse) ) {
+             xllmResponseDestroy(pResponse);
+@@ -1612,6 +1666,24 @@
+     return eResult;
+ }
+ 
++xwork_result xwork__agent_run_claimed(xwork_agent* Agent,const char* Prompt,
++    const xllm_message* UserMessage,bool Resume,const xwork_resume_options* ResumeOptions,
++    xwork_run_result* Result,xwork_error* Error)
++{
++    if(Agent && Agent->OnExtension){
++        xwork_agent_extension_context Context={0};Context.ePhase=XWORK_AGENT_EXTENSION_RUN;
++        Context.sPrompt=Prompt;Context.pUserMessage=UserMessage;Context.bResume=Resume;
++        Context.pResumeOptions=ResumeOptions;Context.pResult=Result;Context.DefaultRun=xwork__agent_run_default;
++        if(Result)memset(Result,0,sizeof(*Result));
++        xwork_result Status=xwork__agent_extension(Agent,&Context,Error);
++        if(Status!=XWORK_RESULT_OK || Context.bHandled){
++            if(Status==XWORK_RESULT_OK && !xwork__save(Agent,Error))return XWORK_RESULT_ERROR;
++            return Status;
++        }
++    }
++    return xwork__agent_run_default(Agent,Prompt,UserMessage,Resume,ResumeOptions,Result,Error);
++}
++
+ xwork_result xworkAgentRun(xwork_agent* pAgent, const char* sPrompt, xwork_run_result* pResult, xwork_error* pError)
+ {
+     xwork_result eResult;
+@@ -1664,3 +1736,14 @@
+     xwork__agent_run_release(pAgent, NULL);
+     return eResult;
+ }
++
++bool xworkAgentSetProcessOwner(xwork_agent* Agent,
++    xwork_process_owner_acquire_fn Acquire,xwork_process_owner_release_fn Release,
++    void* User,xwork_error* Error)
++{
++    xworkErrorInit(Error);
++    if(!Agent||Agent->bRunning||(!Acquire!=!Release)){
++        xwork__set_error(Error,XWORK_ERROR_INVALID_ARGUMENT,"Configure paired process owners before running the agent");return false;
++    }
++    Agent->OnProcessAcquire=Acquire;Agent->OnProcessRelease=Release;Agent->pProcessOwnerData=User;return true;
++}
+diff --git a/lib/xwork/src/xwork_internal.h b/lib/xwork/src/xwork_internal.h
+--- a/lib/xwork/src/xwork_internal.h
++++ b/lib/xwork/src/xwork_internal.h
+@@ -106,6 +106,8 @@
+     bool bReadOnly;
+     bool bAllowBackground;
+     bool bAllowDelegation;
++    bool bExplicitTools;
++    bool bRequireVerificationAfterWrite;
+ } xwork_subagent_entry;
+ 
+ struct xwork_subagent_catalog {
+@@ -128,6 +130,9 @@
+  * space, one tool family shared by processes and subagents. */
+ 
+ typedef struct xwork_process_entry {
++    xwork_process_owner_release_fn OnProcessRelease;
++    void *pProcessOwnerData,*pProcessOwnerLease;
++    bool bProcessOwnerHeld;
+     volatile long iRefs;
+     volatile long iReady;       /* published only after initialization */
+     xwork_runtime* pRuntime;    /* borrowed from the owning task table */
+@@ -261,6 +266,8 @@
+     size_t iMcpServerCap;
+     xnetengine* pMcpNetEngine;
+     xhttpclient* pMcpHttpClient;
++    xwork_mcp_authorization_fn OnMcpAuthorize;
++    void* pMcpAuthorizationData;
+     xmutex* pSchedulerLock;
+     xwork_schedule_entry** ppSchedules; /* stable until runtime destruction */
+     size_t iScheduleCount;
+@@ -395,6 +402,9 @@
+ bool xwork__external_paths(const xwork_agent* pAgent);
+ 
+ struct xwork_agent {
++    xwork_process_owner_acquire_fn OnProcessAcquire;
++    xwork_process_owner_release_fn OnProcessRelease;
++    void* pProcessOwnerData;
+     bool bEventSinkFailed;
+     volatile long iRefs;
+     xmutex* pStateLock;
+@@ -407,6 +417,9 @@
+     xllm_client* pClient;
+     xllm_session* pSession;
+     char* sWorkspaceRoot;
++    bool bMcpServerScope;
++    char** psMcpServerScope;
++    size_t iMcpServerScopeCount;
+     struct { char* sAlias; char* sDirectory; } PathMounts[8];
+     size_t iPathMountCount;
+     bool bFileMountsSealed;
+@@ -433,6 +446,8 @@
+     void* pEventUserData;
+     xwork_model_complete_fn OnModelComplete;
+     void* pModelUserData;
++    xwork_agent_extension_fn OnExtension;
++    void* pExtensionUserData;
+     void* pOwnerUserData;
+     xwork_agent_owner_retain_fn OnOwnerRetain;
+     xwork_agent_owner_release_fn OnOwnerRelease;
+@@ -779,3 +794,5 @@
+ }
+ 
+ #endif
++
++xwork_result xwork__agent_extension(xwork_agent*,xwork_agent_extension_context*,xwork_error*);
+diff --git a/lib/xwork/src/xwork_subagent.c b/lib/xwork/src/xwork_subagent.c
+--- a/lib/xwork/src/xwork_subagent.c
++++ b/lib/xwork/src/xwork_subagent.c
+@@ -137,18 +137,20 @@
+     pEntry->uContextWindowTokens = pConfig->uContextWindowTokens;
+     pEntry->uMaxInputTokens = pConfig->uMaxInputTokens;
+     pEntry->uMaxTurns = pConfig->uMaxTurns ? pConfig->uMaxTurns : 8u;
+-    pEntry->uTimeoutMs = pConfig->uTimeoutMs ? pConfig->uTimeoutMs : 120000u;
++    pEntry->uTimeoutMs = pConfig->uTimeoutMs;
+     pEntry->uMaxOutputTokens = pConfig->uMaxOutputTokens;
+     pEntry->iMaxFinalBytes = pConfig->iMaxFinalBytes
+         ? pConfig->iMaxFinalBytes : 64u * 1024u;
+     pEntry->uAllowedEffects = pConfig->uAllowedEffects;
+     if ( pConfig->bReadOnly ) {
+-        pEntry->uAllowedEffects &= XWORK_TOOL_EFFECT_READ;
++        pEntry->uAllowedEffects &= XWORK_TOOL_EFFECT_READ | XWORK_TOOL_EFFECT_AGENT_DELEGATION;
+     }
+     pEntry->uMaxDepth = pConfig->uMaxDepth;
+     pEntry->bReadOnly = pConfig->bReadOnly;
+     pEntry->bAllowBackground = pConfig->bAllowBackground;
+     pEntry->bAllowDelegation = pConfig->bAllowDelegation;
++    pEntry->bExplicitTools=pConfig->bExplicitTools;
++    pEntry->bRequireVerificationAfterWrite=pConfig->bRequireVerificationAfterWrite;
+     return true;
+ }
+ 
+@@ -177,6 +179,8 @@
+     tConfig.bReadOnly = pSource->bReadOnly;
+     tConfig.bAllowBackground = pSource->bAllowBackground;
+     tConfig.bAllowDelegation = pSource->bAllowDelegation;
++    tConfig.bExplicitTools=pSource->bExplicitTools;
++    tConfig.bRequireVerificationAfterWrite=pSource->bRequireVerificationAfterWrite;
+     return xwork__subagent_entry_from_config(pTarget, &tConfig);
+ }
+ 
+@@ -434,7 +438,7 @@
+ {
+     size_t i;
+     if ( !pEntry || !sName ) return false;
+-    if ( !pEntry->psTools ) return true;
++    if ( !pEntry->psTools ) return !pEntry->bExplicitTools;
+     for ( i = 0u; i < pEntry->iToolCount; ++i ) {
+         if ( strcmp(pEntry->psTools[i], sName) == 0 ) return true;
+     }
+@@ -528,7 +532,7 @@
+     xwork_error* pError)
+ {
+     xwork_tool_catalog* pCandidateTools;
+-    if ( !xwork__subagent_catalog_tools_valid(
++    if ( !pAgent->OnExtension && !xwork__subagent_catalog_tools_valid(
+             pAgent->pToolCatalog, pCandidate, pError) ) return false;
+     pCandidateTools = xwork__subagent_roster_tool_catalog(
+         pAgent, pAgent->pToolCatalog, pCandidate, pError);
+@@ -608,6 +612,7 @@
+ 
+ typedef struct xwork_delegate_args {
+     xwork_agent* pParent;
++    xllm_session_snapshot* pParentSnapshot;
+     xwork_subagent_catalog* pCatalog;   /* pins pType and the inherited roster */
+     xwork_tool_catalog* pParentTools;   /* matching pinned parent tool generation */
+     const xwork_subagent_entry* pType;  /* borrowed from pCatalog */
+@@ -631,6 +636,7 @@
+     if ( pArgs->bOwnCancel ) xrtCancelDestroy(pArgs->pCancel);
+     if ( pArgs->bScopeEntered ) xwork__delegation_scope_leave(pArgs->pScope);
+     xwork__delegation_scope_release(pArgs->pScope);
++    xllmSessionSnapshotRelease(pArgs->pParentSnapshot);
+     xworkSubagentCatalogRelease(pArgs->pCatalog);
+     xworkToolCatalogRelease(pArgs->pParentTools);
+     free(pArgs->sPrompt);
+@@ -672,17 +678,14 @@
+         xwork__set_error(pError, XWORK_ERROR_CONTEXT, "failed to clone the session config");
+         return false;
+     }
+-    if ( pType->uContextWindowTokens &&
+-         pType->uContextWindowTokens < tSessionConfig.uContextWindowTokens ) {
++    tSessionConfig.sSnapshotPath=NULL; /* Never reuse a parent checkpoint path. */
++    if ( pType->uContextWindowTokens ) {
+         tSessionConfig.uContextWindowTokens = pType->uContextWindowTokens;
+     }
+-    if ( pType->uMaxInputTokens &&
+-         (!tSessionConfig.uMaxInputTokens ||
+-          pType->uMaxInputTokens < tSessionConfig.uMaxInputTokens) ) {
++    if ( pType->uMaxInputTokens ) {
+         tSessionConfig.uMaxInputTokens = pType->uMaxInputTokens;
+     }
+-    if ( pType->uMaxOutputTokens &&
+-        pType->uMaxOutputTokens < tSessionConfig.uMaxOutputTokens ) {
++    if ( pType->uMaxOutputTokens ) {
+         tSessionConfig.uMaxOutputTokens = pType->uMaxOutputTokens;
+     }
+     if ( tSessionConfig.uMaxInputTokens >
+@@ -702,6 +705,7 @@
+         uint32_t uOutput = xllmSessionComputeOutputReserve(
+             tSessionConfig.uContextWindowTokens,
+             tSessionConfig.uMaxOutputTokens);
++        if(uSafety>tSessionConfig.uContextWindowTokens/16u)uSafety=tSessionConfig.uContextWindowTokens/16u;
+         if ( tSessionConfig.uSafetyReserveTokens > uSafety ) {
+             tSessionConfig.uSafetyReserveTokens =
+                 uSafety > UINT32_MAX ? UINT32_MAX : (uint32_t)uSafety;
+@@ -772,7 +776,7 @@
+         pArgs->pParent->bAllowArtifactWrites &&
+         (!pType->bReadOnly || pArgs->pParent->pArtifactStore != NULL);
+     tDefinitionConfig.bRequireVerificationAfterWrite =
+-        pArgs->pParent->bRequireVerificationAfterWrite;
++        pArgs->pParent->bRequireVerificationAfterWrite || pType->bRequireVerificationAfterWrite;
+     tDefinitionConfig.bInjectSystemPrompt = true;
+     pDefinition = xworkAgentDefinitionCreate(&tDefinitionConfig, pError);
+     if ( !pDefinition ) goto cleanup;
+@@ -794,12 +798,19 @@
+     tOptions.pEventUserData = pArgs->pParent->pEventUserData;
+     tOptions.OnModelComplete = pArgs->pParent->OnModelComplete;
+     tOptions.pModelUserData = pArgs->pParent->pModelUserData;
++    tOptions.OnExtension=pArgs->pParent->OnExtension;
++    tOptions.pExtensionUserData=pArgs->pParent->pExtensionUserData;
+     tOptions.pOwnerUserData = pArgs->pParent->pOwnerUserData;
+     tOptions.OnOwnerRetain = pArgs->pParent->OnOwnerRetain;
+     tOptions.OnOwnerRelease = pArgs->pParent->OnOwnerRelease;
+     pChild = xworkAgentCreateWithRuntime(pArgs->pParent->pRuntime,
+         pDefinition, &tOptions, pError);
+     if ( !pChild ) goto cleanup;
++    if(!xworkAgentSetProcessOwner(pChild,pArgs->pParent->OnProcessAcquire,
++        pArgs->pParent->OnProcessRelease,pArgs->pParent->pProcessOwnerData,pError))goto cleanup;
++    if ( pArgs->pParent->bMcpServerScope && !xworkAgentSetMcpServers(pChild,
++            (const char* const*)pArgs->pParent->psMcpServerScope,
++            pArgs->pParent->iMcpServerScopeCount, pError) ) goto cleanup;
+     if ( pArgs->pParent->pFileScope ) {
+         if ( !xworkAgentSetFileScope(pChild, pArgs->pParent->pFileScope, pError) ) goto cleanup;
+     } else if ( !xworkAgentAllowExternalPaths(pChild,
+@@ -820,12 +831,20 @@
+         ? pArgs->pEntry->uId : pArgs->pParent->uParentTaskId;
+     pChild->bAllowSubagentDelegation = pType->bAllowDelegation;
+ 
++    xwork_agent_extension_context Extension={0};Extension.ePhase=XWORK_AGENT_EXTENSION_CHILD;
++    Extension.pParent=pArgs->pParent;Extension.pParentSnapshot=pArgs->pParentSnapshot;
++    Extension.psDelegationPrompt=&pArgs->sPrompt;Extension.pDelegationTools=pArgs->pParentTools;
++    Extension.pDelegationToolOwner=pArgs->pParent;
++    if(xwork__agent_extension(pChild,&Extension,pError)!=XWORK_RESULT_OK)goto cleanup;
++    if(Extension.bOverrideDelegationApproval && !pType->bReadOnly)
++        pChild->eApprovalMode=Extension.eDelegationApproval;
+     /* 3. Pin the parent's tool generation, then apply the child's ceilings. */
++    const char* EmptyTools[1]={NULL};
+     pFilteredTools = xwork__tool_catalog_filter_subagent(
+-        pArgs->pParentTools,
++        Extension.pDelegationTools,
+         xwork__runtime_next_catalog_generation(pArgs->pParent->pRuntime),
+-        (const char* const*)pType->psTools, pType->iToolCount,
+-        pType->uAllowedEffects, pArgs->pParent, pChild, pError);
++        pType->bExplicitTools && !pType->iToolCount ? EmptyTools : (const char* const*)pType->psTools, pType->iToolCount,
++        pType->uAllowedEffects, Extension.pDelegationToolOwner, pChild, pError);
+     if ( !pFilteredTools ) goto cleanup;
+     uEffectiveDepth = pArgs->pScope->uMaxDepth;
+     if ( pType->uMaxDepth && pType->uMaxDepth < uEffectiveDepth ) {
+@@ -862,6 +881,8 @@
+     xwork__delegation_scope_release(pOldChildScope);
+     pOldChildScope = NULL;
+ 
++    Extension.ePhase=XWORK_AGENT_EXTENSION_CHILD_READY;
++    if(xwork__agent_extension(pChild,&Extension,pError)!=XWORK_RESULT_OK)goto cleanup;
+     /* 4. The normal xwork loop preserves model/reasoning overrides and tags. */
+     pArgs->eResult = xworkAgentRun(
+         pChild, pArgs->sPrompt, &tRunResult, pError);
+@@ -1064,6 +1085,7 @@
+     tAgentConfig.bRequireVerificationAfterWrite = false;
+     pChild = xworkAgentCreate(&tAgentConfig, pError);
+     if ( !pChild ) goto cleanup;
++    if(!xworkAgentSetProcessOwner(pChild,pParent->OnProcessAcquire,pParent->OnProcessRelease,pParent->pProcessOwnerData,pError))goto cleanup;
+     if ( pParent->pFileScope ) {
+         if ( !xworkAgentSetFileScope(pChild, pParent->pFileScope, pError) ) goto cleanup;
+     } else if ( !xworkAgentAllowExternalPaths(pChild,
+@@ -1267,6 +1289,11 @@
+     pDelegate->bScopeEntered = true;
+     pDelegate->eResult = XWORK_RESULT_ERROR;
+     pDelegate->pParent = xwork__agent_ref(pAgent);
++    if(pAgent->OnExtension){
++        xllm_error SnapshotError;
++        pDelegate->pParentSnapshot=xllmSessionSnapshotCreate(pAgent->pSession,&SnapshotError);
++        if(!pDelegate->pParentSnapshot)goto oom;
++    }
+     pDelegate->pCatalog = pCatalog;
+     pCatalog = NULL;
+     pDelegate->pParentTools = pParentTools;
+diff --git a/lib/xwork/src/xwork_tools.c b/lib/xwork/src/xwork_tools.c
+--- a/lib/xwork/src/xwork_tools.c
++++ b/lib/xwork/src/xwork_tools.c
+@@ -853,6 +853,7 @@
+         xwork__process_capture_destroy(pEntry->pCapture);
+         xrtProcessDestroy(pEntry->pProcess);
+     }
++    if(pEntry->bProcessOwnerHeld){pEntry->bProcessOwnerHeld=false;pEntry->OnProcessRelease(pEntry->pProcessOwnerData,pEntry->pProcessOwnerLease);pEntry->pProcessOwnerLease=NULL;}
+     if ( pEntry->pStateLock ) {
+         (void)xrtMutexLock(pEntry->pStateLock);
+         free(pEntry->sResult);
+@@ -1565,6 +1566,12 @@
+     if ( !xwork__build_env(tArgs, &pEnv, &iEnvCount, &psEnvStorage, &iEnvStorageCount) ) goto oom;
+     pEntry = xwork__process_add(pAgent, pContext, XWORK_TASK_PROCESS);
+     if ( !pEntry ) { eResult = xwork__tool_fail(pOutput, "managed task limit reached; stop or release an existing task"); goto cleanup; }
++    if(pAgent->OnProcessAcquire){
++        if(!pAgent->OnProcessAcquire(pAgent->pProcessOwnerData,&pEntry->pProcessOwnerLease)){
++            eResult=xwork__tool_process_fail(pOutput,"spawn/resources",psArgv[0],sResolvedCwd,xrtGetError());goto cleanup;
++        }
++        pEntry->OnProcessRelease=pAgent->OnProcessRelease;pEntry->pProcessOwnerData=pAgent->pProcessOwnerData;pEntry->bProcessOwnerHeld=true;
++    }
+     pEntry->sCommand = xwork__argv_preview(psArgv, iArgvCount);
+     if ( !pEntry->sCommand ) goto oom;
+     pEntry->sLabel = xwork__strdup(pEntry->sCommand);
+@@ -1863,7 +1870,13 @@
+     tOptions.StdoutLimit = pAgent->iMaxCapturedCommandBytes;
+     tOptions.StderrLimit = pAgent->iMaxCapturedCommandBytes;
+     tOptions.Overflow = XPROCESS_OVERFLOW_KEEP_LAST;
+-    if ( !xrtProcessRun(pConfig, &tOptions, pResult) ) return false;
++    {
++        void* Lease=NULL;
++        if(pAgent->OnProcessAcquire&&!pAgent->OnProcessAcquire(pAgent->pProcessOwnerData,&Lease))return false;
++        bool Ran=xrtProcessRun(pConfig,&tOptions,pResult);
++        if(pAgent->OnProcessRelease)pAgent->OnProcessRelease(pAgent->pProcessOwnerData,Lease);
++        if(!Ran)return false;
++    }
+     if ( pResult->Wait == XWAIT_CANCELLED ) {
+         if ( pScopeResult ) *pScopeResult = XWORK_RESULT_CANCELLED;
+     } else if ( pResult->Wait == XWAIT_TIMEOUT &&
+diff --git a/src/script/import_xwork.inc b/src/script/import_xwork.inc
+--- a/src/script/import_xwork.inc
++++ b/src/script/import_xwork.inc
+@@ -31,6 +31,9 @@
+ XS_XWORK_SYMBOL(xworkAgentRunBegin)
+ XS_XWORK_SYMBOL(xworkAgentRunEnd)
+ XS_XWORK_SYMBOL(xworkAgentRunReadOnlySubagent)
++XS_XWORK_SYMBOL(xworkAgentSetFileScope)
++XS_XWORK_SYMBOL(xworkAgentSetMcpServers)
++XS_XWORK_SYMBOL(xworkAgentSetProcessOwner)
+ XS_XWORK_SYMBOL(xworkAgentSubagentCatalogSnapshot)
+ XS_XWORK_SYMBOL(xworkAgentSubagentTypeCount)
+ XS_XWORK_SYMBOL(xworkAgentTakeTaskNotices)
+@@ -60,6 +63,11 @@
+ XS_XWORK_SYMBOL(xworkEventSnapshotRelease)
+ XS_XWORK_SYMBOL(xworkExecutorBind)
+ XS_XWORK_SYMBOL(xworkExecutorUnbind)
++XS_XWORK_SYMBOL(xworkFileScopeCreate)
++XS_XWORK_SYMBOL(xworkFileScopeExternal)
++XS_XWORK_SYMBOL(xworkFileScopeRef)
++XS_XWORK_SYMBOL(xworkFileScopeRelease)
++XS_XWORK_SYMBOL(xworkFileScopeSetExternal)
+ XS_XWORK_SYMBOL(xworkMcpClientCallTool)
+ XS_XWORK_SYMBOL(xworkMcpClientConnect)
+ XS_XWORK_SYMBOL(xworkMcpClientCreate)
+@@ -102,6 +110,8 @@
+ XS_XWORK_SYMBOL(xworkRuntimeDisconnectMcpServer)
+ XS_XWORK_SYMBOL(xworkRuntimeEventSnapshot)
+ XS_XWORK_SYMBOL(xworkRuntimeFinishScheduledTask)
++XS_XWORK_SYMBOL(xworkRuntimeMcpDescribe)
++XS_XWORK_SYMBOL(xworkRuntimeMcpRead)
+ XS_XWORK_SYMBOL(xworkRuntimeMcpServerCount)
+ XS_XWORK_SYMBOL(xworkRuntimeMcpServerGetInfo)
+ XS_XWORK_SYMBOL(xworkRuntimeReadArtifact)
+@@ -123,6 +133,7 @@
+ XS_XWORK_SYMBOL(xworkRuntimeScheduleAt)
+ XS_XWORK_SYMBOL(xworkRuntimeScheduleCount)
+ XS_XWORK_SYMBOL(xworkRuntimeScheduleGetInfo)
++XS_XWORK_SYMBOL(xworkRuntimeSetMcpAuthorizationProvider)
+ XS_XWORK_SYMBOL(xworkRuntimeSetMcpServerEnabled)
+ XS_XWORK_SYMBOL(xworkRuntimeSetScheduleEnabled)
+ XS_XWORK_SYMBOL(xworkRuntimeStartScheduledTask)
+@@ -179,10 +190,3 @@
+ XS_XWORK_SYMBOL(xworkToolResultWriterSetSuccess)
+ XS_XWORK_SYMBOL(xworkToolResultWriterWrite)
+ XS_XWORK_SYMBOL(xworkToolResultWriterWriteText)
+-
+-XS_XWORK_SYMBOL(xworkFileScopeCreate)
+-XS_XWORK_SYMBOL(xworkFileScopeRef)
+-XS_XWORK_SYMBOL(xworkFileScopeRelease)
+-XS_XWORK_SYMBOL(xworkFileScopeSetExternal)
+-XS_XWORK_SYMBOL(xworkFileScopeExternal)
+-XS_XWORK_SYMBOL(xworkAgentSetFileScope)

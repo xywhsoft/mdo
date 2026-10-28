@@ -1,3 +1,4 @@
+from locked_sdk import sdk_root
 """Compile actual new platform ZIP storage in the existing xs compiler host."""
 import argparse
 import json
@@ -97,7 +98,7 @@ xvalue* QaProductContract(const xvalue* P,xvfs V){
 def main():
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('--url',required=True);p.add_argument('--home',type=Path,required=True);p.add_argument('--project',default='default');a=p.parse_args()
     out=ROOT/'.build/platform-directory-store-native';out.mkdir(parents=True,exist_ok=True);fixture=out/('home-'+uuid.uuid4().hex[:12]);fixture.mkdir()
-    shutil.copyfile(ROOT/'.build/sdk-overlays/16f28b0bd9ecf791b505bbff9001a0c18bbaf398e29d906dc01df967818bcb84/lib/sqlite3.h',fixture/'sqlite3.h')
+    shutil.copyfile(sdk_root()/'lib/sqlite3.h',fixture/'sqlite3.h')
     kinds=('agents','subagents','tools','mcp','skills','commands','external-tools','knowledge','plugins')
     for kind in kinds:
         directory_zip(fixture/(kind+'.zip'),kind)
