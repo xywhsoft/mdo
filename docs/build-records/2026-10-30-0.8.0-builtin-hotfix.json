@@ -1,0 +1,414 @@
+{
+  "completed_at": "2026-10-29T18:49:07.279851+00:00",
+  "status": "published",
+  "version_name": "0.8.0",
+  "version_code": "05000800",
+  "required": true,
+  "catalog_revision": 31,
+  "replaces_builds": [
+    70000065,
+    70000066,
+    70000067,
+    70000068,
+    70000069,
+    70000070,
+    70000071,
+    70000072
+  ],
+  "new_builds": [
+    70000073,
+    70000074,
+    70000075,
+    70000076,
+    70000077,
+    70000078,
+    70000079,
+    70000080
+  ],
+  "fix_commit": "255f1ffc",
+  "posix_test_commit": "dc973268",
+  "website_commit": "1c6587c824c4d62ac2bfea59fb76ff630b39a52e",
+  "application_source_sha256": "cb28ee06cfedb8daf9ef351b2700cc33d8d027f19fed33bc6424c6df4a6e1af8",
+  "sdk_overlay_sha256": "8f6b730676d095864f8f6d79b6c73681c92f056efda47a9c12c5c2fc6177c0b9",
+  "includes_preexisting_uncommitted_application_changes": true,
+  "root_cause": "Old bundled directories without logical IDs were left unchanged at startup, removing the default Agent from its catalog. Agent lookup failure was incorrectly mapped to session_profile_invalid.",
+  "changes": [
+    "Automatically upgrade unmodified bundled directories using their installed approval digest, with an expected-revision installation guard.",
+    "Preserve disabled, removed, edited and non-builtin installations. Edited or unverifiable builtins have consolidated warnings.",
+    "Quarantine an unapproved definition at startup so settings stay available; failed live reloads retain the existing catalog.",
+    "Use agent_unavailable for Agent lookup failures in session create/open, run and recovery paths; provide localized guidance and an Agent settings action."
+  ],
+  "checks": {
+    "original_bug": {
+      "original_0_8_reproduces_missing_agent_as_invalid_profile": true
+    },
+    "historical_upgrade": {
+      "upgrade-windows.json": {
+        "real_0_7_home_creates_session_after_automatic_upgrade": true,
+        "agent_and_model_errors_are_distinct": true,
+        "unchanged_restart_is_idempotent": true,
+        "modified_current_builtin_is_preserved_and_warned": true,
+        "disabled_agent_and_command_and_removed_command_are_preserved": true,
+        "optouts_restart_is_idempotent": true,
+        "edited_builtin_is_preserved_warned_and_does_not_block_other_upgrades": true,
+        "edited_restart_is_idempotent": true
+      },
+      "upgrade-desktop.json": {
+        "real_0_7_home_creates_session_after_automatic_upgrade": true,
+        "agent_and_model_errors_are_distinct": true,
+        "unchanged_restart_is_idempotent": true,
+        "modified_current_builtin_is_preserved_and_warned": true,
+        "disabled_agent_and_command_and_removed_command_are_preserved": true,
+        "optouts_restart_is_idempotent": true,
+        "edited_builtin_is_preserved_warned_and_does_not_block_other_upgrades": true,
+        "edited_restart_is_idempotent": true
+      },
+      "upgrade-linux-glibc.json": {
+        "real_0_7_home_creates_session_after_automatic_upgrade": true,
+        "agent_and_model_errors_are_distinct": true,
+        "unchanged_restart_is_idempotent": true,
+        "modified_current_builtin_is_preserved_and_warned": true,
+        "disabled_agent_and_command_and_removed_command_are_preserved": true,
+        "optouts_restart_is_idempotent": true,
+        "edited_builtin_is_preserved_warned_and_does_not_block_other_upgrades": true,
+        "edited_restart_is_idempotent": true
+      },
+      "upgrade-linux-musl.json": {
+        "real_0_7_home_creates_session_after_automatic_upgrade": true,
+        "agent_and_model_errors_are_distinct": true,
+        "unchanged_restart_is_idempotent": true,
+        "modified_current_builtin_is_preserved_and_warned": true,
+        "disabled_agent_and_command_and_removed_command_are_preserved": true,
+        "optouts_restart_is_idempotent": true,
+        "edited_builtin_is_preserved_warned_and_does_not_block_other_upgrades": true,
+        "edited_restart_is_idempotent": true
+      }
+    },
+    "fix_suites": [
+      {
+        "name": "probe-build",
+        "returncode": 0,
+        "seconds": 9.53
+      },
+      {
+        "name": "historical-home-upgrade",
+        "returncode": 0,
+        "seconds": 9.61
+      },
+      {
+        "name": "test_extension_builtins_native",
+        "returncode": 0,
+        "seconds": 1.91
+      },
+      {
+        "name": "test_module_directory_native",
+        "returncode": 0,
+        "seconds": 2.12
+      },
+      {
+        "name": "test_extension_directory_native",
+        "returncode": 0,
+        "seconds": 1.53
+      },
+      {
+        "name": "python-unit",
+        "returncode": 0,
+        "seconds": 8.08
+      },
+      {
+        "name": "web-modules",
+        "returncode": 0,
+        "seconds": 0.12
+      },
+      {
+        "name": "frontend",
+        "returncode": 0,
+        "seconds": 37.31
+      }
+    ],
+    "python": {
+      "total": 202,
+      "passed": 196,
+      "conditional_skips": 6
+    },
+    "frontend": {
+      "total": 1210,
+      "passed": 1208,
+      "conditional_skips": 2,
+      "modules": 236
+    },
+    "final_product_tests": [
+      {
+        "name": "packed-mdo.exe",
+        "returncode": 0,
+        "seconds": 2.86
+      },
+      {
+        "name": "packed-mdo-server.exe",
+        "returncode": 0,
+        "seconds": 2.76
+      },
+      {
+        "name": "packed-mdo-linux-x86_64-glibc",
+        "returncode": 0,
+        "seconds": 3.44
+      },
+      {
+        "name": "packed-mdo-server-linux-x86_64-glibc",
+        "returncode": 0,
+        "seconds": 2.52
+      },
+      {
+        "name": "packed-mdo-linux-x86_64-musl",
+        "returncode": 0,
+        "seconds": 3.94
+      },
+      {
+        "name": "packed-mdo-server-linux-x86_64-musl",
+        "returncode": 0,
+        "seconds": 2.88
+      },
+      {
+        "name": "android-static",
+        "returncode": 0,
+        "seconds": 4.75
+      }
+    ],
+    "android_package": {
+      "passed": true,
+      "checks": "APK CRC, IDs, native/data mapping, dependencies, 16 KiB ELF and ZIP alignment",
+      "apks": [
+        {
+          "edition": "lite",
+          "bytes": 6296980,
+          "native_elf_files": 3,
+          "runtime_paths": 0
+        },
+        {
+          "edition": "full",
+          "bytes": 474036328,
+          "native_elf_files": 151,
+          "runtime_paths": 972
+        }
+      ]
+    },
+    "android_exact_embedded_source": {
+      "passed": true,
+      "common_android_pack_sha256": "d70a95b581617a72d8c10aa695b20983d02d35d811fb48df4c75edca39ea11ef",
+      "verified_source_files": {
+        "src/extensions/builtins.c": "76eeaa1e2776b42e15140ab753907436de65e67c4c7536f9ea3bb9fb68e0b7c2",
+        "src/modules/manager.c": "155a316cd1f996b6837ffa643d1dfd9809a160434b52ab976fef885d33a13b56",
+        "src/api/profile.c": "df5ebac72ce7a041c8d24611152957b873850c6f46fc433d18cf7302e2a0eeee",
+        "web/lang/zh-CN.json": "10022cde8e08998146f86e3b4bc96fa4a1085ec4ca079873c7bd5e2beaf8b975",
+        "web/js/utils/dom.js": "075adf4db4c3a58ddc40e5ddb34b3434f2c446029bad1b19c375a8c62dc9ed2a"
+      }
+    },
+    "android_release_certificate_preserved": true,
+    "same_version_live_update": {
+      "original": {
+        "status": "available",
+        "build_id": 70000073,
+        "local_version_code": "05000800",
+        "version_code": "05000800",
+        "available": true,
+        "required": true,
+        "blocked": true
+      },
+      "replacement": {
+        "status": "current",
+        "build_id": 70000073,
+        "local_version_code": "05000800",
+        "version_code": "05000800",
+        "available": false,
+        "required": true,
+        "blocked": false
+      },
+      "passed": true
+    },
+    "live_store": {
+      "live_public_resolve": true,
+      "live_dependency_plan": true,
+      "live_archive_download_and_install": true,
+      "installed_identity_and_provenance": true,
+      "installed_program_executed": true,
+      "disable_succeeds": true,
+      "passed": true
+    },
+    "full_https_update_and_website_hashes": 8,
+    "public_windows_full_blob_hashes": 7,
+    "public_windows_full_apk_head": true
+  },
+  "production": {
+    "service_active": true,
+    "service_restarted": false,
+    "native_binary_and_configuration_unchanged": true,
+    "account_session_and_billing_data_not_replaced": true,
+    "temporary_release_administrator_removed": true,
+    "original_admin_credentials_unchanged": true
+  },
+  "products": [
+    {
+      "filename": "mdo.exe",
+      "platform": "windows-x86_64",
+      "edition": "desktop",
+      "build_id": 70000073,
+      "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
+      "bytes": 6507060,
+      "sha256": "eb0054e7213b3204a412831d086898d257f826a05bd40b758b31b192b66c69eb",
+      "host_bytes": 4046848,
+      "host_sha256": "2c5a24f46416cb1fdd7b99eea7cca5bbdf7a45264d73bb4a2abe6fd91439121c",
+      "libc": "mingw",
+      "packaged_app_sha256": "28d023f47237493a2b75ea3f57189b81c5965c12513354788b83e5295c976ab2"
+    },
+    {
+      "filename": "mdo-server.exe",
+      "platform": "windows-x86_64",
+      "edition": "server",
+      "build_id": 70000074,
+      "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
+      "bytes": 6249330,
+      "sha256": "9dfcf0ec1e0498fd4b393bc1e610c307be6648d5ceccde054d5ab197f16d2b6a",
+      "host_bytes": 3789312,
+      "host_sha256": "58aa1ee12ec627fc9013bc39a5dae6202672daca9f611502182ab2cd626e6ce8",
+      "libc": "mingw",
+      "packaged_app_sha256": "748a8a43d22aeb8c50dc4c6142d1fce467a4cc56ea14be185b8c1f8ee8b5dee2"
+    },
+    {
+      "filename": "mdo-linux-x86_64-glibc",
+      "platform": "linux-x86_64-glibc",
+      "edition": "desktop",
+      "build_id": 70000075,
+      "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
+      "bytes": 6108541,
+      "sha256": "7d72a05ca72b85d6214cd26bb982ac05c55541b9c9073640684ec519d831fc6e",
+      "host_bytes": 3648312,
+      "host_sha256": "11fc8369d5894ae75a505263fd400fd5b3c684dc3d3816996a68655911f44daf",
+      "libc": "glibc",
+      "packaged_app_sha256": "6bb79a9c1cd1ec490eb8dcceec97358da57d9479b8872077e02a9a3cf592114e",
+      "static_core": false,
+      "elf_needed": [
+        "libdl.so.2",
+        "libpthread.so.0",
+        "libm.so.6",
+        "libc.so.6"
+      ],
+      "glibc_required": "2.28",
+      "glibc_max": "2.28"
+    },
+    {
+      "filename": "mdo-server-linux-x86_64-glibc",
+      "platform": "linux-x86_64-glibc",
+      "edition": "server",
+      "build_id": 70000076,
+      "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
+      "bytes": 6071420,
+      "sha256": "e369cea98c87481afc8149538f94f459d60bb916187738a8815b7819221f1e9c",
+      "host_bytes": 3611384,
+      "host_sha256": "1bd9b4e9e4b4415a89c3e847bac8c51adbcf7c9e2b8bebac61dada14fcd1c7c4",
+      "libc": "glibc",
+      "packaged_app_sha256": "cae561d3f2b2a0ac50dae2534f1da0d0e9e3c912e96bf11d00a3ad9b8eb69ebb",
+      "static_core": false,
+      "elf_needed": [
+        "libdl.so.2",
+        "libpthread.so.0",
+        "libm.so.6",
+        "libc.so.6"
+      ],
+      "glibc_required": "2.28",
+      "glibc_max": "2.28"
+    },
+    {
+      "filename": "mdo-linux-x86_64-musl",
+      "platform": "linux-x86_64-musl",
+      "edition": "desktop",
+      "build_id": 70000077,
+      "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
+      "bytes": 7847516,
+      "sha256": "065ba70b408ecf206e8ca7c7db15ecd71d5ab03949558d0822c0374fc5704907",
+      "host_bytes": 5387288,
+      "host_sha256": "cc225b20a11568fb7a3b9485aad1d43381091e0433d78a295d360b813a998629",
+      "libc": "musl",
+      "packaged_app_sha256": "3fe7525ed6fdc4e9251f213d70f74cb5c1a95cd93521d960e81ac5d062ebfa9b",
+      "static_core": true,
+      "elf_needed": [],
+      "glibc_required": null,
+      "glibc_max": "2.28"
+    },
+    {
+      "filename": "mdo-server-linux-x86_64-musl",
+      "platform": "linux-x86_64-musl",
+      "edition": "server",
+      "build_id": 70000078,
+      "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
+      "bytes": 7810460,
+      "sha256": "60a79a4aa99eca55f5b230f7cad9471f63deeb0772073233ae514f2e7dc61aed",
+      "host_bytes": 5350424,
+      "host_sha256": "5330f236213eb6a3c16abeb6dee16839775cd10a09ce4ffddfa76a2e956f115d",
+      "libc": "musl",
+      "packaged_app_sha256": "66c275a5554ac65da0f165237c82b0f2b0e75ac6ddad5d87e71974cfbe7310b1",
+      "static_core": true,
+      "elf_needed": [],
+      "glibc_required": null,
+      "glibc_max": "2.28"
+    },
+    {
+      "filename": "mdo-arm64-v8a.apk",
+      "platform": "android-arm64-v8a",
+      "edition": "lite",
+      "build_id": 70000079,
+      "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
+      "bytes": 6296980,
+      "sha256": "9166566191728a1f4b414d8cebe97a9635a6a9d0b0c7bba95bad567a9f28fb86",
+      "host_bytes": 3551560,
+      "host_sha256": "99ffadc05f06ee8b2a9266dd9effde1c8556416d12bbff529a76d66f5db3aa95",
+      "release_signed": true,
+      "signer_sha256": "94b1947b60f3ce0852b19d9c37a47cc4a084fe9d601692c6a1f6b204c2174e84",
+      "debuggable": false,
+      "abi": "arm64-v8a"
+    },
+    {
+      "filename": "mdo-full-arm64-v8a.apk",
+      "platform": "android-arm64-v8a",
+      "edition": "full",
+      "build_id": 70000080,
+      "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
+      "bytes": 474036328,
+      "sha256": "334287941d460fec433dba860f10b369e5d6066770645bccc96550ffab74dcd0",
+      "host_bytes": 3551560,
+      "host_sha256": "99ffadc05f06ee8b2a9266dd9effde1c8556416d12bbff529a76d66f5db3aa95",
+      "release_signed": true,
+      "signer_sha256": "94b1947b60f3ce0852b19d9c37a47cc4a084fe9d601692c6a1f6b204c2174e84",
+      "debuggable": false,
+      "abi": "arm64-v8a"
+    }
+  ],
+  "limitations": [
+    "Android final packages passed automatic CRC, metadata, 16 KiB alignment, native dependency, signature and exact embedded source checks; no Android real-device test was rerun in this hotfix.",
+    "No paid model calls, Linux GUI visual verification or soak. Earlier full release-gate fixture gaps are not claimed resolved by this targeted hotfix."
+  ],
+  "private_local_evidence": ".build/release-0.8.0-hotfix-20261030",
+  "private_remote_evidence": "/home/xs/mdo-release-0.8.0-hotfix-20261030",
+  "evidence_sha256": {
+    "build-inputs.json": "f332560263a85ad9ef852761185c6f5500fdb26e0b8025f86d4e2d8c9d6b4743",
+    "build-results.json": "2c4f215784e05cbcdfc04d6e0fe011bea26d0bcf478c276810bd6bd7a7d97306",
+    "fix-tests.json": "b748ccd5d772564f048fa1d6806bc99d4edbcfccd794f9488fb0463d37868b35",
+    "product-tests.json": "5303fdc8cab53b6e38422b681f444ef3ccb537072a84eea43acc0852fb35504a",
+    "upgrade-before.json": "60ee76fa936dd222db2ecbfa6151a3396bccfda011f1074c19600fed00f4c2dd",
+    "upgrade-windows.json": "e2589c2727643edc4bd72aebd3a361b25e74f8ff02706014892721e5feeb4e9e",
+    "upgrade-desktop.json": "e2589c2727643edc4bd72aebd3a361b25e74f8ff02706014892721e5feeb4e9e",
+    "upgrade-linux-glibc.json": "888d3daf7cb4b033d10bdb58798b8b5391f1ee8aa9a436d70c4285f51b9f1719",
+    "upgrade-linux-musl.json": "888d3daf7cb4b033d10bdb58798b8b5391f1ee8aa9a436d70c4285f51b9f1719",
+    "android-pack-source.json": "1d35ee443bd8ae5754e3925cb53b2d385f18f55821eef483bbfd0f5a65dacd64",
+    "publication.json": "2081ebc9d869fa366ccd3c03b675c5c4fe49a876b455f6b8a90e06f6e38c6658",
+    "release-validation.json": "a2af1804c10886a3ee922a57aebd78584a093179f5cd97ceb1c036a757a4be91",
+    "published-https-validation.json": "c5172534cf69aa0da43c34f845049b59d2baf02b2449ebb32de1d811f63ac3a7",
+    "windows-public-validation.json": "0cc2adaa9e6dcb4fec706955402ab99bad4795975aaadd0386b758ae07474df1",
+    "same-version-update.json": "ed6450cb54d3aae8c8919c585b5d60f26987d52b3d1da4a06203ccb16b2c1369",
+    "live-store-test.json": "a077711aa2c9e9d0be207d7c8a7dc3635563e0787f85667760d25e37f376615c"
+  },
+  "publication_postcheck_recovery": {
+    "original_error": "ConnectionResetError: [Errno 104] Connection reset by peer",
+    "resolution": "A transient TLS reset occurred during the read-only catalogue postcheck after successful publication. Independent full HTTPS and state verification completed successfully.",
+    "verification": "published-https-validation.json"
+  }
+}
