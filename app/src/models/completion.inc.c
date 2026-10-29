@@ -32,6 +32,7 @@ static const struct {
     { "profile_context_limit", "The Agent's context or input limit exceeds this model's limit. Adjust the Agent limits or choose a model with a larger context window." },
     { "profile_credential_unavailable", "The configured model credential is unavailable locally. Check the provider key or its secret reference in model settings." },
     { "profile_proxy_unavailable", "The configured proxy credential is unavailable locally. Check the proxy settings and its secret reference." },
+    { "profile_system_proxy_unavailable", "System proxy resolution failed. Check the system network proxy or PAC settings, or select a manual proxy. The request was not silently switched to a direct connection." },
     { "profile_ca_unavailable", "The configured CA certificate could not be loaded. Check the certificate file in network settings." },
     { "profile_endpoint_invalid", "The configured model endpoint is invalid. Check the provider API address in model settings." },
 };

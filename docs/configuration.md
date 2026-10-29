@@ -41,7 +41,15 @@ mdo 配置 schema v1 由一份内置基线、三份可选用户 patch 和一层�
 
 `settings.transport.ca_pem_path` 可在“网络”页配置模型 HTTPS 请求使用的自定义 CA。路径必须相对于外部 `mdo-home/`，以 `/` 分隔，不允许盘符、反斜杠或 `..`；例如把 PEM 放到 `mdo-home/certs/company.pem`，设置值为 `certs/company.pem`。空值使用系统证书；非空值将 PEM 中的信任锚与系统证书合并后交给 xllm，不会关闭 TLS 校验，也不影响 Web 搜索工具。运行前读取并解析 PEM，文件缺失、超过 1 MiB 或无有效证书时模型启动明确失败。证书文件随 Home 一起搬移，单文件首次启动不要求创建该目录。
 
-`settings.transport.proxy` 管理模型 HTTPS 请求的可选 HTTP CONNECT 或 SOCKS5 代理，字段为 `kind`（`none`、`http-connect`、`socks5`）、`host`、`port`、`user`、`bypass`。启用时须填写主机和 1–65535 端口；`bypass` 用逗号分隔目标主机模式，支持模式开头或结尾的 `*`。代理密码只能写在 `credential.secret_ref`，引用 `env:`、`file:`、`keychain:` 或 `prompt:`，若使用密码还须填写用户名。`GET /api/v1/settings` 只返回 `credential_configured`，不回传引用文本；设置页输入新引用可替换，勾选清除可移除引用，其他字段的局部更新会保留已有引用。密码在创建模型客户端时解析，读取后即释放临时副本。`kind: none` 保留参数供日后再启用。代理只作用于模型请求，不作用于 Web 搜索、MCP 或应用服务；xllm 当前仅允许 HTTPS 模型端点使用代理。
+`settings.transport.proxy` 管理模型 HTTPS 请求代理，`kind` 可选 `none`（默认）、`system`、`http-connect`、`socks5`。手动模式须填写 `host` 和 1–65535 的 `port`；`user` 可选，`bypass` 用逗号分隔目标主机模式，支持模式开头或结尾的 `*`。代理密码只能写在 `credential.secret_ref`，引用 `env:`、`file:`、`keychain:` 或 `prompt:`，若使用密码还须填写用户名。`GET /api/v1/settings` 只返回 `credential_configured`，不回传引用文本；设置页输入新引用可替换，勾选清除可移除引用，其他字段的局部更新会保留已有引用。密码在创建模型客户端时解析，读取后即释放临时副本。关闭或使用系统代理均保留手动参数；系统模式不读取这些手动凭据。代理只作用于模型请求，不作用于 Web 搜索、MCP 或应用服务；xllm 当前仅允许 HTTPS 模型端点使用代理。
+
+“使用系统代理”在每次模型请求前按实际目标地址解析：
+
+- Windows 读取当前用户的系统代理设置（WinINet）；显式 PAC 按目标解析，无显式 PAC 时优先静态代理，仅自动检测时使用 WPAD。当前用户设置不可读时读取 WinHTTP 默认配置。尊重系统绕过规则和 PAC 的 DIRECT 结果；PAC 失败可使用系统配置的静态后备代理，否则报错。发现超时参数为 5 秒（传给各个系统网络阶段，不是整个 PAC 的严格总耗时上限）。不读取浏览器扩展的独立代理，也不自动发送 Windows 登录凭据。
+- Linux 读取 mdo 启动进程的 `https_proxy` / `HTTPS_PROXY`（HTTP 目标使用 `http_proxy` / `HTTP_PROXY`），缺省时读取 `all_proxy` / `ALL_PROXY`；小写变量优先，显式空值表示直连。`no_proxy` / `NO_PROXY` 支持主机、域名后缀、通配符和可选端口，不支持 CIDR。不读取桌面专有代理设置或 PAC。
+- Android 使用系统默认 `ProxySelector`，跟随当前网络的 HTTP/SOCKS 代理或直连选择；查询使用有界工作队列及 5 秒等待，不开启无限后台线程。VPN 是否接管连接仍由 Android 网络路由决定。
+
+系统未配置代理或命中绕过规则时直连；发现失败、无效地址或不支持的代理协议会返回 `profile_system_proxy_unavailable`，不会把失败悄悄转为直连。不支持 TLS 到代理本身的 `https://` 代理和未标明版本的 SOCKS；可手动指定 HTTP CONNECT 或 SOCKS5。进程代理 URI 中的凭据只在内存解析并清除，不写回设置或日志。系统设置改变后下一次模型请求重新解析；已开始的请求继续使用原有连接。
 
 `models.providers` 与 `models.items` 分开。provider 保存 endpoint、TLS 校验、超时和凭据引用；model 保存 provider ID、wire model、可选协议、默认协议、xllm 能力、上下文/输入/输出窗口、推理档位和附件类型。模型引用的每种协议必须在 provider 上有对应 endpoint，默认协议必须属于模型协议集。
 

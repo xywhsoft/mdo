@@ -34,12 +34,13 @@ static bool MdoApiModelProxyBypassed(cstr Patterns, cstr Url)
     return false;
 }
 
-static xhttpclient* MdoApiModelDiscoveryClient(MdoApiContext* Context, cstr Url, bool Verify)
+static xhttpclient* MdoApiModelDiscoveryClient(MdoApiContext* Context, cstr Url, bool Verify,
+    xllm_error* Error)
 {
     MdoConfigTransportSettings Transport = {0}; xhttpclientconfig Config;
     xtlsverifierconfig Tls; xtlsverifier* Verifier = NULL; xx509store* Store = NULL;
     xnetproxyconfig ProxyConfig; xnetproxy* Proxy = NULL; char* Password = NULL;
-    xhttpclient* Client = NULL; xllm_error Error = {0};
+    xhttpclient* Client = NULL; XS_SystemProxyInfo SystemProxy = {0};
     Transport.Size = sizeof(Transport);
     if (!Context->Request->server || !Context->Request->server->Engine || !MdoConfigGetTransportSettings(&Transport)) return NULL;
     xrtHttpClientConfigInit(&Config); Config.Timeout = 15000000u; Config.IdleTimeout = 10000000u;
@@ -48,11 +49,26 @@ static xhttpclient* MdoApiModelDiscoveryClient(MdoApiContext* Context, cstr Url,
     if (!Verify || Transport.CaPemPath[0]) {
         xrtTlsVerifierConfigInit(&Tls);
         if (!Verify) Tls.Verify = MdoApiModelAcceptTls;
-        else { Store = MdoModelsLoadCaStore(Transport.CaPemPath, &Error); if (!Store) goto done; Tls.Store = Store; }
+        else { Store = MdoModelsLoadCaStore(Transport.CaPemPath, Error); if (!Store) goto done; Tls.Store = Store; }
         Verifier = xrtTlsVerifierCreate(&Tls); if (!Verifier) goto done;
         Config.TlsVerifier = Verifier; Config.SystemTrust = false;
     }
-    if (strcmp(Transport.ProxyKind, "none") && !MdoApiModelProxyBypassed(Transport.ProxyBypass, Url)) {
+    bool System = !strcmp(Transport.ProxyKind, "system");
+    if (System) {
+        SystemProxy.Size = sizeof(SystemProxy); SystemProxy.Version = XS_SYSTEM_PROXY_VERSION;
+        if (!xsSystemProxyResolve(Url, 5000u, &SystemProxy)) {
+            MdoModelProfileErrorInit(Error, "profile_system_proxy_unavailable", SystemProxy.Reason);
+            goto done;
+        }
+        if (SystemProxy.Kind != XS_SYSTEM_PROXY_DIRECT) {
+            xrtNetProxyConfigInit(&ProxyConfig);
+            ProxyConfig.Type = SystemProxy.Kind == XS_SYSTEM_PROXY_SOCKS5 ? XNET_PROXY_SOCKS5 : XNET_PROXY_HTTP_CONNECT;
+            ProxyConfig.Host = xrtStrView(SystemProxy.Host); ProxyConfig.Port = SystemProxy.Port;
+            ProxyConfig.Username = (xbytesview){(const unsigned char*)SystemProxy.User, strlen(SystemProxy.User)};
+            ProxyConfig.Password = (xbytesview){(const unsigned char*)SystemProxy.Password, strlen(SystemProxy.Password)};
+            Proxy = xrtNetProxyCreate(&ProxyConfig); if (!Proxy) goto done; Config.Proxy = Proxy;
+        }
+    } else if (strcmp(Transport.ProxyKind, "none") && !MdoApiModelProxyBypassed(Transport.ProxyBypass, Url)) {
         xrtNetProxyConfigInit(&ProxyConfig);
         ProxyConfig.Type = strcmp(Transport.ProxyKind, "socks5") == 0 ? XNET_PROXY_SOCKS5 : XNET_PROXY_HTTP_CONNECT;
         ProxyConfig.Host = xrtStrView(Transport.ProxyHost); ProxyConfig.Port = Transport.ProxyPort;
@@ -63,6 +79,7 @@ static xhttpclient* MdoApiModelDiscoveryClient(MdoApiContext* Context, cstr Url,
     }
     Client = xrtHttpClientCreate(Context->Request->server->Engine, &Config);
 done:
+    xrtSecureZero(&SystemProxy, sizeof(SystemProxy));
     MdoSecretRelease(&Password); xrtNetProxyRelease(Proxy); xrtTlsVerifierRelease(Verifier); xrtX509StoreFree(Store);
     return Client;
 }
@@ -98,7 +115,13 @@ static bool MdoApiModelDiscoverRun(MdoApiContext* Context, MdoApiJsonBody Body)
         if (!MdoSecretResolve(xrtStrView(Ref), 4096u, &Secret)) { Reply = 422u; Code = "credential_unavailable"; Message = "Saved key is unavailable; enter it again or check its reference"; goto done; }
         Key = Secret;
     }
-    Client = MdoApiModelDiscoveryClient(Context, Url, Verify);
+    xllm_error DiscoveryError = {0};
+    Client = MdoApiModelDiscoveryClient(Context, Url, Verify, &DiscoveryError);
+    if (!Client && !strcmp(MdoModelErrorKind(&DiscoveryError), "profile_system_proxy_unavailable")) {
+        Code = "model_profile_system_proxy_unavailable";
+        Message = MdoModelErrorMessage(&DiscoveryError);
+        goto done;
+    }
     Request = xrtHttpRequestCreate(XRT_STR_LITERAL("GET"), xrtStrView(Url));
     if (!Client || !Request) goto done;
     if (Key) {

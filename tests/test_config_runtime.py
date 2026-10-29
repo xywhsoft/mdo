@@ -22,9 +22,20 @@ PROBE_SOURCE = r'''
 #include <stdio.h>
 #include <string.h>
 #include <xsbase.h>
+#include "model-plugin-free.h"
 
 #include "src/storage/home.c"
+/* Atomic writes now use unique sibling files. Inject a failed write at the
+ * boundary instead of relying on the retired fixed settings.json.tmp name. */
+static bool ProbeAtomicWrite(cstr Path, const void* Data, size_t Size, bool Backup)
+{
+    for (uint32 I=0u;I<xsAppArgumentCount();I++)
+        if (!strcmp(xsAppArgument(I),"--fault-write")) return false;
+    return MdoHomeAtomicWrite(Path,Data,Size,Backup);
+}
+#define MdoHomeAtomicWrite ProbeAtomicWrite
 #include "src/config/config.c"
+#undef MdoHomeAtomicWrite
 
 static void PrintError(const char* sLabel)
 {
@@ -71,6 +82,28 @@ static void ProbePermissions(void)
     printf("probe_done=1\n");
 }
 
+static void ProbeProxy(void)
+{
+    static const char Manual[] = "{\"schema_version\":1,\"patch\":{\"transport\":{\"proxy\":{"
+        "\"kind\":\"socks5\",\"host\":\"retained-proxy\",\"port\":1080,\"user\":\"tester\","
+        "\"credential\":{\"secret_ref\":\"env:MDO_ABSENT_PROXY_SECRET\"}}}}}";
+    printf("proxy_manual_save=%d\n", MdoConfigImport(MDO_CONFIG_SETTINGS,xrtStrView(Manual)) ? 1 : 0);
+    size_t Bytes=0;char* Merged=MdoConfigExport(MDO_CONFIG_SETTINGS,false,&Bytes);
+    char* Kind=Merged?strstr(Merged,"socks5"):NULL;
+    if(Kind)memcpy(Kind,"system",6u);
+    printf("proxy_system_save=%d\n", MdoConfigImport(MDO_CONFIG_SETTINGS,xrtStrView(Merged)) ? 1 : 0);
+    xrtFree(Merged);
+    MdoConfigUnit();
+    printf("proxy_system_reload=%d\n",MdoConfigInit() ? 1 : 0);
+    MdoConfigTransportSettings Transport={0};Transport.Size=sizeof(Transport);
+    printf("proxy_system_retained=%d\n",MdoConfigGetTransportSettings(&Transport) &&
+        !strcmp(Transport.ProxyKind,"system") && !strcmp(Transport.ProxyHost,"retained-proxy") &&
+        Transport.ProxyPort==1080 && !strcmp(Transport.ProxyUser,"tester") &&
+        !strcmp(Transport.ProxySecretRef,"env:MDO_ABSENT_PROXY_SECRET") ? 1 : 0);
+    MdoConfigRestore(MDO_CONFIG_SETTINGS);
+    printf("probe_done=1\n");
+}
+
 void ServiceInit(XS_HostInfo* pHost)
 {
     static const char sSettingsOne[] =
@@ -84,6 +117,8 @@ void ServiceInit(XS_HostInfo* pHost)
         "{\"schema_version\":1,\"patch\":{\"transport\":{\"ca_pem_path\":\"../outside.pem\"}}}";
     static const char sIncompleteProxy[] =
         "{\"schema_version\":1,\"patch\":{\"transport\":{\"proxy\":{\"kind\":\"socks5\"}}}}";
+    static const char sSystemProxy[] =
+        "{\"schema_version\":1,\"patch\":{\"transport\":{\"proxy\":{\"kind\":\"system\"}}}}";
     static const char sPlainProxyPassword[] =
         "{\"schema_version\":1,\"patch\":{\"transport\":{\"proxy\":{\"password\":\"plaintext\"}}}}";
     static const char sRemoveLing[] =
@@ -115,6 +150,7 @@ void ServiceInit(XS_HostInfo* pHost)
     {
         uint32 i;
         for ( i = 0u; i < xsAppArgumentCount(); i++ ) {
+            if ( strcmp(xsAppArgument(i), "--proxy-probe") == 0 ) { ProbeProxy(); return; }
             if ( strcmp(xsAppArgument(i), "--permission-probe") == 0 ) {
                 ProbePermissions();
                 return;
@@ -177,6 +213,8 @@ void ServiceInit(XS_HostInfo* pHost)
         xrtStrView(sEscapingCa), &Preview) ? 1 : 0);
     printf("incomplete_proxy=%d\n", MdoConfigPreviewImport(MDO_CONFIG_SETTINGS,
         xrtStrView(sIncompleteProxy), &Preview) ? 1 : 0);
+    printf("system_proxy=%d\n", MdoConfigPreviewImport(MDO_CONFIG_SETTINGS,
+        xrtStrView(sSystemProxy), &Preview) ? 1 : 0);
     printf("plain_proxy_password=%d\n", MdoConfigPreviewImport(MDO_CONFIG_SETTINGS,
         xrtStrView(sPlainProxyPassword), &Preview) ? 1 : 0);
     memset(&Preview, 0, sizeof(Preview));
@@ -211,6 +249,7 @@ def write_site(site: Path) -> None:
     (site / "src" / "config").mkdir(parents=True)
     (site / "include" / "mdo").mkdir(parents=True)
     (site / "web" / "index.html").write_text("probe", encoding="utf-8")
+    shutil.copy2(ROOT / "tests/fixtures/model-plugin-free.h", site / "model-plugin-free.h")
     shutil.copy2(ROOT / "app/default-home/config/defaults.json",
                  site / "default-home/config/defaults.json")
     for relative in ("src/storage/home.c", "src/storage/home_import.inc.c", "src/storage/home_purge.inc.c", "src/storage/home_restore.inc.c", "src/config/config.c",
@@ -308,6 +347,7 @@ def main() -> int:
         assert "sensitive values must be stored as secret_ref" in output, output
         assert "escaping_ca=0" in output, output
         assert "incomplete_proxy=0" in output, output
+        assert "system_proxy=1" in output, output
         assert "plain_proxy_password=0" in output, output
         assert "ornith-1.5-35b is built-in" in output, output
         assert "restore_preview=1 changes=1" in output, output
@@ -319,6 +359,10 @@ def main() -> int:
         for path in (home / "config").glob("*.json*"):
             if path.is_file():
                 assert "plaintext" not in path.read_text(encoding="utf-8")
+
+        proxy_output = run_probe(host, site, base / "proxy-settings", extra_args=("--proxy-probe",))
+        for check in ("proxy_manual_save", "proxy_system_save", "proxy_system_reload", "proxy_system_retained"):
+            assert f"{check}=1" in proxy_output, proxy_output
 
         layered = base / "layered"
         (layered / "config").mkdir(parents=True)
@@ -382,7 +426,7 @@ def main() -> int:
         assert "probe_init_error=" in output, output
 
         faulted = base / "faulted"
-        (faulted / "config/settings.json.tmp/occupied").mkdir(parents=True)
+        (faulted / "config").mkdir(parents=True)
         original = {
             "schema_version": 1,
             "patch": {"appearance": {"theme": "light"}},

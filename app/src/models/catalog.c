@@ -1121,6 +1121,7 @@ static xllm_client* MdoModelClientCreateAuth(const MdoModelCatalog* pCatalog,
     char* Endpoint = NULL;
     char* Secret = NULL;
     char* ProxyPassword = NULL;
+    XS_SystemProxyInfo SystemProxy = {0};
     xx509store* CaStore = NULL;
     MdoConfigTransportSettings Transport;
     xllm_model_profile Profile;
@@ -1210,7 +1211,17 @@ static xllm_client* MdoModelClientCreateAuth(const MdoModelCatalog* pCatalog,
         CaStore = MdoModelsLoadCaStore(Transport.CaPemPath, pError);
         if ( CaStore == NULL ) goto done;
     }
-    if ( strcmp(Transport.ProxyKind, "none") != 0 &&
+    bool System = strcmp(Transport.ProxyKind, "system") == 0;
+    if ( System ) {
+        SystemProxy.Size = sizeof(SystemProxy);
+        SystemProxy.Version = XS_SYSTEM_PROXY_VERSION;
+        if ( !xsSystemProxyResolve(Endpoint, 5000u, &SystemProxy) ) {
+            MdoModelProfileErrorInit(pError, "profile_system_proxy_unavailable",
+                SystemProxy.Reason[0] ? SystemProxy.Reason : "system proxy resolution failed");
+            goto done;
+        }
+    }
+    if ( !System && strcmp(Transport.ProxyKind, "none") != 0 &&
          Transport.ProxySecretRef[0] != '\0' &&
          !MdoSecretResolve(xrtStrView(Transport.ProxySecretRef), 4096u,
             &ProxyPassword) ) {
@@ -1234,7 +1245,15 @@ static xllm_client* MdoModelClientCreateAuth(const MdoModelCatalog* pCatalog,
     Config.uMaxAttempts = 1u;
     if(Online){Config.bVerifyPeer=!strncmp(g_MdoModelsOnline.Origin,"https://",8);}
     Config.pX509Store = CaStore;
-    if ( strcmp(Transport.ProxyKind, "none") != 0 ) {
+    if ( System && SystemProxy.Kind != XS_SYSTEM_PROXY_DIRECT ) {
+        Config.eProxyKind = SystemProxy.Kind == XS_SYSTEM_PROXY_SOCKS5
+            ? XLLM_PROXY_SOCKS5 : XLLM_PROXY_HTTP_CONNECT;
+        Config.sProxyHost = SystemProxy.Host;
+        Config.uProxyPort = SystemProxy.Port;
+        Config.sProxyUser = SystemProxy.User;
+        Config.sProxyPass = SystemProxy.Password;
+        /* The native resolver has already applied destination-specific bypass. */
+    } else if ( !System && strcmp(Transport.ProxyKind, "none") != 0 ) {
         Config.eProxyKind = strcmp(Transport.ProxyKind, "socks5") == 0
             ? XLLM_PROXY_SOCKS5 : XLLM_PROXY_HTTP_CONNECT;
         Config.sProxyHost = Transport.ProxyHost;
@@ -1257,6 +1276,7 @@ static xllm_client* MdoModelClientCreateAuth(const MdoModelCatalog* pCatalog,
     }
 
 done:
+    xrtSecureZero(&SystemProxy, sizeof(SystemProxy));
     xrtX509StoreFree(CaStore);
     MdoSecretRelease(&ProxyPassword);
     MdoSecretRelease(&Secret);

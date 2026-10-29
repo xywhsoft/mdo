@@ -378,7 +378,7 @@ static bool MdoConfigProxyText(xstrview Text, size_t Maximum,
 static bool MdoConfigProxyValidate(const xvalue* Proxy)
 {
     static const char* const Kinds[] = {
-        "none", "http-connect", "socks5"
+        "none", "http-connect", "socks5", "system"
     };
     const xvalue* Credential;
     xstrview Kind;
@@ -389,7 +389,7 @@ static bool MdoConfigProxyValidate(const xvalue* Proxy)
     uint64 Port;
     if ( xrtValueType(Proxy) != XVALUE_OBJECT ||
          !MdoConfigStringOneOf(xrtValueObjectGet(Proxy,
-            MdoConfigKey("kind")), Kinds, 3u) ||
+            MdoConfigKey("kind")), Kinds, 4u) ||
          !MdoConfigString(xrtValueObjectGet(Proxy,
             MdoConfigKey("kind")), &Kind) ||
          !MdoConfigString(xrtValueObjectGet(Proxy,
@@ -403,7 +403,7 @@ static bool MdoConfigProxyValidate(const xvalue* Proxy)
          !MdoConfigString(xrtValueObjectGet(Proxy,
             MdoConfigKey("bypass")), &Bypass) ||
          !MdoConfigProxyText(Bypass, 1024u, true) ||
-         (!MdoConfigViewEqual(Kind, "none") &&
+         (!MdoConfigViewEqual(Kind, "none") && !MdoConfigViewEqual(Kind, "system") &&
           (Host.Size == 0u || Port == 0u)) ) return false;
     Credential = xrtValueObjectGet(Proxy, MdoConfigKey("credential"));
     if ( Credential != NULL && xrtValueType(Credential) != XVALUE_NULL &&

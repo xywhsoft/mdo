@@ -8,7 +8,7 @@ function number(form, name) {
   return Number(form.elements[name].value);
 }
 
-function settingsPatch(form) {
+export function settingsPatch(form) {
   const proxySecretRef = form.elements.proxy_secret_ref.value.trim();
   return {
     locale: form.elements.locale.value,
@@ -36,12 +36,14 @@ function settingsPatch(form) {
       ca_pem_path: form.elements.ca_pem_path.value.trim(),
       proxy: {
         kind: form.elements.proxy_kind.value,
+        ...(form.elements.proxy_kind.value === "system" ? {} : {
         host: form.elements.proxy_host.value.trim(),
         port: number(form, "proxy_port"),
         user: form.elements.proxy_user.value.trim(),
         bypass: form.elements.proxy_bypass.value.trim(),
         ...(form.elements.proxy_clear_secret.checked ? { credential: null }
           : proxySecretRef ? { credential: { secret_ref: proxySecretRef } } : {}),
+        }),
       },
     },
     workspace: {
@@ -49,6 +51,23 @@ function settingsPatch(form) {
       confirm_external_write: form.elements.confirm_external_write.checked,
     },
   };
+}
+
+export function validateSettingsProxy(form, snapshot) {
+  const kind = form.elements.proxy_kind.value;
+  const manual = kind === "http-connect" || kind === "socks5";
+  for (const name of ["proxy_host", "proxy_port", "proxy_user", "proxy_secret_ref",
+    "proxy_bypass", "proxy_clear_secret"]) form.elements[name].disabled = kind === "system";
+  form.elements.proxy_host.required = manual;
+  form.elements.proxy_port.min = manual ? "1" : "0";
+  const user = form.elements.proxy_user;
+  const hasCredential = Boolean(snapshot?.transport?.proxy?.credential_configured) ||
+    Boolean(form.elements.proxy_secret_ref.value.trim());
+  user.setCustomValidity(manual && !form.elements.proxy_clear_secret.checked &&
+    hasCredential && !user.value.trim() ? t("settings.proxyUserRequired", {},
+      "配置密码引用时须填写代理用户名。") : "");
+  return kind === "system" || (form.elements.proxy_host.validity.valid &&
+    form.elements.proxy_port.validity.valid && user.validity.valid);
 }
 
 export function applyAppearance(settings) {
@@ -206,18 +225,7 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
   }
 
   function validateProxy() {
-    const enabled = form.elements.proxy_kind.value !== "none";
-    form.elements.proxy_host.required = enabled;
-    form.elements.proxy_port.min = enabled ? "1" : "0";
-    const user = form.elements.proxy_user;
-    const hasCredential = Boolean(snapshot?.transport?.proxy?.credential_configured) ||
-      Boolean(form.elements.proxy_secret_ref.value.trim());
-    user.setCustomValidity(!form.elements.proxy_clear_secret.checked &&
-      hasCredential &&
-      !user.value.trim() ? t("settings.proxyUserRequired", {},
-        "配置密码引用时须填写代理用户名。") : "");
-    return form.elements.proxy_host.validity.valid &&
-      form.elements.proxy_port.validity.valid && user.validity.valid;
+    return validateSettingsProxy(form, snapshot);
   }
 
   function fill(settings, preserve = true) {

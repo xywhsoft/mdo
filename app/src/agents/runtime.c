@@ -37,6 +37,7 @@ typedef struct MdoAgentRoute {
     MdoModelProtocol Protocol;
     uint32 MaxOutputTokens;
     xllm_client* Client;
+    uint64 ClientTransportRevision;
 } MdoAgentRoute;
 
 typedef struct MdoAgentResolvedModel {
@@ -428,6 +429,10 @@ static xllm_result MdoAgentsRouteComplete(MdoAgentOwner* Owner,
         Options.RetryObserver=&Observer;
         return MdoModelOnlineComplete(Owner->Models,&Options,Request,Callbacks,Response,Error);
     }
+    MdoConfigTransportSettings Transport = {0};
+    Transport.Size = sizeof(Transport);
+    bool Configured = MdoConfigGetTransportSettings(&Transport);
+    bool Owned = !Configured || !strcmp(Transport.ProxyKind, "system");
     if ( Owner->RouteLock == NULL || !xrtMutexLock(Owner->RouteLock) ) {
         if ( Error != NULL ) {
             xllmErrorInit(Error);
@@ -437,21 +442,28 @@ static xllm_result MdoAgentsRouteComplete(MdoAgentOwner* Owner,
         }
         return XLLM_RESULT_ERROR;
     }
-    /* Routes are published before runs start; main and child calls share
-     * lazily created clients under this lock. */
-    if ( Match->Client == NULL ) {
-        MdoModelClientOptionsInit(&Options);
-        Options.ModelId = Match->ModelId;
-        Options.Protocol = Match->Protocol;
-        Options.ReasoningEffort = Match->ReasoningEffort;
-        Options.MaxOutputTokens = Match->MaxOutputTokens;
+    /* System/PAC choices are resolved on every request. A settings change
+     * also bypasses the original cached client, including when leaving system
+     * mode; another member may still be using that client, so retain it until
+     * the owner drains rather than replacing/freeing it under this lock. */
+    if ( Match->Client && Match->ClientTransportRevision != Transport.Revision ) Owned = true;
+    MdoModelClientOptionsInit(&Options);
+    Options.ModelId = Match->ModelId;
+    Options.Protocol = Match->Protocol;
+    Options.ReasoningEffort = Match->ReasoningEffort;
+    Options.MaxOutputTokens = Match->MaxOutputTokens;
+    if ( !Owned && Match->Client == NULL ) {
         Match->Client = MdoModelClientCreate(Owner->Models, &Options, NULL,
             Error);
+        Match->ClientTransportRevision = Transport.Revision;
     }
     Client = Match->Client;
     (void)xrtMutexUnlock(Owner->RouteLock);
+    if ( Owned ) Client = MdoModelClientCreate(Owner->Models, &Options, NULL, Error);
     if ( Client == NULL ) return XLLM_RESULT_ERROR;
-    return MdoModelCompleteRestartableObserved(Client, Request, Callbacks, Response, Error, &Observer);
+    xllm_result Result = MdoModelCompleteRestartableObserved(Client, Request, Callbacks, Response, Error, &Observer);
+    if ( Owned ) xllmClientDestroy(Client);
+    return Result;
 }
 
 static xllm_result MdoAgentsComplete(void* UserData,

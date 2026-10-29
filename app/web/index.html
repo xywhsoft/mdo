@@ -488,8 +488,8 @@
                   <input id="setting-ca-pem" name="ca_pem_path" type="text" maxlength="511" placeholder="certs/company.pem" autocomplete="off" spellcheck="false">
                 </div>
                 <div class="setting-row">
-                  <div><label for="setting-proxy-kind" data-i18n="settings.proxyKind">模型请求代理</label><p data-i18n="settings.proxyDescription">模型 HTTPS 请求可经 HTTP CONNECT 或 SOCKS5 代理；选“关闭”可保留下面的参数。</p></div>
-                  <select id="setting-proxy-kind" name="proxy_kind"><option value="none" data-i18n="settings.proxyNone">关闭</option><option value="http-connect">HTTP CONNECT</option><option value="socks5">SOCKS5</option></select>
+                  <div><label for="setting-proxy-kind" data-i18n="settings.proxyKind">模型请求代理</label><p data-i18n="settings.proxyDescription">系统代理：Windows 跟随系统设置/PAC，Android 跟随网络代理，Linux 跟随进程代理环境变量。浏览器扩展的独立代理不适用。关闭或切换模式会保留手动参数，仅影响模型请求。</p></div>
+                  <select id="setting-proxy-kind" name="proxy_kind"><option value="none" data-i18n="settings.proxyNone">关闭</option><option value="system" data-i18n="settings.proxySystem">使用系统代理</option><option value="http-connect">HTTP CONNECT</option><option value="socks5">SOCKS5</option></select>
                 </div>
                 <div class="settings-grid">
                   <label><span data-i18n="settings.proxyHost">代理主机</span><input name="proxy_host" type="text" maxlength="255" placeholder="127.0.0.1" autocomplete="off" spellcheck="false"></label>

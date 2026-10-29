@@ -31,6 +31,27 @@ PROBE_SOURCE = r'''
 #include <xsbase.h>
 #include "model-plugin-free.h"
 
+/* Exercise catalog wiring without changing the machine's proxy settings.
+ * The actual OS resolver/parser is tested by test_platform_system_proxy.py. */
+static bool ProbeSystemProxy(cstr Url, uint32 Timeout, XS_SystemProxyInfo* R)
+{
+    (void)Url; (void)Timeout;
+    cstr Kind=getenv("MDO_TEST_SYSTEM_PROXY_KIND");
+    if (!Kind) return xsSystemProxyResolve(Url,Timeout,R);
+    if (!strcmp(Kind,"failure")) {
+        snprintf(R->Reason,sizeof(R->Reason),"test system proxy resolution failed");
+        return false;
+    }
+    if (!strcmp(Kind,"direct")) return true;
+    R->Kind=!strcmp(Kind,"socks5")?XS_SYSTEM_PROXY_SOCKS5:XS_SYSTEM_PROXY_HTTP_CONNECT;
+    snprintf(R->Host,sizeof(R->Host),"127.0.0.1");
+    R->Port=(uint16)atoi(getenv("MDO_TEST_SYSTEM_PROXY_PORT"));
+    snprintf(R->User,sizeof(R->User),"probe");
+    snprintf(R->Password,sizeof(R->Password),"bounded-password");
+    return true;
+}
+#define xsSystemProxyResolve ProbeSystemProxy
+
 #include "src/storage/home.c"
 #include "src/config/config.c"
 #include "src/security/secrets.c"
@@ -56,7 +77,7 @@ void ServiceInit(XS_HostInfo* host)
     xllmErrorInit(&error);
     client = MdoModelClientCreate(catalog, &options, NULL, &error);
     if ( client == NULL ) {
-        printf("proxy_client=0 error=%s\nprobe_done=1\n", error.sMessage);
+        printf("proxy_client=0 kind=%s error=%s\nprobe_done=1\n", MdoModelErrorKind(&error),error.sMessage);
         goto done;
     }
     xllmRequestInit(&request);
@@ -220,8 +241,11 @@ def main() -> int:
         model_thread = threading.Thread(target=model.serve_forever, daemon=True)
         model_thread.start()
         try:
-            for kind, bypass in (("http-connect", ""), ("socks5", ""),
-                                 ("socks5", "127.0.0.1")):
+            for kind, bypass, mode in (("http-connect", "", "manual"), ("socks5", "", "manual"),
+                                      ("socks5", "127.0.0.1", "manual"),
+                                      ("http-connect", "", "system"), ("socks5", "", "system"),
+                                      ("socks5", "ignored-manual-rule", "direct"),
+                                      ("http-connect", "", "failure")):
                 proxy = LocalProxy(("127.0.0.1", 0), ProxyHandler)
                 proxy.kind = kind
                 proxy.target_port = model.server_port
@@ -230,7 +254,7 @@ def main() -> int:
                 thread = threading.Thread(target=proxy.serve_forever, daemon=True)
                 thread.start()
                 try:
-                    home = base / f"{kind}-{bypass or 'routed'}"
+                    home = base / f"{kind}-{bypass or 'routed'}-{mode}"
                     (home / "config").mkdir(parents=True)
                     (home / "certs").mkdir()
                     shutil.copy2(ROOT / "tests/fixtures/proxy-localhost-ca.pem",
@@ -238,7 +262,7 @@ def main() -> int:
                     (home / "config/settings.json").write_text(json.dumps({
                         "schema_version": 1, "patch": {"transport": {
                             "ca_pem_path": "certs/local.pem",
-                            "proxy": {"kind": kind, "host": "127.0.0.1",
+                            "proxy": {"kind": kind if mode == "manual" else "system", "host": "127.0.0.1",
                                       "port": proxy.server_address[1],
                                       "user": "probe", "bypass": bypass,
                                       "credential": {"secret_ref":
@@ -249,13 +273,20 @@ def main() -> int:
                     output = run_probe(host, site, home, {
                         "MDO_ORNITH_RESPONSES_URL": f"https://127.0.0.1:{model.server_port}/v1",
                         "MDO_ORNITH_API_KEY": "bounded-local-model-key",
-                        "MDO_TEST_PROXY_PASSWORD": "bounded-password",
+                        # System mode must ignore even an unreadable old manual secret.
+                        "MDO_TEST_PROXY_PASSWORD": "bounded-password" if mode == "manual" else "",
+                        **({"MDO_TEST_SYSTEM_PROXY_KIND": kind if mode == "system" else mode,
+                            "MDO_TEST_SYSTEM_PROXY_PORT": str(proxy.server_address[1])} if mode != "manual" else {}),
                     })
+                    if mode == "failure":
+                        assert "kind=profile_system_proxy_unavailable" in output, output
+                        assert model.hits == before and proxy.connections == 0, output
+                        continue
                     assert "proxy_result=0 status=200" in output, (
                         kind, bypass, proxy.connections, proxy.errors,
                         model.hits, output)
                     assert model.hits == before + 1, (model.hits, before, output)
-                    assert proxy.connections == (0 if bypass else 1), (
+                    assert proxy.connections == (0 if mode == "direct" or bypass else 1), (
                         kind, bypass, proxy.connections, proxy.errors, output)
                     assert not proxy.errors, proxy.errors
                 finally:
