@@ -29,11 +29,18 @@ static xvalue* MdoDirectoryApiQuery(MdoApiContext* C){
 static bool MdoDirectoryApiPage(const xvalue* Q,size_t* Offset,size_t* Limit){
  *Offset=0;*Limit=50;const cstr Names[]={"offset","limit"};for(size_t I=0;I<2;I++){cstr Text=MdoExtensionText(Q,Names[I],10);if(!Text)continue;uint64 N=0;if(!MdoArchiveApiOffset(xrtStrView(Text),&N)||N>(I?200:50000)||(I&&!N))return false;if(I)*Limit=(size_t)N;else *Offset=(size_t)N;}return true;
 }
+static bool MdoDirectoryApiExecutableSupported(void){
+#if defined(_WIN32) || defined(_WIN64)
+ return false;
+#else
+ return true;
+#endif
+}
 static bool MdoDirectoryApiItemFlags(xvalue* Row){
- cstr Source=MdoExtensionText(Row,"source",16);bool Manual=Source&&!strcmp(Source,"manual");return MdoApiValueSetBool(Row,"editable",Manual)&&MdoApiValueSetBool(Row,"shareable",Manual)&&MdoApiValueSetBool(Row,"store_managed",Source&&!strcmp(Source,"store"));
+ cstr Source=MdoExtensionText(Row,"source",16);bool Manual=Source&&!strcmp(Source,"manual");return MdoApiValueSetBool(Row,"editable",Manual)&&MdoApiValueSetBool(Row,"shareable",Manual)&&MdoApiValueSetBool(Row,"store_managed",Source&&!strcmp(Source,"store"))&&MdoApiValueSetBool(Row,"executable_supported",MdoDirectoryApiExecutableSupported());
 }
 static xvalue* MdoDirectoryApiItem(cstr Kind,cstr Id,char Error[512]){
- xvalue* Item=MdoExtensionsRead(Kind,Id,Error);if(!Item){xvalue* Rows=MdoExtensionsList(Kind,Error);for(size_t I=0;I<xrtValueCount(Rows);I++){const xvalue* Row=xrtValueArrayGet(Rows,I);cstr Found=MdoExtensionText(Row,"id",96);if(Found&&!strcmp(Found,Id)){Item=xrtValueClone(Row);break;}}xrtValueRelease(Rows);}if(Item)MdoDirectoryApiItemFlags(Item);return Item;
+ xvalue* Item=MdoExtensionsRead(Kind,Id,Error);if(!Item){xvalue* Rows=MdoExtensionsList(Kind,Error);for(size_t I=0;I<xrtValueCount(Rows);I++){const xvalue* Row=xrtValueArrayGet(Rows,I);cstr Found=MdoExtensionText(Row,"directory_id",96);if(Found&&!strcmp(Found,Id)){Item=xrtValueClone(Row);break;}}xrtValueRelease(Rows);}if(Item)MdoDirectoryApiItemFlags(Item);return Item;
 }
 static bool MdoDirectoryApiList(MdoApiContext* C,cstr Kind,const xvalue* Q,bool Files,cstr Id){
  char Error[512]={0};size_t Offset,Limit;if(!MdoDirectoryApiPage(Q,&Offset,&Limit))return MdoApiReplyError(C,400,"extension_page_invalid","Use an offset and a limit from 1 to 200",NULL);
@@ -45,7 +52,7 @@ static bool MdoDirectoryApiList(MdoApiContext* C,cstr Kind,const xvalue* Q,bool 
   if(Search&&Search[0]){char* Text=xrtJsonStringify(Row,false,NULL);bool Found=Text&&xrtStrCaseContains(xrtStrView(Text),xrtStrView(Search));xrtFree(Text);if(!Found)continue;}
   if(Total>=Offset&&xrtValueCount(Rows)<Limit){xvalue* Copy=xrtValueClone(Row);Ok=Copy&&(Files||MdoDirectoryApiItemFlags(Copy))&&xrtValueArrayAppend(Rows,Copy);xrtValueRelease(Copy);}Total++;
  }
- if(Ok)Ok=xrtValueObjectSet(Data,XRT_STR_LITERAL("items"),Rows)&&MdoApiValueSetUInt(Data,"total",Total)&&MdoApiValueSetUInt(Data,"offset",Offset)&&MdoApiValueSetUInt(Data,"limit",Limit);
+ if(Ok)Ok=xrtValueObjectSet(Data,XRT_STR_LITERAL("items"),Rows)&&MdoApiValueSetUInt(Data,"total",Total)&&MdoApiValueSetUInt(Data,"offset",Offset)&&MdoApiValueSetUInt(Data,"limit",Limit)&&MdoApiValueSetBool(Data,"executable_supported",MdoDirectoryApiExecutableSupported());
  xrtValueRelease(All);xrtValueRelease(Rows);if(!Ok){xrtValueRelease(Data);return MdoApiReplyError(C,422,"extension_list_failed",Error[0]?Error:"Cannot list extension directories",NULL);}return MdoApiReplySuccessTake(C,200,Data,NULL);
 }
 static bool MdoDirectoryApiFile(MdoApiContext* C,cstr Kind,cstr Id,const xvalue* Q){
@@ -55,7 +62,7 @@ static bool MdoDirectoryApiFile(MdoApiContext* C,cstr Kind,cstr Id,const xvalue*
  bool Read=Text&&xrtReadFull(F,Text,(size_t)Info.Size,NULL);if(Text)Text[Info.Size]=0;xrtClose(F);xrtFree(Full);xrtFree(Root);xrtValueRelease(Item);
  xvalue* Data=Ok?xrtValueObject():NULL;Ok=Ok&&Data&&MdoApiValueSetString(Data,"path",Path)&&MdoApiValueSetUInt(Data,"bytes",Info.Size);
  bool Utf8=Read&&!memchr(Text,0,(size_t)Info.Size)&&xrtUtf8Valid(xrtStrViewN(Text,(size_t)Info.Size),NULL);
- if(Ok)Ok=MdoApiValueSetBool(Data,"binary",!Utf8);
+ if(Ok)Ok=MdoApiValueSetBool(Data,"binary",!Utf8)&&MdoApiValueSetBool(Data,"executable",(Info.Mode&0111u)!=0)&&MdoApiValueSetBool(Data,"executable_supported",MdoDirectoryApiExecutableSupported());
  if(Ok&&Utf8)Ok=MdoApiValueSetString(Data,"text",Text);
  xrtFree(Text);
  if(!Ok){xrtValueRelease(Data);return MdoApiReplyError(C,404,"extension_file_unavailable","File is unavailable; preview is limited to 1 MiB of UTF-8 text",NULL);}return MdoApiReplySuccessTake(C,200,Data,NULL);

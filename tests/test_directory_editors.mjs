@@ -5,7 +5,7 @@ import { testDocument,descendants } from "./helpers/extension-dom.mjs";
 const flush=async()=>{for(let i=0;i<8;i++)await new Promise(r=>setImmediate(r));};
 const button=(root,name)=>descendants(root).find(n=>n.tagName==="BUTTON"&&n.textContent===name);
 function environment(){const old={document:globalThis.document,window:globalThis.window,confirm:globalThis.confirm};globalThis.document=testDocument();globalThis.window=new EventTarget();globalThis.confirm=()=>true;return()=>Object.assign(globalThis,old);}
-async function load(name,mock){globalThis.__directoryUI=mock;const url=new URL(`../app/web/js/features/settings/${name}.js`,import.meta.url);const source=readFileSync(url,"utf8")
+async function load(name,mock){if(mock.api&&!mock.api.get)mock.api.get=async()=>({data:{executable_supported:false}});globalThis.__directoryUI=mock;const url=new URL(`../app/web/js/features/settings/${name}.js`,import.meta.url);const source=readFileSync(url,"utf8")
  .replace('import { api } from "../../api/client.js";',"const {api}=globalThis.__directoryUI;")
  .replace('import { stageExtensionFile } from "../../api/extension-archives.js";',"const {stageExtensionFile}=globalThis.__directoryUI;")
  .replace('import { targetState, subscribeTarget } from "../../api/target.js";',"const {targetState,subscribeTarget}=globalThis.__directoryUI;")
@@ -61,6 +61,15 @@ test("multiple resource staging uses all editor slots and rejects oversized sele
  try{editor=(await load("directory-editor",mock)).createDirectoryEditor();await editor.open({kind:"mcp",manifest,text:"{}"});const view=document.body.querySelector("dialog"),upload=view.querySelector('[aria-label="添加资源文件"]');
   upload.files=Array.from({length:33},(_,i)=>new File(["qa"],`file-${i}`));upload.dispatchEvent(new Event("change"));await flush();assert.equal(staged,0);assert(view.textContent.includes("每次最多保存 32 项修改"));
   upload.files=Array.from({length:4},(_,i)=>new File(["qa"],`file-${i}`));upload.dispatchEvent(new Event("change"));await flush();assert.equal(staged,4);button(view,"保存目录").click();await flush();assert.equal(writes[0][3].length,5);
+ }finally{editor?.destroy();delete globalThis.__directoryUI;restore();}
+});
+
+test("Unix directory editors can mark a newly uploaded native program executable",async()=>{
+ const restore=environment(),writes=[];let editor;const manifest={kind:"mcp",name:"Executable",alias:"executable",entry:"mcp.json",platforms:["linux-x86_64"]};
+ const mock={targetState:()=>({selected:null}),subscribeTarget:()=>()=>{},directoryPath:(k,id)=>`/extensions/${k}/${id}`,directoryId:()=>true,directoryManifest:()=>manifest,api:{get:async path=>{assert.equal(path,"/extensions/mcp?limit=1");return{data:{executable_supported:true}};},delete:async()=>({data:{state:"cancelled"}})},stageExtensionFile:async()=>({id:"native-file"}),saveDirectory:async(...args)=>{writes.push(args);return{};}};
+ try{editor=(await load("directory-editor",mock)).createDirectoryEditor();await editor.open({kind:"mcp",manifest,text:"{}"});const view=document.body.querySelector("dialog"),upload=view.querySelector('[aria-label="添加资源文件"]');upload.files=[new File([new Uint8Array([127,69])],"server")];upload.dispatchEvent(new Event("change"));await flush();
+  button(view,"server · 2 B").click();await flush();const mode=view.querySelector('[aria-label="可执行权限（Linux / Unix）"]');assert(!mode.disabled);mode.checked=true;mode.dispatchEvent(new Event("change"));await flush();button(view,"保存目录").click();await flush();
+  assert.deepEqual(writes[0][3].find(e=>e.path==="server"),{path:"server",task:"native-file",executable:true});assert(!writes[0][3].find(e=>e.path==="mcp.json").executable);
  }finally{editor?.destroy();delete globalThis.__directoryUI;restore();}
 });
 
