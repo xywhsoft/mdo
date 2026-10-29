@@ -16,7 +16,7 @@ export function createDirectoryEditor({owner,onChange=()=>{}}={}) {
   async function open({kind,item=null,manifest=null,text="",edits=[]}={}) {
     if(disposed||!close(false))return;
     const state={target:target(),busy:false,dirty:false,revision:"",item,edits:new Map(edits.map(e=>[e.path,e])),rows:[],offset:0,selected:null,textDirty:false};
-    const releaseTask=id=>{if(id&&state.target===target())void Promise.resolve().then(()=>api.post(`/extension-tasks/${id}/cancel`,{})).catch(()=>{});};
+    const releaseTask=id=>{if(id&&state.target===target())void Promise.resolve().then(()=>state.target===target()?api.delete(`/extension-tasks/${id}`):null).catch(()=>{if(state.target===target())toast("暂存资源未能取消，请在下载任务中重试。","error");});};
     const view=openLayer({title:item?`扩展目录 · ${item.name||item.id}`:"新建扩展目录",icon:"folder",width:"60rem",height:"85%",owner,
       beforeClose:()=>!state.busy&&(!state.dirty||confirm("放弃未保存的目录修改？")),onClosed(){for(const edit of state.edits.values())releaseTask(edit.task);if(active===state)active=null;}});state.view=view;active=state;
     const live=()=>active===state&&!view.signal.aborted&&state.target===target(),options=()=>({signal:view.signal});
