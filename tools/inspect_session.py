@@ -16,7 +16,7 @@ from pathlib import Path
 import sys
 
 
-# Stable xwork event codes used by mdo UI schemas 1 through 6. Preserve unknown
+# Stable xwork event codes used by mdo UI schemas 1 through 9. Preserve unknown
 # codes rather than interpreting a newer schema with an older vocabulary.
 KINDS = (
     "agent_start", "model_start", "model_text_delta", "model_reasoning_delta",
@@ -38,7 +38,7 @@ def kind_name(event: dict) -> str:
     kind = event.get("kind")
     if isinstance(kind, str):
         return kind
-    if (integer(event.get("schema_version")) in range(1, 8)
+    if (integer(event.get("schema_version")) in range(1, 10)
             and isinstance(kind, int) and not isinstance(kind, bool)
             and 0 <= kind < len(KINDS)):
         return KINDS[kind]
