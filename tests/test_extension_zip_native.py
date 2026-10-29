@@ -104,11 +104,11 @@ def main():
     data = bytearray(path.read_bytes()); at = data.index(b'PK\x01\x02'); struct.pack_into('<I', data, at + 24, 0x70000000); path.write_bytes(data); cases[-1]['expected'] = False
     entries = {'agents': 'agent.md', 'subagents': 'agent.c', 'tools': 'tool.c', 'mcp': 'mcp.json', 'skills': 'SKILL.md', 'commands': 'command.c', 'external-tools': 'bin/qa', 'knowledge': 'knowledge.json', 'plugins': 'plugin.json'}
     for kind, entry in entries.items():
-        manifest = {'kind': kind, 'name': 'QA extension', 'alias': 'qa-name', 'entry': entry, 'platforms': ['any']}
+        manifest = {'kind': kind, 'id': kind.removesuffix('s') + ':qa.zip-fixture', 'name': 'QA extension', 'alias': 'qa-name', 'entry': entry, 'platforms': ['any']}
         fixture('manifest-' + kind, [('extension.json', json.dumps(manifest).encode(), regular), (entry, b'not executed', regular)])
         cases[-1]['describe'] = True
     def manifest_fixture(name, changes, extra=()):
-        m = {'kind': 'mcp', 'name': 'QA', 'alias': 'qa', 'entry': 'mcp.json', 'platforms': ['any']}
+        m = {'kind': 'mcp', 'id': 'mcp:qa.zip-fixture', 'name': 'QA', 'alias': 'qa', 'entry': 'mcp.json', 'platforms': ['any']}
         m.update(changes)
         fixture(name, [('extension.json', json.dumps(m).encode(), regular), ('mcp.json', b'{}', regular), *extra], False)
         cases[-1]['describe'] = True

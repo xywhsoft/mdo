@@ -13,6 +13,7 @@ import time
 import urllib.error
 import urllib.request
 from test_api_runtime import free_port
+from current_product_host import product_http_config
 
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -25,9 +26,12 @@ def main():
         nonlocal checks
         assert condition,detail
         checks+=1
-    with tempfile.TemporaryDirectory(prefix='process-sdk-',dir=ROOT/'.build') as raw:
+    port=free_port()
+    # Linux directory transactions require the native filesystem's no-replace
+    # rename; WSL DrvFS deliberately does not emulate that guarantee.
+    with tempfile.TemporaryDirectory(prefix='process-sdk-',dir=ROOT/'.build' if os.name=='nt' else None) as raw, product_http_config(port) as config:
         base=Path(raw);home=base/'home';workspace=base/'workspace';(workspace/'sub').mkdir(parents=True)
-        port=free_port();url=f'http://127.0.0.1:{port}';config=ROOT/'app/xs.json';log=base/'host.log'
+        url=f'http://127.0.0.1:{port}';log=base/'host.log'
         def request(method,path,body=None,expected=200):
             headers={}
             if body is not None:
@@ -51,7 +55,9 @@ def main():
             while time.monotonic()<end:
                 if process.poll() is not None:raise AssertionError(log.read_text(encoding='utf-8',errors='replace'))
                 try:
-                    request('GET','/api/v1/bootstrap');break
+                    bootstrap=request('GET','/api/v1/bootstrap')
+                    if bootstrap['data'].get('ready'):break
+                    if bootstrap['data'].get('stage')=='failed':raise AssertionError(bootstrap)
                 except (urllib.error.URLError,TimeoutError):time.sleep(.1)
             else:raise AssertionError(log.read_text(encoding='utf-8',errors='replace'))
             call('project.create',{'body':{'id':'process-qa','name':'Process output QA','workspace_root':str(workspace)}},project='default')

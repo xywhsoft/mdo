@@ -134,6 +134,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--baseline-root", help="prepared Debian 10 build root; bootstrap with tools/linux/bootstrap_baseline.sh")
     parser.add_argument("--sysroot", type=Path, help="musl target root with include/ and lib/libc.a")
     parser.add_argument("--output-dir", type=Path, default=ROOT / "dist")
+    parser.add_argument("--host-root", type=Path, help="native hosts and objects for this build, without replacing shared caches")
     parser.add_argument("--wsl", action="store_true", help="build using Windows Subsystem for Linux")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--skip-host-build", action="store_true", help="repack using verified cached xs hosts")
@@ -152,6 +153,8 @@ def main(argv: list[str] | None = None) -> int:
             command += ["--glibc-max", args.glibc_max]
             if args.baseline_root:
                 command += ["--baseline-root", args.baseline_root]
+            if args.host_root:
+                command += ["--host-root", wsl_path(args.host_root)]
             if args.sysroot:
                 command += ["--sysroot", wsl_path(args.sysroot)]
             if args.dry_run:
@@ -195,6 +198,8 @@ def main(argv: list[str] | None = None) -> int:
                     '--musl-cc', args.musl_cc, '--gui-cc', args.gui_cc, '--glibc-max', args.glibc_max]
                 if args.sysroot:
                     command += ['--sysroot', str(args.sysroot.resolve())]
+                if args.host_root:
+                    command += ['--host-root', str(args.host_root.resolve())]
                 if args.dry_run:
                     command.append('--dry-run')
                 if args.skip_host_build:
@@ -224,6 +229,8 @@ def main(argv: list[str] | None = None) -> int:
                            "--libc", libc, "--cc", args.musl_cc if libc == "musl" else args.cc,
                            "--gui-cc", args.gui_cc, "--output", str(binary)]
                 command += ["--glibc-max", args.glibc_max]
+                if args.host_root:
+                    command += ["--host-dir", str(args.host_root.resolve() / f"linux-{edition}-{libc}")]
                 if args.skip_host_build:
                     command.append("--skip-host-build")
                 if libc == "musl":

@@ -45,7 +45,7 @@ class Model(BaseHTTPRequestHandler):
             if arguments.get("task_id") == -1 or arguments.get("task_ids") == [-1]:
                 prior = "\n".join(str(v.get("output", "")) for v in inputs
                                   if v.get("type") == "function_call_output")
-                match = re.search(r"task_id: (\d+)", prior)
+                match = re.search(r'"task_id"\s*:\s*(\d+)', prior)
                 assert match, (label, prior)
                 if "task_id" in arguments:
                     arguments["task_id"] = int(match[1])
@@ -186,7 +186,8 @@ def probe(host):
                     else:
                         # Successful signal delivery with wait_ms=0 can leave a
                         # running task; tool success means a terminal snapshot.
-                        assert "task_id:" in text and "state:" in text, text
+                        snapshot = json.loads(text)
+                        assert snapshot['task_id'] > 0 and snapshot['state'], snapshot
                 else:
                     assert all(v["success"] == case["success"] for v in outputs), (label, outputs)
                 text = "\n".join(v.get("text", "") for v in outputs)

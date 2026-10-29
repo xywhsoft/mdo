@@ -30,7 +30,8 @@ xvalue* QaProductContract(const xvalue* P,xvfs V){
     MdoSkillResourceContentUnit(&Content);xrtValueObjectSetNew(R,XRT_STR_LITERAL("deep_resource"),xrtValueBool(DeepRead));
     Info.Size=sizeof(Info);bool Foreign=C&&!MdoSkillCatalogFind(C,"foreign-uninstalled",&Info);
     xrtValueObjectSetNew(R,XRT_STR_LITERAL("foreign_project_not_discovered"),xrtValueBool(Foreign));
-    bool Selection=MdoHomeAtomicWrite("workspace/.mdo/skills.json","{\"Catalog-Alias\":false}",23,false);
+    const char SelectionJson[]="{\"skill:qa.reference\":false}";
+    bool Selection=MdoHomeAtomicWrite("workspace/.mdo/skills.json",SelectionJson,sizeof(SelectionJson)-1,false);
     MdoSkillCatalog* Selected=Selection?MdoSkillCatalogForWorkspace(Workspace):NULL;Info.Size=sizeof(Info);
     Selection=Selection&&Selected&&!MdoSkillCatalogFind(Selected,"Catalog-Alias",&Info);MdoSkillCatalogRelease(Selected);
     xrtValueObjectSetNew(R,XRT_STR_LITERAL("project_selection_only"),xrtValueBool(Selection));
@@ -66,13 +67,13 @@ def main():
     def put(path, text):
         file = fixture / path; file.parent.mkdir(parents=True, exist_ok=True); file.write_text(text, encoding='utf-8')
     skill = 'skills/0123456789ABCDEFGHJKMNPQRSTVWXYZ/'
-    put(skill + 'extension.json', json.dumps({'kind': 'skills', 'name': 'Reference skill', 'alias': 'Catalog-Alias', 'entry': 'instructions.md', 'platforms': ['any']}))
+    put(skill + 'extension.json', json.dumps({'kind': 'skills', 'id': 'skill:qa.reference', 'name': 'Reference skill', 'alias': 'Catalog-Alias', 'entry': 'instructions.md', 'platforms': ['any']}))
     put(skill + 'instructions.md', '---\nname: Reference skill\ndescription: Directory skill regression\n---\nUse directory reference ${MDO_SKILL_DIR}\n')
     put(skill + '.hidden/reference.txt', 'hidden reference')
     put(skill + 'refs/a/b/c/d/e/f/g/h/i/j/k/l/deep.txt', 'deep reference')
     put('workspace/.claude/skills/foreign-uninstalled/SKILL.md', '---\nname: Foreign\ndescription: Uninstalled\n---\nDo not discover.\n')
     knowledge = 'knowledge/ABCDEFGHJKMNPQRSTVWXYZ0123456789/'
-    put(knowledge + 'extension.json', json.dumps({'kind': 'knowledge', 'name': 'Library', 'alias': 'library', 'entry': 'metadata.json', 'platforms': ['any']}))
+    put(knowledge + 'extension.json', json.dumps({'kind': 'knowledge', 'id': 'knowledge:qa.library', 'name': 'Library', 'alias': 'library', 'entry': 'metadata.json', 'platforms': ['any']}))
     put(knowledge + 'metadata.json', json.dumps({'format': 'mdo.knowledge.v1', 'name': 'Library', 'description': 'Reference library', 'index': '.references/a/b/index.md', 'prompt': 'Consult {$path} and its index.', 'inject_prompt': True}))
     put(knowledge + '.references/a/b/index.md', '# Index\n')
     try:

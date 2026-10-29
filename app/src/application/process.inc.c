@@ -105,6 +105,7 @@ native_error:
     SdkNativeFailure(E,"process");
 done:
     MdoCliUseEnd(Use);if(HaveResult)xrtProcessResultUnit(&Result);
-    if(Capture)xworkProcessOutputDestroy(Capture);if(Root)xrtRootClose(Root);
+    if(Capture)xworkProcessOutputDestroy(Capture);
+    if(Root)xrtRootClose(Root);
     xrtFree(Argv);xrtFree(Base);xrtFree(Cwd);xrtFree(OutPath);xrtFree(ErrPath);return Ok;
 }

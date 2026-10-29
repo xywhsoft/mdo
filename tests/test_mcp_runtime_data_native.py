@@ -30,8 +30,8 @@ CONTRACT=r'''
 xvalue* QaProductContract(const xvalue* P,xvfs V){
  xvalue* R=xrtValueObject(),*Out=NULL;char Error[512]={0},Digest[65],After[65];
  bool Home=QaProductHome(SdkField(P,"root"),SdkField(P,"app"),V);
- bool Ok=Home&&MdoExtensionsInit()&&MdoExtensionsFingerprint("mcp","python-runtime",Digest,NULL,Error);
- xvalue* Input=SdkParse("{\"id\":\"qa-runtime\",\"extension_id\":\"python-runtime\",\"variant\":\"default\",\"values\":{},\"enabled\":true,\"expected_revision\":\"\",\"action\":\"preview\"}");
+ bool Ok=Home&&MdoExtensionsInit()&&MdoExtensionsApprovalDigest("mcp:qa.python-runtime",Digest,NULL,Error);
+ xvalue* Input=SdkParse("{\"id\":\"qa-runtime\",\"extension_id\":\"mcp:qa.python-runtime\",\"variant\":\"default\",\"values\":{},\"enabled\":true,\"expected_revision\":\"\",\"action\":\"preview\"}");
  Ok=Ok&&MdoMcpConnectionManage(Input,NULL,&Out,Error);xrtValueRelease(Out);Out=NULL;
  bool Exists=true;xfileinfo Info;Ok=Ok&&MdoHomeExternalStat("data/mcp/runtime/qa-runtime",&Exists,&Info)&&!Exists;
  xrtValueObjectSetNew(R,XRT_STR_LITERAL("preview_stays_cold"),xrtValueBool(Ok));
@@ -40,7 +40,7 @@ xvalue* QaProductContract(const xvalue* P,xvfs V){
  Ok=Ok&&Runtime&&MdoMcpManagerInit(Runtime);char* Text=NULL;
  bool First=Ok&&MdoMcpRead("qa-runtime","resources/read","{\"uri\":\"fixture://state\"}",NULL,MdoDeadlineAfterUs(10000000),&Text,&E)&&Text&&strstr(Text,"runtime-data-ok");xrtFree(Text);Text=NULL;
  xrtValueObjectSetNew(R,XRT_STR_LITERAL("real_python_mcp_called"),xrtValueBool(First));
- bool Reload=First&&MdoExtensionsFingerprint("mcp","python-runtime",After,NULL,Error)&&!strcmp(Digest,After)&&MdoMcpManagerReload();
+ bool Reload=First&&MdoExtensionsApprovalDigest("mcp:qa.python-runtime",After,NULL,Error)&&!strcmp(Digest,After)&&MdoMcpManagerReload();
  MdoMcpCatalog* Catalog=MdoMcpCatalogSnapshot();Reload=Reload&&Catalog&&Catalog->Count==1;MdoMcpCatalogRelease(Catalog);
  Reload=Reload&&MdoMcpRead("qa-runtime","resources/read","{\"uri\":\"fixture://state\"}",NULL,MdoDeadlineAfterUs(10000000),&Text,&E)&&Text&&strstr(Text,"runtime-data-ok");xrtFree(Text);
  xrtValueObjectSetNew(R,XRT_STR_LITERAL("reload_keeps_approval"),xrtValueBool(Reload));
@@ -52,7 +52,7 @@ def main():
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('--url',required=True);p.add_argument('--home',type=Path,required=True);p.add_argument('--project',default='default');a=p.parse_args()
     out=ROOT/'.build/mcp-runtime-data-native';out.mkdir(exist_ok=True,parents=True)
     fixture=out/('home-'+uuid.uuid4().hex[:12]);directory=fixture/'mcp/python-runtime';directory.mkdir(parents=True)
-    (directory/'extension.json').write_text(json.dumps(dict(kind='mcp',name='Python runtime data',alias='python-runtime',entry='mcp.json',platforms=['any'])),encoding='utf-8')
+    (directory/'extension.json').write_text(json.dumps(dict(kind='mcp',id='mcp:qa.python-runtime',name='Python runtime data',alias='python-runtime',entry='mcp.json',platforms=['any'])),encoding='utf-8')
     (directory/'helper.py').write_text('value = 7\n',encoding='utf-8');(directory/'server.py').write_text(SERVER,encoding='utf-8')
     recipe=template('python-runtime','stdio');recipe['inputs']=[dict(id='interpreter',type='text',label='Python',description='Existing test interpreter',required=True,secret=False,default=sys.executable)]
     recipe['variants'][0]['config']['transport']=dict(type='stdio',program={'input':'interpreter'},arguments=['{$path}/server.py'],inherit_environment=False,environment=[])

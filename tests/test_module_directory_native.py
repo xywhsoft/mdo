@@ -100,14 +100,16 @@ def main():
     fixture = out / ('home-' + uuid.uuid4().hex[:12]); fixture.mkdir()
     def add(kind, ident, alias, entry, files, native=None):
         directory = fixture / kind / ident; directory.mkdir(parents=True)
-        meta = {'kind': kind, 'name': alias, 'alias': alias, 'entry': entry, 'platforms': ['any']}
+        meta = {'kind': kind, 'id': kind.removesuffix('s') + ':qa.' + alias.lower(), 'name': alias, 'alias': alias, 'entry': entry, 'platforms': ['any']}
+        if alias == 'Craftsman':
+            meta['dependencies'] = [{'id': 'agent:qa.parent'}]
         if native: meta['native'] = native
         (directory / 'extension.json').write_text(json.dumps(meta), encoding='utf-8')
         for name, text in files.items():
             path = directory / name; path.parent.mkdir(parents=True, exist_ok=True); path.write_text(text, encoding='utf-8')
     parent = {'schema': 'mdo.agent.v1', 'name': 'Parent role', 'description': 'Parent role', 'context': {'custom.parent': {'file': 'parent.txt'}}, 'prompt': 'parent prompt'}
     add('agents', 'parent-directory', 'parent', 'agent.json', {'agent.json': json.dumps(parent), 'parent.txt': 'parent context'})
-    child = {'schema': 'mdo.agent.v1', 'name': 'Craftsman', 'description': 'Child C role', 'code': True, 'extends': 'agent.parent', 'prompt_file': 'prompts/base.txt', 'context': {'custom.child': {'file': 'child.txt'}}}
+    child = {'schema': 'mdo.agent.v1', 'name': 'Craftsman', 'description': 'Child C role', 'code': True, 'extends': 'agent:qa.parent', 'prompt_file': 'prompts/base.txt', 'context': {'custom.child': {'file': 'child.txt'}}}
     code = ROLE.replace('ROLE_ID', 'agent.Craftsman').replace('ROLE_FLAG', 'MDO_AGENT_MAIN').replace('MODULE_ID', 'qa.agent.module')
     add('agents', '0123456789ABCDEFGHJKMNPQRSTVWXYZ', 'Craftsman', 'agent.json', {'agent.json': json.dumps(child), 'agent.c': code,
         'prompts/base.txt': 'child prompt file', 'child.txt': 'child context', 'helper.h': '#define QA_NUMBER 17\n'}, native='agent.c')

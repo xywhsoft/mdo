@@ -142,7 +142,10 @@ def runtime_probes(host: Path, packed: Path, *, optional_tools_stage: Path | Non
         "test_android_device_runtime.py": "requires an explicitly selected Android device",
     }
     probes = []
-    for probe in sorted(TESTS.glob("test_*_runtime.py"), key=lambda path: path.name):
+    inventory = list(TESTS.glob("test_*_runtime.py"))
+    inventory.extend(probe for probe in TESTS.glob("test_process_output_sdk.py")
+                     if probe.name == "test_process_output_sdk.py")
+    for probe in sorted(inventory, key=lambda path: path.name):
         if probe.name in device_probes:
             print(f"[qa] DEVICE CHECK NOT RUN: {probe.name}: {device_probes[probe.name]}", flush=True)
         elif probe.name == "test_optional_tools_runtime.py" and optional_tools_stage is None:
@@ -193,7 +196,7 @@ def frontend_checks() -> None:
     tests = sorted(TESTS.glob("test_*.mjs"), key=lambda path: path.name)
     if not tests:
         raise GateError("no frontend interaction tests were found")
-    run([node, "--test", *(str(path) for path in tests)])
+    run([node, "--test", "--test-concurrency=1", *(str(path) for path in tests)])
 
 
 def native_workbench_probe_commands(packed: Path, output: Path) -> list[list[str]]:
@@ -332,6 +335,10 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--xserver-root", type=Path,
                         help="xserver checkout at the deps.lock revision")
     parser.add_argument("--cc", default="gcc")
+    parser.add_argument("--host-dir", type=Path,
+                        help="build and verify this run's native hosts without replacing another task's hosts")
+    parser.add_argument("--output-dir", type=Path, default=BUILD / "qa-release",
+                        help="candidate products and evidence directory")
     parser.add_argument("--skip-host-build", action="store_true",
                         help="reuse .build/host after dependency verification")
     parser.add_argument("--skip-gui-smoke", action="store_true",
@@ -352,12 +359,12 @@ def main(argv: list[str] | None = None) -> int:
         xserver = build_mdo.find_xserver(args.xserver_root, lock)
         build_mdo.verify_dependencies(xserver, lock)
         inputs = release_inputs()
-        output_dir = BUILD / "qa-release"
+        output_dir = args.output_dir.resolve()
         output_dir.mkdir(parents=True, exist_ok=True)
         suffix = ".exe" if os.name == "nt" else ""
         first = output_dir / f"mdo-release-a{suffix}"
         second = output_dir / f"mdo-release-b{suffix}"
-        host_dir = BUILD / "host" if os.name == "nt" else BUILD / "host/linux-gui-glibc"
+        host_dir = args.host_dir.resolve() if args.host_dir else (BUILD / "host" if os.name == "nt" else BUILD / "host/linux-gui-glibc")
         host = host_dir / f"xs{suffix}"
         packer = host.with_name("xsw.exe") if os.name == "nt" else host
 
@@ -370,6 +377,8 @@ def main(argv: list[str] | None = None) -> int:
         ]
         if args.skip_host_build:
             build.append("--skip-host-build")
+        if args.host_dir:
+            build += ["--host-dir", str(host_dir)]
         run(build)
         host_hash, packer_hash = digest(host), digest(packer)
         strict_compile(args.cc, xserver)
