@@ -15,7 +15,7 @@ const rejectedBeforeExecution = new Set([
   "model_profile_model_missing", "model_profile_protocol_unsupported",
   "model_profile_reasoning_unsupported", "model_profile_output_limit",
   "model_profile_context_limit", "model_profile_credential_unavailable",
-  "model_profile_proxy_unavailable", "model_profile_system_proxy_unavailable", "model_profile_ca_unavailable",
+  "model_profile_proxy_unavailable", "model_profile_proxy_invalid", "model_profile_system_proxy_unavailable", "model_profile_ca_unavailable",
   "model_profile_endpoint_invalid",
   "model_profile_login_required",
 ]);

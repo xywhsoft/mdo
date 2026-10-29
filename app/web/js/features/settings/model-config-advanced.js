@@ -5,6 +5,7 @@ import { clear, element, errorMessage, isImeKey, toast } from "../../utils/dom.j
 import { subscribeLocale, t } from "../../i18n.js";
 import { providerPresets, presetVariant, presetProvider } from "./provider-presets.js";
 import { sameModelConfig } from "./model-config-state.js";
+import { createModelProxyEditor } from "./model-proxy-editor.js";
 
 const protocols = [
   ["openai-chat-completions", "Chat Completions", "chat_completions"],
@@ -201,6 +202,7 @@ export function createAdvancedModelConfigPanel(container, options = {}) {
   let dirty = false;
   let editVersion = 0;
   const rebaseForm = new WeakMap();
+  const proxyEditors = new WeakMap();
 
   function updateBusyState() {
     if (reading || writing) container.setAttribute("aria-busy", "true");
@@ -405,6 +407,8 @@ export function createAdvancedModelConfigPanel(container, options = {}) {
         { type: "number", required: true, min: 1, max: 600000 }),
       input("验证 TLS 证书", "verify_peer", item.verify_peer, { type: "checkbox" }),
     ]));
+    const proxy = createModelProxyEditor(item.proxy);
+    proxyEditors.set(form, proxy); form.append(proxy.element);
     const preset = providerPresets.find((entry) => entry.id === item.template_id);
     const variant = presetVariant(item.template_id, item.template_variant);
     if (preset && variant?.base) {
@@ -478,6 +482,8 @@ export function createAdvancedModelConfigPanel(container, options = {}) {
       ]),
     ]);
     form.append(advanced);
+    const proxy = createModelProxyEditor(item.proxy, { allowProvider: true });
+    proxyEditors.set(form, proxy); form.append(proxy.element);
     const providerSelect = form.elements.provider;
     const defaultProtocol = form.elements.default_protocol;
     const syncProtocols = () => {
@@ -508,6 +514,7 @@ export function createAdvancedModelConfigPanel(container, options = {}) {
     return { ...old, id: String(data.get("id") || "").trim(),
       name: String(data.get("name") || "").trim(), endpoints,
       credential: secret ? { secret_ref: secret } : undefined,
+      proxy: proxyEditors.get(form).read(),
       timeout_ms: Number(data.get("timeout_ms")),
       verify_peer: data.has("verify_peer") };
   }
@@ -520,6 +527,7 @@ export function createAdvancedModelConfigPanel(container, options = {}) {
     return { ...old, id: String(data.get("id") || "").trim(),
       name: String(data.get("name") || "").trim(),
       provider: data.get("provider"), wire_model: String(data.get("wire_model") || "").trim(),
+      proxy: proxyEditors.get(form).read(),
       protocols: selected(form, "protocol"), default_protocol: data.get("default_protocol"),
       capabilities: selected(form, "capability"), window,
       reasoning_efforts: selected(form, "effort"),
@@ -626,6 +634,7 @@ export function createAdvancedModelConfigPanel(container, options = {}) {
     rebaseForm.set(form, () => {
       source = current();
       item = clone(source ?? item);
+      proxyEditors.get(form)?.rebase(item.proxy);
       const id = form.querySelector('input[name="id"]');
       if (id) id.readOnly = Boolean(source);
       const title = form.querySelector("h3");

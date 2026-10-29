@@ -5,6 +5,7 @@ import { subscribeLocale, t } from "../../i18n.js";
 import { createAdvancedModelConfigPanel } from "./model-config-advanced.js";
 import { providerPresets, presetVariant, presetProvider, presetModel, suggestedModels } from "./provider-presets.js";
 import { sameModelConfig } from "./model-config-state.js";
+import { createModelProxyEditor } from "./model-proxy-editor.js";
 
 const clone = (value) => structuredClone(value);
 const text = (key, fallback, params = {}) => t(`modelSetup.${key}`, params, fallback);
@@ -108,7 +109,8 @@ export function createModelConfigPanel(container) {
   function choose(preset, choice = preset.variants[0]) {
     draft = { preset, choice, key: "", base: choice.base, name: preset.labelKey ? text(preset.labelKey, preset.name) : preset.name, provider: null,
       items: [...choice.models], selected: new Set(choice.models.slice(0, 2)), queried: false,
-      ref: "", query: "", manual: "", default: false };
+      ref: "", query: "", manual: "", default: false,
+      proxy: { kind: "global" }, modelProxy: { kind: "global" } };
     view = "setup"; notice = ""; failed = false; render();
   }
   function connection() {
@@ -116,6 +118,7 @@ export function createModelConfigPanel(container) {
     const entry = presetProvider(draft.preset, draft.choice, config.providers, draft.base);
     entry.name = draft.name.trim() || draft.preset.name;
     if (draft.ref.trim()) entry.credential = { secret_ref: draft.ref.trim() };
+    entry.proxy = clone(draft.proxy);
     return entry;
   }
   async function discover() {
@@ -155,7 +158,8 @@ export function createModelConfigPanel(container) {
     for (const id of ids) {
       if (id.length > 256) { status(text("idTooLong", "模型 ID 最多 256 个字符。"), true); return; }
       if (next.items.some((item) => item.provider === entry.id && item.wire_model === id)) continue;
-      const model = presetModel(entry, id, next.items); next.items.push(model); added++;
+      const model = presetModel(entry, id, next.items);
+      model.proxy = clone(draft.modelProxy); next.items.push(model); added++;
       if (draft.default && added === 1) next.default_model = model.id;
     }
     if (!added) { status(text("selectModels", "请至少选择一个尚未添加的模型，或填写模型 ID。"), true); return; }
@@ -199,6 +203,7 @@ export function createModelConfigPanel(container) {
         const previous = draft;
         choose(previous.preset, previous.preset.variants.find((item) => item.id === select.value));
         draft.key = previous.key; draft.name = previous.name;
+        draft.proxy = previous.proxy; draft.modelProxy = previous.modelProxy;
         if (previous.preset.custom) {
           draft.base = previous.base; draft.ref = previous.ref; draft.manual = previous.manual; draft.default = previous.default;
         }
@@ -215,9 +220,15 @@ export function createModelConfigPanel(container) {
     if (!draft.provider) form.append(element("details", { className: "supplier-connection-advanced" }, [element("summary", { text: text("advancedConnection", "高级连接设置") }),
       field(text("connectionName", "供应商名称"), "connection-name", draft.name, (value) => { draft.name = value; }),
       !draft.preset.custom ? field(text("baseUrl", "服务地址（含 /v1）"), "base-url", draft.base, (value) => { draft.base = value; draft.queried = false; }, { type: "url", required: true }) : null,
-      field(text("credentialReference", "凭据引用（可代替 Key）"), "credential-ref", draft.ref, (value) => { draft.ref = value; draft.queried = false; })]));
+      field(text("credentialReference", "凭据引用（可代替 Key）"), "credential-ref", draft.ref, (value) => { draft.ref = value; draft.queried = false; }),
+      createModelProxyEditor(draft.proxy, { collapsible: false, titleKey: "modelProxy.providerTitle",
+        namePrefix: "provider_proxy_",
+        onChange: value => { draft.proxy = value; draft.queried = false; } }).element]));
     if (draft.queried) renderSelection(form);
     form.append(field(text("manualIds", "手动添加模型 ID（多个用逗号分隔）"), "manual-models", draft.manual, (value) => { draft.manual = value; }));
+    form.append(createModelProxyEditor(draft.modelProxy, { allowProvider: true, titleKey: "modelProxy.newModelsTitle",
+      namePrefix: "model_proxy_",
+      onChange: value => { draft.modelProxy = value; } }).element);
     const makeDefault = element("input", { attrs: { type: "checkbox", name: "make-default" } });
     makeDefault.checked = draft.default; makeDefault.addEventListener("change", () => { draft.default = makeDefault.checked; });
     form.append(element("label", { className: "supplier-inline-check" }, [makeDefault, element("span", { text: text("useDefault", "将首个新增模型设为默认") })]));

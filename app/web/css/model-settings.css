@@ -22,6 +22,12 @@
 .supplier-connection-advanced summary { color: var(--muted); font-size: 12px; cursor: pointer; }
 .supplier-connection-advanced[open] > .model-field { margin-top: 14px; }
 .supplier-connection-advanced[open] > .supplier-key-form { margin-top: 14px; }
+.model-proxy-editor .model-advanced-body, .model-proxy-body { display: grid; gap: 14px; }
+.model-proxy-editor p, .model-proxy-inline p { margin: 0; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.model-proxy-inline { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
+.model-proxy-inline h4 { margin: 0 0 14px; font-size: 13px; }
+.supplier-setup-form .model-proxy-editor { border: 1px solid var(--border); border-radius: 10px; }
+.supplier-setup-form .model-proxy-editor summary { padding: 14px; }
 .supplier-inline-check { display: flex; gap: 9px; align-items: center; font-size: 12px; }
 .supplier-inline-check input { accent-color: var(--accent); }
 .supplier-candidates { display: grid; gap: 4px; max-height: 300px; overflow-y: auto; padding: 6px; border: 1px solid var(--border); border-radius: 9px; }

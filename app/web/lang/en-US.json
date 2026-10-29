@@ -2283,5 +2283,15 @@
   "model.retry.temporary": "Model request temporarily failed. Retrying…",
   "model.retry.waiting": "{attempts} attempts made. Retrying in {seconds}s",
   "model.retry.scheduled": "{attempts} attempts made. Next attempt scheduled…",
-  "model.retry.connecting": "Attempt {attempt} in progress…"
+  "model.retry.connecting": "Attempt {attempt} in progress…",
+  "modelProxy.advanced": "Advanced network settings",
+  "modelProxy.providerTitle": "Provider network proxy",
+  "modelProxy.newModelsTitle": "Advanced network settings for new models",
+  "modelProxy.global": "Use global settings",
+  "modelProxy.provider": "Use provider settings",
+  "modelProxy.direct": "Direct connection (no proxy)",
+  "modelProxy.modelHelp": "Models use global settings by default. Select provider settings to inherit its proxy. A separate proxy replaces all proxy parameters together.",
+  "modelProxy.providerHelp": "Global settings are the default. Models selecting provider settings use this proxy. Direct connection bypasses the global proxy.",
+  "modelProxy.secretHelp": "Use an env:, file: or vault: reference for the proxy password, not a plaintext password.",
+  "model.error.profile_proxy_invalid": "The proxy configuration is invalid. Check the model, provider or global proxy settings."
 }
