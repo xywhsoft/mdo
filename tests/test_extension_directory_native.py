@@ -141,6 +141,24 @@ MDO_EXPORT mdo_result mdoCommandRun(const mdo_command_context_v1* C,const xvalue
   xrtValueObjectSetNew(*R,XRT_STR_LITERAL("invalid_journal_preserved_outside"),xrtValueBool(Guard));
  }
  xrtValueObjectSetNew(*R,XRT_STR_LITERAL("recovery_clean"),xrtValueBool(MdoExtensionsRecover(Error)));
+ {
+  const char* Broken="{broken";xvalue* Warnings=NULL,*Current=NULL;
+  bool Ok=MdoHomeAtomicWrite(MDO_EXT_TASKS "/startup-bad-stage/stage.json",Broken,strlen(Broken),false)&&MdoExtensionsRecoverStartup(Error);
+  Warnings=MdoExtensionsRecoveryWarnings();Current=MdoExtensionsRead("skills","qa-local",Error);bool Valid=false;
+  xrtValueGetBool(xrtValueObjectGet(Current,XRT_STR_LITERAL("valid")),&Valid);
+  Ok=Ok&&Warnings&&xrtValueCount(Warnings)==1&&Valid&&!MdoExtensionsRecoveryBlocked("skills","qa-local",NULL);
+  xrtValueRelease(Warnings);xrtValueRelease(Current);
+  xrtValueObjectSetNew(*R,XRT_STR_LITERAL("bad_stage_becomes_warning"),xrtValueBool(Ok));
+  const char* Journal="{\"kind\":\"mcp\",\"id\":\"qa-local\",\"phase\":\"invalid\"}";
+  Ok=Ok&&MdoHomeAtomicWrite(MDO_EXT_TASKS "/startup-bad-journal/transaction.json",Journal,strlen(Journal),false)&&MdoExtensionsRecoverStartup(Error);
+  Current=MdoExtensionsRead("mcp","qa-local",Error);bool Enabled=true;Valid=true;
+  xrtValueGetBool(xrtValueObjectGet(Current,XRT_STR_LITERAL("valid")),&Valid);xrtValueGetBool(xrtValueObjectGet(Current,XRT_STR_LITERAL("enabled")),&Enabled);
+  Ok=Ok&&Current&&!Valid&&!Enabled&&MdoExtensionsRecoveryBlocked("mcp","qa-local",NULL)&&!MdoExtensionsRecoveryBlocked("skills","qa-local",NULL)&&!MdoExtensionsSetEnabled("mcp","qa-local",true,Error);
+  xrtValueRelease(Current);xrtValueObjectSetNew(*R,XRT_STR_LITERAL("ambiguous_installation_fenced"),xrtValueBool(Ok));
+  Ok=Ok&&MdoExtRemoveTree(MDO_EXT_TASKS "/startup-bad-stage")&&MdoExtRemoveTree(MDO_EXT_TASKS "/startup-bad-journal")&&MdoExtensionsRecoverStartup(Error);
+  Warnings=MdoExtensionsRecoveryWarnings();Ok=Ok&&Warnings&&!xrtValueCount(Warnings)&&!MdoExtensionsRecoveryBlocked("mcp","qa-local",NULL);xrtValueRelease(Warnings);
+  xrtValueObjectSetNew(*R,XRT_STR_LITERAL("repaired_records_clear_fence"),xrtValueBool(Ok));
+ }
  MdoExtensionsUnit();xrtRootClose(QaRoot);QaRoot=NULL;return MDO_RESULT_OK;
 }
 '''
@@ -196,7 +214,7 @@ def main():
         for row in result['install_update_remove']:
             assert row['cycle'], row
         assert result['approval_required'] and result['recovery_clean'] and result['changed_store_files_block_execution'], result
-        for key in ('prepared_install_recovered', 'prepared_remove_recovered', 'committed_cleanup_only', 'bad_update_preserves_current', 'fresh_install_rolled_back', 'invalid_journal_preserved_outside'):
+        for key in ('prepared_install_recovered', 'prepared_remove_recovered', 'committed_cleanup_only', 'bad_update_preserves_current', 'fresh_install_rolled_back', 'invalid_journal_preserved_outside', 'bad_stage_becomes_warning', 'ambiguous_installation_fenced', 'repaired_records_clear_fence'):
             assert result[key], (key, result)
         archive = fixture / 'data/extension-tasks/export/result.zip'
         with zipfile.ZipFile(archive) as z:

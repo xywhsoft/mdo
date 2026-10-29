@@ -33,6 +33,7 @@ static bool MdoExtOpRestore(cstr Kind,cstr Id,bool Enabled,char Error[512]){
 bool MdoExtensionsManage(const xvalue* Input,const xvalue* Credits,xcancel* Cancel,xvalue** Result,char Error[512]){
  *Result=NULL;if(Error)Error[0]=0;cstr Kind=MdoExtensionText(Input,"kind",32),Id=MdoExtensionText(Input,"id",96),Action=MdoExtensionText(Input,"action",32),Expected=MdoExtensionText(Input,"expected_revision",64);
  if(!MdoExtensionDirectoryKind(Kind)||!MdoExtensionDirectoryId(Id)||!Action||xrtValueType(Input)!=XVALUE_OBJECT)return MdoExtOpFailure(Error,"Choose an extension type, directory and operation");
+ if(MdoExtensionsRecoveryBlocked(Kind,Id,Error))return false;
  const cstr Flags[]={"enabled","trust_code"};for(size_t I=0;I<2;I++){bool Flag;const xvalue* V=xrtValueObjectGet(Input,xrtStrView(Flags[I]));if(V&&!xrtValueGetBool(V,&Flag))return MdoExtOpFailure(Error,"Activation and code approval must be boolean values");}
  bool Create=!strcmp(Action,"create"),Save=!strcmp(Action,"save"),Import=!strcmp(Action,"import"),Install=!strcmp(Action,"install"),Remove=!strcmp(Action,"remove"),Enable=!strcmp(Action,"enable"),Edit=!strncmp(Action,"file.",5),CancelRemove=!strcmp(Action,"cancel_remove");
 #if defined(__ANDROID__)
@@ -89,6 +90,10 @@ done:
 }
 bool MdoExtensionsWarnings(xvalue* Items){
  if(!Items)return false;
+ xvalue* Recovery=MdoExtensionsRecoveryWarnings();if(!Recovery)return false;
+ for(size_t I=0;I<xrtValueCount(Recovery);I++){const xvalue* W=xrtValueArrayGet(Recovery,I);cstr Path=MdoExtensionText(W,"path",4096),Message=MdoExtensionText(W,"message",512);
+  if(!MdoDiagnosticWarning(Items,"extensions","recovery_pending",Path?Path:"extensions",Path?Path:"data/extension-tasks",Message?Message:"Extension recovery needs attention","Preserved records were not deleted. Repair the indicated record or restore its backup, then restart mdo","extensions")){xrtValueRelease(Recovery);return false;}}
+ xrtValueRelease(Recovery);
  cstr AndroidWarning=MdoAndroidToolsWarning();if(AndroidWarning&&!MdoDiagnosticWarning(Items,"extensions","android_tools_unavailable","external-tools","external-tools",AndroidWarning,"Install the full APK again or free storage, then restart","external-tools"))return false;
  for(size_t K=0;K<9;K++){cstr Kind=MdoExtensionKinds[K];char Error[512]={0};xvalue* Rows=MdoExtensionsList(Kind,Error);
   if(!Rows){if(!MdoDiagnosticWarning(Items,"extensions","catalog_unavailable",Kind,Kind,Error,"Check the extension directory and host installation state","extensions"))return false;continue;}

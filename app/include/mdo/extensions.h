@@ -27,6 +27,11 @@ bool MdoExtensionsPack(cstr Kind,cstr Id,cstr Output,xcancel* Cancel,char Hash[6
 bool MdoExtensionsInstall(cstr Kind,cstr Id,cstr Archive,const xvalue* Credits,bool Trust,xcancel* Cancel,xvalue** Result,char Error[512]);
 bool MdoExtensionsRemove(cstr Kind,cstr Id,xvalue** Result,char Error[512]);
 bool MdoExtensionsRecover(char Error[512]);
+/* Startup preserves ambiguous transactions and fences their installations,
+ * while allowing the settings/history UI to report and repair the failure. */
+bool MdoExtensionsRecoverStartup(char Error[512]);
+xvalue* MdoExtensionsRecoveryWarnings(void);
+bool MdoExtensionsRecoveryBlocked(cstr Kind,cstr Id,char Error[512]);
 bool MdoExtensionsSetEnabled(cstr Kind,cstr Id,bool Enabled,char Error[512]);
 bool MdoExtensionsSetActivation(cstr Kind,const xvalue* Changes,char Error[512]);
 /* Explicit import copies an entire anchored local directory through a real ZIP.

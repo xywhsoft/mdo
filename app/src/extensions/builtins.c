@@ -13,6 +13,7 @@ bool MdoExtensionsSeedBuiltins(char Error[512])
     bool Ok=true;
     for(size_t I=0;Ok&&I<sizeof(MdoBuiltinExtensions)/sizeof(*MdoBuiltinExtensions);I++){
         cstr Kind=MdoBuiltinExtensions[I].Kind,Id=MdoBuiltinExtensions[I].Id,Sha=MdoBuiltinExtensions[I].Sha256;
+        if(MdoExtensionsRecoveryBlocked(Kind,Id,NULL))continue;
         char* Key=xrtFormat("%s:%s",Kind,Id),*Root=MdoExtensionsRoot(Kind,Id);
         bool Exists=false;xfileinfo Info={0};Ok=Key&&Root&&MdoHomeExternalStat(Root,&Exists,&Info);
         const xvalue* Before=Key?xrtValueObjectGet(Receipts,xrtStrView(Key)):NULL;

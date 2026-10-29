@@ -66,7 +66,7 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
         return false;
     }
     char ExtensionError[512]={0};
-    if ( !MdoExtensionsInit() || !MdoExtensionTasksInit() || !MdoExtensionsRecover(ExtensionError) ||
+    if ( !MdoExtensionsInit() || !MdoExtensionTasksInit() || !MdoExtensionsRecoverStartup(ExtensionError) ||
          !MdoExtensionsSeedBuiltins(ExtensionError) ) {
         if(ExtensionError[0])fprintf(stderr,"[mdo] extensions: %s\n",ExtensionError);
         MdoBootstrapFail("Extension installation recovery failed");

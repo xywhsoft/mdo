@@ -10,6 +10,17 @@ static xmutex* MdoExtLock;
 static xmutex* MdoExtMutationLock;
 struct MdoExtensionLease {char* Key;struct MdoExtensionLease* Next;};
 static MdoExtensionLease* MdoExtLeases;
+static xvalue* MdoExtRecoveryIssues;
+static xvalue* MdoExtRecoveryKeys;
+static bool MdoExtRecoveryAll;
+static bool MdoExtRecoveryBlockedLocked(cstr Kind,cstr Id)
+{
+    char Key[132];
+    if(MdoExtRecoveryAll)return true;
+    if(!Kind||!Id)return false;
+    int N=snprintf(Key,sizeof(Key),"%s:%s",Kind,Id);
+    return N<0||(size_t)N>=sizeof(Key)||xrtValueObjectHas(MdoExtRecoveryKeys,xrtStrView(Key));
+}
 static bool MdoExtBusy(cstr Kind,cstr Id){
     for(MdoExtensionLease* L=MdoExtLeases;L;L=L->Next)
         if(!strncmp(L->Key,Kind,strlen(Kind))&&L->Key[strlen(Kind)]==':'&&!strcmp(L->Key+strlen(Kind)+1,Id))return true;
@@ -70,12 +81,26 @@ static xvalue* MdoExtRead(cstr Kind,cstr Id,const xvalue* State,char Error[512])
     if(Ok&&Record){const char* const Credits[]={"submitter","owner","xid"};for(size_t I=0;Ok&&I<3;I++){
         const xvalue* V=xrtValueObjectGet(Record,xrtStrView(Credits[I]));if(V)Ok=xrtValueObjectSet(Row,xrtStrView(Credits[I]),V);}}
     if(Ok&&Record){const cstr Keys[]={"pending_remove","pending_error"};for(size_t I=0;Ok&&I<2;I++){const xvalue* V=xrtValueObjectGet(Record,xrtStrView(Keys[I]));if(V)Ok=xrtValueObjectSet(Row,xrtStrView(Keys[I]),V);}}
+    if(Ok&&MdoExtRecoveryBlockedLocked(Kind,Id))Ok=MdoExtPut(Row,"error","An unfinished extension transaction needs recovery; its files were preserved")&&
+        xrtValueObjectSetNew(Row,XRT_STR_LITERAL("enabled"),xrtValueBool(false))&&xrtValueObjectSetNew(Row,XRT_STR_LITERAL("valid"),xrtValueBool(false));
     xrtFree(Key);xrtFree(Root);xrtValueRelease(Meta);
     if(!Ok){xrtValueRelease(Row);MdoExtError(Error,"Extension entry, source record or file is unavailable");return NULL;}return Row;
 }
 bool MdoExtensionsInit(void)
 {if(MdoExtLock&&MdoExtMutationLock)return true;MdoExtLock=xrtMutexCreate();MdoExtMutationLock=xrtMutexCreate();if(!MdoExtLock||!MdoExtMutationLock){MdoExtensionsUnit();return false;}return true;}
-void MdoExtensionsUnit(void){while(MdoExtLeases){MdoExtensionLease* L=MdoExtLeases;MdoExtLeases=L->Next;xrtFree(L->Key);xrtFree(L);}if(MdoExtLock)xrtMutexDestroy(MdoExtLock);if(MdoExtMutationLock)xrtMutexDestroy(MdoExtMutationLock);MdoExtLock=MdoExtMutationLock=NULL;}
+void MdoExtensionsUnit(void){while(MdoExtLeases){MdoExtensionLease* L=MdoExtLeases;MdoExtLeases=L->Next;xrtFree(L->Key);xrtFree(L);}xrtValueRelease(MdoExtRecoveryIssues);xrtValueRelease(MdoExtRecoveryKeys);MdoExtRecoveryIssues=MdoExtRecoveryKeys=NULL;MdoExtRecoveryAll=false;if(MdoExtLock)xrtMutexDestroy(MdoExtLock);if(MdoExtMutationLock)xrtMutexDestroy(MdoExtMutationLock);MdoExtLock=MdoExtMutationLock=NULL;}
+bool MdoExtensionsRecoveryBlocked(cstr Kind,cstr Id,char Error[512])
+{
+    if(!MdoExtLock)return false;
+    xrtMutexLock(MdoExtLock);bool Blocked=MdoExtRecoveryBlockedLocked(Kind,Id);xrtMutexUnlock(MdoExtLock);
+    if(Blocked)MdoExtError(Error,"An unfinished extension transaction needs recovery; inspect its warning and preserved files before modifying this installation");
+    return Blocked;
+}
+xvalue* MdoExtensionsRecoveryWarnings(void)
+{
+    if(!MdoExtLock)return xrtValueArray();
+    xrtMutexLock(MdoExtLock);xvalue* Out=MdoExtRecoveryIssues?xrtValueClone(MdoExtRecoveryIssues):xrtValueArray();xrtMutexUnlock(MdoExtLock);return Out;
+}
 bool MdoExtensionsMutationBegin(void){return MdoExtMutationLock&&xrtMutexTryLock(MdoExtMutationLock);}
 void MdoExtensionsMutationEnd(void){if(MdoExtMutationLock)xrtMutexUnlock(MdoExtMutationLock);}
 bool MdoExtensionsInUse(cstr Kind,cstr Id){if(!MdoExtLock)return false;xrtMutexLock(MdoExtLock);bool Busy=MdoExtensionDirectoryKind(Kind)&&MdoExtensionDirectoryId(Id)&&MdoExtBusy(Kind,Id);xrtMutexUnlock(MdoExtLock);return Busy;}
@@ -87,6 +112,7 @@ xvalue* MdoExtensionsRead(cstr Kind,cstr Id,char Error[512])
     }
     if(!MdoExtLock){MdoExtError(Error,"Extension manager is not initialized");return NULL;}
     xrtMutexLock(MdoExtLock);xvalue* State=MdoExtReadJson(MDO_EXT_STATE,MDO_EXT_STATE_LIMIT,true);
+    if(MdoExtRecoveryAll&&(!State||xrtValueType(State)!=XVALUE_OBJECT)){xrtValueRelease(State);State=xrtValueObject();xrtClearError();}
     xvalue* Row=State&&xrtValueType(State)==XVALUE_OBJECT&&MdoExtCanonical(Kind,Id)?MdoExtRead(Kind,Id,State,Error):NULL;xrtValueRelease(State);xrtMutexUnlock(MdoExtLock);
     if(!Row&&Error&&!Error[0])MdoExtError(Error,"Cannot verify extension installation state");
     return Row;
@@ -98,6 +124,7 @@ xvalue* MdoExtensionsList(cstr Kind,char Error[512])
     return NULL;
     }
     xrtMutexLock(MdoExtLock);xvalue* State=MdoExtReadJson(MDO_EXT_STATE,MDO_EXT_STATE_LIMIT,true),*Rows=xrtValueArray();
+    if(MdoExtRecoveryAll&&(!State||xrtValueType(State)!=XVALUE_OBJECT)){xrtValueRelease(State);State=xrtValueObject();xrtClearError();}
     bool Ok=State&&xrtValueType(State)==XVALUE_OBJECT&&Rows;xdir D=Ok?MdoHomeOpenDirectory(Kind,XDIR_STAT):NULL;
     if(Ok&&!D&&!MdoExtMissing())Ok=false;
     xdirentry Entry;xdirnext Next=XDIR_NEXT_END;size_t Count=0;
@@ -218,6 +245,7 @@ bool MdoExtensionsFingerprint(cstr Kind,cstr Id,char Hash[65],xcancel* Cancel,ch
 }
 static bool MdoExtVerify(cstr Kind,cstr Id,const xvalue* State,xcancel* Cancel,char Error[512])
 {
+    if(MdoExtRecoveryBlockedLocked(Kind,Id))return MdoExtError(Error,"Extension execution is suspended until its unfinished installation is recovered");
     xvalue* M=MdoExtRead(Kind,Id,State,Error);if(!M)return false;
     if(!MdoExtensionSupportsPlatform(M,MdoExtensionRuntimePlatform())){xrtValueRelease(M);return MdoExtError(Error,"This extension does not support the current device platform");}
     cstr Source=MdoExtensionText(M,"source",16);bool Ok=!Cancel||!xrtCancelRequested(Cancel);
@@ -292,6 +320,7 @@ bool MdoExtensionsPack(cstr Kind,cstr Id,cstr Output,xcancel* Cancel,char Hash[6
      * source extension, where it could recursively package itself. */
     if(!MdoExtLock||!Output||strncmp(Output,"data/extension-tasks/",21)||!MdoExtensionRelativePath(Output))return MdoExtError(Error,"Archive output must belong to an extension task");
     xrtMutexLock(MdoExtLock);xvalue* State=MdoExtReadJson(MDO_EXT_STATE,MDO_EXT_STATE_LIMIT,true),*Meta=State&&MdoExtensionDirectoryKind(Kind)&&MdoExtensionDirectoryId(Id)&&MdoExtCanonical(Kind,Id)?MdoExtRead(Kind,Id,State,Error):NULL;xrtValueRelease(State);
+    if(Meta&&MdoExtRecoveryBlockedLocked(Kind,Id)){xrtValueRelease(Meta);Meta=NULL;MdoExtError(Error,"Recover the unfinished installation before publishing it");}
     if(Meta&&!strcmp(MdoExtensionText(Meta,"source",16),"store")){xrtValueRelease(Meta);Meta=NULL;MdoExtError(Error,"Store extensions cannot be exported or republished");}
     char* Root=Meta?MdoExtensionsRoot(Kind,Id):NULL;MdoExtTree T={0};char Before[65]={0},After[65]={0};
     bool Ok=Root&&MdoExtCollect(Root,&T,Cancel,Error)&&MdoExtFingerprint(Root,&T,Before,Cancel);xfile File=Ok?MdoHomeOpenWrite(Output,XFILE_WRITE|XFILE_CREATE|XFILE_EXCLUSIVE):NULL;
@@ -387,18 +416,45 @@ static bool MdoExtRecoverTask(cstr Task,char Error[512])
     xrtValueRelease(J);xrtFree(Base);xrtFree(Journal);xrtFree(Root);xrtFree(Prior);xrtFree(Incoming);return Ok;
 }
 static bool MdoExtRecoverRemovals(char Error[512]);
-bool MdoExtensionsRecover(char Error[512])
+static bool MdoExtRecoveryIssue(cstr Task,cstr Message)
+{
+    if(MdoExtRecoveryIssues&&xrtValueCount(MdoExtRecoveryIssues)>=128){MdoExtRecoveryAll=true;return true;}
+    char *Base=Task?xrtFormat(MDO_EXT_TASKS "/%s",Task):xrtStrDup(MDO_EXT_TASKS),*Journal=Base?xrtFormat("%s/transaction.json",Base):NULL;
+    bool Exists=false;xfileinfo Info;bool Known=Task&&Journal&&MdoExtStat(Journal,&Exists,&Info);
+    xvalue* J=Known&&Exists?MdoExtReadJson(Journal,MDO_EXT_STATE_LIMIT,false):NULL;
+    cstr Kind=MdoExtensionText(J,"kind",32),Id=MdoExtensionText(J,"id",96);
+    bool Scoped=MdoExtensionDirectoryKind(Kind)&&MdoExtensionDirectoryId(Id);
+    /* Before transaction.json is published, only task-owned incoming files
+     * can exist. An unreadable/present journal must fence live installations. */
+    if(!Known||(Exists&&!Scoped))MdoExtRecoveryAll=true;
+    char* Key=Scoped?MdoExtKey(Kind,Id):NULL;xvalue* Issue=xrtValueObject();
+    bool Ok=Base&&Issue&&MdoExtRecoveryIssues&&MdoExtRecoveryKeys&&xrtValueCount(MdoExtRecoveryIssues)<128&&
+        MdoExtPut(Issue,"path",Known&&Exists?Journal:Base)&&MdoExtPut(Issue,"message",Message&&Message[0]?Message:"Extension recovery failed; its files were preserved");
+    if(Ok&&Scoped)Ok=Key&&MdoExtPut(Issue,"kind",Kind)&&MdoExtPut(Issue,"id",Id)&&xrtValueObjectSetNew(MdoExtRecoveryKeys,xrtStrView(Key),xrtValueBool(true));
+    if(Ok)Ok=xrtValueArrayAppend(MdoExtRecoveryIssues,Issue);
+    xrtValueRelease(J);xrtValueRelease(Issue);xrtFree(Key);xrtFree(Base);xrtFree(Journal);xrtClearError();return Ok;
+}
+static bool MdoExtRecoverAll(char Error[512],bool Startup)
 {
     if(Error)Error[0]=0;
     if(!MdoExtLock)return MdoExtError(Error,"Extension manager is not initialized");
-    xrtMutexLock(MdoExtLock);xdir D=MdoHomeOpenDirectory(MDO_EXT_TASKS,XDIR_STAT);bool Ok=D||MdoExtMissing();xvalue* Tasks=xrtValueArray();xdirentry E;xdirnext Next=XDIR_NEXT_END;
+    xrtMutexLock(MdoExtLock);xrtValueRelease(MdoExtRecoveryIssues);xrtValueRelease(MdoExtRecoveryKeys);MdoExtRecoveryIssues=xrtValueArray();MdoExtRecoveryKeys=xrtValueObject();MdoExtRecoveryAll=false;
+    xdir D=MdoHomeOpenDirectory(MDO_EXT_TASKS,XDIR_STAT);bool Ok=(D||MdoExtMissing())&&MdoExtRecoveryIssues&&MdoExtRecoveryKeys;xvalue* Tasks=xrtValueArray();Ok=Ok&&Tasks;xdirentry E;xdirnext Next=XDIR_NEXT_END;
     while(Ok&&D&&(Next=xrtDirNext(D,&E))==XDIR_NEXT_ITEM){if(E.Info.Type!=XFILE_TYPE_DIRECTORY||!(E.Flags&XDIR_ENTRY_UTF8)||!E.Name.Size||E.Name.Size>96)continue;
         if(xrtValueCount(Tasks)>=4096){Ok=false;break;}Ok=xrtValueArrayAppendNew(Tasks,xrtValueString(xrtStrViewN(E.Name.Data,E.Name.Size)));}
     if(Next==XDIR_NEXT_ERROR)Ok=false;
     if(D&&!xrtDirClose(D))Ok=false;
-    for(size_t I=0;Ok&&I<xrtValueCount(Tasks);I++){xstrview Name={0};xrtValueGetString(xrtValueArrayGet(Tasks,I),&Name);Ok=MdoExtRecoverTask(Name.Data,Error);}
-    xrtValueRelease(Tasks);if(Ok)Ok=MdoExtRecoverRemovals(Error);xrtMutexUnlock(MdoExtLock);return Ok;
+    bool Complete=Ok;
+    if(!Ok)Ok=MdoExtRecoveryIssue(NULL,"Cannot enumerate extension recovery records; extension execution and changes are suspended");
+    for(size_t I=0;Ok&&I<xrtValueCount(Tasks);I++){xstrview Name={0};xrtValueGetString(xrtValueArrayGet(Tasks,I),&Name);char Why[512]={0};
+        if(!MdoExtRecoverTask(Name.Data,Why)){Complete=false;if(Error)snprintf(Error,512,"%s",Why);Ok=MdoExtRecoveryIssue(Name.Data,Why);if(!Startup){MdoExtRecoveryAll=true;break;}}}
+    xrtValueRelease(Tasks);
+    if(Ok&&!MdoExtRecoverRemovals(Error)){Complete=false;MdoExtRecoveryAll=true;Ok=MdoExtRecoveryIssue(NULL,Error);}
+    if(Startup&&Ok){if(Error)Error[0]=0;xrtClearError();}
+    xrtMutexUnlock(MdoExtLock);return Ok&&(Startup||Complete);
 }
+bool MdoExtensionsRecover(char Error[512]){return MdoExtRecoverAll(Error,false);}
+bool MdoExtensionsRecoverStartup(char Error[512]){return MdoExtRecoverAll(Error,true);}
 static bool MdoExtRequiresTrust(const xvalue* M)
 {
     cstr Kind=MdoExtensionText(M,"kind",32),Entry=MdoExtensionText(M,"entry",MDO_EXTENSION_PATH_BYTES);size_t N=Entry?strlen(Entry):0;
@@ -425,6 +481,7 @@ static bool MdoExtExtractZip(MdoZip* Z,cstr Root,xcancel* Cancel,char Error[512]
 }
 static bool MdoExtPublish(cstr Kind,cstr Id,cstr Task,bool Remove,const xvalue* Record,xcancel* Cancel,xvalue** Result,char Error[512])
 {
+    if(MdoExtRecoveryBlockedLocked(Kind,Id))return MdoExtError(Error,"Recover the unfinished transaction before changing this extension directory");
     char *Root=MdoExtensionsRoot(Kind,Id),*Base=xrtFormat(MDO_EXT_TASKS "/%s",Task),*Prior=Base?xrtFormat("%s/prior",Base):NULL,*Incoming=Base?xrtFormat("%s/incoming",Base):NULL,*Journal=Base?xrtFormat("%s/transaction.json",Base):NULL,*Key=MdoExtKey(Kind,Id);
     xvalue* State=MdoExtReadJson(MDO_EXT_STATE,MDO_EXT_STATE_LIMIT,true);const xvalue* Before=Key?xrtValueObjectGet(State,xrtStrView(Key)):NULL;
     bool Exists=false;xfileinfo Info;bool Ok=Root&&Base&&Prior&&Incoming&&Journal&&Key&&State&&xrtValueType(State)==XVALUE_OBJECT&&MdoExtStat(Root,&Exists,&Info);
@@ -506,6 +563,7 @@ static bool MdoExtRecoverRemovals(char Error[512])
     for(size_t I=0;Ok&&I<xrtValueCount(State);I++){
         xstrview Key={0};const xvalue* Record=xrtValueObjectAt(State,I,&Key);bool Pending=false;xrtValueGetBool(xrtValueObjectGet(Record,XRT_STR_LITERAL("pending_remove")),&Pending);if(!Pending)continue;
         cstr Kind=MdoExtensionText(Record,"kind",32),Id=MdoExtensionText(Record,"id",96),Expected=MdoExtensionText(Record,"remove_digest",64);char* ActualKey=MdoExtKey(Kind,Id);
+        if(MdoExtRecoveryBlockedLocked(Kind,Id)){xrtFree(ActualKey);continue;}
         bool Valid=ActualKey&&Expected&&strlen(Expected)==64&&xrtStrEqual(Key,xrtStrView(ActualKey));xrtFree(ActualKey);if(!Valid){Ok=false;MdoExtError(Error,"Invalid pending extension uninstall record was preserved");break;}
         if(MdoExtBusy(Kind,Id))continue;
         char* Root=MdoExtensionsRoot(Kind,Id);
@@ -553,7 +611,7 @@ bool MdoExtensionsSetActivation(cstr Kind,const xvalue* Changes,char Error[512])
     xrtMutexLock(MdoExtLock);xvalue* State=MdoExtReadJson(MDO_EXT_STATE,MDO_EXT_STATE_LIMIT,true);bool Ok=State&&xrtValueType(State)==XVALUE_OBJECT;
     for(size_t I=0;Ok&&I<xrtValueCount(Changes);I++){
         const xvalue* Change=xrtValueArrayGet(Changes,I);cstr Id=MdoExtensionText(Change,"id",96);bool Enabled=false;
-        Ok=MdoExtensionDirectoryId(Id)&&xrtValueGetBool(xrtValueObjectGet(Change,XRT_STR_LITERAL("enabled")),&Enabled)&&MdoExtCanonical(Kind,Id);
+        Ok=MdoExtensionDirectoryId(Id)&&!MdoExtRecoveryBlockedLocked(Kind,Id)&&xrtValueGetBool(xrtValueObjectGet(Change,XRT_STR_LITERAL("enabled")),&Enabled)&&MdoExtCanonical(Kind,Id);
         for(size_t J=0;Ok&&J<I;J++)if(!strcmp(Id,MdoExtensionText(xrtValueArrayGet(Changes,J),"id",96)))Ok=false;
         xvalue* Meta=Ok&&Enabled?MdoExtRead(Kind,Id,State,Error):NULL;if(Ok&&Enabled)Ok=Meta&&MdoExtVerify(Kind,Id,State,NULL,Error);
         char* Key=Ok?MdoExtKey(Kind,Id):NULL;const xvalue* Before=Key?xrtValueObjectGet(State,xrtStrView(Key)):NULL;xvalue* Record=Before?xrtValueClone(Before):xrtValueObject();
@@ -637,7 +695,7 @@ bool MdoExtensionsEdit(cstr Kind,cstr Id,cstr Action,cstr Path,cstr Target,const
     char* Root=MdoExtensionsRoot(Kind,Id),*Full=Root?xrtFormat("%s/%s",Root,Path):NULL,*Destination=Move&&Root?xrtFormat("%s/%s",Root,Target):NULL;
     if(!Meta&&Root){char* Header=xrtFormat("%s/extension.json",Root);xvalue* Raw=Header?MdoExtReadJson(Header,MDO_EXTENSION_MANIFEST_BYTES,false):NULL;xrtFree(Header);char Why[512];if(Raw&&MdoExtensionManifest(Raw,Why,sizeof(Why))&&!strcmp(Kind,MdoExtensionText(Raw,"kind",32)))Meta=Raw;else xrtValueRelease(Raw);}
     bool Pending=false;xrtValueGetBool(xrtValueObjectGet(Record,XRT_STR_LITERAL("pending_remove")),&Pending);
-    MdoExtTree Tree={0};char Hash[65];bool Ok=State&&MdoExtCanonical(Kind,Id)&&(Meta||(Write&&!strcmp(Path,"extension.json")))&&Source&&!strcmp(Source,"manual")&&!Pending&&!MdoExtBusy(Kind,Id)&&Root&&Full&&MdoExtCollect(Root,&Tree,NULL,Error)&&MdoExtFingerprint(Root,&Tree,Hash,NULL)&&!strcmp(Expected,Hash);
+    MdoExtTree Tree={0};char Hash[65];bool Ok=State&&!MdoExtRecoveryBlockedLocked(Kind,Id)&&MdoExtCanonical(Kind,Id)&&(Meta||(Write&&!strcmp(Path,"extension.json")))&&Source&&!strcmp(Source,"manual")&&!Pending&&!MdoExtBusy(Kind,Id)&&Root&&Full&&MdoExtCollect(Root,&Tree,NULL,Error)&&MdoExtFingerprint(Root,&Tree,Hash,NULL)&&!strcmp(Expected,Hash);
     bool Exists=false;xfileinfo Info;if(Ok)Ok=MdoExtStat(Full,&Exists,&Info);
     if(Ok&&(Remove||Move)){const cstr Protected[]={"entry","native","frontend","readme"};for(size_t I=0;Ok&&I<4;I++){cstr P=MdoExtensionText(Meta,Protected[I],4096);if(P&&(!strcmp(P,Path)||(Info.Type==XFILE_TYPE_DIRECTORY&&!strncmp(P,Path,strlen(Path))&&P[strlen(Path)]=='/')))Ok=false;}}
     if(Ok&&Exists){bool Exact=false;for(size_t I=0;I<Tree.Count;I++)if(!strcmp(Tree.Files[I].Path,Path))Exact=true;Ok=Exact;}
