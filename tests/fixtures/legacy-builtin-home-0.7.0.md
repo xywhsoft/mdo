@@ -9,3 +9,7 @@ It contains no account, credentials, projects, sessions, user prompts or memory.
 All enabled flags are normalized to true; the regression sets opt-outs itself.
 The receipt hashes are intentional: old manifests have no logical `id`, so a
 newly generated fixture cannot exercise the actual upgrade failure.
+
+On POSIX, the test recalculates the native mode/size portion of installation
+receipts after extraction. Archive hashes and every historical file byte remain
+unchanged; this represents an unmodified installation on that platform.

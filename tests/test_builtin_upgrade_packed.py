@@ -1,18 +1,30 @@
 """Upgrade the shipped 0.7.0 builtin files and receipts through real startup/API."""
-import argparse,hashlib,http.client,json,os,shutil,tempfile,zipfile
+import argparse,hashlib,http.client,json,os,shutil,struct,tempfile,zipfile
 from pathlib import Path
 from test_packed_home_lease import ROOT,site,start,stop,wait_bootstrap,release_packed_copies
 
 FIXTURE=ROOT/'tests/fixtures/legacy-builtin-home-0.7.0.zip'
 
 def check(packed,report=None,expect_legacy_failure=False):
-    base=Path(tempfile.mkdtemp(prefix='builtin-upgrade-',dir=ROOT/'.build'))
+    scratch=ROOT/'.build' if os.name=='nt' else Path(tempfile.gettempdir())
+    base=Path(tempfile.mkdtemp(prefix='builtin-upgrade-',dir=scratch))
     evidence={};passed=False
     try:
         for scenario in (('unchanged',) if expect_legacy_failure else ('unchanged','optouts','edited')):
             home=base/scenario;home.mkdir()
             with zipfile.ZipFile(FIXTURE) as z:z.extractall(home)
             state=home/'data/extensions/state.json'
+            if os.name!='nt':
+                # Receipts include native mode/size metadata. Keep the old
+                # bytes and archive hashes, but model a POSIX installation.
+                values=json.loads(state.read_text(encoding='utf-8'))
+                for key,row in values.items():
+                    folder=home/row['kind']/row['id'];h=hashlib.sha256()
+                    for p in sorted(folder.rglob('*'),key=lambda p:p.relative_to(folder).as_posix().encode()):
+                        st=p.stat();h.update(p.relative_to(folder).as_posix().encode()+b'\0'+bytes([p.is_dir(),bool(st.st_mode&0o111)])+struct.pack('<Q',st.st_size))
+                        if p.is_file():h.update(p.read_bytes())
+                    row['directory_digest']=h.hexdigest()
+                state.write_text(json.dumps(values),encoding='utf-8')
             if scenario=='optouts':
                 values=json.loads(state.read_text(encoding='utf-8'))
                 values['commands:help']['enabled']=False;values['agents:default']['enabled']=False
@@ -98,7 +110,7 @@ def check(packed,report=None,expect_legacy_failure=False):
                 stop(process);release_packed_copies(directory/packed.name)
         passed=True
     finally:
-        if passed and base.resolve().parent==(ROOT/'.build').resolve() and base.name.startswith('builtin-upgrade-'):shutil.rmtree(base)
+        if passed and base.resolve().parent==scratch.resolve() and base.name.startswith('builtin-upgrade-'):shutil.rmtree(base)
         elif not passed:print('Failure evidence:',base)
     if report:Path(report).write_text(json.dumps(evidence,indent=2)+'\n',encoding='utf-8')
     print('PASS',len(evidence),'historical Home upgrade contracts');return evidence
