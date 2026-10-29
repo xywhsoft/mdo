@@ -2272,5 +2272,12 @@
   "extensionBrowser.copyrightUnknown": "Отдельное уведомление об авторских правах отсутствует. См. лицензию и сведения в исходном коде.",
   "extensionBrowser.license": "Лицензия",
   "extensionBrowser.version": "Версия",
-  "extensionBrowser.storeInstalled": "Установлено из магазина"
+  "extensionBrowser.storeInstalled": "Установлено из магазина",
+  "model.retry.rateLimited": "Сервис модели ограничил частоту запросов. Повторяем…",
+  "model.retry.timeout": "Время ожидания модели истекло. Повторяем…",
+  "model.retry.network": "Соединение с моделью прервано. Повторяем…",
+  "model.retry.temporary": "Запрос к модели временно не выполнен. Повторяем…",
+  "model.retry.waiting": "Выполнено попыток: {attempts}. Повтор через {seconds} с",
+  "model.retry.scheduled": "Выполнено попыток: {attempts}. Следующая попытка запланирована…",
+  "model.retry.connecting": "Выполняется попытка {attempt}…"
 }

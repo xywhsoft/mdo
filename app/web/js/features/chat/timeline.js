@@ -16,6 +16,7 @@ import { conversationGroups } from "./conversation-history.js";
 import { createHistoryWindow } from "./history-window.js";
 import { createConversationNavigation } from "./conversation-navigation.js";
 import { modelErrorMessage, modelErrorTitle } from "../../utils/model-errors.js";
+import { modelRetryNode, updateModelRetryCountdowns } from "./model-retry.js";
 
 export function searchResultTop(row, content, searchBottom, viewportBottom, lineHeight = 24) {
   const room = Math.max(0, viewportBottom - searchBottom);
@@ -105,6 +106,17 @@ export function eventsToTimeline(events, historyLost = false,
   const runEpochs = new Map();
   const terminalRuns = new Map();
   const finalErrors = new Map();
+  const retryNotices = new Map();
+  function clearRetryNotice(event, wholeRun = false) {
+    const key = modelKey(event, runEpochs.get(String(event.run_id || event.agent_id || event.event_id)) ?? 0);
+    const run = String(event.run_id || event.agent_id || event.event_id);
+    for (const [id, notice] of retryNotices) {
+      if (wholeRun ? notice.runKey === run : id === key) {
+        notice.retryResolved = true;
+        retryNotices.delete(id);
+      }
+    }
+  }
   function settleStreams(runKey, epoch, state) {
     // ERROR is a terminal event in xwork, just like AGENT_DONE. Scope the
     // settlement to this execution: other Agents and reused run IDs survive.
@@ -127,7 +139,25 @@ export function eventsToTimeline(events, historyLost = false,
     const itemCount = items.length;
     const runKey = String(event.run_id || event.agent_id || event.event_id);
     const epoch = runEpochs.get(runKey) ?? 0;
+    if ((["model_text_delta", "model_reasoning_delta"].includes(event.kind) && event.text) ||
+        event.kind === "model_done" || event.kind === "tool_start") clearRetryNotice(event);
+    if (["error", "agent_done", "agent_start"].includes(event.kind)) clearRetryNotice(event, true);
     switch (event.kind) {
+      case "model_retry": {
+        if (terminalRuns.has(`${runKey}:${epoch}`)) break;
+        const key = modelKey(event, epoch);
+        let notice = retryNotices.get(key);
+        if (!notice) {
+          notice = { key: `retry-${key}`, kind: "retry", state: "running", runKey, runEpoch: epoch };
+          retryNotices.set(key, notice);
+          items.push(notice);
+        }
+        Object.assign(notice, { time: event.time, errorKind: event.model_error_kind,
+          httpStatus: Number(event.model_http_status || 0), attempts: Number(event.model_attempts || 0),
+          retryWaiting: Number(event.model_retry_after_ms) > 0,
+          retryAt: Number(event.time) / 1000 + Number(event.model_retry_after_ms || 0) });
+        break;
+      }
       case "agent_start":
         runEpochs.set(runKey, Number(event.event_id) || 0);
         runUsages.set(`${runKey}:${Number(event.event_id) || 0}`,
@@ -399,7 +429,8 @@ export function eventsToTimeline(events, historyLost = false,
         const failure = { key: `error-${event.event_id}`,
           kind: event.agent_depth > 0 ? "task" : "error",
           role,
-          text, state: "failed", time: event.time };
+          text, state: "failed", time: event.time,
+          retryPrompt: event.agent_depth > 0 ? undefined : promptsByRun.get(runKey) };
         finalErrors.set(errorKey, failure);
         items.push(failure);
         break;
@@ -534,7 +565,7 @@ export function eventsToTimeline(events, historyLost = false,
         (nextUserSequence === null || nextUserSequence > item.retryPrompt.sequence))
       item.forkThroughSequence = nextUserSequence === null ? null : nextUserSequence - 1;
   }
-  return items;
+  return items.filter(item => !item.retryResolved);
 }
 
 export async function resolveTimelineCopyText(item, owner,
@@ -712,6 +743,7 @@ function commandButton(label, description, iconName, actionRef, handlers, sessio
 
 function timelineNode(item, handlers, projectId, sessionId, writable,
   openState, previewOpen, previewScroll, toolTextCache) {
+  if (item.kind === "retry") return modelRetryNode(item);
   if (item.kind === "process") {
     const details = element("details", { className: "conversation-process", attrs: {
       "data-timeline-key": item.key, "data-state": item.state } });
@@ -844,6 +876,7 @@ function timelineNode(item, handlers, projectId, sessionId, writable,
   }
   if (item.meta) children.push(element("div", { className: "timeline-meta", text: item.meta }));
   if ((item.kind === "assistant" && item.text) ||
+      (item.kind === "error" && item.retryPrompt) ||
       (item.kind === "user" && (item.text || item.attachments?.length))) {
     const actions = element("div", { className: "timeline-actions" });
     if (item.text) {
@@ -882,8 +915,8 @@ function timelineNode(item, handlers, projectId, sessionId, writable,
           opener, () => resolveTimelineActionText(item, owner), item.sourceEventId));
       actions.append(edit);
     }
-    if (item.kind === "assistant") {
-      if (writable && !item.historyReadOnly && "forkThroughSequence" in item) {
+    if (item.kind === "assistant" || item.kind === "error") {
+      if (item.kind === "assistant" && writable && !item.historyReadOnly && "forkThroughSequence" in item) {
         const fork = commandButton(t("timeline.fork", {}, "分叉"),
           t("timeline.forkFromReply", {}, "从此回复分叉会话"), "branch", `${item.key}/fork`,
           handlers, sessionKey, () => handlers.onFork(item.forkThroughSequence, owner));
@@ -930,6 +963,12 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
   showReadError = true }) {
   const busySessions = new Set();
   const renderedRows = new Map();
+  let retryTimer = 0;
+  function syncRetryCountdowns() {
+    if (updateModelRetryCountdowns(container)) {
+      if (!retryTimer) retryTimer = setInterval(syncRetryCountdowns, 1000);
+    } else if (retryTimer) { clearInterval(retryTimer); retryTimer = 0; }
+  }
   const handlers = {
     onFork, onEdit, onRetry,
     isBusy: (key) => busySessions.has(key),
@@ -1025,6 +1064,7 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
     }
     for (const key of renderedRows.keys())
       if (!retained.has(key)) renderedRows.delete(key);
+    syncRetryCountdowns();
   }
 
   function syncBusy() {
@@ -1275,6 +1315,7 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
       queueRender(store.get());
     },
     destroy() {
+      if (retryTimer) clearInterval(retryTimer);
       historyWindow?.destroy(); viewportObserver?.disconnect();
       scroller.removeEventListener("scroll", onScroll);
       container.removeEventListener("click", rememberProcessToggle);

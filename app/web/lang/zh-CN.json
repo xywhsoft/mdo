@@ -2272,5 +2272,12 @@
   "extensionBrowser.storeInstalled": "商店安装",
   "layers.close": "关闭窗口",
   "layers.maximize": "最大化窗口",
-  "layers.restore": "还原窗口"
+  "layers.restore": "还原窗口",
+  "model.retry.rateLimited": "模型服务暂时限流，正在重试…",
+  "model.retry.timeout": "模型请求超时，正在重试…",
+  "model.retry.network": "模型连接暂时中断，正在重试…",
+  "model.retry.temporary": "模型请求暂时失败，正在重试…",
+  "model.retry.waiting": "已尝试 {attempts} 次，{seconds} 秒后再次尝试",
+  "model.retry.scheduled": "已尝试 {attempts} 次，即将再次尝试…",
+  "model.retry.connecting": "正在进行第 {attempt} 次尝试…"
 }

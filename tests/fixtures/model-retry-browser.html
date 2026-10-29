@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo model retry notice acceptance</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<style>
+  body { display: block; margin: 24px auto; padding: 0 16px; max-width: 820px; background: var(--bg); color: var(--ink); }
+  h1 { font-size: 20px; } .controls { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0; }
+  .controls button { padding: 7px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--panel); color: var(--ink); }
+  .conversation { height: 420px; overflow: auto; padding: 18px; border: 1px solid var(--border); border-radius: 10px; }
+  #result { display: block; margin-top: 12px; color: var(--muted); } #toast-region { position: fixed; bottom: 12px; }
+</style>
+<h1>模型重试提示验收</h1>
+<div class="controls">
+  <button id="limit">限流 429</button><button id="repeat">再次失败</button>
+  <button id="connect">开始下一次尝试</button><button id="recover">恢复输出</button>
+  <button id="partial">保留部分回复</button><button id="stop">停止</button>
+  <button id="fail">最终失败</button><button id="refresh">刷新投影</button>
+</div>
+<div class="conversation"><p id="welcome" hidden></p><ol id="timeline" class="timeline"></ol></div>
+<button id="to-bottom" hidden>回到底部</button><output id="result">Preparing</output>
+<div id="toast-region"></div>
+<script type="module">
+import { createTimelineView } from "/app/web/js/features/chat/timeline.js";
+import { createResourceStore } from "/app/web/js/state/store.js";
+import { loadLocale } from "/app/web/js/i18n.js";
+const nativeFetch = globalThis.fetch;
+globalThis.fetch = (path, options) => nativeFetch(typeof path === "string" && path.startsWith("/lang/")
+  ? `/app/web${path}` : path, options);
+await loadLocale("zh-CN");
+let events = [], next = 0, attempts = 1;
+const store = createResourceStore();
+const timeline = document.querySelector("#timeline");
+const view = createTimelineView({ container: timeline, welcome: document.querySelector("#welcome"),
+  toBottom: document.querySelector("#to-bottom"), store, onFork() {}, onEdit() {},
+  onRetry() { document.querySelector("#result").textContent = "Retry action: original input retained"; } });
+function event(kind, fields = {}) {
+  events.push({ kind, event_id: ++next, run_id: 1, agent_turn: 2,
+    agent_depth: 0, time: Date.now() * 1000, ...fields });
+}
+function publish(label) {
+  store.setData({ projectId: "qa", sessionId: "retry-notice", events: [...events] });
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    document.querySelector("#result").textContent = `${label}; notices=${timeline.querySelectorAll('[data-kind="retry"]').length}; answers=${timeline.querySelectorAll('[data-kind="assistant"]').length}`;
+  }));
+}
+function limited(delay = 8000) {
+  event("model_retry", { model_error_kind: "rate_limited", model_http_status: 429,
+    model_attempts: attempts, model_retry_after_ms: delay });
+}
+function reset(partial = false, delay = 8000) {
+  events = []; next = 0; attempts = 1;
+  event("agent_start", { schema_version: 9, user_message_sequence: 2, text: "你好，你是谁？" });
+  event("model_start");
+  if (partial) event("model_text_delta", { text: "这部分已经生成的回复会保留。" });
+  limited(delay); publish(partial ? "partial" : "limited");
+}
+document.querySelector("#limit").onclick = () => reset();
+document.querySelector("#repeat").onclick = () => { ++attempts; limited(); publish("repeated"); };
+document.querySelector("#connect").onclick = () => { limited(0); publish("connecting"); };
+document.querySelector("#recover").onclick = () => {
+  event("model_text_delta", { text: "你好！我是 mdo，连接已恢复，可以继续为你处理任务。" });
+  event("model_done", { success: true, input_tokens: 30, output_tokens: 12 });
+  event("agent_done", { success: true }); publish("recovered");
+};
+document.querySelector("#partial").onclick = () => reset(true);
+document.querySelector("#stop").onclick = () => { event("agent_done", { success: false }); publish("stopped"); };
+document.querySelector("#fail").onclick = () => {
+  event("error", { model_error_kind: "service_configuration", model_http_status: 403,
+    model_attempts: attempts, text: "Request could not be recovered" }); publish("failed");
+};
+document.querySelector("#refresh").onclick = () => publish("refreshed");
+window.addEventListener("pagehide", () => view.destroy(), { once: true });
+reset(false, 120000);
+</script>
+</html>

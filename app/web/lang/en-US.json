@@ -2272,5 +2272,12 @@
   "extensionBrowser.storeInstalled": "Installed from store",
   "layers.close": "Close window",
   "layers.maximize": "Maximize window",
-  "layers.restore": "Restore window"
+  "layers.restore": "Restore window",
+  "model.retry.rateLimited": "Model service rate limited. Retrying…",
+  "model.retry.timeout": "Model request timed out. Retrying…",
+  "model.retry.network": "Model connection interrupted. Retrying…",
+  "model.retry.temporary": "Model request temporarily failed. Retrying…",
+  "model.retry.waiting": "{attempts} attempts made. Retrying in {seconds}s",
+  "model.retry.scheduled": "{attempts} attempts made. Next attempt scheduled…",
+  "model.retry.connecting": "Attempt {attempt} in progress…"
 }

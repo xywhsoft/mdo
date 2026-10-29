@@ -695,6 +695,10 @@ select:focus-visible,
   .conversation-history-mark > span { transition: none; }
 }
 .timeline-item { margin: 0 0 24px; }
+.model-retry-notice { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border: 1px solid color-mix(in srgb, #d8a63e 38%, var(--border)); border-radius: 10px; background: color-mix(in srgb, #d8a63e 6%, transparent); }
+.model-retry-dot { flex: 0 0 7px; width: 7px; height: 7px; margin-top: 7px; border-radius: 50%; background: #d8a63e; }
+.model-retry-title { color: var(--ink); font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+.model-retry-detail { margin-top: 3px; color: var(--muted); font-size: 12px; line-height: 1.6; }
 /* Execution rows separate replies without the spacing of a full message. */
 .timeline > .timeline-item[data-kind="process"],
 .timeline > .timeline-item:has(+ .timeline-item[data-kind="process"]) { margin-bottom: 12px; }
