@@ -2244,6 +2244,14 @@ export async function boot() {
         });
       composerError.append(review);
     }
+    if (error?.code === "agent_unavailable" || note?.code === "agent_unavailable") {
+      const settings = element("button", {
+        className: "composer-error-action", text: t("composer.openAgentSettings"),
+        attrs: { type: "button" },
+      });
+      settings.addEventListener("click", () => navigation.openSettings("agents"));
+      composerError.append(settings);
+    }
     if (error?.code === "new_task_unconfirmed") {
       const review = element("button", {
         className: "composer-error-action",

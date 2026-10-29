@@ -199,6 +199,7 @@ static bool MdoApiRunBuildMessage(const char* Project,const char* Session,const 
 static bool MdoApiRunStartFailure(MdoApiContext* Context,
     const xwork_error* Error)
 {
+    bool Reply=false;if(MdoApiReplyAgentFailure(Context,Error,&Reply))return Reply;
     const xerror* Cause = xrtGetError();
     xerrkind Kind = Cause != NULL ? xrtErrorKind(Cause) : XERR_NONE;
     xrtClearError();

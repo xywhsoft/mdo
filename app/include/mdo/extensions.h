@@ -6,6 +6,8 @@
  * Returned objects/strings are owned. Reads never execute extension code. */
 bool MdoExtensionsInit(void);
 bool MdoExtensionsSeedBuiltins(char Error[512]);
+bool MdoExtensionsMigrateBuiltins(char Error[512]);
+bool MdoExtensionsBuiltinUpdatePending(cstr Kind,cstr Directory,const xvalue* Row);
 void MdoExtensionsUnit(void);
 xvalue* MdoExtensionsList(cstr Kind,char Error[512]);
 xvalue* MdoExtensionsRead(cstr Kind,cstr Id,char Error[512]);

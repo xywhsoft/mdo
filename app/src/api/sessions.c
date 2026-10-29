@@ -347,6 +347,7 @@ static bool MdoApiSessionReply(MdoApiContext* Context, uint16 Status,
 static bool MdoApiSessionActiveFailure(MdoApiContext* Context,
     const xwork_error* Error)
 {
+    bool Reply=false;if(MdoApiReplyAgentFailure(Context,Error,&Reply))return Reply;
     if (Error && !strcmp(Error->sMessage,MDO_SESSION_EXTERNAL_STATE_ERROR))
         return MdoApiReplyError(Context,409u,"session_external_state",MDO_SESSION_EXTERNAL_STATE_ERROR,NULL);
     const xerror* Cause = xrtGetError();
@@ -470,6 +471,7 @@ static bool MdoApiSessionReplyData(MdoApiContext* Context, xvalue* Data,
 static bool MdoApiSessionCreateFailure(MdoApiContext* Context,
     const xwork_error* Error)
 {
+    bool Reply=false;if(MdoApiReplyAgentFailure(Context,Error,&Reply))return Reply;
     if ( Error != NULL && Error->eCode == XWORK_ERROR_IO )
         return MdoApiReplyError(Context, 500u, "session_persistence_failed",
             "The session could not be persisted", NULL);
@@ -496,6 +498,7 @@ static bool MdoApiSessionCreateFailure(MdoApiContext* Context,
 static bool MdoApiSessionLoadFailure(MdoApiContext* Context,
     const xwork_error* Error)
 {
+    bool Reply=false;if(MdoApiReplyAgentFailure(Context,Error,&Reply))return Reply;
     const xerror* Cause = xrtGetError();
     xerrkind Kind = Cause != NULL ? xrtErrorKind(Cause) : XERR_NONE;
     xrtClearError();

@@ -44,6 +44,7 @@ static bool MdoApiRecoveryPath(const MdoApiContext* Context,
 static bool MdoApiRecoveryFailure(MdoApiContext* Context,
     const xwork_error* Error, const char* ConflictCode)
 {
+    bool Reply=false;if(MdoApiReplyAgentFailure(Context,Error,&Reply))return Reply;
     const xerror* Cause = xrtGetError();
     xerrkind Kind = Cause != NULL ? xrtErrorKind(Cause) : XERR_NONE;
     xrtClearError();

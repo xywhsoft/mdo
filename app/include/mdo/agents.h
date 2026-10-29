@@ -11,6 +11,9 @@
 #include "models.h"
 #include "approvals.h"
 
+/* Stable product failure discriminator; never classify this as a model error. */
+#define MDO_AGENT_UNAVAILABLE_PREFIX "Agent definition unavailable: "
+
 typedef struct MdoAgentSession MdoAgentSession;
 typedef struct MdoAgentRun MdoAgentRun;
 typedef struct MdoModuleCatalog MdoModuleCatalog;

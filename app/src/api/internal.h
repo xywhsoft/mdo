@@ -102,6 +102,9 @@ bool MdoApiReplySuccessTakeRevision(MdoApiContext* pContext, uint16 Status,
 bool MdoApiReplyError(MdoApiContext* pContext, uint16 Status, cstr Code,
     cstr Message, cstr Allow);
 struct xllm_error;
+struct xwork_error;
+bool MdoApiReplyAgentFailure(MdoApiContext* Context,
+    const struct xwork_error* Error,bool* Reply);
 bool MdoApiReplyModelProfileFailure(MdoApiContext* Context,
     const struct xllm_error* Error, cstr UnavailableCode);
 /* Takes optional structured facts even on failure (e.g. committed deletion

@@ -558,6 +558,17 @@ static bool MdoModulesDiscoverDirectory(MdoModuleKind Kind,cstr Type,MdoModuleSo
         xrtValueGetBool(xrtValueObjectGet(Meta,XRT_STR_LITERAL("valid")),&Valid);xrtValueGetBool(xrtValueObjectGet(Meta,XRT_STR_LITERAL("enabled")),&Enabled);
         if(!Valid){MdoModulesDiagnosticAdd(Diagnostics,MDO_MODULE_DIAGNOSTIC_DISCOVERY,MdoExtensionText(Meta,"id",96),NULL,MdoExtensionText(Meta,"error",511));continue;}
         if(!Enabled)continue;
+        /* An unapproved edited directory is quarantined at startup, so its
+         * settings and repair UI remain available. Reloads keep the existing
+         * live catalog rather than silently removing its definitions. */
+        cstr DirectoryId=MdoExtensionText(Meta,"directory_id",96);
+        if(!DirectoryId||!MdoExtensionsVerify(Type,DirectoryId,NULL,Error)){
+            cstr Root=MdoExtensionText(Meta,"root",MDO_EXTENSION_PATH_BYTES);
+            MdoModulesDiagnosticAdd(Diagnostics,MDO_MODULE_DIAGNOSTIC_VALIDATE,Root?Root:Type,NULL,
+                Error[0]?Error:"Extension directory could not be verified");
+            if(g_MdoModules.Catalog){Ok=false;break;}
+            Error[0]=0;continue;
+        }
         cstr Entry=MdoExtensionText(Meta,"entry",MDO_EXTENSION_PATH_BYTES),Native=MdoExtensionText(Meta,"native",MDO_EXTENSION_PATH_BYTES);
         bool Code=Entry&&strlen(Entry)>2&&!strcmp(Entry+strlen(Entry)-2,".c");
         if(Kind==MDO_MODULE_TOOLS&&!Code){snprintf(Error,sizeof(Error),"Agent tool directory requires a C entry");Ok=false;break;}

@@ -1280,8 +1280,10 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
     if ( !MdoModuleCatalogAgentFind(Owner->Modules, AgentId, &AgentInfo) ||
          ((AgentInfo.Flags & MDO_AGENT_MAIN) == 0u &&
           !(Options->AllowSubagentDefinition && (AgentInfo.Flags & MDO_AGENT_SUBAGENT))) ) {
-        MdoAgentsError(Error, XWORK_ERROR_INVALID_ARGUMENT,
-            "selected main Agent was not found");
+        MdoAgentsError(Error, XWORK_ERROR_CONTEXT,
+            MDO_AGENT_UNAVAILABLE_PREFIX);
+        if(Error)snprintf(Error->sMessage,sizeof(Error->sMessage),
+            MDO_AGENT_UNAVAILABLE_PREFIX "%.128s; check that it is installed, enabled and valid",AgentId);
         goto fail;
     }
     if ( !MdoAgentOwnerAcquireAgent(Owner, AgentInfo.Id, Error) ) goto fail;

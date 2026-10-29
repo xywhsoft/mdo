@@ -4,6 +4,17 @@
 #include "internal.h"
 #include "profile.h"
 #include "../../include/mdo/models.h"
+#include "../../include/mdo/agents.h"
+
+bool MdoApiReplyAgentFailure(MdoApiContext* Context,
+    const xwork_error* Error,bool* Reply)
+{
+    if(!Error||Error->eCode!=XWORK_ERROR_CONTEXT||
+        strncmp(Error->sMessage,MDO_AGENT_UNAVAILABLE_PREFIX,
+            sizeof(MDO_AGENT_UNAVAILABLE_PREFIX)-1))return false;
+    *Reply=MdoApiReplyError(Context,422u,"agent_unavailable",Error->sMessage,NULL);
+    return true;
+}
 
 /* A rejected local selection is final and actionable, not a transient model
  * outage. Keep one policy for session creation, profile edits and run starts. */

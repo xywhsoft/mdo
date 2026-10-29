@@ -390,6 +390,10 @@ test("bundled language packs cover the annotated shell and switch without stale 
     assert.equal(errorMessage({ code: "session_profile_invalid",
       message: "The requested session profile is invalid" }),
       "会话配置无效，请检查模型、思考强度和权限。");
+    assert.equal(errorMessage({ code: "agent_unavailable",
+      message: "Agent definition unavailable: mdo.default" }),
+      packs["zh-CN"]["error.agentUnavailable"]);
+    assert.equal(t("composer.retryNewTaskProfile"), "重试创建任务");
     assertApiErrorsLocalized("zh-CN");
     assert.deepEqual(changes, ["zh-CN", "ru-RU", "en-US", "zh-CN"]);
     await assert.rejects(loadLocale("fr"), /Unsupported locale/);
