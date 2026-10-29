@@ -1,0 +1,133 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-30",
+  "feature": "provider-model-proxy-overrides",
+  "code_commits": {
+    "backend": "2bf5fceb",
+    "ui": "7b5f9199"
+  },
+  "version_name": "0.8.0",
+  "version_code": "05000800",
+  "sdk_overlay_sha256": "39d056a14ac9b2640421872121bb82b396b9fe6884de746c6a80a8c29b96e69e",
+  "published": false,
+  "windows": {
+    "path": ".build/model-proxy-overrides-20261030/mdo.exe",
+    "bytes": 6522619,
+    "sha256": "0ea006a65f3462287134fb143f20f32ccb45b872923022e34bfab034b0289919"
+  },
+  "android": {
+    "path": ".build/model-proxy-overrides-20261030/mdo-model-proxy-qa.apk",
+    "bytes": 6317460,
+    "sha256": "861f4aa421b30a544af0de1b35b6fd5e51923f29721dba2591ebcbbb4c5e87e2",
+    "application_id": "org.xleaves.mdo.modelproxyqa",
+    "device_test": "not-run"
+  },
+  "defaults": {
+    "provider": "global",
+    "model": "global",
+    "model_provider_inheritance": "explicit"
+  },
+  "validation": [
+    {
+      "command": "python tests/test_model_proxy_overrides_runtime.py --host .build/system-proxy-20261030/host/xs.exe",
+      "result": "PASS",
+      "details": "12 routing/isolation cases; 11 local TLS completions and 1 missing-credential failure"
+    },
+    {
+      "command": "python tests/test_model_proxy_discovery_packed.py --packed .build/model-proxy-overrides-20261030/mdo.exe",
+      "result": "PASS",
+      "details": "Real catalog requests through CONNECT and SOCKS5 with observed tunnel counts, direct override and global credential failure"
+    },
+    {
+      "command": "python tests/test_model_setup_runtime.py --packed .build/model-proxy-overrides-20261030/mdo.exe",
+      "result": "PASS",
+      "details": "Settings, encrypted credentials/restart, invalid descriptor rejection, catalog overrides and three model protocols"
+    },
+    {
+      "command": "python tests/test_model_proxy_runtime.py --host .build/system-proxy-20261030/host/xs.exe",
+      "result": "PASS",
+      "details": "Existing global manual/system proxy TLS regression"
+    },
+    {
+      "command": "python tests/test_model_proxy_route.py (Windows and WSL)",
+      "result": "PASS",
+      "details": "Actual Agent route including per-model system mode, mode switches and cached client lifetime"
+    },
+    {
+      "command": "python tests/test_config_runtime.py --host .build/system-proxy-20261030/host/xs.exe",
+      "result": "PASS"
+    },
+    {
+      "command": "python tests/test_model_runtime.py --host .build/system-proxy-20261030/host/xs.exe",
+      "result": "PASS"
+    },
+    {
+      "command": "node --experimental-vm-modules --test tests/test_*.mjs",
+      "result": "PASS",
+      "passed": 1214,
+      "skipped": 2,
+      "details": "Includes 4 new proxy editor cases; existing skips"
+    },
+    {
+      "command": "node --experimental-vm-modules tools/check_web_modules.mjs",
+      "result": "PASS",
+      "details": "237 reachable modules"
+    },
+    {
+      "command": "python -m unittest discover -s tests -p test_model_contract.py -v",
+      "result": "PASS",
+      "passed": 6
+    },
+    {
+      "command": "python -m unittest discover -s tests -p test_config_contract.py -v",
+      "result": "PASS",
+      "passed": 6
+    },
+    {
+      "command": "python -m unittest discover -s tests -p test_model_sdk_build.py -v",
+      "result": "PASS",
+      "passed": 2
+    },
+    {
+      "command": "python tools/model_http_sdk.py .build/process-tools-20261029/sdk --check",
+      "result": "PASS"
+    },
+    {
+      "command": "Windows native host and packaged GUI build",
+      "result": "PASS",
+      "details": "New native proxy capability/export verified; final app content equals tested app hash"
+    },
+    {
+      "command": "Android ARM64 native host and independent lite APK build",
+      "result": "PASS",
+      "details": "Fresh native proxy feature, v2/v3 signatures, zipalign, packaged library hash and system-proxy Java class verified"
+    },
+    {
+      "command": "Packed frontend assets served over local HTTP",
+      "result": "PASS",
+      "details": "Proxy editor, provider/model editors and stylesheet match source bytes"
+    },
+    {
+      "command": "Browser/desktop visual acceptance",
+      "result": "NOT_RUN",
+      "details": "Both browser and desktop automation kernels failed initialization: failed to write kernel assets (path not found). No claim of visual or mobile layout acceptance."
+    }
+  ],
+  "fixed_existing_bug": {
+    "symptom": "Catalog discovery configured a proxy but connected to the origin directly",
+    "cause": "The native xhttp build omitted HTTP_CLIENT_PROXY and its source; Config.Proxy was ignored by the compiled feature set",
+    "fix": "Compile/register the proxy module and source, export xrtHttpClientProxy, regenerate the SDK declarations and require actual retained proxy identity before requests",
+    "regression": "test_model_proxy_discovery_packed.py reproduced zero proxy connections before the fix and observes exactly one selected-proxy connection afterward"
+  },
+  "preservation": [
+    "Pre-existing dependency work preserved; only owned Agent route change committed.",
+    "No global OS proxy changes, account data modifications or paid model requests.",
+    "No new external package dependencies; reused existing SDK/native caches."
+  ],
+  "limitations": [
+    "Existing read-only built-in provider/model parameter protection retained.",
+    "Proxy transports retain existing HTTPS model endpoint requirement; CA settings remain global.",
+    "Model/provider settings use the model catalog snapshot for a run; system OS choices are resolved for subsequent requests.",
+    "Visual UI and physical Android acceptance not completed."
+  ]
+}
