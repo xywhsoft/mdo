@@ -127,7 +127,7 @@ bool MdoAndroidToolsEnvironment(const xvalue* Items){
     const cstr Tools[]={"python","python","curl","curl","git","git","curl","imagemagick","imagemagick","poppler","poppler","poppler"};
     const cstr Paths[]={".",".","cacert.pem","cacert.pem","libexec/git-core","share/git-core/templates","cacert.pem",".","etc/ImageMagick-7","share/poppler","fonts/fonts.conf","fonts"};
     bool Ok=true;for(size_t I=0;I<sizeof(Vars)/sizeof(*Vars);I++){
-        bool Found=false;for(size_t J=0;J<xrtValueCount(Items);J++){const xvalue* R=xrtValueArrayGet(Items,J);bool Valid=false,Enabled=false;xrtValueGetBool(xrtValueObjectGet(R,XRT_STR_LITERAL("valid")),&Valid);xrtValueGetBool(xrtValueObjectGet(R,XRT_STR_LITERAL("enabled")),&Enabled);cstr Id=AndroidText(R,"id",96);if(Id&&!strcmp(Id,Tools[I])&&Valid&&Enabled)Found=true;}
+        bool Found=false;for(size_t J=0;J<xrtValueCount(Items);J++){const xvalue* R=xrtValueArrayGet(Items,J);bool Valid=false,Enabled=false;xrtValueGetBool(xrtValueObjectGet(R,XRT_STR_LITERAL("valid")),&Valid);xrtValueGetBool(xrtValueObjectGet(R,XRT_STR_LITERAL("enabled")),&Enabled);cstr Id=AndroidText(R,"directory_id",96);if(Id&&!strcmp(Id,Tools[I])&&Valid&&Enabled)Found=true;}
         if(!Found){(void)xrtEnvRemove(Vars[I]);continue;}char* Path=!strcmp(Paths[I],".")?xrtFormat("data/external-tools/android/%s",Tools[I]):xrtFormat("data/external-tools/android/%s/%s",Tools[I],Paths[I]);char* Native=Path?MdoHomeExternalPath(Path):NULL;Ok=Ok&&Native&&xrtEnvSet(Vars[I],Native);xrtFree(Native);xrtFree(Path);
     }return Ok;
 }
