@@ -48,8 +48,9 @@ static bool AndroidIndexValid(const xvalue* V){
 static bool MdoAndroidToolsLoad(cstr Apk,cstr Native,char Error[512]){
     MdoAndroidToolsUnit();xfileoptions Options;xrtFileOptionsInit(&Options);Options.Flags=XFILE_READ;
     xfile Input=xrtFileOpen(Apk,&Options);MdoZip Z={0};bool Ok=Input&&MdoZipOpenContainer(&Z,Input,true);
+    if(!Ok&&Error)snprintf(Error,512,"Cannot read installed APK ZIP: %.450s",Z.Error[0]?Z.Error:"Cannot open the installed package");
     xvalue* Index=Ok?AndroidEntryJson(&Z,"assets/mdo-runtime.json"):NULL;
-    Ok=Index&&AndroidIndexValid(Index);if(!Ok)AndroidFail(Error,"APK external-tool index validation failed");bool Missing=false;char* Text=Ok?MdoExtensionRead("data/extensions/android-builtins.json",true,131072,&Missing):NULL;
+    if(Ok){Ok=Index&&AndroidIndexValid(Index);if(!Ok)AndroidFail(Error,"APK external-tool index validation failed");}bool Missing=false;char* Text=Ok?MdoExtensionRead("data/extensions/android-builtins.json",true,131072,&Missing):NULL;
     xvalue* Receipts=Text?xrtJsonParse(xrtStrView(Text)):Missing?xrtValueObject():NULL;xrtFree(Text);if(Ok&&(!Receipts||xrtValueType(Receipts)!=XVALUE_OBJECT))AndroidFail(Error,"APK external-tool installation receipts cannot be read");Ok=Ok&&Receipts&&xrtValueType(Receipts)==XVALUE_OBJECT;
     const xvalue* Tools=xrtValueObjectGet(Index,XRT_STR_LITERAL("extensions"));
     for(size_t I=0;Ok&&I<xrtValueCount(Tools);I++){

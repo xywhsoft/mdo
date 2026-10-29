@@ -189,13 +189,20 @@ static bool MdoZipOpenContainer(MdoZip* Z,xfile File,bool Apk)
         uint64 Next=0;for(size_t I=0;I<Z->Count;I++){if(Order[I]->Offset!=Next){xrtFree(Order);goto bad;}Next=Order[I]->End;}
         xrtFree(Order);
         if(Next!=Z->Central){
-            /* Only the signed APK container may have its standard signing
-             * block immediately before the central directory. Extension ZIPs
-             * remain strictly contiguous. PackageManager verifies signatures. */
+            /* PackageManager verifies APK signatures. apksigner may insert
+             * zero padding to align the signing block to a 4 KiB boundary.
+             * Locate that block from its footer, not the last ZIP entry.
+             * Extension ZIPs remain strictly contiguous. */
             uint8 Head[8],Tail[24];uint64 Gap=Z->Central-Next;
-            if(!Apk||Next>Z->Central||Gap<32||Gap>16u*1024u*1024u||
-               !MdoZipReadAt(Z,Next,Head,8)||!MdoZipReadAt(Z,Z->Central-24,Tail,24)||
-               MdoZip64(Head)!=Gap-8||MdoZip64(Tail)!=Gap-8||memcmp(Tail+8,"APK Sig Block 42",16))goto bad;
+            if(!Apk||Next>Z->Central||Gap<32||Gap>16u*1024u*1024u+4095u||
+               !MdoZipReadAt(Z,Z->Central-24,Tail,24)||memcmp(Tail+8,"APK Sig Block 42",16))goto bad;
+            uint64 Size=MdoZip64(Tail);
+            if(Size<24||Size>16u*1024u*1024u-8u||Size>Gap-8)goto bad;
+            uint64 Start=Z->Central-Size-8,Padding=Start-Next;
+            if(!MdoZipReadAt(Z,Start,Head,8)||MdoZip64(Head)!=Size||Padding>4095u||
+               (Padding&&Start%4096u))goto bad;
+            if(Padding){uint8 Zeros[4096];if(!MdoZipReadAt(Z,Next,Zeros,(size_t)Padding))goto bad;
+                for(size_t I=0;I<(size_t)Padding;I++)if(Zeros[I])goto bad;}
         }}
     return true;
 bad:MdoZipFail(Z,"Invalid ZIP entries, paths, types, sizes or overlapping data");
