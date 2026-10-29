@@ -112,7 +112,30 @@ export function createDownloadCenter({ updatePanel, navigation, registry = downl
   }
   entry.addEventListener("click", open);
   close.addEventListener("click", () => { void layer?.close(); });
-  clear.addEventListener("click", () => { if (!layer) return; const owner = target(); void act(async () => { await transport.post("/cli-tools", { action: "clear" }); if (owner === target()) registry.clear(owner); }); });
+  clear.addEventListener("click", () => { if (!layer) return; const owner = target(); void act(async () => {
+    const failures=[];
+    for(const row of registry.list(owner).filter(r=>!downloadActive(r)&&r.state!=="ready")){
+      if(owner!==target()||!writable())return;
+      try{
+        if(row.source==="archive"){
+          let current;
+          try{current=(await transport.get(`/extension-tasks/${row.taskId}`)).data;if(!current||typeof current.state!=="string")throw Error("无法确认任务当前状态，已保留此任务");}
+          catch(e){if(e.status!==404)throw e;}
+          if(owner!==target()||!writable())return;
+          if(current){
+            if(current.active||!["complete","cancelled","failed","expired"].includes(current.state))throw Error("任务状态已变化，已保留此任务");
+            if(current.state==="expired")await transport.delete(`/extension-tasks/${row.taskId}`);
+            if(owner!==target()||!writable())return;
+            await transport.delete(`/extension-tasks/${row.taskId}/forget`);
+          }
+        }
+        // Update and retired-manager rows are presentation history. Ready
+        // downloads and active operations are never cleared by this action.
+        registry.hide?.(row.key);
+      }catch(e){failures.push(`${row.name||row.taskId}: ${e.message}`);}
+    }
+    if(failures.length)throw Error(failures.join("；"));
+  }); });
   const unsubscribe = registry.subscribe(render), locale = subscribeLocale(() => { signature = ""; render(); });
   let selectedTarget = target();
   const targets = subscribeTarget(() => {

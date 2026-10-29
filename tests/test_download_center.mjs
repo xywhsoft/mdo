@@ -33,9 +33,24 @@ test("one global dialog combines source types and delegates cancellation, retry 
   buttons("Retry")[0].click(); await flush(); assert.deepEqual(calls.at(-1), ["/cli-tools", { action: "retry", id: "retry" }]);
   buttons("View update")[0].click(); assert.equal(updates, 1); assert(!dialog.open);
   complete(); await extension; center.open(); await flush(); dialog = doc.body.querySelector("dialog");
-  buttons("Clear finished")[0].click(); await flush(); assert.deepEqual(calls.at(-1), ["/cli-tools", { action: "clear" }]);
+  const beforeClear=calls.length;buttons("Clear finished")[0].click(); await flush(); assert(!calls.slice(beforeClear).some(([p,b])=>p==="/cli-tools"&&b?.action==="clear"));
   assert(!registry.list("local").some(row => row.name === "My Skill"));
   assert(registry.list("local").some(row => row.state === "ready"));
+});
+
+test("clear finished releases native archive receipts and preserves failures and newly active tasks",async t=>{
+ const previous=globalThis.document,doc=testDocument(),entry=new TestElement("button");
+ for(const name of ["label","count"]){const span=new TestElement("span");span.setAttribute(`data-downloads-${name}`,"");entry.append(span);}doc.querySelector=name=>name==="#open-downloads"?entry:null;globalThis.document=doc;
+ const registry=createDownloadRegistry(),calls=[],states=["complete","cancelled","failed","expired","ready","receiving"],ids=states.map((_,i)=>String.fromCharCode(65+i).repeat(32));
+ registry.observe("/extension-tasks",states.map((state,i)=>({id:ids[i],name:`archive-${i}`,state,purpose:"file",bytes:2,received:2})));
+ const center=createDownloadCenter({registry,transport:{post:async()=>assert.fail("no retired CLI clear"),get:async path=>{
+  if(["/extension-tasks","/update","/distribution"].includes(path))return{data:{}};
+  calls.push(["GET",path]);const i=ids.indexOf(path.split("/").at(-1));return{data:{state:i===3?"receiving":states[i],active:false}};
+ },delete:async path=>{calls.push(["DELETE",path]);if(path.includes(ids[2]))throw Error("owned file is still locked");return{data:{}};}}});
+ t.after(()=>{center.destroy();globalThis.document=previous;});center.open();await flush();const dialog=doc.body.querySelector("dialog");descendants(dialog).find(n=>n.tagName==="BUTTON"&&n.textContent==="Clear finished").click();for(let i=0;i<6;i++)await flush();
+ assert(calls.some(([m,p])=>m==="DELETE"&&p===`/extension-tasks/${ids[0]}/forget`));assert(calls.some(([m,p])=>m==="DELETE"&&p===`/extension-tasks/${ids[1]}/forget`));
+ assert(!calls.some(([m,p])=>m==="DELETE"&&p.includes(ids[3])));assert(!calls.some(([,p])=>p.includes(ids[4])||p.includes(ids[5])));
+ assert(!registry.list("local").some(r=>r.taskId===ids[0]||r.taskId===ids[1]));assert(registry.list("local").some(r=>r.taskId===ids[2]));assert(registry.list("local").some(r=>r.taskId===ids[3]));assert(dialog.textContent.includes("owned file is still locked"));
 });
 
 test("closing the public window leaves transfers running and late actions cannot reopen it", async t => {
