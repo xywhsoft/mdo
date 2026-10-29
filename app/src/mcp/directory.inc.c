@@ -75,7 +75,9 @@ static bool McpDirectoryReservedEnvironment(xvalue* Transport)
     if(!A){A=xrtValueArray();if(!A||!xrtValueObjectSetNew(Transport,XRT_STR_LITERAL("environment"),A))return false;}
     for(size_t I=0;I<xrtValueCount(A);I++){
         cstr Name=MdoExtensionText(xrtValueArrayGet(A,I),"name",256);
-        if(!Name||!strcmp(Name,"MDO_EXTENSION_ROOT")||!strcmp(Name,"MDO_EXTENSION_ID")||!strcmp(Name,"MDO_EXTENSION_DIGEST"))return false;
+        const cstr Reserved[]={"MDO_EXTENSION_ROOT","MDO_EXTENSION_ID","MDO_EXTENSION_DIGEST","MDO_EXTENSION_DATA","PYTHONPYCACHEPREFIX","XDG_CACHE_HOME","XDG_DATA_HOME","TMPDIR","TMP","TEMP"};
+        if(!Name)return false;
+        for(size_t J=0;J<sizeof(Reserved)/sizeof(*Reserved);J++)if(!strcmp(Name,Reserved[J]))return false;
     }return true;
 }
 static char* McpDirectoryResolveDocument(MdoMcpSource* Source,const xvalue* Connection,char Error[MDO_MCP_ERROR_LIMIT])
@@ -109,7 +111,10 @@ static char* McpDirectoryResolveDocument(MdoMcpSource* Source,const xvalue* Conn
             else if(Ok&&strchr(Program,'/'))Ok=false;
             xrtFree(Relative);
         }
-        if(Ok&&(!Cwd||!strcmp(Cwd,".")))Ok=McpDirectoryPut(Transport,"working_directory",Native);
+        if(Ok&&(!Cwd||!strcmp(Cwd,"."))){
+            char* Relative=xrtFormat("data/mcp/runtime/%s",Source->Id),*Data=Relative?MdoHomeExternalPath(Relative):NULL;
+            Ok=MdoExtensionDirectoryId(Source->Id)&&Data&&McpDirectoryPut(Transport,"working_directory",Data);xrtFree(Relative);xrtFree(Data);
+        }
         else if(Ok&&Cwd&&!xrtPathIsRooted(Cwd)){
             char* Relative=xrtFormat("%s/%s",Root,Cwd),*Full=Relative?MdoHomeExternalPath(Relative):NULL;
             Ok=MdoExtensionRelativePath(Cwd)&&Full&&McpDirectoryPut(Transport,"working_directory",Full);xrtFree(Relative);xrtFree(Full);

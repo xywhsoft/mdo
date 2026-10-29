@@ -234,3 +234,21 @@ cold diagnostics endpoint can read progress even while the server is busy.
 Resource-browser reads display it while waiting. Request bytes, SSE frames,
 client requests, waiters and deadlines remain bounded. HTTP cancellation/timeout
 closes the active call; a completed write is never replayed as a network retry.
+
+## Directory programs and writable data
+
+Directory MCP programs use `data/mcp/runtime/<connection-id>` as their default
+working directory (including `working_directory: "."`). Read distributed assets
+relative to `MDO_EXTENSION_ROOT`, and write connection state relative to
+`MDO_EXTENSION_DATA`. An explicit directory such as `{$path}` can still be used
+when a program requires it; the program must then keep generated files out of
+its published directory.
+
+The host supplies and reserves `MDO_EXTENSION_ROOT`, `MDO_EXTENSION_ID`,
+`MDO_EXTENSION_DIGEST`, `MDO_EXTENSION_DATA`, `PYTHONPYCACHEPREFIX`,
+`XDG_CACHE_HOME`, `XDG_DATA_HOME`, `TMPDIR`, `TMP` and `TEMP`. Python caches are
+scoped to the approved directory digest, outside the distributed files. The
+entire published directory remains subject to integrity/approval checks; cache
+files are not simply exempted from verification. Preview does not create a
+runtime directory or start a program. Private connection data remains local and
+is not included in ZIP exports or removed with the published extension files.

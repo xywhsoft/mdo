@@ -487,12 +487,23 @@ static bool McpDirectoryBindRuntime(MdoMcpServerEntry* Entry,const MdoMcpSource*
 {
     if(Entry->Transport!=MDO_MCP_TRANSPORT_STDIO)return true;
     cstr Id=MdoExtensionText(Source->Directory,"id",96),Root=MdoExtensionText(Source->Directory,"root",MDO_EXTENSION_PATH_BYTES);
-    char* Native=Root?MdoHomeExternalPath(Root):NULL;const char* Names[]={"MDO_EXTENSION_ROOT","MDO_EXTENSION_ID","MDO_EXTENSION_DIGEST"};
-    const char* Values[]={Native,Id,Source->DirectoryDigest};bool Ok=Native&&Entry->EnvironmentCount<=MDO_MCP_ENVIRONMENT_LIMIT-3;
-    MdoMcpEnvironmentEntry* Next=Ok?xrtRealloc(Entry->Environment,(Entry->EnvironmentCount+3)*sizeof(*Next)):NULL;
-    if(!Next){xrtFree(Native);return false;}Entry->Environment=Next;
-    for(size_t I=0;Ok&&I<3;I++){MdoMcpEnvironmentEntry* E=&Next[Entry->EnvironmentCount++];memset(E,0,sizeof(*E));E->Name=xrtStrDup(Names[I]);E->Value=xrtStrDup(Values[I]);Ok=E->Name&&E->Value;}
-    xrtFree(Native);return Ok;
+    char* Native=Root?MdoHomeExternalPath(Root):NULL;
+    char *Relative=MdoExtensionDirectoryId(Entry->Id)?xrtFormat("data/mcp/runtime/%s",Entry->Id):NULL;
+    char *Cache=Relative?xrtFormat("%s/cache",Relative):NULL,*Python=Cache?xrtFormat("%s/python-%s",Cache,Source->DirectoryDigest):NULL;
+    char *Share=Relative?xrtFormat("%s/share",Relative):NULL,*Temp=Relative?xrtFormat("%s/tmp",Relative):NULL;
+    const cstr Paths[]={Relative,Cache,Python,Share,Temp};char* PathsNative[5]={0};bool Ok=Native!=NULL;
+    for(size_t I=0;Ok&&I<5;I++){
+        PathsNative[I]=Paths[I]?MdoHomeExternalPath(Paths[I]):NULL;Ok=PathsNative[I]!=NULL;
+        if(Ok&&Entry->Enabled){xroot Directory=MdoHomeOpenStorageDirectory(Paths[I]);Ok=Directory!=NULL;if(Directory)xrtRootClose(Directory);}
+    }
+    const cstr Names[]={"MDO_EXTENSION_ROOT","MDO_EXTENSION_ID","MDO_EXTENSION_DIGEST","MDO_EXTENSION_DATA","PYTHONPYCACHEPREFIX","XDG_CACHE_HOME","XDG_DATA_HOME","TMPDIR","TMP","TEMP"};
+    const cstr Values[]={Native,Id,Source->DirectoryDigest,PathsNative[0],PathsNative[2],PathsNative[1],PathsNative[3],PathsNative[4],PathsNative[4],PathsNative[4]};
+    const size_t Count=sizeof(Names)/sizeof(*Names);Ok=Ok&&Entry->EnvironmentCount<=MDO_MCP_ENVIRONMENT_LIMIT-Count;
+    MdoMcpEnvironmentEntry* Next=Ok?xrtRealloc(Entry->Environment,(Entry->EnvironmentCount+Count)*sizeof(*Next)):NULL;
+    Ok=Ok&&Next;if(Next)Entry->Environment=Next;
+    for(size_t I=0;Ok&&I<Count;I++){MdoMcpEnvironmentEntry* E=&Next[Entry->EnvironmentCount++];memset(E,0,sizeof(*E));E->Name=xrtStrDup(Names[I]);E->Value=xrtStrDup(Values[I]);Ok=E->Name&&E->Value;}
+    for(size_t I=0;I<5;I++)xrtFree(PathsNative[I]);
+    xrtFree(Native);xrtFree(Relative);xrtFree(Cache);xrtFree(Python);xrtFree(Share);xrtFree(Temp);return Ok;
 }
 
 static const xvalue* MdoMcpObjectGet(const xvalue* pObject, cstr Name)

@@ -15,7 +15,8 @@ static int field(const char* json,const char* key,char* out,size_t limit,int raw
 int main(int argc,char** argv)
 {
     const char* token=getenv("QA_PRIVATE_TOKEN"),*root=getenv("MDO_EXTENSION_ROOT"),*digest=getenv("MDO_EXTENSION_DIGEST");
-    FILE* support=fopen("support/banner.txt","rb");if(argc!=2||!token||!*token||!root||!digest||!support)return 4;fclose(support);
+    char path[4096];if(!root||snprintf(path,sizeof(path),"%s/support/banner.txt",root)>=(int)sizeof(path))return 4;
+    FILE* support=fopen(path,"rb");if(argc!=2||!token||!*token||!digest||!support)return 4;fclose(support);
     char line[65536],method[256],id[256];int initialized=0;
     while(fgets(line,sizeof(line),stdin)){
         if(!field(line,"method",method,sizeof(method),0))continue;

@@ -14,7 +14,7 @@ ROOT=Path(__file__).resolve().parents[1]
 CASES=("test_extension_zip_native.py",
  "test_extension_directory_native.py","test_extension_builtins_native.py",
  "test_command_directory_native.py","test_module_directory_native.py",
- "test_reference_directory_native.py","test_mcp_directory_native.py",
+ "test_reference_directory_native.py","test_mcp_directory_native.py","test_mcp_runtime_data_native.py",
  "test_plugin_directory_native.py","test_extension_tasks_native.py",
  "test_extension_save_native.py","test_extension_authoring_native.py",
  "test_extension_directory_api_native.py","test_extension_service_native.py",
