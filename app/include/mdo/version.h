@@ -2,12 +2,12 @@
 #define MDO_VERSION_H
 
 #ifndef MDO_BUILD_ID
-#define MDO_BUILD_ID 60000017u
+#define MDO_BUILD_ID 70000065u
 #endif
 
 /* Hexadecimal release identity, independent of legacy/Android install order. */
 #ifndef MDO_VERSION_CODE
-#define MDO_VERSION_CODE 0x05000600u
+#define MDO_VERSION_CODE 0x05000800u
 #endif
 #include "version_code.h"
 
@@ -15,10 +15,10 @@
 #define MDO_TOOLPACK_REVISION 1u
 #endif
 #define MDO_VERSION_MAJOR 0
-#define MDO_VERSION_MINOR 6
+#define MDO_VERSION_MINOR 8
 #define MDO_VERSION_PATCH 0
 #ifndef MDO_VERSION_TEXT
-#define MDO_VERSION_TEXT "0.6.0"
+#define MDO_VERSION_TEXT "0.8.0"
 #endif
 
 #define MDO_CONFIG_SCHEMA_VERSION 1u
