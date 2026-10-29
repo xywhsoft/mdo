@@ -1,5 +1,5 @@
 /* Diff output is consumed as a stream. Only the requested line page is kept;
- * long patches do not inherit process.run's 16 KiB capture budget. */
+ * long patches do not require capturing the entire patch in memory. */
 #define GIT_DIFF_LINE_BYTES 16384u
 #define GIT_DIFF_PAGE_BYTES (512u*1024u)
 typedef struct SdkGitDiffPage {

@@ -63,6 +63,9 @@ bool MdoHomeCreateDirectory(cstr Path);
  * checked link parents fail. The caller closes it with xrtRootClose(). Drain
  * native storage writers before import/purge/Unit, as for native persistence. */
 xroot MdoHomeOpenStorageDirectory(cstr Path);
+/* Opens only an existing writable storage directory through the Home anchor.
+ * Maintenance must never create a lazy Home or recreate a removed directory. */
+xroot MdoHomeOpenExistingStorageDirectory(cstr Path);
 
 /* Removes one empty directory below the anchored external Home. Missing
  * directories are a successful no-op. */

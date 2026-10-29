@@ -125,6 +125,8 @@ static xvalue* xwork__process_status_value(xwork_agent* Agent,xwork_process_entr
         xrtValueObjectSetNew(V,XRT_STR_LITERAL("signal"),xrtValueInt(Entry->iExitSignal))&&
         xrtValueObjectSetNew(V,XRT_STR_LITERAL("stop_reason"),xrtValueInt(Entry->iStopReason));
     if(Ok&&Complete&&Entry->eKind!=XWORK_TASK_PROCESS&&Entry->sResult) {
+        Ok=xwork__output_bool(V,"result_truncated",Entry->bResultDropped)&&
+            xwork__output_uint(V,"result_offset",Entry->uResultBaseOffset);
         size_t Len=strlen(Entry->sResult);
         if(Len>Agent->iMaxInlineToolBytes&&Agent->bAllowArtifactWrites&&!Entry->Output) {
             xvalue* Args=xrtValueObject();Entry->Output=xwork__process_output_create(Agent,Args,true,false,NULL);xrtValueRelease(Args);

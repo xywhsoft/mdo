@@ -58,10 +58,17 @@ class Model(BaseHTTPRequestHandler):
         elif count == 2 and case.get("spawn"):
             prior = "\n".join(str(item.get("output", "")) for item in inputs
                               if item.get("type") == "function_call_output")
-            match = re.search(r"task_id: (\d+)", prior)
+            match = re.search(r'"?task_id"?\s*:\s*(\d+)', prior)
             assert match, (label, "spawn did not return a task ID", prior)
             output = [call("wait", {"task_ids": [int(match[1])], "mode": "all",
                                      "timeout_ms": 5000}, label + "-wait")]
+        elif count == 3 and case.get("spawn"):
+            prior = [str(item.get("output", "")) for item in inputs
+                     if item.get("type") == "function_call_output"]
+            state = next(json.loads(text[text.index('{'):]) for text in reversed(prior)
+                         if '{"tasks"' in text)
+            output = [call("read", {"path": state["tasks"][0]["stdout"]["path"],
+                                     "max_bytes": 4096}, label + "-read")]
         body = json.dumps({"id": "argument-response", "status": "completed",
             "model": "ornith-1.5-35b", "output": output,
             "usage": {"input_tokens": 7, "output_tokens": 3, "total_tokens": 10}}).encode()
@@ -201,7 +208,7 @@ def probe(host):
                 assert approved == int(profile == "balanced" and not case.get("invalid")), label
                 events = read(port, f"projects/default/sessions/{sid}/events?limit=32")["items"]
                 results = [e for e in events if e.get("kind") == "tool_done"]
-                expected_count = 2 if case.get("spawn") or case.get("mixed") else 1
+                expected_count = 3 if case.get("spawn") else 2 if case.get("mixed") else 1
                 assert len(results) == expected_count, (label, results)
                 invalid = [e for e in results if "invalid tool arguments:" in e.get("text", "")]
                 denied = [e for e in results if "tool execution denied by approval policy" in e.get("text", "")]
@@ -215,6 +222,13 @@ def probe(host):
                     succeeded = [e for e in results if e["success"]]
                     assert len(succeeded) == expected_count - len(invalid), (label, results)
                     text = "\n".join(e.get("text", "") for e in succeeded)
+                    for event in succeeded:
+                        raw = event.get("text", "")
+                        try:
+                            value = json.loads(raw[raw.index('{'):])
+                        except (ValueError, TypeError):
+                            continue
+                        text += "\n" + value.get("stdout", {}).get("text", "")
                     if "expected_args" in case:
                         assert json.dumps(case["expected_args"]) in text, (label, text)
                         assert '""' in text, (label, "empty arguments invisible in preview")

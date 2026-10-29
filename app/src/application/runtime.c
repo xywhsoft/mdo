@@ -224,39 +224,8 @@ invalid:xrtFree(Path);return MdoApplicationError(E,"sdk_arguments_invalid","Inva
 #include "files.inc.c"
 #include "changes.inc.c"
 
-static bool SdkProcessOutput(xprocessstream Stream,xbytesview B,void* User){
-    const mdo_sdk_context_v1* C=User;xvalue* Data=xrtValueObject();SdkByteValue(Data,B.Data,B.Size);
-    MdoApplicationEvent(Stream==XPROCESS_STDOUT?"process.stdout":"process.stderr",C,Data);xrtValueRelease(Data);return !SdkCancelled(C);
-}
-static bool SdkProcessCall(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E){
-    cstr Program=SdkField(P,"program"),Directory=SdkField(P,"cwd"),Input=SdkField(P,"input");const xvalue* Args=SdkGet(P,"args");
-    if(!Program||!Program[0]||(Args&&xrtValueType(Args)!=XVALUE_ARRAY)||xrtValueCount(Args)>1024)
-        return MdoApplicationError(E,"sdk_arguments_invalid","Supply a program and a string argv array","process",400,false);
-    cstr* Argv=xrtCalloc(xrtValueCount(Args)+1,sizeof(*Argv));if(!Argv)return false;
-    bool Valid=true;for(size_t i=0;i<xrtValueCount(Args);i++){Argv[i]=SdkText(xrtValueArrayGet(Args,i));if(!Argv[i])Valid=false;}
-    if(!Valid){xrtFree(Argv);return MdoApplicationError(E,"sdk_arguments_invalid","Process argv must contain strings; empty strings are supported","process",400,false);}
-    xprocessconfig Config;xrtProcessConfigInit(&Config);Config.Program=Program;Config.Args=Argv;Config.ArgCount=xrtValueCount(Args);
-    Config.WorkDir=Directory?Directory:(C->Workspace&&C->Workspace[0]?C->Workspace:NULL);Config.HideWindow=true;Config.NewGroup=true;
-    Config.Stdin.Mode=Input?XPROCESS_IO_PIPE:XPROCESS_IO_NULL;Config.Stdout.Mode=XPROCESS_IO_PIPE;Config.Stderr.Mode=XPROCESS_IO_PIPE;
-    xprocessrunoptions Options;xrtProcessRunOptionsInit(&Options);MdoApplicationInvocation* I=C->Opaque;Options.Cancel=I?I->Cancel:NULL;
-    Options.Timeout=C->Deadline?MdoDeadlineWaitMs(C->Deadline):XRT_WAIT_FOREVER;uint64 Timeout=0;
-    if(SdkGet(P,"timeout_ms")&&(!SdkUInt(SdkGet(P,"timeout_ms"),&Timeout)||Timeout>INT64_MAX)){xrtFree(Argv);return MdoApplicationError(E,"sdk_arguments_invalid","Invalid process timeout","process",400,false);}
-    if(Timeout&&(Options.Timeout<0||Options.Timeout>(int64)Timeout))Options.Timeout=(int64)Timeout;
-    Options.Input=(xbytesview){(const unsigned char*)Input,Input?strlen(Input):0};Options.StdoutLimit=16384;Options.StderrLimit=16384;Options.Overflow=XPROCESS_OVERFLOW_KEEP_FIRST;
-    bool Stream=false;xrtValueGetBool(SdkGet(P,"stream"),&Stream);if(Stream){Options.Output=SdkProcessOutput;Options.UserData=(void*)C;}
-    MdoCliUse* Use=NULL;char CommandError[512]={0};if(!MdoCliUseBegin(&Use,CommandError)){xrtFree(Argv);return MdoApplicationError(E,"sdk_commands_unavailable",CommandError,"process",503,false);}
-    xprocessresult Result={0};bool Ok=xrtProcessRun(&Config,&Options,&Result);MdoCliUseEnd(Use);xrtFree(Argv);
-    if(Ok){*R=xrtValueObject();xrtValueObjectSetNew(*R,XRT_STR_LITERAL("exit_code"),xrtValueInt(Result.Status.Code));
-        xrtValueObjectSetNew(*R,XRT_STR_LITERAL("signal"),xrtValueInt(Result.Status.Signal));
-        xvalue* Out=xrtValueObject(),*Err=xrtValueObject();SdkByteValue(Out,Result.Stdout,Result.StdoutSize);SdkByteValue(Err,Result.Stderr,Result.StderrSize);
-        xrtValueObjectSetNew(*R,XRT_STR_LITERAL("stdout"),Out);xrtValueObjectSetNew(*R,XRT_STR_LITERAL("stderr"),Err);
-        xrtValueObjectSetNew(*R,XRT_STR_LITERAL("truncated"),xrtValueBool(Result.StdoutTruncated||Result.StderrTruncated));
-        SdkPutUInt(*R,"wait_status",Result.Wait);
-    }
-    xwaitresult Wait=Result.Wait;xrtProcessResultUnit(&Result);
-    if(Ok&&Wait!=XWAIT_OK)return MdoApplicationError(E,Wait==XWAIT_TIMEOUT?"sdk_process_timeout":"sdk_cancelled",Wait==XWAIT_TIMEOUT?"Process execution timed out; partial output is retained":"Process execution cancelled; partial output is retained","process",Wait==XWAIT_TIMEOUT?504:499,true);
-    return Ok||SdkNativeFailure(E,"process");
-}
+#include "process.inc.c"
+
 static bool SdkNetworkCall(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E){
     cstr Url=SdkField(P,"url"),Method=SdkField(P,"method"),Body=SdkField(P,"body");const xvalue* H=SdkGet(P,"headers");
     if(!Url||(H&&xrtValueType(H)!=XVALUE_OBJECT)||xrtValueCount(H)>64)return MdoApplicationError(E,"sdk_arguments_invalid","Supply a URL and string headers","network",400,false);

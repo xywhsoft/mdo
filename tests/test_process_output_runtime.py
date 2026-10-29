@@ -101,6 +101,7 @@ elif mode=='mcp':
         assert Path(report['exec_stderr']).read_bytes()==b'fixture-error\n'*1000
         assert Path(report['explicit_stdout']).resolve()==(base/'workspace/sub/chosen-out.log').resolve()
         assert Path(report['explicit_stdout']).read_bytes() in (b'short-out\n',b'short-out\r\n')
+        assert not (base/'workspace/sub/denied.log').exists()
         print(f"Native process tools: PASS ({len(report['checks'])} checks; byte-exact long stdout/stderr and post-release logs)")
 
 if __name__=='__main__':main()

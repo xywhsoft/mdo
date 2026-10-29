@@ -697,6 +697,17 @@ done:
     return Result;
 }
 
+xroot MdoHomeOpenExistingStorageDirectory(cstr Path)
+{
+    xroot Result=NULL;xfileinfo Info={0};
+    if(!MdoHomePathValid(Path)||!g_MdoHome.Initialized)return NULL;
+    xrtMutexLock(g_MdoHome.Lock);
+    if(g_MdoHome.Root&&MdoHomeWritableLocked()&&
+       xrtRootStat(g_MdoHome.Root,Path,false,&Info)&&Info.Type==XFILE_TYPE_DIRECTORY)
+        Result=xrtRootOpenIn(g_MdoHome.Root,Path);
+    xrtMutexUnlock(g_MdoHome.Lock);return Result;
+}
+
 bool MdoHomeRemoveEmptyDirectory(cstr Path)
 {
     xfileinfo Info;

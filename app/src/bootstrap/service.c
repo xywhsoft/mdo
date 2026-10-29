@@ -5,9 +5,11 @@
 #include "../../include/mdo/commands.h"
 #include "../../include/mdo/remote.h"
 #include "../../include/mdo/device_transfer.h"
+#include "../../include/mdo/home.h"
 
 static uint64 g_MdoServiceRetryTimer;
 static unsigned g_MdoServiceRetryCount;
+static uint64 g_MdoOutputMaintenanceTimer;
 enum { MDO_SERVICE_READY, MDO_SERVICE_WAITING, MDO_SERVICE_FAILED };
 /* Request workers can observe the deferred owner-timer initialization. */
 static xatomic32 g_MdoServiceState;
@@ -21,6 +23,25 @@ static bool MdoServiceHomeBusy(void)
 
 #include "plugin_bootstrap.inc.c"
 
+static void MdoServiceOutputMaintenance(void* User)
+{
+    g_MdoOutputMaintenanceTimer=0;
+    if(xrtAtomic32Load(&g_MdoServiceState,XMEMORY_ACQUIRE)!=MDO_SERVICE_READY)return;
+    MdoHomeSnapshot Home={0};Home.Size=sizeof(Home);
+    if(MdoHomeGetSnapshot(&Home)&&!Home.ImportInProgress&&!Home.RestartRequired) {
+        xroot Root=MdoHomeOpenExistingStorageDirectory("artifacts");
+        if(Root){(void)xworkProcessOutputCollect(Root,1024u*1024u*1024u,7u*24u*60u*60u);xrtRootClose(Root);}
+        xrtClearError();
+    }
+    g_MdoOutputMaintenanceTimer=xsTimerAfter(User,30u*60u*1000u,MdoServiceOutputMaintenance,User);
+}
+
+static void MdoServiceOutputMaintenanceStart(XS_HostInfo* Host)
+{
+    if(!g_MdoOutputMaintenanceTimer)
+        g_MdoOutputMaintenanceTimer=xsTimerAfter(Host,30000u,MdoServiceOutputMaintenance,Host);
+}
+
 static void MdoServiceRetry(void* User)
 {
     XS_HostInfo* host = User;
@@ -32,6 +53,7 @@ static void MdoServiceRetry(void* User)
         (void)MdoRemoteInit(host->Server);
         (void)MdoDeviceTransfersInit(host->Server);
         xrtAtomic32Store(&g_MdoServiceState,MDO_SERVICE_READY,XMEMORY_RELEASE);
+        MdoServiceOutputMaintenanceStart(host);
         return;
     }
     if (MdoServiceHomeBusy() && ++g_MdoServiceRetryCount < 100u) {
@@ -78,7 +100,7 @@ void ServiceInit(XS_HostInfo* pHost)
     }
     (void)MdoApiInit();
     if (ready) (void)MdoApiQueueStart();
-    if (ready) { (void)MdoRemoteInit(pHost->Server); (void)MdoDeviceTransfersInit(pHost->Server); }
+    if (ready) { (void)MdoRemoteInit(pHost->Server); (void)MdoDeviceTransfersInit(pHost->Server);MdoServiceOutputMaintenanceStart(pHost); }
 }
 
 void ServiceUnit(XS_HostInfo* pHost)
@@ -88,6 +110,8 @@ void ServiceUnit(XS_HostInfo* pHost)
     xrtAtomic32Store(&g_MdoServiceState,MDO_SERVICE_FAILED,XMEMORY_RELEASE);
     if (g_MdoServiceRetryTimer) (void)xsTimerCancel(g_MdoServiceRetryTimer);
     g_MdoServiceRetryTimer = 0u;
+    if(g_MdoOutputMaintenanceTimer)(void)xsTimerCancel(g_MdoOutputMaintenanceTimer);
+    g_MdoOutputMaintenanceTimer=0;
     MdoApiQueueStop();
     MdoModuleManagerStop();
     MdoApplicationStreamsStop();

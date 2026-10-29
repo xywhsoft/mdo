@@ -20,6 +20,11 @@
 不安装时模型不会获得此工具；已有会话的计划显示与历史数据仍保留。
 其他工具继续使用现有内置实现，不要求统一改造成 C 扩展。
 
+## 命令输出与后台任务
+
+`exec/spawn` 使用统一的 stdout/stderr 文件存储；`status/wait` 负责状态，`read/grep` 负责读取结果。
+完整规则及工具短名见 [命令输出与后台任务](process-tools.md)。
+
 ## 命令参数与权限错误
 
 `exec` 和 `spawn` 直接接收 `argv` 字符串数组，不经过 shell。
@@ -107,14 +112,14 @@ static mdo_result Execute(void* UserData,
 
 两种编辑页共用工具勾选清单，包含内建工具和已注册的 C 工具，可筛选且不会丢失隐藏项的选择。默认继承全部可用工具；取消继承后至少选择一个工具。`tools: []` 保留原有继承语义。最终范围始终与登录状态、功能开关、任务权限相交；SubAgent 还受父任务的工具与权限约束。
 
-MCP 的实际工具按需发现。这里选择 `tool_search`、`tool_load`；具体服务端工具范围在 MCP 配置中设置，不把可能在重启后消失的临时工具名称保存为 Agent 白名单。
+MCP 的实际工具按需发现。这里选择 `tools`、`load`；具体服务端工具范围在 MCP 配置中设置，不把可能在重启后消失的临时工具名称保存为 Agent 白名单。
 
 ```yaml
 ---
 name: Researcher
 description: Read a project and answer questions.
 model: inherit
-tools: [read, grep, ask_user]
+tools: [read, grep, ask]
 allow_delegation: false
 code: false
 ---

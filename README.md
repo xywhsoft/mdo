@@ -33,7 +33,7 @@ model chat, tools, projects, sessions, memory, skills, and remote control.
 - **Skills** — author, scope, and invoke skills; built-in creator and native validation.
 - **C commands** — independent files, typed arguments, isolated execution, host APIs, and manual context compaction. [Command SDK](docs/commands.md).
 - **Memory** — per-project memory plus transfer between devices.
-- **Web tools** — bounded `web_search`, `web_open`, `web_find` with DNS-rebinding protection.
+- **Web tools** — bounded `search`, `open`, `find` with DNS-rebinding protection.
 - **Configuration** — layered defaults + per-user settings, atomic replace, `.bak` backups, `secret_ref` for sensitive values.
 - **MCP** — Model Context Protocol support.
 - **Schedules, runs, approvals, asks** — background automation and permission gating.

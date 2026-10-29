@@ -12,6 +12,17 @@ static unsigned Acquired,Released;
 static unsigned Serial;
 static xllm_executor Executor;
 static xllm_executor_result Last;
+static bool DenyOutput,DeniedOutputSeen;
+static xwork_permission_decision Permission(void* User,const xwork_permission_request* Request){
+    (void)User;
+    if(DenyOutput)for(size_t i=0;i<Request->iResourceCount;i++){
+        const xwork_permission_resource* R=&Request->pResources[i];
+        if(R->eKind==XWORK_RESOURCE_PATH&&(R->uAccess&XWORK_RESOURCE_ACCESS_WRITE)&&strstr(R->sResource,"denied.log")){
+            DeniedOutputSeen=true;return XWORK_PERMISSION_DENY;
+        }
+    }
+    return XWORK_PERMISSION_DEFAULT;
+}
 static bool Acquire(void* U,void** Lease){(void)U;*Lease=(void*)1;xrtMutexLock(CounterLock);Acquired++;xrtMutexUnlock(CounterLock);return true;}
 static void Release(void* U,void* Lease){(void)U;(void)Lease;xrtMutexLock(CounterLock);Released++;xrtMutexUnlock(CounterLock);}
 static void Flag(const char* Name,bool Ok){xrtValueObjectSetNew(Checks,xrtStrView(Name),xrtValueBool(Ok));fprintf(stderr,"process-output check %s: %s\n",Name,Ok?"PASS":"FAIL");}
@@ -41,12 +52,14 @@ static bool WaitFor(uint64 Id){
 void ServiceInit(XS_HostInfo* Host){
     (void)Host;Checks=xrtValueObject();CounterLock=xrtMutexCreate();xwork_error Error={0};
     xllm_session_config SC;xllmSessionConfigInit(&SC);xllm_error LE={0};xllm_session* S=xllmSessionCreate(&SC,&LE);
-    xwork_runtime* Runtime=xworkRuntimeCreate(NULL,&Error);xwork_agent_definition_config DC;xworkAgentDefinitionConfigInit(&DC);
+    xwork_runtime_config RC;xworkRuntimeConfigInit(&RC);RC.iMaxRetainedTaskBytes=16384;
+    xwork_runtime* Runtime=xworkRuntimeCreate(&RC,&Error);xwork_agent_definition_config DC;xworkAgentDefinitionConfigInit(&DC);
     DC.sId="process-output-fixture";DC.sModel="no-model-calls";DC.bAutoSaveSession=false;DC.bRequireVerificationAfterWrite=false;
     DC.eApprovalMode=XWORK_APPROVAL_AUTO;DC.iMaxInlineToolBytes=12288u;
     xwork_agent_definition* Definition=xworkAgentDefinitionCreate(&DC,&Error);
     xroot Root=xrtRootOpen(getenv("MDO_OUTPUT_ARTIFACTS"));xwork_artifact_store* Store=Root?xworkArtifactStoreCreate(Root,&Error):NULL;
     xwork_agent_options AO;xworkAgentOptionsInit(&AO);AO.pSession=S;AO.sWorkspaceRoot=getenv("MDO_OUTPUT_WORKSPACE");AO.pArtifactStore=Store;
+    AO.OnPermission=Permission;
     xwork_agent* Agent=S&&Runtime&&Definition&&Store?xworkAgentCreateWithRuntime(Runtime,Definition,&AO,&Error):NULL;
     bool Ok=Agent&&xworkAgentRegisterMcpDiscoveryTools(Agent,&Error)&&xworkAgentSetProcessOwner(Agent,Acquire,Release,NULL,&Error)&&xworkExecutorBind(&Executor,Agent,&Error);
     Flag("agent_initialized",Ok);xvalue* Report=xrtValueObject();
@@ -67,6 +80,11 @@ void ServiceInit(XS_HostInfo* Host){
     Flag("short_inline_separate",R&&Last.bSuccess&&Bool(R,"output_complete")&&
         (!strcmp(Text(Out,"text"),"short-out\n")||!strcmp(Text(Out,"text"),"short-out\r\n"))&&
         (!strcmp(Text(Err,"text"),"short-err\n")||!strcmp(Text(Err,"text"),"short-err\r\n"))&&!Text(Out,"path")[0]);xrtValueRelease(R);
+    xvalue* Denied=Args("short");xrtValueObjectSetNew(Denied,XRT_STR_LITERAL("cwd"),xrtValueString(XRT_STR_LITERAL("sub")));
+    xrtValueObjectSetNew(Denied,XRT_STR_LITERAL("stdout_path"),xrtValueString(XRT_STR_LITERAL("denied.log")));
+    xrtMutexLock(CounterLock);unsigned Prior=Acquired;xrtMutexUnlock(CounterLock);DenyOutput=true;R=Tool("exec",Denied);DenyOutput=false;
+    xrtMutexLock(CounterLock);bool NoLaunch=Prior==Acquired;xrtMutexUnlock(CounterLock);
+    Flag("explicit_output_requires_write_permission_before_launch",DeniedOutputSeen&&NoLaunch&&!Last.bSuccess);xrtValueRelease(R);
     xvalue* P=Args("short");xrtValueObjectSetNew(P,XRT_STR_LITERAL("cwd"),xrtValueString(XRT_STR_LITERAL("sub")));
     xrtValueObjectSetNew(P,XRT_STR_LITERAL("stdout_path"),xrtValueString(XRT_STR_LITERAL("chosen-out.log")));
     xrtValueObjectSetNew(P,XRT_STR_LITERAL("stderr_path"),xrtValueString(XRT_STR_LITERAL("chosen-err.log")));
@@ -115,6 +133,10 @@ void ServiceInit(XS_HostInfo* Host){
     xwork_scheduled_task_config Scheduled;xworkScheduledTaskConfigInit(&Scheduled);Scheduled.sScheduleId="output-report-fixture";Scheduled.uScheduleGeneration=1;Scheduled.sLabel="Synthetic completed report";
     uint64 ReportId=0;bool ScheduledOk=xworkRuntimeCreateScheduledTask(Runtime,&Scheduled,&ReportId,&Error)&&xworkRuntimeStartScheduledTask(Runtime,ReportId,&Error)&&xworkRuntimeFinishScheduledTask(Runtime,ReportId,XWORK_RESULT_OK,"final agent report",&Error);
     R=Tool("status",IdArgs(ReportId));Flag("nonprocess_status_preserves_final_report",ScheduledOk&&R&&Last.bSuccess&&!strcmp(Text(R,"result"),"final agent report"));xrtValueRelease(R);
+    char LongReport[32769];memset(LongReport,'a',sizeof(LongReport)-1u);LongReport[sizeof(LongReport)-1u]=0;
+    ScheduledOk=xworkRuntimeCreateScheduledTask(Runtime,&Scheduled,&ReportId,&Error)&&xworkRuntimeStartScheduledTask(Runtime,ReportId,&Error)&&xworkRuntimeFinishScheduledTask(Runtime,ReportId,XWORK_RESULT_OK,LongReport,&Error);
+    R=Tool("status",IdArgs(ReportId));const xvalue* Kept=xrtValueObjectGet(xrtValueObjectGet(R,XRT_STR_LITERAL("result")),XRT_STR_LITERAL("stdout"));
+    Flag("bounded_nonprocess_report_exposes_retained_range",ScheduledOk&&R&&Bool(R,"result_truncated")&&Number(R,"result_offset")==16384u&&Text(Kept,"path")[0]);xrtValueRelease(R);
     Flag("task_receipt_release",xworkRuntimeReleaseTask(Runtime,Id,&Error));
     R=Tool("spawn",Args("long"));Id=Number(R,"task_id");xrtValueRelease(R);P=IdArgs(Id);
     xrtValueObjectSetNew(P,XRT_STR_LITERAL("mode"),xrtValueString(XRT_STR_LITERAL("kill_tree")));xrtValueObjectSetNew(P,XRT_STR_LITERAL("wait_ms"),xrtValueUInt(5000));
