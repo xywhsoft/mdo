@@ -1,0 +1,287 @@
+{
+  "date": "2026-10-30",
+  "started": "2026-10-29",
+  "version": "0.8.0",
+  "version_code": "05000800",
+  "package": "org.xleaves.mdo.qa.release",
+  "device": {
+    "model": "RMX5090",
+    "android": 16,
+    "api": 36,
+    "abi": "arm64-v8a"
+  },
+  "paid_model_calls": 0,
+  "published": false,
+  "overall_release_approved": false,
+  "commits": [
+    "a0b19e31",
+    "3b505fe6",
+    "09992241",
+    "ebf3e168"
+  ],
+  "source": {
+    "application_fingerprint": "bec02516320e4403e7c32b31aff606a435b30e51b50700104602ba1ac9368f7e",
+    "files": 666,
+    "algorithm": "sha256 of sorted app-relative UTF-8 name + NUL + raw file SHA-256; generated excluded",
+    "working_tree_contains_other_uncommitted_work": true,
+    "current_app_repack_matches_tested_pack": true
+  },
+  "sdk": {
+    "xserver_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
+    "overlay_sha256": "4a09127727b100f15bcfa94c12ab75864188eab048bc139c4e8f681639b86903",
+    "native_sha256": "b46b717a3679ecca8f62e4ca728d909254554bbf5df7d3ab995ab635b1ea98bc",
+    "app_pack_sha256": "52fb702e88132069a18b8559da49faa19306c495e8d55329835947140636ff02"
+  },
+  "artifacts": [
+    {
+      "edition": "full",
+      "returncode": 0,
+      "seconds": 97.19,
+      "bytes": 474032232,
+      "sha256": "e8f1669159820d452df6fc55286a34f5fbc0c29726fe0586115ac8bb2b4f666c"
+    },
+    {
+      "edition": "lite",
+      "returncode": 0,
+      "seconds": 6.86,
+      "bytes": 6292884,
+      "sha256": "b8a4de061204be13606d3558fc0553264ac40ce60f71ac5f390988e567fde77f"
+    }
+  ],
+  "groups": {
+    "lite-verified": {
+      "passed": true,
+      "assertions": 42,
+      "groups": [
+        {
+          "name": "sdk-processes",
+          "status": "passed",
+          "seconds": 0.812
+        },
+        {
+          "name": "managed-tools",
+          "status": "passed",
+          "seconds": 1.391
+        },
+        {
+          "name": "directories",
+          "status": "passed",
+          "seconds": 1.078
+        }
+      ],
+      "evidence": ".build/android-device-20261029/lite-verified/result.json"
+    },
+    "full-accepted": {
+      "passed": true,
+      "assertions": 92,
+      "groups": [
+        {
+          "name": "sdk-processes",
+          "status": "passed",
+          "seconds": 1.0
+        },
+        {
+          "name": "managed-tools",
+          "status": "passed",
+          "seconds": 1.625
+        },
+        {
+          "name": "directories",
+          "status": "passed",
+          "seconds": 1.375
+        },
+        {
+          "name": "packaged-tools",
+          "status": "passed",
+          "seconds": 268.063
+        }
+      ],
+      "evidence": ".build/android-device-20261029/full-accepted/result.json"
+    },
+    "ownership-final": {
+      "passed": true,
+      "assertions": 11,
+      "groups": [
+        {
+          "name": "command-ownership",
+          "status": "passed",
+          "seconds": 198.641
+        }
+      ],
+      "evidence": ".build/android-device-20261029/ownership-final/result.json"
+    }
+  },
+  "apk_container": {
+    "cases": 12,
+    "passed": true,
+    "evidence": ".build/android-device-20261029/apk-container-regression.json"
+  },
+  "packaging_units": {
+    "cases": 7,
+    "passed": true,
+    "command": "python tests/test_android_runtime_aliases.py"
+  },
+  "static_checks": {
+    "strict_c11_passed": true,
+    "apk_validation": [
+      {
+        "edition": "lite",
+        "bytes": 6292884,
+        "native_elf_files": 3,
+        "runtime_paths": 0
+      },
+      {
+        "edition": "full",
+        "bytes": 474032232,
+        "native_elf_files": 151,
+        "runtime_paths": 972
+      }
+    ]
+  },
+  "conversation": {
+    "lite": [
+      {
+        "name": "retry",
+        "requests": 3,
+        "state": "succeeded",
+        "errors": 0
+      },
+      {
+        "name": "network",
+        "requests": 2,
+        "state": "succeeded",
+        "errors": 0
+      },
+      {
+        "name": "partial",
+        "requests": 2,
+        "state": "succeeded",
+        "errors": 0
+      },
+      {
+        "name": "quota",
+        "requests": 1,
+        "state": "failed",
+        "errors": 1,
+        "error_kind": "daily_token_limit"
+      },
+      {
+        "name": "cancel_backoff",
+        "requests_before_resume": 1,
+        "state": "cancelled",
+        "cancel_ms": 113
+      },
+      {
+        "name": "resume_continue_restart",
+        "resumed": true,
+        "credential_retained": true,
+        "draft_retained": true,
+        "errors": 0
+      }
+    ],
+    "full": [
+      {
+        "name": "retry",
+        "requests": 3,
+        "state": "succeeded",
+        "errors": 0
+      },
+      {
+        "name": "network",
+        "requests": 2,
+        "state": "succeeded",
+        "errors": 0
+      },
+      {
+        "name": "partial",
+        "requests": 2,
+        "state": "succeeded",
+        "errors": 0
+      },
+      {
+        "name": "quota",
+        "requests": 1,
+        "state": "failed",
+        "errors": 1,
+        "error_kind": "daily_token_limit"
+      },
+      {
+        "name": "cancel_backoff",
+        "requests_before_resume": 1,
+        "state": "cancelled",
+        "cancel_ms": 97
+      },
+      {
+        "name": "resume_continue_restart",
+        "resumed": true,
+        "credential_retained": true,
+        "draft_retained": true,
+        "errors": 0
+      }
+    ]
+  },
+  "upgrade": {
+    "package": "org.xleaves.mdo.qa.release",
+    "passed": true,
+    "apk_sha256": "e8f1669159820d452df6fc55286a34f5fbc0c29726fe0586115ac8bb2b4f666c",
+    "files_checked": 140,
+    "changed_before_launch": [],
+    "native_directory_relocated": true,
+    "tool_count": 13,
+    "binding_error": "",
+    "changed_after_launch": [],
+    "diagnostics": {
+      "total": 0,
+      "truncated": false,
+      "items": []
+    }
+  },
+  "final_device": {
+    "original_config_session_files": 55,
+    "tools": 13,
+    "binding_error": "",
+    "diagnostics": {
+      "total": 0,
+      "truncated": false,
+      "items": []
+    },
+    "original_changed": [
+      "files/mdo-home/config/models.json"
+    ],
+    "original_changed_explained": [
+      "config/models.json: synthetic provider fixture now uses its full-edition loopback port"
+    ],
+    "clients": 1,
+    "qa_activity_focused": true,
+    "current_pid_crash_lines": [],
+    "daily_package_after": [
+      "codePath=/data/app/~~bTxjOK3BoUHbGWCzl73bsw==/org.xleaves.mdo-t6FxUhaV0KNatMJtKuc9sQ==",
+      "versionCode=60000023 minSdk=26 targetSdk=36",
+      "versionName=0.6.0",
+      "lastUpdateTime=2026-10-27 19:47:21",
+      "dataDir=/data/user/0/org.xleaves.mdo",
+      "firstInstallTime=2026-10-13 17:56:27"
+    ],
+    "daily_package_unchanged": true,
+    "stay_on_while_plugged_in": "15",
+    "adb_forward_after": [
+      ""
+    ],
+    "adb_reverse_after": [
+      ""
+    ],
+    "adb_mappings_restored": true
+  },
+  "preserved_files": {
+    "app\\xs.json": "48f1d32419e18b2714fe10068c14c023687dd145e2de12975b5a0d708dda2ca2",
+    "tests\\test_remote_asymmetric_pause.py": "0ee1e781ae6aae9da6e748b7e15c0160e0940ca12bbc754ae8a5c5ed980f65e8"
+  },
+  "remaining": [
+    "SDK-ARTIFACT-PATH from 2026-10-29 remains unresolved",
+    "Historical runtime and packed-product release gates have not all passed",
+    "8 command-refresh ownership scenarios took 198.641 seconds including ADB/checks; latency needs profiling",
+    "Rebuilt lite APK passed packaging checks but was not freshly installed after the final Android-only hardening",
+    "Formal signing and real native/system large-APK update confirmation were not tested; adb install -r is a different path",
+    "Real provider calls, real-account login and cross-device transfer were not part of this run"
+  ]
+}

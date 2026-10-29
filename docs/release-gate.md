@@ -61,6 +61,8 @@ Windows 真实页面绘制的人工检查可另外运行 `pwsh -NoProfile -Execu
 八种产物构建、当前扩展目录原生回归及进程输出专项检查通过，但传统制品路径存在
 SDK 回归，历史发布门禁仍有未通过项，Android 真机及正式签名产物验收也未完成。
 具体结果及失败范围见 [本轮报告](build-records/2026-10-29-release-acceptance.md)。
+
+2026-10-30 补齐 Android 真机核心检查，修复 APK 读取、工具入口、环境注入和更新后的转发链接四项问题；完整版 13 个程序实际执行及覆盖安装保留验证通过。整体仍未放行：SDK 制品路径回归、历史门禁和工具刷新性能问题尚待处理，正式签名及原生大 APK 安装确认链路也未验收。见 [Android 补充报告](build-records/2026-10-30-android-device-acceptance.md)。
 不能用旧记录或单独的专项通过结果替代当前完整门禁。
 
 发布脚本支持 `--host-dir`、`--output-dir`，Linux 构建支持 `--host-root`，便于使用
