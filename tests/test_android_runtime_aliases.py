@@ -17,7 +17,13 @@ class RuntimeAliases(unittest.TestCase):
     def pack(self, rows, aliases=None):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
-            for name, data in {"busybox/busybox": b"\x7fELFbusybox", **rows}.items():
+            defaults = {"busybox/busybox": b"\x7fELFbusybox"}
+            if any(name.startswith('git/') for name in rows):
+                defaults['git/git'] = b'\x7fELFgit'
+            if any(name.startswith('ffmpeg/') for name in rows):
+                defaults['ffmpeg/ffmpeg'] = b'\x7fELFffmpeg'
+            self.recipes = {}
+            for name, data in {**defaults, **rows}.items():
                 p = root / name; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(data)
             if aliases is not None:
                 p = root / "git/native-aliases.json"; p.parent.mkdir(exist_ok=True); p.write_text(json.dumps(aliases))
@@ -36,6 +42,7 @@ class RuntimeAliases(unittest.TestCase):
                         self.assertEqual(manifest['kind'],'external-tools')
                         self.assertIn('tool.json',tool.namelist())
                         self.assertNotIn('files',manifest)
+                        self.recipes[extension['id']] = json.loads(tool.read('tool.json'))
             return paths, {r['tool']+'/'+r["path"]: r for r in meta["files"]}
 
     def test_identical_libraries_and_programs_share_payload(self):
@@ -43,7 +50,26 @@ class RuntimeAliases(unittest.TestCase):
         self.assertEqual(files["git/git"]["native"], files["git/alias"]["native"])
         self.assertEqual(files["git/git"]["native"], files["git/libexec/git-core/git-add"]["native"])
         self.assertEqual(files["git/libshared.so"]["native"], files["ffmpeg/libshared.so"]["native"])
-        self.assertEqual(len([p for p in paths if p.startswith("lib/")]), 3)
+        self.assertEqual(len([p for p in paths if p.startswith("lib/")]), 4)
+
+    def test_optional_tools_export_programs_and_companions_not_libraries(self):
+        self.pack({'poppler/lib/libfirst.so': b'\x7fELFlibrary',
+                   'poppler/pdfinfo': b'\x7fELFpdfinfo',
+                   'poppler/pdftotext': b'\x7fELFpdftotext',
+                   'poppler/libexec/private': b'\x7fELFprivate',
+                   'imagemagick/lib/libfirst.so': b'\x7fELFlibrary',
+                   'imagemagick/magick': b'\x7fELFmagick',
+                   'ffmpeg/ffprobe': b'\x7fELFffprobe'})
+        for tool, names in [('poppler', {'pdfinfo', 'pdftotext'}),
+                            ('imagemagick', {'magick'}),
+                            ('ffmpeg', {'ffmpeg', 'ffprobe'})]:
+            recipe = self.recipes[tool]
+            self.assertEqual({row['name'] for row in recipe['commands']}, names)
+            self.assertIn(recipe['program'], names)
+
+    def test_shared_libraries_alone_do_not_define_an_external_tool(self):
+        with self.assertRaisesRegex(ValueError, 'No native program for poppler'):
+            self.pack({'poppler/lib/libfirst.so': b'\x7fELFlibrary'})
 
     def test_conflicting_soname_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "conflicting native"):

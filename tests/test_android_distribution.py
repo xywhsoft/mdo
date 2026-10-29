@@ -10,6 +10,15 @@ SYSTEM_LIBRARIES = {"libc.so", "libdl.so", "libm.so", "liblog.so", "libz.so", "l
                     "libmediandk.so", "libcamera2ndk.so"}
 
 
+def elf_program(data):
+    if len(data) < 64 or data[:6] != b'\x7fELF\x02\x01':
+        return False
+    offset = struct.unpack_from('<Q', data, 32)[0]
+    width, count = struct.unpack_from('<HH', data, 54)
+    return struct.unpack_from('<H', data, 16)[0] == 2 or any(
+        struct.unpack_from('<I', data, offset+i*width)[0] == 3 for i in range(count))
+
+
 def elf_dependencies(data, name):
     assert data[:6] == b"\x7fELF\x02\x01", name
     assert struct.unpack_from("<H", data, 18)[0] == 183, name
@@ -73,6 +82,9 @@ def inspect(edition, release, path=None):
                 manifest=json.loads(bundle.read('extension.json'));assert manifest['kind']=='external-tools' and manifest['alias']==tool['id']
                 assert not {'format','files','resources','payload','min_build_id'} & manifest.keys()
                 recipe=json.loads(bundle.read(manifest['entry']));assert recipe['program'] in bundle.namelist()
+                assert elf_program(bundle.read(recipe['program'])), (tool['id'], 'main entry is not a program')
+                for command in recipe['commands']:
+                    assert elf_program(bundle.read(command['entry'])), (tool['id'], command, 'shared library exported as a command')
                 commands.update(c['name'] for c in recipe['commands'])
                 logical_paths.update(tool['id']+'/'+p for p in bundle.namelist())
         native_paths=set()
@@ -93,6 +105,7 @@ def inspect(edition, release, path=None):
             if release["toolpack_revision"] >= 4:
                 assert {"git/git", "sqlite/sqlite3", "poppler/pdftotext", "poppler/pdftoppm",
                         "ffmpeg/ffmpeg", "ffmpeg/ffprobe", "imagemagick/magick", "poppler/fonts/fonts.conf"} <= logical_paths
+                assert {'git','sqlite3','pdfinfo','pdftotext','pdftoppm','ffmpeg','ffprobe','magick'} <= commands
                 assert not {"liblzma.so", "libcrypto.so", "libssl.so"} & native.keys(), "external libraries shadow Android framework dependencies"
         return {"edition": edition, "bytes": path.stat().st_size, "native_elf_files": len(native), "runtime_paths": len(logical_paths)}
 

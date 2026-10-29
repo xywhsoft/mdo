@@ -30,10 +30,13 @@ def add_runtime(archive,root:Path,edition:str,build_id:int,revision:int):
             definition=definitions[tool];record=records.get(tool,{})
             entries=[p for p in record.get('entrypoints',[]) if (directory/p).is_file()]
             if not entries:
-                for p in sorted(directory.rglob('*')):
-                    if not p.is_file():continue
+                # Optional tools have no legacy catalog row. Export their
+                # top-level programs, never a shared library or a private
+                # helper merely because its filename sorts first.
+                for p in sorted(directory.iterdir()):
+                    if not p.is_file() or (p.name.startswith('lib') and p.suffix=='.so'):continue
                     with p.open('rb') as stream:elf=stream.read(4)==b'\x7fELF'
-                    if elf:entries=[p.relative_to(directory).as_posix()];break
+                    if elf:entries.append(p.name)
             if not entries:raise ValueError('No native program for '+tool)
             native={};existing=set()
             for file in sorted(directory.rglob('*')):
