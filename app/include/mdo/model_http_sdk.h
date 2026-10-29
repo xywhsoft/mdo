@@ -22,13 +22,14 @@
  * SOFTWARE.
  */
 
-/* Generated public SDK bridge. Source: xs 25200032fbea715784231795c4902e88bd4f473b.
+/* Generated public SDK bridge. Source: xs 216f5445163ca30c815ad7d5d2da3b71cb2f6401.
  * Regenerate with tools/model_http_sdk.py; contains no implementation. */
 #ifndef MDO_MODEL_HTTP_SDK_H
 #define MDO_MODEL_HTTP_SDK_H
 #include <xsbase.h>
 #define XHTTP_MODULE_HTTP_CLIENT_EASY_FUTURE
 #define XHTTP_MODULE_HTTP_CLIENT_HTTPS
+#define XHTTP_MODULE_HTTP_CLIENT_PROXY
 #define XHTTP_MODULE_HTTP_CLIENT_REDIRECT
 #define XHTTP_MODULE_HTTP_CLIENT_DECOMPRESS
 #define XHTTP_MODULE_HTTP_SSE_PARSER

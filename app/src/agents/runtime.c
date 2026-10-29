@@ -432,7 +432,7 @@ static xllm_result MdoAgentsRouteComplete(MdoAgentOwner* Owner,
     MdoConfigTransportSettings Transport = {0};
     Transport.Size = sizeof(Transport);
     bool Configured = MdoConfigGetTransportSettings(&Transport);
-    bool Owned = !Configured || !strcmp(Transport.ProxyKind, "system");
+    bool Owned = !Configured || MdoModelUsesSystemProxy(Owner->Models, Match->ModelId);
     if ( Owner->RouteLock == NULL || !xrtMutexLock(Owner->RouteLock) ) {
         if ( Error != NULL ) {
             xllmErrorInit(Error);

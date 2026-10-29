@@ -28,11 +28,12 @@ typedef struct MdoAgentOwner { void *Models,*RouteLock,*ExternalModelData;
 #define XLLM_RESULT_ERROR -1
 #define XLLM_ERROR_HOOK 1
 static uint64 Revision=1; static const char* Mode="none";
-static unsigned Created,Destroyed,Completed,Locks;static bool Available=true,Online,LockReady=true,CreateFails;
+static unsigned Created,Destroyed,Completed,Locks;static bool Available=true,Online,LockReady=true,CreateFails,ModelSystem;
 static xllm_client Clients[32];
 static void MdoAgentsRetryProgress(void* P){(void)P;}
 static void MdoAgentsProgressSnapshot(MdoAgentOwner* O,MdoAgentModelProgress* P){(void)O;(void)P;}
 static bool MdoModelIsOnline(void* M,const char* Id){(void)M;(void)Id;return Online;}
+static bool MdoModelUsesSystemProxy(void* M,const char* Id){(void)M;(void)Id;return ModelSystem||!strcmp(Mode,"system");}
 static void MdoModelClientOptionsInit(MdoModelClientOptions* O){memset(O,0,sizeof(*O));}
 static bool MdoConfigGetTransportSettings(MdoConfigTransportSettings* T)
 {T->Revision=Revision;snprintf(T->ProxyKind,sizeof(T->ProxyKind),"%s",Mode);return Available;}
@@ -79,9 +80,13 @@ int main(void)
     assert(MdoAgentsRouteComplete(&Owner,&Route,&Request,NULL,&Response,&Error)==XLLM_RESULT_ERROR);
     LockReady=true;Available=false;
     assert(MdoAgentsRouteComplete(&Owner,&Route,&Request,NULL,&Response,&Error)==XLLM_RESULT_ERROR);
-    Available=true;Online=true;
+    Available=true;Mode="none";Revision++;ModelSystem=true;
+    assert(MdoAgentsRouteComplete(&Owner,&Route,&Request,NULL,&Response,&Error)==0);
+    assert(MdoAgentsRouteComplete(&Owner,&Route,&Request,NULL,&Response,&Error)==0);
+    assert(Created==7&&Destroyed==6&&Completed==8&&!Cached->Destroyed);
+    ModelSystem=false;Online=true;
     assert(MdoAgentsRouteComplete(&Owner,&Route,&Request,NULL,&Response,&Error)==7);
-    assert(Created==5&&Destroyed==4&&!Locks);
+    assert(Created==7&&Destroyed==6&&!Locks);
     xllmClientDestroy(Cached);assert(Created==Destroyed);
     puts("Agent proxy refresh, mode switches and shared-client lifetime: PASS");return 0;
 }

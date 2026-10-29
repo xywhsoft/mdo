@@ -171,6 +171,12 @@ xllm_client* MdoModelClientCreate(const MdoModelCatalog* pCatalog,
 const char* MdoModelProtocolName(MdoModelProtocol Protocol);
 /* Caller owns the combined system/custom trust store. */
 xx509store* MdoModelsLoadCaStore(cstr Path, xllm_error* Error);
+struct MdoConfigTransportSettings;
+/* Apply one optional proxy policy to the current global transport settings.
+ * Caller first resolves a model's explicit "provider" selection. */
+bool MdoModelProxySettings(const xvalue* Proxy,
+    struct MdoConfigTransportSettings* Settings, xllm_error* Error);
+bool MdoModelUsesSystemProxy(const MdoModelCatalog* Catalog, const char* ModelId);
 xllm_provider MdoModelProtocolProvider(MdoModelProtocol Protocol);
 
 #endif

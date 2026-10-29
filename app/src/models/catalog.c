@@ -23,6 +23,7 @@ typedef struct MdoProviderEntry {
     char* Name;
     char* Endpoints[3];
     char* CredentialReference;
+    xvalue* Proxy;
     uint32 TimeoutMilliseconds;
     MdoModelProtocolFlags Protocols;
     bool Builtin;
@@ -39,6 +40,7 @@ typedef struct MdoModelEntry {
     char** ReasoningEfforts;
     size_t ReasoningEffortCount;
     char* DefaultReasoningEffort;
+    xvalue* Proxy;
     MdoModelProtocolFlags Protocols;
     MdoModelProtocol DefaultProtocol;
     xllm_capability_flags Capabilities;
@@ -231,6 +233,7 @@ static void MdoModelsProviderUnit(MdoProviderEntry* pProvider)
     xrtFree(pProvider->Name);
     for ( i = 0u; i < 3u; ++i ) xrtFree(pProvider->Endpoints[i]);
     xrtFree(pProvider->CredentialReference);
+    xrtValueRelease(pProvider->Proxy);
     memset(pProvider, 0, sizeof(*pProvider));
 }
 
@@ -246,6 +249,7 @@ static void MdoModelsModelUnit(MdoModelEntry* pModel)
         xrtFree(pModel->ReasoningEfforts[i]);
     xrtFree(pModel->ReasoningEfforts);
     xrtFree(pModel->DefaultReasoningEffort);
+    xrtValueRelease(pModel->Proxy);
     memset(pModel, 0, sizeof(*pModel));
 }
 
@@ -361,6 +365,12 @@ static bool MdoModelsParseProvider(const xvalue* pValue,
     if ( pCredential != NULL &&
          !MdoModelsCopyString(pCredential, "secret_ref",
             &pProvider->CredentialReference, true) ) return false;
+    const xvalue* Proxy = xrtValueObjectGet(pValue, MdoModelsKey("proxy"));
+    if (Proxy) {
+        if (!MdoConfigModelProxyValid(Proxy, false)) return false;
+        pProvider->Proxy = xrtValueDeepClone(Proxy);
+        if (!pProvider->Proxy) return false;
+    }
     return pProvider->Protocols != 0u;
 }
 
@@ -516,6 +526,12 @@ static bool MdoModelsParseModel(const xvalue* pValue,
             &pModel->DefaultReasoningEffort, true) ||
          !MdoModelsParseAttachments(xrtValueObjectGet(pValue,
             MdoModelsKey("attachments")), &pModel->Attachments) ) return false;
+    const xvalue* Proxy = xrtValueObjectGet(pValue, MdoModelsKey("proxy"));
+    if (Proxy) {
+        if (!MdoConfigModelProxyValid(Proxy, true)) return false;
+        pModel->Proxy = xrtValueDeepClone(Proxy);
+        if (!pModel->Proxy) return false;
+    }
     return true;
 }
 
@@ -1106,6 +1122,8 @@ static char* MdoModelsResolveCredential(const MdoProviderEntry* pProvider,
     return NULL;
 }
 
+#include "proxy.inc.c"
+
 static xllm_client* MdoModelClientCreateAuth(const MdoModelCatalog* pCatalog,
     const MdoModelClientOptions* pOptions, MdoModelClientInfo* pInfo,
     xllm_error* pError,const char* Access)
@@ -1203,10 +1221,7 @@ static xllm_client* MdoModelClientCreateAuth(const MdoModelCatalog* pCatalog,
     if ( Secret == NULL ) goto done;
     memset(&Transport, 0, sizeof(Transport));
     Transport.Size = sizeof(Transport);
-    if ( !MdoConfigGetTransportSettings(&Transport) ) {
-        MdoModelsProfileError(pError, "model transport settings are unavailable");
-        goto done;
-    }
+    if (!MdoModelProxySettings(MdoModelsSelectedProxy(pProvider, pModel), &Transport, pError)) goto done;
     if ( Transport.CaPemPath[0] != '\0' ) {
         CaStore = MdoModelsLoadCaStore(Transport.CaPemPath, pError);
         if ( CaStore == NULL ) goto done;

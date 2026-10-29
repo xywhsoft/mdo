@@ -8,6 +8,7 @@ import argparse
 import json
 import re
 import subprocess
+import build_mdo
 
 ROOT = Path(__file__).resolve().parent.parent
 HEADERS = {'http_headers.h', 'http_body.h', 'http_client.h', 'cookie.h',
@@ -17,8 +18,15 @@ HEADERS = {'http_headers.h', 'http_body.h', 'http_client.h', 'cookie.h',
 
 
 def generate(sdk: Path) -> str:
-    revision = subprocess.check_output(['git', '-C', str(sdk), 'rev-parse', 'HEAD'], text=True).strip()
-    assert revision == json.loads((ROOT / 'deps.lock').read_text())['xserver']['commit'], 'xs revision mismatch'
+    lock = json.loads((ROOT / 'deps.lock').read_text(encoding='utf-8'))
+    marker = sdk / '.mdo-sdk-overlay.json'
+    if marker.is_file():
+        assert json.loads(marker.read_text(encoding='utf-8')) == lock['sdk_overlay'], 'SDK overlay mismatch'
+        build_mdo.verify_dependencies(sdk, lock)
+        revision = lock['xserver']['commit']
+    else:
+        revision = subprocess.check_output(['git', '-C', str(sdk), 'rev-parse', 'HEAD'], text=True).strip()
+        assert revision == lock['xserver']['commit'], 'xs revision mismatch'
     source = (sdk / 'lib/xhttp/single/xhttp.h').read_text(encoding='utf-8')
     sections = re.split(r'/\* ={10,} \*/\n(/\* [^\n]+ \*/)\n/\* ={10,} \*/', source)
     pairs = list(zip(sections[1::2], sections[2::2]))

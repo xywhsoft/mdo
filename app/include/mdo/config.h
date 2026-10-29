@@ -85,6 +85,9 @@ bool MdoConfigGetPowerSettings(MdoConfigPowerSettings* pSettings);
 char* MdoConfigAgentInstructions(void);
 bool MdoConfigGetWebSettings(MdoConfigWebSettings* pSettings);
 bool MdoConfigGetTransportSettings(MdoConfigTransportSettings* pSettings);
+/* Optional provider/model proxy descriptor. Only models may use "provider".
+ * Does not resolve or expose a proxy password. */
+bool MdoConfigModelProxyValid(const xvalue* Proxy, bool AllowProvider);
 
 /* Returned strings are owned by the caller and released with xrtFree. */
 str MdoConfigEffectiveJson(size_t* pSize);

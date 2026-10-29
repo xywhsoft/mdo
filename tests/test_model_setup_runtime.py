@@ -116,12 +116,39 @@ def main():
                     status, result = post('discover', {'provider': draft, 'key': 'fixture-model-key'})
                     assert status >= 400 and result['error']['code'] == code, result
                     assert len(Supplier.calls) == before + 1 and 'fixture-secret' not in json.dumps(result)
+                def global_proxy(value):
+                    status, headers, _ = request(port, 'GET', '/api/v1/settings')
+                    assert status == 200
+                    status, _, raw = request(port, 'PATCH', '/api/v1/settings/settings',
+                        body=json.dumps({'schema_version': 1, 'patch': {'transport': {'proxy': value}}}).encode(),
+                        headers={'Content-Type': 'application/json', 'If-Match': headers['etag']})
+                    assert status == 200, raw
+                global_proxy({'kind': 'http-connect', 'host': '127.0.0.1', 'port': 1, 'user': 'unused',
+                    'credential': {'secret_ref': 'env:MDO_MODEL_SETUP_MISSING_PROXY_SECRET'}})
+                try:
+                    before = len(Supplier.calls)
+                    status, result = post('discover', {'provider': supplier, 'key': 'fixture-model-key'})
+                    assert status == 422 and result['error']['code'] == 'model_profile_proxy_unavailable', result
+                    assert len(Supplier.calls) == before
+                    direct = {**supplier, 'proxy': {'kind': 'none'}}
+                    status, result = post('discover', {'provider': direct, 'key': 'fixture-model-key'})
+                    assert status == 200 and result['data']['items'] == ['fixture-agent', 'fixture-other'], result
+                    assert len(Supplier.calls) == before + 1
+                    for proxy in ({'kind': 'provider'}, {'kind': 'socks5'}, {'kind': 'none', 'password': 'not-allowed'}):
+                        status, result = post('discover', {'provider': {**supplier, 'proxy': proxy}, 'key': 'fixture-model-key'})
+                        assert status == 422 and result['error']['code'] == 'model_profile_proxy_invalid', result
+                        assert len(Supplier.calls) == before + 1
+                finally:
+                    global_proxy({'kind': 'none', 'host': '', 'port': 0, 'user': '', 'credential': None})
+                config, etag = get()
+                supplier['proxy'] = {'kind': 'none'}
                 model = copy.deepcopy(config['items'][0])
                 model.update(id='fixture-agent', name='Fixture agent', provider='fixture', wire_model='fixture-agent',
                     builtin=False, free=False, editable=True, removable=True,
                     protocols=['openai-chat-completions'], default_protocol='openai-chat-completions',
                     reasoning_efforts=['none'], default_reasoning_effort='none', attachments=[],
                     capabilities=['text-input', 'text-output', 'tool-result-input', 'tool-call-output', 'streaming'])
+                model['proxy'] = {'kind': 'provider'}
                 patch = {key: config[key] for key in ('providers', 'items', 'default_model')}
                 patch['providers'].append(supplier); patch['items'].append(model)
                 body = {'patch': patch, 'keys': [{'provider': 'fixture', 'value': 'fixture-model-key'}]}
@@ -129,10 +156,19 @@ def main():
                 assert post('setup', body, '"mdo-config-999999"')[0] == 412
                 invalid = copy.deepcopy(body); invalid['patch']['items'][-1]['provider'] = 'nonexistent'
                 assert post('setup', invalid, etag)[0] == 422
+                for scope, proxy in [('providers', {'kind': 'provider'}), ('items', {'kind': 'unsupported'}),
+                    ('items', {'kind': 'http-connect', 'host': '127.0.0.1', 'port': 0}),
+                    ('items', {'kind': 'socks5', 'host': 'x'*256, 'port': 1080}),
+                    ('items', {'kind': 'socks5', 'host': 'proxy', 'port': 1080, 'password': 'not-allowed'}),
+                    ('items', {'kind': 'socks5', 'host': 'proxy', 'port': 1080, 'credential': {'secret_ref': 'env:UNUSED'}})]:
+                    invalid = copy.deepcopy(body); invalid['patch'][scope][-1]['proxy'] = proxy
+                    assert post('setup', invalid, etag)[0] == 422
                 assert not (base / 'mdo-home/config/secrets/models').exists()
                 status, result = post('setup', body, etag)
                 assert status == 200, result
                 saved, current_etag = get()
+                assert saved['providers'][-1]['proxy'] == {'kind': 'none'}
+                assert saved['items'][-1]['proxy'] == {'kind': 'provider'}
                 assert saved['default_model'] == config['default_model']
                 reference = saved['providers'][-1]['credential']['secret_ref']
                 assert reference.startswith('vault:') and len(reference) == 70

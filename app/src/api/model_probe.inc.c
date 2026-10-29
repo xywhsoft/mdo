@@ -35,14 +35,15 @@ static bool MdoApiModelProxyBypassed(cstr Patterns, cstr Url)
 }
 
 static xhttpclient* MdoApiModelDiscoveryClient(MdoApiContext* Context, cstr Url, bool Verify,
-    xllm_error* Error)
+    const xvalue* ProviderProxy, xllm_error* Error)
 {
     MdoConfigTransportSettings Transport = {0}; xhttpclientconfig Config;
     xtlsverifierconfig Tls; xtlsverifier* Verifier = NULL; xx509store* Store = NULL;
     xnetproxyconfig ProxyConfig; xnetproxy* Proxy = NULL; char* Password = NULL;
     xhttpclient* Client = NULL; XS_SystemProxyInfo SystemProxy = {0};
     Transport.Size = sizeof(Transport);
-    if (!Context->Request->server || !Context->Request->server->Engine || !MdoConfigGetTransportSettings(&Transport)) return NULL;
+    if (!Context->Request->server || !Context->Request->server->Engine ||
+        !MdoModelProxySettings(ProviderProxy, &Transport, Error)) return NULL;
     xrtHttpClientConfigInit(&Config); Config.Timeout = 15000000u; Config.IdleTimeout = 10000000u;
     Config.Decompress.MaxBody = MDO_API_RESPONSE_MAX_BYTES;
     Config.Redirect.MaxHops = 0u; Config.Retry.MaxRetries = 0u;
@@ -72,12 +73,21 @@ static xhttpclient* MdoApiModelDiscoveryClient(MdoApiContext* Context, cstr Url,
         xrtNetProxyConfigInit(&ProxyConfig);
         ProxyConfig.Type = strcmp(Transport.ProxyKind, "socks5") == 0 ? XNET_PROXY_SOCKS5 : XNET_PROXY_HTTP_CONNECT;
         ProxyConfig.Host = xrtStrView(Transport.ProxyHost); ProxyConfig.Port = Transport.ProxyPort;
-        if (Transport.ProxySecretRef[0] && !MdoSecretResolve(xrtStrView(Transport.ProxySecretRef), 4096u, &Password)) goto done;
+        if (Transport.ProxySecretRef[0] && !MdoSecretResolve(xrtStrView(Transport.ProxySecretRef), 4096u, &Password)) {
+            MdoModelProfileErrorInit(Error, "profile_proxy_unavailable", "model proxy password reference is unavailable");
+            xrtClearError(); goto done;
+        }
         ProxyConfig.Username = (xbytesview){(const unsigned char*)Transport.ProxyUser, strlen(Transport.ProxyUser)};
         ProxyConfig.Password = (xbytesview){(const unsigned char*)(Password ? Password : ""), Password ? strlen(Password) : 0u};
         Proxy = xrtNetProxyCreate(&ProxyConfig); if (!Proxy) goto done; Config.Proxy = Proxy;
     }
     Client = xrtHttpClientCreate(Context->Request->server->Engine, &Config);
+    if (Client && Proxy && xrtHttpClientProxy(Client) != Proxy) {
+        /* A host built without HTTP proxy support must not silently dial the
+         * origin directly. This symbol is also required by host ABI checks. */
+        xrtHttpClientDestroy(Client); Client = NULL;
+        MdoModelProfileErrorInit(Error, "profile_proxy_invalid", "the HTTP transport did not retain the selected proxy");
+    }
 done:
     xrtSecureZero(&SystemProxy, sizeof(SystemProxy));
     MdoSecretRelease(&Password); xrtNetProxyRelease(Proxy); xrtTlsVerifierRelease(Verifier); xrtX509StoreFree(Store);
@@ -116,9 +126,14 @@ static bool MdoApiModelDiscoverRun(MdoApiContext* Context, MdoApiJsonBody Body)
         Key = Secret;
     }
     xllm_error DiscoveryError = {0};
-    Client = MdoApiModelDiscoveryClient(Context, Url, Verify, &DiscoveryError);
-    if (!Client && !strcmp(MdoModelErrorKind(&DiscoveryError), "profile_system_proxy_unavailable")) {
-        Code = "model_profile_system_proxy_unavailable";
+    Client = MdoApiModelDiscoveryClient(Context, Url, Verify,
+        xrtValueObjectGet(Provider, XRT_STR_LITERAL("proxy")), &DiscoveryError);
+    char ProxyFailureCode[64];
+    if (!Client && (!strcmp(MdoModelErrorKind(&DiscoveryError), "profile_system_proxy_unavailable") ||
+                   !strcmp(MdoModelErrorKind(&DiscoveryError), "profile_proxy_invalid") ||
+                   !strcmp(MdoModelErrorKind(&DiscoveryError), "profile_proxy_unavailable"))) {
+        snprintf(ProxyFailureCode, sizeof(ProxyFailureCode), "model_%s", MdoModelErrorKind(&DiscoveryError));
+        Code = ProxyFailureCode; Reply = 422u;
         Message = MdoModelErrorMessage(&DiscoveryError);
         goto done;
     }

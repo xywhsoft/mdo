@@ -73,6 +73,8 @@ void ServiceInit(XS_HostInfo* host)
     }
     catalog = MdoModelCatalogSnapshot();
     MdoModelClientOptionsInit(&options);
+    options.ModelId = getenv("MDO_TEST_MODEL_ID");
+    printf("proxy_system_mode=%d\n", MdoModelUsesSystemProxy(catalog, options.ModelId) ? 1 : 0);
     options.Protocol = MDO_MODEL_PROTOCOL_OPENAI_RESPONSES;
     xllmErrorInit(&error);
     client = MdoModelClientCreate(catalog, &options, NULL, &error);
@@ -176,8 +178,11 @@ class ProxyHandler(socketserver.BaseRequestHandler):
                 target = f"127.0.0.1:{server.target_port}"
                 token = base64.b64encode(b"probe:bounded-password").decode()
                 assert lines[0] == f"CONNECT {target} HTTP/1.1", lines[0]
-                assert any(line.lower() == f"proxy-authorization: basic {token}".lower()
-                           for line in lines), lines
+                if getattr(server, "auth", True):
+                    assert any(line.lower() == f"proxy-authorization: basic {token}".lower()
+                               for line in lines), lines
+                else:
+                    assert not any(line.lower().startswith("proxy-authorization:") for line in lines), lines
                 upstream = socket.create_connection(("127.0.0.1", server.target_port), 5)
                 client.sendall(b"HTTP/1.1 200 Connection Established\r\n\r\n")
             else:

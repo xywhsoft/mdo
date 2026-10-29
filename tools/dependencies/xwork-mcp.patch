@@ -3932,6 +3932,14 @@
  #define XRT_MODULE_FILE_ROOT
  #define XRT_MODULE_FILE_TREE
  #define XRT_MODULE_PROCESS_RUN
+@@ -16,6 +18,7 @@
+ /* Optional high-level transport used by runtime-owned MCP HTTP servers. */
+ #define XHTTP_MODULE_HTTP_CLIENT_EASY_FUTURE
+ #define XHTTP_MODULE_HTTP_CLIENT_HTTPS
++#define XHTTP_MODULE_HTTP_CLIENT_PROXY
+ #define XHTTP_MODULE_HTTP_CLIENT_REDIRECT
+ #define XHTTP_MODULE_HTTP_CLIENT_DECOMPRESS
+ #define XHTTP_MODULE_HTTP_SSE_PARSER
 --- a/lib/xwork/xwork.h
 +++ b/lib/xwork/xwork.h
 @@ -24,7 +24,7 @@
@@ -4488,6 +4496,18 @@
 +#endif
 +}
 +#endif
+--- a/src/script/import_xhttp_product.inc
++++ b/src/script/import_xhttp_product.inc
+@@ -89,6 +89,9 @@
+ XS_XRT_SYMBOL(xrtHttpClientDoSync)
+ XS_XRT_SYMBOL(xrtHttpClientDrain)
+ XS_XRT_SYMBOL(xrtHttpClientEngine)
++#if defined(XHTTP_FEATURE_HTTP_CLIENT_PROXY)
++XS_XRT_SYMBOL(xrtHttpClientProxy)
++#endif
+ XS_XRT_SYMBOL(xrtHttpClientGet)
+ XS_XRT_SYMBOL(xrtHttpClientGetAsync)
+ XS_XRT_SYMBOL(xrtHttpClientGetSync)
 --- a/src/script/import_xwork.inc
 +++ b/src/script/import_xwork.inc
 @@ -31,6 +31,9 @@
@@ -5298,6 +5318,52 @@
 +    }
 +    if(!SetWindowSubclass(window,xws_proc,(UINT_PTR)state,(DWORD_PTR)state)){xrtFree(state->Parent);free(state->Path);free(state);}
 +}
+--- a/tools/extensions.json
++++ b/tools/extensions.json
+@@ -664,6 +664,35 @@
+      "-include",
+      "lib/xhttp/include/xhttp/features.h"
+     ]
++   },
++   {
++    "path": "lib/xhttp/src/http/http_client_proxy.c",
++    "flags": [
++     "-Ilib/xhttp/include",
++     "-Ilib/xrtshim",
++     "-DXHTTP_FEATURE_HTTP_BODY",
++     "-DXHTTP_FEATURE_HTTP_CLIENT",
++     "-DXHTTP_FEATURE_HTTP_CLIENT_DECOMPRESS",
++     "-DXHTTP_FEATURE_HTTP_CLIENT_EASY",
++     "-DXHTTP_FEATURE_HTTP_CLIENT_EASY_FUTURE",
++     "-DXHTTP_FEATURE_HTTP_CLIENT_FUTURE",
++     "-DXHTTP_FEATURE_HTTP_CLIENT_HTTPS",
++     "-DXHTTP_FEATURE_HTTP_CLIENT_PREPARE",
++     "-DXHTTP_FEATURE_HTTP_CLIENT_REDIRECT",
++     "-DXHTTP_FEATURE_HTTP_CLIENT_REQUEST",
++     "-DXHTTP_FEATURE_HTTP_CLIENT_RESPONSE",
++     "-DXHTTP_FEATURE_HTTP_CLIENT_STREAM",
++     "-DXHTTP_FEATURE_HTTP_CLIENT_TLS",
++     "-DXHTTP_FEATURE_HTTP_EXCHANGE",
++     "-DXHTTP_FEATURE_HTTP_HEADERS",
++     "-DXHTTP_FEATURE_HTTP_SSE",
++     "-DXHTTP_FEATURE_HTTP_SSE_PARSER",
++     "-DXHTTP_FEATURE_URL",
++     "-include",
++     "lib/xwork/xwork-xrt-roots.h",
++     "-include",
++     "lib/xhttp/include/xhttp/features.h"
++    ]
+    }
+   ],
+   "symbols": "src/script/import_xwork.inc",
+@@ -677,6 +706,7 @@
+    "XHTTP_FEATURE_HTTP_CLIENT_FUTURE",
+    "XHTTP_FEATURE_HTTP_CLIENT_HTTPS",
+    "XHTTP_FEATURE_HTTP_CLIENT_PREPARE",
++   "XHTTP_FEATURE_HTTP_CLIENT_PROXY",
+    "XHTTP_FEATURE_HTTP_CLIENT_REDIRECT",
+    "XHTTP_FEATURE_HTTP_CLIENT_REQUEST",
+    "XHTTP_FEATURE_HTTP_CLIENT_RESPONSE",
 --- a/tools/test_extensions.py
 +++ b/tools/test_extensions.py
 @@ -286,7 +286,7 @@

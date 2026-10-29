@@ -41,7 +41,14 @@ def main() -> int:
     ):
         (sdk / target).write_bytes((native / source).read_bytes())
         names.add(target)
-    names.update(('src/platform/credentials.h', 'android/native/host_jni.c'))
+    names.update(('src/platform/credentials.h', 'android/native/host_jni.c', 'src/script/import_xhttp_product.inc',
+                  'tools/extensions.json'))
+    roots = (sdk / 'lib/xwork/xwork-xrt-roots.h').read_text(encoding='utf-8')
+    registry = json.loads((sdk / 'tools/extensions.json').read_text(encoding='utf-8'))['xwork']
+    if ('#define XHTTP_MODULE_HTTP_CLIENT_PROXY' not in roots or
+            'XHTTP_FEATURE_HTTP_CLIENT_PROXY' not in registry['feature_macro'] or
+            not any(item['path'] == 'lib/xhttp/src/http/http_client_proxy.c' for item in registry['sources'])):
+        raise ValueError('SDK must compile the selected HTTP proxy feature and source')
     proxy_api = (native / 'xs_system_proxy_api.h').read_text(encoding='utf-8')
     if proxy_api not in (sdk / 'src/sdk/xsbase.h').read_text(encoding='utf-8'):
         raise ValueError('SDK system proxy declarations differ from the maintained native header')

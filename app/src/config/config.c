@@ -375,35 +375,36 @@ static bool MdoConfigProxyText(xstrview Text, size_t Maximum,
     return true;
 }
 
-static bool MdoConfigProxyValidate(const xvalue* Proxy)
+static bool MdoConfigProxyValidateInternal(const xvalue* Proxy, bool Override, bool AllowProvider)
 {
     static const char* const Kinds[] = {
-        "none", "http-connect", "socks5", "system"
+        "none", "http-connect", "socks5", "system", "global", "provider"
     };
     const xvalue* Credential;
     xstrview Kind;
-    xstrview Host;
-    xstrview User;
-    xstrview Bypass;
+    xstrview Host = xrtStrView("");
+    xstrview User = xrtStrView("");
+    xstrview Bypass = xrtStrView("");
     xstrview SecretRef;
-    uint64 Port;
+    uint64 Port = 0u;
+    if (Override && Proxy == NULL) return true;
+    const xvalue* HostValue = xrtValueObjectGet(Proxy, MdoConfigKey("host"));
+    const xvalue* PortValue = xrtValueObjectGet(Proxy, MdoConfigKey("port"));
+    const xvalue* UserValue = xrtValueObjectGet(Proxy, MdoConfigKey("user"));
+    const xvalue* BypassValue = xrtValueObjectGet(Proxy, MdoConfigKey("bypass"));
     if ( xrtValueType(Proxy) != XVALUE_OBJECT ||
          !MdoConfigStringOneOf(xrtValueObjectGet(Proxy,
-            MdoConfigKey("kind")), Kinds, 4u) ||
+            MdoConfigKey("kind")), Kinds, Override ? (AllowProvider ? 6u : 5u) : 4u) ||
          !MdoConfigString(xrtValueObjectGet(Proxy,
             MdoConfigKey("kind")), &Kind) ||
-         !MdoConfigString(xrtValueObjectGet(Proxy,
-            MdoConfigKey("host")), &Host) ||
+         ((!Override || HostValue) && !MdoConfigString(HostValue, &Host)) ||
          !MdoConfigProxyText(Host, 256u, true) ||
-         !MdoConfigUnsigned(xrtValueObjectGet(Proxy,
-            MdoConfigKey("port")), &Port) || Port > 65535u ||
-         !MdoConfigString(xrtValueObjectGet(Proxy,
-            MdoConfigKey("user")), &User) ||
+         ((!Override || PortValue) && !MdoConfigUnsigned(PortValue, &Port)) || Port > 65535u ||
+         ((!Override || UserValue) && !MdoConfigString(UserValue, &User)) ||
          !MdoConfigProxyText(User, 256u, false) ||
-         !MdoConfigString(xrtValueObjectGet(Proxy,
-            MdoConfigKey("bypass")), &Bypass) ||
+         ((!Override || BypassValue) && !MdoConfigString(BypassValue, &Bypass)) ||
          !MdoConfigProxyText(Bypass, 1024u, true) ||
-         (!MdoConfigViewEqual(Kind, "none") && !MdoConfigViewEqual(Kind, "system") &&
+         ((MdoConfigViewEqual(Kind, "http-connect") || MdoConfigViewEqual(Kind, "socks5")) &&
           (Host.Size == 0u || Port == 0u)) ) return false;
     Credential = xrtValueObjectGet(Proxy, MdoConfigKey("credential"));
     if ( Credential != NULL && xrtValueType(Credential) != XVALUE_NULL &&
@@ -416,6 +417,26 @@ static bool MdoConfigProxyValidate(const xvalue* Proxy)
           SecretRef.Size >= 2049u) ) return false;
     return true;
 }
+
+bool MdoConfigModelProxyValid(const xvalue* Proxy, bool AllowProvider)
+{
+    if (!MdoConfigProxyValidateInternal(Proxy, true, AllowProvider)) return false;
+    if (!Proxy) return true;
+    static const char* const Names[] = {"kind", "host", "port", "user", "bypass", "credential"};
+    xvalueiter It = {0}; xvaluekey Key; xvalue* Value; xvalueiterresult Result;
+    if (!xrtValueIterBegin(Proxy, &It)) return false;
+    while ((Result = xrtValueIterAdvance(&It, &Key, &Value)) == XVALUE_ITER_ITEM) {
+        bool Known = false;
+        for (size_t I = 0; I < sizeof(Names) / sizeof(Names[0]); I++)
+            if (MdoConfigViewEqual(Key.String, Names[I])) { Known = true; break; }
+        if (!Known) { xrtValueIterEnd(&It); return false; }
+    }
+    xrtValueIterEnd(&It);
+    return Result == XVALUE_ITER_END;
+}
+
+static bool MdoConfigProxyValidate(const xvalue* Proxy)
+{ return MdoConfigProxyValidateInternal(Proxy, false, false); }
 
 static bool MdoConfigReplyLanguageValid(const xvalue* Value)
 {
@@ -679,7 +700,7 @@ static bool MdoConfigProviderValidate(const xvalue* pProvider,
          (xrtValueType(pCredential) != XVALUE_OBJECT ||
           !MdoConfigSecretReferenceValid(xrtValueObjectGet(pCredential,
             MdoConfigKey("secret_ref")))) ) return false;
-    return true;
+    return MdoConfigModelProxyValid(xrtValueObjectGet(pProvider, MdoConfigKey("proxy")), false);
 }
 
 static bool MdoConfigModelItemValidate(const xvalue* pItem,
@@ -791,7 +812,7 @@ static bool MdoConfigModelItemValidate(const xvalue* pItem,
     if ( !MdoConfigStringListValidate(pAttachments, Attachments,
             sizeof(Attachments) / sizeof(Attachments[0]), 0u,
             sizeof(Attachments) / sizeof(Attachments[0]), NULL) ) return false;
-    return true;
+    return MdoConfigModelProxyValid(xrtValueObjectGet(pItem, MdoConfigKey("proxy")), true);
 }
 
 static bool MdoConfigModelsValidate(const xvalue* pModels,
