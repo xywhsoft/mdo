@@ -1,6 +1,6 @@
 # 墨斗 mdo — 原生 C 栈 Agent 工作台
 
-> 仅约 4MB 即具备完整的 Agent 能力。可在任意平台构建、扩展与运行。
+> 轻量原生应用，具备完整的 Agent 能力。可在任意平台构建、扩展与运行。
 > 英文版见 [README.md](README.md)。
 
 mdo（墨斗）是一款便携 Agent 工作台，在**原生 C 栈**（`xrt`、`xs`、`xllm`、`xllm-session`、`xwork`）
@@ -12,18 +12,18 @@ mdo（墨斗）是一款便携 Agent 工作台，在**原生 C 栈**（`xrt`、`
 
 ## ✨ 亮点
 
-### 🪶 约 4MB 具备完整 Agent 能力
-整套 Agent 功能以极小的体积交付：
+### 🪶 轻量原生运行时
+以下为仓库根目录 0.7.0 产物的参考体积（1 MiB = 1,048,576 字节）：
 
 | 产物 | 大小 | 说明 |
 | --- | --- | --- |
-| `mdo-arm64-v8a.apk`（Android 精简版） | **约 4MB** | Android 上的完整 Agent |
-| `mdo-linux-x86_64-glibc` | 约 4.8MB | 桌面版，动态核心 |
-| `mdo-server.exe` | 约 5MB | 无头服务版 |
-| `mdo.exe`（Windows） | 约 5.1MB | 带原生窗口的桌面版 |
-| `mdo-full-arm64-v8a.apk`（Android 完整版） | 约 59MB | 内置浏览器 |
+| `mdo-arm64-v8a.apk`（Android 精简版） | 约 5.93 MiB | Android 上的完整 Agent |
+| `mdo-linux-x86_64-glibc` | 约 5.76 MiB | 桌面版，动态核心 |
+| `mdo-server.exe` | 约 5.89 MiB | 无头服务版 |
+| `mdo.exe`（Windows） | 约 6.13 MiB | 带原生窗口的桌面版 |
+| `mdo-full-arm64-v8a.apk`（Android 完整版） | 约 452.00 MiB | 预装外部程序及其依赖 |
 
-精简版 APK 在约 4MB 的目标体积内，仍交付了完整的 Agent：模型对话、工具、项目、会话、记忆、
+精简版 APK 交付完整的 Agent：模型对话、工具、项目、会话、记忆、
 技能和远程控制。
 
 ### ⚡ 完整功能
@@ -40,7 +40,7 @@ mdo（墨斗）是一款便携 Agent 工作台，在**原生 C 栈**（`xrt`、`
 ### 🛠 二次开发能力
 mdo 为可扩展和可重建而设计：
 
-- **C 源码即应用** — 所有逻辑位于 `app/src/`，按产品边界组织（`api/`、`sessions/`、`remote/`、`skills/`、`projects/` 等）。约 200 个 C 文件，约 7.3 万行。
+- **C 源码即应用** — 所有逻辑位于 `app/src/`，按产品边界组织（`api/`、`sessions/`、`remote/`、`skills/`、`projects/` 等）。
 - **确定性构建** — `deps.lock` 把每个依赖锁定到完整提交 + 源码哈希；`tools/build.py` 从 `app/sources.json` 生成 TCC unity 入口，构建匹配的 `xs` 宿主并打包应用，并拒绝未引用的 C 源与私有头。
 - **原生模块 ABI** — `app/include/mdo/` 定义版本化外接模块（MDO-3），用于可插拔功能。
 - **前端契约** — `app/web/` 存放 HTML/CSS/JS；发布检查会拒绝缺失的导入和无法从页面入口到达的模块。
@@ -52,7 +52,7 @@ mdo 为可扩展和可重建而设计：
 | 平台 | 产物 | GUI | 说明 |
 | --- | --- | --- | --- |
 | Windows | `mdo.exe` / `mdo-server.exe` | 原生窗口 | 便携 Home，无窗口的只读启动零写 |
-| Android | `mdo-arm64-v8a.apk` / `mdo-full-arm64-v8a.apk` | WebView2 | 精简版（约 4MB）与完整版 |
+| Android | `mdo-arm64-v8a.apk` / `mdo-full-arm64-v8a.apk` | Android WebView | 精简版与完整版 |
 | Linux | `mdo-linux-x86_64-{glibc,musl}` | GTK / WebKitGTK | GUI 版与无头服务版 |
 
 - **便携 Home** — 所有运行时数据（`mdo-home/`）位于可执行文件旁，不污染用户目录；可用 `--home` / `MDO_HOME` 覆盖。
@@ -122,4 +122,5 @@ C／JavaScript 共用的面板、资源与浏览器接口。
 ---
 
 ## 📄 许可
-见 [LICENSE](LICENSE)。当前源码版本：**0.6.0**。
+见 [LICENSE](LICENSE)。源码版本和各平台构建序号以 [app/release.json](app/release.json)
+为准；修改版本文件不代表已经发布。

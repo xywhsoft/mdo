@@ -1,6 +1,6 @@
 # mdo — Native C-Stack Agent Workbench
 
-> Full agent capabilities in a ~4 MB desktop app. Build, extend, and run it anywhere.
+> Full agent capabilities in a compact native app. Build, extend, and run it anywhere.
 > See [README_zh.md](README_zh.md) for the Chinese version.
 
 mdo (墨斗) is a portable Agent workbench that layers a **native C stack** —
@@ -13,18 +13,18 @@ self-contained desktop / mobile / server app with a full local-agent feature set
 
 ## ✨ Highlights
 
-### 🪶 Complete Agent in ~4 MB
-The full agent feature set ships in a remarkably small footprint:
+### 🪶 Compact Native Runtime
+Reference sizes for the 0.7.0 artifacts in the repository root (1 MiB = 1,048,576 bytes):
 
 | Product | Size | Notes |
 | --- | --- | --- |
-| `mdo-arm64-v8a.apk` (Android, slim) | **~4 MB** | Full agent on Android |
-| `mdo-linux-x86_64-glibc` | ~4.8 MB | Desktop, dynamic core |
-| `mdo-server.exe` | ~5 MB | Headless server edition |
-| `mdo.exe` (Windows) | ~5.1 MB | Desktop with native window |
-| `mdo-full-arm64-v8a.apk` (Android, full) | ~59 MB | Bundles a bundled browser |
+| `mdo-arm64-v8a.apk` (Android, slim) | ~5.93 MiB | Full agent on Android |
+| `mdo-linux-x86_64-glibc` | ~5.76 MiB | Desktop, dynamic core |
+| `mdo-server.exe` | ~5.89 MiB | Headless server edition |
+| `mdo.exe` (Windows) | ~6.13 MiB | Desktop with native window |
+| `mdo-full-arm64-v8a.apk` (Android, full) | ~452.00 MiB | Preinstalled external programs and their dependencies |
 
-The slim APK reaches the ~4 MB target while still delivering the complete agent:
+The slim APK delivers the complete agent:
 model chat, tools, projects, sessions, memory, skills, and remote control.
 
 ### ⚡ Full Feature Set
@@ -43,7 +43,7 @@ model chat, tools, projects, sessions, memory, skills, and remote control.
 mdo is built to be extended and rebuilt:
 
 - **C source is the app** — all logic lives in `app/src/`, organized by product boundary
-  (`api/`, `sessions/`, `remote/`, `skills/`, `projects/`, ...). ~200 C files, ~73k lines.
+  (`api/`, `sessions/`, `remote/`, `skills/`, `projects/`, ...).
 - **Deterministic build** — `deps.lock` pins every dependency to a full commit + source hash;
   `tools/build.py` generates the TCC unity entry from `app/sources.json`, builds the matching
   `xs` host, and packages the app. It rejects unreferenced C sources and private headers.
@@ -58,7 +58,7 @@ One code base, four targets, portable Home:
 | Platform | Artifact | GUI | Notes |
 | --- | --- | --- | --- |
 | Windows | `mdo.exe` / `mdo-server.exe` | Native window | Portable Home, zero-write read-only startup |
-| Android | `mdo-arm64-v8a.apk` / `mdo-full-arm64-v8a.apk` | WebView2 | Slim (~4 MB) and full variants |
+| Android | `mdo-arm64-v8a.apk` / `mdo-full-arm64-v8a.apk` | Android WebView | Slim and full variants |
 | Linux | `mdo-linux-x86_64-{glibc,musl}` | GTK / WebKitGTK | GUI + headless server editions |
 
 - **Portable Home** — all runtime data (`mdo-home/`) lives beside the executable; never pollutes the user profile.
@@ -135,4 +135,5 @@ native browser views, and the shared C/JavaScript panel and resource APIs.
 ---
 
 ## 📄 License
-See [LICENSE](LICENSE). Current source version: **0.6.0**.
+See [LICENSE](LICENSE). The source version and per-platform build serials are recorded in
+[app/release.json](app/release.json); changing that file does not publish a release.
