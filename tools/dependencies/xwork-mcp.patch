@@ -393,7 +393,7 @@
      if ( !pAgent || !sPath ) return NULL;
      if ( sPath[0] != '@' ) return pAgent->sWorkspaceRoot;
 +    if(!strncmp(sPath,"@results",8u)&&(sPath[8]=='/'||!sPath[8]))
-+        return pAgent->pArtifactStore?pAgent->pArtifactStore->sDirectory:pAgent->sArtifactDirectory;
++        return pAgent->pArtifactStore?pAgent->pArtifactStore->sDirectory:pAgent->sProcessOutputDirectory;
      for ( i = 0u; i < pAgent->iPathMountCount; ++i ) {
          size_t n = strlen(pAgent->PathMounts[i].sAlias);
          if ( strncmp(sPath + 1u, pAgent->PathMounts[i].sAlias, n) == 0 &&
@@ -427,17 +427,25 @@
      for ( i = 0u; i < pAgent->iToolCount; ++i ) {
          if ( strcmp(pAgent->pTools[i].sName, sName) == 0 ) return &pAgent->pTools[i];
      }
-@@ -994,6 +1015,10 @@
+@@ -994,13 +1015,17 @@
      pAgent->sSystemPrompt = xwork__strdup(pConfig->sSystemPrompt ? pConfig->sSystemPrompt : "You are a careful coding agent. Inspect the workspace, use tools to make changes, run relevant tests, and continue until the user's task is complete.");
      pAgent->sSessionPath = pConfig->sSessionPath ? xwork__strdup(pConfig->sSessionPath) : NULL;
      pAgent->sArtifactDirectory = xwork__strdup(pConfig->sArtifactDirectory ? pConfig->sArtifactDirectory : ".xcode/artifacts");
-+    if(pAgent->sArtifactDirectory&&!xrtPathIsAbs(pAgent->sArtifactDirectory)) {
-+        char* Absolute=xrtPathJoin(pAgent->sWorkspaceRoot,pAgent->sArtifactDirectory);
-+        free(pAgent->sArtifactDirectory);pAgent->sArtifactDirectory=Absolute?xwork__strdup(Absolute):NULL;if(Absolute)xrtFree(Absolute);
++    if(pAgent->sArtifactDirectory) {
++        char* Absolute=xrtPathIsAbs(pAgent->sArtifactDirectory)?xrtPathAbs(pAgent->sArtifactDirectory):xrtPathJoin(pAgent->sWorkspaceRoot,pAgent->sArtifactDirectory);
++        pAgent->sProcessOutputDirectory=Absolute?xwork__strdup(Absolute):NULL;if(Absolute)xrtFree(Absolute);
 +    }
      pAgent->pArtifactStore = xworkArtifactStoreRef(pConfig->pArtifactStore);
      pAgent->sModel = pConfig->sModel ? xwork__strdup(pConfig->sModel) : NULL;
      pAgent->sReasoningEffort = pConfig->sReasoningEffort ? xwork__strdup(pConfig->sReasoningEffort) : NULL;
+     pAgent->pCancel = xrtCancelChild(pConfig->pCancel);
+     pAgent->uDeadline = pConfig->uDeadline;
+     xrtFree(sRoot);
+-    if ( !pAgent->sWorkspaceRoot || !pAgent->sSystemPrompt || !pAgent->sArtifactDirectory ||
++    if ( !pAgent->sWorkspaceRoot || !pAgent->sSystemPrompt || !pAgent->sArtifactDirectory || !pAgent->sProcessOutputDirectory ||
+          (pConfig->sSessionPath && !pAgent->sSessionPath) ||
+          (pConfig->sModel && !pAgent->sModel) ||
+          (pConfig->sReasoningEffort && !pAgent->sReasoningEffort) ||
 @@ -1021,6 +1046,8 @@
      pAgent->pEventUserData = pConfig->pEventUserData;
      pAgent->OnModelComplete = pConfig->OnModelComplete;
@@ -458,7 +466,7 @@
      size_t i;
      if ( !pAgent ) return;
      for ( i = 0u; i < pAgent->iPathMountCount; ++i ) {
-@@ -1085,6 +1116,9 @@
+@@ -1085,9 +1116,13 @@
      xworkSubagentCatalogRelease(pAgent->pSubagentCatalog);
      xwork__delegation_scope_release(pAgent->pDelegationScope);
      free(pAgent->sWorkspaceRoot);
@@ -468,7 +476,11 @@
      free(pAgent->sSystemPrompt);
      free(pAgent->sSessionPath);
      free(pAgent->sArtifactDirectory);
-@@ -1224,6 +1258,15 @@
++    free(pAgent->sProcessOutputDirectory);
+     xworkArtifactStoreRelease(pAgent->pArtifactStore);
+     free(pAgent->sModel);
+     free(pAgent->sReasoningEffort);
+@@ -1224,6 +1259,15 @@
      xllm_error* pError
  )
  {
@@ -484,7 +496,7 @@
      if ( pAgent->OnModelComplete ) {
          return pAgent->OnModelComplete(pAgent->pModelUserData, pRequest, pCallbacks, ppResponse, pError);
      }
-@@ -1240,3 +1283,12 @@
+@@ -1240,3 +1284,12 @@
      free(pResult->sFinalText);
      memset(pResult, 0, sizeof(*pResult));
  }
@@ -619,7 +631,15 @@
      struct { char* sAlias; char* sDirectory; } PathMounts[8];
      size_t iPathMountCount;
      bool bFileMountsSealed;
-@@ -433,6 +448,8 @@
+@@ -415,6 +430,7 @@
+     char* sSystemPrompt;
+     char* sSessionPath;
+     char* sArtifactDirectory;
++    char* sProcessOutputDirectory; /* absolute native root; public artifact paths stay relative */
+     xwork_artifact_store* pArtifactStore;
+     char* sModel;
+     char* sReasoningEffort;
+@@ -433,6 +449,8 @@
      void* pEventUserData;
      xwork_model_complete_fn OnModelComplete;
      void* pModelUserData;
@@ -628,7 +648,7 @@
      void* pOwnerUserData;
      xwork_agent_owner_retain_fn OnOwnerRetain;
      xwork_agent_owner_release_fn OnOwnerRelease;
-@@ -575,6 +592,7 @@
+@@ -575,6 +593,7 @@
  bool xwork__emit(xwork_agent* pAgent, const xwork_event* pEvent);
  static void xwork__runtime_record_event(xwork_runtime* pRuntime,
      xwork_event* pEvent);
@@ -636,7 +656,7 @@
  static bool xwork__runtime_write_artifact(xwork_agent* pAgent,
      const char* sSource, const void* pData, size_t iSize,
      const char* sMediaType, uint64_t* puArtifactId,
-@@ -779,3 +797,5 @@
+@@ -779,3 +798,5 @@
  }
  
  #endif

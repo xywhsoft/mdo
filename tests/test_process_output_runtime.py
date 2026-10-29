@@ -23,6 +23,7 @@ def main() -> None:
     p.add_argument('--sdk',type=Path)
     p.add_argument('--cc',default='gcc')
     p.add_argument('--status-tool',default='status')
+    p.add_argument('--legacy-output-root',action='store_true',help='Exercise relative artifact directories without an ArtifactStore')
     args=p.parse_args()
     with tempfile.TemporaryDirectory(prefix='process-output-runtime-',dir=ROOT/'.build') as raw:
         base=Path(raw);site=base/'site';(site/'web').mkdir(parents=True);(base/'workspace/sub').mkdir(parents=True);(base/'artifacts').mkdir()
@@ -63,6 +64,7 @@ elif mode=='mcp':
         print(json.dumps({'jsonrpc':'2.0','id':request['id'],'result':result}),flush=True)
 ''',encoding='utf-8')
         env={'MDO_OUTPUT_PYTHON':sys.executable,'MDO_OUTPUT_CHILD':str(child),'MDO_OUTPUT_WORKSPACE':str(base/'workspace'),'MDO_OUTPUT_ARTIFACTS':str(base/'artifacts'),'MDO_OUTPUT_STATUS_TOOL':args.status_tool}
+        if args.legacy_output_root:env['MDO_OUTPUT_LEGACY_ROOT']='1'
         if args.native:
             lock=json.loads((ROOT/'deps.lock').read_text(encoding='utf-8'))
             sdk=(args.sdk or ROOT/'.build/sdk-overlays'/lock['sdk_overlay']['sha256']).resolve()

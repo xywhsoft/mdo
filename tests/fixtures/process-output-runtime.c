@@ -59,6 +59,7 @@ void ServiceInit(XS_HostInfo* Host){
     xwork_agent_definition* Definition=xworkAgentDefinitionCreate(&DC,&Error);
     xroot Root=xrtRootOpen(getenv("MDO_OUTPUT_ARTIFACTS"));xwork_artifact_store* Store=Root?xworkArtifactStoreCreate(Root,&Error):NULL;
     xwork_agent_options AO;xworkAgentOptionsInit(&AO);AO.pSession=S;AO.sWorkspaceRoot=getenv("MDO_OUTPUT_WORKSPACE");AO.pArtifactStore=Store;
+    if(getenv("MDO_OUTPUT_LEGACY_ROOT")){AO.pArtifactStore=NULL;AO.sArtifactDirectory="artifacts";}
     AO.OnPermission=Permission;
     xwork_agent* Agent=S&&Runtime&&Definition&&Store?xworkAgentCreateWithRuntime(Runtime,Definition,&AO,&Error):NULL;
     bool Ok=Agent&&xworkAgentRegisterMcpDiscoveryTools(Agent,&Error)&&xworkAgentSetProcessOwner(Agent,Acquire,Release,NULL,&Error)&&xworkExecutorBind(&Executor,Agent,&Error);
