@@ -482,6 +482,7 @@ static bool MdoExtExtractZip(MdoZip* Z,cstr Root,xcancel* Cancel,char Error[512]
 static bool MdoExtPublish(cstr Kind,cstr Id,cstr Task,bool Remove,const xvalue* Record,xcancel* Cancel,xvalue** Result,char Error[512])
 {
     if(MdoExtRecoveryBlockedLocked(Kind,Id))return MdoExtError(Error,"Recover the unfinished transaction before changing this extension directory");
+    xrtClearError();cstr Step="inspect installation";
     char *Root=MdoExtensionsRoot(Kind,Id),*Base=xrtFormat(MDO_EXT_TASKS "/%s",Task),*Prior=Base?xrtFormat("%s/prior",Base):NULL,*Incoming=Base?xrtFormat("%s/incoming",Base):NULL,*Journal=Base?xrtFormat("%s/transaction.json",Base):NULL,*Key=MdoExtKey(Kind,Id);
     xvalue* State=MdoExtReadJson(MDO_EXT_STATE,MDO_EXT_STATE_LIMIT,true);const xvalue* Before=Key?xrtValueObjectGet(State,xrtStrView(Key)):NULL;
     bool Exists=false;xfileinfo Info;bool Ok=Root&&Base&&Prior&&Incoming&&Journal&&Key&&State&&xrtValueType(State)==XVALUE_OBJECT&&MdoExtStat(Root,&Exists,&Info);
@@ -491,14 +492,15 @@ static bool MdoExtPublish(cstr Kind,cstr Id,cstr Task,bool Remove,const xvalue* 
         xrtValueObjectSetNew(J,XRT_STR_LITERAL("old_exists"),xrtValueBool(Exists));
     if(Ok)Ok=Before?xrtValueObjectSet(J,XRT_STR_LITERAL("before"),Before):xrtValueObjectSetNew(J,XRT_STR_LITERAL("before"),xrtValueNull());
     bool Prepared=false,Committed=false;
-    if(Ok)Ok=(!Cancel||!xrtCancelRequested(Cancel))&&MdoExtEnsure(Kind)&&MdoExtSaveJson(Journal,J,MDO_EXT_STATE_LIMIT);
+    if(Ok){Step="prepare installation journal";Ok=(!Cancel||!xrtCancelRequested(Cancel))&&MdoExtEnsure(Kind)&&MdoExtSaveJson(Journal,J,MDO_EXT_STATE_LIMIT);}
     Prepared=Ok;
-    if(Ok&&Exists)Ok=MdoHomeRenameNoReplace(Root,Prior);
-    if(Ok&&!Remove)Ok=MdoHomeRenameNoReplace(Incoming,Root);
-    if(Ok)Ok=(!Cancel||!xrtCancelRequested(Cancel))&&MdoExtRecord(Kind,Id,Remove?NULL:Record);
-    if(Ok)Ok=MdoExtPut(J,"phase","committed")&&MdoExtSaveJson(Journal,J,MDO_EXT_STATE_LIMIT);
+    if(Ok&&Exists){Step="retire previous directory";Ok=MdoHomeRenameNoReplace(Root,Prior);}
+    if(Ok&&!Remove){Step="publish incoming directory";Ok=MdoHomeRenameNoReplace(Incoming,Root);}
+    if(Ok){Step="save installation state";Ok=(!Cancel||!xrtCancelRequested(Cancel))&&MdoExtRecord(Kind,Id,Remove?NULL:Record);}
+    if(Ok){Step="commit installation journal";Ok=MdoExtPut(J,"phase","committed")&&MdoExtSaveJson(Journal,J,MDO_EXT_STATE_LIMIT);}
     Committed=Ok;
-    if(!Ok&&Prepared){char Recovery[512]={0};if(!MdoExtRecoverTask(Task,Recovery))MdoExtError(Error,Recovery);}
+    if(!Ok&&Error&&!Error[0]){const xerror* Cause=xrtGetError();snprintf(Error,512,"Extension transaction failed during %s (system code %d): %.330s",Step,Cause?xrtErrorSystemCode(Cause):0,Cause?xrtErrorMessage(Cause):"cancelled or installation state unavailable");}
+    if(!Ok&&Prepared){char Recovery[512]={0};if(!MdoExtRecoverTask(Task,Recovery)&&Error){char Original[256];snprintf(Original,sizeof(Original),"%.250s",Error);snprintf(Error,512,"%s; recovery: %.240s",Original,Recovery);}}
     if(Committed){bool Clean=MdoExtRemoveTree(Base);*Result=xrtValueObject();Ok=*Result&&MdoExtPut(*Result,"kind",Kind)&&MdoExtPut(*Result,"id",Id)&&MdoExtPut(*Result,"root",Root)&&
             xrtValueObjectSetNew(*Result,XRT_STR_LITERAL("cleanup_pending"),xrtValueBool(!Clean))&&xrtValueObjectSetNew(*Result,XRT_STR_LITERAL("removed"),xrtValueBool(Remove));}
     if(!Ok&&Error&&!Error[0])MdoExtError(Error,"Extension directory transaction failed; previous installation was recovered when possible");

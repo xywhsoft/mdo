@@ -755,6 +755,20 @@ bool MdoHomeRenameNoReplace(cstr Source, cstr Target)
         return false;
     }
     bOk = xsRootRenameNoReplace(g_MdoHome.Root, Source, Target);
+#if defined(_WIN32) || defined(_WIN64)
+    /* Exiting processes and directory scanners can retain a Windows sharing
+     * handle briefly. Retry only sharing/access conflicts; every attempt is
+     * still an atomic no-replace rename, including if a destination appears. */
+    uint64 Until=MdoDeadlineAfterUs(500000);
+    while(!bOk&&!MdoDeadlineExpired(Until)&&!xrtThreadStopping()){
+        bool Shared=false;const xerror* Cause=xrtGetError();
+        for(size_t I=0;Cause&&I<8;I++,Cause=xrtErrorCause(Cause)){
+            int32 Code=xrtErrorSystemCode(Cause);if(Code==5||Code==32||Code==33){Shared=true;break;}
+        }
+        if(!Shared)break;
+        xrtSleep(10);xrtClearError();bOk=xsRootRenameNoReplace(g_MdoHome.Root,Source,Target);
+    }
+#endif
     xrtMutexUnlock(g_MdoHome.Lock);
     return bOk;
 }
