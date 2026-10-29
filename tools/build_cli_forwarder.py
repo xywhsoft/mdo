@@ -9,7 +9,8 @@ def build(xserver,output,cc='gcc'):
     compiler=shutil.which(cc) or cc
     flags=['-std=c11','-Os','-s','-ffunction-sections','-fdata-sections','-municode','-Wl,--gc-sections','-Wl,--no-insert-timestamp']
     command=[compiler,*flags,'-I'+str(header.parent),str(source),'-o',str(output),'-lshell32','-luserenv','-ladvapi32']
-    fingerprint=hashlib.sha256(source.read_bytes()+header.read_bytes()+json.dumps(command).encode()+subprocess.check_output([compiler,'--version'])).hexdigest()
+    identity_command=command.copy();identity_command[identity_command.index('-o')+1]='<output>'
+    fingerprint=hashlib.sha256(source.read_bytes()+header.read_bytes()+json.dumps(identity_command).encode()+subprocess.check_output([compiler,'--version'])).hexdigest()
     receipt=output.with_suffix('.build.json')
     if output.is_file() and receipt.is_file():
         previous=json.loads(receipt.read_text())
