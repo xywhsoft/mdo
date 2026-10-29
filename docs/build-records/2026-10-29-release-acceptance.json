@@ -1,0 +1,777 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-29",
+  "decision": "not-approved-for-release",
+  "published": false,
+  "branch": "master",
+  "tested_base_commit": "48e170cc2b0fd5aa6b6940cc41c0051cbec8e64b",
+  "worktree_dirty": true,
+  "version_name": "0.8.0",
+  "version_code": "05000800",
+  "source_inputs": {
+    "application": "dbb22d347c45cb166fb158a10ba2fb9b2959be4523842e9ba5cbc250bed607f5",
+    "dependency lock": "6ede396c739a425287147bd4e707acf473c2a4b39e987cd482af32bea088a2af",
+    "host profile": "d765984879c9d3dedc04c523b0713b4e2662c4b8eb1ab91ff6d16d4c22dd79e2"
+  },
+  "artifacts": [
+    {
+      "name": "windows-desktop",
+      "path": ".build/release-acceptance-20261029/windows-final/mdo-release-a.exe",
+      "bytes": 6504713,
+      "sha256": "be69e1bf8f1eb6ef997fe96ab6739facfbfb8120090200036c8ccf22949a9ed7",
+      "build_id": 70000065
+    },
+    {
+      "name": "windows-server",
+      "path": ".build/release-acceptance-20261029/extra/mdo-server.exe",
+      "bytes": 6246981,
+      "sha256": "4e1db043049c95ad3aa103b31611dc003c43285813622e9dc7ea802612c3ab8c",
+      "build_id": 70000066
+    },
+    {
+      "name": "linux-glibc-gui",
+      "path": ".build/release-acceptance-20261029/linux/linux-x86_64-glibc-gui/mdo",
+      "bytes": 6106194,
+      "sha256": "f6ebe380ddd75bb3756b8c1ec57231175c8cfd44e27c4b5e346f0ee053877ddf",
+      "glibc_required": "2.28",
+      "static_core": false
+    },
+    {
+      "name": "linux-glibc-server",
+      "path": ".build/release-acceptance-20261029/linux/linux-x86_64-glibc-server/mdo-server",
+      "bytes": 6069073,
+      "sha256": "4ddd97d7f6fb0d52d8c8206548e47cb34b7d7a071292adf0f5e48b947f4be3a0",
+      "glibc_required": "2.28",
+      "static_core": false
+    },
+    {
+      "name": "linux-musl-gui",
+      "path": ".build/release-acceptance-20261029/linux/linux-x86_64-musl-gui/mdo",
+      "bytes": 7845170,
+      "sha256": "776e42692be59871478a9d9fe75d12542a3cd3620c89480b190a5cb7fcd9848a",
+      "glibc_required": null,
+      "static_core": true
+    },
+    {
+      "name": "linux-musl-server",
+      "path": ".build/release-acceptance-20261029/linux/linux-x86_64-musl-server/mdo-server",
+      "bytes": 7808111,
+      "sha256": "95cba814c9b98850fcd113110f3fa78d15028e501bd289e05e14919cfba08cd5",
+      "glibc_required": null,
+      "static_core": true
+    },
+    {
+      "name": "android-lite",
+      "path": ".build/release-acceptance-20261029/apk/mdo-lite.apk",
+      "bytes": 6288788,
+      "sha256": "9f0185ed98a506e73158e039e7134940378f05c703d494c91850e76a5a47ca64",
+      "development_signed": true,
+      "device_tested": false
+    },
+    {
+      "name": "android-full",
+      "path": ".build/release-acceptance-20261029/apk/mdo-full.apk",
+      "bytes": 474032232,
+      "sha256": "03a6757144228b90c00c24cba24cd27ff90c203ac342aef1df2df78b37b42774",
+      "development_signed": true,
+      "device_tested": false
+    }
+  ],
+  "checks": {
+    "python_windows": {
+      "total": 202,
+      "passed": 196,
+      "skipped": 6,
+      "failed": 0
+    },
+    "python_linux": {
+      "total": 202,
+      "passed": 200,
+      "skipped": 2,
+      "failed": 0
+    },
+    "node": {
+      "total": 1210,
+      "passed": 1208,
+      "skipped": 2,
+      "failed": 0
+    },
+    "frontend_modules": 236,
+    "strict_c11": true,
+    "windows_reproducible": true,
+    "runtime_inventory": {
+      "total": 120,
+      "initial": {
+        "passed": 34,
+        "failed": 83,
+        "not_run": 3
+      },
+      "fixed_reruns": 3,
+      "remaining_failed": 80,
+      "classification": {
+        "removed_source_layout_fixture": 15,
+        "model_or_session_fixture_precondition": 14,
+        "old_flat_command_fixture": 12,
+        "confirmed_sdk_artifact_path_contract": 1,
+        "incomplete_native_fixture_linkage": 21,
+        "fixed_and_rerun_passed": 3,
+        "removed_toolpack_interface": 2,
+        "Home_initialization_expectation": 13,
+        "old_extension_registration_or_save_contract": 1,
+        "test_attempted_unavailable_sdk_worktree": 1
+      }
+    },
+    "native_current": {
+      "total": 29,
+      "passed": true
+    },
+    "packed_current": {
+      "total": 20,
+      "statuses": {
+        "failed": 7,
+        "passed": 13
+      }
+    },
+    "process_store_checks_per_platform": 111,
+    "process_tool_checks_per_platform": 36,
+    "sdk_checks_per_platform": 31,
+    "process_owner_checks": 9,
+    "diagnostic_scenarios": 16,
+    "official_windows_archives_installed_disabled_removed": 9,
+    "android_full_archives_checked": 13
+  },
+  "fixed": [
+    "strict C11 warnings in current worktree",
+    "bundled tool catalogue StopIteration",
+    "missing or bare logical identity in generated official ZIPs",
+    "destination-dependent forwarder receipt invalidating deterministic packaging",
+    "offline session inspection ignored UI schema 8 and 9",
+    "current native fixture identities and process SDK startup/GUI fixture cleanup"
+  ],
+  "blockers": [
+    {
+      "id": "SDK-ARTIFACT-PATH",
+      "status": "unfixed",
+      "severity": "P2",
+      "summary": "Legacy xwork artifact metadata now exposes an absolute path where its public API promises a workspace-relative path",
+      "evidence": ".build/release-acceptance-20261029/runtime-cases/test_artifact_publication_runtime.log"
+    },
+    {
+      "id": "RELEASE-GATE-FIXTURES",
+      "status": "not-green",
+      "summary": "80 historical runtime probes remain failing; 7 additional packed/native-UI gates remain failing. Most stop on obsolete fixtures or preconditions, so their deeper behavior has not been validated."
+    },
+    {
+      "id": "ANDROID-ACCEPTANCE",
+      "status": "not-run",
+      "summary": "No ADB device; APKs are development-signed QA builds, not release publication artifacts"
+    }
+  ],
+  "runtime_failures": [
+    {
+      "name": "test_agent_authoring_runtime.py",
+      "category": "removed_source_layout_fixture",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_agent_authoring_runtime.log"
+    },
+    {
+      "name": "test_agent_context_runtime.py",
+      "category": "removed_source_layout_fixture",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_agent_context_runtime.log"
+    },
+    {
+      "name": "test_agent_media_runtime.py",
+      "category": "removed_source_layout_fixture",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_agent_media_runtime.log"
+    },
+    {
+      "name": "test_agent_program_runtime.py",
+      "category": "removed_source_layout_fixture",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_agent_program_runtime.log"
+    },
+    {
+      "name": "test_agent_runtime.py",
+      "category": "removed_source_layout_fixture",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_agent_runtime.log"
+    },
+    {
+      "name": "test_api_runtime.py",
+      "category": "model_or_session_fixture_precondition",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_api_runtime.log"
+    },
+    {
+      "name": "test_application_sdk_runtime.py",
+      "category": "old_flat_command_fixture",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_application_sdk_runtime.log"
+    },
+    {
+      "name": "test_artifact_publication_runtime.py",
+      "category": "confirmed_sdk_artifact_path_contract",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_artifact_publication_runtime.log",
+      "notes": "xwork_core.c normalizes sArtifactDirectory to an absolute path; xwork_observability.c still exposes its join as workspace-relative sPath, contradicting xwork.h"
+    },
+    {
+      "name": "test_backup_decode_runtime.py",
+      "category": "model_or_session_fixture_precondition",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_backup_decode_runtime.log"
+    },
+    {
+      "name": "test_backup_download_runtime.py",
+      "category": "model_or_session_fixture_precondition",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_backup_download_runtime.log"
+    },
+    {
+      "name": "test_backup_preview_runtime.py",
+      "category": "model_or_session_fixture_precondition",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_backup_preview_runtime.log"
+    },
+    {
+      "name": "test_backup_upload_runtime.py",
+      "category": "model_or_session_fixture_precondition",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_backup_upload_runtime.log"
+    },
+    {
+      "name": "test_command_catalog_runtime.py",
+      "category": "incomplete_native_fixture_linkage",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_command_catalog_runtime.log"
+    },
+    {
+      "name": "test_command_compact_runtime.py",
+      "category": "old_flat_command_fixture",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_command_compact_runtime.log"
+    },
+    {
+      "name": "test_command_worker_runtime.py",
+      "category": "old_flat_command_fixture",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_command_worker_runtime.log"
+    },
+    {
+      "name": "test_commands_api_runtime.py",
+      "category": "old_flat_command_fixture",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_commands_api_runtime.log"
+    },
+    {
+      "name": "test_completion_policy_runtime.py",
+      "category": "removed_source_layout_fixture",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_completion_policy_runtime.log"
+    },
+    {
+      "name": "test_composer_context_runtime.py",
+      "category": "old_flat_command_fixture",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_composer_context_runtime.log"
+    },
+    {
+      "name": "test_config_runtime.py",
+      "category": "incomplete_native_fixture_linkage",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_config_runtime.log"
+    },
+    {
+      "name": "test_conversation_groups_runtime.py",
+      "category": "model_or_session_fixture_precondition",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_conversation_groups_runtime.log"
+    },
+    {
+      "name": "test_debug_cleanup_runtime.py",
+      "category": "fixed_and_rerun_passed",
+      "initial_status": "failed",
+      "current_status": "passed",
+      "log": "runtime-cases\\test_debug_cleanup_runtime.log",
+      "rerun_log": "inspect-session-runtime.log"
+    },
+    {
+      "name": "test_distribution_runtime.py",
+      "category": "removed_toolpack_interface",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_distribution_runtime.log"
+    },
+    {
+      "name": "test_extensions_runtime.py",
+      "category": "Home_initialization_expectation",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_extensions_runtime.log"
+    },
+    {
+      "name": "test_home_artifact_runtime.py",
+      "category": "model_or_session_fixture_precondition",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_home_artifact_runtime.log"
+    },
+    {
+      "name": "test_home_import_runtime.py",
+      "category": "incomplete_native_fixture_linkage",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_home_import_runtime.log"
+    },
+    {
+      "name": "test_home_purge_runtime.py",
+      "category": "incomplete_native_fixture_linkage",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_home_purge_runtime.log"
+    },
+    {
+      "name": "test_home_restore_runtime.py",
+      "category": "incomplete_native_fixture_linkage",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_home_restore_runtime.log"
+    },
+    {
+      "name": "test_home_runtime.py",
+      "category": "incomplete_native_fixture_linkage",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_home_runtime.log"
+    },
+    {
+      "name": "test_image_download_runtime.py",
+      "category": "model_or_session_fixture_precondition",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_image_download_runtime.log"
+    },
+    {
+      "name": "test_interrupted_profile_runtime.py",
+      "category": "model_or_session_fixture_precondition",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_interrupted_profile_runtime.log"
+    },
+    {
+      "name": "test_lifecycle_runtime.py",
+      "category": "removed_source_layout_fixture",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_lifecycle_runtime.log"
+    },
+    {
+      "name": "test_live_permission_runtime.py",
+      "category": "removed_source_layout_fixture",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_live_permission_runtime.log"
+    },
+    {
+      "name": "test_live_runtime.py",
+      "category": "Home_initialization_expectation",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_live_runtime.log"
+    },
+    {
+      "name": "test_mcp_oauth_runtime.py",
+      "category": "old_extension_registration_or_save_contract",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_mcp_oauth_runtime.log"
+    },
+    {
+      "name": "test_mcp_reliability_runtime.py",
+      "category": "incomplete_native_fixture_linkage",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_mcp_reliability_runtime.log"
+    },
+    {
+      "name": "test_mcp_runtime.py",
+      "category": "incomplete_native_fixture_linkage",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_mcp_runtime.log"
+    },
+    {
+      "name": "test_member_sdk_runtime.py",
+      "category": "old_flat_command_fixture",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_member_sdk_runtime.log"
+    },
+    {
+      "name": "test_memory_runtime.py",
+      "category": "incomplete_native_fixture_linkage",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_memory_runtime.log"
+    },
+    {
+      "name": "test_migration_storage_runtime.py",
+      "category": "Home_initialization_expectation",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_migration_storage_runtime.log"
+    },
+    {
+      "name": "test_model_error_events_runtime.py",
+      "category": "removed_source_layout_fixture",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_model_error_events_runtime.log"
+    },
+    {
+      "name": "test_module_runtime.py",
+      "category": "removed_source_layout_fixture",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_module_runtime.log"
+    },
+    {
+      "name": "test_notice_session_runtime.py",
+      "category": "test_attempted_unavailable_sdk_worktree",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_notice_session_runtime.log"
+    },
+    {
+      "name": "test_orchestration_sdk_runtime.py",
+      "category": "old_flat_command_fixture",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_orchestration_sdk_runtime.log"
+    },
+    {
+      "name": "test_passive_home_runtime.py",
+      "category": "removed_toolpack_interface",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_passive_home_runtime.log"
+    },
+    {
+      "name": "test_permission_profiles_runtime.py",
+      "category": "removed_source_layout_fixture",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_permission_profiles_runtime.log"
+    },
+    {
+      "name": "test_plugins_runtime.py",
+      "category": "old_flat_command_fixture",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_plugins_runtime.log"
+    },
+    {
+      "name": "test_power_runtime.py",
+      "category": "incomplete_native_fixture_linkage",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_power_runtime.log"
+    },
+    {
+      "name": "test_process_output_sdk.py",
+      "category": "fixed_and_rerun_passed",
+      "initial_status": "failed",
+      "current_status": "passed",
+      "log": "runtime-cases\\test_process_output_sdk.log"
+    },
+    {
+      "name": "test_project_binding_runtime.py",
+      "category": "incomplete_native_fixture_linkage",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_project_binding_runtime.log"
+    },
+    {
+      "name": "test_project_purge_cancel_runtime.py",
+      "category": "Home_initialization_expectation",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_project_purge_cancel_runtime.log",
+      "notes": "First cancellation expects unavailable fallback Home. Current startup seeds a real Home before this branch; later cancellation/crash cases remain unexecuted."
+    },
+    {
+      "name": "test_project_purge_http_runtime.py",
+      "category": "Home_initialization_expectation",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_project_purge_http_runtime.log"
+    },
+    {
+      "name": "test_project_purge_intent_runtime.py",
+      "category": "Home_initialization_expectation",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_project_purge_intent_runtime.log"
+    },
+    {
+      "name": "test_project_purge_receipts_runtime.py",
+      "category": "Home_initialization_expectation",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_project_purge_receipts_runtime.log"
+    },
+    {
+      "name": "test_project_purge_runtime.py",
+      "category": "Home_initialization_expectation",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_project_purge_runtime.log"
+    },
+    {
+      "name": "test_project_references_runtime.py",
+      "category": "Home_initialization_expectation",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_project_references_runtime.log"
+    },
+    {
+      "name": "test_recovery_history_runtime.py",
+      "category": "model_or_session_fixture_precondition",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_recovery_history_runtime.log"
+    },
+    {
+      "name": "test_restore_coordinator_runtime.py",
+      "category": "Home_initialization_expectation",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_restore_coordinator_runtime.log"
+    },
+    {
+      "name": "test_restore_receipt_runtime.py",
+      "category": "incomplete_native_fixture_linkage",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_restore_receipt_runtime.log"
+    },
+    {
+      "name": "test_restore_worker_runtime.py",
+      "category": "Home_initialization_expectation",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_restore_worker_runtime.log"
+    },
+    {
+      "name": "test_run_completion_runtime.py",
+      "category": "removed_source_layout_fixture",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_run_completion_runtime.log"
+    },
+    {
+      "name": "test_run_manager_runtime.py",
+      "category": "removed_source_layout_fixture",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_run_manager_runtime.log"
+    },
+    {
+      "name": "test_schedule_executor_runtime.py",
+      "category": "removed_source_layout_fixture",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_schedule_executor_runtime.log"
+    },
+    {
+      "name": "test_schedule_runtime.py",
+      "category": "incomplete_native_fixture_linkage",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_schedule_runtime.log"
+    },
+    {
+      "name": "test_search_api_runtime.py",
+      "category": "incomplete_native_fixture_linkage",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_search_api_runtime.log"
+    },
+    {
+      "name": "test_session_artifact_runtime.py",
+      "category": "model_or_session_fixture_precondition",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_session_artifact_runtime.log"
+    },
+    {
+      "name": "test_session_purge_runtime.py",
+      "category": "model_or_session_fixture_precondition",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_session_purge_runtime.log"
+    },
+    {
+      "name": "test_session_runtime.py",
+      "category": "removed_source_layout_fixture",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_session_runtime.log"
+    },
+    {
+      "name": "test_settings_runtime.py",
+      "category": "incomplete_native_fixture_linkage",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_settings_runtime.log"
+    },
+    {
+      "name": "test_shared_files_runtime.py",
+      "category": "model_or_session_fixture_precondition",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_shared_files_runtime.log"
+    },
+    {
+      "name": "test_skill_arguments_runtime.py",
+      "category": "incomplete_native_fixture_linkage",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_skill_arguments_runtime.log"
+    },
+    {
+      "name": "test_skill_builder_runtime.py",
+      "category": "incomplete_native_fixture_linkage",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_skill_builder_runtime.log"
+    },
+    {
+      "name": "test_skill_features_runtime.py",
+      "category": "incomplete_native_fixture_linkage",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_skill_features_runtime.log"
+    },
+    {
+      "name": "test_skill_runtime.py",
+      "category": "incomplete_native_fixture_linkage",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_skill_runtime.log"
+    },
+    {
+      "name": "test_tool_failure_diagnostics_runtime.py",
+      "category": "fixed_and_rerun_passed",
+      "initial_status": "failed",
+      "current_status": "passed",
+      "log": "runtime-cases\\test_tool_failure_diagnostics_runtime.log"
+    },
+    {
+      "name": "test_update_runtime.py",
+      "category": "Home_initialization_expectation",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_update_runtime.log"
+    },
+    {
+      "name": "test_web_result_files_runtime.py",
+      "category": "incomplete_native_fixture_linkage",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_web_result_files_runtime.log"
+    },
+    {
+      "name": "test_web_result_session_runtime.py",
+      "category": "model_or_session_fixture_precondition",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_web_result_session_runtime.log"
+    },
+    {
+      "name": "test_web_runtime.py",
+      "category": "incomplete_native_fixture_linkage",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_web_runtime.log"
+    },
+    {
+      "name": "test_workbench_baseline_runtime.py",
+      "category": "old_flat_command_fixture",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_workbench_baseline_runtime.log"
+    },
+    {
+      "name": "test_workbench_files_runtime.py",
+      "category": "old_flat_command_fixture",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_workbench_files_runtime.log"
+    },
+    {
+      "name": "test_workbench_runtime.py",
+      "category": "old_flat_command_fixture",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_workbench_runtime.log"
+    },
+    {
+      "name": "test_workbench_terminal_runtime.py",
+      "category": "old_flat_command_fixture",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_workbench_terminal_runtime.log"
+    },
+    {
+      "name": "test_write_admission_runtime.py",
+      "category": "Home_initialization_expectation",
+      "initial_status": "failed",
+      "current_status": "not_passed",
+      "log": "runtime-cases\\test_write_admission_runtime.log"
+    }
+  ],
+  "evidence_root": ".build/release-acceptance-20261029",
+  "native_snapshot": ".build/native-webview-qa-51a062871fdd4e62a2af89d8c9f69d88/window.png",
+  "untested": [
+    "Android physical installation, large-file update and real external-program execution",
+    "Release-signing certificate and final signed APKs",
+    "Real provider-account/model calls in this round",
+    "Linux graphical desktop interaction"
+  ],
+  "repair_commits": [
+    "7a35da94fbdb2c9da46fe7aeb3b947aae8cf2603",
+    "cbc2ff1a43eda7f360ed675be639c6c075b13303",
+    "38be60282559143411a3b79d337a02c4660becff",
+    "139e69bbdfcf8d28b81e2d5724536186c50a9dad"
+  ],
+  "final_verification": {
+    "source_inputs_unchanged": true,
+    "locked_sdk_verified": true,
+    "artifact_hashes_verified": true,
+    "preserved_user_files_verified": true,
+    "owned_source_configuration_removed": true
+  }
+}
