@@ -148,7 +148,7 @@ xllm_result MdoModelOnlineComplete(const MdoModelCatalog* Catalog,const MdoModel
             }
         }
         if(Ready)Result=MdoModelsComplete(NULL,&Borrowed,Callbacks,Response,Error,
-            Options->RestartableStream,MdoModelsOnlineAttempt,&Call);
+            Options->RestartableStream,MdoModelsOnlineAttempt,&Call,Options->RetryObserver);
         else Result=XLLM_RESULT_ERROR;
         xrtFree(ExtraJson);xllmClientDestroy(Call.Client);
     }

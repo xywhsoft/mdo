@@ -9,7 +9,7 @@
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/models.h"
 
-#define MDO_SESSION_EVENT_SCHEMA 8u
+#define MDO_SESSION_EVENT_SCHEMA 9u
 #define MDO_SESSION_EVENT_RECORD_LIMIT (96u * 1024u)
 #define MDO_SESSION_EVENT_TEXT_LIMIT (64u * 1024u)
 #define MDO_SESSION_EVENT_METADATA_LIMIT 4096u
@@ -363,6 +363,14 @@ static char* MdoEventsRecord(const MdoSessionEventBridge* Bridge,
             !MdoEventsObjectTake(Object, "model_attempts", xrtValueUInt(Event->tDiagnostics.uAttemptCount)))
             goto done;
     }
+    if (Event->eKind == MDO_AGENT_EVENT_MODEL_RETRY) {
+        const char* Kind = Event->sProviderCode ? Event->sProviderCode : "unknown";
+        if (!MdoEventsObjectString(Object, "model_error_kind", Kind, strlen(Kind)) ||
+            !MdoEventsObjectTake(Object, "model_http_status", xrtValueUInt(Event->uHttpStatus)) ||
+            !MdoEventsObjectTake(Object, "model_attempts", xrtValueUInt(Event->tDiagnostics.uAttemptCount)) ||
+            !MdoEventsObjectTake(Object, "model_retry_after_ms", xrtValueUInt(Event->tDiagnostics.uRetryAfterMs)))
+            goto done;
+    }
     Json = xrtJsonStringify(Object, false, Size);
     if ( Json != NULL && *Size > MDO_SESSION_EVENT_RECORD_LIMIT ) {
         xrtFree(Json);
@@ -530,7 +538,7 @@ static bool MdoEventsParse(const char* ProjectId, const char* SessionId,
     if ( Root == NULL || xrtValueType(Root) != XVALUE_OBJECT ||
          (FieldCount != 25u && FieldCount != 28u &&
           FieldCount != 29u && FieldCount != 31u &&
-          FieldCount != 32u && FieldCount != 35u && FieldCount != 37u) ||
+          FieldCount != 32u && FieldCount != 35u && FieldCount != 36u && FieldCount != 37u) ||
          !MdoEventsValueUInt(Root, "schema_version", &Schema) ||
          !((Schema == 1u && FieldCount == 25u) ||
            (Schema == 2u && FieldCount == 28u) ||
@@ -538,8 +546,9 @@ static bool MdoEventsParse(const char* ProjectId, const char* SessionId,
            (Schema == 4u && FieldCount == 31u) ||
            (Schema == 5u && FieldCount == 32u) ||
            (Schema == 6u && (FieldCount == 32u || FieldCount == 35u)) ||
-           ((Schema == 7u || Schema == MDO_SESSION_EVENT_SCHEMA) &&
-            (FieldCount == 32u || FieldCount == 35u || FieldCount == 37u))) ||
+           ((Schema >= 7u && Schema <= MDO_SESSION_EVENT_SCHEMA) &&
+            (FieldCount == 32u || FieldCount == 35u || FieldCount == 37u ||
+             (Schema >= 9u && FieldCount == 36u)))) ||
          !MdoEventsValueUInt(Root, "event_id", &Result->Info.EventId) ||
          Result->Info.EventId == 0u ||
          !MdoEventsValueUInt(Root, "source_event_id",
@@ -552,7 +561,7 @@ static bool MdoEventsParse(const char* ProjectId, const char* SessionId,
          Session.Size != strlen(SessionId) ||
          memcmp(Session.Data, SessionId, Session.Size) != 0 ||
          !MdoEventsValueUInt(Root, "kind", &Kind) ||
-         Kind > (uint64)MDO_SESSION_EVENT_HISTORY_TRUNCATED ||
+         Kind > (uint64)MDO_AGENT_EVENT_MODEL_RETRY ||
          !MdoEventsValueUInt(Root, "agent_turn", &Result->Info.AgentTurn) ||
          (Schema >= 3u && !MdoEventsValueUInt(Root,
             "user_message_sequence", &Result->Info.UserMessageSequence)) ||
@@ -654,6 +663,20 @@ static bool MdoEventsParse(const char* ProjectId, const char* SessionId,
         Result->Info.ModelHttpStatus = (uint32)HttpStatus;
         Result->Info.ModelAttempts = (uint32)Attempts;
     } else if (Schema >= 6u && Kind == (uint64)XWORK_EVENT_ERROR) goto done;
+    if (Kind == (uint64)MDO_AGENT_EVENT_MODEL_RETRY) {
+        xstrview ErrorKind;
+        uint64 HttpStatus, Attempts, Delay;
+        if (Schema < 9u || FieldCount != 36u ||
+            !MdoEventsValueString(Root, "model_error_kind", &ErrorKind) ||
+            ErrorKind.Size >= sizeof(Result->Info.ModelErrorKind) ||
+            !MdoEventsValueUInt(Root, "model_http_status", &HttpStatus) || HttpStatus > 599u ||
+            !MdoEventsValueUInt(Root, "model_attempts", &Attempts) || Attempts > UINT32_MAX ||
+            !MdoEventsValueUInt(Root, "model_retry_after_ms", &Delay) || Delay > UINT32_MAX) goto done;
+        memcpy(Result->Info.ModelErrorKind, ErrorKind.Data, ErrorKind.Size);
+        Result->Info.ModelHttpStatus = (uint32)HttpStatus;
+        Result->Info.ModelAttempts = (uint32)Attempts;
+        Result->Info.ModelRetryAfterMs = (uint32)Delay;
+    } else if (FieldCount == 36u) goto done;
     if ( QueueItemId.Size != 0u ) {
         size_t Index;
         for ( Index = 0u; Index < QueueItemId.Size; ++Index ) {
@@ -961,6 +984,12 @@ bool MdoSessionEventBridgeClonePrefix(MdoSessionEventBridge* Bridge,
         Event.sToolCallId = Entry.Info.ToolCallId;
         Event.sArtifactPath = Entry.Info.ArtifactPath;
         Event.sModel = Entry.Info.Model;
+        if (Entry.Info.Kind == MDO_AGENT_EVENT_MODEL_RETRY) {
+            Event.sProviderCode = Entry.Info.ModelErrorKind;
+            Event.uHttpStatus = Entry.Info.ModelHttpStatus;
+            Event.tDiagnostics.uAttemptCount = Entry.Info.ModelAttempts;
+            Event.tDiagnostics.uRetryAfterMs = Entry.Info.ModelRetryAfterMs;
+        }
         Json = MdoEventsRecord(Bridge, Bridge->NextEventId, &Event,
             Entry.Info.ModelId, Entry.Info.ContextWindowTokens, &Entry.Info.Source, &JsonSize);
         MdoEventsOwnedUnit(&Entry);

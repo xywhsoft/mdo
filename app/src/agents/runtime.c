@@ -83,6 +83,8 @@ typedef struct MdoAgentActiveFrame {
     struct MdoAgentActiveFrame* Next;
 } MdoAgentActiveFrame;
 
+typedef struct MdoAgentModelProgress MdoAgentModelProgress;
+
 typedef struct MdoAgentOwner {
     xatomic32 Refs;
     xwork_runtime* Runtime;
@@ -119,6 +121,7 @@ typedef struct MdoAgentOwner {
     bool IndependentDelegation;
     xwork_event_fn ExternalEvent;
     void* ExternalEventData;
+    MdoAgentModelProgress* ModelProgress;
 } MdoAgentOwner;
 
 static void MdoAgentsLifecycleRuntime(MdoAgentOwner*,const xwork_event*);
@@ -172,6 +175,8 @@ static bool MdoAgentsForwardEvent(MdoAgentOwner* Owner,xwork_event_fn Forward,vo
 }
 static bool MdoAgentsOwnerEvent(void* User,const xwork_event* Event){MdoAgentOwner* Owner=User;return MdoAgentsForwardEvent(Owner,Owner->ExternalEvent,Owner->ExternalEventData,Event);}
 static bool MdoAgentsRunEvent(void* User,const xwork_event* Event){MdoAgentRun* Run=User;return MdoAgentsForwardEvent(Run->Session->Owner,Run->ExternalEvent,Run->ExternalEventData,Event);}
+
+#include "model_progress.inc.c"
 
 
 
@@ -358,6 +363,7 @@ static void MdoAgentOwnerRelease(MdoAgentOwner* Owner)
     if ( Previous > 1u ) return;
     if ( Previous == 0u ) abort();
     MdoModuleAgentIdentityEnd(Owner,0);
+    MdoAgentsProgressUnit(Owner);
     while(Owner->Instances){MdoAgentInstance* I=Owner->Instances;Owner->Instances=I->Next;xrtValueRelease(I->Configuration);xrtValueRelease(I->Plan);xrtValueRelease(I->SourcePlan);xrtValueRelease(I->State);xrtValueRelease(I->RequestPreview);xrtFree(I->LegacyPrompt);xrtFree(I);}
     if(Owner->InstanceLock)xrtMutexDestroy(Owner->InstanceLock);
     if(Owner->LifecycleLock)xrtMutexDestroy(Owner->LifecycleLock);
@@ -409,6 +415,9 @@ static xllm_result MdoAgentsRouteComplete(MdoAgentOwner* Owner,
 {
     MdoModelClientOptions Options;
     xllm_client* Client;
+    MdoAgentModelProgress Progress = {0};
+    MdoModelRetryObserver Observer = { MdoAgentsRetryProgress, &Progress };
+    MdoAgentsProgressSnapshot(Owner, &Progress);
     if ( Owner->ExternalComplete != NULL )
         return Owner->ExternalComplete(Owner->ExternalModelData, Request,
             Callbacks, Response, Error);
@@ -416,6 +425,7 @@ static xllm_result MdoAgentsRouteComplete(MdoAgentOwner* Owner,
         MdoModelClientOptionsInit(&Options);Options.ModelId=Match->ModelId;Options.Protocol=Match->Protocol;
         Options.ReasoningEffort=Match->ReasoningEffort;Options.MaxOutputTokens=Match->MaxOutputTokens;
         Options.RestartableStream=true;
+        Options.RetryObserver=&Observer;
         return MdoModelOnlineComplete(Owner->Models,&Options,Request,Callbacks,Response,Error);
     }
     if ( Owner->RouteLock == NULL || !xrtMutexLock(Owner->RouteLock) ) {
@@ -441,7 +451,7 @@ static xllm_result MdoAgentsRouteComplete(MdoAgentOwner* Owner,
     Client = Match->Client;
     (void)xrtMutexUnlock(Owner->RouteLock);
     if ( Client == NULL ) return XLLM_RESULT_ERROR;
-    return MdoModelCompleteRestartable(Client, Request, Callbacks, Response, Error);
+    return MdoModelCompleteRestartableObserved(Client, Request, Callbacks, Response, Error, &Observer);
 }
 
 static xllm_result MdoAgentsComplete(void* UserData,
@@ -1548,7 +1558,7 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
         Owner->ApprovalScope : Options->PermissionUserData;
     AgentOptions.OnHook = Options->OnHook;
     AgentOptions.pHookUserData = Options->HookUserData;
-    AgentOptions.OnEvent = MdoAgentsOwnerEvent;
+    AgentOptions.OnEvent = MdoAgentsProgressOwnerEvent;
     AgentOptions.pEventUserData = Owner;
     AgentOptions.OnModelComplete = MdoAgentsComplete;
     AgentOptions.pModelUserData = Owner;
@@ -2147,7 +2157,7 @@ MdoAgentRun* MdoAgentRunCreate(MdoAgentSession* Session,
     Config.pCancel = Options->Cancel;
     Config.uDeadline = Options->Deadline;
     Result->ExternalEvent=Options->OnEvent;Result->ExternalEventData=Options->EventUserData;
-    Config.OnEvent = Options->OnEvent?MdoAgentsRunEvent:NULL;
+    Config.OnEvent = Options->OnEvent?MdoAgentsProgressRunEvent:NULL;
     Config.pEventUserData = Result;
     Config.pResumeOptions = Options->ResumeOptions;
     Result->Run = Options->UserMessage != NULL ?

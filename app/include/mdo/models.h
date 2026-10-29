@@ -66,6 +66,13 @@ typedef struct MdoModelInfo {
     MdoModelAttachmentFlags Attachments;
 } MdoModelInfo;
 
+/* Product-only progress; never inserted into the provider's messages. A zero
+ * delay means the scheduled next attempt is starting, not that it succeeded. */
+typedef struct MdoModelRetryObserver {
+    bool (*Notify)(void*, const xllm_error*, uint32 NextAttempt, uint32 DelayMs);
+    void* UserData;
+} MdoModelRetryObserver;
+
 typedef struct MdoModelClientOptions {
     uint32 Size;
     const char* ModelId;          /* NULL or empty selects the catalog default. */
@@ -73,6 +80,7 @@ typedef struct MdoModelClientOptions {
     const char* ReasoningEffort;  /* NULL or empty selects the model default. */
     uint32 MaxOutputTokens;       /* zero selects the model maximum. */
     bool RestartableStream;       /* Agent drafts can be replaced on recovery. */
+    const MdoModelRetryObserver* RetryObserver;
 } MdoModelClientOptions;
 
 typedef struct MdoModelClientInfo {
@@ -119,6 +127,8 @@ xllm_result MdoModelComplete(xllm_client*, const xllm_request*,
  * must be dispatched after this function successfully returns a response. */
 xllm_result MdoModelCompleteRestartable(xllm_client*, const xllm_request*,
     const xllm_stream_callbacks*, xllm_response**, xllm_error*);
+xllm_result MdoModelCompleteRestartableObserved(xllm_client*, const xllm_request*,
+    const xllm_stream_callbacks*, xllm_response**, xllm_error*, const MdoModelRetryObserver*);
 const char* MdoModelErrorKind(const xllm_error*);
 const char* MdoModelErrorMessage(const xllm_error*);
 /* Local profile validation keeps a stable kind without parsing diagnostic

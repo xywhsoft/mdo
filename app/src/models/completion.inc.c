@@ -262,7 +262,8 @@ typedef xllm_result (*MdoModelsAttemptFn)(void*, xllm_client**,
 
 static xllm_result MdoModelsComplete(xllm_client* Client, const xllm_request* Request,
     const xllm_stream_callbacks* Callbacks, xllm_response** Response,
-    xllm_error* OutError, bool Restartable, MdoModelsAttemptFn Complete, void* Data)
+    xllm_error* OutError, bool Restartable, MdoModelsAttemptFn Complete, void* Data,
+    const MdoModelRetryObserver* Observer)
 {
     xllm_error Error;
     xllm_result Result = XLLM_RESULT_ERROR;
@@ -408,6 +409,12 @@ static xllm_result MdoModelsComplete(xllm_client* Client, const xllm_request* Re
             break;
         }
         uint64 End = Now + (uint64)Delay * 1000u;
+        if (Observer && Observer->Notify && !Observer->Notify(Observer->UserData,
+                &Error, Attempt == UINT32_MAX ? Attempt : Attempt + 1u, Delay)) {
+            Error.eCode = XLLM_ERROR_HOOK;
+            Retryable = false;
+            break;
+        }
         for (;;) {
             Result = MdoModelsScope(Request, &Error);
             if (Result != XLLM_RESULT_OK) { Retryable = false; goto done; }
@@ -416,6 +423,12 @@ static xllm_result MdoModelsComplete(xllm_client* Client, const xllm_request* Re
             uint64 Remaining = End - Current;
             xrtSleep(Remaining > 20000u ? 20u :
                 (uint32)((Remaining + 999u) / 1000u));
+        }
+        if (Observer && Observer->Notify && !Observer->Notify(Observer->UserData,
+                &Error, Attempt == UINT32_MAX ? Attempt : Attempt + 1u, 0u)) {
+            Error.eCode = XLLM_ERROR_HOOK;
+            Retryable = false;
+            break;
         }
         if (Attempt != UINT32_MAX) ++Attempt;
     }
@@ -450,11 +463,18 @@ done:
 xllm_result MdoModelComplete(xllm_client* Client, const xllm_request* Request,
     const xllm_stream_callbacks* Callbacks, xllm_response** Response, xllm_error* Error)
 {
-    return MdoModelsComplete(Client, Request, Callbacks, Response, Error, false, NULL, NULL);
+    return MdoModelsComplete(Client, Request, Callbacks, Response, Error, false, NULL, NULL, NULL);
 }
 
 xllm_result MdoModelCompleteRestartable(xllm_client* Client, const xllm_request* Request,
     const xllm_stream_callbacks* Callbacks, xllm_response** Response, xllm_error* Error)
 {
-    return MdoModelsComplete(Client, Request, Callbacks, Response, Error, true, NULL, NULL);
+    return MdoModelsComplete(Client, Request, Callbacks, Response, Error, true, NULL, NULL, NULL);
+}
+
+xllm_result MdoModelCompleteRestartableObserved(xllm_client* Client, const xllm_request* Request,
+    const xllm_stream_callbacks* Callbacks, xllm_response** Response, xllm_error* Error,
+    const MdoModelRetryObserver* Observer)
+{
+    return MdoModelsComplete(Client, Request, Callbacks, Response, Error, true, NULL, NULL, Observer);
 }

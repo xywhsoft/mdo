@@ -30,6 +30,7 @@ static cstr MdoApiEventKindText(xwork_event_kind Kind)
     case XWORK_EVENT_RECOVERY_REQUIRED: return "recovery_required";
     case XWORK_EVENT_RECOVERY_RESOLVED: return "recovery_resolved";
     case MDO_SESSION_EVENT_HISTORY_TRUNCATED: return "history_truncated";
+    case MDO_AGENT_EVENT_MODEL_RETRY: return "model_retry";
     default: return "unknown";
     }
 }
@@ -225,6 +226,11 @@ static bool MdoApiSessionEventValueLimit(const MdoSessionEventInfo* Event,
         Ok = MdoApiValueSetString(Item, "model_error_kind", Event->ModelErrorKind) &&
             MdoApiValueSetUInt(Item, "model_http_status", Event->ModelHttpStatus) &&
             MdoApiValueSetUInt(Item, "model_attempts", Event->ModelAttempts);
+    if (Ok && Event->Kind == MDO_AGENT_EVENT_MODEL_RETRY)
+        Ok = MdoApiValueSetString(Item, "model_error_kind", Event->ModelErrorKind) &&
+            MdoApiValueSetUInt(Item, "model_http_status", Event->ModelHttpStatus) &&
+            MdoApiValueSetUInt(Item, "model_attempts", Event->ModelAttempts) &&
+            MdoApiValueSetUInt(Item, "model_retry_after_ms", Event->ModelRetryAfterMs);
     if ( Ok && Event->Kind == XWORK_EVENT_AGENT_START &&
          Event->AgentDepth == 0u )
         Ok = MdoSessionAttachmentEventRead(ProjectId, SessionId,

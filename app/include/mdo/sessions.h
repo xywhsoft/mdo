@@ -186,6 +186,7 @@ typedef struct MdoSessionEventInfo {
     char ModelFinishReason[129];
     uint32 ModelToolCallCount;
     uint32 ModelAttempts;
+    uint32 ModelRetryAfterMs; /* zero: the scheduled attempt has started */
     MdoSessionEventSource Source; /* Actual persistent member, empty for ordinary runs. */
 } MdoSessionEventInfo;
 

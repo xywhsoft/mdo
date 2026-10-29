@@ -4,6 +4,10 @@
 #include <xsbase.h>
 #include <xwork.h>
 
+/* Product UI progress; outside xwork's persisted model/tool context. */
+#define MDO_AGENT_EVENT_MODEL_RETRY \
+    ((xwork_event_kind)(XWORK_EVENT_RECOVERY_RESOLVED + 2))
+
 #include "models.h"
 #include "approvals.h"
 
