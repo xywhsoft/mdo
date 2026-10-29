@@ -1,0 +1,110 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-30",
+  "feature": "model-system-proxy",
+  "code_commits": {
+    "platform": "571ca476",
+    "client": "35b8d2cb"
+  },
+  "version_name": "0.8.0",
+  "version_code": "05000800",
+  "sdk_overlay_sha256": "8713fe28c1678d82126ebc916e477766230881250ac711489dac5e487489c08b",
+  "publication": "local-candidate-only",
+  "production_modified_by_this_task": false,
+  "windows": {
+    "path": ".build/system-proxy-20261030/mdo.exe",
+    "bytes": 6513734,
+    "sha256": "2b9e9e58f161b02dd45d3ca278d383e203e49e9699eca856d8b198a41fdf4998"
+  },
+  "android": {
+    "path": ".build/system-proxy-20261030/mdo-system-proxy-qa.apk",
+    "bytes": 6292884,
+    "sha256": "1e779af041f6b9a31acb28c1127f37c9f57c0236a693d749814c7f74d2c19c26",
+    "application_id": "org.xleaves.mdo.systemproxyqa",
+    "device_test": "not-run"
+  },
+  "validation": [
+    {
+      "command": "python tests/test_platform_system_proxy.py",
+      "result": "PASS",
+      "details": "Windows resolver API mocked; system settings never changed"
+    },
+    {
+      "command": "wsl -e python3 /mnt/d/GIT/mdo/tests/test_platform_system_proxy.py",
+      "result": "PASS",
+      "details": "Actual POSIX environment resolver and parsers"
+    },
+    {
+      "command": "wsl -e python3 /mnt/d/GIT/mdo/tests/test_android_system_proxy.py",
+      "result": "PASS",
+      "details": "HTTP, SOCKS, DIRECT, missing/error settings, interruption, bounded stalled worker"
+    },
+    {
+      "command": "python tests/test_model_proxy_route.py",
+      "result": "PASS",
+      "details": "Actual production route; refresh, transitions, error and shared-client lifetime"
+    },
+    {
+      "command": "wsl -e python3 /mnt/d/GIT/mdo/tests/test_model_proxy_route.py",
+      "result": "PASS",
+      "details": "Same route on POSIX"
+    },
+    {
+      "command": "python tests/test_model_proxy_runtime.py --host .build/system-proxy-20261030/host/xs.exe",
+      "result": "PASS",
+      "details": "Six local TLS completions; one resolution failure sends no model request; manual secrets ignored in system mode"
+    },
+    {
+      "command": "python tests/test_config_runtime.py --host .build/system-proxy-20261030/host/xs.exe",
+      "result": "PASS",
+      "details": "System kind, empty manual parameters, retained manual settings, restart and write failure"
+    },
+    {
+      "command": "python tests/test_model_runtime.py --host .build/system-proxy-20261030/host/xs.exe",
+      "result": "PASS",
+      "details": "Existing model and credential/CA/manual-proxy contracts"
+    },
+    {
+      "command": "python tests/test_system_proxy_packed.py --packed .build/system-proxy-20261030/mdo.exe",
+      "result": "PASS",
+      "details": "Real packed settings API, redaction, mode switches and restart"
+    },
+    {
+      "command": "python tests/test_model_setup_runtime.py --packed .build/system-proxy-20261030/mdo.exe",
+      "result": "PASS",
+      "details": "Discovery, encrypted credentials, restart and all three model protocols"
+    },
+    {
+      "command": "node --experimental-vm-modules --test tests/test_*.mjs",
+      "result": "PASS",
+      "details": "1210 passed, 2 existing skips; includes the new settings proxy cases"
+    },
+    {
+      "command": "node --experimental-vm-modules tools/check_web_modules.mjs",
+      "result": "PASS",
+      "details": "236 frontend modules parsed and reachable"
+    },
+    {
+      "command": "python -m unittest discover -s tests -p test_config_contract.py -v",
+      "result": "PASS",
+      "details": "6 passed"
+    },
+    {
+      "command": "Windows native host + packed GUI build",
+      "result": "PASS",
+      "details": "Locked SDK and new overlay; no old-host receipt bypass"
+    },
+    {
+      "command": "Android ARM64 native library + isolated lite APK build",
+      "result": "PASS",
+      "details": "v2/v3 signature verification and zipalign passed; packaged library hash and SystemProxy DEX class verified"
+    }
+  ],
+  "notes": [
+    "Preserved pre-existing extension dependency work; only owned Agent route hunks committed.",
+    "No new model requests to paid/live providers, no global proxy mutations, no new external packages.",
+    "Linux desktop proxy/PAC and browser extension proxy state are not read. Proxied model endpoints remain HTTPS-only.",
+    "Windows timeout is per WinHTTP network stage, not a strict wall-clock bound for synchronous PAC/WPAD.",
+    "No physical Android network-proxy validation was performed; native and JVM/APK checks completed."
+  ]
+}
