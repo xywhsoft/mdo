@@ -29,6 +29,7 @@ PROBE_SOURCE = r'''
 #include <stdlib.h>
 #include <string.h>
 #include <xsbase.h>
+#include "model-plugin-free.h"
 
 #include "src/storage/home.c"
 #include "src/config/config.c"

@@ -19,9 +19,11 @@ class NativeOverlayReceiptTests(unittest.TestCase):
         class ReachedPack(RuntimeError):pass
         with tempfile.TemporaryDirectory(prefix='android-host-receipt-')as raw:
             root=Path(raw);app=root/'app';app.mkdir();host_dir=root/'host';host_dir.mkdir()
-            names=('xs.exe','xsw.exe')if os.name=='nt'else('xs',)
+            names=('xs.exe',)if os.name=='nt'else('xs',)
             def build_or_pack(command,**kwargs):
                 if Path(command[1]).name!='build.py':raise ReachedPack()
+                self.assertEqual(command[command.index('--frontend')+1],'none')
+                self.assertEqual(Path(command[command.index('--output')+1]).name,names[0])
                 for name in names:
                     host=host_dir/name;host.write_bytes(b'new Android packer')
                     receipt={'schema_version':1,'profile_sha256':build_mdo.host_profile_digest(False),

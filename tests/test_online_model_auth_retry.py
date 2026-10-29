@@ -18,6 +18,7 @@ PROBE = r'''
 #include <stdio.h>
 #include <string.h>
 #include <xsbase.h>
+#include "model-plugin-free.h"
 #define MDO_MODEL_RETRY_BASE_MS 10u
 #define MDO_MODEL_RETRY_MAX_MS 80u
 #include "src/storage/home.c"

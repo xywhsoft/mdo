@@ -20,6 +20,7 @@ PROBE = r'''
 #include <stdio.h>
 #include <string.h>
 #include <xsbase.h>
+#include "model-plugin-free.h"
 #define MDO_MODEL_RETRY_BASE_MS 10u
 #define MDO_MODEL_RETRY_MAX_MS 80u
 #include "src/storage/home.c"
@@ -34,7 +35,8 @@ static bool Idle(uint64 Member) {
     uint64 Until=MdoDeadlineAfterUs(2000000u);
     while(!MdoDeadlineExpired(Until)) {
         xrtMutexLock(g_MdoAccount.Lock);
-        bool Ready=g_MdoAccount.Tokens.MemberId==Member&&!g_MdoAccount.Busy&&!g_MdoAccount.Work.Kind;
+        bool Ready=g_MdoAccount.Tokens.MemberId==Member&&!g_MdoAccount.Busy&&!g_MdoAccount.Work.Kind&&
+            (!Member||MdoAccountModelStateLocked()==MDO_MODEL_LOGIN_READY);
         xrtMutexUnlock(g_MdoAccount.Lock);
         if(Ready)return true;xrtSleep(2u);
     }
@@ -101,6 +103,12 @@ class Identity(BaseHTTPRequestHandler):
         if self.path=="/api/v1/profile":
             member=2 if "switched-member" in self.headers.get("Authorization","") else 1
             return self.reply(200,{"code":0,"data":{"id":member,"username":"fixture_member","nickname":"Fixture"}})
+        if self.path=="/api/v1/ai/catalog":
+            model={"id":"ornith-1.5-35b","title":"Account fixture","available":True,
+                "member_only":True,"free":False,"tool_calling":True,"vision":False,
+                "context_window":240128,"max_output":16384,"reasoning_efforts":"none",
+                "output_limit_field":"max_tokens","default_protocol":"chat","protocols":["chat"]}
+            return self.reply(200,{"code":0,"data":{"version":"a"*64,"models":[model]}})
         self.reply(404,{"code":404,"message":"Optional fixture endpoint unavailable"})
     def do_POST(self):
         body=json.loads(self.rfile.read(int(self.headers.get("Content-Length","0"))) or b"{}")

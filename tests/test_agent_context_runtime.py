@@ -1,5 +1,6 @@
 """Execute configurable sources, history projection and model-call limits offline."""
 from __future__ import annotations
+import argparse
 import json
 from pathlib import Path
 import tempfile
@@ -98,6 +99,9 @@ static void ConfigProbe(xwork_runtime* Runtime){
 '''
 
 def main() -> int:
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--host',type=Path,default=fixture.ROOT/'.build/host/xs.exe')
+    host=parser.parse_args().host.resolve()
     with tempfile.TemporaryDirectory(prefix="agent-context-", dir=fixture.ROOT / ".build") as raw:
         site = Path(raw) / "site"
         fixture.write_site(site)
@@ -121,7 +125,7 @@ def main() -> int:
         source = source.replace("xworkRuntimeConfigInit(&runtime_config);", setup + "\n    xworkRuntimeConfigInit(&runtime_config);")
         source = source.replace("MdoMemoryWriteOptionsInit(&memory_write);", "ConfigProbe(runtime);\n    MdoMemoryWriteOptionsInit(&memory_write);")
         (site / "probe.c").write_text(source, encoding="utf-8")
-        output = fixture.run_probe(fixture.ROOT / ".build/host/xs.exe", site, Path(raw) / "home")
+        output = fixture.run_probe(host, site, Path(raw) / "home")
         assert "context_checks=calls:3 projection:1 refresh:1" in output and "context_error=" not in output, output
         assert "budget_checks=1 calls:2" in output, output
         assert "oversize_checks=1 calls:2" in output, output

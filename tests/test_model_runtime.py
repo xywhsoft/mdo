@@ -23,6 +23,7 @@ PROBE_SOURCE = r'''
 #include <stdio.h>
 #include <string.h>
 #include <xsbase.h>
+#include "model-plugin-free.h"
 
 #include "src/storage/home.c"
 #include "src/config/config.c"
@@ -189,6 +190,7 @@ def write_site(site: Path) -> int:
     (site / "src/models").mkdir(parents=True)
     (site / "include/mdo").mkdir(parents=True)
     (site / "web/index.html").write_text("probe", encoding="utf-8")
+    shutil.copy2(ROOT / "tests/fixtures/model-plugin-free.h", site / "model-plugin-free.h")
     for relative in (
         "default-home/config/defaults.json",
         "src/storage/home.c", "src/storage/home_import.inc.c", "src/storage/home_purge.inc.c", "src/storage/home_restore.inc.c", "src/config/config.c",

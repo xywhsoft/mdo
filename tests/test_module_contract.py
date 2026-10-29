@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
 import tempfile
@@ -56,8 +57,12 @@ class ModuleContractTests(unittest.TestCase):
         bootstrap = BOOTSTRAP_C.read_text(encoding="utf-8")
         module = (ROOT / "tests/fixtures/modules/echo.c").read_text(
             encoding="utf-8")
-        agent = (ROOT / "app/default-home/modules/agents/builtin_default.c").read_text(
-            encoding="utf-8")
+        directory = ROOT / "app/default-home/agents/default"
+        manifest = json.loads((directory / "extension.json").read_text(encoding="utf-8"))
+        native = (directory / manifest["native"]).resolve()
+        self.assertTrue(native.is_relative_to(directory.resolve()))
+        self.assertEqual(manifest["kind"], "agents")
+        agent = native.read_text(encoding="utf-8")
         self.assertIn("MdoModuleManagerInit", bootstrap)
         self.assertIn("MdoModuleManagerUnit", bootstrap)
         self.assertIn("MDO_BOOTSTRAP_MODULES_READY", bootstrap)

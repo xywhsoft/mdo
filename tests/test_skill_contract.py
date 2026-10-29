@@ -35,7 +35,9 @@ class SkillContractTests(unittest.TestCase):
 
     def test_manager_validates_and_caches_content_lazily(self) -> None:
         text = MANAGER.read_text(encoding="utf-8")
-        self.assertIn("MdoHomeExternalStat", text)
+        self.assertIn("xrtFileStat", text)
+        self.assertIn("MdoSkillsInstalledAvailable", text)
+        self.assertIn("MdoExtensionsVerify", text)
         self.assertIn("MdoHomeOpenRead", text)
         self.assertIn("xrtReadAtFull", text)
         self.assertIn("MdoSkillCatalogLoadBody", text)
