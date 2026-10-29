@@ -1,3 +1,192 @@
+--- a/android/native/host_jni.c
++++ b/android/native/host_jni.c
+@@ -4,6 +4,8 @@
+ #include <stdio.h>
+ #include "src/sdk/xs_host.h"
+ #include "src/sdk/xsbase.h"
++
++#include "system_proxy_jni.c"
+ 
+ static JavaVM* CredentialVm;
+ static jclass CredentialClass;
+@@ -31,13 +33,16 @@
+         CredentialClass = NULL; return JNI_ERR;
+     }
+     CredentialVm = Vm;
++    XS_SystemProxyJniInit(Vm, env);
+     return JNI_VERSION_1_6;
+ }
+ JNIEXPORT void JNICALL JNI_OnUnload(JavaVM* Vm, void* Reserved)
+ {
+     JNIEnv* env = NULL; (void)Reserved;
+-    if ((*Vm)->GetEnv(Vm, (void**)&env, JNI_VERSION_1_6) == JNI_OK && CredentialClass)
+-        (*env)->DeleteGlobalRef(env, CredentialClass);
++    if ((*Vm)->GetEnv(Vm, (void**)&env, JNI_VERSION_1_6) == JNI_OK) {
++        XS_SystemProxyJniUnit(env);
++        if (CredentialClass) (*env)->DeleteGlobalRef(env, CredentialClass);
++    }
+     CredentialClass = NULL; CredentialVm = NULL; CredentialMethod = NULL; OpenUrlMethod = NULL; BackgroundLeaseMethod = NULL;
+ }
+ uint64 XS_AndroidBackgroundLease(uint64 Token, uint32 Milliseconds)
+--- /dev/null
++++ b/android/native/system_proxy_jni.c
+@@ -0,0 +1,88 @@
++/* Included by host_jni.c. Proxy discovery is optional at library startup. */
++static JavaVM* SystemProxyVm;
++static jclass SystemProxyClass;
++static jmethodID SystemProxyMethod;
++
++static void XS_SystemProxyJniInit(JavaVM* Vm, JNIEnv* Env)
++{
++    jclass Local = (*Env)->FindClass(Env, "org/xserver/android/SystemProxy");
++    if (Local) {
++        SystemProxyClass = (*Env)->NewGlobalRef(Env, Local);
++        (*Env)->DeleteLocalRef(Env, Local);
++    }
++    if (SystemProxyClass) SystemProxyMethod = (*Env)->GetStaticMethodID(Env,
++        SystemProxyClass, "resolve", "(Ljava/lang/String;I)[Ljava/lang/String;");
++    if ((*Env)->ExceptionCheck(Env)) (*Env)->ExceptionClear(Env);
++    if (!SystemProxyMethod) {
++        if (SystemProxyClass) (*Env)->DeleteGlobalRef(Env, SystemProxyClass);
++        SystemProxyClass = NULL;
++    } else SystemProxyVm = Vm;
++}
++
++static void XS_SystemProxyJniUnit(JNIEnv* Env)
++{
++    if (SystemProxyClass) (*Env)->DeleteGlobalRef(Env, SystemProxyClass);
++    SystemProxyClass = NULL; SystemProxyMethod = NULL; SystemProxyVm = NULL;
++}
++
++static bool XS_SystemProxyJniText(JNIEnv* Env, jobjectArray Values, jsize Index,
++    char* Out, size_t Capacity)
++{
++    jstring Value = (jstring)(*Env)->GetObjectArrayElement(Env, Values, Index);
++    const char* Text = Value ? (*Env)->GetStringUTFChars(Env, Value, NULL) : NULL;
++    bool Ok = Text && strlen(Text) < Capacity;
++    if (Ok) memcpy(Out, Text, strlen(Text) + 1u);
++    if (Text) (*Env)->ReleaseStringUTFChars(Env, Value, Text);
++    if (Value) (*Env)->DeleteLocalRef(Env, Value);
++    return Ok && !(*Env)->ExceptionCheck(Env);
++}
++
++bool XS_AndroidSystemProxy(cstr Url, uint32 TimeoutMs, XS_SystemProxyInfo* Result)
++{
++    JNIEnv* Env = NULL; bool Detach = false, Ok = false;
++    jstring Target = NULL; jobjectArray Values = NULL;
++    if (!SystemProxyVm || !SystemProxyClass || !SystemProxyMethod) goto done;
++    jint Status = (*SystemProxyVm)->GetEnv(SystemProxyVm, (void**)&Env, JNI_VERSION_1_6);
++    if (Status == JNI_EDETACHED) {
++        if ((*SystemProxyVm)->AttachCurrentThread(SystemProxyVm, &Env, NULL) != JNI_OK) goto done;
++        Detach = true;
++    } else if (Status != JNI_OK) goto done;
++    Target = (*Env)->NewStringUTF(Env, Url);
++    if (!Target || (*Env)->ExceptionCheck(Env)) goto done;
++    Values = (jobjectArray)(*Env)->CallStaticObjectMethod(Env, SystemProxyClass,
++        SystemProxyMethod, Target, (jint)TimeoutMs);
++    if (!Values || (*Env)->ExceptionCheck(Env)) goto done;
++    jsize Count = (*Env)->GetArrayLength(Env, Values);
++    char Kind[16] = {0}, Port[8] = {0};
++    if (!Count || !XS_SystemProxyJniText(Env, Values, 0, Kind, sizeof(Kind))) goto done;
++    if (Count == 1 && !strcmp(Kind, "direct")) { Ok = true; goto done; }
++    if (Count != 3 || (strcmp(Kind, "http") && strcmp(Kind, "socks5")) ||
++        !XS_SystemProxyJniText(Env, Values, 1, Result->Host, sizeof(Result->Host)) ||
++        !XS_SystemProxyJniText(Env, Values, 2, Port, sizeof(Port))) goto done;
++    unsigned Number = 0;
++    for (size_t I = 0; Port[I]; ++I) {
++        if (Port[I] < '0' || Port[I] > '9' || Number > 6553u) goto done;
++        Number = Number * 10u + (unsigned)(Port[I] - '0');
++    }
++    if (!Number || Number > 65535u || !Result->Host[0]) goto done;
++    for (size_t I = 0; Result->Host[I]; ++I)
++        if ((unsigned char)Result->Host[I] <= 32u || (unsigned char)Result->Host[I] > 126u ||
++            strchr("/@?#\\", Result->Host[I])) goto done;
++    Result->Port = (uint16)Number;
++    Result->Kind = !strcmp(Kind, "http") ? XS_SYSTEM_PROXY_HTTP_CONNECT : XS_SYSTEM_PROXY_SOCKS5;
++    Ok = true;
++done:
++    if (Env) {
++        if ((*Env)->ExceptionCheck(Env)) (*Env)->ExceptionClear(Env);
++        if (Values) (*Env)->DeleteLocalRef(Env, Values);
++        if (Target) (*Env)->DeleteLocalRef(Env, Target);
++    }
++    if (Detach) (*SystemProxyVm)->DetachCurrentThread(SystemProxyVm);
++    if (!Ok) {
++        Result->Kind = XS_SYSTEM_PROXY_DIRECT; Result->Port = 0;
++        Result->Host[0] = 0;
++        snprintf(Result->Reason, sizeof(Result->Reason), "%s",
++            "Android system proxy resolution failed; check network proxy settings or use a manual proxy");
++    }
++    return Ok;
++}
+--- /dev/null
++++ b/android/src/org/xserver/android/SystemProxy.java
+@@ -0,0 +1,65 @@
++package org.xserver.android;
++
++import java.net.InetSocketAddress;
++import java.net.Proxy;
++import java.net.ProxySelector;
++import java.net.URI;
++import java.util.List;
++import java.util.concurrent.ArrayBlockingQueue;
++import java.util.concurrent.Future;
++import java.util.concurrent.ThreadPoolExecutor;
++import java.util.concurrent.TimeUnit;
++
++/** Reads Android's default network proxy without changing network settings. */
++public final class SystemProxy {
++    // A stalled system PAC resolver must not create unbounded worker threads.
++    private static final ThreadPoolExecutor WORKER = new ThreadPoolExecutor(
++        1, 1, 30, TimeUnit.SECONDS, new ArrayBlockingQueue<Runnable>(1), task -> {
++            Thread thread = new Thread(task, "xs-system-proxy");
++            thread.setDaemon(true);
++            return thread;
++        });
++    static { WORKER.allowCoreThreadTimeOut(true); }
++    private SystemProxy() { }
++
++    /** null means resolution failed; {"direct"} is an explicit direct route. */
++    public static String[] resolve(String url, int timeoutMs) {
++        if (url == null || url.length() > 16384 || timeoutMs < 1 || timeoutMs > 10000)
++            return null;
++        Future<String[]> future = null;
++        try {
++            final URI target = new URI(url);
++            if (!("http".equalsIgnoreCase(target.getScheme()) ||
++                  "https".equalsIgnoreCase(target.getScheme())) || target.getHost() == null)
++                return null;
++            future = WORKER.submit(() -> {
++                ProxySelector selector = ProxySelector.getDefault();
++                if (selector == null) return new String[] { "direct" };
++                List<Proxy> choices = selector.select(target);
++                if (choices == null || choices.isEmpty()) return null;
++                Proxy proxy = choices.get(0);
++                if (proxy == null) return null;
++                if (proxy.type() == Proxy.Type.DIRECT) return new String[] { "direct" };
++                if (!(proxy.address() instanceof InetSocketAddress)) return null;
++                InetSocketAddress address = (InetSocketAddress) proxy.address();
++                String host = address.getHostString();
++                if (host == null || host.isEmpty() || host.length() > 255 ||
++                    address.getPort() < 1 || address.getPort() > 65535) return null;
++                return new String[] { proxy.type() == Proxy.Type.HTTP ? "http" : "socks5",
++                    host, Integer.toString(address.getPort()) };
++            });
++            return future.get(timeoutMs, TimeUnit.MILLISECONDS);
++        } catch (InterruptedException e) {
++            Thread.currentThread().interrupt();
++            return null;
++        } catch (Exception e) {
++            // Exceptions can contain endpoint/PAC details. Never log them.
++            return null;
++        } finally {
++            if (future != null && !future.isDone()) {
++                future.cancel(true);
++                WORKER.remove((Runnable) future);
++            }
++        }
++    }
++}
 --- a/lib/xoauth2/xoauth2.c
 +++ b/lib/xoauth2/xoauth2.c
 @@ -1,4 +1,36 @@
@@ -4080,6 +4269,225 @@
 +    return __xrtRootResolve(Root,Source,0u,false,XSRootRenameSourceProc,&Data);
 +}
 +#endif
+--- a/src/platform/credentials.h
++++ b/src/platform/credentials.h
+@@ -83,4 +83,5 @@
+     return xrtProcessOpen(Url);
+ #endif
+ }
++#include "system_proxy.h"
+ #endif
+--- /dev/null
++++ b/src/platform/system_proxy.h
+@@ -0,0 +1,208 @@
++#ifndef XS_PLATFORM_SYSTEM_PROXY_H
++#define XS_PLATFORM_SYSTEM_PROXY_H
++#include <stdlib.h>
++#include <string.h>
++#include <stdio.h>
++#if defined(_WIN32)
++#include <windows.h>
++#include <winhttp.h>
++#endif
++
++typedef struct { char Host[256];unsigned Port;bool Tls; } XS_ProxyTarget;
++static bool XS_ProxyFailure(XS_SystemProxyInfo* R,cstr Why)
++{
++    R->Kind=XS_SYSTEM_PROXY_DIRECT;R->Port=0;R->Host[0]=R->User[0]=0;
++    xrtSecureZero(R->Password,sizeof(R->Password));
++    snprintf(R->Reason,sizeof(R->Reason),"%s",Why);return false;
++}
++static unsigned XS_ProxyLower(unsigned C){return C>='A'&&C<='Z'?C+32:C;}
++static bool XS_ProxyEqualN(cstr A,cstr B,size_t N)
++{for(size_t I=0;I<N;I++)if(XS_ProxyLower((unsigned char)A[I])!=XS_ProxyLower((unsigned char)B[I]))return false;return true;}
++static bool XS_ProxyText(cstr S,size_t Limit)
++{size_t I=0;for(;S&&I<=Limit&&S[I];I++)if((unsigned char)S[I]<32||(unsigned char)S[I]==127)return false;return S&&I<=Limit;}
++static bool XS_ProxyPort(cstr S,size_t N,unsigned* Port)
++{unsigned V=0;if(!N||N>5)return false;for(size_t I=0;I<N;I++){if(S[I]<'0'||S[I]>'9')return false;V=V*10+(unsigned)(S[I]-'0');}if(!V||V>65535)return false;*Port=V;return true;}
++static bool XS_ProxyAuthority(cstr S,size_t N,char Host[256],unsigned* Port)
++{
++    size_t Start=0,End=N,Colon=N;
++    if(N&&S[0]=='['){Start=1;End=1;while(End<N&&S[End]!=']')End++;if(End==N)return false;if(End+1<N){if(S[End+1]!=':')return false;Colon=End+1;}}
++    else{for(size_t I=0;I<N;I++)if(S[I]==':'){if(Colon!=N)return false;Colon=I;}End=Colon;}
++    if(!End||End<=Start||End-Start>=256)return false;
++    for(size_t I=Start;I<End;I++)if((unsigned char)S[I]<=32||(unsigned char)S[I]>126||strchr("/@?#\\",S[I]))return false;
++    if(Colon<N&&!XS_ProxyPort(S+Colon+1,N-Colon-1,Port))return false;
++    memcpy(Host,S+Start,End-Start);Host[End-Start]=0;return true;
++}
++static bool XS_ProxyTargetRead(cstr Url,XS_ProxyTarget* T)
++{
++    if(!XS_ProxyText(Url,16384))return false;
++    bool Tls=strlen(Url)>=8&&XS_ProxyEqualN(Url,"https://",8);
++    size_t Start=Tls?8:7;if(!Tls&&(strlen(Url)<7||!XS_ProxyEqualN(Url,"http://",7)))return false;
++    size_t End=Start;while(Url[End]&&!strchr("/?#",Url[End]))End++;
++    memset(T,0,sizeof(*T));T->Tls=Tls;T->Port=Tls?443:80;
++    return XS_ProxyAuthority(Url+Start,End-Start,T->Host,&T->Port);
++}
++static bool XS_ProxyGlob(cstr S,cstr P)
++{
++    cstr Star=NULL,Retry=NULL;
++    while(*S){if(*P=='*'){Star=P++;Retry=S;}else if(*P&&XS_ProxyLower((unsigned char)*P)==XS_ProxyLower((unsigned char)*S)){P++;S++;}else if(Star){P=Star+1;S=++Retry;}else return false;}
++    while(*P=='*')P++;
++    return !*P;
++}
++static bool XS_ProxyBypass(const XS_ProxyTarget* T,cstr Rules,bool Windows)
++{
++    if(!Rules)return false;
++    for(size_t At=0;Rules[At];){
++        while(Rules[At]&&(Rules[At]==','||Rules[At]==';'||Rules[At]==' '||Rules[At]=='\t'))At++;
++        size_t End=At;while(Rules[End]&&Rules[End]!=','&&Rules[End]!=';'&&Rules[End]!=' '&&Rules[End]!='\t')End++;
++        size_t N=End-At;if(!N)break;
++        if(N<512){char Pattern[512];memcpy(Pattern,Rules+At,N);Pattern[N]=0;
++            if(Windows&&!strcmp(Pattern,"<local>")&&!strchr(T->Host,'.'))return true;
++            cstr P=Pattern;unsigned Port=T->Port;char Host[256];
++            if(strchr(P,':')&&XS_ProxyAuthority(P,strlen(P),Host,&Port)){if(Port!=T->Port){At=End;continue;}P=Host;}
++            if(XS_ProxyGlob(T->Host,P))return true;
++            if(!Windows){if(*P=='.')P++;size_t H=strlen(T->Host),D=strlen(P);
++                if(D&&H>=D&&XS_ProxyEqualN(T->Host+H-D,P,D)&&(H==D||T->Host[H-D-1]=='.'))return true;}
++        }At=End;
++    }return false;
++}
++static int XS_ProxyHex(unsigned C){C=XS_ProxyLower(C);return C>='0'&&C<='9'?(int)(C-'0'):C>='a'&&C<='f'?(int)(C-'a'+10):-1;}
++static bool XS_ProxyDecode(cstr S,size_t N,char* Out,size_t Capacity)
++{
++    size_t J=0;for(size_t I=0;I<N;I++){unsigned C=(unsigned char)S[I];if(C=='%'){if(I+2>=N)return false;int A=XS_ProxyHex((unsigned char)S[I+1]),B=XS_ProxyHex((unsigned char)S[I+2]);if(A<0||B<0)return false;C=(unsigned)(A*16+B);I+=2;}if(!C||C<32||C==127||J+1>=Capacity)return false;Out[J++]=(char)C;}Out[J]=0;return true;
++}
++static bool XS_ProxyEndpoint(cstr Text,XS_SystemProxyInfo* R)
++{
++    if(!XS_ProxyText(Text,8192)||!Text[0])return XS_ProxyFailure(R,"The system proxy address is empty or invalid");
++    cstr S=Text;unsigned Port=80;uint32 Kind=XS_SYSTEM_PROXY_HTTP_CONNECT;
++    if(strlen(S)>=7&&XS_ProxyEqualN(S,"http://",7))S+=7;
++    else if(strlen(S)>=9&&XS_ProxyEqualN(S,"socks5://",9)){S+=9;Port=1080;Kind=XS_SYSTEM_PROXY_SOCKS5;}
++    else if(strlen(S)>=10&&XS_ProxyEqualN(S,"socks5h://",10)){S+=10;Port=1080;Kind=XS_SYSTEM_PROXY_SOCKS5;}
++    else if(strstr(S,"://"))return XS_ProxyFailure(R,"This system proxy protocol is unsupported; use HTTP CONNECT or SOCKS5");
++    cstr At=strchr(S,'@');
++    if(At){cstr Colon=memchr(S,':',(size_t)(At-S));if(strchr(At+1,'@')||!XS_ProxyDecode(S,(size_t)((Colon?Colon:At)-S),R->User,sizeof(R->User))||!R->User[0]||
++            (Colon&&!XS_ProxyDecode(Colon+1,(size_t)(At-Colon-1),R->Password,sizeof(R->Password))))return XS_ProxyFailure(R,"The system proxy credentials are invalid");
++        S=At+1;
++    }
++    size_t N=strlen(S);if(N&&S[N-1]=='/')N--;
++    if(!XS_ProxyAuthority(S,N,R->Host,&Port))return XS_ProxyFailure(R,"The system proxy host or port is invalid");
++    R->Port=(uint16)Port;R->Kind=Kind;return true;
++}
++#if defined(_WIN32)
++static bool XS_ProxyWindowsList(const XS_ProxyTarget* T,cstr List,cstr Bypass,XS_SystemProxyInfo* R)
++{
++    if(XS_ProxyBypass(T,Bypass,true))return true;
++    if(!XS_ProxyText(List,65536))return XS_ProxyFailure(R,"The system proxy list is invalid");
++    int Best=0;bool UnversionedSocks=false;char Selected[8193]={0};
++    for(size_t At=0;List[At];){
++        while(List[At]&&(List[At]==';'||List[At]==' '||List[At]=='\t'))At++;
++        size_t End=At;while(List[End]&&List[End]!=';'&&List[End]!=' '&&List[End]!='\t')End++;
++        size_t N=End-At;if(!N)break;cstr S=List+At;int Rank=2;
++        cstr Equal=memchr(S,'=',N);bool Socks=false,Unversioned=false;
++        if(Equal){size_t K=(size_t)(Equal-S);Rank=0;
++            if(K==(T->Tls?5u:4u)&&XS_ProxyEqualN(S,T->Tls?"https":"http",K))Rank=3;
++            else if(K==6&&XS_ProxyEqualN(S,"socks5",6)){Rank=1;Socks=true;}
++            else if(K==5&&XS_ProxyEqualN(S,"socks",5)){Rank=1;Unversioned=true;}
++            N-=(size_t)(Equal-S)+1;S=Equal+1;
++        }
++        if(Rank>Best){if(!N||N>8192)return XS_ProxyFailure(R,"The system proxy address is too long");memcpy(Selected,S,N);Selected[N]=0;
++            if(Socks&&!strstr(Selected,"://")){if(N+9>=sizeof(Selected))return XS_ProxyFailure(R,"The system proxy address is too long");memmove(Selected+9,Selected,N+1);memcpy(Selected,"socks5://",9);}
++            Best=Rank;UnversionedSocks=Unversioned;}
++        At=End;
++    }
++    bool Ok=UnversionedSocks?XS_ProxyFailure(R,"The system selected unversioned SOCKS; configure SOCKS5 manually"):!Best||XS_ProxyEndpoint(Selected,R);
++    xrtSecureZero(Selected,sizeof(Selected));return Ok;
++}
++typedef struct XS_ProxyWinApi {
++    BOOL (WINAPI *User)(WINHTTP_CURRENT_USER_IE_PROXY_CONFIG*);
++    BOOL (WINAPI *Default)(WINHTTP_PROXY_INFO*);
++    HINTERNET (WINAPI *Open)(LPCWSTR,DWORD,LPCWSTR,LPCWSTR,DWORD);
++    BOOL (WINAPI *Resolve)(HINTERNET,LPCWSTR,WINHTTP_AUTOPROXY_OPTIONS*,WINHTTP_PROXY_INFO*);
++    BOOL (WINAPI *Timeouts)(HINTERNET,int,int,int,int);
++    BOOL (WINAPI *Close)(HINTERNET);
++} XS_ProxyWinApi;
++static char* XS_ProxyUtf8(LPCWSTR S)
++{
++    if(!S)return NULL;
++    int N=WideCharToMultiByte(CP_UTF8,WC_ERR_INVALID_CHARS,S,-1,NULL,0,NULL,NULL);
++    if(N<=0||N>65537)return NULL;
++    char* Text=xrtMalloc((size_t)N);
++    if(Text&&!WideCharToMultiByte(CP_UTF8,WC_ERR_INVALID_CHARS,S,-1,Text,N,NULL,NULL)){xrtFree(Text);Text=NULL;}return Text;
++}
++static bool XS_ProxyWinResult(const XS_ProxyTarget* T,const WINHTTP_PROXY_INFO* P,XS_SystemProxyInfo* R)
++{
++    if(P->dwAccessType==WINHTTP_ACCESS_TYPE_NO_PROXY)return true;
++    char* List=XS_ProxyUtf8(P->lpszProxy),*Bypass=XS_ProxyUtf8(P->lpszProxyBypass);
++    bool Ok=List&&(!P->lpszProxyBypass||Bypass)&&XS_ProxyWindowsList(T,List,Bypass,R);
++    if(!Ok&&!R->Reason[0])XS_ProxyFailure(R,"Windows returned an invalid proxy configuration");
++    if(List){xrtSecureZero(List,strlen(List));xrtFree(List);}xrtFree(Bypass);return Ok;
++}
++static bool XS_ProxyWindowsResolve(const XS_ProxyWinApi* A,cstr Url,const XS_ProxyTarget* T,uint32 Timeout,XS_SystemProxyInfo* R)
++{
++    WINHTTP_CURRENT_USER_IE_PROXY_CONFIG C={0};WINHTTP_PROXY_INFO P={0};bool Ok=false;
++    if(!A->User(&C)){
++        if(A->Default(&P))Ok=XS_ProxyWinResult(T,&P,R);
++        else XS_ProxyFailure(R,"Windows system proxy settings could not be read");
++        goto done;
++    }
++    /* A configured static proxy does not need WPAD network discovery. */
++    if(C.lpszAutoConfigUrl||(!C.lpszProxy&&C.fAutoDetect)){
++        int N=MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,Url,-1,NULL,0);wchar_t* Wide=N>0?xrtMalloc((size_t)N*sizeof(wchar_t)):NULL;
++        HINTERNET H=Wide?A->Open(L"xs-system-proxy",WINHTTP_ACCESS_TYPE_NO_PROXY,NULL,NULL,0):NULL;
++        WINHTTP_AUTOPROXY_OPTIONS O={0};O.dwFlags=C.lpszAutoConfigUrl?WINHTTP_AUTOPROXY_CONFIG_URL:WINHTTP_AUTOPROXY_AUTO_DETECT;
++        O.lpszAutoConfigUrl=C.lpszAutoConfigUrl;O.dwAutoDetectFlags=C.lpszAutoConfigUrl?0:WINHTTP_AUTO_DETECT_TYPE_DHCP|WINHTTP_AUTO_DETECT_TYPE_DNS_A;
++        /* Never send the user's Windows logon credentials to a PAC server. */
++        O.fAutoLogonIfChallenged=FALSE;
++        bool Resolved=H&&MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,Url,-1,Wide,N)&&A->Timeouts(H,(int)Timeout,(int)Timeout,(int)Timeout,(int)Timeout)&&A->Resolve(H,Wide,&O,&P);
++        DWORD Error=Resolved?0:GetLastError();if(H)A->Close(H);xrtFree(Wide);
++        if(Resolved){Ok=XS_ProxyWinResult(T,&P,R);goto done;}
++        if(!C.lpszProxy){
++            if(!C.lpszAutoConfigUrl&&Error==ERROR_WINHTTP_AUTODETECTION_FAILED)Ok=true;
++            else XS_ProxyFailure(R,"Windows PAC or automatic proxy discovery failed; check system settings or use a manual proxy");
++            goto done;
++        }
++    }
++    if(!C.lpszProxy){Ok=true;goto done;}
++    {WINHTTP_PROXY_INFO Static={WINHTTP_ACCESS_TYPE_NAMED_PROXY,C.lpszProxy,C.lpszProxyBypass};Ok=XS_ProxyWinResult(T,&Static,R);}
++done:
++    if(C.lpszAutoConfigUrl)GlobalFree(C.lpszAutoConfigUrl);
++    if(C.lpszProxy)GlobalFree(C.lpszProxy);
++    if(C.lpszProxyBypass)GlobalFree(C.lpszProxyBypass);
++    if(P.lpszProxy)GlobalFree(P.lpszProxy);
++    if(P.lpszProxyBypass)GlobalFree(P.lpszProxyBypass);
++    return Ok;
++}
++#endif
++
++bool xsSystemProxyResolve(cstr Url,uint32 TimeoutMs,XS_SystemProxyInfo* R)
++{
++    if(!R||R->Size<sizeof(*R)||R->Version!=XS_SYSTEM_PROXY_VERSION)return false;
++    uint32 Size=R->Size;memset(R,0,sizeof(*R));R->Size=Size;R->Version=XS_SYSTEM_PROXY_VERSION;
++    XS_ProxyTarget T;if(!TimeoutMs||TimeoutMs>10000||!XS_ProxyTargetRead(Url,&T))return XS_ProxyFailure(R,"System proxy resolution requires a valid HTTP(S) target and timeout");
++#if defined(_WIN32)
++    HMODULE L=LoadLibraryExW(L"winhttp.dll",NULL,LOAD_LIBRARY_SEARCH_SYSTEM32);XS_ProxyWinApi A={0};bool Ok=false;
++    if(L){
++        FARPROC P=GetProcAddress(L,"WinHttpGetIEProxyConfigForCurrentUser");memcpy(&A.User,&P,sizeof(P));
++        P=GetProcAddress(L,"WinHttpGetDefaultProxyConfiguration");memcpy(&A.Default,&P,sizeof(P));
++        P=GetProcAddress(L,"WinHttpOpen");memcpy(&A.Open,&P,sizeof(P));
++        P=GetProcAddress(L,"WinHttpGetProxyForUrl");memcpy(&A.Resolve,&P,sizeof(P));
++        P=GetProcAddress(L,"WinHttpSetTimeouts");memcpy(&A.Timeouts,&P,sizeof(P));
++        P=GetProcAddress(L,"WinHttpCloseHandle");memcpy(&A.Close,&P,sizeof(P));
++    }
++    if(A.User&&A.Default&&A.Open&&A.Resolve&&A.Timeouts&&A.Close)Ok=XS_ProxyWindowsResolve(&A,Url,&T,TimeoutMs,R);
++    else XS_ProxyFailure(R,"The Windows proxy service is unavailable");
++    if(L)FreeLibrary(L);
++    return Ok;
++#elif defined(__ANDROID__)
++    extern bool XS_AndroidSystemProxy(cstr Url,uint32 TimeoutMs,XS_SystemProxyInfo* Result);
++    return XS_AndroidSystemProxy(Url,TimeoutMs,R);
++#else
++    cstr Bypass=getenv("no_proxy");if(!Bypass)Bypass=getenv("NO_PROXY");
++    if(Bypass&&!XS_ProxyText(Bypass,65536))return XS_ProxyFailure(R,"The process proxy bypass list is invalid");
++    if(XS_ProxyBypass(&T,Bypass,false))return true;
++    cstr Proxy=getenv(T.Tls?"https_proxy":"http_proxy");if(!Proxy)Proxy=getenv(T.Tls?"HTTPS_PROXY":"HTTP_PROXY");
++    if(!Proxy)Proxy=getenv("all_proxy");
++    if(!Proxy)Proxy=getenv("ALL_PROXY");
++    return !Proxy||!Proxy[0]||XS_ProxyEndpoint(Proxy,R);
++#endif
++}
++#endif
 --- a/src/script/import_xwork.inc
 +++ b/src/script/import_xwork.inc
 @@ -31,6 +31,9 @@
@@ -4145,7 +4553,12 @@
 -XS_XWORK_SYMBOL(xworkAgentSetFileScope)
 --- a/src/script/tcc_host.h
 +++ b/src/script/tcc_host.h
-@@ -85,6 +85,7 @@
+@@ -81,10 +81,12 @@
+ 	XS_API_SYMBOL(xsCredentialSeal)
+ 	XS_API_SYMBOL(xsCredentialUnseal)
+ 	XS_API_SYMBOL(xsOpenExternalUrl)
++	XS_API_SYMBOL(xsSystemProxyResolve)
+ 	XS_API_SYMBOL(xsBackgroundLeaseAcquire)
  	XS_API_SYMBOL(xsBackgroundLeaseRenew)
  	XS_API_SYMBOL(xsBackgroundLeaseRelease)
  	XS_API_SYMBOL(xsRootRenameNoReplace)
@@ -4173,7 +4586,38 @@
  #ifdef __cplusplus
 --- a/src/sdk/xsbase.h
 +++ b/src/sdk/xsbase.h
-@@ -381,6 +381,8 @@
+@@ -287,6 +287,30 @@
+ /* Open an HTTP(S) URL in the platform browser, never in the app WebView. */
+ XS_API bool xsOpenExternalUrl(cstr Url);
+ 
++/* Native platform selection for a single HTTP(S) destination. Secrets, if a
++ * process proxy URI contains them, are transient; clear the complete result
++ * after creating the transport. This API never changes platform settings. */
++#define XS_SYSTEM_PROXY_VERSION 1u
++#define XS_SYSTEM_PROXY_DIRECT 0u
++#define XS_SYSTEM_PROXY_HTTP_CONNECT 1u
++#define XS_SYSTEM_PROXY_SOCKS5 2u
++typedef struct XS_SystemProxyInfo {
++    uint32 Size;
++    uint32 Version;
++    uint32 Kind;
++    uint16 Port;
++    char Host[256];
++    char User[256];
++    char Password[4097];
++    char Reason[192];
++} XS_SystemProxyInfo;
++/* Windows uses current-user WinINet settings/PAC (then WinHTTP service
++ * defaults); Android uses ProxySelector; POSIX uses HTTPS_PROXY/ALL_PROXY and
++ * NO_PROXY. No proxy means DIRECT. Discovery/unsupported values fail instead
++ * of silently bypassing an explicitly configured proxy. TimeoutMs is passed
++ * to the platform resolver (1..10000). Browser extension state is not read. */
++XS_API bool xsSystemProxyResolve(cstr Url,uint32 TimeoutMs,XS_SystemProxyInfo* Result);
++
+ /* Opt-in Android CPU execution, without lighting the screen or restarting the
+  * app. Leases last 1..60 seconds and must be renewed by active work. Each token
+  * is independent; expired/released tokens cannot be revived. Release on Unit,
+@@ -381,6 +405,8 @@
  /* Atomic no-replace move of a file, directory or final link within an
   * anchored root. Both parents are resolved without escaping Root. */
  XS_API bool xsRootRenameNoReplace(xroot Root, cstr Source, cstr Target);
