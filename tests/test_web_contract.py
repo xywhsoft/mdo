@@ -22,7 +22,7 @@ class WebContractTests(unittest.TestCase):
 
     def test_web_tools_are_native_bounded_tools(self) -> None:
         source = (ROOT / "app/src/web/manager.c").read_text(encoding="utf-8")
-        for name in ("web_search", "web_open", "web_find"):
+        for name in ("search", "open", "find"):
             self.assertIn(f'Definitions[', source)
             self.assertIn(f'"{name}"', source)
         self.assertIn("XS_FETCH_PUBLIC_ADDRESSES_ONLY", source)

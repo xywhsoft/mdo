@@ -41,7 +41,7 @@ export function toolCallSummary(name, text, truncated = false) {
     case "grep": case "search":
       if (typeof args.pattern === "string") summary = `/${args.pattern}/ · ${args.path || "."}`;
       break;
-    case "poll": case "stdin": case "stop":
+    case "poll": case "status": case "stdin": case "stop":
       if (args.task_id != null || args.id != null) summary = `#${args.task_id ?? args.id}`;
       break;
     case "wait":

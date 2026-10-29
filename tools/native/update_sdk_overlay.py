@@ -30,12 +30,16 @@ def main() -> int:
         "src/xwork_core.c", "src/xwork_agent.c", "src/xwork_subagent.c",
         "xwork-xrt-roots.h", "src/xwork_process_output.inc.c",
         "src/xwork_process_tools.inc.c", "src/xwork_task.c",
-        "src/xwork_schedule.c", "src/xwork_read.inc.c"))
+        "src/xwork_schedule.c", "src/xwork_read.inc.c", "src/xwork_process_grep.inc.c"))
+    names.update('lib/xwork/' + item.relative_to(sdk/'lib/xwork').as_posix()
+                 for item in build_mdo.production_files(sdk/'lib/xwork'))
     native = ROOT / 'tools/native'
     output = sdk / 'lib/xwork/src/xwork_process_output.inc.c'
     output.write_bytes((native / output.name).read_bytes())
     process_tools = sdk / 'lib/xwork/src/xwork_process_tools.inc.c'
     process_tools.write_bytes((native / process_tools.name).read_bytes())
+    process_grep = sdk / 'lib/xwork/src/xwork_process_grep.inc.c'
+    process_grep.write_bytes((native / process_grep.name).read_bytes())
     header = (sdk / 'lib/xwork/xwork.h').read_text(encoding='utf-8')
     declarations = (native / 'xwork_process_output.inc.h').read_text(encoding='utf-8')
     if declarations not in header:

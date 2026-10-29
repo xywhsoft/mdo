@@ -295,7 +295,7 @@ export function createExtensionPanels() {
   function toolPicker(value, schema) {
     const editor = editing, target = targetKey();
     const raw = Array.isArray(value) ? value : String(value || "").replace(/^\[|\]$/g, "").replace(/["']/g, "").split(/[,\s]+/).filter(Boolean);
-    const aliases = { Read: "read", Grep: "grep", Glob: "glob", Bash: "exec", Edit: "edit", Write: "write", WebSearch: "web_search", WebFetch: "web_open", Skill: "skill" };
+    const aliases = { Read: "read", Grep: "grep", Glob: "glob", Bash: "exec", Edit: "edit", Write: "write", WebSearch: "search", WebFetch: "open", Skill: "skill", poll: "status", task_status: "status", ask_user: "ask", web_search: "search", web_open: "open", web_find: "find", tool_search: "tools", tool_load: "load", mcp_read: "fetch" };
     const special = ["inherit","all","none"].includes(value);
     const chosen = new Set((special?[]:raw).map(id => Object.hasOwn(aliases,id) ? aliases[id] : id));
     const group = element("fieldset", { className: "agent-tool-picker" }, [element("legend", { text: label("tools", "工具") })]);
@@ -309,7 +309,7 @@ export function createExtensionPanels() {
     const render = () => {
       const needle = filter.value.toLocaleLowerCase(); clear(list);
       // MCP callable names are discovered lazily and can disappear on restart.
-      // Select tool_search/tool_load here; each server owns its tool allowlist.
+      // Select tools/load here; each server owns its tool allowlist.
       const catalog = (editor.toolCatalog || []).filter(tool => tool.source === "builtin" || tool.source === "c");
       for (const id of chosen) if (!catalog.some(item => item.id === id)) catalog.push({ id, description: "", availability: "missing" });
       for (const tool of catalog) {

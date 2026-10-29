@@ -28,19 +28,19 @@ static const MdoBuiltinTool MDO_BUILTIN_TOOLS[] = {
     {"edit", "Apply exact text edits", XWORK_TOOL_EFFECT_WORKSPACE_WRITE, MDO_TOOL_ALWAYS, false},
     {"exec", "Run a command to completion", XWORK_TOOL_EFFECT_PROCESS, MDO_TOOL_ALWAYS, false},
     {"spawn", "Start a background process task", XWORK_TOOL_EFFECT_PROCESS, MDO_TOOL_ALWAYS, false},
-    {"poll", "Read task output and state", XWORK_TOOL_EFFECT_READ, MDO_TOOL_ALWAYS, false},
+    {"status", "Read task state and output file paths", XWORK_TOOL_EFFECT_READ, MDO_TOOL_ALWAYS, false},
     {"wait", "Wait for background tasks", XWORK_TOOL_EFFECT_READ, MDO_TOOL_ALWAYS, false},
     {"stdin", "Write to a process task's input", XWORK_TOOL_EFFECT_PROCESS, MDO_TOOL_ALWAYS, false},
     {"stop", "Stop a process or SubAgent task", XWORK_TOOL_EFFECT_PROCESS, MDO_TOOL_ALWAYS, false},
-    {"ask_user", "Ask the user a question", XWORK_TOOL_EFFECT_READ, MDO_TOOL_ALWAYS, false},
+    {"ask", "Ask the user a question", XWORK_TOOL_EFFECT_READ, MDO_TOOL_ALWAYS, false},
     {"skill", "Discover and read installed Skills", XWORK_TOOL_EFFECT_READ, MDO_TOOL_ALWAYS, false},
     {"agent", "Delegate to an enabled SubAgent", XWORK_TOOL_EFFECT_AGENT_DELEGATION, MDO_TOOL_SUBAGENT, false},
-    {"web_search", "Search the web through the account service", XWORK_TOOL_EFFECT_READ | XWORK_TOOL_EFFECT_NETWORK | XWORK_TOOL_EFFECT_EXTERNAL_SERVICE | XWORK_TOOL_EFFECT_SECRETS, MDO_TOOL_WEB, true},
-    {"web_open", "Read a public web page", XWORK_TOOL_EFFECT_READ | XWORK_TOOL_EFFECT_NETWORK, MDO_TOOL_WEB, true},
-    {"web_find", "Find text in an opened web page", XWORK_TOOL_EFFECT_READ, MDO_TOOL_WEB, true},
-    {"tool_search", "Discover connected MCP tools", XWORK_TOOL_EFFECT_EXTERNAL_SERVICE, MDO_TOOL_MCP, false},
-    {"tool_load", "Load an MCP tool on demand", XWORK_TOOL_EFFECT_EXTERNAL_SERVICE, MDO_TOOL_MCP, false},
-    {"mcp_read", "Read MCP resources and prompts", XWORK_TOOL_EFFECT_EXTERNAL_SERVICE, MDO_TOOL_MCP, false}
+    {"search", "Search the web through the account service", XWORK_TOOL_EFFECT_READ | XWORK_TOOL_EFFECT_NETWORK | XWORK_TOOL_EFFECT_EXTERNAL_SERVICE | XWORK_TOOL_EFFECT_SECRETS, MDO_TOOL_WEB, true},
+    {"open", "Read a public web page", XWORK_TOOL_EFFECT_READ | XWORK_TOOL_EFFECT_NETWORK, MDO_TOOL_WEB, true},
+    {"find", "Find text in an opened web page", XWORK_TOOL_EFFECT_READ, MDO_TOOL_WEB, true},
+    {"tools", "Discover connected MCP tools", XWORK_TOOL_EFFECT_EXTERNAL_SERVICE, MDO_TOOL_MCP, false},
+    {"load", "Load an MCP tool on demand", XWORK_TOOL_EFFECT_EXTERNAL_SERVICE, MDO_TOOL_MCP, false},
+    {"fetch", "Read MCP resources and prompts", XWORK_TOOL_EFFECT_EXTERNAL_SERVICE, MDO_TOOL_MCP, false}
 };
 
 static inline const MdoBuiltinTool* MdoBuiltinToolFind(cstr Id)
@@ -56,8 +56,9 @@ static inline cstr MdoBuiltinToolCanonicalId(cstr Id)
 {
     static const char* const Aliases[][2] = {
         {"Read","read"}, {"Grep","grep"}, {"Glob","glob"}, {"Bash","exec"},
-        {"Edit","edit"}, {"Write","write"}, {"WebSearch","web_search"},
-        {"WebFetch","web_open"}, {"Skill","skill"}
+        {"Edit","edit"}, {"Write","write"}, {"WebSearch","search"},
+        {"WebFetch","open"}, {"Skill","skill"},
+        {"poll","status"}, {"task_status","status"}, {"ask_user","ask"}, {"web_search","search"}, {"web_open","open"}, {"web_find","find"}, {"tool_search","tools"}, {"tool_load","load"}, {"mcp_read","fetch"}
     };
     size_t i;
     for (i=0u;i<sizeof(Aliases)/sizeof(Aliases[0]);++i)

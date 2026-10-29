@@ -8,6 +8,7 @@ test("file/search/process/task summaries preserve the old tool-specific reading 
   assert.equal(toolCallSummary("read", '{"path":"notes/QA notes.txt"}'), "notes/QA notes.txt");
   assert.equal(toolCallSummary("grep", '{"path":"src","pattern":"token"}'), "/token/ · src");
   assert.equal(toolCallSummary("poll", '{"task_id":17,"wait_ms":1000}'), "#17");
+  assert.equal(toolCallSummary("status", '{"task_id":17}'), "#17");
   assert.equal(toolCallSummary("wait", '{"task_ids":[17,23]}'), "#17, #23");
   assert.equal(toolCallSummary("exec", '{"argv":["python","-c","print(42)","two words"]}'),
     'python -c print(42) "two words"');

@@ -1106,6 +1106,15 @@ static bool MdoModulesAgentCopy(MdoModuleGeneration* pGeneration,
         return false;
     }
     pTarget->ToolCount = pAgent->ToolCount;
+    /* C descriptors and configuration files share the compact built-in IDs. */
+    for(size_t i=0;i<pAgent->ToolCount;i++) {
+        cstr Canonical=MdoBuiltinToolCanonicalId(pTarget->Tools[i]);
+        if(strcmp(Canonical,pTarget->Tools[i])) {
+            char* Copy=xrtStrDup(Canonical);
+            if(!Copy){MdoModulesAgentUnit(pTarget);return false;}
+            xrtFree(pTarget->Tools[i]);pTarget->Tools[i]=Copy;
+        }
+    }
     {
         size_t i;
         for ( i = 0u; i < pTarget->ToolCount; ++i ) {

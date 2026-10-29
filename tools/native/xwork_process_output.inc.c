@@ -115,12 +115,24 @@ static int xwork__output_old_compare(const void* A,const void* B)
 static bool xwork__output_receipt_read(xroot Run,uint64_t* Limit,int64_t* Ended)
 {
     char Text[256];xfileoptions Opt;xrtFileOptionsInit(&Opt);Opt.Flags=XFILE_READ|XFILE_NOFOLLOW;
-    xfile F=xrtRootFileOpen(Run,"receipt.json",&Opt);if(!F)return false;
+    xfile F=xrtRootFileOpen(Run,".receipt.json",&Opt);if(!F)return false;
     size_t N=0;bool Read=xrtRead(F,Text,sizeof(Text)-1u,&N);xrtClose(F);if(!Read||!N||N==sizeof(Text)-1u)return false;
     Text[N]=0;xvalue* V=xrtJsonParse(xrtStrView(Text));uint64_t Stamp=0,Format=0;
     bool Ok=V&&xwork__output_get_uint(V,"format",&Format)&&Format==1u&&
         xwork__output_get_uint(V,"limit",Limit)&&xwork__output_get_uint(V,"ended_ms",&Stamp)&&Stamp<=INT64_MAX;
-    if(Ok)*Ended=(int64_t)Stamp;xrtValueRelease(V);return Ok;
+    if(Ok)*Ended=(int64_t)Stamp;xrtValueRelease(V);
+    if(Ok) {
+        F=xrtRootFileOpen(Run,".finished.json",&Opt);
+        if(F) {
+            N=0;Read=xrtRead(F,Text,sizeof(Text)-1u,&N);xrtClose(F);
+            if(Read&&N&&N<sizeof(Text)-1u) {
+                Text[N]=0;V=xrtJsonParse(xrtStrView(Text));
+                if(V&&xwork__output_get_uint(V,"ended_ms",&Stamp)&&Stamp<=INT64_MAX)*Ended=(int64_t)Stamp;
+                xrtValueRelease(V);
+            }
+        }
+    }
+    return Ok;
 }
 
 static uint64_t xwork__output_scan(xroot Root,uint64_t Target,uint64_t MaxAgeSeconds,bool* Ok)
@@ -137,14 +149,17 @@ static uint64_t xwork__output_scan(xroot Root,uint64_t Target,uint64_t MaxAgeSec
         uint64_t Limit=0,Bytes=0;int64_t Ended=0;
         if(!xwork__output_receipt_read(Run,&Limit,&Ended)||!Limit||Limit>XWORK_OUTPUT_STORE_MAX){xrtRootClose(Run);continue;}
         bool Local=xwork__output_local_active(Name);
-        xfile Lease=Local?NULL:xwork__output_file(Run,"active.lock",false);
+        xfile Lease=Local?NULL:xwork__output_file(Run,".active.lock",false);
         bool Active=Local||!Lease||!xrtFileLock(Lease,XFILE_LOCK_EXCLUSIVE,false);
         if(Active) Bytes=Limit;
         else {
+            /* Re-read completion only after the lifetime lock is acquired. A
+             * finishing writer may have been publishing its immutable marker. */
+            (void)xwork__output_receipt_read(Run,&Limit,&Ended);
             if(xrtRootStat(Run,"stdout.log",false,&Info)&&Info.Type==XFILE_TYPE_FILE)Bytes+=Info.Size;
             if(xrtRootStat(Run,"stderr.log",false,&Info)&&Info.Type==XFILE_TYPE_FILE)Bytes+=Info.Size;
             if(!Ended) { /* Unlocked unfinished receipt: process owner has gone. */
-                if(xrtRootStat(Run,"receipt.json",false,&Info))Ended=Info.Modified;
+                if(xrtRootStat(Run,".receipt.json",false,&Info))Ended=Info.Modified;
                 else Ended=Now;
             }
             if(Count==Cap) {size_t Next=Cap?Cap*2u:32u;void* P=realloc(Old,Next*sizeof(*Old));if(!P){*Ok=false;xrtClose(Lease);xrtRootClose(Run);break;}Old=P;Cap=Next;}
@@ -160,16 +175,19 @@ static uint64_t xwork__output_scan(xroot Root,uint64_t Target,uint64_t MaxAgeSec
         bool Expired=MaxAgeSeconds&&Now>=Old[i].Ended&&(uint64_t)(Now-Old[i].Ended)/1000u>=MaxAgeSeconds;
         if(Total<=Target&&!Expired)continue;
         xroot Run=xrtRootOpenIn(Root,Old[i].Name);if(!Run)continue;
-        xfile Lease=xwork__output_file(Run,"active.lock",false);
+        xfile Lease=xwork__output_file(Run,".active.lock",false);
         bool Removed=false;
         if(Lease&&xrtFileLock(Lease,XFILE_LOCK_EXCLUSIVE,false)) {
             /* Only our fixed files are removed, never recursive arbitrary content. */
             bool A=xrtRootRemove(Run,"stdout.log")||xrtErrorKind(xrtGetError())==XERR_NOT_FOUND;
             bool B=xrtRootRemove(Run,"stderr.log")||xrtErrorKind(xrtGetError())==XERR_NOT_FOUND;
-            if(A&&B)Removed=xrtRootRemove(Run,"receipt.json");
+            if(A&&B) {
+                bool C=xrtRootRemove(Run,".finished.json")||xrtErrorKind(xrtGetError())==XERR_NOT_FOUND;
+                if(C)Removed=xrtRootRemove(Run,".receipt.json");
+            }
         }
         if(Lease)xrtClose(Lease);
-        if(Removed){(void)xrtRootRemove(Run,"active.lock");Total=Total>=Old[i].Bytes?Total-Old[i].Bytes:0;}
+        if(Removed){(void)xrtRootRemove(Run,".active.lock");Total=Total>=Old[i].Bytes?Total-Old[i].Bytes:0;}
         xrtRootClose(Run);if(Removed)(void)xrtRootRemove(Root,Old[i].Name);
     }
     free(Old);return Total;
@@ -178,8 +196,9 @@ static uint64_t xwork__output_scan(xroot Root,uint64_t Target,uint64_t MaxAgeSec
 bool xworkProcessOutputCollect(xroot Directory,uint64_t MaxBytes,uint64_t MaxAgeSeconds)
 {
     if(!xwork__output_local_lock())return false;
-    xroot Root=xwork__output_root(Directory);if(!Root){xrtMutexUnlock(xwork__output_gate);return false;}
-    xfile Gate=xwork__output_file(Root,"quota.lock",false);bool Ok=false;
+    xroot Root=Directory?xrtRootOpenIn(Directory,"process"):NULL;
+    if(!Root){bool Missing=Directory&&xrtErrorKind(xrtGetError())==XERR_NOT_FOUND;xrtMutexUnlock(xwork__output_gate);return Missing;}
+    xfile Gate=xwork__output_file(Root,".quota.lock",false);bool Ok=false;
     if(Gate&&xrtFileLock(Gate,XFILE_LOCK_EXCLUSIVE,true)) {
         uint64_t Total=xwork__output_scan(Root,MaxBytes?MaxBytes:XWORK_OUTPUT_STORE_MAX,MaxAgeSeconds,&Ok);
         Ok=Ok&&Total<=(MaxBytes?MaxBytes:XWORK_OUTPUT_STORE_MAX);
@@ -192,9 +211,9 @@ static bool xwork__output_receipt(xwork_process_output* O)
     if(!O->Run)return true;
     char Text[192];int N=snprintf(Text,sizeof(Text),"{\"format\":1,\"limit\":%llu,\"ended_ms\":%llu}\n",
         (unsigned long long)O->MaxBytes,(unsigned long long)(O->Finished?xllmUnixUs()/1000:0));
-    xfileoptions Opt;xrtFileOptionsInit(&Opt);Opt.Flags=XFILE_WRITE|XFILE_CREATE|XFILE_TRUNCATE|XFILE_NOFOLLOW;
+    xfileoptions Opt;xrtFileOptionsInit(&Opt);Opt.Flags=XFILE_WRITE|XFILE_CREATE|XFILE_EXCLUSIVE|XFILE_NOFOLLOW;
     Opt.Mode=0600u;Opt.Share=XFILE_SHARE_READ;
-    xfile F=xrtRootFileOpen(O->Run,"receipt.json",&Opt);
+    xfile F=xrtRootFileOpen(O->Run,O->Finished?".finished.json":".receipt.json",&Opt);
     bool Ok=F&&N>0&&xrtWriteFull(F,Text,(size_t)N,NULL);if(F)xrtClose(F);return Ok;
 }
 
@@ -203,7 +222,7 @@ static bool xwork__output_reserve(xwork_process_output* O)
     if(O->Reserved)return true;
     if(!xwork__output_local_lock())return false;
     xroot Root=xwork__output_root(O->Root);if(!Root){xrtMutexUnlock(xwork__output_gate);return false;}
-    xfile Gate=xwork__output_file(Root,"quota.lock",false);bool Ok=false;
+    xfile Gate=xwork__output_file(Root,".quota.lock",false);bool Ok=false;
     if(!Gate||!xrtFileLock(Gate,XFILE_LOCK_EXCLUSIVE,true))goto done;
     bool Scanned=false;uint64_t Total=xwork__output_scan(Root,XWORK_OUTPUT_STORE_MAX-O->MaxBytes,XWORK_OUTPUT_AGE,&Scanned);
     if(!Scanned||Total>XWORK_OUTPUT_STORE_MAX-O->MaxBytes){xwork__output_error(O,"store_limit");goto done;}
@@ -211,7 +230,7 @@ static bool xwork__output_reserve(xwork_process_output* O)
     for(size_t i=0;i<sizeof(Random);i++) {static const char Hex[]="0123456789abcdef";O->Id[i*2u]=Hex[Random[i]>>4];O->Id[i*2u+1u]=Hex[Random[i]&15u];}
     if(!xrtRootDirCreate(Root,O->Id,0700u))goto done;
     O->Run=xrtRootOpenIn(Root,O->Id);if(!O->Run)goto done;
-    O->Lease=xwork__output_file(O->Run,"active.lock",true);
+    O->Lease=xwork__output_file(O->Run,".active.lock",true);
     if(!O->Lease||!xrtFileLock(O->Lease,XFILE_LOCK_EXCLUSIVE,false)||!xwork__output_receipt(O))goto done;
     O->Reserved=true;O->ActiveNext=xwork__output_active;xwork__output_active=O;Ok=true;
 done:

@@ -29,6 +29,7 @@ def main() -> None:
             '-I'+str(sdk/'lib/xrtshim'), '-I'+str(sdk/'lib/xhttp/include'),
             '-I'+str(sdk/'lib/xllm'), '-I'+str(sdk/'lib/xllm-session'),
             str(ROOT/'tests/fixtures/process-output-store.c'), '-o', str(binary)]
+        if os.name!='nt':command.insert(1,'-D_GNU_SOURCE')
         command += ['-lws2_32','-lbcrypt','-lcrypt32','-liphlpapi','-lwinmm','-ladvapi32','-lshell32','-lshlwapi','-lole32','-luuid'] if os.name=='nt' else ['-pthread','-ldl','-lm']
         subprocess.run(command, cwd=ROOT, check=True)
         subprocess.run([str(binary), str(base/'files')], cwd=ROOT, check=True, timeout=30)

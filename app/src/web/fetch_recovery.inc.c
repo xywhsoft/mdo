@@ -212,7 +212,7 @@ static xwork_result MdoWebPageFailure(xwork_tool_result_writer* Writer,
         case 425: case 500: case 502: case 503: Reason = "The remote website is temporarily unavailable."; break;
     }
     char Message[640];
-    snprintf(Message, sizeof(Message), "web_open HTTP %u: %s%s", (unsigned)Response->Status,
+    snprintf(Message, sizeof(Message), "open HTTP %u: %s%s", (unsigned)Response->Status,
         Reason, Recovery->WaitExceedsBudget ?
         " The required retry delay exceeds this call's remaining time; no early retry was sent." :
         Recovery->Exhausted ? " Automatic retries were exhausted; try another source or retry later." : "");

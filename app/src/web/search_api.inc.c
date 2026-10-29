@@ -145,13 +145,13 @@ static xwork_result MdoWebSearchExecute(void* pUserData,
          !MdoWebString(xrtValueObjectGet(Arguments, xrtStrView("query")),
             1u, MDO_WEB_QUERY_LIMIT, &Query) || !MdoWebSearchQueryValid(Query) ) {
         Result = MdoWebToolFail(pWriter, pError,
-            "web_search requires a nonblank UTF-8 query without control characters and optional count (1-10)");
+            "search requires a nonblank UTF-8 query without control characters and optional count (1-10)");
         goto done;
     }
     CountValue = xrtValueObjectGet(Arguments, xrtStrView("count"));
     if ( CountValue != NULL && (!MdoWebUnsigned(CountValue, &Count) ||
          Count == 0u || Count > MDO_WEB_SEARCH_MAX_RESULTS) ) {
-        Result = MdoWebToolFail(pWriter, pError, "web_search count must be an integer from 1 to 10");
+        Result = MdoWebToolFail(pWriter, pError, "search count must be an integer from 1 to 10");
         goto done;
     }
     if (snprintf(Endpoint,sizeof(Endpoint),"%s/requests",MdoAccountSearchEndpoint()) >= (int)sizeof(Endpoint)) {
@@ -209,7 +209,7 @@ acquire_account:
     snprintf(Authorization, strlen(Token) + 8u, "Bearer %s", Token);
     Headers[0] = (XS_FetchHeader){ "Accept", "application/json" };
     Headers[1] = (XS_FetchHeader){ "Content-Type", "application/json" };
-    Headers[2] = (XS_FetchHeader){ "User-Agent", "mdo/1 web_search" };
+    Headers[2] = (XS_FetchHeader){ "User-Agent", "mdo/1 search" };
     Headers[3] = (XS_FetchHeader){ "Authorization", Authorization };
 fetch_search:
     if ( (FetchContext.pCancel && xrtCancelRequested(FetchContext.pCancel)) ||

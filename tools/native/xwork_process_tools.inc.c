@@ -256,9 +256,12 @@ static xwork_result xwork__tool_exec(void* User,const xwork_tool_context* Contex
     Options.StdoutLimit=Options.StderrLimit=0;Options.Overflow=XPROCESS_OVERFLOW_KEEP_FIRST;
     Options.Output=xwork__process_run_output;Options.UserData=Capture;
     if(Agent->OnProcessAcquire){if(!Agent->OnProcessAcquire(Agent->pProcessOwnerData,&Lease)){Result=xwork__tool_process_fail(Output,"exec/resources",Argv[0],Cwd,xrtGetError());goto done;}Held=true;}
-    xrtClearError();bool Ran=xrtProcessRun(&Config,&Options,&Process);xworkProcessOutputFinish(Capture);
+    xrtClearError();bool Ran=xrtProcessRun(&Config,&Options,&Process);
+    /* Format the native cause before closing output files can replace the
+     * thread's error. Retaining partial logs must not hide the launch error. */
+    if(!Ran)Result=xwork__tool_process_fail(Output,"exec/start-or-capture",Argv[0],Cwd,xrtGetError());
+    xworkProcessOutputFinish(Capture);
     if(!Ran){
-        Result=xwork__tool_process_fail(Output,"exec/start-or-capture",Argv[0],Cwd,xrtGetError());
         if(xrtMutexLock(Capture->Lock)) {xwork__output_error(Capture,"process_capture_failed");xrtMutexUnlock(Capture->Lock);}
         xvalue* Partial=xworkProcessOutputSnapshot(Capture,true);char* Json=Partial?xrtJsonStringify(Partial,false,NULL):NULL;
         if(Json){xwork_buf Detail={0};if(xwork__buf_append_cstr(&Detail,Output->sContent?Output->sContent:"")&&

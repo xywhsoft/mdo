@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "internal.h"
+#include "../../include/mdo/tool_catalog.h"
 #include "../../include/mdo/agents.h"
 #include "../../include/mdo/runs.h"
 #include "../../include/mdo/sessions.h"
@@ -200,7 +201,7 @@ static bool MdoApiRecoveryReply(MdoApiContext* Context,
             Info.sArgumentsJson != NULL;
         if ( !Ok ) break;
         AllRead = AllRead && Info.bToolAvailable && Info.bAutomaticRetrySafe;
-        MeteredSearch = MeteredSearch || strcmp(Info.sToolName, "web_search") == 0;
+        MeteredSearch = MeteredSearch || strcmp(MdoBuiltinToolCanonicalId(Info.sToolName), "search") == 0;
         CallIdSize = strlen(Info.sToolCallId);
         ToolSize = strlen(Info.sToolName);
         ArgumentSize = strlen(Info.sArgumentsJson);

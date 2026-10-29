@@ -24,6 +24,8 @@ static bool SameFile(const char* Path,const void* Expected,size_t N) {
 int main(int Argc,char** Argv) {
     if(Argc!=2)return 2;
     xroot Root=xrtRootOpen(Argv[1]);CHECK(Root);
+    CHECK(xworkProcessOutputCollect(Root,1024u*1024u,1u));xfileinfo Empty;
+    CHECK(!xrtRootStat(Root,"process",false,&Empty)&&xrtErrorKind(xrtGetError())==XERR_NOT_FOUND);
     xwork_process_output_options Opt;xworkProcessOutputOptionsInit(&Opt);Opt.Directory=Root;
     xwork_error Error;xwork_process_output* O=xworkProcessOutputCreate(&Opt,&Error);CHECK(O);
     CHECK(xworkProcessOutputWrite(O,false,"short stdout",12));CHECK(xworkProcessOutputWrite(O,true,"short stderr",12));

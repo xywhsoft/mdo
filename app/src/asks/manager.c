@@ -225,7 +225,7 @@ static xwork_result MdoAskExecute(void* UserData,
     memset(&Request, 0, sizeof(Request));
     if ( !MdoAskParse(ArgumentsJson, &Request) ) {
         if ( !xworkToolOutputSet(Output, false,
-                "Invalid question or options; revise the ask_user call.") )
+                "Invalid question or options; revise the ask call.") )
             return XWORK_RESULT_ERROR;
         return XWORK_RESULT_OK;
     }
@@ -321,7 +321,7 @@ bool MdoAskRegisterTool(xwork_agent* Agent, const char* ProjectId,
     snprintf(Value->ProjectId, sizeof(Value->ProjectId), "%s", ProjectId);
     snprintf(Value->SessionId, sizeof(Value->SessionId), "%s", SessionId);
     memset(&Tool, 0, sizeof(Tool));
-    Tool.sName = "ask_user";
+    Tool.sName = "ask";
     Tool.sDescription = "Ask the user a concise question and wait for an answer. Provide short options when useful; free text is always available.";
     Tool.sParametersJson = Schema;
     Tool.bStrict = true;
@@ -330,7 +330,7 @@ bool MdoAskRegisterTool(xwork_agent* Agent, const char* ProjectId,
     Tool.pUserData = Value;
     Tool.sSource = "mdo-interaction";
     Tool.iMaxResultBytes = MDO_ASK_ANSWER_CAPACITY + 80u;
-    Tool.sSerialGroup = "mdo.ask_user";
+    Tool.sSerialGroup = "mdo.ask";
     if ( !xworkAgentRegisterTool(Agent, &Tool, Error) ) {
         xrtFree(Value);
         return false;

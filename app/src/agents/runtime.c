@@ -878,6 +878,7 @@ static bool MdoAgentsCatalogHasTool(const xwork_tool_catalog* Catalog,
 {
     xwork_tool_info Info;
     size_t i;
+    Tool=MdoBuiltinToolCanonicalId(Tool);
     for ( i = 0u; i < xworkToolCatalogCount(Catalog); ++i ) {
         memset(&Info, 0, sizeof(Info));
         if ( xworkToolCatalogToolAt(Catalog, i, &Info) &&
