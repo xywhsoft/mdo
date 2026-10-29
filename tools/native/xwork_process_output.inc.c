@@ -335,15 +335,16 @@ static xvalue* xwork__output_stream_value(xwork_process_output* O,size_t Index,b
 {
     xwork_output_stream* S=&O->Streams[Index];xvalue* V=xrtValueObject();if(!V)return NULL;
     bool Ok=xwork__output_uint(V,"bytes",S->Received)&&xwork__output_uint(V,"saved_bytes",S->Path?S->FileBytes:S->Stored)&&
-        xwork__output_bool(V,"complete",O->Finished&&!S->Lost)&&xwork__output_bool(V,"preview_omitted",S->Stored>S->Preview.iLen)&&
+        xwork__output_bool(V,"complete",O->Finished&&!S->Lost)&&xwork__output_bool(V,"preview_omitted",S->Path?S->Stored>1024u:S->Stored>S->Preview.iLen)&&
         xwork__output_put(V,"path",S->Locator?S->Locator:S->Path)&&xwork__output_put(V,"native_path",S->Path);
     if(Ok&&IncludeText) {
-        xwork_buf Text={0};Ok=xwork__buf_append_process_text(&Text,S->Preview.pData,S->Preview.iLen);
-        if(Ok&&S->Stored>S->Preview.iLen&&S->Path) {
+        size_t Head=S->Path&&S->Stored>1024u&&S->Preview.iLen>512u?512u:S->Preview.iLen;
+        xwork_buf Text={0};Ok=xwork__buf_append_process_text(&Text,S->Preview.pData,Head);
+        if(Ok&&S->Stored>Head&&S->Path) {
             xfileoptions Opt;xrtFileOptionsInit(&Opt);Opt.Flags=XFILE_READ|XFILE_NOFOLLOW;
             xfile F=S->Explicit?xrtFileOpen(S->Path,&Opt):
                 xrtRootFileOpen(O->Run,Index?"stderr.log":"stdout.log",&Opt);
-            unsigned char Tail[1024];size_t N=S->Stored-S->Preview.iLen>sizeof(Tail)?sizeof(Tail):(size_t)(S->Stored-S->Preview.iLen);
+            unsigned char Tail[512];size_t N=S->Stored-Head>sizeof(Tail)?sizeof(Tail):(size_t)(S->Stored-Head);
             size_t Got=0;
             if(F&&xrtReadAtFull(F,S->Stored-N,Tail,N,&Got))Ok=xwork__buf_append_cstr(&Text,"\n...[preview omitted; read file for full output]...\n")&&xwork__buf_append_process_text(&Text,Tail,Got);
             if(F)xrtClose(F);

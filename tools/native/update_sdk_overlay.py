@@ -28,10 +28,14 @@ def main() -> int:
     names.update("lib/xwork/" + name for name in (
         "xwork.h", "src/xwork_internal.h", "src/xwork_runtime.c",
         "src/xwork_core.c", "src/xwork_agent.c", "src/xwork_subagent.c",
-        "xwork-xrt-roots.h", "src/xwork_process_output.inc.c"))
+        "xwork-xrt-roots.h", "src/xwork_process_output.inc.c",
+        "src/xwork_process_tools.inc.c", "src/xwork_task.c",
+        "src/xwork_schedule.c", "src/xwork_read.inc.c"))
     native = ROOT / 'tools/native'
     output = sdk / 'lib/xwork/src/xwork_process_output.inc.c'
     output.write_bytes((native / output.name).read_bytes())
+    process_tools = sdk / 'lib/xwork/src/xwork_process_tools.inc.c'
+    process_tools.write_bytes((native / process_tools.name).read_bytes())
     header = (sdk / 'lib/xwork/xwork.h').read_text(encoding='utf-8')
     declarations = (native / 'xwork_process_output.inc.h').read_text(encoding='utf-8')
     if declarations not in header:
