@@ -76,8 +76,12 @@ def build(output,platforms):
         runtime=ROOT/"tools/runtime"/platform
         if platform=="linux-x86_64":info=json.loads((runtime/"catalog.json").read_text())["tools"]
         else:info=[r for r in catalog if r["platform"]==platform]
-        for definition in definitions:
-            tool=definition["id"];record=next(r for r in info if r["id"]==tool)
+        known={row['id']:row for row in definitions}
+        if len({row['id'] for row in info})!=len(info):raise ValueError('Duplicate bundled tool catalogue entry: '+platform)
+        for record in info:
+            tool=record['id']
+            if tool not in known:raise ValueError('Bundled tool is missing official metadata: '+tool)
+            definition=known[tool]
             with tempfile.TemporaryDirectory(prefix="cli-artifact-",dir=ROOT/".build") as raw:
                 stage=Path(raw);shutil.copytree(runtime/tool,stage/tool)
                 if platform=="windows-x86_64" and tool=="python":prepare_windows_python(stage/tool)

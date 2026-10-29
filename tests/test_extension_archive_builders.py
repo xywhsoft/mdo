@@ -20,7 +20,8 @@ class ArchiveBuilders(unittest.TestCase):
    row=package_tool(stage,metadata(),root/'out')
    with zipfile.ZipFile(root/'out'/row['file']) as archive:
     self.assertIsNone(archive.testzip());self.assertIn('empty/',archive.namelist());self.assertEqual(archive.read('.hidden/resource'),b'\0\xffdata');self.assertTrue(archive.getinfo('bin/fixture.exe').external_attr>>16&0o111)
-    self.assertEqual(json.loads(archive.read('extension.json'))['description'],'For people');self.assertEqual(json.loads(archive.read('tool.json'))['prompt'],'For the model')
+    manifest=json.loads(archive.read('extension.json'));self.assertEqual(manifest['id'],'external-tool:mdo.fixture');self.assertEqual(manifest['alias'],'fixture')
+    self.assertEqual(manifest['description'],'For people');self.assertEqual(json.loads(archive.read('tool.json'))['prompt'],'For the model')
    (stage/'Straße.txt').write_bytes(b'one');(stage/'strasse.txt').write_bytes(b'collision')
    with self.assertRaises(ValueError):package_tool(stage,metadata(),root/'out')
  def test_converter_streams_and_preserves_upstream_bytes_and_permissions(self):

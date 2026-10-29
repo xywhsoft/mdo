@@ -42,7 +42,7 @@ def inspect(row,incoming):
             if name not in names or not 0<names[name].file_size<=limit:raise ValueError('Missing or oversized publication document')
         meta=json.loads(archive.read('extension.json'));config=json.loads(archive.read('tool.json'))
         if meta.get('kind')!='external-tools' or meta.get('entry')!='tool.json' or meta.get('platforms')!=[row['platform']] or any(key in meta for key in ('files','resources','base64','format','min_build_id','format_version')):raise ValueError('Not a whole-directory external tool')
-        checked,recipe=tool_documents({**meta,'id':meta['alias'],'platform':row['platform'],'entry':config.get('program'),'prompt':config.get('prompt'),'links':config.get('links',[]),'commands':config.get('commands',[])})
+        checked,recipe=tool_documents({**meta,'id':meta['alias'],'extension_id':meta['id'],'platform':row['platform'],'entry':config.get('program'),'prompt':config.get('prompt'),'links':config.get('links',[]),'commands':config.get('commands',[])})
         if recipe!=config or meta!=checked:raise ValueError('Unexpected official tool recipe or metadata')
         for path in [config['program'],*[item['entry'] for item in config['commands']]]:
             if path not in names or names[path].is_dir() or not names[path].file_size:raise ValueError('Program or command target is missing')

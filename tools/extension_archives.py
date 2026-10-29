@@ -27,7 +27,9 @@ def tool_documents(metadata):
     if metadata.get('platform') not in ('windows-x86_64','linux-x86_64','linux-x86_64-glibc','linux-x86_64-musl','linux-arm64','android-arm64-v8a','macos-arm64'):raise ValueError('Invalid tool platform')
     alias=metadata['id']
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,63}',alias):raise ValueError('Invalid tool alias')
-    meta=dict(kind='external-tools',alias=alias,name=metadata['name'],entry='tool.json',platforms=[metadata['platform']])
+    identity=metadata.get('extension_id','external-tool:mdo.'+alias.lower())
+    if not isinstance(identity,str) or not re.fullmatch(r'external-tool:[a-z0-9_-][a-z0-9._-]{0,127}',identity) or identity.endswith('.') or '..' in identity:raise ValueError('Invalid tool logical identity')
+    meta=dict(kind='external-tools',id=identity,alias=alias,name=metadata['name'],entry='tool.json',platforms=[metadata['platform']])
     for key,limit in [('version',128),('description',2048),('copyright',4096),('license',1024),('author',240)]:
         if key in metadata:
             value=metadata[key]
