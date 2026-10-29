@@ -106,7 +106,8 @@ static bool CliOwnedAlias(cstr Path,const xvalue* Row,const void* Image,size_t S
 {
     if(!Row)return false;
 #if defined(__ANDROID__)
-    (void)Image;(void)Size;char* Native=MdoAndroidForwarder();bool Ok=Native&&MdoAndroidToolOwnedLink(Path,Native);xrtFree(Native);return Ok;
+    (void)Image;(void)Size;char* Native=MdoAndroidForwarder();cstr Previous=CliText(Row,"launcher_path",4096);
+    bool Ok=(Native&&MdoAndroidToolOwnedLink(Path,Native))||(Previous[0]&&MdoAndroidToolOwnedLink(Path,Previous));xrtFree(Native);return Ok;
 #elif defined(_WIN32) || defined(_WIN64)
     if(CliFileMatches(Path,Image,Size))return true;
     cstr Expected=CliText(Row,"launcher_sha256",64);if(!MdoCliHashValid(Expected))return false;
@@ -117,15 +118,40 @@ static bool CliOwnedAlias(cstr Path,const xvalue* Row,const void* Image,size_t S
     (void)Image;(void)Size;char* Script=CliWrapper(Row);bool Ok=Script&&CliFileMatches(Path,Script,strlen(Script));xrtFree(Script);return Ok;
 #endif
 }
+#if defined(__ANDROID__)
+/* Older APKs did not retain a launcher receipt. Only reclaim a registered
+ * alias whose link names this same package's OS-installed forwarder. A user
+ * file, another package, another library or any other link remains untouched. */
+static bool CliPreviousAndroidAlias(cstr Path,const xvalue* Previous)
+{
+    if(!Previous||!CliRelativeValid(CliText(Previous,"target",4096)))return false;
+    cstr Leaf=strrchr(Path,'/');char* Parent=xrtPathParent(Path);xroot Root=Parent?MdoHomeOpenStorageDirectory(Parent):NULL;
+    char* Target=Root&&Leaf?xrtRootLinkRead(Root,Leaf+1):NULL,*Native=MdoAndroidForwarder();
+    if(Root)xrtRootClose(Root);
+    xrtFree(Parent);
+    bool Ok=Target&&Native&&!strncmp(Target,"/data/app/",10)&&!strncmp(Native,"/data/app/",10)&&
+        MdoExtensionRelativePath(Target+1)&&MdoExtensionRelativePath(Native+1);
+    cstr Old=Ok?strstr(Target,"/lib/"):NULL,Now=Ok?strstr(Native,"/lib/"):NULL;
+    Ok=Old&&Now&&!strcmp(Old,Now);cstr OldName=Old,Name=Now;
+    if(Ok){while(OldName>Target&&OldName[-1]!='/')OldName--;while(Name>Native&&Name[-1]!='/')Name--;
+        cstr Dash=memchr(Name,'-',(size_t)(Now-Name));size_t Prefix=Dash?(size_t)(Dash-Name)+1:0;
+        Ok=Prefix&&(size_t)(Old-OldName)>Prefix&&!strncmp(OldName,Name,Prefix);}
+    xrtFree(Target);xrtFree(Native);return Ok;
+}
+#endif
 static bool CliPrepareBindings(xvalue* Map,const xvalue* Previous,const void* Image,size_t Size,bool Restore)
 {
     xroot Root=MdoHomeOpenStorageDirectory("data/external-tools/bin");if(!Root)return false;xrtRootClose(Root);
     for(size_t I=0;I<xrtValueCount(Map);I++){
         xstrview Name;xvalue* Row=xrtValueObjectAt(Map,I,&Name);const xvalue* Old=xrtValueObjectGet(Previous,Name);if(!Old)Old=xrtValueObjectGet(xrtValueObjectGet(g_MdoCli.Published,XRT_STR_LITERAL("retired_commands")),Name);char Path[128];CliAliasPath(Path,Name);bool Exists=false;xfileinfo Info;
         if(!MdoHomeExternalStat(Path,&Exists,&Info))return false;
-        if(Exists&&!CliOwnedAlias(Path,Old,Image,Size)&&!CliOwnedAlias(Path,Row,Image,Size)){if(Restore)continue;snprintf(g_MdoCli.BindingError,sizeof(g_MdoCli.BindingError),"Command entry '%.*s' is occupied by an unrecognized file; original file retained",(int)Name.Size,Name.Data);return false;}
+        bool Owned=!Exists||CliOwnedAlias(Path,Old,Image,Size)||CliOwnedAlias(Path,Row,Image,Size);
 #if defined(__ANDROID__)
-        char* Native=MdoAndroidForwarder();bool Linked=Native&&MdoAndroidToolLink(Path,Native);xrtFree(Native);if(!Linked)return false;
+        if(!Owned)Owned=CliPreviousAndroidAlias(Path,Old);
+#endif
+        if(!Owned){if(Restore)continue;snprintf(g_MdoCli.BindingError,sizeof(g_MdoCli.BindingError),"Command entry '%.*s' is occupied by an unrecognized file; original file retained",(int)Name.Size,Name.Data);return false;}
+#if defined(__ANDROID__)
+        char* Native=MdoAndroidForwarder();bool Linked=Native&&MdoAndroidToolLink(Path,Native)&&CliSet(Row,"launcher_path",Native);xrtFree(Native);if(!Linked)return false;
 #elif defined(_WIN32) || defined(_WIN64)
         char Hash[65],Master[140];uint8 Digest[32];if(!xrtSha256(Image,Size,Digest))return false;CliHex(Digest,Hash);
         if(!Exists){snprintf(Master,sizeof(Master),"data/external-tools/forwarders/%s.exe",Hash);
@@ -141,7 +167,11 @@ static bool CliPrepareBindings(xvalue* Map,const xvalue* Previous,const void* Im
 }
 static void CliRemoveBindings(const xvalue* Old,const xvalue* Keep,const void* Image,size_t Size)
 {
-    for(size_t I=0;I<xrtValueCount(Old);I++){xstrview Name;const xvalue* Row=xrtValueObjectAt(Old,I,&Name);if(!MdoCliCommandName(Name.Data)||xrtValueObjectGet(Keep,Name))continue;char Path[128];CliAliasPath(Path,Name);if(CliOwnedAlias(Path,Row,Image,Size))(void)MdoHomeRemove(Path,false);}
+    for(size_t I=0;I<xrtValueCount(Old);I++){xstrview Name;const xvalue* Row=xrtValueObjectAt(Old,I,&Name);if(!MdoCliCommandName(Name.Data)||xrtValueObjectGet(Keep,Name))continue;char Path[128];CliAliasPath(Path,Name);bool Owned=CliOwnedAlias(Path,Row,Image,Size);
+#if defined(__ANDROID__)
+        if(!Owned)Owned=CliPreviousAndroidAlias(Path,Row);
+#endif
+        if(Owned)(void)MdoHomeRemove(Path,false);}
 }
 static xvalue* CliRetiredBindings(const xvalue* Map,const xvalue* Previous)
 {
