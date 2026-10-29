@@ -81,7 +81,11 @@ bool MdoExtensionTaskBegin(const xvalue* Input,xvalue** Result,char Error[512]){
  if(Items&&xrtValueCount(Items)==128){const xvalue* Oldest=NULL;uint64 OldTime=UINT64_MAX;
   for(size_t I=0;I<xrtValueCount(Items);I++){const xvalue* T=xrtValueArrayGet(Items,I);cstr State=MdoExtensionText(T,"state",24);uint64 Created=0;MdoExtArchiveNumber(T,"created",&Created);if((!strcmp(State,"cancelled")||!strcmp(State,"complete"))&&Created<OldTime){Oldest=T;OldTime=Created;}}
   if(Oldest&&MdoExtArchiveForget(MdoExtensionText(Oldest,"id",32))){xrtValueRelease(Items);Items=MdoExtArchiveList(Error);}}
- for(size_t I=0;I<xrtValueCount(Items);I++){const xvalue* T=xrtValueArrayGet(Items,I);cstr State=MdoExtensionText(T,"state",24);uint64 Bytes=0;MdoExtArchiveNumber(T,"bytes",&Bytes);if(strcmp(State,"cancelled")&&strcmp(State,"complete")){Reserved+=Bytes;Active++;}else{uint64 Stored=0;MdoExtArchiveNumber(T,"stored_bytes",&Stored);Reserved+=Stored;}}
+ for(size_t I=0;I<xrtValueCount(Items);I++){const xvalue* T=xrtValueArrayGet(Items,I);cstr State=MdoExtensionText(T,"state",24);uint64 Bytes=0;MdoExtArchiveNumber(T,"bytes",&Bytes);
+  /* Sealed editor files reserve bytes, but do not consume a transfer slot.
+   * Retained failures also remain clearable without blocking new transfers. */
+  if(!strcmp(State,"receiving")||!strcmp(State,"cancel_requested")||MdoExtArchiveUse(MdoExtensionText(T,"id",32)))Active++;
+  if(strcmp(State,"cancelled")&&strcmp(State,"complete"))Reserved+=Bytes;else{uint64 Stored=0;MdoExtArchiveNumber(T,"stored_bytes",&Stored);Reserved+=Stored;}}
  bool Ok=!MdoExtArchiveTasksStopping&&Items&&xrtValueCount(Items)<128&&Active<3&&Reserved<=MDO_ARCHIVE_TASK_QUOTA&&Size<=MDO_ARCHIVE_TASK_QUOTA-Reserved;char* Id=Ok?xrtXidMakeString():NULL,*Base=Id?xrtFormat(MDO_ARCHIVE_TASK_ROOT "/%s",Id):NULL;
  xroot Directory=Base?MdoHomeOpenStorageDirectory(Base):NULL;Ok=Ok&&Directory;if(Directory)xrtRootClose(Directory);xvalue* T=xrtValueObject();
  Ok=Ok&&T&&MdoExtArchivePut(T,"id",Id)&&MdoExtArchivePut(T,"kind",Kind?Kind:"")&&MdoExtArchivePut(T,"purpose",Purpose)&&MdoExtArchivePut(T,"sha256",Hash)&&MdoExtArchivePut(T,"state","receiving")&&xrtValueObjectSetNew(T,XRT_STR_LITERAL("bytes"),xrtValueUInt(Size))&&xrtValueObjectSetNew(T,XRT_STR_LITERAL("created"),xrtValueUInt((uint64)MdoExtArchiveNow()))&&MdoExtArchiveSave(T);

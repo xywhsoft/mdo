@@ -35,11 +35,19 @@ xvalue* QaProductContract(const xvalue* P,xvfs V){
  bool Removed=MdoExtensionsRemove("skills","0123456789ABCDEFGHJKMNPQRSTVWXYZ",&Out,Error);xrtValueRelease(Out);Out=NULL;QaTaskFlag(R,"installed_directory_removed",Removed);
  char BadId[33]={0};cstr Json="{\"format\":\"mdo.extension.v2\",\"resources\":[]}";bool Legacy=QaBeginTask("install","skills",Json,strlen(Json),BadId,Error)&&MdoExtensionTaskWrite(BadId,0,Json,strlen(Json),&Out,Error);xrtValueRelease(Out);Out=NULL;
  Legacy=Legacy&&!MdoExtensionTaskSeal(BadId,NULL,&Out,Error);xrtValueRelease(Out);Out=MdoExtensionTaskRead(BadId,Error);Legacy=Legacy&&Out&&!strcmp(SdkField(Out,"state"),"failed");QaTaskFlag(R,"legacy_json_is_not_an_archive",Legacy);xrtValueRelease(Out);Out=NULL;
- char Third[33]={0},Fourth[33]={0};bool Quota=QaBeginTask("review","",Json,strlen(Json),Third,Error)&&!QaBeginTask("review","",Json,strlen(Json),Fourth,Error);QaTaskFlag(R,"active_task_quota",Quota);
+ char Waiting[3][33]={{0}},Fourth[33]={0};bool Quota=true;
+ for(size_t I=0;I<3;I++)Quota=Quota&&QaBeginTask("review","",Json,strlen(Json),Waiting[I],Error);
+ Quota=Quota&&!QaBeginTask("review","",Json,strlen(Json),Fourth,Error);QaTaskFlag(R,"active_task_quota",Quota);
  bool Cancel=MdoExtensionTaskCancel(Id,&Out,Error);xrtValueRelease(Out);Out=NULL;Archive=MdoExtensionTaskArchive(Id,Error);Cancel=Cancel&&!Archive;xrtFree(Archive);QaTaskFlag(R,"cancel_removes_archive_access",Cancel);
- bool Clear=MdoExtensionTaskForget(Id,Error)&&MdoExtensionTaskCancel(BadId,&Out,Error);xrtValueRelease(Out);Out=NULL;Clear=Clear&&MdoExtensionTaskForget(BadId,Error)&&MdoExtensionTaskCancel(Third,&Out,Error);xrtValueRelease(Out);Out=NULL;Clear=Clear&&MdoExtensionTaskForget(Third,Error);
+ bool Clear=MdoExtensionTaskForget(Id,Error)&&MdoExtensionTaskCancel(BadId,&Out,Error);xrtValueRelease(Out);Out=NULL;Clear=Clear&&MdoExtensionTaskForget(BadId,Error);
+ for(size_t I=0;I<3;I++){Clear=Clear&&MdoExtensionTaskCancel(Waiting[I],&Out,Error);xrtValueRelease(Out);Out=NULL;Clear=Clear&&MdoExtensionTaskForget(Waiting[I],Error);}
  xvalue* List=MdoExtensionTasksList(Error);Clear=Clear&&List&&!xrtValueCount(List);xrtValueRelease(List);QaTaskFlag(R,"explicit_cleanup",Clear);
  QaTaskFlag(R,"task_path_escape_rejected",!MdoExtensionTaskRead("../outside",Error));
+ char Staged[32][33]={{0}};bool Batch=true;const char* Small="qa";
+ for(size_t I=0;I<32;I++){Batch=Batch&&QaBeginTask("file","mcp",Small,2,Staged[I],Error)&&MdoExtensionTaskWrite(Staged[I],0,Small,2,&Out,Error);xrtValueRelease(Out);Out=NULL;
+  Batch=Batch&&MdoExtensionTaskSeal(Staged[I],NULL,&Out,Error);xrtValueRelease(Out);Out=NULL;}
+ QaTaskFlag(R,"thirty_two_sealed_files_leave_transfer_slots",Batch);
+ for(size_t I=0;I<32;I++)if(Staged[I][0]){MdoExtensionTaskCancel(Staged[I],&Out,Error);xrtValueRelease(Out);Out=NULL;MdoExtensionTaskForget(Staged[I],Error);}
  char Owned[33]={0};bool OwnedOk=QaBeginTask("install","skills",Data,(size_t)Bytes,Owned,Error);MdoExtensionTaskUse* Owner=OwnedOk?MdoExtensionTaskUseBegin(Owned,true,NULL,Error):NULL;
  bool Blocked=Owner&&!MdoExtensionTaskWrite(Owned,0,Data,(size_t)Bytes,&Out,Error);xrtValueRelease(Out);Out=NULL;
  OwnedOk=Blocked&&MdoExtensionTaskUseWrite(Owner,0,Data,(size_t)Bytes,&Out,Error);xrtValueRelease(Out);Out=NULL;

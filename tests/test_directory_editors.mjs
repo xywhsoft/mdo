@@ -55,6 +55,15 @@ test("a new directory atomically saves its first binary and empty resources with
  }finally{editor?.destroy();delete globalThis.__directoryUI;restore();}
 });
 
+test("multiple resource staging uses all editor slots and rejects oversized selections before uploading",async()=>{
+ const restore=environment(),writes=[];let staged=0,editor;const manifest={kind:"mcp",name:"Batch",alias:"batch",entry:"mcp.json",platforms:["any"]};
+ const mock={targetState:()=>({selected:null}),subscribeTarget:()=>()=>{},directoryPath:(k,id)=>`/extensions/${k}/${id}`,directoryId:()=>true,directoryManifest:()=>manifest,api:{delete:async()=>({data:{state:"cancelled"}})},stageExtensionFile:async()=>({id:`owned-${++staged}`}),saveDirectory:async(...args)=>{writes.push(args);return{};}};
+ try{editor=(await load("directory-editor",mock)).createDirectoryEditor();await editor.open({kind:"mcp",manifest,text:"{}"});const view=document.body.querySelector("dialog"),upload=view.querySelector('[aria-label="添加资源文件"]');
+  upload.files=Array.from({length:33},(_,i)=>new File(["qa"],`file-${i}`));upload.dispatchEvent(new Event("change"));await flush();assert.equal(staged,0);assert(view.textContent.includes("每次最多保存 32 项修改"));
+  upload.files=Array.from({length:4},(_,i)=>new File(["qa"],`file-${i}`));upload.dispatchEvent(new Event("change"));await flush();assert.equal(staged,4);button(view,"保存目录").click();await flush();assert.equal(writes[0][3].length,5);
+ }finally{editor?.destroy();delete globalThis.__directoryUI;restore();}
+});
+
 test("MCP connections use installed directory IDs, private revisions and preview-bound approvals, without publishing credentials",async()=>{
  const restore=environment(),calls=[];const template={id:"SERVICE-XID",name:"Service",template_valid:true,template:{inputs:[{id:"endpoint",label:"Endpoint",type:"text"},{id:"token",label:"Token",type:"text",secret:true}],variants:[{id:"default",label:"HTTP",config:{transport:{endpoint:{input:"endpoint"},headers:[{secret_ref:"input:token"}]}}}]}};
  const mock={targetState:()=>({selected:null}),subscribeTarget:()=>()=>{},api:{get:async p=>({data:p==="/mcp/templates"?{items:[template]}:p==="/projects"?{items:[]}:p==="/mcp/connections"?[]:{items:[]}}),post:async(p,b)=>{calls.push({p,b});return{data:b.action==="preview"?{config:{name:"safe"},approval_digest:"c".repeat(64)}:{id:b.id}};}}};
