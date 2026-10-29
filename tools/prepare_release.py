@@ -47,6 +47,7 @@ TARGETS = [
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--notes-file',type=Path,help='UTF-8 public update notes for all eight channels')
+    parser.add_argument('--required',action='store_true',help='Require this update on all eight release channels')
     args=parser.parse_args()
     release=json.loads((ROOT/"app/release.json").read_text(encoding="utf-8"));rows=[]
     notes=args.notes_file.read_text(encoding='utf-8').strip() if args.notes_file else f"mdo {release['version_name']} 更新。完整说明请参阅官网下载页面。"
@@ -82,7 +83,7 @@ def main():
                 require(f'#define MDO_PRODUCT_EDITION "{edition}"' in unity, "embedded edition mismatch: " + name)
                 require(f'#define MDO_BUILD_XSERVER_COMMIT "{lock["xserver"]["commit"]}"' in unity, "embedded dependency mismatch: " + name)
         shutil.copyfile(file,OUTPUT/name)
-        row={"id":id,"platform":platform,"edition":edition,"build_id":release[key],"sha256":sha,"size":len(data),"notes":notes,"required":False,"status":"staged","file":name}
+        row={"id":id,"platform":platform,"edition":edition,"build_id":release[key],"sha256":sha,"size":len(data),"notes":notes,"required":args.required,"status":"staged","file":name}
         row["version_code"]=code;row["version_name"]=release["version_name"]
         if edition=="full":row["toolpack_revision"]=release["toolpack_revision"]
         rows.append(row)
