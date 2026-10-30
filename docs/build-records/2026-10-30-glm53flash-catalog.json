@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "status": "deployed",
+  "deployed_at": "2026-10-30T13:52:10Z",
+  "server_source_commit": "d537edac",
+  "file": "plugin/mdo/modules/models/client-catalog.defaults.json",
+  "sha256": "b217a223b651b6a8d323a173d325279c485af1fd93c0f550e4cd65d06f213df9",
+  "public_version": "c5e83926449e6fca8f3e6b5470a2b3d4c6cb0a3f97046e7881020932bb67f80f",
+  "backup_directory": "/home/xs/mdo-glmflash-catalog-20261030-b378650d",
+  "fields": {
+    "context_tokens": 1000000,
+    "max_output_tokens": 131072,
+    "tools": true,
+    "reasoning": {
+      "kind": "effort",
+      "efforts": [
+        "low",
+        "high",
+        "max"
+      ],
+      "default": "max"
+    }
+  },
+  "sources": [
+    "https://docs.bigmodel.cn/cn/guide/models/vlm/glm-5.3-flash",
+    "https://docs.bigmodel.cn/api-reference/模型-api/对话补全",
+    "https://docs.z.ai/guides/vlm/glm-5.3-flash"
+  ],
+  "server_module_test": true,
+  "client_verification": {
+    "passed": true,
+    "endpoints": [
+      {
+        "endpoint": "https://open.bigmodel.cn/api/paas/v4",
+        "registry_version": "c5e83926449e6fca8f3e6b5470a2b3d4c6cb0a3f97046e7881020932bb67f80f",
+        "context_tokens": 1000000,
+        "max_output_tokens": 131072,
+        "reasoning": {
+          "kind": "effort",
+          "efforts": [
+            "low",
+            "high",
+            "max"
+          ],
+          "default": "max"
+        }
+      },
+      {
+        "endpoint": "https://open.bigmodel.cn/api/coding/paas/v4",
+        "registry_version": "c5e83926449e6fca8f3e6b5470a2b3d4c6cb0a3f97046e7881020932bb67f80f",
+        "context_tokens": 1000000,
+        "max_output_tokens": 131072,
+        "reasoning": {
+          "kind": "effort",
+          "efforts": [
+            "low",
+            "high",
+            "max"
+          ],
+          "default": "max"
+        }
+      },
+      {
+        "endpoint": "https://api.z.ai/api/paas/v4",
+        "registry_version": "c5e83926449e6fca8f3e6b5470a2b3d4c6cb0a3f97046e7881020932bb67f80f",
+        "context_tokens": 1000000,
+        "max_output_tokens": 131072,
+        "reasoning": {
+          "kind": "effort",
+          "efforts": [
+            "low",
+            "high",
+            "max"
+          ],
+          "default": "max"
+        }
+      },
+      {
+        "endpoint": "https://api.z.ai/api/coding/paas/v4",
+        "registry_version": "c5e83926449e6fca8f3e6b5470a2b3d4c6cb0a3f97046e7881020932bb67f80f",
+        "context_tokens": 1000000,
+        "max_output_tokens": 131072,
+        "reasoning": {
+          "kind": "effort",
+          "efforts": [
+            "low",
+            "high",
+            "max"
+          ],
+          "default": "max"
+        }
+      }
+    ],
+    "supplier_model_calls": 0,
+    "credentials_used": false
+  },
+  "unrelated_catalog_unchanged": true,
+  "native_config_unchanged": true,
+  "service_restarted": false,
+  "client_release_changed": false
+}
