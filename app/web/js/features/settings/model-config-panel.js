@@ -258,7 +258,7 @@ export function createModelConfigPanel(container) {
     const makeDefault = element("input", { attrs: { type: "checkbox", name: "make-default" } });
     makeDefault.checked = draft.default; makeDefault.addEventListener("change", () => { draft.default = makeDefault.checked; });
     form.append(element("label", { className: "supplier-inline-check" }, [makeDefault, element("span", { text: text("useDefault", "首个新增模型验证通过后设为默认") })]));
-    form.append(element("p", { className: "model-config-status", text: text("autoVerifyHelp", "添加后会保存配置，并逐个测试回复和工具调用，可能消耗少量 Token；探针不会执行工具。模型列表不含完整能力信息，未知能力使用保守配置。") }));
+    form.append(element("p", { className: "model-config-status", text: text("autoVerifyHelp", "添加后逐个验证流式回复和工具调用，会消耗 Token；工具测试携带本机工具定义，但不会执行工具。未知能力使用保守配置。") }));
     const actions = element("div", { className: "supplier-actions" }, [
       button(text("cancel", "取消"), () => { draft.key = ""; draft = null; view = "detail"; notice = ""; render(); }),
       button(draft.queried ? text("refreshList", "刷新模型列表") : text("connect", "连接并读取模型"), () => void discover()),
@@ -270,7 +270,7 @@ export function createModelConfigPanel(container) {
     if (!record) return text("untested", "已配置 · 尚未测试");
     if (record.running) return text(record.running === "tools" ? "verifyingTools" : "verifyingReply", record.running === "tools" ? "正在验证工具调用…" : "正在验证回复…");
     if (record.error) return record.reply?.state === "passed" ? text("toolsFailureDetail", "回复通过 · 工具调用失败：{reason}", { reason: probeError(record.error) }) : probeError(record.error);
-    if (record.verified) return record.tools?.state === "passed" ? text("verified", "已验证 · 回复和工具调用通过") : text("replyVerified", "已验证 · 回复通过（未声明工具能力）");
+    if (record.verified) return record.tools?.state === "passed" ? text("verified", "已验证 · 流式回复和工具调用通过") : text("replyVerified", "已验证 · 流式回复通过（未声明工具能力）");
     if (record.reply?.state === "failed") return text("replyFailed", "回复验证失败，请检查配置后重新验证。");
     if (record.tools?.state === "failed") return text("toolsFailed", "回复通过 · 工具调用验证失败，请检查配置后重新验证。");
     if (record.reply?.state === "passed") return text("replyOnly", "回复通过 · 工具调用尚未通过验证");
@@ -353,7 +353,7 @@ export function createModelConfigPanel(container) {
       }));
     }
     const models = config.items.filter((item) => item.provider === entry.id);
-    body.append(element("p", { className: "model-config-status", text: text("testHelp", "测试会发送简短请求，可能消耗少量 Token；工具调用测试不会执行任何工具。") }));
+    body.append(element("p", { className: "model-config-status", text: text("testHelp", "测试会消耗 Token；工具测试携带本机已注册工具定义，使用指定探针，不执行任何工具，也不读取会话历史。") }));
     const list = element("div", { className: "supplier-models" });
     for (const model of models) {
       const record = verified.get(model.id) || config.verification?.[model.id];

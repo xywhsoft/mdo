@@ -194,6 +194,23 @@ static bool MdoApiModelProbeToolReply(const xllm_response* Response)
     xrtValueRelease(Args); return Ok;
 }
 
+static bool MdoApiModelProbeAddTools(xllm_request* Request)
+{
+    /* Snapshot metadata only. No user Agent lifecycle, history, tool
+     * discovery, execution or permission callback runs during verification. */
+    xwork_tool_catalog* Catalog = MdoModelVerificationTools(); bool Ok = Catalog != NULL;
+    for (size_t i = 0u; Ok && i < xworkToolCatalogCount(Catalog); ++i) {
+        xwork_tool_info Tool = {0};
+        if (!xworkToolCatalogToolAt(Catalog, i, &Tool)) { Ok = false; break; }
+        if (MdoBuiltinToolFind(Tool.sName))
+            Ok = xllmRequestAddTool(Request, Tool.sName, Tool.sDescription, Tool.sParametersJson, Tool.bStrict);
+    }
+    xworkToolCatalogRelease(Catalog);
+    return Ok && xllmRequestAddTool(Request, "mdo_connection_probe", "Return a connection check. This tool is never executed.",
+        "{\"type\":\"object\",\"properties\":{},\"additionalProperties\":false}", false) &&
+        xllmRequestSetToolChoice(Request, XLLM_TOOL_CHOICE_NAMED, "mdo_connection_probe");
+}
+
 static bool MdoApiModelTestRun(MdoApiContext* Context, MdoApiJsonBody Body)
 {
     MdoModelCatalog* Catalog = NULL; xllm_client* Client = NULL; xllm_response* Response = NULL;
@@ -238,15 +255,13 @@ static bool MdoApiModelTestRun(MdoApiContext* Context, MdoApiJsonBody Body)
     Options.MaxOutputTokens = Info.MaxOutputTokens < 1024u ? Info.MaxOutputTokens : 1024u;
     bool Online = MdoModelIsOnline(Catalog, Id);
     if (!Online) Client = MdoModelClientCreate(Catalog, &Options, NULL, &Error);
-    Request.bStream = false; Request.bParallelToolCalls = false;
+    Request.bStream = true; Request.bParallelToolCalls = false;
     Request.uDeadline = Context->SendDeadline;
     xllmRequestSetCancel(&Request, Context->SendCancel);
-    if (Tools) {
-        Request.eToolChoice = XLLM_TOOL_CHOICE_REQUIRED;
-        if (!xllmRequestAddTool(&Request, "mdo_connection_probe", "Return a connection check. This tool is never executed.",
-            "{\"type\":\"object\",\"properties\":{},\"additionalProperties\":false}", false)) { xllmClientDestroy(Client); Client = NULL; }
-    }
-    if ((Client || Online) && xllmRequestAddTextMessage(&Request, XLLM_ROLE_USER, Tools ? "Call mdo_connection_probe once." : "Reply briefly with OK."))
+    bool Prepared = !Tools || MdoApiModelProbeAddTools(&Request);
+    if (!Prepared) { Error.eCode = XLLM_ERROR_OUT_OF_MEMORY;
+        snprintf(Error.sMessage, sizeof(Error.sMessage), "Model verification tool descriptors are unavailable"); }
+    if (Prepared && (Client || Online) && xllmRequestAddTextMessage(&Request, XLLM_ROLE_USER, Tools ? "Call mdo_connection_probe once." : "Reply briefly with OK."))
         Ok = (Online ? MdoModelOnlineComplete(Catalog, &Options, &Request, NULL, &Response, &Error) :
             MdoModelComplete(Client, &Request, NULL, &Response, &Error)) == XLLM_RESULT_OK;
     Ok = Ok && (Tools ? MdoApiModelProbeToolReply(Response) : MdoApiModelProbeVisibleReply(Response));

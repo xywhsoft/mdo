@@ -1,6 +1,53 @@
 /* Verification is evidence for an exact local profile, not a capability
  * catalog. Store no prompts, responses, endpoints or resolved credentials. */
 #include "../../include/mdo/home.h"
+#include "../../include/mdo/bootstrap.h"
+#include "../../include/mdo/tool_catalog.h"
+
+#define MDO_MODEL_VERIFICATION_CONTRACT "runtime-tools-stream-v2"
+
+static xwork_tool_catalog* MdoModelVerificationTools(void)
+{
+    xwork_runtime* Runtime = MdoBootstrapRuntime();
+    if (!Runtime) return NULL;
+    /* Built-in file/process descriptors live on an SDK Agent, while skill,
+     * web and MCP descriptors live on the runtime. This fixed definition has
+     * no user role, lifecycle code, history, autosave or model execution. */
+    xllm_session_config SessionConfig; xllmSessionConfigInit(&SessionConfig);
+    xllm_error ModelError = {0}; xwork_error WorkError = {0};
+    xllm_session* Session = xllmSessionCreate(&SessionConfig, &ModelError);
+    xwork_agent_definition_config Config; xworkAgentDefinitionConfigInit(&Config);
+    Config.sId = "mdo-model-verification"; Config.sModel = "mdo-model-verification";
+    Config.sSystemPrompt = "Model connection verification.";
+    Config.bRegisterBuiltinTools = true; Config.bAutoSaveSession = false;
+    xwork_agent_definition* Definition = xworkAgentDefinitionCreate(&Config, &WorkError);
+    xwork_agent_options Options; xworkAgentOptionsInit(&Options);
+    Options.pSession = Session; Options.sWorkspaceRoot = xsAppPath();
+    xwork_agent* Agent = Definition && Session ? xworkAgentCreateWithRuntime(Runtime, Definition, &Options, &WorkError) : NULL;
+    xwork_tool_catalog* Catalog = Agent ? xworkAgentToolCatalogSnapshot(Agent) : NULL;
+    xworkAgentDestroy(Agent); xworkAgentDefinitionRelease(Definition); xllmSessionDestroy(Session);
+    return Catalog;
+}
+
+static xvalue* MdoModelVerificationToolBinding(void)
+{
+    xwork_tool_catalog* Catalog = MdoModelVerificationTools(); xvalue* Tools = xrtValueArray();
+    bool Ok = Catalog && Tools;
+    for (size_t i = 0u; Ok && i < xworkToolCatalogCount(Catalog); ++i) {
+        xwork_tool_info Tool = {0};
+        if (!xworkToolCatalogToolAt(Catalog, i, &Tool)) { Ok = false; break; }
+        if (!MdoBuiltinToolFind(Tool.sName)) continue;
+        xvalue* Item = xrtValueObject();
+        Ok = Item && MdoApiValueSetString(Item, "name", Tool.sName) &&
+            MdoApiValueSetString(Item, "description", Tool.sDescription) &&
+            MdoApiValueSetString(Item, "parameters", Tool.sParametersJson) &&
+            MdoApiValueSetBool(Item, "strict", Tool.bStrict) && MdoApiValueAppendTake(Tools, &Item);
+        xrtValueRelease(Item);
+    }
+    xworkToolCatalogRelease(Catalog);
+    if (!Ok) { xrtValueRelease(Tools); Tools = NULL; }
+    return Tools;
+}
 
 static bool MdoModelVerificationHash(const void* Bytes, size_t Size, char Hash[65])
 {
@@ -29,15 +76,16 @@ static bool MdoModelVerificationKey(const xvalue* Models, const xvalue* Transpor
         ProviderId.Size >= sizeof(ProviderName)) return false;
     memcpy(ProviderName, ProviderId.Data, ProviderId.Size); ProviderName[ProviderId.Size] = 0;
     const xvalue* Provider = MdoModelVerificationFind(xrtValueObjectGet(Models, XRT_STR_LITERAL("providers")), ProviderName);
-    xvalue* Binding = xrtValueArray(); size_t Size = 0u; char* Json = NULL;
+    xvalue* Binding = xrtValueArray(); xvalue* Tools = MdoModelVerificationToolBinding(); size_t Size = 0u; char* Json = NULL;
     /* Stable effective JSON also includes immutable vault references. Changing
      * default selection or unrelated appearance settings keeps valid evidence. */
-    bool Ok = Provider && Binding && xrtValueArrayAppend(Binding, (xvalue*)Model) &&
+    bool Ok = Provider && Binding && Tools && MdoApiValueAppendString(Binding, MDO_MODEL_VERIFICATION_CONTRACT) &&
+        xrtValueArrayAppend(Binding, Tools) && xrtValueArrayAppend(Binding, (xvalue*)Model) &&
         xrtValueArrayAppend(Binding, (xvalue*)Provider) &&
         (!Transport || xrtValueArrayAppend(Binding, (xvalue*)Transport));
     if (Ok) Json = xrtJsonStringify(Binding, false, &Size);
     Ok = Json && MdoModelVerificationHash(Json, Size, Hash);
-    xrtFree(Json); xrtValueRelease(Binding); return Ok;
+    xrtFree(Json); xrtValueRelease(Tools); xrtValueRelease(Binding); return Ok;
 }
 
 bool MdoApiModelVerificationSnapshot(cstr Id, char Hash[65])
@@ -83,8 +131,8 @@ static xvalue* MdoModelVerificationRead(cstr Id, cstr Hash)
     Record = xrtJsonParse(xrtStrViewN(Bytes, (size_t)Info.Size));
     xstrview Fingerprint = {0}; uint64 Schema = 0u; int64 SignedSchema = 0;
     const xvalue* Version = xrtValueObjectGet(Record, XRT_STR_LITERAL("schema_version"));
-    bool VersionOk = (xrtValueGetUInt(Version, &Schema) && Schema == 1u) ||
-        (xrtValueGetInt(Version, &SignedSchema) && SignedSchema == 1);
+    bool VersionOk = (xrtValueGetUInt(Version, &Schema) && Schema == 2u) ||
+        (xrtValueGetInt(Version, &SignedSchema) && SignedSchema == 2);
     if (!Record || !VersionOk ||
         !xrtValueGetString(xrtValueObjectGet(Record, XRT_STR_LITERAL("fingerprint")), &Fingerprint) ||
         Fingerprint.Size != 64u || memcmp(Fingerprint.Data, Hash, 64u)) {
@@ -101,7 +149,8 @@ xvalue* MdoApiModelVerificationUpdate(cstr Id, cstr Hash, bool Tools,
     char Path[112]; size_t Size = 0u; char* Json = NULL;
     xvalue* Record = MdoModelVerificationRead(Id, Hash); xvalue* Phase = xrtValueObject();
     if (!Record) Record = xrtValueObject();
-    bool Ok = Record && Phase && MdoApiValueSetUInt(Record, "schema_version", 1u) &&
+    bool Ok = Record && Phase && MdoApiValueSetUInt(Record, "schema_version", 2u) &&
+        MdoApiValueSetString(Record, "contract", MDO_MODEL_VERIFICATION_CONTRACT) &&
         MdoApiValueSetString(Record, "fingerprint", Hash) && MdoApiValueSetString(Phase, "state", State) &&
         MdoApiValueSetUInt(Phase, "latency_ms", Latency) && MdoApiValueSetString(Phase, "code", Code ? Code : "") &&
         MdoApiValueSetTake(Record, Tools ? "tools" : "reply", &Phase) && MdoModelVerificationResult(Record, NeedsTools);

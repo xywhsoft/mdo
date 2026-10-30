@@ -19,6 +19,7 @@ class Supplier(BaseHTTPRequestHandler):
     calls = []
     entered = threading.Event()
     release = threading.Event()
+    contract_errors = []
 
     def log_message(self, *_): pass
 
@@ -26,6 +27,24 @@ class Supplier(BaseHTTPRequestHandler):
         body = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
         self.calls.append(body)
         tools = bool(body.get('tools'))
+        def strict_object(schema):
+            if not isinstance(schema, dict): return True
+            if schema.get('type') == 'object' and (schema.get('additionalProperties') is not False or
+                set(schema.get('required', [])) != set(schema.get('properties', {}))): return False
+            return all(strict_object(value) for value in schema.values() if isinstance(value, dict)) and all(
+                strict_object(value) for row in schema.values() if isinstance(row, list) for value in row)
+        definitions = [tool.get('function', tool) for tool in body.get('tools', [])]
+        names = {tool.get('name') for tool in definitions}
+        valid = body.get('stream') is True and (not tools or {'skill', 'read', 'exec', 'mdo_connection_probe'} <= names)
+        if not self.path.endswith('/messages'):
+            valid &= all(isinstance(tool.get('strict'), bool) and
+                (not tool['strict'] or strict_object(tool.get('parameters', {}))) for tool in definitions)
+        if not valid:
+            self.contract_errors.append('stream or native tool schemas not exercised')
+            raw = json.dumps({'error': {'code': 'invalid_function_parameters', 'type': 'invalid_request_error',
+                'message': 'Invalid strict tool schema or missing runtime verification contract'}}).encode()
+            self.send_response(400); self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(raw))); self.end_headers(); self.wfile.write(raw); return
         if self.mode == 'wait':
             self.entered.set()
             assert self.release.wait(3), 'fixture wait exceeded'
@@ -121,8 +140,18 @@ def main():
                 for name in ('chat', 'responses', 'messages'):
                     result = probe(name)['data']; assert not result['verification']['verified'], result
                     result = probe(name, True)['data']; assert result['verification']['verified'], result
+                    assert result['verification']['contract'] == 'runtime-tools-stream-v2'
+                assert not Supplier.contract_errors
+                assert not list((base/'home/sessions').rglob('snapshot.json'))
                 checks.append('reply + valid dummy tool across Chat, Responses and Anthropic')
+                checks.append('streaming and real native read/exec/skill schemas verified without executing tools or persisting conversations')
                 config, etag = get(); assert all(config['verification'][name]['verified'] for name in ('chat', 'responses', 'messages'))
+                for path in (base/'home/data/model-verification').glob('*.json'):
+                    record = json.loads(path.read_text()); record['schema_version'] = 1
+                    path.write_text(json.dumps(record))
+                assert not get()[0]['verification']
+                for name in ('chat', 'responses', 'messages'): probe(name); probe(name, True)
+                checks.append('old probe-only verification records must be tested again')
                 stop(); start(); config, etag = get(); assert config['verification']['chat']['verified']
                 checks.append('verification survives native restart')
                 Supplier.mode = 'reasoning_only'
