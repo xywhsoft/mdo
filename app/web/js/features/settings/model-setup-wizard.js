@@ -9,7 +9,8 @@ const text=(key,fallback,params={})=>t(`modelWizard.${key}`,params,fallback);
 const clone=value=>structuredClone(value);
 let serial=0;
 export function createModelSetupWizard({preset,choice,provider=null,config,etag,onCommit=()=>{},onDone=()=>{},onCancel=()=>{}}) {
-  const root=element("section",{className:"model-setup-wizard"}),uid=`model-wizard-${++serial}`;
+  const root=element("section",{className:"model-setup-wizard"}),actions=element("div",{className:"supplier-actions model-wizard-actions"}),uid=`model-wizard-${++serial}`;
+  let footerHost=null,renderedStage=0;
   let current=clone(config),revision=etag,connection=clone(provider||presetProvider(preset,choice,config.providers));
   let existing=Boolean(provider),key="",ref="",modelProxy={kind:"provider"},advancedOpen=false;
   let stage=1,mode="auto",manual="",ids=[],records=new Map(),selected=new Set(),errors=new Map();
@@ -102,7 +103,7 @@ export function createModelSetupWizard({preset,choice,provider=null,config,etag,
     finally{if(!disposed&&token===epoch){parameterLoading.clear();render();}}
   }
   function canVerify(){return chosen().length>0&&chosen().every(id=>!parameterLoading.has(id)&&!parameterIssues(records.get(id)).length);}
-  function updatePrimary(){const node=root.querySelector('[data-wizard-submit]');if(node){node.disabled=!canVerify();node.textContent=text("addVerify","添加并验证（{count}）",{count:chosen().length});}}
+  function updatePrimary(){const node=actions.querySelector('[data-wizard-submit]');if(node){node.disabled=!canVerify();node.textContent=text("addVerify","添加并验证（{count}）",{count:chosen().length});}}
   async function readCurrent(signal,adopt=false) {
     const response=await api.get("/models/config",{signal});current=response.data;revision=response.etag;
     const saved=current.providers.find(p=>p.id===connection.id);
@@ -202,7 +203,7 @@ export function createModelSetupWizard({preset,choice,provider=null,config,etag,
     if(mode==="auto"){
       panel.append(element("p",{text:loading?text("discovering","正在自动获取模型列表…"):discovered?text("discovered","已获取 {count} 个模型，下一步选择要添加的模型。",{count:discovered.items.length}):text("discoveryFailed","未能获取模型列表，可重试或切换手动填写。"),attrs:{role:"status"}}));
       if(!loading&&!discovered)panel.append(button(text("retryFetch","重试"),discover));
-    }else panel.append(input(text("modelIds","模型 ID（每行一个，也可用逗号分隔）"),"manual-models",manual,value=>{manual=value;const next=root.querySelector('[data-wizard-next]');if(next)next.disabled=!sourceIds().length;}, {area:true,required:true}));
+    }else panel.append(input(text("modelIds","模型 ID（每行一个，也可用逗号分隔）"),"manual-models",manual,value=>{manual=value;const next=actions.querySelector('[data-wizard-next]');if(next)next.disabled=!sourceIds().length;}, {area:true,required:true}));
   }
   function parametersPage(body) {
     const filter=input(text("search","搜索模型"),"model-query",query,value=>{query=value;
@@ -250,7 +251,7 @@ export function createModelSetupWizard({preset,choice,provider=null,config,etag,
     form.addEventListener("invalid",event=>{const group=event.target.closest("details");if(group)group.open=true;},true);
     if(stage===1)connectionPage(form);else if(stage===2)sourcePage(form);else if(stage===3)parametersPage(form);
     else form.append(element("p",{className:"model-wizard-progress",text:progress||text("preparing","正在准备验证…"),attrs:{role:"status"}}));
-    const actions=element("footer",{className:"supplier-actions model-wizard-actions"});
+    clear(actions);
     if(running)actions.append(button(text("stop","停止"),()=>runController?.abort()));
     else {
       actions.append(button(text("cancel","取消"),onCancel));
@@ -260,10 +261,11 @@ export function createModelSetupWizard({preset,choice,provider=null,config,etag,
       else if(stage===2){primary.setAttribute("data-wizard-next","");primary.disabled=mode==="auto"?(loading||!discovered||!discovered.items.length):!sourceIds().length;}
       actions.append(primary);
     }
-    root.append(form,actions);
+    root.append(form);(footerHost||root).append(actions);
+    if(renderedStage!==stage){const body=root.closest(".mdo-layer-body");if(body)body.scrollTop=0;renderedStage=stage;}
     if(focus){const target=[...root.querySelectorAll("input, select, textarea")].find(node=>node.name===focus);if(target){target.focus();if(selection)target.setSelectionRange?.(...selection);}}
     else if(focusId)root.querySelector('#'+focusId)?.focus();
   }
   const unsubscribe=subscribeLocale(()=>render());render();
-  return {mount:host=>host.append(root),destroy(){disposed=true;++epoch;requestController?.abort();runController?.abort();key="";ref="";for(const field of root.querySelectorAll('input[type="password"]'))field.value="";unsubscribe();root.remove();}};
+  return {mount(host,footer=null){footerHost=footer;host.append(root);(footer||root).append(actions);},destroy(){disposed=true;++epoch;requestController?.abort();runController?.abort();key="";ref="";for(const field of root.querySelectorAll('input[type="password"]'))field.value="";unsubscribe();root.remove();actions.remove();}};
 }

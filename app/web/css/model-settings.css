@@ -25,6 +25,10 @@
 .model-wizard-row { min-width: 0; padding: 14px; border: 1px solid var(--border); border-radius: 10px; }
 .model-wizard-model { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; overflow-wrap: anywhere; }
 .model-wizard-actions { position: sticky; bottom: 0; justify-content: flex-end; margin-top: 20px; padding: 14px 0; border-top: 1px solid var(--border); background: var(--bg); z-index: 2; }
+.model-setup-layer .mdo-layer-body { display: flex; flex-direction: column; gap: 16px; }
+.model-setup-layer h3 { margin: 0 0 16px; font-size: 1rem; }
+.model-setup-layer .model-wizard-actions { position: static; width: 100%; margin: 0; padding: 0; border: 0; background: transparent; }
+.model-setup-layer .model-setup-wizard { min-width: 0; }
 .model-wizard-progress, .model-wizard-notice { overflow-wrap: anywhere; }
 .model-wizard-notice { color: var(--muted); font-size: 12px; }
 .model-parameter-link { display: block; width: fit-content; margin: 4px 0 12px; padding: 0; border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 12px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }

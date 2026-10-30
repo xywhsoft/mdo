@@ -3,6 +3,7 @@ import { t as uiErrorText, setUiText as writeUiText, uiMessage, subscribeLocale,
 import { api, ApiError } from "../../api/client.js";
 import { loadModels } from "../../state/catalogs.js";
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
+import { openLayer } from "../../components/layers.js";
 
 import { createAdvancedModelConfigPanel } from "./model-config-advanced.js";
 import { providerPresets, setProviderCatalog, presetVariant, providerDisplayName } from "./provider-presets.js";
@@ -33,7 +34,7 @@ function field(label, name, value, onChange, { type = "text", required = false }
 // Draft keys exist only in this page's memory, never browser storage or URLs.
 export function createModelConfigPanel(container) {
   let config = null, etag = "", selectedId = "", view = "list", busy = false;
-  let draft = null, parameterEdit = null, advanced = null, advancedChanged = false, needsRead = false;
+  let draft = null, setup = null, parameterEdit = null, advanced = null, advancedChanged = false, needsRead = false;
   let notice = "", failed = false, disposed = false, loading = null;
   const controller = new AbortController();
   let verificationController = null;
@@ -56,11 +57,11 @@ export function createModelConfigPanel(container) {
   }
   function blocked() {
     if (busy) return true;
-    if (draft || [...keyDrafts.values()].some(Boolean) || advanced?.hasUnsaved()) { toast(t("modelConfig.unsaved"), "error"); return true; }
+    if (setup || [...keyDrafts.values()].some(Boolean) || advanced?.hasUnsaved()) { toast(t("modelConfig.unsaved"), "error"); return true; }
     return false;
   }
   async function reload() {
-    if (disposed || busy || draft || [...keyDrafts.values()].some(Boolean) || advanced) return;
+    if (disposed || busy || setup || [...keyDrafts.values()].some(Boolean) || advanced) return;
     if (loading) return loading;
     loading = (async () => {
       setBusy(true);
@@ -113,38 +114,57 @@ export function createModelConfigPanel(container) {
     advanced?.destroy(); advanced = null; view = "list";
     if (advancedChanged) { advancedChanged = false; await reload(); } else render();
   }
-  async function add() {
-    if (blocked()) return;
-    view = "templates"; setBusy(true); status(text("readingSuppliers", "正在读取最新供应商和模型目录…"));
+  function closeSetup(refresh = true) {
+    const own = setup; if (!own) return;
+    setup = null; own.catalogController?.abort(); draft?.destroy(); draft = null;
+    own.layer.dispose({ restoreFocus: !disposed });
+    if (refresh && !disposed) void reload();
+  }
+  function openSetup(existing = false) {
+    if (setup) return setup;
+    const own = { loading: false, notice: "", catalogController: null, layer: null };
+    own.layer = openLayer({ title: uiMessage(existing ? "modelSetup.addModels" : "modelSetup.addSupplier"),
+      icon: "spark", width: "60rem", height: "85%", owner: container,
+      onClosed() { if (setup === own) closeSetup(); },
+    });
+    own.layer.element.classList.add("model-setup-layer"); setup = own;
+    return own;
+  }
+  async function readSuppliers(own) {
+    own.catalogController?.abort(); const control = new AbortController(); own.catalogController = control;
+    own.loading = true; own.notice = ""; renderTemplatesWindow(own);
     try {
-      const response = await api.get("/models/providers", { signal: controller.signal });
-      if (disposed) return;
+      const response = await api.get("/models/providers", { signal: control.signal });
+      if (disposed || setup !== own || draft || control.signal.aborted) return;
       setProviderCatalog(response.data.providers, response.data);
-      notice = response.data.stale ? text("cachedSuppliers", "无法连接目录服务，正在使用上次成功获取的供应商目录。") : "";
-      failed = false;
-    } catch (cause) { if (!disposed) { notice = text("supplierUnavailable", "供应商目录暂时不可用，可重试或手动添加自定义供应商。"); failed = true; } }
-    finally { if (!disposed) render(); setBusy(false); }
+      own.notice = response.data.stale ? text("cachedSuppliers", "无法连接目录服务，正在使用上次成功获取的供应商目录。") : "";
+    } catch (cause) { if (!control.signal.aborted) own.notice = text("supplierUnavailable", "供应商目录暂时不可用，可重试或手动添加自定义供应商。"); }
+    finally { if (setup === own && !draft && own.catalogController === control) { own.loading = false; renderTemplatesWindow(own); } }
+  }
+  function add() {
+    if (blocked()) return;
+    void readSuppliers(openSetup());
   }
   function choose(preset, choice = preset.variants[0], existingProvider = null) {
+    const own = openSetup(Boolean(existingProvider)); own.catalogController?.abort();
     draft?.destroy();
     draft = createModelSetupWizard({ preset, choice, provider: existingProvider, config, etag,
       onCommit(response) {
-        if (disposed) return;
+        if (disposed || setup !== own) return;
         config = response.data; etag = response.etag;
         void loadModels().catch(() => {}); render();
       },
       onDone(result) {
-        if (disposed) return;
-        selectedId = result.providerId; draft?.destroy(); draft = null; view = "detail";
+        if (disposed || setup !== own) return;
+        selectedId = result.providerId; closeSetup(false); view = "detail";
         notice = text("modelsAdded", "已添加 {count} 个模型。", { count: result.added }) + (result.notice ? " " + result.notice : "");
         failed = false; render();
       },
-      async onCancel() {
-        draft?.destroy(); draft = null; view = "detail";
-        await reload();
-      },
+      onCancel() { closeSetup(); },
     });
-    view = "setup"; notice = ""; failed = false; render();
+    clear(own.layer.body); clear(own.layer.footer); draft.mount(own.layer.body, own.layer.footer);
+    own.layer.body.scrollTop = 0;
+    own.layer.body.querySelector('input:not([type="checkbox"])')?.focus();
   }
   function editParameters(model) {
     if (busy) return;
@@ -184,13 +204,17 @@ export function createModelConfigPanel(container) {
         if (await save(next)) parameterEdit = null;
       }, true));
   }
-  function renderTemplates(body) {
+  function renderTemplatesWindow(own) {
+    if (disposed || setup !== own || draft) return;
+    const body = own.layer.body; clear(body); clear(own.layer.footer);
     body.append(element("h3", { text: text("chooseSupplier", "选择供应商") }), element("p", { className: "model-config-status", text: text("templateHelp", "选择服务并填写 API Key。自己的供应商 Key 无需登录墨斗账号。") }));
     const grid = element("div", { className: "supplier-templates" });
+    if (own.loading || own.notice) body.append(element("p", { className: "model-config-status", attrs: { role: "status" }, text: own.loading ? text("readingSuppliers", "正在读取最新供应商和模型目录…") : own.notice }));
     for (const preset of providerPresets.filter((item) => !item.hidden)) grid.append(button(preset.labelKey ? text(preset.labelKey, preset.name) : preset.name, () => choose(preset)));
-    body.append(grid, button(text("refreshSuppliers", "刷新供应商目录"), () => void add()));
+    body.append(grid);
+    const refresh = button(text("refreshSuppliers", "刷新供应商目录"), () => void readSuppliers(own)); refresh.disabled = own.loading;
+    own.layer.footer.append(refresh, button(text("cancel", "取消"), () => closeSetup()));
   }
-  function renderSetup(body) { draft.mount(body); }
   function verificationLabel(record) {
     if (!record) return text("untested", "已配置 · 尚未测试");
     if (record.running) return text(record.running === "tools" ? "verifyingTools" : "verifyingReply", record.running === "tools" ? "正在验证工具调用…" : "正在验证回复…");
@@ -323,12 +347,10 @@ export function createModelConfigPanel(container) {
       item.append(element("small", { text: text("modelCount", "{count} 个模型", { count: config.items.filter((model) => model.provider === entry.id).length }) })); list.append(item);
     }
     const body = element("div", { className: "supplier-body" });
-    if (view !== "list" && view !== "setup") body.append(button(view === "advanced" ? text("backSuppliers", "返回供应商") : text("back", "返回"), () => {
+    if (view !== "list") body.append(button(view === "advanced" ? text("backSuppliers", "返回供应商") : text("back", "返回"), () => {
       void back();
     }));
-    if (view === "templates") renderTemplates(body);
-    else if (view === "setup") renderSetup(body);
-    else if (view === "parameters") renderParameterEdit(body);
+    if (view === "parameters") renderParameterEdit(body);
     else if (view === "advanced") body.append(element("div", { className: "supplier-advanced-host" }));
     else renderDetail(body);
     layout.append(list, body); container.append(layout);
@@ -337,7 +359,6 @@ export function createModelConfigPanel(container) {
     // The expert editor owns its revision and drafts until the user returns.
     // Keep the outer navigation from detaching a still-live editor.
     if (view === "advanced") { header.children[1].disabled = true; header.children[2].disabled = true; }
-    if (view === "setup") { header.children[1].hidden = true; header.children[2].hidden = true; }
     if (busy) setBusy(true);
     if (hadFocus) {
       const field = focusName && [...container.querySelectorAll("input, select")].find((node) => node.name === focusName);
@@ -346,7 +367,7 @@ export function createModelConfigPanel(container) {
       if (target) { const details = target.closest("details"); if (details) details.open = true; if (target === heading) target.tabIndex = -1; target.focus(); if (field && selection) field.setSelectionRange?.(...selection); }
     }
   }
-  const unsubscribe = subscribeLocale(() => { if (!advanced && !busy) render(); });
+  const unsubscribe = subscribeLocale(() => { if (!advanced && !busy) render(); if (setup && !draft) renderTemplatesWindow(setup); });
   return Object.freeze({ ensureLoaded: () => config ? Promise.resolve() : reload(), reload,
-    destroy() { disposed = true; controller.abort(); verificationController?.abort(); draft?.destroy(); keyDrafts.clear(); advanced?.destroy(); unsubscribe(); } });
+    destroy() { disposed = true; controller.abort(); verificationController?.abort(); closeSetup(false); keyDrafts.clear(); advanced?.destroy(); unsubscribe(); } });
 }

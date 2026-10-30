@@ -22,6 +22,17 @@
     click('自动获取');click('下一步');await until(()=>button('添加并验证（2）')&&!button('添加并验证（2）').disabled,'automatic parameter lookup');
     assert(document.querySelector('[name="parameter-0-context_tokens"]').value==='64000','Supplier context metadata reused');
     assert(document.querySelector('[name="parameter-1-context_tokens"]').value==='32000','Missing model context filled from catalog automatically');
+    const layer=document.querySelector('.model-setup-layer');
+    assert(layer?.matches(':modal')&&!document.querySelector('#panel').contains(layer),'Wizard uses public modal outside background settings');
+    const content=layer.querySelector('.mdo-layer-body'),footer=layer.querySelector('.mdo-layer-footer');
+    assert(footer.contains(button('添加并验证（2）')),'Actions live in fixed public layer footer');
+    if(innerWidth<=600)assert(layer.classList.contains('is-fullscreen'),'Narrow viewport uses full screen layer');
+    const editors=[...content.querySelectorAll('.model-parameter-editor')];for(const node of editors)node.open=true;
+    content.scrollTop=content.scrollHeight;
+    const bounds=footer.getBoundingClientRect(),windowBounds=layer.getBoundingClientRect();
+    assert(content.scrollHeight>content.clientHeight&&bounds.bottom<=windowBounds.bottom+1&&bounds.top>=0,'Long model content scrolls while footer remains visible');
+    assert(content.scrollWidth<=content.clientWidth+1,'Modal content has no horizontal overflow');
+    for(const node of editors)node.open=false;content.scrollTop=0;
     layout();
     if(new URLSearchParams(location.search).has('preview')){
       document.querySelector('#result').textContent=JSON.stringify({passed:true,checks});return;
@@ -34,6 +45,7 @@
     assert(Boolean(document.querySelector('.resource-error')?.textContent),'Failed model displays its error');
     await fetch(globalThis.__qaSupplier+'/allow-beta');
     click('添加并验证（1）');await until(()=>document.querySelectorAll('.supplier-model').length===2,'successful retry');
+    assert(!document.querySelector('.model-setup-layer'),'Successful wizard closes and returns to model cards');
     saved=await current();assert(saved.items.filter(n=>n.provider==='fixture').length===2,'Retry completes remaining model');
     const cards=[...document.querySelectorAll('.supplier-model')];
     assert(cards.every(n=>[...n.querySelectorAll('button')].filter(b=>b.textContent==='验证').length===1),'Each card has one verification action');

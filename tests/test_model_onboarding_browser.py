@@ -44,7 +44,7 @@ def check(host,node,browser,evidence):
         config.write_text(json.dumps({'engine':{'workers':2},'services':[{'enabled':True,'class':'http','name':'wizard-browser-test','ip':'127.0.0.1','port':port,
             'host_default':{'enabled':True,'name':'mdo','path':'web','devlang':'c','devfile':'generated/model_wizard_browser_test.c'}}]}),encoding='utf-8')
         page.write_text('''<!doctype html><html lang="zh-CN" data-theme="dark"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<link rel="stylesheet" href="/css/app.css"><style>body{height:auto;overflow:auto;margin:0;padding:24px;background:var(--bg);color:var(--ink)} main{max-width:1120px;margin:auto;container-type:inline-size;container-name:model-config}#result{display:none}</style>
+<link rel="stylesheet" href="/css/app.css"><link rel="stylesheet" href="/css/layers.css"><style>body{height:auto;overflow:auto;margin:0;padding:24px;background:var(--bg);color:var(--ink)} main{max-width:1120px;margin:auto;container-type:inline-size;container-name:model-config}#result{display:none}</style>
 <main><h2>模型管理</h2><div id="panel"></div></main><pre id="result"></pre><script type="module">
 import {api} from '/js/api/client.js';import {loadLocale} from '/js/i18n.js';import {createModelConfigPanel} from '/js/features/settings/model-config-panel.js';
 await loadLocale('zh-CN');await api.get('/project-purge-intent');const panel=createModelConfigPanel(document.querySelector('#panel'));await panel.ensureLoaded();

@@ -43,9 +43,10 @@ test("cancellation stops remaining phases and models", async () => {
 });
 
 const flush = async () => { for (let i = 0; i < 30; i++) await new Promise(resolve => setImmediate(resolve)); };
-function fixture({ failTools = false, hold = false, staleEvidence = false, missingBeta = false, textOnly = false, partialMetadata = false } = {}) {
+function fixture({ failTools = false, hold = false, holdCatalog = false, staleEvidence = false, missingBeta = false, textOnly = false, partialMetadata = false } = {}) {
   const previous = { document: globalThis.document, fetch: globalThis.fetch };
   const document = testDocument(), create = document.createElement;
+  document.querySelector = selector => document.body.querySelector(selector);
   document.createElement = tag => {
     const node = create(tag); node.reportValidity = () => true; node.setCustomValidity = () => {};
     node.toggleAttribute = (key, value) => value ? node.setAttribute(key, "") : node.removeAttribute(key);
@@ -63,7 +64,7 @@ function fixture({ failTools = false, hold = false, staleEvidence = false, missi
     let data = {}, status = 200, error;
     if (path === "/api/v1/models/config") data = structuredClone(config);
     else if (path === "/api/v1/models") data = { providers: [], models: [] };
-    else if (path === "/api/v1/models/providers") data = { providers: [{id:"openai", name:"OpenAI", variants:[{id:"api", label:"regular", base:"https://api.openai.com/v1", protocol:"openai-responses", models:["alpha","beta"]}]}] };
+    else if (path === "/api/v1/models/providers") {if(holdCatalog)await paused;data = { providers: [{id:"openai", name:"OpenAI", variants:[{id:"api", label:"regular", base:"https://api.openai.com/v1", protocol:"openai-responses", models:["alpha","beta"]}]}] };}
     else if (path === "/api/v1/models/parameters") data = { items: body.models.map(id => ({id,protocol:body.protocol,lookup_state:"ok",registry_version:"fixture",fields: missingBeta && id === "beta" ? {} : {
       ...(textOnly ? {tools:{value:false,source:"api"}} : {}),context_tokens:{value:64000,source:"api"},max_output_tokens:{value:16000,source:"api"},reasoning:{value:{kind:"none"},source:"api"}}})) };
     else if (path === "/api/v1/models/discover") data = { items: ["alpha", "beta", "unselected"],...(partialMetadata?{parameters:[{id:"alpha",protocol:body.protocol,fields:{
@@ -104,11 +105,11 @@ function fixture({ failTools = false, hold = false, staleEvidence = false, missi
   };
   const panel = createModelConfigPanel(container);
   const button = label => {
-    const node = descendants(container).find(node => node.tagName === "BUTTON" && node.textContent === label);
+    const node = descendants(document.querySelector(".model-setup-layer") || container).find(node => node.tagName === "BUTTON" && node.textContent === label);
     assert(node, `Missing button ${label}`); return node;
   };
   const input = (name, value) => {
-    const node = descendants(container).find(node => node.name === name); assert(node, `Missing input ${name}`);
+    const node = descendants(document.body).find(node => node.name === name); assert(node, `Missing input ${name}`);
     node.value = value; node.dispatchEvent(new Event("input")); return node;
   };
   async function add() {
@@ -118,7 +119,7 @@ function fixture({ failTools = false, hold = false, staleEvidence = false, missi
     const checkbox = input("make-default", ""); checkbox.checked = true; checkbox.dispatchEvent(new Event("change"));
     button("添加并验证（2）").click(); await flush();
   }
-  return { panel, container, calls, add, button, input, config: () => config, release, allowTools: () => { rejectTools = false; },
+  return { panel, container, get surface(){return document.querySelector(".model-setup-layer") || container;}, calls, add, button, input, config: () => config, release, allowTools: () => { rejectTools = false; },
     restore() { panel.destroy(); release(); Object.assign(globalThis, previous); } };
 }
 test("wizard fetches models and missing parameters automatically and commits only selected profiles", async () => {
@@ -140,7 +141,7 @@ test("failed validation leaves only failed drafts; successes never get probed tw
   const f=fixture({failTools:true});try {
     await f.add();assert(f.config().items.some(m=>m.wire_model==="beta"));
     assert(!f.config().items.some(m=>m.wire_model==="alpha"));
-    assert(descendants(f.container).some(n=>n.className==="resource-error"&&n.textContent), f.container.textContent);
+    assert(descendants(f.surface).some(n=>n.className==="resource-error"&&n.textContent), f.surface.textContent);
     f.allowTools();f.button("添加并验证（1）").click();await flush();
     assert.equal(f.calls.filter(c=>c.path.endsWith("/add")&&c.body.model.wire_model==="beta").length,1);
     assert(f.config().items.some(m=>m.wire_model==="alpha"));
@@ -162,13 +163,13 @@ test("closing the panel cancels a pending draft without registering unverified m
 });
 test("stopping preserves unattempted drafts and leaves no phantom installed profiles",async()=>{
   const f=fixture({hold:true});try{await f.add();f.button("停止").click();await flush();
-    assert(f.container.textContent.includes("已停止"));assert.equal(f.config().items.length,1);
+    assert(f.surface.textContent.includes("已停止"));assert.equal(f.config().items.length,1);
     assert(f.button("添加并验证（2）"));
   }finally{f.restore();}
 });
 test("configuration changes during validation cannot promote a default",async()=>{
   const f=fixture({staleEvidence:true});try{await f.add();assert.equal(f.config().default_model,"existing");
-    assert.equal(f.config().items.length,1);assert(descendants(f.container).some(n=>n.className==="resource-error"&&n.textContent), f.container.textContent);
+    assert.equal(f.config().items.length,1);assert(descendants(f.surface).some(n=>n.className==="resource-error"&&n.textContent), f.surface.textContent);
   }finally{f.restore();}
 });
 test("unknown parameters remain editable and block validation until filled",async()=>{
@@ -180,7 +181,7 @@ test("unknown parameters remain editable and block validation until filled",asyn
 });
 test("deselecting an incomplete profile hides its editor and allows the remaining selection",async()=>{
   const f=fixture({missingBeta:true});try{await f.add();
-    const box=descendants(f.container).find(n=>n.name==="selected-model"&&n.value==="beta");assert(box);
+    const box=descendants(f.surface).find(n=>n.name==="selected-model"&&n.value==="beta");assert(box);
     box.checked=false;box.dispatchEvent(new Event("change"));
     const row=box.closest(".model-wizard-row");assert(row.querySelector(".model-parameter-editor").hidden);
     assert([...row.querySelectorAll("input, select")].filter(n=>n!==box).every(n=>n.disabled));
@@ -199,7 +200,39 @@ test("manual source switches immediately and needs no supplier discovery request
     f.button("下一步").click();await flush();const before=f.calls.filter(c=>c.path.endsWith("/discover")).length;
     f.button("手动填写").click();f.input("manual-models","manual-one\nmanual-two,manual-one");f.button("下一步").click();await flush();
     assert.equal(f.calls.filter(c=>c.path.endsWith("/discover")).length,before);
-    assert.equal(descendants(f.container).filter(n=>n.name==="selected-model").length,2);
+    assert.equal(descendants(f.surface).filter(n=>n.name==="selected-model").length,2);
     assert(f.button("添加并验证（2）"));
+  }finally{f.restore();}
+});
+
+test("supplier selection and wizard use an owned public layer with fixed footer actions",async()=>{
+  const f=fixture();try{
+    await f.panel.ensureLoaded();const background=f.container.textContent;
+    f.button("添加供应商").click();await flush();
+    const layer=document.querySelector(".model-setup-layer");assert(layer?.open);assert(!f.container.contains(layer));
+    assert.equal(f.container.textContent,background);
+    f.button("OpenAI").click();f.input("api-key","fixture-key");
+    const footer=layer.querySelector(".mdo-layer-footer");assert(footer.contains(f.button("下一步")));
+    assert(!layer.querySelector(".mdo-layer-body").contains(f.button("下一步")));
+    f.button("取消").click();await flush();assert(!document.querySelector(".model-setup-layer"));assert.equal(f.config().items.length,1);
+  }finally{f.restore();}
+});
+
+test("closing the wizard layer cancels validation and leaves no late installed drafts",async()=>{
+  const f=fixture({hold:true});try{
+    await f.add();const layer=document.querySelector(".model-setup-layer");assert(layer?.open);
+    layer.dispatchEvent(new Event("cancel",{cancelable:true}));f.release();await flush();
+    assert(!document.querySelector(".model-setup-layer"));assert.equal(f.config().items.length,1);
+    assert.equal(f.calls.filter(c=>c.path.endsWith("/add")).length,1);
+  }finally{f.restore();}
+});
+
+test("a late supplier catalog cannot reopen or replace a cancelled window",async()=>{
+  const f=fixture({holdCatalog:true});try{
+    await f.panel.ensureLoaded();f.button("添加供应商").click();await flush();
+    const layer=document.querySelector(".model-setup-layer");assert(layer?.open);
+    layer.querySelector(".mdo-layer-controls").lastChild.click();f.release();await flush();
+    assert(!document.querySelector(".model-setup-layer"));assert(!f.container.querySelector(".supplier-templates"));
+    assert.equal(f.config().items.length,1);
   }finally{f.restore();}
 });
