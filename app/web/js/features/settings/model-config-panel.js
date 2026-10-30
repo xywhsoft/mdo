@@ -297,7 +297,12 @@ export function createModelConfigPanel(container) {
         const enabled = config.items.some((model) => model.provider === draft.provider?.id && model.wire_model === id);
         const checkbox = element("input", { attrs: { type: "checkbox", value: id } });
         checkbox.checked = draft.selected.has(id); checkbox.disabled = enabled;
-        checkbox.addEventListener("change", () => { if (checkbox.checked) draft.selected.add(id); else draft.selected.delete(id); writeUiText(selectedCount, text("selected", "已选 {count} 个模型", { count: draft.selected.size })); });
+        checkbox.addEventListener("change", () => {
+          if (checkbox.checked) draft.selected.add(id); else draft.selected.delete(id);
+          writeUiText(selectedCount, text("selected", "已选 {count} 个模型", { count: draft.selected.size }));
+          const parameters = container.querySelector(".supplier-parameters");
+          if (parameters) { clear(parameters); renderParameters(parameters); }
+        });
         list.append(element("label", {}, [checkbox, element("span", { text: id }), enabled ? element("small", { text: text("alreadyAdded", "已添加") }) : null]));
       }
       if (ids.length > 100) list.append(element("small", { text: text("filterMore", "请搜索缩小范围；当前显示前 100 项。") }));
@@ -352,7 +357,8 @@ export function createModelConfigPanel(container) {
     });
     form.append(advanced);
     if (draft.queried) renderSelection(form);
-    renderParameters(form);
+    const parameters = element("div", { className: "supplier-parameters" });
+    renderParameters(parameters); form.append(parameters);
     form.append(field(text("manualIds", "手动添加模型 ID（多个用逗号分隔）"), "manual-models", draft.manual, (value) => { draft.manual = value; }));
     const makeDefault = element("input", { attrs: { type: "checkbox", name: "make-default" } });
     makeDefault.checked = draft.default; makeDefault.addEventListener("change", () => { draft.default = makeDefault.checked; });

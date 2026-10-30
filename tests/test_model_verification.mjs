@@ -193,3 +193,15 @@ test("text-only validation never promotes a model as the Agent default", async (
     assert(f.calls.filter(call=>call.path.endsWith("/test")).every(call=>!call.body.tools));
   } finally {f.restore();}
 });
+
+test("deselecting an unresolved model removes its parameter warning and permits the selected model", async () => {
+  const f=fixture({missingBeta:true});
+  try {
+    await f.add();const box=descendants(f.container).find(node=>node.tagName==='INPUT' && node.value==='beta');
+    assert(box);box.checked=false;box.dispatchEvent(new Event('change'));
+    assert(!descendants(f.container).some(node=>node.className==='model-parameter-warning' && !node.hidden && node.textContent.includes('无法获取模型参数')));
+    f.button('添加并验证所选模型').click();await flush();
+    assert(f.config().items.some(item=>item.wire_model==='alpha'));
+    assert(!f.config().items.some(item=>item.wire_model==='beta'));
+  } finally {f.restore();}
+});
