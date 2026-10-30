@@ -11,7 +11,6 @@ import hashlib
 import json
 from pathlib import Path
 import shlex
-import struct
 import time
 import traceback
 import uuid
@@ -145,13 +144,15 @@ def main():
             status=c.data('GET','/api/v1/command-invocations/'+invocation)
             if status['terminal']:break
             time.sleep(.1)
-        check(status['state']=='succeeded' and status['result']['version']=='0.8.0','Real ARM64 TCC command calls the Application SDK')
+        expected_version=json.loads((Path(__file__).resolve().parents[1]/'app/release.json').read_text(encoding='utf-8'))['version_name']
+        check(status['state']=='succeeded' and status['result']['version']==expected_version,'Real ARM64 TCC command calls the Application SDK')
         c.data('DELETE',path,dict(expected_revision=c.data('GET',path)['revision']))
     def full_tools():
         snapshot=c.data('GET','/api/v1/cli-tools');items=snapshot['items']
-        check(not snapshot.get('binding_error') and len(items)==13 and all(row['valid'] for row in items),'All 13 packaged tools initialize and bind')
-        cases={'busybox':['echo','qa-busybox'],'curl':['--version'],'jq':['-n','--arg','s','中文 a b','$s'],'openssh':['-V'],'aria2':['--version'],'ripgrep':['--version'],'7zip':['i'],'python':['-I','-c','import sys,ssl,sqlite3; print("QA_PYTHON",repr(sys.argv[1]))',''],'git':['--version'],'sqlite':[':memory:','select 42;'],'poppler':['-v'],'ffmpeg':['-version'],'imagemagick':['-version']}
-        commands={'7zip':'7zz','aria2':'aria2c','openssh':'ssh','ripgrep':'rg','sqlite':'sqlite3','poppler':'pdfinfo','imagemagick':'magick'}
+        expected={'busybox','curl','jq','openssh','aria2','ripgrep','7zip','python'}
+        check(not snapshot.get('binding_error') and {row['alias'] for row in items}==expected and all(row['valid'] for row in items),'All eight original packaged tools initialize and bind')
+        cases={'busybox':['echo','qa-busybox'],'curl':['--version'],'jq':['-n','--arg','s','中文 a b','$s'],'openssh':['-V'],'aria2':['--version'],'ripgrep':['--version'],'7zip':['i'],'python':['-I','-c','import sys,ssl,sqlite3; print("QA_PYTHON",repr(sys.argv[1]))','']}
+        commands={'7zip':'7zz','aria2':'aria2c','openssh':'ssh','ripgrep':'rg'}
         report['tools']=[]
         for item in items:
             alias=item['alias'];args=cases[alias]
@@ -163,24 +164,6 @@ def main():
             result=c.call('process.run',dict(program=snapshot['bin_path']+'/'+command,args=args,timeout_ms=20000))
             check(result['exit_code']==0,'Packaged '+command+' workflow exits successfully')
             return output(result['stdout'])
-        root=c.home+'/workspace/qa-media-'+uuid.uuid4().hex[:12]
-        wav=root+'.wav';png=root+'.png';pdf=root+'.pdf';rendered=root+'-pdf.png'
-        execute('ffmpeg',['-v','error','-f','lavfi','-i','sine=frequency=1000:duration=0.1','-y',wav])
-        check(read(wav,0,12)[8:12]==b'WAVE','Packaged FFmpeg writes a real WAV file')
-        probe=json.loads(execute('ffprobe',['-v','error','-show_entries','format=format_name','-of','json',wav]))
-        check(probe['format']['format_name']=='wav','Packaged ffprobe companion reads media metadata')
-        execute('magick',['-size','1x1','xc:red',png])
-        check(read(png,0,24)[:8]==b'\x89PNG\r\n\x1a\n' and struct.unpack('>II',read(png,16,8))==(1,1),'Packaged ImageMagick writes a real PNG file')
-        content=b'BT /F1 12 Tf 10 20 Td (Android QA) Tj ET\n'
-        objects=[b'<< /Type /Catalog /Pages 2 0 R >>',b'<< /Type /Pages /Kids [3 0 R] /Count 1 >>',b'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 128 64] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',b'<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',b'<< /Length '+str(len(content)).encode()+b' >>\nstream\n'+content+b'endstream']
-        document=bytearray(b'%PDF-1.4\n');offsets=[]
-        for i,obj in enumerate(objects,1):offsets.append(len(document));document.extend(f'{i} 0 obj\n'.encode()+obj+b'\nendobj\n')
-        offset=len(document);document.extend(b'xref\n0 6\n0000000000 65535 f \n'+b''.join(f'{n:010d} 00000 n \n'.encode() for n in offsets)+f'trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n{offset}\n%%EOF\n'.encode())
-        c.call('fs.write',dict(path=pdf,base64=base64.b64encode(document).decode()))
-        check(b'Android QA' in execute('pdftotext',['-enc','UTF-8',pdf,'-']),'Packaged Poppler extracts actual PDF text')
-        execute('pdftoppm',['-singlefile','-scale-to','32','-png',pdf,root+'-pdf'])
-        check(read(rendered,0,8)==b'\x89PNG\r\n\x1a\n','Packaged Poppler renders a PDF page')
-        for file in (wav,png,pdf,rendered):c.call('fs.remove',dict(path=file))
         python=next(item for item in items if item['alias']=='python')
         result=c.call('process.run',dict(program=snapshot['bin_path']+'/'+python['command'],args=['-I','-c','import sys;sys.stdout.buffer.write(b"x"*200000);sys.stderr.buffer.write(b"err"*6000)'],timeout_ms=10000))
         check(output(result['stdout'])==b'x'*200000 and output(result['stderr'])==b'err'*6000,'Packaged Python retains long stdout/stderr')

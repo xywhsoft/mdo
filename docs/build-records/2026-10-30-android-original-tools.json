@@ -1,0 +1,169 @@
+{
+  "edition": "full",
+  "bytes": 85036681,
+  "native_elf_files": 77,
+  "runtime_paths": 119,
+  "version": "0.8.1",
+  "version_code": "05000801",
+  "build_id": 70000088,
+  "sha256": "e2976682be4f81069f2a816e9d3be5cea5d004bbbeaad6223b165b3896da53c3",
+  "before_bytes": 474036328,
+  "saved_bytes": 388999647,
+  "MiB": 81.1,
+  "reduction_percent": 82.06,
+  "tools": [
+    "busybox",
+    "curl",
+    "jq",
+    "openssh",
+    "aria2",
+    "ripgrep",
+    "7zip",
+    "python"
+  ],
+  "date": "2026-10-30",
+  "completed_at": "2026-10-30T07:18:50.522376+00:00",
+  "status": "built-and-verified-not-published",
+  "source_head": "1892b1366ac25d7e89fc31075a124a97401fcc68",
+  "includes_other_uncommitted_application_changes": true,
+  "scope": "Android full APK fixed original-eight-tool selection",
+  "removed": [
+    "git",
+    "sqlite",
+    "poppler",
+    "ffmpeg",
+    "imagemagick"
+  ],
+  "published": false,
+  "android_real_device_tested": false,
+  "full_release_gate_passed": false,
+  "unit_tests": {
+    "total": 11,
+    "passed": 11,
+    "failed": 0
+  },
+  "checks": [
+    "CRC",
+    "exact eight-tool manifest membership",
+    "tool ZIP hashes",
+    "native hashes and dependency closure",
+    "16 KiB ELF and ZIP alignment",
+    "formal signing certificate unchanged",
+    "v2/v3 signatures"
+  ],
+  "build": {
+    "returncode": 0,
+    "seconds": 26.25,
+    "application_source_unchanged": true
+  },
+  "before_analysis": {
+    "old_bytes": 474036328,
+    "old_MiB": 452.08,
+    "tools": [
+      {
+        "tool": "7zip",
+        "zip_bytes": 1185557,
+        "exclusive_native_bytes": 2623776,
+        "MiB": 3.63,
+        "keep": true
+      },
+      {
+        "tool": "aria2",
+        "zip_bytes": 3210535,
+        "exclusive_native_bytes": 7165176,
+        "MiB": 9.9,
+        "keep": true
+      },
+      {
+        "tool": "busybox",
+        "zip_bytes": 391148,
+        "exclusive_native_bytes": 707504,
+        "MiB": 1.05,
+        "keep": true
+      },
+      {
+        "tool": "curl",
+        "zip_bytes": 2636651,
+        "exclusive_native_bytes": 5465128,
+        "MiB": 7.73,
+        "keep": true
+      },
+      {
+        "tool": "ffmpeg",
+        "zip_bytes": 20753791,
+        "exclusive_native_bytes": 29702442,
+        "MiB": 48.12,
+        "keep": false
+      },
+      {
+        "tool": "git",
+        "zip_bytes": 268458678,
+        "exclusive_native_bytes": 11555858,
+        "MiB": 267.04,
+        "keep": false
+      },
+      {
+        "tool": "imagemagick",
+        "zip_bytes": 8935156,
+        "exclusive_native_bytes": 9820673,
+        "MiB": 17.89,
+        "keep": false
+      },
+      {
+        "tool": "jq",
+        "zip_bytes": 468880,
+        "exclusive_native_bytes": 1105920,
+        "MiB": 1.5,
+        "keep": true
+      },
+      {
+        "tool": "openssh",
+        "zip_bytes": 5951939,
+        "exclusive_native_bytes": 12708272,
+        "MiB": 17.8,
+        "keep": true
+      },
+      {
+        "tool": "poppler",
+        "zip_bytes": 10899419,
+        "exclusive_native_bytes": 7407671,
+        "MiB": 17.46,
+        "keep": false
+      },
+      {
+        "tool": "python",
+        "zip_bytes": 9671359,
+        "exclusive_native_bytes": 19268112,
+        "MiB": 27.6,
+        "keep": true
+      },
+      {
+        "tool": "ripgrep",
+        "zip_bytes": 1543954,
+        "exclusive_native_bytes": 3908864,
+        "MiB": 5.2,
+        "keep": true
+      },
+      {
+        "tool": "sqlite",
+        "zip_bytes": 907184,
+        "exclusive_native_bytes": 1444488,
+        "MiB": 2.24,
+        "keep": false
+      }
+    ],
+    "removable_bytes_without_padding": 388236085
+  },
+  "private_evidence": ".build/android-base-tools-20261030",
+  "evidence_sha256": {
+    "android-tests.log": "ca46303e8ddf31060469e7d33450ece8668543db5a949e6c445fd2fa54eb6fe9",
+    "apk-validation.json": "6e1aa79510b55b4e0a50b6603f6464715069986b686b86683df962b8459a86ce",
+    "build-full.log": "6e883102069747835df28f5ee9751301e3563312863f08c78f86dcd97a4559c2",
+    "build-inputs.json": "45f6181ba32a6b7521f97c2fe7545c037f1eac5461eb6e4f59218476af56809a",
+    "build-result.json": "46e30452e17a608eaeb5c8ff168dd899c0e9b268b3480c8414fbd569d858ee2d",
+    "bundle-tests.log": "fcd3435b6a3c40b6d5ca022aa405c348f50b08758915ea6582566a89faf49a60",
+    "certificate-full.txt": "6a4d15f103cb6abdb1b4e80e4a3ca64acf0a003f6b84ac5e951db1bd9614a15a",
+    "size-before.json": "3a2aa3bf684ad51c437dce26d58d9274516d7b724ccbaaf73dba11b2201419c7",
+    "status-before.txt": "8a0c63c6c64a507c59704d02a93a6f3d238f07f41909de2c565367ba69dc47e8"
+  }
+}

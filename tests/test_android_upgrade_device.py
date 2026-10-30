@@ -33,7 +33,11 @@ def main():
         assert result['native_directory_relocated'],'PackageManager reused the path; relocation was not exercised'
         client.launch();snapshot=client.data('GET','/api/v1/cli-tools')
         result['tool_count']=len(snapshot['items']);result['binding_error']=snapshot['binding_error']
-        assert not result['binding_error'] and result['tool_count']==13 and all(row['valid'] for row in snapshot['items']),result
+        expected={'busybox','curl','jq','openssh','aria2','ripgrep','7zip','python'}
+        current={row['alias']:row for row in snapshot['items']}
+        # Older full APKs may have left additional installed directories.
+        # Preserve those bytes; only the current APK's eight tools must bind.
+        assert not result['binding_error'] and expected<=current.keys() and all(current[name]['valid'] for name in expected),result
         command=client.call('process.run',dict(program=snapshot['bin_path']+'/python',args=['-I','-c','import ssl,sqlite3; print("upgrade-preserved")'],timeout_ms=10000))
         assert command['exit_code']==0 and 'upgrade-preserved' in command['stdout']['text'],command
         after=files();result['changed_after_launch']=[name for name,sha in before.items() if after.get(name)!=sha]

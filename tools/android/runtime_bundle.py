@@ -17,15 +17,20 @@ from extension_archives import package_tool,digest,valid_path
 
 APPLETS=('sh','ash','awk','sed','grep','find','cat','head','tail','sort','wc','cp','mv','rm','mkdir','rmdir','touch','tar','gzip','gunzip','unzip','xargs','tee','tr','which','basename','dirname','ls','pwd','echo')
 
+# APK contents are a product choice, independent of the online tool catalogue.
+# Adding a downloadable tool or staging directory must never enlarge full APKs.
+FULL_APK_TOOLS=('busybox','curl','jq','openssh','aria2','ripgrep','7zip','python')
+
 def add_runtime(archive,root:Path,edition:str,build_id:int,revision:int):
     if edition not in ('full','lite'):raise ValueError('Invalid APK edition')
     definitions={r['id']:r for r in json.loads((ROOT/'tools/runtime/official.json').read_text(encoding='utf-8'))['tools']}
     records={r['id']:r for r in json.loads((ROOT/'tools/runtime/catalog.json').read_text(encoding='utf-8'))['tools'] if r['platform']=='android-arm64-v8a'}
     extensions=[];files=[];names={};executables={}
     if edition=='full':
-        for directory in sorted(root.iterdir()):
-            if not directory.is_dir() or directory.name=='fonts':continue
-            tool=directory.name
+        for tool in FULL_APK_TOOLS:
+            directory=root/tool
+            if not directory.is_dir():raise ValueError('Missing bundled Android tool: '+tool)
+            if directory.is_symlink():raise ValueError('Runtime source contains a link')
             if tool not in definitions:raise ValueError('No official metadata for '+tool)
             definition=definitions[tool];record=records.get(tool,{})
             entries=[p for p in record.get('entrypoints',[]) if (directory/p).is_file()]

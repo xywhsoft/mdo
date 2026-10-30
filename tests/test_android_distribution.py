@@ -99,14 +99,14 @@ def inspect(edition, release, path=None):
         if edition == "lite":
             assert len(native) == len(host_files) and not metadata["files"] and not metadata['extensions']
         else:
+            assert {tool['id'] for tool in metadata['extensions']} == {
+                'busybox','curl','jq','openssh','aria2','ripgrep','7zip','python'
+            }, "full APK must contain only the original eight tools"
             assert {"busybox/busybox", "curl/curl", "jq/jq", "openssh/ssh", "openssh/scp", "openssh/sftp", "python/bin/python3", "aria2/aria2c", "ripgrep/rg", "7zip/7zz"} <= logical_paths
-            assert {'sh','awk','python','python3','git','rg','7zz'}<=commands
+            assert {'sh','awk','python','python3','rg','7zz'}<=commands
             assert len(native) > 5
-            if release["toolpack_revision"] >= 4:
-                assert {"git/git", "sqlite/sqlite3", "poppler/pdftotext", "poppler/pdftoppm",
-                        "ffmpeg/ffmpeg", "ffmpeg/ffprobe", "imagemagick/magick", "poppler/fonts/fonts.conf"} <= logical_paths
-                assert {'git','sqlite3','pdfinfo','pdftotext','pdftoppm','ffmpeg','ffprobe','magick'} <= commands
-                assert not {"liblzma.so", "libcrypto.so", "libssl.so"} & native.keys(), "external libraries shadow Android framework dependencies"
+            assert not {'git','sqlite3','pdfinfo','pdftotext','pdftoppm','ffmpeg','ffprobe','magick'} & commands
+            assert not {"liblzma.so", "libcrypto.so", "libssl.so"} & native.keys(), "external libraries shadow Android framework dependencies"
         return {"edition": edition, "bytes": path.stat().st_size, "native_elf_files": len(native), "runtime_paths": len(logical_paths)}
 
 

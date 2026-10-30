@@ -33,7 +33,7 @@ WSL 方式的 SDK 和 JDK 参数为 Linux 路径，输出保留在 Windows 工�
 默认 `--edition both`，同时生成根目录精简版 `mdo-arm64-v8a.apk` 和完整版
 `mdo-full-arm64-v8a.apk`，复用同一次宿主、应用 pack 和原生库构建。
 `--edition lite` / `--edition full` 可单独构建一版；`--output` 与 `--version-code`
-只适用于单版构建。完整版包含 BusyBox、curl、jq、SSH/SCP/SFTP、Python、aria2c、ripgrep 和 7-Zip。两版使用相同
+只适用于单版构建。完整版固定包含 BusyBox、curl、jq、SSH/SCP/SFTP、Python、aria2c、ripgrep 和 7-Zip；不会自动纳入后续商店工具（如 Git、SQLite CLI、Poppler、FFmpeg、ImageMagick）。两版使用相同
 应用 ID 和签名；每个发布产物使用 `app/release.json` 中各自的递增内部编号。
 工具通过 Android 原生库安装目录执行，数据留在应用私有目录；完整流程及产物
 位置见 `docs/distribution.md`。构建中间文件在 `.build/android/`。

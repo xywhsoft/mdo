@@ -1,10 +1,12 @@
 """APK payloads may share exact bytes, but library identity must never conflict."""
 import importlib.util
+from contextlib import nullcontext
 import io
 import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -14,7 +16,7 @@ spec.loader.exec_module(bundle)
 
 
 class RuntimeAliases(unittest.TestCase):
-    def pack(self, rows, aliases=None):
+    def pack(self, rows, aliases=None, *, full_policy=False):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             defaults = {"busybox/busybox": b"\x7fELFbusybox"}
@@ -23,16 +25,22 @@ class RuntimeAliases(unittest.TestCase):
             if any(name.startswith('ffmpeg/') for name in rows):
                 defaults['ffmpeg/ffmpeg'] = b'\x7fELFffmpeg'
             self.recipes = {}
-            for name, data in {**defaults, **rows}.items():
+            contents = {**defaults, **rows}
+            for name, data in contents.items():
                 p = root / name; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(data)
             if aliases is not None:
                 p = root / "git/native-aliases.json"; p.parent.mkdir(exist_ok=True); p.write_text(json.dumps(aliases))
             out = io.BytesIO()
-            with zipfile.ZipFile(out, "w") as archive:
+            # Alias/ELF contracts use tiny selected tool sets. Policy tests
+            # below exercise the real, fixed full-APK selection without mocks.
+            selection = tuple(sorted({name.split('/')[0] for name in contents}))
+            policy = nullcontext() if full_policy else patch.object(bundle, 'FULL_APK_TOOLS', selection)
+            with policy, zipfile.ZipFile(out, "w") as archive:
                 bundle.add_runtime(archive, root, "full", 50000017, 4)
             with zipfile.ZipFile(out) as archive:
                 paths = archive.namelist()
                 meta = json.loads(archive.read("assets/mdo-runtime.json"))
+                self.extension_ids = {extension['id'] for extension in meta['extensions']}
                 for extension in meta['extensions']:
                     payload=archive.read(extension['asset'])
                     self.assertEqual(__import__('hashlib').sha256(payload).hexdigest(),extension['sha256'])
@@ -44,6 +52,29 @@ class RuntimeAliases(unittest.TestCase):
                         self.assertNotIn('files',manifest)
                         self.recipes[extension['id']] = json.loads(tool.read('tool.json'))
             return paths, {r['tool']+'/'+r["path"]: r for r in meta["files"]}
+
+    @staticmethod
+    def original_tools():
+        return {name: b'\x7fELF' + name.encode() for name in (
+            'busybox/busybox', 'curl/curl', 'jq/jq', 'openssh/ssh',
+            'aria2/aria2c', 'ripgrep/rg', '7zip/7zz', 'python/bin/python3')}
+
+    def test_full_contains_only_original_eight_tools_even_when_store_tools_exist(self):
+        rows = {**self.original_tools(), **{name: b'\x7fELFextra' for name in (
+            'git/git', 'sqlite/sqlite3', 'poppler/pdfinfo', 'ffmpeg/ffmpeg',
+            'imagemagick/magick', 'future-store-tool/program')}}
+        paths, files = self.pack(rows, full_policy=True)
+        expected = {'busybox','curl','jq','openssh','aria2','ripgrep','7zip','python'}
+        self.assertEqual(self.extension_ids, expected)
+        self.assertEqual({name.split('/')[0] for name in files}, expected)
+        self.assertEqual({name for name in paths if name.startswith('assets/mdo-extensions/')},
+                         {'assets/mdo-extensions/' + name + '.zip' for name in expected})
+        self.assertFalse(any('git' in name or 'ffmpeg' in name or 'future-store-tool' in name for name in paths))
+
+    def test_full_refuses_an_incomplete_original_tool_set(self):
+        rows = self.original_tools(); del rows['python/bin/python3']
+        with self.assertRaisesRegex(ValueError, 'Missing bundled Android tool: python'):
+            self.pack(rows, full_policy=True)
 
     def test_identical_libraries_and_programs_share_payload(self):
         paths, files = self.pack({"git/git": b"\x7fELFgit", "git/alias": b"\x7fELFgit", "git/libshared.so": b"\x7fELFlib", "ffmpeg/libshared.so": b"\x7fELFlib"}, {"git/libexec/git-core/git-add": "git/git"})
