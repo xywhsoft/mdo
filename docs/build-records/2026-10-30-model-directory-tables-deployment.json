@@ -1,0 +1,129 @@
+{
+  "deployed_at": "2026-10-30T20:17:52+08:00",
+  "status": "deployed",
+  "server_source_commit": "4b71e6402c4170c0967e349bb39073ebb6697db9",
+  "client_source_commit": "98490914d9a90d65e0566d699d654197d49c7456",
+  "files": [
+    {
+      "path": "plugin/mdo/modules/models/main.c",
+      "sha256": "6be9200c08bed26ee3e87a59385bb2c87f0dfaa4c7fc7e5d6fff041b5f7ec769",
+      "bytes": 6815
+    },
+    {
+      "path": "plugin/mdo/modules/models/src/client_catalog.c",
+      "sha256": "3998d32174b8dd1f2333d00c3070b56663d73e64472d160a6c530990377c490f",
+      "bytes": 10846
+    },
+    {
+      "path": "plugin/mdo/modules/models/client-catalog.defaults.json",
+      "sha256": "8bb2771910086eba5c40a206ec63e9044d2daeea24d39ccd56a1172604ce620d",
+      "bytes": 32992
+    },
+    {
+      "path": "plugin/mdo/page/models/client-catalog-component.html",
+      "sha256": "9e2e307baf70db0e4d71c191aa9b9fa1fa5f63fc1a40be6d5eaff3fd4adc336a",
+      "bytes": 3547
+    },
+    {
+      "path": "plugin/mdo/page/models/client-catalog.html",
+      "sha256": "6234fe6b80e8adfe951945c5683b8efaf585b40e15d8016d95faef5afb77517a",
+      "bytes": 4209
+    },
+    {
+      "path": "plugin/mdo/page/models/client-catalog.js",
+      "sha256": "c95fbae3402fffa02e5b9164a7a520a13581045da97b0fb3bfff4d2ccaa38c45",
+      "bytes": 20889
+    },
+    {
+      "path": "plugin/mdo/page/models/component.js",
+      "sha256": "cc64ef527a99f2e56eb6461c01ebf6d89ae3aa6931e3d368be95277e70dc5fe9",
+      "bytes": 8535
+    },
+    {
+      "path": "plugin/mdo/page/models/admin.css",
+      "sha256": "e7f572b6328abee86db7c7fb184241eae8e467dd0bc7dd86cddf3d9932bf48ea",
+      "bytes": 5305
+    },
+    {
+      "path": "plugin/mdo/src/delivery.c",
+      "sha256": "050cb878c88074daddf1014eee7d2a339cd37a9152d38e308ce22efd082f2087",
+      "bytes": 33027
+    }
+  ],
+  "backup_directory": "/home/xs/mdo-client-catalog-20261030-526d89de85",
+  "deployment": {
+    "phase": "complete",
+    "started_at": 1793362663,
+    "publish_client": false,
+    "files": 9,
+    "service": "xs.service",
+    "pending_file": null,
+    "completed_at": 1793362672,
+    "catalog": {
+      "version": "cc1adc5346de8e68316f9014422a1ffd06264f90ecbf7012796ff8981c659606",
+      "providers": 11,
+      "entries": 38,
+      "products": 28,
+      "plans": 15
+    },
+    "menu": {
+      "id": 73,
+      "title": "模型目录",
+      "href": "/admin/model-gateway/client-catalog",
+      "parent_id": 59,
+      "parent_title": "墨斗·模型与服务"
+    },
+    "anonymous_admin_denied": true,
+    "gateway_configuration_unchanged": {
+      "channel": {
+        "count": 4,
+        "sha256": "a0e40cba98acda0a1f79d47564d253ac0392fca3a84bab9162b1105773a4e3f9"
+      },
+      "model": {
+        "count": 3,
+        "sha256": "0472727ba6a339eb3054aa3233ecbaf7ae28203e094de82c637a5779ae1f7fc5"
+      },
+      "route": {
+        "count": 5,
+        "sha256": "1b0d1b70fb3a4c6875016a3a8e25a0878768f348b42d08ab0df0c0fc045c73fd"
+      }
+    },
+    "protected_sources_unchanged": true,
+    "native_config_unchanged": true,
+    "client_release_selectors_unchanged": 9,
+    "extension_catalog_ok": true
+  },
+  "client_live": {
+    "passed": true,
+    "version": "cc1adc5346de8e68316f9014422a1ffd06264f90ecbf7012796ff8981c659606",
+    "providers": 11,
+    "products": 28,
+    "plans": 15,
+    "has_plan_key_guidance": true,
+    "using_stale_cache": false,
+    "model_calls": 0
+  },
+  "ui_validation": {
+    "component_and_standalone": true,
+    "actual_layui_assets": true,
+    "supplier_create_and_product_edit_saved": true,
+    "parameter_edit_effort_toggle_saved": true,
+    "multiple_components_no_duplicate_ids": true,
+    "closing_second_component_preserved_first_query": true,
+    "dialog_client_height": 610,
+    "dialog_scroll_height": 774,
+    "dialog_bottom": 690.5,
+    "viewport_height": 720,
+    "pager_bottom_after_save": 704.375,
+    "production_admin_write": false,
+    "screenshot": "model-directory-token-plans.png"
+  },
+  "custom_catalog_existed": false,
+  "client_published": false,
+  "installed_client_replaced": false,
+  "validation_limits": [
+    "Authenticated component/standalone editing and geometry were tested locally with actual Layui and simulated HTTP, not a production administrator session.",
+    "Production anonymous boundaries, menu title/parent, source and UI asset hashes, public catalog and native client access were verified.",
+    "Unverified plan-specific model limits remain empty. No supplier model completions or account keys were used."
+  ]
+}
