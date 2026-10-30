@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-10-30T13:41:25.232077+00:00",
+  "version_name": "0.8.1",
+  "version_code": "05000801",
+  "windows_build_id": 70000101,
+  "bytes": 6603795,
+  "sha256": "796b8afa32a29f4f721d25e92fa71786619152061dd347e57a2d1dfaf3fd123a",
+  "source_head": "a08eb25b0fa40896e4ba0b66ffacb466913421c4",
+  "source_inputs": {
+    "application": "1ca7c6dbc58d562c459a21800bd0388a9469ac0394e606bcd68d1c88fc8ac6c7",
+    "dependency lock": "eb8b4af857eaa01b2adcd909ba1d24840f221281ce9add6b6827cd671422546d",
+    "host profile": "d765984879c9d3dedc04c523b0713b4e2662c4b8eb1ab91ff6d16d4c22dd79e2"
+  },
+  "published": false,
+  "other_platforms_rebuilt": false,
+  "includes_existing_uncommitted_changes": true,
+  "checks": {
+    "targeted_frontend_tests": 46,
+    "module_graph": 244,
+    "browser_widths": [
+      1320,
+      390
+    ],
+    "manual_default_without_discovery": true,
+    "spinner_and_inline_discovery_list": true,
+    "selected_only_parameter_lookup": true,
+    "late_reply_cancel_and_input_preservation": true,
+    "already_installed_profiles_disabled": true,
+    "native_start": {
+      "passed": true,
+      "scope": "native WebView2 four launchers",
+      "tools": [
+        "打开浏览器",
+        "打开文件",
+        "打开终端",
+        "打开变更"
+      ],
+      "empty_home": true,
+      "terminal_ended": true
+    },
+    "embedded_changed_resources": true,
+    "source_fingerprints_stable": true
+  }
+}
