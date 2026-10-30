@@ -63,8 +63,9 @@ export function parameterSummary(model) {
 
 export function createParameterEditor(draft, { onChange = () => {}, index = 0 } = {}) {
   const record = draft.record;
-  const root = element("section", { className: "model-parameter-editor" });
-  root.append(element("strong", { text: record.id }));
+  const root = element("details", { className: "model-parameter-editor", attrs: { open: parameterIssues(draft).length ? "" : null } });
+  root.append(element("summary", { text: record.id + (parameterIssues(draft).length ? "" :
+    ` · ${text("context", "上下文长度（tokens）")} ${parameterValue(record, "context_tokens").toLocaleString()}`) }));
   if (record.registry_version && record.registry_version !== "unavailable") root.append(element("small", {
     text: text("catalogVersion", "服务器目录版本：{version}", { version: record.registry_version.slice(0, 16) }),
   }));

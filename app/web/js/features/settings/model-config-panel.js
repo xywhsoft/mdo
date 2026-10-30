@@ -236,7 +236,13 @@ export function createModelConfigPanel(container) {
   }
   async function addSelected(completeOnly = false) {
     if (busy) return;
-    const form = container.querySelector(".supplier-setup-form"); if (!form.reportValidity()) return;
+    const form = container.querySelector(".supplier-setup-form");
+    if (!completeOnly && !form.reportValidity()) return;
+    if (completeOnly) for (const control of form.querySelectorAll("input, select")) {
+      if (!control.closest(".model-parameter-editor") && control.checkValidity && !control.checkValidity()) {
+        control.reportValidity(); return;
+      }
+    }
     if (!draft.preset.local && !draft.provider && !draft.key.trim() && !draft.ref.trim()) {
       status(text("keyRequired", "请输入 API Key，或在高级设置中填写凭据引用。"), true); return;
     }

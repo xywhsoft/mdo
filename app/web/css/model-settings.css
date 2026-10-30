@@ -65,8 +65,11 @@
   .supplier-key-form .model-field { flex-basis: 100%; }
 }
 
-.model-parameter-editor { border: 1px solid var(--border-color, #6666); border-radius: 8px; padding: 16px; display: grid; gap: 12px; margin: 12px 0; }
+.model-parameter-editor { border: 1px solid var(--border-color, #6666); border-radius: 8px; padding: 16px; margin: 12px 0; }
 .model-parameter-warning { color: var(--warning-color, #d88b19); border-left: 3px solid currentColor; background: #d88b1912; padding: 10px 12px; margin: 4px 0; }
 .model-parameter-warning[hidden] { display: none; }
 .model-parameter-editor small { opacity: .8; overflow-wrap: anywhere; }
 .model-parameter-editor small a { margin-inline-start: 8px; }
+
+.model-parameter-editor > summary { cursor: pointer; font-weight: 600; }
+.model-parameter-editor > :not(summary) { margin-block: 10px; }

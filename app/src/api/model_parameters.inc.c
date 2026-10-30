@@ -88,7 +88,7 @@ static xvalue* MdoParameterResolve(const xvalue* Registry, cstr Endpoint, cstr P
     xvalue* Result = xrtValueObject(); xvalue* Fields = xrtValueObject();
     xvalue* Api = MdoParameterApiFields(Row); xvalue* Now = xrtValueInt(MdoUtcUs() / 1000);
     const xvalue* Entries = xrtValueObjectGet(Registry, XRT_STR_LITERAL("entries"));
-    const xvalue* Match = NULL; const xvalue* Upstream = NULL; bool KnownHost = false;
+    const xvalue* Match = NULL; const xvalue* Upstream = NULL; bool KnownHost = false, Ambiguous = false;
     for (size_t i = 0; i < xrtValueCount(Entries); ++i) {
         const xvalue* Entry = xrtValueArrayGet(Entries, i);
         const xvalue* Bases = xrtValueObjectGet(Entry, XRT_STR_LITERAL("bases"));
@@ -108,9 +108,13 @@ static xvalue* MdoParameterResolve(const xvalue* Registry, cstr Endpoint, cstr P
             !MdoParameterContains(xrtValueObjectGet(Entry, XRT_STR_LITERAL("protocols")), Protocol)) continue;
         bool Recommend = false; xrtValueGetBool(xrtValueObjectGet(Entry, XRT_STR_LITERAL("upstream")), &Recommend);
         if (BaseMatch) { Match = Entry; break; }
-        if (Recommend) Upstream = Entry;
+        if (Recommend) {
+            if (Upstream && !xrtValueEqual(xrtValueObjectGet(Upstream, XRT_STR_LITERAL("fields")),
+                xrtValueObjectGet(Entry, XRT_STR_LITERAL("fields")))) Ambiguous = true;
+            Upstream = Entry;
+        }
     }
-    bool Recommendation = !Match && !KnownHost; if (Recommendation) Match = Upstream;
+    bool Recommendation = !Match && !KnownHost && !Ambiguous; if (Recommendation) Match = Upstream;
     bool Ok = Result && Fields && Api && Now;
     for (size_t i = 0; Ok && i < xrtValueCount(Api); ++i) {
         xstrview K; const xvalue* V = xrtValueObjectAt(Api, i, &K); char Name[64];
