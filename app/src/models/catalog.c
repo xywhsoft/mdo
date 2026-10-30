@@ -1250,7 +1250,11 @@ static xllm_client* MdoModelClientCreateAuth(const MdoModelCatalog* pCatalog,
     Config.sBaseUrl = Endpoint;
     Config.sApiKey = Secret;
     Config.sModel = pModel->WireModel;
-    Config.sReasoningEffort = ReasoningEffort;
+    /* Discovery can only provide an ID, not reasoning capabilities. Its
+     * neutral "none" selection means no control when the profile lacks it;
+     * passing a nonempty effort would request an undeclared capability. */
+    Config.sReasoningEffort = !(Profile.uCapabilities & XLLM_CAP_REASONING_CONTROL) &&
+        ReasoningEffort && !strcmp(ReasoningEffort, "none") ? NULL : ReasoningEffort;
     Config.sUserAgent = "mdo/" MDO_VERSION_TEXT;
     Config.uMaxOutputTokens = MaxOutputTokens;
     Config.uTimeoutMs = pProvider->TimeoutMilliseconds;

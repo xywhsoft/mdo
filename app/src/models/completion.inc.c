@@ -262,6 +262,31 @@ static uint32 MdoModelsRetryDelay(uint32 Attempt, uint32 RetryAfter,
 typedef xllm_result (*MdoModelsAttemptFn)(void*, xllm_client**,
     const xllm_request*, const xllm_stream_callbacks*, xllm_response**, xllm_error*);
 
+/* SDK/Agent request defaults are broader than a conservatively discovered
+ * model. Borrow a view of the request and use only declared optional controls.
+ * Messages, tool schemas, cancellation, hooks and the caller's request survive. */
+static const xllm_request* MdoModelsClientRequest(xllm_client* Client,
+    const xllm_request* Request, xllm_request* View)
+{
+    xllm_model_profile Profile;
+    if (!Client || !Request || !xllmClientGetModelProfile(Client, &Profile)) return Request;
+    *View = *Request;
+    if (!(Profile.uCapabilities & XLLM_CAP_PARALLEL_TOOL_CALL))
+        View->bParallelToolCalls = false;
+    if (!(Profile.uCapabilities & XLLM_CAP_REASONING_CONTROL) &&
+        View->sReasoningEffort && !strcmp(View->sReasoningEffort, "none"))
+        View->sReasoningEffort = NULL;
+    return View;
+}
+
+static xllm_result MdoModelsClientComplete(xllm_client* Client, const xllm_request* Request,
+    const xllm_stream_callbacks* Callbacks, xllm_response** Response, xllm_error* Error)
+{
+    xllm_request View;
+    return xllmClientComplete(Client, MdoModelsClientRequest(Client, Request, &View),
+        Callbacks, Response, Error);
+}
+
 static xllm_result MdoModelsComplete(xllm_client* Client, const xllm_request* Request,
     const xllm_stream_callbacks* Callbacks, xllm_response** Response,
     xllm_error* OutError, bool Restartable, MdoModelsAttemptFn Complete, void* Data,
@@ -301,7 +326,7 @@ static xllm_result MdoModelsComplete(xllm_client* Client, const xllm_request* Re
         if (AttemptsMade != UINT32_MAX) ++AttemptsMade;
         Result = Complete ? Complete(Data, &Client, &AttemptRequest,
             Callbacks ? &Stream : NULL, Response, &Error) :
-            xllmClientComplete(Client, &AttemptRequest, Callbacks ? &Stream : NULL,
+            MdoModelsClientComplete(Client, &AttemptRequest, Callbacks ? &Stream : NULL,
                 Response, &Error);
         if (Result == XLLM_RESULT_OK && Restartable &&
             !MdoModelsUsableResponse(*Response)) {

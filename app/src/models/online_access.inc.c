@@ -94,7 +94,7 @@ static xllm_result MdoModelsOnlineAttempt(void* Data,xllm_client** Client,
     *Client=Call->Client;
     if(Call->Client){
         xllm_request Borrowed=*Request;Borrowed.pCancel=Access.Cancel;
-        Result=xllmClientComplete(Call->Client,&Borrowed,Callbacks,Response,Error);
+        Result=MdoModelsClientComplete(Call->Client,&Borrowed,Callbacks,Response,Error);
         if(Error->iHttpStatus==401 &&
             !strcmp(MdoModelErrorKind(Error),"authentication_failed")){
             /* Online account authentication is distinct from a user-entered
