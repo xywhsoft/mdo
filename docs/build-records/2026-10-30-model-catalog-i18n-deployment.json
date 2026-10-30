@@ -1,0 +1,84 @@
+{
+  "completed_at": "2026-10-30T21:35:16+08:00",
+  "phases": {
+    "schema": true,
+    "admin": true,
+    "client": true,
+    "translations_acceptance_server_deployment": true
+  },
+  "server_commit": "c98c1191b529ebb81cbebc90daffe7e24f01349f",
+  "client_commit": "86bfaed9207c651174cce90312f542a7ffb90064",
+  "server_backup": "/home/xs/mdo-client-catalog-20261030-77096a75cc",
+  "server_files": 11,
+  "server_bytes": 194219,
+  "catalog": {
+    "version": "f86664efd67da58b5885eb481b52e63bdce4289e15c7bde1c15da9aad85710bf",
+    "providers": 11,
+    "entries": 38,
+    "products": 28,
+    "plans": 15
+  },
+  "languages": [
+    "zh-CN",
+    "en-US",
+    "ru-RU"
+  ],
+  "live_client": {
+    "passed": true,
+    "embedded_application": true,
+    "providers": 11,
+    "products": 28,
+    "languages": [
+      "zh-CN",
+      "en-US",
+      "ru-RU"
+    ],
+    "version": "f86664efd67da58b5885eb481b52e63bdce4289e15c7bde1c15da9aad85710bf",
+    "embedded_language_assets": true,
+    "using_stale_cache": false,
+    "model_calls": 0,
+    "production_login": false
+  },
+  "acceptance_artifact": {
+    "path": "D:\\GIT\\mdo\\.build\\catalog-i18n-20261030\\mdo.exe",
+    "bytes": 6603219,
+    "sha256": "d73a120c4c8425aa94071e645b25b1a560e19f16234aba37735684a977ab608d",
+    "published": false,
+    "source": "shared worktree acceptance build"
+  },
+  "checks": {
+    "frontend_tests": 69,
+    "migration_tests": 3,
+    "server_native": true,
+    "client_native": true,
+    "packed_native": true,
+    "module_graph": 244,
+    "browser_ui": true,
+    "production_admin_login": false,
+    "production_admin_write": false,
+    "model_calls": 0,
+    "client_release_selectors_unchanged": 9,
+    "gateway_configuration_unchanged": true,
+    "protected_sources_unchanged": true,
+    "native_config_unchanged": true
+  },
+  "ui_evidence": {
+    "source": "local fixture with deployed component and layui assets",
+    "viewport": [
+      1280,
+      720
+    ],
+    "pager_bottom": 703.984375,
+    "image": "D:\\GIT\\mdo\\.build\\catalog-i18n-20261030\\model-catalog-i18n.png",
+    "checks": [
+      "three languages",
+      "draft survives UI language change",
+      "single-language save preserves others",
+      "incomplete language activation rejected",
+      "disabled French registration accepted",
+      "coverage follows selected language",
+      "long Russian labels fit",
+      "scroll and pagination inside viewport"
+    ]
+  }
+}
