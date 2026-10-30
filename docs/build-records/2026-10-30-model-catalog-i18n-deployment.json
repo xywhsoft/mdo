@@ -80,5 +80,32 @@
       "long Russian labels fit",
       "scroll and pagination inside viewport"
     ]
+  },
+  "post_deploy_ui_fix": {
+    "passed": true,
+    "files": [
+      {
+        "path": "plugin/mdo/page/models/catalog-i18n.js",
+        "name": "catalog-i18n.js",
+        "before": "51235aec26a88afa1c85564a6bf9f222f72c1e4d016788eac386fe0799f0fbef",
+        "sha256": "a75a1b49c952d59fe0fe6a86d6c05a5554b6d59f5d03a590c298c495ad7e7bbb"
+      },
+      {
+        "path": "plugin/mdo/page/models/admin-ui.js",
+        "name": "admin-ui.js",
+        "before": "17a12aac2bef0f22b5f01e7db7e5c6b4486a0ed1e6c4b99e657dd302a71598ca",
+        "sha256": "a0de7cccd002767249044b0e44e03ea57fb1a7f1ee958c1b48753db39ee4e578"
+      },
+      {
+        "path": "plugin/mdo/page/models/client-catalog.js",
+        "name": "client-catalog.js",
+        "before": "9e5f5128b22fb897c3a995813bf6734830545d77ac75fa951e08afe4ea277187",
+        "sha256": "2da3edb6bd38ee130fb741c2d0a7f66b0efd492354b257d471b01e7ca3a303cc"
+      }
+    ],
+    "completed_at": 1793368172,
+    "service_restarted": false,
+    "backup": "/home/xs/mdo-client-catalog-20261030-77096a75cc/ui-cleanup-before",
+    "server_commit": "bdabb40f2ec7e645fdca27e8c284d0b526cb752a"
   }
 }
