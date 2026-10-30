@@ -164,6 +164,12 @@ def main():
         Supplier.catalog=copy.deepcopy(cache)
         (base/'home/data').mkdir(parents=True, exist_ok=True)
         (base/'home/data/model-catalog.json').write_text(json.dumps(cache))
+        # The packed GUI persists an "auto" locale on first load. Set an
+        # explicit fixture locale before startup so that unrelated UI write
+        # cannot race the API-only verification probes below.
+        (base/'home/config').mkdir(parents=True, exist_ok=True)
+        (base/'home/config/settings.json').write_text(json.dumps({
+            'schema_version': 1, 'patch': {'locale': 'en-US'}}))
         def call(method, path, body=None, etag=None):
             status, headers, data = request(port, method, '/api/v1/'+path,
                 body=json.dumps(body).encode() if body is not None else None,
