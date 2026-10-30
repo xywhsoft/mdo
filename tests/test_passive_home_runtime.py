@@ -1,4 +1,4 @@
-"""Bounded local publication and read-only memory/migration API regression.
+"""Bounded local publication and read-only memory API regression.
 
 No model calls, tool downloads or public network dependencies. Every Home is
 an isolated fixture; existing user data and browser-cache bytes must survive.
@@ -104,17 +104,15 @@ def run(host: Path) -> list[dict]:
                         assert published(1)["stage"] == "complete"
                         Catalog.revision = 2
                         status, _, body = request(port, "POST", "/api/v1/distribution",
-                            body=b'{"action":"check"}', headers={"Content-Type": "application/json"})
+                            body=b'{"action":"refresh"}', headers={"Content-Type": "application/json"})
                         assert status == 200, (status, body)
                         assert published(2)["stage"] == "complete"
 
-                        def preview() -> dict:
-                            status, _, body = request(port, "GET", "/api/v1/migrations/legacy")
-                            assert status == 200, body
-                            return next(item for item in json.loads(body)["data"]["items"]
-                                        if item["source_id"] == "user-home")
-
-                        before = preview()
+                        def inventory():
+                            return {p.relative_to(home).as_posix():p.read_bytes() if p.is_file() else None
+                                for p in home.rglob("*") if p.name not in (".mdo.lock", ".writer.lock")}
+                        before_reads = inventory()
+                        had_memory = (home / "memory").exists()
                         status, headers, body = request(port, "GET", "/api/v1/memory/global")
                         assert status == 200 and json.loads(body)["data"]["items"] == [], body
                         head_status, head_headers, head_body = request(port, "HEAD", "/api/v1/memory/global")
@@ -127,38 +125,18 @@ def run(host: Path) -> list[dict]:
                             body=payload, headers={"Content-Type": "application/json",
                                                   "If-Match": '"mdo-memory-0"'})
                         assert status == 412, body
-                        after = preview()
-                        assert before == after and after["valid"], (before, after)
-                        assert after["file_count"] == 1 and after["unsupported_count"] == 0, after
-                        if mode == "inside-source":
-                            assert not after["importable"] and after["conflict_count"] == 1, after
-                            status, _, body = request(port, "POST", "/api/v1/migrations/legacy",
-                                body=json.dumps({"source_id": "user-home",
-                                    "preview_token": after["preview_token"]}).encode(),
-                                headers={"Content-Type": "application/json"})
-                            assert status == 409 and not home.exists(), body
-                        elif mode in ("fresh", "browser-cache"):
-                            assert after["importable"], after
                         catalog_path = home / "data/notifications/catalog.json"
                         if mode == "user-data":
-                            assert not after["importable"]
                             assert json.loads(catalog_path.read_bytes())["revision"] == 2
                             assert (home / "user-note.txt").read_bytes() == b"existing portable user data"
-                        else:
-                            assert not catalog_path.exists()
-                        assert not (home / "memory").exists()
+                        assert inventory() == before_reads, "Read/failed conditional write must not alter current Home"
                         if mode == "browser-cache":
                             assert cache.read_bytes() == b"browser-owned-cache"
-                            assert {str(f.relative_to(home)).replace("\\", "/")
-                                for f in home.rglob("*") if f.is_file()} == {
-                                    ".mdo.lock", "data/cache/webview2/cache.bin"}
-                        if mode == "fresh":
-                            assert not home.exists()
                         assert (source / "config.json").read_bytes() == source_bytes
                         observations.append({"mode": mode, "catalog_revision": 2,
-                            "source_file_count": after["file_count"], "source_valid": after["valid"],
-                            "importable": after["importable"], "catalog_persisted": catalog_path.exists(),
-                            "memory_directory_created": False, "source_bytes_unchanged": True})
+                            "catalog_persisted": catalog_path.exists(),
+                            "memory_directory_created": not had_memory and (home / "memory").exists(),
+                            "source_bytes_unchanged": True})
                     except BaseException as error:
                         log.flush()
                         raise RuntimeError(f"{mode}: {error}\n{log_path.read_text(encoding='utf-8', errors='replace')[-4000:]}") from error
@@ -180,7 +158,7 @@ def main() -> None:
     if args.evidence:
         args.evidence.parent.mkdir(parents=True, exist_ok=True)
         args.evidence.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
-    print("passive Home runtime: PASS (four local publication/read/migration cases)")
+    print("passive Home runtime: PASS (four local publication/read cases)")
 
 
 if __name__ == "__main__":

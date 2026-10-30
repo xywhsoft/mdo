@@ -129,6 +129,10 @@ def write_site(site: Path) -> None:
     (site / "default-home" / "config" / "defaults.json").write_text(
         "builtin-default", encoding="utf-8")
     copy_app_source("src/storage/home.c", site)
+    # This storage-only fixture has no Application SDK/plugin manager.
+    source = site / "src/storage/home.c"
+    source.write_text(source.read_text(encoding="utf-8") +
+        '\nbool MdoApplicationPluginHasFile(cstr Path) { (void)Path; return false; }\n', encoding="utf-8")
     (site / "probe.c").write_text(PROBE_SOURCE, encoding="utf-8")
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))

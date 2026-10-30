@@ -672,31 +672,3 @@ bool MdoApiSessionArtifactRoute(MdoApiContext* Context)
         NULL);
     return MdoApiReplySuccessTake(Context, 200u, Data, NULL);
 }
-
-bool MdoApiStorageRoute(MdoApiContext* Context)
-{
-    MdoBootstrapSnapshot Snapshot;
-    xvalue* Data = xrtValueObject();
-    bool Ok;
-
-    memset(&Snapshot, 0, sizeof(Snapshot)); Snapshot.Size = sizeof(Snapshot);
-    Ok = Data != NULL && MdoBootstrapGetSnapshot(&Snapshot) &&
-        MdoApiValueSetString(Data, "home_path", Snapshot.Home.Path) &&
-        MdoApiValueSetString(Data, "persistence",
-            Snapshot.Home.Persistence == MDO_PERSISTENCE_EXTERNAL ?
-                "external" : (Snapshot.Home.Persistence ==
-                MDO_PERSISTENCE_EPHEMERAL ? "ephemeral" : "lazy")) &&
-        MdoApiValueSetBool(Data, "external_overlay",
-            Snapshot.Home.ExternalOverlay) &&
-        MdoApiValueSetUInt(Data, "config_bytes",
-            Snapshot.Config.EffectiveBytes) &&
-        MdoApiValueSetUInt(Data, "session_count", Snapshot.SessionCount) &&
-        MdoApiValueSetUInt(Data, "schedule_count", Snapshot.ScheduleCount) &&
-        MdoApiValueSetUInt(Data, "global_memory_count",
-            Snapshot.GlobalMemoryCount) &&
-        MdoApiValueSetUInt(Data, "artifact_count",
-            MdoBootstrapRuntime() != NULL ?
-                xworkRuntimeArtifactCount(MdoBootstrapRuntime()) : 0u);
-    if ( !Ok ) { xrtValueRelease(Data); Data = NULL; }
-    return MdoApiStateReply(Context, Data);
-}

@@ -28,7 +28,7 @@ static void MdoServiceOutputMaintenance(void* User)
     g_MdoOutputMaintenanceTimer=0;
     if(xrtAtomic32Load(&g_MdoServiceState,XMEMORY_ACQUIRE)!=MDO_SERVICE_READY)return;
     MdoHomeSnapshot Home={0};Home.Size=sizeof(Home);
-    if(MdoHomeGetSnapshot(&Home)&&!Home.ImportInProgress&&!Home.RestartRequired) {
+    if(MdoHomeGetSnapshot(&Home)&&!Home.RestartRequired) {
         xroot Root=MdoHomeOpenExistingStorageDirectory("artifacts");
         if(Root){(void)xworkProcessOutputCollect(Root,1024u*1024u*1024u,7u*24u*60u*60u);xrtRootClose(Root);}
         xrtClearError();

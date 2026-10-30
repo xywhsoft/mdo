@@ -3618,7 +3618,7 @@ manager 修改新批次。启动在所有业务 manager 之前恢复，提交前
 Windows 最终有界门禁通过 114 项 Python、117 项 Node、80 个前端模块解析、严格
 C11、22 个运行探针、确定性打包、便携 WebView2 Home 及 20 秒启动。根目录
 `mdo.exe` SHA-256 为 `01dae3be1e1e168edb34d697790696b7cf4415451f9b52a383d378ed2dc5f78b`。
-详细契约见 [Home 导入事务](home-import-transaction.md)。本轮未复验 Linux/macOS
+该历史 Home 导入事务现已退役。本轮未复验 Linux/macOS
 和实体移动端，也未在原生窗口内完成导入点击；Windows 原生缓存路径由独立门禁
 覆盖。完整项目清除/恢复仍缺；未做压力或高负载测试。
 

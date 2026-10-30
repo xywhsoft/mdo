@@ -203,11 +203,11 @@ def write_site(site: Path) -> None:
         (site / relative).mkdir(parents=True, exist_ok=True)
     (site / "web/index.html").write_text("probe", encoding="utf-8")
     for relative in (
-        "default-home/config/defaults.json", "src/storage/home.c", "src/storage/home_import.inc.c", "src/storage/home_purge.inc.c", "src/storage/home_restore.inc.c",
+        "default-home/config/defaults.json", "src/storage/home.c", "src/storage/home_fs.inc.c", "src/storage/home_purge.inc.c", "src/storage/home_restore.inc.c",
         "src/config/config.c", "src/config/service.c",
     ):
         copy_app_source(relative, site)
-    for name in ("home.h", "home_import.h", "home_purge.h", "home_restore.h", "session_file_policy.h", "config.h", "models.h", "schedules.h",
+    for name in ("home.h", "home_purge.h", "home_restore.h", "session_file_policy.h", "config.h", "models.h", "schedules.h",
                  "settings.h", "web.h"):
         shutil.copy2(ROOT / "app/include/mdo" / name,
                      site / "include/mdo" / name)

@@ -7,6 +7,7 @@ import { openLayer } from "../../components/layers.js";
 import { createNoticePreferences } from "./preferences.js";
 import { createExternalToolsPanel } from "./external-directory-tools.js";
 import { createWarningPanel } from "./warning-panel.js";
+import { createRequestRecovery } from "../../api/request-recovery.js";
 
 const words = {
   "zh-CN": { title: "通知", update: "应用更新", updateBody: "安装后保留配置、项目和会话。", toolsUpdate: "扩展工具包更新", install: "扩展工具包安装", login: "登录账号", toolsBody: "扩展工具包提供 BusyBox 常用命令、curl 网络下载、jq 数据处理和 SSH/SCP/SFTP 远程连接。Python 可用于脚本和数据处理。请从 设置 → 扩展能力 → 扩展工具包 进入安装和更新。", accountBody: "登录后可使用联网搜索、自己的设备中继、在线模型及用量查询。账号令牌保存在本机服务中。点击账号即可直接登录。", android: "Android 不支持单独安装、更新或卸载扩展工具包。系统限制在可写目录中执行原生程序，因此工具必须随完整版 APK 安装和更新。请安装同签名、版本号更大的完整版，覆盖升级会保留配置、项目和会话。", later: "稍后提醒", close: "关闭", tools: "扩展工具包", check: "检查更新", core: "常用工具包", python: "Python（可选）", full: "查看完整版更新", busy: "正在处理…", missing: "尚未安装", installed: "已安装", failure: "操作失败，请重试" },
@@ -31,6 +32,7 @@ export function createNotificationCenter({ updatePanel, navigation, openAccount 
   const toolsBody = document.querySelector("[data-settings-toolpacks]");
   const entries = document.querySelectorAll("[data-notifications-open]");
   let cli = {}, distribution = {cli:{}}, update = null, account = null, diagnostics = null, diagnosticsFailed = false, pending = false, timer, destroyed = false, epoch = 0, view = null;
+  let diagnosticRead = null, diagnosticTimer = 0, diagnosticEpoch = 0;
   const choices = createNoticePreferences();
   const copy = () => words[currentLocale()] ?? words["en-US"];
   const externalPanel=createExternalToolsPanel({refresh,openDownloads,signedIn:()=>account?.state==="signed_in",isMain:()=>navigation.get().view==="workspace",openFull:async()=>{
@@ -40,7 +42,7 @@ export function createNotificationCenter({ updatePanel, navigation, openAccount 
   const key = () => targetState().selected ? `${targetState().selected.owner}/${targetState().selected.id}` : "local";
   const preferences = () => choices.forRun(key(), distribution.notification_session);
   const notices = () => buildNotices({ distribution, update, account, diagnostics, diagnosticsFailed, locale: currentLocale(), preferences: preferences(), copy: copy() });
-  const warningPanel=createWarningPanel({scope:()=>`${key()}/${distribution.notification_session||""}`,refresh,
+  const warningPanel=createWarningPanel({scope:()=>`${key()}/${distribution.notification_session||""}`,refresh:refreshDiagnostics,
     onLater:n=>{choices.record(key(),distribution.notification_session,n,true);render();},onSettings:section=>navigation.openSettings(section)});
   function button(text, action) { const e = node("button", text, "secondary-button"); e.type = "button"; e.addEventListener("click", action); return e; }
   function close() { const own = view; view = null; own?.layer.dispose(); warningPanel.close(); }
@@ -90,32 +92,61 @@ export function createNotificationCenter({ updatePanel, navigation, openAccount 
     externalPanel.render(toolsBody,cli);
   }
   function openTools() { indicators.hide(); close(); navigation.openSettings("toolpacks"); }
+  function resetDiagnostics() {
+    diagnosticEpoch++;
+    diagnosticRead?.recovery.dispose(); diagnosticRead = null;
+    clearTimeout(diagnosticTimer); diagnosticTimer = 0;
+    diagnostics = null; diagnosticsFailed = false;
+  }
+  function refreshDiagnostics() {
+    if (destroyed) return Promise.resolve(false);
+    if (diagnosticRead) return diagnosticRead.promise;
+    clearTimeout(diagnosticTimer); diagnosticTimer = 0;
+    const own = { generation: epoch, check: diagnosticEpoch, recovery: createRequestRecovery() };
+    const current = () => !destroyed && own.generation === epoch && own.check === diagnosticEpoch;
+    diagnosticRead = own;
+    own.promise = (async () => {
+      try {
+        const result = await own.recovery.request(signal => api.get("/diagnostics", { signal }), { retry: false });
+        if (!current()) return false;
+        if (!result.data || !Array.isArray(result.data.items)) throw new Error("Invalid diagnostic snapshot");
+        diagnostics = result.data; diagnosticsFailed = false; render(); return true;
+      } catch (error) {
+        if (current() && error?.name !== "AbortError") { diagnosticsFailed = true; render(); }
+        return false;
+      } finally {
+        own.recovery.dispose();
+        if (diagnosticRead === own) diagnosticRead = null;
+        if (current()) diagnosticTimer = setTimeout(refreshDiagnostics, 30000);
+      }
+    })();
+    return own.promise;
+  }
   async function refresh() {
     if (pending || destroyed) return false; pending = true; const generation = epoch;
+    const checking = refreshDiagnostics();
     try {
-      const results = await Promise.allSettled([api.get("/distribution"), api.get("/update"), api.get("/account"), api.get("/cli-tools"), api.get("/diagnostics")]);
+      const results = await Promise.allSettled([api.get("/distribution"), api.get("/update"), api.get("/account"), api.get("/cli-tools")]);
       if (generation !== epoch || destroyed) return;
       if (results[0].status === "fulfilled") {
         const next=results[0].value.data;
-        if(distribution.notification_session&&next.notification_session&&distribution.notification_session!==next.notification_session)diagnostics=null;
+        if(distribution.notification_session&&next.notification_session&&distribution.notification_session!==next.notification_session){resetDiagnostics();void refreshDiagnostics();}
         distribution=next;
       }
       if (results[1].status === "fulfilled") update = results[1].value.data;
       if (results[2].status === "fulfilled") account = results[2].value.data;
       if (results[3].status === "fulfilled") cli=results[3].value.data;distribution.cli=cli;
-      diagnosticsFailed=results[4].status!=="fulfilled";
-      if(!diagnosticsFailed)diagnostics=results[4].value.data;
       render();
-      return !diagnosticsFailed;
+      return await checking;
     } finally { pending = false; clearTimeout(timer); if (!destroyed && generation!==epoch) queueMicrotask(refresh);else if (!destroyed) timer = setTimeout(refresh, distribution.busy || update?.busy || (cli.tasks??[]).some(t=>["queued","running","installing","uploading"].includes(t.state)) ? 1000 : 30000); }
   }
   let scope = key();
   const locale = subscribeLocale(render), target = subscribeTarget(() => {
     if (scope === key()) { render(); return; }
-    scope = key(); epoch++; close(); externalPanel.reset(); cli={}; distribution = {cli:{}}; update = account = diagnostics = null; diagnosticsFailed=false; render(); void refresh();
+    scope = key(); epoch++; resetDiagnostics(); close(); externalPanel.reset(); cli={}; distribution = {cli:{}}; update = account = null; render(); void refreshDiagnostics(); void refresh();
   });
   const route = navigation.subscribe(state => { renderTools();if (state.view === "settings" && state.settingsSection === "toolpacks") void refresh(); });
   const foreground = () => { if (!document.hidden) void refresh(); }; document.addEventListener("visibilitychange", foreground);
   render(); void refresh();
-  return { refresh, destroy() { destroyed = true; clearTimeout(timer); close(); indicators.destroy(); externalPanel.destroy(); locale(); target(); route(); document.removeEventListener("visibilitychange", foreground); } };
+  return { refresh, destroy() { destroyed = true; resetDiagnostics(); clearTimeout(timer); close(); indicators.destroy(); externalPanel.destroy(); locale(); target(); route(); document.removeEventListener("visibilitychange", foreground); } };
 }

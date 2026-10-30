@@ -230,8 +230,8 @@ def write_site(site: Path) -> None:
     shutil.copytree(ROOT / "app/default-home/skills",
                     site / "default-home/skills", dirs_exist_ok=True)
     for relative in (
-        "src/storage/home.c", "src/storage/home_import.inc.c", "src/storage/home_purge.inc.c", "src/storage/home_restore.inc.c", "src/skills/manager.c",
-        "include/mdo/home.h", "include/mdo/home_import.h", "include/mdo/home_purge.h", "include/mdo/home_restore.h", "include/mdo/session_file_policy.h", "include/mdo/skills.h",
+        "src/storage/home.c", "src/storage/home_fs.inc.c", "src/storage/home_purge.inc.c", "src/storage/home_restore.inc.c", "src/skills/manager.c",
+        "include/mdo/home.h", "include/mdo/home_purge.h", "include/mdo/home_restore.h", "include/mdo/session_file_policy.h", "include/mdo/skills.h",
     ):
         copy_app_source(relative, site)
     (site / "probe.c").write_text(PROBE_SOURCE, encoding="utf-8")

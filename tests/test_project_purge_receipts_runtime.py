@@ -57,7 +57,7 @@ class ReceiptProbe(Probe):
             '    Ok = Text != NULL && Size <= MDO_HOME_PURGE_RECEIPT_BYTES && MdoHomePurgeMarker("request", Text, Size);\n'
             "    if ( Ok ) MdoReceiptFixtureAccepted();")
         change("src/storage/home_purge.inc.c",
-            'MdoHomeImportWrite(MDO_HOME_PURGE_DIR "/result.tmp", Text, Size)',
+            'MdoHomeFsWrite(MDO_HOME_PURGE_DIR "/result.tmp", Text, Size)',
             'MdoReceiptFixtureWrite(MDO_HOME_PURGE_DIR "/result.tmp", Text, Size)')
         change("src/storage/home_purge.inc.c",
             'xsRootRenameNoReplace(g_MdoHome.Root, MDO_HOME_PURGE_DIR "/result.tmp", Path)',
@@ -143,9 +143,10 @@ def run_probe(host: Path) -> None:
     with tempfile.TemporaryDirectory(prefix="purge-receipts-", dir=ROOT / ".build") as raw:
         base = Path(raw)
         with running(host, base / "normal") as probe:
-            assert probe.receipt() == {"found": False} and not probe.home.exists()
+            initial = probe.files()
+            assert probe.receipt() == {"found": False} and probe.files() == initial
             probe.api("POST", CONTROL + "reserved", {})
-            assert not probe.home.exists()
+            assert probe.files() == initial
             targets = probe.seed()
             before, origin, state = probe.files(), probe.origin(), probe.control("state")
             for invalid in ("A" * 32, "../receipt", "short"):

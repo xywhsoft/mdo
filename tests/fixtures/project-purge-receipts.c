@@ -85,11 +85,11 @@ bool MdoReceiptFixturePublish(const MdoHomePurgeRequest* Request, MdoHomePurgeOu
 bool MdoReceiptFixtureWrite(cstr Path, const void* Text, size_t Size)
 {
     if ( g_MdoReceiptFault == 2u ) {
-        bool Ok = MdoHomeImportWrite(Path, Text, Size / 2u);
+        bool Ok = MdoHomeFsWrite(Path, Text, Size / 2u);
         if ( Ok ) MdoReceiptCheckpoint("partial");
         return false;
     }
-    return MdoHomeImportWrite(Path, Text, Size);
+    return MdoHomeFsWrite(Path, Text, Size);
 }
 
 bool MdoReceiptFixtureRename(xroot Root, cstr Source, cstr Target)

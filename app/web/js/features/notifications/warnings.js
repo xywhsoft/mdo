@@ -10,7 +10,13 @@ export function warningRevision(value) {
   for(let i=0;i<text.length;i++){a=Math.imul(a^text.charCodeAt(i),16777619);b=Math.imul(b,33)^text.charCodeAt(i);}
   return (a>>>0).toString(16).padStart(8,"0")+(b>>>0).toString(16).padStart(8,"0");
 }
-const sections={knowledge:"knowledge",skills:"skills",mcp:"mcp",modules:"extensions",plugins:"extensions",extensions:"extensions",sessions:"diagnostics",schedules:"diagnostics"};
+const sections={knowledge:"knowledge",skills:"skills",mcp:"mcp",modules:"extensions",plugins:"extensions",extensions:"extensions"};
+const settingsSections=new Set(["general","agent","models","memory","web","agents","subagents","tools","mcp","skills","commands","toolpacks","knowledge","extensions","account","remote"]);
+const domainNames={
+  "zh-CN":{storage:"本地存储",sessions:"会话",schedules:"计划任务",modules:"扩展加载",skills:"Skill",mcp:"MCP",plugins:"插件",extensions:"扩展",knowledge:"知识库"},
+  "en-US":{storage:"Local storage",sessions:"Conversations",schedules:"Scheduled tasks",modules:"Extension loading",skills:"Skills",mcp:"MCP",plugins:"Plugins",extensions:"Extensions",knowledge:"Knowledge"},
+  "ru-RU":{storage:"Локальное хранилище",sessions:"Диалоги",schedules:"Плановые задачи",modules:"Загрузка расширений",skills:"Навыки",mcp:"MCP",plugins:"Плагины",extensions:"Расширения",knowledge:"Базы знаний"},
+};
 export function warningNotice({diagnostics,failed=false,online=[],locale}) {
   const copy=warningCopy(locale),rows=new Map();
   for(const row of Array.isArray(diagnostics?.items)?diagnostics.items:[]){
@@ -18,10 +24,11 @@ export function warningNotice({diagnostics,failed=false,online=[],locale}) {
     const id="diagnostic:"+JSON.stringify([row.domain,row.code||row.stage||"check",row.subject_id||"",row.path||"",row.code?"":row.message]);
     const code=typeof row.code==="string"?row.code:"",knowledge=row.domain==="knowledge";
     const kind=code?.startsWith("root_")?"root":code==="invalid_metadata"?"metadata":code==="index_unavailable"?"index":code==="config_unavailable"?"config":code==="hint_limit"?"limit":"scan";
-    rows.set(id,{id,revision:warningRevision(row),title:knowledge?copy[kind]+(row.subject_id?` · ${row.subject_id}`:""):`${row.domain}${row.subject_id?` · ${row.subject_id}`:""}`,
-      body:knowledge?`${copy.reasons[code]||row.message}\n${copy.impact}`:row.message,path:typeof row.path==="string"?row.path:"",remedy:knowledge?copy.repair:typeof row.remedy==="string"?row.remedy:"",section:sections[row.domain]||"diagnostics"});
+    const section=settingsSections.has(row.settings_section)?row.settings_section:sections[row.domain];
+    rows.set(id,{id,revision:warningRevision(row),title:knowledge?copy[kind]+(row.subject_id?` · ${row.subject_id}`:""):`${domainNames[locale]?.[row.domain]||domainNames["en-US"][row.domain]||row.domain}${row.subject_id?` · ${row.subject_id}`:""}`,
+      body:knowledge?`${copy.reasons[code]||row.message}\n${copy.impact}`:row.message,path:typeof row.path==="string"?row.path:"",remedy:knowledge?copy.repair:typeof row.remedy==="string"?row.remedy:"",section});
   }
-  if(diagnostics?.truncated)rows.set("diagnostic:truncated",{id:"diagnostic:truncated",revision:1,title:copy.title,body:copy.truncated,section:"diagnostics"});
+  if(diagnostics?.truncated)rows.set("diagnostic:truncated",{id:"diagnostic:truncated",revision:1,title:copy.title,body:copy.truncated});
   if(failed)rows.set("diagnostic:unavailable",{id:"diagnostic:unavailable",revision:1,title:copy.title,body:copy.stale,remedy:copy.retry});
   for(const n of online)rows.set(`online:${n.id}`,{...n,original:n,id:`online:${n.id}`,online:true});
   const items=[...rows.values()].sort((a,b)=>a.id.localeCompare(b.id));

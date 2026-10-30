@@ -1,5 +1,5 @@
 #include "../../include/mdo/time.h"
-/* Private storage transaction, included after home_import.inc.c by home.c.
+/* Private storage transaction, included after home_fs.inc.c by home.c.
  * The journal is immutable once ready. Each rename is reconstructed from
  * exactly one of its two locations, not from a mutable progress counter.
  * Retired journals can only be cleaned up, never interpreted as rollback. */
@@ -151,7 +151,7 @@ static bool MdoHomePurgeTree(cstr Path, unsigned Depth, size_t* Nodes, bool Remo
     xdirnext Next;
     bool Exists, Ok = false;
     if ( Depth > 16u || ++*Nodes > MDO_HOME_PURGE_NODE_LIMIT ||
-         !MdoHomeImportStat(Path, &Exists, &Info) || !Exists ) return false;
+         !MdoHomeFsStat(Path, &Exists, &Info) || !Exists ) return false;
     if ( Info.Type == XFILE_TYPE_FILE ) return !Remove || xrtRootRemove(g_MdoHome.Root, Path);
     if ( Info.Type != XFILE_TYPE_DIRECTORY ) return false;
     Directory = xrtRootDirOpen(g_MdoHome.Root, Path, XDIR_STAT);
@@ -163,7 +163,7 @@ static bool MdoHomePurgeTree(cstr Path, unsigned Depth, size_t* Nodes, bool Remo
         int Written;
         if ( (Entry.Flags & XDIR_ENTRY_UTF8) == 0u || Entry.Name.Size == 0u ||
              Entry.Name.Size > 255u || !xrtUtf8Valid(Entry.Name, NULL) ||
-             MdoHomeImportName(Entry.Name, ".") || MdoHomeImportName(Entry.Name, "..") ) goto done;
+             MdoHomeFsName(Entry.Name, ".") || MdoHomeFsName(Entry.Name, "..") ) goto done;
         for ( i = 0u; i < Entry.Name.Size; ++i ) {
             unsigned char Ch = (unsigned char)Entry.Name.Data[i];
             if ( Ch < 0x20u || Ch == 0x7fu || Ch == '/' || Ch == '\\' || Ch == ':' ) goto done;
@@ -217,7 +217,7 @@ static bool MdoHomePurgeMarker(cstr Name, const void* Bytes, size_t Size)
     bool Ok;
     snprintf(Temporary, sizeof(Temporary), "%s/%s.tmp", MDO_HOME_PURGE_DIR, Name);
     snprintf(Target, sizeof(Target), "%s/%s", MDO_HOME_PURGE_DIR, Name);
-    if ( !MdoHomeImportWrite(Temporary, Bytes, Size) ) return false;
+    if ( !MdoHomeFsWrite(Temporary, Bytes, Size) ) return false;
     if ( xsRootRenameNoReplace(g_MdoHome.Root, Temporary, Target) ) return true;
     Ok = MdoHomePurgeRead(Target, &Read, &ReadSize) && ReadSize == Size &&
         memcmp(Read, Bytes, Size) == 0;
@@ -246,8 +246,8 @@ static bool MdoHomePurgeGetIdentity(const xvalue* Object, cstr Key, xfileinfo* I
     xstrview Text;
     if ( !xrtValueGetString(xrtValueObjectGet(Object, xrtStrView(Key)), &Text) ||
          Text.Size != 33u || Text.Data[16] != ':' ||
-         !MdoHomeImportHex(Text.Data, &Info->Device) ||
-         !MdoHomeImportHex(Text.Data + 17u, &Info->Identity) || Info->Identity == 0u ) return false;
+         !MdoHomeFsHex(Text.Data, &Info->Device) ||
+         !MdoHomeFsHex(Text.Data + 17u, &Info->Identity) || Info->Identity == 0u ) return false;
     Info->Available |= XFILE_INFO_IDENTITY;
     return true;
 }
@@ -352,20 +352,20 @@ static bool MdoHomePurgeRecordRead(cstr Path, bool Terminal, MdoHomePurgeReceipt
     xstrview Outcome;
     bool StillExists, Ok;
     memset(Receipt, 0, sizeof(*Receipt)); *Exists = false;
-    if ( !MdoHomeImportStat(Path, Exists, &Before) ) return false;
+    if ( !MdoHomeFsStat(Path, Exists, &Before) ) return false;
     if ( !*Exists ) return true;
     Ok = Before.Type == XFILE_TYPE_FILE && (Before.Available & XFILE_INFO_SIZE) != 0u &&
         Before.Size <= MDO_HOME_PURGE_RECEIPT_BYTES &&
         MdoHomePurgeReadBounded(Path, MDO_HOME_PURGE_RECEIPT_BYTES, &Text, &Size) &&
-        MdoHomeImportStat(Path, &StillExists, &After) && StillExists && MdoHomePurgeSame(&After, &Before);
+        MdoHomeFsStat(Path, &StillExists, &After) && StillExists && MdoHomePurgeSame(&After, &Before);
     xrtJsonReadConfigInit(&Config); Config.MaxInputBytes = MDO_HOME_PURGE_RECEIPT_BYTES;
     Config.MaxDepth = 2u; Config.MaxValues = 40u; Config.MaxContainerItems = 13u;
     if ( Ok ) Root = xrtJsonRead(xrtStrViewN(Text, Size), &Config);
     Ok = Ok && Root != NULL && MdoHomePurgeRequestParse(Root, &Receipt->Request, Terminal);
     if ( Ok && Terminal ) {
         Ok = xrtValueGetString(xrtValueObjectGet(Root, XRT_STR_LITERAL("outcome")), &Outcome);
-        if ( Ok && MdoHomeImportName(Outcome, "committed") ) Receipt->Outcome = MDO_HOME_PURGE_COMMITTED;
-        else if ( Ok && MdoHomeImportName(Outcome, "aborted") ) Receipt->Outcome = MDO_HOME_PURGE_ABORTED;
+        if ( Ok && MdoHomeFsName(Outcome, "committed") ) Receipt->Outcome = MDO_HOME_PURGE_COMMITTED;
+        else if ( Ok && MdoHomeFsName(Outcome, "aborted") ) Receipt->Outcome = MDO_HOME_PURGE_ABORTED;
         else Ok = false;
         if ( Ok ) {
             Receipt->Committed = Receipt->Outcome == MDO_HOME_PURGE_COMMITTED;
@@ -406,7 +406,7 @@ static bool MdoHomePurgeReceiptGetLocked(cstr Id, MdoHomePurgeReceipt* Receipt, 
             if ( *Found && !MdoHomePurgeRequestSame(&Receipt->Request, &Pending.Request) )
                 return MdoHomePurgeError("terminal and pending project purge records disagree");
             snprintf(Path, sizeof(Path), "%s/committed", Base);
-            if ( !MdoHomeImportStat(Path, &CommitMarker, &Info) ||
+            if ( !MdoHomeFsStat(Path, &CommitMarker, &Info) ||
                  (CommitMarker && (Info.Type != XFILE_TYPE_FILE || !MdoHomePurgeMagic(Path))) ) return false;
             if ( *Found && ((CommitMarker && Receipt->Outcome != MDO_HOME_PURGE_COMMITTED) ||
                  (i == 0u && !CommitMarker && Receipt->Outcome == MDO_HOME_PURGE_COMMITTED)) )
@@ -456,7 +456,7 @@ static bool MdoHomePurgeReceiptCapacity(void)
     xdirnext Next;
     bool Exists, Ok = false;
     size_t Count = 0u;
-    if ( !MdoHomeImportStat(MDO_HOME_PURGE_RECEIPT_DIR, &Exists, &Before) ) return false;
+    if ( !MdoHomeFsStat(MDO_HOME_PURGE_RECEIPT_DIR, &Exists, &Before) ) return false;
     if ( !Exists ) return true;
     if ( Before.Type != XFILE_TYPE_DIRECTORY ) return false;
     Directory = xrtRootDirOpen(g_MdoHome.Root, MDO_HOME_PURGE_RECEIPT_DIR, XDIR_STAT);
@@ -470,7 +470,7 @@ static bool MdoHomePurgeReceiptCapacity(void)
         memcpy(Id, Entry.Name.Data, 32u); Id[32] = '\0';
         if ( !MdoHomePurgeRequestIdValid(Id) ) goto done;
     }
-    Ok = Next == XDIR_NEXT_END && MdoHomeImportStat(MDO_HOME_PURGE_RECEIPT_DIR, &Exists, &After) &&
+    Ok = Next == XDIR_NEXT_END && MdoHomeFsStat(MDO_HOME_PURGE_RECEIPT_DIR, &Exists, &After) &&
         Exists && MdoHomePurgeSame(&After, &Before);
 done:
     if ( !xrtDirClose(Directory) ) Ok = false;
@@ -514,7 +514,7 @@ static bool MdoHomePurgeReceiptPublish(const MdoHomePurgeRequest* Request, MdoHo
             Outcome == MDO_HOME_PURGE_COMMITTED ? "committed" : "aborted"))) ) goto done;
     Text = xrtJsonStringify(Root, false, &Size);
     if ( Text == NULL || Size > MDO_HOME_PURGE_RECEIPT_BYTES ) goto done;
-    if ( !MdoHomeImportStat(MDO_HOME_PURGE_DIR "/result.tmp", &Exists, &Info) ) goto done;
+    if ( !MdoHomeFsStat(MDO_HOME_PURGE_DIR "/result.tmp", &Exists, &Info) ) goto done;
     if ( Exists ) {
         if ( Info.Type != XFILE_TYPE_FILE || Info.Size > MDO_HOME_PURGE_RECEIPT_BYTES ||
              !MdoHomePurgeReadBounded(MDO_HOME_PURGE_DIR "/result.tmp",
@@ -525,7 +525,7 @@ static bool MdoHomePurgeReceiptPublish(const MdoHomePurgeRequest* Request, MdoHo
         if ( PartialSize != Size && !xrtRootRemove(g_MdoHome.Root, MDO_HOME_PURGE_DIR "/result.tmp") ) goto done;
     }
     if ( (!Exists || PartialSize != Size) &&
-         !MdoHomeImportWrite(MDO_HOME_PURGE_DIR "/result.tmp", Text, Size) ) goto done;
+         !MdoHomeFsWrite(MDO_HOME_PURGE_DIR "/result.tmp", Text, Size) ) goto done;
     if ( xsRootRenameNoReplace(g_MdoHome.Root, MDO_HOME_PURGE_DIR "/result.tmp", Path) ) Ok = true;
     else if ( MdoHomePurgeRecordRead(Path, true, &Existing, &Exists) && Exists &&
               MdoHomePurgeRequestSame(&Existing.Request, Request) && Existing.Outcome == Outcome ) {
@@ -628,12 +628,12 @@ static bool MdoHomePurgeLoad(cstr Base, MdoHomePurgeManifest* Manifest)
             xrtValueGetString(xrtValueObjectGet(Item, XRT_STR_LITERAL("type")), &Type) &&
             MdoHomePurgeGetIdentity(Item, "identity", &Target->Info) &&
             xrtValueGetString(xrtValueObjectGet(Item, XRT_STR_LITERAL("bytes")), &Bytes) &&
-            Bytes.Size == 16u && MdoHomeImportHex(Bytes.Data, &Target->Info.Size);
+            Bytes.Size == 16u && MdoHomeFsHex(Bytes.Data, &Target->Info.Size);
         if ( !Ok ) break;
         memcpy(Target->Path, PathText.Data, PathText.Size); Target->Path[PathText.Size] = '\0';
         Target->Info.Available |= XFILE_INFO_SIZE;
-        if ( MdoHomeImportName(Type, "file") ) Target->Info.Type = XFILE_TYPE_FILE;
-        else if ( MdoHomeImportName(Type, "directory") && Target->Info.Size == 0u )
+        if ( MdoHomeFsName(Type, "file") ) Target->Info.Type = XFILE_TYPE_FILE;
+        else if ( MdoHomeFsName(Type, "directory") && Target->Info.Size == 0u )
             Target->Info.Type = XFILE_TYPE_DIRECTORY;
         else Ok = false;
     }
@@ -662,7 +662,7 @@ static bool MdoHomePurgeJournal(cstr Base, bool* Empty)
         size_t i;
         *Empty = false;
         for ( i = 0u; i < sizeof(Names) / sizeof(Names[0]); ++i )
-            if ( MdoHomeImportName(Entry.Name, Names[i]) ) break;
+            if ( MdoHomeFsName(Entry.Name, Names[i]) ) break;
         if ( i == sizeof(Names) / sizeof(Names[0]) || (Entry.Flags & XDIR_ENTRY_UTF8) == 0u ||
              Entry.Info.Type != (i == 5u ? XFILE_TYPE_DIRECTORY : XFILE_TYPE_FILE) ) goto done;
         if ( i == 0u ) Owner = true;
@@ -690,7 +690,7 @@ static bool MdoHomePurgePayload(cstr Base, const MdoHomePurgeManifest* Manifest,
     xdirnext Next;
     bool Exists, Ok = false;
     snprintf(Path, sizeof(Path), "%s/payload", Base);
-    if ( !MdoHomeImportStat(Path, &Exists, &Info) ) return false;
+    if ( !MdoHomeFsStat(Path, &Exists, &Info) ) return false;
     if ( !Exists ) return Retired;
     if ( Info.Type != XFILE_TYPE_DIRECTORY || (Manifest != NULL &&
             !MdoHomePurgeSame(&Info, &Manifest->Payload)) ) return false;
@@ -708,9 +708,9 @@ static bool MdoHomePurgePayload(cstr Base, const MdoHomePurgeManifest* Manifest,
             Index = Index * 10u + Ch - '0';
         }
         snprintf(Name, sizeof(Name), "%04u", (unsigned)Index);
-        if ( Index >= Manifest->Count || !MdoHomeImportName(Entry.Name, Name) ) goto done;
+        if ( Index >= Manifest->Count || !MdoHomeFsName(Entry.Name, Name) ) goto done;
         MdoHomePurgeSlot(Slot, Base, Index);
-        if ( !MdoHomeImportStat(Slot, &Exists, &Info) || !Exists ||
+        if ( !MdoHomeFsStat(Slot, &Exists, &Info) || !Exists ||
              !MdoHomePurgeSame(&Info, &Manifest->Targets[Index].Info) ||
              !MdoHomePurgeTree(Slot, 0u, Nodes, false) ) goto done;
     }
@@ -724,12 +724,12 @@ static bool MdoHomePurgeMove(cstr Source, cstr Target, const xfileinfo* Expected
 {
     xfileinfo Info;
     bool Exists, SourceExists;
-    if ( !MdoHomeImportStat(Source, &Exists, &Info) || !Exists ||
+    if ( !MdoHomeFsStat(Source, &Exists, &Info) || !Exists ||
          !MdoHomePurgeSame(&Info, Expected) ||
-         !MdoHomeImportStat(Target, &Exists, &Info) || Exists ) return false;
+         !MdoHomeFsStat(Target, &Exists, &Info) || Exists ) return false;
     (void)xsRootRenameNoReplace(g_MdoHome.Root, Source, Target);
-    if ( !MdoHomeImportStat(Source, &SourceExists, &Info) || SourceExists ||
-         !MdoHomeImportStat(Target, &Exists, &Info) || !Exists ||
+    if ( !MdoHomeFsStat(Source, &SourceExists, &Info) || SourceExists ||
+         !MdoHomeFsStat(Target, &Exists, &Info) || !Exists ||
          !MdoHomePurgeSame(&Info, Expected) ) return false;
     xrtClearError();
     return true;
@@ -750,7 +750,7 @@ static bool MdoHomePurgeJournalRequest(cstr Base, const MdoHomePurgeManifest* Ma
     if ( *Found ) *Request = Record.Request;
     else {
         snprintf(Path, sizeof(Path), "%s/result.tmp", Base);
-        if ( !MdoHomeImportStat(Path, &Exists, &Info) || Exists )
+        if ( !MdoHomeFsStat(Path, &Exists, &Info) || Exists )
             return MdoHomePurgeError("purge result scratch has no accepted request");
     }
     return true;
@@ -768,7 +768,7 @@ static bool MdoHomePurgeRecoveryResult(const MdoHomePurgeRequest* Request, bool 
     if ( !MdoHomePurgeRecordRead(Path, true, &Receipt, &Exists) ||
          (Exists && (!MdoHomePurgeRequestSame(&Receipt.Request, Request) ||
             Receipt.Outcome != (Committed ? MDO_HOME_PURGE_COMMITTED : MDO_HOME_PURGE_ABORTED))) ||
-         !MdoHomeImportStat(MDO_HOME_PURGE_DIR "/result.tmp", &Scratch, &Info) ||
+         !MdoHomeFsStat(MDO_HOME_PURGE_DIR "/result.tmp", &Scratch, &Info) ||
          (!Committed && (Exists || Scratch) && !MdoHomePurgePayload(MDO_HOME_PURGE_DIR, NULL, true, Nodes)) )
         return MdoHomePurgeError("project purge terminal evidence contradicts recovery");
     return true;
@@ -784,14 +784,14 @@ static bool MdoHomePurgeGc(void)
     bool Exists, Empty, Ready, HasRequest, Ok = false;
     size_t Nodes = 0u, i;
     memset(&Manifest, 0, sizeof(Manifest));
-    if ( !MdoHomeImportStat(MDO_HOME_PURGE_GC, &Exists, &Info) ) return false;
+    if ( !MdoHomeFsStat(MDO_HOME_PURGE_GC, &Exists, &Info) ) return false;
     if ( !Exists ) return true;
     if ( Info.Type != XFILE_TYPE_DIRECTORY ||
          !MdoHomePurgeJournal(MDO_HOME_PURGE_GC, &Empty) ) goto done;
     if ( Empty ) { Ok = xrtRootRemove(g_MdoHome.Root, MDO_HOME_PURGE_GC); goto done; }
-    if ( !MdoHomeImportStat(MDO_HOME_PURGE_GC "/ready", &Ready, &Info) ) goto done;
+    if ( !MdoHomeFsStat(MDO_HOME_PURGE_GC "/ready", &Ready, &Info) ) goto done;
     if ( Ready && (!MdoHomePurgeLoad(MDO_HOME_PURGE_GC, &Manifest) ||
-            !MdoHomeImportStat(MDO_HOME_PURGE_GC, &Exists, &Info) ||
+            !MdoHomeFsStat(MDO_HOME_PURGE_GC, &Exists, &Info) ||
             !MdoHomePurgeSame(&Info, &Manifest.Journal)) ) goto done;
     if ( !MdoHomePurgePayload(MDO_HOME_PURGE_GC, Ready ? &Manifest : NULL, true, &Nodes) ) goto done;
     if ( !MdoHomePurgeJournalRequest(MDO_HOME_PURGE_GC, Ready ? &Manifest : NULL, &Request, &HasRequest) ) goto done;
@@ -801,7 +801,7 @@ static bool MdoHomePurgeGc(void)
         MdoHomePurgeReceiptPath(Path, Request.Id);
         if ( !MdoHomePurgeRecordRead(Path, true, &Receipt, &Exists) || !Exists ||
              !MdoHomePurgeRequestSame(&Receipt.Request, &Request) ) goto done;
-        if ( !MdoHomeImportStat(MDO_HOME_PURGE_GC "/committed", &Committed, &Info) ||
+        if ( !MdoHomeFsStat(MDO_HOME_PURGE_GC "/committed", &Committed, &Info) ||
              (Committed && (Receipt.Outcome != MDO_HOME_PURGE_COMMITTED ||
                 !MdoHomePurgeMagic(MDO_HOME_PURGE_GC "/committed"))) ||
              (Receipt.Outcome == MDO_HOME_PURGE_ABORTED &&
@@ -811,15 +811,15 @@ static bool MdoHomePurgeGc(void)
     for ( i = 0u; Ready && i < Manifest.Count; ++i ) {
         char Slot[96];
         MdoHomePurgeSlot(Slot, MDO_HOME_PURGE_GC, i);
-        if ( !MdoHomeImportStat(Slot, &Exists, &Info) || (Exists &&
+        if ( !MdoHomeFsStat(Slot, &Exists, &Info) || (Exists &&
                 (!MdoHomePurgeSame(&Info, &Manifest.Targets[i].Info) ||
                  !MdoHomePurgeTree(Slot, 0u, &Nodes, true))) ) goto done;
     }
-    if ( !MdoHomeImportStat(MDO_HOME_PURGE_GC "/payload", &Exists, &Info) ||
+    if ( !MdoHomeFsStat(MDO_HOME_PURGE_GC "/payload", &Exists, &Info) ||
          (Exists && !xrtRootRemove(g_MdoHome.Root, MDO_HOME_PURGE_GC "/payload")) ) goto done;
     for ( i = 0u; i < 2u; ++i ) {
         cstr Path = i == 0u ? MDO_HOME_PURGE_GC "/request.tmp" : MDO_HOME_PURGE_GC "/result.tmp";
-        if ( !MdoHomeImportStat(Path, &Exists, &Info) || (Exists && !xrtRootRemove(g_MdoHome.Root, Path)) ) goto done;
+        if ( !MdoHomeFsStat(Path, &Exists, &Info) || (Exists && !xrtRootRemove(g_MdoHome.Root, Path)) ) goto done;
     }
     for ( i = 0u; i < 5u; ++i ) {
         char Path[96];
@@ -827,7 +827,7 @@ static bool MdoHomePurgeGc(void)
          * removed, only the already-validated ownership tail can remain. */
         if ( i == 4u && HasRequest && !xrtRootRemove(g_MdoHome.Root, MDO_HOME_PURGE_GC "/request") ) goto done;
         snprintf(Path, sizeof(Path), "%s/%s", MDO_HOME_PURGE_GC, Files[i]);
-        if ( !MdoHomeImportStat(Path, &Exists, &Info) ||
+        if ( !MdoHomeFsStat(Path, &Exists, &Info) ||
              (Exists && !xrtRootRemove(g_MdoHome.Root, Path)) ) goto done;
     }
     Ok = xrtRootRemove(g_MdoHome.Root, MDO_HOME_PURGE_GC);
@@ -841,27 +841,24 @@ static bool MdoHomePurgeRecoverLocked(void)
     MdoHomePurgeManifest Manifest;
     MdoHomePurgeRequest Request;
     xfileinfo Info;
-    bool Exists, Gc, Empty, Ready, Committed, Other, HasRequest, Ok = false;
+    bool Exists, Gc, Empty, Ready, Committed, HasRequest, Ok = false;
     size_t i, Nodes = 0u;
     memset(&Manifest, 0, sizeof(Manifest));
-    if ( !MdoHomeImportStat(MDO_HOME_PURGE_DIR, &Exists, &Info) ||
-         !MdoHomeImportStat(MDO_HOME_PURGE_GC, &Gc, &Info) ) goto done;
-    if ( Exists || Gc ) {
-        if ( !MdoHomeImportStat(MDO_HOME_IMPORT_DIR, &Other, &Info) || Other ||
-             !MdoHomeImportStat(MDO_HOME_IMPORT_GC, &Other, &Info) || Other || (Exists && Gc) ) goto done;
-    }
+    if ( !MdoHomeFsStat(MDO_HOME_PURGE_DIR, &Exists, &Info) ||
+         !MdoHomeFsStat(MDO_HOME_PURGE_GC, &Gc, &Info) ) goto done;
+    if ( Exists && Gc ) goto done;
     if ( !MdoHomePurgeGc() ) goto done;
     if ( !Exists ) { Ok = true; goto done; }
-    if ( !MdoHomeImportStat(MDO_HOME_PURGE_DIR, &Exists, &Info) ||
+    if ( !MdoHomeFsStat(MDO_HOME_PURGE_DIR, &Exists, &Info) ||
          Info.Type != XFILE_TYPE_DIRECTORY || !MdoHomePurgeJournal(MDO_HOME_PURGE_DIR, &Empty) ) goto done;
     Manifest.Journal = Info;
     if ( Empty ) { Ok = xrtRootRemove(g_MdoHome.Root, MDO_HOME_PURGE_DIR); goto done; }
-    if ( !MdoHomeImportStat(MDO_HOME_PURGE_DIR "/ready", &Ready, &Info) ||
-         !MdoHomeImportStat(MDO_HOME_PURGE_DIR "/committed", &Committed, &Info) ) goto done;
+    if ( !MdoHomeFsStat(MDO_HOME_PURGE_DIR "/ready", &Ready, &Info) ||
+         !MdoHomeFsStat(MDO_HOME_PURGE_DIR "/committed", &Committed, &Info) ) goto done;
     if ( Committed && (!Ready || !MdoHomePurgeMagic(MDO_HOME_PURGE_DIR "/committed")) ) goto done;
     if ( Ready ) {
         if ( !MdoHomePurgeLoad(MDO_HOME_PURGE_DIR, &Manifest) ||
-             !MdoHomeImportStat(MDO_HOME_PURGE_DIR, &Exists, &Info) ||
+             !MdoHomeFsStat(MDO_HOME_PURGE_DIR, &Exists, &Info) ||
              !MdoHomePurgeSame(&Info, &Manifest.Journal) ||
              !MdoHomePurgePayload(MDO_HOME_PURGE_DIR, &Manifest, false, &Nodes) ) goto done;
         if ( !MdoHomePurgeJournalRequest(MDO_HOME_PURGE_DIR, &Manifest, &Request, &HasRequest) ) goto done;
@@ -872,16 +869,16 @@ static bool MdoHomePurgeRecoverLocked(void)
             char Slot[96];
             bool Source, Target;
             MdoHomePurgeSlot(Slot, MDO_HOME_PURGE_DIR, i);
-            if ( !MdoHomeImportStat(Manifest.Targets[i].Path, &Source, &Info) ||
+            if ( !MdoHomeFsStat(Manifest.Targets[i].Path, &Source, &Info) ||
                  (Source && (!MdoHomePurgeSame(&Info, &Manifest.Targets[i].Info) ||
                     !MdoHomePurgeTree(Manifest.Targets[i].Path, 0u, &Nodes, false))) ||
-                 !MdoHomeImportStat(Slot, &Target, &Info) || Source == Target ||
+                 !MdoHomeFsStat(Slot, &Target, &Info) || Source == Target ||
                  (Committed && Source) ) goto done;
         }
         if ( !Committed ) for ( i = Manifest.Count; i-- > 0u; ) {
             char Slot[96];
             MdoHomePurgeSlot(Slot, MDO_HOME_PURGE_DIR, i);
-            if ( !MdoHomeImportStat(Slot, &Exists, &Info) || (Exists &&
+            if ( !MdoHomeFsStat(Slot, &Exists, &Info) || (Exists &&
                     !MdoHomePurgeMove(Slot, Manifest.Targets[i].Path, &Manifest.Targets[i].Info)) ) goto done;
         }
     } else if ( !MdoHomePurgePayload(MDO_HOME_PURGE_DIR, NULL, true, &Nodes) ) goto done;
@@ -910,7 +907,7 @@ static bool MdoHomePurgeAvailableLocked(void)
         return MdoHomePurgeError("project purge requires an already-existing leased Home");
     for ( i = 0u; i < 2u; ++i ) {
         cstr Journal = i == 0u ? MDO_HOME_PURGE_DIR : MDO_HOME_PURGE_GC;
-        if ( !MdoHomeImportStat(Journal, &Exists, &Info) ) return false;
+        if ( !MdoHomeFsStat(Journal, &Exists, &Info) ) return false;
         if ( Exists ) {
             g_MdoHome.RestartRequired = true;
             snprintf(g_MdoHome.Message, sizeof(g_MdoHome.Message),
@@ -960,7 +957,7 @@ bool MdoHomePurgeRequestCancel(cstr Id, cstr Project, uint64 Revision, int64 Cre
     Created = true;
     /* No ready marker or payload: the same empty preparation recovery path
      * publishes ABORTED, even if this process exits just after acceptance. */
-    if ( !MdoHomeImportWrite(MDO_HOME_PURGE_DIR "/owner", MDO_HOME_PURGE_MAGIC,
+    if ( !MdoHomeFsWrite(MDO_HOME_PURGE_DIR "/owner", MDO_HOME_PURGE_MAGIC,
             sizeof(MDO_HOME_PURGE_MAGIC) - 1u) || !MdoHomePurgeRequestSave(&Request) ) goto done;
     Ok = MdoHomePurgeRecoverLocked();
 done:
@@ -1021,17 +1018,17 @@ static bool MdoHomePurgeFilesImpl(cstr ProjectId, cstr SessionId, const MdoHomeP
         if ( !MdoHomePurgeReceiptCapacity() ) goto done;
     }
     for ( i = 0u; i < Count; ++i )
-        if ( !MdoHomeImportStat(Targets[i].Path, &Exists, &Info) || !Exists ||
+        if ( !MdoHomeFsStat(Targets[i].Path, &Exists, &Info) || !Exists ||
              !MdoHomePurgeSame(&Info, &Targets[i].Info) ||
              !MdoHomePurgeTree(Targets[i].Path, 0u, &Nodes, false) ) goto done;
     if ( !xrtRootDirCreate(g_MdoHome.Root, MDO_HOME_PURGE_DIR, 0700u) ) goto done;
     Created = true;
-    if ( !MdoHomeImportWrite(MDO_HOME_PURGE_DIR "/owner", MDO_HOME_PURGE_MAGIC,
+    if ( !MdoHomeFsWrite(MDO_HOME_PURGE_DIR "/owner", MDO_HOME_PURGE_MAGIC,
             sizeof(MDO_HOME_PURGE_MAGIC) - 1u) ||
          (Request != NULL && !MdoHomePurgeRequestSave(Request)) ||
          !xrtRootDirCreate(g_MdoHome.Root, MDO_HOME_PURGE_DIR "/payload", 0700u) ||
-         !MdoHomeImportStat(MDO_HOME_PURGE_DIR, &Exists, &Manifest.Journal) || !Exists ||
-         !MdoHomeImportStat(MDO_HOME_PURGE_DIR "/payload", &Exists, &Manifest.Payload) || !Exists ||
+         !MdoHomeFsStat(MDO_HOME_PURGE_DIR, &Exists, &Manifest.Journal) || !Exists ||
+         !MdoHomeFsStat(MDO_HOME_PURGE_DIR "/payload", &Exists, &Manifest.Payload) || !Exists ||
          !MdoHomePurgeSave(&Manifest) ) goto done;
     for ( i = 0u; i < Count; ++i ) {
         char Slot[96];

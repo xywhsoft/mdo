@@ -110,7 +110,7 @@ void ServiceInit(XS_HostInfo* Host)
             Cause != NULL && xrtErrorKind(Cause) == XERR_UNSUPPORTED, ReservedOk); fflush(stdout); return;
     }
     Second = MdoHomeSessionRestoreBegin("restore-project", "33333333333333333333333333333333", &Other);
-    Busy = Second == NULL && Other == NULL && MdoHomeImportInspect(&Available, &Cache) && !Available &&
+    Busy = Second == NULL && Other == NULL &&
         !MdoHomePurgeAvailableLocked() &&
         MdoHomeAtomicWrite("data/unrelated-restore-probe.txt", "allowed", 7u, false) &&
         MdoHomeRemove("data/unrelated-restore-probe.txt", false); /* no concurrent callback in this fixture */
@@ -157,9 +157,9 @@ def fixture(site: Path) -> None:
         '    snprintf(Source, sizeof(Source), "%s/payload/%s", MDO_HOME_RESTORE_DIR, Record.Name);':
             '    if ( !RestoreProbeStep("ready") ) goto done;\n'
             '    snprintf(Source, sizeof(Source), "%s/payload/%s", MDO_HOME_RESTORE_DIR, Record.Name);',
-        '    if ( !MdoHomeImportStat(MDO_HOME_RESTORE_GC, &Exists, &Info) ) return false;':
+        '    if ( !MdoHomeFsStat(MDO_HOME_RESTORE_GC, &Exists, &Info) ) return false;':
             '    if ( !RestoreProbeStep("gc") ) return false;\n'
-            '    if ( !MdoHomeImportStat(MDO_HOME_RESTORE_GC, &Exists, &Info) ) return false;',
+            '    if ( !MdoHomeFsStat(MDO_HOME_RESTORE_GC, &Exists, &Info) ) return false;',
         '    for ( i = 0u; i < 5u; ++i ) {\n        snprintf(Path, sizeof(Path), "%s/%s", MDO_HOME_RESTORE_GC, Names[i]);':
             '    for ( i = 0u; i < 5u; ++i ) {\n'
             '        if ( i == 4u && !RestoreProbeStep("cleanup-tail") ) return false;\n'

@@ -215,11 +215,6 @@ static const MdoApiRoute g_MdoApiRoutes[] = {
       "GET, HEAD, OPTIONS", MdoApiPermissionsRoute, false },
     { "/api/v1/diagnostics", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
       "GET, HEAD, OPTIONS", MdoApiDiagnosticsRoute, false },
-    { "/api/v1/storage", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
-      "GET, HEAD, OPTIONS", MdoApiStorageRoute, false },
-    { "/api/v1/migrations/legacy",
-      XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_POST,
-      "GET, HEAD, POST, OPTIONS", MdoApiLegacyMigrationsRoute, false },
     { "/api/v1/operations", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
       "GET, HEAD, OPTIONS", MdoApiOperationsRoute, false },
     { "/api/v1/settings/{domain}/preview",
@@ -586,9 +581,7 @@ static bool MdoApiRouteInvokeData(MdoApiContext* Context,
              Route->Proc != MdoApiProjectPurgeIntentRoute &&
              Route->Proc != MdoApiBackupRestoreApplyRoute &&
              Route->Proc != MdoApiBackupRestoreRoute ) return MdoApiReplyError(Context, 503u,
-            "home_restart_required", "Restart mdo before changing imported data", NULL);
-        if ( Home.ImportInProgress ) return MdoApiReplyError(Context, 409u,
-            "home_import_busy", "Home import is in progress; wait before changing data", NULL);
+            "home_restart_required", "Restart mdo before changing data", NULL);
     }
     if ( !Route->ProjectLease ) return Route->Proc(Context);
     /* Invalid captures retain each endpoint's existing validation response.

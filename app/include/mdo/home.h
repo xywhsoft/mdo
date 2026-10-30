@@ -13,8 +13,7 @@ typedef struct MdoHomeSnapshot {
     uint32 Size;
     MdoPersistenceMode Persistence;
     bool ExternalOverlay;
-    bool RestartRequired; /* imported batch or recovery must precede writes */
-    bool ImportInProgress;
+    bool RestartRequired; /* consistency recovery must precede writes */
     const char* Path;
     char Message[256];
 } MdoHomeSnapshot;

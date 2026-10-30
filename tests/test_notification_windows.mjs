@@ -117,3 +117,29 @@ test("failed checks keep the previous warning; target changes reject late checks
   env.switchTarget({id:"remote",owner:"9"});env.model.diagnostics.items=[];env.stubs.api.get=original;resolve({data:{items:[issue]}});await flush();await flush();
   assert(!env.doc.body.querySelector("dialog"));assert(!env.host.children.some(b=>b.dataset.noticeId==="system-warnings"));oldButton.click();await flush();assert(!env.doc.body.querySelector("dialog"));
 });
+
+test("diagnostic warnings render and recheck without waiting for a slow update endpoint",async t=>{
+  const env=await fixture(t),original=env.stubs.api.get;let release,diagnosticReads=0;
+  const slow=new Promise(resolve=>{release=resolve;});
+  env.model.diagnostics.items=[{domain:"storage",code:"restart_required",path:"home",message:"Restart needed",remedy:"Restart mdo"}];
+  env.stubs.api.get=path=>{if(path==="/diagnostics")diagnosticReads++;return path==="/update"?slow:original(path);};
+  const background=env.center.refresh();await flush();await flush();
+  const warning=env.host.children.find(button=>button.dataset.noticeId==="system-warnings");assert(warning);
+  warning.click();const dialog=env.doc.body.querySelector("dialog");
+  assert(dialog.textContent.includes("Restart needed"));
+  assert.equal(dialog.querySelectorAll("[data-warning-action=settings]").length,0);
+  env.model.diagnostics.items=[];dialog.querySelector(".mdo-layer-footer").firstChild.click();
+  await flush();await flush();assert.equal(diagnosticReads,2);
+  assert(!env.host.children.some(button=>button.dataset.noticeId==="system-warnings"));
+  release({data:env.model.update});await background;
+});
+
+test("a malformed diagnostic response preserves previous warnings and shows check failure",async t=>{
+  const env=await fixture(t),original=env.stubs.api.get;
+  env.model.diagnostics.items=[{domain:"sessions",path:"sessions/bad/meta.json",message:"Invalid metadata"}];
+  await env.center.refresh();env.stubs.api.get=path=>path==="/diagnostics"?Promise.resolve({data:{items:{}}}):original(path);
+  assert.equal(await env.center.refresh(),false);
+  env.host.children.find(button=>button.dataset.noticeId==="system-warnings").click();
+  assert.equal(env.doc.body.querySelectorAll(".warning-entry").length,2);
+  assert(env.doc.body.querySelector("dialog").textContent.includes("Invalid metadata"));
+});

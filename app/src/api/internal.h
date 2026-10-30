@@ -213,8 +213,6 @@ bool MdoApiArtifactsRoute(MdoApiContext* pContext);
 bool MdoApiArtifactRoute(MdoApiContext* pContext);
 bool MdoApiSessionArtifactRoute(MdoApiContext* pContext);
 bool MdoApiDiagnosticsRoute(MdoApiContext* pContext);
-bool MdoApiStorageRoute(MdoApiContext* pContext);
-bool MdoApiLegacyMigrationsRoute(MdoApiContext* pContext);
 bool MdoApiSessionEventsRoute(MdoApiContext* pContext);
 bool MdoApiSessionTurnsRoute(MdoApiContext* pContext);
 bool MdoApiDraftRoute(MdoApiContext* pContext);

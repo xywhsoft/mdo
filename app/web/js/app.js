@@ -21,10 +21,6 @@ import {
   resumeSettingsLocaleInitialization,
 } from "./state/settings.js";
 import {
-  modulesStore, skillsStore, mcpStore, storageStore,
-  diagnosticsStore, migrationsStore, loadResource,
-} from "./state/resources.js";
-import {
   tasksStore, taskDetailStore, artifactPreviewStore, loadTasks,
   refreshSelectedTask,
 } from "./state/tasks.js";
@@ -1326,21 +1322,7 @@ export async function boot() {
     panel: schedulesWorkspace,
     projectsStore, agentsStore, modelsStore,
   });
-  const resourcePanels = createResourcePanels({
-    modelsStore,
-    agentsStore,
-    stores: {
-      modules: modulesStore,
-      skills: skillsStore,
-      mcp: mcpStore,
-      storage: storageStore,
-      diagnostics: diagnosticsStore,
-      migrations: migrationsStore,
-    },
-    reload: (name) => name === "models" ? loadModels()
-      : name === "modules" ? Promise.all([loadResource("modules"), loadAgents()])
-        : loadResource(name),
-  });
+  const resourcePanels = createResourcePanels();
 
   let sendBlockedByState = true;
   function syncSendDisabled() {

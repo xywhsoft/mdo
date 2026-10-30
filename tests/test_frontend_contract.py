@@ -177,9 +177,8 @@ class FrontendContractTests(unittest.TestCase):
     def test_resource_management_is_split_into_bounded_stores(self) -> None:
         resources = self.scripts["js/state/resources.js"]
         panels = self.scripts["js/features/settings/resource-panels.js"]
-        for name in ("modules", "skills", "mcp", "storage",
-                     "diagnostics", "migrations"):
-            self.assertIn(f"{name}Store", resources)
+        for name in ("storage", "diagnostics", "migrations"):
+            self.assertNotIn(f"{name}Store", resources)
         self.assertIn('api.post(`/${name}/reload`)', resources)
         self.assertIn("startResourceOperation", resources)
         observation = self.scripts["js/state/resource-operation.js"]
@@ -191,16 +190,6 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("createExtensionPanels", panels)
         self.assertIn("refreshMcp", self.scripts["js/features/settings/extension-panels.js"])
 
-    def test_legacy_migration_requires_preview_and_second_confirmation(self) -> None:
-        resources = self.scripts["js/state/resources.js"]
-        panels = self.scripts["js/features/settings/resource-panels.js"]
-        self.assertIn('"/migrations/legacy"', resources)
-        self.assertIn("applyLegacyMigration", resources)
-        self.assertIn("preview_token", resources)
-        self.assertIn("requires_confirmation", panels)
-        self.assertIn("confirmingSource", panels)
-        self.assertIn("旧目录会原样保留", panels)
-        self.assertIn("restart_required", panels)
 
     def test_session_lifecycle_uses_revisioned_server_mutations(self) -> None:
         sessions = self.scripts["js/state/sessions.js"]

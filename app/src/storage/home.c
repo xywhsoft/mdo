@@ -4,7 +4,6 @@
 
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/application.h"
-#include "../../include/mdo/home_import.h"
 #include "../../include/mdo/home_purge.h"
 #include "../../include/mdo/home_restore.h"
 #include "../../include/mdo/session_file_policy.h"
@@ -34,7 +33,6 @@ typedef struct MdoHomeState {
     MdoPersistenceMode Persistence;
     bool ExternalOverlay;
     bool Initialized;
-    MdoHomeImport* Import;
     MdoHomeSessionRestore* Restore;
     bool RestartRequired;
     char Message[256];
@@ -42,7 +40,6 @@ typedef struct MdoHomeState {
 
 static MdoHomeState g_MdoHome;
 
-static bool MdoHomeImportRecoverLocked(bool* Published);
 static bool MdoHomePurgeRecoverLocked(void);
 static bool MdoHomeSessionRestoreRecoverLocked(bool* Committed);
 
@@ -333,10 +330,9 @@ fail:
 
 static bool MdoHomeWritableLocked(void)
 {
-    if ( g_MdoHome.Import == NULL && !g_MdoHome.RestartRequired ) return true;
+    if ( !g_MdoHome.RestartRequired ) return true;
     MdoHomeErrorSet(XERR_AGAIN, MDO_HOME_ERROR_STATE,
-        g_MdoHome.RestartRequired ? "Home storage requires restart before writing" :
-        "Home import is in progress");
+        "Home storage requires restart before writing");
     return false;
 }
 
@@ -424,8 +420,7 @@ bool MdoHomeInit(void)
                 "external Home path exists but is not a directory");
             goto fail;
         }
-        if ( !MdoHomeMountLocked() || !MdoHomeSessionRestoreRecoverLocked(NULL) || !MdoHomePurgeRecoverLocked() ||
-             !MdoHomeImportRecoverLocked(NULL) ) goto fail;
+        if ( !MdoHomeMountLocked() || !MdoHomeSessionRestoreRecoverLocked(NULL) || !MdoHomePurgeRecoverLocked() ) goto fail;
     } else {
         pError = xrtGetError();
         if ( pError == NULL || xrtErrorKind(pError) != XERR_NOT_FOUND )
@@ -492,7 +487,6 @@ bool MdoHomeGetSnapshot(MdoHomeSnapshot* pSnapshot)
     pSnapshot->Persistence = g_MdoHome.Persistence;
     pSnapshot->ExternalOverlay = g_MdoHome.ExternalOverlay;
     pSnapshot->RestartRequired = g_MdoHome.RestartRequired;
-    pSnapshot->ImportInProgress = g_MdoHome.Import != NULL;
     pSnapshot->Path = g_MdoHome.Path;
     snprintf(pSnapshot->Message, sizeof(pSnapshot->Message), "%s",
         g_MdoHome.Message);
@@ -1040,7 +1034,7 @@ bool MdoHomeAtomicWrite(cstr Path, const void* pData, size_t iSize,
 done:
     if ( !bOk ) {
         xerror* pSaved = xrtTakeError();
-        if ( Created && g_MdoHome.Root != NULL && g_MdoHome.Import == NULL &&
+        if ( Created && g_MdoHome.Root != NULL &&
              !g_MdoHome.RestartRequired )
             (void)xrtRootRemove(g_MdoHome.Root, sTemporary);
         xrtClearError();
@@ -1140,7 +1134,7 @@ done:
         if ( Target != NULL ) (void)xrtClose(Target);
         if ( !bOk ) {
             xrtMutexLock(g_MdoHome.Lock);
-            if ( g_MdoHome.Root != NULL && g_MdoHome.Import == NULL &&
+            if ( g_MdoHome.Root != NULL &&
                  !g_MdoHome.RestartRequired )
                 (void)xrtRootRemove(g_MdoHome.Root, Path);
             xrtMutexUnlock(g_MdoHome.Lock);
@@ -1154,8 +1148,8 @@ done:
 }
 
 /* Private part of the same translation unit: it shares the Home mutex/root
- * without exposing them to migration callers or depending on unity ordering. */
-#include "home_import.inc.c"
+ * without exposing them to transaction callers or depending on unity ordering. */
+#include "home_fs.inc.c"
 #include "home_purge.inc.c"
 #include "home_restore.inc.c"
 

@@ -564,9 +564,6 @@ done:
 '''
     declaration = "void ServiceInit(XS_HostInfo* pHost)\n"
     needle = "    bool ready = MdoBootstrapInit(pHost);\n"
-    shutil.copy2(ROOT / "tests/fixtures/migration-lifecycle.c",
-                 base / "src/bootstrap/migration-lease-probe.c")
-    fixture += '\n#include "migration-lease-probe.c"\n'
     shutil.copy2(ROOT / "tests/fixtures/project-references.c",
                  base / "src/bootstrap/project-references-probe.c")
     fixture += '\n#include "project-references-probe.c"\n'
@@ -579,7 +576,6 @@ done:
         "        xrtAtomic32Init(&g_MdoApiProbeLeaseChecks, 0u);\n"
         "        xrtAtomic32Init(&g_MdoApiProbeLeaseViolations, 0u);\n"
         "        xrtAtomic32Init(&g_MdoApiPurgeProbeSmallLimit, 0u);\n"
-        "        MdoApiProbeMigrationInit();\n"
         "        MdoApiReferenceProbeInit();\n"
         "        MdoApiProbeCreateTasks();\n"
         "        g_MdoApiProbeApprovalThread = xrtThreadCreate(\n"
@@ -601,8 +597,6 @@ done:
         "    g_MdoApiProbeDefinition = NULL;\n"
         "    MdoProjectLeaseRelease(g_MdoApiProbeLease);\n"
         "    g_MdoApiProbeLease = NULL;\n"
-        "    MdoProjectLeaseRelease(g_MdoMigrationProbeExclusive);\n"
-        "    g_MdoMigrationProbeExclusive = NULL;\n"
         "    xrtMutexDestroy(g_MdoApiProbeLeaseLock);\n"
         "    MdoBootstrapUnit();\n"
         "    if ( g_MdoApiProbeApprovalThread != NULL ) {\n"
@@ -622,7 +616,6 @@ done:
         "    size_t Index;\n"
         "    if ( MdoApiProbeLeaseControl(pRequest) ) return XS_OK;\n"
         "    if ( MdoApiCaptureProbe(pRequest) ) return XS_OK;\n"
-        "    if ( MdoApiProbeMigrationLeaseControl(pRequest) ) return XS_OK;\n"
         "    if ( MdoApiReferenceProbeControl(pRequest) ) return XS_OK;\n"
         "    if ( pRequest != NULL && pRequest->head != NULL ) {\n"
         "        xstrview Target = pRequest->head->Target;\n"
@@ -725,52 +718,6 @@ done:
         '    if ( !MdoApiProbeLeaseCheckpoint(Candidate.Id) ||\n'
         '         !MdoHomeAtomicWrite(Path, Json, Size, false) ) {', 1)
     project_path.write_text(project_text, encoding="utf-8", newline="\n")
-    # Fault and ownership observations affect only this copied application.
-    declaration = ("\nbool MdoApiProbeMigrationCheckpoint(const MdoMigrationContext* Context,\n"
-                   "    unsigned Phase, const char* Path, xwork_error* Error);\n")
-    apply_path = base / "src/migration/apply.c"
-    apply_text = apply_path.read_text(encoding="utf-8")
-    apply_text = apply_text.replace('#include "internal.h"\n',
-                                    '#include "internal.h"\n' + declaration, 1)
-    prepare = "    if ( !MdoMigrationPrepareStage(&Context, Error) ) {"
-    publish = "    if ( !xrtPathRename(Context.StagePath, Context.Preview.TargetPath, false) ) {"
-    cleanup = "            (void)xrtDirRemoveAll(Context.StagePath);"
-    assert apply_text.count(prepare) == apply_text.count(publish) == apply_text.count(cleanup) == 1
-    apply_text = apply_text.replace(prepare,
-        "    if ( !MdoApiProbeMigrationCheckpoint(&Context, 0u, NULL, Error) ||\n"
-        "         !MdoMigrationPrepareStage(&Context, Error) ) {", 1)
-    apply_text = apply_text.replace(publish,
-        "    if ( !MdoApiProbeMigrationCheckpoint(&Context, 2u, NULL, Error) ||\n"
-        "         !xrtPathRename(Context.StagePath, Context.Preview.TargetPath, false) ) {", 1)
-    cache_publish = ('    if ( Context.CacheImport != NULL ) {\n'
-        '        MdoHomeImport* Import = Context.CacheImport;\n'
-        '        Context.CacheImport = NULL; /* End consumes on success and failure. */')
-    assert apply_text.count(cache_publish) == 1
-    apply_text = apply_text.replace(cache_publish,
-        '    if ( Context.CacheImport != NULL ) {\n'
-        '        if ( !MdoApiProbeMigrationCheckpoint(&Context, 2u, NULL, Error) ) goto done;\n'
-        '        MdoHomeImport* Import = Context.CacheImport;\n'
-        '        Context.CacheImport = NULL; /* End consumes on success and failure. */', 1)
-    cache_cleanup = '        if ( !MdoHomeImportEnd(Import, false) )'
-    assert apply_text.count(cache_cleanup) == 1
-    apply_text = apply_text.replace(cache_cleanup,
-        '        (void)MdoApiProbeMigrationCheckpoint(&Context, 3u, NULL, NULL);\n' + cache_cleanup, 1)
-    apply_text = apply_text.replace(cleanup,
-        "            (void)MdoApiProbeMigrationCheckpoint(&Context, 3u, NULL, NULL);\n" + cleanup, 1)
-    apply_path.write_text(apply_text, encoding="utf-8", newline="\n")
-    common_path = base / "src/migration/common.c"
-    common_text = common_path.read_text(encoding="utf-8")
-    common_text = common_text.replace('#include "internal.h"\n',
-                                      '#include "internal.h"\n' + declaration, 1)
-    write_start = common_text.index("bool MdoMigrationStageWrite(")
-    write_end = common_text.index("bool MdoMigrationStageCopy(", write_start)
-    write_text = common_text[write_start:write_end]
-    point = "    xrtFileOptionsInit(&Options);"
-    assert write_text.count(point) == 1
-    write_text = write_text.replace(point,
-        "    if ( !MdoApiProbeMigrationCheckpoint(Context, 1u, Path, Error) ) return false;\n" + point, 1)
-    common_path.write_text(common_text[:write_start] + write_text + common_text[write_end:],
-                           encoding="utf-8", newline="\n")
     mock_server = base / "mcp_mock_server.py"
     mock_server.write_text(MCP_MOCK_SERVER, encoding="utf-8")
     mcp_document = {
@@ -1198,95 +1145,8 @@ def purge_inventory_probe(port: int, home: Path, workspace: Path) -> None:
         foreign.unlink(missing_ok=True)
 
 
-def migration_lease_snapshot(port: int) -> dict:
-    status, _, body = request(port, "GET", "/__fixture/migration-lease/checkpoint")
-    assert status == 200, (status, body)
-    evidence = json.loads(body)["data"]
-    assert evidence["violations"] == 0, evidence
-    return evidence
 
 
-def migration_lease_probe(port: int, home: Path, legacy: Path) -> tuple[dict, dict]:
-    """Reserve every mapped bucket before staging, through cleanup/publication."""
-    fixture = "/__fixture/migration-lease/"
-    path = "/api/v1/migrations/legacy"
-    remapped_dir = legacy / "projects/Legacy Project"
-    remapped_dir.mkdir()
-    remapped_file = remapped_dir / "project.json"
-    remapped_file.write_text(json.dumps({"name": "Remapped fixture",
-        "path": str(legacy.parent / "workspace")}), encoding="utf-8")
-
-    def preview() -> dict:
-        status, _, body = request(port, "GET", path)
-        assert status == 200, (status, body)
-        source = next(item for item in json.loads(body)["data"]["items"]
-                      if item["source_id"] == "user-home")
-        assert source["importable"] is True, source
-        return source
-
-    def inventory() -> dict:
-        return {item.relative_to(legacy).as_posix(): item.read_bytes()
-                for item in legacy.rglob("*") if item.is_file()}
-
-    def available(name: str) -> None:
-        status, _, body = request(port, "GET", fixture + "free-" + name)
-        assert status == 200 and json.loads(body)["data"]["available"], (name, body)
-
-    def apply() -> tuple[int, dict[str, str], bytes]:
-        return request(port, "POST", path,
-            body=json.dumps({"source_id": "user-home",
-                             "preview_token": source["preview_token"]}).encode(),
-            headers={"Content-Type": "application/json"})
-
-    def unchanged() -> None:
-        assert not home.exists(), home
-        assert not list(home.parent.glob(f"{home.name}.migrate-*")), home
-        assert before == inventory(), "legacy source changed"
-
-    try:
-        source, before = preview(), inventory()
-        for held in ("first", "tasks", "remapped"):
-            checkpoint = migration_lease_snapshot(port)
-            assert request(port, "POST", fixture + "acquire-" + held)[0] == 200
-            try:
-                status, _, body = apply()
-                assert status == 409 and json.loads(body)["error"]["code"] == (
-                    "migration_conflict"), (held, status, body)
-                # Covers the public C entry when no error output is supplied.
-                assert request(port, "POST", fixture + "apply-null-error")[0] == 200
-                unchanged()
-                assert checkpoint == migration_lease_snapshot(port)
-                for other in ("first", "tasks", "remapped"):
-                    if other != held:
-                        available(other)  # Partial acquisition must be unwound.
-            finally:
-                assert request(port, "POST", fixture + "release")[0] == 200
-            available(held)
-
-        for failure in ("fail-report", "fail-publish"):
-            checkpoint = migration_lease_snapshot(port)
-            assert request(port, "POST", fixture + failure)[0] == 200
-            try:
-                status, _, body = apply()
-                assert status == 500 and json.loads(body)["error"]["code"] == (
-                    "migration_failed"), (failure, status, body)
-                unchanged()
-                after = migration_lease_snapshot(port)
-                assert after["prepare"] > checkpoint["prepare"] and (
-                    after["write"] > checkpoint["write"] and
-                    after["cleanup"] > checkpoint["cleanup"]), after
-                assert after["remapped"] is True, after
-                if failure == "fail-publish":
-                    assert after["publish"] > checkpoint["publish"], after
-                for name in ("first", "tasks", "remapped"):
-                    available(name)
-            finally:
-                assert request(port, "POST", fixture + "clear-failure")[0] == 200
-    finally:
-        # Remove only the two entries created by this fixture, never legacy data.
-        remapped_file.unlink()
-        remapped_dir.rmdir()
-    return preview(), migration_lease_snapshot(port)
 
 
 def scheduled_questions_probe(port: int, home: Path, definition: dict) -> None:
@@ -1377,102 +1237,6 @@ def scheduled_questions_probe(port: int, home: Path, definition: dict) -> None:
     assert not list((home / "sessions/api-project").glob("schedule-task-*"))
 
 
-def run_cache_migration_probe(host: Path) -> None:
-    """HTTP import preserves an existing cache, freezes writes, then loads on restart."""
-    with tempfile.TemporaryDirectory(prefix="api-cache-import-", dir=ROOT / ".build") as raw:
-        base = Path(raw)
-        port = free_port()
-        config = write_site(base, port)
-        home = base / "home"
-        cache = home / "data/cache/webview2/cache.bin"
-        cache.parent.mkdir(parents=True)
-        cache.write_bytes(b"portable-cache")
-        legacy = base / ".mdo"
-        legacy.mkdir()
-        source_bytes = b'{"models":[],"settings":{"theme":"dark"}}'
-        (legacy / "config.json").write_bytes(source_bytes)
-        env = dict(os.environ, USERPROFILE=str(base), HOME=str(base), MDO_HOME=str(home))
-        fixture = "/__fixture/migration-lease/"
-        path = "/api/v1/migrations/legacy"
-        for restart in (False, True, None):
-            env["MDO_HOME"] = str(legacy / "must-not-be-created" if restart is None else home)
-            log_path = base / ("restart.log" if restart else "import.log")
-            with log_path.open("wb") as log:
-                process = subprocess.Popen([str(host), str(config)], cwd=base, env=env,
-                    stdout=log, stderr=subprocess.STDOUT,
-                    creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
-                try:
-                    wait_ready(port, process)
-                    status, _, body = request(port, "GET", "/api/v1/bootstrap")
-                    state = json.loads(body)["data"]["home"]
-                    assert status == 200 and not state["restart_required"], body
-                    assert not state["import_in_progress"], state
-                    if restart is None:
-                        status, _, body = request(port, "GET", path)
-                        source = next(item for item in json.loads(body)["data"]["items"]
-                                      if item["source_id"] == "user-home")
-                        assert status == 200 and source["valid"] and not source["importable"], body
-                        payload = json.dumps({"source_id": "user-home",
-                                              "preview_token": source["preview_token"]}).encode()
-                        assert request(port, "POST", path, body=payload,
-                            headers={"Content-Type": "application/json"})[0] == 409
-                        assert not (legacy / "must-not-be-created").exists()
-                        continue
-                    if restart:
-                        assert not (home / ".mdo-import").exists()
-                        assert not (home / ".mdo-import-cleanup").exists()
-                        status, _, body = request(port, "GET", "/api/v1/settings")
-                        assert status == 200 and json.loads(body)["data"][
-                            "appearance"]["theme"] == "dark", body
-                        continue
-                    status, _, body = request(port, "GET", path)
-                    source = next(item for item in json.loads(body)["data"]["items"]
-                                  if item["source_id"] == "user-home")
-                    assert status == 200 and source["importable"] and (
-                        source["preserve_browser_cache"] is True), body
-                    payload = json.dumps({"source_id": "user-home",
-                                          "preview_token": source["preview_token"]}).encode()
-                    for failure in ("fail-report", "fail-publish"):
-                        assert request(port, "POST", fixture + failure)[0] == 200
-                        try:
-                            status, _, body = request(port, "POST", path, body=payload,
-                                headers={"Content-Type": "application/json"})
-                            assert status == 500, (status, body)
-                            assert not (home / ".mdo-import").exists()
-                            assert not (home / "config").exists()
-                            assert cache.read_bytes() == b"portable-cache"
-                            assert not json.loads(request(port, "GET", "/api/v1/bootstrap")[2])[
-                                "data"]["home"]["restart_required"]
-                        finally:
-                            assert request(port, "POST", fixture + "clear-failure")[0] == 200
-                    status, _, body = request(port, "POST", path, body=payload,
-                        headers={"Content-Type": "application/json"})
-                    assert status == 201 and json.loads(body)["data"]["restart_required"], body
-                    state = json.loads(request(port, "GET", "/api/v1/bootstrap")[2])["data"]["home"]
-                    assert state["restart_required"] and not state["import_in_progress"], state
-                    evidence = migration_lease_snapshot(port)
-                    assert evidence["publish"] >= 2 and evidence["cleanup"] >= 2, evidence
-                    status, _, body = request(port, "POST", "/api/v1/projects",
-                        body=b'{"id":"must-not-write","name":"Blocked"}',
-                        headers={"Content-Type": "application/json"})
-                    assert status == 503 and json.loads(body)["error"]["code"] == (
-                        "home_restart_required"), body
-                    assert not (home / "projects/must-not-write.json").exists()
-                    assert (home / ".mdo-import/committed").is_file()
-                except BaseException as error:
-                    raise RuntimeError(f"{error}\n{log_path.read_text(encoding='utf-8', errors='replace')[-6000:]}") from error
-                finally:
-                    if process.poll() is None:
-                        process.terminate()
-                        try:
-                            process.wait(timeout=5)
-                        except subprocess.TimeoutExpired:
-                            process.kill()
-                            process.wait(timeout=3)
-            assert cache.read_bytes() == b"portable-cache"
-            assert (legacy / "config.json").read_bytes() == source_bytes
-        assert cache.read_bytes() == b"portable-cache"
-        assert (legacy / "config.json").read_bytes() == source_bytes
 
 
 def run_probe(host: Path) -> None:
@@ -1484,53 +1248,6 @@ def run_probe(host: Path) -> None:
         port = free_port()
         config_path = write_site(base, port)
         home = base / "home"
-        legacy = base / ".mdo"
-        (legacy / "projects/api-legacy").mkdir(parents=True)
-        (legacy / "projects/api-legacy/sessions").mkdir()
-        (legacy / "memory").mkdir()
-        (legacy / "schedules").mkdir()
-        (legacy / "config.json").write_text(json.dumps({
-            "models": [{
-                "id": "legacy-model",
-                "name": "Legacy model",
-                "baseUrl": "https://example.invalid/v1",
-                "model": "legacy-wire-model",
-                "dialect": "responses",
-                "reasoning": "medium",
-                "apiKey": "legacy-migration-secret",
-            }],
-            "defaultModel": "legacy-model",
-            "activeProject": "api-legacy",
-            "settings": {"theme": "auto", "fontSize": "md",
-                         "interactMode": "guide", "sound": True},
-        }), encoding="utf-8")
-        (legacy / "projects/api-legacy/project.json").write_text(json.dumps({
-            "name": "API legacy project",
-            "path": str(base / "workspace"),
-            "defaultModel": "legacy-model",
-        }), encoding="utf-8")
-        (legacy / "projects/api-legacy/sessions/s123456789abc.meta.json").write_text(
-            json.dumps({
-                "id": "s123456789abc",
-                "title": "Legacy API session",
-                "model": "legacy-model",
-                "project": "api-legacy",
-                "contextWindow": 131072,
-                "createdAt": 1700000000000,
-                "updatedAt": 1700000001000,
-                "turns": 0,
-                "pinned": True,
-                "userPrompt": "Preserve this legacy session prompt.",
-            }), encoding="utf-8")
-        (legacy / "memory/preference.md").write_text(
-            "# Preference\n\nKeep migration explicit.\n", encoding="utf-8")
-        legacy_schedule = legacy / "schedules/once.json"
-        legacy_schedule.write_text(json.dumps({
-            "id": "once",
-            "title": "L" * 300,
-            "prompt": "Review migration",
-            "kind": "once",
-        }), encoding="utf-8")
         log_path = base / "xs.log"
         model_server = ModelServer(("127.0.0.1", 0), ModelHandler)
         model_port = int(model_server.server_address[1])
@@ -1600,150 +1317,6 @@ def run_probe(host: Path) -> None:
                 project_lease_exclusion(port, home, "lease-session")
                 assert not home.exists(), home
 
-                status, headers, body = request(
-                    port, "GET", "/api/v1/migrations/legacy")
-                document = json.loads(body)
-                assert status == 200, (status, body)
-                assert_common(headers, document)
-                migrations = document["data"]
-                assert migrations["count"] == 2, migrations
-                assert migrations["requires_confirmation"] is True, migrations
-                sources = {item["source_id"]: item
-                           for item in migrations["items"]}
-                portable = sources["portable-data"]
-                assert portable["found"] is False, portable
-                user_home = sources["user-home"]
-                assert user_home["found"] is True, user_home
-                assert user_home["valid"] is True, user_home
-                assert user_home["importable"] is True, user_home
-                assert user_home["target_available"] is True, user_home
-                assert user_home["file_count"] == 5, user_home
-                assert user_home["project_count"] == 1, user_home
-                assert user_home["session_count"] == 1, user_home
-                assert user_home["model_count"] == 1, user_home
-                assert user_home["schedule_count"] == 1, user_home
-                assert user_home["memory_file_count"] == 1, user_home
-                assert user_home["unsupported_count"] == 0, user_home
-                assert re.fullmatch(r"[0-9a-f]{64}",
-                                    user_home["preview_token"]), user_home
-                assert not home.exists(), home
-
-                stale_token = ("0" if user_home["preview_token"][0] != "0"
-                               else "1") + user_home["preview_token"][1:]
-                status, _, body = request(
-                    port, "POST", "/api/v1/migrations/legacy",
-                    body=json.dumps({
-                        "source_id": "user-home",
-                        "preview_token": stale_token,
-                    }).encode(), headers={"Content-Type": "application/json"})
-                assert status == 409, (status, body)
-                assert not home.exists(), home
-
-                status, _, body = request(
-                    port, "POST", "/api/v1/migrations/legacy",
-                    body=json.dumps({
-                        "source_id": "user-home",
-                        "preview_token": user_home["preview_token"],
-                    }).encode(), headers={"Content-Type": "application/json"})
-                assert status == 422, (status, body)
-                assert json.loads(body)["error"]["code"] == "migration_invalid", body
-                assert not home.exists(), home
-                assert not list(home.parent.glob(f"{home.name}.migrate-*")), list(
-                    home.parent.iterdir())
-                assert legacy.is_dir(), legacy
-
-                legacy_schedule.write_text(json.dumps({
-                    "id": "once",
-                    "title": "Legacy reminder",
-                    "prompt": "Review migration",
-                    "kind": "once",
-                }), encoding="utf-8")
-                status, _, body = request(
-                    port, "GET", "/api/v1/migrations/legacy")
-                assert status == 200, (status, body)
-                refreshed = json.loads(body)["data"]
-                user_home = {item["source_id"]: item
-                             for item in refreshed["items"]}["user-home"]
-                assert user_home["importable"] is True, user_home
-
-                user_home, migration_before = migration_lease_probe(port, home, legacy)
-                status, headers, body = request(
-                    port, "POST", "/api/v1/migrations/legacy",
-                    body=json.dumps({
-                        "source_id": "user-home",
-                        "preview_token": user_home["preview_token"],
-                    }).encode(), headers={"Content-Type": "application/json"})
-                document = json.loads(body)
-                assert status == 201, (status, body)
-                assert_common(headers, document)
-                applied = document["data"]
-                assert applied["restart_required"] is True, applied
-                assert applied["imported_models"] == 1, applied
-                assert applied["imported_projects"] == 2, applied
-                assert applied["imported_sessions"] == 1, applied
-                assert applied["imported_schedules"] == 1, applied
-                assert applied["imported_memory_entries"] == 1, applied
-                assert home.is_dir(), home
-                report_path = Path(applied["report_path"])
-                assert report_path.is_file(), report_path
-                report = json.loads(report_path.read_text(encoding="utf-8"))
-                assert report["source_preserved"] is True, report
-                assert report["restart_required"] is True, report
-                assert report["preview_token"] == user_home["preview_token"], report
-                assert "legacy-migration-secret" not in report_path.read_text(
-                    encoding="utf-8"), report
-                assert (home / "config/settings.json").is_file(), home
-                migrated_settings = json.loads((home / "config/settings.json")
-                                               .read_text(encoding="utf-8"))
-                assert migrated_settings["patch"]["composer"]["submit_mode"] == "guide", migrated_settings
-                assert migrated_settings["patch"]["notifications"]["sound"] is True, migrated_settings
-                assert "interaction_mode" not in migrated_settings["patch"].get("agent", {}), migrated_settings
-                assert (home / "config/models.json").is_file(), home
-                model_config = (home / "config/models.json").read_text(
-                    encoding="utf-8")
-                assert "legacy-migration-secret" not in model_config, model_config
-                secret_path = next((home / "secrets").glob("legacy-*.key"))
-                assert secret_path.read_text(encoding="utf-8") == (
-                    "legacy-migration-secret"), secret_path
-                assert (home / "memory/global.json").is_file(), home
-                assert (home / "schedules/once.json").is_file(), home
-                migrated_session = home / "sessions/api-legacy/s123456789abc"
-                assert (migrated_session / "meta.json").is_file(), migrated_session
-                assert (migrated_session / "snapshot.json").is_file(), migrated_session
-                assert (home / "migration/session-prompts/api-legacy/"
-                        "s123456789abc.txt").is_file(), home
-                assert legacy.is_dir(), legacy
-
-                migration_after = migration_lease_snapshot(port)
-                assert migration_after["prepare"] > migration_before["prepare"] and (
-                    migration_after["write"] > migration_before["write"] and
-                    migration_after["publish"] > migration_before["publish"] and
-                    migration_after["cleanup"] == migration_before["cleanup"]), migration_after
-                for name in ("first", "tasks", "remapped"):
-                    status, _, body = request(port, "GET",
-                        "/__fixture/migration-lease/free-" + name)
-                    assert status == 200 and json.loads(body)["data"]["available"], body
-
-                # Publication requires restart. Do not run the rest of the API
-                # suite against managers from before the imported generation.
-                # Preserve the complete migrated fixture and start fresh here.
-                process.terminate()
-                try:
-                    process.wait(timeout=3)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    process.wait(timeout=3)
-                imported_home = base / "migration-evidence-home"
-                assert home.resolve().parent == base.resolve()
-                assert imported_home.resolve().parent == base.resolve()
-                home.rename(imported_home)
-                process = subprocess.Popen(
-                    [str(host), str(config_path), "--", "--home", str(home)],
-                    cwd=base, env=environment, stdout=log, stderr=subprocess.STDOUT,
-                    creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
-                wait_ready(port, process)
-                assert not home.exists(), home
-
                 # The UI reads bounded summaries and edits through store-wide
                 # ETags, so concurrent agent writes cannot be overwritten.
                 memory_path = "/api/v1/memory/projects/api-project"
@@ -1807,8 +1380,7 @@ def run_probe(host: Path) -> None:
                     "settings", "models", "agents", "modules", "skills",
                     "mcp", "projects", "sessions", "runs", "schedules",
                     "tasks", "artifacts", "approvals", "permissions", "diagnostics",
-                    "storage", "operations",
-                    "migrations/legacy",
+                    "operations",
                 )
                 for resource in resources:
                     status, resource_headers, resource_body = request(
@@ -5895,7 +5467,6 @@ def main() -> int:
         print(f"missing xs host: {host}", file=sys.stderr)
         return 2
     run_unconfigured_model_probe(host)
-    run_cache_migration_probe(host)
     run_probe(host)
     print("API runtime probe: PASS")
     return 0

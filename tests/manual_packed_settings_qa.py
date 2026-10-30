@@ -31,8 +31,8 @@ from test_interrupt_runtime import stop_host
 
 SETTINGS = "/api/v1/settings/settings"
 READ_PATHS = {"/api/v1/" + name for name in (
-    "models/config", "modules", "skills", "mcp", "permissions", "storage",
-    "diagnostics", "migrations/legacy", "settings")}
+    "models/config", "modules", "skills", "mcp", "permissions",
+    "diagnostics", "settings")}
 
 
 WRITE_PATHS = {"/api/v1/settings/models": "PUT",

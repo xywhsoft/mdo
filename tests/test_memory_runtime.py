@@ -671,7 +671,7 @@ def write_site(site: Path) -> None:
     (site / "web/index.html").write_text("probe", encoding="utf-8")
     for relative in (
         "default-home/config/defaults.json",
-        "src/storage/home.c", "src/storage/home_import.inc.c", "src/storage/home_purge.inc.c", "src/storage/home_restore.inc.c",
+        "src/storage/home.c", "src/storage/home_fs.inc.c", "src/storage/home_purge.inc.c", "src/storage/home_restore.inc.c",
         "src/projects/lifecycle.c",
         "src/config/config.c",
         "src/memory/manager.c",
@@ -681,7 +681,7 @@ def write_site(site: Path) -> None:
     shutil.copy2(
         ROOT / "app/src/memory/internal.h", site / "src/memory/internal.h"
     )
-    for name in ("home.h", "home_restore.h", "session_file_policy.h", "home_import.h", "home_purge.h", "config.h", "memory.h", "project_lifecycle.h"):
+    for name in ("home.h", "home_restore.h", "session_file_policy.h", "home_purge.h", "config.h", "memory.h", "project_lifecycle.h"):
         shutil.copy2(ROOT / "app/include/mdo" / name, site / "include/mdo" / name)
     # Inject a bounded publication fault only into this temporary application's copy.
     manager = site / "src/memory/manager.c"

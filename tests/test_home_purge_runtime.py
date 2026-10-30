@@ -340,7 +340,7 @@ def run_probe(host: Path) -> None:
 
         # All ambiguity cases must reject before any compensating move.
         for mode in ("both", "neither", "identity", "bytes", "manifest-path", "foreign", "marker",
-                     "directory-identity", "journal-identity", "payload-identity", "early-commit", "import-conflict"):
+                     "directory-identity", "journal-identity", "payload-identity", "early-commit"):
             home = base / mode
             seed(home)
             launch(host, site, home, "crash-11" if mode == "directory-identity" else "crash-4", checkpoint=True)
@@ -369,7 +369,6 @@ def run_probe(host: Path) -> None:
                 else: shutil.copytree(saved, changed)
             elif mode == "early-commit":
                 (home / ".mdo-purge/committed").write_bytes(b"mdo-project-purge-v1\n")
-            elif mode == "import-conflict": (home / ".mdo-import").mkdir()
             else: (home / ".mdo-purge/committed").write_bytes(b"invalid marker")
             before = inventory(home)
             text = launch(host, site, home, "inspect")

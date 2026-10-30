@@ -252,8 +252,8 @@ def write_site(site: Path) -> None:
     shutil.copy2(ROOT / "tests/fixtures/model-plugin-free.h", site / "model-plugin-free.h")
     shutil.copy2(ROOT / "app/default-home/config/defaults.json",
                  site / "default-home/config/defaults.json")
-    for relative in ("src/storage/home.c", "src/storage/home_import.inc.c", "src/storage/home_purge.inc.c", "src/storage/home_restore.inc.c", "src/config/config.c",
-                     "include/mdo/home.h", "include/mdo/home_import.h", "include/mdo/home_purge.h", "include/mdo/home_restore.h", "include/mdo/session_file_policy.h", "include/mdo/config.h"):
+    for relative in ("src/storage/home.c", "src/storage/home_fs.inc.c", "src/storage/home_purge.inc.c", "src/storage/home_restore.inc.c", "src/config/config.c",
+                     "include/mdo/home.h", "include/mdo/home_purge.h", "include/mdo/home_restore.h", "include/mdo/session_file_policy.h", "include/mdo/config.h"):
         copy_app_source(relative, site)
     (site / "probe.c").write_text(PROBE_SOURCE, encoding="utf-8")
     with socket.socket() as listener:

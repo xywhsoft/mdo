@@ -82,12 +82,12 @@ static bool MdoHomeRestoreReceiptRead(cstr Id, MdoHomeSessionRestoreReceipt* Rec
     bool StillExists, Ok;
     MdoHomeRestoreReceiptInit(Receipt); *Exists = false;
     MdoHomeRestoreReceiptPath(Path, Id);
-    if ( !MdoHomeImportStat(Path, Exists, &Before) ) return false;
+    if ( !MdoHomeFsStat(Path, Exists, &Before) ) return false;
     if ( !*Exists ) return true;
     Ok = Before.Type == XFILE_TYPE_FILE && (Before.Available & XFILE_INFO_SIZE) != 0u &&
         Before.Size <= MDO_HOME_RESTORE_RECORD_BYTES &&
         MdoHomePurgeReadBounded(Path, MDO_HOME_RESTORE_RECORD_BYTES, &Text, &Bytes) &&
-        MdoHomeImportStat(Path, &StillExists, &After) && StillExists && MdoHomePurgeSame(&Before, &After);
+        MdoHomeFsStat(Path, &StillExists, &After) && StillExists && MdoHomePurgeSame(&Before, &After);
     xrtJsonReadConfigInit(&Config); Config.MaxInputBytes = MDO_HOME_RESTORE_RECORD_BYTES;
     Config.MaxDepth = 3u; Config.MaxValues = 48u; Config.MaxContainerItems = 8u;
     if ( Ok ) Value = xrtJsonRead(xrtStrViewN(Text, Bytes), &Config);
@@ -96,11 +96,11 @@ static bool MdoHomeRestoreReceiptRead(cstr Id, MdoHomeSessionRestoreReceipt* Rec
         MdoHomeRestoreRequestParse(xrtValueObjectGet(Value, XRT_STR_LITERAL("request")), &Receipt->Request) &&
         strcmp(Id, Receipt->Request.SessionId) == 0 &&
         xrtValueGetString(xrtValueObjectGet(Value, XRT_STR_LITERAL("outcome")), &Outcome);
-    if ( Ok && MdoHomeImportName(Outcome, "committed") ) {
+    if ( Ok && MdoHomeFsName(Outcome, "committed") ) {
         Receipt->Outcome = MDO_HOME_SESSION_RESTORE_COMMITTED; Receipt->Committed = true;
         Receipt->DirectoryIdentity.Type = XFILE_TYPE_DIRECTORY;
         Ok = xrtValueCount(Value) == 4u && MdoHomePurgeGetIdentity(Value, "directory", &Receipt->DirectoryIdentity);
-    } else if ( Ok && MdoHomeImportName(Outcome, "aborted") ) {
+    } else if ( Ok && MdoHomeFsName(Outcome, "aborted") ) {
         Receipt->Outcome = MDO_HOME_SESSION_RESTORE_ABORTED; Ok = xrtValueCount(Value) == 3u;
     } else Ok = false;
     xrtValueRelease(Value); xrtFree(Text);
@@ -135,7 +135,7 @@ static bool MdoHomeRestorePosition(cstr Base, const MdoHomeRestoreRecord* Record
     if ( !Record->Ready ) return true;
     snprintf(Source, sizeof(Source), "%s/payload/%s", Base, Record->Name);
     MdoHomeRestoreTarget(Target, Record);
-    if ( !MdoHomeImportStat(Source, &SourceExists, &Private) || !MdoHomeImportStat(Target, &TargetExists, &Live) ) return false;
+    if ( !MdoHomeFsStat(Source, &SourceExists, &Private) || !MdoHomeFsStat(Target, &TargetExists, &Live) ) return false;
     if ( SourceExists ) return MdoHomePurgeSame(&Private, &Record->Directory) &&
         !(TargetExists && MdoHomePurgeSame(&Live, &Record->Directory));
     *Committed = TargetExists && MdoHomePurgeSame(&Live, &Record->Directory);
@@ -198,7 +198,7 @@ static bool MdoHomeRestoreReceiptCapacity(void)
     xdirnext Next;
     bool Exists, Ok = false;
     size_t Count = 0u;
-    if ( !MdoHomeImportStat(MDO_HOME_RESTORE_RECEIPT_DIR, &Exists, &Before) ) return false;
+    if ( !MdoHomeFsStat(MDO_HOME_RESTORE_RECEIPT_DIR, &Exists, &Before) ) return false;
     if ( !Exists ) return true;
     if ( Before.Type != XFILE_TYPE_DIRECTORY ) return false;
     Dir = xrtRootDirOpen(g_MdoHome.Root, MDO_HOME_RESTORE_RECEIPT_DIR, XDIR_STAT);
@@ -212,7 +212,7 @@ static bool MdoHomeRestoreReceiptCapacity(void)
         memcpy(Id, Entry.Name.Data, 32u); Id[32] = '\0';
         if ( !MdoHomePurgeRequestIdValid(Id) ) goto done;
     }
-    Ok = Next == XDIR_NEXT_END && MdoHomeImportStat(MDO_HOME_RESTORE_RECEIPT_DIR, &Exists, &After) &&
+    Ok = Next == XDIR_NEXT_END && MdoHomeFsStat(MDO_HOME_RESTORE_RECEIPT_DIR, &Exists, &After) &&
         Exists && MdoHomePurgeSame(&Before, &After);
 done:
     if ( !xrtDirClose(Dir) ) Ok = false;
@@ -241,17 +241,17 @@ static bool MdoHomeRestoreReceiptPublish(const MdoHomeRestoreRecord* Record, boo
          (Committed && !MdoHomePurgePutIdentity(Value, "directory", &Record->Directory)) ) goto done;
     Text = xrtJsonStringify(Value, false, &Bytes);
     if ( Text == NULL || Bytes > MDO_HOME_RESTORE_RECORD_BYTES ||
-         !MdoHomeImportStat(MDO_HOME_RESTORE_DIR "/result.tmp", &Exists, &Before) ) goto done;
+         !MdoHomeFsStat(MDO_HOME_RESTORE_DIR "/result.tmp", &Exists, &Before) ) goto done;
     if ( Exists ) {
         if ( Before.Type != XFILE_TYPE_FILE || (Before.Available & XFILE_INFO_SIZE) == 0u || Before.Size > Bytes ||
              !MdoHomePurgeReadBounded(MDO_HOME_RESTORE_DIR "/result.tmp", MDO_HOME_RESTORE_RECORD_BYTES, &Partial, &PartialBytes) ||
              PartialBytes > Bytes || (PartialBytes != 0u && memcmp(Partial, Text, PartialBytes) != 0) ||
-             !MdoHomeImportStat(MDO_HOME_RESTORE_DIR "/result.tmp", &StillExists, &After) ||
+             !MdoHomeFsStat(MDO_HOME_RESTORE_DIR "/result.tmp", &StillExists, &After) ||
              !StillExists || !MdoHomePurgeSame(&Before, &After) ) goto done;
     }
     if ( Terminal ) { Ok = true; goto done; }
     if ( Exists && PartialBytes != Bytes && !xrtRootRemove(g_MdoHome.Root, MDO_HOME_RESTORE_DIR "/result.tmp") ) goto done;
-    if ( (!Exists || PartialBytes != Bytes) && !MdoHomeImportWrite(MDO_HOME_RESTORE_DIR "/result.tmp", Text, Bytes) ) goto done;
+    if ( (!Exists || PartialBytes != Bytes) && !MdoHomeFsWrite(MDO_HOME_RESTORE_DIR "/result.tmp", Text, Bytes) ) goto done;
     if ( xsRootRenameNoReplace(g_MdoHome.Root, MDO_HOME_RESTORE_DIR "/result.tmp", Path) ) Ok = true;
     else if ( MdoHomeRestoreReceiptRead(Record->Request.SessionId, &Existing, &Exists) && Exists &&
               MdoHomeRestoreReceiptMatches(&Existing, Record, Committed) ) { xrtClearError(); Ok = true; }
@@ -266,7 +266,7 @@ static bool MdoHomeRestoreResultScratchValid(cstr Base, const MdoHomeRestoreReco
     xfileinfo Before, After;
     bool Exists, StillExists, Ok;
     snprintf(Scratch, sizeof(Scratch), "%s/result.tmp", Base);
-    if ( !MdoHomeImportStat(Scratch, &Exists, &Before) ) return false;
+    if ( !MdoHomeFsStat(Scratch, &Exists, &Before) ) return false;
     if ( !Exists ) return true;
     if ( !Record->HasRequest ) return false;
     MdoHomeRestoreReceiptPath(Target, Record->Request.SessionId);
@@ -275,6 +275,6 @@ static bool MdoHomeRestoreResultScratchValid(cstr Base, const MdoHomeRestoreReco
         MdoHomePurgeReadBounded(Target, MDO_HOME_RESTORE_RECORD_BYTES, &Text, &Bytes) &&
         MdoHomePurgeReadBounded(Scratch, MDO_HOME_RESTORE_RECORD_BYTES, &Partial, &PartialBytes) &&
         PartialBytes <= Bytes && (PartialBytes == 0u || memcmp(Partial, Text, PartialBytes) == 0) &&
-        MdoHomeImportStat(Scratch, &StillExists, &After) && StillExists && MdoHomePurgeSame(&Before, &After);
+        MdoHomeFsStat(Scratch, &StillExists, &After) && StillExists && MdoHomePurgeSame(&Before, &After);
     xrtFree(Text); xrtFree(Partial); return Ok;
 }

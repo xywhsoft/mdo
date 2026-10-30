@@ -8,6 +8,7 @@
 #include "../../include/mdo/skills.h"
 #include "../../include/mdo/knowledge.h"
 #include "../../include/mdo/extensions.h"
+#include "diagnostics_storage.inc.c"
 
 #define MDO_API_DIAGNOSTIC_LIMIT 256u
 
@@ -80,6 +81,11 @@ bool MdoApiDiagnosticsRoute(MdoApiContext* Context)
     xvalue* Knowledge = MdoKnowledgeDiagnostics();
     if(Knowledge&&!MdoApplicationPluginWarnings(Knowledge)){xrtValueRelease(Knowledge);Knowledge=NULL;}
     if(Knowledge&&!MdoExtensionsWarnings(Knowledge)){xrtValueRelease(Knowledge);Knowledge=NULL;}
+    MdoHomeSnapshot Home = {0}; Home.Size = sizeof(Home);
+    if ( Knowledge && !MdoHomeGetSnapshot(&Home) ) { xrtValueRelease(Knowledge); Knowledge = NULL; }
+    if ( Knowledge && !MdoApiStorageWarnings(Knowledge, &Home) ) {
+        xrtValueRelease(Knowledge); Knowledge = NULL;
+    }
     size_t Total = 0u;
     size_t Added = 0u;
     size_t Index;
