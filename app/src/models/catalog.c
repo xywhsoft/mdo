@@ -296,7 +296,7 @@ void MdoModelCatalogRelease(MdoModelCatalog* pCatalog)
     xrtFree(pCatalog);
 }
 
-static MdoProviderEntry* MdoModelsFindProvider(MdoModelCatalog* pCatalog,
+static MdoProviderEntry* MdoModelsFindProvider(const MdoModelCatalog* pCatalog,
     cstr ProviderId)
 {
     size_t i;
