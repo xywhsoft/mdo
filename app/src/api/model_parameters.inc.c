@@ -13,19 +13,6 @@ static bool MdoParameterContains(const xvalue* List, cstr Text)
     return false;
 }
 
-static xvalue* MdoParameterRegistry(void)
-{
-    xfileoptions Options; xrtFileOptionsInit(&Options); Options.Flags = XFILE_READ;
-    xfile F = xrtVfsOpen(MdoHomeApplicationVfs(), "/app/resources/model-parameters.json", &Options);
-    xfileinfo Info = {0}; char* Bytes = NULL; xvalue* Root = NULL;
-    if (F && xrtFileStat(F, &Info) && Info.Size && Info.Size <= 256u * 1024u) {
-        Bytes = xrtMalloc((size_t)Info.Size);
-        if (Bytes && xrtReadFull(F, Bytes, (size_t)Info.Size, NULL))
-            Root = xrtJsonParse(xrtStrViewN(Bytes, (size_t)Info.Size));
-    }
-    if (F) xrtClose(F); xrtFree(Bytes); xrtClearError(); return Root;
-}
-
 static bool MdoParameterSet(xvalue* Fields, cstr Name, const xvalue* Value,
     cstr Source, cstr Url, const xvalue* Date)
 {
@@ -82,7 +69,10 @@ static xvalue* MdoParameterApiFields(const xvalue* Row)
             if (xrtValueGetBool(xrtValueObjectGet(Effort, xrtStrView(Names[i])), &Enabled) && Enabled)
                 MdoApiValueAppendString(Levels, Names[i]);
         }
-        MdoApiValueSetTake(Reasoning, "efforts", &Levels);
+        if (!xrtValueCount(Levels)) {
+            xrtValueRelease(Reasoning); Reasoning = NULL;
+        } else MdoApiValueSetTake(Reasoning, "efforts", &Levels);
+        xrtValueRelease(Levels);
     }
     if (Reasoning) { xrtValueObjectSet(Fields, XRT_STR_LITERAL("reasoning"), Reasoning); xrtValueRelease(Reasoning); }
     const xvalue* Tools = xrtValueObjectGet(Caps, XRT_STR_LITERAL("tool_calling"));
@@ -134,7 +124,7 @@ static xvalue* MdoParameterResolve(const xvalue* Registry, cstr Endpoint, cstr P
         xstrview K; const xvalue* V = xrtValueObjectAt(Defaults, i, &K); char Name[64];
         if (K.Size >= sizeof(Name)) { Ok = false; break; }
         memcpy(Name, K.Data, K.Size); Name[K.Size] = 0;
-        Ok = MdoParameterSet(Fields, Name, V, Recommendation ? "upstream-recommendation" : "registry", Url,
+        Ok = MdoParameterSet(Fields, Name, V, Recommendation ? "upstream-recommendation" : "server", Url,
             xrtValueObjectGet(Match, XRT_STR_LITERAL("checked_at")));
     }
     /* A boolean effort support without a list is still unknown. A declared

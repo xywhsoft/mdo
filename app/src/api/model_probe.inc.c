@@ -4,6 +4,7 @@
 #include "../../include/mdo/http_url.h"
 #include "../../include/mdo/model_http_sdk.h"
 #include <ctype.h>
+#include "../../include/mdo/account.h"
 #include "model_parameters.inc.c"
 
 static xtlsverifydecision MdoApiModelAcceptTls(const xtlspeer* Peer, ptr Data)
@@ -94,6 +95,8 @@ done:
     MdoSecretRelease(&Password); xrtNetProxyRelease(Proxy); xrtTlsVerifierRelease(Verifier); xrtX509StoreFree(Store);
     return Client;
 }
+
+#include "model_catalog_client.inc.c"
 
 static bool MdoApiModelDiscoverRun(MdoApiContext* Context, MdoApiJsonBody Body, bool Parameters)
 {
@@ -187,7 +190,21 @@ static bool MdoApiModelDiscoverRun(MdoApiContext* Context, MdoApiJsonBody Body, 
 done:
     if (Parameters && Endpoint && strcmp(Code, "endpoint_invalid") && strcmp(Code, "key_invalid") &&
         strcmp(Code, "credential_unavailable") && strcmp(Code, "authentication_failed")) {
-        xvalue* Registry = MdoParameterRegistry(); Data = xrtValueObject(); Items = xrtValueArray();
+        bool NeedCatalog = false;
+        for (size_t n = 0; n < xrtValueCount(Selected); ++n) {
+            const xvalue* Row = NULL;
+            for (size_t k = 0; k < xrtValueCount(List); ++k) {
+                const xvalue* Candidate = xrtValueArrayGet(List, k);
+                if (xrtValueEqual(xrtValueObjectGet(Candidate, XRT_STR_LITERAL("id")), xrtValueArrayGet(Selected, n))) { Row = Candidate; break; }
+            }
+            xvalue* Fields = MdoParameterApiFields(Row);
+            NeedCatalog |= !xrtValueObjectHas(Fields, XRT_STR_LITERAL("context_tokens")) ||
+                !xrtValueObjectHas(Fields, XRT_STR_LITERAL("max_output_tokens")) || !xrtValueObjectHas(Fields, XRT_STR_LITERAL("reasoning"));
+            xrtValueRelease(Fields);
+        }
+        bool Stale = false;
+        xvalue* Registry = NeedCatalog ? MdoParameterRegistry(Context, false, &Stale) : NULL;
+        Data = xrtValueObject(); Items = xrtValueArray();
         Ok = Data && Items;
         for (size_t n = 0; Ok && n < xrtValueCount(Selected); ++n) {
             xstrview Id; char Name[257]; xrtValueGetString(xrtValueArrayGet(Selected, n), &Id);
@@ -197,7 +214,8 @@ done:
                 if (MdoParameterTextEqual(xrtValueObjectGet(Candidate, XRT_STR_LITERAL("id")), Name)) { Row = Candidate; break; }
             }
             xvalue* Resolved = MdoParameterResolve(Registry, Endpoint, Protocol, Name, Row, Code);
-            Ok = Resolved && MdoApiValueAppendTake(Items, &Resolved); xrtValueRelease(Resolved);
+            Ok = Resolved && MdoApiValueSetBool(Resolved, "catalog_stale", Stale) &&
+                MdoApiValueSetBool(Resolved, "catalog_unavailable", NeedCatalog && !Registry) && MdoApiValueAppendTake(Items, &Resolved); xrtValueRelease(Resolved);
         }
         Ok = Ok && MdoApiValueSetTake(Data, "items", &Items); xrtValueRelease(Registry);
     }
@@ -286,7 +304,7 @@ static bool MdoApiModelTestRun(MdoApiContext* Context, MdoApiJsonBody Body)
         }
         xrtValueRelease(Verification); Verification = NULL;
     }
-    Options.MaxOutputTokens = Info.MaxOutputTokens < 1024u ? Info.MaxOutputTokens : 1024u;
+    Options.MaxOutputTokens = Info.MaxOutputTokens; /* Validate the saved runtime budget and reasoning selection together. */
     bool Online = MdoModelIsOnline(Catalog, Id);
     if (!Online) Client = MdoModelClientCreate(Catalog, &Options, NULL, &Error);
     Request.bStream = true; Request.bParallelToolCalls = false;
@@ -335,7 +353,7 @@ typedef struct MdoModelProbeJob {
     XS_HttpReq Request;
     xhttp1head Head;
     MdoApiJsonBody Body;
-    bool Test, Parameters, Sent;
+    bool Test, Parameters, Catalog, Sent;
 } MdoModelProbeJob;
 static struct { xmutex* Lock; xtaskpool* Pool; size_t Count; bool Stopping; } g_MdoModelProbes;
 
@@ -372,23 +390,23 @@ static xtaskoutcome MdoApiModelProbeRun(xcancel* Cancel, ptr Value, xtaskvalue* 
 {
     MdoModelProbeJob* Job = Value; (void)Result; Job->Context.SendCancel = Cancel;
     if (!MdoApiDownloadLive(&Job->Context)) return XTASK_CANCELLED;
-    Job->Sent = Job->Test ? MdoApiModelTestRun(&Job->Context, Job->Body) : MdoApiModelDiscoverRun(&Job->Context, Job->Body, Job->Parameters);
+    Job->Sent = Job->Catalog ? MdoApiModelProvidersRun(&Job->Context) : Job->Test ? MdoApiModelTestRun(&Job->Context, Job->Body) : MdoApiModelDiscoverRun(&Job->Context, Job->Body, Job->Parameters);
     return Job->Sent ? XTASK_SUCCESS : XTASK_FAILED;
 }
 
-static bool MdoApiModelProbeStart(MdoApiContext* Context, bool Test, bool Parameters)
+static bool MdoApiModelProbeStart(MdoApiContext* Context, bool Test, bool Parameters, bool Catalog)
 {
     MdoModelProbeJob* Job = xrtCalloc(1u, sizeof(*Job)); xfuture* Future = NULL; xtaskargs Args = {0};
     if (!Job) return MdoApiReplyError(Context, 503u, "probe_unavailable", "Model test resources are unavailable", NULL);
-    MdoApiBodyStatus Status = MdoApiJsonBodyRead(Context, &Job->Body);
+    MdoApiBodyStatus Status = Catalog ? MDO_API_BODY_OK : MdoApiJsonBodyRead(Context, &Job->Body);
     if (Status != MDO_API_BODY_OK) { xrtFree(Job); return MdoApiReplyBodyError(Context, Status); }
     Job->Head.MethodCode = Context->Request->head->MethodCode; Job->Request.head = &Job->Head;
     Job->Request.server = xsServerRetain(Context->Request->server);
     if (Context->Request->tls) Job->Request.tls = xrtTlsStreamRef(Context->Request->tls);
     else Job->Request.tcp = xrtNetStreamRef(Context->Request->tcp);
-    Job->Context.Request = &Job->Request; Job->Test = Test; Job->Parameters = Parameters;
+    Job->Context.Request = &Job->Request; Job->Test = Test; Job->Parameters = Parameters; Job->Catalog = Catalog;
     memcpy(Job->Context.RequestId, Context->RequestId, sizeof(Job->Context.RequestId));
-    Job->Context.SendDeadline = MdoDeadlineAfterUs(Test ? 30000000u : 15000000u); Job->Context.CloseResponse = true;
+    Job->Context.SendDeadline = MdoDeadlineAfterUs((Test || Parameters) ? 30000000u : 15000000u); Job->Context.CloseResponse = true;
     xrtMutexLock(g_MdoModelProbes.Lock);
     if (!g_MdoModelProbes.Stopping && g_MdoModelProbes.Count < 2u) {
         if (!g_MdoModelProbes.Pool) { xtaskpoolconfig Config = {0}; Config.Threads = 1u; Config.QueueLimit = 1u; g_MdoModelProbes.Pool = xrtTaskPoolCreate(&Config); }
@@ -405,7 +423,9 @@ static bool MdoApiModelProbeStart(MdoApiContext* Context, bool Test, bool Parame
     return MdoApiReplyError(Context, 503u, "probe_busy", "Another model test is running; retry shortly", NULL);
 }
 
-bool MdoApiModelDiscoverRoute(MdoApiContext* Context) { return MdoApiModelProbeStart(Context, false, false); }
-bool MdoApiModelTestRoute(MdoApiContext* Context) { return MdoApiModelProbeStart(Context, true, false); }
+bool MdoApiModelDiscoverRoute(MdoApiContext* Context) { return MdoApiModelProbeStart(Context, false, false, false); }
+bool MdoApiModelTestRoute(MdoApiContext* Context) { return MdoApiModelProbeStart(Context, true, false, false); }
 
-bool MdoApiModelParametersRoute(MdoApiContext* Context) { return MdoApiModelProbeStart(Context, false, true); }
+bool MdoApiModelParametersRoute(MdoApiContext* Context) { return MdoApiModelProbeStart(Context, false, true, false); }
+
+bool MdoApiModelProvidersRoute(MdoApiContext* Context) { return MdoApiModelProbeStart(Context, false, false, true); }

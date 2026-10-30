@@ -25,7 +25,16 @@ class Supplier(BaseHTTPRequestHandler):
 
     def log_message(self, *_): pass
 
+    catalog = None
+    catalog_mode = 'ok'
+    catalog_headers = []
     def do_GET(self):
+        if self.path == '/api/v1/ai/client-catalog':
+            self.catalog_headers.append(dict(self.headers))
+            raw = json.dumps({'code': 0, 'data': self.catalog if self.catalog_mode == 'ok' else {'bad': True}}).encode()
+            self.send_response(200 if self.catalog_mode != 'failed' else 503)
+            self.send_header('Content-Type', 'application/json'); self.send_header('Content-Length', str(len(raw)))
+            self.end_headers(); self.wfile.write(raw); return
         rows = [{'id': 'gpt-5.4', 'context_length': 32000},
             {'id': 'metadata-false', 'max_input_tokens': 12345, 'max_tokens': 4096,
              'capabilities': {'thinking': {'supported': False}, 'tool_calling': False}},
@@ -125,7 +134,8 @@ def main():
         build_mdo.write_if_changed(build_mdo.UNITY_PATH, build_mdo.generated_unity(
             build_mdo.load_object(build_mdo.LOCK_PATH), build_mdo.source_list()).encode())
     host_config = (args.packed.resolve().parent if args.packed else ROOT/'app')/'xs.model-verification-test.json'
-    assert not host_config.exists(), 'An owned probe is already running'
+    wrapper=ROOT/'app/generated/model_verification_catalog_test.c'
+    assert not host_config.exists() and (args.packed or not wrapper.exists()), 'An owned probe is already running'
     supplier = ThreadingHTTPServer(('127.0.0.1', 0), Supplier)
     threading.Thread(target=supplier.serve_forever, daemon=True).start()
     evidence = ROOT/'.build/acceptance/model-verification-20261030'
@@ -134,9 +144,23 @@ def main():
     with tempfile.TemporaryDirectory(prefix='model-verification-', dir=ROOT/'.build') as raw:
         base = Path(raw); port = free_port(); process = None
         if not args.packed:
+            wrapper.write_text(f'#define MDO_ACCOUNT_SERVICE_ORIGIN \"http://127.0.0.1:{supplier.server_port}\"\n#include \"mdo_unity.c\"\n')
             host_config.write_text(json.dumps({'engine': {'workers': 2}, 'services': [{'enabled': True, 'class': 'http',
                 'name': 'model-verification-test', 'ip': '127.0.0.1', 'port': port,
-                'host_default': {'enabled': True, 'name': 'mdo', 'path': 'web', 'devlang': 'c', 'devfile': 'generated/mdo_unity.c'}}]}))
+                'host_default': {'enabled': True, 'name': 'mdo', 'path': 'web', 'devlang': 'c', 'devfile': 'generated/model_verification_catalog_test.c'}}]}))
+        cache = {'schema_version': 1, 'cached_at_ms': int(time.time()*1000), 'version': 'fixture-v1', 'providers': [], 'entries': [
+            {'bases': ['https://api.openai.com/v1'], 'ids': ['gpt-5.4'], 'protocols': ['openai-responses'],
+             'upstream': True, 'source_url': 'https://example.invalid/model-spec', 'checked_at': '2026-10-30',
+             'fields': {'context_tokens': 1050000, 'max_output_tokens': 128000,
+                        'reasoning': {'kind': 'effort', 'efforts': ['none', 'low', 'medium', 'high', 'xhigh']}}},
+            {'bases': ['https://api.openai.com/v1'], 'ids': ['gpt-6.1-sol'], 'protocols': ['openai-responses'],
+             'upstream': True, 'source_url': 'https://example.invalid/model-spec', 'checked_at': '2026-10-30',
+             'fields': {'context_tokens': 1050000, 'max_output_tokens': 128000,
+                        'reasoning': {'kind': 'effort', 'efforts': ['low', 'medium', 'high', 'xhigh', 'max']}}}]}
+        cache['providers']=[{'id':'fixture','name':'Fixture','variants':[{'id':'api','label':'regular','base':'https://example.invalid/v1','protocol':'openai-responses','models':['old-id']}]}]
+        Supplier.catalog=copy.deepcopy(cache)
+        (base/'home/data').mkdir(parents=True, exist_ok=True)
+        (base/'home/data/model-catalog.json').write_text(json.dumps(cache))
         def call(method, path, body=None, etag=None):
             status, headers, data = request(port, method, '/api/v1/'+path,
                 body=json.dumps(body).encode() if body is not None else None,
@@ -183,6 +207,22 @@ def main():
                 wait_ready(port, process)
             try:
                 start(); config, etag = get()
+                if not args.packed:
+                    status, _, providers = call('GET', 'models/providers')
+                    assert status == 200 and not providers['data']['stale'], providers
+                    assert providers['data']['providers'][0]['variants'][0]['models'] == ['old-id']
+                    Supplier.catalog['version']='fixture-v2'
+                    Supplier.catalog['providers'][0]['variants'][0]['models']=['new-id']
+                    status, _, providers = call('GET', 'models/providers')
+                    assert status == 200 and providers['data']['version'] == 'fixture-v2'
+                    assert providers['data']['providers'][0]['variants'][0]['models'] == ['new-id']
+                    for mode in ['failed', 'malformed']:
+                        Supplier.catalog_mode=mode
+                        status, _, providers = call('GET', 'models/providers')
+                        assert status == 200 and providers['data']['stale'] and providers['data']['version']=='fixture-v2', providers
+                    Supplier.catalog_mode='ok'
+                    assert all(not any(k.lower() in ('authorization','x-api-key','cookie') for k in headers) for headers in Supplier.catalog_headers)
+                    checks.append('public server updates applied without a client release; offline/malformed responses preserve cache; no credentials sent centrally')
                 metadata_provider = {'endpoints': {'responses': f'http://127.0.0.1:{supplier.server_port}/v1/responses'}, 'proxy': {'kind': 'none'}}
                 status, _, result = call('POST', 'models/parameters', {'provider': metadata_provider,
                     'protocol': 'openai-responses', 'models': ['gpt-5.4', 'metadata-false', 'metadata-effort', 'unknown-gpt-5.4']})
@@ -204,7 +244,7 @@ def main():
                 status, _, _ = call('POST', 'models/parameters', {'provider': metadata_provider,
                     'protocol': 'openai-responses', 'models': ['x']*33})
                 assert status == 422
-                checks.append('bundled exact-ID registry; API field precedence; explicit false; unknown and batch limits')
+                checks.append('server-cache exact-ID registry; API field precedence; explicit false; unknown and batch limits')
                 for name, protocol, endpoint in [('chat', 'openai-chat-completions', 'chat_completions'),
                     ('responses', 'openai-responses', 'responses'), ('messages', 'anthropic-messages', 'anthropic_messages')]:
                     provider = {'id': name, 'name': name, 'builtin': False, 'editable': True, 'removable': True,
@@ -222,7 +262,7 @@ def main():
                 for name in ('chat', 'responses', 'messages'):
                     result = probe(name)['data']; assert not result['verification']['verified'], result
                     result = probe(name, True)['data']; assert result['verification']['verified'], result
-                    assert result['verification']['contract'] == 'runtime-tools-stream-v2'
+                    assert result['verification']['contract'] == 'runtime-tools-stream-v3'
                 assert not Supplier.contract_errors
                 assert not list((base/'home/sessions').rglob('snapshot.json'))
                 checks.append('reply + valid dummy tool across Chat, Responses and Anthropic')
@@ -299,6 +339,7 @@ def main():
                 print('PASS: '+ '; '.join(checks))
             finally:
                 Supplier.release.set(); stop(); host_config.unlink(missing_ok=True)
+                if not args.packed: wrapper.unlink(missing_ok=True)
                 supplier.shutdown(); supplier.server_close()
 
 
