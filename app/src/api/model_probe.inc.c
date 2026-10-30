@@ -4,6 +4,7 @@
 #include "../../include/mdo/http_url.h"
 #include "../../include/mdo/model_http_sdk.h"
 #include <ctype.h>
+#include "model_parameters.inc.c"
 
 static xtlsverifydecision MdoApiModelAcceptTls(const xtlspeer* Peer, ptr Data)
 { (void)Peer; (void)Data; return XTLS_VERIFY_ACCEPT; }
@@ -94,23 +95,36 @@ done:
     return Client;
 }
 
-static bool MdoApiModelDiscoverRun(MdoApiContext* Context, MdoApiJsonBody Body)
+static bool MdoApiModelDiscoverRun(MdoApiContext* Context, MdoApiJsonBody Body, bool Parameters)
 {
-    xvalue* Provider; xvalue* Endpoints; xvalue* Data = NULL; xvalue* Items = NULL; xvalue* Parsed = NULL;
+    xvalue* Provider; xvalue* Endpoints; xvalue* Data = NULL; xvalue* Items = NULL; xvalue* Parsed = NULL; xvalue* List = NULL;
     xhttprequest* Request = NULL; xhttpclient* Client = NULL; xhttpresult* Result = NULL;
     cstr Endpoint = NULL, Key = NULL, Ref = NULL; char Url[2056], Authorization[4104]; char* Secret = NULL;
     cstr Code = "connection_failed", Message = "Could not connect; check the address, network, proxy and TLS settings";
     uint16 Reply = 502u, HttpStatus = 0u; bool Verify = true, Anthropic = false, Ok = false; size_t i;
     Provider = xrtValueObjectGet(Body.Value, XRT_STR_LITERAL("provider"));
     Endpoints = xrtValueObjectGet(Provider, XRT_STR_LITERAL("endpoints"));
-    Endpoint = MdoApiModelText(Endpoints, "chat_completions", 2048u);
-    if (!Endpoint) Endpoint = MdoApiModelText(Endpoints, "responses", 2048u);
-    if (!Endpoint) { Endpoint = MdoApiModelText(Endpoints, "anthropic_messages", 2048u); Anthropic = true; }
+    const xvalue* Selected = xrtValueObjectGet(Body.Value, XRT_STR_LITERAL("models"));
+    cstr Protocol = MdoApiModelText(Body.Value, "protocol", 64);
+    if (Parameters) {
+        if (xrtValueType(Selected) != XVALUE_ARRAY || !xrtValueCount(Selected) || xrtValueCount(Selected) > 32u ||
+            !Protocol || (strcmp(Protocol, "openai-chat-completions") && strcmp(Protocol, "openai-responses") && strcmp(Protocol, "anthropic-messages")))
+            return MdoApiReplyError(Context, 422u, "parameters_invalid", "Select 1 to 32 model IDs and an available protocol", NULL);
+        for (size_t n = 0; n < xrtValueCount(Selected); ++n) {
+            xstrview Id = {0};
+            if (!xrtValueGetString(xrtValueArrayGet(Selected, n), &Id) || !Id.Size || Id.Size > 256 || memchr(Id.Data, 0, Id.Size))
+                return MdoApiReplyError(Context, 422u, "parameters_invalid", "Model IDs must contain 1 to 256 characters", NULL);
+        }
+        Anthropic = !strcmp(Protocol, "anthropic-messages");
+        Endpoint = MdoApiModelText(Endpoints, Anthropic ? "anthropic_messages" : !strcmp(Protocol, "openai-responses") ? "responses" : "chat_completions", 2048u);
+    } else Endpoint = MdoApiModelText(Endpoints, "chat_completions", 2048u);
+    if (!Parameters && !Endpoint) Endpoint = MdoApiModelText(Endpoints, "responses", 2048u);
+    if (!Parameters && !Endpoint) { Endpoint = MdoApiModelText(Endpoints, "anthropic_messages", 2048u); Anthropic = true; }
     if (!Endpoint || !MdoHttpUrlValid(xrtStrView(Endpoint), true) || strchr(Endpoint, '?')) {
         Reply = 422u; Code = "endpoint_invalid"; Message = "Enter a full model API endpoint URL"; goto done;
     }
     snprintf(Url, sizeof(Url), "%s", Endpoint);
-    const char* Suffix = Anthropic ? "/messages" : (MdoApiModelText(Endpoints, "chat_completions", 2048u) ? "/chat/completions" : "/responses");
+    const char* Suffix = Anthropic ? "/messages" : ((Parameters ? !strcmp(Protocol, "openai-chat-completions") : MdoApiModelText(Endpoints, "chat_completions", 2048u) != NULL) ? "/chat/completions" : "/responses");
     size_t Length = strlen(Url), Tail = strlen(Suffix);
     if (Length <= Tail || strcmp(Url + Length - Tail, Suffix)) {
         Reply = 422u; Code = "catalog_unsupported"; Message = "This custom endpoint has no discoverable model catalog; add model IDs manually"; goto done;
@@ -125,6 +139,9 @@ static bool MdoApiModelDiscoverRun(MdoApiContext* Context, MdoApiJsonBody Body)
         if (!MdoSecretResolve(xrtStrView(Ref), 4096u, &Secret)) { Reply = 422u; Code = "credential_unavailable"; Message = "Saved key is unavailable; enter it again or check its reference"; goto done; }
         Key = Secret;
     }
+    /* OpenAI's public catalog has IDs only. Do not send another network
+     * request to learn that it has no parameter metadata. */
+    if (Parameters && !strncmp(Endpoint, "https://api.openai.com/v1/", 26u)) { Code = "not_exposed"; goto done; }
     xllm_error DiscoveryError = {0};
     Client = MdoApiModelDiscoveryClient(Context, Url, Verify,
         xrtValueObjectGet(Provider, XRT_STR_LITERAL("proxy")), &DiscoveryError);
@@ -157,8 +174,9 @@ static bool MdoApiModelDiscoverRun(MdoApiContext* Context, MdoApiJsonBody Body)
     if (HttpStatus < 200u || HttpStatus >= 300u) goto done;
     xbytesview Bytes = xrtHttpResponseBody(Response);
     Parsed = xrtJsonParse(xrtStrViewN((cstr)Bytes.Data, Bytes.Size));
-    xvalue* List = xrtValueObjectGet(Parsed, XRT_STR_LITERAL("data"));
+    List = xrtValueObjectGet(Parsed, XRT_STR_LITERAL("data"));
     if (xrtValueType(List) != XVALUE_ARRAY) { Code = "catalog_invalid"; Message = "The supplier returned an unreadable model list"; goto done; }
+    if (Parameters) { Code = "ok"; goto done; }
     Data = xrtValueObject(); Items = xrtValueArray(); if (!Data || !Items) goto done;
     for (i = 0u; i < xrtValueCount(List) && i < 2048u; i++) {
         cstr Id = MdoApiModelText(xrtValueArrayGet(List, i), "id", 256u);
@@ -167,6 +185,22 @@ static bool MdoApiModelDiscoverRun(MdoApiContext* Context, MdoApiJsonBody Body)
     Ok = MdoApiValueSetTake(Data, "items", &Items) && MdoApiValueSetUInt(Data, "http_status", HttpStatus) &&
         MdoApiValueSetBool(Data, "truncated", xrtValueCount(List) > 2048u);
 done:
+    if (Parameters && Endpoint && strcmp(Code, "endpoint_invalid") && strcmp(Code, "key_invalid") &&
+        strcmp(Code, "credential_unavailable") && strcmp(Code, "authentication_failed")) {
+        xvalue* Registry = MdoParameterRegistry(); Data = xrtValueObject(); Items = xrtValueArray();
+        Ok = Data && Items;
+        for (size_t n = 0; Ok && n < xrtValueCount(Selected); ++n) {
+            xstrview Id; char Name[257]; xrtValueGetString(xrtValueArrayGet(Selected, n), &Id);
+            memcpy(Name, Id.Data, Id.Size); Name[Id.Size] = 0; const xvalue* Row = NULL;
+            for (size_t k = 0; k < xrtValueCount(List); ++k) {
+                const xvalue* Candidate = xrtValueArrayGet(List, k);
+                if (MdoParameterTextEqual(xrtValueObjectGet(Candidate, XRT_STR_LITERAL("id")), Name)) { Row = Candidate; break; }
+            }
+            xvalue* Resolved = MdoParameterResolve(Registry, Endpoint, Protocol, Name, Row, Code);
+            Ok = Resolved && MdoApiValueAppendTake(Items, &Resolved); xrtValueRelease(Resolved);
+        }
+        Ok = Ok && MdoApiValueSetTake(Data, "items", &Items); xrtValueRelease(Registry);
+    }
     xrtSecureZero(Authorization, sizeof(Authorization));
     if (Key && Key != Secret) xrtSecureZero((void*)Key, strlen(Key));
     MdoSecretRelease(&Secret); xrtValueRelease(Parsed); xrtValueRelease(Items);
@@ -301,7 +335,7 @@ typedef struct MdoModelProbeJob {
     XS_HttpReq Request;
     xhttp1head Head;
     MdoApiJsonBody Body;
-    bool Test, Sent;
+    bool Test, Parameters, Sent;
 } MdoModelProbeJob;
 static struct { xmutex* Lock; xtaskpool* Pool; size_t Count; bool Stopping; } g_MdoModelProbes;
 
@@ -338,11 +372,11 @@ static xtaskoutcome MdoApiModelProbeRun(xcancel* Cancel, ptr Value, xtaskvalue* 
 {
     MdoModelProbeJob* Job = Value; (void)Result; Job->Context.SendCancel = Cancel;
     if (!MdoApiDownloadLive(&Job->Context)) return XTASK_CANCELLED;
-    Job->Sent = Job->Test ? MdoApiModelTestRun(&Job->Context, Job->Body) : MdoApiModelDiscoverRun(&Job->Context, Job->Body);
+    Job->Sent = Job->Test ? MdoApiModelTestRun(&Job->Context, Job->Body) : MdoApiModelDiscoverRun(&Job->Context, Job->Body, Job->Parameters);
     return Job->Sent ? XTASK_SUCCESS : XTASK_FAILED;
 }
 
-static bool MdoApiModelProbeStart(MdoApiContext* Context, bool Test)
+static bool MdoApiModelProbeStart(MdoApiContext* Context, bool Test, bool Parameters)
 {
     MdoModelProbeJob* Job = xrtCalloc(1u, sizeof(*Job)); xfuture* Future = NULL; xtaskargs Args = {0};
     if (!Job) return MdoApiReplyError(Context, 503u, "probe_unavailable", "Model test resources are unavailable", NULL);
@@ -352,7 +386,7 @@ static bool MdoApiModelProbeStart(MdoApiContext* Context, bool Test)
     Job->Request.server = xsServerRetain(Context->Request->server);
     if (Context->Request->tls) Job->Request.tls = xrtTlsStreamRef(Context->Request->tls);
     else Job->Request.tcp = xrtNetStreamRef(Context->Request->tcp);
-    Job->Context.Request = &Job->Request; Job->Test = Test;
+    Job->Context.Request = &Job->Request; Job->Test = Test; Job->Parameters = Parameters;
     memcpy(Job->Context.RequestId, Context->RequestId, sizeof(Job->Context.RequestId));
     Job->Context.SendDeadline = MdoDeadlineAfterUs(Test ? 30000000u : 15000000u); Job->Context.CloseResponse = true;
     xrtMutexLock(g_MdoModelProbes.Lock);
@@ -371,5 +405,7 @@ static bool MdoApiModelProbeStart(MdoApiContext* Context, bool Test)
     return MdoApiReplyError(Context, 503u, "probe_busy", "Another model test is running; retry shortly", NULL);
 }
 
-bool MdoApiModelDiscoverRoute(MdoApiContext* Context) { return MdoApiModelProbeStart(Context, false); }
-bool MdoApiModelTestRoute(MdoApiContext* Context) { return MdoApiModelProbeStart(Context, true); }
+bool MdoApiModelDiscoverRoute(MdoApiContext* Context) { return MdoApiModelProbeStart(Context, false, false); }
+bool MdoApiModelTestRoute(MdoApiContext* Context) { return MdoApiModelProbeStart(Context, true, false); }
+
+bool MdoApiModelParametersRoute(MdoApiContext* Context) { return MdoApiModelProbeStart(Context, false, true); }

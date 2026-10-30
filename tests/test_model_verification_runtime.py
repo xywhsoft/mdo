@@ -25,6 +25,16 @@ class Supplier(BaseHTTPRequestHandler):
 
     def log_message(self, *_): pass
 
+    def do_GET(self):
+        rows = [{'id': 'gpt-5.4', 'context_length': 32000},
+            {'id': 'metadata-false', 'max_input_tokens': 12345, 'max_tokens': 4096,
+             'capabilities': {'thinking': {'supported': False}, 'tool_calling': False}},
+            {'id': 'metadata-effort', 'context_length': 64000, 'max_tokens': 16000,
+             'capabilities': {'effort': {'supported': True, 'low': True, 'high': True, 'max': False}}}]
+        raw = json.dumps({'data': rows}).encode()
+        self.send_response(200); self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', str(len(raw))); self.end_headers(); self.wfile.write(raw)
+
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
         self.calls.append(body)
@@ -173,6 +183,28 @@ def main():
                 wait_ready(port, process)
             try:
                 start(); config, etag = get()
+                metadata_provider = {'endpoints': {'responses': f'http://127.0.0.1:{supplier.server_port}/v1/responses'}, 'proxy': {'kind': 'none'}}
+                status, _, result = call('POST', 'models/parameters', {'provider': metadata_provider,
+                    'protocol': 'openai-responses', 'models': ['gpt-5.4', 'metadata-false', 'metadata-effort', 'unknown-gpt-5.4']})
+                assert status == 200, result
+                rows = {row['id']: row for row in result['data']['items']}
+                fields = rows['gpt-5.4']['fields']
+                assert fields['context_tokens']['value'] == 32000 and fields['context_tokens']['source'] == 'api', rows
+                assert fields['max_output_tokens']['source'] == 'upstream-recommendation', rows
+                assert fields['reasoning']['value']['efforts'] == ['none', 'low', 'medium', 'high', 'xhigh'], rows
+                assert rows['metadata-false']['fields']['tools']['value'] is False
+                assert rows['metadata-false']['fields']['reasoning']['value']['kind'] == 'none'
+                assert rows['metadata-effort']['fields']['reasoning']['value']['efforts'] == ['low', 'high']
+                assert not rows['unknown-gpt-5.4']['fields'], rows
+                metadata_provider['endpoints']['responses'] = 'https://api.openai.com/v1/responses'
+                status, _, result = call('POST', 'models/parameters', {'provider': metadata_provider,
+                    'protocol': 'openai-responses', 'models': ['gpt-6.1-sol']})
+                assert status == 200 and result['data']['items'][0]['fields']['context_tokens']['value'] == 1050000, result
+                assert 'none' not in result['data']['items'][0]['fields']['reasoning']['value']['efforts']
+                status, _, _ = call('POST', 'models/parameters', {'provider': metadata_provider,
+                    'protocol': 'openai-responses', 'models': ['x']*33})
+                assert status == 422
+                checks.append('bundled exact-ID registry; API field precedence; explicit false; unknown and batch limits')
                 for name, protocol, endpoint in [('chat', 'openai-chat-completions', 'chat_completions'),
                     ('responses', 'openai-responses', 'responses'), ('messages', 'anthropic-messages', 'anthropic_messages')]:
                     provider = {'id': name, 'name': name, 'builtin': False, 'editable': True, 'removable': True,

@@ -157,6 +157,7 @@ bool MdoApiModelSetupRoute(MdoApiContext* Context);
 bool MdoApiModelProbesInit(void);
 void MdoApiModelProbesUnit(void);
 bool MdoApiModelDiscoverRoute(MdoApiContext* Context);
+bool MdoApiModelParametersRoute(MdoApiContext* Context);
 bool MdoApiModelTestRoute(MdoApiContext* Context);
 bool MdoApiModelVerificationSnapshot(cstr Id, char Hash[65]);
 xvalue* MdoApiModelVerificationUpdate(cstr Id, cstr Hash, bool Tools,

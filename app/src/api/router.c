@@ -108,6 +108,7 @@ static const MdoApiRoute g_MdoApiRoutes[] = {
     { "/api/v1/models/config", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
       "GET, HEAD, OPTIONS", MdoApiModelConfigRoute, false },
     { "/api/v1/models/setup", XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiModelSetupRoute, false },
+    { "/api/v1/models/parameters", XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiModelParametersRoute, false },
     { "/api/v1/models/discover", XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiModelDiscoverRoute, false },
     { "/api/v1/models/test", XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiModelTestRoute, false },
     { "/api/v1/agents", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
@@ -676,7 +677,7 @@ bool MdoApiApplicationInvoke(const mdo_sdk_context_v1* Caller,cstr Method,cstr T
         const MdoApiRoute* R=&g_MdoApiRoutes[i];if(!MdoApiRouteMatch(&C,R->Path))continue;
         /* These handlers explicitly retain a physical HTTP connection. The SDK
          * transport chooses loopback before invoking them, never replays work. */
-        if(R->Proc==MdoApiEcosystemRoute||R->Proc==MdoApiModelDiscoverRoute||R->Proc==MdoApiModelTestRoute||
+        if(R->Proc==MdoApiEcosystemRoute||R->Proc==MdoApiModelDiscoverRoute||R->Proc==MdoApiModelParametersRoute||R->Proc==MdoApiModelTestRoute||
             R->Proc==MdoApiSessionBackupRoute||R->Proc==MdoApiLiveRoute||R->Proc==MdoApiDirectRoute||
             strstr(Target,"/attachments/"))return false;
         if(!(R->Methods&Head.MethodCode)){MdoApplicationError(Error,"method_not_allowed","Unsupported operation method","dispatch",405,false);return false;}
