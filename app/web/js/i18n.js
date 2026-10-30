@@ -78,7 +78,14 @@ function bindUi(node, slot, value) {
     bindings.set(slot, value);
     node.setAttribute?.("data-ui-localized", "");
   } else if (bindings) {
+    const previous = bindings.has(slot);
     bindings.delete(slot);
+    if (previous) {
+      const field = ({ text: "i18n", title: "i18nTitle", placeholder: "i18nPlaceholder", "aria-label": "i18nAriaLabel" })[slot];
+      const attribute = ({ text: "data-i18n", title: "data-i18n-title", placeholder: "data-i18n-placeholder", "aria-label": "data-i18n-aria-label" })[slot];
+      if (attribute) node.removeAttribute?.(attribute);
+      if (field && node.dataset) delete node.dataset[field];
+    }
     if (!bindings.size) { uiBindings.delete(node); node.removeAttribute?.("data-ui-localized"); }
   }
   return value == null ? "" : String(value);
@@ -115,13 +122,14 @@ export function translateStatic(root = document) {
   const selector = "[data-i18n], [data-i18n-title], [data-i18n-placeholder], [data-i18n-aria-label], [data-ui-localized]";
   const nodes = [root, ...root.querySelectorAll(selector)];
   for (const node of nodes) {
-    if (node.dataset?.i18n) node.textContent = t(node.dataset.i18n, {}, node.textContent);
+    const bindings = uiBindings.get(node);
+    if (node.dataset?.i18n && !bindings?.has("text")) node.textContent = t(node.dataset.i18n, {}, node.textContent);
     for (const [attribute, key] of [
       ["title", node.dataset?.i18nTitle],
       ["placeholder", node.dataset?.i18nPlaceholder],
       ["aria-label", node.dataset?.i18nAriaLabel],
     ]) {
-      if (key) node.setAttribute(attribute, t(key, {}, node.getAttribute(attribute) ?? ""));
+      if (key && !bindings?.has(attribute)) node.setAttribute(attribute, t(key, {}, node.getAttribute(attribute) ?? ""));
     }
     refreshUi(node);
   }

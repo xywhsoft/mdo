@@ -43,9 +43,9 @@ function environment(context) {
 test("explicit UI bindings change copy and nested parameters without changing edits or author text", async context => {
   const document = environment(context);
   await loadLocale("zh-CN");
-  const save = element("button", { text: uiMessage("sessionAction.save") });
+  const save = element("button", { text: uiMessage("sessionAction.save"), attrs: { "data-i18n": "sessionAction.close" } });
   const title = uiMessage("settings.knowledge");
-  const search = element("input", { attrs: { placeholder: uiMessage("ui.singleResourceStore.searchValue1", { value1: title }) } });
+  const search = element("input", { attrs: { placeholder: uiMessage("ui.singleResourceStore.searchValue1", { value1: title }), "data-i18n-placeholder": "sessionAction.close" } });
   const author = element("p", { text: "保存 <script>author</script>" });
   search.value = "保存 my unsent draft"; search.selectionStart = 3; search.scrollTop = 19;
   document.body.append(save, search, author); search.focus();

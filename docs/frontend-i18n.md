@@ -17,7 +17,7 @@
 
 ```js
 const save = element("button", { text: uiMessage("sessionAction.save") });
-setUiAttribute(search, "placeholder", uiMessage("store.searchPlaceholder"));
+setUiAttribute(search, "placeholder", uiMessage("ui.externalDirectoryTools.searchTools"));
 setUiText(status, uiMessage("draft.saveFailed", { error: details }));
 ```
 
