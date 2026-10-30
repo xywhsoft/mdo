@@ -1,0 +1,10 @@
+{
+  "kind": "subagents",
+  "id": "subagent:general",
+  "name": "通用助手",
+  "alias": "general",
+  "entry": "agent.md",
+  "platforms": ["any"],
+  "author": "墨斗",
+  "description": "执行主 Agent 委派的独立任务，跟随父任务的模型和授权，返回结果与验证情况。"
+}

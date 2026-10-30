@@ -78,7 +78,19 @@ export function createExtensionPanels() {
   const actions = new Map();
   const browsers = new Map(EXTENSION_KINDS.map(kind => [kind, createExtensionBrowser({ kind, onClose: () => reads.cancel(`detail:${kind}`) })]));
   const current = (kind, target) => !disposed && !paused && selected === kind && target === targetKey();
+  let roleRestore = null;
+  function restoreRole(kind,item) {
+    roleRestore?.dispose();
+    const target=targetKey(), layer=openLayer({title:uiMessage("ui.extensionPanels.restoreBuiltinRole", {}, "恢复默认"),icon:"terminal",width:"32rem",height:"auto",mobile:"fit",maximizable:false,owner:roots.get(kind),onClosed(){if(roleRestore===layer)roleRestore=null;}});
+    roleRestore=layer;
+    layer.body.append(element("p",{text:uiMessage("ui.extensionPanels.restoreBuiltinRoleConfirm", {}, "恢复此角色的内置文件？本地修改将被替换，当前启停状态保持不变。")}));
+    layer.footer.append(button(label("cancel","取消"),()=>layer.close()),button(uiMessage("ui.extensionPanels.restoreBuiltinRole", {}, "恢复默认"),()=>{
+      layer.dispose();if(!current(kind,target))return;
+      return act(kind,scope=>changeDirectory(kind,item,"restore_builtin",{trust_code:true},{signal:scope.signal}));
+    },true));
+  }
   function cancelReads() {
+    roleRestore?.dispose();roleRestore=null;
     reads.cancel();
     for (const controller of actions.values()) controller.abort();
     for (const state of states.values()) {
@@ -227,6 +239,7 @@ export function createExtensionPanels() {
           await changeDirectory(kind,item,"enable",{enabled:!item.enabled});
         }));
         const controls = editable ? [edit, button(label("export", "导出"), () => exportItem(kind, item))] : [];
+        if (item.builtin_restorable) controls.push(button(uiMessage("ui.extensionPanels.restoreBuiltinRole", {}, "恢复默认"),()=>restoreRole(kind,item)));
         if (["agents","subagents"].includes(kind)) controls.push(button(uiMessage("ui.extensionPanels.contextPreview", {}, "上下文预览"),()=>openRolePlan({kind,id:item.id,owner:roots.get(kind)})));
         if (store && item.valid && item.shareable!==false && editable && !(kind==="agents"&&(item.directory_id==="default"||item.id==="agent:default"))) controls.push(button(uiMessage("ui.pluginWorkbench.shareToCreatorCenter", {}, "分享到创作中心"), () => store.publish(item, owner)));
         if (store) controls.push(...store.localActions(item));

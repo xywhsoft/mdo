@@ -8,6 +8,9 @@
 bool MdoExtensionsInit(void);
 bool MdoExtensionsSeedBuiltins(char Error[512]);
 bool MdoExtensionsMigrateBuiltins(char Error[512]);
+bool MdoExtensionsEditableSource(cstr Kind,cstr Source);
+bool MdoExtensionsBuiltinRole(cstr Kind,cstr Directory,cstr Ref);
+bool MdoExtensionsRestoreBuiltin(cstr Kind,cstr Directory,cstr Expected,bool Trust,xcancel* Cancel,xvalue** Result,char Error[512]);
 bool MdoExtensionsBuiltinUpdatePending(cstr Kind,cstr Directory,const xvalue* Row);
 void MdoExtensionsUnit(void);
 xvalue* MdoExtensionsList(cstr Kind,char Error[512]);

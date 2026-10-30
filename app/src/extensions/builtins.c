@@ -3,6 +3,55 @@
 #include "../../include/mdo/extension_manifest.h"
 #include "../../generated/builtin-extensions/index.h"
 
+bool MdoExtensionsEditableSource(cstr Kind,cstr Source)
+{
+    return Source&&(!strcmp(Source,"manual")||(!strcmp(Source,"builtin")&&Kind&&(!strcmp(Kind,"agents")||!strcmp(Kind,"subagents"))));
+}
+bool MdoExtensionsBuiltinRole(cstr Kind,cstr Directory,cstr Ref)
+{
+    if(!Kind||!Directory||!Ref||(strcmp(Kind,"agents")&&strcmp(Kind,"subagents")))return false;
+    char Identity[170];snprintf(Identity,sizeof(Identity),"%s:%s",!strcmp(Kind,"agents")?"agent":"subagent",Directory);
+    if(strcmp(Identity,Ref))return false;
+    for(size_t I=0;I<sizeof(MdoBuiltinExtensions)/sizeof(*MdoBuiltinExtensions);I++)
+        if(!strcmp(Kind,MdoBuiltinExtensions[I].Kind)&&!strcmp(Directory,MdoBuiltinExtensions[I].Id))return true;
+    return false;
+}
+bool MdoExtensionsRestoreBuiltin(cstr Kind,cstr Directory,cstr Expected,bool Trust,xcancel* Cancel,xvalue** Result,char Error[512])
+{
+    *Result=NULL;
+    xvalue* Before=MdoExtensionsRead(Kind,Directory,Error);
+    bool Allowed=Before&&MdoExtensionsEditableSource(Kind,MdoExtensionText(Before,"source",16))&&
+        MdoExtensionsBuiltinRole(Kind,Directory,MdoExtensionText(Before,"id",MDO_EXTENSION_REF_BYTES));
+    xrtValueRelease(Before);
+    if(!Allowed){snprintf(Error,512,"Only the matching local builtin role can be restored");return false;}
+    /* Called by the normal manager after revision, retirement and source checks.
+     * The archive and digest come only from this executable's VFS. */
+    for(size_t I=0;I<sizeof(MdoBuiltinExtensions)/sizeof(*MdoBuiltinExtensions);I++){
+        if(strcmp(Kind,MdoBuiltinExtensions[I].Kind)||strcmp(Directory,MdoBuiltinExtensions[I].Id))continue;
+        char* Packaged=xrtFormat("/app/generated/builtin-extensions/%s",MdoBuiltinExtensions[I].File);
+        char* Task=xrtXidMakeString(),*Relative=Task?xrtFormat("data/extension-tasks/%s/builtin.zip",Task):NULL;
+        xfileoptions Options;xrtFileOptionsInit(&Options);Options.Flags=XFILE_READ;
+        xfile Input=Packaged?xrtVfsOpen(MdoHomeApplicationVfs(),Packaged,&Options):NULL;
+        xfile Output=Input&&Relative?MdoHomeOpenWrite(Relative,XFILE_WRITE|XFILE_CREATE|XFILE_EXCLUSIVE):NULL;
+        bool Created=Output!=NULL,Ok=Input&&Output;unsigned char Buffer[65536];size_t N=0;
+        while(Ok){Ok=(!Cancel||!xrtCancelRequested(Cancel))&&xrtRead(Input,Buffer,sizeof(Buffer),&N);if(!Ok||!N)break;Ok=xrtWriteFull(Output,Buffer,N,NULL);}
+        if(Output&&!xrtClose(Output))Ok=false;
+        if(Input&&!xrtClose(Input))Ok=false;
+        xvalue* Credits=xrtValueObject();
+        Ok=Ok&&Credits&&xrtValueObjectSetNew(Credits,XRT_STR_LITERAL("source"),xrtValueString(XRT_STR_LITERAL("builtin")))&&
+            xrtValueObjectSetNew(Credits,XRT_STR_LITERAL("expected_revision"),xrtValueString(xrtStrView(Expected)))&&
+            xrtValueObjectSetNew(Credits,XRT_STR_LITERAL("sha256"),xrtValueString(xrtStrView(MdoBuiltinExtensions[I].Sha256)))&&
+            MdoExtensionsInstall(Kind,Directory,Relative,Credits,Trust,Cancel,Result,Error);
+        xrtValueRelease(Credits);
+        if(Created)(void)MdoHomeRemove(Relative,false);
+        char* Parent=Relative?xrtPathParent(Relative):NULL;if(Parent)(void)MdoHomeRemoveEmptyDirectory(Parent);
+        xrtFree(Parent);xrtFree(Packaged);xrtFree(Task);xrtFree(Relative);
+        if(!Ok&&!Error[0])snprintf(Error,512,"Cannot restore the packaged builtin role");
+        return Ok;
+    }
+    snprintf(Error,512,"No packaged builtin role matches this directory");return false;
+}
+
 /* A separate receipt remembers first installation even after uninstall. It
  * prevents a packaged fallback from reviving removed/disabled extensions. */
 static bool MdoExtensionsSeedBuiltinsMode(bool Migrate,char Error[512])

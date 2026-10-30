@@ -73,7 +73,7 @@ bool MdoExtensionsSave(cstr Kind,cstr Id,const xvalue* Manifest,const xvalue* Ed
     xvalue* State=MdoExtReadJson(MDO_EXT_STATE,MDO_EXT_STATE_LIMIT,true);char* Key=MdoExtKey(Kind,Id);const xvalue* Before=State&&Key?xrtValueObjectGet(State,xrtStrView(Key)):NULL;
     cstr Source=Before?MdoExtensionText(Before,"source",16):"manual";bool Pending=false;xrtValueGetBool(xrtValueObjectGet(Before,XRT_STR_LITERAL("pending_remove")),&Pending);
     MdoExtTree Tree={0};char PriorHash[65]={0},NewHash[65]={0};
-    bool Ok=Root&&Key&&State&&xrtValueType(State)==XVALUE_OBJECT&&Source&&!strcmp(Source,"manual")&&!Pending&&!MdoExtBusy(Kind,Id)&&MdoExtIdentityLocked(Kind,Id,Manifest,NULL,Error)&&MdoExtStat(Root,&Exists,&Info)&&
+    bool Ok=Root&&Key&&State&&xrtValueType(State)==XVALUE_OBJECT&&MdoExtensionsEditableSource(Kind,Source)&&!Pending&&!MdoExtBusy(Kind,Id)&&MdoExtIdentityLocked(Kind,Id,Manifest,NULL,Error)&&MdoExtStat(Root,&Exists,&Info)&&
         (Expected[0]?(Exists&&MdoExtCanonical(Kind,Id)&&MdoExtCollect(Root,&Tree,Cancel,Error)&&MdoExtFingerprint(Root,&Tree,PriorHash,Cancel)&&!strcmp(Expected,PriorHash)):!Exists);
     char* Task=Ok?xrtXidMakeString():NULL,*Base=Task?xrtFormat(MDO_EXT_TASKS "/%s",Task):NULL,*Incoming=Base?xrtFormat("%s/incoming",Base):NULL;
     Ok=Ok&&Base&&Incoming&&MdoExtStage(Base,Kind,Id)&&MdoExtCloneDirectory(Root,Incoming,&Tree,Cancel);

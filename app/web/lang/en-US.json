@@ -3368,5 +3368,8 @@
   "modelWizard.next": "Next",
   "modelSetup.modelsAdded": "Added {count} models.",
   "modelParameters.cardSummary": "Context {context} · Output budget {output} · Reasoning {reasoning}",
-  "modelWizard.alreadyAdded": "Already added"
+  "modelWizard.alreadyAdded": "Already added",
+  "ui.extensionPanels.restoreBuiltinRole": "Restore default",
+  "ui.extensionPanels.restoreBuiltinRoleConfirm": "Restore this role’s built-in files? Local changes will be replaced. Its enabled or disabled state will be kept.",
+  "action.confirm": "Confirm"
 }

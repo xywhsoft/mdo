@@ -3368,5 +3368,8 @@
   "modelWizard.next": "Далее",
   "modelSetup.modelsAdded": "Добавлено моделей: {count}.",
   "modelParameters.cardSummary": "Контекст {context} · Бюджет вывода {output} · Рассуждение {reasoning}",
-  "modelWizard.alreadyAdded": "Уже добавлена"
+  "modelWizard.alreadyAdded": "Уже добавлена",
+  "ui.extensionPanels.restoreBuiltinRole": "Восстановить по умолчанию",
+  "ui.extensionPanels.restoreBuiltinRoleConfirm": "Восстановить встроенные файлы этой роли? Локальные изменения будут заменены. Состояние включения сохранится.",
+  "action.confirm": "Подтвердить"
 }

@@ -6,6 +6,32 @@ import { resourceCredits, customizableResource } from "../app/web/js/features/se
 import { expandSkillAuthoringDraft } from "../app/web/js/features/settings/skill-authoring.js";
 const flush=()=>new Promise(r=>setImmediate(r));
 
+test("builtin roles can be customized while managed store works stay read only",()=>{
+  for(const kind of ["agents","subagents"]){
+    assert(customizableResource({kind,source:"builtin",editable:true}));
+    assert(!customizableResource({kind,source:"builtin",editable:false}));
+    assert(!customizableResource({kind,source:"builtin",store_managed:true}));
+    assert(!customizableResource({kind,source:"store",editable:true}));
+  }
+  assert(!customizableResource({kind:"skills",source:"builtin"}));
+});
+
+test("builtin role restoration uses a window with fixed actions and closes on navigation",async t=>{
+  const saved={document:globalThis.document,window:globalThis.window,fetch:globalThis.fetch};
+  const doc=testDocument(),roots=new Map(["subagents","agents"].map(k=>[k,new TestElement("div")]));
+  doc.querySelector=s=>roots.get(s.match(/^\[data-extension-manager="([^"]+)"\]$/)?.[1])||null;
+  globalThis.document=doc;globalThis.window=new EventTarget();
+  const role={kind:"subagents",id:"subagent:general",directory_id:"general",source:"builtin",editable:true,builtin_restorable:true,shareable:false,valid:true,enabled:true,name:"General"};
+  globalThis.fetch=async()=>Response.json({ok:true,data:{items:[role],total:1}});
+  const panels=createExtensionPanels();t.after(()=>{panels.destroy();Object.assign(globalThis,saved);});
+  panels.selectSection("subagents");await flush();await flush();
+  const restore=descendants(roots.get("subagents")).find(n=>n.tagName==="BUTTON"&&n.textContent==="恢复默认");assert(restore);
+  restore.click();const dialog=doc.body.querySelector("dialog"),footer=dialog.querySelector("footer");
+  assert(dialog.textContent.includes("当前启停状态保持不变"));assert(footer.textContent.includes("恢复默认"));
+  assert(!dialog.querySelector(".mdo-layer-body").contains(footer));
+  panels.selectSection("agents");assert(!doc.body.querySelector("dialog"));
+});
+
 test("Skill and Agent-tool local lists restrict installed works, retain user edits and show distinct credits",async t=>{
   const old={document:globalThis.document,window:globalThis.window,fetch:globalThis.fetch};
   const roots=new Map(["agents","subagents","skills","tools","commands"].map(k=>[k,new TestElement("div")])),doc=testDocument();

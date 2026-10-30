@@ -53,11 +53,11 @@ bool MdoExtensionsManage(const xvalue* Input,const xvalue* Credits,xcancel* Canc
  if(!MdoExtensionDirectoryId(Id))return MdoExtOpFailure(Error,"Invalid extension directory identity");
  if(MdoExtensionsRecoveryBlocked(Kind,Id,Error))return false;
  const cstr Flags[]={"enabled","trust_code"};for(size_t I=0;I<2;I++){bool Flag;const xvalue* V=xrtValueObjectGet(Input,xrtStrView(Flags[I]));if(V&&!xrtValueGetBool(V,&Flag))return MdoExtOpFailure(Error,"Activation and code approval must be boolean values");}
- bool Create=!strcmp(Action,"create"),Save=!strcmp(Action,"save"),Import=!strcmp(Action,"import"),Install=!strcmp(Action,"install"),Remove=!strcmp(Action,"remove"),Enable=!strcmp(Action,"enable"),Edit=!strncmp(Action,"file.",5),CancelRemove=!strcmp(Action,"cancel_remove"),Bind=!strcmp(Action,"bind");
+ bool Create=!strcmp(Action,"create"),Save=!strcmp(Action,"save"),Import=!strcmp(Action,"import"),Install=!strcmp(Action,"install"),Remove=!strcmp(Action,"remove"),Enable=!strcmp(Action,"enable"),Edit=!strncmp(Action,"file.",5),CancelRemove=!strcmp(Action,"cancel_remove"),Bind=!strcmp(Action,"bind"),Reset=!strcmp(Action,"restore_builtin");
 #if defined(__ANDROID__)
  if(!strcmp(Kind,"external-tools")&&(Create||Save||Import||Install||Edit))return MdoExtOpFailure(Error,"Android external programs are installed and updated through the full APK");
 #endif
- if(!Create&&!Save&&!Import&&!Install&&!Remove&&!Enable&&!Edit&&!CancelRemove&&!Bind)return MdoExtOpFailure(Error,"Unknown directory operation");
+ if(!Create&&!Save&&!Import&&!Install&&!Remove&&!Enable&&!Edit&&!CancelRemove&&!Bind&&!Reset)return MdoExtOpFailure(Error,"Unknown directory operation");
  if(Cancel&&xrtCancelRequested(Cancel))return MdoExtOpFailure(Error,"Extension operation cancelled before changing files");
  if(!MdoExtensionsMutationBegin())return MdoExtOpFailure(Error,"Another extension operation is still running");
  bool Ok=false,Trust=MdoExtOpBool(Input,"trust_code",false),WasEnabled=false,Suspended=false;char RuntimeError[512]={0};xvalue* Before=MdoExtOpItem(Kind,Id,RuntimeError);
@@ -75,14 +75,15 @@ bool MdoExtensionsManage(const xvalue* Input,const xvalue* Credits,xcancel* Canc
   xrtFree(Workspace);goto done;
  }
  if(Install&&Before&&Source&&strcmp(Source,"store")&&MdoExtensionText(Credits,"source",16)&&!strcmp(MdoExtensionText(Credits,"source",16),"store")){MdoExtOpFailure(Error,"A local extension already owns this directory identity; store installation will not overwrite it");goto done;}
- if((Edit||(Save&&Before))&&(!Before||!Source||strcmp(Source,"manual"))){MdoExtOpFailure(Error,"Only locally authored manual extensions can be edited");goto done;}
+ if((Edit||(Save&&Before))&&(!Before||!MdoExtensionsEditableSource(Kind,Source))){MdoExtOpFailure(Error,"Only locally authored extensions and builtin roles can be edited");goto done;}
  if((Import||Install)&&Source&&!strcmp(Source,"store")){cstr NewSource=MdoExtensionText(Credits,"source",16);if(!NewSource||strcmp(NewSource,"store")){MdoExtOpFailure(Error,"Managed store installations can only be replaced with a verified store update");goto done;}}
+ if(Reset&&(!Before||!MdoExtensionsEditableSource(Kind,Source)||!MdoExtensionsBuiltinRole(Kind,Id,MdoExtensionText(Before,"id",MDO_EXTENSION_REF_BYTES)))){MdoExtOpFailure(Error,"Only the matching local builtin role can be restored");goto done;}
  if(!Before&&!Create&&!Save&&!Import&&!Install){MdoExtOpFailure(Error,"Extension directory is not installed");goto done;}
  if(CancelRemove){Ok=MdoExtensionsCancelRemove(Kind,Id,Error);if(Ok)*Result=MdoExtOpItem(Kind,Id,Error);goto done;}
  if(Enable){bool Enabled=MdoExtOpBool(Input,"enabled",true);Ok=MdoExtOpRestore(Kind,Id,Enabled,Error);
   if(!Ok){char Rollback[512];if(!MdoExtOpRestore(Kind,Id,WasEnabled,Rollback)&&Error)snprintf(Error,512,"Activation failed and its runtime needs recovery: %.400s",Rollback);}else *Result=MdoExtOpItem(Kind,Id,Error);goto done;}
- if((Remove||Edit||(Before&&(Save||Import||Install)))&&(!Expected||strlen(Expected)!=64)){MdoExtOpFailure(Error,"Inspect the current directory and supply its fingerprint before replacing, editing or uninstalling it");goto done;}
- if((Remove||Edit||(Before&&(Save||Import||Install)))&&Expected){char Actual[65];if(!MdoExtensionsFingerprint(Kind,Id,Actual,Cancel,Error)||strcmp(Actual,Expected)){MdoExtOpFailure(Error,"Extension directory changed; refresh it before applying this operation");goto done;}}
+ if((Remove||Edit||Reset||(Before&&(Save||Import||Install)))&&(!Expected||strlen(Expected)!=64)){MdoExtOpFailure(Error,"Inspect the current directory and supply its fingerprint before replacing, editing or uninstalling it");goto done;}
+ if((Remove||Edit||Reset||(Before&&(Save||Import||Install)))&&Expected){char Actual[65];if(!MdoExtensionsFingerprint(Kind,Id,Actual,Cancel,Error)||strcmp(Actual,Expected)){MdoExtOpFailure(Error,"Extension directory changed; refresh it before applying this operation");goto done;}}
  if(Before&&!Create){
   if(!MdoExtOpRestore(Kind,Id,false,Error)){char Ignored[512];(void)MdoExtOpRestore(Kind,Id,WasEnabled,Ignored);goto done;}Suspended=true;
   if(MdoExtensionsInUse(Kind,Id)){
@@ -92,6 +93,7 @@ bool MdoExtensionsManage(const xvalue* Input,const xvalue* Credits,xcancel* Canc
   }
  }
  if(Create){cstr Text=MdoExtensionText(Input,"entry_text",1048576);Ok=MdoExtensionsCreate(Kind,Id,xrtValueObjectGet(Input,XRT_STR_LITERAL("manifest")),Text,Text?strlen(Text):0,Trust,Result,Error);}
+ else if(Reset)Ok=MdoExtensionsRestoreBuiltin(Kind,Id,Expected,Trust,Cancel,Result,Error);
  else if(Save)Ok=MdoExtensionsSave(Kind,Id,xrtValueObjectGet(Input,XRT_STR_LITERAL("manifest")),xrtValueObjectGet(Input,XRT_STR_LITERAL("edits")),Expected?Expected:"",Trust,Cancel,Result,Error);
  else if(Import)Ok=MdoExtensionsImportDirectoryEntry(Kind,Id,MdoExtensionText(Input,"directory",4096),xrtValueObjectGet(Input,XRT_STR_LITERAL("manifest")),MdoExtensionText(Input,"entry_text",1048576),Expected?Expected:"",Trust,Cancel,Result,Error);
  else if(Install){xvalue* Provenance=Credits?xrtValueClone(Credits):xrtValueObject();Ok=Provenance!=NULL;if(!Credits)Ok=Ok&&MdoExtOpPut(Provenance,"source","manual");
