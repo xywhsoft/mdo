@@ -11,6 +11,20 @@ import application_sdk
 import application_contracts
 
 class ApplicationSdkContractTests(unittest.TestCase):
+    def test_model_catalog_routes_describe_read_and_parameter_lookup(self):
+        rows={row['id']:row for row in application_sdk.services(ROOT)}
+        request,response=application_contracts.contract(rows['product.models.providers.get'])
+        self.assertNotIn('body',request['properties'])
+        catalog=response['$defs']['ModelProviderCatalog']
+        self.assertEqual(catalog['required'],['providers','version','stale'])
+        self.assertEqual(catalog['properties']['providers']['type'],'array')
+        request,response=application_contracts.contract(rows['product.models.parameters.post'])
+        parameters=request['$defs']['ModelParametersInput']
+        self.assertEqual(parameters['required'],['provider','models','protocol'])
+        self.assertEqual(parameters['properties']['models']['maxItems'],32)
+        self.assertIn('refresh_catalog',parameters['properties'])
+        self.assertEqual(response['$defs']['ModelParameterCatalog']['required'],['items'])
+
     def test_generated_sdk_removes_retired_source_headers_and_symbols(self):
         directory=ROOT/'.build'/('sdk-generation-contract-'+uuid.uuid4().hex)
         public=directory/'app/include/mdo';public.mkdir(parents=True)

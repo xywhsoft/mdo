@@ -46,6 +46,8 @@ DEFS={
  'Recovery':document('project_id:s session_id:s recovery_token:s history_epoch:s revision:u last_sequence:u resume_required:b automatic_resume:b automatic_retry_safe:b items:a'),
  'Binary':document('base64:s content_type:s bytes:u filename:s'),
  'Config':document('schema_version:u patch:o effective:o revision:u runtime_override:b items:a providers:a keys:o'),
+ 'ModelProviderCatalog':obj({'providers':array(ref('Document')),'version':S,'stale':B},('providers','version','stale')),
+ 'ModelParameterCatalog':obj({'items':array(ref('Document'))},('items',)),
  'Ecosystem':document('items:a types:a installed:a catalogs:a operation:j draft:j state:s id:s'),
  'Directory':document('path:s parent:s separator:s directories:ss shortcuts:a truncated:b'),
  'Attachment':document('id:s mime_type:s file_name:s size:u url:s created_at:i'),
@@ -94,6 +96,10 @@ INPUTS={
  'SkillValidate':document('content:s'),
  'Migrate':document('source:s source_path:s destination:s project_id:s approved:b dry_run:b'),
  'ModelProbe':document('provider:o key:s model_id:s tools:b'),
+ 'ModelParameters':obj({'provider':ref('Document'),'key':S,
+    'models':{**array({**S,'minLength':1,'description':'Model ID, at most 256 UTF-8 bytes.'}),'minItems':1,'maxItems':32},
+    'protocol':{'type':'string','enum':['openai-chat-completions','openai-responses','anthropic-messages']},
+    'refresh_catalog':B},('provider','models','protocol'),True),
  'ModelSetup':document('schema_version:u patch:o providers:a keys:o credential:o secret_ref:s'),
  'AccountLogin':document('identifier:s password:s remember:b',('remember',),True),
  'AccountCallback':document('callback_url:s',('callback_url',),True),
@@ -137,6 +143,7 @@ BODY_GROUPS={
  'RolePreview':'AgentPlanRoute',
  'Command':'CommandInvocationRoute','SkillInvoke':'SkillInvokeRoute','SkillValidate':'SkillValidateRoute',
  'Migrate':'LegacyMigrationsRoute SkillMigrateRoute McpMigrateRoute','ModelProbe':'ModelDiscoverRoute ModelTestRoute',
+ 'ModelParameters':'ModelParametersRoute',
  'ModelSetup':'ModelSetupRoute','AccountLogin':'AccountRoute','Remote':'RemoteRoute',
  'Update':'UpdateRoute','Transfer':'DeviceTransfersRoute',
  'Ecosystem':'EcosystemRoute','Purge':'ProjectPurgeRoute ProjectPurgeCancelRoute ProjectPurgeIntentPrepareRoute ProjectPurgeIntentRoute',
@@ -150,7 +157,7 @@ BODY['CommandProjectRoute']='Enabled'
 BODY['SkillProjectRoute']='Enabled'
 BODY['ExtensionsRoute']='ExtensionDirectory'
 NO_BODY=set('''CommandsRoute DistributionRoute CliToolsRoute LiveRoute DirectRoute UpdateExitRoute BootstrapRoute SettingsRoute
-ModelsRoute ModelConfigRoute AgentsRoute BackupUploadRoute BackupUploadSealRoute BackupPreviewsRoute BackupPreviewRoute UpdateDownloadRoute UpdateInstallRoute
+ModelsRoute ModelConfigRoute ModelProvidersRoute AgentsRoute BackupUploadRoute BackupUploadSealRoute BackupPreviewsRoute BackupPreviewRoute UpdateDownloadRoute UpdateInstallRoute
 BackupRestoreApplyRoute BackupRestoresRoute BackupRestoreRoute BackupPreviewStartRoute ModulesRoute ToolsRoute SkillsRoute McpRoute DirectoriesRoute
 ProjectPurgePreviewRoute ProjectPurgeResultRoute ProjectWorkspaceFilesRoute MemoryOpenDirectoryRoute MemoryEntryRoute
 RunsRoute TasksRoute ApprovalsRoute AsksRoute WorkspaceFilesRoute ArtifactsRoute PermissionsRoute DiagnosticsRoute StorageRoute
@@ -171,6 +178,7 @@ RESULT_GROUPS={
  'Remote':'RemoteRoute','Transfer':'DeviceTransfersRoute','Account':'AccountRoute','Upload':'BackupUploadsRoute BackupUploadRoute BackupUploadChunkRoute BackupUploadSealRoute',
  'Preview':'BackupPreviewStartRoute BackupPreviewRoute','Restore':'BackupRestoreReviewRoute BackupRestoreApplyRoute BackupRestoreRoute',
  'Config':'SettingsRoute ModelConfigRoute SettingsPreviewRoute SettingsMutationRoute ModelSetupRoute','Ecosystem':'EcosystemRoute',
+ 'ModelProviderCatalog':'ModelProvidersRoute','ModelParameterCatalog':'ModelParametersRoute',
  'Directory':'DirectoriesRoute',
  'Document':'AgentPlanRoute',
  'Attachment':'AttachmentsRoute AttachmentInfoRoute',

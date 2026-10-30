@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-10-30T11:44:28.997417+00:00",
+  "version_name": "0.8.1",
+  "version_code": "05000801",
+  "build_id": 70000097,
+  "filename": "mdo.exe",
+  "bytes": 6590767,
+  "sha256": "bac3660bcbb039b921bfef204e5c5acbd118b84f21a3b6f059edb4acf5fca81b",
+  "inputs": {
+    "application": "ed2804a2001db963ff35c91b2436e245eec961963f25768cb07340beab12e3a5",
+    "dependency lock": "eb8b4af857eaa01b2adcd909ba1d24840f221281ce9add6b6827cd671422546d",
+    "host profile": "d765984879c9d3dedc04c523b0713b4e2662c4b8eb1ab91ff6d16d4c22dd79e2"
+  },
+  "source_head": "13ef731fed11af8517a261ec7e262d4125225574",
+  "includes_existing_uncommitted_changes": true,
+  "sdk_contract_sha256": "41be96904d51f78b0befebecd6c10d4b180c53d6a244308a02b5683a06e1c836",
+  "checks": {
+    "sdk_contract_tests": 10,
+    "packed_dependencies": {
+      "fresh_home_ready": true,
+      "nine_catalogue_identity_contracts": true,
+      "direct_and_reverse_dependency_details": true,
+      "cascade_disable_commits_three_preferences": true,
+      "same_plan_returns_same_receipt": true,
+      "enable_restores_required_closure": true,
+      "offline_migration_refuses_real_active_home": true,
+      "cross_kind_knowledge_edit_is_atomic_and_rejected": true,
+      "restart_recovers_identity_and_activation": true
+    },
+    "native_start": {
+      "passed": true,
+      "scope": "native WebView2 four launchers",
+      "tools": [
+        "打开浏览器",
+        "打开文件",
+        "打开终端",
+        "打开变更"
+      ],
+      "empty_home": true,
+      "terminal_ended": true
+    },
+    "embedded_release_and_ui_hashes": true
+  },
+  "published": false,
+  "other_platforms_rebuilt": false,
+  "full_preflight_repeated": false,
+  "previous_preflight_report": "docs/build-records/2026-10-30-0.8.1-resumed-preflight.md"
+}
