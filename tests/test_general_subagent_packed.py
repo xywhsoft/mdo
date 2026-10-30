@@ -1,7 +1,10 @@
 """Bundled general assistant: real packed startup, delegation and opt-out.
 
-All model requests go to the loopback fixture. Homes, workspaces and program
-copies stay under the project build directory; no user installation is changed.
+All model requests go to the loopback fixture. Windows fixtures stay under the
+project build directory. Linux uses native temporary storage: WSL's Windows
+9p mounts do not support the atomic no-replace rename required by installation.
+Only the executable and small disposable Homes are copied, without a new runtime
+or repository checkout. No user installation is changed.
 """
 from __future__ import annotations
 
@@ -160,7 +163,8 @@ def wait_run(port, run, timeout=18, approve_agent=False):
 
 
 def check(packed, previous=None, report=None):
-    base = Path(tempfile.mkdtemp(prefix='general-subagent-', dir=ROOT/'.build'))
+    scratch = ROOT/'.build' if os.name == 'nt' else Path(tempfile.gettempdir())
+    base = Path(tempfile.mkdtemp(prefix='general-subagent-', dir=scratch))
     home = base/'home'
     workspace = base/'workspace'
     workspace.mkdir()
@@ -331,7 +335,7 @@ def check(packed, previous=None, report=None):
         for copy in copies:
             if copy.exists():
                 release_packed_copies(copy)
-        if passed and base.resolve().parent == (ROOT/'.build').resolve() and base.name.startswith('general-subagent-'):
+        if passed and base.resolve().parent == scratch.resolve() and base.name.startswith('general-subagent-'):
             shutil.rmtree(base)
         elif not passed:
             print('Failure fixture preserved:', base, flush=True)
