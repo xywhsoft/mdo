@@ -72,3 +72,34 @@
 组件复用现有加载器的 ID 命名空间、请求取消、关闭保护和表格清理，不嵌套 HTML/body/iframe 或重复加载 layui。默认表格分页，数据区独立滚动；弹窗滚动区域限制在视口内。显示保存通知时重新计算表格高度，分页栏仍在可视区域。旧后台缓存需对整个后台 Ctrl+F5；兼容提示不会自动重载或丢弃其他标签草稿。
 
 第二轮部署及边界见 [模型目录表格部署记录](build-records/2026-10-30-model-directory-tables-deployment.md)。首轮部署记录为历史状态，当前数量以本节为准。
+
+## Catalog languages
+
+Suppliers and API products carry an optional `i18n` map keyed by registered locale
+IDs. `default_locale` and `locales` travel through the native providers API and
+are cached with the complete public catalog. Existing plain display strings are
+retained for schema-1 clients. Three complete content languages ship initially:
+Simplified Chinese, English and Russian. The server owns supplier/product text;
+fixed client UI copy continues to use the bundled language packs.
+
+`catalog-localization.js` validates maps, follows explicit enabled-language
+fallbacks, then uses the catalog default and legacy text. Disabled translations
+are admin drafts and never selected for normal client display. Remote strings are
+plain text. Known legacy product-label keys remain supported.
+
+Names and key guidance are resolved at render time, including already-open
+wizards. `presetProvider` writes the canonical name, never the currently translated
+one. Existing custom names win over catalog text. Changing language or refreshing
+translations therefore does not mutate saved endpoint/model/budget/credential
+configuration or invalidate verification evidence.
+
+`locale-registry.js` centralizes client language definitions and text direction.
+To add a whole-client language, add its pack and definition, check placeholders
+and layout, then ship the client. Server-only content translations can be updated
+without a client release. A server catalog language alone does not supply the
+whole client's interface pack.
+
+The admin model catalog has independent interface/content selectors, per-language
+edit tabs, coverage filters and a language-registry editor. New content languages
+start disabled; fill their translations before enabling them. Current admin
+components and standalone HTML share source and translation bindings.

@@ -158,6 +158,9 @@ def main():
              'fields': {'context_tokens': 1050000, 'max_output_tokens': 128000,
                         'reasoning': {'kind': 'effort', 'efforts': ['low', 'medium', 'high', 'xhigh', 'max']}}}]}
         cache['providers']=[{'id':'fixture','name':'Fixture','variants':[{'id':'api','label':'regular','base':'https://example.invalid/v1','protocol':'openai-responses','models':['old-id']}]}]
+        cache['default_locale']='zh-CN'
+        cache['locales']=[{'id':tag,'name':tag,'dir':'ltr','enabled':True} for tag in ['zh-CN','en-US','ru-RU']]
+        cache['providers'][0]['i18n']={tag:{'name':tag+' supplier'} for tag in ['zh-CN','en-US','ru-RU']}
         Supplier.catalog=copy.deepcopy(cache)
         (base/'home/data').mkdir(parents=True, exist_ok=True)
         (base/'home/data/model-catalog.json').write_text(json.dumps(cache))
@@ -211,6 +214,8 @@ def main():
                     status, _, providers = call('GET', 'models/providers')
                     assert status == 200 and not providers['data']['stale'], providers
                     assert providers['data']['providers'][0]['variants'][0]['models'] == ['old-id']
+                    assert providers['data']['default_locale']=='zh-CN' and providers['data']['locales']==cache['locales']
+                    assert providers['data']['providers'][0]['i18n']['ru-RU']['name']=='ru-RU supplier'
                     Supplier.catalog['version']='fixture-v2'
                     Supplier.catalog['providers'][0]['variants'][0]['models']=['new-id']
                     status, _, providers = call('GET', 'models/providers')
@@ -220,9 +225,10 @@ def main():
                         Supplier.catalog_mode=mode
                         status, _, providers = call('GET', 'models/providers')
                         assert status == 200 and providers['data']['stale'] and providers['data']['version']=='fixture-v2', providers
+                        assert providers['data']['locales']==cache['locales'] and providers['data']['providers'][0]['i18n']==cache['providers'][0]['i18n']
                     Supplier.catalog_mode='ok'
                     assert all(not any(k.lower() in ('authorization','x-api-key','cookie') for k in headers) for headers in Supplier.catalog_headers)
-                    checks.append('public server updates applied without a client release; offline/malformed responses preserve cache; no credentials sent centrally')
+                    checks.append('multilingual metadata survives refresh and offline cache; public server updates applied without a client release; offline/malformed responses preserve cache; no credentials sent centrally')
                 if not args.packed:
                     count = len(Supplier.catalog_headers)
                     status, _, complete = call('POST', 'models/parameters', {'provider': {'endpoints': {
