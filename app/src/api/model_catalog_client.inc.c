@@ -19,7 +19,8 @@ static xvalue* MdoClientCatalogCache(void)
         Bytes=xrtMalloc((size_t)Info.Size);
         if(Bytes && xrtReadFull(F,Bytes,(size_t)Info.Size,NULL))Root=xrtJsonParse(xrtStrViewN(Bytes,(size_t)Info.Size));
     }
-    if(F)xrtClose(F);xrtFree(Bytes);xrtClearError();
+    if(F)xrtClose(F);
+    xrtFree(Bytes);xrtClearError();
     if(!MdoClientCatalogValid(Root)){xrtValueRelease(Root);Root=NULL;}return Root;
 }
 static xvalue* MdoParameterRegistry(MdoApiContext* Context,bool Refresh,bool* Stale)
@@ -45,7 +46,8 @@ static xvalue* MdoParameterRegistry(MdoApiContext* Context,bool Refresh,bool* St
         }
     }
     if(Catalog){MdoApiValueSetUInt(Catalog,"cached_at_ms",(uint64)Now);size_t Size=0;char* Json=xrtJsonStringify(Catalog,false,&Size);
-        if(Json)MdoHomeAtomicWrite(MDO_CLIENT_CATALOG_PATH,Json,Size,false);xrtFree(Json);xrtValueRelease(Cached);Cached=NULL;
+        if(Json)MdoHomeAtomicWrite(MDO_CLIENT_CATALOG_PATH,Json,Size,false);
+        xrtFree(Json);xrtValueRelease(Cached);Cached=NULL;
     }
     xrtValueRelease(Envelope);xrtHttpResultDestroy(Result);xrtHttpRequestDestroy(Request);xrtHttpClientDestroy(Client);xrtClearError();
     if(!Catalog && Cached){Catalog=Cached;Cached=NULL;if(Stale)*Stale=true;}

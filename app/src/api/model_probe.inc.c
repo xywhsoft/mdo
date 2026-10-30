@@ -105,7 +105,10 @@ static bool MdoApiModelDiscoverRun(MdoApiContext* Context, MdoApiJsonBody Body, 
     cstr Endpoint = NULL, Key = NULL, Ref = NULL; char Url[2056], Authorization[4104]; char* Secret = NULL;
     cstr Code = "connection_failed", Message = "Could not connect; check the address, network, proxy and TLS settings";
     uint16 Reply = 502u, HttpStatus = 0u; bool Verify = true, Anthropic = false, Ok = false; size_t i;
-    bool RefreshCatalog = true;
+    bool RefreshCatalog = true, CatalogOnly = false;
+    const xvalue* OnlyValue = xrtValueObjectGet(Body.Value, XRT_STR_LITERAL("catalog_only"));
+    if (Parameters && OnlyValue && !xrtValueGetBool(OnlyValue, &CatalogOnly))
+        return MdoApiReplyError(Context, 422u, "parameters_invalid", "catalog_only must be a boolean", NULL);
     const xvalue* RefreshValue = xrtValueObjectGet(Body.Value, XRT_STR_LITERAL("refresh_catalog"));
     if (Parameters && RefreshValue && !xrtValueGetBool(RefreshValue, &RefreshCatalog))
         return MdoApiReplyError(Context, 422u, "parameters_invalid", "refresh_catalog must be a boolean", NULL);
@@ -137,6 +140,7 @@ static bool MdoApiModelDiscoverRun(MdoApiContext* Context, MdoApiJsonBody Body, 
         Reply = 422u; Code = "catalog_unsupported"; Message = "This custom endpoint has no discoverable model catalog; add model IDs manually"; goto done;
     }
     strcpy(Url + Length - Tail, "/models");
+    if (Parameters && CatalogOnly) { Code = "not_exposed"; goto done; }
     (void)xrtValueGetBool(xrtValueObjectGet(Provider, XRT_STR_LITERAL("verify_peer")), &Verify);
     Key = MdoApiModelText(Body.Value, "key", 4096u);
     if (xrtValueObjectGet(Body.Value, XRT_STR_LITERAL("key")) && !Key) { Reply = 422u; Code = "key_invalid"; Message = "API key must be nonempty"; goto done; }
@@ -191,6 +195,19 @@ static bool MdoApiModelDiscoverRun(MdoApiContext* Context, MdoApiJsonBody Body, 
     }
     Ok = MdoApiValueSetTake(Data, "items", &Items) && MdoApiValueSetUInt(Data, "http_status", HttpStatus) &&
         MdoApiValueSetBool(Data, "truncated", xrtValueCount(List) > 2048u);
+    if (Ok) {
+        xvalue* Records = xrtValueArray();
+        cstr RecordProtocol = Protocol ? Protocol : Anthropic ? "anthropic-messages" :
+            MdoApiModelText(Endpoints, "chat_completions", 2048u) ? "openai-chat-completions" : "openai-responses";
+        Ok = Records != NULL;
+        for (i = 0u; Ok && i < xrtValueCount(List) && i < 2048u; ++i) {
+            const xvalue* Row = xrtValueArrayGet(List, i); cstr Id = MdoApiModelText(Row, "id", 256u);
+            if (!Id) continue;
+            xvalue* Record = MdoParameterResolve(NULL, Endpoint, RecordProtocol, Id, Row, "ok");
+            Ok = Record && MdoApiValueAppendTake(Records, &Record); xrtValueRelease(Record);
+        }
+        Ok = Ok && MdoApiValueSetTake(Data, "parameters", &Records); xrtValueRelease(Records);
+    }
 done:
     if (Parameters && Endpoint && strcmp(Code, "endpoint_invalid") && strcmp(Code, "key_invalid") &&
         strcmp(Code, "credential_unavailable") && strcmp(Code, "authentication_failed")) {
@@ -267,11 +284,33 @@ static bool MdoApiModelProbeAddTools(xllm_request* Request)
         xllmRequestSetToolChoice(Request, XLLM_TOOL_CHOICE_NAMED, "mdo_connection_probe");
 }
 
+static bool MdoApiModelProbeExecute(MdoApiContext* Context, MdoModelCatalog* Catalog,
+    cstr Id, uint32 Output, bool Tools, uint64* Latency, xllm_error* Error)
+{
+    uint64 Started = MdoMonotonicUs(); xllm_request Request; xllm_response* Response = NULL;
+    MdoModelClientOptions Options; MdoModelClientOptionsInit(&Options);
+    Options.ModelId = Id; Options.MaxOutputTokens = Output;
+    bool Online = MdoModelIsOnline(Catalog, Id);
+    xllm_client* Client = Online ? NULL : MdoModelClientCreate(Catalog, &Options, NULL, Error);
+    xllmRequestInit(&Request); Request.bStream = true; Request.bParallelToolCalls = false;
+    Request.uDeadline = Context->SendDeadline; xllmRequestSetCancel(&Request, Context->SendCancel);
+    bool Prepared = !Tools || MdoApiModelProbeAddTools(&Request), Ok = false;
+    if (!Prepared) { Error->eCode = XLLM_ERROR_OUT_OF_MEMORY;
+        snprintf(Error->sMessage, sizeof(Error->sMessage), "Model verification tool descriptors are unavailable"); }
+    if (Prepared && (Client || Online) && xllmRequestAddTextMessage(&Request, XLLM_ROLE_USER,
+        Tools ? "Call mdo_connection_probe once." : "Reply briefly with OK."))
+        Ok = (Online ? MdoModelOnlineComplete(Catalog, &Options, &Request, NULL, &Response, Error) :
+            MdoModelComplete(Client, &Request, NULL, &Response, Error)) == XLLM_RESULT_OK;
+    Ok = Ok && (Tools ? MdoApiModelProbeToolReply(Response) : MdoApiModelProbeVisibleReply(Response));
+    *Latency = (MdoMonotonicUs() - Started) / 1000u;
+    xllmResponseDestroy(Response); xllmRequestUnit(&Request); xllmClientDestroy(Client); xrtClearError();
+    return Ok;
+}
+
 static bool MdoApiModelTestRun(MdoApiContext* Context, MdoApiJsonBody Body)
 {
-    MdoModelCatalog* Catalog = NULL; xllm_client* Client = NULL; xllm_response* Response = NULL;
-    xllm_request Request; xllm_error Error = {0}; MdoModelClientOptions Options;
-    MdoModelInfo Info = {0}; xvalue* Data = NULL; bool Ok = false, Tools = false; uint64 Started = MdoMonotonicUs();
+    MdoModelCatalog* Catalog = NULL; xllm_error Error = {0};
+    MdoModelInfo Info = {0}; xvalue* Data = NULL; bool Ok = false, Tools = false; uint64 Latency = 0u;
     char Fingerprint[65], Current[65]; xvalue* Verification = NULL;
     cstr Id = MdoApiModelText(Body.Value, "model_id", 128u);
     xvalue* ToolMode = xrtValueObjectGet(Body.Value, XRT_STR_LITERAL("tools"));
@@ -285,7 +324,6 @@ static bool MdoApiModelTestRun(MdoApiContext* Context, MdoApiJsonBody Body)
     if (!MdoSettingsServiceGetSnapshot(&Settings) || !Settings.Initialized || Settings.Degraded)
         return MdoApiReplyError(Context, 503u, "model_verification_unavailable", "Model configuration is not ready for verification", NULL);
     Catalog = MdoModelCatalogSnapshot(); Info.Size = sizeof(Info);
-    xllmRequestInit(&Request); MdoModelClientOptionsInit(&Options); Options.ModelId = Id;
     if (!Id || !MdoModelCatalogModelFind(Catalog, Id, &Info)) {
         MdoModelCatalogRelease(Catalog);
         return MdoApiReplyError(Context, 404u, "model_not_found", "Save the model before testing it", NULL);
@@ -308,21 +346,7 @@ static bool MdoApiModelTestRun(MdoApiContext* Context, MdoApiJsonBody Body)
         }
         xrtValueRelease(Verification); Verification = NULL;
     }
-    Options.MaxOutputTokens = Info.MaxOutputTokens; /* Validate the saved runtime budget and reasoning selection together. */
-    bool Online = MdoModelIsOnline(Catalog, Id);
-    if (!Online) Client = MdoModelClientCreate(Catalog, &Options, NULL, &Error);
-    Request.bStream = true; Request.bParallelToolCalls = false;
-    Request.uDeadline = Context->SendDeadline;
-    xllmRequestSetCancel(&Request, Context->SendCancel);
-    bool Prepared = !Tools || MdoApiModelProbeAddTools(&Request);
-    if (!Prepared) { Error.eCode = XLLM_ERROR_OUT_OF_MEMORY;
-        snprintf(Error.sMessage, sizeof(Error.sMessage), "Model verification tool descriptors are unavailable"); }
-    if (Prepared && (Client || Online) && xllmRequestAddTextMessage(&Request, XLLM_ROLE_USER, Tools ? "Call mdo_connection_probe once." : "Reply briefly with OK."))
-        Ok = (Online ? MdoModelOnlineComplete(Catalog, &Options, &Request, NULL, &Response, &Error) :
-            MdoModelComplete(Client, &Request, NULL, &Response, &Error)) == XLLM_RESULT_OK;
-    Ok = Ok && (Tools ? MdoApiModelProbeToolReply(Response) : MdoApiModelProbeVisibleReply(Response));
-    uint64 Latency = (MdoMonotonicUs() - Started) / 1000u;
-    xllmResponseDestroy(Response); xllmRequestUnit(&Request); xllmClientDestroy(Client);
+    Ok = MdoApiModelProbeExecute(Context, Catalog, Id, Info.MaxOutputTokens, Tools, &Latency, &Error);
     MdoModelCatalogRelease(Catalog); xrtClearError();
     char Code[64];
     snprintf(Code, sizeof(Code), "model_%s", Error.eCode == XLLM_ERROR_NONE ?
@@ -352,12 +376,15 @@ static bool MdoApiModelTestRun(MdoApiContext* Context, MdoApiJsonBody Body)
         MdoModelErrorMessage(&Error), NULL);
 }
 
+#include "model_add.inc.c"
+
 typedef struct MdoModelProbeJob {
     MdoApiContext Context;
     XS_HttpReq Request;
     xhttp1head Head;
     MdoApiJsonBody Body;
-    bool Test, Parameters, Catalog, Sent;
+    bool Test, Parameters, Catalog, Add, Sent, WriteHeld;
+    uint64 Revision;
 } MdoModelProbeJob;
 static struct { xmutex* Lock; xtaskpool* Pool; size_t Count; bool Stopping; } g_MdoModelProbes;
 
@@ -386,6 +413,7 @@ static void MdoApiModelProbeDrop(ptr Value, ptr UserData)
         xrtNetStreamDestroy(Job->Request.tcp);
     }
     xsServerRelease(Job->Request.server);
+    if (Job->WriteHeld) MdoApiWriteReleaseBackground();
     xrtMutexLock(g_MdoModelProbes.Lock); g_MdoModelProbes.Count--; xrtMutexUnlock(g_MdoModelProbes.Lock);
     xrtFree(Job);
 }
@@ -394,23 +422,32 @@ static xtaskoutcome MdoApiModelProbeRun(xcancel* Cancel, ptr Value, xtaskvalue* 
 {
     MdoModelProbeJob* Job = Value; (void)Result; Job->Context.SendCancel = Cancel;
     if (!MdoApiDownloadLive(&Job->Context)) return XTASK_CANCELLED;
-    Job->Sent = Job->Catalog ? MdoApiModelProvidersRun(&Job->Context) : Job->Test ? MdoApiModelTestRun(&Job->Context, Job->Body) : MdoApiModelDiscoverRun(&Job->Context, Job->Body, Job->Parameters);
+    Job->Sent = Job->Add ? MdoApiModelAddRun(&Job->Context, Job->Body, Job->Revision) :
+        Job->Catalog ? MdoApiModelProvidersRun(&Job->Context) : Job->Test ? MdoApiModelTestRun(&Job->Context, Job->Body) : MdoApiModelDiscoverRun(&Job->Context, Job->Body, Job->Parameters);
     return Job->Sent ? XTASK_SUCCESS : XTASK_FAILED;
 }
 
-static bool MdoApiModelProbeStart(MdoApiContext* Context, bool Test, bool Parameters, bool Catalog)
+static bool MdoApiModelProbeStart(MdoApiContext* Context, bool Test, bool Parameters, bool Catalog, bool Add)
 {
     MdoModelProbeJob* Job = xrtCalloc(1u, sizeof(*Job)); xfuture* Future = NULL; xtaskargs Args = {0};
     if (!Job) return MdoApiReplyError(Context, 503u, "probe_unavailable", "Model test resources are unavailable", NULL);
+    if (Add && MdoApiExpectedRevision(Context, &Job->Revision) != MDO_API_PRECONDITION_OK) {
+        xrtFree(Job); return MdoApiReplyError(Context, 428u, "precondition_required", "Read model settings before adding a model", NULL);
+    }
     MdoApiBodyStatus Status = Catalog ? MDO_API_BODY_OK : MdoApiJsonBodyRead(Context, &Job->Body);
     if (Status != MDO_API_BODY_OK) { xrtFree(Job); return MdoApiReplyBodyError(Context, Status); }
+    if (Add) {
+        Job->WriteHeld = MdoApiWriteRetainBackground();
+        if (!Job->WriteHeld) { MdoApiModelSecretBodyUnit(&Job->Body); xrtFree(Job);
+            return MdoApiReplyError(Context, 409u, "write_admission_busy", "Wait for the current write before adding models", NULL); }
+    }
     Job->Head.MethodCode = Context->Request->head->MethodCode; Job->Request.head = &Job->Head;
     Job->Request.server = xsServerRetain(Context->Request->server);
     if (Context->Request->tls) Job->Request.tls = xrtTlsStreamRef(Context->Request->tls);
     else Job->Request.tcp = xrtNetStreamRef(Context->Request->tcp);
-    Job->Context.Request = &Job->Request; Job->Test = Test; Job->Parameters = Parameters; Job->Catalog = Catalog;
+    Job->Context.Request = &Job->Request; Job->Test = Test; Job->Parameters = Parameters; Job->Catalog = Catalog; Job->Add = Add;
     memcpy(Job->Context.RequestId, Context->RequestId, sizeof(Job->Context.RequestId));
-    Job->Context.SendDeadline = MdoDeadlineAfterUs((Test || Parameters) ? 30000000u : 15000000u); Job->Context.CloseResponse = true;
+    Job->Context.SendDeadline = MdoDeadlineAfterUs(Add ? 60000000u : (Test || Parameters) ? 30000000u : 15000000u); Job->Context.CloseResponse = true;
     xrtMutexLock(g_MdoModelProbes.Lock);
     if (!g_MdoModelProbes.Stopping && g_MdoModelProbes.Count < 2u) {
         if (!g_MdoModelProbes.Pool) { xtaskpoolconfig Config = {0}; Config.Threads = 1u; Config.QueueLimit = 1u; g_MdoModelProbes.Pool = xrtTaskPoolCreate(&Config); }
@@ -423,13 +460,15 @@ static bool MdoApiModelProbeStart(MdoApiContext* Context, bool Test, bool Parame
     xrtMutexUnlock(g_MdoModelProbes.Lock);
     if (Future) { xrtFutureDestroy(Future); Context->Takeover = true; return true; }
     MdoApiModelSecretBodyUnit(&Job->Body); xsServerRelease(Job->Request.server);
+    if (Job->WriteHeld) MdoApiWriteReleaseBackground();
     xrtTlsStreamDestroy(Job->Request.tls); xrtNetStreamDestroy(Job->Request.tcp); xrtFree(Job);
     return MdoApiReplyError(Context, 503u, "probe_busy", "Another model test is running; retry shortly", NULL);
 }
 
-bool MdoApiModelDiscoverRoute(MdoApiContext* Context) { return MdoApiModelProbeStart(Context, false, false, false); }
-bool MdoApiModelTestRoute(MdoApiContext* Context) { return MdoApiModelProbeStart(Context, true, false, false); }
+bool MdoApiModelDiscoverRoute(MdoApiContext* Context) { return MdoApiModelProbeStart(Context, false, false, false, false); }
+bool MdoApiModelTestRoute(MdoApiContext* Context) { return MdoApiModelProbeStart(Context, true, false, false, false); }
 
-bool MdoApiModelParametersRoute(MdoApiContext* Context) { return MdoApiModelProbeStart(Context, false, true, false); }
+bool MdoApiModelParametersRoute(MdoApiContext* Context) { return MdoApiModelProbeStart(Context, false, true, false, false); }
 
-bool MdoApiModelProvidersRoute(MdoApiContext* Context) { return MdoApiModelProbeStart(Context, false, false, true); }
+bool MdoApiModelProvidersRoute(MdoApiContext* Context) { return MdoApiModelProbeStart(Context, false, false, true, false); }
+bool MdoApiModelAddRoute(MdoApiContext* Context) { return MdoApiModelProbeStart(Context, false, false, false, true); }

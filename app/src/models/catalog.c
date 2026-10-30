@@ -25,6 +25,7 @@ typedef struct MdoProviderEntry {
     char* Name;
     char* Endpoints[3];
     char* CredentialReference;
+    char* DraftCredential;
     xvalue* Proxy;
     uint32 TimeoutMilliseconds;
     MdoModelProtocolFlags Protocols;
@@ -235,6 +236,7 @@ static void MdoModelsProviderUnit(MdoProviderEntry* pProvider)
     xrtFree(pProvider->Name);
     for ( i = 0u; i < 3u; ++i ) xrtFree(pProvider->Endpoints[i]);
     xrtFree(pProvider->CredentialReference);
+    MdoSecretRelease(&pProvider->DraftCredential);
     xrtValueRelease(pProvider->Proxy);
     memset(pProvider, 0, sizeof(*pProvider));
 }
@@ -535,6 +537,29 @@ static bool MdoModelsParseModel(const xvalue* pValue,
         if (!pModel->Proxy) return false;
     }
     return true;
+}
+
+MdoModelCatalog* MdoModelCatalogDraft(const xvalue* Provider, const xvalue* Model, cstr Key)
+{
+    MdoModelCatalog* Catalog = MdoModelsCatalogCreate(0u);
+    if (!Catalog) return NULL;
+    Catalog->Providers = xrtCalloc(1u, sizeof(*Catalog->Providers));
+    if (!Catalog->Providers) goto fail;
+    Catalog->ProviderCount = 1u;
+    Catalog->Models = xrtCalloc(1u, sizeof(*Catalog->Models));
+    if (!Catalog->Models) goto fail;
+    Catalog->ModelCount = 1u;
+    if (!MdoModelsParseProvider(Provider, Catalog->Providers) || Catalog->Providers[0].Builtin ||
+        !MdoModelsParseModel(Model, Catalog, Catalog->Models) || Catalog->Models[0].Builtin) goto fail;
+    if (Key) {
+        if (strlen(Key) > 4096u) goto fail;
+        Catalog->Providers[0].DraftCredential = xrtStrDup(Key);
+        if (!Catalog->Providers[0].DraftCredential) goto fail;
+    }
+    Catalog->DefaultModelIndex = 0u;
+    return Catalog;
+fail:
+    MdoModelCatalogRelease(Catalog); return NULL;
 }
 
 #include "online_catalog.inc.c"
@@ -1096,6 +1121,7 @@ static char* MdoModelsResolveCredential(const MdoProviderEntry* pProvider,
     char* Secret = NULL;
     const xerror* pRuntimeError;
     cstr Message;
+    if (pProvider->DraftCredential) return xrtStrDup(pProvider->DraftCredential);
     if ( pProvider->CredentialReference == NULL ) {
         Secret = xrtStrDup("");
         if ( Secret == NULL ) {

@@ -3,6 +3,9 @@
  * Existing entries remain available to active clients and config backups. */
 static void MdoApiModelSecretBodyUnit(MdoApiJsonBody* Body)
 {
+    xstrview DirectKey = {0};
+    if (Body->Value && xrtValueGetString(xrtValueObjectGet(Body->Value,
+        XRT_STR_LITERAL("key")), &DirectKey)) xrtSecureZero((void*)DirectKey.Data, DirectKey.Size);
     xvalue* Keys = Body->Value ? xrtValueObjectGet(Body->Value, XRT_STR_LITERAL("keys")) : NULL;
     size_t i;
     if ( xrtValueType(Keys) == XVALUE_ARRAY ) for ( i = 0u; i < xrtValueCount(Keys); i++ ) {

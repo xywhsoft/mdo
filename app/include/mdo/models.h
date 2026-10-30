@@ -142,6 +142,10 @@ bool MdoModelManagerReload(void);
 uint64 MdoModelManagerGeneration(void);
 
 MdoModelCatalog* MdoModelCatalogSnapshot(void);
+/* One caller-owned, unpublished profile for onboarding. Key is copied into
+ * memory only and securely erased with the catalog; no manager/vault writes. */
+MdoModelCatalog* MdoModelCatalogDraft(const xvalue* Provider,
+    const xvalue* Model, const char* Key);
 MdoModelCatalog* MdoModelCatalogRef(MdoModelCatalog* pCatalog);
 void MdoModelCatalogRelease(MdoModelCatalog* pCatalog);
 size_t MdoModelCatalogProviderCount(const MdoModelCatalog* pCatalog);
