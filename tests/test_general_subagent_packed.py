@@ -78,7 +78,7 @@ class Model(BaseHTTPRequestHandler):
                     if index == 1:
                         message = call('write', {'path': path, 'content': 'delegated-ok'})
                     elif index == 2:
-                        argv = ['cmd.exe', '/D', '/C', 'echo general-exec-ok'] if os.name == 'nt' else ['/bin/sh', '-c', 'printf general-exec-ok']
+                        argv = getattr(self, 'exec_argv', None) or (['cmd.exe', '/D', '/C', 'echo general-exec-ok'] if os.name == 'nt' else ['/bin/sh', '-c', 'printf general-exec-ok'])
                         message = call('exec', {'argv': argv, 'timeout_ms': 5000})
                     elif index == 3:
                         message = call('read', {'path': path})

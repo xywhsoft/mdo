@@ -30,6 +30,7 @@ def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--adb',type=Path,required=True);p.add_argument('--serial',required=True)
     p.add_argument('--package',required=True);p.add_argument('--edition',choices=('lite','full'),required=True)
+    p.add_argument('--version',default=json.loads((Path(__file__).resolve().parents[1]/'app/release.json').read_text(encoding='utf-8'))['version_name'])
     p.add_argument('--evidence',type=Path,required=True)
     p.add_argument('--only',nargs='+',choices=('sdk-processes','managed-tools','directories','packaged-tools','command-ownership'))
     a=p.parse_args()
@@ -205,7 +206,7 @@ def main():
             check(not c.data('POST','/api/v1/cli-tools',dict(action='refresh'))['binding_error'],'Command index recovers after its conflicting QA link is removed')
     try:
         c.launch();info=c.call('runtime.info');snapshot=c.data('GET','/api/v1/cli-tools')
-        check(info['version']=='0.8.0' and snapshot['edition']==a.edition,'Correct candidate version and Android edition')
+        check(info['version']==a.version and snapshot['edition']==a.edition,'Correct candidate version and Android edition')
         marker=c.home+'/workspace/qa-device-marker.txt';marker_bytes=b'Android release QA: preserve across lite/full update\n'
         if a.edition=='lite':c.call('fs.write',dict(path=marker,text=marker_bytes.decode()))
         else:check(read(marker)==marker_bytes,'Lite-to-full upgrade preserved the private Home marker')
