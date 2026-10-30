@@ -5,9 +5,9 @@ import { loadModels } from "../../state/catalogs.js";
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
 
 import { createAdvancedModelConfigPanel } from "./model-config-advanced.js";
-import { providerPresets, setProviderCatalog, presetVariant, presetProvider, presetModel, suggestedModels } from "./provider-presets.js";
+import { providerPresets, setProviderCatalog, presetVariant } from "./provider-presets.js";
 import { sameModelConfig } from "./model-config-state.js";
-import { createModelProxyEditor } from "./model-proxy-editor.js";
+import { createModelSetupWizard } from "./model-setup-wizard.js";
 import { verifyModelSetup } from "./model-verification.js";
 import { parameterDraft, parameterIssues, applyParameters, createParameterEditor, parameterSummary } from "./model-parameters.js";
 
@@ -87,7 +87,7 @@ export function createModelConfigPanel(container) {
       committed = true; config = next; etag = saved.etag;
       for (const key of keys) keyDrafts.delete(key.provider);
       verified.clear();
-      if (draft) draft.key = "";
+      draft?.destroy();
       draft = null; needsRead = true;
       try {
         const current = await api.get("/models/config"); config = current.data; etag = current.etag; needsRead = false;
@@ -124,53 +124,26 @@ export function createModelConfigPanel(container) {
     } catch (cause) { if (!disposed) { notice = text("supplierUnavailable", "供应商目录暂时不可用，可重试或手动添加自定义供应商。"); failed = true; } }
     finally { if (!disposed) render(); setBusy(false); }
   }
-  function choose(preset, choice = preset.variants[0]) {
-    // New models use the same supplier route as discovery unless overridden.
-    draft = { preset, choice, key: "", base: choice.base, name: preset.labelKey ? text(preset.labelKey, preset.name) : preset.name, provider: null,
-      items: [...choice.models], selected: new Set(choice.models.slice(0, 2)), queried: false,
-      ref: "", query: "", manual: "", default: false, advancedOpen: false,
-      parameters: new Map(), parameterBinding: "", proxy: { kind: "global" }, modelProxy: { kind: "provider" } };
+  function choose(preset, choice = preset.variants[0], existingProvider = null) {
+    draft?.destroy();
+    draft = createModelSetupWizard({ preset, choice, provider: existingProvider, config, etag,
+      onCommit(response) {
+        if (disposed) return;
+        config = response.data; etag = response.etag;
+        void loadModels().catch(() => {}); render();
+      },
+      onDone(result) {
+        if (disposed) return;
+        selectedId = result.providerId; draft?.destroy(); draft = null; view = "detail";
+        notice = text("modelsAdded", "已添加 {count} 个模型。", { count: result.added }) + (result.notice ? " " + result.notice : "");
+        failed = false; render();
+      },
+      async onCancel() {
+        draft?.destroy(); draft = null; view = "detail";
+        await reload();
+      },
+    });
     view = "setup"; notice = ""; failed = false; render();
-  }
-  function connection() {
-    if (draft.provider) return clone(draft.provider);
-    const entry = presetProvider(draft.preset, draft.choice, config.providers, draft.base);
-    entry.name = draft.name.trim() || draft.preset.name;
-    if (draft.ref.trim()) entry.credential = { secret_ref: draft.ref.trim() };
-    entry.proxy = clone(draft.proxy);
-    return entry;
-  }
-  function selectedIds() {
-    return [...new Set([...draft.selected, ...draft.manual.split(/[\n,;]+/).map(id => id.trim()).filter(Boolean)])];
-  }
-  function setupProtocol(entry) {
-    return draft.provider ? (entry.endpoints.responses ? "openai-responses" : entry.endpoints.chat_completions ? "openai-chat-completions" : "anthropic-messages") : draft.choice.protocol;
-  }
-  async function resolveParameters(ids) {
-    const entry = connection(), protocol = setupProtocol(entry);
-    const binding = JSON.stringify([entry.endpoints, protocol]);
-    if (draft.parameterBinding !== binding) { draft.parameters.clear(); draft.parameterBinding = binding; }
-    const missing = ids.filter(id => !draft.parameters.has(id));
-    if (!missing.length) return true;
-    setBusy(true); status(text("readingParameters", "正在读取模型参数并查询服务器参数表…"));
-    try {
-      for (let offset = 0; offset < missing.length; offset += 32) {
-        const payload = { provider: entry, protocol, models: missing.slice(offset, offset + 32) };
-        if (draft.key.trim()) payload.key = draft.key.trim();
-        const response = await api.post("/models/parameters", payload, { signal: controller.signal });
-        if (disposed) return false;
-        for (const record of response.data.items) draft.parameters.set(record.id, parameterDraft(record));
-      }
-      return true;
-    } catch (cause) { if (!disposed) status(probeError(cause), true); return false; }
-    finally { setBusy(false); }
-  }
-  function renderParameters(host) {
-    let index = 0;
-    for (const id of selectedIds()) {
-      const value = draft.parameters.get(id);
-      if (value) host.append(createParameterEditor(value, { index: index++ }));
-    }
   }
   function editParameters(model) {
     if (busy) return;
@@ -210,174 +183,13 @@ export function createModelConfigPanel(container) {
         if (await save(next)) parameterEdit = null;
       }, true));
   }
-  async function discover() {
-    if (busy) return;
-    const form = container.querySelector(".supplier-setup-form");
-    if (!form.reportValidity()) return;
-    if (!draft.preset.local && !draft.provider && !draft.key.trim() && !draft.ref.trim()) {
-      status(text("keyRequired", "请输入 API Key，或在高级设置中填写凭据引用。"), true); return;
-    }
-    setBusy(true); status(text("connecting", "正在读取模型列表…"));
-    try {
-      const entry = connection();
-      const payload = { provider: entry }; if (draft.key.trim()) payload.key = draft.key.trim();
-      const result = await api.post("/models/discover", payload);
-      if (disposed) return;
-      draft.items = [...new Set(result.data.items)];
-      draft.selected = new Set(suggestedModels(draft.items, draft.choice.models).filter((id) =>
-        !config.items.some((model) => model.provider === draft.provider?.id && model.wire_model === id))); draft.queried = true;
-      if (!(await resolveParameters([...draft.selected]))) return;
-      notice = text("catalogConnected", "模型列表读取成功；请检查参数，添加后将验证回复和工具调用。"); failed = false; render();
-    } catch (cause) {
-      if (cause.code === "catalog_unsupported") {
-        draft.queried = true; notice = text("catalogFallback", "此服务不提供模型列表。可选用模板模型或手动填写模型 ID；添加后将自动验证。"); failed = false; render();
-      } else status(probeError(cause), true);
-    } finally { setBusy(false); }
-  }
-  async function addSelected(completeOnly = false) {
-    if (busy) return;
-    const form = container.querySelector(".supplier-setup-form");
-    if (!completeOnly && !form.reportValidity()) return;
-    if (completeOnly) for (const control of form.querySelectorAll("input, select")) {
-      if (!control.closest(".model-parameter-editor") && control.checkValidity && !control.checkValidity()) {
-        control.reportValidity(); return;
-      }
-    }
-    if (!draft.preset.local && !draft.provider && !draft.key.trim() && !draft.ref.trim()) {
-      status(text("keyRequired", "请输入 API Key，或在高级设置中填写凭据引用。"), true); return;
-    }
-    const entry = connection(), next = clone(config);
-    if (!draft.provider) next.providers.push(entry);
-    const manual = draft.manual.split(/[\n,;]+/).map((id) => id.trim()).filter(Boolean);
-    const ids = [...new Set([...draft.selected, ...manual])];
-    if (ids.some(id => id.length > 256)) { status(text("idTooLong", "模型 ID 最多 256 个字符。"), true); return; }
-    const unresolved = ids.filter(id => !draft.parameters.has(id));
-    if (!(await resolveParameters(ids))) return;
-    if (unresolved.length) { render(); status(text("reviewParameters", "已读取参数，请检查并补全后再添加。")); return; }
-    const incomplete = ids.filter(id => parameterIssues(draft.parameters.get(id)).length);
-    if (incomplete.length && !completeOnly) { render(); status(text("parametersMissing", "无法获取模型参数，请补全这些参数。"), true); return; }
-    const pendingDraft = incomplete.length ? draft : null;
-    const added = [], makeDefault = draft.default;
-    for (const id of ids.filter(id => !incomplete.includes(id))) {
-      if (id.length > 256) { status(text("idTooLong", "模型 ID 最多 256 个字符。"), true); return; }
-      if (next.items.some((item) => item.provider === entry.id && item.wire_model === id)) continue;
-      const model = applyParameters(presetModel(entry, id, next.items), draft.parameters.get(id));
-      model.proxy = clone(draft.modelProxy); next.items.push(model); added.push(model.id);
-    }
-    if (!added.length) { status(text("selectModels", "请至少选择一个尚未添加的模型，或填写模型 ID。"), true); return; }
-    selectedId = entry.id;
-    const keys = draft.key.trim() ? [{ provider: entry.id, value: draft.key.trim() }] : [];
-    if (await save(next, keys) && !disposed && !needsRead) {
-      const results = await verifyModels(config.items.filter(model => added.includes(model.id)));
-      if (makeDefault && !disposed && results?.get(added[0])?.verified && results?.get(added[0])?.agentReady) {
-        const message = notice, error = failed, updated = clone(config);
-        updated.default_model = added[0];
-        if (await save(updated)) status(message, error);
-      }
-      if (pendingDraft && !disposed) {
-        pendingDraft.provider = config.providers.find(item => item.id === entry.id);
-        pendingDraft.key = ""; pendingDraft.selected = new Set(incomplete); pendingDraft.manual = "";
-        draft = pendingDraft; view = "setup"; render();
-      }
-    }
-  }
   function renderTemplates(body) {
     body.append(element("h3", { text: text("chooseSupplier", "选择供应商") }), element("p", { className: "model-config-status", text: text("templateHelp", "选择服务并填写 API Key。自己的供应商 Key 无需登录墨斗账号。") }));
     const grid = element("div", { className: "supplier-templates" });
     for (const preset of providerPresets.filter((item) => !item.hidden)) grid.append(button(preset.labelKey ? text(preset.labelKey, preset.name) : preset.name, () => choose(preset)));
     body.append(grid, button(text("refreshSuppliers", "刷新供应商目录"), () => void add()));
   }
-  function renderSelection(body) {
-    const selectedCount = element("span", { className: "model-config-status", text: text("selected", "已选 {count} 个模型", { count: draft.selected.size }) });
-    const list = element("div", { className: "supplier-candidates" });
-    function fill(query = "") {
-      clear(list);
-      const ids = draft.items.filter((id) => id.toLowerCase().includes(query.toLowerCase()));
-      for (const id of ids.slice(0, 100)) {
-        const enabled = config.items.some((model) => model.provider === draft.provider?.id && model.wire_model === id);
-        const checkbox = element("input", { attrs: { type: "checkbox", value: id } });
-        checkbox.checked = draft.selected.has(id); checkbox.disabled = enabled;
-        checkbox.addEventListener("change", () => {
-          if (checkbox.checked) draft.selected.add(id); else draft.selected.delete(id);
-          writeUiText(selectedCount, text("selected", "已选 {count} 个模型", { count: draft.selected.size }));
-          const parameters = container.querySelector(".supplier-parameters");
-          if (parameters) { clear(parameters); renderParameters(parameters); }
-        });
-        list.append(element("label", {}, [checkbox, element("span", { text: id }), enabled ? element("small", { text: text("alreadyAdded", "已添加") }) : null]));
-      }
-      if (ids.length > 100) list.append(element("small", { text: text("filterMore", "请搜索缩小范围；当前显示前 100 项。") }));
-    }
-    const search = field(text("findModel", "搜索模型"), "model-query", draft.query, (value) => { draft.query = value; fill(value); });
-    body.append(search, selectedCount, list); fill(draft.query);
-  }
-  function renderSetup(body) {
-    const form = element("form", { className: "supplier-setup-form" });
-    form.addEventListener("invalid", (event) => { const details = event.target.closest("details"); if (details) details.open = true; }, true);
-    form.addEventListener("submit", (event) => { event.preventDefault(); void (draft.queried ? addSelected() : discover()); });
-    form.append(element("h3", { text: draft.provider ? text("addModels", "添加模型") : draft.preset.labelKey ? text(draft.preset.labelKey, draft.preset.name) : draft.preset.name }));
-    if (!draft.provider && draft.preset.variants.length > 1) {
-      const select = element("select", { attrs: { name: "service-variant" } });
-      for (const choice of draft.preset.variants) select.append(element("option", { text: text(choice.label, choice.label), attrs: { value: choice.id } }));
-      select.value = draft.choice.id; select.addEventListener("change", () => {
-        const previous = draft;
-        choose(previous.preset, previous.preset.variants.find((item) => item.id === select.value));
-        draft.key = previous.key; draft.name = previous.name;
-        draft.proxy = previous.proxy; draft.modelProxy = previous.modelProxy;
-        draft.advancedOpen = previous.advancedOpen;
-        if (previous.preset.custom) {
-          draft.base = previous.base; draft.ref = previous.ref; draft.manual = previous.manual; draft.default = previous.default;
-        }
-        render();
-      });
-      form.append(element("label", { className: "model-field" }, [element("span", { text: draft.preset.custom ? text("protocol", "接口协议") : text("apiProduct", "API 产品") }), select]));
-    }
-    if (!draft.provider && draft.preset.custom) form.append(field(text("baseUrl", "服务地址（含 /v1）"), "base-url", draft.base, (value) => { draft.base = value; draft.queried = false; }, { type: "url", required: true }));
-    if (draft.choice.key_note) form.append(element("p", { className: "model-parameter-warning", text: draft.choice.key_note }));
-    if (draft.choice.source_url && /^https:\/\//.test(draft.choice.source_url)) form.append(element("a", {
-      text: text("productDocs", "接口与套餐说明"), attrs: { href: draft.choice.source_url, target: "_blank", rel: "noopener noreferrer" },
-    }));
-    if (!draft.provider || draft.provider.credential) {
-      form.append(field(draft.provider ? text("replaceKeyOptional", "API Key（留空使用已保存的凭据）") : text("apiKey", "API Key"), "api-key", draft.key, (value) => { draft.key = value; draft.queried = false; }, { type: "password" }));
-      if (draft.preset.keyUrl && !draft.provider) form.append(element("a", { className: "supplier-key-link", text: text("getKey", "获取 API Key"), attrs: { href: draft.preset.keyUrl, target: "_blank", rel: "noopener noreferrer" } }));
-      form.append(element("p", { className: "model-config-status", text: text("keyPrivacy", "Key 仅在本机加密保存，不写入模型配置。复制到其他设备后需重新填写。") }));
-    }
-    const advanced = element("details", { className: "supplier-connection-advanced" }, [element("summary", { text: text("advancedConnection", "高级设置") }),
-      ...(!draft.provider ? [
-        field(text("connectionName", "供应商名称"), "connection-name", draft.name, (value) => { draft.name = value; }),
-        !draft.preset.custom ? field(text("baseUrl", "服务地址（含 /v1）"), "base-url", draft.base, (value) => { draft.base = value; draft.queried = false; }, { type: "url", required: true }) : null,
-        field(text("credentialReference", "凭据引用（可代替 Key）"), "credential-ref", draft.ref, (value) => { draft.ref = value; draft.queried = false; }),
-        createModelProxyEditor(draft.proxy, { collapsible: false, titleKey: "modelProxy.providerTitle",
-          namePrefix: "provider_proxy_",
-          onChange: value => { draft.proxy = value; draft.queried = false; } }).element,
-      ] : []),
-      createModelProxyEditor(draft.modelProxy, { allowProvider: true, collapsible: false, titleKey: "modelProxy.newModelsTitle",
-        namePrefix: "model_proxy_",
-        onChange: value => { draft.modelProxy = value; } }).element,
-    ]);
-    advanced.open = Boolean(draft.advancedOpen);
-    const setupDraft = draft;
-    advanced.addEventListener("toggle", () => {
-      if (draft === setupDraft && container.contains(advanced)) draft.advancedOpen = advanced.open;
-    });
-    form.append(advanced);
-    if (draft.queried) renderSelection(form);
-    const parameters = element("div", { className: "supplier-parameters" });
-    renderParameters(parameters); form.append(parameters);
-    form.append(field(text("manualIds", "手动添加模型 ID（多个用逗号分隔）"), "manual-models", draft.manual, (value) => { draft.manual = value; }));
-    const makeDefault = element("input", { attrs: { type: "checkbox", name: "make-default" } });
-    makeDefault.checked = draft.default; makeDefault.addEventListener("change", () => { draft.default = makeDefault.checked; });
-    form.append(element("label", { className: "supplier-inline-check" }, [makeDefault, element("span", { text: text("useDefault", "首个新增模型验证通过后设为默认") })]));
-    form.append(element("p", { className: "model-config-status", text: text("autoVerifyHelp", "添加后逐个验证流式回复和工具调用，会消耗 Token；工具测试携带本机工具定义，但不会执行工具。缺失的模型参数需要先补全。") }));
-    const actions = element("div", { className: "supplier-actions" }, [
-      button(text("cancel", "取消"), () => { draft.key = ""; draft = null; view = "detail"; notice = ""; render(); }),
-      button(draft.queried ? text("refreshList", "刷新模型列表") : text("connect", "连接并读取模型"), () => void discover()),
-      button(draft.queried ? text("addSelected", "添加并验证所选模型") : text("saveAndVerify", "直接添加并验证"), () => void addSelected(), true),
-    ]);
-    actions.append(button(text("readParameters", "读取所选模型参数"), async () => { if (!busy && await resolveParameters(selectedIds())) render(); }));
-    if ([...draft.parameters.values()].some(value => parameterIssues(value).length))
-      actions.append(button(text("addComplete", "仅添加参数完整的模型"), () => void addSelected(true)));
-    form.append(actions); body.append(form);
-  }
+  function renderSetup(body) { draft.mount(body); }
   function verificationLabel(record) {
     if (!record) return text("untested", "已配置 · 尚未测试");
     if (record.running) return text(record.running === "tools" ? "verifyingTools" : "verifyingReply", record.running === "tools" ? "正在验证工具调用…" : "正在验证回复…");
@@ -431,21 +243,10 @@ export function createModelConfigPanel(container) {
     finally { verificationController = null; render(); setBusy(false); }
     return results;
   }
-  async function testModel(model, node, line, tools = false) {
-    if (busy) return;
-    setBusy(true); line.classList.remove("resource-error"); writeUiText(line, text("testing", "正在请求模型…"));
-    try {
-      const result = await api.post("/models/test", { model_id: model.id, tools }, { signal: controller.signal });
-      if (disposed) return;
-      const record = result.data.verification || { [tools ? "tools" : "reply"]: { state: "passed" } };
-      verified.set(model.id, record); writeUiText(line, verificationLabel(record));
-    } catch (cause) { if (!disposed) { verified.set(model.id, { error: cause }); writeUiText(line, probeError(cause)); line.classList.add("resource-error"); } }
-    finally { setBusy(false); if (!disposed) node.focus({ preventScroll: true }); }
-  }
   function renderDetail(body) {
     const entry = provider(); if (!entry) return;
     body.append(element("header", { className: "supplier-detail-heading" }, [element("h3", { text: entry.name }),
-      entry.builtin ? element("span", { text: uiMessage("modelConfig.builtinTag") }) : button(text("advancedEditor", "高级编辑"), () => showAdvanced("provider", entry.id))]));
+      entry.builtin ? element("span", { text: uiMessage("modelConfig.builtinTag") }) : button(text("advancedEditor", "编辑"), () => showAdvanced("provider", entry.id))]));
     if (entry.builtin) body.append(element("p", { className: "model-config-status", text: uiMessage("modelConfig.builtinModelNote") }));
     else {
       body.append(element("p", { className: "model-config-status supplier-address", text: Object.values(entry.endpoints)[0] || "" }));
@@ -461,7 +262,7 @@ export function createModelConfigPanel(container) {
       body.append(credentials, button(text("addModels", "添加模型"), () => {
         if (blocked()) return;
         const preset = providerPresets.find((item) => item.id === entry.template_id) || providerPresets.find((item) => item.id === "custom");
-        choose(preset, presetVariant(preset.id, entry.template_variant)); draft.provider = entry; render();
+        choose(preset, presetVariant(preset.id, entry.template_variant), entry);
       }));
     }
     const models = config.items.filter((item) => item.provider === entry.id);
@@ -472,13 +273,9 @@ export function createModelConfigPanel(container) {
       const line = element("p", { className: `supplier-model-status ${record?.error || record?.reply?.state === "failed" || record?.tools?.state === "failed" ? "resource-error" : ""}`, text: record ? verificationLabel(record) : (model.builtin ? text("builtinAvailable", "内置服务") : text("untested", "已配置 · 尚未测试")), attrs: { role: "status" } });
       const row = element("article", { className: "supplier-model" }, [element("div", { className: "supplier-model-title" }, [element("strong", { text: model.name }), model.id === config.default_model ? element("span", { className: "model-default-badge", text: uiMessage("modelConfig.defaultTag") }) : null]), element("small", { text: model.wire_model }), line]);
       const actions = element("div", { className: "supplier-actions" });
-      const verify = button(text("verifyAgain", "完整验证 / 重试"), () => void verifyModels([model])); actions.append(verify);
+      const verify = button(text("verifyAgain", "验证"), () => void verifyModels([model])); actions.append(verify);
       verify.disabled = model.enabled === false;
-      const test = button(text("testReply", "测试回复"), () => void testModel(model, test, line)); actions.append(test);
-      if (model.enabled !== false && model.capabilities.includes("tool-call-output")) {
-        const toolTest = button(text("testTools", "测试工具调用"), () => void testModel(model, toolTest, line, true)); actions.append(toolTest);
-      }
-      if (!model.builtin) actions.append(button(text("advancedEditor", "高级编辑"), () => showAdvanced("model", model.id)));
+      if (!model.builtin) actions.append(button(text("advancedEditor", "编辑"), () => showAdvanced("model", model.id)));
       if (model.id !== config.default_model && model.enabled !== false && record?.tools?.state === "passed") actions.append(button(uiMessage("modelConfig.setDefault"), () => { const next = clone(config); next.default_model = model.id; void save(next); }));
       if (!model.builtin && model.id !== config.default_model) {
         actions.append(button(model.enabled === false ? text("enable", "启用") : text("disable", "停用"), () => {
@@ -490,10 +287,11 @@ export function createModelConfigPanel(container) {
         }));
         actions.append(button(uiMessage("modelConfig.remove"), () => { confirm.hidden = false; })); row.append(confirm);
       }
-      if (model.enabled === false) { writeUiText(line, text("disabled", "已停用；启用后可用于会话。")); test.disabled = true; }
+      if (model.enabled === false) { writeUiText(line, text("disabled", "已停用；启用后可用于会话。")); verify.disabled = true; }
       if (!model.builtin) {
         row.append(element("p", { className: "model-config-status", text: parameterSummary(model) }));
-        actions.append(button(text("editParameters", "模型参数"), () => editParameters(model)));
+        const parameters = button(text("editParameters", "模型参数"), () => editParameters(model));
+        parameters.className = "model-parameter-link"; row.append(parameters);
       }
       row.append(actions); list.append(row);
     }
@@ -524,8 +322,7 @@ export function createModelConfigPanel(container) {
       item.append(element("small", { text: text("modelCount", "{count} 个模型", { count: config.items.filter((model) => model.provider === entry.id).length }) })); list.append(item);
     }
     const body = element("div", { className: "supplier-body" });
-    if (view !== "list") body.append(button(view === "setup" ? text("cancel", "取消") : view === "advanced" ? text("backSuppliers", "返回供应商") : text("back", "返回"), () => {
-      if (view === "setup") { draft.key = ""; draft = null; }
+    if (view !== "list" && view !== "setup") body.append(button(view === "advanced" ? text("backSuppliers", "返回供应商") : text("back", "返回"), () => {
       void back();
     }));
     if (view === "templates") renderTemplates(body);
@@ -539,6 +336,7 @@ export function createModelConfigPanel(container) {
     // The expert editor owns its revision and drafts until the user returns.
     // Keep the outer navigation from detaching a still-live editor.
     if (view === "advanced") { header.children[1].disabled = true; header.children[2].disabled = true; }
+    if (view === "setup") { header.children[1].hidden = true; header.children[2].hidden = true; }
     if (busy) setBusy(true);
     if (hadFocus) {
       const field = focusName && [...container.querySelectorAll("input, select")].find((node) => node.name === focusName);
@@ -549,5 +347,5 @@ export function createModelConfigPanel(container) {
   }
   const unsubscribe = subscribeLocale(() => { if (!advanced && !busy) render(); });
   return Object.freeze({ ensureLoaded: () => config ? Promise.resolve() : reload(), reload,
-    destroy() { disposed = true; controller.abort(); verificationController?.abort(); if (draft) draft.key = ""; keyDrafts.clear(); advanced?.destroy(); unsubscribe(); } });
+    destroy() { disposed = true; controller.abort(); verificationController?.abort(); draft?.destroy(); keyDrafts.clear(); advanced?.destroy(); unsubscribe(); } });
 }

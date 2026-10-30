@@ -67,7 +67,23 @@ function fixture({ failTools = false, hold = false, staleEvidence = false, missi
     else if (path === "/api/v1/models/parameters") data = { items: body.models.map(id => ({id,protocol:body.protocol,lookup_state:"ok",registry_version:"fixture",fields: missingBeta && id === "beta" ? {} : {
       ...(textOnly ? {tools:{value:false,source:"api"}} : {}),context_tokens:{value:64000,source:"api"},max_output_tokens:{value:16000,source:"api"},reasoning:{value:{kind:"none"},source:"api"}}})) };
     else if (path === "/api/v1/models/discover") data = { items: ["alpha", "beta", "unselected"] };
-    else if (path === "/api/v1/models/setup" || path === "/api/v1/settings/models") {
+    else if (path === "/api/v1/models/add") {
+      if (hold) await paused;
+      options.signal?.throwIfAborted();
+      if (staleEvidence || (rejectTools && body.model.id.endsWith("alpha"))) {
+        status = staleEvidence ? 409 : 422;
+        error = { code: staleEvidence ? "model_config_changed" : "model_tools_test_failed", message: "fixture rejection" };
+      } else {
+        if (!config.providers.some(p => p.id === body.provider.id))
+          config.providers.push({...structuredClone(body.provider),credential:{secret_ref:"vault:"+"a".repeat(64)}});
+        config.items.push(structuredClone(body.model));
+        const tools=body.model.capabilities.includes("tool-call-output");
+        const record={verified:true,reply:{state:"passed"},...(tools?{tools:{state:"passed"}}:{})};
+        config.verification[body.model.id]=record;
+        if(body.make_default&&tools)config.default_model=body.model.id;
+        status=201;data={added:true,verified:true,agent_ready:tools,verification_saved:true,model_id:body.model.id,verification:record};
+      }
+    } else if (path === "/api/v1/settings/models") {
       config = { ...structuredClone(body.patch), verification: config.verification };
     } else if (path === "/api/v1/models/test") {
       if (hold) await paused;
@@ -83,7 +99,7 @@ function fixture({ failTools = false, hold = false, staleEvidence = false, missi
         if (staleEvidence) delete config.verification[body.model_id];
       }
     } else assert.fail(`Unexpected request ${path}`);
-    return new Response(JSON.stringify({ ok: status === 200, data, error }), { status, headers: { ETag: '"fixture-revision"' } });
+    return new Response(JSON.stringify({ ok: status >= 200 && status < 300, data, error }), { status, headers: { ETag: '"fixture-revision"' } });
   };
   const panel = createModelConfigPanel(container);
   const button = label => {
@@ -96,112 +112,84 @@ function fixture({ failTools = false, hold = false, staleEvidence = false, missi
   };
   async function add() {
     await panel.ensureLoaded(); button("添加供应商").click(); await flush(); button("OpenAI").click(); input("api-key", "fixture-key");
-    button("连接并读取模型").click(); await flush();
+    button("下一步").click(); await flush();
+    button("下一步").click(); await flush();
     const checkbox = input("make-default", ""); checkbox.checked = true; checkbox.dispatchEvent(new Event("change"));
-    button("添加并验证所选模型").click(); await flush();
+    button("添加并验证（2）").click(); await flush();
   }
   return { panel, container, calls, add, button, input, config: () => config, release, allowTools: () => { rejectTools = false; },
     restore() { panel.destroy(); release(); Object.assign(globalThis, previous); } };
 }
-test("wizard saves only selected profiles, auto-verifies, and then sets the default", async () => {
-  const f = fixture();
-  try {
+test("wizard fetches models and missing parameters automatically and commits only selected profiles", async () => {
+  const f=fixture();try {
     await f.add();
-    const probes = f.calls.filter(call => call.path.endsWith("/test"));
-    assert.deepEqual(probes.map(call => call.body), [
-      { model_id: "openai-alpha", tools: false }, { model_id: "openai-alpha", tools: true },
-      { model_id: "openai-beta", tools: false }, { model_id: "openai-beta", tools: true },
-    ]);
-    const save = f.calls.find(call => call.path.endsWith("/setup"));
-    assert.equal(save.body.patch.default_model, "existing");
-    assert.equal(save.body.patch.items[1].proxy.kind, "provider");
-    assert.equal(f.config().default_model, "openai-alpha");
-    assert(f.container.textContent.includes("2/2")); assert(f.container.textContent.includes("已验证"));
-    assert(!f.container.textContent.includes("停止后续验证"));
-    await f.panel.reload(); assert(f.container.textContent.includes("已验证"));
-  } finally { f.restore(); }
+    const adds=f.calls.filter(c=>c.path.endsWith("/add"));
+    assert.deepEqual(adds.map(c=>c.body.model.wire_model),["alpha","beta"]);
+    assert.equal(adds[0].body.model.proxy.kind,"provider");
+    assert.equal(f.calls.filter(c=>c.path.endsWith("/discover")).length,1);
+    const lookup=f.calls.find(c=>c.path.endsWith("/parameters"));assert.equal(lookup.body.catalog_only,true);assert(!lookup.body.key);
+    assert(!f.calls.some(c=>c.path.endsWith("/setup")));
+    assert.equal(f.config().default_model,"openai-alpha");
+    assert(f.container.textContent.includes("已验证"));
+    assert(!f.container.textContent.includes("测试回复"));assert(!f.container.textContent.includes("测试工具调用"));
+    assert(descendants(f.container).some(n=>n.className==="model-parameter-link"));
+  } finally {f.restore();}
 });
-test("failed tool validation stays visible, preserves the default, and can be retried", async () => {
-  const f = fixture({ failTools: true });
-  try {
-    await f.add(); assert.equal(f.config().default_model, "existing");
-    assert(f.container.textContent.includes("1/2")); assert(f.container.textContent.includes("回复通过"));
-    assert(f.container.textContent.includes("失败"));
-    assert.equal(f.config().verification["openai-alpha"].verified, false);
-    assert.equal(f.button("添加供应商").disabled, false);
-    assert(descendants(f.container).some(node => node.textContent === "完整验证 / 重试" && !node.disabled));
-    f.allowTools(); f.button("完整验证 / 重试").click(); await flush();
-    assert.equal(f.config().verification["openai-alpha"].verified, true);
-    assert(f.container.textContent.includes("1/1"));
-  } finally { f.restore(); }
+test("failed validation leaves only failed drafts; successes never get probed twice", async()=>{
+  const f=fixture({failTools:true});try {
+    await f.add();assert(f.config().items.some(m=>m.wire_model==="beta"));
+    assert(!f.config().items.some(m=>m.wire_model==="alpha"));
+    assert(descendants(f.container).some(n=>n.className==="resource-error"&&n.textContent), f.container.textContent);
+    f.allowTools();f.button("添加并验证（1）").click();await flush();
+    assert.equal(f.calls.filter(c=>c.path.endsWith("/add")&&c.body.model.wire_model==="beta").length,1);
+    assert(f.config().items.some(m=>m.wire_model==="alpha"));
+  }finally{f.restore();}
 });
-test("closing the panel cancels pending onboarding and prevents further probes", async () => {
-  const f = fixture({ hold: true });
-  try {
-    await f.add(); f.panel.destroy(); await flush();
-    assert.equal(f.calls.filter(call => call.path.endsWith("/test")).length, 1);
-    assert.equal(f.config().default_model, "existing");
-  } finally { f.restore(); }
+test("closing the panel cancels a pending draft without registering unverified models",async()=>{
+  const f=fixture({hold:true});try{await f.add();f.panel.destroy();await flush();
+    assert.equal(f.calls.filter(c=>c.path.endsWith("/add")).length,1);assert.equal(f.config().items.length,1);
+  }finally{f.restore();}
 });
-test("stop remains clickable during verification and keeps the saved models", async () => {
-  const f = fixture({ hold: true });
-  try {
-    await f.add(); const stop = f.button("停止后续验证"); assert.equal(Boolean(stop.disabled), false);
-    stop.click(); await flush();
-    assert(f.container.textContent.includes("已停止"));
-    assert(!descendants(f.container).some(node => node.tagName === "BUTTON" && node.textContent === "停止后续验证"));
-    assert.equal(f.calls.filter(call => call.path.endsWith("/test")).length, 1);
-    assert.equal(f.config().items.length, 3);
-    assert.equal(f.button("添加供应商").disabled, false);
-  } finally { f.restore(); }
+test("stopping preserves unattempted drafts and leaves no phantom installed profiles",async()=>{
+  const f=fixture({hold:true});try{await f.add();f.button("停止").click();await flush();
+    assert(f.container.textContent.includes("已停止"));assert.equal(f.config().items.length,1);
+    assert(f.button("添加并验证（2）"));
+  }finally{f.restore();}
 });
-test("evidence invalidated by native configuration changes cannot set the default", async () => {
-  const f = fixture({ staleEvidence: true });
-  try {
-    await f.add(); assert.equal(f.config().default_model, "existing");
-    assert(f.container.textContent.includes("0/2")); assert(f.container.textContent.includes("配置已变化"));
-  } finally { f.restore(); }
+test("configuration changes during validation cannot promote a default",async()=>{
+  const f=fixture({staleEvidence:true});try{await f.add();assert.equal(f.config().default_model,"existing");
+    assert.equal(f.config().items.length,1);assert(descendants(f.container).some(n=>n.className==="resource-error"&&n.textContent), f.container.textContent);
+  }finally{f.restore();}
 });
-
-test("unknown parameters block saving until completed, with an explicit warning", async () => {
-  const f = fixture({missingBeta:true});
-  try {
-    await f.add();
-    assert.equal(f.calls.filter(call => call.path.endsWith("/setup")).length,0);
-    assert(descendants(f.container).some(node => node.className === "model-parameter-warning" && !node.hidden && node.textContent.includes("无法获取模型参数")));
-    f.input("parameter-1-context_tokens","16000"); f.input("parameter-1-max_output_tokens","8000");
-    f.input("parameter-1-output-budget","2048");
+test("unknown parameters remain editable and block validation until filled",async()=>{
+  const f=fixture({missingBeta:true});try{await f.add();assert.equal(f.calls.filter(c=>c.path.endsWith("/add")).length,0);
+    f.input("parameter-1-context_tokens","16000");f.input("parameter-1-max_output_tokens","8000");f.input("parameter-1-output-budget","2048");
     const choice=f.input("parameter-1-reasoning","provider-default");choice.dispatchEvent(new Event("change"));
-    f.button("添加并验证所选模型").click();await flush();
-    assert.equal(f.calls.filter(call => call.path.endsWith("/setup")).length,1);
-    const beta=f.config().items.find(item=>item.wire_model==="beta");
-    assert.equal(beta.window.context_tokens,16000);assert.deepEqual(beta.reasoning_efforts,["default"]);
-  } finally {f.restore();}
+    f.button("添加并验证（2）").click();await flush();assert.equal(f.config().items.length,3);
+  }finally{f.restore();}
 });
-test("complete models can be saved while unresolved models remain editable", async () => {
-  const f=fixture({missingBeta:true});
-  try {
-    await f.add();f.button("仅添加参数完整的模型").click();await flush();
-    assert(f.config().items.some(item=>item.wire_model==="alpha"));
-    assert(!f.config().items.some(item=>item.wire_model==="beta"));
-    assert(descendants(f.container).some(node=>node.name==="parameter-0-context_tokens"));
-  } finally {f.restore();}
+test("deselecting an incomplete profile hides its editor and allows the remaining selection",async()=>{
+  const f=fixture({missingBeta:true});try{await f.add();
+    const box=descendants(f.container).find(n=>n.name==="selected-model"&&n.value==="beta");assert(box);
+    box.checked=false;box.dispatchEvent(new Event("change"));
+    const row=box.closest(".model-wizard-row");assert(row.querySelector(".model-parameter-editor").hidden);
+    assert([...row.querySelectorAll("input, select")].filter(n=>n!==box).every(n=>n.disabled));
+    f.button("添加并验证（1）").click();await flush();assert(f.config().items.some(m=>m.wire_model==="alpha"));
+    assert(!f.config().items.some(m=>m.wire_model==="beta"));
+  }finally{f.restore();}
 });
-test("text-only validation never promotes a model as the Agent default", async () => {
-  const f=fixture({textOnly:true});
-  try {await f.add();assert.equal(f.config().default_model,"existing");
-    assert(f.calls.filter(call=>call.path.endsWith("/test")).every(call=>!call.body.tools));
-  } finally {f.restore();}
+test("text-only profiles do not become the Agent default",async()=>{
+  const f=fixture({textOnly:true});try{await f.add();assert.equal(f.config().default_model,"existing");
+    assert(f.calls.filter(c=>c.path.endsWith("/add")).every(c=>!c.body.model.capabilities.includes("tool-call-output")));
+  }finally{f.restore();}
 });
-
-test("deselecting an unresolved model removes its parameter warning and permits the selected model", async () => {
-  const f=fixture({missingBeta:true});
-  try {
-    await f.add();const box=descendants(f.container).find(node=>node.tagName==='INPUT' && node.value==='beta');
-    assert(box);box.checked=false;box.dispatchEvent(new Event('change'));
-    assert(!descendants(f.container).some(node=>node.className==='model-parameter-warning' && !node.hidden && node.textContent.includes('无法获取模型参数')));
-    f.button('添加并验证所选模型').click();await flush();
-    assert(f.config().items.some(item=>item.wire_model==='alpha'));
-    assert(!f.config().items.some(item=>item.wire_model==='beta'));
-  } finally {f.restore();}
+test("manual source switches immediately and needs no supplier discovery request",async()=>{
+  const f=fixture();try{
+    await f.panel.ensureLoaded();f.button("添加供应商").click();await flush();f.button("OpenAI").click();f.input("api-key","fixture-key");
+    f.button("下一步").click();await flush();const before=f.calls.filter(c=>c.path.endsWith("/discover")).length;
+    f.button("手动填写").click();f.input("manual-models","manual-one\nmanual-two,manual-one");f.button("下一步").click();await flush();
+    assert.equal(f.calls.filter(c=>c.path.endsWith("/discover")).length,before);
+    assert.equal(descendants(f.container).filter(n=>n.name==="selected-model").length,2);
+    assert(f.button("添加并验证（2）"));
+  }finally{f.restore();}
 });

@@ -1,5 +1,5 @@
 import { element } from "../../utils/dom.js";
-import { t } from "../../i18n.js";
+import { t, currentLocale } from "../../i18n.js";
 
 const text = (key, fallback, params = {}) => t(`modelParameters.${key}`, params, fallback);
 export const effortNames = ["none", "minimal", "low", "medium", "high", "xhigh", "max"];
@@ -56,9 +56,12 @@ export function applyParameters(model, draft) {
 }
 
 export function parameterSummary(model) {
-  return model.parameters ? text("identified", "参数已识别 · 上下文 {context} · 每次输出预算 {output}", {
-    context: model.window.context_tokens.toLocaleString(), output: model.window.max_output_tokens.toLocaleString(),
-  }) : text("legacy", "旧配置，来源未知；可重新识别参数后选择应用。");
+  const format=value=>Number.isSafeInteger(value)?value.toLocaleString(currentLocale()):"—";
+  return text("cardSummary", "上下文 {context} · 输出预算 {output} · 思考 {reasoning}", {
+    context: format(model.window?.context_tokens), output: format(model.window?.max_output_tokens),
+    reasoning: (model.reasoning_efforts?.length ? model.reasoning_efforts : ["default"])
+      .map(effort=>t(`reasoning.${effort}`,{},effort)).join(" / "),
+  });
 }
 
 export function createParameterEditor(draft, { onChange = () => {}, index = 0 } = {}) {
@@ -75,11 +78,11 @@ export function createParameterEditor(draft, { onChange = () => {}, index = 0 } 
   const warning = element("p", { className: "model-parameter-warning", attrs: { role: "status" } });
   root.append(warning);
   const labels = { context_tokens: text("context", "上下文长度（tokens）"), max_output_tokens: text("maxOutput", "模型最大输出（tokens）"), reasoning: text("reasoning", "思考控制"), output_budget: text("budget", "每次请求输出预算（tokens）") };
-  function update() {
+  function update(notify = true) {
     const issues = parameterIssues(draft);
     warning.hidden = !issues.length;
     warning.textContent = issues.length ? text("missing", "无法获取模型参数，请补全这些参数：{fields}", { fields: issues.map(key => labels[key]).join("、") }) : "";
-    onChange();
+    if (notify) onChange();
   }
   function manual(key, value) {
     record.fields[key] = { value, source: "manual", checked_at: new Date().toISOString() };
@@ -135,5 +138,5 @@ export function createParameterEditor(draft, { onChange = () => {}, index = 0 } 
   root.append(element("label", { className: "model-field" }, [element("span", { text: labels.output_budget }), budget]),
     element("small", { text: text("budgetHelp", "输出预算与模型最大输出分开保存，不会自动请求模型的全部输出额度。") }));
   if (record.lookup_state && !["ok", "not_exposed"].includes(record.lookup_state)) root.append(element("p", { className: "model-parameter-warning", text: text("unavailable", "本次未能读取供应商参数，已尝试服务器参数表；请确认网络、接口权限或手动补全。") }));
-  refreshEfforts(); update(); return root;
+  refreshEfforts(); update(false); return root;
 }
