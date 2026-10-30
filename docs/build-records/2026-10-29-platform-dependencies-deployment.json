@@ -1,0 +1,394 @@
+{
+  "date": "2026-10-29",
+  "completed_at_utc": "2026-10-29T08:49:22+00:00",
+  "status": "platform_deployed_client_not_published",
+  "source_repository": "D:\\GIT\\home",
+  "source_commit": "57498b44a9df0b11fbf40d4e25586fd610a6ff8c",
+  "uncommitted_server_changes_included": true,
+  "source_archive_sha256": "ee1b7cf3e283c58e952270e4b3156b5c9694ac04fa1efba1b2896e9c3e4b452b",
+  "files": [
+    {
+      "path": "modules/attachment.h",
+      "sha256": "284c7fe3040e9a4190d0d30b8a64d58666710886c333dbd5f25aa0b427876c37",
+      "bytes": 15684,
+      "expected_deployed_sha256": "9334af1bd062d9f567911d2a82a88771eb257d02e7fb731ea031140331c5252c"
+    },
+    {
+      "path": "page/attachment/list.html",
+      "sha256": "a841aa693b0a60d5ffe054d925f2623ef660f72e31d2466db87e1e3dd32b3474",
+      "bytes": 16146,
+      "expected_deployed_sha256": "02f369e47d5e5f8b6d358eb8159b07ee076b5f37bf62380e42a0a962aae59c42"
+    },
+    {
+      "path": "plugin/mdo/modules/ecosystem/agent_config_format.h",
+      "sha256": "c4d24f35bf31a079886bc752f38bdf8fbf4235b801957ae3f669f1257d257d0e",
+      "bytes": 16892,
+      "expected_deployed_sha256": "d52035cbdf1ea313b0130565f9132c0e7a2650711b0a4444eb0169c08b1527ae"
+    },
+    {
+      "path": "plugin/mdo/modules/ecosystem/directory_dependencies.inc.c",
+      "sha256": "4934f6552466d81ba304f2781e2c11162a371f1a9cbbe0b908091608daf9ff68",
+      "bytes": 9173,
+      "expected_deployed_sha256": null
+    },
+    {
+      "path": "plugin/mdo/modules/ecosystem/directory_lifecycle.inc.c",
+      "sha256": "e8b43cd4e2b70c6c17ef65b973205ce8df953575da3a586d81aec42eddfd34a0",
+      "bytes": 27104,
+      "expected_deployed_sha256": "3f08114e46e63890de464b5bc4a4d5874fcf9db6d8db6c6336616ec0f322b69a"
+    },
+    {
+      "path": "plugin/mdo/modules/ecosystem/directory_routes.inc.c",
+      "sha256": "7ac1f8a7222408e81282b7b091b974ada4c0fb3d0bf7d1572a1135432d421cfd",
+      "bytes": 18191,
+      "expected_deployed_sha256": "e5d0fbee2273d12f38ac6e6ea62000ea1d7dc7fc046841bcc5693c053110f8ea"
+    },
+    {
+      "path": "plugin/mdo/modules/ecosystem/directory_store.inc.c",
+      "sha256": "48a60af2128595b5996d2678988263d7bd2ef7d5ec0856f299649933e190c6e3",
+      "bytes": 22876,
+      "expected_deployed_sha256": "6be20dabd34a0637777d990a5dc5f3e9c9a54e498797edcbfdd4e9aab1c58ed3"
+    },
+    {
+      "path": "plugin/mdo/modules/ecosystem/directory_versions.inc.c",
+      "sha256": "ffee2f90ccb2b57321d22c0d14b4a8708b10d0b322d58da267b79686483c0b2f",
+      "bytes": 7319,
+      "expected_deployed_sha256": "32a14bcbec9339665cccfde6c36cd675b8218e24e0ff5fcf471c5e1aeeffa4c8"
+    },
+    {
+      "path": "plugin/mdo/modules/ecosystem/extension_graph.h",
+      "sha256": "a84510cee5e583fd3fa9c6160f6442ec820fc60978376fd7840c84b2386532e8",
+      "bytes": 13560,
+      "expected_deployed_sha256": null
+    },
+    {
+      "path": "plugin/mdo/modules/ecosystem/extension_identity.h",
+      "sha256": "a830931eec7087d655a7754e3cca4fdb48555a3dd09b83844fbf3753792a1a6f",
+      "bytes": 3151,
+      "expected_deployed_sha256": "fa95279e777200dd27c8a4e0b614362bbde72d1b89ad498390ae5b376474e58b"
+    },
+    {
+      "path": "plugin/mdo/modules/ecosystem/extension_manifest.h",
+      "sha256": "46121000afa67f367c42aea398536abf97e5d1f99fbfc9ff99ad8d0400f1b495",
+      "bytes": 7949,
+      "expected_deployed_sha256": "497666007fa1197700ed935ca108e123a70d50671a0f5e7579785543c37d99c1"
+    },
+    {
+      "path": "plugin/mdo/modules/ecosystem/main.c",
+      "sha256": "597bf17c349be8984deea3077054074cabb848d3f8ae6ae795b97050e7e5430a",
+      "bytes": 4733,
+      "expected_deployed_sha256": "aaf6a4041790dc49d17c81d8f85aeeddccfce749b0859ab8c204e1e92bc4ced8"
+    },
+    {
+      "path": "plugin/mdo/modules/ecosystem/mcp_template.h",
+      "sha256": "e02d4faa0b4106daa1674515686ca480906f4daf1bab72390871d9a2f54d4bb5",
+      "bytes": 12559,
+      "expected_deployed_sha256": "efb176684d30af0c711b41d9f74ffa8769a24bf5346cf5a112a6dfa19a8502fb"
+    },
+    {
+      "path": "plugin/mdo/modules/ecosystem/plugin_format.h",
+      "sha256": "4b937e625858ff25ff207c8ec8813e3da5db96724e7c6f491748b9e1a0968dd7",
+      "bytes": 4972,
+      "expected_deployed_sha256": "670addeeb26f92c0d9cb386d5178ebcb9161ec4e9c22b6c5fd1ed97d8011b01a"
+    },
+    {
+      "path": "plugin/mdo/page/extensions/public.js",
+      "sha256": "7f039ea2fb986cb211114cda930949769119e7a53e1b3c03df98f865a1ba0eb5",
+      "bytes": 16138,
+      "expected_deployed_sha256": "b0700727f2046491e618426a2196b599a820347365fca4eff3e6143ed5b52e56"
+    },
+    {
+      "path": "plugin/mdo/page/extensions/transfer.js",
+      "sha256": "f463de5c788be82601df0aa992b7b5fe8a5c44cd31aa92fb8792c00b08436f51",
+      "bytes": 8712,
+      "expected_deployed_sha256": "a184e3977e3d55db79df5fe5c2281c10259e644b9cfc765d7ead37bc62198914"
+    },
+    {
+      "path": "route_http/attachment.h",
+      "sha256": "da2b703918564a227e7b35d51bac69b7217986f2e650de880b4b476d46f1b83f",
+      "bytes": 25437,
+      "expected_deployed_sha256": "91e2e8e97c5854061ce74e1ef8a24fd25500cbfac66df42d5afd55c4e31f2ee2"
+    }
+  ],
+  "platform_only": true,
+  "mdo_client_published": false,
+  "remote_backup": "/home/xs/mdo-dependencies-20261029-4f62c4259f",
+  "prepare": {
+    "prepared": true,
+    "files": 17,
+    "protected_files": 10,
+    "migration_tables_added": [
+      "dependency",
+      "extension_conflict",
+      "identity"
+    ],
+    "database_row_counts_preserved": true,
+    "attachment_guard_contract": true,
+    "production_source_modified": false,
+    "remote_backup": "/home/xs/mdo-dependencies-20261029-4f62c4259f"
+  },
+  "production_verification": {
+    "verified_at": 1793263762,
+    "service_active": true,
+    "owned_source_files": 17,
+    "protected_source_files": 10,
+    "protected_sources_unchanged": true,
+    "native_and_config_unchanged": true,
+    "mdo_release_catalog_unchanged": true,
+    "nine_catalogs": {
+      "agents": 0,
+      "subagents": 0,
+      "tools": 0,
+      "skills": 0,
+      "mcp": 0,
+      "external-tools": 13,
+      "commands": 0,
+      "plugins": 0,
+      "knowledge": 0
+    },
+    "legacy_zip": {
+      "version_id": "756e1428228546adaede0b2a1985574c",
+      "bytes": 1764505,
+      "sha256": "36b2bcbf5a222f3d0f416354c625f5f11bcc93d00fe77c77d8235df1cfb3581a",
+      "old_client_full_download": true,
+      "old_client_chunked_download": true,
+      "protocol_1_download_identical": true
+    },
+    "anonymous_authority_unchanged": true,
+    "database_integrity": "ok",
+    "database_tables": {
+      "audit": {
+        "count": 77,
+        "sha256": "77cad58fdc57f6240516729dc3b4112fcb7c92de88ce66261fb1e670b0584d43"
+      },
+      "dependency": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "extension_conflict": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "identity": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "profile": {
+        "count": 1,
+        "sha256": "ec8ca71fa887e21b5350aea9c26db2c8d18fba817201eee4d3fcdaaa9ffcb764"
+      },
+      "published": {
+        "count": 39,
+        "sha256": "53e4ab279abee4797d89165b0d09589b4b887259c1ecc8d89b4becda33d95f37"
+      },
+      "request": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "upload": {
+        "count": 57,
+        "sha256": "9803004e9ac28a12f2958ef34798cd4c81a1c580b7bb63a5f0bc7a6863396fea"
+      },
+      "version": {
+        "count": 48,
+        "sha256": "acbaa897cf67c007f25b38e625b92522fd1ead6aaec315f85cf4d6f1fedff4ef"
+      },
+      "work": {
+        "count": 22,
+        "sha256": "ae141ec9ca4a81da000e022028079f0ec8cfe7ad7d30b763e640ac6700fe13b6"
+      }
+    },
+    "mdo_releases": [
+      {
+        "id": "desktop",
+        "status": "published",
+        "version_name": "0.7.0",
+        "version_code": "05000700",
+        "build_id": 70000049,
+        "sha256": "c8a6390979633aee314a270546f4885e498fe252c0c2eb4079f3688632fccad9",
+        "size": 6432860
+      },
+      {
+        "id": "lite",
+        "status": "published",
+        "version_name": "0.7.0",
+        "version_code": "05000700",
+        "build_id": 70000055,
+        "sha256": "8ded2f666e719169a67e8e69de96438849f634eaf626a63ea225be63b1d46708",
+        "size": 6219156
+      },
+      {
+        "id": "full",
+        "status": "published",
+        "version_name": "0.7.0",
+        "version_code": "05000700",
+        "build_id": 70000056,
+        "sha256": "c66b5f0152bb8b001c88d5402ebc1cfaf50e0f563662773ee153caf2e85977bf",
+        "size": 473954408
+      },
+      {
+        "id": "linux-glibc-gui",
+        "status": "published",
+        "version_name": "0.7.0",
+        "version_code": "05000700",
+        "build_id": 70000051,
+        "sha256": "ddb28c77f6c7056b0184354491c15b28556445960db88f99020d54e55e8ed077",
+        "size": 6035885
+      },
+      {
+        "id": "linux-glibc-server",
+        "status": "published",
+        "version_name": "0.7.0",
+        "version_code": "05000700",
+        "build_id": 70000052,
+        "sha256": "b8b29364d03c5f36bd31bcf3377b399b41bce900c81c7c2254b3194fac0d007e",
+        "size": 5998764
+      },
+      {
+        "id": "linux-musl-gui",
+        "status": "published",
+        "version_name": "0.7.0",
+        "version_code": "05000700",
+        "build_id": 70000053,
+        "sha256": "2fac9b253ed9e7e57fe62dfabe1263a5799fcc0c355082224f7943d42461be8a",
+        "size": 7770764
+      },
+      {
+        "id": "linux-musl-server",
+        "status": "published",
+        "version_name": "0.7.0",
+        "version_code": "05000700",
+        "build_id": 70000054,
+        "sha256": "0209d80bf364065d4a1c61e9e9de4296b5792c9eb45265db714b3d93486a5f2e",
+        "size": 7733707
+      },
+      {
+        "id": "windows-server",
+        "status": "published",
+        "version_name": "0.7.0",
+        "version_code": "05000700",
+        "build_id": 70000050,
+        "sha256": "6acaf63ce2d5103c16d7de43ee4d8e95c24d48d2f4b5f857af088b76124330e6",
+        "size": 6175131
+      }
+    ],
+    "publish_mdo": false,
+    "backup": "/home/xs/mdo-dependencies-20261029-4f62c4259f"
+  },
+  "public_release_verification": {
+    "verified_at_utc": "2026-10-29T08:50:33Z",
+    "eight_update_selectors_unchanged": true,
+    "website_release_information_unchanged": true,
+    "responses": {
+      "desktop": {
+        "status": 200,
+        "unchanged": true,
+        "url": "https://ai.xywhsoft.com/update/version?platform=windows-x86_64&edition=desktop&build_id=0&version_format=hex24&version_code=05000000",
+        "version_name": "0.7.0",
+        "build_id": 70000049,
+        "sha256": "c8a6390979633aee314a270546f4885e498fe252c0c2eb4079f3688632fccad9"
+      },
+      "windows-server": {
+        "status": 200,
+        "unchanged": true,
+        "url": "https://ai.xywhsoft.com/update/version?platform=windows-x86_64&edition=server&build_id=0&version_format=hex24&version_code=05000000",
+        "version_name": "0.7.0",
+        "build_id": 70000050,
+        "sha256": "6acaf63ce2d5103c16d7de43ee4d8e95c24d48d2f4b5f857af088b76124330e6"
+      },
+      "linux-glibc-gui": {
+        "status": 200,
+        "unchanged": true,
+        "url": "https://ai.xywhsoft.com/update/version?platform=linux-x86_64-glibc&edition=desktop&build_id=0&version_format=hex24&version_code=05000000",
+        "version_name": "0.7.0",
+        "build_id": 70000051,
+        "sha256": "ddb28c77f6c7056b0184354491c15b28556445960db88f99020d54e55e8ed077"
+      },
+      "linux-glibc-server": {
+        "status": 200,
+        "unchanged": true,
+        "url": "https://ai.xywhsoft.com/update/version?platform=linux-x86_64-glibc&edition=server&build_id=0&version_format=hex24&version_code=05000000",
+        "version_name": "0.7.0",
+        "build_id": 70000052,
+        "sha256": "b8b29364d03c5f36bd31bcf3377b399b41bce900c81c7c2254b3194fac0d007e"
+      },
+      "linux-musl-gui": {
+        "status": 200,
+        "unchanged": true,
+        "url": "https://ai.xywhsoft.com/update/version?platform=linux-x86_64-musl&edition=desktop&build_id=0&version_format=hex24&version_code=05000000",
+        "version_name": "0.7.0",
+        "build_id": 70000053,
+        "sha256": "2fac9b253ed9e7e57fe62dfabe1263a5799fcc0c355082224f7943d42461be8a"
+      },
+      "linux-musl-server": {
+        "status": 200,
+        "unchanged": true,
+        "url": "https://ai.xywhsoft.com/update/version?platform=linux-x86_64-musl&edition=server&build_id=0&version_format=hex24&version_code=05000000",
+        "version_name": "0.7.0",
+        "build_id": 70000054,
+        "sha256": "0209d80bf364065d4a1c61e9e9de4296b5792c9eb45265db714b3d93486a5f2e"
+      },
+      "lite": {
+        "status": 200,
+        "unchanged": true,
+        "url": "https://ai.xywhsoft.com/update/version?platform=android-arm64-v8a&edition=lite&build_id=0&version_format=hex24&version_code=05000000",
+        "version_name": "0.7.0",
+        "build_id": 70000055,
+        "sha256": "8ded2f666e719169a67e8e69de96438849f634eaf626a63ea225be63b1d46708"
+      },
+      "full": {
+        "status": 200,
+        "unchanged": true,
+        "url": "https://ai.xywhsoft.com/update/version?platform=android-arm64-v8a&edition=full&build_id=0&version_format=hex24&version_code=05000000",
+        "version_name": "0.7.0",
+        "build_id": 70000056,
+        "sha256": "c66b5f0152bb8b001c88d5402ebc1cfaf50e0f563662773ee153caf2e85977bf"
+      },
+      "website-facts": {
+        "status": 200,
+        "unchanged": true,
+        "url": "https://mdo.xywhsoft.com/site-facts.json",
+        "version_name": "0.7.0",
+        "build_id": null,
+        "sha256": null
+      }
+    },
+    "local_client_files_unchanged": {
+      "D:\\GIT\\mdo\\mdo.exe": "c8a6390979633aee314a270546f4885e498fe252c0c2eb4079f3688632fccad9",
+      "E:\\software\\mdo\\mdo.exe": "c8a6390979633aee314a270546f4885e498fe252c0c2eb4079f3688632fccad9"
+    },
+    "deployed_source_matches_local_snapshot": true,
+    "publish_mdo": false
+  },
+  "browser_smoke": {
+    "public_catalog_loaded": true,
+    "detail_loaded": true,
+    "dependency_heading_visible": true,
+    "legacy_extension_reports_no_dependencies": true,
+    "screenshot": ".build/platform-dependencies-20261029/online-extension-detail.png",
+    "screenshot_sha256": "34bca8e198081fd0d611b532a837924a215736fd086855cc3ffcd7137180693a"
+  },
+  "attempts": [
+    {
+      "outcome": "aborted_before_source_write",
+      "reason": "Only restart is passwordless; standalone stop required an unavailable password. Original source unchanged and service confirmed healthy."
+    },
+    {
+      "outcome": "automatic_source_rollback",
+      "reason": "Admin anonymous access returns the existing hidden-route 404 rather than the assumed 401/403. Production behavior verified and comparison corrected without changing access controls."
+    },
+    {
+      "outcome": "deployed_and_verified",
+      "strategy": "Backward compatible headers first, atomic ecosystem directory exchange, permitted service restart."
+    }
+  ],
+  "limits": [
+    "No production test works/accounts were created. Existing published legacy extensions have no typed IDs; successful real-world dependency plans require new same-work versions declaring IDs. Positive dependency closure contracts passed in isolated native tests.",
+    "No mdo client package, release record, website download selector or update manifest was published or modified.",
+    "Native XS binary and server configuration retained their original hashes."
+  ],
+  "rollback": {
+    "source": "Original ecosystem directory remains at remote_backup/next-ecosystem after exchange; original other source inodes remain at remote_backup/retained-originals. Backups and journals are private.",
+    "database": "Migration is additive. Automatic source rollback retains new tables and does not overwrite live user data. A full consistent SQLite backup is retained for explicit recovery."
+  }
+}

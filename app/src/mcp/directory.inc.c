@@ -1,3 +1,4 @@
+#include "../../include/mdo/distribution.h"
 /* MCP distribution owns a directory. Connection values and approvals never
  * enter that directory; these bounded records live only below data/mcp. */
 #define MDO_MCP_CONNECTIONS "data/mcp/connections"
@@ -83,17 +84,17 @@ static bool McpDirectoryReservedEnvironment(xvalue* Transport)
 static char* McpDirectoryResolveDocument(MdoMcpSource* Source,const xvalue* Connection,char Error[MDO_MCP_ERROR_LIMIT])
 {
     char Why[512]={0},Digest[65]={0};char* Text=NULL;
-    cstr DirectoryId=MdoExtensionText(Connection,"extension_id",96),Id=MdoExtensionText(Connection,"id",96),VariantId=MdoExtensionText(Connection,"variant",64);
+    cstr DirectoryId=MdoExtensionText(Connection,"extension_id",MDO_EXTENSION_REF_BYTES),Id=MdoExtensionText(Connection,"id",96),VariantId=MdoExtensionText(Connection,"variant",64);
     cstr Approved=MdoExtensionText(Connection,"approval_digest",64),Project=MdoExtensionText(Connection,"project_id",64);
     const xvalue* Values=xrtValueObjectGet(Connection,XRT_STR_LITERAL("values"));bool Enabled=false;
-    bool Ok=Connection&&MdoMcpTemplateKeys(Connection,"|id||extension_id||variant||values||enabled||name||project_id||approval_digest|")&&Id&&!strcmp(Id,Source->Id)&&DirectoryId&&MdoExtensionDirectoryId(DirectoryId)&&VariantId&&
+    bool Ok=Connection&&MdoMcpTemplateKeys(Connection,"|id||extension_id||directory_id||variant||values||enabled||name||project_id||approval_digest|")&&Id&&!strcmp(Id,Source->Id)&&DirectoryId&&MdoExtensionRefKind(DirectoryId)&&!strcmp(MdoExtensionRefKind(DirectoryId),"mcp")&&VariantId&&
         xrtValueType(Values)==XVALUE_OBJECT&&xrtValueCount(Values)<=32&&xrtValueGetBool(xrtValueObjectGet(Connection,XRT_STR_LITERAL("enabled")),&Enabled)&&(!Project||!Project[0]||MdoExtensionIdValid(Project));
     xvalue* Meta=Ok?MdoExtensionsRead("mcp",DirectoryId,Why):NULL;bool ExtensionEnabled=false;
     xrtValueGetBool(xrtValueObjectGet(Meta,XRT_STR_LITERAL("enabled")),&ExtensionEnabled);Enabled=Enabled&&ExtensionEnabled;
     cstr Root=MdoExtensionText(Meta,"root",MDO_EXTENSION_PATH_BYTES),Entry=MdoExtensionText(Meta,"entry",MDO_EXTENSION_PATH_BYTES),Alias=MdoExtensionText(Meta,"alias",64);
     char* Path=Root&&Entry?xrtFormat("%s/%s",Root,Entry):NULL,*Native=Root?MdoHomeExternalPath(Root):NULL;
     Text=Path?MdoExtensionRead(Path,true,MDO_MCP_FILE_LIMIT,NULL):NULL;xvalue* Template=Text?xrtJsonParse(xrtStrView(Text)):NULL;xrtFree(Text);
-    Ok=Ok&&Meta&&Native&&Template&&MdoMcpTemplateValidate(Template,Alias,Why,sizeof(Why))&&MdoExtensionsVerify("mcp",DirectoryId,NULL,Why)&&MdoExtensionsFingerprint("mcp",DirectoryId,Digest,NULL,Why);
+    Ok=Ok&&Meta&&Native&&Template&&MdoMcpTemplateValidate(Template,Alias,Why,sizeof(Why))&&MdoExtensionsVerify("mcp",DirectoryId,NULL,Why)&&MdoExtensionsApprovalDigest(DirectoryId,Digest,NULL,Why);
     if(Ok&&Enabled&&(!Approved||strcmp(Approved,Digest))){snprintf(Why,sizeof(Why),"MCP directory changed or has not been approved; review its launch/target and confirm the connection again");Ok=false;}
     const xvalue* Variants=xrtValueObjectGet(Template,XRT_STR_LITERAL("variants")),*Selected=NULL;
     for(size_t I=0;I<xrtValueCount(Variants);I++){const xvalue* V=xrtValueArrayGet(Variants,I);cstr Name=MdoExtensionText(V,"id",64);if(Name&&VariantId&&!strcmp(Name,VariantId))Selected=V;}
@@ -103,7 +104,15 @@ static char* McpDirectoryResolveDocument(MdoMcpSource* Source,const xvalue* Conn
     Ok=Ok&&Config&&McpDirectoryPut(Config,"id",Source->Id)&&xrtValueObjectSetNew(Config,XRT_STR_LITERAL("enabled"),xrtValueBool(Enabled));
     cstr Name=MdoExtensionText(Connection,"name",256);if(Ok&&Name&&Name[0])Ok=McpDirectoryPut(Config,"name",Name);
     if(Ok&&Type&&!strcmp(Type,"stdio")){
+        const xvalue* ProgramRef=xrtValueObjectGet(Transport,XRT_STR_LITERAL("program"));
+        if(xrtValueType(ProgramRef)==XVALUE_OBJECT){
+            cstr Ref=MdoExtensionText(ProgramRef,"ref",MDO_EXTENSION_REF_BYTES),Export=MdoExtensionText(ProgramRef,"export",64);xvalue* Closure=MdoExtensionsDependencies(DirectoryId,false,Why);bool Declared=false;
+            for(size_t I=0;Ref&&I<xrtValueCount(Closure);I++){cstr Target=MdoExtensionText(xrtValueArrayGet(Closure,I),"id",MDO_EXTENSION_REF_BYTES);if(Target&&!strcmp(Target,Ref)){Declared=true;break;}}
+            char* Executable=Declared?MdoCliProgram(Ref,Export,Why):NULL;Ok=Executable&&McpDirectoryPut(Transport,"program",Executable);xrtFree(Executable);xrtValueRelease(Closure);
+            if(!Declared)snprintf(Why,sizeof(Why),"MCP executable reference must be a declared required external program dependency");
+        }
         cstr Program=MdoExtensionText(Transport,"program",4096),Cwd=MdoExtensionText(Transport,"working_directory",4096);
+        Ok=Ok&&Program;
         if(Program&&!xrtPathIsRooted(Program)){
             char* Relative=xrtFormat("%s/%s",Root,Program);bool Exists=false;xfileinfo Info;
             Ok=Relative&&MdoHomeExternalStat(Relative,&Exists,&Info);
@@ -150,7 +159,7 @@ bool MdoMcpRemoveDirectoryConnections(cstr DirectoryId,char Error[512]){
  while((Next=xrtDirNext(D,&E))==XDIR_NEXT_ITEM){
   if(++Count>4096){Ok=false;break;}if(E.Info.Type!=XFILE_TYPE_FILE||!(E.Flags&XDIR_ENTRY_UTF8)||E.Name.Size<6||E.Name.Size>101||memcmp(E.Name.Data+E.Name.Size-5,".json",5))continue;
   char* Path=xrtFormat("data/mcp/connections/%.*s",(int)E.Name.Size,E.Name.Data);char* Text=Path?MdoExtensionRead(Path,true,262144,NULL):NULL;
-  xvalue* Doc=Text?xrtJsonParse(xrtStrView(Text)):NULL;cstr Id=MdoExtensionText(Doc,"extension_id",96);
+  xvalue* Doc=Text?xrtJsonParse(xrtStrView(Text)):NULL;cstr Id=MdoExtensionText(Doc,"directory_id",96);
   if(!Doc)Ok=false;else if(Id&&!strcmp(Id,DirectoryId)&&!MdoHomeRemove(Path,false))Ok=false;
   if(Text){xrtSecureZero(Text,strlen(Text));xrtFree(Text);}xrtValueRelease(Doc);xrtFree(Path);
  }if(Next==XDIR_NEXT_ERROR)Ok=false;if(!xrtDirClose(D))Ok=false;if(!Ok&&Error)snprintf(Error,512,"The extension directory was removed, but one or more private MCP bindings require cleanup");return Ok;

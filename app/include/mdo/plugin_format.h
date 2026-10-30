@@ -6,6 +6,7 @@
 #define MDO_PLUGIN_COUNT 32u
 #define MDO_PLUGIN_FILES MDO_EXTENSION_DIRECTORY_ENTRIES
 #define MDO_PLUGIN_BYTES MDO_EXTENSION_DIRECTORY_BYTES
+static bool MdoPluginIdentity(cstr Id){cstr Kind=MdoExtensionRefKind(Id);return Kind&&!strcmp(Kind,"plugins");}
 static bool MdoPluginPath(cstr P){return MdoExtensionRelativePath(P);}
 static const xvalue* MdoPluginGet(const xvalue* V,cstr K){return xrtValueObjectGet(V,xrtStrView(K));}
 static bool MdoPluginFail(char* E,size_t N,cstr Why){if(E&&N)snprintf(E,N,"%s",Why);return false;}
@@ -34,18 +35,9 @@ static bool MdoPluginPathOverlap(cstr A,cstr B){
 static const xvalue* MdoPluginFile(const xvalue* Files,cstr Path){
  for(size_t I=0;Path&&I<xrtValueCount(Files);I++){const xvalue* F=xrtValueArrayGet(Files,I);cstr P=MdoExtensionText(F,"path",MDO_EXTENSION_PATH_BYTES);bool D=false;xrtValueGetBool(MdoPluginGet(F,"directory"),&D);if(!D&&P&&!strcmp(P,Path))return F;}return NULL;
 }
-static bool MdoPluginRelations(const xvalue* D,cstr Kind,cstr Self,char* E,size_t N){
- const xvalue* Rows=MdoPluginGet(D,Kind);if(!Rows)return true;
- if(xrtValueType(Rows)!=XVALUE_ARRAY||xrtValueCount(Rows)>32)return MdoPluginFail(E,N,"Plugin relations allow at most 32 entries");
- const cstr Keys[]={"id","reason"};
- for(size_t I=0;I<xrtValueCount(Rows);I++){const xvalue* R=xrtValueArrayGet(Rows,I);cstr Id=MdoExtensionText(R,"id",96);
-  if(!MdoPluginKeys(R,Keys,2)||!MdoExtensionDirectoryId(Id)||(Self&&!strcmp(Self,Id))||(MdoPluginGet(R,"reason")&&!MdoExtensionText(R,"reason",600)))return MdoPluginFail(E,N,"A relation needs another plugin identity and optional reason; version bounds are not supported");
-  for(size_t J=0;J<I;J++)if(!strcmp(Id,MdoExtensionText(xrtValueArrayGet(Rows,J),"id",96)))return MdoPluginFail(E,N,"Duplicate plugin relation");}
- return true;
-}
 static bool MdoPluginValidate(const xvalue* D,const xvalue* Files,cstr ExpectedAlias,char* E,size_t N){
- const cstr Keys[]={"entry","overrides","exclusive","requires","conflicts"};
- if(!MdoPluginKeys(D,Keys,5)||xrtValueType(Files)!=XVALUE_ARRAY||!xrtValueCount(Files)||xrtValueCount(Files)>MDO_PLUGIN_FILES)return MdoPluginFail(E,N,"A plugin recipe contains entries, overrides and optional relationships; its files belong to the directory ZIP");
+ const cstr Keys[]={"entry","overrides","exclusive"};
+ if(!MdoPluginKeys(D,Keys,3)||xrtValueType(Files)!=XVALUE_ARRAY||!xrtValueCount(Files)||xrtValueCount(Files)>MDO_PLUGIN_FILES)return MdoPluginFail(E,N,"A plugin recipe contains entries, overrides and optional relationships; its files belong to the directory ZIP");
  const xvalue* Overrides=MdoPluginGet(D,"overrides");const cstr MappingKeys[]={"source","target"};
  if(Overrides&&(xrtValueType(Overrides)!=XVALUE_ARRAY||xrtValueCount(Overrides)>4096))return MdoPluginFail(E,N,"Invalid plugin overrides");
  for(size_t I=0;I<xrtValueCount(Overrides);I++){const xvalue* O=xrtValueArrayGet(Overrides,I);cstr S=MdoExtensionText(O,"source",MDO_EXTENSION_PATH_BYTES),T=MdoExtensionText(O,"target",MDO_EXTENSION_PATH_BYTES);
@@ -61,6 +53,6 @@ static bool MdoPluginValidate(const xvalue* D,const xvalue* Files,cstr ExpectedA
  const xvalue* Exclusive=MdoPluginGet(D,"exclusive");if(Exclusive&&(xrtValueType(Exclusive)!=XVALUE_ARRAY||xrtValueCount(Exclusive)>16))return MdoPluginFail(E,N,"Invalid exclusive markers");
  for(size_t I=0;I<xrtValueCount(Exclusive);I++){xstrview K={0};if(!xrtValueGetString(xrtValueArrayGet(Exclusive,I),&K)||memchr(K.Data,0,K.Size)||!MdoExtensionAlias(K.Data))return MdoPluginFail(E,N,"Invalid exclusive marker");
   for(size_t J=0;J<I;J++)if(xrtValueEqual(xrtValueArrayGet(Exclusive,I),xrtValueArrayGet(Exclusive,J)))return MdoPluginFail(E,N,"Duplicate exclusive marker");}
- return MdoPluginRelations(D,"requires",ExpectedAlias,E,N)&&MdoPluginRelations(D,"conflicts",ExpectedAlias,E,N);
+ (void)ExpectedAlias;return true;
 }
 #endif

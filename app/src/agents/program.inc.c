@@ -5,18 +5,18 @@ static bool MdoAgentsCanDelegate(const MdoModuleAgentInfo* Parent,const MdoModul
     const xvalue* Delegation=MdoAgentConfigGet(Config,"delegation");
     cstr Short=!strncmp(Child->Id,"subagent.",9)?Child->Id+9:!strncmp(Child->Id,"agent.",6)?Child->Id+6:Child->Id;
     const xvalue* Allow=MdoAgentConfigGet(Delegation,"allow"),*Deny=MdoAgentConfigGet(Delegation,"deny");
-    bool Ok=(MdoAgentsListMatch(Allow,Child->Id,true)||MdoAgentsListMatch(Allow,Short,false)) &&
-        !MdoAgentsListMatch(Deny,Child->Id,false) && !MdoAgentsListMatch(Deny,Short,false);
+    bool Ok=(MdoAgentsListMatch(Allow,Child->Id,true)||MdoAgentsListMatch(Allow,Short,false)||(Child->ExtensionId&&MdoAgentsListMatch(Allow,Child->ExtensionId,false))) &&
+        !MdoAgentsListMatch(Deny,Child->Id,false) && !MdoAgentsListMatch(Deny,Short,false) && !(Child->ExtensionId&&MdoAgentsListMatch(Deny,Child->ExtensionId,false));
     xrtValueRelease(Config);return Ok;
 }
-static bool MdoAgentsApplyMcpSelection(xwork_agent* Agent,cstr Workspace,const MdoModuleAgentInfo* Definition,xwork_error* Error)
+static bool MdoAgentsApplyMcpSelection(MdoAgentOwner* Owner,xwork_agent* Agent,const MdoModuleAgentInfo* Definition,xwork_error* Error)
 {
     xvalue* Config=Definition->ConfigurationJson?xrtJsonParse(xrtStrView(Definition->ConfigurationJson)):NULL;
-    const xvalue* Selected=MdoAgentConfigGet(Config,"mcp_servers");bool Ok=true;
-    if(Selected){
+    bool Ok=!Config||MdoAgentsBindMcp(Owner,Definition,Config,Error);const xvalue* Selected=MdoAgentConfigGet(Config,"mcp_servers");
+    if(Ok&&Selected){
         const char* Ids[128];size_t N=xrtValueCount(Selected);
         for(size_t I=0;I<N;I++){xstrview Id;xrtValueGetString(xrtValueArrayGet(Selected,I),&Id);Ids[I]=Id.Data;}
-        Ok=MdoMcpConfigureRole(Agent,Workspace,Ids,N,Error);
+        Ok=MdoMcpConfigureRoleScoped(Agent,Owner->Workspace,Owner->ProductProject,Ids,N,Error);
     }
     xrtValueRelease(Config);return Ok;
 }
@@ -235,6 +235,7 @@ static xwork_result MdoAgentsExtension(void* Data,xwork_agent_extension_context*
     MdoAgentInstance* Instance=MdoAgentsInstance(Owner,Native,Error);
     if(!Instance)return XWORK_RESULT_ERROR;
     if(Native->ePhase==XWORK_AGENT_EXTENSION_MODEL_DISPATCH){
+        if(!MdoAgentsCheckDependencies(Owner,&Instance->Definition,Native->pAgent,Error))return XWORK_RESULT_ERROR;
         /* Includes compaction meta-requests, which must use the same role's
          * provider even when two profiles share a wire model name. */
         xrtMutexLock(Owner->InstanceLock);Instance->CurrentRequest=Native->pRequest;xrtMutexUnlock(Owner->InstanceLock);
@@ -248,7 +249,7 @@ static xwork_result MdoAgentsExtension(void* Data,xwork_agent_extension_context*
             XWORK_APPROVAL_CALLBACK:Owner->DelegationApproval;
         if(Instance->Definition.PermissionProfile && !strcmp(Instance->Definition.PermissionProfile,"balanced") && Native->eDelegationApproval==XWORK_APPROVAL_AUTO)
             Native->eDelegationApproval=XWORK_APPROVAL_CALLBACK;
-        return MdoAgentsApplyMcpSelection(Native->pAgent,Owner->Workspace,&Instance->Definition,Error)?XWORK_RESULT_OK:XWORK_RESULT_ERROR;
+        return MdoAgentsApplyMcpSelection(Owner,Native->pAgent,&Instance->Definition,Error)?XWORK_RESULT_OK:XWORK_RESULT_ERROR;
     }
     if(Native->ePhase==XWORK_AGENT_EXTENSION_CHILD_READY){
         MdoAgentResolvedModel Model,ParentModel=Owner->RootModel;
@@ -270,7 +271,8 @@ static xwork_result MdoAgentsExtension(void* Data,xwork_agent_extension_context*
         size_t Published=0;
         if(!MdoAgentsPublishSubagents(Owner,Native->pAgent,&Instance->Definition,&Model,&Published,Error))return XWORK_RESULT_ERROR;
         size_t ToolCount=0;uint64 Generation=0;
-        if(!MdoAgentsApplyToolPolicy(Native->pAgent,&Instance->Definition,Instance->Definition.AllowedEffects & Owner->DelegationEffects,&ToolCount,&Generation,Error))return XWORK_RESULT_ERROR;
+        if(!MdoAgentsApplyToolPolicy(Native->pAgent,&Instance->Definition,Instance->Definition.AllowedEffects & Owner->DelegationEffects,Owner->Workspace,&ToolCount,&Generation,Error))return XWORK_RESULT_ERROR;
+        if(!MdoAgentsCheckDependencies(Owner,&Instance->Definition,Native->pAgent,Error))return XWORK_RESULT_ERROR;
         return XWORK_RESULT_OK;
     }
     if(Native->ePhase==XWORK_AGENT_EXTENSION_CONTEXT){
@@ -326,6 +328,7 @@ static xwork_result MdoAgentsExtension(void* Data,xwork_agent_extension_context*
     if(Native->ePhase==XWORK_AGENT_EXTENSION_BEFORE_TOOL || Native->ePhase==XWORK_AGENT_EXTENSION_AFTER_TOOL){
         bool Before=Native->ePhase==XWORK_AGENT_EXTENSION_BEFORE_TOOL;
         if(!MdoAgentsProgramEvent(Owner,Instance,Native,Instance->Plan,Before?MDO_AGENT_BEFORE_TOOL:MDO_AGENT_AFTER_TOOL,Error))return XWORK_RESULT_ERROR;
+        if(Before){char Why[512]={0};if(!MdoAgentsCheckDependencies(Owner,&Instance->Definition,Native->pAgent,Error))return XWORK_RESULT_ERROR;if(Native->pToolEvent&&!MdoMcpCheckTool(Native->pAgent,Native->pToolEvent->sToolName,Native->pToolEvent->sArgumentsJson,Owner->Workspace,Owner->ProductProject,Why)){MdoAgentsError(Error,XWORK_ERROR_CONTEXT,Why);return XWORK_RESULT_ERROR;}}
         if(Native->pToolEvent && !strcmp(Native->pToolEvent->sToolName,"agent")){
             xwork_agent_extension_context Current=*Native;xwork_hook_event Event=*Native->pToolEvent;
             if(!Before && Native->pToolOutput){Event.sOutput=Native->pToolOutput->sContent;Event.bSuccess=Native->pToolOutput->bSuccess;}

@@ -1,75 +1,74 @@
 # 知识库
 
-知识库是带索引的文档目录，作为第六个已落地的扩展体系接入本机、商店、创作中心和后台。它不提供向量数据库或自动执行脚本；Agent 根据可选提示词，用已有 `read`、`ls`、`glob`、`grep` 工具按需查看资料。
+知识库是带索引的文档目录。设置 → 扩展能力 → 知识库支持本机/商店列表、搜索、筛选、分页、详情、目录文件管理和 ZIP 分发。它与项目文档共用真实文件，Agent 用已有文件工具按需查看资料。
 
-## 使用
-
-设置 → 扩展能力 → 知识库，提供本机与商店两个选项卡。支持名称/描述搜索、状态筛选、公共分页、详情弹窗；下载任务使用全局入口。
-
-- 创建 / 导入：可以新建知识库、导入文档目录，或导入完整普通 ZIP。新建及编辑窗口可修改名称、面向用户的描述、索引、模型提示词、作者、版权与许可，并添加、移除或编辑文档；底部保存/取消固定，正文独立滚动。
-- 自定义知识库支持启停、编辑、导出、分享及删除。保存整目录时同时核对元数据与文档修订；冲突保留草稿，不覆盖外部更改。
-- 保存及异步读取附件期间冻结整个表单、文件操作和底部按钮，阻止重复提交与关闭。失败后保留草稿并恢复控件原有禁用状态；批量读取文件全部成功才加入草稿，设备切换后丢弃迟到读取结果。
-- 商店知识库支持详情、文档预览、下载安装、历史版本、检查更新、启停与卸载。禁止编辑、复制与再次分享。更新保留启停状态，拒绝覆盖本机修改；卸载发现改动时保留整个目录为自定义资料。
-- 提示词注入可独立关闭。停用知识库或关闭注入后，下次任务运行不再注入；文档不会整体进入上下文，也不会在安装时运行。
-
-示例提示词：
+## 目录与索引
 
 ```text
-涉及 xrt 库的功能可以参考 {$path} 目录，index.md 为索引文件。
-```
-
-`{$path}` 在使用时替换为该设备上的工具路径，例如 `@knowledge/xrt-reference`。它映射到当前 `mdo-home/knowledge/xrt-reference`，移动 Home 不需要修改路径。工作区受限/只读模式仍可读取这个明确挂载的资料目录，不会因此开放其他外部路径。SubAgent 继承挂载并获得同一检索提示；工具 allowlist 和任务权限继续生效。
-
-提示词作为有边界的参考数据注入，最多每库 8 KiB、合计 128 KiB；只扫描最多 256 个库。无效资料不会注入；不会把整库正文作为系统规则。超出提示词预算时省略后续提示，不无限膨胀上下文。
-
-## 本地及分发格式
-
-```text
-mdo-home/knowledge/xrt-reference/
+knowledge/xrt-reference/
   extension.json
   knowledge.json
+  README.md
   index.md
   reference/runtime.md
   assets/diagram.png
 ```
 
+`README.md` 用于项目说明；默认索引是 `index.md`。索引中每节包含用途说明和对应文件路径，帮助模型快速定位：
+
+```markdown
+# XRT 文档索引
+
+## 生命周期与内存
+说明初始化、对象所有权和内存释放约定。
+文档：reference/runtime.md
+
+## 示例
+按模块给出最小可运行示例。
+文档：examples/index.md
+```
+
+外层清单：
+
 ```json
 {
-  "format": "mdo.knowledge.v1",
-  "name": "XRT 开发参考",
-  "description": "XRT 接口说明、示例和常见问题。",
-  "index": "index.md",
-  "prompt": "涉及 xrt 库的功能可以参考 {$path} 目录，index.md 为索引文件。",
-  "inject_prompt": true,
-  "author": "文档作者",
-  "copyright": "保留原作者版权声明",
-  "license": "MIT"
+  "kind":"knowledge", "id":"knowledge:acme.xrt", "name":"XRT 开发参考",
+  "alias":"xrt-reference", "entry":"knowledge.json", "readme":"README.md",
+  "platforms":["any"], "dependencies":[]
 }
 ```
 
-`index` 必须是目录内已有的 UTF-8 文本文档（最多 4 MiB），可以不是 index.md。每库最多 128 个资料文件，解码后总内容受 64 MiB 的包限制；可以保留图片、PDF 等二进制附件。管理界面文本预览最多 64 KiB，模型工具可分页读取；二进制预览不执行文件。提示词与描述分别面向模型和用户。
+`knowledge.json`：
 
-目录盘点、编辑快照和导出共用便携路径遍历器，不额外限制为八层。所有已通过安装路径长度校验的深层文档均可管理；遍历使用有界堆栈，最多处理 32,768 个目录项，保留原有文件数量、容量及不跟随符号链接/目录联接的保护。删除清理采用相同的深度与目录项预算，使用堆上的后序遍历，不递归消耗线程栈。路径每段最多 64 字节，安装后的相对 Home 路径最多 220 字节。
+```json
+{
+  "format":"mdo.knowledge.v1",
+  "index":"index.md",
+  "prompt":"涉及 XRT 时参考 {$path}，通过 index.md 定位文档。",
+  "inject_prompt":true
+}
+```
 
-分发整个知识目录的普通 ZIP，根 extension.json 指向 knowledge.json；文档、索引、图片、隐藏文件与空目录均为真实文件。不接受内嵌编码文件或安装钩子，统一使用 [目录商店](ecosystem-store.md) 的文件校验、事务与卸载规则。
+`index` 可以指定另一个真实 UTF-8 文本文件。必须非空、可读且不超过 4 MiB。文档、图片、PDF、隐藏文件和空目录按普通目录 ZIP 分发；不把文件编码塞进 JSON。格式、路径和容量边界见[目录商店](ecosystem-store.md)。
 
-知识库自身格式在客户端和平台统一为 `mdo.knowledge.v1`，其最低客户端安装编号统一为 `60000009`。客户端投稿、网页创作器、平台审核校验及本地安装都使用同一下限；小包、大包和重新导出都不能将它降回通用扩展包的旧下限。外层扩展包协议保持现有规则，仍保留 v2 的大包支持；明确声明更高客户端要求的作品保留较高值。
+## 依赖与使用
 
-## 线上流程
+知识库只依赖其他知识库，关系写在 `extension.json.dependencies`，不重复写入 `knowledge.json`。例如 mdo 库可依赖 XServer 库，XServer 再依赖 XRT；直接使用 XRT 接口的 mdo 文档也可显式依赖 XRT，宿主去重。单纯相关资料可以保留正文链接，或声明为可选依赖。
 
-客户端“分享到创作中心”或网站“知识库”分类投稿。网站可上传作品 JSON，也可填写名称、描述、版权与提示词，导入文档目录或直接编辑索引后生成作品，预览并提交。
+详情显示依赖、必需/可选、说明、状态和直接使用者；平台详情可以点击跳转。停用基础库前会显示包含传递使用者的计划；卸载只删除所选库，使用者保留但停用。商店更新检查整组内容并恢复原启用选择。
 
-普通用户默认 3 件 / 每版本 10 MiB，创作者 20 件 / 每版本 100 MiB，计入安装文件与私有审核附件；继续复用创作者申请和作品数量扩容。公布与新版本须审核，更新审核期间保留旧公开版本。作者可管理版本、下架或删除作品。后台“墨斗·扩展与插件 → 知识库管理”沿用 `_component + layui table`，有待审核、已公布、未公布切换及筛选、审核、下架、资料与操作记录；详情显示提示词、目录与文档预览。审核关注资料来源、分发许可及版权，不在服务器执行文档。
+`{$path}` 变为该设备的 `@knowledge/<directory_id>`。移动 Home 无需修改文档。这个明确挂载继承给 SubAgent，仍受文件工具权限和项目选择限制，不开放其他目录。
 
-## API / Application SDK
+每库提示最多 8 KiB，注入条目总预算 128 KiB。宿主先为完整必需集合保留 ID、名称、路径和索引，再填充提示，父库不会缺少依赖定位信息而单独出现。正文不整体进入上下文。索引读取另有合计 16 MiB 预算，超限报告不可用。
 
-- `GET /api/v1/extensions/knowledge`：本机列表。
-- `GET|PUT|DELETE /api/v1/extensions/knowledge/{id}`：元数据与管理，写入/删除需 `If-Match: "new"` 或当前元数据摘要。
-- `GET .../{id}/bundle`：自定义目录导出，含 `bundle_revision` 和 `files`。商店资源拒绝导出。
-- `PUT` 的 `content` 为元数据 JSON 字符串；提供 `files` 时整体替换文件集合，已有目录必须同时提供 `bundle_revision`。省略 `files` 则保留文档，只更新元数据。知识库写入有独立的 100 MiB 请求上限；一般 API 的 256 KiB 上限保持原样。
-- `GET .../{id}/documents[?path=<相对路径>]`：文件列表及有界文本预览，支持查看商店资源。
-- `POST .../{id}/enabled`：启停。
-- `POST /api/v1/ecosystem`，`single_kind=knowledge`：分享、搜索、计划、安装、更新、历史与卸载。
-- 线上 `/api/v1/mdo/ecosystem/packages?single=1&kind=knowledge&format=2`，创作中心 `/mdo/creator?kind=knowledge`。
+关闭注入、项目停用、索引缺失或必需集合无法进入预算时，不注入受影响集合；明确依赖该集合的角色或工具在执行前被阻止。运行中的每次模型派发和工具执行也会重检，修复后可重试。
 
-SDK 复用自动生成的扩展资源接口；例如 `extensions.list` 的参数为 `{"path":{"kind":"knowledge"}}`。没有隐藏的 UI 专用存储。元数据保存修订与整目录修订相互独立；确认丢失后先重读，避免盲目重复写入。
+## 管理接口
+
+- `GET /api/v1/extensions/knowledge`：列表；返回稳定 `id` 和物理 `directory_id`。
+- `GET /api/v1/extensions/knowledge/<id或directory_id>`：清单、整目录修订、依赖详情和使用者。
+- `PUT` 同一路径：`manifest`、有界 `edits`、`expected_revision`；二进制编辑通过原始文件暂存任务引用。
+- `GET .../files`、`GET .../file?path=...`：分页文件列表和预览。
+- `POST /api/v1/ecosystem`：安装、更新、启用、停用、卸载的计划与应用。
+
+本机编辑、商店不可变性、事务回执、项目选择、迁移与平台接口见[扩展身份与依赖](extension-dependencies.md)。

@@ -17,7 +17,7 @@ static bool SdkPluginEnabled(const xvalue* M){bool Enabled=true;xrtValueGetBool(
 #include "plugins_vfs.inc.c"
 
 static bool SdkPluginMountDirectory(SdkPlugin* P,const xvalue* Summary){
- cstr Id=SdkField(Summary,"id");char Error[512]={0},Hash[65];xvalue* Meta=MdoExtensionsRead("plugins",Id,Error);
+ cstr Id=SdkField(Summary,"directory_id");char Error[512]={0},Hash[65];xvalue* Meta=MdoExtensionsRead("plugins",Id,Error);
  cstr Root=SdkField(Meta,"root"),Entry=SdkField(Meta,"entry");char* Path=Root&&Entry?xrtFormat("%s/%s",Root,Entry):NULL;
  char* Text=Path?MdoExtensionRead(Path,true,1048576,NULL):NULL;xvalue* Doc=Text?SdkParse(Text):NULL;xrtFree(Text);xrtFree(Path);
  xvalue* Files=Meta?MdoExtensionsFiles("plugins",Id,NULL,Error):NULL;
@@ -38,7 +38,7 @@ static bool SdkPluginMountDirectory(SdkPlugin* P,const xvalue* Summary){
 static bool SdkPluginPublishView(xvalue* Map,xvalue* Effective){
  MdoExtensionLease* Pins[32]={0};xvalue* NewMap=Map?xrtValueClone(Map):NULL,*NewEffective=Effective?xrtValueClone(Effective):NULL;bool Ok=NewMap&&NewEffective;
  for(size_t I=0;Ok&&I<xrtValueCount(Effective);I++)if(SdkPluginEnabled(xrtValueArrayGet(Effective,I))){
-  char Error[512];Pins[I]=MdoExtensionsAcquire("plugins",SdkField(xrtValueArrayGet(Effective,I),"id"),Error);Ok=Pins[I]!=NULL;}
+  char Error[512];Pins[I]=MdoExtensionsAcquire("plugins",SdkField(xrtValueArrayGet(Effective,I),"directory_id"),Error);Ok=Pins[I]!=NULL;}
  if(Ok){for(size_t I=0;I<32;I++){MdoExtensionsRelease(SdkPlugins.Pins[I]);SdkPlugins.Pins[I]=Pins[I];Pins[I]=NULL;}
   xrtValueRelease(SdkPlugins.Map);SdkPlugins.Map=NewMap;NewMap=NULL;xrtValueRelease(SdkPlugins.Effective);SdkPlugins.Effective=NewEffective;NewEffective=NULL;}
  for(size_t I=0;

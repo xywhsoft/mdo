@@ -16,7 +16,7 @@ xvalue* QaProductContract(const xvalue* P,xvfs V){
  for(size_t I=0;Ok&&I<2;I++){
   cstr Kind=Kinds[I],Physical=I?"1123456789ABCDEFGHJKMNPQRSTVWXYZ":"0123456789ABCDEFGHJKMNPQRSTVWXYZ",Alias=I?"QA-Skill":"QA-Command";char Before[65],After[65],Method[130];bool Item=MdoExtensionsFingerprint(Kind,Physical,Before,NULL,Error);
   xvalue* Q=SdkParse("{\"path\":{},\"query\":{\"project\":\"default\"}}");xvalue* Path=xrtValueObjectGet(Q,XRT_STR_LITERAL("path"));SdkPut(Path,I?"id":"command",Physical);snprintf(Method,sizeof(Method),"product.%s.project.by_%s.get",Kind,I?"id":"command");Item=Item&&mdoCall(&C,Method,Q,&Out,&E)==MDO_RESULT_OK;
-  const xvalue* Row=SdkGet(Out,"data");Item=Item&&Row&&!strcmp(SdkField(Row,"id"),Physical)&&!strcmp(SdkField(Row,"alias"),Alias)&&!strcmp(SdkField(Row,"revision"),"new");xrtValueRelease(Out);Out=NULL;
+  const xvalue* Row=SdkGet(Out,"data");Item=Item&&Row&&!strcmp(SdkField(Row,"directory_id"),Physical)&&!strcmp(SdkField(Row,"alias"),Alias)&&!strcmp(SdkField(Row,"revision"),"new");xrtValueRelease(Out);Out=NULL;
   xvalue* Body=SdkParse("{\"enabled\":false}");xrtValueObjectSet(Q,XRT_STR_LITERAL("body"),Body);xrtValueRelease(Body);SdkPut(Q,"revision","\"new\"");snprintf(Method,sizeof(Method),"product.%s.project.by_%s.enabled.post",Kind,I?"id":"command");Item=Item&&mdoCall(&C,Method,Q,&Out,&E)==MDO_RESULT_OK&&!MdoExtOpBool(SdkGet(Out,"data"),"project_enabled",true);char Revision[72]={0};if(Out&&SdkField(SdkGet(Out,"data"),"revision"))snprintf(Revision,sizeof(Revision),"\"%s\"",SdkField(SdkGet(Out,"data"),"revision"));xrtValueRelease(Out);Out=NULL;
   NoStale=NoStale&&mdoCall(&C,Method,Q,&Out,&E)!=MDO_RESULT_OK;xrtValueRelease(Out);Out=NULL;
   char* Workspace=MdoHomeDefaultWorkspacePath(false);if(I){MdoSkillCatalog* Skills=MdoSkillCatalogForWorkspace(Workspace);MdoSkillInfo Info={0};Info.Size=sizeof(Info);Runtime=Runtime&&Skills&&!MdoSkillCatalogFind(Skills,Alias,&Info);MdoSkillCatalogRelease(Skills);}else{xvalue* Catalog=MdoCommandCatalog(Workspace);Runtime=Runtime&&Catalog&&!MdoExtOpBool(SdkGet(Catalog,Alias),"enabled",true);xrtValueRelease(Catalog);}xrtFree(Workspace);
@@ -33,7 +33,7 @@ def main():
  p=argparse.ArgumentParser(description=__doc__);p.add_argument('--url',required=True);p.add_argument('--home',type=Path,required=True);p.add_argument('--project',default='default');a=p.parse_args()
  out=ROOT/'.build/project-extension-selection-native';out.mkdir(parents=True,exist_ok=True);fixture=out/('home-'+uuid.uuid4().hex[:12]);fixture.mkdir()
  for kind,ident,alias,entry,source in [('commands','0123456789ABCDEFGHJKMNPQRSTVWXYZ','QA-Command','command.c','/* mdo-command {"id":"QA-Command","description":"Fixture"} */\n'),('skills','1123456789ABCDEFGHJKMNPQRSTVWXYZ','QA-Skill','SKILL.md','---\nname: QA Skill\ndescription: Fixture\n---\nReference')]:
-  folder=fixture/kind/ident;folder.mkdir(parents=True);(folder/'extension.json').write_text(json.dumps(dict(kind=kind,name=alias,alias=alias,entry=entry,platforms=['any'])),encoding='utf-8');(folder/entry).write_text(source,encoding='utf-8')
+  folder=fixture/kind/ident;folder.mkdir(parents=True);(folder/'extension.json').write_text(json.dumps(dict(kind=kind,id=('command:' if kind=='commands' else 'skill:')+alias.lower(),name=alias,alias=alias,entry=entry,platforms=['any'])),encoding='utf-8');(folder/entry).write_text(source,encoding='utf-8')
  try:
   result=product(a,fixture,CONTRACT,out/'result.json');assert len(result)>=5 and all(v is True for k,v in result.items() if k!='error'),result;print(json.dumps(result,ensure_ascii=False))
  finally:

@@ -1,5 +1,6 @@
 #include "../../include/mdo/extensions.h"
 #include "../../include/mdo/extension_manifest.h"
+#include "../../include/mdo/extension_graph.h"
 #include "../../include/mdo/extension_tasks.h"
 
 static bool MdoDirectoryApiParams(MdoApiContext* C,char Kind[33],char Id[97]){
@@ -8,7 +9,13 @@ static bool MdoDirectoryApiParams(MdoApiContext* C,char Kind[33],char Id[97]){
  Kind[C->Params[0].Size]=0;
  Id[0]=0;
  if(!MdoExtensionDirectoryKind(Kind))return false;
- if(C->ParamCount>=2){if(C->Params[1].Size>96)return false;
+ if(C->ParamCount>=2){if(C->Params[1].Size>MDO_EXTENSION_REF_BYTES)return false;
+ if(memchr(C->Params[1].Data,':',C->Params[1].Size)){
+  char Ref[MDO_EXTENSION_REF_BYTES+1],Why[512];memcpy(Ref,C->Params[1].Data,C->Params[1].Size);Ref[C->Params[1].Size]=0;
+  cstr RefKind=MdoExtensionRefKind(Ref);if(!RefKind||strcmp(RefKind,Kind))return false;
+  xvalue* Row=MdoExtensionsResolve(Ref,Why);cstr Dir=MdoExtensionText(Row,"directory_id",96);bool Ok=Dir&&MdoExtensionDirectoryId(Dir);if(Ok)snprintf(Id,97,"%s",Dir);xrtValueRelease(Row);return Ok;
+ }
+ if(C->Params[1].Size>96)return false;
  memcpy(Id,C->Params[1].Data,C->Params[1].Size);
  Id[C->Params[1].Size]=0;
  if(!MdoExtensionDirectoryId(Id))return false;
@@ -41,6 +48,27 @@ static bool MdoDirectoryApiItemFlags(xvalue* Row){
 }
 static xvalue* MdoDirectoryApiItem(cstr Kind,cstr Id,char Error[512]){
  xvalue* Item=MdoExtensionsRead(Kind,Id,Error);if(!Item){xvalue* Rows=MdoExtensionsList(Kind,Error);for(size_t I=0;I<xrtValueCount(Rows);I++){const xvalue* Row=xrtValueArrayGet(Rows,I);cstr Found=MdoExtensionText(Row,"directory_id",96);if(Found&&!strcmp(Found,Id)){Item=xrtValueClone(Row);break;}}xrtValueRelease(Rows);}if(Item)MdoDirectoryApiItemFlags(Item);return Item;
+}
+static bool MdoDirectoryApiRelations(xvalue* Item,cstr Scope,char Error[512]){
+ xvalue* Rows=MdoExtensionsSnapshot(Error),*Details=xrtValueArray(),*Users=xrtValueArray();bool Ok=Rows&&Details&&Users;MdoExtensionGraph G;
+ if(Ok)Ok=MdoGraphInit(&G,Rows,Error);
+ if(Ok){
+  cstr Self=MdoExtensionText(Item,"id",MDO_EXTENSION_REF_BYTES);const xvalue* Deps=xrtValueObjectGet(Item,XRT_STR_LITERAL("dependencies"));
+  for(size_t I=0;Ok&&I<xrtValueCount(Deps);I++){
+   const xvalue* D=xrtValueArrayGet(Deps,I);cstr Ref=MdoExtensionText(D,"id",MDO_EXTENSION_REF_BYTES);size_t At=MdoGraphFind(&G,Ref);xvalue* Detail=xrtValueClone(D);
+   bool Available=At!=SIZE_MAX&&!G.Nodes[At].Duplicate;Ok=Detail&&MdoApiValueSetBool(Detail,"available",Available);
+   if(Available){const cstr Keys[]={"name","kind","directory_id","source","dependency_state","effective_enabled","desired_enabled"};for(size_t J=0;Ok&&J<7;J++){const xvalue* V=xrtValueObjectGet(G.Nodes[At].Row,xrtStrView(Keys[J]));if(V)Ok=xrtValueObjectSet(Detail,xrtStrView(Keys[J]),V);}}
+   Ok=Ok&&xrtValueArrayAppend(Details,Detail);xrtValueRelease(Detail);
+  }
+  for(size_t I=0;Ok&&I<G.Count;I++){const xvalue* Deps=xrtValueObjectGet(G.Nodes[I].Row,XRT_STR_LITERAL("dependencies"));for(size_t J=0;J<xrtValueCount(Deps);J++){cstr Ref=MdoExtensionText(xrtValueArrayGet(Deps,J),"id",MDO_EXTENSION_REF_BYTES);if(Ref&&Self&&!strcmp(Self,Ref)){Ok=xrtValueArrayAppend(Users,G.Nodes[I].Row);break;}}}
+  MdoGraphUnit(&G);
+ }
+ cstr BindingId=MdoExtensionText(Item,"id",MDO_EXTENSION_REF_BYTES);bool HasIdentity=MdoExtensionRefValid(BindingId);
+ xvalue* BindingData=Ok&&HasIdentity?MdoExtensionsBindings(BindingId,Scope,Error):NULL;
+ if(Ok&&HasIdentity)Ok=BindingData&&xrtValueObjectSet(Item,XRT_STR_LITERAL("dependency_bindings"),xrtValueObjectGet(BindingData,XRT_STR_LITERAL("bindings")))&&xrtValueObjectSet(Item,XRT_STR_LITERAL("bindings_revision"),xrtValueObjectGet(BindingData,XRT_STR_LITERAL("revision")));
+ xrtValueRelease(BindingData);
+ Ok=Ok&&xrtValueObjectSet(Item,XRT_STR_LITERAL("dependency_details"),Details)&&xrtValueObjectSet(Item,XRT_STR_LITERAL("dependents"),Users);
+ xrtValueRelease(Rows);xrtValueRelease(Details);xrtValueRelease(Users);return Ok;
 }
 static bool MdoDirectoryApiList(MdoApiContext* C,cstr Kind,const xvalue* Q,bool Files,cstr Id){
  char Error[512]={0};size_t Offset,Limit;if(!MdoDirectoryApiPage(Q,&Offset,&Limit))return MdoApiReplyError(C,400,"extension_page_invalid","Use an offset and a limit from 1 to 200",NULL);
@@ -76,6 +104,7 @@ bool MdoApiExtensionsRoute(MdoApiContext* C){
   else{xvalue* Item=MdoDirectoryApiItem(Kind,Id,Error);char Hash[65];if(Item&&MdoExtensionsFingerprint(Kind,Id,Hash,C->SendCancel,Error))MdoApiValueSetString(Item,"revision",Hash);
    char* Root=Item?MdoExtensionsRoot(Kind,Id):NULL,*Path=Root?xrtFormat("%s/extension.json",Root):NULL,*Text=Path?MdoExtensionRead(Path,true,MDO_EXTENSION_MANIFEST_BYTES,NULL):NULL;xvalue* Manifest=Text?xrtJsonParse(xrtStrView(Text)):NULL;
    if(Manifest&&Item)xrtValueObjectSet(Item,XRT_STR_LITERAL("manifest"),Manifest);
+   if(Item&&!MdoDirectoryApiRelations(Item,MdoExtensionText(Q,"project",64),Error)){xrtValueRelease(Item);Item=NULL;}
    xrtValueRelease(Manifest);
    xrtFree(Text);
    xrtFree(Path);

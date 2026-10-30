@@ -28,6 +28,7 @@ tools/*
 !tools/inspect_session.py
 !tools/README.md
 !tools/build_mdo.py
+!tools/migrate_extension_dependencies.py
 !tools/version_code.py
 !tools/build_cli_forwarder.py
 !tools/cli_forwarder.c

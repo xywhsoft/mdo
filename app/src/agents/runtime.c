@@ -71,7 +71,8 @@ typedef struct MdoAgentInstance {
 static xwork_result MdoAgentsExtension(void*,xwork_agent_extension_context*,xwork_error*);
 static bool MdoAgentsPattern(cstr,cstr);
 static bool MdoAgentsCanDelegate(const MdoModuleAgentInfo*,const MdoModuleAgentInfo*);
-static bool MdoAgentsApplyMcpSelection(xwork_agent*,cstr,const MdoModuleAgentInfo*,xwork_error*);
+struct MdoAgentOwner;
+static bool MdoAgentsApplyMcpSelection(struct MdoAgentOwner*,xwork_agent*,const MdoModuleAgentInfo*,xwork_error*);
 
 typedef struct MdoAgentActiveFrame {
     MdoAgentInstance* Instance;
@@ -828,6 +829,9 @@ static bool MdoAgentsReplyLanguage(char** Prompt, xwork_error* Error)
     return MdoAgentsAppendPrompt(Prompt, Fragment, strlen(Fragment), Error);
 }
 
+static const xvalue* MdoAgentsSourceSpec(const xvalue* Config,cstr Id);
+static bool MdoAgentsSourceEnabled(const xvalue* Spec,bool Default);
+#include "dependencies.inc.c"
 #include "context.inc.c"
 
 static xwork_approval_mode MdoAgentsApproval(const char* Profile,
@@ -843,7 +847,7 @@ static xwork_approval_mode MdoAgentsApproval(const char* Profile,
 }
 
 static bool MdoAgentsApplyToolPolicy(xwork_agent* Agent,
-    const MdoModuleAgentInfo* Definition, xwork_tool_effects AllowedEffects,
+    const MdoModuleAgentInfo* Definition, xwork_tool_effects AllowedEffects,cstr Workspace,
     size_t* ToolCount, uint64* Generation, xwork_error* Error)
 {
     xwork_tool_catalog* Catalog = xworkAgentToolCatalogSnapshot(Agent);
@@ -855,7 +859,10 @@ static bool MdoAgentsApplyToolPolicy(xwork_agent* Agent,
             "cannot snapshot the Agent tool catalog");
         return false;
     }
-    for ( i = 0u; i < xworkToolCatalogCount(Catalog); ++i ) {
+    MdoModuleCatalog* Modules=MdoModuleCatalogSnapshot();xvalue* Providers=xrtValueObject(),*Decisions=xrtValueObject();
+    if(!Providers||!Decisions){xrtValueRelease(Providers);xrtValueRelease(Decisions);MdoModuleCatalogRelease(Modules);xworkToolCatalogRelease(Catalog);return false;}
+    for(size_t J=0;Ok&&J<MdoModuleCatalogToolCount(Modules);J++){MdoModuleToolInfo T={0};T.Size=sizeof(T);if(MdoModuleCatalogToolAt(Modules,J,&T)&&T.ExtensionId)Ok=xrtValueObjectSetNew(Providers,xrtStrView(T.Id),xrtValueString(xrtStrView(T.ExtensionId)));}
+    for ( i = 0u; Ok&&i < xworkToolCatalogCount(Catalog); ++i ) {
         memset(&Info, 0, sizeof(Info));
         if ( !xworkToolCatalogToolAt(Catalog, i, &Info) ) {
             Ok = false;
@@ -863,7 +870,11 @@ static bool MdoAgentsApplyToolPolicy(xwork_agent* Agent,
                 "cannot inspect the Agent tool catalog");
             break;
         }
-        if ( (Info.uEffects & ~AllowedEffects) != 0u ||
+        bool InScope=true;xstrview Provider;if(xrtValueGetString(xrtValueObjectGet(Providers,xrtStrView(Info.sName)),&Provider)){
+            const xvalue* Decision=xrtValueObjectGet(Decisions,Provider);if(Decision)xrtValueGetBool(Decision,&InScope);
+            else{char Why[512];InScope=MdoExtensionsProjectAllows(Provider.Data,Workspace,Why);if(!xrtValueObjectSetNew(Decisions,Provider,xrtValueBool(InScope))){Ok=false;break;}}
+        }
+        if ( !InScope || (Info.uEffects & ~AllowedEffects) != 0u ||
              !MdoAgentsToolSelected(Definition, Info.sName) ) {
             if ( !xworkAgentUnregisterTool(Agent, Info.sName, Error) ) {
                 Ok = false;
@@ -871,7 +882,7 @@ static bool MdoAgentsApplyToolPolicy(xwork_agent* Agent,
             }
         }
     }
-    xworkToolCatalogRelease(Catalog);
+    xrtValueRelease(Providers);xrtValueRelease(Decisions);MdoModuleCatalogRelease(Modules);xworkToolCatalogRelease(Catalog);
     if ( !Ok ) return false;
     Catalog = xworkAgentToolCatalogSnapshot(Agent);
     if ( Catalog == NULL ) {
@@ -938,7 +949,6 @@ static bool MdoAgentsValidateSkillTools(MdoAgentOwner* Owner,
     xwork_tool_effects MainEffects, xwork_error* Error)
 {
     xwork_tool_catalog* Tools = Owner->DelegationTools?xworkToolCatalogRef(Owner->DelegationTools):xworkAgentToolCatalogSnapshot(Agent);
-    size_t i;
     bool Ok = false;
     if ( Tools == NULL ) {
         MdoAgentsError(Error, XWORK_ERROR_CONTEXT,
@@ -949,22 +959,7 @@ static bool MdoAgentsValidateSkillTools(MdoAgentOwner* Owner,
     bool MainValid=MainTools && MdoAgentsValidateSkillToolsForDefinition(Main,Owner->Skills,MainTools,MainEffects,Error);
     xworkToolCatalogRelease(MainTools);
     if(!MainValid)goto done;
-    for ( i = 0u; i < MdoModuleCatalogAgentCount(Owner->Modules); ++i ) {
-        MdoModuleAgentInfo Subagent;
-        xwork_tool_effects Effects;
-        memset(&Subagent, 0, sizeof(Subagent));
-        Subagent.Size = sizeof(Subagent);
-        if ( !MdoModuleCatalogAgentAt(Owner->Modules, i, &Subagent) ||
-             (Subagent.Flags & MDO_AGENT_SUBAGENT) == 0u || !MdoAgentsCanDelegate(Main,&Subagent)) continue;
-        Effects = (xwork_tool_effects)Subagent.AllowedEffects & Owner->DelegationEffects;
-        if ( (Subagent.Flags & MDO_AGENT_READ_ONLY) != 0u ||
-             (Subagent.PermissionProfile != NULL &&
-              strcmp(Subagent.PermissionProfile, "read-only") == 0) )
-            Effects &= XWORK_TOOL_EFFECT_READ |
-                XWORK_TOOL_EFFECT_AGENT_DELEGATION;
-        if ( !MdoAgentsValidateSkillToolsForDefinition(&Subagent,
-                Owner->Skills, Tools, Effects, Error) ) goto done;
-    }
+    /* Children validate their own preloads at CHILD_READY. */
     Ok = true;
 done:
     xworkToolCatalogRelease(Tools);
@@ -1011,6 +1006,7 @@ static bool MdoAgentsPublishSubagents(MdoAgentOwner* Owner,
         Subagent.Size = sizeof(Subagent);
         if ( !MdoModuleCatalogAgentAt(Owner->Modules, i, &Subagent) ||
              (Subagent.Flags & MDO_AGENT_SUBAGENT) == 0u || !MdoAgentsCanDelegate(Main,&Subagent)) continue;
+        xwork_error DependencyError;if(!MdoAgentsCheckDependencies(Owner,&Subagent,NULL,&DependencyError))continue;
         if ( !MdoAgentsGrow((void**)&Definitions, &Capacity, Count + 1u,
                 sizeof(*Definitions)) ||
              !MdoAgentsGrow((void**)&Prompts, &PromptCapacity, Count + 1u,
@@ -1415,7 +1411,7 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
         }
     }
     if ( !MdoAgentsReplyLanguage(&Prompt, Error) || !MdoToolPrompt(&Prompt) ||
-         !MdoSkillCatalogAppendPrompt(MdoAgentsToolSelected(&AgentInfo,"skill") ? Owner->Skills : NULL, &Prompt) || !MdoKnowledgeAppendPrompt(&Prompt) ) goto fail;
+         !MdoSkillCatalogAppendPrompt(MdoAgentsToolSelected(&AgentInfo,"skill") ? Owner->Skills : NULL, &Prompt) || !MdoKnowledgeAppendPromptForWorkspace(&Prompt,Owner->Workspace) ) goto fail;
     /* Memory is a dynamic context section. Keep the recovered Agent/Skill/user
      * instructions, but refresh memory paths and indices when a run is admitted.
      * Remove the old structured-memory section as well during the transition. */
@@ -1605,9 +1601,10 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
          !MdoAgentsPublishSubagents(Owner, Session->Agent, &AgentInfo, &Model,
             &Session->SubagentCount, Error) ||
          !(Owner->DelegationTools=xworkAgentToolCatalogSnapshot(Session->Agent)) ||
-         !MdoAgentsApplyMcpSelection(Session->Agent,Owner->Workspace,&AgentInfo,Error) ||
-         !MdoAgentsApplyToolPolicy(Session->Agent, &AgentInfo, AllowedEffects,
+         !MdoAgentsApplyMcpSelection(Owner,Session->Agent,&AgentInfo,Error) ||
+         !MdoAgentsApplyToolPolicy(Session->Agent, &AgentInfo, AllowedEffects,Owner->Workspace,
             &Session->ToolCount, &Session->ToolCatalogGeneration, Error) ||
+         !MdoAgentsCheckDependencies(Owner,&AgentInfo,Session->Agent,Error) ||
          !MdoAgentsValidateSkillTools(Owner, Session->Agent, &AgentInfo,
             AllowedEffects, Error) )
         goto fail;

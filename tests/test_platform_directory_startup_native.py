@@ -46,7 +46,7 @@ def main():
         names=('initialize','bind_int','bind_text','prepare_v2','finalize','step','exec','column_count','column_name','column_type','column_int64','column_int','column_text','column_bytes','bind_int64','open','busy_timeout','close','changes')
         setup='QaSqlite=LoadLibraryW(L"C:/Program Files/Python312/DLLs/sqlite3.dll");tcc_add_include_path(T,"/app/qa/plugin_sdk");tcc_add_include_path(T,"/app/qa");'+''.join(f'tcc_add_symbol(T,"sqlite3_{name}",GetProcAddress(QaSqlite,"sqlite3_{name}"));' for name in names)
         result=product(a,fixture,PRELUDE+(PLATFORM/'src/net/plugin_owned_work.c').read_text(encoding='utf-8')+STUBS+startup+CONTRACT,out/'result.json',compiler_setup=setup,compiler_prelude='#include <windows.h>\nstatic HMODULE QaSqlite;',compiler_cleanup='if(QaSqlite)FreeLibrary(QaSqlite);')
-        assert result['routes']==30,result
+        assert result['routes']==32,result
         assert all(value is True for key,value in result.items() if key!='routes'),result
         print(json.dumps(result,ensure_ascii=False))
     finally:

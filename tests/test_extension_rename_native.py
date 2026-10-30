@@ -29,7 +29,7 @@ xvalue* QaProductContract(const xvalue* P,xvfs V){
  uint64 Start=MdoMonotonicUs();bool Refused=H!=Invalid&&!MdoHomeRenameNoReplace("mcp/moved","mcp/still-locked");uint64 Elapsed=MdoMonotonicUs()-Start;
  if(H!=Invalid)CloseHandle(H);xrtFree(Native);SdkPutUInt(R,"permanent_wait_us",Elapsed);
  xrtValueObjectSetNew(R,XRT_STR_LITERAL("permanent_holder_is_bounded"),xrtValueBool(Refused&&Elapsed<1000000));
- char Error[512]={0};xvalue* Meta=SdkParse("{\"kind\":\"mcp\",\"name\":\"Held directory\",\"alias\":\"held\",\"entry\":\"mcp.json\",\"platforms\":[\"any\"]}"),*Out=NULL;
+ char Error[512]={0};xvalue* Meta=SdkParse("{\"kind\":\"mcp\",\"name\":\"Held directory\",\"alias\":\"held\",\"entry\":\"mcp.json\",\"platforms\":[\"any\"],\"id\":\"mcp:qa.held\"}"),*Out=NULL;
  bool Created=MdoExtensionsInit()&&MdoExtensionsCreate("mcp","held-install",Meta,"{}",2,true,&Out,Error);xrtValueRelease(Meta);xrtValueRelease(Out);Out=NULL;
  Native=MdoHomeExternalPath("mcp/held-install");H=Native?CreateFileA(Native,0x80000000ul,3,NULL,3,0x02000000ul,NULL):Invalid;
  bool Failed=Created&&H!=Invalid&&!MdoExtensionsRemove("mcp","held-install",&Out,Error);xrtValueRelease(Out);

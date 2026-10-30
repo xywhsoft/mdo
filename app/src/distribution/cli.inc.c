@@ -31,7 +31,7 @@ static MdoCliUse* CliUseCreate(xvalue* Items){
     Use->Leases=xrtCalloc(xrtValueCount(Items)+1,sizeof(*Use->Leases));if(!Use->Leases){xrtFree(Use);return NULL;}
     for(size_t I=0;I<xrtValueCount(Items);I++){
         xvalue* Item=xrtValueArrayGet(Items,I);if(!CliBool(Item,"valid",false)||!CliBool(Item,"enabled",true))continue;
-        char Error[512]={0};MdoExtensionLease* Lease=MdoExtensionsAcquire("external-tools",CliText(Item,"id",96),Error);
+        char Error[512]={0};MdoExtensionLease* Lease=MdoExtensionsAcquire("external-tools",CliText(Item,"directory_id",96),Error);
         if(Lease)Use->Leases[Use->Count++]=Lease;
         else{CliSet(Item,"error",Error);xrtValueObjectSetNew(Item,XRT_STR_LITERAL("valid"),xrtValueBool(false));xrtValueObjectSetNew(Item,XRT_STR_LITERAL("present"),xrtValueBool(false));}
     }return Use;
@@ -52,7 +52,7 @@ static xvalue* CliDirectoryItems(char Error[512])
     xvalue* Directories=MdoExtensionsList("external-tools",Error),*Items=xrtValueArray();bool Ok=Directories&&Items;
     for(size_t I=0;Ok&&I<xrtValueCount(Directories);I++){
         const xvalue* Meta=xrtValueArrayGet(Directories,I);xvalue* Row=xrtValueClone(Meta);bool Valid=CliBool(Meta,"valid",false);
-        cstr Id=CliText(Meta,"id",96),Root=CliText(Meta,"root",4096),Entry=CliText(Meta,"entry",4096);
+        cstr Id=CliText(Meta,"directory_id",96),Root=CliText(Meta,"root",4096),Entry=CliText(Meta,"entry",4096);
         char Why[512]={0},*Path=Valid?xrtFormat("%s/%s",Root,Entry):NULL;
         char* Text=Path?MdoExtensionRead(Path,true,256u*1024u,NULL):NULL;xvalue* Config=Text?xrtJsonParse(xrtStrView(Text)):NULL;xrtFree(Text);xrtFree(Path);
         Valid=Valid&&MdoExternalToolConfig(Config,Why);
@@ -75,7 +75,7 @@ static xvalue* CliDirectoryItems(char Error[512])
 #if defined(__ANDROID__)
         if(!MdoAndroidToolsActive()){Valid=false;snprintf(Why,sizeof(Why),"External programs require the full Android APK");}
 #endif
-        Ok=Row&&CliSet(Row,"id",Id)&&CliSet(Row,"managed_root",Root)&&CliSet(Row,"platform",MdoToolPlatform())&&
+        Ok=Row&&CliSet(Row,"directory_id",Id)&&CliSet(Row,"managed_root",Root)&&CliSet(Row,"platform",MdoToolPlatform())&&
             CliSet(Row,"entry",Program)&&CliSet(Row,"path",Native?Native:"")&&CliSet(Row,"relative_path",Relative?Relative:"")&&
             CliSet(Row,"prompt",CliText(Config,"prompt",16384))&&CliSet(Row,"command",CliText(Config,"command",64)[0]?CliText(Config,"command",64):CliText(Meta,"alias",64))&&
             xrtValueObjectSetNew(Row,XRT_STR_LITERAL("valid"),xrtValueBool(Valid))&&xrtValueObjectSetNew(Row,XRT_STR_LITERAL("present"),xrtValueBool(Valid))&&
@@ -88,6 +88,22 @@ static xvalue* CliDirectoryItems(char Error[512])
         xrtFree(Native);
     }
     xrtValueRelease(Directories);if(!Ok){xrtValueRelease(Items);return NULL;}return Items;
+}
+char* MdoCliProgram(cstr Ref,cstr Export,char Error[512])
+{
+    cstr Kind=MdoExtensionRefKind(Ref);if(!Kind||strcmp(Kind,"external-tools")||!MdoCliCommandName(Export)){if(Error)snprintf(Error,512,"Choose a typed external program ID and a named executable export");return NULL;}
+    xvalue* Meta=MdoExtensionsResolve(Ref,Error);cstr Directory=MdoExtensionText(Meta,"directory_id",96),Root=MdoExtensionText(Meta,"root",4096),Entry=MdoExtensionText(Meta,"entry",4096);
+    bool Ok=Directory&&MdoExtensionsPreflight(Ref,Error)&&MdoExtensionsVerify("external-tools",Directory,NULL,Error);char* Path=Ok?xrtFormat("%s/%s",Root,Entry):NULL;
+    char* Text=Path?MdoExtensionRead(Path,true,262144,NULL):NULL;xvalue* Config=Text?xrtJsonParse(xrtStrView(Text)):NULL;xrtFree(Text);xrtFree(Path);Ok=Ok&&MdoExternalToolConfig(Config,Error);cstr Program=NULL;
+    cstr Default=CliText(Config,"command",64);if(!Default[0])Default=MdoExtensionText(Meta,"alias",64);
+    const xvalue* Commands=xrtValueObjectGet(Config,XRT_STR_LITERAL("commands"));
+    if(!xrtValueCount(Commands)&&Default&&!strcmp(Default,Export))Program=MdoExtensionText(Config,"program",4096);
+    for(size_t I=0;Ok&&I<xrtValueCount(Commands);I++){const xvalue* Command=xrtValueArrayGet(Commands,I);cstr Name=MdoExtensionText(Command,"name",64);if(Name&&!strcmp(Name,Export)&&!xrtValueCount(xrtValueObjectGet(Command,XRT_STR_LITERAL("args")))){Program=MdoExtensionText(Command,"entry",4096);break;}}
+    char* Relative=Ok&&Program?xrtFormat("%s/%s",Root,Program):NULL;bool Present=false;xfileinfo Info;
+    Ok=Relative&&MdoHomeExternalStat(Relative,&Present,&Info)&&Present&&Info.Type==XFILE_TYPE_FILE&&Info.Size;
+    char* Result=Ok?(MdoAndroidToolsActive()?MdoAndroidToolProgram(Directory,Program):MdoHomeExternalPath(Relative)):NULL;
+    if(!Result&&Error&&!Error[0])snprintf(Error,512,"%.160s#%.64s is not an available executable export without preset arguments",Ref,Export);
+    xrtFree(Relative);xrtValueRelease(Config);xrtValueRelease(Meta);return Result;
 }
 static bool CliReloadLocked(char Error[512])
 {

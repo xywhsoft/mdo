@@ -1,11 +1,12 @@
 import { setUiText as writeUiText, uiMessage, t as uiText, subscribeLocale, t } from "../../i18n.js";
 
+import { localDependencyPanel } from "./extension-dependencies.js";
 import { createExtensionBrowser, actionMenu, extensionToggle, detailTabs, browserText } from "../../components/extension-browser.js";
 import { createSingleResourceStore } from "./single-resource-store.js";
 import { customizableResource, resourceCredits, storeReadOnlyMessage } from "./resource-credits.js";
 import { createSkillWorkbench } from "./skill-workbench.js";
 import { createDirectoryEditor } from "./directory-editor.js";
-import { directoryId, directoryManifest, readDirectoryEntry, saveDirectory, changeDirectory } from "./directory-documents.js";
+import { directoryId, extensionRef, directoryManifest, readDirectoryEntry, saveDirectory, changeDirectory } from "./directory-documents.js";
 import { createMcpContext } from "./mcp-context.js";
 import { createMcpAuthorization } from "./mcp-authorization.js";
 import { createMcpConnections } from "./mcp-directory-connections.js";
@@ -102,7 +103,7 @@ export function createExtensionPanels() {
       ]);
       if (!isCurrent()) return;
       state.catalog = catalog?.data.items ?? [];
-      state.items=append?[...new Map([...state.items,...response.data.items].map(row=>[row.id,row])).values()]:response.data.items||[];state.total=response.data.total??state.items.length;state.loaded=true;
+      state.items=append?[...new Map([...state.items,...response.data.items].map(row=>[row.id||row.directory_id,row])).values()]:response.data.items||[];state.total=response.data.total??state.items.length;state.loaded=true;
     } catch (error) { if (isCurrent() && error?.name !== "AbortError") { state.loaded = false; state.error = errorMessage(error); } }
     finally { if (isCurrent()) {
       for (const key of ["catalog", "catalog-tools", "packages", "mcp-templates"]) reads.cancel(key);
@@ -173,6 +174,10 @@ export function createExtensionPanels() {
     const refresh = actions.find(control => control.tagName === "BUTTON" && control.textContent === label("refresh", "刷新"));
     const creation = actions.filter(control => control.tagName === "BUTTON" && control !== refresh);
     toolbar.append(refresh, actionMenu(creation, browserText("createImport", "创建 / 导入")), ...actions.filter(control => control.tagName === "INPUT"));
+    if(state.items.some(item=>item.source==="builtin"&&!item.id))toolbar.append(button(uiMessage("ui.extensionPanels.migrateBuiltInExtensionIdentities", {}, "迁移内置扩展身份"),()=>{
+      if(!confirm(uiMessage("ui.extensionPanels.migrateOldBuiltInExtensionsUsingTheCurrentApp", {}, "使用当前应用自带的归档迁移旧内置扩展？停用和卸载设置会保留，已修改的目录会停止迁移并保留原文件。")))return;
+      return act(kind,scope=>api.post("/ecosystem",{action:"migrate_builtins",trust_code:true},{signal:scope.signal}));
+    }));
     toolbar.querySelectorAll("button").forEach(node => { node.disabled = state.busy; });
     const search = element("input", { className: "extension-search", attrs: { type: "search", placeholder: label("filter", "按名称或说明筛选"), "aria-label": label("filter", "按名称或说明筛选") } });
     search.value = state.filter;
@@ -207,7 +212,7 @@ export function createExtensionPanels() {
         const meta = element("div", { className: "resource-meta" }, [
           element("code", { text: item.path }),
           element("span", { text: item.enabled ? label("enabled", "已启用") : label("disabled", "已停用") }),
-          item.external ? null : element("span", { text: label("builtin", "内置") }),
+          item.source!=="builtin" ? null : element("span", { text: label("builtin", "内置") }),
           kind === "mcp" ? element("span", { text: uiMessage(`resource.mcp${({ ready: "Ready", failed: "Failed", disabled: "Disabled", disconnected: "Disconnected" })[item.state] || "Disconnected"}`) }) : null,
           kind === "mcp" ? element("span", { text: uiMessage("resource.toolCount", { count: item.tool_count || 0 }) }) : null,
         ]);
@@ -215,15 +220,15 @@ export function createExtensionPanels() {
         const editable=!protectedKind||customizableResource(item,owner), credits=protectedKind?resourceCredits(item,owner):null;
         const edit = button(label("edit", "编辑"), async () => {
           const target = targetKey(), isCurrent = () => current(kind, target);
-          try { const data = await readDirectoryEntry(kind,item.id); if (isCurrent()) openEditor(kind,data); }
+          try { const data = await readDirectoryEntry(kind,item.id||item.directory_id); if (isCurrent()) openEditor(kind,data); }
           catch (error) { if (isCurrent() && error?.name !== "AbortError") toast(errorMessage(error), "error"); }
         });
         const toggle = button(item.enabled ? label("disable", "停用") : label("enable", "启用"), () => act(kind, async () => {
-          await api.post(`${path(kind, item.id)}/enabled`, { enabled: !item.enabled });
+          await changeDirectory(kind,item,"enable",{enabled:!item.enabled});
         }));
         const controls = editable ? [edit, button(label("export", "导出"), () => exportItem(kind, item))] : [];
         if (["agents","subagents"].includes(kind)) controls.push(button(uiMessage("ui.extensionPanels.contextPreview", {}, "上下文预览"),()=>openRolePlan({kind,id:item.id,owner:roots.get(kind)})));
-        if (store && item.valid && item.shareable!==false && editable && !(kind==="agents"&&item.id==="default")) controls.push(button(uiMessage("ui.pluginWorkbench.shareToCreatorCenter", {}, "分享到创作中心"), () => store.publish(item, owner)));
+        if (store && item.valid && item.shareable!==false && editable && !(kind==="agents"&&(item.directory_id==="default"||item.id==="agent:default"))) controls.push(button(uiMessage("ui.pluginWorkbench.shareToCreatorCenter", {}, "分享到创作中心"), () => store.publish(item, owner)));
         if (store) controls.push(...store.localActions(item));
         controls.push(button(uiMessage("ui.extensionPanels.directoryAndFiles", {}, "目录与文件"),()=>directoryEditor.open({kind,item})));
         if (kind === "skills" && editable) controls.push(button(label("improveSkill", "用 AI 改进"), () =>
@@ -233,26 +238,26 @@ export function createExtensionPanels() {
           if(!confirm(uiMessage("ui.pluginWorkbench.uninstallTheEntireDirectoryForValue1", { value1: item.name||item.id }, "卸载 {value1} 的整个目录？")))return;
           await changeDirectory(kind,item,"remove");
         })));
-        const canToggle = !(kind === "agents" && item.id === "default");
+        const canToggle = !(kind === "agents" && (item.directory_id === "default"||item.id==="agent:default"));
         toggle.disabled = state.busy;
         controls.forEach(control => { control.disabled = state.busy; });
         const status = kind === "mcp" ? ({ready:uiText("ui.extensionPanels.connected", {}, "已连接"),failed:uiText("resource.mcpFailed", {}, "连接失败"),disabled:uiText("ecosystem.disabled", {}, "已停用"),disconnected:uiText("resource.mcpDisconnected", {}, "未连接")})[item.state]||uiText("resource.mcpDisconnected", {}, "未连接") : !item.valid ? browserText("needsAttention", "需要处理") : "";
-        rows.push({ key: item.id, kind, title: item.name || item.id, description: item.description, byline: credits?.submitter,
-          meta: credits ? [...credits.meta, owner?.source === "store" || item.store_managed ? browserText("storeInstalled", "商店安装") : item.external ? browserText("custom", "自定义") : label("builtin", "内置")] : [owner?.author, owner?.version, item.external ? browserText("custom", "自定义") : label("builtin", "内置")],
+        rows.push({ key: item.id||item.directory_id, kind, title: item.name || item.id, description: item.description, byline: credits?.submitter,
+          meta: credits ? [...credits.meta, owner?.source === "store" || item.store_managed ? browserText("storeInstalled", "商店安装") : item.source==="manual" ? browserText("custom", "自定义") : item.source==="store" ? browserText("storeInstalled", "商店安装") : label("builtin", "内置")] : [owner?.author, owner?.version, item.source==="manual" ? browserText("custom", "自定义") : item.source==="store" ? browserText("storeInstalled", "商店安装") : label("builtin", "内置")],
           badge: { text: status, tone: !item.valid || item.state === "failed" ? "error" : "" },
           toggle: canToggle ? extensionToggle(toggle, item.enabled, item.name || item.id) : null, actions: controls,
           detail: () => {
             const description = element("div", {}, [element("p", { text: item.description }), !item.valid ? element("p", { className: "extension-error", text: item.error }) : null]);
-            if(credits)description.append(credits.facts());if(!editable)description.append(element("p",{className:"extension-help",text:storeReadOnlyMessage()}));
+            description.append(localDependencyPanel(kind,item));if(credits)description.append(credits.facts());if(!editable)description.append(element("p",{className:"extension-help",text:storeReadOnlyMessage()}));
             const usage = element("div", {}, [element("p", { text: kind === "skills" ? `$${item.alias} · /skill:${item.alias}` : kind === "commands" ? `/${item.alias}` : kind === "mcp" ? status : kind === "knowledge" ? `${item.directory}/${item.index}\n${item.inject_prompt ? item.prompt : uiMessage("ui.extensionPanels.promptInjectionDisabled", {}, "已关闭提示词注入")}` : item.name || item.id }),
               kind === "tools" ? element("div", { className: "tool-exports" }, (item.tools || []).map(tool => element("code", { text: tool.id }))) : null]);
             const source = element("div", {}, [meta]), preview = element("div"); source.append(preview); let sourceLoaded = false;
             const readSource = async () => {
               if (sourceLoaded) return;
-              const target = targetKey(), isCurrent = () => current(kind, target) && browser.isSelected(item.id) && source.isConnected;
+              const target = targetKey(), isCurrent = () => current(kind, target) && browser.isSelected(item.id||item.directory_id) && source.isConnected;
               preview.replaceChildren(element("p", { text: browserText("loading", "正在载入…") }));
               try {
-                const data=await readDirectoryEntry(kind,item.id);
+                const data=await readDirectoryEntry(kind,item.id||item.directory_id);
                 if(!isCurrent())return;
                 preview.replaceChildren(element("pre",{className:"store-source",text:data.content}),button(uiMessage("ui.extensionPanels.browseFullDirectory", {}, "浏览完整目录"),()=>directoryEditor.open({kind,item})));
                 sourceLoaded = true;
@@ -514,11 +519,11 @@ export function createExtensionPanels() {
     }
   }
   async function importFile(kind,file){if(!file)return;try{await stores.get(kind).importPackage(file);}catch(e){toast(errorMessage(e),"error");}}
-  async function exportItem(kind,item){try{await exportDirectoryZip(kind,item.id);}catch(e){toast(errorMessage(e),"error");}}
+  async function exportItem(kind,item){try{await exportDirectoryZip(kind,item.id||item.directory_id);}catch(e){toast(errorMessage(e),"error");}}
   const unsubscribeLocale = subscribeLocale(() => { for (const kind of EXTENSION_KINDS) render(kind); });
   const invalidate = event => { const state = states.get(event.detail?.kind);if (state) state.loaded = false; };
   window.addEventListener("mdo-extensions-changed", invalidate);
-  const openResource=event=>{const ref=event.detail;if(!EXTENSION_KINDS.includes(ref?.kind)||!directoryId(ref?.id))return;pendingResource=ref;if(stores.has(ref.kind))states.get(ref.kind).area="local";if(ref.kind==="tools")states.get("tools").view="custom";if(selected===ref.kind)void openLinkedResource();};
+  const openResource=event=>{const ref=event.detail;if(!EXTENSION_KINDS.includes(ref?.kind)||!(directoryId(ref?.id)||extensionRef(ref?.id,ref.kind)))return;pendingResource=ref;if(stores.has(ref.kind))states.get(ref.kind).area="local";if(ref.kind==="tools")states.get("tools").view="custom";if(selected===ref.kind)void openLinkedResource();};
   window.addEventListener("mdo-open-resource",openResource);
   const unsubscribeTarget = subscribeTarget(() => {
     if (activeTarget === targetKey()) return;

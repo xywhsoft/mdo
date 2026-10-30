@@ -3,6 +3,8 @@
 #include "../../include/mdo/extension_manifest.h"
 #include "../../include/mdo/extension_tasks.h"
 #include "../../include/mdo/extension_service.h"
+#include "../../include/mdo/modules.h"
+#include "../../include/mdo/skills.h"
 #include "internal.h"
 #include "write_admission.h"
 
@@ -11,8 +13,16 @@ static bool EcoHandleInput(MdoApiContext* C,xvalue* Input){
  const cstr Retired[]={"package","resources","files","base64","format","min_build_id","single_kind","artifact","references"};for(size_t I=0;I<sizeof(Retired)/sizeof(*Retired);I++)if(xrtValueObjectHas(Input,xrtStrView(Retired[I]))){xrtValueRelease(Input);return MdoApiReplyError(C,422,"extension_json_retired","Extensions are complete directory ZIP files; embedded file payloads and legacy package fields are unsupported",NULL);}
  if(Action&&!strcmp(Action,"installed")){
   const cstr Kinds[]={"agents","subagents","tools","mcp","skills","commands","external-tools","knowledge","plugins"};Out=xrtValueObject();Ok=Out!=NULL;
-  for(size_t I=0;Ok&&I<9;I++){xvalue* Rows=MdoExtensionsList(Kinds[I],Error);Ok=Rows!=NULL;for(size_t J=0;Ok&&J<xrtValueCount(Rows);J++){const xvalue* Row=xrtValueArrayGet(Rows,J);cstr Id=MdoExtensionText(Row,"id",96);char* Key=Id?xrtFormat("%s:%s",Kinds[I],Id):NULL;Ok=Key&&xrtValueObjectSet(Out,xrtStrView(Key),Row);xrtFree(Key);}xrtValueRelease(Rows);}
- }else if(Action&&(!strcmp(Action,"catalog")||!strcmp(Action,"detail")||!strcmp(Action,"files")||!strcmp(Action,"preview")||!strcmp(Action,"mine")||!strcmp(Action,"profile")||!strcmp(Action,"requests")))Ok=MdoExtensionServiceRead(Input,C->SendCancel,&Out,Error);
+  for(size_t I=0;Ok&&I<9;I++){xvalue* Rows=MdoExtensionsList(Kinds[I],Error);Ok=Rows!=NULL;for(size_t J=0;Ok&&J<xrtValueCount(Rows);J++){const xvalue* Row=xrtValueArrayGet(Rows,J);cstr Id=MdoExtensionText(Row,"directory_id",96);char* Key=Id?xrtFormat("%s:%s",Kinds[I],Id):NULL;Ok=Key&&xrtValueObjectSet(Out,xrtStrView(Key),Row);xrtFree(Key);}xrtValueRelease(Rows);}
+ }else if(Action&&!strcmp(Action,"migrate_builtins")){
+  bool Trust=false;Ok=xrtValueGetBool(xrtValueObjectGet(Input,XRT_STR_LITERAL("trust_code")),&Trust)&&Trust&&MdoExtensionsMutationBegin();
+  if(Ok){Ok=MdoExtensionsMigrateBuiltins(Error)&&MdoModuleManagerReload()&&MdoSkillManagerReload();MdoExtensionsMutationEnd();}
+  if(Ok)Out=MdoExtensionsSnapshot(Error);else if(!Error[0])snprintf(Error,sizeof(Error),"Confirm restoration from the current application's builtin archives; another extension operation may be running");
+ }else if(Action&&!strcmp(Action,"install_plan"))Ok=MdoExtensionServicePlan(Input,C->SendCancel,&Out,Error);
+ else if(Action&&!strcmp(Action,"dependency_plan")){xvalue* Request=xrtValueClone(Input);cstr Operation=MdoExtensionText(Input,"operation",16);Ok=Request&&Operation&&MdoApiValueSetString(Request,"action",Operation)&&MdoExtensionsPlan(Request,NULL,&Out,Error);xrtValueRelease(Request);}
+ else if(Action&&!strcmp(Action,"apply_plan")){xvalue* Plan=MdoExtensionsPlanRead(MdoExtensionText(Input,"plan_id",32),MdoExtensionText(Input,"revision",64),Error);cstr Operation=MdoExtensionText(Plan,"action",16);if(Operation)Ok=!strcmp(Operation,"install")?MdoExtensionServiceApplyPlan(Input,C->SendCancel,&Out,Error):MdoExtensionsApplyPlan(Input,NULL,C->SendCancel,&Out,Error);xrtValueRelease(Plan);}
+ else if(Action&&!strcmp(Action,"discard_plan")){Ok=MdoExtensionsPlanDiscard(MdoExtensionText(Input,"plan_id",32),MdoExtensionText(Input,"revision",64),Error);if(Ok)Out=xrtValueObject();}
+ else if(Action&&(!strcmp(Action,"catalog")||!strcmp(Action,"detail")||!strcmp(Action,"files")||!strcmp(Action,"preview")||!strcmp(Action,"mine")||!strcmp(Action,"profile")||!strcmp(Action,"requests")||!strcmp(Action,"resolve")||!strcmp(Action,"plan")))Ok=MdoExtensionServiceRead(Input,C->SendCancel,&Out,Error);
  else if(Action&&!strcmp(Action,"download"))Ok=MdoExtensionServiceDownload(MdoExtensionText(Input,"kind",32),MdoExtensionText(Input,"version_id",32),C->SendCancel,&Out,Error);
  else if(Action&&!strcmp(Action,"submit"))Ok=MdoExtensionServicePublish(Input,C->SendCancel,&Out,Error);
  else if(Action)Ok=MdoExtensionServiceWrite(Input,C->SendCancel,&Out,Error);

@@ -84,7 +84,7 @@ bool MdoExtensionTaskBegin(const xvalue* Input,xvalue** Result,char Error[512]){
  for(size_t I=0;I<xrtValueCount(Items);I++){const xvalue* T=xrtValueArrayGet(Items,I);cstr State=MdoExtensionText(T,"state",24);uint64 Bytes=0;MdoExtArchiveNumber(T,"bytes",&Bytes);
   /* Sealed editor files reserve bytes, but do not consume a transfer slot.
    * Retained failures also remain clearable without blocking new transfers. */
-  if(!strcmp(State,"receiving")||!strcmp(State,"cancel_requested")||MdoExtArchiveUse(MdoExtensionText(T,"id",32)))Active++;
+  MdoExtensionTaskUse* Use=MdoExtArchiveUse(MdoExtensionText(T,"id",32));if(!strcmp(State,"receiving")||!strcmp(State,"cancel_requested")||(Use&&Use->Sealing))Active++;
   if(strcmp(State,"cancelled")&&strcmp(State,"complete"))Reserved+=Bytes;else{uint64 Stored=0;MdoExtArchiveNumber(T,"stored_bytes",&Stored);Reserved+=Stored;}}
  bool Ok=!MdoExtArchiveTasksStopping&&Items&&xrtValueCount(Items)<128&&Active<3&&Reserved<=MDO_ARCHIVE_TASK_QUOTA&&Size<=MDO_ARCHIVE_TASK_QUOTA-Reserved;char* Id=Ok?xrtXidMakeString():NULL,*Base=Id?xrtFormat(MDO_ARCHIVE_TASK_ROOT "/%s",Id):NULL;
  xroot Directory=Base?MdoHomeOpenStorageDirectory(Base):NULL;Ok=Ok&&Directory;if(Directory)xrtRootClose(Directory);xvalue* T=xrtValueObject();
@@ -123,10 +123,10 @@ bool MdoExtensionTaskWrite(cstr Id,uint64 Offset,const void* Data,size_t Bytes,x
 bool MdoExtensionTaskUseWrite(MdoExtensionTaskUse* Use,uint64 Offset,const void* Data,size_t Bytes,xvalue** Result,char Error[512]){if(!Use){*Result=NULL;return MdoExtArchiveError(Error,"An owned archive transfer is required");}return MdoExtArchiveWrite(Use->Id,Use,Offset,Data,Bytes,Result,Error);}
 bool MdoExtensionTaskOrigin(MdoExtensionTaskUse* Use,const xvalue* Origin,char Error[512]){
  if(!Use||xrtValueType(Origin)!=XVALUE_OBJECT)return false;
- cstr Kind=MdoExtensionText(Origin,"kind",32),Id=MdoExtensionText(Origin,"xid",32),Version=MdoExtensionText(Origin,"version_id",32),Hash=MdoExtensionText(Origin,"sha256",64);
+ cstr Kind=MdoExtensionText(Origin,"kind",32),Id=MdoExtensionText(Origin,"xid",32),Version=MdoExtensionText(Origin,"version_id",32),Hash=MdoExtensionText(Origin,"sha256",64),Ref=MdoExtensionText(Origin,"id",MDO_EXTENSION_REF_BYTES),RefKind=MdoExtensionRefKind(Ref);
  char* Text=xrtJsonStringify(Origin,false,NULL);
- bool Valid=Text&&strlen(Text)<=8192&&MdoExtensionDirectoryKind(Kind)&&MdoExtArchiveId(Id)&&MdoExtArchiveId(Version)&&MdoExtArchiveHash(Hash);xrtFree(Text);if(!Valid)return MdoExtArchiveError(Error,"Invalid verified store origin");
- const cstr Fields[]={"kind","xid","version_id","sha256","bytes","owner","submitter","author","copyright","license","name","alias","platforms","state","version"};
+ bool Valid=Text&&strlen(Text)<=8192&&MdoExtensionDirectoryKind(Kind)&&RefKind&&!strcmp(Kind,RefKind)&&MdoExtArchiveId(Id)&&MdoExtArchiveId(Version)&&MdoExtArchiveHash(Hash);xrtFree(Text);if(!Valid)return MdoExtArchiveError(Error,"Invalid verified store origin");
+ const cstr Fields[]={"id","kind","xid","version_id","sha256","bytes","owner","submitter","author","copyright","license","name","alias","platforms","state","version"};
  for(size_t I=0;I<xrtValueCount(Origin);I++){xstrview Key={0};xrtValueObjectAt(Origin,I,&Key);bool Known=false;for(size_t J=0;J<sizeof(Fields)/sizeof(*Fields);J++)if(xrtStrEqual(Key,xrtStrView(Fields[J])))Known=true;if(!Known)return MdoExtArchiveError(Error,"Unexpected field in verified store origin");}
  xrtMutexLock(MdoExtArchiveTasksLock);xvalue* Task=MdoExtArchiveLoad(Use->Id,Error);cstr State=MdoExtensionText(Task,"state",24);bool Ok=Task&&MdoExtArchiveUse(Use->Id)==Use&&State&&!strcmp(State,"receiving")&&!xrtCancelRequested(Use->Cancel)&&!strcmp(Kind,MdoExtensionText(Task,"kind",32))&&!strcmp(Hash,MdoExtensionText(Task,"sha256",64))&&xrtValueObjectSet(Task,XRT_STR_LITERAL("store"),Origin)&&MdoExtArchivePut(Task,"directory_id",Id)&&MdoExtArchiveSave(Task);
  xrtValueRelease(Task);xrtMutexUnlock(MdoExtArchiveTasksLock);return Ok||MdoExtArchiveError(Error,"Archive transfer changed before its store origin could be recorded");
@@ -204,7 +204,7 @@ bool MdoExtensionTaskForget(cstr Id,char Error[512]){
 }
 bool MdoExtensionTaskComplete(cstr Id,const xvalue* Outcome,xvalue** Result,char Error[512]){
  *Result=NULL;if(Error)Error[0]=0;if(!MdoExtArchiveTasksLock||!MdoExtArchiveId(Id))return MdoExtArchiveError(Error,"Choose a sealed archive task");xrtMutexLock(MdoExtArchiveTasksLock);xvalue* T=MdoExtArchiveLoad(Id,Error);cstr State=MdoExtensionText(T,"state",24);
- bool Ok=T&&State&&(!strcmp(State,"ready")||!strcmp(State,"cancel_requested")||!strcmp(State,"complete"));cstr Target=MdoExtensionText(Outcome,"id",96),Problem=MdoExtensionText(Outcome,"runtime_error",512);
+ bool Ok=T&&State&&(!strcmp(State,"ready")||!strcmp(State,"cancel_requested")||!strcmp(State,"complete"));cstr Target=MdoExtensionText(Outcome,"directory_id",96),Problem=MdoExtensionText(Outcome,"runtime_error",512);
  if(Ok&&Target)Ok=MdoExtArchivePut(T,"directory_id",Target);
  if(Ok&&Problem)Ok=MdoExtArchivePut(T,"error",Problem);
  Ok=Ok&&MdoExtArchivePut(T,"state","complete")&&MdoExtArchiveSave(T);

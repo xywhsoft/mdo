@@ -40,23 +40,23 @@ xvalue* MdoApplicationPluginNativeSources(void){
     for(size_t I=0;I<xrtValueCount(SdkPlugins.Effective);I++){
         const xvalue* M=xrtValueArrayGet(SdkPlugins.Effective,I);cstr Native=SdkField(SdkGet(SdkGet(M,"manifest"),"entry"),"native");
         if(!Native||!SdkPluginEnabled(M))continue;
-        char* Path=xrtFormat("/app/__mdo_plugins/%s/%s/%s",SdkField(M,"id"),SdkField(M,"revision"),Native);
-        xvalue* R=xrtValueObject();SdkPut(R,"path",Path);SdkPut(R,"id",SdkField(M,"alias"));SdkPut(R,"directory_id",SdkField(M,"id"));SdkPut(R,"version",SdkField(M,"version")?SdkField(M,"version"):"0.0.0");
-        const xvalue* Requires=SdkGet(SdkGet(M,"manifest"),"requires");xvalue* Resolved=xrtValueArray();
-        for(size_t J=0;J<xrtValueCount(Requires);J++){cstr Ref=SdkField(xrtValueArrayGet(Requires,J),"id");const xvalue* Other=SdkPluginFind(SdkPlugins.Effective,Ref);
-            if(!Other)for(size_t K=0;K<xrtValueCount(SdkPlugins.Effective);K++){const xvalue* Candidate=xrtValueArrayGet(SdkPlugins.Effective,K);if(!strcmp(Ref,SdkField(Candidate,"alias")))Other=Candidate;}
+        char* Path=xrtFormat("/app/__mdo_plugins/%s/%s/%s",SdkField(M,"directory_id"),SdkField(M,"revision"),Native);
+        xvalue* R=xrtValueObject();SdkPut(R,"path",Path);SdkPut(R,"id",SdkField(M,"alias"));SdkPut(R,"directory_id",SdkField(M,"directory_id"));SdkPut(R,"version",SdkField(M,"version")?SdkField(M,"version"):"0.0.0");
+        const xvalue* Requires=SdkGet(M,"dependencies");xvalue* Resolved=xrtValueArray();
+        for(size_t J=0;J<xrtValueCount(Requires);J++){const xvalue* Dependency=xrtValueArrayGet(Requires,J);cstr Ref=SdkField(Dependency,"id");if(!MdoPluginIdentity(Ref)||MdoGraphBool(Dependency,"optional",false))continue;const xvalue* Other=SdkPluginFind(SdkPlugins.Effective,Ref);
             if(Other){xvalue* V=xrtValueObject();SdkPut(V,"id",SdkField(Other,"alias"));xrtValueArrayAppendNew(Resolved,V);}}
         xrtValueObjectSetNew(R,XRT_STR_LITERAL("requires"),Resolved);xrtValueArrayAppendNew(Rows,R);xrtFree(Path);
     }xrtMutexUnlock(SdkPlugins.Lock);return Rows;
 }
 static bool SdkPluginFrontendCall(cstr Method,const xvalue* P,xvalue** R,mdo_error_v1* E){
     cstr Client=SdkField(P,"client"),Page=SdkField(P,"page"),Id=SdkField(P,"id"),Revision=SdkField(P,"revision");
+    if(!strcmp(Method,"plugin.frontend.enter")){char Why[512]={0};if(!MdoExtensionsRuntimeCheck(Id,NULL,"global",NULL,false,Why))return MdoApplicationError(E,"sdk_plugin_dependency_unavailable",Why,"plugin",409,false);}
     if(!SdkIdValid(Client)||!SdkIdValid(Page))return MdoApplicationError(E,"sdk_arguments_invalid","A window client and document identity are required","plugin",422,false);
     xrtMutexLock(SdkPlugins.Lock);
     bool CleanupControl=!strcmp(Method,"plugin.frontend.hello")||!strcmp(Method,"plugin.frontend.leave")||!strcmp(Method,"plugin.frontend.fail");
     if(SdkPlugins.Busy||(SdkPlugins.Recovery&&!CleanupControl)){xrtMutexUnlock(SdkPlugins.Lock);return MdoApplicationError(E,"sdk_plugin_busy","Plugin manager is changing or recovering","plugin",409,false);}
     bool Hello=!strcmp(Method,"plugin.frontend.hello"),Leave=!strcmp(Method,"plugin.frontend.leave"),Fail=!strcmp(Method,"plugin.frontend.fail"),Ok=true;
-    if(!Hello&&(!MdoExtensionDirectoryId(Id)||!Revision||strlen(Revision)!=64)){xrtMutexUnlock(SdkPlugins.Lock);return MdoApplicationError(E,"sdk_arguments_invalid","A plugin identity and content digest are required","plugin",422,false);}
+    if(!Hello&&(!MdoPluginIdentity(Id)||!Revision||strlen(Revision)!=64)){xrtMutexUnlock(SdkPlugins.Lock);return MdoApplicationError(E,"sdk_arguments_invalid","A plugin identity and content digest are required","plugin",422,false);}
     xvalue* Next=xrtValueArray();bool Existing=false;
     for(size_t I=0;I<xrtValueCount(SdkPlugins.Frontends);I++){
         const xvalue* Row=xrtValueArrayGet(SdkPlugins.Frontends,I);bool SameClient=!strcmp(Client,SdkField(Row,"client"));

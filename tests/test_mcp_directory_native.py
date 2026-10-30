@@ -12,7 +12,7 @@ from mcp_template_fixture import template
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT = r'''
 static bool QaMcpConnection(cstr Id,cstr Marker,cstr Digest,bool Enabled){
-    char Error[512];xvalue* Old=MdoMcpConnections(Id,Error),*Input=SdkParse("{\"action\":\"save\",\"extension_id\":\"0123456789ABCDEFGHJKMNPQRSTVWXYZ\",\"variant\":\"default\",\"values\":{},\"secret_refs\":{\"token\":\"env:MDO_QA_MCP_TOKEN\"}}"),*Out=NULL;
+    char Error[512];xvalue* Old=MdoMcpConnections(Id,Error),*Input=SdkParse("{\"action\":\"save\",\"extension_id\":\"mcp:qa.bundled-fixture\",\"variant\":\"default\",\"values\":{},\"secret_refs\":{\"token\":\"env:MDO_QA_MCP_TOKEN\"}}"),*Out=NULL;
     bool Ok=Input&&SdkPut(Input,"id",Id)&&SdkPut(Input,"expected_revision",Old?SdkField(Old,"revision"):"")&&SdkPut(Input,"approval_digest",Digest)&&SdkPut(xrtValueObjectGet(Input,XRT_STR_LITERAL("values")),"marker",Marker)&&xrtValueObjectSetNew(Input,XRT_STR_LITERAL("enabled"),xrtValueBool(Enabled))&&MdoMcpConnectionManage(Input,NULL,&Out,Error);
     xrtValueRelease(Old);xrtValueRelease(Input);xrtValueRelease(Out);return Ok;
 }
@@ -40,12 +40,12 @@ xvalue* QaProductContract(const xvalue* P,xvfs V){
     xvalue* Removed=NULL;bool Pinned=Ok&&!MdoExtensionsRemove("mcp","0123456789ABCDEFGHJKMNPQRSTVWXYZ",&Removed,Error);xrtValueRelease(Removed);
     xrtValueObjectSetNew(R,XRT_STR_LITERAL("running_process_pins_directory"),xrtValueBool(Pinned));
     bool Persisted=Ok&&MdoMcpManagerSetEnabled("qa-one",false,&Work);PrivateDoc=MdoMcpConnections("qa-one",Error);Persisted=Persisted&&PrivateDoc&&!MdoExtOpBool(PrivateDoc,"enabled",true);xrtValueRelease(PrivateDoc);Persisted=Persisted&&MdoMcpManagerReload()&&MdoMcpManagerSetEnabled("qa-one",true,&Work)&&QaMcpMarker("qa-one","alpha-private-only");xrtValueObjectSetNew(R,XRT_STR_LITERAL("activation_is_durable_and_credentials_retained"),xrtValueBool(Persisted));
-    xvalue* PreviewInput=SdkParse("{\"action\":\"preview\",\"id\":\"qa-preview\",\"extension_id\":\"0123456789ABCDEFGHJKMNPQRSTVWXYZ\",\"variant\":\"default\",\"values\":{\"marker\":\"preview-only\"}}");xvalue* PreviewOut=NULL;
+    xvalue* PreviewInput=SdkParse("{\"action\":\"preview\",\"id\":\"qa-preview\",\"extension_id\":\"mcp:qa.bundled-fixture\",\"variant\":\"default\",\"values\":{\"marker\":\"preview-only\"}}");xvalue* PreviewOut=NULL;
     bool Cold=MdoMcpConnectionManage(PreviewInput,NULL,&PreviewOut,Error)&&SdkField(PreviewOut,"approval_digest");bool PreviewExists=false;xfileinfo PreviewInfo;Cold=Cold&&MdoHomeExternalStat("data/mcp/connections/qa-preview.json",&PreviewExists,&PreviewInfo)&&!PreviewExists;xrtValueObjectSetNew(R,XRT_STR_LITERAL("preview_is_cold_and_requires_no_real_secret"),xrtValueBool(Cold));xrtValueRelease(PreviewInput);xrtValueRelease(PreviewOut);
     bool Changed=Ok&&MdoHomeAtomicWrite("mcp/0123456789ABCDEFGHJKMNPQRSTVWXYZ/support/banner.txt","updated support",15,false)&&MdoMcpManagerReload();
     C=Changed?MdoMcpCatalogSnapshot():NULL;Changed=Changed&&C&&C->Count==0;MdoMcpCatalogRelease(C);
     xrtValueObjectSetNew(R,XRT_STR_LITERAL("changed_directory_requires_approval"),xrtValueBool(Changed));
-    PrivateDoc=MdoMcpConnections("qa-one",Error);xvalue* Reuse=SdkParse("{\"action\":\"save\",\"id\":\"qa-one\",\"extension_id\":\"0123456789ABCDEFGHJKMNPQRSTVWXYZ\",\"variant\":\"default\",\"enabled\":true,\"values\":{\"marker\":\"alpha-private-only\"}}");char NewDigest[65];MdoExtensionsFingerprint("mcp","0123456789ABCDEFGHJKMNPQRSTVWXYZ",NewDigest,NULL,Error);SdkPut(Reuse,"expected_revision",SdkField(PrivateDoc,"revision"));SdkPut(Reuse,"approval_digest",NewDigest);PreviewOut=NULL;
+    PrivateDoc=MdoMcpConnections("qa-one",Error);xvalue* Reuse=SdkParse("{\"action\":\"save\",\"id\":\"qa-one\",\"extension_id\":\"mcp:qa.bundled-fixture\",\"variant\":\"default\",\"enabled\":true,\"values\":{\"marker\":\"alpha-private-only\"}}");char NewDigest[65];MdoExtensionsFingerprint("mcp","0123456789ABCDEFGHJKMNPQRSTVWXYZ",NewDigest,NULL,Error);SdkPut(Reuse,"expected_revision",SdkField(PrivateDoc,"revision"));SdkPut(Reuse,"approval_digest",NewDigest);PreviewOut=NULL;
     bool Refused=!MdoMcpConnectionManage(Reuse,NULL,&PreviewOut,Error);xrtValueObjectSetNew(R,XRT_STR_LITERAL("changed_program_cannot_retain_old_credentials"),xrtValueBool(Refused));xrtValueRelease(PrivateDoc);xrtValueRelease(Reuse);xrtValueRelease(PreviewOut);
     XS_ServerInfo Server={0};Server.Name="mcp-api-fixture";Server.Port=58013;SdkServer=&Server;g_MdoApiInitialized=true;bool Api=MdoApiWriteInit()&&MdoApiExtensionTasksInit();mdo_sdk_context_v1 Sdk={0};Sdk.Size=sizeof(Sdk);Sdk.Version=MDO_SDK_VERSION;Sdk.Api=MdoApplicationApi();Sdk.ExtensionId="mcp-api-fixture";Sdk.Origin=MDO_ORIGIN_USER;mdo_error_v1 Failure={0};xvalue* Req=SdkParse("{\"path\":{\"connection\":\"qa-one\"}}");
     Api=Api&&mdoCall(&Sdk,"product.mcp.connections.by_connection.get",Req,&PreviewOut,&Failure)==MDO_RESULT_OK&&!SdkGet(SdkGet(SdkGet(PreviewOut,"data"),"values"),"token");xrtValueRelease(PreviewOut);PreviewOut=NULL;xrtValueRelease(Req);
@@ -77,7 +77,7 @@ def main():
     shutil.copyfile(ROOT / 'tests/fixtures/mcp-directory-server.c', directory / 'server.c')
     subprocess.run([str(args.cc), '-Os', '-s', '-Wall', '-Wextra', str(directory / 'server.c'), '-o', str(directory / 'bin/server.exe')], check=True, capture_output=True)
     (directory / 'support/banner.txt').write_text('directory support', encoding='utf-8')
-    (directory / 'extension.json').write_text(json.dumps({'kind': 'mcp', 'name': 'Bundled MCP', 'alias': 'bundled-fixture', 'entry': 'mcp.json', 'platforms': ['windows-x86_64']}), encoding='utf-8')
+    (directory / 'extension.json').write_text(json.dumps({'kind': 'mcp', 'id':'mcp:qa.bundled-fixture', 'name': 'Bundled MCP', 'alias': 'bundled-fixture', 'entry': 'mcp.json', 'platforms': ['windows-x86_64']}), encoding='utf-8')
     recipe = template('bundled-fixture', 'stdio')
     recipe['inputs'] = [dict(id='marker', type='text', label='Marker', description='Private value', required=True, secret=False),
                         dict(id='token', type='text', label='Token', description='Private credential', required=True, secret=True)]

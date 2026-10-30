@@ -486,7 +486,7 @@ static bool MdoMcpReadSource(MdoMcpSource* Source,char** Text,size_t* Size,char 
 static bool McpDirectoryBindRuntime(MdoMcpServerEntry* Entry,const MdoMcpSource* Source)
 {
     if(Entry->Transport!=MDO_MCP_TRANSPORT_STDIO)return true;
-    cstr Id=MdoExtensionText(Source->Directory,"id",96),Root=MdoExtensionText(Source->Directory,"root",MDO_EXTENSION_PATH_BYTES);
+    cstr Id=MdoExtensionText(Source->Directory,"directory_id",96),Root=MdoExtensionText(Source->Directory,"root",MDO_EXTENSION_PATH_BYTES);
     char* Native=Root?MdoHomeExternalPath(Root):NULL;
     char *Relative=MdoExtensionDirectoryId(Entry->Id)?xrtFormat("data/mcp/runtime/%s",Entry->Id):NULL;
     char *Cache=Relative?xrtFormat("%s/cache",Relative):NULL,*Python=Cache?xrtFormat("%s/python-%s",Cache,Source->DirectoryDigest):NULL;
@@ -1387,7 +1387,7 @@ static bool MdoMcpBuildCandidate(uint64 Generation,
         Parsed = MdoMcpParseServer(&Sources[i], Text, TextSize, &Entry,
             &Stage, Error);
         if(Parsed){
-            Entry.DirectoryId=xrtStrDup(MdoExtensionText(Sources[i].Directory,"id",96));Entry.ProjectId=xrtStrDup(Sources[i].ProjectId?Sources[i].ProjectId:"");
+            Entry.DirectoryId=xrtStrDup(MdoExtensionText(Sources[i].Directory,"directory_id",96));Entry.ProjectId=xrtStrDup(Sources[i].ProjectId?Sources[i].ProjectId:"");
             Entry.DirectoryLease=Sources[i].DirectoryLease;Sources[i].DirectoryLease=NULL;
             char* Combined=xrtFormat("%s\n%s",Text,Sources[i].DirectoryDigest);
             Parsed=Entry.DirectoryId&&Entry.ProjectId&&Combined&&MdoMcpHash(Combined,strlen(Combined),Entry.SourceHash)&&McpDirectoryBindRuntime(&Entry,&Sources[i]);xrtFree(Combined);
@@ -1814,6 +1814,11 @@ bool MdoMcpDiagnosticsAt(const MdoMcpDiagnostics* pDiagnostics,
 
 bool MdoMcpRead(cstr Server,cstr Method,cstr Params,xcancel* Cancel,uint64 Deadline,char** Result,xwork_error* Error)
 {
+    if(Result)*Result=NULL;
+    MdoMcpCatalog* Catalog=MdoMcpCatalogSnapshot();const MdoMcpServerEntry* Entry=NULL;for(size_t I=0;Server&&Catalog&&I<Catalog->Count;I++)if(!strcmp(Catalog->Entries[I].Id,Server)){Entry=&Catalog->Entries[I];break;}char Why[512]={0};bool Ready=Entry&&Entry->Enabled;char* Workspace=NULL;char Scope[65]="global";
+    if(Ready&&Entry->ProjectId&&Entry->ProjectId[0]){snprintf(Scope,sizeof(Scope),"%s",Entry->ProjectId);if(!strcmp(Scope,"default"))Workspace=MdoHomeDefaultWorkspacePath(false);else{MdoProjectInfo Project={0};Project.Size=sizeof(Project);bool Found=false;xwork_error Failure;if(MdoProjectGet(Scope,&Project,&Found,&Failure)&&Found)Workspace=xrtStrDup(Project.WorkspaceRoot);}Ready=Workspace!=NULL;}
+    xvalue* Template=Ready&&Entry->DirectoryId?MdoExtensionsRead("mcp",Entry->DirectoryId,Why):NULL;cstr Ref=MdoExtensionText(Template,"id",MDO_EXTENSION_REF_BYTES);if(Ready&&Entry->DirectoryId)Ready=Ref&&MdoExtensionsRuntimeCheck(Ref,Workspace,Scope,NULL,false,Why);
+    xrtFree(Workspace);xrtValueRelease(Template);MdoMcpCatalogRelease(Catalog);if(!Ready){MdoMcpRoleError(Error,XWORK_ERROR_CONTEXT,Why[0]?Why:"MCP connection is disabled or its dependencies are not ready");return false;}
     return g_MdoMcp.Initialized&&xworkRuntimeMcpRead(g_MdoMcp.Runtime,Server,Method,Params,Cancel,Deadline,Result,Error);
 }
 xvalue* MdoMcpDescribe(cstr Server)

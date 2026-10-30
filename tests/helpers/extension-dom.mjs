@@ -2,6 +2,7 @@
 export const descendants = node => [node, ...node.children.flatMap(child => typeof child === "object" ? descendants(child) : [])];
 export class TestElement extends EventTarget {
   constructor(tag) { super(); this.tag = tag; this.tagName = tag.toUpperCase(); this.children = []; this.dataset = {}; this.attributes = {}; this.style = { setProperty(key,value,priority="") { this[key]=String(value); this[`${key}:priority`]=priority; }, getPropertyValue(key) { return this[key] || ""; }, getPropertyPriority(key) { return this[`${key}:priority`] || ""; }, removeProperty(key) { delete this[key]; delete this[`${key}:priority`]; } }; this.value = ""; this.scrollTop = 0; this.isConnected = true; }
+  get isConnected() { return this._connected!==false&&(!this.parent||this.parent.isConnected); } set isConnected(value) { this._connected=Boolean(value); }
   set textContent(value) { this.replaceChildren(); this.text = String(value); }
   get textContent() { return this.text || this.children.map(c => typeof c === "object" ? c.textContent : c).join(""); }
   setAttribute(key, value) { this.attributes[key] = String(value); if (["name", "value", "type", "id"].includes(key)) this[key] = value; if (key.startsWith("data-")) this.dataset[key.slice(5).replace(/-([a-z])/g, (_, c) => c.toUpperCase())] = String(value); }

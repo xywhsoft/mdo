@@ -1,5 +1,7 @@
-import { subscribeLocale, t as uiErrorText, setUiText as writeUiText, uiMessage, t as uiText } from "../../i18n.js";
+import { t as uiErrorText, setUiText as writeUiText, uiMessage, t as uiText, subscribeLocale } from "../../i18n.js";
 
+import { dependencyList, localDependencyPanel } from "./extension-dependencies.js";
+import { reviewDependencyPlan } from "./dependency-plan.js";
 import { createExtensionBrowser, detailTabs, detailFacts, browserText } from "../../components/extension-browser.js";
 import { api } from "../../api/client.js";
 import { stageExtensionFile } from "../../api/extension-archives.js";
@@ -24,7 +26,7 @@ export function createSingleResourceStore(kind, onChange, onBrowse=()=>{}, onMan
   let items=[],installed={},query="",applied="",state="all",total=0,epoch=0,detailEpoch=0,controller=null,detailAbort=null,dialog=null,busy=false,saving=false,dirty=false,visible=false,disposed=false,activeTarget=device();
   const live=(n,target)=>!disposed&&n===epoch&&target===device();
   const call=async(body,signal=controller?.signal)=>(await api.post("/ecosystem",{kind,...body},{signal})).data;
-  const owned=row=>Object.values(installed).find(local=>local.kind===kind&&local.id===row.xid&&local.source==="store");
+  const owned=row=>Object.values(installed).find(local=>local.kind===kind&&local.directory_id===row.xid&&local.source==="store");
   function report(error){writeUiText(statusRoot, errorMessage(error));statusRoot.className="extension-error";}
   function close(force=false){if(!dialog)return true;if(!force&&(saving||dirty&&!confirm(uiMessage("ui.singleResourceStore.discardUnsubmittedInformation", {}, "放弃未提交的信息？"))))return false;dialog.dispose();dialog=null;dirty=saving=false;return true;}
   function modal(title){if(!close())return null;const view=openLayer({title,icon:kind==="skills"?"spark":"folder",width:"48rem",height:"80%",beforeClose:()=>!saving&&(!dirty||confirm(uiMessage("ui.singleResourceStore.discardUnsubmittedInformation", {}, "放弃未提交的信息？"))),onClosed(){if(dialog===view){dialog=null;dirty=saving=false;}}});dialog=view;return view;}
@@ -56,13 +58,13 @@ export function createSingleResourceStore(kind, onChange, onBrowse=()=>{}, onMan
   async function loadDetail(row){
     const n=++detailEpoch,target=device(),key=row.version_id;detailAbort?.abort();detailAbort=new AbortController();const signal=detailAbort.signal,valid=()=>!disposed&&n===detailEpoch&&target===device()&&browser.isSelected(key);
     try{const data=await call({action:"detail",version_id:key},signal);if(!valid())return;const credits=resourceCredits({...data,source:"store"}),description=text("div","");description.append(text("p",data.description||""),credits.facts(),detailFacts([[uiMessage("ui.singleResourceStore.alias", {}, "别名"),data.alias],[uiMessage("extensionBrowser.platform", {}, "支持平台"),data.platforms?.join(" / ")],[uiMessage("ui.singleResourceStore.archiveSize", {}, "归档大小"),`${data.bytes} B`],["SHA-256",data.sha256]]));
+      description.append(dependencyList(data));
       if(data.manifest?.readme){const readme=await call({action:"preview",version_id:key,path:data.manifest.readme},signal);if(!valid())return;if(!readme.binary)description.append(renderSourceMarkdown(readme.text));}
       const files=text("div",""),tabs=detailTabs([{id:"description",label:uiMessage("backupImport.notice", {}, "说明"),content:description},{id:"files",label:uiMessage("ui.singleResourceStore.sourceAndFiles", {}, "源码与文件"),content:files}]);browser.showDetail(key,tabs);void filesView(data,files,signal,valid);
       let trusted=!["agents","subagents","tools","commands","mcp","plugins","external-tools"].includes(kind);const same=owned(data)?.installation?.version_id===key;
       const install=button(same?uiMessage("store.installed", {}, "已安装"):policy.installLabel?.()||uiMessage("ui.singleResourceStore.downloadAndInstall", {}, "下载并安装"),async()=>{if(!valid()||!trusted||busy||same)return;if(policy.beforeInstall&&!await policy.beforeInstall())return;busy=true;install.disabled=true;try{
-        let previous=null;try{previous=(await api.get(`/extensions/${kind}/${encodeURIComponent(data.xid)}`,{signal})).data;}catch(e){if(e.status!==404)throw e;}
-        const task=await call({action:"download",version_id:key},signal);if(!valid())return;
-        await api.post(`/extension-tasks/${task.id}/install`,{trust_code:trusted,expected_revision:previous?.revision||"",...(!previous?{enabled:kind!=="plugins"}:{})},{signal});if(!valid())return;browser.closeDetail();onChange();busy=false;await load();
+        const plan=await call({action:"install_plan",version_id:key},signal);if(!valid())return;
+        const receipt=await reviewDependencyPlan(plan,{signal});if(!receipt||!valid())return;browser.closeDetail();onChange();busy=false;await load();
       }catch(e){if(valid()&&e.name!=="AbortError")report(e);}finally{busy=false;install.disabled=same||!trusted;}},true);install.disabled=same||!trusted;
       if(!trusted){const check=element("input",{attrs:{type:"checkbox"}});check.addEventListener("change",()=>{trusted=check.checked;install.disabled=!trusted||same;});description.append(element("label",{className:"store-code-consent"},[check,text("span",uiMessage("ui.singleResourceStore.iReviewedTheFilesAndTrustTheAuthorAnd", {}, "我已检查文件并信任作者，允许此扩展在设备上运行。")) ]));}
       browser.setActions(key,install,button(uiMessage("context.close", {}, "关闭"),()=>browser.closeDetail()));

@@ -1,7 +1,7 @@
 bool MdoApiMcpTemplatesRoute(MdoApiContext* C){
  char Error[512]={0};xvalue* Rows=MdoExtensionsList("mcp",Error),*Items=xrtValueArray(),*Data=xrtValueObject();bool Ok=Rows&&Items&&Data;
  for(size_t I=0;Ok&&I<xrtValueCount(Rows);I++){
-  const xvalue* Row=xrtValueArrayGet(Rows,I);cstr Id=MdoExtensionText(Row,"id",96),Alias=MdoExtensionText(Row,"alias",64);char* Entry=Id?MdoExtensionsEntryPath("mcp",Id,Error):NULL,*Text=Entry?MdoExtensionRead(Entry,true,MDO_MCP_FILE_LIMIT,NULL):NULL;
+  const xvalue* Row=xrtValueArrayGet(Rows,I);cstr Id=MdoExtensionText(Row,"directory_id",96),Alias=MdoExtensionText(Row,"alias",64);char* Entry=Id?MdoExtensionsEntryPath("mcp",Id,Error):NULL,*Text=Entry?MdoExtensionRead(Entry,true,MDO_MCP_FILE_LIMIT,NULL):NULL;
   xvalue* Template=Text?xrtJsonParse(xrtStrView(Text)):NULL,*Item=xrtValueClone(Row);bool Valid=Template&&MdoMcpTemplateValidate(Template,Alias,Error,sizeof(Error));
   Ok=Item&&MdoDirectoryApiItemFlags(Item)&&MdoApiValueSetBool(Item,"template_valid",Valid);if(Ok&&Valid)Ok=xrtValueObjectSet(Item,XRT_STR_LITERAL("template"),Template);else if(Ok)Ok=MdoApiValueSetString(Item,"template_error",Error[0]?Error:"Invalid service recipe");
   if(Ok)Ok=xrtValueArrayAppend(Items,Item);

@@ -36,11 +36,15 @@ static bool MdoMcpTemplateUrl(cstr S)
 {
     /* User-specific queries, fragments and URL userinfo are inputs, never
      * published defaults. HTTP is allowed only by the local runtime policy. */
-    return S&&!strncmp(S,"https://",8)&&S[8]&&!strpbrk(S,"@?#\\ \t\r\n");
+    if(!S||strncmp(S,"https://",8)||!S[8])return false;
+    for(cstr P=S;*P;P++)if(strchr("@?#\\ \t\r\n",*P))return false;
+    return true;
 }
 static bool MdoMcpTemplateLeaf(const xvalue* T,const xvalue* V,bool Secret,bool Url,bool Program)
 {
-    if(xrtValueType(V)==XVALUE_OBJECT){cstr Id=MdoExtensionText(V,"input",64);const xvalue* I=MdoMcpTemplateInput(T,Id);
+    if(xrtValueType(V)==XVALUE_OBJECT){
+        if(Program&&xrtValueObjectHas(V,XRT_STR_LITERAL("ref"))){cstr Ref=MdoExtensionText(V,"ref",MDO_EXTENSION_REF_BYTES),Export=MdoExtensionText(V,"export",64),Kind=MdoExtensionRefKind(Ref);return Kind&&!strcmp(Kind,"external-tools")&&MdoMcpTemplateKeys(V,"|ref||export|")&&MdoExtensionAlias(Export);}
+        cstr Id=MdoExtensionText(V,"input",64);const xvalue* I=MdoMcpTemplateInput(T,Id);
         return MdoMcpTemplateKeys(V,"|input|")&&I&&MdoMcpTemplateFlag(I,"secret",false)==Secret;}
     xstrview S;if(Secret||!xrtValueGetString(V,&S)||S.Size>4096||memchr(S.Data,0,S.Size)||!MdoMcpTemplateString(S.Data))return false;
     if(Url)return MdoMcpTemplateUrl(S.Data);

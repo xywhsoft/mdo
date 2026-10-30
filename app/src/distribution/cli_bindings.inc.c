@@ -46,12 +46,12 @@ static bool CliMapAdd(xvalue* Map,const xvalue* Tool,cstr Name,cstr Relative,con
 #endif
     if(!MdoCliCommandName(Key)||!CliRelativeValid(Relative))return false;
     const xvalue* Old=xrtValueObjectGet(Map,xrtStrView(Key));
-    if(Old){if(!strcmp(CliText(Old,"tool_id",96),CliText(Tool,"id",96))&&!strcmp(CliText(Old,"target",4096),Relative))return true;
+    if(Old){if(!strcmp(CliText(Old,"tool_id",96),CliText(Tool,"directory_id",96))&&!strcmp(CliText(Old,"target",4096),Relative))return true;
         snprintf(g_MdoCli.BindingError,sizeof(g_MdoCli.BindingError),"Command '%s' is already provided by %s; disable it or choose another command name",Key,CliText(Old,"tool_id",96));return false;}
     if(xrtValueCount(Map)>=1024)return false;
     char* Native=MdoHomeExternalPath(Relative);bool Present=Native&&CliPresent(Native);xrtFree(Native);
     if(!Present){snprintf(g_MdoCli.BindingError,sizeof(g_MdoCli.BindingError),"Command '%s' program does not exist: %.130s",Key,Relative);return false;}
-    xvalue* Row=xrtValueObject();bool Ok=Row&&CliSet(Row,"target",Relative)&&CliSet(Row,"tool_id",CliText(Tool,"id",96));
+    xvalue* Row=xrtValueObject();bool Ok=Row&&CliSet(Row,"target",Relative)&&CliSet(Row,"tool_id",CliText(Tool,"directory_id",96));
     if(Args)Ok=Ok&&xrtValueObjectSet(Row,XRT_STR_LITERAL("args"),Args);else Ok=Ok&&xrtValueObjectSetNew(Row,XRT_STR_LITERAL("args"),xrtValueArray());
     Ok=Ok&&xrtValueObjectSet(Map,xrtStrView(Key),Row);xrtValueRelease(Row);return Ok;
 }

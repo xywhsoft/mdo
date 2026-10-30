@@ -1,0 +1,203 @@
+{
+  "schema": 1,
+  "checked_unix": 1793071145.1993468,
+  "source_commit": "1df26c6710114bd174d68404f167807bd0973957",
+  "binary_sha256": "b74dca205299f418b511f688c3177e460ad9d3cbb10f0015073511f4d6d1fb5c",
+  "driver_sha256": "0b9fc5ba8a7fe6f557410d788913642feaf3a7c0cf2aa2473b52ef466673bf21",
+  "linux": [
+    {
+      "family": 4,
+      "backend": "native",
+      "backend_name": "epoll",
+      "checks": {
+        "terminal": true,
+        "continuous_72h": true,
+        "joined": true,
+        "drained": true,
+        "quota_zero": true,
+        "future_complete": true,
+        "sources": true,
+        "binary": true,
+        "driver": true,
+        "processes_gone": true,
+        "systemd_success": true
+      },
+      "state_sha256": "85541d8efbbc9633fd192287b1e8dd6948c9ef0fd539d63db7d4de29df152d6b",
+      "elapsed_seconds": 259200.1902343966,
+      "sample": {
+        "phase": "draining",
+        "elapsed": 259200.169,
+        "read": 15281466704,
+        "written": 15281466704,
+        "messages": 1989624,
+        "games": 14502653,
+        "backpressure": 289262,
+        "rekeys": 685811,
+        "packets": 87783945,
+        "idle_checks": 138,
+        "future_mode": true,
+        "future_submitted": 3979252,
+        "future_completed": 3979252,
+        "future_pending": 0,
+        "future_retained": 0,
+        "future_bytes": 0
+      },
+      "clock": {
+        "tick_gap_seconds": 0.18018130026757717,
+        "monotonic_elapsed_seconds": 259200.1905442169,
+        "wall_elapsed_seconds": 259200.19054484367,
+        "offset_seconds": 6.26780092716217e-07
+      },
+      "largest_tick_gap": 1.0094482162967324,
+      "systemd_invocation_id": "eac09d23508c45658e9ed3b309d19f27"
+    },
+    {
+      "family": 4,
+      "backend": "select",
+      "backend_name": "select",
+      "checks": {
+        "terminal": true,
+        "continuous_72h": true,
+        "joined": true,
+        "drained": true,
+        "quota_zero": true,
+        "future_complete": true,
+        "sources": true,
+        "binary": true,
+        "driver": true,
+        "processes_gone": true,
+        "systemd_success": true
+      },
+      "state_sha256": "cfda09f557e961b388127fd0fec37234018491a94cfb3dc985fe9ec1da029d2c",
+      "elapsed_seconds": 259200.1605725251,
+      "sample": {
+        "phase": "draining",
+        "elapsed": 259200.139,
+        "read": 15272905312,
+        "written": 15272905312,
+        "messages": 1988500,
+        "games": 14503329,
+        "backpressure": 283539,
+        "rekeys": 685387,
+        "packets": 87729669,
+        "idle_checks": 138,
+        "future_mode": true,
+        "future_submitted": 3977004,
+        "future_completed": 3977004,
+        "future_pending": 0,
+        "future_retained": 0,
+        "future_bytes": 0
+      },
+      "clock": {
+        "tick_gap_seconds": 0.14110288908705115,
+        "monotonic_elapsed_seconds": 259200.16081123892,
+        "wall_elapsed_seconds": 259200.16081118584,
+        "offset_seconds": -5.3085386753082275e-08
+      },
+      "largest_tick_gap": 1.0094599137082696,
+      "systemd_invocation_id": "e95733326a5741ef90c2a017702daa00"
+    },
+    {
+      "family": 6,
+      "backend": "native",
+      "backend_name": "epoll",
+      "checks": {
+        "terminal": true,
+        "continuous_72h": true,
+        "joined": true,
+        "drained": true,
+        "quota_zero": true,
+        "future_complete": true,
+        "sources": true,
+        "binary": true,
+        "driver": true,
+        "processes_gone": true,
+        "systemd_success": true
+      },
+      "state_sha256": "8e578d90d23acdd3d1566279e4bb57f4ea3931a0d06905763853553b48d64e39",
+      "elapsed_seconds": 259200.18193947757,
+      "sample": {
+        "phase": "draining",
+        "elapsed": 259200.161,
+        "read": 15281661272,
+        "written": 15281661272,
+        "messages": 1989640,
+        "games": 14505502,
+        "backpressure": 286512,
+        "rekeys": 684982,
+        "packets": 87677846,
+        "idle_checks": 138,
+        "future_mode": true,
+        "future_submitted": 3979284,
+        "future_completed": 3979284,
+        "future_pending": 0,
+        "future_retained": 0,
+        "future_bytes": 0
+      },
+      "clock": {
+        "tick_gap_seconds": 0.179916902910918,
+        "monotonic_elapsed_seconds": 259200.18266424583,
+        "wall_elapsed_seconds": 259200.18266487122,
+        "offset_seconds": 6.253831088542938e-07
+      },
+      "largest_tick_gap": 1.009619093965739,
+      "systemd_invocation_id": "f56b4d333b42405f8eb14a55c1db0698"
+    },
+    {
+      "family": 6,
+      "backend": "select",
+      "backend_name": "select",
+      "checks": {
+        "terminal": true,
+        "continuous_72h": true,
+        "joined": true,
+        "drained": true,
+        "quota_zero": true,
+        "future_complete": true,
+        "sources": true,
+        "binary": true,
+        "driver": true,
+        "processes_gone": true,
+        "systemd_success": true
+      },
+      "state_sha256": "7db85ff431dc9b4174352ac1be2e0b206a9bdbcd54e9e511e7031765bbed5462",
+      "elapsed_seconds": 259200.50171786733,
+      "sample": {
+        "phase": "draining",
+        "elapsed": 259200.48,
+        "read": 15273087608,
+        "written": 15273087608,
+        "messages": 1988532,
+        "games": 14501945,
+        "backpressure": 285299,
+        "rekeys": 685089,
+        "packets": 87691519,
+        "idle_checks": 138,
+        "future_mode": true,
+        "future_submitted": 3977068,
+        "future_completed": 3977068,
+        "future_pending": 0,
+        "future_retained": 0,
+        "future_bytes": 0
+      },
+      "clock": {
+        "tick_gap_seconds": 0.48145939130336046,
+        "monotonic_elapsed_seconds": 259200.5020769653,
+        "wall_elapsed_seconds": 259200.50207781792,
+        "offset_seconds": 8.526258170604706e-07
+      },
+      "largest_tick_gap": 1.009654297027737,
+      "systemd_invocation_id": "c669d1c8cb89405aa4a91b278f31aabe"
+    }
+  ],
+  "windows": {
+    "status": "unverified",
+    "reason": "local evidence directory absent; recorded observer and native PIDs absent on recheck; no terminal success proof"
+  },
+  "mdo_business": {
+    "status": "failed_previous_observation",
+    "final_receipt_available": false,
+    "reason": "prior failure in receipt write; local raw evidence no longer present; no 72h claim"
+  },
+  "current_main_acceptance": false
+}

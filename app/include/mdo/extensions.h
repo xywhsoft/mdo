@@ -1,6 +1,7 @@
 #ifndef MDO_EXTENSIONS_H
 #define MDO_EXTENSIONS_H
 #include <xsbase.h>
+#include <xwork.h>
 
 /* Physical installation identity is (kind,id); aliases are runtime names.
  * Returned objects/strings are owned. Reads never execute extension code. */
@@ -12,10 +13,35 @@ void MdoExtensionsUnit(void);
 xvalue* MdoExtensionsList(cstr Kind,char Error[512]);
 xvalue* MdoExtensionsRead(cstr Kind,cstr Id,char Error[512]);
 xvalue* MdoExtensionsFindAlias(cstr Kind,cstr Alias,char Error[512]);
+/* Logical id is type:name. Returned rows keep id and directory_id separate. */
+xvalue* MdoExtensionsSnapshot(char Error[512]);
+xvalue* MdoExtensionsResolve(cstr Id,char Error[512]);
+xvalue* MdoExtensionsDependencies(cstr Id,bool Reverse,char Error[512]);
+bool MdoExtensionsPreflight(cstr Id,char Error[512]);
+char* MdoExtensionsDirectoryId(cstr Kind,cstr Identity,char Error[512]);
+xvalue* MdoExtensionsActivationIssues(cstr Kind,const xvalue* Changes,char Error[512]);
+xvalue* MdoExtensionsBindings(cstr Id,cstr Scope,char Error[512]);
+char* MdoExtensionsBinding(cstr Id,cstr Dependency,cstr Scope,char Error[512]);
+bool MdoExtensionsBind(cstr Id,cstr Dependency,cstr Scope,cstr Connection,cstr Expected,xvalue** Result,char Error[512]);
+bool MdoExtensionsRuntimeCheck(cstr Id,cstr Workspace,cstr Scope,xwork_agent* Agent,bool ForModel,char Error[512]);
+bool MdoExtensionsProjectAllows(cstr Id,cstr Workspace,char Error[512]);
+/* Host reconciliation after a committed edit: retain user intent even when
+ * providers or runtime configuration are temporarily unavailable. */
+bool MdoExtensionsRememberDesired(cstr Kind,cstr Directory,bool Enabled,char Error[512]);
+/* Packages/Downloads are host-verified store records, never HTTP input. */
+bool MdoExtensionsPlan(const xvalue* Input,const xvalue* Packages,xvalue** Result,char Error[512]);
+xvalue* MdoExtensionsPlanRead(cstr Id,cstr Revision,char Error[512]);
+xvalue* MdoExtensionsPlanReceipt(cstr Id,cstr Revision,char Error[512]);
+bool MdoExtensionsPlanReceiptRefresh(cstr Id,cstr Revision,const xvalue* Receipt,char Error[512]);
+bool MdoExtensionsPlanDiscard(cstr Id,cstr Revision,char Error[512]);
+typedef bool (*MdoExtensionReload)(const xvalue* Items,bool Retiring,void* Data,char Error[512]);
+bool MdoExtensionsApplyGroup(const xvalue* Plan,const xvalue* Downloads,bool Trust,xcancel* Cancel,MdoExtensionReload Reload,void* Data,xvalue** Result,char Error[512]);
+bool MdoExtensionsApplyPlan(const xvalue* Input,const xvalue* Downloads,xcancel* Cancel,xvalue** Result,char Error[512]);
 xvalue* MdoExtensionsFiles(cstr Kind,cstr Id,xcancel* Cancel,char Error[512]);
 char* MdoExtensionsEntryPath(cstr Kind,cstr Id,char Error[512]);
 char* MdoExtensionsRoot(cstr Kind,cstr Id);
 bool MdoExtensionsFingerprint(cstr Kind,cstr Id,char Hash[65],xcancel* Cancel,char Error[512]);
+bool MdoExtensionsApprovalDigest(cstr Id,char Hash[65],xcancel* Cancel,char Error[512]);
 bool MdoExtensionsVerify(cstr Kind,cstr Id,xcancel* Cancel,char Error[512]);
 typedef struct MdoExtensionLease MdoExtensionLease;
 /* Pins an enabled, verified installation until its runtime finishes. Updates

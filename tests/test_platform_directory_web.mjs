@@ -54,3 +54,16 @@ test('admin uses native layui table toolbar, pagination and nine-kind endpoint; 
  const root=new TestElement('main'),grid=new TestElement('table'),feedback=new TestElement('p');feedback.setAttribute('data-feedback','');root.append(feedback,grid);document.body.append(root);
  const source=readFileSync(site+'/extensions/admin.js','utf8').replace(/from '(\/mdo\/[^']+)'/g,(_,path)=>'from '+JSON.stringify(urls[path]));const admin=await import(data(source));await admin.mount(root);assert.deepEqual(options.defaultToolbar,['filter','exports','print']);assert.equal(options.where.kind,'mcp');assert.equal(options.request.pageName,'page');assert.equal(options.url,'/admin/api/mdo/extensions');assert(options.page.layout.includes('skip'));assert.equal(options.parseData({code:0,data:{csrf:'private-memory',items:[{name:'fixture'}],total:1}}).data[0].name,'fixture');root.remove();observer();assert(removed);
 });
+
+
+test('platform dependency lists link by stable ID and never expose unpublished targets',t=>{
+ dom(t);const view=transfer.dependencyLinks({dependency_details:[{id:'knowledge:mdo.xrt',name:'XRT',available:true,reason:'Runtime reference'},{id:'knowledge:private.hidden',available:false,optional:true}],dependents:[{id:'knowledge:mdo.mdo',name:'mdo'}]});
+ const links=view.querySelectorAll('a').map(a=>a.getAttribute('href')||a.href);assert.deepEqual(links,['https://ai.xywhsoft.com/mdo/ecosystem?extension=knowledge%3Amdo.xrt','https://ai.xywhsoft.com/mdo/ecosystem?extension=knowledge%3Amdo.mdo']);for(const text of ['Runtime reference','必需','可选','尚未公开或暂不可用'])assert(view.textContent.includes(text),text);assert(!links.some(href=>href.includes('private.hidden')));
+});
+
+
+test('following a dependency URL resolves its ID and opens the referenced work detail',async t=>{
+ dom(t);globalThis.location=new URL('https://ai.xywhsoft.com/mdo/ecosystem?extension=knowledge%3Amdo.xrt');const root=new TestElement('main');root.append(new TestElement('h1'));for(const part of ['feedback','profile','toolbar','list','pager']){const node=new TestElement('div');node.setAttribute('data-'+part,'');root.append(node);}document.body.append(root);
+ const requested=[],row={id:'knowledge:mdo.xrt',name:'XRT manual',version_id:'d'.repeat(32),dependencies:[]};t.mock.method(globalThis,'fetch',async url=>{requested.push(url);return Response.json({code:0,data:url.includes('/catalog')?{items:[],total:0}:url.includes('/files')?{items:[],total:0}:row});});
+ const source=readFileSync(site+'/extensions/public.js','utf8').replace(/from '(\/mdo\/[^']+)'/g,(_,path)=>'from '+JSON.stringify(urls[path]))+'\nexport {start as boot};';const target=await import(data(source));await target.boot(root);assert(requested.some(url=>url.includes('/resolve?ref=knowledge%3Amdo.xrt')));assert(requested.some(url=>url.includes('/detail?version='+row.version_id)));assert(document.body.querySelector('dialog').textContent.includes('XRT manual'));
+});

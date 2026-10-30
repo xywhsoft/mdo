@@ -7,5 +7,6 @@
   "platforms": [
     "any"
   ],
-  "author": "墨斗"
+  "author": "墨斗",
+  "id": "command:settings"
 }

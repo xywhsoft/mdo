@@ -23,7 +23,7 @@ xvalue* QaProductContract(const xvalue* P,xvfs V){
  xvalue* R=xrtValueObject();char Error[512]={0};bool Home=QaProductHome(SdkField(P,"root"),SdkField(P,"app"),V);
  bool Ok=Home&&MdoExtensionsInit()&&MdoCliInit(NULL);SdkPutBool(R,"initialized",Ok);
  xvalue* Snapshot=Ok?MdoCliSnapshot():NULL;const xvalue* Items=SdkGet(Snapshot,"items"),*Tool=xrtValueArrayGet(Items,0);
- bool Found=xrtValueCount(Items)==1&&CliBool(Tool,"valid",false)&&!strcmp(CliText(Tool,"id",96),"0123456789ABCDEFGHJKMNPQRSTVWXYZ");
+ bool Found=xrtValueCount(Items)==1&&CliBool(Tool,"valid",false)&&!strcmp(CliText(Tool,"id",160),"external-tool:qa.probe")&&!strcmp(CliText(Tool,"directory_id",96),"0123456789ABCDEFGHJKMNPQRSTVWXYZ");
  SdkPutBool(R,"directory_discovered",Found);SdkPut(R,"binding_error",CliText(Snapshot,"binding_error",256));
  char* Prompt=xrtStrDup("system");bool Injected=MdoCliToolPrompt(&Prompt)&&strstr(Prompt,"author model usage")&&!strstr(Prompt,"user description text");
  SdkPutBool(R,"prompt_is_separate",Injected);xrtFree(Prompt);
@@ -57,7 +57,7 @@ def main():
     a = p.parse_args(); out = ROOT / '.build/external-directory-native'; out.mkdir(parents=True, exist_ok=True)
     fixture = out / ('home-' + uuid.uuid4().hex[:12]); directory = fixture / 'external-tools' / ID
     (directory / 'bin').mkdir(parents=True)
-    (directory / 'extension.json').write_text(json.dumps(dict(kind='external-tools', name='QA Program', alias='qa-probe', entry='tool.json', platforms=['windows-x86_64'], description='user description text')), encoding='utf-8')
+    (directory / 'extension.json').write_text(json.dumps(dict(kind='external-tools', id='external-tool:qa.probe', name='QA Program', alias='qa-probe', entry='tool.json', platforms=['windows-x86_64'], description='user description text')), encoding='utf-8')
     (directory / 'tool.json').write_text(json.dumps(dict(program='bin/probe.exe', command='qa-probe', aliases=['qa-alias'], prompt='author model usage', commands=[dict(name='qa-probe', entry='bin/probe.exe', args=['prefix'])])), encoding='utf-8')
     source = directory / 'probe.c'; source.write_text('#include <stdio.h>\n#include <windows.h>\nint wmain(int n,wchar_t** v){for(int i=1;i<n;i++){char s[4096];if(!WideCharToMultiByte(CP_UTF8,0,v[i],-1,s,sizeof(s),0,0))return 90;puts(s);}return 37;}\n')
     subprocess.run(['E:/software/w64devkit/bin/gcc.exe', '-Os', '-s', '-municode', str(source), '-o', str(directory / 'bin/probe.exe')], check=True)

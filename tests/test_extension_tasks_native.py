@@ -52,7 +52,7 @@ xvalue* QaProductContract(const xvalue* P,xvfs V){
  bool Blocked=Owner&&!MdoExtensionTaskWrite(Owned,0,Data,(size_t)Bytes,&Out,Error);xrtValueRelease(Out);Out=NULL;
  OwnedOk=Blocked&&MdoExtensionTaskUseWrite(Owner,0,Data,(size_t)Bytes,&Out,Error);xrtValueRelease(Out);Out=NULL;
  QaTaskFlag(R,"only_active_receiver_can_write_owned_task",OwnedOk);
- xvalue* Origin=SdkParse("{\"kind\":\"skills\",\"xid\":\"0123456789ABCDEFGHJKMNPQRSTVWXYZ\",\"version_id\":\"1123456789ABCDEFGHJKMNPQRSTVWXYZ\",\"unexpected_secret\":\"fixture\"}");char OwnedHash[65];MdoExtensionHashBytes(Data,(size_t)Bytes,OwnedHash);SdkPut(Origin,"sha256",OwnedHash);
+ xvalue* Origin=SdkParse("{\"kind\":\"skills\",\"id\":\"skill:qa.uploaded\",\"xid\":\"0123456789ABCDEFGHJKMNPQRSTVWXYZ\",\"version_id\":\"1123456789ABCDEFGHJKMNPQRSTVWXYZ\",\"unexpected_secret\":\"fixture\"}");char OwnedHash[65];MdoExtensionHashBytes(Data,(size_t)Bytes,OwnedHash);SdkPut(Origin,"sha256",OwnedHash);
  bool OriginOk=Owner&&!MdoExtensionTaskOrigin(Owner,Origin,Error);xrtValueObjectRemove(Origin,XRT_STR_LITERAL("unexpected_secret"));OriginOk=OriginOk&&MdoExtensionTaskOrigin(Owner,Origin,Error);xrtValueRelease(Origin);QaTaskFlag(R,"verified_origin_rejects_unexpected_fields",OriginOk);
  MdoExtensionTaskUseEnd(Owner);OwnedOk=OwnedOk&&MdoExtensionTaskSeal(Owned,NULL,&Out,Error);xrtValueRelease(Out);Out=NULL;Owner=OwnedOk?MdoExtensionTaskUseBegin(Owned,false,NULL,Error):NULL;
  bool Progress=Owner&&MdoExtensionTaskTransfer(Owner,Bytes,"submitting",Error)&&!MdoExtensionTaskTransfer(Owner,Bytes+1,"uploading",Error)&&MdoExtensionTaskCancel(Owned,&Out,Error);xrtValueRelease(Out);Out=NULL;
@@ -87,7 +87,7 @@ def main():
     p = argparse.ArgumentParser(description=__doc__); p.add_argument('--url', required=True); p.add_argument('--home', type=Path, required=True); p.add_argument('--project', default='default'); a = p.parse_args()
     out = ROOT / '.build/extension-tasks-native'; out.mkdir(parents=True, exist_ok=True); fixture = out / ('home-' + uuid.uuid4().hex[:12]); fixture.mkdir()
     with zipfile.ZipFile(fixture / 'payload.zip', 'w', compression=zipfile.ZIP_STORED) as z:
-        z.writestr('extension.json', json.dumps(dict(kind='skills', name='Uploaded skill', alias='uploaded-skill', entry='SKILL.md', platforms=['any'])))
+        z.writestr('extension.json', json.dumps(dict(kind='skills', id='skill:qa.uploaded', name='Uploaded skill', alias='uploaded-skill', entry='SKILL.md', platforms=['any'])))
         z.writestr('SKILL.md', '---\nname: uploaded-skill\ndescription: Test\n---\nARCHIVE-BINARY-CONTENT-MARKER\n')
         z.writestr('.hidden.bin', bytes(range(256)) * 4)
         z.writestr('empty/', b'')

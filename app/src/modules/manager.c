@@ -208,6 +208,11 @@ void MdoModuleAgentUnbindContext(xwork_agent* Agent){
     while(*At){if((*At)->Agent==Agent){MdoModuleAgentScope* Scope=*At;*At=Scope->Next;xrtFree(Scope);break;}At=&(*At)->Next;}
     xrtMutexUnlock(g_MdoModules.Lock);
 }
+char* MdoModuleAgentProject(xwork_agent* Agent,uint64 AgentId){
+    if(!g_MdoModules.Lock)return xrtStrDup("");
+    char* Project=NULL;bool Found=false;
+    xrtMutexLock(g_MdoModules.Lock);for(MdoModuleAgentScope* S=g_MdoModules.Scopes;S;S=S->Next)if((Agent&&S->Agent==Agent)||(AgentId&&S->AgentId==AgentId)){Found=true;Project=xrtStrDup(S->Project);break;}xrtMutexUnlock(g_MdoModules.Lock);return Found?Project:xrtStrDup("");
+}
 void MdoModuleAgentSetMemberContext(xwork_agent* Agent,void* Owner,uint64 AgentId,cstr Namespace,cstr MemberId){
     if(!g_MdoModules.Lock)return;
     xrtMutexLock(g_MdoModules.Lock);
@@ -556,7 +561,7 @@ static bool MdoModulesDiscoverDirectory(MdoModuleKind Kind,cstr Type,MdoModuleSo
     for(size_t I=0;Ok&&I<xrtValueCount(Rows);I++){
         const xvalue* Meta=xrtValueArrayGet(Rows,I);bool Valid=false,Enabled=false;
         xrtValueGetBool(xrtValueObjectGet(Meta,XRT_STR_LITERAL("valid")),&Valid);xrtValueGetBool(xrtValueObjectGet(Meta,XRT_STR_LITERAL("enabled")),&Enabled);
-        if(!Valid){MdoModulesDiagnosticAdd(Diagnostics,MDO_MODULE_DIAGNOSTIC_DISCOVERY,MdoExtensionText(Meta,"id",96),NULL,MdoExtensionText(Meta,"error",511));continue;}
+        if(!Valid){MdoModulesDiagnosticAdd(Diagnostics,MDO_MODULE_DIAGNOSTIC_DISCOVERY,MdoExtensionText(Meta,"directory_id",96),NULL,MdoExtensionText(Meta,"error",511));continue;}
         if(!Enabled)continue;
         /* An unapproved edited directory is quarantined at startup, so its
          * settings and repair UI remain available. Reloads keep the existing
@@ -795,7 +800,7 @@ static bool MdoModulesCopyDescriptor(MdoModuleGeneration* pGeneration,
     pGeneration->Application.RunId="";pGeneration->Application.Workspace="";
     pGeneration->Application.Origin=MDO_ORIGIN_EXTENSION;
     pGeneration->Application.ExtensionKind=MdoExtensionText(pGeneration->Directory,"kind",32);
-    pGeneration->Application.DirectoryId=MdoExtensionText(pGeneration->Directory,"id",96);
+    pGeneration->Application.DirectoryId=MdoExtensionText(pGeneration->Directory,"directory_id",96);
     pGeneration->Application.ExtensionRoot=pGeneration->DirectoryNative;
     pGeneration->HostServices.Application=&pGeneration->Application;
     return true;
@@ -842,7 +847,8 @@ static MdoModuleGeneration* MdoModulesCompile(const MdoModuleSource* pSource,
     if(pSource->Directory){
         pGeneration->Directory=xrtValueClone(pSource->Directory);
         pGeneration->DirectoryNative=MdoHomeExternalPath(MdoExtensionText(pSource->Directory,"root",MDO_EXTENSION_PATH_BYTES));
-        cstr Kind=MdoExtensionText(pSource->Directory,"kind",32),Id=MdoExtensionText(pSource->Directory,"id",96);
+        cstr Kind=MdoExtensionText(pSource->Directory,"kind",32),Id=MdoExtensionText(pSource->Directory,"directory_id",96);
+        if(pSource->Plugin&&!MdoExtensionsRuntimeCheck(MdoExtensionText(pSource->Directory,"id",MDO_EXTENSION_REF_BYTES),NULL,"global",NULL,false,sError))goto memory_failed;
         pGeneration->DirectoryLease=MdoExtensionsAcquire(Kind,Id,sError);
         if(!pGeneration->Directory||!pGeneration->DirectoryNative||!pGeneration->DirectoryLease||!MdoExtensionsFingerprint(Kind,Id,pGeneration->DirectoryDigest,NULL,sError))goto memory_failed;
         /* Bind the entry snapshot to the pinned directory fingerprint too. */
@@ -913,7 +919,7 @@ static MdoModuleGeneration* MdoModulesCompile(const MdoModuleSource* pSource,
         return NULL;
     }
     xrtFree(pBytes);
-    if(pSource->Directory){char Current[65];cstr Kind=MdoExtensionText(pSource->Directory,"kind",32),Id=MdoExtensionText(pSource->Directory,"id",96);
+    if(pSource->Directory){char Current[65];cstr Kind=MdoExtensionText(pSource->Directory,"kind",32),Id=MdoExtensionText(pSource->Directory,"directory_id",96);
         if(!MdoExtensionsFingerprint(Kind,Id,Current,NULL,sError)||strcmp(Current,pGeneration->DirectoryDigest)){
             MdoModulesDiagnosticAdd(pDiagnostics,MDO_MODULE_DIAGNOSTIC_COMPILE,pSource->VirtualPath,pGeneration->SourceHash,"Extension directory changed during compilation");MdoModulesGenerationRelease(pGeneration);return NULL;}}
     EntryCast.Pointer = tcc_get_symbol(pGeneration->Tcc,
@@ -1683,6 +1689,10 @@ static xwork_result MdoModulesDescribePermissions(void* pUserData,
         return XWORK_RESULT_ERROR;
     }
     MdoModulesToolContext(&Context, pTool, pContext,&Scope);
+    cstr Reference=MdoExtensionText(pTool->Owner->Directory,"id",MDO_EXTENSION_REF_BYTES);char DependencyError[512]={0};
+    if(Reference&&!MdoExtensionsRuntimeCheck(Reference,pContext->sWorkspaceRoot,Scope.Project,pContext->pAgent,true,DependencyError)){
+        MdoModulesXworkError(pError,XWORK_ERROR_CONTEXT,DependencyError);return XWORK_RESULT_ERROR;
+    }
     memset(&Writer, 0, sizeof(Writer));
     Writer.Size = sizeof(Writer);
     Writer.AbiVersion = MDO_MODULE_ABI_VERSION;
@@ -1718,6 +1728,10 @@ static xwork_result MdoModulesExecute(void* pUserData,
         return XWORK_RESULT_ERROR;
     }
     MdoModulesToolContext(&Context, pTool, pContext,&Scope);
+    cstr Reference=MdoExtensionText(pTool->Owner->Directory,"id",MDO_EXTENSION_REF_BYTES);char DependencyError[512]={0};
+    if(Reference&&!MdoExtensionsRuntimeCheck(Reference,pContext->sWorkspaceRoot,Scope.Project,pContext->pAgent,true,DependencyError)){
+        MdoModulesXworkError(pError,XWORK_ERROR_CONTEXT,DependencyError);return XWORK_RESULT_ERROR;
+    }
     memset(&Writer, 0, sizeof(Writer));
     Writer.Size = sizeof(Writer);
     Writer.AbiVersion = MDO_MODULE_ABI_VERSION;
@@ -1778,7 +1792,7 @@ static MdoModuleGeneration* MdoModulesReadAgentProfile(const MdoModuleSource* So
     char Error[MDO_MODULE_ERROR_LIMIT]={0},After[65]={0};char* Text=NULL;MdoAgentFile File;bool Parsed=false;
     memset(&File,0,sizeof(File));MdoModuleRegistrarContext Registrar;
     cstr Id=MdoExtensionText(Source->Directory,"alias",64),Root=MdoExtensionText(Source->Directory,"root",MDO_EXTENSION_PATH_BYTES);
-    cstr Kind=MdoExtensionText(Source->Directory,"kind",32),DirectoryId=MdoExtensionText(Source->Directory,"id",96);
+    cstr Kind=MdoExtensionText(Source->Directory,"kind",32),DirectoryId=MdoExtensionText(Source->Directory,"directory_id",96);
     MdoModuleGeneration* Module=xrtCalloc(1,sizeof(*Module));if(!Module)goto failed;
     xrtAtomic32Init(&Module->Refs,1);Module->Generation=Generation;Module->Kind=Source->Kind;Module->Profile=true;Module->External=true;
     Module->Directory=xrtValueClone(Source->Directory);Module->DirectoryNative=Root?MdoHomeExternalPath(Root):NULL;
@@ -1917,7 +1931,7 @@ static MdoModuleCatalog* MdoModulesBuildCandidateBody(uint64 Generation,
                 MdoModuleGeneration* G=Old->Modules[J];if(strcmp(G->SourcePath,pSources[i].VirtualPath))continue;
                 size_t Bytes=0;bytes Source=xrtVfsReadAllLimit(MdoHomeApplicationVfs(),pSources[i].VirtualPath,MDO_MODULE_SOURCE_LIMIT,&Bytes);char Hash[65];
                 bool Same=Source&&MdoExtensionHashBytes(Source,Bytes,Hash)&&!strcmp(Hash,G->SourceRevision)&&!xrtAtomic32Load(&G->Stopped,XMEMORY_ACQUIRE);xrtFree(Source);
-                if(Same&&pSources[i].Directory){char Why[512],Digest[65];Same=MdoExtensionsFingerprint(MdoExtensionText(pSources[i].Directory,"kind",32),MdoExtensionText(pSources[i].Directory,"id",96),Digest,NULL,Why)&&!strcmp(Digest,G->DirectoryDigest);}
+                if(Same&&pSources[i].Directory){char Why[512],Digest[65];Same=MdoExtensionsFingerprint(MdoExtensionText(pSources[i].Directory,"kind",32),MdoExtensionText(pSources[i].Directory,"directory_id",96),Digest,NULL,Why)&&!strcmp(Digest,G->DirectoryDigest);}
                 if(!Same){MdoModulesDiagnosticAdd(pDiagnostics,MDO_MODULE_DIAGNOSTIC_VALIDATE,pSources[i].VirtualPath,G->SourceHash,"Active native plugin directory changed; restart the host before loading its replacement");MdoModuleCatalogRelease(Old);goto failed;}
                 if(Same&&MdoModulesGenerationRef(G))pCatalog->Modules[i]=G;
                 break;
@@ -2235,6 +2249,7 @@ bool MdoModuleCatalogToolAt(const MdoModuleCatalog* pCatalog,
     pInfo->Size = sizeof(*pInfo);
     pInfo->Generation = pCatalog->Generation;
     pInfo->ModuleId = pTool->Owner->Id;
+    pInfo->ExtensionId = MdoExtensionText(pTool->Owner->Directory,"id",MDO_EXTENSION_REF_BYTES);
     pInfo->Id = pTool->Id;
     pInfo->Name = pTool->Name;
     pInfo->Description = pTool->Description;
@@ -2259,6 +2274,7 @@ bool MdoModuleCatalogAgentAt(const MdoModuleCatalog* pCatalog,
     pInfo->Size = sizeof(*pInfo);
     pInfo->Generation = pCatalog->Generation;
     pInfo->ModuleId = pAgent->Owner->Id;
+    pInfo->ExtensionId = MdoExtensionText(pAgent->Owner->Directory,"id",MDO_EXTENSION_REF_BYTES);
     pInfo->Id = pAgent->Id;
     pInfo->Name = pAgent->Name;
     pInfo->Description = pAgent->Description;

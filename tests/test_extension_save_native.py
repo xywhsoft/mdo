@@ -18,7 +18,7 @@ xvalue* QaProductContract(const xvalue* P,xvfs V){
  bool Collision=MdoHomeAtomicWrite("probe/occupied","keep",4,false),Created=true;
  xrtMutexLock(g_MdoHome.Lock);Collision=Collision&&!MdoHomeWriteTempLocked("probe/occupied","bad",3,&Created)&&!Created;xrtMutexUnlock(g_MdoHome.Lock);xrtClearError();
  QaFlag(R,"exclusive_collision_preserves_other_file",Collision&&QaContent("probe/occupied","keep"));
- xvalue* M=SdkParse("{\"kind\":\"tools\",\"name\":\"Two sources\",\"alias\":\"save-test\",\"entry\":\"src/tool.c\",\"native\":\"src/helper.c\",\"platforms\":[\"any\"]}");
+ xvalue* M=SdkParse("{\"kind\":\"tools\",\"name\":\"Two sources\",\"alias\":\"save-test\",\"entry\":\"src/tool.c\",\"native\":\"src/helper.c\",\"platforms\":[\"any\"],\"id\":\"tool:qa.save-test\"}");
  xvalue* E=SdkParse("[{\"path\":\"src/tool.c\",\"text\":\"// entry\\n\"},{\"path\":\"src/helper.c\",\"text\":\"// helper\\n\"}]");
  Ok=Ok&&MdoExtensionsSave("tools","qa-save",M,E,"",true,NULL,&Out,Error);xrtValueRelease(Out);Out=NULL;QaFlag(R,"multiple_declared_files_created_together",Ok);
  Ok=Ok&&MdoHomeAtomicWrite("tools/qa-save/src/tool.c.tmp","preserve sibling",16,false)&&MdoHomeAtomicWrite("tools/qa-save/dependency.bin","binary resource",15,false)&&MdoExtEnsure("tools/qa-save/empty")&&MdoExtensionsFingerprint("tools","qa-save",Hash,NULL,Error);snprintf(Before,sizeof(Before),"%s",Hash);

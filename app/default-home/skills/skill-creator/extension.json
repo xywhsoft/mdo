@@ -6,5 +6,6 @@
   "platforms": [
     "any"
   ],
-  "author": "墨斗"
+  "author": "墨斗",
+  "id": "skill:skill-creator"
 }

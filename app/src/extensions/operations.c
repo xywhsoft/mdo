@@ -8,6 +8,8 @@
 #include "../../include/mdo/application.h"
 #include "../../include/mdo/diagnostics.h"
 #include "../../include/mdo/android_tools.h"
+#include "../../include/mdo/project_lifecycle.h"
+#include "../../include/mdo/projects.h"
 
 static bool MdoExtOpFailure(char Error[512],cstr Message){if(Error)snprintf(Error,512,"%s",Message);return false;}
 static bool MdoExtOpBool(const xvalue* V,cstr Key,bool Default){bool B=Default;xrtValueGetBool(xrtValueObjectGet(V,xrtStrView(Key)),&B);return B;}
@@ -25,26 +27,53 @@ static bool MdoExtOpReload(cstr Kind,char Error[512]){
 }
 static xvalue* MdoExtOpItem(cstr Kind,cstr Id,char Error[512]){
  xvalue* M=MdoExtensionsRead(Kind,Id,Error);if(M)return M;
- xvalue* Rows=MdoExtensionsList(Kind,Error);for(size_t I=0;I<xrtValueCount(Rows);I++){const xvalue* Row=xrtValueArrayGet(Rows,I);cstr Found=MdoExtensionText(Row,"id",96);if(Found&&!strcmp(Id,Found)){M=xrtValueClone(Row);break;}}xrtValueRelease(Rows);if(M&&Error)Error[0]=0;return M;
+ xvalue* Rows=MdoExtensionsList(Kind,Error);for(size_t I=0;I<xrtValueCount(Rows);I++){const xvalue* Row=xrtValueArrayGet(Rows,I);cstr Found=MdoExtensionText(Row,"directory_id",96);if(Found&&!strcmp(Id,Found)){M=xrtValueClone(Row);break;}}xrtValueRelease(Rows);if(M&&Error)Error[0]=0;return M;
 }
 static bool MdoExtOpRestore(cstr Kind,cstr Id,bool Enabled,char Error[512]){
  return MdoExtensionsSetEnabled(Kind,Id,Enabled,Error)&&MdoExtOpReload(Kind,Error);
 }
+static bool MdoExtOpReloadGroup(const xvalue* Items,bool Retiring,void* Data,char Error[512]){
+ (void)Data;const cstr Retire[]={"plugins","skills","tools","mcp","external-tools"},Resume[]={"external-tools","mcp","tools","skills","plugins"};const cstr* Kinds=Retiring?Retire:Resume;bool Ok=true;
+ for(size_t K=0;K<5;K++){bool Needed=false;for(size_t I=0;I<xrtValueCount(Items);I++){cstr Kind=MdoExtensionText(xrtValueArrayGet(Items,I),"kind",32);if(Kind&&(!strcmp(Kind,Kinds[K])||(!strcmp(Kinds[K],"tools")&&(!strcmp(Kind,"agents")||!strcmp(Kind,"subagents")))))Needed=true;}
+  char Why[512]={0};if(Needed&&!MdoExtOpReload(Kinds[K],Why)){Ok=false;if(Error&&!Error[0])snprintf(Error,512,"%s",Why);}}
+ return Ok;
+}
+bool MdoExtensionsApplyPlan(const xvalue* Input,const xvalue* Downloads,xcancel* Cancel,xvalue** Result,char Error[512]){
+ *Result=NULL;cstr Id=MdoExtensionText(Input,"plan_id",32),Revision=MdoExtensionText(Input,"revision",64);xvalue* Plan=MdoExtensionsPlanRead(Id,Revision,Error);if(!Plan)return false;
+ bool Ok=MdoExtensionsMutationBegin();if(!Ok)MdoExtOpFailure(Error,"Another extension operation is still running");
+ else{Ok=MdoExtensionsApplyGroup(Plan,Downloads,MdoExtOpBool(Input,"trust_code",false),Cancel,MdoExtOpReloadGroup,NULL,Result,Error);MdoExtensionsMutationEnd();}
+ if(Ok&&*Result){bool Plugins=false;const xvalue* Items=xrtValueObjectGet(Plan,XRT_STR_LITERAL("items"));for(size_t I=0;I<xrtValueCount(Items);I++){cstr Kind=MdoExtensionText(xrtValueArrayGet(Items,I),"kind",32);if(Kind&&!strcmp(Kind,"plugins"))Plugins=true;}if(Plugins){bool Restart=false,Pending=MdoApplicationPluginsPending(&Restart);xrtValueObjectSetNew(*Result,XRT_STR_LITERAL("pending"),xrtValueBool(Pending));xrtValueObjectSetNew(*Result,XRT_STR_LITERAL("restart_required"),xrtValueBool(Restart));if(Pending)xrtValueObjectSetNew(*Result,XRT_STR_LITERAL("runtime_ready"),xrtValueBool(false));}}
+ if(Ok&&*Result){char Why[512]={0};if(!MdoExtensionsPlanReceiptRefresh(Id,Revision,*Result,Why))MdoExtOpPut(*Result,"receipt_error",Why);}
+ xrtValueRelease(Plan);return Ok;
+}
 bool MdoExtensionsManage(const xvalue* Input,const xvalue* Credits,xcancel* Cancel,xvalue** Result,char Error[512]){
- *Result=NULL;if(Error)Error[0]=0;cstr Kind=MdoExtensionText(Input,"kind",32),Id=MdoExtensionText(Input,"id",96),Action=MdoExtensionText(Input,"action",32),Expected=MdoExtensionText(Input,"expected_revision",64);
- if(!MdoExtensionDirectoryKind(Kind)||!MdoExtensionDirectoryId(Id)||!Action||xrtValueType(Input)!=XVALUE_OBJECT)return MdoExtOpFailure(Error,"Choose an extension type, directory and operation");
+ *Result=NULL;if(Error)Error[0]=0;cstr Kind=MdoExtensionText(Input,"kind",32),Id=MdoExtensionText(Input,"id",MDO_EXTENSION_REF_BYTES),Action=MdoExtensionText(Input,"action",32),Expected=MdoExtensionText(Input,"expected_revision",64);char Physical[97];
+ if(!MdoExtensionDirectoryKind(Kind)||!Id||!Action||xrtValueType(Input)!=XVALUE_OBJECT)return MdoExtOpFailure(Error,"Choose an extension type, directory and operation");
+ if(strchr(Id,':')){char* Resolved=MdoExtensionsDirectoryId(Kind,Id,Error);if(!Resolved)return false;snprintf(Physical,sizeof(Physical),"%s",Resolved);xrtFree(Resolved);Id=Physical;}
+ if(!MdoExtensionDirectoryId(Id))return MdoExtOpFailure(Error,"Invalid extension directory identity");
  if(MdoExtensionsRecoveryBlocked(Kind,Id,Error))return false;
  const cstr Flags[]={"enabled","trust_code"};for(size_t I=0;I<2;I++){bool Flag;const xvalue* V=xrtValueObjectGet(Input,xrtStrView(Flags[I]));if(V&&!xrtValueGetBool(V,&Flag))return MdoExtOpFailure(Error,"Activation and code approval must be boolean values");}
- bool Create=!strcmp(Action,"create"),Save=!strcmp(Action,"save"),Import=!strcmp(Action,"import"),Install=!strcmp(Action,"install"),Remove=!strcmp(Action,"remove"),Enable=!strcmp(Action,"enable"),Edit=!strncmp(Action,"file.",5),CancelRemove=!strcmp(Action,"cancel_remove");
+ bool Create=!strcmp(Action,"create"),Save=!strcmp(Action,"save"),Import=!strcmp(Action,"import"),Install=!strcmp(Action,"install"),Remove=!strcmp(Action,"remove"),Enable=!strcmp(Action,"enable"),Edit=!strncmp(Action,"file.",5),CancelRemove=!strcmp(Action,"cancel_remove"),Bind=!strcmp(Action,"bind");
 #if defined(__ANDROID__)
  if(!strcmp(Kind,"external-tools")&&(Create||Save||Import||Install||Edit))return MdoExtOpFailure(Error,"Android external programs are installed and updated through the full APK");
 #endif
- if(!Create&&!Save&&!Import&&!Install&&!Remove&&!Enable&&!Edit&&!CancelRemove)return MdoExtOpFailure(Error,"Unknown directory operation");
+ if(!Create&&!Save&&!Import&&!Install&&!Remove&&!Enable&&!Edit&&!CancelRemove&&!Bind)return MdoExtOpFailure(Error,"Unknown directory operation");
  if(Cancel&&xrtCancelRequested(Cancel))return MdoExtOpFailure(Error,"Extension operation cancelled before changing files");
  if(!MdoExtensionsMutationBegin())return MdoExtOpFailure(Error,"Another extension operation is still running");
  bool Ok=false,Trust=MdoExtOpBool(Input,"trust_code",false),WasEnabled=false,Suspended=false;char RuntimeError[512]={0};xvalue* Before=MdoExtOpItem(Kind,Id,RuntimeError);
- if(Before)WasEnabled=MdoExtOpBool(Before,"enabled",false);
+ if(Before)WasEnabled=MdoExtOpBool(Before,"desired_enabled",false);
  cstr Source=MdoExtensionText(Before,"source",16);
+ if(Bind){
+  cstr Ref=MdoExtensionText(Before,"id",MDO_EXTENSION_REF_BYTES),Dependency=MdoExtensionText(Input,"dependency_id",MDO_EXTENSION_REF_BYTES),Connection=MdoExtensionText(Input,"connection_id",96),Scope=MdoExtensionText(Input,"scope",64),Revision=MdoExtensionText(Input,"expected_binding_revision",64);char* Workspace=NULL;
+  Ok=Ref&&Dependency&&Connection&&(!Scope||!Scope[0]||!strcmp(Scope,"global")||MdoExtensionDirectoryId(Scope));
+  if(Ok&&Scope&&Scope[0]&&strcmp(Scope,"global")){
+   if(!strcmp(Scope,"default"))Workspace=MdoHomeDefaultWorkspacePath(false);
+   else{MdoProjectInfo Project={0};Project.Size=sizeof(Project);bool Found=false;xwork_error Why;if(MdoProjectGet(Scope,&Project,&Found,&Why)&&Found)Workspace=xrtStrDup(Project.WorkspaceRoot);}Ok=Workspace!=NULL;
+  }
+  if(Ok&&Connection[0]){char* Match=MdoMcpDependencyConnection(Dependency,Workspace,Connection,false,Error);Ok=Match!=NULL;xrtFree(Match);}
+  if(Ok)Ok=MdoExtensionsBind(Ref,Dependency,Scope,Connection,Revision,Result,Error);
+  xrtFree(Workspace);goto done;
+ }
  if(Install&&Before&&Source&&strcmp(Source,"store")&&MdoExtensionText(Credits,"source",16)&&!strcmp(MdoExtensionText(Credits,"source",16),"store")){MdoExtOpFailure(Error,"A local extension already owns this directory identity; store installation will not overwrite it");goto done;}
  if((Edit||(Save&&Before))&&(!Before||!Source||strcmp(Source,"manual"))){MdoExtOpFailure(Error,"Only locally authored manual extensions can be edited");goto done;}
  if((Import||Install)&&Source&&!strcmp(Source,"store")){cstr NewSource=MdoExtensionText(Credits,"source",16);if(!NewSource||strcmp(NewSource,"store")){MdoExtOpFailure(Error,"Managed store installations can only be replaced with a verified store update");goto done;}}
@@ -75,8 +104,8 @@ bool MdoExtensionsManage(const xvalue* Input,const xvalue* Credits,xcancel* Canc
   if(Remove&&!strcmp(Kind,"mcp")&&!MdoMcpRemoveDirectoryConnections(Id,RuntimeError)&&*Result){xrtValueObjectSetNew(*Result,XRT_STR_LITERAL("cleanup_pending"),xrtValueBool(true));MdoExtOpPut(*Result,"cleanup_error",RuntimeError);RuntimeError[0]=0;}
   bool Wanted=!Remove&&!Create&&!(Save&&!Before)&&MdoExtOpBool(Input,"enabled",Before?WasEnabled:strcmp(Kind,"plugins")!=0);
   RuntimeError[0]=0;bool Live=Remove?MdoExtOpReload(Kind,RuntimeError):MdoExtOpRestore(Kind,Id,Wanted,RuntimeError);
-  if(!Live){char Ignored[512];if(!Remove)(void)MdoExtOpRestore(Kind,Id,false,Ignored);if(*Result)MdoExtOpPut(*Result,"runtime_error",RuntimeError);}
-  if(*Result){xrtValueObjectSetNew(*Result,XRT_STR_LITERAL("enabled"),xrtValueBool(Live&&Wanted));xrtValueObjectSetNew(*Result,XRT_STR_LITERAL("runtime_ready"),xrtValueBool(Live));}
+  if(!Live){if(!Remove){char Why[512]={0};if(!MdoExtensionsRememberDesired(Kind,Id,Wanted,Why)&&*Result)MdoExtOpPut(*Result,"preference_error",Why);}if(*Result)MdoExtOpPut(*Result,"runtime_error",RuntimeError);}
+  if(*Result){xrtValueObjectSetNew(*Result,XRT_STR_LITERAL("desired_enabled"),xrtValueBool(Wanted));xrtValueObjectSetNew(*Result,XRT_STR_LITERAL("enabled"),xrtValueBool(Live&&Wanted));xrtValueObjectSetNew(*Result,XRT_STR_LITERAL("runtime_ready"),xrtValueBool(Live));}
  }
 done:
  if(Ok&&*Result&&!strcmp(Kind,"plugins")){
@@ -99,7 +128,7 @@ bool MdoExtensionsWarnings(xvalue* Items){
   if(!Rows){if(!MdoDiagnosticWarning(Items,"extensions","catalog_unavailable",Kind,Kind,Error,"Check the extension directory and host installation state","extensions"))return false;continue;}
   for(size_t I=0;I<xrtValueCount(Rows);I++){
    if(xrtValueCount(Items)>=255){xrtValueRelease(Rows);return MdoDiagnosticWarning(Items,"extensions","warning_limit","","","Additional extension warnings were omitted","Resolve the listed issues and check again","extensions");}
-   const xvalue* Row=xrtValueArrayGet(Rows,I);cstr Id=MdoExtensionText(Row,"id",96),Root=MdoExtensionText(Row,"root",4096),Problem=MdoExtensionText(Row,"error",512),PendingError=MdoExtensionText(Row,"pending_error",512);
+   const xvalue* Row=xrtValueArrayGet(Rows,I);cstr Id=MdoExtensionText(Row,"directory_id",96),Root=MdoExtensionText(Row,"root",4096),Problem=MdoExtensionText(Row,"error",512),PendingError=MdoExtensionText(Row,"pending_error",512);
    bool Pending=MdoExtOpBool(Row,"pending_remove",false),Valid=MdoExtOpBool(Row,"valid",false),Builtin=MdoExtensionsBuiltinUpdatePending(Kind,Id,Row);
    if(Pending||!Valid||Builtin){char Subject[140];snprintf(Subject,sizeof(Subject),"%s/%s",Kind,Id?Id:"");bool Ok=MdoDiagnosticWarning(Items,"extensions",PendingError?"uninstall_changed":Pending?"uninstall_pending":Builtin?"builtin_update_preserved":"invalid_directory",Subject,Root?Root:Kind,
      PendingError?PendingError:Pending?"Uninstall is waiting for the active native plugin to retire or the application to restart":Builtin?"An updated builtin is available, but the installed files were modified or could not be verified; the original directory was preserved":Problem?Problem:"The extension directory is invalid",

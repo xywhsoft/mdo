@@ -67,19 +67,22 @@ MdoSkillCatalog* MdoSkillCatalogForWorkspace(cstr Workspace)
     Ok=Text&&xrtReadFull(File,Text,(size_t)Bytes,NULL);if(!xrtClose(File))Ok=false;
     xvalue* Settings=Ok?xrtJsonParse(xrtStrViewN(Text,(size_t)Bytes)):NULL;xrtFree(Text);
     Ok=Settings&&xrtValueType(Settings)==XVALUE_OBJECT;
-    for(size_t I=0;Ok&&I<xrtValueCount(Settings);I++){bool Flag=false;Ok=xrtValueGetBool(xrtValueObjectAt(Settings,I,NULL),&Flag);}
+    for(size_t I=0;Ok&&I<xrtValueCount(Settings);I++){bool Flag=false;xstrview Key;cstr Kind;const xvalue* V=xrtValueObjectAt(Settings,I,&Key);Ok=Key.Size<=MDO_EXTENSION_REF_BYTES&&!memchr(Key.Data,0,Key.Size)&&(Kind=MdoExtensionRefKind(Key.Data))&&!strcmp(Kind,"skills")&&xrtValueGetBool(V,&Flag);}
+    char Why[512]={0};xvalue* Installed=Ok?MdoExtensionsList("skills",Why):NULL;Ok=Ok&&Installed;
     MdoSkillCatalog* Catalog=Ok?MdoSkillsCatalogCreate(Base->Generation):NULL;
     if(Catalog)Catalog->Diagnostics=MdoSkillsDiagnosticsCreate();
     Ok=Ok&&Catalog&&Catalog->Diagnostics;
     for(size_t I=0;Ok&&I<Base->Count;I++){
-        MdoSkillEntry* E=&Base->Entries[I];bool Enabled=true;const xvalue* Flag=xrtValueObjectGet(Settings,xrtStrView(E->Id));
+        MdoSkillEntry* E=&Base->Entries[I];bool Enabled=true;cstr Ref=NULL;
+        for(size_t J=0;E->DirectoryId&&J<xrtValueCount(Installed);J++){const xvalue* Row=xrtValueArrayGet(Installed,J);cstr Directory=MdoExtensionText(Row,"directory_id",96);if(Directory&&!strcmp(Directory,E->DirectoryId)){Ref=MdoExtensionText(Row,"id",MDO_EXTENSION_REF_BYTES);break;}}
+        const xvalue* Flag=Ref?xrtValueObjectGet(Settings,xrtStrView(Ref)):NULL;
         if(Flag)xrtValueGetBool(Flag,&Enabled);
         if(!Enabled)continue;
         MdoSkillSource S={0};S.External=E->External;S.Id=E->Id;S.Scope=E->Scope;S.NativeRoot=E->NativeRoot;
         S.DirectoryId=E->DirectoryId;S.EntryFile=E->EntryFile;S.VirtualDirectory=E->VirtualDirectory;S.RelativeDirectory=E->RelativeDirectory;
         Ok=MdoSkillsScopedPut(Catalog,&S,true);
     }
-    xrtValueRelease(Settings);MdoSkillCatalogRelease(Base);
+    xrtValueRelease(Installed);xrtValueRelease(Settings);MdoSkillCatalogRelease(Base);
     if(!Ok){MdoSkillCatalogRelease(Catalog);MdoSkillsSetError("Cannot read project Skill selection; only installed Home directories can be selected");return NULL;}
     if(Catalog->Count>1)qsort(Catalog->Entries,Catalog->Count,sizeof(*Catalog->Entries),MdoSkillsEntryCompare);
     return Catalog;

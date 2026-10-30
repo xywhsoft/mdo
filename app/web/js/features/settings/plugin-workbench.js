@@ -1,5 +1,6 @@
-import { currentLocale, subscribeLocale, t as uiText, uiMessage } from "../../i18n.js";
+import { currentLocale, t as uiText, uiMessage, subscribeLocale } from "../../i18n.js";
 
+import { localDependencyPanel } from "./extension-dependencies.js";
 import { api } from "../../api/client.js";
 import { createApplicationClient } from "../../api/application.js";
 import { targetState, subscribeTarget } from "../../api/target.js";
@@ -30,7 +31,7 @@ export function createPluginWorkbench(root) {
   const call = async (method, params = {}, own = epoch) => { if (!current(own)) throw new DOMException("Device changed", "AbortError"); const result = await sdk.call(method, params); if (!current(own)) throw new DOMException("Device changed", "AbortError"); return result; };
   const changed = () => { window.dispatchEvent(new CustomEvent("mdo-plugins-changed")); if (active) void load(); };
   const store = createSingleResourceStore("plugins", changed, () => { area = "store"; render(); }, async () => { area = "local"; await load(); });
-  const receipt = item => receipts[`plugins:${item.id}`]||null;
+  const receipt = item => receipts[`plugins:${item.directory_id||item.id}`]||null;
   const editable = item => ownershipKnown && item.source === "manual";
   const directoryEditor=createDirectoryEditor({owner:root,onChange:changed});
   const showError = e => { if (e.name !== "AbortError") toast(errorMessage(e), "error"); };
@@ -64,21 +65,14 @@ export function createPluginWorkbench(root) {
       const description = element("div", {}, [node("p", spec?.description || uiMessage("ui.pluginWorkbench.legacyPluginFormat", {}, "旧格式插件")), credits.facts(), detailFacts([[uiMessage("task.meta.state", {}, "状态"), statusText[item.state] || item.state], [uiMessage("ui.pluginWorkbench.currentRevision", {}, "当前修订"), item.revision], [uiMessage("ui.pluginWorkbench.activeRevision", {}, "实际生效修订"), item.effective_revision || uiMessage("ui.pluginWorkbench.notEnabled", {}, "未启用")], [uiMessage("ui.pluginWorkbench.frontendEntry", {}, "前端入口"), spec?.entry?.frontend || full.frontend || uiMessage("settings.reasoningNone", {}, "无")], [uiMessage("ui.pluginWorkbench.nativeEntry", {}, "原生入口"), spec?.entry?.native || uiMessage("settings.reasoningNone", {}, "无")]])]);
       const files = node("div");
       for (const f of full.files || []) { const targets = spec?.overrides?.filter(r => r.source === f.path).map(r => r.target) || []; files.append(element("div", { className: "resource-actions" }, [button(f.path, () => inspectFile(full, f)), node("small", uiMessage("ui.filesView.value1BytesValue2", { value1: f.bytes.toLocaleString(currentLocale()), value2: targets.length ? ` → ${targets.join(" / ")}` : uiMessage("ui.pluginWorkbench.pluginPrivateFile", {}, " · 插件私有文件") }, "{value1} 字节{value2}"))])); }
-      const relations = node("div"); relations.append(node("h4", uiMessage("ui.pluginWorkbench.exclusiveFeatures", {}, "独占功能")), node("p", (spec?.exclusive || []).map(slotName).join("、") || uiMessage("settings.reasoningNone", {}, "无")));
-      for (const [key, title] of [["requires", uiMessage("ui.pluginWorkbench.requiredPlugins", {}, "必需插件")], ["conflicts", uiMessage("ui.pluginWorkbench.explicitConflicts", {}, "明确冲突")]]) {
-        relations.append(node("h4", title)); for (const r of spec?.[key] || []) relations.append(node("p", `${r.id} · ${r.reason || ""}`));
-      }
-      const users = data.items.filter(r => r.manifest?.requires?.some(dep => dep.id === id)); relations.append(node("h4", uiMessage("ui.pluginWorkbench.requiredByPlugins", {}, "被以下插件依赖")), node("p", users.map(r => r.manifest.name).join("、") || uiMessage("settings.reasoningNone", {}, "无")));
+      const relations = localDependencyPanel("plugins",full);
       browser.showDetail(id,detailTabs([{id:"description",label:uiMessage("backupImport.notice", {}, "说明"),content:description},{id:"files",label:uiMessage("ui.pluginWorkbench.filesAndEntries", {}, "文件与入口"),content:files},{id:"relations",label:uiMessage("ui.pluginWorkbench.dependenciesAndConflicts", {}, "依赖与冲突"),content:relations}]));
     } catch (e) { if (current(own) && browser.isSelected(id)) browser.showDetail(id, node("p", errorMessage(e), "extension-error")); }
   }
   async function toggle(item){
     if(busy)return;busy=true;
-    const changes=[{id:item.id,enabled:!item.enabled}];
     try{
-      const plan=await call("plugin.plan",{changes});
-      if(!plan.allowed){await review(changes,item.enabled?uiMessage("ui.pluginWorkbench.disablePlugin", {}, "停用插件"):uiMessage("ui.pluginWorkbench.enablePlugin", {}, "启用插件"),plan);return;}
-      const result=await call("plugin.commit",{changes,expected_revision:plan.base_revision,expected_plan:plan.plan_revision});changed();
+      const result=await changeDirectory("plugins",item,"enable",{enabled:!item.enabled});if(!result)return;changed();
       toast(result.restart_required?uiMessage("ui.pluginWorkbench.pluginSelectionSavedRestartMdoToApplyIt", {}, "插件选择已保存，重启 mdo 后生效"):result.pending?uiMessage("ui.pluginWorkbench.waitingForTheOldPluginToFinishCleanup", {}, "等待旧插件完成清理"):uiMessage("ui.pluginWorkbench.pluginSelectionApplied", {}, "插件选择已生效"));
     }catch(e){showError(e);}finally{busy=false;}
   }
@@ -96,8 +90,8 @@ export function createPluginWorkbench(root) {
         for (const issue of plan.issues || []) {
           const row = element("section", { className: "warning-entry" }, [node("p", `${issue.id} ${issue.other}：${issue.code === "exclusive" ? uiMessage("ui.pluginWorkbench.cannotOverrideValue1AtTheSameTime", { value1: slotName(issue.detail) }, "不能同时接管 {value1}") : issue.detail}`, "extension-error")]);
           const set = patch => { const old = changes.find(r => r.id === patch.id); if (old) Object.assign(old, patch); else changes.push(patch); void refresh(); };
-          if (["exclusive", "conflicts"].includes(issue.code)) for (const id of [issue.id, issue.other]) row.append(button(uiMessage("ui.pluginWorkbench.disableValue1", { value1: id }, "停用 {value1}"), () => set({ id, enabled: false })));
-          if (issue.code === "requires") { row.append(button(uiMessage("ui.pluginWorkbench.alsoDisableValue1", { value1: issue.id }, "同时停用 {value1}"),()=>set({id:issue.id,enabled:false})));const dependency = data.items.find(r => r.id === issue.other); if (dependency && !dependency.enabled) row.append(button(uiMessage("ui.pluginWorkbench.alsoEnableValue1", { value1: issue.other }, "同时启用 {value1}"), () => set({ id: issue.other, enabled: true }))); else row.append(node("p", uiMessage("ui.pluginWorkbench.installACompatibleVersionFromThePluginStoreFirst", {}, "请先在插件商店安装符合要求的版本。"))); }
+          if (["exclusive", "dependency_conflict"].includes(issue.code)) for (const id of [issue.id, issue.other]) row.append(button(uiMessage("ui.pluginWorkbench.disableValue1", { value1: id }, "停用 {value1}"), () => set({ id, enabled: false })));
+          if (["dependency_disabled","dependency_missing","dependency_blocked"].includes(issue.code)) { row.append(button(uiMessage("ui.pluginWorkbench.alsoDisableValue1", { value1: issue.id }, "同时停用 {value1}"),()=>set({id:issue.id,enabled:false})));const dependency = data.items.find(r => r.id === issue.other); if (dependency && !dependency.enabled) row.append(button(uiMessage("ui.pluginWorkbench.alsoEnableValue1", { value1: issue.other }, "同时启用 {value1}"), () => set({ id: issue.other, enabled: true }))); else row.append(node("p", uiMessage("ui.pluginWorkbench.installACompatibleVersionFromThePluginStoreFirst", {}, "请先在插件商店安装符合要求的版本。"))); }
           d.body.append(row);
         }
         d.body.append(node("p", uiMessage("ui.pluginWorkbench.codeOrResourceDirectoryChangesRequireARestartReplacement", {}, "代码或资源目录变更需要重启。仍在运行的窗口或代码退出前，替代插件不会启动。"), "extension-help")); confirm.disabled = !plan.allowed;
@@ -118,7 +112,7 @@ export function createPluginWorkbench(root) {
   async function edit(item=null,native=false){
     if(item){if(!editable(item))throw Error(uiText("ui.pluginWorkbench.storePluginsCannotBeEditedOrSharedAgain", {}, "商店插件不支持编辑或再次分享"));await directoryEditor.open({kind:"plugins",item});return;}
     const entry=native?"runtime/plugin.c":"runtime/main.js",manifest=directoryManifest("plugins","my-plugin",{name:uiText("ui.pluginWorkbench.myPlugin", {}, "我的插件"),version:"1.0.0",license:"MIT",[native?"native":"frontend"]:entry});
-    await directoryEditor.open({kind:"plugins",manifest,text:JSON.stringify({entry:{[native?"native":"frontend"]:entry},overrides:[],exclusive:[],requires:[],conflicts:[]},null,2),edits:[{path:entry,text:native?nativeScript("my-plugin"):defaultScript}]});
+    await directoryEditor.open({kind:"plugins",manifest,text:JSON.stringify({entry:{[native?"native":"frontend"]:entry},overrides:[],exclusive:[]},null,2),edits:[{path:entry,text:native?nativeScript("my-plugin"):defaultScript}]});
   }
   async function combinations() {
     const d = layer({ title: uiText("ui.pluginWorkbench.pluginCombinations", {}, "插件组合方案"), width: "48rem" });
@@ -157,7 +151,7 @@ export function createPluginWorkbench(root) {
       const spec = item.manifest || {}, record = receipt(item), credits = resourceCredits({ ...item, ...spec, external: true, store_managed: item.source === "store" || record && record.source !== "local" }, record), actions = [];
       if (editable(item)) actions.push(button(uiMessage("timeline.edit", {}, "编辑"), () => edit(item)), button(uiMessage("ui.pluginWorkbench.shareToCreatorCenter", {}, "分享到创作中心"), () => store.publish({...item,name:item.name||spec.name||item.id},record)));
       actions.push(...store.localActions(item));
-      actions.push(button(uiMessage("store.uninstall", {}, "卸载"),async()=>{if(!confirm(uiMessage("ui.pluginWorkbench.uninstallTheEntireDirectoryForValue1", { value1: item.name||spec.name||item.id }, "卸载 {value1} 的整个目录？")))return;const result=await changeDirectory("plugins",item,"remove");changed();toast(result.pending_remove?uiMessage("ui.pluginWorkbench.disabledTheEntireDirectoryWillBeDeletedAfterRestarting", {}, "已停用，重启 mdo 后删除整个目录"):uiMessage("ui.pluginWorkbench.pluginDirectoryUninstalled", {}, "插件目录已卸载"));}));
+      actions.push(button(uiMessage("store.uninstall", {}, "卸载"),async()=>{if(!confirm(uiMessage("ui.pluginWorkbench.uninstallTheEntireDirectoryForValue1", { value1: item.name||spec.name||item.id }, "卸载 {value1} 的整个目录？")))return;const result=await changeDirectory("plugins",item,"remove");if(!result)return;changed();toast(result.pending_remove?uiMessage("ui.pluginWorkbench.disabledTheEntireDirectoryWillBeDeletedAfterRestarting", {}, "已停用，重启 mdo 后删除整个目录"):uiMessage("ui.pluginWorkbench.pluginDirectoryUninstalled", {}, "插件目录已卸载"));}));
       const stopLocale = subscribeLocale(render);
   return { key: item.id, title: spec.name || item.id, byline: credits.submitter, description: spec.description || uiText("ui.pluginWorkbench.legacyPluginFormat", {}, "旧格式插件"), meta: [...new Set([spec.version, ...credits.meta].filter(Boolean))], badge: { text: statusText[item.state] || item.state, tone: item.state === "failed" ? "error" : "" }, primary: extensionToggle(button(item.enabled ? uiMessage("resource.disable", {}, "停用") : uiMessage("resource.enable", {}, "启用"), () => toggle(item)), item.enabled, spec.name || item.id), actions, onSelect: () => details(item) };
     });

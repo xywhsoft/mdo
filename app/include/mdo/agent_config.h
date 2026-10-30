@@ -3,6 +3,7 @@
 #include "extension_files.h"
 #include "agent_config_format.h"
 #include "extensions.h"
+#include "agent_dependencies.h"
 
 static inline xvalue* MdoAgentConfigResolveDepth(cstr Id, cstr Text, bool Main,
     cstr Root,const char** Stack, unsigned Depth, char* Error, size_t Capacity)
@@ -29,11 +30,12 @@ static inline xvalue* MdoAgentConfigResolveDepth(cstr Id, cstr Text, bool Main,
             if(!Base || !MdoAgentConfigSetText(Base,"prompt",MDO_AGENT_SYSTEM_PROMPT))goto failed;
         } else {
             bool ParentMain=Main; cstr ParentId=Parent;
-            if (!strncmp(Parent,"agent.",6)) { ParentMain=true; ParentId=Parent+6; }
-            else if (!strncmp(Parent,"subagent.",9)) { ParentMain=false; ParentId=Parent+9; }
-            else if (!strcmp(Parent,"mdo.default")) { ParentMain=true; ParentId="default"; }
-            if (!MdoExtensionAlias(ParentId)) goto failed;
-            char Why[512]={0};xvalue* ParentDirectory=MdoExtensionsFindAlias(ParentMain?"agents":"subagents",ParentId,Why);
+            char Why[512]={0};xvalue* ParentDirectory=NULL;
+            if(MdoExtensionRefValid(Parent)){
+                cstr Kind=MdoExtensionRefKind(Parent);if(strcmp(Kind,"agents")&&strcmp(Kind,"subagents"))goto failed;
+                if(!MdoAgentDependencyDeclared(Root,Parent,Error,Capacity))goto failed;
+                ParentMain=!strcmp(Kind,"agents");ParentDirectory=MdoExtensionsResolve(Parent,Why);ParentId=MdoAgentConfigText(ParentDirectory,"alias");
+            }else {Failure="Role inheritance requires a declared typed agent: or subagent: ID; migrate the old alias reference";goto failed;}
             cstr ParentRoot=MdoAgentConfigText(ParentDirectory,"root"),ParentEntry=MdoAgentConfigText(ParentDirectory,"entry");
             char* Path=ParentRoot&&ParentEntry?xrtFormat("%s/%s",ParentRoot,ParentEntry):NULL;
             ParentText=Path?MdoExtensionRead(Path,true,MDO_EXTENSION_TEXT_LIMIT,NULL):NULL;xrtFree(Path);
@@ -73,7 +75,8 @@ static inline xvalue* MdoAgentConfigResolveAt(cstr Id,cstr Text,bool Main,cstr R
 {
     const char* Stack[16]={0};
     if(Error&&Capacity)Error[0]=0;
-    return MdoAgentConfigResolveDepth(Id,Text,Main,Root,Stack,0,Error,Capacity);
+    xvalue* Config=MdoAgentConfigResolveDepth(Id,Text,Main,Root,Stack,0,Error,Capacity);
+    if(Config&&!MdoAgentResolveSelections(Config,Root,Error,Capacity)){xrtValueRelease(Config);Config=NULL;}return Config;
 }
 static inline xvalue* MdoAgentConfigResolve(cstr Id,cstr Text,bool Main,char* Error,size_t Capacity)
 {

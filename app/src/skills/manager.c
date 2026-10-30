@@ -449,7 +449,7 @@ static bool MdoSkillsDiscover(MdoSkillSource** Sources,size_t* Count,MdoSkillDia
     for(size_t I=0;Ok&&I<xrtValueCount(Rows);I++){
         const xvalue* Row=xrtValueArrayGet(Rows,I);bool Valid=false,Enabled=false;
         xrtValueGetBool(xrtValueObjectGet(Row,XRT_STR_LITERAL("valid")),&Valid);xrtValueGetBool(xrtValueObjectGet(Row,XRT_STR_LITERAL("enabled")),&Enabled);
-        cstr Id=MdoExtensionText(Row,"id",96),Alias=MdoExtensionText(Row,"alias",64),Root=MdoExtensionText(Row,"root",MDO_EXTENSION_PATH_BYTES);
+        cstr Id=MdoExtensionText(Row,"directory_id",96),Alias=MdoExtensionText(Row,"alias",64),Root=MdoExtensionText(Row,"root",MDO_EXTENSION_PATH_BYTES);
         if(!Valid){MdoSkillsDiagnosticAdd(Diagnostics,MDO_SKILL_DIAGNOSTIC_DISCOVERY,Id,Root,MdoExtensionText(Row,"error",511));continue;}
         if(!Enabled)continue;
         xvalue* Unique=MdoExtensionsFindAlias("skills",Alias,Error);bool Callable=Unique&&MdoSkillsIdValid(Alias);xrtValueRelease(Unique);

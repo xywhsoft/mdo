@@ -1,0 +1,199 @@
+{
+  "date": "2026-10-29",
+  "mdo_head": "93901e817f8da22e4a3bac868c47d0759bcde519",
+  "working_tree_changes_included": true,
+  "online_deployed": false,
+  "android_device_tested": false,
+  "windows": {
+    "sha256": "4f63bec5d1a23e6248f18bb02559f5b4253c36160bd7638f5e9a0e1e283cb651",
+    "bytes": 6498431,
+    "path": ".build/extension-dependencies/release/mdo.exe",
+    "packaged_app_sha256": "654caafca67d3169c231d3ad3ed4808be7fdabd0405359f8e3d54a641eddc9ec",
+    "sdk_overlay_sha256": "a94cfc5ce710929ec9017198712d6214f5a51be35a085e9444e95262de90abdc"
+  },
+  "linux": {
+    "sha256": "4ba031fcb051cab07c3534d9f1bb05a42fce291b37abdde43e8276f551c99c5e",
+    "bytes": 6062274,
+    "path": ".build/extension-dependencies/linux-release/linux-x86_64-glibc-server/mdo-server",
+    "packaged_app_sha256": "2be879a4da78b5d345daee393008d5a4fe603c20a1237c519049845598c64708",
+    "abi": {
+      "elf_needed": [
+        "libdl.so.2",
+        "libpthread.so.0",
+        "libm.so.6",
+        "libc.so.6"
+      ],
+      "elf_interpreter": "/lib64/ld-linux-x86-64.so.2",
+      "glibc_required": "2.28",
+      "glibc_versions": [
+        "2.2.5",
+        "2.3",
+        "2.3.2",
+        "2.3.3",
+        "2.4",
+        "2.6",
+        "2.7",
+        "2.9",
+        "2.12",
+        "2.14",
+        "2.17",
+        "2.25",
+        "2.28"
+      ],
+      "glibc_max": "2.28",
+      "static_core": false
+    },
+    "sdk_overlay_sha256": "a94cfc5ce710929ec9017198712d6214f5a51be35a085e9444e95262de90abdc"
+  },
+  "sdk_overlay_sha256": "a94cfc5ce710929ec9017198712d6214f5a51be35a085e9444e95262de90abdc",
+  "shared_headers": {
+    "extension_identity.h": "a830931eec7087d655a7754e3cca4fdb48555a3dd09b83844fbf3753792a1a6f",
+    "extension_manifest.h": "46121000afa67f367c42aea398536abf97e5d1f99fbfc9ff99ad8d0400f1b495",
+    "extension_graph.h": "a84510cee5e583fd3fa9c6160f6442ec820fc60978376fd7840c84b2386532e8",
+    "agent_config_format.h": "40525be23bbe48dfa17fd41f9980b9222390b3c2cbf8d5a808f7076ebb33106f",
+    "plugin_format.h": "4b937e625858ff25ff207c8ec8813e3da5db96724e7c6f491748b9e1a0968dd7",
+    "mcp_template.h": "e02d4faa0b4106daa1674515686ca480906f4daf1bab72390871d9a2f54d4bb5"
+  },
+  "native_suites": [
+    {
+      "test": "extension_dependencies",
+      "passed": true,
+      "seconds": 0.75
+    },
+    {
+      "test": "extension_dependency_group",
+      "passed": true,
+      "seconds": 2.02
+    },
+    {
+      "test": "extension_dependency_runtime",
+      "passed": true,
+      "seconds": 1.58
+    },
+    {
+      "test": "extension_dependency_store",
+      "passed": true,
+      "seconds": 1.78
+    },
+    {
+      "test": "extension_dependency_service",
+      "passed": true,
+      "seconds": 2.0
+    },
+    {
+      "test": "extension_directory",
+      "passed": true,
+      "seconds": 2.09
+    },
+    {
+      "test": "extension_directory_api",
+      "passed": true,
+      "seconds": 2.58
+    },
+    {
+      "test": "extension_builtins",
+      "passed": true,
+      "seconds": 2.36
+    },
+    {
+      "test": "extension_save",
+      "passed": true,
+      "seconds": 1.8
+    },
+    {
+      "test": "extension_authoring",
+      "passed": true,
+      "seconds": 2.14
+    },
+    {
+      "test": "extension_rename",
+      "passed": true,
+      "seconds": 2.81
+    },
+    {
+      "test": "extension_tasks",
+      "passed": true,
+      "seconds": 2.95
+    },
+    {
+      "test": "extension_service",
+      "passed": true,
+      "seconds": 2.16
+    },
+    {
+      "test": "project_extension_selection",
+      "passed": true,
+      "seconds": 1.59
+    },
+    {
+      "test": "plugin_directory",
+      "passed": true,
+      "seconds": 1.75
+    },
+    {
+      "test": "command_directory",
+      "passed": true,
+      "seconds": 0.73
+    },
+    {
+      "test": "mcp_directory",
+      "passed": true,
+      "seconds": 2.25
+    },
+    {
+      "test": "mcp_dependency",
+      "passed": true,
+      "seconds": 2.56
+    },
+    {
+      "test": "external_directory",
+      "passed": true,
+      "seconds": 6.28
+    },
+    {
+      "test": "platform_directory_store",
+      "passed": true,
+      "seconds": 2.02
+    },
+    {
+      "test": "platform_directory_routes",
+      "passed": true,
+      "seconds": 1.92
+    },
+    {
+      "test": "platform_directory_startup",
+      "passed": true,
+      "seconds": 1.75
+    }
+  ],
+  "frontend": {
+    "passed": 1208,
+    "skipped": 2,
+    "failed": 0
+  },
+  "packed_contracts": {
+    "windows": 9,
+    "linux": 9
+  },
+  "migration": {
+    "windows_passed": 11,
+    "windows_skipped": 1,
+    "linux_passed": 12
+  },
+  "mcp_dependency_contracts": 27,
+  "final_source_check": {
+    "mdo_head": "4af4f4486045ba0c88a0c986a31fb66b00a995b8",
+    "sdk_overlay_sha256": "a94cfc5ce710929ec9017198712d6214f5a51be35a085e9444e95262de90abdc",
+    "shared_headers": {
+      "extension_identity.h": "a830931eec7087d655a7754e3cca4fdb48555a3dd09b83844fbf3753792a1a6f",
+      "extension_manifest.h": "46121000afa67f367c42aea398536abf97e5d1f99fbfc9ff99ad8d0400f1b495",
+      "extension_graph.h": "a84510cee5e583fd3fa9c6160f6442ec820fc60978376fd7840c84b2386532e8",
+      "agent_config_format.h": "c4d24f35bf31a079886bc752f38bdf8fbf4235b801957ae3f669f1257d257d0e",
+      "plugin_format.h": "4b937e625858ff25ff207c8ec8813e3da5db96724e7c6f491748b9e1a0968dd7",
+      "mcp_template.h": "e02d4faa0b4106daa1674515686ca480906f4daf1bab72390871d9a2f54d4bb5"
+    },
+    "platform_dependency_contracts": 10,
+    "platform_startup_routes": 32,
+    "note": "Parallel default prompt update preserved and mirrored. Focused platform checks passed using the recorded acceptance SDK. Acceptance artifacts retain their original build receipt and source snapshot."
+  }
+}

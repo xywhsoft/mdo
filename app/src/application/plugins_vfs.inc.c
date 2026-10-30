@@ -9,16 +9,16 @@ static xvalue* SdkPluginMapBuild(SdkPlugin* Plugins){
     xvalue* Map=xrtValueArray();bool Ok=Map!=NULL;
     for(size_t I=0;Ok&&I<MDO_PLUGIN_COUNT;I++){
         const xvalue* M=Plugins[I].Manifest;if(!M||Plugins[I].Error[0])continue;
-        cstr Id=SdkField(M,"id"),Revision=SdkField(M,"revision");const xvalue* Files=SdkGet(M,"files"),*Doc=SdkGet(M,"manifest");
+        cstr Owner=SdkField(M,"id"),Id=SdkField(M,"directory_id"),Revision=SdkField(M,"revision");const xvalue* Files=SdkGet(M,"files"),*Doc=SdkGet(M,"manifest");
         if(!SdkPluginEnabled(M))continue;
         for(size_t J=0;Ok&&J<xrtValueCount(Files);J++){
             const xvalue* F=xrtValueArrayGet(Files,J);cstr Name=SdkField(F,"path");uint64 Size=0;SdkUInt(SdkGet(F,"bytes"),&Size);
             bool Directory=false;xrtValueGetBool(SdkGet(F,"directory"),&Directory);if(Directory)continue;
             char Source[4608],Target[4608];snprintf(Source,sizeof(Source),"plugins/%s/%s",Id,Name);
             snprintf(Target,sizeof(Target),"web/__mdo_plugins/%s/%s/%s",Id,Revision,Name);
-            Ok=SdkPluginMapAppend(Map,Target,Source,Id,Revision,Size);
+            Ok=SdkPluginMapAppend(Map,Target,Source,Owner,Revision,Size);
             snprintf(Target,sizeof(Target),"__mdo_plugins/%s/%s/%s",Id,Revision,Name);
-            Ok=Ok&&SdkPluginMapAppend(Map,Target,Source,Id,Revision,Size);
+            Ok=Ok&&SdkPluginMapAppend(Map,Target,Source,Owner,Revision,Size);
         }
         if(!SdkPluginEnabled(M)||Plugins[I].Error[0])continue;
         const xvalue* Overrides=SdkGet(Doc,"overrides");
@@ -31,7 +31,7 @@ static xvalue* SdkPluginMapBuild(SdkPlugin* Plugins){
                 if(!Ok)snprintf(Plugins[I].Error,sizeof(Plugins[I].Error),"File target conflicts with %s: %s",Other,Target);
             }
             char Source[4608];snprintf(Source,sizeof(Source),"plugins/%s/%s",Id,Name);
-            Ok=Ok&&SdkPluginMapAppend(Map,Target,Source,Id,Revision,Size);
+            Ok=Ok&&SdkPluginMapAppend(Map,Target,Source,Owner,Revision,Size);
         }
     }
     if(!Ok){xrtValueRelease(Map);return NULL;}return Map;

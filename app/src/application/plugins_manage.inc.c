@@ -6,9 +6,9 @@ static bool SdkPluginLookup(cstr Id,cstr Revision,SdkPlugin* Plugin,mdo_error_v1
  return Ok||MdoApplicationError(E,"sdk_plugin_directory_changed","Plugin directory changed; read its current metadata","plugin",409,false);
 }
 static bool SdkPluginFileCall(const xvalue* P,xvalue** R,mdo_error_v1* E){
- cstr Id=SdkField(P,"id"),Path=SdkField(P,"path");if(!MdoExtensionDirectoryId(Id)||!MdoPluginPath(Path))return MdoApplicationError(E,"sdk_arguments_invalid","Choose an installed plugin file","plugin",422,false);
+ cstr Id=SdkField(P,"id"),Path=SdkField(P,"path");if(!MdoPluginIdentity(Id)||!MdoPluginPath(Path))return MdoApplicationError(E,"sdk_arguments_invalid","Choose an installed plugin file","plugin",422,false);
  SdkPlugin V={0};if(!SdkPluginLookup(Id,SdkField(P,"revision"),&V,E)){SdkPluginDrop(&V);return false;}
- bool Ok=MdoPluginFile(SdkGet(V.Manifest,"files"),Path)!=NULL;char* Relative=Ok?xrtFormat("plugins/%s/%s",Id,Path):NULL;
+ bool Ok=MdoPluginFile(SdkGet(V.Manifest,"files"),Path)!=NULL;char* Relative=Ok?xrtFormat("plugins/%s/%s",SdkField(V.Manifest,"directory_id"),Path):NULL;
  char* Text=Relative?MdoExtensionRead(Relative,true,1048576,NULL):NULL;Ok=Text&&xrtUtf8Valid(xrtStrView(Text),NULL);*R=Ok?xrtValueObject():NULL;
  if(Ok)Ok=*R&&SdkPut(*R,"text",Text)&&SdkPut(*R,"revision",SdkField(V.Manifest,"revision"));
  xrtFree(Relative);xrtFree(Text);SdkPluginDrop(&V);return Ok||MdoApplicationError(E,"sdk_plugin_file_not_text","Use the common binary file endpoint for non-text files or files over 1 MiB","plugin",422,false);
@@ -24,7 +24,7 @@ static xvalue* SdkPluginPresetsRead(void){
         for(size_t J=0;Ok&&J<I;J++)if(!strcmp(Id,SdkField(xrtValueArrayGet(Items,J),"id")))Ok=false;
         for(size_t J=0;Ok&&J<xrtValueCount(Pins);J++){
             const xvalue* P=xrtValueArrayGet(Pins,J);cstr Pid=SdkField(P,"id");bool Enabled;
-            Ok=MdoExtensionDirectoryId(Pid)&&xrtValueGetBool(SdkGet(P,"enabled"),&Enabled)&&!SdkGet(P,"revision");
+            Ok=MdoPluginIdentity(Pid)&&xrtValueGetBool(SdkGet(P,"enabled"),&Enabled)&&!SdkGet(P,"revision");
             for(size_t K=0;Ok&&K<J;K++)if(!strcmp(Pid,SdkField(xrtValueArrayGet(Pins,K),"id")))Ok=false;
         }
     }if(!Ok){xrtValueRelease(Doc);return NULL;}return Doc;

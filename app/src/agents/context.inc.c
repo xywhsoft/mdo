@@ -139,6 +139,7 @@ static bool MdoAgentsFrozenSource(MdoAgentInstance* Instance,xvalue* Plan,cstr I
 static bool MdoAgentsContextCollect(MdoAgentOwner* Owner,MdoAgentInstance* Instance,
     const MdoModuleAgentInfo* Definition,xwork_agent_extension_context* Native,xvalue** Output,xwork_error* Error)
 {
+    if(!Instance->SourcePlan&&(!MdoAgentsCheckDependencies(Owner,Definition,Native?Native->pAgent:NULL,Error)||!MdoAgentsBindMcp(Owner,Definition,Instance->Configuration,Error)))return false;
     xvalue* Plan=xrtValueObject();xvalue* Variables=xrtValueObject();xvalue* Sources=xrtValueArray();
     bool Ok=Plan && Variables && Sources && MdoAgentsPlanPut(Plan,"schema","mdo.agent.context.v1") &&
         MdoAgentsPlanPut(Plan,"agent_id",Definition->Id) &&
@@ -177,7 +178,7 @@ static bool MdoAgentsContextCollect(MdoAgentOwner* Owner,MdoAgentInstance* Insta
             else if(!strcmp(Id,"reply_language"))Ok=MdoAgentsReplyLanguage(&Text,Error);
             else if(!strcmp(Id,"external_tools"))Ok=MdoToolPrompt(&Text) && MdoAgentsFilterMetadata(&Text,Spec);
             else if(!strcmp(Id,"skills.discovery"))Ok=MdoSkillCatalogAppendPrompt(Owner->Skills,&Text) && MdoAgentsFilterMetadata(&Text,Spec);
-            else if(!strcmp(Id,"knowledge"))Ok=MdoKnowledgeAppendPrompt(&Text) && MdoAgentsFilterMetadata(&Text,Spec);
+            else if(!strcmp(Id,"knowledge"))Ok=MdoKnowledgeAppendPromptForWorkspace(&Text,Owner->Workspace) && MdoAgentsFilterMetadata(&Text,Spec);
             else if(!strcmp(Id,"memory.global")){xrtFree(Text);Text=MdoMemoryBuildGlobalPrompt(Error);}
             else if(!strcmp(Id,"memory.project")){
                 if(Owner->ProductProject[0]){xrtFree(Text);Text=MdoMemoryBuildProjectPrompt(Owner->ProductProject,Error);}

@@ -79,7 +79,7 @@ def main():
     out = ROOT / '.build/command-directory-native'; out.mkdir(parents=True, exist_ok=True)
     fixture = out / ('home-' + uuid.uuid4().hex[:12]); fixture.mkdir()
     directory = fixture / 'commands/0123456789ABCDEFGHJKMNPQRSTVWXYZ'; (directory / 'nested').mkdir(parents=True)
-    manifest = {'kind': 'commands', 'name': 'Directory QA', 'alias': 'QA-Alias', 'entry': 'nested/command.c', 'platforms': ['any']}
+    manifest = {'kind': 'commands', 'id':'command:qa.alias', 'name': 'Directory QA', 'alias': 'QA-Alias', 'entry': 'nested/command.c', 'platforms': ['any']}
     (directory / 'extension.json').write_text(json.dumps(manifest), encoding='utf-8')
     meta = {'id': 'QA-Alias', 'description': 'Native auxiliary C command', 'effects': ['read']}
     command = '/* mdo-command ' + json.dumps(meta) + ' */\n' + r'''

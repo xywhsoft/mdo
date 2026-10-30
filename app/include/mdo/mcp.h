@@ -84,6 +84,9 @@ typedef struct MdoMcpDiagnosticInfo {
 bool MdoMcpManagerInit(xwork_runtime* pRuntime);
 void MdoMcpManagerUnit(void);
 bool MdoMcpManagerReload(void);
+/* Resolve a template dependency to one approved private in-scope connection.
+ * Owned string. No connection is started or credential selected implicitly. */
+char* MdoMcpDependencyConnection(cstr Ref,cstr Workspace,cstr Preferred,bool RequireReady,char Error[512]);
 bool MdoMcpRemoveDirectoryConnections(cstr DirectoryId,char Error[512]);
 xvalue* MdoMcpConnections(cstr Id,char Error[512]);
 /* Private device bindings only; archive manifests never contain these values.
@@ -112,8 +115,10 @@ bool MdoMcpValidateText(const char* Id, const char* Text, char* Error, size_t Ca
  * inherited by subagents and apply to search, schema load and invocation. */
 bool MdoMcpConfigureAgent(xwork_agent* Agent, const char* Workspace, xwork_error* Error);
 bool MdoMcpConfigureRole(xwork_agent* Agent,const char* Workspace,const char* const* Ids,size_t Count,xwork_error* Error);
+bool MdoMcpConfigureRoleScoped(xwork_agent* Agent,const char* Workspace,const char* Scope,const char* const* Ids,size_t Count,xwork_error* Error);
 str MdoMcpRolePrompt(const char* Workspace,const char* const* Ids,size_t Count,bool Restrict,xwork_error* Error);
 bool MdoMcpRead(const char* Server,const char* Method,const char* Params,xcancel* Cancel,uint64 Deadline,char** Result,xwork_error* Error);
+bool MdoMcpCheckTool(xwork_agent* Agent,cstr Tool,cstr Arguments,cstr Workspace,cstr Scope,char Error[512]);
 xvalue* MdoMcpDescribe(const char* Server);
 xvalue* MdoMcpAuthorizationStatus(const char* ServerId);
 bool MdoMcpAuthorizationStart(const char* ServerId,const char* LocalOrigin);

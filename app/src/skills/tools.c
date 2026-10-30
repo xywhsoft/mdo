@@ -1,6 +1,9 @@
 #include <stdio.h>
 #include <string.h>
 #include "../../include/mdo/skills.h"
+#include "../../include/mdo/extensions.h"
+#include "../../include/mdo/extension_manifest.h"
+#include "../../include/mdo/modules.h"
 
 static bool MdoSkillArgumentUInt(const xvalue* Value, uint64* Number)
 {
@@ -73,6 +76,11 @@ static xwork_result MdoSkillExecute(void* Data, const xwork_tool_context* Contex
         Id = xrtStrDupN(Name.Data, Name.Size); Info.Size = sizeof(Info);
         Ok = Id != NULL && MdoSkillCatalogFind(Catalog, Id, &Info);
         if (!Ok) Message = "Skill is missing or disabled; search installed Skills first";
+        if(Ok&&Info.DirectoryId){
+            char Why[512]={0};xvalue* Row=MdoExtensionsRead("skills",Info.DirectoryId,Why);cstr Ref=MdoExtensionText(Row,"id",MDO_EXTENSION_REF_BYTES);char* Project=MdoModuleAgentProject(Context?Context->pAgent:NULL,Context?Context->uAgentId:0);
+            Ok=Ref&&Project&&MdoExtensionsRuntimeCheck(Ref,Context?Context->sWorkspaceRoot:NULL,Project,Context?Context->pAgent:NULL,true,Why);xrtFree(Project);xrtValueRelease(Row);
+            if(!Ok){snprintf(Failure,sizeof(Failure),"%s",Why[0]?Why:"Skill dependencies are unavailable");Message=Failure;}
+        }
         if(Ok&&!Info.AutoInvoke){Ok=false;Message="This Skill requires explicit user selection with $name; do not reproduce its workflow automatically";}
         if (Ok) { Base=MdoSkillCatalogBaseDirectory(Catalog,Id);Ok=Base!=NULL;
             if(!Ok)Message="Skill directory could not be prepared; check local storage and refresh Skills"; }

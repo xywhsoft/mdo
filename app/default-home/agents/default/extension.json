@@ -8,5 +8,6 @@
     "any"
   ],
   "author": "墨斗",
-  "description": "General coding and knowledge-work Agent with inherited model settings."
+  "description": "General coding and knowledge-work Agent with inherited model settings.",
+  "id": "agent:default"
 }

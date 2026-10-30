@@ -5,6 +5,7 @@ from pathlib import Path
 import shutil
 import uuid
 import zipfile
+from extension_identity_fixture import extension_ref
 
 from native_extension_runner import run
 from test_extension_zip_native import headers
@@ -37,6 +38,7 @@ bool MdoHomeAtomicWrite(cstr Path,const void* Data,size_t Size,bool Backup){
  bool Ok=Native&&xrtFileWriteAtomic(Native,(xbytesview){Data,Size});xrtFree(Native);return Ok;
 }
 bool MdoHomeRemove(cstr Path,bool Backup){(void)Backup;return xrtRootRemove(QaRoot,Path);}
+bool MdoHomeRemoveEmptyDirectory(cstr Path){return xrtRootRemove(QaRoot,Path);}
 bool MdoHomeCreateDirectory(cstr Path){return QaParents(Path)&&xrtRootDirCreate(QaRoot,Path,0700);}
 xroot MdoHomeOpenStorageDirectory(cstr Path){
  if(!QaParents(Path))return NULL;xfileinfo I;
@@ -108,7 +110,7 @@ MDO_EXPORT mdo_result mdoCommandRun(const mdo_command_context_v1* C,const xvalue
  }xrtValueObjectSetNew(*R,XRT_STR_LITERAL("approval_required"),xrtValueBool(Approval));
  {
   xfile Archive=MdoHomeOpenRead("data/extension-tasks/fixture/mcp.zip");char Hash[65];uint64 Size=0;bool Ok=Archive&&MdoExtFileDigest(Archive,NULL,Hash,&Size);xrtClose(Archive);
-  xvalue* Credits=xrtValueObject(),*Installed=NULL,*Removed=NULL;MdoExtPut(Credits,"source","store");MdoExtPut(Credits,"sha256",Hash);MdoExtPut(Credits,"submitter","QA publisher");
+  xvalue* Credits=xrtValueObject(),*Installed=NULL,*Removed=NULL;MdoExtPut(Credits,"source","store");MdoExtPut(Credits,"id","mcp:qa.archive");MdoExtPut(Credits,"sha256",Hash);MdoExtPut(Credits,"submitter","QA publisher");
   Ok=Ok&&MdoExtensionsInstall("mcp","stored-root","data/extension-tasks/fixture/mcp.zip",Credits,true,NULL,&Installed,Error);xrtValueRelease(Installed);xrtValueRelease(Credits);
   Ok=Ok&&MdoExtensionsVerify("mcp","stored-root",NULL,Error)&&MdoHomeAtomicWrite("mcp/stored-root/include/helper.h","tampered",8,false)&&!MdoExtensionsVerify("mcp","stored-root",NULL,Error)&&!MdoExtensionsSetEnabled("mcp","stored-root",true,Error)&&MdoExtensionsSetEnabled("mcp","stored-root",false,Error);
   Ok=Ok&&MdoExtensionsRemove("mcp","stored-root",&Removed,Error);xrtValueRelease(Removed);
@@ -175,7 +177,7 @@ def main():
     entries = {'agents': 'agent.md', 'subagents': 'agent.c', 'tools': 'tool.c', 'mcp': 'mcp.json', 'skills': 'SKILL.md', 'commands': 'command.c', 'external-tools': 'bin/qa', 'knowledge': 'knowledge.json', 'plugins': 'plugin.json'}
     for kind, entry in entries.items():
         directory = fixture / kind / 'qa-local'; directory.mkdir(parents=True)
-        manifest = {'kind': kind, 'name': 'QA directory', 'alias': 'qa-command-name', 'entry': entry, 'platforms': ['any']}
+        manifest = {'kind': kind, 'id': extension_ref(kind,'local'), 'name': 'QA directory', 'alias': 'qa-command-name', 'entry': entry, 'platforms': ['any']}
         (directory / 'extension.json').write_text(json.dumps(manifest), encoding='utf-8')
         (directory / entry).parent.mkdir(parents=True, exist_ok=True)
         (directory / entry).write_bytes(b'not executed')
@@ -188,9 +190,11 @@ def main():
         directory = fixture / kind / 'qa-local'
         with zipfile.ZipFile(downloads / (kind + '.zip'), 'w', compression=zipfile.ZIP_DEFLATED) as z:
             for file in sorted(directory.rglob('*')):
-                z.write(file, file.relative_to(directory).as_posix())
+                if file.name=='extension.json':
+                    meta=json.loads(file.read_text(encoding='utf-8'));meta['id']=extension_ref(kind,'archive');z.writestr('extension.json',json.dumps(meta))
+                else:z.write(file, file.relative_to(directory).as_posix())
     with zipfile.ZipFile(downloads / 'corrupt-mcp.zip', 'w', compression=zipfile.ZIP_STORED) as z:
-        z.writestr('extension.json', (fixture / 'mcp/qa-local/extension.json').read_bytes())
+        meta=json.loads((fixture/'mcp/qa-local/extension.json').read_text(encoding='utf-8'));meta['id']=extension_ref('mcp','corrupt');z.writestr('extension.json',json.dumps(meta))
         z.writestr('mcp.json', b'corrupt-me')
     with zipfile.ZipFile(downloads / 'corrupt-mcp.zip') as z:
         at = z.getinfo('mcp.json').header_offset + 30 + len('mcp.json')
@@ -204,7 +208,9 @@ def main():
     source += headers() + HOME_STUBS
     manager = (ROOT / 'app/src/extensions/manager.c').read_text(encoding='utf-8')
     manager = '\n'.join(line for line in manager.splitlines() if not line.startswith('#include '))
-    source += manager + TEST
+    # This fixture isolates single-directory recovery; group recovery is exercised
+    # by the full-product test_extension_dependency_group_native.py contract.
+    source += manager + '\nstatic bool MdoExtGroupsRecover(char Error[512]){(void)Error;return true;}\nstatic bool MdoExtManualMigrationsReady(char Error[512]){(void)Error;return true;}\n' + TEST
     try:
         result = run(args, ident, source, {'root': str(fixture)}, out / 'native-result.json')
         for row in result['types']:

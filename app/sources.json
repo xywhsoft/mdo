@@ -3,6 +3,7 @@
   "sources": [
     "src/storage/home.c",
     "src/extensions/manager.c",
+    "src/extensions/runtime.c",
     "src/extensions/builtins.c",
     "src/extensions/operations.c",
     "src/extensions/tasks.c",

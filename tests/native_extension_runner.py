@@ -62,7 +62,7 @@ MDO_EXPORT mdo_result mdoCommandRun(const mdo_command_context_v1* C,const xvalue
     if command.exists() or (directory and directory.exists()):
         raise AssertionError('Refusing to replace an existing command')
     command.parent.mkdir(parents=True,exist_ok=True)
-    manifest = json.dumps(dict(kind='commands',name=ident,alias=ident,entry='command.c',platforms=['any'])).encode()
+    manifest = json.dumps(dict(kind='commands',id='command:qa.'+ident,name=ident,alias=ident,entry='command.c',platforms=['any'])).encode()
     if directory: (directory / 'extension.json').write_bytes(manifest)
     command.write_bytes(encoded)
     try:

@@ -125,7 +125,7 @@ xvalue* MdoCommandProjectSettings(xroot Root) {
         Schema==1&&xrtValueType(Disabled)==XVALUE_OBJECT&&xrtValueCount(Disabled)<=MDO_COMMAND_LIMIT;
     for(size_t i=0;Ok&&i<xrtValueCount(Disabled);i++){
         xstrview Key={0};const xvalue* Item=xrtValueObjectAt(Disabled,i,&Key);bool Value=false;
-        Ok=Key.Size>0&&Key.Size<=64&&!memchr(Key.Data,0,Key.Size)&&MdoExtensionAlias(Key.Data)&&xrtValueGetBool(Item,&Value);
+        Ok=Key.Size>0&&Key.Size<=MDO_EXTENSION_REF_BYTES&&!memchr(Key.Data,0,Key.Size)&&MdoExtensionRefValid(Key.Data)&&xrtValueGetBool(Item,&Value);
     }
     if(!Ok){xrtValueRelease(V);return NULL;}return V;
 }
@@ -134,7 +134,7 @@ xvalue* MdoCommandCatalog(cstr Workspace)
     char Error[512]={0};xvalue* Rows=MdoExtensionsList("commands",Error),*Map=xrtValueObject();
     if(!Rows||!Map||xrtValueCount(Rows)>MDO_COMMAND_LIMIT)goto fail;
     for(size_t I=0;I<xrtValueCount(Rows);I++){
-        const xvalue* Row=xrtValueArrayGet(Rows,I);cstr Id=CommandText(Row,"id"),Alias=CommandText(Row,"alias");
+        const xvalue* Row=xrtValueArrayGet(Rows,I);cstr Id=CommandText(Row,"directory_id"),Alias=CommandText(Row,"alias");
         bool Valid=false,Enabled=false;xrtValueGetBool(xrtValueObjectGet(Row,XRT_STR_LITERAL("valid")),&Valid);
         xrtValueGetBool(xrtValueObjectGet(Row,XRT_STR_LITERAL("enabled")),&Enabled);
         if(!Alias||!MdoExtensionAlias(Alias))continue;
@@ -145,7 +145,7 @@ xvalue* MdoCommandCatalog(cstr Workspace)
         char Revision[65]={0}
         ;
         if(Valid)Valid=MdoExtensionsFingerprint("commands",Id,Revision,NULL,Error);
-        bool Ok=Item&&CommandSet(Item,"id",Alias)&&CommandSet(Item,"directory_id",Id)&&CommandSet(Item,"scope",CommandText(Row,"source"))&&CommandSet(Item,"source",CommandText(Row,"source"))&&
+        bool Ok=Item&&CommandSet(Item,"id",Alias)&&CommandSet(Item,"extension_id",CommandText(Row,"id"))&&CommandSet(Item,"directory_id",Id)&&CommandSet(Item,"scope",CommandText(Row,"source"))&&CommandSet(Item,"source",CommandText(Row,"source"))&&
             CommandSet(Item,"directory_root",CommandText(Row,"root"))&&CommandSet(Item,"path",Path)&&CommandSet(Item,"revision",Revision)&&
             CommandSet(Item,"diagnostic",Valid?"":Error[0]?Error:"Command directory is invalid")&&
             xrtValueObjectSetNew(Item,XRT_STR_LITERAL("enabled"),xrtValueBool(Enabled))&&
@@ -165,7 +165,7 @@ xvalue* MdoCommandCatalog(cstr Workspace)
         const xvalue* Disabled=xrtValueObjectGet(Settings,XRT_STR_LITERAL("disabled"));
         for(size_t I=0;I<xrtValueCount(Disabled);I++){
             xstrview Key={0};bool Value=false;xrtValueGetBool(xrtValueObjectAt(Disabled,I,&Key),&Value);
-            xvalue* Item=xrtValueObjectGet(Map,Key);if(Item&&Value)xrtValueObjectSetNew(Item,XRT_STR_LITERAL("enabled"),xrtValueBool(false));
+            for(size_t J=0;Value&&J<xrtValueCount(Map);J++){xvalue* Item=xrtValueObjectAt(Map,J,NULL);cstr Ref=CommandText(Item,"extension_id");if(Ref&&xrtStrEqual(Key,xrtStrView(Ref)))xrtValueObjectSetNew(Item,XRT_STR_LITERAL("enabled"),xrtValueBool(false));}
         }
         xrtValueRelease(Settings);
     }

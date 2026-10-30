@@ -57,3 +57,8 @@
 .settings-content .plugin-workbench > .eb-toolbar { width:100%;max-width:none;padding:0;margin:24px 0; }
 .mdo-layer .plugin-editor { display:block;width:100%;max-width:none;padding:0;margin:0; }
 .plugin-editor .extension-field > :is(input,textarea,select) { width:100%;box-sizing:border-box; }
+.extension-dependencies { margin-block:16px; }
+.extension-dependency { display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 12px;border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-block:8px; }
+.extension-dependency code { overflow-wrap:anywhere;font-size:12px; }
+.extension-dependency > p { flex-basis:100%;margin:0;color:var(--muted); }
+.dependency-plan { overflow-wrap:anywhere; }

@@ -368,6 +368,7 @@ xvalue* MdoCommandStart(const xvalue* Input,cstr Workspace,char Error[512]) {
     if(Existing){if(strcmp(Hash,CommandText(Existing,"request_hash")?CommandText(Existing,"request_hash"):"")){xrtValueRelease(Existing);goto conflict;}return Existing;}
     char *Source=NULL,Revision[65];xvalue* Meta=NULL;
     if(!MdoCommandResolve(Workspace,Command,&Source,&Meta,Revision,Error))return NULL;
+    if(!MdoExtensionsRuntimeCheck(CommandText(Meta,"extension_id"),Workspace,Project,NULL,false,Error)){xrtFree(Source);xrtValueRelease(Meta);return NULL;}
     cstr Requested=CommandText(Input,"revision");
     if(Requested&&Requested[0]&&strcmp(Requested,Revision)){xrtFree(Source);xrtValueRelease(Meta);snprintf(Error,512,"Command source changed; refresh the catalog");return NULL;}
     bool NeedsSession=false;xrtValueGetBool(xrtValueObjectGet(Meta,XRT_STR_LITERAL("requires_session")),&NeedsSession);

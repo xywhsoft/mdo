@@ -5,7 +5,7 @@ static xvalue* McpPrivateLoad(cstr Id,char** Raw,bool* Missing){
 }
 static void McpPrivateTextUnit(char* Text){if(Text){xrtSecureZero(Text,strlen(Text));xrtFree(Text);}}
 static xvalue* McpPrivatePublic(const xvalue* Doc,cstr Raw){
- xvalue* Out=xrtValueClone(Doc),*Values=xrtValueClone(xrtValueObjectGet(Doc,XRT_STR_LITERAL("values"))),*Secrets=xrtValueObject();cstr Directory=MdoExtensionText(Doc,"extension_id",96);char Why[512];
+ xvalue* Out=xrtValueClone(Doc),*Values=xrtValueClone(xrtValueObjectGet(Doc,XRT_STR_LITERAL("values"))),*Secrets=xrtValueObject();cstr Directory=MdoExtensionText(Doc,"extension_id",MDO_EXTENSION_REF_BYTES);char Why[512];
  xvalue* Meta=MdoExtensionsRead("mcp",Directory,Why);char* Entry=Meta?MdoExtensionsEntryPath("mcp",Directory,Why):NULL,*Text=Entry?MdoExtensionRead(Entry,true,MDO_MCP_FILE_LIMIT,NULL):NULL;
  xvalue* Template=Text?xrtJsonParse(xrtStrView(Text)):NULL;const xvalue* Inputs=xrtValueObjectGet(Template,XRT_STR_LITERAL("inputs"));bool Ok=Out&&Values&&Secrets;
  for(size_t I=0;Ok&&I<xrtValueCount(Inputs);I++){const xvalue* Input=xrtValueArrayGet(Inputs,I);cstr Id=MdoExtensionText(Input,"id",64);if(Id&&MdoMcpTemplateFlag(Input,"secret",false)){
@@ -54,10 +54,10 @@ bool MdoMcpConnectionManage(const xvalue* Input,xcancel* Cancel,xvalue** Result,
  if(!Ok){McpPrivateError(Error,"Connection changed or cannot be read; refresh it before saving");goto done;}
  if(Remove){Ok=Old&&MdoHomeRemove(Path,false);if(Ok&&!McpPrivateReload(Error)){if(!MdoHomeAtomicWrite(Path,OldRaw,strlen(OldRaw),false)||!McpPrivateReload(NULL))(void)MdoHomeRequireRestart("MCP connection removal rollback needs recovery");Ok=false;}
   if(Ok){(void)MdoMcpAuthorizationForget(Id);*Result=xrtValueObject();Committed=true;}goto done;}
- cstr Directory=MdoExtensionText(Input,"extension_id",96),Variant=MdoExtensionText(Input,"variant",64),Approval=MdoExtensionText(Input,"approval_digest",64);
+ cstr Directory=MdoExtensionText(Input,"extension_id",MDO_EXTENSION_REF_BYTES),Variant=MdoExtensionText(Input,"variant",64),Approval=MdoExtensionText(Input,"approval_digest",64);
  Meta=MdoExtensionsRead("mcp",Directory,Error);Entry=Meta?MdoExtensionsEntryPath("mcp",Directory,Error):NULL;Text=Entry?MdoExtensionRead(Entry,true,MDO_MCP_FILE_LIMIT,NULL):NULL;Template=Text?xrtJsonParse(xrtStrView(Text)):NULL;
  cstr Alias=MdoExtensionText(Meta,"alias",64),Root=MdoExtensionText(Meta,"root",4096);Native=Root?MdoHomeExternalPath(Root):NULL;
- Ok=Meta&&Template&&Native&&Variant&&MdoMcpTemplateValidate(Template,Alias,Error,512)&&MdoExtensionsVerify("mcp",Directory,Cancel,Error)&&MdoExtensionsFingerprint("mcp",Directory,Digest,Cancel,Error);
+ Ok=Meta&&Template&&Native&&Variant&&MdoMcpTemplateValidate(Template,Alias,Error,512)&&MdoExtensionsVerify("mcp",Directory,Cancel,Error)&&MdoExtensionsApprovalDigest(Directory,Digest,Cancel,Error);
  if(!Ok)goto done;
  if(!Preview&&(!Approval||strcmp(Approval,Digest))){Ok=McpPrivateError(Error,"Preview the current program/target and confirm its directory digest before saving");
  goto done;
@@ -66,7 +66,7 @@ bool MdoMcpConnectionManage(const xvalue* Input,xcancel* Cancel,xvalue** Result,
  if((Supplied&&xrtValueType(Supplied)!=XVALUE_OBJECT)||(Secrets&&xrtValueType(Secrets)!=XVALUE_OBJECT)||(References&&xrtValueType(References)!=XVALUE_OBJECT)){Ok=McpPrivateError(Error,"Connection parameters and secret fields must be objects");goto done;}
  const xvalue* Sets[]={Supplied,Secrets,References};for(size_t S=0;Ok&&S<3;S++)for(size_t I=0;I<xrtValueCount(Sets[S]);I++){xstrview Key={0};xrtValueObjectAt(Sets[S],I,&Key);char* Name=xrtStrDupN(Key.Data,Key.Size);const xvalue* Definition=MdoMcpTemplateInput(Template,Name);bool Secret=MdoMcpTemplateFlag(Definition,"secret",false);Ok=Definition&&(S?Secret:!Secret);xrtFree(Name);}
  if(!Ok){McpPrivateError(Error,"Unknown connection parameter or a secret supplied as an ordinary value");goto done;}
- bool Same=Old&&MdoExtensionText(Old,"extension_id",96)&&!strcmp(Directory,MdoExtensionText(Old,"extension_id",96))&&MdoExtensionText(Old,"variant",64)&&!strcmp(Variant,MdoExtensionText(Old,"variant",64))&&MdoExtensionText(Old,"approval_digest",64)&&!strcmp(Digest,MdoExtensionText(Old,"approval_digest",64));
+ bool Same=Old&&MdoExtensionText(Old,"extension_id",MDO_EXTENSION_REF_BYTES)&&!strcmp(Directory,MdoExtensionText(Old,"extension_id",MDO_EXTENSION_REF_BYTES))&&MdoExtensionText(Old,"variant",64)&&!strcmp(Variant,MdoExtensionText(Old,"variant",64))&&MdoExtensionText(Old,"approval_digest",64)&&!strcmp(Digest,MdoExtensionText(Old,"approval_digest",64));
  Values=xrtValueObject();Ok=Values!=NULL;
  for(size_t I=0;Ok&&I<xrtValueCount(Inputs);I++){
   const xvalue* Definition=xrtValueArrayGet(Inputs,I);cstr Key=MdoExtensionText(Definition,"id",64);bool Secret=MdoMcpTemplateFlag(Definition,"secret",false);cstr Value=MdoExtensionText(Supplied,Key,4096);
@@ -80,7 +80,7 @@ bool MdoMcpConnectionManage(const xvalue* Input,xcancel* Cancel,xvalue** Result,
   if(!Value)Value="";
   Ok=McpDirectoryPut(Values,Key,Value);
  }
- Doc=xrtValueObject();Ok=Ok&&Doc&&McpDirectoryPut(Doc,"id",Id)&&McpDirectoryPut(Doc,"extension_id",Directory)&&McpDirectoryPut(Doc,"variant",Variant)&&McpDirectoryPut(Doc,"approval_digest",Digest)&&xrtValueObjectSet(Doc,XRT_STR_LITERAL("values"),Values);
+ Doc=xrtValueObject();Ok=Ok&&Doc&&McpDirectoryPut(Doc,"id",Id)&&McpDirectoryPut(Doc,"extension_id",Directory)&&McpDirectoryPut(Doc,"directory_id",MdoExtensionText(Meta,"directory_id",96))&&McpDirectoryPut(Doc,"variant",Variant)&&McpDirectoryPut(Doc,"approval_digest",Digest)&&xrtValueObjectSet(Doc,XRT_STR_LITERAL("values"),Values);
  bool Enabled=MdoMcpTemplateFlag(Input,"enabled",Old?MdoMcpTemplateFlag(Old,"enabled",false):false);if(Ok)Ok=xrtValueObjectSetNew(Doc,XRT_STR_LITERAL("enabled"),xrtValueBool(Enabled));
  const cstr Optional[]={"name","project_id"};for(size_t I=0;Ok&&I<2;I++){cstr S=MdoExtensionText(Input,Optional[I],I?64:256);if(S)Ok=McpDirectoryPut(Doc,Optional[I],S);}
  if(!Ok)goto done;

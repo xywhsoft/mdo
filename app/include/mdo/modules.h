@@ -10,6 +10,7 @@ typedef struct MdoModuleCatalog MdoModuleCatalog;
 struct mdo_application_v1;
 void MdoModuleManagerAttachApplication(const struct mdo_application_v1* Api);
 bool MdoModuleAgentBindContext(xwork_agent*,const char* Project,const char* Session);
+char* MdoModuleAgentProject(xwork_agent*,uint64 AgentId);
 void MdoModuleAgentSetMemberContext(xwork_agent*,void* Owner,uint64 AgentId,const char* Namespace,const char* MemberId);
 void MdoModuleAgentUnbindContext(xwork_agent*);
 bool MdoModuleAgentIdentityBegin(void* Owner,uint64 AgentId,const char* Project,const char* Session);
@@ -53,6 +54,7 @@ typedef struct MdoModuleToolInfo {
     uint32 Size;
     uint64 Generation;
     const char* ModuleId;
+    const char* ExtensionId;
     const char* Id;
     const char* Name;
     const char* Description;
@@ -68,6 +70,7 @@ typedef struct MdoModuleAgentInfo {
     uint32 Size;
     uint64 Generation;
     const char* ModuleId;
+    const char* ExtensionId;
     const char* Id;
     const char* Name;
     const char* Description;

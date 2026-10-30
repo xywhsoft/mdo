@@ -7,7 +7,11 @@ static bool MdoProjectExtensionSelection(MdoApiContext* C,cstr Kind){
     xhttpmethod Method=C->Request->head->MethodCode;bool Write=Method!=XHTTP_METHOD_GET;
     if(Method!=XHTTP_METHOD_GET&&Method!=XHTTP_METHOD_POST&&Method!=XHTTP_METHOD_DELETE)return MdoApiReplyError(C,405,"extension_project_selection_only","Edit extension files in Home; projects only select their activation",NULL);
     if(C->ParamCount>1&&!xrtStrEqual(C->Params[1],XRT_STR_LITERAL("enabled")))return MdoApiReplyError(C,404,"extension_project_action","Unknown project selection action",NULL);
-    char Id[97]={0};if(C->ParamCount){if(C->Params[0].Size>96)return MdoApiReplyError(C,400,"extension_project_id","Invalid directory identity",NULL);memcpy(Id,C->Params[0].Data,C->Params[0].Size);if(!MdoExtensionDirectoryId(Id))return MdoApiReplyError(C,400,"extension_project_id","Invalid directory identity",NULL);}
+    char Id[97]={0};if(C->ParamCount){
+        if(C->Params[0].Size>MDO_EXTENSION_REF_BYTES)return MdoApiReplyError(C,400,"extension_project_id","Invalid extension identity",NULL);
+        char Ref[MDO_EXTENSION_REF_BYTES+1],Why[512]={0};memcpy(Ref,C->Params[0].Data,C->Params[0].Size);Ref[C->Params[0].Size]=0;
+        char* Directory=MdoExtensionsDirectoryId(Kind,Ref,Why);if(!Directory)return MdoApiReplyError(C,400,"extension_project_id",Why,NULL);snprintf(Id,sizeof(Id),"%s",Directory);xrtFree(Directory);
+    }
     if(Write&&!Id[0])return MdoApiReplyError(C,400,"extension_project_id","Choose an installed Home extension",NULL);
     char* Workspace=NULL;if(!MdoApiSkillScopeMode(C,&Workspace,true))return true;if(!Workspace)return MdoApiReplyError(C,400,"extension_project_required","A project ID is required",NULL);
     char Project[65]={0};size_t N=0;xrtPercentDecode(xrtStrViewN(C->Target.Query.Data+8,C->Target.Query.Size-8),Project,64,&N);Project[N]=0;xwork_error Failure;
@@ -16,10 +20,10 @@ static bool MdoProjectExtensionSelection(MdoApiContext* C,cstr Kind){
     xfileoptions O;xrtFileOptionsInit(&O);O.Flags=XFILE_READ|XFILE_NOFOLLOW;xfile F=xrtRootFileOpen(Root,Path,&O);bool Missing=!F&&CommandMissing();char* Raw=CommandReadFile(F);bool Ok=(Raw||Missing)&&(!Write||Lock);xvalue* Settings=Raw?xrtJsonParse(xrtStrView(Raw)):!strcmp(Kind,"commands")?SdkParse("{\"schema_version\":1,\"disabled\":{}}"):xrtValueObject();
     xvalue* Flags=!strcmp(Kind,"commands")?xrtValueObjectGet(Settings,XRT_STR_LITERAL("disabled")):Settings;Ok=Ok&&(!Raw||strlen(Raw)<=65536)&&xrtValueType(Settings)==XVALUE_OBJECT&&xrtValueType(Flags)==XVALUE_OBJECT&&xrtValueCount(Flags)<=8192;
     if(Ok&&!strcmp(Kind,"commands")){uint64 Schema=0;Ok=xrtValueCount(Settings)==2&&CommandUInt(xrtValueObjectGet(Settings,XRT_STR_LITERAL("schema_version")),&Schema)&&Schema==1;}
-    for(size_t I=0;Ok&&I<xrtValueCount(Flags);I++){xstrview K={0};const xvalue* V=xrtValueObjectAt(Flags,I,&K);bool B;Ok=K.Size&&K.Size<=64&&!memchr(K.Data,0,K.Size)&&MdoExtensionAlias(K.Data)&&xrtValueGetBool(V,&B);}
+    for(size_t I=0;Ok&&I<xrtValueCount(Flags);I++){xstrview K={0};const xvalue* V=xrtValueObjectAt(Flags,I,&K);bool B;cstr Type;Ok=K.Size&&K.Size<=MDO_EXTENSION_REF_BYTES&&!memchr(K.Data,0,K.Size)&&(Type=MdoExtensionRefKind(K.Data))&&!strcmp(Type,Kind)&&xrtValueGetBool(V,&B);}
     char Error[512]={0},Revision[65]="new";bool Preferences=Ok;if(!Ok)snprintf(Error,sizeof(Error),"Project preferences are unreadable, invalid or locked; no extension files were changed");if(Raw)Ok=Ok&&MdoExtensionHash(Raw,Revision);xvalue* Rows=Ok?MdoExtensionsList(Kind,Error):NULL,*Items=xrtValueArray(),*Data=xrtValueObject();Ok=Ok&&Rows&&Items&&Data;bool Found=!Id[0]||!Preferences,Replied=false;
     for(size_t I=0;Ok&&I<xrtValueCount(Rows);I++){
-        const xvalue* Item=xrtValueArrayGet(Rows,I);cstr Physical=MdoExtensionText(Item,"id",96),Alias=MdoExtensionText(Item,"alias",64);if(Id[0]&&(!Physical||strcmp(Id,Physical)))continue;if(!Alias&&!Id[0])continue;Found=true;if(!Alias){Ok=false;snprintf(Error,sizeof(Error),"Repair this extension's Home manifest before selecting it for a project");break;}
+        const xvalue* Item=xrtValueArrayGet(Rows,I);cstr Physical=MdoExtensionText(Item,"directory_id",96),Alias=MdoExtensionText(Item,"id",MDO_EXTENSION_REF_BYTES);if(Id[0]&&(!Physical||strcmp(Id,Physical)))continue;if(!Alias&&!Id[0])continue;Found=true;if(!Alias){Ok=false;snprintf(Error,sizeof(Error),"Repair this extension's Home manifest before selecting it for a project");break;}
         if(Write){
             if(!ExtensionMatch(C,Raw)){Replied=true;Ok=false;break;}
             if(Method==XHTTP_METHOD_DELETE)xrtValueObjectRemove(Flags,xrtStrView(Alias));

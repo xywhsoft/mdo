@@ -35,24 +35,26 @@ static xvalue* MdoExtServiceJson(cstr Path,cstr Method,const xvalue* Body,const 
  xvalue* Data=Ok?MdoExtServiceDecode(&Response,Error):NULL;xsFetchResponseUnit(&Response);return Data;
 }
 static char* MdoExtServiceQuery(cstr Base,const xvalue* Input){
- char* Path=xrtStrDup(Base);const cstr TextFields[]={"kind","platform","q","state","work","path"};const size_t Limits[]={32,32,240,16,32,4096};
- for(size_t I=0;Path&&I<6;I++){const xvalue* Field=xrtValueObjectGet(Input,xrtStrView(TextFields[I]));if(!Field)continue;cstr Text=MdoExtensionText(Input,TextFields[I],Limits[I]);if(!Text){xrtFree(Path);return NULL;}char* Encoded=xrtPercentEncodeNew(Text,strlen(Text),XRT_STR_LITERAL(""),NULL),*Next=Encoded?xrtFormat("%s%c%s=%s",Path,strchr(Path,'?')?'&':'?',TextFields[I],Encoded):NULL;xrtFree(Encoded);xrtFree(Path);Path=Next;}
+ char* Path=xrtStrDup(Base);const cstr TextFields[]={"kind","platform","q","state","work","path","ref"};const size_t Limits[]={32,32,240,16,32,4096,MDO_EXTENSION_REF_BYTES};
+ for(size_t I=0;Path&&I<7;I++){const xvalue* Field=xrtValueObjectGet(Input,xrtStrView(TextFields[I]));if(!Field)continue;cstr Text=MdoExtensionText(Input,TextFields[I],Limits[I]);if(!Text){xrtFree(Path);return NULL;}char* Encoded=xrtPercentEncodeNew(Text,strlen(Text),XRT_STR_LITERAL(""),NULL),*Next=Encoded?xrtFormat("%s%c%s=%s",Path,strchr(Path,'?')?'&':'?',TextFields[I],Encoded):NULL;xrtFree(Encoded);xrtFree(Path);Path=Next;}
  const cstr Numbers[]={"offset","limit"};for(size_t I=0;Path&&I<2;I++){if(!xrtValueObjectHas(Input,xrtStrView(Numbers[I])))continue;uint64 N=0;if(!MdoExtServiceNumber(Input,Numbers[I],&N)||N>(I?200:100000)){xrtFree(Path);return NULL;}char* Next=xrtFormat("%s%c%s=%llu",Path,strchr(Path,'?')?'&':'?',Numbers[I],(unsigned long long)N);xrtFree(Path);Path=Next;}return Path;
 }
 bool MdoExtensionServiceRead(const xvalue* Input,xcancel* Cancel,xvalue** Result,char Error[512]){
  *Result=NULL;if(Error)Error[0]=0;cstr Action=MdoExtensionText(Input,"action",24),Kind=MdoExtensionText(Input,"kind",32),Version=MdoExtensionText(Input,"version_id",32);if(!Action||(Kind&&Kind[0]&&!MdoExtensionDirectoryKind(Kind)))return MdoExtServiceError(Error,"Choose an extension service action and type");
  bool Required=!strcmp(Action,"mine")||!strcmp(Action,"profile")||!strcmp(Action,"requests");char* Base=NULL;
  if(!strcmp(Action,"catalog"))Base=xrtStrDup(MDO_EXT_SERVICE "/catalog");
+ else if(!strcmp(Action,"resolve")&&MdoExtensionRefValid(MdoExtensionText(Input,"ref",MDO_EXTENSION_REF_BYTES)))Base=xrtStrDup(MDO_EXT_SERVICE "/resolve");
+ else if(!strcmp(Action,"plan")&&MdoExtServiceId(Version))Base=xrtFormat(MDO_EXT_SERVICE "/plan?version=%s",Version);
  else if(!strcmp(Action,"mine")||!strcmp(Action,"profile")||!strcmp(Action,"requests"))Base=xrtFormat(MDO_EXT_SERVICE "/creator?scope=%s",!strcmp(Action,"mine")?"works":Action);
  else if((!strcmp(Action,"detail")||!strcmp(Action,"files")||!strcmp(Action,"preview"))&&MdoExtServiceId(Version))Base=xrtFormat(MDO_EXT_SERVICE "/%s?version=%s",Action,Version);
  if(!Base)return MdoExtServiceError(Error,"Unsupported extension read; no arbitrary service URL is accepted");
  char* Path=MdoExtServiceQuery(Base,Input);
  xrtFree(Base);
- if(Path&&!strcmp(Action,"catalog")&&!xrtValueObjectHas(Input,XRT_STR_LITERAL("platform"))){char* Filtered=xrtFormat("%s%cplatform=%s",Path,strchr(Path,'?')?'&':'?',MdoExtensionRuntimePlatform());xrtFree(Path);Path=Filtered;}
+ if(Path&&(!strcmp(Action,"catalog")||!strcmp(Action,"plan")||!strcmp(Action,"resolve"))&&!xrtValueObjectHas(Input,XRT_STR_LITERAL("platform"))){char* Filtered=xrtFormat("%s%cplatform=%s",Path,strchr(Path,'?')?'&':'?',MdoExtensionRuntimePlatform());xrtFree(Path);Path=Filtered;}
  MdoAccountLease Lease={0};bool Ok=Path&&MdoExtServiceLease(Cancel,Required,&Lease,Error);if(Ok)*Result=MdoExtServiceJson(Path,"GET",NULL,&Lease,Cancel,Error);MdoAccountRelease(&Lease);xrtFree(Path);return *Result!=NULL;
 }
 static xvalue* MdoExtServiceOrigin(const xvalue* Entry){
- const cstr Names[]={"kind","xid","version_id","sha256","bytes","owner","submitter","author","copyright","license","name","alias","platforms","state","version"};xvalue* Origin=xrtValueObject();bool Ok=Origin!=NULL;
+ const cstr Names[]={"id","kind","xid","version_id","sha256","bytes","owner","submitter","author","copyright","license","name","alias","platforms","state","version"};xvalue* Origin=xrtValueObject();bool Ok=Origin!=NULL;
  for(size_t I=0;Ok&&I<sizeof(Names)/sizeof(*Names);I++){const xvalue* Value=xrtValueObjectGet(Entry,xrtStrView(Names[I]));if(Value)Ok=xrtValueObjectSet(Origin,xrtStrView(Names[I]),Value);}if(!Ok){xrtValueRelease(Origin);return NULL;}return Origin;
 }
 bool MdoExtensionServiceDownload(cstr Kind,cstr Version,xcancel* Cancel,xvalue** Result,char Error[512]){
@@ -66,7 +68,7 @@ bool MdoExtensionServiceDownload(cstr Kind,cstr Version,xcancel* Cancel,xvalue**
  xvalue* Input=xrtValueObject();Ok=Ok&&Input&&MdoExtServicePut(Input,"kind",Kind)&&MdoExtServicePut(Input,"purpose","install")&&MdoExtServicePut(Input,"sha256",Hash)&&xrtValueObjectSetNew(Input,XRT_STR_LITERAL("bytes"),xrtValueUInt(Bytes))&&MdoExtensionTaskBegin(Input,&Task,Error);xrtValueRelease(Input);
  char Id[33]={0};if(Ok)snprintf(Id,sizeof(Id),"%s",MdoExtensionText(Task,"id",32));MdoExtensionTaskUse* Use=Ok?MdoExtensionTaskUseBegin(Id,true,Cancel,Error):NULL;MdoAccountLease Lease={0};Origin=Ok?MdoExtServiceOrigin(Entry):NULL;
  Ok=Ok&&Use&&Origin&&MdoExtensionTaskOrigin(Use,Origin,Error)&&MdoExtServiceLease(MdoExtensionTaskUseCancel(Use),false,&Lease,Error);
- for(uint64 Offset=0;Ok&&Offset<Bytes;){char* Path=xrtFormat(MDO_EXT_SERVICE "/archive?version=%s&offset=%llu",Version,(unsigned long long)Offset);XS_FetchResponse Response={0};uint64 Remaining=Bytes-Offset;size_t Want=(size_t)(Remaining<MDO_EXTENSION_TASK_CHUNK?Remaining:MDO_EXTENSION_TASK_CHUNK);
+ for(uint64 Offset=0;Ok&&Offset<Bytes;){char* Path=xrtFormat(MDO_EXT_SERVICE "/archive?dependency_protocol=1&version=%s&offset=%llu",Version,(unsigned long long)Offset);XS_FetchResponse Response={0};uint64 Remaining=Bytes-Offset;size_t Want=(size_t)(Remaining<MDO_EXTENSION_TASK_CHUNK?Remaining:MDO_EXTENSION_TASK_CHUNK);
   Ok=Path&&MdoExtServiceFetch(Path,"GET",NULL,0,true,&Lease,MdoExtensionTaskUseCancel(Use),&Response,Error)&&Response.BodySize==Want&&Response.ContentType&&!strncmp(Response.ContentType,"application/zip",15);
   xvalue* Progress=NULL;if(Ok)Ok=MdoExtensionTaskUseWrite(Use,Offset,Response.Body,Response.BodySize,&Progress,Error);xrtValueRelease(Progress);xsFetchResponseUnit(&Response);xrtFree(Path);Offset+=Want;
  }
@@ -129,3 +131,5 @@ bool MdoExtensionServiceWrite(const xvalue* Input,xcancel* Cancel,xvalue** Resul
  for(size_t I=0;Ok&&I<sizeof(Fields)/sizeof(*Fields);I++){const xvalue* Value=xrtValueObjectGet(Input,xrtStrView(Fields[I]));if(Value)Ok=xrtValueObjectSet(Body,xrtStrView(Fields[I]),Value);}
  MdoAccountLease Lease={0};Ok=Ok&&MdoExtServiceLease(Cancel,true,&Lease,Error);if(Ok)*Result=MdoExtServiceJson(MDO_EXT_SERVICE "/creator","POST",Body,&Lease,Cancel,Error);xrtValueRelease(Body);MdoAccountRelease(&Lease);return *Result!=NULL;
 }
+
+#include "service_plan.inc.c"

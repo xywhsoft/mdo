@@ -28,6 +28,9 @@ bool MdoDistributionRequest(cstr Action,cstr Id);
 bool MdoToolPrompt(char** Prompt);
 bool MdoCliInit(XS_ServerInfo* Server);
 bool MdoCliReload(void);
+/* Resolves one named executable export without a PATH search. Caller pins the
+ * provider's required closure for the full lifetime of the process. */
+char* MdoCliProgram(cstr Ref,cstr Export,char Error[512]);
 void MdoCliStop(void);
 void MdoCliUnit(void);
 xvalue* MdoCliSnapshot(void);
