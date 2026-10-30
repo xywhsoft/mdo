@@ -1,6 +1,7 @@
 // The bundled Chinese pack is the source of truth for UI keys. Dynamic views
 // can call t() while static, text-only nodes use data-i18n attributes.
-export const supportedLocales = Object.freeze(["zh-CN", "en-US", "ru-RU"]);
+import { localeDefinitions, resolveRegisteredLocale, supportedLocales } from "./locale-registry.js";
+export { supportedLocales } from "./locale-registry.js";
 
 const packs = new Map();
 const listeners = new Set();
@@ -17,10 +18,7 @@ export function resolveLocale(preference = "auto", system = systemLanguages()) {
   if (supportedLocales.includes(preference)) return preference;
   if (preference !== "auto") return "en-US";
   const tag = system?.languages?.[0] || system?.language || "";
-  const language = typeof tag === "string" ? tag.trim().toLowerCase().split(/[-_]/)[0] : "";
-  if (language === "zh") return "zh-CN";
-  if (language === "ru") return "ru-RU";
-  return "en-US";
+  return resolveRegisteredLocale(tag);
 }
 
 function systemLanguages() {
@@ -150,6 +148,7 @@ export async function loadLocale(nextLocale) {
   locale = nextLocale;
   if (typeof document !== "undefined") {
     document.documentElement.lang = locale;
+    document.documentElement.dir = localeDefinitions.find(value => value.id === locale)?.dir || "ltr";
     document.title = t("app.title", {}, document.title);
     translateStatic(document);
   }

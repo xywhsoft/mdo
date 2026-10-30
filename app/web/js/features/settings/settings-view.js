@@ -1,3 +1,4 @@
+import { localeDefinitions } from "../../locale-registry.js";
 import { setUiText as writeUiText, uiMessage, currentLocale, loadLocale, supportedLocales, t } from "../../i18n.js";
 
 import { applySettings, loadSettings, restoreSettings } from "../../state/settings.js";
@@ -238,6 +239,8 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
     const retained = preserve && snapshot
       ? changedSettingsValues(submittedValues ?? baselineValues, values()) : {};
     snapshot = settings;
+    if (form.elements.locale.options.length !== localeDefinitions.length || [...form.elements.locale.options].some((option,index) => option.value !== localeDefinitions[index].id))
+      form.elements.locale.replaceChildren(...localeDefinitions.map(locale => new Option(locale.name, locale.id)));
     form.elements.locale.value = supportedLocales.includes(settings.locale)
       ? settings.locale : "zh-CN";
     form.elements.theme.value = settings.appearance.theme;

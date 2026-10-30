@@ -1,4 +1,4 @@
-import { t as uiText } from "../../i18n.js";
+import { validateCatalogLanguages, validateCatalogText, localizedCatalogEntity, canonicalCatalogText } from "./catalog-localization.js";
 // Small data-only catalog. API product variants have independent addresses;
 // an ordinary API key must never silently use a Coding Plan endpoint.
 const chat = "openai-chat-completions", messages = "anthropic-messages";
@@ -8,13 +8,22 @@ const variant = (id, label, base, models, protocol = chat) => ({ id, label, base
 export let providerPresets = [{ id: "custom", name: "Custom supplier", labelKey: "customSupplier", custom: true,
   variants: [variant("chat", "chatCompletions", "", []), variant("responses", "responses", "", [], "openai-responses"),
     variant("messages", "anthropicMessages", "", [], messages)] }];
-export function setProviderCatalog(items) {
+export function setProviderCatalog(items, metadata = {}) {
+  const languages = validateCatalogLanguages(metadata);
   const valid = items.filter(item => item && /^[A-Za-z0-9._-]{1,90}$/.test(item.id) && item.id !== "custom" &&
     typeof item.name === "string" && item.name.length <= 128 && Array.isArray(item.variants) && item.variants.length && item.variants.length <= 16 &&
     item.variants.every(v => typeof v.id === "string" && typeof v.base === "string" &&
       [chat, "openai-responses", messages].includes(v.protocol) && Array.isArray(v.models) && v.models.every(id => typeof id === "string" && id.length <= 256)));
   if (valid.length !== items.length) throw new Error("Invalid supplier catalog");
-  providerPresets = [...structuredClone(valid), providerPresets.find(item => item.id === "custom")];
+  for (const provider of valid) {
+    validateCatalogText(provider, ["name", "description"], languages);
+    for (const variant of provider.variants) validateCatalogText(variant, ["label", "description", "key_note"], languages);
+  }
+  providerPresets = [...valid.map(provider => {
+    const value = localizedCatalogEntity(provider, ["name", "description"], languages);
+    value.variants = provider.variants.map(variant => localizedCatalogEntity(variant, ["label", "description", "key_note"], languages));
+    return value;
+  }), providerPresets.find(item => item.id === "custom")];
 }
 
 export function presetVariant(id, variantId) {
@@ -34,7 +43,7 @@ export function presetProvider(preset, selected, entries = [], base = selected.b
   const endpoints = selected.protocol === messages ? { anthropic_messages: `${base}/messages` }
     : selected.protocol === "openai-responses" ? { responses: `${base}/responses`, ...(!preset.custom ? { chat_completions: `${base}/chat/completions` } : {}) }
       : { chat_completions: `${base}/chat/completions` };
-  return { id: uniqueId(preset.id, entries), name: preset.name, builtin: false,
+  return { id: uniqueId(preset.id, entries), name: canonicalCatalogText(preset, "name"), builtin: false,
     editable: true, removable: true, verify_peer: true, timeout_ms: 120000,
     template_id: preset.id, template_variant: selected.id, endpoints };
 }
@@ -63,4 +72,10 @@ export function suggestedModels(ids, recommendations = []) {
   const preferred = recommendations.filter((id) => available.has(id));
   const others = ids.filter((id) => !/(embed|whisper|tts|audio|image|rerank|moderation|dall-e|sora)/i.test(id));
   return [...new Set([...preferred, ...others])].slice(0, 2);
+}
+
+// Rendering never edits the saved name. A custom name always wins.
+export function providerDisplayName(provider) {
+  const preset = providerPresets.find(value => value.id === provider.template_id);
+  return preset && provider.name === canonicalCatalogText(preset, "name") ? preset.name : provider.name;
 }

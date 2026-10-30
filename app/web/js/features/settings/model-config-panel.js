@@ -5,7 +5,7 @@ import { loadModels } from "../../state/catalogs.js";
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
 
 import { createAdvancedModelConfigPanel } from "./model-config-advanced.js";
-import { providerPresets, setProviderCatalog, presetVariant } from "./provider-presets.js";
+import { providerPresets, setProviderCatalog, presetVariant, providerDisplayName } from "./provider-presets.js";
 import { sameModelConfig } from "./model-config-state.js";
 import { createModelSetupWizard } from "./model-setup-wizard.js";
 import { verifyModelSetup } from "./model-verification.js";
@@ -69,6 +69,7 @@ export function createModelConfigPanel(container) {
         config = response.data; etag = response.etag; needsRead = false; verified.clear();
         if (!provider()) selectedId = config.providers.find((entry) => config.items.some((item) => item.id === config.default_model && item.provider === entry.id))?.id || config.providers[0]?.id || "";
         notice = ""; failed = false; render();
+        if (config.providers.some(item => item.template_id)) void api.get("/models/providers", { signal: controller.signal }).then(response => { if (!disposed) { setProviderCatalog(response.data.providers, response.data); if (!draft && !advanced && !busy) render(); } }).catch(() => {});
       } catch (cause) { if (!disposed) { notice = errorMessage(cause); failed = true; render(); } }
       finally { loading = null; setBusy(false); }
     })(); return loading;
@@ -118,7 +119,7 @@ export function createModelConfigPanel(container) {
     try {
       const response = await api.get("/models/providers", { signal: controller.signal });
       if (disposed) return;
-      setProviderCatalog(response.data.providers);
+      setProviderCatalog(response.data.providers, response.data);
       notice = response.data.stale ? text("cachedSuppliers", "无法连接目录服务，正在使用上次成功获取的供应商目录。") : "";
       failed = false;
     } catch (cause) { if (!disposed) { notice = text("supplierUnavailable", "供应商目录暂时不可用，可重试或手动添加自定义供应商。"); failed = true; } }
@@ -245,7 +246,7 @@ export function createModelConfigPanel(container) {
   }
   function renderDetail(body) {
     const entry = provider(); if (!entry) return;
-    body.append(element("header", { className: "supplier-detail-heading" }, [element("h3", { text: entry.name }),
+    body.append(element("header", { className: "supplier-detail-heading" }, [element("h3", { text: providerDisplayName(entry) }),
       entry.builtin ? element("span", { text: uiMessage("modelConfig.builtinTag") }) : button(text("advancedEditor", "编辑"), () => showAdvanced("provider", entry.id))]));
     if (entry.builtin) body.append(element("p", { className: "model-config-status", text: uiMessage("modelConfig.builtinModelNote") }));
     else {
@@ -317,7 +318,7 @@ export function createModelConfigPanel(container) {
     const layout = element("div", { className: `supplier-layout supplier-view-${view}` });
     const list = element("nav", { className: "supplier-list", attrs: { "aria-label": uiMessage("modelConfig.providerList") } });
     for (const entry of config.providers) {
-      const item = button(entry.name, () => { if (blocked()) return; selectedId = entry.id; view = "detail"; notice = ""; render(); });
+      const item = button(providerDisplayName(entry), () => { if (blocked()) return; selectedId = entry.id; view = "detail"; notice = ""; render(); });
       item.className = "model-config-item"; item.setAttribute("aria-current", entry.id === selectedId && view === "detail" ? "true" : "false");
       item.append(element("small", { text: text("modelCount", "{count} 个模型", { count: config.items.filter((model) => model.provider === entry.id).length }) })); list.append(item);
     }
@@ -341,7 +342,7 @@ export function createModelConfigPanel(container) {
     if (hadFocus) {
       const field = focusName && [...container.querySelectorAll("input, select")].find((node) => node.name === focusName);
       const heading = body.querySelector("h3");
-      const target = field || (view === "list" ? [...list.querySelectorAll("button")].find((node) => node.textContent.startsWith(provider()?.name || "")) : heading);
+      const target = field || (view === "list" ? [...list.querySelectorAll("button")].find((node) => node.textContent.startsWith(provider() ? providerDisplayName(provider()) : "")) : heading);
       if (target) { const details = target.closest("details"); if (details) details.open = true; if (target === heading) target.tabIndex = -1; target.focus(); if (field && selection) field.setSelectionRange?.(...selection); }
     }
   }
