@@ -2,7 +2,7 @@
 #define MDO_VERSION_H
 
 #ifndef MDO_BUILD_ID
-#define MDO_BUILD_ID 70000099u
+#define MDO_BUILD_ID 70000100u
 #endif
 
 /* Hexadecimal release identity, independent of legacy/Android install order. */

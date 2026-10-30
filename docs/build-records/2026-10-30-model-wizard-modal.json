@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-10-30T13:15:21.670258+00:00",
+  "version_name": "0.8.1",
+  "version_code": "05000801",
+  "windows_build_id": 70000100,
+  "bytes": 6603224,
+  "sha256": "252fee8ecf2f7d7efa3fe194ae3754bfb22a7920af9dd7355ed5c00d2b4d73ba",
+  "source_head": "2151ffef26cf93bce2e334f01c9641995ae2952e",
+  "source_inputs": {
+    "application": "dab30bc8199a2d71a2e450a7fc5a315b3ef3206c06a47b47a302fad9d29c3832",
+    "dependency lock": "eb8b4af857eaa01b2adcd909ba1d24840f221281ce9add6b6827cd671422546d",
+    "host profile": "d765984879c9d3dedc04c523b0713b4e2662c4b8eb1ab91ff6d16d4c22dd79e2"
+  },
+  "published": false,
+  "other_platforms_rebuilt": false,
+  "includes_existing_uncommitted_changes": true,
+  "checks": {
+    "targeted_frontend_tests": 34,
+    "locale_tests": 9,
+    "module_graph": 244,
+    "browser_widths": [
+      1320,
+      390
+    ],
+    "fixed_footer_and_scroll": true,
+    "public_modal_and_mobile_fullscreen": true,
+    "cancel_and_late_response_handling": true,
+    "native_start": {
+      "passed": true,
+      "scope": "native WebView2 four launchers",
+      "tools": [
+        "打开浏览器",
+        "打开文件",
+        "打开终端",
+        "打开变更"
+      ],
+      "empty_home": true,
+      "terminal_ended": true
+    },
+    "embedded_changed_resources": true,
+    "source_fingerprints_stable": true
+  }
+}
