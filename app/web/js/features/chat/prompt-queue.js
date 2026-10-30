@@ -19,6 +19,7 @@ function newId() {
 
 export function createPromptQueue({ container, navigation, isRunActive, stagedEntries,
   createRecovery, stamp,
+  isRunFinishing = () => false, onUpdated = () => {},
   isProfileBusy = () => false,
   isRunReviewPending = () => false, isSessionWritable = () => true,
   isSessionRunActive = () => false, modelsStore,
@@ -99,6 +100,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     if (!(queues.get(key)?.length) && items.length) expanded.set(key, true);
     queues.set(key, items);
     render();
+    onUpdated();
   }
 
   async function load(key, force = false) {
@@ -225,7 +227,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
           acceptedRun ? "queue.runAccepted" : claimedRun
           ? "queue.runStarting" : reviewPending
           ? "queue.reviewRun" : waitingForProfile ? "queue.waitForProfile" : saved.length
-          ? "queue.waitForRun" : entries[0]?.rejected
+          ? (waitingForRun && isRunFinishing() ? "queue.waitForRelease" : "queue.waitForRun") : entries[0]?.rejected
             ? "queue.rejected" : "queue.awaitingAdmission") }),
     ]);
     container.insertBefore(header, previousList);

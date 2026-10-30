@@ -720,6 +720,8 @@
   "queue.retryUncertain": "Retry after confirming it was not sent",
   "queue.sendNext": "Send next",
   "queue.waitForRun": "Sends when this turn finishes",
+  "queue.waitForRelease": "Finishing the previous turn, then sending automatically",
+  "task.finishing": "Finishing the previous turn…",
   "queue.waitForProfile": "Waiting for session preferences",
   "queue.restoreToSend": "Restore this session to continue sending",
   "queue.awaitingAdmission": "Waiting to join the queue",

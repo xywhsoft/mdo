@@ -51,6 +51,8 @@ import { timelineStore, selectTimeline, clearTimeline, refreshSelectedTimeline, 
 import { todoStore, selectTodo, clearTodo } from "./state/todo.js";
 import { createTimelineView } from "./features/chat/timeline.js";
 import { createQueueGate } from "./features/chat/queue-gate.js";
+import { runAwaitingRelease } from "./features/chat/run-finishing.js";
+import { createResourceRefresh } from "./features/shell/resource-refresh.js";
 import { createRunStopController, resolvesRunStopError } from "./features/chat/run-stop-controller.js";
 import { createRunPollRead } from "./features/chat/run-poll-read.js";
 import { createMessageEditDialog } from "./features/chat/message-edit-dialog.js";
@@ -267,6 +269,7 @@ export async function boot() {
   let skipLegacyDraftCapture = false;
   let tasksTimer = 0;
   let runsTimer = 0;
+  let resourceRefresh = null;
   let sessionTimer = 0;
   let approvalsTimer = 0;
   let routeVersion = 0;
@@ -760,6 +763,8 @@ export async function boot() {
   let queueEditKey = "";
   const promptQueue = createPromptQueue({
     container: $("#prompt-queue"), navigation, modelsStore,
+    isRunFinishing: () => runAwaitingRelease(activeRun, timelineStore.get().data),
+    onUpdated: () => scheduleRunsRefresh(),
     isRunActive: () => Boolean(activeRun),
     isProfileBusy: () => composerProfile?.isBusy() ?? false,
     isSessionRunActive: (key) => {
@@ -1374,7 +1379,9 @@ export async function boot() {
     const stopPhase = runStops.phase(activeRun?.id);
     runStatus.lastElementChild.textContent = stopPhase === "waiting"
       ? t("shell.stopWaiting", {}, "连接恢复后停止任务")
-      : stopPhase || activeRun?.cancel_requested ? t("task.stopping", {}, "正在停止…") : runStateText(shown.state);
+      : stopPhase || activeRun?.cancel_requested ? t("task.stopping", {}, "正在停止…")
+      : runAwaitingRelease(activeRun, timelineStore.get().data)
+        ? t("task.finishing", {}, "正在结束上一轮…") : runStateText(shown.state);
     send.hidden = false;
     stop.hidden = !activeRun && !slashCommands.pendingCount();
     syncStopBusy();
@@ -1689,6 +1696,14 @@ export async function boot() {
   }
   runsStore.subscribe(findActiveRun);
   runsStore.subscribe(() => { void promptQueue.flushUnusedImages(); });
+  let shownFinishing = false;
+  timelineStore.subscribe(() => {
+    const finishing = runAwaitingRelease(activeRun, timelineStore.get().data);
+    if (shownFinishing === finishing) return;
+    shownFinishing = finishing;
+    setRun(activeRun); promptQueue.render();
+    if (finishing) { void loadRuns(); void refreshSelectedQueue(); }
+  });
 
   function scheduleRunPoll(delay = 2500) {
     runPollReads.cancel();
@@ -2779,15 +2794,21 @@ export async function boot() {
   }
   tasksStore.subscribe(scheduleTaskRefresh);
   function scheduleRunsRefresh() {
-    window.clearTimeout(runsTimer);
-    if (document.hidden || liveConnection.isConnected()) return;
     const snapshot = runsStore.get();
-    if (snapshot.status === "loading" || snapshot.status === "refreshing") return;
-    runsTimer = window.setTimeout(async () => {
-      await loadRuns();
-      await refreshSelectedQueue();
-    },
-      Number(snapshot.data?.active_runs ?? 0) > 0 ? 2500 : 8000);
+    const selected = navigation.get();
+    const outstanding = Number(snapshot.data?.active_runs ?? 0) > 0 || Boolean(activeRun) ||
+      promptQueue.hasUnsettled(selected.projectId, selected.sessionId);
+    if (document.hidden || (liveConnection.isConnected() && !outstanding)) {
+      window.clearTimeout(runsTimer); runsTimer = 0; return;
+    }
+    if (runsTimer) return;
+    runsTimer = window.setTimeout(() => {
+      runsTimer = 0;
+      // Keep reconciliation independent of both the live channel and slow
+      // peripheral reads. Each lane still permits only one in-flight GET.
+      resourceRefresh?.request(["runs", "queue"]);
+      scheduleRunsRefresh();
+    }, outstanding ? 2500 : 8000);
   }
   runsStore.subscribe(scheduleRunsRefresh);
   const sessionMetadataSync = createSessionMetadataSync({ navigation,
@@ -2812,32 +2833,25 @@ export async function boot() {
     }, pending || asksStore.get().data?.items?.length ||
       recoveryStore.get().data?.resume_required ? 2500 : 8000);
   }
-  let liveRefreshTimer = 0;
-  let liveRefreshing = false;
-  let liveRefreshPending = false;
-  function scheduleLiveRefresh() {
-    liveRefreshPending = true;
-    if (document.hidden || liveRefreshTimer || liveRefreshing) return;
-    liveRefreshTimer = window.setTimeout(async () => {
-      liveRefreshTimer = 0;
-      if (document.hidden || !liveConnection.isConnected()) return;
-      liveRefreshPending = false;
-      liveRefreshing = true;
-      const focusStop = document.activeElement === stop;
-      const version = routeVersion;
-      try {
-        await Promise.allSettled([loadRuns(), loadTasks(), loadApprovals(),
-          refreshSelectedAsks(), loadRecovery(), loadSessions(),
-          sessionMetadataSync.refresh(), refreshSelectedQueue(), refreshSelectedTask()]);
+  resourceRefresh = createResourceRefresh({
+    enabled: () => !document.hidden,
+    operations: {
+      async runs() {
+        const focusStop = document.activeElement === stop;
+        const version = routeVersion;
+        await loadRuns();
         if (focusStop && !activeRun && version === routeVersion && !prompt.disabled &&
             (document.activeElement === stop || document.activeElement === document.body) &&
             shell.dataset.sidebar !== "open" && !document.querySelector("dialog[open]"))
           prompt.focus({ preventScroll: true });
-      } finally {
-        liveRefreshing = false;
-        if (liveRefreshPending) scheduleLiveRefresh();
-      }
-    }, 120);
+      },
+      queue: refreshSelectedQueue, tasks: loadTasks, approvals: loadApprovals,
+      asks: refreshSelectedAsks, recovery: loadRecovery, sessions: loadSessions,
+      metadata: () => sessionMetadataSync.refresh(), task: refreshSelectedTask,
+    },
+  });
+  function scheduleLiveRefresh() {
+    if (liveConnection.isConnected()) resourceRefresh.request();
   }
   function syncLocalConnection(connected) {
     if (isRemoteTarget()) return;
@@ -2883,8 +2897,11 @@ export async function boot() {
   });
   liveConnection.pause(document.hidden);
   liveConnection.start(currentPageWriteToken());
-  window.addEventListener("pagehide", () => { runPollReads.cancel(); runStops.dispose(); liveConnection.pause(true); });
-  window.addEventListener("pageshow", () => liveConnection.pause(document.hidden));
+  window.addEventListener("pagehide", () => { runPollReads.cancel(); runStops.dispose(); resourceRefresh.pause(); liveConnection.pause(true); });
+  window.addEventListener("pageshow", () => {
+    if (!document.hidden) resourceRefresh.resume();
+    liveConnection.pause(document.hidden);
+  });
   approvalsStore.subscribe(scheduleApprovalRefresh);
   asksStore.subscribe(scheduleApprovalRefresh);
   recoveryStore.subscribe(scheduleApprovalRefresh);
@@ -2896,13 +2913,14 @@ export async function boot() {
     if (document.hidden) {
       runPollReads.cancel();
       window.clearTimeout(runMonitor); runMonitor = 0;
-      window.clearTimeout(liveRefreshTimer); liveRefreshTimer = 0;
+      resourceRefresh.pause();
       window.clearTimeout(tasksTimer);
-      window.clearTimeout(runsTimer);
+      window.clearTimeout(runsTimer); runsTimer = 0;
       window.clearTimeout(sessionTimer);
       window.clearTimeout(approvalsTimer);
     }
     else {
+      resourceRefresh.resume();
       refreshRelativeTimes();
       void recoverCatalogs();
       void recoverSettings();
