@@ -1,0 +1,183 @@
+"""Model onboarding evidence through the real API; in-place, local HTTP only."""
+import argparse
+import copy
+from concurrent.futures import ThreadPoolExecutor
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+import threading
+
+from test_api_runtime import ROOT, free_port, request, wait_ready
+
+
+class Supplier(BaseHTTPRequestHandler):
+    mode = 'ok'
+    calls = []
+    entered = threading.Event()
+    release = threading.Event()
+
+    def log_message(self, *_): pass
+
+    def do_POST(self):
+        body = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
+        self.calls.append(body)
+        tools = bool(body.get('tools'))
+        if self.mode == 'wait':
+            self.entered.set()
+            assert self.release.wait(3), 'fixture wait exceeded'
+        args = '[]' if self.mode == 'invalid_tool' else '{}'
+        if self.path.endswith('/responses'):
+            output = [{'type': 'function_call', 'call_id': 'probe', 'name': 'mdo_connection_probe', 'arguments': args}] if tools else [
+                {'type': 'message', 'role': 'assistant', 'content': [{'type': 'output_text', 'text': 'OK'}]}]
+            data = {'id': 'resp_fixture', 'model': body['model'], 'status': 'completed', 'output': output}
+        elif self.path.endswith('/messages'):
+            content = [{'type': 'tool_use', 'id': 'probe', 'name': 'mdo_connection_probe', 'input': [] if self.mode == 'invalid_tool' else {}}] if tools else [{'type': 'text', 'text': 'OK'}]
+            data = {'id': 'msg_fixture', 'type': 'message', 'role': 'assistant', 'model': body['model'],
+                'content': content, 'stop_reason': 'tool_use' if tools else 'end_turn', 'usage': {'input_tokens': 2, 'output_tokens': 2}}
+        else:
+            message = {'role': 'assistant', 'content': 'OK'}
+            if tools:
+                message = {'role': 'assistant', 'content': None, 'tool_calls': [{'id': 'probe', 'type': 'function',
+                    'function': {'name': 'mdo_connection_probe', 'arguments': args}}]}
+            elif self.mode == 'reasoning_only':
+                message = {'role': 'assistant', 'content': None, 'reasoning_content': 'internal thought only'}
+            data = {'id': 'fixture', 'object': 'chat.completion', 'model': body['model'],
+                'choices': [{'index': 0, 'message': message, 'finish_reason': 'tool_calls' if tools else 'stop'}]}
+        raw = json.dumps(data).encode()
+        self.send_response(200); self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', str(len(raw))); self.end_headers(); self.wfile.write(raw)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--host', type=Path, default=ROOT/'.build/system-proxy-20261030/host/xs.exe')
+    args = parser.parse_args()
+    sys.path.insert(0, str(ROOT))
+    from tools import build_mdo
+    build_mdo.write_if_changed(build_mdo.UNITY_PATH, build_mdo.generated_unity(
+        build_mdo.load_object(build_mdo.LOCK_PATH), build_mdo.source_list()).encode())
+    host_config = ROOT/'app/xs.model-verification-test.json'
+    assert not host_config.exists(), 'An owned probe is already running'
+    supplier = ThreadingHTTPServer(('127.0.0.1', 0), Supplier)
+    threading.Thread(target=supplier.serve_forever, daemon=True).start()
+    evidence = ROOT/'.build/acceptance/model-verification-20261030'
+    evidence.mkdir(parents=True, exist_ok=True)
+    checks = []
+    with tempfile.TemporaryDirectory(prefix='model-verification-', dir=ROOT/'.build') as raw:
+        base = Path(raw); port = free_port(); process = None
+        host_config.write_text(json.dumps({'engine': {'workers': 2}, 'services': [{'enabled': True, 'class': 'http',
+            'name': 'model-verification-test', 'ip': '127.0.0.1', 'port': port,
+            'host_default': {'enabled': True, 'name': 'mdo', 'path': 'web', 'devlang': 'c', 'devfile': 'generated/mdo_unity.c'}}]}))
+        def call(method, path, body=None, etag=None):
+            status, headers, data = request(port, method, '/api/v1/'+path,
+                body=json.dumps(body).encode() if body is not None else None,
+                headers={'Content-Type': 'application/json', **({'If-Match': etag} if etag else {})})
+            return status, headers, json.loads(data)
+        def get():
+            status, headers, data = call('GET', 'models/config'); assert status == 200, data
+            return data['data'], headers['etag']
+        def save(config, etag):
+            patch = {key: config[key] for key in ('providers', 'items', 'default_model')}
+            status, _, data = call('PUT', 'settings/models', {'schema_version': 1, 'patch': patch}, etag)
+            assert status == 200, data
+        def probe(model, tools=False, expected=200):
+            status, _, data = call('POST', 'models/test', {'model_id': model, 'tools': tools})
+            assert status == expected, data
+            return data
+        def stop():
+            nonlocal process
+            if process and process.poll() is None:
+                if os.name == 'nt': subprocess.run(['taskkill', '/PID', str(process.pid), '/T', '/F'], capture_output=True)
+                else: process.terminate()
+                process.wait(timeout=8)
+            process = None
+        with (evidence/'native-api.log').open('wb') as log:
+            def start():
+                nonlocal process
+                process = subprocess.Popen([str(args.host.resolve()), str(host_config)], cwd=ROOT/'app',
+                    env={**os.environ, 'MDO_HOME': str(base/'home'), 'USE_WEBVIEW': '0'}, stdout=log, stderr=log,
+                    creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+                wait_ready(port, process)
+            try:
+                start(); config, etag = get()
+                for name, protocol, endpoint in [('chat', 'openai-chat-completions', 'chat_completions'),
+                    ('responses', 'openai-responses', 'responses'), ('messages', 'anthropic-messages', 'anthropic_messages')]:
+                    provider = {'id': name, 'name': name, 'builtin': False, 'editable': True, 'removable': True,
+                        'verify_peer': True, 'timeout_ms': 2000, 'proxy': {'kind': 'none'},
+                        'credential': {'secret_ref': 'env:MDO_ONBOARDING_TEST_KEY'},
+                        'endpoints': {endpoint: f'http://127.0.0.1:{supplier.server_port}/v1/'+
+                            {'chat_completions': 'chat/completions', 'responses': 'responses', 'anthropic_messages': 'messages'}[endpoint]}}
+                    model = copy.deepcopy(config['items'][0])
+                    model.update(id=name, name=name, provider=name, wire_model=name, builtin=False, free=False,
+                        editable=True, removable=True, protocols=[protocol], default_protocol=protocol,
+                        reasoning_efforts=['none'], default_reasoning_effort='none', attachments=[],
+                        proxy={'kind': 'provider'}, capabilities=['text-input', 'text-output', 'tool-result-input', 'tool-call-output', 'streaming'])
+                    config['providers'].append(provider); config['items'].append(model)
+                save(config, etag)
+                for name in ('chat', 'responses', 'messages'):
+                    result = probe(name)['data']; assert not result['verification']['verified'], result
+                    result = probe(name, True)['data']; assert result['verification']['verified'], result
+                checks.append('reply + valid dummy tool across Chat, Responses and Anthropic')
+                config, etag = get(); assert all(config['verification'][name]['verified'] for name in ('chat', 'responses', 'messages'))
+                stop(); start(); config, etag = get(); assert config['verification']['chat']['verified']
+                checks.append('verification survives native restart')
+                Supplier.mode = 'reasoning_only'
+                result = probe('chat', expected=422); assert result['error']['code'] == 'model_test_failed', result
+                assert not get()[0]['verification']['chat']['verified']
+                Supplier.mode = 'ok'; probe('chat')
+                Supplier.mode = 'invalid_tool'
+                result = probe('chat', True, 422); assert result['error']['code'] == 'model_tools_test_failed', result
+                assert not get()[0]['verification']['chat']['verified']
+                Supplier.mode = 'ok'; probe('chat', True)
+                checks.append('reasoning-only replies and invalid tool arguments cannot verify a model')
+                config, etag = get(); config['default_model'] = 'chat'; save(config, etag)
+                assert get()[0]['verification']['chat']['verified']
+                config, etag = get(); config['items'][-3]['window']['max_output_tokens'] -= 1; save(config, etag)
+                assert 'chat' not in get()[0]['verification']
+                checks.append('default selection keeps evidence; changed model limits invalidate it')
+                config, etag = get(); text_only = copy.deepcopy(config['items'][-3]); text_only['id'] = 'text-only'
+                text_only['capabilities'].remove('tool-call-output'); config['items'].append(text_only); save(config, etag)
+                assert probe('text-only')['data']['verification']['verified']
+                before = len(Supplier.calls); probe('text-only', True, 422); assert before == len(Supplier.calls)
+                checks.append('reply-only profile verifies without tool probes; undeclared tools rejected locally')
+                Supplier.mode = 'wait'; Supplier.entered.clear(); Supplier.release.clear()
+                with ThreadPoolExecutor(max_workers=1) as pool:
+                    pending = pool.submit(probe, 'chat', False, 409)
+                    assert Supplier.entered.wait(2)
+                    config, etag = get(); config['items'][-4]['proxy'] = {'kind': 'none'}; save(config, etag)
+                    Supplier.release.set(); result = pending.result(timeout=4)
+                    assert result['error']['code'] == 'model_config_changed', result
+                Supplier.mode = 'ok'
+                assert 'chat' not in get()[0]['verification']
+                checks.append('configuration race cannot stamp a changed profile as verified')
+                config, etag = get(); original = copy.deepcopy(config['providers'][-2])
+                for field, value in [('proxy', {'kind': 'global'}),
+                    ('credential', {'secret_ref': 'env:MDO_ONBOARDING_OTHER_KEY'}),
+                    ('endpoints', {'responses': f'http://127.0.0.1:{supplier.server_port}/changed/responses'})]:
+                    config['providers'][-2][field] = value; save(config, etag)
+                    config, etag = get(); assert 'responses' not in config['verification'], field
+                    config['providers'][-2] = copy.deepcopy(original); save(config, etag)
+                    config, etag = get(); assert config['verification']['responses']['verified'], field
+                status, headers, _ = call('GET', 'settings'); assert status == 200
+                status, _, data = call('PATCH', 'settings/settings', {'schema_version': 1,
+                    'patch': {'transport': {'proxy': {'kind': 'system'}}}}, headers['etag'])
+                assert status == 200, data
+                assert not get()[0]['verification']
+                checks.append('supplier endpoint, credential reference, proxy and global transport invalidate evidence')
+                records = list((base/'home/data/model-verification').glob('*.json'))
+                assert records and all('fixture-only-key' not in p.read_text() and 'http://' not in p.read_text() for p in records)
+                checks.append('evidence stores only fingerprints, states, latency and safe error kinds')
+                (evidence/'native-api.json').write_text(json.dumps({'passed': True, 'checks': checks}, indent=2)+'\n')
+                print('PASS: '+ '; '.join(checks))
+            finally:
+                Supplier.release.set(); stop(); host_config.unlink(missing_ok=True)
+                supplier.shutdown(); supplier.server_close()
+
+
+if __name__ == '__main__':
+    os.environ['MDO_ONBOARDING_TEST_KEY'] = 'fixture-only-key'
+    main()

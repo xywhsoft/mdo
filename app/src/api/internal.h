@@ -158,6 +158,10 @@ bool MdoApiModelProbesInit(void);
 void MdoApiModelProbesUnit(void);
 bool MdoApiModelDiscoverRoute(MdoApiContext* Context);
 bool MdoApiModelTestRoute(MdoApiContext* Context);
+bool MdoApiModelVerificationSnapshot(cstr Id, char Hash[65]);
+xvalue* MdoApiModelVerificationUpdate(cstr Id, cstr Hash, bool Tools,
+    bool NeedsTools, cstr State, uint64 Latency, cstr Code);
+bool MdoApiModelVerificationAttach(xvalue* Models, const xvalue* Transport);
 bool MdoApiAgentsRoute(MdoApiContext* pContext);
 bool MdoApiAgentPlanRoute(MdoApiContext* Context);
 bool MdoApiModulesRoute(MdoApiContext* pContext);

@@ -206,6 +206,8 @@ bool MdoApiModelsRoute(MdoApiContext* Context)
 
 /* The editor receives references, never resolved credential values.  The
  * config transaction still validates protected built-ins and all changes. */
+#include "model_verification.inc.c"
+
 bool MdoApiModelConfigRoute(MdoApiContext* Context)
 {
     str Json = NULL;
@@ -228,6 +230,11 @@ bool MdoApiModelConfigRoute(MdoApiContext* Context)
             XRT_STR_LITERAL("models")) : NULL;
         if ( xrtValueType(Models) != XVALUE_OBJECT ) break;
         Data = xrtValueDeepClone(Models);
+        const xvalue* Settings = xrtValueObjectGet(Root, XRT_STR_LITERAL("settings"));
+        if (Data && !MdoApiModelVerificationAttach(Data,
+            xrtValueObjectGet(Settings, XRT_STR_LITERAL("transport")))) {
+            xrtValueRelease(Data); Data = NULL;
+        }
         xrtValueRelease(Root); Root = NULL;
         if ( Data == NULL || !MdoConfigGetSnapshot(&After) ) break;
         if ( Before.Revision == After.Revision ) {

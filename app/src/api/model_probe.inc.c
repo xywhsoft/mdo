@@ -176,11 +176,30 @@ done:
     xrtValueRelease(Data); return MdoApiReplyError(Context, Reply, Code, Message, NULL);
 }
 
+static bool MdoApiModelProbeVisibleReply(const xllm_response* Response)
+{
+    if (!Response || !Response->sContent) return false;
+    for (const unsigned char* p = (const unsigned char*)Response->sContent; *p; ++p)
+        if (*p > 32u) return true;
+    return false;
+}
+
+static bool MdoApiModelProbeToolReply(const xllm_response* Response)
+{
+    if (!Response || Response->iToolCallCount != 1u || !Response->pToolCalls[0].sId ||
+        !Response->pToolCalls[0].sId[0] || !Response->pToolCalls[0].sName ||
+        strcmp(Response->pToolCalls[0].sName, "mdo_connection_probe") || !Response->pToolCalls[0].sArgumentsJson) return false;
+    xvalue* Args = xrtJsonParse(xrtStrView(Response->pToolCalls[0].sArgumentsJson));
+    bool Ok = Args && xrtValueType(Args) == XVALUE_OBJECT && xrtValueCount(Args) == 0u;
+    xrtValueRelease(Args); return Ok;
+}
+
 static bool MdoApiModelTestRun(MdoApiContext* Context, MdoApiJsonBody Body)
 {
     MdoModelCatalog* Catalog = NULL; xllm_client* Client = NULL; xllm_response* Response = NULL;
     xllm_request Request; xllm_error Error = {0}; MdoModelClientOptions Options;
     MdoModelInfo Info = {0}; xvalue* Data = NULL; bool Ok = false, Tools = false; uint64 Started = MdoMonotonicUs();
+    char Fingerprint[65], Current[65]; xvalue* Verification = NULL;
     cstr Id = MdoApiModelText(Body.Value, "model_id", 128u);
     xvalue* ToolMode = xrtValueObjectGet(Body.Value, XRT_STR_LITERAL("tools"));
     if (ToolMode && !xrtValueGetBool(ToolMode, &Tools))
@@ -191,7 +210,25 @@ static bool MdoApiModelTestRun(MdoApiContext* Context, MdoApiJsonBody Body)
         MdoModelCatalogRelease(Catalog);
         return MdoApiReplyError(Context, 404u, "model_not_found", "Save the model before testing it", NULL);
     }
-    Options.MaxOutputTokens = Info.MaxOutputTokens < 256u ? Info.MaxOutputTokens : 256u;
+    if (Tools && !(Info.Capabilities & XLLM_CAP_TOOL_CALL_OUT)) {
+        MdoModelCatalogRelease(Catalog);
+        return MdoApiReplyError(Context, 422u, "model_tools_unsupported", "This model profile does not declare tool calling", NULL);
+    }
+    bool NeedsTools = (Info.Capabilities & XLLM_CAP_TOOL_CALL_OUT) != 0u;
+    bool Persist = MdoApiModelVerificationSnapshot(Id, Fingerprint);
+    if (!Persist && !Info.Builtin) {
+        MdoModelCatalogRelease(Catalog);
+        return MdoApiReplyError(Context, 409u, "model_config_changed", "Read the current model configuration before testing", NULL);
+    }
+    if (Persist) {
+        Verification = MdoApiModelVerificationUpdate(Id, Fingerprint, Tools, NeedsTools, "pending", 0u, "");
+        if (!Verification) {
+            MdoModelCatalogRelease(Catalog);
+            return MdoApiReplyError(Context, 503u, "model_verification_unavailable", "The model verification result could not be saved", NULL);
+        }
+        xrtValueRelease(Verification); Verification = NULL;
+    }
+    Options.MaxOutputTokens = Info.MaxOutputTokens < 1024u ? Info.MaxOutputTokens : 1024u;
     bool Online = MdoModelIsOnline(Catalog, Id);
     if (!Online) Client = MdoModelClientCreate(Catalog, &Options, NULL, &Error);
     Request.bStream = false; Request.bParallelToolCalls = false;
@@ -205,19 +242,31 @@ static bool MdoApiModelTestRun(MdoApiContext* Context, MdoApiJsonBody Body)
     if ((Client || Online) && xllmRequestAddTextMessage(&Request, XLLM_ROLE_USER, Tools ? "Call mdo_connection_probe once." : "Reply briefly with OK."))
         Ok = (Online ? MdoModelOnlineComplete(Catalog, &Options, &Request, NULL, &Response, &Error) :
             MdoModelComplete(Client, &Request, NULL, &Response, &Error)) == XLLM_RESULT_OK;
-    if (Tools) Ok = Ok && Response && Response->iToolCallCount == 1u && Response->pToolCalls[0].sName &&
-        strcmp(Response->pToolCalls[0].sName, "mdo_connection_probe") == 0;
-    else if (Ok && (!Response || ((!Response->sContent || !Response->sContent[0]) && (!Response->sReasoningContent || !Response->sReasoningContent[0])))) Ok = false;
-    if (Ok) {
-        Data = xrtValueObject(); Ok = Data && MdoApiValueSetBool(Data, "verified", true) &&
-            MdoApiValueSetUInt(Data, "latency_ms", (MdoMonotonicUs() - Started) / 1000u);
-    }
+    Ok = Ok && (Tools ? MdoApiModelProbeToolReply(Response) : MdoApiModelProbeVisibleReply(Response));
+    uint64 Latency = (MdoMonotonicUs() - Started) / 1000u;
     xllmResponseDestroy(Response); xllmRequestUnit(&Request); xllmClientDestroy(Client);
     MdoModelCatalogRelease(Catalog); xrtClearError();
-    if (Ok) return MdoApiReplySuccessTake(Context, 200u, Data, NULL);
-    xrtValueRelease(Data);
     char Code[64];
-    snprintf(Code, sizeof(Code), "model_%s", MdoModelErrorKind(&Error));
+    snprintf(Code, sizeof(Code), "model_%s", Error.eCode == XLLM_ERROR_NONE ?
+        (Tools ? "tools_test_failed" : "test_failed") : MdoModelErrorKind(&Error));
+    if (Persist) {
+        if (!MdoApiModelVerificationSnapshot(Id, Current) || strcmp(Fingerprint, Current))
+            return MdoApiReplyError(Context, 409u, "model_config_changed", "Model configuration changed during the test; run verification again", NULL);
+        Verification = MdoApiModelVerificationUpdate(Id, Fingerprint, Tools, NeedsTools,
+            Ok ? "passed" : "failed", Latency, Ok ? "" : Code);
+        if (!Verification)
+            return MdoApiReplyError(Context, 503u, "model_verification_unavailable", "The model verification result could not be saved", NULL);
+    }
+    if (Ok) {
+        Data = xrtValueObject(); Ok = Data && MdoApiValueSetBool(Data, "verified", true) &&
+            MdoApiValueSetUInt(Data, "latency_ms", Latency) &&
+            (!Verification || MdoApiValueSetTake(Data, "verification", &Verification));
+        xrtValueRelease(Verification);
+        if (Ok) return MdoApiReplySuccessTake(Context, 200u, Data, NULL);
+        xrtValueRelease(Data);
+        return MdoApiReplyError(Context, 503u, "model_verification_unavailable", "The model verification response is unavailable", NULL);
+    }
+    xrtValueRelease(Verification);
     return MdoApiReplyError(Context, 422u, Error.eCode == XLLM_ERROR_NONE ?
         (Tools ? "model_tools_test_failed" : "model_test_failed") : Code,
         Error.eCode == XLLM_ERROR_NONE ? "The model response did not satisfy the connection test" :
