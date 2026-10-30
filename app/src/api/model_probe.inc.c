@@ -204,6 +204,13 @@ static bool MdoApiModelTestRun(MdoApiContext* Context, MdoApiJsonBody Body)
     xvalue* ToolMode = xrtValueObjectGet(Body.Value, XRT_STR_LITERAL("tools"));
     if (ToolMode && !xrtValueGetBool(ToolMode, &Tools))
         return MdoApiReplyError(Context, 422u, "probe_invalid", "tools must be a boolean", NULL);
+    /* Wait for a settings transaction to finish before pairing its revision
+     * with the runtime catalog. Otherwise a new JSON profile could be paired
+     * with an old catalog while a reload is still being published. */
+    MdoSettingsServiceSnapshot Settings = {0}; MdoConfigSnapshot Revision = {0};
+    Settings.Size = sizeof(Settings); Revision.Size = sizeof(Revision);
+    if (!MdoSettingsServiceGetSnapshot(&Settings) || !Settings.Initialized || Settings.Degraded)
+        return MdoApiReplyError(Context, 503u, "model_verification_unavailable", "Model configuration is not ready for verification", NULL);
     Catalog = MdoModelCatalogSnapshot(); Info.Size = sizeof(Info);
     xllmRequestInit(&Request); MdoModelClientOptionsInit(&Options); Options.ModelId = Id;
     if (!Id || !MdoModelCatalogModelFind(Catalog, Id, &Info)) {
@@ -216,7 +223,7 @@ static bool MdoApiModelTestRun(MdoApiContext* Context, MdoApiJsonBody Body)
     }
     bool NeedsTools = (Info.Capabilities & XLLM_CAP_TOOL_CALL_OUT) != 0u;
     bool Persist = MdoApiModelVerificationSnapshot(Id, Fingerprint);
-    if (!Persist && !Info.Builtin) {
+    if ((!Persist && !Info.Builtin) || !MdoConfigGetSnapshot(&Revision) || Revision.Revision != Settings.Config.Revision) {
         MdoModelCatalogRelease(Catalog);
         return MdoApiReplyError(Context, 409u, "model_config_changed", "Read the current model configuration before testing", NULL);
     }
@@ -250,7 +257,8 @@ static bool MdoApiModelTestRun(MdoApiContext* Context, MdoApiJsonBody Body)
     snprintf(Code, sizeof(Code), "model_%s", Error.eCode == XLLM_ERROR_NONE ?
         (Tools ? "tools_test_failed" : "test_failed") : MdoModelErrorKind(&Error));
     if (Persist) {
-        if (!MdoApiModelVerificationSnapshot(Id, Current) || strcmp(Fingerprint, Current))
+        if (!MdoConfigGetSnapshot(&Revision) || Revision.Revision != Settings.Config.Revision ||
+            !MdoApiModelVerificationSnapshot(Id, Current) || strcmp(Fingerprint, Current))
             return MdoApiReplyError(Context, 409u, "model_config_changed", "Model configuration changed during the test; run verification again", NULL);
         Verification = MdoApiModelVerificationUpdate(Id, Fingerprint, Tools, NeedsTools,
             Ok ? "passed" : "failed", Latency, Ok ? "" : Code);

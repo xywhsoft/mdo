@@ -54,7 +54,7 @@ class Supplier(BaseHTTPRequestHandler):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--host', type=Path, default=ROOT/'.build/system-proxy-20261030/host/xs.exe')
+    parser.add_argument('--host', type=Path, default=ROOT/'.build/host/xs.exe')
     args = parser.parse_args()
     sys.path.insert(0, str(ROOT))
     from tools import build_mdo
@@ -154,6 +154,18 @@ def main():
                 Supplier.mode = 'ok'
                 assert 'chat' not in get()[0]['verification']
                 checks.append('configuration race cannot stamp a changed profile as verified')
+                Supplier.mode = 'wait'; Supplier.entered.clear(); Supplier.release.clear()
+                with ThreadPoolExecutor(max_workers=1) as pool:
+                    pending = pool.submit(probe, 'chat', False, 409)
+                    assert Supplier.entered.wait(2)
+                    config, etag = get(); original_proxy = config['items'][-4]['proxy']
+                    config['items'][-4]['proxy'] = {'kind': 'provider'}; save(config, etag)
+                    config, etag = get(); config['items'][-4]['proxy'] = original_proxy; save(config, etag)
+                    Supplier.release.set(); result = pending.result(timeout=4)
+                    assert result['error']['code'] == 'model_config_changed', result
+                Supplier.mode = 'ok'
+                assert not get()[0]['verification'].get('chat', {}).get('verified')
+                checks.append('changing and restoring the same profile during a probe remains inconclusive')
                 config, etag = get(); original = copy.deepcopy(config['providers'][-2])
                 for field, value in [('proxy', {'kind': 'global'}),
                     ('credential', {'secret_ref': 'env:MDO_ONBOARDING_OTHER_KEY'}),
