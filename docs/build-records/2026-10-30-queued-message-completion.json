@@ -1,0 +1,216 @@
+{
+  "mdo.exe": {
+    "bytes": 6524347,
+    "sha256": "7f0613fd82f245e4f33084de438c79d3af896c604c27ae988cf51d18e15ecdd2"
+  },
+  "mdo-queue-qa.apk": {
+    "bytes": 6317460,
+    "sha256": "d148ce7dd99cfa5fc115eeb8823e2dda1bede47adf124be76ac202ada4435196"
+  },
+  "android_native_matches_build": true,
+  "overlay_sha256": "183ba3810e585118e707cd27520858f485c07435daf7a121dc8f5d4d4e17ef05",
+  "commits": {
+    "native": "7710ffaa",
+    "frontend": "4919eed8"
+  },
+  "runtime_results": [
+    {
+      "mode": "chat",
+      "first_ms": 13,
+      "first_code": "none",
+      "second_ms": 15,
+      "connection_ports": [
+        61098,
+        61099
+      ]
+    },
+    {
+      "mode": "responses",
+      "first_ms": 13,
+      "first_code": "none",
+      "second_ms": 0,
+      "connection_ports": [
+        61105,
+        61106
+      ]
+    },
+    {
+      "mode": "anthropic",
+      "first_ms": 11,
+      "first_code": "none",
+      "second_ms": 1,
+      "connection_ports": [
+        61109,
+        61110
+      ]
+    },
+    {
+      "mode": "incomplete",
+      "first_ms": 8,
+      "first_code": "none",
+      "second_ms": 0,
+      "connection_ports": [
+        61114,
+        61115
+      ]
+    },
+    {
+      "mode": "failed",
+      "first_ms": 15,
+      "first_code": "upstream",
+      "second_ms": 1,
+      "connection_ports": [
+        61118,
+        61119
+      ]
+    },
+    {
+      "mode": "anthropic-error",
+      "first_ms": 16,
+      "first_code": "upstream",
+      "second_ms": 16,
+      "connection_ports": [
+        61131,
+        61132
+      ]
+    },
+    {
+      "mode": "truncated",
+      "first_ms": 2,
+      "first_code": "incomplete_response",
+      "second_ms": 0,
+      "connection_ports": [
+        61137,
+        61137
+      ]
+    },
+    {
+      "mode": "malformed",
+      "first_ms": 15,
+      "first_code": "parse",
+      "second_ms": 1,
+      "connection_ports": [
+        61140,
+        61141
+      ]
+    },
+    {
+      "mode": "late-usage",
+      "first_ms": 309,
+      "first_code": "none",
+      "second_ms": 1,
+      "connection_ports": [
+        61146,
+        61147
+      ]
+    },
+    {
+      "mode": "cancel",
+      "first_ms": 152,
+      "first_code": "cancelled",
+      "second_ms": 1,
+      "connection_ports": [
+        61152,
+        61153
+      ]
+    },
+    {
+      "mode": "reuse",
+      "first_ms": 2,
+      "first_code": "none",
+      "second_ms": 0,
+      "connection_ports": [
+        61162,
+        61162
+      ]
+    },
+    {
+      "mode": "reuse",
+      "first_ms": 2,
+      "first_code": "none",
+      "second_ms": 0,
+      "connection_ports": [
+        61521,
+        61521
+      ]
+    },
+    {
+      "mode": "tls-tail",
+      "first_ms": 1042,
+      "first_code": "none",
+      "second_ms": 1028,
+      "connection_ports": [
+        61524,
+        61525
+      ]
+    }
+  ],
+  "queue_latency": [
+    {
+      "packed": "D:\\GIT\\mdo\\.build\\queue-fix-20261030\\mdo.exe",
+      "tail_delay_seconds": 0,
+      "relative_ms": {
+        "model1_request": 0.0,
+        "model1_sse_done": 0.0,
+        "model1_http_end": 0.0,
+        "first_terminal_observed": 63.0,
+        "model2_request": 125.0,
+        "model2_sse_done": 125.0,
+        "model2_http_end": 125.0
+      },
+      "model_calls": 2
+    },
+    {
+      "packed": "D:\\GIT\\mdo\\.build\\queue-fix-20261030\\mdo.exe",
+      "tail_delay_seconds": 4,
+      "relative_ms": {
+        "model1_request": 0.0,
+        "model1_sse_done": 0.0,
+        "first_terminal_observed": 94.0,
+        "model2_request": 391.0,
+        "model2_sse_done": 391.0,
+        "model2_http_end": 391.0
+      },
+      "model_calls": 2
+    }
+  ],
+  "frontend_full": {
+    "tests": 1225,
+    "passed": 1223,
+    "skipped": 2,
+    "failed": 0
+  },
+  "frontend_final_targeted": {
+    "tests": 30,
+    "passed": 30,
+    "failed": 0
+  },
+  "module_graph": 239,
+  "other_runtime": {
+    "queue_actions": "passed",
+    "model_proxy_tls": "passed",
+    "old_run_completion": "not_run_missing_legacy_fixture_agent_file"
+  },
+  "published": false,
+  "android_device_tested": false,
+  "date": "2026-10-30",
+  "version": "0.8.0",
+  "version_code": "05000800",
+  "scope": "protocol stream completion, independent resource refresh, outstanding queue reconciliation and finishing labels",
+  "before_fix_latest_candidate_next_call_ms": 4156,
+  "commands": [
+    "python tests/test_model_stream_terminal_runtime.py --host .build/system-proxy-20261030/host/xs.exe",
+    "python tests/test_queue_stream_completion.py --packed .build/queue-fix-20261030/mdo.exe",
+    "python tests/test_queue_actions_runtime.py --host .build/system-proxy-20261030/host/xs.exe",
+    "python tests/test_model_proxy_runtime.py --host .build/system-proxy-20261030/host/xs.exe",
+    "node --test tests/test_*.mjs",
+    "node --test tests/test_resource_refresh.mjs tests/test_prompt_queue_reads.mjs tests/test_run_poll_read.mjs",
+    "node --experimental-vm-modules tools/check_web_modules.mjs",
+    "python -m unittest discover -s tests -p test_model_sdk_build.py"
+  ],
+  "limitations": [
+    "No UI visual acceptance",
+    "No Android physical-device acceptance",
+    "Old run completion fixture cannot start because builtin_default.c was removed before this change; packed end-to-end admission is covered instead"
+  ]
+}
