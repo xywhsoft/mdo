@@ -691,15 +691,13 @@ export function createAdvancedModelConfigPanel(container, options = {}) {
           source ? uiText("modelConfig.updated", {}, "配置已更新") : uiText("modelConfig.added", {}, "配置已添加"), kind, value.id, true);
       });
       actions.append(save, discard);
-      if (source?.removable) {
-        const used = kind === "provider" && config.items.some((model) => model.provider === source.id);
-        const isDefault = kind === "model" && source.id === config.default_model;
+      if (kind === "model" && source?.removable) {
+        const isDefault = source.id === config.default_model;
         const remove = copy("button", "modelConfig.remove", uiText("schedule.delete", {}, "删除"), {},
           { className: "danger-link", attrs: { type: "button" } });
-        if (used || isDefault) translatedAttribute(remove, "title",
-          used ? "modelConfig.providerInUse" : "modelConfig.defaultInUse",
-          used ? uiText("ui.modelConfigAdvanced.moveReferencingModelsToAnotherProviderFirst", {}, "先将引用它的模型移到其他 供应商") : uiText("modelConfig.defaultInUse", {}, "先设置其他默认模型"));
-        remove.disabled = used || isDefault;
+        if (isDefault) translatedAttribute(remove, "title", "modelConfig.defaultInUse",
+          uiText("modelConfig.defaultInUse", {}, "先设置其他默认模型"));
+        remove.disabled = isDefault;
         const confirm = element("div", { className: "model-delete-confirm", attrs: { role: "group" } }, [
           copy("span", "modelConfig.removePrompt",
             uiText("ui.modelConfigAdvanced.deleteValue1ExistingConversationsUsingItMayNoLonger", { value1: source.name || source.id }, "删除“{value1}”？使用它的已有会话可能无法继续。"),
@@ -720,7 +718,7 @@ export function createAdvancedModelConfigPanel(container, options = {}) {
         });
         apply.addEventListener("click", () => {
           const next = clone(config);
-          next[kind === "model" ? "items" : "providers"] = collection().filter((entry) => entry.id !== source.id);
+          next.items = collection().filter((entry) => entry.id !== source.id);
           confirm.hidden = true;
           void transact(next, "modelConfig.removed", uiText("modelConfig.removed", {}, "配置已删除"), kind, "");
         });

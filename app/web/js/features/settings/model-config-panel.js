@@ -136,7 +136,7 @@ export function createModelConfigPanel(container) {
       onClosed() { if (removal === own) removal = null; },
     });
     removal = own; own.layer.element.classList.add("supplier-remove-layer");
-    own.layer.body.append(element("p", { text: uiMessage("modelSetup.removeSupplierPrompt", { name: providerDisplayName(entry), count: models.length }, "删除供应商“{name}”及其 {count} 个模型？已有会话会保留，使用这些模型的会话需要重新选择模型。") }));
+    own.layer.body.append(element("p", { text: uiMessage("modelSetup.removeSupplierPrompt", { name: providerDisplayName(entry), count: models.length }, "确定删除供应商“{name}”吗？对应的 {count} 个模型也会一并删除，已有会话会保留。") }));
     if (changedDefault) own.layer.body.append(element("p", { text: uiMessage("modelSetup.removeSupplierDefault", { model: fallback.name }, "默认模型将切换为 {model}。") }));
     const error = element("p", { className: "resource-error", attrs: { role: "alert", hidden: "" } });
     own.layer.body.append(error);

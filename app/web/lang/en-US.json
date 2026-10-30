@@ -1692,7 +1692,7 @@
   "modelSetup.addSupplier": "Add supplier",
   "modelSetup.removeSupplier": "Delete supplier",
   "modelSetup.removeSupplierNamed": "Delete supplier {name}",
-  "modelSetup.removeSupplierPrompt": "Delete supplier “{name}” and its {count} models? Existing conversations will be kept; conversations using these models will need another model selected.",
+  "modelSetup.removeSupplierPrompt": "Delete supplier “{name}”? Its {count} models will also be deleted. Existing conversations will be kept.",
   "modelSetup.removeSupplierDefault": "The default model will switch to {model}.",
   "modelSetup.supplierProtected": "Built-in or protected suppliers cannot be deleted.",
   "modelSetup.supplierRemoved": "The supplier and its models have been deleted.",
