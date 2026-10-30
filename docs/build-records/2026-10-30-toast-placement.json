@@ -1,0 +1,172 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-10-30T11:58:43.267323+00:00",
+  "version_name": "0.8.1",
+  "version_code": "05000801",
+  "windows_build_id": 70000098,
+  "filename": "mdo.exe",
+  "bytes": 6590972,
+  "sha256": "8555f9d244bd83317d74fcdf2aa0bc162cc9605a0078faff29bf81e19096e464",
+  "inputs": {
+    "application": "1f08aa3b16fb8cb7c97399bc12c719edfc05de8f80782aa85c3a38d00fc5562c",
+    "dependency lock": "eb8b4af857eaa01b2adcd909ba1d24840f221281ce9add6b6827cd671422546d",
+    "host profile": "d765984879c9d3dedc04c523b0713b4e2662c4b8eb1ab91ff6d16d4c22dd79e2"
+  },
+  "layouts": [
+    {
+      "passed": true,
+      "width": 1442,
+      "reports": [
+        {
+          "name": "desktop",
+          "toast": {
+            "x": 290,
+            "y": 70,
+            "width": 360
+          },
+          "workspace": {
+            "x": 272,
+            "y": 0,
+            "width": 1170
+          },
+          "columns": "272px 1170px"
+        },
+        {
+          "name": "resized",
+          "toast": {
+            "x": 398,
+            "y": 70,
+            "width": 360
+          },
+          "workspace": {
+            "x": 380,
+            "y": 0,
+            "width": 1062
+          },
+          "columns": "380px 1062px"
+        },
+        {
+          "name": "collapsed",
+          "toast": {
+            "x": 18,
+            "y": 70,
+            "width": 360
+          },
+          "workspace": {
+            "x": 0,
+            "y": 0,
+            "width": 1442
+          },
+          "columns": "0px 1442px"
+        },
+        {
+          "name": "workbench",
+          "toast": {
+            "x": 290,
+            "y": 70,
+            "width": 360
+          },
+          "workspace": {
+            "x": 272,
+            "y": 0,
+            "width": 690
+          },
+          "columns": "272px 690px 480px"
+        },
+        {
+          "name": "maximized",
+          "toast": {
+            "x": 290,
+            "y": 70,
+            "width": 360
+          },
+          "workspace": {
+            "x": 272,
+            "y": 0,
+            "width": 1170
+          },
+          "columns": "272px 0px 1170px"
+        },
+        {
+          "name": "settings",
+          "toast": {
+            "x": 18,
+            "y": 70,
+            "width": 360
+          },
+          "workspace": {
+            "x": 0,
+            "y": 0,
+            "width": 1442
+          },
+          "columns": "1442px"
+        }
+      ]
+    },
+    {
+      "passed": true,
+      "width": 390,
+      "reports": [
+        {
+          "name": "mobile",
+          "toast": {
+            "x": 12,
+            "y": 64,
+            "width": 360
+          },
+          "workspace": {
+            "x": 0,
+            "y": 52,
+            "width": 390
+          },
+          "columns": "390px"
+        },
+        {
+          "name": "mobile-drawer",
+          "toast": {
+            "x": 12,
+            "y": 64,
+            "width": 360
+          },
+          "workspace": {
+            "x": 0,
+            "y": 52,
+            "width": 390
+          },
+          "columns": "390px"
+        },
+        {
+          "name": "mobile-settings",
+          "toast": {
+            "x": 12,
+            "y": 64,
+            "width": 360
+          },
+          "workspace": {
+            "x": 0,
+            "y": 0,
+            "width": 390
+          },
+          "columns": "390px"
+        }
+      ]
+    }
+  ],
+  "existing_notification_and_pane_tests_passed": 7,
+  "native_start": {
+    "passed": true,
+    "scope": "native WebView2 four launchers",
+    "tools": [
+      "打开浏览器",
+      "打开文件",
+      "打开终端",
+      "打开变更"
+    ],
+    "empty_home": true,
+    "terminal_ended": true
+  },
+  "embedded_html_css_verified": true,
+  "published": false,
+  "other_platforms_rebuilt": false,
+  "full_release_gate_repeated": false
+}

@@ -1277,7 +1277,7 @@ select:focus-visible,
 .primary-button, .secondary-button { min-height: 35px; padding: 0 14px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); cursor: pointer; }
 .primary-button { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
 .secondary-button { background: transparent; }
-.toast-region { position: fixed; z-index: 110; right: 18px; bottom: 18px; display: grid; width: min(360px, calc(100vw - 36px)); gap: 8px; pointer-events: none; }
+.toast-region { position: absolute; grid-column: 2 / -1; grid-row: 1; z-index: 110; top: calc(var(--header-height) + 12px); left: 18px; right: 18px; display: grid; max-width: 360px; gap: 8px; pointer-events: none; }
 .toast { padding: 10px 13px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-raised); box-shadow: 0 8px 28px rgb(0 0 0 / 12%); font-size: 12px; animation: toast-in .18s ease-out; }
 .toast[data-tone="error"] { border-color: color-mix(in srgb, var(--danger) 42%, var(--border)); color: var(--danger); }
 
@@ -1599,7 +1599,7 @@ select:focus-visible,
 :root[data-density="compact"] .setting-switch { min-height: 60px; }
 
 @keyframes pulse { 50% { opacity: .35; transform: scale(.82); } }
-@keyframes toast-in { from { opacity: 0; transform: translateY(8px); } }
+@keyframes toast-in { from { opacity: 0; transform: translateY(-8px); } }
 
 
 @media (min-width: 761px) {
@@ -1678,6 +1678,7 @@ select:focus-visible,
   .app-shell[data-sidebar="open"] .sidebar { transform: translateX(0); }
   .sidebar-close { display: inline-grid; }
   .workspace { grid-column: 1; grid-row: 2; min-height: 0; }
+  .toast-region { grid-column: 1 / -1; grid-row: 2; top: 12px; left: 12px; right: 12px; }
   .app-shell[data-settings-open] .workspace { grid-row: 1; }
   .workspace-header { display: none; }
   .workspace { grid-template-rows: minmax(0, 1fr) auto; }
@@ -2070,6 +2071,11 @@ select:focus-visible,
 .app-shell[data-settings-open] > .workspace {
   grid-column: 1 / -1;
   grid-row: 1 / -1;
+}
+.app-shell[data-settings-open] > .toast-region {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  top: calc(var(--header-height) + 12px);
 }
 .app-shell[data-settings-open] > :is(.sidebar, .mobile-bar, .pane-resize-handle, .scrim) {
   display: none;
