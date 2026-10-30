@@ -119,7 +119,7 @@ export function createModelConfigPanel(container) {
     // New models use the same supplier route as discovery unless overridden.
     draft = { preset, choice, key: "", base: choice.base, name: preset.labelKey ? text(preset.labelKey, preset.name) : preset.name, provider: null,
       items: [...choice.models], selected: new Set(choice.models.slice(0, 2)), queried: false,
-      ref: "", query: "", manual: "", default: false,
+      ref: "", query: "", manual: "", default: false, advancedOpen: false,
       proxy: { kind: "global" }, modelProxy: { kind: "provider" } };
     view = "setup"; notice = ""; failed = false; render();
   }
@@ -220,6 +220,7 @@ export function createModelConfigPanel(container) {
         choose(previous.preset, previous.preset.variants.find((item) => item.id === select.value));
         draft.key = previous.key; draft.name = previous.name;
         draft.proxy = previous.proxy; draft.modelProxy = previous.modelProxy;
+        draft.advancedOpen = previous.advancedOpen;
         if (previous.preset.custom) {
           draft.base = previous.base; draft.ref = previous.ref; draft.manual = previous.manual; draft.default = previous.default;
         }
@@ -233,18 +234,27 @@ export function createModelConfigPanel(container) {
       if (draft.preset.keyUrl && !draft.provider) form.append(element("a", { className: "supplier-key-link", text: text("getKey", "获取 API Key"), attrs: { href: draft.preset.keyUrl, target: "_blank", rel: "noopener noreferrer" } }));
       form.append(element("p", { className: "model-config-status", text: text("keyPrivacy", "Key 仅在本机加密保存，不写入模型配置。复制到其他设备后需重新填写。") }));
     }
-    if (!draft.provider) form.append(element("details", { className: "supplier-connection-advanced" }, [element("summary", { text: text("advancedConnection", "高级连接设置") }),
-      field(text("connectionName", "供应商名称"), "connection-name", draft.name, (value) => { draft.name = value; }),
-      !draft.preset.custom ? field(text("baseUrl", "服务地址（含 /v1）"), "base-url", draft.base, (value) => { draft.base = value; draft.queried = false; }, { type: "url", required: true }) : null,
-      field(text("credentialReference", "凭据引用（可代替 Key）"), "credential-ref", draft.ref, (value) => { draft.ref = value; draft.queried = false; }),
-      createModelProxyEditor(draft.proxy, { collapsible: false, titleKey: "modelProxy.providerTitle",
-        namePrefix: "provider_proxy_",
-        onChange: value => { draft.proxy = value; draft.queried = false; } }).element]));
+    if (!draft.provider) form.append(createModelProxyEditor(draft.proxy, { collapsible: false, titleKey: "modelProxy.providerTitle",
+      namePrefix: "provider_proxy_",
+      onChange: value => { draft.proxy = value; draft.queried = false; } }).element);
+    const advanced = element("details", { className: "supplier-connection-advanced" }, [element("summary", { text: text("advancedConnection", "高级设置") }),
+      ...(!draft.provider ? [
+        field(text("connectionName", "供应商名称"), "connection-name", draft.name, (value) => { draft.name = value; }),
+        !draft.preset.custom ? field(text("baseUrl", "服务地址（含 /v1）"), "base-url", draft.base, (value) => { draft.base = value; draft.queried = false; }, { type: "url", required: true }) : null,
+        field(text("credentialReference", "凭据引用（可代替 Key）"), "credential-ref", draft.ref, (value) => { draft.ref = value; draft.queried = false; }),
+      ] : []),
+      createModelProxyEditor(draft.modelProxy, { allowProvider: true, collapsible: false, titleKey: "modelProxy.newModelsTitle",
+        namePrefix: "model_proxy_",
+        onChange: value => { draft.modelProxy = value; } }).element,
+    ]);
+    advanced.open = Boolean(draft.advancedOpen);
+    const setupDraft = draft;
+    advanced.addEventListener("toggle", () => {
+      if (draft === setupDraft && container.contains(advanced)) draft.advancedOpen = advanced.open;
+    });
+    form.append(advanced);
     if (draft.queried) renderSelection(form);
     form.append(field(text("manualIds", "手动添加模型 ID（多个用逗号分隔）"), "manual-models", draft.manual, (value) => { draft.manual = value; }));
-    form.append(createModelProxyEditor(draft.modelProxy, { allowProvider: true, titleKey: "modelProxy.newModelsTitle",
-      namePrefix: "model_proxy_",
-      onChange: value => { draft.modelProxy = value; } }).element);
     const makeDefault = element("input", { attrs: { type: "checkbox", name: "make-default" } });
     makeDefault.checked = draft.default; makeDefault.addEventListener("change", () => { draft.default = makeDefault.checked; });
     form.append(element("label", { className: "supplier-inline-check" }, [makeDefault, element("span", { text: text("useDefault", "首个新增模型验证通过后设为默认") })]));
