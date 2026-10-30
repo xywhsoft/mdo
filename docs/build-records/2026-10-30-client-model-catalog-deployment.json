@@ -1,0 +1,90 @@
+{
+  "deployed_at": "2026-10-30T19:29:40+08:00",
+  "status": "server_deployed_client_not_published",
+  "server_repository": "D:/GIT/home",
+  "server_source_commit": "e404238c9628298e94e990bc1f422d73b014843c",
+  "client_source_commit": "feefdae60254120f0e91e17c9b818e6680d459a6",
+  "files": [
+    {
+      "path": "plugin/mdo/modules/models/main.c",
+      "sha256": "7fd3309b4bfc60c2f3a75d2e78a4b85267fcd23e226e93eb73d7ceb3af418ca1",
+      "bytes": 6824
+    },
+    {
+      "path": "plugin/mdo/modules/models/src/client_catalog.c",
+      "sha256": "0c2874ae68e031c6a884a00b1cd16460d5e2dbb5a2eb1b815191bd031fe4a3a1",
+      "bytes": 10260
+    },
+    {
+      "path": "plugin/mdo/modules/models/client-catalog.defaults.json",
+      "sha256": "3179551a1a107bc8b412c0becd54530388b2683a1024f1c20fc8f8efc74a8dd9",
+      "bytes": 19538
+    },
+    {
+      "path": "plugin/mdo/page/models/client-catalog.html",
+      "sha256": "1715e17bf7c4ea024238e2999b6f922c36e78d0b5e829cdd9867654410e304d3",
+      "bytes": 10692
+    }
+  ],
+  "backup_directory": "/home/xs/mdo-client-catalog-20261030-3d4afc8fc1",
+  "deployment": {
+    "phase": "complete",
+    "started_at": 1793359776,
+    "publish_client": false,
+    "files": 4,
+    "service": "xs.service",
+    "pending_file": null,
+    "completed_at": 1793359780,
+    "catalog": {
+      "version": "591f659fd62f9b9c385deeb2140f8ffc318080b187b4670811d0fdb241680c9e",
+      "providers": 10,
+      "entries": 24
+    },
+    "menu": {
+      "id": 73,
+      "title": "客户端模型目录",
+      "href": "/admin/model-gateway/client-catalog",
+      "parent_id": 59,
+      "parent_title": "墨斗·模型与服务"
+    },
+    "anonymous_admin_denied": true,
+    "gateway_configuration_unchanged": {
+      "channel": {
+        "count": 4,
+        "sha256": "a0e40cba98acda0a1f79d47564d253ac0392fca3a84bab9162b1105773a4e3f9"
+      },
+      "model": {
+        "count": 3,
+        "sha256": "0472727ba6a339eb3054aa3233ecbaf7ae28203e094de82c637a5779ae1f7fc5"
+      },
+      "route": {
+        "count": 5,
+        "sha256": "1b0d1b70fb3a4c6875016a3a8e25a0878768f348b42d08ab0df0c0fc045c73fd"
+      }
+    },
+    "protected_sources_unchanged": true,
+    "native_config_unchanged": true,
+    "client_release_selectors_unchanged": 9,
+    "extension_catalog_ok": true
+  },
+  "live_client_verification": {
+    "passed": true,
+    "live_public_service": true,
+    "providers": 10,
+    "version": "591f659fd62f9b9c385deeb2140f8ffc318080b187b4670811d0fdb241680c9e",
+    "parameter_models": [
+      "gpt-6-luna",
+      "gpt-6.1-terra",
+      "gpt-6.1-sol"
+    ],
+    "no_model_completion_requests": true,
+    "no_user_credentials_used": true
+  },
+  "validation_limits": [
+    "Admin menu parent and registration verified in the production database; anonymous admin requests denied. No production admin login or catalog write was performed.",
+    "Client live checks fetched public metadata only; no model completion or supplier credential was used."
+  ],
+  "evidence_directory": ".build\\client-model-catalog-deploy-20261030",
+  "client_published": false,
+  "installed_client_replaced": false
+}
