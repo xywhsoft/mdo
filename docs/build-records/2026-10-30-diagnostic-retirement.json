@@ -1,0 +1,100 @@
+{
+  "product_commit": "c76756d739dcdfad342d5a6c0ac8b98656f4ec94",
+  "version": "0.8.0",
+  "version_code": "05000800",
+  "published": false,
+  "existing_installation_replaced": false,
+  "existing_worktree_changes_preserved": true,
+  "candidate_contains_existing_worktree_changes": true,
+  "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
+  "artifacts": {
+    "mdo.exe": {
+      "bytes": 6477148,
+      "sha256": "33564c239dc451a78b571f0cd2c2cc1f10a66ce0b24b3f294bfb2fad612d334b"
+    },
+    "mdo-diagnostics-qa.apk": {
+      "bytes": 6272404,
+      "sha256": "c4c9153d942663a3f53bf8af74ed41392c2005d69a98c6e9fb2b51b15492cb19"
+    }
+  },
+  "android_native_matches_build": true,
+  "android_native_sha256": "4b741656e89fe858ffbf5c8d932c5bdfb1373f7f0ac97dc820f83f8986de7012",
+  "verification": {
+    "frontend": {
+      "tests": 1224,
+      "pass": 1222,
+      "skip": 2,
+      "fail": 0
+    },
+    "final_targeted_frontend": {
+      "tests": 13,
+      "pass": 13
+    },
+    "contracts": {
+      "tests": 47,
+      "pass": 47
+    },
+    "frontend_modules": 239,
+    "native_probes": [
+      "home",
+      "home_restore",
+      "home_purge",
+      "project_purge_receipts",
+      "passive_home",
+      "diagnostics_storage"
+    ],
+    "passive_home": [
+      {
+        "mode": "fresh",
+        "catalog_revision": 2,
+        "catalog_persisted": true,
+        "memory_directory_created": false,
+        "source_bytes_unchanged": true
+      },
+      {
+        "mode": "browser-cache",
+        "catalog_revision": 2,
+        "catalog_persisted": true,
+        "memory_directory_created": false,
+        "source_bytes_unchanged": true
+      },
+      {
+        "mode": "inside-source",
+        "catalog_revision": 2,
+        "catalog_persisted": true,
+        "memory_directory_created": false,
+        "source_bytes_unchanged": true
+      },
+      {
+        "mode": "user-data",
+        "catalog_revision": 2,
+        "catalog_persisted": true,
+        "memory_directory_created": false,
+        "source_bytes_unchanged": true
+      }
+    ],
+    "packed": [
+      {
+        "mode": "normal",
+        "domains": [],
+        "retired_routes": true
+      },
+      {
+        "mode": "invalid-files",
+        "domains": [
+          "extensions",
+          "knowledge",
+          "sessions"
+        ],
+        "retired_routes": true
+      }
+    ]
+  },
+  "not_run": [
+    "visual_acceptance",
+    "android_device",
+    "full_general_api_runtime_main",
+    "live_model_calls"
+  ],
+  "evidence_directory": ".build/diagnostic-retirement-20261030"
+}
