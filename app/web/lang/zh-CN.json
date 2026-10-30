@@ -3317,5 +3317,6 @@
   "modelSetup.addComplete": "仅添加参数完整的模型",
   "reasoning.default": "供应商默认",
   "modelParameters.catalogVersion": "服务器目录版本：{version}",
-  "modelParameters.catalogOffline": "服务器参数目录暂时不可用；缓存中的推荐值可能已过期，未知项请手动补全。"
+  "modelParameters.catalogOffline": "服务器参数目录暂时不可用；缓存中的推荐值可能已过期，未知项请手动补全。",
+  "modelSetup.productDocs": "接口与套餐说明"
 }

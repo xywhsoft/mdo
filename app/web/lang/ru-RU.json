@@ -3317,5 +3317,6 @@
   "modelSetup.refreshSuppliers": "Обновить каталог поставщиков",
   "modelSetup.readParameters": "Получить параметры выбранных моделей",
   "modelSetup.addComplete": "Добавить только модели с полными параметрами",
-  "reasoning.default": "По умолчанию у поставщика"
+  "reasoning.default": "По умолчанию у поставщика",
+  "modelSetup.productDocs": "Документация API и тарифа"
 }

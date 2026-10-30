@@ -332,6 +332,10 @@ export function createModelConfigPanel(container) {
       form.append(element("label", { className: "model-field" }, [element("span", { text: draft.preset.custom ? text("protocol", "接口协议") : text("apiProduct", "API 产品") }), select]));
     }
     if (!draft.provider && draft.preset.custom) form.append(field(text("baseUrl", "服务地址（含 /v1）"), "base-url", draft.base, (value) => { draft.base = value; draft.queried = false; }, { type: "url", required: true }));
+    if (draft.choice.key_note) form.append(element("p", { className: "model-parameter-warning", text: draft.choice.key_note }));
+    if (draft.choice.source_url && /^https:\/\//.test(draft.choice.source_url)) form.append(element("a", {
+      text: text("productDocs", "接口与套餐说明"), attrs: { href: draft.choice.source_url, target: "_blank", rel: "noopener noreferrer" },
+    }));
     if (!draft.provider || draft.provider.credential) {
       form.append(field(draft.provider ? text("replaceKeyOptional", "API Key（留空使用已保存的凭据）") : text("apiKey", "API Key"), "api-key", draft.key, (value) => { draft.key = value; draft.queried = false; }, { type: "password" }));
       if (draft.preset.keyUrl && !draft.provider) form.append(element("a", { className: "supplier-key-link", text: text("getKey", "获取 API Key"), attrs: { href: draft.preset.keyUrl, target: "_blank", rel: "noopener noreferrer" } }));

@@ -3317,5 +3317,6 @@
   "modelSetup.addComplete": "Add models with complete parameters only",
   "reasoning.default": "Provider default",
   "modelParameters.catalogVersion": "Server catalog version: {version}",
-  "modelParameters.catalogOffline": "Server catalog unavailable. Cached recommendations may be outdated; fill unknown parameters manually."
+  "modelParameters.catalogOffline": "Server catalog unavailable. Cached recommendations may be outdated; fill unknown parameters manually.",
+  "modelSetup.productDocs": "API product and plan documentation"
 }
