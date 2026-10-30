@@ -9,6 +9,8 @@
 #include "../../include/mdo/version.h"
 #include "../../include/mdo/builtin_model.h"
 
+static void MdoModelsInstallWireHooks(xllm_client* Client);
+
 #define MDO_MODELS_ERROR_DOMAIN "mdo.models"
 #define MDO_MODELS_MAX_CONFIG_BYTES (1024u * 1024u)
 #define MDO_MODELS_MAX_PROVIDERS 128u
@@ -1284,6 +1286,7 @@ static xllm_client* MdoModelClientCreateAuth(const MdoModelCatalog* pCatalog,
     Config.eProvider = Profile.eProvider;
     Config.pModelProfile = &Profile;
     pClient = xllmClientCreate(&Config, pError);
+    MdoModelsInstallWireHooks(pClient);
     if ( pClient != NULL && pInfo != NULL ) {
         pInfo->ModelGeneration = pCatalog->Generation;
         pInfo->Protocol = Protocol;

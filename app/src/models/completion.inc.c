@@ -279,12 +279,17 @@ static const xllm_request* MdoModelsClientRequest(xllm_client* Client,
     return View;
 }
 
+#include "tool_schema.inc.c"
+
 static xllm_result MdoModelsClientComplete(xllm_client* Client, const xllm_request* Request,
     const xllm_stream_callbacks* Callbacks, xllm_response** Response, xllm_error* Error)
 {
-    xllm_request View;
-    return xllmClientComplete(Client, MdoModelsClientRequest(Client, Request, &View),
-        Callbacks, Response, Error);
+    xllm_request View; MdoModelHooks Context; xllm_hooks Hooks;
+    const xllm_request* Prepared = MdoModelsClientRequest(Client, Request, &View);
+    if (!Client || !Request || Prepared != &View)
+        return xllmClientComplete(Client, Prepared, Callbacks, Response, Error);
+    MdoModelsRequestHooks(&View, &Context, &Hooks);
+    return xllmClientComplete(Client, &View, Callbacks, Response, Error);
 }
 
 static xllm_result MdoModelsComplete(xllm_client* Client, const xllm_request* Request,

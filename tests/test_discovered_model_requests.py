@@ -79,12 +79,66 @@ static void RunProfile(MdoModelProtocol Protocol,bool Controlled){
     }
     xllmRequestUnit(&Request);
 }
+static bool SchemaHookRequest(xllm_client* C,xllm_request* R,void* P){(void)C;(void)R;((unsigned*)P)[0]++;return true;}
+static bool SchemaHookBody(xllm_client* C,xllm_wire* W,void* P){(void)C;((unsigned*)P)[1]++;char* Copy=malloc(W->iBodySize+1);if(!Copy)return false;memcpy(Copy,W->sBody,W->iBodySize+1);W->sBody=Copy;W->iBodyCapacity=W->iBodySize+1;return true;}
+static bool SchemaHookRetry(xllm_client* C,const xllm_diagnostics* D,uint32 N,void* P){(void)C;(void)D;(void)N;((unsigned*)P)[2]++;return true;}
+static bool SchemaHookResponseBody(xllm_client* C,xllm_wire* W,void* P){(void)C;(void)W;((unsigned*)P)[3]++;return true;}
+static bool SchemaHookTool(xllm_client* C,xllm_tool_call* T,uint32 N,void* P){(void)C;(void)T;(void)N;((unsigned*)P)[4]++;return true;}
+static bool SchemaHookResponse(xllm_client* C,xllm_response* R,void* P){(void)C;(void)R;((unsigned*)P)[5]++;return true;}
+static void RunToolSchemas(void){
+    const char* Good="{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\"}},\"required\":[\"path\"],\"additionalProperties\":false}";
+    const char* Optional="{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\"},\"limit\":{\"type\":\"integer\"}},\"required\":[\"path\"],\"additionalProperties\":false}";
+    Check(MdoModelsToolStrictCompatible(Good),"strict_valid");
+    Check(!MdoModelsToolStrictCompatible(Optional),"optional_is_not_strict");
+    Check(!MdoModelsToolStrictCompatible("{\"type\":\"object\",\"properties\":{},\"required\":[],\"additionalProperties\":true}"),"open_object_is_not_strict");
+    Check(!MdoModelsToolStrictCompatible("{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"string\"},\"b\":{\"type\":\"string\"}},\"required\":[\"a\",\"a\"],\"additionalProperties\":false}"),"duplicate_required_rejected");
+    Check(!MdoModelsToolStrictCompatible("{\"type\":\"object\",\"properties\":{\"items\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"string\"}},\"required\":[],\"additionalProperties\":false}}},\"required\":[\"items\"],\"additionalProperties\":false}"),"nested_optional_rejected");
+    for(unsigned Provider=0;Provider<3;Provider++){
+        xllm_provider Protocol=Provider==0?XLLM_PROVIDER_OPENAI_COMPAT:Provider==1?XLLM_PROVIDER_OPENAI_RESPONSES:XLLM_PROVIDER_ANTHROPIC;
+        xllm_model_profile Profile;xllmModelProfileInit(&Profile);Profile.sId="schema-test";Profile.sModel="schema-test";Profile.eProvider=Protocol;
+        Profile.uCapabilities=XLLM_CAP_TEXT_IN|XLLM_CAP_TEXT_OUT|XLLM_CAP_TOOL_CALL_OUT|XLLM_CAP_TOOL_RESULT_IN|XLLM_CAP_STREAM;
+        Profile.eWindowMode=XLLM_WINDOW_SHARED_CONTEXT;Profile.uContextWindowTokens=65536;Profile.uMaxInputTokens=57344;Profile.uMaxOutputTokens=8192;
+        xllm_client_config Config;xllmClientConfigInit(&Config);Config.sBaseUrl="http://127.0.0.1:9/v1";Config.sModel="schema-test";
+        Config.sApiKey="not-used";Config.eProvider=Protocol;Config.pModelProfile=&Profile;Config.uMaxOutputTokens=1024;xllm_error Error={0};
+        xllm_client* Client=xllmClientCreate(&Config,&Error);Check(Client!=NULL,"schema_client");
+        xllm_request Request;xllmRequestInit(&Request);xllmRequestAddTextMessage(&Request,XLLM_ROLE_USER,"OK");
+        xllmRequestAddTool(&Request,"optional","Optional fields",Optional,true);xllmRequestAddTool(&Request,"valid","Strict fields",Good,true);
+        xllmRequestAddTool(&Request,"best_effort","Explicit non-strict",Good,false);
+        xllm_request View=Request;if(Client)MdoModelsClientRequest(Client,&Request,&View);
+        Check(Request.pTools[0].bStrict&&Request.pTools[0].sParametersJson==View.pTools[0].sParametersJson&&
+            Request.pMessages==View.pMessages&&Request.pTools[0].sName==View.pTools[0].sName,"caller_and_schema_unchanged");
+        char* Json=Client?xllmClientBuildRequestJson(Client,&View,&Error):NULL;Check(Json!=NULL,"adapted_tool_wire_json");
+        xllm_wire Wire={0};Wire.sBody=Json;Wire.iBodySize=Json?strlen(Json):0;Wire.iBodyCapacity=Wire.iBodySize+1;
+        unsigned Seen[6]={0};xllm_hooks Original={0},Wrapped;MdoModelHooks Context;
+        Original.pOnRequest=SchemaHookRequest;Original.pOnRequestBody=SchemaHookBody;Original.pOnRetry=SchemaHookRetry;
+        Original.pOnResponseBody=SchemaHookResponseBody;Original.pOnToolCall=SchemaHookTool;Original.pOnResponse=SchemaHookResponse;Original.pUserData=Seen;
+        Request.pHooks=&Original;View.pHooks=&Original;MdoModelsRequestHooks(&View,&Context,&Wrapped);
+        Check(Json&&Wrapped.pOnRequest(Client,&View,Wrapped.pUserData)&&Wrapped.pOnRequestBody(Client,&Wire,Wrapped.pUserData),"strict_wire_seam");
+        Wrapped.pOnRetry(Client,NULL,2,Wrapped.pUserData);Wrapped.pOnResponseBody(Client,&Wire,Wrapped.pUserData);
+        Wrapped.pOnToolCall(Client,NULL,0,Wrapped.pUserData);Wrapped.pOnResponse(Client,NULL,Wrapped.pUserData);
+        for(unsigned I=0;I<6;I++)Check(Seen[I]==1,"caller_hook_forwarded_once");
+        Check(Request.pHooks==&Original&&Original.pUserData==Seen,"caller_hooks_unchanged");
+        if(Json&&Protocol!=XLLM_PROVIDER_ANTHROPIC){xvalue* Root=xrtJsonParse(xrtStrView(Wire.sBody));
+            xvalue* Tools=xrtValueObjectGet(Root,XRT_STR_LITERAL("tools"));xvalue* Tool=xrtValueArrayGet(Tools,0);
+            if(Protocol==XLLM_PROVIDER_OPENAI_COMPAT)Tool=xrtValueObjectGet(Tool,XRT_STR_LITERAL("function"));
+            bool Strict=true;Check(xrtValueGetBool(xrtValueObjectGet(Tool,XRT_STR_LITERAL("strict")),&Strict)&&!Strict,"wire_explicit_false");
+            const xvalue* Params=xrtValueObjectGet(Tool,XRT_STR_LITERAL("parameters"));
+            Check(xrtValueCount(xrtValueObjectGet(Params,XRT_STR_LITERAL("required")))==1&&xrtValueCount(xrtValueObjectGet(Params,XRT_STR_LITERAL("properties")))==2,"optional_schema_not_rewritten");
+            Tool=xrtValueArrayGet(Tools,1);if(Protocol==XLLM_PROVIDER_OPENAI_COMPAT)Tool=xrtValueObjectGet(Tool,XRT_STR_LITERAL("function"));
+            Check(xrtValueGetBool(xrtValueObjectGet(Tool,XRT_STR_LITERAL("strict")),&Strict)&&Strict,"valid_strict_preserved");
+            Tool=xrtValueArrayGet(Tools,2);if(Protocol==XLLM_PROVIDER_OPENAI_COMPAT)Tool=xrtValueObjectGet(Tool,XRT_STR_LITERAL("function"));
+            Check(xrtValueGetBool(xrtValueObjectGet(Tool,XRT_STR_LITERAL("strict")),&Strict)&&!Strict,"explicit_nonstrict_preserved");xrtValueRelease(Root);}
+        if(Wire.sBody!=Json)xllmFree(Wire.sBody);xllmFree(Json);xllmRequestUnit(&Request);xllmClientDestroy(Client);
+    }
+    printf("strict_tool_contract=1\n");
+}
 void ServiceInit(XS_HostInfo* Host){
     (void)Host;Check(MdoHomeInit()&&MdoConfigInit(),"init");
     RunProfile(MDO_MODEL_PROTOCOL_OPENAI_RESPONSES,false);
     RunProfile(MDO_MODEL_PROTOCOL_OPENAI_CHAT_COMPLETIONS,false);
     RunProfile(MDO_MODEL_PROTOCOL_ANTHROPIC_MESSAGES,false);
     RunProfile(MDO_MODEL_PROTOCOL_OPENAI_RESPONSES,true);
+    RunToolSchemas();
     MdoConfigUnit();MdoHomeUnit();printf("failed=%u\nprobe_done=1\n",Failed);fflush(stdout);
 }
 '''
@@ -118,7 +172,7 @@ def main():
                     time.sleep(.1)
             text=log.read_text(errors='replace');(evidence/'native-request-contract.txt').write_text(text,encoding='utf-8')
             for expected in ['prepared_protocol_2_controlled_0=1','prepared_protocol_1_controlled_0=1',
-                'prepared_protocol_3_controlled_0=1','prepared_protocol_2_controlled_1=1','failed=0','probe_done=1']:
+                'prepared_protocol_3_controlled_0=1','prepared_protocol_2_controlled_1=1','strict_tool_contract=1','failed=0','probe_done=1']:
                 assert expected in text,text[-16000:]
             print('Discovered Chat/Responses/Anthropic profiles: serialization, request ownership and capability boundaries PASS')
         finally:
