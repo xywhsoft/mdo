@@ -39,8 +39,9 @@ class Supplier(BaseHTTPRequestHandler):
         names = {tool.get('name') for tool in definitions}
         valid = body.get('stream') is True and (not tools or {'skill', 'read', 'exec', 'mdo_connection_probe'} <= names)
         if not self.path.endswith('/messages'):
-            valid &= all(isinstance(tool.get('strict'), bool) and
-                (not tool['strict'] or strict_object(tool.get('parameters', {}))) for tool in definitions)
+            valid &= all((isinstance(tool.get('strict'), bool) if self.path.endswith('/responses') else
+                'strict' not in tool or isinstance(tool['strict'], bool)) and
+                (not tool.get('strict') or strict_object(tool.get('parameters', {}))) for tool in definitions)
         if not valid:
             self.contract_errors.append('stream or native tool schemas not exercised')
             raw = json.dumps({'error': {'code': 'invalid_function_parameters', 'type': 'invalid_request_error',
@@ -68,8 +69,38 @@ class Supplier(BaseHTTPRequestHandler):
                 message = {'role': 'assistant', 'content': None, 'reasoning_content': 'internal thought only'}
             data = {'id': 'fixture', 'object': 'chat.completion', 'model': body['model'],
                 'choices': [{'index': 0, 'message': message, 'finish_reason': 'tool_calls' if tools else 'stop'}]}
-        raw = json.dumps(data).encode()
-        self.send_response(200); self.send_header('Content-Type', 'application/json')
+        events = []
+        def event(kind, value):
+            events.append(f'event: {kind}\ndata: {json.dumps(value)}\n\n')
+        if self.path.endswith('/responses'):
+            if tools:
+                item = {**data['output'][0], 'id': 'fc_probe'}
+                event('response.output_item.added', {'type': 'response.output_item.added', 'output_index': 0,
+                    'item': {**item, 'arguments': ''}})
+                event('response.function_call_arguments.delta', {'type': 'response.function_call_arguments.delta',
+                    'output_index': 0, 'item_id': 'fc_probe', 'delta': args})
+            else:
+                event('response.output_text.delta', {'type': 'response.output_text.delta', 'output_index': 0,
+                    'content_index': 0, 'delta': 'OK'})
+            event('response.completed', {'type': 'response.completed', 'response': data})
+        elif self.path.endswith('/messages'):
+            event('message_start', {'type': 'message_start', 'message': {**data, 'content': [],
+                'usage': {'input_tokens': 2, 'output_tokens': 0}}})
+            block = {'type': 'tool_use', 'id': 'probe', 'name': 'mdo_connection_probe', 'input': {}} if tools else {'type': 'text', 'text': ''}
+            event('content_block_start', {'type': 'content_block_start', 'index': 0, 'content_block': block})
+            event('content_block_delta', {'type': 'content_block_delta', 'index': 0, 'delta':
+                {'type': 'input_json_delta', 'partial_json': args} if tools else {'type': 'text_delta', 'text': 'OK'}})
+            event('content_block_stop', {'type': 'content_block_stop', 'index': 0})
+            event('message_delta', {'type': 'message_delta', 'delta': {'stop_reason': data['stop_reason']}, 'usage': {'output_tokens': 2}})
+            event('message_stop', {'type': 'message_stop'})
+        else:
+            delta = data['choices'][0]['message']
+            for call in delta.get('tool_calls', []): call['index'] = 0
+            chunk = {**data, 'object': 'chat.completion.chunk', 'choices': [{'index': 0, 'delta': delta,
+                'finish_reason': data['choices'][0]['finish_reason']}]}
+            events.append(f'data: {json.dumps(chunk)}\n\ndata: [DONE]\n\n')
+        raw = ''.join(events).encode()
+        self.send_response(200); self.send_header('Content-Type', 'text/event-stream')
         self.send_header('Content-Length', str(len(raw))); self.end_headers(); self.wfile.write(raw)
 
 

@@ -83,6 +83,9 @@ static bool MdoModelsStrictBody(xllm_client* Client, xllm_wire* Wire, void* Data
         xvalue* Strict = xrtValueObjectGet(Tool, XRT_STR_LITERAL("strict")); bool Enabled = false;
         xrtValueGetBool(Strict, &Enabled);
         if (!Enabled && Strict) continue;
+        /* Chat Completions already defaults to best effort. Only Responses
+         * needs an explicit false when the SDK omitted the caller's flag. */
+        if (!Enabled && !Strict && Profile.eProvider == XLLM_PROVIDER_OPENAI_COMPAT) continue;
         const xvalue* Schema = xrtValueObjectGet(Tool, XRT_STR_LITERAL("parameters")); xstrview RootType = {0};
         bool Compatible = !xrtValueObjectGet(Schema, XRT_STR_LITERAL("anyOf")) &&
             xrtValueGetString(xrtValueObjectGet(Schema, XRT_STR_LITERAL("type")), &RootType) &&

@@ -130,7 +130,8 @@ static void RunToolSchemas(void){
             Tool=xrtValueArrayGet(Tools,1);if(Protocol==XLLM_PROVIDER_OPENAI_COMPAT)Tool=xrtValueObjectGet(Tool,XRT_STR_LITERAL("function"));
             Check(xrtValueGetBool(xrtValueObjectGet(Tool,XRT_STR_LITERAL("strict")),&Strict)&&Strict,"valid_strict_preserved");
             Tool=xrtValueArrayGet(Tools,2);if(Protocol==XLLM_PROVIDER_OPENAI_COMPAT)Tool=xrtValueObjectGet(Tool,XRT_STR_LITERAL("function"));
-            Check(xrtValueGetBool(xrtValueObjectGet(Tool,XRT_STR_LITERAL("strict")),&Strict)&&!Strict,"explicit_nonstrict_preserved");xrtValueRelease(Root);}
+            xvalue* Mode=xrtValueObjectGet(Tool,XRT_STR_LITERAL("strict"));
+            Check(Protocol==XLLM_PROVIDER_OPENAI_COMPAT?!Mode:xrtValueGetBool(Mode,&Strict)&&!Strict,"explicit_nonstrict_preserved");xrtValueRelease(Root);}
         if(Wire.sBody!=Json)xllmFree(Wire.sBody);xllmFree(Json);xllmRequestUnit(&Request);xllmClientDestroy(Client);
     }
     printf("strict_tool_contract=1\n");
