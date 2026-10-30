@@ -187,6 +187,40 @@
 +        }
 +    }
 +}
+--- a/lib/xllm/src/dialect_responses.c
++++ b/lib/xllm/src/dialect_responses.c
+@@ -409,6 +409,12 @@
+         pCall->bDone = true;
+     } else if ( XLLM_IS("response.incomplete") ) {
+         xvalue* pResponse = xllm__json_get(pRoot, "response");
++        xllm_usage tUsage;
++        memset(&tUsage, 0, sizeof(tUsage));
++        xllm__responses_fill_usage(&tUsage, xllm__json_get(pResponse, "usage"));
++        if ( tUsage.uTotalTokens || tUsage.uInputTokens || tUsage.uOutputTokens ) {
++            if ( !xllm__assemble_usage(pCall, &tUsage) ) { bOk = false; }
++        }
+         xvalue* pDetails = xllm__json_get(pResponse, "incomplete_details");
+         xstrview tReason = xllm__json_text(pDetails, "reason");
+         if ( !xllm__assemble_finish(pCall,
+--- a/lib/xllm/src/xllm_transport.c
++++ b/lib/xllm/src/xllm_transport.c
+@@ -892,6 +892,16 @@
+                 xllm__pump_fail(pCall, "body", "http_protocol");
+                 return NULL;
+             }
++            /* A decoded SSE terminal event completes the model protocol.
++             * Do not wait for a provider's delayed final chunk/EOF. Prefer
++             * the BODY_DONE path above when framing is already available;
++             * otherwise retire this undrained connection, never pool it.
++             * A response-body hook deliberately defers decoding until EOF. */
++            if ( pCall->bSse && !pCall->bDeferParse && pCall->bDone ) {
++                pCall->bReusable = false;
++                xllm__transport_finish(pCall, XLLM_TRANSPORT_OK);
++                return NULL;
++            }
+             if ( pCall->bWireEnd ) {
+                 xllm__pump_fail(pCall, "body", "unexpected_eof");
+                 return NULL;
 --- a/lib/xoauth2/xoauth2.c
 +++ b/lib/xoauth2/xoauth2.c
 @@ -1,4 +1,36 @@

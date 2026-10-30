@@ -42,7 +42,7 @@ def main() -> int:
         (sdk / target).write_bytes((native / source).read_bytes())
         names.add(target)
     names.update(('src/platform/credentials.h', 'android/native/host_jni.c', 'src/script/import_xhttp_product.inc',
-                  'tools/extensions.json'))
+                  'tools/extensions.json', 'lib/xllm/src/xllm_transport.c', 'lib/xllm/src/dialect_responses.c'))
     roots = (sdk / 'lib/xwork/xwork-xrt-roots.h').read_text(encoding='utf-8')
     registry = json.loads((sdk / 'tools/extensions.json').read_text(encoding='utf-8'))['xwork']
     if ('#define XHTTP_MODULE_HTTP_CLIENT_PROXY' not in roots or
@@ -74,6 +74,7 @@ def main() -> int:
                       fromfile="a/" + name if old.returncode == 0 else "/dev/null", tofile="b/" + name))
     patch.write_text("".join(result), encoding="utf-8", newline="\n")
     lock["libraries"]["xwork"]["production_tree_sha256"] = build_mdo.production_tree_sha256(sdk / "lib/xwork")
+    lock["libraries"]["xllm"]["production_tree_sha256"] = build_mdo.production_tree_sha256(sdk / "lib/xllm")
     lock["sdk_overlay"]["sha256"] = hashlib.sha256(patch.read_bytes()).hexdigest()
     (ROOT / "deps.lock").write_text(json.dumps(lock, indent=2) + "\n", encoding="utf-8", newline="\n")
     print("SDK overlay:", lock["sdk_overlay"]["sha256"])

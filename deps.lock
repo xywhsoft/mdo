@@ -44,7 +44,7 @@
     "xllm": {
       "version": "3.1.0",
       "source_commit": "5d16ece2b049fd73eee1d8e79551d6d70c6be216",
-      "production_tree_sha256": "02e153e4f5778213c518ebb83a94551a0f0636ed7ffb6f0aba41a06e119abec2"
+      "production_tree_sha256": "ec39c2cbe84839f7606976d9af3de5d718d148d21038d9c59d00fe1699bc3469"
     },
     "xllm-session": {
       "version": "3.0.0-dev",
@@ -71,7 +71,7 @@
   },
   "sdk_overlay": {
     "path": "tools/dependencies/xwork-mcp.patch",
-    "sha256": "39d056a14ac9b2640421872121bb82b396b9fe6884de746c6a80a8c29b96e69e",
+    "sha256": "183ba3810e585118e707cd27520858f485c07435daf7a121dc8f5d4d4e17ef05",
     "base_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
     "purpose": "MCP and platform compatibility, native browser panels, atomic file replacement and symmetric role runtime hooks; paired external process ownership and PID-safe tree cleanup",
     "xrt_single_header_sha256": "99bead7f87b4e6601cbb555b0d1ba30bb0030bf42c731c7c21f8bd29c1f04453"
