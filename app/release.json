@@ -1,13 +1,13 @@
 {
   "version_name": "0.8.1",
   "version_code": "05000801",
-  "windows_build_id": 70000101,
-  "windows_server_build_id": 70000090,
-  "android_lite_build_id": 70000095,
-  "android_full_build_id": 70000096,
+  "windows_build_id": 70000102,
+  "windows_server_build_id": 70000103,
+  "android_lite_build_id": 70000108,
+  "android_full_build_id": 70000109,
   "toolpack_revision": 4,
-  "linux_glibc_gui_build_id": 70000091,
-  "linux_glibc_server_build_id": 70000092,
-  "linux_musl_gui_build_id": 70000093,
-  "linux_musl_server_build_id": 70000094
+  "linux_glibc_gui_build_id": 70000104,
+  "linux_glibc_server_build_id": 70000105,
+  "linux_musl_gui_build_id": 70000106,
+  "linux_musl_server_build_id": 70000107
 }
