@@ -464,7 +464,7 @@ static bool MdoConfigSettingsValidate(const xvalue* pSettings)
         "read-only", "balanced", "full-access"
     };
     static const char* const Efforts[] = {
-        "none", "minimal", "low", "medium", "high", "xhigh", "max"
+        "default", "none", "minimal", "low", "medium", "high", "xhigh", "max"
     };
     static const char* const OpenModes[] = { "last", "new", "ask" };
     const xvalue* pAppearance;
@@ -703,6 +703,31 @@ static bool MdoConfigProviderValidate(const xvalue* pProvider,
     return MdoConfigModelProxyValid(xrtValueObjectGet(pProvider, MdoConfigKey("proxy")), false);
 }
 
+static bool MdoConfigModelParametersValid(const xvalue* Parameters)
+{
+    if (!Parameters) return true; /* Preserve existing profiles verbatim. */
+    uint64 Schema; xstrview Text; size_t Size = 0;
+    if (xrtValueType(Parameters) != XVALUE_OBJECT ||
+        !MdoConfigUnsigned(xrtValueObjectGet(Parameters, MdoConfigKey("schema_version")), &Schema) || Schema != 1u)
+        return false;
+    const xvalue* Fields = xrtValueObjectGet(Parameters, MdoConfigKey("fields"));
+    if (xrtValueType(Fields) != XVALUE_OBJECT || xrtValueCount(Fields) > 8u) return false;
+    for (size_t I = 0; I < xrtValueCount(Fields); ++I) {
+        xstrview Key; const xvalue* Field = xrtValueObjectAt(Fields, I, &Key);
+        if (xrtValueType(Field) != XVALUE_OBJECT || !xrtValueObjectGet(Field, MdoConfigKey("value")) ||
+            !MdoConfigString(xrtValueObjectGet(Field, MdoConfigKey("source")), &Text) ||
+            (!MdoConfigViewEqual(Text,"api") && !MdoConfigViewEqual(Text,"server") &&
+             !MdoConfigViewEqual(Text,"upstream-recommendation") && !MdoConfigViewEqual(Text,"manual") && !MdoConfigViewEqual(Text,"legacy"))) return false;
+        const xvalue* Url = xrtValueObjectGet(Field, MdoConfigKey("url"));
+        if (Url && (!MdoConfigString(Url, &Text) || Text.Size > 2048u)) return false;
+        if (MdoConfigViewEqual(Key,"context_tokens") || MdoConfigViewEqual(Key,"max_input_tokens") || MdoConfigViewEqual(Key,"max_output_tokens")) {
+            uint64 Limit; if (!MdoConfigUnsigned(xrtValueObjectGet(Field,MdoConfigKey("value")),&Limit) || !Limit || Limit > UINT32_MAX) return false;
+        } else if (!MdoConfigViewEqual(Key,"reasoning") && !MdoConfigViewEqual(Key,"tools") && !MdoConfigViewEqual(Key,"window_mode")) return false;
+    }
+    char* Json = xrtJsonStringify(Parameters, false, &Size);
+    bool Ok = Json && Size <= 32768u; xrtFree(Json); return Ok;
+}
+
 static bool MdoConfigModelItemValidate(const xvalue* pItem,
     const xvalue* pProviders, xstrview* pId)
 {
@@ -713,7 +738,7 @@ static bool MdoConfigModelItemValidate(const xvalue* pItem,
         "max-completion-tokens", "developer-role", "media-input"
     };
     static const char* const Efforts[] = {
-        "none", "minimal", "low", "medium", "high", "xhigh", "max"
+        "default", "none", "minimal", "low", "medium", "high", "xhigh", "max"
     };
     static const char* const Attachments[] = { "image", "audio", "file" };
     const xvalue* pProtocols;
@@ -737,6 +762,7 @@ static bool MdoConfigModelItemValidate(const xvalue* pItem,
     size_t j;
 
     if ( xrtValueType(pItem) != XVALUE_OBJECT ||
+         !MdoConfigModelParametersValid(xrtValueObjectGet(pItem, MdoConfigKey("parameters"))) ||
          !MdoConfigString(xrtValueObjectGet(pItem, MdoConfigKey("id")),
             pId) || pId->Size == 0u || pId->Size > 128u ||
          !MdoConfigString(xrtValueObjectGet(pItem, MdoConfigKey("name")),

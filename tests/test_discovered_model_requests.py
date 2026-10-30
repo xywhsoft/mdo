@@ -21,7 +21,7 @@ static unsigned Failed;
 static void Check(bool Ok,const char* Name){if(!Ok){++Failed;printf("FAIL %s\n",Name);}}
 static void RunProfile(MdoModelProtocol Protocol,bool Controlled){
     MdoModelCatalog Catalog={0};MdoProviderEntry Provider={0};MdoModelEntry Model={0};
-    char* Efforts[]={"none"};
+    char* Efforts[]={"none","default"};
     Provider.Id="discovered";Provider.Name="Discovered";Provider.TimeoutMilliseconds=2000;
     Provider.Protocols=MdoModelsProtocolFlag(Protocol);
     size_t Index=0;MdoModelsEndpointIndex(Protocol,&Index);
@@ -33,7 +33,7 @@ static void RunProfile(MdoModelProtocol Protocol,bool Controlled){
     if(Controlled)Model.Capabilities|=XLLM_CAP_REASONING_CONTROL|XLLM_CAP_REASONING_OUT|XLLM_CAP_PARALLEL_TOOL_CALL;
     Model.WindowMode=XLLM_WINDOW_SHARED_CONTEXT;Model.ContextWindowTokens=65536;Model.MaxInputTokens=57344;
     Model.MaxOutputTokens=8192;Model.OutputReserveTokens=4096;Model.SummaryTokens=2048;
-    Model.ReasoningEfforts=Efforts;Model.ReasoningEffortCount=1;Model.DefaultReasoningEffort="none";
+    Model.ReasoningEfforts=Efforts;Model.ReasoningEffortCount=2;Model.DefaultReasoningEffort="none";
     Catalog.Providers=&Provider;Catalog.ProviderCount=1;Catalog.Models=&Model;Catalog.ModelCount=1;
     xllm_error Error={0};xllm_model_profile Profile;
     Check(MdoModelCatalogProfile(&Catalog,Model.Id,Protocol,&Profile,&Error),"profile");
@@ -65,6 +65,20 @@ static void RunProfile(MdoModelProtocol Protocol,bool Controlled){
         Check(Json!=NULL,"serialized_request");
         printf("prepared_protocol_%u_controlled_%u=%u\n",(unsigned)Protocol,Controlled,Json!=NULL);
         xllmFree(Json);
+        if(Controlled && Protocol!=MDO_MODEL_PROTOCOL_ANTHROPIC_MESSAGES){
+            xllmRequestSetReasoningEffort(&Request,"default");
+            Prepared=MdoModelsClientRequest(Client,&Request,&View);
+            MdoModelHooks Context;xllm_hooks Hooks;MdoModelsRequestHooks(&View,&Context,&Hooks,true);
+            Json=xllmClientBuildRequestJson(Client,Prepared,&Error);
+            xllm_wire Wire={0};Wire.sBody=Json;Wire.iBodySize=Json?strlen(Json):0;Wire.iBodyCapacity=Wire.iBodySize+1;
+            Check(Json && Hooks.pOnRequestBody(Client,&Wire,Hooks.pUserData),"provider_default_wire");
+            xvalue* R=Wire.sBody?xrtJsonParse(xrtStrView(Wire.sBody)):NULL;
+            Check(R && !xrtValueObjectHas(R,XRT_STR_LITERAL("reasoning_effort")) &&
+                !xrtValueObjectHas(xrtValueObjectGet(R,XRT_STR_LITERAL("reasoning")),XRT_STR_LITERAL("effort")),"provider_default_omits_controls");
+            xrtValueRelease(R);if(Wire.sBody!=Json)xllmFree(Wire.sBody);xllmFree(Json);
+            Options.ReasoningEffort="default";xllm_client* DefaultClient=MdoModelClientCreate(&Catalog,&Options,NULL,&Error);
+            Check(DefaultClient!=NULL,"factory_provider_default");xllmClientDestroy(DefaultClient);
+        }
         if(!Controlled){
             xllmRequestSetReasoningEffort(&Request,"high");
             Prepared=MdoModelsClientRequest(Client,&Request,&View);
@@ -112,14 +126,14 @@ static void RunToolSchemas(void){
         unsigned Seen[6]={0};xllm_hooks Original={0},Wrapped;MdoModelHooks Context;
         Original.pOnRequest=SchemaHookRequest;Original.pOnRequestBody=SchemaHookBody;Original.pOnRetry=SchemaHookRetry;
         Original.pOnResponseBody=SchemaHookResponseBody;Original.pOnToolCall=SchemaHookTool;Original.pOnResponse=SchemaHookResponse;Original.pUserData=Seen;
-        Request.pHooks=&Original;View.pHooks=&Original;MdoModelsRequestHooks(&View,&Context,&Wrapped);
+        Request.pHooks=&Original;View.pHooks=&Original;MdoModelsRequestHooks(&View,&Context,&Wrapped,false);
         Check(Json&&Wrapped.pOnRequest(Client,&View,Wrapped.pUserData)&&Wrapped.pOnRequestBody(Client,&Wire,Wrapped.pUserData),"strict_wire_seam");
         Wrapped.pOnRetry(Client,NULL,2,Wrapped.pUserData);Wrapped.pOnResponseBody(Client,&Wire,Wrapped.pUserData);
         Wrapped.pOnToolCall(Client,NULL,0,Wrapped.pUserData);Wrapped.pOnResponse(Client,NULL,Wrapped.pUserData);
         for(unsigned I=0;I<6;I++)Check(Seen[I]==1,"caller_hook_forwarded_once");
         Check(Request.pHooks==&Original&&Original.pUserData==Seen,"caller_hooks_unchanged");
         xllm_hooks RetryOnly={0};RetryOnly.pOnRetry=SchemaHookRetry;RetryOnly.pUserData=Seen;View.pHooks=&RetryOnly;
-        MdoModelsRequestHooks(&View,&Context,&Wrapped);
+        MdoModelsRequestHooks(&View,&Context,&Wrapped,false);
         Check(!Wrapped.pOnRequest&&!Wrapped.pOnResponseBody&&!Wrapped.pOnToolCall&&!Wrapped.pOnResponse&&Wrapped.pOnRetry&&Wrapped.pOnRequestBody,"absent_hooks_stay_absent");
         if(Json&&Protocol!=XLLM_PROVIDER_ANTHROPIC){xvalue* Root=xrtJsonParse(xrtStrView(Wire.sBody));
             xvalue* Tools=xrtValueObjectGet(Root,XRT_STR_LITERAL("tools"));xvalue* Tool=xrtValueArrayGet(Tools,0);

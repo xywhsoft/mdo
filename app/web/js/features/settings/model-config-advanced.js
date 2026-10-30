@@ -22,7 +22,7 @@ const capabilities = [
   ["parallel-tool-calls", "并行工具"], ["max-completion-tokens", "max_completion_tokens"],
   ["developer-role", "Developer 角色"], ["media-input", "媒体输入"],
 ];
-const efforts = ["none", "minimal", "low", "medium", "high", "xhigh", "max"];
+const efforts = ["default", "none", "minimal", "low", "medium", "high", "xhigh", "max"];
 const attachments = [["image", "图片"], ["audio", "音频"], ["file", "文件"]];
 const clone = (value) => structuredClone(value);
 
@@ -64,7 +64,7 @@ const optionKeys = Object.freeze({
   "media-input": "modelConfig.mediaInput",
   image: "modelConfig.image", audio: "modelConfig.audio",
   file: "modelConfig.file",
-  none: "settings.reasoningNone", minimal: "settings.reasoningMinimal",
+  default: "reasoning.default", none: "settings.reasoningNone", minimal: "settings.reasoningMinimal",
   low: "settings.reasoningLow", medium: "settings.reasoningMedium",
   high: "settings.reasoningHigh", xhigh: "settings.reasoningXhigh",
   max: "settings.reasoningMax",

@@ -271,6 +271,7 @@ static const xllm_request* MdoModelsClientRequest(xllm_client* Client,
     xllm_model_profile Profile;
     if (!Client || !Request || !xllmClientGetModelProfile(Client, &Profile)) return Request;
     *View = *Request;
+    if (View->sReasoningEffort && !strcmp(View->sReasoningEffort, "default")) View->sReasoningEffort = NULL;
     if (!(Profile.uCapabilities & XLLM_CAP_PARALLEL_TOOL_CALL))
         View->bParallelToolCalls = false;
     if (!(Profile.uCapabilities & XLLM_CAP_REASONING_CONTROL) &&
@@ -288,7 +289,7 @@ static xllm_result MdoModelsClientComplete(xllm_client* Client, const xllm_reque
     const xllm_request* Prepared = MdoModelsClientRequest(Client, Request, &View);
     if (!Client || !Request || Prepared != &View)
         return xllmClientComplete(Client, Prepared, Callbacks, Response, Error);
-    MdoModelsRequestHooks(&View, &Context, &Hooks);
+    MdoModelsRequestHooks(&View, &Context, &Hooks, Request->sReasoningEffort && !strcmp(Request->sReasoningEffort, "default"));
     return xllmClientComplete(Client, &View, Callbacks, Response, Error);
 }
 

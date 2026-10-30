@@ -5,10 +5,11 @@ import { loadModels } from "../../state/catalogs.js";
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
 
 import { createAdvancedModelConfigPanel } from "./model-config-advanced.js";
-import { providerPresets, presetVariant, presetProvider, presetModel, suggestedModels } from "./provider-presets.js";
+import { providerPresets, setProviderCatalog, presetVariant, presetProvider, presetModel, suggestedModels } from "./provider-presets.js";
 import { sameModelConfig } from "./model-config-state.js";
 import { createModelProxyEditor } from "./model-proxy-editor.js";
 import { verifyModelSetup } from "./model-verification.js";
+import { parameterDraft, parameterIssues, applyParameters, createParameterEditor, parameterSummary } from "./model-parameters.js";
 
 const clone = (value) => structuredClone(value);
 const text = (key, fallback, params = {}) => t(`modelSetup.${key}`, params, fallback);
@@ -32,7 +33,7 @@ function field(label, name, value, onChange, { type = "text", required = false }
 // Draft keys exist only in this page's memory, never browser storage or URLs.
 export function createModelConfigPanel(container) {
   let config = null, etag = "", selectedId = "", view = "list", busy = false;
-  let draft = null, advanced = null, advancedChanged = false, needsRead = false;
+  let draft = null, parameterEdit = null, advanced = null, advancedChanged = false, needsRead = false;
   let notice = "", failed = false, disposed = false, loading = null;
   const controller = new AbortController();
   let verificationController = null;
@@ -111,16 +112,24 @@ export function createModelConfigPanel(container) {
     advanced?.destroy(); advanced = null; view = "list";
     if (advancedChanged) { advancedChanged = false; await reload(); } else render();
   }
-  function add() {
+  async function add() {
     if (blocked()) return;
-    view = "templates"; render();
+    view = "templates"; setBusy(true); status(text("readingSuppliers", "正在读取最新供应商和模型目录…"));
+    try {
+      const response = await api.get("/models/providers", { signal: controller.signal });
+      if (disposed) return;
+      setProviderCatalog(response.data.providers);
+      notice = response.data.stale ? text("cachedSuppliers", "无法连接目录服务，正在使用上次成功获取的供应商目录。") : "";
+      failed = false;
+    } catch (cause) { if (!disposed) { notice = text("supplierUnavailable", "供应商目录暂时不可用，可重试或手动添加自定义供应商。"); failed = true; } }
+    finally { if (!disposed) render(); setBusy(false); }
   }
   function choose(preset, choice = preset.variants[0]) {
     // New models use the same supplier route as discovery unless overridden.
     draft = { preset, choice, key: "", base: choice.base, name: preset.labelKey ? text(preset.labelKey, preset.name) : preset.name, provider: null,
       items: [...choice.models], selected: new Set(choice.models.slice(0, 2)), queried: false,
       ref: "", query: "", manual: "", default: false, advancedOpen: false,
-      proxy: { kind: "global" }, modelProxy: { kind: "provider" } };
+      parameters: new Map(), parameterBinding: "", proxy: { kind: "global" }, modelProxy: { kind: "provider" } };
     view = "setup"; notice = ""; failed = false; render();
   }
   function connection() {
@@ -130,6 +139,76 @@ export function createModelConfigPanel(container) {
     if (draft.ref.trim()) entry.credential = { secret_ref: draft.ref.trim() };
     entry.proxy = clone(draft.proxy);
     return entry;
+  }
+  function selectedIds() {
+    return [...new Set([...draft.selected, ...draft.manual.split(/[\n,;]+/).map(id => id.trim()).filter(Boolean)])];
+  }
+  function setupProtocol(entry) {
+    return draft.provider ? (entry.endpoints.responses ? "openai-responses" : entry.endpoints.chat_completions ? "openai-chat-completions" : "anthropic-messages") : draft.choice.protocol;
+  }
+  async function resolveParameters(ids) {
+    const entry = connection(), protocol = setupProtocol(entry);
+    const binding = JSON.stringify([entry.endpoints, protocol]);
+    if (draft.parameterBinding !== binding) { draft.parameters.clear(); draft.parameterBinding = binding; }
+    const missing = ids.filter(id => !draft.parameters.has(id));
+    if (!missing.length) return true;
+    setBusy(true); status(text("readingParameters", "正在读取模型参数并查询服务器参数表…"));
+    try {
+      for (let offset = 0; offset < missing.length; offset += 32) {
+        const payload = { provider: entry, protocol, models: missing.slice(offset, offset + 32) };
+        if (draft.key.trim()) payload.key = draft.key.trim();
+        const response = await api.post("/models/parameters", payload, { signal: controller.signal });
+        if (disposed) return false;
+        for (const record of response.data.items) draft.parameters.set(record.id, parameterDraft(record));
+      }
+      return true;
+    } catch (cause) { if (!disposed) status(probeError(cause), true); return false; }
+    finally { setBusy(false); }
+  }
+  function renderParameters(host) {
+    let index = 0;
+    for (const id of selectedIds()) {
+      const value = draft.parameters.get(id);
+      if (value) host.append(createParameterEditor(value, { index: index++ }));
+    }
+  }
+  function editParameters(model) {
+    if (busy) return;
+    parameterEdit = { model, draft: parameterDraft(model.parameters, model) };
+    if (!model.parameters) parameterEdit.draft.record.fields = Object.fromEntries([
+      ["context_tokens", model.window.context_tokens], ["max_output_tokens", model.window.max_output_tokens],
+      ["reasoning", model.capabilities.includes("reasoning-control") ? { kind: "effort", efforts: model.reasoning_efforts.filter(level => level !== "default") } : { kind: "provider-default" }],
+    ].map(([key, value]) => [key, { value, source: "legacy" }]));
+    view = "parameters"; render();
+  }
+  async function identifyParameters() {
+    if (busy || !parameterEdit) return;
+    const entry = config.providers.find(item => item.id === parameterEdit.model.provider);
+    setBusy(true);
+    try {
+      const response = await api.post("/models/parameters", { provider: entry, protocol: parameterEdit.model.default_protocol,
+        models: [parameterEdit.model.wire_model] }, { signal: controller.signal });
+      if (disposed) return;
+      const detected = parameterDraft(response.data.items[0], parameterEdit.model);
+      for (const [key, field] of Object.entries(parameterEdit.draft.record.fields))
+        if (field.source === "manual") detected.record.fields[key] = clone(field);
+      parameterEdit.draft = detected; render();
+    } catch (cause) { if (!disposed) status(probeError(cause), true); }
+    finally { setBusy(false); }
+  }
+  function renderParameterEdit(body) {
+    body.append(element("h3", { text: text("editParameters", "模型参数") }),
+      element("p", { className: "model-config-status", text: text("applyParametersHelp", "重新识别会保留手动填写的参数。确认并应用后才会改变现有模型配置。") }),
+      createParameterEditor(parameterEdit.draft));
+    body.append(button(text("identifyParameters", "重新识别参数"), () => void identifyParameters()),
+      button(text("cancel", "取消"), () => { parameterEdit = null; view = "detail"; render(); }),
+      button(text("applyParameters", "应用参数"), async () => {
+        if (busy) return;
+        if (parameterIssues(parameterEdit.draft).length) { status(text("parametersMissing", "无法获取模型参数，请补全这些参数。"), true); return; }
+        const next = clone(config), index = next.items.findIndex(item => item.id === parameterEdit.model.id);
+        next.items[index] = applyParameters(parameterEdit.model, parameterEdit.draft);
+        if (await save(next)) parameterEdit = null;
+      }, true));
   }
   async function discover() {
     if (busy) return;
@@ -147,14 +226,15 @@ export function createModelConfigPanel(container) {
       draft.items = [...new Set(result.data.items)];
       draft.selected = new Set(suggestedModels(draft.items, draft.choice.models).filter((id) =>
         !config.items.some((model) => model.provider === draft.provider?.id && model.wire_model === id))); draft.queried = true;
-      notice = text("catalogConnected", "模型列表读取成功；添加后将自动适配并验证回复和工具调用。"); failed = false; render();
+      if (!(await resolveParameters([...draft.selected]))) return;
+      notice = text("catalogConnected", "模型列表读取成功；请检查参数，添加后将验证回复和工具调用。"); failed = false; render();
     } catch (cause) {
       if (cause.code === "catalog_unsupported") {
         draft.queried = true; notice = text("catalogFallback", "此服务不提供模型列表。可选用模板模型或手动填写模型 ID；添加后将自动验证。"); failed = false; render();
       } else status(probeError(cause), true);
     } finally { setBusy(false); }
   }
-  async function addSelected() {
+  async function addSelected(completeOnly = false) {
     if (busy) return;
     const form = container.querySelector(".supplier-setup-form"); if (!form.reportValidity()) return;
     if (!draft.preset.local && !draft.provider && !draft.key.trim() && !draft.ref.trim()) {
@@ -164,11 +244,18 @@ export function createModelConfigPanel(container) {
     if (!draft.provider) next.providers.push(entry);
     const manual = draft.manual.split(/[\n,;]+/).map((id) => id.trim()).filter(Boolean);
     const ids = [...new Set([...draft.selected, ...manual])];
+    if (ids.some(id => id.length > 256)) { status(text("idTooLong", "模型 ID 最多 256 个字符。"), true); return; }
+    const unresolved = ids.filter(id => !draft.parameters.has(id));
+    if (!(await resolveParameters(ids))) return;
+    if (unresolved.length) { render(); status(text("reviewParameters", "已读取参数，请检查并补全后再添加。")); return; }
+    const incomplete = ids.filter(id => parameterIssues(draft.parameters.get(id)).length);
+    if (incomplete.length && !completeOnly) { render(); status(text("parametersMissing", "无法获取模型参数，请补全这些参数。"), true); return; }
+    const pendingDraft = incomplete.length ? draft : null;
     const added = [], makeDefault = draft.default;
-    for (const id of ids) {
+    for (const id of ids.filter(id => !incomplete.includes(id))) {
       if (id.length > 256) { status(text("idTooLong", "模型 ID 最多 256 个字符。"), true); return; }
       if (next.items.some((item) => item.provider === entry.id && item.wire_model === id)) continue;
-      const model = presetModel(entry, id, next.items);
+      const model = applyParameters(presetModel(entry, id, next.items), draft.parameters.get(id));
       model.proxy = clone(draft.modelProxy); next.items.push(model); added.push(model.id);
     }
     if (!added.length) { status(text("selectModels", "请至少选择一个尚未添加的模型，或填写模型 ID。"), true); return; }
@@ -176,10 +263,15 @@ export function createModelConfigPanel(container) {
     const keys = draft.key.trim() ? [{ provider: entry.id, value: draft.key.trim() }] : [];
     if (await save(next, keys) && !disposed && !needsRead) {
       const results = await verifyModels(config.items.filter(model => added.includes(model.id)));
-      if (makeDefault && !disposed && results?.get(added[0])?.verified) {
+      if (makeDefault && !disposed && results?.get(added[0])?.verified && results?.get(added[0])?.agentReady) {
         const message = notice, error = failed, updated = clone(config);
         updated.default_model = added[0];
         if (await save(updated)) status(message, error);
+      }
+      if (pendingDraft && !disposed) {
+        pendingDraft.provider = config.providers.find(item => item.id === entry.id);
+        pendingDraft.key = ""; pendingDraft.selected = new Set(incomplete); pendingDraft.manual = "";
+        draft = pendingDraft; view = "setup"; render();
       }
     }
   }
@@ -187,7 +279,7 @@ export function createModelConfigPanel(container) {
     body.append(element("h3", { text: text("chooseSupplier", "选择供应商") }), element("p", { className: "model-config-status", text: text("templateHelp", "选择服务并填写 API Key。自己的供应商 Key 无需登录墨斗账号。") }));
     const grid = element("div", { className: "supplier-templates" });
     for (const preset of providerPresets.filter((item) => !item.hidden)) grid.append(button(preset.labelKey ? text(preset.labelKey, preset.name) : preset.name, () => choose(preset)));
-    body.append(grid);
+    body.append(grid, button(text("refreshSuppliers", "刷新供应商目录"), () => void add()));
   }
   function renderSelection(body) {
     const selectedCount = element("span", { className: "model-config-status", text: text("selected", "已选 {count} 个模型", { count: draft.selected.size }) });
@@ -254,16 +346,20 @@ export function createModelConfigPanel(container) {
     });
     form.append(advanced);
     if (draft.queried) renderSelection(form);
+    renderParameters(form);
     form.append(field(text("manualIds", "手动添加模型 ID（多个用逗号分隔）"), "manual-models", draft.manual, (value) => { draft.manual = value; }));
     const makeDefault = element("input", { attrs: { type: "checkbox", name: "make-default" } });
     makeDefault.checked = draft.default; makeDefault.addEventListener("change", () => { draft.default = makeDefault.checked; });
     form.append(element("label", { className: "supplier-inline-check" }, [makeDefault, element("span", { text: text("useDefault", "首个新增模型验证通过后设为默认") })]));
-    form.append(element("p", { className: "model-config-status", text: text("autoVerifyHelp", "添加后逐个验证流式回复和工具调用，会消耗 Token；工具测试携带本机工具定义，但不会执行工具。未知能力使用保守配置。") }));
+    form.append(element("p", { className: "model-config-status", text: text("autoVerifyHelp", "添加后逐个验证流式回复和工具调用，会消耗 Token；工具测试携带本机工具定义，但不会执行工具。缺失的模型参数需要先补全。") }));
     const actions = element("div", { className: "supplier-actions" }, [
       button(text("cancel", "取消"), () => { draft.key = ""; draft = null; view = "detail"; notice = ""; render(); }),
       button(draft.queried ? text("refreshList", "刷新模型列表") : text("connect", "连接并读取模型"), () => void discover()),
       button(draft.queried ? text("addSelected", "添加并验证所选模型") : text("saveAndVerify", "直接添加并验证"), () => void addSelected(), true),
     ]);
+    actions.append(button(text("readParameters", "读取所选模型参数"), async () => { if (!busy && await resolveParameters(selectedIds())) render(); }));
+    if ([...draft.parameters.values()].some(value => parameterIssues(value).length))
+      actions.append(button(text("addComplete", "仅添加参数完整的模型"), () => void addSelected(true)));
     form.append(actions); body.append(form);
   }
   function verificationLabel(record) {
@@ -301,7 +397,7 @@ export function createModelConfigPanel(container) {
       for (const model of models) {
         const result = results.get(model.id), evidence = config.verification?.[model.id];
         if (result.verified && !evidence?.verified) {
-          result.verified = false; result.error = new ApiError(text("verificationChanged", "配置已变化，请重新验证。"));
+          result.verified = false; result.agentReady = false; result.error = new ApiError(text("verificationChanged", "配置已变化，请重新验证。"));
           verified.set(model.id, result);
         }
       }
@@ -367,7 +463,7 @@ export function createModelConfigPanel(container) {
         const toolTest = button(text("testTools", "测试工具调用"), () => void testModel(model, toolTest, line, true)); actions.append(toolTest);
       }
       if (!model.builtin) actions.append(button(text("advancedEditor", "高级编辑"), () => showAdvanced("model", model.id)));
-      if (model.id !== config.default_model && model.enabled !== false) actions.append(button(uiMessage("modelConfig.setDefault"), () => { const next = clone(config); next.default_model = model.id; void save(next); }));
+      if (model.id !== config.default_model && model.enabled !== false && record?.tools?.state === "passed") actions.append(button(uiMessage("modelConfig.setDefault"), () => { const next = clone(config); next.default_model = model.id; void save(next); }));
       if (!model.builtin && model.id !== config.default_model) {
         actions.append(button(model.enabled === false ? text("enable", "启用") : text("disable", "停用"), () => {
           const next = clone(config); next.items.find((item) => item.id === model.id).enabled = model.enabled === false; void save(next);
@@ -379,6 +475,10 @@ export function createModelConfigPanel(container) {
         actions.append(button(uiMessage("modelConfig.remove"), () => { confirm.hidden = false; })); row.append(confirm);
       }
       if (model.enabled === false) { writeUiText(line, text("disabled", "已停用；启用后可用于会话。")); test.disabled = true; }
+      if (!model.builtin) {
+        row.append(element("p", { className: "model-config-status", text: parameterSummary(model) }));
+        actions.append(button(text("editParameters", "模型参数"), () => editParameters(model)));
+      }
       row.append(actions); list.append(row);
     }
     body.append(list);
@@ -414,6 +514,7 @@ export function createModelConfigPanel(container) {
     }));
     if (view === "templates") renderTemplates(body);
     else if (view === "setup") renderSetup(body);
+    else if (view === "parameters") renderParameterEdit(body);
     else if (view === "advanced") body.append(element("div", { className: "supplier-advanced-host" }));
     else renderDetail(body);
     layout.append(list, body); container.append(layout);

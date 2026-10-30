@@ -7,6 +7,7 @@ import { clear, element, errorMessage, toast } from "../../utils/dom.js";
 import { findModel as selectedModel, modelLoginBlock } from "../../utils/models.js";
 
 const EFFORT_LABEL = Object.freeze({
+  default: ["reasoning.default", uiText("reasoning.default", {}, "供应商默认")],
   none: ["reasoning.none", uiText("reasoning.none", {}, "无思考")],
   minimal: ["reasoning.minimal", uiText("settings.reasoningMinimal", {}, "极低")],
   low: ["reasoning.low", uiText("settings.reasoningLow", {}, "低")],

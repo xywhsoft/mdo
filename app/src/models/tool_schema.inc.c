@@ -70,7 +70,7 @@ static bool MdoModelsToolStrictCompatible(cstr Json)
  * replacement belongs to the SDK's libc allocator, not the XRT allocator. */
 static bool MdoModelsStrictBody(xllm_client* Client, xllm_wire* Wire, void* Data)
 {
-    (void)Data; xllm_model_profile Profile;
+    xllm_model_profile Profile;
     if (!xllmClientGetModelProfile(Client, &Profile) ||
         (Profile.eProvider != XLLM_PROVIDER_OPENAI_COMPAT && Profile.eProvider != XLLM_PROVIDER_OPENAI_RESPONSES)) return true;
     xvalue* Root = xrtJsonParse(xrtStrViewN(Wire->sBody, Wire->iBodySize));
@@ -93,6 +93,15 @@ static bool MdoModelsStrictBody(xllm_client* Client, xllm_wire* Wire, void* Data
         if (Enabled && Compatible) continue;
         Ok = xrtValueObjectSetNew(Tool, XRT_STR_LITERAL("strict"), xrtValueBool(false)); Changed = true;
     }
+    if (Ok && Data) {
+        if (xrtValueObjectHas(Root, XRT_STR_LITERAL("reasoning_effort"))) {
+            Ok = xrtValueObjectRemove(Root, XRT_STR_LITERAL("reasoning_effort")); Changed = true;
+        }
+        xvalue* Reasoning = xrtValueObjectGet(Root, XRT_STR_LITERAL("reasoning"));
+        if (xrtValueObjectHas(Reasoning, XRT_STR_LITERAL("effort"))) {
+            Ok = Ok && xrtValueObjectRemove(Reasoning, XRT_STR_LITERAL("effort")); Changed = true;
+        }
+    }
     if (Ok && Changed) {
         size_t Size = 0u; char* Json = xrtJsonStringify(Root, false, &Size);
         char* Replacement = Json ? malloc(Size + 1u) : NULL;
@@ -111,14 +120,22 @@ static void MdoModelsInstallWireHooks(xllm_client* Client)
     if (Client) xllmClientSetHooks(Client, &Hooks);
 }
 
-typedef struct MdoModelHooks { xllm_hooks Inner; } MdoModelHooks;
+typedef struct MdoModelHooks { xllm_hooks Inner; bool ProviderDefault; } MdoModelHooks;
 static bool MdoModelsHookRequest(xllm_client* C, xllm_request* R, void* Data)
-{ MdoModelHooks* H = Data; return !H->Inner.pOnRequest || H->Inner.pOnRequest(C, R, H->Inner.pUserData); }
+{
+    MdoModelHooks* H = Data;
+    bool Ok = !H->Inner.pOnRequest || H->Inner.pOnRequest(C, R, H->Inner.pUserData);
+    if (Ok && R->sReasoningEffort) {
+        H->ProviderDefault = !strcmp(R->sReasoningEffort, "default");
+        if (H->ProviderDefault) R->sReasoningEffort = NULL;
+    }
+    return Ok;
+}
 static bool MdoModelsHookBody(xllm_client* C, xllm_wire* W, void* Data)
 {
     MdoModelHooks* H = Data; char* Original = W->sBody;
     if (H->Inner.pOnRequestBody && !H->Inner.pOnRequestBody(C, W, H->Inner.pUserData)) return false;
-    char* Inner = W->sBody; bool Ok = MdoModelsStrictBody(C, W, NULL);
+    char* Inner = W->sBody; bool Ok = MdoModelsStrictBody(C, W, H->ProviderDefault ? H : NULL);
     if (Inner != Original && W->sBody != Inner) xllmFree(Inner);
     return Ok;
 }
@@ -131,10 +148,11 @@ static bool MdoModelsHookTool(xllm_client* C, xllm_tool_call* T, uint32 I, void*
 static bool MdoModelsHookResponse(xllm_client* C, xllm_response* R, void* Data)
 { MdoModelHooks* H = Data; return !H->Inner.pOnResponse || H->Inner.pOnResponse(C, R, H->Inner.pUserData); }
 
-static void MdoModelsRequestHooks(xllm_request* View, MdoModelHooks* Context, xllm_hooks* Hooks)
+static void MdoModelsRequestHooks(xllm_request* View, MdoModelHooks* Context, xllm_hooks* Hooks, bool ProviderDefault)
 {
-    if (!View->pHooks) return; /* Product clients already own the default seam. */
-    Context->Inner = *View->pHooks; memset(Hooks, 0, sizeof(*Hooks));
+    memset(Context, 0, sizeof(*Context)); Context->ProviderDefault = ProviderDefault;
+    if (!View->pHooks && !ProviderDefault) return; /* Product clients already own the default seam. */
+    if (View->pHooks) Context->Inner = *View->pHooks; memset(Hooks, 0, sizeof(*Hooks));
     Hooks->pOnRequest = Context->Inner.pOnRequest ? MdoModelsHookRequest : NULL;
     Hooks->pOnRequestBody = MdoModelsHookBody;
     Hooks->pOnRetry = Context->Inner.pOnRetry ? MdoModelsHookRetry : NULL;

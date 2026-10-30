@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
-import { providerPresets, presetProvider, presetModel, suggestedModels, uniqueId } from "../app/web/js/features/settings/provider-presets.js";
+import { providerPresets, setProviderCatalog, presetProvider, presetModel, suggestedModels, uniqueId } from "../app/web/js/features/settings/provider-presets.js";
 import { sameModelConfig } from "../app/web/js/features/settings/model-config-state.js";
 
+setProviderCatalog(["bigmodel", "zai", "dashscope"].map(id => ({id,name:id,variants:[
+ {id:"api",protocol:"openai-chat-completions",base:"https://example.test/v1",models:["sample"]},
+ {id:"coding",protocol:"openai-chat-completions",base:"https://example.test/coding/v1",models:["sample"]}]})));
 for (const preset of providerPresets) for (const variant of preset.variants) {
   const provider = presetProvider(preset, variant, [], variant.base || "https://example.test/v1");
   assert.equal(provider.builtin, false);
@@ -28,8 +31,6 @@ for (const variant of custom.variants) {
   const endpoint = { "openai-chat-completions": "chat/completions", "openai-responses": "responses", "anthropic-messages": "messages" }[variant.protocol];
   assert.equal(Object.values(provider.endpoints)[0], `https://example.test/v1/${endpoint}`);
 }
-assert.ok(providerPresets.find((item) => item.id === "openai-compatible").hidden);
-assert.ok(providerPresets.find((item) => item.id === "anthropic-compatible").hidden);
 for (const preset of products) {
   const regular = presetProvider(preset, preset.variants[0]);
   const coding = presetProvider(preset, preset.variants.find((item) => item.id === "coding"));

@@ -4,7 +4,7 @@
 #include "../../include/mdo/bootstrap.h"
 #include "../../include/mdo/tool_catalog.h"
 
-#define MDO_MODEL_VERIFICATION_CONTRACT "runtime-tools-stream-v2"
+#define MDO_MODEL_VERIFICATION_CONTRACT "runtime-tools-stream-v3"
 
 static xwork_tool_catalog* MdoModelVerificationTools(void)
 {
@@ -79,13 +79,16 @@ static bool MdoModelVerificationKey(const xvalue* Models, const xvalue* Transpor
     xvalue* Binding = xrtValueArray(); xvalue* Tools = MdoModelVerificationToolBinding(); size_t Size = 0u; char* Json = NULL;
     /* Stable effective JSON also includes immutable vault references. Changing
      * default selection or unrelated appearance settings keeps valid evidence. */
-    bool Ok = Provider && Binding && Tools && MdoApiValueAppendString(Binding, MDO_MODEL_VERIFICATION_CONTRACT) &&
-        xrtValueArrayAppend(Binding, Tools) && xrtValueArrayAppend(Binding, (xvalue*)Model) &&
+    xvalue* EffectiveModel = xrtValueClone(Model);
+    if (EffectiveModel && xrtValueObjectHas(EffectiveModel, XRT_STR_LITERAL("parameters")))
+        xrtValueObjectRemove(EffectiveModel, XRT_STR_LITERAL("parameters"));
+    bool Ok = EffectiveModel && Provider && Binding && Tools && MdoApiValueAppendString(Binding, MDO_MODEL_VERIFICATION_CONTRACT) &&
+        xrtValueArrayAppend(Binding, Tools) && xrtValueArrayAppend(Binding, EffectiveModel) &&
         xrtValueArrayAppend(Binding, (xvalue*)Provider) &&
         (!Transport || xrtValueArrayAppend(Binding, (xvalue*)Transport));
     if (Ok) Json = xrtJsonStringify(Binding, false, &Size);
     Ok = Json && MdoModelVerificationHash(Json, Size, Hash);
-    xrtFree(Json); xrtValueRelease(Tools); xrtValueRelease(Binding); return Ok;
+    xrtFree(Json); xrtValueRelease(Tools); xrtValueRelease(Binding); xrtValueRelease(EffectiveModel); return Ok;
 }
 
 bool MdoApiModelVerificationSnapshot(cstr Id, char Hash[65])

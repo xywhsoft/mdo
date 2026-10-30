@@ -43,7 +43,7 @@ test("cancellation stops remaining phases and models", async () => {
 });
 
 const flush = async () => { for (let i = 0; i < 30; i++) await new Promise(resolve => setImmediate(resolve)); };
-function fixture({ failTools = false, hold = false, staleEvidence = false } = {}) {
+function fixture({ failTools = false, hold = false, staleEvidence = false, missingBeta = false, textOnly = false } = {}) {
   const previous = { document: globalThis.document, fetch: globalThis.fetch };
   const document = testDocument(), create = document.createElement;
   document.createElement = tag => {
@@ -63,6 +63,9 @@ function fixture({ failTools = false, hold = false, staleEvidence = false } = {}
     let data = {}, status = 200, error;
     if (path === "/api/v1/models/config") data = structuredClone(config);
     else if (path === "/api/v1/models") data = { providers: [], models: [] };
+    else if (path === "/api/v1/models/providers") data = { providers: [{id:"openai", name:"OpenAI", variants:[{id:"api", label:"regular", base:"https://api.openai.com/v1", protocol:"openai-responses", models:["alpha","beta"]}]}] };
+    else if (path === "/api/v1/models/parameters") data = { items: body.models.map(id => ({id,protocol:body.protocol,lookup_state:"ok",registry_version:"fixture",fields: missingBeta && id === "beta" ? {} : {
+      ...(textOnly ? {tools:{value:false,source:"api"}} : {}),context_tokens:{value:64000,source:"api"},max_output_tokens:{value:16000,source:"api"},reasoning:{value:{kind:"none"},source:"api"}}})) };
     else if (path === "/api/v1/models/discover") data = { items: ["alpha", "beta", "unselected"] };
     else if (path === "/api/v1/models/setup" || path === "/api/v1/settings/models") {
       config = { ...structuredClone(body.patch), verification: config.verification };
@@ -75,7 +78,7 @@ function fixture({ failTools = false, hold = false, staleEvidence = false } = {}
         error = { code: "model_tools_test_failed", message: "fixture tool rejection" };
       } else {
         record[phase] = { state: "passed" };
-        record.verified = record.reply?.state === "passed" && record.tools?.state === "passed";
+        record.verified = record.reply?.state === "passed" && (!config.items.find(item => item.id === body.model_id)?.capabilities.includes("tool-call-output") || record.tools?.state === "passed");
         data = { verified: true, latency_ms: 2, verification: structuredClone(record) };
         if (staleEvidence) delete config.verification[body.model_id];
       }
@@ -92,12 +95,12 @@ function fixture({ failTools = false, hold = false, staleEvidence = false } = {}
     node.value = value; node.dispatchEvent(new Event("input")); return node;
   };
   async function add() {
-    await panel.ensureLoaded(); button("添加供应商").click(); button("OpenAI").click(); input("api-key", "fixture-key");
+    await panel.ensureLoaded(); button("添加供应商").click(); await flush(); button("OpenAI").click(); input("api-key", "fixture-key");
     button("连接并读取模型").click(); await flush();
     const checkbox = input("make-default", ""); checkbox.checked = true; checkbox.dispatchEvent(new Event("change"));
     button("添加并验证所选模型").click(); await flush();
   }
-  return { panel, container, calls, add, button, config: () => config, release, allowTools: () => { rejectTools = false; },
+  return { panel, container, calls, add, button, input, config: () => config, release, allowTools: () => { rejectTools = false; },
     restore() { panel.destroy(); release(); Object.assign(globalThis, previous); } };
 }
 test("wizard saves only selected profiles, auto-verifies, and then sets the default", async () => {
@@ -158,4 +161,35 @@ test("evidence invalidated by native configuration changes cannot set the defaul
     await f.add(); assert.equal(f.config().default_model, "existing");
     assert(f.container.textContent.includes("0/2")); assert(f.container.textContent.includes("配置已变化"));
   } finally { f.restore(); }
+});
+
+test("unknown parameters block saving until completed, with an explicit warning", async () => {
+  const f = fixture({missingBeta:true});
+  try {
+    await f.add();
+    assert.equal(f.calls.filter(call => call.path.endsWith("/setup")).length,0);
+    assert(descendants(f.container).some(node => node.className === "model-parameter-warning" && !node.hidden && node.textContent.includes("无法获取模型参数")));
+    f.input("parameter-1-context_tokens","16000"); f.input("parameter-1-max_output_tokens","8000");
+    f.input("parameter-1-output-budget","2048");
+    const choice=f.input("parameter-1-reasoning","provider-default");choice.dispatchEvent(new Event("change"));
+    f.button("添加并验证所选模型").click();await flush();
+    assert.equal(f.calls.filter(call => call.path.endsWith("/setup")).length,1);
+    const beta=f.config().items.find(item=>item.wire_model==="beta");
+    assert.equal(beta.window.context_tokens,16000);assert.deepEqual(beta.reasoning_efforts,["default"]);
+  } finally {f.restore();}
+});
+test("complete models can be saved while unresolved models remain editable", async () => {
+  const f=fixture({missingBeta:true});
+  try {
+    await f.add();f.button("仅添加参数完整的模型").click();await flush();
+    assert(f.config().items.some(item=>item.wire_model==="alpha"));
+    assert(!f.config().items.some(item=>item.wire_model==="beta"));
+    assert(descendants(f.container).some(node=>node.name==="parameter-0-context_tokens"));
+  } finally {f.restore();}
+});
+test("text-only validation never promotes a model as the Agent default", async () => {
+  const f=fixture({textOnly:true});
+  try {await f.add();assert.equal(f.config().default_model,"existing");
+    assert(f.calls.filter(call=>call.path.endsWith("/test")).every(call=>!call.body.tools));
+  } finally {f.restore();}
 });

@@ -37,7 +37,7 @@ static bool MdoApiModelProxyBypassed(cstr Patterns, cstr Url)
 }
 
 static xhttpclient* MdoApiModelDiscoveryClient(MdoApiContext* Context, cstr Url, bool Verify,
-    const xvalue* ProviderProxy, xllm_error* Error)
+    const xvalue* ProviderProxy, uint64 Timeout, xllm_error* Error)
 {
     MdoConfigTransportSettings Transport = {0}; xhttpclientconfig Config;
     xtlsverifierconfig Tls; xtlsverifier* Verifier = NULL; xx509store* Store = NULL;
@@ -46,7 +46,7 @@ static xhttpclient* MdoApiModelDiscoveryClient(MdoApiContext* Context, cstr Url,
     Transport.Size = sizeof(Transport);
     if (!Context->Request->server || !Context->Request->server->Engine ||
         !MdoModelProxySettings(ProviderProxy, &Transport, Error)) return NULL;
-    xrtHttpClientConfigInit(&Config); Config.Timeout = 15000000u; Config.IdleTimeout = 10000000u;
+    xrtHttpClientConfigInit(&Config); Config.Timeout = Timeout; Config.IdleTimeout = Timeout < 10000000u ? Timeout : 10000000u;
     Config.Decompress.MaxBody = MDO_API_RESPONSE_MAX_BYTES;
     Config.Redirect.MaxHops = 0u; Config.Retry.MaxRetries = 0u;
     if (!Verify || Transport.CaPemPath[0]) {
@@ -105,6 +105,10 @@ static bool MdoApiModelDiscoverRun(MdoApiContext* Context, MdoApiJsonBody Body, 
     cstr Endpoint = NULL, Key = NULL, Ref = NULL; char Url[2056], Authorization[4104]; char* Secret = NULL;
     cstr Code = "connection_failed", Message = "Could not connect; check the address, network, proxy and TLS settings";
     uint16 Reply = 502u, HttpStatus = 0u; bool Verify = true, Anthropic = false, Ok = false; size_t i;
+    bool RefreshCatalog = true;
+    const xvalue* RefreshValue = xrtValueObjectGet(Body.Value, XRT_STR_LITERAL("refresh_catalog"));
+    if (Parameters && RefreshValue && !xrtValueGetBool(RefreshValue, &RefreshCatalog))
+        return MdoApiReplyError(Context, 422u, "parameters_invalid", "refresh_catalog must be a boolean", NULL);
     Provider = xrtValueObjectGet(Body.Value, XRT_STR_LITERAL("provider"));
     Endpoints = xrtValueObjectGet(Provider, XRT_STR_LITERAL("endpoints"));
     const xvalue* Selected = xrtValueObjectGet(Body.Value, XRT_STR_LITERAL("models"));
@@ -147,7 +151,7 @@ static bool MdoApiModelDiscoverRun(MdoApiContext* Context, MdoApiJsonBody Body, 
     if (Parameters && !strncmp(Endpoint, "https://api.openai.com/v1/", 26u)) { Code = "not_exposed"; goto done; }
     xllm_error DiscoveryError = {0};
     Client = MdoApiModelDiscoveryClient(Context, Url, Verify,
-        xrtValueObjectGet(Provider, XRT_STR_LITERAL("proxy")), &DiscoveryError);
+        xrtValueObjectGet(Provider, XRT_STR_LITERAL("proxy")), 15000000u, &DiscoveryError);
     char ProxyFailureCode[64];
     if (!Client && (!strcmp(MdoModelErrorKind(&DiscoveryError), "profile_system_proxy_unavailable") ||
                    !strcmp(MdoModelErrorKind(&DiscoveryError), "profile_proxy_invalid") ||
@@ -203,7 +207,7 @@ done:
             xrtValueRelease(Fields);
         }
         bool Stale = false;
-        xvalue* Registry = NeedCatalog ? MdoParameterRegistry(Context, false, &Stale) : NULL;
+        xvalue* Registry = NeedCatalog ? MdoParameterRegistry(Context, RefreshCatalog, &Stale) : NULL;
         Data = xrtValueObject(); Items = xrtValueArray();
         Ok = Data && Items;
         for (size_t n = 0; Ok && n < xrtValueCount(Selected); ++n) {

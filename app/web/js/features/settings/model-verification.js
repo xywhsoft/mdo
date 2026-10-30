@@ -21,6 +21,7 @@ export async function verifyModelSetup(models, { request, onProgress = () => {},
       }
     }
     result.verified = result.reply?.state === "passed" && (!result.needsTools || result.tools?.state === "passed");
+    result.agentReady = result.verified && result.tools?.state === "passed";
     results.set(model.id, result);
     onProgress({ model, index, total: models.length, state: "complete", result });
   }

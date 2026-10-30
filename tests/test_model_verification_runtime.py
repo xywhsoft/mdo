@@ -223,9 +223,21 @@ def main():
                     Supplier.catalog_mode='ok'
                     assert all(not any(k.lower() in ('authorization','x-api-key','cookie') for k in headers) for headers in Supplier.catalog_headers)
                     checks.append('public server updates applied without a client release; offline/malformed responses preserve cache; no credentials sent centrally')
+                if not args.packed:
+                    count = len(Supplier.catalog_headers)
+                    status, _, complete = call('POST', 'models/parameters', {'provider': {'endpoints': {
+                        'responses': f'http://127.0.0.1:{supplier.server_port}/v1/responses'},'proxy':{'kind':'none'}},
+                        'protocol':'openai-responses','models':['metadata-false']})
+                    assert status == 200 and len(Supplier.catalog_headers) == count, complete
+                    status, _, missing = call('POST', 'models/parameters', {'key':'supplier-only-draft-key',
+                        'provider': {'endpoints': {'responses': f'http://127.0.0.1:{supplier.server_port}/v1/responses'},'proxy':{'kind':'none'}},
+                        'protocol':'openai-responses','models':['unknown']})
+                    assert status == 200 and len(Supplier.catalog_headers) == count+1, missing
+                    assert not any(k.lower() in ('authorization','x-api-key') for k in Supplier.catalog_headers[-1])
+                    checks.append('complete supplier metadata bypasses server lookup; missing fields refresh server data without a supplier key')
                 metadata_provider = {'endpoints': {'responses': f'http://127.0.0.1:{supplier.server_port}/v1/responses'}, 'proxy': {'kind': 'none'}}
                 status, _, result = call('POST', 'models/parameters', {'provider': metadata_provider,
-                    'protocol': 'openai-responses', 'models': ['gpt-5.4', 'metadata-false', 'metadata-effort', 'unknown-gpt-5.4']})
+                    'refresh_catalog': False, 'protocol': 'openai-responses', 'models': ['gpt-5.4', 'metadata-false', 'metadata-effort', 'unknown-gpt-5.4']})
                 assert status == 200, result
                 rows = {row['id']: row for row in result['data']['items']}
                 fields = rows['gpt-5.4']['fields']
@@ -238,11 +250,11 @@ def main():
                 assert not rows['unknown-gpt-5.4']['fields'], rows
                 metadata_provider['endpoints']['responses'] = 'https://api.openai.com/v1/responses'
                 status, _, result = call('POST', 'models/parameters', {'provider': metadata_provider,
-                    'protocol': 'openai-responses', 'models': ['gpt-6.1-sol']})
+                    'refresh_catalog': False, 'protocol': 'openai-responses', 'models': ['gpt-6.1-sol']})
                 assert status == 200 and result['data']['items'][0]['fields']['context_tokens']['value'] == 1050000, result
                 assert 'none' not in result['data']['items'][0]['fields']['reasoning']['value']['efforts']
                 status, _, _ = call('POST', 'models/parameters', {'provider': metadata_provider,
-                    'protocol': 'openai-responses', 'models': ['x']*33})
+                    'refresh_catalog': False, 'protocol': 'openai-responses', 'models': ['x']*33})
                 assert status == 422
                 checks.append('server-cache exact-ID registry; API field precedence; explicit false; unknown and batch limits')
                 for name, protocol, endpoint in [('chat', 'openai-chat-completions', 'chat_completions'),
@@ -255,7 +267,7 @@ def main():
                     model = copy.deepcopy(config['items'][0])
                     model.update(id=name, name=name, provider=name, wire_model=name, builtin=False, free=False,
                         editable=True, removable=True, protocols=[protocol], default_protocol=protocol,
-                        reasoning_efforts=['none'], default_reasoning_effort='none', attachments=[],
+                        reasoning_efforts=['default'], default_reasoning_effort='default', attachments=[],
                         proxy={'kind': 'provider'}, capabilities=['text-input', 'text-output', 'tool-result-input', 'tool-call-output', 'streaming'])
                     config['providers'].append(provider); config['items'].append(model)
                 save(config, etag)
@@ -276,6 +288,17 @@ def main():
                 checks.append('old probe-only verification records must be tested again')
                 stop(); start(); config, etag = get(); assert config['verification']['chat']['verified']
                 checks.append('verification survives native restart')
+                config, etag = get()
+                target = next(item for item in config['items'] if item['id'] == 'responses')
+                target['parameters'] = {'schema_version':1,'fields':{'context_tokens':{'value':65536,'source':'api','checked_at':'2026-10-30'}}}
+                save(config,etag)
+                assert get()[0]['verification']['responses']['verified']
+                config, etag = get();target=next(item for item in config['items'] if item['id']=='responses')
+                target['parameters']['fields']['context_tokens']['checked_at']='2026-10-31'
+                save(config,etag)
+                assert get()[0]['verification']['responses']['verified']
+                checks.append('parameter provenance refresh does not invalidate unchanged effective request evidence')
+
                 Supplier.mode = 'reasoning_only'
                 result = probe('chat', expected=422); assert result['error']['code'] == 'model_test_failed', result
                 assert not get()[0]['verification']['chat']['verified']
