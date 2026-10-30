@@ -1,6 +1,8 @@
+import { setUiText as writeUiText, uiMessage, subscribeLocale, t } from "../../i18n.js";
+
 import { createProject, readProject, updateProject } from "../../state/catalogs.js";
 import { element, errorMessage, toast } from "../../utils/dom.js";
-import { subscribeLocale, t } from "../../i18n.js";
+
 import { projectDefaultsFromWorkspace, projectIdFromName } from "./project-identity.js";
 import { findModel } from "../../utils/models.js";
 import { droppedFolderPath } from "./folder-drop.js";
@@ -54,12 +56,12 @@ export function createProjectDialog({ dialog, form, error, submit, modelsStore,
     const path = workspace.value.trim();
     if (folderUI.summary) folderUI.summary.hidden = !path;
     if (folderUI.empty) folderUI.empty.hidden = Boolean(path);
-    if (folderUI.name) folderUI.name.textContent = projectDefaultsFromWorkspace(path).name || path;
-    if (folderUI.path) folderUI.path.textContent = path;
+    if (folderUI.name) writeUiText(folderUI.name, projectDefaultsFromWorkspace(path).name || path);
+    if (folderUI.path) writeUiText(folderUI.path, path);
     if (folderUI.browseLabel) {
       folderUI.browseLabel.removeAttribute("data-i18n");
-      folderUI.browseLabel.textContent = path ? t("project.changeFolder", {}, "更换文件夹")
-        : t("project.addFolder", {}, "添加文件夹");
+      writeUiText(folderUI.browseLabel, path ? uiMessage("project.changeFolder", {}, "更换文件夹")
+        : uiMessage("project.addFolder", {}, "添加文件夹"));
     }
   }
   folderUI.clear?.addEventListener("click", () => {
@@ -91,7 +93,7 @@ export function createProjectDialog({ dialog, form, error, submit, modelsStore,
       if (owner !== generation || !dialog.open || controller.signal.aborted) return;
       const key = { folder_drop_one: "project.dropOneFolder", folder_drop_directory: "project.dropDirectoryOnly",
         folder_drop_unavailable: "project.dropUnavailable" }[cause.code];
-      error.textContent = key ? t(key) : errorMessage(cause); error.hidden = false;
+      writeUiText(error, key ? uiMessage(key) : errorMessage(cause)); error.hidden = false;
     } finally {
       if (owner === generation) { selecting = false; renderState(); }
     }
@@ -100,24 +102,24 @@ export function createProjectDialog({ dialog, form, error, submit, modelsStore,
   function fillModels(selected = model.value) {
     const models = modelsStore.get().data?.models ?? [];
     selected = findModel(models, selected)?.id ?? selected;
-    model.replaceChildren(element("option", { text: t("project.followGlobal", {}, "跟随全局默认"),
+    model.replaceChildren(element("option", { text: uiMessage("project.followGlobal", {}, "跟随全局默认"),
       attrs: { value: "" } }), ...
       models.map((item) => element("option", {
         text: item.name || item.id, attrs: { value: item.id },
       })));
     if (selected && !models.some((item) => item.id === selected))
-      model.append(element("option", { text: t("project.unavailableModel", { id: selected },
+      model.append(element("option", { text: uiMessage("project.unavailableModel", { id: selected },
         `${selected}（已不可用）`), attrs: { value: selected } }));
     model.value = selected;
   }
   function renderText() {
-    title.textContent = editing ? t("project.editTitle", {}, "编辑项目") :
-      t("project.create", {}, "创建项目");
-    description.textContent = editing
-      ? t("project.editDescription", {}, "修改只影响此后创建的任务；已有会话仍使用创建时的配置。")
-      : t("project.addDescription", {}, "指定工作区目录；项目会保留在侧栏，新任务将使用该目录。");
-    submit.textContent = editing ? t("project.save", {}, "保存项目") :
-      t("project.create", {}, "创建项目");
+    writeUiText(title, editing ? uiMessage("project.editTitle", {}, "编辑项目") :
+      uiMessage("project.create", {}, "创建项目"));
+    writeUiText(description, editing
+      ? uiMessage("project.editDescription", {}, "修改只影响此后创建的任务；已有会话仍使用创建时的配置。")
+      : uiMessage("project.addDescription", {}, "指定工作区目录；项目会保留在侧栏，新任务将使用该目录。"));
+    writeUiText(submit, editing ? uiMessage("project.save", {}, "保存项目") :
+      uiMessage("project.create", {}, "创建项目"));
     renderFolder();
     renderState();
   }
@@ -128,8 +130,8 @@ export function createProjectDialog({ dialog, form, error, submit, modelsStore,
       field.disabled = loading || localSave || selecting;
     if (status) {
       status.hidden = !loading && !localSave && !selecting;
-      status.textContent = loading ? t("project.loading", {}, "正在读取项目…") :
-        localSave ? t("project.saving", {}, "正在保存项目…") : selecting ? t("project.checkingFolder", {}, "正在确认文件夹…") : "";
+      writeUiText(status, loading ? uiMessage("project.loading", {}, "正在读取项目…") :
+        localSave ? uiMessage("project.saving", {}, "正在保存项目…") : selecting ? uiMessage("project.checkingFolder", {}, "正在确认文件夹…") : "");
     }
   }
   modelsStore.subscribe(() => fillModels());
@@ -168,7 +170,7 @@ export function createProjectDialog({ dialog, form, error, submit, modelsStore,
         `已添加项目 ${result.name}`));
     } catch (cause) {
       if (owner.generation === generation && dialog.open) {
-        error.textContent = errorMessage(cause);
+        writeUiText(error, errorMessage(cause));
         error.hidden = false;
         error.focus();
       } else notify(errorMessage(cause), "error");
@@ -221,7 +223,7 @@ export function createProjectDialog({ dialog, form, error, submit, modelsStore,
         } catch (cause) {
           if (version !== generation || !dialog.open) return;
           loading = false; loadFailed = true;
-          error.textContent = errorMessage(cause); error.hidden = false;
+          writeUiText(error, errorMessage(cause)); error.hidden = false;
           // An unread definition cannot be submitted without its ETag.
           renderState(); submit.disabled = true;
           error.focus(); return;

@@ -4,6 +4,9 @@ export const supportedLocales = Object.freeze(["zh-CN", "en-US", "ru-RU"]);
 
 const packs = new Map();
 const listeners = new Set();
+const uiMessages = new WeakSet();
+const uiBindings = new WeakMap();
+const uiTextNodes = new WeakMap();
 let locale = "en-US";
 let requestVersion = 0;
 
@@ -53,12 +56,63 @@ export function currentLocale() { return locale; }
 
 export function t(key, params = {}, fallback = key) {
   const text = packs.get(locale)?.[key] ?? packs.get("zh-CN")?.[key] ?? fallback;
-  return text.replace(/\{([a-zA-Z_][\w]*)\}/g,
+  return String(text).replace(/\{([a-zA-Z_][\w]*)\}/g,
     (match, name) => Object.hasOwn(params, name) ? String(params[name]) : match);
 }
 
+// Explicit UI copy retains its key so mounted forms can change language without
+// rebuilding controls, losing edits, or translating author/user content by text.
+export function uiMessage(key, params = {}, fallback = key) {
+  const message = Object.freeze({ key, params, fallback,
+    toString() { return t(key, params, fallback); },
+    toJSON() { return this.toString(); },
+  });
+  uiMessages.add(message);
+  return message;
+}
+
+function bindUi(node, slot, value) {
+  let bindings = uiBindings.get(node);
+  if (uiMessages.has(value)) {
+    if (!bindings) { bindings = new Map(); uiBindings.set(node, bindings); }
+    bindings.set(slot, value);
+    node.setAttribute?.("data-ui-localized", "");
+  } else if (bindings) {
+    bindings.delete(slot);
+    if (!bindings.size) { uiBindings.delete(node); node.removeAttribute?.("data-ui-localized"); }
+  }
+  return value == null ? "" : String(value);
+}
+
+export function setUiText(node, value) {
+  node.textContent = bindUi(node, "text", value);
+  if (uiMessages.has(value) && node.ownerDocument) {
+    if (!node.firstChild) node.append(node.ownerDocument.createTextNode(""));
+    uiTextNodes.set(node, node.firstChild);
+  } else uiTextNodes.delete(node);
+  return value;
+}
+
+export function setUiAttribute(node, name, value) {
+  if (typeof node.setAttribute !== "function") { node[name] = value; return value; }
+  node.setAttribute(name, bindUi(node, name, value));
+  return value;
+}
+
+function refreshUi(node) {
+  for (const [slot, value] of uiBindings.get(node) || []) {
+    if (slot === "text") {
+      const anchor = uiTextNodes.get(node);
+      if (anchor?.parentNode === node && anchor.nodeType === 3) anchor.nodeValue = String(value);
+      else if (!node.ownerDocument) node.textContent = String(value);
+      // A different renderer replaced our text node; it now owns the content.
+    }
+    else node.setAttribute(slot, String(value));
+  }
+}
+
 export function translateStatic(root = document) {
-  const selector = "[data-i18n], [data-i18n-title], [data-i18n-placeholder], [data-i18n-aria-label]";
+  const selector = "[data-i18n], [data-i18n-title], [data-i18n-placeholder], [data-i18n-aria-label], [data-ui-localized]";
   const nodes = [root, ...root.querySelectorAll(selector)];
   for (const node of nodes) {
     if (node.dataset?.i18n) node.textContent = t(node.dataset.i18n, {}, node.textContent);
@@ -69,6 +123,7 @@ export function translateStatic(root = document) {
     ]) {
       if (key) node.setAttribute(attribute, t(key, {}, node.getAttribute(attribute) ?? ""));
     }
+    refreshUi(node);
   }
 }
 

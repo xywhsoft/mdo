@@ -1,7 +1,8 @@
+import { t as uiErrorText } from "../../i18n.js";
 import { createSha256 } from "../../utils/sha256.js";
 
 function invalid() {
-  return Object.assign(new Error("Conversation snapshot failed validation"), { code: "conversation_invalid" });
+  return Object.assign(new Error(uiErrorText("error.detail.conversationSnapshotFailedValidation", {}, "Conversation snapshot failed validation")), { code: "conversation_invalid" });
 }
 // Hash exactly the native bytes, before parsing unrelated uint64 identifiers.
 export function decodeConversationPage(page, owner) {

@@ -1,3 +1,4 @@
+import { t as uiErrorText } from "../i18n.js";
 import { ApiError, api, currentPageWriteToken } from "../api/client.js";
 import { isTransientReadError } from "../api/read-recovery.js";
 import { createRequestRecovery } from "../api/request-recovery.js";
@@ -20,7 +21,7 @@ export async function runTaskStopAction({ id, task = null,
   epoch = stamp, token = currentPageWriteToken(), recoveryOptions } = {}) {
   id = String(id ?? "");
   if (!/^[1-9][0-9]*$/.test(id) || (task && String(task.id) !== id))
-    throw new TypeError("task ID is invalid");
+    throw new TypeError(uiErrorText("error.detail.taskIdIsInvalid", {}, "task ID is invalid"));
   const recovery = createRequestRecovery(recoveryOptions), original = epoch();
   let owner = task ? identity(task) : null, checking = false, submitted = false;
   function assertOwner() {
@@ -30,14 +31,14 @@ export async function runTaskStopAction({ id, task = null,
   function snapshot(reply) {
     assertOwner();
     if (token && reply?.writeToken !== token)
-      throw new ApiError("Task service restarted", { code: "write_token_conflict" });
+      throw new ApiError(uiErrorText("error.detail.taskServiceRestarted", {}, "Task service restarted"), { code: "write_token_conflict" });
     const current = reply?.data;
     if (String(current?.id) !== id || typeof current?.terminal !== "boolean" ||
         typeof current?.stop_requested !== "boolean")
-      throw new ApiError("Invalid task stop response", { code: "invalid_response" });
+      throw new ApiError(uiErrorText("error.detail.invalidTaskStopResponse", {}, "Invalid task stop response"), { code: "invalid_response" });
     const next = identity(current);
     if (owner !== null && next !== owner)
-      throw new ApiError("Task ownership changed", { code: "task_stop_context_changed" });
+      throw new ApiError(uiErrorText("error.detail.taskOwnershipChanged", {}, "Task ownership changed"), { code: "task_stop_context_changed" });
     owner = next;
     return current;
   }
@@ -71,7 +72,7 @@ export async function runTaskStopAction({ id, task = null,
     if (submitted && uncertain(error)) {
       const observed = confirmedObservation();
       if (observed) return observed;
-      const final = new ApiError("Task stop acknowledgement could not be confirmed", {
+      const final = new ApiError(uiErrorText("error.detail.taskStopAcknowledgementCouldNotBeConfirmed", {}, "Task stop acknowledgement could not be confirmed"), {
         code: "task_stop_unconfirmed",
       });
       final.cause = error; throw final;

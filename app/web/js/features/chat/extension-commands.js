@@ -1,3 +1,4 @@
+import { t as uiText } from "../../i18n.js";
 import { api } from "../../api/client.js";
 import { subscribeTarget, targetState } from "../../api/target.js";
 const listeners = new Set(), catalogs = new Map(), recoveries = new Map();
@@ -39,7 +40,7 @@ export async function runCommand(command, raw, scope, { onPending, signal } = {}
   const path = `/command-invocations/${id}`;
   const current = () => owner() === target && !signal?.aborted;
   let result, admitted = false, terminal = false;
-  if(!recovered&&recoveries.size>=64)throw new Error("未确认的命令过多，请先读取已有命令的执行状态。");
+  if(!recovered&&recoveries.size>=64)throw new Error(uiText("ui.extensionCommands.tooManyUnconfirmedCommandsReadExistingCommandStatusFirst", {}, "未确认的命令过多，请先读取已有命令的执行状态。"));
   recoveries.set(recoveryKey,id);
   onPending?.(id, target);
   try {
@@ -48,24 +49,24 @@ export async function runCommand(command, raw, scope, { onPending, signal } = {}
       if (!recovered && error.status >= 400) { recoveries.delete(recoveryKey);throw error; }
       if (!current()) throw error;
       try { result = (await api.get(path, { signal })).data; }
-      catch { throw new Error(`命令提交结果不确定（${id}）。请先重新读取状态，避免重复执行。`, { cause: error }); }
+      catch { throw new Error(uiText("ui.extensionCommands.commandSubmissionIsUnconfirmedValue1ReadItsStatusBefore", { value1: id }, "命令提交结果不确定（{value1}）。请先重新读取状态，避免重复执行。"), { cause: error }); }
     }
     const checkReceipt = () => {
       if(!result||result.id!==id||typeof result.terminal!=="boolean"||typeof result.state!=="string")
-        throw new Error(`命令状态无效（${id}），请重新读取；不要重复提交。`);
+        throw new Error(uiText("ui.extensionCommands.invalidCommandStateValue1ReadTheStatusAgainDo", { value1: id }, "命令状态无效（{value1}），请重新读取；不要重复提交。"));
     };
     checkReceipt();let readFailures = 0;
     const until = Date.now() + 610000;
     while (!result.terminal) {
       if (!current()) throw new DOMException("Command target changed", "AbortError");
-      if (Date.now() > until) throw new Error(`命令状态等待超时（${id}）；请重新读取状态。`);
+      if (Date.now() > until) throw new Error(uiText("ui.extensionCommands.timedOutWaitingForCommandStatusValue1ReadThe", { value1: id }, "命令状态等待超时（{value1}）；请重新读取状态。"));
       await new Promise(resolve => setTimeout(resolve, Math.min(150 * 2 ** readFailures, 2000)));
       try { result = (await api.get(path, { signal })).data;checkReceipt(); readFailures = 0; }
       catch (error) { if (++readFailures >= 10 || error.status >= 400) throw error; }
     }
     terminal = result.terminal && !["interrupted", "uncertain"].includes(result.state);
     if(!current())throw new DOMException("Command target changed","AbortError");
-    if (result.state !== "succeeded") throw Object.assign(new Error(result.error || `命令执行失败：${result.state}`),{code:result.error_code,invocationId:id});
+    if (result.state !== "succeeded") throw Object.assign(new Error(result.error || uiText("ui.extensionCommands.commandFailedValue1", { value1: result.state }, "命令执行失败：{value1}")),{code:result.error_code,invocationId:id});
     return { ...result, raw_arguments: raw };
   } finally {
     if (terminal) recoveries.delete(recoveryKey);

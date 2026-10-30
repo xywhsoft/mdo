@@ -1,6 +1,8 @@
+import { setUiText as writeUiText, uiMessage, currentLocale, loadLocale, supportedLocales, t } from "../../i18n.js";
+
 import { applySettings, loadSettings, restoreSettings } from "../../state/settings.js";
 import { errorMessage, toast } from "../../utils/dom.js";
-import { currentLocale, loadLocale, supportedLocales, t } from "../../i18n.js";
+
 import { createSettingsAutosave, changedSettingsValues } from "./settings-autosave.js";
 import { createSettingsPages } from "./settings-pages.js";
 
@@ -143,7 +145,7 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
   }
 
   function feedbackText(text, tone = "neutral") {
-    feedback.textContent = text;
+    writeUiText(feedback, text);
     feedback.dataset.tone = tone;
     syncShortActions();
   }
@@ -165,11 +167,11 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
 
   function renderPowerStatus(settings) {
     const runtime = settings.power_runtime;
-    powerStatus.textContent = !runtime?.checked
-      ? t("settings.preventSleepChecking")
+    writeUiText(powerStatus, !runtime?.checked
+      ? uiMessage("settings.preventSleepChecking")
       : !runtime.available
-        ? t("settings.preventSleepUnavailable")
-        : t("settings.preventSleepReady");
+        ? uiMessage("settings.preventSleepUnavailable")
+        : uiMessage("settings.preventSleepReady"));
   }
 
   function focusAfterAction(preferred = feedback) {
@@ -187,8 +189,8 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
   }
 
   function renderStatus(settings) {
-    revision.textContent = t("settings.autosaveDescription", {},
-      "有效更改会自动保存；保存失败时可点击保存重试。");
+    writeUiText(revision, uiMessage("settings.autosaveDescription", {},
+      "有效更改会自动保存；保存失败时可点击保存重试。"));
     feedbackText(settings.transaction_service.runtime_consistent
       ? t("settings.synced", {}, "配置与本地服务保持同步。")
       : t("settings.runtimeError", { error: settings.transaction_service.last_error },
@@ -199,10 +201,10 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
   function renderProxyCredential(settings) {
     const configured = Boolean(settings.transport?.proxy?.credential_configured);
     document.querySelector("#proxy-clear-secret-row").hidden = !configured;
-    proxyCredential.textContent = configured
-      ? t("settings.proxyCredentialConfigured", {},
+    writeUiText(proxyCredential, configured
+      ? uiMessage("settings.proxyCredentialConfigured", {},
         "代理密码引用已配置；输入新引用可替换，或勾选清除。")
-      : t("settings.proxyCredentialMissing", {}, "未配置代理密码引用。");
+      : uiMessage("settings.proxyCredentialMissing", {}, "未配置代理密码引用。"));
   }
 
   function validateInstructions() {
@@ -218,8 +220,8 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
     const bytes = new TextEncoder().encode(field.value).length;
     field.setCustomValidity(bytes > 8192
       ? t("settings.instructionsTooLong", {}, "自定义指令不能超过 8192 字节。") : "");
-    instructionsCount.textContent = t("settings.instructionsBytes",
-      { bytes }, `${bytes} / 8192 字节`);
+    writeUiText(instructionsCount, uiMessage("settings.instructionsBytes",
+      { bytes }, `${bytes} / 8192 字节`));
     instructionsCount.dataset.tone = bytes > 8192 ? "error" : "neutral";
     return bytes <= 8192 && customLanguage.validity.valid;
   }
@@ -509,7 +511,7 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
 
   const unsubscribe = store.subscribe((state) => {
     if (state.status === "loading" && !state.data) {
-      revision.textContent = t("settings.loading", {}, "正在读取当前配置…");
+      writeUiText(revision, uiMessage("settings.loading", {}, "正在读取当前配置…"));
       return;
     }
     if (state.status === "error") {

@@ -1,6 +1,7 @@
+import { t as uiErrorText, currentLocale, subscribeLocale } from "../../i18n.js";
 import { api } from "../../api/client.js";
 import { targetState, subscribeTarget } from "../../api/target.js";
-import { currentLocale, subscribeLocale } from "../../i18n.js";
+
 import { buildNotices } from "./model.js";
 import { createNoticeIndicators } from "./indicator.js";
 import { openLayer } from "../../components/layers.js";
@@ -109,7 +110,7 @@ export function createNotificationCenter({ updatePanel, navigation, openAccount 
       try {
         const result = await own.recovery.request(signal => api.get("/diagnostics", { signal }), { retry: false });
         if (!current()) return false;
-        if (!result.data || !Array.isArray(result.data.items)) throw new Error("Invalid diagnostic snapshot");
+        if (!result.data || !Array.isArray(result.data.items)) throw new Error(uiErrorText("error.detail.invalidDiagnosticSnapshot", {}, "Invalid diagnostic snapshot"));
         diagnostics = result.data; diagnosticsFailed = false; render(); return true;
       } catch (error) {
         if (current() && error?.name !== "AbortError") { diagnosticsFailed = true; render(); }

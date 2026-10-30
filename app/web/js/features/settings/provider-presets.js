@@ -1,9 +1,10 @@
+import { t as uiText } from "../../i18n.js";
 // Small data-only catalog. API product variants have independent addresses;
 // an ordinary API key must never silently use a Coding Plan endpoint.
 const chat = "openai-chat-completions", messages = "anthropic-messages";
 const variant = (id, label, base, models, protocol = chat) => ({ id, label, base, models, protocol });
 export const providerPresets = Object.freeze([
-  { id: "bigmodel", name: "智谱", keyUrl: "https://open.bigmodel.cn/usercenter/proj-mgmt/apikeys", variants: [
+  { id: "bigmodel", get name() { return uiText("ui.providerPresets.zhipu", {}, "智谱"); }, keyUrl: "https://open.bigmodel.cn/usercenter/proj-mgmt/apikeys", variants: [
     variant("api", "regular", "https://open.bigmodel.cn/api/paas/v4", ["glm-5.3", "glm-5.3-flash"]),
     variant("coding", "coding", "https://open.bigmodel.cn/api/coding/paas/v4", ["glm-5.3", "glm-5.1"])] },
   { id: "zai", name: "Z.ai", keyUrl: "https://z.ai/manage-apikey/apikey-list", variants: [
@@ -17,11 +18,11 @@ export const providerPresets = Object.freeze([
   { id: "minimax", name: "MiniMax", keyUrl: "https://platform.minimaxi.com/user-center/basic-information/interface-key", variants: [
     variant("cn", "domestic", "https://api.minimaxi.com/anthropic/v1", ["MiniMax-M2.5"], messages),
     variant("global", "international", "https://api.minimax.io/anthropic/v1", ["MiniMax-M2.5"], messages)] },
-  { id: "dashscope", name: "阿里云百炼", keyUrl: "https://bailian.console.aliyun.com/", variants: [
+  { id: "dashscope", get name() { return uiText("ui.providerPresets.alibabaCloudModelStudio", {}, "阿里云百炼"); }, keyUrl: "https://bailian.console.aliyun.com/", variants: [
     variant("cn", "domestic", "https://dashscope.aliyuncs.com/compatible-mode/v1", ["qwen3.6-plus", "qwen3-coder-plus"]),
     variant("global", "international", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1", ["qwen3.6-plus"]),
     variant("coding", "coding", "https://coding.dashscope.aliyuncs.com/v1", ["qwen3.6-plus", "kimi-k2.5"])] },
-  { id: "siliconflow", name: "硅基流动", keyUrl: "https://cloud.siliconflow.cn/account/ak", variants: [
+  { id: "siliconflow", get name() { return uiText("ui.providerPresets.siliconflow", {}, "硅基流动"); }, keyUrl: "https://cloud.siliconflow.cn/account/ak", variants: [
     variant("cn", "domestic", "https://api.siliconflow.cn/v1", ["deepseek-ai/DeepSeek-V3.2", "Pro/zai-org/GLM-5.1"])] },
   { id: "openai", name: "OpenAI", keyUrl: "https://platform.openai.com/api-keys", variants: [
     variant("api", "regular", "https://api.openai.com/v1", ["gpt-5.4", "gpt-4.1-mini"], "openai-responses")] },

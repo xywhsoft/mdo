@@ -1,9 +1,11 @@
+import { uiMessage, t as uiText, subscribeLocale, t } from "../../i18n.js";
+
 import { element, clear, formatRelativeTime, errorMessage, toast } from "../../utils/dom.js";
 import {
   cancelTask, clearSelectedTask, loadTasks, readArtifactPreview,
   refreshSelectedTask, selectTask, selectedTask,
 } from "../../state/tasks.js";
-import { subscribeLocale, t } from "../../i18n.js";
+
 import { taskOwnerLocation } from "./task-owner.js";
 import { createTaskQuestions } from "./task-questions.js";
 import { isTransientReadError } from "../../api/read-recovery.js";
@@ -11,10 +13,10 @@ import { taskReadErrorMessage } from "./read-errors.js";
 
 const ACTIVE_STATES = new Set(["pending", "running"]);
 const STATE_LABELS = Object.freeze({
-  pending: "等待中", running: "运行中", succeeded: "已完成", failed: "失败",
-  cancelled: "已停止", timed_out: "已超时", lost: "已丢失",
+  get pending() { return uiText("dock.task.pending", {}, "等待中"); }, get running() { return uiText("timeline.running", {}, "运行中"); }, get succeeded() { return uiText("run.succeeded", {}, "已完成"); }, get failed() { return uiText("timeline.failed", {}, "失败"); },
+  get cancelled() { return uiText("timeline.stopped", {}, "已停止"); }, get timed_out() { return uiText("run.timedOut", {}, "已超时"); }, get lost() { return uiText("task.state.lost", {}, "已丢失"); },
 });
-const KIND_LABELS = Object.freeze({ process: "Shell", agent: "子 Agent", scheduled: "计划任务" });
+const KIND_LABELS = Object.freeze({ process: "Shell", get agent() { return uiText("timeline.subagent", {}, "子 Agent"); }, get scheduled() { return uiText("settings.schedules", {}, "计划任务"); } });
 function stateLabel(value) {
   return t(`task.state.${value}`, {}, STATE_LABELS[value] || value);
 }
@@ -38,7 +40,7 @@ function taskName(item) {
 }
 
 function lastKnownNotice() {
-  return element("div", { className: "resource-error", text: t("task.lastKnown", {},
+  return element("div", { className: "resource-error", text: uiMessage("task.lastKnown", {},
     "暂时无法更新，以下显示上次读取的任务信息。") });
 }
 
@@ -143,7 +145,7 @@ export function createTaskPanel({ container, detailContainer, store, detailStore
       notes.length ? element("p", { className: "task-output-note",
         text: notes.join(t("common.listSeparator", {}, "；")) }) : null,
       element("pre", { className: `task-output task-output-${name}`,
-        text: stream.text || t("task.output.empty", {}, "暂无输出"),
+        text: stream.text || uiMessage("task.output.empty", {}, "暂无输出"),
         attrs: { "data-task-scroll": `output/${name}` } }),
     ]);
     section.addEventListener("toggle", () => {
@@ -157,7 +159,7 @@ export function createTaskPanel({ container, detailContainer, store, detailStore
   function renderPreview(artifact) {
     if (previewState.status === "loading" || previewState.status === "refreshing") {
       return element("div", { className: "artifact-preview",
-        text: t("task.artifact.loading", {}, "正在读取产物…") });
+        text: uiMessage("task.artifact.loading", {}, "正在读取产物…") });
     }
     if (previewState.status === "error") {
       return element("div", { className: "resource-error", text: errorMessage(previewState.error) });
@@ -167,7 +169,7 @@ export function createTaskPanel({ container, detailContainer, store, detailStore
     const body = preview.text
       ? element("pre", { className: "task-output", text: preview.text,
         attrs: { "data-task-scroll": `artifact/${artifact.id}` } })
-      : element("p", { className: "task-output-note", text: t("task.artifact.binary",
+      : element("p", { className: "task-output-note", text: uiMessage("task.artifact.binary",
         { type: preview.mediaType, size: formatBytes(preview.bytes.length) },
         `二进制产物 ${preview.mediaType}，已读取 ${formatBytes(preview.bytes.length)}。`) });
     return element("div", { className: "artifact-preview" }, [
@@ -206,11 +208,11 @@ export function createTaskPanel({ container, detailContainer, store, detailStore
       isTransientReadError(detailState.error);
     if (detailState.status === "error" && !retainedError) {
       const retry = element("button", { className: "task-detail-close",
-        text: t("task.detail.retry", {}, "重试读取"),
+        text: uiMessage("task.detail.retry", {}, "重试读取"),
         attrs: { type: "button", "data-task-focus": "retry" } });
       retry.addEventListener("click", () => void refreshSelectedTask({ retry: true }));
       const close = element("button", { className: "task-detail-close",
-        text: t("task.backToList", {}, "返回任务列表"), attrs: {
+        text: uiMessage("task.backToList", {}, "返回任务列表"), attrs: {
           type: "button", "data-task-focus": "back" } });
       close.addEventListener("click", closeDetail);
       detailHeader.append(element("div", { className: "task-detail-actions" }, [close, retry]));
@@ -220,7 +222,7 @@ export function createTaskPanel({ container, detailContainer, store, detailStore
     }
     if (!detailState.data) {
       detailBody.append(element("div", { className: "empty-state",
-        text: t("task.detail.loading", {}, "正在载入任务详情…") }));
+        text: uiMessage("task.detail.loading", {}, "正在载入任务详情…") }));
       restoreView(detailContainer, view, container.querySelector(
         `[data-task-focus="open/${selected}"]`));
       return;
@@ -228,13 +230,13 @@ export function createTaskPanel({ container, detailContainer, store, detailStore
     const { detail: task, output, artifacts } = detailState.data;
     const owner = taskOwnerLocation(task.owner_session);
     const close = element("button", { className: "task-detail-close",
-      text: t("task.backToList", {}, "返回任务列表"), attrs: {
+      text: uiMessage("task.backToList", {}, "返回任务列表"), attrs: {
         type: "button", "data-task-focus": "back" } });
     close.addEventListener("click", closeDetail);
     const headerActions = [close];
     if (retainedError) {
       const retry = element("button", { className: "task-detail-close",
-        text: t("task.detail.retry", {}, "重试读取"),
+        text: uiMessage("task.detail.retry", {}, "重试读取"),
         attrs: { type: "button", "data-task-focus": "retry" } });
       retry.addEventListener("click", () => void refreshSelectedTask({ retry: true }));
       headerActions.push(retry);
@@ -242,10 +244,10 @@ export function createTaskPanel({ container, detailContainer, store, detailStore
     }
     if (ACTIVE_STATES.has(task.state)) {
       const stop = element("button", { className: "task-cancel",
-        text: stopping(task) ? t("task.stopping", {}, "正在停止…") : t("task.stop", {}, "停止"), attrs: { type: "button",
+        text: stopping(task) ? uiMessage("task.stopping", {}, "正在停止…") : uiMessage("task.stop", {}, "停止"), attrs: { type: "button",
           "data-task-focus": "stop", "data-task-cancel": String(task.id),
           "data-task-stopping": String(stopping(task)),
-          "aria-label": t("task.stopNamed", { name: task.label || task.id },
+          "aria-label": uiMessage("task.stopNamed", { name: task.label || task.id },
             `停止任务 ${task.label || task.id}`) } });
       stop.addEventListener("click", () => cancel(task));
       headerActions.push(stop);
@@ -271,7 +273,7 @@ export function createTaskPanel({ container, detailContainer, store, detailStore
     for (const artifact of artifacts) {
       const open = element("button", { className: "task-artifact", attrs: {
         type: "button", "data-task-focus": `artifact/${artifact.id}` } }, [
-        element("span", { text: artifact.path || t("task.artifact.fallback",
+        element("span", { text: artifact.path || uiMessage("task.artifact.fallback",
           { id: artifact.id }, `产物 #${artifact.id}`) }),
         element("span", { text: `${artifact.media_type || "binary"} · ${formatBytes(artifact.size_bytes)}` }),
       ]);
@@ -281,7 +283,7 @@ export function createTaskPanel({ container, detailContainer, store, detailStore
       if (preview) artifactList.append(preview);
     }
     if (!artifacts.length) artifactList.append(element("p", { className: "task-output-note",
-      text: t("task.artifact.empty", {}, "该任务没有产物。") }));
+      text: uiMessage("task.artifact.empty", {}, "该任务没有产物。") }));
     detailHeader.append(
       element("div", { className: "task-detail-actions" }, headerActions),
       element("header", { className: "task-detail-heading" }, [
@@ -291,9 +293,9 @@ export function createTaskPanel({ container, detailContainer, store, detailStore
     );
     detailBody.append(metadata,
       element("section", { className: "task-detail-section" }, [element("h4", {
-        text: t("task.output.title", {}, "输出") }), outputBody]),
+        text: uiMessage("task.output.title", {}, "输出") }), outputBody]),
       element("section", { className: "task-detail-section" }, [element("h4", {
-        text: t("task.artifact.title", { count: artifacts.length },
+        text: uiMessage("task.artifact.title", { count: artifacts.length },
           `产物 ${artifacts.length}`) }), artifactList]),
     );
     syncCancelButtons();
@@ -307,7 +309,7 @@ export function createTaskPanel({ container, detailContainer, store, detailStore
     if (listState.status === "error") {
       const retained = items.length && isTransientReadError(listState.error);
       const retry = element("button", { className: "task-detail-close",
-        text: t("task.detail.retry", {}, "重试读取"), attrs: {
+        text: uiMessage("task.detail.retry", {}, "重试读取"), attrs: {
           type: "button", "data-task-focus": "retry-list" } });
       retry.addEventListener("click", () => void loadTasks({ retry: true }));
       container.append(retained ? lastKnownNotice() : element("div", {
@@ -321,8 +323,8 @@ export function createTaskPanel({ container, detailContainer, store, detailStore
       const loading = listState.status === "loading" ||
         (listState.status === "refreshing" && !listState.updatedAt);
       container.append(element("div", { className: "empty-state", text: loading
-        ? t("task.list.loading", {}, "正在载入任务…")
-        : t("task.list.empty", {}, "暂无后台任务") }));
+        ? uiMessage("task.list.loading", {}, "正在载入任务…")
+        : uiMessage("task.list.empty", {}, "暂无后台任务") }));
       restoreView(container, view, document.querySelector("#tasks-title"));
       return;
     }
@@ -346,10 +348,10 @@ export function createTaskPanel({ container, detailContainer, store, detailStore
       const headerChildren = [open];
       if (ACTIVE_STATES.has(item.state)) {
         const cancelButton = element("button", { className: "task-cancel",
-          text: stopping(item) ? t("task.stopping", {}, "正在停止…") : t("task.stop", {}, "停止"), attrs: { type: "button",
+          text: stopping(item) ? uiMessage("task.stopping", {}, "正在停止…") : uiMessage("task.stop", {}, "停止"), attrs: { type: "button",
             "data-task-focus": `cancel/${item.id}`, "data-task-cancel": String(item.id),
             "data-task-stopping": String(stopping(item)),
-            "aria-label": t("task.stopNamed", { name: item.label || item.id },
+            "aria-label": uiMessage("task.stopNamed", { name: item.label || item.id },
               `停止任务 ${item.label || item.id}`) } });
         cancelButton.addEventListener("click", () => cancel(item));
         headerChildren.push(cancelButton);

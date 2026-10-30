@@ -1,3 +1,4 @@
+import { t as uiErrorText } from "../i18n.js";
 // The pinned XS Android bridge transfers at most 8 MiB through FileReader.
 // Check before creating a URL or reporting browser handoff. Desktop/browser
 // downloads keep their existing limits and do not depend on this bridge.
@@ -5,7 +6,7 @@ export const ANDROID_EXPORT_MAX_BYTES = 8 * 1024 * 1024;
 
 export function saveBlobFile({ blob, filename }) {
   if (typeof globalThis.XsExport?.save === "function" && blob.size > ANDROID_EXPORT_MAX_BYTES) {
-    const error = new Error("This file exceeds Android's 8 MiB export limit. Use a desktop or browser to export it.");
+    const error = new Error(uiErrorText("error.detail.thisFileExceedsAndroidS8MibExportLimitUse", {}, "This file exceeds Android's 8 MiB export limit. Use a desktop or browser to export it."));
     error.code = "export_platform_limit";
     throw error;
   }

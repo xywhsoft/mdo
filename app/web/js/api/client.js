@@ -1,3 +1,5 @@
+import { t as uiErrorText, t as uiText } from "../i18n.js";
+
 import { targetFetch, targetState } from "./target.js";
 
 import { downloadRegistry } from "../state/downloads.js";
@@ -53,7 +55,7 @@ export function allowsApiWrite(path, options = {}) {
 
 function checkWrite(path, options) {
   if (!allowsApiWrite(path, options))
-    throw new ApiError("Review the saved project purge request before writing", {
+    throw new ApiError(uiErrorText("error.detail.reviewTheSavedProjectPurgeRequestBeforeWriting", {}, "Review the saved project purge request before writing"), {
       code: "purge_review_required",
     });
 }
@@ -71,7 +73,7 @@ export class ApiError extends Error {
 
 export function apiUrl(path) {
   if (typeof path !== "string" || !path.startsWith("/") || path.startsWith("//")) {
-    throw new TypeError("API path must be an absolute path within /api/v1");
+    throw new TypeError(uiErrorText("error.detail.apiPathMustBeAnAbsolutePathWithinApiV1", {}, "API path must be an absolute path within /api/v1"));
   }
   return `${API_ROOT}${path}`;
 }
@@ -85,7 +87,7 @@ export function resourceId(value, label = "resource") {
 }
 
 export function attachmentUrl(projectId, sessionId, id) {
-  if (!/^[0-9a-f]{32}$/.test(id)) throw new TypeError("Attachment ID is invalid");
+  if (!/^[0-9a-f]{32}$/.test(id)) throw new TypeError(uiErrorText("error.detail.attachmentIdIsInvalid", {}, "Attachment ID is invalid"));
   return apiUrl(`/projects/${resourceId(projectId, "project")}` +
     `/sessions/${resourceId(sessionId, "session")}/attachments/${id}`);
 }
@@ -106,13 +108,13 @@ async function readEnvelope(response, path = "", method = "GET", signal) {
     checkSignal(signal);
     if (error?.name === "AbortError") throw error;
     if (error?.code) throw new ApiError(error.message, error);
-    throw new ApiError("服务返回了无效响应", {
+    throw new ApiError(uiText("ui.client.theServiceReturnedAnInvalidResponse", {}, "服务返回了无效响应"), {
       status: response.status, code: "invalid_response",
     });
   }
   checkSignal(signal);
   if (!response.ok || envelope?.ok !== true) {
-    const error = new ApiError(envelope?.error?.message || `请求失败 (${response.status})`, {
+    const error = new ApiError(envelope?.error?.message || uiText("ui.client.requestFailedValue1", { value1: response.status }, "请求失败 ({value1})"), {
       status: response.status,
       code: envelope?.error?.code,
       requestId: envelope?.request_id,
@@ -176,7 +178,7 @@ async function sendJson(path, options) {
     if (error?.name === "AbortError") throw error;
     if (error?.code) throw new ApiError(error.message, error);
     networkErrorHandler?.();
-    throw new ApiError("无法连接本地 mdo 服务", { code: "network_error" });
+    throw new ApiError(uiText("ui.client.cannotConnectToTheLocalMdoService", {}, "无法连接本地 mdo 服务"), { code: "network_error" });
   }
 
   const result = await readEnvelope(response, path, method, options.signal);
@@ -185,7 +187,7 @@ async function sendJson(path, options) {
 
 async function uploadImage(projectId, sessionId, file, mime = file.type, options = {}) {
   if (options.uploadId && !/^[0-9a-f]{32}$/.test(options.uploadId))
-    throw new TypeError("Invalid image upload identity");
+    throw new TypeError(uiErrorText("error.detail.invalidImageUploadIdentity", {}, "Invalid image upload identity"));
   const path = `/projects/${resourceId(projectId, "project")}` +
     `/sessions/${resourceId(sessionId, "session")}/attachments` +
     (options.uploadId ? `/${options.uploadId}` : "");
@@ -202,7 +204,7 @@ async function sendImage(path, file, mime, method, signal) {
     ...(pageWriteToken ? { "X-Mdo-Write-Token": pageWriteToken } : {}) };
   if (file.name) {
     const name = attachmentFileName(file.name);
-    if (!name) throw new ApiError("Image filename is invalid", { code: "image_name_invalid" });
+    if (!name) throw new ApiError(uiErrorText("error.detail.imageFilenameIsInvalid", {}, "Image filename is invalid"), { code: "image_name_invalid" });
     headers["X-Mdo-File-Name"] = encodeURIComponent(name);
   }
   let response;
@@ -220,14 +222,14 @@ async function sendImage(path, file, mime, method, signal) {
     if (error?.name === "AbortError") throw error;
     if (error?.code) throw new ApiError(error.message, error);
     networkErrorHandler?.();
-    throw new ApiError("无法连接本地 mdo 服务", { code: "network_error" });
+    throw new ApiError(uiText("ui.client.cannotConnectToTheLocalMdoService", {}, "无法连接本地 mdo 服务"), { code: "network_error" });
   }
   return (await readEnvelope(response, path, method, signal)).data;
 }
 
 function deleteImage(projectId, sessionId, id) {
   if (!/^[0-9a-f]{32}$/.test(id))
-    throw new TypeError("Attachment ID is invalid");
+    throw new TypeError(uiErrorText("error.detail.attachmentIdIsInvalid", {}, "Attachment ID is invalid"));
   return apiRequest(`/projects/${resourceId(projectId, "project")}` +
     `/sessions/${resourceId(sessionId, "session")}/attachments/${id}`,
     { method: "DELETE" });
@@ -235,7 +237,7 @@ function deleteImage(projectId, sessionId, id) {
 
 function markImageDiscard(projectId, sessionId, id) {
   if (!/^[0-9a-f]{32}$/.test(id))
-    throw new TypeError("Attachment ID is invalid");
+    throw new TypeError(uiErrorText("error.detail.attachmentIdIsInvalid", {}, "Attachment ID is invalid"));
   return apiRequest(`/projects/${resourceId(projectId, "project")}` +
     `/sessions/${resourceId(sessionId, "session")}/queue/discard-images/${id}`,
     { method: "POST" });
@@ -257,14 +259,14 @@ export const api = Object.freeze({
 export async function uploadBackupChunk(id, offset, chunk, options = {}) {
   if (!/^[0-9a-f]{32}$/.test(id) || !Number.isSafeInteger(offset) || offset < 0 ||
       !(chunk instanceof Uint8Array) || !chunk.byteLength || chunk.byteLength > 262144)
-    throw new TypeError("Invalid backup chunk");
+    throw new TypeError(uiErrorText("error.detail.invalidBackupChunk", {}, "Invalid backup chunk"));
   return uploadBinaryChunk(`/session-backups/uploads/${id}/chunks/${offset}`, chunk, options);
 }
 
 export async function uploadExtensionChunk(id, offset, chunk, options = {}) {
   if (!/^[A-Za-z0-9_-]{32}$/.test(id) || !Number.isSafeInteger(offset) || offset < 0 ||
       !(chunk instanceof Uint8Array) || !chunk.byteLength || chunk.byteLength > 1048576)
-    throw new TypeError("Invalid extension archive chunk");
+    throw new TypeError(uiErrorText("error.detail.invalidExtensionArchiveChunk", {}, "Invalid extension archive chunk"));
   return uploadBinaryChunk(`/extension-tasks/${id}/chunks/${offset}`, chunk, options);
 }
 
@@ -283,7 +285,7 @@ async function uploadBinaryChunk(path, chunk, options) {
       if (error?.name === "AbortError") throw error;
       if (error?.code) throw new ApiError(error.message, error);
       networkErrorHandler?.();
-      throw new ApiError("Cannot upload file chunk", { code: "network_error" });
+      throw new ApiError(uiErrorText("error.detail.cannotUploadFileChunk", {}, "Cannot upload file chunk"), { code: "network_error" });
     }
     return readEnvelope(response, path, "PUT", options.signal);
   }));

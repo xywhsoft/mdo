@@ -1,3 +1,5 @@
+import { t as uiErrorText, t as uiText } from "../i18n.js";
+
 import { createSha256 } from "../utils/sha256.js";
 
 const ID = /^[0-9a-f]{32}$/, SHA = /^[0-9a-f]{64}$/;
@@ -57,7 +59,7 @@ export function createRemoteTransport({ socket = (...args) => new WebSocket(...a
   let connectReject = null, connectTimer = 0;
   let direct = null, directReady = false, directTimer = 0, rendezvous = null, probing = null;
   const send = (value, route = connection) => {
-    if (route?.readyState !== 1) throw remoteError("remote_offline", "目标设备连接已断开");
+    if (route?.readyState !== 1) throw remoteError("remote_offline", uiText("ui.remoteTransport.targetDeviceDisconnected", {}, "目标设备连接已断开"));
     route.send(typeof value === "string" || value instanceof Uint8Array ? value : JSON.stringify(value));
   };
   function release(entry) {
@@ -93,7 +95,7 @@ export function createRemoteTransport({ socket = (...args) => new WebSocket(...a
     if (directReady && direct?.readyState !== 1) loseDirect(direct);
     return directReady ? direct : connection;
   }
-  function disconnect(error = remoteError("remote_offline", "目标设备离线，操作不会转到本机")) {
+  function disconnect(error = remoteError("remote_offline", uiText("ui.target.targetDeviceIsOfflineTheOperationWillNotRun", {}, "目标设备离线，操作不会转到本机"))) {
     const old = connection; connection = null; hello = null; generation++;
     const oldDirect = direct; direct = null; directReady = false; clearTimer(directTimer); oldDirect?.close();
     probing?.finish(false); probing = null;
@@ -103,7 +105,7 @@ export function createRemoteTransport({ socket = (...args) => new WebSocket(...a
       let failure = error;
       if (entry.write && entry.admitted) {
         const meta = remember(entry);
-        failure = remoteError("remote_result_unconfirmed", "远程写入的结果尚未确认，请核对目标状态，勿重复提交", meta);
+        failure = remoteError("remote_result_unconfirmed", uiText("ui.remoteTransport.remoteWriteIsUnconfirmedCheckTheTargetStateDo", {}, "远程写入的结果尚未确认，请核对目标状态，勿重复提交"), meta);
       }
       reject(entry, failure);
     }
@@ -190,7 +192,7 @@ export function createRemoteTransport({ socket = (...args) => new WebSocket(...a
         const unknown = entry.write && value.outcome !== "not_started";
         if (unknown) remember(entry, meta);
         reject(entry, remoteError(unknown ? "remote_result_unconfirmed" : value.code || "remote_request_failed",
-          unknown ? "远程写入的结果尚未确认，请核对后再操作" : "目标设备拒绝了此操作", meta));
+          unknown ? uiText("ui.remoteTransport.remoteWriteIsUnconfirmedCheckTheResultBeforeContinuing", {}, "远程写入的结果尚未确认，请核对后再操作") : uiText("ui.remoteTransport.theTargetDeviceRejectedThisOperation", {}, "目标设备拒绝了此操作"), meta));
       }
     } else throw remoteError("remote_protocol", "Unexpected remote response");
   }
@@ -206,17 +208,17 @@ export function createRemoteTransport({ socket = (...args) => new WebSocket(...a
   }
   async function fetchTarget(path, options = {}) {
     const epoch = generation, runtime = hello?.runtime_id;
-    if (!hello) throw remoteError("remote_offline", "目标设备离线，操作不会转到本机");
+    if (!hello) throw remoteError("remote_offline", uiText("ui.target.targetDeviceIsOfflineTheOperationWillNotRun", {}, "目标设备离线，操作不会转到本机"));
     if (typeof path !== "string" || !path.startsWith("/api/v1/") || path.startsWith("/api/v1/connector/"))
       throw remoteError("remote_scope", "This endpoint is outside the selected target");
     const method = (options.method || "GET").toUpperCase(), write = !["GET", "HEAD"].includes(method);
-    if (!["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"].includes(method)) throw new TypeError("Unsupported remote method");
-    if (write && hello.mode !== "control") throw remoteError("read_only", "当前设备连接为只读模式");
+    if (!["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"].includes(method)) throw new TypeError(uiErrorText("error.detail.unsupportedRemoteMethod", {}, "Unsupported remote method"));
+    if (write && hello.mode !== "control") throw remoteError("read_only", uiText("ui.remoteTransport.thisDeviceConnectionIsReadOnly", {}, "当前设备连接为只读模式"));
     if (requests.size >= 64 || sequence === Number.MAX_SAFE_INTEGER) throw remoteError("remote_capacity", "Wait for remote operations to finish");
     const headerValues = new Headers(options.headers);
     if (!write && typeof DecompressionStream === "function") headerValues.set("Accept-Encoding", "gzip");
     const headers = [...headerValues].map(pair => pair);
-    if (headers.some(([name]) => !allowedHeaders.has(name))) throw new TypeError("Unsupported remote header");
+    if (headers.some(([name]) => !allowedHeaders.has(name))) throw new TypeError(uiErrorText("error.detail.unsupportedRemoteHeader", {}, "Unsupported remote header"));
     const body = options.body;
     let bytes;
     if (body == null) bytes = new Uint8Array();
@@ -224,9 +226,9 @@ export function createRemoteTransport({ socket = (...args) => new WebSocket(...a
     else if (body instanceof Uint8Array) bytes = body.slice();
     else if (body instanceof ArrayBuffer) bytes = new Uint8Array(body.slice(0));
     else if (body instanceof Blob && body.size <= hello.upload_limit) bytes = new Uint8Array(await body.arrayBuffer());
-    else throw new TypeError("Unsupported remote body");
+    else throw new TypeError(uiErrorText("error.detail.unsupportedRemoteBody", {}, "Unsupported remote body"));
     if (epoch !== generation || runtime !== hello?.runtime_id) { bytes.fill(0); throw remoteError("remote_offline", "Target connection changed"); }
-    if (bytes.length > hello.upload_limit || (!write && bytes.length)) { bytes.fill(0); throw new TypeError("Remote body exceeds its limit"); }
+    if (bytes.length > hello.upload_limit || (!write && bytes.length)) { bytes.fill(0); throw new TypeError(uiErrorText("error.detail.remoteBodyExceedsItsLimit", {}, "Remote body exceeds its limit")); }
     if (requests.size >= 64) { bytes.fill(0); throw remoteError("remote_capacity", "Wait for remote operations to finish"); }
     return new Promise((resolve, rejectPromise) => {
       const entry = { id: id(), method, path, headers, write, upload: bytes, queue: [],
@@ -270,17 +272,17 @@ export function createRemoteTransport({ socket = (...args) => new WebSocket(...a
       fail(error) { current.close(); current.onclose?.({ code: error.code === "remote_revoked" ? 1008 : 1006 }); },
       text(value) {
         if (value.type === "live_opened") { current.readyState = 1; current.onopen?.({}); }
-        else if (value.type === "live_closed" || value.type === "error") current.fail(remoteError(value.code || "remote_live", "Live channel closed"));
+        else if (value.type === "live_closed" || value.type === "error") current.fail(remoteError(value.code || "remote_live", uiErrorText("error.remoteLiveClosed", {}, "Live channel closed")));
         else if (value.type === "live_event") {
           if (event || value.offset !== offset || value.sequence !== eventSequence + 1 ||
-              !integer(value.bytes, hello.live_limit) || !SHA.test(value.sha256)) throw remoteError("remote_protocol", "Invalid live event");
+              !integer(value.bytes, hello.live_limit) || !SHA.test(value.sha256)) throw remoteError("remote_protocol", uiErrorText("error.remoteEventInvalid", {}, "Invalid live event"));
           event = { ...value, data: new Uint8Array(value.bytes), received: 0, hash: createSha256() };
         } else if (value.type === "live_event_end") {
           if (!event || value.sequence !== event.sequence || value.offset !== offset ||
-              event.received !== event.bytes || event.hash.hex() !== event.sha256) throw remoteError("remote_protocol", "Incomplete live event");
+              event.received !== event.bytes || event.hash.hex() !== event.sha256) throw remoteError("remote_protocol", uiErrorText("error.remoteEventIncomplete", {}, "Incomplete live event"));
           const data = decoder.decode(event.data); eventSequence = event.sequence; event = null;
           current.onmessage?.({ data });
-        } else throw remoteError("remote_protocol", "Unexpected live event");
+        } else throw remoteError("remote_protocol", uiErrorText("error.remoteEventUnexpected", {}, "Unexpected live event"));
       },
       body(frame) {
         if (!event || frame.offset !== offset || frame.bytes.length > event.bytes - event.received)
@@ -296,7 +298,7 @@ export function createRemoteTransport({ socket = (...args) => new WebSocket(...a
     catch (error) { lives.delete(liveId); routeFailure(route, error); throw error; }
     return current;
   }
-  function loseDirect(active, error = remoteError("remote_offline", "直连中断，已使用服务器中转")) {
+  function loseDirect(active, error = remoteError("remote_offline", uiText("ui.remoteTransport.directConnectionInterruptedUsingServerRelay", {}, "直连中断，已使用服务器中转"))) {
     if (active !== direct) return;
     direct = null; directReady = false; clearTimer(directTimer); active.close();
     if (rendezvous?.socket === active) {
@@ -306,7 +308,7 @@ export function createRemoteTransport({ socket = (...args) => new WebSocket(...a
     for (const entry of [...requests.values()]) if (entry.socket === active) {
       let failure = error;
       if (entry.write && entry.admitted) failure = remoteError("remote_result_unconfirmed",
-        "远程写入的结果尚未确认，请核对目标状态，勿重复提交", remember(entry));
+        uiText("ui.remoteTransport.remoteWriteIsUnconfirmedCheckTheTargetStateDo", {}, "远程写入的结果尚未确认，请核对目标状态，勿重复提交"), remember(entry));
       reject(entry, failure);
     }
     for (const live of [...lives.values()]) if (live.socket === active) live.fail(error);
@@ -441,7 +443,7 @@ export function createRemoteTransport({ socket = (...args) => new WebSocket(...a
           };
           active.onerror = () => { if (active === connection) disconnect(); };
           active.onclose = event => { if (active === connection) disconnect(event.code === 1008 ?
-            remoteError("remote_revoked", "设备授权已撤销，请返回本机或选择其他设备") : undefined); };
+            remoteError("remote_revoked", uiText("ui.remoteTransport.deviceAccessWasRevokedReturnToThisDeviceOr", {}, "设备授权已撤销，请返回本机或选择其他设备")) : undefined); };
         } catch (error) { disconnect(error); }
       });
     },

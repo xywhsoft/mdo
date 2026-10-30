@@ -1,3 +1,5 @@
+import { currentLocale, setUiAttribute as writeUiAttribute, setUiText as writeUiText, uiMessage, t as uiText } from "../../i18n.js";
+
 import { element as make, icon, iconButton, popupMenu } from "./controls.js";
 import { changesTree, changeStats } from "./changes-model.js";
 import { renderDiffRows, diffLabels, diffProvenance } from "./diff-render.js";
@@ -12,31 +14,31 @@ export async function mountChangesView(root, { sdk, context, params = {}, viewSt
   let repository = saved.repository || params.repository || ".", state, selected = saved.selected || "", page, split = Boolean(saved.split), treeWidth = Math.max(150, Math.min(360, saved.treeWidth || 200));
   let operation, generation = 0, saveTimer, treeRows = [], focused = 0, selectedRows = null, previousPages = [], targetOffset = 0, continuous = Boolean(saved.continuous), multi;
   const bar = make("div", "wb-changes-toolbar"), scope = make("select", "wb-compare-scope"), base = make("select", "wb-compare-base"), summary = make("span", "wb-changes-summary");
-  scope.setAttribute("aria-label", "变更比较范围"); base.setAttribute("aria-label", "比较基准分支"); base.hidden = true;
-  for (const [value, label] of [["workspace", "工作区"], ["staged", "已暂存"], ["unstaged", "未暂存"], ["branch", "分支 → HEAD"], ["session", "本会话"]]) {
+  writeUiAttribute(scope, "aria-label", uiMessage("ui.changesView.changeComparisonScope", {}, "变更比较范围")); writeUiAttribute(base, "aria-label", uiMessage("ui.changesView.baseBranchForComparison", {}, "比较基准分支")); base.hidden = true;
+  for (const [value, label] of [["workspace", uiText("ui.changesView.workspace", {}, "工作区")], ["staged", uiText("ui.changesView.staged", {}, "已暂存")], ["unstaged", uiText("ui.changesView.unstaged", {}, "未暂存")], ["branch", uiText("ui.changesView.branchHead", {}, "分支 → HEAD")], ["session", uiText("ui.changesView.thisConversation", {}, "本会话")]]) {
     const option = make("option", "", label); option.value = value; scope.append(option);
   }
   scope.value = ["workspace", "staged", "unstaged", "branch", "session"].includes(saved.scope) ? saved.scope : "workspace";
   const errorToast = error => { if (error.name !== "AbortError" && !signal.aborted) toast(error.message, "error"); };
   const action = (glyph, label, run) => iconButton(glyph, label, run, errorToast);
-  const refresh = action("refresh", "刷新变更", () => refreshChanges()), toggleTree = action("folder", "切换变更文件树", () => { tree.hidden = !tree.hidden; remember(); });
-  const more = action("more", "变更更多操作", () => {});
+  const refresh = action("refresh", uiMessage("ui.changesView.refreshChanges", {}, "刷新变更"), () => refreshChanges()), toggleTree = action("folder", uiMessage("ui.changesView.toggleChangedFileTree", {}, "切换变更文件树"), () => { tree.hidden = !tree.hidden; remember(); });
+  const more = action("more", uiMessage("ui.changesView.moreChangeActions", {}, "变更更多操作"), () => {});
   bar.append(scope, base, summary, refresh, toggleTree, more);
   const body = make("div", "wb-files-body"), main = make("div", "wb-file-main"), fileBar = make("div", "wb-change-filebar"), fileName = make("span", "wb-file-path"), fileStats = make("span", "wb-change-stats");
   const diff = make("div", "wb-changes-diff"), info = make("div", "wb-file-info"), tree = make("aside", "wb-file-tree wb-changes-tree"), search = make("input", "wb-file-search");
   const treeList = make("div", "wb-changes-tree-list"), treeCanvas = make("div", "wb-changes-tree-canvas"), treeTitle = make("div", "wb-tree-heading");
-  search.placeholder = "筛选变更文件…"; search.setAttribute("aria-label", "筛选变更文件");
-  treeList.setAttribute("role", "tree"); treeList.setAttribute("aria-label", "变更文件"); treeList.tabIndex = 0; treeList.append(treeCanvas);
-  const open = action("file", "打开工作区文件", () => {
+  writeUiAttribute(search, "placeholder", uiMessage("ui.changesView.filterChangedFiles", {}, "筛选变更文件…")); writeUiAttribute(search, "aria-label", uiMessage("ui.changesView.filterChangedFiles769", {}, "筛选变更文件"));
+  treeList.setAttribute("role", "tree"); writeUiAttribute(treeList, "aria-label", uiMessage("ui.changesView.changedFiles", {}, "变更文件")); treeList.tabIndex = 0; treeList.append(treeCanvas);
+  const open = action("file", uiMessage("ui.changesView.openWorkspaceFile", {}, "打开工作区文件"), () => {
     const file = state?.files.find(file => file.path === selected); if (!file || file.directory) return;
     const chosen = page?.rows.find(row => row.new_line && (!selectedRows || row.offset >= selectedRows[0]));
     return openFile(`${state.repository.replace(/[\\/]$/, "")}/${file.path}`, chosen?.new_line || 1);
   });
-  const quote = action("review", "引用所选差异", () => quoteChanges()); quote.onpointerdown = event => event.preventDefault();
-  const previous = action("arrow-left", "上一页差异", () => { if (previousPages.length) return loadDiff(previousPages.pop(), false); });
-  const next = action("arrow-right", "下一页差异", () => { if (page?.more) { previousPages.push(page.offset); return loadDiff(page.next, false); } });
+  const quote = action("review", uiMessage("ui.changesView.quoteSelectedDiff", {}, "引用所选差异"), () => quoteChanges()); quote.onpointerdown = event => event.preventDefault();
+  const previous = action("arrow-left", uiMessage("ui.changesView.previousDiffPage", {}, "上一页差异"), () => { if (previousPages.length) return loadDiff(previousPages.pop(), false); });
+  const next = action("arrow-right", uiMessage("ui.changesView.nextDiffPage", {}, "下一页差异"), () => { if (page?.more) { previousPages.push(page.offset); return loadDiff(page.next, false); } });
   fileBar.append(fileName, fileStats, open, quote); main.append(fileBar, diff, info);
-  treeTitle.append(make("span", "", "变更文件")); tree.append(search, treeTitle, treeList); tree.style.width = `${treeWidth}px`; tree.hidden = Boolean(saved.treeHidden);
+  treeTitle.append(make("span", "", uiMessage("ui.changesView.changedFiles", {}, "变更文件"))); tree.append(search, treeTitle, treeList); tree.style.width = `${treeWidth}px`; tree.hidden = Boolean(saved.treeHidden);
   body.append(main, tree); root.append(bar, body);
   const remember = () => {
     clearTimeout(saveTimer); saveTimer = setTimeout(() => {
@@ -51,19 +53,19 @@ export async function mountChangesView(root, { sdk, context, params = {}, viewSt
   };
   const fail = (error, retry) => {
     if (signal.aborted || error.name === "AbortError") return;
-    const explanation = error.code === "git_baseline_missing" ? "这个会话没有已捕获的比较基线。请选择工作区或分支比较。" : error.code === "git_baseline_unavailable" ? `会话开始时未能捕获完整基线，不能回溯补建。请选择工作区或分支比较。${error.message}` : error.code === "git_baseline_context_changed" ? "该会话的原始仓库或工作目录已变化，不能沿用旧基线。请选择工作区或分支比较。" : error.message;
+    const explanation = error.code === "git_baseline_missing" ? uiText("ui.changesView.thisConversationHasNoCapturedComparisonBaselineSelectWorkspace", {}, "这个会话没有已捕获的比较基线。请选择工作区或分支比较。") : error.code === "git_baseline_unavailable" ? uiText("ui.changesView.theFullBaselineWasNotCapturedWhenThisConversation", { value1: error.message }, "会话开始时未能捕获完整基线，不能回溯补建。请选择工作区或分支比较。{value1}") : error.code === "git_baseline_context_changed" ? uiText("ui.changesView.theOriginalRepositoryOrWorkingDirectoryChangedTheOld", {}, "该会话的原始仓库或工作目录已变化，不能沿用旧基线。请选择工作区或分支比较。") : error.message;
     multi?.dispose(); multi = null; page = null; diff.replaceChildren(make("p", "wb-error wb-change-message", explanation));
-    info.replaceChildren(action("refresh", "重新读取变更", retry)); controls();
+    info.replaceChildren(action("refresh", uiMessage("ui.changesView.readChangesAgain", {}, "重新读取变更"), retry)); controls();
   };
   const controls = () => {
     const file = state?.files.find(file => file.path === selected);
-    fileBar.hidden = continuous; fileName.textContent = file ? file.path : "变更"; fileName.title = file?.old_path ? `${file.old_path} → ${file.path}` : selected;
-    fileStats.textContent = file ? changeStats(file) : "";
+    fileBar.hidden = continuous; writeUiText(fileName, file ? file.path : uiMessage("ui.startView.changes", {}, "变更")); writeUiAttribute(fileName, "title", file?.old_path ? `${file.old_path} → ${file.path}` : selected);
+    writeUiText(fileStats, file ? changeStats(file) : "");
     open.disabled = !file || Boolean(file.directory) || file.status.includes("D") && !file.worktree_recreated;
     quote.disabled = !page?.rows.length; previous.disabled = !previousPages.length; next.disabled = !page?.more;
-    summary.textContent = state ? `${state.files.length} 文件 · +${state.additions} −${state.deletions}${state.unmeasured_files ? ` · ${state.unmeasured_files} 未统计` : ""}` : "";
-    summary.title = state ? `${state.repository}\n${state.branch || "分离 HEAD"}${state.unborn ? " · 尚无首次提交" : ""}${scope.value === "branch" ? `\n${state.base} → ${state.head}（提交之间）` : ""}` : "";
-    if (state?.scope === "session") summary.title += `\n基线：${new Date(state.baseline_captured_at_us / 1000).toLocaleString()}\n原始工作区字节；显示会话启动后的净变化，也包含其他程序的修改。`;
+    writeUiText(summary, state ? uiMessage("ui.changesView.value1FilesValue2Value3Value4", { value1: state.files.length, value2: state.additions, value3: state.deletions, value4: state.unmeasured_files ? uiMessage("ui.changesView.value1NotCounted", { value1: state.unmeasured_files }, " · {value1} 未统计") : "" }, "{value1} 文件 · +{value2} −{value3}{value4}") : "");
+    writeUiAttribute(summary, "title", state ? `${state.repository}\n${state.branch || uiMessage("ui.changesView.detachedHead", {}, "分离 HEAD")}${state.unborn ? uiMessage("ui.changesView.noInitialCommit", {}, " · 尚无首次提交") : ""}${scope.value === "branch" ? uiMessage("ui.changesView.value1Value2BetweenCommits", { value1: state.base, value2: state.head }, "\n{value1} → {value2}（提交之间）") : ""}` : "");
+    if (state?.scope === "session") summary.title += uiMessage("ui.changesView.baselineValue1OriginalWorkspaceBytesShowsNetChangesSince", { value1: new Date(state.baseline_captured_at_us / 1000).toLocaleString(currentLocale()) }, "\n基线：{value1}\n原始工作区字节；显示会话启动后的净变化，也包含其他程序的修改。");
   };
   const selectRow = (row, extend) => {
     selectedRows = extend && selectedRows ? [Math.min(selectedRows[0], row.offset), Math.max(selectedRows[0], row.offset)] : [row.offset, row.offset];
@@ -79,13 +81,13 @@ export async function mountChangesView(root, { sdk, context, params = {}, viewSt
     if (split) {
       const labels = make("div", "wb-change-labels"); diffLabels(scope.value).forEach(label => labels.append(make("span", "", label))); diff.append(labels);
     }
-    if (!page.rows.length) diff.append(make("p", "wb-change-message", "此范围没有可显示的文本差异（可能只有文件模式或索引状态变化）。"));
+    if (!page.rows.length) diff.append(make("p", "wb-change-message", uiMessage("ui.changesView.noDisplayableTextDifferencesInThisScopePossiblyOnly", {}, "此范围没有可显示的文本差异（可能只有文件模式或索引状态变化）。")));
     renderDiffRows(diff, page, { split, path: selected, select: selectRow });
     diff.scrollTop = scrollTop;
-    info.replaceChildren(previous, make("span", "", `差异行 ${page.total ? page.offset + 1 : 0}–${page.next} / ${page.total.toLocaleString()} · +${page.additions} −${page.deletions}`), next);
-    if (page.binary) info.append(make("span", "", "二进制文件无法显示文本差异"));
-    if (state.files.find(file => file.path === selected)?.worktree_recreated) info.append(make("span", "", "暂存删除后在原路径重建；显示 HEAD → 当前文件"));
-    if (scope.value === "branch") info.append(make("span", "", "选定提交 → HEAD；打开文件显示当前工作区内容"));
+    info.replaceChildren(previous, make("span", "", uiMessage("ui.changesView.diffLinesValue1Value2Value3Value4Value5", { value1: page.total ? page.offset + 1 : 0, value2: page.next, value3: page.total.toLocaleString(currentLocale()), value4: page.additions, value5: page.deletions }, "差异行 {value1}–{value2} / {value3} · +{value4} −{value5}")), next);
+    if (page.binary) info.append(make("span", "", uiMessage("ui.continuousChanges.binaryFilesHaveNoTextDiff", {}, "二进制文件无法显示文本差异")));
+    if (state.files.find(file => file.path === selected)?.worktree_recreated) info.append(make("span", "", uiMessage("ui.changesView.stagedDeletionFollowedByRecreationAtTheSamePath", {}, "暂存删除后在原路径重建；显示 HEAD → 当前文件")));
+    if (scope.value === "branch") info.append(make("span", "", uiMessage("ui.changesView.selectedCommitHeadOpeningTheFileShowsCurrentWorkspace", {}, "选定提交 → HEAD；打开文件显示当前工作区内容")));
     controls();
   };
   const quoteChanges = () => {
@@ -111,7 +113,7 @@ export async function mountChangesView(root, { sdk, context, params = {}, viewSt
     if (continuous) { if (multi) multi.select(selected); else showContinuous(); remember(); return; }
     const controller = task(), request = ++generation, path = selected;
     targetOffset = offset; if (reset) previousPages = []; selectedRows = null; page = null; controls();
-    diff.replaceChildren(make("p", "wb-change-message", "正在读取文件差异…")); info.replaceChildren(); renderTreeRows(); remember();
+    diff.replaceChildren(make("p", "wb-change-message", uiMessage("ui.continuousChanges.readingFileDiff", {}, "正在读取文件差异…"))); info.replaceChildren(); renderTreeRows(); remember();
     try {
       const result = await readOperation(sdk, "changes.diff", { ...comparison(), path, revision: state.revision, offset, limit: 300 }, controller.signal);
       if (signal.aborted || request !== generation) return;
@@ -127,8 +129,8 @@ export async function mountChangesView(root, { sdk, context, params = {}, viewSt
       button.tabIndex = -1; button.setAttribute("role", "treeitem"); button.setAttribute("aria-level", String(item.depth + 1)); button.setAttribute("aria-selected", String(item.path === selected));
       if (item.directory) button.setAttribute("aria-expanded", String(!collapsed.has(item.path) || Boolean(search.value.trim())));
       button.append(icon(item.directory ? "folder" : "file"), label);
-      if (item.file) { const stats = make("span", "wb-change-tree-stats", changeStats(item.file)); button.append(stats); button.title = `${item.path}\n${item.file.status} · ${stats.textContent}${item.file.old_path ? `\n原路径：${item.file.old_path}` : ""}`; }
-      else button.title = item.path;
+      if (item.file) { const stats = make("span", "wb-change-tree-stats", changeStats(item.file)); button.append(stats); writeUiAttribute(button, "title", `${item.path}\n${item.file.status} · ${stats.textContent}${item.file.old_path ? uiMessage("ui.changesView.originalPathValue1", { value1: item.file.old_path }, "\n原路径：{value1}") : ""}`); }
+      else writeUiAttribute(button, "title", item.path);
       button.onclick = () => { focused = at; treeList.focus(); activate(item); };
       button.ondblclick = () => { if (item.file && !item.file.directory && (!item.file.status.includes("D") || item.file.worktree_recreated)) void openFile(`${state.repository}/${item.path}`, 1).catch(errorToast); };
       treeCanvas.append(button); if (at === focused) treeList.setAttribute("aria-activedescendant", button.id);
@@ -153,7 +155,7 @@ export async function mountChangesView(root, { sdk, context, params = {}, viewSt
       else if (event.key === "Enter" || event.key === " ") activate(item);
     }
   };
-  const separator = make("div", "wb-file-tree-resize"); separator.tabIndex = 0; separator.setAttribute("role", "separator"); separator.setAttribute("aria-label", "调整变更文件树宽度"); separator.setAttribute("aria-orientation", "vertical"); tree.prepend(separator);
+  const separator = make("div", "wb-file-tree-resize"); separator.tabIndex = 0; separator.setAttribute("role", "separator"); writeUiAttribute(separator, "aria-label", uiMessage("ui.changesView.resizeChangedFileTree", {}, "调整变更文件树宽度")); separator.setAttribute("aria-orientation", "vertical"); tree.prepend(separator);
   const setWidth = width => { treeWidth = Math.max(150, Math.min(360, Math.max(150, root.clientWidth - 160), width)); tree.style.width = `${treeWidth}px`; };
   let pointerX = 0, pointerWidth = 0;
   separator.onpointerdown = event => { pointerX = event.clientX; pointerWidth = treeWidth; separator.setPointerCapture(event.pointerId); event.preventDefault(); };
@@ -161,7 +163,7 @@ export async function mountChangesView(root, { sdk, context, params = {}, viewSt
   separator.onpointerup = event => { if (separator.hasPointerCapture(event.pointerId)) { separator.releasePointerCapture(event.pointerId); remember(); } };
   separator.onkeydown = event => { if (["ArrowLeft", "ArrowRight"].includes(event.key)) { event.preventDefault(); setWidth(treeWidth + (event.key === "ArrowLeft" ? 20 : -20)); remember(); } };
   async function refreshChanges() {
-    const controller = task(), request = ++generation; page = null; state = null; controls(); filterTree(); diff.replaceChildren(make("p", "wb-change-message", "正在读取项目变更…"));
+    const controller = task(), request = ++generation; page = null; state = null; controls(); filterTree(); diff.replaceChildren(make("p", "wb-change-message", uiMessage("ui.changesView.readingProjectChanges", {}, "正在读取项目变更…")));
     base.hidden = scope.value !== "branch";
     try {
       if (scope.value === "branch") {
@@ -169,26 +171,26 @@ export async function mountChangesView(root, { sdk, context, params = {}, viewSt
         if (request !== generation || signal.aborted) return;
         base.replaceChildren(); for (const ref of refs) { const option = make("option", "", ref.name); option.value = ref.ref; base.append(option); }
         base.value = refs.some(ref => ref.ref === old) ? old : refs.find(ref => ref.ref.startsWith("refs/remotes/") && !ref.ref.endsWith("/HEAD"))?.ref || refs[0]?.ref || "";
-        if (!base.value) throw new Error("当前仓库没有可比较的分支或提交。");
+        if (!base.value) throw new Error(uiText("ui.changesView.thisRepositoryHasNoBranchesOrCommitsToCompare", {}, "当前仓库没有可比较的分支或提交。"));
       }
       const result = await readOperation(sdk, "changes.list", comparison(), controller.signal);
       if (request !== generation || signal.aborted) return;
       state = result; repository = result.repository; controls(); filterTree();
-      if (!state.files.length) { selected = ""; diff.replaceChildren(make("p", "wb-change-message", "此比较范围没有变更。")); info.replaceChildren(); controls(); remember(); return; }
+      if (!state.files.length) { selected = ""; diff.replaceChildren(make("p", "wb-change-message", uiMessage("ui.changesView.noChangesInThisComparisonScope", {}, "此比较范围没有变更。"))); info.replaceChildren(); controls(); remember(); return; }
       if (!state.files.some(file => file.path === selected)) selected = state.files[0].path;
       await loadDiff();
     } catch (error) { if (request === generation) fail(error, refreshChanges); }
   }
   scope.onchange = () => void refreshChanges().catch(errorToast); base.onchange = () => void refreshChanges().catch(errorToast);
   const menu = popupMenu(more, () => [
-    { label: "连续浏览文件", icon: "file", checked: continuous, execute: () => { continuous = !continuous; if (continuous) showContinuous(); else void loadDiff(); remember(); } },
-    { label: "左右对照", icon: "split", checked: split, execute: () => { split = !split; if (continuous) showContinuous(); else renderDiff(); remember(); } },
-    { label: "跳到差异行…", icon: "search", disabled: !page?.total, execute: () => {
-      const value = prompt(`输入差异行（1–${page.total}，包括文件头）`, String(targetOffset + 1)); if (value === null) return;
-      const line = Number(value); if (!Number.isSafeInteger(line) || line < 1 || line > page.total) throw new Error("请输入范围内的整数行号。"); return loadDiff(line - 1);
+    { label: uiText("ui.changesView.browseFilesContinuously", {}, "连续浏览文件"), icon: "file", checked: continuous, execute: () => { continuous = !continuous; if (continuous) showContinuous(); else void loadDiff(); remember(); } },
+    { label: uiText("ui.changesView.sideBySide", {}, "左右对照"), icon: "split", checked: split, execute: () => { split = !split; if (continuous) showContinuous(); else renderDiff(); remember(); } },
+    { label: uiText("ui.changesView.goToDiffLine", {}, "跳到差异行…"), icon: "search", disabled: !page?.total, execute: () => {
+      const value = prompt(uiMessage("ui.changesView.enterDiffLine1Value1IncludingFileHeaders", { value1: page.total }, "输入差异行（1–{value1}，包括文件头）"), String(targetOffset + 1)); if (value === null) return;
+      const line = Number(value); if (!Number.isSafeInteger(line) || line < 1 || line > page.total) throw new Error(uiText("ui.changesView.enterAnIntegerLineNumberWithinRange", {}, "请输入范围内的整数行号。")); return loadDiff(line - 1);
     } },
-    { label: "选择仓库目录…", icon: "folder", execute: () => {
-      const value = prompt("仓库目录（所属设备）", repository); if (!value?.trim()) return; repository = value.trim(); selected = ""; return refreshChanges();
+    { label: uiText("ui.changesView.chooseRepositoryDirectory", {}, "选择仓库目录…"), icon: "folder", execute: () => {
+      const value = prompt(uiMessage("ui.changesView.repositoryDirectoryOnTheOwningDevice", {}, "仓库目录（所属设备）"), repository); if (!value?.trim()) return; repository = value.trim(); selected = ""; return refreshChanges();
     } },
   ], { signal, onError: errorToast });
   let previousWidth = 0;

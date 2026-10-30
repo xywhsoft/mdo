@@ -1,3 +1,4 @@
+import { t as uiErrorText } from "../../i18n.js";
 import { mountIcons } from "../../components/icons.js";
 
 // Session-bound extension surfaces. Navigation retires the old mount before
@@ -32,7 +33,7 @@ export function createConversationContributions({ navigation, onError, sdkFor })
       if (row.descriptor.when && !await row.descriptor.when(options)) return;
       if (!valid()) return;
       const host = document.querySelector(row.action ? "#sdk-conversation-actions" : "#sdk-conversation-views");
-      if (!host) throw Error("The conversation extension surface is unavailable");
+      if (!host) throw Error(uiErrorText("error.detail.theConversationExtensionSurfaceIsUnavailable", {}, "The conversation extension surface is unavailable"));
       const node = row.node = document.createElement(row.action ? "button" : "section");
       node.dataset.conversationContribution = row.id;
       if (row.action) {
@@ -76,9 +77,9 @@ export function createConversationContributions({ navigation, onError, sdkFor })
     return row.retirement;
   };
   const add = (map, action, id, descriptor, api) => {
-    if (stopped) throw Error("Conversation contributions have been disposed");
-    if (!/^[A-Za-z0-9_.-]+$/.test(id) || map.has(id)) throw Error("Duplicate or invalid conversation contribution ID");
-    if (typeof descriptor[action ? "execute" : "mount"] !== "function") throw TypeError("A conversation contribution needs a callback");
+    if (stopped) throw Error(uiErrorText("error.detail.conversationContributionsHaveBeenDisposed", {}, "Conversation contributions have been disposed"));
+    if (!/^[A-Za-z0-9_.-]+$/.test(id) || map.has(id)) throw Error(uiErrorText("error.detail.duplicateOrInvalidConversationContributionId", {}, "Duplicate or invalid conversation contribution ID"));
+    if (typeof descriptor[action ? "execute" : "mount"] !== "function") throw TypeError(uiErrorText("error.detail.aConversationContributionNeedsACallback", {}, "A conversation contribution needs a callback"));
     const row = { id, action, descriptor, api, active: true, version: 0, executions: new Set() }; map.set(id, row); void refresh(row);
     return () => remove(map, row);
   };
@@ -88,7 +89,7 @@ export function createConversationContributions({ navigation, onError, sdkFor })
     registerView: (id, descriptor, api) => add(views, false, id, descriptor, api),
     async destroy() {
       if (!stopped) { stopped = true; unsubscribe?.(); for (const row of [...actions.values()]) remove(actions, row); for (const row of [...views.values()]) remove(views, row); }
-      await Promise.allSettled([...retiring]); if (failures.length) throw Error("Conversation contribution cleanup did not complete");
+      await Promise.allSettled([...retiring]); if (failures.length) throw Error(uiErrorText("error.detail.conversationContributionCleanupDidNotComplete", {}, "Conversation contribution cleanup did not complete"));
     },
   });
 }

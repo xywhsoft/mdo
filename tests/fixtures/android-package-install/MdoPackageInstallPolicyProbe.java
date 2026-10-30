@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Locale;
 
 public final class MdoPackageInstallPolicyProbe {
     interface Operation { void run() throws Exception; }
@@ -24,6 +25,14 @@ public final class MdoPackageInstallPolicyProbe {
         try (RandomAccessFile file = new RandomAccessFile(path.toFile(), "rw")) { file.setLength(bytes); }
     }
     public static void main(String[] args) throws Exception {
+        Locale.setDefault(Locale.CHINESE);
+        for (String source : new String[]{"更新文件路径缺失，请重新下载", "更新文件不在应用私有目录中，请重新下载",
+                "更新文件不存在或不是普通文件，请重新下载", "更新文件为空，请重新下载", "更新文件超过 512 MiB 上限，无法安装",
+                "正在验证更新包…", "安装应用更新", "无法打开系统安装器"}) {
+            check(MdoPackageInstallPolicy.text(source, Locale.CHINESE).equals(source), "Chinese copy changed");
+            for (Locale language : new Locale[]{Locale.ENGLISH, new Locale("ru"), Locale.FRENCH})
+                check(!MdoPackageInstallPolicy.text(source, language).equals(source), "Missing native translation: " + language);
+        }
         Path base = new File(args[0]).toPath();
         Path files = Files.createDirectory(base.resolve("files"));
         Path updates = Files.createDirectories(files.resolve("mdo-home/data/update"));

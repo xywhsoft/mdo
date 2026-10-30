@@ -1,3 +1,4 @@
+import { t as uiErrorText } from "../../i18n.js";
 // Window-local execution. The host reserves compatibility slots before import
 // and releases them only after every owned cleanup has actually completed.
 export function createPluginLoader({ client, api, createScope, canCall = () => true,
@@ -58,7 +59,7 @@ export function createPluginLoader({ client, api, createScope, canCall = () => t
         attempted.add(key); progress = true; let scope;
         try {
           const module = await importModule(`/${plugin.frontend.slice(4)}?revision=${encodeURIComponent(plugin.revision)}`);
-          if (typeof module.activate !== "function") throw Error("Missing activate(sdk)");
+          if (typeof module.activate !== "function") throw Error(uiErrorText("error.detail.missingActivateSdk", {}, "Missing activate(sdk)"));
           scope = createScope(plugin); const record = { plugin, scope, failed: false, activated: false }; active.set(plugin.id, record);
           const cleanup = await module.activate(scope.sdk); if (typeof cleanup === "function") scope.own(cleanup); record.activated=true;
           if (disposed || stopped()) await retire(record);

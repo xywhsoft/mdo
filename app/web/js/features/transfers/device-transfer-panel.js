@@ -1,7 +1,8 @@
+import { setUiText as writeUiText, uiMessage, t } from "../../i18n.js";
+
 import { apiRequest } from "../../api/client.js";
 import { targetState, subscribeTarget, requestTargetSwitch } from "../../api/target.js";
 import { element, clear, errorMessage } from "../../utils/dom.js";
-import { t } from "../../i18n.js";
 
 const root = "/device-transfers";
 const id = () => [...crypto.getRandomValues(new Uint8Array(16))].map(x => x.toString(16).padStart(2, "0")).join("");
@@ -53,16 +54,16 @@ export function createDeviceTransferPanel({ beforeStart = async () => true } = {
   }
   function failure(cause) {
     if (cause?.name === "AbortError") return;
-    error.hidden = false; error.textContent = errorMessage(cause);
+    error.hidden = false; writeUiText(error, errorMessage(cause));
   }
   function renderJob(value) {
     job = value;
     const state = value.state;
-    status.textContent = t(`transfer.state.${state}`, {}, state);
+    writeUiText(status, uiMessage(`transfer.state.${state}`, {}, state));
     if (value.current_file) status.textContent += ` · ${value.current_file}`;
     if (value.current_file_total) status.textContent += ` · ${Math.min(100, Math.floor((value.current_file_bytes ?? 0) * 100 / value.current_file_total))}%`;
     if (value.route) status.textContent += ` · ${value.route === "lan" ? text("lan", "局域网直连") : text("relay", "服务器中转")}`;
-    error.hidden = !value.error; error.textContent = value.error || "";
+    error.hidden = !value.error; writeUiText(error, value.error || "");
     const review = state === "awaiting_confirmation";
     destination.hidden = !review; confirm.hidden = !review;
     projects.hidden = selection?.kind === "project";
@@ -103,7 +104,7 @@ export function createDeviceTransferPanel({ beforeStart = async () => true } = {
     }));
     if (previous) devices.value = deviceItems.some(device => device.id === previous) ? previous : "";
     renderControls();
-    if (!deviceItems.length) status.textContent = text("noDevices", "未发现其他设备；请在同账号的目标设备上开启远控和允许接收。");
+    if (!deviceItems.length) writeUiText(status, text("noDevices", "未发现其他设备；请在同账号的目标设备上开启远控和允许接收。"));
   }
   async function loadTasks() {
     const value = await call(root); clear(tasks);
@@ -162,9 +163,9 @@ export function createDeviceTransferPanel({ beforeStart = async () => true } = {
   function open(resource = null, button = document.activeElement) {
     stopReads(); key = sourceKey(); controller = new AbortController(); origin = button;
     selection = resource; job = null; requestId = ""; busy = false; projectOptionsKey = ""; clear(projects); directory.value = "";
-    destination.hidden = true; error.hidden = true; status.textContent = text("loading", "正在读取设备和传输任务…");
+    destination.hidden = true; error.hidden = true; writeUiText(status, text("loading", "正在读取设备和传输任务…"));
     resume.hidden = cancel.hidden = openTarget.hidden = true; renderControls();
-    heading.textContent = resource?.kind === "project" ? text("sendProject", "发送完整项目到设备") : text("title", "发送到设备");
+    writeUiText(heading, resource?.kind === "project" ? text("sendProject", "发送完整项目到设备") : text("title", "发送到设备"));
     dialog.showModal(); close.focus();
     void Promise.all([loadDevices(true), loadTasks()]).then(() => {
       setTimeout(() => { if (dialog.open) void loadDevices().catch(failure); }, 1200);

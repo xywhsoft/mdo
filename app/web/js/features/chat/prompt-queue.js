@@ -1,6 +1,8 @@
+import { setUiAttribute as writeUiAttribute, setUiText as writeUiText, uiMessage, t as uiText, subscribeLocale, t } from "../../i18n.js";
+
 import { api, resourceId } from "../../api/client.js";
 import { createPromptQueueTransport, queueResponse } from "./prompt-queue-transport.js";
-import { subscribeLocale, t } from "../../i18n.js";
+
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
 import { createUnusedImageCleanup } from "./unused-image-cleanup.js";
 import { findModel } from "../../utils/models.js";
@@ -76,9 +78,9 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     if (!profile) return null;
     const model = findModel(modelsStore?.get().data?.models ?? [], profile.model_id);
     const permission = {
-      "read-only": ["shell.permission.readOnly", "只读"],
-      balanced: ["shell.permission.balanced", "询问"],
-      "full-access": ["shell.permission.fullAccess", "完全访问"],
+      "read-only": ["shell.permission.readOnly", uiText("shell.permission.readOnly", {}, "只读")],
+      balanced: ["shell.permission.balanced", uiText("shell.permission.balanced", {}, "询问")],
+      "full-access": ["shell.permission.fullAccess", uiText("shell.permission.fullAccess", {}, "完全访问")],
     }[profile.permission_profile];
     const reasoning = t(`reasoning.${profile.reasoning_effort}`, {},
       profile.reasoning_effort);
@@ -197,7 +199,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     const writable = isSessionWritable();
     let open = expanded.get(key) ?? true;
     const toggle = element("button", { className: "prompt-queue-toggle",
-      text: t("queue.count", { count: entries.length }),
+      text: uiMessage("queue.count", { count: entries.length }),
       attrs: { type: "button", "aria-expanded": String(open),
         "aria-controls": "prompt-queue-list", "data-queue-focus": "toggle" },
     });
@@ -206,7 +208,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     const retry = !writable || waitingForRun || waitingForProfile || !saved.length || reviewPending ||
       sendingLocally ||
       acceptedRun || claimedRun || (meta.managed && !meta.paused) || saved[0]?.state === "editing" ? null : element("button", {
-      text: t(uncertain ? "queue.retryUncertain" : stagedHead
+      text: uiMessage(uncertain ? "queue.retryUncertain" : stagedHead
         ? "queue.continueStaged" : "queue.sendNext"),
       attrs: { type: "button", "data-queue-focus": "retry" },
     });
@@ -223,7 +225,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     }
     const header = element("div", { className: "prompt-queue-header" }, [
       toggle, retry ?? element("span", { className: "prompt-queue-waiting",
-        text: meta.paused ? t("queue.paused", {}, "队列已暂停") : t(!writable ? "queue.restoreToSend" : sendingLocally ? "queue.sending" :
+        text: meta.paused ? uiMessage("queue.paused", {}, "队列已暂停") : uiMessage(!writable ? "queue.restoreToSend" : sendingLocally ? "queue.sending" :
           acceptedRun ? "queue.runAccepted" : claimedRun
           ? "queue.runStarting" : reviewPending
           ? "queue.reviewRun" : waitingForProfile ? "queue.waitForProfile" : saved.length
@@ -236,7 +238,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     }), previousList);
     if (uncertain && !sendingLocally) container.insertBefore(element("p", {
       className: "prompt-queue-warning",
-      text: t(acceptedRun ? "queue.runAcceptedWarning" : claimedRun
+      text: uiMessage(acceptedRun ? "queue.runAcceptedWarning" : claimedRun
         ? "queue.runStartingWarning" :
         "queue.uncertainWarning"),
     }), previousList);
@@ -260,10 +262,10 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
             text: String(index + 1) }),
           element("div", { className: "prompt-queue-item-body" }, [
             element("span", { className: "prompt-queue-text",
-              text: promptContextSummary(entry.text) || t("queue.imageMessage"),
-              attrs: { title: promptContextText(entry.text) || t("queue.imageMessage") } }),
+              text: promptContextSummary(entry.text) || uiMessage("queue.imageMessage"),
+              attrs: { title: promptContextText(entry.text) || uiMessage("queue.imageMessage") } }),
             element("span", { className: "prompt-queue-state",
-              text: t(entry.rejected ? "queue.rejected" :
+              text: uiMessage(entry.rejected ? "queue.rejected" :
                 "queue.awaitingAdmission") }),
           ]),
         ]));
@@ -272,13 +274,13 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
       const locked = !canChange(entry) || !writable || busy.has(key) || actionBusy.has(key);
       const handle = element("button", { className: "prompt-queue-drag", text: "⠿",
         attrs: { type: "button", "data-queue-drag": "", "data-queue-focus": `${entry.id}:drag`,
-          "aria-label": t("queue.drag", {}, "拖动排序，或按上下方向键调整顺序"),
-          title: t("queue.drag", {}, "拖动排序，或按上下方向键调整顺序") } });
+          "aria-label": uiMessage("queue.drag", {}, "拖动排序，或按上下方向键调整顺序"),
+          title: uiMessage("queue.drag", {}, "拖动排序，或按上下方向键调整顺序") } });
       handle.disabled = locked;
       const remove = element("button", {
-        text: t("queue.remove"),
-        attrs: { type: "button", "aria-label": t("queue.removeNumber", { number: index + 1 }),
-          title: t("queue.remove"),
+        text: uiMessage("queue.remove"),
+        attrs: { type: "button", "aria-label": uiMessage("queue.removeNumber", { number: index + 1 }),
+          title: uiMessage("queue.remove"),
           "data-queue-focus": entry.id, "data-queue-index": String(index) },
       });
       // Keep the focused remove button focusable while its request is in flight.
@@ -295,29 +297,29 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
       });
       const body = element("div", { className: "prompt-queue-item-body" }, [
         element("span", { className: "prompt-queue-text",
-          text: promptContextSummary(entry.text) || t("queue.imageMessage"), attrs: {
+          text: promptContextSummary(entry.text) || uiMessage("queue.imageMessage"), attrs: {
             title: [promptContextText(entry.text) || t("queue.imageMessage"), profileLabel(entry.profile)].filter(Boolean).join("\n\n") } }),
       ]);
       if (entry.attachments?.length) {
         body.append(element("span", { className: "prompt-queue-attachments",
           text: `▧ ${entry.attachments.length}`,
-          attrs: { "aria-label": t("queue.imageMessage") } }));
+          attrs: { "aria-label": uiMessage("queue.imageMessage") } }));
       }
       const actions = element("div", { className: "prompt-queue-actions" });
       function action(label, fallback, suffix, callback, text = null) {
-        const button = element("button", { text: text ?? t(label, {}, fallback), attrs: {
-          type: "button", "aria-label": t(label, {}, fallback), title: t(label, {}, fallback),
+        const button = element("button", { text: text ?? uiMessage(label, {}, fallback), attrs: {
+          type: "button", "aria-label": uiMessage(label, {}, fallback), title: uiMessage(label, {}, fallback),
           "data-queue-focus": `${entry.id}:${suffix}` } });
         button.disabled = locked;
         button.addEventListener("click", () => void runAction(key, callback, origin));
         actions.append(button);
         return button;
       }
-      const steer = action("queue.steer", "引导", "steer", () => performAction(key, "steer", entry.id));
-      steer.title = t("queue.steerHint", {}, "停止当前执行并优先发送此消息");
-      if (onWithdraw) action("queue.edit", "撤回编辑", "edit", () =>
+      const steer = action("queue.steer", uiMessage("queue.steer", {}, "引导"), "steer", () => performAction(key, "steer", entry.id));
+      writeUiAttribute(steer, "title", uiMessage("queue.steerHint", {}, "停止当前执行并优先发送此消息"));
+      if (onWithdraw) action("queue.edit", uiMessage("queue.edit", {}, "撤回编辑"), "edit", () =>
         onWithdraw(key, entry, draftRevision => performAction(key, "withdraw", entry.id, "", draftRevision)), "✎");
-      remove.textContent = "×";
+      writeUiText(remove, "×");
       actions.append(remove);
       nextCards.push(element("li", { attrs: itemAttrs }, [
         handle, element("span", { className: "prompt-queue-index",
@@ -344,7 +346,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
         const oldIndex = previous.querySelector(".prompt-queue-index");
         const newIndex = card.querySelector(".prompt-queue-index");
         if (oldIndex.textContent !== newIndex.textContent)
-          oldIndex.textContent = newIndex.textContent;
+          writeUiText(oldIndex, newIndex.textContent);
         const oldRemove = previous.querySelector("button[data-queue-index]");
         const newRemove = card.querySelector("button[data-queue-index]");
         if (oldRemove && newRemove) {

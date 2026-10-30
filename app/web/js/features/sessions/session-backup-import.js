@@ -1,5 +1,7 @@
+import { currentLocale, setUiText as writeUiText, setUiAttribute as writeUiAttribute, uiMessage, subscribeLocale, t } from "../../i18n.js";
+
 import { createBackupImportController } from "./backup-import-controller.js";
-import { subscribeLocale, t } from "../../i18n.js";
+
 import { element, errorMessage } from "../../utils/dom.js";
 
 export function createSessionBackupImport({ dialog, projectsStore, preferredProject,
@@ -16,7 +18,7 @@ export function createSessionBackupImport({ dialog, projectsStore, preferredProj
     const selected = project.value || preferredProject();
     const items = projectsStore.get().data?.items || [];
     project.replaceChildren(element("option", { text: copy("selectProject"), attrs: { value: "" } }),
-      ...items.map((item) => element("option", { text: item.id === "default" ? t("nav.defaultProject", {}, "默认项目") :
+      ...items.map((item) => element("option", { text: item.id === "default" ? uiMessage("nav.defaultProject", {}, "默认项目") :
         item.name || item.id, attrs: { value: item.id } })));
     project.value = items.some((item) => item.id === selected) ? selected : "";
     render();
@@ -24,17 +26,17 @@ export function createSessionBackupImport({ dialog, projectsStore, preferredProj
   function render() {
     if (destroyed) return;
     const state = controller.get(), result = state.restore, preview = state.preview?.result;
-    title.textContent = copy("title"); scope.textContent = copy("scope");
-    node("file-label").textContent = copy("file");
-    node("project-label").textContent = copy("project");
-    closeButton.setAttribute("aria-label", t("sessionAction.close", {}, "关闭"));
-    next.textContent = copy("another"); refresh.textContent = copy("query");
-    progress.setAttribute("aria-label", copy("progress"));
+    writeUiText(title, copy("title")); writeUiText(scope, copy("scope"));
+    writeUiText(node("file-label"), copy("file"));
+    writeUiText(node("project-label"), copy("project"));
+    writeUiAttribute(closeButton, "aria-label", t("sessionAction.close", {}, "关闭"));
+    writeUiText(next, copy("another")); writeUiText(refresh, copy("query"));
+    writeUiAttribute(progress, "aria-label", copy("progress"));
     const phase = state.phase;
     scope.hidden = !["choose", "hashing", "uploading", "inspecting", "preview"].includes(phase);
-    status.textContent = copy(`phase.${phase}`, state.progress ? {
+    writeUiText(status, copy(`phase.${phase}`, state.progress ? {
       received: size(state.progress.received), total: size(state.progress.total),
-    } : {});
+    } : {}));
     if (result?.cancel_requested && !result.terminal) status.textContent += " " + copy("cancelPending");
     progress.hidden = !["hashing", "uploading", "inspecting", "restoring", "resolving", "reviewing"].includes(phase) || !state.busy;
     if (state.progress) { progress.max = state.progress.total; progress.value = state.progress.received; }
@@ -66,7 +68,7 @@ export function createSessionBackupImport({ dialog, projectsStore, preferredProj
       fact("agent", preview?.agent_id || result?.source_agent_id);
       fact("protocol", preview?.protocol || result?.source_protocol);
       const captured = preview?.captured_at || result?.source_captured_at;
-      if (captured) fact("captured", new Date(captured / 1000).toLocaleString());
+      if (captured) fact("captured", new Date(captured / 1000).toLocaleString(currentLocale()));
       fact("files", preview?.file_count ?? result?.file_count);
       const totalBytes = preview?.total_bytes ?? result?.total_bytes;
       if (totalBytes !== undefined) fact("bytes", size(totalBytes));
@@ -80,9 +82,9 @@ export function createSessionBackupImport({ dialog, projectsStore, preferredProj
     if (!result && state.preview?.message) fact("diagnostic", state.preview.message);
     facts.hidden = !facts.childElementCount;
     target.hidden = !["preview", "review", "restoring", "committed", "aborted", "unknown"].includes(phase);
-    target.textContent = copy(phase === "unknown" ? "unknown" : phase === "review" ? "confirmation" : "staged");
+    writeUiText(target, copy(phase === "unknown" ? "unknown" : phase === "review" ? "confirmation" : "staged"));
     primary.hidden = !["preview", "review", "committed"].includes(phase);
-    primary.textContent = copy(phase === "preview" ? "review" : phase === "review" ? "confirm" : "open");
+    writeUiText(primary, copy(phase === "preview" ? "review" : phase === "review" ? "confirm" : "open"));
     primary.disabled = state.busy || opening || result?.restart_required || (phase === "preview" && (!project.value || preview?.legacy_partial)) ||
       (phase === "committed" && (result.cleanup_pending || result.restart_required || !result.terminal));
     refresh.hidden = !(["failed", "unknown", "restoring", "inspecting"].includes(phase) || result?.restart_required || result?.cleanup_pending);
@@ -90,14 +92,14 @@ export function createSessionBackupImport({ dialog, projectsStore, preferredProj
     const cancellable = result ? !result.terminal && !result.committed : Boolean(state.preview || state.upload || state.busy);
     cancel.hidden = !cancellable;
     cancel.disabled = opening || phase === "resolving" || phase === "reviewing";
-    cancel.textContent = copy(phase === "review" && !state.attempted ? "changeTarget" : "cancel");
+    writeUiText(cancel, copy(phase === "review" && !state.attempted ? "changeTarget" : "cancel"));
     next.hidden = !(result ? result.terminal && !result.cleanup_pending && !result.restart_required :
       phase === "failed" || phase === "preview");
     next.disabled = state.busy || opening;
     dialog.setAttribute("aria-busy", String(state.busy || opening));
     const failure = openingError || state.error;
     error.hidden = !failure;
-    error.textContent = failure ? errorMessage(failure) : "";
+    writeUiText(error, failure ? errorMessage(failure) : "");
     if (phase !== lastPhase) dialog.querySelector(".backup-import-body").scrollTop = 0;
     lastPhase = phase;
     if (failure && failure !== lastError && dialog.open) error.focus();

@@ -1,3 +1,4 @@
+import { t as uiErrorText } from "../i18n.js";
 import { api, ApiError, currentPageWriteToken } from "../api/client.js";
 import { targetState } from "../api/target.js";
 import { createRequestRecovery } from "../api/request-recovery.js";
@@ -10,8 +11,8 @@ const permanent = error => ["home_restart_required", "write_token_required", "wr
   "runtime_rejected", "configuration_persistence_failed"].includes(error?.code);
 const transient = error => !permanent(error) && (isTransientReadError(error) ||
   ["invalid_response", "remote_result_unconfirmed", "settings_result_unavailable"].includes(error?.code));
-const invalid = () => new ApiError("Invalid settings response", { code: "invalid_response" });
-const pending = () => new ApiError("Settings confirmation is pending", { status: 425 });
+const invalid = () => new ApiError(uiErrorText("error.detail.invalidSettingsResponse", {}, "Invalid settings response"), { code: "invalid_response" });
+const pending = () => new ApiError(uiErrorText("error.detail.settingsConfirmationIsPending", {}, "Settings confirmation is pending"), { status: 425 });
 const aborted = () => new DOMException("Settings write cancelled", "AbortError");
 const tag = revision => `"mdo-config-${revision}"`;
 
@@ -23,7 +24,7 @@ export function createSettingsWriter({ client = api, epoch = stamp, token = curr
   return async function write(patch, etag, { restore = false, signal } = {}) {
     if (signal?.aborted) throw aborted();
     const revision = Number(/^"mdo-config-([1-9][0-9]*)"$/.exec(etag)?.[1]);
-    if (!Number.isSafeInteger(revision) || revision < 1) throw new TypeError("Invalid settings ETag");
+    if (!Number.isSafeInteger(revision) || revision < 1) throw new TypeError(uiErrorText("error.detail.invalidSettingsEtag", {}, "Invalid settings ETag"));
     // Freeze the submitted intent even while the caller continues editing.
     const body = restore ? null : JSON.parse(JSON.stringify({ schema_version: 1, patch }));
     const original = epoch(), writeToken = token(), recovery = createRecovery();
@@ -37,7 +38,7 @@ export function createSettingsWriter({ client = api, epoch = stamp, token = curr
     function verifyToken(reply) {
       assertOwner();
       if (writeToken && reply?.writeToken !== writeToken)
-        throw new ApiError("Settings service restarted", { code: "write_token_conflict" });
+        throw new ApiError(uiErrorText("error.detail.settingsServiceRestarted", {}, "Settings service restarted"), { code: "write_token_conflict" });
     }
     function snapshot(reply) {
       verifyToken(reply);
@@ -46,7 +47,7 @@ export function createSettingsWriter({ client = api, epoch = stamp, token = curr
           reply.etag !== tag(data.revision) || typeof data.user_patches?.settings !== "boolean" ||
           typeof data.transaction_service?.runtime_consistent !== "boolean") throw invalid();
       if (!data.transaction_service.runtime_consistent)
-        throw new ApiError("Settings runtime requires a restart", { code: "runtime_inconsistent", status: 503 });
+        throw new ApiError(uiErrorText("error.detail.settingsRuntimeRequiresARestart", {}, "Settings runtime requires a restart"), { code: "runtime_inconsistent", status: 503 });
       return { ...data, etag: reply.etag };
     }
     try {
@@ -101,7 +102,7 @@ export function createSettingsWriter({ client = api, epoch = stamp, token = curr
           previous_revision: revision, revision: fresh.revision, recovered: true,
         } };
         if (fresh.revision !== revision)
-          throw new ApiError("Settings changed while saving", { code: "revision_conflict", status: 412 });
+          throw new ApiError(uiErrorText("error.detail.settingsChangedWhileSaving", {}, "Settings changed while saving"), { code: "revision_conflict", status: 412 });
         confirm = false;
         throw pending();
       }, { retryable: transient });

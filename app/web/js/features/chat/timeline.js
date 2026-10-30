@@ -1,3 +1,5 @@
+import { setUiAttribute as writeUiAttribute, setUiText as writeUiText, uiMessage, currentLocale, subscribeLocale, t } from "../../i18n.js";
+
 import { element, clear, formatClock, errorMessage, toast } from "../../utils/dom.js";
 import { copyText } from "../../utils/clipboard.js";
 import { parsePromptContext, promptContextText, CONTEXT_START } from "./prompt-context.js";
@@ -9,7 +11,7 @@ import { createRequestRecovery } from "../../api/request-recovery.js";
 import { mountIcons } from "../../components/icons.js";
 import { renderMarkdown } from "./markdown.js";
 import { artifactPreviewNode } from "./artifact-preview.js";
-import { currentLocale, subscribeLocale, t } from "../../i18n.js";
+
 import { labelImageName } from "./image-names.js";
 import { toolCallSummary, toolSectionNode } from "./tool-content.js";
 import { conversationGroups } from "./conversation-history.js";
@@ -616,7 +618,7 @@ function timeNode(value) {
   if (value) {
     const date = new Date(Number(value) / 1000);
     time.dateTime = date.toISOString();
-    time.title = date.toLocaleString(currentLocale());
+    writeUiAttribute(time, "title", date.toLocaleString(currentLocale()));
   }
   return time;
 }
@@ -631,8 +633,8 @@ function foldSection(label, value, copy = false, actionRef = "") {
     element("span", { text: label }),
   ]);
   if (copy) {
-    const button = element("button", { text: t("timeline.copy", {}, "复制"), attrs: {
-      type: "button", "aria-label": t("timeline.copySection", { label }, `复制${label}`),
+    const button = element("button", { text: uiMessage("timeline.copy", {}, "复制"), attrs: {
+      type: "button", "aria-label": uiMessage("timeline.copySection", { label }, `复制${label}`),
       "data-timeline-action": actionRef,
     } });
     button.addEventListener("click", async () => {
@@ -695,7 +697,7 @@ function foldableNode(item, openState, previewOpen, previewScroll, projectId, se
       const owner = { projectId, sessionId };
       if (item.inputText) body.append(toolSectionNode(t("timeline.call", {}, "调用"), item, "input", owner,
         `${item.key}/tool-input`, toolTextCache, value => {
-          summaryPreview.textContent = toolCallSummary(item.role, value);
+          writeUiText(summaryPreview, toolCallSummary(item.role, value));
         }));
       if (item.outputText) body.append(toolSectionNode(
         item.state === "failed" ? t("timeline.errorOutput", {}, "错误输出")
@@ -753,7 +755,7 @@ function timelineNode(item, handlers, projectId, sessionId, writable,
       : t("timeline.processComplete", {}, "查看思考与执行过程");
     const summary = element("summary", {}, [actionIcon("chevron-down"),
       element("span", { text: label }), count ? element("span", {
-        className: "conversation-process-count", text: t("timeline.processTools", { count }, `${count} 次工具调用`) }) : null]);
+        className: "conversation-process-count", text: uiMessage("timeline.processTools", { count }, `${count} 次工具调用`) }) : null]);
     details.append(summary);
     function expand() {
       if (!details.open || details.querySelector(".conversation-process-items")) return;
@@ -769,7 +771,7 @@ function timelineNode(item, handlers, projectId, sessionId, writable,
   }
   if (item.kind === "history-more") {
     const button = element("button", { className: "conversation-gap", text:
-      t("timeline.loadBetween", {}, "加载这之间的对话"), attrs: { type: "button" } });
+      uiMessage("timeline.loadBetween", {}, "加载这之间的对话"), attrs: { type: "button" } });
     button.addEventListener("click", async () => {
       button.disabled = true;
       try { await handlers.revealTurn?.(item.turnId, false); }
@@ -791,10 +793,10 @@ function timelineNode(item, handlers, projectId, sessionId, writable,
   ]);
   if (item.kind === "assistant" && item.state === "cancelled")
     header.insertBefore(element("span", { className: "timeline-stopped",
-      text: t("timeline.stopped", {}, "已停止") }), time);
+      text: uiMessage("timeline.stopped", {}, "已停止") }), time);
   if (item.kind === "assistant" && item.state === "failed")
     header.insertBefore(element("span", { className: "timeline-failed",
-      text: t("timeline.failed", {}, "失败") }), time);
+      text: uiMessage("timeline.failed", {}, "失败") }), time);
   const body = element("div", { className: "timeline-body" +
     (item.kind === "assistant" ? " markdown-body" : "") });
   function paintText(text) {
@@ -822,7 +824,7 @@ function timelineNode(item, handlers, projectId, sessionId, writable,
   const partialNote = (item.kind === "user" || item.kind === "assistant") &&
       item.textTruncated ? element("p", {
     className: "timeline-truncation-note",
-    text: t("timeline.partialMessage", {},
+    text: uiMessage("timeline.partialMessage", {},
       "消息内容有截断；复制时会尝试获取全文，无法获取时仅复制可见部分。"),
   }) : null;
   if (partialNote) children.push(partialNote);
@@ -834,7 +836,7 @@ function timelineNode(item, handlers, projectId, sessionId, writable,
   const sessionKey = `${projectId ?? ""}/${sessionId ?? ""}`;
   const owner = { projectId, sessionId };
   if (item.textTruncated && ["assistant", "user"].includes(item.kind)) {
-    const full = element("button", { className: "conversation-gap", text: t("toolContent.loadFull"), attrs: { type: "button" } });
+    const full = element("button", { className: "conversation-gap", text: uiMessage("toolContent.loadFull"), attrs: { type: "button" } });
     full.addEventListener("click", async () => {
       full.disabled = true;
       try {
@@ -856,9 +858,9 @@ function timelineNode(item, handlers, projectId, sessionId, writable,
     for (const [index, id] of item.attachments.entries()) {
       if (typeof id === "string" && /^[0-9a-f]{32}$/.test(id)) {
         const caption = element("bdi", { className: "image-file-name",
-          text: t("timeline.userImage", { index: index + 1 }, `用户图片 ${index + 1}`) });
+          text: uiMessage("timeline.userImage", { index: index + 1 }, `用户图片 ${index + 1}`) });
         const preview = element("button", { className: "timeline-image-preview",
-          attrs: { type: "button", "aria-label": t("timeline.viewImage",
+          attrs: { type: "button", "aria-label": uiMessage("timeline.viewImage",
             { index: index + 1 }, `查看用户图片 ${index + 1}`),
             "data-image-preview": "",
             "data-image-ref": `timeline:${projectId}/${sessionId}/${item.key}/${id}/${index}` },
@@ -883,7 +885,7 @@ function timelineNode(item, handlers, projectId, sessionId, writable,
       const copyLabel = t("timeline.copyMessage", {}, "复制消息");
       const copy = element("button", { className: "timeline-action-button", attrs: {
         type: "button", "aria-label": copyLabel,
-        title: item.textTruncated ? copyLabel : t("timeline.copy", {}, "复制"),
+        title: item.textTruncated ? copyLabel : uiMessage("timeline.copy", {}, "复制"),
         "data-timeline-action": `${item.key}/copy` },
       }, [actionIcon("copy")]);
       let copying = false;
@@ -1204,9 +1206,9 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
       const failedInitialLoad = state.status === "error" && data?.initializing;
       historyButton.hidden = !data?.hasOlder && !(showReadError && failedInitialLoad);
       historyButton.disabled = Boolean(data?.loadingHistory);
-      historyButton.textContent = data?.loadingHistory ? t("timeline.loadingOlder", {}, "正在加载更早对话…")
-        : data?.historyError || failedInitialLoad ? t("timeline.retryOlder", {}, "加载失败，点击重试")
-          : t("timeline.loadOlder", {}, "加载更早的对话");
+      writeUiText(historyButton, data?.loadingHistory ? uiMessage("timeline.loadingOlder", {}, "正在加载更早对话…")
+        : data?.historyError || failedInitialLoad ? uiMessage("timeline.retryOlder", {}, "加载失败，点击重试")
+          : uiMessage("timeline.loadOlder", {}, "加载更早的对话"));
     }
     historyNavigation?.update(data);
     if ((focusedAction || focusedImage) && !container.contains(document.activeElement)) {

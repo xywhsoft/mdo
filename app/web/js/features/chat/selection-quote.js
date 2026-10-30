@@ -1,9 +1,10 @@
+import { uiMessage, t } from "../../i18n.js";
 import { element, isImeKey } from "../../utils/dom.js";
-import { t } from "../../i18n.js";
+
 import { newPromptContext } from "./prompt-context.js";
 
 export function createSelectionQuote({ container, owner, add, writable = () => true }) {
-  const button = element("button", { className: "selection-quote-button", text: t("context.quoteSelection"), attrs: { type: "button" } });
+  const button = element("button", { className: "selection-quote-button", text: uiMessage("context.quoteSelection"), attrs: { type: "button" } });
   button.hidden = true; document.body.append(button);
   let captured = null;
   function hide() { button.hidden = true; captured = null; }

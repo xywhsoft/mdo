@@ -1,3 +1,4 @@
+import { t as uiErrorText } from "../../i18n.js";
 import { ApiError, api, currentPageWriteToken, resourceId } from "../../api/client.js";
 import { isTransientReadError } from "../../api/read-recovery.js";
 import { createRequestRecovery, clientActionId } from "../../api/request-recovery.js";
@@ -10,7 +11,7 @@ const uncertain = error => isTransientReadError(error) ||
     "recovery_result_unavailable"].includes(error?.code);
 const stamp = () => JSON.stringify([targetState().selected, targetState().runtimeChanged,
   currentPageWriteToken()]);
-const pending = () => new ApiError("Recovery acknowledgement is pending", {
+const pending = () => new ApiError(uiErrorText("error.detail.recoveryAcknowledgementIsPending", {}, "Recovery acknowledgement is pending"), {
   code: "recovery_confirmation_pending", status: 425,
 });
 function resumed(run, owner, id) {
@@ -37,7 +38,7 @@ export async function runRecoveryAction({ kind, data, choices,
   inspectRecovery = (owner, options) => withSessionRuntime(owner.project_id, owner.session_id,
     () => api.get(`/projects/${resourceId(owner.project_id)}/sessions/${resourceId(owner.session_id)}/recovery`, options), options),
   epoch = stamp, token = currentPageWriteToken(), recoveryOptions } = {}) {
-  if (!["resume", "abandon"].includes(kind)) throw new TypeError("Unknown recovery action");
+  if (!["resume", "abandon"].includes(kind)) throw new TypeError(uiErrorText("error.detail.unknownRecoveryAction", {}, "Unknown recovery action"));
   const recovery = createRequestRecovery(recoveryOptions), original = epoch();
   let submitted = false, confirming = false;
   function assertOwner() {
@@ -47,7 +48,7 @@ export async function runRecoveryAction({ kind, data, choices,
   function verifyEpoch(reply) {
     assertOwner();
     if (token && reply?.writeToken !== token)
-      throw new ApiError("Recovery service restarted", { code: "write_token_conflict" });
+      throw new ApiError(uiErrorText("error.detail.recoveryServiceRestarted", {}, "Recovery service restarted"), { code: "write_token_conflict" });
   }
   try {
     try {
@@ -58,7 +59,7 @@ export async function runRecoveryAction({ kind, data, choices,
       }, { retry: false });
       assertOwner();
       if (kind === "resume" ? resumed(result, data, id) : closed(result, data)) return result;
-      throw new ApiError("Invalid recovery acknowledgement", { code: "invalid_response" });
+      throw new ApiError(uiErrorText("error.detail.invalidRecoveryAcknowledgement", {}, "Invalid recovery acknowledgement"), { code: "invalid_response" });
     } catch (error) {
       if (error?.name === "AbortError" || !uncertain(error) ||
           ["run_limit_reached", "recovery_state_conflict"].includes(error?.code)) throw error;
@@ -80,7 +81,7 @@ export async function runRecoveryAction({ kind, data, choices,
     // Preserve definite rejections. After a possibly accepted write, an
     // exhausted confirmation gets one accurate final message, never a replay.
     if (confirming && (uncertain(error) || error?.code === "recovery_confirmation_pending")) {
-      const final = new ApiError("Recovery action acknowledgement could not be confirmed", {
+      const final = new ApiError(uiErrorText("error.detail.recoveryActionAcknowledgementCouldNotBeConfirmed", {}, "Recovery action acknowledgement could not be confirmed"), {
         code: kind === "resume" ? "recovery_resume_unconfirmed" : "recovery_abandon_unconfirmed",
       });
       final.cause = error; final.recoveryActionUncertain = true; throw final;

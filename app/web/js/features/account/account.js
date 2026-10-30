@@ -135,16 +135,16 @@ export function createAccount({ navigation, onModelsChange = () => {} }) {
     if (!allowance) { parent.append(text("span", copy(snapshot?.models_status && snapshot.models_status !== 200 ? "allowanceUnavailable" : "allowanceLoading"), "account-quota-note")); return; }
     if (!compact) parent.append(text("h3", copy("modelAllowance")), text("p", copy("tokenReset"), "account-note"));
     for (const q of allowance.quotas) {
-      const counts = q.unlimited ? copy("tokensUsed", { count: q.used_tokens.toLocaleString() }) :
-        copy("tokensRemaining", { remaining: q.remaining_tokens.toLocaleString(), limit: q.limit_tokens.toLocaleString() });
+      const counts = q.unlimited ? copy("tokensUsed", { count: q.used_tokens.toLocaleString(currentLocale()) }) :
+        copy("tokensRemaining", { remaining: q.remaining_tokens.toLocaleString(currentLocale()), limit: q.limit_tokens.toLocaleString(currentLocale()) });
       const title = q.models ? copy("sharedAllowance") : q.title;
       const row = quotaRow({ ...q, title }, copy("modelRemaining", { model: title }));
       row.title = counts + " · " + copy("tokenReset");
       if (!compact) {
-        row.append(text("p", q.models && !q.unlimited ? copy("standardTokensRemaining", { remaining: q.remaining_tokens.toLocaleString(), limit: q.limit_tokens.toLocaleString() }) : counts, "account-note"));
+        row.append(text("p", q.models && !q.unlimited ? copy("standardTokensRemaining", { remaining: q.remaining_tokens.toLocaleString(currentLocale()), limit: q.limit_tokens.toLocaleString(currentLocale()) }) : counts, "account-note"));
         for (const model of q.models || []) row.append(text("p", copy("modelEquivalent", { model: model.title, weight: model.token_weight_bps / 10000,
-          count: model.unlimited ? copy("unlimited") : model.available_model_tokens.toLocaleString() }), "account-note"));
-        if (q.reserved_tokens) row.append(text("p", copy("tokensReserved", { count: q.reserved_tokens.toLocaleString() }), "account-note"));
+          count: model.unlimited ? copy("unlimited") : model.available_model_tokens.toLocaleString(currentLocale()) }), "account-note"));
+        if (q.reserved_tokens) row.append(text("p", copy("tokensReserved", { count: q.reserved_tokens.toLocaleString(currentLocale()) }), "account-note"));
       }
       parent.append(row);
     }
@@ -169,8 +169,8 @@ export function createAccount({ navigation, onModelsChange = () => {} }) {
     if (!quota) { meters.append(text("p", copy(snapshot.search_status && snapshot.search_status !== 200 ? "allowanceUnavailable" : "allowanceLoading"), "account-quota-note")); return meters; }
     quota.title = copy("quotaRemaining"); quota.stale ||= snapshot.search_status !== 200;
     const row = quotaRow(quota, copy("searchAllowance"));
-    row.append(text("p", copy("searchesRemaining", { remaining: quota.remaining.toLocaleString(), limit: quota.limit.toLocaleString() }), "account-quota-count"));
-    row.append(text("p", copy("searchesUsed", { count: quota.used.toLocaleString() }), "account-note"));
+    row.append(text("p", copy("searchesRemaining", { remaining: quota.remaining.toLocaleString(currentLocale()), limit: quota.limit.toLocaleString(currentLocale()) }), "account-quota-count"));
+    row.append(text("p", copy("searchesUsed", { count: quota.used.toLocaleString(currentLocale()) }), "account-note"));
     meters.append(row, text("p", copy("searchReset", { time: new Date(quota.resets_at * 1000).toLocaleString(currentLocale(),
       { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) }), "account-note"));
     return meters;

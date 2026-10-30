@@ -1,4 +1,5 @@
-import { subscribeLocale, t } from "../../i18n.js";
+import { setUiText as writeUiText, uiMessage, subscribeLocale, t } from "../../i18n.js";
+
 import { errorMessage } from "../../utils/dom.js";
 import { isTransientReadError } from "../../api/read-recovery.js";
 
@@ -81,12 +82,12 @@ export function createSessionLoadNotice({ navigation, store, conversation,
     notice.setAttribute("role", failed ? "alert" : "status");
     notice.hidden = false;
     notice.dataset.compact = String(Boolean(hasDetail));
-    heading.textContent = title;
-    description.textContent = body;
+    writeUiText(heading, title);
+    writeUiText(description, body);
     const retrying = restoreFocus && !failed && !delayed;
-    retry.textContent = retrying
-      ? t("sessionLoad.retrying", {}, "正在重试…")
-      : t("sessionLoad.retry", {}, "重试读取");
+    writeUiText(retry, retrying
+      ? uiMessage("sessionLoad.retrying", {}, "正在重试…")
+      : uiMessage("sessionLoad.retry", {}, "重试读取"));
     retry.hidden = !failed && !delayed && !retrying;
     retry.setAttribute("aria-disabled", retrying ? "true" : "false");
     if (failed && restoreFocus && retrySawLoading) {
@@ -95,10 +96,10 @@ export function createSessionLoadNotice({ navigation, store, conversation,
       retrySawLoading = false;
     }
     if (!hasDetail) {
-      sessionTitle.textContent = title;
-      sessionSubtitle.textContent = body;
-      mobileTitle.textContent = title;
-      mobileMeta.textContent = "";
+      writeUiText(sessionTitle, title);
+      writeUiText(sessionSubtitle, body);
+      writeUiText(mobileTitle, title);
+      writeUiText(mobileMeta, "");
     }
   }
 

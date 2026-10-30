@@ -1,6 +1,7 @@
+import { setUiText as writeUiText, uiMessage, t } from "../../i18n.js";
+
 import { element } from "../../utils/dom.js";
 import { copyText } from "../../utils/clipboard.js";
-import { t } from "../../i18n.js";
 
 const INLINE = /(`[^`\n]+`|\*\*[^*\n]+\*\*|~~[^~\n]+~~|\*[^*\n]+\*|!\[[^\]\n]*\]\([^\s)]+\)|\[[^\]\n]+\]\([^\s)]+\))/g;
 const LIST = /^\s{0,3}([-*]|\d+[.)])\s+(.*)$/;
@@ -39,7 +40,7 @@ function inline(text) {
       const src = safeImage(token.slice(bracket + 2, -1));
       if (src) node = element("button", { className: "md-image-preview",
         attrs: { type: "button", "data-image-preview": "",
-          "aria-label": t("markdown.viewImage", { alt: alt || t("markdown.image", {}, "Markdown 图片") },
+          "aria-label": uiMessage("markdown.viewImage", { alt: alt || t("markdown.image", {}, "Markdown 图片") },
             `查看图片：${alt || "Markdown 图片"}`) },
       }, [element("img", { attrs: { src, alt, loading: "lazy",
         decoding: "async", referrerpolicy: "no-referrer" } })]);
@@ -86,18 +87,18 @@ export function renderMarkdown(source) {
       const block = element("div", { className: "md-codeblock" });
       const head = element("div", { className: "md-code-head" });
       head.append(element("span", { text: fence[1] || "text" }));
-      const copy = element("button", { text: t("markdown.copyCode", {}, "复制代码"),
+      const copy = element("button", { text: uiMessage("markdown.copyCode", {}, "复制代码"),
         attrs: { type: "button" } });
       let resetCopyLabel;
       copy.addEventListener("click", async () => {
         try {
           await copyText(code.join("\n"));
-          copy.textContent = t("markdown.copied", {}, "已复制");
-        } catch { copy.textContent = t("markdown.copyFailed", {}, "复制失败"); }
+          writeUiText(copy, uiMessage("markdown.copied", {}, "已复制"));
+        } catch { writeUiText(copy, uiMessage("markdown.copyFailed", {}, "复制失败")); }
         clearTimeout(resetCopyLabel);
         resetCopyLabel = setTimeout(() => {
           if (copy.isConnected)
-            copy.textContent = t("markdown.copyCode", {}, "复制代码");
+            writeUiText(copy, uiMessage("markdown.copyCode", {}, "复制代码"));
         }, 1200);
       });
       head.append(copy);

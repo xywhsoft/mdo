@@ -1,3 +1,4 @@
+import { t as uiErrorText } from "../../i18n.js";
 import { api, ApiError, attachmentFileName, attachmentUrl, resourceId } from "../../api/client.js";
 import { eventsToTimeline } from "../chat/timeline.js";
 import { targetFetch } from "../../api/target.js";
@@ -24,14 +25,14 @@ function cancelBody(body) {
 async function readImage(response, size, mime, signal) {
   if (!response.ok) {
     cancelBody(response.body);
-    throw new ApiError("Export image request failed", { status: response.status });
+    throw new ApiError(uiErrorText("error.detail.exportImageRequestFailed", {}, "Export image request failed"), { status: response.status });
   }
   const type = (response.headers.get("Content-Type") ?? "").split(";")[0].trim();
   const length = response.headers.get("Content-Length");
   if (type !== mime || (length !== null &&
       (!/^\d+$/.test(length) || Number(length) !== size)) || !response.body) {
     cancelBody(response.body);
-    throw new Error("Invalid export image response");
+    throw new Error(uiErrorText("error.detail.invalidExportImageResponse", {}, "Invalid export image response"));
   }
   const reader = response.body.getReader();
   const bytes = new Uint8Array(size);
@@ -51,16 +52,16 @@ async function readImage(response, size, mime, signal) {
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
-      if (value.length > size - offset) throw new Error("Export image exceeds its size");
+      if (value.length > size - offset) throw new Error(uiErrorText("error.detail.exportImageExceedsItsSize", {}, "Export image exceeds its size"));
       bytes.set(value, offset);
       offset += value.length;
     }
-    if (offset !== size) throw new Error("Export image is incomplete");
+    if (offset !== size) throw new Error(uiErrorText("error.detail.exportImageIsIncomplete", {}, "Export image is incomplete"));
     complete = true;
     return bytes;
   } catch (error) {
     if (error instanceof TypeError && !signal.aborted)
-      throw new ApiError("Export image connection interrupted", { code: "network_error" });
+      throw new ApiError(uiErrorText("error.detail.exportImageConnectionInterrupted", {}, "Export image connection interrupted"), { code: "network_error" });
     throw error;
   } finally {
     cleanup();
@@ -77,7 +78,7 @@ export async function loadSessionMarkdownImages(session, transcript,
   if (!Number.isInteger(maxImages) || maxImages < 1 || maxImages > MAX_IMAGES ||
       !Number.isInteger(maxBytes) || maxBytes < 1 || maxBytes > MAX_BYTES ||
       !Number.isFinite(timeoutMs) || timeoutMs <= 0 || timeoutMs > 30000)
-    throw new TypeError("Invalid image export bounds");
+    throw new TypeError(uiErrorText("error.detail.invalidImageExportBounds", {}, "Invalid image export bounds"));
   const ids = new Set(eventsToTimeline(transcript.events ?? [])
     .flatMap((item) => item.attachments ?? []));
   const images = new Map();
@@ -114,7 +115,7 @@ export async function loadSessionMarkdownImages(session, transcript,
               credentials: "same-origin", redirect: "error", signal });
           } catch (error) {
             if (error instanceof TypeError && !signal.aborted)
-              throw new ApiError("Export image connection interrupted", { code: "network_error" });
+              throw new ApiError(uiErrorText("error.detail.exportImageConnectionInterrupted", {}, "Export image connection interrupted"), { code: "network_error" });
             throw error;
           }
           if (signal.aborted) {

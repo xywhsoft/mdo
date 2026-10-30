@@ -1,3 +1,5 @@
+import { setUiText as writeUiText, t as uiText } from "../../i18n.js";
+
 import { api } from "../../api/client.js";
 import { openLayer } from "../../components/layers.js";
 import { element, errorMessage } from "../../utils/dom.js";
@@ -11,7 +13,7 @@ export function roleAdvanced(source) {
 export function parseRoleAdvanced(text) {
   const value = JSON.parse(text || "{}");
   if (!value || typeof value !== "object" || Array.isArray(value) || Object.keys(value).some(key => !ROLE_ADVANCED_KEYS.includes(key)))
-    throw Error("高级配置只接受 context、runtime、delegation、history、model_options、mcp_servers 和 skills。其他字段请在源文件中编辑。");
+    throw Error(uiText("ui.agentAuthoring.advancedConfigurationAcceptsOnlyContextRuntimeDelegationHistoryModel", {}, "高级配置只接受 context、runtime、delegation、history、model_options、mcp_servers 和 skills。其他字段请在源文件中编辑。"));
   return value;
 }
 export function newRole(kind) {
@@ -55,19 +57,19 @@ MDO_AGENT_MODULE(Role)
 `;
 }
 export async function openRolePlan({kind,id,content,owner}) {
-  const layer = openLayer({title:"角色上下文预览",icon:"terminal",width:"64rem",height:"85%",owner});
-  const status = element("p",{text:"正在构建预览…",attrs:{role:"status"}});layer.body.append(status);
-  const close=element("button",{className:"secondary-button",text:"关闭",attrs:{type:"button"}});
+  const layer = openLayer({title:uiText("ui.agentAuthoring.roleContextPreview", {}, "角色上下文预览"),icon:"terminal",width:"64rem",height:"85%",owner});
+  const status = element("p",{text:uiText("ui.agentAuthoring.buildingPreview", {}, "正在构建预览…"),attrs:{role:"status"}});layer.body.append(status);
+  const close=element("button",{className:"secondary-button",text:uiText("context.close", {}, "关闭"),attrs:{type:"button"}});
   close.addEventListener("click",()=>layer.close());layer.footer.append(close);
   try {
     const url=`/extensions/${kind}/${encodeURIComponent(id)}/plan?project=default`;
     const {data}=content === undefined ? await api.get(url,{signal:layer.signal}) : await api.post(url,{content},{signal:layer.signal});
     if(layer.signal.aborted)return;
-    status.textContent="配置预览不运行 C 回调、不调用模型。C 回调后的实际请求可通过运行时检查接口查看。预览包含你的提示词与记忆，仅在当前设备显示。";
+    writeUiText(status, uiText("ui.agentAuthoring.configurationPreviewDoesNotRunCCallbacksOrCall", {}, "配置预览不运行 C 回调、不调用模型。C 回调后的实际请求可通过运行时检查接口查看。预览包含你的提示词与记忆，仅在当前设备显示。"));
     const sources=element("div",{className:"agent-plan-sources"});
     for(const source of [...data.sources].sort((a,b)=>a.order-b.order)){
-      const details=element("details",{},[element("summary",{text:`${source.enabled?"启用":"停用"} · ${source.id} · ${source.role} · ${new TextEncoder().encode(source.text).length} B${source.truncated?" · 已裁剪":""}`}),element("pre",{className:"store-source",text:source.text})]);sources.append(details);
+      const details=element("details",{},[element("summary",{text:`${source.enabled?uiText("resource.enable", {}, "启用"):uiText("resource.disable", {}, "停用")} · ${source.id} · ${source.role} · ${new TextEncoder().encode(source.text).length} B${source.truncated?uiText("ui.agentAuthoring.truncated", {}, " · 已裁剪"):""}`}),element("pre",{className:"store-source",text:source.text})]);sources.append(details);
     }
-    layer.body.append(sources,element("h3",{text:"系统提示词"}),element("pre",{className:"store-source",text:data.system_prompt}),element("h3",{text:"用户上下文"}),element("pre",{className:"store-source",text:data.user_context}),element("details",{},[element("summary",{text:"完整配置与来源数据"}),element("pre",{className:"store-source",text:JSON.stringify(data,null,2)})]));
-  } catch(error) { if(!layer.signal.aborted)status.textContent=errorMessage(error); }
+    layer.body.append(sources,element("h3",{text:uiText("ui.agentAuthoring.systemPrompt", {}, "系统提示词")}),element("pre",{className:"store-source",text:data.system_prompt}),element("h3",{text:uiText("ui.agentAuthoring.userContext", {}, "用户上下文")}),element("pre",{className:"store-source",text:data.user_context}),element("details",{},[element("summary",{text:uiText("ui.agentAuthoring.fullConfigurationAndSources", {}, "完整配置与来源数据")}),element("pre",{className:"store-source",text:JSON.stringify(data,null,2)})]));
+  } catch(error) { if(!layer.signal.aborted)writeUiText(status, errorMessage(error)); }
 }

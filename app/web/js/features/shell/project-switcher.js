@@ -1,5 +1,6 @@
+import { setUiText as writeUiText, setUiAttribute as writeUiAttribute, uiMessage, subscribeLocale, t } from "../../i18n.js";
+
 import { clear, element, isImeKey, revealListOption } from "../../utils/dom.js";
-import { subscribeLocale, t } from "../../i18n.js";
 
 // The header project crumb changes the destination for a new task. Existing
 // sessions stay in their own projects and keep their drafts when we leave.
@@ -49,8 +50,8 @@ export function createProjectSwitcher({ control, button, name, separator, menu,
     const list = projects();
     const selected = list.find((item) => item.id === current);
     const label = projectLabel(selected ?? { id: current, name: current });
-    name.textContent = label;
-    button.setAttribute("aria-label", t("nav.switchProject", { name: label },
+    writeUiText(name, label);
+    writeUiAttribute(button, "aria-label", t("nav.switchProject", { name: label },
       `切换项目，当前 ${label}`));
     const focusedId = menu.contains(document.activeElement)
       ? document.activeElement.dataset.projectId : "";
@@ -69,7 +70,7 @@ export function createProjectSwitcher({ control, button, name, separator, menu,
       menu.append(item);
     }
     const manage = element("button", { className: "project-menu-manage",
-      text: t("nav.manageProjects", {}, "管理项目"), attrs: {
+      text: uiMessage("nav.manageProjects", {}, "管理项目"), attrs: {
         type: "button", role: "menuitem", "data-project-id": "manage",
       } });
     manage.addEventListener("click", () => { close(); onManageProjects(); });

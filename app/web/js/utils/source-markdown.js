@@ -1,3 +1,4 @@
+import { t as uiErrorText } from "../i18n.js";
 // Source documentation uses a small DOM renderer. HTML remains literal text,
 // links allow HTTP(S) only, and image syntax never starts a network request.
 export function renderSourceMarkdown(source) {
@@ -36,7 +37,7 @@ export function renderPackageAttachment(file, labels = {}) {
   const make=(tag,text)=>{const e=document.createElement(tag);if(text!==undefined)e.textContent=text;return e;};
   const out=make("details");out.append(make("summary",file.path));
   try {
-    if(typeof file.base64!=="string" || file.base64.length>1400000)throw Error("Invalid attachment");
+    if(typeof file.base64!=="string" || file.base64.length>1400000)throw Error(uiErrorText("error.detail.invalidAttachment", {}, "Invalid attachment"));
     const raw=atob(file.base64),bytes=Uint8Array.from(raw,c=>c.charCodeAt(0));
     const meta=make("p",`${bytes.length} B`);out.append(meta);
     let source=null;try{source=new TextDecoder("utf-8",{fatal:true}).decode(bytes);if(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(source))source=null;}catch{}

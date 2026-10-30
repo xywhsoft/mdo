@@ -1,4 +1,5 @@
-import { currentLocale, subscribeLocale, t } from "../../i18n.js";
+import { setUiText as writeUiText, uiMessage, currentLocale, subscribeLocale, t } from "../../i18n.js";
+
 import { element, formatRelativeTime, isImeKey, revealListOption } from "../../utils/dom.js";
 import { createCompositionTracker } from "../../utils/composition.js";
 import { matchingSessions } from "./sidebar-tree.js";
@@ -46,14 +47,14 @@ export function createSessionSearch({ dialog, button, store, projectsStore,
     active = matches.length ? (retained >= 0 && retained < limit ? retained : 0) : -1;
     const loading = !snapshot.updatedAt && !snapshot.data?.items?.length &&
       ["idle", "loading", "refreshing"].includes(snapshot.status);
-    status.textContent = snapshot.status === "error" ? t("sessionList.readFailed")
-      : loading ? t("sessionSearch.loading")
-      : !matches.length ? t(input.value.trim() ? "sessionSearch.noMatches" : "sessionSearch.empty")
-      : input.value.trim() ? t("sessionSearch.results", { count: matches.length })
-      : t("sessionSearch.recent");
+    writeUiText(status, snapshot.status === "error" ? uiMessage("sessionList.readFailed")
+      : loading ? uiMessage("sessionSearch.loading")
+      : !matches.length ? uiMessage(input.value.trim() ? "sessionSearch.noMatches" : "sessionSearch.empty")
+      : input.value.trim() ? uiMessage("sessionSearch.results", { count: matches.length })
+      : uiMessage("sessionSearch.recent"));
     retry.hidden = snapshot.status !== "error";
     retry.disabled = Boolean(store.isPending?.());
-    retry.textContent = t(retry.disabled ? "sessionLoad.retrying" : "sessionLoad.retry");
+    writeUiText(retry, uiMessage(retry.disabled ? "sessionLoad.retrying" : "sessionLoad.retry"));
     list.setAttribute("aria-busy", String(loading));
     more.hidden = matches.length <= limit;
     const rows = matches.slice(0, limit).map(session => ({ session,

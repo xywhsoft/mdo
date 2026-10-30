@@ -1,12 +1,12 @@
-import { currentLocale, t } from "../i18n.js";
+import { currentLocale, t, setUiText, setUiAttribute } from "../i18n.js";
 import { modelErrorMessage } from "./model-errors.js";
 
 export function element(tag, options = {}, children = []) {
   const node = document.createElement(tag);
   if (options.className) node.className = options.className;
-  if (options.text !== undefined) node.textContent = String(options.text);
+  if (options.text !== undefined) setUiText(node, options.text);
   for (const [name, value] of Object.entries(options.attrs ?? {})) {
-    if (value !== null && value !== undefined) node.setAttribute(name, String(value));
+    if (value !== null && value !== undefined) setUiAttribute(node, name, value);
   }
   for (const child of children) {
     if (child !== null && child !== undefined) node.append(child);

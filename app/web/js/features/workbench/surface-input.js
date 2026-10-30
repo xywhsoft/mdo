@@ -1,20 +1,22 @@
+import { setUiText as writeUiText, uiMessage, t as uiText } from "../../i18n.js";
+
 /* Native drivers remain plugins. This channel only maps UI input into bounded,
  * sequenced events. Receivers must enforce epoch/sequence and lease expiry. */
 export function createSurfaceInput({ canvas, toolbar, sdk, stream, signal, onError }) {
   if (!stream) return { stop() {}, dispose() {} };
   const epoch = crypto.randomUUID(), queue = []; let sequence = 0, active = false, sending = false, heartbeat;
-  const toggle = document.createElement("button"); toggle.type = "button"; toggle.className = "wb-button"; toggle.textContent = "开始控制"; toolbar.append(toggle);
+  const toggle = document.createElement("button"); toggle.type = "button"; toggle.className = "wb-button"; writeUiText(toggle, uiMessage("ui.surfaceInput.takeControl", {}, "开始控制")); toolbar.append(toggle);
   canvas.tabIndex = 0;
   const packet = (kind, fields = {}) => ({ epoch, sequence: ++sequence, kind, lease_ms: 1500, ...fields });
   const write = event => sdk.call("stream.write", { handle: stream, text: JSON.stringify(event) + "\n", timeout_ms: 250 });
   const release = () => {
-    if (!active) return; active = false; clearInterval(heartbeat); queue.length = 0; toggle.textContent = "开始控制";
+    if (!active) return; active = false; clearInterval(heartbeat); queue.length = 0; writeUiText(toggle, uiMessage("ui.surfaceInput.takeControl", {}, "开始控制"));
     void write(packet("release_all")).catch(() => { /* Driver lease expiry releases held input. */ });
   };
   const pump = async () => {
     if (sending) return; sending = true;
     try { while (active && queue.length) await write(queue.shift()); }
-    catch (error) { release(); onError(new Error(`控制通道未确认，已退出控制：${error.message}`)); }
+    catch (error) { release(); onError(new Error(uiText("ui.surfaceInput.controlChannelUnconfirmedControlEndedValue1", { value1: error.message }, "控制通道未确认，已退出控制：{value1}"))); }
     finally { sending = false; }
   };
   const send = (kind, fields) => {
@@ -22,12 +24,12 @@ export function createSurfaceInput({ canvas, toolbar, sdk, stream, signal, onErr
     const event = packet(kind, fields), previous = queue.at(-1);
     if (kind === "pointermove" && previous?.kind === kind && previous.pointer === event.pointer) queue[queue.length - 1] = event;
     else if (queue.length < 32) queue.push(event);
-    else { release(); onError(new Error("控制通道拥塞，已退出控制")); return; }
+    else { release(); onError(new Error(uiText("ui.surfaceInput.controlChannelCongestedControlEnded", {}, "控制通道拥塞，已退出控制"))); return; }
     void pump();
   };
   toggle.onclick = () => {
     if (active) { release(); return; }
-    active = true; toggle.textContent = "退出控制"; canvas.focus(); send("acquire"); heartbeat = setInterval(() => send("heartbeat"), 500);
+    active = true; writeUiText(toggle, uiMessage("ui.surfaceInput.releaseControl", {}, "退出控制")); canvas.focus(); send("acquire"); heartbeat = setInterval(() => send("heartbeat"), 500);
   };
   const pointer = event => {
     if (!active) return; event.preventDefault();

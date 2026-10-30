@@ -1,7 +1,8 @@
+import { t as uiErrorText, t } from "../i18n.js";
 import { api } from "../api/client.js";
 import { createResourceStore } from "./store.js";
 import { validateAskAnswer } from "./asks.js";
-import { t } from "../i18n.js";
+
 import { runTaskStopAction } from "./task-stop-action.js";
 import { isTransientReadError } from "../api/read-recovery.js";
 import { runDecisionAction } from "./decision-action.js";
@@ -25,7 +26,7 @@ const taskReadTokens = new WeakMap();
 
 function taskId(value) {
   const id = String(value ?? "");
-  if (!/^[1-9][0-9]*$/.test(id)) throw new TypeError("task ID is invalid");
+  if (!/^[1-9][0-9]*$/.test(id)) throw new TypeError(uiErrorText("error.detail.taskIdIsInvalid", {}, "task ID is invalid"));
   return id;
 }
 
@@ -136,7 +137,7 @@ export async function answerTaskAsk(value, askId, answer) {
 export function readArtifactPreview(artifact) {
   const id = taskId(artifact?.id);
   const ownerTask = taskId(artifact?.task_id);
-  if (!selectedTaskId || ownerTask !== selectedTaskId) throw new TypeError("artifact does not belong to the selected task");
+  if (!selectedTaskId || ownerTask !== selectedTaskId) throw new TypeError(uiErrorText("error.detail.artifactDoesNotBelongToTheSelectedTask", {}, "artifact does not belong to the selected task"));
   artifactPreviewStore.reset();
   return artifactPreviewStore.load(async () => {
     const response = await api.get(`/artifacts/${id}?offset=0&limit=${ARTIFACT_PREVIEW_BYTES}`);

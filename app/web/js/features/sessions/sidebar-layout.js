@@ -1,3 +1,4 @@
+import { t as uiErrorText } from "../../i18n.js";
 import { api, currentPageWriteToken } from "../../api/client.js";
 import { targetState, subscribeTarget } from "../../api/target.js";
 import { createRequestRecovery } from "../../api/request-recovery.js";
@@ -26,14 +27,14 @@ export function validSidebarLayout(value) {
 
 export function moveSidebarItem(layout, key, group = "", before = "", order = []) {
   const next = structuredClone(layout);
-  if (!sidebarItemKey(key) || (group && !next.groups.some(item => item.id === group))) throw new TypeError("Invalid sidebar destination");
+  if (!sidebarItemKey(key) || (group && !next.groups.some(item => item.id === group))) throw new TypeError(uiErrorText("error.detail.invalidSidebarDestination", {}, "Invalid sidebar destination"));
   const current = new Map(next.placements.map(item => [item.key, item.group]));
   const keys = [...new Set([...next.placements.map(item => item.key), ...order.filter(sidebarItemKey)])].filter(item => item !== key);
-  if (before && (!keys.includes(before) || before === key)) throw new TypeError("Invalid sidebar anchor");
+  if (before && (!keys.includes(before) || before === key)) throw new TypeError(uiErrorText("error.detail.invalidSidebarAnchor", {}, "Invalid sidebar anchor"));
   keys.splice(before ? keys.indexOf(before) : keys.length, 0, key); current.set(key, group);
   next.placements = keys.map(item => ({ key: item, group: current.get(item) || "" }));
   if (group) next.collapsed = next.collapsed.filter(key => key !== `section:custom-${group}`);
-  if (!validSidebarLayout(next)) throw Object.assign(new TypeError("Sidebar capacity exceeded"), { code: "sidebar_layout_invalid" });
+  if (!validSidebarLayout(next)) throw Object.assign(new TypeError(uiErrorText("error.detail.sidebarCapacityExceeded", {}, "Sidebar capacity exceeded")), { code: "sidebar_layout_invalid" });
   return next;
 }
 
@@ -89,7 +90,7 @@ export function createSidebarLayoutStore({ changed = () => {}, failed = () => {}
     try {
       const reply = await request.request(signal => read(path, { signal }));
       if (version !== generation || epoch !== targetEpoch()) return;
-      if (!validSidebarLayout(reply.data)) throw new Error("Invalid sidebar layout response");
+      if (!validSidebarLayout(reply.data)) throw new Error(uiErrorText("error.detail.invalidSidebarLayoutResponse", {}, "Invalid sidebar layout response"));
       value = reply.data; ready = true;
     } catch (error) { if (version === generation && error?.name !== "AbortError") failed(error); }
     finally { request.dispose(); if (version === generation) { loading = null; changed(); } }
@@ -103,7 +104,7 @@ export function createSidebarLayoutStore({ changed = () => {}, failed = () => {}
       if (disposed || !ready || busy || targetState().runtimeChanged || (targetState().selected && (!targetState().connected || targetState().selected.mode !== "control"))) return false;
       const origin = stamp(), epoch = targetEpoch(), version = generation;
       const next = change(structuredClone(value));
-      if (!validSidebarLayout(next) || bytes(JSON.stringify(next)) > 192 * 1024) throw Object.assign(new TypeError("Invalid sidebar layout"), { code: "sidebar_layout_invalid" });
+      if (!validSidebarLayout(next) || bytes(JSON.stringify(next)) > 192 * 1024) throw Object.assign(new TypeError(uiErrorText("error.detail.invalidSidebarLayout", {}, "Invalid sidebar layout")), { code: "sidebar_layout_invalid" });
       if (same(next, value)) return true;
       busy = true; changed(); let confirmed = null;
       const request = recovery();
@@ -115,12 +116,12 @@ export function createSidebarLayoutStore({ changed = () => {}, failed = () => {}
           if (stamp() !== origin || generation !== version) throw new DOMException("Sidebar target changed", "AbortError");
           // A lost ACK is read back. Never overwrite a peer by replaying PUT.
           const saved = (await request.request(signal => { assertOwner(); return read(path, { signal }); })).data;
-          if (!validSidebarLayout(saved)) throw new Error("Invalid sidebar layout response");
+          if (!validSidebarLayout(saved)) throw new Error(uiErrorText("error.detail.invalidSidebarLayoutResponse", {}, "Invalid sidebar layout response"));
           if (saved.revision === next.revision + 1 && same(saved, next)) confirmed = saved;
           else { value = saved; throw error; }
         }
         if (stamp() !== origin || version !== generation || epoch !== targetEpoch()) return false;
-        if (!validSidebarLayout(confirmed) || confirmed.revision !== next.revision + 1 || !same(confirmed, next)) throw new Error("Invalid sidebar write acknowledgement");
+        if (!validSidebarLayout(confirmed) || confirmed.revision !== next.revision + 1 || !same(confirmed, next)) throw new Error(uiErrorText("error.detail.invalidSidebarWriteAcknowledgement", {}, "Invalid sidebar write acknowledgement"));
         value = confirmed; return true;
       } finally { request.dispose(); if (activeWrite === request) activeWrite = null;
         if (version === generation) { busy = false; changed(); } }

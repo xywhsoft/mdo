@@ -1,3 +1,4 @@
+import { t as uiErrorText } from "../../i18n.js";
 import { api, attachmentFileName, resourceId } from "../../api/client.js";
 
 // Names are immutable for a scoped attachment ID. Share reads between draft
@@ -6,11 +7,11 @@ import { api, attachmentFileName, resourceId } from "../../api/client.js";
 export function createImageNameCache({ limit = 128, retryMs = 5000,
   now = Date.now, read = (path) => api.get(path) } = {}) {
   if (!Number.isInteger(limit) || limit < 1 || !Number.isFinite(retryMs) || retryMs < 0)
-    throw new TypeError("Invalid image name cache bounds");
+    throw new TypeError(uiErrorText("error.detail.invalidImageNameCacheBounds", {}, "Invalid image name cache bounds"));
   const entries = new Map();
 
   function key(owner, id) {
-    if (!/^[0-9a-f]{32}$/.test(id)) throw new TypeError("Attachment ID is invalid");
+    if (!/^[0-9a-f]{32}$/.test(id)) throw new TypeError(uiErrorText("error.detail.attachmentIdIsInvalid", {}, "Attachment ID is invalid"));
     return `/projects/${resourceId(owner.projectId, "project")}` +
       `/sessions/${resourceId(owner.sessionId, "session")}/attachments/${id}/info`;
   }
@@ -32,9 +33,9 @@ export function createImageNameCache({ limit = 128, retryMs = 5000,
     const entry = { retryAt: Infinity, promise: null };
     entry.promise = Promise.resolve().then(() => read(path)).then(({ data }) => {
       if (data?.id !== id || ![1, 2].includes(data.schema_version))
-        throw new Error("Invalid image metadata");
+        throw new Error(uiErrorText("error.detail.invalidImageMetadata", {}, "Invalid image metadata"));
       const name = data.schema_version === 2 ? attachmentFileName(data.file_name) : "";
-      if (data.schema_version === 2 && !name) throw new Error("Invalid image name");
+      if (data.schema_version === 2 && !name) throw new Error(uiErrorText("error.detail.invalidImageName", {}, "Invalid image name"));
       entry.name = name;
       return name;
     }).catch(() => { entry.retryAt = now() + retryMs; return ""; });

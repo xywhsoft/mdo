@@ -1,3 +1,4 @@
+import { t as uiErrorText } from "../i18n.js";
 import { api, ApiError, currentPageWriteToken, resourceId } from "../api/client.js";
 import { createRequestRecovery } from "../api/request-recovery.js";
 import { isTransientReadError } from "../api/read-recovery.js";
@@ -9,7 +10,7 @@ const rejected = error => fenced(error) || ["schedule_persistence_failed",
   "schedule_service_unavailable", "schedule_update_failed", "schedule_limit_reached"].includes(error?.code);
 const uncertain = error => !fenced(error) && (isTransientReadError(error) ||
   ["invalid_response", "remote_result_unconfirmed", "schedule_result_unavailable"].includes(error?.code));
-const pending = () => new ApiError("Schedule confirmation is pending", { code: "schedule_confirmation_pending", status: 425 });
+const pending = () => new ApiError(uiErrorText("error.detail.scheduleConfirmationIsPending", {}, "Schedule confirmation is pending"), { code: "schedule_confirmation_pending", status: 425 });
 const aborted = () => new DOMException("Schedule save cancelled", "AbortError");
 const tag = (id, revision) => `"mdo-schedule-${id}-${revision}"`;
 const signature = body => JSON.stringify(Object.entries(body).sort(([a], [b]) => a.localeCompare(b)));
@@ -26,22 +27,22 @@ export function createScheduleWriter({ client = api, epoch = resourceOperationEp
     id = resourceId(id, "schedule");
     if (id.length > 64 || signal?.aborted) {
       if (signal?.aborted) throw aborted();
-      throw new TypeError("Invalid schedule identity");
+      throw new TypeError(uiErrorText("error.detail.invalidScheduleIdentity", {}, "Invalid schedule identity"));
     }
     const match = /^"mdo-schedule-(.+)-([1-9][0-9]*)"$/.exec(etag || "");
     const revision = kind === "create" ? 0 : Number(match?.[2]);
     if (kind !== "create" && (match?.[1] !== id || !Number.isSafeInteger(revision)))
-      throw new TypeError("Invalid schedule revision");
+      throw new TypeError(uiErrorText("error.detail.invalidScheduleRevision", {}, "Invalid schedule revision"));
     const body = JSON.parse(JSON.stringify(definition ?? {}));
     const original = epoch(), writeToken = token();
     if (owner !== original) { intents.clear(); owner = original; }
     const key = `${kind}/${id}/${etag || ""}`;
     let intent = intents.get(key);
     if (intent && signature(intent.body) !== signature(body))
-      throw new ApiError("An earlier schedule save is not confirmed", { code: "schedule_save_pending_changed" });
+      throw new ApiError(uiErrorText("error.detail.anEarlierScheduleSaveIsNotConfirmed", {}, "An earlier schedule save is not confirmed"), { code: "schedule_save_pending_changed" });
     if (!intent) {
       if (intents.size >= 64)
-        throw new ApiError("Too many unconfirmed schedule saves", { code: "schedule_save_pending_limit" });
+        throw new ApiError(uiErrorText("error.detail.tooManyUnconfirmedScheduleSaves", {}, "Too many unconfirmed schedule saves"), { code: "schedule_save_pending_limit" });
       intent = { body, confirm: false };
       intents.set(key, intent);
     }
@@ -54,7 +55,7 @@ export function createScheduleWriter({ client = api, epoch = resourceOperationEp
     function verifyToken(reply) {
       assertOwner();
       if (writeToken && reply?.writeToken !== writeToken)
-        throw new ApiError("Schedule service restarted", { code: "write_token_conflict" });
+        throw new ApiError(uiErrorText("error.detail.scheduleServiceRestarted", {}, "Schedule service restarted"), { code: "write_token_conflict" });
     }
     function verify(reply) {
       verifyToken(reply);
@@ -62,11 +63,11 @@ export function createScheduleWriter({ client = api, epoch = resourceOperationEp
       if (kind === "remove" && data?.id === id && data.removed === true) return reply;
       if (data?.id !== id || !Number.isSafeInteger(data.revision) || data.revision < 1 ||
           reply.etag !== tag(id, data.revision))
-        throw new ApiError("Invalid schedule acknowledgement", { code: "invalid_response" });
+        throw new ApiError(uiErrorText("error.detail.invalidScheduleAcknowledgement", {}, "Invalid schedule acknowledgement"), { code: "invalid_response" });
       if (data.revision < revision) throw pending();
       if (kind === "remove" || Object.entries(intent.body).some(([name, value]) => data[name] !== value)) {
         if (kind !== "create" && data.revision <= revision) throw pending();
-        throw new ApiError("The schedule changed while saving", { code: "revision_conflict", status: 412 });
+        throw new ApiError(uiErrorText("error.detail.theScheduleChangedWhileSaving", {}, "The schedule changed while saving"), { code: "revision_conflict", status: 412 });
       }
       return reply;
     }
@@ -119,7 +120,7 @@ export function createScheduleWriter({ client = api, epoch = resourceOperationEp
     } catch (error) {
       assertOwner();
       if (intent.confirm && !fenced(error) && !["revision_conflict", "schedule_not_found"].includes(error?.code)) {
-        const final = new ApiError("Schedule save could not be confirmed", {
+        const final = new ApiError(uiErrorText("error.detail.scheduleSaveCouldNotBeConfirmed", {}, "Schedule save could not be confirmed"), {
           code: "schedule_save_unconfirmed", details: { schedule_id: id } });
         final.cause = error; throw final;
       }
@@ -128,8 +129,8 @@ export function createScheduleWriter({ client = api, epoch = resourceOperationEp
   }
   async function run(id, revision, { signal } = {}) {
     id = resourceId(id, "schedule");
-    if (id.length > 64) throw new TypeError("Invalid schedule identity");
-    if (!Number.isSafeInteger(revision) || revision < 1) throw new TypeError("Invalid schedule revision");
+    if (id.length > 64) throw new TypeError(uiErrorText("error.detail.invalidScheduleIdentity", {}, "Invalid schedule identity"));
+    if (!Number.isSafeInteger(revision) || revision < 1) throw new TypeError(uiErrorText("error.detail.invalidScheduleRevision", {}, "Invalid schedule revision"));
     const original = epoch(), writeToken = token(), recovery = createRecovery();
     const cancel = () => recovery.dispose();
     signal?.addEventListener("abort", cancel, { once: true });
@@ -144,16 +145,16 @@ export function createScheduleWriter({ client = api, epoch = resourceOperationEp
       }, { retry: false });
       assertOwner();
       if (writeToken && result?.writeToken !== writeToken)
-        throw new ApiError("Schedule service restarted", { code: "write_token_conflict" });
+        throw new ApiError(uiErrorText("error.detail.scheduleServiceRestarted", {}, "Schedule service restarted"), { code: "write_token_conflict" });
       if (result?.data?.schedule_id !== id || !Number.isSafeInteger(result.data.task_id) ||
           result.data.task_id < 1 || !Number.isSafeInteger(result.data.agent_run_id) || result.data.agent_run_id < 1)
-        throw new ApiError("Invalid schedule run acknowledgement", { code: "invalid_response" });
+        throw new ApiError(uiErrorText("error.detail.invalidScheduleRunAcknowledgement", {}, "Invalid schedule run acknowledgement"), { code: "invalid_response" });
       return result;
     } catch (error) {
       assertOwner();
       if (!rejected(error) && error?.code !== "schedule_run_unavailable" &&
           (uncertain(error) || error?.code === "revision_conflict")) {
-        const final = new ApiError("Schedule run could not be confirmed", {
+        const final = new ApiError(uiErrorText("error.detail.scheduleRunCouldNotBeConfirmed", {}, "Schedule run could not be confirmed"), {
           code: "schedule_run_unconfirmed", status: error?.status });
         final.cause = error; throw final;
       }

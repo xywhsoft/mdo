@@ -1,12 +1,12 @@
+import { uiMessage, t } from "../../i18n.js";
 import { element } from "../../utils/dom.js";
-import { t } from "../../i18n.js";
 
 export function previewPromptContext(item, opener = document.activeElement) {
   const dialog = element("dialog", { className: "app-dialog prompt-context-preview" });
   const heading = element("h2", { text: item.label });
   heading.id = `context-${item.id}`;
   dialog.setAttribute("aria-labelledby", heading.id);
-  const close = element("button", { text: t("context.close"), attrs: { type: "button", autofocus: "" } });
+  const close = element("button", { text: uiMessage("context.close"), attrs: { type: "button", autofocus: "" } });
   close.addEventListener("click", () => dialog.close());
   dialog.append(element("div", { className: "dialog-card" }, [heading,
     element("pre", { text: item.content ?? item.path ?? "" }), close]));
@@ -23,7 +23,7 @@ export function promptContextChips(contexts, { onRemove, disabled = false } = {}
     const chip = element("span", { className: "prompt-context-chip", attrs: { "data-context-kind": item.kind } }, [preview]);
     if (onRemove) {
       const remove = element("button", { text: "×", attrs: { type: "button",
-        "aria-label": t("context.remove", { name: item.label }) } });
+        "aria-label": uiMessage("context.remove", { name: item.label }) } });
       remove.disabled = disabled;
       remove.addEventListener("click", () => onRemove(item.id)); chip.append(remove);
     }

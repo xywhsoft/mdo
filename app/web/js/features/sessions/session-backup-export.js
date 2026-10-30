@@ -1,5 +1,7 @@
+import { setUiText as writeUiText, setUiAttribute as writeUiAttribute, uiMessage, subscribeLocale, t } from "../../i18n.js";
+
 import { exportSession } from "../../state/sessions.js";
-import { subscribeLocale, t } from "../../i18n.js";
+
 import { errorMessage, toast } from "../../utils/dom.js";
 import { saveBlobFile } from "../../utils/file-download.js";
 
@@ -21,23 +23,23 @@ export function createSessionBackupExport({ dialog, download = exportSession,
 
   function render() {
     if (!job) return;
-    title.textContent = t("backupExport.title", { title: job.session.title ||
-      t("sessionAction.untitled", {}, "未命名任务") }, "导出“{title}”");
-    scope.textContent = t("backupExport.scope", {},
-      "包含已保存且仍保留的模型记录、消息、附件、产物、待办、反馈、草稿和队列。已清理的记录和未保存的输入不在备份中。");
-    closeButton.setAttribute("aria-label", t("sessionAction.close", {}, "关闭"));
-    cancel.textContent = t(job.failure ? "project.close" : "sessionAction.cancel", {}, job.failure ? "关闭" : "取消");
-    retry.textContent = t("backupExport.retry", {}, "重新导出");
+    writeUiText(title, uiMessage("backupExport.title", { title: job.session.title ||
+      uiMessage("sessionAction.untitled", {}, "未命名任务") }, "导出“{title}”"));
+    writeUiText(scope, uiMessage("backupExport.scope", {},
+      "包含已保存且仍保留的模型记录、消息、附件、产物、待办、反馈、草稿和队列。已清理的记录和未保存的输入不在备份中。"));
+    writeUiAttribute(closeButton, "aria-label", t("sessionAction.close", {}, "关闭"));
+    writeUiText(cancel, uiMessage(job.failure ? "project.close" : "sessionAction.cancel", {}, job.failure ? "关闭" : "取消"));
+    writeUiText(retry, uiMessage("backupExport.retry", {}, "重新导出"));
     retry.hidden = !job.failure; error.hidden = !job.failure;
-    if (job.failure) error.textContent = errorMessage(job.failure);
+    if (job.failure) writeUiText(error, errorMessage(job.failure));
     const state = job.progress;
     const phase = job.failure ? "failed" : state.phase;
     const bytes = (value) => (value / 1048576).toFixed(2);
-    status.textContent = phase === "receiving"
-      ? t("backupExport.receiving", { received: bytes(state.received), total: bytes(state.total) },
+    writeUiText(status, phase === "receiving"
+      ? uiMessage("backupExport.receiving", { received: bytes(state.received), total: bytes(state.total) },
         "正在接收 {received} / {total} MiB…")
-      : t(`backupExport.${phase}`, {}, phase === "verifying" ? "正在校验备份…" :
-        phase === "failed" ? "备份尚未导出" : "正在整理会话备份…");
+      : uiMessage(`backupExport.${phase}`, {}, phase === "verifying" ? "正在校验备份…" :
+        phase === "failed" ? "备份尚未导出" : "正在整理会话备份…"));
     progress.hidden = !!job.failure;
     if (state.total) { progress.max = state.total; progress.value = state.received; }
     else progress.removeAttribute("value");

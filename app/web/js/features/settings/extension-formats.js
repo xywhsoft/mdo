@@ -1,3 +1,4 @@
+import { t as uiErrorText } from "../../i18n.js";
 // These editors preserve unknown frontmatter. This is a bounded field editor,
 // not a YAML engine: native validation remains authoritative for imported files.
 export const EXTENSION_KINDS = Object.freeze(["agents", "subagents", "tools", "skills", "mcp", "commands", "knowledge"]);
@@ -24,7 +25,7 @@ export function splitPrompt(source) {
   const text = String(source).replace(/^\uFEFF/, "").replace(/\r\n/g, "\n");
   if (!text.startsWith("---\n")) return { header: "", body: text };
   const end = text.indexOf("\n---", 4);
-  if (end < 0 || !/^\n---(?:\n|$)/.test(text.slice(end))) throw new Error("Unclosed frontmatter");
+  if (end < 0 || !/^\n---(?:\n|$)/.test(text.slice(end))) throw new Error(uiErrorText("error.detail.unclosedFrontmatter", {}, "Unclosed frontmatter"));
   return { header: text.slice(4, end), body: text.slice(end + 4).replace(/^\n/, "") };
 }
 function scalar(text) {
@@ -97,7 +98,7 @@ export function prepareMcpCredentials(document, inputs = []) {
     if (values == null || Array.isArray(values)) continue;
     if (typeof values !== "object") throw new Error(`Invalid MCP ${key}`);
     doc.transport[key] = Object.entries(values).map(([name, value]) => {
-      if (typeof value !== "string" || !value || value.includes("\0")) throw new Error("Invalid MCP credential");
+      if (typeof value !== "string" || !value || value.includes("\0")) throw new Error(uiErrorText("error.detail.invalidMcpCredential", {}, "Invalid MCP credential"));
       const secret_ref = `input:${secrets.length}`; secrets.push(value);
       return { name, secret_ref };
     });
@@ -108,20 +109,20 @@ export function mcpImportDocuments(text) {
   const root = JSON.parse(text);
   if (root.schema_version === 1 && root.transport) return [{ id: root.id, content: JSON.stringify(root, null, 2), secrets: [] }];
   const servers = root.mcpServers ?? root;
-  if (!servers || typeof servers !== "object" || Array.isArray(servers)) throw new Error("Expected mcpServers object");
+  if (!servers || typeof servers !== "object" || Array.isArray(servers)) throw new Error(uiErrorText("error.detail.expectedMcpserversObject", {}, "Expected mcpServers object"));
   const entries = Object.entries(servers);
-  if (!entries.length || entries.length > 32) throw new Error("Import 1–32 MCP servers at a time");
+  if (!entries.length || entries.length > 32) throw new Error(uiErrorText("error.detail.import132McpServersAtATime", {}, "Import 1–32 MCP servers at a time"));
   return entries.map(([id, server]) => {
     if (!portableId(id) || !server || typeof server !== "object") throw new Error(`Invalid MCP server: ${id}`);
     const doc = newMcp(id), secrets = [];
     const reference = value => {
-      if (typeof value !== "string" || !value || value.includes("\0")) throw new Error("Invalid MCP credential");
+      if (typeof value !== "string" || !value || value.includes("\0")) throw new Error(uiErrorText("error.detail.invalidMcpCredential", {}, "Invalid MCP credential"));
       // The native endpoint seals inputs and returns only opaque references.
       const ref = `input:${secrets.length}`; secrets.push(value); return ref;
     };
     if (server.url) {
-      if (server.type === "sse") throw new Error("Legacy SSE is unsupported; use Streamable HTTP");
-      if (!mcpHttpEndpointValid(server.url)) throw new Error("MCP endpoint requires HTTPS or explicit loopback HTTP");
+      if (server.type === "sse") throw new Error(uiErrorText("error.detail.legacySseIsUnsupportedUseStreamableHttp", {}, "Legacy SSE is unsupported; use Streamable HTTP"));
+      if (!mcpHttpEndpointValid(server.url)) throw new Error(uiErrorText("error.detail.mcpEndpointRequiresHttpsOrExplicitLoopbackHttp", {}, "MCP endpoint requires HTTPS or explicit loopback HTTP"));
       doc.transport = { type: "streamable-http", endpoint: server.url,
         headers: Object.entries(server.headers ?? {}).map(([name, value]) => ({ name, secret_ref: reference(value) })) };
     } else {
@@ -132,7 +133,7 @@ export function mcpImportDocuments(text) {
       doc.transport.environment = Object.entries(server.env ?? {}).map(([name, value]) => ({ name, secret_ref: reference(value) }));
     }
     if (server.oauth) {
-      if (!server.url) throw new Error("OAuth requires an HTTP server");
+      if (!server.url) throw new Error(uiErrorText("error.detail.oauthRequiresAnHttpServer", {}, "OAuth requires an HTTP server"));
       const auth = server.oauth;
       doc.oauth = auth === true ? true : {};
       if (auth !== true) {

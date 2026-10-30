@@ -1,15 +1,16 @@
+import { setUiAttribute as writeUiAttribute, uiMessage, subscribeLocale, t } from "../../i18n.js";
+
 import { element, errorMessage, toast } from "../../utils/dom.js";
-import { subscribeLocale, t } from "../../i18n.js";
 
 // The rail owns only the compact index. Selecting an unloaded turn asks the
 // store for its event range, so jumping never downloads the intervening text.
 export function createConversationNavigation({ scroller, container, onReveal, onLoadIndex }) {
   const workspace = scroller.parentElement;
   const rail = element("nav", { className: "conversation-history-rail", attrs: {
-    "aria-label": t("timeline.historyNavigation", {}, "对话历史导航") } });
+    "aria-label": uiMessage("timeline.historyNavigation", {}, "对话历史导航") } });
   const marks = element("div", { className: "conversation-history-marks" });
   const older = element("button", { className: "conversation-history-older", text: "⋯", attrs: {
-    type: "button", "aria-label": t("timeline.olderSummaries", {}, "更早的对话摘要") } });
+    type: "button", "aria-label": uiMessage("timeline.olderSummaries", {}, "更早的对话摘要") } });
   const preview = element("div", { className: "conversation-history-preview", attrs: { role: "tooltip" } });
   preview.id = `history-preview-${Math.random().toString(36).slice(2)}`;
   preview.hidden = true;
@@ -69,8 +70,8 @@ export function createConversationNavigation({ scroller, container, onReveal, on
     window.clearTimeout(hideTimer);
     emphasize(button);
     preview.replaceChildren(element("strong", { text: turn.question ||
-      t("timeline.emptyPrompt", {}, "附件任务") }), element("p", {
-      text: turn.answer || t("timeline.noReplyYet", {}, "尚无回复") }));
+      uiMessage("timeline.emptyPrompt", {}, "附件任务") }), element("p", {
+      text: turn.answer || uiMessage("timeline.noReplyYet", {}, "尚无回复") }));
     preview.hidden = false;
     positionPreview(button);
     button.setAttribute("aria-describedby", preview.id);
@@ -137,7 +138,7 @@ export function createConversationNavigation({ scroller, container, onReveal, on
           button.addEventListener("click", () => { hide(); void jump(button, summaries.get(id)); });
           rows.set(id, button);
         }
-        button.setAttribute("aria-label", (turn.question || t("timeline.emptyPrompt", {}, "附件任务")).slice(0, 200));
+        writeUiAttribute(button, "aria-label", (turn.question || t("timeline.emptyPrompt", {}, "附件任务")).slice(0, 200));
         if (button !== cursor) marks.insertBefore(button, cursor);
         cursor = button.nextSibling;
       }
@@ -172,8 +173,8 @@ export function createConversationNavigation({ scroller, container, onReveal, on
   const observer = typeof ResizeObserver === "function" ? new ResizeObserver(schedule) : null;
   observer?.observe(scroller);
   const locale = subscribeLocale(() => {
-    rail.setAttribute("aria-label", t("timeline.historyNavigation", {}, "对话历史导航"));
-    older.setAttribute("aria-label", t("timeline.olderSummaries", {}, "更早的对话摘要"));
+    writeUiAttribute(rail, "aria-label", t("timeline.historyNavigation", {}, "对话历史导航"));
+    writeUiAttribute(older, "aria-label", t("timeline.olderSummaries", {}, "更早的对话摘要"));
     signature = ""; update(data);
   });
   return Object.freeze({ update, destroy() {

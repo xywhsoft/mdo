@@ -1,8 +1,9 @@
+import { t as uiErrorText } from "../../i18n.js";
 // A working read-only template using the same ABI as production C modules.
 // No external compiler, dependency injection or second plugin protocol.
 import { portableId } from "./extension-formats.js";
 export function newTool(id = "my-tool") {
-  if (!portableId(id)) throw new Error("Invalid tool file ID");
+  if (!portableId(id)) throw new Error(uiErrorText("error.detail.invalidToolFileId", {}, "Invalid tool file ID"));
   return `#include "mdo/module.h"
 
 /* mdo owns argument/result storage. Write a bounded result before returning.

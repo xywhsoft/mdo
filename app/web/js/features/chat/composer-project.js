@@ -1,6 +1,6 @@
+import { uiMessage, currentLocale, subscribeLocale, t } from "../../i18n.js";
 import { resourceId } from "../../api/client.js";
 import { element } from "../../utils/dom.js";
-import { currentLocale, subscribeLocale, t } from "../../i18n.js";
 
 // A new task has no session yet. Its project lives in the URL so refreshing a
 // draft does not silently move the eventual session back to "default".
@@ -30,7 +30,7 @@ export function createComposerProject({ select, row, prompt, navigation,
       `${id}:${projects.get(id)?.name ?? ""}`).join("\n")}`;
     if (nextKey !== optionKey) {
       select.replaceChildren(...ordered.map((id) => element("option", {
-        text: id === "default" ? t("nav.defaultProject", {}, "默认项目") :
+        text: id === "default" ? uiMessage("nav.defaultProject", {}, "默认项目") :
           projects.get(id)?.name || id,
         attrs: { value: id },
       })));

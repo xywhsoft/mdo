@@ -1,3 +1,5 @@
+import { setUiText as writeUiText, uiMessage, t as uiText, subscribeLocale, t } from "../../i18n.js";
+
 import { createExtensionBrowser, actionMenu, extensionToggle, detailTabs, browserText } from "../../components/extension-browser.js";
 import { createSingleResourceStore } from "./single-resource-store.js";
 import { customizableResource, resourceCredits, storeReadOnlyMessage } from "./resource-credits.js";
@@ -14,7 +16,7 @@ import { createCommandWorkbench } from "./command-projects.js";
 import { newRole, roleAdvanced, parseRoleAdvanced, ROLE_ADVANCED_KEYS, openRolePlan, roleProgramTemplate } from "./agent-authoring.js";
 import { api } from "../../api/client.js";
 import { targetState, subscribeTarget } from "../../api/target.js";
-import { subscribeLocale, t } from "../../i18n.js";
+
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
 import { loadAgents } from "../../state/catalogs.js";
 import { refreshMcp, disconnectMcp, reloadCatalog } from "../../state/resources.js";
@@ -29,7 +31,7 @@ import { awaitResourceOperation } from "../../state/resource-operation.js";
 import { extensionFieldError, validateExtensionId, requiredExtensionFields, validateExtensionForm, parseExtensionJson } from "./extension-validation.js";
 
 const label = (key, fallback, args = {}) => t(`ecosystem.${key}`, args, fallback);
-const title = kind => ({ agents: "Agent", tools: label("toolTitle", "工具"), subagents: "SubAgent", skills: "Skill", mcp: "MCP", knowledge: "知识库", commands: label("commands", "命令") })[kind];
+const title = kind => ({ agents: "Agent", tools: label("toolTitle", "工具"), subagents: "SubAgent", skills: "Skill", mcp: "MCP", knowledge: uiText("settings.knowledge", {}, "知识库"), commands: label("commands", "命令") })[kind];
 const path = (kind, id = "") => `/extensions/${kind}${id ? `/${id}` : ""}`;
 const revision = item => ({ ifMatch: `"${item?.revision || "new"}"` });
 const targetKey = () => targetState().selected?.id || "local";
@@ -141,7 +143,7 @@ export function createExtensionPanels() {
     const store = stores.get(kind);
     if (store) {
       const tabs = element("div", { className: "store-tabs", attrs: { role: "tablist", "aria-label": title(kind) } });
-      for (const [area, text] of [["local", `本机 ${title(kind)}`], ["store", `${title(kind)}商店`]]) {
+      for (const [area, text] of [["local", uiText("ui.extensionPanels.localValue1", { value1: title(kind) }, "本机 {value1}")], ["store", uiText("ui.extensionPanels.value1Store", { value1: title(kind) }, "{value1}商店")]]) {
         const tab = button(text, () => { if (state.busy || store.hasPendingChanges()) return; state.area = area; store.activate(area === "store"); render(kind); if (area === "local") void load(kind); });
         tab.setAttribute("role", "tab"); tab.setAttribute("aria-selected", String(state.area === area)); tabs.append(tab);
       }
@@ -158,15 +160,15 @@ export function createExtensionPanels() {
     })), file];
     if (state.operation) {
       const operation = state.operation;
-      actions.splice(3, 0, button(t("resource.recheckOperation", {}, "重新读取状态"), () => act(kind, scope => awaitResourceOperation(operation, scope))));
+      actions.splice(3, 0, button(uiMessage("resource.recheckOperation", {}, "重新读取状态"), () => act(kind, scope => awaitResourceOperation(operation, scope))));
     }
     if (kind === "skills") {
       actions.push(button(label("skillBuilder", "Skill 构建器"), () => skillWorkbench.open({ builder: true })));
       actions.push(button(label("skillSources", "来源、项目与 AI 创建"), () => skillWorkbench.open()));
     }
     const builtinView = kind === "tools" && state.view === "builtin";
-    if (kind === "mcp") actions.push(button("管理连接", () => mcpConnections.open()));
-    if (kind === "commands") actions.push(button("项目命令", () => commandWorkbench.open()));
+    if (kind === "mcp") actions.push(button(uiMessage("ui.extensionPanels.manageConnections", {}, "管理连接"), () => mcpConnections.open()));
+    if (kind === "commands") actions.push(button(uiMessage("ui.extensionPanels.projectCommands", {}, "项目命令"), () => commandWorkbench.open()));
     const toolbar = element("div", { className: "extension-toolbar eb-toolbar" });
     const refresh = actions.find(control => control.tagName === "BUTTON" && control.textContent === label("refresh", "刷新"));
     const creation = actions.filter(control => control.tagName === "BUTTON" && control !== refresh);
@@ -206,8 +208,8 @@ export function createExtensionPanels() {
           element("code", { text: item.path }),
           element("span", { text: item.enabled ? label("enabled", "已启用") : label("disabled", "已停用") }),
           item.external ? null : element("span", { text: label("builtin", "内置") }),
-          kind === "mcp" ? element("span", { text: t(`resource.mcp${({ ready: "Ready", failed: "Failed", disabled: "Disabled", disconnected: "Disconnected" })[item.state] || "Disconnected"}`) }) : null,
-          kind === "mcp" ? element("span", { text: t("resource.toolCount", { count: item.tool_count || 0 }) }) : null,
+          kind === "mcp" ? element("span", { text: uiMessage(`resource.mcp${({ ready: "Ready", failed: "Failed", disabled: "Disabled", disconnected: "Disconnected" })[item.state] || "Disconnected"}`) }) : null,
+          kind === "mcp" ? element("span", { text: uiMessage("resource.toolCount", { count: item.tool_count || 0 }) }) : null,
         ]);
         const owner=null, protectedKind=["agents","subagents","tools","skills","commands","mcp","knowledge"].includes(kind);
         const editable=!protectedKind||customizableResource(item,owner), credits=protectedKind?resourceCredits(item,owner):null;
@@ -220,21 +222,21 @@ export function createExtensionPanels() {
           await api.post(`${path(kind, item.id)}/enabled`, { enabled: !item.enabled });
         }));
         const controls = editable ? [edit, button(label("export", "导出"), () => exportItem(kind, item))] : [];
-        if (["agents","subagents"].includes(kind)) controls.push(button("上下文预览",()=>openRolePlan({kind,id:item.id,owner:roots.get(kind)})));
-        if (store && item.valid && item.shareable!==false && editable && !(kind==="agents"&&item.id==="default")) controls.push(button("分享到创作中心", () => store.publish(item, owner)));
+        if (["agents","subagents"].includes(kind)) controls.push(button(uiMessage("ui.extensionPanels.contextPreview", {}, "上下文预览"),()=>openRolePlan({kind,id:item.id,owner:roots.get(kind)})));
+        if (store && item.valid && item.shareable!==false && editable && !(kind==="agents"&&item.id==="default")) controls.push(button(uiMessage("ui.pluginWorkbench.shareToCreatorCenter", {}, "分享到创作中心"), () => store.publish(item, owner)));
         if (store) controls.push(...store.localActions(item));
-        controls.push(button("目录与文件",()=>directoryEditor.open({kind,item})));
+        controls.push(button(uiMessage("ui.extensionPanels.directoryAndFiles", {}, "目录与文件"),()=>directoryEditor.open({kind,item})));
         if (kind === "skills" && editable) controls.push(button(label("improveSkill", "用 AI 改进"), () =>
           skillWorkbench.open({ builder: true, mode: "improve", id: item.id, scope: "user" })));
-        if(kind==="mcp")controls.push(button("创建连接",()=>mcpConnections.open({templateId:item.id})));
-        controls.push(button("卸载",()=>act(kind,async()=>{
-          if(!confirm(`卸载 ${item.name||item.id} 的整个目录？`))return;
+        if(kind==="mcp")controls.push(button(uiMessage("ui.extensionPanels.createConnection", {}, "创建连接"),()=>mcpConnections.open({templateId:item.id})));
+        controls.push(button(uiMessage("store.uninstall", {}, "卸载"),()=>act(kind,async()=>{
+          if(!confirm(uiMessage("ui.pluginWorkbench.uninstallTheEntireDirectoryForValue1", { value1: item.name||item.id }, "卸载 {value1} 的整个目录？")))return;
           await changeDirectory(kind,item,"remove");
         })));
         const canToggle = !(kind === "agents" && item.id === "default");
         toggle.disabled = state.busy;
         controls.forEach(control => { control.disabled = state.busy; });
-        const status = kind === "mcp" ? ({ready:"已连接",failed:"连接失败",disabled:"已停用",disconnected:"未连接"})[item.state]||"未连接" : !item.valid ? browserText("needsAttention", "需要处理") : "";
+        const status = kind === "mcp" ? ({ready:uiText("ui.extensionPanels.connected", {}, "已连接"),failed:uiText("resource.mcpFailed", {}, "连接失败"),disabled:uiText("ecosystem.disabled", {}, "已停用"),disconnected:uiText("resource.mcpDisconnected", {}, "未连接")})[item.state]||uiText("resource.mcpDisconnected", {}, "未连接") : !item.valid ? browserText("needsAttention", "需要处理") : "";
         rows.push({ key: item.id, kind, title: item.name || item.id, description: item.description, byline: credits?.submitter,
           meta: credits ? [...credits.meta, owner?.source === "store" || item.store_managed ? browserText("storeInstalled", "商店安装") : item.external ? browserText("custom", "自定义") : label("builtin", "内置")] : [owner?.author, owner?.version, item.external ? browserText("custom", "自定义") : label("builtin", "内置")],
           badge: { text: status, tone: !item.valid || item.state === "failed" ? "error" : "" },
@@ -242,7 +244,7 @@ export function createExtensionPanels() {
           detail: () => {
             const description = element("div", {}, [element("p", { text: item.description }), !item.valid ? element("p", { className: "extension-error", text: item.error }) : null]);
             if(credits)description.append(credits.facts());if(!editable)description.append(element("p",{className:"extension-help",text:storeReadOnlyMessage()}));
-            const usage = element("div", {}, [element("p", { text: kind === "skills" ? `$${item.alias} · /skill:${item.alias}` : kind === "commands" ? `/${item.alias}` : kind === "mcp" ? status : kind === "knowledge" ? `${item.directory}/${item.index}\n${item.inject_prompt ? item.prompt : "已关闭提示词注入"}` : item.name || item.id }),
+            const usage = element("div", {}, [element("p", { text: kind === "skills" ? `$${item.alias} · /skill:${item.alias}` : kind === "commands" ? `/${item.alias}` : kind === "mcp" ? status : kind === "knowledge" ? `${item.directory}/${item.index}\n${item.inject_prompt ? item.prompt : uiMessage("ui.extensionPanels.promptInjectionDisabled", {}, "已关闭提示词注入")}` : item.name || item.id }),
               kind === "tools" ? element("div", { className: "tool-exports" }, (item.tools || []).map(tool => element("code", { text: tool.id }))) : null]);
             const source = element("div", {}, [meta]), preview = element("div"); source.append(preview); let sourceLoaded = false;
             const readSource = async () => {
@@ -252,7 +254,7 @@ export function createExtensionPanels() {
               try {
                 const data=await readDirectoryEntry(kind,item.id);
                 if(!isCurrent())return;
-                preview.replaceChildren(element("pre",{className:"store-source",text:data.content}),button("浏览完整目录",()=>directoryEditor.open({kind,item})));
+                preview.replaceChildren(element("pre",{className:"store-source",text:data.content}),button(uiMessage("ui.extensionPanels.browseFullDirectory", {}, "浏览完整目录"),()=>directoryEditor.open({kind,item})));
                 sourceLoaded = true;
               } catch (error) { if (isCurrent() && error?.name !== "AbortError") preview.replaceChildren(element("p", { className: "extension-error", text: errorMessage(error) }), button(browserText("retry", "重试"), readSource)); }
             };
@@ -325,12 +327,12 @@ export function createExtensionPanels() {
     inherit.addEventListener("change", render); filter.addEventListener("input", render); render();
     if (editor.toolCatalog) return;
     editor.loadTools = () => {
-      status.textContent = label("loading", "正在载入…");
+      writeUiText(status, label("loading", "正在载入…"));
       void reads.read("tool-picker", "/tools", { isCurrent: () =>
         current(editor.kind, target) && editing === editor && editor.toolList === list }).then(response => {
         if (editing !== editor || target !== targetKey() || editor.toolList !== list) return;
-        editor.toolCatalog = response.data.items || []; status.textContent = ""; render();
-      }).catch(error => { if (current(editor.kind, target) && editing === editor && editor.toolList === list && error?.name !== "AbortError") status.textContent = errorMessage(error); });
+        editor.toolCatalog = response.data.items || []; writeUiText(status, ""); render();
+      }).catch(error => { if (current(editor.kind, target) && editing === editor && editor.toolList === list && error?.name !== "AbortError") writeUiText(status, errorMessage(error)); });
     };
     editor.loadTools();
   }
@@ -363,19 +365,19 @@ export function createExtensionPanels() {
     if (kind !== "commands") inputField(editing.form, "name", label("name", "名称"), values.name || "", { required: required("name") });
     inputField(editing.form, "description", label("description", "说明"), values.description || "", { required: required("description") });
     if (["agents", "subagents"].includes(kind)) {
-      inputField(editing.form,"extends","继承角色（可选）",values.extends || "",{hint:"mdo.general、agent.<id> 或 subagent.<id>；对象逐项合并，数组整体替换。"});
-      inputField(editing.form,"mode","运行模式",values.mode || (kind === "agents"?"primary":"subagent"),{hint:"primary、subagent 或 both；主角色与子角色使用同一套开发接口。"});
+      inputField(editing.form,"extends",uiMessage("ui.extensionPanels.inheritedRoleOptional", {}, "继承角色（可选）"),values.extends || "",{hint:uiMessage("ui.extensionPanels.mdoGeneralAgentIdOrSubagentIdObjectsMerge", {}, "mdo.general、agent.<id> 或 subagent.<id>；对象逐项合并，数组整体替换。")});
+      inputField(editing.form,"mode",uiMessage("ui.extensionPanels.executionMode", {}, "运行模式"),values.mode || (kind === "agents"?"primary":"subagent"),{hint:uiMessage("ui.extensionPanels.primarySubagentOrBothPrimaryAndChildRolesShare", {}, "primary、subagent 或 both；主角色与子角色使用同一套开发接口。")});
       inputField(editing.form, "model", label("model", "模型"), values.model || "inherit", { hint: label("modelHint", "inherit 跟随主 Agent；或填写模型 ID。") });
       inputField(editing.form, "reasoning_effort", label("effort", "思考强度（可选）"), values.reasoning_effort || values.thoughtLevel || "");
       toolPicker(values.tools, values.schema);
-      inputField(editing.form, "code", "结合 C 角色程序", values.code === true || values.code === "true", { type: "checkbox", hint: `在本角色目录添加 C 程序并通过根清单 native 字段指定，使用 mdo/agent.h。支持上下文、模型请求、响应、工具、委派回调和完整驱动；下面的配置继续生效。` });
-      inputField(editing.form,"permission_profile","权限配置（可选）",values.permission_profile || "",{hint:"inherit、read-only、balanced 或 full-access；始终受用户当前授权限制。"});
-      inputField(editing.form,"prompt_mode","与继承/C 基础提示词组合",values.prompt_mode || "append",{hint:"append 追加，replace 替换。"});
+      inputField(editing.form, "code", uiMessage("ui.extensionPanels.includeACRoleProgram", {}, "结合 C 角色程序"), values.code === true || values.code === "true", { type: "checkbox", hint: uiMessage("ui.extensionPanels.addACProgramToThisRoleDirectoryAnd", {  }, "在本角色目录添加 C 程序并通过根清单 native 字段指定，使用 mdo/agent.h。支持上下文、模型请求、响应、工具、委派回调和完整驱动；下面的配置继续生效。") });
+      inputField(editing.form,"permission_profile",uiMessage("ui.extensionPanels.permissionProfileOptional", {}, "权限配置（可选）"),values.permission_profile || "",{hint:uiMessage("ui.extensionPanels.inheritReadOnlyBalancedOrFullAccessAlwaysLimited", {}, "inherit、read-only、balanced 或 full-access；始终受用户当前授权限制。")});
+      inputField(editing.form,"prompt_mode",uiMessage("ui.extensionPanels.combineWithInheritedCBasePrompt", {}, "与继承/C 基础提示词组合"),values.prompt_mode || "append",{hint:uiMessage("ui.extensionPanels.appendAddsToThePromptReplaceSubstitutesIt", {}, "append 追加，replace 替换。")});
       inputField(editing.form, "read_only", label("readOnly", "只读任务"), values.read_only === true || values.read_only === "true", { type: "checkbox" });
       inputField(editing.form, "allow_delegation", label("delegation", "允许再次委派"), values.allow_delegation === true || values.allow_delegation === "true", { type: "checkbox" });
-      inputField(editing.form,"allow_background","允许后台委派",values.allow_background !== false && values.allow_background !== "false",{type:"checkbox"});
-      inputField(editing.form,"require_verification_after_write","修改后要求验证",values.require_verification_after_write === true || values.require_verification_after_write === "true",{type:"checkbox"});
-      inputField(editing.form,"role_options","高级配置（JSON）",JSON.stringify(roleAdvanced(source),null,2),{area:true,hint:"context：各来源的启停、筛选、顺序、角色、模板、字节上限及刷新；runtime：执行与模型额度；delegation：可委派角色及上下文；history：历史与图片策略；model_options：采样；mcp_servers、skills：能力选择。取消继承全部工具后不选择任何工具，表示禁用所有工具。"});
+      inputField(editing.form,"allow_background",uiMessage("ui.extensionPanels.allowBackgroundDelegation", {}, "允许后台委派"),values.allow_background !== false && values.allow_background !== "false",{type:"checkbox"});
+      inputField(editing.form,"require_verification_after_write",uiMessage("ui.extensionPanels.requireValidationAfterChanges", {}, "修改后要求验证"),values.require_verification_after_write === true || values.require_verification_after_write === "true",{type:"checkbox"});
+      inputField(editing.form,"role_options",uiMessage("ui.extensionPanels.advancedConfigurationJson", {}, "高级配置（JSON）"),JSON.stringify(roleAdvanced(source),null,2),{area:true,hint:uiMessage("ui.extensionPanels.contextSourceActivationFilteringOrderRolesTemplatesByteLimits", {}, "context：各来源的启停、筛选、顺序、角色、模板、字节上限及刷新；runtime：执行与模型额度；delegation：可委派角色及上下文；history：历史与图片策略；model_options：采样；mcp_servers、skills：能力选择。取消继承全部工具后不选择任何工具，表示禁用所有工具。")});
     }
     if (kind === "commands") inputField(editing.form, "argument_hint", label("argumentHint", "参数提示（可选）"), values["argument-hint"] || "");
     inputField(editing.form, "prompt", label(kind === "agents" ? "agentInstructions" : "instructions", kind === "agents" ? "系统提示词（留空使用默认规则）" : "指令"), values.prompt || "", { area: true, required: required("prompt") });
@@ -384,7 +386,7 @@ export function createExtensionPanels() {
     if(item&&!customizableResource(item)){toast(storeReadOnlyMessage(),"error");return;}
     if(item&&["agents","subagents"].includes(kind)&&/\.c$/i.test(item.manifest?.entry||"")){void directoryEditor.open({kind,item});return;}
     if(kind==="mcp"||kind==="knowledge"){
-      const text=kind==="mcp"?JSON.stringify(newMcpTemplate(),null,2):JSON.stringify({format:"mdo.knowledge.v1",name:"my-knowledge",description:"知识库",index:"index.md",prompt:"涉及相关内容时参考 {$path}，index.md 是索引。",inject_prompt:true},null,2);
+      const text=kind==="mcp"?JSON.stringify(newMcpTemplate(),null,2):JSON.stringify({format:"mdo.knowledge.v1",name:"my-knowledge",description:uiText("settings.knowledge", {}, "知识库"),index:"index.md",prompt:"涉及相关内容时参考 {$path}，index.md 是索引。",inject_prompt:true},null,2);
       void directoryEditor.open({kind,item,manifest:item?.manifest||directoryManifest(kind,kind==="mcp"?"my-server":"my-knowledge"),text,edits:kind==="knowledge"?[{path:"index.md",text:"# 知识库索引\n"}]:[]});return;
     }
     if(item&&["tools","skills","commands","knowledge"].includes(kind)&&!customizableResource(item)){toast(storeReadOnlyMessage(),"error");return;}
@@ -428,17 +430,17 @@ export function createExtensionPanels() {
       element("small", { text: label("idHint", "小写字母、数字、点、短横线或下划线；创建后不改名。") })]),
       element("div", { className: "extension-toolbar" }, [formMode, sourceMode]), form, source,
       imported?.files?.length ? element("p", { text: label("fileCount", "包含 {count} 个附属文件", { count: imported.files.length }) }) : "",
-      element("label",{className:"extension-field"},[element("span",{text:"根清单：名称、别名、入口、平台、作者、版权和许可"}),manifest]),status);
+      element("label",{className:"extension-field"},[element("span",{text:uiMessage("ui.extensionPanels.rootManifestNameAliasEntryPlatformsAuthorCopyrightAnd", {}, "根清单：名称、别名、入口、平台、作者、版权和许可")}),manifest]),status);
     layer.footer.append(save, cancel);
-    if(["agents","subagents"].includes(kind))layer.footer.prepend(button("上下文预览",()=>{
-      try{if(!directoryId(id.value.trim()))throw Error("目录名称无效");void openRolePlan({kind,id:id.value.trim(),content:currentSource(),owner:dialog});}
+    if(["agents","subagents"].includes(kind))layer.footer.prepend(button(uiMessage("ui.extensionPanels.contextPreview", {}, "上下文预览"),()=>{
+      try{if(!directoryId(id.value.trim()))throw Error(uiText("ui.extensionPanels.invalidDirectoryName", {}, "目录名称无效"));void openRolePlan({kind,id:id.value.trim(),content:currentSource(),owner:dialog});}
       catch(error){showEditorError(editor,error);}
     }));
-    if(["agents","subagents"].includes(kind))layer.body.append(button("添加 C 角色程序",()=>{
+    if(["agents","subagents"].includes(kind))layer.body.append(button(uiMessage("ui.extensionPanels.addCRoleProgram", {}, "添加 C 角色程序"),()=>{
       try{
-        const meta=JSON.parse(manifest.value);if(!portableId(meta.alias))throw Error("请先填写有效调用别名");
+        const meta=JSON.parse(manifest.value);if(!portableId(meta.alias))throw Error(uiText("ui.extensionPanels.enterAValidInvocationAliasFirst", {}, "请先填写有效调用别名"));
         editor.nativeText=roleProgramTemplate(kind,meta.alias);meta.native=meta.native||"agent.c";manifest.value=JSON.stringify(meta,null,2);
-        editor.status.textContent="保存时将 C 程序与配置一起写入本角色目录；之后可通过目录与文件窗口继续编辑。";
+        writeUiText(editor.status, uiMessage("ui.extensionPanels.theCProgramAndConfigurationAreSavedTogetherIn", {}, "保存时将 C 程序与配置一起写入本角色目录；之后可通过目录与文件窗口继续编辑。"));
       }catch(error){showEditorError(editor,error);}
     }));
     form.addEventListener("submit", event => { event.preventDefault(); void saveEditor(); });
@@ -454,7 +456,7 @@ export function createExtensionPanels() {
       const current = currentSource();
       if (!sourceMode) fillForm(current);
       editing.source.value = current; editing.sourceMode = sourceMode;
-      editing.form.hidden = sourceMode; editing.source.hidden = !sourceMode; editing.status.textContent = "";
+      editing.form.hidden = sourceMode; editing.source.hidden = !sourceMode; writeUiText(editing.status, "");
       clearEditorValidation(editing);
       (sourceMode ? editing.source : editing.form.querySelector("input,textarea"))?.focus();
     } catch (error) { showEditorError(editing, error); }
@@ -463,16 +465,16 @@ export function createExtensionPanels() {
     editor.dialog.querySelectorAll('[aria-invalid="true"]').forEach(node => node.removeAttribute("aria-invalid"));
     editor.dialog.querySelectorAll('[aria-describedby="extension-field-error"]').forEach(node => node.removeAttribute("aria-describedby"));
     editor.dialog.querySelector("#extension-field-error")?.remove();
-    if (editor.validationError) { editor.validationError = false; editor.status.textContent = ""; }
+    if (editor.validationError) { editor.validationError = false; writeUiText(editor.status, ""); }
   }
   function showEditorError(editor, error) {
     clearEditorValidation(editor);
-    if (!error?.extensionValidation) { editor.status.textContent = errorMessage(error); return; }
+    if (!error?.extensionValidation) { writeUiText(editor.status, errorMessage(error)); return; }
     const control = error.field === "source" || editor.sourceMode && error.field !== "extension_id" ? editor.source :
       error.field === "extension_id" ? editor.id : editor.form.elements.namedItem(error.field);
     editor.validationError = true;
     const message = label(error.extensionValidation, undefined, { ...error.args, field: control?.dataset.fieldLabel || error.field });
-    editor.status.textContent = control ? "" : message;
+    writeUiText(editor.status, control ? "" : message);
     if (control) {
       const hint = element("small", { className: "extension-field-error", text: message, attrs: { id: "extension-field-error", role: "alert" } });
       control.insertAdjacentElement("afterend", hint); control.setAttribute("aria-describedby", "extension-field-error");
@@ -497,17 +499,17 @@ export function createExtensionPanels() {
       const edits=[{path:manifest.entry,text:content}];
       if(editor.nativeText&&manifest.native)edits.push({path:manifest.native,text:editor.nativeText});
       editor.saving = true; editor.dialog.querySelectorAll("input,textarea,select,button").forEach(node => { node.disabled = true; });
-      editor.status.textContent = label("saving", "正在保存…");
+      writeUiText(editor.status, label("saving", "正在保存…"));
       const result=await saveDirectory(editor.kind,id,manifest,edits,editor.item?.revision||"",{signal:editor.layer.signal});
       if (editing !== editor || editor.layer.signal.aborted || editor.target !== targetKey()) return;
       editor.saving = false; closeEditor(true); announceChange(editor.kind); await load(editor.kind);
-      toast(result.runtime_error?`文件已保存，运行时需要处理：${result.runtime_error}`:editor.item?"目录已保存":"目录已保存，请启用后使用", "success");
+      toast(result.runtime_error?uiMessage("ui.extensionPanels.filesSavedRuntimeNeedsAttentionValue1", { value1: result.runtime_error }, "文件已保存，运行时需要处理：{value1}"):editor.item?uiMessage("ui.extensionPanels.directorySaved", {}, "目录已保存"):uiMessage("ui.extensionPanels.directorySavedEnableItBeforeUse", {}, "目录已保存，请启用后使用"), "success");
     } catch (error) {
       if (editing !== editor || editor.layer.signal.aborted || editor.target !== targetKey()) return;
       editor.saving = false; editor.dialog.querySelectorAll("input,textarea,select,button").forEach(node => { node.disabled = false; }); editor.id.disabled = Boolean(editor.item);
       if (editor.inheritTools?.checked) editor.toolList.querySelectorAll("input").forEach(node => { node.disabled = true; });
       editor.syncTransport?.();
-      if (error?.status === 412) editor.status.textContent = label("conflict", "文件已被其他操作修改。请复制当前内容，重新载入后再保存。");
+      if (error?.status === 412) writeUiText(editor.status, label("conflict", "文件已被其他操作修改。请复制当前内容，重新载入后再保存。"));
       else showEditorError(editor, error);
     }
   }

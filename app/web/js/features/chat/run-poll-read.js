@@ -1,3 +1,4 @@
+import { t as uiErrorText } from "../../i18n.js";
 import { ApiError } from "../../api/client.js";
 import { createRequestRecovery } from "../../api/request-recovery.js";
 
@@ -24,7 +25,7 @@ export function createRunPollRead({ read, createRecovery = createRequestRecovery
         }, { retry: false });
         if (run?.id !== expected.id || run.project_id !== expected.project_id ||
             run.session_id !== expected.session_id || typeof run.terminal !== "boolean")
-          throw new ApiError("Invalid polled run response", { code: "invalid_response" });
+          throw new ApiError(uiErrorText("error.detail.invalidPolledRunResponse", {}, "Invalid polled run response"), { code: "invalid_response" });
         return run;
       } finally {
         if (pending === recovery) pending = null;

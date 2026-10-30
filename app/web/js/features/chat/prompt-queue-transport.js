@@ -1,3 +1,4 @@
+import { t as uiErrorText } from "../../i18n.js";
 import { ApiError, api, currentPageWriteToken, resourceId } from "../../api/client.js";
 import { createRequestRecovery } from "../../api/request-recovery.js";
 import { isTransientReadError } from "../../api/read-recovery.js";
@@ -8,7 +9,7 @@ const epoch = () => JSON.stringify([targetState().selected,
 const definite = new Set(["quota_exceeded", "daily_token_limit", "service_quota_exceeded", "insufficient_balance"]);
 const uncertain = error => !definite.has(error?.code) && (isTransientReadError(error) ||
   ["invalid_response", "queue_unavailable", "remote_result_unconfirmed"].includes(error?.code));
-const pending = () => new ApiError("Queue write confirmation is pending", { code: "queue_confirmation_pending" });
+const pending = () => new ApiError(uiErrorText("error.detail.queueWriteConfirmationIsPending", {}, "Queue write confirmation is pending"), { code: "queue_confirmation_pending" });
 
 function path(key, id = "") {
   const [project, session] = key.split("/");
@@ -26,12 +27,12 @@ export function queueResponse(response) {
         typeof item.priority !== "boolean" || !Array.isArray(item.attachments) ||
         item.attachments.some(id => typeof id !== "string" || !/^[0-9a-f]{32}$/.test(id))) return true;
     ids.add(item.id); return false;
-  })) throw new ApiError("Invalid prompt queue response", { code: "invalid_response" });
+  })) throw new ApiError(uiErrorText("error.detail.invalidPromptQueueResponse", {}, "Invalid prompt queue response"), { code: "invalid_response" });
   const data = response.data;
   if ((data.revision !== undefined && (!Number.isSafeInteger(data.revision) || data.revision < 0)) ||
       (data.managed !== undefined && typeof data.managed !== "boolean") ||
       (data.actions !== undefined && (!Array.isArray(data.actions) || data.actions.length > 32)))
-    throw new ApiError("Invalid prompt queue metadata", { code: "invalid_response" });
+    throw new ApiError(uiErrorText("error.detail.invalidPromptQueueMetadata", {}, "Invalid prompt queue metadata"), { code: "invalid_response" });
   return response;
 }
 
@@ -43,7 +44,7 @@ async function receipt(key, id, signal, verify) {
     if (value?.id === id && value.state === "starting") return null;
     if (value?.id !== id || value.state !== "accepted" ||
         !/^run-[A-Za-z0-9_.-]+$/.test(value.run_id ?? ""))
-      throw new ApiError("Invalid prompt queue receipt", { code: "invalid_response" });
+      throw new ApiError(uiErrorText("error.detail.invalidPromptQueueReceipt", {}, "Invalid prompt queue receipt"), { code: "invalid_response" });
     return value;
   } catch (error) {
     if (error?.status === 404 && error.code === "queue_receipt_not_found") return null;
@@ -74,7 +75,7 @@ export function createPromptQueueTransport({ createRecovery = createRequestRecov
     function verify(reply, signal) {
       assertOwner(signal);
       if (token && reply?.writeToken !== token)
-        throw new ApiError("Queue service restarted", { code: "write_token_conflict" });
+        throw new ApiError(uiErrorText("error.detail.queueServiceRestarted", {}, "Queue service restarted"), { code: "write_token_conflict" });
     }
     function checked(reply, signal) {
       verify(reply, signal);
@@ -88,7 +89,7 @@ export function createPromptQueueTransport({ createRecovery = createRequestRecov
         }, { retry: false });
         checked(reply);
         if (proves(reply.data.items, reply.data)) return reply;
-        throw new ApiError("Invalid queue write acknowledgement", { code: "invalid_response" });
+        throw new ApiError(uiErrorText("error.detail.invalidQueueWriteAcknowledgement", {}, "Invalid queue write acknowledgement"), { code: "invalid_response" });
       } catch (error) {
         if (error?.name === "AbortError" || (!uncertain(error) && !conflicts.includes(error?.code))) throw error;
         original = error; confirming = true;
@@ -131,7 +132,7 @@ export function createPromptQueueTransport({ createRecovery = createRequestRecov
           ["model_id", "reasoning_effort", "permission_profile"].every(name => item.profile[name] === body.profile[name]));
         if (item.text !== body.text || item.priority !== body.priority ||
             JSON.stringify(item.attachments) !== JSON.stringify(body.attachments) || !sameProfile)
-          throw new ApiError("The queued message ID has different content", { code: "queue_id_conflict", status: 409 });
+          throw new ApiError(uiErrorText("error.detail.theQueuedMessageIdHasDifferentContent", {}, "The queued message ID has different content"), { code: "queue_id_conflict", status: 409 });
         return true;
       }, { origin, runReceipt: true, conflicts: ["queue_item_consumed"] });
     },
@@ -145,7 +146,7 @@ export function createPromptQueueTransport({ createRecovery = createRequestRecov
           if (!accepted) return false;
           if (!["kind", "item", "before", "revision", "draft_revision"]
             .every(name => accepted[name] === body[name]))
-            throw new ApiError("Queue action ID has different content", { code: "queue_action_conflict", status: 409 });
+            throw new ApiError(uiErrorText("error.detail.queueActionIdHasDifferentContent", {}, "Queue action ID has different content"), { code: "queue_action_conflict", status: 409 });
           return true;
         });
     },

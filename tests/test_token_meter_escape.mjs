@@ -26,6 +26,8 @@ class Node extends EventTarget {
   }
   setAttribute(name, value) { this.attributes.set(name, String(value)); }
   getAttribute(name) { return this.attributes.get(name) ?? null; }
+  get title() { return this.getAttribute("title") || ""; }
+  set title(value) { this.setAttribute("title", value); }
   focus() { this.owner.activeElement = this; }
   querySelector() { return null; }
 }

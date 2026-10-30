@@ -1,4 +1,5 @@
-import { subscribeLocale, t } from "../../i18n.js";
+import { setUiText as writeUiText, uiMessage, subscribeLocale, t } from "../../i18n.js";
+
 import { isImeKey } from "../../utils/dom.js";
 import { createCompositionTracker } from "../../utils/composition.js";
 
@@ -11,9 +12,9 @@ export function createConversationSearch({ bar, input, count, openButtons, close
 
   function renderCount() {
     if (bar.hidden) return;
-    count.textContent = !input.value.trim() ? t("search.loadedOnly") :
-      t(olderHistoryMissing ? "search.resultsTrimmed" : "search.resultsLoaded",
-        { count: matchCount });
+    writeUiText(count, !input.value.trim() ? uiMessage("search.loadedOnly") :
+      uiMessage(olderHistoryMissing ? "search.resultsTrimmed" : "search.resultsLoaded",
+        { count: matchCount }));
   }
 
   function close(restoreFocus = false) {
@@ -22,7 +23,7 @@ export function createConversationSearch({ bar, input, count, openButtons, close
     composition.reset();
     input.value = "";
     onQuery("");
-    count.textContent = "";
+    writeUiText(count, "");
     for (const button of openButtons) button.setAttribute("aria-expanded", "false");
     onClose?.();
     if (restoreFocus) prompt.focus();

@@ -1,8 +1,10 @@
+import { setUiText as writeUiText, uiMessage, subscribeLocale, t } from "../../i18n.js";
+
 import { approvalDecisionStatus, approvalDecisionStore, decideApproval, loadApprovals } from "../../state/approvals.js";
 import { answerAsk, selectedAsks, refreshSelectedAsks } from "../../state/asks.js";
 import { loadRuns } from "../../state/runs.js";
 import { selectedTodo, refreshSelectedTodo } from "../../state/todo.js";
-import { subscribeLocale, t } from "../../i18n.js";
+
 import { element, errorMessage, isImeKey, toast } from "../../utils/dom.js";
 import { createCompositionTracker } from "../../utils/composition.js";
 import { createAskCard } from "../asks/ask-card.js";
@@ -18,7 +20,7 @@ function taskCard(onOpenTasks) {
   const list = element("ul", { className: "conversation-dock-list" });
   const rows = new Map();
   const title = element("h3");
-  const open = element("button", { text: t("dock.task.details"), attrs: {
+  const open = element("button", { text: uiMessage("dock.task.details"), attrs: {
     type: "button", "data-dock-focus": "tasks/open" } });
   open.addEventListener("click", onOpenTasks);
   const node = element("section", { className: "conversation-dock" }, [
@@ -27,7 +29,7 @@ function taskCard(onOpenTasks) {
   ]);
   return { node, sync(tasks) {
     const count = t("dock.task.count", { count: tasks.length });
-    if (title.textContent !== count) title.textContent = count;
+    if (title.textContent !== count) writeUiText(title, count);
     const ordered = [];
     const live = new Set();
     for (const task of tasks.slice(0, 8)) {
@@ -45,8 +47,8 @@ function taskCard(onOpenTasks) {
         ? Number(task.pending_questions) > 0 ? t("task.awaitingAnswer")
           : t(STATE_KEYS[task.state]) : task.state || "";
       const label = task.label || t("dock.task.fallback", { id: task.id });
-      if (row.state.textContent !== state) row.state.textContent = state;
-      if (row.label.textContent !== label) row.label.textContent = label;
+      if (row.state.textContent !== state) writeUiText(row.state, state);
+      if (row.label.textContent !== label) writeUiText(row.label, label);
       ordered.push(row.node);
     }
     for (const key of rows.keys()) if (!live.has(key)) rows.delete(key);
@@ -67,7 +69,7 @@ function todoCard(focusKey, onToggle) {
   return { node, sync(items, expanded) {
     const done = items.filter((item) => item.done).length;
     const count = t("dock.todo.count", { done, count: items.length });
-    if (toggle.textContent !== count) toggle.textContent = count;
+    if (toggle.textContent !== count) writeUiText(toggle, count);
     toggle.setAttribute("aria-expanded", String(expanded));
     list.hidden = !expanded;
     const occurrences = new Map();
@@ -91,7 +93,7 @@ function todoCard(focusKey, onToggle) {
       const className = item.done ? "done" : (index === current ? "current" : "");
       if (row.node.className !== className) row.node.className = className;
       const mark = item.done ? "✓" : "○";
-      if (row.mark.textContent !== mark) row.mark.textContent = mark;
+      if (row.mark.textContent !== mark) writeUiText(row.mark, mark);
       ordered.push(row.node);
     }
     for (const key of rows.keys()) if (!live.has(key)) rows.delete(key);
@@ -114,7 +116,7 @@ function approvalSummary(item) {
 
 function decisionHeader(title, onExpand) {
   const expand = element("button", { className: "decision-dock-expand",
-    text: t("dock.expandDecision"), attrs: { type: "button",
+    text: uiMessage("dock.expandDecision"), attrs: { type: "button",
       "aria-expanded": "false", "aria-controls": "conversation-docks" } });
   if (title.dataset.dockFocus)
     expand.dataset.dockFocus = `${title.dataset.dockFocus}/expand`;
@@ -126,11 +128,11 @@ function approvalCard(item, argumentsOpen, onChanged, onExpand) {
   const key = String(item.id);
   const card = element("section", { className: "conversation-dock approval-dock",
     attrs: { "data-approval-id": key } });
-  const deny = element("button", { text: t("dock.approval.deny"), attrs: {
+  const deny = element("button", { text: uiMessage("dock.approval.deny"), attrs: {
     type: "button", "data-dock-focus": `approval/${key}/deny` } });
-  const allow = element("button", { className: "interaction-primary", text: t("dock.approval.allowOnce"), attrs: {
+  const allow = element("button", { className: "interaction-primary", text: uiMessage("dock.approval.allowOnce"), attrs: {
     type: "button", "data-dock-focus": `approval/${key}/allow` } });
-  const allowRun = element("button", { text: t("dock.approval.allowRun"), attrs: {
+  const allowRun = element("button", { text: uiMessage("dock.approval.allowRun"), attrs: {
     type: "button", "data-dock-focus": `approval/${key}/allow_run` } });
   for (const [button, decision] of [[deny, "deny"], [allow, "allow"],
     [allowRun, "allow_run"]]) {
@@ -153,12 +155,12 @@ function approvalCard(item, argumentsOpen, onChanged, onExpand) {
     if (argumentsView.isConnected) argumentsOpen.set(key, argumentsView.open);
   });
   const summary = element("p", { className: "interaction-hint", text: approvalSummary(item) });
-  const title = element("h3", { text: t("interaction.approval.title"),
+  const title = element("h3", { text: uiMessage("interaction.approval.title"),
     attrs: { tabindex: "-1", "data-dock-focus": `approval/${key}/title` } });
   const more = element("details", { className: "approval-scope" }, [
-    element("summary", { text: t("interaction.approval.more"),
+    element("summary", { text: uiMessage("interaction.approval.more"),
       attrs: { "data-dock-focus": `approval/${key}/scope` } }),
-    element("p", { text: t("interaction.approval.scopeHint") }),
+    element("p", { text: uiMessage("interaction.approval.scopeHint") }),
     element("div", { className: "conversation-dock-actions" }, [allowRun]),
   ]);
   card.append(
@@ -173,7 +175,7 @@ function approvalCard(item, argumentsOpen, onChanged, onExpand) {
   return { node: card, sync(next) {
     item = next;
     const nextSummary = approvalSummary(item);
-    if (summary.textContent !== nextSummary) summary.textContent = nextSummary;
+    if (summary.textContent !== nextSummary) writeUiText(summary, nextSummary);
     const busy = String(approvalDecisionStatus(key) !== "idle");
     for (const button of [deny, allow, allowRun])
       button.setAttribute("aria-disabled", busy);
@@ -206,7 +208,7 @@ export function createConversationDocks({ container, navigation, tasksStore, app
   const approvalRoot = element("div", { className: "conversation-dock-stack" });
   const askRoot = element("div", { className: "conversation-dock-stack" });
   const otherRoot = element("div", { className: "conversation-dock-stack" });
-  const recoveryTitle = element("h3", { text: t("recovery.title", {}, "上次回复未完成"),
+  const recoveryTitle = element("h3", { text: uiMessage("recovery.title", {}, "上次回复未完成"),
     attrs: { id: "recovery-title", tabindex: "-1" } });
   const recoverySummary = element("div", { className: "approval-summary",
     attrs: { id: "recovery-summary", "aria-live": "polite" } });
@@ -250,7 +252,7 @@ export function createConversationDocks({ container, navigation, tasksStore, app
     for (const button of container.querySelectorAll(".decision-dock-expand")) {
       const label = t(expanded ? "dock.collapseDecision" :
         "dock.expandDecision");
-      if (button.textContent !== label) button.textContent = label;
+      if (button.textContent !== label) writeUiText(button, label);
       if (button.getAttribute("aria-expanded") !== String(expanded))
         button.setAttribute("aria-expanded", String(expanded));
     }
@@ -563,7 +565,7 @@ export function createConversationDocks({ container, navigation, tasksStore, app
       approvalCards.clear();
       todoView = null;
       taskView = null;
-      recoveryTitle.textContent = t("recovery.title", {}, "上次回复未完成");
+      writeUiText(recoveryTitle, uiMessage("recovery.title", {}, "上次回复未完成"));
       render();
     }),
   ];

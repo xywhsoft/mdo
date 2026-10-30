@@ -1,16 +1,18 @@
+import { t as uiErrorText, t as uiText } from "../../i18n.js";
+
 import { api } from "../../api/client.js";
 import { directoryId } from "./directory-documents.js";
 import { customizableResource, storeReadOnlyMessage } from "./resource-credits.js";
 
 export function skillAuthoringPrompt({ directory, scope, mode = "create", id = "", request = "" }) {
   if (typeof directory !== "string" || !directory || directory.includes("\0"))
-    throw new Error("Skill directory is unavailable");
-  if(scope!=="user")throw new Error("Skill 统一保存在 Home；项目只保存启停选择");
-  if (!["create", "improve", "review"].includes(mode)) throw new Error("Unknown Skill builder mode");
-  if ((mode !== "create" || id) && !directoryId(id)) throw new Error("请填写有效的 Skill ID");
+    throw new Error(uiErrorText("error.detail.skillDirectoryIsUnavailable", {}, "Skill directory is unavailable"));
+  if(scope!=="user")throw new Error(uiText("ui.skillAuthoring.skillsAreStoredInHomeProjectsOnlyStoreEnabled", {}, "Skill 统一保存在 Home；项目只保存启停选择"));
+  if (!["create", "improve", "review"].includes(mode)) throw new Error(uiErrorText("error.detail.unknownSkillBuilderMode", {}, "Unknown Skill builder mode"));
+  if ((mode !== "create" || id) && !directoryId(id)) throw new Error(uiText("ui.skillAuthoring.enterAValidSkillId", {}, "请填写有效的 Skill ID"));
   if (typeof request !== "string" || request.includes("\0") || new TextEncoder().encode(request).length > 8192)
-    throw new Error("需求描述最多 8 KiB，且不能包含空字符");
-  const action = ({ create: "创建一个", improve: "改进已有", review: "只读检查已有" })[mode];
+    throw new Error(uiText("ui.skillAuthoring.theRequestMustFitIn8KibAndContain", {}, "需求描述最多 8 KiB，且不能包含空字符"));
+  const action = ({ create: uiText("ui.skillAuthoring.createANewOne", {}, "创建一个"), improve: uiText("ui.skillAuthoring.improveAnExistingOne", {}, "改进已有"), review: uiText("ui.skillAuthoring.inspectAnExistingOneReadOnly", {}, "只读检查已有") })[mode];
   return `请使用 Skill 构建器，帮我${action} mdo Skill。保存范围：Home 技能目录。
 目标父目录：${JSON.stringify(directory)}。
 ${id ? `Skill ID：${JSON.stringify(id)}。` : "请根据用途选择一个未使用的 Skill ID。"}
@@ -29,27 +31,27 @@ export async function expandSkillAuthoringDraft(settings, options) {
     try { const {data}=await api.get(`/extensions/skills/${encodeURIComponent(settings.id)}`,options);if(!customizableResource(data))throw Error(storeReadOnlyMessage()); }
     catch(error){if(error.status!==404)throw error;}
   }
-  if (new TextEncoder().encode(args).length > 16384) throw new Error("构建请求超过 16 KiB，请缩短需求或路径");
+  if (new TextEncoder().encode(args).length > 16384) throw new Error(uiText("ui.skillAuthoring.buildRequestExceeds16KibShortenTheRequestOr", {}, "构建请求超过 16 KiB，请缩短需求或路径"));
   const response = await api.post(`/skills/invoke?project=${encodeURIComponent(settings.projectId || "default")}`,
     { id: "skill-creator", arguments: args }, options);
   const text = response.data?.text;
   if (typeof text !== "string" || new TextEncoder().encode(text).length > 65536)
-    throw new Error("构建器草稿无效或超过 64 KiB；请检查 skill-creator，当前内容已保留");
+    throw new Error(uiText("ui.skillAuthoring.builderDraftIsInvalidOrExceeds64KibCheck", {}, "构建器草稿无效或超过 64 KiB；请检查 skill-creator，当前内容已保留"));
   return text;
 }
 
 // Dedicated conversation: every pre-existing draft and its attachments survives.
-export async function createSkillAuthoringDraft({ createSession, draftStore, projectId, text, title = "创建 Skill", check = () => {} }) {
+export async function createSkillAuthoringDraft({ createSession, draftStore, projectId, text, title = uiText("ui.skillWorkbench.createSkill", {}, "创建 Skill"), check = () => {} }) {
   check();
   const session = await createSession({ project_id: projectId, title });
   check();
   const key = `${session.project_id}/${session.id}`;
-  if (!await draftStore.ensureLoaded(key)) throw new Error("Cannot load the Skill authoring draft");
+  if (!await draftStore.ensureLoaded(key)) throw new Error(uiErrorText("error.detail.cannotLoadTheSkillAuthoringDraft", {}, "Cannot load the Skill authoring draft"));
   check();
   const before = draftStore.snapshot(key);
-  if (before.text || before.attachments.length) throw new Error("The authoring draft already contains content");
+  if (before.text || before.attachments.length) throw new Error(uiErrorText("error.detail.theAuthoringDraftAlreadyContainsContent", {}, "The authoring draft already contains content"));
   draftStore.edit(key, text, [], true);
-  if (!await draftStore.flush(key)) throw new Error("The Skill authoring draft has not been saved; retry saving it before sending");
+  if (!await draftStore.flush(key)) throw new Error(uiErrorText("error.detail.theSkillAuthoringDraftHasNotBeenSavedRetrySaving", {}, "The Skill authoring draft has not been saved; retry saving it before sending"));
   check();
   return session;
 }

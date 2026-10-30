@@ -1,5 +1,7 @@
+import { setUiText as writeUiText, uiMessage, t } from "../../i18n.js";
+
 import { element, toast, errorMessage, isImeKey } from "../../utils/dom.js";
-import { t } from "../../i18n.js";
+
 import { currentPageWriteToken } from "../../api/client.js";
 import { targetState } from "../../api/target.js";
 import { moveSidebarItem, emptySidebarLayout } from "./sidebar-layout.js";
@@ -30,8 +32,8 @@ export function createSidebarOrganizer({ container, store, render }) {
       } });
     dialog = source; source.element.classList.add("sidebar-organizer-dialog");
     const formId = `${source.element.id}-form`;
-    const cancel = element("button", { className: "secondary-button", text: t("sidebar.cancel"), attrs: { type: "button" } });
-    const submit = element("button", { className: "primary-button", text: t("sidebar.save"), attrs: { type: "submit", form: formId } });
+    const cancel = element("button", { className: "secondary-button", text: uiMessage("sidebar.cancel"), attrs: { type: "button" } });
+    const submit = element("button", { className: "primary-button", text: uiMessage("sidebar.save"), attrs: { type: "submit", form: formId } });
     const error = element("p", { className: "dialog-error", attrs: { role: "alert" } }); error.hidden = true;
     const hint = element("p", { className: "sidebar-organizer-description", text: description, attrs: { id: `${formId}-description` } });
     source.element.setAttribute("aria-describedby", hint.id);
@@ -42,22 +44,22 @@ export function createSidebarOrganizer({ container, store, render }) {
     cancel.addEventListener("click", () => { void source.close("cancel"); }, options);
     card.addEventListener("submit", async event => {
       event.preventDefault(); if (busy || dialog !== source || source.signal.aborted) return;
-      if (origin !== epoch() || revision !== store.get().revision || !store.writable()) { error.textContent = t("sidebar.changed"); error.hidden = false; return; }
+      if (origin !== epoch() || revision !== store.get().revision || !store.writable()) { writeUiText(error, uiMessage("sidebar.changed")); error.hidden = false; return; }
       busy = true; error.hidden = true; submit.disabled = cancel.disabled = source.closeButton.disabled = true;
       try {
         const saved = await commit();
         if (dialog !== source || source.signal.aborted) return;
         busy = false;
         if (saved) await source.close("saved");
-        else { error.textContent = t("sidebar.changed"); error.hidden = false; }
+        else { writeUiText(error, uiMessage("sidebar.changed")); error.hidden = false; }
       }
-      catch (failure) { if (dialog === source && !source.signal.aborted) { error.textContent = errorMessage(failure); error.hidden = false; } }
+      catch (failure) { if (dialog === source && !source.signal.aborted) { writeUiText(error, errorMessage(failure)); error.hidden = false; } }
       finally { busy = false; if (!source.signal.aborted) submit.disabled = cancel.disabled = source.closeButton.disabled = false; }
     }, options);
     const first = card.querySelector("input,select") || submit; first.focus({ preventScroll: true }); first.select?.();
   }
   function groupForm(group = null) {
-    const input = element("input", { attrs: { required: "", maxlength: "80", "aria-label": t("sidebar.groupName"), autocomplete: "off" } });
+    const input = element("input", { attrs: { required: "", maxlength: "80", "aria-label": uiMessage("sidebar.groupName"), autocomplete: "off" } });
     input.value = group?.name || "";
     form(t(group ? "sidebar.renameGroup" : "sidebar.newGroup"), t("sidebar.groupHint"), [input], async () => {
       const name = input.value.trim();
@@ -71,8 +73,8 @@ export function createSidebarOrganizer({ container, store, render }) {
     });
   }
   function move(key) {
-    const input = element("select", { attrs: { "aria-label": t("sidebar.destination") } });
-    input.append(element("option", { text: t("sidebar.originalLocation"), attrs: { value: "" } }));
+    const input = element("select", { attrs: { "aria-label": uiMessage("sidebar.destination") } });
+    input.append(element("option", { text: uiMessage("sidebar.originalLocation"), attrs: { value: "" } }));
     for (const group of store.get().groups) input.append(element("option", { text: group.name, attrs: { value: group.id } }));
     input.value = store.get().placements.find(item => item.key === key)?.group || "";
     form(t("sidebar.moveToGroup"), t("sidebar.groupHint"), [input], () => store.update(value => {

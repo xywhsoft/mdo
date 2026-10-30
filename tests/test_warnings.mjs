@@ -36,3 +36,15 @@ test("all current diagnostic domains share one warning and never link to the rem
   assert.equal(notice([{...b,settings_section:"tools"}]).items[0].section,"tools");
   assert.equal(notice([{...b,settings_section:"missing-page"}]).items[0].section,"mcp");
 });
+
+test("known knowledge and storage reasons are localized while technical evidence stays intact",()=>{
+  const row={domain:"storage",code:"temporary_storage",message:"EACCES private/device/path",remedy:"Native fallback"};
+  for(const locale of ["zh-CN","en-US","ru-RU"]){
+    const storage=warningNotice({diagnostics:{items:[row]},locale}).items[0];
+    assert(storage.body.includes(row.message));assert(!storage.remedy.includes("Native fallback"));
+    const knowledge=warningNotice({diagnostics:{items:[{domain:"knowledge",code:"root_not_directory",message:"Native knowledge fallback"}]},locale}).items[0];
+    assert(!knowledge.body.includes("Native knowledge fallback"));
+    if(locale!=="zh-CN"){assert.doesNotMatch(storage.body,/[\u4e00-\u9fff]/u);assert.doesNotMatch(knowledge.body,/[\u4e00-\u9fff]/u);}
+    if(locale==="ru-RU"){assert.match(storage.body,/[\u0400-\u04ff]/u);assert.match(knowledge.body,/[\u0400-\u04ff]/u);}
+  }
+});

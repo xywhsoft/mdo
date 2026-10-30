@@ -1,3 +1,4 @@
+import { t as uiErrorText } from "../i18n.js";
 import { ApiError, api, currentPageWriteToken, resourceId } from "../api/client.js";
 import { createRequestRecovery, clientActionId } from "../api/request-recovery.js";
 import { isTransientReadError } from "../api/read-recovery.js";
@@ -9,7 +10,7 @@ const fenced = error => ["home_restart_required", "write_token_required", "write
   "write_token_conflict", "remote_runtime_changed"].includes(error?.code);
 const transient = error => !fenced(error) && (isTransientReadError(error) ||
   ["invalid_response", "remote_result_unconfirmed", "session_result_unavailable"].includes(error?.code));
-const pending = () => new ApiError("Fork confirmation is pending", { code: "session_fork_pending", status: 425 });
+const pending = () => new ApiError(uiErrorText("error.detail.forkConfirmationIsPending", {}, "Fork confirmation is pending"), { code: "session_fork_pending", status: 425 });
 const aborted = () => new DOMException("Fork cancelled", "AbortError");
 
 // A reserved child ID makes repeated POSTs safe. After uncertain delivery,
@@ -29,15 +30,15 @@ export function createSessionForker({ newId = clientActionId, epoch = stamp,
     if (!Number.isSafeInteger(revision) || revision < 1 ||
         (session.etag && session.etag !== tag) || !Number.isSafeInteger(through) || through < 0 ||
         (input.title !== undefined && typeof input.title !== "string"))
-      throw new TypeError("Invalid fork boundary");
+      throw new TypeError(uiErrorText("error.detail.invalidForkBoundary", {}, "Invalid fork boundary"));
     const original = epoch(), writeToken = token();
     if (generation !== original) { intents.clear(); generation = original; }
     const key = JSON.stringify([project, source, tag, through, input.title || ""]);
     let intent = intents.get(key);
     if (!intent) {
-      if (intents.size >= 64) throw new ApiError("Too many unconfirmed forks", { code: "session_fork_pending_limit" });
+      if (intents.size >= 64) throw new ApiError(uiErrorText("error.detail.tooManyUnconfirmedForks", {}, "Too many unconfirmed forks"), { code: "session_fork_pending_limit" });
       const id = newId();
-      if (!/^[0-9a-f]{32}$/.test(id)) throw new TypeError("Invalid fork identity");
+      if (!/^[0-9a-f]{32}$/.test(id)) throw new TypeError(uiErrorText("error.detail.invalidForkIdentity", {}, "Invalid fork identity"));
       intent = { body: Object.freeze({ through_sequence: through, client_session_id: id,
         ...(input.title ? { title: input.title } : {}) }), uncertain: false, confirm: false };
       intents.set(key, intent);
@@ -51,14 +52,14 @@ export function createSessionForker({ newId = clientActionId, epoch = stamp,
     function verified(reply) {
       assertOwner();
       if (writeToken && reply?.writeToken !== writeToken)
-        throw new ApiError("Fork service restarted", { code: "write_token_conflict" });
+        throw new ApiError(uiErrorText("error.detail.forkServiceRestarted", {}, "Fork service restarted"), { code: "write_token_conflict" });
       const data = reply?.data, id = intent.body.client_session_id;
       if (data?.id !== id || data.project_id !== project || data.parent_session_id !== source ||
           data.forked_through_sequence !== through || !Number.isSafeInteger(data.revision) ||
           data.revision < 1 || reply.etag !== `"mdo-session-${id}-${data.revision}"`)
-        throw new ApiError("Invalid fork acknowledgement", { code: "invalid_response" });
+        throw new ApiError(uiErrorText("error.detail.invalidForkAcknowledgement", {}, "Invalid fork acknowledgement"), { code: "invalid_response" });
       if (data.status !== "active")
-        throw new ApiError("The fork is no longer active", { code: "session_fork_inactive" });
+        throw new ApiError(uiErrorText("error.detail.theForkIsNoLongerActive", {}, "The fork is no longer active"), { code: "session_fork_inactive" });
       return { ...data, etag: reply.etag };
     }
     try {
@@ -98,7 +99,7 @@ export function createSessionForker({ newId = clientActionId, epoch = stamp,
     } catch (error) {
       if (!intent.uncertain) intents.delete(key);
       if (transient(error)) {
-        const final = new ApiError("Fork creation could not be confirmed", {
+        const final = new ApiError(uiErrorText("error.detail.forkCreationCouldNotBeConfirmed", {}, "Fork creation could not be confirmed"), {
           code: intent.uncertain ? "session_fork_unconfirmed" : "session_fork_unavailable" });
         final.cause = error; throw final;
       }

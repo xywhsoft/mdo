@@ -1,7 +1,8 @@
+import { t as uiErrorText, t } from "../i18n.js";
 import { api } from "../api/client.js";
 import { createResourceStore } from "./store.js";
 import { isTransientReadError } from "../api/read-recovery.js";
-import { t } from "../i18n.js";
+
 import { runDecisionAction } from "./decision-action.js";
 
 export const approvalsStore = createResourceStore({ total: 0, limit: 4, truncated: false, items: [] },
@@ -21,7 +22,7 @@ export function approvalDecisionStatus(value) {
 
 function approvalId(value) {
   const id = String(value ?? "");
-  if (!/^[1-9][0-9]*$/.test(id)) throw new TypeError("approval ID is invalid");
+  if (!/^[1-9][0-9]*$/.test(id)) throw new TypeError(uiErrorText("error.detail.approvalIdIsInvalid", {}, "approval ID is invalid"));
   return id;
 }
 
@@ -46,7 +47,7 @@ export function loadApprovals({ retry = false } = {}) {
 export async function decideApproval(value, decision) {
   const id = approvalId(value);
   if (!new Set(["allow", "allow_run", "deny"]).has(decision))
-    throw new TypeError("approval decision is invalid");
+    throw new TypeError(uiErrorText("error.detail.approvalDecisionIsInvalid", {}, "approval decision is invalid"));
   if (approvalDecisionStatus(id) !== "idle") return false;
   pending.add(id);
   publishDecisions();

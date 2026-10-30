@@ -1,3 +1,4 @@
+import { t as uiErrorText } from "../i18n.js";
 // Incremental SHA-256 keeps backup verification available on plain HTTP mobile
 // origins, where Web Crypto is unavailable. Only one 64-byte block is buffered.
 const K = new Uint32Array([
@@ -42,7 +43,7 @@ export function createSha256() {
     update(input) {
       if (!(input instanceof Uint8Array) || result !== null ||
           bytes + input.length > Math.floor(Number.MAX_SAFE_INTEGER / 8))
-        throw new TypeError("Invalid SHA-256 input or finalized hash");
+        throw new TypeError(uiErrorText("error.detail.invalidSha256InputOrFinalizedHash", {}, "Invalid SHA-256 input or finalized hash"));
       bytes += input.length;
       let offset = 0;
       if (used) {

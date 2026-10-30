@@ -1,7 +1,9 @@
+import { t as uiErrorText, setUiText as writeUiText, uiMessage, subscribeLocale, t } from "../../i18n.js";
+
 import { api, ApiError } from "../../api/client.js";
 import { loadModels } from "../../state/catalogs.js";
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
-import { subscribeLocale, t } from "../../i18n.js";
+
 import { createAdvancedModelConfigPanel } from "./model-config-advanced.js";
 import { providerPresets, presetVariant, presetProvider, presetModel, suggestedModels } from "./provider-presets.js";
 import { sameModelConfig } from "./model-config-state.js";
@@ -43,7 +45,7 @@ export function createModelConfigPanel(container) {
   function status(message, error = false) {
     notice = message; failed = error;
     const line = container.querySelector(".supplier-notice");
-    if (line) { line.textContent = message; line.classList.toggle("resource-error", error); line.hidden = !message; }
+    if (line) { writeUiText(line, message); line.classList.toggle("resource-error", error); line.hidden = !message; }
   }
   function blocked() {
     if (busy) return true;
@@ -69,7 +71,7 @@ export function createModelConfigPanel(container) {
     setBusy(true); let committed = false;
     try {
       const latest = await api.get("/models/config");
-      if (!sameModelConfig(config, latest.data)) throw new ApiError("Model settings changed", { status: 412 });
+      if (!sameModelConfig(config, latest.data)) throw new ApiError(uiErrorText("error.detail.modelSettingsChanged", {}, "Model settings changed"), { status: 412 });
       etag = latest.etag;
       const patch = { default_model: next.default_model, providers: next.providers, items: next.items };
       const saved = keys.length
@@ -183,7 +185,7 @@ export function createModelConfigPanel(container) {
         const enabled = config.items.some((model) => model.provider === draft.provider?.id && model.wire_model === id);
         const checkbox = element("input", { attrs: { type: "checkbox", value: id } });
         checkbox.checked = draft.selected.has(id); checkbox.disabled = enabled;
-        checkbox.addEventListener("change", () => { if (checkbox.checked) draft.selected.add(id); else draft.selected.delete(id); selectedCount.textContent = text("selected", "已选 {count} 个模型", { count: draft.selected.size }); });
+        checkbox.addEventListener("change", () => { if (checkbox.checked) draft.selected.add(id); else draft.selected.delete(id); writeUiText(selectedCount, text("selected", "已选 {count} 个模型", { count: draft.selected.size })); });
         list.append(element("label", {}, [checkbox, element("span", { text: id }), enabled ? element("small", { text: text("alreadyAdded", "已添加") }) : null]));
       }
       if (ids.length > 100) list.append(element("small", { text: text("filterMore", "请搜索缩小范围；当前显示前 100 项。") }));
@@ -241,19 +243,19 @@ export function createModelConfigPanel(container) {
   }
   async function testModel(model, node, line, tools = false) {
     if (busy) return;
-    setBusy(true); line.classList.remove("resource-error"); line.textContent = text("testing", "正在请求模型…");
+    setBusy(true); line.classList.remove("resource-error"); writeUiText(line, text("testing", "正在请求模型…"));
     try {
       const result = await api.post("/models/test", { model_id: model.id, tools });
       const message = tools ? text("toolsTested", "工具调用测试通过 · {ms} ms", { ms: result.data.latency_ms }) : text("tested", "回复测试通过 · {ms} ms", { ms: result.data.latency_ms });
-      verified.set(model.id, message); line.textContent = message;
-    } catch (cause) { verified.delete(model.id); line.textContent = probeError(cause); line.classList.add("resource-error"); }
+      verified.set(model.id, message); writeUiText(line, message);
+    } catch (cause) { verified.delete(model.id); writeUiText(line, probeError(cause)); line.classList.add("resource-error"); }
     finally { setBusy(false); node.focus({ preventScroll: true }); }
   }
   function renderDetail(body) {
     const entry = provider(); if (!entry) return;
     body.append(element("header", { className: "supplier-detail-heading" }, [element("h3", { text: entry.name }),
-      entry.builtin ? element("span", { text: t("modelConfig.builtinTag") }) : button(text("advancedEditor", "高级编辑"), () => showAdvanced("provider", entry.id))]));
-    if (entry.builtin) body.append(element("p", { className: "model-config-status", text: t("modelConfig.builtinModelNote") }));
+      entry.builtin ? element("span", { text: uiMessage("modelConfig.builtinTag") }) : button(text("advancedEditor", "高级编辑"), () => showAdvanced("provider", entry.id))]));
+    if (entry.builtin) body.append(element("p", { className: "model-config-status", text: uiMessage("modelConfig.builtinModelNote") }));
     else {
       body.append(element("p", { className: "model-config-status supplier-address", text: Object.values(entry.endpoints)[0] || "" }));
       const keyForm = element("form", { className: "supplier-key-form" }); let key = keyDrafts.get(entry.id) || "";
@@ -276,25 +278,25 @@ export function createModelConfigPanel(container) {
     const list = element("div", { className: "supplier-models" });
     for (const model of models) {
       const line = element("p", { className: "supplier-model-status", text: verified.get(model.id) || (model.builtin ? text("builtinAvailable", "内置服务") : text("untested", "已配置 · 尚未测试")), attrs: { role: "status" } });
-      const row = element("article", { className: "supplier-model" }, [element("div", { className: "supplier-model-title" }, [element("strong", { text: model.name }), model.id === config.default_model ? element("span", { className: "model-default-badge", text: t("modelConfig.defaultTag") }) : null]), element("small", { text: model.wire_model }), line]);
+      const row = element("article", { className: "supplier-model" }, [element("div", { className: "supplier-model-title" }, [element("strong", { text: model.name }), model.id === config.default_model ? element("span", { className: "model-default-badge", text: uiMessage("modelConfig.defaultTag") }) : null]), element("small", { text: model.wire_model }), line]);
       const actions = element("div", { className: "supplier-actions" });
       const test = button(text("testReply", "测试回复"), () => void testModel(model, test, line)); actions.append(test);
       if (model.enabled !== false && model.capabilities.includes("tool-call-output")) {
         const toolTest = button(text("testTools", "测试工具调用"), () => void testModel(model, toolTest, line, true)); actions.append(toolTest);
       }
       if (!model.builtin) actions.append(button(text("advancedEditor", "高级编辑"), () => showAdvanced("model", model.id)));
-      if (model.id !== config.default_model && model.enabled !== false) actions.append(button(t("modelConfig.setDefault"), () => { const next = clone(config); next.default_model = model.id; void save(next); }));
+      if (model.id !== config.default_model && model.enabled !== false) actions.append(button(uiMessage("modelConfig.setDefault"), () => { const next = clone(config); next.default_model = model.id; void save(next); }));
       if (!model.builtin && model.id !== config.default_model) {
         actions.append(button(model.enabled === false ? text("enable", "启用") : text("disable", "停用"), () => {
           const next = clone(config); next.items.find((item) => item.id === model.id).enabled = model.enabled === false; void save(next);
         }));
-        const confirm = element("div", { className: "model-delete-confirm", attrs: { hidden: "" } }, [element("span", { text: t("modelConfig.removePrompt", { name: model.name }) })]);
-        confirm.append(button(text("cancel", "取消"), () => { confirm.hidden = true; }), button(t("modelConfig.confirmRemove"), () => {
+        const confirm = element("div", { className: "model-delete-confirm", attrs: { hidden: "" } }, [element("span", { text: uiMessage("modelConfig.removePrompt", { name: model.name }) })]);
+        confirm.append(button(text("cancel", "取消"), () => { confirm.hidden = true; }), button(uiMessage("modelConfig.confirmRemove"), () => {
           const next = clone(config); next.items = next.items.filter((item) => item.id !== model.id); void save(next);
         }));
-        actions.append(button(t("modelConfig.remove"), () => { confirm.hidden = false; })); row.append(confirm);
+        actions.append(button(uiMessage("modelConfig.remove"), () => { confirm.hidden = false; })); row.append(confirm);
       }
-      if (model.enabled === false) { line.textContent = text("disabled", "已停用；启用后可用于会话。"); test.disabled = true; }
+      if (model.enabled === false) { writeUiText(line, text("disabled", "已停用；启用后可用于会话。")); test.disabled = true; }
       row.append(actions); list.append(row);
     }
     body.append(list);
@@ -305,15 +307,15 @@ export function createModelConfigPanel(container) {
     const hadFocus = container.contains(active), focusName = active?.name;
     const selection = hadFocus && typeof active.selectionStart === "number" ? [active.selectionStart, active.selectionEnd] : null;
     clear(container);
-    const header = element("div", { className: "supplier-toolbar" }, [element("p", { className: "model-config-status", text: config ? text("default", "默认模型：{model}", { model: config.items.find((item) => item.id === config.default_model)?.name || config.default_model }) : t("resource.loading") }),
-      button(t("modelConfig.refresh"), () => void reload()), button(text("addSupplier", "添加供应商"), add, true)]);
+    const header = element("div", { className: "supplier-toolbar" }, [element("p", { className: "model-config-status", text: config ? text("default", "默认模型：{model}", { model: config.items.find((item) => item.id === config.default_model)?.name || config.default_model }) : uiMessage("resource.loading") }),
+      button(uiMessage("modelConfig.refresh"), () => void reload()), button(text("addSupplier", "添加供应商"), add, true)]);
     container.append(header, element("p", { className: `supplier-notice ${failed ? "resource-error" : "model-config-status"}`, text: notice, attrs: { role: failed ? "alert" : "status", hidden: notice ? null : "" } }));
     if (!config) return;
     if (config.runtime_override || needsRead) {
-      const line = element("p", { className: "resource-error", text: config.runtime_override ? t("modelConfig.runtimeOverride") : notice }); container.append(line);
+      const line = element("p", { className: "resource-error", text: config.runtime_override ? uiMessage("modelConfig.runtimeOverride") : notice }); container.append(line);
     }
     const layout = element("div", { className: `supplier-layout supplier-view-${view}` });
-    const list = element("nav", { className: "supplier-list", attrs: { "aria-label": t("modelConfig.providerList") } });
+    const list = element("nav", { className: "supplier-list", attrs: { "aria-label": uiMessage("modelConfig.providerList") } });
     for (const entry of config.providers) {
       const item = button(entry.name, () => { if (blocked()) return; selectedId = entry.id; view = "detail"; notice = ""; render(); });
       item.className = "model-config-item"; item.setAttribute("aria-current", entry.id === selectedId && view === "detail" ? "true" : "false");

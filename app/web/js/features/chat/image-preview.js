@@ -1,4 +1,5 @@
-import { subscribeLocale, t } from "../../i18n.js";
+import { setUiText as writeUiText, setUiAttribute as writeUiAttribute, uiMessage, subscribeLocale, t } from "../../i18n.js";
+
 import { previewImageName } from "./image-names.js";
 import { bindTargetImage, releaseTargetImage } from "../../api/target-image.js";
 
@@ -10,8 +11,8 @@ export function createImagePreview({ dialog, image, caption, closeButton,
   function showName(name) {
     currentImage.alt = name || t("image.previewTitle", {}, "图片预览");
     if (caption) {
-      caption.textContent = currentImage.alt;
-      caption.title = currentImage.alt;
+      writeUiText(caption, currentImage.alt);
+      writeUiAttribute(caption, "title", currentImage.alt);
     }
   }
 
@@ -22,10 +23,10 @@ export function createImagePreview({ dialog, image, caption, closeButton,
     currentImage.setAttribute("aria-busy", String(phase === "loading"));
     if (status) {
       status.hidden = phase !== "loading" && phase !== "error";
-      status.textContent = phase === "loading"
-        ? t("image.previewLoading", {}, "正在加载图片…")
+      writeUiText(status, phase === "loading"
+        ? uiMessage("image.previewLoading", {}, "正在加载图片…")
         : phase === "error"
-          ? t("image.previewFailed", {}, "图片暂时无法显示，请重新载入或关闭后重试。") : "";
+          ? uiMessage("image.previewFailed", {}, "图片暂时无法显示，请重新载入或关闭后重试。") : "");
     }
     if (retryButton) {
       // Keep the focused retry visible during its request. On success, return
@@ -34,7 +35,7 @@ export function createImagePreview({ dialog, image, caption, closeButton,
       if (!visible && dialog.open && document.activeElement === retryButton) closeButton.focus();
       retryButton.hidden = !visible;
       retryButton.setAttribute("aria-disabled", String(phase !== "error"));
-      retryButton.textContent = t("image.previewRetry", {}, "重新载入");
+      writeUiText(retryButton, uiMessage("image.previewRetry", {}, "重新载入"));
     }
   }
 
@@ -73,7 +74,7 @@ export function createImagePreview({ dialog, image, caption, closeButton,
     currentImage.removeAttribute("src");
     currentImage.alt = "";
     renderLoadState();
-    if (caption) { caption.textContent = ""; caption.removeAttribute("title"); }
+    if (caption) { writeUiText(caption, ""); caption.removeAttribute("title"); }
     if (!restoreFocus || !previous) return;
     const target = previous.trigger.isConnected ? previous.trigger :
       previous.reference ? [...document.querySelectorAll("button[data-image-ref]")]

@@ -1,6 +1,8 @@
+import { setUiAttribute as writeUiAttribute, uiMessage, subscribeLocale, t } from "../../i18n.js";
+
 import { element, toast, errorMessage, isImeKey } from "../../utils/dom.js";
 import { replaceInputText } from "../../utils/text-edit.js";
-import { subscribeLocale, t } from "../../i18n.js";
+
 import { newPromptContext } from "./prompt-context.js";
 
 export function createComposerAddMenu({ button, input, imageInput, textInput, add, owner = () => "" }) {
@@ -22,10 +24,10 @@ export function createComposerAddMenu({ button, input, imageInput, textInput, ad
     }
   }
   function render() {
-    menu.replaceChildren(); button.title = t("context.add"); button.setAttribute("aria-label", t("context.add"));
+    menu.replaceChildren(); writeUiAttribute(button, "title", uiMessage("context.add")); writeUiAttribute(button, "aria-label", t("context.add"));
     for (const [key, action] of definitions) {
       if (key === "context.addImages" && !imageInput) continue;
-      const entry = element("button", { text: t(key), attrs: { type: "button", role: "menuitem" } });
+      const entry = element("button", { text: uiMessage(key), attrs: { type: "button", role: "menuitem" } });
       entry.addEventListener("click", () => { close(); action(); }); menu.append(entry);
     }
   }

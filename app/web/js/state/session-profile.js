@@ -1,3 +1,4 @@
+import { t as uiErrorText } from "../i18n.js";
 import { ApiError, api, currentPageWriteToken, resourceId } from "../api/client.js";
 import { createRequestRecovery } from "../api/request-recovery.js";
 import { isTransientReadError } from "../api/read-recovery.js";
@@ -10,7 +11,7 @@ const fenced = error => ["home_restart_required", "write_token_required", "write
   "write_token_conflict", "remote_runtime_changed"].includes(error?.code);
 const transient = error => !fenced(error) && (isTransientReadError(error) ||
   ["invalid_response", "remote_result_unconfirmed", "session_result_unavailable"].includes(error?.code));
-const pending = () => new ApiError("Profile confirmation is pending", { code: "session_profile_pending", status: 425 });
+const pending = () => new ApiError(uiErrorText("error.detail.profileConfirmationIsPending", {}, "Profile confirmation is pending"), { code: "session_profile_pending", status: 425 });
 const aborted = () => new DOMException("Profile update cancelled", "AbortError");
 const same = (a, b) => ["model_id", "reasoning_effort", "permission_profile"].every(key => a[key] === b[key]);
 
@@ -32,7 +33,7 @@ export function createSessionProfileUpdater({ permissionOnly = false, epoch = st
     if (!Number.isSafeInteger(revision) || revision < 1 || (session.etag && session.etag !== tag) ||
         (!permissionOnly && typeof body.reasoning_effort !== "string") ||
         !["read-only", "balanced", "full-access"].includes(body.permission_profile))
-      throw new TypeError("Invalid session profile");
+      throw new TypeError(uiErrorText("error.detail.invalidSessionProfile", {}, "Invalid session profile"));
     const original = epoch(), writeToken = token(), path = `/projects/${project}/sessions/${id}`;
     const recovery = createRecovery(), cancel = () => recovery.dispose();
     signal?.addEventListener("abort", cancel, { once: true });
@@ -44,15 +45,15 @@ export function createSessionProfileUpdater({ permissionOnly = false, epoch = st
     function verified(reply) {
       assertOwner();
       if (writeToken && reply?.writeToken !== writeToken)
-        throw new ApiError("Profile service restarted", { code: "write_token_conflict" });
+        throw new ApiError(uiErrorText("error.detail.profileServiceRestarted", {}, "Profile service restarted"), { code: "write_token_conflict" });
       const data = reply?.data;
       if (data?.id !== id || data.project_id !== project || !Number.isSafeInteger(data.revision) ||
           data.revision < revision || reply.etag !== `"mdo-session-${id}-${data.revision}"` ||
           typeof data.model_id !== "string" || typeof data.reasoning_effort !== "string" ||
           !["read-only", "balanced", "full-access"].includes(data.permission_profile))
-        throw new ApiError("Invalid profile acknowledgement", { code: "invalid_response" });
+        throw new ApiError(uiErrorText("error.detail.invalidProfileAcknowledgement", {}, "Invalid profile acknowledgement"), { code: "invalid_response" });
       if (data.status !== "active")
-        throw new ApiError("Session is no longer active", { code: "session_state_conflict" });
+        throw new ApiError(uiErrorText("error.detail.sessionIsNoLongerActive", {}, "Session is no longer active"), { code: "session_state_conflict" });
       return { ...data, etag: reply.etag };
     }
     try {
@@ -69,7 +70,7 @@ export function createSessionProfileUpdater({ permissionOnly = false, epoch = st
               revision = fresh.revision; tag = fresh.etag;
               confirm = false; throw pending();
             }
-            const error = new ApiError("The session profile changed", { code: "session_profile_conflict" });
+            const error = new ApiError(uiErrorText("error.detail.theSessionProfileChanged", {}, "The session profile changed"), { code: "session_profile_conflict" });
             error.currentSession = fresh; throw error;
           }
           // An earlier PUT may still arrive, but both carry the same original
@@ -84,7 +85,7 @@ export function createSessionProfileUpdater({ permissionOnly = false, epoch = st
             return send(path + (permissionOnly ? "/permission" : "/profile"), body, { ifMatch: tag, signal: attemptSignal });
           },
           { signal: attemptSignal }));
-          if (!matches(fresh)) throw new ApiError("Profile result differs", { code: "invalid_response" });
+          if (!matches(fresh)) throw new ApiError(uiErrorText("error.detail.profileResultDiffers", {}, "Profile result differs"), { code: "invalid_response" });
           return fresh;
         } catch (error) {
           assertOwner();
@@ -98,7 +99,7 @@ export function createSessionProfileUpdater({ permissionOnly = false, epoch = st
       }, { retryable: transient });
     } catch (error) {
       if (!transient(error)) throw error;
-      const final = new ApiError("Session profile could not be confirmed", {
+      const final = new ApiError(uiErrorText("error.detail.sessionProfileCouldNotBeConfirmed", {}, "Session profile could not be confirmed"), {
         code: uncertain ? "session_profile_unconfirmed" : "session_profile_unavailable" });
       final.cause = error; throw final;
     } finally {

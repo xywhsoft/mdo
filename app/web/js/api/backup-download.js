@@ -1,3 +1,4 @@
+import { t as uiErrorText } from "../i18n.js";
 import { ApiError, apiUrl, resourceId } from "./client.js";
 import { createSha256 } from "../utils/sha256.js";
 import { targetFetch } from "./target.js";
@@ -12,7 +13,7 @@ export async function downloadSessionBackup(projectId, sessionId, {
 } = {}) {
   if (!Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > BACKUP_MAX_BYTES ||
       !Number.isFinite(timeoutMs) || timeoutMs <= 0 || timeoutMs > 30000)
-    throw new TypeError("Invalid backup download limits");
+    throw new TypeError(uiErrorText("error.detail.invalidBackupDownloadLimits", {}, "Invalid backup download limits"));
   const project = resourceId(projectId, "project"), session = resourceId(sessionId, "session");
   const controller = new AbortController();
   let timedOut = false, reader = null, response = null, complete = false;

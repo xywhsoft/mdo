@@ -1,3 +1,4 @@
+import { t as uiErrorText } from "../../i18n.js";
 import { ApiError } from "../../api/client.js";
 import { createRequestRecovery } from "../../api/request-recovery.js";
 import { isTransientReadError } from "../../api/read-recovery.js";
@@ -149,7 +150,7 @@ export function createProjectPurgeRecovery({ transport, timeoutMs = 8000, recove
       let timer;
       try {
         await Promise.race([beforePrepare(), new Promise((_, reject) => {
-          timer = setTimeout(() => reject(new ApiError("Wait for local operations", { code: "purge_client_busy" })), timeoutMs);
+          timer = setTimeout(() => reject(new ApiError(uiErrorText("error.detail.waitForLocalOperations", {}, "Wait for local operations"), { code: "purge_client_busy" })), timeoutMs);
         })]);
       } finally { clearTimeout(timer); }
       if (state.intent || state.error || state.writeConflict) throw invalid();
@@ -202,7 +203,7 @@ export function createProjectPurgeRecovery({ transport, timeoutMs = 8000, recove
       const intent = state.intent;
       if (!intent || state.result?.accepted !== true || state.result.outcome !== "committed" ||
           !state.result.committed || state.result.restart_required) return false;
-      if (!canComplete()) throw new ApiError("Copy unsaved drafts before reloading", { code: "purge_draft_unsaved" });
+      if (!canComplete()) throw new ApiError(uiErrorText("error.detail.copyUnsavedDraftsBeforeReloading", {}, "Copy unsaved drafts before reloading"), { code: "purge_draft_unsaved" });
       // Verify the terminal receipt immediately before ACK. Keep the local
       // pause through pagehide; clearing it would autosave purged memory.
       const receipt = await query(intent);

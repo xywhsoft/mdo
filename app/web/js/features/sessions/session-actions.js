@@ -1,30 +1,30 @@
-import { t } from "../../i18n.js";
+import { t as uiErrorText, t as uiText, t } from "../../i18n.js";
 
 // Keep the sidebar and conversation header in sync as session states change.
 export function sessionActionItems(session) {
   const item = (name, key, fallback, tone) =>
     ({ name, label: t(key, {}, fallback), ...(tone ? { tone } : {}) });
   if (session.status === "trash")
-    return [item("restore", "action.restore", "恢复"),
-      item("send_device", "transfer.title", "发送到设备"),
-      item("purge", "action.purgeSession", "彻底删除", "danger")];
+    return [item("restore", "action.restore", uiText("timeline.recovery", {}, "恢复")),
+      item("send_device", "transfer.title", uiText("transfer.title", {}, "发送到设备")),
+      item("purge", "action.purgeSession", uiText("action.purgeSession", {}, "彻底删除"), "danger")];
 
-  const actions = [item("send_device", "transfer.title", "发送到设备"), item("tasks", "action.tasks", "后台任务"),
-    item("rename", "action.rename", "重命名")];
+  const actions = [item("send_device", "transfer.title", uiText("transfer.title", {}, "发送到设备")), item("tasks", "action.tasks", uiText("timeline.backgroundTask", {}, "后台任务")),
+    item("rename", "action.rename", uiText("action.rename", {}, "重命名"))];
   if (session.status === "active") {
     actions.push(
-      session.pinned ? item("pin", "action.unpin", "取消置顶") :
-        item("pin", "action.pin", "置顶"),
-      item("archive", "action.archive", "归档"),
-      item("fork", "action.fork", "创建分支"),
-      item("truncate", "action.truncate", "截断历史", "danger"),
-      item("clear", "action.clear", "清空历史", "danger"),
-      item("export", "action.export", "导出 Markdown"),
-      item("export_json", "action.exportJson", "导出 JSON 备份"),
+      session.pinned ? item("pin", "action.unpin", uiText("action.unpin", {}, "取消置顶")) :
+        item("pin", "action.pin", uiText("action.pin", {}, "置顶")),
+      item("archive", "action.archive", uiText("action.archive", {}, "归档")),
+      item("fork", "action.fork", uiText("action.fork", {}, "创建分支")),
+      item("truncate", "action.truncate", uiText("action.truncate", {}, "截断历史"), "danger"),
+      item("clear", "action.clear", uiText("action.clear", {}, "清空历史"), "danger"),
+      item("export", "action.export", uiText("action.export", {}, "导出 Markdown")),
+      item("export_json", "action.exportJson", uiText("action.exportJson", {}, "导出 JSON 备份")),
     );
-  } else actions.push(item("unarchive", "action.unarchive", "移回进行中"));
-  actions.push(item("import_json", "action.importJson", "导入会话备份"),
-    item("trash", "action.trash", "移到回收站", "danger"));
+  } else actions.push(item("unarchive", "action.unarchive", uiText("action.unarchive", {}, "移回进行中")));
+  actions.push(item("import_json", "action.importJson", uiText("action.importJson", {}, "导入会话备份")),
+    item("trash", "action.trash", uiText("action.trash", {}, "移到回收站"), "danger"));
   return actions;
 }
 
@@ -62,7 +62,7 @@ export function sessionActionDialogCopy(action, session) {
       t("sessionAction.clearConfirm", {}, "清空历史"),
     ],
   }[action];
-  if (!copy) throw new TypeError("unknown session action");
+  if (!copy) throw new TypeError(uiErrorText("error.detail.unknownSessionAction", {}, "unknown session action"));
   return copy;
 }
 
@@ -73,18 +73,18 @@ export function sessionForkTitle(session) {
 
 export function sessionActionToast(action, session) {
   const copy = {
-    rename: ["sessionAction.renamed", "会话已重命名"],
-    pin: session.pinned ? ["sessionAction.pinned", "会话已置顶"] :
-      ["sessionAction.unpinned", "已取消置顶"],
-    archive: ["sessionAction.archived", "会话已归档"],
-    unarchive: ["sessionAction.unarchived", "会话已移回进行中"],
-    trash: ["sessionAction.trashed", "会话已移到回收站"],
-    purge: ["sessionAction.purged", "会话已彻底删除"],
-    restore: ["sessionAction.restored", "会话已恢复"],
-    fork: ["sessionAction.forked", "已创建会话分支"],
-    truncate: ["sessionAction.truncated", "会话历史已截断"],
-    clear: ["sessionAction.cleared", "会话历史已清空"],
+    rename: ["sessionAction.renamed", uiText("sessionAction.renamed", {}, "会话已重命名")],
+    pin: session.pinned ? ["sessionAction.pinned", uiText("sessionAction.pinned", {}, "会话已置顶")] :
+      ["sessionAction.unpinned", uiText("sessionAction.unpinned", {}, "已取消置顶")],
+    archive: ["sessionAction.archived", uiText("sessionAction.archived", {}, "会话已归档")],
+    unarchive: ["sessionAction.unarchived", uiText("sessionAction.unarchived", {}, "会话已移回进行中")],
+    trash: ["sessionAction.trashed", uiText("sessionAction.trashed", {}, "会话已移到回收站")],
+    purge: ["sessionAction.purged", uiText("sessionAction.purged", {}, "会话已彻底删除")],
+    restore: ["sessionAction.restored", uiText("timeline.recoveryResolved", {}, "会话已恢复")],
+    fork: ["sessionAction.forked", uiText("sessionAction.forked", {}, "已创建会话分支")],
+    truncate: ["sessionAction.truncated", uiText("timeline.historyTruncated", {}, "会话历史已截断")],
+    clear: ["sessionAction.cleared", uiText("timeline.historyCleared", {}, "会话历史已清空")],
   }[action];
-  if (!copy) throw new TypeError("unknown session action");
+  if (!copy) throw new TypeError(uiErrorText("error.detail.unknownSessionAction", {}, "unknown session action"));
   return t(copy[0], {}, copy[1]);
 }

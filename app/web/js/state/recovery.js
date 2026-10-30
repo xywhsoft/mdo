@@ -1,3 +1,4 @@
+import { t as uiErrorText } from "../i18n.js";
 import { ApiError, api, resourceId } from "../api/client.js";
 import { createResourceStore } from "./store.js";
 import { withSessionRuntime } from "./session-runtime.js";
@@ -33,7 +34,7 @@ export async function readRecovery(projectId, sessionId, { signal,
         !Number.isSafeInteger(data.revision) || data.revision < 1 ||
         !Number.isSafeInteger(data.last_sequence) || data.last_sequence < 0 ||
         !Number.isSafeInteger(data.total) || data.total !== data.items.length)
-      throw new ApiError("Invalid runtime inspection response", { code: "invalid_response" });
+      throw new ApiError(uiErrorText("error.detail.invalidRuntimeInspectionResponse", {}, "Invalid runtime inspection response"), { code: "invalid_response" });
     // Only a fresh successful inspection proves the previous runtime exited.
     // Cached snapshots and failed/busy reads must not unlock a submitted retry.
     return { ...data, inspection_id: ++inspectionSequence };
@@ -70,16 +71,16 @@ export async function resumeRecovery(data, choices, options = {}) {
   const project = resourceId(data?.project_id, "project");
   const session = resourceId(data?.session_id, "session");
   const token = String(data?.recovery_token ?? "");
-  if (!/^[0-9a-f]{64}$/.test(token)) throw new TypeError("recovery token is invalid");
+  if (!/^[0-9a-f]{64}$/.test(token)) throw new TypeError(uiErrorText("error.detail.recoveryTokenIsInvalid", {}, "recovery token is invalid"));
   if (options.clientResumeId && !/^[0-9a-f]{32}$/.test(options.clientResumeId))
-    throw new TypeError("resume correlation ID is invalid");
+    throw new TypeError(uiErrorText("error.detail.resumeCorrelationIdIsInvalid", {}, "resume correlation ID is invalid"));
   const decisions = (data?.items ?? []).map((item) => {
     const action = choices.get(String(item.tool_call_id));
     if (!new Set(["retry", "record_uncertain"]).has(action)) {
-      throw new TypeError("every pending call needs a recovery decision");
+      throw new TypeError(uiErrorText("error.detail.everyPendingCallNeedsARecoveryDecision", {}, "every pending call needs a recovery decision"));
     }
     if (action === "retry" && !item.tool_available) {
-      throw new TypeError("an unavailable tool cannot be retried");
+      throw new TypeError(uiErrorText("error.detail.anUnavailableToolCannotBeRetried", {}, "an unavailable tool cannot be retried"));
     }
     return { tool_call_id: String(item.tool_call_id), action };
   });
@@ -101,7 +102,7 @@ export async function abandonRecovery(data, options = {}) {
   if (!Number.isSafeInteger(revision) || revision < 1 ||
       !Number.isSafeInteger(lastSequence) || lastSequence < 1 ||
       data?.resume_required !== true)
-    throw new TypeError("only an unchanged interrupted response can be ended");
+    throw new TypeError(uiErrorText("error.detail.onlyAnUnchangedInterruptedResponseCanBeEnded", {}, "only an unchanged interrupted response can be ended"));
   return withSessionRuntime(project, session, async () => {
     if (options.signal?.aborted) throw new DOMException("Recovery cancelled", "AbortError");
     return (await api.post(`/projects/${project}/sessions/${session}/abandon`, {

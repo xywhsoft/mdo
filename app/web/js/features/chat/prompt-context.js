@@ -1,3 +1,4 @@
+import { t as uiErrorText } from "../../i18n.js";
 // Portable context lives in the existing durable message, never browser storage.
 // A strict, suffix-only envelope keeps ordinary Markdown/JSON untouched.
 export const CONTEXT_START = "\n\n<!--mdo-context:v1-->\n";
@@ -36,7 +37,7 @@ export function parsePromptContext(value = "") {
 export function serializePromptContext(text, contexts = []) {
   if (!contexts.length) return text;
   if (contexts.length > MAX_CONTEXTS || !contexts.every(validPromptContext) ||
-      new Set(contexts.map(item => item.id)).size !== contexts.length) throw new TypeError("Invalid prompt contexts");
+      new Set(contexts.map(item => item.id)).size !== contexts.length) throw new TypeError(uiErrorText("error.detail.invalidPromptContexts", {}, "Invalid prompt contexts"));
   return `${text}${CONTEXT_START}${JSON.stringify({ contexts })}${END}`;
 }
 

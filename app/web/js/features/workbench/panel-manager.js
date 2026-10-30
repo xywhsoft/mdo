@@ -1,3 +1,5 @@
+import { setUiText as writeUiText, setUiAttribute as writeUiAttribute, t as uiText, uiMessage } from "../../i18n.js";
+
 import { normalizeLayout, reorderPanel, safeBrowserUrl, validateImageFrame } from "./model.js";
 import { createNativeBrowserBridge } from "./native-browser.js";
 import { mountBrowserView } from "./browser-view.js";
@@ -13,16 +15,16 @@ import { renderSourceMarkdown } from "../../utils/source-markdown.js";
 import { toast } from "../../utils/dom.js";
 import { isRemoteTarget, targetState } from "../../api/target.js";
 
-const make = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = text; return node; };
+const make = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) writeUiText(node, text); return node; };
 function button(label, execute, className = "wb-button") {
-  const node = make("button", className, label); node.type = "button"; node.title = label;
+  const node = make("button", className, label); node.type = "button"; writeUiAttribute(node, "title", label);
   node.onclick = () => Promise.resolve().then(execute).catch(error => toast(error.message, "error")); return node;
 }
 export function createPanelManager({ shell, api, layoutApi = api, navigation, clientId, addContext = () => {}, renderers = new Map() }) {
   const entries = new Map(), definitions = new Map(), discovered = new Set(), mounts = new Map(), bridge = createNativeBrowserBridge(), fileEvents = new EventTarget();
   const dock = make("aside", "workbench"), top = make("header", "wb-top"), tabs = make("div", "wb-tabs"), content = make("div", "wb-content");
-  dock.setAttribute("aria-label", "工具工作区"); tabs.setAttribute("role", "tablist");
-  const resize = make("div", "wb-resize"); resize.tabIndex = 0; resize.setAttribute("role", "separator"); resize.setAttribute("aria-label", "调整工具工作区宽度"); resize.setAttribute("aria-orientation", "vertical");
+  writeUiAttribute(dock, "aria-label", uiMessage("ui.panelManager.toolWorkspace", {}, "工具工作区")); tabs.setAttribute("role", "tablist");
+  const resize = make("div", "wb-resize"); resize.tabIndex = 0; resize.setAttribute("role", "separator"); writeUiAttribute(resize, "aria-label", uiMessage("ui.panelManager.resizeToolWorkspace", {}, "调整工具工作区宽度")); resize.setAttribute("aria-orientation", "vertical");
   let layout = normalizeLayout(), revision = 0, stopped = false, ready = false, edited = false, saving = false, dirty = false, saveTimer = 0, dragId = "", syncTimer = 0, syncing = null;
   let profile;
   try { profile = localStorage.getItem("mdo.workbench.profile"); if (!/^wb-[a-f0-9-]{36}$/.test(profile || "")) { profile = `wb-${crypto.randomUUID()}`; localStorage.setItem("mdo.workbench.profile", profile); } }
@@ -31,7 +33,7 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
   const displayTarget = isRemoteTarget() ? targetState().selected.id : "local";
   const bound = row => api.bind({ ...row.context, extension: row.owner });
   const title = row => row.title || definitions.get(row.type)?.title || row.type;
-  const fail = (root, error, retry) => { root.replaceChildren(make("p", "wb-error", error.message || String(error)), button("重新读取", retry)); };
+  const fail = (root, error, retry) => { root.replaceChildren(make("p", "wb-error", error.message || String(error)), button(uiMessage("resource.retryLoad", {}, "重新读取"), retry)); };
   const save = async () => {
     if (!ready || saving || stopped) return;
     saving = true;
@@ -40,7 +42,7 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
       const restore = layout.order.map(id => entries.get(id)).filter(Boolean).map(row => ({ id: row.id, owner: row.owner, context: row.context }));
       const result = await layoutApi.call("panel.layout.put", { id: profile, revision, value: { ...layout, restore } }); revision = result.revision;
     } }
-    catch (error) { dirty = true; toast(`工作区布局未保存：${error.message}`, "error"); }
+    catch (error) { dirty = true; toast(uiMessage("ui.panelManager.workspaceLayoutWasNotSavedValue1", { value1: error.message }, "工作区布局未保存：{value1}"), "error"); }
     finally { saving = false; }
   };
   const remember = () => { edited = true; dirty = true; clearTimeout(saveTimer); saveTimer = setTimeout(save, 300); };
@@ -56,7 +58,7 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
   };
   const close = async id => {
     const row = entries.get(id); if (!row) return;
-    if (mounts.get(id)?.dirty?.() && !confirm("此面板有未保存修改，仍要关闭吗？")) return;
+    if (mounts.get(id)?.dirty?.() && !confirm(uiMessage("ui.panelManager.thisPanelHasUnsavedChangesCloseAnyway", {}, "此面板有未保存修改，仍要关闭吗？"))) return;
     await bound(row).call("panel.close", { id }); disposeMount(id); entries.delete(id); selectRemaining();
     remember(); render();
   };
@@ -90,7 +92,7 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
         if (copied) try { drafts.clear(previous); if (draftSource && draftSource !== previous) drafts.clear(draftSource); } catch { /* Keep redundant working copies. */ }
       }
       remember(); render();
-    }).catch(error => { if (!stopped) toast(`文件已改名，但面板状态未保存：${error.message}`, "error"); });
+    }).catch(error => { if (!stopped) toast(uiMessage("ui.panelManager.fileRenamedButPanelStateWasNotSavedValue1", { value1: error.message }, "文件已改名，但面板状态未保存：{value1}"), "error"); });
   });
   const rect = node => { const r = node.getBoundingClientRect(); return { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height), scale: window.devicePixelRatio || 1 }; };
   const browserViews = new Map();
@@ -106,7 +108,7 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
     const abort = new AbortController(), value = { root, abort, revision: row.revision, resourceRevision: 0, events: new EventTarget() }; mounts.set(row.id, value);
     value.resizeObserver = new ResizeObserver(() => value.events.dispatchEvent(new CustomEvent("resize", { detail: rect(root) }))); value.resizeObserver.observe(root);
     try {
-      const definition = definitions.get(row.type); if (!definition) throw new Error(`面板插件未加载：${row.type}`);
+      const definition = definitions.get(row.type); if (!definition) throw new Error(uiText("ui.panelManager.panelPluginIsNotLoadedValue1", { value1: row.type }, "面板插件未加载：{value1}"));
       const sdk = bound(row), signal = abort.signal, context = Object.freeze({ ...row.context, target: displayTarget, extension: row.owner });
       if (definition.mount || definition.render) {
         const events = value.events;
@@ -117,7 +119,7 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
       }
       if (definition.renderer === "custom") {
         const render = renderers.get(definition.frontend || row.type);
-        if (!render) throw new Error(`插件渲染器尚未加载：${definition.frontend || row.type}`);
+        if (!render) throw new Error(uiText("ui.panelManager.pluginRendererIsNotLoadedYetValue1", { value1: definition.frontend || row.type }, "插件渲染器尚未加载：{value1}"));
         const resource = row.resource?.id ? await sdk.call("resource.get", { id: row.resource.id }, { signal }) : null;
         value.resourceRevision = resource?.revision || 0;
         const dispose = await render(root, resource?.value ?? row.params ?? {}, { sdk, context, signal, events: value.events, addContext });
@@ -127,12 +129,12 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
       if (definition.renderer === "editor") {
         const { path, space = "workspace" } = row.params || {};
         const file = await sdk.call("fs.read", { path, space, limit: 262144 }, { signal });
-        if (typeof file.text !== "string" || file.bytes !== file.size) throw new Error("编辑器支持完整的 UTF-8 文本文件，大小上限 256 KiB");
-        const editor = make("textarea", "wb-document-editor"); editor.value = file.text; editor.setAttribute("aria-label", path);
+        if (typeof file.text !== "string" || file.bytes !== file.size) throw new Error(uiText("ui.panelManager.theEditorSupportsCompleteUtf8TextFilesUp", {}, "编辑器支持完整的 UTF-8 文本文件，大小上限 256 KiB"));
+        const editor = make("textarea", "wb-document-editor"); editor.value = file.text; writeUiAttribute(editor, "aria-label", path);
         let dirty = false; value.dirty = () => dirty; editor.oninput = () => { dirty = true; };
-        const saveButton = button("保存", async () => {
+        const saveButton = button(uiMessage("sidebar.save", {}, "保存"), async () => {
           saveButton.disabled = true;
-          try { const saved = await sdk.call("fs.write", { path, space, text: editor.value, revision: file.revision }, { signal }); file.revision = saved.revision; dirty = false; saveButton.textContent = "已保存"; }
+          try { const saved = await sdk.call("fs.write", { path, space, text: editor.value, revision: file.revision }, { signal }); file.revision = saved.revision; dirty = false; writeUiText(saveButton, uiMessage("settings.saved", {}, "已保存")); }
           finally { saveButton.disabled = false; }
         });
         root.append(editor, saveButton); return;
@@ -140,21 +142,21 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
       if (definition.renderer === "web") {
         const url = safeBrowserUrl(row.params?.url || row.resource?.url);
         /* Never let preview content share the host origin or native bridge. */
-        if (new URL(url).origin === location.origin) throw new Error("预览页必须使用独立源，不能指向 mdo 主界面");
+        if (new URL(url).origin === location.origin) throw new Error(uiText("ui.panelManager.previewPagesNeedASeparateOriginAndCannotPoint", {}, "预览页必须使用独立源，不能指向 mdo 主界面"));
         if (bridge.available()) {
           const browser = await sdk.call("browser.create", { client: clientId, key: `preview-${row.id}`, url }, { signal });
           await browserView(root, { ...row, resource: { id: browser.id } }, signal, value); return;
         }
         const toolbar = make("div", "wb-toolbar"), frame = make("iframe", "wb-preview");
-        frame.setAttribute("sandbox", "allow-scripts allow-forms"); frame.referrerPolicy = "no-referrer"; frame.title = title(row);
-        toolbar.append(button("刷新", () => { frame.src = url; }), button("手机", () => { frame.style.width = "390px"; }), button("自适应", () => { frame.style.width = "100%"; }), button("横竖屏", () => { frame.style.width = frame.style.width === "844px" ? "390px" : "844px"; }));
+        frame.setAttribute("sandbox", "allow-scripts allow-forms"); frame.referrerPolicy = "no-referrer"; writeUiAttribute(frame, "title", title(row));
+        toolbar.append(button(uiMessage("resource.refresh", {}, "刷新"), () => { frame.src = url; }), button(uiMessage("account.phone", {}, "手机"), () => { frame.style.width = "390px"; }), button(uiMessage("ui.panelManager.responsive", {}, "自适应"), () => { frame.style.width = "100%"; }), button(uiMessage("ui.panelManager.orientation", {}, "横竖屏"), () => { frame.style.width = frame.style.width === "844px" ? "390px" : "844px"; }));
         root.append(toolbar, frame); frame.src = url; value.dispose = () => { frame.src = "about:blank"; }; return;
       }
       if (definition.renderer === "surface") {
         const toolbar = make("div", "wb-toolbar"), canvas = make("canvas", "wb-surface"); canvas.width = Math.max(1,Math.min(4096,row.params?.width || 1280)); canvas.height = Math.max(1,Math.min(4096,row.params?.height || 720)); root.append(toolbar, canvas);
         const input = createSurfaceInput({ canvas, toolbar, sdk, stream: row.params?.input_stream, signal, onError: error => toast(error.message, "error") });
         value.dispose = () => input.dispose(); value.visible = visible => { if (!visible) input.stop(); };
-        const stream = row.params?.stream; if (!stream) throw new Error("操作画面需要插件提供 stream 句柄");
+        const stream = row.params?.stream; if (!stream) throw new Error(uiText("ui.panelManager.interactiveSurfacesRequireAStreamHandleFromThePlugin", {}, "操作画面需要插件提供 stream 句柄"));
         let frame = [], bytes = 0;
         const pump = async () => { while (!signal.aborted) {
           if (root.hidden || document.hidden) { await new Promise(resolve => setTimeout(resolve, 150)); continue; }
@@ -166,12 +168,12 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
           for (const byte of Uint8Array.from(atob(chunk.base64), c => c.charCodeAt(0))) frame.push(byte);
           while (frame.length >= 4) {
             bytes = new DataView(Uint8Array.from(frame.slice(0, 4)).buffer).getUint32(0, true);
-            if (!bytes || bytes > 1048576) throw new Error("画面帧长度无效"); if (frame.length < bytes + 4) break;
+            if (!bytes || bytes > 1048576) throw new Error(uiText("ui.panelManager.invalidFrameLength", {}, "画面帧长度无效")); if (frame.length < bytes + 4) break;
             const encoded = Uint8Array.from(frame.slice(4, bytes + 4)); validateImageFrame(encoded);
             const image = await createImageBitmap(new Blob([encoded])); frame = frame.slice(bytes + 4);
             if (!signal.aborted) canvas.getContext("2d").drawImage(image, 0, 0, canvas.width, canvas.height); image.close();
           }
-          if (chunk.eof) { if (frame.length) throw new Error("画面流在帧结束前中断"); break; }
+          if (chunk.eof) { if (frame.length) throw new Error(uiText("ui.panelManager.frameStreamInterruptedBeforeFrameCompletion", {}, "画面流在帧结束前中断")); break; }
         } };
         void pump().catch(error => { input.stop(); if (!signal.aborted) fail(root, error, () => remount(row.id)); }); return;
       }
@@ -179,7 +181,7 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
       value.resourceRevision = resource.revision || 0;
       const data = resource.value;
       if (definition.renderer === "diff") {
-        const files = Array.isArray(data?.files) ? data.files : [{ path: data?.path || "变更", patch: data?.patch || String(data || "") }];
+        const files = Array.isArray(data?.files) ? data.files : [{ path: data?.path || uiText("ui.startView.changes", {}, "变更"), patch: data?.patch || String(data || "") }];
         for (const file of files.slice(0, 256)) {
           const details = make("details", "wb-diff"), summary = make("summary", "", file.path), pre = make("pre"); details.open = true;
           for (const line of String(file.patch || "").split("\n")) pre.append(make("div", line.startsWith("+") ? "wb-added" : line.startsWith("-") ? "wb-removed" : "", line));
@@ -194,17 +196,17 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
               const items = data.items.map((entry, at) => at === index ? { ...entry, done: input.checked } : entry);
               await sdk.call("resource.put", { id: resource.id, revision: resource.revision, kind: resource.kind, title: resource.title, value: { ...data, items } }, { signal });
               remount(row.id);
-            } catch (error) { input.checked = Boolean(item.done); input.disabled = false; toast(`计划未保存：${error.message}`, "error"); }
+            } catch (error) { input.checked = Boolean(item.done); input.disabled = false; toast(uiMessage("ui.panelManager.planWasNotSavedValue1", { value1: error.message }, "计划未保存：{value1}"), "error"); }
           };
           label.append(input, document.createTextNode(item.text || "")); root.append(label);
         }
       } else {
         const text = typeof data === "string" ? data : data?.text || JSON.stringify(data, null, 2);
         root.append(renderSourceMarkdown(text));
-        if (resource.id && !row.params?.readonly) root.append(button("编辑", () => {
+        if (resource.id && !row.params?.readonly) root.append(button(uiMessage("timeline.edit", {}, "编辑"), () => {
           const editor = make("textarea", "wb-document-editor"); editor.value = text; let dirty = false;
           value.dirty = () => dirty; editor.oninput = () => { dirty = true; };
-          const saveButton = button("保存", async () => {
+          const saveButton = button(uiMessage("sidebar.save", {}, "保存"), async () => {
             saveButton.disabled = true;
             try {
               const saved = await sdk.call("resource.put", { id: resource.id, revision: resource.revision, kind: resource.kind, title: resource.title,
@@ -215,7 +217,7 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
           root.replaceChildren(editor, saveButton); editor.focus();
         }));
       }
-      root.append(button("引用到对话", () => {
+      root.append(button(uiMessage("ui.panelManager.quoteInConversation", {}, "引用到对话"), () => {
         const selection = document.getSelection(), selected = selection?.toString();
         const text = selected && root.contains(selection.anchorNode) && root.contains(selection.focusNode) ? selected : typeof data === "string" ? data : JSON.stringify(data);
         addContext({ title: title(row), content: text, source: row.resource?.id || row.id, context: row.context });
@@ -234,14 +236,14 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
     shell.dataset.workbench = layout.open ? "open" : "closed"; shell.toggleAttribute("data-workbench-maximized", layout.maximized && layout.open);
     const sidebar = Number.parseFloat(shell.style.getPropertyValue("--sidebar-column")) || 0;
     shell.style.setProperty("--workbench-width", `${Math.min(layout.width, Math.max(320, innerWidth - sidebar - 360))}px`); dock.hidden = !layout.open;
-    opener.title = layout.open ? "隐藏右侧栏" : "展开右侧栏";
-    opener.setAttribute("aria-label", opener.title); opener.setAttribute("aria-expanded", String(layout.open));
+    writeUiAttribute(opener, "title", layout.open ? uiMessage("ui.panelManager.hideRightSidebar", {}, "隐藏右侧栏") : uiMessage("ui.panelManager.showRightSidebar", {}, "展开右侧栏"));
+    writeUiAttribute(opener, "aria-label", opener.title); opener.setAttribute("aria-expanded", String(layout.open));
     tabs.replaceChildren();
     for (const id of layout.order) {
       const row = entries.get(id); if (!row) continue;
       const tab = make("div", "wb-tab"), select = button(`${row.pinned ? "● " : ""}${title(row)}`, () => reveal(id), "wb-tab-select");
       tab.draggable = true; tab.dataset.panel = id; select.setAttribute("role", "tab"); select.setAttribute("aria-selected", String(id === layout.active));
-      const closeTab = iconButton("close", `关闭${title(row)}`, () => close(id), error => toast(error.message, "error")); closeTab.className = "wb-tab-close";
+      const closeTab = iconButton("close", uiMessage("ui.panelManager.closeValue1", { value1: title(row) }, "关闭{value1}"), () => close(id), error => toast(error.message, "error")); closeTab.className = "wb-tab-close";
       tab.append(select, closeTab);
       tab.ondragstart = event => { dragId = id; event.dataTransfer?.setData("text/mdo-panel", id); };
       tab.ondragover = event => { if (dragId) event.preventDefault(); };
@@ -268,13 +270,13 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
     const hidden = [...mounts].filter(([id, mounted]) => id !== layout.active && id !== layout.secondary && !mounted.dirty?.());
     for (const [id] of hidden.slice(0, Math.max(0, mounts.size - 8))) disposeMount(id);
   }
-  const more = iconButton("more", "工作区更多操作", () => {}), menu = popupMenu(more, () => [
-    { label: entries.get(layout.active)?.pinned ? "取消固定" : "固定", icon: "pin", checked: Boolean(entries.get(layout.active)?.pinned), disabled: !entries.has(layout.active), execute: () => { const row = entries.get(layout.active); return row && update(row.id, { pinned: !row.pinned }); } },
-    { label: layout.secondary ? "退出并排" : "并排", icon: "split", checked: Boolean(layout.secondary), disabled: layout.order.length < 2, execute: () => { layout.secondary = layout.secondary ? "" : layout.order.find(id => id !== layout.active) || ""; remember(); render(); } },
-    { label: layout.maximized ? "恢复宽度" : "展开", icon: "expand", checked: layout.maximized, execute: () => { layout.maximized = !layout.maximized; remember(); render(); } },
-    { label: "收起", execute: () => { layout.open = false; remember(); render(); } },
+  const more = iconButton("more", uiMessage("ui.panelManager.moreWorkspaceActions", {}, "工作区更多操作"), () => {}), menu = popupMenu(more, () => [
+    { label: entries.get(layout.active)?.pinned ? uiText("ui.panelManager.unpin", {}, "取消固定") : uiText("ui.panelManager.pin", {}, "固定"), icon: "pin", checked: Boolean(entries.get(layout.active)?.pinned), disabled: !entries.has(layout.active), execute: () => { const row = entries.get(layout.active); return row && update(row.id, { pinned: !row.pinned }); } },
+    { label: layout.secondary ? uiText("ui.panelManager.exitSideBySideView", {}, "退出并排") : uiText("ui.panelManager.sideBySideView", {}, "并排"), icon: "split", checked: Boolean(layout.secondary), disabled: layout.order.length < 2, execute: () => { layout.secondary = layout.secondary ? "" : layout.order.find(id => id !== layout.active) || ""; remember(); render(); } },
+    { label: layout.maximized ? uiText("ui.panelManager.restoreWidth", {}, "恢复宽度") : uiText("ui.panelManager.expand", {}, "展开"), icon: "expand", checked: layout.maximized, execute: () => { layout.maximized = !layout.maximized; remember(); render(); } },
+    { label: uiText("dock.collapseDecision", {}, "收起"), execute: () => { layout.open = false; remember(); render(); } },
   ], { onError: error => toast(error.message, "error") });
-  top.append(tabs, iconButton("plus", "新建标签页", () => newTab(), error => toast(error.message, "error")), more);
+  top.append(tabs, iconButton("plus", uiMessage("ui.panelManager.newTab", {}, "新建标签页"), () => newTab(), error => toast(error.message, "error")), more);
   dock.append(resize, top, content); shell.append(dock);
   let pointerX, startWidth;
   resize.onpointerdown = event => { pointerX = event.clientX; startWidth = layout.width; resize.setPointerCapture(event.pointerId); event.preventDefault(); };
@@ -293,11 +295,11 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
   const beforeUnload = event => { if (bridge.busy() || [...mounts.values()].some(mounted => mounted.dirty?.())) { event.preventDefault(); event.returnValue = ""; } };
   window.addEventListener("beforeunload", beforeUnload);
   async function open(type, params = {}, scopedApi = api, definition) {
-    if (stopped) throw new Error("工作区已退出");
+    if (stopped) throw new Error(uiText("ui.panelManager.workspaceExited", {}, "工作区已退出"));
     if (definition) definitions.set(type, definition);
     const client = scopedApi.bind({});
     if (type === "mdo.editor" && params.params?.path) {
-      const scope = await client.call("sdk.context"); if (stopped) throw new Error("工作区已退出");
+      const scope = await client.call("sdk.context"); if (stopped) throw new Error(uiText("ui.panelManager.workspaceExited", {}, "工作区已退出"));
       const same = (a, b) => (a || "") === (b || "");
       const existing = [...entries.values()].find(row => row.type === type && filePathKey(row.params?.path) === filePathKey(params.params.path) && row.owner === scope.extension && ["project", "session", "run"].every(key => same(row.context[key], scope[key])));
       if (existing) {
@@ -316,13 +318,13 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
     if (params.reveal !== "background" || !layout.active) reveal(row.id); else { remember(); render(); }
     return handle(row.id);
   }
-  async function newTab() { return open("mdo.new-tab", { title: "新标签页" }); }
+  async function newTab() { return open("mdo.new-tab", { title: uiText("ui.startView.newTab", {}, "新标签页") }); }
   async function toggleWorkbench() {
     await ensure();
     if (!layout.open && !layout.order.length) return newTab();
     layout.open = !layout.open; remember(); render();
   }
-  definitions.set("mdo.new-tab", { title: "新标签页", renderer: "custom", mount(root, { sdk, signal, panelId, context }) {
+  definitions.set("mdo.new-tab", { title: uiText("ui.startView.newTab", {}, "新标签页"), renderer: "custom", mount(root, { sdk, signal, panelId, context }) {
     // An explicit click owns one admission key. Retrying an uncertain open
     // finds its original resource rather than creating another browser/shell.
     const keys = new Map(), history = [];
@@ -332,16 +334,16 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
       let handle; const pinned = Boolean(entries.get(panelId)?.pinned);
       if (type === "mdo.browser") {
         const browser = await sdk.call("browser.create", { client: clientId, key: key(type) });
-        handle = await open(type, { key: browser.id, title: "浏览器", resource: { id: browser.id }, pinned }, sdk);
+        handle = await open(type, { key: browser.id, title: uiText("ui.startView.browser", {}, "浏览器"), resource: { id: browser.id }, pinned }, sdk);
       } else if (type === "mdo.terminal") {
         let terminal;
         try { terminal = await sdk.call("terminal.create", { key: key(type) }); }
         catch (error) {
           if (error.code !== "terminal_limit") throw error;
-          handle = await open(type, { key: "terminal-manager", title: "终端", pinned }, sdk);
-          toast("终端名额已满。请选择已有终端，或在更多操作中清理失效项目的记录。");
+          handle = await open(type, { key: "terminal-manager", title: uiText("ui.terminalView.terminal", {}, "终端"), pinned }, sdk);
+          toast(uiMessage("ui.panelManager.terminalLimitReachedSelectAnExistingTerminalOrClear", {}, "终端名额已满。请选择已有终端，或在更多操作中清理失效项目的记录。"));
         }
-        if (terminal) handle = await open(type, { key: terminal.id, title: "终端", params: { terminal: terminal.id }, pinned }, sdk);
+        if (terminal) handle = await open(type, { key: terminal.id, title: uiText("ui.terminalView.terminal", {}, "终端"), params: { terminal: terminal.id }, pinned }, sdk);
       } else {
         const descriptor = definitions.get(type);
         await descriptor?.registration;
@@ -358,29 +360,29 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
     });
     void sdk.call("browser.list", { client: clientId }, { signal }).then(browsers => {
       if (signal.aborted) return;
-      for (const browser of browsers) history.push({ id: `resume-${browser.id}`, title: browser.title || browser.url || "浏览器", type: "mdo.browser", browser });
+      for (const browser of browsers) history.push({ id: `resume-${browser.id}`, title: browser.title || browser.url || uiText("ui.startView.browser", {}, "浏览器"), type: "mdo.browser", browser });
       view.refresh();
     }).catch(() => {});
     return view;
   } });
-  for (const [id, renderer, label] of [["mdo.browser", "browser", "浏览器"], ["mdo.document", "document", "文档"], ["mdo.plan", "plan", "计划"], ["mdo.diff", "diff", "变更"], ["mdo.preview", "web", "网页预览"], ["mdo.editor", "editor", "文件编辑"]]) definitions.set(id, { title: label, renderer });
+  for (const [id, renderer, label] of [["mdo.browser", "browser", uiText("ui.startView.browser", {}, "浏览器")], ["mdo.document", "document", uiText("ui.panelManager.document", {}, "文档")], ["mdo.plan", "plan", uiText("ui.panelManager.plan", {}, "计划")], ["mdo.diff", "diff", uiText("ui.startView.changes", {}, "变更")], ["mdo.preview", "web", uiText("ui.panelManager.webPreview", {}, "网页预览")], ["mdo.editor", "editor", uiText("ui.panelManager.fileEditor", {}, "文件编辑")]]) definitions.set(id, { title: label, renderer });
   const openFile = async (path, client, line = 1) => {
     const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(["native", path])));
     const key = [...new Uint8Array(digest)].map(value => value.toString(16).padStart(2, "0")).join("");
     const panel = await open("mdo.editor", { key, title: path.split(/[\\/]/).at(-1), params: { path, space: "native", line } }, client);
     const locating = mounts.get(panel.id)?.locate?.(line); if (locating) await locating; return panel;
   };
-  for (const [id, title] of [["mdo.files", "文件"], ["mdo.editor", "文件"]]) definitions.set(id, { title, renderer: "custom", mount: (root, options) => mountFilesView(root, { ...options, fileEvents, openFile: path => openFile(path, options.sdk) }) });
-  definitions.set("mdo.task-plan", { title: "会话计划", renderer: "custom", mount(root, { sdk, context, signal }) {
-    if (!context.session) { root.append(make("p", "", "请先选择一个会话，查看它的任务计划。")); return; }
+  for (const [id, title] of [["mdo.files", uiText("modelConfig.file", {}, "文件")], ["mdo.editor", uiText("modelConfig.file", {}, "文件")]]) definitions.set(id, { title, renderer: "custom", mount: (root, options) => mountFilesView(root, { ...options, fileEvents, openFile: path => openFile(path, options.sdk) }) });
+  definitions.set("mdo.task-plan", { title: uiText("ui.panelManager.conversationPlan", {}, "会话计划"), renderer: "custom", mount(root, { sdk, context, signal }) {
+    if (!context.session) { root.append(make("p", "", uiMessage("ui.panelManager.selectAConversationToViewItsTaskPlan", {}, "请先选择一个会话，查看它的任务计划。"))); return; }
     let timer, previous = "";
     const refresh = async () => {
       try {
         const plan = await sdk.call("product.projects.by_project.sessions.by_session.todo.get", { path: { project: context.project, session: context.session } }, { signal });
         const identity = JSON.stringify(plan);
         if (identity !== previous && !signal.aborted) {
-          previous = identity; root.replaceChildren(make("h2", "", "会话计划"));
-          if (!plan.items?.length) root.append(make("p", "", "这个会话尚未生成任务计划。"));
+          previous = identity; root.replaceChildren(make("h2", "", uiMessage("ui.panelManager.conversationPlan", {}, "会话计划")));
+          if (!plan.items?.length) root.append(make("p", "", uiMessage("ui.panelManager.thisConversationHasNoTaskPlanYet", {}, "这个会话尚未生成任务计划。")));
           for (const item of plan.items || []) { const line = make("label", "wb-plan-item"), checked = make("input"); checked.type = "checkbox"; checked.checked = Boolean(item.done); checked.disabled = true; line.append(checked, document.createTextNode(item.text || "")); root.append(line); }
         }
       } catch (error) { if (!signal.aborted && !previous) fail(root, error, refresh); }
@@ -388,8 +390,8 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
     };
     void refresh(); return () => clearTimeout(timer);
   } });
-  definitions.set("mdo.changes", { title: "变更", renderer: "custom", mount: (root, options) => mountChangesView(root, { ...options, openFile: (path, line) => openFile(path, options.sdk, line) }) });
-  definitions.set("mdo.terminal", { title: "终端", renderer: "custom", mount: mountTerminalView });
+  definitions.set("mdo.changes", { title: uiText("ui.startView.changes", {}, "变更"), renderer: "custom", mount: (root, options) => mountChangesView(root, { ...options, openFile: (path, line) => openFile(path, options.sdk, line) }) });
+  definitions.set("mdo.terminal", { title: uiText("ui.terminalView.terminal", {}, "终端"), renderer: "custom", mount: mountTerminalView });
   async function synchronize() {
     if (stopped) return;
     try {
@@ -486,7 +488,7 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
       let view = browserViews.get(id);
       if (!view) {
         const client = api.bind(action.context || {}), browser = await client.call("browser.get", { id });
-        if (isRemoteTarget() && browser.url && ["localhost","127.0.0.1","[::1]"].includes(new URL(browser.url).hostname)) throw new Error("目标设备的本地网址需要预览服务映射");
+        if (isRemoteTarget() && browser.url && ["localhost","127.0.0.1","[::1]"].includes(new URL(browser.url).hostname)) throw new Error(uiText("ui.panelManager.localUrlsOnTheTargetDeviceNeedPreviewService", {}, "目标设备的本地网址需要预览服务映射"));
         await bridge.call("create", { browser: id, url: browser.url || "about:blank", visible: false, bounds: { x:0,y:0,width:1024,height:768,scale:1 } });
         view = { row: browser, execute: (operation, parameters = {}) => bridge.call(operation, { browser:id, ...parameters }) }; browserViews.set(id, view);
       }
@@ -496,7 +498,7 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
         while (!stopped && Date.now() < deadline) {
           if (Date.now() - lastReceipt > 500) {
             const receipt = await api.call("ui.result", { id: action.id }); lastReceipt = Date.now();
-            if (receipt.state === "cancelled") throw new Error(receipt.error || "浏览器等待已取消");
+            if (receipt.state === "cancelled") throw new Error(receipt.error || uiText("ui.panelManager.browserWaitCancelled", {}, "浏览器等待已取消"));
           }
           const state = await view.execute("state"); if (state.error) throw new Error(state.error);
           if (!state.loading) {
@@ -506,7 +508,7 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
           }
           await new Promise(resolve => setTimeout(resolve,100));
         }
-        throw new Error("等待浏览器页面或元素超时");
+        throw new Error(uiText("ui.panelManager.timedOutWaitingForBrowserPageOrElement", {}, "等待浏览器页面或元素超时"));
       }
       return view.execute(command, { ...params, agent: true });
     },

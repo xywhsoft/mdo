@@ -1,3 +1,5 @@
+import { setUiAttribute as writeUiAttribute, setUiText as writeUiText, t as uiText, uiMessage } from "../../i18n.js";
+
 import { element as make, iconButton, popupMenu } from "./controls.js";
 import { createTerminalInput, terminalBytes } from "./terminal-io.js";
 import { loadTerminalRenderer } from "./terminal-renderer.js";
@@ -5,65 +7,65 @@ import { toast } from "../../utils/dom.js";
 
 const encoder = new TextEncoder(), sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const running = row => row && ["starting", "running", "closing"].includes(row.state);
-const stateName = row => ({ starting: "正在启动", running: "运行中", closing: "正在结束", ended: "已结束" })[row?.state] || "未连接";
-const reasonName = row => ({ service_stopped: "本地服务已停止，终端未重启。", service_restarted: "服务已重启，旧终端未重启，输入未重放。", process_exited: `进程已退出${row?.exit_code !== undefined ? `（${row.exit_code}）` : ""}。`, closed: "终端已结束。", not_started: "程序未能启动。", cancelled_before_start: "已取消启动。" })[row?.reason] || "";
+const stateName = row => ({ starting: uiText("ui.terminalView.starting", {}, "正在启动"), running: uiText("timeline.running", {}, "运行中"), closing: uiText("ui.terminalView.ending", {}, "正在结束"), ended: uiText("ui.terminalView.ended", {}, "已结束") })[row?.state] || uiText("resource.mcpDisconnected", {}, "未连接");
+const reasonName = row => ({ service_stopped: uiText("ui.terminalView.localServiceStoppedTerminalWasNotRestarted", {}, "本地服务已停止，终端未重启。"), service_restarted: uiText("ui.terminalView.serviceRestartedTheOldTerminalWasNotRestartedAnd", {}, "服务已重启，旧终端未重启，输入未重放。"), process_exited: uiText("ui.terminalView.processExitedValue1", { value1: row?.exit_code !== undefined ? `（${row.exit_code}）` : "" }, "进程已退出{value1}。"), closed: uiText("ui.terminalView.terminalEnded", {}, "终端已结束。"), not_started: uiText("ui.terminalView.programCouldNotStart", {}, "程序未能启动。"), cancelled_before_start: uiText("ui.terminalView.startupCancelled", {}, "已取消启动。") })[row?.reason] || "";
 
 export async function mountTerminalView(root, { sdk, context, params = {}, viewState = {}, update, signal, addContext }) {
   const { Terminal, FitAddon, SearchAddon, Unicode11Addon } = await loadTerminalRenderer();
   if (signal.aborted) return;
   const capabilities = await sdk.call("terminal.capabilities", {}, { signal });
-  if (!capabilities.supported) { root.append(make("p", "wb-error", "当前设备的运行时不支持交互终端。")); return; }
+  if (!capabilities.supported) { root.append(make("p", "wb-error", uiMessage("ui.terminalView.thisDeviceSRuntimeDoesNotSupportInteractiveTerminals", {}, "当前设备的运行时不支持交互终端。"))); return; }
   root.classList.add("wb-terminal-view");
   let terminal, fit, searchAddon, observer, themeObserver, selected, lease, input, reading, renewing = false, attaching = false, resizing = false, wantedSize, creation = false, blocked = false, connected = false, cursor = 0, generation = 0, renewAt = 0, disposed = false, fontSize = Math.max(11, Math.min(22, Number(viewState.terminal?.fontSize) || 13)), lastSize = "", notice = "", autoControl = true, pendingBytes = 0;
   let reviewRequired = false;
   const bar = make("div", "wb-terminal-toolbar"), sessions = make("select", "wb-terminal-sessions"), path = make("div", "wb-terminal-path"), surface = make("div", "wb-terminal-surface"), footer = make("div", "wb-terminal-status"), status = make("span"), message = make("span", "wb-terminal-message"), placeholder = make("div", "wb-terminal-empty");
   const onError = error => toast(error.message || String(error), "error");
   const action = (glyph, label, execute) => iconButton(glyph, label, execute, onError);
-  const plus = action("plus", "新建终端", () => create()), control = action("refresh", "连接终端输入", () => acquire(true)), end = action("stop", "结束终端", () => close()), more = action("more", "终端更多操作", () => {});
-  sessions.setAttribute("aria-label", "终端会话"); footer.setAttribute("role", "status");
+  const plus = action("plus", uiMessage("ui.terminalView.newTerminal", {}, "新建终端"), () => create()), control = action("refresh", uiMessage("ui.terminalView.connectTerminalInput", {}, "连接终端输入"), () => acquire(true)), end = action("stop", uiMessage("ui.terminalView.endTerminal", {}, "结束终端"), () => close()), more = action("more", uiMessage("ui.terminalView.moreTerminalActions", {}, "终端更多操作"), () => {});
+  writeUiAttribute(sessions, "aria-label", uiMessage("ui.terminalView.terminalSession", {}, "终端会话")); footer.setAttribute("role", "status");
   bar.append(sessions, plus, control, end, more); footer.append(status, message); root.append(bar, path, surface, placeholder, footer);
-  const findbar = make("div", "wb-terminal-find"), find = make("input"), matches = make("span"); find.placeholder = "查找终端内容"; find.setAttribute("aria-label", find.placeholder); findbar.hidden = true;
-  const search = (previous = false) => { if (find.value) searchAddon?.[previous ? "findPrevious" : "findNext"](find.value, { caseSensitive: false, regex: false, decorations: { matchBackground: "#b29b4444", matchBorder: "#9a8b55", activeMatchBackground: "#3478d4", activeMatchColor: "#ffffff" } }); else { searchAddon?.clearDecorations(); matches.textContent = ""; } };
+  const findbar = make("div", "wb-terminal-find"), find = make("input"), matches = make("span"); writeUiAttribute(find, "placeholder", uiMessage("ui.terminalView.findInTerminal", {}, "查找终端内容")); writeUiAttribute(find, "aria-label", find.placeholder); findbar.hidden = true;
+  const search = (previous = false) => { if (find.value) searchAddon?.[previous ? "findPrevious" : "findNext"](find.value, { caseSensitive: false, regex: false, decorations: { matchBackground: "#b29b4444", matchBorder: "#9a8b55", activeMatchBackground: "#3478d4", activeMatchColor: "#ffffff" } }); else { searchAddon?.clearDecorations(); writeUiText(matches, ""); } };
   find.oninput = () => search(); find.onkeydown = event => { if (event.key === "Enter") { event.preventDefault(); search(event.shiftKey); } if (event.key === "Escape") { event.preventDefault(); hideFind(); } };
   const hideFind = () => { findbar.hidden = true; searchAddon?.clearDecorations(); terminal?.focus(); };
   const showFind = () => { findbar.hidden = false; find.focus(); find.select(); };
-  findbar.append(find, matches, action("arrow-left", "上一个匹配", () => search(true)), action("arrow-right", "下一个匹配", () => search()), action("close", "关闭终端查找", hideFind)); root.insertBefore(findbar, surface);
+  findbar.append(find, matches, action("arrow-left", uiMessage("ui.terminalView.previousMatch", {}, "上一个匹配"), () => search(true)), action("arrow-right", uiMessage("ui.terminalView.nextMatch", {}, "下一个匹配"), () => search()), action("close", uiMessage("ui.terminalView.closeTerminalFind", {}, "关闭终端查找"), hideFind)); root.insertBefore(findbar, surface);
   const copy = async () => { const text = terminal?.getSelection(); if (text) await navigator.clipboard.writeText(text); };
   const quote = () => {
     const text = terminal?.getSelection(); if (!text) return;
-    if (encoder.encode(text).length > 32768) throw new Error("选中内容超过 32 KiB，请缩小终端选择范围。");
-    addContext({ title: "终端选择内容", source: `terminal:${selected.id}`, context,
-      content: `终端：${selected.title || "终端"}\n会话：${selected.id}\n工作目录：${selected.cwd}\n设备：${context.target || context.device || "本机"}\n\n${text}` });
+    if (encoder.encode(text).length > 32768) throw new Error(uiText("ui.terminalView.selectionExceeds32KibSelectASmallerTerminalRange", {}, "选中内容超过 32 KiB，请缩小终端选择范围。"));
+    addContext({ title: uiText("ui.terminalView.terminalSelection", {}, "终端选择内容"), source: `terminal:${selected.id}`, context,
+      content: uiText("ui.terminalView.terminalValue1ConversationValue2WorkingDirectoryValue3DeviceValue4", { value1: selected.title || uiText("ui.terminalView.terminal", {}, "终端"), value2: selected.id, value3: selected.cwd, value4: context.target || context.device || uiText("devices.local", {}, "本机"), value5: text }, "终端：{value1}\n会话：{value2}\n工作目录：{value3}\n设备：{value4}\n\n{value5}") });
   };
-  const paste = async () => { if (!input || blocked) throw new Error("请先连接终端输入。"); terminal.paste(await navigator.clipboard.readText()); terminal.focus(); };
+  const paste = async () => { if (!input || blocked) throw new Error(uiText("ui.terminalView.connectTerminalInputFirst", {}, "请先连接终端输入。")); terminal.paste(await navigator.clipboard.readText()); terminal.focus(); };
   const changeFont = value => { fontSize = Math.max(11, Math.min(22, value)); if (terminal) terminal.options.fontSize = fontSize; measure(); remember(); };
   const menu = popupMenu(more, () => [
-    { label: "复制选择内容", disabled: !terminal?.hasSelection(), execute: copy },
-    { label: "粘贴", disabled: !input || blocked, execute: paste },
-    { label: "引用选择内容", disabled: !terminal?.hasSelection(), execute: quote },
-    { label: "查找…", disabled: !terminal, execute: showFind },
-    { label: "刷新终端列表", execute: async () => { const rows = await refresh(); if (selected && !rows.some(row => row.id === selected.id)) await select(""); } },
-    { label: "清空显示", disabled: !terminal, execute: () => terminal.clear() },
-    { label: "增大字体", disabled: !terminal || fontSize >= 22, execute: () => changeFont(fontSize + 1) },
-    { label: "减小字体", disabled: !terminal || fontSize <= 11, execute: () => changeFont(fontSize - 1) },
-    { label: "释放已结束的终端", disabled: !selected?.drained, execute: async () => { const id = selected.id; if (!confirm("移除这个已结束终端的记录和内存输出？")) return; await sdk.call("terminal.release", { id }, { signal }); await select(""); await refresh(); } },
-    { label: "清理失效项目的终端记录…", disabled: reviewRequired, execute: async () => {
-      if (!confirm("清理本扩展在已注销或已更换目录项目中的已结束终端记录？运行中的终端和其他扩展不受影响。")) return;
+    { label: uiText("ui.terminalView.copySelection", {}, "复制选择内容"), disabled: !terminal?.hasSelection(), execute: copy },
+    { label: uiText("ui.terminalView.paste", {}, "粘贴"), disabled: !input || blocked, execute: paste },
+    { label: uiText("ui.terminalView.quoteSelection", {}, "引用选择内容"), disabled: !terminal?.hasSelection(), execute: quote },
+    { label: uiText("ui.terminalView.find", {}, "查找…"), disabled: !terminal, execute: showFind },
+    { label: uiText("ui.terminalView.refreshTerminals", {}, "刷新终端列表"), execute: async () => { const rows = await refresh(); if (selected && !rows.some(row => row.id === selected.id)) await select(""); } },
+    { label: uiText("ui.terminalView.clearDisplay", {}, "清空显示"), disabled: !terminal, execute: () => terminal.clear() },
+    { label: uiText("ui.terminalView.increaseFontSize", {}, "增大字体"), disabled: !terminal || fontSize >= 22, execute: () => changeFont(fontSize + 1) },
+    { label: uiText("ui.terminalView.decreaseFontSize", {}, "减小字体"), disabled: !terminal || fontSize <= 11, execute: () => changeFont(fontSize - 1) },
+    { label: uiText("ui.terminalView.releaseEndedTerminal", {}, "释放已结束的终端"), disabled: !selected?.drained, execute: async () => { const id = selected.id; if (!confirm(uiMessage("ui.terminalView.removeThisEndedTerminalSRecordAndInMemory", {}, "移除这个已结束终端的记录和内存输出？"))) return; await sdk.call("terminal.release", { id }, { signal }); await select(""); await refresh(); } },
+    { label: uiText("ui.terminalView.cleanUpUnavailableProjectTerminals", {}, "清理失效项目的终端记录…"), disabled: reviewRequired, execute: async () => {
+      if (!confirm(uiMessage("ui.terminalView.cleanUpEndedTerminalsOwnedByThisExtensionFor", {}, "清理本扩展在已注销或已更换目录项目中的已结束终端记录？运行中的终端和其他扩展不受影响。"))) return;
       const result = await sdk.bind({ project: "default", session: "", run: "" }).call("terminal.prune", {}, { signal });
-      toast(`已清理 ${result.released} 条失效项目的终端记录。`);
+      toast(uiMessage("ui.terminalView.cleanedUpValue1TerminalRecordsForUnavailableProjects", { value1: result.released }, "已清理 {value1} 条失效项目的终端记录。"));
     } },
   ], { signal, onError });
   const visible = () => !disposed && !signal.aborted && !root.hidden && !document.hidden && surface.clientWidth > 0 && surface.clientHeight > 0;
-  const remember = () => { if (!disposed) void update({ title: selected?.title || "终端", view_state: { ...viewState, terminal: { id: selected?.id || "", fontSize } } }).catch(onError); };
+  const remember = () => { if (!disposed) void update({ title: selected?.title || uiText("ui.terminalView.terminal", {}, "终端"), view_state: { ...viewState, terminal: { id: selected?.id || "", fontSize } } }).catch(onError); };
   const renderStatus = () => {
     if (disposed) return;
     root.dataset.terminalState = reviewRequired ? "unknown" : selected?.state || "empty"; root.dataset.terminalInput = input && !blocked ? "connected" : "readonly";
-    status.textContent = reviewRequired ? "状态待确认 · 只读" : !selected ? "终端" : `${stateName(selected)}${running(selected) ? input && !blocked ? " · 可输入" : " · 只读" : ""}${pendingBytes ? ` · 待确认 ${pendingBytes} B` : ""}`;
-    message.textContent = notice || selected?.error || (!running(selected) ? reasonName(selected) : "关闭标签页会保留终端"); message.title = message.textContent;
-    path.textContent = selected ? `${selected.cwd} · ${selected.program}` : ""; path.title = path.textContent;
+    writeUiText(status, reviewRequired ? uiMessage("ui.terminalView.statusUnconfirmedReadOnly", {}, "状态待确认 · 只读") : !selected ? uiMessage("ui.terminalView.terminal", {}, "终端") : `${stateName(selected)}${running(selected) ? input && !blocked ? uiMessage("ui.terminalView.inputEnabled", {}, " · 可输入") : uiMessage("ui.terminalView.readOnly", {}, " · 只读") : ""}${pendingBytes ? uiMessage("ui.terminalView.value1BUnconfirmed", { value1: pendingBytes }, " · 待确认 {value1} B") : ""}`);
+    writeUiText(message, notice || selected?.error || (!running(selected) ? reasonName(selected) : uiMessage("ui.terminalView.closingTheTabKeepsTheTerminalRunning", {}, "关闭标签页会保留终端"))); writeUiAttribute(message, "title", message.textContent);
+    writeUiText(path, selected ? `${selected.cwd} · ${selected.program}` : ""); writeUiAttribute(path, "title", path.textContent);
     plus.disabled = creation || reviewRequired; end.disabled = reviewRequired || !running(selected) || selected.state === "closing";
-    const option = [...sessions.options].find(option => option.value === selected?.id); if (option) option.textContent = `${selected.title} ${selected.id.slice(-4)} · ${reviewRequired ? "状态待确认" : stateName(selected)}`;
-    control.disabled = reviewRequired || !selected || selected.state !== "running" || attaching; control.title = control.disabled ? "连接终端输入" : input && !blocked ? "重新连接终端输入" : "连接终端输入";
+    const option = [...sessions.options].find(option => option.value === selected?.id); if (option) writeUiText(option, `${selected.title} ${selected.id.slice(-4)} · ${reviewRequired ? uiMessage("ui.terminalView.statusUnconfirmed", {}, "状态待确认") : stateName(selected)}`);
+    control.disabled = reviewRequired || !selected || selected.state !== "running" || attaching; writeUiAttribute(control, "title", control.disabled ? uiMessage("ui.terminalView.connectTerminalInput", {}, "连接终端输入") : input && !blocked ? uiMessage("ui.terminalView.reconnectTerminalInput", {}, "重新连接终端输入") : uiMessage("ui.terminalView.connectTerminalInput", {}, "连接终端输入"));
     terminal && (terminal.options.disableStdin = !input || blocked || !visible() || !connected);
   };
   const clearInput = (reason = "") => { input?.stop(); input = null; pendingBytes = 0; if (reason) notice = reason; renderStatus(); };
@@ -71,7 +73,7 @@ export async function mountTerminalView(root, { sdk, context, params = {}, viewS
   const inputFault = error => {
     blocked = true; autoControl = false;
     const unknown = !error.status || error.status >= 500 || error.name === "AbortError";
-    notice = unknown ? "连接中断，最近输入是否收到尚不确定；请检查输出后重新连接，输入不会重发。" : `输入已暂停：${error.message}。请检查后重新连接。`;
+    notice = unknown ? uiText("ui.terminalView.connectionLostRecentInputDeliveryIsUncertainCheckOutput", {}, "连接中断，最近输入是否收到尚不确定；请检查输出后重新连接，输入不会重发。") : uiText("ui.terminalView.inputPausedValue1CheckAndReconnect", { value1: error.message }, "输入已暂停：{value1}。请检查后重新连接。");
     detach(); renderStatus();
   };
   async function acquire(explicit = false) {
@@ -85,7 +87,7 @@ export async function mountTerminalView(root, { sdk, context, params = {}, viewS
       selected = attached; lease = newLease; renewAt = Date.now() + 5000; blocked = false; connected = true; notice = "";
       input = createTerminalInput({ lease, write: (params, options) => timedCall("terminal.write", params, options.signal), fault: inputFault, changed: count => { pendingBytes = count; renderStatus(); } });
       lastSize = ""; measure(); terminal?.focus();
-    } catch (error) { if (!signal.aborted && version === generation) { blocked = true; autoControl = false; notice = error.code === "terminal_control_busy" ? "另一个页面正在输入；这里可以继续只读查看。" : `暂时无法连接输入：${error.message}`; } }
+    } catch (error) { if (!signal.aborted && version === generation) { blocked = true; autoControl = false; notice = error.code === "terminal_control_busy" ? uiText("ui.terminalView.anotherPageIsSendingInputYouCanKeepViewing", {}, "另一个页面正在输入；这里可以继续只读查看。") : uiText("ui.terminalView.cannotConnectInputRightNowValue1", { value1: error.message }, "暂时无法连接输入：{value1}"); } }
     finally { attaching = false; renderStatus(); }
   }
   async function timedCall(method, params, parent = signal) {
@@ -103,7 +105,7 @@ export async function mountTerminalView(root, { sdk, context, params = {}, viewS
       if (version !== generation || lease !== current) return;
       if (result.epoch !== current.epoch || result.input_epoch !== current.input_epoch || result.control_token !== current.control_token) {
         if (result.control_token) void sdk.call("terminal.detach", { ...current, epoch: result.epoch, control_token: result.control_token, input_epoch: result.input_epoch }).catch(() => {});
-        throw new Error("输入租约已改变");
+        throw new Error(uiText("ui.terminalView.inputLeaseChanged", {}, "输入租约已改变"));
       }
       renewAt = Date.now() + 5000;
     } catch (error) { if (version === generation && lease === current && !signal.aborted) inputFault(error); }
@@ -136,19 +138,19 @@ export async function mountTerminalView(root, { sdk, context, params = {}, viewS
     // breaks emoji/IME input without an active reader. Keep its normal mode.
     terminal = new Terminal({ cursorBlink: true, fontSize, fontFamily: 'Consolas, "Cascadia Mono", "Noto Sans Mono CJK SC", monospace', scrollback: 2000, allowProposedApi: true, disableStdin: true, screenReaderMode: false });
     fit = new FitAddon(); searchAddon = new SearchAddon(); terminal.loadAddon(fit); terminal.loadAddon(searchAddon); terminal.loadAddon(new Unicode11Addon()); terminal.unicode.activeVersion = "11";
-    terminal.open(surface); terminal.textarea.setAttribute("aria-label", "交互终端输入"); theme();
+    terminal.open(surface); writeUiAttribute(terminal.textarea, "aria-label", uiMessage("ui.terminalView.interactiveTerminalInput", {}, "交互终端输入")); theme();
     const admit = (text, binary = false) => {
       if (!input || blocked) return;
       try {
         // Refuse huge paste events before allocating their encoded copy.
-        if (text.length > 65536) throw new Error("粘贴内容超出 64 KiB 输入队列，尚未发送；请分段粘贴。");
+        if (text.length > 65536) throw new Error(uiText("ui.terminalView.pastedContentExceedsThe64KibInputQueueAnd", {}, "粘贴内容超出 64 KiB 输入队列，尚未发送；请分段粘贴。"));
         input.enqueue(binary ? Uint8Array.from(text, char => char.charCodeAt(0) & 255) : encoder.encode(text));
         terminal.clearSelection();
         if (notice.startsWith("粘贴内容超出")) { notice = ""; renderStatus(); }
       } catch (error) { notice = error.message; renderStatus(); }
     };
     terminal.onData(text => admit(text)); terminal.onBinary(text => admit(text, true));
-    searchAddon.onDidChangeResults(result => { matches.textContent = result.resultCount ? `${result.resultIndex + 1} / ${result.resultCount}` : "无匹配"; });
+    searchAddon.onDidChangeResults(result => { writeUiText(matches, result.resultCount ? `${result.resultIndex + 1} / ${result.resultCount}` : uiMessage("ui.terminalView.noMatches", {}, "无匹配")); });
     terminal.attachCustomKeyEventHandler(event => {
       if (event.type !== "keydown") return true;
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") { event.preventDefault(); showFind(); return false; }
@@ -163,17 +165,17 @@ export async function mountTerminalView(root, { sdk, context, params = {}, viewS
   async function select(id) {
     generation++; reading?.abort(); detach(); blocked = false; autoControl = true; connected = false; selected = null; cursor = 0; notice = ""; lastSize = ""; terminal?.dispose(); terminal = null; surface.replaceChildren(); placeholder.replaceChildren(); placeholder.hidden = false;
     if (!id) {
-      const createButton = action("plus", "新建终端", create); placeholder.append(make("h3", "", "终端"), make("p", "", "在当前项目中运行命令。"), createButton); remember(); renderStatus(); return;
+      const createButton = action("plus", uiMessage("ui.terminalView.newTerminal", {}, "新建终端"), create); placeholder.append(make("h3", "", uiMessage("ui.terminalView.terminal", {}, "终端")), make("p", "", uiMessage("ui.terminalView.runCommandsInTheCurrentProject", {}, "在当前项目中运行命令。")), createButton); remember(); renderStatus(); return;
     }
     const version = generation, row = await sdk.call("terminal.get", { id }, { signal }); if (version !== generation || signal.aborted) return;
-    selected = row; cursor = row.oldest; if (row.oldest) notice = "较早输出已超出缓存，仅显示保留内容；屏幕可能不完整。";
+    selected = row; cursor = row.oldest; if (row.oldest) notice = uiText("ui.terminalView.olderOutputExceededTheCacheOnlyRetainedContentIs", {}, "较早输出已超出缓存，仅显示保留内容；屏幕可能不完整。");
     renderer(); sessions.value = row.id; placeholder.hidden = true; remember(); renderStatus(); if (row.state === "running") await acquire();
   }
   async function refresh() {
     const rows = await sdk.call("terminal.list", {}, { signal }); if (signal.aborted) return;
     sessions.replaceChildren();
-    if (!selected && rows.length) { const option = make("option", "", "选择终端…"); option.value = ""; sessions.append(option); }
-    if (!rows.length) { const option = make("option", "", "没有终端"); option.value = ""; sessions.append(option); }
+    if (!selected && rows.length) { const option = make("option", "", uiMessage("ui.terminalView.selectTerminal", {}, "选择终端…")); option.value = ""; sessions.append(option); }
+    if (!rows.length) { const option = make("option", "", uiMessage("ui.terminalView.noTerminals", {}, "没有终端")); option.value = ""; sessions.append(option); }
     for (const row of rows) { const option = make("option", "", `${row.title} ${row.id.slice(-4)} · ${stateName(row)}`); option.value = row.id; sessions.append(option); }
     if (selected && rows.some(row => row.id === selected.id)) sessions.value = selected.id;
     return rows;
@@ -184,14 +186,14 @@ export async function mountTerminalView(root, { sdk, context, params = {}, viewS
       // This key belongs to one explicit click only; reload/list never creates.
       const row = await timedCall("terminal.create", { key: `term-${crypto.randomUUID()}`, columns: terminal?.cols || 80, rows: terminal?.rows || 24 });
       if (signal.aborted) return; await refresh(); await select(row.id); sessions.value = row.id;
-    } catch (error) { if (!signal.aborted) { notice = `启动结果尚需核对：${error.message}；请从会话列表查看。不会自动重复启动。`; await refresh().catch(() => {}); renderStatus(); } }
+    } catch (error) { if (!signal.aborted) { notice = uiText("ui.terminalView.startupResultUnconfirmedValue1CheckTheSessionListStartup", { value1: error.message }, "启动结果尚需核对：{value1}；请从会话列表查看。不会自动重复启动。"); await refresh().catch(() => {}); renderStatus(); } }
     finally { creation = false; renderStatus(); }
   }
   async function close() {
-    if (!running(selected) || !confirm("结束这个终端及它启动的子进程？关闭标签页可保留运行。")) return;
+    if (!running(selected) || !confirm(uiMessage("ui.terminalView.endThisTerminalAndItsChildProcessesCloseThe", {}, "结束这个终端及它启动的子进程？关闭标签页可保留运行。"))) return;
     const current = selected, version = generation; detach(); blocked = true;
     try { const ended = await timedCall("terminal.close", { id: current.id, epoch: current.epoch }); if (version === generation) { selected = ended; notice = ""; renderStatus(); } }
-    catch (error) { if (version === generation) { notice = `结束结果尚未确认：${error.message}。请重新查看状态。`; renderStatus(); } }
+    catch (error) { if (version === generation) { notice = uiText("ui.terminalView.terminationResultUnconfirmedValue1CheckTheStatusAgain", { value1: error.message }, "结束结果尚未确认：{value1}。请重新查看状态。"); renderStatus(); } }
     await refresh();
   }
   sessions.onchange = () => { void select(sessions.value).catch(onError); };
@@ -208,7 +210,7 @@ export async function mountTerminalView(root, { sdk, context, params = {}, viewS
         const result = await timedCall("terminal.read", { id: current.id, epoch: current.epoch, cursor, limit: 32768, wait_ms: 500 }, request.signal);
         if (version !== generation || signal.aborted) continue;
         const data = terminalBytes(result, cursor); connected = true; selected = result;
-        if (result.gap) { terminal.reset(); notice = "输出超出 1 MiB 缓存，较早部分已丢弃；屏幕可能不完整。"; }
+        if (result.gap) { terminal.reset(); notice = uiText("ui.terminalView.outputExceededThe1MibCacheOlderContentWas", {}, "输出超出 1 MiB 缓存，较早部分已丢弃；屏幕可能不完整。"); }
         if (data.length) await new Promise(resolve => {
           const done = () => { request.signal.removeEventListener("abort", done); resolve(); };
           if (request.signal.aborted) { done(); return; }
@@ -224,12 +226,12 @@ export async function mountTerminalView(root, { sdk, context, params = {}, viewS
         connected = false;
         if (["write_token_conflict", "purge_review_required"].includes(error.code)) {
           reviewRequired = true; generation++; blocked = true; autoControl = false; detach();
-          notice = "终端状态尚未确认。请保留草稿并重新载入；进程和输入不会重放。";
+          notice = uiText("ui.terminalView.terminalStatusUnconfirmedKeepDraftsAndReloadProcessesAnd", {}, "终端状态尚未确认。请保留草稿并重新载入；进程和输入不会重放。");
         } else if (error.code === "terminal_epoch_changed") {
           blocked = true; autoControl = false; detach();
           try { selected = await sdk.call("terminal.get", { id: current.id }, { signal }); cursor = selected.oldest; terminal.reset(); } catch { /* keep old identity, never recreate */ }
-          notice = "服务已重启，旧终端未重启，输入未重放。";
-        } else { if (lease) inputFault(error); notice ||= `暂时无法读取终端：${error.message}`; }
+          notice = uiText("ui.terminalView.serviceRestartedTheOldTerminalWasNotRestartedAnd", {}, "服务已重启，旧终端未重启，输入未重放。");
+        } else { if (lease) inputFault(error); notice ||= uiText("ui.terminalView.cannotReadTerminalRightNowValue1", { value1: error.message }, "暂时无法读取终端：{value1}"); }
         renderStatus(); await sleep(1000);
       } finally { signal.removeEventListener("abort", abort); if (reading === request) reading = null; }
     }
@@ -246,7 +248,7 @@ export async function mountTerminalView(root, { sdk, context, params = {}, viewS
   void pump();
   return { dispose, visible(shown) { if (!shown) {
     reading?.abort("hidden");
-    if (input?.pending) { blocked = true; autoControl = false; notice = "已停止尚未确认的输入，请检查输出后重新连接；输入不会重发。"; }
+    if (input?.pending) { blocked = true; autoControl = false; notice = uiText("ui.terminalView.unconfirmedInputStoppedCheckOutputAndReconnectInputWill", {}, "已停止尚未确认的输入，请检查输出后重新连接；输入不会重发。"); }
     detach();
   } else { measure(); renderStatus(); } } };
 }

@@ -1,3 +1,4 @@
+import { t as uiErrorText } from "../i18n.js";
 import { api, ApiError, resourceId } from "./client.js";
 import { isTransientReadError } from "./read-recovery.js";
 import { createRequestRecovery } from "./request-recovery.js";
@@ -18,11 +19,11 @@ export async function uploadImageWithRecovery(projectId, sessionId, file, mime,
       `/projects/${resourceId(projectId, "project")}/sessions/${resourceId(sessionId, "session")}` +
       `/attachments/${id}/info`, { signal })).data,
   } = {}) {
-  if (!/^[0-9a-f]{32}$/.test(id)) throw new TypeError("Invalid image upload identity");
+  if (!/^[0-9a-f]{32}$/.test(id)) throw new TypeError(uiErrorText("error.detail.invalidImageUploadIdentity", {}, "Invalid image upload identity"));
   const deadline = now() + 90000;
   const recovery = createRequestRecovery({ now, random, setTimer, clearTimer, eventTarget,
     requestMs: 30000, recoveryMs: 90000,
-    timeoutError: () => new ApiError("Image transfer timed out", { code: "image_upload_timeout" }) });
+    timeoutError: () => new ApiError(uiErrorText("error.detail.imageTransferTimedOut", {}, "Image transfer timed out"), { code: "image_upload_timeout" }) });
   let inspect = false, lastError;
   const active = () => {
     recovery.assertActive();
@@ -40,7 +41,7 @@ export async function uploadImageWithRecovery(projectId, sessionId, file, mime,
         if (inspect) {
           try {
             const stored = await bounded(read);
-            if (!matches(stored)) throw new ApiError("Image acknowledgement differs",
+            if (!matches(stored)) throw new ApiError(uiErrorText("error.detail.imageAcknowledgementDiffers", {}, "Image acknowledgement differs"),
               { code: "image_upload_conflict" });
             return stored;
           } catch (error) {
@@ -50,11 +51,11 @@ export async function uploadImageWithRecovery(projectId, sessionId, file, mime,
         }
         active();
         const stored = await bounded(upload);
-        if (!matches(stored)) throw new ApiError("Image acknowledgement differs",
+        if (!matches(stored)) throw new ApiError(uiErrorText("error.detail.imageAcknowledgementDiffers", {}, "Image acknowledgement differs"),
           { code: "image_upload_conflict" });
         return stored;
       } catch (error) {
-        if (error.status === 405) throw new ApiError("Update the target device to upload images",
+        if (error.status === 405) throw new ApiError(uiErrorText("error.detail.updateTheTargetDeviceToUploadImages", {}, "Update the target device to upload images"),
           { code: "image_upload_unsupported" });
         if (!isTransientReadError(error) &&
             !["image_upload_timeout", "invalid_response", "remote_result_unconfirmed"].includes(error?.code))
@@ -70,7 +71,7 @@ export async function uploadImageWithRecovery(projectId, sessionId, file, mime,
       }
     }
     active();
-    throw Object.assign(new ApiError("The image could not be confirmed after recovery",
+    throw Object.assign(new ApiError(uiErrorText("error.detail.theImageCouldNotBeConfirmedAfterRecovery", {}, "The image could not be confirmed after recovery"),
       { code: "image_upload_unavailable" }), { cause: lastError });
   } finally { recovery.dispose(); }
 }

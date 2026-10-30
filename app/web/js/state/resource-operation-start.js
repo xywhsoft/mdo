@@ -1,3 +1,4 @@
+import { t as uiErrorText } from "../i18n.js";
 import { api } from "../api/client.js";
 import { clientActionId, createRequestRecovery } from "../api/request-recovery.js";
 import { isTransientReadError } from "../api/read-recovery.js";
@@ -10,7 +11,7 @@ import { awaitResourceOperation, resourceOperationEpoch } from "./resource-opera
 export async function startResourceOperation(path, expected, { signal, isCurrent = () => true,
   epoch = resourceOperationEpoch, recoveryOptions = {}, createId = () => `op-c-${clientActionId()}` } = {}) {
   const id = createId(), originalEpoch = epoch();
-  if (!/^op-c-[0-9a-f]{32}$/.test(id)) throw new TypeError("Invalid operation request identity");
+  if (!/^op-c-[0-9a-f]{32}$/.test(id)) throw new TypeError(uiErrorText("error.detail.invalidOperationRequestIdentity", {}, "Invalid operation request identity"));
   const pending = { id, ...expected, state: "pending", terminal: false, message: "", acceptance_unknown: true };
   const recovery = createRequestRecovery(recoveryOptions);
   const cancel = () => recovery.dispose();

@@ -1,9 +1,11 @@
+import { setUiText as writeUiText, setUiAttribute as writeUiAttribute, uiMessage } from "../../i18n.js";
+
 import { mountIcons } from "../../components/icons.js";
 
 export function element(tag, className, text) {
   const node = document.createElement(tag);
   if (className) node.className = className;
-  if (text !== undefined) node.textContent = text;
+  if (text !== undefined) writeUiText(node, text);
   return node;
 }
 export function icon(name) {
@@ -12,7 +14,7 @@ export function icon(name) {
 }
 export function iconButton(name, label, execute, onError = console.error) {
   const node = element("button", "wb-icon-button"); node.type = "button";
-  node.title = label; node.setAttribute("aria-label", label); node.append(icon(name));
+  writeUiAttribute(node, "title", label); writeUiAttribute(node, "aria-label", label); node.append(icon(name));
   node.onclick = () => Promise.resolve().then(execute).catch(onError); return node;
 }
 /** One menu implementation for native-content overlays, keyboard and touch. */
@@ -46,10 +48,10 @@ export function popupMenu(trigger, items, { signal, onError = console.error } = 
     if (menu) { close(true); return; }
     if (signal?.aborted) return;
     opener = trigger; menu = element("div", "wb-menu"); menu.setAttribute("role", "menu");
-    menu.setAttribute("aria-label", trigger.getAttribute("aria-label") || "更多操作");
+    writeUiAttribute(menu, "aria-label", trigger.getAttribute("aria-label") || uiMessage("extensionBrowser.more", {}, "更多操作"));
     for (const item of typeof items === "function" ? items() : items) {
       const node = element("button", "wb-menu-item", item.label); node.type = "button"; node.disabled = Boolean(item.disabled);
-      node.setAttribute("aria-label", item.label);
+      writeUiAttribute(node, "aria-label", item.label);
       node.setAttribute("role", item.checked === undefined ? "menuitem" : "menuitemcheckbox");
       if (item.checked !== undefined) node.setAttribute("aria-checked", String(item.checked));
       if (item.icon) node.prepend(icon(item.icon));

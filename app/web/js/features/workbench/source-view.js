@@ -1,3 +1,5 @@
+import { setUiAttribute as writeUiAttribute, uiMessage } from "../../i18n.js";
+
 import { element as make } from "./controls.js";
 
 const languages = /\.(?:c|h|cc|cpp|hpp|js|mjs|cjs|ts|tsx|jsx|json|py|sh|bash|ps1|css|java|rs|go)$/i;
@@ -15,7 +17,7 @@ export function sourceTokens(text, path) {
 /** Fixed-height source rows bound DOM size even for very long log files. */
 export function createSourceView(text, path, { signal, line = 1 } = {}) {
   const root = make("div", "wb-source"), canvas = make("div", "wb-source-canvas"), lines = text.split("\n");
-  root.tabIndex = 0; root.setAttribute("aria-label", `文件内容：${path}`); root.append(canvas);
+  root.tabIndex = 0; writeUiAttribute(root, "aria-label", uiMessage("ui.sourceView.fileContentsValue1", { value1: path }, "文件内容：{value1}")); root.append(canvas);
   const totalHeight = lines.length * 20, physicalHeight = Math.min(16000000, totalHeight);
   canvas.style.height = `${physicalHeight}px`;
   canvas.style.minWidth = `${Math.min(2000000, 68 + lines.reduce((longest, value) => Math.max(longest, value.length), 1) * 8)}px`;
@@ -26,7 +28,7 @@ export function createSourceView(text, path, { signal, line = 1 } = {}) {
     if (first === start && last === end) return; start = first; end = last; canvas.replaceChildren();
     for (let at = first; at < last; at++) {
       const row = make("div", "wb-source-line"), number = make("button", "wb-source-number", String(at + 1)), code = make("span", "wb-source-text");
-      row.dataset.line = String(at + 1); row.style.top = `${at * 20 - logicalTop + root.scrollTop}px`; number.type = "button"; number.setAttribute("aria-label", `选择第 ${at + 1} 行`);
+      row.dataset.line = String(at + 1); row.style.top = `${at * 20 - logicalTop + root.scrollTop}px`; number.type = "button"; writeUiAttribute(number, "aria-label", uiMessage("ui.sourceView.selectLineValue1", { value1: at + 1 }, "选择第 {value1} 行"));
       row.classList.toggle("wb-source-selected", Boolean(selected && at + 1 >= selected[0] && at + 1 <= selected[1]));
       number.onclick = event => { selected = event.shiftKey && selected ? [Math.min(selected[0], at + 1), Math.max(selected[0], at + 1)] : [at + 1, at + 1]; start = -1; render(); };
       for (const token of sourceTokens(lines[at], path)) code.append(make("span", token.kind ? `wb-token-${token.kind}` : "", token.text));

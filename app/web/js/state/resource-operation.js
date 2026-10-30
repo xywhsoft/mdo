@@ -1,29 +1,29 @@
+import { t as uiText, t } from "../i18n.js";
 import { api, ApiError, resourceId, currentPageWriteToken } from "../api/client.js";
 import { targetState, subscribeTarget } from "../api/target.js";
 import { createRequestRecovery } from "../api/request-recovery.js";
 import { isTransientReadError } from "../api/read-recovery.js";
-import { t } from "../i18n.js";
 
 export const resourceOperationEpoch = () => JSON.stringify([targetState().selected,
   targetState().runtimeChanged, currentPageWriteToken()]);
 const invalid = () => new ApiError(t("resource.operationInvalid", {}, "操作状态响应不符，请重新读取状态。"), { code: "resource_operation_invalid" });
 const aborted = () => new DOMException("Operation observation cancelled", "AbortError");
 const mcpFailures = Object.freeze({
-  mcp_authorization_required: ["mcpAuthorizationRequired", "请在 MCP 设置中完成该服务器授权，并检查权限配置。"],
-  mcp_start_failed: ["mcpStartFailed", "无法启动 MCP 程序，请检查程序路径、工作目录和环境配置。"],
-  mcp_timeout: ["mcpTimeout", "MCP 服务器未在时限内响应，请检查服务器状态或调整超时设置。"],
-  mcp_io: ["mcpIo", "MCP 连接中断或无法读取响应，请检查网络或服务器进程。"],
-  mcp_busy: ["mcpBusy", "MCP 服务器正在处理另一个请求，请稍后测试连接。"],
-  mcp_disabled: ["mcpDisabled", "MCP 服务器已停用，请启用后再测试连接。"],
-  mcp_protocol_version: ["mcpProtocolVersion", "MCP 协议版本不兼容，请检查服务器支持的版本。"],
-  mcp_invalid_response: ["mcpInvalidResponse", "服务器返回的数据不符合 MCP 协议，请检查连接方式和服务器实现。"],
-  mcp_remote_error: ["mcpRemoteError", "MCP 服务器拒绝了初始化或工具发现请求，请检查服务器配置及日志。"],
-  mcp_limit: ["mcpLimit", "MCP 响应超出配置的大小或工具数量限制，请检查服务器和限制设置。"],
-  mcp_memory: ["mcpMemory", "内存不足，无法完成 MCP 连接测试，请释放内存后重试。"],
-  mcp_configuration: ["mcpConfiguration", "MCP 配置无效，请检查服务器配置后再测试连接。"],
-  mcp_session_expired: ["mcpSessionExpired", "MCP 服务器会话已过期，请重新测试连接。"],
-  mcp_not_found: ["mcpNotFound", "MCP 服务器配置已被移除，请刷新服务器列表。"],
-  mcp_status_unavailable: ["mcpStatusUnavailable", "连接测试已结束，但服务器状态暂时不可用，请刷新服务器列表。"],
+  mcp_authorization_required: ["mcpAuthorizationRequired", uiText("ui.resourceOperation.completeServerAuthorizationInMcpSettingsAndCheckPermissions", {}, "请在 MCP 设置中完成该服务器授权，并检查权限配置。")],
+  mcp_start_failed: ["mcpStartFailed", uiText("resource.mcpStartFailed", {}, "无法启动 MCP 程序，请检查程序路径、工作目录和环境配置。")],
+  mcp_timeout: ["mcpTimeout", uiText("resource.mcpTimeout", {}, "MCP 服务器未在时限内响应，请检查服务器状态或调整超时设置。")],
+  mcp_io: ["mcpIo", uiText("resource.mcpIo", {}, "MCP 连接中断或无法读取响应，请检查网络或服务器进程。")],
+  mcp_busy: ["mcpBusy", uiText("resource.mcpBusy", {}, "MCP 服务器正在处理另一个请求，请稍后测试连接。")],
+  mcp_disabled: ["mcpDisabled", uiText("resource.mcpDisabled", {}, "MCP 服务器已停用，请启用后再测试连接。")],
+  mcp_protocol_version: ["mcpProtocolVersion", uiText("resource.mcpProtocolVersion", {}, "MCP 协议版本不兼容，请检查服务器支持的版本。")],
+  mcp_invalid_response: ["mcpInvalidResponse", uiText("resource.mcpInvalidResponse", {}, "服务器返回的数据不符合 MCP 协议，请检查连接方式和服务器实现。")],
+  mcp_remote_error: ["mcpRemoteError", uiText("resource.mcpRemoteError", {}, "MCP 服务器拒绝了初始化或工具发现请求，请检查服务器配置及日志。")],
+  mcp_limit: ["mcpLimit", uiText("resource.mcpLimit", {}, "MCP 响应超出配置的大小或工具数量限制，请检查服务器和限制设置。")],
+  mcp_memory: ["mcpMemory", uiText("resource.mcpMemory", {}, "内存不足，无法完成 MCP 连接测试，请释放内存后重试。")],
+  mcp_configuration: ["mcpConfiguration", uiText("resource.mcpConfiguration", {}, "MCP 配置无效，请检查服务器配置后再测试连接。")],
+  mcp_session_expired: ["mcpSessionExpired", uiText("resource.mcpSessionExpired", {}, "MCP 服务器会话已过期，请重新测试连接。")],
+  mcp_not_found: ["mcpNotFound", uiText("resource.mcpNotFound", {}, "MCP 服务器配置已被移除，请刷新服务器列表。")],
+  mcp_status_unavailable: ["mcpStatusUnavailable", uiText("resource.mcpStatusUnavailable", {}, "连接测试已结束，但服务器状态暂时不可用，请刷新服务器列表。")],
 });
 function failureMessage(operation) {
   if (operation.kind !== "mcp_refresh") return t("resource.reloadFailed", {}, "目录刷新失败");

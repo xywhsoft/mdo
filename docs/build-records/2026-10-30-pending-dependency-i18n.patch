@@ -1,0 +1,81 @@
+--- a/app/web/js/features/settings/dependency-plan.js
++++ b/app/web/js/features/settings/dependency-plan.js
+@@ -0,0 +1,2 @@
++import { setUiText as writeUiText, uiMessage, t as uiText } from "../../i18n.js";
++
+@@ -6 +8 @@
+-export const dependencyActionLabel = item => item.operation === "remove" ? "卸载" : item.operation === "install" ? item.old_exists ? "更新" : "安装" : item.desired_enabled ? "启用 / 保持启用" : "停用";
++export const dependencyActionLabel = item => item.operation === "remove" ? uiText("store.uninstall", {}, "卸载") : item.operation === "install" ? item.old_exists ? uiText("extensionBrowser.update", {}, "更新") : uiText("extensionBrowser.install", {}, "安装") : item.desired_enabled ? uiText("ui.dependencyPlan.enableKeepEnabled", {}, "启用 / 保持启用") : uiText("resource.disable", {}, "停用");
+@@ -9 +11 @@
+-  root.append(element("p",{text:"以下扩展属于同一操作计划。共享依赖只处理一次；更新失败会恢复整组目录和启用状态。"}));
++  root.append(element("p",{text:uiMessage("ui.dependencyPlan.theseExtensionsShareOneOperationPlanSharedDependenciesAre", {}, "以下扩展属于同一操作计划。共享依赖只处理一次；更新失败会恢复整组目录和启用状态。")}));
+@@ -12 +14 @@
+-    element("span",{text:dependencyActionLabel(item)}),...(item.version?[element("small",{text:`版本 ${item.version}`})]:[]),
++    element("span",{text:dependencyActionLabel(item)}),...(item.version?[element("small",{text:uiMessage("ui.dependencyPlan.versionValue1", { value1: item.version }, "版本 {value1}")})]:[]),
+@@ -15 +17 @@
+-  if(plan.items?.some(item=>item.kind==="mcp"))root.append(element("p",{className:"extension-help",text:"安装 MCP 模板后，请在依赖详情中选择私有连接；需要的账号登录与授权会单独检查。"}));
++  if(plan.items?.some(item=>item.kind==="mcp"))root.append(element("p",{className:"extension-help",text:uiMessage("ui.dependencyPlan.afterInstallingAnMcpTemplateSelectAPrivateConnection", {}, "安装 MCP 模板后，请在依赖详情中选择私有连接；需要的账号登录与授权会单独检查。")}));
+@@ -22 +24 @@
+-    const view=openLayer({title:"确认扩展依赖计划",icon:"folder",width:"48rem",height:"80%",beforeClose:()=>!busy,onClosed(){controller.abort();stop();options.signal?.removeEventListener("abort",abort);if(!attempted&&device()===target)void api.post("/ecosystem",{action:"discard_plan",plan_id:plan.id,revision:plan.revision}).catch(()=>{});if(!finished){finished=true;resolve(committedReceipt);}}});
++    const view=openLayer({title:uiMessage("ui.dependencyPlan.confirmExtensionDependencyPlan", {}, "确认扩展依赖计划"),icon:"folder",width:"48rem",height:"80%",beforeClose:()=>!busy,onClosed(){controller.abort();stop();options.signal?.removeEventListener("abort",abort);if(!attempted&&device()===target)void api.post("/ecosystem",{action:"discard_plan",plan_id:plan.id,revision:plan.revision}).catch(()=>{});if(!finished){finished=true;resolve(committedReceipt);}}});
+@@ -26,3 +28,3 @@
+-    const summary=dependencyPlanSummary(plan),status=element("p",{attrs:{role:"status"}}),trust=element("input",{attrs:{type:"checkbox","aria-label":"确认整组扩展内容"}});trust.checked=!code;
+-    view.body.append(summary,...(code?[element("label",{className:"store-code-consent"},[trust,element("span",{text:"我已核对以上操作及作者，信任整组扩展的内容和程序。"})])]:[]),status);
+-    const apply=element("button",{className:"primary-button",text:"应用此计划",attrs:{type:"button"}}),close=element("button",{className:"secondary-button",text:"取消",attrs:{type:"button"}});apply.disabled=!plan.ready;view.footer.append(apply,close);
++    const summary=dependencyPlanSummary(plan),status=element("p",{attrs:{role:"status"}}),trust=element("input",{attrs:{type:"checkbox","aria-label":uiMessage("ui.dependencyPlan.confirmTheEntireExtensionGroup", {}, "确认整组扩展内容")}});trust.checked=!code;
++    view.body.append(summary,...(code?[element("label",{className:"store-code-consent"},[trust,element("span",{text:uiMessage("ui.dependencyPlan.iReviewedTheseOperationsAndAuthorsAndTrustThe", {}, "我已核对以上操作及作者，信任整组扩展的内容和程序。")})])]:[]),status);
++    const apply=element("button",{className:"primary-button",text:uiMessage("ui.dependencyPlan.applyThisPlan", {}, "应用此计划"),attrs:{type:"button"}}),close=element("button",{className:"secondary-button",text:uiMessage("sidebar.cancel", {}, "取消"),attrs:{type:"button"}});apply.disabled=!plan.ready;view.footer.append(apply,close);
+@@ -31 +33 @@
+-      if(busy||!trust.checked||!plan.ready||device()!==target)return;busy=true;attempted=true;apply.disabled=close.disabled=trust.disabled=view.closeButton.disabled=true;status.textContent="正在下载、验证并应用整组扩展，请等待结果…";
++      if(busy||!trust.checked||!plan.ready||device()!==target)return;busy=true;attempted=true;apply.disabled=close.disabled=trust.disabled=view.closeButton.disabled=true;writeUiText(status, uiMessage("ui.dependencyPlan.downloadingVerifyingAndApplyingTheExtensionGroupPleaseWait", {}, "正在下载、验证并应用整组扩展，请等待结果…"));
+@@ -35 +37 @@
+-        if(receipt.runtime_ready===false){committedReceipt=receipt;status.textContent=`文件与启用意图已保存，运行状态需要处理：${receipt.runtime_error||"请检查依赖配置或重新启动"}`;busy=false;close.textContent="关闭";close.disabled=view.closeButton.disabled=false;return;}
++        if(receipt.runtime_ready===false){committedReceipt=receipt;writeUiText(status, uiMessage("ui.dependencyPlan.filesAndEnabledPreferencesAreSavedRuntimeNeedsAttention", { value1: receipt.runtime_error||uiMessage("ui.dependencyPlan.checkDependencyConfigurationOrRestart", {}, "请检查依赖配置或重新启动") }, "文件与启用意图已保存，运行状态需要处理：{value1}"));busy=false;writeUiText(close, uiMessage("context.close", {}, "关闭"));close.disabled=view.closeButton.disabled=false;return;}
+@@ -37 +39 @@
+-      }catch(error){if(!controller.signal.aborted){status.textContent=`${errorMessage(error)}。如果连接中断，可重试此计划以读取操作回执。`;busy=false;apply.disabled=!trust.checked;close.disabled=trust.disabled=view.closeButton.disabled=false;}}
++      }catch(error){if(!controller.signal.aborted){writeUiText(status, uiMessage("ui.dependencyPlan.value1IfDisconnectedRetryThisPlanToReadIts", { value1: errorMessage(error) }, "{value1}。如果连接中断，可重试此计划以读取操作回执。"));busy=false;apply.disabled=!trust.checked;close.disabled=trust.disabled=view.closeButton.disabled=false;}}
+--- a/app/web/js/features/settings/extension-dependencies.js
++++ b/app/web/js/features/settings/extension-dependencies.js
+@@ -0,0 +1,2 @@
++import { setUiText as writeUiText, uiMessage, t as uiText } from "../../i18n.js";
++
+@@ -5 +7 @@
+-const states={ready:"已安装且依赖满足",disabled:"已停用",dependency_missing:"尚未安装",dependency_disabled:"依赖已停用",dependency_cycle:"存在循环依赖",dependency_conflict:"存在冲突",dependency_blocked:"依赖尚未就绪",dependency_source_mismatch:"来源身份不匹配",dependency_depth:"依赖链超过深度限制",duplicate_identity:"身份冲突",needs_configuration:"需要配置",needs_authorization:"需要登录"};
++const states={get ready() { return uiText("ui.extensionDependencies.installedDependenciesSatisfied", {}, "已安装且依赖满足"); },get disabled() { return uiText("ecosystem.disabled", {}, "已停用"); },get dependency_missing() { return uiText("ui.extensionDependencies.notInstalled", {}, "尚未安装"); },get dependency_disabled() { return uiText("ui.extensionDependencies.dependencyDisabled", {}, "依赖已停用"); },get dependency_cycle() { return uiText("ui.extensionDependencies.dependencyCycle", {}, "存在循环依赖"); },get dependency_conflict() { return uiText("ui.extensionDependencies.conflict", {}, "存在冲突"); },get dependency_blocked() { return uiText("ui.extensionDependencies.dependenciesNotReady", {}, "依赖尚未就绪"); },get dependency_source_mismatch() { return uiText("ui.extensionDependencies.sourceIdentityMismatch", {}, "来源身份不匹配"); },get dependency_depth() { return uiText("ui.extensionDependencies.dependencyChainExceedsTheDepthLimit", {}, "依赖链超过深度限制"); },get duplicate_identity() { return uiText("ui.extensionDependencies.identityConflict", {}, "身份冲突"); },get needs_configuration() { return uiText("ui.extensionDependencies.configurationRequired", {}, "需要配置"); },get needs_authorization() { return uiText("ui.extensionDependencies.signInRequired", {}, "需要登录"); }};
+@@ -7,2 +9,2 @@
+-  const root=element("section",{className:"extension-dependencies",attrs:{"aria-label":"扩展依赖"}});
+-  root.append(element("h4",{text:"依赖扩展"}));
++  const root=element("section",{className:"extension-dependencies",attrs:{"aria-label":uiMessage("ui.extensionDependencies.extensionDependencies", {}, "扩展依赖")}});
++  root.append(element("h4",{text:uiMessage("ui.extensionDependencies.requiredExtensions", {}, "依赖扩展")}));
+@@ -10 +12 @@
+-  if(!rows.length)root.append(element("p",{className:"extension-help",text:"无扩展依赖"}));
++  if(!rows.length)root.append(element("p",{className:"extension-help",text:uiMessage("ui.extensionDependencies.noExtensionDependencies", {}, "无扩展依赖")}));
+@@ -13,2 +15,2 @@
+-    line.append(element("strong",{text:row.name||row.id}),element("code",{text:row.id}),element("span",{text:row.optional?"可选":"必需"}));
+-    if(row.available===false||row.dependency_state)line.append(element("span",{text:row.available===false?"尚未安装或不可用":states[row.dependency_state]||row.dependency_state}));
++    line.append(element("strong",{text:row.name||row.id}),element("code",{text:row.id}),element("span",{text:row.optional?uiMessage("ui.extensionDependencies.optional", {}, "可选"):uiMessage("ui.extensionDependencies.required", {}, "必需")}));
++    if(row.available===false||row.dependency_state)line.append(element("span",{text:row.available===false?uiMessage("ui.extensionDependencies.notInstalledOrUnavailable", {}, "尚未安装或不可用"):states[row.dependency_state]||row.dependency_state}));
+@@ -19,2 +21,2 @@
+-  if(conflicts.length){root.append(element("h4",{text:"不能同时启用"}));for(const conflict of conflicts)root.append(element("p",{text:`${conflict.id}${conflict.reason?` · ${conflict.reason}`:""}`}));}
+-  if(item.dependents?.length){root.append(element("h4",{text:"被以下扩展依赖"}));for(const user of item.dependents)root.append(element("p",{text:`${user.name||user.id} · ${user.id}`}));}
++  if(conflicts.length){root.append(element("h4",{text:uiMessage("ui.extensionDependencies.cannotBeEnabledTogether", {}, "不能同时启用")}));for(const conflict of conflicts)root.append(element("p",{text:`${conflict.id}${conflict.reason?` · ${conflict.reason}`:""}`}));}
++  if(item.dependents?.length){root.append(element("h4",{text:uiMessage("ui.extensionDependencies.requiredByTheseExtensions", {}, "被以下扩展依赖")}));for(const user of item.dependents)root.append(element("p",{text:`${user.name||user.id} · ${user.id}`}));}
+@@ -30 +32 @@
+-    panel.append(element("p",{className:"extension-help",text:"MCP 模板安装就绪后，仍需配置并授权私有连接。连接绑定只保存在本机，不进入发布归档。"}));
++    panel.append(element("p",{className:"extension-help",text:uiMessage("ui.extensionDependencies.installedMcpTemplatesStillRequireConfiguredAndAuthorizedPrivate", {}, "MCP 模板安装就绪后，仍需配置并授权私有连接。连接绑定只保存在本机，不进入发布归档。")}));
+@@ -33,2 +35,2 @@
+-      const line=element("label",{className:"extension-field"}),select=element("select",{attrs:{"aria-label":`${dependency.id} 私有连接`}}),save=element("button",{className:"secondary-button",text:"保存连接绑定",attrs:{type:"button"}}),status=element("small",{attrs:{role:"status"}});
+-      select.append(element("option",{text:"未指定连接（仅一个可用连接时按当前作用域解析）",attrs:{value:""}}));
++      const line=element("label",{className:"extension-field"}),select=element("select",{attrs:{"aria-label":uiMessage("ui.extensionDependencies.value1PrivateConnection", { value1: dependency.id }, "{value1} 私有连接")}}),save=element("button",{className:"secondary-button",text:uiMessage("ui.extensionDependencies.saveConnectionBinding", {}, "保存连接绑定"),attrs:{type:"button"}}),status=element("small",{attrs:{role:"status"}});
++      select.append(element("option",{text:uiMessage("ui.extensionDependencies.noExplicitConnectionResolveInTheCurrentScopeWhen", {}, "未指定连接（仅一个可用连接时按当前作用域解析）"),attrs:{value:""}}));
+@@ -37 +39 @@
+-      const existing=detail.dependency_bindings?.[dependency.id]||"";if(existing&&!choices.some(connection=>connection.id===existing))select.append(element("option",{text:`${existing}（当前不可用）`,attrs:{value:existing}}));select.value=existing;
++      const existing=detail.dependency_bindings?.[dependency.id]||"";if(existing&&!choices.some(connection=>connection.id===existing))select.append(element("option",{text:uiMessage("ui.extensionDependencies.value1CurrentlyUnavailable", { value1: existing }, "{value1}（当前不可用）"),attrs:{value:existing}}));select.value=existing;
+@@ -39,2 +41,2 @@
+-        const response=(await api.post(`${path}/actions`,{action:"bind",dependency_id:dependency.id,connection_id:select.value,scope,expected_binding_revision:revision},options)).data;if(!live())return;revision=response.revision;status.textContent="绑定已保存；登录、连接和能力发现会在运行前检查。";
+-      }catch(error){if(live()&&error.name!=="AbortError")status.textContent=errorMessage(error);}finally{if(live())save.disabled=select.disabled=false;}});
++        const response=(await api.post(`${path}/actions`,{action:"bind",dependency_id:dependency.id,connection_id:select.value,scope,expected_binding_revision:revision},options)).data;if(!live())return;revision=response.revision;writeUiText(status, uiMessage("ui.extensionDependencies.bindingSavedSignInConnectionAndCapabilityDiscoveryAre", {}, "绑定已保存；登录、连接和能力发现会在运行前检查。"));
++      }catch(error){if(live()&&error.name!=="AbortError")writeUiText(status, errorMessage(error));}finally{if(live())save.disabled=select.disabled=false;}});
+@@ -43 +45 @@
+-  }).catch(error=>{if(live()&&error.name!=="AbortError")panel.append(element("p",{className:"extension-help",text:`依赖状态暂时无法更新：${errorMessage(error)}`}));});
++  }).catch(error=>{if(live()&&error.name!=="AbortError")panel.append(element("p",{className:"extension-help",text:uiMessage("ui.extensionDependencies.dependencyStatusCouldNotBeRefreshedValue1", { value1: errorMessage(error) }, "依赖状态暂时无法更新：{value1}")}));});

@@ -1,3 +1,4 @@
+import { t as uiErrorText } from "../i18n.js";
 // Recovery is opt-in for idempotent reads. load() settles its first attempt;
 // subscribers observe later recovery, within six attempts and a shared minute.
 // Ordinary stores, including settings operations that can write, never retry.
@@ -95,7 +96,7 @@ export function createResourceStore(initialData = null, {
       return publish({ status: "ready", data, error: null, updatedAt: now() });
     } catch (error) {
       if (generation !== requestGeneration) return state;
-      if (expired) error = Object.assign(new Error("Resource read timed out"),
+      if (expired) error = Object.assign(new Error(uiErrorText("error.detail.resourceReadTimedOut", {}, "Resource read timed out")),
         { code: "network_error", cause: error });
       if (error?.name === "AbortError") return state;
       if (!probing && recoverRead?.(error) && attempt < 6) {

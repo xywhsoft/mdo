@@ -1,4 +1,5 @@
-import { t, subscribeLocale } from "../../i18n.js";
+import { setUiText as writeUiText, uiMessage, t, subscribeLocale } from "../../i18n.js";
+
 import { errorMessage } from "../../utils/dom.js";
 import { reviewedPurgeIntent } from "./project-purge-contract.js";
 
@@ -16,13 +17,13 @@ export function createProjectPurgeConfirmation({ dialog, recovery, onResolved })
 
   function render() {
     if (!preview) return;
-    dialog.querySelector("h3").textContent = t("purgeConfirm.title", { name: preview.name });
-    dialog.querySelector('[data-purge-confirm="description"]').textContent = t("purgeConfirm.description",
+    writeUiText(dialog.querySelector("h3"), uiMessage("purgeConfirm.title", { name: preview.name }));
+    writeUiText(dialog.querySelector('[data-purge-confirm="description"]'), uiMessage("purgeConfirm.description",
       { sessions: preview.session_count, schedules: preview.schedule_count,
-        files: preview.file_count, directories: preview.directory_count });
-    dialog.querySelector("label span").textContent = t("purgeConfirm.typeId", { id: preview.id });
-    cancel.textContent = t("purgeConfirm.cancel");
-    submit.textContent = working ? t("purgeConfirm.working") : t("purgeConfirm.execute");
+        files: preview.file_count, directories: preview.directory_count }));
+    writeUiText(dialog.querySelector("label span"), uiMessage("purgeConfirm.typeId", { id: preview.id }));
+    writeUiText(cancel, uiMessage("purgeConfirm.cancel"));
+    writeUiText(submit, working ? uiMessage("purgeConfirm.working") : uiMessage("purgeConfirm.execute"));
     cancel.disabled = input.disabled = working;
     submit.disabled = working || recovery.get().busy || input.value !== preview.id;
     dialog.setAttribute("aria-busy", String(working));
@@ -39,7 +40,7 @@ export function createProjectPurgeConfirmation({ dialog, recovery, onResolved })
         origin = null;
         dialog.close(); onResolved();
       } else if (state.error) {
-        error.textContent = errorMessage(state.error); error.hidden = false; error.focus();
+        writeUiText(error, errorMessage(state.error)); error.hidden = false; error.focus();
       }
     } finally {
       working = false; render();

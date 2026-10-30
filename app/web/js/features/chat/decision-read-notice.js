@@ -1,12 +1,13 @@
+import { uiMessage, setUiText as writeUiText, t as uiText, t } from "../../i18n.js";
+
 import { element, errorMessage } from "../../utils/dom.js";
 import { isTransientReadError } from "../../api/read-recovery.js";
-import { t } from "../../i18n.js";
 
 const FALLBACKS = Object.freeze({
-  asks: "暂时无法读取对话询问，请检查连接后重试。",
-  approvals: "暂时无法读取权限审核，请检查连接后重试。",
-  runs: "暂时无法读取运行状态，请检查连接后重试。",
-  todo: "暂时无法读取待办列表，请检查连接后重试。",
+  get asks() { return uiText("dock.read.asks", {}, "暂时无法读取对话询问，请检查连接后重试。"); },
+  get approvals() { return uiText("dock.read.approvals", {}, "暂时无法读取权限审核，请检查连接后重试。"); },
+  get runs() { return uiText("dock.read.runs", {}, "暂时无法读取运行状态，请检查连接后重试。"); },
+  get todo() { return uiText("dock.read.todo", {}, "暂时无法读取待办列表，请检查连接后重试。"); },
 });
 
 export function decisionReadError(error, kind) {
@@ -26,7 +27,7 @@ export function createDecisionReadNotice() {
   ]);
   return { node, sync(next) {
     failures = next;
-    message.textContent = [...new Set(next.map(item => decisionReadError(item.error, item.kind)))].join("\n");
-    retry.textContent = t("task.detail.retry", {}, "重试读取");
+    writeUiText(message, [...new Set(next.map(item => decisionReadError(item.error, item.kind)))].join("\n"));
+    writeUiText(retry, uiMessage("task.detail.retry", {}, "重试读取"));
   } };
 }

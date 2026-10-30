@@ -1,7 +1,9 @@
+import { uiMessage, t as uiText, subscribeLocale, t } from "../../i18n.js";
+
 import { api, attachmentUrl } from "../../api/client.js";
 import { targetImage } from "../../api/target-image.js";
 import { clear, element, toast } from "../../utils/dom.js";
-import { subscribeLocale, t } from "../../i18n.js";
+
 import { imageNames, labelImageName } from "./image-names.js";
 
 const TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
@@ -64,7 +66,7 @@ function imageError(key, fallback, code = "") {
 
 export function unsupportedModelError() {
   return imageError("image.unsupportedModel",
-    "当前模型不支持图片，请先切换到支持图片的模型",
+    uiText("image.unsupportedModel", {}, "当前模型不支持图片，请先切换到支持图片的模型"),
     "image_model_unsupported");
 }
 
@@ -128,7 +130,7 @@ export function createComposerImages({ composer, prompt, button, input, strip,
       if (!/^[0-9a-f]{32}$/.test(id)) continue;
       const remove = element("button", {
         className: "composer-image-remove", text: "×",
-        attrs: { type: "button", "aria-label": t("image.remove", { number: index + 1 },
+        attrs: { type: "button", "aria-label": uiMessage("image.remove", { number: index + 1 },
           `移除图片 ${index + 1}`),
           "data-image-id": id, "data-image-index": String(index) },
       });
@@ -178,9 +180,9 @@ export function createComposerImages({ composer, prompt, button, input, strip,
         }
       });
       const caption = element("bdi", { className: "image-file-name",
-        text: t("image.alt", { number: index + 1 }, `图片 ${index + 1}`) });
+        text: uiMessage("image.alt", { number: index + 1 }, `图片 ${index + 1}`) });
       const preview = element("button", { className: "composer-image-preview", attrs: {
-          type: "button", "aria-label": t("image.view", { number: index + 1 },
+          type: "button", "aria-label": uiMessage("image.view", { number: index + 1 },
             `查看图片 ${index + 1}`),
           "data-image-preview": "",
           "data-image-id": id, "data-image-index": String(index),
@@ -196,20 +198,20 @@ export function createComposerImages({ composer, prompt, button, input, strip,
     }
     if (uploading) strip.append(element("span", {
       className: "composer-image-uploading",
-      text: t("image.saving", {}, "正在保存图片…"),
+      text: uiMessage("image.saving", {}, "正在保存图片…"),
     }));
     const pending = currentUpload()?.pending ?? 0;
     if (pending) strip.append(element("span", {
       className: "composer-image-uploading",
-      text: t("image.pendingCount", { count: pending }, `待添加 ${pending} 张图片`),
+      text: uiMessage("image.pendingCount", { count: pending }, `待添加 ${pending} 张图片`),
     }));
     if (removing) strip.append(element("span", {
       className: "composer-image-uploading",
-      text: t("image.removing", {}, "正在移除图片…"),
+      text: uiMessage("image.removing", {}, "正在移除图片…"),
     }));
     if (hasUnsupportedDraft()) strip.append(element("span", {
       className: "composer-image-unsupported",
-      text: t("image.draftUnsupported", {},
+      text: uiMessage("image.draftUnsupported", {},
         "当前模型不支持图片；切换模型或移除图片后再发送"),
     }));
     if (bindButton) button.disabled = !writable || uploading || removing || !currentModel();
@@ -309,14 +311,14 @@ export function createComposerImages({ composer, prompt, button, input, strip,
     if (!candidates.length) return;
     if (removingCurrent()) {
       onError(selectionError("image.waitForCurrent",
-        "请等待当前图片操作完成后再添加"));
+        uiText("image.waitForCurrent", {}, "请等待当前图片操作完成后再添加")));
       return;
     }
     const job = currentUpload();
     // Creating an image-first task briefly marks the editor non-writable while
     // its session is being created. Already accepted uploads may still queue.
     if (!job && (!writable || prompt.readOnly || prompt.disabled)) { onError(imageError("image.readOnly",
-      "当前会话不可添加图片")); return; }
+      uiText("image.readOnly", {}, "当前会话不可添加图片"))); return; }
     if (!job && !imageCapable()) {
       onError(unsupportedModelError());
       return;
@@ -333,13 +335,13 @@ export function createComposerImages({ composer, prompt, button, input, strip,
     }
     if (!images.length) {
       onError(otherFiles
-        ? selectionError("image.typesOnly", "仅支持 PNG、JPEG 和 WebP 图片")
-        : selectionError("image.maxSize", "请选择非空且不超过 8 MiB 的图片"));
+        ? selectionError("image.typesOnly", uiText("image.typesOnly", {}, "仅支持 PNG、JPEG 和 WebP 图片"))
+        : selectionError("image.maxSize", uiText("image.maxSize", {}, "请选择非空且不超过 8 MiB 的图片")));
       return;
     }
     if (images.length + ids.length + (job?.reserved ?? 0) > 4) {
       onError(selectionError("image.maxCount",
-        "每条消息最多可添加 4 张图片"));
+        uiText("image.maxCount", {}, "每条消息最多可添加 4 张图片")));
       return;
     }
     if (otherFiles) toast(t("image.skippedFiles", { count: otherFiles },
@@ -408,7 +410,7 @@ export function createComposerImages({ composer, prompt, button, input, strip,
     const files = imageTransferFiles(event.dataTransfer);
     if (!files.length) {
       onError(selectionError("image.dropUnavailable",
-        "无法读取拖放的文件，请使用“添加图片”选择"));
+        uiText("image.dropUnavailable", {}, "无法读取拖放的文件，请使用“添加图片”选择")));
       return;
     }
     void addFiles(files);

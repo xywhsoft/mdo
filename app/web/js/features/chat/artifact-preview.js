@@ -1,6 +1,7 @@
+import { setUiText as writeUiText, uiMessage, t } from "../../i18n.js";
+
 import { api, resourceId } from "../../api/client.js";
 import { element, errorMessage } from "../../utils/dom.js";
-import { t } from "../../i18n.js";
 
 const PREVIEW_BYTES = 64 * 1024;
 
@@ -11,7 +12,7 @@ export function artifactPreviewNode(projectId, sessionId, eventId, actionRef,
   const path = `/projects/${resourceId(projectId, "project")}` +
     `/sessions/${resourceId(sessionId, "session")}/artifacts/${id}`;
 
-  const summary = element("summary", { text: t("timeline.previewArtifact", {}, "预览产物"),
+  const summary = element("summary", { text: uiMessage("timeline.previewArtifact", {}, "预览产物"),
     attrs: { "data-timeline-action": actionRef } });
   const status = element("p", { className: "timeline-artifact-note",
     attrs: { role: "status" } });
@@ -25,18 +26,18 @@ export function artifactPreviewNode(projectId, sessionId, eventId, actionRef,
   details.addEventListener("toggle", async () => {
     if (!details.open || loaded || loading) return;
     loading = true;
-    status.textContent = t("task.artifact.loading", {}, "正在读取产物…");
+    writeUiText(status, uiMessage("task.artifact.loading", {}, "正在读取产物…"));
     try {
       const { data } = await api.get(`${path}?offset=0&limit=${PREVIEW_BYTES}`);
       const binary = window.atob(data.data || "");
       const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
       const mediaType = data.media_type || "application/octet-stream";
       content.replaceChildren();
-      status.textContent = "";
+      writeUiText(status, "");
       if (/^(text\/|application\/(json|xml|javascript))/.test(mediaType)) {
         content.append(element("pre", { text: new TextDecoder().decode(bytes) }));
       } else {
-        content.append(element("p", { text: t("task.artifact.binary",
+        content.append(element("p", { text: uiMessage("task.artifact.binary",
           { type: mediaType, size: `${bytes.length} B` },
           `二进制产物 ${mediaType}，已读取 ${bytes.length} B。`) }));
       }
@@ -47,7 +48,7 @@ export function artifactPreviewNode(projectId, sessionId, eventId, actionRef,
       content.scrollTop = scrollTop;
       loaded = true;
     } catch (error) {
-      status.textContent = errorMessage(error);
+      writeUiText(status, errorMessage(error));
     } finally {
       loading = false;
     }

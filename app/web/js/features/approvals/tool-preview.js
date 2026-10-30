@@ -1,4 +1,5 @@
-import { t } from "../../i18n.js";
+import { uiMessage, t } from "../../i18n.js";
+
 import { element } from "../../utils/dom.js";
 import { formatArguments } from "./labels.js";
 
@@ -35,14 +36,14 @@ export function renderToolPreview(item) {
     schedule: "Manage a schedule", agent: "Start a subagent", network: "Access a network or external service",
     tool: "Use tool: {tool}" };
   root.append(element("p", { className: "interaction-operation",
-    text: t(`interaction.action.${preview.kind}`, { tool: preview.tool }, labels[preview.kind]) }));
+    text: uiMessage(`interaction.action.${preview.kind}`, { tool: preview.tool }, labels[preview.kind]) }));
   if (preview.command) root.append(element("pre", {
     className: "interaction-command", text: preview.command,
   }));
   if (preview.path) root.append(element("p", { className: "interaction-target",
-    text: t("interaction.file", { path: preview.path }, "File: {path}") }));
+    text: uiMessage("interaction.file", { path: preview.path }, "File: {path}") }));
   if (preview.cwd) root.append(element("p", { className: "interaction-target",
-    text: t("interaction.cwd", { path: preview.cwd }, "Working directory: {path}") }));
+    text: uiMessage("interaction.cwd", { path: preview.cwd }, "Working directory: {path}") }));
   const shown = new Set([preview.command, preview.path, preview.cwd]);
   for (const resource of item?.resources ?? []) {
     if (typeof resource.resource !== "string" || !resource.resource || shown.has(resource.resource)) continue;
@@ -57,7 +58,7 @@ export function renderToolPreview(item) {
 
 export function renderToolArguments(item, attrs = {}, summaryAttrs = {}) {
   return element("details", { className: "approval-arguments", attrs }, [
-    element("summary", { text: t("interaction.details", {}, "View operation details"), attrs: summaryAttrs }),
+    element("summary", { text: uiMessage("interaction.details", {}, "View operation details"), attrs: summaryAttrs }),
     element("pre", { text: formatArguments(item?.arguments_json) }),
   ]);
 }

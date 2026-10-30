@@ -1,8 +1,10 @@
+import { t as uiErrorText, setUiText as writeUiText, uiMessage, t } from "../../i18n.js";
+
 import { api, ApiError, resourceId } from "../../api/client.js";
 import { createRequestRecovery } from "../../api/request-recovery.js";
 import { isTransientReadError } from "../../api/read-recovery.js";
 import { toast } from "../../utils/dom.js";
-import { t } from "../../i18n.js";
+
 import { focusSessionComposerAfterNavigation } from "./session-composer-focus.js";
 
 const endpoint = "/workspace-state";
@@ -11,7 +13,7 @@ async function readWorkspace(recovery) {
   const saved = (await recovery.request(signal => api.get(endpoint, { signal }))).data;
   if (typeof saved?.project_id !== "string" || typeof saved.session_id !== "string" ||
       Boolean(saved.project_id) !== Boolean(saved.session_id))
-    throw new ApiError("Invalid saved workspace selection", { code: "invalid_response" });
+    throw new ApiError(uiErrorText("error.detail.invalidSavedWorkspaceSelection", {}, "Invalid saved workspace selection"), { code: "invalid_response" });
   return saved;
 }
 
@@ -23,7 +25,7 @@ async function lastSessionCandidate(saved, sessions, recovery, onFailure) {
       const result = (await recovery.request(signal =>
         api.get(`/projects/${project}/sessions/${session}`, { signal }))).data;
       if (result?.project_id !== project || result.id !== session)
-        throw new ApiError("Invalid saved session identity", { code: "invalid_response" });
+        throw new ApiError(uiErrorText("error.detail.invalidSavedSessionIdentity", {}, "Invalid saved session identity"), { code: "invalid_response" });
       return result;
     } catch (error) {
       // Deletion is a normal fallback. A temporary read failure must exhaust
@@ -93,7 +95,7 @@ export async function startWorkspaceNavigation({ navigation, settingsStore,
               throw error;
           } catch (cause) {
             if (cause?.name === "AbortError") throw cause;
-            throw new ApiError("The last session save could not be confirmed", {
+            throw new ApiError(uiErrorText("error.detail.theLastSessionSaveCouldNotBeConfirmed", {}, "The last session save could not be confirmed"), {
               code: "workspace_save_unconfirmed" });
           }
         }
@@ -190,7 +192,7 @@ export async function startWorkspaceNavigation({ navigation, settingsStore,
       return;
     }
 
-    title.textContent = candidate.title || t("startup.untitled", {}, "未命名任务");
+    writeUiText(title, candidate.title || uiMessage("startup.untitled", {}, "未命名任务"));
     function openNew() {
       dialog.close();
       navigation.newTask(candidate.project_id, { replace: true });

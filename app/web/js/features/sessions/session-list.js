@@ -1,5 +1,7 @@
+import { setUiText as writeUiText, uiMessage, currentLocale, subscribeLocale, t } from "../../i18n.js";
+
 import { element, clear, formatRelativeTime, errorMessage, isImeKey, toast } from "../../utils/dom.js";
-import { currentLocale, subscribeLocale, t } from "../../i18n.js";
+
 import { sessionActionItems } from "./session-actions.js";
 import { mountIcons } from "../../components/icons.js";
 import { recentSessions, sidebarGroups, sidebarWindow, matchingSessions } from "./sidebar-tree.js";
@@ -78,11 +80,11 @@ export function createSessionList({ container, count, filter, searchButton, stor
         searchButton ?? filter).focus({ preventScroll: true });
       return;
     }
-    readMessage.textContent = isTransientReadError(readError)
-      ? t("sessionList.readFailed", {}, "暂时无法读取会话列表，请检查连接后重试。")
-      : errorMessage(readError);
+    writeUiText(readMessage, isTransientReadError(readError)
+      ? uiMessage("sessionList.readFailed", {}, "暂时无法读取会话列表，请检查连接后重试。")
+      : errorMessage(readError));
     const pending = Boolean(store.isPending?.());
-    readRetry.textContent = pending ? t("sessionLoad.retrying") : t("sessionLoad.retry");
+    writeUiText(readRetry, pending ? uiMessage("sessionLoad.retrying") : uiMessage("sessionLoad.retry"));
     readRetry.setAttribute("aria-disabled", String(pending));
     readRetry.hidden = !onRetrySessions;
     if (!readNotice.isConnected) container.prepend(readNotice);
@@ -114,7 +116,7 @@ export function createSessionList({ container, count, filter, searchButton, stor
       if (!session || !time) continue;
       time.dataset.relativeTime = String(session.updated_at);
       const label = formatRelativeTime(session.updated_at);
-      if (time.textContent !== label) time.textContent = label;
+      if (time.textContent !== label) writeUiText(time, label);
     }
   }
 
@@ -131,10 +133,10 @@ export function createSessionList({ container, count, filter, searchButton, stor
       else row.removeAttribute("data-unread");
       const indicator = button.querySelector(".session-item-activity");
       const activityLabel = activityText(activity);
-      if (indicator.textContent !== activityLabel) indicator.textContent = activityLabel;
+      if (indicator.textContent !== activityLabel) writeUiText(indicator, activityLabel);
       const result = button.querySelector(".session-item-unread");
       const resultLabel = unread.has(key) ? t("nav.unread", {}, "有新结果") : "";
-      if (result.textContent !== resultLabel) result.textContent = resultLabel;
+      if (result.textContent !== resultLabel) writeUiText(result, resultLabel);
     }
   }
 
@@ -217,7 +219,7 @@ export function createSessionList({ container, count, filter, searchButton, stor
     const groups = organizedSidebar(baseGroups, layoutStore.get());
     const workspaceView = layoutStore.get().view === "workspace";
     const searching = Boolean(query.trim());
-    count.textContent = String(groups.total);
+    writeUiText(count, String(groups.total));
     container.setAttribute("aria-busy", String(coldRead(state) || layoutStore.busy()));
     clear(container);
     syncReadNotice();
@@ -230,21 +232,21 @@ export function createSessionList({ container, count, filter, searchButton, stor
     if (coldRead(state)) {
       openMenu = "";
       container.append(element("div", { className: "empty-state",
-        text: t("nav.loading", {}, "正在载入会话…") }));
+        text: uiMessage("nav.loading", {}, "正在载入会话…") }));
       if (retainedReadFocus && readNotice.isConnected) readRetry.focus({ preventScroll: true });
       return;
     }
 
-    const toolbar = element("div", { className: "sidebar-organize-toolbar", attrs: { role: "group", "aria-label": t("sidebar.groupHint") } });
+    const toolbar = element("div", { className: "sidebar-organize-toolbar", attrs: { role: "group", "aria-label": uiMessage("sidebar.groupHint") } });
     for (const view of ["workspace", "timeline"]) {
-      const button = element("button", { text: t(`sidebar.view.${view}`), attrs: { type: "button", title: t(`sidebar.view.${view}`),
+      const button = element("button", { text: uiMessage(`sidebar.view.${view}`), attrs: { type: "button", title: uiMessage(`sidebar.view.${view}`),
         "data-sidebar-focus": `view:${view}`, "aria-pressed": String(layoutStore.get().view === view) } });
       button.disabled = !layoutStore.writable();
       button.addEventListener("click", () => { focusRequest = { sidebar: `view:${view}` }; void organizer.save(value => ({ ...value, view })); });
       toolbar.append(button);
     }
-    const addGroup = element("button", { text: "+", attrs: { type: "button", title: t("sidebar.newGroup"),
-      "aria-label": t("sidebar.newGroup"), "data-sidebar-focus": "add-group" } });
+    const addGroup = element("button", { text: "+", attrs: { type: "button", title: uiMessage("sidebar.newGroup"),
+      "aria-label": uiMessage("sidebar.newGroup"), "data-sidebar-focus": "add-group" } });
     addGroup.disabled = !layoutStore.writable() || layoutStore.get().groups.length >= 32;
     addGroup.addEventListener("click", () => organizer.groupForm()); toolbar.append(addGroup); container.append(toolbar);
 
@@ -371,7 +373,7 @@ export function createSessionList({ container, count, filter, searchButton, stor
     function dragHandle(key, label) {
       const button = element("button", { className: "sidebar-drag-handle", text: "⠿", attrs: {
         type: "button", "data-sidebar-drag": key, "data-sidebar-focus": `drag:${key}`,
-        title: t("sidebar.dragHint"), "aria-label": t("sidebar.dragItem", { name: label }) } });
+        title: uiMessage("sidebar.dragHint"), "aria-label": uiMessage("sidebar.dragItem", { name: label }) } });
       button.disabled = !layoutStore.writable() || searching || !workspaceView;
       return button;
     }
@@ -417,12 +419,12 @@ export function createSessionList({ container, count, filter, searchButton, stor
       const list = element("ul", { className: "session-group-children" });
       body.append(list);
       if (!sessions.length) list.append(element("li", { className: "session-group-empty",
-        text: t("nav.emptyGroup", {}, "暂无任务") }));
+        text: uiMessage("nav.emptyGroup", {}, "暂无任务") }));
       for (const session of windowed.items) appendSession(list, session, pinned, key);
       if (windowed.remaining > 0) {
-        const more = element("button", { className: "session-show-more", text: t("nav.showMore", {}, "显示更多"), attrs: {
+        const more = element("button", { className: "session-show-more", text: uiMessage("nav.showMore", {}, "显示更多"), attrs: {
           type: "button", "data-sidebar-focus": `more:${key}`,
-          "aria-label": t("nav.showMoreTasks", { count: windowed.remaining }, `显示其余 ${windowed.remaining} 个任务`),
+          "aria-label": uiMessage("nav.showMoreTasks", { count: windowed.remaining }, `显示其余 ${windowed.remaining} 个任务`),
         } });
         more.addEventListener("click", () => updateTree(`more:${key}`, () => {
           limits.set(key, (limits.get(key) ?? initialLimit) + initialLimit);
@@ -514,7 +516,7 @@ export function createSessionList({ container, count, filter, searchButton, stor
         option(t("sidebar.deleteGroup"), `custom-menu:${group.id}`, () => organizer.remove(group), { disabled: !layoutStore.writable() }),
       ]);
       const body = section(`custom-${group.id}`, group.name, [menu], group.id);
-      if (!group.entries.length) body.append(element("p", { className: "session-group-empty", text: t("sidebar.dropHint") }));
+      if (!group.entries.length) body.append(element("p", { className: "session-group-empty", text: uiMessage("sidebar.dropHint") }));
       const key = `custom:${group.id}`, limit = limits.get(key) ?? 20;
       const entries = searching ? [...group.entries] : group.entries.slice(0, limit);
       const current = group.entries.find(entry => entry.kind === "project" ? entry.item.id === selected.projectId :
@@ -525,7 +527,7 @@ export function createSessionList({ container, count, filter, searchButton, stor
         else { const list = element("ul", { className: "session-group-children" }); body.append(list); appendSession(list, entry.item, false, `custom:${group.id}`); }
       }
       if (entries.length < group.entries.length) {
-        const more = element("button", { className: "session-show-more", text: t("nav.showMore"), attrs: {
+        const more = element("button", { className: "session-show-more", text: uiMessage("nav.showMore"), attrs: {
           type: "button", "data-sidebar-focus": `more:${key}` } });
         more.addEventListener("click", () => updateTree(`more:${key}`, () => limits.set(key, limit + 20))); body.append(more);
       }
@@ -537,14 +539,14 @@ export function createSessionList({ container, count, filter, searchButton, stor
         status, query, locale: currentLocale(), defaultProjectName: t("nav.defaultProject") })
         .filter(session => !(session.status === "active" && session.pinned));
       for (const group of timelineSidebar(sessions)) {
-        const label = element("p", { className: "sidebar-time-heading", text: t(`sidebar.date.${group.id}`) });
+        const label = element("p", { className: "sidebar-time-heading", text: uiMessage(`sidebar.date.${group.id}`) });
         projectBody.append(label); appendSessions(projectBody, group.sessions, `date:${group.id}`, 20);
       }
     }
     if (workspaceView && !groups.projects.length) {
       const key = searching ? "nav.noMatch" : status === "trash" ? "nav.trashEmpty" :
         status === "archived" ? "nav.noArchivedSessions" : "nav.noProjects";
-      projectBody.append(element("p", { className: "session-projects-empty", text: t(key) }));
+      projectBody.append(element("p", { className: "session-projects-empty", text: uiMessage(key) }));
     }
 
     if (workspaceView) {
@@ -554,7 +556,7 @@ export function createSessionList({ container, count, filter, searchButton, stor
     if (!groups.tasks.length) {
       const key = searching ? "nav.noMatch" : status === "trash" ? "nav.trashEmpty" :
         status === "archived" ? "nav.noArchivedSessions" : "nav.emptyGroup";
-      tasksBody.append(element("p", { className: "session-group-empty", text: t(key) }));
+      tasksBody.append(element("p", { className: "session-group-empty", text: uiMessage(key) }));
     } else appendSessions(tasksBody, groups.tasks, "tasks", 20);
     }
 

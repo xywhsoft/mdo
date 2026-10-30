@@ -1,3 +1,4 @@
+import { t as uiErrorText } from "../i18n.js";
 import { ApiError, api, resourceId } from "../api/client.js";
 import { createResourceStore } from "./store.js";
 import { withSessionRuntime } from "./session-runtime.js";
@@ -41,7 +42,7 @@ export async function startRun(projectId, sessionId, prompt, attachments = [],
       submitted = true;
       return (await api.post(`/projects/${project}/sessions/${session}/runs`, body, { signal })).data;
     }, { signal }), { retry: false });
-    if (!matches(run)) throw new ApiError("Invalid run admission response", { code: "invalid_response" });
+    if (!matches(run)) throw new ApiError(uiErrorText("error.detail.invalidRunAdmissionResponse", {}, "Invalid run admission response"), { code: "invalid_response" });
     return run;
   } catch (error) {
     // The server may have started the run before its response was lost.
@@ -61,15 +62,15 @@ export async function startRun(projectId, sessionId, prompt, attachments = [],
               if (failure.code !== "queue_receipt_not_found" || failure.status !== 404) throw failure;
             }
             if (!receipt || (receipt.id === queueItemId && receipt.state === "starting"))
-              throw new ApiError("The queued run outcome is not available yet", { code: "run_confirmation_pending" });
+              throw new ApiError(uiErrorText("error.detail.theQueuedRunOutcomeIsNotAvailableYet", {}, "The queued run outcome is not available yet"), { code: "run_confirmation_pending" });
             if (receipt.id !== queueItemId || receipt.state !== "accepted" ||
                 !/^run-[A-Za-z0-9_.-]+$/.test(receipt.run_id ?? ""))
-              throw new ApiError("Invalid queued run receipt", { code: "invalid_response" });
+              throw new ApiError(uiErrorText("error.detail.invalidQueuedRunReceipt", {}, "Invalid queued run receipt"), { code: "invalid_response" });
             acceptedId = receipt.run_id;
           }
           const run = (await api.get(`/runs/${acceptedId}`, { signal })).data;
           if (!matches(run) || run.id !== acceptedId)
-            throw new ApiError("Invalid confirmed run response", { code: "invalid_response" });
+            throw new ApiError(uiErrorText("error.detail.invalidConfirmedRunResponse", {}, "Invalid confirmed run response"), { code: "invalid_response" });
           return run;
         }, { retryable: failure => isTransientReadError(failure) || failure?.code === "run_confirmation_pending" });
       } catch (failure) { error.confirmationError = failure; }

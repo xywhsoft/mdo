@@ -1,7 +1,9 @@
+import { setUiText as writeUiText, uiMessage, subscribeLocale, t } from "../../i18n.js";
+
 import { readProject, readProjectPurgePreview,
   unregisterProject } from "../../state/catalogs.js";
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
-import { subscribeLocale, t } from "../../i18n.js";
+
 import { reviewedPurgeIntent, purgeBindingsMatch } from "../settings/project-purge-contract.js";
 
 // Project operations belong to the workspace sidebar, independent of Settings.
@@ -33,11 +35,11 @@ export function createProjectManagement({ projectsStore, purgeRecovery, purgeCon
     target = current;
     unregisterOrigin = origin ?? document.activeElement;
     const summary = projectsStore.get().data?.items?.find((item) => item.id === project.id) ?? project;
-    description.textContent = Number.isInteger(summary.session_count) && Number.isInteger(summary.schedule_count)
-      ? t("project.unregisterDescription", { name: current.name,
+    writeUiText(description, Number.isInteger(summary.session_count) && Number.isInteger(summary.schedule_count)
+      ? uiMessage("project.unregisterDescription", { name: current.name,
         sessions: summary.session_count, schedules: summary.schedule_count })
-      : t("project.unregisterPreserveDescription", { name: current.name },
-        `“${current.name}” 的项目定义将移除，已有会话和计划会保留。`);
+      : uiMessage("project.unregisterPreserveDescription", { name: current.name },
+        `“${current.name}” 的项目定义将移除，已有会话和计划会保留。`));
     error.hidden = true;
     dialog.showModal();
     dialog.querySelector('[value="cancel"]')?.focus();
@@ -55,7 +57,7 @@ export function createProjectManagement({ projectsStore, purgeRecovery, purgeCon
 
   function openPreview(project, origin) {
     previewProject = project; previewOrigin = origin;
-    previewTitle.textContent = t("project.previewTitle", { name: project.name || project.id });
+    writeUiText(previewTitle, uiMessage("project.previewTitle", { name: project.name || project.id }));
     previewConfirm.disabled = true;
     previewDialog.showModal(); previewClose.focus();
     void loadPreview();
@@ -108,26 +110,26 @@ export function createProjectManagement({ projectsStore, purgeRecovery, purgeCon
       for (const target of data.targets)
         paths.append(element("li", {}, [element("code", { text: target.path })]));
       previewList.append(element("dt", { className: "project-preview-target-label",
-        text: t("project.previewTargets", { count: data.target_count },
+        text: uiMessage("project.previewTargets", { count: data.target_count },
           `候选路径（${data.target_count} 项）`) }),
         element("dd", { className: "project-preview-targets" }, [paths]));
     }
     previewList.hidden = false;
-    previewStatus.textContent = t("project.previewRevision", { revision: data.revision },
-      `项目版本 ${data.revision} · 当前清单仅供核对`);
+    writeUiText(previewStatus, uiMessage("project.previewRevision", { revision: data.revision },
+      `项目版本 ${data.revision} · 当前清单仅供核对`));
     const unsettled = [data.session_runtime_count,
       data.active_interactive_run_count, data.active_scheduled_run_count_global,
       data.session_diagnostic_count, data.session_catalog_diagnostic_count_global,
       data.schedule_catalog_diagnostic_count_global].some((value) =>
       Number(value) > 0);
-    previewNote.textContent = unsettled
-      ? t("project.previewUnsettled", {}, "存在运行态或诊断项；执行彻底清除前必须重新核对并处理。")
-      : t("project.previewClear", {}, "当前未发现运行态或诊断项；执行彻底清除前仍须重新核对。");
+    writeUiText(previewNote, unsettled
+      ? uiMessage("project.previewUnsettled", {}, "存在运行态或诊断项；执行彻底清除前必须重新核对并处理。")
+      : uiMessage("project.previewClear", {}, "当前未发现运行态或诊断项；执行彻底清除前仍须重新核对。"));
     previewNote.hidden = false;
     previewConfirm.disabled = !canConfirmPreview();
     const intent = purgeRecovery.get().intent;
     if (intent && (intent.project_id !== data.id || intent.revision !== data.revision || intent.created_at !== data.created_at))
-      previewNote.textContent = t("purgeConfirm.changedBinding");
+      writeUiText(previewNote, uiMessage("purgeConfirm.changedBinding"));
   }
 
   async function loadPreview() {
@@ -137,7 +139,7 @@ export function createProjectManagement({ projectsStore, purgeRecovery, purgeCon
     previewRequest = request;
     previewData = null;
     previewConfirm.disabled = true;
-    previewStatus.textContent = t("project.previewLoading", {}, "正在读取清单…");
+    writeUiText(previewStatus, uiMessage("project.previewLoading", {}, "正在读取清单…"));
     previewList.hidden = true;
     previewNote.hidden = true;
     try {
@@ -148,8 +150,8 @@ export function createProjectManagement({ projectsStore, purgeRecovery, purgeCon
     } catch (cause) {
       if (cause?.name !== "AbortError" && previewDialog.open &&
           previewRequest === request)
-        previewStatus.textContent = t("project.previewFailed", { error: errorMessage(cause) },
-          `清单读取失败：${errorMessage(cause)}`);
+        writeUiText(previewStatus, uiMessage("project.previewFailed", { error: errorMessage(cause) },
+          `清单读取失败：${errorMessage(cause)}`));
     } finally {
       if (previewRequest === request) previewRequest = null;
     }
@@ -166,7 +168,7 @@ export function createProjectManagement({ projectsStore, purgeRecovery, purgeCon
       dialog.close();
       toast(t("project.unregistered", {}, "项目已取消注册；会话和计划仍保留"));
     } catch (cause) {
-      error.textContent = errorMessage(cause);
+      writeUiText(error, errorMessage(cause));
       error.hidden = false;
       error.focus();
     } finally { confirm.disabled = false; }
@@ -204,9 +206,9 @@ export function createProjectManagement({ projectsStore, purgeRecovery, purgeCon
   purgeRecovery.subscribe(() => { previewConfirm.disabled = !canConfirmPreview(); });
   subscribeLocale(() => {
     if (previewDialog.open && previewProject) {
-      previewTitle.textContent = t("project.previewTitle",
+      writeUiText(previewTitle, uiMessage("project.previewTitle",
         { name: previewProject.name || previewProject.id },
-        `${previewProject.name || previewProject.id} · 清除范围`);
+        `${previewProject.name || previewProject.id} · 清除范围`));
       if (previewData) showPreview(previewData);
     }
   });

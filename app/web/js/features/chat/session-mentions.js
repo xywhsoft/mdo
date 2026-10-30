@@ -1,5 +1,6 @@
+import { uiMessage, t } from "../../i18n.js";
 import { element, isImeKey, toast, errorMessage, revealListOption } from "../../utils/dom.js";
-import { t } from "../../i18n.js";
+
 import { subscribeTarget, targetState } from "../../api/target.js";
 import { currentPageWriteToken } from "../../api/client.js";
 import { loadSessionTranscript } from "../../state/sessions.js";
@@ -21,7 +22,7 @@ const epoch = () => JSON.stringify([targetState().selected, targetState().runtim
 export function createSessionMentions({ composer, input, navigation, sessionsStore, add }) {
   const slashMenuId = input.id && input.id !== "prompt" ? `${input.id}-slash-menu` : "slash-menu";
   const menu = element("div", { className: "file-mention-menu session-mention-menu", attrs: {
-    role: "listbox", id: `session-mentions-${input.id}`, "aria-label": t("context.sessions") } });
+    role: "listbox", id: `session-mentions-${input.id}`, "aria-label": uiMessage("context.sessions") } });
   menu.hidden = true; composer.append(menu);
   let choices = [], active = 0, generation = 0, recovery = null, loading = false;
   const token = () => input.selectionStart === input.selectionEnd && /(?:^|\s)#([^\n#]*)$/.exec(input.value.slice(0, input.selectionStart));
@@ -38,7 +39,7 @@ export function createSessionMentions({ composer, input, navigation, sessionsSto
     const before = input.value, caret = input.selectionStart, found = token();
     const start = caret - found[0].length + (found[0][0] === "#" ? 0 : 1);
     recovery = createRequestRecovery();
-    menu.replaceChildren(element("p", { text: t("context.readingSession") }));
+    menu.replaceChildren(element("p", { text: uiMessage("context.readingSession") }));
     try {
       const transcript = await loadSessionTranscript(session, { createRecovery: () => recovery });
       if (serial !== generation || origin !== epoch() || owner !== JSON.stringify(navigation.get()) || input.value !== before) return;
@@ -58,7 +59,7 @@ export function createSessionMentions({ composer, input, navigation, sessionsSto
       `${session.title} ${session.project_id}`.toLocaleLowerCase().includes(needle)).slice(0, 8);
     menu.replaceChildren(); active = 0;
     menu.hidden = false; input.setAttribute("aria-controls", menu.id); input.setAttribute("aria-expanded", "true");
-    if (!choices.length) menu.append(element("p", { text: t("context.noSessions") }));
+    if (!choices.length) menu.append(element("p", { text: uiMessage("context.noSessions") }));
     choices.forEach((session, index) => {
       const option = element("div", { className: "file-mention-option", text: `${session.title || session.id} · ${session.project_id}`,
         attrs: { role: "option", id: `${menu.id}-${index}`, "aria-selected": String(index === active) } });

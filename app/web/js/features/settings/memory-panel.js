@@ -1,6 +1,7 @@
+import { uiMessage, setUiText as writeUiText, t as uiText, subscribeLocale, t } from "../../i18n.js";
+
 import { api, resourceId } from "../../api/client.js";
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
-import { subscribeLocale, t } from "../../i18n.js";
 
 const dialog = document.querySelector("#memory-dialog");
 const form = dialog.querySelector("#memory-form");
@@ -42,21 +43,21 @@ export async function openMemoryDirectory(project = null) {
 
 function setStatus(message, tone = "neutral") {
   statusMessage = null;
-  status.textContent = message;
+  writeUiText(status, message);
   status.dataset.tone = tone;
 }
 
 function setLocalizedStatus(key, params = {}, fallback = key, tone = "neutral") {
   statusMessage = { key, params, fallback };
-  status.textContent = t(key, params, fallback);
+  writeUiText(status, uiMessage(key, params, fallback));
   status.dataset.tone = tone;
 }
 
 function renderTitle() {
-  title.textContent = activeProject
-    ? t("memory.projectTitle", { name: activeProject.name || activeProject.id },
+  writeUiText(title, activeProject
+    ? uiMessage("memory.projectTitle", { name: activeProject.name || activeProject.id },
       `${activeProject.name || activeProject.id} · 项目记忆`)
-    : t("memory.globalTitle", {}, "全局记忆");
+    : uiMessage("memory.globalTitle", {}, "全局记忆"));
 }
 
 function fields() {
@@ -106,7 +107,7 @@ function renderList() {
   const items = collection?.data?.items ?? [];
   if (!items.length) {
     list.append(element("p", { className: "empty-state",
-      text: t("memory.empty", {}, "还没有记忆。") }));
+      text: uiMessage("memory.empty", {}, "还没有记忆。") }));
     return;
   }
   for (const item of items) {
@@ -125,12 +126,12 @@ function renderList() {
 async function refresh({ discardDraft = false, selectId = selectedId } = {}) {
   if (busy || (!discardDraft && dirty())) {
     setLocalizedStatus("memory.dirtyRefresh", {},
-      "有未保存的修改。保存后再刷新，或点击“刷新”放弃当前修改。", "error");
+      uiText("memory.dirtyRefresh", {}, "有未保存的修改。保存后再刷新，或点击“刷新”放弃当前修改。"), "error");
     return;
   }
   const serial = ++requestSerial;
   setBusy(true);
-  setLocalizedStatus("memory.loading", {}, "正在读取记忆…");
+  setLocalizedStatus("memory.loading", {}, uiText("memory.loading", {}, "正在读取记忆…"));
   try {
     const next = await api.get(collectionPath);
     if (serial !== requestSerial) return;
@@ -145,7 +146,7 @@ async function refresh({ discardDraft = false, selectId = selectedId } = {}) {
     } else fill();
     setLocalizedStatus("memory.count", { count: next.data.items.length,
       revision: next.data.revision },
-      `${next.data.items.length} 条记忆 · revision ${next.data.revision}`);
+      uiText("ui.memoryPanel.value1MemoriesRevisionValue2", { value1: next.data.items.length, value2: next.data.revision }, "{value1} 条记忆 · revision {value2}"));
   } catch (cause) {
     if (serial === requestSerial) setStatus(errorMessage(cause), "error");
   } finally {
@@ -157,7 +158,7 @@ async function select(id) {
   if (busy) return;
   if (dirty()) {
     setLocalizedStatus("memory.dirtySelection", {},
-      "请先保存当前修改，或点击“刷新”放弃修改。", "error");
+      uiText("memory.dirtySelection", {}, "请先保存当前修改，或点击“刷新”放弃修改。"), "error");
     return;
   }
   const serial = ++requestSerial;
@@ -168,7 +169,7 @@ async function select(id) {
     collection.etag = result.etag;
     fill(result.data);
     setLocalizedStatus("memory.editing", { title: result.data.title },
-      `正在编辑“${result.data.title}”`);
+      uiText("ui.memoryPanel.editingValue1", { value1: result.data.title }, "正在编辑“{value1}”"));
     form.elements.content.focus();
   } catch (cause) {
     if (serial === requestSerial) setStatus(errorMessage(cause), "error");
@@ -181,13 +182,13 @@ function validate(input) {
   if (!form.reportValidity()) return false;
   if (encoder.encode(input.content).length > 64 * 1024) {
     setLocalizedStatus("memory.contentLimit", {},
-      "内容最多 64 KiB（按 UTF-8 字节计算）。", "error");
+      uiText("ui.memoryPanel.contentIsLimitedTo64KibOfUtf8", {}, "内容最多 64 KiB（按 UTF-8 字节计算）。"), "error");
     return false;
   }
   if (input.tags.length > 16 || new Set(input.tags).size !== input.tags.length ||
       input.tags.some((tag) => encoder.encode(tag).length > 64)) {
     setLocalizedStatus("memory.tagsLimit", {},
-      "标签最多 16 个，每个不超过 64 字节，不能重复。", "error");
+      uiText("memory.tagsLimit", {}, "标签最多 16 个，每个不超过 64 字节，不能重复。"), "error");
     return false;
   }
   return true;
@@ -196,7 +197,7 @@ function validate(input) {
 function close() {
   if (dirty()) {
     setLocalizedStatus("memory.dirtyClose", {},
-      "有未保存的修改。请保存，或点击“放弃并关闭”。", "error");
+      uiText("memory.dirtyClose", {}, "有未保存的修改。请保存，或点击“放弃并关闭”。"), "error");
     return;
   }
   dialog.close();
@@ -211,7 +212,7 @@ dialog.addEventListener("cancel", (event) => {
   if (!dirty()) return;
   event.preventDefault();
   setLocalizedStatus("memory.dirtyClose", {},
-    "有未保存的修改。请保存，或点击“放弃并关闭”。", "error");
+    uiText("memory.dirtyClose", {}, "有未保存的修改。请保存，或点击“放弃并关闭”。"), "error");
 });
 dialog.addEventListener("close", () => {
   if (dialog.open) return;
@@ -227,11 +228,11 @@ form.addEventListener("change", updateDirty);
 dialog.querySelector("#memory-new").addEventListener("click", () => {
   if (dirty()) {
     setLocalizedStatus("memory.dirtySelection", {},
-      "请先保存当前修改，或点击“刷新”放弃修改。", "error");
+      uiText("memory.dirtySelection", {}, "请先保存当前修改，或点击“刷新”放弃修改。"), "error");
     return;
   }
   fill();
-  setLocalizedStatus("memory.newHint", {}, "新建记忆；标识保存后不可修改。");
+  setLocalizedStatus("memory.newHint", {}, uiText("memory.newHint", {}, "新建记忆；标识保存后不可修改。"));
   form.elements.id.focus();
 });
 dialog.querySelector("#memory-refresh").addEventListener("click", () => {
@@ -267,7 +268,7 @@ dialog.querySelector("#memory-delete-cancel").addEventListener("click", () => {
 dialog.querySelector("#memory-delete-apply").addEventListener("click", async () => {
   if (busy || !selectedId || !collection?.etag) return;
   if (dirty()) {
-    setLocalizedStatus("memory.dirtyDelete", {}, "先保存或刷新当前修改，再删除。", "error");
+    setLocalizedStatus("memory.dirtyDelete", {}, uiText("memory.dirtyDelete", {}, "先保存或刷新当前修改，再删除。"), "error");
     return;
   }
   setBusy(true);
@@ -303,8 +304,8 @@ export function openMemoryPanel(project = null, { selectId = "", onClose = null 
   returnFocus = document.activeElement;
   onClosed = onClose;
   renderTitle();
-  pathLabel.textContent = project ? `mdo-home/memory/projects/${project.id}/`
-    : "mdo-home/memory/global/";
+  writeUiText(pathLabel, project ? `mdo-home/memory/projects/${project.id}/`
+    : "mdo-home/memory/global/");
   fill();
   clear(list);
   dialog.showModal();
@@ -317,5 +318,5 @@ subscribeLocale(() => {
   renderTitle();
   if (collection) renderList();
   if (statusMessage)
-    status.textContent = t(statusMessage.key, statusMessage.params, statusMessage.fallback);
+    writeUiText(status, uiMessage(statusMessage.key, statusMessage.params, statusMessage.fallback));
 });

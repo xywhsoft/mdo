@@ -1,7 +1,9 @@
+import { setUiText as writeUiText, uiMessage, subscribeLocale, t } from "../../i18n.js";
+
 import { loadRecovery } from "../../state/recovery.js";
 import { runRecoveryAction } from "./recovery-action.js";
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
-import { subscribeLocale, t } from "../../i18n.js";
+
 import { renderToolPreview, renderToolArguments } from "../approvals/tool-preview.js";
 import { createRecoveryDecisions, defaultRecoveryAction } from "../approvals/recovery-decisions.js";
 import { isTransientReadError } from "../../api/read-recovery.js";
@@ -105,14 +107,14 @@ export function createRecoveryDock({ container, summary, store, onResume, onAban
       element("p", {
         className: "recovery-warning",
         text: item.tool_available
-          ? t(decisions.choice(id) === "retry" ? "recovery.retryWarning" : "recovery.unknownResult")
-          : t("recovery.toolUnavailable"),
+          ? uiMessage(decisions.choice(id) === "retry" ? "recovery.retryWarning" : "recovery.unknownResult")
+          : uiMessage("recovery.toolUnavailable"),
       }),
       argumentsView,
     );
     if (item.tool_available) card.append(
       element("div", { className: "recovery-options", attrs: { role: "group",
-        "aria-label": t("recovery.group", { tool },
+        "aria-label": uiMessage("recovery.group", { tool },
           `${tool} 的处理方式`) } }, [
         optionButton(data, item, "record_uncertain", t("recovery.recordUncertain")),
         optionButton(data, item, "retry", t("recovery.retry")),
@@ -144,44 +146,44 @@ export function createRecoveryDock({ container, summary, store, onResume, onAban
     clear(summary);
     clear(container);
     if (state.status === "error" && isTransientReadError(state.error)) {
-      summary.textContent = ["model_profile_login_pending", "model_profile_login_unavailable"].includes(state.error?.code)
+      writeUiText(summary, ["model_profile_login_pending", "model_profile_login_unavailable"].includes(state.error?.code)
         ? modelErrorMessage(state.error.code.slice(6), state.error.message)
-        : t("shell.connecting", {}, "正在连接本地服务…");
+        : uiMessage("shell.connecting", {}, "正在连接本地服务…"));
       restoreFocus(focused);
       return;
     }
     if (state.status === "error") {
-      summary.textContent = t("recovery.unavailable", {}, "恢复状态不可用");
+      writeUiText(summary, uiMessage("recovery.unavailable", {}, "恢复状态不可用"));
       container.append(element("div", { className: "resource-error", text: errorMessage(state.error) }));
       const retry = element("button", { className: "secondary-button",
-        text: t("task.detail.retry", {}, "重试读取"), attrs: { type: "button" } });
+        text: uiMessage("task.detail.retry", {}, "重试读取"), attrs: { type: "button" } });
       retry.addEventListener("click", () => void loadRecovery({ retry: true }));
       container.append(retry);
       restoreFocus(focused);
       return;
     }
     if (data.unavailable) {
-      summary.textContent = t("recovery.checkPaused", {}, "会话运行期间暂不检查恢复状态");
+      writeUiText(summary, uiMessage("recovery.checkPaused", {}, "会话运行期间暂不检查恢复状态"));
       restoreFocus(focused);
       return;
     }
     if (!data.resume_required) {
-      summary.textContent = state.status === "loading"
-        ? t("recovery.checking", {}, "正在检查中断状态…")
-        : t("recovery.notRequired", {}, "当前会话不需要恢复");
+      writeUiText(summary, state.status === "loading"
+        ? uiMessage("recovery.checking", {}, "正在检查中断状态…")
+        : uiMessage("recovery.notRequired", {}, "当前会话不需要恢复"));
       restoreFocus(focused);
       return;
     }
     if (decisions.isSubmitted(data)) {
-      summary.textContent = t("recovery.syncing");
+      writeUiText(summary, uiMessage("recovery.syncing"));
       restoreFocus(focused);
       return;
     }
     const safeCalls = [], uncertainCalls = [];
     for (const item of items)
       (defaultRecoveryAction(item) === "retry" ? safeCalls : uncertainCalls).push(item);
-    summary.textContent = t(uncertainCalls.length ? "recovery.pendingSummary" :
-      safeCalls.length ? "recovery.safeSummary" : "recovery.noPendingCalls", { count: items.length });
+    writeUiText(summary, uiMessage(uncertainCalls.length ? "recovery.pendingSummary" :
+      safeCalls.length ? "recovery.safeSummary" : "recovery.noPendingCalls", { count: items.length }));
     if (automaticFailure && failureOwner === historyOwner(data) &&
         safeCalls.length && !uncertainCalls.length)
       container.append(element("p", { className: "resource-error", text: automaticFailure }));
@@ -192,12 +194,12 @@ export function createRecoveryDock({ container, summary, store, onResume, onAban
     }
     for (const item of uncertainCalls) container.append(renderCard(data, item));
     if (safeCalls.length && uncertainCalls.length) container.append(element("p", {
-      className: "interaction-hint", text: t("recovery.safeSummary", { count: safeCalls.length }),
+      className: "interaction-hint", text: uiMessage("recovery.safeSummary", { count: safeCalls.length }),
     }));
     const ready = decisions.ready(data);
     const submitButton = element("button", {
       className: "primary-button recovery-submit",
-      text: decisions.isBusy(data) ? t("recovery.continuing") : t("recovery.resume"),
+      text: decisions.isBusy(data) ? uiMessage("recovery.continuing") : uiMessage("recovery.resume"),
       attrs: { type: "button", "data-recovery-focus": "submit",
         "aria-disabled": String(decisions.isBusy(data)) },
     });
@@ -206,7 +208,7 @@ export function createRecoveryDock({ container, summary, store, onResume, onAban
     {
       const abandonButton = element("button", {
         className: "recovery-abandon",
-        text: t("recovery.endTurn", {}, "结束本次回复"),
+        text: uiMessage("recovery.endTurn", {}, "结束本次回复"),
         attrs: { type: "button", "data-recovery-focus": "abandon",
           "aria-disabled": String(decisions.isBusy(data)) },
       });

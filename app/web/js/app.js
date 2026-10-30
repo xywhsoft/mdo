@@ -1,3 +1,5 @@
+import { t as uiErrorText, uiMessage, setUiText as writeUiText, setUiAttribute as writeUiAttribute, t as uiText, subscribeLocale, t } from "./i18n.js";
+
 import { createDownloadCenter } from "./features/downloads/center.js";
 import { createSkillAuthoringDraft } from "./features/settings/skill-authoring.js";
 import { createNotificationCenter } from "./features/notifications/center.js";
@@ -111,7 +113,7 @@ import { createPaneLayout } from "./features/shell/pane-layout.js";
 import { trackMobileViewport } from "./features/shell/mobile-viewport.js";
 import { api, ApiError, setApiWriteGuard, currentPageWriteToken, setApiWriteConflictHandler, setApiNetworkErrorHandler, hasPendingApiWrites } from "./api/client.js";
 import { clear, element, errorMessage, isImeKey, refreshRelativeTimes, toast } from "./utils/dom.js";
-import { subscribeLocale, t } from "./i18n.js";
+
 import { copyText } from "./utils/clipboard.js";
 import { modelLoginBlock } from "./utils/models.js";
 import { modelErrorMessage } from "./utils/model-errors.js";
@@ -127,20 +129,20 @@ function terminalState(run) {
 }
 
 const RUN_STATE_LABEL = Object.freeze({
-  created: ["run.created", "准备中"],
-  running: ["run.running", "运行中"],
-  succeeded: ["run.succeeded", "已完成"],
-  failed: ["run.failed", "运行失败"],
-  cancelled: ["run.cancelled", "已停止"],
-  timed_out: ["run.timedOut", "已超时"],
-  archived: ["run.archived", "已归档"],
-  trash: ["run.trash", "回收站"],
-  loading: ["run.loading", "载入中"],
-  unavailable: ["sessionLoad.failedTitle", "任务暂时无法载入"],
+  created: ["run.created", uiText("run.created", {}, "准备中")],
+  running: ["run.running", uiText("timeline.running", {}, "运行中")],
+  succeeded: ["run.succeeded", uiText("run.succeeded", {}, "已完成")],
+  failed: ["run.failed", uiText("run.failed", {}, "运行失败")],
+  cancelled: ["run.cancelled", uiText("timeline.stopped", {}, "已停止")],
+  timed_out: ["run.timedOut", uiText("run.timedOut", {}, "已超时")],
+  archived: ["run.archived", uiText("shell.status.archived", {}, "已归档")],
+  trash: ["run.trash", uiText("shell.status.trash", {}, "回收站")],
+  loading: ["run.loading", uiText("run.loading", {}, "载入中")],
+  unavailable: ["sessionLoad.failedTitle", uiText("sessionLoad.failedTitle", {}, "任务暂时无法载入")],
 });
 
 function runStateText(state) {
-  const [key, fallback] = RUN_STATE_LABEL[state] ?? ["run.ready", "就绪"];
+  const [key, fallback] = RUN_STATE_LABEL[state] ?? ["run.ready", uiText("run.ready", {}, "就绪")];
   return t(key, {}, fallback);
 }
 
@@ -162,9 +164,9 @@ export async function boot() {
       window.location.reload();
     },
     async beforePrepare() {
-      if (localPurgeBusy()) throw new ApiError("Wait for local operations", { code: "purge_client_busy" });
-      if (!await draftStore.flushAll()) throw new ApiError("Save or copy local drafts", { code: "purge_draft_unsaved" });
-      if (localPurgeBusy()) throw new ApiError("Wait for local operations", { code: "purge_client_busy" });
+      if (localPurgeBusy()) throw new ApiError(uiErrorText("error.detail.waitForLocalOperations", {}, "Wait for local operations"), { code: "purge_client_busy" });
+      if (!await draftStore.flushAll()) throw new ApiError(uiErrorText("error.detail.saveOrCopyLocalDrafts", {}, "Save or copy local drafts"), { code: "purge_draft_unsaved" });
+      if (localPurgeBusy()) throw new ApiError(uiErrorText("error.detail.waitForLocalOperations", {}, "Wait for local operations"), { code: "purge_client_busy" });
     },
     canComplete: () => !localPurgeBusy() && !draftStore.hasUnsaved(),
   });
@@ -202,13 +204,13 @@ export async function boot() {
     draftStatus.hidden = !draftError || Boolean(bootstrapFailure()) ||
       (localServiceReconnecting && draftError.code === "network_error");
     const reason = draftError ? errorMessage(draftError) : "";
-    draftStatus.textContent = draftErrorOperation === "confirm" && draftError
-      ? t("draft.saveUnconfirmed", { reason: errorMessage(draftError.confirmationError ?? draftError) },
+    writeUiText(draftStatus, draftErrorOperation === "confirm" && draftError
+      ? uiMessage("draft.saveUnconfirmed", { reason: errorMessage(draftError.confirmationError ?? draftError) },
         "暂时无法确认草稿保存结果，输入已保留：{reason}")
-      : draftError ? t(draftErrorOperation === "read"
+      : draftError ? uiMessage(draftErrorOperation === "read"
       ? "draft.readFailed" : "draft.saveFailed", { error: reason },
       draftErrorOperation === "read" ? `无法读取草稿，输入已保留：${reason}`
-        : `草稿未保存：${reason}`) : "";
+        : `草稿未保存：${reason}`) : "");
   }
   const runStatus = $("#run-status");
   const runtimeState = $("#runtime-state");
@@ -869,13 +871,13 @@ export async function boot() {
           throw new Error(t("slash.modelBusy", {}, "当前无法切换模型"));
         const choices = [...modelSelect.options].filter((option) =>
           option.value && !option.disabled);
-        if (args.length > 1 || (args.length && typeof args[0] !== "string")) throw new Error("用法：/model [模型 ID]");
+        if (args.length > 1 || (args.length && typeof args[0] !== "string")) throw new Error(uiText("ui.app.usageModelModelId", {}, "用法：/model [模型 ID]"));
         if (!args.length && choices.length < 2)
           throw new Error(t("slash.noOtherModel", {}, "没有其他可切换的模型"));
         const index = choices.findIndex((option) =>
           option.value === modelSelect.value);
         const value = args[0] || choices[(index + 1) % choices.length]?.value;
-        if (!choices.some(option => option.value === value)) throw new Error("模型不可用");
+        if (!choices.some(option => option.value === value)) throw new Error(uiText("ui.app.modelUnavailable", {}, "模型不可用"));
         modelSelect.value = value;
         modelSelect.dispatchEvent(new Event("change", { bubbles: true }));
         },
@@ -898,8 +900,8 @@ export async function boot() {
         const session = sessionDetailStore.get().data;
         if (!session)
           throw new Error(t("slash.selectSession", {}, "请先选择会话"));
-        if (session.id !== scope.sessionId || session.project_id !== scope.projectId) throw new Error("会话已切换，请重新执行命令");
-        if (!["export", "fork", "clear"].includes(params?.action)) throw new Error("不支持的会话操作");
+        if (session.id !== scope.sessionId || session.project_id !== scope.projectId) throw new Error(uiText("ui.app.theConversationChangedRunTheCommandAgain", {}, "会话已切换，请重新执行命令"));
+        if (!["export", "fork", "clear"].includes(params?.action)) throw new Error(uiText("ui.app.unsupportedConversationAction", {}, "不支持的会话操作"));
         if (params.action !== "export" && activeRun)
             throw new Error(t("slash.waitForHistory", {}, "请在当前运行结束后修改会话历史"));
         await handleSessionAction(params.action, session);
@@ -911,7 +913,7 @@ export async function boot() {
           if (isCurrent() && !composerText()) { restoreComposerText(text);prompt.dispatchEvent(new Event("input", { bubbles: true }));prompt.focus(); }
         },
         "skill.invoke": async params => {
-          if (!params?.id) throw new Error("Skill ID is required");
+          if (!params?.id) throw new Error(uiErrorText("error.detail.skillIdIsRequired", {}, "Skill ID is required"));
           const text = await expandSkillSelection({ id: params.id, arguments: params.arguments ?? receipt.raw_arguments }, scope.projectId);
           if (isCurrent() && !composerText()) { restoreComposerText(text);prompt.dispatchEvent(new Event("input", { bubbles: true }));prompt.focus(); }
         },
@@ -1275,9 +1277,9 @@ export async function boot() {
   window.addEventListener("pagehide", () => account.dispose(), { once: true });
   const remotePanel = createRemotePanel();
   setTargetSwitchGuard(async ({ copyDrafts = false } = {}) => {
-    if (!applicationUi.canLeave()) throw new ApiError("请先保存工具工作区的编辑内容，或等待浏览器操作完成后再切换设备", { code: "target_workbench_pending" });
+    if (!applicationUi.canLeave()) throw new ApiError(uiText("ui.app.saveWorkspaceEditsOrWaitForBrowserOperationsTo", {}, "请先保存工具工作区的编辑内容，或等待浏览器操作完成后再切换设备"), { code: "target_workbench_pending" });
     if (settingsView.hasPendingChanges() || remotePanel.hasPendingChanges() || resourcePanels.hasPendingChanges())
-      throw new ApiError("Save or discard settings before changing devices", { code: "target_settings_pending" });
+      throw new ApiError(uiErrorText("error.detail.saveOrDiscardSettingsBeforeChangingDevices", {}, "Save or discard settings before changing devices"), { code: "target_settings_pending" });
     if (hasPendingApiWrites()) return false;
     if (copyDrafts) {
       await copyText(JSON.stringify({ target: targetState().selected, drafts: draftStore.unsentSnapshots() }, null, 2));
@@ -1343,8 +1345,8 @@ export async function boot() {
     const phase = runStops.phase(activeRun?.id);
     const label = phase === "waiting" ? t("shell.stopWaiting", {}, "连接恢复后停止任务")
       : phase || activeRun?.cancel_requested ? t("task.stopping", {}, "正在停止…") : t("shell.stop");
-    stop.title = label;
-    stop.setAttribute("aria-label", label);
+    writeUiAttribute(stop, "title", label);
+    writeUiAttribute(stop, "aria-label", label);
     stop.setAttribute("aria-disabled", String(Boolean(activeRun &&
       (activeRun.cancel_requested || runStops.has(activeRun.id)))));
   }
@@ -1359,11 +1361,11 @@ export async function boot() {
     const shown = run ?? { state: sessionWritable ? "idle" : selectedSessionStatus };
     runStatus.dataset.state = shown.state;
     const stopPhase = runStops.phase(activeRun?.id);
-    runStatus.lastElementChild.textContent = stopPhase === "waiting"
-      ? t("shell.stopWaiting", {}, "连接恢复后停止任务")
-      : stopPhase || activeRun?.cancel_requested ? t("task.stopping", {}, "正在停止…")
+    writeUiText(runStatus.lastElementChild, stopPhase === "waiting"
+      ? uiMessage("shell.stopWaiting", {}, "连接恢复后停止任务")
+      : stopPhase || activeRun?.cancel_requested ? uiMessage("task.stopping", {}, "正在停止…")
       : runAwaitingRelease(activeRun, timelineStore.get().data)
-        ? t("task.finishing", {}, "正在结束上一轮…") : runStateText(shown.state);
+        ? uiMessage("task.finishing", {}, "正在结束上一轮…") : runStateText(shown.state));
     send.hidden = false;
     stop.hidden = !activeRun && !slashCommands.pendingCount();
     syncStopBusy();
@@ -1409,43 +1411,43 @@ export async function boot() {
       sessionWritable && !creatingSession && !pendingNewTask);
     composerProfile.setRunActive(Boolean(activeRun),
       creatingNewTask || messageActionBusy || purgeRecovery.isPaused());
-    send.setAttribute("aria-label", activeRun || creatingNewTask
-      ? t("composer.queue", {}, "加入待发送队列")
-      : t("shell.send", {}, "发送任务"));
-    composerHint.textContent = purgeRecovery.isPaused()
+    writeUiAttribute(send, "aria-label", activeRun || creatingNewTask
+      ? uiMessage("composer.queue", {}, "加入待发送队列")
+      : uiMessage("shell.send", {}, "发送任务"));
+    writeUiText(composerHint, purgeRecovery.isPaused()
       ? !purgeRecovery.requiresReview()
         ? purgeRecovery.get().error && !purgeRecovery.get().busy ? errorMessage(purgeRecovery.get().error)
-          : t("purgeRecovery.checkingService")
-        : t(purgeRecovery.get().writeConflictReason === "restart" ? "shell.serviceRestartedTitle" : "error.purgeReviewRequired")
-      : localServiceReconnecting ? t("shell.connecting", {}, "正在连接本地服务…") : messageActionBusy
-      ? t("messageAction.busy", {}, "请等待当前消息操作完成")
+          : uiMessage("purgeRecovery.checkingService")
+        : uiMessage(purgeRecovery.get().writeConflictReason === "restart" ? "shell.serviceRestartedTitle" : "error.purgeReviewRequired")
+      : localServiceReconnecting ? uiMessage("shell.connecting", {}, "正在连接本地服务…") : messageActionBusy
+      ? uiMessage("messageAction.busy", {}, "请等待当前消息操作完成")
       : loginBlock ? modelErrorMessage(loginBlock, "")
       : pendingCatalog ? pendingCatalog.status === "error"
         ? errorMessage(pendingCatalog.error)
-        : t("resource.loading", {}, "正在载入资源…")
+        : uiMessage("resource.loading", {}, "正在载入资源…")
       : pendingSettings ? pendingSettings.status === "error"
         ? errorMessage(pendingSettings.error)
-        : t("settings.loading", {}, "正在读取当前配置…")
+        : uiMessage("settings.loading", {}, "正在读取当前配置…")
       : draftStore.isRunUncertain(selectedDraftKey)
-      ? t("composer.hintReviewRun") : (selectingProjectDraft ||
+      ? uiMessage("composer.hintReviewRun") : (selectingProjectDraft ||
           !draftStore.isLoaded(selectedDraftKey))
-      ? t("composer.hintLoadingDraft") : firstSubmission?.state === "rejected"
-      ? t("composer.hintRejectedSubmission") : firstSubmission?.state === "posting" &&
+      ? uiMessage("composer.hintLoadingDraft") : firstSubmission?.state === "rejected"
+      ? uiMessage("composer.hintRejectedSubmission") : firstSubmission?.state === "posting" &&
           !submissionController?.isBusy(selectedKey)
-      ? t("composer.hintReviewSubmission") : draftStore.submissions(selectedDraftKey).length
-      ? t("composer.hintSavingSubmission") : activeRun
+      ? uiMessage("composer.hintReviewSubmission") : draftStore.submissions(selectedDraftKey).length
+      ? uiMessage("composer.hintSavingSubmission") : activeRun
       ? (guide
-        ? t("composer.hintGuide", {}, "Enter 中断并发送 · Ctrl Enter 排队")
-        : t("composer.hintQueue", {}, "Enter 排队 · Ctrl Enter 中断并发送"))
+        ? uiMessage("composer.hintGuide", {}, "Enter 中断并发送 · Ctrl Enter 排队")
+        : uiMessage("composer.hintQueue", {}, "Enter 排队 · Ctrl Enter 中断并发送"))
       : route.sessionId && runsStore.get().status === "error"
-      ? t("composer.hintRunListUnavailable")
-      : t("composer.hintIdle", {}, "Enter 发送 · Shift Enter 换行");
-    $("#shortcut-enter-description").textContent = guide
-      ? t("composer.shortcutEnterGuide", {}, "发送；运行中中断并优先发送")
-      : t("composer.shortcutEnterQueue", {}, "发送；运行中加入待发送队列");
-    $("#shortcut-control-enter-description").textContent = guide
-      ? t("composer.shortcutControlGuide", {}, "运行中加入待发送队列")
-      : t("composer.shortcutControlQueue", {}, "中断当前运行，优先发送输入");
+      ? uiMessage("composer.hintRunListUnavailable")
+      : uiMessage("composer.hintIdle", {}, "Enter 发送 · Shift Enter 换行"));
+    writeUiText($("#shortcut-enter-description"), guide
+      ? uiMessage("composer.shortcutEnterGuide", {}, "发送；运行中中断并优先发送")
+      : uiMessage("composer.shortcutEnterQueue", {}, "发送；运行中加入待发送队列"));
+    writeUiText($("#shortcut-control-enter-description"), guide
+      ? uiMessage("composer.shortcutControlGuide", {}, "运行中加入待发送队列")
+      : uiMessage("composer.shortcutControlQueue", {}, "中断当前运行，优先发送输入"));
     mobileActivity.hidden = !activeRun && !creatingNewTask;
   }
   settingsStore.subscribe(state => {
@@ -1510,10 +1512,10 @@ export async function boot() {
   }
 
   function syncPromptPlaceholder() {
-    prompt.placeholder = sessionWritable ? t("shell.prompt", {}, "向墨斗描述任务…")
-      : selectedSessionStatus === "loading" ? t("sessionLoad.loadingTitle")
-      : selectedSessionStatus === "unavailable" ? t("sessionLoad.failedTitle")
-      : t("composer.readOnly", {}, "该会话不可运行；请先恢复到进行中");
+    writeUiAttribute(prompt, "placeholder", sessionWritable ? uiMessage("shell.prompt", {}, "向墨斗描述任务…")
+      : selectedSessionStatus === "loading" ? uiMessage("sessionLoad.loadingTitle")
+      : selectedSessionStatus === "unavailable" ? uiMessage("sessionLoad.failedTitle")
+      : uiMessage("composer.readOnly", {}, "该会话不可运行；请先恢复到进行中"));
   }
 
   function sessionStatusSuffix(status) {
@@ -1534,11 +1536,11 @@ export async function boot() {
     focusForkComposerWhenReady();
     if (session) {
       const title = session.title || t("nav.untitled");
-      sessionTitle.textContent = title;
+      writeUiText(sessionTitle, title);
       const statusText = sessionStatusSuffix(session.status);
-      sessionSubtitle.textContent = `${session.agent_id} · ${session.model_id}${statusText}`;
-      mobileTitle.textContent = title;
-      mobileMeta.textContent = statusText;
+      writeUiText(sessionSubtitle, `${session.agent_id} · ${session.model_id}${statusText}`);
+      writeUiText(mobileTitle, title);
+      writeUiText(mobileMeta, statusText);
     }
   });
   createSessionLoadNotice({ navigation, store: sessionDetailStore,
@@ -1572,23 +1574,23 @@ export async function boot() {
     if (focusedAction >= 0)
       (composerError.querySelectorAll(".composer-error-action")[focusedAction] ?? prompt)
         .focus({ preventScroll: true });
-    skipLink.textContent = t(settingsActive ? "shell.skipSettings" :
-      schedulesActive ? "shell.skipSchedules" : "shell.skip");
+    writeUiText(skipLink, uiMessage(settingsActive ? "shell.skipSettings" :
+      schedulesActive ? "shell.skipSchedules" : "shell.skip"));
     const session = sessionDetailStore.get().data;
     if (session && selectedKey === `${session.project_id}/${session.id}`) {
       const statusText = sessionStatusSuffix(session.status);
-      sessionSubtitle.textContent = `${session.agent_id} · ${session.model_id}${statusText}`;
-      mobileMeta.textContent = statusText;
+      writeUiText(sessionSubtitle, `${session.agent_id} · ${session.model_id}${statusText}`);
+      writeUiText(mobileMeta, statusText);
       if (!session.title) {
-        sessionTitle.textContent = t("nav.untitled");
-        mobileTitle.textContent = t("nav.untitled");
+        writeUiText(sessionTitle, uiMessage("nav.untitled"));
+        writeUiText(mobileTitle, uiMessage("nav.untitled"));
       }
     } else if (!selectedKey) {
-      sessionTitle.textContent = t("shell.newTask");
-      sessionSubtitle.textContent = t("shell.newTaskSubtitle", {
-        project: $("#composer-project").value || "default" });
-      mobileTitle.textContent = t("shell.newTask");
-      mobileMeta.textContent = "";
+      writeUiText(sessionTitle, uiMessage("shell.newTask"));
+      writeUiText(sessionSubtitle, uiMessage("shell.newTaskSubtitle", {
+        project: $("#composer-project").value || "default" }));
+      writeUiText(mobileTitle, uiMessage("shell.newTask"));
+      writeUiText(mobileMeta, "");
     }
   });
 
@@ -1607,23 +1609,23 @@ export async function boot() {
     const state = bootstrapStore.get();
     if (isRemoteTarget() && (!targetState().connected || targetState().runtimeChanged)) {
       runtimeState.dataset.state = "error";
-      runtimeLabel.textContent = `${targetState().selected.name} · ${t("devices.offlineShort", {}, "离线")}`;
+      writeUiText(runtimeLabel, `${targetState().selected.name} · ${t("devices.offlineShort", {}, "离线")}`);
       return;
     }
     const failure = bootstrapFailure();
     if (!failure && !isRemoteTarget() && localServiceReconnecting) {
       runtimeState.dataset.state = "loading";
-      runtimeLabel.textContent = t("shell.connecting", {}, "正在连接本地服务…");
+      writeUiText(runtimeLabel, uiMessage("shell.connecting", {}, "正在连接本地服务…"));
       return;
     }
     runtimeState.dataset.state = state.status === "error" || failure ? "error"
       : state.data?.ready ? "ready" : "loading";
-    runtimeLabel.textContent = failure || (state.status === "error"
+    writeUiText(runtimeLabel, failure || (state.status === "error"
       ? errorMessage(state.error)
       : state.data?.ready
         ? isRemoteTarget() ? `${targetState().selected.name} · ${state.data.version}`
-          : t("shell.localService", { version: state.data.version }, `本地服务 ${state.data.version}`)
-        : state.data?.message || t("shell.connecting", {}, "正在连接本地服务…"));
+          : uiMessage("shell.localService", { version: state.data.version }, `本地服务 ${state.data.version}`)
+        : state.data?.message || uiMessage("shell.connecting", {}, "正在连接本地服务…")));
     if (failure || composerError.dataset.code === "bootstrap_failed") {
       hideComposerError();
       renderDraftStatus();
@@ -1939,7 +1941,7 @@ export async function boot() {
       memoryManagement.setActive(false);
       settingsActive = false;
       skipLink.href = "#schedules-content";
-      skipLink.textContent = t("shell.skipSchedules");
+      writeUiText(skipLink, uiMessage("shell.skipSchedules"));
       closeDrawers();
       if (enteringSchedules) $("#schedules-title").focus({ preventScroll: true });
       return;
@@ -1951,7 +1953,7 @@ export async function boot() {
       for (const region of agentWorkspaceRegions) region.hidden = true;
       settingsView.setActive(true);
       skipLink.href = "#settings-content";
-      skipLink.textContent = t("shell.skipSettings");
+      writeUiText(skipLink, uiMessage("shell.skipSettings"));
       const selectedSection = settingsView.selectSection(settingsSection);
       if (selectedSection === "account") void account.refresh();
       memoryManagement.setActive(selectedSection === "memory");
@@ -1971,7 +1973,7 @@ export async function boot() {
     if (focusWasInSettings || focusWasInSchedules) prompt.focus();
     timelineView.restorePreviewScroll();
     skipLink.href = "#timeline";
-    skipLink.textContent = t("shell.skip");
+    writeUiText(skipLink, uiMessage("shell.skip"));
     settingsActive = false;
     composer.toggleAttribute("data-new-task", !sessionId);
     const key = projectId && sessionId ? `${projectId}/${sessionId}` : "";
@@ -1992,10 +1994,10 @@ export async function boot() {
     };
     if (!key) {
       const project = projectId || "default";
-      sessionTitle.textContent = t("shell.newTask");
-      sessionSubtitle.textContent = t("shell.newTaskSubtitle", { project });
-      mobileTitle.textContent = t("shell.newTask");
-      mobileMeta.textContent = "";
+      writeUiText(sessionTitle, uiMessage("shell.newTask"));
+      writeUiText(sessionSubtitle, uiMessage("shell.newTaskSubtitle", { project }));
+      writeUiText(mobileTitle, uiMessage("shell.newTask"));
+      writeUiText(mobileMeta, "");
     }
     // Returning from Settings may keep the same selected session, so refresh
     // the context before the same-session fast path below.
@@ -2012,7 +2014,7 @@ export async function boot() {
           if (detail.status !== "ready" || detail.data?.project_id !== projectId ||
               detail.data.id !== sessionId) {
             if (detail.status === "ready")
-              sessionDetailStore.setError(new Error("Session detail does not match the selected task"));
+              sessionDetailStore.setError(new Error(uiErrorText("error.detail.sessionDetailDoesNotMatchTheSelectedTask", {}, "Session detail does not match the selected task")));
             return;
           }
           // Returning from Settings may refresh the sidebar, but that catalog
@@ -2072,7 +2074,7 @@ export async function boot() {
       if (!stillSelected()) return;
       if (detail?.status !== "ready") return;
       if (detail.data?.project_id !== projectId || detail.data?.id !== sessionId) {
-        sessionDetailStore.setError(new Error("Session detail does not match the selected task"));
+        sessionDetailStore.setError(new Error(uiErrorText("error.detail.sessionDetailDoesNotMatchTheSelectedTask", {}, "Session detail does not match the selected task")));
         return;
       }
       await submissionController.reconcile(key);
@@ -2098,13 +2100,13 @@ export async function boot() {
     const failure = bootstrapFailure();
     if (failure) {
       composerError.hidden = false;
-      composerError.textContent = failure;
+      writeUiText(composerError, failure);
       composerError.dataset.code = "bootstrap_failed";
       delete composerError.dataset.queueItemId;
       return;
     }
     composerError.hidden = true;
-    composerError.textContent = "";
+    writeUiText(composerError, "");
     delete composerError.dataset.code;
     delete composerError.dataset.queueItemId;
   }
@@ -2192,9 +2194,9 @@ export async function boot() {
     if (localServiceReconnecting && error?.code === "network_error" &&
         !error.runAdmissionUncertain) return;
     composerErrorState = { error, note };
-    composerError.textContent = error?.localizedMessageKey
-      ? t(error.localizedMessageKey, {}, error.localizedMessageFallback || error.message)
-      : errorMessage(error);
+    writeUiText(composerError, error?.localizedMessageKey
+      ? uiMessage(error.localizedMessageKey, {}, error.localizedMessageFallback || error.message)
+      : errorMessage(error));
     const detail = typeof note === "function" ? note()
       : typeof note === "object" && note ? errorMessage(note) : note;
     if (detail) composerError.append(" ", detail);
@@ -2204,7 +2206,7 @@ export async function boot() {
     if (error?.runAdmissionUncertain || error?.code === "run_admission_uncertain") {
       const acknowledge = element("button", {
         className: "composer-error-action",
-        text: t("composer.reviewedRun"),
+        text: uiMessage("composer.reviewedRun"),
         attrs: { type: "button" },
       });
       acknowledge.addEventListener("click", () => {
@@ -2222,7 +2224,7 @@ export async function boot() {
       const multiple = draftStore.submissions(selectedKey).length > 1;
       const review = element("button", {
         className: "composer-error-action",
-        text: t(error.code === "submission_rejected"
+        text: uiMessage(error.code === "submission_rejected"
           ? (multiple ? "composer.retryRejectedSubmission" :
             "composer.restoreRejectedSubmission")
           : (multiple ? "composer.retryReviewedSubmission" :
@@ -2243,7 +2245,7 @@ export async function boot() {
     }
     if (error?.code === "agent_unavailable" || note?.code === "agent_unavailable") {
       const settings = element("button", {
-        className: "composer-error-action", text: t("composer.openAgentSettings"),
+        className: "composer-error-action", text: uiMessage("composer.openAgentSettings"),
         attrs: { type: "button" },
       });
       settings.addEventListener("click", () => navigation.openSettings("agents"));
@@ -2252,7 +2254,7 @@ export async function boot() {
     if (error?.code === "new_task_unconfirmed") {
       const review = element("button", {
         className: "composer-error-action",
-        text: t(newTaskController.canChangeProfile()
+        text: uiMessage(newTaskController.canChangeProfile()
           ? "composer.retryNewTaskProfile" : "composer.retryNewTask"),
         attrs: { type: "button" },
       });
@@ -2266,7 +2268,7 @@ export async function boot() {
     if (error?.code === "recovery_required") {
       const openDecisions = element("button", {
         className: "composer-error-action",
-        text: t("composer.openRecovery", {}, "查看处理选项"),
+        text: uiMessage("composer.openRecovery", {}, "查看处理选项"),
         attrs: { type: "button" },
       });
       openDecisions.addEventListener("click", () => {
@@ -2332,7 +2334,7 @@ export async function boot() {
     fromComposer = true }) {
     if (messageActionBusy) {
       showComposerError(localComposerError("messageAction.busy",
-        "请等待当前消息操作完成"));
+        uiText("messageAction.busy", {}, "请等待当前消息操作完成")));
       return;
     }
     fileMentions.hide();
@@ -2474,9 +2476,9 @@ export async function boot() {
   function validateSessionTitle(field, error) {
     const bytes = sessionTitleUtf8Bytes(field.value.trim());
     if (bytes <= SESSION_TITLE_UTF8_LIMIT) return true;
-    error.textContent = t("sessionAction.titleTooLong",
+    writeUiText(error, uiMessage("sessionAction.titleTooLong",
       { bytes, max: SESSION_TITLE_UTF8_LIMIT },
-      `标题占 ${bytes} 字节，最多 ${SESSION_TITLE_UTF8_LIMIT} 字节`);
+      `标题占 ${bytes} 字节，最多 ${SESSION_TITLE_UTF8_LIMIT} 字节`));
     error.hidden = false;
     field.focus();
     return false;
@@ -2486,9 +2488,9 @@ export async function boot() {
     if (!pendingSessionAction) return;
     const [title, description, confirm] = sessionActionDialogCopy(
       pendingSessionAction.action, pendingSessionAction.session);
-    actionTitle.textContent = title;
-    actionDescription.textContent = description;
-    actionConfirm.textContent = confirm;
+    writeUiText(actionTitle, title);
+    writeUiText(actionDescription, description);
+    writeUiText(actionConfirm, confirm);
   }
   subscribeLocale(() => { if (actionDialog.open) syncSessionActionCopy(); });
 
@@ -2526,7 +2528,7 @@ export async function boot() {
       navigation.select(updated.project_id, updated.id);
     } else if (action === "truncate") updated = await truncateSession(session, actionForm.elements.through_sequence.value);
     else if (action === "clear") updated = await clearSession(session);
-    else throw new TypeError("unknown session action");
+    else throw new TypeError(uiErrorText("error.detail.unknownSessionAction", {}, "unknown session action"));
     await refreshSelectedSession(updated);
     if (["unarchive", "restore"].includes(action) && updated.status === "active")
       await refreshSelectedQueue();
@@ -2610,7 +2612,7 @@ export async function boot() {
       }
     } catch (error) {
       if (error?.name === "AbortError") return;
-      actionError.textContent = errorMessage(error);
+      writeUiText(actionError, errorMessage(error));
       actionError.hidden = false;
       actionError.focus();
     } finally {
@@ -2636,9 +2638,9 @@ export async function boot() {
     const token = currentPageWriteToken(), owner = detail.target;
     const check = () => {
       if (currentPageWriteToken() !== token || (targetState().selected?.id || "local") !== owner)
-        throw new Error("设备或工作区状态已改变，请重新创建 Skill");
+        throw new Error(uiText("ui.app.theDeviceOrWorkspaceChangedCreateTheSkillAgain", {}, "设备或工作区状态已改变，请重新创建 Skill"));
     };
-    const title = ["创建 Skill", "改进 Skill", "检查 Skill"].includes(detail.title) ? detail.title : "创建 Skill";
+    const title = ["创建 Skill", "改进 Skill", "检查 Skill"].includes(detail.title) ? detail.title : uiText("ui.skillWorkbench.createSkill", {}, "创建 Skill");
     void createSkillAuthoringDraft({ createSession, draftStore, projectId: detail.projectId, text: detail.text, title, check })
       .then(session => { check(); navigation.select(session.project_id, session.id); closeDrawers(); prompt.focus(); })
       .catch(error => { if ((targetState().selected?.id || "local") === owner) toast(errorMessage(error), "error"); })
@@ -2857,7 +2859,7 @@ export async function boot() {
     else if (event.type === "runtime_changed") {
       runPollReads.cancel();
       runStops.clear();
-      purgeRecovery.markWriteConflict(new ApiError("Service generation changed", {
+      purgeRecovery.markWriteConflict(new ApiError(uiErrorText("error.detail.serviceGenerationChanged", {}, "Service generation changed"), {
         code: event.reason === "restart" ? "service_restarted" : "write_token_conflict",
       }));
     } else if (event.type === "reachable") {

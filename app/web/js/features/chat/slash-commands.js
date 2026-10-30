@@ -1,4 +1,5 @@
-import { subscribeLocale, t } from "../../i18n.js";
+import { uiMessage, setUiAttribute as writeUiAttribute, t as uiText, subscribeLocale, t } from "../../i18n.js";
+
 import { loadCommands, subscribeCommands, parseCommand, runCommand, cancelCommand } from "./extension-commands.js";
 import { loadSelectableSkills, parseSkillSelection, expandSkillSelection } from "./skill-selection.js";
 import { clear, element, errorMessage, isImeKey, revealListOption, toast } from "../../utils/dom.js";
@@ -9,7 +10,7 @@ import { presentCommandResult } from "./command-results.js";
 export function createSlashCommands({ composer, input, onExecute, contextKey = () => "", skillProject = () => "default", commandScope = () => ({ projectId: skillProject() }), onPendingChange = () => {}, insertOnly = false }) {
   const list = element("div", {
     className: "slash-menu",
-    attrs: { id: input.id && input.id !== "prompt" ? `${input.id}-slash-menu` : "slash-menu", role: "listbox", "aria-label": t("slash.label", {}, "斜杠命令") },
+    attrs: { id: input.id && input.id !== "prompt" ? `${input.id}-slash-menu` : "slash-menu", role: "listbox", "aria-label": uiMessage("slash.label", {}, "斜杠命令") },
   });
   list.hidden = true;
   composer.append(list);
@@ -93,7 +94,7 @@ export function createSlashCommands({ composer, input, onExecute, contextKey = (
     hide();let cleared = false;
     try {
       const command = (await loadCommands(scope.projectId, { refresh: true })).find(item => item.id === selection.id);
-      if (!command) throw new Error(`命令 /${selection.id} 不存在、已停用或配置无效。`);
+      if (!command) throw new Error(uiText("ui.slashCommands.commandValue1DoesNotExistIsDisabledOrHas", { value1: selection.id }, "命令 /{value1} 不存在、已停用或配置无效。"));
       if (key !== contextKey()) return true;
       const result = await runCommand(command, selection.raw, scope, { onPending(id, target, done) {
         if (done) pending.delete(id);else pending.set(id, target);onPendingChange(pending.size);
@@ -142,7 +143,7 @@ export function createSlashCommands({ composer, input, onExecute, contextKey = (
   const view = input.ownerDocument?.defaultView;
   view?.addEventListener("blur", hide);
   subscribeLocale(() => {
-    list.setAttribute("aria-label", t("slash.label", {}, "斜杠命令"));
+    writeUiAttribute(list, "aria-label", uiMessage("slash.label", {}, "斜杠命令"));
     if (!list.hidden) render();
   });
   return Object.freeze({

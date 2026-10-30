@@ -1,4 +1,5 @@
-import { subscribeLocale, t } from "../../i18n.js";
+import { setUiText as writeUiText, uiMessage, subscribeLocale, t } from "../../i18n.js";
+
 import { errorMessage, toast } from "../../utils/dom.js";
 import { copyText } from "../../utils/clipboard.js";
 
@@ -48,41 +49,41 @@ export function createProjectPurgeRecoveryPanel({ panel, notice, recovery, navig
     panel.setAttribute("aria-busy", String(state.busy));
     if (!paused && dialog.open) dialog.close();
     notice.hidden = !paused || dialog.open;
-    notice.querySelector("span").textContent = t(serviceCheck
+    writeUiText(notice.querySelector("span"), uiMessage(serviceCheck
       ? state.busy || !state.error ? "purgeRecovery.checkingService" : "purgeRecovery.serviceUnavailable"
-      : restarted ? "shell.serviceRestarted" : "purgeRecovery.notice");
-    jump.textContent = t(serviceCheck || restarted ? "devices.retry" : "purgeRecovery.open");
-    panel.querySelector("h3").textContent = t(serviceCheck ? "purgeRecovery.serviceTitle"
-      : restarted ? "shell.serviceRestartedTitle" : "purgeRecovery.title");
-    panel.querySelector('[data-purge-field="description"]').textContent = t(serviceCheck
-      ? "purgeRecovery.serviceDescription" : restarted ? "shell.serviceRestartedDescription" : "purgeRecovery.description");
-    panel.querySelector('[data-purge-field="status"]').textContent = statusCopy(state);
+      : restarted ? "shell.serviceRestarted" : "purgeRecovery.notice"));
+    writeUiText(jump, uiMessage(serviceCheck || restarted ? "devices.retry" : "purgeRecovery.open"));
+    writeUiText(panel.querySelector("h3"), uiMessage(serviceCheck ? "purgeRecovery.serviceTitle"
+      : restarted ? "shell.serviceRestartedTitle" : "purgeRecovery.title"));
+    writeUiText(panel.querySelector('[data-purge-field="description"]'), uiMessage(serviceCheck
+      ? "purgeRecovery.serviceDescription" : restarted ? "shell.serviceRestartedDescription" : "purgeRecovery.description"));
+    writeUiText(panel.querySelector('[data-purge-field="status"]'), statusCopy(state));
     binding.hidden = !state.intent;
     for (const field of ["name", "project_id", "revision", "purge_request_id"])
-      panel.querySelector(`[data-purge-field="${field}"]`).textContent = String(state.intent?.[field] ?? "");
+      writeUiText(panel.querySelector(`[data-purge-field="${field}"]`), String(state.intent?.[field] ?? ""));
     for (const field of ["name", "project_id", "revision", "purge_request_id"])
-      panel.querySelector(`[data-purge-label="${field}"]`).textContent = t(`purgeRecovery.${field}`);
+      writeUiText(panel.querySelector(`[data-purge-label="${field}"]`), uiMessage(`purgeRecovery.${field}`));
     error.hidden = !state.error || (serviceCheck && state.busy) || (restarted && state.error.code === "service_restarted");
-    error.textContent = state.error ? errorMessage(state.error) : "";
-    query.textContent = serviceCheck ? t(state.busy ? "purgeRecovery.checkingService" : "devices.retry")
-      : state.busy ? t("purgeRecovery.working") : t("purgeRecovery.query");
-    cancel.textContent = t("purgeRecovery.cancel");
-    acknowledge.textContent = t("purgeRecovery.acknowledge");
+    writeUiText(error, state.error ? errorMessage(state.error) : "");
+    writeUiText(query, serviceCheck ? uiMessage(state.busy ? "purgeRecovery.checkingService" : "devices.retry")
+      : state.busy ? uiMessage("purgeRecovery.working") : uiMessage("purgeRecovery.query"));
+    writeUiText(cancel, uiMessage("purgeRecovery.cancel"));
+    writeUiText(acknowledge, uiMessage("purgeRecovery.acknowledge"));
     query.disabled = state.busy;
     cancel.hidden = !state.intent || state.result?.committed ||
       ["pending", "aborted"].includes(state.result?.outcome);
     cancel.disabled = state.busy;
     acknowledge.hidden = state.result?.outcome !== "aborted";
     acknowledge.disabled = state.busy;
-    reload.textContent = t("purgeRecovery.reload");
-    copy.textContent = t("purgeRecovery.copyDrafts");
+    writeUiText(reload, uiMessage("purgeRecovery.reload"));
+    writeUiText(copy, uiMessage("purgeRecovery.copyDrafts"));
     reload.hidden = copy.hidden = !(state.writeConflict || state.error?.code === "purge_draft_unsaved" ||
       (state.intent && !state.intentSaved));
     reload.disabled = copy.disabled = state.busy;
-    review.textContent = t("purgeConfirm.review");
+    writeUiText(review, uiMessage("purgeConfirm.review"));
     review.hidden = !state.intent || !state.intentSaved || state.result?.outcome !== "not_accepted" || state.writeConflict;
     review.disabled = state.busy;
-    complete.textContent = t("purgeConfirm.complete");
+    writeUiText(complete, uiMessage("purgeConfirm.complete"));
     complete.hidden = state.result?.accepted !== true || state.result?.outcome !== "committed" ||
       !state.result?.committed || state.result?.restart_required;
     complete.disabled = state.busy;

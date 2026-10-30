@@ -1,3 +1,5 @@
+import { t as uiErrorText, t as uiText } from "../i18n.js";
+
 import { createRemoteTransport, remoteError } from "./remote-transport.js";
 import { connectorTicket, connectorDirectSocket } from "./connector.js";
 
@@ -24,28 +26,28 @@ export function isRemoteTarget() { return Boolean(selected); }
 export function subscribeTarget(listener) { listeners.add(listener); listener(status); return () => listeners.delete(listener); }
 export function setTargetSwitchGuard(guard) { switchGuard = guard; }
 export async function requestTargetSwitch(next, options = {}) {
-  if (!await switchGuard(options)) throw remoteError("target_switch_busy", "请等待操作完成，并保存或复制未保存的草稿后切换设备", { target: next });
+  if (!await switchGuard(options)) throw remoteError("target_switch_busy", uiText("ui.target.waitForTheOperationToFinishAndSaveOr", {}, "请等待操作完成，并保存或复制未保存的草稿后切换设备"), { target: next });
   switchTarget(next, options.route);
 }
 
 export function targetFetch(path, options = {}) {
   const method = (options.method || "GET").toUpperCase();
-  if (switching) return Promise.reject(remoteError("target_changing", "正在切换设备，请稍候"));
+  if (switching) return Promise.reject(remoteError("target_changing", uiText("ui.target.switchingDevicesPleaseWait", {}, "正在切换设备，请稍候")));
   if (selected && runtimeChanged && !["GET", "HEAD"].includes(method))
-    return Promise.reject(remoteError("remote_runtime_changed", "目标设备运行代已变化，请先保留草稿并重新载入页面"));
+    return Promise.reject(remoteError("remote_runtime_changed", uiText("ui.target.theTargetServiceRestartedKeepYourDraftsAndReload", {}, "目标设备运行代已变化，请先保留草稿并重新载入页面")));
   if (selected && ((path === "/api/v1/update/install" && method === "POST") ||
       (path === "/api/v1/account/login" && method === "POST" && !JSON.parse(options.body || "{}").identifier)))
-    return Promise.reject(remoteError("remote_native_unavailable", "此操作需要在目标设备的原生窗口中完成"));
+    return Promise.reject(remoteError("remote_native_unavailable", uiText("ui.target.completeThisOperationInTheTargetDeviceSNative", {}, "此操作需要在目标设备的原生窗口中完成")));
   if (selected) return transport ? transport.fetch(path, options) :
-    Promise.reject(remoteError("remote_offline", "目标设备离线，操作不会转到本机"));
+    Promise.reject(remoteError("remote_offline", uiText("ui.target.targetDeviceIsOfflineTheOperationWillNotRun", {}, "目标设备离线，操作不会转到本机")));
   return fetch(path, options);
 }
 export function targetLiveSocket(url, protocols) {
-  if (switching || stopped) throw remoteError("target_changing", "正在切换设备，请稍候");
+  if (switching || stopped) throw remoteError("target_changing", uiText("ui.target.switchingDevicesPleaseWait", {}, "正在切换设备，请稍候"));
   if (!selected) return new WebSocket(url, protocols);
-  if (!transport?.state()) throw remoteError("remote_offline", "目标设备离线");
+  if (!transport?.state()) throw remoteError("remote_offline", uiText("ui.target.targetDeviceOffline", {}, "目标设备离线"));
   const token = protocols?.find(value => value.startsWith("mdo.token."))?.slice(10);
-  if (!/^[0-9a-f]{32}-(0|[1-9][0-9]{0,19})$/.test(token || "")) throw new Error("Invalid target live token");
+  if (!/^[0-9a-f]{32}-(0|[1-9][0-9]{0,19})$/.test(token || "")) throw new Error(uiErrorText("error.detail.invalidTargetLiveToken", {}, "Invalid target live token"));
   return transport.liveSocket(token);
 }
 function schedule(error) {
@@ -72,7 +74,7 @@ export function initializeTarget() {
   connecting = (async () => {
     try {
       const details = await connectorTicket(selected.id, selected.mode, undefined, selected.owner);
-      if (details.owner !== selected.owner) throw remoteError("connector_account_changed", "控制端账号已变化，请重新选择该账号的设备");
+      if (details.owner !== selected.owner) throw remoteError("connector_account_changed", uiText("ui.target.theControllerAccountChangedSelectADeviceForThe", {}, "控制端账号已变化，请重新选择该账号的设备"));
       if (switching || stopped) return;
       await transport.connect(details);
     } catch (error) { publish({ connected: false, error }); schedule(error); }
@@ -84,9 +86,9 @@ export function initializeTarget() {
 // Reload is the context boundary: existing subscriptions, dialogs, store
 // closures and asynchronous action continuations cannot address the next target.
 export function switchTarget(next, route = null) {
-  if (next !== null && !validSelection(next)) throw new TypeError("Invalid target selection");
+  if (next !== null && !validSelection(next)) throw new TypeError(uiErrorText("error.detail.invalidTargetSelection", {}, "Invalid target selection"));
   if (route !== null && !/^#\/projects\/[A-Za-z0-9_.%-]+\/(?:new|sessions\/[0-9a-f]{32})$/.test(route))
-    throw new TypeError("Invalid target route");
+    throw new TypeError(uiErrorText("error.detail.invalidTargetRoute", {}, "Invalid target route"));
   const routes = storageRead(ROUTES) || {};
   const key = value => value ? `${value.owner}/${value.id}` : "local";
   routes[key(selected)] = location.hash;

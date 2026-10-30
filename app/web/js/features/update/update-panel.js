@@ -1,5 +1,6 @@
+import { t as uiErrorText, currentLocale, subscribeLocale } from "../../i18n.js";
 import { api } from "../../api/client.js";
-import { currentLocale, subscribeLocale } from "../../i18n.js";
+
 import { subscribeTarget, targetState } from "../../api/target.js";
 import { openLayer } from "../../components/layers.js";
 import { element } from "../../utils/dom.js";
@@ -144,7 +145,7 @@ export function createUpdatePanel({ root, entries = [], transport = api, openDev
     try {
       const { data: latest } = await transport.get("/update");
       if (!latest || typeof latest.enabled !== "boolean" || typeof latest.status !== "string")
-        throw new Error("Invalid update status");
+        throw new Error(uiErrorText("error.detail.invalidUpdateStatus", {}, "Invalid update status"));
       if (!destroyed && generation === epoch) { status = latest; connectionLost = false; render(); }
     } catch { if (!destroyed && generation === epoch) connectionLost = true; }
     finally { pending = false; if (!destroyed) render(); if (!destroyed && generation !== epoch) void refresh(); else schedule(); }

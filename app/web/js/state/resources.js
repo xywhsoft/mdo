@@ -1,8 +1,9 @@
+import { t as uiErrorText } from "../i18n.js";
 import { api, resourceId } from "../api/client.js";
 import { startResourceOperation } from "./resource-operation-start.js";
 
 export async function reloadCatalog(name, options = {}) {
-  if (!["models", "skills", "modules", "mcp"].includes(name)) throw new TypeError("resource cannot be reloaded");
+  if (!["models", "skills", "modules", "mcp"].includes(name)) throw new TypeError(uiErrorText("error.detail.resourceCannotBeReloaded", {}, "resource cannot be reloaded"));
   if (name === "modules") return startResourceOperation("/modules/reload", { kind: "module_reload", target: "" }, options);
   return (await api.post(`/${name}/reload`)).data;
 }

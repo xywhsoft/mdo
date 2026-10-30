@@ -1,5 +1,7 @@
+import { setUiAttribute as writeUiAttribute, uiMessage, subscribeLocale, t } from "../../i18n.js";
+
 import { api } from "../../api/client.js";
-import { subscribeLocale, t } from "../../i18n.js";
+
 import { clear, element, isImeKey, revealListOption } from "../../utils/dom.js";
 import { replaceInputText } from "../../utils/text-edit.js";
 import { createCompositionTracker } from "../../utils/composition.js";
@@ -32,7 +34,7 @@ export function createFileMentions({ composer, input, navigation, onReference })
   const slashMenuId = input.id && input.id !== "prompt" ? `${input.id}-slash-menu` : "slash-menu";
   const list = element("div", {
     className: "file-mention-menu",
-    attrs: { id: input.id && input.id !== "prompt" ? `${input.id}-file-mention-menu` : "file-mention-menu", role: "listbox", "aria-label": t("mention.label", {}, "工作区文件") },
+    attrs: { id: input.id && input.id !== "prompt" ? `${input.id}-file-mention-menu` : "file-mention-menu", role: "listbox", "aria-label": uiMessage("mention.label", {}, "工作区文件") },
   });
   list.hidden = true;
   composer.append(list);
@@ -170,7 +172,7 @@ export function createFileMentions({ composer, input, navigation, onReference })
   });
   input.ownerDocument?.defaultView?.addEventListener("blur", hide);
   navigation.subscribe(() => { hide(); update(); });
-  subscribeLocale(() => list.setAttribute("aria-label", t("mention.label", {}, "工作区文件")));
+  subscribeLocale(() => writeUiAttribute(list, "aria-label", t("mention.label", {}, "工作区文件")));
 
   return Object.freeze({
     hide,

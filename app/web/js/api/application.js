@@ -1,3 +1,5 @@
+import { t as uiErrorText, t as uiText } from "../i18n.js";
+
 import { api } from "./client.js";
 import { workbenchServices } from "./workbench-services.js";
 
@@ -16,13 +18,13 @@ export function createApplicationClient(context = () => ({}), transport = api) {
     result: async (id, options = {}) => {
       const result = await call("operation.result", { id }, options);
       if (result?.encoding !== "utf-8-json" || !Number.isSafeInteger(result.bytes)) return result;
-      if (result.bytes > 16 * 1024 * 1024) throw new Error("SDK result exceeds the client limit");
+      if (result.bytes > 16 * 1024 * 1024) throw new Error(uiErrorText("error.detail.sdkResultExceedsTheClientLimit", {}, "SDK result exceeds the client limit"));
       const bytes = new Uint8Array(result.bytes); let offset = 0;
       while (offset < bytes.length) {
         const chunk = await call("operation.result", { id, offset, limit: 16384 }, options);
         const decoded = Uint8Array.from(atob(chunk.base64), c => c.charCodeAt(0));
         if (!decoded.length || chunk.next !== offset + decoded.length || chunk.next > bytes.length)
-          throw new Error("SDK result returned an invalid byte range");
+          throw new Error(uiErrorText("error.detail.sdkResultReturnedAnInvalidByteRange", {}, "SDK result returned an invalid byte range"));
         bytes.set(decoded, offset); offset = chunk.next;
       }
       return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
@@ -36,14 +38,14 @@ export function createApplicationClient(context = () => ({}), transport = api) {
 export function createLocalApplicationClient(context = () => ({})) {
   const read = async response => {
     const envelope = await response.json();
-    if (!response.ok || !envelope.ok) throw Object.assign(new Error(envelope.error?.message || "本机应用服务不可用"), { code: envelope.error?.code, status: response.status });
+    if (!response.ok || !envelope.ok) throw Object.assign(new Error(envelope.error?.message || uiText("ui.application.localApplicationServiceUnavailable", {}, "本机应用服务不可用")), { code: envelope.error?.code, status: response.status });
     return envelope;
   };
   return createApplicationClient(context, {
     async post(path, body, options = {}) {
       const bootstrap = await fetch("/api/v1/bootstrap", { signal: options.signal });
       const token = bootstrap.headers.get("X-Mdo-Write-Token");
-      if (!bootstrap.ok || !token) throw new Error("本机应用服务尚未就绪");
+      if (!bootstrap.ok || !token) throw new Error(uiText("ui.application.localApplicationServiceIsNotReady", {}, "本机应用服务尚未就绪"));
       return read(await fetch(`/api/v1${path}`, { method: "POST", headers: { "Content-Type": "application/json", "X-Mdo-Write-Token": token }, body: JSON.stringify(body), signal: options.signal }));
     },
     async get(path, options = {}) { return read(await fetch(`/api/v1${path}`, { signal: options.signal })); },
@@ -58,9 +60,9 @@ export async function applyApplicationAction(action, execute, storage, key) {
   const saved = storage.getItem(key);
   let records;
   try { records = saved === null ? {} : JSON.parse(saved); }
-  catch { throw new Error("UI intent journal is corrupt; inspect the UI before repeating effects"); }
+  catch { throw new Error(uiErrorText("error.detail.uiIntentJournalIsCorruptInspectTheUiBeforeRepeating", {}, "UI intent journal is corrupt; inspect the UI before repeating effects")); }
   if (!records || typeof records !== "object" || Array.isArray(records))
-    throw new Error("UI intent journal is invalid; inspect the UI before repeating effects");
+    throw new Error(uiErrorText("error.detail.uiIntentJournalIsInvalidInspectTheUiBeforeRepeating", {}, "UI intent journal is invalid; inspect the UI before repeating effects"));
   if (Object.hasOwn(records, action.id)) {
     const saved = records[action.id];
     return saved.state === "done" ? saved.ack : { success: false, error: "The page restarted while this action was executing; inspect the UI before repeating it" };

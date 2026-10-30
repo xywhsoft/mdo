@@ -1,3 +1,4 @@
+import { t as uiText } from "../../i18n.js";
 /* Long read-only inspections run outside the HTTP worker. A view owns only its
  * operation, including cancellation and release; it never cancels another tab. */
 export async function readOperation(sdk, method, params, signal) {
@@ -10,7 +11,7 @@ export async function readOperation(sdk, method, params, signal) {
       if (signal?.aborted) throw new DOMException("Inspection cancelled", "AbortError");
       receipt = await sdk.wait(id, 500, { signal });
       if (!receipt.terminal) continue;
-      if (receipt.state !== "succeeded") throw Object.assign(new Error(receipt.error?.message || "读取操作未完成"), receipt.error || {});
+      if (receipt.state !== "succeeded") throw Object.assign(new Error(receipt.error?.message || uiText("ui.readOperation.readOperationIncomplete", {}, "读取操作未完成")), receipt.error || {});
       try { const result = await sdk.result(id, { signal }); finished = true; return result; }
       catch (error) { if (error.code !== "sdk_operation_pending") throw error; }
     }

@@ -1,3 +1,4 @@
+import { t as uiErrorText } from "../i18n.js";
 // WebViews do not all expose the asynchronous Clipboard API. Keep copying
 // inside the click handler so the legacy path still has a user gesture.
 export async function copyText(value) {
@@ -69,5 +70,5 @@ export async function copyText(value) {
       }
     } catch { /* A copy event may replace the selected nodes. */ }
   }
-  if (!copied) throw new Error("clipboard unavailable");
+  if (!copied) throw new Error(uiErrorText("error.detail.clipboardUnavailable", {}, "clipboard unavailable"));
 }

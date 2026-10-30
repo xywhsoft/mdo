@@ -1,3 +1,4 @@
+import { t as uiErrorText } from "../i18n.js";
 import { ApiError, api, currentPageWriteToken } from "../api/client.js";
 import { createRequestRecovery } from "../api/request-recovery.js";
 import { isTransientReadError } from "../api/read-recovery.js";
@@ -23,7 +24,7 @@ export async function runDecisionAction({ path, id, field, value,
     ? /^\/approvals\/([1-9][0-9]*)$/.exec(path) : null;
   if (!match || match[1] !== number || typeof value !== "string" || !value ||
       (field === "decision" && !["allow", "allow_run", "deny"].includes(value)))
-    throw new TypeError("Invalid recoverable decision");
+    throw new TypeError(uiErrorText("error.detail.invalidRecoverableDecision", {}, "Invalid recoverable decision"));
   const recovery = createRequestRecovery(recoveryOptions), original = epoch();
   const body = Object.freeze({ [field]: value });
   const uncertain = new Set();
@@ -46,14 +47,14 @@ export async function runDecisionAction({ path, id, field, value,
       }
       assertOwner();
       if (token && reply?.writeToken !== token)
-        throw new ApiError("Decision service restarted", { code: "write_token_conflict" });
+        throw new ApiError(uiErrorText("error.detail.decisionServiceRestarted", {}, "Decision service restarted"), { code: "write_token_conflict" });
       if (String(reply?.data?.id) !== String(id) || reply?.data?.[field] !== value)
-        throw new ApiError("Invalid decision acknowledgement", { code: "invalid_response" });
+        throw new ApiError(uiErrorText("error.detail.invalidDecisionAcknowledgement", {}, "Invalid decision acknowledgement"), { code: "invalid_response" });
       return reply.data;
     }, { retryable: transient });
   } catch (error) {
     if (uncertain.size && transient(error)) {
-      const final = new ApiError("Decision acknowledgement could not be confirmed", {
+      const final = new ApiError(uiErrorText("error.detail.decisionAcknowledgementCouldNotBeConfirmed", {}, "Decision acknowledgement could not be confirmed"), {
         code: field === "answer" ? "ask_answer_unconfirmed" : "approval_decision_unconfirmed",
       });
       final.cause = error; throw final;

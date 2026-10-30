@@ -1,3 +1,4 @@
+import { t as uiErrorText } from "../../i18n.js";
 import { ApiError, api, currentPageWriteToken, resourceId } from "../../api/client.js";
 import { isTransientReadError } from "../../api/read-recovery.js";
 import { createRequestRecovery } from "../../api/request-recovery.js";
@@ -16,7 +17,7 @@ export function draftEndpoint(key) {
   if (!key) return "/draft";
   if (key.startsWith("project:")) return `/projects/${resourceId(key.slice(8), "project")}/draft`;
   const [project, session, extra] = key.split("/");
-  if (extra !== undefined) throw new TypeError("Invalid draft owner");
+  if (extra !== undefined) throw new TypeError(uiErrorText("error.detail.invalidDraftOwner", {}, "Invalid draft owner"));
   return `/projects/${resourceId(project, "project")}/sessions/${resourceId(session, "session")}/draft`;
 }
 
@@ -26,7 +27,7 @@ export function draftEndpoint(key) {
 export function createDraftTransport({ matchesSnapshot, createRecovery = createRequestRecovery,
   epoch = stamp } = {}) {
   if (typeof matchesSnapshot !== "function" || typeof epoch !== "function")
-    throw new TypeError("Invalid draft transport callbacks");
+    throw new TypeError(uiErrorText("error.detail.invalidDraftTransportCallbacks", {}, "Invalid draft transport callbacks"));
   const active = new Map(), pending = new Map();
   async function scoped(action, { signal, key, origin = epoch(), token = currentPageWriteToken() } = {}) {
     const recovery = createRecovery({ eventTarget: null });
@@ -42,7 +43,7 @@ export function createDraftTransport({ matchesSnapshot, createRecovery = createR
     function checked(response, requestSignal) {
       assertOwner(requestSignal);
       if (token && response.writeToken !== token)
-        throw new ApiError("Draft service restarted", { code: "write_token_conflict" });
+        throw new ApiError(uiErrorText("error.detail.draftServiceRestarted", {}, "Draft service restarted"), { code: "write_token_conflict" });
       return response;
     }
     try { return await action({ recovery, assertOwner, checked }); }
@@ -79,12 +80,12 @@ export function createDraftTransport({ matchesSnapshot, createRecovery = createR
     const revision = data => {
       const value = Number(data?.revision);
       if (!Number.isSafeInteger(value) || value < 0)
-        throw new ApiError("Invalid saved draft revision", { code: "invalid_response" });
+        throw new ApiError(uiErrorText("error.detail.invalidSavedDraftRevision", {}, "Invalid saved draft revision"), { code: "invalid_response" });
       return value;
     };
     function accepted(response) {
       if (revision(response.data) <= snapshot.revision || !matchesSnapshot(key, response.data, snapshot))
-        throw new ApiError("Invalid draft save acknowledgement", { code: "invalid_response" });
+        throw new ApiError(uiErrorText("error.detail.invalidDraftSaveAcknowledgement", {}, "Invalid draft save acknowledgement"), { code: "invalid_response" });
       pending.delete(key); return { response, body: snapshot };
     }
     return scoped(async ({ recovery, assertOwner, checked }) => {
@@ -109,17 +110,17 @@ export function createDraftTransport({ matchesSnapshot, createRecovery = createR
             const matches = matchesSnapshot(key, response.data, snapshot);
             pending.delete(key); // The older CAS can no longer commit.
             if (matches) return { response, body: snapshot };
-            throw Object.assign(new ApiError("The draft changed in another window",
+            throw Object.assign(new ApiError(uiErrorText("error.detail.theDraftChangedInAnotherWindow", {}, "The draft changed in another window"),
               { code: "draft_conflict", status: 409 }), { peerDraftChanged: true });
           }
           if (current < snapshot.revision)
-            throw new ApiError("Draft confirmation is pending", { code: "draft_confirmation_pending" });
+            throw new ApiError(uiErrorText("error.detail.draftConfirmationIsPending", {}, "Draft confirmation is pending"), { code: "draft_confirmation_pending" });
           return accepted(await write(signal));
         }, { retryable: error => uncertain(error) || error?.code === "draft_confirmation_pending" ||
           (error?.code === "draft_conflict" && !error.peerDraftChanged) });
       } catch (error) {
         if (error?.name === "AbortError" || !pending.has(key)) throw error;
-        throw Object.assign(new ApiError("The draft save could not be confirmed",
+        throw Object.assign(new ApiError(uiErrorText("error.detail.theDraftSaveCouldNotBeConfirmed", {}, "The draft save could not be confirmed"),
           { code: "draft_save_unconfirmed" }), { confirmationError: error });
       }
     }, previous);

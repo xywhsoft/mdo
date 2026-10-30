@@ -1,3 +1,5 @@
+import { t as uiErrorText, t as uiText } from "../../i18n.js";
+
 /** Ordered, bounded keyboard admission. A failed ACK is uncertain, never an
  * invitation to replay commands using another lease or a new service epoch. */
 export function createTerminalInput({ lease, write, fault, changed = () => {}, capacity = 65536, chunkSize = 8192, retryMs = 100, retryLimit = 40 }) {
@@ -20,7 +22,7 @@ export function createTerminalInput({ lease, write, fault, changed = () => {}, c
           }
         }
         if (stopped) break;
-        if (receipt.sequence !== sequence || receipt.accepted !== bytes.length || receipt.epoch !== lease.epoch) throw new Error("终端输入收据不一致");
+        if (receipt.sequence !== sequence || receipt.accepted !== bytes.length || receipt.epoch !== lease.epoch) throw new Error(uiText("ui.terminalIo.terminalInputReceiptMismatch", {}, "终端输入收据不一致"));
         queue.shift(); pending -= bytes.length; sequence++; changed(pending);
       }
     } catch (error) { if (!stopped) { stop(); fault(error); } }
@@ -29,8 +31,8 @@ export function createTerminalInput({ lease, write, fault, changed = () => {}, c
   return {
     enqueue(bytes) {
       if (stopped) return false;
-      if (!(bytes instanceof Uint8Array)) throw new TypeError("Terminal input must be bytes");
-      if (bytes.length + pending > capacity) throw new Error("粘贴内容超出 64 KiB 输入队列，尚未发送；请分段粘贴。");
+      if (!(bytes instanceof Uint8Array)) throw new TypeError(uiErrorText("error.detail.terminalInputMustBeBytes", {}, "Terminal input must be bytes"));
+      if (bytes.length + pending > capacity) throw new Error(uiText("ui.terminalView.pastedContentExceedsThe64KibInputQueueAnd", {}, "粘贴内容超出 64 KiB 输入队列，尚未发送；请分段粘贴。"));
       // Encode a complete onData event before splitting: surrogate pairs and
       // UTF-8 multibyte sequences survive arbitrary transport chunk boundaries.
       for (let at = 0; at < bytes.length; at += chunkSize) queue.push(bytes.slice(at, at + chunkSize));
@@ -43,6 +45,6 @@ export function createTerminalInput({ lease, write, fault, changed = () => {}, c
 export function terminalBytes(result, cursor) {
   const data = Uint8Array.from(atob(result.base64 || ""), value => value.charCodeAt(0));
   if (!Number.isSafeInteger(result.offset) || !Number.isSafeInteger(result.next) || result.offset < cursor || result.next !== result.offset + data.length || (!result.gap && result.offset !== cursor))
-    throw new Error("终端输出范围不连续，请重新连接查看。");
+    throw new Error(uiText("ui.terminalIo.terminalOutputRangeIsDiscontinuousReconnectToViewIt", {}, "终端输出范围不连续，请重新连接查看。"));
   return data;
 }

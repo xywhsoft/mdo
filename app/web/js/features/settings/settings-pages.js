@@ -1,4 +1,4 @@
-import { subscribeLocale, t } from "../../i18n.js";
+import { t as uiErrorText, setUiText as writeUiText, uiMessage, subscribeLocale, t } from "../../i18n.js";
 
 // Pages are ordinary HTML: one navigation button and one matching panel.
 // External links share desktop/mobile navigation but never own a local page.
@@ -32,7 +32,7 @@ export function createSettingsPages({ workspace, form, navigation }) {
     if (external) externalLinks.set(id, { button, option });
     else pages.set(id, { button, panel, option, preferences: form.contains(panel) });
   }
-  if (!pages.size) throw new Error("Settings needs at least one page");
+  if (!pages.size) throw new Error(uiErrorText("error.detail.settingsNeedsAtLeastOnePage", {}, "Settings needs at least one page"));
   let selected = "";
   const visible = (element) => Boolean(element?.getClientRects().length);
   const usesPreferences = (id) => Boolean(pages.get(id)?.preferences);
@@ -40,11 +40,11 @@ export function createSettingsPages({ workspace, form, navigation }) {
 
   function syncLabels() {
     for (const [heading, group] of groups) group.label = heading.textContent;
-    for (const { button, option } of pages.values()) option.textContent = button.textContent;
-    for (const { button, option } of externalLinks.values()) option.textContent = `${button.textContent.trim()} ↗`;
+    for (const { button, option } of pages.values()) writeUiText(option, button.textContent);
+    for (const { button, option } of externalLinks.values()) writeUiText(option, `${button.textContent.trim()} ↗`);
     const page = pages.get(selected);
-    if (page) workspace.querySelector("#settings-title").textContent = page.preferences
-      ? t("shell.settings.title", {}, "设置") : page.button.textContent;
+    if (page) writeUiText(workspace.querySelector("#settings-title"), page.preferences
+      ? uiMessage("shell.settings.title", {}, "设置") : page.button.textContent);
   }
 
   function keepFocusedFieldVisible() {

@@ -1,6 +1,7 @@
+import { t as uiErrorText, t } from "../i18n.js";
 import { ApiError, api, resourceId } from "../api/client.js";
 import { createResourceStore } from "./store.js";
-import { t } from "../i18n.js";
+
 import { downloadSessionBackup } from "../api/backup-download.js";
 import { isTransientReadError } from "../api/read-recovery.js";
 import { createRequestRecovery } from "../api/request-recovery.js";
@@ -58,7 +59,7 @@ function etag(session) {
   if (session.etag) return session.etag;
   const id = resourceId(session.id, "session");
   const revision = Number(session.revision);
-  if (!Number.isSafeInteger(revision) || revision < 1) throw new TypeError("session revision is invalid");
+  if (!Number.isSafeInteger(revision) || revision < 1) throw new TypeError(uiErrorText("error.detail.sessionRevisionIsInvalid", {}, "session revision is invalid"));
   return `"mdo-session-${id}-${revision}"`;
 }
 
@@ -93,12 +94,12 @@ export async function trashSession(session) {
 }
 
 export async function purgeSession(session) {
-  if (session.status !== "trash") throw new TypeError("only trashed sessions can be permanently deleted");
+  if (session.status !== "trash") throw new TypeError(uiErrorText("error.detail.onlyTrashedSessionsCanBePermanentlyDeleted", {}, "only trashed sessions can be permanently deleted"));
   let data;
   try {
     data = (await api.post(`${endpoint(session)}/purge`, undefined, { ifMatch: etag(session) })).data;
     if (data?.deleted !== true || data.project_id !== session.project_id || data.id !== session.id)
-      throw new ApiError("Invalid session deletion acknowledgement", { code: "invalid_response" });
+      throw new ApiError(uiErrorText("error.detail.invalidSessionDeletionAcknowledgement", {}, "Invalid session deletion acknowledgement"), { code: "invalid_response" });
   } catch (error) {
     // A lost acknowledgement may follow a committed deletion. Check absence;
     // never repeat the destructive POST automatically.
@@ -132,7 +133,7 @@ export async function loadSessionHistory(session, { signal,
         !Number.isSafeInteger(data.revision) || data.revision < 1 ||
         !Number.isSafeInteger(data.last_sequence) || data.last_sequence < 0 ||
         response.etag !== `"mdo-session-${id}-${data.revision}"`)
-      throw new ApiError("Invalid session history boundary", { code: "session_history_unavailable" });
+      throw new ApiError(uiErrorText("error.detail.invalidSessionHistoryBoundary", {}, "Invalid session history boundary"), { code: "session_history_unavailable" });
     return { ...data, etag: response.etag };
   };
   // Edit/retry already owns a shared deadline. Its supplied signal requests
@@ -142,7 +143,7 @@ export async function loadSessionHistory(session, { signal,
   try { return await recovery.request(read); }
   catch (error) {
     if (!isTransientReadError(error)) throw error;
-    const final = new ApiError("The session history boundary could not be read", {
+    const final = new ApiError(uiErrorText("error.detail.theSessionHistoryBoundaryCouldNotBeRead", {}, "The session history boundary could not be read"), {
       code: "session_history_unavailable", status: error.status });
     final.cause = error; throw final;
   } finally { recovery.dispose(); }
@@ -150,7 +151,7 @@ export async function loadSessionHistory(session, { signal,
 
 function sequence(value) {
   const number = Number(value);
-  if (!Number.isSafeInteger(number) || number < 0) throw new TypeError("session sequence is invalid");
+  if (!Number.isSafeInteger(number) || number < 0) throw new TypeError(uiErrorText("error.detail.sessionSequenceIsInvalid", {}, "session sequence is invalid"));
   return number;
 }
 
@@ -167,11 +168,11 @@ export async function truncateSession(session, throughSequence, sourceEventId, o
   const body = { through_sequence: sequence(throughSequence) };
   if (sourceEventId !== undefined) {
     body.source_event_id = sequence(sourceEventId);
-    if (!body.source_event_id) throw new TypeError("source event ID must be positive");
+    if (!body.source_event_id) throw new TypeError(uiErrorText("error.detail.sourceEventIdMustBePositive", {}, "source event ID must be positive"));
   }
   if (options.editId) {
     if (!/^[0-9a-f]{32}$/.test(options.editId) || !body.source_event_id)
-      throw new TypeError("Guarded edit identity is invalid");
+      throw new TypeError(uiErrorText("error.detail.guardedEditIdentityIsInvalid", {}, "Guarded edit identity is invalid"));
     body.client_edit_id = options.editId;
   }
   const response = await api.post(`${endpoint(session)}/truncate`, body,
@@ -207,7 +208,7 @@ function historyChanged() {
 async function readCompleteEventText(projectId, sessionId,
   eventId, kind, { endEventId = eventId, epoch = "" }, recovery) {
   if (!Number.isSafeInteger(eventId) || eventId < 1 || typeof kind !== "string")
-    throw new TypeError("session event identity is invalid");
+    throw new TypeError(uiErrorText("error.detail.sessionEventIdentityIsInvalid", {}, "session event identity is invalid"));
   const path = `${endpoint({ project_id: projectId, id: sessionId })}/events`;
   const fence = epoch ? `&epoch=${resourceId(epoch, "history epoch")}` : "";
   if (endEventId !== undefined && endEventId > eventId) {
@@ -278,7 +279,7 @@ async function readSessionTranscript(session, recovery) {
     const replay = (await recovery.request(signal =>
       api.get(`${path}?after=${cursor}&limit=${TRANSCRIPT_PAGE_SIZE}${epoch ? `&epoch=${epoch}` : ""}`, { signal }))).data;
     if (!/^[0-9a-f]{64}$/.test(replay?.epoch))
-      throw new ApiError("Invalid conversation history identity", { code: "invalid_response" });
+      throw new ApiError(uiErrorText("error.detail.invalidConversationHistoryIdentity", {}, "Invalid conversation history identity"), { code: "invalid_response" });
     if (epoch && replay.epoch !== epoch) throw historyChanged();
     epoch = replay.epoch;
     const latest = Number(replay.latest_event_id);

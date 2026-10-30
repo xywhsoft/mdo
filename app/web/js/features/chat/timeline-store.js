@@ -1,10 +1,11 @@
+import { t as uiErrorText, t } from "../../i18n.js";
 import { liveConnection } from "../../api/live.js";
 import { api, resourceId } from "../../api/client.js";
 import { isTransientReadError } from "../../api/read-recovery.js";
 import { createRequestRecovery } from "../../api/request-recovery.js";
 import { createResourceStore } from "../../state/store.js";
 import { mergeConversationTurns, summarizeConversationEvents } from "./conversation-history.js";
-import { t } from "../../i18n.js";
+
 import { targetState, subscribeTarget } from "../../api/target.js";
 import { createSessionCache } from "./session-cache.js";
 import { decodeConversationPage } from "./conversation-page.js";
@@ -238,11 +239,11 @@ async function refreshSnapshot(token) {
       const current = timelineStore.get().data;
       const page = await readConversation(current, `after=${current.cursor}&epoch=${current.epoch}&limit=4`, controller.signal);
       if (!isCurrent()) return;
-      if (page.delta && page.next_cursor < current.cursor) throw new Error("Conversation cursor moved backwards");
+      if (page.delta && page.next_cursor < current.cursor) throw new Error(uiErrorText("error.detail.conversationCursorMovedBackwards", {}, "Conversation cursor moved backwards"));
       if (!page.delta) resetHistoryReads();
       timelineStore.setData(snapshotData(current, page));
       if (!page.delta || !page.has_more) break;
-      if (page.next_cursor === current.cursor) throw new Error("Conversation cursor did not advance");
+      if (page.next_cursor === current.cursor) throw new Error(uiErrorText("error.detail.conversationCursorDidNotAdvance", {}, "Conversation cursor did not advance"));
     }
     pollDelay = FALLBACK_POLL_MS;
   } catch (error) {

@@ -1,3 +1,4 @@
+import { t as uiErrorText } from "../../i18n.js";
 import { api, currentPageWriteToken, resourceId } from "../../api/client.js";
 import { targetState, subscribeTarget } from "../../api/target.js";
 import { isImeKey } from "../../utils/dom.js";
@@ -7,8 +8,8 @@ export function historyValues(items) {
   if (!Array.isArray(items) || items.length > 30 || items.some(item =>
     !/^[0-9a-f]{32}$/.test(item?.id) || typeof item.text !== "string" ||
     !item.text || new TextEncoder().encode(item.text).length > MAX_PROMPT_BYTES))
-    throw new TypeError("Invalid input history");
-  if (new Set(items.map(item => item.id)).size !== items.length) throw new TypeError("Invalid input history");
+    throw new TypeError(uiErrorText("error.detail.invalidInputHistory", {}, "Invalid input history"));
+  if (new Set(items.map(item => item.id)).size !== items.length) throw new TypeError(uiErrorText("error.detail.invalidInputHistory", {}, "Invalid input history"));
   return items.map(item => item.text).filter((value, index, all) => index === 0 || all[index - 1] !== value);
 }
 

@@ -49,9 +49,15 @@ def overlay_package_installer(source: Path) -> None:
     text = source.read_text(encoding="utf-8")
     if text.count(original) != 1:
         raise ValueError("pinned Android package installer validator changed; review mdo's overlay")
-    source.write_text(text.replace(original,
+    text = text.replace(original,
         "        File file = MdoPackageInstallPolicy.validateFile(getFilesDir(), candidate);\n"
-        "        candidate = file;"), encoding="utf-8")
+        "        candidate = file;")
+    # Translate fixed installer UI copy while preserving paths, signatures and
+    # OS exception details. The pinned SDK checkout itself stays unchanged.
+    text = re.sub(r'"(?:\\.|[^"\\])*"', lambda match:
+        "MdoPackageInstallPolicy.text(" + match[0] + ")"
+        if re.search(r'[\u4e00-\u9fff]', match[0]) else match[0], text)
+    source.write_text(text, encoding="utf-8")
     import shutil
     shutil.copy2(MDO_ROOT / "tools/android/MdoPackageInstallPolicy.java",
                  source.with_name("MdoPackageInstallPolicy.java"))

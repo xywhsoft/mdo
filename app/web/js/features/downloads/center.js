@@ -1,7 +1,9 @@
+import { setUiText as writeUiText, setUiAttribute as writeUiAttribute, t as uiText, uiMessage, t, subscribeLocale } from "../../i18n.js";
+
 import { api } from "../../api/client.js";
 import { targetState, subscribeTarget } from "../../api/target.js";
 import { downloadRegistry, downloadActive } from "../../state/downloads.js";
-import { t, subscribeLocale } from "../../i18n.js";
+
 import { element } from "../../utils/dom.js";
 import { openLayer } from "../../components/layers.js";
 
@@ -38,11 +40,11 @@ export function createDownloadCenter({ updatePanel, navigation, registry = downl
   function render() {
     if (destroyed) return;
     const rows = registry.list(target()), active = rows.filter(downloadActive).length;
-    entry.querySelector("[data-downloads-label]").textContent = text("title");
-    const badge = entry.querySelector("[data-downloads-count]"); badge.textContent = String(active); badge.hidden = !active;
-    entry.setAttribute("aria-label", text("entry", { count: active })); entry.title = text("title");
-    close.textContent = text("close"); clear.textContent = text("clear");
-    message.textContent = error; message.hidden = !error;
+    writeUiText(entry.querySelector("[data-downloads-label]"), text("title"));
+    const badge = entry.querySelector("[data-downloads-count]"); writeUiText(badge, String(active)); badge.hidden = !active;
+    writeUiAttribute(entry, "aria-label", text("entry", { count: active })); writeUiAttribute(entry, "title", text("title"));
+    writeUiText(close, text("close")); writeUiText(clear, text("clear"));
+    writeUiText(message, error); message.hidden = !error;
     clear.disabled = pending || !writable() || !rows.some(r => !downloadActive(r) && r.state !== "ready");
     if (!layer) return;
     layer.update({ title: text("title") });
@@ -54,7 +56,7 @@ export function createDownloadCenter({ updatePanel, navigation, registry = downl
       const kind = row.source === "cli" ? text(`cli.${row.action}`) : text(row.source === "update" ? "app" : row.source === "legacy" ? "legacy" : "extension");
       top.append(node("strong", row.name || kind), node("span", text(`state.${row.state}`))); item.append(top, node("small", `${kind}${row.buildId ? ` · ${row.buildId}` : ""}`, "download-meta"));
       if (downloadActive(row)) {
-        const progress = node("progress"); progress.setAttribute("aria-label", `${row.name || kind} · ${text(`state.${row.state}`)}`);
+        const progress = node("progress"); writeUiAttribute(progress, "aria-label", `${row.name || kind} · ${text(`state.${row.state}`)}`);
         if (row.total > 0 && typeof row.done === "number") { progress.max = row.total; progress.value = Math.max(0, Math.min(row.done, row.total)); item.append(node("small", `${bytes(row.done)} / ${bytes(row.total)}`)); }
         item.append(progress);
       }
@@ -64,8 +66,8 @@ export function createDownloadCenter({ updatePanel, navigation, registry = downl
       const controls = node("div", null, "download-actions");
       if (row.source === "archive") {
         if (!["complete", "cancelled", "expired"].includes(row.state)) controls.append(action(row, text("cancel"), () => transport.delete(`/extension-tasks/${row.taskId}`)));
-        if (row.state === "ready" && row.action === "install") controls.append(action(row, "安装", async () => {
-          if (!confirm("已检查归档内容并信任其来源，允许安装此扩展？")) return;
+        if (row.state === "ready" && row.action === "install") controls.append(action(row, uiMessage("extensionBrowser.install", {}, "安装"), async () => {
+          if (!confirm(uiMessage("ui.center.haveYouReviewedTheArchiveAndTrustItsSource", {}, "已检查归档内容并信任其来源，允许安装此扩展？"))) return;
           let previous=null;if(row.store){try{previous=(await transport.get(`/extensions/${row.kind}/${encodeURIComponent(row.store.xid)}`)).data;}catch(e){if(e.status!==404)throw e;}}
           return transport.post(`/extension-tasks/${row.taskId}/install`, { trust_code: true, expected_revision:previous?.revision||"",...(row.store ? {} : { id: row.directoryId || `import-${row.taskId}` }) });
         }));
@@ -73,7 +75,7 @@ export function createDownloadCenter({ updatePanel, navigation, registry = downl
           const { upload, nonce, proof_upload, ...metadata } = row.publication;
           return transport.post("/ecosystem", { ...metadata, action: "submit", task: row.taskId, ...(proof_upload ? { proof_task: proof_upload } : {}) });
         }));
-        if (["complete", "cancelled", "failed", "expired"].includes(row.state)) controls.append(action(row, "清除", async () => {
+        if (["complete", "cancelled", "failed", "expired"].includes(row.state)) controls.append(action(row, uiMessage("ui.center.clear", {}, "清除"), async () => {
           if (row.state === "expired") await transport.delete(`/extension-tasks/${row.taskId}`);
           await transport.delete(`/extension-tasks/${row.taskId}/forget`);registry.hide?.(row.key);
         }));
@@ -119,11 +121,11 @@ export function createDownloadCenter({ updatePanel, navigation, registry = downl
       try{
         if(row.source==="archive"){
           let current;
-          try{current=(await transport.get(`/extension-tasks/${row.taskId}`)).data;if(!current||typeof current.state!=="string")throw Error("无法确认任务当前状态，已保留此任务");}
+          try{current=(await transport.get(`/extension-tasks/${row.taskId}`)).data;if(!current||typeof current.state!=="string")throw Error(uiText("ui.center.cannotConfirmTheTaskSCurrentStateTheTask", {}, "无法确认任务当前状态，已保留此任务"));}
           catch(e){if(e.status!==404)throw e;}
           if(owner!==target()||!writable())return;
           if(current){
-            if(current.active||!["complete","cancelled","failed","expired"].includes(current.state))throw Error("任务状态已变化，已保留此任务");
+            if(current.active||!["complete","cancelled","failed","expired"].includes(current.state))throw Error(uiText("ui.center.taskStateChangedTheTaskIsRetained", {}, "任务状态已变化，已保留此任务"));
             if(current.state==="expired")await transport.delete(`/extension-tasks/${row.taskId}`);
             if(owner!==target()||!writable())return;
             await transport.delete(`/extension-tasks/${row.taskId}/forget`);

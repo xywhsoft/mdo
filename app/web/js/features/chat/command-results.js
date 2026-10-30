@@ -1,3 +1,4 @@
+import { uiMessage } from "../../i18n.js";
 import { element, toast, errorMessage } from "../../utils/dom.js";
 import { copyText } from "../../utils/clipboard.js";
 
@@ -21,15 +22,15 @@ export function presentCommandResult(receipt,{input,isCurrent=()=>true}={}) {
     input.value=draft;input.dispatchEvent(new Event("input",{bubbles:true}));input.focus();draft=null;
   }
   const text=[draft===null?"":draft,content.detail].filter(Boolean).join("\n\n");
-  if(!text){if(!content.message&&!receipt.actions?.length)toast("命令已完成。");return;}
+  if(!text){if(!content.message&&!receipt.actions?.length)toast(uiMessage("ui.commandResults.commandCompleted", {}, "命令已完成。"));return;}
   const previous=document.activeElement;
   const dialog=element("dialog",{className:"extension-editor"});
-  const preview=element("textarea",{className:"extension-source",attrs:{readonly:"","aria-label":"命令结果"}});preview.value=text;
+  const preview=element("textarea",{className:"extension-source",attrs:{readonly:"","aria-label":uiMessage("ui.commandResults.commandResult", {}, "命令结果")}});preview.value=text;
   const close=()=>{dialog.remove();if(previous?.isConnected)previous.focus();};
-  const copy=element("button",{className:"secondary-button",text:"复制结果",attrs:{type:"button"}});
+  const copy=element("button",{className:"secondary-button",text:uiMessage("ui.commandResults.copyResult", {}, "复制结果"),attrs:{type:"button"}});
   copy.onclick=()=>{void copyText(text).catch(error=>toast(errorMessage(error),"error"));};
-  const done=element("button",{className:"primary-button",text:"关闭",attrs:{type:"button"}});done.onclick=close;
-  dialog.append(element("h2",{text:`/${receipt.command_id} · 命令结果`}),preview,
+  const done=element("button",{className:"primary-button",text:uiMessage("context.close", {}, "关闭"),attrs:{type:"button"}});done.onclick=close;
+  dialog.append(element("h2",{text:uiMessage("ui.commandResults.value1CommandResult", { value1: receipt.command_id }, "/{value1} · 命令结果")}),preview,
     element("div",{className:"extension-toolbar"},[copy,done]));
   dialog.addEventListener("cancel",event=>{event.preventDefault();close();});document.body.append(dialog);dialog.showModal();done.focus();
 }

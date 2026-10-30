@@ -1,3 +1,4 @@
+import { t as uiErrorText } from "../i18n.js";
 import { ApiError } from "./client.js";
 import { isTransientReadError } from "./read-recovery.js";
 
@@ -8,9 +9,9 @@ import { isTransientReadError } from "./read-recovery.js";
 export function createRequestRecovery({ now = Date.now, random = Math.random,
   setTimer = setTimeout, clearTimer = clearTimeout, eventTarget = globalThis.window,
   requestMs = 8000, recoveryMs = 60000,
-  timeoutError = () => new ApiError("Request timed out", { code: "network_error" }) } = {}) {
+  timeoutError = () => new ApiError(uiErrorText("error.detail.requestTimedOut", {}, "Request timed out"), { code: "network_error" }) } = {}) {
   if (!Number.isFinite(requestMs) || requestMs <= 0 || !Number.isFinite(recoveryMs) || recoveryMs <= 0 ||
-      typeof timeoutError !== "function") throw new TypeError("Invalid request recovery limits");
+      typeof timeoutError !== "function") throw new TypeError(uiErrorText("error.detail.invalidRequestRecoveryLimits", {}, "Invalid request recovery limits"));
   const deadline = now() + recoveryMs;
   let stopped = false, cancelPending = null;
   const aborted = () => new DOMException("Request cancelled", "AbortError");

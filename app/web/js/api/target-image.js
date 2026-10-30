@@ -1,3 +1,4 @@
+import { t as uiErrorText } from "../i18n.js";
 import { isRemoteTarget, targetFetch } from "./target.js";
 
 const images = new Map();
@@ -27,7 +28,7 @@ export function bindTargetImage(node, path) {
   dispose(node); node.dataset.mdoImagePath = path;
   if (!isRemoteTarget()) { node.setAttribute("src", path); return; }
   if (!/^\/api\/v1\/projects\/[A-Za-z0-9._-]+\/sessions\/[A-Za-z0-9._-]+\/attachments\/[0-9a-f]{32}$/.test(path))
-    throw new TypeError("Image is outside the selected target");
+    throw new TypeError(uiErrorText("error.detail.imageIsOutsideTheSelectedTarget", {}, "Image is outside the selected target"));
   node.removeAttribute("src"); watch();
   const entry = { cancel: new AbortController(), url: "", mounted: false }; images.set(node, entry);
   queueMicrotask(async () => {
@@ -38,16 +39,16 @@ export function bindTargetImage(node, path) {
       response = await targetFetch(path, { cache: "no-store", redirect: "error", signal: entry.cancel.signal });
       const type = (response.headers.get("Content-Type") || "").split(";")[0];
       if (!response.ok || !["image/png", "image/jpeg", "image/webp"].includes(type) || !response.body)
-        throw new Error("Invalid target image response");
+        throw new Error(uiErrorText("error.detail.invalidTargetImageResponse", {}, "Invalid target image response"));
       const length = response.headers.get("Content-Length");
-      if (length !== null && (!/^[1-9][0-9]*$/.test(length) || Number(length) > 8388608)) throw new Error("Invalid target image length");
+      if (length !== null && (!/^[1-9][0-9]*$/.test(length) || Number(length) > 8388608)) throw new Error(uiErrorText("error.detail.invalidTargetImageLength", {}, "Invalid target image length"));
       reader = response.body.getReader(); const parts = []; let size = 0;
       for (;;) {
         const { value, done } = await reader.read(); if (done) break;
-        if (value.length > 8388608 - size) throw new Error("Target image exceeds limit");
+        if (value.length > 8388608 - size) throw new Error(uiErrorText("error.detail.targetImageExceedsLimit", {}, "Target image exceeds limit"));
         parts.push(value); size += value.length;
       }
-      if (!size || (length !== null && Number(length) !== size)) throw new Error("Incomplete target image");
+      if (!size || (length !== null && Number(length) !== size)) throw new Error(uiErrorText("error.detail.incompleteTargetImage", {}, "Incomplete target image"));
       if (images.get(node) !== entry || entry.cancel.signal.aborted) return;
       entry.url = URL.createObjectURL(new Blob(parts, { type })); node.setAttribute("src", entry.url);
     } catch (error) {

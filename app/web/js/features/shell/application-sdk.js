@@ -1,3 +1,5 @@
+import { t as uiErrorText, setUiText as writeUiText, uiMessage, t as uiText } from "../../i18n.js";
+
 import { createApplicationClient, createLocalApplicationClient, applyApplicationAction } from "../../api/application.js";
 import { isRemoteTarget, targetState } from "../../api/target.js";
 import { toast } from "../../utils/dom.js";
@@ -21,13 +23,13 @@ export function createApplicationUi({ navigation, executeActions, canCall = () =
   const workbench = shell ? createPanelManager({ shell, api, layoutApi: isRemoteTarget() ? localApi : api, navigation, clientId, addContext, renderers }) : null;
   let stopped = false, timer = null, registered = false, registeredScope = "";
   const register = (map, id, value) => {
-    if (stopped) throw new Error("Application UI instance has been disposed");
-    if (!/^[A-Za-z0-9_.-]+$/.test(id) || map.has(id)) throw new Error("Duplicate or invalid SDK contribution ID");
+    if (stopped) throw new Error(uiErrorText("error.detail.applicationUiInstanceHasBeenDisposed", {}, "Application UI instance has been disposed"));
+    if (!/^[A-Za-z0-9_.-]+$/.test(id) || map.has(id)) throw new Error(uiErrorText("error.detail.duplicateOrInvalidSdkContributionId", {}, "Duplicate or invalid SDK contribution ID"));
     map.set(id, value); let active = true;
     return () => { if (active && map.get(id) === value) map.delete(id); active = false; };
   };
   const openPanel = async (id, params, callerApi) => {
-    if (stopped) throw new Error("Application UI instance has been disposed");
+    if (stopped) throw new Error(uiErrorText("error.detail.applicationUiInstanceHasBeenDisposed", {}, "Application UI instance has been disposed"));
     const descriptor = panels.get(id); if (!descriptor) throw new Error(`Panel ${id} is not registered`);
     if (descriptor.placement === "right" && workbench) {
       await descriptor.registration;
@@ -44,7 +46,7 @@ export function createApplicationUi({ navigation, executeActions, canCall = () =
   };
   const createScope = clientApi => {
     let active = true, scopedSdk; const owned = [], ownedLayers = new Set();
-    const check = () => { if (!active || stopped) throw new Error("Application UI instance has been disposed"); };
+    const check = () => { if (!active || stopped) throw new Error(uiErrorText("error.detail.applicationUiInstanceHasBeenDisposed", {}, "Application UI instance has been disposed")); };
     const own = cleanup => {
       let retained = true; const dispose = () => { if (retained) { retained = false; return cleanup(); } };
       if (!active || stopped) dispose(); else owned.push(dispose); return dispose;
@@ -54,7 +56,7 @@ export function createApplicationUi({ navigation, executeActions, canCall = () =
       context: () => Object.freeze({ ...options.context }),
       ui: Object.freeze({ ...ui, refreshSession: () => { check(); return refreshSession?.(options.context); },
         openPanel: (id, params) => { check(); return openPanel(id, params, options.sdk); },
-        openEditor: args => ui.openEditor(args, options.sdk), newTab: () => { check(); return workbench.open("mdo.new-tab", { title: "新标签页" }, options.sdk); } }) });
+        openEditor: args => ui.openEditor(args, options.sdk), newTab: () => { check(); return workbench.open("mdo.new-tab", { title: uiText("ui.startView.newTab", {}, "新标签页") }, options.sdk); } }) });
     const conversations = createConversationContributions({ navigation, onError: error => toast(error.message, "error"),
       sdkFor: (sdk, context) => viewSdk({ sdk, context }) });
     own(() => conversations.destroy());
@@ -73,7 +75,7 @@ export function createApplicationUi({ navigation, executeActions, canCall = () =
       if (descriptor.placement === "right" && workbench) {
         removeDock = workbench.register(id, contribution);
         contribution.registration = clientApi.call("panel.register", { id, title: descriptor.title || id, renderer: callback ? "custom" : descriptor.renderer, scope: descriptor.scope || "session" });
-        contribution.registration.catch(error => toast(`面板注册失败：${error.message}`, "error"));
+        contribution.registration.catch(error => toast(uiMessage("ui.applicationSdk.panelRegistrationFailedValue1", { value1: error.message }, "面板注册失败：{value1}"), "error"));
       }
       const dispose = () => { for (const layer of openDialogs.get(id) || []) layer.dispose(); openDialogs.delete(id); removeDock?.(); remove(); };
       return own(dispose);
@@ -84,11 +86,11 @@ export function createApplicationUi({ navigation, executeActions, canCall = () =
       workbench?.rendererChanged(id);
       return own(() => { remove(); workbench?.rendererChanged(id); });
     },
-    render: (id, root, value, options = {}) => { check(); const render = renderers.get(id); if (!render) throw new Error("Renderer is not registered"); return render(root, value, { ...options, sdk: scopedSdk }); },
+    render: (id, root, value, options = {}) => { check(); const render = renderers.get(id); if (!render) throw new Error(uiErrorText("error.detail.rendererIsNotRegistered", {}, "Renderer is not registered")); return render(root, value, { ...options, sdk: scopedSdk }); },
     registerMenu: (id, descriptor) => {
       check();
-      const button = document.createElement("button"); button.type = "button"; button.textContent = descriptor.label || id;
-      const root = document.querySelector(descriptor.mount || ".sidebar"); if (!root) throw new Error("Menu mount is unavailable");
+      const button = document.createElement("button"); button.type = "button"; writeUiText(button, descriptor.label || id);
+      const root = document.querySelector(descriptor.mount || ".sidebar"); if (!root) throw new Error(uiErrorText("error.detail.menuMountIsUnavailable", {}, "Menu mount is unavailable"));
       const remove = register(menus, id, button);
       button.onclick = () => Promise.resolve().then(() => { check(); return descriptor.execute({ sdk: scopedSdk }); }).catch(error => toast(error.message, "error"));
       try { root.append(button); } catch (error) { button.remove(); remove(); throw error; }
@@ -110,11 +112,11 @@ export function createApplicationUi({ navigation, executeActions, canCall = () =
       layer = openLayer({ ...options, onClosed(result) { ownedLayers.delete(layer); options?.onClosed?.(result); } });
       ownedLayers.add(layer); return layer;
     } }),
-    newTab: () => { check(); if (!workbench) throw new Error("Workbench is unavailable"); return workbench.newTab(); },
+    newTab: () => { check(); if (!workbench) throw new Error(uiErrorText("error.detail.workbenchIsUnavailable", {}, "Workbench is unavailable")); return workbench.newTab(); },
     openWindow: ({ url, name = "_blank" }) => {
       check();
       const opened = window.open(url, name, "noopener");
-      if (!opened) throw new Error("The OS or browser blocked the new window; open it from a user action");
+      if (!opened) throw new Error(uiErrorText("error.detail.theOsOrBrowserBlockedTheNewWindowOpenIt", {}, "The OS or browser blocked the new window; open it from a user action"));
     },
     openEditor: async ({ path, space = "workspace" }, callerApi = clientApi) => {
       check(); const editorApi = callerApi.bind({});
@@ -125,11 +127,11 @@ export function createApplicationUi({ navigation, executeActions, canCall = () =
         return workbench.open("mdo.editor", { key, title: path, params: { path, space, edit: true } }, editorApi);
       }
       const resource = await editorApi.call("fs.read", { path, space, limit: 262144 }); check();
-      if (typeof resource.text !== "string" || resource.bytes !== resource.size) throw new Error("The editor supports complete UTF-8 files up to 256 KiB");
+      if (typeof resource.text !== "string" || resource.bytes !== resource.size) throw new Error(uiErrorText("error.detail.theEditorSupportsCompleteUtf8FilesUpTo256", {}, "The editor supports complete UTF-8 files up to 256 KiB"));
       const id = `editor.${crypto.randomUUID()}`;
       const dispose = ui.registerPanel(id, { title: path, render(root, { signal }) {
-        const input = document.createElement("textarea"), save = document.createElement("button"); input.value = resource.text; input.style.cssText = "width:70vw;height:60vh"; save.textContent = "保存";
-        save.onclick = async () => { save.disabled = true; try { const saved = await editorApi.call("fs.write", { path, space, text: input.value, revision: resource.revision }, { signal }); resource.revision = saved.revision; save.textContent = "已保存"; } catch (error) { toast(error.message, "error"); } finally { save.disabled = false; } };
+        const input = document.createElement("textarea"), save = document.createElement("button"); input.value = resource.text; input.style.cssText = "width:70vw;height:60vh"; writeUiText(save, uiMessage("sidebar.save", {}, "保存"));
+        save.onclick = async () => { save.disabled = true; try { const saved = await editorApi.call("fs.write", { path, space, text: input.value, revision: resource.revision }, { signal }); resource.revision = saved.revision; writeUiText(save, uiMessage("settings.saved", {}, "已保存")); } catch (error) { toast(error.message, "error"); } finally { save.disabled = false; } };
         root.append(input, save); return dispose;
       } }); await openPanel(id, {});
     },
@@ -141,7 +143,7 @@ export function createApplicationUi({ navigation, executeActions, canCall = () =
       for (const dispose of owned.reverse()) { try { pending.push(Promise.resolve(dispose())); } catch (error) { pending.push(Promise.reject(error)); } }
       retirement = Promise.allSettled(pending).then(async results => {
         if (!stopped && workbench) await workbench.retireOwner(clientApi);
-        if (results.some(r => r.status === "rejected")) throw Error("Plugin cleanup did not complete");
+        if (results.some(r => r.status === "rejected")) throw Error(uiErrorText("error.detail.pluginCleanupDidNotComplete", {}, "Plugin cleanup did not complete"));
       });
       return retirement;
     } };
@@ -165,7 +167,7 @@ export function createApplicationUi({ navigation, executeActions, canCall = () =
     if (action.action.startsWith("workbench.") && workbench) return workbench.execute(action);
     const scope = action.context || {}, selected = navigation.workspace();
     if ((scope.project && scope.project !== selected.projectId && !(scope.project === "default" && !selected.projectId)) || (scope.session && scope.session !== selected.sessionId))
-      throw new Error("The target window changed conversation before the UI action ran");
+      throw new Error(uiErrorText("error.detail.theTargetWindowChangedConversationBeforeTheUiActionRan", {}, "The target window changed conversation before the UI action ran"));
     if (actions.has(action.action)) return actions.get(action.action)(action.params, { sdk });
     if (action.action === "ui.toast") { toast(String(action.params?.message || "")); return; }
     if (action.action === "ui.panel") return openPanel(action.params?.id, action.params);

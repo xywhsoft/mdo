@@ -1,3 +1,4 @@
+import { t as uiErrorText } from "../i18n.js";
 import { targetLiveSocket } from "./target.js";
 import { api } from "./client.js";
 import { createRequestRecovery } from "./request-recovery.js";
@@ -78,7 +79,7 @@ export function createLiveConnection({
       }, { retry: false });
       if (check.lifecycle !== lifecycle || paused || !token) return;
       if (!/^[0-9a-f]{32}-(0|[1-9][0-9]{0,19})$/.test(value ?? ""))
-        throw new Error("Invalid live token");
+        throw new Error(uiErrorText("error.detail.invalidLiveToken", {}, "Invalid live token"));
       if (value !== token) {
         const reason = value.split("-")[0] === token.split("-")[0] ? "purge" : "restart";
         token = value;

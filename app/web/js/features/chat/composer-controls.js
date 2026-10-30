@@ -1,7 +1,8 @@
+import { setUiText as writeUiText, setUiAttribute as writeUiAttribute, uiMessage, t } from "../../i18n.js";
+
 import { mountIcons } from "../../components/icons.js";
 import { isImeKey } from "../../utils/dom.js";
 import { findModel } from "../../utils/models.js";
-import { t } from "../../i18n.js";
 
 const PERMISSION_ICON = Object.freeze({
   "read-only": "shield-check", balanced: "hand", "full-access": "shield-alert",
@@ -83,38 +84,38 @@ export function createComposerControls({ root, modelSelect, reasoningSelect,
   }
 
   function sync() {
-    manageModels.textContent = t("modelSetup.manageModels", {}, "管理模型");
+    writeUiText(manageModels, uiMessage("modelSetup.manageModels", {}, "管理模型"));
     const model = findModel(modelsStore.get().data?.models ?? [], modelSelect.value);
-    modelLabel.textContent = model?.name || modelSelect.value || t("shell.model", {}, "模型");
+    writeUiText(modelLabel, model?.name || modelSelect.value || uiMessage("shell.model", {}, "模型"));
     const efforts = [...reasoningSelect.options];
     const current = Math.max(0, efforts.findIndex((item) => item.value === reasoningSelect.value));
     slider.max = String(Math.max(0, efforts.length - 1)); slider.value = String(current);
     slider.disabled = reasoningSelect.disabled || efforts.length < 2;
     slider.setAttribute("aria-valuetext", efforts[current]?.textContent || t("reasoning.none", {}, "无思考"));
-    effortLabel.textContent = slider.getAttribute("aria-valuetext");
-    modelEffort.textContent = effortLabel.textContent;
+    writeUiText(effortLabel, slider.getAttribute("aria-valuetext"));
+    writeUiText(modelEffort, effortLabel.textContent);
     scale.replaceChildren();
     for (const option of efforts) {
-      const label = doc.createElement("span"); label.textContent = option.textContent; scale.append(label);
+      const label = doc.createElement("span"); writeUiText(label, option.textContent); scale.append(label);
     }
     modelTrigger.disabled = modelSelect.disabled && reasoningSelect.disabled;
     const next = !status.hidden ? status.textContent : "";
     root.dataset.profileState = next ? status.dataset.state || "pending" : "";
-    modelTrigger.title = `${modelLabel.textContent} · ${effortLabel.textContent}${next ? ` · ${next}` : ""}`;
-    modelTrigger.setAttribute("aria-label", `${t("composer.modelSettings", {}, "模型与思考深度")}：${modelTrigger.title}`);
+    writeUiAttribute(modelTrigger, "title", `${modelLabel.textContent} · ${effortLabel.textContent}${next ? ` · ${next}` : ""}`);
+    writeUiAttribute(modelTrigger, "aria-label", `${t("composer.modelSettings", {}, "模型与思考深度")}：${modelTrigger.title}`);
     permissionTrigger.disabled = permissionSelect.disabled;
     permissionTrigger.dataset.permission = permissionSelect.value;
     permissionIcon.dataset.icon = PERMISSION_ICON[permissionSelect.value] || "shield";
     mountIcons(permissionTrigger);
     const permissionName = permissionSelect.selectedOptions[0]?.textContent || t("shell.permission", {}, "权限");
-    permissionTrigger.title = `${permissionName}${next ? ` · ${next}` : ""}`;
-    permissionTrigger.setAttribute("aria-label", `${t("shell.permission", {}, "权限")}：${permissionTrigger.title}`);
+    writeUiAttribute(permissionTrigger, "title", `${permissionName}${next ? ` · ${next}` : ""}`);
+    writeUiAttribute(permissionTrigger, "aria-label", `${t("shell.permission", {}, "权限")}：${permissionTrigger.title}`);
     for (const choice of choices) {
       choice.setAttribute("aria-checked", String(choice.dataset.permission === permissionSelect.value));
       choice.disabled = permissionSelect.disabled;
     }
     permissionStatus.hidden = status.hidden;
-    permissionStatus.textContent = status.textContent;
+    writeUiText(permissionStatus, status.textContent);
     permissionStatus.dataset.state = status.dataset.state || "";
     fitEstimate(); position();
   }
@@ -130,7 +131,7 @@ export function createComposerControls({ root, modelSelect, reasoningSelect,
     listen(button, "click", () => close(true));
   listen(slider, "input", () => {
     const label = reasoningSelect.options[Number(slider.value)]?.textContent || "";
-    effortLabel.textContent = label; slider.setAttribute("aria-valuetext", label);
+    writeUiText(effortLabel, label); slider.setAttribute("aria-valuetext", label);
   });
   listen(slider, "change", () => {
     if (slider.disabled) return;

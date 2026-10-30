@@ -1,8 +1,8 @@
+import { t as uiErrorText, t } from "../../i18n.js";
 import { ApiError, api, resourceId } from "../../api/client.js";
 import { isTransientReadError } from "../../api/read-recovery.js";
 import { createRequestRecovery } from "../../api/request-recovery.js";
 import { createDraftTransport, draftEndpoint as endpoint } from "./draft-transport.js";
-import { t } from "../../i18n.js";
 
 const SAVE_DELAY_MS = 300;
 const MAX_DRAFT_BYTES = 65536;
@@ -120,7 +120,7 @@ function matchesSnapshot(key, data, body) {
       imageIds(data.attachments).length !== data.attachments.length || !items ||
       savedProfile === undefined || (Object.hasOwn(body, "new_task") && savedNewTask === undefined) ||
       (Object.hasOwn(data, "run_admission_uncertain") && typeof data.run_admission_uncertain !== "boolean"))
-    throw new ApiError("Invalid draft save confirmation", { code: "invalid_response" });
+    throw new ApiError(uiErrorText("error.detail.invalidDraftSaveConfirmation", {}, "Invalid draft save confirmation"), { code: "invalid_response" });
   return data.text === body.text && sameIds(data.attachments, body.attachments) &&
     (data.run_admission_uncertain === true) === body.run_admission_uncertain &&
     items && sameSubmissions(items, body.submissions) &&
@@ -521,7 +521,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
     select,
     edit,
     forgetSession(key) {
-      if (!key || key.startsWith("project:")) throw new TypeError("a session draft key is required");
+      if (!key || key.startsWith("project:")) throw new TypeError(uiErrorText("error.detail.aSessionDraftKeyIsRequired", {}, "a session draft key is required"));
       forgotten.add(key);
       transport.forget(key);
       const current = entry(key);

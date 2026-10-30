@@ -272,7 +272,7 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("approvalDecisionStore.subscribe(render)",
                       self.scripts["js/features/chat/conversation-docks.js"])
         self.assertIn("renderToolArguments(item", panel)
-        self.assertIn('t("dock.approval.allowRun")',
+        self.assertIn('uiMessage("dock.approval.allowRun")',
                       self.scripts["js/features/chat/conversation-docks.js"])
         self.assertNotIn("innerHTML", panel)
 

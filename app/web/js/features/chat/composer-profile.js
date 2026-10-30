@@ -1,17 +1,19 @@
+import { uiMessage, setUiText as writeUiText, t as uiText, subscribeLocale, t } from "../../i18n.js";
+
 import { updateSessionProfile, updateSessionPermission } from "../../state/sessions.js";
 import { projectDraftKey } from "./draft-store.js";
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
-import { subscribeLocale, t } from "../../i18n.js";
+
 import { findModel as selectedModel, modelLoginBlock } from "../../utils/models.js";
 
 const EFFORT_LABEL = Object.freeze({
-  none: ["reasoning.none", "无思考"],
-  minimal: ["reasoning.minimal", "极低"],
-  low: ["reasoning.low", "低"],
-  medium: ["reasoning.medium", "中"],
-  high: ["reasoning.high", "高"],
-  xhigh: ["reasoning.xhigh", "极高"],
-  max: ["reasoning.max", "最大"],
+  none: ["reasoning.none", uiText("reasoning.none", {}, "无思考")],
+  minimal: ["reasoning.minimal", uiText("settings.reasoningMinimal", {}, "极低")],
+  low: ["reasoning.low", uiText("settings.reasoningLow", {}, "低")],
+  medium: ["reasoning.medium", uiText("settings.reasoningMedium", {}, "中")],
+  high: ["reasoning.high", uiText("settings.reasoningHigh", {}, "高")],
+  xhigh: ["reasoning.xhigh", uiText("settings.reasoningXhigh", {}, "极高")],
+  max: ["reasoning.max", uiText("settings.reasoningMax", {}, "最大")],
 });
 
 function reasoningChoice(model, preferred = "") {
@@ -25,7 +27,7 @@ export function fillReasoningOptions(select, model, preferred = "") {
   clear(select);
   for (const effort of efforts)
     select.append(element("option", { text: EFFORT_LABEL[effort]
-      ? t(EFFORT_LABEL[effort][0], {}, EFFORT_LABEL[effort][1]) : effort,
+      ? uiMessage(EFFORT_LABEL[effort][0], {}, EFFORT_LABEL[effort][1]) : effort,
       attrs: { value: effort } }));
   const chosen = reasoningChoice(model, preferred);
   select.value = chosen;
@@ -173,15 +175,15 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
         projectDraftKey(projectId)) ?? "saved";
       status.hidden = !member && execution?.available !== false && !nextRun && saveState === "saved";
       status.dataset.state = saveState;
-      status.textContent = execution?.available === false ? execution.message || t("profile.targetUnavailable", {}, "当前主讲不可用")
-        : member ? t("profile.memberBinding", { member: member.id }, `主讲 ${member.id} 的模型绑定固定；返回协调者后可修改协调者模型。`)
+      writeUiText(status, execution?.available === false ? execution.message || uiMessage("profile.targetUnavailable", {}, "当前主讲不可用")
+        : member ? uiMessage("profile.memberBinding", { member: member.id }, `主讲 ${member.id} 的模型绑定固定；返回协调者后可修改协调者模型。`)
         : saveState === "error"
-        ? session ? t("profile.notSaved", {}, "后续配置未保存")
-          : t("profile.draftNotSaved", {}, "新任务配置未保存")
+        ? session ? uiMessage("profile.notSaved", {}, "后续配置未保存")
+          : uiMessage("profile.draftNotSaved", {}, "新任务配置未保存")
         : saveState === "saving"
-          ? session ? t("profile.savingNext", {}, "正在保存后续配置…")
-            : t("profile.savingDraft", {}, "正在保存新任务配置…")
-          : nextRun ? t("profile.nextRun", {}, "下次任务生效") : "";
+          ? session ? uiMessage("profile.savingNext", {}, "正在保存后续配置…")
+            : uiMessage("profile.savingDraft", {}, "正在保存新任务配置…")
+          : nextRun ? uiMessage("profile.nextRun", {}, "下次任务生效") : "");
     }
     onSelectionChange?.();
   }

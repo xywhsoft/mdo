@@ -1,4 +1,5 @@
-import { t } from "../../i18n.js";
+import { t as uiErrorText, t } from "../../i18n.js";
+
 import { ApiError } from "../../api/client.js";
 import { isTransientReadError } from "../../api/read-recovery.js";
 import { createMessageEditRecovery, messageEditId } from "./message-edit-recovery.js";
@@ -28,11 +29,11 @@ export async function runMessageReplacement({ session, sequence, sourceEventId, 
     try {
       const saved = await recovery.request(() => preserveInput(), { retry: false });
       if (!saved && !await recovery.request(signal => confirmInput({ signal })))
-        throw new ApiError("The edit input has not been saved", { code: "session_edit_draft_unsaved" });
+        throw new ApiError(uiErrorText("error.detail.theEditInputHasNotBeenSaved", {}, "The edit input has not been saved"), { code: "session_edit_draft_unsaved" });
     } catch (error) {
       if (isTransientReadError(error) ||
           ["remote_result_unconfirmed", "invalid_response"].includes(error?.code)) {
-        const final = new ApiError("The edit input has not been confirmed saved", {
+        const final = new ApiError(uiErrorText("error.detail.theEditInputHasNotBeenConfirmedSaved", {}, "The edit input has not been confirmed saved"), {
           code: "session_edit_draft_unsaved" });
         final.cause = error;
         throw final;
@@ -48,7 +49,7 @@ export async function runMessageReplacement({ session, sequence, sourceEventId, 
     } catch (error) {
       if (isTransientReadError(error) ||
           ["remote_result_unconfirmed", "invalid_response"].includes(error?.code)) {
-        const final = new ApiError("The history edit result could not be confirmed", {
+        const final = new ApiError(uiErrorText("error.detail.theHistoryEditResultCouldNotBeConfirmed", {}, "The history edit result could not be confirmed"), {
           code: "session_edit_unconfirmed" });
         final.cause = error;
         throw final;

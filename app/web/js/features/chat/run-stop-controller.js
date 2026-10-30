@@ -1,3 +1,4 @@
+import { t as uiErrorText } from "../../i18n.js";
 import { isTransientReadError } from "../../api/read-recovery.js";
 import { ApiError } from "../../api/client.js";
 import { createRequestRecovery } from "../../api/request-recovery.js";
@@ -34,7 +35,7 @@ export function createRunStopController({ cancel, read, canWrite = () => true,
     entry.inspect = true; entry.waitingConnection = true; entry.phase = "waiting";
   }
   function unconfirmed(entry, cause) {
-    const error = new ApiError("Stopping the run could not be confirmed", { code: "run_stop_unconfirmed" });
+    const error = new ApiError(uiErrorText("error.detail.stoppingTheRunCouldNotBeConfirmed", {}, "Stopping the run could not be confirmed"), { code: "run_stop_unconfirmed" });
     error.cause = cause; remove(entry); onError(error, entry.owner);
   }
   function request(entry, operation) {
@@ -49,7 +50,7 @@ export function createRunStopController({ cancel, read, canWrite = () => true,
     onAccepted(run, entry.owner);
   }
   function check(run, owner) {
-    if (!matches(run, owner)) throw Object.assign(new Error("Invalid run stop response"),
+    if (!matches(run, owner)) throw Object.assign(new Error(uiErrorText("error.detail.invalidRunStopResponse", {}, "Invalid run stop response")),
       { code: "run_stop_invalid_response" });
   }
   async function attempt(entry) {
@@ -82,7 +83,7 @@ export function createRunStopController({ cancel, read, canWrite = () => true,
       if (!current(entry)) return;
       check(run, entry.owner);
       if (!run.terminal && !run.cancel_requested)
-        throw Object.assign(new Error("Invalid run stop acknowledgement"),
+        throw Object.assign(new Error(uiErrorText("error.detail.invalidRunStopAcknowledgement", {}, "Invalid run stop acknowledgement")),
           { code: "run_stop_invalid_response" });
       accept(entry, run);
     } catch (error) {

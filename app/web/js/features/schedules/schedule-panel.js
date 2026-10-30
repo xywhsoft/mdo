@@ -1,3 +1,5 @@
+import { setUiText as writeUiText, setUiAttribute as writeUiAttribute, uiMessage, currentLocale, subscribeLocale, t } from "../../i18n.js";
+
 import { resourceId } from "../../api/client.js";
 import { createSchedule, loadSchedules, cancelScheduleReads, removeSchedule,
   replaceSchedule, runSchedule, schedulesStore,
@@ -8,7 +10,7 @@ import { subscribeTarget } from "../../api/target.js";
 import { resourceOperationEpoch } from "../../state/resource-operation.js";
 import { clientActionId } from "../../api/request-recovery.js";
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
-import { currentLocale, subscribeLocale, t } from "../../i18n.js";
+
 import { modelErrorMessage } from "../../utils/model-errors.js";
 
 export function scheduleHistoryText(entry) {
@@ -99,16 +101,16 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
 
   function renderEditorHeader() {
     if (editorLoading) return;
-    title.textContent = original
-      ? t("schedule.editTitle", { label: original.label }, `编辑：${original.label}`)
-      : t("schedule.newTitle", {}, "新建计划");
-    save.textContent = original
-      ? t("schedule.save", {}, "保存更改")
-      : t("schedule.create", {}, "创建计划");
+    writeUiText(title, original
+      ? uiMessage("schedule.editTitle", { label: original.label }, `编辑：${original.label}`)
+      : uiMessage("schedule.newTitle", {}, "新建计划"));
+    writeUiText(save, original
+      ? uiMessage("schedule.save", {}, "保存更改")
+      : uiMessage("schedule.create", {}, "创建计划"));
   }
 
   function setFeedback(message, error = false) {
-    formStatus.textContent = message;
+    writeUiText(formStatus, message);
     formStatus.dataset.tone = error ? "error" : "neutral";
   }
 
@@ -135,7 +137,7 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
       for (const feedback of list.querySelectorAll(".schedule-card-feedback"))
         feedback.hidden = true;
     }
-    actionStatus.textContent = id ? "" : message;
+    writeUiText(actionStatus, id ? "" : message);
     actionStatus.dataset.tone = error ? "error" : "neutral";
   }
 
@@ -222,7 +224,7 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
   // Keep card nodes stable while an active run is polled. Replacing the list
   // each second discards text selection and keyboard focus inside the cards.
   function syncText(node, value) {
-    if (node.textContent !== value) node.textContent = value;
+    if (node.textContent !== value) writeUiText(node, value);
   }
 
   function scheduleCard(id) {
@@ -260,7 +262,7 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
 
   function syncScheduleCard(card, item, data) {
     if (card.getAttribute("aria-label") !== item.label)
-      card.setAttribute("aria-label", item.label);
+      writeUiAttribute(card, "aria-label", item.label);
     const [heading, frequency, statistics, feedback, actions] = card.children;
     const [label, enabledBadge, runningBadge] = heading.children;
     syncText(label, item.label);
@@ -302,10 +304,10 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
         (!data.enabled || data.persistence_fault ||
           item.active_runs >= item.max_concurrent_runs));
       if (button.disabled !== disabled) button.disabled = disabled;
-      if (action === "run") button.title = disabled && !busy
-        ? (!data.enabled ? t("schedule.runDisabledGlobal", {}, "请先在 Agent 设置中启用计划任务") :
-          data.persistence_fault ? t("schedule.runDisabledStorage", {}, "计划任务存储不可用") :
-            t("schedule.runDisabledLimit", {}, "已达到并发运行上限")) : "";
+      if (action === "run") writeUiAttribute(button, "title", disabled && !busy
+        ? (!data.enabled ? uiMessage("schedule.runDisabledGlobal", {}, "请先在 Agent 设置中启用计划任务") :
+          data.persistence_fault ? uiMessage("schedule.runDisabledStorage", {}, "计划任务存储不可用") :
+            uiMessage("schedule.runDisabledLimit", {}, "已达到并发运行上限")) : "");
     }
   }
 
@@ -313,17 +315,17 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
     if (activeRefresh) { clearTimeout(activeRefresh); activeRefresh = 0; }
     if (state.status === "idle" || state.status === "loading" ||
         (state.status === "refreshing" && typeof state.data?.enabled !== "boolean")) {
-      status.textContent = t("schedule.loading", {}, "正在读取计划任务…");
+      writeUiText(status, uiMessage("schedule.loading", {}, "正在读取计划任务…"));
       return;
     }
     const data = state.data;
     if (state.status === "error")
-      status.textContent = t("schedule.loadFailed", { error: errorMessage(state.error) },
-        `读取失败：${errorMessage(state.error)}`);
+      writeUiText(status, uiMessage("schedule.loadFailed", { error: errorMessage(state.error) },
+        `读取失败：${errorMessage(state.error)}`));
     if (!data) return;
     const items = data.items ?? [];
     const feedbackInCard = items.some((item) => item.id === actionFeedback.id);
-    actionStatus.textContent = feedbackInCard ? "" : actionFeedback.message;
+    writeUiText(actionStatus, feedbackInCard ? "" : actionFeedback.message);
     if (visible() && (state.status === "error"
         ? isTransientReadError(state.error) : items.length))
       activeRefresh = setTimeout(() => {
@@ -332,11 +334,11 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
       }, state.status === "error" ? 30000 :
         items.some((item) => item.active_runs > 0) ? 1000 : 15000);
     if (state.status !== "error")
-      status.textContent = t("schedule.count", { count: data.total ?? items.length },
+      writeUiText(status, t("schedule.count", { count: data.total ?? items.length },
         `${data.total ?? items.length} 项计划`) +
         (!data.enabled ? t("schedule.globalDisabled", {}, " · 全局执行已关闭，可在 Agent 设置中开启") : "") +
         (data.truncated ? t("schedule.truncated", {}, " · 仅显示前 100 项") : "") +
-        (data.persistence_fault ? t("schedule.storageFault", {}, " · 存储故障，请检查诊断") : "");
+        (data.persistence_fault ? t("schedule.storageFault", {}, " · 存储故障，请检查诊断") : ""));
     const active = document.activeElement;
     const activeId = active?.dataset?.scheduleId;
     const activeAction = active?.dataset?.scheduleAction;
@@ -494,7 +496,7 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
       editorDialog.open && epoch === resourceOperationEpoch();
     newSchedule();
     editorLoading = true;
-    title.textContent = t("schedule.editTitle", { label: item.label }, `编辑：${item.label}`);
+    writeUiText(title, uiMessage("schedule.editTitle", { label: item.label }, `编辑：${item.label}`));
     setFeedback(t("schedule.loadingOne", {}, "正在读取计划…"));
     showEditor(origin);
     try {
@@ -520,9 +522,9 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
     const retrying = historyDialog.open;
     historyItem = item;
     historyLoading = true;
-    historyTitle.textContent = t("schedule.historyTitle", { label: item.label },
-      `${item.label} · 执行历史`);
-    historyStatus.textContent = t("schedule.historyLoading", {}, "正在读取执行历史…");
+    writeUiText(historyTitle, uiMessage("schedule.historyTitle", { label: item.label },
+      `${item.label} · 执行历史`));
+    writeUiText(historyStatus, uiMessage("schedule.historyLoading", {}, "正在读取执行历史…"));
     historyRetry.hidden = !retrying;
     historyRetry.setAttribute("aria-disabled", "true");
     clear(historyList);
@@ -532,15 +534,15 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
       if (!isCurrent()) return;
       historyRetry.hidden = true;
       historyRetry.removeAttribute("aria-disabled");
-      historyStatus.textContent = data.items.length
+      writeUiText(historyStatus, data.items.length
         ? t("schedule.historyCount", { count: data.items.length }, `${data.items.length} 条记录`) +
           (data.has_more ? t("schedule.historyMore", {}, " · 仅显示最近记录") : "")
-        : t("schedule.historyEmpty", {}, "尚无已完成的运行。");
+        : uiMessage("schedule.historyEmpty", {}, "尚无已完成的运行。"));
       for (const entry of data.items) {
         const card = element("article", { className: "schedule-history-item" });
         const header = element("header");
         const finished = clockText(entry.finished_at);
-        header.append(element("strong", { text: t(RESULT_KEY[entry.result], {}, entry.result) }),
+        header.append(element("strong", { text: uiMessage(RESULT_KEY[entry.result], {}, entry.result) }),
           element("time", { text: finished }));
         card.append(header,
           element("p", { text: t("schedule.historyTask", { id: entry.task_id }, `任务 #${entry.task_id}`) +
@@ -553,8 +555,8 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
       if (retrying) panel.querySelector("#schedule-history-close").focus({ preventScroll: true });
     } catch (error) {
       if (isCurrent() && error?.name !== "AbortError") {
-        historyStatus.textContent = t("schedule.loadFailed", { error: errorMessage(error) },
-          `读取失败：${errorMessage(error)}`);
+        writeUiText(historyStatus, uiMessage("schedule.loadFailed", { error: errorMessage(error) },
+          `读取失败：${errorMessage(error)}`));
         historyRetry.hidden = false;
         historyRetry.removeAttribute("aria-disabled");
         historyRetry.focus({ preventScroll: true });
@@ -582,8 +584,8 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
           { listAction: true, listTarget: { id: item.id, action: "enabled" } });
     if (button.dataset.scheduleAction === "delete") {
       deleteTarget = { item, index: schedulesStore.get().data.items.indexOf(item) };
-      panel.querySelector("#schedule-delete-label").textContent = t("schedule.deleteLabel",
-        { label: item.label }, `“${item.label}”将从本地计划中移除。`);
+      writeUiText(panel.querySelector("#schedule-delete-label"), uiMessage("schedule.deleteLabel",
+        { label: item.label }, `“${item.label}”将从本地计划中移除。`));
       deleteDialog.returnValue = "cancel";
       deleteDialog.showModal();
     }

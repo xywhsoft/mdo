@@ -1,3 +1,4 @@
+import { t as uiText } from "../../i18n.js";
 export const PANEL_LIMIT = 64;
 export function panelIdentity(type, key, context, owner = "local-client") {
   return JSON.stringify([owner, context.device || "", context.project || "default", context.session || "", type, key || ""]);
@@ -9,21 +10,21 @@ export function contextSnapshot(navigation) {
 export function safeBrowserUrl(value) {
   const url = new URL(value);
   if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || url.href.length > 8192)
-    throw new Error("请输入 HTTP 或 HTTPS 网址；地址中不能包含账号密码");
+    throw new Error(uiText("ui.model.enterAnHttpOrHttpsUrlWithoutEmbeddedCredentials", {}, "请输入 HTTP 或 HTTPS 网址；地址中不能包含账号密码"));
   return url.href;
 }
 /** Shared omnibox rules: ports and IPv6 literals are URLs, words are search. */
 export function browserLocation(value) {
   const text = String(value || "").trim();
-  if (!text) throw new Error("请输入网址或搜索内容");
-  if (text.length > 8192) throw new Error("网址或搜索内容过长");
+  if (!text) throw new Error(uiText("ui.model.enterAUrlOrSearchQuery", {}, "请输入网址或搜索内容"));
+  if (text.length > 8192) throw new Error(uiText("ui.model.urlOrSearchQueryIsTooLong", {}, "网址或搜索内容过长"));
   if (/^https?:\/\//i.test(text)) return safeBrowserUrl(text);
   const hostPort = /^(?:localhost|[\w.-]+|\[[a-f\d:]+\])(?::\d+)?(?:[/?#]|$)/i.test(text);
   if (hostPort && !/\s/.test(text) && (/[.:\[]/.test(text.split(/[/?#]/)[0]) || /^localhost(?:[/:?#]|$)/i.test(text))) {
     const local = /^(?:localhost|127(?:\.\d+){3}|\[::1\])(?::\d+)?(?:[/?#]|$)/i.test(text);
     return safeBrowserUrl(`${local ? "http" : "https"}://${text}`);
   }
-  if (/^[a-z][a-z\d+.-]*:/i.test(text)) throw new Error("请输入 HTTP 或 HTTPS 网址");
+  if (/^[a-z][a-z\d+.-]*:/i.test(text)) throw new Error(uiText("ui.model.enterAnHttpOrHttpsUrl", {}, "请输入 HTTP 或 HTTPS 网址"));
   return safeBrowserUrl(`https://www.bing.com/search?q=${encodeURIComponent(text)}`);
 }
 export function browserPhase(state) {
@@ -50,7 +51,7 @@ export function validateImageFrame(bytes) {
   } else if (bytes.length >= 4 && bytes[0] === 255 && bytes[1] === 216) {
     let at = 2;
     while (at + 3 < bytes.length) {
-      if (bytes[at++] !== 255) throw new Error("JPEG 画面帧格式无效");
+      if (bytes[at++] !== 255) throw new Error(uiText("ui.model.invalidJpegFrameFormat", {}, "JPEG 画面帧格式无效"));
       while (bytes[at] === 255) at++;
       const marker = bytes[at++]; if ([0xd8,0xd9].includes(marker)) continue;
       if (at + 2 > bytes.length) break; const size = data.getUint16(at);
@@ -59,6 +60,6 @@ export function validateImageFrame(bytes) {
       at += size;
     }
   }
-  if (!width || !height || width > 8192 || height > 8192 || width * height > 16777216) throw new Error("画面需为 PNG/JPEG，且解码尺寸不能超过 1600 万像素");
+  if (!width || !height || width > 8192 || height > 8192 || width * height > 16777216) throw new Error(uiText("ui.model.framesMustBePngJpegAndDecodeToAt", {}, "画面需为 PNG/JPEG，且解码尺寸不能超过 1600 万像素"));
   return { width, height };
 }

@@ -1,9 +1,10 @@
+import { setUiText as writeUiText, uiMessage, t } from "../../i18n.js";
+
 import { element, toast } from "../../utils/dom.js";
 import { copyText } from "../../utils/clipboard.js";
 import { readCompleteSessionEventText } from "../../state/sessions.js";
 import { api, resourceId } from "../../api/client.js";
 import { createRequestRecovery } from "../../api/request-recovery.js";
-import { t } from "../../i18n.js";
 
 function argumentsObject(text) {
   try {
@@ -137,12 +138,12 @@ export function toolSectionNode(label, item, part, owner, actionRef, cache, onCo
   let copying = false;
   const content = element("div", { className: "timeline-tool-content", attrs: { tabindex: "-1" } });
   const note = element("p", { className: "timeline-truncation-note", attrs: { role: "status" } });
-  const copy = element("button", { text: t("timeline.copy", {}, "复制"), attrs: {
-    type: "button", "aria-label": t("timeline.copySection", { label }, `复制${label}`),
+  const copy = element("button", { text: uiMessage("timeline.copy", {}, "复制"), attrs: {
+    type: "button", "aria-label": uiMessage("timeline.copySection", { label }, `复制${label}`),
     "data-timeline-action": actionRef,
   } });
   const more = element("button", { className: "timeline-tool-more",
-    text: t("toolContent.loadFull", {}, "读取完整内容"), attrs: {
+    text: uiMessage("toolContent.loadFull", {}, "读取完整内容"), attrs: {
       type: "button", "data-timeline-action": `${actionRef}/full`,
     } });
   const section = element("div", { className: "timeline-fold-section" }, [
@@ -156,7 +157,7 @@ export function toolSectionNode(label, item, part, owner, actionRef, cache, onCo
     content.replaceChildren();
     if (preview) {
       content.append(element("p", { className: "timeline-tool-caption", text: preview.kind === "edit"
-        ? t("toolContent.requestedEdits", {}, "请求的修改片段") : t("toolContent.writeContent", {}, "写入内容") }));
+        ? uiMessage("toolContent.requestedEdits", {}, "请求的修改片段") : uiMessage("toolContent.writeContent", {}, "写入内容") }));
       if (preview.kind === "write") content.append(element("pre", { text: preview.text }));
       else {
         const diff = element("pre", { className: "timeline-tool-diff" });
@@ -164,10 +165,10 @@ export function toolSectionNode(label, item, part, owner, actionRef, cache, onCo
           attrs: { "data-edit": line.index }, text: `${line.kind === "removed" ? "−" : "+"} ${line.text}` }));
         content.append(diff);
         if (preview.omitted) content.append(element("p", { className: "timeline-truncation-note",
-          text: t("toolContent.previewLimited", {}, "预览仅显示前 200 行；完整修改见调用参数。") }));
+          text: uiMessage("toolContent.previewLimited", {}, "预览仅显示前 200 行；完整修改见调用参数。") }));
       }
       const raw = element("details", { className: "timeline-tool-raw" }, [
-        element("summary", { text: t("toolContent.rawArguments", {}, "调用参数") }),
+        element("summary", { text: uiMessage("toolContent.rawArguments", {}, "调用参数") }),
         element("pre", { text: formatToolArguments(value) }),
       ]);
       raw.open = rawOpen;
@@ -175,7 +176,7 @@ export function toolSectionNode(label, item, part, owner, actionRef, cache, onCo
     } else content.append(element("pre", { text: part === "input" ? formatToolArguments(value) : value }));
     content.querySelector("pre").scrollTop = oldScroll;
     note.hidden = complete;
-    if (!complete) note.textContent = t("toolContent.partial", {}, "当前只显示部分内容；复制时会尝试读取全文。");
+    if (!complete) writeUiText(note, uiMessage("toolContent.partial", {}, "当前只显示部分内容；复制时会尝试读取全文。"));
     if (complete && document.activeElement === more) content.focus({ preventScroll: true });
     more.hidden = complete;
     if (complete) onComplete?.(value);
@@ -193,8 +194,8 @@ export function toolSectionNode(label, item, part, owner, actionRef, cache, onCo
           if (cache.size > 64) cache.delete(cache.keys().next().value);
         }
         if (section.isConnected) paint();
-      } else if (section.isConnected) note.textContent = t("toolContent.fullUnavailable", {},
-        "完整内容暂不可用；可复制可见部分，较大结果请查看产物。");
+      } else if (section.isConnected) writeUiText(note, uiMessage("toolContent.fullUnavailable", {},
+        "完整内容暂不可用；可复制可见部分，较大结果请查看产物。"));
       return result;
     }).finally(() => { pending = null; more.removeAttribute("aria-disabled"); });
     return pending;
@@ -202,8 +203,8 @@ export function toolSectionNode(label, item, part, owner, actionRef, cache, onCo
   more.addEventListener("click", async () => {
     try { await load(); }
     catch (error) {
-      if (error?.name !== "AbortError") note.textContent = t("toolContent.fullUnavailable", {},
-        "完整内容暂不可用；可复制可见部分，较大结果请查看产物。");
+      if (error?.name !== "AbortError") writeUiText(note, uiMessage("toolContent.fullUnavailable", {},
+        "完整内容暂不可用；可复制可见部分，较大结果请查看产物。"));
     }
   });
   copy.addEventListener("click", async () => {

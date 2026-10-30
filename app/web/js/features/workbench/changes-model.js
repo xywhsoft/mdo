@@ -1,3 +1,4 @@
+import { t as uiText } from "../../i18n.js";
 /** Keep source rows intact; pairing changes presentation, never line identity. */
 export function pairDiffRows(rows) {
   const result = [];
@@ -34,4 +35,4 @@ export function changesTree(files, collapsed = new Set(), query = "") {
   visit(root, 0); return result;
 }
 
-export const changeStats = file => file.binary ? "二进制" : !file.stats_available ? "未统计" : `+${file.additions} −${file.deletions}`;
+export const changeStats = file => file.binary ? uiText("ui.changesModel.binary", {}, "二进制") : !file.stats_available ? uiText("ui.changesModel.notCounted", {}, "未统计") : `+${file.additions} −${file.deletions}`;

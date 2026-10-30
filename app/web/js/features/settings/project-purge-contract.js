@@ -1,10 +1,11 @@
+import { t as uiErrorText } from "../../i18n.js";
 import { ApiError } from "../../api/client.js";
 
 export const EMPTY_PURGE_ETAG = '"mdo-purge-intent-empty"';
 const bindingFields = ["purge_request_id", "project_id", "revision", "created_at"];
 
 export function invalidPurge() {
-  return new ApiError("The saved purge request could not be verified", { code: "purge_intent_unavailable" });
+  return new ApiError(uiErrorText("error.detail.theSavedPurgeRequestCouldNotBeVerified", {}, "The saved purge request could not be verified"), { code: "purge_intent_unavailable" });
 }
 
 function validBinding(value) {
@@ -61,7 +62,7 @@ export function reviewedPurgeIntent(preview, id) {
   for (const field of ["session_runtime_count", "active_interactive_run_count", "active_scheduled_run_count_global",
     "session_diagnostic_count", "session_catalog_diagnostic_count_global", "schedule_catalog_diagnostic_count_global"]) {
     if (!Number.isSafeInteger(preview[field]) || preview[field] < 0) throw invalidPurge();
-    if (preview[field]) throw new ApiError("Resolve active runs and diagnostics before removal", { code: "purge_client_busy" });
+    if (preview[field]) throw new ApiError(uiErrorText("error.detail.resolveActiveRunsAndDiagnosticsBeforeRemoval", {}, "Resolve active runs and diagnostics before removal"), { code: "purge_client_busy" });
   }
   return Object.freeze(intent);
 }

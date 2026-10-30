@@ -1,3 +1,4 @@
+import { t as uiText } from "../../i18n.js";
 /** Per-panel working copies. Saving one editor must not clear another editor's
  * unsaved text. A bounded metadata index makes closed-panel drafts discoverable
  * without scanning every key or deleting other working copies. */
@@ -8,7 +9,7 @@ export function createFileDrafts({ context, panel, storage = () => localStorage 
   const parse = value => value === null ? null : JSON.parse(value);
   const index = path => {
     const values = parse(storage().getItem(indexKey(path))) || [];
-    if (!Array.isArray(values) || values.length > 64 || values.some(value => typeof value !== "string" || value.length > 128)) throw new Error("草稿索引不可用，请保留当前页面并保存文件。");
+    if (!Array.isArray(values) || values.length > 64 || values.some(value => typeof value !== "string" || value.length > 128)) throw new Error(uiText("ui.fileDrafts.draftIndexUnavailableKeepThisPageOpenAndSave", {}, "草稿索引不可用，请保留当前页面并保存文件。"));
     return values;
   };
   const valid = value => value && typeof value.text === "string" && value.text.length <= 1024 * 1024;

@@ -1,3 +1,4 @@
+import { t as uiErrorText } from "../../i18n.js";
 import { ApiError } from "../../api/client.js";
 import { isTransientReadError } from "../../api/read-recovery.js";
 import { createRequestRecovery } from "../../api/request-recovery.js";
@@ -32,7 +33,7 @@ export function createSessionHistoryRead({ navigation, readHistory,
         assertOwner(); return history;
       } catch (error) {
         if (!isTransientReadError(error)) throw error;
-        const final = new ApiError("The session history boundary could not be read", {
+        const final = new ApiError(uiErrorText("error.detail.theSessionHistoryBoundaryCouldNotBeRead", {}, "The session history boundary could not be read"), {
           code: "session_history_unavailable", status: error.status });
         final.cause = error; throw final;
       } finally {

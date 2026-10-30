@@ -1,5 +1,7 @@
+import { setUiText as writeUiText, uiMessage, subscribeLocale, t } from "../../i18n.js";
+
 import { clear, element, errorMessage } from "../../utils/dom.js";
-import { subscribeLocale, t } from "../../i18n.js";
+
 import { createMemoryBrowser } from "./memory-browser.js";
 
 export function createMemoryManagement({ panel, projectsStore, openEditor, openDirectory,
@@ -22,9 +24,9 @@ export function createMemoryManagement({ panel, projectsStore, openEditor, openD
     // A project definition can be removed while its memory file stays open.
     if (project && !projects.some((item) => item.id === project.id)) projects.push(project);
     clear(scope);
-    scope.append(element("option", { text: t("memory.globalTitle"), attrs: { value: "" } }));
+    scope.append(element("option", { text: uiMessage("memory.globalTitle"), attrs: { value: "" } }));
     for (const item of projects) scope.append(element("option", {
-      text: t("memory.projectTitle", { name: item.name || item.id }), attrs: { value: item.id },
+      text: uiMessage("memory.projectTitle", { name: item.name || item.id }), attrs: { value: item.id },
     }));
     scope.value = project?.id ?? "";
   }
@@ -35,12 +37,12 @@ export function createMemoryManagement({ panel, projectsStore, openEditor, openD
     refresh.disabled = create.disabled = state.busy;
     edit.disabled = state.busy || !state.entry;
     status.dataset.tone = state.error ? "error" : "neutral";
-    status.textContent = state.error ? errorMessage(state.error) : state.busy
-      ? t("memory.loading") : t("memory.fileCount", { count: state.collection?.items?.length ?? 0 });
+    writeUiText(status, state.error ? errorMessage(state.error) : state.busy
+      ? uiMessage("memory.loading") : uiMessage("memory.fileCount", { count: state.collection?.items?.length ?? 0 }));
     clear(files);
     const items = state.collection?.items ?? [];
     if (!items.length) files.append(element("p", { className: "empty-state",
-      text: state.busy ? t("memory.loading") : t("memory.empty") }));
+      text: state.busy ? uiMessage("memory.loading") : uiMessage("memory.empty") }));
     for (const item of items) {
       const button = element("button", { className: "memory-list-item", attrs: {
         type: "button", "data-memory-file": item.id,
@@ -54,11 +56,11 @@ export function createMemoryManagement({ panel, projectsStore, openEditor, openD
     if (focusedId) [...files.querySelectorAll("[data-memory-file]")]
       .find((node) => node.dataset.memoryFile === focusedId)?.focus({ preventScroll: true });
     const directoryPath = state.project ? `mdo-home/memory/projects/${state.project.id}/` : "mdo-home/memory/global/";
-    title.textContent = state.selectedId ? `${state.selectedId}.md` : t("memory.selectFile");
-    path.textContent = directoryPath + (state.selectedId ? `${state.selectedId}.md` : "");
+    writeUiText(title, state.selectedId ? `${state.selectedId}.md` : uiMessage("memory.selectFile"));
+    writeUiText(path, directoryPath + (state.selectedId ? `${state.selectedId}.md` : ""));
     // Show the file verbatim. Markdown and HTML in memory cannot run scripts
     // or load external images when the user is only inspecting local data.
-    content.textContent = state.entry?.content ?? (state.busy ? t("memory.loading") : t("memory.selectFileHint"));
+    writeUiText(content, state.entry?.content ?? (state.busy ? uiMessage("memory.loading") : uiMessage("memory.selectFileHint")));
   }
 
   function selectScope(id) {

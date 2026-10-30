@@ -1,16 +1,17 @@
+import { t as uiErrorText, setUiAttribute as writeUiAttribute, setUiText as writeUiText, uiMessage } from "../i18n.js";
+
 import { element, isImeKey } from "../utils/dom.js";
 import { mountIcons } from "./icons.js";
-import { t } from "../i18n.js";
 
 const managers = new WeakMap();
 let sequence = 0;
-const text = (key, fallback) => t(`layers.${key}`, {}, fallback);
+const text = (key, fallback) => uiMessage(`layers.${key}`, {}, fallback);
 const node = (tag, className) => element(tag, { className });
 
 // Numbers are CSS logical pixels, never physical display pixels. Percentages
 // refer to the visual viewport, including when the soft keyboard is visible.
 export function layerSize(value, axis) {
-  if (axis !== "width" && axis !== "height") throw new TypeError("Invalid layer size axis");
+  if (axis !== "width" && axis !== "height") throw new TypeError(uiErrorText("error.detail.invalidLayerSizeAxis", {}, "Invalid layer size axis"));
   if (value === "auto") return value;
   if (typeof value === "number" && Number.isFinite(value) && value > 0) return `${value}px`;
   if (typeof value === "string") {
@@ -18,7 +19,7 @@ export function layerSize(value, axis) {
     if (match && Number.isFinite(Number(match[1])) && Number(match[1]) > 0) return match[2] === "%"
       ? `calc(var(--layer-viewport-${axis}) * ${Number(match[1]) / 100})` : value.trim();
   }
-  throw new TypeError("Layer sizes must be positive CSS pixels, rem, percentages, or auto");
+  throw new TypeError(uiErrorText("error.detail.layerSizesMustBePositiveCssPixelsRemPercentagesOr", {}, "Layer sizes must be positive CSS pixels, rem, percentages, or auto"));
 }
 
 function managerFor(doc) {
@@ -55,7 +56,7 @@ export function openLayer(options = {}) {
     closeOnBackdrop: false, maximizable: true, draggable: true, ...options };
   const validate = next => {
     layerSize(next.width, "width"); layerSize(next.height, "height");
-    if (!["fullscreen", "fit"].includes(next.mobile)) throw new TypeError("Invalid mobile layer layout");
+    if (!["fullscreen", "fit"].includes(next.mobile)) throw new TypeError(uiErrorText("error.detail.invalidMobileLayerLayout", {}, "Invalid mobile layer layout"));
   };
   validate(config);
   const dialog = node("dialog", "mdo-layer"), header = node("header", "mdo-layer-header");
@@ -69,7 +70,7 @@ export function openLayer(options = {}) {
     button.type = "button";
     button.append(element("span", { className: "icon", attrs: { "data-icon": name, "aria-hidden": "true" } }));
   }
-  closeButton.setAttribute("aria-label", text("close", "关闭窗口")); closeButton.title = text("close", "关闭窗口");
+  writeUiAttribute(closeButton, "aria-label", text("close", "关闭窗口")); writeUiAttribute(closeButton, "title", text("close", "关闭窗口"));
   tools.append(maximize, closeButton); header.append(icon, heading, tools); dialog.append(header, body, footer);
   const lifetime = new AbortController(), listeners = new AbortController();
   let ended = false, pendingClose = null, contentDispose, maximized = false, drag = null, shift = { x: 0, y: 0 };
@@ -98,14 +99,15 @@ export function openLayer(options = {}) {
     dialog.classList.toggle("is-fullscreen", (mobile && config.mobile === "fullscreen") || maximized);
   };
   const paint = () => {
-    heading.textContent = config.title;
+    writeUiText(heading, config.title);
     icon.hidden = !config.icon;
     if (config.icon) { icon.dataset.icon = config.icon; mountIcons(header); }
     dialog.style.width = layerSize(config.width, "width"); dialog.style.height = layerSize(config.height, "height");
     dialog.classList.toggle("is-draggable", Boolean(config.draggable));
     maximize.hidden = !config.maximizable;
-    maximize.setAttribute("aria-label", maximized ? text("restore", "还原窗口") : text("maximize", "最大化窗口"));
-    maximize.title = maximize.getAttribute("aria-label"); maximize.setAttribute("aria-pressed", String(maximized));
+    const maximizeLabel = maximized ? text("restore", "还原窗口") : text("maximize", "最大化窗口");
+    writeUiAttribute(maximize, "aria-label", maximizeLabel);
+    writeUiAttribute(maximize, "title", maximizeLabel); maximize.setAttribute("aria-pressed", String(maximized));
     layout();
   };
   let unlock = () => {};

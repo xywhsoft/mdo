@@ -1,6 +1,7 @@
+import { setUiText as writeUiText, uiMessage, subscribeLocale, t } from "../../i18n.js";
+
 import { api } from "../../api/client.js";
 import { element, errorMessage, isImeKey } from "../../utils/dom.js";
-import { subscribeLocale, t } from "../../i18n.js";
 
 export function directoryChild(data, name) {
   return `${data.path}${data.path.endsWith(data.separator) ? "" : data.separator}${name}`;
@@ -18,9 +19,9 @@ export function createDirectoryPicker({ dialog,
   let loading = false, failure = "";
 
   function renderStatus() {
-    status.textContent = failure || (loading ? t("directory.loading", {}, "正在读取目录…") :
-      current?.truncated ? t("directory.truncated", {}, "部分目录未列出，可输入完整路径进入。") :
-        current && !current.directories.length ? t("directory.empty", {}, "此目录没有子目录。") : "");
+    writeUiText(status, failure || (loading ? uiMessage("directory.loading", {}, "正在读取目录…") :
+      current?.truncated ? uiMessage("directory.truncated", {}, "部分目录未列出，可输入完整路径进入。") :
+        current && !current.directories.length ? uiMessage("directory.empty", {}, "此目录没有子目录。") : ""));
     status.classList.toggle("dialog-error-text", Boolean(failure));
     list.setAttribute("aria-busy", String(loading));
     choose.disabled = loading || !current || path.value !== current.path;
@@ -30,8 +31,8 @@ export function createDirectoryPicker({ dialog,
   function renderList() {
     shortcuts.replaceChildren(...locations.map((item) => {
       const button = element("button", { className: "secondary-button", attrs: { type: "button",
-        title: item.path }, text: item.kind === "home" ? t("directory.home", {}, "用户目录") :
-        t("directory.cwd", {}, "启动目录") });
+        title: item.path }, text: item.kind === "home" ? uiMessage("directory.home", {}, "用户目录") :
+        uiMessage("directory.cwd", {}, "启动目录") });
       button.addEventListener("click", () => { void load(item.path, true); });
       return button;
     }));

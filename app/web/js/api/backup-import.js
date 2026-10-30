@@ -1,10 +1,11 @@
+import { t as uiErrorText } from "../i18n.js";
 import { api, ApiError, uploadBackupChunk } from "./client.js";
 import { BACKUP_MAX_BYTES } from "./backup-download.js";
 import { createSha256 } from "../utils/sha256.js";
 
 const root = "/session-backups";
 const id = (value) => {
-  if (!/^[0-9a-f]{32}$/.test(value)) throw new TypeError("Invalid backup request ID");
+  if (!/^[0-9a-f]{32}$/.test(value)) throw new TypeError(uiErrorText("error.detail.invalidBackupRequestId", {}, "Invalid backup request ID"));
   return value;
 };
 const check = (signal) => { if (signal?.aborted) throw new DOMException("Cancelled", "AbortError"); };
@@ -18,9 +19,9 @@ export function newBackupUploadId() {
 export async function uploadBackupFile(file, { signal, onProgress = () => {},
   onIdentity = () => {}, timeoutMs = 120000 } = {}) {
   if (!file || !Number.isSafeInteger(file.size) || file.size < 1 || file.size > BACKUP_MAX_BYTES)
-    throw new ApiError("Backup file exceeds its byte budget", { code: "backup_upload_limit" });
+    throw new ApiError(uiErrorText("error.detail.backupFileExceedsItsByteBudget", {}, "Backup file exceeds its byte budget"), { code: "backup_upload_limit" });
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0 || timeoutMs > 120000)
-    throw new TypeError("Invalid backup upload deadline");
+    throw new TypeError(uiErrorText("error.detail.invalidBackupUploadDeadline", {}, "Invalid backup upload deadline"));
   const controller = new AbortController(), uploadId = newBackupUploadId();
   const abort = () => controller.abort();
   signal?.addEventListener("abort", abort, { once: true });
@@ -46,16 +47,16 @@ export async function uploadBackupFile(file, { signal, onProgress = () => {},
       check(active);
       const result = (await uploadBackupChunk(uploadId, offset, chunk, { signal: active })).data;
       if (result?.received_bytes !== offset + chunk.length)
-        throw new ApiError("Backup progress differs", { code: "backup_upload_conflict" });
+        throw new ApiError(uiErrorText("error.detail.backupProgressDiffers", {}, "Backup progress differs"), { code: "backup_upload_conflict" });
       onProgress({ phase: "uploading", received: offset + chunk.length, total: size });
     }
     const result = (await api.post(path + "/seal", undefined, { signal: active })).data;
     check(active);
     if (result?.sha256 !== digest || result?.bytes !== size)
-      throw new ApiError("Sealed backup digest differs", { code: "backup_upload_checksum" });
+      throw new ApiError(uiErrorText("error.detail.sealedBackupDigestDiffers", {}, "Sealed backup digest differs"), { code: "backup_upload_checksum" });
     return { id: uploadId, sha256: digest, bytes: size };
   } catch (error) {
-    if (expired) throw new ApiError("Backup upload exceeded its deadline", { code: "backup_upload_timeout" });
+    if (expired) throw new ApiError(uiErrorText("error.detail.backupUploadExceededItsDeadline", {}, "Backup upload exceeded its deadline"), { code: "backup_upload_timeout" });
     throw error;
   } finally { clearTimeout(timer); signal?.removeEventListener("abort", abort); }
 }

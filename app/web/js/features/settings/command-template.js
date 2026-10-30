@@ -1,6 +1,7 @@
+import { t as uiText } from "../../i18n.js";
 export function newCommand(id = "my-command") {
   return `/* mdo-command
-${JSON.stringify({ id, description: "自定义命令", effects: ["ui"], timeout_ms: 30000 }, null, 2)}
+${JSON.stringify({ id, description: uiText("ui.commandTemplate.customCommand", {}, "自定义命令"), effects: ["ui"], timeout_ms: 30000 }, null, 2)}
 */
 #include "mdo/command.h"
 

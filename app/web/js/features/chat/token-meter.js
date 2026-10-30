@@ -1,5 +1,7 @@
+import { setUiText as writeUiText, setUiAttribute as writeUiAttribute, uiMessage, currentLocale, subscribeLocale, t } from "../../i18n.js";
+
 import { clear, element, isImeKey } from "../../utils/dom.js";
-import { currentLocale, subscribeLocale, t } from "../../i18n.js";
+
 import { findModel } from "../../utils/models.js";
 
 export function estimateInputTokens(text) {
@@ -48,14 +50,14 @@ export function createTokenMeter({ root, trigger, ring, panel, estimate, prompt,
     const imageCount = attachments().length;
     const hasImages = imageCount > 0;
     const draft = input + imageCount * 4096 + (input || hasImages ? 12 : 0);
-    estimate.textContent = hasImages
-      ? t("token.textEstimateWithImages", { count: number(input), images: number(imageCount * 4096) },
+    writeUiText(estimate, hasImages
+      ? uiMessage("token.textEstimateWithImages", { count: number(input), images: number(imageCount * 4096) },
         `文字 ~${number(input)} tok · 图片 ~${number(imageCount * 4096)} tok`)
-      : input ? t("token.inputEstimate", { count: number(input) },
-        `输入 ~${number(input)} tok`) : "";
-    estimate.title = hasImages
-      ? t("token.imageEstimateTitle", {}, "图片按每张 4,096 token 估算；实际用量由模型返回")
-      : t("token.estimateTitle", {}, "按输入文本粗略估算");
+      : input ? uiMessage("token.inputEstimate", { count: number(input) },
+        `输入 ~${number(input)} tok`) : "");
+    writeUiAttribute(estimate, "title", hasImages
+      ? uiMessage("token.imageEstimateTitle", {}, "图片按每张 4,096 token 估算；实际用量由模型返回")
+      : uiMessage("token.estimateTitle", {}, "按输入文本粗略估算"));
     const session = sessionStore.get().data;
     const models = modelsStore.get().data?.models ?? [];
     const execution = session?.execution;
@@ -97,19 +99,19 @@ export function createTokenMeter({ root, trigger, ring, panel, estimate, prompt,
     const percent = lastWindowTokens
       ? Math.min(100, Math.round(nextInput / lastWindowTokens * 100)) : 0;
     ring.style.setProperty("--meter-percent", `${percent}%`);
-    trigger.title = lastWindowTokens
-      ? t("token.tooltip", { model: reference ? lastModelName : model?.name || model?.id || "—",
+    writeUiAttribute(trigger, "title", lastWindowTokens
+      ? uiMessage("token.tooltip", { model: reference ? lastModelName : model?.name || model?.id || "—",
         input: number(nextInput), limit: number(lastWindowTokens) },
         `${lastModelName} 预计下次输入 ~${number(nextInput)} / 上下文上限 ${number(lastWindowTokens)} tokens`)
-      : t("token.view", {}, "查看 token 用量");
+      : uiMessage("token.view", {}, "查看 token 用量"));
     const scrollTop = panel.scrollTop;
     const closeFocused = document.activeElement === closeButton;
     clear(panel);
     closeButton = element("button", { className: "context-meter-close", text: "×",
-      attrs: { type: "button", "aria-label": t("token.close", {}, "关闭 token 用量") } });
+      attrs: { type: "button", "aria-label": uiMessage("token.close", {}, "关闭 token 用量") } });
     closeButton.addEventListener("click", () => setOpen(false));
     const heading = element("div", { className: "context-meter-heading" }, [
-      element("h3", { text: t("token.title", {}, "Token 用量"),
+      element("h3", { text: uiMessage("token.title", {}, "Token 用量"),
         attrs: { id: "context-meter-title" } }), closeButton,
     ]);
     const details = element("dl");
@@ -140,17 +142,17 @@ export function createTokenMeter({ root, trigger, ring, panel, estimate, prompt,
     for (const [label, value] of rows)
       details.append(element("dt", { text: label }), element("dd", { text: value }));
     panel.append(heading, details,
-      element("p", { text: t("token.note", {},
+      element("p", { text: uiMessage("token.note", {},
         "预计输入与自动压缩共用上下文检查点：上次服务端输入与输出，加上此后新增内容及草稿估算。输出预留与安全余量已计入压缩阈值；累计用量只包含可见调用。") }));
-    if (unavailable) panel.append(element("p", { text: execution.message || t("token.targetUnavailable", {}, "当前主讲配置无法读取，未使用其他上下文的用量替代。") }));
+    if (unavailable) panel.append(element("p", { text: execution.message || uiMessage("token.targetUnavailable", {}, "当前主讲配置无法读取，未使用其他上下文的用量替代。") }));
     if (hasImages)
-      panel.append(element("p", { text: t("token.imageEstimateNote", {},
+      panel.append(element("p", { text: uiMessage("token.imageEstimateNote", {},
         "图片按每张 4,096 token 估算，实际用量取决于模型。") }));
     if (!contextEvent && latestCall)
-      panel.append(element("p", { text: t("token.legacyCheckpoint", {},
+      panel.append(element("p", { text: uiMessage("token.legacyCheckpoint", {},
         "此会话暂无新的上下文检查点，当前使用上次用量估算；继续运行后刷新。") }));
     if (reference && !lastWindowTokens)
-      panel.append(element("p", { text: t("token.unknownContext", {},
+      panel.append(element("p", { text: uiMessage("token.unknownContext", {},
         "上次调用的模型配置无法确定，暂不显示上下文占比。") }));
     panel.scrollTop = scrollTop;
     if (closeFocused) closeButton.focus({ preventScroll: true });

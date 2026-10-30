@@ -1,8 +1,10 @@
+import { currentLocale, t as uiErrorText, setUiText as writeUiText, t as uiText, uiMessage, subscribeLocale, t } from "../../i18n.js";
+
 import { mountIcons } from "../../components/icons.js";
 import { api, ApiError } from "../../api/client.js";
 import { loadModels } from "../../state/catalogs.js";
 import { clear, element, errorMessage, isImeKey, toast } from "../../utils/dom.js";
-import { subscribeLocale, t } from "../../i18n.js";
+
 import { providerPresets, presetVariant, presetProvider } from "./provider-presets.js";
 import { sameModelConfig } from "./model-config-state.js";
 import { createModelProxyEditor } from "./model-proxy-editor.js";
@@ -69,7 +71,7 @@ const optionKeys = Object.freeze({
 });
 
 function copy(tag, key, fallback, params = {}, options = {}) {
-  return element(tag, { ...options, text: t(key, params, fallback), attrs: {
+  return element(tag, { ...options, text: uiMessage(key, params, fallback), attrs: {
     ...options.attrs, "data-model-copy-key": key,
     "data-model-copy-params": JSON.stringify(params),
     "data-model-copy-fallback": fallback,
@@ -78,8 +80,8 @@ function copy(tag, key, fallback, params = {}, options = {}) {
 
 function translateCopy(container) {
   for (const node of container.querySelectorAll("[data-model-copy-key]"))
-    node.textContent = t(node.dataset.modelCopyKey,
-      JSON.parse(node.dataset.modelCopyParams), node.dataset.modelCopyFallback);
+    writeUiText(node, uiMessage(node.dataset.modelCopyKey,
+      JSON.parse(node.dataset.modelCopyParams), node.dataset.modelCopyFallback));
   for (const node of container.querySelectorAll("[data-model-attr-key]"))
     node.setAttribute(node.dataset.modelAttrName,
       t(node.dataset.modelAttrKey, {}, node.dataset.modelAttrFallback));
@@ -152,13 +154,13 @@ function infoValue(key, label, value) {
 function formHeader(form, item, isModel) {
   const title = item.name ? element("h3", { text: item.name }) : copy("h3",
     isModel ? "modelConfig.newModel" : "modelConfig.newProvider",
-    isModel ? "新增模型" : "新增 供应商");
+    isModel ? uiText("modelConfig.newModel", {}, "新增模型") : uiText("ui.modelConfigAdvanced.addProvider", {}, "新增 供应商"));
   const note = item.builtin ? copy("p",
     isModel ? "modelConfig.builtinModelNote" : "modelConfig.builtinProviderNote",
-    isModel ? "ornith-1.5-35b 是内置免费模型，参数不可编辑。" : "内置 供应商 由 mdo 提供，配置不可更改。")
+    isModel ? uiText("modelConfig.builtinModelNote", {}, "ornith-1.5-35b 是内置免费模型，参数不可编辑。") : uiText("ui.modelConfigAdvanced.builtInProvidersAreSuppliedByMdoAndCannot", {}, "内置 供应商 由 mdo 提供，配置不可更改。"))
     : copy("p", isModel ? "modelConfig.providerNote" : "modelConfig.secretNote",
-      isModel ? "模型引用 供应商；协议必须有对应的 供应商 URL。"
-        : "使用凭据引用，不在页面或配置中保存 API Key 明文。");
+      isModel ? uiText("ui.modelConfigAdvanced.modelsReferenceProvidersEachProtocolNeedsAMatchingProvider", {}, "模型引用 供应商；协议必须有对应的 供应商 URL。")
+        : uiText("modelConfig.secretNote", {}, "使用凭据引用，不在页面或配置中保存 API Key 明文。"));
   form.append(element("header", { className: "model-editor-heading" }, [
     modelIcon(isModel ? "brain" : "code", "icon model-editor-icon"),
     element("div", {}, [title, note]),
@@ -215,9 +217,9 @@ export function createAdvancedModelConfigPanel(container, options = {}) {
     const notice = element("div", { className: cause ? "resource-error" : "empty-state",
       attrs: { role: cause ? "alert" : "status", "data-model-read-status": "" } }, [cause
       ? element("p", { text: errorMessage(cause) })
-      : copy("p", "resource.loading", "正在读取…")]);
+      : copy("p", "resource.loading", uiText("resource.loading", {}, "正在读取…"))]);
     if (cause) {
-      const retry = copy("button", "resource.retryLoad", "重新读取", {},
+      const retry = copy("button", "resource.retryLoad", uiText("resource.retryLoad", {}, "重新读取"), {},
         { className: "secondary-button", attrs: { type: "button" } });
       retry.addEventListener("click", async () => {
         if (reading || writing || !allowChange()) return;
@@ -253,7 +255,7 @@ export function createAdvancedModelConfigPanel(container, options = {}) {
           (formAtRead?.contains(globalThis.document.activeElement) &&
             globalThis.document.activeElement !== focusAtRead)) {
         container.prepend(copy("p", "modelConfig.refreshKept",
-          "刷新期间的新输入已保留；保存或放弃修改后可再次刷新。", {}, {
+          uiText("modelConfig.refreshKept", {}, "刷新期间的新输入已保留；保存或放弃修改后可再次刷新。"), {}, {
             className: "model-config-status", attrs: {
               role: "status", "data-model-read-status": "",
             },
@@ -315,7 +317,7 @@ export function createAdvancedModelConfigPanel(container, options = {}) {
       const body = { schema_version: 1, patch };
       await api.post("/settings/models/preview", body);
       const latest = await api.get("/models/config");
-      if (!sameModelConfig(config, latest.data)) throw new ApiError("Model settings changed", { status: 412 });
+      if (!sameModelConfig(config, latest.data)) throw new ApiError(uiErrorText("error.detail.modelSettingsChanged", {}, "Model settings changed"), { status: 412 });
       etag = latest.etag;
       const saved = await api.put("/settings/models", body, { ifMatch: etag });
       committed = true;
@@ -356,7 +358,7 @@ export function createAdvancedModelConfigPanel(container, options = {}) {
         container.querySelector('.model-config-item[aria-current="true"]')?.focus();
       }
       if (keepForm) container.prepend(copy("p", "modelConfig.savedKept",
-        "本次保存已完成；后续输入仍未保存。", {}, {
+        uiText("modelConfig.savedKept", {}, "本次保存已完成；后续输入仍未保存。"), {}, {
           className: "model-config-status", attrs: { role: "status" },
         }));
       if (readError) renderReadState(readError, true);
@@ -381,38 +383,38 @@ export function createAdvancedModelConfigPanel(container, options = {}) {
     formHeader(form, item, false);
     if (item.builtin) {
       form.append(element("section", { className: "model-section" }, [
-        copy("h4", "modelConfig.endpoints", "协议接口"),
+        copy("h4", "modelConfig.endpoints", uiText("modelConfig.endpoints", {}, "协议接口")),
         element("div", { className: "model-summary-chips" }, protocols
           .filter(([, , endpoint]) => item.endpoints?.[endpoint])
           .map(([, label]) => element("span", { text: label }))),
         element("dl", { className: "model-info-grid" }, [
-          infoValue("modelConfig.id", "标识", item.id),
-          infoValue("modelConfig.timeout", "超时（毫秒）", String(item.timeout_ms)),
+          infoValue("modelConfig.id", uiMessage("memory.id", {}, "标识"), item.id),
+          infoValue("modelConfig.timeout", uiMessage("modelConfig.timeout", {}, "超时（毫秒）"), String(item.timeout_ms)),
         ]),
       ]));
       return;
     }
-    form.append(formSection("modelConfig.basicInfo", "基本信息", [
-      input("名称", "name", item.name, { required: true, maxLength: 256 }),
-      input("标识", "id", item.id, { required: true, readOnly: Boolean(selectedId), maxLength: 128,
+    form.append(formSection("modelConfig.basicInfo", uiMessage("modelConfig.basicInfo", {}, "基本信息"), [
+      input(uiText("schedule.label", {}, "名称"), "name", item.name, { required: true, maxLength: 256 }),
+      input(uiText("memory.id", {}, "标识"), "id", item.id, { required: true, readOnly: Boolean(selectedId), maxLength: 128,
         pattern: "[A-Za-z0-9_-][A-Za-z0-9._-]*" }),
-    ]), formSection("modelConfig.endpoints", "协议接口", [
+    ]), formSection("modelConfig.endpoints", uiMessage("modelConfig.endpoints", {}, "协议接口"), [
       input("Chat Completions URL", "chat_completions", item.endpoints?.chat_completions || "", { maxLength: 2048, placeholder: "https://api.example.com/v1/chat/completions" }),
       input("Responses URL", "responses", item.endpoints?.responses || "", { maxLength: 2048, placeholder: "https://api.example.com/v1/responses" }),
       input("Anthropic Messages URL", "anthropic_messages", item.endpoints?.anthropic_messages || "", { maxLength: 2048, placeholder: "https://api.example.com/v1/messages" }),
-    ], "model-section-wide"), formSection("modelConfig.connection", "连接设置", [
-      input("凭据引用", "secret_ref", item.credential?.secret_ref || "",
+    ], "model-section-wide"), formSection("modelConfig.connection", uiMessage("modelConfig.connection", {}, "连接设置"), [
+      input(uiText("modelConfig.secretRef", {}, "凭据引用"), "secret_ref", item.credential?.secret_ref || "",
         { placeholder: "env:MY_MODEL_API_KEY", maxLength: 2048 }),
-      input("超时（毫秒）", "timeout_ms", item.timeout_ms,
+      input(uiText("modelConfig.timeout", {}, "超时（毫秒）"), "timeout_ms", item.timeout_ms,
         { type: "number", required: true, min: 1, max: 600000 }),
-      input("验证 TLS 证书", "verify_peer", item.verify_peer, { type: "checkbox" }),
+      input(uiText("modelConfig.verifyTls", {}, "验证 TLS 证书"), "verify_peer", item.verify_peer, { type: "checkbox" }),
     ]));
     const proxy = createModelProxyEditor(item.proxy);
     proxyEditors.set(form, proxy); form.append(proxy.element);
     const preset = providerPresets.find((entry) => entry.id === item.template_id);
     const variant = presetVariant(item.template_id, item.template_variant);
     if (preset && variant?.base) {
-      const reset = copy("button", "modelSetup.restoreTemplate", "恢复模板连接参数", {},
+      const reset = copy("button", "modelSetup.restoreTemplate", uiText("modelSetup.restoreTemplate", {}, "恢复模板连接参数"), {},
         { className: "secondary-button", attrs: { type: "button" } });
       reset.addEventListener("click", () => {
         const defaults = presetProvider(preset, variant);
@@ -431,51 +433,51 @@ export function createAdvancedModelConfigPanel(container, options = {}) {
     if (item.builtin) {
       const provider = config.providers.find((entry) => entry.id === item.provider);
       form.append(element("section", { className: "model-section" }, [
-        copy("h4", "modelConfig.basicInfo", "基本信息"),
+        copy("h4", "modelConfig.basicInfo", uiText("modelConfig.basicInfo", {}, "基本信息")),
         element("dl", { className: "model-info-grid" }, [
-          infoValue("modelConfig.provider", "供应商", provider?.name || item.provider),
-          infoValue("modelConfig.wireModel", "API 模型名", item.wire_model),
-          infoValue("modelConfig.contextTokens", "上下文 token", item.window.context_tokens.toLocaleString()),
-          infoValue("modelConfig.maxOutputTokens", "最大输出 token", item.window.max_output_tokens.toLocaleString()),
+          infoValue("modelConfig.provider", uiMessage("modelConfig.provider", {}, "供应商"), provider?.name || item.provider),
+          infoValue("modelConfig.wireModel", uiMessage("modelConfig.wireModel", {}, "API 模型名"), item.wire_model),
+          infoValue("modelConfig.contextTokens", uiMessage("modelConfig.contextTokens", {}, "上下文 token"), item.window.context_tokens.toLocaleString(currentLocale())),
+          infoValue("modelConfig.maxOutputTokens", uiMessage("modelConfig.maxOutputTokens", {}, "最大输出 token"), item.window.max_output_tokens.toLocaleString(currentLocale())),
         ]),
-        copy("h4", "modelConfig.protocols", "支持的协议"),
+        copy("h4", "modelConfig.protocols", uiText("modelConfig.protocols", {}, "支持的协议")),
         element("div", { className: "model-summary-chips" }, protocols
           .filter(([key]) => item.protocols.includes(key))
           .map(([, label]) => element("span", { text: label }))),
       ]));
       return;
     }
-    form.append(formSection("modelConfig.basicInfo", "基本信息", [
-      input("名称", "name", item.name, { required: true, maxLength: 256 }),
-      input("标识", "id", item.id, { required: true, readOnly: Boolean(selectedId), maxLength: 128,
+    form.append(formSection("modelConfig.basicInfo", uiMessage("modelConfig.basicInfo", {}, "基本信息"), [
+      input(uiText("schedule.label", {}, "名称"), "name", item.name, { required: true, maxLength: 256 }),
+      input(uiText("memory.id", {}, "标识"), "id", item.id, { required: true, readOnly: Boolean(selectedId), maxLength: 128,
         pattern: "[A-Za-z0-9_-][A-Za-z0-9._-]*" }),
-      input("供应商", "provider", item.provider, { kind: "select", choices:
+      input(uiText("modelConfig.provider", {}, "供应商"), "provider", item.provider, { kind: "select", choices:
         config.providers.map((provider) => [provider.id, provider.name]) }),
-      input("API 模型名", "wire_model", item.wire_model, { required: true, maxLength: 256 }),
+      input(uiText("modelConfig.wireModel", {}, "API 模型名"), "wire_model", item.wire_model, { required: true, maxLength: 256 }),
     ]));
-    const defaults = formSection("modelConfig.defaults", "默认行为", [
-      input("默认协议", "default_protocol", item.default_protocol,
+    const defaults = formSection("modelConfig.defaults", uiMessage("modelConfig.defaults", {}, "默认行为"), [
+      input(uiText("modelConfig.defaultProtocol", {}, "默认协议"), "default_protocol", item.default_protocol,
         { kind: "select", choices: protocols.map(([key, label]) => [key, label]) }),
-      input("默认思考强度", "default_reasoning_effort", item.default_reasoning_effort,
+      input(uiText("modelConfig.defaultEffort", {}, "默认思考强度"), "default_reasoning_effort", item.default_reasoning_effort,
         { kind: "select", choices: efforts.map((value) => [value, value]) }),
-      input("计费模型", "billable", !item.free, { type: "checkbox" }),
+      input(uiText("modelConfig.billable", {}, "计费模型"), "billable", !item.free, { type: "checkbox" }),
     ]);
-    defaults.append(checks("支持的协议", "protocol", item.protocols, protocols));
+    defaults.append(checks(uiText("modelConfig.protocols", {}, "支持的协议"), "protocol", item.protocols, protocols));
     form.append(defaults);
     const advanced = element("details", { className: "model-advanced" }, [
-      copy("summary", "modelConfig.advanced", "能力与上下文参数"),
+      copy("summary", "modelConfig.advanced", uiText("modelConfig.advanced", {}, "能力与上下文参数")),
       element("div", { className: "model-advanced-body" }, [
-        checks("能力", "capability", item.capabilities, capabilities),
-        checks("思考强度", "effort", item.reasoning_efforts,
+        checks(uiText("modelConfig.capabilities", {}, "能力"), "capability", item.capabilities, capabilities),
+        checks(uiText("schedule.reasoning", {}, "思考强度"), "effort", item.reasoning_efforts,
           efforts.map((value) => [value, value])),
-        checks("附件", "attachment", item.attachments, attachments),
+        checks(uiText("modelConfig.attachments", {}, "附件"), "attachment", item.attachments, attachments),
         element("div", { className: "model-form-grid" }, [
-          input("窗口模式", "window_mode", item.window.mode,
-            { kind: "select", choices: [["shared-context", "共享上下文"],
-              ["split-input-output", "输入/输出分离"]] }),
-          ...[["context_tokens", "上下文 token"], ["max_input_tokens", "最大输入 token"],
-            ["max_output_tokens", "最大输出 token"], ["output_reserve_tokens", "输出预留 token"],
-            ["summary_tokens", "摘要 token"]].map(([key, label]) =>
+          input(uiText("modelConfig.windowMode", {}, "窗口模式"), "window_mode", item.window.mode,
+            { kind: "select", choices: [["shared-context", uiText("modelConfig.sharedContext", {}, "共享上下文")],
+              ["split-input-output", uiText("modelConfig.splitWindow", {}, "输入/输出分离")]] }),
+          ...[["context_tokens", uiText("modelConfig.contextTokens", {}, "上下文 token")], ["max_input_tokens", uiText("modelConfig.maxInputTokens", {}, "最大输入 token")],
+            ["max_output_tokens", uiText("modelConfig.maxOutputTokens", {}, "最大输出 token")], ["output_reserve_tokens", uiText("modelConfig.outputReserveTokens", {}, "输出预留 token")],
+            ["summary_tokens", uiText("modelConfig.summaryTokens", {}, "摘要 token")]].map(([key, label]) =>
             input(label, key, item.window[key], { type: "number", required: true,
               min: key === "output_reserve_tokens" || key === "summary_tokens" ? 0 : 1 })),
         ]),
@@ -541,8 +543,8 @@ export function createAdvancedModelConfigPanel(container, options = {}) {
     const controls = element("div", { className: "model-config-controls" });
     const tabs = element("div", { className: "model-config-tabs" });
     for (const [value, key, label] of [
-      ["model", "modelConfig.models", "模型"],
-      ["provider", "modelConfig.providers", "供应商"],
+      ["model", "modelConfig.models", uiText("shell.model", {}, "模型")],
+      ["provider", "modelConfig.providers", uiText("modelConfig.provider", {}, "供应商")],
     ]) {
       const button = copy("button", key, label, {}, { className: "secondary-button",
         attrs: { type: "button", "aria-pressed": kind === value } });
@@ -553,7 +555,7 @@ export function createAdvancedModelConfigPanel(container, options = {}) {
       });
       tabs.append(button);
     }
-    const refresh = copy("button", "modelConfig.refresh", "刷新", {},
+    const refresh = copy("button", "modelConfig.refresh", uiText("resource.refresh", {}, "刷新"), {},
       { className: "secondary-button", attrs: { type: "button" } });
     refresh.addEventListener("click", async () => {
       if (!allowChange()) return;
@@ -565,7 +567,7 @@ export function createAdvancedModelConfigPanel(container, options = {}) {
         container.querySelector('[data-model-copy-key="modelConfig.refresh"]')?.focus();
     });
     const add = copy("button", kind === "model" ? "modelConfig.newModel" :
-      "modelConfig.newProvider", kind === "model" ? "新增模型" : "新增 供应商",
+      "modelConfig.newProvider", kind === "model" ? uiText("modelConfig.newModel", {}, "新增模型") : uiText("ui.modelConfigAdvanced.addProvider", {}, "新增 供应商"),
     {}, { className: "primary-button", attrs: { type: "button" } });
     add.disabled = config.runtime_override;
     add.addEventListener("click", () => {
@@ -575,28 +577,28 @@ export function createAdvancedModelConfigPanel(container, options = {}) {
     });
     const defaultModel = config.items.find((item) => item.id === config.default_model);
     controls.append(tabs, copy("p", "modelConfig.status",
-      `默认模型：${defaultModel?.name || config.default_model}`,
+      uiText("ui.modelConfigAdvanced.defaultModelValue1", { value1: defaultModel?.name || config.default_model }, "默认模型：{value1}"),
       { model: defaultModel?.name || config.default_model },
       { className: "model-config-status" }),
       element("div", { className: "model-toolbar-actions" }, [refresh, add]));
     container.append(controls);
     if (config.runtime_override) container.append(copy("p", "modelConfig.runtimeOverride",
-      "当前配置含运行时覆盖；请移除启动覆盖后再用页面编辑模型。",
+      uiText("modelConfig.runtimeOverride", {}, "当前配置含运行时覆盖；请移除启动覆盖后再用页面编辑模型。"),
       {}, { className: "resource-error" }));
     const layout = element("div", { className: "model-config-layout" });
     const list = translatedAttribute(element("div", { className: "model-config-list" }),
       "aria-label", kind === "model" ? "modelConfig.modelList" : "modelConfig.providerList",
-      kind === "model" ? "模型列表" : "供应商 列表");
+      kind === "model" ? uiText("modelConfig.modelList", {}, "模型列表") : uiText("ui.modelConfigAdvanced.providers", {}, "供应商 列表"));
     list.append(element("div", { className: "model-list-heading" }, [
       copy("span", kind === "model" ? "modelConfig.models" : "modelConfig.providers",
-        kind === "model" ? "模型" : "供应商"),
+        kind === "model" ? uiText("shell.model", {}, "模型") : uiText("modelConfig.provider", {}, "供应商")),
       element("span", { className: "model-list-count", text: collection().length }),
     ]));
     for (const item of collection()) {
       const badges = element("span", { className: "model-item-badges" }, [
-        item.builtin ? copy("span", "modelConfig.builtinTag", "内置") : null,
+        item.builtin ? copy("span", "modelConfig.builtinTag", uiText("modelConfig.builtinTag", {}, "内置")) : null,
         kind === "model" && item.id === config.default_model
-          ? copy("span", "modelConfig.defaultTag", "默认", {}, { className: "model-default-badge" }) : null,
+          ? copy("span", "modelConfig.defaultTag", uiText("modelConfig.defaultTag", {}, "默认"), {}, { className: "model-default-badge" }) : null,
       ]);
       const providerName = kind === "model"
         ? config.providers.find((entry) => entry.id === item.provider)?.name || item.provider : item.id;
@@ -639,17 +641,17 @@ export function createAdvancedModelConfigPanel(container, options = {}) {
       if (id) id.readOnly = Boolean(source);
       const title = form.querySelector("h3");
       if (source?.name && title) {
-        title.textContent = source.name;
+        writeUiText(title, source.name);
         for (const name of [...title.getAttributeNames()])
           if (name.startsWith("data-model-copy-")) title.removeAttribute(name);
       }
     });
     const actions = element("div", { className: "model-config-actions" });
     if (!source?.builtin && !config.runtime_override) {
-      const save = copy("button", "modelConfig.save", "保存", {},
+      const save = copy("button", "modelConfig.save", uiText("sidebar.save", {}, "保存"), {},
         { className: "primary-button", attrs: { type: "submit" } });
       save.disabled = Boolean(source);
-      const discard = copy("button", "modelConfig.discard", "放弃修改", {},
+      const discard = copy("button", "modelConfig.discard", uiText("modelConfig.discard", {}, "放弃修改"), {},
         { className: "secondary-button", attrs: { type: "button" } });
       discard.hidden = true;
       discard.addEventListener("click", () => {
@@ -686,27 +688,27 @@ export function createAdvancedModelConfigPanel(container, options = {}) {
         if (source) next[key] = next[key].map((entry) => entry.id === source.id ? value : entry);
         else next[key].push(value);
         void transact(next, source ? "modelConfig.updated" : "modelConfig.added",
-          source ? "配置已更新" : "配置已添加", kind, value.id, true);
+          source ? uiText("modelConfig.updated", {}, "配置已更新") : uiText("modelConfig.added", {}, "配置已添加"), kind, value.id, true);
       });
       actions.append(save, discard);
       if (source?.removable) {
         const used = kind === "provider" && config.items.some((model) => model.provider === source.id);
         const isDefault = kind === "model" && source.id === config.default_model;
-        const remove = copy("button", "modelConfig.remove", "删除", {},
+        const remove = copy("button", "modelConfig.remove", uiText("schedule.delete", {}, "删除"), {},
           { className: "danger-link", attrs: { type: "button" } });
         if (used || isDefault) translatedAttribute(remove, "title",
           used ? "modelConfig.providerInUse" : "modelConfig.defaultInUse",
-          used ? "先将引用它的模型移到其他 供应商" : "先设置其他默认模型");
+          used ? uiText("ui.modelConfigAdvanced.moveReferencingModelsToAnotherProviderFirst", {}, "先将引用它的模型移到其他 供应商") : uiText("modelConfig.defaultInUse", {}, "先设置其他默认模型"));
         remove.disabled = used || isDefault;
         const confirm = element("div", { className: "model-delete-confirm", attrs: { role: "group" } }, [
           copy("span", "modelConfig.removePrompt",
-            `删除“${source.name || source.id}”？使用它的已有会话可能无法继续。`,
+            uiText("ui.modelConfigAdvanced.deleteValue1ExistingConversationsUsingItMayNoLonger", { value1: source.name || source.id }, "删除“{value1}”？使用它的已有会话可能无法继续。"),
             { name: source.name || source.id }),
         ]);
-        translatedAttribute(confirm, "aria-label", "modelConfig.removeGroup", "确认删除");
-        const cancel = copy("button", "modelConfig.cancel", "取消", {},
+        translatedAttribute(confirm, "aria-label", "modelConfig.removeGroup", uiText("modelConfig.removeGroup", {}, "确认删除"));
+        const cancel = copy("button", "modelConfig.cancel", uiText("sidebar.cancel", {}, "取消"), {},
           { className: "secondary-button", attrs: { type: "button" } });
-        const apply = copy("button", "modelConfig.confirmRemove", "确认删除", {},
+        const apply = copy("button", "modelConfig.confirmRemove", uiText("modelConfig.removeGroup", {}, "确认删除"), {},
           { className: "danger-button", attrs: { type: "button" } });
         const dismiss = () => { confirm.hidden = true; remove.focus(); };
         cancel.addEventListener("click", dismiss);
@@ -720,7 +722,7 @@ export function createAdvancedModelConfigPanel(container, options = {}) {
           const next = clone(config);
           next[kind === "model" ? "items" : "providers"] = collection().filter((entry) => entry.id !== source.id);
           confirm.hidden = true;
-          void transact(next, "modelConfig.removed", "配置已删除", kind, "");
+          void transact(next, "modelConfig.removed", uiText("modelConfig.removed", {}, "配置已删除"), kind, "");
         });
         confirm.append(cancel, apply);
         confirm.hidden = true;
@@ -729,12 +731,12 @@ export function createAdvancedModelConfigPanel(container, options = {}) {
       }
     }
     if (kind === "model" && source && source.id !== config.default_model && !config.runtime_override) {
-      const setDefault = copy("button", "modelConfig.setDefault", "设为默认模型", {},
+      const setDefault = copy("button", "modelConfig.setDefault", uiText("modelConfig.setDefault", {}, "设为默认模型"), {},
         { className: "secondary-button", attrs: { type: "button" } });
       setDefault.addEventListener("click", () => {
         if (!allowChange()) return;
         const next = clone(config); next.default_model = source.id;
-        void transact(next, "modelConfig.defaultUpdated", "默认模型已更新");
+        void transact(next, "modelConfig.defaultUpdated", uiText("modelConfig.defaultUpdated", {}, "默认模型已更新"));
       });
       actions.append(setDefault);
     }
