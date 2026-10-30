@@ -1,0 +1,87 @@
+{
+  "date": "2026-10-30",
+  "product_commits": [
+    "f90e6e25",
+    "48f14d4b"
+  ],
+  "build_commit": "48f14d4b0e8c77d779211be69d4064fa4e596113",
+  "version": "0.8.0",
+  "version_code": "05000800",
+  "published": false,
+  "real_installation_replaced": false,
+  "catalogs": {
+    "zh-CN": {
+      "keys": 3256,
+      "added_keys": 1010
+    },
+    "en-US": {
+      "keys": 3256,
+      "added_keys": 1010
+    },
+    "ru-RU": {
+      "keys": 3256,
+      "added_keys": 1010
+    }
+  },
+  "verification": {
+    "frontend": {
+      "tests": 1230,
+      "passed": 1228,
+      "skipped": 2,
+      "failed": 0
+    },
+    "final_catalog_and_binding": {
+      "tests": 11,
+      "passed": 11
+    },
+    "frontend_contract_tests": 19,
+    "api_contract_tests": 22,
+    "frontend_modules": 239,
+    "android_policy_and_localization_cases": 51,
+    "android_pinned_installer_integration": true,
+    "packed_language_resources": [
+      {
+        "locale": "zh-CN",
+        "keys": 3256,
+        "matches_source": true,
+        "etag": null
+      },
+      {
+        "locale": "en-US",
+        "keys": 3256,
+        "matches_source": true,
+        "etag": null
+      },
+      {
+        "locale": "ru-RU",
+        "keys": 3256,
+        "matches_source": true,
+        "etag": null
+      }
+    ],
+    "apk_signature_and_alignment": true,
+    "apk_contains_translated_installer": true,
+    "android_native_library_unchanged": true
+  },
+  "artifacts": {
+    "mdo.exe": {
+      "bytes": 6566676,
+      "sha256": "37d057bc27c4f9de9867642f738bc51103a2c0412fcc16779f8b7f14bf053143"
+    },
+    "mdo-i18n-qa.apk": {
+      "bytes": 6362516,
+      "sha256": "aedfdc842c503ecaf816a14d29e254f237e50b2e00c24de1cd8ebfe00d4c0b58"
+    }
+  },
+  "android_native_sha256": "4b741656e89fe858ffbf5c8d932c5bdfb1373f7f0ac97dc820f83f8986de7012",
+  "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
+  "original_worktree_paths_preserved": 123,
+  "candidate_contains_existing_worktree_changes": true,
+  "pending_dependency_localization_patch": "docs/build-records/2026-10-30-pending-dependency-i18n.patch",
+  "not_run": [
+    "manual_visual_all_pages",
+    "android_device",
+    "live_model_calls"
+  ],
+  "evidence_directory": ".build/i18n-audit-20261030"
+}
