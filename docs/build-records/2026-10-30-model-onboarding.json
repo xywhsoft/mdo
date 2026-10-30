@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-10-30T13:01:04.169323+00:00",
+  "version_name": "0.8.1",
+  "version_code": "05000801",
+  "windows_build_id": 70000099,
+  "filename": "mdo.exe",
+  "bytes": 6600118,
+  "sha256": "5c266b5937dda9c1c5f5ed5d07f2f697bfd8f2880db7ab7dbe3b43873a46bc25",
+  "source_head": "01fc91983ddf13891e61e3af7209890c92e77cb2",
+  "includes_existing_uncommitted_changes": true,
+  "source_inputs": {
+    "application": "ed3e40e8f212ad269ddba849c209e341ab3cf383ea73161f0de547bbb06c56e6",
+    "dependency lock": "eb8b4af857eaa01b2adcd909ba1d24840f221281ce9add6b6827cd671422546d",
+    "host profile": "d765984879c9d3dedc04c523b0713b4e2662c4b8eb1ab91ff6d16d4c22dd79e2"
+  },
+  "published": false,
+  "other_platforms_rebuilt": false,
+  "full_release_gate_repeated": false,
+  "checks": {
+    "frontend_full_pass": 1247,
+    "frontend_full_skipped": 2,
+    "frontend_targeted_final": 24,
+    "python_unit_total": 198,
+    "python_unit_skipped": 6,
+    "sdk_contract_tests": 10,
+    "module_graph": 242,
+    "strict_c11": true,
+    "browser_widths": [
+      1320,
+      390
+    ],
+    "browser_native_supplier": true,
+    "packed_onboarding": {
+      "passed": true,
+      "checks": [
+        "reasoning_only leaves model, provider and verification unchanged",
+        "invalid_tool leaves model, provider and verification unchanged",
+        "successful reply and tools atomically add profile and sealed key with persisted evidence",
+        "duplicate submission never repeats model calls",
+        "existing supplier credentials are reused without replacement",
+        "configuration revision changes during verification refuse the commit",
+        "accepted background verification holds the destructive-write gate",
+        "closing an in-flight request prevents late model installation",
+        "draft verification uses the saved transport for Chat, Responses and Anthropic",
+        "discovery preserves supplier parameter metadata",
+        "successful verification and profile survive native restart"
+      ]
+    },
+    "packed_dependencies": {
+      "fresh_home_ready": true,
+      "nine_catalogue_identity_contracts": true,
+      "direct_and_reverse_dependency_details": true,
+      "cascade_disable_commits_three_preferences": true,
+      "same_plan_returns_same_receipt": true,
+      "enable_restores_required_closure": true,
+      "offline_migration_refuses_real_active_home": true,
+      "cross_kind_knowledge_edit_is_atomic_and_rejected": true,
+      "restart_recovers_identity_and_activation": true
+    },
+    "native_webview_start": {
+      "passed": true,
+      "scope": "native WebView2 four launchers",
+      "tools": [
+        "打开浏览器",
+        "打开文件",
+        "打开终端",
+        "打开变更"
+      ],
+      "empty_home": true,
+      "terminal_ended": true
+    },
+    "embedded_source_hashes": true,
+    "source_fingerprints_stable": true
+  },
+  "evidence_directory": ".build/model-onboarding-20261030"
+}
