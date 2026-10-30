@@ -62,7 +62,7 @@ window.__qaReady=true;window.__qaSupplier='''+json.dumps(origin)+''';</script></
                     process=subprocess.Popen([str(host),str(config)],cwd=ROOT/'app',env={**os.environ,'USE_WEBVIEW':'0','MDO_HOME':str(evidence/'home-narrow')},
                         stdout=log,stderr=log,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0));wait_ready(port,process)
                 preview=subprocess.run([str(node),str(ROOT/'tests/queue_browser_driver.mjs'),str(browser),str(evidence/f'edge-{width}-preview'),
-                    f'http://127.0.0.1:{port}/model-wizard-qa.html?preview=parameters',str(width),str(evidence/f'parameters-{width}.png'),str(ROOT/'tests/model_onboarding_browser_driver.js')],
+                    f'http://127.0.0.1:{port}/model-wizard-qa.html?preview=source',str(width),str(evidence/f'source-{width}.png'),str(ROOT/'tests/model_onboarding_browser_driver.js')],
                     capture_output=True,text=True,encoding='utf-8',timeout=55)
                 assert preview.returncode==0 and json.loads(preview.stdout)['passed'],(preview.stdout,preview.stderr)
                 server.model_reads=0;Supplier.calls=[];Supplier.catalog_headers=[]

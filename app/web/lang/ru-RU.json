@@ -3340,7 +3340,7 @@
   "modelWizard.automatic": "Автоматически",
   "modelWizard.manual": "Вручную",
   "modelWizard.discovering": "Автоматическое получение списка моделей…",
-  "modelWizard.discovered": "Найдено моделей: {count}. Выберите модели на следующем шаге.",
+  "modelWizard.discovered": "Найдено моделей: {count}. Выберите модели для добавления.",
   "modelWizard.discoveryFailed": "Не удалось получить список. Повторите попытку или введите ID вручную.",
   "modelWizard.retryFetch": "Повторить",
   "modelWizard.modelIds": "ID моделей (по одному в строке или через запятую)",
@@ -3357,5 +3357,6 @@
   "modelWizard.previous": "Назад",
   "modelWizard.next": "Далее",
   "modelSetup.modelsAdded": "Добавлено моделей: {count}.",
-  "modelParameters.cardSummary": "Контекст {context} · Бюджет вывода {output} · Рассуждение {reasoning}"
+  "modelParameters.cardSummary": "Контекст {context} · Бюджет вывода {output} · Рассуждение {reasoning}",
+  "modelWizard.alreadyAdded": "Уже добавлена"
 }

@@ -13,7 +13,8 @@ export function createModelSetupWizard({preset,choice,provider=null,config,etag,
   let footerHost=null,renderedStage=0;
   let current=clone(config),revision=etag,connection=clone(provider||presetProvider(preset,choice,config.providers));
   let existing=Boolean(provider),key="",ref="",modelProxy={kind:"provider"},advancedOpen=false;
-  let stage=1,mode="auto",manual="",ids=[],records=new Map(),selected=new Set(),errors=new Map();
+  let stage=1,mode="manual",manual="",ids=[],records=new Map(),selected=new Set(),errors=new Map();
+  let autoSelected=new Set(),autoSelectionReady=false,sourceQuery="";
   let discovered=null,loading=false,running=false,disposed=false,epoch=0,requestController=null,runController=null;
   let notice="",added=0,progress="",query="",defaultRequested=false,defaultApplied=false,parameterLoading=new Set();
   const stepNames=()=>[text("connection","连接供应商"),text("source","选择模型来源"),text("parameters","确认模型与参数"),text("verify","验证并添加")];
@@ -28,7 +29,7 @@ export function createModelSetupWizard({preset,choice,provider=null,config,etag,
   }
   function cancelRequest() { ++epoch;requestController?.abort();requestController=null;loading=false;parameterLoading.clear(); }
   function invalidate() {
-    cancelRequest();discovered=null;
+    cancelRequest();discovered=null;autoSelected.clear();autoSelectionReady=false;
     for(const [id,value]of records){
       value.record.fields=Object.fromEntries(Object.entries(value.record.fields).filter(([,field])=>field.source==="manual"));
       if(!Object.keys(value.record.fields).length)records.delete(id);
@@ -41,6 +42,7 @@ export function createModelSetupWizard({preset,choice,provider=null,config,etag,
   }
   const protocol=()=>existing?(connection.endpoints.responses?"openai-responses":connection.endpoints.chat_completions?"openai-chat-completions":"anthropic-messages"):choice.protocol;
   const chosen=()=>ids.filter(id=>selected.has(id));
+  const configured=id=>current.items.some(model=>model.provider===connection.id&&model.wire_model===id);
   function normalized(record) {
     const value=parameterDraft(record);const context=parameterValue(value.record,"context_tokens"),limit=parameterValue(value.record,"max_output_tokens");
     if(context&&value.output>=context)value.output=Math.max(1,Math.min(limit||8192,8192,Math.floor(context/4)));
@@ -50,19 +52,21 @@ export function createModelSetupWizard({preset,choice,provider=null,config,etag,
     return [...new Set((mode==="manual"?manual.split(/[\n,，;；]+/):discovered?.items||[]).map(id=>typeof id==="string"?id.trim():id.id).filter(Boolean))];
   }
   function createRows() {
-    ids=sourceIds().filter(id=>!current.items.some(m=>m.provider===connection.id&&m.wire_model===id));
-    const recommendations=mode==="manual"?ids:suggestedModels(ids,choice.models);
-    selected=new Set(recommendations);errors.clear();
+    ids=sourceIds().filter(id=>!configured(id)&&(mode==="manual"||autoSelected.has(id)));
+    selected=new Set(ids);errors.clear();
     for(const id of ids)if(!records.has(id))records.set(id,normalized({id,protocol:protocol(),fields:{}}));
   }
   async function discover() {
     if(disposed||running)return;
-    cancelRequest();const token=epoch;requestController=new AbortController();loading=true;notice="";render();
+    cancelRequest();const token=epoch;requestController=new AbortController();loading=true;discovered=null;notice="";render();
     try {
       const body={provider:endpoint(),protocol:protocol()};if(key.trim())body.key=key.trim();
       const result=await api.post("/models/discover",body,{signal:requestController.signal});
       if(disposed||token!==epoch||mode!=="auto")return;
       discovered=result.data;
+      const available=sourceIds().filter(id=>!configured(id));
+      autoSelected=new Set(autoSelectionReady?available.filter(id=>autoSelected.has(id)):suggestedModels(available,choice.models));
+      autoSelectionReady=true;
       for(const record of result.data.parameters||[]){
         const value=normalized(record),old=records.get(record.id);
         for(const [name,field]of Object.entries(old?.record.fields||{}))if(field.source==="manual")value.record.fields[name]=clone(field);
@@ -74,10 +78,13 @@ export function createModelSetupWizard({preset,choice,provider=null,config,etag,
     finally{if(!disposed&&token===epoch){loading=false;render();}}
   }
   function switchSource(next) {
-    if(running)return;
-    cancelRequest();mode=next;notice="";render();
-    if(mode==="auto"&&!discovered)void discover();
+    if(running||(mode===next&&(next==="manual"||loading)))return;
+    mode=next;notice="";
+    if(mode==="auto")void discover();
+    else {cancelRequest();render();}
   }
+  const sourceReady=()=>mode==="manual"?sourceIds().length>0:!loading&&Boolean(discovered)&&sourceIds().some(id=>!configured(id)&&autoSelected.has(id));
+  function updateSourceNext(){const next=actions.querySelector('[data-wizard-next]');if(next)next.disabled=!sourceReady();}
   async function resolve() {
     requestController?.abort();const control=new AbortController();requestController=control;const token=++epoch;
     const missing=ids.filter(id=>["context_tokens","max_output_tokens","reasoning"].some(field=>!records.get(id)?.record.fields[field]));
@@ -190,20 +197,35 @@ export function createModelSetupWizard({preset,choice,provider=null,config,etag,
   }
   function sourcePage(body) {
     const tabs=element("div",{className:"model-source-tabs",attrs:{role:"tablist","aria-label":text("source","选择模型来源")}});
-    for(const [value,label]of [["auto",text("automatic","自动获取")],["manual",text("manual","手动填写")]]){
+    for(const [value,label]of [["manual",text("manual","手动填写")],["auto",text("automatic","自动获取")]]){
       const tab=button(label,()=>switchSource(value));tab.setAttribute("role","tab");tab.id=uid+'-'+value;
       tab.setAttribute("aria-selected",String(mode===value));tab.setAttribute("aria-controls",uid+'-source');tab.tabIndex=mode===value?0:-1;
       tab.addEventListener("keydown",event=>{
         if(!["ArrowLeft","ArrowRight","Home","End"].includes(event.key))return;
-        event.preventDefault();const next=event.key==="Home"?"auto":event.key==="End"?"manual":mode==="auto"?"manual":"auto";
-        switchSource(next);root.querySelector('#'+uid+'-'+next)?.focus();
+        event.preventDefault();const next=event.key==="Home"?"manual":event.key==="End"?"auto":mode==="auto"?"manual":"auto";
+        if(next!==mode)switchSource(next);root.querySelector('#'+uid+'-'+next)?.focus();
       });tabs.append(tab);
     }
-    const panel=element("div",{className:"model-source-panel",attrs:{id:uid+'-source',role:"tabpanel","aria-labelledby":uid+'-'+mode}});body.append(tabs,panel);
+    const panel=element("div",{className:"model-source-panel",attrs:{id:uid+'-source',role:"tabpanel","aria-labelledby":uid+'-'+mode,"aria-busy":String(mode==="auto"&&loading)}});body.append(tabs,panel);
     if(mode==="auto"){
-      panel.append(element("p",{text:loading?text("discovering","正在自动获取模型列表…"):discovered?text("discovered","已获取 {count} 个模型，下一步选择要添加的模型。",{count:discovered.items.length}):text("discoveryFailed","未能获取模型列表，可重试或切换手动填写。"),attrs:{role:"status"}}));
+      const status=element("p",{className:"model-source-status",attrs:{role:"status"}});
+      if(loading)status.append(element("span",{className:"model-source-spinner",attrs:{"aria-hidden":"true"}}));
+      status.append(element("span",{text:loading?text("discovering","正在自动获取模型列表…"):discovered?text("discovered","已获取 {count} 个模型，请选择要添加的模型。",{count:discovered.items.length}):text("discoveryFailed","未能获取模型列表，可重试或切换手动填写。")}));panel.append(status);
       if(!loading&&!discovered)panel.append(button(text("retryFetch","重试"),discover));
-    }else panel.append(input(text("modelIds","模型 ID（每行一个，也可用逗号分隔）"),"manual-models",manual,value=>{manual=value;const next=actions.querySelector('[data-wizard-next]');if(next)next.disabled=!sourceIds().length;}, {area:true,required:true}));
+      if(!loading&&discovered?.items.length){
+        panel.append(input(text("search","搜索模型"),"source-query",sourceQuery,value=>{sourceQuery=value;for(const row of panel.querySelectorAll(".model-source-item"))row.hidden=!row.dataset.model.toLowerCase().includes(value.toLowerCase());}));
+        const list=element("ul",{className:"model-source-list"});
+        for(const id of sourceIds()){
+          const row=element("li",{className:"model-source-item"});row.dataset.model=id;row.hidden=!id.toLowerCase().includes(sourceQuery.toLowerCase());
+          const check=element("input",{attrs:{type:"checkbox",name:"discovered-model",value:id}});check.disabled=configured(id);check.checked=!check.disabled&&autoSelected.has(id);
+          check.addEventListener("change",()=>{if(check.checked)autoSelected.add(id);else autoSelected.delete(id);updateSourceNext();});
+          const label=element("label",{},[check,element("span",{text:id})]);
+          if(check.disabled)label.append(element("small",{text:text("alreadyAdded","已添加")}));
+          row.append(label);list.append(row);
+        }
+        panel.append(list);
+      }
+    }else panel.append(input(text("modelIds","模型 ID（每行一个，也可用逗号分隔）"),"manual-models",manual,value=>{manual=value;updateSourceNext();}, {area:true,required:true}));
   }
   function parametersPage(body) {
     const filter=input(text("search","搜索模型"),"model-query",query,value=>{query=value;
@@ -214,7 +236,7 @@ export function createModelSetupWizard({preset,choice,provider=null,config,etag,
       const row=element("article",{className:"model-wizard-row"});row.dataset.model=id;
       const check=element("input",{attrs:{type:"checkbox",name:"selected-model",value:id}});check.checked=selected.has(id);
       const toggleEditor=()=>{editor.hidden=!check.checked;for(const field of editor.querySelectorAll("input, select"))field.disabled=!check.checked;};
-      check.addEventListener("change",()=>{if(check.checked)selected.add(id);else selected.delete(id);toggleEditor();updatePrimary();});
+      check.addEventListener("change",()=>{if(check.checked)selected.add(id);else selected.delete(id);if(mode==="auto"){if(check.checked)autoSelected.add(id);else autoSelected.delete(id);}toggleEditor();updatePrimary();});
       row.append(element("label",{className:"model-wizard-model"},[check,element("strong",{text:id})]));
       if(parameterLoading.has(id))row.append(element("p",{className:"model-config-status",text:text("identifying","正在自动识别参数…") }));
       const value=records.get(id),editor=createParameterEditor(value,{index,onChange:()=>{
@@ -234,6 +256,7 @@ export function createModelSetupWizard({preset,choice,provider=null,config,etag,
       if(!existing&&!preset.local&&!key.trim()&&!ref.trim()){notice=text("keyRequired","请填写 API Key 或凭据引用。");render();return;}
       stage=2;notice="";render();if(mode==="auto"&&!discovered)await discover();
     }else if(stage===2){
+      if(!sourceReady())return;
       const list=sourceIds();if(!list.length||list.some(id=>id.length>256)){notice=text("invalidIds","请提供有效的模型 ID，每个最多 256 个字符。");render();return;}
       createRows();stage=3;notice="";render();void resolve();
     }
@@ -258,7 +281,7 @@ export function createModelSetupWizard({preset,choice,provider=null,config,etag,
       if(stage>1)actions.append(button(text("previous","上一步"),()=>{cancelRequest();stage--;notice="";render();}));
       const primary=button(stage===3?text("addVerify","添加并验证（{count}）",{count:chosen().length}):text("next","下一步"),stage===3?verify:next,true);
       if(stage===3){primary.setAttribute("data-wizard-submit","");primary.disabled=!canVerify();}
-      else if(stage===2){primary.setAttribute("data-wizard-next","");primary.disabled=mode==="auto"?(loading||!discovered||!discovered.items.length):!sourceIds().length;}
+      else if(stage===2){primary.setAttribute("data-wizard-next","");primary.disabled=!sourceReady();}
       actions.append(primary);
     }
     root.append(form);(footerHost||root).append(actions);

@@ -3340,7 +3340,7 @@
   "modelWizard.automatic": "Automatic",
   "modelWizard.manual": "Manual",
   "modelWizard.discovering": "Fetching the model list automatically…",
-  "modelWizard.discovered": "Found {count} models. Choose models in the next step.",
+  "modelWizard.discovered": "Found {count} models. Select the models to add.",
   "modelWizard.discoveryFailed": "Could not fetch models. Retry or enter IDs manually.",
   "modelWizard.retryFetch": "Retry",
   "modelWizard.modelIds": "Model IDs (one per line or separated by commas)",
@@ -3357,5 +3357,6 @@
   "modelWizard.previous": "Back",
   "modelWizard.next": "Next",
   "modelSetup.modelsAdded": "Added {count} models.",
-  "modelParameters.cardSummary": "Context {context} · Output budget {output} · Reasoning {reasoning}"
+  "modelParameters.cardSummary": "Context {context} · Output budget {output} · Reasoning {reasoning}",
+  "modelWizard.alreadyAdded": "Already added"
 }

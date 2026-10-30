@@ -15,11 +15,21 @@
     const groups=[...document.querySelectorAll('.model-proxy-inline h4')].map(n=>n.textContent);
     assert(groups[0].includes('供应商')&&groups[1].includes('新模型'),'Supplier and model proxy settings share one advanced group in order');
     assert(document.querySelector('[name="model_proxy_kind"]').value==='provider','New models inherit supplier proxy');
-    input('api-key','browser-fixture-only');click('下一步');await until(()=>button('下一步')&&!button('下一步').disabled,'automatic discovery');
-    assert(document.querySelector('[role="tab"][aria-selected="true"]').textContent==='自动获取','Automatic tab selected and fetched without another click');
-    const first=document.querySelector('[role="tab"]');first.focus();first.dispatchEvent(new KeyboardEvent('keydown',{key:'End',bubbles:true}));
+    input('api-key','browser-fixture-only');click('下一步');
+    assert(document.querySelector('[role="tab"][aria-selected="true"]').textContent==='手动填写'&&document.querySelector('textarea'),'Manual input is selected by default');
+    assert((await(await fetch(globalThis.__qaSupplier+'/stats')).json()).models===0,'Entering source step makes no model-list request');
+    click('自动获取');assert(document.querySelector('.model-source-spinner'),'Clicking automatic immediately displays spinner');
+    assert(getComputedStyle(document.querySelector('.model-source-spinner')).animationName!=='none','Loading indicator rotates');
+    await until(()=>document.querySelectorAll('[name="discovered-model"]').length===2,'inline discovery list');
+    assert(document.querySelectorAll('[name="selected-model"]').length===0,'Model list appears in source step before parameter confirmation');
+    if(new URLSearchParams(location.search).get('preview')==='source'){
+      layout();document.querySelector('#result').textContent=JSON.stringify({passed:true,checks});return;
+    }
+    const first=document.querySelector('[role="tab"][aria-selected="true"]');first.focus();first.dispatchEvent(new KeyboardEvent('keydown',{key:'Home',bubbles:true}));
     assert(document.activeElement.textContent==='手动填写','Source tabs support keyboard selection and focus');
-    click('自动获取');click('下一步');await until(()=>button('添加并验证（2）')&&!button('添加并验证（2）').disabled,'automatic parameter lookup');
+    document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'End',bubbles:true}));
+    await until(()=>button('下一步')&&!button('下一步').disabled,'automatic discovery after source switch');
+    click('下一步');await until(()=>button('添加并验证（2）')&&!button('添加并验证（2）').disabled,'automatic parameter lookup');
     assert(document.querySelector('[name="parameter-0-context_tokens"]').value==='64000','Supplier context metadata reused');
     assert(document.querySelector('[name="parameter-1-context_tokens"]').value==='32000','Missing model context filled from catalog automatically');
     const layer=document.querySelector('.model-setup-layer');
@@ -53,7 +63,7 @@
     assert(!cards.some(n=>/测试回复|测试工具调用|高级编辑/.test(n.textContent)),'Redundant test and advanced-edit buttons removed');
     layout();
     const stats=await(await fetch(globalThis.__qaSupplier+'/stats')).json();
-    assert(stats.models===1,'Supplier model list fetched exactly once');
+    assert(stats.models===2,'Exactly one model-list request per automatic tab activation');
     assert(stats.calls.filter(c=>c.model==='alpha').length===2,'Successful model never verified again on retry');
     assert(stats.catalog_credentials===false,'Public parameter catalog receives no supplier credential');
     document.querySelector('#result').textContent=JSON.stringify({passed:true,checks,stats});

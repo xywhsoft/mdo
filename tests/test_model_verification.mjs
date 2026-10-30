@@ -43,7 +43,7 @@ test("cancellation stops remaining phases and models", async () => {
 });
 
 const flush = async () => { for (let i = 0; i < 30; i++) await new Promise(resolve => setImmediate(resolve)); };
-function fixture({ failTools = false, hold = false, holdCatalog = false, staleEvidence = false, missingBeta = false, textOnly = false, partialMetadata = false } = {}) {
+function fixture({ failTools = false, hold = false, holdCatalog = false, holdDiscovery = false, staleEvidence = false, missingBeta = false, textOnly = false, partialMetadata = false } = {}) {
   const previous = { document: globalThis.document, fetch: globalThis.fetch };
   const document = testDocument(), create = document.createElement;
   document.querySelector = selector => document.body.querySelector(selector);
@@ -67,8 +67,8 @@ function fixture({ failTools = false, hold = false, holdCatalog = false, staleEv
     else if (path === "/api/v1/models/providers") {if(holdCatalog)await paused;data = { providers: [{id:"openai", name:"OpenAI", variants:[{id:"api", label:"regular", base:"https://api.openai.com/v1", protocol:"openai-responses", models:["alpha","beta"]}]}] };}
     else if (path === "/api/v1/models/parameters") data = { items: body.models.map(id => ({id,protocol:body.protocol,lookup_state:"ok",registry_version:"fixture",fields: missingBeta && id === "beta" ? {} : {
       ...(textOnly ? {tools:{value:false,source:"api"}} : {}),context_tokens:{value:64000,source:"api"},max_output_tokens:{value:16000,source:"api"},reasoning:{value:{kind:"none"},source:"api"}}})) };
-    else if (path === "/api/v1/models/discover") data = { items: ["alpha", "beta", "unselected"],...(partialMetadata?{parameters:[{id:"alpha",protocol:body.protocol,fields:{
-      context_tokens:{value:4096,source:"api"},max_output_tokens:{value:1024,source:"api"}}}]}:{}) };
+    else if (path === "/api/v1/models/discover") {if(holdDiscovery)await paused;data = { items: ["alpha", "beta", "unselected"],...(partialMetadata?{parameters:[{id:"alpha",protocol:body.protocol,fields:{
+      context_tokens:{value:4096,source:"api"},max_output_tokens:{value:1024,source:"api"}}}]}:{}) };}
     else if (path === "/api/v1/models/add") {
       if (hold) await paused;
       options.signal?.throwIfAborted();
@@ -115,6 +115,7 @@ function fixture({ failTools = false, hold = false, holdCatalog = false, staleEv
   async function add() {
     await panel.ensureLoaded(); button("添加供应商").click(); await flush(); button("OpenAI").click(); input("api-key", "fixture-key");
     button("下一步").click(); await flush();
+    button("自动获取").click(); await flush();
     button("下一步").click(); await flush();
     const checkbox = input("make-default", ""); checkbox.checked = true; checkbox.dispatchEvent(new Event("change"));
     button("添加并验证（2）").click(); await flush();
@@ -194,14 +195,52 @@ test("text-only profiles do not become the Agent default",async()=>{
     assert(f.calls.filter(c=>c.path.endsWith("/add")).every(c=>!c.body.model.capabilities.includes("tool-call-output")));
   }finally{f.restore();}
 });
-test("manual source switches immediately and needs no supplier discovery request",async()=>{
+test("manual input is the default and never requests a supplier model list",async()=>{
   const f=fixture();try{
     await f.panel.ensureLoaded();f.button("添加供应商").click();await flush();f.button("OpenAI").click();f.input("api-key","fixture-key");
     f.button("下一步").click();await flush();const before=f.calls.filter(c=>c.path.endsWith("/discover")).length;
+    assert.equal(before,0);assert(f.surface.querySelector("textarea"));assert(f.button("下一步").disabled);
     f.button("手动填写").click();f.input("manual-models","manual-one\nmanual-two,manual-one");f.button("下一步").click();await flush();
     assert.equal(f.calls.filter(c=>c.path.endsWith("/discover")).length,before);
     assert.equal(descendants(f.surface).filter(n=>n.name==="selected-model").length,2);
     assert(f.button("添加并验证（2）"));
+  }finally{f.restore();}
+});
+
+test("automatic discovery immediately spins and displays selectable models before the next step",async()=>{
+  const f=fixture({holdDiscovery:true});try{
+    await f.panel.ensureLoaded();f.button("添加供应商").click();await flush();f.button("OpenAI").click();f.input("api-key","fixture-key");
+    f.button("下一步").click();f.button("自动获取").click();
+    assert(f.surface.querySelector(".model-source-spinner"));assert(f.button("下一步").disabled);
+    assert.equal(f.surface.querySelector('[role="tabpanel"]').getAttribute("aria-busy"),"true");
+    f.release();await flush();assert(!f.surface.querySelector(".model-source-spinner"));
+    const models=descendants(f.surface).filter(n=>n.name==="discovered-model");assert.deepEqual(models.map(n=>n.value),["alpha","beta","unselected"]);
+    assert.equal(descendants(f.surface).filter(n=>n.name==="selected-model").length,0);
+    models[0].checked=false;models[0].dispatchEvent(new Event("change"));models[1].checked=false;models[1].dispatchEvent(new Event("change"));
+    assert(f.button("下一步").disabled);models[1].checked=true;models[1].dispatchEvent(new Event("change"));f.button("下一步").click();await flush();
+    assert.deepEqual(descendants(f.surface).filter(n=>n.name==="selected-model").map(n=>n.value),["beta"]);
+    assert.deepEqual(f.calls.find(c=>c.path.endsWith("/parameters")).body.models,["beta"]);
+    f.button("上一步").click();assert.equal(descendants(f.surface).find(n=>n.name==="discovered-model"&&n.value==="alpha").checked,false);
+  }finally{f.restore();}
+});
+
+test("discovered installed profiles remain visible but cannot be selected or added twice",async()=>{
+  const f=fixture();try{
+    await f.add();f.button("添加模型").click();f.button("下一步").click();f.button("自动获取").click();await flush();
+    const rows=descendants(f.surface).filter(n=>n.name==="discovered-model");
+    assert(rows.find(n=>n.value==="alpha").disabled);assert(rows.find(n=>n.value==="beta").disabled);
+    assert.equal(rows.find(n=>n.value==="unselected").checked,true);f.button("下一步").click();await flush();
+    assert.deepEqual(descendants(f.surface).filter(n=>n.name==="selected-model").map(n=>n.value),["unselected"]);
+  }finally{f.restore();}
+});
+
+test("switching back to manual cancels discovery and preserves input against late replies",async()=>{
+  const f=fixture({holdDiscovery:true});try{
+    await f.panel.ensureLoaded();f.button("添加供应商").click();await flush();f.button("OpenAI").click();f.input("api-key","fixture-key");
+    f.button("下一步").click();f.input("manual-models","manual-draft");f.button("自动获取").click();
+    f.button("手动填写").click();f.release();await flush();
+    assert.equal(f.surface.querySelector("textarea").value,"manual-draft");assert(!f.surface.querySelector(".model-source-spinner"));
+    assert(!f.surface.querySelector(".model-source-list"));assert(!f.button("下一步").disabled);
   }finally{f.restore();}
 });
 

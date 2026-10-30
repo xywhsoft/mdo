@@ -3340,7 +3340,7 @@
   "modelWizard.automatic": "自动获取",
   "modelWizard.manual": "手动填写",
   "modelWizard.discovering": "正在自动获取模型列表…",
-  "modelWizard.discovered": "已获取 {count} 个模型，下一步选择要添加的模型。",
+  "modelWizard.discovered": "已获取 {count} 个模型，请选择要添加的模型。",
   "modelWizard.discoveryFailed": "未能获取模型列表，可重试或切换手动填写。",
   "modelWizard.retryFetch": "重试",
   "modelWizard.modelIds": "模型 ID（每行一个，也可用逗号分隔）",
@@ -3357,5 +3357,6 @@
   "modelWizard.previous": "上一步",
   "modelWizard.next": "下一步",
   "modelSetup.modelsAdded": "已添加 {count} 个模型。",
-  "modelParameters.cardSummary": "上下文 {context} · 输出预算 {output} · 思考 {reasoning}"
+  "modelParameters.cardSummary": "上下文 {context} · 输出预算 {output} · 思考 {reasoning}",
+  "modelWizard.alreadyAdded": "已添加"
 }
