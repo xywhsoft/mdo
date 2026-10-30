@@ -234,14 +234,14 @@ export function createModelConfigPanel(container) {
       if (draft.preset.keyUrl && !draft.provider) form.append(element("a", { className: "supplier-key-link", text: text("getKey", "获取 API Key"), attrs: { href: draft.preset.keyUrl, target: "_blank", rel: "noopener noreferrer" } }));
       form.append(element("p", { className: "model-config-status", text: text("keyPrivacy", "Key 仅在本机加密保存，不写入模型配置。复制到其他设备后需重新填写。") }));
     }
-    if (!draft.provider) form.append(createModelProxyEditor(draft.proxy, { collapsible: false, titleKey: "modelProxy.providerTitle",
-      namePrefix: "provider_proxy_",
-      onChange: value => { draft.proxy = value; draft.queried = false; } }).element);
     const advanced = element("details", { className: "supplier-connection-advanced" }, [element("summary", { text: text("advancedConnection", "高级设置") }),
       ...(!draft.provider ? [
         field(text("connectionName", "供应商名称"), "connection-name", draft.name, (value) => { draft.name = value; }),
         !draft.preset.custom ? field(text("baseUrl", "服务地址（含 /v1）"), "base-url", draft.base, (value) => { draft.base = value; draft.queried = false; }, { type: "url", required: true }) : null,
         field(text("credentialReference", "凭据引用（可代替 Key）"), "credential-ref", draft.ref, (value) => { draft.ref = value; draft.queried = false; }),
+        createModelProxyEditor(draft.proxy, { collapsible: false, titleKey: "modelProxy.providerTitle",
+          namePrefix: "provider_proxy_",
+          onChange: value => { draft.proxy = value; draft.queried = false; } }).element,
       ] : []),
       createModelProxyEditor(draft.modelProxy, { allowProvider: true, collapsible: false, titleKey: "modelProxy.newModelsTitle",
         namePrefix: "model_proxy_",
