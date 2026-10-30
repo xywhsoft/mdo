@@ -118,6 +118,9 @@ static void RunToolSchemas(void){
         Wrapped.pOnToolCall(Client,NULL,0,Wrapped.pUserData);Wrapped.pOnResponse(Client,NULL,Wrapped.pUserData);
         for(unsigned I=0;I<6;I++)Check(Seen[I]==1,"caller_hook_forwarded_once");
         Check(Request.pHooks==&Original&&Original.pUserData==Seen,"caller_hooks_unchanged");
+        xllm_hooks RetryOnly={0};RetryOnly.pOnRetry=SchemaHookRetry;RetryOnly.pUserData=Seen;View.pHooks=&RetryOnly;
+        MdoModelsRequestHooks(&View,&Context,&Wrapped);
+        Check(!Wrapped.pOnRequest&&!Wrapped.pOnResponseBody&&!Wrapped.pOnToolCall&&!Wrapped.pOnResponse&&Wrapped.pOnRetry&&Wrapped.pOnRequestBody,"absent_hooks_stay_absent");
         if(Json&&Protocol!=XLLM_PROVIDER_ANTHROPIC){xvalue* Root=xrtJsonParse(xrtStrView(Wire.sBody));
             xvalue* Tools=xrtValueObjectGet(Root,XRT_STR_LITERAL("tools"));xvalue* Tool=xrtValueArrayGet(Tools,0);
             if(Protocol==XLLM_PROVIDER_OPENAI_COMPAT)Tool=xrtValueObjectGet(Tool,XRT_STR_LITERAL("function"));

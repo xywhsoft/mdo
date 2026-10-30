@@ -5,11 +5,13 @@ from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
 import threading
+import time
 
 from test_api_runtime import ROOT, free_port, request, wait_ready
 
@@ -74,12 +76,14 @@ class Supplier(BaseHTTPRequestHandler):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--host', type=Path, default=ROOT/'.build/host/xs.exe')
+    parser.add_argument('--packed', type=Path, help='test an existing executable in place, without copying the app')
     args = parser.parse_args()
     sys.path.insert(0, str(ROOT))
     from tools import build_mdo
-    build_mdo.write_if_changed(build_mdo.UNITY_PATH, build_mdo.generated_unity(
-        build_mdo.load_object(build_mdo.LOCK_PATH), build_mdo.source_list()).encode())
-    host_config = ROOT/'app/xs.model-verification-test.json'
+    if not args.packed:
+        build_mdo.write_if_changed(build_mdo.UNITY_PATH, build_mdo.generated_unity(
+            build_mdo.load_object(build_mdo.LOCK_PATH), build_mdo.source_list()).encode())
+    host_config = (args.packed.resolve().parent if args.packed else ROOT/'app')/'xs.model-verification-test.json'
     assert not host_config.exists(), 'An owned probe is already running'
     supplier = ThreadingHTTPServer(('127.0.0.1', 0), Supplier)
     threading.Thread(target=supplier.serve_forever, daemon=True).start()
@@ -88,9 +92,10 @@ def main():
     checks = []
     with tempfile.TemporaryDirectory(prefix='model-verification-', dir=ROOT/'.build') as raw:
         base = Path(raw); port = free_port(); process = None
-        host_config.write_text(json.dumps({'engine': {'workers': 2}, 'services': [{'enabled': True, 'class': 'http',
-            'name': 'model-verification-test', 'ip': '127.0.0.1', 'port': port,
-            'host_default': {'enabled': True, 'name': 'mdo', 'path': 'web', 'devlang': 'c', 'devfile': 'generated/mdo_unity.c'}}]}))
+        if not args.packed:
+            host_config.write_text(json.dumps({'engine': {'workers': 2}, 'services': [{'enabled': True, 'class': 'http',
+                'name': 'model-verification-test', 'ip': '127.0.0.1', 'port': port,
+                'host_default': {'enabled': True, 'name': 'mdo', 'path': 'web', 'devlang': 'c', 'devfile': 'generated/mdo_unity.c'}}]}))
         def call(method, path, body=None, etag=None):
             status, headers, data = request(port, method, '/api/v1/'+path,
                 body=json.dumps(body).encode() if body is not None else None,
@@ -113,13 +118,27 @@ def main():
                 if os.name == 'nt': subprocess.run(['taskkill', '/PID', str(process.pid), '/T', '/F'], capture_output=True)
                 else: process.terminate()
                 process.wait(timeout=8)
+                if args.packed: time.sleep(.5)  # WebView child handles finish closing.
             process = None
-        with (evidence/'native-api.log').open('wb') as log:
+        label = 'packed-api' if args.packed else 'native-api'
+        log_path = evidence/(label+'.log')
+        with log_path.open('wb') as log:
             def start():
-                nonlocal process
-                process = subprocess.Popen([str(args.host.resolve()), str(host_config)], cwd=ROOT/'app',
+                nonlocal process, port
+                executable = args.packed or args.host
+                offset = log_path.stat().st_size
+                command = [str(executable.resolve()), '--', '--home', str(base/'home')] if args.packed else [str(executable.resolve()), str(host_config)]
+                process = subprocess.Popen(command, cwd=host_config.parent,
                     env={**os.environ, 'MDO_HOME': str(base/'home'), 'USE_WEBVIEW': '0'}, stdout=log, stderr=log,
                     creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+                if args.packed:
+                    until = time.monotonic()+20
+                    while time.monotonic() < until and process.poll() is None:
+                        text = log_path.read_bytes()[offset:].decode('utf-8', errors='replace')
+                        match = re.search(r"server 'mdo' http bound on 127\.0\.0\.1:(\d+)", text)
+                        if match: port = int(match[1]); break
+                        time.sleep(.05)
+                    else: raise RuntimeError('Packed app did not bind its embedded service')
                 wait_ready(port, process)
             try:
                 start(); config, etag = get()
@@ -212,7 +231,8 @@ def main():
                 records = list((base/'home/data/model-verification').glob('*.json'))
                 assert records and all('fixture-only-key' not in p.read_text() and 'http://' not in p.read_text() for p in records)
                 checks.append('evidence stores only fingerprints, states, latency and safe error kinds')
-                (evidence/'native-api.json').write_text(json.dumps({'passed': True, 'checks': checks}, indent=2)+'\n')
+                (evidence/(label+'.json')).write_text(json.dumps({'passed': True, 'checks': checks,
+                    'embedded_application': bool(args.packed)}, indent=2)+'\n')
                 print('PASS: '+ '; '.join(checks))
             finally:
                 Supplier.release.set(); stop(); host_config.unlink(missing_ok=True)

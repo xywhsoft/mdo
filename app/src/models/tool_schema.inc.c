@@ -132,8 +132,11 @@ static void MdoModelsRequestHooks(xllm_request* View, MdoModelHooks* Context, xl
 {
     if (!View->pHooks) return; /* Product clients already own the default seam. */
     Context->Inner = *View->pHooks; memset(Hooks, 0, sizeof(*Hooks));
-    Hooks->pOnRequest = MdoModelsHookRequest; Hooks->pOnRequestBody = MdoModelsHookBody;
-    Hooks->pOnRetry = MdoModelsHookRetry; Hooks->pOnResponseBody = MdoModelsHookResponseBody;
-    Hooks->pOnToolCall = MdoModelsHookTool; Hooks->pOnResponse = MdoModelsHookResponse;
+    Hooks->pOnRequest = Context->Inner.pOnRequest ? MdoModelsHookRequest : NULL;
+    Hooks->pOnRequestBody = MdoModelsHookBody;
+    Hooks->pOnRetry = Context->Inner.pOnRetry ? MdoModelsHookRetry : NULL;
+    Hooks->pOnResponseBody = Context->Inner.pOnResponseBody ? MdoModelsHookResponseBody : NULL;
+    Hooks->pOnToolCall = Context->Inner.pOnToolCall ? MdoModelsHookTool : NULL;
+    Hooks->pOnResponse = Context->Inner.pOnResponse ? MdoModelsHookResponse : NULL;
     Hooks->pUserData = Context; View->pHooks = Hooks;
 }
