@@ -109,10 +109,11 @@ export function createModelConfigPanel(container) {
     view = "templates"; render();
   }
   function choose(preset, choice = preset.variants[0]) {
+    // New models use the same supplier route as discovery unless overridden.
     draft = { preset, choice, key: "", base: choice.base, name: preset.labelKey ? text(preset.labelKey, preset.name) : preset.name, provider: null,
       items: [...choice.models], selected: new Set(choice.models.slice(0, 2)), queried: false,
       ref: "", query: "", manual: "", default: false,
-      proxy: { kind: "global" }, modelProxy: { kind: "global" } };
+      proxy: { kind: "global" }, modelProxy: { kind: "provider" } };
     view = "setup"; notice = ""; failed = false; render();
   }
   function connection() {
