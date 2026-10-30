@@ -1,23 +1,44 @@
 """Draft verification commits only successful profiles; bounded loopback calls."""
-import argparse,copy,http.client,json,os,subprocess,tempfile,threading,time
+import argparse,copy,http.client,json,os,re,subprocess,tempfile,threading,time
 from concurrent.futures import ThreadPoolExecutor
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 from test_api_runtime import ROOT,free_port,request,wait_ready,write_site
 from test_model_verification_runtime import Supplier
 
-def check(host):
+def check(host,packed=False):
     Supplier.calls=[];Supplier.contract_errors=[];Supplier.mode='ok'
     supplier=ThreadingHTTPServer(('127.0.0.1',0),Supplier)
     threading.Thread(target=supplier.serve_forever,daemon=True).start()
     checks=[]
     try:
       with tempfile.TemporaryDirectory(prefix='model-onboarding-',dir=ROOT/'.build') as raw:
-        base=Path(raw);port=free_port();site=base/'site';site.mkdir();config_path=write_site(site,port)
+        base=Path(raw);port=free_port();site=base/'site';site.mkdir();config_path=None if packed else write_site(site,port)
         home=base/'home'
         with (base/'host.log').open('wb') as log:
-          proc=subprocess.Popen([str(host),str(config_path),'--','--home',str(home)],cwd=site,
-            env={**os.environ,'USE_WEBVIEW':'0'},stdout=log,stderr=log)
+          def start():
+            nonlocal port
+            offset=(base/'host.log').stat().st_size
+            args=[str(host),*([] if packed else [str(config_path)]),'--','--home',str(home)]
+            child=subprocess.Popen(args,cwd=site,env={**os.environ,'USE_WEBVIEW':'0'},stdout=log,stderr=log,
+                creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+            try:
+                if packed:
+                    deadline=time.monotonic()+20
+                    while time.monotonic()<deadline and child.poll() is None:
+                        match=re.search(r"server 'mdo' http bound on 127\.0\.0\.1:(\d+)",(base/'host.log').read_bytes()[offset:].decode('utf-8',errors='replace'))
+                        if match:port=int(match[1]);break
+                        time.sleep(.05)
+                    else:raise RuntimeError('Packed app did not bind its embedded service')
+                wait_ready(port,child);return child
+            except BaseException:stop(child);raise
+          def stop(child):
+            if child.poll() is None:
+                if os.name=='nt':subprocess.run(['taskkill','/PID',str(child.pid),'/T','/F'],capture_output=True)
+                else:child.terminate()
+                child.wait(timeout=10)
+            if packed:time.sleep(.6) # Owned WebView child handles finish closing.
+          proc=start()
           try:
             wait_ready(port,proc)
             def call(method,path,body=None,etag=None):
@@ -90,19 +111,18 @@ def check(host):
             status,_,data=call('POST','models/discover',{'provider':draft('x')['provider']});assert status==200,data
             assert any(row['id']=='metadata-effort' and row['fields']['context_tokens']['value']==64000 for row in data['data']['parameters'])
             checks.append('discovery preserves supplier parameter metadata')
-            proc.terminate();proc.wait(timeout=10)
-            proc=subprocess.Popen([str(host),str(config_path),'--','--home',str(home)],cwd=site,
-                env={**os.environ,'USE_WEBVIEW':'0'},stdout=log,stderr=log)
-            wait_ready(port,proc);restarted,_=current();assert restarted['verification']['protocol-0']['verified']
+            stop(proc)
+            proc=start();restarted,_=current();assert restarted['verification']['protocol-0']['verified']
             checks.append('successful verification and profile survive native restart')
             assert not Supplier.contract_errors,Supplier.contract_errors
             print(json.dumps({'passed':True,'checks':checks},ensure_ascii=False))
           except BaseException:
             log.flush();print((base/'host.log').read_text(encoding='utf-8',errors='replace')[-3500:]);raise
           finally:
-            Supplier.release.set();proc.terminate();proc.wait(timeout=10)
+            Supplier.release.set();stop(proc)
     finally:supplier.shutdown();supplier.server_close()
 
 if __name__=='__main__':
-    parser=argparse.ArgumentParser();parser.add_argument('--host',type=Path,required=True)
-    check(parser.parse_args().host.resolve())
+    parser=argparse.ArgumentParser();target=parser.add_mutually_exclusive_group(required=True)
+    target.add_argument('--host',type=Path);target.add_argument('--packed',type=Path);args=parser.parse_args()
+    check((args.packed or args.host).resolve(),bool(args.packed))

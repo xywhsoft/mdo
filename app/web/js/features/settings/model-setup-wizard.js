@@ -87,8 +87,11 @@ export function createModelSetupWizard({preset,choice,provider=null,config,etag,
         const result=await api.post("/models/parameters",{provider:endpoint(),protocol:protocol(),models:batch,catalog_only:true,refresh_catalog:offset===0},{signal:control.signal});
         if(disposed||token!==epoch)return;
         for(const row of result.data.items){
-          const old=records.get(row.id);const merged=normalized(row);
-          for(const [name,field]of Object.entries(old?.record.fields||{}))if(["manual","api"].includes(field.source))merged.record.fields[name]=clone(field);
+          const old=records.get(row.id),record=clone(row);
+          for(const [name,field]of Object.entries(old?.record.fields||{}))if(["manual","api"].includes(field.source))record.fields[name]=clone(field);
+          // Compute an automatic budget from the effective merged limits, not
+          // the catalog's larger limits before the API fields take precedence.
+          const merged=normalized(record);
           if(old?.budgetEdited) {merged.output=old.output;merged.budgetEdited=true;}
           if(old?.effortEdited){merged.effort=old.effort;merged.effortEdited=true;}
           records.set(row.id,merged);parameterLoading.delete(row.id);

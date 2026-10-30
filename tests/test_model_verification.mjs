@@ -43,7 +43,7 @@ test("cancellation stops remaining phases and models", async () => {
 });
 
 const flush = async () => { for (let i = 0; i < 30; i++) await new Promise(resolve => setImmediate(resolve)); };
-function fixture({ failTools = false, hold = false, staleEvidence = false, missingBeta = false, textOnly = false } = {}) {
+function fixture({ failTools = false, hold = false, staleEvidence = false, missingBeta = false, textOnly = false, partialMetadata = false } = {}) {
   const previous = { document: globalThis.document, fetch: globalThis.fetch };
   const document = testDocument(), create = document.createElement;
   document.createElement = tag => {
@@ -66,7 +66,8 @@ function fixture({ failTools = false, hold = false, staleEvidence = false, missi
     else if (path === "/api/v1/models/providers") data = { providers: [{id:"openai", name:"OpenAI", variants:[{id:"api", label:"regular", base:"https://api.openai.com/v1", protocol:"openai-responses", models:["alpha","beta"]}]}] };
     else if (path === "/api/v1/models/parameters") data = { items: body.models.map(id => ({id,protocol:body.protocol,lookup_state:"ok",registry_version:"fixture",fields: missingBeta && id === "beta" ? {} : {
       ...(textOnly ? {tools:{value:false,source:"api"}} : {}),context_tokens:{value:64000,source:"api"},max_output_tokens:{value:16000,source:"api"},reasoning:{value:{kind:"none"},source:"api"}}})) };
-    else if (path === "/api/v1/models/discover") data = { items: ["alpha", "beta", "unselected"] };
+    else if (path === "/api/v1/models/discover") data = { items: ["alpha", "beta", "unselected"],...(partialMetadata?{parameters:[{id:"alpha",protocol:body.protocol,fields:{
+      context_tokens:{value:4096,source:"api"},max_output_tokens:{value:1024,source:"api"}}}]}:{}) };
     else if (path === "/api/v1/models/add") {
       if (hold) await paused;
       options.signal?.throwIfAborted();
@@ -143,6 +144,15 @@ test("failed validation leaves only failed drafts; successes never get probed tw
     f.allowTools();f.button("添加并验证（1）").click();await flush();
     assert.equal(f.calls.filter(c=>c.path.endsWith("/add")&&c.body.model.wire_model==="beta").length,1);
     assert(f.config().items.some(m=>m.wire_model==="alpha"));
+  }finally{f.restore();}
+});
+
+test("automatic budgets respect API limits after missing fields are filled from the catalog",async()=>{
+  const f=fixture({partialMetadata:true});try{
+    await f.add();const body=f.calls.find(c=>c.path.endsWith("/add")&&c.body.model.wire_model==="alpha")?.body;
+    assert(body,"Complete merged parameters must allow validation without manual budget correction");
+    assert.equal(body.model.window.context_tokens,4096);assert.equal(body.model.window.max_output_tokens,1024);
+    assert.equal(body.model.parameters.fields.context_tokens.source,"api");
   }finally{f.restore();}
 });
 test("closing the panel cancels a pending draft without registering unverified models",async()=>{
