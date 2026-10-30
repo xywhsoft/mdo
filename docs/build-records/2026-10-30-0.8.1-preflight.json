@@ -1,0 +1,1549 @@
+{
+  "date": "2026-10-30",
+  "recorded_at": "2026-10-30T07:07:28.195583+00:00",
+  "status": "preflight-failed-not-published",
+  "version_name": "0.8.1",
+  "version_code": "05000801",
+  "install_ids": {
+    "windows_build_id": 70000081,
+    "windows_server_build_id": 70000082,
+    "android_lite_build_id": 70000087,
+    "android_full_build_id": 70000088,
+    "linux_glibc_gui_build_id": 70000083,
+    "linux_glibc_server_build_id": 70000084,
+    "linux_musl_gui_build_id": 70000085,
+    "linux_musl_server_build_id": 70000086
+  },
+  "const_fix_commit": "9e498291",
+  "recorded_head": "9e49829171aeec13b2b405c113a7e2e9d02f288c",
+  "current_worktree_accepted": false,
+  "published": false,
+  "daily_installation_replaced": false,
+  "real_model_calls": false,
+  "android_device_tested": false,
+  "checks": {
+    "python_unit": {
+      "total": 195,
+      "passed": 189,
+      "skipped": 6,
+      "log": "refresh-python-unit.log"
+    },
+    "frontend": {
+      "total": 1230,
+      "passed": 1228,
+      "skipped": 2,
+      "failed": 0,
+      "log": "gate.log"
+    },
+    "frontend_modules": 239,
+    "final_proxy_editor": {
+      "total": 4,
+      "passed": 4,
+      "failed": 0
+    },
+    "strict_c11_after_const_fix": true,
+    "first_runtime_sweep": {
+      "total": 118,
+      "passed": 47,
+      "failed": 71,
+      "rows": [
+        {
+          "name": "test_account_runtime",
+          "returncode": 0,
+          "seconds": 33.67,
+          "timeout": false,
+          "log": "runtime-test_account_runtime.log"
+        },
+        {
+          "name": "test_agent_authoring_runtime",
+          "returncode": 1,
+          "seconds": 0.11,
+          "timeout": false,
+          "log": "runtime-test_agent_authoring_runtime.log"
+        },
+        {
+          "name": "test_agent_context_runtime",
+          "returncode": 1,
+          "seconds": 0.09,
+          "timeout": false,
+          "log": "runtime-test_agent_context_runtime.log"
+        },
+        {
+          "name": "test_agent_media_runtime",
+          "returncode": 1,
+          "seconds": 0.11,
+          "timeout": false,
+          "log": "runtime-test_agent_media_runtime.log"
+        },
+        {
+          "name": "test_agent_program_runtime",
+          "returncode": 1,
+          "seconds": 0.11,
+          "timeout": false,
+          "log": "runtime-test_agent_program_runtime.log"
+        },
+        {
+          "name": "test_agent_runtime",
+          "returncode": 1,
+          "seconds": 0.11,
+          "timeout": false,
+          "log": "runtime-test_agent_runtime.log"
+        },
+        {
+          "name": "test_api_origin_runtime",
+          "returncode": 0,
+          "seconds": 2.7,
+          "timeout": false,
+          "log": "runtime-test_api_origin_runtime.log"
+        },
+        {
+          "name": "test_api_runtime",
+          "returncode": 1,
+          "seconds": 3.33,
+          "timeout": false,
+          "log": "runtime-test_api_runtime.log"
+        },
+        {
+          "name": "test_application_sdk_runtime",
+          "returncode": 1,
+          "seconds": 2.69,
+          "timeout": false,
+          "log": "runtime-test_application_sdk_runtime.log"
+        },
+        {
+          "name": "test_artifact_publication_runtime",
+          "returncode": 0,
+          "seconds": 0.33,
+          "timeout": false,
+          "log": "runtime-test_artifact_publication_runtime.log"
+        },
+        {
+          "name": "test_backup_decode_runtime",
+          "returncode": 1,
+          "seconds": 3.14,
+          "timeout": false,
+          "log": "runtime-test_backup_decode_runtime.log"
+        },
+        {
+          "name": "test_backup_download_runtime",
+          "returncode": 1,
+          "seconds": 3.09,
+          "timeout": false,
+          "log": "runtime-test_backup_download_runtime.log"
+        },
+        {
+          "name": "test_backup_export_runtime",
+          "returncode": 0,
+          "seconds": 7.88,
+          "timeout": false,
+          "log": "runtime-test_backup_export_runtime.log"
+        },
+        {
+          "name": "test_backup_import_runtime",
+          "returncode": 0,
+          "seconds": 8.0,
+          "timeout": false,
+          "log": "runtime-test_backup_import_runtime.log"
+        },
+        {
+          "name": "test_backup_preview_runtime",
+          "returncode": 1,
+          "seconds": 3.31,
+          "timeout": false,
+          "log": "runtime-test_backup_preview_runtime.log"
+        },
+        {
+          "name": "test_backup_stage_runtime",
+          "returncode": 0,
+          "seconds": 96.67,
+          "timeout": false,
+          "log": "runtime-test_backup_stage_runtime.log"
+        },
+        {
+          "name": "test_backup_upload_runtime",
+          "returncode": 1,
+          "seconds": 3.5,
+          "timeout": false,
+          "log": "runtime-test_backup_upload_runtime.log"
+        },
+        {
+          "name": "test_command_catalog_runtime",
+          "returncode": 1,
+          "seconds": 8.16,
+          "timeout": false,
+          "log": "runtime-test_command_catalog_runtime.log"
+        },
+        {
+          "name": "test_command_compact_runtime",
+          "returncode": 1,
+          "seconds": 3.2,
+          "timeout": false,
+          "log": "runtime-test_command_compact_runtime.log"
+        },
+        {
+          "name": "test_command_posix_sdk_runtime",
+          "returncode": 0,
+          "seconds": 8.14,
+          "timeout": false,
+          "log": "runtime-test_command_posix_sdk_runtime.log"
+        },
+        {
+          "name": "test_command_worker_runtime",
+          "returncode": 1,
+          "seconds": 0.48,
+          "timeout": false,
+          "log": "runtime-test_command_worker_runtime.log"
+        },
+        {
+          "name": "test_commands_api_runtime",
+          "returncode": 1,
+          "seconds": 2.75,
+          "timeout": false,
+          "log": "runtime-test_commands_api_runtime.log"
+        },
+        {
+          "name": "test_completion_policy_runtime",
+          "returncode": 1,
+          "seconds": 0.55,
+          "timeout": false,
+          "log": "runtime-test_completion_policy_runtime.log"
+        },
+        {
+          "name": "test_composer_context_runtime",
+          "returncode": 1,
+          "seconds": 21.28,
+          "timeout": false,
+          "log": "runtime-test_composer_context_runtime.log"
+        },
+        {
+          "name": "test_config_runtime",
+          "returncode": 0,
+          "seconds": 1.66,
+          "timeout": false,
+          "log": "runtime-test_config_runtime.log"
+        },
+        {
+          "name": "test_context_usage_runtime",
+          "returncode": 0,
+          "seconds": 0.27,
+          "timeout": false,
+          "log": "runtime-test_context_usage_runtime.log"
+        },
+        {
+          "name": "test_conversation_groups_runtime",
+          "returncode": 1,
+          "seconds": 2.39,
+          "timeout": false,
+          "log": "runtime-test_conversation_groups_runtime.log"
+        },
+        {
+          "name": "test_conversation_resume_runtime",
+          "returncode": 0,
+          "seconds": 12.22,
+          "timeout": false,
+          "log": "runtime-test_conversation_resume_runtime.log"
+        },
+        {
+          "name": "test_conversation_runtime",
+          "returncode": 0,
+          "seconds": 11.77,
+          "timeout": false,
+          "log": "runtime-test_conversation_runtime.log"
+        },
+        {
+          "name": "test_debug_cleanup_runtime",
+          "returncode": 0,
+          "seconds": 4.44,
+          "timeout": false,
+          "log": "runtime-test_debug_cleanup_runtime.log"
+        },
+        {
+          "name": "test_decision_retry_runtime",
+          "returncode": 0,
+          "seconds": 7.42,
+          "timeout": false,
+          "log": "runtime-test_decision_retry_runtime.log"
+        },
+        {
+          "name": "test_device_transfer_runtime",
+          "returncode": 0,
+          "seconds": 114.88,
+          "timeout": false,
+          "log": "runtime-test_device_transfer_runtime.log"
+        },
+        {
+          "name": "test_diagnostics_storage_runtime",
+          "returncode": 0,
+          "seconds": 0.27,
+          "timeout": false,
+          "log": "runtime-test_diagnostics_storage_runtime.log"
+        },
+        {
+          "name": "test_directories_runtime",
+          "returncode": 0,
+          "seconds": 3.48,
+          "timeout": false,
+          "log": "runtime-test_directories_runtime.log"
+        },
+        {
+          "name": "test_distribution_runtime",
+          "returncode": 1,
+          "seconds": 0.2,
+          "timeout": false,
+          "log": "runtime-test_distribution_runtime.log"
+        },
+        {
+          "name": "test_exec_arguments_runtime",
+          "returncode": 0,
+          "seconds": 20.69,
+          "timeout": false,
+          "log": "runtime-test_exec_arguments_runtime.log"
+        },
+        {
+          "name": "test_extensions_runtime",
+          "returncode": 1,
+          "seconds": 4.12,
+          "timeout": false,
+          "log": "runtime-test_extensions_runtime.log"
+        },
+        {
+          "name": "test_home_artifact_runtime",
+          "returncode": 1,
+          "seconds": 5.02,
+          "timeout": false,
+          "log": "runtime-test_home_artifact_runtime.log"
+        },
+        {
+          "name": "test_home_purge_runtime",
+          "returncode": 1,
+          "seconds": 4.83,
+          "timeout": false,
+          "log": "runtime-test_home_purge_runtime.log"
+        },
+        {
+          "name": "test_home_restore_runtime",
+          "returncode": 0,
+          "seconds": 12.12,
+          "timeout": false,
+          "log": "runtime-test_home_restore_runtime.log"
+        },
+        {
+          "name": "test_home_runtime",
+          "returncode": 0,
+          "seconds": 1.06,
+          "timeout": false,
+          "log": "runtime-test_home_runtime.log"
+        },
+        {
+          "name": "test_image_download_runtime",
+          "returncode": 1,
+          "seconds": 4.59,
+          "timeout": false,
+          "log": "runtime-test_image_download_runtime.log"
+        },
+        {
+          "name": "test_image_runtime",
+          "returncode": 0,
+          "seconds": 13.28,
+          "timeout": false,
+          "log": "runtime-test_image_runtime.log"
+        },
+        {
+          "name": "test_image_upload_identity_runtime",
+          "returncode": 0,
+          "seconds": 11.12,
+          "timeout": false,
+          "log": "runtime-test_image_upload_identity_runtime.log"
+        },
+        {
+          "name": "test_interrupt_runtime",
+          "returncode": 0,
+          "seconds": 6.84,
+          "timeout": false,
+          "log": "runtime-test_interrupt_runtime.log"
+        },
+        {
+          "name": "test_interrupted_profile_runtime",
+          "returncode": 1,
+          "seconds": 4.33,
+          "timeout": false,
+          "log": "runtime-test_interrupted_profile_runtime.log"
+        },
+        {
+          "name": "test_lifecycle_runtime",
+          "returncode": 1,
+          "seconds": 0.12,
+          "timeout": false,
+          "log": "runtime-test_lifecycle_runtime.log"
+        },
+        {
+          "name": "test_live_permission_runtime",
+          "returncode": 1,
+          "seconds": 0.67,
+          "timeout": false,
+          "log": "runtime-test_live_permission_runtime.log"
+        },
+        {
+          "name": "test_live_runtime",
+          "returncode": 1,
+          "seconds": 3.95,
+          "timeout": false,
+          "log": "runtime-test_live_runtime.log"
+        },
+        {
+          "name": "test_mcp_oauth_runtime",
+          "returncode": 1,
+          "seconds": 3.17,
+          "timeout": false,
+          "log": "runtime-test_mcp_oauth_runtime.log"
+        },
+        {
+          "name": "test_mcp_reliability_runtime",
+          "returncode": 1,
+          "seconds": 21.48,
+          "timeout": false,
+          "log": "runtime-test_mcp_reliability_runtime.log"
+        },
+        {
+          "name": "test_mcp_runtime",
+          "returncode": 1,
+          "seconds": 20.22,
+          "timeout": false,
+          "log": "runtime-test_mcp_runtime.log"
+        },
+        {
+          "name": "test_member_sdk_runtime",
+          "returncode": 1,
+          "seconds": 3.73,
+          "timeout": false,
+          "log": "runtime-test_member_sdk_runtime.log"
+        },
+        {
+          "name": "test_memory_runtime",
+          "returncode": 1,
+          "seconds": 20.2,
+          "timeout": false,
+          "log": "runtime-test_memory_runtime.log"
+        },
+        {
+          "name": "test_model_error_events_runtime",
+          "returncode": 1,
+          "seconds": 0.11,
+          "timeout": false,
+          "log": "runtime-test_model_error_events_runtime.log"
+        },
+        {
+          "name": "test_model_proxy_overrides_runtime",
+          "returncode": 0,
+          "seconds": 2.77,
+          "timeout": false,
+          "log": "runtime-test_model_proxy_overrides_runtime.log"
+        },
+        {
+          "name": "test_model_proxy_runtime",
+          "returncode": 0,
+          "seconds": 4.5,
+          "timeout": false,
+          "log": "runtime-test_model_proxy_runtime.log"
+        },
+        {
+          "name": "test_model_retry_progress_runtime",
+          "returncode": 0,
+          "seconds": 2.91,
+          "timeout": false,
+          "log": "runtime-test_model_retry_progress_runtime.log"
+        },
+        {
+          "name": "test_model_retry_runtime",
+          "returncode": 0,
+          "seconds": 11.22,
+          "timeout": false,
+          "log": "runtime-test_model_retry_runtime.log"
+        },
+        {
+          "name": "test_model_runtime",
+          "returncode": 0,
+          "seconds": 1.91,
+          "timeout": false,
+          "log": "runtime-test_model_runtime.log"
+        },
+        {
+          "name": "test_model_setup_runtime",
+          "returncode": 0,
+          "seconds": 8.55,
+          "timeout": false,
+          "log": "runtime-test_model_setup_runtime.log"
+        },
+        {
+          "name": "test_model_stream_terminal_runtime",
+          "returncode": 0,
+          "seconds": 9.77,
+          "timeout": false,
+          "log": "runtime-test_model_stream_terminal_runtime.log"
+        },
+        {
+          "name": "test_module_runtime",
+          "returncode": 1,
+          "seconds": 0.11,
+          "timeout": false,
+          "log": "runtime-test_module_runtime.log"
+        },
+        {
+          "name": "test_notice_session_runtime",
+          "returncode": 1,
+          "seconds": 0.7,
+          "timeout": false,
+          "log": "runtime-test_notice_session_runtime.log"
+        },
+        {
+          "name": "test_online_model_runtime",
+          "returncode": 0,
+          "seconds": 14.28,
+          "timeout": false,
+          "log": "runtime-test_online_model_runtime.log"
+        },
+        {
+          "name": "test_operation_runtime",
+          "returncode": 0,
+          "seconds": 0.31,
+          "timeout": false,
+          "log": "runtime-test_operation_runtime.log"
+        },
+        {
+          "name": "test_orchestration_sdk_runtime",
+          "returncode": 1,
+          "seconds": 3.59,
+          "timeout": false,
+          "log": "runtime-test_orchestration_sdk_runtime.log"
+        },
+        {
+          "name": "test_passive_home_runtime",
+          "returncode": 0,
+          "seconds": 12.56,
+          "timeout": false,
+          "log": "runtime-test_passive_home_runtime.log"
+        },
+        {
+          "name": "test_permission_profiles_runtime",
+          "returncode": 1,
+          "seconds": 0.66,
+          "timeout": false,
+          "log": "runtime-test_permission_profiles_runtime.log"
+        },
+        {
+          "name": "test_plugins_runtime",
+          "returncode": 1,
+          "seconds": 2.72,
+          "timeout": false,
+          "log": "runtime-test_plugins_runtime.log"
+        },
+        {
+          "name": "test_power_runtime",
+          "returncode": 1,
+          "seconds": 15.25,
+          "timeout": false,
+          "log": "runtime-test_power_runtime.log"
+        },
+        {
+          "name": "test_process_output_runtime",
+          "returncode": 0,
+          "seconds": 3.17,
+          "timeout": false,
+          "log": "runtime-test_process_output_runtime.log"
+        },
+        {
+          "name": "test_project_binding_runtime",
+          "returncode": 0,
+          "seconds": 3.78,
+          "timeout": false,
+          "log": "runtime-test_project_binding_runtime.log"
+        },
+        {
+          "name": "test_project_purge_cancel_runtime",
+          "returncode": 1,
+          "seconds": 2.91,
+          "timeout": false,
+          "log": "runtime-test_project_purge_cancel_runtime.log"
+        },
+        {
+          "name": "test_project_purge_frontend_runtime",
+          "returncode": 1,
+          "seconds": 16.55,
+          "timeout": false,
+          "log": "runtime-test_project_purge_frontend_runtime.log"
+        },
+        {
+          "name": "test_project_purge_http_runtime",
+          "returncode": 1,
+          "seconds": 2.8,
+          "timeout": false,
+          "log": "runtime-test_project_purge_http_runtime.log"
+        },
+        {
+          "name": "test_project_purge_intent_runtime",
+          "returncode": 1,
+          "seconds": 2.88,
+          "timeout": false,
+          "log": "runtime-test_project_purge_intent_runtime.log"
+        },
+        {
+          "name": "test_project_purge_receipts_runtime",
+          "returncode": 0,
+          "seconds": 108.41,
+          "timeout": false,
+          "log": "runtime-test_project_purge_receipts_runtime.log"
+        },
+        {
+          "name": "test_project_purge_runtime",
+          "returncode": 1,
+          "seconds": 2.94,
+          "timeout": false,
+          "log": "runtime-test_project_purge_runtime.log"
+        },
+        {
+          "name": "test_project_references_runtime",
+          "returncode": 1,
+          "seconds": 2.42,
+          "timeout": false,
+          "log": "runtime-test_project_references_runtime.log"
+        },
+        {
+          "name": "test_queue_actions_runtime",
+          "returncode": 0,
+          "seconds": 10.2,
+          "timeout": false,
+          "log": "runtime-test_queue_actions_runtime.log"
+        },
+        {
+          "name": "test_recovery_history_runtime",
+          "returncode": 1,
+          "seconds": 3.28,
+          "timeout": false,
+          "log": "runtime-test_recovery_history_runtime.log"
+        },
+        {
+          "name": "test_remote_service_runtime",
+          "returncode": 0,
+          "seconds": 7.56,
+          "timeout": false,
+          "log": "runtime-test_remote_service_runtime.log"
+        },
+        {
+          "name": "test_responses_followup_runtime",
+          "returncode": 0,
+          "seconds": 5.53,
+          "timeout": false,
+          "log": "runtime-test_responses_followup_runtime.log"
+        },
+        {
+          "name": "test_restore_coordinator_runtime",
+          "returncode": 1,
+          "seconds": 2.78,
+          "timeout": false,
+          "log": "runtime-test_restore_coordinator_runtime.log"
+        },
+        {
+          "name": "test_restore_receipt_runtime",
+          "returncode": 0,
+          "seconds": 8.36,
+          "timeout": false,
+          "log": "runtime-test_restore_receipt_runtime.log"
+        },
+        {
+          "name": "test_restore_worker_runtime",
+          "returncode": 1,
+          "seconds": 2.27,
+          "timeout": false,
+          "log": "runtime-test_restore_worker_runtime.log"
+        },
+        {
+          "name": "test_run_completion_runtime",
+          "returncode": 1,
+          "seconds": 0.09,
+          "timeout": false,
+          "log": "runtime-test_run_completion_runtime.log"
+        },
+        {
+          "name": "test_run_manager_runtime",
+          "returncode": 1,
+          "seconds": 0.09,
+          "timeout": false,
+          "log": "runtime-test_run_manager_runtime.log"
+        },
+        {
+          "name": "test_schedule_executor_runtime",
+          "returncode": 1,
+          "seconds": 0.12,
+          "timeout": false,
+          "log": "runtime-test_schedule_executor_runtime.log"
+        },
+        {
+          "name": "test_schedule_runtime",
+          "returncode": 1,
+          "seconds": 20.19,
+          "timeout": false,
+          "log": "runtime-test_schedule_runtime.log"
+        },
+        {
+          "name": "test_search_api_runtime",
+          "returncode": 1,
+          "seconds": 15.47,
+          "timeout": false,
+          "log": "runtime-test_search_api_runtime.log"
+        },
+        {
+          "name": "test_session_artifact_runtime",
+          "returncode": 1,
+          "seconds": 3.34,
+          "timeout": false,
+          "log": "runtime-test_session_artifact_runtime.log"
+        },
+        {
+          "name": "test_session_profile_errors_runtime",
+          "returncode": 0,
+          "seconds": 4.67,
+          "timeout": false,
+          "log": "runtime-test_session_profile_errors_runtime.log"
+        },
+        {
+          "name": "test_session_purge_runtime",
+          "returncode": 1,
+          "seconds": 2.02,
+          "timeout": false,
+          "log": "runtime-test_session_purge_runtime.log"
+        },
+        {
+          "name": "test_session_runtime",
+          "returncode": 1,
+          "seconds": 0.12,
+          "timeout": false,
+          "log": "runtime-test_session_runtime.log"
+        },
+        {
+          "name": "test_settings_confirmation_runtime",
+          "returncode": 0,
+          "seconds": 2.8,
+          "timeout": false,
+          "log": "runtime-test_settings_confirmation_runtime.log"
+        },
+        {
+          "name": "test_settings_runtime",
+          "returncode": 1,
+          "seconds": 15.16,
+          "timeout": false,
+          "log": "runtime-test_settings_runtime.log"
+        },
+        {
+          "name": "test_shared_files_runtime",
+          "returncode": 1,
+          "seconds": 3.19,
+          "timeout": false,
+          "log": "runtime-test_shared_files_runtime.log"
+        },
+        {
+          "name": "test_shared_work_sdk_runtime",
+          "returncode": 0,
+          "seconds": 4.69,
+          "timeout": false,
+          "log": "runtime-test_shared_work_sdk_runtime.log"
+        },
+        {
+          "name": "test_sidebar_layout_runtime",
+          "returncode": 0,
+          "seconds": 14.33,
+          "timeout": false,
+          "log": "runtime-test_sidebar_layout_runtime.log"
+        },
+        {
+          "name": "test_skill_arguments_runtime",
+          "returncode": 1,
+          "seconds": 15.19,
+          "timeout": false,
+          "log": "runtime-test_skill_arguments_runtime.log"
+        },
+        {
+          "name": "test_skill_builder_runtime",
+          "returncode": 1,
+          "seconds": 15.17,
+          "timeout": false,
+          "log": "runtime-test_skill_builder_runtime.log"
+        },
+        {
+          "name": "test_skill_features_runtime",
+          "returncode": 1,
+          "seconds": 15.2,
+          "timeout": false,
+          "log": "runtime-test_skill_features_runtime.log"
+        },
+        {
+          "name": "test_skill_runtime",
+          "returncode": 1,
+          "seconds": 15.17,
+          "timeout": false,
+          "log": "runtime-test_skill_runtime.log"
+        },
+        {
+          "name": "test_task_stop_runtime",
+          "returncode": 0,
+          "seconds": 4.61,
+          "timeout": false,
+          "log": "runtime-test_task_stop_runtime.log"
+        },
+        {
+          "name": "test_tool_failure_diagnostics_runtime",
+          "returncode": 0,
+          "seconds": 15.75,
+          "timeout": false,
+          "log": "runtime-test_tool_failure_diagnostics_runtime.log"
+        },
+        {
+          "name": "test_update_runtime",
+          "returncode": 1,
+          "seconds": 2.88,
+          "timeout": false,
+          "log": "runtime-test_update_runtime.log"
+        },
+        {
+          "name": "test_web_result_files_runtime",
+          "returncode": 1,
+          "seconds": 15.5,
+          "timeout": false,
+          "log": "runtime-test_web_result_files_runtime.log"
+        },
+        {
+          "name": "test_web_result_session_runtime",
+          "returncode": 1,
+          "seconds": 4.44,
+          "timeout": false,
+          "log": "runtime-test_web_result_session_runtime.log"
+        },
+        {
+          "name": "test_web_runtime",
+          "returncode": 1,
+          "seconds": 15.34,
+          "timeout": false,
+          "log": "runtime-test_web_runtime.log"
+        },
+        {
+          "name": "test_workbench_baseline_runtime",
+          "returncode": 1,
+          "seconds": 5.34,
+          "timeout": false,
+          "log": "runtime-test_workbench_baseline_runtime.log"
+        },
+        {
+          "name": "test_workbench_changes_runtime",
+          "returncode": 0,
+          "seconds": 15.75,
+          "timeout": false,
+          "log": "runtime-test_workbench_changes_runtime.log"
+        },
+        {
+          "name": "test_workbench_files_runtime",
+          "returncode": 1,
+          "seconds": 3.11,
+          "timeout": false,
+          "log": "runtime-test_workbench_files_runtime.log"
+        },
+        {
+          "name": "test_workbench_runtime",
+          "returncode": 1,
+          "seconds": 2.78,
+          "timeout": false,
+          "log": "runtime-test_workbench_runtime.log"
+        },
+        {
+          "name": "test_workbench_terminal_runtime",
+          "returncode": 1,
+          "seconds": 2.83,
+          "timeout": false,
+          "log": "runtime-test_workbench_terminal_runtime.log"
+        },
+        {
+          "name": "test_write_admission_runtime",
+          "returncode": 1,
+          "seconds": 2.55,
+          "timeout": false,
+          "log": "runtime-test_write_admission_runtime.log"
+        },
+        {
+          "name": "test_process_output_sdk",
+          "returncode": 0,
+          "seconds": 3.49,
+          "timeout": false,
+          "log": "runtime-test_process_output_sdk.log"
+        }
+      ]
+    },
+    "model_refresh": {
+      "total": 10,
+      "passed": 8,
+      "failed": 2,
+      "rows": [
+        {
+          "name": "python-unit",
+          "returncode": 0,
+          "seconds": 8.12,
+          "timeout": false,
+          "log": "refresh-python-unit.log"
+        },
+        {
+          "name": "test_model_runtime",
+          "returncode": 0,
+          "seconds": 2.41,
+          "timeout": false,
+          "log": "refresh-test_model_runtime.log"
+        },
+        {
+          "name": "test_model_setup_runtime",
+          "returncode": 0,
+          "seconds": 11.84,
+          "timeout": false,
+          "log": "refresh-test_model_setup_runtime.log"
+        },
+        {
+          "name": "test_model_proxy_overrides_runtime",
+          "returncode": 0,
+          "seconds": 3.58,
+          "timeout": false,
+          "log": "refresh-test_model_proxy_overrides_runtime.log"
+        },
+        {
+          "name": "test_model_proxy_runtime",
+          "returncode": 0,
+          "seconds": 4.42,
+          "timeout": false,
+          "log": "refresh-test_model_proxy_runtime.log"
+        },
+        {
+          "name": "test_model_retry_progress_runtime",
+          "returncode": 0,
+          "seconds": 2.8,
+          "timeout": false,
+          "log": "refresh-test_model_retry_progress_runtime.log"
+        },
+        {
+          "name": "test_model_retry_runtime",
+          "returncode": 0,
+          "seconds": 11.22,
+          "timeout": false,
+          "log": "refresh-test_model_retry_runtime.log"
+        },
+        {
+          "name": "test_model_stream_terminal_runtime",
+          "returncode": 1,
+          "seconds": 7.28,
+          "timeout": false,
+          "log": "refresh-test_model_stream_terminal_runtime.log"
+        },
+        {
+          "name": "test_online_model_runtime",
+          "returncode": 0,
+          "seconds": 13.48,
+          "timeout": false,
+          "log": "refresh-test_online_model_runtime.log"
+        },
+        {
+          "name": "test_home_purge_runtime",
+          "returncode": 1,
+          "seconds": 3.38,
+          "timeout": false,
+          "log": "refresh-test_home_purge_runtime.log"
+        }
+      ]
+    },
+    "packed": {
+      "total": 18,
+      "passed": 12,
+      "failed": 6,
+      "rows": [
+        {
+          "name": "test_packed_home_lease",
+          "returncode": 1,
+          "seconds": 1.7,
+          "timeout": false,
+          "log": "packed-test_packed_home_lease.log"
+        },
+        {
+          "name": "test_packed_default_workspace",
+          "returncode": 1,
+          "seconds": 1.7,
+          "timeout": false,
+          "log": "packed-test_packed_default_workspace.log"
+        },
+        {
+          "name": "test_packed_module_catalog",
+          "returncode": 1,
+          "seconds": 1.2,
+          "timeout": false,
+          "log": "packed-test_packed_module_catalog.log"
+        },
+        {
+          "name": "test_live_runtime",
+          "returncode": 1,
+          "seconds": 1.69,
+          "timeout": false,
+          "log": "packed-test_live_runtime.log"
+        },
+        {
+          "name": "test_packed_queue_start_recovery",
+          "returncode": 0,
+          "seconds": 3.66,
+          "timeout": false,
+          "log": "packed-test_packed_queue_start_recovery.log"
+        },
+        {
+          "name": "test_packed_backup_download",
+          "returncode": 1,
+          "seconds": 1.72,
+          "timeout": false,
+          "log": "packed-test_packed_backup_download.log"
+        },
+        {
+          "name": "test_packed_restore",
+          "returncode": 1,
+          "seconds": 1.7,
+          "timeout": false,
+          "log": "packed-test_packed_restore.log"
+        },
+        {
+          "name": "test_packed_compaction_failure",
+          "returncode": 0,
+          "seconds": 6.02,
+          "timeout": false,
+          "log": "packed-test_packed_compaction_failure.log"
+        },
+        {
+          "name": "test_packed_compaction_recovery",
+          "returncode": 0,
+          "seconds": 5.75,
+          "timeout": false,
+          "log": "packed-test_packed_compaction_recovery.log"
+        },
+        {
+          "name": "test_packed_fork_recovery",
+          "returncode": 0,
+          "seconds": 5.44,
+          "timeout": false,
+          "log": "packed-test_packed_fork_recovery.log"
+        },
+        {
+          "name": "test_packed_message_edit_recovery",
+          "returncode": 0,
+          "seconds": 9.83,
+          "timeout": false,
+          "log": "packed-test_packed_message_edit_recovery.log"
+        },
+        {
+          "name": "test_packed_recovery_ack",
+          "returncode": 0,
+          "seconds": 9.14,
+          "timeout": false,
+          "log": "packed-test_packed_recovery_ack.log"
+        },
+        {
+          "name": "test_grep_regex_packed",
+          "returncode": 0,
+          "seconds": 5.5,
+          "timeout": false,
+          "log": "packed-test_grep_regex_packed.log"
+        },
+        {
+          "name": "test_extension_dependencies_packed",
+          "returncode": 0,
+          "seconds": 3.02,
+          "timeout": false,
+          "log": "packed-test_extension_dependencies_packed.log"
+        },
+        {
+          "name": "test_builtin_upgrade_packed",
+          "returncode": 0,
+          "seconds": 12.16,
+          "timeout": false,
+          "log": "packed-test_builtin_upgrade_packed.log"
+        },
+        {
+          "name": "test_diagnostics_retirement_packed",
+          "returncode": 0,
+          "seconds": 2.41,
+          "timeout": false,
+          "log": "packed-test_diagnostics_retirement_packed.log"
+        },
+        {
+          "name": "test_queue_stream_completion",
+          "returncode": 0,
+          "seconds": 5.39,
+          "timeout": false,
+          "log": "packed-test_queue_stream_completion.log"
+        },
+        {
+          "name": "bundled-command-workers",
+          "returncode": 0,
+          "seconds": 2.45,
+          "timeout": false,
+          "log": "packed-bundled-command-workers.log"
+        }
+      ]
+    },
+    "native_gui": {
+      "total": 5,
+      "passed": 4,
+      "failed": 1,
+      "rows": [
+        {
+          "name": "native-start",
+          "returncode": 0,
+          "seconds": 4.27,
+          "timeout": false,
+          "log": "gui-native-start.log"
+        },
+        {
+          "name": "native-display",
+          "returncode": 0,
+          "seconds": 6.09,
+          "timeout": false,
+          "log": "gui-native-display.log"
+        },
+        {
+          "name": "native-application",
+          "returncode": 0,
+          "seconds": 23.97,
+          "timeout": false,
+          "log": "gui-native-application.log"
+        },
+        {
+          "name": "native-changes",
+          "returncode": 1,
+          "seconds": 4.27,
+          "timeout": false,
+          "log": "gui-native-changes.log"
+        },
+        {
+          "name": "native-terminal",
+          "returncode": 0,
+          "seconds": 6.62,
+          "timeout": false,
+          "log": "gui-native-terminal.log"
+        }
+      ]
+    },
+    "windows_portable_home_gate": true,
+    "windows_packed_startup_20_seconds": true,
+    "android_lite_crc_and_version_metadata": true,
+    "android_lite_release_certificate_preserved": true,
+    "android_lite_signature_v2": true,
+    "android_lite_signature_v3": true
+  },
+  "intermittent": {
+    "home_purge": {
+      "first_failure": "fail-9: frozen=1",
+      "second_failure": "fail-11: frozen=1",
+      "isolated_fail9": [
+        {
+          "index": 0,
+          "log": "[xs] XServer 1.0.0 (commit 216f5445163ca30c815ad7d5d2da3b71cb2f6401, 2026-10-30, windows)\n[xs] extensions (7): xllm, xllm-session, xwork, xoauth2, webview, image, xrudp\n[xs] config loaded: D:\\GIT\\mdo\\.build\\pre-release-0.8.1-20261030\\purge-repro\\site\\xs.json (1 servers)\n[xs] server 'mdo-home-probe' class=http 127.0.0.1:53309 tls=off enabled\n[xs]   default-host 'probe' path=D:\\GIT\\mdo\\.build\\pre-release-0.8.1-20261030\\purge-repro\\site\\web devfile=D:\\GIT\\mdo\\.build\\pre-release-0.8.1-20261030\\purge-repro\\site\\probe.c\n[xs] engine started, workers=12\n[xs] script loaded: D:\\GIT\\mdo\\.build\\pre-release-0.8.1-20261030\\purge-repro\\site\\probe.c (6.9 KB gen 1)\npurge_end=0 committed=0 frozen=0 reserved=1\npurge_finished=1\n[xs] http server 'mdo-home-probe' static-only mode\n[xs] server 'mdo-home-probe' http bound on 127.0.0.1:53309\n[xs] running, press Ctrl+C to stop\n",
+          "inventory": {
+            "missing": [],
+            "added": [],
+            "changed": []
+          },
+          "recovery": "[xs] XServer 1.0.0 (commit 216f5445163ca30c815ad7d5d2da3b71cb2f6401, 2026-10-30, windows)\n[xs] extensions (7): xllm, xllm-session, xwork, xoauth2, webview, image, xrudp\n[xs] config loaded: D:\\GIT\\mdo\\.build\\pre-release-0.8.1-20261030\\purge-repro\\site\\xs.json (1 servers)\n[xs] server 'mdo-home-probe' class=http 127.0.0.1:53309 tls=off enabled\n[xs]   default-host 'probe' path=D:\\GIT\\mdo\\.build\\pre-release-0.8.1-20261030\\purge-repro\\site\\web devfile=D:\\GIT\\mdo\\.build\\pre-release-0.8.1-20261030\\purge-repro\\site\\probe.c\n[xs] engine started, workers=12\n[xs] script loaded: D:\\GIT\\mdo\\.build\\pre-release-0.8.1-20261030\\purge-repro\\site\\probe.c (6.9 KB gen 1)\npurge_inspect=1\npurge_finished=1\n[xs] http server 'mdo-home-probe' static-only mode\n[xs] server 'mdo-home-probe' http bound on 127.0.0.1:53309\n[xs] running, press Ctrl+C to stop\n",
+          "recovered": true
+        },
+        {
+          "index": 1,
+          "log": "[xs] XServer 1.0.0 (commit 216f5445163ca30c815ad7d5d2da3b71cb2f6401, 2026-10-30, windows)\n[xs] extensions (7): xllm, xllm-session, xwork, xoauth2, webview, image, xrudp\n[xs] config loaded: D:\\GIT\\mdo\\.build\\pre-release-0.8.1-20261030\\purge-repro\\site\\xs.json (1 servers)\n[xs] server 'mdo-home-probe' class=http 127.0.0.1:53309 tls=off enabled\n[xs]   default-host 'probe' path=D:\\GIT\\mdo\\.build\\pre-release-0.8.1-20261030\\purge-repro\\site\\web devfile=D:\\GIT\\mdo\\.build\\pre-release-0.8.1-20261030\\purge-repro\\site\\probe.c\n[xs] engine started, workers=12\n[xs] script loaded: D:\\GIT\\mdo\\.build\\pre-release-0.8.1-20261030\\purge-repro\\site\\probe.c (6.9 KB gen 1)\npurge_end=0 committed=0 frozen=0 reserved=1\npurge_finished=1\n[xs] http server 'mdo-home-probe' static-only mode\n[xs] server 'mdo-home-probe' http bound on 127.0.0.1:53309\n[xs] running, press Ctrl+C to stop\n",
+          "inventory": {
+            "missing": [],
+            "added": [],
+            "changed": []
+          },
+          "recovery": "[xs] XServer 1.0.0 (commit 216f5445163ca30c815ad7d5d2da3b71cb2f6401, 2026-10-30, windows)\n[xs] extensions (7): xllm, xllm-session, xwork, xoauth2, webview, image, xrudp\n[xs] config loaded: D:\\GIT\\mdo\\.build\\pre-release-0.8.1-20261030\\purge-repro\\site\\xs.json (1 servers)\n[xs] server 'mdo-home-probe' class=http 127.0.0.1:53309 tls=off enabled\n[xs]   default-host 'probe' path=D:\\GIT\\mdo\\.build\\pre-release-0.8.1-20261030\\purge-repro\\site\\web devfile=D:\\GIT\\mdo\\.build\\pre-release-0.8.1-20261030\\purge-repro\\site\\probe.c\n[xs] engine started, workers=12\n[xs] script loaded: D:\\GIT\\mdo\\.build\\pre-release-0.8.1-20261030\\purge-repro\\site\\probe.c (6.9 KB gen 1)\npurge_inspect=1\npurge_finished=1\n[xs] http server 'mdo-home-probe' static-only mode\n[xs] server 'mdo-home-probe' http bound on 127.0.0.1:53309\n[xs] running, press Ctrl+C to stop\n",
+          "recovered": true
+        },
+        {
+          "index": 2,
+          "log": "[xs] XServer 1.0.0 (commit 216f5445163ca30c815ad7d5d2da3b71cb2f6401, 2026-10-30, windows)\n[xs] extensions (7): xllm, xllm-session, xwork, xoauth2, webview, image, xrudp\n[xs] config loaded: D:\\GIT\\mdo\\.build\\pre-release-0.8.1-20261030\\purge-repro\\site\\xs.json (1 servers)\n[xs] server 'mdo-home-probe' class=http 127.0.0.1:53309 tls=off enabled\n[xs]   default-host 'probe' path=D:\\GIT\\mdo\\.build\\pre-release-0.8.1-20261030\\purge-repro\\site\\web devfile=D:\\GIT\\mdo\\.build\\pre-release-0.8.1-20261030\\purge-repro\\site\\probe.c\n[xs] engine started, workers=12\n[xs] script loaded: D:\\GIT\\mdo\\.build\\pre-release-0.8.1-20261030\\purge-repro\\site\\probe.c (6.9 KB gen 1)\npurge_end=0 committed=0 frozen=0 reserved=1\npurge_finished=1\n[xs] http server 'mdo-home-probe' static-only mode\n[xs] server 'mdo-home-probe' http bound on 127.0.0.1:53309\n[xs] running, press Ctrl+C to stop\n",
+          "inventory": {
+            "missing": [],
+            "added": [],
+            "changed": []
+          },
+          "recovery": "[xs] XServer 1.0.0 (commit 216f5445163ca30c815ad7d5d2da3b71cb2f6401, 2026-10-30, windows)\n[xs] extensions (7): xllm, xllm-session, xwork, xoauth2, webview, image, xrudp\n[xs] config loaded: D:\\GIT\\mdo\\.build\\pre-release-0.8.1-20261030\\purge-repro\\site\\xs.json (1 servers)\n[xs] server 'mdo-home-probe' class=http 127.0.0.1:53309 tls=off enabled\n[xs]   default-host 'probe' path=D:\\GIT\\mdo\\.build\\pre-release-0.8.1-20261030\\purge-repro\\site\\web devfile=D:\\GIT\\mdo\\.build\\pre-release-0.8.1-20261030\\purge-repro\\site\\probe.c\n[xs] engine started, workers=12\n[xs] script loaded: D:\\GIT\\mdo\\.build\\pre-release-0.8.1-20261030\\purge-repro\\site\\probe.c (6.9 KB gen 1)\npurge_inspect=1\npurge_finished=1\n[xs] http server 'mdo-home-probe' static-only mode\n[xs] server 'mdo-home-probe' http bound on 127.0.0.1:53309\n[xs] running, press Ctrl+C to stop\n",
+          "recovered": true
+        }
+      ],
+      "isolated_repeated_cases": 20,
+      "isolated_repeated_failed": 0,
+      "third_instrumented_full_suite": {
+        "passed": true
+      },
+      "root_cause_confirmed": false,
+      "fixed": false
+    },
+    "sdk_cancel": {
+      "failure": {
+        "result": -1,
+        "code": "network",
+        "milliseconds": 164,
+        "second_call_milliseconds": 14
+      },
+      "repeated": [
+        {
+          "index": 0,
+          "returncode": 0,
+          "log": "cancel-repeat-0.log"
+        },
+        {
+          "index": 1,
+          "returncode": 0,
+          "log": "cancel-repeat-1.log"
+        },
+        {
+          "index": 2,
+          "returncode": 0,
+          "log": "cancel-repeat-2.log"
+        }
+      ],
+      "root_cause_confirmed": false,
+      "fixed": false
+    }
+  },
+  "source_consistency": {
+    "first_sweep_rejected": true,
+    "packed_sweep_rejected": true,
+    "user_confirmed_other_work_paused": true,
+    "final_build_sweep_rejected": true,
+    "final_changed_files": [
+      "app\\src\\api\\model_probe.inc.c",
+      "app\\src\\api\\internal.h",
+      "app\\src\\api\\catalogs.c",
+      "app\\src\\api\\model_verification.inc.c"
+    ],
+    "frozen_inputs_before_final_builds": {
+      "application": "02f16f79617002d03ef67730311395b12ab764f4b9895ece0a3aa1d0cab2c029",
+      "dependency lock": "eb8b4af857eaa01b2adcd909ba1d24840f221281ce9add6b6827cd671422546d",
+      "host profile": "d765984879c9d3dedc04c523b0713b4e2662c4b8eb1ab91ff6d16d4c22dd79e2"
+    },
+    "note": "Four model API source changes appeared again during builds after coordination. Seven artifacts are retained as test output and are not a coherent approved release."
+  },
+  "builds": [
+    {
+      "name": "windows-server",
+      "returncode": 0,
+      "seconds": 101.58
+    },
+    {
+      "name": "linux-four",
+      "returncode": 0,
+      "seconds": 798.77
+    },
+    {
+      "name": "android-lite",
+      "returncode": 0,
+      "seconds": 14.7
+    }
+  ],
+  "products": [
+    {
+      "file": ".build/pre-release-0.8.1-20261030/windows-gui/mdo.exe",
+      "bytes": 6567136,
+      "sha256": "7189b59dbc3e3d3fb36a4eb1c523f57b239685b6e3a0ac03c54588ad77eb51a3",
+      "release_candidate": false,
+      "metadata": {
+        "version_code": "05000801",
+        "edition": "gui",
+        "libc": "mingw",
+        "packaged_app_sha256": "2cb7cb207c066e1abf51e2565bea7ebfa8cdbb4f67618ea8acd92ed2f3dbc6e3"
+      },
+      "host_overlay": "183ba3810e585118e707cd27520858f485c07435daf7a121dc8f5d4d4e17ef05"
+    },
+    {
+      "file": ".build/pre-release-0.8.1-20261030/windows-server/mdo-server.exe",
+      "bytes": 6309405,
+      "sha256": "d291c61aecca331b2c81648a43add84d797b7224caee4490827e9b8a57ceb2b0",
+      "release_candidate": false,
+      "metadata": {
+        "version_code": "05000801",
+        "edition": "server",
+        "libc": "mingw",
+        "packaged_app_sha256": "c8cf908bf974bf5757f051b940f4af8d48d25c3a34792eff6053b0c7ba6b0f5a"
+      },
+      "host_overlay": "183ba3810e585118e707cd27520858f485c07435daf7a121dc8f5d4d4e17ef05"
+    },
+    {
+      "file": ".build/pre-release-0.8.1-20261030/linux/linux-x86_64-glibc-gui/mdo",
+      "bytes": 6167593,
+      "sha256": "b78c4deb9d1ebc0ba306d4187a32ecb28e73331f45c69d8668d7321d4e4b22ce",
+      "release_candidate": false,
+      "metadata": {
+        "version_code": "05000801",
+        "edition": "gui",
+        "libc": "glibc",
+        "packaged_app_sha256": "0c5a1e61776f4d94155e5857faa84bd7aee58c259ea16d186db49ca083e73bf9"
+      },
+      "host_overlay": "183ba3810e585118e707cd27520858f485c07435daf7a121dc8f5d4d4e17ef05"
+    },
+    {
+      "file": ".build/pre-release-0.8.1-20261030/linux/linux-x86_64-glibc-server/mdo-server",
+      "bytes": 6130470,
+      "sha256": "70cd059d9e947cc80cb0b8615b2e3803255336ed64ab89f4b90f57c708a745ed",
+      "release_candidate": false,
+      "metadata": {
+        "version_code": "05000801",
+        "edition": "server",
+        "libc": "glibc",
+        "packaged_app_sha256": "f71e94abc5aa0fa180032cb027e1e932a4a920575af5089ccbb23638f2f8f738"
+      },
+      "host_overlay": "183ba3810e585118e707cd27520858f485c07435daf7a121dc8f5d4d4e17ef05"
+    },
+    {
+      "file": ".build/pre-release-0.8.1-20261030/linux/linux-x86_64-musl-gui/mdo",
+      "bytes": 7902473,
+      "sha256": "6f0527ce763d7ecaf069fee3a95a9e39a6145b9dd7bef7da919a2a0874937cae",
+      "release_candidate": false,
+      "metadata": {
+        "version_code": "05000801",
+        "edition": "gui",
+        "libc": "musl",
+        "packaged_app_sha256": "0e72b40cef6f6bf9c920c21ca20476609282954db3567211f33e9c354b6f49bf"
+      },
+      "host_overlay": "183ba3810e585118e707cd27520858f485c07435daf7a121dc8f5d4d4e17ef05"
+    },
+    {
+      "file": ".build/pre-release-0.8.1-20261030/linux/linux-x86_64-musl-server/mdo-server",
+      "bytes": 7869512,
+      "sha256": "a940144d7263098ee57c84243247ebc9b2c02ae28fb635c8c423cef4fed716b7",
+      "release_candidate": false,
+      "metadata": {
+        "version_code": "05000801",
+        "edition": "server",
+        "libc": "musl",
+        "packaged_app_sha256": "d61995b54d377be89a2b10e490e66dfc485e43ce4356dc53c3984e561c8396c9"
+      },
+      "host_overlay": "183ba3810e585118e707cd27520858f485c07435daf7a121dc8f5d4d4e17ef05"
+    },
+    {
+      "file": ".build/pre-release-0.8.1-20261030/mdo-arm64-v8a.apk",
+      "bytes": 6366612,
+      "sha256": "e34b990ab4467b7ac847d05c97f67f6ddde27f93b904688e4554af4f81b00fe1",
+      "release_candidate": false,
+      "metadata": {
+        "edition": "lite",
+        "build_id": "70000087",
+        "version_code": "05000801",
+        "extensions": [],
+        "files": []
+      }
+    }
+  ],
+  "android_full_built": false,
+  "eight_product_metadata_validation_complete": false,
+  "deterministic_pack_validation_complete": false,
+  "full_release_gate_passed": false,
+  "private_evidence": ".build/pre-release-0.8.1-20261030",
+  "failure_details": "runtime-failure-details.json",
+  "unresolved": [
+    "Intermittent purge rollback leaves Home frozen in two full-suite fault cases; isolated and third full-suite probes passed without a confirmed fix.",
+    "SDK async cancellation once classified as network; isolated repeats passed without a confirmed fix.",
+    "Numerous legacy fixtures reference retired sources, SDK methods, flat extensions, old Home assumptions or an unconfigured online model; other failed assertions still need triage.",
+    "Repeated concurrent model/API edits invalidated final source consistency and prevented coherent eight-product acceptance."
+  ],
+  "evidence_sha256": {
+    "build-android-lite.log": "b9c41c61ec2cada1c77c0564c18497ed9dfaafa81781e0979d6f260fed49b0c1",
+    "build-linux-four.log": "a03436cba199df0fcb0e8aae6c1028ccd78eea820a8395d375563c5936f759e9",
+    "build-results.json": "24d885b87c3c9ae1a4d49f31d871354f7dd2d84d8d3dedb3d1de5988e782ad85",
+    "build-windows-server.log": "8f924f84de042986fa4b2aee782545808d0e3cd7c93d0838c15339f764d881cd",
+    "builds.log": "18ab28842f4e9e8ef72aa7e4f5b892a02edae9177b24a22f046167a75eae6369",
+    "cancel-repeat-0.log": "0871683fdb83165054f1c8b6297cb528a457cba7a4cfff0c39fd49d48b7e35b4",
+    "cancel-repeat-1.log": "0584f31cffbb267f6b61cff0cf670c11b88251a082c735de772c39028ceaa71f",
+    "cancel-repeat-2.log": "a4b4f2f26d7d061556569ddd816613e3c4fad6a41e85e21590487c1522bddd51",
+    "cancel-repeat.json": "d3bc47bab5b91ae7c319e2fb690f3f2cd96f7b2ff1adedd77fdf0d53bcdb58b4",
+    "diff-check.log": "fd93fbac1b8c12205c392846c6539be4dfe629dbae8b82ba8de1229b6aa0b587",
+    "final-inputs.json": "87699804c8394fe8feaaf94403236839da5fd38a0b07c6233b009740fb819952",
+    "final-proxy-editor.log": "6d046cd5b8f1b9762cf42b59c2cd00663845dee6425ea0b71a0fb95041a6911d",
+    "final-web-modules.log": "3fa38480f20a18d01ddf45075ba6779f59471b8b308d7f770efedda99dd63a6d",
+    "final-windows-gui.log": "5d7fade57a9c6503375e41b6e529d25548f4443232053aa9fa2bb2d0e130d419",
+    "fork-recovery.json": "026be45aa37818e36459f1ddbf86f9eb3ca5d9aef47f5f41e877f8a6a11b1918",
+    "gate.log": "86e06b2ccd69584c3db01ba054fdb19d0e88a610540f404a58aa84ef45291e7a",
+    "grep-regex.json": "8b0bddae92a5da843505a218ef456221e9aae98306f13db678beee30f9a5f97e",
+    "gui-native-application.log": "096a03236d939093c3c7f126001e66e02975aaeb2f2f4201e64c58b47f72f7dc",
+    "gui-native-changes.log": "9c48e37725c8e31047548b8033c342257416d6578f4621d3070faa841aee6e7c",
+    "gui-native-display.log": "ed25b7cf54b60b5da30fbb1a4b1d7998c1b23352a272409e054318f9eabe53d2",
+    "gui-native-start.log": "0d4f1f564ec30212d025d95388c0bd7fab4ebde1ee55d0dd5eead6aed6dace8f",
+    "gui-native-terminal.log": "1184e8d7b9ac267dd38dbc1b91cd1b6b5ee437df889a7b0a5b9118b07c3b514a",
+    "gui-results.json": "35e63d135cee9b8276738c1135c3771046605495257c075e455ad7bda232279a",
+    "gui.log": "87cb0e46b813aecd546721e75d638bc5d9a23edcb5818acedb8fc308a84dcbab",
+    "inputs-after-runtime.json": "f61052562d6486ced1a5eb59ae96246f947ec00df9004e2678524551261db0f4",
+    "inputs-before-drift.json": "72941d82563e0f74748ab69ca75c61edd5cd8721dafdd5c1956e8c185f2b0c3e",
+    "inputs-before-ui-drift.json": "f61052562d6486ced1a5eb59ae96246f947ec00df9004e2678524551261db0f4",
+    "packed-bundled-command-workers.log": "0090ec37fba774c681b563a2c787596d3c2d2ada57661aca2db82a4fe7354f64",
+    "packed-commands.json": "30476e6a3373977cb6632628f3dbe6f61e81399f09fe2625124e8825ffffc57b",
+    "packed-results.json": "01710fa32e5ef7dd27390f13c3fd7ebc1d4fdad1719cc1bcbdea5f38b6764ed1",
+    "packed-test_builtin_upgrade_packed.log": "5ea5e165257ca486f41b7a84f6cd5a21f624e69781044500c08b02a6e8bbda03",
+    "packed-test_diagnostics_retirement_packed.log": "cd585248693dad3baec885a9e9708c2594411668b153b5f123945c550273e53d",
+    "packed-test_extension_dependencies_packed.log": "a59a7f61f7413c2af5566c39c40765489fb40475725c6972a787d7af9d1fe52c",
+    "packed-test_grep_regex_packed.log": "16c176a055028f0a3f46d4f43c0ed9ca817d78737b13a1e10cf748d09e8eaf1a",
+    "packed-test_live_runtime.log": "0e9d21e2886f757716c14e0f3605240669a844818e3a41fa403daf489670f8c8",
+    "packed-test_packed_backup_download.log": "c33d8135a4fa42fcb0a47e86acba8c8ac7fe9dc5eb7bc16bdbe4b7e304a5a17e",
+    "packed-test_packed_compaction_failure.log": "326ccb9123b9266a5b4acc789f0b275187c88080b1b303d1e5ed4cc6fc9e6148",
+    "packed-test_packed_compaction_recovery.log": "53c82b6a160c4c0b48ca9d53762f0532e8b8ff459e71b124c3b9b55b5097e1eb",
+    "packed-test_packed_default_workspace.log": "8e24f46218baa002d59f94989eea93394803182dd68dec1570eca38b26cae92b",
+    "packed-test_packed_fork_recovery.log": "51959c6134146bd346cb6de14569ac4f83d0e71943d07ae96f4140a7d9608887",
+    "packed-test_packed_home_lease.log": "90b5ade4e11fff508afbd38718a5df97664b197f155c7f573003d14e0b2222e4",
+    "packed-test_packed_message_edit_recovery.log": "9c3e88c320b949595d106ed6d43335c2a942aa0ffd8d31056f792f16f94600f5",
+    "packed-test_packed_module_catalog.log": "a970a74a27a8903088eea3442cdfe5f2047afa962304375923cb7a8f9752f852",
+    "packed-test_packed_queue_start_recovery.log": "43ef035f2f69ee46be95d8e3ff5f02d252ce6b5ee4d9de8d7b36c67e57090464",
+    "packed-test_packed_recovery_ack.log": "a284a4ddba60e2bb841e6a085827ab87b1d0f000829bb62b6285e3a91af68248",
+    "packed-test_packed_restore.log": "c44eb42757f7ea04676fa9e6e4525aef491d0b1c6306c2bbbb95a4133349164a",
+    "packed-test_queue_stream_completion.log": "011977daaa1e220a5cfefd4a1f68e145f2650243abd128b3fe6fe4a05e42188c",
+    "packed.log": "c4cbd4286049415d90cccd0dbf890ee3d2801d36f91259ba6f01c34d3797a0ea",
+    "partial-products.json": "770d43115dbb97fc1ad6382584019bcc21bde230085c4e11d3998d38a552384c",
+    "purge-repeat.json": "528acb13744351aa37ea3f4906724c0f5c5ab67d0f3dc905788e8d03e6c084d2",
+    "purge-repro.json": "a0ea7af31cce8fdeee994f26fa7c68b48d5a908945e43d88917b1bb97872b0df",
+    "purge-repro.log": "4beb834878b47d26ffbd7829e1a4e14a6804e08f28bfb30215ad8dcd473636ba",
+    "purge-retained.json": "748eda8085f7e3c82149775d9542083427f0f8a955173c4a0ed18c85c69c5c09",
+    "purge-retained.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "refresh-build.log": "5d7fade57a9c6503375e41b6e529d25548f4443232053aa9fa2bb2d0e130d419",
+    "refresh-python-unit.log": "11c756ce0676b79d320e463a777cef50ee630d65d19ad90c9b3d6e0e368c8485",
+    "refresh-results.json": "c6194a0cb271034b8c0eed1661086199e66897ef66f6a04a1e31e9503b9e3d03",
+    "refresh-test_home_purge_runtime.log": "b455b7326a43824fe962add82155d2209aab3b42ab4a8ad414c7cdc8a6b30f7e",
+    "refresh-test_model_proxy_overrides_runtime.log": "edf6ef9e2ca7a7fa05dd486656974df87305f44daa1a99cbda586dd5a49569d1",
+    "refresh-test_model_proxy_runtime.log": "8b644fa522c7cc7c280f077355ab819f9566169d891f4fae1e684dd3e60ad20f",
+    "refresh-test_model_retry_progress_runtime.log": "6cb30a2c851cdf659bf79b0884d22546b80e83702810d09069cbd103d6bda39f",
+    "refresh-test_model_retry_runtime.log": "57fe06c17f320fa509ae8c60a26b3d96b95a1d7fa351bd8ff2ff64b688349b5e",
+    "refresh-test_model_runtime.log": "5d7a1e9771e4e67942453e6de1b6c1a536f28f8d37971be315f6acde2998b95c",
+    "refresh-test_model_setup_runtime.log": "704bca034a70c47eaa15d36aa17bf51bb7df20f45496be3a73d12dc082db0b00",
+    "refresh-test_model_stream_terminal_runtime.log": "a420170129b2e04242084a952b2f217ec20f2fbeb39b0dd707a84926e7b044c0",
+    "refresh-test_online_model_runtime.log": "4e34f505ef14f838df33027f29fe10a038ba3efbaab0d773e09a54b41fd0d97c",
+    "refresh.log": "2ba192334998d55084a019e66730141405a3635ebd08e9dc0a4575577b53cd6e",
+    "release-before.json": "c2f46937a7319baf8ffd25fa94b040c69ade268f2a72eca5adcb261235d8359a",
+    "repeat-failures.log": "1e7d4c167444c5b14a08c0cfac8e5e35d21f3c547eac51253cefcb229b9708de",
+    "runtime-build.log": "5d7fade57a9c6503375e41b6e529d25548f4443232053aa9fa2bb2d0e130d419",
+    "runtime-failure-details.json": "6c0ae2d0862e65302783f28f1eee690dba64491e8c34f06366cad09534210866",
+    "runtime-results.json": "664d0049b5b15075255c92459b793b43e748c8a94741e396011120543f5d2066",
+    "runtime-test_account_runtime.log": "3a69f3c21c4ac7cf20fe34ccd1231497097f47009fa47a0012b7f065ea5dd4e7",
+    "runtime-test_agent_authoring_runtime.log": "d7c3d1aa875fc815d77b5d3c271f37e7501e04dcbb73e5b72cc5dfe15195978a",
+    "runtime-test_agent_context_runtime.log": "a06bde016965a8b498d8d5b8342e0711585cc2aa5e835e25b3009d207ebab36a",
+    "runtime-test_agent_media_runtime.log": "0a948b3124862bb75399b589bb6191b77e5252e5f57028911831a87984922146",
+    "runtime-test_agent_program_runtime.log": "9105a9d0550666f8f00602810681030c94da0ffc53258ae971bc6bdb9154078f",
+    "runtime-test_agent_runtime.log": "250b0089e71fe401032a7f1684f3d75a3b71563d0a8822a757202d4130fc4e77",
+    "runtime-test_api_origin_runtime.log": "a6fda8f59a98b53bbf6e94bc8dffc794468b13af0c73f845aa48270bdaed6557",
+    "runtime-test_api_runtime.log": "85621a7fff8ff0eadb0c5f820c04ad0618c3efedb6226456494f4e091fbe77ac",
+    "runtime-test_application_sdk_runtime.log": "5e8ad32b12562f5bd99bd4c85f18a563557126b92d776e49519a54b1014088f4",
+    "runtime-test_artifact_publication_runtime.log": "d406e9646cb57926790759e81ae609bdde4de805213d984ba536d5b821c8cc53",
+    "runtime-test_backup_decode_runtime.log": "7cb67826bd42893e68ad35c7687668b986b12775748b17cf6c09e3609da8b75f",
+    "runtime-test_backup_download_runtime.log": "18696fd85925597391c4c5af516e9dda2f9203a0c11e9fc96cd116dc09ba38bf",
+    "runtime-test_backup_export_runtime.log": "5c66ac9525d54fd2af6a24a7ba3cc31d16c2e6ae37d5bac97ce401202b1d09b4",
+    "runtime-test_backup_import_runtime.log": "b636c18752abd43da92c3a61fb8ff7d90b5a0084579b80cec1621ef0f512e460",
+    "runtime-test_backup_preview_runtime.log": "a55d8d7c71cc9f3049abfdf4e0c2f48f79d751fd8f0dba34ba9edd1d059703f8",
+    "runtime-test_backup_stage_runtime.log": "69b3ec2a4286c3a5f24223c598ee1f782a59003da96a3032c7506eddc370eabc",
+    "runtime-test_backup_upload_runtime.log": "f858b986d620f915c3520260d4097a3c728c174baaa11546dda66317a1fdde82",
+    "runtime-test_command_catalog_runtime.log": "b77143654ed009e334311de674981a14587eb31cf9a7a7ad2a9124536fee33eb",
+    "runtime-test_command_compact_runtime.log": "4cc9c45b2af0b9c945609d08b9314a59ac7298fd60c6ae48c85d183fd3a3bab2",
+    "runtime-test_command_posix_sdk_runtime.log": "dce82704e84c05d054db41d25941eb5fb1a19702d15299751cea10e0b295bbdb",
+    "runtime-test_command_worker_runtime.log": "dbb74bcf12bbae7879ff0b611f419ad638b1335e2004ee04f9079223cfe46a03",
+    "runtime-test_commands_api_runtime.log": "ced08d6dbe6084ce1177a9bb92fa3fe37d70dad5037f5fb6c62570a70dec7b52",
+    "runtime-test_completion_policy_runtime.log": "20cb78fd48ac6e8ad389ef8cf677f07558a7e6ac44a2bc2e7eba4390cd9cb7b5",
+    "runtime-test_composer_context_runtime.log": "7f75c76410738dbcec83f51fe4abcbbc8334b545f6441b18ea6857bd6922f728",
+    "runtime-test_config_runtime.log": "cdf50fb60d59e7d8d62f6d326cd7a2eaa81a94843bddcaaa7d03d52f99a8a380",
+    "runtime-test_context_usage_runtime.log": "8bb797711ffa61488668fb0d2227d71713644944fa5263116bc654d2623bf04f",
+    "runtime-test_conversation_groups_runtime.log": "09743a6045590e818a90b25e6a5130b7a6425aca25309feb8a1bb9cb6a76d358",
+    "runtime-test_conversation_resume_runtime.log": "c5408340e804f8a824d0896a1f4c1e9c0ef06a5a5d29b69a97953b456d121242",
+    "runtime-test_conversation_runtime.log": "fb0ef05ad3b6a6def537dfa712815c2ee7c88c2e127925a9e579e7d55a7c5e58",
+    "runtime-test_debug_cleanup_runtime.log": "db938872b7236c76b42e62c14b8658b692ba3c101abfd2b1f64a22a12ccff0c3",
+    "runtime-test_decision_retry_runtime.log": "a2067a18b9072d41803f0551f26283e10b8a840f05dfe59cf23809361a2729f9",
+    "runtime-test_device_transfer_runtime.log": "5574742028a6b29f2104c73c9981dcf08123fcee37c7fe33810793c6f6e2456c",
+    "runtime-test_diagnostics_storage_runtime.log": "283dccdab2c271bea0ce44426e9c89f9f20f3679782b9ae09659ecdb9e50b01f",
+    "runtime-test_directories_runtime.log": "3169aac891bdf208fae628c2e41d996bfc228a649c128c407d2ef57802d47132",
+    "runtime-test_distribution_runtime.log": "7241696459fb3ed4de1edb33c9ff32316305a068a08e826b3fee16f99ecc4b1b",
+    "runtime-test_exec_arguments_runtime.log": "d73560f80184df33104c6189f153ed73971e33e03e32e18b2ca4aa9d0d332b77",
+    "runtime-test_extensions_runtime.log": "e7910bbfb409271931789579c9bf3f3871ae5804817cb7f6c82e710b296aec0f",
+    "runtime-test_home_artifact_runtime.log": "e90f4f6086ebf4edcc117fa7b04f9bbb5842ba96ad05e29c5f6d6deedee31cc2",
+    "runtime-test_home_purge_runtime.log": "afe73a8eefaf4f43803df3e7a046ca923304a1e88be30b04a866845ed3d50214",
+    "runtime-test_home_restore_runtime.log": "6037d980da97dd07d720b081a6d13f8bab77e278639cf98a359ea7ee238bbef4",
+    "runtime-test_home_runtime.log": "f55302de16ee651147a6755adb07d8a4b18913f21782323caa96f10e5b385ea1",
+    "runtime-test_image_download_runtime.log": "8a5143ec80d2eb7ca5ccd8ef02719bab63a5819d89023c61b7c65fff06238455",
+    "runtime-test_image_runtime.log": "7d30ef1ebf7e1b07498ca4e228b1c198b62b7cbfdd3fcff60247987a9c53405b",
+    "runtime-test_image_upload_identity_runtime.log": "e1f219daa9017e4ae90a7a4a6d425dce1fa3aaa5eac3c13def19b63eb05f4821",
+    "runtime-test_interrupt_runtime.log": "3f29a429d74a0082a540372638d48a1f008452bc674db7f8edfad596dcade2e7",
+    "runtime-test_interrupted_profile_runtime.log": "fdec0d7b84222d24ae35045aeeac1562224f5b141e19d7880b50e290507e5839",
+    "runtime-test_lifecycle_runtime.log": "02764e7c9a7882292adec9bbfb81fe5f7ed9118494138a6fb0c5917f6464b921",
+    "runtime-test_live_permission_runtime.log": "c49ddf36de3b822fad98f9d866e83701dfaf646f85b520c15600ca9630eec50e",
+    "runtime-test_live_runtime.log": "ea9e6f5ce2d6702892b8a0c2855597d07dbd74c6afb878cad9547d0a29175e7c",
+    "runtime-test_mcp_oauth_runtime.log": "e06c9060e22bd7667475c5a67a67cb9fe9b05fbeab6d235180270a80ead09231",
+    "runtime-test_mcp_reliability_runtime.log": "85a83beeac76c8a75c5b98a2e40da95850120ef8b786502d31762ac85cc28be0",
+    "runtime-test_mcp_runtime.log": "444e6e735db56d7d38ad9c262535cf84afc99dd9f2d64427d01119eac4df058a",
+    "runtime-test_member_sdk_runtime.log": "dd1d1177592e4b7f24c80d2d4a4672c3b2dffeadf4cf7ebe4571ca46ef7f76f7",
+    "runtime-test_memory_runtime.log": "ad493e5b0b1982e29f4cba843fe521ec77e5b8ec46984a2a021ffb65f96643b7",
+    "runtime-test_model_error_events_runtime.log": "a43e54e701b83c43e6084d3bc8f6784446f41f69147b35c44613fb6f78c82c42",
+    "runtime-test_model_proxy_overrides_runtime.log": "edf6ef9e2ca7a7fa05dd486656974df87305f44daa1a99cbda586dd5a49569d1",
+    "runtime-test_model_proxy_runtime.log": "8b644fa522c7cc7c280f077355ab819f9566169d891f4fae1e684dd3e60ad20f",
+    "runtime-test_model_retry_progress_runtime.log": "6cb30a2c851cdf659bf79b0884d22546b80e83702810d09069cbd103d6bda39f",
+    "runtime-test_model_retry_runtime.log": "66db1792f3c641680db3dc53581237fd266f40329a0c0a253cf4f931fa2b5bd3",
+    "runtime-test_model_runtime.log": "5d7a1e9771e4e67942453e6de1b6c1a536f28f8d37971be315f6acde2998b95c",
+    "runtime-test_model_setup_runtime.log": "704bca034a70c47eaa15d36aa17bf51bb7df20f45496be3a73d12dc082db0b00",
+    "runtime-test_model_stream_terminal_runtime.log": "ab6c62c20c415c4f81ea4c1e37aaa77011729b27b95cdf85efeb841c8727ffd0",
+    "runtime-test_module_runtime.log": "e4d2c71abd9b8020ea5dd8179973399b2ff19c1e0ff25d6ffd8017a52cf7cbf6",
+    "runtime-test_notice_session_runtime.log": "e68fcb697f8715c9a034011959833494a7e2a4c698dabe87291141f61bab6200",
+    "runtime-test_online_model_runtime.log": "a46772404041e19fc5d571289ae4addc8198d6952bdab3b85635265be308df36",
+    "runtime-test_operation_runtime.log": "c2a8bd2c662712b9cb40c015fc3b405e656edc2136731df138612558ffc8dd27",
+    "runtime-test_orchestration_sdk_runtime.log": "dfd8575b10fed6b84a7e26300d11de8f763c56a7a9c8592318a951f834c8a29a",
+    "runtime-test_passive_home_runtime.log": "f81e243866062ed73a8c4f045bffce127d47fad062379058164e9f74f264c589",
+    "runtime-test_permission_profiles_runtime.log": "4106b08eff010b4d477f8674394607aae44e34ed92aea73b00d90cdea4f30f27",
+    "runtime-test_plugins_runtime.log": "9256c7c2d7e349422369d7b4b47e7e3b18adc379686e1efe4282996b4b284222",
+    "runtime-test_power_runtime.log": "a5c453266f4a864784920f79e219ffadd71c2ae95bb60c1d223a001f5e233414",
+    "runtime-test_process_output_runtime.log": "2b9990d6e08244e61317bf1188974a75e6c4b432bc2629d4cd4ca5eb6a74bc15",
+    "runtime-test_process_output_sdk.log": "cfb6f4c2da6d22c045b0256942d23b3e91681bdf78ded8a68799e6a1a51a148d",
+    "runtime-test_project_binding_runtime.log": "8458308e9ccd8b800cc57d2e3dadf5140587800762044ba504c0f0ce28ac50b5",
+    "runtime-test_project_purge_cancel_runtime.log": "d6a866d7699e6b0687997d19c04dc1c67783c2b81d10ea8e1301b5068d9b0754",
+    "runtime-test_project_purge_frontend_runtime.log": "b450a70908dc170da300d6da29ef1ca1033e32b4323803aafc9ea9169ab8f578",
+    "runtime-test_project_purge_http_runtime.log": "ed6b84029c1edc6136c321ae263a154314566c782cf3e4d592ca912daefa91ad",
+    "runtime-test_project_purge_intent_runtime.log": "855cf178c18e215617d1bbadd81164f88659378b4f2b410cd3478fc4509d0bb6",
+    "runtime-test_project_purge_receipts_runtime.log": "7357da2e50f65b90a74e0578ae81cdecb588d3d5292dcd38268e84b1659c8e43",
+    "runtime-test_project_purge_runtime.log": "192c620291b35f91146f3708f60959264c2be0bd1685e7a1503cd20fa019937a",
+    "runtime-test_project_references_runtime.log": "84ae8b75d29f336f8f6e680ae944b4b2049947854c07504660b30d90afd9cb73",
+    "runtime-test_queue_actions_runtime.log": "09d5d9864e93b24688ca496ac87f35a6f8b97497c75415e97e90100e8a18320b",
+    "runtime-test_recovery_history_runtime.log": "dc6b7f1182a7752d213571e24d99c9d9988c972627bba47f1b55ae16b73f47e6",
+    "runtime-test_remote_service_runtime.log": "085e2f199a6cf0af194439020c1113a692b34d0de7371847296f6cdaac91d330",
+    "runtime-test_responses_followup_runtime.log": "0927ccf008e96b6fff12f24bfa5fa7ee7c740e081d50d730bacb46943ebe6cdd",
+    "runtime-test_restore_coordinator_runtime.log": "a1fe4425e3739bf8f2df7187fb4fcef7961008a4b6704c0be7da43577eeb2e95",
+    "runtime-test_restore_receipt_runtime.log": "d7e33894346f91bc4e6f5ad6e926e23ff90afe039475a8ef10887d94c6eb6178",
+    "runtime-test_restore_worker_runtime.log": "6577c5729263380b637d23c281de4375489973d358502a0fada745149d3a3b67",
+    "runtime-test_run_completion_runtime.log": "0df0333f6c99b802c64f1ff68b25b8915881d1548d28c97e5125f06ced69763d",
+    "runtime-test_run_manager_runtime.log": "b4932e90885905aed90d99fa94d8f88b03b7fd020d834beeb802ac864d9383ee",
+    "runtime-test_schedule_executor_runtime.log": "7c55a3a4b2a8da623f3bc4d758edb117dcb760b1bacd763d919204668fce4711",
+    "runtime-test_schedule_runtime.log": "fccea33f6977cb26243c33b5e2fb0a2b5f52c0f3e7871c57304f67170ff69c5d",
+    "runtime-test_search_api_runtime.log": "62e9bfe95123098a47a1354068c8c26055af497f7234bfe1cb9346b8756a316e",
+    "runtime-test_session_artifact_runtime.log": "6d55a6ee8c2c8a4d71af1d1b9a47515da8975b2720d82996c4889ad31388b7b3",
+    "runtime-test_session_profile_errors_runtime.log": "1a6e6cedc791017ccbcb9946cc28e5970e367a4982eeb4c2c6ac5d6cd4b05522",
+    "runtime-test_session_purge_runtime.log": "67ff86bb800c2dc4b2a88192bc352f5cec1a4204887277d9b761c911eeed763f",
+    "runtime-test_session_runtime.log": "e4e43bac082e29dda0392aed2d57309b82a1e6b63255990aa8d962c489382d4a",
+    "runtime-test_settings_confirmation_runtime.log": "669208a7ae8a9fd1014680264d60aceef1fa4e42c63f22df5c4731d191101f03",
+    "runtime-test_settings_runtime.log": "f639a37c5a6f93e0e3906c070618c84f4833c42b571f1bb7675f7b59f9ca97a2",
+    "runtime-test_shared_files_runtime.log": "82f37d83f78b7ea89746b8d5c8f14920cbb686054535a89ec7e6a93380edd376",
+    "runtime-test_shared_work_sdk_runtime.log": "7a87ae0f9ce3545734c161591a96b3648cc6f7c0d9b3fcb11439b24b1455d077",
+    "runtime-test_sidebar_layout_runtime.log": "c20f36ca1ecf6eca584516a8743c5fb71515f756610d7513f565be6057736f9a",
+    "runtime-test_skill_arguments_runtime.log": "e258a334c0fbd5b4793eaebc54966343f007b324134f6032ec1a127a3205faee",
+    "runtime-test_skill_builder_runtime.log": "0ab6cfed9d213ec4e87b7f0f5ca6ec0a73b6bd3151ea28395ceb7b73fa401f96",
+    "runtime-test_skill_features_runtime.log": "1d48e476a7fa482904df7ae38cc5d07dd191eee65f678277b022b9c78bf53b7e",
+    "runtime-test_skill_runtime.log": "95b3b12d4b724a67db49fff1145c77332da2d8677074aef2a744c0c3671022e0",
+    "runtime-test_task_stop_runtime.log": "4693ec77ae3ee2f89eaf81874fb6fb459c07029d1cd2429da339fc21646fa88d",
+    "runtime-test_tool_failure_diagnostics_runtime.log": "ee160d563f942d695685931ae0654e5ec442700eeef77e789cace38c18e875c6",
+    "runtime-test_update_runtime.log": "c4b28f1979bc10227593a7351ae2771dc1de0f136e30eddde440c185c517ec0e",
+    "runtime-test_web_result_files_runtime.log": "d8bca69697e9b9c91da9c318d68cb664750057a44b868c1750c8ecf1f6be03e1",
+    "runtime-test_web_result_session_runtime.log": "6536fd1b1ef7782f8ba6579b69f7f1aa92633fa3e56a0e7709eee79f24307a83",
+    "runtime-test_web_runtime.log": "43a7e2723230a2956ab8f274eed49a49025e501cca8e31f4c03ba574b87fd098",
+    "runtime-test_workbench_baseline_runtime.log": "c916cd74bb42a2574167c69e653d1095b662fa16c759d107c99a41aa2f597ddb",
+    "runtime-test_workbench_changes_runtime.log": "9c88e7396a1ac1f44642f9e5a0cf085a771f1e203dd2fe1cb5293ca20946de09",
+    "runtime-test_workbench_files_runtime.log": "148c07ab14d46ddc3dc1be5bbf86f24ee11e595306f354b0894f812cfebda939",
+    "runtime-test_workbench_runtime.log": "95d1432c393498e7682f3cb0efe7fd5502e5a722efd4eee8130cdd941cd319c7",
+    "runtime-test_workbench_terminal_runtime.log": "2b19a60e1703bbea3a77226af2c2135e75e7c55db8a8844f389075723ecf6320",
+    "runtime-test_write_admission_runtime.log": "389da35b14976b95ca2ca055b8ac732c72f3883a68f7b15661c121bb4a96bf16",
+    "runtime.log": "bb759418db0155f0bc94f219b24d903f96d3a6b8305fe06650cb7c0dec676e91",
+    "source-changed-after-pause.json": "51ca2801a72d5c1158ee3d58c7eeb80ddd38de5a1ad6a0625d6030ca44b29950",
+    "source-changed-again.json": "6fb81c6724fa7d1dea90a32f01f0219104dab9eadd3d550084656569f25ded65",
+    "source-files-final.json": "42b621b949984c3db6fba1d748a63ee9376e8bd4e7803adaed224e2844cdb994",
+    "strict-compile.log": "c5e6f53558f4e2c47019f45b635270a59054b1e28398b2bf863bbb9f02b485d8"
+  }
+}
