@@ -113,8 +113,10 @@ def run(host):
                 value = settled()
                 assert value["status"] == "current" and value["local_sha256"] == hashlib.sha256(SOURCE).hexdigest(), value
                 assert value["edition"] == "desktop", value
-                assert not home.exists(), "startup checks must not create Home"
-                print("PASS matching hash; startup is read only")
+                # Installing bundled extension identities may create Home at
+                # bootstrap. The updater itself must remain read-only here.
+                assert not (home / "data/update").exists(), "startup update check wrote its cache"
+                print("PASS matching hash; startup update check creates no cache")
                 Published.package = NEXT
                 local_build = json.loads((ROOT / "app/release.json").read_text())["windows_build_id"]
                 assert "version_code=05000600" in Published.last_query, Published.last_query

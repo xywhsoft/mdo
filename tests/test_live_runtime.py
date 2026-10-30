@@ -195,12 +195,16 @@ def probe(host: Path | None, packed: Path | None):
                     creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
             status, document = wait_bootstrap(process, port, site / "native.log")
             assert status == 200 and document["data"]["ready"], document
+            def home_inventory():
+                return {p.relative_to(home).as_posix(): p.read_bytes() if p.is_file() else None
+                        for p in home.rglob("*") if p.name not in (".mdo.lock", ".writer.lock")}
+            before_connections = home_inventory()
             assert connect(origin="https://example.invalid").status == 403
             assert connect(token="incorrect").status == 403
             assert connect(version="12").status == 400
             for client in sockets: client.close()
             sockets.clear()
-            assert not home.exists(), "read-only WebSocket check created portable Home"
+            assert home_inventory() == before_connections, "read-only WebSocket check changed portable Home"
             configure_model(port, endpoint)
             status, document = request(port, "POST", "/api/v1/sessions", {
                 "project_id": "default", "title": "Live probe", "agent_id": "mdo.default",

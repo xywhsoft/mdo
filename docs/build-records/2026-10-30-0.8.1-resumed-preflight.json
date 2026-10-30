@@ -1,0 +1,1534 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-10-30T08:00:08.813922+00:00",
+  "version_name": "0.8.1",
+  "version_code": "05000801",
+  "published": false,
+  "source_stable": true,
+  "source_head": "38a1abcb4790d32306080e81b810475992289805",
+  "inputs": {
+    "application": "c80ed43e593eabe20b8be93ffc2b08f510a9af747711bce658024964e78019bc",
+    "dependency lock": "eb8b4af857eaa01b2adcd909ba1d24840f221281ce9add6b6827cd671422546d",
+    "host profile": "d765984879c9d3dedc04c523b0713b4e2662c4b8eb1ab91ff6d16d4c22dd79e2"
+  },
+  "results": {
+    "base": [
+      {
+        "name": "unit",
+        "returncode": 0,
+        "seconds": 16.33
+      },
+      {
+        "name": "web-modules",
+        "returncode": 0,
+        "seconds": 0.12
+      },
+      {
+        "name": "frontend",
+        "returncode": 0,
+        "seconds": 87.88
+      },
+      {
+        "name": "model-verification",
+        "returncode": 0,
+        "seconds": 4.8
+      },
+      {
+        "name": "model-terminals",
+        "returncode": 0,
+        "seconds": 9.53
+      },
+      {
+        "name": "purge",
+        "returncode": 0,
+        "seconds": 14.61
+      }
+    ],
+    "runtime": [
+      {
+        "name": "build",
+        "returncode": 0,
+        "seconds": 10.02
+      },
+      {
+        "name": "test_account_runtime",
+        "returncode": 0,
+        "seconds": 31.8
+      },
+      {
+        "name": "test_agent_authoring_runtime",
+        "returncode": 1,
+        "seconds": 0.09
+      },
+      {
+        "name": "test_agent_context_runtime",
+        "returncode": 1,
+        "seconds": 0.09
+      },
+      {
+        "name": "test_agent_media_runtime",
+        "returncode": 1,
+        "seconds": 0.16
+      },
+      {
+        "name": "test_agent_program_runtime",
+        "returncode": 1,
+        "seconds": 0.11
+      },
+      {
+        "name": "test_agent_runtime",
+        "returncode": 1,
+        "seconds": 0.09
+      },
+      {
+        "name": "test_api_origin_runtime",
+        "returncode": 0,
+        "seconds": 2.81
+      },
+      {
+        "name": "test_api_runtime",
+        "returncode": 1,
+        "seconds": 3.27
+      },
+      {
+        "name": "test_application_sdk_runtime",
+        "returncode": 1,
+        "seconds": 2.77
+      },
+      {
+        "name": "test_artifact_publication_runtime",
+        "returncode": 0,
+        "seconds": 0.36
+      },
+      {
+        "name": "test_backup_decode_runtime",
+        "returncode": 1,
+        "seconds": 3.77
+      },
+      {
+        "name": "test_backup_download_runtime",
+        "returncode": 1,
+        "seconds": 3.2
+      },
+      {
+        "name": "test_backup_export_runtime",
+        "returncode": 0,
+        "seconds": 9.12
+      },
+      {
+        "name": "test_backup_import_runtime",
+        "returncode": 0,
+        "seconds": 8.52
+      },
+      {
+        "name": "test_backup_preview_runtime",
+        "returncode": 1,
+        "seconds": 2.62
+      },
+      {
+        "name": "test_backup_stage_runtime",
+        "returncode": 0,
+        "seconds": 88.97
+      },
+      {
+        "name": "test_backup_upload_runtime",
+        "returncode": 1,
+        "seconds": 3.76
+      },
+      {
+        "name": "test_command_catalog_runtime",
+        "returncode": 1,
+        "seconds": 8.16
+      },
+      {
+        "name": "test_command_compact_runtime",
+        "returncode": 1,
+        "seconds": 3.2
+      },
+      {
+        "name": "test_command_posix_sdk_runtime",
+        "returncode": 0,
+        "seconds": 8.14
+      },
+      {
+        "name": "test_command_worker_runtime",
+        "returncode": 1,
+        "seconds": 0.17
+      },
+      {
+        "name": "test_commands_api_runtime",
+        "returncode": 1,
+        "seconds": 2.77
+      },
+      {
+        "name": "test_completion_policy_runtime",
+        "returncode": 1,
+        "seconds": 0.58
+      },
+      {
+        "name": "test_composer_context_runtime",
+        "returncode": 1,
+        "seconds": 21.33
+      },
+      {
+        "name": "test_config_runtime",
+        "returncode": 0,
+        "seconds": 1.09
+      },
+      {
+        "name": "test_context_usage_runtime",
+        "returncode": 0,
+        "seconds": 0.19
+      },
+      {
+        "name": "test_conversation_groups_runtime",
+        "returncode": 1,
+        "seconds": 2.22
+      },
+      {
+        "name": "test_conversation_resume_runtime",
+        "returncode": 0,
+        "seconds": 10.59
+      },
+      {
+        "name": "test_conversation_runtime",
+        "returncode": 0,
+        "seconds": 11.55
+      },
+      {
+        "name": "test_debug_cleanup_runtime",
+        "returncode": 0,
+        "seconds": 4.5
+      },
+      {
+        "name": "test_decision_retry_runtime",
+        "returncode": 0,
+        "seconds": 6.89
+      },
+      {
+        "name": "test_device_transfer_runtime",
+        "returncode": 0,
+        "seconds": 110.72
+      },
+      {
+        "name": "test_diagnostics_storage_runtime",
+        "returncode": 0,
+        "seconds": 0.23
+      },
+      {
+        "name": "test_directories_runtime",
+        "returncode": 0,
+        "seconds": 2.78
+      },
+      {
+        "name": "test_distribution_runtime",
+        "returncode": 1,
+        "seconds": 0.12
+      },
+      {
+        "name": "test_exec_arguments_runtime",
+        "returncode": 0,
+        "seconds": 14.84
+      },
+      {
+        "name": "test_extensions_runtime",
+        "returncode": 1,
+        "seconds": 3.11
+      },
+      {
+        "name": "test_home_artifact_runtime",
+        "returncode": 1,
+        "seconds": 2.67
+      },
+      {
+        "name": "test_home_restore_runtime",
+        "returncode": 0,
+        "seconds": 7.49
+      },
+      {
+        "name": "test_home_runtime",
+        "returncode": 0,
+        "seconds": 0.73
+      },
+      {
+        "name": "test_image_download_runtime",
+        "returncode": 1,
+        "seconds": 3.14
+      },
+      {
+        "name": "test_image_runtime",
+        "returncode": 0,
+        "seconds": 9.92
+      },
+      {
+        "name": "test_image_upload_identity_runtime",
+        "returncode": 0,
+        "seconds": 8.11
+      },
+      {
+        "name": "test_interrupt_runtime",
+        "returncode": 0,
+        "seconds": 4.94
+      },
+      {
+        "name": "test_interrupted_profile_runtime",
+        "returncode": 1,
+        "seconds": 3.64
+      },
+      {
+        "name": "test_lifecycle_runtime",
+        "returncode": 1,
+        "seconds": 0.09
+      },
+      {
+        "name": "test_live_permission_runtime",
+        "returncode": 1,
+        "seconds": 0.59
+      },
+      {
+        "name": "test_live_runtime",
+        "returncode": 1,
+        "seconds": 2.8
+      },
+      {
+        "name": "test_mcp_oauth_runtime",
+        "returncode": 1,
+        "seconds": 2.73
+      },
+      {
+        "name": "test_mcp_reliability_runtime",
+        "returncode": 1,
+        "seconds": 21.3
+      },
+      {
+        "name": "test_mcp_runtime",
+        "returncode": 1,
+        "seconds": 20.19
+      },
+      {
+        "name": "test_member_sdk_runtime",
+        "returncode": 1,
+        "seconds": 3.73
+      },
+      {
+        "name": "test_memory_runtime",
+        "returncode": 1,
+        "seconds": 20.17
+      },
+      {
+        "name": "test_model_error_events_runtime",
+        "returncode": 1,
+        "seconds": 0.09
+      },
+      {
+        "name": "test_model_proxy_overrides_runtime",
+        "returncode": 0,
+        "seconds": 2.45
+      },
+      {
+        "name": "test_model_proxy_runtime",
+        "returncode": 0,
+        "seconds": 4.3
+      },
+      {
+        "name": "test_model_retry_progress_runtime",
+        "returncode": 0,
+        "seconds": 2.28
+      },
+      {
+        "name": "test_model_retry_runtime",
+        "returncode": 0,
+        "seconds": 11.23
+      },
+      {
+        "name": "test_model_runtime",
+        "returncode": 0,
+        "seconds": 1.58
+      },
+      {
+        "name": "test_model_setup_runtime",
+        "returncode": 0,
+        "seconds": 7.33
+      },
+      {
+        "name": "test_module_runtime",
+        "returncode": 1,
+        "seconds": 0.09
+      },
+      {
+        "name": "test_notice_session_runtime",
+        "returncode": 1,
+        "seconds": 0.64
+      },
+      {
+        "name": "test_online_model_runtime",
+        "returncode": 0,
+        "seconds": 11.5
+      },
+      {
+        "name": "test_operation_runtime",
+        "returncode": 0,
+        "seconds": 0.28
+      },
+      {
+        "name": "test_orchestration_sdk_runtime",
+        "returncode": 1,
+        "seconds": 2.67
+      },
+      {
+        "name": "test_passive_home_runtime",
+        "returncode": 0,
+        "seconds": 9.23
+      },
+      {
+        "name": "test_permission_profiles_runtime",
+        "returncode": 1,
+        "seconds": 0.55
+      },
+      {
+        "name": "test_plugins_runtime",
+        "returncode": 1,
+        "seconds": 2.61
+      },
+      {
+        "name": "test_power_runtime",
+        "returncode": 1,
+        "seconds": 15.22
+      },
+      {
+        "name": "test_process_output_runtime",
+        "returncode": 0,
+        "seconds": 3.02
+      },
+      {
+        "name": "test_project_binding_runtime",
+        "returncode": 0,
+        "seconds": 3.86
+      },
+      {
+        "name": "test_project_purge_cancel_runtime",
+        "returncode": 1,
+        "seconds": 2.19
+      },
+      {
+        "name": "test_project_purge_frontend_runtime",
+        "returncode": 0,
+        "seconds": 27.62
+      },
+      {
+        "name": "test_project_purge_http_runtime",
+        "returncode": 1,
+        "seconds": 2.72
+      },
+      {
+        "name": "test_project_purge_intent_runtime",
+        "returncode": 1,
+        "seconds": 2.17
+      },
+      {
+        "name": "test_project_purge_receipts_runtime",
+        "returncode": 0,
+        "seconds": 102.09
+      },
+      {
+        "name": "test_project_purge_runtime",
+        "returncode": 1,
+        "seconds": 2.72
+      },
+      {
+        "name": "test_project_references_runtime",
+        "returncode": 1,
+        "seconds": 2.61
+      },
+      {
+        "name": "test_queue_actions_runtime",
+        "returncode": 0,
+        "seconds": 9.39
+      },
+      {
+        "name": "test_recovery_history_runtime",
+        "returncode": 1,
+        "seconds": 3.16
+      },
+      {
+        "name": "test_remote_service_runtime",
+        "returncode": 0,
+        "seconds": 5.94
+      },
+      {
+        "name": "test_responses_followup_runtime",
+        "returncode": 0,
+        "seconds": 3.75
+      },
+      {
+        "name": "test_restore_coordinator_runtime",
+        "returncode": 1,
+        "seconds": 2.12
+      },
+      {
+        "name": "test_restore_receipt_runtime",
+        "returncode": 0,
+        "seconds": 6.81
+      },
+      {
+        "name": "test_restore_worker_runtime",
+        "returncode": 1,
+        "seconds": 2.16
+      },
+      {
+        "name": "test_run_completion_runtime",
+        "returncode": 1,
+        "seconds": 0.11
+      },
+      {
+        "name": "test_run_manager_runtime",
+        "returncode": 1,
+        "seconds": 0.11
+      },
+      {
+        "name": "test_schedule_executor_runtime",
+        "returncode": 1,
+        "seconds": 0.08
+      },
+      {
+        "name": "test_schedule_runtime",
+        "returncode": 1,
+        "seconds": 20.19
+      },
+      {
+        "name": "test_search_api_runtime",
+        "returncode": 1,
+        "seconds": 15.48
+      },
+      {
+        "name": "test_session_artifact_runtime",
+        "returncode": 1,
+        "seconds": 3.11
+      },
+      {
+        "name": "test_session_profile_errors_runtime",
+        "returncode": 0,
+        "seconds": 4.66
+      },
+      {
+        "name": "test_session_purge_runtime",
+        "returncode": 1,
+        "seconds": 1.39
+      },
+      {
+        "name": "test_session_runtime",
+        "returncode": 1,
+        "seconds": 0.09
+      },
+      {
+        "name": "test_settings_confirmation_runtime",
+        "returncode": 0,
+        "seconds": 2.12
+      },
+      {
+        "name": "test_settings_runtime",
+        "returncode": 1,
+        "seconds": 15.16
+      },
+      {
+        "name": "test_shared_files_runtime",
+        "returncode": 1,
+        "seconds": 2.52
+      },
+      {
+        "name": "test_shared_work_sdk_runtime",
+        "returncode": 0,
+        "seconds": 4.72
+      },
+      {
+        "name": "test_sidebar_layout_runtime",
+        "returncode": 0,
+        "seconds": 15.7
+      },
+      {
+        "name": "test_skill_arguments_runtime",
+        "returncode": 1,
+        "seconds": 15.16
+      },
+      {
+        "name": "test_skill_builder_runtime",
+        "returncode": 1,
+        "seconds": 15.19
+      },
+      {
+        "name": "test_skill_features_runtime",
+        "returncode": 1,
+        "seconds": 15.19
+      },
+      {
+        "name": "test_skill_runtime",
+        "returncode": 1,
+        "seconds": 15.27
+      },
+      {
+        "name": "test_task_stop_runtime",
+        "returncode": 0,
+        "seconds": 3.53
+      },
+      {
+        "name": "test_tool_failure_diagnostics_runtime",
+        "returncode": 0,
+        "seconds": 13.69
+      },
+      {
+        "name": "test_update_runtime",
+        "returncode": 0,
+        "seconds": 8.8
+      },
+      {
+        "name": "test_web_result_files_runtime",
+        "returncode": 1,
+        "seconds": 15.48
+      },
+      {
+        "name": "test_web_result_session_runtime",
+        "returncode": 1,
+        "seconds": 3.72
+      },
+      {
+        "name": "test_web_runtime",
+        "returncode": 1,
+        "seconds": 15.28
+      },
+      {
+        "name": "test_workbench_baseline_runtime",
+        "returncode": 1,
+        "seconds": 4.78
+      },
+      {
+        "name": "test_workbench_changes_runtime",
+        "returncode": 0,
+        "seconds": 14.72
+      },
+      {
+        "name": "test_workbench_files_runtime",
+        "returncode": 1,
+        "seconds": 2.83
+      },
+      {
+        "name": "test_workbench_runtime",
+        "returncode": 1,
+        "seconds": 2.7
+      },
+      {
+        "name": "test_workbench_terminal_runtime",
+        "returncode": 1,
+        "seconds": 2.8
+      },
+      {
+        "name": "test_write_admission_runtime",
+        "returncode": 1,
+        "seconds": 2.73
+      },
+      {
+        "name": "process-output-sdk",
+        "returncode": 0,
+        "seconds": 2.97
+      }
+    ],
+    "build": [
+      {
+        "name": "windows-gui",
+        "returncode": 0,
+        "seconds": 9.97
+      },
+      {
+        "name": "windows-server",
+        "returncode": 0,
+        "seconds": 9.7
+      },
+      {
+        "name": "linux-four",
+        "returncode": 0,
+        "seconds": 164.64
+      },
+      {
+        "name": "android-lite",
+        "returncode": 0,
+        "seconds": 12.72
+      },
+      {
+        "name": "android-full",
+        "returncode": 0,
+        "seconds": 22.97
+      }
+    ],
+    "final": [
+      {
+        "name": "contracts-windows-gui",
+        "returncode": 0,
+        "seconds": 2.73
+      },
+      {
+        "name": "contracts-windows-server",
+        "returncode": 0,
+        "seconds": 2.73
+      },
+      {
+        "name": "contracts-linux-glibc-gui",
+        "returncode": 0,
+        "seconds": 6.27
+      },
+      {
+        "name": "contracts-linux-glibc-server",
+        "returncode": 0,
+        "seconds": 2.61
+      },
+      {
+        "name": "contracts-linux-musl-gui",
+        "returncode": 0,
+        "seconds": 3.92
+      },
+      {
+        "name": "contracts-linux-musl-server",
+        "returncode": 0,
+        "seconds": 3.06
+      },
+      {
+        "name": "test_packed_home_lease",
+        "returncode": 1,
+        "seconds": 2.22
+      },
+      {
+        "name": "test_packed_default_workspace",
+        "returncode": 1,
+        "seconds": 1.17
+      },
+      {
+        "name": "test_packed_module_catalog",
+        "returncode": 1,
+        "seconds": 2.45
+      },
+      {
+        "name": "test_live_runtime",
+        "returncode": 0,
+        "seconds": 7.03
+      },
+      {
+        "name": "test_packed_queue_start_recovery",
+        "returncode": 0,
+        "seconds": 4.7
+      },
+      {
+        "name": "test_packed_backup_download",
+        "returncode": 1,
+        "seconds": 2.3
+      },
+      {
+        "name": "test_packed_restore",
+        "returncode": 1,
+        "seconds": 2.09
+      },
+      {
+        "name": "test_packed_compaction_failure",
+        "returncode": 0,
+        "seconds": 6.28
+      },
+      {
+        "name": "test_packed_compaction_recovery",
+        "returncode": 0,
+        "seconds": 5.02
+      },
+      {
+        "name": "test_packed_fork_recovery",
+        "returncode": 0,
+        "seconds": 5.34
+      },
+      {
+        "name": "test_packed_message_edit_recovery",
+        "returncode": 0,
+        "seconds": 9.86
+      },
+      {
+        "name": "test_packed_recovery_ack",
+        "returncode": 0,
+        "seconds": 8.8
+      },
+      {
+        "name": "test_grep_regex_packed",
+        "returncode": 0,
+        "seconds": 4.73
+      },
+      {
+        "name": "test_builtin_upgrade_packed",
+        "returncode": 0,
+        "seconds": 9.94
+      },
+      {
+        "name": "test_diagnostics_retirement_packed",
+        "returncode": 0,
+        "seconds": 2.44
+      },
+      {
+        "name": "test_queue_stream_completion",
+        "returncode": 0,
+        "seconds": 6.59
+      },
+      {
+        "name": "bundled-commands",
+        "returncode": 0,
+        "seconds": 3.8
+      },
+      {
+        "name": "gui-start",
+        "returncode": 0,
+        "seconds": 4.59
+      },
+      {
+        "name": "gui-display",
+        "returncode": 0,
+        "seconds": 6.34
+      },
+      {
+        "name": "gui-application",
+        "returncode": 0,
+        "seconds": 23.66
+      },
+      {
+        "name": "gui-changes",
+        "returncode": 0,
+        "seconds": 10.52
+      },
+      {
+        "name": "gui-terminal",
+        "returncode": 0,
+        "seconds": 6.22
+      },
+      {
+        "name": "portable-and-startup",
+        "returncode": 0
+      },
+      {
+        "name": "metadata",
+        "returncode": 0,
+        "seconds": 12.84
+      },
+      {
+        "name": "repack",
+        "returncode": 0,
+        "seconds": 10.7
+      }
+    ]
+  },
+  "failures": [
+    {
+      "suite": "runtime",
+      "name": "test_agent_authoring_runtime",
+      "returncode": 1,
+      "seconds": 0.09
+    },
+    {
+      "suite": "runtime",
+      "name": "test_agent_context_runtime",
+      "returncode": 1,
+      "seconds": 0.09
+    },
+    {
+      "suite": "runtime",
+      "name": "test_agent_media_runtime",
+      "returncode": 1,
+      "seconds": 0.16
+    },
+    {
+      "suite": "runtime",
+      "name": "test_agent_program_runtime",
+      "returncode": 1,
+      "seconds": 0.11
+    },
+    {
+      "suite": "runtime",
+      "name": "test_agent_runtime",
+      "returncode": 1,
+      "seconds": 0.09
+    },
+    {
+      "suite": "runtime",
+      "name": "test_api_runtime",
+      "returncode": 1,
+      "seconds": 3.27
+    },
+    {
+      "suite": "runtime",
+      "name": "test_application_sdk_runtime",
+      "returncode": 1,
+      "seconds": 2.77
+    },
+    {
+      "suite": "runtime",
+      "name": "test_backup_decode_runtime",
+      "returncode": 1,
+      "seconds": 3.77
+    },
+    {
+      "suite": "runtime",
+      "name": "test_backup_download_runtime",
+      "returncode": 1,
+      "seconds": 3.2
+    },
+    {
+      "suite": "runtime",
+      "name": "test_backup_preview_runtime",
+      "returncode": 1,
+      "seconds": 2.62
+    },
+    {
+      "suite": "runtime",
+      "name": "test_backup_upload_runtime",
+      "returncode": 1,
+      "seconds": 3.76
+    },
+    {
+      "suite": "runtime",
+      "name": "test_command_catalog_runtime",
+      "returncode": 1,
+      "seconds": 8.16
+    },
+    {
+      "suite": "runtime",
+      "name": "test_command_compact_runtime",
+      "returncode": 1,
+      "seconds": 3.2
+    },
+    {
+      "suite": "runtime",
+      "name": "test_command_worker_runtime",
+      "returncode": 1,
+      "seconds": 0.17
+    },
+    {
+      "suite": "runtime",
+      "name": "test_commands_api_runtime",
+      "returncode": 1,
+      "seconds": 2.77
+    },
+    {
+      "suite": "runtime",
+      "name": "test_completion_policy_runtime",
+      "returncode": 1,
+      "seconds": 0.58
+    },
+    {
+      "suite": "runtime",
+      "name": "test_composer_context_runtime",
+      "returncode": 1,
+      "seconds": 21.33
+    },
+    {
+      "suite": "runtime",
+      "name": "test_conversation_groups_runtime",
+      "returncode": 1,
+      "seconds": 2.22
+    },
+    {
+      "suite": "runtime",
+      "name": "test_distribution_runtime",
+      "returncode": 1,
+      "seconds": 0.12
+    },
+    {
+      "suite": "runtime",
+      "name": "test_extensions_runtime",
+      "returncode": 1,
+      "seconds": 3.11
+    },
+    {
+      "suite": "runtime",
+      "name": "test_home_artifact_runtime",
+      "returncode": 1,
+      "seconds": 2.67
+    },
+    {
+      "suite": "runtime",
+      "name": "test_image_download_runtime",
+      "returncode": 1,
+      "seconds": 3.14
+    },
+    {
+      "suite": "runtime",
+      "name": "test_interrupted_profile_runtime",
+      "returncode": 1,
+      "seconds": 3.64
+    },
+    {
+      "suite": "runtime",
+      "name": "test_lifecycle_runtime",
+      "returncode": 1,
+      "seconds": 0.09
+    },
+    {
+      "suite": "runtime",
+      "name": "test_live_permission_runtime",
+      "returncode": 1,
+      "seconds": 0.59
+    },
+    {
+      "suite": "runtime",
+      "name": "test_live_runtime",
+      "returncode": 1,
+      "seconds": 2.8
+    },
+    {
+      "suite": "runtime",
+      "name": "test_mcp_oauth_runtime",
+      "returncode": 1,
+      "seconds": 2.73
+    },
+    {
+      "suite": "runtime",
+      "name": "test_mcp_reliability_runtime",
+      "returncode": 1,
+      "seconds": 21.3
+    },
+    {
+      "suite": "runtime",
+      "name": "test_mcp_runtime",
+      "returncode": 1,
+      "seconds": 20.19
+    },
+    {
+      "suite": "runtime",
+      "name": "test_member_sdk_runtime",
+      "returncode": 1,
+      "seconds": 3.73
+    },
+    {
+      "suite": "runtime",
+      "name": "test_memory_runtime",
+      "returncode": 1,
+      "seconds": 20.17
+    },
+    {
+      "suite": "runtime",
+      "name": "test_model_error_events_runtime",
+      "returncode": 1,
+      "seconds": 0.09
+    },
+    {
+      "suite": "runtime",
+      "name": "test_module_runtime",
+      "returncode": 1,
+      "seconds": 0.09
+    },
+    {
+      "suite": "runtime",
+      "name": "test_notice_session_runtime",
+      "returncode": 1,
+      "seconds": 0.64
+    },
+    {
+      "suite": "runtime",
+      "name": "test_orchestration_sdk_runtime",
+      "returncode": 1,
+      "seconds": 2.67
+    },
+    {
+      "suite": "runtime",
+      "name": "test_permission_profiles_runtime",
+      "returncode": 1,
+      "seconds": 0.55
+    },
+    {
+      "suite": "runtime",
+      "name": "test_plugins_runtime",
+      "returncode": 1,
+      "seconds": 2.61
+    },
+    {
+      "suite": "runtime",
+      "name": "test_power_runtime",
+      "returncode": 1,
+      "seconds": 15.22
+    },
+    {
+      "suite": "runtime",
+      "name": "test_project_purge_cancel_runtime",
+      "returncode": 1,
+      "seconds": 2.19
+    },
+    {
+      "suite": "runtime",
+      "name": "test_project_purge_http_runtime",
+      "returncode": 1,
+      "seconds": 2.72
+    },
+    {
+      "suite": "runtime",
+      "name": "test_project_purge_intent_runtime",
+      "returncode": 1,
+      "seconds": 2.17
+    },
+    {
+      "suite": "runtime",
+      "name": "test_project_purge_runtime",
+      "returncode": 1,
+      "seconds": 2.72
+    },
+    {
+      "suite": "runtime",
+      "name": "test_project_references_runtime",
+      "returncode": 1,
+      "seconds": 2.61
+    },
+    {
+      "suite": "runtime",
+      "name": "test_recovery_history_runtime",
+      "returncode": 1,
+      "seconds": 3.16
+    },
+    {
+      "suite": "runtime",
+      "name": "test_restore_coordinator_runtime",
+      "returncode": 1,
+      "seconds": 2.12
+    },
+    {
+      "suite": "runtime",
+      "name": "test_restore_worker_runtime",
+      "returncode": 1,
+      "seconds": 2.16
+    },
+    {
+      "suite": "runtime",
+      "name": "test_run_completion_runtime",
+      "returncode": 1,
+      "seconds": 0.11
+    },
+    {
+      "suite": "runtime",
+      "name": "test_run_manager_runtime",
+      "returncode": 1,
+      "seconds": 0.11
+    },
+    {
+      "suite": "runtime",
+      "name": "test_schedule_executor_runtime",
+      "returncode": 1,
+      "seconds": 0.08
+    },
+    {
+      "suite": "runtime",
+      "name": "test_schedule_runtime",
+      "returncode": 1,
+      "seconds": 20.19
+    },
+    {
+      "suite": "runtime",
+      "name": "test_search_api_runtime",
+      "returncode": 1,
+      "seconds": 15.48
+    },
+    {
+      "suite": "runtime",
+      "name": "test_session_artifact_runtime",
+      "returncode": 1,
+      "seconds": 3.11
+    },
+    {
+      "suite": "runtime",
+      "name": "test_session_purge_runtime",
+      "returncode": 1,
+      "seconds": 1.39
+    },
+    {
+      "suite": "runtime",
+      "name": "test_session_runtime",
+      "returncode": 1,
+      "seconds": 0.09
+    },
+    {
+      "suite": "runtime",
+      "name": "test_settings_runtime",
+      "returncode": 1,
+      "seconds": 15.16
+    },
+    {
+      "suite": "runtime",
+      "name": "test_shared_files_runtime",
+      "returncode": 1,
+      "seconds": 2.52
+    },
+    {
+      "suite": "runtime",
+      "name": "test_skill_arguments_runtime",
+      "returncode": 1,
+      "seconds": 15.16
+    },
+    {
+      "suite": "runtime",
+      "name": "test_skill_builder_runtime",
+      "returncode": 1,
+      "seconds": 15.19
+    },
+    {
+      "suite": "runtime",
+      "name": "test_skill_features_runtime",
+      "returncode": 1,
+      "seconds": 15.19
+    },
+    {
+      "suite": "runtime",
+      "name": "test_skill_runtime",
+      "returncode": 1,
+      "seconds": 15.27
+    },
+    {
+      "suite": "runtime",
+      "name": "test_web_result_files_runtime",
+      "returncode": 1,
+      "seconds": 15.48
+    },
+    {
+      "suite": "runtime",
+      "name": "test_web_result_session_runtime",
+      "returncode": 1,
+      "seconds": 3.72
+    },
+    {
+      "suite": "runtime",
+      "name": "test_web_runtime",
+      "returncode": 1,
+      "seconds": 15.28
+    },
+    {
+      "suite": "runtime",
+      "name": "test_workbench_baseline_runtime",
+      "returncode": 1,
+      "seconds": 4.78
+    },
+    {
+      "suite": "runtime",
+      "name": "test_workbench_files_runtime",
+      "returncode": 1,
+      "seconds": 2.83
+    },
+    {
+      "suite": "runtime",
+      "name": "test_workbench_runtime",
+      "returncode": 1,
+      "seconds": 2.7
+    },
+    {
+      "suite": "runtime",
+      "name": "test_workbench_terminal_runtime",
+      "returncode": 1,
+      "seconds": 2.8
+    },
+    {
+      "suite": "runtime",
+      "name": "test_write_admission_runtime",
+      "returncode": 1,
+      "seconds": 2.73
+    },
+    {
+      "suite": "final",
+      "name": "test_packed_home_lease",
+      "returncode": 1,
+      "seconds": 2.22
+    },
+    {
+      "suite": "final",
+      "name": "test_packed_default_workspace",
+      "returncode": 1,
+      "seconds": 1.17
+    },
+    {
+      "suite": "final",
+      "name": "test_packed_module_catalog",
+      "returncode": 1,
+      "seconds": 2.45
+    },
+    {
+      "suite": "final",
+      "name": "test_packed_backup_download",
+      "returncode": 1,
+      "seconds": 2.3
+    },
+    {
+      "suite": "final",
+      "name": "test_packed_restore",
+      "returncode": 1,
+      "seconds": 2.09
+    }
+  ],
+  "products": [
+    {
+      "filename": "mdo.exe",
+      "platform": "windows-x86_64",
+      "edition": "desktop",
+      "build_id": 70000089,
+      "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
+      "bytes": 6573837,
+      "sha256": "2ceeeb84ee373021dbd2968eadb033af80eb0ab583542060dc007f8192d9bb51",
+      "host_bytes": 4056064,
+      "host_sha256": "85d0f3cc6d4ecb68965a00ece2e3326bd32cc3f163d443ddbd4b72c0b3755c2d",
+      "libc": "mingw",
+      "packaged_app_sha256": "943b5890f3d9e92173923d57ddf5b260bb1062eaedfb8150828a2a406a55c0fc"
+    },
+    {
+      "filename": "mdo-server.exe",
+      "platform": "windows-x86_64",
+      "edition": "server",
+      "build_id": 70000090,
+      "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
+      "bytes": 6316108,
+      "sha256": "38a62a33203856e592bf4616bd7180e81c7d6ed4191ba1a687990ed2649cdb7c",
+      "host_bytes": 3798528,
+      "host_sha256": "3fc2b86dbf596166386e3d2bfa3c8a8464bc5b5317c9ec02feac391a8c85e3b9",
+      "libc": "mingw",
+      "packaged_app_sha256": "86b3a385f42113d3b6194bf862ca4c1a4b3967d3213f477873dfaae92a4e06ee"
+    },
+    {
+      "filename": "mdo-linux-x86_64-glibc",
+      "platform": "linux-x86_64-glibc",
+      "edition": "desktop",
+      "build_id": 70000091,
+      "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
+      "bytes": 6174297,
+      "sha256": "2595a28e2d20e97b295fb24ae6ed1dcec062fd168cae5b4cb5fd81126b52aa15",
+      "host_bytes": 3656504,
+      "host_sha256": "b0271ecc1d4b58f3515f45a0fd730e45a8baf3e1aabb7c6d992cad5e19964517",
+      "libc": "glibc",
+      "packaged_app_sha256": "b2da3aedf0f826eceee892e21d49311d353caf7ab7da057cff899d389e3174e4",
+      "static_core": false,
+      "elf_needed": [
+        "libdl.so.2",
+        "libpthread.so.0",
+        "libm.so.6",
+        "libc.so.6"
+      ],
+      "glibc_required": "2.28",
+      "glibc_max": "2.28"
+    },
+    {
+      "filename": "mdo-server-linux-x86_64-glibc",
+      "platform": "linux-x86_64-glibc",
+      "edition": "server",
+      "build_id": 70000092,
+      "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
+      "bytes": 6137175,
+      "sha256": "d4aa5ba0355677984890f882a4830e27f3283ae408f884f45eaf75dc7943763e",
+      "host_bytes": 3619576,
+      "host_sha256": "ed3deb10804b8e6af2b381b33cac12fd8440df7b8c0a60a4adc85042706f35ca",
+      "libc": "glibc",
+      "packaged_app_sha256": "3e0403708aea1ecfdcdec3e391809c6861199c6c72d99dd2d242d06d5a48e0a7",
+      "static_core": false,
+      "elf_needed": [
+        "libdl.so.2",
+        "libpthread.so.0",
+        "libm.so.6",
+        "libc.so.6"
+      ],
+      "glibc_required": "2.28",
+      "glibc_max": "2.28"
+    },
+    {
+      "filename": "mdo-linux-x86_64-musl",
+      "platform": "linux-x86_64-musl",
+      "edition": "desktop",
+      "build_id": 70000093,
+      "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
+      "bytes": 7909176,
+      "sha256": "4d9509acf71fd46a02a6bf4dd92c38ddb60f3c93f80e5f013edaa8b4c0febaf9",
+      "host_bytes": 5391384,
+      "host_sha256": "c28d5a8fb37d0845e56f88ad4d2e3a7a9673bcf33659419dce153f124feda7ca",
+      "libc": "musl",
+      "packaged_app_sha256": "38efa2a73260d335ca774c969761137b1a96128412e67b3e801748d622d6a934",
+      "static_core": true,
+      "elf_needed": [],
+      "glibc_required": null,
+      "glibc_max": "2.28"
+    },
+    {
+      "filename": "mdo-server-linux-x86_64-musl",
+      "platform": "linux-x86_64-musl",
+      "edition": "server",
+      "build_id": 70000094,
+      "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
+      "bytes": 7876213,
+      "sha256": "7878246f39ff672a10d3c5822b65c7da84bb7c0347e193061d0e55f08ec9db8b",
+      "host_bytes": 5358616,
+      "host_sha256": "5a0265c48b9f33a340a0077362da91dd49087ac064adf6150433813446fa06f4",
+      "libc": "musl",
+      "packaged_app_sha256": "ae8cdde3aea6207a04039a08836f86ad964e628f7c0f234238d68c4882b208e5",
+      "static_core": true,
+      "elf_needed": [],
+      "glibc_required": null,
+      "glibc_max": "2.28"
+    },
+    {
+      "filename": "mdo-arm64-v8a.apk",
+      "platform": "android-arm64-v8a",
+      "edition": "lite",
+      "build_id": 70000095,
+      "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
+      "bytes": 6374804,
+      "sha256": "3bb361448db8ab6e9bf49199578c66ff5ea9a5a3ee6d23bf5e61bca419b3aba1",
+      "host_bytes": 3558000,
+      "host_sha256": "4b741656e89fe858ffbf5c8d932c5bdfb1373f7f0ac97dc820f83f8986de7012",
+      "release_signed": true,
+      "signer_sha256": "94b1947b60f3ce0852b19d9c37a47cc4a084fe9d601692c6a1f6b204c2174e84",
+      "debuggable": false,
+      "abi": "arm64-v8a"
+    },
+    {
+      "filename": "mdo-full-arm64-v8a.apk",
+      "platform": "android-arm64-v8a",
+      "edition": "full",
+      "build_id": 70000096,
+      "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
+      "bytes": 85036681,
+      "sha256": "df42a5f728bfbf439aa110976883893622545ad7bc69865219e1e9dd4e933d09",
+      "host_bytes": 3558000,
+      "host_sha256": "4b741656e89fe858ffbf5c8d932c5bdfb1373f7f0ac97dc820f83f8986de7012",
+      "release_signed": true,
+      "signer_sha256": "94b1947b60f3ce0852b19d9c37a47cc4a084fe9d601692c6a1f6b204c2174e84",
+      "debuggable": false,
+      "abi": "arm64-v8a"
+    }
+  ],
+  "deterministic": {
+    "first": "2ceeeb84ee373021dbd2968eadb033af80eb0ab583542060dc007f8192d9bb51",
+    "second": "2ceeeb84ee373021dbd2968eadb033af80eb0ab583542060dc007f8192d9bb51",
+    "matched": true
+  },
+  "model_terminals": [
+    {
+      "mode": "chat",
+      "first_ms": 4,
+      "first_code": "none",
+      "second_ms": 15,
+      "connection_ports": [
+        49758,
+        49759
+      ]
+    },
+    {
+      "mode": "responses",
+      "first_ms": 6,
+      "first_code": "none",
+      "second_ms": 15,
+      "connection_ports": [
+        49762,
+        49763
+      ]
+    },
+    {
+      "mode": "anthropic",
+      "first_ms": 18,
+      "first_code": "none",
+      "second_ms": 15,
+      "connection_ports": [
+        49768,
+        49769
+      ]
+    },
+    {
+      "mode": "incomplete",
+      "first_ms": 16,
+      "first_code": "none",
+      "second_ms": 15,
+      "connection_ports": [
+        49772,
+        49773
+      ]
+    },
+    {
+      "mode": "failed",
+      "first_ms": 14,
+      "first_code": "upstream",
+      "second_ms": 3,
+      "connection_ports": [
+        49778,
+        49779
+      ]
+    },
+    {
+      "mode": "anthropic-error",
+      "first_ms": 3,
+      "first_code": "upstream",
+      "second_ms": 0,
+      "connection_ports": [
+        49782,
+        49783
+      ]
+    },
+    {
+      "mode": "truncated",
+      "first_ms": 2,
+      "first_code": "incomplete_response",
+      "second_ms": 0,
+      "connection_ports": [
+        49786,
+        49786
+      ]
+    },
+    {
+      "mode": "malformed",
+      "first_ms": 10,
+      "first_code": "parse",
+      "second_ms": 0,
+      "connection_ports": [
+        49789,
+        49790
+      ]
+    },
+    {
+      "mode": "late-usage",
+      "first_ms": 312,
+      "first_code": "none",
+      "second_ms": 15,
+      "connection_ports": [
+        49793,
+        49794
+      ]
+    },
+    {
+      "mode": "cancel",
+      "first_ms": 174,
+      "first_code": "cancelled",
+      "second_ms": 1,
+      "connection_ports": [
+        49801,
+        49802
+      ]
+    },
+    {
+      "mode": "reuse",
+      "first_ms": 2,
+      "first_code": "none",
+      "second_ms": 0,
+      "connection_ports": [
+        49807,
+        49807
+      ]
+    },
+    {
+      "mode": "tls-tail",
+      "first_ms": 1036,
+      "first_code": "none",
+      "second_ms": 5,
+      "connection_ports": [
+        49810,
+        49812
+      ]
+    }
+  ],
+  "fixture_sha256": {
+    "tests/test_live_runtime.py": "3acc25887e673460014ee4a0c125bb40e6deaa51e9b61e2bfebf57294d2de9d7",
+    "tests/test_update_runtime.py": "7589944824fd179ba765639cef80f4edece762e8de693e971be4beb611b298a1",
+    "tests/test_packed_queue_start_recovery.py": "a186f47f7ebc742db1372048a2f5a695e8009749ef52d1f1838f248ae09bda3a",
+    "tests/test_workbench_native_browser.py": "f31cfb700f2fdd19f29b8b6d88c31019ef8cb764d9e2dab7677e6967bda6d839"
+  },
+  "known_unresolved": [
+    "Historical full Home purge fault-injection rollback entered frozen recovery twice; this uninstrumented full rerun passed, with no root cause or fix confirmed.",
+    "Historical SDK cancellation returned network once; the current 12-case rerun returned cancelled as expected, without a confirmed product fix.",
+    "Broad runtime and several packed fixtures still fail against current directory identities, model authentication and startup initialization contracts.",
+    "No Android physical-device or real-account cross-device acceptance performed in this turn."
+  ],
+  "preflight_status": "failed"
+}

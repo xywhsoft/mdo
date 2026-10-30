@@ -143,7 +143,16 @@ try{
  await mdo.files.write({path:repository+'/native.js',text:'const answer = 2;\n'});await git('add','--all');
  await mdo.files.write({path:repository+'/native.js',text:'const answer = 3;\n'});
  const {api}=await import('/js/api/client.js');
- const session=(await api.post('/sessions',{project_id:'default',title:'Native baseline QA'})).data.id;
+ const current=await api.get('/models/config');
+ const {runtime_override,verification,...config}=current.data;
+ const provider={...config.providers[0],id:'native-changes-fixture',name:'Native changes fixture',builtin:false,
+  editable:true,removable:true,endpoints:{chat_completions:'http://127.0.0.1:9/v1/chat/completions'},
+  credential:{secret_ref:'env:MDO_NATIVE_FIXTURE_KEY'}};
+ const model={...config.items[0],id:'native-changes-fixture',name:'Native changes fixture',provider:provider.id,
+  builtin:false,free:false,editable:true,removable:true,protocols:['openai-chat-completions'],default_protocol:'openai-chat-completions'};
+ await api.put('/settings/models',{schema_version:1,patch:{...config,providers:[...config.providers,provider],items:[...config.items,model]}},{ifMatch:current.etag});
+ const session=(await api.post('/sessions',{project_id:'default',title:'Native baseline QA',
+  model_id:model.id,protocol:'openai-chat-completions',reasoning_effort:'none',max_output_tokens:1024})).data.id;
  location.hash=`#/projects/default/sessions/${session}`;await until(async()=>(await mdo.call('sdk.context')).session===session);
  const before=(await mdo.files.read({path:repository+'/.git/index'})).base64;
  const panel=await mdo.panel.open({client:mdo.clientId,type:'mdo.changes',key:'native-changes',params:{repository},reveal:'activate'});
@@ -272,6 +281,7 @@ def main():
   (base/'web/index.html').write_text(page,encoding='utf-8')
   with (args.evidence/'native-host.log').open('wb') as log:
    environment={key:value for key,value in os.environ.items() if not (args.terminal or args.start) or key.lower()!='psmodulepath'}
+   if args.changes:environment['MDO_NATIVE_FIXTURE_KEY']='fixture-only'
    process=subprocess.Popen([*command,'--home',str(base/'home')],cwd=base,env=environment,stdout=log,stderr=log)
    try:
     wait_ready(port,process);deadline=time.monotonic()+90

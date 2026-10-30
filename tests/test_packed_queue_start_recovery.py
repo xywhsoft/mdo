@@ -76,6 +76,7 @@ def configure_model(port: int, endpoint: str, protocol: str = "openai-chat-compl
     config["providers"].append(provider)
     config["items"].append(model)
     config.pop("runtime_override", None)
+    config.pop("verification", None)
     status, _, raw = raw_request(port, "PUT", "/api/v1/settings/models",
         body=json.dumps({"schema_version": 1, "patch": config}).encode(),
         headers={"Content-Type": "application/json", "If-Match": headers["etag"]})
