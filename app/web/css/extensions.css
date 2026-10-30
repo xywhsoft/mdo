@@ -24,6 +24,21 @@
 .extension-check small { flex-basis: 100%; color: var(--muted); font-size: 11px; line-height: 1.6; }
 .extension-form textarea[name="prompt"] { min-height: 180px; resize: vertical; line-height: 1.6; }
 .extension-source { width: 100%; min-height: 300px; font-family: var(--font-mono, monospace) !important; line-height: 1.6; resize: vertical; }
+.extension-directory-files { display: flex; flex-wrap: wrap; gap: 6px; margin-block: 12px; }
+.extension-directory-files > p { flex-basis: 100%; margin: 8px 0 2px; color: var(--muted); font-size: 12px; }
+.extension-directory-files > button { max-width: 100%; overflow-wrap: anywhere; text-align: start; }
+.extension-directory-actions, .extension-current-file-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.extension-directory-actions { margin-block: 16px; }
+.extension-directory-content { min-width: 0; }
+.extension-current-file { display: flex; align-items: center; gap: 12px; padding-block: 14px; margin-bottom: 12px; border-block: 1px solid var(--border); }
+.extension-current-file > .icon { flex: none; width: 20px; height: 20px; color: var(--muted); }
+.extension-current-file-info { flex: 1; min-width: 0; display: grid; gap: 5px; }
+.extension-current-file-label { color: var(--muted); font-size: 11px; }
+.extension-current-file-path { font-size: 14px; font-weight: 600; line-height: 1.5; overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  .extension-current-file { flex-wrap: wrap; }
+  .extension-current-file-actions { flex-basis: 100%; padding-inline-start: 32px; }
+}
 .extension-editor-status { color: var(--danger, #c94343); white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
 .extension-editor-footer { justify-content: flex-end; margin-top: 16px; }
 .extension-transport textarea { min-height: 90px; font-family: var(--font-mono, monospace); }

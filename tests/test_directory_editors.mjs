@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { testDocument,descendants } from "./helpers/extension-dom.mjs";
 const flush=async()=>{for(let i=0;i<8;i++)await new Promise(r=>setImmediate(r));};
 const button=(root,name)=>descendants(root).find(n=>n.tagName==="BUTTON"&&n.textContent===name);
+function acceptPath(value){const view=document.body.querySelector(".extension-path-layer");assert(view,"Missing path dialog");if(value!==undefined){const input=view.querySelector("input");input.value=value;input.dispatchEvent(new Event("input"));}button(view,"确定").click();}
 function environment(){const old={document:globalThis.document,window:globalThis.window,confirm:globalThis.confirm};globalThis.document=testDocument();globalThis.window=new EventTarget();globalThis.confirm=()=>true;return()=>Object.assign(globalThis,old);}
 async function load(name,mock){if(mock.api&&!mock.api.get)mock.api.get=async()=>({data:{executable_supported:false}});globalThis.__directoryUI=mock;const url=new URL(`../app/web/js/features/settings/${name}.js`,import.meta.url);const source=readFileSync(url,"utf8")
  .replace('import { api } from "../../api/client.js";',"const {api}=globalThis.__directoryUI;")
@@ -25,9 +26,8 @@ test("directory editor preserves unopened resources, uses raw file tasks and fre
   saveDirectory:async(...args)=>{writes.push(args);if(gate)await gate;if(fail)throw Error("Disk write failed");return {};}};
  let editor;try{const mod=await load("directory-editor",mock);editor=mod.createDirectoryEditor();await editor.open({kind:"tools",item});const view=document.body.querySelector("dialog"),footer=view.querySelector("footer");
   assert(footer);assert(!view.querySelector(".mdo-layer-body").contains(footer));const source=view.querySelector('[aria-label="文件内容"]');source.value="changed C";source.dispatchEvent(new Event("input"));button(view,"保存目录").click();await flush();assert(view.textContent.includes("Disk write failed"));assert.equal(source.value,"changed C");
-  const upload=view.querySelector('[aria-label="添加资源文件"]');upload.files=[Object.assign(new Blob([new Uint8Array([0,255,7])]),{name:"data.bin"})];view.querySelector('[aria-label="文件路径"]').value=".hidden/deep/data.bin";
-  // Restore the edited file path before flushing; uploads may choose a new path.
-  view.querySelector('[aria-label="文件路径"]').value="tool.c";upload.files=[Object.assign(new Blob([new Uint8Array([0,255,7])]),{name:"data.bin"}),Object.assign(new Blob(["more"]),{name:"more.txt"})];upload.dispatchEvent(new Event("change"));await flush();
+  assert.equal(view.querySelector(".extension-current-file-path").textContent,"tool.c");assert(!view.querySelector('[aria-label="文件路径"]'));
+  const upload=view.querySelector('[aria-label="添加资源文件"]');upload.files=[Object.assign(new Blob([new Uint8Array([0,255,7])]),{name:"data.bin"}),Object.assign(new Blob(["more"]),{name:"more.txt"})];upload.dispatchEvent(new Event("change"));await flush();acceptPath("");await flush();
   fail=false;gate=new Promise(r=>release=r);button(view,"保存目录").click();button(view,"保存目录").click();await flush();assert.equal(writes.length,2);assert(view.querySelectorAll("input,textarea,select,button").every(n=>n.disabled));
   assert.equal(writes[1][4],item.revision);const edits=writes[1][3];assert.deepEqual(edits.find(e=>e.path==="tool.c"),{path:"tool.c",text:"changed C"});assert.deepEqual(edits.find(e=>e.path==="data.bin"),{path:"data.bin",task:"binary-task"});assert(!JSON.stringify(edits).includes("base64"));assert(!edits.some(e=>e.path===".hidden/deep/data.bin"));release();await flush();assert(!document.body.querySelector("dialog"));
  }finally{editor?.destroy();delete globalThis.__directoryUI;restore();}
@@ -39,18 +39,40 @@ test("store directory browser exposes files but cannot save, rename or replace r
  let editor;try{editor=(await load("directory-editor",mock)).createDirectoryEditor();await editor.open({kind:"skills",item});const view=document.body.querySelector("dialog");for(const name of ["保存目录","重命名","删除文件","添加资源","新建目录"])assert(button(view,name).disabled);assert(view.querySelector('[aria-label="文件内容"]').readOnly);button(view,"关闭").click();await flush();assert(!document.body.querySelector("dialog"));}finally{editor?.destroy();delete globalThis.__directoryUI;restore();}
 });
 
+test("current file is a plain heading and new text uses its own path dialog",async()=>{
+ const restore=environment(),writes=[],manifest={kind:"commands",name:"Test",alias:"test",entry:"command.c",platforms:["any"]};let editor;
+ const mock={targetState:()=>({selected:null}),subscribeTarget:()=>()=>{},directoryPath:(k,id)=>`/extensions/${k}/${id}`,directoryId:()=>true,directoryManifest:()=>manifest,api:{},saveDirectory:async(...args)=>{writes.push(args);return{};}};
+ try{editor=(await load("directory-editor",mock)).createDirectoryEditor();await editor.open({kind:"commands",manifest,text:"original command"});const view=document.body.querySelector("dialog"),heading=view.querySelector(".extension-current-file");
+  assert.equal(heading.querySelector("code").textContent,"command.c");assert(!heading.querySelector("input"));assert(heading.contains(button(view,"重命名")));
+  button(view,"新建文本").click();await flush();let dialog=document.body.querySelector(".extension-path-layer");assert(dialog);button(dialog,"取消").click();await flush();assert.equal(heading.querySelector("code").textContent,"command.c");
+  button(view,"新建文本").click();await flush();acceptPath("notes/usage.md");await flush();assert.equal(heading.querySelector("code").textContent,"notes/usage.md");
+  const text=view.querySelector('[aria-label="文件内容"]');text.value="New documentation";text.dispatchEvent(new Event("input"));button(view,"保存目录").click();await flush();
+  assert.deepEqual(writes[0][3],[{path:"command.c",text:"original command"},{path:"notes/usage.md",text:"New documentation"}]);
+ }finally{editor?.destroy();delete globalThis.__directoryUI;restore();}
+});
+
+test("resource paths remain explicit and cancelling staging or closing the owner keeps no orphan dialog",async()=>{
+ const restore=environment(),writes=[],manifest={kind:"mcp",name:"Test",alias:"test",entry:"mcp.json",platforms:["any"]};let editor,staged=0;
+ const mock={targetState:()=>({selected:null}),subscribeTarget:()=>()=>{},directoryPath:(k,id)=>`/extensions/${k}/${id}`,directoryId:()=>true,directoryManifest:()=>manifest,api:{delete:async()=>({})},stageExtensionFile:async()=>{staged++;return{id:"raw-resource"};},saveDirectory:async(...args)=>{writes.push(args);return{};}};
+ try{editor=(await load("directory-editor",mock)).createDirectoryEditor();await editor.open({kind:"mcp",manifest,text:"{}"});const view=document.body.querySelector("dialog"),upload=view.querySelector('[aria-label="添加资源文件"]');
+  upload.files=[new File(["raw"],"server")];upload.dispatchEvent(new Event("change"));await flush();button(document.body.querySelector(".extension-path-layer"),"取消").click();await flush();assert.equal(staged,0);
+  upload.dispatchEvent(new Event("change"));await flush();acceptPath("bin/server");await flush();assert.equal(staged,1);button(view,"保存目录").click();await flush();assert.deepEqual(writes[0][3].find(e=>e.path==="bin/server"),{path:"bin/server",task:"raw-resource"});
+  await editor.open({kind:"mcp",manifest,text:"{}"});button(document.body.querySelector("dialog"),"新建文本").click();await flush();assert(document.body.querySelector(".extension-path-layer"));editor.destroy();await flush();assert(!document.body.querySelector("dialog"));
+ }finally{editor?.destroy();delete globalThis.__directoryUI;restore();}
+});
+
 test("missing manual manifest stays repairable, and discarded binary staging is cancelled",async()=>{
  const restore=environment(),calls=[],item={id:"broken",name:"Broken",source:"manual",editable:true,revision:"d".repeat(64)};
  const mock={targetState:()=>({selected:null}),subscribeTarget:()=>()=>{},directoryPath:(k,id)=>`/extensions/${k}/${id}`,directoryId:()=>true,directoryManifest:(kind,id)=>({kind,alias:id,entry:"mcp.json",platforms:["any"]}),api:{get:async p=>({data:p.includes("/files?")?{items:[{path:"bin/server",bytes:3}],total:1}:item}),post:async()=>assert.fail("Cancellation has no POST route"),delete:async p=>{calls.push({p});return{data:{state:"cancelled"}};}},stageExtensionFile:async()=>({id:"discard-owned-file"})};
  let editor;try{editor=(await load("directory-editor",mock)).createDirectoryEditor();await editor.open({kind:"mcp",item});const view=document.body.querySelector("dialog");assert(view.textContent.includes("根清单缺失或损坏"));assert.equal(JSON.parse(view.querySelector('[aria-label="extension.json（稳定 ID、依赖、冲突、名称、入口与许可）"]').value).kind,"mcp");
-  const upload=view.querySelector('[aria-label="添加资源文件"]');upload.files=[new File([new Uint8Array([0,255])],"server")];upload.dispatchEvent(new Event("change"));await flush();button(view,"关闭").click();await flush();assert(calls.some(c=>c.p==="/extension-tasks/discard-owned-file"));
+  const upload=view.querySelector('[aria-label="添加资源文件"]');upload.files=[new File([new Uint8Array([0,255])],"server")];upload.dispatchEvent(new Event("change"));await flush();acceptPath();await flush();button(view,"关闭").click();await flush();assert(calls.some(c=>c.p==="/extension-tasks/discard-owned-file"));
  }finally{editor?.destroy();delete globalThis.__directoryUI;restore();}
 });
 
 test("a new directory atomically saves its first binary and empty resources without replacing the selected config",async()=>{
  const restore=environment(),writes=[],cancelled=[],manifest={kind:"mcp",name:"New MCP",alias:"new-mcp",entry:"mcp.json",platforms:["any"]};let staged=0;
  const mock={targetState:()=>({selected:null}),subscribeTarget:()=>()=>{},directoryPath:(k,id)=>`/extensions/${k}/${id}`,directoryId:()=>true,directoryManifest:()=>manifest,api:{post:async p=>{cancelled.push(p);}},stageExtensionFile:async()=>{staged++;return{id:"new-binary-task"};},saveDirectory:async(...args)=>{writes.push(args);return{};}};
- let editor;try{editor=(await load("directory-editor",mock)).createDirectoryEditor();await editor.open({kind:"mcp",manifest,text:"{}"});const view=document.body.querySelector("dialog"),upload=view.querySelector('[aria-label="添加资源文件"]');upload.files=[new File([new Uint8Array([0,255])],"server.exe"),new File([],"empty")];upload.dispatchEvent(new Event("change"));await flush();button(view,"保存目录").click();await flush();
+ let editor;try{editor=(await load("directory-editor",mock)).createDirectoryEditor();await editor.open({kind:"mcp",manifest,text:"{}"});const view=document.body.querySelector("dialog"),upload=view.querySelector('[aria-label="添加资源文件"]');upload.files=[new File([new Uint8Array([0,255])],"server.exe"),new File([],"empty")];upload.dispatchEvent(new Event("change"));await flush();acceptPath("");await flush();button(view,"保存目录").click();await flush();
   assert.equal(staged,1);assert.equal(writes[0][4],"");assert.deepEqual(writes[0][3],[{path:"mcp.json",text:"{}"},{path:"server.exe",task:"new-binary-task"},{path:"empty",text:""}]);assert.equal(cancelled.length,0);
  }finally{editor?.destroy();delete globalThis.__directoryUI;restore();}
 });
@@ -60,14 +82,14 @@ test("multiple resource staging uses all editor slots and rejects oversized sele
  const mock={targetState:()=>({selected:null}),subscribeTarget:()=>()=>{},directoryPath:(k,id)=>`/extensions/${k}/${id}`,directoryId:()=>true,directoryManifest:()=>manifest,api:{delete:async()=>({data:{state:"cancelled"}})},stageExtensionFile:async()=>({id:`owned-${++staged}`}),saveDirectory:async(...args)=>{writes.push(args);return{};}};
  try{editor=(await load("directory-editor",mock)).createDirectoryEditor();await editor.open({kind:"mcp",manifest,text:"{}"});const view=document.body.querySelector("dialog"),upload=view.querySelector('[aria-label="添加资源文件"]');
   upload.files=Array.from({length:33},(_,i)=>new File(["qa"],`file-${i}`));upload.dispatchEvent(new Event("change"));await flush();assert.equal(staged,0);assert(view.textContent.includes("每次最多保存 32 项修改"));
-  upload.files=Array.from({length:4},(_,i)=>new File(["qa"],`file-${i}`));upload.dispatchEvent(new Event("change"));await flush();assert.equal(staged,4);button(view,"保存目录").click();await flush();assert.equal(writes[0][3].length,5);
+  upload.files=Array.from({length:4},(_,i)=>new File(["qa"],`file-${i}`));upload.dispatchEvent(new Event("change"));await flush();acceptPath("");await flush();assert.equal(staged,4);button(view,"保存目录").click();await flush();assert.equal(writes[0][3].length,5);
  }finally{editor?.destroy();delete globalThis.__directoryUI;restore();}
 });
 
 test("Unix directory editors can mark a newly uploaded native program executable",async()=>{
  const restore=environment(),writes=[];let editor;const manifest={kind:"mcp",name:"Executable",alias:"executable",entry:"mcp.json",platforms:["linux-x86_64"]};
  const mock={targetState:()=>({selected:null}),subscribeTarget:()=>()=>{},directoryPath:(k,id)=>`/extensions/${k}/${id}`,directoryId:()=>true,directoryManifest:()=>manifest,api:{get:async path=>{assert.equal(path,"/extensions/mcp?limit=1");return{data:{executable_supported:true}};},delete:async()=>({data:{state:"cancelled"}})},stageExtensionFile:async()=>({id:"native-file"}),saveDirectory:async(...args)=>{writes.push(args);return{};}};
- try{editor=(await load("directory-editor",mock)).createDirectoryEditor();await editor.open({kind:"mcp",manifest,text:"{}"});const view=document.body.querySelector("dialog"),upload=view.querySelector('[aria-label="添加资源文件"]');upload.files=[new File([new Uint8Array([127,69])],"server")];upload.dispatchEvent(new Event("change"));await flush();
+ try{editor=(await load("directory-editor",mock)).createDirectoryEditor();await editor.open({kind:"mcp",manifest,text:"{}"});const view=document.body.querySelector("dialog"),upload=view.querySelector('[aria-label="添加资源文件"]');upload.files=[new File([new Uint8Array([127,69])],"server")];upload.dispatchEvent(new Event("change"));await flush();acceptPath();await flush();
   button(view,"server · 2 B").click();await flush();const mode=view.querySelector('[aria-label="可执行权限（Linux / Unix）"]');assert(!mode.disabled);mode.checked=true;mode.dispatchEvent(new Event("change"));await flush();button(view,"保存目录").click();await flush();
   assert.deepEqual(writes[0][3].find(e=>e.path==="server"),{path:"server",task:"native-file",executable:true});assert(!writes[0][3].find(e=>e.path==="mcp.json").executable);
  }finally{editor?.destroy();delete globalThis.__directoryUI;restore();}
