@@ -8,12 +8,15 @@ import { createAdvancedModelConfigPanel } from "./model-config-advanced.js";
 import { providerPresets, presetVariant, presetProvider, presetModel, suggestedModels } from "./provider-presets.js";
 import { sameModelConfig } from "./model-config-state.js";
 import { createModelProxyEditor } from "./model-proxy-editor.js";
+import { verifyModelSetup } from "./model-verification.js";
 
 const clone = (value) => structuredClone(value);
 const text = (key, fallback, params = {}) => t(`modelSetup.${key}`, params, fallback);
 const probeErrorKeys = { authentication_failed: "authFailed", credential_unavailable: "credentialUnavailable",
   connection_failed: "connectionFailed", catalog_invalid: "catalogInvalid", supplier_rate_limited: "rateLimited",
-  probe_busy: "probeBusy", model_test_failed: "testFailed", model_tools_test_failed: "toolTestFailed" };
+  probe_busy: "probeBusy", model_test_failed: "testFailed", model_tools_test_failed: "toolTestFailed",
+  model_config_changed: "verificationChanged", model_verification_unavailable: "verificationUnavailable",
+  model_tools_unsupported: "toolsUnsupported" };
 const probeError = (cause) => probeErrorKeys[cause.code] ? text(probeErrorKeys[cause.code], errorMessage(cause)) : errorMessage(cause);
 const button = (label, action, primary = false) => {
   const node = element("button", { text: label, className: primary ? "primary-button" : "secondary-button", attrs: { type: "button" } });
@@ -31,6 +34,8 @@ export function createModelConfigPanel(container) {
   let config = null, etag = "", selectedId = "", view = "list", busy = false;
   let draft = null, advanced = null, advancedChanged = false, needsRead = false;
   let notice = "", failed = false, disposed = false, loading = null;
+  const controller = new AbortController();
+  let verificationController = null;
   const verified = new Map();
   const keyDrafts = new Map();
 
@@ -38,7 +43,8 @@ export function createModelConfigPanel(container) {
   function setBusy(value) {
     busy = value; container.toggleAttribute("aria-busy", value);
     for (const node of container.querySelectorAll("button, input, select")) {
-      if (value) { node.dataset.beforeBusy = String(node.disabled); node.disabled = true; }
+      if (node.dataset.allowBusy === "true") continue;
+      if (value) { if (node.dataset.beforeBusy == null) node.dataset.beforeBusy = String(node.disabled); node.disabled = true; }
       else if (node.dataset.beforeBusy != null) { node.disabled = node.dataset.beforeBusy === "true"; delete node.dataset.beforeBusy; }
     }
   }
@@ -59,7 +65,7 @@ export function createModelConfigPanel(container) {
       setBusy(true);
       try {
         const response = await api.get("/models/config"); if (disposed) return;
-        config = response.data; etag = response.etag; needsRead = false;
+        config = response.data; etag = response.etag; needsRead = false; verified.clear();
         if (!provider()) selectedId = config.providers.find((entry) => config.items.some((item) => item.id === config.default_model && item.provider === entry.id))?.id || config.providers[0]?.id || "";
         notice = ""; failed = false; render();
       } catch (cause) { if (!disposed) { notice = errorMessage(cause); failed = true; render(); } }
@@ -70,15 +76,16 @@ export function createModelConfigPanel(container) {
     if (busy || needsRead || config.runtime_override) return false;
     setBusy(true); let committed = false;
     try {
-      const latest = await api.get("/models/config");
+      const latest = await api.get("/models/config", { signal: controller.signal });
       if (!sameModelConfig(config, latest.data)) throw new ApiError(uiErrorText("error.detail.modelSettingsChanged", {}, "Model settings changed"), { status: 412 });
       etag = latest.etag;
       const patch = { default_model: next.default_model, providers: next.providers, items: next.items };
       const saved = keys.length
-        ? await api.post("/models/setup", { patch, keys }, { ifMatch: etag })
-        : await api.put("/settings/models", { schema_version: 1, patch }, { ifMatch: etag });
+        ? await api.post("/models/setup", { patch, keys }, { ifMatch: etag, signal: controller.signal })
+        : await api.put("/settings/models", { schema_version: 1, patch }, { ifMatch: etag, signal: controller.signal });
       committed = true; config = next; etag = saved.etag;
-      for (const key of keys) { keyDrafts.delete(key.provider); verified.clear(); }
+      for (const key of keys) keyDrafts.delete(key.provider);
+      verified.clear();
       if (draft) draft.key = "";
       draft = null; needsRead = true;
       try {
@@ -140,10 +147,10 @@ export function createModelConfigPanel(container) {
       draft.items = [...new Set(result.data.items)];
       draft.selected = new Set(suggestedModels(draft.items, draft.choice.models).filter((id) =>
         !config.items.some((model) => model.provider === draft.provider?.id && model.wire_model === id))); draft.queried = true;
-      notice = text("catalogConnected", "模型列表连接成功；选择模型后添加，实际可用性需单独测试。"); failed = false; render();
+      notice = text("catalogConnected", "模型列表读取成功；添加后将自动适配并验证回复和工具调用。"); failed = false; render();
     } catch (cause) {
       if (cause.code === "catalog_unsupported") {
-        draft.queried = true; notice = text("catalogFallback", "此服务不提供模型列表。可选用模板模型或手动填写模型 ID；保存后请测试。"); failed = false; render();
+        draft.queried = true; notice = text("catalogFallback", "此服务不提供模型列表。可选用模板模型或手动填写模型 ID；添加后将自动验证。"); failed = false; render();
       } else status(probeError(cause), true);
     } finally { setBusy(false); }
   }
@@ -157,18 +164,24 @@ export function createModelConfigPanel(container) {
     if (!draft.provider) next.providers.push(entry);
     const manual = draft.manual.split(/[\n,;]+/).map((id) => id.trim()).filter(Boolean);
     const ids = [...new Set([...draft.selected, ...manual])];
-    let added = 0;
+    const added = [], makeDefault = draft.default;
     for (const id of ids) {
       if (id.length > 256) { status(text("idTooLong", "模型 ID 最多 256 个字符。"), true); return; }
       if (next.items.some((item) => item.provider === entry.id && item.wire_model === id)) continue;
       const model = presetModel(entry, id, next.items);
-      model.proxy = clone(draft.modelProxy); next.items.push(model); added++;
-      if (draft.default && added === 1) next.default_model = model.id;
+      model.proxy = clone(draft.modelProxy); next.items.push(model); added.push(model.id);
     }
-    if (!added) { status(text("selectModels", "请至少选择一个尚未添加的模型，或填写模型 ID。"), true); return; }
+    if (!added.length) { status(text("selectModels", "请至少选择一个尚未添加的模型，或填写模型 ID。"), true); return; }
     selectedId = entry.id;
     const keys = draft.key.trim() ? [{ provider: entry.id, value: draft.key.trim() }] : [];
-    await save(next, keys);
+    if (await save(next, keys) && !disposed && !needsRead) {
+      const results = await verifyModels(config.items.filter(model => added.includes(model.id)));
+      if (makeDefault && !disposed && results?.get(added[0])?.verified) {
+        const message = notice, error = failed, updated = clone(config);
+        updated.default_model = added[0];
+        if (await save(updated)) status(message, error);
+      }
+    }
   }
   function renderTemplates(body) {
     body.append(element("h3", { text: text("chooseSupplier", "选择供应商") }), element("p", { className: "model-config-status", text: text("templateHelp", "选择服务并填写 API Key。自己的供应商 Key 无需登录墨斗账号。") }));
@@ -234,23 +247,78 @@ export function createModelConfigPanel(container) {
       onChange: value => { draft.modelProxy = value; } }).element);
     const makeDefault = element("input", { attrs: { type: "checkbox", name: "make-default" } });
     makeDefault.checked = draft.default; makeDefault.addEventListener("change", () => { draft.default = makeDefault.checked; });
-    form.append(element("label", { className: "supplier-inline-check" }, [makeDefault, element("span", { text: text("useDefault", "将首个新增模型设为默认") })]));
+    form.append(element("label", { className: "supplier-inline-check" }, [makeDefault, element("span", { text: text("useDefault", "首个新增模型验证通过后设为默认") })]));
+    form.append(element("p", { className: "model-config-status", text: text("autoVerifyHelp", "添加后会保存配置，并逐个测试回复和工具调用，可能消耗少量 Token；探针不会执行工具。模型列表不含完整能力信息，未知能力使用保守配置。") }));
     const actions = element("div", { className: "supplier-actions" }, [
       button(text("cancel", "取消"), () => { draft.key = ""; draft = null; view = "detail"; notice = ""; render(); }),
       button(draft.queried ? text("refreshList", "刷新模型列表") : text("connect", "连接并读取模型"), () => void discover()),
-      button(draft.queried ? text("addSelected", "添加所选模型") : text("saveUnverified", "直接保存，稍后测试"), () => void addSelected(), true),
+      button(draft.queried ? text("addSelected", "添加并验证所选模型") : text("saveAndVerify", "直接添加并验证"), () => void addSelected(), true),
     ]);
     form.append(actions); body.append(form);
+  }
+  function verificationLabel(record) {
+    if (!record) return text("untested", "已配置 · 尚未测试");
+    if (record.running) return text(record.running === "tools" ? "verifyingTools" : "verifyingReply", record.running === "tools" ? "正在验证工具调用…" : "正在验证回复…");
+    if (record.error) return record.reply?.state === "passed" ? text("toolsFailureDetail", "回复通过 · 工具调用失败：{reason}", { reason: probeError(record.error) }) : probeError(record.error);
+    if (record.verified) return record.tools?.state === "passed" ? text("verified", "已验证 · 回复和工具调用通过") : text("replyVerified", "已验证 · 回复通过（未声明工具能力）");
+    if (record.reply?.state === "failed") return text("replyFailed", "回复验证失败，请检查配置后重新验证。");
+    if (record.tools?.state === "failed") return text("toolsFailed", "回复通过 · 工具调用验证失败，请检查配置后重新验证。");
+    if (record.reply?.state === "passed") return text("replyOnly", "回复通过 · 工具调用尚未通过验证");
+    if (record.tools?.state === "passed") return text("toolsOnly", "工具调用通过 · 回复尚未通过验证");
+    return text("verificationIncomplete", "验证未完成，请重新验证。");
+  }
+  async function verifyModels(models) {
+    if (busy || disposed || !models.length) return;
+    verificationController = new AbortController();
+    setBusy(true); let results;
+    try {
+      results = await verifyModelSetup(models, {
+        signal: verificationController.signal,
+        request: async (id, tools, signal) => (await api.post("/models/test", { model_id: id, tools }, { signal })).data,
+        onProgress({ model, index, total, phase, state, result }) {
+          verified.set(model.id, { ...result, running: state === "running" ? phase : "" });
+          notice = text("verificationProgress", "验证 {index}/{total} · {model} · {stage}", {
+            index: index + 1, total, model: model.name, stage: verificationLabel(verified.get(model.id)),
+          }); failed = false; render();
+        },
+      });
+      // Native records are authoritative across page reloads and restarts.
+      const current = await api.get("/models/config", { signal: controller.signal });
+      if (!sameModelConfig(config, current.data)) {
+        verified.clear(); throw new ApiError(text("verificationChanged", "配置已变化，请重新验证。"));
+      }
+      config = current.data; etag = current.etag;
+      for (const model of models) {
+        const result = results.get(model.id), evidence = config.verification?.[model.id];
+        if (result.verified && !evidence?.verified) {
+          result.verified = false; result.error = new ApiError(text("verificationChanged", "配置已变化，请重新验证。"));
+          verified.set(model.id, result);
+        }
+      }
+      const passed = [...results.values()].filter(result => result.verified).length;
+      notice = text("verificationComplete", "验证完成 · {passed}/{total} 个模型通过；未通过的模型可查看原因并重新验证。", { passed, total: models.length });
+      failed = passed !== models.length; render();
+    } catch (cause) {
+      results = undefined;
+      for (const model of models) if (verified.get(model.id)?.running) verified.set(model.id, {});
+      if (!disposed) {
+        notice = cause.name === "AbortError" ? text("verificationStopped", "已停止后续验证。配置已保存，可稍后重新验证。") : errorMessage(cause);
+        failed = cause.name !== "AbortError"; render();
+      }
+    }
+    finally { verificationController = null; render(); setBusy(false); }
+    return results;
   }
   async function testModel(model, node, line, tools = false) {
     if (busy) return;
     setBusy(true); line.classList.remove("resource-error"); writeUiText(line, text("testing", "正在请求模型…"));
     try {
-      const result = await api.post("/models/test", { model_id: model.id, tools });
-      const message = tools ? text("toolsTested", "工具调用测试通过 · {ms} ms", { ms: result.data.latency_ms }) : text("tested", "回复测试通过 · {ms} ms", { ms: result.data.latency_ms });
-      verified.set(model.id, message); writeUiText(line, message);
-    } catch (cause) { verified.delete(model.id); writeUiText(line, probeError(cause)); line.classList.add("resource-error"); }
-    finally { setBusy(false); node.focus({ preventScroll: true }); }
+      const result = await api.post("/models/test", { model_id: model.id, tools }, { signal: controller.signal });
+      if (disposed) return;
+      const record = result.data.verification || { [tools ? "tools" : "reply"]: { state: "passed" } };
+      verified.set(model.id, record); writeUiText(line, verificationLabel(record));
+    } catch (cause) { if (!disposed) { verified.set(model.id, { error: cause }); writeUiText(line, probeError(cause)); line.classList.add("resource-error"); } }
+    finally { setBusy(false); if (!disposed) node.focus({ preventScroll: true }); }
   }
   function renderDetail(body) {
     const entry = provider(); if (!entry) return;
@@ -278,9 +346,12 @@ export function createModelConfigPanel(container) {
     body.append(element("p", { className: "model-config-status", text: text("testHelp", "测试会发送简短请求，可能消耗少量 Token；工具调用测试不会执行任何工具。") }));
     const list = element("div", { className: "supplier-models" });
     for (const model of models) {
-      const line = element("p", { className: "supplier-model-status", text: verified.get(model.id) || (model.builtin ? text("builtinAvailable", "内置服务") : text("untested", "已配置 · 尚未测试")), attrs: { role: "status" } });
+      const record = verified.get(model.id) || config.verification?.[model.id];
+      const line = element("p", { className: `supplier-model-status ${record?.error || record?.reply?.state === "failed" || record?.tools?.state === "failed" ? "resource-error" : ""}`, text: record ? verificationLabel(record) : (model.builtin ? text("builtinAvailable", "内置服务") : text("untested", "已配置 · 尚未测试")), attrs: { role: "status" } });
       const row = element("article", { className: "supplier-model" }, [element("div", { className: "supplier-model-title" }, [element("strong", { text: model.name }), model.id === config.default_model ? element("span", { className: "model-default-badge", text: uiMessage("modelConfig.defaultTag") }) : null]), element("small", { text: model.wire_model }), line]);
       const actions = element("div", { className: "supplier-actions" });
+      const verify = button(text("verifyAgain", "完整验证 / 重试"), () => void verifyModels([model])); actions.append(verify);
+      verify.disabled = model.enabled === false;
       const test = button(text("testReply", "测试回复"), () => void testModel(model, test, line)); actions.append(test);
       if (model.enabled !== false && model.capabilities.includes("tool-call-output")) {
         const toolTest = button(text("testTools", "测试工具调用"), () => void testModel(model, toolTest, line, true)); actions.append(toolTest);
@@ -311,6 +382,10 @@ export function createModelConfigPanel(container) {
     const header = element("div", { className: "supplier-toolbar" }, [element("p", { className: "model-config-status", text: config ? text("default", "默认模型：{model}", { model: config.items.find((item) => item.id === config.default_model)?.name || config.default_model }) : uiMessage("resource.loading") }),
       button(uiMessage("modelConfig.refresh"), () => void reload()), button(text("addSupplier", "添加供应商"), add, true)]);
     container.append(header, element("p", { className: `supplier-notice ${failed ? "resource-error" : "model-config-status"}`, text: notice, attrs: { role: failed ? "alert" : "status", hidden: notice ? null : "" } }));
+    if (verificationController) {
+      const stop = button(text("stopVerification", "停止后续验证"), () => verificationController?.abort());
+      stop.dataset.allowBusy = "true"; header.append(stop);
+    }
     if (!config) return;
     if (config.runtime_override || needsRead) {
       const line = element("p", { className: "resource-error", text: config.runtime_override ? uiMessage("modelConfig.runtimeOverride") : notice }); container.append(line);
@@ -347,5 +422,5 @@ export function createModelConfigPanel(container) {
   }
   const unsubscribe = subscribeLocale(() => { if (!advanced && !busy) render(); });
   return Object.freeze({ ensureLoaded: () => config ? Promise.resolve() : reload(), reload,
-    destroy() { disposed = true; if (draft) draft.key = ""; keyDrafts.clear(); advanced?.destroy(); unsubscribe(); } });
+    destroy() { disposed = true; controller.abort(); verificationController?.abort(); if (draft) draft.key = ""; keyDrafts.clear(); advanced?.destroy(); unsubscribe(); } });
 }

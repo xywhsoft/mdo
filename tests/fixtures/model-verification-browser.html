@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo 模型添加验证验收</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<style>
+body { display: block; max-width: 1080px; margin: 20px auto; padding: 0 20px; background: var(--bg); color: var(--ink); overflow: auto; }
+h1 { font-size: 20px; } #fixture-help { color: var(--muted); margin: 12px 0 24px; }
+#panel { border: 1px solid var(--border); border-radius: 10px; padding: 20px; }
+</style>
+<h1>模型添加流程验收</h1>
+<p id="fixture-help">本页使用本机模拟数据，不访问真实模型。Alpha 首次工具调用失败，重试后成功；Beta 直接通过。</p>
+<section id="panel"></section><div id="toast-region"></div>
+<script type="module">
+import { createModelConfigPanel } from "/app/web/js/features/settings/model-config-panel.js";
+import { loadLocale } from "/app/web/js/i18n.js";
+const nativeFetch = globalThis.fetch;
+let config = { default_model: "existing", runtime_override: false,
+  providers: [{ id: "existing", name: "现有供应商", builtin: true, endpoints: {} }],
+  items: [{ id: "existing", name: "现有默认模型", provider: "existing", wire_model: "existing", builtin: true, capabilities: [] }], verification: {} };
+const attempts = new Map(), calls = [];
+globalThis.fetch = async (path, options = {}) => {
+  if (path.startsWith("/lang/")) return nativeFetch(`/app/web${path}`, options);
+  const body = options.body ? JSON.parse(options.body) : null;
+  calls.push({ path, model: body?.model_id, tools: body?.tools });
+  let data = {}, status = 200, error;
+  if (path === "/api/v1/models/config") data = structuredClone(config);
+  else if (path === "/api/v1/models") data = { providers: [], models: [] };
+  else if (path === "/api/v1/models/discover") data = { items: ["Alpha", "Beta", "Not-selected"] };
+  else if (path === "/api/v1/models/setup" || path === "/api/v1/settings/models") config = { ...structuredClone(body.patch), verification: config.verification };
+  else if (path === "/api/v1/models/test") {
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    const phase = body.tools ? "tools" : "reply", key = `${body.model_id}:${phase}`;
+    attempts.set(key, (attempts.get(key) || 0) + 1);
+    const record = config.verification[body.model_id] ||= { verified: false };
+    if (body.tools && body.model_id.endsWith("Alpha") && attempts.get(key) === 1) {
+      record.tools = { state: "failed" }; status = 422;
+      error = { code: "model_tools_test_failed", message: "模拟服务未返回合法的工具调用" };
+    } else {
+      record[phase] = { state: "passed", latency_ms: 1000 };
+      record.verified = record.reply?.state === "passed" && record.tools?.state === "passed";
+      data = { verified: true, latency_ms: 1000, verification: structuredClone(record) };
+    }
+  } else throw new Error(`Unexpected fixture request: ${path}`);
+  return new Response(JSON.stringify({ ok: status === 200, data, error }), { status, headers: { ETag: '"fixture-revision"' } });
+};
+await loadLocale("zh-CN");
+const panel = createModelConfigPanel(document.querySelector("#panel"));
+window.addEventListener("pagehide", () => panel.destroy(), { once: true });
+await panel.ensureLoaded();
+</script>
+</html>

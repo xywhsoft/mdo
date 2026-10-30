@@ -31,7 +31,7 @@ export function createModelProxyEditor(value, { allowProvider = false,
   const label = (key, fallback, control) => element("label", { className: "model-field" }, [copy("span", key, fallback), control]);
   body.append(label("settings.proxyKind", uiMessage("settings.proxyKind", {}, "模型请求代理"), mode),
     copy("p", allowProvider ? "modelProxy.modelHelp" : "modelProxy.providerHelp",
-      allowProvider ? uiText("modelProxy.modelHelp", {}, "默认直接跟随全局。选择跟随供应商时使用该供应商的代理；独立配置会覆盖整组代理参数。")
+      allowProvider ? uiText("modelProxy.modelHelp", {}, "可跟随全局或供应商设置；独立配置会覆盖整组代理参数。")
         : uiText("modelProxy.providerHelp", {}, "默认跟随全局。模型选择跟随供应商后，使用此处设置；直连可绕过全局代理。")));
   const fields = {};
   const manual = element("div", { className: "model-form-grid model-proxy-fields" });
