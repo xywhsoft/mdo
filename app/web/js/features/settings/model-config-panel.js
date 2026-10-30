@@ -4,6 +4,7 @@ import { api, ApiError } from "../../api/client.js";
 import { loadModels } from "../../state/catalogs.js";
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
 import { openLayer } from "../../components/layers.js";
+import { mountIcons } from "../../components/icons.js";
 
 import { createAdvancedModelConfigPanel } from "./model-config-advanced.js";
 import { providerPresets, setProviderCatalog, presetVariant, providerDisplayName } from "./provider-presets.js";
@@ -38,6 +39,7 @@ export function createModelConfigPanel(container) {
   let notice = "", failed = false, disposed = false, loading = null;
   const controller = new AbortController();
   let verificationController = null;
+  let removal = null;
   const verified = new Map();
   const keyDrafts = new Map();
 
@@ -56,12 +58,12 @@ export function createModelConfigPanel(container) {
     if (line) { writeUiText(line, message); line.classList.toggle("resource-error", error); line.hidden = !message; }
   }
   function blocked() {
-    if (busy) return true;
+    if (busy || removal) return true;
     if (setup || [...keyDrafts.values()].some(Boolean) || advanced?.hasUnsaved()) { toast(t("modelConfig.unsaved"), "error"); return true; }
     return false;
   }
   async function reload() {
-    if (disposed || busy || setup || [...keyDrafts.values()].some(Boolean) || advanced) return;
+    if (disposed || busy || setup || removal || [...keyDrafts.values()].some(Boolean) || advanced) return;
     if (loading) return loading;
     loading = (async () => {
       setBusy(true);
@@ -113,6 +115,50 @@ export function createModelConfigPanel(container) {
     if (blocked()) return;
     advanced?.destroy(); advanced = null; view = "list";
     if (advancedChanged) { advancedChanged = false; await reload(); } else render();
+  }
+  function canRemoveProvider(entry) {
+    return !entry.builtin && entry.removable === true && !config.items.some(model =>
+      model.provider === entry.id && (model.builtin || model.removable === false));
+  }
+  function removeProvider(entry, opener) {
+    if (blocked() || needsRead || config.runtime_override || !canRemoveProvider(entry)) return;
+    const next = clone(config), models = next.items.filter(model => model.provider === entry.id);
+    next.providers = next.providers.filter(item => item.id !== entry.id);
+    next.items = next.items.filter(model => model.provider !== entry.id);
+    const fallback = next.items.find(model => model.id === next.default_model) ||
+      next.items.find(model => model.builtin && model.enabled !== false) || next.items.find(model => model.enabled !== false);
+    if (!fallback) { status(t("modelConfig.defaultInUse"), true); return; }
+    const changedDefault = next.default_model !== fallback.id;
+    next.default_model = fallback.id;
+    const own = { pending: false, layer: null };
+    own.layer = openLayer({ title: uiMessage("modelSetup.removeSupplier", {}, "删除供应商"), icon: "close", width: "32rem", height: "auto",
+      mobile: "fit", maximizable: false, owner: container, opener, beforeClose: () => !own.pending,
+      onClosed() { if (removal === own) removal = null; },
+    });
+    removal = own; own.layer.element.classList.add("supplier-remove-layer");
+    own.layer.body.append(element("p", { text: uiMessage("modelSetup.removeSupplierPrompt", { name: providerDisplayName(entry), count: models.length }, "删除供应商“{name}”及其 {count} 个模型？已有会话会保留，使用这些模型的会话需要重新选择模型。") }));
+    if (changedDefault) own.layer.body.append(element("p", { text: uiMessage("modelSetup.removeSupplierDefault", { model: fallback.name }, "默认模型将切换为 {model}。") }));
+    const error = element("p", { className: "resource-error", attrs: { role: "alert", hidden: "" } });
+    own.layer.body.append(error);
+    const cancel = button(uiMessage("modelSetup.cancel", {}, "取消"), () => void own.layer.close());
+    const apply = button(uiMessage("modelConfig.confirmRemove", {}, "确认删除"), async () => {
+      if (own.pending || disposed || removal !== own) return;
+      own.pending = true; error.hidden = true;
+      for (const node of own.layer.element.querySelectorAll("button")) node.disabled = true;
+      try {
+        if (await save(next)) {
+          keyDrafts.delete(entry.id);
+          if (!provider()) selectedId = config.items.find(model => model.id === config.default_model)?.provider || config.providers[0]?.id || "";
+          own.layer.dispose();
+          if (!needsRead) { notice = text("supplierRemoved", "供应商及其模型已删除。"); failed = false; }
+          render(); container.querySelector('.model-config-item[aria-current="true"]')?.focus();
+        } else { writeUiText(error, notice); error.hidden = false; }
+      } finally {
+        own.pending = false;
+        if (removal === own) for (const node of own.layer.element.querySelectorAll("button")) node.disabled = false;
+      }
+    });
+    apply.className = "danger-button"; own.layer.footer.append(cancel, apply); cancel.focus();
   }
   function closeSetup(refresh = true) {
     const own = setup; if (!own) return;
@@ -344,8 +390,15 @@ export function createModelConfigPanel(container) {
     for (const entry of config.providers) {
       const item = button(providerDisplayName(entry), () => { if (blocked()) return; selectedId = entry.id; view = "detail"; notice = ""; render(); });
       item.className = "model-config-item"; item.setAttribute("aria-current", entry.id === selectedId && view === "detail" ? "true" : "false");
-      item.append(element("small", { text: text("modelCount", "{count} 个模型", { count: config.items.filter((model) => model.provider === entry.id).length }) })); list.append(item);
+      item.append(element("small", { text: text("modelCount", "{count} 个模型", { count: config.items.filter((model) => model.provider === entry.id).length }) }));
+      const remove = button("", () => removeProvider(entry, remove)); remove.className = "supplier-remove";
+      remove.setAttribute("aria-label", text("removeSupplierNamed", "删除供应商 {name}", { name: providerDisplayName(entry) }));
+      remove.setAttribute("title", canRemoveProvider(entry) ? text("removeSupplier", "删除供应商") : text("supplierProtected", "内置或受保护的供应商不可删除。"));
+      remove.disabled = !canRemoveProvider(entry);
+      remove.append(element("span", { className: "icon", attrs: { "data-icon": "close", "aria-hidden": "true" } }));
+      list.append(element("div", { className: "supplier-list-row", attrs: { "data-provider-id": entry.id } }, [item, remove]));
     }
+    mountIcons(list);
     const body = element("div", { className: "supplier-body" });
     if (view !== "list") body.append(button(view === "advanced" ? text("backSuppliers", "返回供应商") : text("back", "返回"), () => {
       void back();
@@ -369,5 +422,5 @@ export function createModelConfigPanel(container) {
   }
   const unsubscribe = subscribeLocale(() => { if (!advanced && !busy) render(); if (setup && !draft) renderTemplatesWindow(setup); });
   return Object.freeze({ ensureLoaded: () => config ? Promise.resolve() : reload(), reload,
-    destroy() { disposed = true; controller.abort(); verificationController?.abort(); closeSetup(false); keyDrafts.clear(); advanced?.destroy(); unsubscribe(); } });
+    destroy() { disposed = true; controller.abort(); verificationController?.abort(); removal?.layer.dispose(); closeSetup(false); keyDrafts.clear(); advanced?.destroy(); unsubscribe(); } });
 }

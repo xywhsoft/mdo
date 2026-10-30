@@ -43,7 +43,7 @@ test("cancellation stops remaining phases and models", async () => {
 });
 
 const flush = async () => { for (let i = 0; i < 30; i++) await new Promise(resolve => setImmediate(resolve)); };
-function fixture({ failTools = false, hold = false, holdCatalog = false, holdDiscovery = false, staleEvidence = false, missingBeta = false, textOnly = false, partialMetadata = false } = {}) {
+function fixture({ failTools = false, hold = false, holdCatalog = false, holdDiscovery = false, staleEvidence = false, missingBeta = false, textOnly = false, partialMetadata = false, initialConfig = null, holdSave = false } = {}) {
   const previous = { document: globalThis.document, fetch: globalThis.fetch };
   const document = testDocument(), create = document.createElement;
   document.querySelector = selector => document.body.querySelector(selector);
@@ -56,6 +56,7 @@ function fixture({ failTools = false, hold = false, holdCatalog = false, holdDis
   const container = document.createElement("section"); document.body.append(container);
   let config = { default_model: "existing", providers: [{ id: "existing", name: "Existing", builtin: true, endpoints: {} }],
     items: [{ ...model("existing"), provider: "existing", wire_model: "existing", builtin: true }], verification: {} };
+  if (initialConfig) config = structuredClone(initialConfig);
   const calls = []; let release, rejectTools = failTools;
   const paused = new Promise(resolve => { release = resolve; });
   globalThis.fetch = async (path, options = {}) => {
@@ -86,6 +87,7 @@ function fixture({ failTools = false, hold = false, holdCatalog = false, holdDis
         status=201;data={added:true,verified:true,agent_ready:tools,verification_saved:true,model_id:body.model.id,verification:record};
       }
     } else if (path === "/api/v1/settings/models") {
+      if (holdSave) await paused;
       config = { ...structuredClone(body.patch), verification: config.verification };
     } else if (path === "/api/v1/models/test") {
       if (hold) await paused;
@@ -274,4 +276,93 @@ test("a late supplier catalog cannot reopen or replace a cancelled window",async
     assert(!document.querySelector(".model-setup-layer"));assert(!f.container.querySelector(".supplier-templates"));
     assert.equal(f.config().items.length,1);
   }finally{f.restore();}
+});
+
+function deletionFixture(options = {}) {
+  const profile = (id, provider, builtin = false) => ({ ...model(id), provider, wire_model: id,
+    builtin, removable: !builtin, window: { context_tokens: 64000, max_output_tokens: 8192 } });
+  return fixture({ initialConfig: {
+    default_model: "existing", verification: {},
+    providers: [
+      { id: "existing", name: "Existing", builtin: true, removable: false, endpoints: {} },
+      { id: "custom", name: "Custom", builtin: false, removable: true, endpoints: {} },
+      { id: "other", name: "Other", builtin: false, removable: true, endpoints: {} },
+    ],
+    items: [profile("existing", "existing", true), profile("a", "custom"), profile("b", "custom"), profile("c", "other")],
+  }, ...options });
+}
+const supplierRow = (f, id) => f.container.querySelector(".supplier-list").children.find(row => row.dataset.providerId === id);
+const removeLayer = () => document.querySelector(".supplier-remove-layer");
+const removalButton = label => descendants(removeLayer()).find(node => node.tagName === "BUTTON" && node.textContent === label);
+
+test("supplier X actions are separate from selection and protect the built-in supplier", async () => {
+  const f = deletionFixture(); try {
+    await f.panel.ensureLoaded(); const row = supplierRow(f, "custom"), select = row.querySelector(".model-config-item"), remove = row.querySelector(".supplier-remove");
+    assert(!select.contains(remove)); assert(!remove.disabled);
+    assert.equal(remove.getAttribute("aria-label"), "删除供应商 Custom");
+    assert.equal(remove.querySelector(".icon").dataset.icon, "close");
+    const builtin = supplierRow(f, "existing").querySelector(".supplier-remove");
+    assert(builtin.disabled); builtin.click(); assert(!removeLayer());
+    remove.click(); assert(removeLayer()?.open); assert(!f.container.contains(removeLayer()));
+    assert.equal(select.getAttribute("aria-current"), "false");
+    assert(removeLayer().textContent.includes("2 个模型"));
+    removalButton("取消").click(); await flush();
+    assert(!removeLayer()); assert.equal(f.config().items.length, 4);
+    assert(!f.calls.some(call => call.method === "PUT"));
+  } finally { f.restore(); }
+});
+
+test("confirmed supplier deletion removes its profiles atomically and keeps the current default", async () => {
+  const f = deletionFixture(); try {
+    await f.panel.ensureLoaded(); supplierRow(f, "custom").querySelector(".supplier-remove").click();
+    removalButton("确认删除").click(); await flush();
+    assert(!removeLayer()); assert(!supplierRow(f, "custom"));
+    assert.deepEqual(f.config().providers.map(p => p.id), ["existing", "other"]);
+    assert.deepEqual(f.config().items.map(m => m.id), ["existing", "c"]);
+    assert.equal(f.config().default_model, "existing");
+    const writes = f.calls.filter(call => call.method === "PUT"); assert.equal(writes.length, 1);
+    assert(writes[0].body.patch.items.every(item => writes[0].body.patch.providers.some(p => p.id === item.provider)));
+  } finally { f.restore(); }
+});
+
+test("deleting the selected default supplier explains and applies the built-in fallback", async () => {
+  const f = deletionFixture(); try {
+    f.config().default_model = "a"; await f.panel.ensureLoaded();
+    supplierRow(f, "custom").querySelector(".supplier-remove").click();
+    assert(removeLayer().textContent.includes("默认模型将切换为 existing"));
+    removalButton("确认删除").click(); await flush();
+    assert.equal(f.config().default_model, "existing");
+    assert.equal(supplierRow(f, "existing").querySelector(".model-config-item").getAttribute("aria-current"), "true");
+  } finally { f.restore(); }
+});
+
+test("a configuration conflict preserves the supplier and the confirmation for review", async () => {
+  const f = deletionFixture(); try {
+    await f.panel.ensureLoaded(); supplierRow(f, "custom").querySelector(".supplier-remove").click();
+    f.config().providers[1].name = "Changed on another page";
+    removalButton("确认删除").click(); await flush();
+    assert(removeLayer()?.open); assert(!removeLayer().querySelector(".resource-error").hidden);
+    assert.equal(f.config().providers.length, 3); assert.equal(f.config().items.length, 4);
+    assert(!f.calls.some(call => call.method === "PUT"));
+  } finally { f.restore(); }
+});
+
+test("a pending supplier deletion cannot submit twice or close its confirmation", async () => {
+  const f = deletionFixture({ holdSave: true }); try {
+    await f.panel.ensureLoaded(); supplierRow(f, "custom").querySelector(".supplier-remove").click();
+    const layer = removeLayer(), apply = removalButton("确认删除");
+    apply.click(); await flush(); assert(apply.disabled); apply.click();
+    layer.dispatchEvent(new Event("cancel", { cancelable: true })); await flush();
+    assert.equal(removeLayer(), layer); assert.equal(f.calls.filter(call => call.method === "PUT").length, 1);
+    f.release(); await flush(); assert(!removeLayer()); assert.equal(f.config().providers.length, 2);
+  } finally { f.restore(); }
+});
+
+test("protected profiles and page disposal cannot leave an active supplier removal", async () => {
+  const f = deletionFixture(); try {
+    f.config().items[1].removable = false; await f.panel.ensureLoaded();
+    assert(supplierRow(f, "custom").querySelector(".supplier-remove").disabled);
+    supplierRow(f, "other").querySelector(".supplier-remove").click(); assert(removeLayer());
+    f.panel.destroy(); assert(!removeLayer()); assert(!f.calls.some(call => call.method === "PUT"));
+  } finally { f.restore(); }
 });
