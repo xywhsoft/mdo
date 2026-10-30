@@ -60,6 +60,9 @@ static bool MdoApiModelProvidersRun(MdoApiContext* Context)
     xvalue* Data=xrtValueObject();
     bool Ok=Data && xrtValueObjectSet(Data,XRT_STR_LITERAL("providers"),xrtValueObjectGet(Catalog,XRT_STR_LITERAL("providers"))) &&
         MdoApiValueSetString(Data,"version",MdoApiModelText(Catalog,"version",64)) && MdoApiValueSetBool(Data,"stale",Stale);
+    if(Ok && xrtValueObjectHas(Catalog,XRT_STR_LITERAL("locales")))
+        Ok=xrtValueObjectSet(Data,XRT_STR_LITERAL("locales"),xrtValueObjectGet(Catalog,XRT_STR_LITERAL("locales"))) &&
+            xrtValueObjectSet(Data,XRT_STR_LITERAL("default_locale"),xrtValueObjectGet(Catalog,XRT_STR_LITERAL("default_locale")));
     xrtValueRelease(Catalog);if(Ok)return MdoApiReplySuccessTake(Context,200,Data,NULL);
     xrtValueRelease(Data);return MdoApiReplyError(Context,503,"model_catalog_unavailable","Supplier catalog is unavailable",NULL);
 }
