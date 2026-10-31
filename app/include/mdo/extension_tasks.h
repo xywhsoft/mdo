@@ -12,6 +12,9 @@ bool MdoExtensionTaskPack(cstr Kind,cstr DirectoryId,xcancel* Cancel,xvalue** Re
 bool MdoExtensionTaskWrite(cstr Id,uint64 Offset,const void* Data,size_t Bytes,xvalue** Result,char Error[512]);
 bool MdoExtensionTaskSeal(cstr Id,xcancel* Cancel,xvalue** Result,char Error[512]);
 bool MdoExtensionTaskCancel(cstr Id,xvalue** Result,char Error[512]);
+/* End an owned, inactive transfer with its actual failure, rather than
+ * replacing transport/installation errors with a user-cancellation receipt. */
+bool MdoExtensionTaskFail(cstr Id,cstr Message,xvalue** Result,char Error[512]);
 bool MdoExtensionTaskForget(cstr Id,char Error[512]);
 bool MdoExtensionTaskComplete(cstr Id,const xvalue* Outcome,xvalue** Result,char Error[512]);
 /* Returns an owned Home-relative path only for a sealed archive. */

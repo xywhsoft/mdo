@@ -3371,5 +3371,16 @@
   "modelWizard.alreadyAdded": "已添加",
   "ui.extensionPanels.restoreBuiltinRole": "恢复默认",
   "ui.extensionPanels.restoreBuiltinRoleConfirm": "恢复此角色的内置文件？本地修改将被替换，当前启停状态保持不变。",
-  "action.confirm": "确定"
+  "action.confirm": "确定",
+  "extensionInstall.title": "扩展安装",
+  "extensionInstall.trustTitle": "信任并安装扩展？",
+  "extensionInstall.trustPrompt": "请确认你信任以下扩展及其来源。点击“安装”后将加入下载任务，自动下载并安装；可在下载任务中查看结果或取消。",
+  "extensionInstall.installing": "正在安装",
+  "extensionInstall.success": "安装成功",
+  "extensionInstall.failed": "安装失败，点击重试",
+  "extensionInstall.uncertain": "状态待确认",
+  "extensionInstall.interrupted": "安装任务被中断，请检查本机扩展与下载任务后再重试。",
+  "extensionInstall.runtimeAttention": "文件已安装，但加载或启用失败，请查看扩展详情。",
+  "extensionInstall.invalidPlan": "安装计划不可用，请刷新后重试。",
+  "extensionInstall.queueing": "正在加入下载任务…"
 }

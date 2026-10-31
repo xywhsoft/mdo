@@ -101,3 +101,16 @@ test("same-device connection updates retain the window; switching device closes 
   assert(!doc.body.querySelector("dialog"));old.click();await flush();assert.equal(calls.length,0);
   center.open();assert(doc.body.querySelector("dialog").textContent.includes("New task"));assert(!doc.body.querySelector("dialog").textContent.includes("Old task"));
 });
+
+
+test("the download window tracks and cancels native installation jobs without owning their lifetime",async t=>{
+ const previous=globalThis.document,doc=testDocument(),entry=new TestElement("button");
+ for(const name of ["label","count"]){const span=new TestElement("span");span.setAttribute(`data-downloads-${name}`,"");entry.append(span);}doc.querySelector=name=>name==="#open-downloads"?entry:null;globalThis.document=doc;
+ const registry=createDownloadRegistry(),id="sdk-"+"9".repeat(32),calls=[];
+ registry.install("local",id,{name:"Queued external tool",state:"installing"});
+ const center=createDownloadCenter({registry,installer:{refresh:async()=>{},cancel:async row=>{calls.push(row.operationId);}},transport:{get:async()=>({data:{}})}});
+ t.after(()=>{center.destroy();globalThis.document=previous;});center.open();await flush();const dialog=doc.body.querySelector("dialog");assert(dialog.textContent.includes("Queued external tool"));
+ descendants(dialog).find(n=>n.tagName==="BUTTON"&&n.textContent==="Cancel").click();await flush();assert.deepEqual(calls,[id]);
+ dialog.querySelector(".mdo-layer-controls").lastChild.click();assert.equal(registry.list("local")[0].state,"installing");assert(!doc.body.querySelector("dialog"));
+ registry.install("local",id,{state:"failed",error:"Store HTTP 503"});center.open();assert(doc.body.querySelector("dialog").textContent.includes("Store HTTP 503"));
+});

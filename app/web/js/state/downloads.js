@@ -23,7 +23,13 @@ export function createDownloadRegistry(storage = null) {
     if (JSON.stringify(previous) === JSON.stringify(next)) return;
     records.set(key, next); publish();
   }
-  const list = target => [...records.values()].filter(r => r.target === target && !r.hidden).sort((a, b) => b.started - a.started);
+  const list = target => [...records.values()].filter(r => r.target === target && !r.hidden &&
+    !(r.source === "archive" && r.store?.version_id && [...records.values()].some(job => job.target === target && job.source === "install" && job.versionIds?.includes(r.store.version_id)))).sort((a, b) => b.started - a.started);
+  function install(target, operationId, patch = {}) {
+    if (!/^sdk-[0-9a-f]{32}$/.test(operationId)) throw new Error("Invalid installation operation identity");
+    const key = `${target}:install:${operationId}`;
+    put(key, { target, source: "install", operationId, ...patch }); return records.get(key);
+  }
   function observe(path, data, target = "local") {
     if (!data || typeof data !== "object") return;
     if (path === "/extension-tasks" || path.startsWith("/extension-tasks/")) {
@@ -32,8 +38,12 @@ export function createDownloadRegistry(storage = null) {
         const state = task.state === "receiving" ? task.store ? "downloading" : "uploading" : task.state === "cancel_requested" ? "cancelling" : task.state === "ready" && task.active ? task.phase || "running" : task.state;
         put(`${target}:archive:${task.id}`, { target, source: "archive", taskId: task.id, action: task.purpose, kind: task.kind, directoryId: task.directory_id,
           name: task.name || task.alias || task.directory_id || task.id, state: state === "submitting" ? "uploading" : state,
-          done: task.phase === "uploading" || task.phase === "submitting" ? task.sent || 0 : task.received || 0, total: task.bytes || 0,
+          done: task.phase === "uploading" || task.phase === "submitting" ? task.sent || 0 : task.received || task.transferred_bytes || 0, total: task.bytes || 0,
           error: String(task.error || "").slice(0, 1000), store: task.store || null, publication: task.publication || null });
+        if(task.store?.version_id)for(const parent of records.values())if(parent.target===target&&parent.source==="install"&&parent.versionIds?.includes(task.store.version_id)){
+          const progress={...parent.transferProgress,[task.store.version_id]:task.received||task.transferred_bytes||0};
+          put(parent.key,{transferProgress:progress,done:Object.values(progress).reduce((sum,n)=>sum+n,0)});
+        }
       }
     }
     if (path === "/cli-tools" && Array.isArray(data.tasks)) {
@@ -82,7 +92,7 @@ export function createDownloadRegistry(storage = null) {
     try { const result = await operation(); put(key, { state: "complete" }); return result; }
     catch (error) { put(key, { state: !error?.status || error?.name === "AbortError" ? "unknown" : "failed", error: String(error?.message || "").slice(0, 1000) }); throw error; }
   }
-  return { list, observe, run, subscribe(fn) { listeners.add(fn); fn(); return () => listeners.delete(fn); },
+  return { list, observe, run, install, subscribe(fn) { listeners.add(fn); fn(); return () => listeners.delete(fn); },
     hide(key) { const row=records.get(key);if(row){records.set(key,{...row,hidden:true});publish();} },
     clear(target) { for (const row of records.values()) if (row.target === target && !downloadActive(row) && row.state !== "ready") records.set(row.key, { ...row, hidden: true }); publish(); } };
 }

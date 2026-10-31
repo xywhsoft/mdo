@@ -6,11 +6,12 @@ import { downloadRegistry, downloadActive } from "../../state/downloads.js";
 
 import { element } from "../../utils/dom.js";
 import { openLayer } from "../../components/layers.js";
+import { extensionInstaller } from "../../state/extension-installs.js";
 
 const text = (key, args = {}) => t(`downloads.${key}`, args, key);
 const node = (tag, value, cls) => element(tag, { ...(value == null ? {} : { text: value }), className: cls });
 const bytes = size => `${(size / 1048576).toFixed(1)} MiB`;
-export function createDownloadCenter({ updatePanel, navigation, registry = downloadRegistry, transport = api } = {}) {
+export function createDownloadCenter({ updatePanel, navigation, registry = downloadRegistry, transport = api, installer = extensionInstaller } = {}) {
   const entry = document.querySelector("#open-downloads");
   if (!entry) return null;
   const message = element("p", { className: "download-error", attrs: { role: "alert" } }), list = node("div", null, "download-list"), clear = node("button", "", "secondary-button"), close = node("button", "", "secondary-button");
@@ -20,7 +21,7 @@ export function createDownloadCenter({ updatePanel, navigation, registry = downl
   const writable = () => { const s = targetState(); return !s.selected || s.connected && !s.runtimeChanged && s.selected.mode !== "view"; };
   async function refresh() {
     if (destroyed || polling) return; polling = true;
-    try { await Promise.allSettled([transport.get("/extension-tasks"), transport.get("/update"), transport.get("/distribution")]); }
+    try { await Promise.allSettled([transport.get("/extension-tasks"), transport.get("/update"), transport.get("/distribution"),installer.refresh({discover:true})]); }
     finally { polling = false; schedule(); }
   }
   function schedule() {
@@ -64,7 +65,10 @@ export function createDownloadCenter({ updatePanel, navigation, registry = downl
       if (row.state === "unknown") item.append(node("p", text("uncertain"), "download-meta"));
       if (row.submission) item.append(node("p", `${text("submission")} #${row.submission.id} · ${row.submission.state}`, "download-meta"));
       const controls = node("div", null, "download-actions");
-      if (row.source === "archive") {
+      if (row.source === "install") {
+        if(downloadActive(row))controls.append(action(row,text("cancel"),()=>installer.cancel(row)));
+        else controls.append(action(row,text("clear"),()=>registry.hide(row.key)));
+      } else if (row.source === "archive") {
         if (!["complete", "cancelled", "expired"].includes(row.state)) controls.append(action(row, text("cancel"), () => transport.delete(`/extension-tasks/${row.taskId}`)));
         if (row.state === "ready" && row.action === "install") controls.append(action(row, uiMessage("extensionBrowser.install", {}, "安装"), async () => {
           if (!confirm(uiMessage("ui.center.haveYouReviewedTheArchiveAndTrustItsSource", {}, "已检查归档内容并信任其来源，允许安装此扩展？"))) return;

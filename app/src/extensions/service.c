@@ -19,7 +19,15 @@ static bool MdoExtServiceFetch(cstr Path,cstr Method,const void* Body,size_t Byt
  bool Ok=Url&&Path&&!strncmp(Path,MDO_EXT_SERVICE,sizeof(MDO_EXT_SERVICE)-1)&&Bytes<=1048576&&(!Cancel||!xrtCancelRequested(Cancel));
  if(Ok&&Lease&&Lease->Managed){Ok=Lease->AccessToken&&strlen(Lease->AccessToken)<=4096;if(Ok){snprintf(Authorization,sizeof(Authorization),"Bearer %s",Lease->AccessToken);Headers[Count++]=(XS_FetchHeader){"Authorization",Authorization};}}
  XS_FetchRequest Request={0};Request.Size=sizeof(Request);Request.Version=XS_FETCH_REQUEST_VERSION;Request.Url=Url;Request.Method=Method;Request.Headers=Headers;Request.HeaderCount=Count;Request.Body=Body;Request.BodySize=Bytes;Request.Timeout=30000000;Request.IdleTimeout=10000000;Request.MaxBodyBytes=Binary?1048576:8u*1024u*1024u;Request.Cancel=Lease&&Lease->Managed?Lease->Cancel:Cancel;Response->Size=sizeof(*Response);
- if(Ok){xrtClearError();Ok=xsFetch(&Request,Response);}xrtSecureZero(Authorization,sizeof(Authorization));xrtFree(Url);
+ if(Ok)for(unsigned Attempt=0;Attempt<3;Attempt++){
+  xrtClearError();bool Fetched=xsFetch(&Request,Response);
+  bool Retry=!strcmp(Method,"GET")&&Attempt<2&&!Response->Redirects&&(!Request.Cancel||!xrtCancelRequested(Request.Cancel))&&(!Fetched||Response->Status==408||Response->Status==502||Response->Status==503||Response->Status==504);
+  if(!Retry){Ok=Fetched;break;}
+  xsFetchResponseUnit(Response);Response->Size=sizeof(*Response);
+  unsigned Delay=Attempt?750:250;for(unsigned Wait=0;Wait<Delay&&(!Request.Cancel||!xrtCancelRequested(Request.Cancel));Wait+=25)xrtSleep(25);
+  if(Request.Cancel&&xrtCancelRequested(Request.Cancel)){Ok=false;break;}
+ }
+ xrtSecureZero(Authorization,sizeof(Authorization));xrtFree(Url);
  if(!Ok){if(Request.Cancel&&xrtCancelRequested(Request.Cancel))return MdoExtServiceError(Error,"Extension transfer cancelled or its account session changed");const xerror* Cause=xrtGetError();if(Error&&Cause)snprintf(Error,512,"The extension service connection failed: %.400s",xrtErrorMessage(Cause));else MdoExtServiceError(Error,"The extension service connection could not complete");return false;}
  if(Response->Status==401&&Lease&&Lease->Managed)(void)MdoAccountRejectAccess(Lease);
  if(Response->Redirects||Response->Status<200||Response->Status>=300){char Message[512]="The extension service rejected this request";xvalue* Envelope=Response->Body&&Response->BodySize<=65536?xrtJsonParse(xrtStrViewN((cstr)Response->Body,Response->BodySize)):NULL;cstr Text=MdoExtensionText(Envelope,"message",500);if(Text)snprintf(Message,sizeof(Message),"%s",Text);xrtValueRelease(Envelope);return MdoExtServiceError(Error,Message);}
@@ -65,15 +73,16 @@ bool MdoExtensionServiceDownload(cstr Kind,cstr Version,xcancel* Cancel,xvalue**
  xvalue* Query=xrtValueObject(),*Entry=NULL,*Task=NULL,*Origin=NULL;bool Ok=Query&&MdoExtServicePut(Query,"action","detail")&&MdoExtServicePut(Query,"version_id",Version)&&MdoExtensionServiceRead(Query,Cancel,&Entry,Error);xrtValueRelease(Query);
  cstr ActualKind=MdoExtensionText(Entry,"kind",32),State=MdoExtensionText(Entry,"state",16),Hash=MdoExtensionText(Entry,"sha256",64);uint64 Bytes=0;
  cstr ActualVersion=MdoExtensionText(Entry,"version_id",32);Ok=Ok&&ActualKind&&!strcmp(Kind,ActualKind)&&ActualVersion&&!strcmp(Version,ActualVersion)&&State&&!strcmp(State,"published")&&MdoExtServiceNumber(Entry,"bytes",&Bytes)&&Bytes&&Bytes<=MDO_EXTENSION_ARCHIVE_BYTES;
- xvalue* Input=xrtValueObject();Ok=Ok&&Input&&MdoExtServicePut(Input,"kind",Kind)&&MdoExtServicePut(Input,"purpose","install")&&MdoExtServicePut(Input,"sha256",Hash)&&xrtValueObjectSetNew(Input,XRT_STR_LITERAL("bytes"),xrtValueUInt(Bytes))&&MdoExtensionTaskBegin(Input,&Task,Error);xrtValueRelease(Input);
+ xvalue* Input=xrtValueObject();Ok=Ok&&Input&&MdoExtServicePut(Input,"kind",Kind)&&MdoExtServicePut(Input,"purpose","install")&&MdoExtServicePut(Input,"sha256",Hash)&&xrtValueObjectSetNew(Input,XRT_STR_LITERAL("bytes"),xrtValueUInt(Bytes))&&MdoExtensionTaskBeginWait(Input,Cancel,&Task,Error);xrtValueRelease(Input);
  char Id[33]={0};if(Ok)snprintf(Id,sizeof(Id),"%s",MdoExtensionText(Task,"id",32));MdoExtensionTaskUse* Use=Ok?MdoExtensionTaskUseBegin(Id,true,Cancel,Error):NULL;MdoAccountLease Lease={0};Origin=Ok?MdoExtServiceOrigin(Entry):NULL;
  Ok=Ok&&Use&&Origin&&MdoExtensionTaskOrigin(Use,Origin,Error)&&MdoExtServiceLease(MdoExtensionTaskUseCancel(Use),false,&Lease,Error);
  for(uint64 Offset=0;Ok&&Offset<Bytes;){char* Path=xrtFormat(MDO_EXT_SERVICE "/archive?dependency_protocol=1&version=%s&offset=%llu",Version,(unsigned long long)Offset);XS_FetchResponse Response={0};uint64 Remaining=Bytes-Offset;size_t Want=(size_t)(Remaining<MDO_EXTENSION_TASK_CHUNK?Remaining:MDO_EXTENSION_TASK_CHUNK);
-  Ok=Path&&MdoExtServiceFetch(Path,"GET",NULL,0,true,&Lease,MdoExtensionTaskUseCancel(Use),&Response,Error)&&Response.BodySize==Want&&Response.ContentType&&!strncmp(Response.ContentType,"application/zip",15);
+  Ok=Path&&MdoExtServiceFetch(Path,"GET",NULL,0,true,&Lease,MdoExtensionTaskUseCancel(Use),&Response,Error);
+  if(Ok&&(Response.BodySize!=Want||!Response.ContentType||strncmp(Response.ContentType,"application/zip",15))){snprintf(Error,512,"Store archive chunk mismatch: expected %zu application/zip bytes, received %zu bytes (HTTP %u, %.80s)",Want,Response.BodySize,(unsigned)Response.Status,Response.ContentType?Response.ContentType:"no Content-Type");Ok=false;}
   xvalue* Progress=NULL;if(Ok)Ok=MdoExtensionTaskUseWrite(Use,Offset,Response.Body,Response.BodySize,&Progress,Error);xrtValueRelease(Progress);xsFetchResponseUnit(&Response);xrtFree(Path);Offset+=Want;
  }
  MdoAccountRelease(&Lease);MdoExtensionTaskUseEnd(Use);if(Ok)Ok=MdoExtensionTaskSeal(Id,Cancel,Result,Error);
- if(!Ok&&Id[0]){xvalue* Receipt=NULL;char Ignored[512];(void)MdoExtensionTaskCancel(Id,&Receipt,Ignored);xrtValueRelease(Receipt);}
+ if(!Ok&&Id[0]){xvalue* Receipt=NULL;char Ignored[512];if(Cancel&&xrtCancelRequested(Cancel))(void)MdoExtensionTaskCancel(Id,&Receipt,Ignored);else (void)MdoExtensionTaskFail(Id,Error&&Error[0]?Error:"Store archive download or validation failed",&Receipt,Ignored);xrtValueRelease(Receipt);}
  xrtValueRelease(Entry);xrtValueRelease(Task);xrtValueRelease(Origin);if(!Ok&&Error&&!Error[0])MdoExtServiceError(Error,"The store archive changed or failed its byte/hash/ZIP validation");return Ok;
 }
 bool MdoExtensionServiceInstall(cstr Id,const xvalue* Input,xcancel* Cancel,xvalue** Result,char Error[512]){

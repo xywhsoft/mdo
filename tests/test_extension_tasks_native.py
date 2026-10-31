@@ -9,6 +9,7 @@ from native_product_runner import product
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT = r'''
+static int32 QaReleaseTaskSlot(void* Id){xrtSleep(120);char Error[512];xvalue* Out=NULL;MdoExtensionTaskCancel(Id,&Out,Error);xrtValueRelease(Out);return 0;}
 static void QaTaskFlag(xvalue* R,cstr K,bool B){xrtValueObjectSetNew(R,xrtStrView(K),xrtValueBool(B));}
 static bool QaBeginTask(cstr Purpose,cstr Kind,const void* Data,size_t Bytes,char Id[33],char Error[512]){
  char Hash[65];xvalue* P=xrtValueObject(),*Out=NULL;bool Ok=MdoExtensionHashBytes(Data,Bytes,Hash)&&SdkPut(P,"purpose",Purpose)&&SdkPut(P,"kind",Kind)&&SdkPut(P,"sha256",Hash)&&SdkPutUInt(P,"bytes",Bytes)&&MdoExtensionTaskBegin(P,&Out,Error);
@@ -38,6 +39,10 @@ xvalue* QaProductContract(const xvalue* P,xvfs V){
  char Waiting[3][33]={{0}},Fourth[33]={0};bool Quota=true;
  for(size_t I=0;I<3;I++)Quota=Quota&&QaBeginTask("review","",Json,strlen(Json),Waiting[I],Error);
  Quota=Quota&&!QaBeginTask("review","",Json,strlen(Json),Fourth,Error);QaTaskFlag(R,"active_task_quota",Quota);
+ xvalue* Slot=xrtValueObject();char SlotHash[65];MdoExtensionHashBytes(Json,strlen(Json),SlotHash);SdkPut(Slot,"purpose","review");SdkPut(Slot,"sha256",SlotHash);SdkPutUInt(Slot,"bytes",strlen(Json));xcancel* SlotCancel=xrtCancelCreate();xrtCancelRequest(SlotCancel);
+ QaTaskFlag(R,"queued_download_wait_is_cancellable",!MdoExtensionTaskBeginWait(Slot,SlotCancel,&Out,Error)&&strstr(Error,"cancelled"));xrtValueRelease(Out);Out=NULL;xrtCancelDestroy(SlotCancel);
+ xthread* SlotThread=xrtThreadCreate(QaReleaseTaskSlot,Waiting[0],0);bool SlotWait=SlotThread&&MdoExtensionTaskBeginWait(Slot,NULL,&Out,Error);if(SlotThread){xrtThreadWait(SlotThread);xrtThreadDestroy(SlotThread);}if(SlotWait)snprintf(Fourth,sizeof(Fourth),"%s",SdkField(Out,"id"));xrtValueRelease(Out);Out=NULL;xrtValueRelease(Slot);QaTaskFlag(R,"queued_download_waits_for_existing_transfer_slot",SlotWait);if(Fourth[0]){MdoExtensionTaskCancel(Fourth,&Out,Error);xrtValueRelease(Out);Out=NULL;MdoExtensionTaskForget(Fourth,Error);}
+
  bool Cancel=MdoExtensionTaskCancel(Id,&Out,Error);xrtValueRelease(Out);Out=NULL;Archive=MdoExtensionTaskArchive(Id,Error);Cancel=Cancel&&!Archive;xrtFree(Archive);QaTaskFlag(R,"cancel_removes_archive_access",Cancel);
  bool Clear=MdoExtensionTaskForget(Id,Error)&&MdoExtensionTaskCancel(BadId,&Out,Error);xrtValueRelease(Out);Out=NULL;Clear=Clear&&MdoExtensionTaskForget(BadId,Error);
  for(size_t I=0;I<3;I++){Clear=Clear&&MdoExtensionTaskCancel(Waiting[I],&Out,Error);xrtValueRelease(Out);Out=NULL;Clear=Clear&&MdoExtensionTaskForget(Waiting[I],Error);}
@@ -78,6 +83,15 @@ xvalue* QaProductContract(const xvalue* P,xvfs V){
  char CancelId[33]={0};bool Pinned=QaBeginTask("review","",Json,strlen(Json),CancelId,Error)&&MdoExtensionTaskWrite(CancelId,0,Json,strlen(Json),&Out,Error);xrtValueRelease(Out);Out=NULL;Pinned=Pinned&&MdoExtensionTaskSeal(CancelId,NULL,&Out,Error);xrtValueRelease(Out);Out=NULL;
  MdoExtensionTaskUse* Use=Pinned?MdoExtensionTaskUseBegin(CancelId,false,NULL,Error):NULL;Pinned=Pinned&&Use&&MdoExtensionTaskCancel(CancelId,&Out,Error)&&!strcmp(SdkField(Out,"state"),"cancel_requested")&&xrtCancelRequested(MdoExtensionTaskUseCancel(Use))&&!MdoExtensionTaskForget(CancelId,Error);xrtValueRelease(Out);Out=NULL;
  MdoExtensionTaskUseEnd(Use);Out=MdoExtensionTaskRead(CancelId,Error);Pinned=Pinned&&Out&&!strcmp(SdkField(Out,"state"),"cancelled");xrtValueRelease(Out);Out=NULL;Pinned=Pinned&&MdoExtensionTaskForget(CancelId,Error);QaTaskFlag(R,"cancellation_waits_for_file_owner",Pinned);
+
+ char FailedId[33]={0};bool Failed=QaBeginTask("install","skills",Data,(size_t)Bytes,FailedId,Error)&&MdoExtensionTaskWrite(FailedId,0,Data,100,&Out,Error);xrtValueRelease(Out);Out=NULL;
+ Failed=Failed&&MdoExtensionTaskFail(FailedId,"HTTP 503: upstream unavailable",&Out,Error)&&!strcmp(SdkField(Out,"state"),"failed")&&!strcmp(SdkField(Out,"error"),"HTTP 503: upstream unavailable");uint64 Transferred=0,Retained=1;
+ Failed=Failed&&MdoExtArchiveNumber(Out,"transferred_bytes",&Transferred)&&Transferred==100&&MdoExtArchiveNumber(Out,"stored_bytes",&Retained)&&Retained==0;xrtValueRelease(Out);Out=NULL;
+ MdoExtensionTasksUnit();Failed=Failed&&MdoExtensionTasksInit();Out=MdoExtensionTaskRead(FailedId,Error);Failed=Failed&&Out&&!strcmp(SdkField(Out,"state"),"failed")&&!strcmp(SdkField(Out,"error"),"HTTP 503: upstream unavailable");xrtValueRelease(Out);Out=NULL;
+ Failed=Failed&&MdoExtensionTaskFail(FailedId,"secondary cleanup failure",&Out,Error)&&MdoExtArchiveNumber(Out,"transferred_bytes",&Transferred)&&Transferred==100&&!strcmp(SdkField(Out,"error"),"HTTP 503: upstream unavailable");xrtValueRelease(Out);Out=NULL;
+ QaTaskFlag(R,"transfer_failure_survives_cleanup_and_restart",Failed);MdoExtensionTaskForget(FailedId,Error);
+ char UserCancelled[33]={0};bool CancelReason=QaBeginTask("review","",Json,strlen(Json),UserCancelled,Error)&&MdoExtensionTaskCancel(UserCancelled,&Out,Error);xrtValueRelease(Out);Out=NULL;
+ CancelReason=CancelReason&&MdoExtensionTaskFail(UserCancelled,"late transfer error",&Out,Error)&&!strcmp(SdkField(Out,"state"),"cancelled");xrtValueRelease(Out);Out=NULL;MdoExtensionTaskForget(UserCancelled,Error);QaTaskFlag(R,"failure_does_not_override_explicit_cancellation",CancelReason);
  g_MdoApiInitialized=false;SdkServer=NULL;MdoApiExtensionTasksUnit();MdoApiWriteUnit();MdoExtensionTasksUnit();xrtFree(Data);MdoExtensionsUnit();if(Home)MdoHomeUnit();return R;
 }
 '''

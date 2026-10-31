@@ -148,7 +148,7 @@ export async function apiRequest(path, options = {}) {
     "sdk.services", "sdk.describe", "sdk.context", "sdk.native", "events.read", "plugin.list",
     "panel.types", "panel.list", "panel.get", "panel.layout.get", "panel.report", "browser.report",
     "resource.list", "resource.get", "browser.list", "browser.get", "browser.result",
-    "client.hello", "client.poll", "ui.result", "stream.read", "stream.stat", "operation.get", "operation.wait", "operation.result",
+    "client.hello", "client.poll", "ui.result", "stream.read", "stream.stat", "operation.list", "operation.get", "operation.wait", "operation.result",
   ].includes(options.body?.method);
   return !ephemeralSdkRead && !["GET", "HEAD", "OPTIONS"].includes((options.method ?? "GET").toUpperCase())
     ? trackWrite(tracked) : tracked();

@@ -39,11 +39,31 @@ test("store managed items cannot be published or accept old JSON import packages
  let store;try{const {createSingleResourceStore}=await loadStore(api);store=createSingleResourceStore("mcp",()=>{});await store.publish({id:"store-id",source:"store",editable:false});assert.equal(requests,0);await assert.rejects(store.importPackage({manifest:{kind:"mcp"},resources:[]}),/ZIP/);}finally{store?.destroy();restore();}
 });
 
-test("store updates inspect one host plan and preserve disabled activation intent",async t=>{
- const restore=environment(),writes=[],row={kind:"skills",id:"skill:qa.updated",xid:"work-xid",version_id:"new-version",name:"Updated skill",manifest:{id:"skill:qa.updated"},state:"published"};
- const previous={kind:"skills",id:row.id,directory_id:row.xid,source:"store",enabled:false,desired_enabled:false,revision:"d".repeat(64),installation:{version_id:"old-version"}};
+test("store install opens one trust window, queues independently and preserves the inspected update",async()=>{
+ const restore=environment(),writes=[],{createDownloadRegistry}=await import("../app/web/js/state/downloads.js"),registry=createDownloadRegistry();
+ const row={kind:"skills",id:"skill:qa.updated",xid:"work-xid",version_id:"new-version",name:"Updated skill",manifest:{id:"skill:qa.updated"},state:"published"};
+ let done=false;const previous={kind:"skills",id:row.id,directory_id:row.xid,source:"store",enabled:false,desired_enabled:false,revision:"d".repeat(64),installation:{version_id:"old-version"}};
  const plan={id:"a".repeat(32),revision:"b".repeat(64),ready:true,items:[{...row,directory_id:row.xid,operation:"install",old_exists:true,desired_enabled:false,expected_revision:previous.revision}]};
- const api={get:async path=>({data:path==="/ecosystem"?{[row.xid]:previous}:previous}),post:async(path,body)=>{if(body.action==="catalog")return{data:{items:[row],total:1}};if(body.action==="detail")return{data:row};if(body.action==="files")return{data:{items:[],total:0}};if(body.action==="install_plan"){assert.equal(body.version_id,row.version_id);return{data:plan};}throw Error("Unexpected request");}};
- t.mock.method(globalThis,"fetch",async(url,o)=>{writes.push({url,body:JSON.parse(o.body)});return Response.json({ok:true,data:{runtime_ready:true}});});
- let store;try{store=(await loadStore(api)).createSingleResourceStore("skills",()=>{});store.activate(true);await flush();descendants(store.root).find(n=>n.tagName==="BUTTON"&&n.textContent==="更新").click();await flush();const view=document.body.querySelector("dialog");descendants(view).find(n=>n.tagName==="BUTTON"&&n.textContent==="下载并安装").click();await flush();const review=document.body.querySelectorAll("dialog").at(-1);assert(review.textContent.includes(row.id));assert.equal(plan.items[0].desired_enabled,false);descendants(review).find(n=>n.tagName==="BUTTON"&&n.textContent==="应用此计划").click();await flush();assert.equal(writes.length,1);assert.equal(writes[0].url,"/api/v1/ecosystem");assert.deepEqual(writes[0].body,{action:"apply_plan",plan_id:plan.id,revision:plan.revision,trust_code:true});assert.equal(plan.items[0].expected_revision,previous.revision);}finally{store?.destroy();restore();}
+ const api={get:async()=>({data:{[row.xid]:{...previous,installation:{version_id:done?row.version_id:"old-version"}}}}),post:async(path,body)=>{if(body.action==="catalog")return{data:{items:[row],total:1}};if(body.action==="install_plan"){assert.equal(body.version_id,row.version_id);return{data:plan};}throw Error("Unexpected request");}};
+ const id="sdk-"+"1".repeat(32),installer={async enqueue(received,metadata){assert.equal(received,plan);writes.push(metadata);return registry.install("local",id,{...metadata,versionIds:[row.version_id],state:"installing"});}};
+ let store;try{store=(await loadStore(api)).createSingleResourceStore("skills",()=>{},()=>{},null,{registry,installer});store.activate(true);await flush();
+ descendants(store.root).find(n=>n.tagName==="BUTTON"&&n.textContent==="更新").click();await flush();
+ const review=document.body.querySelector("dialog");assert(review.textContent.includes("信任并安装"));assert(review.textContent.includes(row.name));assert(!review.querySelector('input[type="checkbox"]'));assert.equal(writes.length,0);
+ descendants(review).find(n=>n.tagName==="BUTTON"&&n.textContent==="安装").click();await flush();assert.equal(writes.length,1);assert.equal(plan.items[0].desired_enabled,false);assert.equal(plan.items[0].expected_revision,previous.revision);
+ assert(!document.body.querySelector("dialog"));let control=descendants(store.root).find(n=>n.dataset?.installState==="installing");assert(control?.disabled);assert(control.querySelector(".extension-install-spinner"));assert.equal(registry.list("local").length,1);
+ done=true;registry.install("local",id,{state:"complete"});await flush();assert(descendants(store.root).some(n=>n.tagName==="BUTTON"&&n.textContent==="安装成功"));
+ }finally{store?.destroy();restore();}
+});
+
+test("all nine install buttons request trust once; closing the page does not cancel accepted work",async()=>{
+ const restore=environment(),{createDownloadRegistry}=await import("../app/web/js/state/downloads.js");
+ try {for(const kind of ["agents","subagents","tools","mcp","skills","commands","external-tools","knowledge","plugins"]){
+  const registry=createDownloadRegistry(),row={kind,name:"Fixture "+kind,xid:"work",version_id:"version",id:kind+":fixture"},plan={id:"p",revision:"r",ready:true,items:[{...row,operation:"install"}]};let calls=0;
+  const api={get:async()=>({data:{}}),post:async(path,body)=>({data:body.action==="catalog"?{items:[row],total:1}:body.action==="install_plan"?plan:{}})};
+  const id="sdk-"+"2".repeat(32),installer={async enqueue(p,meta){calls++;return registry.install("local",id,{...meta,versionIds:[row.version_id],state:"installing"});}};
+  const store=(await loadStore(api)).createSingleResourceStore(kind,()=>{},()=>{},null,{registry,installer});store.activate(true);await flush();
+  descendants(store.root).find(n=>n.tagName==="BUTTON"&&n.textContent==="安装").click();await flush();assert.equal(calls,0);let view=document.body.querySelector("dialog");descendants(view).find(n=>n.tagName==="BUTTON"&&n.textContent==="取消").click();await flush();assert.equal(registry.list("local").length,0);
+  descendants(store.root).find(n=>n.tagName==="BUTTON"&&n.textContent==="安装").click();await flush();view=document.body.querySelector("dialog");descendants(view).find(n=>n.tagName==="BUTTON"&&n.textContent==="安装").click();await flush();assert.equal(calls,1);
+  registry.install("local",id,{state:"failed",error:"Actual transfer failure"});await flush();const failed=descendants(store.root).find(n=>n.dataset?.installState==="failed");assert(failed.textContent.startsWith("安装失败"));assert.equal(failed.title,"Actual transfer failure");assert(!failed.disabled);store.destroy();assert.equal(calls,1);
+ }} finally{restore();}
 });

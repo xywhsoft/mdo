@@ -222,12 +222,36 @@ bool MdoExtensionsPlanDiscard(cstr Id,cstr Revision,char Error[512]){
     xrtMutexLock(MdoExtLock);xvalue* Receipt=MdoExtGroupReceipt(Id);bool Ok=!MdoExtGroupActive&&!Receipt;char* Path=xrtFormat(MDO_EXT_PLANS "/%s.json",Id);
     Ok=Ok&&Path&&MdoHomeRemove(Path,false);xrtFree(Path);xrtValueRelease(Receipt);xrtMutexUnlock(MdoExtLock);return Ok||MdoExtError(Error,"An applying or completed plan retains its receipt for safe retries");
 }
+bool MdoExtensionsRebaseUnrelatedPlan(xvalue* Plan,char Error[512]){
+    cstr Action=MdoExtensionText(Plan,"action",16),Root=MdoExtensionText(Plan,"root",MDO_EXTENSION_REF_BYTES);
+    if(!Action||strcmp(Action,"install")||!Root)return MdoExtError(Error,"Only an inspected installation can be queued");
+    const xvalue* Old=xrtValueObjectGet(Plan,XRT_STR_LITERAL("items"));xvalue* Request=xrtValueObject(),*Packages=xrtValueArray(),*Fresh=NULL;
+    bool Ok=Request&&Packages;
+    for(size_t I=0;Ok&&I<xrtValueCount(Old);I++){const xvalue* Item=xrtValueArrayGet(Old,I);cstr Op=MdoExtensionText(Item,"operation",16);if(Op&&!strcmp(Op,"install"))Ok=xrtValueArrayAppend(Packages,Item);}
+    Ok=Ok&&MdoExtPut(Request,"action","install")&&MdoExtPut(Request,"ref",Root)&&MdoExtensionsPlan(Request,Packages,&Fresh,Error)&&MdoGraphBool(Fresh,"ready",false);
+    const xvalue* Now=xrtValueObjectGet(Fresh,XRT_STR_LITERAL("items"));Ok=Ok&&xrtValueCount(Old)==xrtValueCount(Now);
+    const cstr Fields[]={"id","kind","directory_id","version_id","sha256","operation","expected_revision"};
+    for(size_t I=0;Ok&&I<xrtValueCount(Old);I++){
+        const xvalue* A=xrtValueArrayGet(Old,I),*B=NULL;cstr Id=MdoExtensionText(A,"id",MDO_EXTENSION_REF_BYTES);
+        for(size_t J=0;Id&&J<xrtValueCount(Now);J++){const xvalue* Candidate=xrtValueArrayGet(Now,J);cstr Ref=MdoExtensionText(Candidate,"id",MDO_EXTENSION_REF_BYTES);if(Ref&&!strcmp(Id,Ref)){B=Candidate;break;}}
+        Ok=B&&MdoGraphBool(A,"old_exists",false)==MdoGraphBool(B,"old_exists",false)&&MdoGraphBool(A,"desired_enabled",false)==MdoGraphBool(B,"desired_enabled",false);
+        for(size_t J=0;Ok&&J<sizeof(Fields)/sizeof(*Fields);J++){cstr X=MdoExtensionText(A,Fields[J],4096),Y=MdoExtensionText(B,Fields[J],4096);Ok=(!X&&!Y)||(X&&Y&&!strcmp(X,Y));}
+    }
+    char Before[65]={0},After[65]={0};Ok=Ok&&MdoExtValueHash(xrtValueObjectGet(Plan,XRT_STR_LITERAL("affected")),Before)&&MdoExtValueHash(xrtValueObjectGet(Fresh,XRT_STR_LITERAL("affected")),After)&&!strcmp(Before,After);
+    /* This marker is private to the admitted in-memory copy. Never change the
+     * saved plan or its revision after the user has reviewed it. */
+    cstr Hash=MdoExtensionText(Fresh,"state_hash",64);if(Ok)Ok=Hash&&MdoExtPut(Plan,"rebased_state_hash",Hash);
+    if(Fresh){char Why[512]={0};(void)MdoExtensionsPlanDiscard(MdoExtensionText(Fresh,"id",32),MdoExtensionText(Fresh,"revision",64),Why);}
+    xrtValueRelease(Request);xrtValueRelease(Packages);xrtValueRelease(Fresh);
+    if(!Ok&&Error&&!Error[0])MdoExtError(Error,"The installation, dependencies or affected directories changed since confirmation; review the plan again");
+    return Ok;
+}
 bool MdoExtensionsApplyGroup(const xvalue* Plan,const xvalue* Downloads,bool Trust,xcancel* Cancel,MdoExtensionReload Reload,void* Data,xvalue** Result,char Error[512]){
     *Result=NULL;if(Error)Error[0]=0;cstr PlanId=MdoExtensionText(Plan,"id",32),Revision=MdoExtensionText(Plan,"revision",64);const xvalue* PlanItems=xrtValueObjectGet(Plan,XRT_STR_LITERAL("items"));
     if(!PlanId||strlen(PlanId)!=32||!MdoExtensionDirectoryId(PlanId)||!Revision||!MdoExtPlanLive(Plan)||!MdoGraphBool(Plan,"ready",false)||!xrtValueCount(PlanItems)||xrtValueCount(PlanItems)>MDO_EXT_PLAN_LIMIT)return MdoExtError(Error,"Inspect a complete, unblocked dependency plan before applying it");
     xrtMutexLock(MdoExtLock);xvalue* Receipt=MdoExtGroupReceipt(PlanId);if(Receipt){bool Same=MdoExtensionText(Receipt,"revision",64)&&!strcmp(Revision,MdoExtensionText(Receipt,"revision",64));if(Same)*Result=Receipt;else xrtValueRelease(Receipt);xrtMutexUnlock(MdoExtLock);return Same||MdoExtError(Error,"The plan receipt belongs to another revision");}xrtClearError();
     xvalue *Before=MdoExtReadJson(MDO_EXT_STATE,MDO_EXT_STATE_LIMIT,true),*After=Before?xrtValueClone(Before):NULL,*Suspended=Before?xrtValueClone(Before):NULL,*Items=xrtValueClone(PlanItems),*J=xrtValueObject(),*Out=xrtValueObject();char Hash[65];
-    cstr Expected=MdoExtensionText(Plan,"state_hash",64);bool Ok=!MdoExtGroupActive&&!MdoExtRecoveryAll&&Before&&After&&Suspended&&Items&&J&&Out&&Expected&&MdoExtValueHash(Before,Hash)&&!strcmp(Hash,Expected)&&(!Cancel||!xrtCancelRequested(Cancel));
+    cstr Expected=MdoExtensionText(Plan,"rebased_state_hash",64);if(!Expected)Expected=MdoExtensionText(Plan,"state_hash",64);bool Ok=!MdoExtGroupActive&&!MdoExtRecoveryAll&&Before&&After&&Suspended&&Items&&J&&Out&&Expected&&MdoExtValueHash(Before,Hash)&&!strcmp(Hash,Expected)&&(!Cancel||!xrtCancelRequested(Cancel));
     char* Task=Ok?xrtXidMakeString():NULL;char *Base=Task?xrtFormat(MDO_EXT_GROUPS "/%s",Task):NULL,*Journal=Base?xrtFormat("%s/journal.json",Base):NULL,*BeforePath=Base?xrtFormat("%s/before.json",Base):NULL,*AfterPath=Base?xrtFormat("%s/after.json",Base):NULL,*Stage=Base?xrtFormat("%s/stage.json",Base):NULL;
     xvalue* Intent=xrtValueObject();Ok=Ok&&Task&&Base&&Journal&&BeforePath&&AfterPath&&Stage&&Intent&&xrtValueObjectSetNew(Intent,XRT_STR_LITERAL("protocol"),xrtValueUInt(1))&&xrtValueObjectSetNew(Intent,XRT_STR_LITERAL("count"),xrtValueUInt(xrtValueCount(Items)))&&MdoExtEnsure(Base)&&MdoExtSaveJson(Stage,Intent,4096);
     for(size_t I=0;Ok&&I<xrtValueCount(Items);I++){

@@ -3371,5 +3371,16 @@
   "modelWizard.alreadyAdded": "Уже добавлена",
   "ui.extensionPanels.restoreBuiltinRole": "Восстановить по умолчанию",
   "ui.extensionPanels.restoreBuiltinRoleConfirm": "Восстановить встроенные файлы этой роли? Локальные изменения будут заменены. Состояние включения сохранится.",
-  "action.confirm": "Подтвердить"
+  "action.confirm": "Подтвердить",
+  "extensionInstall.title": "Установка расширения",
+  "extensionInstall.trustTitle": "Доверять и установить расширения?",
+  "extensionInstall.trustPrompt": "Подтвердите доверие к расширениям и их источникам. Кнопка «Установить» добавит задачу автоматического скачивания и установки. Результат и отмена доступны в загрузках.",
+  "extensionInstall.installing": "Установка",
+  "extensionInstall.success": "Установлено",
+  "extensionInstall.failed": "Ошибка установки; повторить",
+  "extensionInstall.uncertain": "Статус не подтверждён",
+  "extensionInstall.interrupted": "Установка прервана. Проверьте локальные расширения и загрузки перед повтором.",
+  "extensionInstall.runtimeAttention": "Файлы установлены, но загрузка или включение требует внимания. Откройте сведения о расширении.",
+  "extensionInstall.invalidPlan": "План установки недоступен. Обновите список и повторите.",
+  "extensionInstall.queueing": "Добавление задачи загрузки…"
 }

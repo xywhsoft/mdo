@@ -40,6 +40,10 @@ bool MdoExtensionsPlanDiscard(cstr Id,cstr Revision,char Error[512]);
 typedef bool (*MdoExtensionReload)(const xvalue* Items,bool Retiring,void* Data,char Error[512]);
 bool MdoExtensionsApplyGroup(const xvalue* Plan,const xvalue* Downloads,bool Trust,xcancel* Cancel,MdoExtensionReload Reload,void* Data,xvalue** Result,char Error[512]);
 bool MdoExtensionsApplyPlan(const xvalue* Input,const xvalue* Downloads,xcancel* Cancel,xvalue** Result,char Error[512]);
+/* Re-solve a queued install against current state. Only unrelated changes may
+ * be rebased; inspected versions, affected users and directory revisions stay
+ * fixed. Caller owns the global mutation admission. */
+bool MdoExtensionsRebaseUnrelatedPlan(xvalue* Plan,char Error[512]);
 xvalue* MdoExtensionsFiles(cstr Kind,cstr Id,xcancel* Cancel,char Error[512]);
 char* MdoExtensionsEntryPath(cstr Kind,cstr Id,char Error[512]);
 char* MdoExtensionsRoot(cstr Kind,cstr Id);

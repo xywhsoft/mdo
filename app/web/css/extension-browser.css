@@ -79,6 +79,11 @@
   .eb-page-links .eb-page-previous,.eb-page-links .eb-page-next { padding-inline:8px; white-space:nowrap; }
   .eb-pagination select { flex:none; }
 }
+.extension-install-spinner { display:inline-block;width:1em;height:1em;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:extension-install-spin .8s linear infinite; }
+[data-install-state="installing"] { min-width:4.5em; }
+[data-install-state="failed"] { color:var(--danger,#c74646); }
+@keyframes extension-install-spin { to { transform:rotate(360deg); } }
+@media (prefers-reduced-motion:reduce) { .extension-install-spinner { animation-duration:2s; } }
 @container extension-browser (max-width:330px) {
   .eb-page-links .eb-page-previous,.eb-page-links .eb-page-next { font-size:0; min-width:28px; padding-inline:7px; }
   .eb-page-previous::before { content:"‹"; font-size:18px; }

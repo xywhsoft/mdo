@@ -12,11 +12,14 @@ import { createDirectoryEditor } from "../settings/directory-editor.js";
 import { directoryId,directoryManifest,readDirectoryEntry,saveDirectory,changeDirectory } from "../settings/directory-documents.js";
 import { resourceCredits,customizableResource } from "../settings/resource-credits.js";
 import { exportDirectoryZip } from "../../api/extension-export.js";
+import { reviewDependencyPlan } from "../settings/dependency-plan.js";
+import { extensionInstaller } from "../../state/extension-installs.js";
 
 const node=(tag,text="",className="")=>element(tag,{text,className}),device=()=>targetState().selected?.id||"local";
-export const externalToolAction=(row,installed)=>{const local=installed.find(t=>t.id===(row.xid||row.tool_id));return !local?"install":local.installation?.version_id!==row.version_id?"update":null;};
+const installedTool=(row,installed)=>installed.find(t=>t.directory_id===row.xid||t.id===(row.id||row.xid||row.tool_id));
+export const externalToolAction=(row,installed)=>{const local=installedTool(row,installed);return !local?"install":local.installation?.version_id!==row.version_id?"update":null;};
 export function createExternalToolsPanel({refresh=()=>{},openFull=()=>{},signedIn=()=>false,isMain=()=>true}={}) {
-  let data={},tab="local",query="",filter="all",error="",context=device(),busy=false,editor=null,disposed=false,storeActive=false;
+  let data={},tab="local",query="",filter="all",error="",context=device(),busy=false,editor=null,disposed=false,storeActive=false,guideController=null;
   const hosts=new Set(),browser=createExtensionBrowser({kind:"external-tools"}),sdk=createApplicationClient(()=>({extension:"mdo.external-tools"}));
   const android=()=>data.platform?.startsWith("android"),writable=()=>data.writable!==false&&(!targetState().selected||targetState().connected&&!targetState().runtimeChanged&&targetState().selected.mode!=="view");
   const report=e=>{if(e.name!=="AbortError"){error=errorMessage(e);renderAll();}};
@@ -28,15 +31,24 @@ export function createExternalToolsPanel({refresh=()=>{},openFull=()=>{},signedI
   function renderAll(){for(const host of hosts)render(host,data);}
   async function recommend(){
     if(busy||!writable())return;if(android()){if(await command({action:"accept"}))await openFull();return;}
-    busy=true;renderAll();const own=device();try{
-      const catalog=(await api.post("/ecosystem",{action:"catalog",kind:"external-tools",limit:200})).data;
+    busy=true;guideController=new AbortController();renderAll();const own=device(),plans=[],existing=[];
+    const discard=()=>device()===own?Promise.allSettled(plans.map(({plan})=>api.post("/ecosystem",{action:"discard_plan",plan_id:plan.id,revision:plan.revision}))):Promise.resolve();
+    let reviewed=false;try{
+      const catalog=(await api.post("/ecosystem",{action:"catalog",kind:"external-tools",limit:100})).data;
       const aliases=["busybox","curl","jq","openssh","aria2","ripgrep","7zip"],rows=aliases.map(alias=>catalog.items.find(r=>r.alias===alias&&r.owner===0));
       if(rows.some(r=>!r))throw Error(uiText("ui.externalDirectoryTools.theRecommendedCatalogIsNotFullyPublishedYetInstall", {}, "官方推荐目录尚未完整发布，请在工具商店安装可用工具。"));
-      for(const row of rows){if(own!==device()||disposed)throw new DOMException("Device changed","AbortError");const previous=data.items?.find(t=>t.id===row.xid);if(previous?.installation?.version_id===row.version_id){await api.post(`/extensions/external-tools/${row.xid}/enabled`,{enabled:true});continue;}
-        const fresh=previous?(await api.get(`/extensions/external-tools/${row.xid}`)).data:null,task=(await api.post("/ecosystem",{action:"download",kind:"external-tools",version_id:row.version_id})).data;
-        if(own!==device()||disposed)throw new DOMException("Device changed","AbortError");await api.post(`/extension-tasks/${task.id}/install`,{trust_code:true,expected_revision:fresh?.revision||"",enabled:true});
-      }if(own===device()){await command({action:"accept"});await changed();}
-    }finally{busy=false;if(own===device())renderAll();}
+      for(const row of rows){if(own!==device()||disposed)throw new DOMException("Device changed","AbortError");const previous=installedTool(row,data.items||[]);if(previous?.installation?.version_id===row.version_id){existing.push({...row,directory_id:row.xid,operation:"enable",desired_enabled:true});continue;}
+        plans.push({row,plan:(await api.post("/ecosystem",{action:"install_plan",kind:"external-tools",version_id:row.version_id})).data});
+      }
+      if(own!==device()||disposed){await discard();return;}
+      const combined={ready:plans.every(({plan})=>plan.ready),items:[...plans.flatMap(({plan})=>plan.items),...existing],issues:plans.flatMap(({plan})=>plan.issues||[])};
+      reviewed=true;const queued=await reviewDependencyPlan(combined,{discard,signal:guideController.signal,queue:async()=>{
+        for(const row of existing){if(own!==device())break;await api.post(`/extensions/external-tools/${row.xid}/enabled`,{enabled:true});}
+        const jobs=[];for(const {row,plan} of plans){if(own!==device())break;try{jobs.push(await extensionInstaller.enqueue(plan,{kind:"external-tools",name:row.name,resourceId:row.id,directoryId:row.xid,versionId:row.version_id}));}catch(e){report(e);}}
+        return {queued:jobs.length};
+      }});
+      if(queued&&own===device()){await command({action:"accept"});await changed();}
+    }finally{if(!reviewed)await discard();guideController=null;busy=false;if(own===device())renderAll();}
   }
   async function edit(item=null,owner){
     if(editor){editor.view.closeButton.focus();return;}if(android()||!writable()||item&&!customizableResource(item))return;
@@ -74,7 +86,7 @@ export function createExternalToolsPanel({refresh=()=>{},openFull=()=>{},signedI
       return {key:item.id,title:item.name,description:item.description,byline:credits.submitter,meta:credits.meta,toggle,actions,badge:{text:item.valid?"":item.error||uiText("extensionBrowser.needsAttention", {}, "需要处理"),tone:item.valid?"":"error"},detail:()=>detailTabs([{id:"description",label:uiMessage("backupImport.notice", {}, "说明"),content:element("div",{},[node("p",item.description),credits.facts(),localDependencyPanel("external-tools",item)])},{id:"usage",label:uiMessage("extensionBrowser.usage", {}, "使用方式"),content:element("div",{},[node("code",item.path),node("pre",item.prompt,"store-source"),node("p",uiMessage("ui.externalDirectoryTools.commandDirectoryValue1", { value1: data.bin_path||"" }, "命令目录：{value1}"))])}])};});browser.setItems(rows,{pageKey:JSON.stringify([query,filter]),empty:uiText("ui.externalDirectoryTools.noLocalToolsAddYourOwnToolDirectoryOr", {}, "暂无本机工具，可以添加自己的工具目录或前往工具商店。")});};
     search.addEventListener("input",()=>{query=search.value;draw();});select.addEventListener("change",()=>{filter=select.value;draw();});draw();host.append(browser.root);
   }
-  function reset(){editor?.view.dispose();editor=null;files.close(true);data={};error="";query="";filter="all";tab="local";storeActive=false;store.activate(false);browser.reset();guide.hidden=true;}
+  function reset(){guideController?.abort();editor?.view.dispose();editor=null;files.close(true);data={};error="";query="";filter="all";tab="local";storeActive=false;store.activate(false);browser.reset();guide.hidden=true;}
   const stopLocale = subscribeLocale(renderAll);
   return {render,command,reset,destroy(){stopLocale();disposed=true;reset();files.destroy();store.destroy();browser.destroy();guide.remove();hosts.clear();}};
 }

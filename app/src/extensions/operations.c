@@ -40,8 +40,10 @@ static bool MdoExtOpReloadGroup(const xvalue* Items,bool Retiring,void* Data,cha
 }
 bool MdoExtensionsApplyPlan(const xvalue* Input,const xvalue* Downloads,xcancel* Cancel,xvalue** Result,char Error[512]){
  *Result=NULL;cstr Id=MdoExtensionText(Input,"plan_id",32),Revision=MdoExtensionText(Input,"revision",64);xvalue* Plan=MdoExtensionsPlanRead(Id,Revision,Error);if(!Plan)return false;
- bool Ok=MdoExtensionsMutationBegin();if(!Ok)MdoExtOpFailure(Error,"Another extension operation is still running");
- else{Ok=MdoExtensionsApplyGroup(Plan,Downloads,MdoExtOpBool(Input,"trust_code",false),Cancel,MdoExtOpReloadGroup,NULL,Result,Error);MdoExtensionsMutationEnd();}
+ bool Queued=MdoExtOpBool(Input,"queued",false),Ok=false;
+ do{Ok=MdoExtensionsMutationBegin();if(Ok||!Queued||(Cancel&&xrtCancelRequested(Cancel)))break;xrtSleep(10);}while(Queued);
+ if(!Ok)MdoExtOpFailure(Error,Cancel&&xrtCancelRequested(Cancel)?"Installation cancelled while waiting for another extension operation":"Another extension operation is still running");
+ else{Ok=(!Queued||MdoExtensionsRebaseUnrelatedPlan(Plan,Error))&&MdoExtensionsApplyGroup(Plan,Downloads,MdoExtOpBool(Input,"trust_code",false),Cancel,MdoExtOpReloadGroup,NULL,Result,Error);MdoExtensionsMutationEnd();}
  if(Ok&&*Result){bool Plugins=false;const xvalue* Items=xrtValueObjectGet(Plan,XRT_STR_LITERAL("items"));for(size_t I=0;I<xrtValueCount(Items);I++){cstr Kind=MdoExtensionText(xrtValueArrayGet(Items,I),"kind",32);if(Kind&&!strcmp(Kind,"plugins"))Plugins=true;}if(Plugins){bool Restart=false,Pending=MdoApplicationPluginsPending(&Restart);xrtValueObjectSetNew(*Result,XRT_STR_LITERAL("pending"),xrtValueBool(Pending));xrtValueObjectSetNew(*Result,XRT_STR_LITERAL("restart_required"),xrtValueBool(Restart));if(Pending)xrtValueObjectSetNew(*Result,XRT_STR_LITERAL("runtime_ready"),xrtValueBool(false));}}
  if(Ok&&*Result){char Why[512]={0};if(!MdoExtensionsPlanReceiptRefresh(Id,Revision,*Result,Why))MdoExtOpPut(*Result,"receipt_error",Why);}
  xrtValueRelease(Plan);return Ok;

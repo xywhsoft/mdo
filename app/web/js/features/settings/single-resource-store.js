@@ -10,6 +10,8 @@ import { element, errorMessage, toast } from "../../utils/dom.js";
 import { customizableResource, resourceCredits, storeReadOnlyMessage } from "./resource-credits.js";
 import { openLayer } from "../../components/layers.js";
 import { renderSourceMarkdown } from "../../utils/source-markdown.js";
+import { downloadRegistry, downloadActive } from "../../state/downloads.js";
+import { extensionInstaller } from "../../state/extension-installs.js";
 
 const names = { agents:"Agent", subagents:"SubAgent", get tools() { return uiMessage("ecosystem.toolTitle", {}, "Agent 工具"); }, get mcp() { return uiMessage("ui.singleResourceStore.mcpService", {}, "MCP 服务"); }, skills:"Skill", get commands() { return uiMessage("ecosystem.commands", {}, "编辑器命令"); }, get "external-tools"() { return uiMessage("settings.toolpacks", {}, "外部工具"); }, get knowledge() { return uiMessage("settings.knowledge", {}, "知识库"); }, get plugins() { return uiMessage("settings.extensions", {}, "插件"); } };
 const text = (tag, value, className = "") => element(tag, { text: value, className });
@@ -27,6 +29,36 @@ export function createSingleResourceStore(kind, onChange, onBrowse=()=>{}, onMan
   const live=(n,target)=>!disposed&&n===epoch&&target===device();
   const call=async(body,signal=controller?.signal)=>(await api.post("/ecosystem",{kind,...body},{signal})).data;
   const owned=row=>Object.values(installed).find(local=>local.kind===kind&&local.directory_id===row.xid&&local.source==="store");
+  const installer=policy.installer||extensionInstaller,registry=policy.registry||downloadRegistry,installControls=new Map(),completed=new Set();
+  let promptController=null,promptVersion="";
+  const installation=row=>registry.list(device()).find(job=>job.source==="install"&&job.versionIds?.includes(row.version_id));
+  function updateInstallButtons(){for(const [control,row] of installControls){
+    const job=installation(row),same=owned(row)?.installation?.version_id===row.version_id,active=job&&downloadActive(job),pending=promptVersion===row.version_id;
+    const state=active||pending?"installing":job?.state==="failed"?"failed":job?.state==="unknown"?"unknown":job?.state==="complete"&&(same||busy)?"complete":"";
+    control.dataset.installState=state;
+    const label=state==="installing"?uiText("extensionInstall.installing", {}, "正在安装"):state==="complete"?uiText("extensionInstall.success", {}, "安装成功"):state==="failed"?uiText("extensionInstall.failed", {}, "安装失败，点击重试"):state==="unknown"?uiText("extensionInstall.uncertain", {}, "状态待确认"):same?uiText("extensionBrowser.manage", {}, "管理"):owned(row)?uiText("extensionBrowser.update", {}, "更新"):policy.installLabel?.()||uiText("extensionBrowser.install", {}, "安装");
+    control.setAttribute("aria-label",label);control.setAttribute("aria-busy",String(state==="installing"));control.title=job?.error||label;
+    control.replaceChildren(state==="installing"?element("span",{className:"extension-install-spinner",attrs:{"aria-hidden":"true"}}):document.createTextNode(label));
+    const selected=targetState().selected;
+    control.disabled=busy||active||pending||Boolean(selected&&(!targetState().connected||targetState().runtimeChanged||selected.mode==="view"));
+  }}
+  function installButton(row){const control=button("",()=>{
+    const job=installation(row),same=owned(row)?.installation?.version_id===row.version_id;
+    if(job?.state==="unknown"){document.querySelector("#open-downloads")?.click();return;}
+    if(same)return onManage?onManage(owned(row)):detail(row);
+    return beginInstall(row);
+  },true);installControls.set(control,row);updateInstallButtons();return control;}
+  async function beginInstall(row){
+    if(disposed||promptVersion)return;if(policy.beforeInstall&&!await policy.beforeInstall())return;
+    const target=device();promptController=new AbortController();promptVersion=row.version_id;updateInstallButtons();
+    try{
+      const plan=await call({action:"install_plan",version_id:row.version_id},promptController.signal);
+      if(disposed||device()!==target)return;
+      const queued=await reviewDependencyPlan(plan,{signal:promptController.signal,queue:approved=>installer.enqueue(approved,{name:row.name,kind,versionId:row.version_id,directoryId:row.xid,resourceId:row.id})});
+      if(queued&&device()===target&&!disposed)browser.closeDetail();
+    }catch(error){if(!disposed&&device()===target&&error.name!=="AbortError")report(error);}
+    finally{promptVersion="";promptController=null;if(!disposed)updateInstallButtons();}
+  }
   function report(error){writeUiText(statusRoot, errorMessage(error));statusRoot.className="extension-error";}
   function close(force=false){if(!dialog)return true;if(!force&&(saving||dirty&&!confirm(uiMessage("ui.singleResourceStore.discardUnsubmittedInformation", {}, "放弃未提交的信息？"))))return false;dialog.dispose();dialog=null;dirty=saving=false;return true;}
   function modal(title){if(!close())return null;const view=openLayer({title,icon:kind==="skills"?"spark":"folder",width:"48rem",height:"80%",beforeClose:()=>!saving&&(!dirty||confirm(uiMessage("ui.singleResourceStore.discardUnsubmittedInformation", {}, "放弃未提交的信息？"))),onClosed(){if(dialog===view){dialog=null;dirty=saving=false;}}});dialog=view;return view;}
@@ -37,11 +69,12 @@ export function createSingleResourceStore(kind, onChange, onBrowse=()=>{}, onMan
     }catch(e){if(live(n,target)&&e.name!=="AbortError")report(e);}finally{if(live(n,target)){busy=false;render();}}
   }
   function render(){
+    installControls.clear();
     browser.rememberFocus();const form=element("form",{className:"store-search eb-toolbar"}),input=element("input",{attrs:{type:"search",maxlength:"240",placeholder:uiMessage("ui.singleResourceStore.searchValue1AuthorsOrUses", { value1: names[kind] }, "搜索{value1}、作者或用途"),"aria-label":uiMessage("ui.singleResourceStore.searchValue1", { value1: names[kind] }, "搜索{value1}")}});input.value=query;input.addEventListener("input",()=>{query=input.value;});
     const select=element("select",{attrs:{"aria-label":uiMessage("task.meta.state", {}, "状态")}});for(const [value,label]of [["all",uiText("extensionBrowser.all", {}, "全部状态")],["installed",uiText("store.installed", {}, "已安装")],["updates",uiText("extensionBrowser.updates", {}, "可更新")],["new",uiText("extensionBrowser.notInstalled", {}, "未安装")]])select.append(element("option",{text:label,attrs:{value}}));select.value=state;select.addEventListener("change",()=>{state=select.value;render();});
     form.append(input,select,element("button",{text:uiMessage("store.searchButton", {}, "搜索"),className:"secondary-button",attrs:{type:"submit"}}),button(uiMessage("resource.refresh", {}, "刷新"),()=>load()));form.addEventListener("submit",e=>{e.preventDefault();query=input.value.trim();void load();});for(const b of form.querySelectorAll("button"))b.disabled=busy;
     const rows=items.filter(row=>{const local=owned(row),same=local?.installation?.version_id===row.version_id;return state==="all"||state==="installed"&&local||state==="updates"&&local&&!same||state==="new"&&!local;}).map(row=>{
-      const local=owned(row),same=local?.installation?.version_id===row.version_id,credits=resourceCredits({...row,source:"store"});const primary=button(same?uiMessage("extensionBrowser.manage", {}, "管理"):local?uiMessage("extensionBrowser.update", {}, "更新"):uiMessage("extensionBrowser.install", {}, "安装"),()=>same&&onManage?onManage(local):detail(row));primary.disabled=busy;
+      const local=owned(row),same=local?.installation?.version_id===row.version_id,credits=resourceCredits({...row,source:"store"}),primary=installButton(row);
       return {key:row.version_id,kind,title:row.name,byline:credits.submitter,description:row.description,meta:credits.meta,badge:{text:same?uiText("store.installed", {}, "已安装"):local?uiText("extensionBrowser.updates", {}, "可更新"):""},primary,onSelect:()=>loadDetail(row)};
     });
     browser.setItems(rows,{busy,pageKey:JSON.stringify([applied,state]),onNext:items.length<total?()=>load(true):null,empty:uiText("ui.singleResourceStore.noMatchingValue1", { value1: names[kind] }, "暂无匹配的{value1}。")});root.replaceChildren(form,browser.root);
@@ -61,12 +94,7 @@ export function createSingleResourceStore(kind, onChange, onBrowse=()=>{}, onMan
       description.append(dependencyList(data));
       if(data.manifest?.readme){const readme=await call({action:"preview",version_id:key,path:data.manifest.readme},signal);if(!valid())return;if(!readme.binary)description.append(renderSourceMarkdown(readme.text));}
       const files=text("div",""),tabs=detailTabs([{id:"description",label:uiMessage("backupImport.notice", {}, "说明"),content:description},{id:"files",label:uiMessage("ui.singleResourceStore.sourceAndFiles", {}, "源码与文件"),content:files}]);browser.showDetail(key,tabs);void filesView(data,files,signal,valid);
-      let trusted=!["agents","subagents","tools","commands","mcp","plugins","external-tools"].includes(kind);const same=owned(data)?.installation?.version_id===key;
-      const install=button(same?uiMessage("store.installed", {}, "已安装"):policy.installLabel?.()||uiMessage("ui.singleResourceStore.downloadAndInstall", {}, "下载并安装"),async()=>{if(!valid()||!trusted||busy||same)return;if(policy.beforeInstall&&!await policy.beforeInstall())return;busy=true;install.disabled=true;try{
-        const plan=await call({action:"install_plan",version_id:key},signal);if(!valid())return;
-        const receipt=await reviewDependencyPlan(plan,{signal});if(!receipt||!valid())return;browser.closeDetail();onChange();busy=false;await load();
-      }catch(e){if(valid()&&e.name!=="AbortError")report(e);}finally{busy=false;install.disabled=same||!trusted;}},true);install.disabled=same||!trusted;
-      if(!trusted){const check=element("input",{attrs:{type:"checkbox"}});check.addEventListener("change",()=>{trusted=check.checked;install.disabled=!trusted||same;});description.append(element("label",{className:"store-code-consent"},[check,text("span",uiMessage("ui.singleResourceStore.iReviewedTheFilesAndTrustTheAuthorAnd", {}, "我已检查文件并信任作者，允许此扩展在设备上运行。")) ]));}
+      const install=installButton(data);
       browser.setActions(key,install,button(uiMessage("context.close", {}, "关闭"),()=>browser.closeDetail()));
     }catch(e){if(valid()&&e.name!=="AbortError")browser.showDetail(key,text("p",errorMessage(e),"extension-error"));}
   }
@@ -96,7 +124,8 @@ export function createSingleResourceStore(kind, onChange, onBrowse=()=>{}, onMan
     if(!(file instanceof Blob))throw Error(uiText("ui.singleResourceStore.selectAZipOfTheEntireExtensionDirectoryJson", {}, "请选择整个扩展目录的 ZIP 文件；JSON 包已停止支持"));const view=modal(uiText("ui.singleResourceStore.importValue1Zip", { value1: names[kind] }, "导入{value1} ZIP"));if(!view)return;const message=text("p",`${file.name||"extension.zip"} · ${file.size} B`),identity=element("input",{attrs:{maxlength:"96",placeholder:uiMessage("ui.singleResourceStore.localDirectoryName", {}, "本机目录名称")}}),trust=element("input",{attrs:{type:"checkbox"}});view.body.append(message,identity,element("label",{},[trust,text("span",uiMessage("ui.singleResourceStore.iReviewedThisZipAndTrustItsContents", {}, "我已检查此 ZIP 并信任其内容")) ]));
     const install=button(uiMessage("ecosystem.import", {}, "导入"),async()=>{if(saving||!trust.checked)return;if(!/^[A-Za-z0-9_-][A-Za-z0-9._-]{0,95}$/.test(identity.value.trim()))throw Error(uiText("ui.singleResourceStore.enterAValidLocalDirectoryName", {}, "请填写有效的本机目录名称"));saving=true;install.disabled=true;try{const task=await stageExtensionFile(file,{kind,signal:view.signal});await api.post(`/extension-tasks/${task.id}/install`,{id:identity.value.trim(),trust_code:true,enabled:false},{signal:view.signal});saving=false;close(true);onChange();await load();}catch(e){writeUiText(message, errorMessage(e));}finally{saving=false;install.disabled=false;}},true);view.footer.append(install,button(uiMessage("sidebar.cancel", {}, "取消"),()=>view.close()));
   }
-  const unsubscribe=subscribeTarget(()=>{if(device()===activeTarget)return;activeTarget=device();++epoch;++detailEpoch;controller?.abort();detailAbort?.abort();browser.reset();close(true);items=[];installed={};total=0;busy=false;if(visible)void load();});render();
+  const unsubscribe=subscribeTarget(()=>{if(device()===activeTarget)return;activeTarget=device();++epoch;++detailEpoch;controller?.abort();detailAbort?.abort();promptController?.abort();browser.reset();close(true);items=[];installed={};total=0;busy=false;if(visible)void load();});render();
+  const stopDownloads=registry.subscribe(()=>{if(disposed)return;updateInstallButtons();for(const job of registry.list(device()))if(job.source==="install"&&job.kind===kind&&["complete","failed","cancelled"].includes(job.state)&&!completed.has(job.operationId)){completed.add(job.operationId);if(visible){void onChange();void load();}}});
   const stopLocale = subscribeLocale(render);
-  return {root,statusRoot,publish,localActions,importPackage,activate(value){visible=value;if(!value)browser.closeDetail(false);else if(!busy)void load();},hasPendingChanges:()=>Boolean(dialog)||saving,destroy(){disposed=true;++epoch;controller?.abort();detailAbort?.abort();browser.destroy();unsubscribe();close(true);}};
+  return {root,statusRoot,publish,localActions,importPackage,activate(value){visible=value;if(!value){promptController?.abort();browser.closeDetail(false);}else if(!busy)void load();},hasPendingChanges:()=>Boolean(dialog)||saving,destroy(){disposed=true;++epoch;controller?.abort();detailAbort?.abort();promptController?.abort();browser.destroy();unsubscribe();stopDownloads();stopLocale();close(true);}};
 }

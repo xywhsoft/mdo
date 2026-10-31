@@ -3371,5 +3371,16 @@
   "modelWizard.alreadyAdded": "Already added",
   "ui.extensionPanels.restoreBuiltinRole": "Restore default",
   "ui.extensionPanels.restoreBuiltinRoleConfirm": "Restore this role’s built-in files? Local changes will be replaced. Its enabled or disabled state will be kept.",
-  "action.confirm": "Confirm"
+  "action.confirm": "Confirm",
+  "extensionInstall.title": "Extension installation",
+  "extensionInstall.trustTitle": "Trust and install these extensions?",
+  "extensionInstall.trustPrompt": "Confirm that you trust these extensions and their sources. Install adds a download task that downloads and installs automatically. View its result or cancel it in Downloads.",
+  "extensionInstall.installing": "Installing",
+  "extensionInstall.success": "Installed successfully",
+  "extensionInstall.failed": "Installation failed; retry",
+  "extensionInstall.uncertain": "Status unconfirmed",
+  "extensionInstall.interrupted": "Installation was interrupted. Inspect local extensions and Downloads before retrying.",
+  "extensionInstall.runtimeAttention": "Files were installed, but loading or activation needs attention. Inspect the extension details.",
+  "extensionInstall.invalidPlan": "The installation plan is unavailable. Refresh and retry.",
+  "extensionInstall.queueing": "Adding download task…"
 }
