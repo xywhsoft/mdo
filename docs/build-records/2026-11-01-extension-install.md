@@ -27,6 +27,25 @@
 - 四组原生扩展契约：任务错误保留/重启/重复清理、槽位等待与取消、无关变化重验、目标修改拒绝、原批准计划不可变、依赖组事务、失败收据、短块/损坏 ZIP/读取重试及非幂等提交不重放。
 - 真实公开商店七个独立计划同时接纳，BusyBox、curl、jq、OpenSSH、aria2、ripgrep、7-Zip 全部安装及加载成功；实际执行 7-Zip 与 jq 的原程序和 Windows 转发器，退出码均为 0。原生测试另验证 SDK 生态接口不走 HTTP 队列，以及原始取消信号可达产品服务。没有真实模型调用。
 
-产物构建和最终成品验收完成后在本记录补充结果。当前没有修改线上服务、平台目录、官网下载或自动更新清单。
+## 最终产物验收
 
-可复核证据：`.build/extension-install-20261101/` 下的 `prechecks.json`、各回归日志、`public-queue-result.json` 和 `live-install-receipt.json`。测试使用项目内小型 Home 与既有 SDK/运行时，未创建仓库副本或额外运行时。
+最终 13 项成品检查全部通过：Python 单元、模块图、严格 C11 编译、六个 Windows/Linux 成品启动及通用助手运行回归、四组原生安装契约、七项公开商店后台安装、内置扩展升级、八个产物内容与签名核验。
+
+八个产物均复核最新 SDK 原生路由、槽位等待和前端安装模块，包内文件与冻结源码一致。两个 Android APK 均使用既有正式证书，核对 CRC、对齐、版本、签名和内置工具目录；完整版仍仅含原先八种工具。本轮没有新增 Android 真机验收。
+
+Linux 四个最终程序均成功生成，但构建脚本收尾的 `umount` 一度返回忙。随后复核该临时挂载已经释放，四份构建收据的源码提交、大小和文件哈希均吻合，再通过成品提取与运行验证后接纳，原始非零退出和后续独立验证分别保留。没有将收尾错误记成编译成功退出。
+
+版本保持 `0.8.2 / 05000802`，安装编号为 70000118–70000125，工具修订号为 4。八份程序已同步到仓库根目录，`mdo-builds.json` 状态为 `verified-not-published`。当前没有修改线上服务、平台目录、官网下载或自动更新清单。
+
+| 文件 | 安装编号 | MiB | SHA-256 |
+| --- | --- | --- | --- |
+| `mdo.exe` | 70000118 | 6.31 | `c0d615c265adbd8b3a9fad4b2b2c91c0d89776dc63c2a3a70e3540aa28a23274` |
+| `mdo-server.exe` | 70000119 | 6.06 | `73919d13baa1556ea6119d17edd96820c9c55354f9760f410aec95bf7794d1f5` |
+| `mdo-linux-x86_64-glibc` | 70000120 | 5.93 | `403ca60480d56f2fb7ea1a0e34328f9e3db442c77b83ed9c5f6eebbe32e7946b` |
+| `mdo-server-linux-x86_64-glibc` | 70000121 | 5.89 | `902017fabae1e8dd31c51abcac0b68432f74ffd82692f009412fa5693b7b32a4` |
+| `mdo-linux-x86_64-musl` | 70000122 | 7.58 | `3e55c90859d1fd0d2252bd55908142da9e0734a673490bc92a1fd28ecaa21496` |
+| `mdo-server-linux-x86_64-musl` | 70000123 | 7.55 | `0d6f53e4e565245a194ba65819890fa83682f2ba19fcd6a8fa806379abfc233b` |
+| `mdo-arm64-v8a.apk` | 70000124 | 6.12 | `c1970f7e7174b67c6f046bf5a6429cdb1560d96cdf56e7f784f0c201c752a865` |
+| `mdo-full-arm64-v8a.apk` | 70000125 | 81.13 | `b7b2a273a82273a26f7b0085e957a1fe675de4647201f41084683e26ce4c17fe` |
+
+可复核证据：`.build/extension-install-20261101/` 下的 `prechecks.json`、各回归日志、`final-check-results.json`、`products.json`、`public-queue-result.json` 和 `live-install-receipt.json`。首轮批量失败记录保留在 `initial-public-store-seven-queued.log`，构建收尾错误及校验恢复保留在 `build-linux-four.log` 与 `build-results.json`。测试使用项目内小型 Home 与既有 SDK/运行时，未创建仓库副本或额外运行时。
