@@ -665,6 +665,7 @@ bool MdoApiApplicationInvoke(const mdo_sdk_context_v1* Caller,cstr Method,cstr T
     }
     char Token[MDO_API_WRITE_TOKEN_CAPACITY];
     MdoApplicationInvocation* Invocation=Caller->Opaque;
+    C.SendCancel=Invocation?Invocation->Cancel:NULL;
     if(strcmp(Method,"GET")){
         if(Invocation&&Invocation->WriteToken[0])snprintf(Token,sizeof(Token),"%s",Invocation->WriteToken);
         else if(!MdoApiWriteToken(Token))return MdoApplicationError(Error,"sdk_unavailable","Write admission unavailable","dispatch",503,false);
@@ -678,8 +679,9 @@ bool MdoApiApplicationInvoke(const mdo_sdk_context_v1* Caller,cstr Method,cstr T
     for(size_t i=0;i<sizeof(g_MdoApiRoutes)/sizeof(*g_MdoApiRoutes);i++){
         const MdoApiRoute* R=&g_MdoApiRoutes[i];if(!MdoApiRouteMatch(&C,R->Path))continue;
         /* These handlers explicitly retain a physical HTTP connection. The SDK
-         * transport chooses loopback before invoking them, never replays work. */
-        if(R->Proc==MdoApiEcosystemRoute||R->Proc==MdoApiModelAddRoute||R->Proc==MdoApiModelDiscoverRoute||R->Proc==MdoApiModelParametersRoute||R->Proc==MdoApiModelProvidersRoute||R->Proc==MdoApiModelTestRoute||
+         * transport chooses loopback before invoking them, never replays work.
+         * Ecosystem has captured replies and runs on the SDK-owned worker. */
+        if(R->Proc==MdoApiModelAddRoute||R->Proc==MdoApiModelDiscoverRoute||R->Proc==MdoApiModelParametersRoute||R->Proc==MdoApiModelProvidersRoute||R->Proc==MdoApiModelTestRoute||
             R->Proc==MdoApiSessionBackupRoute||R->Proc==MdoApiLiveRoute||R->Proc==MdoApiDirectRoute||
             strstr(Target,"/attachments/"))return false;
         if(!(R->Methods&Head.MethodCode)){MdoApplicationError(Error,"method_not_allowed","Unsupported operation method","dispatch",405,false);return false;}
