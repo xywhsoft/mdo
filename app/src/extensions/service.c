@@ -19,11 +19,16 @@ static bool MdoExtServiceLease(xcancel* Cancel,bool Required,MdoAccountLease* Le
  * malformed HTTP and resource/permission failures require explicit action. */
 static bool MdoExtServiceTransientTransport(const xerror* Cause){
  cstr RootDomain=Cause?xrtErrorDomain(Cause):NULL;
- bool Incomplete=RootDomain&&!strcmp(RootDomain,"xs.fetch")&&xrtErrorCode(Cause)==XS_FETCH_ERROR_INCOMPLETE,Transient=Incomplete;
+ bool Incomplete=RootDomain&&!strcmp(RootDomain,"xs.fetch")&&xrtErrorCode(Cause)==XS_FETCH_ERROR_INCOMPLETE,Transient=Incomplete,Deadline=false;
  for(size_t Depth=0;Cause&&Depth<16;Depth++,Cause=xrtErrorCause(Cause)){
   xerrkind Kind=xrtErrorKind(Cause);cstr Domain=xrtErrorDomain(Cause);int32 Code=xrtErrorCode(Cause);
+  if(Kind==XERR_TIMEOUT)Deadline=true;
   if(Domain&&!strcmp(Domain,"xrt.tls")&&(Code==XTLS_ERROR_VERIFY||Code==XTLS_ERROR_CERTIFICATE||Code==XTLS_ERROR_IDENTITY))return false;
-  if(Kind==XERR_ARGUMENT||Kind==XERR_TYPE||Kind==XERR_VALUE||Kind==XERR_RANGE||Kind==XERR_MEMORY||Kind==XERR_PERMISSION||Kind==XERR_UNSUPPORTED||Kind==XERR_CANCELLED||Kind==XERR_NOT_FOUND||Kind==XERR_EXISTS)return false;
+  /* A total deadline cancels the HTTP client's private TLS/TCP operations.
+   * Those nested cancellations are not a user cancellation. The request's
+   * actual cancel token is checked separately before allowing any retry. */
+  if(Kind==XERR_CANCELLED){if(!Deadline)return false;continue;}
+  if(Kind==XERR_ARGUMENT||Kind==XERR_TYPE||Kind==XERR_VALUE||Kind==XERR_RANGE||Kind==XERR_MEMORY||Kind==XERR_PERMISSION||Kind==XERR_UNSUPPORTED||Kind==XERR_NOT_FOUND||Kind==XERR_EXISTS)return false;
   if(Kind==XERR_PROTOCOL&&(!Incomplete||(Domain&&!strcmp(Domain,"xrt.tls"))))return false;
   if(Kind==XERR_IO||Kind==XERR_AGAIN||Kind==XERR_TIMEOUT||Kind==XERR_CLOSED)Transient=true;
  }
@@ -40,12 +45,13 @@ static bool MdoExtServiceFetchAttempt(cstr Path,cstr Method,const void* Body,siz
  char* Url=xrtFormat(MDO_ACCOUNT_SERVICE_ORIGIN "%s",Path);char Authorization[4200]={0};XS_FetchHeader Headers[3]={{"Accept",Binary&&!strcmp(Method,"GET")?"application/zip":"application/json"},{"Content-Type",Binary?"application/octet-stream":"application/json"}};size_t Count=2;
  bool Ok=Url&&Path&&!strncmp(Path,MDO_EXT_SERVICE,sizeof(MDO_EXT_SERVICE)-1)&&Bytes<=1048576&&(!Cancel||!xrtCancelRequested(Cancel));
  if(Ok&&Lease&&Lease->Managed){Ok=Lease->AccessToken&&strlen(Lease->AccessToken)<=4096;if(Ok){snprintf(Authorization,sizeof(Authorization),"Bearer %s",Lease->AccessToken);Headers[Count++]=(XS_FetchHeader){"Authorization",Authorization};}}
- XS_FetchRequest Request={0};Request.Size=sizeof(Request);Request.Version=XS_FETCH_REQUEST_VERSION;Request.Url=Url;Request.Method=Method;Request.Headers=Headers;Request.HeaderCount=Count;Request.Body=Body;Request.BodySize=Bytes;Request.Timeout=30000000;Request.IdleTimeout=10000000;Request.MaxBodyBytes=Binary?1048576:8u*1024u*1024u;Request.Cancel=Lease&&Lease->Managed?Lease->Cancel:Cancel;Response->Size=sizeof(*Response);
+ bool ArchiveRead=Binary&&!strcmp(Method,"GET");
+ XS_FetchRequest Request={0};Request.Size=sizeof(Request);Request.Version=XS_FETCH_REQUEST_VERSION;Request.Url=Url;Request.Method=Method;Request.Headers=Headers;Request.HeaderCount=Count;Request.Body=Body;Request.BodySize=Bytes;Request.Timeout=ArchiveRead?120000000:30000000;Request.IdleTimeout=ArchiveRead?30000000:10000000;Request.MaxBodyBytes=Binary?1048576:8u*1024u*1024u;Request.Cancel=Lease&&Lease->Managed?Lease->Cancel:Cancel;Response->Size=sizeof(*Response);
  bool Read=Ok&&!strcmp(Method,"GET");if(Ok){xrtClearError();Ok=xsFetch(&Request,Response);}
  bool Cancelled=Request.Cancel&&xrtCancelRequested(Request.Cancel);
  if(Retryable&&Read&&!Cancelled&&!Response->Redirects)*Retryable=!Ok?MdoExtServiceTransientTransport(xrtGetError()):Response->Status==408||Response->Status==425||Response->Status==500||Response->Status==502||Response->Status==503||Response->Status==504;
  xrtSecureZero(Authorization,sizeof(Authorization));xrtFree(Url);
- if(!Ok){if(Cancelled)return MdoExtServiceError(Error,"Extension transfer cancelled or its account session changed");const xerror* Cause=xrtGetError();if(Error&&Cause)snprintf(Error,512,"The extension service connection failed: %.400s",xrtErrorMessage(Cause));else MdoExtServiceError(Error,"The extension service connection could not complete");return false;}
+ if(!Ok){if(Cancelled)return MdoExtServiceError(Error,"Extension transfer cancelled or its account session changed");const xerror* Cause=xrtGetError();if(Cause&&xrtErrorCause(Cause)&&xrtErrorDomain(Cause)&&!strcmp(xrtErrorDomain(Cause),"xs.fetch"))Cause=xrtErrorCause(Cause);if(Error&&Cause)snprintf(Error,512,"The extension service connection failed: %.400s",xrtErrorMessage(Cause));else MdoExtServiceError(Error,"The extension service connection could not complete");return false;}
  if(Response->Status==401&&Lease&&Lease->Managed)(void)MdoAccountRejectAccess(Lease);
  if(Response->Redirects||Response->Status<200||Response->Status>=300){char Message[512];snprintf(Message,sizeof(Message),"The extension service rejected this request (HTTP %u)",(unsigned)Response->Status);xvalue* Envelope=Response->Body&&Response->BodySize<=65536?xrtJsonParse(xrtStrViewN((cstr)Response->Body,Response->BodySize)):NULL;cstr Text=MdoExtensionText(Envelope,"message",450);if(Text&&Text[0])snprintf(Message,sizeof(Message),"HTTP %u: %s",(unsigned)Response->Status,Text);xrtValueRelease(Envelope);return MdoExtServiceError(Error,Message);}
  return true;
