@@ -64,6 +64,17 @@ static bool MdoExtServiceFetch(cstr Path,cstr Method,const void* Body,size_t Byt
   if(!MdoExtServiceWaitRetry(Retry,Lease&&Lease->Managed?Lease->Cancel:Cancel,Error))return false;
  }
 }
+/* One download/group shares a retry budget. Keep the current archive and
+ * verified offset while retrying a read instead of replaying its prefix. */
+static bool MdoExtServiceRetryRead(bool Transient,unsigned* Retries,xcancel* Cancel,char Error[512]){
+ if(!Transient||!Retries||*Retries>=MDO_EXT_INSTALL_RETRIES)return false;
+ return MdoExtServiceWaitRetry((*Retries)++,Cancel,Error);
+}
+static bool MdoExtServiceFetchBudget(cstr Path,const MdoAccountLease* Lease,xcancel* Cancel,XS_FetchResponse* Response,unsigned* Retries,char Error[512]){
+ for(;;){bool Transient=false;if(MdoExtServiceFetchAttempt(Path,"GET",NULL,0,true,Lease,Cancel,Response,&Transient,Error))return true;
+  xsFetchResponseUnit(Response);if(!MdoExtServiceRetryRead(Transient,Retries,Lease&&Lease->Managed?Lease->Cancel:Cancel,Error))return false;
+ }
+}
 static xvalue* MdoExtServiceDecode(const XS_FetchResponse* Response,char Error[512]){
  xjsonreadconfig Config;xrtJsonReadConfigInit(&Config);Config.MaxInputBytes=8u*1024u*1024u;Config.MaxStringBytes=1048576;Config.MaxValues=200000;Config.MaxDepth=20;
  xvalue* Envelope=xrtJsonRead(xrtStrViewN((cstr)Response->Body,Response->BodySize),&Config);int64 Code=-1;bool Ok=Envelope&&xrtValueGetInt(xrtValueObjectGet(Envelope,XRT_STR_LITERAL("code")),&Code)&&Code==0;
@@ -94,23 +105,28 @@ static bool MdoExtServiceReadAttempt(const xvalue* Input,xcancel* Cancel,xvalue*
  MdoAccountLease Lease={0};bool Ok=Path&&MdoExtServiceLease(Cancel,Required,&Lease,Error);if(Ok)*Result=MdoExtServiceJsonAttempt(Path,"GET",NULL,&Lease,Cancel,Retryable,Error);MdoAccountRelease(&Lease);xrtFree(Path);return *Result!=NULL;
 }
 bool MdoExtensionServiceRead(const xvalue* Input,xcancel* Cancel,xvalue** Result,char Error[512]){return MdoExtServiceReadAttempt(Input,Cancel,Result,NULL,Error);}
+static bool MdoExtServiceReadBudget(const xvalue* Input,xcancel* Cancel,xvalue** Result,unsigned* Retries,char Error[512]){
+ for(;;){bool Transient=false;if(MdoExtServiceReadAttempt(Input,Cancel,Result,&Transient,Error))return true;
+  xrtValueRelease(*Result);*Result=NULL;if(!MdoExtServiceRetryRead(Transient,Retries,Cancel,Error))return false;
+ }
+}
 static xvalue* MdoExtServiceOrigin(const xvalue* Entry){
  const cstr Names[]={"id","kind","xid","version_id","sha256","bytes","owner","submitter","author","copyright","license","name","alias","platforms","state","version","serial","sort_order","tags"};xvalue* Origin=xrtValueObject();bool Ok=Origin!=NULL;
  for(size_t I=0;Ok&&I<sizeof(Names)/sizeof(*Names);I++){const xvalue* Value=xrtValueObjectGet(Entry,xrtStrView(Names[I]));if(Value)Ok=xrtValueObjectSet(Origin,xrtStrView(Names[I]),Value);}if(!Ok){xrtValueRelease(Origin);return NULL;}return Origin;
 }
-static bool MdoExtServiceDownloadAttempt(cstr Kind,cstr Version,xcancel* Cancel,xvalue** Result,bool* Retryable,char Error[512]){
+static bool MdoExtServiceDownloadAttempt(cstr Kind,cstr Version,xcancel* Cancel,xvalue** Result,unsigned* Retries,char Error[512]){
  *Result=NULL;if(Error)Error[0]=0;if(!MdoExtensionDirectoryKind(Kind)||!MdoExtServiceId(Version))return MdoExtServiceError(Error,"Choose a published extension version");
 #if defined(__ANDROID__)
  if(!strcmp(Kind,"external-tools"))return MdoExtServiceError(Error,"Android external programs are installed and updated with the full APK");
 #endif
- xvalue* Query=xrtValueObject(),*Entry=NULL,*Task=NULL,*Origin=NULL;bool Ok=Query&&MdoExtServicePut(Query,"action","detail")&&MdoExtServicePut(Query,"version_id",Version)&&MdoExtServiceReadAttempt(Query,Cancel,&Entry,Retryable,Error);xrtValueRelease(Query);
+ xvalue* Query=xrtValueObject(),*Entry=NULL,*Task=NULL,*Origin=NULL;bool Ok=Query&&MdoExtServicePut(Query,"action","detail")&&MdoExtServicePut(Query,"version_id",Version)&&MdoExtServiceReadBudget(Query,Cancel,&Entry,Retries,Error);xrtValueRelease(Query);
  cstr ActualKind=MdoExtensionText(Entry,"kind",32),State=MdoExtensionText(Entry,"state",16),Hash=MdoExtensionText(Entry,"sha256",64);uint64 Bytes=0;
  cstr ActualVersion=MdoExtensionText(Entry,"version_id",32);Ok=Ok&&ActualKind&&!strcmp(Kind,ActualKind)&&ActualVersion&&!strcmp(Version,ActualVersion)&&State&&!strcmp(State,"published")&&MdoExtServiceNumber(Entry,"bytes",&Bytes)&&Bytes&&Bytes<=MDO_EXTENSION_ARCHIVE_BYTES;
  xvalue* Input=xrtValueObject();Ok=Ok&&Input&&MdoExtServicePut(Input,"kind",Kind)&&MdoExtServicePut(Input,"purpose","install")&&MdoExtServicePut(Input,"sha256",Hash)&&xrtValueObjectSetNew(Input,XRT_STR_LITERAL("bytes"),xrtValueUInt(Bytes))&&MdoExtensionTaskBeginWait(Input,Cancel,&Task,Error);xrtValueRelease(Input);
  char Id[33]={0};if(Ok)snprintf(Id,sizeof(Id),"%s",MdoExtensionText(Task,"id",32));MdoExtensionTaskUse* Use=Ok?MdoExtensionTaskUseBegin(Id,true,Cancel,Error):NULL;MdoAccountLease Lease={0};Origin=Ok?MdoExtServiceOrigin(Entry):NULL;
  Ok=Ok&&Use&&Origin&&MdoExtensionTaskOrigin(Use,Origin,Error)&&MdoExtServiceLease(MdoExtensionTaskUseCancel(Use),false,&Lease,Error);
  for(uint64 Offset=0;Ok&&Offset<Bytes;){char* Path=xrtFormat(MDO_EXT_SERVICE "/archive?dependency_protocol=1&version=%s&offset=%llu",Version,(unsigned long long)Offset);XS_FetchResponse Response={0};uint64 Remaining=Bytes-Offset;size_t Want=(size_t)(Remaining<MDO_EXTENSION_TASK_CHUNK?Remaining:MDO_EXTENSION_TASK_CHUNK);
-  Ok=Path&&MdoExtServiceFetchAttempt(Path,"GET",NULL,0,true,&Lease,MdoExtensionTaskUseCancel(Use),&Response,Retryable,Error);
+  Ok=Path&&MdoExtServiceFetchBudget(Path,&Lease,MdoExtensionTaskUseCancel(Use),&Response,Retries,Error);
   if(Ok&&(Response.BodySize!=Want||!Response.ContentType||strncmp(Response.ContentType,"application/zip",15))){snprintf(Error,512,"Store archive chunk mismatch: expected %zu application/zip bytes, received %zu bytes (HTTP %u, %.80s)",Want,Response.BodySize,(unsigned)Response.Status,Response.ContentType?Response.ContentType:"no Content-Type");Ok=false;}
   xvalue* Progress=NULL;if(Ok)Ok=MdoExtensionTaskUseWrite(Use,Offset,Response.Body,Response.BodySize,&Progress,Error);xrtValueRelease(Progress);xsFetchResponseUnit(&Response);xrtFree(Path);Offset+=Want;
  }
@@ -119,12 +135,7 @@ static bool MdoExtServiceDownloadAttempt(cstr Kind,cstr Version,xcancel* Cancel,
  xrtValueRelease(Entry);xrtValueRelease(Task);xrtValueRelease(Origin);if(!Ok&&Error&&!Error[0])MdoExtServiceError(Error,"The store archive changed or failed its byte/hash/ZIP validation");return Ok;
 }
 bool MdoExtensionServiceDownload(cstr Kind,cstr Version,xcancel* Cancel,xvalue** Result,char Error[512]){
- for(unsigned Retry=0;;Retry++){
-  bool Transient=false;if(MdoExtServiceDownloadAttempt(Kind,Version,Cancel,Result,&Transient,Error))return true;
-  if(!Transient||Retry==MDO_EXT_INSTALL_RETRIES)return false;
-  xrtValueRelease(*Result);*Result=NULL;
-  if(!MdoExtServiceWaitRetry(Retry,Cancel,Error))return false;
- }
+ unsigned Retries=0;return MdoExtServiceDownloadAttempt(Kind,Version,Cancel,Result,&Retries,Error);
 }
 bool MdoExtensionServiceInstall(cstr Id,const xvalue* Input,xcancel* Cancel,xvalue** Result,char Error[512]){
  *Result=NULL;if(Error)Error[0]=0;MdoExtensionTaskUse* Use=MdoExtensionTaskUseBegin(Id,false,Cancel,Error);xvalue* Task=Use?MdoExtensionTaskRead(Id,Error):NULL;const xvalue* Origin=xrtValueObjectGet(Task,XRT_STR_LITERAL("store"));cstr Kind=MdoExtensionText(Origin,"kind",32),Target=MdoExtensionText(Origin,"xid",32);char* Archive=Use?MdoExtensionTaskArchive(Id,Error):NULL;
