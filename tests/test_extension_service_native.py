@@ -16,7 +16,13 @@ PLATFORM = ROOT.parent / 'home/host/xywhsoft_ai/plugin/mdo/modules/ecosystem'
 TRANSPORT = r'''
 static MdDirectoryStore QaStore;
 static bool QaLogin=true,QaLoseSubmit=true,QaRedirect,QaCorrupt,QaShort,QaCancel,QaRaw=true;
-static unsigned QaChunks,QaRequests,QaLeaks,QaTransientReads;
+static unsigned QaChunks,QaRequests,QaLeaks,QaTransientReads,QaReadStatus,QaDeferredStatus,QaScheduledReads,QaScheduledFailures;
+static xerrkind QaReadError=XERR_TIMEOUT;
+static cstr QaReadDomain="qa.network";
+static int32 QaReadCode=1;
+static xcancel* QaCancelRoot;
+static xthread* QaCancelThread;
+static int32 QaCancelRetry(void* Root){xrtSleep(40);xrtCancelRequest(Root);return 0;}
 static bool QaLease(xcancel* Parent,uint32 Timeout,MdoAccountLease* L){
  (void)Timeout;memset(L,0,sizeof(*L));if(!QaLogin)return false;L->Cancel=Parent?xrtCancelChild(Parent):xrtCancelCreate();L->AccessToken=xrtStrDup("native-fixture-credential");L->Managed=true;L->MemberId=12;L->Generation=7;return L->Cancel&&L->AccessToken;
 }
@@ -25,7 +31,7 @@ static bool QaReject(const MdoAccountLease* L){(void)L;return true;}
 static void QaResponseUnit(XS_FetchResponse* R){xrtFree(R->Body);xrtFree(R->ContentType);memset(R,0,sizeof(*R));}
 static char* QaQuery(cstr Url,cstr Key){char* Tag=xrtFormat("%s=",Key);cstr At=Tag?strstr(Url,Tag):NULL;xrtFree(Tag);if(!At)return NULL;At+=strlen(Key)+1;size_t N=strcspn(At,"&");return xrtStrDupN(At,N);}
 static bool QaFetch(const XS_FetchRequest* Q,XS_FetchResponse* R){
- QaRequests++;if(QaTransientReads&&!strcmp(Q->Method,"GET")){QaTransientReads--;return false;}if(!Q->Url||strncmp(Q->Url,"https://ai.xywhsoft.com/api/v1/mdo/extensions/",sizeof("https://ai.xywhsoft.com/api/v1/mdo/extensions/")-1))return false;
+ QaRequests++;if(!strcmp(Q->Method,"GET")&&QaScheduledFailures&&++QaScheduledReads%3==0){QaScheduledFailures--;xrtSetErrorInfo(XERR_TIMEOUT,"qa.network",1,"temporary staged-download timeout");return false;}if(QaTransientReads&&!strcmp(Q->Method,"GET")){QaTransientReads--;if(QaCancelRoot&&!QaCancelThread)QaCancelThread=xrtThreadCreate(QaCancelRetry,QaCancelRoot,0);unsigned Status=QaReadStatus;if(QaDeferredStatus){QaReadStatus=QaDeferredStatus;QaDeferredStatus=0;}if(Status){R->Status=(uint16)Status;R->Redirects=QaRedirect?1:0;return true;}xrtSetErrorInfo(QaReadError,QaReadDomain,QaReadCode,"injected transport error");return false;}if(!Q->Url||strncmp(Q->Url,"https://ai.xywhsoft.com/api/v1/mdo/extensions/",sizeof("https://ai.xywhsoft.com/api/v1/mdo/extensions/")-1))return false;
  if(QaCancel){xrtCancelRequest(Q->Cancel);return false;}if(Q->Cancel&&xrtCancelRequested(Q->Cancel))return false;
  bool Auth=false;for(size_t I=0;I<Q->HeaderCount;I++)if(!strcmp(Q->Headers[I].Name,"Authorization"))Auth=!strcmp(Q->Headers[I].Value,"Bearer native-fixture-credential");
  cstr Path=strstr(Q->Url,"/api/v1/mdo/extensions/");xvalue* Input=Q->BodySize&&strcmp(Q->Method,"PUT")?xrtJsonParse(xrtStrViewN(Q->Body,Q->BodySize)):NULL,*Out=NULL;char E[512]={0};bool Ok=false;
@@ -54,6 +60,25 @@ static void QaDiscard(cstr Id){xvalue* O=NULL;char E[512];MdoExtensionTaskCancel
 xvalue* QaProductContract(const xvalue* P,xvfs V){
  xvalue* R=xrtValueObject(),*Out=NULL;char E[512]={0};bool Home=QaProductHome(SdkField(P,"root"),SdkField(P,"app"),V);char* StorePath=xrtFormat("%s/platform",SdkField(P,"root"));bool Ok=Home&&MdoExtensionsInit()&&MdoExtensionTasksInit()&&MdStoreInit(&QaStore,StorePath,E);xrtFree(StorePath);
  QaLogin=false;xvalue* Input=SdkParse("{\"action\":\"catalog\"}");bool Public=Ok&&QaMdoExtensionServiceRead(Input,NULL,&Out,E);xrtValueRelease(Out);Out=NULL;SdkPut(Input,"action","profile");Public=Public&&!QaMdoExtensionServiceRead(Input,NULL,&Out,E);xrtValueRelease(Out);Out=NULL;xrtValueRelease(Input);QaFlag(R,"anonymous_catalog_and_private_login_required",Public);QaLogin=true;
+ Input=SdkParse("{\"action\":\"catalog\"}");unsigned RetryBefore=QaRequests;QaTransientReads=5;
+ bool RetryFive=QaMdoExtensionServiceRead(Input,NULL,&Out,E)&&QaRequests==RetryBefore+6&&!QaTransientReads;xrtValueRelease(Out);Out=NULL;QaFlag(R,"fifth_automatic_read_retry_can_succeed",RetryFive);
+ RetryBefore=QaRequests;QaTransientReads=6;bool Limited=!QaMdoExtensionServiceRead(Input,NULL,&Out,E)&&QaRequests==RetryBefore+6&&!QaTransientReads;xrtValueRelease(Out);Out=NULL;QaFlag(R,"six_failures_stop_at_five_retries",Limited);
+ const xerrkind Hard[]={XERR_ARGUMENT,XERR_MEMORY,XERR_PERMISSION,XERR_PROTOCOL,XERR_UNSUPPORTED,XERR_INTERNAL};bool Deterministic=true;
+ for(size_t I=0;I<sizeof(Hard)/sizeof(*Hard);I++){RetryBefore=QaRequests;QaReadError=Hard[I];QaTransientReads=8;Deterministic=Deterministic&&!QaMdoExtensionServiceRead(Input,NULL,&Out,E)&&QaRequests==RetryBefore+1&&QaTransientReads==7;xrtValueRelease(Out);Out=NULL;}
+ QaTransientReads=0;QaReadError=XERR_TIMEOUT;QaFlag(R,"deterministic_and_unknown_transport_errors_are_not_retried",Deterministic);
+ const unsigned Permanent[]={400,401,403,404,409,413,422,429};bool Rejected=true;
+ for(size_t I=0;I<sizeof(Permanent)/sizeof(*Permanent);I++){RetryBefore=QaRequests;QaReadStatus=Permanent[I];QaTransientReads=8;Rejected=Rejected&&!QaMdoExtensionServiceRead(Input,NULL,&Out,E)&&QaRequests==RetryBefore+1&&QaTransientReads==7;xrtValueRelease(Out);Out=NULL;}
+ QaTransientReads=0;QaReadStatus=0;QaFlag(R,"permission_integrity_and_unqualified_rate_limit_responses_stop_immediately",Rejected);
+ const unsigned Temporary[]={408,425,500,502,503,504};bool ServerBusy=true;
+ for(size_t I=0;I<sizeof(Temporary)/sizeof(*Temporary);I++){RetryBefore=QaRequests;QaReadStatus=Temporary[I];QaTransientReads=1;ServerBusy=ServerBusy&&QaMdoExtensionServiceRead(Input,NULL,&Out,E)&&QaRequests==RetryBefore+2;xrtValueRelease(Out);Out=NULL;}
+ QaReadStatus=0;QaFlag(R,"temporary_http_errors_are_retried",ServerBusy);
+ QaReadStatus=0;QaDeferredStatus=401;QaTransientReads=6;RetryBefore=QaRequests;bool NewPermanent=!QaMdoExtensionServiceRead(Input,NULL,&Out,E)&&QaRequests==RetryBefore+2&&QaTransientReads==4;xrtValueRelease(Out);Out=NULL;QaReadStatus=0;QaTransientReads=0;QaFlag(R,"a_permanent_error_after_a_transient_failure_stops_early",NewPermanent);
+
+ QaReadError=XERR_IO;QaReadDomain="xrt.tls";QaReadCode=XTLS_ERROR_VERIFY;QaTransientReads=1;RetryBefore=QaRequests;bool Tls=!QaMdoExtensionServiceRead(Input,NULL,&Out,E)&&QaRequests==RetryBefore+1;xrtValueRelease(Out);Out=NULL;QaFlag(R,"certificate_verification_failure_never_retries",Tls);
+ QaReadError=XERR_PROTOCOL;QaReadDomain="xs.fetch";QaReadCode=XS_FETCH_ERROR_INCOMPLETE;QaTransientReads=1;RetryBefore=QaRequests;bool Eof=QaMdoExtensionServiceRead(Input,NULL,&Out,E)&&QaRequests==RetryBefore+2;xrtValueRelease(Out);Out=NULL;QaFlag(R,"typed_incomplete_response_is_retryable",Eof);
+ QaReadError=XERR_TIMEOUT;QaReadDomain="qa.network";QaReadCode=1;
+ QaCancelRoot=xrtCancelCreate();QaTransientReads=1;RetryBefore=QaRequests;bool CancelRetry=!QaMdoExtensionServiceRead(Input,QaCancelRoot,&Out,E)&&QaRequests==RetryBefore+1&&strstr(E,"cancelled");xrtValueRelease(Out);Out=NULL;if(QaCancelThread){xrtThreadWait(QaCancelThread);xrtThreadDestroy(QaCancelThread);}QaCancelThread=NULL;xrtCancelDestroy(QaCancelRoot);QaCancelRoot=NULL;QaFlag(R,"cancellation_interrupts_retry_backoff_without_another_request",CancelRetry);xrtValueRelease(Input);
+
  Ok=Ok&&MdoExtensionTaskPack("skills","authored",NULL,&Out,E);char Task[33]={0};if(Ok)snprintf(Task,sizeof(Task),"%s",SdkField(Out,"id"));xrtValueRelease(Out);Out=NULL;
  Input=SdkParse("{\"publish\":true,\"review_notes\":\"Source files are included\",\"source_included\":true}");SdkPut(Input,"task",Task);
  bool Lost=Ok&&!QaMdoExtensionServicePublish(Input,NULL,&Out,E);xrtValueRelease(Out);Out=NULL;Out=MdoExtensionTaskRead(Task,E);Lost=Lost&&Out&&!strcmp(SdkField(Out,"state"),"ready")&&MdStoreScalar(&QaStore,"SELECT count(*) FROM version WHERE owner=?1",12)==1;QaFlag(R,"lost_submit_reply_keeps_retryable_task",Lost);QaFlag(R,"review_request_is_retained_without_payload",SdkGet(Out,"publication")&&!strcmp(SdkField(SdkGet(Out,"publication"),"nonce"),Task));xrtValueRelease(Out);Out=NULL;

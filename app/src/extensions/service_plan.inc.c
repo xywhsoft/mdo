@@ -10,7 +10,7 @@ bool MdoExtensionServicePlan(const xvalue* Input,xcancel* Cancel,xvalue** Result
     xvalue* Request=xrtValueObject();Ok=Ok&&Request&&MdoExtServicePut(Request,"action","install")&&MdoExtServicePut(Request,"ref",Root)&&MdoExtensionsPlan(Request,Items,Result,Error);
     xrtValueRelease(Request);xrtValueRelease(Remote);if(!Ok&&Error&&!Error[0])MdoExtServiceError(Error,"The store does not provide a complete dependency protocol 1 plan; update the platform before installing");return Ok;
 }
-bool MdoExtensionServiceApplyPlan(const xvalue* Input,xcancel* Cancel,xvalue** Result,char Error[512]){
+static bool MdoExtServiceApplyPlanAttempt(const xvalue* Input,xcancel* Cancel,xvalue** Result,bool* Retryable,char Error[512]){
     *Result=NULL;if(Error)Error[0]=0;cstr Id=MdoExtensionText(Input,"plan_id",32),Revision=MdoExtensionText(Input,"revision",64);xvalue* Plan=MdoExtensionsPlanRead(Id,Revision,Error);if(!Plan)return false;
     *Result=MdoExtensionsPlanReceipt(Id,Revision,Error);if(*Result){xrtValueRelease(Plan);return true;}if(Error&&Error[0]){xrtValueRelease(Plan);return false;}
     const xvalue* Items=xrtValueObjectGet(Plan,XRT_STR_LITERAL("items"));size_t Count=xrtValueCount(Items);bool Ok=MdoExtServicePlanBool(Input,"trust_code")&&MdoExtServicePlanBool(Plan,"ready")&&Count&&Count<=128;uint64 Total=0;
@@ -20,7 +20,7 @@ bool MdoExtensionServiceApplyPlan(const xvalue* Input,xcancel* Cancel,xvalue** R
     MdoExtensionTaskUse** Uses=Ok?xrtCalloc(Count,sizeof(*Uses)):NULL;xvalue* Downloads=xrtValueArray(),*Tasks=xrtValueArray();Ok=Ok&&Uses&&Downloads&&Tasks;
     for(size_t I=0;Ok&&I<Count;I++){
         const xvalue* Item=xrtValueArrayGet(Items,I);cstr Op=MdoExtensionText(Item,"operation",16);if(strcmp(Op,"install"))continue;
-        xvalue* Task=NULL;Ok=MdoExtensionServiceDownload(MdoExtensionText(Item,"kind",32),MdoExtensionText(Item,"version_id",32),Cancel,&Task,Error);cstr TaskId=MdoExtensionText(Task,"id",32);
+        xvalue* Task=NULL;Ok=MdoExtServiceDownloadAttempt(MdoExtensionText(Item,"kind",32),MdoExtensionText(Item,"version_id",32),Cancel,&Task,Retryable,Error);cstr TaskId=MdoExtensionText(Task,"id",32);
         if(Ok)Ok=TaskId&&xrtValueArrayAppendNew(Tasks,xrtValueString(xrtStrView(TaskId)));
         if(Ok)Uses[I]=MdoExtensionTaskUseBegin(TaskId,false,Cancel,Error);
         char* Archive=Uses[I]?MdoExtensionTaskArchive(TaskId,Error):NULL;
@@ -34,4 +34,16 @@ bool MdoExtensionServiceApplyPlan(const xvalue* Input,xcancel* Cancel,xvalue** R
         xstrview Task;xrtValueGetString(xrtValueArrayGet(Tasks,I),&Task);xvalue* Receipt=NULL;char Why[512]={0};bool Saved=Ok?MdoExtensionTaskComplete(Task.Data,*Result,&Receipt,Why):Cancel&&xrtCancelRequested(Cancel)?MdoExtensionTaskCancel(Task.Data,&Receipt,Why):MdoExtensionTaskFail(Task.Data,Error&&Error[0]?Error:"Extension group installation failed",&Receipt,Why);if(!Saved&&Ok&&*Result)MdoExtServicePut(*Result,"transfer_receipt_error",Why);xrtValueRelease(Receipt);
     }
     xrtFree(Uses);xrtValueRelease(Downloads);xrtValueRelease(Tasks);xrtValueRelease(Plan);if(!Ok&&Error&&!Error[0])MdoExtServiceError(Error,"Confirm code approval for the complete inspected plan; the group must fit the 1 GiB transfer budget");return Ok;
+}
+
+/* One native operation owns all attempts. Reads may be repeated before commit;
+ * trust, pinned versions and the approval revision are never regenerated. */
+bool MdoExtensionServiceApplyPlan(const xvalue* Input,xcancel* Cancel,xvalue** Result,char Error[512]){
+ for(unsigned Retry=0;;Retry++){
+  bool Transient=false;
+  if(MdoExtServiceApplyPlanAttempt(Input,Cancel,Result,&Transient,Error)){if(Retry&&*Result)xrtValueObjectSetNew(*Result,XRT_STR_LITERAL("retry_count"),xrtValueUInt(Retry));return true;}
+  if(!Transient||Retry==MDO_EXT_INSTALL_RETRIES)return false;
+  xrtValueRelease(*Result);*Result=NULL;
+  if(!MdoExtServiceWaitRetry(Retry,Cancel,Error))return false;
+ }
 }
