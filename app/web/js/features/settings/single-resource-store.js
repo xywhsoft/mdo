@@ -26,7 +26,7 @@ export function createSingleResourceStore(kind, onChange, onBrowse=()=>{}, onMan
   if (!names[kind]) throw Error(uiErrorText("error.detail.unsupportedExtensionType", {}, "Unsupported extension type"));
   const root=text("div","","single-resource-store"),statusRoot=element("p",{className:"extension-help",attrs:{role:"status"}});
   const browser=createExtensionBrowser({kind,onClose:()=>{++detailEpoch;detailAbort?.abort();}});
-  let items=[],installed={},query="",applied="",state="all",total=0,epoch=0,detailEpoch=0,controller=null,detailAbort=null,dialog=null,busy=false,saving=false,dirty=false,visible=false,disposed=false,activeTarget=device();
+  let items=[],installed={},query="",applied="",state="new",total=0,epoch=0,detailEpoch=0,controller=null,detailAbort=null,dialog=null,busy=false,saving=false,dirty=false,visible=false,disposed=false,activeTarget=device();
   const live=(n,target)=>!disposed&&n===epoch&&target===device();
   const call=async(body,signal=controller?.signal)=>(await api.post("/ecosystem",{kind,...body},{signal})).data;
   const owned=row=>Object.values(installed).find(local=>local.kind===kind&&local.directory_id===row.xid&&local.source==="store");
@@ -119,7 +119,7 @@ export function createSingleResourceStore(kind, onChange, onBrowse=()=>{}, onMan
       }catch(e){if(current())writeUiText(message, uiMessage("ui.singleResourceStore.value1TheArchiveTaskIsRetainedForRetryOr", { value1: errorMessage(e) }, "{value1}。归档任务已保留，可重试；也可在下载任务中取消。"));}finally{if(current()){saving=false;view.closeButton.disabled=false;submit.disabled=false;for(const c of form.elements)c.disabled=false;}}
     });
   }
-  function localActions(receipt){if(receipt?.source!=="store"||receipt.kind!==kind)return[];return[button(uiMessage("ui.singleResourceStore.checkStoreUpdates", {}, "检查商店更新"),()=>{query=receipt.alias||receipt.name||"";void load();onBrowse();})];}
+  function localActions(receipt){if(receipt?.source!=="store"||receipt.kind!==kind)return[];return[button(uiMessage("ui.singleResourceStore.checkStoreUpdates", {}, "检查商店更新"),()=>{query=receipt.alias||receipt.name||"";state="all";void load();onBrowse();})];}
   async function importPackage(file){
     if(policy.beforeInstall&&!await policy.beforeInstall())return;
     if(!(file instanceof Blob))throw Error(uiText("ui.singleResourceStore.selectAZipOfTheEntireExtensionDirectoryJson", {}, "请选择整个扩展目录的 ZIP 文件；JSON 包已停止支持"));const view=modal(uiText("ui.singleResourceStore.importValue1Zip", { value1: names[kind] }, "导入{value1} ZIP"));if(!view)return;const message=text("p",`${file.name||"extension.zip"} · ${file.size} B`),identity=element("input",{attrs:{maxlength:"96",placeholder:uiMessage("ui.singleResourceStore.localDirectoryName", {}, "本机目录名称")}}),trust=element("input",{attrs:{type:"checkbox"}});view.body.append(message,identity,element("label",{},[trust,text("span",uiMessage("ui.singleResourceStore.iReviewedThisZipAndTrustItsContents", {}, "我已检查此 ZIP 并信任其内容")) ]));

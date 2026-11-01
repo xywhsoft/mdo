@@ -47,6 +47,7 @@ test("store install opens one trust window, queues independently and preserves t
  const api={get:async()=>({data:{[row.xid]:{...previous,installation:{version_id:done?row.version_id:"old-version"}}}}),post:async(path,body)=>{if(body.action==="catalog")return{data:{items:[row],total:1}};if(body.action==="install_plan"){assert.equal(body.version_id,row.version_id);return{data:plan};}throw Error("Unexpected request");}};
  const id="sdk-"+"1".repeat(32),installer={async enqueue(received,metadata){assert.equal(received,plan);writes.push(metadata);return registry.install("local",id,{...metadata,versionIds:[row.version_id],state:"installing"});}};
  let managed=0,store;try{store=(await loadStore(api)).createSingleResourceStore("skills",()=>{},()=>{},item=>{managed++;assert.equal(item.directory_id,row.xid);},{registry,installer});store.activate(true);await flush();
+ const filter=store.root.querySelector("select");filter.value="all";filter.dispatchEvent(new Event("change"));
  descendants(store.root).find(n=>n.tagName==="BUTTON"&&n.textContent==="更新").click();await flush();
  const review=document.body.querySelector("dialog");assert(review.textContent.includes("信任并安装"));assert(review.textContent.includes(row.name));assert(!review.querySelector('input[type="checkbox"]'));assert.equal(writes.length,0);
  descendants(review).find(n=>n.tagName==="BUTTON"&&n.textContent==="安装").click();await flush();assert.equal(writes.length,1);assert.equal(plan.items[0].desired_enabled,false);assert.equal(plan.items[0].expected_revision,previous.revision);
