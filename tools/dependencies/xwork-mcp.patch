@@ -5409,3 +5409,176 @@
          self.assertEqual(len(symbols), len(set(symbols)))
          self.assertEqual(set(symbols), apis)
  
+--- a/lib/xllm/src/dialect_responses.c
++++ b/lib/xllm/src/dialect_responses.c
+@@ -88,6 +88,13 @@
+             if ( pMessage->iPartCount == 1u && pMessage->pParts[0].eKind == XLLM_PART_TEXT ) {
+                 if ( !xllm__json_string(pBuf, pMessage->pParts[0].sText ? pMessage->pParts[0].sText : "") ||
+                      !xllm__buf_append_char(pBuf, '}') ) { return false; }
++            } else if ( pMessage->iPartCount > 0u ) {
++                if ( !xllm__buf_append_char(pBuf, '[') ) return false;
++                for ( j = 0u; j < pMessage->iPartCount; ++j ) {
++                    if ( j && !xllm__buf_append_char(pBuf, ',') ) return false;
++                    if ( !xllm__responses_append_content_part(pBuf, &pMessage->pParts[j], false, pError) ) return false;
++                }
++                if ( !xllm__buf_append_cstr(pBuf, "]}") ) return false;
+             } else if ( !xllm__json_string(pBuf, pMessage->sContent ? pMessage->sContent : "") ||
+                         !xllm__buf_append_char(pBuf, '}') ) {
+                 return false;
+@@ -250,8 +257,9 @@
+                  !xllm__json_string(&tBody, pTool->sDescription ? pTool->sDescription : "") ||
+                  !xllm__buf_append_cstr(&tBody, ",\"parameters\":") ||
+                  !xllm__buf_append_cstr(&tBody, sSchema) ) goto oom;
+-            if ( pTool->bStrict &&
+-                 !xllm__buf_append_cstr(&tBody, ",\"strict\":true") ) goto oom;
++            /* Preserve the caller's mode instead of requesting implicit strict normalization. */
++            if ( !xllm__buf_append_cstr(&tBody, pTool->bStrict ?
++                    ",\"strict\":true" : ",\"strict\":false") ) goto oom;
+             if ( !xllm__buf_append_char(&tBody, '}') ) goto oom;
+         }
+         if ( !xllm__buf_append_char(&tBody, ']') ||
+--- a/lib/xwork/src/xwork_mcp.c
++++ b/lib/xwork/src/xwork_mcp.c
+@@ -2761,10 +2761,11 @@
+         const char* sType=xwork__json_text(tBlock,"type");
+         const char* sMime=xwork__json_text(tBlock,"mimeType");
+         const char* sData=xwork__json_text(tBlock,"data");
+-        if(sType&&!strcmp(sType,"image")&&sMime&&sData&&strlen(sData)<=2u*1024u*1024u&&
++        if(sType&&!strcmp(sType,"image")&&sMime&&sData&&strlen(sData)<=pClient->iMaxMessageBytes&&
+             (!strcmp(sMime,"image/png")||!strcmp(sMime,"image/jpeg")||!strcmp(sMime,"image/webp"))) {
+             size_t iSize=0;unsigned char* pData=xrtBase64DecodeNew(sData,strlen(sData),&iSize,NULL);
+-            if(pData&&iSize<=1024u*1024u)(void)xworkToolOutputSetImage(pOutput,pData,iSize,sMime);
++            bool bCopied = !pData || xworkToolOutputSetImage(pOutput,pData,iSize,sMime);
++            if(!bCopied){xrtFree(pData);goto oom;}
+             xrtFree(pData);break;
+         }
+     }
+--- a/lib/xwork/src/xwork_executor.c
++++ b/lib/xwork/src/xwork_executor.c
+@@ -15,30 +15,33 @@
+     /* Tool-table cache (改造 B): owned xllm_tool copies rebuilt only when
+      * the registry generation changes; requests borrow it as a view. */
+     xllm_tool* pToolCache;
++    xwork_tool_catalog* pToolCacheCatalog; /* retains strings borrowed by tool views */
+     size_t iToolCacheCount;
+     uint64_t uToolCacheGeneration;
+ };
+ 
+ static bool xwork__executor_rebuild_tool_cache(xwork_executor_state* pState)
+ {
+-    size_t i;
+-    xllm_tool* pNew;
+-    if ( pState->pAgent->iToolCount != pState->iToolCacheCount ) {
+-        pNew = (xllm_tool*)realloc(pState->pToolCache,
+-            pState->pAgent->iToolCount * sizeof(*pNew));
+-        if ( !pNew && pState->pAgent->iToolCount ) { return false; }
++    size_t i;xllm_tool* pNew;xwork_tool_catalog* pCatalog; xwork_tool_catalog* pOld;
++    if ( !xrtMutexLock(pState->pAgent->pStateLock) ) return false;
++    pCatalog = xworkToolCatalogRef(pState->pAgent->pToolCatalog);
++    (void)xrtMutexUnlock(pState->pAgent->pStateLock);
++    if ( !pCatalog ) return false;
++    if ( pCatalog->iToolCount != pState->iToolCacheCount ) {
++        pNew = (xllm_tool*)realloc(pState->pToolCache,pCatalog->iToolCount*sizeof(*pNew));
++        if ( !pNew && pCatalog->iToolCount ) { xworkToolCatalogRelease(pCatalog);return false; }
+         pState->pToolCache = pNew;
+     }
+-    if ( !pState->pToolCache && pState->pAgent->iToolCount ) { return false; }
+-    for ( i = 0u; i < pState->pAgent->iToolCount; ++i ) {
+-        const xwork_tool_entry* pTool = &pState->pAgent->pTools[i];
++    for ( i = 0u; i < pCatalog->iToolCount; ++i ) {
++        const xwork_tool_entry* pTool = &pCatalog->pTools[i];
+         pState->pToolCache[i].sName = pTool->sName;
+         pState->pToolCache[i].sDescription = pTool->sDescription;
+         pState->pToolCache[i].sParametersJson = pTool->sParametersJson;
+         pState->pToolCache[i].bStrict = pTool->bStrict;
+     }
+-    pState->iToolCacheCount = pState->pAgent->iToolCount;
+-    pState->uToolCacheGeneration = pState->pAgent->uToolRegistryGeneration;
++    pState->iToolCacheCount = pCatalog->iToolCount;
++    pState->uToolCacheGeneration = pCatalog->uGeneration;
++    pOld=pState->pToolCacheCatalog;pState->pToolCacheCatalog=pCatalog;xworkToolCatalogRelease(pOld);
+     return true;
+ }
+ 
+@@ -201,6 +204,7 @@
+         free(pState->sLastResult);
+         free(pState->pLastImage);
+         free(pState->pToolCache);
++        xworkToolCatalogRelease(pState->pToolCacheCatalog);
+         free(pState);
+     }
+     memset(pExecutor, 0, sizeof(*pExecutor));
+--- a/lib/xwork/src/xwork_agent.c
++++ b/lib/xwork/src/xwork_agent.c
+@@ -474,6 +474,7 @@
+ )
+ {
+     const xwork_tool_entry* pTool;
++    xwork_tool_catalog* pCatalog;
+     xwork_tool_context tContext;
+     xwork_tool_output tOutput;
+     xwork_tool_result_writer tResultWriter;
+@@ -497,20 +498,26 @@
+         xwork__set_error(pError, XWORK_ERROR_INVALID_ARGUMENT, "invalid tool execution arguments");
+         return XWORK_RESULT_ERROR;
+     }
+-    pTool = xwork__find_tool(pAgent, pCall->sName ? pCall->sName : "");
++    if ( !xrtMutexLock(pAgent->pStateLock) ) {
++        xwork__set_error(pError,XWORK_ERROR_CONTEXT,"failed to retain active tool catalog");return XWORK_RESULT_ERROR;
++    }
++    pCatalog=xworkToolCatalogRef(pAgent->pToolCatalog);
++    pTool=xwork__find_tool(pAgent,pCall->sName?pCall->sName:"");
++    (void)xrtMutexUnlock(pAgent->pStateLock);
++    if(!pCatalog){xwork__set_error(pError,XWORK_ERROR_CONTEXT,"active tool catalog is unavailable");return XWORK_RESULT_ERROR;}
+     xworkToolOutputInit(&tOutput);
+     xworkErrorInit(&tPermissionError);
+     memset(&tResultWriter, 0, sizeof(tResultWriter));
+     memset(&tContext, 0, sizeof(tContext));
+     tContext.pAgent = pAgent;
+     tContext.sWorkspaceRoot = pAgent->sWorkspaceRoot;
+-    tContext.sToolName = pTool->sName;
++    tContext.sToolName = pTool ? pTool->sName : pCall->sName;
+     tContext.sToolCallId = pCall->sId;
+     tContext.uEffects = pTool ? pTool->uEffects : 0u;
+     tContext.uAgentTurn = uTurn;
+     tContext.uAgentId = pAgent->uAgentId;
+     tContext.uRunId = pAgent->pActiveRun ? pAgent->pActiveRun->uRunId : 0u;
+-    tContext.uCatalogGeneration = pAgent->uToolRegistryGeneration;
++    tContext.uCatalogGeneration = pCatalog->uGeneration;
+     tContext.pCancel = pOperationCancel
+         ? pOperationCancel : xwork__active_cancel(pAgent);
+     uAgentDeadline = xwork__active_deadline(pAgent);
+@@ -532,6 +539,7 @@
+     if ( !xwork__emit(pAgent, &tEvent) ) {
+         xwork__set_error(pError, pAgent->bEventSinkFailed ? XWORK_ERROR_IO : XWORK_ERROR_CANCELLED,
+             pAgent->bEventSinkFailed ? "session event persistence failed before tool execution" : "agent was cancelled before tool execution");
++        xworkToolCatalogRelease(pCatalog);
+         return pAgent->bEventSinkFailed ? XWORK_RESULT_ERROR : XWORK_RESULT_CANCELLED;
+     }
+     if ( !pTool ) {
+@@ -713,7 +721,16 @@
+     }
+ tool_ready:
+     if ( sArtifact ) {
+-        sInline = xwork__strdup(tOutput.sContent ? tOutput.sContent : "");
++        /* Typed results already own a durable artifact but still obey the session inline budget. */
++        size_t Length=tOutput.sContent?strlen(tOutput.sContent):0u;
++        if(Length>pAgent->iMaxInlineToolBytes){
++            xwork_buf Index={0};char* Locator=xwork__result_locator(pAgent,sArtifact);
++            if(!Locator)goto oom;
++            bool Indexed=xwork__buf_appendf(&Index,
++                "[tool output truncated in context: %zu bytes; full output saved as artifact %llu at %s]\nRead the file in pages with read(path, max_bytes=4096).\n",
++                Length,(unsigned long long)uArtifactId,Locator[0]?Locator:sArtifact);
++            free(Locator);if(Indexed)sInline=xwork__buf_detach(&Index);xwork__buf_unit(&Index);
++        }else sInline=xwork__strdup(tOutput.sContent?tOutput.sContent:"");
+         if ( !sInline ) goto oom;
+     } else if ( !xwork__spill_tool_output(
+             pAgent,
+@@ -776,6 +793,7 @@
+     free(sArtifact);
+     xwork__buf_unit(&tSession);
+     xwork__buf_unit(&tHookOutput);
++    xworkToolCatalogRelease(pCatalog);
+     return eResult;
+ }
+ 
