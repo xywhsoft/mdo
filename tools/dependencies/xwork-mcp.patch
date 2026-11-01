@@ -5582,3 +5582,19 @@
      return eResult;
  }
  
+--- a/lib/xwork/src/xwork_mcp.c
++++ b/lib/xwork/src/xwork_mcp.c
+@@ -3726,8 +3726,11 @@
+ static bool xwork__mcp_append_compact_text(
+     xwork_buf* pOut, const char* sText, size_t iMaxBytes)
+ {
+-    size_t i;
+-    for ( i = 0u; sText && sText[i] && i < iMaxBytes; ++i ) {
++    size_t i,Limit=0u;
++    while (sText && Limit<iMaxBytes && sText[Limit]) ++Limit;
++    /* A compact description must not end in the middle of a UTF-8 character. */
++    if(sText && sText[Limit]) while(Limit && ((unsigned char)sText[Limit]&0xc0u)==0x80u) --Limit;
++    for ( i = 0u; i < Limit; ++i ) {
+         unsigned char ch = (unsigned char)sText[i];
+         if ( ch == '\r' || ch == '\n' || ch == '\t' || ch < 0x20u ) ch = ' ';
+         if ( !xwork__buf_append_char(pOut, (char)ch) ) return false;

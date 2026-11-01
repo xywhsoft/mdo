@@ -55,7 +55,7 @@
     "xwork": {
       "version": "3.11.0",
       "source_commit": "0dc70638b0faa00b89a6cdb4e73eac35ad2213e3",
-      "production_tree_sha256": "d8a46ab939688364909b5001f2acdb18a381c5f7ddbd017085331bb8e43a668b",
+      "production_tree_sha256": "e7140f03d7149afa74b861aa12d00adf67bf7f4c1a430aa122f46cae432a58da",
       "abi_version": 9,
       "event_schema_version": 3
     }
@@ -71,9 +71,9 @@
   },
   "sdk_overlay": {
     "path": "tools/dependencies/xwork-mcp.patch",
-    "sha256": "b227708443e3149553303fca1fe6dc5f6e54e17e75e776fa63bbd675b6da56f3",
+    "sha256": "7b26bfea71d2f66e8153566c17c79266457b4979528423997e4225649474f27d",
     "base_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
-    "purpose": "MCP and platform compatibility, native browser panels, atomic file replacement and symmetric role runtime hooks; paired external process ownership and PID-safe tree cleanup; retained dynamic tool catalogs, bounded typed results and complete MCP/Responses images",
+    "purpose": "MCP and platform compatibility, native browser panels, atomic file replacement and symmetric role runtime hooks; paired external process ownership and PID-safe tree cleanup; retained dynamic tool catalogs, bounded typed results and complete MCP/Responses images; UTF-8-safe MCP discovery truncation",
     "xrt_single_header_sha256": "99bead7f87b4e6601cbb555b0d1ba30bb0030bf42c731c7c21f8bd29c1f04453"
   }
 }

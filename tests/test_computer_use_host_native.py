@@ -9,13 +9,14 @@ from native_product_runner import product
 def main():
  p=argparse.ArgumentParser();p.add_argument('--url',required=True);p.add_argument('--home',type=Path,required=True);p.add_argument('--project',default='default');a=p.parse_args()
  out=ROOT/'.build/computer-use-native';out.mkdir(parents=True,exist_ok=True);results={}
- for name in ('responses','catalog','result-cap','image-cap'):
+ for name in ('responses','catalog','result-cap','image-cap','discovery'):
   fixture=out/('contract-'+name);fixture.mkdir(exist_ok=True)
   source=(ROOT/('tests/fixtures/computer-use-'+name+'.c')).read_text(encoding='utf-8')
   source=source.replace('void ServiceInit(XS_HostInfo* Host)','static void QaRun(XS_HostInfo* Host)')
   source=source.replace('void ServiceUnit(XS_HostInfo* Host)','static void QaUnit(XS_HostInfo* Host)')
   source=source.replace(' fflush(stdout); exit(0);',' fflush(stdout);').replace('fflush(stdout);exit(0);','fflush(stdout);')
   source=source.replace('"tests/fixtures/computer-use-image-peer.py"','"'+(ROOT/'tests/fixtures/computer-use-image-peer.py').as_posix()+'"')
+  source=source.replace('QA_UTF8_PEER',(ROOT/'tests/fixtures/mcp-utf8-peer.py').as_posix())
   source=source.replace('".build/computer-use/large-image-result.png"','"'+(out/'large-image-result.png').as_posix()+'"')
   if name=='responses':
    source=source.replace('static xllm_client* Client;','static xllm_client* Client;static xvalue* QaResult;')
