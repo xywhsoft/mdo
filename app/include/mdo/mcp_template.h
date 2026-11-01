@@ -84,10 +84,20 @@ static bool MdoMcpTemplateValidate(const xvalue* T,cstr Id,char* Error,size_t Ca
         const xvalue* V=xrtValueArrayGet(Variants,i),*C=xrtValueObjectGet(V,XRT_STR_LITERAL("config")),*Tr=xrtValueObjectGet(C,XRT_STR_LITERAL("transport"));
         cstr Vid=MdoExtensionText(V,"id",64),Label=MdoExtensionText(V,"label",256),Type=MdoExtensionText(Tr,"type",32);
         Why="Invalid MCP connection variant or runtime config";
-        if(!MdoMcpTemplateKeys(V,"|id||label||platforms||config||requirements|")||!MdoExtensionAlias(Vid)||!Label||!*Label||!Type)goto bad;
+        if(!MdoMcpTemplateKeys(V,"|id||label||platforms||config||requirements||default|")||!MdoExtensionAlias(Vid)||!Label||!*Label||!Type)goto bad;
+        bool Default=false;
+        if(xrtValueObjectHas(V,XRT_STR_LITERAL("default"))&&!xrtValueGetBool(xrtValueObjectGet(V,XRT_STR_LITERAL("default")),&Default))goto bad;
         for(size_t j=0;j<i;j++)if(!strcmp(Vid,MdoExtensionText(xrtValueArrayGet(Variants,j),"id",64)))goto bad;
         const xvalue* Ps=xrtValueObjectGet(V,XRT_STR_LITERAL("platforms"));if(xrtValueType(Ps)!=XVALUE_ARRAY||!xrtValueCount(Ps)||xrtValueCount(Ps)>8)goto bad;
         for(size_t j=0;j<xrtValueCount(Ps);j++){xstrview S;if(!xrtValueGetString(xrtValueArrayGet(Ps,j),&S)||S.Size>40||memchr(S.Data,0,S.Size))goto bad;}
+        if(Default)for(size_t j=0;j<i;j++){
+            const xvalue* Other=xrtValueArrayGet(Variants,j);if(!MdoMcpTemplateFlag(Other,"default",false))continue;
+            const xvalue* Platforms=xrtValueObjectGet(Other,XRT_STR_LITERAL("platforms"));
+            for(size_t a=0;a<xrtValueCount(Ps);a++)for(size_t b=0;b<xrtValueCount(Platforms);b++){
+                xstrview A={0},B={0};xrtValueGetString(xrtValueArrayGet(Ps,a),&A);xrtValueGetString(xrtValueArrayGet(Platforms,b),&B);
+                if(xrtStrEqual(A,B)||xrtStrEqual(A,XRT_STR_LITERAL("any"))||xrtStrEqual(B,XRT_STR_LITERAL("any"))){Why="Only one default MCP variant is allowed per platform";goto bad;}
+            }
+        }
         if(xrtValueObjectHas(V,XRT_STR_LITERAL("requirements"))&&!MdoExtensionText(V,"requirements",4000))goto bad;
         if(!MdoMcpTemplateKeys(C,"|schema_version||name||description||transport||protocol_version||startup_timeout_ms||request_timeout_ms||limits||tools||security||auto_reconnect||oauth|")||!MdoExtensionNumber(C,"schema_version",&N)||N!=1||!MdoExtensionText(C,"name",256)||!MdoExtensionText(C,"description",2048))goto bad;
         cstr Protocol=MdoExtensionText(C,"protocol_version",32);if(!Protocol||(strcmp(Protocol,"2025-11-25")&&strcmp(Protocol,"2026-07-28")))goto bad;
@@ -132,5 +142,20 @@ static bool MdoMcpTemplateValidate(const xvalue* T,cstr Id,char* Error,size_t Ca
     if(xrtValueObjectHas(T,XRT_STR_LITERAL("capabilities"))){const xvalue* A=xrtValueObjectGet(T,XRT_STR_LITERAL("capabilities"));if(xrtValueType(A)!=XVALUE_ARRAY||xrtValueCount(A)>128)goto bad;for(size_t i=0;i<xrtValueCount(A);i++){xstrview S;if(!xrtValueGetString(xrtValueArrayGet(A,i),&S)||S.Size>1000||memchr(S.Data,0,S.Size))goto bad;}}
     return true;
 bad:if(Error&&Capacity)snprintf(Error,Capacity,"%s",Why);return false;
+}
+
+/* Declaration order is the existing template's implicit default. Explicitly
+ * false variants are advanced-only; a true marker takes precedence. */
+static const xvalue* MdoMcpTemplateDefault(const xvalue* Template,cstr Platform)
+{
+    const xvalue* Variants=xrtValueObjectGet(Template,XRT_STR_LITERAL("variants")),*Fallback=NULL;
+    for(size_t I=0;I<xrtValueCount(Variants);I++){
+        const xvalue* V=xrtValueArrayGet(Variants,I),*Ps=xrtValueObjectGet(V,XRT_STR_LITERAL("platforms"));bool Matches=false;
+        for(size_t J=0;J<xrtValueCount(Ps);J++){xstrview P={0};if(xrtValueGetString(xrtValueArrayGet(Ps,J),&P)&&(xrtStrEqual(P,XRT_STR_LITERAL("any"))||xrtStrEqual(P,xrtStrView(Platform))))Matches=true;}
+        if(!Matches)continue;
+        if(MdoMcpTemplateFlag(V,"default",false))return V;
+        if(!Fallback&&!xrtValueObjectHas(V,XRT_STR_LITERAL("default")))Fallback=V;
+    }
+    return Fallback;
 }
 #endif

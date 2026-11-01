@@ -3383,5 +3383,7 @@
   "extensionInstall.interrupted": "安装任务被中断，请检查本机扩展与下载任务后再重试。",
   "extensionInstall.runtimeAttention": "文件已安装，但加载或启用失败，请查看扩展详情。",
   "extensionInstall.invalidPlan": "安装计划不可用，请刷新后重试。",
-  "extensionInstall.queueing": "正在加入下载任务…"
+  "extensionInstall.queueing": "正在加入下载任务…",
+  "ui.mcpTemplate.invalidDefault": "默认方案标记必须为布尔值",
+  "ui.mcpTemplate.duplicateDefault": "每个平台只能有一个默认 MCP 方案"
 }

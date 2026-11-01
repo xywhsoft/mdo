@@ -3383,5 +3383,7 @@
   "extensionInstall.interrupted": "Installation was interrupted. Inspect local extensions and Downloads before retrying.",
   "extensionInstall.runtimeAttention": "Files were installed, but loading or activation needs attention. Inspect the extension details.",
   "extensionInstall.invalidPlan": "The installation plan is unavailable. Refresh and retry.",
-  "extensionInstall.queueing": "Adding download task…"
+  "extensionInstall.queueing": "Adding download task…",
+  "ui.mcpTemplate.invalidDefault": "The default variant flag must be a boolean",
+  "ui.mcpTemplate.duplicateDefault": "Only one default MCP variant is allowed per platform"
 }

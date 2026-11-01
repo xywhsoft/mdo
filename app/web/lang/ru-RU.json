@@ -3383,5 +3383,7 @@
   "extensionInstall.interrupted": "Установка прервана. Проверьте локальные расширения и загрузки перед повтором.",
   "extensionInstall.runtimeAttention": "Файлы установлены, но загрузка или включение требует внимания. Откройте сведения о расширении.",
   "extensionInstall.invalidPlan": "План установки недоступен. Обновите список и повторите.",
-  "extensionInstall.queueing": "Добавление задачи загрузки…"
+  "extensionInstall.queueing": "Добавление задачи загрузки…",
+  "ui.mcpTemplate.invalidDefault": "Признак варианта по умолчанию должен быть логическим",
+  "ui.mcpTemplate.duplicateDefault": "Для каждой платформы разрешён только один вариант MCP по умолчанию"
 }

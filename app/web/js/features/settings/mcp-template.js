@@ -3,7 +3,7 @@ import { t as uiText } from "../../i18n.js";
 // serialize device credentials here; private bindings belong to the native API.
 export function newMcpTemplate(id="my-server") {
   return {format:"mdo.mcp-template.v1",id,operator:"",inputs:[{id:"endpoint",type:"text",label:uiText("ui.mcpTemplate.serviceUrl", {}, "服务地址"),description:uiText("ui.mcpTemplate.httpsMcpEndpoint", {}, "HTTPS MCP 端点"),required:true,secret:false}],
-    variants:[{id:"default",label:uiText("ui.mcpTemplate.httpService", {}, "HTTP 服务"),platforms:["any"],config:{schema_version:1,name:uiText("ui.singleResourceStore.mcpService", {}, "MCP 服务"),description:uiText("ui.mcpTemplate.mcpServiceConnection", {}, "MCP 服务连接"),protocol_version:"2025-11-25",startup_timeout_ms:10000,request_timeout_ms:60000,
+    variants:[{id:"default",default:true,label:uiText("ui.mcpTemplate.httpService", {}, "HTTP 服务"),platforms:["any"],config:{schema_version:1,name:uiText("ui.singleResourceStore.mcpService", {}, "MCP 服务"),description:uiText("ui.mcpTemplate.mcpServiceConnection", {}, "MCP 服务连接"),protocol_version:"2025-11-25",startup_timeout_ms:10000,request_timeout_ms:60000,
       limits:{message_bytes:1048576,tools:128},tools:{allow:[],deny:[]},security:{default_effects:["external-service"],permission_profile:"balanced",trust_read_only_annotations:false},auto_reconnect:true,
       transport:{type:"streamable-http",endpoint:{input:"endpoint"},headers:[]}}}]};
 }
@@ -19,6 +19,10 @@ export function mcpVariantInputs(template, variant) {
   walk(variant?.config);
   return (template.inputs || []).filter(input => used.has(input.id));
 }
+export function mcpDefaultVariant(template, platform) {
+  const variants=(template?.variants||[]).filter(v=>v.platforms?.includes("any")||v.platforms?.includes(platform));
+  return variants.find(v=>v.default===true)||variants.find(v=>!Object.hasOwn(v,"default"))||null;
+}
 export function mcpTemplateSummary(template) {
   const variants = template?.variants || [];
   return {
@@ -31,6 +35,9 @@ export function parseMcpTemplate(text) {
   const template = JSON.parse(text);
   if (template?.format !== "mdo.mcp-template.v1" || !Array.isArray(template.inputs) || !Array.isArray(template.variants) || !template.variants.length) throw Error(uiText("ui.mcpTemplate.selectAnMcpServiceTemplateMdoMcpTemplateV1", {}, "请选择 MCP 服务模板（mdo.mcp-template.v1）"));
   if (template.inputs.some(i => i.secret && Object.hasOwn(i, "default"))) throw Error(uiText("ui.mcpTemplate.credentialInputsCannotContainDefaults", {}, "凭据参数不能包含默认值"));
+  const defaults=template.variants.filter(v=>v.default===true);
+  for(const v of template.variants)if(Object.hasOwn(v,"default")&&typeof v.default!=="boolean")throw Error(uiText("ui.mcpTemplate.invalidDefault",{},"默认方案标记必须为布尔值"));
+  for(let i=0;i<defaults.length;i++)for(let j=0;j<i;j++)if(defaults[i].platforms?.some(p=>p==="any"||defaults[j].platforms?.includes("any")||defaults[j].platforms?.includes(p)))throw Error(uiText("ui.mcpTemplate.duplicateDefault",{},"每个平台只能有一个默认 MCP 方案"));
   return template;
 }
 
