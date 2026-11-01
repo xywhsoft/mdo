@@ -89,6 +89,7 @@ bool MdoMcpManagerReload(void);
 char* MdoMcpDependencyConnection(cstr Ref,cstr Workspace,cstr Preferred,bool RequireReady,char Error[512]);
 bool MdoMcpRemoveDirectoryConnections(cstr DirectoryId,char Error[512]);
 xvalue* MdoMcpConnections(cstr Id,char Error[512]);
+xvalue* MdoMcpExtensionStatus(cstr ExtensionId);
 /* Private device bindings only; archive manifests never contain these values.
  * Preview is cold. Save requires the reviewed whole-directory approval digest. */
 bool MdoMcpConnectionManage(const xvalue* Input,xcancel* Cancel,xvalue** Result,char Error[512]);

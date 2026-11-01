@@ -70,6 +70,19 @@ static bool McpDirectoryPlatform(const xvalue* Variant)
 }
 static bool McpDirectoryPut(xvalue* O,cstr Key,cstr Text)
 {return Text&&xrtValueObjectSetNew(O,xrtStrView(Key),xrtValueString(xrtStrView(Text)));}
+/* Credentials follow the declared target/grants and nonsecret parameters,
+ * never a program path or package fingerprint. Renew only for verified installs. */
+static bool McpCredentialIdentity(const xvalue* Template,cstr VariantId,const xvalue* Values,char Hash[65])
+{
+    const xvalue* Variant=NULL,*Variants=xrtValueObjectGet(Template,XRT_STR_LITERAL("variants"));
+    for(size_t I=0;I<xrtValueCount(Variants);I++){const xvalue* V=xrtValueArrayGet(Variants,I);cstr Id=MdoExtensionText(V,"id",64);if(Id&&VariantId&&!strcmp(Id,VariantId))Variant=V;}
+    xvalue* Identity=xrtValueObject(),*Ordinary=xrtValueObject();bool Ok=Variant&&Identity&&Ordinary;
+    const xvalue* Inputs=xrtValueObjectGet(Template,XRT_STR_LITERAL("inputs"));
+    for(size_t I=0;Ok&&I<xrtValueCount(Inputs);I++){const xvalue* Input=xrtValueArrayGet(Inputs,I);cstr Id=MdoExtensionText(Input,"id",64);if(MdoMcpTemplateFlag(Input,"secret",false))continue;
+        const xvalue* V=xrtValueObjectGet(Values,xrtStrView(Id));if(!V)V=xrtValueObjectGet(Input,XRT_STR_LITERAL("default"));if(V)Ok=xrtValueObjectSet(Ordinary,xrtStrView(Id),V);}
+    Ok=Ok&&xrtValueObjectSet(Identity,XRT_STR_LITERAL("variant"),Variant)&&xrtValueObjectSet(Identity,XRT_STR_LITERAL("values"),Ordinary);
+    char* Text=Ok?xrtJsonStringify(Identity,false,NULL):NULL;Ok=Text&&MdoExtensionHash(Text,Hash);xrtFree(Text);xrtValueRelease(Identity);xrtValueRelease(Ordinary);return Ok;
+}
 static bool McpDirectoryReservedEnvironment(xvalue* Transport)
 {
     xvalue* A=xrtValueObjectGet(Transport,XRT_STR_LITERAL("environment"));
@@ -87,7 +100,7 @@ static char* McpDirectoryResolveDocument(MdoMcpSource* Source,const xvalue* Conn
     cstr DirectoryId=MdoExtensionText(Connection,"extension_id",MDO_EXTENSION_REF_BYTES),Id=MdoExtensionText(Connection,"id",96),VariantId=MdoExtensionText(Connection,"variant",64);
     cstr Approved=MdoExtensionText(Connection,"approval_digest",64),Project=MdoExtensionText(Connection,"project_id",64);
     const xvalue* Values=xrtValueObjectGet(Connection,XRT_STR_LITERAL("values"));bool Enabled=false;
-    bool Ok=Connection&&MdoMcpTemplateKeys(Connection,"|id||extension_id||directory_id||variant||values||enabled||name||project_id||approval_digest|")&&Id&&!strcmp(Id,Source->Id)&&DirectoryId&&MdoExtensionRefKind(DirectoryId)&&!strcmp(MdoExtensionRefKind(DirectoryId),"mcp")&&VariantId&&
+    bool Ok=Connection&&MdoMcpTemplateKeys(Connection,"|id||extension_id||directory_id||variant||values||enabled||name||project_id||approval_digest||managed_default||credential_identity|")&&Id&&!strcmp(Id,Source->Id)&&DirectoryId&&MdoExtensionRefKind(DirectoryId)&&!strcmp(MdoExtensionRefKind(DirectoryId),"mcp")&&VariantId&&
         xrtValueType(Values)==XVALUE_OBJECT&&xrtValueCount(Values)<=32&&xrtValueGetBool(xrtValueObjectGet(Connection,XRT_STR_LITERAL("enabled")),&Enabled)&&(!Project||!Project[0]||MdoExtensionIdValid(Project));
     xvalue* Meta=Ok?MdoExtensionsRead("mcp",DirectoryId,Why):NULL;bool ExtensionEnabled=false;
     xrtValueGetBool(xrtValueObjectGet(Meta,XRT_STR_LITERAL("enabled")),&ExtensionEnabled);Enabled=Enabled&&ExtensionEnabled;
@@ -95,7 +108,9 @@ static char* McpDirectoryResolveDocument(MdoMcpSource* Source,const xvalue* Conn
     char* Path=Root&&Entry?xrtFormat("%s/%s",Root,Entry):NULL,*Native=Root?MdoHomeExternalPath(Root):NULL;
     Text=Path?MdoExtensionRead(Path,true,MDO_MCP_FILE_LIMIT,NULL):NULL;xvalue* Template=Text?xrtJsonParse(xrtStrView(Text)):NULL;xrtFree(Text);
     Ok=Ok&&Meta&&Native&&Template&&MdoMcpTemplateValidate(Template,Alias,Why,sizeof(Why))&&MdoExtensionsVerify("mcp",DirectoryId,NULL,Why)&&MdoExtensionsApprovalDigest(DirectoryId,Digest,NULL,Why);
-    if(Ok&&Enabled&&(!Approved||strcmp(Approved,Digest))){snprintf(Why,sizeof(Why),"MCP directory changed or has not been approved; review its launch/target and confirm the connection again");Ok=false;}
+    if(Ok&&Enabled&&(!Approved||strcmp(Approved,Digest))){char Identity[65],Trusted[65];cstr Prior=MdoExtensionText(Connection,"credential_identity",64);
+        bool Renew=MdoMcpTemplateFlag(Connection,"managed_default",false)&&Prior&&McpCredentialIdentity(Template,VariantId,Values,Identity)&&!strcmp(Identity,Prior)&&McpDefaultTrusted(Meta,Trusted,Why)&&!strcmp(Trusted,Digest);
+        if(!Renew){snprintf(Why,sizeof(Why),"MCP directory changed or has not been approved; review its launch/target and confirm the connection again");Ok=false;}}
     const xvalue* Variants=xrtValueObjectGet(Template,XRT_STR_LITERAL("variants")),*Selected=NULL;
     for(size_t I=0;I<xrtValueCount(Variants);I++){const xvalue* V=xrtValueArrayGet(Variants,I);cstr Name=MdoExtensionText(V,"id",64);if(Name&&VariantId&&!strcmp(Name,VariantId))Selected=V;}
     Ok=Ok&&Selected&&McpDirectoryPlatform(Selected);
@@ -143,8 +158,8 @@ static char* McpDirectoryResolveDocument(MdoMcpSource* Source,const xvalue* Conn
 }
 static char* McpDirectoryResolve(MdoMcpSource* Source,char Error[MDO_MCP_ERROR_LIMIT])
 {
-    char* Text=MdoExtensionRead(Source->RelativePath,true,MDO_MCP_FILE_LIMIT,NULL);
-    xvalue* Connection=Text?xrtJsonParse(xrtStrView(Text)):NULL;xrtFree(Text);
+    char* Text=Source->Connection?NULL:MdoExtensionRead(Source->RelativePath,true,MDO_MCP_FILE_LIMIT,NULL);
+    xvalue* Connection=Source->Connection?xrtValueClone(Source->Connection):Text?xrtJsonParse(xrtStrView(Text)):NULL;xrtFree(Text);
     char* Result=McpDirectoryResolveDocument(Source,Connection,Error);xrtValueRelease(Connection);return Result;
 }
 #include "../../include/mdo/extension_files.h"

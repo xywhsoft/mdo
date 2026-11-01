@@ -134,6 +134,13 @@ bool MdoExtensionsWarnings(xvalue* Items){
    if(xrtValueCount(Items)>=255){xrtValueRelease(Rows);return MdoDiagnosticWarning(Items,"extensions","warning_limit","","","Additional extension warnings were omitted","Resolve the listed issues and check again","extensions");}
    const xvalue* Row=xrtValueArrayGet(Rows,I);cstr Id=MdoExtensionText(Row,"directory_id",96),Root=MdoExtensionText(Row,"root",4096),Problem=MdoExtensionText(Row,"error",512),PendingError=MdoExtensionText(Row,"pending_error",512);
    bool Pending=MdoExtOpBool(Row,"pending_remove",false),Valid=MdoExtOpBool(Row,"valid",false),Builtin=MdoExtensionsBuiltinUpdatePending(Kind,Id,Row);
+   if(!strcmp(Kind,"mcp")&&Valid&&MdoExtOpBool(Row,"enabled",false)){
+    MdoMcpCatalog* Ready=MdoMcpCatalogSnapshot();xvalue* Status=Ready?MdoMcpExtensionStatus(MdoExtensionText(Row,"id",MDO_EXTENSION_REF_BYTES)):NULL;MdoMcpCatalogRelease(Ready);cstr State=MdoExtensionText(Status,"state",32),Message=MdoExtensionText(Status,"activation_error",1024);
+    if(State&&strcmp(State,"ready")&&strcmp(State,"starting")&&strcmp(State,"disabled")){
+     bool Good=MdoDiagnosticWarning(Items,"extensions",!strcmp(State,"needs_authorization")?"mcp_authorization_required":!strcmp(State,"needs_configuration")?"mcp_configuration_required":"mcp_activation_failed",MdoExtensionText(Row,"id",MDO_EXTENSION_REF_BYTES),Root?Root:Kind,Message&&*Message?Message:"MCP service needs configuration or authorization","Open the MCP extension to complete its parameters or authorization, or retry the connection","mcp");
+     if(!Good){xrtValueRelease(Status);xrtValueRelease(Rows);return false;}
+    }xrtValueRelease(Status);
+   }
    if(Pending||!Valid||Builtin){char Subject[140];snprintf(Subject,sizeof(Subject),"%s/%s",Kind,Id?Id:"");bool Ok=MdoDiagnosticWarning(Items,"extensions",PendingError?"uninstall_changed":Pending?"uninstall_pending":Builtin?"builtin_update_preserved":"invalid_directory",Subject,Root?Root:Kind,
      PendingError?PendingError:Pending?"Uninstall is waiting for the active native plugin to retire or the application to restart":Builtin?"An updated builtin is available, but the installed files were modified or could not be verified; the original directory was preserved":Problem?Problem:"The extension directory is invalid",
      PendingError?"Inspect the changed files, then cancel or request uninstall again":Pending?"Restart the application to finish removing this complete directory":Builtin?"Preserve your changes, then restore or migrate the builtin in its extension settings":"Repair its local files or reinstall the store archive","extensions");if(!Ok){xrtValueRelease(Rows);return false;}}

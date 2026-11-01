@@ -185,6 +185,7 @@ xvalue* MdoMcpAuthorizationStatus(cstr Id)
         McpOAuthSet(Out,"authorization_url",Entry->Status==MDO_MCP_AUTH_READY?Entry->AuthorizationUrl:NULL)&&
         xrtValueObjectSetNew(Out,XRT_STR_LITERAL("busy"),xrtValueBool(Entry->Busy))&&
         xrtValueObjectSetNew(Out,XRT_STR_LITERAL("authorized"),xrtValueBool(Entry->HasToken&&!Entry->NeedsAuthorization))&&
+        xrtValueObjectSetNew(Out,XRT_STR_LITERAL("needs_authorization"),xrtValueBool(Entry->NeedsAuthorization||!Entry->HasToken))&&
         xrtValueObjectSetNew(Out,XRT_STR_LITERAL("http_status"),xrtValueUInt(Entry->HttpStatus))&&
         xrtValueObjectSetNew(Out,XRT_STR_LITERAL("expires_at"),xrtValueUInt(Entry->Expires));
     xrtMutexUnlock(Entry->Lock);if(!Ok){xrtValueRelease(Out);return NULL;}return Out;

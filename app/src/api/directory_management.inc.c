@@ -44,6 +44,7 @@ static bool MdoDirectoryApiExecutableSupported(void){
 #endif
 }
 static bool MdoDirectoryApiItemFlags(xvalue* Row){
+ cstr Kind=MdoExtensionText(Row,"kind",32);if(Kind&&!strcmp(Kind,"mcp")){xvalue* Status=MdoMcpExtensionStatus(MdoExtensionText(Row,"id",MDO_EXTENSION_REF_BYTES));if(Status){for(size_t I=0;I<xrtValueCount(Status);I++){xstrview K={0};const xvalue* V=xrtValueObjectAt(Status,I,&K);xrtValueObjectSet(Row,K,V);}xrtValueRelease(Status);}if(!MdoExtOpBool(Row,"enabled",false))MdoApiValueSetString(Row,"state","disabled");}
  cstr Source=MdoExtensionText(Row,"source",16);bool Manual=Source&&!strcmp(Source,"manual");return MdoApiValueSetBool(Row,"editable",MdoExtensionsEditableSource(MdoExtensionText(Row,"kind",32),Source))&&MdoApiValueSetBool(Row,"builtin_restorable",MdoExtensionsEditableSource(MdoExtensionText(Row,"kind",32),Source)&&MdoExtensionsBuiltinRole(MdoExtensionText(Row,"kind",32),MdoExtensionText(Row,"directory_id",96),MdoExtensionText(Row,"id",MDO_EXTENSION_REF_BYTES)))&&MdoApiValueSetBool(Row,"shareable",Manual)&&MdoApiValueSetBool(Row,"store_managed",Source&&!strcmp(Source,"store"))&&MdoApiValueSetBool(Row,"executable_supported",MdoDirectoryApiExecutableSupported());
 }
 static xvalue* MdoDirectoryApiItem(cstr Kind,cstr Id,char Error[512]){

@@ -23,10 +23,11 @@ char* MdoMcpDependencyConnection(cstr Ref,cstr Workspace,cstr Preferred,bool Req
     if(Error)Error[0]=0;
     if(!g_MdoMcp.Initialized){if(Error)snprintf(Error,512,"Wait for MCP catalogue initialization");return NULL;}cstr Kind=MdoExtensionRefKind(Ref);if(!Kind||strcmp(Kind,"mcp")){if(Error)snprintf(Error,512,"Use a typed MCP extension ID");return NULL;}
     if(!MdoExtensionsProjectAllows(Ref,Workspace,Error))return NULL;
-    xvalue* Template=MdoExtensionsResolve(Ref,Error);cstr Directory=MdoExtensionText(Template,"directory_id",96);MdoMcpCatalog* Catalog=MdoMcpCatalogSnapshot();char* Result=NULL;size_t Matches=0;
+    xvalue* Template=MdoExtensionsResolve(Ref,Error);cstr Directory=MdoExtensionText(Template,"directory_id",96);MdoMcpCatalog* Catalog=MdoMcpCatalogSnapshot();char* Result=NULL;size_t Matches=0;unsigned Best=0;char DefaultId[97];McpDefaultId(Ref,DefaultId);
     if(Directory&&Catalog)for(size_t I=0;I<Catalog->Count;I++){
         MdoMcpServerEntry* Entry=&Catalog->Entries[I];if(!Entry->DirectoryId||strcmp(Directory,Entry->DirectoryId)||!Entry->Enabled||!McpDirectoryProjectMatches(Entry,Workspace)||(Preferred&&*Preferred&&strcmp(Preferred,Entry->Id)))continue;
-        Matches++;if(!Result)Result=xrtStrDup(Entry->Id);
+        unsigned Rank=(Entry->ProjectId&&Entry->ProjectId[0]?2:0)+(!strcmp(Entry->Id,DefaultId)?2:1);
+        if(Rank>Best){Best=Rank;Matches=0;xrtFree(Result);Result=NULL;}if(Rank==Best){Matches++;if(!Result)Result=xrtStrDup(Entry->Id);}
     }
     MdoMcpCatalogRelease(Catalog);xrtValueRelease(Template);
     if(Matches!=1||!Result){xrtFree(Result);if(Error)snprintf(Error,512,"%.160s: %s",Ref,Matches>1?"Choose a private MCP connection; multiple accounts or connections match":"Configure and authorize an enabled MCP connection in this project");return NULL;}

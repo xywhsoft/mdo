@@ -97,6 +97,7 @@ bool MdoExtensionsSave(cstr Kind,cstr Id,const xvalue* Manifest,const xvalue* Ed
     if(Ok&&Exists){MdoExtTree Current={0};char Now[65];Ok=MdoExtCollect(Root,&Current,Cancel,Error)&&MdoExtFingerprint(Root,&Current,Now,Cancel)&&!strcmp(PriorHash,Now);MdoExtTreeUnit(&Current);}
     xvalue* Record=Before?xrtValueClone(Before):xrtValueObject();Ok=Ok&&Record&&MdoExtPut(Record,"source","manual")&&MdoExtPut(Record,"logical_id",MdoExtensionText(Manifest,"id",MDO_EXTENSION_REF_BYTES))&&MdoExtPut(Record,"kind",Kind)&&MdoExtPut(Record,"id",Id);
     if(Ok&&!Exists)Ok=xrtValueObjectSetNew(Record,XRT_STR_LITERAL("enabled"),xrtValueBool(false));
+    if(Ok&&Trust&&!strcmp(Kind,"mcp"))Ok=MdoExtPut(Record,"directory_digest",NewHash);
     for(size_t I=0;
     Ok&&I<32;
     I++)if(Files[I]&&xrtCancelRequested(MdoExtensionTaskUseCancel(Files[I])))Ok=false;

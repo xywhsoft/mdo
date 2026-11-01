@@ -80,6 +80,7 @@ struct MdoMcpCatalog {
     MdoMcpServerEntry* Entries;
     size_t Count;
     size_t Capacity;
+    xvalue* Defaults;
 };
 
 typedef struct MdoMcpDiagnosticEntry {
@@ -106,6 +107,7 @@ typedef struct MdoMcpSource {
     char* ProjectId;
     char DirectoryDigest[65];
     MdoExtensionLease* DirectoryLease;
+    xvalue* Connection;
 } MdoMcpSource;
 
 typedef struct MdoMcpState {
@@ -116,9 +118,21 @@ typedef struct MdoMcpState {
     MdoMcpDiagnostics* Diagnostics;
     uint64 NextGeneration;
     bool Initialized;
+    xmutex* PrepareLock;
+    xcond* PrepareChanged;
+    xthread* PrepareThread;
+    xcancel* PrepareCancel;
+    uint64 PrepareGeneration;
+    xvalue* PrepareResults;
+    bool PrepareStopping;
+    bool PrepareSuspended;
 } MdoMcpState;
 
 static MdoMcpState g_MdoMcp;
+static void McpPrepareSchedule(void);
+static bool McpPrepareInit(void);
+static void McpPrepareUnit(void);
+static bool McpPreparePause(void);
 
 #include "oauth.inc.c"
 
@@ -335,6 +349,8 @@ static MdoMcpCatalog* MdoMcpCatalogCreate(uint64 Generation)
     if ( pCatalog == NULL ) return NULL;
     xrtAtomic32Init(&pCatalog->Refs, 1u);
     pCatalog->Generation = Generation;
+    pCatalog->Defaults = xrtValueArray();
+    if(!pCatalog->Defaults){xrtFree(pCatalog);return NULL;}
     return pCatalog;
 }
 
@@ -363,6 +379,7 @@ void MdoMcpCatalogRelease(MdoMcpCatalog* pCatalog)
     for ( i = 0u; i < pCatalog->Count; ++i )
         MdoMcpServerUnit(&pCatalog->Entries[i]);
     xrtFree(pCatalog->Entries);
+    xrtValueRelease(pCatalog->Defaults);
     xrtFree(pCatalog);
 }
 
@@ -443,7 +460,7 @@ static void MdoMcpSourceUnit(MdoMcpSource* pSource)
     if ( pSource == NULL ) return;
     xrtFree(pSource->Id);
     xrtFree(pSource->VirtualPath);
-    xrtFree(pSource->RelativePath);xrtValueRelease(pSource->Directory);xrtFree(pSource->ProjectId);MdoExtensionsRelease(pSource->DirectoryLease);
+    xrtFree(pSource->RelativePath);xrtValueRelease(pSource->Directory);xrtFree(pSource->ProjectId);MdoExtensionsRelease(pSource->DirectoryLease);xrtValueRelease(pSource->Connection);
     memset(pSource, 0, sizeof(*pSource));
 }
 
@@ -461,13 +478,15 @@ static int MdoMcpSourceCompare(const void* Left, const void* Right)
     return strcmp(pLeft->Id, pRight->Id);
 }
 
+static bool McpDefaultTrusted(const xvalue*,char[65],char[512]);
 #include "directory.inc.c"
-static bool MdoMcpDiscover(MdoMcpSource** Sources,size_t* Count,MdoMcpDiagnostics* Diagnostics)
+#include "defaults.inc.c"
+static bool MdoMcpDiscover(MdoMcpSource** Sources,size_t* Count,MdoMcpDiagnostics* Diagnostics,xvalue* Defaults)
 {
     *Sources=NULL;*Count=0;size_t Capacity=0;xdir D=MdoHomeOpenDirectory(MDO_MCP_CONNECTIONS,XDIR_STAT);
-    if(!D){if(xrtGetError()&&xrtErrorKind(xrtGetError())==XERR_NOT_FOUND){xrtClearError();return true;}return false;}
+    if(!D){if(xrtGetError()&&xrtErrorKind(xrtGetError())==XERR_NOT_FOUND)xrtClearError();else return false;}
     bool Ok=true;xdirentry E;xdirnext Next=XDIR_NEXT_END;
-    while(Ok&&(Next=xrtDirNext(D,&E))==XDIR_NEXT_ITEM){
+    while(Ok&&D&&(Next=xrtDirNext(D,&E))==XDIR_NEXT_ITEM){
         if(!(E.Flags&XDIR_ENTRY_UTF8)||E.Name.Size<6||E.Name.Size>101||memcmp(E.Name.Data+E.Name.Size-5,".json",5))continue;
         char* Id=xrtStrDupN(E.Name.Data,E.Name.Size-5);if(!Id){Ok=false;break;}
         if(!MdoMcpIdValid(Id)){MdoMcpDiagnosticAdd(Diagnostics,MDO_MCP_DIAGNOSTIC_DISCOVERY,Id,MDO_MCP_CONNECTIONS,NULL,"Invalid private MCP connection identity");xrtFree(Id);continue;}
@@ -476,7 +495,17 @@ static bool MdoMcpDiscover(MdoMcpSource** Sources,size_t* Count,MdoMcpDiagnostic
         S->RelativePath=xrtFormat(MDO_MCP_CONNECTIONS "/%s.json",Id);S->VirtualPath=S->RelativePath?xrtFormat("/app/default-home/%s",S->RelativePath):NULL;
         if(!S->RelativePath||!S->VirtualPath){MdoMcpSourceUnit(S);Ok=false;break;}(*Count)++;
     }
-    if(!xrtDirClose(D)||Next==XDIR_NEXT_ERROR)Ok=false;
+    if((D&&!xrtDirClose(D))||Next==XDIR_NEXT_ERROR)Ok=false;
+    xvalue* Installed=Ok?MdoExtensionsList("mcp",NULL):NULL;
+    if(Ok&&!Installed)Ok=false;
+    for(size_t I=0;Ok&&I<xrtValueCount(Installed);I++)Ok=McpDefaultsAppend(xrtValueArrayGet(Installed,I),Sources,Count,&Capacity,Defaults);
+    xrtValueRelease(Installed);
+    for(size_t I=0;Ok&&I<*Count;I++){MdoMcpSource* S=&(*Sources)[I];if(S->Connection)continue;
+        char* Text=MdoExtensionRead(S->RelativePath,true,MDO_MCP_FILE_LIMIT,NULL);xvalue* Doc=Text?xrtJsonParse(xrtStrView(Text)):NULL,*Row=xrtValueObject();
+        cstr Ref=MdoExtensionText(Doc,"extension_id",MDO_EXTENSION_REF_BYTES);
+        if(Ref){Ok=Row&&McpDirectoryPut(Row,"extension_id",Ref)&&McpDirectoryPut(Row,"state",MdoMcpTemplateFlag(Doc,"enabled",false)?"starting":"disabled")&&xrtValueObjectSet(Row,XRT_STR_LITERAL("connection"),Doc)&&xrtValueArrayAppend(Defaults,Row);}
+        if(Text){xrtSecureZero(Text,strlen(Text));xrtFree(Text);}xrtValueRelease(Doc);xrtValueRelease(Row);
+    }
     if(!Ok){MdoMcpSourcesUnit(*Sources,*Count);*Sources=NULL;*Count=0;return false;}
     if(*Count>1)qsort(*Sources,*Count,sizeof(**Sources),MdoMcpSourceCompare);
     return true;
@@ -1353,7 +1382,7 @@ static bool MdoMcpBuildCandidate(uint64 Generation,
     pCatalog = MdoMcpCatalogCreate(Generation);
     pDiagnostics = MdoMcpDiagnosticsCreate();
     if ( pCatalog == NULL || pDiagnostics == NULL ||
-         !MdoMcpDiscover(&Sources, &SourceCount, pDiagnostics) ) goto done;
+         !MdoMcpDiscover(&Sources, &SourceCount, pDiagnostics, pCatalog->Defaults) ) goto done;
     for ( i = 0u; i < SourceCount; ++i ) {
         MdoMcpServerEntry Entry;
         MdoMcpDiagnosticStage Stage = MDO_MCP_DIAGNOSTIC_PARSE;
@@ -1578,6 +1607,7 @@ bool MdoMcpManagerReload(void)
     }
     Generation = g_MdoMcp.NextGeneration + 1u;
     (void)xrtMutexUnlock(g_MdoMcp.Lock);
+    if(!McpPreparePause()){(void)xrtMutexUnlock(g_MdoMcp.ReloadLock);McpPrepareSchedule();MdoMcpSetError("MCP initialization is still stopping; retry this operation");return false;}
     Ok = MdoMcpBuildCandidate(Generation, &pCatalog, &pDiagnostics) &&
         MdoMcpPublishCandidate(pCatalog, pDiagnostics);
     if ( !Ok && xrtGetError() == NULL )
@@ -1585,6 +1615,7 @@ bool MdoMcpManagerReload(void)
     MdoMcpCatalogRelease(pCatalog);
     MdoMcpDiagnosticsRelease(pDiagnostics);
     (void)xrtMutexUnlock(g_MdoMcp.ReloadLock);
+    McpPrepareSchedule();
     return Ok;
 }
 
@@ -1609,6 +1640,7 @@ bool MdoMcpManagerInit(xwork_runtime* pRuntime)
     g_MdoMcp.Runtime = pRuntime;
     g_MdoMcp.Initialized = true;
     if(!McpOAuthInit(pRuntime)){MdoMcpManagerUnit();return false;}
+    if(!McpPrepareInit()){MdoMcpManagerUnit();return false;}
     if ( !MdoMcpManagerReload() ) {
         MdoMcpManagerUnit();
         return false;
@@ -1618,6 +1650,7 @@ bool MdoMcpManagerInit(xwork_runtime* pRuntime)
 
 void MdoMcpManagerUnit(void)
 {
+    McpPrepareUnit();
     McpOAuthUnit(g_MdoMcp.Runtime);
     MdoMcpCatalog* pCatalog = g_MdoMcp.Catalog;
     MdoMcpDiagnostics* pDiagnostics = g_MdoMcp.Diagnostics;
@@ -1811,6 +1844,7 @@ bool MdoMcpDiagnosticsAt(const MdoMcpDiagnostics* pDiagnostics,
 
 #include "scopes.inc.c"
 #include "connections.inc.c"
+#include "prepare.inc.c"
 
 bool MdoMcpRead(cstr Server,cstr Method,cstr Params,xcancel* Cancel,uint64 Deadline,char** Result,xwork_error* Error)
 {

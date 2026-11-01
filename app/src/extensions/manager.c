@@ -841,6 +841,7 @@ bool MdoExtensionsCreate(cstr Kind,cstr Id,const xvalue* Manifest,const void* En
     const cstr Extra[]={"native","frontend","readme"};for(size_t I=0;Ok&&I<3;I++){cstr P=MdoExtensionText(Manifest,Extra[I],4096);if(P&&strcmp(P,MdoExtensionText(Manifest,"entry",4096)))Ok=false;}
     MdoExtTree Tree={0};char Hash[65];Ok=Ok&&MdoExtCollect(Incoming,&Tree,NULL,Error)&&MdoExtFingerprint(Incoming,&Tree,Hash,NULL);MdoExtTreeUnit(&Tree);
     xvalue* Record=xrtValueObject();Ok=Ok&&Record&&MdoExtPut(Record,"source","manual")&&MdoExtPut(Record,"logical_id",MdoExtensionText(Manifest,"id",MDO_EXTENSION_REF_BYTES))&&MdoExtPut(Record,"kind",Kind)&&MdoExtPut(Record,"id",Id)&&xrtValueObjectSetNew(Record,XRT_STR_LITERAL("enabled"),xrtValueBool(false));
+    if(Ok&&Trust&&!strcmp(Kind,"mcp"))Ok=MdoExtPut(Record,"directory_digest",Hash);
     if(Ok)Ok=MdoExtPublish(Kind,Id,Task,false,Record,NULL,Result,Error);
     if(!Ok&&Base){char* Journal=xrtFormat("%s/transaction.json",Base);bool HasJournal=false;if(Journal&&MdoExtStat(Journal,&HasJournal,&Info)&&!HasJournal)MdoExtRemoveTree(Base);xrtFree(Journal);}
     xrtValueRelease(Record);xrtFree(Root);xrtFree(Task);xrtFree(Base);xrtFree(Incoming);xrtFree(MetaPath);xrtFree(EntryPath);xrtMutexUnlock(MdoExtLock);
