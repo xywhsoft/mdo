@@ -160,6 +160,9 @@ def package(stage, metadata, output):
     descriptions=json.loads((Path(__file__).resolve().parents[2]/"runtime/official.json").read_text(encoding="utf-8"))["tools"]
     metadata=dict(metadata)
     metadata.setdefault("description",next((row["description"] for row in descriptions if row["id"]==metadata["id"]),""))
+    definition=next((row for row in descriptions if row["id"]==metadata["id"]),{})
+    for key in ('sort_order','tags'):
+        if key in definition:metadata.setdefault(key,definition[key])
     metadata.setdefault("copyright","")
     return helper.package_tool(stage,metadata,output)
 

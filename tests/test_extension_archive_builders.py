@@ -8,12 +8,17 @@ import tempfile
 import unittest
 import zipfile
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT/'tools'))
-from extension_archives import package_tool
+from extension_archives import package_tool,tool_documents
 from convert_legacy_external_archives import convert
 
 def metadata():return dict(id='fixture',name='Fixture tool',version='1.0.0',platform='windows-x86_64',description='For people',prompt='For the model',entry='bin/fixture.exe',license='MIT',copyright='Original authors',links=['https://example.org/source'],commands=[dict(name='fixture',entry='bin/fixture.exe',args=[])])
 
 class ArchiveBuilders(unittest.TestCase):
+ def test_presentation_metadata_is_preserved_and_bounded(self):
+  meta,_=tool_documents({**metadata(),'sort_order':1000,'tags':['推荐','CLI']})
+  self.assertEqual((meta['sort_order'],meta['tags']),(1000,['推荐','CLI']))
+  for fields in ({'sort_order':True},{'sort_order':2147483648},{'tags':['dup','dup']},{'tags':['bad\nlabel']},{'tags':['中'*22]},{'tags':[' trailing ']},{'tags':[str(n) for n in range(17)]}):
+   with self.subTest(fields=fields),self.assertRaises(ValueError):tool_documents({**metadata(),**fields})
  def test_whole_directory_resources_and_mode(self):
   with tempfile.TemporaryDirectory() as temp:
    root=Path(temp);stage=root/'stage';(stage/'bin').mkdir(parents=True);(stage/'bin/fixture.exe').write_bytes(b'MZ\0fixture');(stage/'.hidden').mkdir();(stage/'.hidden/resource').write_bytes(b'\0\xffdata');(stage/'empty').mkdir()

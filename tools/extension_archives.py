@@ -30,6 +30,14 @@ def tool_documents(metadata):
     identity=metadata.get('extension_id','external-tool:mdo.'+alias.lower())
     if not isinstance(identity,str) or not re.fullmatch(r'external-tool:[a-z0-9_-][a-z0-9._-]{0,127}',identity) or identity.endswith('.') or '..' in identity:raise ValueError('Invalid tool logical identity')
     meta=dict(kind='external-tools',id=identity,alias=alias,name=metadata['name'],entry='tool.json',platforms=[metadata['platform']])
+    if 'sort_order' in metadata:
+        rank=metadata['sort_order']
+        if type(rank) is not int or not -2147483648<=rank<=2147483647:raise ValueError('Invalid sort_order')
+        meta['sort_order']=rank
+    if 'tags' in metadata:
+        tags=metadata['tags']
+        if not isinstance(tags,list) or len(tags)>16 or any(not isinstance(t,str) or not t or t.strip()!=t or len(t.encode())>64 or any(ord(c)<32 or ord(c)==127 for c in t) for t in tags) or len(set(tags))!=len(tags):raise ValueError('Invalid tags')
+        meta['tags']=list(tags)
     for key,limit in [('version',128),('description',2048),('copyright',4096),('license',1024),('author',240)]:
         if key in metadata:
             value=metadata[key]

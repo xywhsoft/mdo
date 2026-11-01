@@ -61,6 +61,13 @@ test('platform dependency lists link by stable ID and never expose unpublished t
  const links=view.querySelectorAll('a').map(a=>a.getAttribute('href')||a.href);assert.deepEqual(links,['https://ai.xywhsoft.com/mdo/ecosystem?extension=knowledge%3Amdo.xrt','https://ai.xywhsoft.com/mdo/ecosystem?extension=knowledge%3Amdo.mdo']);for(const text of ['Runtime reference','必需','可选','尚未公开或暂不可用'])assert(view.textContent.includes(text),text);assert(!links.some(href=>href.includes('private.hidden')));
 });
 
+test('public catalogue renders multiple safe label capsules beside creator information',async t=>{
+ dom(t);globalThis.location=new URL('https://ai.xywhsoft.com/mdo/ecosystem');const root=new TestElement('main');root.append(new TestElement('h1'));for(const part of ['feedback','profile','toolbar','list','pager']){const node=new TestElement('div');node.setAttribute('data-'+part,'');root.append(node);}document.body.append(root);
+ t.mock.method(globalThis,'fetch',async()=>Response.json({code:0,data:{total:1,items:[{name:'Python',submitter:'墨斗',author:'Python developers',version:'1',state:'published',tags:['推荐','<script>']}]}}));
+ const source=readFileSync(site+'/extensions/public.js','utf8').replace(/from '(\/mdo\/[^']+)'/g,(_,path)=>'from '+JSON.stringify(urls[path]))+'\nexport {start as boot};';const target=await import(data(source));await target.boot(root);
+ assert.deepEqual(root.querySelectorAll('.extension-label').map(el=>el.textContent),['推荐','<script>']);assert.equal(root.querySelectorAll('script').length,0);assert(root.querySelector('.extension-card').textContent.includes('Python developers'));
+});
+
 
 test('following a dependency URL resolves its ID and opens the referenced work detail',async t=>{
  dom(t);globalThis.location=new URL('https://ai.xywhsoft.com/mdo/ecosystem?extension=knowledge%3Amdo.xrt');const root=new TestElement('main');root.append(new TestElement('h1'));for(const part of ['feedback','profile','toolbar','list','pager']){const node=new TestElement('div');node.setAttribute('data-'+part,'');root.append(node);}document.body.append(root);

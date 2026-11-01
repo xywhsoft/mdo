@@ -1,3 +1,4 @@
+import { extensionPresentation } from "../../components/extension-presentation.js";
 import { setUiText as writeUiText, uiMessage, t as uiText, subscribeLocale, t } from "../../i18n.js";
 
 import { localDependencyPanel } from "./extension-dependencies.js";
@@ -255,7 +256,7 @@ export function createExtensionPanels() {
         toggle.disabled = state.busy;
         controls.forEach(control => { control.disabled = state.busy; });
         const status = kind === "mcp" ? ({ready:uiText("ui.extensionPanels.connected", {}, "已连接"),failed:uiText("resource.mcpFailed", {}, "连接失败"),disabled:uiText("ecosystem.disabled", {}, "已停用"),disconnected:uiText("resource.mcpDisconnected", {}, "未连接")})[item.state]||uiText("resource.mcpDisconnected", {}, "未连接") : !item.valid ? browserText("needsAttention", "需要处理") : "";
-        rows.push({ key: item.id||item.directory_id, kind, title: item.name || item.id, description: item.description, byline: credits?.submitter,
+        rows.push({ ...extensionPresentation(item),key: item.id||item.directory_id, kind, title: item.name || item.id, description: item.description, byline: credits?.submitter,
           meta: credits ? [...credits.meta, owner?.source === "store" || item.store_managed ? browserText("storeInstalled", "商店安装") : item.source==="manual" ? browserText("custom", "自定义") : item.source==="store" ? browserText("storeInstalled", "商店安装") : label("builtin", "内置")] : [owner?.author, owner?.version, item.source==="manual" ? browserText("custom", "自定义") : item.source==="store" ? browserText("storeInstalled", "商店安装") : label("builtin", "内置")],
           badge: { text: status, tone: !item.valid || item.state === "failed" ? "error" : "" },
           toggle: canToggle ? extensionToggle(toggle, item.enabled, item.name || item.id) : null, actions: controls,
@@ -279,7 +280,7 @@ export function createExtensionPanels() {
             return detailTabs([{ id: "description", label: browserText("description", "说明"), content: description }, { id: "usage", label: browserText("usage", "使用方式"), content: usage }, { id: "source", label: browserText("sourceFiles", "来源与文件"), content: source, onSelect: () => queueMicrotask(readSource) }]);
           } });
       }
-      browser.setItems(rows, { busy: state.busy, pageKey:JSON.stringify([state.filter,state.stateFilter,state.view]),onNext:state.items.length<state.total?()=>load(kind,true):null, empty: state.filter || state.stateFilter !== "all" ? browserText("empty", "没有匹配的扩展") : label("empty", "还没有资源。新建或导入一个即可开始。") });
+      browser.setItems(rows, { sort:true,busy: state.busy, pageKey:JSON.stringify([state.filter,state.stateFilter,state.view]),onNext:state.items.length<state.total?()=>load(kind,true):null, empty: state.filter || state.stateFilter !== "all" ? browserText("empty", "没有匹配的扩展") : label("empty", "还没有资源。新建或导入一个即可开始。") });
     };
     search.addEventListener("input", () => { state.filter = search.value; renderItems(); });
     toolbar.prepend(search, statusFilter); if (sourceFilter) toolbar.insertBefore(sourceFilter, statusFilter);

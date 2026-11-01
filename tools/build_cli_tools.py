@@ -90,6 +90,7 @@ def build(output,platforms):
                 manifest=dict(id=tool,name=definition["name"],version=version(record["version"]),platform=platform,
                               description=definition["description"],copyright=record.get("copyright",definition.get("copyright","")),prompt=definition["prompt"],entry=entry,license=record.get("license",definition["license"]),links=definition["links"],recommended=definition["recommended"],upstream_version=record["version"])
                 manifest["commands"]=[dict(name=Path(p).stem if p.lower().endswith('.exe') else Path(p).name,entry=tool+'/'+p,args=[]) for p in record["entrypoints"]]
+                manifest.update({k:definition[k] for k in ('sort_order','tags') if k in definition})
                 if tool=="python":
                     names={c['name'] for c in manifest['commands']}
                     for name in ('python','python3'):

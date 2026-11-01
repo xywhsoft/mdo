@@ -2,6 +2,7 @@ import { element } from "../utils/dom.js";
 import { mountIcons } from "./icons.js";
 import { openLayer } from "./layers.js";
 import { t } from "../i18n.js";
+import { compareExtensions, extensionTags } from "./extension-presentation.js";
 
 export const browserText = (key, fallback, args = {}) => t(`extensionBrowser.${key}`, args, fallback);
 const el = (tag, cls, text) => element(tag, { className: cls, ...(text === undefined ? {} : { text }) });
@@ -148,7 +149,7 @@ export function createExtensionBrowser({ kind, onClose } = {}) {
       page = Math.min(page, Math.max(0, Math.ceil(next.length / pageSize) - 1));
       const scroll = list.scrollTop, focused = list.contains(document.activeElement) ? document.activeElement?.dataset.ebFocus : rememberedFocus;
       rememberedFocus = null;
-      rows = next; list.replaceChildren(); list.setAttribute("aria-busy", String(busy));
+      rows = settings.sort ? [...next].sort(compareExtensions) : next; list.replaceChildren(); list.setAttribute("aria-busy", String(busy));
       for (const row of rows.slice(page * pageSize, (page + 1) * pageSize)) {
         const entry = el("article", "eb-row"); entry.dataset.key = row.key;
         entry.classList.toggle("is-selected", selected === row.key);
@@ -157,6 +158,7 @@ export function createExtensionBrowser({ kind, onClose } = {}) {
         const info = el("span", "eb-info"), title = el("span", "eb-title"), name = el("span", "eb-name", row.title);
         title.append(name);
         if (row.byline) title.append(el("small", "eb-byline", row.byline));
+        for(const tag of extensionTags(row.tags))title.append(el("span","eb-tag",tag));
         info.append(title, el("span", "eb-description", row.description || browserText("noDescription", "暂无说明")), el("span", "eb-meta", (row.meta || []).filter(Boolean).join(" · ")));
         openButton.append(extensionIcon(row.kind || kind), info); openButton.addEventListener("click", () => open(row.key));
         const controls = el("div", "eb-actions");

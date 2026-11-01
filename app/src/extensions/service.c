@@ -89,7 +89,7 @@ static bool MdoExtServiceReadAttempt(const xvalue* Input,xcancel* Cancel,xvalue*
 }
 bool MdoExtensionServiceRead(const xvalue* Input,xcancel* Cancel,xvalue** Result,char Error[512]){return MdoExtServiceReadAttempt(Input,Cancel,Result,NULL,Error);}
 static xvalue* MdoExtServiceOrigin(const xvalue* Entry){
- const cstr Names[]={"id","kind","xid","version_id","sha256","bytes","owner","submitter","author","copyright","license","name","alias","platforms","state","version"};xvalue* Origin=xrtValueObject();bool Ok=Origin!=NULL;
+ const cstr Names[]={"id","kind","xid","version_id","sha256","bytes","owner","submitter","author","copyright","license","name","alias","platforms","state","version","serial","sort_order","tags"};xvalue* Origin=xrtValueObject();bool Ok=Origin!=NULL;
  for(size_t I=0;Ok&&I<sizeof(Names)/sizeof(*Names);I++){const xvalue* Value=xrtValueObjectGet(Entry,xrtStrView(Names[I]));if(Value)Ok=xrtValueObjectSet(Origin,xrtStrView(Names[I]),Value);}if(!Ok){xrtValueRelease(Origin);return NULL;}return Origin;
 }
 static bool MdoExtServiceDownloadAttempt(cstr Kind,cstr Version,xcancel* Cancel,xvalue** Result,bool* Retryable,char Error[512]){

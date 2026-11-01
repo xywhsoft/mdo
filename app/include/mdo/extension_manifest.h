@@ -66,10 +66,23 @@ static bool MdoExtensionRelations(const xvalue* M,cstr Field,bool Optional,char*
     return true;
 bad:if(Error&&Capacity)snprintf(Error,Capacity,"Invalid %s: use unique typed extension IDs, optional flags and reasons; knowledge can reference only knowledge",Field);return false;
 }
+static bool MdoExtensionPresentation(const xvalue* M,char* Error,size_t Capacity)
+{
+    int64 Rank=0;const xvalue* Sort=xrtValueObjectGet(M,XRT_STR_LITERAL("sort_order")),*Tags=xrtValueObjectGet(M,XRT_STR_LITERAL("tags"));
+    if(Sort&&(!MdoExtensionNumber(M,"sort_order",&Rank)||Rank<INT32_MIN||Rank>INT32_MAX))goto bad;
+    if(!Tags)return true;
+    if(xrtValueType(Tags)!=XVALUE_ARRAY||xrtValueCount(Tags)>16)goto bad;
+    for(size_t I=0;I<xrtValueCount(Tags);I++){xstrview Tag={0};if(!xrtValueGetString(xrtValueArrayGet(Tags,I),&Tag)||!Tag.Size||Tag.Size>64||memchr(Tag.Data,0,Tag.Size)||!xrtUtf8Valid(Tag,NULL)||xrtStrTrim(Tag).Size!=Tag.Size)goto bad;
+        for(size_t K=0;K<Tag.Size;K++)if((unsigned char)Tag.Data[K]<32||(unsigned char)Tag.Data[K]==127)goto bad;
+        for(size_t J=0;J<I;J++){xstrview Prior={0};xrtValueGetString(xrtValueArrayGet(Tags,J),&Prior);if(xrtStrEqual(Tag,Prior))goto bad;}}
+    return true;
+bad:if(Error&&Capacity)snprintf(Error,Capacity,"Use an int32 sort_order and up to 16 unique, nonempty tags of at most 64 UTF-8 bytes");return false;
+}
 static bool MdoExtensionManifest(const xvalue* M,char* Error,size_t Capacity)
 {
     cstr Why="extension.json must describe one of the nine extension types";
     if(xrtValueType(M)!=XVALUE_OBJECT)goto bad;
+    if(!MdoExtensionPresentation(M,Error,Capacity))return false;
     const char* const Removed[]={"format","resources","files","base64","min_build_id","format_version"};
     for(size_t I=0;I<sizeof(Removed)/sizeof(*Removed);I++)if(xrtValueObjectHas(M,xrtStrView(Removed[I]))){Why="Legacy package fields are not accepted in extension.json";goto bad;}
     cstr Kind=MdoExtensionText(M,"kind",32),Name=MdoExtensionText(M,"name",240),Alias=MdoExtensionText(M,"alias",64),Entry=MdoExtensionText(M,"entry",MDO_EXTENSION_PATH_BYTES);

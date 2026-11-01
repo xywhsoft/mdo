@@ -86,7 +86,7 @@ static xvalue* MdoExtRead(cstr Kind,cstr Id,const xvalue* State,char Error[512])
         xrtValueObjectSetNew(Row,XRT_STR_LITERAL("platform_supported"),xrtValueBool(MdoExtensionSupportsPlatform(Meta,MdoExtensionRuntimePlatform())))&&
         xrtValueObjectSetNew(Row,XRT_STR_LITERAL("enabled"),xrtValueBool(Enabled))&&xrtValueObjectSetNew(Row,XRT_STR_LITERAL("valid"),xrtValueBool(true));
     if(Ok&&Record)Ok=xrtValueObjectSet(Row,XRT_STR_LITERAL("installation"),Record);
-    if(Ok&&Record){const char* const Credits[]={"submitter","owner","xid"};for(size_t I=0;Ok&&I<3;I++){
+    if(Ok&&Record){const char* const Credits[]={"submitter","owner","xid","serial","sort_order","tags"};for(size_t I=0;Ok&&I<sizeof(Credits)/sizeof(*Credits);I++){
         const xvalue* V=xrtValueObjectGet(Record,xrtStrView(Credits[I]));if(V)Ok=xrtValueObjectSet(Row,xrtStrView(Credits[I]),V);}}
     if(Ok&&Record){const cstr Keys[]={"pending_remove","pending_error"};for(size_t I=0;Ok&&I<2;I++){const xvalue* V=xrtValueObjectGet(Record,xrtStrView(Keys[I]));if(V)Ok=xrtValueObjectSet(Row,xrtStrView(Keys[I]),V);}}
     if(Ok&&MdoExtRecoveryBlockedLocked(Kind,Id))Ok=MdoExtPut(Row,"error","An unfinished extension transaction needs recovery; its files were preserved")&&
@@ -129,7 +129,7 @@ static xvalue* MdoExtListRawLocked(cstr Kind,const xvalue* State,char Error[512]
         if(!Row){Row=xrtValueObject();char* Key=MdoExtKey(Kind,Id),*Root=MdoExtensionsRoot(Kind,Id);const xvalue* Record=Key?xrtValueObjectGet(State,xrtStrView(Key)):NULL;bool Enabled=true;const xvalue* Flag=xrtValueObjectGet(Record,XRT_STR_LITERAL("enabled"));if(Flag&&!xrtValueGetBool(Flag,&Enabled))Ok=false;
             cstr Source=Record?MdoExtensionText(Record,"source",16):"manual";
             Ok=Ok&&Row&&MdoExtPut(Row,"id","")&&MdoExtPut(Row,"directory_id",Id)&&MdoExtPut(Row,"kind",Kind)&&MdoExtPut(Row,"name",Id)&&MdoExtPut(Row,"root",Root)&&MdoExtPut(Row,"source",Source)&&MdoExtPut(Row,"error",Why)&&xrtValueObjectSetNew(Row,XRT_STR_LITERAL("enabled"),xrtValueBool(Enabled))&&xrtValueObjectSetNew(Row,XRT_STR_LITERAL("valid"),xrtValueBool(false));
-            if(Ok&&Record){Ok=xrtValueObjectSet(Row,XRT_STR_LITERAL("installation"),Record);const cstr Keys[]={"submitter","owner","xid","pending_remove","pending_error"};for(size_t I=0;Ok&&I<5;I++){const xvalue* V=xrtValueObjectGet(Record,xrtStrView(Keys[I]));if(V)Ok=xrtValueObjectSet(Row,xrtStrView(Keys[I]),V);}}
+            if(Ok&&Record){Ok=xrtValueObjectSet(Row,XRT_STR_LITERAL("installation"),Record);const cstr Keys[]={"submitter","owner","xid","pending_remove","pending_error","serial","sort_order","tags"};for(size_t I=0;Ok&&I<sizeof(Keys)/sizeof(*Keys);I++){const xvalue* V=xrtValueObjectGet(Record,xrtStrView(Keys[I]));if(V)Ok=xrtValueObjectSet(Row,xrtStrView(Keys[I]),V);}}
             xrtFree(Key);xrtFree(Root);}
         size_t RowBytes=0;char* Json=Row?xrtJsonStringify(Row,false,&RowBytes):NULL;Ok=Ok&&Json&&RowBytes<=8u*1024u*1024u-MetadataBytes;if(Ok)MetadataBytes+=RowBytes;xrtFree(Json);
         Ok=Ok&&xrtValueArrayAppend(Rows,Row);xrtValueRelease(Row);
@@ -657,6 +657,7 @@ bool MdoExtensionsInstall(cstr Kind,cstr Id,cstr Archive,const xvalue* Credits,b
 {
     *Result=NULL;if(Error)Error[0]=0;
     if(!MdoExtLock||!MdoExtensionDirectoryKind(Kind)||!MdoExtensionDirectoryId(Id)||!Archive||!MdoExtensionRelativePath(Archive))return MdoExtError(Error,"Choose an extension type, directory identity and downloaded ZIP");
+    if(Credits&&!MdoExtensionPresentation(Credits,Error,512))return false;
     xrtMutexLock(MdoExtLock);if(MdoExtBusy(Kind,Id)){xrtMutexUnlock(MdoExtLock);return MdoExtError(Error,"Extension directory is in use; stop its active calls before updating");}
     cstr ExpectedRevision=MdoExtensionText(Credits,"expected_revision",64);
     if(ExpectedRevision){char* Existing=MdoExtensionsRoot(Kind,Id);bool Exists=false;xfileinfo Info;char Actual[65];MdoExtTree Tree={0};bool Match=Existing&&MdoExtStat(Existing,&Exists,&Info);
@@ -688,7 +689,7 @@ bool MdoExtensionsInstall(cstr Kind,cstr Id,cstr Archive,const xvalue* Credits,b
         cstr OldSource=MdoExtensionText(Old,"source",16);if(OldSource&&!strcmp(OldSource,"store")&&strcmp(Source,"store"))Ok=false;
         Record=xrtValueObject();Ok=Ok&&State&&xrtValueType(State)==XVALUE_OBJECT&&Record&&MdoExtPut(Record,"source",Source)&&MdoExtPut(Record,"logical_id",MdoExtensionText(Meta,"id",MDO_EXTENSION_REF_BYTES))&&MdoExtPut(Record,"sha256",Digest)&&MdoExtPut(Record,"directory_digest",DirectoryDigest)&&MdoExtPut(Record,"kind",Kind)&&MdoExtPut(Record,"id",Id)&&
             xrtValueObjectSetNew(Record,XRT_STR_LITERAL("enabled"),xrtValueBool(Enabled));xrtValueRelease(State);xrtFree(Key);
-        const char* const Names[]={"owner","submitter","author","copyright","license","xid","version_id","version"};
+        const char* const Names[]={"owner","submitter","author","copyright","license","xid","version_id","version","serial","sort_order","tags"};
         for(size_t I=0;Ok&&I<sizeof(Names)/sizeof(*Names);I++){const xvalue* V=xrtValueObjectGet(Credits,xrtStrView(Names[I]));if(V)Ok=xrtValueObjectSet(Record,xrtStrView(Names[I]),V);}}
     if(Ok)Ok=MdoExtPublish(Kind,Id,Task,false,Record,Cancel,Result,Error);
     if(!Ok&&Base){char* Journal=xrtFormat("%s/transaction.json",Base);bool Exists=false;xfileinfo Info;

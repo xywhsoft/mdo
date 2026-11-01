@@ -74,6 +74,7 @@ def add_runtime(archive,root:Path,edition:str,build_id:int,revision:int):
                 for name in ('python','python3'):
                     if name not in {c['name'] for c in commands}:commands.append(dict(name=name,entry=entries[0],args=[]))
             metadata=dict(id=tool,name=definition['name'],description=definition['description'],prompt=definition['prompt'],license=record.get('license',definition['license']),links=definition['links'],version=record.get('version',definition.get('versions',{}).get('android-arm64-v8a','1')),platform='android-arm64-v8a',entry=entries[0],commands=commands)
+            metadata.update({k:definition[k] for k in ('sort_order','tags') if k in definition})
             extra={'fonts':root/'fonts'} if tool in ('poppler','imagemagick') and (root/'fonts').is_dir() else None
             with tempfile.TemporaryDirectory(prefix='mdo-apk-zip-') as temporary:
                 row=package_tool(directory,metadata,Path(temporary),extra)

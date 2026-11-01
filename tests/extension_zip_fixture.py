@@ -47,7 +47,7 @@ def directory_zip(path, kind, *, alias='zip-fixture', version=None):
 
 def platform_store_source(directory, sqlite_header='/app/qa/sqlite3.h'):
     source = (directory/'directory_store.inc.c').read_text(encoding='utf-8')
-    for name in ('directory_content.inc.c', 'directory_lifecycle.inc.c', 'directory_versions.inc.c', 'directory_dependencies.inc.c'):
+    for name in ('directory_content.inc.c', 'directory_presentation.inc.c', 'directory_lifecycle.inc.c', 'directory_versions.inc.c', 'directory_dependencies.inc.c'):
         source = source.replace(f'#include "{name}"', (directory/name).read_text(encoding='utf-8'))
     for name in ('extension_manifest.h', 'extension_graph.h', 'agent_config_format.h', 'knowledge_format.h', 'mcp_template.h', 'external_tool.h', 'plugin_format.h'):
         source = source.replace(f'#include "{name}"', f'#include "/app/include/mdo/{name}"')

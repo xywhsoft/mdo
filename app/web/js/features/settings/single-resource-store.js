@@ -12,6 +12,7 @@ import { openLayer } from "../../components/layers.js";
 import { renderSourceMarkdown } from "../../utils/source-markdown.js";
 import { downloadRegistry, downloadActive } from "../../state/downloads.js";
 import { extensionInstaller } from "../../state/extension-installs.js";
+import { extensionPresentation } from "../../components/extension-presentation.js";
 
 const names = { agents:"Agent", subagents:"SubAgent", get tools() { return uiMessage("ecosystem.toolTitle", {}, "Agent 工具"); }, get mcp() { return uiMessage("ui.singleResourceStore.mcpService", {}, "MCP 服务"); }, skills:"Skill", get commands() { return uiMessage("ecosystem.commands", {}, "编辑器命令"); }, get "external-tools"() { return uiMessage("settings.toolpacks", {}, "外部工具"); }, get knowledge() { return uiMessage("settings.knowledge", {}, "知识库"); }, get plugins() { return uiMessage("settings.extensions", {}, "插件"); } };
 const text = (tag, value, className = "") => element(tag, { text: value, className });
@@ -75,9 +76,9 @@ export function createSingleResourceStore(kind, onChange, onBrowse=()=>{}, onMan
     form.append(input,select,element("button",{text:uiMessage("store.searchButton", {}, "搜索"),className:"secondary-button",attrs:{type:"submit"}}),button(uiMessage("resource.refresh", {}, "刷新"),()=>load()));form.addEventListener("submit",e=>{e.preventDefault();query=input.value.trim();void load();});for(const b of form.querySelectorAll("button"))b.disabled=busy;
     const rows=items.filter(row=>{const local=owned(row),same=local?.installation?.version_id===row.version_id;return state==="all"||state==="installed"&&local||state==="updates"&&local&&!same||state==="new"&&!local;}).map(row=>{
       const local=owned(row),same=local?.installation?.version_id===row.version_id,credits=resourceCredits({...row,source:"store"}),primary=installButton(row);
-      return {key:row.version_id,kind,title:row.name,byline:credits.submitter,description:row.description,meta:credits.meta,badge:{text:same?uiText("store.installed", {}, "已安装"):local?uiText("extensionBrowser.updates", {}, "可更新"):""},primary,onSelect:()=>loadDetail(row)};
+      return {...extensionPresentation(row),key:row.version_id,kind,title:row.name,byline:credits.submitter,description:row.description,meta:credits.meta,badge:{text:same?uiText("store.installed", {}, "已安装"):local?uiText("extensionBrowser.updates", {}, "可更新"):""},primary,onSelect:()=>loadDetail(row)};
     });
-    browser.setItems(rows,{busy,pageKey:JSON.stringify([applied,state]),onNext:items.length<total?()=>load(true):null,empty:uiText("ui.singleResourceStore.noMatchingValue1", { value1: names[kind] }, "暂无匹配的{value1}。")});root.replaceChildren(form,browser.root);
+    browser.setItems(rows,{sort:true,busy,pageKey:JSON.stringify([applied,state]),onNext:items.length<total?()=>load(true):null,empty:uiText("ui.singleResourceStore.noMatchingValue1", { value1: names[kind] }, "暂无匹配的{value1}。")});root.replaceChildren(form,browser.root);
   }
   function detail(row){onBrowse();if(!items.some(r=>r.version_id===row.version_id))items.unshift(row);state="all";render();browser.open(row.version_id);}
   async function filesView(row,host,signal,valid){
