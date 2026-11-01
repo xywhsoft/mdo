@@ -84,8 +84,8 @@ typedef struct MdoMcpDiagnosticInfo {
 bool MdoMcpManagerInit(xwork_runtime* pRuntime);
 void MdoMcpManagerUnit(void);
 bool MdoMcpManagerReload(void);
-/* Resolve a template dependency to one approved private in-scope connection.
- * Owned string. No connection is started or credential selected implicitly. */
+/* Resolve an explicit binding, project choice or stable default. Equally
+ * ranked accounts require a choice. Owned string; does not start transport. */
 char* MdoMcpDependencyConnection(cstr Ref,cstr Workspace,cstr Preferred,bool RequireReady,char Error[512]);
 bool MdoMcpRemoveDirectoryConnections(cstr DirectoryId,char Error[512]);
 xvalue* MdoMcpConnections(cstr Id,char Error[512]);

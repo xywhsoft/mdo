@@ -24,14 +24,14 @@ class McpContractTests(unittest.TestCase):
         self.assertIn("MdoMcpManagerGetStatus", text)
         self.assertIn("MdoMcpManagerDisconnect", text)
 
-    def test_format_is_cold_lazy_and_secret_reference_only(self) -> None:
+    def test_format_separates_cold_preview_from_approved_activation(self) -> None:
         text = FORMAT.read_text(encoding="utf-8")
         self.assertIn("do not start a process or make a network request", text)
         self.assertIn("secret_ref", text)
         self.assertIn("never returns their", text)
         self.assertIn("values through catalog or status APIs", text)
-        self.assertIn("tool_search", text)
-        self.assertIn("tool_load", text)
+        self.assertIn("`tools`, `load` and `fetch`", text)
+        self.assertIn("worker never opens a login browser", text)
         self.assertIn("never falls back", text)
 
     def test_protocol_and_transport_are_explicit(self) -> None:

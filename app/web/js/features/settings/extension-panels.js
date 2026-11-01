@@ -30,6 +30,7 @@ import { saveBlobFile } from "../../utils/file-download.js";
 import { createExtensionReads } from "./extension-reads.js";
 import { openLayer } from "../../components/layers.js";
 import { awaitResourceOperation } from "../../state/resource-operation.js";
+import { mcpActivationLabel, mcpActivationAction } from "./mcp-activation.js";
 import { extensionFieldError, validateExtensionId, requiredExtensionFields, validateExtensionForm, parseExtensionJson } from "./extension-validation.js";
 
 const label = (key, fallback, args = {}) => t(`ecosystem.${key}`, args, fallback);
@@ -211,7 +212,7 @@ export function createExtensionPanels() {
       const sourceItems = kind === "tools" ? state.view === "builtin" ? builtin : state.view === "custom" ? state.items : [...builtin, ...state.items] : state.items;
       const items = sourceItems.filter(item => `${item.id} ${item.name} ${item.description}`.toLocaleLowerCase().includes(needle)).filter(item => {
         if (state.stateFilter === "all") return true;
-        if (state.stateFilter === "error") return item.builtinTool ? !item.available : !item.valid || item.state === "failed";
+        if (state.stateFilter === "error") return item.builtinTool ? !item.available : !item.valid || ["failed","needs_configuration","needs_authorization","needs_approval","unsupported"].includes(item.state);
         const enabled = item.builtinTool ? item.available : item.enabled;
         return state.stateFilter === "enabled" ? enabled : !enabled;
       });
@@ -226,7 +227,7 @@ export function createExtensionPanels() {
           element("code", { text: item.path }),
           element("span", { text: item.enabled ? label("enabled", "已启用") : label("disabled", "已停用") }),
           item.source!=="builtin" ? null : element("span", { text: label("builtin", "内置") }),
-          kind === "mcp" ? element("span", { text: uiMessage(`resource.mcp${({ ready: "Ready", failed: "Failed", disabled: "Disabled", disconnected: "Disconnected" })[item.state] || "Disconnected"}`) }) : null,
+          kind === "mcp" ? element("span", { text: mcpActivationLabel(item) }) : null,
           kind === "mcp" ? element("span", { text: uiMessage("resource.toolCount", { count: item.tool_count || 0 }) }) : null,
         ]);
         const owner=null, protectedKind=["agents","subagents","tools","skills","commands","mcp","knowledge"].includes(kind);
@@ -247,7 +248,15 @@ export function createExtensionPanels() {
         controls.push(button(uiMessage("ui.extensionPanels.directoryAndFiles", {}, "目录与文件"),()=>directoryEditor.open({kind,item})));
         if (kind === "skills" && editable) controls.push(button(label("improveSkill", "用 AI 改进"), () =>
           skillWorkbench.open({ builder: true, mode: "improve", id: item.id, scope: "user" })));
-        if(kind==="mcp")controls.push(button(uiMessage("ui.extensionPanels.createConnection", {}, "创建连接"),()=>mcpConnections.open({templateId:item.id})));
+        let primary=null;
+        if(kind==="mcp"){
+          const action=mcpActivationAction(item),id=item.default_connection_id;
+          if(action==="authorize"&&id)primary=button(uiMessage("mcpActivation.authorize",{},"登录授权"),()=>mcpAuthorization.open(id));
+          if(action==="retry"&&id)primary=button(uiMessage("mcpActivation.retry",{},"重新连接"),()=>act(kind,async()=>{await refreshMcp(id);}));
+          const configure=button(uiMessage("mcpActivation.configure",{},"服务配置"),()=>mcpConnections.open({templateId:item.id}));
+          if(action==="configure")primary=configure;else controls.push(configure);
+          if(primary)primary.disabled=state.busy;
+        }
         controls.push(button(uiMessage("store.uninstall", {}, "卸载"),()=>act(kind,async()=>{
           if(!confirm(uiMessage("ui.pluginWorkbench.uninstallTheEntireDirectoryForValue1", { value1: item.name||item.id }, "卸载 {value1} 的整个目录？")))return;
           await changeDirectory(kind,item,"remove");
@@ -255,14 +264,15 @@ export function createExtensionPanels() {
         const canToggle = !(kind === "agents" && (item.directory_id === "default"||item.id==="agent:default"));
         toggle.disabled = state.busy;
         controls.forEach(control => { control.disabled = state.busy; });
-        const status = kind === "mcp" ? ({ready:uiText("ui.extensionPanels.connected", {}, "已连接"),failed:uiText("resource.mcpFailed", {}, "连接失败"),disabled:uiText("ecosystem.disabled", {}, "已停用"),disconnected:uiText("resource.mcpDisconnected", {}, "未连接")})[item.state]||uiText("resource.mcpDisconnected", {}, "未连接") : !item.valid ? browserText("needsAttention", "需要处理") : "";
+        const status = kind === "mcp" ? mcpActivationLabel(item) : !item.valid ? browserText("needsAttention", "需要处理") : "";
         rows.push({ ...extensionPresentation(item),key: item.id||item.directory_id, kind, title: item.name || item.id, description: item.description, byline: credits?.submitter,
           meta: credits ? [...credits.meta, owner?.source === "store" || item.store_managed ? browserText("storeInstalled", "商店安装") : item.source==="manual" ? browserText("custom", "自定义") : item.source==="store" ? browserText("storeInstalled", "商店安装") : label("builtin", "内置")] : [owner?.author, owner?.version, item.source==="manual" ? browserText("custom", "自定义") : item.source==="store" ? browserText("storeInstalled", "商店安装") : label("builtin", "内置")],
           badge: { text: status, tone: !item.valid || item.state === "failed" ? "error" : "" },
-          toggle: canToggle ? extensionToggle(toggle, item.enabled, item.name || item.id) : null, actions: controls,
+          toggle: canToggle ? extensionToggle(toggle, item.enabled, item.name || item.id) : null, primary, actions: controls,
           detail: () => {
             const description = element("div", {}, [element("p", { text: item.description }), !item.valid ? element("p", { className: "extension-error", text: item.error }) : null]);
             description.append(localDependencyPanel(kind,item));if(credits)description.append(credits.facts());if(!editable)description.append(element("p",{className:"extension-help",text:storeReadOnlyMessage()}));
+            if(kind==="mcp"&&item.activation_error)description.append(element("p",{className:"extension-error",text:item.activation_error}));
             const usage = element("div", {}, [element("p", { text: kind === "skills" ? `$${item.alias} · /skill:${item.alias}` : kind === "commands" ? `/${item.alias}` : kind === "mcp" ? status : kind === "knowledge" ? `${item.directory}/${item.index}\n${item.inject_prompt ? item.prompt : uiMessage("ui.extensionPanels.promptInjectionDisabled", {}, "已关闭提示词注入")}` : item.name || item.id }),
               kind === "tools" ? element("div", { className: "tool-exports" }, (item.tools || []).map(tool => element("code", { text: tool.id }))) : null]);
             const source = element("div", {}, [meta]), preview = element("div"); source.append(preview); let sourceLoaded = false;
@@ -555,6 +565,12 @@ export function createExtensionPanels() {
   };
   window.addEventListener("pagehide", onHide);
   window.addEventListener("pageshow", onShow);
+  const mcpStatusTimer=setInterval(()=>{
+    const state=states.get("mcp");
+    const typing=roots.get("mcp")?.contains(document.activeElement)&&document.activeElement?.matches("input,select,textarea");
+    if(!disposed&&!paused&&selected==="mcp"&&state.area==="local"&&!state.busy&&!mcpConnections.hasPendingChanges()&&!directoryEditor.hasPendingChanges()&&!typing)void load("mcp");
+  },2500);
+  mcpStatusTimer.unref?.();
   return Object.freeze({
     selectSection(kind) {
       const next = EXTENSION_KINDS.includes(kind) ? kind : "";
@@ -565,6 +581,6 @@ export function createExtensionPanels() {
       else if(pendingResource?.kind===selected)void openLinkedResource();
     },
     hasPendingChanges: () => [...stores.values()].some(s => s.hasPendingChanges()) || dirty() || directoryEditor.hasPendingChanges() || skillWorkbench.hasPendingChanges() || mcpConnections.hasPendingChanges() || commandWorkbench.hasPendingChanges(),
-    destroy() { disposed = true; for (const browser of browsers.values()) browser.destroy(); for (const store of stores.values()) store.destroy(); directoryEditor.destroy(); skillWorkbench.destroy(); mcpConnections.destroy(); commandWorkbench.destroy(); mcpAuthorization.destroy(); mcpContext.destroy(); cancelReads(); closeEditor(true); unsubscribeLocale(); unsubscribeTarget();window.removeEventListener("mdo-extensions-changed", invalidate);window.removeEventListener("mdo-open-resource",openResource);window.removeEventListener("pagehide",onHide);window.removeEventListener("pageshow",onShow); },
+    destroy() { disposed = true; clearInterval(mcpStatusTimer); for (const browser of browsers.values()) browser.destroy(); for (const store of stores.values()) store.destroy(); directoryEditor.destroy(); skillWorkbench.destroy(); mcpConnections.destroy(); commandWorkbench.destroy(); mcpAuthorization.destroy(); mcpContext.destroy(); cancelReads(); closeEditor(true); unsubscribeLocale(); unsubscribeTarget();window.removeEventListener("mdo-extensions-changed", invalidate);window.removeEventListener("mdo-open-resource",openResource);window.removeEventListener("pagehide",onHide);window.removeEventListener("pageshow",onShow); },
   });
 }

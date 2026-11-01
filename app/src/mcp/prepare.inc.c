@@ -12,7 +12,7 @@ static void McpPrepareSchedule(void)
     if(!g_MdoMcp.PrepareLock)return;
     uint64 Generation=MdoMcpManagerGeneration();
     xrtMutexLock(g_MdoMcp.PrepareLock);
-    if(!g_MdoMcp.PrepareStopping){g_MdoMcp.PrepareGeneration=Generation;g_MdoMcp.PrepareSuspended=false;
+    if(!g_MdoMcp.PrepareStopping){g_MdoMcp.PrepareGeneration=Generation;g_MdoMcp.PrepareTicket++;g_MdoMcp.PrepareSuspended=false;
         if(g_MdoMcp.PrepareCancel)xrtCancelRequest(g_MdoMcp.PrepareCancel);
         xrtCondBroadcast(g_MdoMcp.PrepareChanged);}
     xrtMutexUnlock(g_MdoMcp.PrepareLock);
@@ -29,33 +29,35 @@ static void McpPrepareResult(cstr Id,uint64 Generation,cstr State,cstr Error,uns
 static bool McpPrepareTransient(const xwork_error* Error)
 {
     if(Error->uHttpStatus)return Error->uHttpStatus==408||Error->uHttpStatus==429||Error->uHttpStatus>=500;
+    if(Error->eCode==XWORK_ERROR_IO&&strstr(Error->sMessage,"failed to start MCP stdio server"))return false;
     return Error->eCode==XWORK_ERROR_IO||Error->eCode==XWORK_ERROR_TIMEOUT;
 }
 static int32 McpPrepareWorker(void* Data)
 {
-    (void)Data;uint64 Completed=0;
+    (void)Data;uint64 Ticket=0;
     for(;;){
         xrtMutexLock(g_MdoMcp.PrepareLock);
-        while(!g_MdoMcp.PrepareStopping&&(g_MdoMcp.PrepareSuspended||Completed==g_MdoMcp.PrepareGeneration))xrtCondWait(g_MdoMcp.PrepareChanged,g_MdoMcp.PrepareLock);
+        while(!g_MdoMcp.PrepareStopping&&(g_MdoMcp.PrepareSuspended||Ticket==g_MdoMcp.PrepareTicket))xrtCondWait(g_MdoMcp.PrepareChanged,g_MdoMcp.PrepareLock);
         if(g_MdoMcp.PrepareStopping){xrtMutexUnlock(g_MdoMcp.PrepareLock);break;}
-        Completed=g_MdoMcp.PrepareGeneration;xcancel* Cancel=xrtCancelCreate();g_MdoMcp.PrepareCancel=Cancel;
+        Ticket=g_MdoMcp.PrepareTicket;uint64 Completed=g_MdoMcp.PrepareGeneration;xcancel* Cancel=xrtCancelCreate();g_MdoMcp.PrepareCancel=Cancel;
         xrtValueRelease(g_MdoMcp.PrepareResults);g_MdoMcp.PrepareResults=xrtValueObject();
         xrtMutexUnlock(g_MdoMcp.PrepareLock);
         MdoMcpCatalog* Catalog=Cancel?MdoMcpCatalogSnapshot():NULL;
         for(size_t I=0;Catalog&&I<Catalog->Count&&!xrtCancelRequested(Cancel);I++){
             const MdoMcpServerEntry* Entry=&Catalog->Entries[I];if(!Entry->Enabled)continue;
             MdoMcpServerStatus Status={0};Status.Size=sizeof(Status);
-            if(MdoMcpManagerGetStatus(Entry->Id,&Status)&&Status.Connected&&Status.ToolsDiscovered)continue;
+            if(MdoMcpManagerGetStatus(Entry->Id,&Status)&&Status.Connected&&Status.ToolsDiscovered){McpPrepareResult(Entry->Id,Completed,"ready","",0);continue;}
+            uint64 Milliseconds=(uint64)Entry->StartupTimeoutMilliseconds+Entry->RequestTimeoutMilliseconds;
+            if(Milliseconds>60000)Milliseconds=60000;
+            uint64 Deadline=MdoDeadlineAfterUs(Milliseconds*1000);
             for(unsigned Attempt=1;Attempt<=5&&!xrtCancelRequested(Cancel);Attempt++){
                 McpPrepareResult(Entry->Id,Completed,"starting","",Attempt);
                 xwork_error Error;xworkErrorInit(&Error);
-                uint64 Milliseconds=(uint64)Entry->StartupTimeoutMilliseconds+Entry->RequestTimeoutMilliseconds;
-                if(Milliseconds>60000)Milliseconds=60000;
-                bool Ok=xworkRuntimeRefreshMcpServer(g_MdoMcp.Runtime,Entry->Id,Cancel,MdoDeadlineAfterUs(Milliseconds*1000),&Error);
+                bool Ok=xworkRuntimeRefreshMcpServer(g_MdoMcp.Runtime,Entry->Id,Cancel,Deadline,&Error);
                 if(xrtCancelRequested(Cancel))break;
                 xvalue* Auth=MdoMcpAuthorizationStatus(Entry->Id);bool Login=MdoMcpTemplateFlag(Auth,"needs_authorization",false);xrtValueRelease(Auth);
-                bool Retry=!Ok&&!Login&&McpPrepareTransient(&Error)&&Attempt<5;
-                McpPrepareResult(Entry->Id,Completed,Ok?"ready":Login||Error.uHttpStatus==401?"needs_authorization":Retry?"starting":"failed",Error.sMessage,Attempt);
+                bool Retry=!Ok&&!Login&&McpPrepareTransient(&Error)&&Attempt<5&&!MdoDeadlineExpired(Deadline);
+                McpPrepareResult(Entry->Id,Completed,Ok?"ready":Login||Error.uHttpStatus==401?Entry->OAuthJson?"needs_authorization":"needs_configuration":Retry?"starting":"failed",Error.sMessage,Attempt);
                 if(!Retry)break;
                 xrtMutexLock(g_MdoMcp.PrepareLock);
                 if(!xrtCancelRequested(Cancel)&&!g_MdoMcp.PrepareStopping)xrtCondWaitFor(g_MdoMcp.PrepareChanged,g_MdoMcp.PrepareLock,Attempt*250);
@@ -79,8 +81,9 @@ xvalue* MdoMcpExtensionStatus(cstr Ref)
         if(Found){if(!Status.Enabled)S="disabled";else if(Status.Connected&&Status.ToolsDiscovered){S="ready";Message="";}else{
             if(g_MdoMcp.PrepareLock){xrtMutexLock(g_MdoMcp.PrepareLock);Prepared=xrtValueClone(xrtValueObjectGet(g_MdoMcp.PrepareResults,xrtStrView(Key)));xrtMutexUnlock(g_MdoMcp.PrepareLock);}
             uint64 G=0;if(xrtValueGetUInt(xrtValueObjectGet(Prepared,XRT_STR_LITERAL("generation")),&G)&&G==Catalog->Generation){S=MdoExtensionText(Prepared,"state",32);Message=MdoExtensionText(Prepared,"error",1024);}
+            if(S&&!strcmp(S,"ready")){S=Status.State==XWORK_MCP_SERVER_FAILED?"failed":"disconnected";Message="";}
         }}else if(Key&&Enabled&&strcmp(S,"needs_configuration")&&strcmp(S,"needs_approval")){
-            for(size_t J=0;Diagnostics&&J<Diagnostics->Count;J++)if(Diagnostics->Entries[J].ServerId&&!strcmp(Diagnostics->Entries[J].ServerId,Key)){S="failed";Message=Diagnostics->Entries[J].Message;break;}
+            for(size_t J=0;Diagnostics&&J<Diagnostics->Count;J++)if(Diagnostics->Entries[J].ServerId&&!strcmp(Diagnostics->Entries[J].ServerId,Key)){Message=Diagnostics->Entries[J].Message;S=Message&&strstr(Message,"not been approved")?"needs_approval":"failed";break;}
         }
         if(Key)Connections++;if(Found&&Status.Enabled)Tools+=Status.DiscoveredToolCount;
         unsigned Rank=!strcmp(S,"ready")?6:!strcmp(S,"starting")?5:!strcmp(S,"disabled")?1:3;

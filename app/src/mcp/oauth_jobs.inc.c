@@ -155,7 +155,7 @@ static int32 McpOAuthWorker(void* Data)
     if(Job->Code){xrtSecureZero(Job->Code,strlen(Job->Code));xrtFree(Job->Code);}
     xrtFree(Job->State);xrtFree(Job->Issuer);xrtFree(Job->Redirect);xrtFree(Job);
     xrtMutexLock(g_MdoMcpOAuth.Lock);xrtMutexLock(Entry->Lock);Entry->Busy=false;xrtMutexUnlock(Entry->Lock);
-    g_MdoMcpOAuth.Running--;xrtMutexUnlock(g_MdoMcpOAuth.Lock);return 0;
+    g_MdoMcpOAuth.Running--;xrtMutexUnlock(g_MdoMcpOAuth.Lock);if(Ok)McpPrepareSchedule();return 0;
 }
 
 static bool McpOAuthLaunch(McpOAuthJob* Job)

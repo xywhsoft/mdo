@@ -20,4 +20,6 @@ test("default MCP variants follow platform declarations and never select an adva
  const invalid=structuredClone(t);invalid.variants[0].default="true";assert.throws(()=>parseMcpTemplate(JSON.stringify(invalid)),/布尔/);
  const old={...recipe,inputs:[],variants:[{id:"ordinary",platforms:["any"]},{id:"extra",default:false,platforms:["any"]}]};
  assert.equal(mcpDefaultVariant(old,"windows-x86_64").id,"ordinary");
+ const linux={...t,variants:[{id:"generic",default:true,platforms:["linux-x86_64"]}]};assert.equal(mcpDefaultVariant(linux,"linux-x86_64-glibc").id,"generic");
+ linux.variants.push({id:"glibc",default:true,platforms:["linux-x86_64-glibc"]});assert.throws(()=>parseMcpTemplate(JSON.stringify(linux)),/默认/);
 });

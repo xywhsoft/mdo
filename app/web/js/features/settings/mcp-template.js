@@ -20,7 +20,7 @@ export function mcpVariantInputs(template, variant) {
   return (template.inputs || []).filter(input => used.has(input.id));
 }
 export function mcpDefaultVariant(template, platform) {
-  const variants=(template?.variants||[]).filter(v=>v.platforms?.includes("any")||v.platforms?.includes(platform));
+  const variants=(template?.variants||[]).filter(v=>v.platforms?.includes("any")||v.platforms?.includes(platform)||platform?.startsWith("linux-x86_64-")&&v.platforms?.includes("linux-x86_64"));
   return variants.find(v=>v.default===true)||variants.find(v=>!Object.hasOwn(v,"default"))||null;
 }
 export function mcpTemplateSummary(template) {
@@ -37,7 +37,7 @@ export function parseMcpTemplate(text) {
   if (template.inputs.some(i => i.secret && Object.hasOwn(i, "default"))) throw Error(uiText("ui.mcpTemplate.credentialInputsCannotContainDefaults", {}, "凭据参数不能包含默认值"));
   const defaults=template.variants.filter(v=>v.default===true);
   for(const v of template.variants)if(Object.hasOwn(v,"default")&&typeof v.default!=="boolean")throw Error(uiText("ui.mcpTemplate.invalidDefault",{},"默认方案标记必须为布尔值"));
-  for(let i=0;i<defaults.length;i++)for(let j=0;j<i;j++)if(defaults[i].platforms?.some(p=>p==="any"||defaults[j].platforms?.includes("any")||defaults[j].platforms?.includes(p)))throw Error(uiText("ui.mcpTemplate.duplicateDefault",{},"每个平台只能有一个默认 MCP 方案"));
+  for(let i=0;i<defaults.length;i++)for(let j=0;j<i;j++)if(defaults[i].platforms?.some(p=>defaults[j].platforms?.some(q=>p==="any"||q==="any"||p===q||p==="linux-x86_64"&&q.startsWith("linux-x86_64-")||q==="linux-x86_64"&&p.startsWith("linux-x86_64-"))))throw Error(uiText("ui.mcpTemplate.duplicateDefault",{},"每个平台只能有一个默认 MCP 方案"));
   return template;
 }
 

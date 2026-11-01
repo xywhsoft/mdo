@@ -95,7 +95,7 @@ static bool MdoMcpTemplateValidate(const xvalue* T,cstr Id,char* Error,size_t Ca
             const xvalue* Platforms=xrtValueObjectGet(Other,XRT_STR_LITERAL("platforms"));
             for(size_t a=0;a<xrtValueCount(Ps);a++)for(size_t b=0;b<xrtValueCount(Platforms);b++){
                 xstrview A={0},B={0};xrtValueGetString(xrtValueArrayGet(Ps,a),&A);xrtValueGetString(xrtValueArrayGet(Platforms,b),&B);
-                if(xrtStrEqual(A,B)||xrtStrEqual(A,XRT_STR_LITERAL("any"))||xrtStrEqual(B,XRT_STR_LITERAL("any"))){Why="Only one default MCP variant is allowed per platform";goto bad;}
+                if(xrtStrEqual(A,B)||xrtStrEqual(A,XRT_STR_LITERAL("any"))||xrtStrEqual(B,XRT_STR_LITERAL("any"))||(xrtStrEqual(A,XRT_STR_LITERAL("linux-x86_64"))&&B.Size>13&&!memcmp(B.Data,"linux-x86_64-",13))||(xrtStrEqual(B,XRT_STR_LITERAL("linux-x86_64"))&&A.Size>13&&!memcmp(A.Data,"linux-x86_64-",13))){Why="Only one default MCP variant is allowed per platform";goto bad;}
             }
         }
         if(xrtValueObjectHas(V,XRT_STR_LITERAL("requirements"))&&!MdoExtensionText(V,"requirements",4000))goto bad;
@@ -150,8 +150,7 @@ static const xvalue* MdoMcpTemplateDefault(const xvalue* Template,cstr Platform)
 {
     const xvalue* Variants=xrtValueObjectGet(Template,XRT_STR_LITERAL("variants")),*Fallback=NULL;
     for(size_t I=0;I<xrtValueCount(Variants);I++){
-        const xvalue* V=xrtValueArrayGet(Variants,I),*Ps=xrtValueObjectGet(V,XRT_STR_LITERAL("platforms"));bool Matches=false;
-        for(size_t J=0;J<xrtValueCount(Ps);J++){xstrview P={0};if(xrtValueGetString(xrtValueArrayGet(Ps,J),&P)&&(xrtStrEqual(P,XRT_STR_LITERAL("any"))||xrtStrEqual(P,xrtStrView(Platform))))Matches=true;}
+        const xvalue* V=xrtValueArrayGet(Variants,I);bool Matches=MdoExtensionSupportsPlatform(V,Platform);
         if(!Matches)continue;
         if(MdoMcpTemplateFlag(V,"default",false))return V;
         if(!Fallback&&!xrtValueObjectHas(V,XRT_STR_LITERAL("default")))Fallback=V;

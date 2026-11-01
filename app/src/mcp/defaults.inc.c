@@ -20,8 +20,12 @@ static bool McpDefaultTrusted(const xvalue* Meta,char Digest[65],char Error[512]
 {
     cstr Id=MdoExtensionText(Meta,"id",MDO_EXTENSION_REF_BYTES),Directory=MdoExtensionText(Meta,"directory_id",96);
     cstr Approved=MdoExtensionText(xrtValueObjectGet(Meta,XRT_STR_LITERAL("installation")),"directory_digest",64);char Actual[65];
-    return Approved&&Directory&&MdoExtensionsVerify("mcp",Directory,NULL,Error)&&MdoExtensionsFingerprint("mcp",Directory,Actual,NULL,Error)&&
-        !strcmp(Approved,Actual)&&MdoExtensionsApprovalDigest(Id,Digest,NULL,Error);
+    bool Ok=Approved&&Directory&&MdoExtensionsVerify("mcp",Directory,NULL,Error)&&MdoExtensionsFingerprint("mcp",Directory,Actual,NULL,Error)&&!strcmp(Approved,Actual);
+    xvalue* Closure=Ok?MdoExtensionsDependencies(Id,false,Error):NULL;Ok=Ok&&Closure;
+    for(size_t I=1;Ok&&I<xrtValueCount(Closure);I++){const xvalue* Dependency=xrtValueArrayGet(Closure,I);cstr Kind=MdoExtensionText(Dependency,"kind",32),Dir=MdoExtensionText(Dependency,"directory_id",96),Pinned=MdoExtensionText(xrtValueObjectGet(Dependency,XRT_STR_LITERAL("installation")),"directory_digest",64);char Hash[65];
+        Ok=Kind&&Dir&&Pinned&&MdoExtensionsVerify(Kind,Dir,NULL,Error)&&MdoExtensionsFingerprint(Kind,Dir,Hash,NULL,Error)&&!strcmp(Hash,Pinned);
+    }xrtValueRelease(Closure);Ok=Ok&&MdoExtensionsApprovalDigest(Id,Digest,NULL,Error);
+    if(!Ok&&Error&&!Error[0])snprintf(Error,512,"Review the MCP directory and its required dependencies before allowing automatic startup");return Ok;
 }
 static xvalue* McpDefaultDocument(const xvalue* Meta,xvalue** Missing,const char** State,char Error[512])
 {

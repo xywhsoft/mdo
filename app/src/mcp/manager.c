@@ -123,6 +123,7 @@ typedef struct MdoMcpState {
     xthread* PrepareThread;
     xcancel* PrepareCancel;
     uint64 PrepareGeneration;
+    uint64 PrepareTicket;
     xvalue* PrepareResults;
     bool PrepareStopping;
     bool PrepareSuspended;
@@ -479,6 +480,7 @@ static int MdoMcpSourceCompare(const void* Left, const void* Right)
 }
 
 static bool McpDefaultTrusted(const xvalue*,char[65],char[512]);
+static bool McpInputUsed(const xvalue*,cstr,unsigned);
 #include "directory.inc.c"
 #include "defaults.inc.c"
 static bool MdoMcpDiscover(MdoMcpSource** Sources,size_t* Count,MdoMcpDiagnostics* Diagnostics,xvalue* Defaults)

@@ -11,8 +11,9 @@ static xvalue* McpPrivatePublic(const xvalue* Doc,cstr Raw){
  xvalue* Template=Text?xrtJsonParse(xrtStrView(Text)):NULL;const xvalue* Inputs=xrtValueObjectGet(Template,XRT_STR_LITERAL("inputs"));bool Ok=Out&&Values&&Secrets;
  for(size_t I=0;Ok&&I<xrtValueCount(Inputs);I++){const xvalue* Input=xrtValueArrayGet(Inputs,I);cstr Id=MdoExtensionText(Input,"id",64);if(Id&&MdoMcpTemplateFlag(Input,"secret",false)){
   cstr Ref=MdoExtensionText(Values,Id,4096);Ok=xrtValueObjectSetNew(Secrets,xrtStrView(Id),xrtValueBool(Ref&&Ref[0]));xrtValueObjectRemove(Values,xrtStrView(Id));}}
- /* A deleted or invalid recipe cannot reveal stale credential references. */
- if(!Template){for(size_t I=xrtValueCount(Values);I>0;I--){xstrview Key={0};const xvalue* Child=xrtValueObjectAt(Values,I-1,&Key);xstrview Ref={0};if(xrtValueGetString(Child,&Ref)&&MdoSecretReferenceSyntaxValid(Ref))xrtValueObjectRemove(Values,Key);}}
+ /* A removed/renamed secret input must not expose its stale vault reference,
+  * even when the replacement recipe itself is valid. */
+ for(size_t I=xrtValueCount(Values);I>0;I--){xstrview Key={0};const xvalue* Child=xrtValueObjectAt(Values,I-1,&Key);xstrview Ref={0};if(xrtValueGetString(Child,&Ref)&&MdoSecretReferenceSyntaxValid(Ref))xrtValueObjectRemove(Values,Key);}
  char Revision[65];Ok=Ok&&Raw&&MdoExtensionHash(Raw,Revision)&&McpDirectoryPut(Out,"revision",Revision)&&xrtValueObjectSet(Out,XRT_STR_LITERAL("values"),Values)&&xrtValueObjectSet(Out,XRT_STR_LITERAL("secrets_set"),Secrets);
  if(Ok&&Meta)Ok=xrtValueObjectSet(Out,XRT_STR_LITERAL("extension"),Meta);
  xrtValueRelease(Meta);xrtFree(Entry);xrtFree(Text);xrtValueRelease(Template);xrtValueRelease(Values);xrtValueRelease(Secrets);if(!Ok){xrtValueRelease(Out);return NULL;}return Out;
@@ -77,6 +78,9 @@ bool MdoMcpConnectionManage(const xvalue* Input,xcancel* Cancel,xvalue** Result,
  char PriorIdentity[65],TrustedDigest[65];cstr IdentityBefore=MdoExtensionText(Old,"credential_identity",64);
  bool Renew=MdoMcpTemplateFlag(Old,"managed_default",false)&&IdentityBefore&&McpCredentialIdentity(Template,Variant,xrtValueObjectGet(Old,XRT_STR_LITERAL("values")),PriorIdentity)&&!strcmp(PriorIdentity,IdentityBefore)&&McpDefaultTrusted(Meta,TrustedDigest,Error)&&!strcmp(TrustedDigest,Digest);
  bool Same=Old&&MdoExtensionText(Old,"extension_id",MDO_EXTENSION_REF_BYTES)&&!strcmp(Directory,MdoExtensionText(Old,"extension_id",MDO_EXTENSION_REF_BYTES))&&MdoExtensionText(Old,"variant",64)&&!strcmp(Variant,MdoExtensionText(Old,"variant",64))&&(Renew||(MdoExtensionText(Old,"approval_digest",64)&&!strcmp(Digest,MdoExtensionText(Old,"approval_digest",64))));
+ if(Same){xvalue* Proposed=xrtValueClone(xrtValueObjectGet(Old,XRT_STR_LITERAL("values")));char Before[65],After[65];bool Matches=Proposed!=NULL;
+  for(size_t I=0;Matches&&I<xrtValueCount(Supplied);I++){xstrview K={0};const xvalue* V=xrtValueObjectAt(Supplied,I,&K);Matches=xrtValueObjectSet(Proposed,K,V);}
+  Same=Matches&&McpCredentialIdentity(Template,Variant,xrtValueObjectGet(Old,XRT_STR_LITERAL("values")),Before)&&McpCredentialIdentity(Template,Variant,Proposed,After)&&!strcmp(Before,After);xrtValueRelease(Proposed);}
  Values=xrtValueObject();Ok=Values!=NULL;
  for(size_t I=0;Ok&&I<xrtValueCount(Inputs);I++){
   const xvalue* Definition=xrtValueArrayGet(Inputs,I);cstr Key=MdoExtensionText(Definition,"id",64);bool Secret=MdoMcpTemplateFlag(Definition,"secret",false);cstr Value=MdoExtensionText(Supplied,Key,4096);
@@ -98,7 +102,7 @@ bool MdoMcpConnectionManage(const xvalue* Input,xcancel* Cancel,xvalue** Result,
  if(!Ok)goto done;
  MdoMcpSource Source={0};Source.Id=xrtStrDup(Id);char Why[MDO_MCP_ERROR_LIMIT]={0};char* Config=Source.Id?McpDirectoryResolveDocument(&Source,Doc,Why):NULL;MdoMcpSourceUnit(&Source);Rendered=Config?xrtJsonParse(xrtStrView(Config)):NULL;McpPrivateTextUnit(Config);
  if(!Rendered){Ok=McpPrivateError(Error,Why[0]?Why:"Invalid private connection parameters");goto done;}
- if(Preview){*Result=xrtValueObject();Ok=*Result&&McpDirectoryPut(*Result,"approval_digest",Digest)&&xrtValueObjectSet(*Result,XRT_STR_LITERAL("config"),Rendered)&&xrtValueObjectSetNew(*Result,XRT_STR_LITERAL("target_changed"),xrtValueBool(Old&&!Same));goto done;}
+ if(Preview){*Result=xrtValueObject();Ok=*Result&&McpDirectoryPut(*Result,"approval_digest",Digest)&&xrtValueObjectSet(*Result,XRT_STR_LITERAL("config"),Rendered)&&xrtValueObjectSetNew(*Result,XRT_STR_LITERAL("target_changed"),xrtValueBool(Old&&!Missing&&!Same));goto done;}
  NewRaw=xrtJsonStringify(Doc,false,NULL);Ok=NewRaw&&strlen(NewRaw)<=MDO_MCP_FILE_LIMIT&&(!Cancel||!xrtCancelRequested(Cancel))&&MdoHomeAtomicWrite(Path,NewRaw,strlen(NewRaw),false);
  if(Ok&&!Same)(void)MdoMcpAuthorizationForget(Id);
  if(Ok&&!McpPrivateReload(Error)){bool Restored=!Missing&&OldRaw?MdoHomeAtomicWrite(Path,OldRaw,strlen(OldRaw),false):MdoHomeRemove(Path,false);if(!Restored||!McpPrivateReload(NULL))(void)MdoHomeRequireRestart("Private MCP connection rollback needs recovery");Ok=false;}

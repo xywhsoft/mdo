@@ -16,11 +16,12 @@ int main(int argc,char** argv)
 {
     const char* token=getenv("QA_PRIVATE_TOKEN"),*root=getenv("MDO_EXTENSION_ROOT"),*digest=getenv("MDO_EXTENSION_DIGEST");
     char path[4096];if(!root||snprintf(path,sizeof(path),"%s/support/banner.txt",root)>=(int)sizeof(path))return 4;
-    FILE* support=fopen(path,"rb");if(argc!=2||!digest||!support)return 4;
+    int require_token=argc==3&&!strcmp(argv[2],"require-token");
+    FILE* support=fopen(path,"rb");if((argc!=2&&!require_token)||!digest||!support)return 4;
 #ifndef QA_AUTO
     if(!token||!*token)return 4;
 #else
-    (void)token;
+    if(require_token&&(!token||!*token))return 4;
 #endif
     fclose(support);
     char line[65536],method[256],id[256];int initialized=0;

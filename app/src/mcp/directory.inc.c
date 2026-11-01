@@ -52,22 +52,7 @@ static xvalue* McpDirectoryRender(const xvalue* Template,const xvalue* Value,con
     }return xrtValueClone(Value);
 }
 static bool McpDirectoryPlatform(const xvalue* Variant)
-{
-#if defined(__ANDROID__)
-    cstr Platform="android-arm64-v8a";
-#elif defined(_WIN32) || defined(_WIN64)
-    cstr Platform="windows-x86_64";
-#elif defined(__aarch64__) && defined(__APPLE__)
-    cstr Platform="macos-arm64";
-#elif defined(__aarch64__)
-    cstr Platform="linux-arm64";
-#else
-    cstr Platform="linux-x86_64";
-#endif
-    const xvalue* Platforms=xrtValueObjectGet(Variant,XRT_STR_LITERAL("platforms"));
-    for(size_t I=0;I<xrtValueCount(Platforms);I++){xstrview P={0};if(xrtValueGetString(xrtValueArrayGet(Platforms,I),&P)&&
-        (xrtStrEqual(P,XRT_STR_LITERAL("any"))||xrtStrEqual(P,xrtStrView(Platform))))return true;}return false;
-}
+{return MdoExtensionSupportsPlatform(Variant,MdoExtensionRuntimePlatform());}
 static bool McpDirectoryPut(xvalue* O,cstr Key,cstr Text)
 {return Text&&xrtValueObjectSetNew(O,xrtStrView(Key),xrtValueString(xrtStrView(Text)));}
 /* Credentials follow the declared target/grants and nonsecret parameters,
@@ -76,12 +61,13 @@ static bool McpCredentialIdentity(const xvalue* Template,cstr VariantId,const xv
 {
     const xvalue* Variant=NULL,*Variants=xrtValueObjectGet(Template,XRT_STR_LITERAL("variants"));
     for(size_t I=0;I<xrtValueCount(Variants);I++){const xvalue* V=xrtValueArrayGet(Variants,I);cstr Id=MdoExtensionText(V,"id",64);if(Id&&VariantId&&!strcmp(Id,VariantId))Variant=V;}
-    xvalue* Identity=xrtValueObject(),*Ordinary=xrtValueObject();bool Ok=Variant&&Identity&&Ordinary;
+    const xvalue* Config=xrtValueObjectGet(Variant,XRT_STR_LITERAL("config"));xvalue* Identity=xrtValueObject(),*Ordinary=xrtValueObject(),*Target=xrtValueObject();bool Ok=Variant&&Identity&&Ordinary&&Target;
+    const cstr Keys[]={"transport","oauth","security","tools","protocol_version"};for(size_t I=0;Ok&&I<5;I++){const xvalue* V=xrtValueObjectGet(Config,xrtStrView(Keys[I]));if(V)Ok=xrtValueObjectSet(Target,xrtStrView(Keys[I]),V);}
     const xvalue* Inputs=xrtValueObjectGet(Template,XRT_STR_LITERAL("inputs"));
-    for(size_t I=0;Ok&&I<xrtValueCount(Inputs);I++){const xvalue* Input=xrtValueArrayGet(Inputs,I);cstr Id=MdoExtensionText(Input,"id",64);if(MdoMcpTemplateFlag(Input,"secret",false))continue;
+    for(size_t I=0;Ok&&I<xrtValueCount(Inputs);I++){const xvalue* Input=xrtValueArrayGet(Inputs,I);cstr Id=MdoExtensionText(Input,"id",64);if(MdoMcpTemplateFlag(Input,"secret",false)||!McpInputUsed(Config,Id,0))continue;
         const xvalue* V=xrtValueObjectGet(Values,xrtStrView(Id));if(!V)V=xrtValueObjectGet(Input,XRT_STR_LITERAL("default"));if(V)Ok=xrtValueObjectSet(Ordinary,xrtStrView(Id),V);}
-    Ok=Ok&&xrtValueObjectSet(Identity,XRT_STR_LITERAL("variant"),Variant)&&xrtValueObjectSet(Identity,XRT_STR_LITERAL("values"),Ordinary);
-    char* Text=Ok?xrtJsonStringify(Identity,false,NULL):NULL;Ok=Text&&MdoExtensionHash(Text,Hash);xrtFree(Text);xrtValueRelease(Identity);xrtValueRelease(Ordinary);return Ok;
+    Ok=Ok&&McpDirectoryPut(Identity,"variant",VariantId)&&xrtValueObjectSet(Identity,XRT_STR_LITERAL("target"),Target)&&xrtValueObjectSet(Identity,XRT_STR_LITERAL("values"),Ordinary);
+    char* Text=Ok?xrtJsonStringify(Identity,false,NULL):NULL;Ok=Text&&MdoExtensionHash(Text,Hash);xrtFree(Text);xrtValueRelease(Identity);xrtValueRelease(Ordinary);xrtValueRelease(Target);return Ok;
 }
 static bool McpDirectoryReservedEnvironment(xvalue* Transport)
 {

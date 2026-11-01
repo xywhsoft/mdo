@@ -110,6 +110,7 @@ bool MdoExtensionsManage(const xvalue* Input,const xvalue* Credits,xcancel* Canc
   RuntimeError[0]=0;bool Live=Remove?MdoExtOpReload(Kind,RuntimeError):MdoExtOpRestore(Kind,Id,Wanted,RuntimeError);
   if(!Live){if(!Remove){char Why[512]={0};if(!MdoExtensionsRememberDesired(Kind,Id,Wanted,Why)&&*Result)MdoExtOpPut(*Result,"preference_error",Why);}if(*Result)MdoExtOpPut(*Result,"runtime_error",RuntimeError);}
   if(*Result){xrtValueObjectSetNew(*Result,XRT_STR_LITERAL("desired_enabled"),xrtValueBool(Wanted));xrtValueObjectSetNew(*Result,XRT_STR_LITERAL("enabled"),xrtValueBool(Live&&Wanted));xrtValueObjectSetNew(*Result,XRT_STR_LITERAL("runtime_ready"),xrtValueBool(Live));}
+  if(*Result&&!Remove&&!strcmp(Kind,"mcp")){xvalue* Meta=MdoExtensionsRead(Kind,Id,NULL);xvalue* Activation=MdoMcpExtensionStatus(MdoExtensionText(Meta,"id",MDO_EXTENSION_REF_BYTES));if(Activation)xrtValueObjectSet(*Result,XRT_STR_LITERAL("activation"),Activation);xrtValueRelease(Activation);xrtValueRelease(Meta);}
  }
 done:
  if(Ok&&*Result&&!strcmp(Kind,"plugins")){
@@ -136,7 +137,7 @@ bool MdoExtensionsWarnings(xvalue* Items){
    bool Pending=MdoExtOpBool(Row,"pending_remove",false),Valid=MdoExtOpBool(Row,"valid",false),Builtin=MdoExtensionsBuiltinUpdatePending(Kind,Id,Row);
    if(!strcmp(Kind,"mcp")&&Valid&&MdoExtOpBool(Row,"enabled",false)){
     MdoMcpCatalog* Ready=MdoMcpCatalogSnapshot();xvalue* Status=Ready?MdoMcpExtensionStatus(MdoExtensionText(Row,"id",MDO_EXTENSION_REF_BYTES)):NULL;MdoMcpCatalogRelease(Ready);cstr State=MdoExtensionText(Status,"state",32),Message=MdoExtensionText(Status,"activation_error",1024);
-    if(State&&strcmp(State,"ready")&&strcmp(State,"starting")&&strcmp(State,"disabled")){
+    if(State&&strcmp(State,"ready")&&strcmp(State,"starting")&&strcmp(State,"disabled")&&strcmp(State,"disconnected")){
      bool Good=MdoDiagnosticWarning(Items,"extensions",!strcmp(State,"needs_authorization")?"mcp_authorization_required":!strcmp(State,"needs_configuration")?"mcp_configuration_required":"mcp_activation_failed",MdoExtensionText(Row,"id",MDO_EXTENSION_REF_BYTES),Root?Root:Kind,Message&&*Message?Message:"MCP service needs configuration or authorization","Open the MCP extension to complete its parameters or authorization, or retry the connection","mcp");
      if(!Good){xrtValueRelease(Status);xrtValueRelease(Rows);return false;}
     }xrtValueRelease(Status);

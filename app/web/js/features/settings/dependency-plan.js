@@ -15,7 +15,7 @@ export function dependencyPlanSummary(plan,{compact=false}={}) {
     element("span",{text:dependencyActionLabel(item)}),...(item.version?[element("small",{text:uiMessage("ui.dependencyPlan.versionValue1", { value1: item.version }, "版本 {value1}")})]:[]),
   ]));
   for(const issue of plan.issues||[])root.append(element("p",{className:"extension-error",text:`${issue.chain?.join(" → ")||issue.id||""}：${issue.message||issue.code}`}));
-  if(plan.items?.some(item=>item.kind==="mcp"))root.append(element("p",{className:"extension-help",text:uiMessage("ui.dependencyPlan.afterInstallingAnMcpTemplateSelectAPrivateConnection", {}, "安装 MCP 模板后，请在依赖详情中选择私有连接；需要的账号登录与授权会单独检查。")}));
+  if(plan.items?.some(item=>item.kind==="mcp"))root.append(element("p",{className:"extension-help",text:uiMessage("mcpActivation.installConsent", {}, "安装并启用即允许运行默认 MCP 程序或连接默认服务，并自动发现工具。仅缺少参数或需要账号授权时才需继续配置；高级权限方案不会自动启用。")}));
   return root;
 }
 export function reviewDependencyPlan(plan,options={}) {
