@@ -4,9 +4,10 @@ import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 
-const [browser, profile, url, width, screenshot, testScript] = process.argv.slice(2);
+const [browser, profile, url, width, screenshot, testScript, pointer] = process.argv.slice(2);
 const child = spawn(browser, ["--headless=new", "--disable-gpu", "--no-first-run",
   "--disable-background-networking", "--disable-extensions", "--remote-debugging-port=0",
+  ...(pointer === "desktop" ? ["--blink-settings=primaryHoverType=2,primaryPointerType=4,availableHoverTypes=2,availablePointerTypes=4"] : []),
   `--user-data-dir=${profile}`, `--window-size=${width},900`, "about:blank"],
 { windowsHide: true, stdio: "ignore" });
 let stage="launch",lastMethod="",lastState=null;const diagnostics=[];

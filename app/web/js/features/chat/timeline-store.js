@@ -81,8 +81,18 @@ function updateTurns(data, events, additions = []) {
   const ranges = events.map(historyRemovalRange).filter(Boolean);
   const retained = (data.turns ?? []).filter(turn => ranges.every(({ first, end }) =>
     turn.first_event_id < first || turn.first_event_id >= end));
-  return mergeConversationTurns(mergeConversationTurns(retained, additions),
-    summarizeConversationEvents(events)).filter(turn => ranges.every(({ first, end }) =>
+  const indexed = mergeConversationTurns(retained, additions);
+  const positions = new Map(indexed.map((turn, index) => [turn.first_event_id, index]));
+  const derived = summarizeConversationEvents(events).map(turn => {
+    const position = positions.get(turn.first_event_id);
+    const previous = indexed[position];
+    const following = position === undefined ? null : indexed[position + 1];
+    const end = following ? Math.min(turn.end_event_id, following.first_event_id - 1) : turn.end_event_id;
+    // A partial transcript, or a jump across unloaded turns, must not replace
+    // a complete indexed summary. Later live events can still extend it.
+    return previous?.indexed_through >= end ? previous : turn;
+  });
+  return mergeConversationTurns(indexed, derived).filter(turn => ranges.every(({ first, end }) =>
     turn.first_event_id < first || turn.first_event_id >= end));
 }
 
@@ -140,7 +150,8 @@ function indexProgress(current, before, hasMore) {
   // Text pages and compact index pages can overlap and arrive in either order.
   // A known prefix never shrinks; proof of its beginning cannot be undone.
   return { indexBefore: earlierCursor(current.indexBefore, before),
-    indexHasMore: Boolean(current.indexHasMore && hasMore) };
+    indexHasMore: Boolean(current.indexHasMore && hasMore),
+    indexInitialized: Boolean(current.indexInitialized || !hasMore) };
 }
 
 function schedulePoll(token) {
@@ -224,7 +235,11 @@ function snapshotData(current, page) {
     cursor: page.next_cursor, latestEventId: page.latest_event_id, historyLost: page.history_lost,
     syncing: Boolean(page.delta && page.has_more), syncError: null,
     ...(page.delta ? {} : { firstLoadedTurn: page.next_before, hasOlder: page.has_more,
-      indexHasMore: page.has_more, indexBefore: turns[0]?.first_event_id || page.next_before,
+      // A reply-group snapshot can omit its user prompt entirely. Its text
+      // cursor is not the beginning of the independent navigation index.
+      indexInitialized: !page.has_more && (turns.length > 0 || !page.latest_event_id),
+      indexHasMore: page.has_more || Boolean(page.latest_event_id && !turns.length),
+      indexBefore: turns[0]?.first_event_id || page.next_before,
       loadingHistory: false, historyError: null }) };
 }
 
@@ -324,7 +339,7 @@ function loadInitialTimeline(token) {
         latestEventId: page.latest_event_id, events, turns: page.items,
         firstLoadedTurn: selected[0]?.first_event_id ?? 0,
         hasOlder: Boolean(page.has_more || page.items.length > selected.length),
-        indexHasMore: page.has_more, indexBefore: page.next_before,
+        indexInitialized: true, indexHasMore: page.has_more, indexBefore: page.next_before,
         historyLost: Boolean(page.history_lost) });
       subscribeLiveTimeline();
       if (!liveConnection.isConnected()) await refreshTimeline(token);
@@ -378,7 +393,7 @@ export function loadOlderTimeline() {
         timelineStore.setData({ ...current, events, turns: updateTurns(current, events),
           firstLoadedTurn: earlierCursor(current.firstLoadedTurn, page.next_before),
           hasOlder: page.next_before > current.firstLoadedTurn ? current.hasOlder : page.has_more,
-          ...(page.next_before <= current.indexBefore
+          ...(!page.has_more || page.next_before <= current.indexBefore
             ? indexProgress(current, page.next_before, page.has_more) : {}), loadingHistory: false });
         return;
       }
@@ -414,15 +429,20 @@ export function loadOlderConversationIndex() {
   const signal = selectionAbort?.signal;
   const request = (async () => {
     try {
-      const page = (await readTimeline(`${endpoint(data)}/turns?before=${data.indexBefore}&limit=64`, signal)).data;
+      const initial = data.indexInitialized === false;
+      const before = initial ? 0 : data.indexBefore;
+      const page = (await readTimeline(`${endpoint(data)}/turns?before=${before}&limit=64`, signal)).data;
       if (!historyCurrent(token, data, signal)) return;
       if (data.epoch && page.epoch !== data.epoch) { await reloadSelectedTimeline(); return; }
       const current = timelineStore.get().data;
-      const turns = updateTurns(current, current.events, page.items);
+      const turns = updateTurns(current, current.events, page.items.map(turn => ({ ...turn,
+        indexed_through: page.latest_event_id ?? data.latestEventId })));
       const stale = page.items.length && !page.items.some(item => turns.some(turn =>
         turn.first_event_id === item.first_event_id));
       timelineStore.setData({ ...current, turns,
-        ...(stale ? {} : indexProgress(current, page.next_before, page.has_more)) });
+        ...(stale ? {} : initial && current.indexInitialized === false
+          ? { indexBefore: page.next_before, indexHasMore: page.has_more, indexInitialized: true }
+          : { ...indexProgress(current, page.next_before, page.has_more), indexInitialized: true }) });
     } finally { if (indexRequest === request) indexRequest = null; }
   })();
   indexRequest = request;

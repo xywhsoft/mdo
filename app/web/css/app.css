@@ -670,10 +670,11 @@ select:focus-visible,
 .conversation-process-items .timeline-item { margin-bottom: 8px; }
 .conversation-process-items .timeline-item:last-child { margin-bottom: 0; }
 .conversation-gap { display: block; width: 100%; padding: 8px; border: 1px dashed var(--border); border-radius: 8px; background: transparent; color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; }
-.conversation-history-rail { position: absolute; z-index: 11; left: 10px; display: flex; flex-direction: column; width: 32px; pointer-events: none; }
+.conversation.has-history-navigation .timeline { width: min(760px, calc(100% - 88px)); }
+.conversation-history-rail { --history-mark-height: 10px; position: absolute; z-index: 11; left: 10px; display: flex; flex-direction: column; width: 32px; pointer-events: none; }
 .conversation-history-marks { display: flex; flex: 1; flex-direction: column; min-height: 0; align-items: flex-start; overflow-y: auto; scrollbar-width: none; pointer-events: auto; }
 .conversation-history-marks::-webkit-scrollbar { display: none; }
-.conversation-history-mark { display: grid; flex: 0 0 10px; height: 10px; width: 32px; place-items: center start; padding: 0; border: 0; background: transparent; cursor: pointer; }
+.conversation-history-mark { display: grid; flex: 0 0 var(--history-mark-height); height: var(--history-mark-height); width: 32px; place-items: center start; padding: 0; border: 0; background: transparent; cursor: pointer; }
 .conversation-history-mark > span { width: 10px; height: 2px; border-radius: 1px; background: var(--faint); transition: width .16s ease, background .16s ease; }
 .conversation-history-mark[aria-current="true"] > span { background: var(--muted); }
 .conversation-history-mark[data-proximity="3"] > span { width: 12px; }
@@ -681,14 +682,12 @@ select:focus-visible,
 .conversation-history-mark[data-proximity="1"] > span { width: 22px; background: var(--muted); }
 .conversation-history-mark[data-proximity="0"] > span { width: 28px; background: var(--ink); }
 .conversation-history-mark:focus-visible { outline: 1px solid var(--muted); outline-offset: 2px; }
-.conversation-history-older { flex-shrink: 0; width: 32px; height: 26px; padding: 0; border: 0; background: transparent; color: var(--muted); cursor: pointer; pointer-events: auto; }
-.conversation-history-older[hidden] { display: none; }
 .conversation-history-preview { position: absolute; left: 40px; width: min(320px, calc(100vw - 80px)); padding: 12px 14px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface-raised); box-shadow: 0 8px 28px rgb(0 0 0 / 18%); color: var(--ink); pointer-events: auto; }
 .conversation-history-preview[hidden] { display: none; }
 .conversation-history-preview strong, .conversation-history-preview p { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; overflow-wrap: anywhere; line-height: 1.6; font-size: 12px; }
 .conversation-history-preview strong { -webkit-line-clamp: 2; }
 .conversation-history-preview p { -webkit-line-clamp: 4; margin: 6px 0 0; color: var(--muted); }
-@media (max-width: 879px), (hover: none), (pointer: coarse) {
+@media (max-width: 760px), (hover: none), (pointer: coarse) {
   .conversation-history-rail { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {

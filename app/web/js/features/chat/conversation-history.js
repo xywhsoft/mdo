@@ -14,10 +14,18 @@ export function summarizeConversationEvents(events) {
   let current = null;
   let modelTurn = null;
   for (const event of events) {
-    if (event.kind === "agent_start" && !(event.agent_depth > 0) &&
-        (event.user_message_sequence > 0 || !(event.schema_version >= 3))) {
-      current = { first_event_id: event.event_id, end_event_id: event.event_id,
-        question: (event.text ?? "").slice(0, 200), answer: "", time: event.time, state: "running" };
+    const anchor = event.action_prompt;
+    const prompt = event.kind === "agent_start" && !(event.agent_depth > 0) &&
+      (event.user_message_sequence > 0 || !(event.schema_version >= 3)) ? event
+      : event.kind === "model_text_delta" && event.agent_depth === 0 &&
+        anchor?.kind === "agent_start" && anchor.agent_depth === 0 && anchor.user_message_sequence > 0 &&
+        Number.isSafeInteger(anchor.event_id) && anchor.event_id > 0 && anchor.event_id < event.event_id ? anchor : null;
+    // A complete reply page carries its validated input anchor even when the
+    // corresponding input is outside the loaded transcript. Show its mark
+    // immediately while older compact summaries load independently.
+    if (prompt && current?.first_event_id !== prompt.event_id) {
+      current = { first_event_id: prompt.event_id, end_event_id: prompt.event_id,
+        question: (prompt.text ?? "").slice(0, 200), answer: "", time: prompt.time, state: "running" };
       turns.push(current);
       modelTurn = null;
     }

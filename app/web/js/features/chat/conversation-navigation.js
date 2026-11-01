@@ -9,12 +9,11 @@ export function createConversationNavigation({ scroller, container, onReveal, on
   const rail = element("nav", { className: "conversation-history-rail", attrs: {
     "aria-label": uiMessage("timeline.historyNavigation", {}, "对话历史导航") } });
   const marks = element("div", { className: "conversation-history-marks" });
-  const older = element("button", { className: "conversation-history-older", text: "⋯", attrs: {
-    type: "button", "aria-label": uiMessage("timeline.olderSummaries", {}, "更早的对话摘要") } });
   const preview = element("div", { className: "conversation-history-preview", attrs: { role: "tooltip" } });
   preview.id = `history-preview-${Math.random().toString(36).slice(2)}`;
   preview.hidden = true;
-  rail.append(older, marks, preview);
+  rail.hidden = true;
+  rail.append(marks, preview);
   workspace.append(rail);
   let data = null;
   let signature = "";
@@ -23,9 +22,25 @@ export function createConversationNavigation({ scroller, container, onReveal, on
   let selected = 0;
   let previewFor = 0;
   let emphasized = [];
+  let owner = "";
+  let ownerVersion = 0;
+  let disposed = false;
+  let indexPending = false;
+  let blockedIndex = "";
+  let capacity = 0;
+  let eligible = false;
   const touchScreen = window.matchMedia("(hover: none), (pointer: coarse)");
   const rows = new Map();
   const summaries = new Map();
+
+  function visibleBounds() {
+    const box = scroller.getBoundingClientRect();
+    const overlap = Math.max(0, parseFloat(getComputedStyle(scroller)
+      .getPropertyValue("--conversation-dock-overlap")) || 0);
+    return { top: box.top, left: box.left, width: box.width,
+      bottom: Math.max(box.top, box.bottom - overlap),
+      height: Math.max(0, box.height - overlap) };
+  }
 
   // Only the hovered/focused mark and its three neighbours on each side grow.
   // Scroll position changes brightness, never the resting width of a mark.
@@ -54,7 +69,7 @@ export function createConversationNavigation({ scroller, container, onReveal, on
     emphasize(null);
   }
   function positionPreview(button) {
-    const bounds = scroller.getBoundingClientRect();
+    const bounds = visibleBounds();
     const origin = rail.getBoundingClientRect().top;
     const mark = button.getBoundingClientRect();
     // Clamp to the conversation, rather than the shorter, centred rail. A
@@ -75,30 +90,65 @@ export function createConversationNavigation({ scroller, container, onReveal, on
     preview.hidden = false;
     positionPreview(button);
     button.setAttribute("aria-describedby", preview.id);
+    schedule();
   }
   function delayHide() { hideTimer = window.setTimeout(hide, 160); }
 
   async function jump(button, turn) {
     if (button.disabled || !turn) return;
+    const version = ownerVersion;
     selected = turn.first_event_id;
     button.disabled = true;
     rail.setAttribute("aria-busy", "true");
     try { await onReveal(turn.first_event_id); }
-    catch (error) { if (error?.name !== "AbortError") toast(errorMessage(error), "error"); }
-    finally { button.disabled = false; rail.removeAttribute("aria-busy"); syncActive(); }
+    catch (error) { if (version === ownerVersion && !disposed && error?.name !== "AbortError") toast(errorMessage(error), "error"); }
+    finally { if (version === ownerVersion && !disposed) { button.disabled = false; rail.removeAttribute("aria-busy"); schedule(); } }
   }
   function layout() {
-    const box = scroller.getBoundingClientRect();
+    const box = visibleBounds();
     const parent = workspace.getBoundingClientRect();
-    // Leave enough room beside the 760px transcript, including its margins.
-    // Observe the column itself: an open sidebar can narrow a desktop window.
-    rail.hidden = !data?.sessionId || !data.turns?.length || box.width < 880
-      || box.height <= 48 || touchScreen.matches;
+    const step = parseFloat(getComputedStyle(rail).getPropertyValue("--history-mark-height")) || 10;
+    // Capacity follows the visible conversation, including floating task and
+    // approval docks. Short histories fit in full; longer indexes scroll.
+    capacity = Math.max(0, Math.floor((box.height - 24) / step));
+    eligible = Boolean(data?.sessionId && box.width >= 240 && window.innerWidth > 760
+      && capacity > 0 && !touchScreen.matches && !document.hidden);
+    rail.hidden = !eligible || !data.turns?.length;
+    const shown = !rail.hidden;
+    if (scroller.classList.contains("has-history-navigation") !== shown)
+      scroller.classList.toggle("has-history-navigation", shown);
     if (rail.hidden) { hide(); return; }
-    const height = Math.min(marks.children.length * 10 + (older.hidden ? 0 : 26), box.height - 48);
+    const height = Math.min(marks.children.length, capacity) * step;
     rail.style.top = `${box.top - parent.top + (box.height - height) / 2}px`;
     rail.style.height = `${height}px`;
     if (previewFor && rows.has(previewFor)) positionPreview(rows.get(previewFor));
+  }
+  function indexCursor() {
+    return JSON.stringify([ownerVersion, data?.indexInitialized, data?.indexBefore,
+      data?.turns?.length]);
+  }
+  function fillIndex(earlier = false) {
+    if (disposed || !eligible || data?.initializing || !data?.indexHasMore || !onLoadIndex || indexPending
+      || (!earlier && data.indexInitialized !== false && data.turns.length >= capacity)) return;
+    const cursor = indexCursor();
+    if (blockedIndex === cursor) return;
+    const version = ownerVersion;
+    indexPending = true;
+    // This never waits for transcript nodes or downloads intervening text.
+    // One compact page at a time also bounds work after a viewport resize.
+    void Promise.resolve().then(() => {
+      if (!disposed && version === ownerVersion) return onLoadIndex();
+    }).catch(error => {
+      if (version !== ownerVersion || disposed) return;
+      if (error?.name === "AbortError") return;
+      blockedIndex = cursor;
+      toast(errorMessage(error), "error");
+    }).finally(() => {
+      if (version !== ownerVersion || disposed) return;
+      indexPending = false;
+      if (cursor === indexCursor()) blockedIndex = cursor;
+      schedule();
+    });
   }
   function syncActive() {
     frame = 0;
@@ -110,11 +160,17 @@ export function createConversationNavigation({ scroller, container, onReveal, on
     if (current) selected = Number(current.dataset.turnId);
     for (const button of marks.children)
       button.setAttribute("aria-current", String(Number(button.dataset.turnId) === selected));
+    fillIndex();
   }
-  function schedule() { if (!frame) frame = requestAnimationFrame(syncActive); }
+  function schedule() { if (!disposed && !frame) frame = requestAnimationFrame(syncActive); }
   function update(next) {
     data = next;
-    older.hidden = !data?.indexHasMore;
+    const identity = JSON.stringify([data?.projectId, data?.sessionId, data?.epoch]);
+    if (owner !== identity) {
+      owner = identity; ++ownerVersion; indexPending = false; blockedIndex = "";
+      signature = ""; selected = 0; hide(); rail.removeAttribute("aria-busy");
+      marks.replaceChildren(); rows.clear(); summaries.clear();
+    }
     const key = JSON.stringify([data?.projectId, data?.sessionId, data?.turns]);
     if (key !== signature) {
       const focused = marks.contains(document.activeElement) ? document.activeElement.dataset.turnId : "";
@@ -144,6 +200,7 @@ export function createConversationNavigation({ scroller, container, onReveal, on
       }
       while (cursor) { const next = cursor.nextSibling; cursor.remove(); cursor = next; }
       for (const id of rows.keys()) if (!retained.has(id)) { rows.delete(id); summaries.delete(id); }
+      if (!selected && data?.turns?.length) selected = data.turns.at(-1).first_event_id;
       layout();
       marks.scrollTop = signature ? scroll + Math.max(0, marks.scrollHeight - oldHeight) : marks.scrollHeight;
       if (focused) marks.querySelector(`[data-turn-id="${focused}"]`)?.focus({ preventScroll: true });
@@ -153,33 +210,36 @@ export function createConversationNavigation({ scroller, container, onReveal, on
     }
     schedule();
   }
-  older.addEventListener("click", async () => {
-    older.disabled = true;
-    try {
-      await onLoadIndex?.();
-      await new Promise(resolve => requestAnimationFrame(resolve));
-      marks.scrollTop = 0;
-    }
-    catch (error) { if (error?.name !== "AbortError") toast(errorMessage(error), "error"); }
-    finally { older.disabled = false; }
-  });
   preview.addEventListener("pointerenter", () => window.clearTimeout(hideTimer));
   preview.addEventListener("pointerleave", delayHide);
-  marks.addEventListener("scroll", hide, { passive: true });
+  marks.addEventListener("scroll", () => {
+    hide();
+    if (marks.scrollTop <= 20) fillIndex(true);
+  }, { passive: true });
+  marks.addEventListener("wheel", event => {
+    if (event.deltaY < 0 && marks.scrollTop <= 20) { blockedIndex = ""; fillIndex(true); }
+  }, { passive: true });
   rail.addEventListener("keydown", event => { if (event.key === "Escape") hide(); });
   scroller.addEventListener("scroll", schedule, { passive: true });
   window.addEventListener("resize", schedule);
+  function resume() { if (!document.hidden) { blockedIndex = ""; schedule(); } }
+  window.addEventListener("pageshow", resume);
+  document.addEventListener("visibilitychange", resume);
   touchScreen.addEventListener("change", schedule);
   const observer = typeof ResizeObserver === "function" ? new ResizeObserver(schedule) : null;
   observer?.observe(scroller);
+  const overlapObserver = typeof MutationObserver === "function" ? new MutationObserver(schedule) : null;
+  overlapObserver?.observe(scroller, { attributes: true, attributeFilter: ["style"] });
   const locale = subscribeLocale(() => {
     writeUiAttribute(rail, "aria-label", t("timeline.historyNavigation", {}, "对话历史导航"));
-    writeUiAttribute(older, "aria-label", t("timeline.olderSummaries", {}, "更早的对话摘要"));
     signature = ""; update(data);
   });
   return Object.freeze({ update, destroy() {
-    locale(); observer?.disconnect(); rail.remove(); window.clearTimeout(hideTimer);
+    disposed = true; ++ownerVersion;
+    locale(); observer?.disconnect(); overlapObserver?.disconnect(); rail.remove(); window.clearTimeout(hideTimer);
+    scroller.classList.remove("has-history-navigation");
     scroller.removeEventListener("scroll", schedule); window.removeEventListener("resize", schedule);
+    window.removeEventListener("pageshow", resume); document.removeEventListener("visibilitychange", resume);
     touchScreen.removeEventListener("change", schedule);
     if (frame) cancelAnimationFrame(frame);
   } });

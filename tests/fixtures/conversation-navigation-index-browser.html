@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<meta charset="utf-8">
+<title>Conversation navigation index regression</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<style>
+  #workspace { position: relative; width: 1000px; margin: 50px; }
+  #scroller { width: 100%; height: 330px; overflow: auto; }
+  #timeline { padding-block: 24px; }
+  #result { white-space: pre-wrap; }
+</style>
+<output id="result">Pending</output>
+<div id="workspace"><section id="scroller" class="conversation"><ol id="timeline" class="timeline"><li>Only a reply fragment is loaded. No previous user message is in the DOM.</li></ol></section></div>
+<div id="toast-region"></div>
+<script type="module">
+import { createConversationNavigation } from "/app/web/js/features/chat/conversation-navigation.js";
+const scroller = document.querySelector("#scroller"), container = document.querySelector("#timeline");
+const result = document.querySelector("#result"), checks = [];
+const pause = (ms = 30) => new Promise(resolve => requestAnimationFrame(() =>
+  requestAnimationFrame(() => setTimeout(resolve, ms))));
+function check(ok, message) { if (!ok) throw Error(message); checks.push(message); }
+async function until(predicate) {
+  for (let i = 0; i < 100; ++i) { if (predicate()) return; await pause(); }
+  throw Error("Browser did not settle");
+}
+const turns = count => Array.from({ length: count }, (_, i) => ({ first_event_id: i * 10 + 1,
+  end_event_id: i * 10 + 10, question: `Question ${i + 1}`, answer: `Answer ${i + 1}` }));
+const state = (sessionId, items = [], more = false) => ({ projectId: "qa", sessionId,
+  epoch: "stable", turns: items, indexHasMore: more, indexInitialized: !more, indexBefore: 0 });
+let nav, data;
+const rail = () => document.querySelector(".conversation-history-rail");
+const marks = () => document.querySelector(".conversation-history-marks");
+const buttons = () => [...marks().children];
+const publish = next => { data = next; nav.update(data); };
+function reset(options = {}) {
+  nav?.destroy(); scroller.style.width = "100%"; scroller.style.height = "330px";
+  scroller.style.removeProperty("--conversation-dock-overlap");
+  container.replaceChildren(Object.assign(document.createElement("li"), { textContent: "Reply fragment only" }));
+  nav = createConversationNavigation({ scroller, container, onReveal: async () => {}, ...options });
+}
+try {
+  check(!matchMedia("(hover: none), (pointer: coarse)").matches, "desktop pointer capabilities available");
+  let reads = 0, revealed = 0;
+  reset({ onLoadIndex: async () => { ++reads; publish({ ...data, turns: turns(3), indexHasMore: false, indexInitialized: true }); },
+    onReveal: async id => { revealed = id; } });
+  publish(state("cold-fragment", [], true));
+  await until(() => buttons().length === 3 && !rail().hidden);
+  check(reads === 1 && !container.querySelector("[data-turn-id]"), "cold reply-only content automatically loads a separate index");
+  check(!rail().querySelector(".conversation-history-older") && !rail().textContent.includes("⋯"), "all short-history marks replace the manual ellipsis");
+  check(marks().scrollHeight === marks().clientHeight && Math.abs(rail().getBoundingClientRect().height - 30) < 1,
+    "three turns fit in full regardless of which text is loaded");
+  buttons()[0].click(); await until(() => revealed === 1);
+  check(revealed === 1, "an unloaded mark reveals exactly its own event identity");
+  buttons()[1].dispatchEvent(new Event("pointerenter"));
+  check(!rail().querySelector("[role=tooltip]").hidden && rail().querySelector("strong").textContent === "Question 2", "compact summaries provide hover previews");
+  scroller.style.width = "600px"; await until(() => scroller.getBoundingClientRect().width === 600);
+  check(!rail().hidden && getComputedStyle(rail()).display !== "none", "an open sidebar or a narrow desktop conversation does not hide the index");
+  check(rail().getBoundingClientRect().right <= container.getBoundingClientRect().left, "narrow conversations reserve room for navigation without covering text");
+
+  publish(state("fit-and-resize", turns(45)));
+  await until(() => rail().getBoundingClientRect().height === 300);
+  check(buttons().length === 45 && rail().getBoundingClientRect().height === 300 && marks().scrollHeight > marks().clientHeight,
+    "overflow is limited by real conversation height");
+  scroller.style.height = "600px"; await until(() => rail().getBoundingClientRect().height === 450);
+  check(rail().getBoundingClientRect().height === 450 && marks().scrollHeight === marks().clientHeight,
+    "a taller conversation immediately displays every mark that fits");
+  scroller.style.setProperty("--conversation-dock-overlap", "260px"); await until(() => rail().getBoundingClientRect().height === 310);
+  check(rail().getBoundingClientRect().height === 310 && rail().getBoundingClientRect().bottom <= scroller.getBoundingClientRect().bottom - 260,
+    "floating task and approval docks reduce the visible navigation capacity");
+  marks().scrollTop = marks().scrollHeight;
+  await until(() => marks().scrollTop === marks().scrollHeight - marks().clientHeight); await pause();
+  buttons().at(-1).dispatchEvent(new Event("pointerenter"));
+  await until(() => !rail().querySelector("[role=tooltip]").hidden &&
+    rail().querySelector("[role=tooltip]").getBoundingClientRect().top >= scroller.getBoundingClientRect().top &&
+    rail().querySelector("[role=tooltip]").getBoundingClientRect().bottom <= scroller.getBoundingClientRect().bottom - 260);
+  const preview = rail().querySelector("[role=tooltip]").getBoundingClientRect();
+  check(preview.top >= scroller.getBoundingClientRect().top && preview.bottom <= scroller.getBoundingClientRect().bottom - 260,
+    "hover previews remain above floating docks");
+
+  const all = turns(176); reads = 0; let loaded = 0;
+  reset({ onLoadIndex: async () => {
+    ++reads; loaded = Math.min(176, loaded + 64);
+    const items = all.slice(-loaded);
+    publish({ ...data, turns: items, indexInitialized: true, indexHasMore: loaded < 176, indexBefore: items[0].first_event_id });
+  } });
+  scroller.style.height = "850px";
+  publish(state("many-turns", [], true));
+  await until(() => reads === 2 && buttons().length === 128 && rail().getBoundingClientRect().height === 820); await pause();
+  check(reads === 2 && rail().getBoundingClientRect().height === 820, "compact index pages automatically fill a tall viewport with bounded prefetch");
+  scroller.dispatchEvent(new Event("scroll")); await pause();
+  check(reads === 2 && container.children.length === 1, "ordinary transcript scrolling neither downloads all history nor refetches a full index");
+  marks().scrollTop = 0; marks().dispatchEvent(new Event("scroll"));
+  await until(() => reads === 3 && buttons().length === 176);
+  check(reads === 3 && container.children.length === 1, "scrolling the minimap reaches earlier summaries independently of transcript pages");
+
+  let rejectOld; reads = 0;
+  reset({ onLoadIndex: () => { reads++; return new Promise((_, reject) => { rejectOld = reject; }); } });
+  publish(state("old-session", [], true)); await until(() => reads === 1);
+  const toastCount = () => document.querySelectorAll("#toast-region .toast").length;
+  const oldToasts = toastCount();
+  publish(state("new-session", [{ ...turns(1)[0], question: "New owner" }]));
+  rejectOld(Error("Late old-session failure")); await pause();
+  buttons()[0].dispatchEvent(new Event("pointerenter"));
+  check(toastCount() === oldToasts && rail().querySelector("strong").textContent === "New owner", "late index failures cannot affect a newly selected session or reuse old previews");
+
+  reads = 0; reset({ onLoadIndex: async () => { reads++; } });
+  publish(state("no-progress", [], true)); await until(() => reads === 1);
+  for (let i = 0; i < 5; ++i) window.dispatchEvent(new Event("resize"));
+  await pause(); check(reads === 1, "a non-advancing index response cannot start an automatic request loop");
+
+  reads = 0; reset({ onLoadIndex: async () => { reads++; throw Error("Index fixture denied"); } });
+  publish(state("denied-index", [], true)); await until(() => reads === 1); await pause();
+  window.dispatchEvent(new Event("resize")); await pause();
+  check(reads === 1 && toastCount() === oldToasts + 1, "an index read failure is reported once and leaves the transcript intact");
+
+  reads = 0; reset({ onLoadIndex: async () => {
+    if (++reads === 1) throw new DOMException("Page backgrounded", "AbortError");
+    publish(state("resumed", turns(2)));
+  } });
+  publish(state("resumed", [], true)); await until(() => reads >= 1);
+  window.dispatchEvent(new Event("pageshow")); await until(() => buttons().length === 2);
+  check(reads === 2 && toastCount() === oldToasts + 1, "returning to a page restores a cancelled index read without a warning");
+
+  publish(state("")); await pause();
+  check(rail().hidden && !scroller.classList.contains("has-history-navigation"), "leaving a conversation releases navigation space");
+  publish(state("restored", turns(3))); await pause();
+  check(!rail().hidden && buttons().length === 3, "returning to a loaded conversation restores navigation without visible user rows");
+  nav.destroy(); check(!rail(), "destroy removes the rail and its observers");
+  result.textContent = JSON.stringify({ passed: true, checks });
+} catch (error) {
+  const metrics = { rows: marks()?.children.length, rail: rail()?.getBoundingClientRect().toJSON(), hidden: rail()?.hidden,
+    style: rail()?.getAttribute("style"), step: rail() && getComputedStyle(rail()).getPropertyValue("--history-mark-height"),
+    computedHeight: rail() && getComputedStyle(rail()).height, scrollerStyle: scroller.getAttribute("style"), rails: document.querySelectorAll(".conversation-history-rail").length,
+    animation: rail() && [getComputedStyle(rail()).transition, getComputedStyle(rail()).animation, getComputedStyle(rail()).maxHeight, getComputedStyle(rail()).transform],
+    preview: rail()?.querySelector("[role=tooltip]")?.getBoundingClientRect().toJSON(), previewHidden: rail()?.querySelector("[role=tooltip]")?.hidden,
+    scroll: marks()?.scrollHeight, viewport: marks()?.clientHeight, conversation: scroller.getBoundingClientRect().toJSON() };
+  nav?.destroy(); result.textContent = JSON.stringify({ passed: false, checks, metrics, error: error.stack });
+}
+</script>
+</html>
