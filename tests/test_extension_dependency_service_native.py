@@ -41,7 +41,7 @@ def main():
  symbols=('initialize','bind_int','bind_text','prepare_v2','finalize','step','exec','column_count','column_name','column_type','column_int64','column_text','column_bytes','bind_int64','open','busy_timeout','close','changes');setup='QaSqlite=LoadLibraryW(L"C:/Program Files/Python312/DLLs/sqlite3.dll");'+''.join(f'tcc_add_symbol(T,"sqlite3_{n}",GetProcAddress(QaSqlite,"sqlite3_{n}"));' for n in symbols)
  helpers=STORE.split('xvalue* QaProductContract(')[0]+DEPENDENCIES.split('xvalue* QaProductContract(')[0];passed=False
  try:
-  result=product(a,fixture,platform_store_source(PLATFORM)+helpers+TRANSPORT+client+CONTRACT,out/'result.json',compiler_setup=setup,compiler_prelude='#include <windows.h>\nstatic HMODULE QaSqlite;',compiler_cleanup='if(QaSqlite)FreeLibrary(QaSqlite);');assert len(result)>=7 and all(value is True for key,value in result.items() if not key.endswith('error')),result;passed=True;print('PASS',len(result)-1,'native store-group service contracts')
+  result=product(a,fixture,platform_store_source(PLATFORM)+helpers+TRANSPORT+client+CONTRACT,out/'result.json',compiler_setup=setup,compiler_prelude='#include <windows.h>\nstatic HMODULE QaSqlite;',compiler_cleanup='if(QaSqlite)FreeLibrary(QaSqlite);');assert len(result)>=7 and all(value is True for key,value in result.items() if not key.endswith('error')),result;passed=True;print('PASS',sum(type(value) is bool for value in result.values()),'native store-group service contracts')
  finally:
   if passed and fixture.resolve().parent==out.resolve():shutil.rmtree(fixture)
 if __name__=='__main__':main()

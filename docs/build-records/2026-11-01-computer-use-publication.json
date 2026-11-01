@@ -1,0 +1,157 @@
+{
+  "published_at_unix": 1793540245,
+  "catalog_revision": 34,
+  "host_version": "0.8.3",
+  "host_version_code": "05000803",
+  "host_source_commit": "617749d51c518674c2af3e26306dad428564d0e0",
+  "host_sdk_overlay_sha256": "7b26bfea71d2f66e8153566c17c79266457b4979528423997e4225649474f27d",
+  "windows": [
+    {
+      "id": "desktop",
+      "platform": "windows-x86_64",
+      "edition": "desktop",
+      "build_id": 70000134,
+      "sha256": "b191d420b51f41ba70617b1918a43a3a3e65d6741607b2a915bff8f354d09904",
+      "size": 6621311,
+      "required": true
+    },
+    {
+      "id": "windows-server",
+      "platform": "windows-x86_64",
+      "edition": "server",
+      "build_id": 70000135,
+      "sha256": "6d36eaf9ab2548d0a12a2bbe01a28c77414725f6a18e03955abe07af961d557d",
+      "size": 6363582,
+      "required": true
+    }
+  ],
+  "mcp": {
+    "work": "b75e742c47914f3da5f200e38270f51a",
+    "sha256": "83f65718786d729424791978108fe0bf2a7fc2a6e466ba4746da24d73c2a7350",
+    "size": 34404222,
+    "version_id": "3077413c2fe44f7281bf311f31d9fed7",
+    "id": "mcp:mdo.computer-use"
+  },
+  "mcp_package_version": "0.3.0",
+  "cua_version": "0.38.0",
+  "cua_source_commit": "85e2b1318bd77ccf3cfa88ccdf875a4bb7eaed19",
+  "native_regressions": {
+    "responses": true,
+    "catalog": true,
+    "result-cap": true,
+    "image-cap": true,
+    "discovery": true
+  },
+  "directory_acceptance": {
+    "raw_zip_install_and_official_hashes": true,
+    "stable_identity_and_native_validation": true,
+    "private_connection_approved": true,
+    "official_tools_discovered": 63,
+    "identical_update_while_connected": true,
+    "grant_requires_explicit_variant": true,
+    "relocation_resolves_relative_program_and_discovers_tools": true,
+    "project_connection_scope": true,
+    "uninstall_deletes_complete_directory": true
+  },
+  "models": {
+    "desktop_ornith": {
+      "model": "ornith-1.5-35b",
+      "passed": true,
+      "checks": {
+        "run_succeeded": true,
+        "button_once": true,
+        "visual_code": true,
+        "screenshot_retained": true,
+        "text": true,
+        "checkbox": true,
+        "selection": true
+      },
+      "elapsed_seconds": 156.27,
+      "model_calls": 11,
+      "tool_calls": 17
+    },
+    "browser_glm_flash": {
+      "model": "mdo-online.glm-5.3-flash",
+      "passed": true,
+      "checks": {
+        "run_succeeded": true,
+        "text": true,
+        "button_once": true,
+        "checkbox": true,
+        "selection": true,
+        "scroll": true,
+        "screenshot_retained": true
+      },
+      "elapsed_seconds": 495.38,
+      "model_calls": 33,
+      "tool_calls": 42
+    },
+    "browser_ornith": {
+      "model": "ornith-1.5-35b",
+      "passed": false,
+      "checks": {
+        "run_succeeded": false,
+        "text": true,
+        "button_once": true,
+        "checkbox": false,
+        "selection": false,
+        "scroll": false,
+        "screenshot_retained": true
+      },
+      "elapsed_seconds": 901.47,
+      "model_calls": 63,
+      "tool_calls": 62
+    }
+  },
+  "store_acceptance": {
+    "work": "b75e742c47914f3da5f200e38270f51a",
+    "version_id": "3077413c2fe44f7281bf311f31d9fed7",
+    "sha256": "83f65718786d729424791978108fe0bf2a7fc2a6e466ba4746da24d73c2a7350",
+    "public_catalogue_and_creator_attribution": true,
+    "native_store_download_hash_install_to_work_xid": true,
+    "private_connection_and_63_official_tools": true,
+    "native_store_uninstall_deletes_entire_directory": true,
+    "existing_account_preserved": true
+  },
+  "server_bootstrap": {
+    "ready": true,
+    "account_preserved": true,
+    "version": "0.8.3",
+    "edition": "server",
+    "verified_build_id": 70000135,
+    "native_reported_local_sha256": "6d36eaf9ab2548d0a12a2bbe01a28c77414725f6a18e03955abe07af961d557d"
+  },
+  "public_acceptance": {
+    "desktop_https_update_full_hash": true,
+    "desktop_website_https_head": true,
+    "windows-server_https_update_full_hash": true,
+    "windows-server_website_https_head": true,
+    "website_versions_per_artifact": true
+  },
+  "server_readback": {
+    "desktop_object_sha256": true,
+    "desktop_website_sha256": true,
+    "windows-server_object_sha256": true,
+    "windows-server_website_sha256": true,
+    "other_six_channels_and_notices_unchanged": true,
+    "mcp_publication_and_database_integrity": true,
+    "service_active": true,
+    "catalog_revision": 34
+  },
+  "regressions": {
+    "strict_c11": true,
+    "python_cases": 199,
+    "python_skipped": 6,
+    "javascript_cases": 1285,
+    "javascript_skipped": 2,
+    "native_service_contracts": 35,
+    "native_group_service_contracts": 9,
+    "slow_progressing_1mib_ms": 32884
+  },
+  "initial_windows_builds_superseded": [
+    70000126,
+    70000127
+  ],
+  "other_platforms": "Linux and Android remain at the existing 0.8.1 publications",
+  "home_data_included": false
+}
