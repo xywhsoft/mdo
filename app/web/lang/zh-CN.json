@@ -2340,6 +2340,7 @@
   "ui.externalDirectoryTools.commonToolsHelpTheAgentSearchDownloadConnectTo": "安装常用工具可帮助 Agent 搜索、下载、连接远程设备和处理文件；之后可自由停用、替换或卸载。",
   "ui.externalDirectoryTools.installing": "正在安装…",
   "ui.externalDirectoryTools.installRecommendedTools": "安装推荐工具",
+  "ui.externalDirectoryTools.installRecommendedToolsOneClick": "一键安装推荐工具",
   "ui.externalDirectoryTools.donTShowAgain": "不再提示",
   "ui.externalDirectoryTools.localTools": "本机工具",
   "ui.externalDirectoryTools.toolStore": "工具商店",

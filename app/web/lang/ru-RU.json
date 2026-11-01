@@ -2340,6 +2340,7 @@
   "ui.externalDirectoryTools.commonToolsHelpTheAgentSearchDownloadConnectTo": "Общие инструменты помогают агенту искать, скачивать, подключаться к устройствам и обрабатывать файлы. Позже их можно отключить, заменить или удалить.",
   "ui.externalDirectoryTools.installing": "Установка…",
   "ui.externalDirectoryTools.installRecommendedTools": "Установить рекомендуемые инструменты",
+  "ui.externalDirectoryTools.installRecommendedToolsOneClick": "Установить рекомендуемые инструменты",
   "ui.externalDirectoryTools.donTShowAgain": "Больше не показывать",
   "ui.externalDirectoryTools.localTools": "Локальные инструменты",
   "ui.externalDirectoryTools.toolStore": "Магазин инструментов",

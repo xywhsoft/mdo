@@ -9,3 +9,5 @@
 .cli-authoring .cli-field:first-child { margin-top:0; }
 .cli-authoring .cli-field :is(input, textarea) { font:inherit; }
 .cli-authoring .cli-field input[type="checkbox"] { width:auto; align-self:flex-start; }
+
+.cli-tabbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:8px}.cli-tabbar>.store-tabs{margin-bottom:0}.cli-tabbar>.cli-recommend{margin-inline-start:auto;white-space:nowrap}

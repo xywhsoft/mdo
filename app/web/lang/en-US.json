@@ -2340,6 +2340,7 @@
   "ui.externalDirectoryTools.commonToolsHelpTheAgentSearchDownloadConnectTo": "Common tools help the Agent search, download, connect to devices and process files. You can disable, replace or uninstall them later.",
   "ui.externalDirectoryTools.installing": "Installing…",
   "ui.externalDirectoryTools.installRecommendedTools": "Install recommended tools",
+  "ui.externalDirectoryTools.installRecommendedToolsOneClick": "Install recommended tools",
   "ui.externalDirectoryTools.donTShowAgain": "Don't show again",
   "ui.externalDirectoryTools.localTools": "Local tools",
   "ui.externalDirectoryTools.toolStore": "Tool store",
