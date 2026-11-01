@@ -36,7 +36,7 @@ export function createSingleResourceStore(kind, onChange, onBrowse=()=>{}, onMan
     const job=installation(row),same=owned(row)?.installation?.version_id===row.version_id,active=job&&downloadActive(job),pending=promptVersion===row.version_id;
     const state=active||pending?"installing":job?.state==="failed"?"failed":job?.state==="unknown"?"unknown":job?.state==="complete"&&(same||busy)?"complete":"";
     control.dataset.installState=state;
-    const label=state==="installing"?uiText("extensionInstall.installing", {}, "正在安装"):state==="complete"?uiText("extensionInstall.success", {}, "安装成功"):state==="failed"?uiText("extensionInstall.failed", {}, "安装失败，点击重试"):state==="unknown"?uiText("extensionInstall.uncertain", {}, "状态待确认"):same?uiText("extensionBrowser.manage", {}, "管理"):owned(row)?uiText("extensionBrowser.update", {}, "更新"):policy.installLabel?.()||uiText("extensionBrowser.install", {}, "安装");
+    const label=state==="installing"?uiText("extensionInstall.installing", {}, "正在安装"):state==="complete"?uiText("extensionBrowser.manage", {}, "管理"):state==="failed"?uiText("extensionInstall.failed", {}, "安装失败，点击重试"):state==="unknown"?uiText("extensionInstall.uncertain", {}, "状态待确认"):same?uiText("extensionBrowser.manage", {}, "管理"):owned(row)?uiText("extensionBrowser.update", {}, "更新"):policy.installLabel?.()||uiText("extensionBrowser.install", {}, "安装");
     control.setAttribute("aria-label",label);control.setAttribute("aria-busy",String(state==="installing"));control.title=job?.error||label;
     control.replaceChildren(state==="installing"?element("span",{className:"extension-install-spinner",attrs:{"aria-hidden":"true"}}):document.createTextNode(label));
     const selected=targetState().selected;

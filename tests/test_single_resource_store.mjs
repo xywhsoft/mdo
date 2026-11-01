@@ -46,12 +46,12 @@ test("store install opens one trust window, queues independently and preserves t
  const plan={id:"a".repeat(32),revision:"b".repeat(64),ready:true,items:[{...row,directory_id:row.xid,operation:"install",old_exists:true,desired_enabled:false,expected_revision:previous.revision}]};
  const api={get:async()=>({data:{[row.xid]:{...previous,installation:{version_id:done?row.version_id:"old-version"}}}}),post:async(path,body)=>{if(body.action==="catalog")return{data:{items:[row],total:1}};if(body.action==="install_plan"){assert.equal(body.version_id,row.version_id);return{data:plan};}throw Error("Unexpected request");}};
  const id="sdk-"+"1".repeat(32),installer={async enqueue(received,metadata){assert.equal(received,plan);writes.push(metadata);return registry.install("local",id,{...metadata,versionIds:[row.version_id],state:"installing"});}};
- let store;try{store=(await loadStore(api)).createSingleResourceStore("skills",()=>{},()=>{},null,{registry,installer});store.activate(true);await flush();
+ let managed=0,store;try{store=(await loadStore(api)).createSingleResourceStore("skills",()=>{},()=>{},item=>{managed++;assert.equal(item.directory_id,row.xid);},{registry,installer});store.activate(true);await flush();
  descendants(store.root).find(n=>n.tagName==="BUTTON"&&n.textContent==="更新").click();await flush();
  const review=document.body.querySelector("dialog");assert(review.textContent.includes("信任并安装"));assert(review.textContent.includes(row.name));assert(!review.querySelector('input[type="checkbox"]'));assert.equal(writes.length,0);
  descendants(review).find(n=>n.tagName==="BUTTON"&&n.textContent==="安装").click();await flush();assert.equal(writes.length,1);assert.equal(plan.items[0].desired_enabled,false);assert.equal(plan.items[0].expected_revision,previous.revision);
  assert(!document.body.querySelector("dialog"));let control=descendants(store.root).find(n=>n.dataset?.installState==="installing");assert(control?.disabled);assert(control.querySelector(".extension-install-spinner"));assert.equal(registry.list("local").length,1);
- done=true;registry.install("local",id,{state:"complete"});await flush();assert(descendants(store.root).some(n=>n.tagName==="BUTTON"&&n.textContent==="安装成功"));
+ done=true;registry.install("local",id,{state:"complete"});await flush();const manage=descendants(store.root).find(n=>n.tagName==="BUTTON"&&n.textContent==="管理");assert(manage&&!manage.disabled);assert(!descendants(store.root).some(n=>n.tagName==="BUTTON"&&n.textContent==="安装成功"));manage.click();await flush();assert.equal(managed,1);assert.equal(writes.length,1);
  }finally{store?.destroy();restore();}
 });
 
