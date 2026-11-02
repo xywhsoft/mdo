@@ -331,9 +331,9 @@ export function createExtensionPanels() {
     editor.inheritTools = inherit; editor.toolList = list; editor.getSelectedTools = () => [...chosen]; editor.form.append(group);
     const render = () => {
       const needle = filter.value.toLocaleLowerCase(); clear(list);
-      // MCP callable names are discovered lazily and can disappear on restart.
-      // Select tools/load here; each server owns its tool allowlist.
-      const catalog = (editor.toolCatalog || []).filter(tool => tool.source === "builtin" || tool.source === "c");
+      // /tools contains active extension exports, regardless of provenance.
+      // MCP callable names are discovered separately: select tools/load here.
+      const catalog = [...(editor.toolCatalog || [])];
       for (const id of chosen) if (!catalog.some(item => item.id === id)) catalog.push({ id, description: "", availability: "missing" });
       for (const tool of catalog) {
         if (!`${tool.id} ${tool.description}`.toLocaleLowerCase().includes(needle)) continue;

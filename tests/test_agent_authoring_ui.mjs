@@ -42,7 +42,11 @@ test("both role editors save explicit no-tools and expose identical C/configurat
   document.querySelector=selector=>roots.get(selector.match(/data-extension-manager="([^"]+)"/)?.[1])||null;
   const writes=[];t.mock.method(globalThis,"fetch",async(url,options)=>{
     if(options.method==="PUT")writes.push({url,body:JSON.parse(options.body)});
-    return Response.json({ok:true,data:{items:[]}});
+    return Response.json({ok:true,data:{items:url==="/api/v1/tools" ? [
+      {id:"read",source:"builtin",availability:"available"},
+      {id:"local.echo",source:"manual",availability:"available"},
+      {id:"store.echo",source:"store",availability:"available"},
+    ] : []}});
   });
   const {createExtensionPanels}=await import("../app/web/js/features/settings/extension-panels.js");
   const panel=createExtensionPanels();t.after(()=>{panel.destroy();Object.assign(globalThis,previous);});
@@ -54,6 +58,8 @@ test("both role editors save explicit no-tools and expose identical C/configurat
     dialog.querySelector("input").value=`config-${kind}`;
     for(const control of form.elements){if(control.name==="name"||control.name==="description")control.value="Role fixture";}
     assert(form.elements.find(n=>n.name==="code"));assert(form.elements.find(n=>n.name==="role_options"));
+    assert.deepEqual(dialog.querySelectorAll(".agent-tool-option").map(row=>row.querySelector("input").value),
+      ["read","local.echo","store.echo"],"both role pickers must include bundled, manual and store extensions");
     const inherit=dialog.querySelector("fieldset").querySelector("input");inherit.checked=false;inherit.dispatchEvent(new Event("change"));
     button(dialog,"保存").click();await flush();
     assert.equal(writes.at(-1).url,`/api/v1/extensions/${kind}/config-${kind}`);
