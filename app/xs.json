@@ -36,7 +36,7 @@
           "default": "mdo-home",
           "subdir": "data/ui/main-window.state"
         },
-        "install_fallback": "ask"
+        "install_fallback": "browser"
       }
     }
   ]

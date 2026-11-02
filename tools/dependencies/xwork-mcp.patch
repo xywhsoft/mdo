@@ -4703,15 +4703,16 @@
  void xsWvRun(void* pWebview)
 --- a/src/webview/xs_app_window.c
 +++ b/src/webview/xs_app_window.c
-@@ -18,6 +18,7 @@
+@@ -18,6 +18,8 @@
  
  #include "src/core/appnode.h"
  #include "xs_webview.h"
 +#include "xs_window_state_win.h"
++#include <shellapi.h>
  
  /* webview_impl.cpp 提供的 C ABI 出口（webview 库薄封装，语义一致） */
  extern void* xsWvCreate(int iDebug, const char* sProfileDir);
-@@ -31,6 +32,7 @@
+@@ -31,6 +33,7 @@
  extern void xsWvSetSize(void* pWebview, int iWidth, int iHeight, int iHint);
  extern void* xsWvGetWindow(void* pWebview);
  extern int xsWvEnableDirectoryDrop(void* pWebview, const char* sUrl);
@@ -4719,7 +4720,7 @@
  
  /* TCC 探测契约（/xs/xs_webview.h + import_webview.inc）：只回答构建期事实 */
  int xsWebviewAvailable(void)
-@@ -260,6 +262,7 @@
+@@ -260,16 +263,21 @@
  	char			sTitle[128];
  	char			sTargetUrl[1024];	/* 状态缓冲：写缓冲在置状态之前 */
  	char			sFailPage[2560];
@@ -4727,7 +4728,34 @@
  	char*			sProfileDir;	/* optional absolute UTF-8 WebView2 profile path */
  	int			iWidth, iHeight, iMinWidth, iMinHeight;
  	int			iClose;
-@@ -398,10 +401,12 @@
+ 	int			iDebug;
++	volatile LONG		iBrowserFallback; /* -1=headless, 0=native, 1=pending, 2=opened */
+ 	volatile LONG		iAlive;
+ } XS_AppWindow;
+ 
+ static XS_AppWindow g_tWindows[XS_MAX_APP_WINDOWS];
+ static int g_iWindowCount;
+ static volatile LONG g_iLiveStopWindows;	/* close=stop 存活计数 */
++static volatile LONG g_iBrowserService;
++static int g_iBrowserOnly;
++#include "xs_browser_fallback_win.h"
+ static HANDLE g_hSingleMutex, g_hWakeEvent;
+ static void* g_pWaitRegistration;
+ 
+@@ -376,10 +384,11 @@
+ 
+ 	/* webview 官方契约：STA 前置（设计 §14 M0 记录第 3 条） */
+ 	CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
+-	pWin->pWebview = xsWvCreate(pWin->iDebug, pWin->sProfileDir);
++	pWin->pWebview = getenv("XS_WV2_FORCE_CREATE_FAILURE") ? NULL : xsWvCreate(pWin->iDebug, pWin->sProfileDir);
+ 	if ( pWin->pWebview == NULL ) {
+ 		printf("[xs] app '%s': webview create failed, headless\n",
+ 			pWin->pServer->Name);
++		app_browser_fallback(pWin, "WebView creation failed");
+ 		CoUninitialize();
+ 		if ( pWin->iClose == XS_APP_CLOSE_STOP )
+ 			InterlockedDecrement(&g_iLiveStopWindows);
+@@ -398,10 +407,12 @@
  		pWin->pOrigProc = (WNDPROC)SetWindowLongPtrW(pWin->hWnd,
  			GWLP_WNDPROC, (LONG_PTR)app_wnd_proc);
  	}
@@ -4740,7 +4768,17 @@
  		pWin->iDirectoryDropChecked = 1;
  		xsWvNavigate((void*)pWin->pWebview, pWin->sTargetUrl);
  	} else if ( iState == XS_APP_NAV_FAIL )
-@@ -429,6 +434,7 @@
+@@ -416,7 +427,8 @@
+ 	pWin->pWebview = NULL;
+ 	CoUninitialize();
+ 	if ( pWin->iClose == XS_APP_CLOSE_STOP
+-		&& InterlockedDecrement(&g_iLiveStopWindows) == 0 ) {
++		&& InterlockedDecrement(&g_iLiveStopWindows) == 0
++		&& !InterlockedCompareExchange(&g_iBrowserService, 0, 0) ) {
+ 		XS_RequestStop();	/* 全部 stop 型窗口已关闭：请求优雅停机 */
+ 	}
+ 	pWin->iAlive = 0;
+@@ -429,6 +441,7 @@
  	XS_AppWindow* pWin = (XS_AppWindow*)pArg;
  	if ( !pWin->iDirectoryDropChecked ) {
  		xsWvEnableDirectoryDrop(pWv, pWin->sTargetUrl);
@@ -4748,8 +4786,87 @@
  		pWin->iDirectoryDropChecked = 1;
  	}
  	xsWvNavigate(pWv, pWin->sTargetUrl);
-@@ -682,6 +688,8 @@
+@@ -479,6 +492,8 @@
+ 	for ( i = 0; i < g_iWindowCount; i++ ) {
+ 		XS_AppWindow* pWin = &g_tWindows[i];
+ 
++		if (InterlockedCompareExchange(&pWin->iBrowserFallback, 1, 2) == 2)
++			app_browser_open(pWin);
+ 		if ( pWin->iClose == XS_APP_CLOSE_HIDE && pWin->iAlive
+ 			&& pWin->hWnd != NULL ) {
+ 			app_dispatch(pWin, app_job_show, pWin->hWnd);
+@@ -622,21 +637,26 @@
+ 	XS_ServerInfo* pFirst = app_first_server(pApp);
+ 	xvalue* pWin;
+ 	char sFallback[16];
+-	int iFallback = XS_APP_FB_ASK;
++	int iFallback = -1; /* Default: use the browser, without downloading a runtime. */
+ 
+ 	if ( pFirst == NULL ) return false;	/* 无 app 节点：本层静默 */
+ 	if ( !app_single_instance_acquire() ) {
+ 		XS_RequestStop();	/* 二次实例：唤醒既有窗口后请求退出 */
+ 		return false;
+ 	}
+-	if ( wv2_runtime_present() ) return true;
+ 
+ 	pWin = app_window_object(pFirst);
+ 	if ( pWin != NULL ) {
+-		app_cfg_str(pWin, "install_fallback", sFallback, sizeof sFallback, "ask");
++		app_cfg_str(pWin, "install_fallback", sFallback, sizeof sFallback, "browser");
++		if ( strcmp(sFallback, "ask") == 0 ) iFallback = XS_APP_FB_ASK;
+ 		if ( strcmp(sFallback, "silent") == 0 ) iFallback = XS_APP_FB_SILENT;
+ 		else if ( strcmp(sFallback, "headless") == 0 ) iFallback = XS_APP_FB_HEADLESS;
+ 	}
++	if (iFallback == -1) {
++		g_iBrowserOnly = getenv("XS_WV2_FORCE_MISSING") != NULL;
++		return true; /* Try the loader, including app-local runtimes. */
++	}
++	if (wv2_runtime_present()) return true;
+ 	if ( iFallback == XS_APP_FB_HEADLESS ) {
+ 		printf("[xs] app: WebView2 Runtime missing, headless "
+ 			"(install_fallback=headless)\n");
+@@ -647,14 +667,14 @@
+ 			L"系统缺少 WebView2 运行时（约 240 MB），需要联网下载安装。\n"
+ 			L"现在安装吗？（取消则转为浏览器访问）",
+ 			L"xs", MB_OKCANCEL | MB_ICONQUESTION) != IDOK ) {
+-		printf("[xs] app: WebView2 install declined, headless\n");
+-		return false;
++		printf("[xs] app: WebView2 install declined, browser fallback\n");
++		g_iBrowserOnly = 1; return true;
+ 	}
+ 	printf("[xs] app: installing WebView2 Runtime (%s)…\n",
+ 		iFallback == XS_APP_FB_SILENT ? "silent" : "ask");
+ 	if ( !wv2_install_with_ui() ) {
+-		printf("[xs] app: WebView2 install failed, headless\n");
+-		return false;
++		printf("[xs] app: WebView2 install failed, browser fallback\n");
++		g_iBrowserOnly = 1; return true;
+ 	}
+ 	printf("[xs] app: WebView2 Runtime installed\n");
+ 	return true;
+@@ -668,20 +688,27 @@
+ 		XS_ServerInfo* pServer = pApp->Servers[i];
+ 		XS_AppWindow* pWin;
+ 		xvalue* pCfg;
+-		char sClose[16];
++		char sClose[16], sFallback[16];
+ 
+ 		if ( pServer == NULL || !pServer->Enabled || !XS_ServerIsApp(pServer) )
+ 			continue;
+-		pWin = &g_tWindows[g_iWindowCount];
++		pWin = &g_tWindows[g_iWindowCount++];
+ 		ZeroMemory(pWin, sizeof *pWin);
+ 		pWin->pServer = pServer;
+ 		pCfg = app_window_object(pServer);
++		if (pCfg) app_cfg_str(pCfg, "install_fallback", sFallback, sizeof sFallback, "browser");
++		else snprintf(sFallback, sizeof sFallback, "browser");
++		if (!strcmp(sFallback, "headless")) pWin->iBrowserFallback = -1;
++		if (g_iBrowserOnly) { app_browser_fallback(pWin, "WebView2 Runtime unavailable"); continue; }
+ 		if ( pCfg != NULL ) {
+ 			if ( !app_cfg_profile_dir(pCfg, &pWin->sProfileDir) ) {
+ 				printf("[xs] app '%s': invalid window.profile_dir; "
  					"frontend disabled (no AppData fallback)\n", pServer->Name);
++				app_browser_fallback(pWin, "Invalid WebView profile directory");
  				continue;
  			}
 +			if (!app_cfg_window_path(pCfg,"state_file",&pWin->sStateFile))
@@ -4757,15 +4874,32 @@
  			app_cfg_str(pCfg, "title", pWin->sTitle, sizeof pWin->sTitle, "xs app");
  			app_cfg_str(pCfg, "url", pWin->sTargetUrl, sizeof pWin->sTargetUrl, "/");
  			pWin->iWidth = app_cfg_int(pCfg, "width", 1280, 200, 32767);
-@@ -707,6 +715,7 @@
+@@ -707,6 +734,8 @@
  		if ( pWin->hThread == NULL ) {
  			printf("[xs] app '%s': UI thread create failed, headless\n",
  				pServer->Name);
++			app_browser_fallback(pWin, "UI thread creation failed");
 +			xrtFree(pWin->sStateFile);pWin->sStateFile=NULL;
  			xrtFree(pWin->sProfileDir);
  			pWin->sProfileDir = NULL;
  			if ( pWin->iClose == XS_APP_CLOSE_STOP )
-@@ -813,6 +822,7 @@
+@@ -714,7 +743,6 @@
+ 			pWin->iAlive = 0;
+ 			continue;
+ 		}
+-		g_iWindowCount++;
+ 		printf("[xs] app '%s': frontend window loading (close=%s)\n",
+ 			pServer->Name, pWin->iClose == XS_APP_CLOSE_HIDE ? "hide" : "stop");
+ 	}
+@@ -760,6 +788,7 @@
+ 		 * 后自查生效；若窗口已就绪则直接 dispatch 导航 */
+ 		snprintf(pWin->sTargetUrl, sizeof pWin->sTargetUrl, "%s", sUrl);
+ 		InterlockedExchange(&pWin->iNavState, XS_APP_NAV_URL);
++		app_browser_open(pWin);
+ 		if ( pWin->iAlive && pWin->pWebview != NULL )
+ 			app_dispatch(pWin, app_job_navigate, pWin);
+ 		printf("[xs] app '%s': frontend ready -> %s\n",
+@@ -813,6 +842,7 @@
  			g_tWindows[i].hThread = NULL;
  			/* A timed-out UI thread still reads this path during creation. */
  			if ( iWait == WAIT_OBJECT_0 ) {
@@ -5600,3 +5734,57 @@
          unsigned char ch = (unsigned char)sText[i];
          if ( ch == '\r' || ch == '\n' || ch == '\t' || ch < 0x20u ) ch = ' ';
          if ( !xwork__buf_append_char(pOut, (char)ch) ) return false;
+--- /dev/null
++++ b/src/webview/xs_browser_fallback_win.h
+@@ -0,0 +1,51 @@
++/* Browser fallback is armed by window failure and dispatched only after Ready.
++ * Both the UI thread and Ready may observe the failure first; claim it once. */
++#ifndef XS_BROWSER_FALLBACK_WIN_H
++#define XS_BROWSER_FALLBACK_WIN_H
++
++static void app_browser_open(XS_AppWindow* pWin)
++{
++	WCHAR sUrl[1024], sMessage[1280];
++	HRESULT iCom;
++	INT_PTR iResult = 0;
++
++	if (g_XS_Stop || InterlockedCompareExchange(&pWin->iNavState, 0, 0) != XS_APP_NAV_URL)
++		return;
++	if (InterlockedCompareExchange(&pWin->iBrowserFallback, 2, 1) != 1)
++		return;
++	printf("[xs] app '%s': browser/service mode -> %s\n", pWin->pServer->Name, pWin->sTargetUrl);
++	fflush(stdout);
++	if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, pWin->sTargetUrl,
++		-1, sUrl, sizeof sUrl / sizeof sUrl[0]) > 0) {
++		iCom = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
++		iResult = (INT_PTR)ShellExecuteW(NULL, L"open", sUrl, NULL, NULL, SW_SHOWNORMAL);
++		if (SUCCEEDED(iCom)) CoUninitialize();
++	}
++	else {
++		wcscpy(sUrl, L"(invalid page URL)");
++	}
++	if (iResult <= 32) {
++		printf("[xs] app '%s': cannot open browser (%lld); open %s manually\n",
++			pWin->pServer->Name, (long long)iResult, pWin->sTargetUrl);
++		fflush(stdout);
++		int iChinese = PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_CHINESE;
++		_snwprintf(sMessage, sizeof sMessage / sizeof sMessage[0] - 1,
++			iChinese ? L"本地服务已启动，但无法自动打开浏览器，请手动访问：\n\n%ls\n\n关闭此提示不会停止服务。" :
++			L"The local service is running. Open this address in a browser:\n\n%ls\n\n"
++			L"Closing this message will keep the service running.", sUrl);
++		sMessage[sizeof sMessage / sizeof sMessage[0] - 1] = 0;
++		MessageBoxW(NULL, sMessage, iChinese ? L"xs - 浏览器访问" : L"xs - Browser fallback", MB_OK | MB_ICONINFORMATION);
++	}
++}
++
++static void app_browser_fallback(XS_AppWindow* pWin, const char* sReason)
++{
++	if (InterlockedCompareExchange(&pWin->iBrowserFallback, 1, 0) != 0)
++		return; /* Explicit headless, or already scheduled/opened. */
++	InterlockedExchange(&g_iBrowserService, 1);
++	printf("[xs] app '%s': %s; using browser/service mode when ready\n",
++		pWin->pServer->Name, sReason);
++	app_browser_open(pWin);
++}
++
++#endif
