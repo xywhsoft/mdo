@@ -25,6 +25,12 @@ export function createApplicationUi({ navigation, executeActions, canCall = () =
   const workbench = shell ? createPanelManager({ shell, api, layoutApi: isRemoteTarget() ? localApi : api, navigation, clientId, addContext, renderers }) : null;
   let stopped = false, timer = null, registered = false, registeredScope = "";
   const agentLifecycle = createAgentLifecycle(error => toast(error.message, "error"));
+  const agentRefreshers = new Set(); let selectedAgentContext = null;
+  const selectAgent = context => {
+    const previous = selectedAgentContext; selectedAgentContext = context; agentLifecycle.select(context);
+    if (previous && context && previous.agent !== context.agent && previous.project === context.project && previous.session === context.session)
+      for (const refresh of agentRefreshers) refresh();
+  };
   disposers.push(() => agentLifecycle.destroy());
   const register = (map, id, value) => {
     if (stopped) throw new Error(uiErrorText("error.detail.applicationUiInstanceHasBeenDisposed", {}, "Application UI instance has been disposed"));
@@ -63,6 +69,8 @@ export function createApplicationUi({ navigation, executeActions, canCall = () =
         openEditor: args => ui.openEditor(args, options.sdk), newTab: () => { check(); return workbench.open("mdo.new-tab", { title: uiText("ui.startView.newTab", {}, "新标签页") }, options.sdk); } }) });
     const conversations = createConversationContributions({ navigation, onError: error => toast(error.message, "error"),
       sdkFor: (sdk, context) => viewSdk({ sdk, context }) });
+    const refreshAgentViews = () => conversations.refresh(); agentRefreshers.add(refreshAgentViews);
+    own(() => agentRefreshers.delete(refreshAgentViews));
     own(() => conversations.destroy());
     const ui = Object.freeze({
     refreshSession: () => { check(); return refreshSession?.(scopedSdk.context()); },
@@ -220,5 +228,5 @@ export function createApplicationUi({ navigation, executeActions, canCall = () =
     finally { if (!stopped) timer = setTimeout(poll, document.hidden ? 10000 : 1500); }
   };
   void poll();
-  return Object.freeze({ sdk, selectAgent: context => agentLifecycle.select(context), beforeSelectAgent: (id, signal) => agentLifecycle.beforeSelect(id, signal), canLeave: () => workbench?.canLeave() ?? true, destroy() { if (stopped) return; stopped = true; clearTimeout(timer); clearInterval(leaseTimer); workbench?.destroy(); for (const dispose of disposers.reverse()) { try { Promise.resolve(dispose()).catch(() => {}); } catch { /* Finish other cleanup. */ } } } });
+  return Object.freeze({ sdk, selectAgent, beforeSelectAgent: (id, signal) => agentLifecycle.beforeSelect(id, signal), canLeave: () => workbench?.canLeave() ?? true, destroy() { if (stopped) return; stopped = true; clearTimeout(timer); clearInterval(leaseTimer); workbench?.destroy(); for (const dispose of disposers.reverse()) { try { Promise.resolve(dispose()).catch(() => {}); } catch { /* Finish other cleanup. */ } } } });
 }

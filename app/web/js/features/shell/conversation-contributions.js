@@ -85,6 +85,7 @@ export function createConversationContributions({ navigation, onError, sdkFor })
   };
   const unsubscribe = navigation.subscribe?.(() => { for (const row of [...actions.values(), ...views.values()]) void refresh(row); });
   return Object.freeze({
+    refresh() { if (!stopped) for (const row of [...actions.values(), ...views.values()]) void refresh(row); },
     registerAction: (id, descriptor, api) => add(actions, true, id, descriptor, api),
     registerView: (id, descriptor, api) => add(views, false, id, descriptor, api),
     async destroy() {

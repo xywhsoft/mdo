@@ -14,6 +14,22 @@ globalThis.fetch=async(url,options={})=>{
   return Response.json({ok:true,data},{headers:{"X-Mdo-Write-Token":"a".repeat(32)+"-0"}});
 };
 const { createApplicationUi }=await import("../app/web/js/features/shell/application-sdk.js");
+
+test("changing the Agent in the same conversation refreshes conditional actions", async () => {
+ const original=document.querySelector,host=new Node("section"); let selected="agent.one";
+ document.querySelector=selector=>selector==="#sdk-conversation-actions"?host:original(selector);
+ const navigation={preferredProject:()=>"p",workspace:()=>({projectId:"p",sessionId:"s"}),get:()=>({projectId:"p",sessionId:"s",view:"workspace"})};
+ const app=createApplicationUi({navigation,executeActions:async()=>{}});
+ try {
+  app.sdk.ui.registerConversationAction("qa.conditional",{label:"Conditional",when:()=>selected==="agent.one",execute(){}});
+  app.selectAgent({agent:selected,project:"p",session:"s"});
+  for(let i=0;i<10;i++)await new Promise(setImmediate);
+  assert.equal(host.children.length,1);
+  selected="agent.two"; app.selectAgent({agent:selected,project:"p",session:"s"});
+  for(let i=0;i<10;i++)await new Promise(setImmediate);
+  assert.equal(host.children.length,0);
+ } finally { app.destroy(); document.querySelector=original; }
+});
 test("conversation refresh uses the bound displaying host without issuing a target UI RPC",async()=>{
  const original=document.querySelector,host=new Node("section");let route={projectId:"p",sessionId:"first",view:"workspace"},bound;const refreshed=[];
  document.querySelector=selector=>selector==="#sdk-conversation-views"?host:original(selector);
