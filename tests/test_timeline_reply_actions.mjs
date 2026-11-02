@@ -63,14 +63,19 @@ function page(event) {
     delta: false, has_more: true, history_lost: false };
 }
 
-test("snapshot validation rejects foreign, invalid and newer input anchors", () => {
+test("invalid input anchors are removed without hiding the readable answer or enabling actions", () => {
   const owner = { projectId: "qa", sessionId: "branch" };
   assert.equal(decodeConversationPage(page(reply), owner).items.length, 1);
   for (const fields of [{ projection_epoch: "d".repeat(64) }, { event_id: 21 },
     { user_message_sequence: 0 }, { kind: "model_text_delta" }, { agent_depth: 1 },
     { attachments: ["../foreign-image"] }, { text_truncated: undefined }]) {
-    assert.throws(() => decodeConversationPage(page({ ...reply,
-      action_prompt: { ...input, ...fields } }), owner), { code: "conversation_invalid" });
+    const decoded = decodeConversationPage(page({ ...reply,
+      action_prompt: { ...input, ...fields } }), owner);
+    assert.equal(decoded.items.length, 1);
+    assert.equal(decoded.items[0].text, reply.text);
+    assert.equal(decoded.items[0].action_prompt, undefined);
+    assert.equal(decoded.notices[0].code, "unreadable_event");
+    assert.equal(eventsToTimeline(decoded.items)[0].retryPrompt, undefined);
   }
 });
 

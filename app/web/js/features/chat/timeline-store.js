@@ -9,6 +9,7 @@ import { mergeConversationTurns, summarizeConversationEvents } from "./conversat
 import { targetState, subscribeTarget } from "../../api/target.js";
 import { createSessionCache } from "./session-cache.js";
 import { decodeConversationPage } from "./conversation-page.js";
+import { mergeConversationNotices } from "./conversation-notices.js";
 
 const MAX_PAGES_PER_REFRESH = 4;
 const FALLBACK_POLL_MS = 2500;
@@ -229,12 +230,24 @@ async function readConversation(data, query, signal = selectionAbort?.signal) {
 }
 
 function snapshotData(current, page) {
-  const events = page.delta ? mergeTimelineEvents(current.events, page.items).events : page.items;
+  // A bounded scan of a damaged suffix may not find any valid ID. Rechecking
+  // that same journal must not erase healthy rows recovered via older pages.
+  if (!page.delta && current.epoch === page.epoch && current.latestEventId > 0 &&
+      !page.latest_event_id && page.notices.length) return { ...current,
+    historyNotices: mergeConversationNotices(current.historyNotices, page.notices),
+    syncing: false, syncError: null };
+  const merged = page.delta ? mergeTimelineEvents(current.events, page.items) : null;
+  const events = merged ? merged.events : page.items;
   const turns = page.delta ? updateTurns(current, events) : summarizeConversationEvents(events);
   return { ...current, epoch: page.epoch, events, turns, initializing: false,
+    historyNotices: page.delta && !merged.cleared
+      ? mergeConversationNotices(current.historyNotices, page.notices) : page.notices,
     cursor: page.next_cursor, latestEventId: page.latest_event_id, historyLost: page.history_lost,
     syncing: Boolean(page.delta && page.has_more), syncError: null,
+    ...(merged?.cleared ? { hasOlder: false, olderScanBefore: undefined,
+      indexHasMore: false, indexBefore: 0, firstLoadedTurn: turns[0]?.first_event_id ?? 0 } : {}),
     ...(page.delta ? {} : { firstLoadedTurn: page.next_before, hasOlder: page.has_more,
+      olderScanBefore: page.next_scan_before,
       // A reply-group snapshot can omit its user prompt entirely. Its text
       // cursor is not the beginning of the independent navigation index.
       indexInitialized: !page.has_more && (turns.length > 0 || !page.latest_event_id),
@@ -385,14 +398,24 @@ export function loadOlderTimeline() {
   const request = (async () => {
     try {
       if (data.epoch) {
-        const page = await readConversation(data, `before=${data.firstLoadedTurn}&limit=1`, signal);
+        const scan = data.olderScanBefore === undefined ? "" :
+          `&scan_before=${data.olderScanBefore}&epoch=${data.epoch}`;
+        const page = await readConversation(data, `before=${data.firstLoadedTurn}&limit=1${scan}`, signal);
         if (!historyCurrent(token, data, signal)) return;
         if (page.epoch !== data.epoch) { await reloadSelectedTimeline(); return; }
         const current = timelineStore.get().data;
         const events = mergeTimelineEvents(current.events, page.items).events;
+        const ownsBoundary = current.firstLoadedTurn === data.firstLoadedTurn &&
+          current.olderScanBefore === data.olderScanBefore;
         timelineStore.setData({ ...current, events, turns: updateTurns(current, events),
+          // Only establish an unknown live cursor from rows actually read.
+          // A newer append observed by an older-page GET still needs replay.
+          cursor: current.cursor || Math.max(0, ...page.items.map(item => item.aggregate_end_id || item.event_id)),
+          latestEventId: Math.max(current.latestEventId, page.latest_event_id),
+          historyNotices: mergeConversationNotices(current.historyNotices, page.notices),
+          olderScanBefore: ownsBoundary ? page.next_scan_before : current.olderScanBefore,
           firstLoadedTurn: earlierCursor(current.firstLoadedTurn, page.next_before),
-          hasOlder: page.next_before > current.firstLoadedTurn ? current.hasOlder : page.has_more,
+          hasOlder: ownsBoundary ? page.has_more : current.hasOlder,
           ...(!page.has_more || page.next_before <= current.indexBefore
             ? indexProgress(current, page.next_before, page.has_more) : {}), loadingHistory: false });
         return;
@@ -462,7 +485,7 @@ export async function revealConversationTurn(id) {
   const merged = mergeTimelineEvents(current.events, events).events;
   const first = Math.min(current.firstLoadedTurn || id, id);
   timelineStore.setData({ ...current, events: merged, turns: updateTurns(current, merged),
-    firstLoadedTurn: first, hasOlder: Boolean(current.indexHasMore ||
+    firstLoadedTurn: first, olderScanBefore: undefined, hasOlder: Boolean(current.indexHasMore ||
       current.turns.some(item => item.first_event_id < first)) });
 }
 
@@ -525,6 +548,7 @@ export function applyLiveTimeline(replay) {
   timelineStore.setData({ ...current, cursor: next, latestEventId: latest, historyLost, events, turns,
     syncing: next < latest, syncError: null,
     ...(merged.cleared ? { hasOlder: false, indexHasMore: false, indexBefore: 0,
+      olderScanBefore: undefined, historyNotices: [],
       firstLoadedTurn: turns[0]?.first_event_id ?? 0 } : {}) });
 }
 

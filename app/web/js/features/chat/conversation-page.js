@@ -1,5 +1,6 @@
 import { t as uiErrorText } from "../../i18n.js";
 import { createSha256 } from "../../utils/sha256.js";
+import { conversationNoticeCodes } from "./conversation-notices.js";
 
 function invalid() {
   return Object.assign(new Error(uiErrorText("error.detail.conversationSnapshotFailedValidation", {}, "Conversation snapshot failed validation")), { code: "conversation_invalid" });
@@ -19,15 +20,36 @@ export function decodeConversationPage(page, owner) {
   let items;
   try { items = JSON.parse(page.items_json); } catch { throw invalid(); }
   if (!Array.isArray(items) || items.length > 4096) throw invalid();
-  let previous = 0;
-  for (const event of items) {
+  if (page.next_scan_before !== undefined &&
+      (!Number.isSafeInteger(page.next_scan_before) || page.next_scan_before < 0 || page.delta)) throw invalid();
+  const notices = [];
+  function unreadable(event) {
+    if (notices.length >= 16) return;
+    const offset = Number.isSafeInteger(event?.event_id) && event.event_id > 0 ? event.event_id : 0;
+    const notice = { code: "unreadable_event", offset, before_event_id: offset,
+      id: `${page.epoch}:${offset}:unreadable_event` };
+    if (!notices.some(value => value.id === notice.id)) notices.push(notice);
+  }
+  if (page.notices !== undefined) {
+    if (!Array.isArray(page.notices) || page.notices.length > 16) unreadable();
+    for (const notice of Array.isArray(page.notices) ? page.notices.slice(0, 16) : []) {
+      if (!notice || !conversationNoticeCodes.has(notice.code) ||
+          !Number.isSafeInteger(notice.before_event_id) || notice.before_event_id < 0 ||
+          !Number.isSafeInteger(notice.offset) || notice.offset < 0 ||
+          notice.id !== `${page.epoch}:${notice.offset}:${notice.code}`) { unreadable(); continue; }
+      if (notices.length < 16) notices.push(notice);
+    }
+  }
+  let previous = 0; const valid = [];
+  for (const original of items) {
+    let event = original;
     if (!event || !Number.isSafeInteger(event.event_id) || event.event_id <= previous ||
         event.event_id > page.latest_event_id || typeof event.kind !== "string" || typeof event.text !== "string" ||
         !/^[0-9a-f]{64}$/.test(event.content_hash) || event.projection_epoch !== page.epoch ||
         event.node_id !== `${owner.sessionId}:${page.epoch}:${event.event_id}` ||
         !Number.isSafeInteger(event.aggregate_end_id) || event.aggregate_end_id < 0 ||
         (event.aggregate_end_id && (event.aggregate_end_id < event.event_id || event.aggregate_end_id > page.next_cursor)))
-      throw invalid();
+      { unreadable(event); continue; }
     previous = event.event_id;
     if (event.action_prompt !== undefined) {
       const prompt = event.action_prompt;
@@ -39,8 +61,11 @@ export function decodeConversationPage(page, owner) {
           !Number.isSafeInteger(prompt.user_message_sequence) || prompt.user_message_sequence <= 0 ||
           typeof prompt.text !== "string" || typeof prompt.text_truncated !== "boolean" ||
           (prompt.attachments !== undefined && (!Array.isArray(prompt.attachments) ||
-            prompt.attachments.some(id => typeof id !== "string" || !/^[0-9a-f]{32}$/.test(id))))) throw invalid();
+            prompt.attachments.some(id => typeof id !== "string" || !/^[0-9a-f]{32}$/.test(id))))) {
+        unreadable(event); event = { ...event }; delete event.action_prompt;
+      }
     }
+    valid.push(event);
   }
-  return { ...page, items };
+  return { ...page, items: valid, notices };
 }

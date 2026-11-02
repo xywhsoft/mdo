@@ -3398,5 +3398,9 @@
   "mcpActivation.noParameters": "此服务无需填写参数，启用后会自动连接。更多账号和连接方案可在高级配置中管理。",
   "mcpActivation.installConsent": "安装并启用即允许运行默认 MCP 程序或连接默认服务，并自动发现工具。仅缺少参数或需要账号授权时才需继续配置；高级权限方案不会自动启用。",
   "mcpActivation.targetChanged": "服务目标或权限已更改，请打开高级连接配置重新审阅；旧凭据不会自动发送。",
-  "mcpActivation.disconnected": "待连接"
+  "mcpActivation.disconnected": "待连接",
+  "timeline.historyScanLimited": "此段执行记录较长，已分段加载；可继续查看更早记录。",
+  "timeline.historyTextLimited": "此处内容超出单段显示限额，已分段显示，其余记录正常保留。",
+  "timeline.historySectionLimited": "此段内容超出显示限额，已保留可显示的部分。",
+  "timeline.historySectionUnreadable": "此处部分记录异常，暂时无法显示；其他会话内容不受影响。"
 }

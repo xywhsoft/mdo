@@ -377,14 +377,36 @@ bool MdoApiSessionEventValue(const MdoSessionEventInfo* Event,
         FullText ? MDO_API_EVENT_SINGLE_TEXT_BYTES : MDO_API_EVENT_TEXT_BYTES, pValue);
 }
 
+static xvalue* MdoApiConversationNotices(const MdoConversationPageInfo* Page)
+{
+    static const char* const Codes[] = { "", "scan_limit", "invalid_record",
+        "text_limit", "event_limit", "unreadable_event" };
+    xvalue* Notices = xrtValueArray();
+    if (!Notices) return NULL;
+    for (size_t i = 0u; i < Page->NoticeCount; ++i) {
+        const MdoConversationNotice* Notice = &Page->Notices[i];
+        if (Notice->Kind < MDO_CONVERSATION_SCAN_LIMIT || Notice->Kind > MDO_CONVERSATION_UNREADABLE_EVENT) continue;
+        const char* Code = Codes[Notice->Kind]; char Id[160]; xvalue* Item = xrtValueObject();
+        snprintf(Id, sizeof(Id), "%s:%llu:%s", Page->Epoch, (unsigned long long)Notice->Offset, Code);
+        bool Ok = Item && MdoApiValueSetString(Item, "id", Id) &&
+            MdoApiValueSetString(Item, "code", Code) &&
+            MdoApiValueSetUInt(Item, "before_event_id", Notice->BeforeEventId) &&
+            MdoApiValueSetUInt(Item, "offset", Notice->Offset) && MdoApiValueAppendTake(Notices, &Item);
+        xrtValueRelease(Item);
+        if (!Ok) { xrtValueRelease(Notices); return NULL; }
+    }
+    return Notices;
+}
+
 bool MdoApiSessionConversationRoute(MdoApiContext* Context)
 {
     char Project[MDO_PROJECT_ID_CAPACITY], Session[MDO_SESSION_ID_CAPACITY], Epoch[65] = "", Hash[65];
-    uint64 Before = 0u, After = 0u, Limit = 4u; unsigned Seen = 0u;
+    uint64 Before = 0u, After = 0u, Limit = 4u, ScanBefore = 0u; unsigned Seen = 0u;
     xstrview Query = Context->Target.Query;
     xwork_error Error; MdoConversationPageInfo Page;
     MdoSession* Loaded = NULL; MdoSessionEventSnapshot* Snapshot = NULL;
-    xvalue *Items = NULL, *Data = NULL; char* Json = NULL; size_t JsonSize = 0u;
+    xvalue *Items = NULL, *Data = NULL, *Notices = NULL; char* Json = NULL;
+    size_t JsonSize = 0u, ItemsBytes = 2u;
     if (Context->ParamCount != 2u ||
         !MdoApiCaptureId(Context, 0u, Project, sizeof(Project)) ||
         !MdoApiCaptureId(Context, 1u, Session, sizeof(Session))) goto invalid;
@@ -399,7 +421,8 @@ bool MdoApiSessionConversationRoute(MdoApiContext* Context)
         unsigned Bit = xrtStrEqual(Name, XRT_STR_LITERAL("before")) ? 1u :
             xrtStrEqual(Name, XRT_STR_LITERAL("after")) ? 2u :
             xrtStrEqual(Name, XRT_STR_LITERAL("limit")) ? 4u :
-            xrtStrEqual(Name, XRT_STR_LITERAL("epoch")) ? 8u : 0u;
+            xrtStrEqual(Name, XRT_STR_LITERAL("epoch")) ? 8u :
+            xrtStrEqual(Name, XRT_STR_LITERAL("scan_before")) ? 16u : 0u;
         if (!Bit || (Seen & Bit)) goto invalid;
         Seen |= Bit;
         if (Bit == 8u) {
@@ -412,19 +435,18 @@ bool MdoApiSessionConversationRoute(MdoApiContext* Context)
             uint64 Number;
             if (!MdoApiUnsigned(Value, Bit == 4u ? 4u : UINT64_MAX, &Number) ||
                 (Bit == 4u && !Number)) goto invalid;
-            if (Bit == 1u) Before = Number; else if (Bit == 2u) After = Number; else Limit = Number;
+            if (Bit == 1u) Before = Number; else if (Bit == 2u) After = Number;
+            else if (Bit == 16u) ScanBefore = Number; else Limit = Number;
         }
         Position = End + (End < Query.Size ? 1u : 0u);
         if (Position == Query.Size && End < Query.Size) goto invalid;
     }
-    if (Before && After) goto invalid;
+    if ((Before && After) || ((Seen & 16u) && (!(Seen & 8u) || (Seen & 2u)))) goto invalid;
     Loaded = MdoSessionLoad(Project, Session, &Error);
     if (!Loaded) return MdoApiReplyError(Context, 404u, "session_not_found", "The requested session does not exist", NULL);
-    Snapshot = MdoSessionConversationReplyPage(Project, Session, Before, After, Epoch, (size_t)Limit, &Page, &Error);
+    Snapshot = MdoSessionConversationReplyPageAt(Project, Session, Before, After, Epoch,
+        (size_t)Limit, (Seen & 16u) != 0u, ScanBefore, &Page, &Error);
     MdoSessionRelease(Loaded);
-    if (!Snapshot && Error.eCode == XWORK_ERROR_INVALID_ARGUMENT)
-        return MdoApiReplyError(Context, 413u, "conversation_group_too_large",
-            "A complete conversation group exceeds display limits", NULL);
     if (!Snapshot) return MdoApiReplyError(Context, Error.eCode == XWORK_ERROR_CONTEXT ? 409u : 503u,
         "conversation_changed", "Conversation changed while reading; retry the snapshot", NULL);
     Items = xrtValueArray(); Data = xrtValueObject();
@@ -433,11 +455,17 @@ bool MdoApiSessionConversationRoute(MdoApiContext* Context)
     for (size_t i = 0u; i < MdoSessionEventSnapshotCount(Snapshot); ++i) {
         MdoSessionEventInfo Event; xvalue* Item = NULL; char Node[256];
         Event.Size = sizeof(Event);
-        if (!MdoSessionEventSnapshotAt(Snapshot, i, &Event)) goto fail;
+        if (!MdoSessionEventSnapshotAt(Snapshot, i, &Event)) {
+            MdoSessionConversationPageNotice(&Page, MDO_CONVERSATION_UNREADABLE_EVENT, 0u, i);
+            continue;
+        }
         size_t TextLimit = Event.AgentDepth == 0u &&
             (Event.Kind == XWORK_EVENT_MODEL_TEXT_DELTA || Event.Kind == XWORK_EVENT_AGENT_START)
             ? 1024u * 1024u : MDO_API_EVENT_SINGLE_TEXT_BYTES;
-        if (!MdoApiSessionEventValueLimit(&Event, Project, Session, TextLimit, &Item)) goto fail;
+        if (!MdoApiSessionEventValueLimit(&Event, Project, Session, TextLimit, &Item)) {
+            MdoSessionConversationPageNotice(&Page, MDO_CONVERSATION_UNREADABLE_EVENT, Event.EventId, Event.EventId);
+            continue;
+        }
         if (!MdoApiValueSetString(Item, "projection_epoch", Page.Epoch)) { xrtValueRelease(Item); goto fail; }
         if (Event.Kind == XWORK_EVENT_AGENT_START && !Event.AgentDepth &&
             (Event.UserMessageSequence || Event.SchemaVersion < 3u)) NeedsActionPrompt = false;
@@ -447,24 +475,37 @@ bool MdoApiSessionConversationRoute(MdoApiContext* Context)
                 MdoApiValueSetString(Prompt, "projection_epoch", Page.Epoch) &&
                 MdoApiValueSetTake(Item, "action_prompt", &Prompt);
             xrtValueRelease(Prompt);
-            if (!Ok) { xrtValueRelease(Item); goto fail; }
+            if (!Ok) MdoSessionConversationPageNotice(&Page,
+                MDO_CONVERSATION_UNREADABLE_EVENT, Event.EventId, Event.EventId);
         }
         snprintf(Node, sizeof(Node), "%s:%s:%llu", Session, Page.Epoch, (unsigned long long)Event.EventId);
         size_t Size = 0u; char* Encoded = xrtJsonStringify(Item, false, &Size);
         bool Ok = Encoded && MdoApiConversationHash(xrtStrViewN(Encoded, Size), Hash) &&
             MdoApiValueSetString(Item, "content_hash", Hash) && MdoApiValueSetString(Item, "node_id", Node);
         xrtFree(Encoded);
-        if (Ok) Ok = MdoApiValueAppendTake(Items, &Item);
+        if (Ok) {
+            /* Hash/node fields add less than this reserve. Bound the actual
+             * envelope per item so one bad section cannot reject the page. */
+            size_t Cost = Size + strlen(Node) + 128u;
+            if (Cost + 1u > MDO_API_CONVERSATION_ITEMS_MAX_BYTES - ItemsBytes) {
+                MdoSessionConversationPageNotice(&Page, MDO_CONVERSATION_EVENT_LIMIT, Event.EventId, Event.EventId);
+                xrtValueRelease(Item); continue;
+            }
+            ItemsBytes += Cost + 1u;
+            Ok = MdoApiValueAppendTake(Items, &Item);
+        }
         xrtValueRelease(Item);
         if (!Ok) goto fail;
     }
     Json = xrtJsonStringify(Items, false, &JsonSize);
-    if (Json && JsonSize > MDO_API_CONVERSATION_ITEMS_MAX_BYTES) {
-        xrtFree(Json); xrtValueRelease(Items); xrtValueRelease(Data);
-        MdoSessionEventSnapshotRelease(Snapshot);
-        return MdoApiReplyError(Context, 413u, "conversation_group_too_large",
-            "A complete conversation group exceeds display limits", NULL);
+    /* Defensive check if envelope fields grow beyond the per-item reserve:
+     * discard only the overflowing suffix, never all the healthy rows. */
+    while (Json && JsonSize > MDO_API_CONVERSATION_ITEMS_MAX_BYTES && xrtValueCount(Items)) {
+        xrtValueArrayRemove(Items, xrtValueCount(Items) - 1u, 1u);
+        xrtFree(Json); Json = xrtJsonStringify(Items, false, &JsonSize);
+        MdoSessionConversationPageNotice(&Page, MDO_CONVERSATION_EVENT_LIMIT, 0u, Page.NextScanBefore);
     }
+    Notices = MdoApiConversationNotices(&Page);
     if (!Json || !MdoApiConversationHash(xrtStrViewN(Json, JsonSize), Hash) ||
         !MdoApiValueSetString(Data, "project_id", Project) ||
         !MdoApiValueSetString(Data, "session_id", Session) ||
@@ -474,14 +515,16 @@ bool MdoApiSessionConversationRoute(MdoApiContext* Context)
         !MdoApiValueSetUInt(Data, "latest_event_id", MdoSessionEventSnapshotLatestId(Snapshot)) ||
         !MdoApiValueSetUInt(Data, "next_cursor", MdoSessionEventSnapshotNextCursor(Snapshot)) ||
         !MdoApiValueSetUInt(Data, "next_before", Page.NextBefore) ||
+        !Notices || !MdoApiValueSetTake(Data, "notices", &Notices) ||
         !MdoApiValueSetBool(Data, "delta", Page.Delta) ||
         !MdoApiValueSetBool(Data, "has_more", Page.HasMore) ||
         !MdoApiValueSetBool(Data, "history_lost", MdoSessionEventSnapshotHistoryLost(Snapshot))) goto fail;
+    if (Page.HasScanBefore && !MdoApiValueSetUInt(Data, "next_scan_before", Page.NextScanBefore)) goto fail;
     xrtFree(Json); xrtValueRelease(Items); MdoSessionEventSnapshotRelease(Snapshot);
     return MdoApiReplySuccessTake(Context, 200u, Data, NULL);
 invalid:
-    return MdoApiReplyError(Context, 400u, "invalid_query", "Only bounded before, after, epoch and limit are accepted", NULL);
+    return MdoApiReplyError(Context, 400u, "invalid_query", "Only bounded before, after, epoch, scan_before and limit are accepted", NULL);
 fail:
-    xrtFree(Json); xrtValueRelease(Items); xrtValueRelease(Data); MdoSessionEventSnapshotRelease(Snapshot);
+    xrtFree(Json); xrtValueRelease(Items); xrtValueRelease(Data); xrtValueRelease(Notices); MdoSessionEventSnapshotRelease(Snapshot);
     return MdoApiReplyError(Context, 500u, "conversation_unavailable", "Conversation snapshot could not be serialized", NULL);
 }

@@ -3398,5 +3398,9 @@
   "mcpActivation.noParameters": "No parameters are needed. Enabling this service connects it automatically. Manage additional accounts and variants in advanced settings.",
   "mcpActivation.installConsent": "Installing and enabling permits the default MCP program to run or its default service to connect, with automatic tool discovery. Only missing parameters or account authorization require further setup. Advanced permission variants are never enabled automatically.",
   "mcpActivation.targetChanged": "The service target or permissions changed. Review the advanced connection settings; saved credentials will not be sent automatically.",
-  "mcpActivation.disconnected": "Disconnected"
+  "mcpActivation.disconnected": "Disconnected",
+  "timeline.historyScanLimited": "This execution history is long and has been split into pages. Earlier records can still be loaded.",
+  "timeline.historyTextLimited": "This content exceeds the per-section display limit and is shown in parts. Other records are preserved.",
+  "timeline.historySectionLimited": "This section exceeds the display limit. Readable content has been retained.",
+  "timeline.historySectionUnreadable": "Some records here cannot be displayed. The rest of the conversation is unaffected."
 }

@@ -57,10 +57,10 @@ export function conversationGroups(items) {
       // replies and execution records use the same projection as a full turn.
       if (!turn) {
         turn = { key: `fragment-${item.key}`, firstEventId: 0,
-          user: null, entries: [], state: item.turnState ?? "running" };
+          user: null, entries: [], state: item.kind === "history-notice" ? "done" : item.turnState ?? "running" };
         groups.push(turn);
       }
-      if (!(item.agentDepth > 0)) turn.state = item.turnState ?? "running";
+      if (item.kind !== "history-notice" && !(item.agentDepth > 0)) turn.state = item.turnState ?? "running";
       // Normal main-Agent text is public conversation, even when tools or
       // another reply follow it. Only explicit execution records are folded.
       if (item.executionDetail || item.agentDepth > 0 ||

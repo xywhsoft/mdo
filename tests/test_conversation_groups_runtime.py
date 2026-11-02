@@ -15,6 +15,20 @@ from test_packed_home_lease import site, start, stop, request, wait_bootstrap
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def prepare_history_home(home):
+    # History rendering is offline. Never depend on a signed-in online model.
+    config = json.loads((ROOT / 'app/default-home/config/defaults.json').read_text(encoding='utf-8'))['models']
+    config['providers'].append(dict(id='history-fixture', name='History fixture',
+        builtin=False, editable=True, removable=True, verify_peer=True, timeout_ms=1000,
+        endpoints={'responses':'http://127.0.0.1:1/v1'}, credential={'secret_ref':'env:MDO_HISTORY_FIXTURE_KEY'}))
+    model = {**config['items'][0], 'id':'history-fixture', 'name':'History fixture',
+        'provider':'history-fixture', 'builtin':False, 'editable':True, 'removable':True,
+        'protocols':['openai-responses'], 'default_protocol':'openai-responses'}
+    config['items'].append(model)
+    (home / 'config').mkdir(parents=True, exist_ok=True)
+    (home / 'config/models.json').write_text(json.dumps({'schema_version':1,'patch':config}), encoding='utf-8')
+
+
 def records(session):
     items = []
 
@@ -64,13 +78,14 @@ def records(session):
 def probe(packed, replay_journal=None):
     with tempfile.TemporaryDirectory(prefix="conversation-groups-", dir=ROOT / ".build") as raw:
         base = Path(raw); path, port = site(base, "site", packed); home = base / "home"
+        prepare_history_home(home)
         env = dict(os.environ, USERPROFILE=str(base), MDO_ORNITH_RESPONSES_URL="http://127.0.0.1:1/v1")
         process = start(path, packed, home, env)
         try:
             _, boot = wait_bootstrap(process, port, path / "packed.log")
             assert boot["data"]["ready"], boot
             status, doc = request(port, "POST", "/api/v1/sessions", dict(project_id="default",
-                title="Complete group fixture", agent_id="mdo.default", model_id="ornith-1.5-35b",
+                title="Complete group fixture", agent_id="mdo.default", model_id="history-fixture",
                 protocol="openai-responses", reasoning_effort="medium", max_output_tokens=1024))
             assert status == 201, doc
             session = doc["data"]["id"]

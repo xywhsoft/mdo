@@ -2139,3 +2139,6 @@ select:focus-visible,
   .recovery-dock .recovery-abandon { min-height: 40px; }
   .recovery-options { gap: 6px; }
 }
+
+/* Read-only history faults stay separate from model failure cards. */
+.timeline-history-notice { margin: 8px 0 16px; padding: 7px 10px; border-inline-start: 2px solid var(--warning, #bd8a35); color: var(--muted); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }

@@ -315,6 +315,21 @@ MdoSessionEventSnapshot* MdoSessionEventReplay(const char* ProjectId,
  * append-only journal and can be read separately using their stable IDs. */
 xvalue* MdoSessionConversationTurns(const char* ProjectId, const char* SessionId,
     uint64 Before, size_t Limit, xwork_error* Error);
+/* Read projection diagnostics only. Never persisted or sent to model context. */
+#define MDO_CONVERSATION_NOTICE_LIMIT 16u
+typedef enum MdoConversationNoticeKind {
+    MDO_CONVERSATION_SCAN_LIMIT = 1,
+    MDO_CONVERSATION_INVALID_RECORD,
+    MDO_CONVERSATION_TEXT_LIMIT,
+    MDO_CONVERSATION_EVENT_LIMIT,
+    MDO_CONVERSATION_UNREADABLE_EVENT
+} MdoConversationNoticeKind;
+typedef struct MdoConversationNotice {
+    MdoConversationNoticeKind Kind;
+    uint64 BeforeEventId; /* zero places the notice after the retained events */
+    uint64 Offset;        /* stable identity inside the anchored file generation */
+} MdoConversationNotice;
+
 typedef struct MdoConversationPageInfo {
     char Epoch[65];
     /* False when the filesystem needs mtime for identity; append can then
@@ -326,7 +341,13 @@ typedef struct MdoConversationPageInfo {
     /* Optional root input for a reply page that starts inside its user turn.
      * Strings are borrowed from the returned snapshot until its release. */
     MdoSessionEventInfo ActionPrompt;
+    uint64 NextScanBefore;
+    bool HasScanBefore;
+    size_t NoticeCount;
+    MdoConversationNotice Notices[MDO_CONVERSATION_NOTICE_LIMIT];
 } MdoConversationPageInfo;
+void MdoSessionConversationPageNotice(MdoConversationPageInfo* Page,
+    MdoConversationNoticeKind Kind, uint64 BeforeEventId, uint64 Offset);
 /* One anchored journal view. Before pages backwards; After + matching Epoch
  * pages forwards. Text deltas are aggregated, tool bodies remain previews.
  * The file generation changes on atomic history replacement, independently
@@ -339,6 +360,11 @@ MdoSessionEventSnapshot* MdoSessionConversationPage(const char* ProjectId,
 MdoSessionEventSnapshot* MdoSessionConversationReplyPage(const char* ProjectId,
     const char* SessionId, uint64 Before, uint64 After, const char* Epoch,
     size_t Replies, MdoConversationPageInfo* Page, xwork_error* Error);
+/* An epoch-bound byte cursor makes even an all-malformed region pageable. */
+MdoSessionEventSnapshot* MdoSessionConversationReplyPageAt(const char* ProjectId,
+    const char* SessionId, uint64 Before, uint64 After, const char* Epoch,
+    size_t Replies, bool HasScanBefore, uint64 ScanBefore,
+    MdoConversationPageInfo* Page, xwork_error* Error);
 MdoSessionEventSnapshot* MdoSessionEventSnapshotRef(
     MdoSessionEventSnapshot* Snapshot);
 void MdoSessionEventSnapshotRelease(MdoSessionEventSnapshot* Snapshot);

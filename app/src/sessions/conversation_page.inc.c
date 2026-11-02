@@ -1,7 +1,9 @@
 /* Display projection, not model context. Recent content is read in one file
  * view instead of replaying 32 events per network round trip. Each operation
  * has bounded retained memory and scan work. Display history pages finish a
- * reply and its preceding execution before crossing a page boundary.
+ * reply and its preceding execution before crossing a page boundary when
+ * possible. Bad or oversized sections yield local notices and a continuation,
+ * never erase other readable events in the conversation.
  * No sidecar, migration or write is needed to browse an old conversation. */
 #define MDO_VIEW_EVENTS 96u
 #define MDO_VIEW_BYTES (96u * 1024u)
@@ -10,6 +12,34 @@
 #define MDO_VIEW_REPLY_TEXT (1024u * 1024u)
 #define MDO_VIEW_HARD_BYTES (4u * 1024u * 1024u)
 #define MDO_VIEW_HARD_EVENTS 4096u
+
+void MdoSessionConversationPageNotice(MdoConversationPageInfo* Page,
+    MdoConversationNoticeKind Kind, uint64 BeforeEventId, uint64 Offset)
+{
+    for (size_t i = 0u; i < Page->NoticeCount; ++i)
+        if (Page->Notices[i].Kind == Kind && Page->Notices[i].BeforeEventId == BeforeEventId) return;
+    if (Page->NoticeCount < MDO_CONVERSATION_NOTICE_LIMIT)
+        Page->Notices[Page->NoticeCount++] = (MdoConversationNotice){ Kind, BeforeEventId, Offset };
+}
+
+/* A corrupt suffix must not cause an unbounded search before the first page.
+ * A later byte-cursor page can establish its own latest valid ID if necessary. */
+static uint64 MdoViewLatest(MdoEventReader* Reader, const char* Project,
+    const char* Session, MdoConversationPageInfo* Page)
+{
+    uint64 End = Reader->Size, Scanned = 0u; xstrview Record;
+    while (End && Scanned < MDO_VIEW_SCAN) {
+        uint64 Previous = End; MdoSessionEventOwned Event;
+        if (!MdoEventReaderPrevious(Reader, &End, &Record)) break;
+        Scanned += Previous - End;
+        if (MdoEventsParse(Project, Session, Record, &Event)) {
+            uint64 Id = Event.Info.EventId; MdoEventsOwnedUnit(&Event); return Id;
+        }
+        MdoSessionConversationPageNotice(Page, MDO_CONVERSATION_INVALID_RECORD, 0u, End);
+        xrtClearError();
+    }
+    return 0u;
+}
 
 static bool MdoViewEpoch(MdoEventReader* Reader, char Output[65])
 {
@@ -73,7 +103,8 @@ static size_t MdoViewPrefix(const char* Text, size_t Limit)
 
 static MdoSessionEventSnapshot* MdoReadConversationPage(const char* Project,
     const char* Session, uint64 Before, uint64 After, const char* Epoch,
-    size_t Turns, bool ReplyGroups, MdoConversationPageInfo* Page, xwork_error* Error)
+    size_t Turns, bool ReplyGroups, bool HasScanBefore, uint64 ScanBefore,
+    MdoConversationPageInfo* Page, xwork_error* Error)
 {
     char Path[MDO_SESSION_PATH_CAPACITY];
     MdoSessionEventSnapshot* Snapshot = NULL;
@@ -99,17 +130,22 @@ static MdoSessionEventSnapshot* MdoReadConversationPage(const char* Project,
     Page->StableEpoch = Reader->File != NULL &&
         (Reader->Info.Available & XFILE_INFO_IDENTITY) != 0u;
     memcpy(Snapshot->Epoch, Page->Epoch, sizeof(Snapshot->Epoch));
-    Snapshot->LatestId = MdoEventReaderLatest(Reader, Project, Session, &Snapshot->HistoryLost);
-    Delta = !Before && Epoch && *Epoch && !strcmp(Epoch, Page->Epoch) && After <= Snapshot->LatestId;
+    Snapshot->LatestId = MdoViewLatest(Reader, Project, Session, Page);
+    bool LatestUnknown = !Snapshot->LatestId && Reader->Size;
+    Delta = !HasScanBefore && !LatestUnknown && !Before && Epoch && *Epoch &&
+        !strcmp(Epoch, Page->Epoch) && After <= Snapshot->LatestId;
     Page->Delta = Delta;
     Snapshot->NextCursor = Delta ? After : Snapshot->LatestId;
     End = Reader->Size;
-    if (Before) {
+    if (HasScanBefore) {
+        if (!Epoch || strcmp(Epoch, Page->Epoch) || ScanBefore > Reader->Size) goto changed;
+        End = ScanBefore;
+    } else if (Before) {
         MdoEventReaderAfter(Reader, Project, Session, Before - 1u);
         while (Reader->Position < Reader->Size) {
             uint64 At = Reader->Position; MdoSessionEventOwned Event;
             if (!MdoEventReaderNext(Reader, &Record)) break;
-            if (!MdoEventsParse(Project, Session, Record, &Event)) { Snapshot->HistoryLost = true; xrtClearError(); continue; }
+            if (!MdoEventsParse(Project, Session, Record, &Event)) { xrtClearError(); continue; }
             bool Found = Event.Info.EventId >= Before;
             MdoEventsOwnedUnit(&Event);
             if (Found) { End = At; break; }
@@ -117,17 +153,26 @@ static MdoSessionEventSnapshot* MdoReadConversationPage(const char* Project,
     } else if (Delta) MdoEventReaderAfter(Reader, Project, Session, After);
 
     while (Scanned < MDO_VIEW_SCAN) {
-        uint64 RecordEnd = End;
+        uint64 RecordEnd = End, RecordStart = Reader->Position;
         if (!(Delta ? MdoEventReaderNext(Reader, &Record) :
                 MdoEventReaderPrevious(Reader, &End, &Record))) break;
         MdoSessionEventOwned Event; size_t Merge = SIZE_MAX;
-        Scanned += Record.Size + 1u;
+        Scanned += Delta ? Reader->Position - RecordStart : RecordEnd - End;
         if (!MdoEventsParse(Project, Session, Record, &Event)) {
-            Snapshot->HistoryLost = true; xrtClearError(); continue;
+            MdoSessionConversationPageNotice(Page, MDO_CONVERSATION_INVALID_RECORD, Previous,
+                Delta ? RecordStart : End);
+            StreamCount = 0u; xrtClearError(); continue;
         }
         if (Delta && Event.Info.EventId <= After) { MdoEventsOwnedUnit(&Event); continue; }
+        if (LatestUnknown && !Snapshot->LatestId) {
+            Snapshot->LatestId = Event.Info.EventId; Snapshot->NextCursor = Event.Info.EventId;
+        }
         if ((Previous && (Delta ? Event.Info.EventId <= Previous : Event.Info.EventId >= Previous)) ||
-            Event.Info.EventId > Snapshot->LatestId) { MdoEventsOwnedUnit(&Event); goto changed; }
+            Event.Info.EventId > Snapshot->LatestId) {
+            MdoSessionConversationPageNotice(Page, MDO_CONVERSATION_INVALID_RECORD, Previous,
+                Delta ? RecordStart : End);
+            MdoEventsOwnedUnit(&Event); StreamCount = 0u; continue;
+        }
         /* A history group contains one public reply and the execution before
          * it. Byte/event budgets are soft targets: finish the group before
          * paging, so no stream prefix or half execution becomes a new layout. */
@@ -169,7 +214,9 @@ static MdoSessionEventSnapshot* MdoReadConversationPage(const char* Project,
             ? MDO_VIEW_REPLY_TEXT : MdoViewDelta(&Event.Info) ? MDO_VIEW_TEXT : 4096u;
         size_t Prefix = MdoViewPrefix(Event.Text, TextLimit);
         if (AtomicReplies && Main && Event.Text[Prefix] &&
-            Event.Info.Kind == XWORK_EVENT_MODEL_TEXT_DELTA) { MdoEventsOwnedUnit(&Event); goto oversized; }
+            Event.Info.Kind == XWORK_EVENT_MODEL_TEXT_DELTA) {
+            MdoSessionConversationPageNotice(Page, MDO_CONVERSATION_TEXT_LIMIT, Event.Info.EventId, End);
+        }
         if (Event.Text[Prefix]) { Event.Text[Prefix] = '\0'; Event.Info.TextTruncated = true; }
         if (MdoViewDelta(&Event.Info)) {
             for (size_t i = 0u; i < StreamCount; ++i) {
@@ -183,7 +230,10 @@ static MdoSessionEventSnapshot* MdoReadConversationPage(const char* Project,
             MdoSessionEventOwned* Other = &Snapshot->Events[Merge];
             size_t A = strlen(Other->Text), B = strlen(Event.Text);
             if (A > MDO_VIEW_REPLY_TEXT || B > MDO_VIEW_REPLY_TEXT - A) {
-                MdoEventsOwnedUnit(&Event); goto oversized;
+                MdoSessionConversationPageNotice(Page, MDO_CONVERSATION_TEXT_LIMIT, Event.Info.EventId, End);
+                MdoEventsOwnedUnit(&Event); StreamCount = 0u;
+                if (!Delta) End = RecordEnd;
+                break;
             }
             char* Combined = (char*)xrtMalloc(A + B + 1u);
             if (!Combined) { MdoEventsOwnedUnit(&Event); goto memory; }
@@ -198,7 +248,9 @@ static MdoSessionEventSnapshot* MdoReadConversationPage(const char* Project,
             size_t ByteLimit = AtomicReplies ? MDO_VIEW_HARD_BYTES : MDO_VIEW_BYTES;
             if (NewCost > ByteLimit - Bytes + OldCost) {
                 xrtFree(Text); MdoEventsOwnedUnit(&Event);
-                if (AtomicReplies) goto oversized;
+                MdoSessionConversationPageNotice(Page, MDO_CONVERSATION_EVENT_LIMIT,
+                    Snapshot->Count ? Snapshot->Events[Snapshot->Count-1u].Info.EventId : 0u, End);
+                if (!Delta) End = RecordEnd;
                 break;
             }
             Bytes = Bytes - OldCost + NewCost;
@@ -215,8 +267,11 @@ static MdoSessionEventSnapshot* MdoReadConversationPage(const char* Project,
             size_t ByteLimit = AtomicReplies || !Snapshot->Count ? MDO_VIEW_HARD_BYTES : MDO_VIEW_BYTES;
             size_t EventLimit = AtomicReplies ? MDO_VIEW_HARD_EVENTS : MDO_VIEW_EVENTS;
             if (Snapshot->Count >= EventLimit || Cost > ByteLimit - Bytes) {
-                if (AtomicReplies) { MdoEventsOwnedUnit(&Event); goto oversized; }
-                MdoEventsOwnedUnit(&Event); break;
+                MdoSessionConversationPageNotice(Page, MDO_CONVERSATION_EVENT_LIMIT,
+                    Event.Info.EventId, Delta ? RecordStart : End);
+                MdoEventsOwnedUnit(&Event);
+                if (!Delta) End = RecordEnd;
+                break;
             }
             if (!MdoEventsSnapshotGrow(Snapshot)) { MdoEventsOwnedUnit(&Event); goto memory; }
             Previous = Event.Info.EventId;
@@ -230,7 +285,9 @@ static MdoSessionEventSnapshot* MdoReadConversationPage(const char* Project,
         }
         if (!ReplyGroups && Start && ++Starts == Turns && !Delta) break;
     }
-    if (ReplyGroups && !Delta && Scanned >= MDO_VIEW_SCAN && End) goto oversized;
+    if (!Delta && Scanned >= MDO_VIEW_SCAN && End)
+        MdoSessionConversationPageNotice(Page, MDO_CONVERSATION_SCAN_LIMIT,
+            Snapshot->Count ? Snapshot->Events[Snapshot->Count-1u].Info.EventId : 0u, End);
     if (Reader->Failed) goto io;
     if (!Delta) {
         /* Reverse scanning aggregates in reverse order; original event IDs
@@ -244,6 +301,7 @@ static MdoSessionEventSnapshot* MdoReadConversationPage(const char* Project,
         }
         Page->NextBefore = Snapshot->Count ? Snapshot->Events[0].Info.EventId : Before;
         Page->HasMore = End != 0u;
+        Page->NextScanBefore = End; Page->HasScanBefore = true;
         /* Keep reply paging independent of input paging. A partial user turn
          * still needs its real input ID/text for fork and retry actions. Read
          * only that anchor, never insert old execution or an extra user row. */
@@ -261,9 +319,9 @@ static MdoSessionEventSnapshot* MdoReadConversationPage(const char* Project,
             while (ContextScanned < MDO_VIEW_SCAN &&
                    MdoEventReaderPrevious(Reader, &ContextEnd, &Record)) {
                 MdoSessionEventOwned Input;
-                ContextScanned += Record.Size + 1u;
+                ContextScanned = End - ContextEnd;
                 if (!MdoEventsParse(Project, Session, Record, &Input)) {
-                    xrtClearError(); break;
+                    xrtClearError(); continue;
                 }
                 bool Boundary = Input.Info.Kind == MDO_SESSION_EVENT_HISTORY_TRUNCATED;
                 bool RootInput = Input.Info.Kind == XWORK_EVENT_AGENT_START &&
@@ -283,7 +341,16 @@ static MdoSessionEventSnapshot* MdoReadConversationPage(const char* Project,
                 if (Boundary || RootInput) break;
             }
         }
-    } else Page->HasMore = Snapshot->NextCursor < Snapshot->LatestId;
+    } else {
+        Page->HasMore = Snapshot->NextCursor < Snapshot->LatestId;
+        /* No event-ID progress through a corrupt prefix: recover from a cold
+         * bounded suffix instead of returning a permanently stuck delta. */
+        if (Page->HasMore && !Snapshot->Count && Scanned >= MDO_VIEW_SCAN) {
+            MdoEventReaderClose(Reader); MdoSessionEventSnapshotRelease(Snapshot);
+            return MdoReadConversationPage(Project, Session, 0u, 0u, "", Turns,
+                ReplyGroups, false, 0u, Page, Error);
+        }
+    }
     if (Reader->Failed) goto io;
     if (!MdoViewCurrent(Path, Reader)) goto changed;
     MdoEventReaderClose(Reader); return Snapshot;
@@ -296,8 +363,6 @@ memory:
 io:
     MdoEventsError(Error, XWORK_ERROR_IO, "cannot read conversation snapshot");
     goto fail;
-oversized:
-    MdoEventsError(Error, XWORK_ERROR_INVALID_ARGUMENT, "conversation group exceeds view limits");
 fail:
     MdoEventReaderClose(Reader); MdoSessionEventSnapshotRelease(Snapshot); return NULL;
 }
@@ -305,9 +370,16 @@ fail:
 MdoSessionEventSnapshot* MdoSessionConversationPage(const char* Project,
     const char* Session, uint64 Before, uint64 After, const char* Epoch,
     size_t Turns, MdoConversationPageInfo* Page, xwork_error* Error)
-{ return MdoReadConversationPage(Project, Session, Before, After, Epoch, Turns, false, Page, Error); }
+{ return MdoReadConversationPage(Project, Session, Before, After, Epoch, Turns, false, false, 0u, Page, Error); }
 
 MdoSessionEventSnapshot* MdoSessionConversationReplyPage(const char* Project,
     const char* Session, uint64 Before, uint64 After, const char* Epoch,
     size_t Replies, MdoConversationPageInfo* Page, xwork_error* Error)
-{ return MdoReadConversationPage(Project, Session, Before, After, Epoch, Replies, true, Page, Error); }
+{ return MdoReadConversationPage(Project, Session, Before, After, Epoch, Replies, true, false, 0u, Page, Error); }
+
+MdoSessionEventSnapshot* MdoSessionConversationReplyPageAt(const char* Project,
+    const char* Session, uint64 Before, uint64 After, const char* Epoch,
+    size_t Replies, bool HasScanBefore, uint64 ScanBefore,
+    MdoConversationPageInfo* Page, xwork_error* Error)
+{ return MdoReadConversationPage(Project, Session, Before, After, Epoch, Replies, true,
+    HasScanBefore, ScanBefore, Page, Error); }

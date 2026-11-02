@@ -15,6 +15,7 @@ import { artifactPreviewNode } from "./artifact-preview.js";
 import { labelImageName } from "./image-names.js";
 import { toolCallSummary, toolSectionNode } from "./tool-content.js";
 import { conversationGroups } from "./conversation-history.js";
+import { insertConversationNotices } from "./conversation-notices.js";
 import { createHistoryWindow } from "./history-window.js";
 import { createConversationNavigation } from "./conversation-navigation.js";
 import { modelErrorMessage, modelErrorTitle } from "../../utils/model-errors.js";
@@ -74,10 +75,10 @@ function completeTextSpan(event, start = 0, end = (event.text || "").length) {
     ...(event.aggregate_end_id ? { endEventId: event.aggregate_end_id } : {}) };
 }
 
-function appendOrCreate(items, streams, event, kind, role, key) {
+function appendOrCreate(items, streams, event, kind, role, key, section = "") {
   let item = streams.get(key);
   if (!item) {
-    item = { key, kind, role, text: "", time: event.time, state: "running", meta: "" };
+    item = { key: key + section, kind, role, text: "", time: event.time, state: "running", meta: "" };
     items.push(item);
     streams.set(key, item);
   }
@@ -91,7 +92,7 @@ function appendOrCreate(items, streams, event, kind, role, key) {
 }
 
 export function eventsToTimeline(events, historyLost = false,
-  { showHistoryTruncations = true } = {}) {
+  { showHistoryTruncations = true, historyNotices = [] } = {}) {
   const items = [];
   const tools = new Map();
   const modelStarts = new Map();
@@ -109,6 +110,9 @@ export function eventsToTimeline(events, historyLost = false,
   const terminalRuns = new Map();
   const finalErrors = new Map();
   const retryNotices = new Map();
+  const boundaries = [...new Set(historyNotices.map(notice => notice.before_event_id)
+    .filter(id => Number.isSafeInteger(id) && id > 0))].sort((a, b) => a - b);
+  let boundary = 0, streamSection = "";
   function clearRetryNotice(event, wholeRun = false) {
     const key = modelKey(event, runEpochs.get(String(event.run_id || event.agent_id || event.event_id)) ?? 0);
     const run = String(event.run_id || event.agent_id || event.event_id);
@@ -129,13 +133,20 @@ export function eventsToTimeline(events, historyLost = false,
   }
   // An explicit history boundary already explains why earlier events are
   // absent. A second generic gap notice would imply an unrelated loss.
-  if (historyLost && events[0]?.kind !== "history_truncated") {
+  if (historyLost && events[0]?.kind !== "history_truncated" && !historyNotices.some(notice =>
+      ["invalid_record", "unreadable_event"].includes(notice.code))) {
     items.push({ key: "history-gap", kind: "system",
       role: t("timeline.recordNotice", {}, "记录提示"),
       text: t("timeline.historyGap", {}, "更早的事件已不在当前记录中。"),
       state: "done", time: 0 });
   }
   for (const event of events) {
+    // Never join text across an unreadable section. Keep the warning between
+    // the two readable fragments, with distinct stable renderer keys.
+    while (boundary < boundaries.length && boundaries[boundary] <= event.event_id) {
+      streamSection = `-section-${boundaries[boundary++]}`;
+      streams.clear();
+    }
     const sourceKey = event.source?.member ? `${event.source.namespace}/${event.source.member}` : "";
     latestMainPrompt = promptsBySource.get(sourceKey) || null;
     const itemCount = items.length;
@@ -227,7 +238,7 @@ export function eventsToTimeline(events, historyLost = false,
       case "model_reasoning_delta": {
         const thought = appendOrCreate(items, streams, event, "reasoning",
           t("timeline.reasoning", {}, "思考"),
-          `reasoning-${modelKey(event, epoch)}`);
+          `reasoning-${modelKey(event, epoch)}`, streamSection);
         thought.runKey = runKey;
         thought.runEpoch = epoch;
         break;
@@ -249,7 +260,8 @@ export function eventsToTimeline(events, historyLost = false,
             if (!latestMainPrompt || prompt.sourceEventId > latestMainPrompt.sourceEventId)
               latestMainPrompt = prompt;
           }
-          const answer = appendOrCreate(items, streams, event, "assistant", event.model || "Agent", `assistant-${modelKey(event, epoch)}`);
+          const answer = appendOrCreate(items, streams, event, "assistant", event.model || "Agent",
+            `assistant-${modelKey(event, epoch)}`, streamSection);
           answer.runKey = runKey;
           answer.runEpoch = epoch;
           answer.retryPrompt = promptsByRun.get(runKey);
@@ -745,6 +757,10 @@ function commandButton(label, description, iconName, actionRef, handlers, sessio
 
 function timelineNode(item, handlers, projectId, sessionId, writable,
   openState, previewOpen, previewScroll, toolTextCache) {
+  if (item.kind === "history-notice") return element("p", {
+    className: "timeline-item timeline-history-notice", text: item.text,
+    attrs: { role: "note", "data-kind": "history-notice" },
+  });
   if (item.kind === "retry") return modelRetryNode(item);
   if (item.kind === "process") {
     const details = element("details", { className: "conversation-process", attrs: {
@@ -1146,8 +1162,11 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
         for (const [key, value] of position.scroll) previewScroll.set(key, value);
       }
     }
-    const items = eventsToTimeline(data?.events ?? [], data?.historyLost,
-      { showHistoryTruncations: false });
+    const noticeText = code => t(code === "scan_limit" ? "timeline.historyScanLimited" :
+      code === "text_limit" ? "timeline.historyTextLimited" : code === "event_limit"
+        ? "timeline.historySectionLimited" : "timeline.historySectionUnreadable");
+    const items = insertConversationNotices(eventsToTimeline(data?.events ?? [], data?.historyLost,
+      { showHistoryTruncations: false, historyNotices: data?.historyNotices }), data?.historyNotices, noticeText);
     const groups = conversationGroups(items);
     const projected = [];
     let previousTurn = 0;

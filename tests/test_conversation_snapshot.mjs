@@ -25,17 +25,29 @@ function page(ids, fields={}) {
     ...fields,items_json,items_hash:sha(items_json) };
 }
 const reply = p => Response.json({ok:true,data:p});
+const notice = (code="invalid_record", offset=100, before=0) => ({
+  code, offset, before_event_id:before, id:`${epoch}:${offset}:${code}`,
+});
+function withItems(p, mutate) {
+  const items=JSON.parse(p.items_json); mutate(items);
+  const items_json=JSON.stringify(items);
+  return {...p,items_json,items_hash:sha(items_json)};
+}
 let fetcher;
 globalThis.fetch = (url, options) => fetcher(url, options);
 beforeEach(() => { clearTimeline(); clearTimelineCache(); timers.clear(); });
 after(() => { clearTimeline(); Object.assign(globalThis, previous); });
-test("snapshot hashes, order, ownership and aggregate ranges are checked before use", () => {
+test("snapshot hashes and ownership remain strict while bad rows are quarantined", () => {
   assert.equal(decodeConversationPage(page([1,2]),owner).items.length,2);
-  for (const broken of [page([2,1]),page([1],{session_id:"b"}),{...page([1]),items_hash:"f".repeat(64)},
+  for (const broken of [page([1],{session_id:"b"}),{...page([1]),items_hash:"f".repeat(64)},
     page([1],{next_cursor:2,latest_event_id:1})]) assert.throws(() => decodeConversationPage(broken,owner),{code:"conversation_invalid"});
   const p=page([1]); const items=JSON.parse(p.items_json); items[0].aggregate_end_id=3;
   p.items_json=JSON.stringify(items); p.items_hash=sha(p.items_json);
-  assert.throws(() => decodeConversationPage(p,owner),{code:"conversation_invalid"});
+  const decoded=decodeConversationPage(p,owner);
+  assert.equal(decoded.items.length,0);
+  assert.equal(decoded.notices[0].code,"unreadable_event");
+  assert.deepEqual(decodeConversationPage(page([2,1],{latest_event_id:2,next_cursor:2}),owner)
+    .items.map(e=>e.event_id),[2]);
 });
 test("a complete reply can exceed the old byte and event preview limits", () => {
   const p = page(Array.from({length: 110}, (_, i) => i + 1));
@@ -94,4 +106,88 @@ test("a superseded response cannot overwrite the newly selected session", async 
   fetcher=async url=>reply(page(url.includes("after=")?[]:[3],{session_id:"b",...(url.includes("after=")?{delta:true,next_cursor:3,latest_event_id:3}:{})}));
   await selectTimeline("qa","b"); resolve(reply(page([1]))); await old;
   assert.equal(timelineStore.get().data.sessionId,"b"); assert.equal(timelineStore.get().data.events[0].event_id,3);
+});
+
+test("a damaged row or action anchor preserves neighboring replies", () => {
+  const input=withItems(page([1,2,3]),items=>{
+    items[1].text=null;
+    items[2].action_prompt={kind:"agent_start",event_id:99};
+  });
+  const result=decodeConversationPage(input,owner);
+  assert.deepEqual(result.items.map(e=>e.text),["text 1","text 3"]);
+  assert.equal(result.items[1].action_prompt,undefined);
+  assert.equal(result.notices.length,2);
+  // Display recovery neither repairs nor overwrites the received journal data.
+  assert.equal(JSON.parse(input.items_json)[1].text,null);
+  const annotation=decodeConversationPage(page([1,2],{notices:[{code:"future_unknown"},null]}),owner);
+  assert.equal(annotation.items.length,2);
+  assert.equal(annotation.notices.length,1);
+});
+
+test("byte continuation crosses an empty corrupt suffix without losing healthy history", async () => {
+  const suffix=page([],{has_more:true,next_scan_before:1000,notices:[notice()]});
+  fetcher=async()=>reply(suffix);
+  await selectTimeline("qa","a");
+  assert.equal(timelineStore.get().status,"ready");
+  assert.equal(timelineStore.get().data.hasOlder,true);
+  let query;
+  fetcher=async url=>{query=url; return reply(page([1,2],{next_scan_before:0,notices:[notice("invalid_record",200,2)]}));};
+  await loadOlderTimeline();
+  assert.ok(query.includes(`scan_before=1000&epoch=${epoch}`));
+  const recovered=timelineStore.get().data;
+  assert.equal(recovered.cursor,2);
+  assert.equal(recovered.hasOlder,false);
+  assert.equal(recovered.olderScanBefore,0);
+  assert.deepEqual(recovered.events.map(e=>e.event_id),[1,2]);
+  fetcher=async()=>reply(suffix);
+  await refreshSelectedTimeline();
+  assert.deepEqual(timelineStore.get().data.events.map(e=>e.event_id),[1,2]);
+  assert.equal(timelineStore.get().data.cursor,2);
+  assert.equal(timelineStore.get().data.hasOlder,false);
+});
+
+test("delta refresh and cached selection retain the byte cursor and local notices", async () => {
+  fetcher=async url=>reply(url.includes("after=") ? page([],{delta:true,next_cursor:8,latest_event_id:8}) :
+    page([7,8],{has_more:true,next_scan_before:500,notices:[notice("scan_limit",500,7)]}));
+  await selectTimeline("qa","a");
+  await refreshSelectedTimeline();
+  assert.equal(timelineStore.get().data.olderScanBefore,500);
+  assert.equal(timelineStore.get().data.historyNotices.length,1);
+  clearTimeline();
+  await selectTimeline("qa","a");
+  assert.equal(timelineStore.get().data.olderScanBefore,500);
+  let query;
+  fetcher=async url=>{query=url;return reply(page([5,6],{next_cursor:8,latest_event_id:8,
+    next_scan_before:0,notices:[notice("invalid_record",300,6)]}));};
+  await loadOlderTimeline();
+  assert.ok(query.includes("scan_before=500"));
+  assert.equal(timelineStore.get().data.historyNotices.length,2);
+  assert.equal(timelineStore.get().data.hasOlder,false);
+  fetcher=async()=>reply(page([9],{epoch:"b".repeat(64),next_scan_before:0}));
+  await refreshSelectedTimeline();
+  assert.equal(timelineStore.get().data.historyNotices.length,0);
+});
+
+test("intentional history clearing drops obsolete display warnings and continuation", async () => {
+  fetcher=async url=>reply(url.includes("after=") ? page([],{delta:true,next_cursor:8,latest_event_id:8}) :
+    page([7,8],{has_more:true,next_scan_before:500,notices:[notice()]}));
+  await selectTimeline("qa","a");
+  applyLiveTimeline({project_id:"qa",session_id:"a",epoch,items:[
+    {event_id:9,kind:"history_truncated",source_event_id:1}],next_cursor:9,latest_event_id:9});
+  assert.equal(timelineStore.get().data.historyNotices.length,0);
+  assert.equal(timelineStore.get().data.olderScanBefore,undefined);
+});
+
+test("an older GET observing an append cannot skip the new live events", async () => {
+  fetcher=async url=>reply(url.includes("after=") ? page([],{delta:true,next_cursor:8,latest_event_id:8}) :
+    page([7,8],{has_more:true,next_scan_before:500}));
+  await selectTimeline("qa","a");
+  fetcher=async()=>reply(page([5,6],{next_cursor:10,latest_event_id:10,next_scan_before:0}));
+  await loadOlderTimeline();
+  assert.equal(timelineStore.get().data.cursor,8);
+  let query;
+  fetcher=async url=>{query=url;return reply(page([9,10],{delta:true}));};
+  await refreshSelectedTimeline();
+  assert.ok(query.includes("after=8"));
+  assert.deepEqual(timelineStore.get().data.events.map(e=>e.event_id),[5,6,7,8,9,10]);
 });
