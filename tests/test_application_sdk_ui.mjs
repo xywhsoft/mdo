@@ -66,7 +66,7 @@ test("startup recovery gate delays registration and plugin activation until writ
 test("plugin callbacks retain the owning SDK and failed activation rolls back contributions",async()=>{
  const frontend='web/'+fileURLToPath(new URL('./fixtures/application-sdk-plugin.mjs',import.meta.url)).replaceAll('\\','/').replace(/^\/+/, '');
  const navigation={preferredProject:()=>"default",workspace:()=>({projectId:"default",sessionId:"s"}),get:()=>({projectId:"default",sessionId:"s"})};
- plugins=[{id:"qa-scope",enabled:true,frontend,revision:"scope"}];writes.length=0;
+ plugins=[{id:"plugin:qa-scope",directory_id:"qa-directory",enabled:true,frontend,revision:"scope"}];writes.length=0;
  globalThis.applicationSdkFixture={};let app=createApplicationUi({navigation,executeActions:async()=>{}});
  try{
   for(let i=0;i<100&&!globalThis.applicationSdkFixture.ready;i++)await new Promise(resolve=>setTimeout(resolve,5));
@@ -77,7 +77,7 @@ test("plugin callbacks retain the owning SDK and failed activation rolls back co
   await plugin.ui.render('qa.fixture.renderer',document.body,{});
   const event=new Event('keydown');Object.assign(event,{code:'KeyK',ctrlKey:true});document.dispatchEvent(event);await new Promise(resolve=>setTimeout(resolve,0));
   assert.deepEqual(writes.map(row=>row.text),['activate','panel','menu','renderer','keybinding']);
-  assert.ok(writes.every(row=>row.extension==='plugin.qa-scope'),writes);
+  assert.ok(writes.every(row=>row.extension==='plugin.qa-directory'),writes);
  }finally{app.destroy();}
  assert.equal(sidebar.children.length,0);assert.equal(document.body.children.length,0);
  assert.throws(()=>globalThis.applicationSdkFixture.sdk.ui.registerAction('late',()=>{}),/disposed/);

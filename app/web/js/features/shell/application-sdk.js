@@ -151,7 +151,7 @@ export function createApplicationUi({ navigation, executeActions, canCall = () =
   const rootScope = createScope(api), sdk = rootScope.sdk, ui = sdk.ui; disposers.push(() => rootScope.dispose());
   const pluginLoader = createPluginLoader({ client: clientId, onStateChanged: value => window.dispatchEvent(new CustomEvent("mdo-plugin-runtime-state",{detail:value})), api: () => isRemoteTarget() ? localApi : api,
     canCall, stopped: () => stopped, createScope(plugin) {
-      const scopedApi = createApplicationClient(() => ({ project: navigation.preferredProject(), session: navigation.workspace().sessionId || "", client: clientId, extension: `plugin.${plugin.id}` }));
+      const scopedApi = createApplicationClient(() => ({ project: navigation.preferredProject(), session: navigation.workspace().sessionId || "", client: clientId, extension: `plugin.${plugin.directory_id || plugin.id}` }));
       return createScope(scopedApi);
     } });
   const pluginsChanged = () => { pluginLoader.invalidate(); void pluginLoader.poll(); };
