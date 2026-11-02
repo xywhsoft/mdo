@@ -1,0 +1,93 @@
+{
+  "completed_at": "2026-11-02T17:26:56.323355+08:00",
+  "status": "implemented-tested-not-published",
+  "version_name": "0.8.4",
+  "version_code": "05000804",
+  "commits": [
+    "a529d7b375e8de50c802f201d516fab40ad1cef4",
+    "04261c09641e54e920dac940af076ec815381b9c"
+  ],
+  "artifact": {
+    "path": "D:\\GIT\\mdo\\.build\\navigation-mcp-20261102\\mdo.exe",
+    "sha256": "ff554a8ef0439b98460b2adaa6799a9a1043ebfcc43bc8ef3254ee912d117db9",
+    "bytes": 6632693,
+    "source_commit": "04261c09641e54e920dac940af076ec815381b9c",
+    "packaged_app_sha256": "f7328b8e7543f962f8eb4769a098500b1b057f88769110f6042af27cda4d1bd1",
+    "includes_concurrent_workspace_changes": true
+  },
+  "checks": {
+    "frontend": {
+      "files": 203,
+      "passed": 1288,
+      "skipped": 1,
+      "failed": 0
+    },
+    "static_contracts": 127,
+    "web_modules": 248,
+    "strict_c11": true,
+    "session_activation_native": 6,
+    "session_activation_api": true,
+    "mcp_automatic_native": 18,
+    "computer_use_host_native": 5,
+    "real_cua_capabilities": 11,
+    "packed_contracts": 9
+  },
+  "real_cua": {
+    "status": {
+      "state": "ready",
+      "activation_error": "",
+      "default_connection_id": "auto-64e93a8f712ce8345ed0b1b7fa791d7a",
+      "missing_inputs": [],
+      "connection_count": 1,
+      "tool_count": 63
+    },
+    "connections": 1,
+    "safe_default_without_existing_profile_grant": true,
+    "agent_discovers_automatic_service_without_a_model_call": true,
+    "recovered_history_receives_live_capabilities_and_instructions": true,
+    "restart_does_not_accumulate_capability_blocks": true,
+    "capability_source_refreshes_each_request": true,
+    "warmup_metadata_requests": 7,
+    "core_schemas_preload_without_model_discovery": true,
+    "preloaded_schema_count": 4,
+    "preloaded_schema_bytes": 12301,
+    "repeated_warmup_keeps_the_core_schema_budget": true,
+    "preloaded_tool_executes_real_cua_read_only": true,
+    "role_can_explicitly_disable_mcp_context": true,
+    "new_roles_enable_live_mcp_instructions_by_default": true,
+    "roles_without_mcp_discovery_do_not_advertise_mcp": true,
+    "next_request_drops_disabled_server_summary": true,
+    "disabled_server_blocks_preloaded_tool_invocation": true,
+    "error": ""
+  },
+  "real_model_entry": {
+    "passed": true,
+    "model_id": "mdo-online.glm-5.3-flash",
+    "phase": "first_model_request_only",
+    "tool_calls": [
+      {
+        "name": "mcp__auto-64e93a8f712ce__launch_app",
+        "arguments_json": "{\"aumid\":\"Microsoft.WindowsCalculator_8wekyb3d8bbwe!App\",\"session\":\"calc\"}"
+      }
+    ],
+    "usage": {
+      "input_tokens": 9212,
+      "output_tokens": 57,
+      "total_tokens": 9269,
+      "cached_input_tokens": 0,
+      "cache_write_tokens": 0,
+      "reasoning_tokens": 8
+    },
+    "finish_reason": "tool_calls",
+    "http_status": 200,
+    "gui_operation_executed": false
+  },
+  "limitations": [
+    "Agent context/program legacy harnesses reference removed default-home/modules paths and did not start.",
+    "The real-model check covers first-tool selection only; the full autonomous calculator task was not rerun.",
+    "No Android physical-device or cross-platform build was performed in this turn.",
+    "The Windows artifact includes the workspace message-display changes present at build time; that work belongs to another task."
+  ],
+  "evidence": ".build\\navigation-mcp-20261102",
+  "published": false
+}

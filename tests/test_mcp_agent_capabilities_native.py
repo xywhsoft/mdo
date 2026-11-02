@@ -1,5 +1,7 @@
 """Real Cua schemas and read-only invocation, plus recovered-context refresh."""
 import json
+import contextlib
+import io
 from pathlib import Path
 import manual_mcp_computer_use_acceptance as fixture
 
@@ -29,6 +31,12 @@ EXTRA = r'''
  }}xworkToolCatalogRelease(Tools);
  xrtValueObjectSetNew(R,XRT_STR_LITERAL("core_schemas_preload_without_model_discovery"),xrtValueBool(Loaded>0&&Loaded<=4&&WindowTool));
  xrtValueObjectSetNew(R,XRT_STR_LITERAL("preloaded_schema_count"),xrtValueUInt(Loaded));xrtValueObjectSetNew(R,XRT_STR_LITERAL("preloaded_schema_bytes"),xrtValueUInt(SchemaBytes));
+ xvalue* Probe=xrtValueObject(),*ProbeTools=xrtValueArray();Tools=xworkAgentToolCatalogSnapshot(Agent);
+ for(size_t I=0;I<xworkToolCatalogCount(Tools);I++){xwork_tool_info T={0};if(xworkToolCatalogToolAt(Tools,I,&T)){
+  xvalue* Tool=xrtValueObject();SdkPut(Tool,"name",T.sName);SdkPut(Tool,"description",T.sDescription);
+  xvalue* Parameters=T.sParametersJson?xrtJsonParse(xrtStrView(T.sParametersJson)):xrtValueObject();
+  xrtValueObjectSetNew(Tool,XRT_STR_LITERAL("parameters"),Parameters);xrtValueObjectSetNew(Tool,XRT_STR_LITERAL("strict"),xrtValueBool(T.bStrict));xrtValueArrayAppendNew(ProbeTools,Tool);
+ }}xworkToolCatalogRelease(Tools);SdkPut(Probe,"system",Prompt);xrtValueObjectSetNew(Probe,XRT_STR_LITERAL("tools"),ProbeTools);xrtValueObjectSetNew(R,XRT_STR_LITERAL("model_probe"),Probe);
  xrtValueObjectSetNew(R,XRT_STR_LITERAL("repeated_warmup_keeps_the_core_schema_budget"),xrtValueBool(Loaded<=4&&SchemaBytes<=24u*1024u));
  bool Invoked=WindowTool&&xworkExecutorBind(&Executor,Agent,&E);xllm_executor_result Operation={0};
  Call.sId="qa-real-cua-read";Call.sName=WindowTool;Call.sArgumentsJson="{\"app\":\"Calculator\"}";
@@ -62,7 +70,10 @@ def main():
     needle=' if(Executor.pUserData)xworkExecutorUnbind(&Executor);if(Agent)xworkAgentDestroy(Agent);'
     assert fixture.CONTRACT.count(needle)==1
     fixture.CONTRACT=fixture.CONTRACT.replace(needle,EXTRA+needle)
-    fixture.main()
+    # Keep the full public schema snapshot in the local evidence file. Normal
+    # test output should not dump thousands of lines of tool parameters.
+    with contextlib.redirect_stdout(io.StringIO()):
+        fixture.main()
     result=json.loads((Path(fixture.ROOT)/'.build/mcp-auto-20261102/cua-auto-result.json').read_text(encoding='utf-8'))
     result=result.get('result',result)
     for key in ('recovered_history_receives_live_capabilities_and_instructions','restart_does_not_accumulate_capability_blocks',
