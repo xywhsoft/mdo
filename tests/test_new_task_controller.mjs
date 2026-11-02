@@ -42,9 +42,10 @@ test("attachment-first creation recovers a lost create response", async () => {
     draftStore.select(projectKey);
     assert.equal(await draftStore.ensureLoaded(projectKey), true);
     draftStore.edit(projectKey, "image prompt", [], true);
-    const controller = createNewTaskController({ draftStore,
+    const controller = createNewTaskController({ draftStore, agentId: () => "agent.qa",
       newId() { return sessionId; },
       async createSession(input) {
+        assert.equal(input.agent_id, "agent.qa");
         createCalls += 1;
         assert.equal(input.client_session_id, sessionId);
         assert.equal(documents.get("/api/v1/draft").new_task.session_id,

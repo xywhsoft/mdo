@@ -2024,6 +2024,10 @@ select:focus-visible,
 #composer-model-effort { flex: 0 1 auto; max-width: 50%; overflow: hidden; text-overflow: ellipsis; color: var(--faint); white-space: nowrap; }
 .composer-model-trigger .icon { flex: 0 0 14px; width: 14px; height: 14px; }
 .composer-permission-trigger { flex: 0 0 34px; width: 34px; padding: 0; }
+.composer-agent-select { flex: 0 1 auto; min-width: 0; width: auto; max-width: 7rem; height: 34px; border: 0; border-radius: var(--radius-sm); padding-inline: 6px 24px; background-color: transparent; color: var(--muted); font: inherit; font-size: 12px; text-overflow: ellipsis; cursor: pointer; }
+.composer-agent-select:hover { background-color: var(--surface-hover); }
+.composer-agent-select:disabled { opacity: .55; cursor: default; }
+@media (pointer: coarse) { .composer-agent-select { height: 40px; } }
 .composer-permission-trigger .icon { width: 18px; height: 18px; }
 .composer-permission-trigger[data-permission="full-access"], .composer-permission-panel [data-permission="full-access"] { color: var(--danger); }
 .composer-model-trigger:hover, .composer-permission-trigger:hover, .composer-model-trigger[aria-expanded="true"], .composer-permission-trigger[aria-expanded="true"] { background: var(--surface-hover); }

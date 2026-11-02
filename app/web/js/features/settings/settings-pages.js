@@ -1,4 +1,5 @@
 import { t as uiErrorText, setUiText as writeUiText, uiMessage, subscribeLocale, t } from "../../i18n.js";
+import { subscribeSettingsPages } from "./settings-page-registry.js";
 
 // Pages are ordinary HTML: one navigation button and one matching panel.
 // External links share desktop/mobile navigation but never own a local page.
@@ -34,6 +35,19 @@ export function createSettingsPages({ workspace, form, navigation }) {
   }
   if (!pages.size) throw new Error(uiErrorText("error.detail.settingsNeedsAtLeastOnePage", {}, "Settings needs at least one page"));
   let selected = "";
+  const extensionPages = new Map();
+  let extensionGroup, extensionHeading, extensionOptions;
+  function releasePage(page) {
+    page?.abort?.abort();
+    if (page?.task) void page.task.then(cleanup => typeof cleanup === "function" && cleanup()).catch(() => {});
+    if (page) { page.task = null; page.abort = null; }
+  }
+  function mountPage(page) {
+    if (!page?.extension || page.task) return;
+    const abort = page.abort = new AbortController(); page.panel.replaceChildren();
+    page.task = Promise.resolve().then(() => !abort.signal.aborted && page.extension.mount(page.panel, { signal: abort.signal }))
+      .catch(error => { if (!abort.signal.aborted) writeUiText(page.panel, error.message); });
+  }
   const visible = (element) => Boolean(element?.getClientRects().length);
   const usesPreferences = (id) => Boolean(pages.get(id)?.preferences);
   const currentNavigation = () => visible(picker) ? picker : pages.get(selected)?.button;
@@ -87,6 +101,7 @@ export function createSettingsPages({ workspace, form, navigation }) {
     const page = pages.get(selected);
     for (const [id, { panel, button }] of pages) {
       panel.hidden = id !== selected;
+      if (id !== selected) releasePage(pages.get(id));
       if (id === selected) button.setAttribute("aria-current", "page");
       else button.removeAttribute("aria-current");
     }
@@ -96,6 +111,7 @@ export function createSettingsPages({ workspace, form, navigation }) {
     workspace.querySelector("#settings-actions").hidden = !page.preferences;
     if (changed) { layout.scrollTop = 0; content.scrollTop = 0; }
     syncLabels();
+    mountPage(page);
     // Back/forward and programmatic navigation can hide the active editor.
     // Do not move focus when a visible button or the native selector owns it.
     if (content.contains(document.activeElement) && !visible(document.activeElement))
@@ -121,6 +137,33 @@ export function createSettingsPages({ workspace, form, navigation }) {
   observer?.observe(pickerRow);
   observer?.observe(layout);
   const unsubscribeLocale = subscribeLocale(syncLabels);
+  const unsubscribeExtensions = subscribeSettingsPages(entries => {
+    const desired = new Map(entries);
+    for (const [id, page] of extensionPages) if (desired.get(id) !== page.extension) {
+      releasePage(page); page.button.remove(); page.panel.remove(); page.option.remove();
+      extensionPages.delete(id); pages.delete(id);
+    }
+    for (const [id, extension] of entries) if (!extensionPages.has(id)) {
+      if (pages.has(id)) throw Error(`Settings page already exists: ${id}`);
+      if (!extensionGroup) {
+        extensionGroup = document.createElement("div"); extensionGroup.setAttribute("data-settings-group", "");
+        const heading = extensionHeading = document.createElement("p"); heading.setAttribute("data-settings-group-label", "");
+        heading.setAttribute("data-i18n", "settings.extensionSettings");
+        writeUiText(heading, t("settings.extensionSettings", {}, "扩展设置")); extensionGroup.append(heading); nav.append(extensionGroup);
+        extensionOptions = document.createElement("optgroup"); groups.set(heading, extensionOptions); picker.append(extensionOptions);
+      }
+      const button = document.createElement("button"), panel = document.createElement("section"), option = document.createElement("option");
+      button.type = "button"; button.dataset.settingsSection = id; writeUiText(button, extension.title || id);
+      panel.dataset.settingsPanel = id; panel.className = "settings-section"; panel.hidden = true;
+      option.value = id; extensionGroup.append(button); content.append(panel); extensionOptions.append(option);
+      const page = { button, panel, option, preferences: false, extension };
+      pages.set(id, page); extensionPages.set(id, page);
+    }
+    if (!extensionPages.size && extensionGroup) {
+      groups.delete(extensionHeading); extensionGroup.remove(); extensionOptions.remove(); extensionGroup = extensionOptions = extensionHeading = null;
+    }
+    selectSection(navigation.get?.()?.settingsSection || selected || "general");
+  });
   syncLabels();
 
   return Object.freeze({ selectSection, usesPreferences, keepFocusedFieldVisible,
@@ -132,6 +175,7 @@ export function createSettingsPages({ workspace, form, navigation }) {
       window.removeEventListener("resize", syncResponsive);
       observer?.disconnect();
       unsubscribeLocale();
+      unsubscribeExtensions(); for (const page of extensionPages.values()) releasePage(page);
     },
   });
 }

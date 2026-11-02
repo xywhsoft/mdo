@@ -592,7 +592,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
       schedule("", true);
       return true;
     },
-    reseedNewTask(sessionId, selectedProfile) {
+    reseedNewTask(sessionId, selectedProfile, agentId = null) {
       const current = entry("");
       const task = current.newTask;
       const first = current.submissions[0];
@@ -600,6 +600,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
           (first && first.id !== task.session_id) ||
           current.submissions.some((item) => item.id === sessionId)) return false;
       const nextTask = newTask({ ...task, phase: "creating", session_id: sessionId,
+        ...(agentId ? { agent_id: agentId } : {}),
         model_id: selectedProfile.model_id,
         reasoning_effort: selectedProfile.reasoning_effort,
         permission_profile: selectedProfile.permission_profile });

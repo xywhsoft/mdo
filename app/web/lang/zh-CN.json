@@ -3420,5 +3420,10 @@
   "settings.maxTurns": "执行轮数上限",
   "settings.maxTurnsDescription": "每个 Agent 单次运行的模型执行轮数，0 表示不限制。角色单独设置的更低上限仍生效；下次启动或继续任务时应用。",
   "extensionTrust.required": "请先勾选信任确认，确认已核对操作、作者及扩展内容后再继续。",
-  "ecosystem.builtinReadOnly": "此扩展随 mdo 提供，可以启用或停用；文件随应用更新。"
+  "ecosystem.builtinReadOnly": "此扩展随 mdo 提供，可以启用或停用；文件随应用更新。",
+  "agent.defaultName": "墨斗",
+  "composer.chooseAgent": "选择 Agent",
+  "composer.agentPrompt": "向{agent}描述任务…",
+  "settings.extensionSettings": "扩展设置",
+  "composer.agentSwitchIdle": "请等待当前任务和待发送消息结束后切换 Agent"
 }

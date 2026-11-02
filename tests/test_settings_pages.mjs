@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createSettingsPages } from "../app/web/js/features/settings/settings-pages.js";
 import { loadLocale } from "../app/web/js/i18n.js";
+import { registerSettingsPage } from "../app/web/js/features/settings/settings-page-registry.js";
 
 // Minimal DOM adapter for page ownership and navigation. Real layout, native
 // selectors and keyboard visibility are checked against the packed app.
@@ -23,9 +24,26 @@ class Element extends EventTarget {
   getBoundingClientRect() { return { top: 0, bottom: 200 }; }
   setAttribute(key, value) { this.attributes[key] = value; }
   removeAttribute(key) { delete this.attributes[key]; }
+  replaceChildren() { this.children = []; }
+  remove() { if (this.parent) this.parent.children = this.parent.children.filter(node => node !== this); }
   focus() { document.activeElement = this; }
   closest(selector) { return selector === "[data-settings-group]" ? this.group ?? null : this; }
 }
+
+test("extension settings register after startup, mount on selection and release on removal", async () => {
+  const f = fixture(); let mounted = 0, cleaned = 0, signal;
+  const remove = registerSettingsPage("qa-extension", { title: "QA Settings", mount(root, options) {
+    mounted++; signal = options.signal; return () => cleaned++;
+  } });
+  try {
+    assert.equal(mounted, 0); assert.equal(f.pages.selectSection("qa-extension"), "qa-extension");
+    await new Promise(setImmediate); assert.equal(mounted, 1);
+    f.pages.selectSection("qa-extension"); await new Promise(setImmediate); assert.equal(mounted, 1);
+    f.pages.selectSection("general"); await new Promise(setImmediate); assert.equal(signal.aborted, true); assert.equal(cleaned, 1);
+    f.pages.selectSection("qa-extension"); await new Promise(setImmediate); assert.equal(mounted, 2);
+    remove(); await new Promise(setImmediate); assert.equal(cleaned, 2); assert.equal(f.pages.selectSection("qa-extension"), "general");
+  } finally { remove(); f.close(); }
+});
 
 function fixture({ grouped = false, external = false } = {}) {
   const original = { document: globalThis.document, window: globalThis.window,

@@ -41,7 +41,7 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
   projectsStore, settingsStore, draftStore, status, resetButton, isRunActive,
   hasPendingSubmission = () => false, onBusyChange,
   onSelectionChange, onProfileUpdated, updateProfile = updateSessionProfile,
-  updatePermission = updateSessionPermission }) {
+  updatePermission = updateSessionPermission, selectedAgent = () => "mdo.default" }) {
   // Blank tasks have no session metadata. Keep manual choices per project, but
   // continue following its configured default until the user picks a model.
   const drafts = new Map();
@@ -90,7 +90,7 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
   }
   function defaultAgent() {
     return agentsStore.get().data?.items?.find((item) =>
-      item.id === "mdo.default");
+      item.id === selectedAgent());
   }
   function defaultModelId() {
     const projectId = navigation.get().projectId || "default";
@@ -102,7 +102,7 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
   }
   function agentPermission(session) {
     const agent = agentsStore.get().data?.items?.find((item) =>
-      item.id === (session?.agent_id || "mdo.default"));
+      item.id === (session?.agent_id || selectedAgent()));
     // Existing sessions keep their recorded permission. Blank tasks inherit
     // the global default unless the user has saved a chat-level override.
     return session?.permission_profile || (!session &&

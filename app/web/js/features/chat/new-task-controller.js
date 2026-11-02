@@ -23,7 +23,7 @@ function sameSubmission(a, b) {
 // ordered list is copied to the new session draft. No queue POST happens here.
 export function createNewTaskController({ draftStore, newId, createSession,
   findSession, onPersisted, onMigrated, onReview, onChange,
-  isWritePaused = () => false }) {
+  isWritePaused = () => false, agentId = () => "mdo.default" }) {
   let pumping = false;
   let preparing = false;
   let migrating = false;
@@ -176,7 +176,7 @@ export function createNewTaskController({ draftStore, newId, createSession,
     if (!task) {
       task = { project_id: projectId, session_id: id,
         title: taskTitle(text),
-        agent_id: "mdo.default", model_id: profile.model_id,
+        agent_id: agentId(), model_id: profile.model_id,
         reasoning_effort: profile.reasoning_effort,
         permission_profile: profile.permission_profile,
         phase: "creating" };
@@ -222,7 +222,7 @@ export function createNewTaskController({ draftStore, newId, createSession,
       draftStore.capture("", draftStore.text(projectKey));
     const sessionId = newId();
     if (!draftStore.setNewTask({ project_id: projectId,
-      session_id: sessionId, title, agent_id: "mdo.default",
+      session_id: sessionId, title, agent_id: agentId(),
       model_id: profile.model_id,
       reasoning_effort: profile.reasoning_effort,
       permission_profile: profile.permission_profile,
@@ -236,7 +236,7 @@ export function createNewTaskController({ draftStore, newId, createSession,
   async function review(profile) {
     if (isWritePaused()) return false;
     if (createRejected) {
-      if (!draftStore.reseedNewTask(newId(), profile))
+      if (!draftStore.reseedNewTask(newId(), profile, agentId()))
         throw new Error(t("composer.newTaskSaveFailed"));
       createRejected = false;
     }

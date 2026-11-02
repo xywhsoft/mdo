@@ -3420,5 +3420,10 @@
   "settings.maxTurns": "Execution turn limit",
   "settings.maxTurnsDescription": "Maximum model turns per Agent run. 0 means unlimited. A lower role-specific limit still applies. Changes apply when starting or continuing a task.",
   "extensionTrust.required": "Please select the trust confirmation after reviewing the operations, authors and extension contents.",
-  "ecosystem.builtinReadOnly": "This extension ships with mdo and can be enabled or disabled. Its files are updated with the app."
+  "ecosystem.builtinReadOnly": "This extension ships with mdo and can be enabled or disabled. Its files are updated with the app.",
+  "agent.defaultName": "Mdo",
+  "composer.chooseAgent": "Choose Agent",
+  "composer.agentPrompt": "Describe a task to {agent}…",
+  "settings.extensionSettings": "Extension settings",
+  "composer.agentSwitchIdle": "Wait for the current task and queued messages to finish before switching Agent"
 }

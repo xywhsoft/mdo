@@ -7,6 +7,8 @@ import { createPanelManager } from "../workbench/panel-manager.js";
 import { openLayer } from "../../components/layers.js";
 import { createPluginLoader } from "./plugin-loader.js";
 import { createConversationContributions } from "./conversation-contributions.js";
+import { createAgentLifecycle } from "./agent-lifecycle.js";
+import { registerSettingsPage } from "../settings/settings-page-registry.js";
 
 export function createApplicationUi({ navigation, executeActions, canCall = () => true, addContext, refreshSession }) {
   let clientId = `ui-${crypto.randomUUID()}`;
@@ -22,6 +24,8 @@ export function createApplicationUi({ navigation, executeActions, canCall = () =
   const shell = document.querySelector("#app-shell");
   const workbench = shell ? createPanelManager({ shell, api, layoutApi: isRemoteTarget() ? localApi : api, navigation, clientId, addContext, renderers }) : null;
   let stopped = false, timer = null, registered = false, registeredScope = "";
+  const agentLifecycle = createAgentLifecycle(error => toast(error.message, "error"));
+  disposers.push(() => agentLifecycle.destroy());
   const register = (map, id, value) => {
     if (stopped) throw new Error(uiErrorText("error.detail.applicationUiInstanceHasBeenDisposed", {}, "Application UI instance has been disposed"));
     if (!/^[A-Za-z0-9_.-]+$/.test(id) || map.has(id)) throw new Error(uiErrorText("error.detail.duplicateOrInvalidSdkContributionId", {}, "Duplicate or invalid SDK contribution ID"));
@@ -62,6 +66,21 @@ export function createApplicationUi({ navigation, executeActions, canCall = () =
     own(() => conversations.destroy());
     const ui = Object.freeze({
     refreshSession: () => { check(); return refreshSession?.(scopedSdk.context()); },
+    registerAgent: (id, descriptor) => {
+      check();
+      const options = (context, signal) => ({ context, signal,
+        sdk: viewSdk({ context, sdk: clientApi.bind({ project: context.project, session: context.session }) }) });
+      const callback = (context, signal) => descriptor.onSelected?.(options(context, signal));
+      callback.beforeDeselected = (context, signal) => descriptor.beforeDeselected?.(options(context, signal));
+      return own(agentLifecycle.register(id, callback));
+    },
+    registerSettingsPage: (id, descriptor) => {
+      check();
+      return own(registerSettingsPage(id, { ...descriptor, mount: (root, options) => descriptor.mount(root, {
+        ...options, sdk: viewSdk({ context: { project: "default", session: "", view: "settings" },
+          sdk: clientApi.bind({ project: "default", session: "" }) }),
+      }) }));
+    },
     registerConversationAction: (id, descriptor) => { check(); return own(conversations.registerAction(id, descriptor, clientApi)); },
     registerConversationView: (id, descriptor) => { check(); return own(conversations.registerView(id, descriptor, clientApi)); },
     registerPanel: (id, descriptor) => {
@@ -201,5 +220,5 @@ export function createApplicationUi({ navigation, executeActions, canCall = () =
     finally { if (!stopped) timer = setTimeout(poll, document.hidden ? 10000 : 1500); }
   };
   void poll();
-  return Object.freeze({ sdk, canLeave: () => workbench?.canLeave() ?? true, destroy() { if (stopped) return; stopped = true; clearTimeout(timer); clearInterval(leaseTimer); workbench?.destroy(); for (const dispose of disposers.reverse()) { try { Promise.resolve(dispose()).catch(() => {}); } catch { /* Finish other cleanup. */ } } } });
+  return Object.freeze({ sdk, selectAgent: context => agentLifecycle.select(context), beforeSelectAgent: (id, signal) => agentLifecycle.beforeSelect(id, signal), canLeave: () => workbench?.canLeave() ?? true, destroy() { if (stopped) return; stopped = true; clearTimeout(timer); clearInterval(leaseTimer); workbench?.destroy(); for (const dispose of disposers.reverse()) { try { Promise.resolve(dispose()).catch(() => {}); } catch { /* Finish other cleanup. */ } } } });
 }

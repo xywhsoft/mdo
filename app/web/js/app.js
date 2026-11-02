@@ -83,6 +83,7 @@ import { loadCommands, parseCommand, runCommand } from "./features/chat/extensio
 import { parseSkillSelection } from "./features/chat/skill-selection.js";
 import { trackComposerMenuRoom } from "./features/chat/composer-menu-room.js";
 import { createComposerProfile } from "./features/chat/composer-profile.js";
+import { createComposerAgent, agentLabel } from "./features/chat/composer-agent.js";
 import { createComposerControls } from "./features/chat/composer-controls.js";
 import { createTokenMeter } from "./features/chat/token-meter.js";
 import { createTaskDialog } from "./features/tasks/task-dialog.js";
@@ -310,7 +311,7 @@ export async function boot() {
 
   function localPurgeBusy() {
     return hasPendingApiWrites() || messageActionBusy || Boolean(messageEditingKey) ||
-      composerImages?.hasInFlight() || composerProfile.hasInFlight() ||
+      composerImages?.hasInFlight() || composerProfile.hasInFlight() || composerAgent?.isBusy() ||
       submissionController?.hasInFlight() || promptQueue.hasInFlight() ||
       newTaskController?.isBusy() || newTaskController?.isPreparing() || newTaskController?.isMigrating();
   }
@@ -464,7 +465,7 @@ export async function boot() {
   function assertReplacementProfile(attachments) {
     const loginBlock = composerProfile.loginBlock();
     if (loginBlock) throw localComposerError(`model.error.${loginBlock}`, "", `model_${loginBlock}`);
-    if (composerProfile.isBusy())
+    if (composerProfile.isBusy() || composerAgent?.isBusy())
       throw new Error(t("composer.profileBusy", {}, "请等待会话配置更新完成"));
     if (attachments.length && !composerImages.supportsCurrentModel())
       throw unsupportedModelError();
@@ -758,13 +759,14 @@ export async function boot() {
   let draftStore;
   let submissionController;
   let composerProfile;
+  let composerAgent;
   let queueEditKey = "";
   const promptQueue = createPromptQueue({
     container: $("#prompt-queue"), navigation, modelsStore,
     isRunFinishing: () => runAwaitingRelease(activeRun, timelineStore.get().data),
     onUpdated: () => scheduleRunsRefresh(),
     isRunActive: () => Boolean(activeRun),
-    isProfileBusy: () => composerProfile?.isBusy() ?? false,
+    isProfileBusy: () => Boolean(composerProfile?.isBusy() || composerAgent?.isBusy()),
     isSessionRunActive: (key) => {
       const [projectId, sessionId] = key.split("/");
       return Boolean(activeRun && activeRun.project_id === projectId &&
@@ -1102,6 +1104,7 @@ export async function boot() {
     permissionSelect: $("#composer-permission"), status: composerProfileStatus,
     modelsStore, navigation });
   composerProfile = createComposerProfile({
+    selectedAgent: () => composerAgent?.selection() || "mdo.default",
     modelSelect: $("#composer-model"), reasoningSelect: $("#composer-reasoning"),
     permissionSelect: $("#composer-permission"), navigation,
     sessionStore: sessionDetailStore, modelsStore, agentsStore, projectsStore, settingsStore,
@@ -1135,7 +1138,22 @@ export async function boot() {
     },
   });
   $("#composer-model").addEventListener("change", () => setRun(activeRun));
+  composerAgent = createComposerAgent({ select: $("#composer-agent"), navigation,
+    sessionStore: sessionDetailStore, agentsStore, profile: () => composerProfile.selection(),
+    blocked: () => Boolean(activeRun || messageActionBusy || purgeRecovery.isPaused() || composerProfile.isBusy() ||
+      newTaskController?.isPreparing() || (newTaskController?.isBlocked() && !newTaskController?.canChangeProfile()) ||
+      (draftStore.submissions(selectedDraftKey).length && !newTaskController?.canChangeProfile()) ||
+      sessionDetailStore.get().data?.execution?.target ||
+      (runsStore.get().data?.items ?? []).some(run => run.project_id === navigation.get().projectId &&
+        run.session_id === navigation.get().sessionId && !terminalState(run)) ||
+      targetState().runtimeChanged || (isRemoteTarget() && targetState().selected.mode !== "control")),
+    onBusy: () => { setRun(activeRun); promptQueue.render(); },
+    onSelected: context => { applicationUi.selectAgent(context); if (context) { composerProfile.sync(); syncPromptPlaceholder(context.agent); } },
+    beforeSelect: (id, signal) => applicationUi.beforeSelectAgent(id, signal),
+  });
+  window.addEventListener("pagehide", () => composerAgent.destroy(), { once: true });
   newTaskController = createNewTaskController({
+    agentId: () => composerAgent.selection(),
     isWritePaused: purgeRecovery.isPaused,
     draftStore, newId: () => promptQueue.newId(), createSession,
     async findSession(projectId, sessionId) {
@@ -1334,7 +1352,7 @@ export async function boot() {
     prompt.readOnly = extractingQueue;
     composerContext?.render();
     $("#composer-attach").disabled = extractingQueue;
-    send.disabled = sendBlockedByState || extractingQueue ||
+    send.disabled = sendBlockedByState || extractingQueue || composerAgent?.isBusy() ||
       ((composerImages?.isUploading() ||
         composerImages?.hasUnsupportedDraft()) && !localCommand);
   }
@@ -1411,6 +1429,7 @@ export async function boot() {
       sessionWritable && !creatingSession && !pendingNewTask);
     composerProfile.setRunActive(Boolean(activeRun),
       creatingNewTask || messageActionBusy || purgeRecovery.isPaused());
+    composerAgent?.sync();
     writeUiAttribute(send, "aria-label", activeRun || creatingNewTask
       ? uiMessage("composer.queue", {}, "加入待发送队列")
       : uiMessage("shell.send", {}, "发送任务"));
@@ -1511,8 +1530,9 @@ export async function boot() {
     for (const button of exportButtons) button.disabled = !available;
   }
 
-  function syncPromptPlaceholder() {
-    writeUiAttribute(prompt, "placeholder", sessionWritable ? uiMessage("shell.prompt", {}, "向墨斗描述任务…")
+  function syncPromptPlaceholder(agent = composerAgent?.selection() || "mdo.default") {
+    const name = agentLabel((agentsStore.get().data?.items || []).find(item => item.id === agent) || { id: agent });
+    writeUiAttribute(prompt, "placeholder", sessionWritable ? uiMessage("composer.agentPrompt", { agent: name }, "向{agent}描述任务…")
       : selectedSessionStatus === "loading" ? uiMessage("sessionLoad.loadingTitle")
       : selectedSessionStatus === "unavailable" ? uiMessage("sessionLoad.failedTitle")
       : uiMessage("composer.readOnly", {}, "该会话不可运行；请先恢复到进行中"));
@@ -2332,6 +2352,7 @@ export async function boot() {
 
   async function submitPrompt({ text, attachments = [], interrupt = false,
     fromComposer = true }) {
+    if (composerAgent?.isBusy()) { showComposerError(localComposerError("composer.profileBusy", "请等待会话配置更新完成")); return; }
     if (messageActionBusy) {
       showComposerError(localComposerError("messageAction.busy",
         uiText("messageAction.busy", {}, "请等待当前消息操作完成")));

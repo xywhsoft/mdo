@@ -57,6 +57,25 @@ const models = [
     default_reasoning_effort: "medium" },
 ];
 
+test("a newly selected custom Agent supplies defaults without replacing a manual model choice", () => {
+  let selected = "mdo.default";
+  const modelSelect = new Select(), reasoningSelect = new Select(), permissionSelect = new Select(["read-only", "balanced", "full-access"]);
+  const profile = createComposerProfile({ modelSelect, reasoningSelect, permissionSelect,
+    selectedAgent: () => selected,
+    navigation: { get: () => ({ projectId: "default", sessionId: "" }), subscribe: () => () => {} },
+    sessionStore: createResourceStore(null), modelsStore: createResourceStore({ default_model_id: "text", models }),
+    projectsStore: createResourceStore({ items: [] }), agentsStore: createResourceStore({ items: [
+      { id: "mdo.default", model: "text" }, { id: "agent.custom", model: "code", reasoning_effort: "high" }] }),
+    onBusyChange() {},
+  });
+  try {
+    selected = "agent.custom"; profile.sync(); assert.equal(profile.selection().model_id, "code");
+    modelSelect.value = "text"; modelSelect.dispatchEvent(new Event("change"));
+    selected = "mdo.default"; profile.sync(); selected = "agent.custom"; profile.sync();
+    assert.equal(profile.selection().model_id, "text");
+  } finally { profile.destroy(); }
+});
+
 test("restored online selections wait for login and the authoritative catalog without changing the draft", () => {
   const online = "mdo-online.glm-5.3";
   const detail = { id: "s", project_id: "p", status: "active", model_id: online,
