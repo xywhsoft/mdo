@@ -1141,8 +1141,7 @@ static xwork_artifact_store* MdoAgentsArtifactStore(const char* Directory,
     char* p;
     Home.Size = sizeof(Home);
     if ( !Directory || !MdoHomeGetSnapshot(&Home) || !Home.Path ) goto fail;
-    Relative = xrtPathIsAbs(Directory) ? xrtPathRel(Home.Path, Directory) :
-        xrtStrDup(Directory);
+    Relative = MdoPathStore(Directory);
     if ( Relative == NULL ) goto fail;
     for ( p = Relative; *p; ++p ) if ( *p == '\\' ) *p = '/';
     /* Invalid Home paths must never fall back to unrestricted native IO. */
@@ -1190,6 +1189,9 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
     uint64 MemoryGeneration = 0u;
     char* DefaultArtifacts = NULL;
     char* DefaultWorkspace = NULL;
+    char* NativeSnapshot = NULL;
+    char* NativeJournal = NULL;
+    MdoAgentSessionOptions NativeOptions;
     const char* Artifacts;
     xwork_artifact_store* ArtifactStore = NULL;
     MdoHomeSnapshot Home;
@@ -1218,6 +1220,18 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
             "effective Agent settings are unavailable");
         return NULL;
     }
+    NativeOptions = *Options;
+    if ( Options->SessionPath && Options->SessionPath[0] ) {
+        NativeSnapshot = MdoPathResolve(Options->SessionPath);
+        if ( !NativeSnapshot ) { MdoAgentsError(Error, XWORK_ERROR_INVALID_ARGUMENT, "invalid Home session snapshot path"); goto fail; }
+        NativeOptions.SessionPath = NativeSnapshot;
+    }
+    if ( Options->JournalPath && Options->JournalPath[0] ) {
+        NativeJournal = MdoPathResolve(Options->JournalPath);
+        if ( !NativeJournal ) { MdoAgentsError(Error, XWORK_ERROR_INVALID_ARGUMENT, "invalid Home session journal path"); goto fail; }
+        NativeOptions.JournalPath = NativeJournal;
+    }
+    Options = &NativeOptions;
     Owner = (MdoAgentOwner*)xrtCalloc(1u, sizeof(*Owner));
     if ( Owner == NULL ) {
         MdoAgentsError(Error, XWORK_ERROR_OUT_OF_MEMORY,
@@ -1647,6 +1661,8 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
     xrtFree(MemoryPrompt);
     xrtFree(DefaultArtifacts);
     xrtFree(DefaultWorkspace);
+    xrtFree(NativeSnapshot);
+    xrtFree(NativeJournal);
     xworkArtifactStoreRelease(ArtifactStore);
     return Session;
 
@@ -1657,6 +1673,8 @@ fail:
     xrtFree(MemoryPrompt);
     xrtFree(DefaultArtifacts);
     xrtFree(DefaultWorkspace);
+    xrtFree(NativeSnapshot);
+    xrtFree(NativeJournal);
     xworkArtifactStoreRelease(ArtifactStore);
     if ( Session != NULL ) {
         if ( Session->Owner == NULL ) Session->Owner = Owner;

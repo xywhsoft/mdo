@@ -22,13 +22,15 @@ bool MdoUpdateWindowsInstall(cstr Source,cstr Hash)
         !GetProcessTimes((void*)(intptr_t)-1,&Created,&End,&Kernel,&User)) goto done;
     snprintf(Identity,sizeof(Identity),"%llu",(unsigned long long)(((uint64)Created.High<<32)|Created.Low));
     snprintf(Pid,sizeof(Pid),"%lu",GetCurrentProcessId());
-    Ok = MdoUpdateWinPut(Params,"target",Source) && MdoUpdateWinPut(Params,"sha256",Hash) &&
+    str Name=xrtPathName(Source);
+    Ok = Name && MdoUpdateWinPut(Params,"target",Name) && MdoUpdateWinPut(Params,"sha256",Hash) &&
         MdoUpdateWinPut(Params,"pid",Pid) && MdoUpdateWinPut(Params,"identity",Identity) &&
         MdoUpdateWinPut(Params,"restart_mode","original") &&
-        MdoUpdateWinPut(Params,"home",Home.Path) && MdoUpdateWinPut(Params,"work_dir",xsAppPath());
+        MdoUpdateWinPut(Params,"home",".") && MdoUpdateWinPut(Params,"path_format","home-relative-v1");
+    xrtFree(Name);
     Ok = Ok && xrtValueArrayAppendNew(Args,xrtValueString(XRT_STR_LITERAL("--"))) &&
         xrtValueArrayAppendNew(Args,xrtValueString(XRT_STR_LITERAL("--home"))) &&
-        xrtValueArrayAppendNew(Args,xrtValueString(xrtStrView(Home.Path)));
+        xrtValueArrayAppendNew(Args,xrtValueString(XRT_STR_LITERAL(".")));
     for (i=0;Ok && i<xsAppArgumentCount();++i) {
         cstr Arg = xsAppArgument((uint32)i);
         if (!strcmp(Arg,"--home")) { ++i; continue; }

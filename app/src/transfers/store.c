@@ -142,12 +142,18 @@ void MdoDtTaskPath(char Path[256],bool Incoming,cstr Id,cstr Leaf) {
 }
 xvalue* MdoDtTaskRead(bool Incoming,cstr Id) {
     char Path[256]; if (!MdoDtId(Id)) return NULL;
-    MdoDtTaskPath(Path,Incoming,Id,"task.json"); return MdoDtRead(Path,256u*1024u);
+    MdoDtTaskPath(Path,Incoming,Id,"task.json"); xvalue* Task=MdoDtRead(Path,256u*1024u);
+    const cstr Keys[]={"target_directory","target_workspace","destination_workspace"};
+    for(size_t I=0;Task&&I<3;I++)if(!MdoPathField(Task,Keys[I],true)){xrtValueRelease(Task);Task=NULL;}
+    return Task;
 }
 bool MdoDtTaskSave(bool Incoming,const xvalue* Task) {
     cstr Id=MdoAccountText(Task,"id",32u); char Path[256];
     if (!MdoDtId(Id)) return false;
-    MdoDtTaskPath(Path,Incoming,Id,"task.json"); return MdoDtSave(Path,Task);
+    MdoDtTaskPath(Path,Incoming,Id,"task.json"); xvalue* Stored=xrtValueDeepClone(Task);
+    const cstr Keys[]={"target_directory","target_workspace","destination_workspace"};bool Ok=Stored!=NULL;
+    for(size_t I=0;Ok&&I<3;I++)Ok=MdoPathField(Stored,Keys[I],false);
+    Ok=Ok&&MdoDtSave(Path,Stored);xrtValueRelease(Stored);return Ok;
 }
 bool MdoDtTaskState(xvalue* Task,cstr State,cstr Error) {
     return MdoAccountSetString(Task,"state",State) && MdoAccountSetString(Task,"error",Error?Error:"") &&

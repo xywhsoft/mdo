@@ -23,7 +23,8 @@ static bool SdkProcessOutput(xprocessstream Stream,xbytesview Bytes,void* User)
 
 static char* SdkProcessPath(cstr Base,cstr Path)
 {
-    char* Joined=xrtPathIsRooted(Path)?xrtStrDup(Path):xrtPathJoin(Base,Path);
+    if(xrtPathIsRooted(Path))return MdoPathResolve(Path);
+    char* Joined=xrtPathJoin(Base,Path);
     char* Absolute=Joined?xrtPathAbs(Joined):NULL;xrtFree(Joined);return Absolute;
 }
 
@@ -55,7 +56,7 @@ static bool SdkProcessCall(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** 
         Argv[i]=SdkText(xrtValueArrayGet(Args,i));
         if(!Argv[i]){MdoApplicationError(E,"sdk_arguments_invalid","Process argv must contain strings without NUL; empty strings are supported","process",400,false);goto done;}
     }
-    Base=C->Workspace&&C->Workspace[0]?xrtPathAbs(C->Workspace):MdoHomeDefaultWorkspacePath(false);
+    Base=C->Workspace&&C->Workspace[0]?MdoPathResolve(C->Workspace):MdoHomeDefaultWorkspacePath(false);
     Cwd=Base?SdkProcessPath(Base,Directory?Directory:"."):NULL;if(!Cwd)goto native_error;
     for(unsigned i=0;i<2;i++) {
         cstr Key=i?"stderr_path":"stdout_path";if(!SdkGet(P,Key))continue;

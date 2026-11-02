@@ -115,7 +115,7 @@ static char* SdkNativePath(const mdo_sdk_context_v1* C,const xvalue* P,bool Stor
     if(Space&&!strcmp(Space,"home"))return MdoHomeExternalPath(Path);
     if(Space&&!strcmp(Space,"application"))return xrtPathJoin(MdoHomeApplicationRoot(),Path);
     if(Space&&strcmp(Space,"native")&&strcmp(Space,"workspace"))goto bad;
-    if(xrtPathIsRooted(Path))return xrtPathAbs(Path);
+    if(xrtPathIsRooted(Path))return MdoPathResolve(Path);
     char* Base=C->Workspace&&C->Workspace[0]?xrtStrDup(C->Workspace):MdoHomeDefaultWorkspacePath(false);
     char* Result=Base?xrtPathJoin(Base,Path):NULL;xrtFree(Base);return Result;
 bad:MdoApplicationError(E,"sdk_arguments_invalid","A valid path and resource space are required","resolve",400,false);return NULL;

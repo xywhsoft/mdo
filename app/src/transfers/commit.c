@@ -232,7 +232,7 @@ bool MdoDtCommit(xvalue* Task,xcancel* Cancel,xwork_error* Error) {
     if (Full) {
         if (!MdoDtMark(Project,NULL,true,Id)) goto done;
         cstr Selected=MdoAccountText(Task,"target_directory",2048u);
-        if (Selected && Selected[0]) ParentPath=xrtPathAbs(Selected);
+        if (Selected && Selected[0]) ParentPath=MdoPathResolve(Selected);
         else {
             Root=MdoHomeOpenStorageDirectory("workspace/received-projects"); xrtRootClose(Root); Root=NULL;
             ParentPath=MdoHomeExternalPath("workspace/received-projects");

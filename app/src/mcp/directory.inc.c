@@ -31,6 +31,9 @@ static xvalue* McpDirectoryInput(const xvalue* Template,const xvalue* Values,cst
         int64 Number=Negative?-(int64)N:(int64)N,Bound=0;
         if((MdoExtensionNumber(Input,"min",&Bound)&&Number<Bound)||(MdoExtensionNumber(Input,"max",&Bound)&&Number>Bound))return NULL;
     }
+    if(Type&&(!strcmp(Type,"directory")||!strcmp(Type,"file"))&&Text[0]){
+        char* Native=MdoPathResolve(Text);xvalue* Result=Native?xrtValueString(xrtStrView(Native)):NULL;xrtFree(Native);return Result;
+    }
     return xrtValueClone(Value);
 }
 static xvalue* McpDirectoryRender(const xvalue* Template,const xvalue* Value,const xvalue* Values,cstr Root,unsigned Depth)
@@ -142,11 +145,44 @@ static char* McpDirectoryResolveDocument(MdoMcpSource* Source,const xvalue* Conn
     if(!Result)snprintf(Error,MDO_MCP_ERROR_LIMIT,"%s",Why[0]?Why:"MCP connection requires an installed directory, valid private values, matching approval and a supported variant");
     xrtFree(Path);xrtFree(Native);xrtValueRelease(Meta);xrtValueRelease(Template);xrtValueRelease(Config);return Result;
 }
+/* PRE-1.0: canonicalize only typed file/directory connection parameters. Never
+ * change recipe bytes, credentials, arbitrary text parameters or approvals. */
+static bool McpDirectoryUpgradePaths(xvalue* Connection,bool* Changed,char Error[512])
+{
+    cstr Directory=MdoExtensionText(Connection,"directory_id",96);
+    xvalue* Meta=Directory?MdoExtensionsRead("mcp",Directory,Error):NULL;
+    cstr Root=MdoExtensionText(Meta,"root",4096),Entry=MdoExtensionText(Meta,"entry",4096);
+    char* Path=Root&&Entry?xrtFormat("%s/%s",Root,Entry):NULL;
+    char* Text=Path?MdoExtensionRead(Path,true,MDO_MCP_FILE_LIMIT,NULL):NULL;
+    xvalue* Template=Text?xrtJsonParse(xrtStrView(Text)):NULL;
+    xvalue* Values=(xvalue*)xrtValueObjectGet(Connection,XRT_STR_LITERAL("values"));
+    const xvalue* Inputs=xrtValueObjectGet(Template,XRT_STR_LITERAL("inputs"));bool Ok=Template&&Values;
+    for(size_t I=0;Ok&&I<xrtValueCount(Inputs);I++){
+        const xvalue* Input=xrtValueArrayGet(Inputs,I);cstr Id=MdoExtensionText(Input,"id",64),Type=MdoExtensionText(Input,"type",16);
+        cstr Before=Id?MdoExtensionText(Values,Id,4096):NULL;
+        if(!Before||!xrtPathIsRooted(Before)||MdoMcpTemplateFlag(Input,"secret",false)||!Type||(strcmp(Type,"file")&&strcmp(Type,"directory")))continue;
+        char* Stored=MdoPathStore(Before);Ok=Stored!=NULL;
+        if(Ok&&strcmp(Stored,Before)){*Changed=true;Ok=McpDirectoryPut(Values,Id,Stored);}xrtFree(Stored);
+    }
+    if(Ok&&*Changed&&MdoMcpTemplateFlag(Connection,"managed_default",false)){
+        char Identity[65];cstr Variant=MdoExtensionText(Connection,"variant",64);
+        Ok=McpCredentialIdentity(Template,Variant,Values,Identity)&&McpDirectoryPut(Connection,"credential_identity",Identity);
+    }
+    xrtFree(Path);xrtFree(Text);xrtValueRelease(Template);xrtValueRelease(Meta);return Ok;
+}
 static char* McpDirectoryResolve(MdoMcpSource* Source,char Error[MDO_MCP_ERROR_LIMIT])
 {
     char* Text=Source->Connection?NULL:MdoExtensionRead(Source->RelativePath,true,MDO_MCP_FILE_LIMIT,NULL);
     xvalue* Connection=Source->Connection?xrtValueClone(Source->Connection):Text?xrtJsonParse(xrtStrView(Text)):NULL;xrtFree(Text);
-    char* Result=McpDirectoryResolveDocument(Source,Connection,Error);xrtValueRelease(Connection);return Result;
+    char* Result=McpDirectoryResolveDocument(Source,Connection,Error);
+    /* The fully validated resolved config stays native. Publish only the
+     * private, relative representation, once, after recipe/approval checks. */
+    if(Result&&!Source->Connection&&Source->RelativePath&&!strncmp(Source->RelativePath,"data/mcp/connections/",21)){
+        bool Changed=false;char Why[512]={0};
+        if(!McpDirectoryUpgradePaths(Connection,&Changed,Why)){xrtFree(Result);Result=NULL;snprintf(Error,MDO_MCP_ERROR_LIMIT,"Cannot migrate MCP path parameters");}
+        else if(Changed){char* Stored=xrtJsonStringify(Connection,false,NULL);bool Ok=Stored&&MdoHomeAtomicWrite(Source->RelativePath,Stored,strlen(Stored),false);xrtFree(Stored);if(!Ok){xrtFree(Result);Result=NULL;snprintf(Error,MDO_MCP_ERROR_LIMIT,"Cannot save portable MCP path parameters");}}
+    }
+    xrtValueRelease(Connection);return Result;
 }
 #include "../../include/mdo/extension_files.h"
 /* Host-owned connection values never belong to the distributed directory.

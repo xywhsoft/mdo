@@ -53,7 +53,7 @@ def run():
             executable=base/(version+".exe")
             subprocess.run(["gcc","-municode",str(code),'-DVERSION="'+version+'"',"-o",str(executable)],check=True)
             versions[version]=executable
-        for failure in ("", "arguments", "locked", "hash", "identity"):
+        for failure in ("", "portable", "arguments", "locked", "hash", "identity"):
             directory=base/("墨斗 [测试] $&' " + (failure or "success")); directory.mkdir()
             cache=directory/"mdo-home/data/update"; cache.mkdir(parents=True)
             target=directory/"墨斗 '$&.exe"; shutil.copy2(versions["old"],target)
@@ -75,6 +75,11 @@ def run():
                 pid=str(parent.pid),identity=str(identity+1 if failure=="identity" else identity),
                 home=str(directory/"mdo-home"),work_dir=str(directory),args=args,
                 restart_mode="original" if preserve else "explicit")),encoding="utf-8")
+            if failure == "portable":
+                document=json.loads(parameters.read_text(encoding="utf-8"))
+                document.update(target=target.name,home=".",path_format="home-relative-v1")
+                document.pop('work_dir')
+                parameters.write_text(json.dumps(document),encoding="utf-8")
             lock=None; helper=None
             try:
                 if failure=="locked":

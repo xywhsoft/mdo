@@ -368,7 +368,8 @@ static bool MdoDecodeMeta(MdoDecode* Decode, bool Legacy)
             !MdoBackupView(Ids, "source_workspace", &Workspace)) ) goto done;
     if ( !Legacy ) {
         char Resolved[MDO_SESSION_WORKSPACE_CAPACITY];
-        if ( !MdoPathCopy(Workspace.Data, Resolved, sizeof(Resolved)) ||
+        if ( memchr(Workspace.Data, 0, Workspace.Size) ||
+             !MdoPathCopy(Workspace.Data, Resolved, sizeof(Resolved)) ||
              strcmp(Resolved, Decode->Backup->Info.WorkspaceRoot) ) goto done;
     }
     Ok = true;

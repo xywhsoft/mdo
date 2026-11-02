@@ -9,6 +9,7 @@ static bool MdoPathMigrateObject(xvalue* Object, const char* const* Keys, size_t
         const xvalue* Value = xrtValueObjectGet(Object, xrtStrView(Keys[I]));
         if ( !Value || xrtValueType(Value) == XVALUE_NULL ) continue;
         if ( !xrtValueGetString(Value, &Before) || memchr(Before.Data, 0, Before.Size) ) return false;
+        if ( !xrtPathIsRooted(Before.Data) ) continue; /* includes legacy mdo-home: syntax */
         char* Stored = MdoPathStore(Before.Data);
         if ( !Stored ) return false;
         if ( strcmp(Stored, Before.Data) ) {
@@ -19,7 +20,7 @@ static bool MdoPathMigrateObject(xvalue* Object, const char* const* Keys, size_t
     }
     return true;
 }
-static bool MdoPathMigrateFile(cstr Path, const char* const* Keys, size_t Count, bool Terminals)
+static bool MdoPathMigrateFile(cstr Path, const char* const* Keys, size_t Count, unsigned Kind)
 {
     bool Exists = false; xfileinfo Info = {0};
     if ( !MdoHomeExternalStat(Path, &Exists, &Info) ) return false;
@@ -35,7 +36,7 @@ static bool MdoPathMigrateFile(cstr Path, const char* const* Keys, size_t Count,
     xvalue* Doc = xrtJsonRead(xrtStrViewN(Text, Bytes), &Config); xrtFree(Text);
     if ( !Doc || xrtValueType(Doc) != XVALUE_OBJECT ) { xrtValueRelease(Doc); xrtClearError(); return true; }
     bool Changed = false;
-    if ( Terminals ) {
+    if ( Kind == 1 ) {
         const xvalue* Rows = xrtValueObjectGet(Doc, XRT_STR_LITERAL("terminals"));
         static const char* const Fields[] = {"cwd", "program"}, *const Workspace[] = {"workspace"};
         for ( size_t I = 0; Ok && I < xrtValueCount(Rows); ++I ) {
@@ -44,6 +45,10 @@ static bool MdoPathMigrateFile(cstr Path, const char* const* Keys, size_t Count,
             xvalue* Context = (xvalue*)xrtValueObjectGet(Row, XRT_STR_LITERAL("context"));
             if ( Ok && Context ) Ok = MdoPathMigrateObject(Context, Workspace, 1, &Changed);
         }
+    } else if ( Kind == 2 ) {
+        xvalue* Transport = (xvalue*)xrtValueObjectGet(Doc, XRT_STR_LITERAL("transport"));
+        static const char* const Fields[] = {"program", "working_directory"};
+        if ( Transport ) Ok = MdoPathMigrateObject(Transport, Fields, 2, &Changed);
     } else Ok = MdoPathMigrateObject(Doc, Keys, Count, &Changed);
     if ( Ok && Changed ) {
         Text = xrtJsonStringify(Doc, true, &Bytes);
@@ -75,8 +80,8 @@ static bool MdoPathMigrateTree(cstr Path, unsigned Depth, size_t* Budget, bool B
             bool Json = N >= 5 && !strcmp(Name + N - 5, ".json");
             bool Backup = N >= 9 && !strcmp(Name + N - 9, ".json.bak");
             if ( Metadata || (!strcmp(Path, "projects") && (Json || Backup)) ||
-                 (!strcmp(Path, "schedules") && (Json || Backup)) || (Baseline && (Json || Backup)) )
-                Ok = MdoPathMigrateFile(Child, Baseline ? Fields : Workspace, Baseline ? 2 : 1, false);
+                 ((!strcmp(Path, "schedules") || !strcmp(Path, "config/mcp")) && (Json || Backup)) || (Baseline && (Json || Backup)) )
+                Ok = MdoPathMigrateFile(Child, Baseline ? Fields : Workspace, Baseline ? 2 : 1, !strcmp(Path, "config/mcp") ? 2 : 0);
         }
         xrtFree(Child);
     }
@@ -93,6 +98,7 @@ bool MdoPathMigrate(void)
     return MdoPathMigrateTree("projects", 0, &Budget, false) &&
         MdoPathMigrateTree("sessions", 2, &Budget, false) &&
         MdoPathMigrateTree("schedules", 0, &Budget, false) &&
+        MdoPathMigrateTree("config/mcp", 0, &Budget, false) &&
         MdoPathMigrateTree("workbench-baselines", 2, &Budget, true) &&
         MdoPathMigrateFile("data/application/terminals.json", NULL, 0, true);
 }

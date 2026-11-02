@@ -57,6 +57,20 @@ static bool SdkStateShardBudget(cstr Physical,size_t Bytes,mdo_error_v1* E){
 }
 /* One checksummed atomic document per namespace: a transaction never publishes
  * a subset of its keys. Tombstones retain revisions across remove/recreate. */
+static bool SdkStateSave(cstr Path,const xvalue* Root,mdo_error_v1* E);
+/* PRE-1.0: only host member records are upgraded. All plugin state is opaque. */
+static bool SdkStateUpgradePaths(xvalue* Root,bool* Changed){
+    const xvalue* Records=SdkGet(Root,"records");
+    for(size_t I=0;I<xrtValueCount(Records);I++){
+        cstr Key=SdkKey(Records,I);if(strncmp(Key,"sys.instance.",13))continue;
+        xvalue* V=(xvalue*)SdkGet(SdkGet(Records,Key),"value");cstr Before=SdkField(V,"workspace");
+        if(!Before||!xrtPathIsRooted(Before))continue;
+        char* Stored=MdoPathStore(Before);if(!Stored)return false;
+        bool Different=strcmp(Before,Stored)!=0;
+        bool Ok=!Different||SdkPut(V,"workspace",Stored);xrtFree(Stored);if(!Ok)return false;
+        if(Different)*Changed=true;
+    }return true;
+}
 static xvalue* SdkStateLoad(const mdo_sdk_context_v1* C,const xvalue* P,char Path[160],mdo_error_v1* E){
     cstr Name=SdkField(P,"namespace");if(!Name)Name=C->Namespace&&C->Namespace[0]?C->Namespace:C->ExtensionId;
     cstr Project=C->ProjectId&&C->ProjectId[0]?C->ProjectId:"default";
@@ -88,10 +102,22 @@ static xvalue* SdkStateLoad(const mdo_sdk_context_v1* C,const xvalue* P,char Pat
     if(Valid)Valid=xrtValueType(Requests)==XVALUE_OBJECT&&xrtValueCount(Requests)<=128;
     xrtValueRelease(Envelope);
     if(!Valid){xrtValueRelease(Root);MdoApplicationError(E,HadText?"sdk_state_corrupt":"sdk_state_unreadable","State is unreadable, corrupt or unsupported; original data was preserved","state",422,false);return NULL;}
+    bool Migrated=false;
+    if(!SdkStateUpgradePaths(Root,&Migrated)){xrtValueRelease(Root);MdoApplicationError(E,"sdk_state_path","Stored member path is invalid; original data was retained","state",422,false);return NULL;}
+    if(Migrated&&!SdkStateSave(Path,Root,E)){xrtValueRelease(Root);return NULL;}
     return Root;
 }
 static bool SdkStateSave(cstr Path,const xvalue* Root,mdo_error_v1* E){
-    char* Payload=SdkJson(Root);char Hash[65];bool Ok=Payload&&strlen(Payload)<=SDK_STATE_BYTES;
+    xvalue* Stored=xrtValueDeepClone(Root);const xvalue* Records=SdkGet(Stored,"records");bool Portable=Stored!=NULL;
+    /* These are host-owned member records. Application-owned state remains
+     * opaque; never guess path semantics inside third-party plugin data. */
+    for(size_t I=0;Portable&&I<xrtValueCount(Records);I++){
+        cstr Key=SdkKey(Records,I);if(!strncmp(Key,"sys.instance.",13)){
+            xvalue* Value=(xvalue*)SdkGet(SdkGet(Records,Key),"value");
+            if(Value)Portable=MdoPathField(Value,"workspace",false);
+        }
+    }
+    char* Payload=Portable?SdkJson(Stored):NULL;xrtValueRelease(Stored);char Hash[65];bool Ok=Payload&&strlen(Payload)<=SDK_STATE_BYTES;
     if(!Ok){xrtFree(Payload);return MdoApplicationError(E,"sdk_state_limit","Namespace exceeds its 4 MiB storage budget","state",413,false);}
     xvalue* Envelope=xrtValueObject();Ok=MdoExtensionHash(Payload,Hash)&&SdkPut(Envelope,"payload",Payload)&&SdkPut(Envelope,"sha256",Hash);xrtFree(Payload);
     char* Text=Ok?SdkJson(Envelope):NULL;xrtValueRelease(Envelope);

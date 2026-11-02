@@ -10,9 +10,16 @@ static bool SdkInstanceStore(xvalue* Root,cstr Key,xvalue* V,mdo_error_v1* E){
     if(Revision==UINT64_MAX||(!SdkGet(Records,Key)&&xrtValueCount(Records)>=SDK_STATE_RECORDS))return MdoApplicationError(E,"sdk_instance_limit","Member namespace retained-record budget exhausted","instance",413,false);
     return SdkPutUInt(V,"revision",Revision+1)&&SdkMailboxStore(Root,Key,V,Revision+1,E);
 }
+static bool SdkInstanceIntentHash(const xvalue* V,char Hash[65]){
+    const cstr Keys[]={"id","agent_id","model_id","permission_profile","workspace","parent_session","owner"};
+    xvalue* Intent=xrtValueObject();bool Ok=Intent!=NULL;
+    for(size_t I=0;Ok&&I<7;I++)Ok=SdkPut(Intent,Keys[I],SdkField(V,Keys[I]));
+    Ok=Ok&&MdoPathField(Intent,"workspace",false)&&SdkMailboxHash(Intent,Hash);xrtValueRelease(Intent);return Ok;
+}
 static int SdkInstanceActive(cstr Identity);
 static xvalue* SdkInstanceInfo(const xvalue* V){
-    xvalue* R=xrtValueClone(V);cstr State=SdkField(V,"state"),Epoch=SdkField(V,"epoch");
+    xvalue* R=xrtValueDeepClone(V);cstr State=SdkField(V,"state"),Epoch=SdkField(V,"epoch");
+    if(R&&!MdoPathField(R,"workspace",true)){xrtValueRelease(R);return NULL;}
     cstr Identity=SdkField(V,"runtime_identity");
     if(State&&Identity&&SdkInstanceActive(Identity)>=0&&(!strcmp(State,"idle")||!strcmp(State,"requires_review")))SdkPut(R,"state","running");
     if(State&&!strcmp(State,"running")&&(!Epoch||strcmp(Epoch,SdkState.Epoch)||!Identity||SdkInstanceActive(Identity)<0))SdkPut(R,"state","requires_review");
@@ -122,8 +129,9 @@ static bool SdkInstanceCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue
     if(List){*R=xrtValueArray();const xvalue* Records=SdkGet(Root,"records");for(size_t I=0;I<xrtValueCount(Records);I++){cstr K=SdkKey(Records,I);if(!strncmp(K,"sys.instance.",13))xrtValueArrayAppendNew(*R,SdkInstanceListInfo(SdkInstanceValue(Root,K)));}Ok=*R!=NULL;goto done;}
     if(Create){
         xvalue* Intent=xrtValueObject();SdkPut(Intent,"id",Id);SdkPut(Intent,"agent_id",Agent);SdkPut(Intent,"model_id",Model);SdkPut(Intent,"permission_profile",Permission);
-        SdkPut(Intent,"workspace",C->Workspace);SdkPut(Intent,"parent_session",C->SessionId);SdkPut(Intent,"owner",C->ExtensionId);char Hash[65];SdkMailboxHash(Intent,Hash);
-        if(Member){Ok=SdkField(Member,"intent_hash")&&!strcmp(SdkField(Member,"intent_hash"),Hash);xrtValueRelease(Intent);if(Ok)*R=SdkInstanceInfo(Member);else MdoApplicationError(E,"sdk_identity_conflict","Member id belongs to different creation intent","instance",409,false);goto done;}
+        SdkPut(Intent,"workspace",C->Workspace);SdkPut(Intent,"parent_session",C->SessionId);SdkPut(Intent,"owner",C->ExtensionId);char Hash[65];
+        if(!SdkInstanceIntentHash(Intent,Hash)){xrtValueRelease(Intent);goto done;}
+        if(Member){char Prior[65];Ok=(SdkField(Member,"intent_hash")&&!strcmp(SdkField(Member,"intent_hash"),Hash))||(SdkInstanceIntentHash(Member,Prior)&&!strcmp(Prior,Hash));xrtValueRelease(Intent);if(Ok)*R=SdkInstanceInfo(Member);else MdoApplicationError(E,"sdk_identity_conflict","Member id belongs to different creation intent","instance",409,false);goto done;}
         size_t Count=0;const xvalue* Records=SdkGet(Root,"records");for(size_t I=0;I<xrtValueCount(Records);I++)if(!strncmp(SdkKey(Records,I),"sys.instance.",13))Count++;
         if(Count>=64){xrtValueRelease(Intent);MdoApplicationError(E,"sdk_instance_limit","Namespace retains 64 members; use an execution namespace","instance",413,false);goto done;}
         char Box[96];snprintf(Box,sizeof(Box),"instance.%s",Id);SdkPut(Intent,"mailbox",Box);SdkPut(Intent,"namespace",SdkField(Root,"namespace"));SdkPut(Intent,"intent_hash",Hash);SdkPut(Intent,"state","idle");SdkPut(Intent,"epoch",SdkState.Epoch);SdkPut(Intent,"history_format","mdo.instance.history.v1");

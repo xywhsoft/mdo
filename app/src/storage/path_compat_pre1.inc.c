@@ -1,6 +1,9 @@
 /* TEMPORARY: remove at 1.0. This is component matching, never a regex replace
  * over a document. Existing absolute locations win, including external projects.
  * Only NOT_FOUND permits rebasing; permission/I/O errors must not redirect I/O. */
+#if defined(MDO_VERSION_CODE) && ((MDO_VERSION_CODE & 0x00FFFFFFu) >= 0x00010000u)
+#error Remove pre-1.0 Home path compatibility before building mdo 1.0
+#endif
 static char* MdoPathLegacyResolve(cstr Path)
 {
     char* Native = xrtPathAbs(Path);

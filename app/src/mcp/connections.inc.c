@@ -93,6 +93,8 @@ bool MdoMcpConnectionManage(const xvalue* Input,xcancel* Cancel,xvalue** Result,
   if(!Value)Value=MdoExtensionText(Definition,"default",4096);
   if(!Value)Value="";
   Ok=McpDirectoryPut(Values,Key,Value);
+  cstr Type=MdoExtensionText(Definition,"type",16);
+  if(Ok&&!Secret&&Type&&(!strcmp(Type,"directory")||!strcmp(Type,"file")))Ok=MdoPathField(Values,Key,false);
  }
  Doc=xrtValueObject();Ok=Ok&&Doc&&McpDirectoryPut(Doc,"id",Id)&&McpDirectoryPut(Doc,"extension_id",Directory)&&McpDirectoryPut(Doc,"directory_id",MdoExtensionText(Meta,"directory_id",96))&&McpDirectoryPut(Doc,"variant",Variant)&&McpDirectoryPut(Doc,"approval_digest",Digest)&&xrtValueObjectSet(Doc,XRT_STR_LITERAL("values"),Values);
  char DefaultId[97],Identity[65];bool Managed=McpDefaultId(Directory,DefaultId)&&!strcmp(Id,DefaultId);

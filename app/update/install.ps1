@@ -74,7 +74,21 @@ function File-Hash([string]$path) {
 }
 try {
     $parametersData = Get-Content -LiteralPath $Parameters -Raw -Encoding UTF8 | ConvertFrom-Json
-    $targetPath = [IO.Path]::GetFullPath([string]$parametersData.target)
+    $parent = [Diagnostics.Process]::GetProcessById([int]$parametersData.pid)
+    if ($parametersData.path_format -eq 'home-relative-v1') {
+        # Derive native locations at execution time. No installation directory
+        # or Home location is persisted in the new admission document.
+        $name = [string]$parametersData.target
+        if (-not $name -or $name -ne [IO.Path]::GetFileName($name) -or $name -in @('.', '..')) {
+            throw 'Invalid executable name in install parameters'
+        }
+        $targetPath = [IO.Path]::GetFullPath($parent.MainModule.FileName)
+        if ([IO.Path]::GetFileName($targetPath) -ine $name) { throw 'Original executable name mismatch' }
+        $parametersData | Add-Member -NotePropertyName work_dir -NotePropertyValue ([IO.Path]::GetDirectoryName($targetPath)) -Force
+    } else {
+        # PRE-1.0 compatibility: remove when old installer documents retire.
+        $targetPath = [IO.Path]::GetFullPath([string]$parametersData.target)
+    }
     $newPath = Join-Path $folder 'new.exe'
     $oldPath = Join-Path $folder 'old.exe'
     $expected = [string]$parametersData.sha256
@@ -84,12 +98,17 @@ try {
     if ((File-Hash $newPath) -cne $expected) {
         throw 'Downloaded package hash changed before installation'
     }
-    $parent = [Diagnostics.Process]::GetProcessById([int]$parametersData.pid)
     if ([IO.Path]::GetFullPath($parent.MainModule.FileName) -ine $targetPath) { throw 'Original executable path mismatch' }
     if ($parent.StartTime.ToUniversalTime().ToFileTimeUtc().ToString() -cne [string]$parametersData.identity) {
         throw 'The original process identity no longer matches'
     }
     $restartArgs = @($parametersData.args)
+    if ($parametersData.path_format -eq 'home-relative-v1') {
+        $homeRoot = [IO.Directory]::GetParent([IO.Directory]::GetParent($folder).FullName).FullName
+        for ($i = 0; $i -lt $restartArgs.Count - 1; $i++) {
+            if ($restartArgs[$i] -eq '--home' -and $restartArgs[$i + 1] -eq '.') { $restartArgs[$i + 1] = $homeRoot }
+        }
+    }
     if ($parametersData.restart_mode -eq 'original') {
         # xsAppArgument contains only app arguments; retain native --port etc. too.
         $record = Get-CimInstance Win32_Process -Filter ("ProcessId=" + $parent.Id)

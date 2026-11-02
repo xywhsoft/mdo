@@ -988,14 +988,11 @@ static bool MdoMcpParseWorkingDirectory(const xvalue* pValue,
         *pDirectory = Joined;
         return true;
     }
-    if ( !xrtPathIsAbs(Text) ) {
-        xrtFree(Text);
-        MdoMcpFormatError(Error, MDO_MCP_ERROR_LIMIT,
-            "working_directory must be absolute or use mdo-home:");
-        return false;
-    }
-    *pDirectory = Text;
-    return true;
+    *pDirectory = MdoPathResolve(Text);
+    xrtFree(Text);
+    if ( !*pDirectory ) MdoMcpFormatError(Error, MDO_MCP_ERROR_LIMIT,
+        "working_directory must be a valid Home-relative or native path");
+    return *pDirectory != NULL;
 }
 
 static bool MdoMcpParseEffects(const xvalue* pValue,
@@ -1073,6 +1070,11 @@ static bool MdoMcpParseStdio(const xvalue* pTransport,
         return false;
     }
     pEntry->Transport = MDO_MCP_TRANSPORT_STDIO;
+    if ( xrtPathIsRooted(pEntry->Program) || strchr(pEntry->Program, '/') || strchr(pEntry->Program, '\\') ) {
+        char* Native = MdoPathResolve(pEntry->Program);
+        if ( !Native ) return false;
+        xrtFree(pEntry->Program); pEntry->Program = Native;
+    }
     pEntry->InheritEnvironment = Inherit;
     return true;
 }
