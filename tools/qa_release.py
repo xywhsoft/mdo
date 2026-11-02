@@ -123,6 +123,9 @@ def runtime_probe_command(probe: Path, host: Path, packed: Path, *,
         return [sys.executable, str(probe), "--packed-path", str(packed)]
     if probe.name == "test_session_purge_runtime.py":
         return [sys.executable, str(probe), "--host", str(host), "--packed", str(packed)]
+    if probe.name == "test_browser_fallback_runtime.py":
+        return [sys.executable, str(probe), "--host", str(host), "--evidence",
+                str(packed.parent / "browser-fallback.json")]
     if probe.name == "test_task_stop_runtime.py":
         directory = BUILD / "qa-release" / ("task-stop-" + uuid.uuid4().hex)
         return [sys.executable, str(probe), "--host", str(host), "--directory", str(directory)]
