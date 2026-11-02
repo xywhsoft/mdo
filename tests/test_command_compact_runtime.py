@@ -3,7 +3,7 @@ import argparse,json,os,subprocess,tempfile,threading,time,uuid
 from pathlib import Path
 from collections import Counter
 from http.server import ThreadingHTTPServer
-from test_api_runtime import ROOT,write_site,free_port,request,wait_ready,session_events
+from test_api_runtime import ROOT,free_port,request,wait_ready,session_events
 from test_packed_compaction_failure import Model
 
 def main():
@@ -12,9 +12,15 @@ def main():
     server=ThreadingHTTPServer(('127.0.0.1',0),Model);thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
     try:
       with tempfile.TemporaryDirectory(dir=ROOT/'.build',prefix='command-compact-') as raw:
-        base=Path(raw);port=free_port();config=write_site(base,port);home=base/'home'
+        base=Path(raw);port=free_port();home=base/'home'
+        # Compile the current application in place. The broad API fixture adds
+        # unrelated source hooks and can hide ownership differences from release.
+        config=ROOT/'app'/('.compact-qa-'+uuid.uuid4().hex+'.json')
+        config.write_text(json.dumps({'engine':{'workers':2},'services':[{
+          'enabled':True,'class':'http','name':'compact-qa','ip':'127.0.0.1','port':port,
+          'host_default':{'enabled':True,'name':'mdo','path':'web','devlang':'c','devfile':'generated/mdo_unity.c'}}]}),encoding='utf-8')
         with (base/'host.log').open('wb') as output:
-          child=subprocess.Popen([str(a.host.resolve()),str(config),'--','--home',str(home)],cwd=base,
+          child=subprocess.Popen([str(a.host.resolve()),str(config),'--','--home',str(home)],cwd=ROOT/'app',
             env=dict(os.environ,MDO_CONTEXT_FIXTURE_KEY='fixture-only'),stdout=output,stderr=subprocess.STDOUT,
             creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
           try:
@@ -39,12 +45,8 @@ def main():
             model['window'].update(context_tokens=131072,max_input_tokens=131072,max_output_tokens=1024,output_reserve_tokens=1024,summary_tokens=1024)
             settings['providers'].append(provider);settings['items'].append(model);settings.pop('runtime_override',None)
             call('PUT','/settings/models',{'schema_version':1,'patch':settings},{'If-Match':fields['etag']})
-            (home/'commands').mkdir(exist_ok=True)
-            (home/'commands/sessioncreate.c').write_text('/* mdo-command {"id":"sessioncreate","description":"Create fixture session"} */\n#include "mdo/command.h"\nmdo_result mdoCommandRun(const mdo_command_context_v1* C,const xvalue* A,xvalue** R){return mdoCommandCall(C,"session.create",C->Host->At(A,0),R);}',encoding='utf-8')
-            create,_=call('POST','/command-invocations?project=default',{'invocation_id':'cmd-'+uuid.uuid4().hex,'command_id':'sessioncreate',
-              'raw_arguments':json.dumps([{'title':'Manual compact','model_id':'command-fixture','reasoning_effort':'none','permission_profile':'read-only','max_output_tokens':1024}])},status=202)
-            created=wait('/command-invocations/'+create['id']);assert created['state']=='succeeded',created
-            session=created['result']
+            session,_=call('POST','/sessions',{'project_id':'default','title':'Manual compact',
+              'model_id':'command-fixture','reasoning_effort':'none','permission_profile':'read-only','max_output_tokens':1024},status=201)
             path='/projects/default/sessions/'+session['id']
             for i in range(5):
               run,_=call('POST',path+'/runs',{'prompt':f'Turn {i} PIXEL_KEEP: dimensions32 palette8 output pixels.png. '+'history-note '*2500},status=202)
@@ -60,8 +62,11 @@ def main():
             while Model.calls['summary']==count and time.monotonic()<until:time.sleep(.02)
             assert Model.calls['summary']>count,(wait(pending),Model.calls)
             call('DELETE',pending);assert wait(pending)['state']=='cancelled'
-            Model.mode='valid';result=wait(invoke())
-            assert result['state']=='succeeded' and result['actions'][0]['type']=='ui.refresh',result
+            Model.mode='valid'
+            frontend=subprocess.run(['node',str(ROOT/'tests/fixtures/command-compact-client.mjs'),
+              f'http://127.0.0.1:{port}',session['id']],cwd=ROOT,capture_output=True,text=True,encoding='utf-8',timeout=30)
+            assert frontend.returncode==0,(frontend.stdout,frontend.stderr)
+            assert json.loads(frontend.stdout)['state']=='succeeded',frontend.stdout
             events=session_events(port,'/api/v1'+path)
             assert any(e['kind']=='compaction_done' for e in events),[e['kind'] for e in events]
             history=lambda events:[(e['kind'],e.get('text')) for e in events if e['kind'] in ('user_message','assistant_message','final')]
@@ -72,6 +77,7 @@ def main():
             child.terminate()
             try:child.wait(timeout=10)
             except subprocess.TimeoutExpired:child.kill();child.wait()
+            config.unlink(missing_ok=True)
     finally:server.shutdown();server.server_close();thread.join(timeout=5)
-    print('Manual compact: forced summary / quota failure / cancellation / original transcript / continuation: PASS')
+    print('Manual compact: native frontend + recovery serialization / forced summary / quota failure / cancellation / original transcript / continuation: PASS')
 if __name__=='__main__':main()

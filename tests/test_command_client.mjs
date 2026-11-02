@@ -2,6 +2,75 @@ import assert from "node:assert/strict";
 import test from "node:test";
 globalThis.window = new EventTarget();
 const { loadCommands, runCommand, cancelCommand, parseCommand } = await import("../app/web/js/features/chat/extension-commands.js");
+const { withSessionRuntime } = await import("../app/web/js/state/session-runtime.js");
+const flush = () => new Promise(resolve => setImmediate(resolve));
+const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; };
+
+test("compact waits for the same session's recovery inspection before submission", async context => {
+  const gate = deferred(), scope = { projectId: "work", sessionId: "compact-inspection" };
+  const inspection = withSessionRuntime(scope.projectId, scope.sessionId, () => gate.promise);
+  await flush();
+  let posts = 0;
+  context.mock.method(globalThis, "fetch", async (_url, options) => {
+    posts++;
+    return Response.json({ ok: true, data: { id: JSON.parse(options.body).invocation_id, terminal: true, state: "succeeded" } });
+  });
+  const command = runCommand({ id: "compact", requires_session: true }, "", scope);
+  try { await flush(); assert.equal(posts, 0, "recovery still owns the exclusive server runtime"); }
+  finally { gate.resolve(); await Promise.all([inspection, command]); }
+  assert.equal(posts, 1);
+});
+
+test("compact owns the session until its asynchronous receipt is terminal", async context => {
+  const polling = deferred(), receipt = deferred(); let id;
+  context.mock.method(globalThis, "fetch", async (_url, options) => {
+    if (options.method === "POST") {
+      id = JSON.parse(options.body).invocation_id;
+      return Response.json({ ok: true, data: { id, terminal: false, state: "running" } });
+    }
+    polling.resolve(); await receipt.promise;
+    return Response.json({ ok: true, data: { id, terminal: true, state: "succeeded" } });
+  });
+  const scope = { projectId: "work", sessionId: "compact-polling" };
+  const command = runCommand({ id: "compact", requires_session: true }, "", scope);
+  await polling.promise;
+  let inspected = false;
+  const inspection = withSessionRuntime(scope.projectId, scope.sessionId, async () => { inspected = true; });
+  try { await flush(); assert.equal(inspected, false, "receipt polling must retain the runtime lane"); }
+  finally { receipt.resolve(); await Promise.all([command, inspection]); }
+  assert.equal(inspected, true);
+});
+
+test("a cancelled compact waiting for inspection never submits or bypasses its owner", async context => {
+  const gate = deferred(), scope = { projectId: "work", sessionId: "compact-cancel" }, controller = new AbortController();
+  const inspection = withSessionRuntime(scope.projectId, scope.sessionId, () => gate.promise);
+  await flush();
+  let posts = 0, followerEntered = false;
+  context.mock.method(globalThis, "fetch", async () => { posts++; throw Error("unexpected POST"); });
+  const command = runCommand({ id: "compact", requires_session: true }, "", scope, { signal: controller.signal });
+  const rejected = assert.rejects(command, { name: "AbortError" });
+  const follower = withSessionRuntime(scope.projectId, scope.sessionId, async () => { followerEntered = true; });
+  try {
+    controller.abort(); await rejected; await flush();
+    assert.equal(posts, 0); assert.equal(followerEntered, false);
+  } finally { gate.resolve(); await Promise.all([inspection, follower]); }
+});
+
+test("stop and a compact in another session do not wait for the held session", async context => {
+  const gate = deferred();
+  const inspection = withSessionRuntime("work", "compact-other", () => gate.promise);
+  await flush();
+  let posts = 0;
+  context.mock.method(globalThis, "fetch", async (_url, options) => {
+    posts++;
+    return Response.json({ ok: true, data: { id: JSON.parse(options.body).invocation_id, terminal: true, state: "succeeded" } });
+  });
+  try {
+    await runCommand({ id: "stop", requires_session: false }, "", { projectId: "work", sessionId: "compact-other" });
+    await runCommand({ id: "compact", requires_session: true }, "", { projectId: "work", sessionId: "independent" });
+    assert.equal(posts, 2);
+  } finally { gate.resolve(); await inspection; }
+});
 
 test("command parsing keeps raw arguments and leaves both Skill forms separate",()=>{
   assert.deepEqual(parseCommand('/model ["model-id"]'),{id:"model",raw:'["model-id"]'});

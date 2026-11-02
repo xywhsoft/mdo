@@ -1,6 +1,7 @@
 import { t as uiText } from "../../i18n.js";
 import { api } from "../../api/client.js";
 import { subscribeTarget, targetState } from "../../api/target.js";
+import { withSessionRuntime } from "../../state/session-runtime.js";
 const listeners = new Set(), catalogs = new Map(), recoveries = new Map();
 let generation = 0;
 const owner = () => targetState().selected?.id || "local";
@@ -33,6 +34,19 @@ export function commandInvocationId() {
 }
 // A lost acknowledgement requires a status GET, never a repeated mutation.
 export async function runCommand(command, raw, scope, { onPending, signal } = {}) {
+  const target = owner(), boundScope = { ...scope };
+  const execute = () => {
+    if (owner() !== target || signal?.aborted) throw new DOMException("Command target changed", "AbortError");
+    return executeCommand(command, raw, boundScope, { onPending, signal });
+  };
+  // Recovery reads and run/profile requests open the same exclusive runtime.
+  // Hold its lane through the terminal receipt, not just the command POST:
+  // the native command starts asynchronously and only then opens the session.
+  return command.requires_session && boundScope.sessionId
+    ? withSessionRuntime(boundScope.projectId || "default", boundScope.sessionId, execute, { signal })
+    : execute();
+}
+async function executeCommand(command, raw, scope, { onPending, signal }) {
   const target = owner(), recoveryKey = JSON.stringify([target,scope.projectId,scope.sessionId,command.id,raw]);
   const recovered = recoveries.get(recoveryKey), id = recovered || commandInvocationId();
   const input = { invocation_id: id, command_id: command.id, raw_arguments: raw,

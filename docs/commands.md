@@ -67,6 +67,8 @@ MDO_EXPORT mdo_result mdoCommandRun(
 | `skill.invoke` | `{"id":"skill-id","arguments":"..."}`；未提供 arguments 时使用命令原始参数 |
 | `api.request` | `{"method":"GET","path":"/api/v1/..."}`；访问本机现有 API，写入可选 `body`、`headers` |
 
+界面对 `requires_session: true` 的命令使用与恢复检查、启动回复和配置切换相同的会话队列，并一直等待命令的最终回执后才释放。`/compact` 在子进程异步启动后才打开执行环境，仅等待命令提交响应不足以避免与后台恢复检查冲突。不依赖会话的 `/stop` 等命令不等待这条队列。
+
 `api.request` 只接受本机 API 路径，走已有来源、修订、写入和项目保护；写入令牌由宿主提供，不交给 C 命令。返回 `status`、`etag`、`body`，调用者应检查 HTTP 状态。命令、宿主更新及工具包分发相关端点不向此桥开放，防止递归或替换运行中的宿主。网络失败不会自动重放写入；错误会明确提醒结果可能已生效。
 
 界面操作仅在成功后由原浏览器应用，并检查当前上下文。结构化结果支持：
