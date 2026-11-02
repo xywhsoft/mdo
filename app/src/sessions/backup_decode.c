@@ -365,8 +365,12 @@ static bool MdoDecodeMeta(MdoDecode* Decode, bool Legacy)
             &Decode->Backup->Info) ) goto done;
     if ( !Legacy && (!MdoBackupUInt(Ids, "revision", &Revision) ||
             Revision != Decode->Backup->Info.Revision ||
-            !MdoBackupView(Ids, "source_workspace", &Workspace) ||
-            !MdoDecodeEqual(Workspace, Decode->Backup->Info.WorkspaceRoot)) ) goto done;
+            !MdoBackupView(Ids, "source_workspace", &Workspace)) ) goto done;
+    if ( !Legacy ) {
+        char Resolved[MDO_SESSION_WORKSPACE_CAPACITY];
+        if ( !MdoPathCopy(Workspace.Data, Resolved, sizeof(Resolved)) ||
+             strcmp(Resolved, Decode->Backup->Info.WorkspaceRoot) ) goto done;
+    }
     Ok = true;
 done:
     xrtValueRelease(Root);

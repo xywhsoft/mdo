@@ -28,7 +28,7 @@ static bool MdoRestoreTarget(const MdoSessionBackup* Source, const MdoSessionBac
     if ( !MdoRestoreText(Info->ProjectId, sizeof(Info->ProjectId), Target->ProjectId) ||
          !MdoRestoreText(Info->Id, sizeof(Info->Id), Target->SessionId) ||
          strlen(Info->Id) != 32u || !MdoBackupDigits(Info->Id, 32u, true) || strcmp(Info->Id, Source->Info.Id) == 0 ||
-         !MdoRestoreText(Info->WorkspaceRoot, sizeof(Info->WorkspaceRoot), Target->WorkspaceRoot) ||
+         !MdoPathCopy(Target->WorkspaceRoot, Info->WorkspaceRoot, sizeof(Info->WorkspaceRoot)) ||
          !MdoBackupWorkspaceAbsolute(xrtStrView(Info->WorkspaceRoot)) ) goto invalid;
     Info->Revision = 1u; Info->CreatedAt = Info->UpdatedAt = Target->RestoredAt;
     if (!Target->PreserveLifecycle) {

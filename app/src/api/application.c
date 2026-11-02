@@ -25,7 +25,7 @@ bool MdoApiApplicationRoute(MdoApiContext* C){
     if(!Project||!Project[0]||!strcmp(Project,"default"))Workspace=MdoHomeDefaultWorkspacePath(false);
     else {MdoProjectInfo Info={0};Info.Size=sizeof(Info);bool Found=false;xwork_error Error;
         if(!MdoProjectGet(Project,&Info,&Found,&Error)||!Found){MdoApiJsonBodyUnit(&Body);return MdoApiReplyError(C,404,"sdk_project_missing","The selected project is unavailable",NULL);}
-        Workspace=xrtPathAbs(Info.WorkspaceRoot);
+        Workspace=MdoPathResolve(Info.WorkspaceRoot);
     }
     MdoApplicationContext(&Native,&I,Extension?Extension:"local-client",C->RequestId,Project,SdkField(Scope,"session"),SdkField(Scope,"run"),Workspace,0);
     Native.Origin=MDO_ORIGIN_USER;

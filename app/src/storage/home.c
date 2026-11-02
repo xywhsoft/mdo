@@ -1156,3 +1156,5 @@ done:
 /* The Home lease and VFS mount have the same generation lifetime. */
 xvfs MdoHomeApplicationVfs(void) { return g_MdoHome.ApplicationVfs; }
 cstr MdoHomeApplicationRoot(void) { return g_MdoHome.ApplicationRoot; }
+
+#include "portable_paths.inc.c"

@@ -4,7 +4,7 @@ xvalue* MdoAgentDefinitionInspect(cstr Id,cstr Text,bool Main,cstr Workspace,
     MdoAgentOwner Owner={0};MdoAgentInstance Instance={0};MdoAgentFile File={0};
     xwork_agent_extension_context Native={0};xvalue* Plan=NULL;
     xworkErrorInit(Error);
-    Owner.Modules=MdoModuleCatalogSnapshot();Owner.Workspace=xrtPathAbs(Workspace?Workspace:".");
+    Owner.Modules=MdoModuleCatalogSnapshot();Owner.Workspace=MdoPathResolve(Workspace?Workspace:".");
     snprintf(Owner.ProductProject,sizeof(Owner.ProductProject),"%s",ProjectId?ProjectId:"");
     Owner.Skills=MdoSkillCatalogForWorkspace(Owner.Workspace?Owner.Workspace:".");
     Instance.Definition.Size=sizeof(Instance.Definition);

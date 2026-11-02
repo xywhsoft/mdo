@@ -475,6 +475,7 @@ char* MdoSchedulesInternalJson(const MdoScheduleInfo* Info, size_t* Size)
             xrtValueUInt(Info->ClaimCount)) ||
          !MdoSchedulesObjectTake(Root, "misfire_count",
             xrtValueUInt(Info->MisfireCount)) ) goto done;
+    if ( !MdoPathField(Root, "workspace_root", false) ) goto done;
     Json = xrtJsonStringify(Root, true, Size);
     if ( Json != NULL && *Size > MDO_SCHEDULE_STORE_LIMIT ) {
         xrtFree(Json);
@@ -619,7 +620,7 @@ bool MdoSchedulesInternalParse(const char* ExpectedId, xstrview Json,
          !MdoSchedulesCopyView(Info->Input, sizeof(Info->Input), Input, false) ||
          strcmp(Info->Id, ExpectedId) != 0 ||
          !MdoSchedulesInternalValidate(Info, NULL) ) goto done;
-    Ok = true;
+    Ok = MdoPathCopy(Info->WorkspaceRoot, Info->WorkspaceRoot, sizeof(Info->WorkspaceRoot));
 done:
     xrtValueRelease(Root);
     return Ok;

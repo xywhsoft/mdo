@@ -85,6 +85,18 @@ bool MdoHomeLinkNoReplace(cstr Source,cstr Target);
  * API accepts native paths rather than xfile handles. */
 str MdoHomeExternalPath(cstr Path);
 
+/* Durable product paths are relative to Home, never to cwd. Native paths are
+ * transient. Existing external project bindings remain native. The pre-1.0
+ * compatibility leaf relocates a missing absolute .../mdo-home/... reference.
+ * Owned results; neither resolver creates files nor rewrites user content. */
+str MdoPathResolve(cstr Path);
+str MdoPathStore(cstr Path);
+bool MdoPathCopy(cstr Path, char* Output, size_t Capacity);
+bool MdoPathField(xvalue* Object, cstr Key, bool Resolve);
+/* Startup-only, before managers/writers: upgrade known product path fields.
+ * Includes metadata backups; excludes model ledgers and arbitrary documents. */
+bool MdoPathMigrate(void);
+
 #define MDO_DEFAULT_WORKSPACE_PATH "workspace"
 /* Owned native path for the built-in default project, relative to the selected
  * Home rather than cwd. Create=false only resolves the path; Create=true

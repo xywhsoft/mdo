@@ -77,7 +77,7 @@ static bool MdoApiSessionReplayMatches(const MdoSessionInfo* Info,
         Options->Agent.WorkspaceRoot[0] == '\0') &&
         strcmp(Options->ProjectId, "default") == 0 ?
         MdoHomeDefaultWorkspacePath(false) :
-        xrtPathAbs(Options->Agent.WorkspaceRoot != NULL &&
+        MdoPathResolve(Options->Agent.WorkspaceRoot != NULL &&
             Options->Agent.WorkspaceRoot[0] != '\0' ?
             Options->Agent.WorkspaceRoot : ".");
     bool Matches = Workspace != NULL &&
@@ -740,8 +740,7 @@ bool MdoApiSessionCreateRoute(MdoApiContext* Context)
             if ( xrtPathIsAbs(ProjectInfo.WorkspaceRoot) )
                 Options.Agent.WorkspaceRoot = ProjectInfo.WorkspaceRoot;
             else {
-                ProjectWorkspace = xrtPathJoin(xsAppPath(),
-                    ProjectInfo.WorkspaceRoot);
+                ProjectWorkspace = MdoPathResolve(ProjectInfo.WorkspaceRoot);
                 if ( ProjectWorkspace == NULL ) {
                     MdoApiJsonBodyUnit(&Body);
                     return MdoApiReplyError(Context, 500u,

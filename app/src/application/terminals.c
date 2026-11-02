@@ -61,9 +61,14 @@ static bool SdkTerminalOwn(const mdo_sdk_context_v1* C,const SdkTerminal* T,mdo_
 }
 static bool SdkTerminalSave(void){
     xvalue* Root=xrtValueObject(),*Rows=xrtValueArray();SdkPutUInt(Root,"schema_version",1);
-    for(size_t i=0;i<SDK_TERMINAL_SLOTS;i++)if(SdkTerminals.Slots[i].Record)xrtValueArrayAppend(Rows,SdkTerminals.Slots[i].Record);
+    bool Portable=Root&&Rows;
+    for(size_t i=0;Portable&&i<SDK_TERMINAL_SLOTS;i++)if(SdkTerminals.Slots[i].Record){
+        xvalue* Row=xrtValueDeepClone(SdkTerminals.Slots[i].Record);
+        Portable=Row&&MdoPathField(Row,"cwd",false)&&MdoPathField(Row,"program",false)&&MdoPathField((xvalue*)SdkGet(Row,"context"),"workspace",false)&&xrtValueArrayAppend(Rows,Row);
+        xrtValueRelease(Row);
+    }
     xrtValueObjectSetNew(Root,XRT_STR_LITERAL("terminals"),Rows);char* Json=SdkJson(Root);size_t N=Json?strlen(Json):0;
-    bool Ok=Json&&N<=SDK_TERMINAL_STORE&&MdoHomeAtomicWrite(SDK_TERMINAL_PATH,Json,N,false);xrtFree(Json);xrtValueRelease(Root);return Ok;
+    bool Ok=Portable&&Json&&N<=SDK_TERMINAL_STORE&&MdoHomeAtomicWrite(SDK_TERMINAL_PATH,Json,N,false);xrtFree(Json);xrtValueRelease(Root);return Ok;
 }
 /* Releasing output storage must not make a lost creation request replayable.
  * Receipts are constant-time lookups by hashed owner/context/key, never a scan
@@ -201,7 +206,9 @@ bool MdoApplicationTerminalsInit(void){
         const xvalue* Row=xrtValueArrayGet(Rows,i);const xvalue* Context=SdkGet(Row,"context");
         Valid=SdkIdValid(SdkField(Row,"id"))&&SdkIdValid(SdkField(Row,"owner"))&&SdkField(Row,"key")&&SdkField(Row,"request_hash")&&xrtValueType(Context)==XVALUE_OBJECT&&SdkField(Context,"project")&&SdkField(Context,"session")&&SdkField(Context,"run")&&SdkField(Context,"workspace");
         for(size_t j=0;Valid&&j<i;j++)if(!strcmp(SdkField(Row,"id"),SdkField(SdkTerminals.Slots[j].Record,"id")))Valid=false;
-        if(Valid){SdkTerminal* T=&SdkTerminals.Slots[i];T->Record=xrtValueClone(Row);T->Exited=T->ReaderDone=T->WriterDone=T->WaiterDone=true;
+        if(Valid){SdkTerminal* T=&SdkTerminals.Slots[i];T->Record=xrtValueDeepClone(Row);T->Exited=T->ReaderDone=T->WriterDone=T->WaiterDone=true;
+            cstr Program=SdkField(T->Record,"program");bool ProgramPath=Program&&(xrtPathIsRooted(Program)||strchr(Program,'/')||strchr(Program,'\\'));
+            Valid=T->Record&&MdoPathField(T->Record,"cwd",true)&&(!ProgramPath||MdoPathField(T->Record,"program",true))&&MdoPathField((xvalue*)SdkGet(T->Record,"context"),"workspace",true);
             cstr State=SdkField(Row,"state");if(!State||strcmp(State,"ended"))SdkPut(T->Record,"reason","service_restarted");SdkPut(T->Record,"state","ended");}
     }
     xrtValueRelease(Root);SdkTerminals.Ready=Valid;return true;

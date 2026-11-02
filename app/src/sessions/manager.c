@@ -309,6 +309,7 @@ char* MdoSessionsInternalMetaJson(const MdoSessionInfo* Info, size_t* Size)
             Info->ParentSessionId) ||
          !MdoSessionsObjectTake(Object, "forked_through_sequence",
             xrtValueUInt(Info->ForkedThroughSequence)) ) goto done;
+    if ( !MdoPathField(Object, "workspace_root", false) ) goto done;
     Json = xrtJsonStringify(Object, true, Size);
 done:
     xrtValueRelease(Object);
@@ -497,7 +498,7 @@ bool MdoSessionsInternalMetaParse(const char* ExpectedProject,
     Info->ModelGeneration = ModelGeneration;
     Info->ModuleGeneration = ModuleGeneration;
     Info->SkillGeneration = SkillGeneration;
-    Ok = true;
+    Ok = MdoPathCopy(Info->WorkspaceRoot, Info->WorkspaceRoot, sizeof(Info->WorkspaceRoot));
 done:
     xrtValueRelease(Root);
     return Ok;
@@ -898,7 +899,7 @@ MdoSession* MdoSessionCreate(const MdoSessionCreateOptions* Options,
                 "cannot prepare the default project workspace");
             goto done;
         }
-    } else Workspace = xrtPathAbs(Options->Agent.WorkspaceRoot != NULL &&
+    } else Workspace = MdoPathResolve(Options->Agent.WorkspaceRoot != NULL &&
         Options->Agent.WorkspaceRoot[0] != '\0' ?
         Options->Agent.WorkspaceRoot : ".");
     if ( SessionId == NULL || Workspace == NULL ||

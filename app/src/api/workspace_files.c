@@ -310,7 +310,6 @@ bool MdoApiProjectWorkspaceFilesRoute(MdoApiContext* Context)
     MdoWsScan* Scan;
     xwork_error Error;
     char* Root = NULL;
-    char* RelativeRoot = NULL;
     bool Found = false;
     bool Ok;
     if ( Context->ParamCount != 1u ||
@@ -348,14 +347,8 @@ bool MdoApiProjectWorkspaceFilesRoute(MdoApiContext* Context)
             return Ok;
         }
         Root = MdoHomeDefaultWorkspacePath(false);
-    } else if ( !Found ) Root = xrtPathAbs(".");
-    else if ( xrtPathIsAbs(Project.WorkspaceRoot) )
-        Root = xrtPathAbs(Project.WorkspaceRoot);
-    else {
-        RelativeRoot = xrtPathJoin(xsAppPath(), Project.WorkspaceRoot);
-        if ( RelativeRoot != NULL ) Root = xrtPathAbs(RelativeRoot);
-    }
-    xrtFree(RelativeRoot);
+    } else if ( !Found ) Root = MdoPathResolve(".");
+    else Root = MdoPathResolve(Project.WorkspaceRoot);
     if ( Root == NULL ) { xrtFree(Scan); goto unavailable; }
     Ok = MdoWsReply(Context, Scan, Root);
     xrtFree(Root);

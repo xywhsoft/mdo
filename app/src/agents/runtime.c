@@ -1236,7 +1236,8 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
     }
     Owner->LifecycleLock=xrtMutexCreate();
     Owner->InstanceLock=xrtMutexCreate();
-    Owner->Workspace=xrtPathAbs(Options->WorkspaceRoot && Options->WorkspaceRoot[0]?Options->WorkspaceRoot:".");
+    Owner->Workspace=(!Options->WorkspaceRoot || !Options->WorkspaceRoot[0]) && Options->ProjectId && !strcmp(Options->ProjectId,"default")?
+        MdoHomeDefaultWorkspacePath(true):MdoPathResolve(Options->WorkspaceRoot && Options->WorkspaceRoot[0]?Options->WorkspaceRoot:".");
     if(!Owner->InstanceLock || !Owner->LifecycleLock || !Owner->Workspace)goto fail;
     Owner->Routes=xrtCalloc(4096u,sizeof(*Owner->Routes));Owner->RouteCapacity=4096u;
     Owner->RouteLock = xrtMutexCreate();
@@ -1543,8 +1544,7 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
     }
     xworkAgentOptionsInit(&AgentOptions);
     AgentOptions.pSession = Owner->LlmSession;
-    AgentOptions.sWorkspaceRoot = Options->WorkspaceRoot != NULL &&
-        Options->WorkspaceRoot[0] != '\0' ? Options->WorkspaceRoot : ".";
+    AgentOptions.sWorkspaceRoot = Owner->Workspace;
     if ( (Options->WorkspaceRoot == NULL || Options->WorkspaceRoot[0] == '\0') &&
          Options->ProjectId != NULL && strcmp(Options->ProjectId, "default") == 0 ) {
         if(!DefaultWorkspace)DefaultWorkspace = MdoHomeDefaultWorkspacePath(true);

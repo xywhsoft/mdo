@@ -154,6 +154,7 @@ static bool MdoProjectsParse(const char* ExpectedId, xstrview Json,
         Info->CreatedAt = Created;
         Info->UpdatedAt = Updated;
     }
+    if ( Ok ) Ok = MdoPathCopy(Info->WorkspaceRoot, Info->WorkspaceRoot, sizeof(Info->WorkspaceRoot));
     xrtValueRelease(Root);
     return Ok;
 }
@@ -218,7 +219,7 @@ static char* MdoProjectsJson(const MdoProjectInfo* Info, size_t* Size)
          MdoProjectsObjectUInt(Root, "revision", Info->Revision) &&
          MdoProjectsObjectInt(Root, "created_at_us", Info->CreatedAt) &&
          MdoProjectsObjectInt(Root, "updated_at_us", Info->UpdatedAt) )
-        Json = xrtJsonStringify(Root, true, Size);
+        if ( MdoPathField(Root, "workspace_root", false) ) Json = xrtJsonStringify(Root, true, Size);
     xrtValueRelease(Root);
     if ( Json != NULL && *Size > MDO_PROJECT_STORE_LIMIT ) {
         xrtFree(Json);

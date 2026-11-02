@@ -65,6 +65,10 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
         MdoBootstrapFail("Home initialization failed");
         return false;
     }
+    if ( !MdoPathMigrate() ) {
+        MdoBootstrapFail("Home path migration failed; original records were retained");
+        return false;
+    }
     char ExtensionError[512]={0};
     if ( !MdoExtensionsInit() || !MdoExtensionTasksInit() || !MdoExtensionsRecoverStartup(ExtensionError) ||
          !MdoExtensionsSeedBuiltins(ExtensionError) ) {

@@ -154,6 +154,7 @@ static xvalue* SdkGitBaselineRead(const mdo_sdk_context_v1* C,mdo_error_v1* E){
     char Path[512];if(!SdkGitBaselinePath(C->ProjectId,C->SessionId,Path))return SdkGitFail(E,"git_baseline_missing","Select a session that captured a workspace baseline at creation",409),NULL;
     bool Missing=false;char* Text=MdoExtensionRead(Path,true,16384,&Missing);xvalue* V=SdkParse(Text);xrtFree(Text);
     if(!V){SdkGitFail(E,Missing?"git_baseline_missing":"git_baseline_corrupt",Missing?"This session has no captured baseline":"The captured baseline record is unreadable; original data was retained",Missing?409:503);return NULL;}
+    if(!MdoPathField(V,"workspace",true)||!MdoPathField(V,"repository",true)){xrtValueRelease(V);SdkGitFail(E,"git_baseline_corrupt","Baseline path is invalid",503);return NULL;}
     uint64 Version=0;bool Available=false;
     if(!SdkUInt(SdkGet(V,"schema_version"),&Version)||Version!=1||!xrtValueGetBool(SdkGet(V,"available"),&Available)||!SdkField(V,"representation")||strcmp(SdkField(V,"representation"),"raw-worktree-v1")||
         !SdkField(V,"project")||strcmp(SdkField(V,"project"),C->ProjectId)||!SdkField(V,"session")||strcmp(SdkField(V,"session"),C->SessionId)||!SdkField(V,"workspace")||!C->Workspace||strcmp(SdkField(V,"workspace"),C->Workspace)){
@@ -176,6 +177,7 @@ void MdoApplicationCaptureChanges(cstr Project,cstr Session,cstr Workspace){
     if(Root&&Repo)Tree=SdkGitSnapshot(&C,Root,Repo,Ref,&E);
     xvalue* V=xrtValueObject();SdkPutUInt(V,"schema_version",1);SdkPut(V,"session",Session);SdkPut(V,"project",Project);SdkPut(V,"workspace",Workspace);SdkPut(V,"repository",Root);SdkPut(V,"tree",Tree);
     SdkPut(V,"representation","raw-worktree-v1");SdkPutUInt(V,"captured_at_us",(uint64)MdoUtcUs());xrtValueObjectSetNew(V,XRT_STR_LITERAL("available"),xrtValueBool(Tree!=NULL));SdkPut(V,"reason",Tree?"":E.Code);SdkPut(V,"message",Tree?"":E.Message);
-    char* Json=SdkJson(V);if(Json)(void)MdoHomeAtomicWrite(Path,Json,strlen(Json),false);xrtFree(Json);xrtValueRelease(V);xrtFree(Root);xrtFree(Repo);xrtFree(Tree);
+    bool Portable=MdoPathField(V,"workspace",false)&&MdoPathField(V,"repository",false);
+    char* Json=Portable?SdkJson(V):NULL;if(Json)(void)MdoHomeAtomicWrite(Path,Json,strlen(Json),false);xrtFree(Json);xrtValueRelease(V);xrtFree(Root);xrtFree(Repo);xrtFree(Tree);
 done:xrtMutexUnlock(SdkGitBaselineLock);xrtClearError();if(Saved)xrtSetErrorTake(Saved);
 }

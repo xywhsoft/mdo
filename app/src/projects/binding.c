@@ -66,7 +66,7 @@ bool MdoProjectBindingGet(cstr ProjectId, MdoProjectBinding* Binding, xwork_erro
     }
     else if ( xrtPathIsAbs(Info.WorkspaceRoot) ) Real = xrtPathReal(Info.WorkspaceRoot);
     else {
-        Relative = xrtPathJoin(xsAppPath(), Info.WorkspaceRoot);
+        Relative = MdoPathResolve(Info.WorkspaceRoot);
         if ( Relative != NULL ) Real = xrtPathReal(Relative);
     }
     if ( Real == NULL || !MdoProjectBindingText(Real, sizeof(Candidate.WorkspaceRoot)) ||

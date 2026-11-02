@@ -722,6 +722,7 @@ str MdoSessionBackupEncode(const MdoSessionBackup* Backup,
          !MdoBackupSet(Root, "ui_last_event_id", xrtValueUInt(History.Last)) ||
          !MdoBackupSet(Root, "ui_records", xrtValueUInt(History.Records)) ) goto memory;
     if ( !xrtValueObjectSetTake(Root, XRT_STR_LITERAL("absent_files"), &Absent) ) goto memory;
+    if ( !MdoPathField(Root, "source_workspace", false) ) goto memory;
     Manifest = xrtJsonStringify(Root, false, &ManifestBytes);
     if ( Manifest == NULL || ManifestBytes == 0u || Manifest[ManifestBytes - 1u] != '}' ) goto memory;
     /* Header + each bounded path/hash/length/encoding fragment + encoded bytes

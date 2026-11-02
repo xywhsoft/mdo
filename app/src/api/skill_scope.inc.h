@@ -21,7 +21,7 @@ static bool MdoApiSkillScopeMode(MdoApiContext* Context,char** Workspace,bool Cr
         if(!MdoProjectGet(Id,&Info,&Found,&Error)||!Found) {
             MdoApiReplyError(Context,404,"skill_project_missing","Project is unavailable",NULL);return false;
         }
-        *Workspace=xrtPathAbs(Info.WorkspaceRoot);
+        *Workspace=MdoPathResolve(Info.WorkspaceRoot);
     }
     if(!*Workspace){MdoApiReplyError(Context,503,"skill_scope_unavailable","Project directory is unavailable",NULL);return false;}
     return true;
