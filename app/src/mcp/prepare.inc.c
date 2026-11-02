@@ -85,7 +85,8 @@ xvalue* MdoMcpExtensionStatus(cstr Ref)
         }}else if(Key&&Enabled&&strcmp(S,"needs_configuration")&&strcmp(S,"needs_approval")){
             for(size_t J=0;Diagnostics&&J<Diagnostics->Count;J++)if(Diagnostics->Entries[J].ServerId&&!strcmp(Diagnostics->Entries[J].ServerId,Key)){Message=Diagnostics->Entries[J].Message;S=Message&&strstr(Message,"not been approved")?"needs_approval":"failed";break;}
         }
-        if(Key)Connections++;if(Found&&Status.Enabled)Tools+=Status.DiscoveredToolCount;
+        if(Key)Connections++;
+        if(Found&&Status.Enabled)Tools+=Status.DiscoveredToolCount;
         unsigned Rank=!strcmp(S,"ready")?6:!strcmp(S,"starting")?5:!strcmp(S,"disabled")?1:3;
         if(Rank>Best){Best=Rank;State=S;snprintf(Error,sizeof(Error),"%s",Message?Message:"");snprintf(Id,sizeof(Id),"%s",Key?Key:"");
             xrtValueRelease(Missing);Missing=xrtValueClone(xrtValueObjectGet(Row,XRT_STR_LITERAL("missing_inputs")));if(!Missing)Missing=xrtValueArray();

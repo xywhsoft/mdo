@@ -25,7 +25,9 @@ static bool McpDefaultTrusted(const xvalue* Meta,char Digest[65],char Error[512]
     for(size_t I=1;Ok&&I<xrtValueCount(Closure);I++){const xvalue* Dependency=xrtValueArrayGet(Closure,I);cstr Kind=MdoExtensionText(Dependency,"kind",32),Dir=MdoExtensionText(Dependency,"directory_id",96),Pinned=MdoExtensionText(xrtValueObjectGet(Dependency,XRT_STR_LITERAL("installation")),"directory_digest",64);char Hash[65];
         Ok=Kind&&Dir&&Pinned&&MdoExtensionsVerify(Kind,Dir,NULL,Error)&&MdoExtensionsFingerprint(Kind,Dir,Hash,NULL,Error)&&!strcmp(Hash,Pinned);
     }xrtValueRelease(Closure);Ok=Ok&&MdoExtensionsApprovalDigest(Id,Digest,NULL,Error);
-    if(!Ok&&Error&&!Error[0])snprintf(Error,512,"Review the MCP directory and its required dependencies before allowing automatic startup");return Ok;
+    if(!Ok&&Error&&!Error[0])
+        snprintf(Error,512,"Review the MCP directory and its required dependencies before allowing automatic startup");
+    return Ok;
 }
 static xvalue* McpDefaultDocument(const xvalue* Meta,xvalue** Missing,const char** State,char Error[512])
 {
