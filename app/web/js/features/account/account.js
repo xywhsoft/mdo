@@ -7,6 +7,7 @@ import { createLoginWindow } from "./login-window.js";
 import { allowanceView, searchAllowanceView } from "./allowance.js";
 import { balanceView, formatBalance } from "./balance.js";
 import { isAccountSignedIn } from "./session-state.js";
+import { membershipView } from "./membership.js";
 
 // Tokens stay in the native host. Passwords are submitted once from the form,
 // then cleared; account rendering uses only filtered public snapshots.
@@ -50,9 +51,10 @@ export function createAccount({ navigation, onModelsChange = () => {} }) {
     sidebar.querySelector("[data-account-name]").textContent = signedIn() ? displayName() : copy("login");
     const avatar = sidebar.querySelector("[data-account-avatar]");
     avatar.replaceChildren(document.createTextNode(signedIn() ? [...displayName()][0]?.toUpperCase() || "◉" : "◉"), vipBadge);
-    const allowance = signedIn() ? allowanceView(snapshot.model_allowance) : null;
+    const now = Date.now() / 1000;
+    const allowance = signedIn() ? allowanceView(snapshot.model_allowance, now) : null;
     const vip = Boolean(allowance?.vip); sidebar.classList.toggle("is-vip", vip); vipBadge.hidden = !vip;
-    group.hidden = !signedIn(); group.textContent = !allowance ? copy("groupLoading") : allowance.group === "vip" ? "VIP" :
+    group.hidden = !signedIn(); group.textContent = !allowance ? copy(snapshot.models_status ? "groupUnavailable" : "groupLoading") : allowance.group === "vip" ? "VIP" :
       allowance.group === "free" ? copy("freeGroup") : allowance.group;
     renderQuotas(sidebarQuota, allowance, true);
     sidebarQuota.hidden = !signedIn();
@@ -63,24 +65,19 @@ export function createAccount({ navigation, onModelsChange = () => {} }) {
     const stateText = copy(snapshot.state === "signing_in" ? "signingIn" : snapshot.state === "signed_in" ? "signedIn" :
       snapshot.state === "authorizing" ? "waitingBrowser" : snapshot.state === "refreshing" ? "refreshing" :
       snapshot.state === "expired" ? "expired" : "signedOut");
-    const status = text("p", signedIn() ? copy("greeting", { name: displayName() }) : stateText, "account-state");
+    const status = text("p", stateText, "account-state");
     status.setAttribute("role", "status");
-    const nodes = [status];
-    if (signedIn()) nodes.push(renderBalance());
-    if (!signedIn()) nodes.push(text("p", copy("description"), "account-note account-benefits"));
-    if (snapshot.profile) {
-      const details = text("dl", "", "account-details");
-      for (const [key, value] of [["username", snapshot.profile.username], ["phone", snapshot.profile.phone], ["email", snapshot.profile.email]]) {
-        if (!value) continue;
-        details.append(text("dt", copy(key)), text("dd", value));
-      }
-      for (const [key, value] of [["phoneVerified", snapshot.profile.phone_verified], ["emailVerified", snapshot.profile.email_verified]])
-        details.append(text("dt", copy(key)), text("dd", copy(value ? "verified" : "unverified")));
-      nodes.push(details);
-      if (allowance) {
-        details.append(text("dt", copy("userGroup")), text("dd", group.textContent));
-        const meters = text("section", "", "account-model-allowance"); renderQuotas(meters, allowance, false); nodes.push(meters);
-      }
+    const nodes = [];
+    if (signedIn()) {
+      nodes.push(renderIdentity(allowance, status, now));
+      const overview = text("div", "", "account-overview");
+      overview.append(renderBalance(), renderProfile()); nodes.push(overview);
+      const meters = text("section", "", "account-model-allowance");
+      renderQuotas(meters, allowance, false); nodes.push(meters);
+    } else {
+      const intro = text("section", "", "account-signin");
+      intro.append(status, text("p", copy("description"), "account-note account-benefits")); nodes.push(intro);
+      if (snapshot.profile) nodes.push(renderProfile());
     }
     if (snapshot.message) nodes.push(text("p", copy(snapshot.message), "account-hint"));
     if ([403, 429, 503].includes(snapshot.search_status))
@@ -107,6 +104,56 @@ export function createAccount({ navigation, onModelsChange = () => {} }) {
     }
     if (focusOwner && focusAction) [...focusOwner.querySelectorAll("[data-account-action]")]
       .find((node) => node.dataset.accountAction === focusAction && node.dataset.id === focusId)?.focus({ preventScroll: true });
+  }
+  function renderIdentity(allowance, status, now) {
+    const hero = text("section", "", "account-summary");
+    hero.classList.toggle("is-vip", Boolean(allowance?.vip));
+    const avatar = text("div", [...displayName()][0]?.toUpperCase() || "◉", "account-profile-avatar");
+    avatar.setAttribute("aria-hidden", "true");
+    const identity = text("div", "", "account-summary-identity");
+    status.className = "account-session-state";
+    identity.append(status, text("h3", displayName()));
+    if (snapshot.profile?.username) identity.append(text("p", `@${snapshot.profile.username}`, "account-note"));
+    const membership = text("div", "", "account-membership");
+    membership.append(text("span", copy("userGroup"), "account-membership-label"));
+    const badge = text("strong", group.textContent, "account-membership-badge");
+    membership.append(badge);
+    const plan = membershipView(snapshot.model_allowance, now);
+    if (!plan) membership.append(text("p", copy(snapshot.models_status ? "membershipUnavailable" : "membershipLoading"), "account-note"));
+    else {
+      membership.dataset.state = plan.state;
+      const stale = plan.stale || snapshot.models_status !== 200;
+      if (plan.state === "active") {
+        const number = value => value.toLocaleString(currentLocale());
+        const remaining = stale ? copy("membershipUpdating") : plan.days ?
+          copy("membershipDaysHours", { days: number(plan.days), hours: number(plan.hours) }) : plan.hours ?
+          copy("membershipHoursMinutes", { hours: number(plan.hours), minutes: number(plan.minutes) }) : plan.minutes ?
+          copy("membershipMinutes", { minutes: number(plan.minutes) }) : copy("membershipLessThanMinute");
+        membership.append(text("p", remaining, "account-membership-remaining"));
+      } else if (plan.state === "expired") membership.append(text("p", copy("membershipExpired"), "account-membership-remaining"));
+      if (plan.expiresAt && plan.state !== "free") {
+        const date = new Date(plan.expiresAt * 1000);
+        const expiry = text("time", copy("membershipExpiresAt", { time: date.toLocaleString(currentLocale(),
+          { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) }), "account-membership-expiry");
+        expiry.setAttribute("datetime", date.toISOString()); membership.append(expiry);
+      }
+    }
+    hero.append(avatar, identity, membership); return hero;
+  }
+  function renderProfile() {
+    const card = text("section", "", "account-profile-card");
+    card.append(text("h3", copy("profileDetails")));
+    if (!snapshot.profile) { card.append(text("p", copy("profileUnavailable"), "account-note")); return card; }
+    const details = text("dl", "", "account-details");
+    const field = (key, value, className = "") => {
+      const row = text("div", "", "account-detail");
+      row.append(text("dt", copy(key)), text("dd", value, className)); details.append(row);
+    };
+    for (const [key, value] of [["username", snapshot.profile.username], ["phone", snapshot.profile.phone], ["email", snapshot.profile.email]])
+      if (value) field(key, value);
+    for (const [key, value] of [["phoneVerified", snapshot.profile.phone_verified], ["emailVerified", snapshot.profile.email_verified]])
+      field(key, copy(value ? "verified" : "unverified"), `account-verification ${value ? "is-verified" : "is-unverified"}`);
+    card.append(details); return card;
   }
   function renderBalance() {
     const card = text("section", "", "account-balance");
@@ -199,7 +246,10 @@ export function createAccount({ navigation, onModelsChange = () => {} }) {
         modelGeneration = nextModels; void Promise.resolve(onModelsChange()).catch(() => {});
       }
     }
-    catch { /* Local host reconnection uses the existing global connection UI. */ }
+    catch {
+      // Keep expiry accurate while the existing global UI handles reconnection.
+      if (!disposed && owner === scope()) render();
+    }
     finally { fetching = false; if (!disposed && owner !== scope()) void refresh(); else schedule(); }
   }
   async function openLogin() {

@@ -24,23 +24,69 @@
 :is(.account-model-allowance,.account-search-allowance) .account-quota-heading strong { font-size:13px; }
 :is(.account-model-allowance,.account-search-allowance) .account-note { margin-top:7px; }
 .account-search-allowance .account-quota-count { margin-top:10px; font-size:14px; font-variant-numeric:tabular-nums; }
-.account-panel { max-width:680px; }
-.account-balance { display:grid; gap:14px; padding:16px; border:1px solid var(--border); border-radius:var(--radius-md); margin:20px 0; background:var(--surface); }
+.account-panel { max-width:880px; }
+.settings-content .account-panel > [data-account-body] { gap:16px; padding-top:24px; }
+.account-panel > [data-account-body] > * { min-width:0; margin:0; }
+.account-summary { display:grid; grid-template-columns:56px minmax(0,1fr) minmax(210px,.9fr); align-items:center; gap:18px; padding:22px; border:1px solid var(--border); border-radius:var(--radius-md); background:var(--surface); }
+.account-summary.is-vip { border-color:rgba(214,171,83,.38); background:linear-gradient(115deg,rgba(214,171,83,.09),transparent 65%),var(--surface); }
+.account-profile-avatar { display:grid; place-items:center; width:56px; height:56px; border:1px solid var(--border-strong); border-radius:16px; background:var(--surface-active); font-size:24px; font-weight:650; }
+.account-summary.is-vip .account-profile-avatar { border-color:rgba(214,171,83,.55); color:#b6811a; background:rgba(214,171,83,.12); }
+.account-summary-identity { min-width:0; }
+.account-summary-identity h3 { margin:5px 0; font-size:21px; font-weight:650; line-height:1.3; overflow-wrap:anywhere; }
+.account-summary-identity p { margin:0; }
+.account-session-state { display:flex; align-items:center; gap:6px; color:var(--muted); font-size:11px; }
+.account-session-state::before { content:""; width:6px; height:6px; flex-shrink:0; border-radius:50%; background:var(--success); }
+.account-membership { display:grid; justify-items:start; align-content:center; min-width:0; gap:7px; padding-left:22px; border-left:1px solid var(--border); }
+.account-membership-label { color:var(--muted); font-size:11px; }
+.account-membership-badge { max-width:100%; padding:3px 9px; border:1px solid var(--border); border-radius:6px; background:var(--surface-raised); font-size:12px; font-weight:650; overflow-wrap:anywhere; }
+.account-summary.is-vip .account-membership-badge { color:#b6811a; background:rgba(214,171,83,.1); border-color:rgba(214,171,83,.35); }
+.account-membership-remaining { margin:2px 0 0; font-size:18px; font-weight:600; line-height:1.4; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+.account-membership[data-state="expired"] .account-membership-remaining { color:var(--warning); }
+.account-membership-expiry { color:var(--muted); font-size:11px; line-height:1.5; overflow-wrap:anywhere; }
+.account-membership .account-note { margin:0; }
+.account-overview { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); align-items:stretch; gap:16px; }
+.account-overview > * { min-width:0; }
+.account-profile-card, .account-signin { display:grid; align-content:start; gap:16px; padding:20px; border:1px solid var(--border); border-radius:var(--radius-md); background:var(--surface); }
+.account-profile-card h3 { margin:0; font-size:14px; font-weight:600; }
+.account-signin :is(.account-state,.account-benefits) { margin:0; }
+.account-balance { display:grid; align-content:start; gap:18px; padding:20px; border:1px solid var(--border); border-radius:var(--radius-md); margin:0; background:var(--surface); }
 .account-balance :is(h3,p,dl) { margin:0; }
-.account-balance h3 { font-size:15px; }
-.account-balance-heading { display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:8px 16px; font-size:13px; }
-.account-balance-heading strong { font-size:26px; font-weight:600; font-variant-numeric:tabular-nums; }
+.account-balance h3 { font-size:14px; font-weight:600; }
+.account-balance-heading { display:grid; gap:5px; color:var(--muted); font-size:12px; }
+.account-balance-heading strong { color:var(--ink); font-size:30px; line-height:1.3; font-weight:650; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
 .account-balance-details { display:grid; grid-template-columns:1fr auto; gap:8px 16px; font-size:13px; }
 .account-balance-details dt { color:var(--muted); }
 .account-balance-details dd { margin:0; font-variant-numeric:tabular-nums; }
 .account-note { color:var(--muted); overflow-wrap:anywhere; font-size:13px; }
 .account-state { font-size:16px; font-weight:600; overflow-wrap:anywhere; }
 .account-benefits { line-height:1.6; }
-.account-details { display:grid; grid-template-columns:minmax(90px,auto) 1fr; gap:10px 22px; font-size:14px; }
-.account-details dt { color:var(--muted); }
+.account-details { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:18px 16px; margin:0; font-size:13px; }
+.account-detail { display:grid; align-content:start; min-width:0; gap:6px; }
+.account-details dt { color:var(--muted); font-size:11px; }
 .account-details dd { margin:0; overflow-wrap:anywhere; }
+.account-verification { display:flex; align-items:baseline; gap:6px; }
+.account-verification::before { content:""; align-self:center; width:6px; height:6px; flex-shrink:0; border-radius:50%; background:var(--faint); }
+.account-verification.is-verified { color:var(--success); }
+.account-verification.is-verified::before { background:currentColor; }
+.account-panel :is(.account-model-allowance,.account-search-allowance) { gap:12px; margin:0; padding:20px; }
+.account-panel :is(.account-model-allowance,.account-search-allowance) h3 { font-size:14px; font-weight:600; }
+.account-panel .account-quota-row { min-width:0; padding:13px 14px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--surface); }
+.account-panel .account-quota-heading { flex-wrap:wrap; }
+.account-panel .account-quota-heading > span { overflow:visible; white-space:normal; overflow-wrap:anywhere; }
+.account-panel .account-quota-bar { height:5px; margin-top:9px; }
+.account-panel .account-quota-row .account-note { font-size:12px; line-height:1.5; }
 .account-hint { color:var(--warning); font-size:13px; }
-.account-actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:24px; }
+.account-actions { display:flex; flex-wrap:wrap; gap:10px; padding-top:4px; margin-top:0; }
+.account-actions button { white-space:normal; }
+@media (max-width:640px) {
+  .account-summary { grid-template-columns:48px minmax(0,1fr); padding:18px; gap:14px; }
+  .account-profile-avatar { width:48px; height:48px; font-size:21px; }
+  .account-summary-identity h3 { font-size:19px; }
+  .account-membership { grid-column:1 / -1; padding:14px 0 0; border-left:0; border-top:1px solid var(--border); }
+  .account-overview { grid-template-columns:minmax(0,1fr); }
+  .account-balance-heading strong { font-size:28px; }
+  .account-actions button { flex:1 1 140px; }
+}
 .account-search-notice { max-width:var(--composer-width); margin:8px auto; padding:12px 16px; border:1px solid var(--border); border-radius:var(--radius-md); background:var(--surface); font-size:13px; }
 .account-search-notice p { margin:0 0 8px; }
 .account-search-row { display:flex; align-items:center; gap:10px; margin-top:8px; }

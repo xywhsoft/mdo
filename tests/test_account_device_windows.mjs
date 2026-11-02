@@ -78,6 +78,42 @@ test("account readiness refreshes models even when login state changes without a
  await env.account.refresh();assert.equal(env.modelChanges.length,before+3);
 });
 
+test("account shows plan expiry and remaining VIP time, then clears the countdown after expiry",async t=>{
+ const env=await setup(t),now=Math.floor(Date.now()/1000);
+ env.model.target={...signedIn(9),models_status:200,model_allowance:{is_vip:true,group_id:"vip",plan_id:"vip",plan_expires_at:now+2*86400+3*3600+300,updated_at:now,daily_quotas:[]}};
+ await env.account.refresh();
+ const panel=env.ids.get("account-panel");
+ assert(panel.querySelector(".account-membership-remaining").textContent.includes("2d 3h remaining"));
+ assert(panel.querySelector("time").textContent.startsWith("Expires:"));
+ assert(panel.querySelector(".account-summary").classList.contains("is-vip"));
+ env.model.target.model_allowance.plan_expires_at=now-1;await env.account.refresh();
+ assert.equal(panel.querySelector(".account-membership-remaining").textContent,"VIP expired");
+ assert(!panel.querySelector(".account-summary").classList.contains("is-vip"));
+ for(const status of [200,503]){
+  env.model.target={...signedIn(9),models_status:status};await env.account.refresh();
+  assert(!panel.querySelector(".account-membership-remaining"));
+  assert(panel.querySelector(".account-membership").textContent.includes("temporarily unavailable"));
+ }
+});
+
+test("an outdated membership snapshot waits for refresh instead of claiming a current countdown",async t=>{
+ const env=await setup(t),now=Math.floor(Date.now()/1000);
+ env.model.target={...signedIn(9),models_status:200,model_allowance:{is_vip:true,group_id:"vip",plan_id:"vip",plan_expires_at:now+86400,updated_at:now-120,daily_quotas:[]}};
+ await env.account.refresh();
+ assert.equal(env.ids.get("account-panel").querySelector(".account-membership-remaining").textContent,"Waiting for a membership update");
+});
+
+test("VIP expires locally even when account refresh is temporarily unavailable",async t=>{
+ const env=await setup(t),now=Math.floor(Date.now()/1000);
+ env.model.target={...signedIn(9),models_status:200,model_allowance:{is_vip:true,group_id:"vip",plan_id:"vip",plan_expires_at:now+60,updated_at:now,daily_quotas:[]}};
+ await env.account.refresh();assert(env.ids.get("account-panel").querySelector(".account-summary").classList.contains("is-vip"));
+ t.mock.method(Date,"now",()=> (now+61)*1000);
+ env.stub.api.get=async()=>{throw Error("offline");};
+ await env.account.refresh();
+ assert.equal(env.ids.get("account-panel").querySelector(".account-membership-remaining").textContent,"VIP expired");
+ assert(!env.ids.get("account-panel").querySelector(".account-summary").classList.contains("is-vip"));
+});
+
 test("signed-out sidebar opens the shared login without navigation, then signed-in sidebar opens account settings",async t=>{
  const env=await setup(t);env.ids.get("open-account").click();assert.equal(env.doc.body.querySelector("dialog").id,"account-login-dialog");assert.deepEqual(env.navigations,[]);
  submit(env.doc);await flush();await flush();assert(!env.doc.body.querySelector("dialog"));
