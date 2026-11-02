@@ -23,9 +23,11 @@ def inventory(directory):
 
 
 def restore(port, home):
+    from test_packed_home_lease import configure_offline_model
+    configure_offline_model(port)
     status, value = request(port, "POST", "/api/v1/sessions", {
         "project_id": "default", "title": "Packed restore 中文", "agent_id": "mdo.default",
-        "model_id": "ornith-1.5-35b", "protocol": "openai-responses", "reasoning_effort": "medium",
+        "model_id": "queue-fixture", "protocol": "openai-responses", "reasoning_effort": "medium",
         "max_output_tokens": 1024,
     })
     assert status == 201, value

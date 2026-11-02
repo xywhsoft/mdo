@@ -123,9 +123,11 @@ def main() -> int:
         try:
             status, response = wait_bootstrap(first, first_port, first_site / "packed.log")
             assert status == 200 and response["data"]["ready"], response
+            from test_packed_home_lease import configure_offline_model
+            configure_offline_model(first_port)
             status, response = request(first_port, "POST", "/api/v1/sessions", {
                 "project_id": "default", "title": "Packed backup 便携",
-                "agent_id": "mdo.default", "model_id": "ornith-1.5-35b",
+                "agent_id": "mdo.default", "model_id": "queue-fixture",
                 "protocol": "openai-responses", "reasoning_effort": "medium",
                 "max_output_tokens": 1024,
             })

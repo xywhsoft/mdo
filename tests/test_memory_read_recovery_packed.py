@@ -63,7 +63,11 @@ class Provider(BaseHTTPRequestHandler):
             paths = [target]
             if step and expected not in prior:
                 self.failures.append((label, step, expected))
-            if label.endswith('full-access') and 'Full access: native file paths outside the workspace are allowed.' not in body_text:
+            access_guidance = (
+                'In full access mode read may use native paths outside the workspace.',
+                'In full access mode, use read directly for user-specified native paths outside the workspace;',
+            )
+            if label.endswith('full-access') and not any(text in body_text for text in access_guidance):
                 self.failures.append((label, step, 'full-access prompt'))
         output = [{'type': 'message', 'content': [{'type': 'output_text',
                    'text': 'Memory read fixture complete'}]}]

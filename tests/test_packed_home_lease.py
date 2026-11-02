@@ -102,6 +102,16 @@ def release_packed_copies(*copies: Path) -> None:
                 time.sleep(0.05)
 
 
+def configure_offline_model(port: int) -> None:
+    """Metadata-only probes use a local profile, independent of online login."""
+    status, document = request(port, "GET", "/api/v1/models/config")
+    assert status == 200, document
+    if any(row["id"] == "queue-fixture" for row in document["data"]["items"]):
+        return
+    from test_packed_queue_start_recovery import configure_model
+    configure_model(port, "http://127.0.0.1:9/v1", "openai-responses")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--packed", type=Path, default=ROOT / ("mdo.exe" if os.name == "nt" else "mdo"))
@@ -125,9 +135,10 @@ def main() -> int:
         try:
             status, response = wait_bootstrap(first, first_port, first_site / "packed.log")
             assert status == 200 and response["data"]["ready"], response
+            configure_offline_model(first_port)
             status, response = request(first_port, "POST", "/api/v1/sessions", {
                 "project_id": "default", "title": "Home lease QA",
-                "agent_id": "mdo.default", "model_id": "ornith-1.5-35b",
+                "agent_id": "mdo.default", "model_id": "queue-fixture",
                 "protocol": "openai-responses", "reasoning_effort": "medium",
                 "max_output_tokens": 1024,
             })

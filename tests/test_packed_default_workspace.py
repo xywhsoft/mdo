@@ -28,9 +28,11 @@ def ready(directory: Path, packed: Path, home: Path, port: int):
 
 
 def create(port: int, **fields):
+    from test_packed_home_lease import configure_offline_model
+    configure_offline_model(port)
     status, document = request(port, "POST", "/api/v1/sessions", {
         "project_id": "default", "title": "Default workspace probe",
-        "agent_id": "mdo.default", "model_id": "ornith-1.5-35b",
+        "agent_id": "mdo.default", "model_id": "queue-fixture",
         "protocol": "openai-responses", "reasoning_effort": "medium",
         "max_output_tokens": 1024, **fields,
     })
@@ -46,11 +48,11 @@ def default_probe(base: Path, packed: Path) -> None:
     (directory / "mention-probe-launch.txt").write_text("outside", encoding="utf-8")
     process = ready(directory, packed, home, port)
     try:
-        assert not home.exists()
+        assert not workspace.exists()
         files = "/api/v1/projects/default/workspace/files?q=mention-probe"
         status, document = request(port, "GET", files)
         assert status == 200 and document["data"]["items"] == [], document
-        assert not home.exists(), "read-only completion created Home"
+        assert not workspace.exists(), "read-only completion created a workspace"
         requested_id = "d" * 32
         status, session = create(port, client_session_id=requested_id)
         assert status == 201 and Path(session["workspace_root"]) == workspace
@@ -103,7 +105,12 @@ def invalid_workspace_probe(base: Path, packed: Path) -> None:
     workspace.write_text("keep this file", encoding="utf-8")
     process = ready(directory, packed, home, port)
     try:
-        status, document = request(port, "POST", "/api/v1/sessions", {"project_id": "default"})
+        from test_packed_home_lease import configure_offline_model
+        configure_offline_model(port)
+        status, document = request(port, "POST", "/api/v1/sessions", {
+            "project_id": "default", "model_id": "queue-fixture",
+            "protocol": "openai-responses", "reasoning_effort": "medium",
+        })
         assert status == 500 and document["error"]["code"] == "session_persistence_failed", (status, document)
         assert workspace.read_text(encoding="utf-8") == "keep this file"
         assert not (home / "sessions").exists()
