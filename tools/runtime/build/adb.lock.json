@@ -1,0 +1,23 @@
+[
+  {
+    "platform": "windows-x86_64",
+    "binary_architecture": "x86 (official Windows client, runs on x64 via WOW64)",
+    "version": "37.0.1",
+    "file": "platform-tools_r37.0.1-win.zip",
+    "url": "https://dl.google.com/android/repository/platform-tools_r37.0.1-win.zip",
+    "size": 8044989,
+    "sha256": "45f4d63113e895ebde0c90f194099a4676b6ac653bd28d54314a9e022bbc1a99",
+    "repository_sha1": "e03e78b1d80b396f1c3358e31251cb31740e1110"
+  },
+  {
+    "platform": "linux-x86_64-glibc",
+    "binary_architecture": "x86_64",
+    "minimum_glibc": "2.16",
+    "version": "37.0.1",
+    "file": "platform-tools_r37.0.1-linux.zip",
+    "url": "https://dl.google.com/android/repository/platform-tools_r37.0.1-linux.zip",
+    "size": 9054187,
+    "sha256": "d230f13842f60f782a8645f9c813f8f845bf36089ea7289f28c48f17979313f1",
+    "repository_sha1": "477254aa5f903c15cf51001717bdf347fb6b53e0"
+  }
+]

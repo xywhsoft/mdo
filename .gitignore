@@ -59,6 +59,7 @@ tools/runtime/**
 !tools/runtime/build/*.sh
 !tools/runtime/build/*.c
 !tools/runtime/build/sources.lock.json
+!tools/runtime/build/adb.lock.json
 !tools/runtime/build/busybox-android.config
 
 !tools/build_toolpacks.py

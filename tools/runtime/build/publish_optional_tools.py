@@ -50,16 +50,25 @@ def inspect(row,incoming):
     return meta,config,source
 
 
+def check_identity(db,meta,work):
+    """Apply the same immutable logical identity rule as the live store."""
+    ref=meta['id']
+    previous=db.execute('SELECT ref FROM identity WHERE work=?',(work,)).fetchone()
+    owner=db.execute('SELECT work,owner,kind FROM identity WHERE ref=?',(ref,)).fetchone()
+    if previous and previous!=(ref,):raise ValueError("A published work's logical ID cannot be changed")
+    if owner and owner!=(work,0,'external-tools'):raise ValueError('Extension ID is already registered to another work')
+
+
 def publish(incoming,database,backup,apply=False):
     incoming,database,backup=Path(incoming),Path(database),Path(backup)
     if not database.is_file():raise ValueError('Initialize the new directory store first')
     catalogue=json.loads((incoming/'catalog.json').read_text(encoding='utf-8'));rows=catalogue['tools']
     if not isinstance(rows,list) or not 0<len(rows)<=500:raise ValueError('Invalid catalogue')
-    prepared=[];identities=set();work_ids={}
+    prepared=[];identities=set();work_ids={};logical_ids={}
     with closing(sqlite3.connect(database,timeout=15)) as db:
         db.execute('PRAGMA foreign_keys=ON')
         if db.execute('PRAGMA integrity_check').fetchone()[0]!='ok':raise ValueError('Database integrity failed')
-        for name in ('work','version','published','upload','audit'):db.execute('SELECT * FROM '+name+' LIMIT 0')
+        for name in ('work','version','published','upload','audit','identity'):db.execute('SELECT * FROM '+name+' LIMIT 0')
         for row in rows:
             meta,config,source=inspect(row,incoming);key=meta['alias'],row['platform']
             if key in identities:raise ValueError('Duplicate publication head')
@@ -67,6 +76,9 @@ def publish(incoming,database,backup,apply=False):
             works=db.execute("SELECT xid,revision FROM work WHERE owner=0 AND kind='external-tools' AND alias=? AND deleted=0",(meta['alias'],)).fetchall()
             if len(works)>1:raise ValueError('Ambiguous official work identity')
             work=works[0][0] if works else work_ids.setdefault(meta['alias'],uuid.uuid4().hex)
+            check_identity(db,meta,work)
+            if meta['id'] in logical_ids and logical_ids[meta['id']]!=work:raise ValueError('Duplicate logical identity in publication batch')
+            logical_ids[meta['id']]=work
             previous=db.execute("SELECT v.xid,v.sha256,v.manifest FROM published p JOIN version v ON v.xid=p.version WHERE p.work=? AND p.platform=?",(work,row['platform'])).fetchone()
             unchanged=previous and previous[1]==row['sha256']
             if previous and not unchanged and json.loads(previous[2]).get('version')==meta.get('version'):raise ValueError('An immutable published version has different bytes')
@@ -107,6 +119,8 @@ def publish(incoming,database,backup,apply=False):
                 matches=db.execute("SELECT xid FROM work WHERE owner=0 AND kind='external-tools' AND alias=? AND deleted=0",(meta['alias'],)).fetchall()
                 if item['existing'] and matches!=[(work,)] or not item['existing'] and matches and matches!=[(work,)]:raise ValueError('Official identity changed; refresh')
                 if not matches:db.execute("INSERT INTO work(xid,owner,kind,alias,name,created) VALUES(?,0,'external-tools',?,?,?)",(work,meta['alias'],meta['name'],now))
+                check_identity(db,meta,work)
+                db.execute('INSERT OR IGNORE INTO identity(ref,work,owner,kind,created) VALUES(?,?,0,?,?)',(meta['id'],work,'external-tools',now))
                 nonce=uuid.uuid4().hex;manifest=json.dumps(meta,ensure_ascii=False,separators=(',',':'));reason='Operator publication: pinned upstream provenance and complete directory ZIP; original license/source references retained.'
                 db.execute("INSERT INTO version(xid,work,owner,nonce,request_digest,manifest,sha256,bytes,proof_hash,proof_bytes,notes,source_url,source_included,state,requested,created) VALUES(?,?,0,?,?,?,?,?,'',0,?,?,0,'published',1,?)",(version,work,nonce,hashlib.sha256(manifest.encode()).hexdigest(),manifest,row['sha256'],row['size'],reason,item['source_url'],now))
                 db.execute('INSERT INTO published(work,platform,version) VALUES(?,?,?) ON CONFLICT(work,platform) DO UPDATE SET version=excluded.version',(work,row['platform'],version))

@@ -4,6 +4,19 @@
 基础组包括 BusyBox、curl、jq、OpenSSH 客户端、aria2、ripgrep、7-Zip；Python 为可选增强包。
 原有 Windows Git 保留为单独的可选包，Android Git 不在本轮范围内。
 
+新增可独立安装的 **Android Debug Bridge（adb）37.0.1**，用于 Windows x64 和
+Linux x64 glibc。Windows 包保留 Google 官方 Win32 程序及配套 DLL，在 x64
+系统上通过 WOW64 运行；Linux 官方 ELF 的最低 GLIBC 符号版本为 2.16，另需
+系统提供 libgcc_s。该 Linux 包不标记为通用或 musl，避免安装到不兼容的系统。
+本项不含 fastboot、USB 驱动或 Android 端客户端；未做 Windows 7 或真机操作验收。
+
+`build/adb.lock.json` 固定官方 SDK Platform-Tools 归档的版本、URL、字节数、
+SHA-256 和 Google 仓库 SHA-1。执行 `python tools/runtime/build/stage_adb.py`
+生成普通整目录 ZIP 与独立发布目录 `packages/adb/catalog.json`；包内保留
+`NOTICE.txt`、`source.properties` 和来源记录。Windows 已通过 mdo 原生 ZIP
+安装、工具发现、命令入口执行、中文 Home 和 Home 移动验证；Linux 客户端已在 WSL
+实际执行版本查询。线上发布和最终下载验证见对应构建记录。
+
 | 工具 | Windows x64 | Android arm64-v8a | 入口 |
 | --- | --- | --- | --- |
 | BusyBox | 1.38.0-FRP-6075-g169694ebd，Unicode UCRT 版 | 1.38.0，精简静态构建 | `busybox[.exe] <applet>` |

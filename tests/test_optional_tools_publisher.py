@@ -40,8 +40,16 @@ def main():
             assert db.execute('SELECT count(*) FROM published').fetchone()[0]==3
             assert db.execute("SELECT count(*) FROM upload WHERE state='sealed'").fetchone()[0]==0
             assert db.execute('SELECT count(*) FROM audit').fetchone()[0]==3
+            assert db.execute('SELECT ref,owner,kind FROM identity').fetchall()==[('external-tool:mdo.sqlite',0,'external-tools')]
+            assert db.execute("SELECT count(*) FROM identity i JOIN published p ON p.work=i.work WHERE i.ref='external-tool:mdo.sqlite'").fetchone()[0]==3
+            try:module.check_identity(db,{'id':'external-tool:other.sqlite'},receipts[0]['work'])
+            except ValueError:pass
+            else:raise AssertionError('Published logical identity was allowed to change')
+            try:module.check_identity(db,{'id':'external-tool:mdo.sqlite'},'another-work')
+            except ValueError:pass
+            else:raise AssertionError('Published logical identity was allowed to be stolen')
         again=module.publish(incoming,database,root/'second-backup.db',True)
         assert all(not receipt['inserted'] for receipt in again)
         assert (root/'backup.db').is_file()
-    print('PASS ZIP publication survives collection, groups all platforms under one XID and retries without duplicates')
+    print('PASS ZIP publication survives collection, registers immutable resolvable IDs, groups all platforms under one XID and retries without duplicates')
 if __name__=='__main__':main()
