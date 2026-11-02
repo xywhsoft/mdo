@@ -1,5 +1,5 @@
 """Manual compaction, failure atomicity and cancellation with a loopback model."""
-import argparse,json,os,subprocess,tempfile,threading,time,uuid
+import argparse,json,os,shutil,subprocess,tempfile,threading,time,uuid
 from pathlib import Path
 from collections import Counter
 from http.server import ThreadingHTTPServer
@@ -7,7 +7,8 @@ from test_api_runtime import ROOT,free_port,request,wait_ready,session_events
 from test_packed_compaction_failure import Model
 
 def main():
-    p=argparse.ArgumentParser();p.add_argument('--host',type=Path,required=True);a=p.parse_args()
+    p=argparse.ArgumentParser();runtime=p.add_mutually_exclusive_group(required=True)
+    runtime.add_argument('--host',type=Path);runtime.add_argument('--packed',type=Path);a=p.parse_args()
     Model.calls=Counter();Model.mode='valid';Model.requests=[]
     server=ThreadingHTTPServer(('127.0.0.1',0),Model);thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
     try:
@@ -15,13 +16,17 @@ def main():
         base=Path(raw);port=free_port();home=base/'home'
         # Compile the current application in place. The broad API fixture adds
         # unrelated source hooks and can hide ownership differences from release.
-        config=ROOT/'app'/('.compact-qa-'+uuid.uuid4().hex+'.json')
+        config=base/'xs.json' if a.packed else ROOT/'app'/('.compact-qa-'+uuid.uuid4().hex+'.json')
         config.write_text(json.dumps({'engine':{'workers':2},'services':[{
           'enabled':True,'class':'http','name':'compact-qa','ip':'127.0.0.1','port':port,
           'host_default':{'enabled':True,'name':'mdo','path':'web','devlang':'c','devfile':'generated/mdo_unity.c'}}]}),encoding='utf-8')
         with (base/'host.log').open('wb') as output:
-          child=subprocess.Popen([str(a.host.resolve()),str(config),'--','--home',str(home)],cwd=ROOT/'app',
-            env=dict(os.environ,MDO_CONTEXT_FIXTURE_KEY='fixture-only'),stdout=output,stderr=subprocess.STDOUT,
+          if a.packed:
+            exe=base/'mdo.exe';shutil.copyfile(a.packed.resolve(),exe);command=[str(exe)];directory=base
+          else:
+            command=[str(a.host.resolve()),str(config),'--','--home',str(home)];directory=ROOT/'app'
+          child=subprocess.Popen(command,cwd=directory,
+            env=dict(os.environ,MDO_HOME=str(home),USE_WEBVIEW='0',MDO_CONTEXT_FIXTURE_KEY='fixture-only'),stdout=output,stderr=subprocess.STDOUT,
             creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
           try:
             wait_ready(port,child)
