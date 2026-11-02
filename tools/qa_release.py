@@ -130,7 +130,7 @@ def runtime_probe_command(probe: Path, host: Path, packed: Path, *,
         directory = BUILD / "qa-release" / ("task-stop-" + uuid.uuid4().hex)
         return [sys.executable, str(probe), "--host", str(host), "--directory", str(directory)]
     if probe.name in {"test_conversation_groups_runtime.py", "test_responses_followup_runtime.py",
-                      "test_session_profile_errors_runtime.py"}:
+                      "test_session_profile_errors_runtime.py", "test_conversation_faults_runtime.py"}:
         return [sys.executable, str(probe), "--packed", str(packed)]
     if probe.name == "test_optional_tools_runtime.py":
         platform = optional_tools_platform or ("windows-x86_64" if os.name == "nt" else "linux-x86_64")
