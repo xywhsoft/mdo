@@ -1367,7 +1367,7 @@ select:focus-visible,
 .setting-row > div, .setting-switch > span:first-child { min-width: 0; }
 .setting-row label, .setting-switch strong { display: block; font-size: 13px; font-weight: 600; }
 .setting-row p, .setting-switch small { display: block; margin: 3px 0 0; color: var(--muted); font-size: 11px; font-weight: 400; }
-.setting-row select, .setting-row input, .settings-grid input {
+.setting-row select, .setting-row input, .setting-row textarea, .settings-grid input {
   min-width: 160px;
   min-height: 36px;
   padding: 6px 9px;
@@ -1377,10 +1377,11 @@ select:focus-visible,
   background: var(--surface-raised);
   color: var(--ink);
 }
-.setting-row select:focus, .setting-row input:focus, .settings-grid input:focus { border-color: var(--focus); }
+.setting-row select:focus, .setting-row input:focus, .setting-row textarea:focus, .settings-grid input:focus { border-color: var(--focus); }
 .setting-row input[type="number"] { width: 112px; min-width: 112px; }
-.setting-row-wide { display: grid; align-items: start; gap: 12px; padding: 18px 0; }
-.setting-row-wide input { width: 100%; }
+.setting-row-wide { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; gap: 12px; padding: 18px 0; }
+.setting-row-wide :is(input, textarea) { width: 100%; min-width: 0; }
+.setting-row textarea { min-height: 160px; resize: vertical; line-height: 1.5; }
 .setting-instructions textarea { width: 100%; min-height: 112px; resize: vertical; padding: 9px 11px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface-raised); color: var(--ink); font: inherit; line-height: 1.5; }
 .setting-instructions textarea:focus { outline: 2px solid var(--focus); outline-offset: 1px; }
 .setting-instructions small { color: var(--muted); text-align: right; }

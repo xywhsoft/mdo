@@ -503,8 +503,8 @@
                 <div class="credential-state" id="proxy-credential-state" role="status"></div>
                 <label class="setting-switch" id="proxy-clear-secret-row" hidden><span><strong data-i18n="settings.proxyClearSecret">清除已配置的密码引用</strong><small data-i18n="settings.proxyClearSecretDescription">下次应用时删除旧引用；密码文件或环境变量本身不会被删除。</small></span><input name="proxy_clear_secret" type="checkbox"><span class="switch-control" aria-hidden="true"></span></label>
                 <div class="setting-row setting-row-wide">
-                  <div><label for="setting-proxy-bypass" data-i18n="settings.proxyBypass">不走代理的地址</label><p data-i18n="settings.proxyBypassDescription">逗号分隔的主机名模式，可使用前后 * 通配符，例如 localhost,*.internal。</p></div>
-                  <input id="setting-proxy-bypass" name="proxy_bypass" type="text" maxlength="1023" autocomplete="off" spellcheck="false">
+                  <div><label for="setting-proxy-bypass" data-i18n="settings.proxyBypass">不走代理的地址</label><p id="setting-proxy-bypass-description" data-i18n="settings.proxyBypassDescription">每行一个主机名模式，也可用逗号分隔；支持前后 * 通配符，例如 localhost、*.internal。</p></div>
+                  <textarea id="setting-proxy-bypass" name="proxy_bypass" rows="6" maxlength="1023" autocomplete="off" spellcheck="false" aria-describedby="setting-proxy-bypass-description"></textarea>
                 </div>
               </section>
             </form>

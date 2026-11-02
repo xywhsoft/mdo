@@ -360,7 +360,7 @@
   "settings.proxyUser": "Имя пользователя (необязательно)",
   "settings.proxySecretRef": "Ссылка на пароль (необязательно)",
   "settings.proxyBypass": "Адреса без прокси",
-  "settings.proxyBypassDescription": "Шаблоны имён хостов через запятую; * допускается в начале или конце, например localhost,*.internal.",
+  "settings.proxyBypassDescription": "Введите по одному шаблону имени хоста на строку или разделите их запятыми. Поддерживается * в начале или конце, например localhost и *.internal.",
   "settings.proxyUserRequired": "Для ссылки на пароль укажите имя пользователя прокси.",
   "settings.proxyInvalid": "Проверьте адрес, порт или имя пользователя прокси.",
   "settings.proxyCredentialConfigured": "Ссылка на пароль прокси настроена. Введите новую ссылку для замены или выберите удаление.",

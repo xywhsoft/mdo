@@ -44,7 +44,7 @@ export function settingsPatch(form) {
         host: form.elements.proxy_host.value.trim(),
         port: number(form, "proxy_port"),
         user: form.elements.proxy_user.value.trim(),
-        bypass: form.elements.proxy_bypass.value.trim(),
+        bypass: form.elements.proxy_bypass.value.split(/[,\r\n]+/).map(value => value.trim()).filter(Boolean).join(","),
         ...(form.elements.proxy_clear_secret.checked ? { credential: null }
           : proxySecretRef ? { credential: { secret_ref: proxySecretRef } } : {}),
         }),
@@ -277,7 +277,7 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
     form.elements.proxy_user.value = proxy.user ?? "";
     form.elements.proxy_secret_ref.value = "";
     form.elements.proxy_clear_secret.checked = false;
-    form.elements.proxy_bypass.value = proxy.bypass ?? "";
+    form.elements.proxy_bypass.value = (proxy.bypass ?? "").split(",").map(value => value.trim()).filter(Boolean).join("\n");
     validateProxy();
     renderProxyCredential(settings);
     baselineFingerprint = fingerprint();

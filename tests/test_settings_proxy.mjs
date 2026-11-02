@@ -58,3 +58,12 @@ test("Agent turn settings preserve unlimited zero and a finite integer in the sa
   form.elements.max_turns.value = "512";
   assert.equal(settingsPatch(form).agent.max_turns, 512);
 });
+
+test("multiline proxy bypass rules save as a comma-separated list without newline characters", () => {
+  const form = fixture();
+  form.elements.proxy_kind.value = "none";
+  form.elements.proxy_bypass.value = " localhost\r\n\n *.internal, example.com \r 127.0.0.1\n";
+  assert.equal(settingsPatch(form).transport.proxy.bypass, "localhost,*.internal,example.com,127.0.0.1");
+  form.elements.proxy_bypass.value = " \n,\r\n ";
+  assert.equal(settingsPatch(form).transport.proxy.bypass, "");
+});

@@ -342,7 +342,7 @@
   "settings.proxyUser": "Username (optional)",
   "settings.proxySecretRef": "Password reference (optional)",
   "settings.proxyBypass": "Hosts that bypass the proxy",
-  "settings.proxyBypassDescription": "Comma-separated host patterns; a leading or trailing * is allowed, such as localhost,*.internal.",
+  "settings.proxyBypassDescription": "Enter one hostname pattern per line, or separate them with commas. Leading or trailing * wildcards are supported, for example localhost and *.internal.",
   "settings.proxyUserRequired": "Enter a proxy username when configuring a password reference.",
   "settings.proxyInvalid": "Check the proxy host, port, or username.",
   "settings.proxyCredentialConfigured": "A proxy password reference is configured. Enter a new reference to replace it, or select Clear.",
