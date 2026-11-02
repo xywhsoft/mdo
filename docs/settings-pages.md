@@ -107,6 +107,20 @@ Agent 工具与 Skill 列表不再各自提供创作中心外链，提交作品�
 
 静态文案用 `data-i18n`，动态文案用 `t()`，并补齐 `zh-CN`、`en-US`、`ru-RU`。手机分类标题会随着语言切换自动同步。
 
+## 执行轮数上限
+
+“Agent 行为 → 执行轮数上限”保存 `agent.max_turns`。默认 `0` 表示不限制；
+正整数 `1–1024` 限制每个 Agent 单次运行的模型执行轮数。主 Agent 和委派子 Agent
+分别计数。更改自动保存，在下一次启动或继续任务时应用；正在运行的任务保留启动时的设置。
+
+角色文件的 `runtime.max_turns` 也支持 `0`。全局和角色都设置了正数时，较低的上限生效；
+只有一方为正数时使用该值。内置默认 Agent、通用子 Agent 和未指定上限的新角色默认均为 `0`。
+旧 Home 缺少此字段时自动继承新默认值，未修改的旧内置角色按现有安装收据机制更新；
+用户修改的角色保留原内容和明确设置的上限。
+
+轮数只统计内部模型执行循环，一条用户任务可以包含多轮。命令超时、取消和工具重复失败
+继续使用各自的现有规则。中、英、俄三种语言使用同一个表单及保存流程。
+
 ## 验证
 
 运行 `node --test tests/test_settings_pages.mjs tests/test_settings_autosave.mjs tests/test_settings_state.mjs tests/test_settings_resource_loading.mjs`，以及 `python -m unittest discover -s tests -p test_frontend_contract.py`。

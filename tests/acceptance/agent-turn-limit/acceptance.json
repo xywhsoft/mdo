@@ -1,0 +1,65 @@
+{
+  "date": "2026-11-02",
+  "source_commit": "8ff4595d658f305d15bf967df36f88801cbd425f",
+  "status": "local acceptance; this task did not deploy",
+  "model_network_requests": 0,
+  "default_max_turns": 0,
+  "finite_range": [
+    1,
+    1024
+  ],
+  "role_combination": "minimum of nonzero global and role ceilings; both zero means unlimited",
+  "native_cases": [
+    "CASE global=0 target=130 delegate=0 role=mdo.default status=0 root=130 child=0 error=",
+    "CASE global=2 target=4 delegate=0 role=mdo.default status=4294967293 root=2 child=0 error=configured agent-turn limit reached",
+    "CASE global=0 target=130 delegate=1 role=mdo.default status=0 root=2 child=130 error=",
+    "CASE global=2 target=4 delegate=1 role=mdo.default status=0 root=2 child=2 error=",
+    "CASE global=0 target=5 delegate=0 role=agent.limited status=4294967293 root=3 child=0 error=configured agent-turn limit reached"
+  ],
+  "legacy_settings_default": true,
+  "builtin_upgrade": true,
+  "settings_api": {
+    "valid": [
+      0,
+      1024,
+      512
+    ],
+    "invalid": [
+      -1,
+      1.5,
+      1025,
+      true,
+      "5",
+      null
+    ],
+    "restart_value": 512,
+    "existing_preferences_preserved": true
+  },
+  "browser": {
+    "category": "Agent behavior",
+    "initial": 0,
+    "saved_finite_value": 2,
+    "reloaded_finite_value": 2,
+    "restored_value": 0,
+    "reloaded_unlimited_value": 0,
+    "console_errors": []
+  },
+  "frontend": {
+    "files": 8,
+    "tests": 58,
+    "passed": 58,
+    "modules": 248
+  },
+  "config_contract_tests": 6,
+  "sdk": {
+    "patch_sha256": "aaa926f27d189a53b2bf4595a40facea1be8b2f020814f56c4de988f88340ebd",
+    "xwork_source_sha256": "f10d1b633d87e9857de4621a6f1391b281c2a0dc396634f91e9826227f563e89",
+    "cache_reused_in_place": true,
+    "native_host_recompiled": true
+  },
+  "build": {
+    "path": ".build/agent-turn-limit-20261102/mdo.exe",
+    "bytes": 6646515,
+    "sha256": "0b8de13189bc16edc2b772c14e198434270f7dfb24359d2b37558a6c285006d2"
+  }
+}

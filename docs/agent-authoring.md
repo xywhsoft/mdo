@@ -79,6 +79,11 @@ context: {"memory.global":false,"environment":true}
 
 `runtime` 支持 `max_turns`、`max_model_calls`（每次运行）、`max_depth`、`max_final_bytes`、`timeout_ms`（命令超时）、`task_timeout_ms`（接受委派的任务超时）、`context_tokens`、`input_tokens`、`output_tokens`。委派任务 `task_timeout_ms: 0` 表示不额外添加角色时间限制，仍继承宿主任务取消与截止时间。主任务总超时由宿主运行配置负责。工具连续失败仍沿用产品的 10 次策略。
 
+`max_turns` 默认 `0`，表示不添加角色轮数上限，也可显式设置为 `0`。全局“Agent 行为”中的
+`agent.max_turns` 同样默认 `0`；全局或角色有正数上限时采用较低的有效上限，主、子 Agent
+分别按每次运行计数。已有角色明确设置的正数上限保持有效。自定义 C 驱动自行管理其控制流，
+使用托管默认循环时遵循此轮数限制。
+
 `max_model_calls` 约束角色的普通交互请求；压缩摘要使用已有的独立、有界重试策略。发送前还会检查回调新增消息和工具 schema 的输入开销，超出时尝试一次安全压缩，无法容纳时明确失败，避免发送已知超限的请求。
 
 `require_verification_after_write` 开启修改后的验证要求。`history` 支持 `mode: all/current/recent`、`keep_recent_turns`（recent 默认 2）、`include_summary`、`tool_result_max_bytes`、`images: allow/omit`。投影保留工具账本配对，原始内容仍留在会话中。主动排除摘要/旧消息会减少模型可见上下文，适合明确独立的任务。
