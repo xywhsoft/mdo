@@ -77,7 +77,7 @@ static bool MdoBackupEventCopy(const MdoSessionEventInfo* Event, void* Data)
     Fact->Kind = Event->Kind; Fact->Depth = Event->AgentDepth; Fact->Success = Event->Success;
     Fact->Truncated = Event->TextTruncated;
     Fact->Todo = Event->Kind == XWORK_EVENT_TOOL_DONE && Event->Success && Event->AgentDepth == 0u &&
-        strcmp(Event->ToolName, "mdo.todo") == 0;
+        MdoSessionsIsTodoTool(Event->ToolName);
     memcpy(Fact->QueueId, Event->QueueItemId, sizeof(Fact->QueueId));
     return true;
 }

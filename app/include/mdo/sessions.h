@@ -384,7 +384,7 @@ bool MdoSessionEventQueueStartSeen(const char* ProjectId,
     const char* SessionId, const char* QueueItemId, uint64 AgentRunId,
     bool* Seen);
 
-/* The optional external mdo.todo example projects its latest successful main-Agent
+/* The bundled todo tool (and legacy mdo.todo records) projects the latest successful main-Agent
  * snapshot into a bounded Home sidecar. A missing sidecar loads as empty and
  * never creates Home. The returned value is caller-owned. Project/Reset take
  * a shared lifecycle lease before any sidecar write, including direct calls. */

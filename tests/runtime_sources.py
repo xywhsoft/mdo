@@ -13,11 +13,12 @@ QUOTED_INCLUDE = re.compile(r'^\s*#\s*include\s*"([^"\r\n]+)"', re.MULTILINE)
 
 
 def install_todo_example(home: Path) -> None:
-    """Explicit opt-in for plan fixtures; the product never installs this."""
-    source = APP.parent / "examples/tools/todo.c"
-    target = home / "tools/todo-example.c"
-    target.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(source, target)
+    """Seed the bundled tool for source-only fixtures that bypass bootstrap."""
+    source = APP / "default-home/tools/todo"
+    target = home / "tools/todo"
+    if not target.exists():
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(source, target)
 
 
 def copy_echo_module(site: Path) -> None:

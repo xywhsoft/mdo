@@ -32,10 +32,10 @@ function tick() {
   timer.callback();
   return timer.delay;
 }
-function observe(id) {
+function observe(id, name = "todo", extra = {}) {
   timelineStore.setData({ projectId: "qa", sessionId: "a", cursor: id,
     latestEventId: id, historyLost: false, events: [{ event_id: id, kind: "tool_done",
-      tool_name: "mdo.todo", success: true, agent_depth: 0 }] });
+      tool_name: name, success: true, agent_depth: 0, ...extra }] });
 }
 beforeEach(() => { clearTimeline(); clearTodo(); timers.clear(); clock = 0; });
 after(() => {
@@ -56,6 +56,18 @@ test("a transient todo read recovers without a new tool event", async (context) 
   assert.equal(todoStore.get().error, null);
   assert.equal(todoStore.get().data.eventId, 7);
   assert.equal(timers.size, 0);
+});
+
+test("both todo and legacy mdo.todo refresh the plan; failed and delegated calls do not", async context => {
+  let calls = 0;
+  context.mock.method(globalThis, "fetch", async () => ++calls === 1 ? empty() : plan(calls + 2));
+  await selectTodo("qa", "a");
+  observe(1, "todo", { success: false }); await flush();
+  observe(2, "todo", { agent_depth: 1 }); await flush();
+  observe(3, "unrelated"); await flush();
+  assert.equal(calls, 1);
+  observe(4); await flush(); assert.equal(calls, 2);
+  observe(5, "mdo.todo"); await flush(); assert.equal(calls, 3);
 });
 
 test("transport failures and projection lag share the same bounded retry budget", async (context) => {

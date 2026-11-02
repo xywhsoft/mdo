@@ -109,7 +109,7 @@ class ModelHandler(BaseHTTPRequestHandler):
                 output = [{
                     "type": "function_call",
                     "call_id": "todo-probe-call",
-                    "name": "mdo.todo",
+                    "name": "todo",
                     "arguments": json.dumps({"items": [
                         {"text": "Inspect repository", "done": True},
                         {"text": "Verify result", "done": False},
@@ -3887,9 +3887,7 @@ def run_probe(host: Path) -> None:
                     ask_recovered_run)
                 assert ask_recovered_run["resume"] is True, ask_recovered_run
 
-                status, _, body = request(port, "PUT", "/api/v1/extensions/tools/todo-example",
-                    body=json.dumps({"content":(ROOT / "examples/tools/todo.c").read_text(encoding="utf-8")}).encode(),
-                    headers={"Content-Type":"application/json", "If-Match":'"new"'})
+                status, _, body = request(port, "GET", "/api/v1/extensions/tools/todo")
                 assert status == 200, (status, body)
                 status, _, body = request(port, "POST", run_path,
                     body=b'{"prompt":"TODO probe","timeout_ms":10000}',
@@ -3919,7 +3917,7 @@ def run_probe(host: Path) -> None:
                            event["user_message_sequence"] > 0
                            for event in todo_events), todo_events
                 assert any(event["kind"] == "tool_done" and
-                           event["tool_name"] == "mdo.todo" and
+                           event["tool_name"] == "todo" and
                            event["success"] for event in todo_events), todo_events
 
                 asks_path = session_path + "/asks"

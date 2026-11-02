@@ -6,6 +6,13 @@
 #include "data_gate.h"
 #include "../../include/mdo/home_restore.h"
 #include "../../include/mdo/home_purge.h"
+#include <string.h>
+
+/* New calls use todo; retained event ledgers still carry the former name. */
+static inline bool MdoSessionsIsTodoTool(const char* Name)
+{
+    return Name != NULL && (!strcmp(Name, "todo") || !strcmp(Name, "mdo.todo"));
+}
 
 typedef struct MdoSessionEventBridge MdoSessionEventBridge;
 typedef struct MdoSessionEventTrimPlan MdoSessionEventTrimPlan;

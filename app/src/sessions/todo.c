@@ -154,8 +154,7 @@ bool MdoSessionTodoProject(const char* ProjectId, const char* SessionId,
     MdoSessionDataLease* DataLease = NULL;
     if ( Event == NULL || Event->eKind != XWORK_EVENT_TOOL_DONE ||
          !Event->bSuccess || Event->uAgentDepth != 0u ||
-         Event->sToolName == NULL ||
-         strcmp(Event->sToolName, "mdo.todo") != 0 ) return true;
+         !MdoSessionsIsTodoTool(Event->sToolName) ) return true;
     if ( EventId == 0u || Event->sText == NULL ||
          Event->iTextLength == 0u ||
          Event->iTextLength > MDO_TODO_INPUT_MAX ||

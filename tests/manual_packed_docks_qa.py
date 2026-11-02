@@ -185,19 +185,19 @@ class Model(BaseHTTPRequestHandler):
             elif "TODO REORDER UI" in wire and "todo-reorder" not in Model.sent:
                 Model.sent.add("todo-reorder")
                 output = [{"type": "function_call", "call_id": "ui-todo-reorder-1",
-                           "name": "mdo.todo", "arguments": json.dumps({"items": [
+                           "name": "todo", "arguments": json.dumps({"items": [
                                {"text": "Verify refresh", "done": True},
                                {"text": "Inspect UI", "done": True}]})}]
             elif "TODO UPDATE UI" in wire and "todo-update" not in Model.sent:
                 Model.sent.add("todo-update")
                 output = [{"type": "function_call", "call_id": "ui-todo-update-1",
-                           "name": "mdo.todo", "arguments": json.dumps({"items": [
+                           "name": "todo", "arguments": json.dumps({"items": [
                                {"text": "Inspect UI", "done": True},
                                {"text": "Verify refresh", "done": True}]})}]
             elif "TODO UI" in wire and "todo" not in Model.sent:
                 Model.sent.add("todo")
                 output = [{"type": "function_call", "call_id": "ui-todo-1",
-                           "name": "mdo.todo", "arguments": json.dumps({"items": [
+                           "name": "todo", "arguments": json.dumps({"items": [
                                {"text": "Inspect UI", "done": True},
                                {"text": "Verify refresh", "done": False}]})}]
             elif "ARTIFACT UI" in wire and "artifact" not in Model.sent:

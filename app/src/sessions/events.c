@@ -1322,7 +1322,7 @@ bool MdoSessionEventTrimReconcileTodo(MdoSessionEventTrimPlan* Plan,
                 Entry.Info.SourceEventId : 1u) ) Stale = true;
         if ( Entry.Info.Kind == XWORK_EVENT_TOOL_DONE &&
              Entry.Info.Success && Entry.Info.AgentDepth == 0u &&
-             strcmp(Entry.ToolName, "mdo.todo") == 0 &&
+             MdoSessionsIsTodoTool(Entry.ToolName) &&
              !Entry.Info.TextTruncated ) {
             size_t TextSize = strlen(Entry.Text);
             char* Copy = (char*)xrtMalloc(TextSize + 1u);
@@ -1349,7 +1349,7 @@ bool MdoSessionEventTrimReconcileTodo(MdoSessionEventTrimPlan* Plan,
             memset(&Event, 0, sizeof(Event));
             Event.eKind = XWORK_EVENT_TOOL_DONE;
             Event.bSuccess = true;
-            Event.sToolName = "mdo.todo";
+            Event.sToolName = "todo";
             Event.sText = LatestTodoText;
             Event.iTextLength = LatestTodoSize;
             Ok = MdoSessionTodoProject(Plan->Bridge->ProjectId,

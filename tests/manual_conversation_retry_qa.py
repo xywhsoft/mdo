@@ -98,7 +98,7 @@ class Model(BaseHTTPRequestHandler):
         finish = 'stop'
         if prompt == 'decisions' and attempt <= 6:
             name, arguments = [
-                ('mdo.todo', {'items':[
+                ('todo', {'items':[
                     {'text':'Inspect the fixture', 'done':True},
                     {'text':'Verify the question and approval', 'done':False}]}),
                 ('ask_user', {'question':'Which fixture route should be checked?',
@@ -111,7 +111,7 @@ class Model(BaseHTTPRequestHandler):
                     "from pathlib import Path; "
                     "assert Path('approval-proof.txt').read_text() == 'mdo decision fixture\\n'; "
                     "print('FIXTURE_VERIFIED')"], 'timeout_ms':5000}),
-                ('mdo.todo', {'items':[
+                ('todo', {'items':[
                     {'text':'Inspect the fixture', 'done':True},
                     {'text':'Verify the question and approval', 'done':True}]}),
             ][attempt-1]

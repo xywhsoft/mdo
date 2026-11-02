@@ -57,7 +57,7 @@ static inline cstr MdoBuiltinToolCanonicalId(cstr Id)
     static const char* const Aliases[][2] = {
         {"Read","read"}, {"Grep","grep"}, {"Glob","glob"}, {"Bash","exec"},
         {"Edit","edit"}, {"Write","write"}, {"WebSearch","search"},
-        {"WebFetch","open"}, {"Skill","skill"},
+        {"WebFetch","open"}, {"Skill","skill"}, {"mdo.todo","todo"},
         {"poll","status"}, {"task_status","status"}, {"ask_user","ask"}, {"web_search","search"}, {"web_open","open"}, {"web_find","find"}, {"tool_search","tools"}, {"tool_load","load"}, {"mcp_read","fetch"}
     };
     size_t i;

@@ -67,7 +67,7 @@ class Model(BaseHTTPRequestHandler):
             arguments = {"items": [{"text": "Inspect pixel tools", "done": prompt != "baseline"},
                 {"text": "Verify the result", "done": prompt == "update-final"}]}
             message["tool_calls"] = [{"id": f"todo-{prompt}", "type": "function",
-                "function": {"name": "mdo.todo", "arguments": json.dumps(arguments)}}]
+                "function": {"name": "todo", "arguments": json.dumps(arguments)}}]
             finish = "tool_calls"
         raw = json.dumps({"id": "todo-read", "model": body["model"], "choices": [{"index": 0,
             "message": message, "finish_reason": finish}],

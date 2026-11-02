@@ -75,7 +75,7 @@ function observeTimeline(state) {
     return;
   }
   const latest = [...(data.events ?? [])].reverse().find(event =>
-    event.kind === "tool_done" && event.tool_name === "mdo.todo" && event.success &&
+    event.kind === "tool_done" && ["todo", "mdo.todo"].includes(event.tool_name) && event.success &&
     event.agent_depth === 0 && Number(event.event_id) > observedEventId);
   if (latest) {
     observedEventId = Number(latest.event_id);
