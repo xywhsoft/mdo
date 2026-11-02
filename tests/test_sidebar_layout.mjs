@@ -13,7 +13,7 @@ test("sidebar layout rejects unknown fields, duplicate identities and invalid de
     { ...value, groups: [{ id: a, name: "\ninvalid" }] }]) assert.equal(Boolean(validSidebarLayout(invalid)), false);
 });
 
-test("group assignments preserve project ownership, pins, filtering and stable manual order", () => {
+test("group assignments preserve project ownership, pins, filtering and recent activation order", () => {
   const sessions = [{ id: "one", project_id: "alpha", status: "active", title: "one", updated_at: 3 },
     { id: "two", project_id: "alpha", status: "active", title: "two", updated_at: 2 },
     { id: "pin", project_id: "alpha", status: "active", pinned: true, updated_at: 4 }];
@@ -27,12 +27,12 @@ test("group assignments preserve project ownership, pins, filtering and stable m
   assert.equal(tree.custom[1].entries[0].item.project_id, "alpha"); assert.equal(tree.pinned[0].id, "pin");
   assert.equal(tree.custom[1].entries.length, 1); assert.equal(sessions[1].project_id, "alpha");
   layout = moveSidebarItem(initial(), "s:alpha/two", "", "s:alpha/one", ["s:alpha/one", "s:alpha/two"]);
-  assert.deepEqual(organizedSidebar(base, layout).projects[0].sessions.map(item => item.id), ["two", "one"]);
+  assert.deepEqual(organizedSidebar(base, layout).projects[0].sessions.map(item => item.id), ["one", "two"]);
 });
 
 test("timeline buckets use calendar days, and orphaned placements do not hide new sessions", () => {
   const now = new Date(2026, 9, 23, 12).getTime();
-  const source = [0, 1, 5, 20].map((days, i) => ({ id: String(i), updated_at: (now - days * 86400000) / 1000 }));
+  const source = [0, 1, 5, 20].map((days, i) => ({ id: String(i), updated_at: (now - days * 86400000) * 1000 }));
   assert.deepEqual(timelineSidebar(source, now).map(item => [item.id, item.sessions.length]), [["today",1],["yesterday",1],["week",1],["older",1]]);
   const layout = moveSidebarItem(initial(), "s:removed/old", a);
   const tree = organizedSidebar(sidebarGroups({ sessions: [{ id: "new", project_id: "default", status: "active" }] }), layout);
@@ -65,4 +65,18 @@ test("destroy cancels an unresponsive write and never applies its late reply", a
   let coldReads = 0;
   const cold = createSidebarLayoutStore({ read: async () => { ++coldReads; return { data: emptySidebarLayout() }; } });
   cold.destroy(); await Promise.resolve(); assert.equal(coldReads, 0);
+});
+
+
+test("saved placements never override activation order in tasks, pins or custom groups", () => {
+  const sessions = [
+    { id: "old", project_id: "default", status: "active", updated_at: 500, last_activated_at: 10 },
+    { id: "recent", project_id: "default", status: "active", updated_at: 1, last_activated_at: 20 },
+  ];
+  const layout = initial();
+  layout.placements = [{ key: "s:default/old", group: "" }, { key: "s:default/recent", group: "" }];
+  assert.deepEqual(organizedSidebar(sidebarGroups({ sessions }), layout).tasks.map(s => s.id), ["recent", "old"]);
+  for (const place of layout.placements) place.group = a;
+  assert.deepEqual(organizedSidebar(sidebarGroups({ sessions }), layout).custom[0].entries.map(e => e.item.id), ["recent", "old"]);
+  assert.deepEqual(organizedSidebar(sidebarGroups({ sessions: sessions.map(s => ({ ...s, pinned: true })) }), layout).pinned.map(s => s.id), ["recent", "old"]);
 });

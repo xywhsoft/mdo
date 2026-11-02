@@ -279,6 +279,7 @@ bool MdoApiSessionsRoute(MdoApiContext* Context)
             MdoApiValueSetUInt(Item, "revision", Info.Revision) &&
             MdoApiValueSetInt(Item, "created_at", Info.CreatedAt) &&
             MdoApiValueSetInt(Item, "updated_at", Info.UpdatedAt) &&
+            MdoApiValueSetInt(Item, "last_activated_at", Info.LastActivatedAt) &&
             MdoApiValueSetBool(Item, "pinned", Info.Pinned) &&
             MdoApiValueSetBool(Item, "runtime_open", Info.RuntimeOpen) &&
             MdoApiValueSetUInt(Item, "max_output_tokens",

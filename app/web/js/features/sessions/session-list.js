@@ -4,7 +4,7 @@ import { element, clear, formatRelativeTime, errorMessage, isImeKey, toast } fro
 
 import { sessionActionItems } from "./session-actions.js";
 import { mountIcons } from "../../components/icons.js";
-import { recentSessions, sidebarGroups, sidebarWindow, matchingSessions } from "./sidebar-tree.js";
+import { recentSessions, sidebarGroups, sidebarWindow, matchingSessions, sessionActivity } from "./sidebar-tree.js";
 import { createSidebarLayoutStore, organizedSidebar, timelineSidebar } from "./sidebar-layout.js";
 import { createSidebarOrganizer } from "./sidebar-organizer.js";
 import { isTransientReadError } from "../../api/read-recovery.js";
@@ -103,8 +103,8 @@ export function createSessionList({ container, count, filter, searchButton, stor
     // Keep the row mounted so polling cannot clear selection or menu focus.
     const timeline = layoutStore.get().view === "timeline";
     return JSON.stringify([timeline ? new Date().toDateString() : "", recentSessions(items).map(({ project_id, id, title, status, pinned,
-      model_id, agent_id, updated_at }) => [project_id, id, title, status, pinned, model_id, agent_id,
-        timeline ? new Date(Number(updated_at || 0) * 1000).toDateString() : ""])]);
+      model_id, agent_id, updated_at, last_activated_at }) => [project_id, id, title, status, pinned, model_id, agent_id,
+        timeline ? new Date(Number(last_activated_at || updated_at || 0) / 1000).toDateString() : ""])]);
   }
 
   function syncTimes() {
@@ -114,8 +114,8 @@ export function createSessionList({ container, count, filter, searchButton, stor
       const session = sessions.get(button.dataset.sessionKey);
       const time = button.querySelector(".session-item-time");
       if (!session || !time) continue;
-      time.dataset.relativeTime = String(session.updated_at);
-      const label = formatRelativeTime(session.updated_at);
+      time.dataset.relativeTime = String(sessionActivity(session));
+      const label = formatRelativeTime(sessionActivity(session));
       if (time.textContent !== label) writeUiText(time, label);
     }
   }
@@ -390,8 +390,8 @@ export function createSessionList({ container, count, filter, searchButton, stor
         element("span", { className: "session-item-title", text: label }),
       ]), element("span", { className: "session-item-trailing" }, [
         element("span", { className: "session-run-indicator", attrs: { "aria-hidden": "true" } }),
-        element("time", { className: "session-item-time", text: formatRelativeTime(session.updated_at),
-          attrs: { "data-relative-time": session.updated_at } }),
+        element("time", { className: "session-item-time", text: formatRelativeTime(sessionActivity(session)),
+          attrs: { "data-relative-time": sessionActivity(session) } }),
       ]), element("span", { className: "sr-only session-item-status" }, [
         element("span", { className: "session-item-activity" }),
         element("span", { className: "session-item-unread" }),

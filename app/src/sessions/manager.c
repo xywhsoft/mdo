@@ -292,6 +292,8 @@ char* MdoSessionsInternalMetaJson(const MdoSessionInfo* Info, size_t* Size)
             xrtValueInt(Info->CreatedAt)) ||
          !MdoSessionsObjectTake(Object, "updated_at_us",
             xrtValueInt(Info->UpdatedAt)) ||
+         !MdoSessionsObjectTake(Object, "last_activated_at_us",
+            xrtValueInt(Info->LastActivatedAt >= Info->CreatedAt ? Info->LastActivatedAt : Info->CreatedAt)) ||
          !MdoSessionsObjectString(Object, "status", Status) ||
          !MdoSessionsObjectString(Object, "previous_status", Previous) ||
          !MdoSessionsObjectTake(Object, "pinned", xrtValueBool(Info->Pinned)) ||
@@ -391,6 +393,7 @@ bool MdoSessionsInternalMetaParse(const char* ExpectedProject,
     uint64 MaxOutput;
     uint64 Created;
     uint64 Updated;
+    uint64 Activated;
     uint64 ConfigRevision;
     uint64 ModelGeneration;
     uint64 ModuleGeneration;
@@ -417,7 +420,7 @@ bool MdoSessionsInternalMetaParse(const char* ExpectedProject,
          ((Schema == 1u && xrtValueCount(Root) != 20u) ||
           (Schema == 2u && xrtValueCount(Root) != 22u) ||
           (Schema == MDO_SESSION_SCHEMA_VERSION &&
-           xrtValueCount(Root) != 23u)) ||
+           xrtValueCount(Root) != (xrtValueObjectGet(Root, XRT_STR_LITERAL("last_activated_at_us")) ? 24u : 23u))) ||
          !MdoSessionsValueUInt(Root, "revision", &Revision) ||
          Revision == 0u ||
          !MdoSessionsValueString(Root, "id", &Id) ||
@@ -483,6 +486,11 @@ bool MdoSessionsInternalMetaParse(const char* ExpectedProject,
     Info->Revision = Revision;
     Info->CreatedAt = (int64)Created;
     Info->UpdatedAt = (int64)Updated;
+    Activated = Updated; /* Existing conversations retain their initial relative order. */
+    if ( xrtValueObjectGet(Root, XRT_STR_LITERAL("last_activated_at_us")) &&
+         (!MdoSessionsValueUInt(Root, "last_activated_at_us", &Activated) ||
+          Activated > INT64_MAX || Activated < Created) ) goto done;
+    Info->LastActivatedAt = (int64)Activated;
     Info->Pinned = Pinned;
     Info->MaxOutputTokens = (uint32)MaxOutput;
     Info->ConfigRevision = ConfigRevision;
@@ -964,6 +972,7 @@ MdoSession* MdoSessionCreate(const MdoSessionCreateOptions* Options,
     Info.Revision = 1u;
     Info.CreatedAt = MdoUtcUs();
     Info.UpdatedAt = Info.CreatedAt;
+    Info.LastActivatedAt = Info.CreatedAt;
     Info.Status = MDO_SESSION_ACTIVE;
     Info.PreviousStatus = MDO_SESSION_ACTIVE;
     Info.RuntimeOpen = true;
@@ -1430,6 +1439,7 @@ MdoSession* MdoSessionFork(MdoSession* Source,
     Info.Revision = 1u;
     Info.CreatedAt = MdoUtcUs();
     Info.UpdatedAt = Info.CreatedAt;
+    Info.LastActivatedAt = Info.CreatedAt;
     Info.Status = MDO_SESSION_ACTIVE;
     Info.PreviousStatus = MDO_SESSION_ACTIVE;
     Info.RuntimeOpen = true;
@@ -1639,14 +1649,47 @@ bool MdoSessionUseAgent(MdoSession* Session,MdoAgentSession* Agent,cstr Namespac
 static bool MdoSessionsCommit(MdoSession* Session,
     const MdoSessionInfo* Candidate, xwork_error* Error)
 {
-    if ( !MdoSessionsMetaWrite(Session->MetaPath, Candidate) ) {
+    MdoSessionInfo Current, Merged = *Candidate;
+    /* Navigation is independent of the optimistic content revision. A live
+     * runtime may still hold the metadata from before another tab activated it. */
+    if ( !MdoSessionsMetaRead(Candidate->ProjectId, Candidate->Id, &Current) ) {
+        MdoSessionsXrtError(Error, XWORK_ERROR_IO, "cannot read current session activity");
+        return false;
+    }
+    if ( Current.LastActivatedAt > Merged.LastActivatedAt )
+        Merged.LastActivatedAt = Current.LastActivatedAt;
+    if ( !MdoSessionsMetaWrite(Session->MetaPath, &Merged) ) {
         MdoSessionsXrtError(Error, XWORK_ERROR_IO,
             "cannot update session metadata");
         return false;
     }
-    Session->Info = *Candidate;
+    Session->Info = Merged;
     MdoSessionsGenerationAdvance();
     return true;
+}
+
+bool MdoSessionActivate(MdoSession* Session, xwork_error* Error)
+{
+    xworkErrorInit(Error);
+    if ( !Session ) {
+        MdoSessionsError(Error, XWORK_ERROR_INVALID_ARGUMENT, "session is required");
+        return false;
+    }
+    xrtMutexLock(Session->Lock);
+    xrtMutexLock(g_MdoSessions.Lock);
+    MdoSessionInfo Current;
+    bool Ok = MdoSessionsMetaRead(Session->Info.ProjectId, Session->Info.Id, &Current);
+    if ( Ok ) {
+        int64 Now = MdoUtcUs();
+        if ( Now < Current.CreatedAt ) Now = Current.CreatedAt;
+        if ( Now > Current.LastActivatedAt ) Current.LastActivatedAt = Now;
+        Ok = MdoSessionsMetaWrite(Session->MetaPath, &Current);
+        if ( Ok ) { Session->Info = Current; MdoSessionsGenerationAdvance(); }
+    }
+    if ( !Ok ) MdoSessionsXrtError(Error, XWORK_ERROR_IO, "cannot save session activation");
+    xrtMutexUnlock(g_MdoSessions.Lock);
+    xrtMutexUnlock(Session->Lock);
+    return Ok;
 }
 
 static bool MdoSessionsValidateCurrent(MdoSession* Session,
@@ -2407,8 +2450,8 @@ static int MdoSessionsCatalogCompare(const void* LeftValue,
     if ( Left->Status != Right->Status )
         return Left->Status < Right->Status ? -1 : 1;
     if ( Left->Pinned != Right->Pinned ) return Left->Pinned ? -1 : 1;
-    if ( Left->UpdatedAt != Right->UpdatedAt )
-        return Left->UpdatedAt > Right->UpdatedAt ? -1 : 1;
+    if ( Left->LastActivatedAt != Right->LastActivatedAt )
+        return Left->LastActivatedAt > Right->LastActivatedAt ? -1 : 1;
     return strcmp(Left->Id, Right->Id);
 }
 

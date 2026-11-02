@@ -79,11 +79,13 @@ export async function startWorkspaceNavigation({ navigation, settingsStore,
         target.key !== failedKey && canPersistSelection()) {
       const next = target;
       writeRecovery = createRecovery({ eventTarget: null });
+      let activated = null;
       try {
         try {
-          await writeRecovery.request(signal => api.put(endpoint, {
+          const reply = await writeRecovery.request(signal => api.put(endpoint, {
             project_id: next.projectId, session_id: next.sessionId,
           }, { signal }), { retry: false });
+          activated = reply?.data;
         } catch (error) {
           if (error?.name === "AbortError" || (!isTransientReadError(error) &&
               !["invalid_response", "remote_result_unconfirmed"].includes(error?.code))) throw error;
@@ -93,6 +95,7 @@ export async function startWorkspaceNavigation({ navigation, settingsStore,
             const saved = await readWorkspace(writeRecovery);
             if (saved?.project_id !== next.projectId || saved.session_id !== next.sessionId)
               throw error;
+            activated = saved;
           } catch (cause) {
             if (cause?.name === "AbortError") throw cause;
             throw new ApiError(uiErrorText("error.detail.theLastSessionSaveCouldNotBeConfirmed", {}, "The last session save could not be confirmed"), {
@@ -100,6 +103,11 @@ export async function startWorkspaceNavigation({ navigation, settingsStore,
           }
         }
         lastSavedKey = next.key;
+        const catalog = sessionsStore.get().data;
+        if (activated?.last_activated_at > 0 && Array.isArray(catalog?.items))
+          sessionsStore.setData({ ...catalog, items: catalog.items.map(item =>
+            item.project_id === next.projectId && item.id === next.sessionId ?
+              { ...item, last_activated_at: activated.last_activated_at } : item) });
       } catch (error) {
         failedKey = next.key;
         if (!stopped && error?.name !== "AbortError" && target?.key === next.key && canPersistSelection())

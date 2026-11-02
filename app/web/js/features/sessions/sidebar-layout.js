@@ -2,6 +2,7 @@ import { t as uiErrorText } from "../../i18n.js";
 import { api, currentPageWriteToken } from "../../api/client.js";
 import { targetState, subscribeTarget } from "../../api/target.js";
 import { createRequestRecovery } from "../../api/request-recovery.js";
+import { recentSessions, sessionActivity } from "./sidebar-tree.js";
 
 export const emptySidebarLayout = () => ({ schema_version: 1, revision: 0, view: "workspace",
   project_sort: "name", groups: [], placements: [], collapsed: [] });
@@ -46,11 +47,11 @@ export function organizedSidebar(base, layout) {
   const custom = layout.groups.map(group => ({ ...group, entries: [] }));
   const groups = new Map(custom.map(group => [group.id, group]));
   function sessions(items) {
-    return sort(items.filter(item => {
+    return recentSessions(items.filter(item => {
       const target = groups.get(places.get(skey(item))?.group);
       if (!target) return true;
       target.entries.push({ kind: "session", key: skey(item), item }); return false;
-    }), skey);
+    }));
   }
   const tasks = sessions(base.tasks);
   const projects = sort(base.projects.map(item => ({ ...item, sessions: sessions(item.sessions) })).filter(item => {
@@ -58,8 +59,12 @@ export function organizedSidebar(base, layout) {
     if (!target) return true;
     target.entries.push({ kind: "project", key, item }); return false;
   }), item => `p:${item.id}`);
-  for (const group of custom) group.entries = sort(group.entries, item => item.key);
-  return { ...base, projects, tasks, custom, pinned: sort(base.pinned, skey) };
+  for (const group of custom) group.entries.sort((a, b) => {
+    const activity = entry => entry.kind === "session" ? sessionActivity(entry.item) :
+      Math.max(0, ...entry.item.sessions.map(sessionActivity));
+    return activity(b) - activity(a) || rank(a.key) - rank(b.key);
+  });
+  return { ...base, projects, tasks, custom, pinned: recentSessions(base.pinned) };
 }
 
 export function timelineSidebar(sessions, now = Date.now()) {
@@ -68,7 +73,7 @@ export function timelineSidebar(sessions, now = Date.now()) {
   const week = new Date(midnight); week.setDate(week.getDate() - 7);
   const groups = ["today", "yesterday", "week", "older"].map(id => ({ id, sessions: [] }));
   for (const item of sessions) {
-    const date = Number(item.updated_at || 0) * 1000;
+    const date = sessionActivity(item) / 1000;
     groups[date >= midnight.getTime() ? 0 : date >= yesterday.getTime() ? 1 : date >= week.getTime() ? 2 : 3].sessions.push(item);
   }
   return groups.filter(group => group.sessions.length);

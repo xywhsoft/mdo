@@ -236,6 +236,7 @@ bool MdoApiWorkspaceStateRoute(MdoApiContext* Context)
     xwork_error Error;
     xvalue* Data;
     bool Ok;
+    int64 ActivatedAt = 0;
 
     if ( Context->Request->head->MethodCode == XHTTP_METHOD_PUT ) {
         BodyStatus = MdoApiJsonBodyRead(Context, &Body);
@@ -259,7 +260,14 @@ bool MdoApiWorkspaceStateRoute(MdoApiContext* Context)
         /* Keep the session's project lease through publication. Releasing it
          * before this write lets project exclusion race a stale selection. */
         xrtMutexLock(g_MdoWorkspaceStateLock);
-        Ok = MdoWorkspaceStateWrite(&State);
+        MdoWorkspaceState Previous;
+        Ok = MdoWorkspaceStateRead(&Previous);
+        if ( Ok && (strcmp(Previous.ProjectId, State.ProjectId) ||
+                    strcmp(Previous.SessionId, State.SessionId)) )
+            Ok = MdoSessionActivate(Session, &Error);
+        MdoSessionInfo Info = {0}; Info.Size = sizeof(Info);
+        if ( Ok ) Ok = MdoSessionGetInfo(Session, &Info);
+        if ( Ok ) { ActivatedAt = Info.LastActivatedAt; Ok = MdoWorkspaceStateWrite(&State); }
         xrtMutexUnlock(g_MdoWorkspaceStateLock);
         MdoSessionRelease(Session);
         if ( !Ok )
@@ -271,12 +279,19 @@ bool MdoApiWorkspaceStateRoute(MdoApiContext* Context)
         xrtMutexUnlock(g_MdoWorkspaceStateLock);
         if ( !Ok ) return MdoApiReplyError(Context, 503u,
             "workspace_state_unavailable", "The last session could not be read", NULL);
+        if ( State.ProjectId[0] && State.SessionId[0] ) {
+            Session = MdoSessionLoad(State.ProjectId, State.SessionId, &Error);
+            MdoSessionInfo Info = {0}; Info.Size = sizeof(Info);
+            if ( Session && MdoSessionGetInfo(Session, &Info) ) ActivatedAt = Info.LastActivatedAt;
+            MdoSessionRelease(Session);
+        }
     }
 
     Data = xrtValueObject();
     Ok = Data != NULL &&
         MdoApiValueSetString(Data, "project_id", State.ProjectId) &&
-        MdoApiValueSetString(Data, "session_id", State.SessionId);
+        MdoApiValueSetString(Data, "session_id", State.SessionId) &&
+        MdoApiValueSetInt(Data, "last_activated_at", ActivatedAt);
     if ( !Ok ) { xrtValueRelease(Data); Data = NULL; }
     if ( Data == NULL ) return MdoApiReplyError(Context, 503u,
         "workspace_state_unavailable", "The last session is unavailable", NULL);

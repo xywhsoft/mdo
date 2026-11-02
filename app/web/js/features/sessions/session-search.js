@@ -2,7 +2,7 @@ import { setUiText as writeUiText, uiMessage, currentLocale, subscribeLocale, t 
 
 import { element, formatRelativeTime, isImeKey, revealListOption } from "../../utils/dom.js";
 import { createCompositionTracker } from "../../utils/composition.js";
-import { matchingSessions } from "./sidebar-tree.js";
+import { matchingSessions, sessionActivity } from "./sidebar-tree.js";
 
 const PAGE_SIZE = 40;
 
@@ -64,7 +64,7 @@ export function createSessionSearch({ dialog, button, store, projectsStore,
     // Ordinary catalog polling must not reset scroll or replace the selected
     // option while the user reads the results or uses the arrow keys.
     const nextKey = JSON.stringify([currentLocale(), rows.map(({ session, title, project }) =>
-      [key(session), title, project, session.updated_at])]);
+      [key(session), title, project, sessionActivity(session)])]);
     if (nextKey !== renderedKey) {
       renderedKey = nextKey;
       const hadOptionFocus = list.contains(document.activeElement);
@@ -74,8 +74,8 @@ export function createSessionSearch({ dialog, button, store, projectsStore,
         } }, [element("span", { className: "session-search-result-copy" }, [
           element("strong", { text: title }), element("small", { text: project }),
         ]), element("span", { className: "session-search-result-time",
-          text: formatRelativeTime(session.updated_at),
-          attrs: { "data-relative-time": session.updated_at } })]);
+          text: formatRelativeTime(sessionActivity(session)),
+          attrs: { "data-relative-time": sessionActivity(session) } })]);
         row.addEventListener("click", () => select(key(session)));
         row.addEventListener("focus", () => setActive(index));
         return row;

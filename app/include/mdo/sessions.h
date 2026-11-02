@@ -114,6 +114,7 @@ typedef struct MdoSessionInfo {
     char ReasoningEffort[MDO_SESSION_REASONING_CAPACITY];
     char PermissionProfile[MDO_SESSION_REASONING_CAPACITY];
     char WorkspaceRoot[MDO_SESSION_WORKSPACE_CAPACITY];
+    int64 LastActivatedAt;       /* user navigation, independent of metadata edits. */
 } MdoSessionInfo;
 
 typedef struct MdoSessionDiagnostic {
@@ -214,6 +215,8 @@ MdoSession* MdoSessionLoad(const char* ProjectId, const char* SessionId,
 MdoSession* MdoSessionRef(MdoSession* Session);
 void MdoSessionRelease(MdoSession* Session);
 bool MdoSessionGetInfo(MdoSession* Session, MdoSessionInfo* Info);
+/* Records navigation without changing the content/profile revision. */
+bool MdoSessionActivate(MdoSession* Session, xwork_error* Error);
 /* Member execution shares the parent's live permission mode even when the
  * parent's own runtime closes. Each acquire needs the matching release. */
 MdoApprovalScope* MdoSessionPermissionScopeAcquire(const char* ProjectId,const char* SessionId,xwork_error* Error);

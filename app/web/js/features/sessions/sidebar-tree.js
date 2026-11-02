@@ -1,8 +1,9 @@
 // The sidebar is a view of the existing catalog. Pinning never duplicates a
 // session, and removing a project definition must not hide its saved history.
+export const sessionActivity = session => Number(session.last_activated_at || session.updated_at || 0);
 export function recentSessions(sessions) {
   return [...sessions].sort((a, b) =>
-    Number(b.updated_at || 0) - Number(a.updated_at || 0) ||
+    sessionActivity(b) - sessionActivity(a) ||
     `${a.project_id}/${a.id}`.localeCompare(`${b.project_id}/${b.id}`));
 }
 
@@ -30,7 +31,7 @@ export function sidebarGroups({ sessions = [], projects = [], status = "active",
   // A pinned task still contributes to its project's recent activity.
   const activity = new Map();
   for (const session of visible) {
-    if (!activity.has(session.project_id)) activity.set(session.project_id, Number(session.updated_at || 0));
+    if (!activity.has(session.project_id)) activity.set(session.project_id, sessionActivity(session));
   }
   const groups = new Map();
   for (const project of projects) {

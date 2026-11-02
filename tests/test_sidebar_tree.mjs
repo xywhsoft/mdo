@@ -88,3 +88,11 @@ test("older selected tasks remain visible without rendering the whole hidden pre
   assert.equal(sidebarWindow(sessions, 5, "default/1").items.length, 5);
   assert.equal(sidebarWindow(sessions, 5, "", true).items.length, 12);
 });
+
+
+test("navigation activity controls order independently of edits and project recency", () => {
+  const rows = [session("edited", "alpha", { updated_at: 1000, last_activated_at: 10 }),
+    session("visited", "default", { updated_at: 1, last_activated_at: 20 }),
+    session("legacy", "alpha", { updated_at: 15 })];
+  assert.deepEqual(recentSessions(rows).map(s => s.id), ["visited", "legacy", "edited"]);
+});
