@@ -1,0 +1,96 @@
+{
+  "date": "2026-11-03",
+  "name": "Android Debug Bridge (adb)",
+  "version": "37.0.1",
+  "logical_id": "external-tool:mdo.adb",
+  "source_commit": "9e71afb2",
+  "source_lock": [
+    {
+      "platform": "windows-x86_64",
+      "binary_architecture": "x86 (official Windows client, runs on x64 via WOW64)",
+      "version": "37.0.1",
+      "file": "platform-tools_r37.0.1-win.zip",
+      "url": "https://dl.google.com/android/repository/platform-tools_r37.0.1-win.zip",
+      "size": 8044989,
+      "sha256": "45f4d63113e895ebde0c90f194099a4676b6ac653bd28d54314a9e022bbc1a99",
+      "repository_sha1": "e03e78b1d80b396f1c3358e31251cb31740e1110"
+    },
+    {
+      "platform": "linux-x86_64-glibc",
+      "binary_architecture": "x86_64",
+      "minimum_glibc": "2.16",
+      "version": "37.0.1",
+      "file": "platform-tools_r37.0.1-linux.zip",
+      "url": "https://dl.google.com/android/repository/platform-tools_r37.0.1-linux.zip",
+      "size": 9054187,
+      "sha256": "d230f13842f60f782a8645f9c813f8f845bf36089ea7289f28c48f17979313f1",
+      "repository_sha1": "477254aa5f903c15cf51001717bdf347fb6b53e0"
+    }
+  ],
+  "publication": [
+    {
+      "work": "628ce634135e4403918b1b72c3238886",
+      "version_id": "fcb8b429eed349d59cf1c8bda496c4b0",
+      "alias": "adb",
+      "platform": "windows-x86_64",
+      "sha256": "ba9d2a6273b7901cff1ec130884bd5cfe2bc085973575dbbf9574654e92845eb",
+      "inserted": true
+    },
+    {
+      "work": "628ce634135e4403918b1b72c3238886",
+      "version_id": "a8e71c1256d746fb86f792853ca799cb",
+      "alias": "adb",
+      "platform": "linux-x86_64-glibc",
+      "sha256": "bf132dbd82aa6b45a135e6b1f513c23235c69e6c77f0baf0b97cdb831236ca04",
+      "inserted": true
+    }
+  ],
+  "public_verification": {
+    "downloads": [
+      {
+        "platform": "windows-x86_64",
+        "version_id": "fcb8b429eed349d59cf1c8bda496c4b0",
+        "catalogue": true,
+        "resolve": true,
+        "sha256": "ba9d2a6273b7901cff1ec130884bd5cfe2bc085973575dbbf9574654e92845eb",
+        "bytes": 4404527,
+        "download_url": "https://ai.xywhsoft.com/api/v1/mdo/extensions/archive?version=fcb8b429eed349d59cf1c8bda496c4b0&dependency_protocol=1",
+        "content_type": "application/zip"
+      },
+      {
+        "platform": "linux-x86_64-glibc",
+        "version_id": "a8e71c1256d746fb86f792853ca799cb",
+        "catalogue": true,
+        "resolve": true,
+        "sha256": "bf132dbd82aa6b45a135e6b1f513c23235c69e6c77f0baf0b97cdb831236ca04",
+        "bytes": 4627611,
+        "download_url": "https://ai.xywhsoft.com/api/v1/mdo/extensions/archive?version=a8e71c1256d746fb86f792853ca799cb&dependency_protocol=1",
+        "content_type": "application/zip"
+      }
+    ],
+    "unsupported_platforms_filtered": [
+      "linux-x86_64-musl",
+      "android-arm64-v8a"
+    ],
+    "network_retries": []
+  },
+  "validation": {
+    "windows_version": true,
+    "wsl_version": true,
+    "server_linux_version": true,
+    "native_windows_zip_install": true,
+    "native_tool_discovery": true,
+    "native_alias_execution": true,
+    "unicode_home": true,
+    "portable_home_move": true,
+    "publisher_identity_idempotence": true,
+    "zip_crc_and_digests": true,
+    "other_published_heads_preserved": 40,
+    "service_restarted": false,
+    "runtime_and_config_preserved": true,
+    "device_operations_tested": false,
+    "windows7_tested": false
+  },
+  "production_backup": "/home/xs/mdo-adb-20261103-2a9442f4b5/catalog-before.db",
+  "local_evidence": ".build/adb-20261103"
+}
