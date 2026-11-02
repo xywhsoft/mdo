@@ -24,7 +24,7 @@ static void MdoTitleSave(MdoSession* session,const char* title,uint32 state)
     xrtMutexLock(session->Lock);xrtMutexLock(g_MdoSessions.Lock);
     MdoSessionInfo current,candidate;
     if(MdoSessionsMetaRead(session->Info.ProjectId,session->Info.Id,&current) && current.TitleState==2 && current.Status==MDO_SESSION_ACTIVE){
-        session->Info=current;
+        bool open=session->Info.RuntimeOpen;session->Info=current;session->Info.RuntimeOpen=open;
         if(MdoSessionsCandidate(session,&candidate,&error)){
             candidate.TitleState=state;
             if(title && *title)snprintf(candidate.Title,sizeof(candidate.Title),"%s",title);
@@ -54,6 +54,7 @@ static void MdoTitleProcess(MdoSession* session)
     xstrview content={0},id={0};uint64 created=0;
     bool valid=job && MdoSessionsValueString(job,"content",&content) && content.Size>0 && content.Size<=8192 &&
         MdoSessionsValueString(job,"request_id",&id) && id.Size==64 && MdoSessionsValueUInt(job,"created_at_us",&created);
+    valid=valid && created<=INT64_MAX;
     if(valid && MdoUtcUs()>=(int64)created && MdoUtcUs()-(int64)created<60000000 && !xrtCancelRequested(MdoTitle.Cancel)){
         xvalue* request=xrtValueObject();MdoSessionsObjectString(request,"request_id",id.Data);MdoSessionsObjectString(request,"content",content.Data);MdoSessionsObjectString(request,"locale","auto");
         body=xrtJsonStringify(request,false,&body_size);xrtValueRelease(request);
@@ -127,7 +128,7 @@ void MdoSessionTitleStart(MdoSession* session,const char* prompt,const xllm_mess
     bool pending=false;xrtMutexLock(session->Lock);xrtMutexLock(g_MdoSessions.Lock);
     MdoSessionInfo current,candidate;
     if(MdoSessionsMetaRead(session->Info.ProjectId,session->Info.Id,&current) && current.TitleState==1 && current.Status==MDO_SESSION_ACTIVE){
-        session->Info=current;
+        bool open=session->Info.RuntimeOpen;session->Info=current;session->Info.RuntimeOpen=open;
         if(MdoSessionsCandidate(session,&candidate,&error) && MdoTitlePath(path,&current)){
             char identity[512],id[65];unsigned char hash[32];snprintf(identity,sizeof(identity),"title-v1/%s/%s/%lld",current.ProjectId,current.Id,(long long)current.CreatedAt);
             bool random_ok=xrtSha256(identity,strlen(identity),hash);for(size_t i=0;i<32;i++)snprintf(id+i*2,3,"%02x",hash[i]);

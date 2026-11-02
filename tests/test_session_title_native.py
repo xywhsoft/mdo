@@ -36,9 +36,9 @@ xvalue* QaProductContract(const xvalue* P,xvfs V){
  snprintf(S.Info.Id,sizeof(S.Info.Id),"0123456789abcdef0123456789abcdef");snprintf(S.Info.ProjectId,sizeof(S.Info.ProjectId),"default");
  snprintf(S.Info.AgentId,sizeof(S.Info.AgentId),"mdo.default");snprintf(S.Info.ModelId,sizeof(S.Info.ModelId),"fixture");snprintf(S.Info.WorkspaceRoot,sizeof(S.Info.WorkspaceRoot),".");
  snprintf(S.MetaPath,sizeof(S.MetaPath),"sessions/default/%s/meta.json",S.Info.Id);QaNamingSession=&S;MdoTitle.Cancel=xrtCancelCreate();
- QaSeedTitle(&S,2);int64 Activated=S.Info.LastActivatedAt;QaNamingMode=1;MdoTitleProcess(&S);
+ QaSeedTitle(&S,2);S.Info.RuntimeOpen=true;int64 Activated=S.Info.LastActivatedAt;QaNamingMode=1;MdoTitleProcess(&S);
  SdkPutBool(R,"anonymous_bounded_request",Home&&QaAnonymous&&QaBounded);
- SdkPutBool(R,"model_title_and_activity",S.Info.TitleState==3&&!strcmp(S.Info.Title,"Generated title")&&S.Info.LastActivatedAt==Activated);
+ SdkPutBool(R,"model_title_and_activity",S.Info.TitleState==3&&!strcmp(S.Info.Title,"Generated title")&&S.Info.LastActivatedAt==Activated&&S.Info.RuntimeOpen);
  QaSeedTitle(&S,2);QaNamingMode=2;MdoTitleProcess(&S);
  SdkPutBool(R,"manual_rename_wins",S.Info.TitleState==0&&!strcmp(S.Info.Title,"Manual title"));
  QaSeedTitle(&S,2);QaNamingMode=4;MdoTitleProcess(&S);
