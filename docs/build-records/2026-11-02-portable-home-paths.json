@@ -1,0 +1,61 @@
+{
+  "task": "Home-relative persisted paths and pre-1.0 legacy recovery",
+  "source_commits": [
+    "37979551",
+    "8c705e16"
+  ],
+  "build": {
+    "schema_version": 1,
+    "platform": "windows",
+    "version_code": "05000804",
+    "edition": "gui",
+    "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
+    "mdo_commit": "8c705e162b35057a557900e17938a84b346128d4",
+    "packaged_app_sha256": "107543d971a3c3f9805651694cbdf825515ce793db80d4769290783c07675b86",
+    "mdo_worktree_dirty": false,
+    "sha256": "b42a873d55c4475443f40387ffe7500b8023729b2170199c4d2a923155ffb5f7",
+    "bytes": 6640592
+  },
+  "checks": {
+    "strict_c11": true,
+    "one_point_zero_compatibility_retirement_guard": true,
+    "frontend": {
+      "passed": 1297,
+      "skipped": 1,
+      "failed": 0,
+      "modules": 248
+    },
+    "static_contracts": 127,
+    "portable_native_contracts": 31,
+    "physical_home_move_contracts": 6,
+    "packed_executable_and_home_move_contracts": 7,
+    "windows_installer_cases": 6,
+    "mcp_automatic_contracts": 18,
+    "real_cua_contracts": 11,
+    "session_activation_native_contracts": 6,
+    "session_activation_http": true,
+    "packed_dependency_contracts": 9
+  },
+  "artifact": "D:\\GIT\\mdo\\.build\\portable-paths-20261102\\mdo.exe",
+  "artifact_sha256": "b42a873d55c4475443f40387ffe7500b8023729b2170199c4d2a923155ffb5f7",
+  "packaged_c_header_and_installer_files_match": 363,
+  "scope": {
+    "external_projects_unchanged": true,
+    "tool_parameters_remain_workspace_relative": true,
+    "historical_text_unchanged": true,
+    "production_home_untouched": true,
+    "published": false
+  },
+  "limitations": [
+    "No Android device test or Linux build in this round",
+    "No real model call; native Agent read and real Cua read-only tests cover runtime boundaries"
+  ],
+  "evidence": {
+    "native": ".build/portable-paths-native/01ed6cb1c1/result.json",
+    "move": ".build/portable-home-move/7ccc240d86/result.json",
+    "packed_move": ".build/portable-home-move/0945865b8c/result.json",
+    "packed": ".build/portable-paths-20261102/packed.json",
+    "frontend": ".build/portable-paths-20261102/frontend.log"
+  },
+  "full_build_receipt": ".build/portable-paths-20261102/build.json"
+}
