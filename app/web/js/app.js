@@ -1100,6 +1100,7 @@ export async function boot() {
   draftStore.select("");
   if (!purgeRecovery.isPaused()) void projectDraftSelection.restoreLegacy();
   const composerControls = createComposerControls({ root: $("#composer-profile-controls"),
+    agentSelect: $("#composer-agent"),
     modelSelect: $("#composer-model"), reasoningSelect: $("#composer-reasoning"),
     permissionSelect: $("#composer-permission"), status: composerProfileStatus,
     modelsStore, navigation });
@@ -1148,6 +1149,7 @@ export async function boot() {
         run.session_id === navigation.get().sessionId && !terminalState(run)) ||
       targetState().runtimeChanged || (isRemoteTarget() && targetState().selected.mode !== "control")),
     onBusy: () => { setRun(activeRun); promptQueue.render(); },
+    onSync: () => composerControls.sync(),
     onSelected: context => { applicationUi.selectAgent(context); if (context) { composerProfile.sync(); syncPromptPlaceholder(context.agent); } },
     beforeSelect: (id, signal) => applicationUi.beforeSelectAgent(id, signal),
   });

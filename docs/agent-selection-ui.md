@@ -1,6 +1,6 @@
 # Agent selection and extension settings
 
-The composer lists every installed Agent whose public flags include `MDO_AGENT_MAIN`, including roles that also support delegation. SubAgent-only definitions stay in the SubAgent catalog. A new conversation records the selected Agent when its first message or attachment creates it. Selection itself creates no conversation and makes no model request.
+The composer's unified configuration popup lists Agent, model and reasoning strength in that order. Its compact trigger shows the selected Agent alongside the model and reasoning strength; there is no separate Agent selector in the toolbar. Every installed Agent whose public flags include `MDO_AGENT_MAIN` is available, including roles that also support delegation. SubAgent-only definitions stay in the SubAgent catalog. A new conversation records the selected Agent when its first message or attachment creates it. Selection itself creates no conversation and makes no model request.
 
 An idle existing conversation can change `agent_id` through the optional field on `PUT /api/v1/projects/{project}/sessions/{session}/profile`. The existing model, reasoning, permission, history and revision checks remain in force. The manager recreates and validates the Agent against the recovered ledger before committing metadata. Active runtimes refuse the change. UI pending submissions and member-main-speaker routes also block selection. A lost acknowledgement is confirmed against both the desired Agent and model profile.
 

@@ -5,7 +5,7 @@ import { subscribeTarget, targetState } from "../../api/target.js";
 
 export const agentLabel = agent => agent?.id === "mdo.default" ? t("agent.defaultName", {}, "墨斗") : agent?.name || agent?.id || "";
 export function createComposerAgent({ select, navigation, sessionStore, agentsStore, profile,
-  blocked = () => false, onBusy = () => {}, onSelected = () => {}, beforeSelect = async () => {}, update = updateSessionProfile }) {
+  blocked = () => false, onBusy = () => {}, onSelected = () => {}, onSync = () => {}, beforeSelect = async () => {}, update = updateSessionProfile }) {
   const drafts = new Map(); let busy = false, stopped = false, controller = null, last = "";
   const current = () => {
     const route = navigation.get(), session = sessionStore.get().data;
@@ -33,6 +33,7 @@ export function createComposerAgent({ select, navigation, sessionStore, agentsSt
       target: JSON.stringify([targetState().selected, targetState().runtimeChanged]) };
     const key = JSON.stringify(context);
     if (key !== last) { last = key; onSelected(route.view === "workspace" ? context : null); }
+    onSync();
   }
   async function change() {
     if (busy || blocked()) { sync(); return; }

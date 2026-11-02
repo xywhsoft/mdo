@@ -239,12 +239,13 @@
                 <button class="composer-permission-trigger" id="composer-permission-trigger" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="composer-permission-panel">
                   <span class="icon" id="composer-permission-icon" data-icon="shield" aria-hidden="true"></span>
                 </button>
-                <select class="composer-agent-select" id="composer-agent" aria-label="选择 Agent"></select>
                 <div class="composer-config-panel" id="composer-model-panel" role="dialog" aria-labelledby="composer-model-title" tabindex="-1" hidden>
-                  <header><h3 id="composer-model-title" data-i18n="composer.modelSettings">模型与思考深度</h3>
+                  <header><h3 id="composer-model-title" data-i18n="composer.modelSettings">Agent、模型与推理强度</h3>
                     <button class="composer-profile-reset" id="composer-profile-reset" type="button" aria-label="跟随项目默认配置" data-i18n-aria-label="profile.followDefaults" title="跟随项目默认配置" data-i18n-title="profile.followDefaults" hidden>↺</button>
-                    <button class="icon-button" type="button" data-profile-close aria-label="关闭模型设置" data-i18n-aria-label="composer.closeSettings"><span class="icon" data-icon="close" aria-hidden="true"></span></button>
+                    <button class="icon-button" type="button" data-profile-close aria-label="关闭会话配置" data-i18n-aria-label="composer.closeSettings"><span class="icon" data-icon="close" aria-hidden="true"></span></button>
                   </header>
+                  <label for="composer-agent" data-i18n="composer.chooseAgent">选择 Agent</label>
+                  <select class="composer-select" id="composer-agent" aria-label="选择 Agent" data-i18n-aria-label="composer.chooseAgent"></select>
                   <label for="composer-model" data-i18n="shell.model">模型</label>
                   <select class="composer-select" id="composer-model" aria-label="模型" data-i18n-aria-label="shell.model"></select>
                   <div class="composer-effort-heading"><label for="composer-effort-slider" data-i18n="shell.reasoning">推理强度</label><output id="composer-effort-label" for="composer-effort-slider"></output></div>

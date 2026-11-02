@@ -10,7 +10,7 @@ const PERMISSION_ICON = Object.freeze({
 
 // Presentation only. Native selects remain the profile controller's source of
 // truth, so queued runs, persistence and permission enforcement are unchanged.
-export function createComposerControls({ root, modelSelect, reasoningSelect,
+export function createComposerControls({ root, agentSelect, modelSelect, reasoningSelect,
   permissionSelect, status, modelsStore, navigation }) {
   const doc = root.ownerDocument;
   const win = doc.defaultView;
@@ -86,7 +86,9 @@ export function createComposerControls({ root, modelSelect, reasoningSelect,
   function sync() {
     writeUiText(manageModels, uiMessage("modelSetup.manageModels", {}, "管理模型"));
     const model = findModel(modelsStore.get().data?.models ?? [], modelSelect.value);
-    writeUiText(modelLabel, model?.name || modelSelect.value || uiMessage("shell.model", {}, "模型"));
+    const agentName = agentSelect.selectedOptions[0]?.textContent || agentSelect.value;
+    const modelName = model?.name || modelSelect.value || uiMessage("shell.model", {}, "模型");
+    writeUiText(modelLabel, [agentName, modelName].filter(Boolean).join(" · "));
     const efforts = [...reasoningSelect.options];
     const current = Math.max(0, efforts.findIndex((item) => item.value === reasoningSelect.value));
     slider.max = String(Math.max(0, efforts.length - 1)); slider.value = String(current);
@@ -98,11 +100,11 @@ export function createComposerControls({ root, modelSelect, reasoningSelect,
     for (const option of efforts) {
       const label = doc.createElement("span"); writeUiText(label, option.textContent); scale.append(label);
     }
-    modelTrigger.disabled = modelSelect.disabled && reasoningSelect.disabled;
+    modelTrigger.disabled = agentSelect.disabled && modelSelect.disabled && reasoningSelect.disabled;
     const next = !status.hidden ? status.textContent : "";
     root.dataset.profileState = next ? status.dataset.state || "pending" : "";
     writeUiAttribute(modelTrigger, "title", `${modelLabel.textContent} · ${effortLabel.textContent}${next ? ` · ${next}` : ""}`);
-    writeUiAttribute(modelTrigger, "aria-label", `${t("composer.modelSettings", {}, "模型与思考深度")}：${modelTrigger.title}`);
+    writeUiAttribute(modelTrigger, "aria-label", `${t("composer.modelSettings", {}, "Agent、模型与推理强度")}：${modelTrigger.title}`);
     permissionTrigger.disabled = permissionSelect.disabled;
     permissionTrigger.dataset.permission = permissionSelect.value;
     permissionIcon.dataset.icon = PERMISSION_ICON[permissionSelect.value] || "shield";
