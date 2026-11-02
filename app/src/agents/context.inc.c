@@ -27,6 +27,14 @@ static bool MdoAgentsSourceEnabled(const xvalue* Spec,bool Default)
     if(xrtValueGetBool(Spec,&Enabled))return Enabled;
     return MdoAgentConfigBool(Spec,"enabled",Default);
 }
+static bool MdoAgentsMcpAvailable(const MdoModuleAgentInfo* Definition,const xwork_agent_extension_context* Native)
+{
+    if(!MdoAgentsToolSelected(Definition,"tools")||!(Definition->AllowedEffects&XWORK_TOOL_EFFECT_EXTERNAL_SERVICE))return false;
+    if(!Native||!Native->pAgent)return true;
+    xwork_tool_catalog* Catalog=xworkAgentToolCatalogSnapshot(Native->pAgent);bool Found=false;
+    for(size_t I=0;I<xworkToolCatalogCount(Catalog);I++){xwork_tool_info Tool={0};if(xworkToolCatalogToolAt(Catalog,I,&Tool)&&!strcmp(Tool.sName,"tools")){Found=true;break;}}
+    xworkToolCatalogRelease(Catalog);return Found;
+}
 static bool MdoAgentsPlanPut(xvalue* Object,cstr Key,cstr Text)
 {return MdoAgentConfigSetText(Object,Key,Text);}
 static char* MdoAgentsRenderTemplate(cstr Text,const xvalue* Variables,xwork_error* Error)
@@ -128,7 +136,8 @@ static bool MdoAgentsFrozenSource(MdoAgentInstance* Instance,xvalue* Plan,cstr I
 {
     *Frozen=false;
     cstr Refresh=MdoAgentConfigText(Spec,"refresh");
-    if(!Instance->SourcePlan || (Refresh&&!strcmp(Refresh,"request")))return true;
+    if(!Instance->SourcePlan || (Refresh&&!strcmp(Refresh,"request")) ||
+        (!Refresh&&!strcmp(Id,"mcp.instructions")))return true;
     const xvalue* Sources=MdoAgentConfigGet(Instance->SourcePlan,"sources");
     for(size_t I=0;I<xrtValueCount(Sources);I++){
         const xvalue* Source=xrtValueArrayGet(Sources,I);cstr SourceId=MdoAgentConfigText(Source,"id");
@@ -151,6 +160,10 @@ static bool MdoAgentsContextCollect(MdoAgentOwner* Owner,MdoAgentInstance* Insta
     if(!Ok)goto done;
     if(Instance->LegacyPrompt){
         Ok=MdoAgentsPlanSource(Plan,"system",xrtStrDup(Instance->LegacyPrompt),NULL,0,true,"recovered-legacy-context",Error);
+        const xvalue* Spec=MdoAgentsSourceSpec(Instance->Configuration,"mcp.instructions");
+        bool Enabled=MdoAgentsSourceEnabled(Spec,MdoAgentsMcpAvailable(Definition,Native));
+        char* Text=Enabled?MdoMcpRolePrompt(Owner->Workspace,NULL,0,false,Error):xrtStrDup("");
+        if(Ok)Ok=MdoAgentsPlanSource(Plan,"mcp.instructions",Text,Spec,1200,Enabled,"mcp.instructions",Error);else xrtFree(Text);
         goto done;
     }
     static const char* Ids[]={"system","skills.preload","user_instructions","reply_language","environment","external_tools",
@@ -161,6 +174,7 @@ static bool MdoAgentsContextCollect(MdoAgentOwner* Owner,MdoAgentInstance* Insta
         cstr Id=Ids[I];const xvalue* Spec=MdoAgentsSourceSpec(Instance->Configuration,Id);
         bool Frozen=false;Ok=MdoAgentsFrozenSource(Instance,Plan,Id,Spec,&Frozen);if(!Ok||Frozen)continue;
         bool Default=strcmp(Id,"environment") && strcmp(Id,"project_rules") && strcmp(Id,"mcp.instructions");
+        if(!strcmp(Id,"mcp.instructions"))Default=MdoAgentsMcpAvailable(Definition,Native);
         if(!strcmp(Id,"skills.discovery"))Default=MdoAgentsToolSelected(Definition,"skill");
         if(!strncmp(Id,"memory.",7))Default=Settings.MemoryEnabled;
         bool Enabled=MdoAgentsSourceEnabled(Spec,Default);

@@ -2150,6 +2150,19 @@ MdoAgentRun* MdoAgentRunCreate(MdoAgentSession* Session,
             return NULL;
         }
     }
+    /* Only schemas enter here; no remote operation is executed. Applying the
+     * role policy afterwards keeps schema warmup within the same capability
+     * boundary as explicit discovery and load. */
+    MdoModuleAgentInfo Definition={0};Definition.Size=sizeof(Definition);
+    if(MdoModuleCatalogAgentFind(Session->Owner->Modules,Session->AgentId,&Definition)&&
+        MdoAgentsToolSelected(&Definition,"tools")&&
+        (Definition.AllowedEffects&XWORK_TOOL_EFFECT_EXTERNAL_SERVICE)&&strcmp(Session->PermissionProfile,"read-only")){
+        if(!MdoAgentsApplyMcpSelection(Session->Owner,Session->Agent,&Definition,Error))return NULL;
+        MdoMcpPreloadAgentTools(Session->Agent,Session->Owner->Workspace,Session->Owner->ProductProject);
+        size_t Count=0;uint64 Generation=0;
+        if(!MdoAgentsApplyToolPolicy(Session->Agent,&Definition,Definition.AllowedEffects,
+            Session->Owner->Workspace,&Count,&Generation,Error))return NULL;
+    }
     Result = (MdoAgentRun*)xrtCalloc(1u, sizeof(*Result));
     if ( Result == NULL ) {
         MdoAgentsError(Error, XWORK_ERROR_OUT_OF_MEMORY,

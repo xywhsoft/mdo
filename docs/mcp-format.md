@@ -233,3 +233,27 @@ entire published directory remains subject to integrity/approval checks; cache
 files are not simply exempted from verification. Preview does not create a
 runtime directory or start a program. Private connection data remains local and
 is not included in ZIP exports or removed with the published extension files.
+## Model capability discovery
+
+Enabled, in-scope MCP services are described in the Agent's dynamic
+`mcp.instructions` context source. It includes connection/discovery state,
+the exact server ID, compact service metadata and at most 4 KiB of cached
+server instructions per service. Summaries are bounded; `tools({})` remains
+the complete discovery entry point. No credential values are included.
+
+This source is enabled by default when the role has the MCP discovery tool
+and refreshes on model requests. Configurable/C Agents can override or disable
+it through the existing context-source API, including
+`"context": {"mcp.instructions": false}`. Recovered legacy conversations keep
+their pinned base context and receive a replaceable live capability block;
+restarting does not append repeated copies or rewrite user/assistant history.
+
+At an idle main-Agent boundary, the host can warm up tool schemas referenced
+as backtick identifiers in cached server instructions. This is generic to MCP,
+with no Computer Use executable/name special case. Automatic warmup has four
+MCP tool slots and a 24 KiB schema/description budget; existing explicit loads
+are retained and count toward the automatic budget. Unavailable or oversized
+entry points remain available through ordinary `tools` and `load` calls.
+Warmup never executes a remote tool, opens an authorization flow, grants
+permissions or bypasses role, project, directory approval or server allow/deny
+rules. Ordinary tool approval still applies to every actual invocation.

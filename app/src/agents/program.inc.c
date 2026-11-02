@@ -18,7 +18,21 @@ static bool MdoAgentsApplyMcpSelection(MdoAgentOwner* Owner,xwork_agent* Agent,c
         for(size_t I=0;I<N;I++){xstrview Id;xrtValueGetString(xrtValueArrayGet(Selected,I),&Id);Ids[I]=Id.Data;}
         Ok=MdoMcpConfigureRoleScoped(Agent,Owner->Workspace,Owner->ProductProject,Ids,N,Error);
     }
+    else if(Ok&&Agent==Owner->RootAgent&&!Definition->HasProgram)Ok=MdoMcpConfigureAgent(Agent,Owner->Workspace,Error);
     xrtValueRelease(Config);return Ok;
+}
+static char* MdoAgentsLegacyPrompt(cstr Previous)
+{
+    char* Text=Previous?xrtStrDup(Previous):NULL;
+    if(Text){
+        char* Start=strstr(Text,"<mdo_mcp_capabilities>\nThe following enabled MCP services");
+        size_t N=strlen(Text),Tail=strlen("</mdo_mcp_capabilities>");
+        if(Start&&N>=Tail&&!strcmp(Text+N-Tail,"</mdo_mcp_capabilities>")){
+            while(Start>Text&&(Start[-1]=='\n'||Start[-1]=='\r'))Start--;
+            *Start=0;
+        }
+    }
+    return Text;
 }
 static MdoAgentInstance* MdoAgentsInstance(MdoAgentOwner* Owner,xwork_agent_extension_context* Native,xwork_error* Error)
 {
@@ -38,7 +52,9 @@ static MdoAgentInstance* MdoAgentsInstance(MdoAgentOwner* Owner,xwork_agent_exte
         if(!Instance->Definition.HasProgram && !MdoAgentConfigGet(Instance->Configuration,"schema") &&
             !MdoAgentConfigGet(Instance->Configuration,"context") && Native->pAgent==Owner->RootAgent){
             cstr Previous=xllmSessionGetSystemPrompt(Native->pSession);
-            Instance->LegacyPrompt=Previous?xrtStrDup(Previous):NULL;
+            Instance->LegacyPrompt=MdoAgentsLegacyPrompt(Previous);
+            /* The base context remains pinned. Replace our last live MCP
+             * block on recovery, so restarts cannot accumulate stale copies. */
         }
         if(!Instance->Configuration||!Instance->State){xrtValueRelease(Instance->Configuration);xrtValueRelease(Instance->State);xrtFree(Instance->LegacyPrompt);xrtFree(Instance);Instance=NULL;}
     }
@@ -125,7 +141,8 @@ static xwork_result MdoAgentsLifecycleRun(MdoAgentOwner* Owner,MdoAgentInstance*
 static bool MdoAgentsRefreshContext(MdoAgentOwner* Owner,MdoAgentInstance* Instance,
     xwork_agent_extension_context* Native,bool Force,xwork_error* Error)
 {
-    bool Refresh=Force || !Instance->Plan;
+    const xvalue* McpSpec=MdoAgentsSourceSpec(Instance->Configuration,"mcp.instructions");
+    bool Refresh=Force || !Instance->Plan || MdoAgentsSourceEnabled(McpSpec,MdoAgentsMcpAvailable(&Instance->Definition,Native));
     const xvalue* Context=MdoAgentConfigGet(Instance->Configuration,"context");
     for(size_t I=0;!Refresh && I<xrtValueCount(Context);I++){
         const xvalue* Spec=xrtValueObjectAt(Context,I,NULL);
@@ -276,6 +293,7 @@ static xwork_result MdoAgentsExtension(void* Data,xwork_agent_extension_context*
         return XWORK_RESULT_OK;
     }
     if(Native->ePhase==XWORK_AGENT_EXTENSION_CONTEXT){
+        if(!MdoAgentsApplyMcpSelection(Owner,Native->pAgent,&Instance->Definition,Error))return XWORK_RESULT_ERROR;
         if(!MdoAgentsHistoryConfigure(Instance,Native,false))return XWORK_RESULT_ERROR;
         return MdoAgentsRefreshContext(Owner,Instance,Native,false,Error)?XWORK_RESULT_OK:XWORK_RESULT_ERROR;
     }

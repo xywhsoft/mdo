@@ -118,6 +118,8 @@ bool MdoMcpConfigureAgent(xwork_agent* Agent, const char* Workspace, xwork_error
 bool MdoMcpConfigureRole(xwork_agent* Agent,const char* Workspace,const char* const* Ids,size_t Count,xwork_error* Error);
 bool MdoMcpConfigureRoleScoped(xwork_agent* Agent,const char* Workspace,const char* Scope,const char* const* Ids,size_t Count,xwork_error* Error);
 str MdoMcpRolePrompt(const char* Workspace,const char* const* Ids,size_t Count,bool Restrict,xwork_error* Error);
+/* Idle-boundary metadata warmup; never executes a remote operation. */
+void MdoMcpPreloadAgentTools(xwork_agent* Agent,cstr Workspace,cstr Scope);
 bool MdoMcpRead(const char* Server,const char* Method,const char* Params,xcancel* Cancel,uint64 Deadline,char** Result,xwork_error* Error);
 bool MdoMcpCheckTool(xwork_agent* Agent,cstr Tool,cstr Arguments,cstr Workspace,cstr Scope,char Error[512]);
 xvalue* MdoMcpDescribe(const char* Server);
