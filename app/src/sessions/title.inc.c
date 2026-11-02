@@ -10,7 +10,8 @@ static size_t MdoTitleClip(char* out,size_t capacity,const char* text,size_t cha
     size_t bytes=0,count=0;if(!text){out[0]=0;return 0;}
     const unsigned char* p=(const unsigned char*)text;size_t left=strlen(text);
     while(*p && count<chars){size_t n=*p<128?1:(*p&224)==192?2:(*p&240)==224?3:4;
-        if(n>left || bytes+n>=capacity || !xrtUtf8Valid(xrtStrViewN((const char*)p,n),NULL))break;left-=n;
+        if(n>left || bytes+n>=capacity || !xrtUtf8Valid(xrtStrViewN((const char*)p,n),NULL))break;
+        left-=n;
         if(*p<32){out[bytes++]=' ';p+=n;count++;continue;}
         memcpy(out+bytes,p,n);bytes+=n;p+=n;count++;
     }out[bytes]=0;return bytes;
@@ -70,7 +71,8 @@ static void MdoTitleProcess(MdoSession* session)
                 if(clean){memcpy(title,text.Data,text.Size);title[text.Size]=0;}
             }
         }
-        if(result.Body)xrtSecureZero(result.Body,result.BodySize);xsFetchResponseUnit(&result);
+        if(result.Body)xrtSecureZero(result.Body,result.BodySize);
+        xsFetchResponseUnit(&result);
     }
     /* Shutdown leaves the durable request pending for one idempotent restart.
      * Timeout, invalid output and all service refusals are silent fallbacks. */
@@ -79,8 +81,10 @@ static void MdoTitleProcess(MdoSession* session)
         lease=MdoSessionDataAcquire(info.ProjectId,info.Id,MDO_SESSION_DATA_WRITE,&error);
         if(lease){(void)MdoHomeRemove(path,false);MdoSessionDataRelease(lease);}
     }
-    if(body)xrtSecureZero(body,body_size);xrtFree(body);xrtValueRelease(response);xrtValueRelease(job);
-    if(raw)xrtSecureZero(raw,size);xrtFree(raw);
+    if(body)xrtSecureZero(body,body_size);
+    xrtFree(body);xrtValueRelease(response);xrtValueRelease(job);
+    if(raw)xrtSecureZero(raw,size);
+    xrtFree(raw);
 }
 static int32 MdoTitleWorker(void* unused)
 {
@@ -121,7 +125,8 @@ void MdoSessionTitleStart(MdoSession* session,const char* prompt,const xllm_mess
     const char* marker=text?strstr(text,"\n\n<!--mdo-context:v1-->\n"):NULL;
     if(marker)visible_size=(size_t)(marker-text);
     if(visible_size>8192){visible_size=8192;while(visible_size && ((unsigned char)text[visible_size]&192)==128)visible_size--;}
-    if(visible_size)memcpy(visible,text,visible_size);visible[visible_size]=0;
+    if(visible_size)memcpy(visible,text,visible_size);
+    visible[visible_size]=0;
     MdoTitleClip(seed,sizeof(seed),visible,2048);MdoTitleClip(fallback,sizeof(fallback),seed,80);xrtSecureZero(visible,sizeof(visible));
     if(!seed[0]){snprintf(seed,sizeof(seed),"Analyze the attached file");snprintf(fallback,sizeof(fallback),"File analysis");}
     xwork_error error;MdoSessionDataLease* lease=MdoSessionDataAcquire(session->Info.ProjectId,session->Info.Id,MDO_SESSION_DATA_WRITE,&error);if(!lease)return;
@@ -136,7 +141,8 @@ void MdoSessionTitleStart(MdoSession* session,const char* prompt,const xllm_mess
             size_t size=0;char* json=xrtJsonStringify(job,false,&size);xrtValueRelease(job);
             candidate.TitleState=MdoTitle.Thread?2u:4u;snprintf(candidate.Title,sizeof(candidate.Title),"%s",fallback);
             if(random_ok && json && MdoHomeAtomicWrite(path,json,size,true) && MdoSessionsCommit(session,&candidate,&error))pending=candidate.TitleState==2;
-            if(json)xrtSecureZero(json,size);xrtFree(json);
+            if(json)xrtSecureZero(json,size);
+            xrtFree(json);
         }
     }
     xrtMutexUnlock(g_MdoSessions.Lock);xrtMutexUnlock(session->Lock);MdoSessionDataRelease(lease);xrtSecureZero(seed,sizeof(seed));
