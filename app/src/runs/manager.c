@@ -817,6 +817,7 @@ bool MdoRunStartWithOutcome(const MdoRunStartOptions* Options,
         goto publish;
     }
     Ready = true;
+    if(!Options->Resume && !Member)MdoSessionTitleStart(Session,Options->Prompt,Options->UserMessage);
 
 publish:
     MdoAgentSessionRelease(Agent);

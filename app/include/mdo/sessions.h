@@ -48,6 +48,7 @@ typedef struct MdoSessionCreateOptions {
     const char* Title;           /* NULL selects "New session". */
     MdoAgentSessionOptions Agent;
     const char* RequestedId;     /* NULL generates an ID; otherwise reserved. */
+    bool AutoTitle;              /* Explicit opt-in; existing/custom titles stay manual. */
 } MdoSessionCreateOptions;
 
 /* Open-time callbacks are intentionally separate from durable identity.
@@ -115,6 +116,7 @@ typedef struct MdoSessionInfo {
     char PermissionProfile[MDO_SESSION_REASONING_CAPACITY];
     char WorkspaceRoot[MDO_SESSION_WORKSPACE_CAPACITY];
     int64 LastActivatedAt;       /* user navigation, independent of metadata edits. */
+    uint32 TitleState;           /* 0 manual/legacy, 1 waiting, 2 pending, 3 model, 4 fallback. */
 } MdoSessionInfo;
 
 typedef struct MdoSessionDiagnostic {
@@ -230,6 +232,9 @@ bool MdoSessionUseAgent(MdoSession*,MdoAgentSession*,const char* Namespace,const
 
 bool MdoSessionRename(MdoSession* Session, const char* Title,
     xwork_error* Error);
+/* Best effort after the first accepted main-user turn; never fails that run. */
+void MdoSessionTitleStart(MdoSession* Session, const char* Prompt,
+    const xllm_message* UserMessage);
 /* Revalidate a recovered idle session before atomically changing its next-run
  * model, reasoning and permission profile. NULL fields retain their value. */
 bool MdoSessionSetProfile(MdoSession* Session, const char* ModelId,

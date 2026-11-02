@@ -354,7 +354,7 @@ static bool MdoDecodeMeta(MdoDecode* Decode, bool Legacy)
     if ( Legacy ) {
         xjsonreadconfig Config;
         xrtJsonReadConfigInit(&Config); Config.MaxInputBytes = 64u * 1024u;
-        Config.MaxDepth = 8u; Config.MaxValues = 32u; Config.MaxContainerItems = 24u;
+        Config.MaxDepth = 8u; Config.MaxValues = 40u; Config.MaxContainerItems = 32u;
         Root = xrtJsonRead(xrtStrViewN(File->Data, File->Bytes), &Config); Ids = Root;
     }
     if ( !MdoBackupView(Ids, "project_id", &Project) ||

@@ -68,6 +68,8 @@ struct MdoSessionCatalog {
 };
 
 static MdoSessionManagerState g_MdoSessions;
+static bool MdoTitleInit(void);
+static void MdoTitleUnit(void);
 void MdoSessionsWorkspaceCaptureSet(void (*Capture)(cstr,cstr,cstr)){g_MdoSessions.WorkspaceCapture=Capture;}
 
 void MdoSessionsObserve(MdoSessionEventObserver Observer, void* Data)
@@ -277,6 +279,7 @@ char* MdoSessionsInternalMetaJson(const MdoSessionInfo* Info, size_t* Size)
          !MdoSessionsObjectString(Object, "id", Info->Id) ||
          !MdoSessionsObjectString(Object, "project_id", Info->ProjectId) ||
          !MdoSessionsObjectString(Object, "title", Info->Title) ||
+         !MdoSessionsObjectTake(Object, "title_state", xrtValueUInt(Info->TitleState)) ||
          !MdoSessionsObjectString(Object, "agent_id", Info->AgentId) ||
          !MdoSessionsObjectString(Object, "model_id", Info->ModelId) ||
          !MdoSessionsObjectString(Object, "protocol", Protocol) ||
@@ -407,8 +410,8 @@ bool MdoSessionsInternalMetaParse(const char* ExpectedProject,
     xrtJsonReadConfigInit(&Config);
     Config.MaxInputBytes = MDO_SESSION_META_LIMIT;
     Config.MaxDepth = 8u;
-    Config.MaxValues = 32u;
-    Config.MaxContainerItems = 24u;
+    Config.MaxValues = 40u;
+    Config.MaxContainerItems = 32u;
     Root = xrtJsonRead(Json, &Config);
     memset(Info, 0, sizeof(*Info));
     Info->Size = sizeof(*Info);
@@ -421,7 +424,8 @@ bool MdoSessionsInternalMetaParse(const char* ExpectedProject,
          ((Schema == 1u && xrtValueCount(Root) != 20u) ||
           (Schema == 2u && xrtValueCount(Root) != 22u) ||
           (Schema == MDO_SESSION_SCHEMA_VERSION &&
-           xrtValueCount(Root) != (xrtValueObjectGet(Root, XRT_STR_LITERAL("last_activated_at_us")) ? 24u : 23u))) ||
+           xrtValueCount(Root) != (xrtValueObjectGet(Root, XRT_STR_LITERAL("last_activated_at_us")) ? 24u : 23u) +
+               (xrtValueObjectGet(Root,XRT_STR_LITERAL("title_state"))?1u:0u))) ||
          !MdoSessionsValueUInt(Root, "revision", &Revision) ||
          Revision == 0u ||
          !MdoSessionsValueString(Root, "id", &Id) ||
@@ -493,6 +497,10 @@ bool MdoSessionsInternalMetaParse(const char* ExpectedProject,
           Activated > INT64_MAX || Activated < Created) ) goto done;
     Info->LastActivatedAt = (int64)Activated;
     Info->Pinned = Pinned;
+    uint64 TitleState=0;
+    if(xrtValueObjectGet(Root,XRT_STR_LITERAL("title_state")) &&
+       (!MdoSessionsValueUInt(Root,"title_state",&TitleState) || TitleState>4))goto done;
+    Info->TitleState=(uint32)TitleState;
     Info->MaxOutputTokens = (uint32)MaxOutput;
     Info->ConfigRevision = ConfigRevision;
     Info->ModelGeneration = ModelGeneration;
@@ -671,11 +679,13 @@ bool MdoSessionManagerInit(xwork_runtime* Runtime)
     }
     g_MdoSessions.Generation = 1u;
     g_MdoSessions.Initialized = true;
+    (void)MdoTitleInit(); /* A naming outage must never prevent application startup. */
     return true;
 }
 
 void MdoSessionManagerUnit(void)
 {
+    MdoTitleUnit();
     /* Callers drain storage transactions first. Detached inactive reservations
      * remain caller-owned; their project/data pins survive closed registries. */
     MdoSessionRestoreReservation* Restore = g_MdoSessions.Restores;
@@ -986,6 +996,7 @@ MdoSession* MdoSessionCreate(const MdoSessionCreateOptions* Options,
     snprintf(Info.Id, sizeof(Info.Id), "%s", SessionId);
     snprintf(Info.ProjectId, sizeof(Info.ProjectId), "%s", Options->ProjectId);
     snprintf(Info.Title, sizeof(Info.Title), "%s", Title);
+    Info.TitleState=Options->AutoTitle?1u:0u;
     snprintf(Info.AgentId, sizeof(Info.AgentId), "%s", AgentInfo.AgentId);
     snprintf(Info.ModelId, sizeof(Info.ModelId), "%s", AgentInfo.ModelId);
     snprintf(Info.ReasoningEffort, sizeof(Info.ReasoningEffort), "%s",
@@ -1704,6 +1715,14 @@ static bool MdoSessionsValidateCurrent(MdoSession* Session,
         return false;
     }
     if ( Current.Revision != Session->Info.Revision ) {
+        /* Background naming is metadata only. A live Agent handle may rebase
+         * over exactly that change, but never over a profile/status edit. API
+         * mutations still enforce their explicit If-Match before this seam. */
+        MdoSessionInfo Before=Session->Info,After=Current;
+        Before.Revision=After.Revision=0;Before.UpdatedAt=After.UpdatedAt=0;
+        Before.LastActivatedAt=After.LastActivatedAt=0;Before.RuntimeOpen=After.RuntimeOpen=false;
+        Before.TitleState=After.TitleState=0;memset(Before.Title,0,sizeof(Before.Title));memset(After.Title,0,sizeof(After.Title));
+        if(!memcmp(&Before,&After,sizeof(Before))){bool Open=Session->Info.RuntimeOpen;Session->Info=Current;Session->Info.RuntimeOpen=Open;return true;}
         MdoSessionsError(Error, XWORK_ERROR_CONTEXT,
             "session metadata changed; reload before updating it");
         return false;
@@ -1962,15 +1981,18 @@ bool MdoSessionRename(MdoSession* Session, const char* Title,
     xrtMutexLock(Session->Lock);
     xrtMutexLock(g_MdoSessions.Lock);
     if ( !MdoSessionsValidateCurrent(Session, Error) ) Ok = false;
-    else if ( strcmp(Session->Info.Title, Title) == 0 ) Ok = true;
+    else if ( strcmp(Session->Info.Title, Title) == 0 && Session->Info.TitleState==0 ) Ok = true;
     else if ( MdoSessionsCandidate(Session, &Candidate, Error) ) {
         snprintf(Candidate.Title, sizeof(Candidate.Title), "%s", Title);
+        Candidate.TitleState=0; /* Even re-entering the same title cancels automatic naming. */
         Ok = MdoSessionsCommit(Session, &Candidate, Error);
     } else Ok = false;
     xrtMutexUnlock(g_MdoSessions.Lock);
     xrtMutexUnlock(Session->Lock);
     return Ok;
 }
+
+#include "title.inc.c"
 
 bool MdoSessionSetPinned(MdoSession* Session, bool Pinned,
     xwork_error* Error)

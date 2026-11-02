@@ -35,7 +35,7 @@ export function createNewTaskController({ draftStore, newId, createSession,
   async function sessionFor(task) {
     try {
       return await createSession({ project_id: task.project_id,
-        client_session_id: task.session_id, title: task.title,
+        client_session_id: task.session_id, title: task.title, auto_title: true,
         agent_id: task.agent_id, model_id: task.model_id,
         reasoning_effort: task.reasoning_effort,
         permission_profile: task.permission_profile });

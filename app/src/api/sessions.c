@@ -685,7 +685,10 @@ bool MdoApiSessionCreateRoute(MdoApiContext* Context)
     if ( BodyStatus != MDO_API_BODY_OK )
         return MdoApiReplyBodyError(Context, BodyStatus);
     MdoSessionCreateOptionsInit(&Options);
-    Valid = xrtValueType(Body.Value) == XVALUE_OBJECT &&
+    const xvalue* AutoTitle=xrtValueObjectGet(Body.Value,XRT_STR_LITERAL("auto_title"));
+    bool AutoTitleValid=!AutoTitle || xrtValueGetBool(AutoTitle,&Options.AutoTitle);
+    if(AutoTitle)Present++;
+    Valid = AutoTitleValid && xrtValueType(Body.Value) == XVALUE_OBJECT &&
         MdoApiSessionString(Body.Value, "project_id", Project,
             sizeof(Project), true, &Present) &&
         MdoApiSessionString(Body.Value, "title", Title,
