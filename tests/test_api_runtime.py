@@ -1324,8 +1324,7 @@ def run_probe(host: Path) -> None:
                 assert status == 200 and json.loads(body)["data"]["items"] == [], body
                 initial_tag = headers["etag"]
                 payload = json.dumps({
-                    "id": "style", "title": "Style", "content": "Keep code readable.",
-                    "tags": ["code"], "pinned": True,
+                    "id": "style", "content": "Keep code readable.",
                 }).encode()
                 status, _, body = request(port, "PUT", memory_path,
                     body=payload, headers={"Content-Type": "application/json"})
@@ -1507,9 +1506,8 @@ def run_probe(host: Path) -> None:
                 status, headers, body = request(port, "GET", preview_memory)
                 assert status == 200, (status, body)
                 status, _, body = request(port, "PUT", preview_memory,
-                    body=json.dumps({"id": "purge-note", "title": "Purge note",
-                                     "content": "Preview this project memory.",
-                                     "tags": [], "pinned": False}).encode(),
+                    body=json.dumps({"id": "purge-note",
+                                     "content": "Preview this project memory."}).encode(),
                     headers={"Content-Type": "application/json",
                              "If-Match": headers["etag"]})
                 assert status == 200, (status, body)

@@ -95,8 +95,8 @@ def main() -> int:
                     "permission_profile": "balanced", "phase": "rejected"},
                 "submissions": [], "attachments": [], "run_admission_uncertain": False})
         _, headers, _ = request(port, "GET", f"/api/v1/memory/projects/{project}")
-        api("PUT", f"memory/projects/{project}", {"id": "fixture-note", "title": "项目记忆",
-            "content": "用于核对候选数据范围。", "tags": [], "pinned": False},
+        api("PUT", f"memory/projects/{project}", {"id": "fixture-note",
+            "content": "用于核对候选数据范围。"},
             **{"If-Match": headers["etag"]})
         api("POST", "schedules", {"id": "inventory-plan", "label": "已停用的核对计划",
             "notify": "", "project_id": project, "agent_id": "mdo.default",

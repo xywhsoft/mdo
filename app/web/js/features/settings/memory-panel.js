@@ -15,12 +15,6 @@ const removeButton = dialog.querySelector("#memory-remove");
 const deleteConfirm = dialog.querySelector("#memory-delete-confirm");
 const encoder = new TextEncoder();
 
-// Edit complete Markdown, including optional frontmatter, in one file.
-for (const name of ["title", "tags", "pinned"]) {
-  form.elements[name].closest("label").hidden = true;
-  form.elements[name].required = false;
-}
-
 let collectionPath = "";
 let collection = null;
 let selectedId = "";
@@ -63,10 +57,7 @@ function renderTitle() {
 function fields() {
   return {
     id: form.elements.id.value.trim(),
-    title: form.elements.id.value.trim(),
     content: form.elements.content.value,
-    tags: form.elements.tags.value.split(",").map((tag) => tag.trim()).filter(Boolean),
-    pinned: form.elements.pinned.checked,
   };
 }
 
@@ -89,10 +80,7 @@ function fill(entry = null) {
   selectedId = entry?.id ?? "";
   form.elements.id.value = entry?.id ?? "";
   form.elements.id.readOnly = Boolean(entry);
-  form.elements.title.value = entry?.title ?? "";
   form.elements.content.value = entry?.content ?? "";
-  form.elements.tags.value = entry?.tags?.join(", ") ?? "";
-  form.elements.pinned.checked = Boolean(entry?.pinned);
   removeButton.hidden = !entry;
   deleteConfirm.hidden = true;
   baseline = fingerprint();
@@ -114,8 +102,8 @@ function renderList() {
     const button = element("button", { className: "memory-list-item",
       attrs: { type: "button", "data-memory-id": item.id,
         "aria-current": item.id === selectedId ? "true" : "false" } });
-    button.append(element("strong", { text: `${item.pinned ? "📌 " : ""}${item.title}` }),
-      element("small", { text: item.tags?.join(" · ") || item.id }));
+    button.append(element("strong", { text: item.title }),
+      element("small", { text: item.id }));
     button.addEventListener("click", () => { void select(item.id); });
     list.append(button);
   }
@@ -183,12 +171,6 @@ function validate(input) {
   if (encoder.encode(input.content).length > 64 * 1024) {
     setLocalizedStatus("memory.contentLimit", {},
       uiText("ui.memoryPanel.contentIsLimitedTo64KibOfUtf8", {}, "内容最多 64 KiB（按 UTF-8 字节计算）。"), "error");
-    return false;
-  }
-  if (input.tags.length > 16 || new Set(input.tags).size !== input.tags.length ||
-      input.tags.some((tag) => encoder.encode(tag).length > 64)) {
-    setLocalizedStatus("memory.tagsLimit", {},
-      uiText("memory.tagsLimit", {}, "标签最多 16 个，每个不超过 64 字节，不能重复。"), "error");
     return false;
   }
   return true;

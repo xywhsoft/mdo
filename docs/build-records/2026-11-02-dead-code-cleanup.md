@@ -35,3 +35,23 @@ Validation:
 - Native discovered-model request probe: Chat/Responses/Anthropic serialization,
   caller ownership, strict-schema policy and capability boundaries passed.
 - Existing locked SDK overlay reused; no repository/runtime copy or deployment.
+
+## Stage 2: remove unused Markdown editor metadata
+
+- The HTTP editor now accepts exactly `id` and `content`. Remove unused
+  `title`/`tags`/`pinned` request validation, old options construction, hidden
+  form fields, tag validation, checkbox styling and their language strings.
+  Markdown/frontmatter content, scope checks, byte limits and ETags are unchanged.
+- Update API fixtures and the keyboard fixture to match the real file editor.
+  The native structured-memory SDK contract is unchanged.
+
+Validation:
+
+- Real HTTP integration on the current source and existing XS host: global and
+  project Unicode Markdown round trips, missing/stale preconditions, malformed
+  fields, path/size rejection and deletion passed.
+- Memory browser: 4 tests passed; memory native/API static contracts: 4 passed.
+- Shared native ZIP codec: 44 adversarial fixtures and binary writer round trip
+  passed, including its test-local validation iterator.
+- Only an owned Home fixture under `.build/dead-code-audit-20261102` was used;
+  the temporary service/configuration was stopped/removed after the checks.

@@ -6,7 +6,6 @@
 #include "../memory/internal.h"
 
 #define MDO_API_MEMORY_CONTENT_CAPACITY (64u * 1024u + 1u)
-#define MDO_API_MEMORY_TAG_LIMIT 16u
 
 static bool MdoApiMemoryPath(MdoApiContext* Context, bool Entry,
     MdoMemoryScope* Scope, char Project[MDO_MEMORY_PROJECT_CAPACITY],
@@ -176,62 +175,24 @@ static bool MdoApiMemoryWrite(MdoApiContext* Context,
 {
     MdoApiJsonBody Body;
     MdoApiBodyStatus Status = MdoApiJsonBodyRead(Context, &Body);
-    MdoMemoryWriteOptions Options;
     xwork_error Error;
     char Id[MDO_MEMORY_ID_CAPACITY] = { 0 };
-    char Title[MDO_MEMORY_TITLE_CAPACITY] = { 0 };
     char Content[MDO_API_MEMORY_CONTENT_CAPACITY] = { 0 };
-    char Tags[MDO_API_MEMORY_TAG_LIMIT][MDO_MEMORY_TAG_CAPACITY];
-    const char* TagPointers[MDO_API_MEMORY_TAG_LIMIT];
-    const xvalue* TagValues;
-    const xvalue* PinnedValue;
     xvalue* Data;
     char Tag[64];
-    size_t i, TagCount = 0u;
-    bool Pinned = false;
     bool Valid;
     if ( Status != MDO_API_BODY_OK ) return MdoApiReplyBodyError(Context, Status);
-    TagValues = xrtValueObjectGet(Body.Value, XRT_STR_LITERAL("tags"));
-    PinnedValue = xrtValueObjectGet(Body.Value, XRT_STR_LITERAL("pinned"));
     Valid = xrtValueType(Body.Value) == XVALUE_OBJECT &&
-        xrtValueCount(Body.Value) == 5u &&
+        xrtValueCount(Body.Value) == 2u &&
         MdoApiMemoryString(Body.Value, "id", Id, sizeof(Id)) &&
-        MdoApiMemoryString(Body.Value, "title", Title, sizeof(Title)) &&
-        MdoApiMemoryString(Body.Value, "content", Content, sizeof(Content)) &&
-        TagValues != NULL && xrtValueType(TagValues) == XVALUE_ARRAY &&
-        (TagCount = xrtValueCount(TagValues)) <= MDO_API_MEMORY_TAG_LIMIT &&
-        PinnedValue != NULL && xrtValueType(PinnedValue) == XVALUE_BOOL &&
-        xrtValueGetBool(PinnedValue, &Pinned);
-    for ( i = 0u; Valid && i < TagCount; ++i ) {
-        const xvalue* Value = xrtValueArrayGet(TagValues, i);
-        xstrview Text;
-        Valid = Value != NULL && xrtValueType(Value) == XVALUE_STRING &&
-            xrtValueGetString(Value, &Text) &&
-            Text.Size < sizeof(Tags[i]) &&
-            memchr(Text.Data, 0, Text.Size) == NULL;
-        if ( Valid ) {
-            memcpy(Tags[i], Text.Data, Text.Size);
-            Tags[i][Text.Size] = '\0';
-            TagPointers[i] = Tags[i];
-        }
-    }
+        MdoApiMemoryString(Body.Value, "content", Content, sizeof(Content));
     if ( !Valid ) {
         MdoApiJsonBodyUnit(&Body);
         return MdoApiReplyError(Context, 422u, "memory_invalid",
             "Memory fields are invalid", NULL);
     }
-    MdoMemoryWriteOptionsInit(&Options);
-    Options.Scope = Scope;
-    Options.ProjectId = Scope == MDO_MEMORY_PROJECT ? Project : NULL;
-    Options.Id = Id;
-    Options.Title = Title;
-    Options.Content = Content;
-    Options.Tags = TagPointers;
-    Options.TagCount = TagCount;
-    Options.Pinned = Pinned;
-    Options.ExpectedRevision = Revision;
-    Options.Actor = "web-ui";
-    Valid = MdoMemoryFileWrite(Scope, Options.ProjectId, Id, Content, false,
+    Valid = MdoMemoryFileWrite(Scope,
+        Scope == MDO_MEMORY_PROJECT ? Project : NULL, Id, Content, false,
         Revision, &Revision, &Error);
     MdoApiJsonBodyUnit(&Body);
     if ( !Valid ) return MdoApiMemoryFailure(Context, &Error);
@@ -276,16 +237,10 @@ static bool MdoApiMemoryRoute(MdoApiContext* Context, bool Entry)
         return MdoApiMemoryPreconditionError(Context, Precondition);
     if ( !Entry ) return MdoApiMemoryWrite(Context, Scope, Project, Revision);
     {
-        MdoMemoryRemoveOptions Options;
         xvalue* Data;
         char Tag[64];
-        MdoMemoryRemoveOptionsInit(&Options);
-        Options.Scope = Scope;
-        Options.ProjectId = Scope == MDO_MEMORY_PROJECT ? Project : NULL;
-        Options.Id = Id;
-        Options.ExpectedRevision = Revision;
-        Options.Actor = "web-ui";
-        if ( !MdoMemoryFileWrite(Scope, Options.ProjectId, Id, NULL, true,
+        if ( !MdoMemoryFileWrite(Scope,
+                Scope == MDO_MEMORY_PROJECT ? Project : NULL, Id, NULL, true,
                 Revision, &Revision, &Error) )
             return MdoApiMemoryFailure(Context, &Error);
         Data = xrtValueObject();

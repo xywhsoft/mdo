@@ -755,10 +755,7 @@
         <div class="memory-list-pane"><div class="memory-list-heading"><strong data-i18n="memory.entries">条目</strong><div><button class="secondary-button" id="memory-refresh" type="button" data-i18n="memory.refresh">刷新</button><button class="secondary-button" id="memory-new" type="button" data-i18n="memory.new">新建</button></div></div><div id="memory-list" class="memory-list"></div></div>
         <form id="memory-form" class="memory-form">
           <label><span data-i18n="memory.id">标识</span><input name="id" required maxlength="64" pattern="[A-Za-z0-9_-][A-Za-z0-9._-]*" autocomplete="off" placeholder="例如 coding-style" data-i18n-placeholder="memory.idPlaceholder"></label>
-          <label><span data-i18n="memory.title">标题</span><input name="title" required maxlength="256" autocomplete="off"></label>
           <label><span data-i18n="memory.content">内容</span><textarea name="content" required rows="9" autocomplete="off"></textarea></label>
-          <label><span data-i18n="memory.tags">标签（逗号分隔，最多 16 个）</span><input name="tags" autocomplete="off" placeholder="例如 style, build" data-i18n-placeholder="memory.tagsPlaceholder"></label>
-          <label class="memory-pin"><input name="pinned" type="checkbox"><span data-i18n="memory.pinned">置顶</span></label>
           <div class="memory-form-actions"><button class="primary-button" type="submit" data-i18n="memory.save">保存记忆</button><button class="danger-link" id="memory-remove" type="button" data-i18n="memory.remove" hidden>删除条目</button></div>
           <div class="memory-delete-confirm" id="memory-delete-confirm" hidden><span data-i18n="memory.deletePrompt">确认删除当前条目？</span><button class="secondary-button" id="memory-delete-cancel" type="button" data-i18n="memory.cancel">取消</button><button class="danger-button" id="memory-delete-apply" type="button" data-i18n="memory.delete">删除</button></div>
         </form>
