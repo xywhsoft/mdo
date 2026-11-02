@@ -559,6 +559,7 @@ static bool MdoApiSessionMutationFailure(MdoApiContext* Context,
 
 static bool MdoApiSessionProfileUpdate(MdoApiContext* Context, bool PermissionOnly)
 {
+    char Agent[MDO_SESSION_IDENTITY_CAPACITY] = { 0 };
     char Project[MDO_PROJECT_ID_CAPACITY];
     char SessionId[MDO_SESSION_ID_CAPACITY];
     char Model[MDO_SESSION_IDENTITY_CAPACITY] = { 0 };
@@ -590,7 +591,8 @@ static bool MdoApiSessionProfileUpdate(MdoApiContext* Context, bool PermissionOn
     if ( BodyStatus != MDO_API_BODY_OK )
         return MdoApiReplyBodyError(Context, BodyStatus);
     Valid = xrtValueType(Body.Value) == XVALUE_OBJECT &&
-        (PermissionOnly || (MdoApiSessionString(Body.Value, "model_id", Model,
+        (PermissionOnly || (MdoApiSessionString(Body.Value, "agent_id", Agent,
+            sizeof(Agent), false, &Present) && MdoApiSessionString(Body.Value, "model_id", Model,
             sizeof(Model), true, &Present) &&
         MdoApiSessionText(Body.Value, "reasoning_effort", Reasoning,
             sizeof(Reasoning), true, true, &Present))) &&
@@ -616,14 +618,14 @@ static bool MdoApiSessionProfileUpdate(MdoApiContext* Context, bool PermissionOn
         return MdoApiReplyError(Context, 412u, "revision_conflict",
             "The session changed; reload it before updating", NULL);
     }
-    if ( !PermissionOnly && strcmp(Info.ModelId, Model) == 0 &&
+    if ( !PermissionOnly && (!Agent[0] || strcmp(Info.AgentId, Agent) == 0) && strcmp(Info.ModelId, Model) == 0 &&
          strcmp(Info.ReasoningEffort, Reasoning) == 0 &&
          strcmp(Info.PermissionProfile, Permission) == 0 ) {
         MdoSessionRelease(Session);
         return MdoApiSessionReply(Context, 200u, &Info);
     }
     if ( !(PermissionOnly ? MdoSessionSetPermission(Session, Permission, &Error) :
-            MdoSessionSetProfile(Session, Model, Reasoning, Permission, NULL, &Error)) ) {
+            MdoSessionSetAgentProfile(Session, Agent[0] ? Agent : NULL, Model, Reasoning, Permission, NULL, &Error)) ) {
         MdoSessionRelease(Session);
         if ( Error.eCode == XWORK_ERROR_MODEL )
             return MdoApiReplyModelProfileFailure(Context, &Error.tModelError,

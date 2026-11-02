@@ -235,6 +235,9 @@ bool MdoSessionRename(MdoSession* Session, const char* Title,
 bool MdoSessionSetProfile(MdoSession* Session, const char* ModelId,
     const char* ReasoningEffort, const char* PermissionProfile,
     const MdoSessionRuntimeOptions* Runtime, xwork_error* Error);
+bool MdoSessionSetAgentProfile(MdoSession* Session, const char* AgentId,
+    const char* ModelId, const char* ReasoningEffort, const char* PermissionProfile,
+    const MdoSessionRuntimeOptions* Runtime, xwork_error* Error);
 /* Persist and apply ask/full access without recreating a running Agent.
  * The handle's revision is revalidated under the manager lock. */
 bool MdoSessionSetPermission(MdoSession* Session, const char* Permission,

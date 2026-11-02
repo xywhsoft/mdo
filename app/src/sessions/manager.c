@@ -1775,7 +1775,7 @@ done:
     return Ok;
 }
 
-bool MdoSessionSetProfile(MdoSession* Session, const char* ModelId,
+bool MdoSessionSetAgentProfile(MdoSession* Session, const char* AgentId, const char* ModelId,
     const char* ReasoningEffort, const char* PermissionProfile,
     const MdoSessionRuntimeOptions* Runtime, xwork_error* Error)
 {
@@ -1799,6 +1799,8 @@ bool MdoSessionSetProfile(MdoSession* Session, const char* ModelId,
     if ( Session == NULL || Runtime->Size < sizeof(*Runtime) ||
          ((Runtime->OnOwnerRetain != NULL) !=
           (Runtime->OnOwnerRelease != NULL)) ||
+         (AgentId != NULL && !MdoSessionsTextValid(AgentId,
+            MDO_SESSION_IDENTITY_CAPACITY, false)) ||
          (ModelId != NULL &&
           !MdoSessionsTextValid(ModelId,
             MDO_SESSION_IDENTITY_CAPACITY, false)) ||
@@ -1809,7 +1811,7 @@ bool MdoSessionSetProfile(MdoSession* Session, const char* ModelId,
           strcmp(PermissionProfile, "read-only") != 0 &&
           strcmp(PermissionProfile, "balanced") != 0 &&
           strcmp(PermissionProfile, "full-access") != 0) ||
-         (ModelId == NULL && ReasoningEffort == NULL &&
+         (AgentId == NULL && ModelId == NULL && ReasoningEffort == NULL &&
           PermissionProfile == NULL) ) {
         MdoSessionsError(Error, XWORK_ERROR_INVALID_ARGUMENT,
             "invalid session profile request");
@@ -1828,7 +1830,8 @@ bool MdoSessionSetProfile(MdoSession* Session, const char* ModelId,
             "the session must be active and idle to change its profile");
         goto unlock_manager;
     }
-    if ( (ModelId == NULL ||
+    if ( (AgentId == NULL || strcmp(AgentId, Session->Info.AgentId) == 0) &&
+         (ModelId == NULL ||
           strcmp(ModelId, Session->Info.ModelId) == 0) &&
          (ReasoningEffort == NULL ||
           strcmp(ReasoningEffort, Session->Info.ReasoningEffort) == 0) &&
@@ -1840,6 +1843,8 @@ bool MdoSessionSetProfile(MdoSession* Session, const char* ModelId,
     }
     if ( !MdoSessionsCandidate(Session, &Candidate, Error) )
         goto unlock_manager;
+    if ( AgentId != NULL )
+        snprintf(Candidate.AgentId, sizeof(Candidate.AgentId), "%s", AgentId);
     if ( ModelId != NULL )
         snprintf(Candidate.ModelId, sizeof(Candidate.ModelId), "%s", ModelId);
     if ( ReasoningEffort != NULL )
@@ -1932,6 +1937,14 @@ done:
         Candidate.ProjectId, Candidate.Id);
     xrtMutexUnlock(Session->Lock);
     return Ok;
+}
+
+bool MdoSessionSetProfile(MdoSession* Session, const char* ModelId,
+    const char* ReasoningEffort, const char* PermissionProfile,
+    const MdoSessionRuntimeOptions* Runtime, xwork_error* Error)
+{
+    return MdoSessionSetAgentProfile(Session, NULL, ModelId, ReasoningEffort,
+        PermissionProfile, Runtime, Error);
 }
 
 bool MdoSessionRename(MdoSession* Session, const char* Title,

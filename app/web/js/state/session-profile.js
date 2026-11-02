@@ -28,8 +28,10 @@ export function createSessionProfileUpdater({ permissionOnly = false, epoch = st
     let revision = Number(session.revision), tag = `"mdo-session-${id}-${revision}"`;
     const body = Object.freeze(permissionOnly ? { permission_profile: profile.permission_profile } :
       { model_id: resourceId(profile.model_id), reasoning_effort: profile.reasoning_effort,
-        permission_profile: profile.permission_profile });
-    const matches = value => permissionOnly ? value.permission_profile === body.permission_profile : same(value, body);
+        permission_profile: profile.permission_profile,
+        ...(profile.agent_id ? { agent_id: resourceId(profile.agent_id) } : {}) });
+    const matches = value => permissionOnly ? value.permission_profile === body.permission_profile :
+      same(value, body) && (!body.agent_id || value.agent_id === body.agent_id);
     if (!Number.isSafeInteger(revision) || revision < 1 || (session.etag && session.etag !== tag) ||
         (!permissionOnly && typeof body.reasoning_effort !== "string") ||
         !["read-only", "balanced", "full-access"].includes(body.permission_profile))

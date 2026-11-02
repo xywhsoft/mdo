@@ -10,6 +10,15 @@ const desired = { model_id: "code", reasoning_effort: "high", permission_profile
 const network = () => new ApiError("Lost response", { code: "network_error" });
 const unavailable = () => new ApiError("Not applied", { code: "session_service_unavailable", status: 503 });
 const stale = () => new ApiError("Stale revision", { code: "revision_conflict", status: 412 });
+
+test("a lost Agent switch is confirmed only when the same Agent and profile were saved", async () => {
+  const f = environment({ send: async (_path, body) => { assert.equal(body.agent_id, "agent.demo"); throw network(); },
+    inspect: async () => reply({ agent_id: "agent.demo" }) });
+  const result = await f.settle(f.update(source, { ...desired, agent_id: "agent.demo" }));
+  assert.equal(result.agent_id, "agent.demo");
+  const conflict = environment({ send: async () => { throw network(); }, inspect: async () => reply({ agent_id: "agent.peer" }) });
+  await assert.rejects(conflict.settle(conflict.update(source, { ...desired, agent_id: "agent.demo" })), /changed/);
+});
 const reply = (data = {}, metadata = {}) => {
   const result = { ...source, ...desired, revision: 2, status: "active", ...data };
   return { data: result, etag: `"mdo-session-${result.id}-${result.revision}"`, writeToken: "epoch", ...metadata };

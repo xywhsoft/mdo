@@ -72,7 +72,7 @@ INPUTS={
  'ProjectUpdate':document('name:s workspace_root:s default_model_id:s',('name','workspace_root','default_model_id'),True),
  'SessionCreate':document('project_id:s title:s agent_id:s model_id:s protocol:s reasoning_effort:s permission_profile:s workspace_root:s client_session_id:s max_output_tokens:u',('project_id',),True),
  'SessionUpdate':document('title:s archived:b deleted:b pinned:b',closed=True),
- 'ProfileUpdate':document('model_id:s reasoning_effort:s permission_profile:s',('model_id','reasoning_effort','permission_profile'),True),
+ 'ProfileUpdate':document('agent_id:s model_id:s reasoning_effort:s permission_profile:s',('model_id','reasoning_effort','permission_profile'),True),
  'Permission':document('permission_profile:s',('permission_profile',),True),
  'RunStart':document('prompt:s attachments:ss automatic:b resume:b client_resume_id:s queue_item_id:s'),
  'Resume':document('recovery_token:s client_resume_id:s decisions:a resume:b automatic:b'),
