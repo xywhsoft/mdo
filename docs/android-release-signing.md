@@ -1,11 +1,12 @@
 # Android 正式签名身份
 
-2026-10-11，用户授权创建 mdo 的长期正式签名。私有材料保存在
-`E:\software\mdo-signing`，不属于仓库或可清理的 `.build` 缓存。
+2026-10-11，用户授权创建 mdo 的长期正式签名。2026-11-02 按用户要求，
+已将私有材料迁入项目内的 `D:\GIT\mdo\.private\android-signing`。
+`.private/` 已加入 Git 忽略；这是长期材料，不能作为 `.build` 构建缓存清理。
 
 | 项目 | 值 |
 | --- | --- |
-| 密钥库 | `E:\software\mdo-signing\mdo-release.p12` |
+| 密钥库 | `D:\GIT\mdo\.private\android-signing\mdo-release.p12` |
 | 别名 | `mdo-release` |
 | 算法 | RSA 4096 / SHA256withRSA |
 | 有效期 | 10,000 天 |
@@ -17,7 +18,10 @@
 `--keystore`、`--key-alias` 和 `--store-password-env` 参数；不得把密码传入
 命令行、发布包、Git 或日志。Windows ACL 限制为当前用户、管理员及 SYSTEM。
 
-请离线备份整个私有目录，并保护备份的访问权限。后续精简版与完整版必须共用
+请随项目保留整个私有目录，并保护备份的访问权限。不要将正式签名材料放到项目
+外或临时构建目录；发布、清理、迁移项目时必须保留 `.private/android-signing`。
+迁移时已验证密钥库可读取，证书与已发布 APK 一致，原项目外文件已移除。
+后续精简版与完整版必须共用
 此密钥，不能在清理缓存、换电脑或升级工具链时重新生成。
 
 这套密钥与旧开发签名不同，不能直接覆盖旧签名的安装。首次迁移需要先导出并

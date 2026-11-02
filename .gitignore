@@ -2,6 +2,9 @@
 data/
 mdo-home/
 
+# Long-lived local signing credentials; keep outside disposable build caches.
+.private/
+
 # 构建产物与二进制
 /mdo-linux-x86_64-glibc
 /mdo-linux-x86_64-musl
