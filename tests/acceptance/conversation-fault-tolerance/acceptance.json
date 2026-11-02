@@ -1,0 +1,125 @@
+{
+  "date": "2026-11-02",
+  "source_commit": "1a9eedbc200315c5342781b399e5477ef6902f80",
+  "status": "local acceptance, not a published release",
+  "model_requests": 0,
+  "original_journals": [
+    {
+      "session": "60037b7c7d64f89645a7ecd3a086beef",
+      "bytes": 51040431,
+      "sha256": "b99f239e876fc740ff792d4d01b1a1195fc21298782966682b1dbf85313f975c",
+      "unchanged_from_diagnosis": true
+    },
+    {
+      "session": "e560d579f55ec2121a84c0784f9210cf",
+      "bytes": 216991204,
+      "sha256": "abddeb1d2e10ff2243c2f7bbd83c2d1e1f235737ac630aa15e43bc033a6ee6ed",
+      "unchanged_from_diagnosis": true
+    }
+  ],
+  "native_cases": [
+    {
+      "name": "bad-middle",
+      "pages": 1,
+      "public_text_fragments": 2,
+      "notices": 2
+    },
+    {
+      "name": "bad-suffix",
+      "pages": 2,
+      "public_text_fragments": 1,
+      "notices": 3
+    },
+    {
+      "name": "all-bad",
+      "pages": 1,
+      "public_text_fragments": 0,
+      "notices": 1
+    },
+    {
+      "name": "oversized-record",
+      "pages": 1,
+      "public_text_fragments": 2,
+      "notices": 1
+    },
+    {
+      "name": "long-text",
+      "pages": 2,
+      "public_text_fragments": 2,
+      "notices": 1
+    },
+    {
+      "name": "60037b7c7d64f89645a7ecd3a086beef",
+      "pages": 6,
+      "public_text_fragments": 18,
+      "notices": 1
+    },
+    {
+      "name": "e560d579f55ec2121a84c0784f9210cf",
+      "pages": 60,
+      "public_text_fragments": 118,
+      "notices": 6
+    }
+  ],
+  "packed_http_cases": {
+    "bad-middle": {
+      "pages": 1,
+      "rows": 4,
+      "notices": 1
+    },
+    "all-bad": {
+      "pages": 1,
+      "rows": 0,
+      "notices": 1
+    },
+    "bad-suffix": {
+      "pages": 2,
+      "rows": 2,
+      "notices": 3
+    },
+    "long-text": {
+      "pages": 2,
+      "rows": 5,
+      "notices": 1
+    },
+    "bad-attachment": {
+      "pages": 1,
+      "rows": 2,
+      "notices": 1
+    },
+    "oversized-record": {
+      "pages": 1,
+      "rows": 4,
+      "notices": 1
+    }
+  },
+  "frontend": {
+    "tests": 162,
+    "passed": 162,
+    "files": 26,
+    "web_modules": 248
+  },
+  "normal_history": {
+    "replies": 5,
+    "tool_pairs": 10,
+    "complete_text": true,
+    "resume": true,
+    "delta": true
+  },
+  "browser": {
+    "runtime": "Windows packed app served on loopback; background IAB",
+    "middle": "healthy before / one-line warning / healthy after, no false whole-history gap",
+    "suffix": "healthy prefix visible after a malformed-only suffix page"
+  },
+  "test_build": {
+    "path": ".build/history-fault-tolerance-20261102/mdo.exe",
+    "bytes": 6633375,
+    "sha256": "6540b2b10ee335c8ff82ab0f225af7bba79a3ecdc925c7b2cb1c09cf6e9bf066"
+  },
+  "notes": [
+    "No imported user Home or copied user journal",
+    "Original journals opened read-only by the actual native parser/cursor/view code",
+    "Small disposable HTTP fixtures, no account and no model requests",
+    "No upstream Cua patches, dependency clones or version changes"
+  ]
+}
