@@ -293,7 +293,9 @@ static xwork_result MdoAgentsExtension(void* Data,xwork_agent_extension_context*
         return XWORK_RESULT_OK;
     }
     if(Native->ePhase==XWORK_AGENT_EXTENSION_CONTEXT){
-        if(!MdoAgentsApplyMcpSelection(Owner,Native->pAgent,&Instance->Definition,Error))return XWORK_RESULT_ERROR;
+        /* Root creation/run preparation and CHILD configure the scope before
+         * the Agent starts. Context refresh runs under the active run claim;
+         * changing its scope here is forbidden by xwork. */
         if(!MdoAgentsHistoryConfigure(Instance,Native,false))return XWORK_RESULT_ERROR;
         return MdoAgentsRefreshContext(Owner,Instance,Native,false,Error)?XWORK_RESULT_OK:XWORK_RESULT_ERROR;
     }
