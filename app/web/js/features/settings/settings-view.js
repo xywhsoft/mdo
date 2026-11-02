@@ -32,6 +32,7 @@ export function settingsPatch(form) {
       web_search: form.elements.web_search.checked,
       memory: form.elements.memory.checked,
       schedules: form.elements.schedules.checked,
+      max_turns: number(form, "max_turns"),
       max_parallel_tools: number(form, "max_parallel_tools"),
       max_parallel_subagents: number(form, "max_parallel_subagents"),
     },
@@ -263,6 +264,7 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
     form.elements.reply_language_custom.value = form.elements.reply_language.value === "custom" ? replyLanguage : "";
     validateInstructions();
     form.elements.max_parallel_tools.value = settings.agent.max_parallel_tools;
+    form.elements.max_turns.value = settings.agent.max_turns ?? 0;
     form.elements.max_parallel_subagents.value = settings.agent.max_parallel_subagents;
     form.elements.web_search.checked = settings.agent.web_search;
     form.elements.memory.checked = settings.agent.memory;

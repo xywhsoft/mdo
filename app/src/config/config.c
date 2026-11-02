@@ -539,6 +539,9 @@ static bool MdoConfigSettingsValidate(const xvalue* pSettings)
          !MdoConfigBool(pAgent, "memory") ||
          !MdoConfigBool(pAgent, "schedules") ||
          !MdoConfigUnsigned(xrtValueObjectGet(pAgent,
+            MdoConfigKey("max_turns")), &iValue) ||
+         iValue > 1024u ||
+         !MdoConfigUnsigned(xrtValueObjectGet(pAgent,
             MdoConfigKey("max_parallel_tools")), &iValue) ||
          iValue == 0u || iValue > 64u ||
          !MdoConfigUnsigned(xrtValueObjectGet(pAgent,
@@ -1443,6 +1446,7 @@ bool MdoConfigGetAgentSettings(MdoConfigAgentSettings* pSettings)
     xstrview ReplyLanguage = { 0 };
     uint64 MaxTools;
     uint64 MaxSubagents;
+    uint64 MaxTurns;
     bool MemoryEnabled;
     bool SchedulesEnabled;
     uint32 Size;
@@ -1485,9 +1489,11 @@ bool MdoConfigGetAgentSettings(MdoConfigAgentSettings* pSettings)
             MdoConfigKey("max_parallel_tools")), &MaxTools) &&
          MdoConfigUnsigned(xrtValueObjectGet(pAgent,
             MdoConfigKey("max_parallel_subagents")), &MaxSubagents) &&
+          MdoConfigUnsigned(xrtValueObjectGet(pAgent,
+             MdoConfigKey("max_turns")), &MaxTurns) &&
          Reasoning.Size < sizeof(pSettings->ReasoningEffort) &&
          Permission.Size < sizeof(pSettings->PermissionProfile) &&
-         MaxTools <= UINT32_MAX && MaxSubagents <= UINT32_MAX ) {
+          MaxTools <= UINT32_MAX && MaxSubagents <= UINT32_MAX && MaxTurns <= 1024u ) {
         memset(pSettings, 0, sizeof(*pSettings));
         pSettings->Size = Size;
         pSettings->Revision = g_MdoConfig.Revision;
@@ -1495,6 +1501,7 @@ bool MdoConfigGetAgentSettings(MdoConfigAgentSettings* pSettings)
         pSettings->SchedulesEnabled = SchedulesEnabled;
         pSettings->MaxParallelTools = (uint32)MaxTools;
         pSettings->MaxParallelSubagents = (uint32)MaxSubagents;
+        pSettings->MaxTurns = (uint32)MaxTurns;
         memcpy(pSettings->ReasoningEffort, Reasoning.Data, Reasoning.Size);
         memcpy(pSettings->PermissionProfile, Permission.Data, Permission.Size);
         if ( ReplyLanguage.Size != 0u )

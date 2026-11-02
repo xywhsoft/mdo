@@ -472,6 +472,10 @@
                   <input id="setting-parallel-tools" name="max_parallel_tools" type="number" min="1" max="64" required>
                 </div>
                 <div class="setting-row">
+                  <div><label for="setting-max-turns" data-i18n="settings.maxTurns">执行轮数上限</label><p id="setting-max-turns-description" data-i18n="settings.maxTurnsDescription">每个 Agent 单次运行的模型执行轮数，0 表示不限制。角色单独设置的更低上限仍生效；下次启动或继续任务时应用。</p></div>
+                  <input id="setting-max-turns" name="max_turns" type="number" min="0" max="1024" step="1" required aria-describedby="setting-max-turns-description">
+                </div>
+                <div class="setting-row">
                   <div><label for="setting-parallel-subagents" data-i18n="settings.parallelSubagents">并行子 Agent 数</label><p data-i18n="settings.parallelSubagentsDescription">设为 0 可关闭并行子 Agent。</p></div>
                   <input id="setting-parallel-subagents" name="max_parallel_subagents" type="number" min="0" max="16" required>
                 </div>

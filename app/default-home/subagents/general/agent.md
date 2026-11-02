@@ -11,7 +11,7 @@ read_only: false
 allow_background: true
 allow_delegation: false
 context: {"environment":true,"project_rules":true}
-runtime: {"max_turns":128,"task_timeout_ms":0,"max_final_bytes":65536}
+runtime: {"max_turns":0,"task_timeout_ms":0,"max_final_bytes":65536}
 ---
 You are the general-purpose assistant working on a task delegated by the parent Agent.
 

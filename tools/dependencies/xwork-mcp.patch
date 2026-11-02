@@ -2974,7 +2974,8 @@
 @@ -137,18 +137,20 @@
      pEntry->uContextWindowTokens = pConfig->uContextWindowTokens;
      pEntry->uMaxInputTokens = pConfig->uMaxInputTokens;
-     pEntry->uMaxTurns = pConfig->uMaxTurns ? pConfig->uMaxTurns : 8u;
+-    pEntry->uMaxTurns = pConfig->uMaxTurns ? pConfig->uMaxTurns : 8u;
++    pEntry->uMaxTurns = pConfig->uMaxTurns;
 -    pEntry->uTimeoutMs = pConfig->uTimeoutMs ? pConfig->uTimeoutMs : 120000u;
 +    pEntry->uTimeoutMs = pConfig->uTimeoutMs;
      pEntry->uMaxOutputTokens = pConfig->uMaxOutputTokens;
@@ -4159,7 +4160,8 @@
 -    uint64_t uMaxInputTokens;      /* 0 inherits; nonzero may only narrow. */
 +    uint64_t uContextWindowTokens; /* 0 inherits; host validates the selected model. */
 +    uint64_t uMaxInputTokens;      /* 0 inherits; host validates the selected model. */
-     uint32_t uMaxTurns;            /* 0 selects 8. */
+-    uint32_t uMaxTurns;            /* 0 selects 8. */
++    uint32_t uMaxTurns;            /* 0 means unlimited. */
 -    uint32_t uTimeoutMs;           /* 0 selects 120000. */
 +    uint32_t uTimeoutMs;           /* 0 means no task lifetime deadline. */
      uint32_t uMaxOutputTokens;     /* 0 inherits the parent session cap. */

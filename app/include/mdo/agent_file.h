@@ -156,7 +156,7 @@ static inline bool MdoAgentFileParseAt(cstr Id, cstr Text, bool Main,cstr Root,
         File->Agent.Flags |= MDO_AGENT_REQUIRE_VERIFICATION_AFTER_WRITE;
     File->Agent.AllowedEffects = (File->Agent.Flags & MDO_AGENT_READ_ONLY)
         ? MDO_TOOL_EFFECT_READ | ((File->Agent.Flags & MDO_AGENT_ALLOW_DELEGATION)?MDO_TOOL_EFFECT_AGENT_DELEGATION:0u) : MDO_TOOL_EFFECT_ALL;
-    File->Agent.MaxTurns = Main?128u:64u; File->Agent.TimeoutMilliseconds = 120000u;
+    File->Agent.MaxTurns = 0u; File->Agent.TimeoutMilliseconds = 120000u;
     File->Agent.MaxFinalBytes = 64u * 1024u; File->Agent.MaxDepth = (File->Agent.Flags & MDO_AGENT_ALLOW_DELEGATION) ? (Main?4u:2u) : 1u;
     const xvalue* Runtime=MdoAgentConfigGet(Document,"runtime"); uint64 Number;
 #define MDO_AGENT_LIMIT(key,member,maximum) do { if(!MdoAgentConfigNumber(Runtime,key,File->Agent.member,maximum,&Number)) Ok=false; else File->Agent.member=Number; } while(0)
@@ -168,7 +168,7 @@ static inline bool MdoAgentFileParseAt(cstr Id, cstr Text, bool Main,cstr Root,
     MDO_AGENT_LIMIT("input_tokens",MaxInputTokens,UINT32_MAX);
     MDO_AGENT_LIMIT("output_tokens",MaxOutputTokens,UINT32_MAX);
 #undef MDO_AGENT_LIMIT
-    if(!File->ConfigurationJson || !File->Agent.MaxTurns || !File->Agent.MaxFinalBytes || !File->Agent.MaxDepth) Ok=false;
+    if(!File->ConfigurationJson || !File->Agent.MaxFinalBytes || !File->Agent.MaxDepth) Ok=false;
     xrtValueRelease(Document);
     if (!Ok) {
         if (Error != NULL && Capacity != 0u)

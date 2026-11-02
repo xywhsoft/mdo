@@ -3402,5 +3402,7 @@
   "timeline.historyScanLimited": "This execution history is long and has been split into pages. Earlier records can still be loaded.",
   "timeline.historyTextLimited": "This content exceeds the per-section display limit and is shown in parts. Other records are preserved.",
   "timeline.historySectionLimited": "This section exceeds the display limit. Readable content has been retained.",
-  "timeline.historySectionUnreadable": "Some records here cannot be displayed. The rest of the conversation is unaffected."
+  "timeline.historySectionUnreadable": "Some records here cannot be displayed. The rest of the conversation is unaffected.",
+  "settings.maxTurns": "Execution turn limit",
+  "settings.maxTurnsDescription": "Maximum model turns per Agent run. 0 means unlimited. A lower role-specific limit still applies. Changes apply when starting or continuing a task."
 }

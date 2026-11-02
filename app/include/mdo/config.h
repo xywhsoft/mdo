@@ -39,6 +39,7 @@ typedef struct MdoConfigAgentSettings {
     char ReasoningEffort[32];
     char PermissionProfile[64];
     char ReplyLanguage[129];     /* Empty follows the latest user message. */
+    uint32 MaxTurns;             /* Per run, zero means unlimited. */
 } MdoConfigAgentSettings;
 
 typedef struct MdoConfigPowerSettings {

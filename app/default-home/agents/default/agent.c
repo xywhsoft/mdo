@@ -16,7 +16,7 @@ static const mdo_agent_v1 MDO_DEFAULT_AGENT = {
     0u,
     0u,
     0u,
-    128u,
+    0u, /* No role-specific turn ceiling; follow Agent behavior settings. */
     120000u,
     64u * 1024u,
     MDO_TOOL_EFFECT_ALL,

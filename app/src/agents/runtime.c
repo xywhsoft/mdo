@@ -1,4 +1,5 @@
 #include "../../include/mdo/time.h"
+#include "../../include/mdo/agent_limits.h"
 #include "../../include/mdo/distribution.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -121,6 +122,7 @@ typedef struct MdoAgentOwner {
     xwork_approval_mode DelegationApproval;
     xwork_tool_effects DelegationEffects;
     bool IndependentDelegation;
+    uint32 MaxTurns; /* Pin the global ceiling for this run's entire roster. */
     xwork_event_fn ExternalEvent;
     void* ExternalEventData;
     MdoAgentModelProgress* ModelProgress;
@@ -1065,7 +1067,7 @@ static bool MdoAgentsPublishSubagents(MdoAgentOwner* Owner,
         Target->uContextWindowTokens=Subagent.ContextWindowTokens?Subagent.ContextWindowTokens:Model.Info.ContextWindowTokens;
         Target->uMaxInputTokens=Subagent.MaxInputTokens?Subagent.MaxInputTokens:Model.Info.MaxInputTokens;
         if(Target->uMaxInputTokens>Target->uContextWindowTokens)Target->uMaxInputTokens=Target->uContextWindowTokens;
-        Target->uMaxTurns = Subagent.MaxTurns;
+        Target->uMaxTurns = MdoAgentEffectiveTurnLimit(Owner->MaxTurns, Subagent.MaxTurns);
         xvalue* ChildOptions=Subagent.ConfigurationJson?xrtJsonParse(xrtStrView(Subagent.ConfigurationJson)):NULL;
         uint64 ChildTimeout=MdoAgentConfigText(ChildOptions,"schema")?0u:Subagent.TimeoutMilliseconds;
         MdoAgentConfigNumber(MdoAgentConfigGet(ChildOptions,"runtime"),"task_timeout_ms",ChildTimeout,86400000u,&ChildTimeout);
@@ -1239,6 +1241,7 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
         goto fail;
     }
     xrtAtomic32Init(&Owner->Refs, 1u);
+    Owner->MaxTurns = Settings.MaxTurns;
     Owner->Runtime = xworkRuntimeRef(Runtime);
     if ( Owner->Runtime == NULL ) goto fail;
     /* The callback owner, including retained runtime Agent references, outlives
@@ -1507,7 +1510,7 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
     DefinitionConfig.eApprovalMode = Options->UseRunPermissionScope &&
         Approval != XWORK_APPROVAL_READ_ONLY ? XWORK_APPROVAL_CALLBACK : Approval;
     DefinitionConfig.uCommandTimeoutMs = AgentInfo.TimeoutMilliseconds;
-    DefinitionConfig.uMaxAgentTurns = AgentInfo.MaxTurns;
+    DefinitionConfig.uMaxAgentTurns = MdoAgentEffectiveTurnLimit(Settings.MaxTurns, AgentInfo.MaxTurns);
     DefinitionConfig.uConsecutiveFailureLimit = 10u;
     DefinitionConfig.uRepeatedToolBatchLimit = 10u;
     DefinitionConfig.uCompletionVerificationRetries = 10u;

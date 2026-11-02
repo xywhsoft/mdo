@@ -7,7 +7,7 @@ function fixture() {
   const names = ["locale", "theme", "font_size", "density", "submit_mode", "completion_sound",
     "prevent_sleep", "permission_profile", "reasoning_effort", "user_instructions", "reply_language",
     "reply_language_custom", "web_search", "memory", "schedules", "max_parallel_tools",
-    "max_parallel_subagents", "ca_pem_path", "open_mode", "confirm_external_write", "proxy_kind",
+    "max_parallel_subagents", "max_turns", "ca_pem_path", "open_mode", "confirm_external_write", "proxy_kind",
     "proxy_host", "proxy_port", "proxy_user", "proxy_secret_ref", "proxy_bypass", "proxy_clear_secret"];
   const elements = Object.fromEntries(names.map(name => [name, {
     value: "", checked: false, disabled: false, validity: { valid: true },
@@ -49,4 +49,12 @@ test("switching back to manual restores validation and the retained values", () 
   assert.equal(proxy.host, "127.0.0.1"); assert.equal(proxy.port, 1080);
   assert.equal(proxy.credential.secret_ref, "env:PROXY_TEST_SECRET");
   assert.equal(fields.proxy_host.disabled, false);
+});
+
+test("Agent turn settings preserve unlimited zero and a finite integer in the save patch", () => {
+  const form = fixture();
+  form.elements.max_turns.value = "0";
+  assert.equal(settingsPatch(form).agent.max_turns, 0);
+  form.elements.max_turns.value = "512";
+  assert.equal(settingsPatch(form).agent.max_turns, 512);
 });

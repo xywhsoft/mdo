@@ -180,6 +180,7 @@ bool MdoApiSettingsRoute(MdoApiContext* Context)
         MdoApiValueSetBool(AgentValue, "memory", Service.Agent.MemoryEnabled) &&
         MdoApiValueSetBool(AgentValue, "schedules",
             Service.Agent.SchedulesEnabled) &&
+        MdoApiValueSetUInt(AgentValue, "max_turns", Service.Agent.MaxTurns) &&
         MdoApiValueSetUInt(AgentValue, "max_parallel_tools",
             Service.Agent.MaxParallelTools) &&
         MdoApiValueSetUInt(AgentValue, "max_parallel_subagents",
