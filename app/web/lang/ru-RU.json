@@ -1788,8 +1788,8 @@
   "ecosystem.toolTitle": "Инструменты Agent",
   "ecosystem.agentsHelp": "Агент по умолчанию доступен для редактирования. Пустые инструкции используют системные правила; C необязателен.",
   "ecosystem.toolsHelp": "Файлы C хранятся в mdo-home/tools и компилируются при сохранении. Код работает в процессе приложения; проверяйте импортируемые исходники.",
-  "ecosystem.builtinToolsHelp": "Встроенные инструменты поддерживаются mdo. Доступность зависит от входа, настроек и разрешений задачи.",
-  "ecosystem.builtinTools": "Встроенные инструменты mdo",
+  "ecosystem.builtinToolsHelp": "Встроенные расширения входят в mdo и включаются или отключаются так же, как другие расширения. Вызовы ограничены настройками и разрешениями задачи.",
+  "ecosystem.builtinTools": "Встроенные расширения mdo",
   "ecosystem.customTools": "Пользовательские инструменты",
   "ecosystem.member": "Аккаунт",
   "ecosystem.chooseTool": "Выберите хотя бы один инструмент или наследуйте все доступные.",
@@ -1808,6 +1808,8 @@
   "ecosystem.availability.unavailable": "Временно недоступен",
   "ecosystem.availability.missing": "Инструмент не зарегистрирован",
   "ecosystem.toolDescription.read": "Чтение текста и изображений рабочей области",
+  "ecosystem.toolDescription.todo": "Управление планом сеанса и отображение хода выполнения задач.",
+  "ecosystem.toolDescription.fetch": "Чтение ресурсов и подсказок MCP",
   "ecosystem.toolDescription.ls": "Просмотр каталогов рабочей области",
   "ecosystem.toolDescription.glob": "Поиск файлов по шаблону пути",
   "ecosystem.toolDescription.grep": "Поиск текста в файлах",
@@ -2168,7 +2170,7 @@
   "extensionBrowser.task.running": "Загрузка",
   "extensionBrowser.task.installing": "Установка",
   "extensionBrowser.task.uploading": "Отправка",
-  "ecosystem.allAgentToolsHelp": "Встроенные инструменты входят в mdo. Создавайте, импортируйте или устанавливайте инструменты C. Вызовы ограничены правами текущей задачи.",
+  "ecosystem.allAgentToolsHelp": "Встроенные и пользовательские инструменты управляются одинаково: их можно включать и отключать. Разрешения задачи сохраняются.",
   "extensionBrowser.pagination": "Страницы списка",
   "extensionBrowser.previousPage": "Назад",
   "extensionBrowser.nextPage": "Далее",
@@ -3405,5 +3407,6 @@
   "timeline.historySectionUnreadable": "Часть записей здесь недоступна для отображения. Остальная переписка не затронута.",
   "settings.maxTurns": "Лимит шагов выполнения",
   "settings.maxTurnsDescription": "Максимум обращений к модели за один запуск Agent. 0 — без ограничений. Меньший лимит роли сохраняется. Изменение применяется при запуске или продолжении задачи.",
-  "extensionTrust.required": "Проверьте действия, авторов и содержимое расширений, затем отметьте подтверждение доверия."
+  "extensionTrust.required": "Проверьте действия, авторов и содержимое расширений, затем отметьте подтверждение доверия.",
+  "ecosystem.builtinReadOnly": "Это расширение входит в mdo. Его можно включить или отключить; файлы обновляются вместе с приложением."
 }

@@ -1770,8 +1770,8 @@
   "ecosystem.toolTitle": "Agent 工具",
   "ecosystem.agentsHelp": "默认 Agent 可直接编辑。提示词留空使用系统默认规则；C 代码仅用于高级扩展。",
   "ecosystem.toolsHelp": "C 文件保存在 mdo-home/tools。保存后自动编译注册；C 代码在本机进程执行，请审阅来源。",
-  "ecosystem.builtinToolsHelp": "内建工具由 mdo 维护。能否调用取决于登录、功能设置和当前任务权限。",
-  "ecosystem.builtinTools": "mdo 内建工具",
+  "ecosystem.builtinToolsHelp": "内置扩展随 mdo 提供，和其他扩展一样可以启用或停用。工具调用仍受功能设置和当前任务权限限制。",
+  "ecosystem.builtinTools": "mdo 内置扩展",
   "ecosystem.customTools": "自定义工具",
   "ecosystem.member": "会员",
   "ecosystem.chooseTool": "请选择至少一个工具，或启用继承全部工具。",
@@ -1790,6 +1790,8 @@
   "ecosystem.availability.unavailable": "暂不可用",
   "ecosystem.availability.missing": "工具未注册",
   "ecosystem.toolDescription.read": "读取工作区文本和图片",
+  "ecosystem.toolDescription.todo": "管理会话待办计划并显示执行进度。",
+  "ecosystem.toolDescription.fetch": "读取 MCP 资源和提示词",
   "ecosystem.toolDescription.ls": "查看工作区目录",
   "ecosystem.toolDescription.glob": "按路径匹配文件",
   "ecosystem.toolDescription.grep": "搜索文件内容",
@@ -2165,7 +2167,7 @@
   "extensionBrowser.task.running": "下载中",
   "extensionBrowser.task.installing": "安装中",
   "extensionBrowser.task.uploading": "上传中",
-  "ecosystem.allAgentToolsHelp": "内建工具随 mdo 提供；自定义 C 工具可以创建、导入或从商店安装。工具调用受当前任务权限限制。",
+  "ecosystem.allAgentToolsHelp": "内置工具和自定义工具使用同一套扩展管理，均可启用或停用。工具调用仍受当前任务权限限制。",
   "extensionBrowser.pagination": "列表翻页",
   "extensionBrowser.previousPage": "上一页",
   "extensionBrowser.nextPage": "下一页",
@@ -3405,5 +3407,6 @@
   "timeline.historySectionUnreadable": "此处部分记录异常，暂时无法显示；其他会话内容不受影响。",
   "settings.maxTurns": "执行轮数上限",
   "settings.maxTurnsDescription": "每个 Agent 单次运行的模型执行轮数，0 表示不限制。角色单独设置的更低上限仍生效；下次启动或继续任务时应用。",
-  "extensionTrust.required": "请先勾选信任确认，确认已核对操作、作者及扩展内容后再继续。"
+  "extensionTrust.required": "请先勾选信任确认，确认已核对操作、作者及扩展内容后再继续。",
+  "ecosystem.builtinReadOnly": "此扩展随 mdo 提供，可以启用或停用；文件随应用更新。"
 }

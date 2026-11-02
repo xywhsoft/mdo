@@ -1,0 +1,12 @@
+{
+  "kind": "tools",
+  "id": "tool:spawn",
+  "name": "spawn",
+  "alias": "spawn",
+  "entry": "tool.c",
+  "description": "启动后台进程任务",
+  "platforms": [
+    "any"
+  ],
+  "author": "墨斗"
+}

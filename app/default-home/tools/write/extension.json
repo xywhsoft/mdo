@@ -1,0 +1,12 @@
+{
+  "kind": "tools",
+  "id": "tool:write",
+  "name": "write",
+  "alias": "write",
+  "entry": "tool.c",
+  "description": "创建、覆盖或追加文件",
+  "platforms": [
+    "any"
+  ],
+  "author": "墨斗"
+}

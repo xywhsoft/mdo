@@ -1,0 +1,12 @@
+{
+  "kind": "tools",
+  "id": "tool:edit",
+  "name": "edit",
+  "alias": "edit",
+  "entry": "tool.c",
+  "description": "按精确文本修改文件",
+  "platforms": [
+    "any"
+  ],
+  "author": "墨斗"
+}

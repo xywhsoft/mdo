@@ -1,0 +1,12 @@
+{
+  "kind": "tools",
+  "id": "tool:skill",
+  "name": "skill",
+  "alias": "skill",
+  "entry": "tool.c",
+  "description": "按需发现和读取 Skill",
+  "platforms": [
+    "any"
+  ],
+  "author": "墨斗"
+}

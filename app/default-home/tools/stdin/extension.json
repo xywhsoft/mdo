@@ -1,0 +1,12 @@
+{
+  "kind": "tools",
+  "id": "tool:stdin",
+  "name": "stdin",
+  "alias": "stdin",
+  "entry": "tool.c",
+  "description": "向进程任务写入输入",
+  "platforms": [
+    "any"
+  ],
+  "author": "墨斗"
+}

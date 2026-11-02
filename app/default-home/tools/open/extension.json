@@ -1,0 +1,12 @@
+{
+  "kind": "tools",
+  "id": "tool:open",
+  "name": "open",
+  "alias": "open",
+  "entry": "tool.c",
+  "description": "读取公开网页内容",
+  "platforms": [
+    "any"
+  ],
+  "author": "墨斗"
+}

@@ -876,6 +876,10 @@ static bool MdoAgentsApplyToolPolicy(xwork_agent* Agent,
             const xvalue* Decision=xrtValueObjectGet(Decisions,Provider);if(Decision)xrtValueGetBool(Decision,&InScope);
             else{char Why[512];InScope=MdoExtensionsProjectAllows(Provider.Data,Workspace,Why);if(!xrtValueObjectSetNew(Decisions,Provider,xrtValueBool(InScope))){Ok=false;break;}}
         }
+        /* The host supplies execution, not an unmanageable fallback. Each
+         * native tool must have an enabled extension in this pinned catalog. */
+        if ( MdoBuiltinToolFind(Info.sName) &&
+             !xrtValueObjectHas(Providers,xrtStrView(Info.sName)) ) InScope=false;
         if ( !InScope || (Info.uEffects & ~AllowedEffects) != 0u ||
              !MdoAgentsToolSelected(Definition, Info.sName) ) {
             if ( !xworkAgentUnregisterTool(Agent, Info.sName, Error) ) {

@@ -24,7 +24,23 @@ static xwork_tool_catalog* MdoModelVerificationTools(void)
     xwork_agent_options Options; xworkAgentOptionsInit(&Options);
     Options.pSession = Session; Options.sWorkspaceRoot = xsAppPath();
     xwork_agent* Agent = Definition && Session ? xworkAgentCreateWithRuntime(Runtime, Definition, &Options, &WorkError) : NULL;
-    xwork_tool_catalog* Catalog = Agent ? xworkAgentToolCatalogSnapshot(Agent) : NULL;
+    /* Connection tests use the same enabled extension set as normal runs;
+     * automatic SDK descriptors are not a fallback for disabled directories. */
+    MdoModuleCatalog* Modules=MdoModuleCatalogSnapshot();
+    xwork_tool_catalog* Catalog = Agent&&Modules ? xworkAgentToolCatalogSnapshot(Agent) : NULL;
+    bool Ok=Catalog!=NULL;
+    for(size_t I=0;Ok&&I<xworkToolCatalogCount(Catalog);I++){
+        xwork_tool_info Tool={0};Ok=xworkToolCatalogToolAt(Catalog,I,&Tool);
+        if(!Ok||!MdoBuiltinToolFind(Tool.sName))continue;
+        bool Enabled=false;
+        for(size_t J=0;J<MdoModuleCatalogToolCount(Modules);J++){
+            MdoModuleToolInfo Info={0};Info.Size=sizeof(Info);
+            if(MdoModuleCatalogToolAt(Modules,J,&Info)&&!strcmp(Info.Id,Tool.sName)){Enabled=true;break;}
+        }
+        if(!Enabled)Ok=xworkAgentUnregisterTool(Agent,Tool.sName,&WorkError);
+    }
+    xworkToolCatalogRelease(Catalog);Catalog=Ok?xworkAgentToolCatalogSnapshot(Agent):NULL;
+    MdoModuleCatalogRelease(Modules);
     xworkAgentDestroy(Agent); xworkAgentDefinitionRelease(Definition); xllmSessionDestroy(Session);
     return Catalog;
 }

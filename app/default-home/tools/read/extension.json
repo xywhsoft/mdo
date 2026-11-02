@@ -1,0 +1,12 @@
+{
+  "kind": "tools",
+  "id": "tool:read",
+  "name": "read",
+  "alias": "read",
+  "entry": "tool.c",
+  "description": "读取工作区文本和图片",
+  "platforms": [
+    "any"
+  ],
+  "author": "墨斗"
+}

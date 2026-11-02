@@ -323,6 +323,9 @@ typedef struct mdo_registrar_v1 {
     mdo_result (*AddService)(void* Context, const struct mdo_service_v1*, char*, size_t);
     mdo_result (*AddHook)(void* Context, const struct mdo_hook_v1*, char*, size_t);
     mdo_result (*AddLifecycle)(void* Context,const mdo_lifecycle_v1*,char*,size_t);
+    /* Bind an existing host tool through this extension's identity/lifecycle.
+     * The host retains its real schema, execution and permission handling. */
+    mdo_result (*AddBuiltinTool)(void* Context, const char* Id, char*, size_t);
 } mdo_registrar_v1;
 
 typedef mdo_result (*mdo_module_register_v1)(

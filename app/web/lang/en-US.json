@@ -1766,8 +1766,8 @@
   "ecosystem.toolTitle": "Agent tools",
   "ecosystem.agentsHelp": "Edit the default Agent directly. Leave instructions empty for system defaults; C code is optional for advanced extensions.",
   "ecosystem.toolsHelp": "C files live in mdo-home/tools and compile on save. C code executes in the host process; review imported sources.",
-  "ecosystem.builtinToolsHelp": "Built-in tools are maintained by mdo. Availability depends on sign-in, feature settings and task permissions.",
-  "ecosystem.builtinTools": "mdo built-in tools",
+  "ecosystem.builtinToolsHelp": "Built-in extensions ship with mdo and can be enabled or disabled like other extensions. Calls still follow feature settings and task permissions.",
+  "ecosystem.builtinTools": "mdo built-in extensions",
   "ecosystem.customTools": "Custom tools",
   "ecosystem.member": "Member",
   "ecosystem.chooseTool": "Select at least one tool or inherit all available tools.",
@@ -1786,6 +1786,8 @@
   "ecosystem.availability.unavailable": "Currently unavailable",
   "ecosystem.availability.missing": "Tool is not registered",
   "ecosystem.toolDescription.read": "Read workspace text and images",
+  "ecosystem.toolDescription.todo": "Manage the session plan and display task progress.",
+  "ecosystem.toolDescription.fetch": "Read MCP resources and prompts",
   "ecosystem.toolDescription.ls": "List workspace directories",
   "ecosystem.toolDescription.glob": "Find files by path pattern",
   "ecosystem.toolDescription.grep": "Search text in workspace files",
@@ -2165,7 +2167,7 @@
   "extensionBrowser.task.running": "Downloading",
   "extensionBrowser.task.installing": "Installing",
   "extensionBrowser.task.uploading": "Uploading",
-  "ecosystem.allAgentToolsHelp": "Built-in tools ship with mdo. Create, import or install custom C tools. Calls follow the current task permissions.",
+  "ecosystem.allAgentToolsHelp": "Built-in and custom tools use the same extension management and can be enabled or disabled. Calls still follow task permissions.",
   "extensionBrowser.pagination": "List pagination",
   "extensionBrowser.previousPage": "Previous",
   "extensionBrowser.nextPage": "Next",
@@ -3405,5 +3407,6 @@
   "timeline.historySectionUnreadable": "Some records here cannot be displayed. The rest of the conversation is unaffected.",
   "settings.maxTurns": "Execution turn limit",
   "settings.maxTurnsDescription": "Maximum model turns per Agent run. 0 means unlimited. A lower role-specific limit still applies. Changes apply when starting or continuing a task.",
-  "extensionTrust.required": "Please select the trust confirmation after reviewing the operations, authors and extension contents."
+  "extensionTrust.required": "Please select the trust confirmation after reviewing the operations, authors and extension contents.",
+  "ecosystem.builtinReadOnly": "This extension ships with mdo and can be enabled or disabled. Its files are updated with the app."
 }

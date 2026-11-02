@@ -1,0 +1,12 @@
+{
+  "kind": "tools",
+  "id": "tool:status",
+  "name": "status",
+  "alias": "status",
+  "entry": "tool.c",
+  "description": "查询任务状态与输出文件位置",
+  "platforms": [
+    "any"
+  ],
+  "author": "墨斗"
+}

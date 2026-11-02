@@ -64,6 +64,7 @@ typedef struct MdoModuleToolInfo {
     const char* SerialGroup;
     const char* PermissionResource;
     size_t MaxResultBytes;
+    const char* Source;
 } MdoModuleToolInfo;
 
 typedef struct MdoModuleAgentInfo {

@@ -1,0 +1,12 @@
+{
+  "kind": "tools",
+  "id": "tool:agent",
+  "name": "agent",
+  "alias": "agent",
+  "entry": "tool.c",
+  "description": "将任务委派给已启用的 SubAgent",
+  "platforms": [
+    "any"
+  ],
+  "author": "墨斗"
+}

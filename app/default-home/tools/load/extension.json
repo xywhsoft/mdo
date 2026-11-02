@@ -1,0 +1,12 @@
+{
+  "kind": "tools",
+  "id": "tool:load",
+  "name": "load",
+  "alias": "load",
+  "entry": "tool.c",
+  "description": "按需加载 MCP 工具",
+  "platforms": [
+    "any"
+  ],
+  "author": "墨斗"
+}

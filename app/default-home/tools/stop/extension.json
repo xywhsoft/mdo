@@ -1,0 +1,12 @@
+{
+  "kind": "tools",
+  "id": "tool:stop",
+  "name": "stop",
+  "alias": "stop",
+  "entry": "tool.c",
+  "description": "停止进程或子 Agent 任务",
+  "platforms": [
+    "any"
+  ],
+  "author": "墨斗"
+}

@@ -1,0 +1,12 @@
+{
+  "kind": "tools",
+  "id": "tool:grep",
+  "name": "grep",
+  "alias": "grep",
+  "entry": "tool.c",
+  "description": "搜索文件内容",
+  "platforms": [
+    "any"
+  ],
+  "author": "墨斗"
+}

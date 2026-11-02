@@ -1,0 +1,12 @@
+{
+  "kind": "tools",
+  "id": "tool:ls",
+  "name": "ls",
+  "alias": "ls",
+  "entry": "tool.c",
+  "description": "查看工作区目录",
+  "platforms": [
+    "any"
+  ],
+  "author": "墨斗"
+}

@@ -1,0 +1,12 @@
+{
+  "kind": "tools",
+  "id": "tool:exec",
+  "name": "exec",
+  "alias": "exec",
+  "entry": "tool.c",
+  "description": "执行命令并等待结束",
+  "platforms": [
+    "any"
+  ],
+  "author": "墨斗"
+}

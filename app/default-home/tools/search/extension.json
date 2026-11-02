@@ -1,0 +1,12 @@
+{
+  "kind": "tools",
+  "id": "tool:search",
+  "name": "search",
+  "alias": "search",
+  "entry": "tool.c",
+  "description": "使用账号服务搜索互联网",
+  "platforms": [
+    "any"
+  ],
+  "author": "墨斗"
+}

@@ -1,0 +1,12 @@
+{
+  "kind": "tools",
+  "id": "tool:wait",
+  "name": "wait",
+  "alias": "wait",
+  "entry": "tool.c",
+  "description": "等待后台任务",
+  "platforms": [
+    "any"
+  ],
+  "author": "墨斗"
+}

@@ -3,10 +3,12 @@ import { browserText, detailFacts } from "../../components/extension-browser.js"
 
 export const storeResource = (item, receipt) => item?.store_managed === true || item?.source === "store" || receipt?.source === "store";
 export const customizableResource = (item, receipt) => !item?.plugin_owned && item?.management_known !== false && item?.editable !== false && (!item?.source || item.source === "manual" || item.source === "builtin" && ["agents", "subagents"].includes(item.kind)) && !storeResource(item, receipt);
-export const storeReadOnlyMessage = () => browserText("storeReadOnly", "商店安装的资源仅支持启停、更新和卸载；不能编辑、复制或再次分享。");
+export const storeReadOnlyMessage = item => item?.source === "builtin"
+  ? uiText("ecosystem.builtinReadOnly", {}, "此扩展随 mdo 提供，可以启用或停用；文件随应用更新。")
+  : browserText("storeReadOnly", "商店安装的资源仅支持启停、更新和卸载；不能编辑、复制或再次分享。");
 export function resourceCredits(item = {}, receipt = null) {
   const manifest = item.plugin_owned ? item.plugin || {} : receipt?.manifest || {}, managed = storeResource(item, receipt);
-  const submitter = item.plugin_owned ? uiText("ui.resourceCredits.pluginValue1", { value1: item.plugin?.name || item.plugin?.id }, "插件：{value1}") : item.submitter || receipt?.submitter || (managed ? browserText("unknownSubmitter", "提交者信息未提供") : item.external===false ? browserText("builtin", "内置") : browserText("localAdded", "本机添加"));
+  const submitter = item.plugin_owned ? uiText("ui.resourceCredits.pluginValue1", { value1: item.plugin?.name || item.plugin?.id }, "插件：{value1}") : item.submitter || receipt?.submitter || (managed ? browserText("unknownSubmitter", "提交者信息未提供") : item.source==="builtin" || item.external===false ? browserText("builtin", "内置") : browserText("localAdded", "本机添加"));
   const author = manifest.author || receipt?.author || item.author || "";
   const copyright = manifest.copyright || receipt?.copyright || item.copyright || "";
   const license = manifest.license || receipt?.license || item.license || "";

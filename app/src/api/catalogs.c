@@ -45,24 +45,18 @@ bool MdoApiToolsRoute(MdoApiContext* Context)
         MdoMcpServerInfo Info={0}; Info.Size=sizeof(Info);
         if (MdoMcpCatalogAt(Mcp,i,&Info) && Info.Enabled) HasMcp=true;
     }
-    for (i=0u;Ok && i<sizeof(MDO_BUILTIN_TOOLS)/sizeof(MDO_BUILTIN_TOOLS[0]);++i) {
-        const MdoBuiltinTool* Builtin=&MDO_BUILTIN_TOOLS[i]; cstr Availability="available";
-        xvalue* Item;
-        if (Builtin->Requirement==MDO_TOOL_WEB) Availability=!SignedIn?"sign_in_required":!Settings.Web.Enabled?"web_disabled":!Web.Enabled?"unavailable":"available";
-        else if (Builtin->Requirement==MDO_TOOL_SUBAGENT && !HasSubagent) Availability="no_subagents";
-        else if (Builtin->Requirement==MDO_TOOL_MCP && !HasMcp) Availability="no_mcp_servers";
-        Item=MdoApiToolItem(Builtin->Id,Builtin->Id,Builtin->Description,"builtin",Builtin->Effects,Builtin->MemberOnly,Availability);
-        Ok=Item && MdoApiValueAppendTake(Items,&Item); xrtValueRelease(Item);
-    }
     for (i=0u;Ok && i<MdoModuleCatalogToolCount(Modules);++i) {
         MdoModuleToolInfo Tool={0}; xvalue* Item; cstr Path=""; Tool.Size=sizeof(Tool);
         if (!MdoModuleCatalogToolAt(Modules,i,&Tool)) { Ok=false; break; }
-        if (MdoBuiltinToolFind(Tool.Id)) continue;
+        const MdoBuiltinTool* Builtin=MdoBuiltinToolFind(Tool.Id);cstr Availability="available";
+        if (Builtin && Builtin->Requirement==MDO_TOOL_WEB) Availability=!SignedIn?"sign_in_required":!Settings.Web.Enabled?"web_disabled":!Web.Enabled?"unavailable":"available";
+        else if (Builtin && Builtin->Requirement==MDO_TOOL_SUBAGENT && !HasSubagent) Availability="no_subagents";
+        else if (Builtin && Builtin->Requirement==MDO_TOOL_MCP && !HasMcp) Availability="no_mcp_servers";
         for (j=0u;j<MdoModuleCatalogModuleCount(Modules);++j) {
             MdoModuleInfo Module={0}; Module.Size=sizeof(Module);
             if (MdoModuleCatalogModuleAt(Modules,j,&Module) && !strcmp(Module.Id,Tool.ModuleId)) { Path=Module.SourcePath; break; }
         }
-        Item=MdoApiToolItem(Tool.Id,Tool.Name,Tool.Description,"c",Tool.Effects,false,"available");
+        Item=MdoApiToolItem(Tool.Id,Tool.Name,Tool.Description,Tool.Source?Tool.Source:"manual",Tool.Effects,Builtin&&Builtin->MemberOnly,Availability);
         Ok=Item && MdoApiValueSetString(Item,"source_path",Path) && MdoApiValueAppendTake(Items,&Item); xrtValueRelease(Item);
     }
     if (Ok) Ok=MdoApiValueSetTake(Data,"items",&Items) && MdoApiValueSetUInt(Data,"generation",MdoModuleManagerGeneration());

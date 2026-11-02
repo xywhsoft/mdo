@@ -1,0 +1,12 @@
+{
+  "kind": "tools",
+  "id": "tool:ask",
+  "name": "ask",
+  "alias": "ask",
+  "entry": "tool.c",
+  "description": "向用户提问",
+  "platforms": [
+    "any"
+  ],
+  "author": "墨斗"
+}

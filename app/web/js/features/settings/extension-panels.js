@@ -34,6 +34,8 @@ import { mcpActivationLabel, mcpActivationAction } from "./mcp-activation.js";
 import { extensionFieldError, requiredExtensionFields, validateExtensionForm } from "./extension-validation.js";
 
 const label = (key, fallback, args = {}) => t(`ecosystem.${key}`, args, fallback);
+const descriptionText = (kind, item) => kind === "tools" && item.source === "builtin"
+  ? label(`toolDescription.${item.alias || item.directory_id}`, item.description) : item.description;
 const title = kind => ({ agents: "Agent", tools: label("toolTitle", "工具"), subagents: "SubAgent", skills: "Skill", mcp: "MCP", knowledge: uiText("settings.knowledge", {}, "知识库"), commands: label("commands", "命令") })[kind];
 const path = (kind, id = "") => `/extensions/${kind}${id ? `/${id}` : ""}`;
 const revision = item => ({ ifMatch: `"${item?.revision || "new"}"` });
@@ -59,7 +61,7 @@ function inputField(form, name, text, value = "", { area = false, type = "text",
 }
 
 export function createExtensionPanels() {
-  const states = new Map(EXTENSION_KINDS.map(kind => [kind, { loaded: false, serial: 0, items: [], catalog: [], view: "all", stateFilter: "all", error: "", busy: false, reading: false, filter: "", area: "local" }]));
+  const states = new Map(EXTENSION_KINDS.map(kind => [kind, { loaded: false, serial: 0, items: [], view: "all", stateFilter: "all", error: "", busy: false, reading: false, filter: "", area: "local" }]));
   const roots = new Map(EXTENSION_KINDS.map(kind => [kind, document.querySelector(`[data-extension-manager="${kind}"]`)]));
   let selected = "", editing = null, activeTarget = targetKey(), pendingResource = null;
   let disposed = false, paused = false;
@@ -111,12 +113,8 @@ export function createExtensionPanels() {
     const isCurrent = () => current(kind, target) && serial === state.serial;
     state.busy = state.reading = true; state.error = ""; render(kind);
     try {
-      const [response, catalog] = await Promise.all([
-        reads.read("catalog", `${path(kind)}?offset=${append?state.items.length:0}&limit=100`, { isCurrent }),
-        kind === "tools" ? reads.read("catalog-tools", "/tools", { isCurrent }) : null,
-      ]);
+      const response = await reads.read("catalog", `${path(kind)}?offset=${append?state.items.length:0}&limit=100`, { isCurrent });
       if (!isCurrent()) return;
-      state.catalog = catalog?.data.items ?? [];
       state.items=append?[...new Map([...state.items,...response.data.items].map(row=>[row.id||row.directory_id,row])).values()]:response.data.items||[];state.total=response.data.total??state.items.length;state.loaded=true;
     } catch (error) { if (isCurrent() && error?.name !== "AbortError") { state.loaded = false; state.error = errorMessage(error); } }
     finally { if (isCurrent()) {
@@ -201,28 +199,22 @@ export function createExtensionPanels() {
     statusFilter.value = state.stateFilter;
     const sourceFilter = kind === "tools" ? element("select", { attrs: { "aria-label": browserText("source", "来源") } }) : null;
     if (sourceFilter) {
-      for (const [value, text] of [["all", browserText("allSources", "全部来源")], ["builtin", label("builtinTools", "mdo 内建工具")], ["custom", label("customTools", "自定义工具")]]) sourceFilter.append(element("option", { text, attrs: { value } }));
+      for (const [value, text] of [["all", browserText("allSources", "全部来源")], ["builtin", label("builtinTools", "mdo 内置扩展")], ["custom", label("customTools", "自定义工具")]]) sourceFilter.append(element("option", { text, attrs: { value } }));
       sourceFilter.value = state.view;
       sourceFilter.addEventListener("change", () => { state.view = sourceFilter.value; renderItems(); });
     }
     statusFilter.addEventListener("change", () => { state.stateFilter = statusFilter.value; renderItems(); });
     const renderItems = () => {
       const needle = state.filter.toLocaleLowerCase(), rows = [];
-      const builtin = kind === "tools" ? state.catalog.filter(item => item.source === "builtin").map(item => ({ ...item, builtinTool: true })) : [];
-      const sourceItems = kind === "tools" ? state.view === "builtin" ? builtin : state.view === "custom" ? state.items : [...builtin, ...state.items] : state.items;
-      const items = sourceItems.filter(item => `${item.id} ${item.name} ${item.description}`.toLocaleLowerCase().includes(needle)).filter(item => {
+      const sourceItems = kind !== "tools" || state.view === "all" ? state.items :
+        state.items.filter(item => state.view === "builtin" ? item.source === "builtin" : item.source !== "builtin");
+      const items = sourceItems.filter(item => `${item.id} ${item.name} ${descriptionText(kind,item)}`.toLocaleLowerCase().includes(needle)).filter(item => {
         if (state.stateFilter === "all") return true;
-        if (state.stateFilter === "error") return item.builtinTool ? !item.available : !item.valid || ["failed","needs_configuration","needs_authorization","needs_approval","unsupported"].includes(item.state);
-        const enabled = item.builtinTool ? item.available : item.enabled;
+        if (state.stateFilter === "error") return !item.valid || ["failed","needs_configuration","needs_authorization","needs_approval","unsupported"].includes(item.state);
+        const enabled = item.enabled;
         return state.stateFilter === "enabled" ? enabled : !enabled;
       });
       for (const item of items) {
-        if (item.builtinTool) {
-          rows.push({ key: `builtin:${item.id}`, title: item.id, kind, description: label(`toolDescription.${item.id}`, item.description),
-            meta: [label("builtin", "内置"), item.member_only ? label("member", "会员") : ""], badge: { text: availability(item) },
-            detail: () => detailTabs([{ id: "description", label: browserText("description", "说明"), content: element("div", {}, [element("p", { text: label(`toolDescription.${item.id}`, item.description) }), element("p", { text: availability(item) }), element("p", { className: "extension-help", text: label("builtinToolsHelp", "内建工具由 mdo 维护。能否调用取决于登录、功能设置和当前任务权限。") })]) }]) });
-          continue;
-        }
         const meta = element("div", { className: "resource-meta" }, [
           element("code", { text: item.path }),
           element("span", { text: item.enabled ? label("enabled", "已启用") : label("disabled", "已停用") }),
@@ -265,13 +257,13 @@ export function createExtensionPanels() {
         toggle.disabled = state.busy;
         controls.forEach(control => { control.disabled = state.busy; });
         const status = kind === "mcp" ? mcpActivationLabel(item) : !item.valid ? browserText("needsAttention", "需要处理") : "";
-        rows.push({ ...extensionPresentation(item),key: item.id||item.directory_id, kind, title: item.name || item.id, description: item.description, byline: credits?.submitter,
+        rows.push({ ...extensionPresentation(item),key: item.id||item.directory_id, kind, title: item.name || item.id, description: descriptionText(kind,item), byline: credits?.submitter,
           meta: credits ? [...credits.meta, owner?.source === "store" || item.store_managed ? browserText("storeInstalled", "商店安装") : item.source==="manual" ? browserText("custom", "自定义") : item.source==="store" ? browserText("storeInstalled", "商店安装") : label("builtin", "内置")] : [owner?.author, owner?.version, item.source==="manual" ? browserText("custom", "自定义") : item.source==="store" ? browserText("storeInstalled", "商店安装") : label("builtin", "内置")],
           badge: { text: status, tone: !item.valid || item.state === "failed" ? "error" : "" },
           toggle: canToggle ? extensionToggle(toggle, item.enabled, item.name || item.id) : null, primary, actions: controls,
           detail: () => {
-            const description = element("div", {}, [element("p", { text: item.description }), !item.valid ? element("p", { className: "extension-error", text: item.error }) : null]);
-            description.append(localDependencyPanel(kind,item));if(credits)description.append(credits.facts());if(!editable)description.append(element("p",{className:"extension-help",text:storeReadOnlyMessage()}));
+            const description = element("div", {}, [element("p", { text: descriptionText(kind,item) }), !item.valid ? element("p", { className: "extension-error", text: item.error }) : null]);
+            description.append(localDependencyPanel(kind,item));if(credits)description.append(credits.facts());if(!editable)description.append(element("p",{className:"extension-help",text:storeReadOnlyMessage(item)}));
             if(kind==="mcp"&&item.activation_error)description.append(element("p",{className:"extension-error",text:item.activation_error}));
             const usage = element("div", {}, [element("p", { text: kind === "skills" ? `$${item.alias} · /skill:${item.alias}` : kind === "commands" ? `/${item.alias}` : kind === "mcp" ? status : kind === "knowledge" ? `${item.directory}/${item.index}\n${item.inject_prompt ? item.prompt : uiMessage("ui.extensionPanels.promptInjectionDisabled", {}, "已关闭提示词注入")}` : item.name || item.id }),
               kind === "tools" ? element("div", { className: "tool-exports" }, (item.tools || []).map(tool => element("code", { text: tool.id }))) : null]);
@@ -412,13 +404,13 @@ export function createExtensionPanels() {
     inputField(editing.form, "prompt", label(kind === "agents" ? "agentInstructions" : "instructions", kind === "agents" ? "系统提示词（留空使用默认规则）" : "指令"), values.prompt || "", { area: true, required: required("prompt") });
   }
   function openEditor(kind, item = null, imported = null) {
-    if(item&&!customizableResource(item)){toast(storeReadOnlyMessage(),"error");return;}
+    if(item&&!customizableResource(item)){toast(storeReadOnlyMessage(item),"error");return;}
     if(item&&["agents","subagents"].includes(kind)&&/\.c$/i.test(item.manifest?.entry||"")){void directoryEditor.open({kind,item});return;}
     if(kind==="mcp"||kind==="knowledge"){
       const text=kind==="mcp"?JSON.stringify(newMcpTemplate(),null,2):JSON.stringify({format:"mdo.knowledge.v1",name:"my-knowledge",description:uiText("settings.knowledge", {}, "知识库"),index:"index.md",prompt:"涉及相关内容时参考 {$path}，index.md 是索引。",inject_prompt:true},null,2);
       void directoryEditor.open({kind,item,manifest:item?.manifest||directoryManifest(kind,kind==="mcp"?"my-server":"my-knowledge"),text,edits:kind==="knowledge"?[{path:"index.md",text:"# 知识库索引\n"}]:[]});return;
     }
-    if(item&&["tools","skills","commands","knowledge"].includes(kind)&&!customizableResource(item)){toast(storeReadOnlyMessage(),"error");return;}
+    if(item&&["tools","skills","commands","knowledge"].includes(kind)&&!customizableResource(item)){toast(storeReadOnlyMessage(item),"error");return;}
     reads.cancel("editor");
     if (editing && !closeEditor()) return;
     const initial = imported?.content ?? item?.content ?? (kind === "commands" ? newCommand() : kind === "tools" ? newTool() : ["agents","subagents"].includes(kind) ? newRole(kind) :

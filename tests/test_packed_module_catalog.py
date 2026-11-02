@@ -94,7 +94,7 @@ def main():
                   and 'mdo.todo' not in tools and 'mdo.echo' not in tools, result)
             status, result = request(port, 'GET', '/api/v1/tools')
             tools = {row['id']: row for row in result['data']['items']}
-            check('catalog_exposes_c_tool', status == 200 and tools['todo']['source'] == 'c'
+            check('catalog_exposes_c_tool', status == 200 and tools['todo']['source'] == 'builtin'
                   and {'read', 'exec', 'spawn', 'status', 'wait', 'ask', 'skill', 'agent'} <= tools.keys(), result)
             check('extension_is_directory', (home / 'tools/todo/extension.json').is_file()
                   and (home / 'tools/todo/tool.c').is_file())

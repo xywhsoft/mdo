@@ -1,0 +1,12 @@
+{
+  "kind": "tools",
+  "id": "tool:glob",
+  "name": "glob",
+  "alias": "glob",
+  "entry": "tool.c",
+  "description": "按路径匹配文件",
+  "platforms": [
+    "any"
+  ],
+  "author": "墨斗"
+}

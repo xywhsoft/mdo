@@ -1,0 +1,12 @@
+{
+  "kind": "tools",
+  "id": "tool:fetch",
+  "name": "fetch",
+  "alias": "fetch",
+  "entry": "tool.c",
+  "description": "Read MCP resources and prompts",
+  "platforms": [
+    "any"
+  ],
+  "author": "墨斗"
+}

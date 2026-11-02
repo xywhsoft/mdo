@@ -1,0 +1,12 @@
+{
+  "kind": "tools",
+  "id": "tool:find",
+  "name": "find",
+  "alias": "find",
+  "entry": "tool.c",
+  "description": "在已打开的网页中查找文本",
+  "platforms": [
+    "any"
+  ],
+  "author": "墨斗"
+}

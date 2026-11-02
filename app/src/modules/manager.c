@@ -33,12 +33,13 @@ void MdoModuleManagerAttachApplication(const mdo_application_v1* Api){g_MdoModul
 #define MDO_MODULE_ERROR_LIMIT 1024u
 #define MDO_MODULE_SOURCE "mdo.modules"
 #define MDO_MODULE_COMPILE_OPTIONS "-std=c11 -Wall -Wextra -Werror"
-#define MDO_MODULE_COMPILE_ID "c11|-Wall|-Wextra|-Werror|application-sdk-v1"
+#define MDO_MODULE_COMPILE_ID "c11|-Wall|-Wextra|-Werror|application-sdk-v1|builtin-tool-binding"
 
 typedef struct MdoModuleGeneration MdoModuleGeneration;
 
 typedef struct MdoModuleToolBinding {
     MdoModuleGeneration* Owner;
+    bool Builtin;
     char* Id;
     char* Name;
     char* Description;
@@ -1191,6 +1192,56 @@ static bool MdoModulesAgentCopy(MdoModuleGeneration* pGeneration,
     return true;
 }
 
+static bool MdoModulesAppendTool(MdoModuleGeneration* Generation,
+    MdoModuleToolBinding* Tool, char* Error, size_t ErrorCapacity)
+{
+    for ( size_t I = 0u; I < Generation->ToolCount; ++I ) {
+        if ( !strcmp(Generation->Tools[I].Id, Tool->Id) ) {
+            MdoModulesCopyError(Error, ErrorCapacity, "module registered a duplicate tool ID");
+            MdoModulesToolUnit(Tool);
+            return false;
+        }
+    }
+    if ( !MdoModulesGrow((void**)&Generation->Tools, &Generation->ToolCapacity,
+            Generation->ToolCount + 1u, sizeof(*Generation->Tools), MDO_MODULE_TOOL_LIMIT) ) {
+        MdoModulesCopyError(Error, ErrorCapacity, "module tool count or memory limit was exceeded");
+        MdoModulesToolUnit(Tool);
+        return false;
+    }
+    Generation->Tools[Generation->ToolCount++] = *Tool;
+    return true;
+}
+
+static mdo_result MdoModulesRegistrarAddBuiltinTool(void* Context,
+    const char* Id, char* Error, size_t ErrorCapacity)
+{
+    MdoModuleRegistrarContext* Registrar = Context;
+    MdoModuleToolBinding Tool = {0};
+    const MdoBuiltinTool* Builtin = Id ? MdoBuiltinToolFind(Id) : NULL;
+    if ( !Registrar || !Registrar->Generation || Registrar->Failed ) return MDO_RESULT_ERROR;
+    if ( Registrar->Generation->Kind != MDO_MODULE_TOOLS || !Builtin ) {
+        MdoModulesCopyError(Error, ErrorCapacity, "bind a known host tool from a tool extension");
+        goto failed;
+    }
+    Tool.Owner = Registrar->Generation;
+    Tool.Builtin = true;
+    Tool.Effects = (mdo_tool_effects)Builtin->Effects;
+    if ( !MdoModulesStringCopy(&Tool.Id, Id, MDO_MODULE_ID_LIMIT, true) ||
+         !MdoModulesStringCopy(&Tool.Name, Id, MDO_MODULE_NAME_LIMIT, true) ||
+         !MdoModulesStringCopy(&Tool.Description, Builtin->Description, MDO_MODULE_DESCRIPTION_LIMIT, true) ) {
+        MdoModulesToolUnit(&Tool);
+        MdoModulesCopyError(Error, ErrorCapacity, "cannot retain host tool binding");
+        goto failed;
+    }
+    if ( !MdoModulesAppendTool(Registrar->Generation, &Tool, Error, ErrorCapacity) ) goto failed;
+    return MDO_RESULT_OK;
+failed:
+    Registrar->Failed = true;
+    MdoModulesCopyError(Registrar->Message, sizeof(Registrar->Message),
+        Error && Error[0] ? Error : "host tool registration failed");
+    return MDO_RESULT_ERROR;
+}
+
 static mdo_result MdoModulesRegistrarAddTool(void* pContext,
     const mdo_tool_v1* pTool, char* Error, size_t ErrorCapacity)
 {
@@ -1198,7 +1249,6 @@ static mdo_result MdoModulesRegistrarAddTool(void* pContext,
         (MdoModuleRegistrarContext*)pContext;
     MdoModuleGeneration* pGeneration;
     MdoModuleToolBinding Tool;
-    size_t i;
 
     if ( pRegistrar == NULL || pRegistrar->Generation == NULL ||
          pRegistrar->Failed ) return MDO_RESULT_ERROR;
@@ -1210,23 +1260,7 @@ static mdo_result MdoModulesRegistrarAddTool(void* pContext,
     }
     if ( !MdoModulesToolCopy(pGeneration, &Tool, pTool,
             Error, ErrorCapacity) ) goto failed;
-    for ( i = 0u; i < pGeneration->ToolCount; ++i ) {
-        if ( strcmp(pGeneration->Tools[i].Id, Tool.Id) == 0 ) {
-            MdoModulesToolUnit(&Tool);
-            MdoModulesCopyError(Error, ErrorCapacity,
-                "module registered a duplicate tool ID");
-            goto failed;
-        }
-    }
-    if ( !MdoModulesGrow((void**)&pGeneration->Tools,
-            &pGeneration->ToolCapacity, pGeneration->ToolCount + 1u,
-            sizeof(*pGeneration->Tools), MDO_MODULE_TOOL_LIMIT) ) {
-        MdoModulesToolUnit(&Tool);
-        MdoModulesCopyError(Error, ErrorCapacity,
-            "module tool count or memory limit was exceeded");
-        goto failed;
-    }
-    pGeneration->Tools[pGeneration->ToolCount++] = Tool;
+    if ( !MdoModulesAppendTool(pGeneration, &Tool, Error, ErrorCapacity) ) goto failed;
     return MDO_RESULT_OK;
 
 failed:
@@ -1304,6 +1338,7 @@ static bool MdoModulesRegister(MdoModuleGeneration* pGeneration,
     Registrar.AddService = MdoModulesRegistrarAddService;
     Registrar.AddHook = MdoModulesRegistrarAddHook;
     Registrar.AddLifecycle = MdoModulesRegistrarAddLifecycle;
+    Registrar.AddBuiltinTool = MdoModulesRegistrarAddBuiltinTool;
     memset(sError, 0, sizeof(sError));
     Result = Register(&pGeneration->HostServices, &Registrar,
         &pGeneration->ModuleData, sError, sizeof(sError));
@@ -1497,7 +1532,7 @@ static bool MdoModulesValidateCatalog(MdoModuleCatalog* pCatalog,
     }
     for ( i = 0u; i < pCatalog->ToolCount; ++i ) {
         size_t j;
-        if ((pCatalog->Tools[i]->Owner->PluginEntry || strncmp(pCatalog->Tools[i]->Owner->SourcePath, "/app/default-home/tools/", sizeof("/app/default-home/tools/") - 1u) == 0) &&
+        if (!pCatalog->Tools[i]->Builtin && (pCatalog->Tools[i]->Owner->PluginEntry || strncmp(pCatalog->Tools[i]->Owner->SourcePath, "/app/default-home/tools/", sizeof("/app/default-home/tools/") - 1u) == 0) &&
             MdoBuiltinToolFind(MdoBuiltinToolCanonicalId(pCatalog->Tools[i]->Id)) != NULL) {
             (void)MdoModulesDiagnosticAdd(pDiagnostics, MDO_MODULE_DIAGNOSTIC_VALIDATE,
                 pCatalog->Tools[i]->Owner->SourcePath, pCatalog->Tools[i]->Owner->SourceHash,
@@ -1753,35 +1788,40 @@ static xwork_result MdoModulesExecute(void* pUserData,
 }
 
 static xwork_tool_definition* MdoModulesDefinitions(
-    const MdoModuleCatalog* pCatalog)
+    const MdoModuleCatalog* pCatalog, size_t* Count)
 {
     xwork_tool_definition* pDefinitions;
     size_t i;
 
-    if ( pCatalog->ToolCount == 0u ) return NULL;
-    pDefinitions = (xwork_tool_definition*)xrtCalloc(pCatalog->ToolCount,
+    *Count = 0u;
+    for ( i = 0u; i < pCatalog->ToolCount; ++i ) if ( !pCatalog->Tools[i]->Builtin ) ++*Count;
+    if ( *Count == 0u ) return NULL;
+    pDefinitions = (xwork_tool_definition*)xrtCalloc(*Count,
         sizeof(*pDefinitions));
     if ( pDefinitions == NULL ) return NULL;
+    size_t At = 0u;
     for ( i = 0u; i < pCatalog->ToolCount; ++i ) {
         MdoModuleToolBinding* pTool = pCatalog->Tools[i];
-        pDefinitions[i].sName = pTool->Id;
-        pDefinitions[i].sDescription = pTool->Description;
-        pDefinitions[i].sParametersJson = pTool->ParametersJson;
-        pDefinitions[i].bStrict = (pTool->Flags & MDO_TOOL_STRICT) != 0u;
-        pDefinitions[i].uEffects = (xwork_tool_effects)pTool->Effects;
-        pDefinitions[i].pUserData = pTool;
-        pDefinitions[i].sSource = MDO_MODULE_SOURCE;
-        pDefinitions[i].OnDescribePermissions =
+        if ( pTool->Builtin ) continue;
+        xwork_tool_definition* Definition = &pDefinitions[At++];
+        Definition->sName = pTool->Id;
+        Definition->sDescription = pTool->Description;
+        Definition->sParametersJson = pTool->ParametersJson;
+        Definition->bStrict = (pTool->Flags & MDO_TOOL_STRICT) != 0u;
+        Definition->uEffects = (xwork_tool_effects)pTool->Effects;
+        Definition->pUserData = pTool;
+        Definition->sSource = MDO_MODULE_SOURCE;
+        Definition->OnDescribePermissions =
             pTool->DescribePermissions != NULL ||
             pTool->PermissionResource != NULL
             ? MdoModulesDescribePermissions : NULL;
-        pDefinitions[i].OnExecuteV2 = MdoModulesExecute;
-        pDefinitions[i].iMaxResultBytes = pTool->MaxResultBytes;
-        pDefinitions[i].OnOwnerRetain = MdoModulesToolOwnerRetain;
-        pDefinitions[i].OnOwnerRelease = MdoModulesToolOwnerRelease;
-        pDefinitions[i].bParallelSafe =
+        Definition->OnExecuteV2 = MdoModulesExecute;
+        Definition->iMaxResultBytes = pTool->MaxResultBytes;
+        Definition->OnOwnerRetain = MdoModulesToolOwnerRetain;
+        Definition->OnOwnerRelease = MdoModulesToolOwnerRelease;
+        Definition->bParallelSafe =
             (pTool->Flags & MDO_TOOL_PARALLEL_SAFE) != 0u;
-        pDefinitions[i].sSerialGroup = pTool->SerialGroup;
+        Definition->sSerialGroup = pTool->SerialGroup;
     }
     return pDefinitions;
 }
@@ -2047,8 +2087,9 @@ bool MdoModuleManagerReload(void)
         pCandidate=MdoModulesBuildCandidate(CandidateGeneration,pDiagnostics,&Recoverable);
     xrtMutexLock(g_MdoModules.Lock);
     if ( pCandidate != NULL ) {
-        pDefinitions = MdoModulesDefinitions(pCandidate);
-        if ( pCandidate->ToolCount != 0u && pDefinitions == NULL ) {
+        size_t DefinitionCount = 0u;
+        pDefinitions = MdoModulesDefinitions(pCandidate, &DefinitionCount);
+        if ( DefinitionCount != 0u && pDefinitions == NULL ) {
             (void)MdoModulesDiagnosticAdd(pDiagnostics,
                 MDO_MODULE_DIAGNOSTIC_PUBLISH, NULL, NULL,
                 "failed to allocate xwork tool definitions");
@@ -2056,7 +2097,7 @@ bool MdoModuleManagerReload(void)
             xworkErrorInit(&WorkError);
             if ( xworkRuntimeReplaceToolsBySource(g_MdoModules.Runtime,
                     MDO_MODULE_SOURCE, pDefinitions,
-                    pCandidate->ToolCount, NULL, &WorkError) ) {
+                    DefinitionCount, NULL, &WorkError) ) {
                 pOldCatalog = g_MdoModules.Catalog;
                 g_MdoModules.Catalog = pCandidate;
                 pCandidate = NULL;
@@ -2259,6 +2300,7 @@ bool MdoModuleCatalogToolAt(const MdoModuleCatalog* pCatalog,
     pInfo->SerialGroup = pTool->SerialGroup;
     pInfo->PermissionResource = pTool->PermissionResource;
     pInfo->MaxResultBytes = pTool->MaxResultBytes;
+    pInfo->Source = MdoExtensionText(pTool->Owner->Directory,"source",16);
     return true;
 }
 

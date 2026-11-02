@@ -1,0 +1,12 @@
+{
+  "kind": "tools",
+  "id": "tool:tools",
+  "name": "tools",
+  "alias": "tools",
+  "entry": "tool.c",
+  "description": "发现已配置的 MCP 工具",
+  "platforms": [
+    "any"
+  ],
+  "author": "墨斗"
+}
