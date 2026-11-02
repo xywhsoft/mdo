@@ -31,6 +31,8 @@ def main():
             return reply.code, reply.headers, json.load(reply)
 
     prefix = 'qa-memory-' + uuid.uuid4().hex[:10]
+    status, _, result = request('POST', '/projects', {'id': prefix, 'name': 'Memory API QA'})
+    assert status in (200, 201), result
     for scope in ('global', 'projects/' + prefix):
         path = '/memory/' + scope
         status, headers, result = request('GET', path)
@@ -55,6 +57,17 @@ def main():
         directory = args.home / 'memory' / scope
         assert (directory / (ident + '.md')).read_text(encoding='utf-8') == content
         assert request('PUT', path, payload, original)[0] == 412
+        method = ('product.memory.global.put' if scope == 'global'
+                  else 'product.memory.projects.by_project.put')
+        sdk_content = content + '\nSDK 编辑。\n'
+        status, _, result = request('POST', '/application/call', {
+            'method': method, 'params': {
+                'path': {} if scope == 'global' else {'project': prefix},
+                'revision': saved, 'body': {'id': ident, 'content': sdk_content}},
+            'context': {'project': prefix}})
+        assert status == 200 and result['data']['status'] == 200, result
+        saved = result['data']['revision']
+        assert (directory / (ident + '.md')).read_text(encoding='utf-8') == sdk_content
         status, _, result = request('DELETE', path + '/' + ident, tag=saved)
         assert status == 200, result
         assert request('GET', path + '/' + ident)[0] == 404

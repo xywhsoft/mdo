@@ -1,7 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { renderSourceMarkdown } from "../app/web/js/utils/source-markdown.js";
 
 class Node {
@@ -26,16 +25,6 @@ test("links allow only HTTP(S) and images do not load",()=>{
   const nodes=flatten(output),links=nodes.filter(n=>n.tag==="a");
   assert.equal(links[0].href,'https://example.com/a');assert.equal(links[0].rel,'noopener noreferrer');
   assert(!links.some(n=>n.href?.startsWith('javascript:')));assert(!nodes.some(n=>n.tag==="img"));
-});
-const ecosystemSite = process.env.MDO_ECOSYSTEM_SITE_ROOT;
-test("the configured ecosystem website shares the source renderer", {
-  skip: ecosystemSite ? false : "Set MDO_ECOSYSTEM_SITE_ROOT for the website integration check",
-}, () => {
-  // Git may check out CRLF on Windows. Compare source text, retaining all
-  // other differences; a missing configured website is still a test failure.
-  const source = path => readFileSync(path, "utf8").replaceAll("\r\n", "\n");
-  assert.equal(source(new URL('../app/web/js/utils/source-markdown.js',import.meta.url)),
-    source(resolve(ecosystemSite, 'plugin/mdo/page/ecosystem/markdown.js')));
 });
 test("ecosystem translations follow the application's flat language-pack contract",()=>{
   for(const locale of ['zh-CN','en-US','ru-RU']){

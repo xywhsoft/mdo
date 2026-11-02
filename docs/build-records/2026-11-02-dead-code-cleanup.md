@@ -55,3 +55,41 @@ Validation:
   passed, including its test-local validation iterator.
 - Only an owned Home fixture under `.build/dead-code-audit-20261102` was used;
   the temporary service/configuration was stopped/removed after the checks.
+
+## Stage 3: retired styles and final integration
+
+- Remove 7,832 UTF-8 bytes of old tool-package rows, store cards/dialogs,
+  editor layouts and model-candidate list CSS. Preserve the command-result
+  dialog's still-used `.extension-editor` and dynamically generated
+  `.supplier-view-*` rules, current shared layers, tabs and recommendation UI.
+- Align generated Application SDK `MemoryInput` with the two-field HTTP
+  editor. Verify both global/project writes through the actual SDK broker,
+  while retaining the native legacy-memory API export coverage.
+- Remove the obsolete optional assertion comparing the app renderer with the
+  retired website `ecosystem/markdown.js` (the file and its imports no longer
+  exist in the current website). Keep the local renderer's safety tests.
+
+Final validation:
+
+- Full front-end suite, 203 files: 1,286 passed, zero failures; two optional
+  checks were skipped at that point. After removing the obsolete website
+  assertion, the remaining three source-renderer tests passed separately.
+- Static native/API contracts: 127 passed. Frontend graph: 247 modules reached.
+- Real MCP directory/private-connection and automatic-activation probes passed:
+  handshakes, reconnect, bounded background retry, credential boundaries,
+  private overrides, approval changes, process retirement and uninstall.
+- Current `.build/host` and SDK source caches disappeared during this run.
+  Do not recreate large SDK/worktree copies: reuse the existing `mdo.exe`
+  host, whose whole-file hash matches its prior product receipt. Load current
+  source with `--no-vfs`, then repack the current app using that same host.
+- Packed startup, current web assets, and the real HTTP/SDK memory round trips
+  passed. The temporary headless configuration was restored byte-for-byte;
+  all owned acceptance processes were stopped.
+- Normal Windows acceptance package:
+  `.build/dead-code-audit-20261102/mdo-cleanup.exe`, 6,625,223 bytes,
+  SHA-256 `0df53a3992003850b3adbb15fc71b28dccfbc6ebc3715140ad5e10d5095a9c23`.
+  Its host prefix still matches SHA-256
+  `74bf58a745978d8780112792f77c3822a913e5eeeaa08a890c3ecaf416a39a8c`.
+- Product code/resources net reduction: 405 lines relative to `87d5ebbc`.
+  Release remains 0.8.4. Root `mdo.exe`, user data, other workspaces and online
+  downloads/updates were not replaced or published.

@@ -11,6 +11,21 @@ import application_sdk
 import application_contracts
 
 class ApplicationSdkContractTests(unittest.TestCase):
+    def test_markdown_editor_contract_and_native_memory_capabilities(self):
+        rows={row['id']:row for row in application_sdk.services(ROOT)}
+        routes=[row for row in rows.values()
+                if row['handler']=='MdoApiMemoryCollectionRoute' and row['method']=='PUT']
+        self.assertEqual(len(routes),2)
+        for row in routes:
+            request,_=application_contracts.contract(row)
+            body=request['$defs']['MemoryInput']
+            self.assertEqual(body['required'],['id','content'])
+            self.assertEqual(set(body['properties']),{'id','content'})
+        exported=dict(application_sdk.native_symbols(ROOT))
+        for name in ('MdoMemoryUpsert','MdoMemoryRemove','MdoMemoryExportDirectory',
+                     'MdoMemoryImportDirectory','MdoMcpValidateText'):
+            self.assertIn(name,exported)
+
     def test_model_catalog_routes_describe_read_and_parameter_lookup(self):
         rows={row['id']:row for row in application_sdk.services(ROOT)}
         request,response=application_contracts.contract(rows['product.models.providers.get'])

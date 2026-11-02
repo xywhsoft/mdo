@@ -83,7 +83,7 @@ INPUTS={
  'Enabled':document('enabled:b',('enabled',),True),
  'Ask':document('answer:s',('answer',),True),
  'Approval':document('decision:s',('decision',),True),
- 'Memory':document('id:s title:s content:s tags:ss pinned:b',('id','title','content','tags','pinned'),True),
+ 'Memory':document('id:s content:s',('id','content'),True),
  'Draft':deepcopy(DEFS['Draft']),
  'PromptHistoryEntry':document('id:s text:s',('id','text'),True),
  'Submission':document('id:s text:s attachments:ss profile:Profile state:s stage:s interrupt:b revision:u'),

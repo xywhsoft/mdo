@@ -26,9 +26,5 @@
 .warning-entry p { margin:8px 0; }
 .warning-path { color:var(--muted); font-size:.875rem; overflow-wrap:anywhere; }
 .warning-entry-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
-.toolpack-row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin:16px 0; }
 [data-settings-toolpacks] code { display:block; font-size:12px; overflow-wrap:anywhere; }
-.toolpack-section { padding:14px 0; border-bottom:1px solid var(--border); }
-.toolpack-section p { margin:8px 0; overflow-wrap:anywhere; }
-.toolpack-section a { color:var(--accent); }
 [data-settings-toolpacks] progress { width:100%; }
