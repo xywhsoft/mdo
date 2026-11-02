@@ -71,6 +71,20 @@ def main():
             assert any(e['kind']=='compaction_done' for e in events),[e['kind'] for e in events]
             history=lambda events:[(e['kind'],e.get('text')) for e in events if e['kind'] in ('user_message','assistant_message','final')]
             assert history(events)==history(before),'Compaction removed original transcript'
+            # Reproduce an old conversation whose Agent extension was removed.
+            # Only this synthetic Home is edited; never alter a user's metadata.
+            meta=home/'sessions/default'/session['id']/'meta.json'
+            saved=json.loads(meta.read_text(encoding='utf-8'));saved['agent_id']='agent.removed-fixture'
+            meta.write_text(json.dumps(saved),encoding='utf-8')
+            calls=Model.calls.copy();orphaned=wait(invoke())
+            assert orphaned['state']=='failed' and orphaned['error_code']=='agent_unavailable',orphaned
+            assert Model.calls==calls,'Missing Agent must not send a model request'
+            orphan,fields=call('GET',path)
+            assert orphan['agent_id']=='agent.removed-fixture','Do not silently substitute the Agent'
+            restored,_=call('PUT',path+'/profile',{'agent_id':'mdo.default','model_id':orphan['model_id'],
+              'reasoning_effort':orphan['reasoning_effort'],'permission_profile':orphan['permission_profile']},{'If-Match':fields['etag']})
+            assert restored['agent_id']=='mdo.default',restored
+            assert history(session_events(port,'/api/v1'+path))==history(before),'Agent recovery removed original transcript'
             run,_=call('POST',path+'/runs',{'prompt':'Continue PIXEL_KEEP.'},status=202)
             assert wait('/runs/'+run['id'])['state']=='succeeded'
           finally:
@@ -79,5 +93,5 @@ def main():
             except subprocess.TimeoutExpired:child.kill();child.wait()
             config.unlink(missing_ok=True)
     finally:server.shutdown();server.server_close();thread.join(timeout=5)
-    print('Manual compact: native frontend + recovery serialization / forced summary / quota failure / cancellation / original transcript / continuation: PASS')
+    print('Manual compact: native frontend + recovery serialization / forced summary / quota failure / cancellation / missing Agent recovery / original transcript / continuation: PASS')
 if __name__=='__main__':main()

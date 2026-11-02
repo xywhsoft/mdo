@@ -1220,7 +1220,7 @@
   "error.homeRestartRequired": "本地存储需要恢复一致性，请关闭并重新启动 mdo 后继续。",
   "error.invalidResponse": "服务返回了无效响应，请重试。",
   "composer.openAgentSettings": "检查 Agent",
-  "error.agentUnavailable": "所选 Agent 未安装、已停用或加载失败。请在设置 → Agent 中检查，并查看扩展警告。",
+  "error.agentUnavailable": "当前会话的 Agent 未安装、已停用或加载失败。请在输入框切换可用的 Agent，或在设置 → Agent / 插件中恢复它，再重试。",
   "error.sessionProfileInvalid": "会话配置无效，请检查模型、思考强度和权限。",
   "error.imageModelUnsupported": "当前模型不支持图片输入，请切换模型或移除图片。",
   "error.runLimitReached": "同时运行的任务已达上限，请稍后重试。",

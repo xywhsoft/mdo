@@ -39,13 +39,23 @@ MDO_EXPORT mdo_result mdoCommandRun(const mdo_command_context_v1* C,const xvalue
     (extension / 'nested/command.c').write_text(source, encoding='utf-8')
     results = []
     try:
-        for changed in (False, True):
-            task = fixture / ('changed' if changed else 'execute'); (task / 'mdo').mkdir(parents=True); (task / 'web').mkdir()
+        for mode in ('execute', 'changed', 'sdk-error', 'override', 'handled-error'):
+            changed = mode == 'changed'
+            task = fixture / mode; (task / 'mdo').mkdir(parents=True); (task / 'web').mkdir()
             (task / 'web/index.html').write_text('Command directory test', encoding='utf-8')
             shutil.copyfile(ROOT / 'app/command-worker.c', task / 'worker.c')
             for name in ('command.h', 'module.h', 'sdk.h', 'workbench.h'):
                 shutil.copyfile(ROOT / 'include/mdo' / name, task / 'mdo' / name)
-            (task / 'command.c').write_text(source, encoding='utf-8')
+            command = source
+            if mode in ('sdk-error', 'override', 'handled-error'):
+                tail = 'return Code;'
+                if mode == 'override':
+                    tail = 'snprintf(C->Error,C->ErrorCapacity,"fixture command failure");return Code;'
+                elif mode == 'handled-error':
+                    tail = 'mdoCall(C->Application,"extension.fingerprint",NULL,R,&E);return MDO_RESULT_ERROR;'
+                command = '#include "mdo/command.h"\n#include <stdio.h>\nmdo_result mdoCommandRun(const mdo_command_context_v1* C,const xvalue* A,xvalue** R){mdo_error_v1 E={0};mdo_result Code=mdoCall(C->Application,"qa.failure",NULL,R,&E);' + tail + '}'
+            (task / 'command.c').write_text(command, encoding='utf-8')
+            (extension / 'nested/command.c').write_text(command, encoding='utf-8')
             data = {'watch_parent': False, 'extension_root': str(extension), 'extension_entry': 'nested/command.c',
                     'directory_id': '0123456789ABCDEFGHJKMNPQRSTVWXYZ', 'command_id': 'qa-alias',
                     'revision': 'a' * 64, 'arguments': [], 'raw_arguments': '', 'workspace': str(ROOT)}
@@ -63,8 +73,13 @@ MDO_EXPORT mdo_result mdoCommandRun(const mdo_command_context_v1* C,const xvalue
                         if request.name in handled:
                             continue
                         message = json.loads(request.read_text(encoding='utf-8'))
-                        assert message['method'] == 'sdk.invoke' and message['params']['method'] == 'extension.fingerprint', message
-                        response = {'ok': True, 'error': '', 'result': {'code': 0, 'result': {'sha256': ('b' if changed else 'a') * 64}, 'error': {}}}
+                        assert message['method'] == 'sdk.invoke', message
+                        method = message['params']['method']
+                        assert method in ('extension.fingerprint', 'qa.failure'), message
+                        frame = {'code': 0, 'result': {'sha256': ('b' if changed else 'a') * 64}, 'error': {}}
+                        if method == 'qa.failure':
+                            frame = {'code': -1, 'result': None, 'error': {'code': 'agent_unavailable', 'message': 'Fixture Agent missing', 'status': 409}}
+                        response = {'ok': True, 'error': '', 'result': frame}
                         dest = task / request.name.replace('request-', 'response-')
                         temp = dest.with_suffix('.tmp'); temp.write_text(json.dumps(response), encoding='utf-8'); temp.replace(dest)
                         handled.add(request.name)
@@ -75,10 +90,16 @@ MDO_EXPORT mdo_result mdoCommandRun(const mdo_command_context_v1* C,const xvalue
                 result = json.loads((task / 'final.json').read_text(encoding='utf-8'))
                 if changed:
                     assert not result['ok'] and 'changed during compilation' in result['error'], result
+                elif mode == 'sdk-error':
+                    assert not result['ok'] and result['error_code'] == 'agent_unavailable', result
+                elif mode in ('override', 'handled-error'):
+                    assert not result['ok'] and result['error_code'] == 'command_failed', result
+                    if mode == 'override':
+                        assert result['error'] == 'fixture command failure', result
                 else:
                     assert result['ok'] and result['result'] == {'text': 'directory resource', 'value': 48}, result
-                assert len(handled) == 1, handled
-                results.append({'changed': changed, 'passed': True})
+                assert len(handled) == (3 if mode == 'handled-error' else 2 if mode in ('sdk-error', 'override') else 1), handled
+                results.append({'mode': mode, 'passed': True})
                 process.wait(timeout=10)
             finally:
                 if process.poll() is None:

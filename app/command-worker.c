@@ -20,6 +20,10 @@ extern void _exit(int);
 
 #define CW_LIMIT (1024u*1024u)
 static char CWError[2048];
+/* Preserve a directly propagated SDK failure for localized UI feedback. A
+ * command that handles it or replaces the message keeps its own error type. */
+static char CWSdkFailureCode[64], CWSdkFailureText[2048];
+static mdo_result CWSdkFailureResult;
 static unsigned CWSequence;
 static char* CWRoot;
 static xatomic32 CWDone;
@@ -99,6 +103,7 @@ static bool CWSdkUInt(const xvalue* V,uint64* N){int64 I=0;return xrtValueGetUIn
 static uint64 CWSdkClock(void){return xllmClockUs();}
 static bool CWSdkCancelled(const mdo_sdk_context_v1* C){return C->Deadline&&xllmDeadlineExpired(C->Deadline);}
 static mdo_result CWSdkCall(const mdo_sdk_context_v1* C,cstr M,const xvalue* P,xvalue** R,mdo_error_v1* E){
+    CWSdkFailureCode[0]=0;
     (void)C;*R=NULL;if(E){memset(E,0,sizeof(*E));E->Size=sizeof(*E);}
     xvalue* Q=xrtValueObject(),*Frame=NULL;
     bool Ok=Q&&M&&xrtValueObjectSetNew(Q,XRT_STR_LITERAL("method"),CWSdkString(M))&&
@@ -111,7 +116,11 @@ static mdo_result CWSdkCall(const mdo_sdk_context_v1* C,cstr M,const xvalue* P,x
             snprintf(E->Stage,sizeof(E->Stage),"%s",CWText(Failure,"stage"));uint64 Status=0;CWSdkUInt(CWGet(Failure,"status"),&Status);E->Status=(uint32)Status;
             snprintf(E->Cause,sizeof(E->Cause),"%s",CWText(Failure,"cause"));
             xrtValueGetBool(CWGet(Failure,"retryable"),&E->Retryable);xrtValueGetBool(CWGet(Failure,"may_have_completed"),&E->MayHaveCompleted);}
-        if(Code!=MDO_RESULT_OK)snprintf(CWError,sizeof(CWError),"%s: %s",CWText(Failure,"code"),CWText(Failure,"message"));
+        if(Code!=MDO_RESULT_OK){
+            snprintf(CWError,sizeof(CWError),"%s: %s",CWText(Failure,"code"),CWText(Failure,"message"));
+            snprintf(CWSdkFailureCode,sizeof(CWSdkFailureCode),"%s",CWText(Failure,"code"));
+            snprintf(CWSdkFailureText,sizeof(CWSdkFailureText),"%s",CWError);CWSdkFailureResult=Code;
+        }
     }else if(E){snprintf(E->Code,sizeof(E->Code),"sdk_transport_failed");snprintf(E->Message,sizeof(E->Message),"%s",CWError);E->MayHaveCompleted=true;}
     xrtValueRelease(Frame);return Code;
 }
@@ -197,6 +206,8 @@ void ServiceInit(XS_HostInfo* H) {
     xrtValueObjectSetNew(Output,XRT_STR_LITERAL("code"),xrtValueInt(Code));
     const char* ErrorCode=!Compiled?"command_compile_failed":!Entry.F?"command_entry_missing":Code==MDO_RESULT_CANCELLED?"command_cancelled":
         Code==MDO_RESULT_TIMEOUT?"command_timeout":Code==MDO_RESULT_LIMIT?"command_limit":Code==MDO_RESULT_OK?"":"command_failed";
+    if(Compiled&&Entry.F&&Code==MDO_RESULT_ERROR&&Code==CWSdkFailureResult&&
+       CWSdkFailureCode[0]&&!strcmp(CWError,CWSdkFailureText))ErrorCode=CWSdkFailureCode;
     xrtValueObjectSetNew(Output,XRT_STR_LITERAL("error_code"),xrtValueString(xrtStrView(ErrorCode)));
     xrtValueObjectSetNew(Output,XRT_STR_LITERAL("error"),xrtValueString(xrtStrView(CWError)));
     if(Result)xrtValueObjectSet(Output,XRT_STR_LITERAL("result"),Result);

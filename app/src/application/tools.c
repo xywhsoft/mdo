@@ -26,7 +26,11 @@ static bool SdkToolCall(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,m
 static bool SdkCompactCall(const mdo_sdk_context_v1* C,xvalue** R,mdo_error_v1* E){
     MdoSessionRuntimeOptions Options;MdoSessionRuntimeOptionsInit(&Options);MdoApplicationInvocation* I=C->Opaque;Options.Cancel=I?I->Cancel:NULL;Options.Deadline=C->Deadline?C->Deadline:MDO_DEADLINE_NEVER;
     xwork_error Error;MdoSession* Session=MdoSessionOpen(C->ProjectId,C->SessionId,&Options,&Error);bool Ok=Session&&MdoSessionCompact(Session,&Error);MdoSessionRelease(Session);
-    if(!Ok)return MdoApplicationError(E,"sdk_compact_failed",Error.sMessage,"context",SdkCancelled(C)?499:409,false);
+    if(!Ok){
+        bool MissingAgent=Error.eCode==XWORK_ERROR_CONTEXT&&
+            !strncmp(Error.sMessage,MDO_AGENT_UNAVAILABLE_PREFIX,sizeof(MDO_AGENT_UNAVAILABLE_PREFIX)-1);
+        return MdoApplicationError(E,MissingAgent?"agent_unavailable":"sdk_compact_failed",Error.sMessage,"context",SdkCancelled(C)?499:409,false);
+    }
     if(I&&I->Actions){xvalue* P=xrtValueObject(),*Result=NULL;SdkPut(P,"action","ui.refresh");bool Found=false;Ok=MdoApplicationUiCall(C,"ui.invoke",P,&Result,E,&Found);xrtValueRelease(Result);xrtValueRelease(P);if(!Ok){E->MayHaveCompleted=true;return false;}}
     *R=xrtValueObject();SdkPut(*R,"message","上下文已压缩，原始会话记录仍可查看。");return true;
 }

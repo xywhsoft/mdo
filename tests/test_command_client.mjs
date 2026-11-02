@@ -3,6 +3,7 @@ import test from "node:test";
 globalThis.window = new EventTarget();
 const { loadCommands, runCommand, cancelCommand, parseCommand } = await import("../app/web/js/features/chat/extension-commands.js");
 const { withSessionRuntime } = await import("../app/web/js/state/session-runtime.js");
+const { errorMessage } = await import("../app/web/js/utils/dom.js");
 const flush = () => new Promise(resolve => setImmediate(resolve));
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; };
 
@@ -70,6 +71,18 @@ test("stop and a compact in another session do not wait for the held session", a
     await runCommand({ id: "compact", requires_session: true }, "", { projectId: "work", sessionId: "independent" });
     assert.equal(posts, 2);
   } finally { gate.resolve(); await inspection; }
+});
+
+test("a removed Agent produces the localized recovery guidance from its command receipt", async context => {
+  context.mock.method(globalThis, "fetch", async (_url, options) => Response.json({ ok: true, data: {
+    id: JSON.parse(options.body).invocation_id, terminal: true, state: "failed",
+    error_code: "agent_unavailable", error: "agent_unavailable: Agent definition unavailable: agent.removed-fixture",
+  } }));
+  await assert.rejects(runCommand({ id: "compact", requires_session: true }, "", { projectId: "work", sessionId: "compact-orphan" }), error => {
+    assert.equal(error.code, "agent_unavailable");
+    assert.match(errorMessage(error), /输入框.*Agent.*插件/);
+    return true;
+  });
 });
 
 test("command parsing keeps raw arguments and leaves both Skill forms separate",()=>{

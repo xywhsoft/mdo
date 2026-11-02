@@ -195,7 +195,7 @@ const API_ERROR_COPY = Object.freeze({
   session_profile_invalid: ["error.sessionProfileInvalid",
     "会话配置无效，请检查模型、思考强度和权限。"],
   agent_unavailable: ["error.agentUnavailable",
-    "所选 Agent 未安装、已停用或加载失败。请在设置 → Agent 中检查，并查看扩展警告。"],
+    "当前会话的 Agent 未安装、已停用或加载失败。请在输入框切换可用的 Agent，或在设置 → Agent / 插件中恢复它，再重试。"],
   session_profile_unconfirmed: ["error.sessionProfileUnconfirmed",
     "会话配置暂未确认，请恢复连接后检查，或重新选择配置。"],
   session_profile_unavailable: ["error.sessionProfileUnavailable",
