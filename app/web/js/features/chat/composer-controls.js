@@ -86,9 +86,7 @@ export function createComposerControls({ root, agentSelect, modelSelect, reasoni
   function sync() {
     writeUiText(manageModels, uiMessage("modelSetup.manageModels", {}, "管理模型"));
     const model = findModel(modelsStore.get().data?.models ?? [], modelSelect.value);
-    const agentName = agentSelect.selectedOptions[0]?.textContent || agentSelect.value;
-    const modelName = model?.name || modelSelect.value || uiMessage("shell.model", {}, "模型");
-    writeUiText(modelLabel, [agentName, modelName].filter(Boolean).join(" · "));
+    writeUiText(modelLabel, model?.name || modelSelect.value || uiMessage("shell.model", {}, "模型"));
     const efforts = [...reasoningSelect.options];
     const current = Math.max(0, efforts.findIndex((item) => item.value === reasoningSelect.value));
     slider.max = String(Math.max(0, efforts.length - 1)); slider.value = String(current);
