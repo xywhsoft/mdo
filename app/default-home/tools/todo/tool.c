@@ -77,7 +77,7 @@ static mdo_result TodoExecute(void* UserData,
 static const mdo_tool_v1 TODO_TOOL = {
     MDO_V1_HEADER(mdo_tool_v1),
     .Id = "todo",
-    .Name = "Update plan",
+    .Name = "todo",
     .Description = "Maintain a concise plan for multi-step work and update progress as tasks finish. Send the complete list on each update; an empty list clears it.",
     .ParametersJson = "{\"type\":\"object\",\"properties\":{\"items\":{\"type\":\"array\",\"maxItems\":24,\"items\":{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":240},\"done\":{\"type\":\"boolean\"}},\"required\":[\"text\",\"done\"],\"additionalProperties\":false}}},\"required\":[\"items\"],\"additionalProperties\":false}",
     .Effects = MDO_TOOL_EFFECT_READ,
@@ -99,7 +99,7 @@ static mdo_result TodoRegister(const mdo_host_services_v1* Host,
 static const mdo_module_v1 TODO_MODULE = {
     MDO_V1_HEADER(mdo_module_v1),
     .Id = "todo",
-    .Name = "Conversation Plan",
+    .Name = "todo",
     .Description = "Maintain the conversation task plan.",
     .Version = "1.0.0",
     .Register = TodoRegister

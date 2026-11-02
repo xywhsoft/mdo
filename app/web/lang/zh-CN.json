@@ -3404,5 +3404,6 @@
   "timeline.historySectionLimited": "此段内容超出显示限额，已保留可显示的部分。",
   "timeline.historySectionUnreadable": "此处部分记录异常，暂时无法显示；其他会话内容不受影响。",
   "settings.maxTurns": "执行轮数上限",
-  "settings.maxTurnsDescription": "每个 Agent 单次运行的模型执行轮数，0 表示不限制。角色单独设置的更低上限仍生效；下次启动或继续任务时应用。"
+  "settings.maxTurnsDescription": "每个 Agent 单次运行的模型执行轮数，0 表示不限制。角色单独设置的更低上限仍生效；下次启动或继续任务时应用。",
+  "extensionTrust.required": "请先勾选信任确认，确认已核对操作、作者及扩展内容后再继续。"
 }

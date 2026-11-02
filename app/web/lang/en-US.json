@@ -3404,5 +3404,6 @@
   "timeline.historySectionLimited": "This section exceeds the display limit. Readable content has been retained.",
   "timeline.historySectionUnreadable": "Some records here cannot be displayed. The rest of the conversation is unaffected.",
   "settings.maxTurns": "Execution turn limit",
-  "settings.maxTurnsDescription": "Maximum model turns per Agent run. 0 means unlimited. A lower role-specific limit still applies. Changes apply when starting or continuing a task."
+  "settings.maxTurnsDescription": "Maximum model turns per Agent run. 0 means unlimited. A lower role-specific limit still applies. Changes apply when starting or continuing a task.",
+  "extensionTrust.required": "Please select the trust confirmation after reviewing the operations, authors and extension contents."
 }

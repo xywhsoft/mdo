@@ -1,7 +1,7 @@
 {
   "kind": "tools",
   "id": "tool:todo",
-  "name": "Todo",
+  "name": "todo",
   "alias": "todo",
   "entry": "tool.c",
   "description": "管理会话待办计划并显示执行进度。",
