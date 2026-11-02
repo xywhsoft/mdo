@@ -196,9 +196,6 @@ static char* MdoMemoryFileIndexRead(const char* ProjectId,size_t* Bytes,bool Pre
     }
 }
 
-static char* MdoMemoryFileIndex(const char* ProjectId,size_t* Bytes,xwork_error* Error)
-{return MdoMemoryFileIndexRead(ProjectId,Bytes,true,Error);}
-
 bool MdoMemoryConfigureFileTools(xwork_agent* Agent, const char* ProjectId,
     xwork_error* Error)
 {

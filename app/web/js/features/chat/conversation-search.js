@@ -1,4 +1,4 @@
-import { setUiText as writeUiText, uiMessage, subscribeLocale, t } from "../../i18n.js";
+import { setUiText as writeUiText, uiMessage, subscribeLocale } from "../../i18n.js";
 
 import { isImeKey } from "../../utils/dom.js";
 import { createCompositionTracker } from "../../utils/composition.js";

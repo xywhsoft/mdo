@@ -1,4 +1,3 @@
-import { t as uiErrorText } from "../i18n.js";
 // Source documentation uses a small DOM renderer. HTML remains literal text,
 // links allow HTTP(S) only, and image syntax never starts a network request.
 export function renderSourceMarkdown(source) {
@@ -28,24 +27,5 @@ export function renderSourceMarkdown(source) {
     if(/^>/.test(line)){const e=make("blockquote");inline(e,line.replace(/^>\s?/,""));out.append(e);continue;}
     const paragraph=[line];while(i<lines.length&&!boundary(lines[i]))paragraph.push(lines[i++]);const e=make("p");inline(e,paragraph.join("\n"));out.append(e);
   }
-  return out;
-}
-
-// Attached scripts are part of the reviewed package, not just filenames.
-// Never execute or interpret their markup. Downloads retain the exact bytes.
-export function renderPackageAttachment(file, labels = {}) {
-  const make=(tag,text)=>{const e=document.createElement(tag);if(text!==undefined)e.textContent=text;return e;};
-  const out=make("details");out.append(make("summary",file.path));
-  try {
-    if(typeof file.base64!=="string" || file.base64.length>1400000)throw Error(uiErrorText("error.detail.invalidAttachment", {}, "Invalid attachment"));
-    const raw=atob(file.base64),bytes=Uint8Array.from(raw,c=>c.charCodeAt(0));
-    const meta=make("p",`${bytes.length} B`);out.append(meta);
-    let source=null;try{source=new TextDecoder("utf-8",{fatal:true}).decode(bytes);if(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(source))source=null;}catch{}
-    if(source!==null){out.append(make("pre",source.slice(0,65536)));if(source.length>65536)out.append(make("p",labels.truncated||"Preview: 64 KiB. Download to inspect the complete file."));}
-    else out.append(make("p",labels.binary||"Binary file. Download to inspect."));
-    if(globalThis.crypto?.subtle)void crypto.subtle.digest("SHA-256",bytes).then(hash=>{meta.textContent+=` · SHA-256 ${Array.from(new Uint8Array(hash),b=>b.toString(16).padStart(2,"0")).join("")}`;}).catch(()=>{});
-    const download=make("button",labels.download||"Download file");download.type="button";
-    download.onclick=()=>{const url=URL.createObjectURL(new Blob([bytes])),a=make("a");a.href=url;a.download=file.path.split("/").at(-1)||"file.bin";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};out.append(download);
-  }catch{out.append(make("p",labels.invalid||"Invalid attachment"));}
   return out;
 }

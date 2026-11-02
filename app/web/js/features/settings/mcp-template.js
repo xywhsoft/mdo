@@ -1,6 +1,6 @@
 import { t as uiText } from "../../i18n.js";
-// Pure recipe helpers, also used by creator-center previews. Never resolve or
-// serialize device credentials here; private bindings belong to the native API.
+// Directory authoring and connection forms never resolve or serialize device
+// credentials here; private bindings and template validation belong to the native API.
 export function newMcpTemplate(id="my-server") {
   return {format:"mdo.mcp-template.v1",id,operator:"",inputs:[{id:"endpoint",type:"text",label:uiText("ui.mcpTemplate.serviceUrl", {}, "服务地址"),description:uiText("ui.mcpTemplate.httpsMcpEndpoint", {}, "HTTPS MCP 端点"),required:true,secret:false}],
     variants:[{id:"default",default:true,label:uiText("ui.mcpTemplate.httpService", {}, "HTTP 服务"),platforms:["any"],config:{schema_version:1,name:uiText("ui.singleResourceStore.mcpService", {}, "MCP 服务"),description:uiText("ui.mcpTemplate.mcpServiceConnection", {}, "MCP 服务连接"),protocol_version:"2025-11-25",startup_timeout_ms:10000,request_timeout_ms:60000,
@@ -18,35 +18,4 @@ export function mcpVariantInputs(template, variant) {
   }
   walk(variant?.config);
   return (template.inputs || []).filter(input => used.has(input.id));
-}
-export function mcpDefaultVariant(template, platform) {
-  const variants=(template?.variants||[]).filter(v=>v.platforms?.includes("any")||v.platforms?.includes(platform)||platform?.startsWith("linux-x86_64-")&&v.platforms?.includes("linux-x86_64"));
-  return variants.find(v=>v.default===true)||variants.find(v=>!Object.hasOwn(v,"default"))||null;
-}
-export function mcpTemplateSummary(template) {
-  const variants = template?.variants || [];
-  return {
-    transports: [...new Set(variants.map(v => v.config?.transport?.type))].filter(Boolean),
-    authentication: [...new Set(variants.map(v => v.config?.oauth?.enabled ? "OAuth" : v.config?.transport?.headers?.length || v.config?.transport?.environment?.length ? uiText("ui.mcpTemplate.secretEnvironmentVariables", {}, "密钥 / 环境变量") : uiText("ui.mcpTemplate.noAuthorizationRequired", {}, "无需授权")))],
-    platforms: [...new Set(variants.flatMap(v => v.platforms || []))],
-  };
-}
-export function parseMcpTemplate(text) {
-  const template = JSON.parse(text);
-  if (template?.format !== "mdo.mcp-template.v1" || !Array.isArray(template.inputs) || !Array.isArray(template.variants) || !template.variants.length) throw Error(uiText("ui.mcpTemplate.selectAnMcpServiceTemplateMdoMcpTemplateV1", {}, "请选择 MCP 服务模板（mdo.mcp-template.v1）"));
-  if (template.inputs.some(i => i.secret && Object.hasOwn(i, "default"))) throw Error(uiText("ui.mcpTemplate.credentialInputsCannotContainDefaults", {}, "凭据参数不能包含默认值"));
-  const defaults=template.variants.filter(v=>v.default===true);
-  for(const v of template.variants)if(Object.hasOwn(v,"default")&&typeof v.default!=="boolean")throw Error(uiText("ui.mcpTemplate.invalidDefault",{},"默认方案标记必须为布尔值"));
-  for(let i=0;i<defaults.length;i++)for(let j=0;j<i;j++)if(defaults[i].platforms?.some(p=>defaults[j].platforms?.some(q=>p==="any"||q==="any"||p===q||p==="linux-x86_64"&&q.startsWith("linux-x86_64-")||q==="linux-x86_64"&&p.startsWith("linux-x86_64-"))))throw Error(uiText("ui.mcpTemplate.duplicateDefault",{},"每个平台只能有一个默认 MCP 方案"));
-  return template;
-}
-
-export function mcpTemplateDiff(before, after) {
-  function flatten(value, path = "", out = {}) {
-    if (value && typeof value === "object") for (const [key, child] of Object.entries(value)) flatten(child, path ? `${path}.${key}` : key, out);
-    else out[path] = value;
-    return out;
-  }
-  const a=flatten(before), b=flatten(after);
-  return [...new Set([...Object.keys(a),...Object.keys(b)])].filter(key=>JSON.stringify(a[key])!==JSON.stringify(b[key])).map(path=>({path,before:a[path],after:b[path]}));
 }

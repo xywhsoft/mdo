@@ -58,31 +58,4 @@ static inline bool MdoExtensionHash(cstr Text,char Output[65])
     return Text != NULL && MdoExtensionHashBytes(Text,strlen(Text),Output);
 }
 
-static inline bool MdoExtensionEnabled(cstr Kind, cstr Id, bool* Enabled)
-{
-    bool Missing = false;
-    char* Text = MdoExtensionRead("config/extensions.json", true, 64u * 1024u, &Missing);
-    char Key[96];
-    xvalue* Config;
-    const xvalue* Disabled;
-    bool Value = false, Ok;
-    *Enabled = true;
-    if (Text == NULL) return Missing;
-    Config = xrtJsonParse(xrtStrView(Text));
-    xrtFree(Text);
-    if (Config == NULL || xrtValueType(Config) != XVALUE_OBJECT) {
-        xrtValueRelease(Config); return false;
-    }
-    snprintf(Key, sizeof(Key), "%s:%s", Kind, Id);
-    Disabled = xrtValueObjectGet(Config, XRT_STR_LITERAL("disabled"));
-    Ok = Disabled == NULL || xrtValueType(Disabled) == XVALUE_OBJECT;
-    if (Ok && Disabled != NULL) {
-        const xvalue* Item = xrtValueObjectGet(Disabled, xrtStrView(Key));
-        Ok = Item == NULL || xrtValueGetBool(Item, &Value);
-    }
-    if (Ok) *Enabled = !Value;
-    xrtValueRelease(Config);
-    return Ok;
-}
-
 #endif

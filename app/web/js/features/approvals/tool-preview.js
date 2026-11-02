@@ -1,4 +1,4 @@
-import { uiMessage, t } from "../../i18n.js";
+import { uiMessage } from "../../i18n.js";
 
 import { element } from "../../utils/dom.js";
 import { formatArguments } from "./labels.js";

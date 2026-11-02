@@ -5,7 +5,6 @@ import { api } from "../../api/client.js";
 import { createApplicationClient } from "../../api/application.js";
 import { targetState, subscribeTarget } from "../../api/target.js";
 import { element, errorMessage, toast } from "../../utils/dom.js";
-import { saveBlobFile } from "../../utils/file-download.js";
 import { openLayer } from "../../components/layers.js";
 import { createExtensionBrowser, extensionToggle, actionMenu, detailFacts, detailTabs } from "../../components/extension-browser.js";
 import { createSingleResourceStore } from "./single-resource-store.js";

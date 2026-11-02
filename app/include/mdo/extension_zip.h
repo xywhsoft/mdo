@@ -232,8 +232,6 @@ static bool MdoZipEntryRead(MdoZip* Z,size_t Index,MdoZipSink Sink,void* User,xc
     if(Ok&&Hash){for(size_t I=0;I<32;I++)snprintf(Hash+2*I,3,"%02x",Digest[I]);}
     return Ok||MdoZipFail(Z,"ZIP file CRC, decoded size, compressed stream or cancellation check failed");
 }
-static bool MdoZipValidate(MdoZip* Z,xcancel* Cancel)
-{for(size_t I=0;I<Z->Count;I++)if(!MdoZipEntryRead(Z,I,NULL,NULL,Cancel,NULL))return false;return true;}
 static int64 MdoZipFind(const MdoZip* Z,cstr Path)
 {for(size_t I=0;I<Z->Count;I++)if(!strcmp(Z->Entries[I].Path,Path))return (int64)I;return -1;}
 

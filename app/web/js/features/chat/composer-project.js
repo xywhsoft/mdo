@@ -1,4 +1,4 @@
-import { uiMessage, currentLocale, subscribeLocale, t } from "../../i18n.js";
+import { uiMessage, currentLocale, subscribeLocale } from "../../i18n.js";
 import { resourceId } from "../../api/client.js";
 import { element } from "../../utils/dom.js";
 

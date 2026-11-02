@@ -1,4 +1,3 @@
-export const noticeIcons = { message: "ⓘ", warning: "⚠", error: "❗", success: "✓", coupon: "◇", update: "↑", tools: "ⓘ", account: "ⓘ" };
 import { warningNotice } from "./warnings.js";
 export function matchesNotice(n, device, locale, signedIn, now = Date.now()) {
   return n && typeof n.id === "string" && typeof n.title === "string" && typeof n.body === "string"

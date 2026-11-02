@@ -1,4 +1,4 @@
-import { setUiText as writeUiText, uiMessage, subscribeLocale, t } from "../../i18n.js";
+import { setUiText as writeUiText, uiMessage, subscribeLocale } from "../../i18n.js";
 
 import { api } from "../../api/client.js";
 import { element, errorMessage, isImeKey } from "../../utils/dom.js";

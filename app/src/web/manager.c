@@ -97,42 +97,6 @@ static xwork_result MdoWebToolFail(xwork_tool_result_writer* pWriter,
 
 static xerrkind MdoWebTransportKind(void);
 
-static xwork_result MdoWebXrtFailure(xwork_tool_result_writer* pWriter,
-    xwork_error* pError, const xwork_tool_context* pContext,
-    const char* Fallback)
-{
-    const xerror* pCause = xrtGetError();
-    xerrkind Kind = MdoWebTransportKind();
-    const char* Message = pCause != NULL ? xrtErrorMessage(pCause) : Fallback;
-    char Details[768];
-    size_t Used = (size_t)snprintf(Details, sizeof(Details), "%s", Message);
-    const xerror* Nested = pCause != NULL ? xrtErrorCause(pCause) : NULL;
-    while ( Nested != NULL && Used < sizeof(Details) - 1u ) {
-        int Written = snprintf(Details + Used, sizeof(Details) - Used,
-            ": %s", xrtErrorMessage(Nested));
-        if ( Written < 0 || (size_t)Written >= sizeof(Details) - Used ) break;
-        Used += (size_t)Written;
-        Nested = xrtErrorCause(Nested);
-    }
-    Message = Details;
-    if ( pContext != NULL && pContext->pCancel != NULL &&
-         xrtCancelRequested(pContext->pCancel) )
-        return MdoWebFail(pError, XWORK_ERROR_CANCELLED, Message);
-    if ( pContext != NULL && pContext->uDeadline != MDO_DEADLINE_NEVER &&
-         MdoDeadlineExpired(pContext->uDeadline) )
-        return MdoWebFail(pError, XWORK_ERROR_TIMEOUT, Message);
-    if ( Kind == XERR_CANCELLED )
-        return MdoWebToolFail(pWriter, pError,
-            "Web operation was interrupted without cancelling the task; inspect its result before retrying.");
-    if ( Kind == XERR_TIMEOUT )
-        return MdoWebToolFail(pWriter, pError, Message);
-    if ( Kind == XERR_MEMORY )
-        return MdoWebFail(pError, XWORK_ERROR_OUT_OF_MEMORY, Message);
-    if ( Kind == XERR_RANGE )
-        return MdoWebFail(pError, XWORK_ERROR_LIMIT, Message);
-    return MdoWebToolFail(pWriter, pError, Message);
-}
-
 static bool MdoWebDefaultFetch(void* pContext,
     const XS_FetchRequest* pRequest, XS_FetchResponse* pResponse)
 {

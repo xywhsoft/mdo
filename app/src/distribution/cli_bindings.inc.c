@@ -3,25 +3,6 @@
  * dispatch index as well as the durable registry, published in one rename. */
 static bool CliRelativeValid(cstr P)
 {return P&&strlen(P)<4096&&MdoExtensionRelativePath(P)&&!strncmp(P,"external-tools/",15);}
-static char* CliRelative(cstr Path)
-{
-    MdoHomeSnapshot H={0};H.Size=sizeof(H);if(!MdoHomeGetSnapshot(&H)||!H.Path)return NULL;
-    char* R=xrtPathRelative(xrtStrView(H.Path),xrtStrView(Path),XPATH_NATIVE);
-    if(R)for(char* C=R;*C;C++)if(*C=='\\')*C='/';
-    if(!CliRelativeValid(R)){xrtFree(R);return NULL;}
-    /* A manual path may traverse a user symlink. Only export a portable entry
-     * when the actual executable stays inside the actual Home. */
-    if(CliPresent(Path)){char* Root=xrtPathReal(H.Path),*Target=xrtPathReal(Path);size_t N=Root?strlen(Root):0;while(N&&(Root[N-1]=='/'||Root[N-1]=='\\'))N--;
-        bool Inside=N&&Target&&strlen(Target)>N&&(Target[N]=='/'||Target[N]=='\\');
-        for(size_t I=0;Inside&&I<N;I++){unsigned char A=Root[I],B=Target[I];if(A=='\\')A='/';if(B=='\\')B='/';
-#if defined(_WIN32) || defined(_WIN64)
-            if(A>='A'&&A<='Z')A+=32;
-            if(B>='A'&&B<='Z')B+=32;
-#endif
-            if(A!=B)Inside=false;}
-        xrtFree(Root);xrtFree(Target);if(!Inside){xrtFree(R);return NULL;}}
-    return R;
-}
 static bool CliAliasesValid(const xvalue* R)
 {
     const xvalue* A=xrtValueObjectGet(R,XRT_STR_LITERAL("aliases"));if(!A)return true;

@@ -173,11 +173,4 @@ static inline char* MdoPromptString(const xvalue* Object, cstr Key)
         ? xrtStrDupN(Text.Data, Text.Size) : NULL;
 }
 
-static inline bool MdoPromptTrue(const xvalue* Object, cstr Key)
-{
-    char* Text = MdoPromptString(Object, Key);
-    bool Value = Text != NULL && strcmp(Text, "true") == 0;
-    xrtFree(Text); return Value;
-}
-
 #endif

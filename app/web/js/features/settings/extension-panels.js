@@ -21,7 +21,7 @@ import { targetState, subscribeTarget } from "../../api/target.js";
 
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
 import { loadAgents } from "../../state/catalogs.js";
-import { refreshMcp, disconnectMcp, reloadCatalog } from "../../state/resources.js";
+import { refreshMcp, reloadCatalog } from "../../state/resources.js";
 import { EXTENSION_KINDS, portableId, promptFields, editPrompt } from "./extension-formats.js";
 import { newMcpTemplate } from "./mcp-template.js";
 import { exportDirectoryZip } from "../../api/extension-export.js";
@@ -31,7 +31,7 @@ import { createExtensionReads } from "./extension-reads.js";
 import { openLayer } from "../../components/layers.js";
 import { awaitResourceOperation } from "../../state/resource-operation.js";
 import { mcpActivationLabel, mcpActivationAction } from "./mcp-activation.js";
-import { extensionFieldError, validateExtensionId, requiredExtensionFields, validateExtensionForm, parseExtensionJson } from "./extension-validation.js";
+import { extensionFieldError, requiredExtensionFields, validateExtensionForm } from "./extension-validation.js";
 
 const label = (key, fallback, args = {}) => t(`ecosystem.${key}`, args, fallback);
 const title = kind => ({ agents: "Agent", tools: label("toolTitle", "工具"), subagents: "SubAgent", skills: "Skill", mcp: "MCP", knowledge: uiText("settings.knowledge", {}, "知识库"), commands: label("commands", "命令") })[kind];

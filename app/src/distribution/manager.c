@@ -12,10 +12,6 @@ static struct {
     xmutex* Lock;xthread* Thread;xcancel* Cancel;XS_ServerInfo* Server;
     xvalue* Catalog;bool Busy;unsigned Command;char Message[256],Stage[24],NotificationSession[33];
 } g_MdoDistribution;
-static cstr MdoDistText(const xvalue* V,cstr K)
-{ xstrview S={0};return xrtValueGetString(xrtValueObjectGet(V,xrtStrView(K)),&S)&&S.Size<=4096&&!memchr(S.Data,0,S.Size)?S.Data:""; }
-static uint64 MdoDistNumber(const xvalue* V,cstr K)
-{uint64 N=0;int64 I=0;const xvalue* X=xrtValueObjectGet(V,xrtStrView(K));if(!xrtValueGetUInt(X,&N)&&xrtValueGetInt(X,&I)&&I>=0)N=(uint64)I;return N;}
 static bool MdoDistSet(xvalue* V,cstr K,cstr S)
 {return xrtValueObjectSetNew(V,xrtStrView(K),xrtValueString(xrtStrView(S?S:"")));}
 uint64 MdoBuildId(void)

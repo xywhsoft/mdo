@@ -125,6 +125,7 @@ def main():
     ident = 'zip-qa-' + uuid.uuid4().hex[:12]
     meta = {'id': ident, 'description': 'Native ZIP contract regression', 'effects': ['read', 'workspace-write'], 'requires_session': False, 'timeout_ms': 60000}
     source = '/* mdo-command ' + json.dumps(meta) + ' */\n#include "mdo/command.h"\n#include <xsbase.h>\n' + headers() + r'''
+static bool ValidateEntries(MdoZip* Z){for(size_t I=0;I<Z->Count;I++)if(!MdoZipEntryRead(Z,I,NULL,NULL,NULL,NULL))return false;return true;}
 MDO_EXPORT mdo_result mdoCommandRun(const mdo_command_context_v1* C,const xvalue* A,xvalue** R){
  (void)C;const xvalue* Request=xrtValueArrayGet(A,0);const xvalue* Cases=xrtValueObjectGet(Request,XRT_STR_LITERAL("cases"));*R=xrtValueObject();xvalue* Rows=xrtValueArray();
  bool Contract=true;for(size_t K=0;K<9;K++)Contract=Contract&&MdoExtensionDirectoryKind(MdoExtensionKinds[K]);
@@ -133,7 +134,7 @@ MDO_EXPORT mdo_result mdoCommandRun(const mdo_command_context_v1* C,const xvalue
  xrtValueObjectSetNew(*R,XRT_STR_LITERAL("directory_contract"),xrtValueBool(Contract));
  for(size_t I=0;I<xrtValueCount(Cases);I++){
   const xvalue* Item=xrtValueArrayGet(Cases,I);xstrview Path={0};xrtValueGetString(xrtValueObjectGet(Item,XRT_STR_LITERAL("path")),&Path);
-  xfile F=xrtOpen(Path.Data,XFILE_READ);MdoZip Z={0};bool Ok=MdoZipOpen(&Z,F);if(Ok)Ok=MdoZipValidate(&Z,NULL);
+  xfile F=xrtOpen(Path.Data,XFILE_READ);MdoZip Z={0};bool Ok=MdoZipOpen(&Z,F);if(Ok)Ok=ValidateEntries(&Z);
   bool Describe=false;xrtValueGetBool(xrtValueObjectGet(Item,XRT_STR_LITERAL("describe")),&Describe);
   if(Ok&&Describe){xvalue* Manifest=MdoExtensionZipManifest(&Z,NULL);Ok=Manifest!=NULL;xrtValueRelease(Manifest);}
   xvalue* Row=xrtValueObject();xrtValueObjectSet(Row,XRT_STR_LITERAL("name"),xrtValueObjectGet(Item,XRT_STR_LITERAL("name")));
@@ -145,7 +146,7 @@ MDO_EXPORT mdo_result mdoCommandRun(const mdo_command_context_v1* C,const xvalue
  bool Ok=Input&&Output&&MdoZipWriterAdd(&W,"lib/数据.bin",false,0755,Input,NULL)&&MdoZipWriterAdd(&W,"empty",true,0755,NULL,NULL)&&MdoZipWriterFinish(&W);
     xrtValueObjectSetNew(*R,XRT_STR_LITERAL("written"),xrtValueBool(Ok));xrtValueObjectSetNew(*R,XRT_STR_LITERAL("writer_error"),xrtValueString(xrtStrView(W.Index.Error)));
  MdoZipWriterUnit(&W);xrtClose(Input);xrtClose(Output);
- xfile Written=xrtOpen(To.Data,XFILE_READ);MdoZip Back={0};bool Readable=MdoZipOpen(&Back,Written)&&MdoZipValidate(&Back,NULL);MdoZipClose(&Back);xrtClose(Written);
+ xfile Written=xrtOpen(To.Data,XFILE_READ);MdoZip Back={0};bool Readable=MdoZipOpen(&Back,Written)&&ValidateEntries(&Back);MdoZipClose(&Back);xrtClose(Written);
  xrtValueObjectSetNew(*R,XRT_STR_LITERAL("native_roundtrip"),xrtValueBool(Readable));return MDO_RESULT_OK;
 }
 '''

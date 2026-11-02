@@ -1,12 +1,5 @@
 import { t as uiText } from "../../i18n.js";
 export const PANEL_LIMIT = 64;
-export function panelIdentity(type, key, context, owner = "local-client") {
-  return JSON.stringify([owner, context.device || "", context.project || "default", context.session || "", type, key || ""]);
-}
-export function contextSnapshot(navigation) {
-  const route = navigation.workspace();
-  return Object.freeze({ project: route.projectId || navigation.preferredProject() || "default", session: route.sessionId || "", run: "" });
-}
 export function safeBrowserUrl(value) {
   const url = new URL(value);
   if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || url.href.length > 8192)

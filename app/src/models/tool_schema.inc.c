@@ -56,13 +56,12 @@ static bool MdoModelsStrictSchema(const xvalue* Schema, unsigned Depth)
     return true;
 }
 
-static bool MdoModelsToolStrictCompatible(cstr Json)
+static bool MdoModelsToolStrictCompatible(const xvalue* Schema)
 {
-    xvalue* Schema = Json ? xrtJsonParse(xrtStrView(Json)) : NULL; xstrview RootType = {0};
-    bool Ok = Schema && !xrtValueObjectGet(Schema, XRT_STR_LITERAL("anyOf")) &&
+    xstrview RootType = {0};
+    return Schema && !xrtValueObjectGet(Schema, XRT_STR_LITERAL("anyOf")) &&
         xrtValueGetString(xrtValueObjectGet(Schema, XRT_STR_LITERAL("type")), &RootType) &&
         RootType.Size == 6u && !memcmp(RootType.Data, "object", 6u) && MdoModelsStrictSchema(Schema, 0u);
-    xrtValueRelease(Schema); xrtClearError(); return Ok;
 }
 
 /* The SDK omits strict:false. Responses may then normalize optional arguments
@@ -86,10 +85,8 @@ static bool MdoModelsStrictBody(xllm_client* Client, xllm_wire* Wire, void* Data
         /* Chat Completions already defaults to best effort. Only Responses
          * needs an explicit false when the SDK omitted the caller's flag. */
         if (!Enabled && !Strict && Profile.eProvider == XLLM_PROVIDER_OPENAI_COMPAT) continue;
-        const xvalue* Schema = xrtValueObjectGet(Tool, XRT_STR_LITERAL("parameters")); xstrview RootType = {0};
-        bool Compatible = !xrtValueObjectGet(Schema, XRT_STR_LITERAL("anyOf")) &&
-            xrtValueGetString(xrtValueObjectGet(Schema, XRT_STR_LITERAL("type")), &RootType) &&
-            RootType.Size == 6u && !memcmp(RootType.Data, "object", 6u) && MdoModelsStrictSchema(Schema, 0u);
+        const xvalue* Schema = xrtValueObjectGet(Tool, XRT_STR_LITERAL("parameters"));
+        bool Compatible = MdoModelsToolStrictCompatible(Schema);
         if (Enabled && Compatible) continue;
         Ok = xrtValueObjectSetNew(Tool, XRT_STR_LITERAL("strict"), xrtValueBool(false)); Changed = true;
     }

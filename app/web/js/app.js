@@ -17,7 +17,7 @@ import {
   patchSession, trashSession, purgeSession, restoreSession, loadSessionHistory, forkSession,
   truncateSession, clearSession, loadSessionTranscript,
 } from "./state/sessions.js";
-import { modelsStore, agentsStore, projectsStore, loadCatalogs, loadModels, loadAgents, loadProjects, recoverCatalogs } from "./state/catalogs.js";
+import { modelsStore, agentsStore, projectsStore, loadCatalogs, loadModels, loadProjects, recoverCatalogs } from "./state/catalogs.js";
 import {
   settingsStore, loadSettings, recoverSettings, previewSettings, applySettings,
   resumeSettingsLocaleInitialization,

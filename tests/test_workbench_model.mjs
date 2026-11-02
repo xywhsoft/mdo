@@ -1,12 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { panelIdentity, safeBrowserUrl, browserLocation, browserPhase, reorderPanel, normalizeLayout, validateImageFrame } from "../app/web/js/features/workbench/model.js";
+import { safeBrowserUrl, browserLocation, browserPhase, reorderPanel, normalizeLayout, validateImageFrame } from "../app/web/js/features/workbench/model.js";
 import { createApplicationClient, applyApplicationAction } from "../app/web/js/api/application.js";
-test("panel identities retain owner, device and immutable conversation", () => {
- const base={device:"a",project:"p",session:"s"};
- for(const change of [{device:"b"},{project:"b"},{session:"b"}])assert.notEqual(panelIdentity("plan","main",base),panelIdentity("plan","main",{...base,...change}));
- assert.notEqual(panelIdentity("plan","main",base,"one"),panelIdentity("plan","main",base,"two"));
-});
 test("URLs reject local files, scripts, credentials and oversized addresses", () => {
  for(const value of ["javascript:alert(1)","file:///C:/private","data:text/html,test","https://name:secret@example.com/","https://example.com/"+"x".repeat(9000)])assert.throws(()=>safeBrowserUrl(value));
  assert.equal(safeBrowserUrl("http://127.0.0.1:3000/"),"http://127.0.0.1:3000/");

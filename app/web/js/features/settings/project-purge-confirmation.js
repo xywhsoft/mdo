@@ -1,4 +1,4 @@
-import { setUiText as writeUiText, uiMessage, t, subscribeLocale } from "../../i18n.js";
+import { setUiText as writeUiText, uiMessage, subscribeLocale } from "../../i18n.js";
 
 import { errorMessage } from "../../utils/dom.js";
 import { reviewedPurgeIntent } from "./project-purge-contract.js";

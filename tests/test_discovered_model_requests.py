@@ -99,14 +99,19 @@ static bool SchemaHookRetry(xllm_client* C,const xllm_diagnostics* D,uint32 N,vo
 static bool SchemaHookResponseBody(xllm_client* C,xllm_wire* W,void* P){(void)C;(void)W;((unsigned*)P)[3]++;return true;}
 static bool SchemaHookTool(xllm_client* C,xllm_tool_call* T,uint32 N,void* P){(void)C;(void)T;(void)N;((unsigned*)P)[4]++;return true;}
 static bool SchemaHookResponse(xllm_client* C,xllm_response* R,void* P){(void)C;(void)R;((unsigned*)P)[5]++;return true;}
+static bool SchemaStrict(cstr Json){
+    xvalue* Schema=xrtJsonParse(xrtStrView(Json));
+    bool Ok=MdoModelsToolStrictCompatible(Schema);
+    xrtValueRelease(Schema);xrtClearError();return Ok;
+}
 static void RunToolSchemas(void){
     const char* Good="{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\"}},\"required\":[\"path\"],\"additionalProperties\":false}";
     const char* Optional="{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\"},\"limit\":{\"type\":\"integer\"}},\"required\":[\"path\"],\"additionalProperties\":false}";
-    Check(MdoModelsToolStrictCompatible(Good),"strict_valid");
-    Check(!MdoModelsToolStrictCompatible(Optional),"optional_is_not_strict");
-    Check(!MdoModelsToolStrictCompatible("{\"type\":\"object\",\"properties\":{},\"required\":[],\"additionalProperties\":true}"),"open_object_is_not_strict");
-    Check(!MdoModelsToolStrictCompatible("{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"string\"},\"b\":{\"type\":\"string\"}},\"required\":[\"a\",\"a\"],\"additionalProperties\":false}"),"duplicate_required_rejected");
-    Check(!MdoModelsToolStrictCompatible("{\"type\":\"object\",\"properties\":{\"items\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"string\"}},\"required\":[],\"additionalProperties\":false}}},\"required\":[\"items\"],\"additionalProperties\":false}"),"nested_optional_rejected");
+    Check(SchemaStrict(Good),"strict_valid");
+    Check(!SchemaStrict(Optional),"optional_is_not_strict");
+    Check(!SchemaStrict("{\"type\":\"object\",\"properties\":{},\"required\":[],\"additionalProperties\":true}"),"open_object_is_not_strict");
+    Check(!SchemaStrict("{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"string\"},\"b\":{\"type\":\"string\"}},\"required\":[\"a\",\"a\"],\"additionalProperties\":false}"),"duplicate_required_rejected");
+    Check(!SchemaStrict("{\"type\":\"object\",\"properties\":{\"items\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"string\"}},\"required\":[],\"additionalProperties\":false}}},\"required\":[\"items\"],\"additionalProperties\":false}"),"nested_optional_rejected");
     for(unsigned Provider=0;Provider<3;Provider++){
         xllm_provider Protocol=Provider==0?XLLM_PROVIDER_OPENAI_COMPAT:Provider==1?XLLM_PROVIDER_OPENAI_RESPONSES:XLLM_PROVIDER_ANTHROPIC;
         xllm_model_profile Profile;xllmModelProfileInit(&Profile);Profile.sId="schema-test";Profile.sModel="schema-test";Profile.eProvider=Protocol;

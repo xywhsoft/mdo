@@ -21,7 +21,6 @@ const node=(tag,text="",className="")=>element(tag,{text,className}),device=()=>
 const recommendedAliases=["busybox","curl","jq","openssh","aria2","ripgrep","7zip"];
 const recommendedId=alias=>`external-tool:mdo.${alias}`;
 const installedTool=(row,installed)=>installed.find(t=>t.directory_id===row.xid||t.id===(row.id||row.xid||row.tool_id));
-export const externalToolAction=(row,installed)=>{const local=installedTool(row,installed);return !local?"install":local.installation?.version_id!==row.version_id?"update":null;};
 export function createExternalToolsPanel({refresh=()=>{},openFull=()=>{},signedIn=()=>false,isMain=()=>true}={}) {
   let data={},tab="local",query="",filter="all",error="",context=device(),busy=false,editor=null,disposed=false,storeActive=false,guideController=null;
   const hosts=new Set(),recommendButtons=new Set(),browser=createExtensionBrowser({kind:"external-tools"}),sdk=createApplicationClient(()=>({extension:"mdo.external-tools"}));

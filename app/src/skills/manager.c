@@ -218,14 +218,6 @@ static xstrview MdoSkillsTrim(xstrview View)
     return View;
 }
 
-static inline xstrview MdoSkillsTrimRight(xstrview View)
-{
-    while ( View.Size != 0u &&
-            (View.Data[View.Size - 1u] == ' ' ||
-             View.Data[View.Size - 1u] == '\r') ) View.Size--;
-    return View;
-}
-
 static bool MdoSkillsCopyView(char** pTarget, xstrview View, size_t Limit,
     bool Required)
 {

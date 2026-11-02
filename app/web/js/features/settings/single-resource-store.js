@@ -1,8 +1,8 @@
 import { t as uiErrorText, setUiText as writeUiText, uiMessage, t as uiText, subscribeLocale } from "../../i18n.js";
 
-import { dependencyList, localDependencyPanel } from "./extension-dependencies.js";
+import { dependencyList } from "./extension-dependencies.js";
 import { reviewDependencyPlan } from "./dependency-plan.js";
-import { createExtensionBrowser, detailTabs, detailFacts, browserText } from "../../components/extension-browser.js";
+import { createExtensionBrowser, detailTabs, detailFacts } from "../../components/extension-browser.js";
 import { api } from "../../api/client.js";
 import { stageExtensionFile } from "../../api/extension-archives.js";
 import { targetState, subscribeTarget } from "../../api/target.js";
@@ -18,7 +18,6 @@ const names = { agents:"Agent", subagents:"SubAgent", get tools() { return uiMes
 const text = (tag, value, className = "") => element(tag, { text: value, className });
 const device = () => targetState().selected?.id || "local";
 const button = (label, action, primary = false) => { const b=element("button", {text:label,className:primary?"primary-button":"secondary-button",attrs:{type:"button"}});b.addEventListener("click",()=>{void Promise.resolve().then(action).catch(e=>toast(errorMessage(e),"error"));});return b; };
-export const singleResource = (row, kind) => (row?.kind || row?.manifest?.kind) === kind;
 
 // All types share real directory archives. No resource bodies or files are
 // reconstructed from catalog JSON; text previews request one selected file.
