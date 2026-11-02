@@ -1,0 +1,445 @@
+{
+  "version_name": "0.8.4",
+  "version_code": "05000804",
+  "published_at": "2026-11-02T14:10:02+08:00",
+  "catalog_revision": 35,
+  "source_head_at_recording": "cb03ed2cfbead7809fca11a209ee96a1d00902bb",
+  "application_source_sha256": "797e5acd7fff013d920f2d1dbde6186c845b2135a35733d4e1e2a5b9ebb3fe69",
+  "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
+  "sdk_overlay_sha256": "7b26bfea71d2f66e8153566c17c79266457b4979528423997e4225649474f27d",
+  "required": true,
+  "products": [
+    {
+      "filename": "mdo.exe",
+      "platform": "windows-x86_64",
+      "edition": "desktop",
+      "build_id": 70000150,
+      "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
+      "bytes": 6625231,
+      "sha256": "1e6300ec1e89ef31cadd23902cf08c3e37a538e72b9c9b976b3df4f0ed30af6d",
+      "host_bytes": 4057088,
+      "host_sha256": "74bf58a745978d8780112792f77c3822a913e5eeeaa08a890c3ecaf416a39a8c",
+      "libc": "mingw",
+      "packaged_app_sha256": "f82effa438fdd59f3912f5939e4142bf16acb21f5cb929da359f1095fbc70b4d",
+      "native_baseline_reused": true,
+      "native_baseline_artifact_sha256": "0df53a3992003850b3adbb15fc71b28dccfbc6ebc3715140ad5e10d5095a9c23"
+    },
+    {
+      "filename": "mdo-server.exe",
+      "platform": "windows-x86_64",
+      "edition": "server",
+      "build_id": 70000151,
+      "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
+      "bytes": 6367502,
+      "sha256": "78d03a9f6e3db9db5addae4931c8b22ad7bc0bd61eb9061368e32f5b26a14151",
+      "host_bytes": 3799552,
+      "host_sha256": "7e6671f4358f55598c88ddf2f83e558cab686880fb40ce1eb5c1af5d22c84b74",
+      "libc": "mingw",
+      "packaged_app_sha256": "af49709dada500f566d0040e10dc8b895cf502533e9337b412074ede77c9fb9f"
+    },
+    {
+      "filename": "mdo-linux-x86_64-glibc",
+      "platform": "linux-x86_64-glibc",
+      "edition": "desktop",
+      "build_id": 70000152,
+      "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
+      "bytes": 6224672,
+      "sha256": "c430d5d52adfda6d982b7e57311779303afe97517b04fe61a1048fa6cff1247e",
+      "host_bytes": 3656504,
+      "host_sha256": "7c7028f0b9d94afb324f9f10c443c22cb5ed9eb742f9865bcd2c02307c455a7c",
+      "libc": "glibc",
+      "packaged_app_sha256": "2284bdd50b1c4cf059c2eb35e1925a78354c704a8937d51b84a66d2071110a1b",
+      "static_core": false,
+      "elf_needed": [
+        "libdl.so.2",
+        "libpthread.so.0",
+        "libm.so.6",
+        "libc.so.6"
+      ],
+      "glibc_required": "2.28",
+      "glibc_max": "2.28"
+    },
+    {
+      "filename": "mdo-server-linux-x86_64-glibc",
+      "platform": "linux-x86_64-glibc",
+      "edition": "server",
+      "build_id": 70000153,
+      "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
+      "bytes": 6187549,
+      "sha256": "2786eb6e146581c4a8f0b3d5c9f8a81084c83c97b5b41643c262f99fc7111782",
+      "host_bytes": 3619576,
+      "host_sha256": "68fcc93e75d70e15c5695fddfa55a8b8cc058b07745a1cba1491ab66fe1bef8b",
+      "libc": "glibc",
+      "packaged_app_sha256": "5c5ae91a33bc8d6d65b30b6f3b41a5869b59af66cf59a82284382807d58e0ebc",
+      "static_core": false,
+      "elf_needed": [
+        "libdl.so.2",
+        "libpthread.so.0",
+        "libm.so.6",
+        "libc.so.6"
+      ],
+      "glibc_required": "2.28",
+      "glibc_max": "2.28"
+    },
+    {
+      "filename": "mdo-linux-x86_64-musl",
+      "platform": "linux-x86_64-musl",
+      "edition": "desktop",
+      "build_id": 70000154,
+      "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
+      "bytes": 7963647,
+      "sha256": "5f2c1cb2e36da5a834312273b51aba73a1c43696966b170c9b9436b3caf4613d",
+      "host_bytes": 5395480,
+      "host_sha256": "e7913877ba16c918ff2b6397c1f2b850cbbe0f800eae478ce1e7e6b68d5536e1",
+      "libc": "musl",
+      "packaged_app_sha256": "f62fe136e587d02681f59a92b520f9ee59e7777758f4a440fcfe2002368df756",
+      "static_core": true,
+      "elf_needed": [],
+      "glibc_required": null,
+      "glibc_max": "2.28"
+    },
+    {
+      "filename": "mdo-server-linux-x86_64-musl",
+      "platform": "linux-x86_64-musl",
+      "edition": "server",
+      "build_id": 70000155,
+      "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
+      "bytes": 7926587,
+      "sha256": "7f371a80e8771429b9161460e3004b8875841efbf4a78365ce2562b2a49601ed",
+      "host_bytes": 5358616,
+      "host_sha256": "14fc1bfa328828a37d1430cfa58bf165b2052eef44392093926ac5adb777c49d",
+      "libc": "musl",
+      "packaged_app_sha256": "03a62b9be1c311b6e716ac49696a6e0172af7033090ece85d8081ae5e06b1691",
+      "static_core": true,
+      "elf_needed": [],
+      "glibc_required": null,
+      "glibc_max": "2.28"
+    },
+    {
+      "filename": "mdo-arm64-v8a.apk",
+      "platform": "android-arm64-v8a",
+      "edition": "lite",
+      "build_id": 70000156,
+      "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
+      "bytes": 6423956,
+      "sha256": "592d03e0c710715f274eb247ee5ef1f95a37f860358fce5d64c99670ded43d03",
+      "host_sha256": "43e9e59c8d538e3fa86aa1a5a21b5e3bd533c372b628f4a6df7a191ba7793920",
+      "host_bytes": 3559152,
+      "release_signed": true,
+      "certificate_sha256": "94b1947b60f3ce0852b19d9c37a47cc4a084fe9d601692c6a1f6b204c2174e84"
+    },
+    {
+      "filename": "mdo-full-arm64-v8a.apk",
+      "platform": "android-arm64-v8a",
+      "edition": "full",
+      "build_id": 70000157,
+      "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
+      "bytes": 85085833,
+      "sha256": "ea51243b732d0696ceb84a900b3fdf55d6838182e7a3d1f7fb19f01df9e55354",
+      "host_sha256": "43e9e59c8d538e3fa86aa1a5a21b5e3bd533c372b628f4a6df7a191ba7793920",
+      "host_bytes": 3559152,
+      "release_signed": true,
+      "certificate_sha256": "94b1947b60f3ce0852b19d9c37a47cc4a084fe9d601692c6a1f6b204c2174e84"
+    }
+  ],
+  "server_verification": {
+    "passed": true,
+    "checked_at": 1793599872,
+    "catalog_revision": 35,
+    "channels": [
+      {
+        "id": "desktop",
+        "build_id": 70000150,
+        "required": true,
+        "old_client_response": true,
+        "legacy_build_response": true,
+        "semantic_code_normalized": true,
+        "blob": {
+          "bytes": 6625231,
+          "sha256": "1e6300ec1e89ef31cadd23902cf08c3e37a538e72b9c9b976b3df4f0ed30af6d"
+        },
+        "website": {
+          "bytes": 6625231,
+          "sha256": "1e6300ec1e89ef31cadd23902cf08c3e37a538e72b9c9b976b3df4f0ed30af6d"
+        }
+      },
+      {
+        "id": "windows-server",
+        "build_id": 70000151,
+        "required": true,
+        "old_client_response": true,
+        "legacy_build_response": true,
+        "semantic_code_normalized": true,
+        "blob": {
+          "bytes": 6367502,
+          "sha256": "78d03a9f6e3db9db5addae4931c8b22ad7bc0bd61eb9061368e32f5b26a14151"
+        },
+        "website": {
+          "bytes": 6367502,
+          "sha256": "78d03a9f6e3db9db5addae4931c8b22ad7bc0bd61eb9061368e32f5b26a14151"
+        }
+      },
+      {
+        "id": "linux-glibc-gui",
+        "build_id": 70000152,
+        "required": true,
+        "old_client_response": true,
+        "legacy_build_response": true,
+        "semantic_code_normalized": true,
+        "blob": {
+          "bytes": 6224672,
+          "sha256": "c430d5d52adfda6d982b7e57311779303afe97517b04fe61a1048fa6cff1247e"
+        },
+        "website": {
+          "bytes": 6224672,
+          "sha256": "c430d5d52adfda6d982b7e57311779303afe97517b04fe61a1048fa6cff1247e"
+        }
+      },
+      {
+        "id": "linux-glibc-server",
+        "build_id": 70000153,
+        "required": true,
+        "old_client_response": true,
+        "legacy_build_response": true,
+        "semantic_code_normalized": true,
+        "blob": {
+          "bytes": 6187549,
+          "sha256": "2786eb6e146581c4a8f0b3d5c9f8a81084c83c97b5b41643c262f99fc7111782"
+        },
+        "website": {
+          "bytes": 6187549,
+          "sha256": "2786eb6e146581c4a8f0b3d5c9f8a81084c83c97b5b41643c262f99fc7111782"
+        }
+      },
+      {
+        "id": "linux-musl-gui",
+        "build_id": 70000154,
+        "required": true,
+        "old_client_response": true,
+        "legacy_build_response": true,
+        "semantic_code_normalized": true,
+        "blob": {
+          "bytes": 7963647,
+          "sha256": "5f2c1cb2e36da5a834312273b51aba73a1c43696966b170c9b9436b3caf4613d"
+        },
+        "website": {
+          "bytes": 7963647,
+          "sha256": "5f2c1cb2e36da5a834312273b51aba73a1c43696966b170c9b9436b3caf4613d"
+        }
+      },
+      {
+        "id": "linux-musl-server",
+        "build_id": 70000155,
+        "required": true,
+        "old_client_response": true,
+        "legacy_build_response": true,
+        "semantic_code_normalized": true,
+        "blob": {
+          "bytes": 7926587,
+          "sha256": "7f371a80e8771429b9161460e3004b8875841efbf4a78365ce2562b2a49601ed"
+        },
+        "website": {
+          "bytes": 7926587,
+          "sha256": "7f371a80e8771429b9161460e3004b8875841efbf4a78365ce2562b2a49601ed"
+        }
+      },
+      {
+        "id": "lite",
+        "build_id": 70000156,
+        "required": true,
+        "old_client_response": true,
+        "legacy_build_response": true,
+        "semantic_code_normalized": true,
+        "blob": {
+          "bytes": 6423956,
+          "sha256": "592d03e0c710715f274eb247ee5ef1f95a37f860358fce5d64c99670ded43d03"
+        },
+        "website": {
+          "bytes": 6423956,
+          "sha256": "592d03e0c710715f274eb247ee5ef1f95a37f860358fce5d64c99670ded43d03"
+        }
+      },
+      {
+        "id": "full",
+        "build_id": 70000157,
+        "required": true,
+        "old_client_response": true,
+        "legacy_build_response": true,
+        "semantic_code_normalized": true,
+        "blob": {
+          "bytes": 85085833,
+          "sha256": "ea51243b732d0696ceb84a900b3fdf55d6838182e7a3d1f7fb19f01df9e55354"
+        },
+        "website": {
+          "bytes": 85085833,
+          "sha256": "ea51243b732d0696ceb84a900b3fdf55d6838182e7a3d1f7fb19f01df9e55354"
+        }
+      }
+    ],
+    "website_files": 19,
+    "service_active": true,
+    "native_runtime_unchanged": true,
+    "model_catalog_unchanged": true,
+    "website_inode_preserved": true,
+    "original_credentials_unchanged": true
+  },
+  "client_verification": {
+    "passed": true,
+    "channels": [
+      {
+        "id": "desktop",
+        "build_id": 70000150,
+        "required": true,
+        "head_bytes": 6625231,
+        "complete_blob_hash": true
+      },
+      {
+        "id": "windows-server",
+        "build_id": 70000151,
+        "required": true,
+        "head_bytes": 6367502
+      },
+      {
+        "id": "linux-glibc-gui",
+        "build_id": 70000152,
+        "required": true,
+        "head_bytes": 6224672
+      },
+      {
+        "id": "linux-glibc-server",
+        "build_id": 70000153,
+        "required": true,
+        "head_bytes": 6187549
+      },
+      {
+        "id": "linux-musl-gui",
+        "build_id": 70000154,
+        "required": true,
+        "head_bytes": 7963647
+      },
+      {
+        "id": "linux-musl-server",
+        "build_id": 70000155,
+        "required": true,
+        "head_bytes": 7926587
+      },
+      {
+        "id": "lite",
+        "build_id": 70000156,
+        "required": true,
+        "head_bytes": 6423956,
+        "complete_blob_hash": true
+      },
+      {
+        "id": "full",
+        "build_id": 70000157,
+        "required": true,
+        "head_bytes": 85085833
+      }
+    ],
+    "website_version": "0.8.4"
+  },
+  "android_certificate_sha256": "94b1947b60f3ce0852b19d9c37a47cc4a084fe9d601692c6a1f6b204c2174e84",
+  "signing_directory": "D:/GIT/mdo/.private/android-signing",
+  "service_restarted": false,
+  "server_program_and_config_unchanged": true,
+  "android_device_test": false,
+  "real_model_test": false,
+  "private_evidence": ".build\\release-0.8.4-20261102",
+  "remote_private_evidence": "/home/xs/mdo-release-0.8.4-20261102",
+  "website_source_commit": "e02c16ed03cf13b2cf13f2311b8c6375de73b5fd",
+  "website_copy_validation": {
+    "passed": true,
+    "checked_at": 1793600368,
+    "files": [
+      "index.html",
+      "download/index.html",
+      "guide.html",
+      "en/index.html",
+      "en/download/index.html",
+      "en/guide.html",
+      "ru/index.html",
+      "ru/download/index.html",
+      "ru/guide.html",
+      "site-facts.json"
+    ],
+    "sha_tooltips_verified": 24,
+    "artifact_links_verified": 24,
+    "service_restarted": false,
+    "server_program_and_config_unchanged": true
+  },
+  "packed_dependency_contracts": {
+    "packed-linux-glibc-gui": {
+      "fresh_home_ready": true,
+      "nine_catalogue_identity_contracts": true,
+      "direct_and_reverse_dependency_details": true,
+      "cascade_disable_commits_three_preferences": true,
+      "same_plan_returns_same_receipt": true,
+      "enable_restores_required_closure": true,
+      "offline_migration_refuses_real_active_home": true,
+      "cross_kind_knowledge_edit_is_atomic_and_rejected": true,
+      "restart_recovers_identity_and_activation": true
+    },
+    "packed-linux-glibc-server": {
+      "fresh_home_ready": true,
+      "nine_catalogue_identity_contracts": true,
+      "direct_and_reverse_dependency_details": true,
+      "cascade_disable_commits_three_preferences": true,
+      "same_plan_returns_same_receipt": true,
+      "enable_restores_required_closure": true,
+      "offline_migration_refuses_real_active_home": true,
+      "cross_kind_knowledge_edit_is_atomic_and_rejected": true,
+      "restart_recovers_identity_and_activation": true
+    },
+    "packed-linux-musl-gui": {
+      "fresh_home_ready": true,
+      "nine_catalogue_identity_contracts": true,
+      "direct_and_reverse_dependency_details": true,
+      "cascade_disable_commits_three_preferences": true,
+      "same_plan_returns_same_receipt": true,
+      "enable_restores_required_closure": true,
+      "offline_migration_refuses_real_active_home": true,
+      "cross_kind_knowledge_edit_is_atomic_and_rejected": true,
+      "restart_recovers_identity_and_activation": true
+    },
+    "packed-linux-musl-server": {
+      "fresh_home_ready": true,
+      "nine_catalogue_identity_contracts": true,
+      "direct_and_reverse_dependency_details": true,
+      "cascade_disable_commits_three_preferences": true,
+      "same_plan_returns_same_receipt": true,
+      "enable_restores_required_closure": true,
+      "offline_migration_refuses_real_active_home": true,
+      "cross_kind_knowledge_edit_is_atomic_and_rejected": true,
+      "restart_recovers_identity_and_activation": true
+    },
+    "packed-windows-gui": {
+      "fresh_home_ready": true,
+      "nine_catalogue_identity_contracts": true,
+      "direct_and_reverse_dependency_details": true,
+      "cascade_disable_commits_three_preferences": true,
+      "same_plan_returns_same_receipt": true,
+      "enable_restores_required_closure": true,
+      "offline_migration_refuses_real_active_home": true,
+      "cross_kind_knowledge_edit_is_atomic_and_rejected": true,
+      "restart_recovers_identity_and_activation": true
+    },
+    "packed-windows-server": {
+      "fresh_home_ready": true,
+      "nine_catalogue_identity_contracts": true,
+      "direct_and_reverse_dependency_details": true,
+      "cascade_disable_commits_three_preferences": true,
+      "same_plan_returns_same_receipt": true,
+      "enable_restores_required_closure": true,
+      "offline_migration_refuses_real_active_home": true,
+      "cross_kind_knowledge_edit_is_atomic_and_rejected": true,
+      "restart_recovers_identity_and_activation": true
+    }
+  },
+  "full_legacy_gate_passed": false,
+  "known_limitations": [
+    "Freshly compiled Windows GUI native host exceeded startup deadlines twice; not shipped. Release reuses an accepted host from the same pinned SDK and repacks current application sources.",
+    "WSL DrvFS lacks required atomic no-replace directory rename. Linux-native filesystem checks passed; DrvFS behavior is not fixed.",
+    "No Android physical-device, real-model or dual-device acceptance was performed in this release run."
+  ]
+}
