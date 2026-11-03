@@ -79,7 +79,7 @@ void ServiceInit(XS_HostInfo* host)
     memset(&provider, 0, sizeof(provider));
     provider.Size = sizeof(provider);
     printf("provider_ok=%d\n",
-        MdoModelCatalogProviderFind(first, "ornith", &provider) ? 1 : 0);
+        MdoModelCatalogProviderFind(first, "fixture-provider", &provider) ? 1 : 0);
     printf("provider=%s protocols=%u credential_ref=%d verify=%d\n",
         provider.Id, (unsigned)provider.Protocols,
         provider.HasCredentialReference ? 1 : 0,
@@ -87,18 +87,6 @@ void ServiceInit(XS_HostInfo* host)
     memset(&model, 0, sizeof(model));
     model.Size = sizeof(model);
     printf("default_ok=%d\n", MdoModelCatalogDefault(first, &model) ? 1 : 0);
-    {
-        MdoModelInfo legacy = {0};
-        xllm_client* client;
-        MdoModelClientOptions alias_options;
-        legacy.Size = sizeof(legacy);
-        printf("legacy_alias=%d\n", MdoModelCatalogModelFind(first, "ling-3.0-tiny", &legacy) &&
-            strcmp(legacy.Id, "ornith-1.5-35b") == 0);
-        MdoModelClientOptionsInit(&alias_options); alias_options.ModelId = "ling-3.0-tiny";
-        client = MdoModelClientCreate(first, &alias_options, NULL, &error);
-        printf("legacy_client=%d\n", client != NULL);
-        if ( client != NULL ) xllmClientDestroy(client);
-    }
     printf("model=%s wire=%s default_protocol=%u context=%llu output=%u efforts=%zu\n",
         model.Id, model.WireModel, (unsigned)model.DefaultProtocol,
         (unsigned long long)model.ContextWindowTokens,
@@ -181,6 +169,27 @@ void ServiceUnit(XS_HostInfo* host)
 '''
 
 
+def personal_catalog():
+    from model_fixture import model_catalog
+    catalog = model_catalog("fixture-model", "https://example.invalid/v1")
+    catalog["providers"][0].update(
+        credential={"secret_ref": "env:MDO_TEST_MODEL_KEY"},
+        endpoints={"chat_completions": "https://example.invalid/v1/chat/completions",
+                   "responses": "https://example.invalid/v1/responses",
+                   "anthropic_messages": "https://example.invalid/v1/messages"})
+    catalog["items"][0].update(
+        protocols=["openai-chat-completions", "openai-responses", "anthropic-messages"],
+        reasoning_efforts=["none", "low", "medium", "high"], default_reasoning_effort="medium")
+    catalog["items"][0]["capabilities"].extend(["reasoning-output", "reasoning-control"])
+    return catalog
+
+
+def write_models(home, catalog):
+    path = home / "config/models.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"schema_version": 1, "patch": catalog}), encoding="utf-8")
+
+
 def write_site(site: Path) -> int:
     (site / "web").mkdir(parents=True)
     (site / "default-home/config").mkdir(parents=True)
@@ -199,9 +208,12 @@ def write_site(site: Path) -> int:
         "include/mdo/secrets.h", "include/mdo/version.h",
     ):
         copy_app_source(relative, site)
-    key = site / "default-home/config/secrets/builtin-model.key"
-    key.parent.mkdir(parents=True)
-    key.write_text("bounded-built-in-fixture-key", encoding="ascii")
+    # Product defaults intentionally contain no connection. Supply an ordinary
+    # personal provider explicitly, rather than relying on retired built-ins.
+    defaults = site / "default-home/config/defaults.json"
+    data = json.loads(defaults.read_text(encoding="utf-8"))
+    data["models"] = personal_catalog()
+    defaults.write_text(json.dumps(data), encoding="utf-8")
     (site / "probe.c").write_text(PROBE_SOURCE, encoding="utf-8")
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))
@@ -229,11 +241,8 @@ def run_probe(host: Path, site: Path, home: Path,
               environment: dict[str, str] | None = None, timeout_seconds: float = 10.0) -> str:
     command = [str(host), "xs.json", "--", "--home", str(home)]
     process_environment = os.environ.copy()
-    for name in (
-        "MDO_ORNITH_CHAT_COMPLETIONS_URL", "MDO_ORNITH_RESPONSES_URL",
-        "MDO_ORNITH_ANTHROPIC_URL", "MDO_ORNITH_API_KEY",
-    ):
-        process_environment.pop(name, None)
+    process_environment["MDO_TEST_MODEL_KEY"] = "bounded-runtime-fixture-key"
+    process_environment.pop("MDO_TEST_PROXY_PASSWORD", None)
     if environment is not None:
         process_environment.update(environment)
     process = subprocess.Popen(
@@ -322,35 +331,27 @@ def main() -> int:
             }), encoding="utf-8")
             proxy_output = run_probe(host, site, proxy_home, {
                 "MDO_TEST_PROXY_PASSWORD": "bounded-probe-password",
-                **{name: "https://example.invalid/v1" for name in (
-                    "MDO_ORNITH_CHAT_COMPLETIONS_URL", "MDO_ORNITH_RESPONSES_URL", "MDO_ORNITH_ANTHROPIC_URL")},
             })
             assert "client_1=1" in proxy_output and "client_3=1" in proxy_output, proxy_output
             missing_password = run_probe(host, site, proxy_home, {
                 "MDO_TEST_PROXY_PASSWORD": "",
-                **{name: "https://example.invalid/v1" for name in (
-                    "MDO_ORNITH_CHAT_COMPLETIONS_URL", "MDO_ORNITH_RESPONSES_URL", "MDO_ORNITH_ANTHROPIC_URL")},
             })
             assert "client_1=0" in missing_password, missing_password
             assert "model proxy password reference is unavailable" in missing_password, missing_password
             assert "kind=profile_proxy_unavailable" in missing_password, missing_password
-        invalid_endpoint = run_probe(host, site, base / "invalid-endpoint", {
-            "MDO_ORNITH_CHAT_COMPLETIONS_URL": "https://example.invalid/\n",
-            "MDO_ORNITH_API_KEY": "bounded-runtime-probe-key",
-        })
+        invalid_home = base / "invalid-endpoint"
+        invalid_catalog = personal_catalog()
+        invalid_catalog["providers"][0]["endpoints"]["chat_completions"] = "https://example.invalid/\n"
+        write_models(invalid_home, invalid_catalog)
+        invalid_endpoint = run_probe(host, site, invalid_home)
         assert "client_1=0" in invalid_endpoint and "kind=profile_endpoint_invalid" in invalid_endpoint, invalid_endpoint
-        output = run_probe(host, site, base / "state", {
-            "MDO_ORNITH_CHAT_COMPLETIONS_URL": "https://example.invalid/v1",
-            "MDO_ORNITH_RESPONSES_URL": "https://example.invalid/v1",
-            "MDO_ORNITH_ANTHROPIC_URL": "https://example.invalid",
-            "MDO_ORNITH_API_KEY": "bounded-runtime-probe-key",
-        })
+        output = run_probe(host, site, base / "state")
         assert "probe_init_error=" not in output, output
         assert "catalog_one=1 providers=1 models=1" in output, output
         assert "provider_ok=1" in output, output
-        assert "provider=ornith protocols=7 credential_ref=1 verify=1" in output, output
+        assert "provider=fixture-provider protocols=7 credential_ref=1 verify=1" in output, output
         assert "default_ok=1" in output, output
-        assert "model=ornith-1.5-35b wire=ornith-1.5-35b" in output, output
+        assert "model=fixture-model wire=fixture-model" in output, output
         assert "context=240128 output=16384 efforts=4" in output, output
         assert "profile_1=1 provider=0" in output, output
         assert "profile_2=1 provider=2" in output, output
@@ -364,42 +365,24 @@ def main() -> int:
         assert "reload=1" in output, output
         assert "catalog_two=2 old_default=1 new_default=1" in output, output
         assert "probe_done=1" in output, output
-        assert "legacy_alias=1" in output and "legacy_client=1" in output, output
+        # Missing/malformed personal secret references fail locally without
+        # exposing key bytes. These probes create clients, never network calls.
+        no_key_home = base / "without-key"
+        unavailable = run_probe(host, site, no_key_home, {"MDO_TEST_MODEL_KEY": ""})
+        assert "client_1=0" in unavailable and "kind=profile_credential_unavailable" in unavailable, unavailable
+        assert "bounded-runtime-fixture-key" not in unavailable
+        assert not no_key_home.exists()
 
-        # Read an old full-array Home without changing its file. Other models
-        # keep their identity and inherit the replacement built-in provider.
-        old = json.loads((ROOT / "app/default-home/config/defaults.json").read_text(encoding="utf-8"))["models"]
-        old["default_model"] = "ling-3.0-tiny"
-        old["providers"][0].update(id="ling", name="Ling")
-        old["providers"][0]["endpoints"] = {key: value.replace("ornith", "ling")
-            for key, value in old["providers"][0]["endpoints"].items()}
-        old["providers"][0]["credential"] = {"secret_ref": "env:MDO_LING_API_KEY"}
-        old["items"][0].update(id="ling-3.0-tiny", name="Ling 3.0 Tiny", provider="ling", wire_model="ling-3.0-tiny")
-        custom = json.loads(json.dumps(old["items"][0]))
-        custom.update(id="user-kept", name="User kept", wire_model="my-model", builtin=False, free=False, editable=True, removable=True)
-        old["items"].append(custom)
-        legacy_path = base / "legacy/config/models.json"
-        legacy_path.parent.mkdir(parents=True)
-        legacy_bytes = json.dumps({"schema_version": 1, "patch": old}).encode()
-        legacy_path.write_bytes(legacy_bytes)
-        legacy = run_probe(host, site, legacy_path.parent.parent)
-        assert "probe_init_error=" not in legacy and "providers=1 models=2" in legacy, legacy
-        assert "model=ornith-1.5-35b wire=ornith-1.5-35b" in legacy, legacy
-        assert legacy_path.read_bytes() == legacy_bytes and not legacy_path.with_suffix(".json.bak").exists()
-
-        # Missing or malformed provisioned credentials fail locally without
-        # creating Home or emitting any key bytes in public diagnostics.
-        key = site / "default-home/config/secrets/builtin-model.key"
-        key.unlink()
-        unavailable = run_probe(host, site, base / "without-key")
-        assert "client_1=0" in unavailable and "credential is unavailable" in unavailable, unavailable
-        assert "kind=profile_credential_unavailable" in unavailable, unavailable
-        assert not (base / "without-key").exists()
+        invalid_key_home = base / "invalid-key"
+        invalid_catalog = personal_catalog()
+        invalid_catalog["providers"][0]["credential"] = {"secret_ref": "file:config/secrets/test.key"}
+        write_models(invalid_key_home, invalid_catalog)
+        key = invalid_key_home / "config/secrets/test.key"
+        key.parent.mkdir()
         key.write_bytes(b"bad\x00credential")
-        invalid = run_probe(host, site, base / "invalid-key")
-        assert "client_1=0" in invalid and "bad\x00credential" not in invalid, invalid
-        assert "kind=profile_credential_unavailable" in invalid, invalid
-        assert not (base / "invalid-key").exists()
+        invalid = run_probe(host, site, invalid_key_home)
+        assert "client_1=0" in invalid and "kind=profile_credential_unavailable" in invalid, invalid
+        assert "bad\x00credential" not in invalid
     print("model runtime probe: PASS")
     return 0
 

@@ -200,7 +200,7 @@ def check(host: Path, base: Path, unconfigured=False):
         catalog = until(ready)
         if unconfigured:
             assert catalog["default_model_id"] == ONLINE and len(catalog["models"]) == 2
-            return {"empty_default_waits_for_catalog":"PASS","model_calls":Service.model_calls}
+            return {"empty_default_waits_for_catalog":"PASS","empty_default_model_calls":Service.model_calls}
         assert next(m for m in catalog["models"] if m["id"] == ONLINE)["requires_login"] is True
         assert next(m for m in catalog["models"] if m["id"] == personal["id"])["requires_login"] is False
         ornith = next(m for m in catalog["models"] if m["id"] == "mdo-online.ornith-1.5-35b")
