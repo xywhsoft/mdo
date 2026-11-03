@@ -1,0 +1,298 @@
+{
+  "schema_version": 1,
+  "status": "inventory_only_not_build_configuration",
+  "source_commit": "430f8a5313ba36216a3bea6677d7a2272c774ee3",
+  "scope": {
+    "original_app": "D:/GIT/mdo/app",
+    "original_app_access": "read_only",
+    "future_staging_root": ".build/precompile-stage/<platform>",
+    "changes_this_turn": "inventory and read-only syntax probes only"
+  },
+  "validation": {
+    "method": "GCC C11 standalone syntax checks with pinned SDK headers, implicit declarations and pointer type mismatches treated as errors",
+    "candidate_input_count": 15,
+    "candidate_input_bytes": 135434,
+    "object_emission_tested": false,
+    "object_linking_tested": false,
+    "runtime_parity_tested": false,
+    "performance_measured": false,
+    "source_hashes_checked_unchanged": true
+  },
+  "first_batch": [
+    {
+      "id": "common_base",
+      "status": "candidate_not_yet_object_link_verified",
+      "purpose": "基础校验与路径工具",
+      "suggested_object": "common_base.o",
+      "depends_on": [],
+      "files": [
+        {
+          "source": "include/mdo/http_url.h",
+          "bytes": 2802,
+          "sha256": "df7a82b6ed707b97de0cf607009ddf7d48c9a8c7441268b61bda6841b51d98c3",
+          "standalone_syntax_ok": true,
+          "staging_action": "extract_implementation_keep_declarations"
+        },
+        {
+          "source": "include/mdo/version_code.h",
+          "bytes": 1468,
+          "sha256": "c04a017140b827e933f4902745ebba0e3c40bde4607b0d326db7bdea6181263f",
+          "standalone_syntax_ok": true,
+          "staging_action": "extract_implementation_keep_declarations"
+        },
+        {
+          "source": "include/mdo/extension_identity.h",
+          "bytes": 3151,
+          "sha256": "a830931eec7087d655a7754e3cca4fdb48555a3dd09b83844fbf3753792a1a6f",
+          "standalone_syntax_ok": true,
+          "staging_action": "extract_implementation_keep_declarations"
+        },
+        {
+          "source": "include/mdo/extension_path.h",
+          "bytes": 3912,
+          "sha256": "0f81dd08ee53f724a3477cd67c1c742b538011d82e7bdccd7349caf674ee3193",
+          "standalone_syntax_ok": true,
+          "staging_action": "extract_implementation_keep_declarations"
+        },
+        {
+          "source": "include/mdo/extension_casefold.h",
+          "bytes": 37832,
+          "sha256": "1e590ac1a2c134c3a80ef798c668b42d026ba942c68249ae8d2427375648d9f4",
+          "standalone_syntax_ok": true,
+          "staging_action": "extract_implementation_keep_declarations"
+        }
+      ],
+      "notes": "头文件实现需提取为外部函数；保留宏和声明；casefold 数据表并入路径实现，version_code 函数较小，不单独生成对象。"
+    },
+    {
+      "id": "common_zip",
+      "status": "candidate_not_yet_object_link_verified",
+      "purpose": "ZIP 流式读写与 CRC",
+      "suggested_object": "common_zip.o",
+      "depends_on": [
+        "common_base"
+      ],
+      "files": [
+        {
+          "source": "include/mdo/extension_zip.h",
+          "bytes": 21317,
+          "sha256": "62ef1388b128d4dbcd20a72f379475238ad58f02504a04fc02476430a889d39c",
+          "standalone_syntax_ok": true,
+          "staging_action": "extract_implementation_keep_declarations"
+        }
+      ],
+      "notes": "保留 MdoZip、MdoZipEntry 等被调用方使用的布局和回调类型；对象实现依赖公共路径函数与宿主 XRT。"
+    },
+    {
+      "id": "common_extension_metadata",
+      "status": "candidate_not_yet_object_link_verified",
+      "purpose": "扩展清单与依赖图",
+      "suggested_object": "common_extension_metadata.o",
+      "depends_on": [
+        "common_base",
+        "common_zip"
+      ],
+      "files": [
+        {
+          "source": "include/mdo/extension_manifest.h",
+          "bytes": 9215,
+          "sha256": "ab2335a1cdb8c98e2a3e83e8de62b0d2af597bdb214c29b699320bfb2e71aacd",
+          "standalone_syntax_ok": true,
+          "staging_action": "extract_implementation_keep_declarations"
+        },
+        {
+          "source": "include/mdo/extension_graph.h",
+          "bytes": 13565,
+          "sha256": "d60c797b53bbdffa6057e5ccb540e2af4dcdf6d7a02df41d33cbffa98f068a7e",
+          "standalone_syntax_ok": true,
+          "staging_action": "extract_implementation_keep_declarations"
+        }
+      ],
+      "notes": "清单、ZIP 清单提取、元数据依赖图可抽取；不包含安装、激活、更新或运行管理器。"
+    },
+    {
+      "id": "common_prompt_parser",
+      "status": "candidate_not_yet_object_link_verified",
+      "purpose": "文本与 frontmatter 解析",
+      "suggested_object": "common_prompt_parser.o",
+      "depends_on": [
+        "common_base"
+      ],
+      "files": [
+        {
+          "source": "include/mdo/prompt_file.h",
+          "bytes": 8476,
+          "sha256": "86e930a32826ec5b987023cf2c693c3680a0579372f71697dec0384eb7bc70c4",
+          "standalone_syntax_ok": true,
+          "staging_action": "extract_implementation_keep_declarations"
+        }
+      ],
+      "notes": "只处理内存中的文本和 xvalue，不包含 Agent 执行、模型调用或目录解析。"
+    },
+    {
+      "id": "common_formats",
+      "status": "candidate_not_yet_object_link_verified",
+      "purpose": "扩展配方格式校验",
+      "suggested_object": "common_formats.o",
+      "depends_on": [
+        "common_extension_metadata"
+      ],
+      "files": [
+        {
+          "source": "include/mdo/knowledge_format.h",
+          "bytes": 1945,
+          "sha256": "de80430e289b63b2016df5d7a035af5dfb3a758b2cebd2da824be3698f90f668",
+          "standalone_syntax_ok": true,
+          "staging_action": "extract_implementation_keep_declarations"
+        },
+        {
+          "source": "include/mdo/mcp_template.h",
+          "bytes": 14346,
+          "sha256": "68cf3bc16c2a85717f838637562abf291e0482dca83c84b38c0f1bf9bd89e50e",
+          "standalone_syntax_ok": true,
+          "staging_action": "extract_implementation_keep_declarations"
+        },
+        {
+          "source": "include/mdo/plugin_format.h",
+          "bytes": 4972,
+          "sha256": "4b937e625858ff25ff207c8ec8813e3da5db96724e7c6f491748b9e1a0968dd7",
+          "standalone_syntax_ok": true,
+          "staging_action": "extract_implementation_keep_declarations"
+        },
+        {
+          "source": "include/mdo/external_tool.h",
+          "bytes": 3501,
+          "sha256": "b56e85d1cda5ad72d1773073ac03b026a4e1e2ee1d32bcf9c36e1bef73aea123",
+          "standalone_syntax_ok": true,
+          "staging_action": "extract_implementation_keep_declarations"
+        }
+      ],
+      "notes": "保留数据格式常量与公开类型；格式校验规则改变也必须使对象失效，不能仅按文件存在复用。"
+    },
+    {
+      "id": "common_api_values",
+      "status": "candidate_not_yet_object_link_verified",
+      "purpose": "JSON 值辅助函数",
+      "suggested_object": "common_api_values.o",
+      "depends_on": [],
+      "files": [
+        {
+          "source": "src/api/value.c",
+          "bytes": 2414,
+          "sha256": "866a66a8078d5b87f17861bf41e80de338277e5e161e4e7f9273d0c0cc56affb",
+          "standalone_syntax_ok": true,
+          "staging_action": "remove_c_from_unity_after_link_validation"
+        }
+      ],
+      "notes": "已有外部函数接口；从副本 unity 列表移除该 C 文件后链接对象，保留现有内部声明头。"
+    },
+    {
+      "id": "common_platform",
+      "status": "candidate_not_yet_object_link_verified",
+      "purpose": "系统睡眠抑制平台适配",
+      "suggested_object": "common_platform.o",
+      "depends_on": [],
+      "files": [
+        {
+          "source": "src/power/inhibitor.c",
+          "bytes": 6518,
+          "sha256": "66571ef79f979551ceb6a668298d00ae06d8faaca6c7d3d8dc4bdcbbce6c35b7",
+          "standalone_syntax_ok": true,
+          "staging_action": "remove_c_from_unity_after_link_validation"
+        }
+      ],
+      "notes": "已有外部函数接口；对象按目标系统和架构分别生成，保留 power.h，收益预计较小，尚未做性能计时。"
+    }
+  ],
+  "conditional_extraction": [
+    {
+      "source": "include/mdo/agent_config_format.h",
+      "reason": "可抽取配置解析/合并/校验函数，但 MDO_AGENT_SYSTEM_PROMPT 等产品策略数据保留在源码/配置侧，不整文件封装。"
+    },
+    {
+      "source": "include/mdo/scoped_files.h",
+      "reason": "可抽取 rooted 文件操作，需裁掉不必要的 extension_files.h 传递依赖；代码较少且涉及文件安全语义，首轮保留。"
+    },
+    {
+      "source": "include/mdo/extension_files.h",
+      "reason": "HashBytes/Hash 可单独评估；MdoExtensionRead 依赖 MdoHomeOpenRead/MdoResourceOpenRead，不整文件归入无业务公共库。"
+    },
+    {
+      "source": "src/api/body.c",
+      "reason": "独立语法检查通过且静态函数未发现外部调用，但包含上传路径、请求上限、错误映射等业务策略；仅抽通用解码内核。"
+    },
+    {
+      "source": "src/remote/websocket.c",
+      "reason": "包括 transfer.inc.c，依赖 RUDP、业务传输规则及 unity 中先前出现的 HTTP URL 工具；需先划清 transport 分组及声明接口。"
+    }
+  ],
+  "keep_as_source_or_declarations": [
+    {
+      "source": "include/mdo/model_http_sdk.h",
+      "reason": "生成的声明桥，不含实现；不能靠 .o 消除编译时所需类型和函数声明。"
+    },
+    {
+      "source": "include/mdo/time.h",
+      "reason": "薄内联转发和时间单位转换，底层已在宿主，额外对象收益小。"
+    },
+    {
+      "source": "include/mdo/agent_limits.h",
+      "reason": "常量宏，无可编译实现。"
+    },
+    {
+      "source": "include/mdo/tool_catalog.h",
+      "reason": "内建工具、能力、效果及兼容名称目录属于产品策略，首轮保留。"
+    },
+    {
+      "source": "include/mdo/session_file_policy.h",
+      "reason": "备份/恢复白名单和会话文件策略，首轮保留可覆盖源码。"
+    },
+    {
+      "source": "include/mdo/agent_config.h",
+      "reason": "Agent 继承、目录资源读取、默认提示词及业务依赖解析。"
+    },
+    {
+      "source": "include/mdo/agent_dependencies.h",
+      "reason": "调用扩展依赖解析和已安装目录，不是无状态格式库。"
+    },
+    {
+      "source": "include/mdo/agent_file.h",
+      "reason": "Agent 默认值、能力和权限配置组装，依赖 agent_config。"
+    },
+    {
+      "source": "src/application/value.c",
+      "reason": "独立检查失败，依赖其他 unity 文件中的静态 SdkBindNative/SdkBuiltinService；混有当前应用函数表和上下文绑定。"
+    },
+    {
+      "source": "src/bootstrap/",
+      "reason": "生命周期、覆盖插件重编译与服务入口，保留源码。"
+    },
+    {
+      "source": "src/agents/;src/runs/;src/sessions/;src/models/;src/config/;src/account/;src/extensions/",
+      "reason": "业务状态、会话、鉴权、策略及扩展管理器，首轮不按目录整体预编译。"
+    },
+    {
+      "source": "src/api/router.c;src/api/resources.c;src/application/plugins*.c",
+      "reason": "路由、产品信息、插件运行与源码覆盖机制，保留业务源码。"
+    },
+    {
+      "source": "command-worker.c",
+      "reason": "子进程启动源码仍按既有命令隔离流程使用，首轮保留。"
+    }
+  ],
+  "pipeline_requirements": [
+    "先复制 app，再在副本内生成 unity、模块 SDK、编译胶水和对象；不调用会写回原 app/generated 的默认生成步骤。",
+    "使用真实复制或 copy-on-write，不对会改写的文件使用硬链接。原始 app 前后核对指纹。",
+    "只允许显式白名单删除实现；有类型/宏/函数声明的头文件在原路径生成薄声明版本，不能删除整个 include 目录。",
+    "原始 .c 输入从副本 sources/unity 移除；解析、链接和重定位必须同时装入相应公共对象，正常入口及核心插件重编译都使用同一对象清单。",
+    "副本生成 module-sdk 的头文件镜像，并生成对新增外部公共函数的原生符号绑定，避免插件缺符号或重复携带原实现。",
+    "整个 SDK 镜像、生成文件和资源目录必须审计对被删实现的引用；casefold 等实现私有表可在确认无剩余引用后删除。",
+    "缓存指纹覆盖源码、传递包含依赖、宏/编译选项、目标系统/架构及 TCC/宿主/SDK 版本。",
+    "通过语法检查不代表可发布；后续还需真实 TCC .o 生成、链接、业务/原生插件/核心覆盖测试和启动/体积对照。"
+  ],
+  "override_boundary": {
+    "business_sources": "保留并继续允许源码覆盖",
+    "deleted_library_implementations": "仅在流水线副本里删除实现仍会使发行包无法从这些文件重新编译公共库；不能默认声称所有旧覆盖行为无变化。",
+    "preserve_library_overrides_requires": "保留可验证源码包或提供按需源码来源/匹配 ABI 的对象替换机制；触及库传递依赖时使预编译产物失效。"
+  }
+}
