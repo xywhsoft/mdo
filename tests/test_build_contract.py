@@ -164,7 +164,7 @@ class BuildContractTests(unittest.TestCase):
         self.assertRegex(self.lock["xrt"]["commit"], r"^[0-9a-f]{40}$")
         self.assertRegex(self.lock["xserver"]["commit"], r"^[0-9a-f]{40}$")
         self.assertEqual(self.lock["xserver"]["required_extensions"],
-                         ["xwork", "webview", "image", "xrudp", "xoauth2"])
+                         ["xwork", "webview", "image", "xrudp", "xoauth2", "md4c"])
         image = self.lock["xserver"]["native_extensions"]["image"]
         self.assertEqual(image["abi_version"], 1)
         self.assertRegex(image["tree_sha256"], r"^[0-9a-f]{64}$")
