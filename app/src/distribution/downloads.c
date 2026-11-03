@@ -7,6 +7,8 @@
 #include "../../include/mdo/extension_manifest.h"
 #include "../../include/mdo/time.h"
 #include "../../include/mdo/aria2.h"
+#include "../../include/mdo/download_network.h"
+#include "../../include/mdo/http_url.h"
 
 #define DL_COUNT 128u
 #define DL_RECORD "data/downloads/tasks.json"
@@ -26,11 +28,16 @@ static uint64 DlNumber(const xvalue* V,cstr K){uint64 N=0;int64 I=0;const xvalue
 static bool DlUInt(xvalue* V,cstr K,uint64 N){return xrtValueObjectSetNew(V,xrtStrView(K),xrtValueUInt(N));}
 static bool DlHash(cstr H){if(!H||strlen(H)!=64)return false;for(size_t I=0;I<64;I++)if(!strchr("0123456789abcdef",H[I]))return false;return true;}
 static bool DlContext(cstr Source,cstr Identity,const xvalue* C){
-    if(xrtValueType(C)!=XVALUE_OBJECT||!Identity||!Identity[0]||strlen(Identity)>512)return false;
+    if(xrtValueType(C)!=XVALUE_OBJECT||!Identity||!Identity[0]||strlen(Identity)>2048)return false;
     if(!strcmp(Source,"extension"))return strlen(Identity)==32&&MdoExtensionDirectoryId(Identity)&&MdoExtensionDirectoryKind(DlText(C,"kind"))&&strlen(DlText(C,"archive_id"))==32&&MdoExtensionDirectoryId(DlText(C,"archive_id"));
     cstr Path=DlText(C,"path"),Relative=DlText(C,"relative");
-    if(strcmp(Path,Identity)||Path[0]!='/'||strchr(Path,'\r')||strchr(Path,'\n')||!MdoExtensionRelativePath(Relative))return false;
+    if(strcmp(Path,Identity)||(Path[0]!='/'&&!MdoHttpUrlValid(xrtStrView(Path),false))||strchr(Path,'\r')||strchr(Path,'\n')||!MdoExtensionRelativePath(Relative))return false;
+    const xvalue* Hosts=xrtValueObjectGet(C,XRT_STR_LITERAL("redirect_hosts"));
+    if(Hosts&&(strcmp(Source,"transfer")||xrtValueType(Hosts)!=XVALUE_ARRAY||xrtValueCount(Hosts)>8))return false;
+    for(size_t I=0;I<xrtValueCount(Hosts);I++){xstrview H={0};if(!xrtValueGetString(xrtValueArrayGet(Hosts,I),&H)||!H.Size||H.Size>253||memchr(H.Data,0,H.Size))return false;
+        for(size_t J=0;J<H.Size;J++)if(!isalnum((unsigned char)H.Data[J])&&!strchr(".-:[]",H.Data[J]))return false;}
     if(!strcmp(Source,"update"))return !strcmp(Relative,"data/update/new.exe")||!strcmp(Relative,"data/update/new.bin")||!strcmp(Relative,"data/update/new.apk");
+    if(Path[0]!='/'&&strncmp(Relative,"data/downloads/assets/",22))return false;
     size_t Length=strlen(Relative);
     return !strcmp(Source,"transfer")&&!strncmp(Relative,"data/downloads/",15)&&strcmp(Relative,DL_RECORD)&&
         (Length<12||strcmp(Relative+Length-12,".resume.json"));
@@ -179,7 +186,11 @@ static int32 DlWorker(void* Unused){
         else if(!strcmp(DlText(R,"source"),"update")){
             MdoUpdateStatus S={0};Ok=MdoUpdateGetStatus(&S)&&!strcmp(S.Hash,DlText(R,"sha256"))&&MdoUpdateResumeDownload(Dispatch);
             if(!Ok)snprintf(E,sizeof(E),"Update metadata changed or another update operation is active; open the update details");
-        }else Ok=MdoTransferDownload(MdoDownloads.Engine,DlText(C,"path"),DlText(C,"relative"),DlNumber(R,"bytes"),DlText(R,"sha256"),Dispatch);
+        }else if(DlText(C,"path")[0]=='/')Ok=MdoTransferDownload(MdoDownloads.Engine,DlText(C,"path"),DlText(C,"relative"),DlNumber(R,"bytes"),DlText(R,"sha256"),Dispatch);
+        else {cstr Hosts[8]={0};const xvalue* H=xrtValueObjectGet(C,XRT_STR_LITERAL("redirect_hosts"));size_t Count=xrtValueCount(H);
+            for(size_t J=0;J<Count&&J<8;J++){xstrview V={0};xrtValueGetString(xrtValueArrayGet(H,J),&V);Hosts[J]=V.Data;}
+            MdoDownloadSource Source={DlText(C,"path"),DlText(C,"relative"),DlText(R,"sha256"),DlNumber(R,"bytes"),Hosts,Count};
+            Ok=MdoTransferDownloadSource(MdoDownloads.Engine,&Source,Dispatch,NULL,NULL,NULL);}
         xrtValueRelease(Result);xrtValueRelease(R);xrtMutexLock(MdoDownloads.Lock);
         if(!Ok&&!T->Active){if(DlState(T,"starting")){DlPut(T->Record,"state","failed");DlPut(T->Record,"error_code","resume");DlPut(T->Record,"error",E[0]?E:"Download could not be restarted");DlSave();}xrtCancelDestroy(T->DispatchCancel);T->DispatchCancel=NULL;}
         xrtMutexUnlock(MdoDownloads.Lock);
@@ -207,6 +218,7 @@ bool MdoDownloadsAction(cstr Id,cstr Action,char Error[512]){
     if(Ok)Ok=DlSave();if(!Ok&&Error)snprintf(Error,512,"Download state changed, the action is unavailable, or its record cannot be saved");xrtMutexUnlock(MdoDownloads.Lock);return Ok;
 }
 bool MdoDownloadsInit(xnetengine* Engine){
+    MdoDownloadNetworkSetEngine(Engine);
     if(MdoDownloads.Lock)return true;MdoDownloads.Lock=xrtMutexCreate();MdoDownloads.Cancel=xrtCancelCreate();MdoDownloads.Engine=Engine;
     if(!MdoDownloads.Lock||!MdoDownloads.Cancel)return false;
     xvalue* A=DlRead(DL_RECORD);bool Exists=false;xfileinfo Info;size_t N=xrtValueCount(A);

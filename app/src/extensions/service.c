@@ -1,3 +1,4 @@
+#include "../../include/mdo/download_network.h"
 #include "../../include/mdo/extension_service.h"
 #include "../../include/mdo/downloads.h"
 #include "../../include/mdo/aria2.h"
@@ -49,7 +50,7 @@ static bool MdoExtServiceFetchAttempt(cstr Path,cstr Method,const void* Body,siz
  if(Ok&&Lease&&Lease->Managed){Ok=Lease->AccessToken&&strlen(Lease->AccessToken)<=4096;if(Ok){snprintf(Authorization,sizeof(Authorization),"Bearer %s",Lease->AccessToken);Headers[Count++]=(XS_FetchHeader){"Authorization",Authorization};}}
  bool ArchiveRead=Binary&&!strcmp(Method,"GET");
  XS_FetchRequest Request={0};Request.Size=sizeof(Request);Request.Version=XS_FETCH_REQUEST_VERSION;Request.Url=Url;Request.Method=Method;Request.Headers=Headers;Request.HeaderCount=Count;Request.Body=Body;Request.BodySize=Bytes;Request.Timeout=ArchiveRead?120000000:30000000;Request.IdleTimeout=ArchiveRead?30000000:10000000;Request.MaxBodyBytes=Binary?1048576:8u*1024u*1024u;Request.Cancel=Lease&&Lease->Managed?Lease->Cancel:Cancel;Response->Size=sizeof(*Response);
- bool Read=Ok&&!strcmp(Method,"GET");if(Ok){xrtClearError();Ok=xsFetch(&Request,Response);}
+ bool Read=Ok&&!strcmp(Method,"GET");if(Ok){xrtClearError();Ok=MdoDownloadFetch(&Request,Response);}
  bool Cancelled=Request.Cancel&&xrtCancelRequested(Request.Cancel);
  if(Retryable&&Read&&!Cancelled&&!Response->Redirects)*Retryable=!Ok?MdoExtServiceTransientTransport(xrtGetError()):Response->Status==408||Response->Status==425||Response->Status==500||Response->Status==502||Response->Status==503||Response->Status==504;
  xrtSecureZero(Authorization,sizeof(Authorization));xrtFree(Url);
@@ -62,7 +63,7 @@ static bool MdoExtServiceFetch(cstr Path,cstr Method,const void* Body,size_t Byt
  for(unsigned Retry=0;;Retry++){
   bool Transient=false;if(MdoExtServiceFetchAttempt(Path,Method,Body,Bytes,Binary,Lease,Cancel,Response,&Transient,Error))return true;
   if(!Transient||Retry==MDO_EXT_INSTALL_RETRIES)return false;
-  xsFetchResponseUnit(Response);Response->Size=sizeof(*Response);
+  MdoDownloadFetchUnit(Response);Response->Size=sizeof(*Response);
   if(!MdoExtServiceWaitRetry(Retry,Lease&&Lease->Managed?Lease->Cancel:Cancel,Error))return false;
  }
 }
@@ -74,7 +75,7 @@ static bool MdoExtServiceRetryRead(bool Transient,unsigned* Retries,xcancel* Can
 }
 static bool MdoExtServiceFetchBudget(cstr Path,const MdoAccountLease* Lease,xcancel* Cancel,XS_FetchResponse* Response,unsigned* Retries,char Error[512]){
  for(;;){bool Transient=false;if(MdoExtServiceFetchAttempt(Path,"GET",NULL,0,true,Lease,Cancel,Response,&Transient,Error))return true;
-  xsFetchResponseUnit(Response);if(!MdoExtServiceRetryRead(Transient,Retries,Lease&&Lease->Managed?Lease->Cancel:Cancel,Error))return false;
+  MdoDownloadFetchUnit(Response);if(!MdoExtServiceRetryRead(Transient,Retries,Lease&&Lease->Managed?Lease->Cancel:Cancel,Error))return false;
  }
 }
 static xvalue* MdoExtServiceDecode(const XS_FetchResponse* Response,char Error[512]){
@@ -84,7 +85,7 @@ static xvalue* MdoExtServiceDecode(const XS_FetchResponse* Response,char Error[5
 }
 static xvalue* MdoExtServiceJsonAttempt(cstr Path,cstr Method,const xvalue* Body,const MdoAccountLease* Lease,xcancel* Cancel,bool* Retryable,char Error[512]){
  size_t Bytes=0;char* Text=Body?xrtJsonStringify(Body,false,&Bytes):NULL;XS_FetchResponse Response={0};bool Ok=(!Body||Text)&&Bytes<=16384&&(Retryable?MdoExtServiceFetchAttempt(Path,Method,Text,Bytes,false,Lease,Cancel,&Response,Retryable,Error):MdoExtServiceFetch(Path,Method,Text,Bytes,false,Lease,Cancel,&Response,Error));xrtFree(Text);
- xvalue* Data=Ok?MdoExtServiceDecode(&Response,Error):NULL;xsFetchResponseUnit(&Response);return Data;
+ xvalue* Data=Ok?MdoExtServiceDecode(&Response,Error):NULL;MdoDownloadFetchUnit(&Response);return Data;
 }
 static xvalue* MdoExtServiceJson(cstr Path,cstr Method,const xvalue* Body,const MdoAccountLease* Lease,xcancel* Cancel,char Error[512]){return MdoExtServiceJsonAttempt(Path,Method,Body,Lease,Cancel,NULL,Error);}
 static char* MdoExtServiceQuery(cstr Base,const xvalue* Input){
@@ -158,7 +159,7 @@ static bool MdoExtServiceDownloadAttempt(cstr Kind,cstr Version,xcancel* Cancel,
   char* Path=xrtFormat(MDO_EXT_SERVICE "/archive?dependency_protocol=1&version=%s&offset=%llu",Version,(unsigned long long)Offset);XS_FetchResponse Response={0};uint64 Remaining=Bytes-Offset;size_t Want=(size_t)(Remaining<MDO_EXTENSION_TASK_CHUNK?Remaining:MDO_EXTENSION_TASK_CHUNK);
   Ok=Path&&MdoExtServiceFetchBudget(Path,&Lease,MdoDownloadsCancelToken(Download,MdoExtensionTaskUseCancel(Use)),&Response,Retries,Error);
   if(Ok&&(Response.BodySize!=Want||!Response.ContentType||strncmp(Response.ContentType,"application/zip",15))){snprintf(Error,512,"Store archive chunk mismatch: expected %zu application/zip bytes, received %zu bytes (HTTP %u, %.80s)",Want,Response.BodySize,(unsigned)Response.Status,Response.ContentType?Response.ContentType:"no Content-Type");Ok=false;}
-  xvalue* Progress=NULL;if(Ok)Ok=MdoExtensionTaskUseWrite(Use,Offset,Response.Body,Response.BodySize,&Progress,Error)&&MdoDownloadsProgress(Download,Offset+Want,"downloading");xrtValueRelease(Progress);xsFetchResponseUnit(&Response);xrtFree(Path);Offset+=Want;
+  xvalue* Progress=NULL;if(Ok)Ok=MdoExtensionTaskUseWrite(Use,Offset,Response.Body,Response.BodySize,&Progress,Error)&&MdoDownloadsProgress(Download,Offset+Want,"downloading");xrtValueRelease(Progress);MdoDownloadFetchUnit(&Response);xrtFree(Path);Offset+=Want;
  }
  MdoAccountRelease(&Lease);MdoExtensionTaskUseEnd(Use);if(Ok)Ok=MdoDownloadsGate(Download,Cancel)&&MdoDownloadsProgress(Download,Bytes,"verifying")&&MdoExtensionTaskSeal(Id,MdoDownloadsCancelToken(Download,Cancel),Result,Error);
  /* Receiving archives remain resumable on read failures, cancellation and
@@ -192,7 +193,7 @@ static bool MdoExtServiceUpload(cstr Id,MdoExtensionTaskUse* Use,const MdoAccoun
  uint8* Buffer=Ok&&!Finished?xrtMalloc(MDO_EXTENSION_TASK_CHUNK):NULL;if(Ok&&!Finished&&!Buffer)Ok=false;
  while(Ok&&!Finished&&Offset<Bytes){size_t N=(size_t)(Bytes-Offset<MDO_EXTENSION_TASK_CHUNK?Bytes-Offset:MDO_EXTENSION_TASK_CHUNK);char* Path=xrtFormat(MDO_EXT_SERVICE "/uploads?id=%s&offset=%llu",Id,(unsigned long long)Offset);XS_FetchResponse Response={0};
   Ok=Path&&MdoExtensionTaskTransfer(Use,Offset,"uploading",Error)&&xrtReadAtFull(F,Offset,Buffer,N,NULL)&&MdoExtServiceFetch(Path,"PUT",Buffer,N,true,Lease,MdoExtensionTaskUseCancel(Use),&Response,Error);
-  Remote=Ok?MdoExtServiceDecode(&Response,Error):NULL;uint64 Received=0;Ok=Ok&&Remote&&MdoExtServiceNumber(Remote,"received",&Received)&&Received==Offset+N;xrtValueRelease(Remote);Remote=NULL;xsFetchResponseUnit(&Response);xrtFree(Path);Offset+=N;
+  Remote=Ok?MdoExtServiceDecode(&Response,Error):NULL;uint64 Received=0;Ok=Ok&&Remote&&MdoExtServiceNumber(Remote,"received",&Received)&&Received==Offset+N;xrtValueRelease(Remote);Remote=NULL;MdoDownloadFetchUnit(&Response);xrtFree(Path);Offset+=N;
  }
  xrtFree(Buffer);xrtClose(F);
  if(Ok&&!Finished){xvalue* Seal=xrtValueObject();Ok=Seal&&MdoExtServicePut(Seal,"action","seal")&&MdoExtServicePut(Seal,"id",Id);if(Ok)Remote=MdoExtServiceJson(MDO_EXT_SERVICE "/uploads","POST",Seal,Lease,MdoExtensionTaskUseCancel(Use),Error);xrtValueRelease(Seal);State=MdoExtensionText(Remote,"state",16);Ok=Ok&&State&&!strcmp(State,"sealed");xrtValueRelease(Remote);}

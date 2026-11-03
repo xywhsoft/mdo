@@ -63,7 +63,7 @@ export function createDownloadCenter({ updatePanel, navigation, registry = downl
       top.append(node("strong", row.name || kind), node("span", text(`state.${row.state}`))); item.append(top, node("small", `${kind}${row.buildId ? ` · ${row.buildId}` : ""}`, "download-meta"));
       if(row.source === "native") {
         item.append(node("small",text("engine",{engine:row.engine === "aria2" ? "aria2" : text("nativeEngine")}),"download-meta"));
-        if(row.fallbackReason) item.append(node("p",text("fallback"),"download-meta"));
+        if(row.fallbackReason) item.append(node("p",text(row.fallbackReason === "aria2_network_policy" ? "networkFallback" : "fallback"),"download-meta"));
       }
       if (downloadActive(row) || row.state === "paused") {
         const progress = node("progress"); writeUiAttribute(progress, "aria-label", `${row.name || kind} · ${text(`state.${row.state}`)}`);

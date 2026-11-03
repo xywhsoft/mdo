@@ -116,6 +116,8 @@ bool MdoHomeAtomicWrite(cstr Path, const void* pData, size_t iSize,
 /* Removes one external Home file without creating Home.  Missing files are a
  * successful no-op.  Backup has the same meaning as for AtomicWrite. */
 bool MdoHomeRemove(cstr Path, bool Backup);
+/* Existing native directory; includes a 32 MiB reserve. */
+bool MdoHomeDiskSpace(cstr Path,uint64 Required);
 
 /* Copies the current resource fallback into the external Home if the external
  * path does not already exist. */

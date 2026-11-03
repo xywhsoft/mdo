@@ -2,6 +2,7 @@
   "schema_version": 1,
   "sources": [
     "src/storage/home.c",
+    "src/distribution/network.c",
     "src/distribution/downloads.c",
     "src/distribution/aria2.c",
     "src/extensions/manager.c",

@@ -20,6 +20,14 @@ typedef struct MdoTransferReport {
 } MdoTransferReport;
 /* With a report, preserve failed bytes for diagnosis; never activate them. */
 bool MdoTransferDownloadReport(xnetengine* Engine,cstr Path,cstr Relative,uint64 Size,cstr Hash,xcancel* Cancel,MdoTransferProgress Progress,void* Data,MdoTransferReport* Report);
+/* Trusted native producers only: public HTTPS catalog URLs, mandatory size
+ * and SHA-256, Home-relative data/downloads destination. No browser URL API.
+ * Redirects allow only the source host and these exact hosts, at most 5 hops. */
+typedef struct MdoDownloadSource {
+    cstr Url,Relative,Sha256;uint64 Bytes;
+    const cstr* RedirectHosts;size_t RedirectHostCount;
+} MdoDownloadSource;
+bool MdoTransferDownloadSource(xnetengine* Engine,const MdoDownloadSource* Source,xcancel* Cancel,MdoTransferProgress Progress,void* Data,MdoTransferReport* Report);
 bool MdoTransferDownloadProgress(xnetengine* Engine,cstr Path,cstr Relative,uint64 Size,cstr Hash,xcancel* Cancel,MdoTransferProgress Progress,void* Data);
 bool MdoDistributionInit(XS_ServerInfo* Server);
 void MdoDistributionUnit(void);

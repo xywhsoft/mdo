@@ -1,3 +1,4 @@
+#include "../../include/mdo/download_network.h"
 #include "../../include/mdo/aria2.h"
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/extensions.h"
@@ -54,11 +55,12 @@ static void ArStop(MdoAria* A){
     }
     MdoCliUseEnd(A->Use);MdoExtensionsRelease(A->Lease);xrtSecureZero(A,sizeof(*A));
 }
-static bool ArStart(MdoAria* A,xcancel* Cancel){
+static bool ArStart(MdoAria* A,xcancel* Cancel,bool Launch){
     char Why[512]={0};xvalue* Meta=MdoExtensionsResolve("external-tool:mdo.aria2",Why);cstr Id=MdoExtensionText(Meta,"directory_id",96);
     A->Lease=Id?MdoExtensionsAcquire("external-tools",Id,Why):NULL;xrtValueRelease(Meta);
     char* Program=A->Lease&&MdoCliUseBegin(&A->Use,Why)?MdoCliProgram("external-tool:mdo.aria2","aria2c",Why):NULL;
     if(!Program)return false;
+    if(!Launch){xrtFree(Program);return true;}
     xnetaddr Addr={0};xnetsocket Socket=xrtNetSocketOpen(XNET_FAMILY_IPV4,XNET_SOCKET_STREAM,0);
     bool Ok=Socket&&xrtNetAddrLoopback(&Addr,XNET_FAMILY_IPV4,0)&&xrtNetSocketBind(Socket,&Addr)&&xrtNetSocketLocal(Socket,&Addr);xrtNetSocketClose(Socket);
     char *Secret=xrtXidMakeString(),Port[48],SecretArg[100],Parent[72];
@@ -99,9 +101,15 @@ static bool ArVerify(MdoNativeDownload* T,cstr Path,uint64 Bytes,cstr Hash,xcanc
 MdoAriaResult MdoAriaDownload(MdoNativeDownload* T,cstr Url,uint64 Bytes,cstr Hash,cstr Authorization,xcancel* Cancel,char** Relative,MdoTransferReport* Report){
     if(Relative)*Relative=NULL;if(Report)memset(Report,0,sizeof(*Report));char Id[33];
     if(!Relative||!T||!MdoDownloadsIdentity(T,Id))return MDO_ARIA_UNAVAILABLE;
-    MdoAria A={0};MdoAriaResult Result=MDO_ARIA_UNAVAILABLE;char* Path=ArPath(Id,"payload"),*Native=Path?MdoHomeExternalPath(Path):NULL;
+    MdoAria A={0};MdoAriaResult Result=MDO_ARIA_UNAVAILABLE;bool NetworkFallback=false;char* Path=ArPath(Id,"payload"),*Native=Path?MdoHomeExternalPath(Path):NULL;
     if(!Url||(!strncmp(Url,"https://",8)?false:strncmp(Url,"http://",7)!=0)||strchr(Url,'\r')||strchr(Url,'\n')||!Hash||strlen(Hash)!=64||!Bytes||!Path||!Native)goto done;
-    if(!ArStart(&A,Cancel)){Result=A.Lease?MDO_ARIA_FALLBACK:MDO_ARIA_UNAVAILABLE;goto done;}
+    xvalue* Policy=xrtValueObject();bool Compatible=Policy&&MdoDownloadAriaOptions(Policy,Url);xrtValueRelease(Policy);
+    if(!ArStart(&A,Cancel,Compatible)){Result=A.Lease?MDO_ARIA_FALLBACK:MDO_ARIA_UNAVAILABLE;goto done;}
+    if(!Compatible){NetworkFallback=true;Result=MDO_ARIA_FALLBACK;goto done;}
+    char* Scratch=xrtFormat("data/downloads/aria2/%s",Id);xroot Root=Scratch?MdoHomeOpenStorageDirectory(Scratch):NULL;
+    char* NativeDir=Root?MdoHomeExternalPath(Scratch):NULL;bool Space=NativeDir&&MdoHomeDiskSpace(NativeDir,Bytes);
+    xrtRootClose(Root);xrtFree(NativeDir);xrtFree(Scratch);
+    if(!Space){ArError(Report,"space","Insufficient free disk space for the selected download");Result=MDO_ARIA_FAILED;goto done;}
     Result=MDO_ARIA_FAILED;
     if(!MdoDownloadsEngine(T,"aria2","")||!ArOwn(Id,Url,Hash,Bytes)){ArError(Report,"write","Cannot prepare aria2 task storage");goto done;}
     char* Dir=xrtStrDup(Native);char* Slash=Dir?strrchr(Dir,'/'):NULL;char* Back=Dir?strrchr(Dir,'\\'):NULL;if(Back&&(!Slash||Back>Slash))Slash=Back;if(!Slash){xrtFree(Dir);goto done;}*Slash=0;
@@ -112,6 +120,7 @@ MdoAriaResult MdoAriaDownload(MdoNativeDownload* T,cstr Url,uint64 Bytes,cstr Ha
         ArPut(Options,"min-split-size","1M")&&ArPut(Options,"max-tries","3")&&ArPut(Options,"retry-wait","1")&&ArPut(Options,"connect-timeout","15")&&ArPut(Options,"timeout","30")&&
         ArPut(Options,"max-redirect","0")&&ArPut(Options,"check-certificate","true")&&ArPut(Options,"follow-torrent","false")&&ArPut(Options,"follow-metalink","false")&&ArPut(Options,"all-proxy","");
     if(Ok&&Authorization&&Authorization[0]){xvalue* H=xrtValueArray();Ok=!strchr(Authorization,'\r')&&!strchr(Authorization,'\n')&&strlen(Authorization)<=4200&&H&&xrtValueArrayAppendNew(H,xrtValueString(xrtStrView(Authorization)))&&xrtValueObjectSet(Options,XRT_STR_LITERAL("header"),H);xrtValueRelease(H);}
+    if(Ok&&!MdoDownloadAriaOptions(Options,Url)){NetworkFallback=true;Ok=false;}
     Ok=Ok&&xrtValueArrayAppend(P,Options);xvalue* Reply=Ok?ArRpc(&A,"aria2.addUri",P,Cancel):NULL;xstrview Gid={0};Ok=xrtValueGetString(Reply,&Gid)&&Gid.Size==16&&!memchr(Gid.Data,0,16);
     if(Ok)snprintf(A.Gid,sizeof(A.Gid),"%s",Gid.Data);xrtValueRelease(Reply);xrtValueRelease(P);xrtValueRelease(Uris);xrtValueRelease(Options);xrtFree(Dir);
     if(!Ok){fprintf(stderr,"[mdo] aria2 RPC submission failed\n");Result=MDO_ARIA_FALLBACK;goto done;}
@@ -146,7 +155,7 @@ done:
     if(Result==MDO_ARIA_FAILED&&Report&&!Report->Code[0])ArError(Report,"download","aria2 download could not complete");
     if(Result==MDO_ARIA_FALLBACK||Result==MDO_ARIA_UNAVAILABLE){
         if(!MdoAriaCleanup(Id)){ArError(Report,"write","Cannot remove the stopped aria2 partial file");return MDO_ARIA_FAILED;}
-        if(!MdoDownloadsEngine(T,"native",Result==MDO_ARIA_FALLBACK?"aria2_failed":""))return MDO_ARIA_FAILED;
+        if(!MdoDownloadsEngine(T,"native",NetworkFallback?"aria2_network_policy":Result==MDO_ARIA_FALLBACK?"aria2_failed":""))return MDO_ARIA_FAILED;
         if(Report)memset(Report,0,sizeof(*Report));
     }else if(Result==MDO_ARIA_FAILED&&Report&&(!strcmp(Report->Code,"checksum")||!strcmp(Report->Code,"size")))MdoAriaCleanup(Id);
     return Result;
