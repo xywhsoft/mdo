@@ -20,6 +20,9 @@ ARCHIVE=archive.getvalue();ARCHIVE_HASH=hashlib.sha256(ARCHIVE).hexdigest()
 class Publisher(BaseHTTPRequestHandler):
     requests=[]
     clients=[]
+    protocol_version='HTTP/1.1'
+    def send_response(self,*args):
+        super().send_response(*args);self.send_header('Connection','close')
     def log_message(self,*_):pass
     def do_GET(self):
         if '/extensions/detail?' in self.path:
@@ -32,11 +35,15 @@ class Publisher(BaseHTTPRequestHandler):
             if field:
                 first,last=field.split('=')[1].split('-');start=int(first);end=int(last) if last else len(ARCHIVE)-1
             body=ARCHIVE[start:end+1];type(self).requests.append(('extension',start));type(self).clients.append(('extension',self.headers.get('User-Agent','')))
-            self.send_response(206 if field else 200);self.send_header('Content-Length',str(len(body)));self.send_header('Content-Type','application/zip')
+            chunked=not sliced
+            self.send_response(206 if field else 200);self.send_header('Transfer-Encoding' if chunked else 'Content-Length','chunked' if chunked else str(len(body)));self.send_header('Content-Type','application/zip')
             if field:self.send_header('Content-Range',f'bytes {start}-{end}/{len(ARCHIVE)}')
             self.end_headers()
             try:
-                for at in range(0,len(body),16384):self.wfile.write(body[at:at+16384]);self.wfile.flush();time.sleep(.012)
+                for at in range(0,len(body),16384):
+                    piece=body[at:at+16384]
+                    self.wfile.write((f'{len(piece):x}\r\n'.encode()+piece+b'\r\n') if chunked else piece);self.wfile.flush();time.sleep(.012)
+                if chunked:self.wfile.write(b'0\r\n\r\n');self.wfile.flush()
             except (BrokenPipeError,ConnectionResetError,ConnectionAbortedError):pass
             return
         mode=self.path.removeprefix('/qa/');start=0;end=len(PAYLOAD)-1
@@ -60,7 +67,7 @@ class Publisher(BaseHTTPRequestHandler):
         except (BrokenPipeError,ConnectionResetError,ConnectionAbortedError):pass
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--host',type=Path,required=True);parser.add_argument('--serve-ui',action='store_true');parser.add_argument('--aria2',action='store_true');args=parser.parse_args()
+    parser=argparse.ArgumentParser();parser.add_argument('--host',type=Path,required=True);parser.add_argument('--serve-ui',action='store_true');parser.add_argument('--aria2',action='store_true');parser.add_argument('--aria2-extension-only',action='store_true');args=parser.parse_args()
     with ThreadingHTTPServer(('127.0.0.1',0),Publisher) as publisher,tempfile.TemporaryDirectory(dir=ROOT/'.build',prefix='native-download-') as raw:
         thread=threading.Thread(target=publisher.serve_forever,daemon=True);thread.start()
         base=Path(raw);home=base/'home';port=free_port();stem='.download-qa-'+uuid.uuid4().hex
@@ -104,7 +111,7 @@ static int32 QaTransfer(void* Unused){{
 }}
 void ServiceUnit(XS_HostInfo* H){{MdoDownloadsStop();if(QaThread){{xrtThreadWait(QaThread);xrtThreadDestroy(QaThread);QaThread=NULL;}}QaBaseUnit(H);}}
 XS_RequestResult RequestProc(XS_HttpReq* R){{
- if(xrtStrEqual(R->head->Target,XRT_STR_LITERAL("/qa/disable-aria"))){{char E[512]={{0}};bool Ok=MdoExtensionsSetEnabled("external-tools","{'A'*32}",false,E)&&MdoCliReload();MdoApiContext C={{0}};C.Request=R;MdoApiRequestId(C.RequestId);if(Ok)MdoApiReplySuccessTake(&C,200,xrtValueObject(),NULL);else MdoApiReplyError(&C,409,"qa",E,NULL);return XS_OK;}}
+ if(xrtStrEqual(R->head->Target,XRT_STR_LITERAL("/qa/disable-aria"))||xrtStrEqual(R->head->Target,XRT_STR_LITERAL("/qa/enable-aria"))){{char E[512]={{0}};bool Ok=MdoExtensionsSetEnabled("external-tools","{'A'*32}",xrtStrEqual(R->head->Target,XRT_STR_LITERAL("/qa/enable-aria")),E)&&MdoCliReload();MdoApiContext C={{0}};C.Request=R;MdoApiRequestId(C.RequestId);if(Ok)MdoApiReplySuccessTake(&C,200,xrtValueObject(),NULL);else MdoApiReplyError(&C,409,"qa",E,NULL);return XS_OK;}}
  if(R->head->Target.Size>4&&!memcmp(R->head->Target.Data,"/qa/",4)){{
   if(QaThread){{xrtThreadWait(QaThread);xrtThreadDestroy(QaThread);QaThread=NULL;}}
   MdoHomeRemove("data/downloads/qa-result.json",false);snprintf(QaPath,sizeof(QaPath),"%.*s",(int)R->head->Target.Size,R->head->Target.Data);QaThread=xrtThreadCreate(QaTransfer,NULL,0);
@@ -143,6 +150,10 @@ XS_RequestResult RequestProc(XS_HttpReq* R){{
             return row,t,result
         try:
             process=start()
+            if args.aria2_extension_only:
+                assert transfer('extension')['success']
+                extension=next(r for r in rows() if r['source']=='extension');assert extension['engine']=='aria2',extension
+                print('PASS focused chunked aria2 extension download');return
             if args.aria2:
                 row,t,result=begin('normal',wait=False);assert row['engine']=='aria2',row
                 api('POST',f"/download-tasks/{row['id']}/pause",{});time.sleep(.6)
@@ -172,13 +183,29 @@ XS_RequestResult RequestProc(XS_HttpReq* R){{
                 assert result and not result[0]['success'],result
                 assert not (home/f"data/downloads/aria2/{row['id']}").exists()
                 assert transfer('extension')['success']
+                extension=next(r for r in rows() if r['source']=='extension');assert extension['engine']=='aria2',extension
                 assert any('aria2' in agent for mode,agent in Publisher.clients if mode=='extension')
                 archives=api('GET','/extension-tasks');assert len(archives)==1 and archives[0]['state']=='ready',archives
                 assert not (home/'skills'/('W'*32)).exists()
+                api('POST','/update/download',{})
+                until(lambda:api('GET','/update').get('ready'))
+                update=next(r for r in rows() if r['source']=='update');assert update['engine']=='aria2' and update['state']=='ready',update
                 st,_,data=request(port,'GET','/qa/disable-aria');assert st==200,(st,data)
                 result=transfer('disabled');assert result['success'],result
                 assert next(r for r in rows() if r['identity']=='/qa/disabled')['engine']=='native'
-                print('PASS real aria2 auto-detection, pause/restart resume, child crash fallback, auth/checksum no fallback, cancel cleanup, whole extension seal, disabled-tool native selection')
+                command=f'Get-CimInstance Win32_Process -Filter "ParentProcessId={process.pid}" | Where-Object Name -eq "aria2c.exe" | Select-Object -ExpandProperty ProcessId'
+                assert not subprocess.check_output(['powershell','-NoProfile','-Command',command],text=True).strip(),'Completed downloads must stop owned child processes'
+                print('PASS real aria2 auto-detection, pause/restart resume, child crash fallback, auth/checksum no fallback, cancel cleanup, chunked whole extension seal, updater, disabled-tool native selection and child cleanup',flush=True)
+                if args.serve_ui:
+                    st,_,data=request(port,'GET','/qa/enable-aria');assert st==200,(st,data)
+                    (home/'data/downloads/fixture.bin').unlink(missing_ok=True)
+                    row,t,result=begin('preview',wait=False);api('POST',f"/download-tasks/{row['id']}/pause",{})
+                    receipt=ROOT/'.build/download-ui-fixture.json';stop=base/'stop'
+                    receipt.write_text(json.dumps(dict(url=f'http://127.0.0.1:{port}',home=str(home),stop=str(stop),id=row['id'])),encoding='utf-8')
+                    print('UI fixture: '+str(receipt),flush=True)
+                    until_stop=time.monotonic()+900
+                    while not stop.exists() and time.monotonic()<until_stop:time.sleep(.25)
+                    receipt.unlink(missing_ok=True)
                 return
             row,t,result=begin('normal');id=row['id'];api('POST',f'/download-tasks/{id}/pause',{})
             time.sleep(.15);paused=next(r for r in rows() if r['id']==id);assert paused['state']=='paused',paused
@@ -250,8 +277,13 @@ XS_RequestResult RequestProc(XS_HttpReq* R){{
                 st,_,_=request(port,'GET','/api/v1/download-tasks');assert st==503,st
                 assert index.read_bytes()==broken,'Unreadable task index must not be overwritten'
             print('PASS unreadable/oversized indexes preserved; unrelated app APIs remain available')
+        except Exception:
+            print((base/'host.log').read_text(encoding='utf-8',errors='replace')[-6000:])
+            print('Publisher requests:',Publisher.requests)
+            raise
         finally:
             if process and process.poll() is None:process.terminate();process.wait(timeout=10)
+            if args.aria2:time.sleep(2)
             source.unlink(missing_ok=True);config.unlink(missing_ok=True);log.close();publisher.shutdown();thread.join(timeout=5)
 
 if __name__=='__main__':main()

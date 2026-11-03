@@ -20,14 +20,6 @@ static cstr ArText(const xvalue* V,cstr K){cstr S=MdoExtensionText(V,K,4096);ret
 static bool ArDecimal(cstr S,uint64* Out){
     uint64 N=0;if(!S||!*S)return false;for(;*S;S++){if(*S<'0'||*S>'9'||N>(UINT64_MAX-(unsigned)(*S-'0'))/10)return false;N=N*10+(unsigned)(*S-'0');}*Out=N;return true;
 }
-/* Supply the already pinned catalogue size through an in-memory Metalink.
- * This lets aria2 split even when the store streams with chunked framing. */
-static char* ArMetalink(cstr Url,uint64 Bytes){
-    size_t N=strlen(Url);if(N>4096)return NULL;char* Escaped=xrtMalloc(N*5+1);if(!Escaped)return NULL;size_t At=0;
-    for(size_t I=0;I<N;I++){cstr S=Url[I]=='&'?"&amp;":Url[I]=='<'?"&lt;":Url[I]=='>'?"&gt;":NULL;if(S){size_t L=strlen(S);memcpy(Escaped+At,S,L);At+=L;}else Escaped[At++]=Url[I];}Escaped[At]=0;
-    char* Xml=xrtFormat("<?xml version=\"1.0\" encoding=\"UTF-8\"?><metalink xmlns=\"urn:ietf:params:xml:ns:metalink\"><file name=\"payload\"><size>%llu</size><url>%s</url></file></metalink>",(unsigned long long)Bytes,Escaped);xrtFree(Escaped);
-    char* Encoded=Xml?xrtBase64EncodeNew(Xml,strlen(Xml),NULL):NULL;xrtFree(Xml);return Encoded;
-}
 static bool ArError(MdoTransferReport* R,cstr Code,cstr Detail){if(R){snprintf(R->Code,sizeof(R->Code),"%s",Code);snprintf(R->Detail,sizeof(R->Detail),"%s",Detail);}return false;}
 static char* ArPath(cstr Id,cstr Name){return Id&&strlen(Id)==32&&MdoExtensionDirectoryId(Id)?xrtFormat("data/downloads/aria2/%s/%s",Id,Name):NULL;}
 bool MdoAriaCleanup(cstr Id){
@@ -113,27 +105,28 @@ MdoAriaResult MdoAriaDownload(MdoNativeDownload* T,cstr Url,uint64 Bytes,cstr Ha
     Result=MDO_ARIA_FAILED;
     if(!MdoDownloadsEngine(T,"aria2","")||!ArOwn(Id,Url,Hash,Bytes)){ArError(Report,"write","Cannot prepare aria2 task storage");goto done;}
     char* Dir=xrtStrDup(Native);char* Slash=Dir?strrchr(Dir,'/'):NULL;char* Back=Dir?strrchr(Dir,'\\'):NULL;if(Back&&(!Slash||Back>Slash))Slash=Back;if(!Slash){xrtFree(Dir);goto done;}*Slash=0;
-    xvalue *P=xrtValueArray(),*Options=xrtValueObject();char* Metalink=ArMetalink(Url,Bytes);
-    bool Ok=P&&Options&&Metalink&&xrtValueArrayAppendNew(P,xrtValueString(xrtStrView(Metalink)))&&
+    xvalue *P=xrtValueArray(),*Uris=xrtValueArray(),*Options=xrtValueObject();
+    bool Ok=P&&Uris&&Options&&xrtValueArrayAppendNew(Uris,xrtValueString(xrtStrView(Url)))&&xrtValueArrayAppend(P,Uris)&&
         ArPut(Options,"dir",Dir)&&ArPut(Options,"out","payload")&&ArPut(Options,"continue","true")&&ArPut(Options,"auto-file-renaming","false")&&ArPut(Options,"allow-overwrite","true")&&
         ArPut(Options,"file-allocation","none")&&ArPut(Options,"auto-save-interval","1")&&ArPut(Options,"split","4")&&ArPut(Options,"max-connection-per-server","4")&&
         ArPut(Options,"min-split-size","1M")&&ArPut(Options,"max-tries","3")&&ArPut(Options,"retry-wait","1")&&ArPut(Options,"connect-timeout","15")&&ArPut(Options,"timeout","30")&&
         ArPut(Options,"max-redirect","0")&&ArPut(Options,"check-certificate","true")&&ArPut(Options,"follow-torrent","false")&&ArPut(Options,"follow-metalink","false")&&ArPut(Options,"all-proxy","");
     if(Ok&&Authorization&&Authorization[0]){xvalue* H=xrtValueArray();Ok=!strchr(Authorization,'\r')&&!strchr(Authorization,'\n')&&strlen(Authorization)<=4200&&H&&xrtValueArrayAppendNew(H,xrtValueString(xrtStrView(Authorization)))&&xrtValueObjectSet(Options,XRT_STR_LITERAL("header"),H);xrtValueRelease(H);}
-    Ok=Ok&&xrtValueArrayAppend(P,Options);xvalue* Reply=Ok?ArRpc(&A,"aria2.addMetalink",P,Cancel):NULL;xstrview Gid={0};Ok=xrtValueCount(Reply)==1&&xrtValueGetString(xrtValueArrayGet(Reply,0),&Gid)&&Gid.Size==16&&!memchr(Gid.Data,0,16);
-    if(Ok)snprintf(A.Gid,sizeof(A.Gid),"%s",Gid.Data);xrtValueRelease(Reply);xrtValueRelease(P);xrtValueRelease(Options);xrtFree(Metalink);xrtFree(Dir);
-    if(!Ok){Result=MDO_ARIA_FALLBACK;goto done;}
+    Ok=Ok&&xrtValueArrayAppend(P,Options);xvalue* Reply=Ok?ArRpc(&A,"aria2.addUri",P,Cancel):NULL;xstrview Gid={0};Ok=xrtValueGetString(Reply,&Gid)&&Gid.Size==16&&!memchr(Gid.Data,0,16);
+    if(Ok)snprintf(A.Gid,sizeof(A.Gid),"%s",Gid.Data);xrtValueRelease(Reply);xrtValueRelease(P);xrtValueRelease(Uris);xrtValueRelease(Options);xrtFree(Dir);
+    if(!Ok){fprintf(stderr,"[mdo] aria2 RPC submission failed\n");Result=MDO_ARIA_FALLBACK;goto done;}
     bool WasPaused=false;
     for(;;){
         bool Paused=false;if(!MdoDownloadsControl(T,&Paused,Cancel))break;
         if(xrtProcessState(A.Process)!=XPROCESS_RUNNING){Result=MDO_ARIA_FALLBACK;break;}
         if(Paused!=WasPaused){Reply=ArGid(&A,Paused?"aria2.pause":"aria2.unpause",Cancel);if(!Reply){Result=MDO_ARIA_FALLBACK;break;}xrtValueRelease(Reply);WasPaused=Paused;}
-        Reply=ArGid(&A,"aria2.tellStatus",Cancel);if(!Reply){Result=MDO_ARIA_FALLBACK;break;}
+        Reply=ArGid(&A,"aria2.tellStatus",Cancel);if(!Reply){fprintf(stderr,"[mdo] aria2 status RPC failed\n");Result=MDO_ARIA_FALLBACK;break;}
         cstr State=ArText(Reply,"status");uint64 Done=0,Total=0;bool Valid=ArDecimal(ArText(Reply,"completedLength"),&Done)&&ArDecimal(ArText(Reply,"totalLength"),&Total)&&Done<=Bytes&&(!Total||Total==Bytes);
         bool Complete=!strcmp(State,"complete"),Failed=!strcmp(State,"error")||!strcmp(State,"removed");uint64 Code=0;ArDecimal(ArText(Reply,"errorCode"),&Code);
         xrtValueRelease(Reply);
         if(!Valid){ArError(Report,"size","Download size differs from the selected resource");break;}
         if(Failed){
+            fprintf(stderr,"[mdo] aria2 download stopped with code %llu\n",(unsigned long long)Code);
             if(Code==1||Code==2||Code==5||Code==6||Code==7||Code==8||Code==19||Code==22||Code==28||Code==29)Result=MDO_ARIA_FALLBACK;
             else ArError(Report,Code==9||Code==13||Code==14||Code==15||Code==16||Code==17||Code==18?"write":Code==32?"checksum":"http","aria2 rejected the download; check resource access, disk space and certificate trust");
             break;
