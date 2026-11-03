@@ -50,13 +50,8 @@ static bool MdoUpdatePolicyParse(xvalue* Root,MdoUpdateStatus* Status)
     }
     Status->Required = Force; Status->Bytes = Size; return true;
 }
-static bool MdoUpdatePolicySave(const MdoUpdateStatus* Status)
+static bool MdoUpdatePolicyWrite(const MdoUpdateStatus* Status)
 {
-    bool Exists = false; xfileinfo Info;
-    if (!MdoHomeExternalStat("data/update/policy.json",&Exists,&Info)) return false;
-    /* No filesystem writes for ordinary startup checks. Once cached, persist
-     * explicit revocations as well, so stale required=true cannot reappear. */
-    if (!Status->Required && !Exists) return true;
     xvalue* Root = xrtValueObject(); size_t Size = 0; char Url[128],Code[9]; str Json = NULL;
     MdoVersionCodeFormat(Status->VersionCode,Code);
     snprintf(Url,sizeof(Url),"%s",Status->DownloadPath);
@@ -73,6 +68,14 @@ static bool MdoUpdatePolicySave(const MdoUpdateStatus* Status)
     if (Ok) Json = xrtJsonStringify(Root,false,&Size);
     Ok = Json && MdoHomeAtomicWrite("data/update/policy.json",Json,Size,false);
     xrtFree(Json); xrtValueRelease(Root); return Ok;
+}
+static bool MdoUpdatePolicySave(const MdoUpdateStatus* Status)
+{
+    bool Exists=false;xfileinfo Info;
+    if(!MdoHomeExternalStat("data/update/policy.json",&Exists,&Info))return false;
+    /* Ordinary startup checks remain read only. Explicit downloads always
+     * write their accepted policy so they can be recovered after restart. */
+    return !Status->Required&&!Exists?true:MdoUpdatePolicyWrite(Status);
 }
 static void MdoUpdatePolicyLoad(MdoUpdateStatus* Status)
 {

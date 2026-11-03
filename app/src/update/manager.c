@@ -139,6 +139,7 @@ done:
 }
 static void MdoUpdateDoDownload(MdoUpdateStatus* Status)
 {
+    if(!MdoUpdatePolicyWrite(Status)){MdoUpdateComplete(Status,"available","Cannot persist the selected update for download recovery");return;}
     char Path[160], Hash[65];
     snprintf(Path,sizeof(Path),"%s",Status->DownloadPath);
     if(!Path[0])snprintf(Path,sizeof(Path),"/update/download/%s/%s",Status->Platform,Status->Hash);
@@ -146,7 +147,7 @@ static void MdoUpdateDoDownload(MdoUpdateStatus* Status)
     bool Ok=MdoTransferDownload(g_MdoUpdate.Engine,Path,Relative,Status->Bytes,Status->Hash,g_MdoUpdate.Cancel);
     str Native=Ok?MdoHomeExternalPath(Relative):NULL;
     if(Ok)Ok=Native&&MdoUpdateFileHash(Native,Hash,!strcmp(Status->Platform,"windows-x86_64"))&&!strcmp(Hash,Status->Hash);
-    xrtFree(Native); if(!Ok)MdoHomeRemove(Relative,false);
+    xrtFree(Native); /* Interrupted bytes belong to the resumable download. */
     Status->Ready=Ok;
     MdoUpdateComplete(Status,Ok?"ready":"available",Ok?"":"Download failed or checksum mismatch");
 }

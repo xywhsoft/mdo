@@ -28,6 +28,8 @@ static xatomic64 g_MdoApiFallbackId;
 static bool g_MdoApiInitialized;
 
 static const MdoApiRoute g_MdoApiRoutes[] = {
+    { "/api/v1/download-tasks", XHTTP_METHOD_GET, "GET, OPTIONS", MdoApiNativeDownloadsRoute, false },
+    { "/api/v1/download-tasks/{download}/{action}", XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiNativeDownloadsRoute, false },
     { "/api/v1/application/services", XHTTP_METHOD_GET, "GET, OPTIONS", MdoApiApplicationRoute, false },
     { "/api/v1/application/call", XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiApplicationRoute, false },
     { "/api/v1/application/events", XHTTP_METHOD_GET, "GET, OPTIONS", MdoApiApplicationRoute, false },

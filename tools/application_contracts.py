@@ -159,7 +159,7 @@ BODY['ExtensionTasksRoute']='ExtensionTask'
 BODY['CommandProjectRoute']='Enabled'
 BODY['SkillProjectRoute']='Enabled'
 BODY['ExtensionsRoute']='ExtensionDirectory'
-NO_BODY=set('''CommandsRoute DistributionRoute CliToolsRoute LiveRoute DirectRoute UpdateExitRoute BootstrapRoute SettingsRoute
+NO_BODY=set('''NativeDownloadsRoute CommandsRoute DistributionRoute CliToolsRoute LiveRoute DirectRoute UpdateExitRoute BootstrapRoute SettingsRoute
 ModelsRoute ModelConfigRoute ModelProvidersRoute AgentsRoute BackupUploadRoute BackupUploadSealRoute BackupPreviewsRoute BackupPreviewRoute UpdateDownloadRoute UpdateInstallRoute
 BackupRestoreApplyRoute BackupRestoresRoute BackupRestoreRoute BackupPreviewStartRoute ModulesRoute ToolsRoute SkillsRoute McpRoute DirectoriesRoute
 ProjectPurgePreviewRoute ProjectPurgeResultRoute ProjectWorkspaceFilesRoute MemoryOpenDirectoryRoute MemoryEntryRoute

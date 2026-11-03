@@ -1,4 +1,5 @@
 #include "../../include/mdo/distribution.h"
+#include "../../include/mdo/downloads.h"
 #include "../../include/mdo/extension_updates.h"
 #include <stdio.h>
 #include "../../include/mdo/extensions.h"
@@ -70,6 +71,7 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
         MdoBootstrapFail("Home path migration failed; original records were retained");
         return false;
     }
+    if(!MdoDownloadsInit(pHost->Server->Engine)){MdoBootstrapFail("Download task recovery failed");return false;}
     char ExtensionError[512]={0};
     if ( !MdoExtensionsInit() || !MdoExtensionTasksInit() || !MdoExtensionsRecoverStartup(ExtensionError) ||
          !MdoExtensionsSeedBuiltins(ExtensionError) ) {
@@ -259,6 +261,7 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
 
 void MdoBootstrapUnit(void)
 {
+    MdoDownloadsStop();
     MdoExtensionUpdatesUnit();
     MdoApplicationInstancesStop();
     MdoModuleManagerStop();
@@ -275,6 +278,7 @@ void MdoBootstrapUnit(void)
     MdoModuleManagerUnit();
     MdoMcpManagerUnit();
     MdoWebManagerUnit();
+    MdoDownloadsUnit();
     MdoAccountUnit();
     MdoMemoryManagerUnit();
     MdoSkillManagerUnit();

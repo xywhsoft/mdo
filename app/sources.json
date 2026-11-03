@@ -2,6 +2,7 @@
   "schema_version": 1,
   "sources": [
     "src/storage/home.c",
+    "src/distribution/downloads.c",
     "src/extensions/manager.c",
     "src/extensions/runtime.c",
     "src/extensions/builtins.c",
@@ -96,6 +97,7 @@
     "src/api/distribution.c",
     "src/api/update.c",
     "src/api/downloads.c",
+    "src/api/native_downloads.c",
     "src/api/image_downloads.c",
     "src/api/backup_upload.c",
     "src/api/backup_preview.c",
