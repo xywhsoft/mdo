@@ -3,6 +3,7 @@ import { mountIcons } from "./icons.js";
 import { openLayer } from "./layers.js";
 import { t } from "../i18n.js";
 import { compareExtensions, extensionTags } from "./extension-presentation.js";
+import { trackAnchoredMenu } from "../utils/anchored-menu.js";
 
 export const browserText = (key, fallback, args = {}) => t(`extensionBrowser.${key}`, args, fallback);
 const el = (tag, cls, text) => element(tag, { className: cls, ...(text === undefined ? {} : { text }) });
@@ -20,10 +21,11 @@ export function actionMenu(actions, label = browserText("more", "更多操作"))
   summary.setAttribute("aria-label", label);
   const body = el("div", "eb-menu-items"); body.setAttribute("role", "group"); body.setAttribute("aria-label", label);
   body.append(...actions); menu.append(summary, body);
+  let stopPositioning = null;
   menu.addEventListener("toggle", () => {
+    stopPositioning?.(); stopPositioning = null;
     if (!menu.open) return;
-    const rect = summary.getBoundingClientRect(), width = Math.min(260, globalThis.innerWidth - 24 || 260);
-    Object.assign(body.style, { width: `${width}px`, left: `${Math.max(12, Math.min(rect.right - width, (globalThis.innerWidth || 600) - width - 12))}px`, top: `${Math.min(rect.bottom + 5, Math.max(12, (globalThis.innerHeight || 800) - 240))}px`, maxHeight: "min(55dvh, 340px)", overflowY: "auto" });
+    stopPositioning = trackAnchoredMenu(body, summary, { width: 260, maxHeight: 340, margin: 12, gap: 5 });
   });
   body.addEventListener("click", event => { if (event.target.closest?.("button,a")) menu.open = false; });
   menu.addEventListener("keydown", event => {

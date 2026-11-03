@@ -4,6 +4,7 @@ import { element, toast, errorMessage, isImeKey } from "../../utils/dom.js";
 import { replaceInputText } from "../../utils/text-edit.js";
 
 import { newPromptContext } from "./prompt-context.js";
+import { positionAnchoredMenu } from "../../utils/anchored-menu.js";
 
 export function createComposerAddMenu({ button, input, imageInput, textInput, add, owner = () => "" }) {
   const menu = element("div", { className: "composer-add-menu", attrs: { role: "menu", id: `${input.id}-add-menu` } });
@@ -34,11 +35,9 @@ export function createComposerAddMenu({ button, input, imageInput, textInput, ad
   button.addEventListener("click", () => {
     if (button.disabled || input.disabled || input.readOnly) return;
     if (!menu.hidden) { close(true); return; }
-    const box = button.getBoundingClientRect(); menu.hidden = false;
-    menu.style.left = `${Math.max(8, Math.min(box.left, innerWidth - 250))}px`;
-    menu.style.bottom = `${Math.max(8, innerHeight - box.top + 8)}px`;
-    menu.style.maxHeight = `${Math.max(80, box.top - 16)}px`;
-    button.setAttribute("aria-expanded", "true"); menu.querySelector("button")?.focus();
+    menu.hidden = false;
+    positionAnchoredMenu(menu, button, { side: "above", align: "start", gap: 8 });
+    button.setAttribute("aria-expanded", "true"); menu.querySelector("button")?.focus({ preventScroll: true });
   });
   document.addEventListener("pointerdown", event => { if (!menu.contains(event.target) && !button.contains(event.target)) close(); });
   menu.addEventListener("keydown", event => {

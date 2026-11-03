@@ -1,6 +1,7 @@
 import { setUiText as writeUiText, setUiAttribute as writeUiAttribute, uiMessage } from "../../i18n.js";
 
 import { mountIcons } from "../../components/icons.js";
+import { positionAnchoredMenu } from "../../utils/anchored-menu.js";
 
 export function element(tag, className, text) {
   const node = document.createElement(tag);
@@ -25,16 +26,16 @@ export function popupMenu(trigger, items, { signal, onError = console.error } = 
     if (!menu) return;
     menu.remove(); menu = null; trigger.setAttribute("aria-expanded", "false");
     document.removeEventListener("pointerdown", outside, true); document.removeEventListener("keydown", keydown, true);
-    window.removeEventListener("resize", reposition); window.removeEventListener("scroll", reposition, true);
+    window.removeEventListener("resize", reposition); window.removeEventListener("scroll", onScroll, true);
+    window.visualViewport?.removeEventListener("resize", reposition); window.visualViewport?.removeEventListener("scroll", reposition);
     if (restore && opener?.isConnected) opener.focus();
   };
   const outside = event => { if (!menu?.contains(event.target) && !trigger.contains(event.target)) close(); };
   const reposition = () => {
     if (!menu) return;
-    const box = trigger.getBoundingClientRect();
-    menu.style.left = `${Math.max(8, Math.min(innerWidth - menu.offsetWidth - 8, box.right - menu.offsetWidth))}px`;
-    menu.style.top = `${Math.max(8, Math.min(innerHeight - menu.offsetHeight - 8, box.bottom + 4))}px`;
+    positionAnchoredMenu(menu, trigger);
   };
+  const onScroll = event => { if (!menu?.contains(event.target)) reposition(); };
   const keydown = event => {
     if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); close(true); return; }
     if (event.key === "Tab") { close(); return; }
@@ -60,8 +61,9 @@ export function popupMenu(trigger, items, { signal, onError = console.error } = 
     }
     document.body.append(menu); trigger.setAttribute("aria-expanded", "true"); reposition();
     document.addEventListener("pointerdown", outside, true); document.addEventListener("keydown", keydown, true);
-    window.addEventListener("resize", reposition); window.addEventListener("scroll", reposition, true);
-    menu.querySelector("button:not(:disabled)")?.focus();
+    window.addEventListener("resize", reposition); window.addEventListener("scroll", onScroll, true);
+    window.visualViewport?.addEventListener("resize", reposition); window.visualViewport?.addEventListener("scroll", reposition);
+    menu.querySelector("button:not(:disabled)")?.focus({ preventScroll: true });
   };
   trigger.addEventListener("click", open);
   const dispose = () => { close(); trigger.removeEventListener("click", open); signal?.removeEventListener("abort", dispose); };

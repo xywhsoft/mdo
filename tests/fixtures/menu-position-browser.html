@@ -1,0 +1,136 @@
+<!doctype html><html lang="zh-CN" data-theme="dark">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Menu position regression</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<link rel="stylesheet" href="/app/web/css/extension-browser.css">
+<link rel="stylesheet" href="/app/web/css/workbench.css">
+<style>
+body{margin:0}.sidebar{position:fixed;top:90px;left:0;width:280px;height:650px;transform:none;display:block;overflow:hidden}
+.session-navigation{height:100%;overflow:hidden}.session-list{height:100%;overflow:auto}
+#stage{position:fixed;right:10px;top:70px;max-width:calc(100vw - 20px)}
+#result{position:fixed;bottom:0;right:0;max-height:130px;max-width:100%;overflow:auto;white-space:pre-wrap;font-size:10px}
+</style>
+<aside class="sidebar"><div class="session-navigation"><div id="list" class="session-list"></div></div></aside>
+<span id="count" hidden></span><select id="filter" hidden><option value="active">Active</option><option value="archived">Archived</option><option value="trash">Trash</option></select>
+<div id="stage"></div><pre id="result">Preparing</pre><div id="toast-region"></div>
+<script type="module">
+import {createSessionList} from '/app/web/js/features/sessions/session-list.js';
+import {createSessionActionMenu} from '/app/web/js/features/sessions/session-action-menu.js';
+import {actionMenu} from '/app/web/js/components/extension-browser.js';
+import {popupMenu} from '/app/web/js/features/workbench/controls.js';
+import {createComposerAddMenu} from '/app/web/js/features/chat/composer-add-menu.js';
+import {createProjectSwitcher} from '/app/web/js/features/shell/project-switcher.js';
+import {loadLocale} from '/app/web/js/i18n.js';
+const checks={},metrics={},output=document.querySelector('#result');
+window.addEventListener('error',event=>(metrics.errors??=[]).push(String(event.error?.stack||event.message)));
+const paint=async()=>{await new Promise(requestAnimationFrame);await new Promise(requestAnimationFrame);};
+const list=document.querySelector('#list'),filter=document.querySelector('#filter'),stage=document.querySelector('#stage');
+const near=(a,b)=>Math.abs(a-b)<=8;
+function verify(name,anchor,menu){
+  const a=anchor.getBoundingClientRect(),m=menu.getBoundingClientRect();
+  checks[name]=m.height>0&&m.top>=7&&m.left>=7&&m.bottom<=innerHeight-7&&m.right<=innerWidth-7&&
+    (near(m.top,a.bottom)||near(m.bottom,a.top));
+  metrics[name]={anchor:a.toJSON(),menu:m.toJSON(),style:menu.getAttribute('style')};
+}
+function button(text){const node=document.createElement('button');node.type='button';node.textContent=text;return node;}
+try{
+  await loadLocale(new URLSearchParams(location.search).get('locale')||'zh-CN');
+  const groupId='12345678901234567890123456789012';
+  const layout={schema_version:1,revision:1,view:'workspace',project_sort:'name',groups:[{id:groupId,name:'Custom group'}],placements:[],collapsed:[]};
+  const realFetch=globalThis.fetch;
+  globalThis.fetch=(input,options)=>String(input).includes('/sidebar-layout')?
+    Promise.resolve(new Response(JSON.stringify({ok:true,data:layout}),{headers:{'Content-Type':'application/json'}})):realFetch(input,options);
+  const now=Date.now()*1000;
+  const sessions=Array.from({length:45},(_,i)=>({id:`s${i}`,project_id:'default',agent_id:'mdo.default',
+    title:`Session ${i}`,status:'active',revision:1,updated_at:now-i*1000}));
+  let state={status:'ready',data:{items:sessions}},publish;
+  const view=createSessionList({container:list,count:document.querySelector('#count'),filter,
+    store:{get:()=>state,subscribe(fn){publish=fn;fn(state);return()=>{};}},
+    projectsStore:{get:()=>({data:{items:[{id:'alpha',name:'Alpha',managed:true}]}}),subscribe:()=>()=>{}},
+    navigation:{get:()=>({projectId:'default',sessionId:'s0'}),subscribe:()=>()=>{}},
+    onSelect(){},onAction(){},onNewInProject(){},onAddProject(){},onProjectAction(){}});
+  await paint();
+  function dismiss(){document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));}
+  for(const status of ['active','archived','trash']){
+    state={...state,data:{items:sessions.map(s=>({...s,status}))}};publish(state);
+    filter.value=status;filter.dispatchEvent(new Event('change'));await paint();
+    const row=list.querySelectorAll('.session-item-row')[11];
+    list.scrollTop=row.offsetTop-list.offsetTop-260;await paint();
+    const before=list.scrollTop;
+    row.querySelector('.session-more').dispatchEvent(new MouseEvent('click',{bubbles:true,detail:1}));
+    await paint();
+    verify(status,list.querySelectorAll('.session-more')[11],document.querySelector('#sidebar-session-menu'));
+    checks[`${status}Scroll`]=before>0&&list.scrollTop===before;
+    state={...state,data:{items:state.data.items.map((s,i)=>({...s,title:i===0?'Renamed':s.title}))}};publish(state);
+    await paint();
+    verify(`${status}Refresh`,list.querySelectorAll('.session-more')[11],document.querySelector('#sidebar-session-menu'));
+    dismiss();
+  }
+  filter.value='active';filter.dispatchEvent(new Event('change'));await paint();
+  for(const [name,key] of [['customGroup',`custom-menu:${groupId}`],['project','menu:project:alpha'],['listOptions','list-options']]){
+    list.scrollTop=0;await paint();
+    list.querySelector(`[data-sidebar-focus="${key}"]`).click();await paint();
+    verify(name,list.querySelector(`[data-sidebar-focus="${key}"]`),document.querySelector('#sidebar-session-menu'));
+    dismiss();
+    checks[`${name}Escape`]=document.activeElement===list.querySelector(`[data-sidebar-focus="${key}"]`);
+  }
+  view.destroy();document.querySelector('.sidebar').hidden=true;
+  for(const count of [2,40]){
+    const menu=actionMenu(Array.from({length:count},(_,i)=>button(`Action ${i}`)));
+    stage.append(menu);stage.style.top=`${innerHeight-125}px`;
+    await paint();
+    menu.querySelector('summary').click();await paint();
+    verify(`extension${count}`,menu.querySelector('summary'),menu.querySelector('.eb-menu-items'));
+    stage.style.top='200px';await paint();window.dispatchEvent(new Event('resize'));await paint();
+    verify(`extension${count}Resize`,menu.querySelector('summary'),menu.querySelector('.eb-menu-items'));
+    menu.dispatchEvent(new KeyboardEvent('keydown',{key:'End',bubbles:true,cancelable:true}));await paint();
+    const panel=menu.querySelector('.eb-menu-items');
+    checks[`extension${count}LastVisible`]=document.activeElement===panel.lastElementChild&&
+      panel.lastElementChild.getBoundingClientRect().bottom<=panel.getBoundingClientRect().bottom;
+    menu.remove();await paint();window.dispatchEvent(new Event('resize'));
+  }
+  const trigger=button('Workbench');stage.append(trigger);stage.style.top=`${innerHeight-125}px`;
+  const popup=popupMenu(trigger,Array.from({length:40},(_,i)=>({label:`Action ${i}`,execute(){}})));
+  await paint();trigger.click();await paint();
+  const workbenchMenu=document.querySelector('.wb-menu');verify('workbenchLong',trigger,workbenchMenu);
+  workbenchMenu.dispatchEvent(new KeyboardEvent('keydown',{key:'End',bubbles:true,cancelable:true}));await paint();
+  const scroll=workbenchMenu.scrollTop;
+  checks.workbenchLastVisible=scroll>0&&document.activeElement===workbenchMenu.lastElementChild&&
+    workbenchMenu.lastElementChild.getBoundingClientRect().bottom<=workbenchMenu.getBoundingClientRect().bottom;
+  window.dispatchEvent(new Event('resize'));await paint();
+  checks.workbenchScrollStable=workbenchMenu.scrollTop===scroll;
+  workbenchMenu.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));
+  checks.workbenchEscapeFocus=document.activeElement===trigger&&!document.querySelector('.wb-menu');popup.dispose();trigger.remove();
+  const add=button('+'),input=document.createElement('textarea'),textInput=document.createElement('input');input.id='prompt';
+  stage.append(add,input);stage.style.top='20px';
+  await paint();
+  const composer=createComposerAddMenu({button:add,input,textInput,add(){}});
+  add.click();await paint();verify('composerNearTop',add,document.querySelector('.composer-add-menu'));composer.close();
+  stage.style.top=`${innerHeight-125}px`;await paint();add.click();await paint();
+  verify('composerNearBottom',add,document.querySelector('.composer-add-menu'));composer.close();stage.replaceChildren();
+  const control=document.createElement('div');control.className='session-action-control';
+  const header=button('Header'),menu=document.createElement('div');menu.className='session-menu session-header-menu';menu.hidden=true;
+  control.append(header,menu);stage.style.top='20px';stage.append(control);
+  const headerView=createSessionActionMenu({control,button:header,menu,
+    navigation:{get:()=>({view:'workspace',projectId:'default',sessionId:'s0'}),subscribe:()=>()=>{}},
+    store:{get:()=>({data:sessions[0]}),subscribe(fn){fn();return()=>{};}},onAction(){}});
+  header.click();await paint();verify('header',header,menu);headerView.destroy();
+  stage.replaceChildren();stage.style.right='auto';stage.style.left='12px';
+  const projectControl=document.createElement('div');projectControl.className=innerWidth>760?'header-project-control':'mobile-project-control';
+  const projectButton=button('Project'),projectName=document.createElement('span'),projectMenu=document.createElement('div');
+  projectButton.append(projectName);projectMenu.className=`session-menu ${innerWidth>760?'header':'mobile'}-project-menu`;projectMenu.hidden=true;
+  projectControl.append(projectButton,projectMenu);stage.append(projectControl);
+  const switcher=createProjectSwitcher({control:projectControl,button:projectButton,name:projectName,menu:projectMenu,
+    navigation:{get:()=>({view:'workspace',projectId:'default',sessionId:'s0'}),subscribe(fn){fn();return()=>{};}},
+    projectsStore:{get:()=>({data:{items:Array.from({length:32},(_,i)=>({id:i?`p${i}`:'default',name:`Project ${i}`}))}}),subscribe:()=>()=>{}},
+    onSelectProject(){},onManageProjects(){}});
+  await paint();projectButton.click();await paint();verify('projectSwitcher',projectButton,projectMenu);
+  projectButton.dispatchEvent(new KeyboardEvent('keydown',{key:'End',bubbles:true,cancelable:true}));await paint();
+  checks.projectSwitcherLastVisible=projectMenu.scrollTop>0&&document.activeElement===projectMenu.lastElementChild&&
+    projectMenu.lastElementChild.getBoundingClientRect().bottom<=projectMenu.getBoundingClientRect().bottom;
+  switcher.destroy();
+  checks.noRuntimeErrors=!metrics.errors?.length;
+  checks.noOverflow=document.documentElement.scrollWidth<=innerWidth;
+  output.textContent=JSON.stringify({passed:Object.values(checks).every(Boolean),checks,metrics},null,2);
+}catch(error){output.textContent=JSON.stringify({passed:false,checks,metrics,error:String(error.stack)},null,2);}
+</script></html>

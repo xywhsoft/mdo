@@ -8,6 +8,7 @@ import { recentSessions, sidebarGroups, sidebarWindow, matchingSessions, session
 import { createSidebarLayoutStore, organizedSidebar, timelineSidebar } from "./sidebar-layout.js";
 import { createSidebarOrganizer } from "./sidebar-organizer.js";
 import { isTransientReadError } from "../../api/read-recovery.js";
+import { positionAnchoredMenu } from "../../utils/anchored-menu.js";
 
 export function sessionRunActivities(runs = []) {
   const activities = new Map();
@@ -142,19 +143,7 @@ export function createSessionList({ container, count, filter, searchButton, stor
 
   function positionMenu() {
     if (!openMenuNode || !openMenuButton?.isConnected) return;
-    const anchor = openMenuButton.getBoundingClientRect();
-    const margin = 8;
-    const below = Math.max(0, window.innerHeight - anchor.bottom - margin);
-    const above = Math.max(0, anchor.top - margin);
-    const placeAbove = below < Math.min(openMenuNode.scrollHeight, 480) && above > below;
-    openMenuNode.style.maxHeight = `${Math.max(40, Math.min(480,
-      placeAbove ? above : below))}px`;
-    const box = openMenuNode.getBoundingClientRect();
-    openMenuNode.style.top = `${placeAbove
-      ? Math.max(margin, anchor.top - box.height + 3)
-      : Math.min(anchor.bottom - 3, window.innerHeight - margin - box.height)}px`;
-    openMenuNode.style.left = `${Math.max(margin, Math.min(anchor.right - box.width,
-      window.innerWidth - margin - box.width))}px`;
+    positionAnchoredMenu(openMenuNode, openMenuButton);
   }
 
   function menuAction(action, session) {
@@ -307,8 +296,6 @@ export function createSessionList({ container, count, filter, searchButton, stor
         document.body.append(menu);
         openMenuNode = menu;
         openMenuButton = button;
-        positionMenu();
-        menu.scrollTop = menuScroll;
       }
       if (target && target.index !== -2) {
         if (target.index < 0) button.focus({ preventScroll: true });
@@ -582,6 +569,10 @@ export function createSessionList({ container, count, filter, searchButton, stor
       (readNotice.isConnected ? readRetry :
         container.querySelector('.session-item[aria-current="page"]') ?? searchButton ?? filter)
         .focus({ preventScroll: true });
+    // Menus can be created while their project/group is still detached. Measure
+    // only after the complete tree, saved scroll and requested focus are settled.
+    positionMenu();
+    if (openMenuNode) openMenuNode.scrollTop = menuScroll;
   }
 
   organizer = createSidebarOrganizer({ container, store: layoutStore, render });
@@ -661,6 +652,8 @@ export function createSessionList({ container, count, filter, searchButton, stor
   container.addEventListener("scroll", onListScroll);
   sidebar?.addEventListener("scroll", onSidebarScroll);
   window.addEventListener("resize", positionMenu);
+  window.visualViewport?.addEventListener("resize", positionMenu);
+  window.visualViewport?.addEventListener("scroll", positionMenu);
   document.addEventListener("pointerdown", onOutsidePointerDown);
   document.addEventListener("focusin", onFocusIn);
   document.addEventListener("keydown", onDismissKeyDown);
@@ -761,6 +754,8 @@ export function createSessionList({ container, count, filter, searchButton, stor
       container.removeEventListener("scroll", onListScroll);
       sidebar?.removeEventListener("scroll", onSidebarScroll);
       window.removeEventListener("resize", positionMenu);
+      window.visualViewport?.removeEventListener("resize", positionMenu);
+      window.visualViewport?.removeEventListener("scroll", positionMenu);
       document.removeEventListener("pointerdown", onOutsidePointerDown);
       document.removeEventListener("focusin", onFocusIn);
       document.removeEventListener("keydown", onDismissKeyDown);
