@@ -29,7 +29,9 @@ import sys
 for line in sys.stdin:
     request = json.loads(line)
     method = request.get("method")
-    if method == "server/discover":
+    if method == "initialize":
+        result = {"protocolVersion": "2025-11-25", "capabilities": {"tools": {}}, "serverInfo": {"name": "API fixture", "version": "1"}}
+    elif method == "server/discover":
         result = {
             "resultType": "complete",
             "supportedVersions": ["2026-07-28"],
@@ -120,7 +122,7 @@ class ModelHandler(BaseHTTPRequestHandler):
                 output = [{
                     "type": "function_call",
                     "call_id": "ask-probe-call",
-                    "name": "ask_user",
+                    "name": "ask",
                     "arguments": json.dumps({
                         "question": "Which route should I take?",
                         "options": ["Fast", "Careful"],
@@ -131,7 +133,7 @@ class ModelHandler(BaseHTTPRequestHandler):
                 output = [{
                     "type": "function_call",
                     "call_id": "ask-cancel-call",
-                    "name": "ask_user",
+                    "name": "ask",
                     "arguments": '{"question":"Cancel this question?"}',
                 }]
             if "SCHEDULE cancel probe" in json.dumps(payload) and not ModelHandler.schedule_cancel_sent:
@@ -139,7 +141,7 @@ class ModelHandler(BaseHTTPRequestHandler):
                 output = [{
                     "type": "function_call",
                     "call_id": "schedule-cancel-call",
-                    "name": "ask_user",
+                    "name": "ask",
                     "arguments": '{"question":"Cancel this scheduled tool?"}',
                 }]
             if "SCHEDULE ask probe" in json.dumps(payload):
@@ -150,7 +152,7 @@ class ModelHandler(BaseHTTPRequestHandler):
                     "text": "Scheduled answer: " + answers[-1]["output"],
                 }]}] if answers else [{
                     "type": "function_call", "call_id": "schedule-ask-call",
-                    "name": "ask_user", "arguments": json.dumps({
+                    "name": "ask", "arguments": json.dumps({
                         "question": "Which scheduled route?",
                         "options": ["First", "Second"],
                     }),
@@ -203,6 +205,8 @@ def write_site(base: Path, port: int) -> Path:
     # application layout directly so /app/default-home has identical meaning
     # in the development and single-file paths.
     shutil.copytree(ROOT / "app", base, dirs_exist_ok=True)
+    from fixture_offline import isolate_background_network
+    isolate_background_network(base)
     # General API fixtures must not depend on publication timing or contact
     # the public site. Successful passive catalogs have a separate local test.
     unity = base / "generated/mdo_unity.c"
@@ -224,6 +228,8 @@ def write_site(base: Path, port: int) -> Path:
     # the actual provisioned packed Ornith model is tested separately.
     defaults_path = base / "default-home/config/defaults.json"
     defaults = json.loads(defaults_path.read_text(encoding="utf-8"))
+    from model_fixture import conversation_catalog
+    defaults["models"] = conversation_catalog()
     model = defaults["models"]["items"][0]
     model["capabilities"] = [name for name in model["capabilities"] if name != "media-input"]
     model["attachments"] = []
@@ -629,7 +635,7 @@ done:
         "                MdoApiProbeCreateRecoverySession(&CreatedAsk,\n"
         "                    \"ask-recovery-probe\", \"Ask recovery probe\",\n"
         "                    \"Answer the pending question.\",\n"
-        "                    \"recovery-ask-call\", \"ask_user\",\n"
+        "                    \"recovery-ask-call\", \"ask\",\n"
         "                    \"{\\\"question\\\":\\\"Should I continue?\\\",\\\"options\\\":[\\\"Yes\\\",\\\"No\\\"]}\");\n"
         "                break;\n"
         "            }\n"
@@ -674,16 +680,16 @@ done:
     draft_path.write_text(draft_text, encoding="utf-8", newline="\n")
     selection_path = base / "src/api/workspace_state.c"
     selection_text = selection_path.read_text(encoding="utf-8")
-    publication = "        Ok = MdoWorkspaceStateWrite(&State);"
+    publication = "Ok = MdoWorkspaceStateWrite(&State);"
     assert selection_text.count(publication) == 1
     selection_text = "bool MdoApiProbeLeaseCheckpoint(const char* ProjectId);\n" + selection_text
     selection_text = "void MdoApiReferenceProbeBeforeLock(bool Draft);\n" + selection_text
-    selection_lock = "        xrtMutexLock(g_MdoWorkspaceStateLock);\n        Ok = MdoWorkspaceStateWrite(&State);"
+    selection_lock = "        xrtMutexLock(g_MdoWorkspaceStateLock);\n        MdoWorkspaceState Previous;"
     assert selection_text.count(selection_lock) == 1
     selection_text = selection_text.replace(selection_lock,
         "        MdoApiReferenceProbeBeforeLock(false);\n" + selection_lock, 1)
     selection_text = selection_text.replace(publication,
-        "        Ok = MdoApiProbeLeaseCheckpoint(State.ProjectId) &&\n"
+        "Ok = MdoApiProbeLeaseCheckpoint(State.ProjectId) &&\n"
         "            MdoWorkspaceStateWrite(&State);", 1)
     selection_path.write_text(selection_text, encoding="utf-8", newline="\n")
     purge_storage_path = base / "src/storage/home_purge.inc.c"
@@ -720,34 +726,6 @@ done:
     project_path.write_text(project_text, encoding="utf-8", newline="\n")
     mock_server = base / "mcp_mock_server.py"
     mock_server.write_text(MCP_MOCK_SERVER, encoding="utf-8")
-    mcp_document = {
-        "schema_version": 1,
-        "id": "api-mock",
-        "name": "API mock tools",
-        "description": "Local bounded API fixture.",
-        "enabled": True,
-        "transport": {
-            "type": "stdio",
-            "program": sys.executable,
-            "arguments": [str(mock_server)],
-            "working_directory": None,
-            "inherit_environment": True,
-            "environment": [],
-        },
-        "protocol_version": "2026-07-28",
-        "startup_timeout_ms": 5000,
-        "request_timeout_ms": 5000,
-        "limits": {"message_bytes": 1048576, "tools": 16},
-        "tools": {"allow": ["echo"], "deny": []},
-        "security": {
-            "default_effects": ["external-service"],
-            "permission_profile": "balanced",
-            "trust_read_only_annotations": False,
-        },
-        "auto_reconnect": True,
-    }
-    (base / "default-home/mcp/api-mock.json").write_text(
-        json.dumps(mcp_document), encoding="utf-8")
     config = {
         "engine": {"workers": 1},
         "services": [{
@@ -1271,6 +1249,8 @@ def run_probe(host: Path) -> None:
             f"http://127.0.0.1:{model_port}/v1")
         environment["MDO_ORNITH_ANTHROPIC_URL"] = "https://example.invalid"
         environment["MDO_ORNITH_API_KEY"] = "bounded-api-test-key"
+        from model_fixture import prepare_conversation_models
+        prepare_conversation_models(base, home, environment)
         with log_path.open("wb") as log:
             process = subprocess.Popen(
                 [str(host), str(config_path), "--", "--home", str(home)],
@@ -1293,7 +1273,7 @@ def run_probe(host: Path) -> None:
                 assert data["ready"] is True and data["stage"] == "ready", data
                 assert data["config"]["schema_version"] == 1, data
                 assert data["resources"]["models"]["models"] >= 1, data
-                assert not home.exists(), home
+                assert not list((home / "sessions").rglob("meta.json")), home
                 status, _, body = request(port, "GET", "/api/v1/memory/global")
                 assert status == 200 and json.loads(body)["data"]["items"] == [], body
                 status, _, body = request(port, "GET", "/api/v1/pane-layout")
@@ -1306,16 +1286,16 @@ def run_probe(host: Path) -> None:
                 assert status == 200, (status, body)
                 model_config = json.loads(body)["data"]
                 assert model_config["default_model"] == "ornith-1.5-35b", model_config
-                assert model_config["items"][0]["editable"] is False, model_config
+                assert model_config["items"][0]["editable"] is True, model_config
                 assert headers["etag"].startswith('"mdo-config-'), headers
                 # Retired endpoints must not recreate storage or expose Allow.
                 for method in ("GET", "HEAD", "PUT", "OPTIONS"):
                     status, headers, body = request(port, method, "/api/v1/feedback")
                     assert status == 404 and "allow" not in headers, (method, status, headers, body)
-                assert not home.exists(), home
+                assert not list((home / "sessions").rglob("meta.json")), home
 
                 project_lease_exclusion(port, home, "lease-session")
-                assert not home.exists(), home
+                assert not list((home / "sessions").rglob("meta.json")), home
 
                 # The UI reads bounded summaries and edits through store-wide
                 # ETags, so concurrent agent writes cannot be overwritten.
@@ -1400,7 +1380,7 @@ def run_probe(host: Path) -> None:
 
                 project_workspace = base / "project-workspace"
                 project_workspace.mkdir()
-                project_relative = os.path.relpath(project_workspace, host.parent)
+                project_relative = str(project_workspace)
                 project_input = {
                     "id": "ui-workspace", "name": "UI Workspace",
                     "workspace_root": project_relative,
@@ -1580,7 +1560,7 @@ def run_probe(host: Path) -> None:
                     "invalid_project_path"), (status, body)
                 second_workspace = base / "second-project-workspace"
                 second_workspace.mkdir()
-                second_relative = os.path.relpath(second_workspace, host.parent)
+                second_relative = str(second_workspace)
                 replacement = {
                     "name": "Renamed Workspace",
                     "workspace_root": second_relative,
@@ -2010,6 +1990,21 @@ def run_probe(host: Path) -> None:
                     "POST, PATCH, OPTIONS")
                 assert document["error"]["code"] == "method_not_allowed"
 
+                # MCP recipes are installed directories; private connection
+                # values/approvals stay outside the shareable directory.
+                from mcp_template_fixture import template
+                directory=home/'mcp/api-mock';directory.mkdir(parents=True)
+                recipe=template('api-mock','stdio')
+                recipe['variants'][0]['config']['transport']['arguments']=['{$path}/server.py']
+                (directory/'extension.json').write_text(json.dumps(dict(kind='mcp',id='mcp:qa.api-mock',name='API mock',alias='api-mock',entry='mcp.json',platforms=['any'])),encoding='utf-8')
+                (directory/'mcp.json').write_text(json.dumps(recipe),encoding='utf-8')
+                (directory/'server.py').write_text(MCP_MOCK_SERVER,encoding='utf-8')
+                connection=dict(id='api-mock',action='preview',extension_id='mcp:qa.api-mock',variant='default',values=dict(program=sys.executable))
+                status,_,body=request(port,'POST','/api/v1/mcp/connections',body=json.dumps(connection).encode(),headers={'Content-Type':'application/json'})
+                assert status==200,(status,body)
+                connection.update(action='save',expected_revision='',approval_digest=json.loads(body)['data']['approval_digest'],enabled=True)
+                status,_,body=request(port,'POST','/api/v1/mcp/connections',body=json.dumps(connection).encode(),headers={'Content-Type':'application/json'})
+                assert status==200,(status,body)
                 for resource in ("models", "skills", "mcp"):
                     before = json.loads(request(
                         port, "GET", f"/api/v1/{resource}")[2])["data"][
@@ -2030,7 +2025,7 @@ def run_probe(host: Path) -> None:
                 assert len(mcp_data["items"]) == 1, mcp_data
                 assert mcp_data["items"][0]["id"] == "api-mock", mcp_data
                 assert mcp_data["items"][0]["enabled"] is True, mcp_data
-                assert mcp_data["items"][0]["connected"] is False, mcp_data
+                # Enabled services may already be connected by automatic preparation.
 
                 status, headers, body = request(
                     port, "PUT", "/api/v1/mcp/api-mock/enabled",
@@ -2260,7 +2255,7 @@ def run_probe(host: Path) -> None:
                 }, settings_document
                 status, _, body = request(port, "GET", "/api/v1/workspace-state")
                 assert status == 200 and json.loads(body)["data"] == {
-                    "project_id": "", "session_id": "",
+                    "project_id": "", "session_id": "", "last_activated_at": 0,
                 }, body
                 assert not (home / "data/workspace-state.json").exists()
                 assert settings_document["data"]["transaction_service"] == {
@@ -2471,6 +2466,8 @@ def run_probe(host: Path) -> None:
                 assert document["error"]["code"] == "session_create_invalid", (
                     document)
 
+                api_workspace = base / "api-workspace"
+                api_workspace.mkdir()
                 create_session = json.dumps({
                     "project_id": "api-project",
                     "title": "API session",
@@ -2479,7 +2476,7 @@ def run_probe(host: Path) -> None:
                     "protocol": "openai-responses",
                     "reasoning_effort": "medium",
                     "max_output_tokens": 1024,
-                    "workspace_root": str(base),
+                    "workspace_root": str(api_workspace),
                 }).encode()
                 status, headers, body = request(
                     port, "POST", "/api/v1/sessions", body=create_session,
@@ -2514,9 +2511,9 @@ def run_probe(host: Path) -> None:
                     "client_session_id": client_session_id,
                     "title": "Recoverable first prompt",
                     "agent_id": "mdo.default",
-                    "model_id": "ling-3.0-tiny",  # A restored pre-upgrade first prompt.
+                    "model_id": "ornith-1.5-35b",  # Explicit personal fixture profile.
                     "reasoning_effort": "medium",
-                    "workspace_root": str(base),
+                    "workspace_root": str(api_workspace),
                 }
                 requested_body = json.dumps(requested_session).encode()
                 status, _, body = request(
@@ -2558,8 +2555,11 @@ def run_probe(host: Path) -> None:
                     port, "PUT", "/api/v1/workspace-state",
                     body=selected_workspace,
                     headers={"Content-Type": "application/json"})
+                activated=json.loads(body)["data"]["last_activated_at"]
+                assert activated>=session["last_activated_at"]>0
+                session["last_activated_at"]=activated
                 assert status == 200 and json.loads(body)["data"] == {
-                    "project_id": "api-project", "session_id": session_id,
+                    "project_id": "api-project", "session_id": session_id,"last_activated_at":activated,
                 }, body
                 stored_workspace = json.loads((home / "data/workspace-state.json")
                                               .read_text(encoding="utf-8"))
@@ -2569,7 +2569,7 @@ def run_probe(host: Path) -> None:
                 }, stored_workspace
                 status, _, body = request(port, "GET", "/api/v1/workspace-state")
                 assert status == 200 and json.loads(body)["data"] == {
-                    "project_id": "api-project", "session_id": session_id,
+                    "project_id": "api-project", "session_id": session_id,"last_activated_at":activated,
                 }, body
                 for invalid in (
                     {"project_id": "../outside", "session_id": session_id},
@@ -2683,12 +2683,12 @@ def run_probe(host: Path) -> None:
                 assert status == 422, (status, rejected)
                 assert rejected["error"]["code"] == (
                     "image_model_unsupported"), rejected
-                (base / "mention-ref.c").write_text("// fixture", encoding="utf-8")
-                (base / "mention-fixture").mkdir()
-                (base / "mention-fixture/mention-ref nested.c").write_text(
+                (api_workspace / "mention-ref.c").write_text("// fixture", encoding="utf-8")
+                (api_workspace / "mention-fixture").mkdir()
+                (api_workspace / "mention-fixture/mention-ref nested.c").write_text(
                     "// fixture", encoding="utf-8")
-                (base / ".hidden").mkdir()
-                (base / ".hidden/mention-ref-secret.c").write_text(
+                (api_workspace / ".hidden").mkdir()
+                (api_workspace / ".hidden/mention-ref-secret.c").write_text(
                     "// fixture", encoding="utf-8")
                 files_path = session_path + "/workspace/files"
                 status, headers, body = request(
@@ -2706,7 +2706,7 @@ def run_probe(host: Path) -> None:
                     "mention-ref.c", "mention-fixture/mention-ref nested.c"], body
                 long_query = "资料" * 24
                 long_name = long_query + ".txt"
-                (base / long_name).write_text("// fixture", encoding="utf-8")
+                (api_workspace / long_name).write_text("// fixture", encoding="utf-8")
                 status, _, body = request(port, "GET", files_path +
                                           "?q=" + quote(long_query, safe=""))
                 assert status == 200 and json.loads(body)["data"]["items"] == [
@@ -3817,7 +3817,7 @@ def run_probe(host: Path) -> None:
                 assert resumed["state"] == "succeeded", resumed
                 assert resumed["resume"] is True, resumed
                 assert resumed["tool_calls"] == 1, resumed
-                assert not (base / "recovery-probe.txt").exists(), list(
+                assert not (api_workspace / "recovery-probe.txt").exists(), list(
                     base.iterdir())
                 status, _, body = request(port, "GET", recovery_path)
                 assert status == 200, (status, body)
@@ -3840,7 +3840,7 @@ def run_probe(host: Path) -> None:
                 assert ask_recovery["resume_required"] is True, ask_recovery
                 assert ask_recovery["total"] == 1, ask_recovery
                 pending_ask = ask_recovery["items"][0]
-                assert pending_ask["tool"] == "ask_user" and pending_ask[
+                assert pending_ask["tool"] == "ask" and pending_ask[
                     "automatic_retry_safe"] is True, pending_ask
                 status, _, body = request(port, "POST",
                     ask_recovery_base + "/resume",
@@ -3971,7 +3971,7 @@ def run_probe(host: Path) -> None:
                     session_path + f'/events?after={projected["event_id"]}&limit=32')[2])[
                         "data"]["items"]
                 assert any(event["kind"] == "tool_done" and
-                           event["tool_name"] == "ask_user" and
+                           event["tool_name"] == "ask" and
                            event["success"] and "My own route" in event["text"]
                            for event in ask_events), ask_events
 
@@ -4020,7 +4020,7 @@ def run_probe(host: Path) -> None:
                     "protocol": "openai-responses",
                     "reasoning_effort": "medium",
                     "max_output_tokens": 1024,
-                    "workspace_root": str(base),
+                    "workspace_root": str(api_workspace),
                     "input": schedule_input,
                     "frequency": "daily",
                     "interval": 1,
@@ -4583,6 +4583,16 @@ def run_probe(host: Path) -> None:
                 def protected_state():
                     return {p: p.read_bytes() if p.exists() else None
                             for p in protected_files}
+                def assert_protected(expected):
+                    actual = protected_state()
+                    changed = [p for p in expected if actual[p] != expected[p]]
+                    if changed:
+                        evidence = ROOT / ".build/api-protected-state"
+                        evidence.mkdir(parents=True, exist_ok=True)
+                        for p in changed:
+                            for label, value in (("before", expected[p]), ("after", actual[p])):
+                                (evidence / (p.name + "." + label)).write_bytes(value or b"")
+                    assert not changed, [p.name for p in changed]
                 protected_before = protected_state()
                 for bad_source, boundary in (
                     (next(event["event_id"] for event in journal_before_trim
@@ -4596,14 +4606,14 @@ def run_probe(host: Path) -> None:
                             "source_event_id": bad_source}).encode(),
                         headers={"Content-Type": "application/json", "If-Match": current_etag})
                     assert status == 409 and json.loads(body)["error"]["code"] == "session_message_changed", (status, body)
-                    assert protected_state() == protected_before
+                    assert_protected(protected_before)
                 for invalid_source in (0, -1, 1.5, "1", None):
                     status, _, body = request(port, "POST", truncate_path,
                         body=json.dumps({"through_sequence": 0,
                             "source_event_id": invalid_source}).encode(),
                         headers={"Content-Type": "application/json", "If-Match": current_etag})
                     assert status == 422 and json.loads(body)["error"]["code"] == "session_truncate_invalid", (status, body)
-                    assert protected_state() == protected_before
+                    assert_protected(protected_before)
                 status, headers, body = request(port, "POST", truncate_path,
                     body=json.dumps({"through_sequence":
                         cutoff_start["user_message_sequence"] - 1,
@@ -4621,7 +4631,13 @@ def run_probe(host: Path) -> None:
                         "source_event_id": cutoff_start["event_id"]}).encode(),
                     headers={"Content-Type": "application/json", "If-Match": current_etag})
                 assert status == 409 and json.loads(body)["error"]["code"] == "session_message_changed", (status, body)
-                assert protected_state() == protected_after
+                assert_protected(protected_after)
+                status, _, body = request(port, "POST", truncate_path,
+                    body=json.dumps({"through_sequence": cutoff_start["user_message_sequence"] - 1,
+                        "source_event_id": cutoff_start["event_id"], "client_edit_id": "9" * 32}).encode(),
+                    headers={"Content-Type": "application/json", "If-Match": current_etag})
+                assert status == 409 and json.loads(body)["error"]["code"] == "session_message_changed", (status, body)
+                assert_protected(protected_after)
                 restored_todo = json.loads(request(port, "GET", todo_path)[2])[
                     "data"]
                 assert restored_todo["items"] == [
@@ -5255,6 +5271,8 @@ def run_unconfigured_model_probe(host: Path) -> None:
         base = Path(raw)
         site = base / "site"
         shutil.copytree(ROOT / "app", site)
+        from model_fixture import prepare_conversation_models
+        prepare_conversation_models(site, base / "home", {})
         config_path = site / "xs.json"
         config = json.loads(config_path.read_text(encoding="utf-8"))
         port = free_port()
@@ -5397,7 +5415,7 @@ def run_unconfigured_model_probe(host: Path) -> None:
                 assert any(item["id"] == "test-model" for item in
                     json.loads(request(port, "GET", "/api/v1/models")[2])["data"]["models"])
                 protected = json.loads(json.dumps(changed))
-                protected["items"][0]["name"] = "Altered Ling"
+                protected["items"][0]["builtin"] = True
                 status, _, response = request(port, "POST",
                     "/api/v1/settings/models/preview",
                     body=json.dumps({"schema_version": 1, "patch": protected}).encode(),

@@ -1125,7 +1125,37 @@ bool MdoApiSessionBackupRoute(MdoApiContext* Context)
 
 /* Keep response construction outside the cache mutex. Publish a completed
  * result before sending its HTTP acknowledgement. */
+static bool MdoApiSessionMessageObsolete(MdoApiContext*, uint64, uint64);
 #include "message_edit.inc.c"
+
+/* Reject an already-removed source without opening an Agent and recreating
+ * its checkpoint journal. This is only a cheap read check: the mutation keeps
+ * its authoritative event/sequence validation under the session locks. Errors
+ * and stale metadata fall through to the normal route and its status codes. */
+static bool MdoApiSessionMessageObsolete(MdoApiContext* Context,
+    uint64 ThroughSequence, uint64 SourceEventId)
+{
+    char Project[MDO_PROJECT_ID_CAPACITY], Id[MDO_SESSION_ID_CAPACITY];
+    uint64 Revision = 0; bool Matches = false; xwork_error Error;
+    if (!MdoApiSessionPath(Context, Project, Id) ||
+        MdoApiSessionExpectedRevision(Context, Id, &Revision, &Matches) !=
+            MDO_API_SESSION_PRECONDITION_OK || !Matches) return false;
+    MdoSession* Session = MdoSessionLoad(Project, Id, &Error);
+    MdoSessionInfo Info = {0}; Info.Size = sizeof(Info);
+    bool Current = Session && MdoSessionGetInfo(Session, &Info) &&
+        Info.Revision == Revision && Info.Status == MDO_SESSION_ACTIVE;
+    MdoSessionRelease(Session);
+    if (!Current) return false;
+    MdoSessionEventSnapshot* Events = MdoSessionEventReplay(Project, Id,
+        SourceEventId - 1u, 1u, &Error);
+    if (!Events) return false;
+    MdoSessionEventInfo Event = {0}; Event.Size = sizeof(Event);
+    bool Found = MdoSessionEventSnapshotAt(Events, 0u, &Event) &&
+        Event.EventId == SourceEventId && Event.Kind == XWORK_EVENT_AGENT_START &&
+        Event.AgentDepth == 0u && Event.UserMessageSequence == ThroughSequence + 1u;
+    MdoSessionEventSnapshotRelease(Events);
+    return !Found;
+}
 
 static bool MdoApiSessionLedgerMutation(MdoApiContext* Context,
     bool Clear)
@@ -1171,6 +1201,10 @@ static bool MdoApiSessionLedgerMutation(MdoApiContext* Context,
             return MdoApiSessionEditOnce(Context, ThroughSequence,
                 SourceEventId, EditId);
     }
+    if (!Clear && SourceEventId &&
+        MdoApiSessionMessageObsolete(Context, ThroughSequence, SourceEventId))
+        return MdoApiReplyError(Context, 409u, "session_message_changed",
+            "The original message changed; refresh before editing or retrying", NULL);
     Session = MdoApiSessionOpenActive(Context, true, &Info,
         &ExpectedRevision, &ReplyResult);
     if ( Session == NULL ) return ReplyResult;

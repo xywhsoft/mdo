@@ -79,6 +79,11 @@ static bool MdoApiSessionEditOnce(MdoApiContext* Context,
         Message = "History edit reply capacity is temporarily full";
         goto done;
     }
+    if ( MdoApiSessionMessageObsolete(Context, ThroughSequence, SourceEventId) ) {
+        Status = 409u; Code = "session_message_changed";
+        Message = "The original message changed; refresh before editing";
+        goto done;
+    }
     Session = MdoSessionOpen(Project, SessionId, NULL, &Error);
     if ( Session == NULL ) { ActiveFailure = true; goto done; }
     if ( !MdoSessionGetInfo(Session, &Info) ) goto unavailable;
