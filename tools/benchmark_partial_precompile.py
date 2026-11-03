@@ -137,6 +137,19 @@ XS_RequestResult RequestProc(XS_HttpReq* Req){return Request?Request(Req):XS_FAL
     (generated/'mdo_unity.c').write_text(entry,encoding='utf-8')
     return {'libraries':libraries,'exports':exports,'removed_c':removed}
 
+def make_direct_entry(project,libraries):
+    app=project/'app';gen=app/'generated';core=(gen/'mdo_core.c').read_text(encoding='utf-8')
+    pragmas=''.join('#pragma comment(lib, ":'+name+'.o")\n' for name in libraries)
+    (gen/'mdo_unity.c').write_text(pragmas+core,encoding='utf-8')
+    boot=app/'src/bootstrap/plugin_bootstrap.inc.c';text=boot.read_text(encoding='utf-8')
+    text=text.replace('#include "../../generated/partial_objects.inc.h"\n','').replace('"/app/generated/mdo_core.c"','"/app/generated/mdo_unity.c"')
+    text=text.replace('&&MdoLoadCommonObjects(Tcc)','&&tcc_add_library_path(Tcc,"/app/generated/precompiled")>=0')
+    boot.write_text(text,encoding='utf-8')
+    config=json.loads((app/'xs.json').read_text(encoding='utf-8'))
+    for service in config['services']:service['host_default']['dev_lib']='generated/precompiled'
+    (app/'xs.json').write_text(json.dumps(config,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+    (gen/'mdo_core.c').unlink();(gen/'partial_objects.inc.h').unlink()
+
 def main():
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('--directory',type=Path,default=ROOT/'.build/partial-precompile-20261104');p.add_argument('--samples',type=int,default=9);p.add_argument('--prepare-only',action='store_true');a=p.parse_args()
     out=a.directory.resolve();assert out.is_relative_to(ROOT/'.build') and os.name=='nt';out.mkdir(parents=True,exist_ok=True)
@@ -159,12 +172,13 @@ def main():
         (driver/'compiler-defines.inc').write_text('\n'.join(f'tcc_define_symbol(T,{name},{value});' for name,value in defines)+'\n')
         config={'services':[{'enabled':True,'class':'http','name':'partial-compiler','ip':'127.0.0.1','port':free_port(),'host_default':{'enabled':True,'name':'compiler','path':'web','devlang':'c','devfile':'main.c'}}]}
         (driver/'xs.json').write_text(json.dumps(config));objects=project/'app/generated/precompiled';objects.mkdir(exist_ok=True)
-        def compile_probe(name,input,emit,object_path=None,manifest=False,iterations=1):
+        def compile_probe(name,input,emit,object_path=None,manifest=False,iterations=1,library_path=None):
             report=out/(name+'-compiler.json');fields={'BENCH_APP_ROOT':(project/'app').as_posix(),'BENCH_RESULT_PATH':report.as_posix(),'BENCH_OBJECT_PATH':(object_path or objects/'unused.o').as_posix(),'BENCH_INPUT':input}
             text='\n'.join('#define '+key+' '+json.dumps(value) for key,value in fields.items())+f'\n#define BENCH_EMIT {int(emit)}\n#define BENCH_ITERATIONS {iterations}\n'
             if manifest:
                 shutil.copyfile(project/'app/generated/partial_objects.inc.h',driver/'partial_objects.inc.h')
                 text+='\n#define BENCH_OBJECT_MANIFEST "partial_objects.inc.h"\n'
+            if library_path:text+='\n#define BENCH_LIBRARY_PATH '+json.dumps(library_path)+'\n'
             (driver/'benchmark-config.h').write_text(text)
             with (out/(name+'-compiler.log')).open('wb') as log:subprocess.run([str(host/'xs.exe'),str(driver/'xs.json')],cwd=driver,stdout=log,stderr=log,check=True,timeout=60,creationflags=subprocess.CREATE_NO_WINDOW)
             rows=json.loads(report.read_text());assert all(row['ok'] for row in rows);return rows
@@ -179,6 +193,10 @@ def main():
         results['compiler']['partial-core']={'raw':rows,'summary':stats([row['total_ms'] for row in rows])};save()
         bounded_remove(project/'app/generated/partial-build',project/'app/generated')
         pack('partial')
+        make_direct_entry(project,results['extraction']['libraries'])
+        rows=compile_probe('direct-core','/app/generated/mdo_unity.c',False,iterations=a.samples,library_path='/app/generated/precompiled')
+        results['compiler']['direct-core']={'raw':rows,'summary':stats([row['total_ms'] for row in rows])};save()
+        pack('partial-direct')
         if not a.prepare_only:
             print('Prepared source and partial packs; benchmark with benchmark_partial_startup.py',flush=True)
     finally:

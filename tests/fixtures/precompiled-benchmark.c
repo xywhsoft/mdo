@@ -38,6 +38,9 @@ void ServiceInit(XS_HostInfo* Host) {
             // -c changes the action without reinitializing TCC's sections.
             if(tcc_set_options(T,"-c -std=c11")<0)exit(12);
         } else if(tcc_set_options(T,"-std=c11")<0)exit(12);
+#ifdef BENCH_LIBRARY_PATH
+        if(tcc_add_library_path(T,BENCH_LIBRARY_PATH)<0)exit(12);
+#endif
         double Created=xrtTimer();
         bool Added=true;
 #ifdef BENCH_OBJECT_MANIFEST
