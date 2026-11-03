@@ -64,7 +64,7 @@ export function conversationGroups(items) {
       // Normal main-Agent text is public conversation, even when tools or
       // another reply follow it. Only explicit execution records are folded.
       if (item.executionDetail || item.agentDepth > 0 ||
-          ["reasoning", "tool", "task"].includes(item.kind)) {
+          ["reasoning", "tool", "task", "retry"].includes(item.kind)) {
         let process = turn.entries.at(-1);
         if (process?.kind !== "process") {
           process = { key: `process-${item.sourceEventId ?? item.key}`,
@@ -82,4 +82,11 @@ export function conversationGroups(items) {
     }
   }
   return groups;
+}
+
+export function conversationProcessSummary(entry) {
+  const tools = entry.items.filter(item => item.kind === "tool");
+  return { count: tools.length, failed: tools.filter(item => item.state === "failed").length,
+    names: [...new Set(tools.map(item => item.role).filter(Boolean))],
+    retry: entry.items.findLast(item => item.kind === "retry" && item.state === "running") };
 }

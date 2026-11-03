@@ -14,12 +14,12 @@ import { artifactPreviewNode } from "./artifact-preview.js";
 
 import { labelImageName } from "./image-names.js";
 import { toolCallSummary, toolSectionNode } from "./tool-content.js";
-import { conversationGroups } from "./conversation-history.js";
+import { conversationGroups, conversationProcessSummary } from "./conversation-history.js";
 import { insertConversationNotices } from "./conversation-notices.js";
 import { createHistoryWindow } from "./history-window.js";
 import { createConversationNavigation } from "./conversation-navigation.js";
 import { modelErrorMessage, modelErrorTitle } from "../../utils/model-errors.js";
-import { modelRetryNode, updateModelRetryCountdowns } from "./model-retry.js";
+import { modelRetryNode, modelRetryInlineNode, updateModelRetryCountdowns } from "./model-retry.js";
 import { createModelTimingTracker } from "./model-timing.js";
 
 export function searchResultTop(row, content, searchBottom, viewportBottom, lineHeight = 24) {
@@ -404,6 +404,7 @@ export function eventsToTimeline(events, historyLost = false,
         break;
       case "artifact_created":
         items.push({ key: `artifact-${event.event_id}`, kind: "system",
+          executionDetail: true,
           role: t("timeline.artifact", {}, "产物"),
           text: event.artifact_path || event.text || t("timeline.artifactCreated", {}, "已创建产物"),
           artifactId: event.artifact_id,
@@ -414,6 +415,7 @@ export function eventsToTimeline(events, historyLost = false,
       case "compaction_done":
       case "compaction_rejected":
         items.push({ key: `context-${event.event_id}`, kind: "system",
+          executionDetail: true,
           role: t("timeline.context", {}, "上下文"),
           text: event.text || (event.kind === "compaction_start"
             ? t("timeline.compacting", {}, "正在整理上下文…")
@@ -425,6 +427,7 @@ export function eventsToTimeline(events, historyLost = false,
       case "recovery_required":
       case "recovery_resolved":
         items.push({ key: `recovery-${event.event_id}`, kind: "system",
+          executionDetail: event.kind === "recovery_resolved",
           recoveryRecord: true,
           role: t("timeline.recovery", {}, "恢复"),
           text: event.kind === "recovery_resolved" ? recoveryResolvedText(event)
@@ -766,7 +769,7 @@ function commandButton(label, description, iconName, actionRef, handlers, sessio
 }
 
 function timelineNode(item, handlers, projectId, sessionId, writable,
-  openState, previewOpen, previewScroll, toolTextCache) {
+  openState, previewOpen, previewScroll, toolTextCache, folds = null) {
   if (item.kind === "history-notice") return element("p", {
     className: "timeline-item timeline-history-notice", text: item.text,
     attrs: { role: "note", "data-kind": "history-notice" },
@@ -775,19 +778,26 @@ function timelineNode(item, handlers, projectId, sessionId, writable,
   if (item.kind === "process") {
     const details = element("details", { className: "conversation-process", attrs: {
       "data-timeline-key": item.key, "data-state": item.state } });
-    details.open = openState ?? item.state === "running";
-    const count = item.items.filter(child => child.kind === "tool").length;
-    const label = item.state === "running" ? t("timeline.processRunning", {}, "执行过程")
-      : t("timeline.processComplete", {}, "查看思考与执行过程");
+    details.open = openState ?? false;
+    const { count, failed, names, retry } = conversationProcessSummary(item);
+    const label = count ? t("timeline.toolGroup.title", {}, "工具调用") : t("timeline.toolGroup.thinking", {}, "思考与执行");
     const summary = element("summary", {}, [actionIcon("chevron-down"),
       element("span", { text: label }), count ? element("span", {
-        className: "conversation-process-count", text: uiMessage("timeline.processTools", { count }, `${count} 次工具调用`) }) : null]);
+        className: "conversation-process-count", text: t("timeline.toolGroup.count", { count }, `${count} 次`) }) : null,
+      names.length ? element("span", { className: "conversation-process-names", text:
+        names.slice(0, 3).join(" · ") + (names.length > 3 ? t("timeline.toolGroup.more", { count: names.length - 3 }, ` 等 ${names.length - 3} 种`) : ""),
+        attrs: { title: names.join(" · ") } }) : null,
+      item.state === "running" ? element("span", { className: "conversation-process-status", text: t("timeline.toolGroup.running", {}, "进行中") }) : null,
+      failed ? element("span", { className: "conversation-process-failed", text: t("timeline.toolGroup.failed", { count: failed }, `${failed} 次失败`) }) : null,
+      retry ? modelRetryInlineNode(retry) : null]);
     details.append(summary);
     function expand() {
       if (!details.open || details.querySelector(".conversation-process-items")) return;
       const children = element("ol", { className: "conversation-process-items" });
-      for (const child of item.items) children.append(timelineNode(child, handlers,
-        projectId, sessionId, false, undefined, false, 0, toolTextCache));
+      for (const child of item.items.filter(child => child !== retry)) children.append(timelineNode(child, handlers,
+        projectId, sessionId, false, folds?.expanded.get(child.key),
+        folds?.previews.get(`${child.key}/preview`) ?? false,
+        folds?.scroll.get(`${child.key}/preview`) ?? 0, toolTextCache, folds));
       details.append(children);
       mountIcons(children);
     }
@@ -1039,7 +1049,6 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
   const previewExpanded = new Map();
   const previewScroll = new Map();
   const toolTextCache = new Map();
-  const processStates = new Map();
   const manualProcesses = new Set();
   const scroller = container.closest(".conversation");
   const historyWindow = onLoadOlder ? createHistoryWindow({
@@ -1090,7 +1099,8 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
         const node = timelineNode(item, handlers, projectId,
           sessionId, writable, expanded.get(item.key),
           previewExpanded.get(`${item.key}/preview`) ?? false,
-          previewScroll.get(`${item.key}/preview`) ?? 0, toolTextCache);
+          previewScroll.get(`${item.key}/preview`) ?? 0, toolTextCache,
+          { expanded, previews: previewExpanded, scroll: previewScroll });
         node.dataset.timelineRow = item.key;
         const source = item.sourceEventId ?? item.items?.[0]?.sourceEventId;
         if (source) node.dataset.sourceEventId = source;
@@ -1171,7 +1181,6 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
       previewExpanded.clear();
       previewScroll.clear();
       toolTextCache.clear();
-      processStates.clear();
       manualProcesses.clear();
       jumpVersion += 1;
       renderedRows.clear();
@@ -1205,12 +1214,6 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
       previousTurn = group.firstEventId;
       if (group.user) projected.push(group.user);
       for (const entry of group.entries) {
-        if (entry.kind === "process") {
-          if (!manualProcesses.has(entry.key) && processStates.has(entry.key) &&
-              processStates.get(entry.key) !== entry.state)
-            expanded.set(entry.key, entry.state === "running");
-          processStates.set(entry.key, entry.state);
-        }
         projected.push(entry);
       }
     }
@@ -1219,7 +1222,6 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
       ...projected.filter(item => item.kind === "process").map(item => item.key)]);
     for (const key of expanded.keys()) if (!foldKeys.has(key)) expanded.delete(key);
     for (const key of manualProcesses) if (!foldKeys.has(key)) manualProcesses.delete(key);
-    for (const key of processStates.keys()) if (!foldKeys.has(key)) processStates.delete(key);
     const previewKeys = new Set(items.filter((item) => item.artifactId)
       .map((item) => `${item.key}/preview`));
     for (const key of previewExpanded.keys())

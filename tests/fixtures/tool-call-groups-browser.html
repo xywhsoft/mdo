@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo tool call groups</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<style>body{margin:20px;background:var(--bg);color:var(--ink)}.conversation{height:76vh;max-width:820px;margin:auto;overflow:auto}#result{display:block;max-width:820px;margin:auto;font-size:11px;white-space:pre-wrap}#timeline{max-width:100%;padding:0}#timeline>.timeline-item{margin-bottom:24px}</style>
+<div class="conversation"><p id="welcome"></p><ol id="timeline"></ol></div>
+<button id="to-bottom" hidden>↓</button><output id="result">Preparing</output><div id="toast-region"></div>
+<script type="module">
+import {createTimelineView} from "/app/web/js/features/chat/timeline.js";
+import {createResourceStore} from "/app/web/js/state/store.js";
+import {loadLocale} from "/app/web/js/i18n.js";
+const output=document.querySelector("#result"),container=document.querySelector("#timeline");
+const checks={},errors=[];window.addEventListener("error",event=>errors.push(event.message));
+try {
+  await loadLocale(new URL(location.href).searchParams.get("locale")||"zh-CN");
+  const store=createResourceStore(),now=Date.now()*1000;
+  const e=(id,kind,fields={})=>({event_id:id,kind,schema_version:10,run_id:1,agent_depth:0,agent_turn:1,time:now+id*1000,...fields});
+  let events=[e(1,"agent_start",{text:"检查工程并修复问题",user_message_sequence:1}),
+    e(2,"model_text_delta",{text:"我先查看源码和检查结果。"}),e(3,"model_done",{success:true}),
+    e(4,"tool_start",{tool_call_id:"read",tool_name:"read",text:'{"path":"src/main.c"}'}),
+    e(5,"tool_done",{tool_call_id:"read",success:true,text:"int main(void) { return 0; }"}),
+    e(6,"artifact_created",{artifact_path:"report.txt"}),e(7,"compaction_done"),
+    e(8,"tool_start",{tool_call_id:"exec",tool_name:"exec",text:'{"cmd":"check project"}'}),
+    e(9,"tool_done",{tool_call_id:"exec",success:false,text:"Exit 1: one check failed"}),
+    e(10,"model_reasoning_delta",{agent_turn:2,text:"检查到需要修复的问题"}),
+    e(11,"tool_start",{tool_call_id:"write",tool_name:"write",text:'{"path":"src/main.c","content":"updated"}'})];
+  createTimelineView({container,welcome:document.querySelector("#welcome"),toBottom:document.querySelector("#to-bottom"),store});
+  const paint=async()=>{await new Promise(requestAnimationFrame);await new Promise(requestAnimationFrame);};
+  const publish=async()=>{store.setData({projectId:"qa",sessionId:"tool-groups",events});await paint();};
+  const process=()=>container.querySelector(".conversation-process");
+  await publish();
+  checks.compactLive=!process().open&&!process().querySelector(".conversation-process-items");
+  checks.oneGroup=container.querySelectorAll(".conversation-process").length===1&&process().querySelector(".conversation-process-count").textContent.includes("3");
+  checks.failedVisible=process().querySelector("summary .conversation-process-failed")?.textContent.includes("1");
+  process().querySelector("summary").click();await paint();
+  process().querySelector("details[data-timeline-key='tool-4'] summary").click();await paint();
+  events.push(e(12,"tool_start",{tool_call_id:"again",tool_name:"read",text:'{"path":"src/config.c"}'}),e(13,"tool_done",{tool_call_id:"again",success:true,text:"OK"}));await publish();
+  checks.openRetained=process().open&&process().querySelector("details[data-timeline-key='tool-4']")?.open;
+  checks.fourCalls=process().querySelectorAll("li[data-kind='tool']").length===4;
+  process().querySelector("summary").click();await paint();
+  events.push(e(14,"tool_done",{tool_call_id:"write",success:true,text:"Saved"}),
+    e(15,"model_retry",{agent_turn:2,model_error_kind:"rate_limited",model_http_status:429,model_attempts:1,model_retry_after_ms:60000}));await publish();
+  checks.closedRetained=!process().open;
+  checks.retryVisible=process().querySelector("summary [data-model-retry]")?.textContent.includes("429");
+  events.push(e(16,"model_reasoning_delta",{agent_turn:2,text:"检查完成"}),
+    e(17,"model_text_delta",{agent_turn:2,text:"修改已完成，完整执行记录可展开查看。"}),e(18,"model_done",{agent_turn:2,success:true}),e(19,"agent_done",{success:true}));await publish();
+  checks.finishedCompact=!process().open&&!process().querySelector("summary [data-model-retry]");
+  checks.dialogueOnly=[...container.children].map(node=>node.dataset.kind).join(",")==="user,assistant,process,assistant";
+  process().querySelector("summary").click();await paint();
+  checks.childRestored=process().querySelector("details[data-timeline-key='tool-4']")?.open===true;
+  process().querySelector("summary").click();await paint();
+  checks.noOverflow=document.documentElement.scrollWidth<=innerWidth;
+  output.textContent=JSON.stringify({passed:errors.length===0&&Object.values(checks).every(Boolean),checks,errors},null,2);
+}catch(error){output.textContent=JSON.stringify({passed:false,error:String(error.stack),checks,errors});}
+</script>
+</html>

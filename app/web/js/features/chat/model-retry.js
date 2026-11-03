@@ -33,6 +33,17 @@ export function modelRetryNode(item) {
         attrs: { "aria-live": "off" } })])]);
 }
 
+// Remain visible in a collapsed tool group, with the same countdown contract.
+export function modelRetryInlineNode(item) {
+  const copy = modelRetryCopy(item);
+  return element("span", { className: "conversation-process-retry", attrs: {
+    "data-model-retry": "", "data-retry-at": String(item.retryAt),
+    "data-retry-waiting": String(item.retryWaiting), "data-retry-attempts": String(item.attempts),
+    role: "status", "aria-live": "polite",
+  } }, [element("span", { className: "model-retry-title", text: copy.title }),
+    element("span", { className: "model-retry-detail", text: copy.detail, attrs: { "aria-live": "off" } })]);
+}
+
 export function updateModelRetryCountdowns(container, now = Date.now()) {
   const notices = container.querySelectorAll("[data-model-retry]");
   for (const node of notices) {
