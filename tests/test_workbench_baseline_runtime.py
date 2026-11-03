@@ -1,4 +1,5 @@
 """Session creation captures real raw worktree state in an independent Git DB."""
+from runtime_sources import authored_extension
 import argparse, hashlib, http.client, json, os, subprocess, tempfile, time, threading, uuid
 from pathlib import Path
 from test_api_runtime import ROOT, write_site, free_port, wait_ready
@@ -15,7 +16,7 @@ def main():
         repo.mkdir(parents=True); port = free_port(); config = write_site(base, port)
         commands=home/'commands';commands.mkdir()
         command=COMMAND.replace('mdo_result Code=mdoCall(S,Method,V->At(A,1),R,&E);','mdo_result Code=mdoChangesBaseline(S,V->At(A,1),R,&E);')
-        (commands/'baseline.c').write_text('/* mdo-command {"id":"baseline","description":"Baseline C SDK QA"} */\n#include <string.h>\n#include <mdo/workbench.h>\n'+command,encoding='utf-8')
+        authored_extension(commands.parent,"commands",'baseline',"command.c",'/* mdo-command {"id":"baseline","description":"Baseline C SDK QA"} */\n#include <string.h>\n#include <mdo/workbench.h>\n'+command)
         baseline_source=base/'src/application/changes_baseline.inc.c'
         source=baseline_source.read_text(encoding='utf-8');hook='    /* Validate the complete inventory again, including tracked deletions and'
         assert source.count(hook)==1
@@ -148,6 +149,18 @@ def main():
                 process.terminate();process.wait(timeout=10)
                 process=subprocess.Popen([str(args.host.resolve()),str(config),'--','--home',str(home)],cwd=base,env={**os.environ,'USE_WEBVIEW':'0','GIT_CEILING_DIRECTORIES':str(base)},stdout=log,stderr=log);wait_ready(port,process)
                 assert call('changes.baseline',session=session)==receipt,'host restart replaced the original baseline'
+                # Relative records must survive a portable Home move, including
+                # native/Git separator normalization on Windows.
+                record = home / 'workbench-baselines/default/sessions' / (session + '.json')
+                saved=json.loads(record.read_text(encoding='utf-8'))
+                assert saved['workspace']==saved['repository']=='workspace',saved
+                process.terminate();process.wait(timeout=10)
+                moved=base/'moved-home';home.rename(moved);home=moved;repo=home/'workspace'
+                process=subprocess.Popen([str(args.host.resolve()),str(config),'--','--home',str(home)],cwd=base,env={**os.environ,'USE_WEBVIEW':'0','GIT_CEILING_DIRECTORIES':str(base)},stdout=log,stderr=log);wait_ready(port,process)
+                moved_receipt=call('changes.baseline',session=session)
+                assert {k:v for k,v in moved_receipt.items() if k not in ('workspace','repository')}=={k:v for k,v in receipt.items() if k not in ('workspace','repository')},moved_receipt
+                assert Path(moved_receipt['workspace']).resolve()==Path(moved_receipt['repository']).resolve()==repo.resolve(),moved_receipt
+                assert call('changes.list',{'scope':'session'},session)['scope']=='session'
                 # A legacy/imported session has no original capture; querying
                 # it must not create a new baseline at the current disk state.
                 record = home / 'workbench-baselines/default/sessions' / (session + '.json')

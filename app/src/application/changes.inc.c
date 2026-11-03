@@ -72,6 +72,12 @@ static char* SdkGitRoot(const mdo_sdk_context_v1* C,const xvalue* P,mdo_error_v1
     char* Directory=SdkNativePath(C,Params,false,E);xrtValueRelease(Params);if(!Directory)return NULL;
     const cstr Args[]={"rev-parse","--show-toplevel"};char* Root=SdkGitText(C,Directory,Args,2,false,E);xrtFree(Directory);return Root;
 }
+/* Git prints forward slashes on Windows; portable records resolve through the
+ * native path API. Compare canonical directories, never their separator style. */
+static bool SdkGitSameDirectory(cstr A,cstr B){
+    char* Left=A?xrtPathReal(A):NULL,*Right=B?xrtPathReal(B):NULL;
+    bool Same=Left&&Right&&!strcmp(Left,Right);xrtFree(Left);xrtFree(Right);return Same;
+}
 static bool SdkGitOid(cstr Text){size_t N=Text?strlen(Text):0;if(N!=40&&N!=64)return false;for(size_t i=0;i<N;i++)if(!((Text[i]>='0'&&Text[i]<='9')||(Text[i]>='a'&&Text[i]<='f')))return false;return true;}
 static char* SdkGitResolve(const mdo_sdk_context_v1* C,cstr Root,cstr Name,mdo_error_v1* E){
     if(!Name||!Name[0]||strlen(Name)>512)return SdkGitFail(E,"git_revision_invalid","Select a branch or commit",400),NULL;
@@ -165,7 +171,7 @@ static bool SdkGitRangeInit(const mdo_sdk_context_v1* C,const xvalue* P,SdkGitRa
         xvalue* Baseline=SdkGitBaselineRead(C,E);if(!Baseline)return false;bool Available=false;xrtValueGetBool(SdkGet(Baseline,"available"),&Available);
         cstr Root=SdkField(Baseline,"repository"),Workspace=SdkField(Baseline,"workspace"),Tree=SdkField(Baseline,"tree");
         if(!Available){SdkGitFail(E,"git_baseline_unavailable",SdkField(Baseline,"message")?SdkField(Baseline,"message"):"Session baseline capture was unavailable",409);xrtValueRelease(Baseline);return false;}
-        if(!Root||strcmp(Root,G->Root)||!Workspace||strcmp(Workspace,C->Workspace)||!SdkGitOid(Tree)||!SdkField(Baseline,"session")||strcmp(SdkField(Baseline,"session"),C->SessionId)||!SdkField(Baseline,"project")||strcmp(SdkField(Baseline,"project"),C->ProjectId)){
+        if(!SdkGitSameDirectory(Root,G->Root)||!SdkGitSameDirectory(Workspace,C->Workspace)||!SdkGitOid(Tree)||!SdkField(Baseline,"session")||strcmp(SdkField(Baseline,"session"),C->SessionId)||!SdkField(Baseline,"project")||strcmp(SdkField(Baseline,"project"),C->ProjectId)){
             xrtValueRelease(Baseline);return SdkGitFail(E,"git_baseline_context_changed","The captured baseline belongs to the session's original repository and workspace",409);}
         G->Base=xrtStrDup(Tree);SdkUInt(SdkGet(Baseline,"captured_at_us"),&G->CapturedAt);xrtValueRelease(Baseline);G->PrivateRepo=SdkGitSnapshotRepo(C->ProjectId);
         unsigned char Random[16];char Hex[33];if(!G->Base||!G->PrivateRepo||!xrtSecureRandom(Random,sizeof(Random)))return SdkNativeFailure(E,"git_snapshot");

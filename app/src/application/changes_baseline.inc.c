@@ -157,10 +157,10 @@ static xvalue* SdkGitBaselineRead(const mdo_sdk_context_v1* C,mdo_error_v1* E){
     if(!MdoPathField(V,"workspace",true)||!MdoPathField(V,"repository",true)){xrtValueRelease(V);SdkGitFail(E,"git_baseline_corrupt","Baseline path is invalid",503);return NULL;}
     uint64 Version=0;bool Available=false;
     if(!SdkUInt(SdkGet(V,"schema_version"),&Version)||Version!=1||!xrtValueGetBool(SdkGet(V,"available"),&Available)||!SdkField(V,"representation")||strcmp(SdkField(V,"representation"),"raw-worktree-v1")||
-        !SdkField(V,"project")||strcmp(SdkField(V,"project"),C->ProjectId)||!SdkField(V,"session")||strcmp(SdkField(V,"session"),C->SessionId)||!SdkField(V,"workspace")||!C->Workspace||strcmp(SdkField(V,"workspace"),C->Workspace)){
+        !SdkField(V,"project")||strcmp(SdkField(V,"project"),C->ProjectId)||!SdkField(V,"session")||strcmp(SdkField(V,"session"),C->SessionId)||!SdkGitSameDirectory(SdkField(V,"workspace"),C->Workspace)){
         xrtValueRelease(V);SdkGitFail(E,"git_baseline_corrupt","Baseline schema or immutable context is invalid; original data was retained",503);return NULL;}
     xwork_error Error;MdoSession* Session=MdoSessionLoad(C->ProjectId,C->SessionId,&Error);MdoSessionInfo Info={0};Info.Size=sizeof(Info);
-    bool Valid=Session&&MdoSessionGetInfo(Session,&Info)&&C->Workspace&&!strcmp(Info.WorkspaceRoot,C->Workspace);MdoSessionRelease(Session);
+    bool Valid=Session&&MdoSessionGetInfo(Session,&Info)&&SdkGitSameDirectory(Info.WorkspaceRoot,C->Workspace);MdoSessionRelease(Session);
     if(!Valid){xrtValueRelease(V);SdkGitFail(E,"git_baseline_context_changed","The session or its original workspace is unavailable",409);return NULL;}
     return V;
 }
