@@ -21,13 +21,21 @@ function watch() {
   }
 }
 
+export function isTargetImagePath(path) {
+  if (/^\/api\/v1\/projects\/[A-Za-z0-9._-]+\/sessions\/[A-Za-z0-9._-]+\/attachments\/[0-9a-f]{32}$/.test(path)) return true;
+  if (!/^\/api\/v1\/projects\/[A-Za-z0-9._-]+\/sessions\/[A-Za-z0-9._-]+\/markdown-resource\?/.test(path)) return false;
+  const url = new URL(path, "https://mdo.invalid");
+  return [...url.searchParams.keys()].sort().join() === "mode,path" && url.searchParams.get("mode") === "image" &&
+    Boolean(url.searchParams.get("path")) && url.searchParams.get("path").length <= 1024 && path.length <= 4096;
+}
+
 // Application images must use the same target transport as commands. Bundle
 // icons remain ordinary assets. A preview gets its own source lease, so removal
 // of the old timeline row cannot revoke the open preview's blob URL.
 export function bindTargetImage(node, path) {
   dispose(node); node.dataset.mdoImagePath = path;
   if (!isRemoteTarget()) { node.setAttribute("src", path); return; }
-  if (!/^\/api\/v1\/projects\/[A-Za-z0-9._-]+\/sessions\/[A-Za-z0-9._-]+\/attachments\/[0-9a-f]{32}$/.test(path))
+  if (!isTargetImagePath(path))
     throw new TypeError(uiErrorText("error.detail.imageIsOutsideTheSelectedTarget", {}, "Image is outside the selected target"));
   node.removeAttribute("src"); watch();
   const entry = { cancel: new AbortController(), url: "", mounted: false }; images.set(node, entry);
@@ -38,7 +46,7 @@ export function bindTargetImage(node, path) {
     try {
       response = await targetFetch(path, { cache: "no-store", redirect: "error", signal: entry.cancel.signal });
       const type = (response.headers.get("Content-Type") || "").split(";")[0];
-      if (!response.ok || !["image/png", "image/jpeg", "image/webp"].includes(type) || !response.body)
+      if (!response.ok || !["image/png", "image/jpeg", "image/webp", "image/gif"].includes(type) || !response.body)
         throw new Error(uiErrorText("error.detail.invalidTargetImageResponse", {}, "Invalid target image response"));
       const length = response.headers.get("Content-Length");
       if (length !== null && (!/^[1-9][0-9]*$/.test(length) || Number(length) > 8388608)) throw new Error(uiErrorText("error.detail.invalidTargetImageLength", {}, "Invalid target image length"));

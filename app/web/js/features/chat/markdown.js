@@ -1,181 +1,193 @@
-import { setUiText as writeUiText, uiMessage, t } from "../../i18n.js";
-
-import { element } from "../../utils/dom.js";
+import { element, errorMessage, toast } from "../../utils/dom.js";
+import { t } from "../../i18n.js";
 import { copyText } from "../../utils/clipboard.js";
+import { sourceTokens } from "../workbench/source-view.js";
+import { parseMarkdown } from "./markdown-transport.js";
+import { markdownAddress, markdownResourceUrl, markdownImage, openMarkdownFile, nativeExternalLink } from "./markdown-assets.js";
 
-const INLINE = /(`[^`\n]+`|\*\*[^*\n]+\*\*|~~[^~\n]+~~|\*[^*\n]+\*|!\[[^\]\n]*\]\([^\s)]+\)|\[[^\]\n]+\]\([^\s)]+\))/g;
-const LIST = /^\s{0,3}([-*]|\d+[.)])\s+(.*)$/;
-const HEADING = /^(#{1,4})\s+(.*)$/;
-
-function safeLink(value) {
-  try {
-    const url = new URL(value);
-    return url.protocol === "http:" || url.protocol === "https:" ? url.href : null;
-  } catch { return null; }
-}
-
-function safeImage(value) {
-  const remote = safeLink(value);
-  if (remote) return remote;
-  if (value.length > 1024 * 1024 ||
-      !/^data:image\/(?:png|jpeg|gif|webp);base64,[A-Za-z0-9+/]+={0,2}$/i.test(value))
-    return null;
-  return value;
-}
-
-function inline(text) {
-  const nodes = [];
-  let start = 0;
-  for (const match of text.matchAll(INLINE)) {
-    if (match.index > start) nodes.push(document.createTextNode(text.slice(start, match.index)));
-    const token = match[0];
-    let node = null;
-    if (token.startsWith("`")) node = element("code", { text: token.slice(1, -1) });
-    else if (token.startsWith("**")) node = element("strong", { text: token.slice(2, -2) });
-    else if (token.startsWith("~~")) node = element("del", { text: token.slice(2, -2) });
-    else if (token.startsWith("*")) node = element("em", { text: token.slice(1, -1) });
-    else if (token.startsWith("![")) {
-      const bracket = token.indexOf("](");
-      const alt = token.slice(2, bracket);
-      const src = safeImage(token.slice(bracket + 2, -1));
-      if (src) node = element("button", { className: "md-image-preview",
-        attrs: { type: "button", "data-image-preview": "",
-          "aria-label": uiMessage("markdown.viewImage", { alt: alt || t("markdown.image", {}, "Markdown 图片") },
-            `查看图片：${alt || "Markdown 图片"}`) },
-      }, [element("img", { attrs: { src, alt, loading: "lazy",
-        decoding: "async", referrerpolicy: "no-referrer" } })]);
+// Entity decoding is restricted to individual character references, never markup.
+const entities = new Map();
+export function decodeMarkdownEntities(value) {
+  return String(value || "").replace(/&(?:#[0-9]{1,8}|#x[0-9a-f]{1,8}|[a-z][a-z0-9]{1,31});/gi, entity => {
+    if (!entities.has(entity)) {
+      if (entities.size >= 256) entities.clear();
+      entities.set(entity, new DOMParser().parseFromString(entity, "text/html").body.textContent);
     }
-    else if (token.startsWith("[")) {
-      const bracket = token.indexOf("](");
-      const label = token.slice(1, bracket);
-      const href = safeLink(token.slice(bracket + 2, -1));
-      if (href) node = element("a", { text: label,
-        attrs: { href, target: "_blank", rel: "noopener noreferrer" } });
-    }
-    nodes.push(node ?? document.createTextNode(token));
-    start = match.index + token.length;
+    return entities.get(entity);
+  });
+}
+const textOf = nodes => (nodes || []).map(node => node.t === "entity" ? decodeMarkdownEntities(node.s) : node.s ?? textOf(node.c)).join("");
+const tags = new Set(["p", "blockquote", "ul", "ol", "li", "hr", "table", "thead", "tbody", "tr", "th", "td", "strong", "em", "del", "code", "br"]);
+function reusable(root, selector, key) {
+  const pool = new Map();
+  for (const node of root?.querySelectorAll(selector) || []) {
+    const id = key(node); if (!pool.has(id)) pool.set(id, []); pool.get(id).push(node);
   }
-  if (start < text.length) nodes.push(document.createTextNode(text.slice(start)));
-  return nodes;
+  return id => pool.get(id)?.shift();
+}
+function codeBlock(node, takeCode) {
+  const code = textOf(node.c), language = decodeMarkdownEntities(node.lang).trim().split(/\s+/)[0];
+  const previous = takeCode(JSON.stringify([language, code]));
+  if (previous) return previous;
+  const block = element("div", { className: "md-codeblock", attrs: { "data-md-code": JSON.stringify([language, code]) } });
+  const copy = element("button", { text: t("markdown.copyCode"), attrs: { type: "button" } });
+  copy.addEventListener("click", async () => {
+    try { await copyText(code); copy.textContent = t("markdown.copied"); }
+    catch { copy.textContent = t("markdown.copyFailed"); }
+    setTimeout(() => { if (copy.isConnected) copy.textContent = t("markdown.copyCode"); }, 1200);
+  });
+  const header = element("div", { className: "md-code-head" }, [element("span", { text: language || "text" }), copy]);
+  const content = element("code");
+  const aliases = { javascript: "js", typescript: "ts", python: "py", shell: "sh", powershell: "ps1", csharp: "cs", cpp: "cpp" };
+  if (code.length <= 65536) {
+    const lines = code.split("\n");
+    for (const [index, line] of lines.entries()) {
+      for (const token of sourceTokens(line, `code.${aliases[language] || language}`))
+        content.append(token.kind ? element("span", { className: `md-token-${token.kind}`, text: token.text }) : document.createTextNode(token.text));
+      if (index < lines.length - 1) content.append(document.createTextNode("\n"));
+    }
+  } else content.textContent = code;
+  block.append(header, element("pre", {}, [content])); return block;
 }
 
-function appendInline(parent, text) { parent.append(...inline(text)); }
-
-function blockStart(line) {
-  return /^```/.test(line) || HEADING.test(line) || LIST.test(line) ||
-    /^>\s?/.test(line) || /^\s*(-{3,}|\*{3,})\s*$/.test(line);
-}
-
-function cells(line) {
-  return line.trim().replace(/^\||\|$/g, "").split("|").map((part) => part.trim());
-}
-
-export function renderMarkdown(source) {
-  const lines = String(source ?? "").replace(/\r\n?/g, "\n").split("\n");
-  const output = document.createDocumentFragment();
-  let index = 0;
-  while (index < lines.length) {
-    const line = lines[index];
-    if (!line.trim()) { index++; continue; }
-    const fence = /^```([\w+-]*)\s*$/.exec(line);
-    if (fence) {
-      const code = [];
-      index++;
-      while (index < lines.length && !/^```\s*$/.test(lines[index]))
-        code.push(lines[index++]);
-      if (index < lines.length) index++;
-      const block = element("div", { className: "md-codeblock" });
-      const head = element("div", { className: "md-code-head" });
-      head.append(element("span", { text: fence[1] || "text" }));
-      const copy = element("button", { text: uiMessage("markdown.copyCode", {}, "复制代码"),
-        attrs: { type: "button" } });
-      let resetCopyLabel;
-      copy.addEventListener("click", async () => {
-        try {
-          await copyText(code.join("\n"));
-          writeUiText(copy, uiMessage("markdown.copied", {}, "已复制"));
-        } catch { writeUiText(copy, uiMessage("markdown.copyFailed", {}, "复制失败")); }
-        clearTimeout(resetCopyLabel);
-        resetCopyLabel = setTimeout(() => {
-          if (copy.isConnected)
-            writeUiText(copy, uiMessage("markdown.copyCode", {}, "复制代码"));
-        }, 1200);
+export function renderMarkdownNodes(nodes, { previous, owner, signal, onLayout, onOpenFile } = {}) {
+  const takeImage = reusable(previous, "[data-md-image-key]", node => node.dataset.mdImageKey);
+  const takeCode = reusable(previous, "[data-md-code]", node => node.dataset.mdCode);
+  const headings = new Map(); let count = 0;
+  function build(node, depth = 0, inLink = false) {
+    if (!node || ++count > 32768 || depth > 96) throw new Error("Invalid Markdown node budget");
+    if (node.t === "text" || node.t === "entity") return document.createTextNode(node.t === "entity" ? decodeMarkdownEntities(node.s) : String(node.s || ""));
+    if (node.t === "codeblock") return codeBlock(node, takeCode);
+    if (node.t === "img") {
+      const url = decodeMarkdownEntities(node.url), alt = textOf(node.c), title = decodeMarkdownEntities(node.title);
+      const address = markdownAddress(url, true);
+      const src = address?.kind === "file" ? markdownResourceUrl(owner, address.path) : address?.url;
+      const key = JSON.stringify([src, alt, title, inLink]);
+      return takeImage(key) || markdownImage(address, alt, title, owner, { inLink, onLayout });
+    }
+    if (node.t === "a") {
+      const address = markdownAddress(decodeMarkdownEntities(node.url));
+      const href = address?.kind === "file" ? markdownResourceUrl(owner, address.path, "file") : address?.kind === "anchor" ? `#${address.url}` : address?.url;
+      const link = element(href ? "a" : "span", { attrs: href ? { href, title: decodeMarkdownEntities(node.title),
+        ...(address.kind === "web" ? { target: "_blank", rel: "noopener noreferrer" } : {}) } : {} });
+      for (const child of node.c || []) link.append(build(child, depth + 1, true));
+      if (address?.kind === "web") link.addEventListener("click", event => nativeExternalLink(event, address.url));
+      if (address?.kind === "file" && href) link.addEventListener("click", event => {
+        event.preventDefault(); if (signal?.aborted) return;
+        openMarkdownFile(address, owner, { signal, onOpenFile }).catch(error => { if (error.name !== "AbortError") toast(errorMessage(error), "error"); });
       });
-      head.append(copy);
-      block.append(head, element("pre", {}, [element("code", { text: code.join("\n") })]));
-      output.append(block);
-      continue;
+      if (address?.kind === "anchor") link.addEventListener("click", event => {
+        event.preventDefault(); let key; try { key = decodeURIComponent(address.url); } catch { return; }
+        headings.get(key)?.scrollIntoView({ block: "start" });
+      });
+      return link;
     }
-    const heading = HEADING.exec(line);
-    if (heading) {
-      const title = element(`h${heading[1].length}`);
-      appendInline(title, heading[2]);
-      output.append(title);
-      index++;
-      continue;
+    const tag = node.t === "heading" && Number.isInteger(node.level) && node.level >= 1 && node.level <= 6 ? `h${node.level}` : tags.has(node.t) ? node.t : "span";
+    const result = element(tag);
+    if (node.t === "ol" && Number.isSafeInteger(node.start) && node.start > 0) result.start = node.start;
+    if ((node.t === "ol" || node.t === "ul") && node.tight) result.classList.add("md-tight-list");
+    if ((node.t === "th" || node.t === "td") && ["left", "center", "right"].includes(node.align)) result.style.textAlign = node.align;
+    if (node.t === "li" && ["checked", "unchecked"].includes(node.task)) result.append(element("input", { attrs: { type: "checkbox", disabled: "", ...(node.task === "checked" ? { checked: "" } : {}) } }));
+    for (const child of node.c || []) result.append(build(child, depth + 1, inLink));
+    if (node.t === "heading") {
+      const id = textOf(node.c).trim().toLowerCase().replace(/[^\p{L}\p{N}\s_-]/gu, "").replace(/\s+/g, "-");
+      if (!headings.has(id)) headings.set(id, result);
     }
-    if (/^\s*(-{3,}|\*{3,})\s*$/.test(line)) {
-      output.append(element("hr")); index++; continue;
-    }
-    if (/^>\s?/.test(line)) {
-      const quote = [];
-      while (index < lines.length && /^>\s?/.test(lines[index]))
-        quote.push(lines[index++].replace(/^>\s?/, ""));
-      const block = element("blockquote");
-      appendInline(block, quote.join(" "));
-      output.append(block);
-      continue;
-    }
-    if (/^\s*\|.*\|\s*$/.test(line) &&
-        /^\s*\|[\s:|-]+\|\s*$/.test(lines[index + 1] ?? "")) {
-      const table = element("table");
-      const head = element("tr");
-      for (const value of cells(line)) {
-        const cell = element("th"); appendInline(cell, value); head.append(cell);
-      }
-      table.append(element("thead", {}, [head]));
-      index += 2;
-      const body = element("tbody");
-      while (index < lines.length && /^\s*\|.*\|\s*$/.test(lines[index])) {
-        const row = element("tr");
-        for (const value of cells(lines[index++])) {
-          const cell = element("td"); appendInline(cell, value); row.append(cell);
-        }
-        body.append(row);
-      }
-      table.append(body);
-      output.append(element("div", { className: "md-table-wrap" }, [table]));
-      continue;
-    }
-    const list = LIST.exec(line);
-    if (list) {
-      const ordered = /\d/.test(list[1][0]);
-      const group = element(ordered ? "ol" : "ul");
-      while (index < lines.length) {
-        const item = LIST.exec(lines[index]);
-        if (!item || /\d/.test(item[1][0]) !== ordered) break;
-        index++;
-        const li = element("li");
-        const task = /^\[([ xX])\]\s+(.*)$/.exec(item[2]);
-        if (task) li.append(element("input", { attrs: {
-          type: "checkbox", disabled: "", ...(task[1].toLowerCase() === "x" ? { checked: "" } : {}),
-        } }));
-        appendInline(li, task ? task[2] : item[2]);
-        group.append(li);
-      }
-      output.append(group);
-      continue;
-    }
-    const paragraph = [line];
-    index++;
-    while (index < lines.length && lines[index].trim() &&
-           !blockStart(lines[index]) &&
-           !(/^\s*\|.*\|\s*$/.test(lines[index]) &&
-             /^\s*\|[\s:|-]+\|\s*$/.test(lines[index + 1] ?? "")))
-      paragraph.push(lines[index++]);
-    const p = element("p");
-    appendInline(p, paragraph.join(" "));
-    output.append(p);
+    return node.t === "table" ? element("div", { className: "md-table-wrap" }, [result]) : result;
   }
-  return output;
+  const fragment = document.createDocumentFragment();
+  for (const node of nodes) fragment.append(build(node)); return fragment;
+}
+
+export function createMarkdownRenderer({ parse = parseMarkdown, onLayout = () => {}, decorate = () => {}, onOpenFile,
+  delay = 120, concurrency = 2, timeoutMs = 8000 } = {}) {
+  const entries = new Map(), cache = new Map(), waiting = new Set(); let running = 0, stopped = false, cacheBytes = 0;
+  function drain() {
+    for (const entry of waiting) {
+      if (running >= concurrency) break;
+      waiting.delete(entry); if (entry.dead || entry.inflight) continue;
+      void request(entry);
+    }
+  }
+  function schedule(entry, immediate = false) {
+    if (entry.dead || stopped || entry.inflight) return;
+    if (entry.timer) { if (!immediate) return; clearTimeout(entry.timer); }
+    entry.timer = setTimeout(() => { entry.timer = 0; waiting.add(entry); drain(); }, immediate ? 0 : delay);
+  }
+  function paint(entry, tree, source) {
+    const fragment = renderMarkdownNodes(tree.nodes, { previous: entry.blocks, owner: entry.owner,
+      signal: entry.life.signal, onLayout, onOpenFile });
+    entry.blocks.replaceChildren(fragment);
+    entry.tail.textContent = entry.source.startsWith(source) ? entry.source.slice(source.length) : "";
+    entry.parsed = source; entry.tree = tree; decorate(entry.root, entry); onLayout();
+  }
+  async function request(entry) {
+    running++; entry.inflight = true;
+    const source = entry.source, version = entry.version, cancel = new AbortController(); entry.cancel = cancel;
+    const timeout = setTimeout(() => cancel.abort(), timeoutMs);
+    try {
+      // A transport may ignore abort. Own its deadline as well so it cannot
+      // permanently occupy a parsing slot or overwrite a newer reply later.
+      const tree = cache.get(source)?.tree || await new Promise((resolve, reject) => {
+        const aborted = () => reject(new DOMException("Markdown request cancelled", "AbortError"));
+        cancel.signal.addEventListener("abort", aborted, { once: true });
+        if (cancel.signal.aborted) return aborted();
+        Promise.resolve().then(() => parse(source, { signal: cancel.signal }))
+          .then(resolve, reject).finally(() => cancel.signal.removeEventListener("abort", aborted));
+      });
+      if (entry.dead || stopped || entry.version !== version) return;
+      if (tree?.schema_version !== 1 || tree.engine !== "md4c" || !Array.isArray(tree.nodes)) throw new Error("Invalid Markdown response");
+      paint(entry, tree, source);
+      if (entry.final && !cache.has(source)) {
+        const bytes = source.length + JSON.stringify(tree).length;
+        if (bytes <= 4 * 1024 * 1024) {
+          cache.set(source, { tree, bytes }); cacheBytes += bytes;
+          while (cache.size > 32 || cacheBytes > 4 * 1024 * 1024) { const key = cache.keys().next().value; cacheBytes -= cache.get(key).bytes; cache.delete(key); }
+        }
+      }
+    } catch (error) {
+      if (!entry.dead && entry.version === version) {
+        // Keep every reply readable if the parser/transport rejects a budget.
+        if (!entry.tree) entry.tail.textContent = entry.source;
+      }
+    } finally {
+      clearTimeout(timeout); running--; entry.inflight = false;
+      if (!entry.dead && entry.version !== version) schedule(entry, entry.final);
+      drain();
+    }
+  }
+  function remove(entry) { entry.dead = true; clearTimeout(entry.timer); waiting.delete(entry); entry.cancel?.abort(); entry.life.abort(); }
+  return {
+    render(source, { key, owner, itemKey = key, final = false }) {
+      let entry = entries.get(key);
+      if (!entry) {
+        const blocks = element("div", { className: "md-blocks" }), tail = element("span", { className: "md-pending" });
+        entry = { key, owner, itemKey, blocks, tail, root: element("div", { className: "md-content" }, [blocks, tail]),
+          source: null, parsed: "", version: 0, life: new AbortController() }; entries.set(key, entry);
+      }
+      entry.final = final;
+      if (entry.source !== source) {
+        entry.source = String(source || ""); entry.version++;
+        if (entry.parsed && entry.source.startsWith(entry.parsed)) entry.tail.textContent = entry.source.slice(entry.parsed.length);
+        else { entry.blocks.replaceChildren(); entry.tree = null; entry.parsed = ""; entry.tail.textContent = entry.source; }
+        schedule(entry, final || !entry.parsed);
+      }
+      return entry.root;
+    },
+    retain(keys) { for (const [key, entry] of entries) if (!keys.has(key)) { remove(entry); entries.delete(key); } },
+    relocalize() {
+      for (const entry of entries.values()) {
+        if (entry.tree) paint(entry, entry.tree, entry.parsed);
+        for (const button of entry.blocks.querySelectorAll(".md-code-head button")) button.textContent = t("markdown.copyCode");
+        for (const image of entry.blocks.querySelectorAll(".md-image")) {
+          image.querySelector(".md-image-retry").textContent = t("image.previewRetry");
+          const preview = image.querySelector("button.md-image-preview");
+          if (preview) preview.setAttribute("aria-label", t("markdown.viewImage", { alt: image.querySelector("img").alt || t("markdown.image") }));
+          const status = image.querySelector(".md-image-status");
+          if (status.textContent) status.textContent = t("image.previewFailed");
+        }
+      }
+    },
+    destroy() { stopped = true; for (const entry of entries.values()) remove(entry); entries.clear(); cache.clear(); waiting.clear(); },
+  };
 }

@@ -742,6 +742,18 @@ select:focus-visible,
 .markdown-body h1 { font-size: 19px; }
 .markdown-body h2 { font-size: 17px; }
 .markdown-body h3, .markdown-body h4 { font-size: 15px; }
+.markdown-body h5, .markdown-body h6 { margin: 14px 0 7px; font-size: 14px; line-height: 1.4; }
+.md-blocks > :first-child { margin-top: 0; }
+.md-blocks > :last-child { margin-bottom: 0; }
+.md-pending { white-space: pre-wrap; overflow-wrap: anywhere; }
+.md-image { display: inline-block; max-width: 100%; vertical-align: middle; }
+.md-image-status { display: block; max-width: 480px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.md-image > button { margin-top: 4px; }
+.markdown-body .md-tight-list > li > p { margin-bottom: 0; }
+.md-token-keyword { color: #b57bdf; }
+.md-token-string { color: #479a63; }
+.md-token-number { color: #c28342; }
+.md-token-comment { color: var(--muted); }
 .markdown-body ul, .markdown-body ol { padding-left: 24px; }
 .markdown-body li + li { margin-top: 3px; }
 .markdown-body li input[type="checkbox"] { margin-right: 7px; }

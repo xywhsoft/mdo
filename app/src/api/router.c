@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "internal.h"
+#include "markdown.h"
 #include "purge_intent.h"
 #include "write_admission.h"
 #include "backup_upload.h"
@@ -28,6 +29,8 @@ static xatomic64 g_MdoApiFallbackId;
 static bool g_MdoApiInitialized;
 
 static const MdoApiRoute g_MdoApiRoutes[] = {
+    { "/api/v1/projects/{project}/sessions/{session}/markdown-resource", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
+      "GET, HEAD, OPTIONS", MdoApiMarkdownResourceRoute, true },
     { "/api/v1/download-tasks", XHTTP_METHOD_GET, "GET, OPTIONS", MdoApiNativeDownloadsRoute, false },
     { "/api/v1/download-tasks/{download}/{action}", XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiNativeDownloadsRoute, false },
     { "/api/v1/application/services", XHTTP_METHOD_GET, "GET, OPTIONS", MdoApiApplicationRoute, false },

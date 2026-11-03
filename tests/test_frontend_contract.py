@@ -110,7 +110,8 @@ class FrontendContractTests(unittest.TestCase):
             self.assertNotIn("innerHTML", self.scripts[path], path)
         self.assertIn("node.textContent", self.scripts["js/utils/dom.js"])
         self.assertNotIn("innerHTML", self.scripts["js/features/chat/markdown.js"])
-        self.assertIn("body.append(renderMarkdown(", self.scripts["js/features/chat/timeline.js"])
+        self.assertIn("body.append(handlers.markdown.render(", self.scripts["js/features/chat/timeline.js"])
+        self.assertIn('"markdown.parse"', self.scripts["js/features/chat/markdown-transport.js"])
         for source in self.scripts.values():
             self.assertNotIn("eval(", source)
             self.assertNotIn("new Function", source)
@@ -121,7 +122,7 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("await startRun", app)
         self.assertIn("cancel: cancelRun, read: readRun", app)
         self.assertIn("await readRun", app)
-        self.assertIn("if ((!text && !attachments.length && !(fromComposer && composerContext.hasContexts())) || composerImages.isUploading())", app)
+        self.assertIn("if ((!text && !attachments.length && !(fromComposer && composerContext.hasContexts())) || composerImages.isUploading()", app)
         self.assertIn("await newTaskController.submit", app)
         self.assertIn("await submissionController.submit", app)
         self.assertNotIn("submissionLanes", app)

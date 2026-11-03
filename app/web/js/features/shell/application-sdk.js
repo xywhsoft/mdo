@@ -145,6 +145,11 @@ export function createApplicationUi({ navigation, executeActions, canCall = () =
       const opened = window.open(url, name, "noopener");
       if (!opened) throw new Error(uiErrorText("error.detail.theOsOrBrowserBlockedTheNewWindowOpenIt", {}, "The OS or browser blocked the new window; open it from a user action"));
     },
+    openFile: async ({ path, line = 1 }, callerApi = clientApi) => {
+      check();
+      if (!workbench) throw new Error(uiErrorText("error.detail.workbenchIsUnavailable", {}, "Workbench is unavailable"));
+      return workbench.openFile(path, callerApi, line);
+    },
     openEditor: async ({ path, space = "workspace" }, callerApi = clientApi) => {
       check(); const editorApi = callerApi.bind({});
       const resolved = await editorApi.call("fs.resolve", { path, space }); path = resolved.path; space = "native";

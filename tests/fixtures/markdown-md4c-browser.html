@@ -1,0 +1,84 @@
+<!doctype html><html lang="zh-CN" data-theme="dark"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>md4c chat rendering</title><link rel="stylesheet" href="/app/web/css/app.css">
+<style>body{margin:18px}.conversation{height:76vh;max-width:820px;margin:auto;overflow:auto}#timeline{padding:0}#result{max-height:130px;overflow:auto;white-space:pre-wrap;font-size:10px}#scratch{max-width:100%}</style>
+<div class="conversation"><p id="welcome"></p><ol id="timeline"></ol></div><button id="bottom" hidden>↓</button>
+<div id="scratch"></div><pre id="result">Preparing</pre><div id="toast-region"></div>
+<dialog id="preview" class="image-preview-dialog"><button id="close" class="image-preview-close">×</button><img id="preview-image" alt=""></dialog>
+<script type="module">
+import {createTimelineView} from '/app/web/js/features/chat/timeline.js';
+import {createResourceStore} from '/app/web/js/state/store.js';
+import {createMarkdownRenderer} from '/app/web/js/features/chat/markdown.js';
+import {createImagePreview} from '/app/web/js/features/chat/image-preview.js';
+import {loadLocale,t} from '/app/web/js/i18n.js';
+const checks={},errors=[],out=document.querySelector('#result'),timeline=document.querySelector('#timeline');
+window.addEventListener('error',event=>errors.push(event.message));
+const paint=async()=>{await new Promise(requestAnimationFrame);await new Promise(requestAnimationFrame);};
+async function wait(check){for(let i=0;i<180;i++){if(check())return;await new Promise(resolve=>setTimeout(resolve,10));}throw new Error('DOM condition timed out');}
+try{
+ const locale=new URLSearchParams(location.search).get('locale')||'zh-CN';await loadLocale(locale);
+ const owner=await (await fetch('/__qa/info')).json(),opened=[];globalThis.mdo={ui:{openFile:data=>opened.push(data)}};
+ let id=0;const e=(kind,extra={})=>({event_id:++id,kind,run_id:1,agent_turn:1,agent_depth:0,time:id*1000000,...extra});
+ const bad=location.origin+'/__qa/retry.png?key='+crypto.randomUUID();
+ let source=['##### 丰富 Markdown 回复','[**带括号链接**](https://example.invalid/a_(b) "说明") 与 [引用][ref]， https://example.invalid/docs',
+  `![中文图片](./中文%20图片.png "本地工作区")`,`![绝对路径](${encodeURI(owner.image)})`,
+  `[定位到第三行](<${owner.file}:3>)`,`![加载失败可重试](${bad})`,
+  '- 一级\n  - [x] 二级任务','a | b\n--- | :---:\n1 | 2',
+  '~~~javascript\nconst answer = "<script>";\n~~~','3. 第三项\n4. 第四项','first  \nsecond &amp; third',
+  '<img src=x onerror="window.markdownExecuted=true">','[危险](javascript:alert(1))',
+  '[ref]: https://example.invalid/reference'].join('\n\n');
+ const store=createResourceStore();let events=[e('agent_start',{text:'Show Markdown',user_message_sequence:1}),e('model_start'),e('model_text_delta',{text:source})];
+ const view=createTimelineView({container:timeline,welcome:document.querySelector('#welcome'),toBottom:document.querySelector('#bottom'),store});
+ const publish=async()=>{store.setData({projectId:owner.projectId,sessionId:owner.sessionId,events});await paint();};
+ createImagePreview({dialog:document.querySelector('#preview'),image:document.querySelector('#preview-image'),closeButton:document.querySelector('#close'),navigation:{subscribe:()=>()=>{}}});
+ await publish();await wait(()=>timeline.querySelectorAll('img').length===3);await paint();
+ checks.heading=!!timeline.querySelector('h5');
+ checks.complexLinks=!!timeline.querySelector('a[href="https://example.invalid/a_(b)"] strong')&&!!timeline.querySelector('a[href="https://example.invalid/reference"]')&&!!timeline.querySelector('a[href="https://example.invalid/docs"]');
+ checks.nestedTasks=!!timeline.querySelector('li ul li input:checked:disabled');
+ checks.tables=timeline.querySelectorAll('table').length===1&&timeline.querySelector('th:last-child').style.textAlign==='center';
+ checks.orderedStart=timeline.querySelector('ol[start="3"]')?.start===3;
+ checks.breaksEntities=!!timeline.querySelector('br')&&timeline.textContent.includes('second & third');
+ checks.highlight=!!timeline.querySelector('.md-token-keyword')&&!!timeline.querySelector('.md-token-string');
+ checks.noExecutableMarkup=!window.markdownExecuted&&!timeline.querySelector('a[href^="javascript:"]')&&!timeline.querySelector('img[src="x"]');
+ const images=[...timeline.querySelectorAll('img')];for(const image of images)image.loading='eager';
+ await wait(()=>images.slice(0,2).every(image=>image.complete&&image.naturalWidth>0));
+ checks.localImages=images[0].naturalWidth>0&&images[1].naturalWidth>0;
+ await wait(()=>!images[2].closest('.md-image').querySelector('.md-image-retry').hidden);
+ const retry=images[2].closest('.md-image').querySelector('.md-image-retry');retry.click();await wait(()=>images[2].naturalWidth>0);
+ checks.imageRetry=images[2].naturalWidth>0&&retry.hidden;
+ const file=timeline.querySelector('a[href*="mode=file"]');file.click();await wait(()=>opened.length===1);
+ checks.fileJump=opened[0].path.replaceAll('\\','/')===owner.file&&opened[0].line===3;
+ images[0].closest('button').click();await wait(()=>document.querySelector('#preview').open);checks.preview=true;
+ const code=timeline.querySelector('.md-codeblock'),copy=code.querySelector('button'),pre=code.querySelector('pre');
+ pre.scrollLeft=12;const originalScroll=pre.scrollLeft;copy.focus();
+ for(let n=0;n<5;n++){const text=`\n\n新增内容 ${n}`;source+=text;events.push(e('model_text_delta',{text}));await publish();await wait(()=>timeline.querySelector('.md-pending')?.textContent==='');}
+ checks.imageIdentity=images[0]===timeline.querySelectorAll('img')[0]&&images[1]===timeline.querySelectorAll('img')[1];
+ checks.codeIdentity=code===timeline.querySelector('.md-codeblock')&&pre.scrollLeft===originalScroll;
+ checks.previewSurvives=document.querySelector('#preview').open;
+ document.querySelector('#close').click();
+ events.push(e('model_done',{success:true,input_tokens:100,output_tokens:200}),e('agent_done',{success:true,text:source}));await publish();
+ checks.finalPreservesImage=images[0]===timeline.querySelectorAll('img')[0];
+ checks.copyLabel=copy.textContent===t('markdown.copyCode');
+ await loadLocale(locale==='zh-CN'?'en-US':'zh-CN');await paint();
+ checks.liveLocale=timeline.querySelector('.md-code-head button').textContent===t('markdown.copyCode')&&images[0]===timeline.querySelector('img');
+ await loadLocale(locale);await paint();
+ // No operating-system browser is launched: intercept only this native action.
+ const originalFetch=globalThis.fetch;let external=null;const chrome=globalThis.chrome||{};globalThis.chrome=chrome;const previousWebview=chrome.webview;chrome.webview={};
+ globalThis.fetch=(url,options={})=>{const body=options.body?JSON.parse(options.body):null;if(body?.method==='system.open'){external=body.params.target;return Promise.resolve(new Response(JSON.stringify({ok:true,data:{}}),{status:200,headers:{'Content-Type':'application/json'}}));}return originalFetch(url,options);};
+ timeline.querySelector('a[href="https://example.invalid/a_(b)"]').click();await wait(()=>!!external);checks.nativeExternal=external==='https://example.invalid/a_(b)';globalThis.fetch=originalFetch;chrome.webview=previousWebview;
+ // Stale results and transports which ignore abort cannot block later work.
+ const scratch=document.querySelector('#scratch'),requests=[];
+ const renderer=createMarkdownRenderer({delay:0,timeoutMs:40,concurrency:1,parse:text=>new Promise(resolve=>requests.push({text,resolve}))});
+ const oldRoot=renderer.render('old',{key:'old',owner,final:true});scratch.append(oldRoot);await wait(()=>requests.length===1);
+ renderer.render('new',{key:'old',owner,final:true});
+ await wait(()=>requests.length===2);requests[1].resolve({schema_version:1,engine:'md4c',nodes:[{t:'p',c:[{t:'text',s:'new rendered'}]}]});await wait(()=>oldRoot.textContent==='new rendered');
+ requests[0].resolve({schema_version:1,engine:'md4c',nodes:[{t:'p',c:[{t:'text',s:'STALE'}]}]});await paint();checks.staleAndTimeout=oldRoot.textContent==='new rendered';renderer.destroy();
+ const pending=createMarkdownRenderer({delay:500,parse:async()=>({schema_version:1,engine:'md4c',nodes:[{t:'p',c:[{t:'text',s:'base'}]}]})});
+ const pendingRoot=pending.render('base',{key:'locale-pending',owner,final:true});scratch.append(pendingRoot);await wait(()=>pendingRoot.querySelector('p'));
+ pending.render('base appended',{key:'locale-pending',owner});pending.relocalize();checks.localeKeepsPending=pendingRoot.textContent==='base appended';pending.destroy();
+ const failed=createMarkdownRenderer({parse:async()=>{throw new Error('Unavailable');},delay:0});const fallback=failed.render('**readable fallback**',{key:'fallback',owner,final:true});scratch.append(fallback);await paint();checks.fallback=fallback.textContent==='**readable fallback**';failed.destroy();scratch.replaceChildren();
+ checks.noOverflow=document.documentElement.scrollWidth<=innerWidth;checks.noErrors=errors.length===0;
+ document.querySelector('.conversation').scrollTop=0;
+ out.textContent=JSON.stringify({passed:Object.values(checks).every(Boolean),checks,errors},null,2);
+ view.destroy();
+}catch(error){out.textContent=JSON.stringify({passed:false,checks,errors,error:String(error.stack)},null,2);}
+</script></html>

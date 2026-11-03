@@ -156,6 +156,8 @@
   "error.sessionEditDraftUnsaved": "Your edit has not been saved. The old history is unchanged. Keep your input and reconnect before trying again.",
   "app.name": "Mdo",
   "app.title": "Mdo",
+  "markdown.fileUnavailable": "File preview is unavailable. Check that the file is in this conversation’s workspace or artifacts.",
+  "markdown.imageUnavailable": "The image address is unsupported or the conversation resource is unavailable.",
   "markdown.viewImage": "View image: {alt}",
   "markdown.image": "Markdown image",
   "markdown.copyCode": "Copy code",

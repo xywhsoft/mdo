@@ -139,6 +139,7 @@
     "src/api/operations.c",
     "src/api/commands.c",
     "src/api/application.c",
+    "src/api/markdown.c",
     "src/api/session_capture.c",
     "src/api/sessions.c",
     "src/api/shared_files.c",

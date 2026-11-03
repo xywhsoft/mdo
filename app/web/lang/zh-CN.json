@@ -156,6 +156,8 @@
   "error.sessionEditDraftUnsaved": "编辑内容尚未保存，旧会话历史未修改。请保留输入并恢复连接后重试。",
   "app.name": "墨斗",
   "app.title": "墨斗",
+  "markdown.fileUnavailable": "文件预览暂时不可用，请确认文件位于当前会话的工作区或产物目录。",
+  "markdown.imageUnavailable": "图片地址不受支持或会话资源不可用。",
   "markdown.viewImage": "查看图片：{alt}",
   "markdown.image": "Markdown 图片",
   "markdown.copyCode": "复制代码",

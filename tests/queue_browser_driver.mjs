@@ -4,7 +4,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 
-const [browser, profile, url, width, screenshot, testScript, pointer] = process.argv.slice(2);
+const [browser, profile, url, width, screenshot, testScript, pointer, fixtureBudget = "8000"] = process.argv.slice(2);
 const child = spawn(browser, ["--headless=new", "--disable-gpu", "--no-first-run",
   "--disable-background-networking", "--disable-extensions", "--remote-debugging-port=0",
   ...(pointer === "desktop" ? ["--blink-settings=primaryHoverType=2,primaryPointerType=4,availableHoverTypes=2,availablePointerTypes=4"] : []),
@@ -44,7 +44,7 @@ try {
   stage="navigate";await call("Page.navigate", { url });
   stage="fixture";
   let report;
-  for (let i = 0; i < (testScript ? 700 : 160) && !report; ++i) {
+  for (let i = 0; i < (testScript ? 700 : Math.min(400, Math.max(160, Number(fixtureBudget) / 50))) && !report; ++i) {
     await delay(50);
     const result = await call("Runtime.evaluate", { expression: "JSON.stringify({report:document.querySelector('#result')?.textContent,stage:globalThis.__qaStage,url:location.href,ready:document.readyState,body:document.body?.innerText.slice(-500)})", returnByValue: true });
     lastState=JSON.parse(result.result?.value??"null");const candidate = lastState?.report;

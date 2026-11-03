@@ -9,7 +9,7 @@ import { targetImage } from "../../api/target-image.js";
 import { readCompleteSessionEventText } from "../../state/sessions.js";
 import { createRequestRecovery } from "../../api/request-recovery.js";
 import { mountIcons } from "../../components/icons.js";
-import { renderMarkdown } from "./markdown.js";
+import { createMarkdownRenderer } from "./markdown.js";
 import { artifactPreviewNode } from "./artifact-preview.js";
 
 import { labelImageName } from "./image-names.js";
@@ -838,7 +838,8 @@ function timelineNode(item, handlers, projectId, sessionId, writable,
       if (parsed.contexts.length) body.append(promptContextChips(parsed.contexts));
       return;
     }
-    body.append(renderMarkdown(text));
+    body.append(handlers.markdown.render(text, { key: JSON.stringify([projectId, sessionId, item.key]),
+      owner: { projectId, sessionId }, itemKey: item.key, final: item.state !== "running" }));
     for (const [index, button] of [...body.querySelectorAll(".md-code-head button")].entries())
       button.dataset.timelineAction = `${item.key}/code-${index}`;
     for (const [index, link] of [...body.querySelectorAll("a")].entries())
@@ -1029,6 +1030,19 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
   let destroyed = false;
   const manualProcesses = new Set();
   const scroller = container.closest(".conversation");
+  const markdown = createMarkdownRenderer({
+    onLayout() { if (!destroyed && followTail && !searchQuery) scroller.scrollTop = scroller.scrollHeight; },
+    decorate(root, entry) {
+      for (const [index, button] of [...root.querySelectorAll(".md-code-head button")].entries())
+        button.dataset.timelineAction = `${entry.itemKey}/code-${index}`;
+      for (const [index, link] of [...root.querySelectorAll("a")].entries()) link.dataset.timelineAction = `${entry.itemKey}/link-${index}`;
+      for (const [index, image] of [...root.querySelectorAll("button.md-image-preview")].entries()) {
+        image.dataset.timelineAction = `${entry.itemKey}/markdown-image-${index}`;
+        image.dataset.imageRef = `timeline:${entry.owner.projectId}/${entry.owner.sessionId}/${entry.itemKey}/markdown/${index}`;
+      }
+    },
+  });
+  handlers.markdown = markdown;
   const historyWindow = onLoadOlder ? createHistoryWindow({
     read: () => ({ ...store.get(), enabled: !searchQuery && !document.hidden && store.get().status !== "error",
       followTail }),
@@ -1066,8 +1080,14 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
 
   function reconcileRows(entries, projectId, sessionId) {
     const retained = new Set();
+    const markdownKeys = new Set();
+    const retainMarkdown = item => {
+      if (item.kind === "assistant") markdownKeys.add(JSON.stringify([projectId, sessionId, item.key]));
+      for (const child of item.items || []) retainMarkdown(child);
+    };
     let cursor = container.firstChild;
     for (const { item, writable } of entries) {
+      retainMarkdown(item);
       retained.add(item.key);
       // Run completion affects process defaults, not already settled body rows.
       const { turnState, ...renderedItem } = item;
@@ -1091,6 +1111,7 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
       if (row.node !== cursor) container.insertBefore(row.node, cursor);
       cursor = row.node.nextSibling;
     }
+    markdown.retain(markdownKeys);
     while (cursor) {
       const next = cursor.nextSibling;
       cursor.remove();
@@ -1331,6 +1352,7 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
   const unsubscribe = store.subscribe(queueRender);
   const unsubscribeSession = sessionStore?.subscribe(() => queueRender(store.get()));
   const unsubscribeLocale = subscribeLocale(() => {
+    markdown.relocalize();
     renderedRows.clear();
     queueRender(store.get());
   });
@@ -1353,6 +1375,7 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
     },
     destroy() {
       destroyed = true;
+      markdown.destroy();
       if (retryTimer) clearInterval(retryTimer);
       historyWindow?.destroy(); viewportObserver?.disconnect();
       scroller.removeEventListener("scroll", onScroll);

@@ -221,6 +221,9 @@ def attach_defs(schema):
     visit(schema)
     return {**schema,'$defs':needed} if needed else schema
 
+NO_BODY.add('MarkdownResourceRoute')
+QUERY['MarkdownResourceRoute']='path:s mode:s'
+
 def contract(row):
     handler=row['handler'].removeprefix('MdoApi');method=row['method'];path=row['path']
     if handler not in BODY and handler not in NO_BODY and handler!='BackupUploadChunkRoute':

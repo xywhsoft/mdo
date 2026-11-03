@@ -458,7 +458,8 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
     }
   };
   window.addEventListener("mdo-browser-shortcut", nativeShortcut);
-  return Object.freeze({ ensure, open: async (...args) => { await ensure(); return open(...args); }, newTab: async () => { await ensure(); return newTab(); },
+  return Object.freeze({ ensure, open: async (...args) => { await ensure(); return open(...args); },
+    openFile: async (...args) => { await ensure(); return openFile(...args); }, newTab: async () => { await ensure(); return newTab(); },
     register(id, descriptor) { discovered.delete(id); definitions.set(id, descriptor);
       // Restored rows can mount before asynchronous plugin activation. Replace
       // their temporary missing-renderer view when the real definition arrives.

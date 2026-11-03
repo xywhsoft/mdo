@@ -78,6 +78,8 @@ def native_contracts():
     add('events.wait','Wait up to 60 seconds for a matching event, cancellation or epoch/cursor gap; timeout returns an empty page',{'after':uint,'epoch':string,'topic':string,'limit':{**uint,'minimum':1,'maximum':256},'timeout_ms':{**uint,'maximum':60000}})
     add('events.emit','Publish an extension event; event data is visible to trusted application subscribers',{'topic':string,'data':{}},('topic',))
     for name in ('runtime.info','runtime.clock'):add(name,'Read application identity and native runtime metadata')
+    add('markdown.parse','Parse up to 512 KiB of UTF-8 CommonMark/GFM into bounded structural nodes; never executable HTML',
+        {'source':string},('source',),{'type':'object','properties':{'schema_version':uint,'engine':string,'nodes':arr},'required':['schema_version','engine','nodes']})
     add('runtime.log','Write at most 16 KiB of diagnostic text',{'message':string},('message',))
     add('runtime.sleep','Cancellable wait; inherited deadline remains authoritative',{'milliseconds':{**uint,'maximum':86400000}},('milliseconds',))
     add('runtime.env.get','Read a native environment variable',{'name':string},('name',))
