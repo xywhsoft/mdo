@@ -35,7 +35,9 @@ class RuntimeAliases(unittest.TestCase):
             # below exercise the real, fixed full-APK selection without mocks.
             selection = tuple(sorted({name.split('/')[0] for name in contents}))
             policy = nullcontext() if full_policy else patch.object(bundle, 'FULL_APK_TOOLS', selection)
-            with policy, zipfile.ZipFile(out, "w") as archive:
+            # These tiny ELF fixtures exercise native alias/selection policy;
+            # portable pip's real ZIP contents are validated separately.
+            with policy, patch.object(bundle, 'prepare_python_pip', return_value='26.3'), zipfile.ZipFile(out, "w") as archive:
                 bundle.add_runtime(archive, root, "full", 50000017, 4)
             with zipfile.ZipFile(out) as archive:
                 paths = archive.namelist()

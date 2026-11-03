@@ -6,6 +6,7 @@ required lib/*.so install entries. Execution links are a disposable host cache.
 """
 import json
 import re
+import shutil
 import sys
 import tempfile
 from pathlib import Path
@@ -14,6 +15,7 @@ import zipfile
 ROOT=Path(__file__).resolve().parents[2]
 if str(ROOT/'tools') not in sys.path:sys.path.insert(0,str(ROOT/'tools'))
 from extension_archives import package_tool,digest,valid_path
+from runtime.build.python_runtime import prepare_python_pip
 
 APPLETS=('sh','ash','awk','sed','grep','find','cat','head','tail','sort','wc','cp','mv','rm','mkdir','rmdir','touch','tar','gzip','gunzip','unzip','xargs','tee','tr','which','basename','dirname','ls','pwd','echo')
 
@@ -77,7 +79,14 @@ def add_runtime(archive,root:Path,edition:str,build_id:int,revision:int):
             metadata.update({k:definition[k] for k in ('sort_order','tags') if k in definition})
             extra={'fonts':root/'fonts'} if tool in ('poppler','imagemagick') and (root/'fonts').is_dir() else None
             with tempfile.TemporaryDirectory(prefix='mdo-apk-zip-') as temporary:
-                row=package_tool(directory,metadata,Path(temporary),extra)
+                source=directory
+                if tool=='python':
+                    source=Path(temporary)/'python-source'
+                    shutil.copytree(directory,source)
+                    pip_version=prepare_python_pip(source)
+                    metadata['version'] += '+pip.'+pip_version
+                    metadata['license'] += '; pip: MIT; bundled dependency licenses included'
+                row=package_tool(source,metadata,Path(temporary),extra)
                 asset='mdo-extensions/'+tool+'.zip'
                 archive.write(Path(temporary)/row['file'],'assets/'+asset,compress_type=zipfile.ZIP_STORED)
                 extensions.append(dict(id=tool,asset='assets/'+asset,sha256=row['sha256'],bytes=row['size']))

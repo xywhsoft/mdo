@@ -8,7 +8,7 @@ import re
 import shutil
 import struct
 import tempfile
-from runtime.build.python_runtime import prepare_windows_python
+from runtime.build.python_runtime import prepare_windows_python, prepare_python_pip
 from extension_archives import package_tool
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -68,7 +68,7 @@ def linux_files(stage,tool,runtime):
             if p.is_dir():shutil.copytree(p,stage/"runtime/usr/lib"/p.name,dirs_exist_ok=True)
     shutil.copy2(runtime/"provenance.json",stage/"provenance.json")
 
-def build(output,platforms):
+def build(output,platforms,tools=None):
     definitions=json.loads((ROOT/"tools/runtime/official.json").read_text(encoding="utf-8"))["tools"]
     catalog=json.loads((ROOT/"tools/runtime/catalog.json").read_text(encoding="utf-8"))["tools"]
     output.mkdir(parents=True,exist_ok=True);rows=[]
@@ -77,6 +77,10 @@ def build(output,platforms):
         if platform=="linux-x86_64":info=json.loads((runtime/"catalog.json").read_text())["tools"]
         else:info=[r for r in catalog if r["platform"]==platform]
         known={row['id']:row for row in definitions}
+        if tools:
+            missing=set(tools)-{row['id'] for row in info}
+            if missing:raise ValueError('No staged tool for '+platform+': '+', '.join(sorted(missing)))
+            info=[row for row in info if row['id'] in tools]
         if len({row['id'] for row in info})!=len(info):raise ValueError('Duplicate bundled tool catalogue entry: '+platform)
         for record in info:
             tool=record['id']
@@ -86,9 +90,16 @@ def build(output,platforms):
                 stage=Path(raw);shutil.copytree(runtime/tool,stage/tool)
                 if platform=="windows-x86_64" and tool=="python":prepare_windows_python(stage/tool)
                 if platform=="linux-x86_64":linux_files(stage,tool,runtime)
+                pip_version = None
+                if tool=="python":
+                    prefix = stage/"runtime/usr" if platform=="linux-x86_64" else stage/tool
+                    pip_version=prepare_python_pip(prefix,windows=platform=="windows-x86_64",portable_linux=platform=="linux-x86_64")
                 entry=tool+"/"+record["entrypoints"][0]
                 manifest=dict(id=tool,name=definition["name"],version=version(record["version"]),platform=platform,
                               description=definition["description"],copyright=record.get("copyright",definition.get("copyright","")),prompt=definition["prompt"],entry=entry,license=record.get("license",definition["license"]),links=definition["links"],recommended=definition["recommended"],upstream_version=record["version"])
+                if pip_version:
+                    manifest["version"] += "+pip."+pip_version
+                    manifest["license"] += "; pip: MIT; bundled dependency licenses included"
                 manifest["commands"]=[dict(name=Path(p).stem if p.lower().endswith('.exe') else Path(p).name,entry=tool+'/'+p,args=[]) for p in record["entrypoints"]]
                 manifest.update({k:definition[k] for k in ('sort_order','tags') if k in definition})
                 if tool=="python":
@@ -105,4 +116,5 @@ def build(output,platforms):
 if __name__=="__main__":
     p=argparse.ArgumentParser(description=__doc__);p.add_argument("--output",type=Path,default=ROOT/".build/releases/cli-tools")
     p.add_argument("--platform",action="append",choices=["windows-x86_64","linux-x86_64","android-arm64-v8a"])
-    a=p.parse_args();build(a.output,a.platform or ["windows-x86_64","linux-x86_64","android-arm64-v8a"])
+    p.add_argument("--tool",action="append",help="Build only the named staged tool (repeatable)")
+    a=p.parse_args();build(a.output,a.platform or ["windows-x86_64","linux-x86_64","android-arm64-v8a"],a.tool)

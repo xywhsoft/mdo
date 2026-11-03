@@ -78,7 +78,15 @@ Python 工具包修订 3 使用 CPython 自身的标准命令行路径初始化�
 其强制隔离会忽略上述目录；标准库 ZIP 和扩展模块保持随包提供。
 显式使用 `-I`、`-E`、`-P` 时，仍遵守对应的标准隔离选项。
 包清单根据转换后的实际文件重新生成，旧安装需要升级 Python 工具包才能获得修复。
-此调整不包含 pip 或第三方依赖。
+
+Python 外部工具现在内置 pip，模型可按任务需要执行 `python -m pip install openpyxl python-docx`
+等命令安装依赖，仍遵守任务本身的进程／网络权限。不要调用系统的另一个 pip。
+默认安装到 `mdo-home/data/external-tools/python-packages/<Python ABI 与平台>/site-packages`，
+解释器会自动加载该目录；升级外部工具不会删除依赖，也不会改动工具目录的审核哈希。
+缓存写入 `mdo-home/data/cache/python`，路径随当前 Home 重新计算，复制迁移后仍能使用。
+可显式设置 `PIP_TARGET` 覆盖默认目录。第三方依赖不预装，使用 `--upgrade` 升级依赖。
+Windows／Linux 可安装对应平台 wheel；Android 完整版也包含 pip，但原生扩展需要
+Android 兼容 wheel，不能直接安装 Windows、manylinux 或 musllinux 的二进制包。
 
 ## 回调约定
 

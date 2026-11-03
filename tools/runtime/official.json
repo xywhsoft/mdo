@@ -170,7 +170,7 @@
     {
       "id": "python",
       "name": "Python",
-      "prompt": "Run Python scripts, -c or -m. Do not assume pip, third-party modules or development headers are installed.",
+      "prompt": "Run Python scripts, -c or -m. You may install missing dependencies needed for the task with this interpreter: python -m pip install PACKAGE (for example openpyxl for Excel or python-docx for Word). Pip is included; installed packages are automatically imported from portable mdo-home data, outside the tool directory, and survive tool updates. Use --upgrade for dependency upgrades. Respect the current task permissions. Native extension packages need a compatible platform wheel; Android supports pure Python packages and compatible Android wheels.",
       "recommended": false,
       "license": "PSF-2.0",
       "versions": {

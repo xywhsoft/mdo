@@ -32,7 +32,8 @@ SHA-256 和 Google 仓库 SHA-1。执行 `python tools/runtime/build/stage_adb.p
 Windows OpenSSH 额外提供 `ssh-agent.exe`、`ssh-add.exe`。Android 本轮仅构建
 客户端，不含 sshd、agent、Kerberos、FIDO/PKCS11 辅助程序；公钥、密码登录和
 SCP/SFTP 是主要使用范围。Python 保留标准库、SQLite、TLS、ctypes，去掉 SDK
-头文件、测试库、GUI、ensurepip；第三方 wheel / pip 尚未准备。
+头文件、测试库、GUI、ensurepip。发布阶段另行加入固定校验的 pip wheel，
+允许按需安装第三方依赖，不再将缺少 pip 作为能力限制。
 
 ## 目录与发布素材
 
@@ -40,6 +41,15 @@ Windows Python 修订 3 在打包阶段移除强制隔离的 `python*._pth`，�
 模块和 `PYTHONPATH` 的标准导入行为。显式 `-I`、`-E`、`-P` 保持 CPython 语义。
 `python_runtime.py` 用于 ZIP 与 XRTPACK 两条打包路径，转换完成后再计算文件哈希。
 `tests/test_python_runtime_compatibility.py` 覆盖真实解释器的导入、路径和参数行为。
+
+`build/pip.lock.json` 固定 pip 的官方 wheel URL、版本、字节数和 SHA-256；
+`prepare_python_pip` 为三平台独立 ZIP 与 Android 完整版 APK 加入 pip 和许可证。
+Linux 的 pip musl 检测使用随包加载器，子进程使用随包启动脚本，不依赖主机安装 musl。
+模型使用 `python -m pip install <包名>`；依赖和字节码分别写入 Home 的
+`data/external-tools/python-packages/<ABI 与平台>/site-packages` 与 `data/cache/python`，
+不会修改已审核的外部工具目录。启动时从当前位置计算路径，迁移 Home、更新同 ABI 的
+Python 工具后仍可导入。Python ABI 或平台改变时使用独立依赖目录，需重新安装依赖。
+Android 仍只在 full APK 预置 Python；纯 Python 包可安装，原生扩展需要 Android wheel。
 
 ```text
 tools/runtime/
@@ -64,7 +74,7 @@ Git for Windows 安装；来源可追溯到 [Git for Windows MSYS2 packages](htt
 Android 工具由完整版 APK 安装到系统原生库目录。Windows 常用包和 Python 包
 修订 2，以及 Windows／Android 两种发行版已发布至 ai.xywhsoft.com，维护源在
 home 对应 vhost。每工具 ZIP 保留为本地素材，不是客户端的安装入口。安装不修改系统 PATH，模型使用
-已探测的绝对路径，且明确告知 Python 不默认带 pip／第三方包。详见
+已探测的绝对路径。Python 现可用内置 pip 按需安装第三方包。详见
 `../../docs/distribution.md`。
 
 ## Android 运行方式
