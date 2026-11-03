@@ -20,9 +20,7 @@ import { createHistoryWindow } from "./history-window.js";
 import { createConversationNavigation } from "./conversation-navigation.js";
 import { modelErrorMessage, modelErrorTitle } from "../../utils/model-errors.js";
 import { modelRetryNode, modelRetryInlineNode, updateModelRetryCountdowns } from "./model-retry.js";
-import { createModelTimingTracker } from "./model-timing.js";
 import { createStreamScroll } from "./stream-scroll.js";
-import { bootstrapStore } from "../../state/bootstrap.js";
 
 export function searchResultTop(row, content, searchBottom, viewportBottom, lineHeight = 24) {
   const room = Math.max(0, viewportBottom - searchBottom);
@@ -99,8 +97,6 @@ export function eventsToTimeline(events, historyLost = false,
   const items = [];
   const tools = new Map();
   const modelStarts = new Map();
-  const trackTiming = createModelTimingTracker();
-  const runTimings = new Map();
   const toolStageDurations = new Map();
   const runUsages = new Map();
   const streams = new Map();
@@ -157,7 +153,6 @@ export function eventsToTimeline(events, historyLost = false,
     const itemCount = items.length;
     const runKey = String(event.run_id || event.agent_id || event.event_id);
     const epoch = runEpochs.get(runKey) ?? 0;
-    const modelTiming = trackTiming(event, modelKey(event, epoch));
     if ((["model_text_delta", "model_reasoning_delta"].includes(event.kind) && event.text) ||
         event.kind === "model_done" || event.kind === "tool_start") clearRetryNotice(event);
     if (["error", "agent_done", "agent_start"].includes(event.kind)) clearRetryNotice(event, true);
@@ -274,10 +269,6 @@ export function eventsToTimeline(events, historyLost = false,
         }
         break;
       case "model_done": {
-        if(modelTiming) {
-          const key=`${runKey}:${epoch}`, calls=runTimings.get(key) || [];
-          calls.push({...modelTiming,turn:event.agent_turn});runTimings.set(key,calls);
-        }
         const usage = runUsages.get(`${runKey}:${epoch}`);
         if (usage) {
           const input = Number(event.input_tokens);
@@ -306,7 +297,6 @@ export function eventsToTimeline(events, historyLost = false,
         }
         const answer = [...items].reverse().find((item) => item.key === `assistant-${modelKey(event, epoch)}`);
         if (answer) {
-          answer.modelTiming = modelTiming;
           answer.state = event.success ? "done" : "failed";
           answer.inputTokens = Number(event.input_tokens || 0);
           answer.outputTokens = Number(event.output_tokens || 0);
@@ -485,7 +475,6 @@ export function eventsToTimeline(events, historyLost = false,
         }
         if (answer) {
           answer.state = terminalState;
-          answer.modelTimings = runTimings.get(`${runKey}:${epoch}`) || [];
           const toolSeconds = toolStageDurations.get(`${runKey}:${epoch}`);
           if (Number.isFinite(toolSeconds) && toolSeconds > 0)
             answer.toolStageSeconds = toolSeconds;
@@ -991,23 +980,6 @@ function timelineNode(item, handlers, projectId, sessionId, writable,
           `工具和等待合计 ${durationLabel(item.toolStageSeconds)}`));
       if (Number.isFinite(item.tokensPerSecond)) stats.push(`${item.tokensPerSecond.toFixed(1)} tok/s`);
       if (stats.length) actions.append(element("span", { className: "timeline-stats", text: stats.join(" · ") }));
-      const timings = item.modelTimings?.length ? item.modelTimings : item.modelTiming ? [item.modelTiming] : [];
-      if (handlers.showDebugTimings() && timings.length) {
-        const details = element("details", { className: "timeline-model-timing" });
-        details.append(element("summary", { text: t("timeline.modelTiming", {}, "请求耗时") }));
-        for(const [index,timing] of timings.entries()) {
-        if(timings.length > 1) details.append(element("strong",{text:t("timeline.timing.call",{count:timing.turn || index+1},`第 ${timing.turn || index+1} 次模型调用`)}));
-        for (const [key, value] of [["firstReasoning", timing.firstReasoningMs], ["firstText", timing.firstTextMs],
-          ["retryWait", timing.retryWaitMs], ["lastFirstByte", timing.transport?.first_byte_ms],
-          ["lastFirstToken", timing.transport?.first_token_ms]]) {
-          if (value != null && Number.isFinite(value) && (!key.startsWith("last") || value > 0)) details.append(element("p", { text:
-            t(`timeline.timing.${key}`, { duration: durationLabel(value / 1000) }, `${key}: ${durationLabel(value / 1000)}`) }));
-        }
-        details.append(element("p", { text: t("timeline.timing.attempts", { count: timing.attempts }, `请求次数：${timing.attempts}`) }));
-        if (timing.requestId) details.append(element("p", { text: `Request ID: ${timing.requestId}` }));
-        }
-        actions.append(details);
-      }
     }
     children.push(actions);
   }
@@ -1019,7 +991,7 @@ function timelineNode(item, handlers, projectId, sessionId, writable,
 
 export function createTimelineView({ container, welcome, toBottom, store, sessionStore = null,
   onFork, onEdit, onRetry, onSearchCount, onLoadOlder, onLoadIndex, onRevealTurn, onReload,
-  showReadError = true, runtimeStore = bootstrapStore }) {
+  showReadError = true }) {
   const busySessions = new Set();
   const renderedRows = new Map();
   let retryTimer = 0;
@@ -1030,7 +1002,6 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
   }
   const handlers = {
     onFork, onEdit, onRetry,
-    showDebugTimings: () => runtimeStore.get().data?.debug === true,
     isBusy: (key) => busySessions.has(key),
     async runAction(key, action) {
       if (busySessions.has(key)) return;
@@ -1100,7 +1071,7 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
       retained.add(item.key);
       // Run completion affects process defaults, not already settled body rows.
       const { turnState, ...renderedItem } = item;
-      const signature = JSON.stringify([renderedItem, writable, handlers.showDebugTimings()]);
+      const signature = JSON.stringify([renderedItem, writable]);
       let row = renderedRows.get(item.key);
       if (!row || (row.signature !== signature && !row.node.dataset.inlineEditing)) {
         const node = timelineNode(item, handlers, projectId,
@@ -1359,7 +1330,6 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
 
   const unsubscribe = store.subscribe(queueRender);
   const unsubscribeSession = sessionStore?.subscribe(() => queueRender(store.get()));
-  const unsubscribeRuntime = runtimeStore.subscribe(() => queueRender(store.get()));
   const unsubscribeLocale = subscribeLocale(() => {
     renderedRows.clear();
     queueRender(store.get());
@@ -1388,7 +1358,7 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
       scroller.removeEventListener("scroll", onScroll);
       container.removeEventListener("click", rememberProcessToggle);
       container.removeEventListener("scroll", rememberContentScroll, true);
-      unsubscribe(); unsubscribeSession?.(); unsubscribeRuntime(); unsubscribeLocale();
+      unsubscribe(); unsubscribeSession?.(); unsubscribeLocale();
       historyNavigation?.destroy(); historyButton?.remove();
       if (frame) cancelAnimationFrame(frame);
     },
