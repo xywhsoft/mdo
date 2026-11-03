@@ -107,7 +107,9 @@ def until(probe):
     raise AssertionError("bounded account/model transition did not complete")
 
 
-def check(host: Path, base: Path):
+def check(host: Path, base: Path, unconfigured=False):
+    for event in (Service.login, Service.catalog, Service.login_started, Service.catalog_started): event.clear()
+    Service.removed=False; Service.catalog_status=200; Service.model_calls=0
     server = ThreadingHTTPServer(("127.0.0.1", 0), Service)
     server.daemon_threads = True
     worker = threading.Thread(target=server.serve_forever, daemon=True)
@@ -122,8 +124,8 @@ def check(host: Path, base: Path):
     defaults_path = site / "default-home/config/defaults.json"
     defaults = json.loads(defaults_path.read_text(encoding="utf-8"))
     from model_fixture import model_catalog
-    defaults["models"] = model_catalog("mdo-online.personal")
-    personal = defaults["models"]["items"][0]
+    defaults["models"] = model_catalog("mdo-online.personal") if not unconfigured else {"default_model":"","providers":[],"items":[]}
+    personal = defaults["models"]["items"][0] if not unconfigured else None
     defaults_path.write_text(json.dumps(defaults), encoding="utf-8")
     port = free_port()
     config = site / "xs.json"
@@ -177,17 +179,28 @@ def check(host: Path, base: Path):
         start()
         assert call("GET", "/models")["login_state"] == "signed_out"
         # A personal identity in the online namespace is still a local model.
-        local = call("POST", "/sessions", {"model_id": personal["id"], "reasoning_effort": "none", "title": "Personal", "project_id": "default"}, 201)
-        assert local["model_id"] == personal["id"]
+        if personal:
+            local = call("POST", "/sessions", {"model_id": personal["id"], "reasoning_effort": "none", "title": "Personal", "project_id": "default"}, 201)
+            assert local["model_id"] == personal["id"]
         call("POST", "/account/login", {"identifier": "fixture", "password": "fixture-only", "remember": True})
         assert Service.login_started.wait(3)
+        if unconfigured:
+            pending=call("GET","/models")
+            assert pending["models"] == [] and pending["default_model_id"] == ""
+            reject("/sessions","login_pending",method="POST",body={"project_id":"default"})
         reject("/sessions", "login_pending", method="POST", body={"model_id": ONLINE, "project_id": "default"})
         Service.login.set()
         assert Service.catalog_started.wait(3)
         assert call("GET", "/account")["state"] == "signed_in"
         assert call("GET", "/models")["login_state"] == "pending"
+        if unconfigured:
+            reject("/sessions","login_pending",method="POST",body={"project_id":"default"})
+            assert call("GET","/sessions")["items"] == [] and Service.model_calls == 0
         Service.catalog.set()
         catalog = until(ready)
+        if unconfigured:
+            assert catalog["default_model_id"] == ONLINE and len(catalog["models"]) == 2
+            return {"empty_default_waits_for_catalog":"PASS","model_calls":Service.model_calls}
         assert next(m for m in catalog["models"] if m["id"] == ONLINE)["requires_login"] is True
         assert next(m for m in catalog["models"] if m["id"] == personal["id"])["requires_login"] is False
         ornith = next(m for m in catalog["models"] if m["id"] == "mdo-online.ornith-1.5-35b")
@@ -255,6 +268,8 @@ def main():
     with tempfile.TemporaryDirectory(prefix="login-model-startup-", dir=ROOT / ".build") as raw:
         base = Path(raw)
         proof = check(args.host.resolve(), base)
+        empty_base=base/"unconfigured";empty_base.mkdir()
+        proof.update(check(args.host.resolve(),empty_base,unconfigured=True))
         if args.packed:
             from test_packed_home_lease import site, start, stop, wait_bootstrap
             packed = args.packed.resolve()

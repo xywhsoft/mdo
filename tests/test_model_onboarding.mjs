@@ -7,9 +7,20 @@ test("registration is offered only after a ready empty model catalog", () => {
   assert.equal(needsModelSetup({status:"loading",data:null}),false);
   assert.equal(needsModelSetup({status:"error",data:null}),false);
   assert.equal(needsModelSetup({status:"ready",data:{models:[],login_state:"pending"}}),false);
+  assert.equal(needsModelSetup({status:"ready",data:{models:[],login_state:"unavailable"}}),false);
   assert.equal(needsModelSetup({status:"ready",data:{models:[],login_state:"signed_out"}}),true);
   assert.equal(needsModelSetup({status:"ready",data:{models:[],login_state:"ready"}}),true);
   assert.equal(needsModelSetup({status:"ready",data:{models:[{id:"personal"}]}}),false);
+});
+test("an empty default waits for account catalog loading without blocking personal connections", () => {
+  for (const [login_state, expected] of [["pending","profile_login_pending"],["unavailable","profile_login_unavailable"]]) {
+    assert.equal(modelLoginBlock({models:[],login_state},""),expected);
+    const catalog={models:[{id:"personal",requires_login:false}],login_state};
+    assert.equal(modelLoginBlock(catalog,"personal"),"");
+    assert.equal(modelLoginBlock(catalog,""),"");
+  }
+  assert.equal(modelLoginBlock({models:[],login_state:"signed_out"},""),"");
+  assert.equal(modelLoginBlock({models:[],login_state:"ready"},""),"");
 });
 test("registration opens the official account entry with only a public return path", () => {
   const url=new URL(MODEL_REGISTRATION_URL);

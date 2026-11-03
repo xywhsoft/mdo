@@ -28,10 +28,12 @@ bool MdoModelCatalogCheckLogin(const MdoModelCatalog* Catalog,const char* ModelI
     const MdoModelEntry* Model=Catalog?MdoModelsLookup(Catalog,Id):NULL;
     /* Online entries are transient; saved identities survive a restart.
      * An exact personal model takes precedence over the online namespace. */
-    bool Required=Model?(Model->RequiresLogin||MdoModelIsOnline(Catalog,Model->Id)):
-        (!strncmp(Id,"mdo-online.",11) || MdoModelsRetiredOnlineId(Id));
-    if(!Required)return true;
     MdoModelLoginState State=MdoModelCatalogLoginState(Catalog);
+    bool AwaitingDefault=Catalog&&!Catalog->ModelCount&&!*Id&&
+        (State==MDO_MODEL_LOGIN_PENDING||State==MDO_MODEL_LOGIN_UNAVAILABLE);
+    bool Required=AwaitingDefault||(Model?(Model->RequiresLogin||MdoModelIsOnline(Catalog,Model->Id)):
+        (!strncmp(Id,"mdo-online.",11) || MdoModelsRetiredOnlineId(Id)));
+    if(!Required)return true;
     if(State==MDO_MODEL_LOGIN_READY)return true;
     const char* Kind=State==MDO_MODEL_LOGIN_PENDING?"profile_login_pending":
         State==MDO_MODEL_LOGIN_REQUIRED?"profile_login_required":"profile_login_unavailable";

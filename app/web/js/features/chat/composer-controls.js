@@ -8,7 +8,7 @@ import { errorMessage, toast } from "../../utils/dom.js";
 
 export function needsModelSetup(state) {
   return state.status === "ready" && Array.isArray(state.data?.models) &&
-    state.data.models.length === 0 && state.data.login_state !== "pending";
+    state.data.models.length === 0 && !["pending", "unavailable"].includes(state.data.login_state);
 }
 export const MODEL_REGISTRATION_URL = "https://ai.xywhsoft.com/account/index.html?return_to=%2Fmdo%2Faccount";
 
