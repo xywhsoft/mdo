@@ -1159,26 +1159,8 @@ cstr MdoHomeApplicationRoot(void) { return g_MdoHome.ApplicationRoot; }
 
 #include "portable_paths.inc.c"
 
-#if defined(_WIN32) || defined(_WIN64)
-__declspec(dllimport) int __stdcall MultiByteToWideChar(unsigned int,unsigned long,const char*,int,unsigned short*,int);
-__declspec(dllimport) int __stdcall GetDiskFreeSpaceExW(const unsigned short*,uint64*,uint64*,uint64*);
-#endif
 bool MdoHomeDiskSpace(cstr Path,uint64 Required) {
     uint64 Available=0;
-#if defined(_WIN32) || defined(_WIN64)
-    unsigned short Wide[4096];
-    if (!Path || !MultiByteToWideChar(65001u,8u,Path,-1,Wide,4096) || !GetDiskFreeSpaceExW(Wide,&Available,NULL,NULL)) return false;
-#elif defined(__linux__)
-    /* Supported Linux/Android products use 64-bit unsigned-long statvfs ABI.
-     * Resolve libc dynamically because the small TCC SDK omits statvfs.h. */
-    void* Lib=dlopen(NULL,RTLD_NOW); uint64 Buffer[32]={0};
-    int (*Stat)(const char*,void*)=Lib?dlsym(Lib,"statvfs"):NULL;
-    bool Ok=Stat && Stat(Path,Buffer)==0; if (Lib) dlclose(Lib);
-    if (!Ok) return false;
-    uint64 Unit=Buffer[1]?Buffer[1]:Buffer[0];
-    Available=Unit && Buffer[4]>UINT64_MAX/Unit?UINT64_MAX:Unit*Buffer[4];
-#else
-    (void)Path; return true;
-#endif
+    if (!xsDiskAvailableBytes(Path,&Available)) return false;
     return Required<=Available && Available-Required>=UINT64_C(33554432);
 }

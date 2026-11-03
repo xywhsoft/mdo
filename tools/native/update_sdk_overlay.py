@@ -36,6 +36,7 @@ def main() -> int:
     native = ROOT / 'tools/native'
     for source, target in (
         ('xs_system_proxy.h', 'src/platform/system_proxy.h'),
+        ('xs_portable_system.h', 'src/platform/portable_system.h'),
         ('xs_system_proxy_jni.c', 'android/native/system_proxy_jni.c'),
         ('SystemProxy.java', 'android/src/org/xserver/android/SystemProxy.java'),
     ):
@@ -52,6 +53,8 @@ def main() -> int:
     proxy_api = (native / 'xs_system_proxy_api.h').read_text(encoding='utf-8')
     if proxy_api not in (sdk / 'src/sdk/xsbase.h').read_text(encoding='utf-8'):
         raise ValueError('SDK system proxy declarations differ from the maintained native header')
+    if (native / 'xs_portable_system_api.h').read_text(encoding='utf-8') not in (sdk / 'src/sdk/xsbase.h').read_text(encoding='utf-8'):
+        raise ValueError('SDK portable system declarations differ from the maintained native header')
     output = sdk / 'lib/xwork/src/xwork_process_output.inc.c'
     output.write_bytes((native / output.name).read_bytes())
     process_tools = sdk / 'lib/xwork/src/xwork_process_tools.inc.c'

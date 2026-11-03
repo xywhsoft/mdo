@@ -76,7 +76,7 @@
   },
   "sdk_overlay": {
     "path": "tools/dependencies/xwork-mcp.patch",
-    "sha256": "3173f94f8307f94899f04ceaccd88695f128f14bb68b333dbc3a8e1b8dae1b5e",
+    "sha256": "76b8ef683e418c271c4eb22e7eda7dd2add5c085fa6d4a7bac53f7eea36b56c9",
     "base_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
     "purpose": "MCP and platform compatibility, native browser panels, atomic file replacement and symmetric role runtime hooks; paired external process ownership and PID-safe tree cleanup; retained dynamic tool catalogs, bounded typed results and complete MCP/Responses images; UTF-8-safe MCP discovery truncation; consistent zero-as-unlimited turn ceilings for delegated Agents; automatic browser fallback after native frontend initialization failure",
     "xrt_single_header_sha256": "99bead7f87b4e6601cbb555b0d1ba30bb0030bf42c731c7c21f8bd29c1f04453"

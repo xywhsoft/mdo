@@ -4,11 +4,6 @@
 #include "../../include/mdo/extensions.h"
 #include "../../include/mdo/extension_manifest.h"
 #include "../../include/mdo/time.h"
-#if defined(_WIN32)
-__declspec(dllimport) unsigned long __stdcall GetCurrentProcessId(void);
-#else
-#include <unistd.h>
-#endif
 
 /* Each active producer owns its child, RPC secret and download directory.
  * No global aria2 service, user configuration, PATH lookup or saved tokens. */
@@ -67,12 +62,7 @@ static bool ArStart(MdoAria* A,xcancel* Cancel,bool Launch){
     char *Secret=xrtXidMakeString(),Port[48],SecretArg[100],Parent[72];
     Ok=Ok&&Secret;if(Ok){snprintf(A->Secret,sizeof(A->Secret),"%s",Secret);snprintf(A->Rpc,sizeof(A->Rpc),"http://127.0.0.1:%u/jsonrpc",(unsigned)Addr.Port);}xrtFree(Secret);
     snprintf(Port,sizeof(Port),"--rpc-listen-port=%u",(unsigned)Addr.Port);snprintf(SecretArg,sizeof(SecretArg),"--rpc-secret=%s",A->Secret);
-#if defined(_WIN32)
-    unsigned long Pid=GetCurrentProcessId();
-#else
-    unsigned long Pid=(unsigned long)getpid();
-#endif
-    snprintf(Parent,sizeof(Parent),"--stop-with-process=%lu",Pid);
+    snprintf(Parent,sizeof(Parent),"--stop-with-process=%llu",(unsigned long long)xsCurrentProcessId());
     const cstr Args[]={"--no-conf=true","--no-netrc=true","--enable-rpc=true","--rpc-listen-all=false","--rpc-allow-origin-all=false",Port,SecretArg,Parent,
         "--enable-dht=false","--enable-dht6=false","--enable-peer-exchange=false","--bt-enable-lpd=false","--rpc-save-upload-metadata=false","--quiet=true"};
     xprocessconfig Config;xrtProcessConfigInit(&Config);Config.Program=Program;Config.Args=Args;Config.ArgCount=sizeof(Args)/sizeof(*Args);Config.HideWindow=true;Config.NewGroup=true;

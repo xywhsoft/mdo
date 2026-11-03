@@ -4315,11 +4315,12 @@
 +#endif
 --- a/src/platform/credentials.h
 +++ b/src/platform/credentials.h
-@@ -83,4 +83,5 @@
+@@ -83,4 +83,6 @@
      return xrtProcessOpen(Url);
  #endif
  }
 +#include "system_proxy.h"
++#include "portable_system.h"
  #endif
 --- /dev/null
 +++ b/src/platform/system_proxy.h
@@ -4609,11 +4610,13 @@
 -XS_XWORK_SYMBOL(xworkAgentSetFileScope)
 --- a/src/script/tcc_host.h
 +++ b/src/script/tcc_host.h
-@@ -81,10 +81,12 @@
+@@ -81,10 +81,14 @@
  	XS_API_SYMBOL(xsCredentialSeal)
  	XS_API_SYMBOL(xsCredentialUnseal)
  	XS_API_SYMBOL(xsOpenExternalUrl)
 +	XS_API_SYMBOL(xsSystemProxyResolve)
++	XS_API_SYMBOL(xsCurrentProcessId)
++	XS_API_SYMBOL(xsDiskAvailableBytes)
  	XS_API_SYMBOL(xsBackgroundLeaseAcquire)
  	XS_API_SYMBOL(xsBackgroundLeaseRenew)
  	XS_API_SYMBOL(xsBackgroundLeaseRelease)
@@ -4642,7 +4645,7 @@
  #ifdef __cplusplus
 --- a/src/sdk/xsbase.h
 +++ b/src/sdk/xsbase.h
-@@ -287,6 +287,30 @@
+@@ -287,6 +287,36 @@
  /* Open an HTTP(S) URL in the platform browser, never in the app WebView. */
  XS_API bool xsOpenExternalUrl(cstr Url);
  
@@ -4669,11 +4672,17 @@
 + * of silently bypassing an explicitly configured proxy. TimeoutMs is passed
 + * to the platform resolver (1..10000). Browser extension state is not read. */
 +XS_API bool xsSystemProxyResolve(cstr Url,uint32 TimeoutMs,XS_SystemProxyInfo* Result);
++/* Native queries also available to compact TCC builds, without OS headers.
++ * Disk query accepts an existing directory, returns bytes available to this
++ * process (including quotas), and clears the result on failure. */
++XS_API uint64 xsCurrentProcessId(void);
++XS_API bool xsDiskAvailableBytes(cstr Directory, uint64* Available);
++
 +
  /* Opt-in Android CPU execution, without lighting the screen or restarting the
   * app. Leases last 1..60 seconds and must be renewed by active work. Each token
   * is independent; expired/released tokens cannot be revived. Release on Unit,
-@@ -381,6 +405,8 @@
+@@ -381,6 +411,8 @@
  /* Atomic no-replace move of a file, directory or final link within an
   * anchored root. Both parents are resolved without escaping Root. */
  XS_API bool xsRootRenameNoReplace(xroot Root, cstr Source, cstr Target);
@@ -5787,4 +5796,50 @@
 +	app_browser_open(pWin);
 +}
 +
++#endif
+--- /dev/null
++++ b/src/platform/portable_system.h
+@@ -0,0 +1,43 @@
++#ifndef XS_PORTABLE_SYSTEM_H
++#define XS_PORTABLE_SYSTEM_H
++#if defined(_WIN32)
++#include <windows.h>
++#else
++#include <unistd.h>
++#include <sys/statvfs.h>
++#endif
++
++uint64 xsCurrentProcessId(void)
++{
++#if defined(_WIN32)
++    return (uint64)GetCurrentProcessId();
++#else
++    return (uint64)getpid();
++#endif
++}
++
++bool xsDiskAvailableBytes(cstr Directory, uint64* Available)
++{
++    if (Available) *Available = 0;
++    if (!Directory || !Directory[0] || !Available) return false;
++#if defined(_WIN32)
++    int Count = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, Directory, -1, NULL, 0);
++    if (Count <= 0 || Count > 32768) return false;
++    WCHAR* Wide = (WCHAR*)malloc((size_t)Count * sizeof(WCHAR));
++    if (!Wide) return false;
++    ULARGE_INTEGER Bytes;
++    bool Ok = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, Directory, -1, Wide, Count) &&
++        GetDiskFreeSpaceExW(Wide, &Bytes, NULL, NULL);
++    free(Wide);
++    if (Ok) *Available = (uint64)Bytes.QuadPart;
++    return Ok;
++#else
++    struct statvfs Info;
++    if (statvfs(Directory, &Info) != 0) return false;
++    uint64 Unit = (uint64)(Info.f_frsize ? Info.f_frsize : Info.f_bsize);
++    uint64 Blocks = (uint64)Info.f_bavail;
++    *Available = Unit && Blocks > UINT64_MAX / Unit ? UINT64_MAX : Unit * Blocks;
++    return true;
++#endif
++}
 +#endif
