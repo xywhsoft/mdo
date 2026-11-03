@@ -53,6 +53,7 @@ try{
  for(let n=0;n<5;n++){const text=`\n\n新增内容 ${n}`;source+=text;events.push(e('model_text_delta',{text}));await publish();await wait(()=>timeline.querySelector('.md-pending')?.textContent==='');}
  checks.imageIdentity=images[0]===timeline.querySelectorAll('img')[0]&&images[1]===timeline.querySelectorAll('img')[1];
  checks.codeIdentity=code===timeline.querySelector('.md-codeblock')&&pre.scrollLeft===originalScroll;
+ checks.codeFocus=document.activeElement===copy;
  checks.previewSurvives=document.querySelector('#preview').open;
  document.querySelector('#close').click();
  events.push(e('model_done',{success:true,input_tokens:100,output_tokens:200}),e('agent_done',{success:true,text:source}));await publish();

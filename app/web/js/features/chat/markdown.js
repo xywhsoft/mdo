@@ -115,11 +115,19 @@ export function createMarkdownRenderer({ parse = parseMarkdown, onLayout = () =>
     entry.timer = setTimeout(() => { entry.timer = 0; waiting.add(entry); drain(); }, immediate ? 0 : delay);
   }
   function paint(entry, tree, source) {
+    const active = document.activeElement, hadFocus = active && entry.blocks.contains(active);
+    const focusedAction = hadFocus ? active.dataset?.timelineAction : "";
     const fragment = renderMarkdownNodes(tree.nodes, { previous: entry.blocks, owner: entry.owner,
       signal: entry.life.signal, onLayout, onOpenFile });
     entry.blocks.replaceChildren(fragment);
     entry.tail.textContent = entry.source.startsWith(source) ? entry.source.slice(source.length) : "";
-    entry.parsed = source; entry.tree = tree; decorate(entry.root, entry); onLayout();
+    entry.parsed = source; entry.tree = tree; decorate(entry.root, entry);
+    if (hadFocus && !entry.blocks.contains(document.activeElement)) {
+      const replacement = active.isConnected ? active : focusedAction &&
+        [...entry.blocks.querySelectorAll("[data-timeline-action]")].find(node => node.dataset.timelineAction === focusedAction);
+      replacement?.focus({ preventScroll: true });
+    }
+    onLayout();
   }
   async function request(entry) {
     running++; entry.inflight = true;
