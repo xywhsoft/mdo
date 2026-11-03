@@ -50,6 +50,7 @@ tools/*
 !tools/export_icons.py
 !tools/qa_release.py
 !tools/benchmark_precompiled.py
+!tools/benchmark_partial_precompile.py
 !tools/runtime/
 tools/runtime/**
 !tools/runtime/README.md

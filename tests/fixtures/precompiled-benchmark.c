@@ -5,6 +5,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include "benchmark-config.h"
+#ifdef BENCH_OBJECT_MANIFEST
+#include BENCH_OBJECT_MANIFEST
+#endif
 
 static char Diagnostics[8192];
 static void CompilerError(void* User, const char* Message) {
@@ -36,7 +39,11 @@ void ServiceInit(XS_HostInfo* Host) {
             if(tcc_set_options(T,"-c -std=c11")<0)exit(12);
         } else if(tcc_set_options(T,"-std=c11")<0)exit(12);
         double Created=xrtTimer();
-        bool Added=tcc_add_file(T,BENCH_INPUT)==0;
+        bool Added=true;
+#ifdef BENCH_OBJECT_MANIFEST
+        Added=MdoLoadCommonObjects(T);
+#endif
+        Added=Added&&tcc_add_file(T,BENCH_INPUT)==0;
         double AddedAt=xrtTimer();bool Linked=false;
         if(Added)Linked=BENCH_EMIT?tcc_output_file(T,BENCH_OBJECT_PATH)==0:tcc_relocate(T)==0;
         double LinkedAt=xrtTimer();
