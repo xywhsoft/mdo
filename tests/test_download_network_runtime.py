@@ -1,5 +1,5 @@
 """In-place download TLS/proxy acceptance; localhost and tiny fixtures only."""
-import argparse, base64, hashlib, http.client, json, os, socket, ssl, subprocess, sys, tempfile, threading, uuid, zipfile
+import argparse, base64, hashlib, http.client, json, os, socket, ssl, subprocess, sys, tempfile, threading, time, uuid, zipfile
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from test_api_runtime import ROOT, free_port, request, wait_ready
@@ -27,6 +27,8 @@ class Publisher(BaseHTTPRequestHandler):
     hits=0
     def log_message(self,*_):pass
     def do_GET(self):
+        if self.path=='/short':
+            self.send_response(200);self.send_header('Content-Length','11');self.end_headers();self.wfile.write(b'{}');return
         redirects={'/redirect':'/file','/forbidden':'https://blocked.invalid/file','/downgrade':'http://127.0.0.1/file','/loop':'/loop'}
         if self.path in redirects:
             self.send_response(302);self.send_header('Location',redirects[self.path]);self.send_header('Content-Length','0');self.end_headers();return
@@ -36,7 +38,7 @@ class Publisher(BaseHTTPRequestHandler):
         self.send_response(200);self.send_header('Content-Type','application/octet-stream');self.send_header('Content-Length',str(len(data)));self.end_headers();self.wfile.write(data)
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--host',type=Path,required=True);args=parser.parse_args()
+    parser=argparse.ArgumentParser();parser.add_argument('--host',type=Path,required=True);parser.add_argument('--source-only',action='store_true');args=parser.parse_args()
     sys.path.insert(0,str(ROOT));from tools import build_mdo
     build_mdo.write_if_changed(build_mdo.UNITY_PATH,build_mdo.generated_unity(build_mdo.load_object(build_mdo.LOCK_PATH),build_mdo.source_list()).encode())
     with ThreadingHTTPServer(('127.0.0.1',0),Publisher) as publisher,ThreadingHTTPServer(('127.0.0.1',0),Publisher) as plain,tempfile.TemporaryDirectory(dir=ROOT/'.build',prefix='download-network-') as raw:
@@ -72,6 +74,11 @@ static int32 QaRun(void* Unused){{(void)Unused;
   char FetchUrl[160];snprintf(FetchUrl,sizeof(FetchUrl),"%s://127.0.0.1:%u/meta",QaSecure?"https":"http",(unsigned)QaPort);
   XS_FetchRequest F={{0}};F.Url=FetchUrl;F.Method="GET";F.Timeout=3000000;F.IdleTimeout=1000000;F.MaxBodyBytes=4096;XS_FetchResponse Out={{0}};
   bool Fetch=MdoDownloadFetch(&F,&Out)&&Out.Status==200&&Out.BodySize==11;MdoDownloadFetchUnit(&Out);
+  bool ShortRetry=true;
+  if(Ok){{snprintf(FetchUrl,sizeof(FetchUrl),"%s://127.0.0.1:%u/short",QaSecure?"https":"http",(unsigned)QaPort);xrtClearError();
+   bool Read=MdoDownloadFetch(&F,&Out);ShortRetry=!Read&&MdoExtServiceTransientTransport(xrtGetError());
+   if(!ShortRetry){{fprintf(stderr,"Short fixture accepted=%u bytes=%zu\\n",Read,Out.BodySize);for(const xerror* E=xrtGetError();E;E=xrtErrorCause(E))fprintf(stderr,"Short cause %s kind=%d code=%d\\n",xrtErrorDomain(E),(int)xrtErrorKind(E),(int)xrtErrorCode(E));}}
+   MdoDownloadFetchUnit(&Out);xrtClearError();}}
   bool Sources=true;
   if(Ok&&QaSecure){{
    const cstr Paths[]={{"redirect","forbidden","downgrade","loop","file"}};
@@ -83,6 +90,7 @@ static int32 QaRun(void* Unused){{(void)Unused;
   }}
   xvalue* V=xrtValueObject();MdoApiValueSetBool(V,"download",Ok);MdoApiValueSetBool(V,"fetch",Fetch);MdoApiValueSetString(V,"code",Report.Code);
   MdoApiValueSetBool(V,"sources",Sources);
+  MdoApiValueSetBool(V,"short_retry",ShortRetry);
   xvalue* Tasks=MdoDownloadsList();MdoApiValueSetTake(V,"tasks",&Tasks);QaValue=V;return 0;
 }}
 XS_RequestResult RequestProc(XS_HttpReq* R){{
@@ -96,6 +104,7 @@ XS_RequestResult RequestProc(XS_HttpReq* R){{
         try:
             cases=[('http-connect','',True,False,True,False),('socks5','',True,False,True,False),('http-connect','127.0.0.1',True,False,True,False),('http-connect','',False,False,False,False)]
             if os.name=='nt' and aria.is_file():cases += [('http-connect','',True,True,True,False),('socks5','',True,True,True,False),('http-connect','',False,True,True,True),('socks5','',False,True,True,True)]
+            if args.source_only:cases=cases[:1]
             for kind,bypass,ca,managed,expected,plaintext in cases:
                 with LocalProxy(('127.0.0.1',0),DownloadProxy) as proxy:
                     proxy.kind=kind;proxy.target_port=plain.server_port if plaintext else publisher.server_port;proxy.connections=0;proxy.errors=[]
@@ -119,6 +128,19 @@ XS_RequestResult RequestProc(XS_HttpReq* R){{
                             assert status==200,(status,raw)
                             result=json.loads(raw)['data'];assert result['download']==expected and result['fetch']==expected,(kind,managed,result)
                             assert result['sources'],result
+                            assert result['short_retry'],result
+                            if expected and kind=='http-connect' and not managed and not bypass:
+                                task=next(row for row in result['tasks'] if row['identity'].endswith('/loop'))
+                                status,_,body=request(port,'POST',f"/api/v1/download-tasks/{task['id']}/retry",body=b'{}',headers={'Content-Type':'application/json'})
+                                assert status==200,(status,body)
+                                deadline=time.monotonic()+15
+                                while time.monotonic()<deadline:
+                                    status,_,body=request(port,'GET','/api/v1/download-tasks');assert status==200
+                                    resumed=next(row for row in json.loads(body)['data'] if row['id']==task['id'])
+                                    if resumed['state']=='failed' and resumed['updated_at']>task['updated_at']:break
+                                    time.sleep(.05)
+                                else:raise AssertionError('Trusted HTTPS source dispatcher did not finish its retry')
+                                assert resumed['error_code']=='redirect',resumed
                             if expected:
                                 assert hashlib.sha256((home/'data/downloads/network.bin').read_bytes()).hexdigest()==HASH
                                 assert (proxy.connections>0)==(not bypass),(kind,bypass,proxy.connections)
@@ -128,7 +150,7 @@ XS_RequestResult RequestProc(XS_HttpReq* R){{
                         except Exception:
                             print((base/'runtime.log').read_text(encoding='utf-8',errors='replace')[-5000:]);raise
                         finally:process.terminate();process.wait(timeout=10);proxy.shutdown()
-            print('PASS download TLS trust/rejection, authenticated HTTP/SOCKS5 proxy, bypass, extension-fetch transport, managed aria2 and SOCKS5 native fallback')
+            print('PASS trusted source redirects, old size boundary and native dispatcher' if args.source_only else 'PASS download TLS trust/rejection, authenticated proxy, bypass and trusted-source dispatcher; managed aria2 cases: '+str(any(row[3] for row in cases)))
         finally:source.unlink(missing_ok=True);config.unlink(missing_ok=True);publisher.shutdown();plain.shutdown()
 
 if __name__=='__main__':main()

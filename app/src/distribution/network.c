@@ -72,12 +72,17 @@ bool MdoDownloadFetch(const XS_FetchRequest* R,XS_FetchResponse* Out){
     for(size_t I=0;Ok&&I<R->HeaderCount;I++)Ok=xrtHttpRequestSetHeader(Q,xrtStrView(R->Headers[I].Name),xrtStrView(R->Headers[I].Value));
     if(Ok&&R->BodySize)Ok=xrtHttpRequestSetBytes(Q,(xbytesview){R->Body,R->BodySize},(xstrview){0});
     xhttpcalloptions O;xrtHttpCallOptionsInit(&O);O.Cancel=R->Cancel;O.ResponseBodyLimit=R->MaxBodyBytes;O.Timeout=R->Timeout;O.IdleTimeout=R->IdleTimeout;
-    xhttpresult* Result=Ok?xrtHttpClientDoSync(C,Q,&O):NULL;const xhttpresponse* Response=xrtHttpResultResponse(Result);Ok=Response!=NULL;
+    xhttpresult* Result=Ok?xrtHttpClientDoSync(C,Q,&O):NULL;
+    /* Preserve the transport's typed cause across accessors and cleanup.
+     * Querying a NULL result would replace an EOF/TLS error with ARGUMENT. */
+    xerror* Failure=Result?NULL:xrtTakeError();
+    const xhttpresponse* Response=Result?xrtHttpResultResponse(Result):NULL;Ok=Response!=NULL;
     if(Ok){xbytesview Body=xrtHttpResponseBody(Response);const xhttpfield* Type=xrtHttpResponseHeader(Response,XRT_STR_LITERAL("Content-Type"));
         Out->Status=xrtHttpResponseStatus(Response);Out->FinalUrl=xrtStrDup(R->Url);Out->ContentType=xrtStrDupN(Type?Type->Value.Data:"",Type?Type->Value.Size:0);
         Out->Body=xrtMalloc(Body.Size+1);Out->BodySize=Body.Size;Out->Version=XS_FETCH_RESPONSE_VERSION;
         Ok=Out->FinalUrl&&Out->ContentType&&Out->Body;if(Ok){memcpy(Out->Body,Body.Data,Body.Size);Out->Body[Body.Size]=0;}
     }
-    xrtHttpResultDestroy(Result);xrtHttpRequestDestroy(Q);xrtHttpClientDestroy(C);return Ok;
+    xrtHttpResultDestroy(Result);xrtHttpRequestDestroy(Q);xrtHttpClientDestroy(C);
+    if(Failure){xrtSetError(Failure);xrtErrorFree(Failure);}return Ok;
 }
 void MdoDownloadFetchUnit(XS_FetchResponse* R){if(!R)return;xrtFree(R->FinalUrl);xrtFree(R->ContentType);xrtFree(R->Body);memset(R,0,sizeof(*R));}

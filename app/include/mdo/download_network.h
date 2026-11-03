@@ -7,6 +7,8 @@ void MdoDownloadNetworkSetEngine(xnetengine* Engine);
  * Failed proxy/CA resolution never silently selects a direct connection. */
 xhttpclient* MdoDownloadClientCreate(xnetengine* Engine,cstr Url,uint64 Timeout,xllm_error* Error);
 bool MdoDownloadAriaOptions(xvalue* Options,cstr Url);
+/* Bounded, no redirects. Initialize Response to zero and always release it
+ * with MdoDownloadFetchUnit, including after a failed request. */
 bool MdoDownloadFetch(const XS_FetchRequest* Request,XS_FetchResponse* Response);
 void MdoDownloadFetchUnit(XS_FetchResponse* Response);
 #endif

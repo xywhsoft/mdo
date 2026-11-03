@@ -37,7 +37,7 @@ def main():
   with zipfile.ZipFile(path,'w',zipfile.ZIP_DEFLATED) as z:
    for name,content in files.items():z.writestr(name,content)
  client=(ROOT/'app/src/extensions/service.c').read_text(encoding='utf-8').replace('#include "service_plan.inc.c"',(ROOT/'app/src/extensions/service_plan.inc.c').read_text(encoding='utf-8'));client=re.sub(r'^#include .*$', '',client,flags=re.M);client=re.sub(r'\b(MdoExtService\w+|MdoExtensionService\w+)\b',r'Qa\1',client)
- for old,new in dict(MdoAccountAcquireServiceWait='QaLease',MdoAccountRelease='QaRelease',MdoAccountRejectAccess='QaReject',xsFetch='QaFetch',xsFetchResponseUnit='QaResponseUnit').items():client=re.sub(r'\b'+old+r'\b',new,client)
+ for old,new in dict(MdoAccountAcquireServiceWait='QaLease',MdoAccountRelease='QaRelease',MdoAccountRejectAccess='QaReject',MdoDownloadFetch='QaFetch',MdoDownloadFetchUnit='QaResponseUnit',xsFetch='QaFetch',xsFetchResponseUnit='QaResponseUnit').items():client=re.sub(r'\b'+old+r'\b',new,client)
  symbols=('initialize','bind_int','bind_text','prepare_v2','finalize','step','exec','column_count','column_name','column_type','column_int64','column_text','column_bytes','bind_int64','open','busy_timeout','close','changes');setup='QaSqlite=LoadLibraryW(L"C:/Program Files/Python312/DLLs/sqlite3.dll");'+''.join(f'tcc_add_symbol(T,"sqlite3_{n}",GetProcAddress(QaSqlite,"sqlite3_{n}"));' for n in symbols)
  helpers=STORE.split('xvalue* QaProductContract(')[0]+DEPENDENCIES.split('xvalue* QaProductContract(')[0];passed=False
  try:

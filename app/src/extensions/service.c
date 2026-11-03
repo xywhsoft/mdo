@@ -23,6 +23,12 @@ static bool MdoExtServiceLease(xcancel* Cancel,bool Required,MdoAccountLease* Le
 static bool MdoExtServiceTransientTransport(const xerror* Cause){
  cstr RootDomain=Cause?xrtErrorDomain(Cause):NULL;
  bool Incomplete=RootDomain&&!strcmp(RootDomain,"xs.fetch")&&xrtErrorCode(Cause)==XS_FETCH_ERROR_INCOMPLETE,Transient=Incomplete,Deadline=false;
+ /* The shared HTTP client exposes its typed EOF cause directly, while the
+  * previous host fetch wrapped it. Preserve the same bounded read recovery. */
+ for(const xerror* E=Cause;E;E=xrtErrorCause(E))if(xrtErrorDomain(E)&&
+  ((!strcmp(xrtErrorDomain(E),"xrt.http.exchange")&&xrtErrorCode(E)==XHTTP1_EXCHANGE_ERROR_UNEXPECTED_EOF)||
+   (!strcmp(xrtErrorDomain(E),"xrt.http1")&&(xrtErrorCode(E)==XHTTP1_ERROR_BODY_INCOMPLETE||xrtErrorCode(E)==XHTTP1_ERROR_HEAD_INCOMPLETE))||
+   (!strcmp(xrtErrorDomain(E),"xrt.tls")&&xrtErrorCode(E)==XTLS_ERROR_TRUNCATED))){Incomplete=true;Transient=true;break;}
  for(size_t Depth=0;Cause&&Depth<16;Depth++,Cause=xrtErrorCause(Cause)){
   xerrkind Kind=xrtErrorKind(Cause);cstr Domain=xrtErrorDomain(Cause);int32 Code=xrtErrorCode(Cause);
   if(Kind==XERR_TIMEOUT)Deadline=true;
@@ -32,7 +38,7 @@ static bool MdoExtServiceTransientTransport(const xerror* Cause){
    * actual cancel token is checked separately before allowing any retry. */
   if(Kind==XERR_CANCELLED){if(!Deadline)return false;continue;}
   if(Kind==XERR_ARGUMENT||Kind==XERR_TYPE||Kind==XERR_VALUE||Kind==XERR_RANGE||Kind==XERR_MEMORY||Kind==XERR_PERMISSION||Kind==XERR_UNSUPPORTED||Kind==XERR_NOT_FOUND||Kind==XERR_EXISTS)return false;
-  if(Kind==XERR_PROTOCOL&&(!Incomplete||(Domain&&!strcmp(Domain,"xrt.tls"))))return false;
+  if(Kind==XERR_PROTOCOL&&(!Incomplete||(Domain&&!strcmp(Domain,"xrt.tls")&&Code!=XTLS_ERROR_TRUNCATED)))return false;
   if(Kind==XERR_IO||Kind==XERR_AGAIN||Kind==XERR_TIMEOUT||Kind==XERR_CLOSED)Transient=true;
  }
  return !Cause&&Transient;
