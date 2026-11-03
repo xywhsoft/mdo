@@ -21,28 +21,8 @@ class ModelContractTests(unittest.TestCase):
         self.header = HEADER.read_text(encoding="utf-8")
         self.source = SOURCE.read_text(encoding="utf-8")
 
-    def test_provider_and_model_are_separate(self) -> None:
-        models = self.defaults["models"]
-        self.assertEqual(len(models["providers"]), 1)
-        self.assertEqual(len(models["items"]), 1)
-        provider = models["providers"][0]
-        model = models["items"][0]
-        self.assertEqual(model["provider"], provider["id"])
-        self.assertIn("credential", provider)
-        self.assertNotIn("credential", model)
-        self.assertIn("endpoints", provider)
-        self.assertNotIn("endpoints", model)
-
-    def test_ling_declares_three_online_wire_dialects(self) -> None:
-        provider = self.defaults["models"]["providers"][0]
-        model = self.defaults["models"]["items"][0]
-        self.assertEqual(set(provider["endpoints"]), {
-            "chat_completions", "responses", "anthropic_messages",
-        })
-        self.assertEqual(set(model["protocols"]), {
-            "openai-chat-completions", "openai-responses",
-            "anthropic-messages",
-        })
+    def test_no_product_connection_is_preinstalled(self) -> None:
+        self.assertEqual(self.defaults["models"], {"default_model": "", "providers": [], "items": []})
 
     def test_public_catalog_is_snapshot_based_and_non_secret(self) -> None:
         for symbol in (
@@ -70,7 +50,8 @@ class ModelContractTests(unittest.TestCase):
         self.assertIn("MdoSecretResolve", self.source)
         self.assertIn("MdoSecretRelease(&Secret)", self.source)
         self.assertIn("xllmClientCreate(&Config", self.source)
-        self.assertIn("MDO_ORNITH_RESPONSES_URL", self.source)
+        self.assertNotIn("MDO_ORNITH_RESPONSES_URL", self.source)
+        self.assertNotIn("MdoModelsBuiltinCredential", self.source)
         self.assertIn("xrtSecureZero", secrets)
 
     def test_bootstrap_owns_model_manager_before_runtime(self) -> None:

@@ -1113,7 +1113,7 @@
   "modelConfig.builtinProviderNote": "内置供应商由 mdo 提供，配置不可更改。",
   "modelConfig.secretNote": "使用凭据引用，不在页面或配置中保存 API Key 明文。",
   "modelConfig.newModel": "新增模型",
-  "modelConfig.builtinModelNote": "ornith-1.5-35b 是内置免费模型，参数不可编辑。",
+  "modelConfig.builtinModelNote": "此模型由在线服务提供，能力与可用范围以账号权益为准。",
   "modelConfig.builtinModelDetail": "{id} · 上下文 {tokens} tokens · {protocol}",
   "modelConfig.providerNote": "模型引用供应商；协议必须有对应的供应商URL。",
   "modelConfig.advanced": "能力与上下文参数",
@@ -1150,7 +1150,7 @@
   "modelConfig.endpoints": "协议接口",
   "modelConfig.connection": "连接设置",
   "modelConfig.defaults": "默认行为",
-  "modelConfig.description": "管理供应商、模型能力与默认模型。ornith-1.5-35b 始终保留为内置免费模型。",
+  "modelConfig.description": "管理供应商、模型能力与默认模型。登录墨斗账号后可使用在线模型。",
   "common.listSeparator": "；",
   "task.state.pending": "等待中",
   "task.state.running": "运行中",
@@ -3503,5 +3503,10 @@
   "error.file_too_large": "文件超过 8 MiB，请拆分或压缩后添加。",
   "error.file_storage_full": "当前会话的文件存储已满或不可写，请检查空间和权限。",
   "error.file_upload_conflict": "上传标识对应的文件内容不同，原文件未被覆盖，请重新添加。",
-  "file.dropUnavailable": "无法读取拖放的文件，请使用“添加文件”选择。"
+  "file.dropUnavailable": "无法读取拖放的文件，请使用“添加文件”选择。",
+  "composer.registerInvitation": "注册墨斗账号，每天免费畅享 1 亿 Token，解锁在线模型与扩展生态。",
+  "composer.registerFree": "免费注册墨斗账号 ↗",
+  "composer.configureOwnModel": "配置自己的模型",
+  "composer.startUsing": "开始使用墨斗",
+  "composer.selectModel": "选择模型"
 }

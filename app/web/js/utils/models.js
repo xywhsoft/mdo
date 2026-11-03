@@ -9,7 +9,8 @@ export function findModel(models, id) {
 export function modelLoginBlock(catalog, id) {
   const model = findModel(catalog?.models ?? [], id);
   const requiresLogin = model ? model.requires_login === true
-    : typeof id === "string" && id.startsWith("mdo-online.");
+    : typeof id === "string" && (id.startsWith("mdo-online.") ||
+      ["ornith-1.5-35b", "ling-3.0-tiny", "ling-gpu"].includes(id));
   if (!requiresLogin || catalog?.login_state === "ready") return "";
   return catalog?.login_state === "signed_out" ? "profile_login_required"
     : catalog?.login_state === "unavailable" ? "profile_login_unavailable"

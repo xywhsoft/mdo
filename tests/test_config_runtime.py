@@ -349,7 +349,7 @@ def main() -> int:
         assert "incomplete_proxy=0" in output, output
         assert "system_proxy=1" in output, output
         assert "plain_proxy_password=0" in output, output
-        assert "ornith-1.5-35b is built-in" in output, output
+        assert "remove_ling=accepted" in output, output
         assert "restore_preview=1 changes=1" in output, output
         assert "restore=1" in output, output
         assert not (home / "config/settings.json").exists()
@@ -379,7 +379,7 @@ def main() -> int:
         effective = json.loads(initial)
         assert effective["schema_version"] == 1
         assert effective["settings"]["appearance"]["theme"] == "light"
-        assert effective["models"]["items"][0]["id"] == "ornith-1.5-35b"
+        assert effective["models"] == {"default_model": "", "items": [], "providers": []}
 
         language = run_probe(host, site, base / "reply-language", extra_args=("--reply-language-probe",))
         assert all(f"language_{i}=1" in language for i in range(5)), language

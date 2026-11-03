@@ -157,7 +157,7 @@ function formHeader(form, item, isModel) {
     isModel ? uiText("modelConfig.newModel", {}, "新增模型") : uiText("ui.modelConfigAdvanced.addProvider", {}, "新增 供应商"));
   const note = item.builtin ? copy("p",
     isModel ? "modelConfig.builtinModelNote" : "modelConfig.builtinProviderNote",
-    isModel ? uiText("modelConfig.builtinModelNote", {}, "ornith-1.5-35b 是内置免费模型，参数不可编辑。") : uiText("ui.modelConfigAdvanced.builtInProvidersAreSuppliedByMdoAndCannot", {}, "内置 供应商 由 mdo 提供，配置不可更改。"))
+    isModel ? uiText("modelConfig.builtinModelNote", {}, "此模型由在线服务提供，能力与可用范围以账号权益为准。") : uiText("ui.modelConfigAdvanced.builtInProvidersAreSuppliedByMdoAndCannot", {}, "内置 供应商 由 mdo 提供，配置不可更改。"))
     : copy("p", isModel ? "modelConfig.providerNote" : "modelConfig.secretNote",
       isModel ? uiText("ui.modelConfigAdvanced.modelsReferenceProvidersEachProtocolNeedsAMatchingProvider", {}, "模型引用 供应商；协议必须有对应的 供应商 URL。")
         : uiText("modelConfig.secretNote", {}, "使用凭据引用，不在页面或配置中保存 API Key 明文。"));

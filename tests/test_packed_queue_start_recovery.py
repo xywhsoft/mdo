@@ -61,20 +61,23 @@ class Model(BaseHTTPRequestHandler):
 
 
 def configure_model(port: int, endpoint: str, protocol: str = "openai-chat-completions") -> None:
+    from model_fixture import model_catalog
     status, headers, raw = raw_request(port, "GET", "/api/v1/models/config")
     assert status == 200, raw
     config = json.loads(raw)["data"]
-    provider = json.loads(json.dumps(config["providers"][0]))
+    fixture = model_catalog()
+    provider = fixture["providers"][0]
     provider.update(id="queue-fixture", name="Queue fixture", builtin=False,
         editable=True, removable=True, endpoints={
             {"openai-chat-completions": "chat_completions", "openai-responses": "responses"}[protocol]: endpoint},
         credential={"secret_ref": "env:MDO_QUEUE_FIXTURE_KEY"})
-    model = json.loads(json.dumps(config["items"][0]))
+    model = fixture["items"][0]
     model.update(id="queue-fixture", name="Queue fixture", provider="queue-fixture",
         builtin=False, free=False, editable=True, removable=True,
         protocols=[protocol], default_protocol=protocol)
     config["providers"].append(provider)
     config["items"].append(model)
+    if not config["default_model"]: config["default_model"] = model["id"]
     config.pop("runtime_override", None)
     config.pop("verification", None)
     status, _, raw = raw_request(port, "PUT", "/api/v1/settings/models",

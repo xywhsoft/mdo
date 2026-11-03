@@ -287,10 +287,7 @@ class BuildContractTests(unittest.TestCase):
             self.assertTrue((home / relative).is_file(), relative)
         defaults = json.loads((home / "config" / "defaults.json").read_text(encoding="utf-8"))
         self.assertEqual(defaults["schema_version"], 1)
-        self.assertEqual(defaults["models"]["default_model"], "ornith-1.5-35b")
-        ling = defaults["models"]["items"][0]
-        self.assertEqual(ling["id"], "ornith-1.5-35b")
-        self.assertFalse(ling["editable"])
+        self.assertEqual(defaults["models"], {"default_model": "", "providers": [], "items": []})
         self.assertTrue((ROOT / "app" / "web" / "index.html").is_file())
         self.assertIn("mdo-home/", (ROOT / ".gitignore").read_text(encoding="utf-8"))
         self.assertIn("app/generated/", (ROOT / ".gitignore").read_text(encoding="utf-8"))

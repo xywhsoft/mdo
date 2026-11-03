@@ -6,7 +6,6 @@
 #include "../../include/mdo/models.h"
 #include "../../include/mdo/modules.h"
 #include "../../include/mdo/skills.h"
-#include "../../include/mdo/builtin_model.h"
 #include "../../include/mdo/tool_catalog.h"
 #include "../../include/mdo/account.h"
 #include "../../include/mdo/settings.h"
@@ -117,7 +116,7 @@ bool MdoApiModelsRoute(MdoApiContext* Context)
 
     memset(&Default, 0, sizeof(Default));
     Default.Size = sizeof(Default);
-    if ( Ok ) Ok = MdoModelCatalogDefault(Catalog, &Default);
+    if (Ok && !MdoModelCatalogDefault(Catalog,&Default)) { Default.Id="";Default.Generation=MdoModelManagerGeneration(); }
 
     for ( Index = 0u; Ok && Index < MdoModelCatalogProviderCount(Catalog);
           Index++ ) {
@@ -157,8 +156,8 @@ bool MdoApiModelsRoute(MdoApiContext* Context)
             MdoApiValueSetString(Item, "name", Info.Name) &&
             MdoApiValueSetString(Item, "provider_id", Info.ProviderId) &&
             MdoApiValueSetString(Item, "wire_model", Info.WireModel) &&
-            MdoApiValueSetStrings(Item, "aliases", (const char* const[]){ MDO_LEGACY_BUILTIN_MODEL_ID, "ling-gpu" },
-                Info.Builtin && strcmp(Info.Id, MDO_BUILTIN_MODEL_ID) == 0 ? 2u : 0u) &&
+            MdoApiValueSetStrings(Item, "aliases", (const char* const[]){ "ornith-1.5-35b", "ling-3.0-tiny", "ling-gpu" },
+                Info.RequiresLogin && !strcmp(Info.Id,"mdo-online.ornith-1.5-35b") ? 3u : 0u) &&
             MdoApiValueSetUInt(Item, "generation", Info.Generation) &&
             MdoApiValueSetBool(Item, "builtin", Info.Builtin) &&
             MdoApiValueSetBool(Item, "free", Info.Free) &&

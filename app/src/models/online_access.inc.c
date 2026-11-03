@@ -29,7 +29,7 @@ bool MdoModelCatalogCheckLogin(const MdoModelCatalog* Catalog,const char* ModelI
     /* Online entries are transient; saved identities survive a restart.
      * An exact personal model takes precedence over the online namespace. */
     bool Required=Model?(Model->RequiresLogin||MdoModelIsOnline(Catalog,Model->Id)):
-        !strncmp(Id,"mdo-online.",11);
+        (!strncmp(Id,"mdo-online.",11) || MdoModelsRetiredOnlineId(Id));
     if(!Required)return true;
     MdoModelLoginState State=MdoModelCatalogLoginState(Catalog);
     if(State==MDO_MODEL_LOGIN_READY)return true;
@@ -53,8 +53,7 @@ bool MdoModelManagerSetOnlineCatalog(const xvalue* Catalog)
 bool MdoModelIsOnline(const MdoModelCatalog* Catalog,const char* ModelId)
 {
     const MdoModelEntry* Model=Catalog&&ModelId?MdoModelsLookup(Catalog,ModelId):NULL;
-    return Model&&g_MdoModelsOnline.Acquire&&(!strcmp(Model->ProviderId,"mdo-online") ||
-        (Model->Builtin&&!strcmp(Model->Id,MDO_BUILTIN_MODEL_ID)));
+    return Model&&g_MdoModelsOnline.Acquire&&!strcmp(Model->ProviderId,"mdo-online");
 }
 
 xllm_client* MdoModelClientCreate(const MdoModelCatalog* Catalog,const MdoModelClientOptions* Options,MdoModelClientInfo* Info,xllm_error* Error)

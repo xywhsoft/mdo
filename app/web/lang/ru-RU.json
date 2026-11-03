@@ -1131,7 +1131,7 @@
   "modelConfig.builtinProviderNote": "Встроенный провайдер управляется mdo; его нельзя изменить.",
   "modelConfig.secretNote": "Используйте ссылку на секрет; ключ API не сохраняется открытым текстом на странице или в настройках.",
   "modelConfig.newModel": "Добавить модель",
-  "modelConfig.builtinModelNote": "ornith-1.5-35b — встроенная бесплатная модель. Её параметры нельзя изменить.",
+  "modelConfig.builtinModelNote": "Модель предоставляется онлайн-сервисом. Доступность и возможности зависят от условий вашего аккаунта.",
   "modelConfig.builtinModelDetail": "{id} · {tokens} токенов контекста · {protocol}",
   "modelConfig.providerNote": "Модель использует провайдера. Для каждого выбранного протокола нужен соответствующий URL.",
   "modelConfig.advanced": "Возможности и лимиты контекста",
@@ -1168,7 +1168,7 @@
   "modelConfig.endpoints": "API-адреса",
   "modelConfig.connection": "Настройки подключения",
   "modelConfig.defaults": "Поведение по умолчанию",
-  "modelConfig.description": "Управляйте провайдерами, возможностями моделей и моделью по умолчанию. ornith-1.5-35b остаётся встроенной бесплатной моделью.",
+  "modelConfig.description": "Управляйте провайдерами, возможностями моделей и моделью по умолчанию. Войдите для доступа к онлайн-моделям.",
   "common.listSeparator": "; ",
   "task.state.pending": "Ожидает",
   "task.state.running": "Выполняется",
@@ -3503,5 +3503,10 @@
   "error.file_too_large": "Размер файла превышает 8 МиБ. Разделите или сожмите его.",
   "error.file_storage_full": "Хранилище файлов диалога заполнено или недоступно. Проверьте место и права.",
   "error.file_upload_conflict": "По этому идентификатору сохранён другой файл. Он не изменён; добавьте файл заново.",
-  "file.dropUnavailable": "Не удалось прочитать файлы. Используйте «Добавить файлы»."
+  "file.dropUnavailable": "Не удалось прочитать файлы. Используйте «Добавить файлы».",
+  "composer.registerInvitation": "Создайте аккаунт Mdo: 100 миллионов бесплатных токенов каждый день, онлайн-модели и экосистема расширений.",
+  "composer.registerFree": "Создать бесплатный аккаунт Mdo ↗",
+  "composer.configureOwnModel": "Настроить свою модель",
+  "composer.startUsing": "Начните работу с Mdo",
+  "composer.selectModel": "Выбрать модель"
 }

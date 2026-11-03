@@ -35,36 +35,8 @@ class ConfigContractTests(unittest.TestCase):
             {"schema_version", "settings", "models", "permissions"},
         )
 
-    def test_ling_is_protected_and_declares_all_online_protocols(self) -> None:
-        provider = next(item for item in self.defaults["models"]["providers"]
-                        if item["id"] == "ornith")
-        ling = next(item for item in self.defaults["models"]["items"]
-                    if item["id"] == "ornith-1.5-35b")
-        self.assertTrue(provider["builtin"])
-        self.assertFalse(provider["editable"])
-        self.assertFalse(provider["removable"])
-        self.assertEqual(provider["credential"]["secret_ref"],
-                         "env:MDO_ORNITH_API_KEY")
-        self.assertEqual(set(provider["endpoints"]), {
-            "chat_completions", "responses", "anthropic_messages",
-        })
-        self.assertTrue(ling["builtin"])
-        self.assertTrue(ling["free"])
-        self.assertFalse(ling["editable"])
-        self.assertFalse(ling["removable"])
-        self.assertEqual(ling["provider"], provider["id"])
-        self.assertEqual(ling["wire_model"], "ornith-1.5-35b")
-        self.assertEqual(set(ling["protocols"]), {
-            "openai-chat-completions",
-            "openai-responses",
-            "anthropic-messages",
-        })
-        self.assertIn(ling["default_protocol"], ling["protocols"])
-        self.assertEqual(ling["window"]["context_tokens"], 240128)
-        self.assertGreater(ling["window"]["max_output_tokens"], 0)
-        self.assertIn("streaming", ling["capabilities"])
-        self.assertIn(ling["default_reasoning_effort"],
-                      ling["reasoning_efforts"])
+    def test_models_start_unconfigured(self) -> None:
+        self.assertEqual(self.defaults["models"], {"default_model": "", "providers": [], "items": []})
 
     def test_configuration_files_are_user_patches(self) -> None:
         self.assertIn('"config/settings.json"', self.source)
@@ -73,11 +45,10 @@ class ConfigContractTests(unittest.TestCase):
         self.assertIn('MdoConfigNormalizePatch', self.source)
         self.assertIn('MdoHomeAtomicWrite', self.source)
 
-    def test_secret_and_ling_rules_are_server_side(self) -> None:
-        self.assertIn('MdoConfigSecretsValidate', self.source)
-        self.assertIn('MDO_CONFIG_ERROR_PROTECTED', self.source)
-        self.assertIn('xrtValueEqual(pProvider, pProtectedProvider)', self.source)
-        self.assertIn('xrtValueEqual(pItem, pProtectedModel)', self.source)
+    def test_secrets_remain_references_and_retired_models_are_not_protected(self) -> None:
+        self.assertIn("MdoConfigSecretsValidate", self.source)
+        self.assertNotIn("pProtectedModel", self.source)
+        self.assertIn("MdoConfigRetireBuiltinPatch", self.source)
 
     def test_preview_and_commit_share_the_same_prepare_path(self) -> None:
         self.assertGreaterEqual(self.source.count("MdoConfigPrepareImportLocked("), 3)

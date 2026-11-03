@@ -90,8 +90,9 @@ class Service(BaseHTTPRequestHandler):
                      "member_only": True, "free": False, "tool_calling": True, "vision": False,
                      "context_window": 240128, "max_output": 16384, "reasoning_efforts": "none",
                      "output_limit_field": "max_tokens", "default_protocol": "chat", "protocols": ["chat"]}
+            ornith = {**model, "id": "ornith-1.5-35b", "title": "Member Ornith"}
             self.reply({"version": ("b" if self.removed else "a") * 64,
-                        "models": [] if self.removed else [model]}, self.catalog_status)
+                        "models": [] if self.removed else [model, ornith]}, self.catalog_status)
         else:
             self.reply({}, 503)
 
@@ -120,9 +121,9 @@ def check(host: Path, base: Path):
         '#define MDO_DISTRIBUTION_SECURE false\n' + unity.read_text(encoding="utf-8"), encoding="utf-8")
     defaults_path = site / "default-home/config/defaults.json"
     defaults = json.loads(defaults_path.read_text(encoding="utf-8"))
-    personal = copy.deepcopy(defaults["models"]["items"][0])
-    personal.update(id="mdo-online.personal", name="Personal fixture", builtin=False, editable=True, removable=True)
-    defaults["models"]["items"].append(personal)
+    from model_fixture import model_catalog
+    defaults["models"] = model_catalog("mdo-online.personal")
+    personal = defaults["models"]["items"][0]
     defaults_path.write_text(json.dumps(defaults), encoding="utf-8")
     port = free_port()
     config = site / "xs.json"
@@ -176,7 +177,7 @@ def check(host: Path, base: Path):
         start()
         assert call("GET", "/models")["login_state"] == "signed_out"
         # A personal identity in the online namespace is still a local model.
-        local = call("POST", "/sessions", {"model_id": personal["id"], "title": "Personal", "project_id": "default"}, 201)
+        local = call("POST", "/sessions", {"model_id": personal["id"], "reasoning_effort": "none", "title": "Personal", "project_id": "default"}, 201)
         assert local["model_id"] == personal["id"]
         call("POST", "/account/login", {"identifier": "fixture", "password": "fixture-only", "remember": True})
         assert Service.login_started.wait(3)
@@ -189,6 +190,10 @@ def check(host: Path, base: Path):
         catalog = until(ready)
         assert next(m for m in catalog["models"] if m["id"] == ONLINE)["requires_login"] is True
         assert next(m for m in catalog["models"] if m["id"] == personal["id"])["requires_login"] is False
+        ornith = next(m for m in catalog["models"] if m["id"] == "mdo-online.ornith-1.5-35b")
+        assert ornith["requires_login"] and "ornith-1.5-35b" in ornith["aliases"], ornith
+        call("POST", "/sessions", {"model_id": "ornith-1.5-35b", "reasoning_effort": "none",
+            "project_id": "default", "title": "Legacy online alias"}, 201)
         assert call("GET", "/account")["remembered"] is True
         selected = call("POST", "/sessions", {"model_id": ONLINE, "reasoning_effort": "none",
             "project_id": "default", "title": "Restore online"}, 201)
@@ -228,6 +233,14 @@ def check(host: Path, base: Path):
         assert call("GET", path)["model_id"] == ONLINE
         call("POST", "/account/logout", {})
         reject(path + "/recovery", "login_required", 422)
+        code, headers, raw = request(port, "GET", "/api/v1/models/config")
+        code, _, raw = request(port, "PUT", "/api/v1/settings/models",
+            body=json.dumps({"schema_version": 1, "patch": {"default_model": "", "items": [], "providers": []}}).encode(),
+            headers={"Content-Type": "application/json", "If-Match": headers["etag"]})
+        assert code == 200, raw
+        until(lambda: (account if (account := call("GET", "/account"))["state"] == "signed_out" and not account["busy"] else None))
+        call("POST", "/account/login", {"identifier": "fixture", "password": "fixture-only", "remember": False})
+        assert until(ready)["models"] == []
         return {"result": "PASS", "restarts": starts - 1, "model_calls": Service.model_calls}
     finally:
         Service.login.set(); Service.catalog.set()
@@ -252,7 +265,7 @@ def main():
                 status, _, raw = request(port, "GET", "/api/v1/models")
                 catalog = json.loads(raw)["data"]
                 assert status == 200 and catalog["login_state"] == "signed_out", catalog
-                assert any(model["requires_login"] for model in catalog["models"]), catalog
+                assert catalog["models"] == [] and catalog["default_model_id"] == "", catalog
                 status, _, raw = request(port, "POST", "/api/v1/sessions",
                     body=json.dumps({"project_id": "default", "model_id": ONLINE}).encode(),
                     headers={"Content-Type": "application/json"})

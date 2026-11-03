@@ -1,6 +1,6 @@
 /* Public service models are transient catalog entries, never configuration
- * files. Personal provider IDs remain separate and the default model keeps its
- * historical identity, so existing tasks retain their selected wire protocol. */
+ * files. Every online model uses the account namespace; personal providers
+ * and their selected default remain independent. */
 static char* MdoModelsOnlineJoin(const char* Prefix,const char* Suffix)
 {
     size_t A=strlen(Prefix),B=strlen(Suffix);char* Text=xrtMalloc(A+B+1);
@@ -11,6 +11,7 @@ static bool MdoModelsMergeOnline(MdoModelCatalog* Catalog,const xvalue* Value)
     if(!Value)return true;
     const xvalue* Items=xrtValueObjectGet(Value,XRT_STR_LITERAL("models"));
     if(!g_MdoModelsOnline.Origin || xrtValueType(Items)!=XVALUE_ARRAY || xrtValueCount(Items)>64 || MdoModelsFindProvider(Catalog,"mdo-online"))return false;
+    if(!xrtValueCount(Items)){Catalog->LoginCatalogReady=true;return true;}
     MdoProviderEntry* Providers=xrtRealloc(Catalog->Providers,(Catalog->ProviderCount+1)*sizeof(*Providers));
     if(!Providers)return false;
     Catalog->Providers=Providers;
@@ -41,11 +42,10 @@ static bool MdoModelsMergeOnline(MdoModelCatalog* Catalog,const xvalue* Value)
             !MdoModelsBool(Item,"member_only",&Member) || !MdoModelsBool(Item,"free",&Free) ||
             !MdoModelsBool(Item,"tool_calling",&Tools) || !MdoModelsBool(Item,"vision",&Vision))return false;
         for(size_t c=0;c<Id.Size;c++)if(!((Id.Data[c]>='a'&&Id.Data[c]<='z') || (Id.Data[c]>='A'&&Id.Data[c]<='Z') || (Id.Data[c]>='0'&&Id.Data[c]<='9') || Id.Data[c]=='-' || Id.Data[c]=='_' || Id.Data[c]=='.'))return false;
-        bool Builtin=MdoModelsViewEqual(Id,MDO_BUILTIN_MODEL_ID);
         char Local[140];snprintf(Local,sizeof(Local),"mdo-online.%.*s",(int)Id.Size,Id.Data);
-        char* LocalId=xrtStrDup(Builtin?MDO_BUILTIN_MODEL_ID:Local);if(!LocalId)return false;
+        char* LocalId=xrtStrDup(Local);if(!LocalId)return false;
         MdoModelEntry* Model=MdoModelsFindModel(Catalog,LocalId);
-        if(Model && !Builtin){xrtFree(LocalId);return false;}
+        if(Model){xrtFree(LocalId);return false;}
         if(Model)MdoModelsModelUnit(Model);else{Model=&Models[Catalog->ModelCount++];memset(Model,0,sizeof(*Model));}
         Model->Id=LocalId;Model->Name=xrtStrDupN(Title.Data,Title.Size);Model->ProviderId=xrtStrDup("mdo-online");Model->WireModel=xrtStrDupN(Id.Data,Id.Size);
         Model->Builtin=true;Model->Free=Free&&!Member;Model->RequiresLogin=true;
@@ -71,7 +71,6 @@ static bool MdoModelsMergeOnline(MdoModelCatalog* Catalog,const xvalue* Value)
             char* Word=xrtStrDupN(Reasoning.Data+at,end-at);if(!Word)return false;Model->ReasoningEfforts[Model->ReasoningEffortCount++]=Word;at=end+1;}
         const char* Effort=Model->ReasoningEffortCount?Model->ReasoningEfforts[0]:"";
         for(size_t r=0;r<Model->ReasoningEffortCount;r++)if(!strcmp(Model->ReasoningEfforts[r],"high"))Effort="high";
-        if(Builtin)for(size_t r=0;r<Model->ReasoningEffortCount;r++)if(!strcmp(Model->ReasoningEfforts[r],"medium"))Effort="medium";
         Model->DefaultReasoningEffort=xrtStrDup(Effort);
         if(Model->ReasoningEffortCount)Model->Capabilities|=XLLM_CAP_REASONING_OUT|XLLM_CAP_REASONING_CONTROL;
         if(!Model->Name||!Model->ProviderId||!Model->WireModel||!Model->DefaultReasoningEffort)return false;

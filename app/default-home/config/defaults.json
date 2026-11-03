@@ -52,74 +52,9 @@
     }
   },
   "models": {
-    "default_model": "ornith-1.5-35b",
-    "providers": [
-      {
-        "id": "ornith",
-        "name": "Ornith",
-        "builtin": true,
-        "editable": false,
-        "removable": false,
-        "verify_peer": true,
-        "timeout_ms": 120000,
-        "endpoints": {
-          "chat_completions": "builtin:ornith/openai/chat-completions",
-          "responses": "builtin:ornith/openai/responses",
-          "anthropic_messages": "builtin:ornith/anthropic/messages"
-        },
-        "credential": {
-          "secret_ref": "env:MDO_ORNITH_API_KEY"
-        }
-      }
-    ],
-    "items": [
-      {
-        "id": "ornith-1.5-35b",
-        "name": "ornith-1.5-35b",
-        "provider": "ornith",
-        "wire_model": "ornith-1.5-35b",
-        "builtin": true,
-        "free": true,
-        "editable": false,
-        "removable": false,
-        "protocols": [
-          "openai-chat-completions",
-          "openai-responses",
-          "anthropic-messages"
-        ],
-        "default_protocol": "openai-responses",
-        "capabilities": [
-          "text-input",
-          "tool-result-input",
-          "text-output",
-          "json-output",
-          "tool-call-output",
-          "reasoning-output",
-          "streaming",
-          "reasoning-control",
-          "parallel-tool-calls",
-          "media-input"
-        ],
-        "window": {
-          "mode": "shared-context",
-          "context_tokens": 240128,
-          "max_input_tokens": 240127,
-          "max_output_tokens": 16384,
-          "output_reserve_tokens": 8192,
-          "summary_tokens": 4096
-        },
-        "reasoning_efforts": [
-          "none",
-          "low",
-          "medium",
-          "high"
-        ],
-        "default_reasoning_effort": "medium",
-        "attachments": [
-          "image"
-        ]
-      }
-    ]
+    "default_model": "",
+    "providers": [],
+    "items": []
   },
   "permissions": {
     "default_profile": "balanced",

@@ -3,6 +3,14 @@ import { setUiText as writeUiText, setUiAttribute as writeUiAttribute, uiMessage
 import { mountIcons } from "../../components/icons.js";
 import { isImeKey } from "../../utils/dom.js";
 import { findModel } from "../../utils/models.js";
+import { createLocalApplicationClient } from "../../api/application.js";
+import { errorMessage, toast } from "../../utils/dom.js";
+
+export function needsModelSetup(state) {
+  return state.status === "ready" && Array.isArray(state.data?.models) &&
+    state.data.models.length === 0 && state.data.login_state !== "pending";
+}
+export const MODEL_REGISTRATION_URL = "https://ai.xywhsoft.com/account/index.html?return_to=%2Fmdo%2Faccount";
 
 const PERMISSION_ICON = Object.freeze({
   "read-only": "shield-check", balanced: "hand", "full-access": "shield-alert",
@@ -37,6 +45,20 @@ export function createComposerControls({ root, agentSelect, modelSelect, reasoni
   manageModels.href = "#/settings/models";
   manageModels.addEventListener("click", close);
   modelPanel.append(manageModels);
+  const onboarding = doc.createElement("section");
+  onboarding.className = "composer-model-onboarding";
+  const invitation = doc.createElement("p"), register = doc.createElement("a");
+  register.className = "primary-button";
+  register.href = MODEL_REGISTRATION_URL; register.target = "_blank"; register.rel = "noopener noreferrer";
+  register.addEventListener("click", event => {
+    if (!globalThis.chrome?.webview && !globalThis.external?.invoke &&
+        !globalThis.webkit?.messageHandlers?.external && !globalThis.XsBrowser) return;
+    event.preventDefault();
+    const control = new AbortController(), timer = setTimeout(() => control.abort(), 8000);
+    createLocalApplicationClient().call("system.open", { target: MODEL_REGISTRATION_URL }, { signal: control.signal })
+      .catch(error => toast(errorMessage(error), "error")).finally(() => clearTimeout(timer));
+  });
+  onboarding.append(invitation, register); modelPanel.insertBefore(onboarding, manageModels);
 
   function fitEstimate() {
     // Try the optional text at its natural width. Keep it only if all controls
@@ -84,9 +106,14 @@ export function createComposerControls({ root, agentSelect, modelSelect, reasoni
   }
 
   function sync() {
-    writeUiText(manageModels, uiMessage("modelSetup.manageModels", {}, "管理模型"));
+    const empty = needsModelSetup(modelsStore.get());
+    modelPanel.classList.toggle("is-model-empty", empty); onboarding.hidden = !empty;
+    writeUiText(modelPanel.querySelector("#composer-model-title"), uiMessage(empty ? "composer.startUsing" : "composer.modelSettings"));
+    writeUiText(invitation, uiMessage("composer.registerInvitation"));
+    writeUiText(register, uiMessage("composer.registerFree"));
+    writeUiText(manageModels, uiMessage(empty ? "composer.configureOwnModel" : "modelSetup.manageModels"));
     const model = findModel(modelsStore.get().data?.models ?? [], modelSelect.value);
-    writeUiText(modelLabel, model?.name || modelSelect.value || uiMessage("shell.model", {}, "模型"));
+    writeUiText(modelLabel, empty ? uiMessage("composer.selectModel") : model?.name || modelSelect.value || uiMessage("shell.model", {}, "模型"));
     const efforts = [...reasoningSelect.options];
     const current = Math.max(0, efforts.findIndex((item) => item.value === reasoningSelect.value));
     slider.max = String(Math.max(0, efforts.length - 1)); slider.value = String(current);
@@ -94,14 +121,15 @@ export function createComposerControls({ root, agentSelect, modelSelect, reasoni
     slider.setAttribute("aria-valuetext", efforts[current]?.textContent || t("reasoning.none", {}, "无思考"));
     writeUiText(effortLabel, slider.getAttribute("aria-valuetext"));
     writeUiText(modelEffort, effortLabel.textContent);
+    modelEffort.hidden = empty;
     scale.replaceChildren();
     for (const option of efforts) {
       const label = doc.createElement("span"); writeUiText(label, option.textContent); scale.append(label);
     }
-    modelTrigger.disabled = agentSelect.disabled && modelSelect.disabled && reasoningSelect.disabled;
+    modelTrigger.disabled = !empty && agentSelect.disabled && modelSelect.disabled && reasoningSelect.disabled;
     const next = !status.hidden ? status.textContent : "";
     root.dataset.profileState = next ? status.dataset.state || "pending" : "";
-    writeUiAttribute(modelTrigger, "title", `${modelLabel.textContent} · ${effortLabel.textContent}${next ? ` · ${next}` : ""}`);
+    writeUiAttribute(modelTrigger, "title", empty ? modelLabel.textContent : `${modelLabel.textContent} · ${effortLabel.textContent}${next ? ` · ${next}` : ""}`);
     writeUiAttribute(modelTrigger, "aria-label", `${t("composer.modelSettings", {}, "Agent、模型与推理强度")}：${modelTrigger.title}`);
     permissionTrigger.disabled = permissionSelect.disabled;
     permissionTrigger.dataset.permission = permissionSelect.value;
@@ -177,7 +205,9 @@ export function createComposerControls({ root, agentSelect, modelSelect, reasoni
   const estimateObserver = new win.MutationObserver(fitEstimate);
   estimateObserver.observe(estimate, { childList: true, characterData: true, subtree: true });
   const unsubscribe = navigation.subscribe(() => close());
-  return Object.freeze({ sync, close, destroy() {
+  return Object.freeze({ sync, close, openModel() {
+    if (!modelTrigger.disabled && opened !== modelPanel) toggle(modelPanel, modelTrigger);
+  }, destroy() {
     close(); observer?.disconnect(); estimateObserver.disconnect(); unsubscribe(); handlers.forEach((remove) => remove());
     modelPanel.remove(); permissionPanel.remove();
   } });

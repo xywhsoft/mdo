@@ -87,7 +87,7 @@ import { parseSkillSelection } from "./features/chat/skill-selection.js";
 import { trackComposerMenuRoom } from "./features/chat/composer-menu-room.js";
 import { createComposerProfile } from "./features/chat/composer-profile.js";
 import { createComposerAgent, agentLabel } from "./features/chat/composer-agent.js";
-import { createComposerControls } from "./features/chat/composer-controls.js";
+import { createComposerControls, needsModelSetup } from "./features/chat/composer-controls.js";
 import { createTokenMeter } from "./features/chat/token-meter.js";
 import { createTaskDialog } from "./features/tasks/task-dialog.js";
 import { createRecoveryDock } from "./features/chat/recovery-dock.js";
@@ -2444,6 +2444,7 @@ export async function boot() {
     // Commands act on the UI and keep an unsent image draft. They must stay
     // usable while an attachment is still being stored.
     if (fromComposer && slashCommands.consumeExact(text)) return;
+    if (needsModelSetup(modelsStore.get())) { composerControls.openModel(); return; }
     const loginBlock = composerProfile.loginBlock();
     if (loginBlock) { setRun(activeRun); return; }
     if (fromComposer && (text.startsWith("/") || text.startsWith("$"))) {

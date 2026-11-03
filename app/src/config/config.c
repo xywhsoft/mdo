@@ -3,7 +3,6 @@
 
 #include "../../include/mdo/config.h"
 #include "../../include/mdo/http_url.h"
-#include "../../include/mdo/builtin_model.h"
 #include "../../include/mdo/home.h"
 
 #define MDO_CONFIG_ERROR_DOMAIN "mdo.config"
@@ -844,52 +843,31 @@ static bool MdoConfigModelItemValidate(const xvalue* pItem,
     return MdoConfigModelProxyValid(xrtValueObjectGet(pItem, MdoConfigKey("proxy")), true);
 }
 
-static bool MdoConfigModelsValidate(const xvalue* pModels,
-    const xvalue* pDefaultModels)
+static bool MdoConfigRetiredModel(const xvalue* Item, bool Provider);
+
+static bool MdoConfigModelsValidate(const xvalue* pModels)
 {
     const xvalue* pProviders;
     const xvalue* pItems;
-    const xvalue* pDefaultProviders;
-    const xvalue* pDefaultItems;
-    const xvalue* pProtectedProvider;
-    const xvalue* pProtectedModel;
     xstrview DefaultId;
     size_t i;
     size_t j;
     bool bDefaultFound = false;
-    bool bProtectedProviderFound = false;
-    bool bProtectedModelFound = false;
 
     if ( xrtValueType(pModels) != XVALUE_OBJECT ||
-         xrtValueType(pDefaultModels) != XVALUE_OBJECT ||
          !MdoConfigString(xrtValueObjectGet(pModels,
             MdoConfigKey("default_model")), &DefaultId) ||
-         DefaultId.Size == 0u || DefaultId.Size > 128u ) goto invalid;
+         DefaultId.Size > 128u ) goto invalid;
     pProviders = xrtValueObjectGet(pModels, MdoConfigKey("providers"));
     pItems = xrtValueObjectGet(pModels, MdoConfigKey("items"));
-    pDefaultProviders = xrtValueObjectGet(pDefaultModels,
-        MdoConfigKey("providers"));
-    pDefaultItems = xrtValueObjectGet(pDefaultModels, MdoConfigKey("items"));
     if ( xrtValueType(pProviders) != XVALUE_ARRAY ||
          xrtValueCount(pProviders) > 128u ||
          xrtValueType(pItems) != XVALUE_ARRAY ||
-         xrtValueCount(pItems) > 512u ||
-         xrtValueType(pDefaultProviders) != XVALUE_ARRAY ||
-         xrtValueType(pDefaultItems) != XVALUE_ARRAY ) goto invalid;
-    pProtectedProvider = MdoConfigFindById(pDefaultProviders,
-        xrtStrView("ornith"));
-    pProtectedModel = MdoConfigFindById(pDefaultItems,
-        xrtStrView("ornith-1.5-35b"));
-    if ( pProtectedProvider == NULL || pProtectedModel == NULL ) goto invalid;
+         xrtValueCount(pItems) > 512u ) goto invalid;
     for ( i = 0u; i < xrtValueCount(pProviders); ++i ) {
         const xvalue* pProvider = xrtValueArrayGet(pProviders, i);
         xstrview Id;
-        if ( !MdoConfigProviderValidate(pProvider, &Id) ) goto invalid;
-        if ( MdoConfigViewEqual(Id, "ornith") ) {
-            if ( bProtectedProviderFound ||
-                 !xrtValueEqual(pProvider, pProtectedProvider) ) goto protected;
-            bProtectedProviderFound = true;
-        }
+        if ( !MdoConfigProviderValidate(pProvider, &Id) || MdoConfigRetiredModel(pProvider,true) ) goto invalid;
         for ( j = 0u; j < i; ++j ) {
             const xvalue* pEarlier = xrtValueArrayGet(pProviders, j);
             xstrview EarlierId;
@@ -902,18 +880,13 @@ static bool MdoConfigModelsValidate(const xvalue* pModels,
     for ( i = 0u; i < xrtValueCount(pItems); ++i ) {
         const xvalue* pItem = xrtValueArrayGet(pItems, i);
         xstrview Id;
-        if ( !MdoConfigModelItemValidate(pItem, pProviders, &Id) ) goto invalid;
+        if ( !MdoConfigModelItemValidate(pItem, pProviders, &Id) || MdoConfigRetiredModel(pItem,false) ) goto invalid;
         if ( Id.Size == DefaultId.Size &&
              memcmp(Id.Data, DefaultId.Data, Id.Size) == 0 ) {
             bool Enabled = true;
             (void)xrtValueGetBool(xrtValueObjectGet(pItem, MdoConfigKey("enabled")), &Enabled);
             if (!Enabled) goto invalid;
             bDefaultFound = true;
-        }
-        if ( MdoConfigViewEqual(Id, "ornith-1.5-35b") ) {
-            if ( bProtectedModelFound ||
-                 !xrtValueEqual(pItem, pProtectedModel) ) goto protected;
-            bProtectedModelFound = true;
         }
         for ( j = 0u; j < i; ++j ) {
             const xvalue* pEarlier = xrtValueArrayGet(pItems, j);
@@ -924,14 +897,8 @@ static bool MdoConfigModelsValidate(const xvalue* pModels,
                  memcmp(EarlierId.Data, Id.Data, Id.Size) == 0 ) goto invalid;
         }
     }
-    if ( !bProtectedProviderFound || !bProtectedModelFound ) goto protected;
-    if ( !bDefaultFound ) goto invalid;
+    if ( DefaultId.Size && !bDefaultFound ) goto invalid;
     return true;
-
-protected:
-    MdoConfigErrorSet(XERR_PERMISSION, MDO_CONFIG_ERROR_PROTECTED,
-        "ornith-1.5-35b is built-in; its provider and model cannot be edited or removed");
-    return false;
 
 invalid:
     MdoConfigErrorSet(XERR_ARGUMENT, MDO_CONFIG_ERROR_SCHEMA,
@@ -958,13 +925,11 @@ invalid:
     return false;
 }
 
-static bool MdoConfigEffectiveValidate(const xvalue* pRoot,
-    const xvalue* pDefaults)
+static bool MdoConfigEffectiveValidate(const xvalue* pRoot)
 {
     const xvalue* pSettings;
     const xvalue* pModels;
     const xvalue* pPermissions;
-    const xvalue* pDefaultModels;
 
     if ( !MdoConfigSchemaVersion(pRoot) ) {
         MdoConfigErrorSet(XERR_ARGUMENT, MDO_CONFIG_ERROR_SCHEMA,
@@ -974,10 +939,9 @@ static bool MdoConfigEffectiveValidate(const xvalue* pRoot,
     pSettings = xrtValueObjectGet(pRoot, MdoConfigKey("settings"));
     pModels = xrtValueObjectGet(pRoot, MdoConfigKey("models"));
     pPermissions = xrtValueObjectGet(pRoot, MdoConfigKey("permissions"));
-    pDefaultModels = xrtValueObjectGet(pDefaults, MdoConfigKey("models"));
     return MdoConfigSecretsValidate(pRoot) &&
         MdoConfigSettingsValidate(pSettings) &&
-        MdoConfigModelsValidate(pModels, pDefaultModels) &&
+        MdoConfigModelsValidate(pModels) &&
         MdoConfigPermissionsValidate(pPermissions);
 }
 
@@ -1121,7 +1085,7 @@ static xvalue* MdoConfigBuildEffective(xvalue* const* ppPatches)
         return NULL;
     }
     if ( !MdoConfigUpgradeSearch(xrtValueObjectGet(pRoot, MdoConfigKey("settings"))) ||
-         !MdoConfigEffectiveValidate(pRoot, g_MdoConfig.Defaults) ) {
+         !MdoConfigEffectiveValidate(pRoot) ) {
         xrtValueRelease(pRoot);
         return NULL;
     }
@@ -1136,7 +1100,7 @@ static bool MdoConfigEffectiveSize(const xvalue* pEffective, size_t* pSize)
     return true;
 }
 
-#include "builtin_model_upgrade.inc.c"
+#include "retired_models.inc.c"
 
 static xvalue* MdoConfigLoadPatch(MdoConfigDomain Domain)
 {
@@ -1164,7 +1128,7 @@ static xvalue* MdoConfigLoadPatch(MdoConfigDomain Domain)
     pDocument = MdoConfigParseObject(
         (xstrview){ sText, iSize }, "user configuration must be a JSON object");
     if ( pDocument == NULL || !MdoConfigEnvelopeValidate(pDocument) ) goto done;
-    if ( Domain == MDO_CONFIG_MODELS && !MdoConfigUpgradeBuiltinPatch(
+    if ( Domain == MDO_CONFIG_MODELS && !MdoConfigRetireBuiltinPatch(
             xrtValueObjectGet(pDocument, MdoConfigKey("patch"))) ) goto done;
     pPatch = MdoConfigNormalizePatch(Domain,
         xrtValueObjectGet(pDocument, MdoConfigKey("patch")));
@@ -1344,8 +1308,7 @@ bool MdoConfigInit(void)
     g_MdoConfig.Defaults = MdoConfigParseObject(DefaultsText,
         "built-in defaults must be a JSON object");
     if ( g_MdoConfig.Defaults == NULL ||
-         !MdoConfigEffectiveValidate(g_MdoConfig.Defaults,
-            g_MdoConfig.Defaults) ) goto fail;
+         !MdoConfigEffectiveValidate(g_MdoConfig.Defaults) ) goto fail;
     for ( i = 0u; i < MDO_CONFIG_DOMAIN_COUNT; i++ ) {
         g_MdoConfig.Patch[i] = MdoConfigLoadPatch((MdoConfigDomain)i);
         if ( g_MdoConfig.Patch[i] == NULL ) goto fail;

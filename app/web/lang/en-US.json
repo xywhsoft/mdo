@@ -1113,7 +1113,7 @@
   "modelConfig.builtinProviderNote": "This built-in provider is managed by mdo and cannot be edited.",
   "modelConfig.secretNote": "Use a credential reference; the API key is never stored as plain text in this page or configuration.",
   "modelConfig.newModel": "Add model",
-  "modelConfig.builtinModelNote": "ornith-1.5-35b is the built-in free model. Its parameters cannot be edited.",
+  "modelConfig.builtinModelNote": "This model is provided by the online service. Availability and capabilities depend on your account benefits.",
   "modelConfig.builtinModelDetail": "{id} · {tokens} context tokens · {protocol}",
   "modelConfig.providerNote": "A model uses a provider. Each selected protocol needs a matching provider URL.",
   "modelConfig.advanced": "Capabilities and context limits",
@@ -1150,7 +1150,7 @@
   "modelConfig.endpoints": "API endpoints",
   "modelConfig.connection": "Connection settings",
   "modelConfig.defaults": "Defaults",
-  "modelConfig.description": "Manage providers, model capabilities, and the default model. ornith-1.5-35b remains available as the built-in free model.",
+  "modelConfig.description": "Manage providers, model capabilities, and your default model. Sign in to use online models.",
   "common.listSeparator": "; ",
   "task.state.pending": "Pending",
   "task.state.running": "Running",
@@ -3503,5 +3503,10 @@
   "error.file_too_large": "The file exceeds 8 MiB. Split or compress it before adding.",
   "error.file_storage_full": "Session file storage is full or unavailable. Check space and permissions.",
   "error.file_upload_conflict": "This upload identity has different content. The original file was preserved; add it again.",
-  "file.dropUnavailable": "Unable to read the dropped files. Use Add files instead."
+  "file.dropUnavailable": "Unable to read the dropped files. Use Add files instead.",
+  "composer.registerInvitation": "Create a Mdo account to enjoy 100 million free tokens every day and access online models and extensions.",
+  "composer.registerFree": "Create a free Mdo account ↗",
+  "composer.configureOwnModel": "Configure your own model",
+  "composer.startUsing": "Get started with Mdo",
+  "composer.selectModel": "Choose a model"
 }

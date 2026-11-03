@@ -7,7 +7,6 @@
 #include "../../include/mdo/models.h"
 #include "../../include/mdo/secrets.h"
 #include "../../include/mdo/version.h"
-#include "../../include/mdo/builtin_model.h"
 
 static void MdoModelsInstallWireHooks(xllm_client* Client);
 
@@ -320,15 +319,18 @@ static MdoModelEntry* MdoModelsFindModel(MdoModelCatalog* pCatalog,
     return NULL;
 }
 
+static bool MdoModelsRetiredOnlineId(cstr Id)
+{ return !strcmp(Id,"ornith-1.5-35b") || !strcmp(Id,"ling-3.0-tiny") || !strcmp(Id,"ling-gpu"); }
+
 static const MdoModelEntry* MdoModelsLookup(const MdoModelCatalog* Catalog, cstr Id)
 {
     size_t i;
     for ( i = 0u; i < Catalog->ModelCount; ++i )
         if ( strcmp(Catalog->Models[i].Id, Id) == 0 ) return &Catalog->Models[i];
-    if ( strcmp(Id, MDO_LEGACY_BUILTIN_MODEL_ID) != 0 && strcmp(Id, "ling-gpu") != 0 ) return NULL;
-    for ( i = 0u; i < Catalog->ModelCount; ++i )
-        if ( Catalog->Models[i].Builtin && strcmp(Catalog->Models[i].Id, MDO_BUILTIN_MODEL_ID) == 0 )
-            return &Catalog->Models[i];
+    /* Old saved Ornith sessions resolve only to an authenticated online entry. */
+    if (MdoModelsRetiredOnlineId(Id))
+        for (i=0u;i<Catalog->ModelCount;++i)
+            if (Catalog->Models[i].RequiresLogin && !strcmp(Catalog->Models[i].Id,"mdo-online.ornith-1.5-35b"))return &Catalog->Models[i];
     return NULL;
 }
 
@@ -591,10 +593,8 @@ static MdoModelCatalog* MdoModelsBuildCandidate(uint64 Generation)
     pProviders = xrtValueObjectGet(pModels, MdoModelsKey("providers"));
     pItems = xrtValueObjectGet(pModels, MdoModelsKey("items"));
     if ( xrtValueType(pProviders) != XVALUE_ARRAY ||
-         xrtValueCount(pProviders) == 0u ||
          xrtValueCount(pProviders) > MDO_MODELS_MAX_PROVIDERS ||
          xrtValueType(pItems) != XVALUE_ARRAY ||
-         xrtValueCount(pItems) == 0u ||
          xrtValueCount(pItems) > MDO_MODELS_MAX_MODELS ||
          !MdoModelsString(xrtValueObjectGet(pModels,
             MdoModelsKey("default_model")), &DefaultId) ) goto fail;
@@ -603,7 +603,7 @@ static MdoModelCatalog* MdoModelsBuildCandidate(uint64 Generation)
     pCatalog->ProviderCount = xrtValueCount(pProviders);
     pCatalog->Providers = (MdoProviderEntry*)xrtCalloc(
         pCatalog->ProviderCount, sizeof(*pCatalog->Providers));
-    if ( pCatalog->Providers == NULL ) goto fail;
+    if ( pCatalog->ProviderCount && pCatalog->Providers == NULL ) goto fail;
     for ( i = 0u; i < pCatalog->ProviderCount; ++i ) {
         if ( !MdoModelsParseProvider(xrtValueArrayGet(pProviders, i),
                 &pCatalog->Providers[i]) ||
@@ -612,7 +612,7 @@ static MdoModelCatalog* MdoModelsBuildCandidate(uint64 Generation)
     }
     pCatalog->Models = (MdoModelEntry*)xrtCalloc(xrtValueCount(pItems),
         sizeof(*pCatalog->Models));
-    if ( pCatalog->Models == NULL ) goto fail;
+    if ( xrtValueCount(pItems) && pCatalog->Models == NULL ) goto fail;
     for ( i = 0u; i < xrtValueCount(pItems); ++i ) {
         bool Enabled = true;
         const xvalue* Item = xrtValueArrayGet(pItems, i);
@@ -627,11 +627,12 @@ static MdoModelCatalog* MdoModelsBuildCandidate(uint64 Generation)
              memcmp(pModel->Id, DefaultId.Data, DefaultId.Size) == 0 )
             pCatalog->DefaultModelIndex = Index;
     }
-    if ( pCatalog->DefaultModelIndex == SIZE_MAX ) goto fail;
+    if (DefaultId.Size && pCatalog->DefaultModelIndex == SIZE_MAX) goto fail;
     xrtMutexLock(g_MdoModels.Lock);
     xvalue* Online=g_MdoModels.OnlineCatalog?xrtValueClone(g_MdoModels.OnlineCatalog):NULL;
     xrtMutexUnlock(g_MdoModels.Lock);
     bool Merged=MdoModelsMergeOnline(pCatalog,Online);xrtValueRelease(Online);if(!Merged)goto fail;
+    if(pCatalog->DefaultModelIndex==SIZE_MAX && pCatalog->ModelCount)pCatalog->DefaultModelIndex=0u;
     xrtValueRelease(pRoot);
     return pCatalog;
 
@@ -1024,51 +1025,14 @@ static bool MdoModelsEndpointIndex(MdoModelProtocol Protocol, size_t* pIndex)
     }
 }
 
-static char* MdoModelsResolveEndpoint(cstr Endpoint,
-    MdoModelProtocol Protocol, xllm_error* pError)
+static char* MdoModelsResolveEndpoint(cstr Endpoint, xllm_error* pError)
 {
-    static const char* const BuiltinEndpoints[] = {
-        "builtin:ornith/openai/chat-completions",
-        "builtin:ornith/openai/responses",
-        "builtin:ornith/anthropic/messages"
-    };
-    static const char* const EnvironmentNames[] = {
-        "MDO_ORNITH_CHAT_COMPLETIONS_URL",
-        "MDO_ORNITH_RESPONSES_URL",
-        "MDO_ORNITH_ANTHROPIC_URL"
-    };
-    size_t Index;
-    char* Result = NULL;
-    size_t Length;
-    if ( Endpoint == NULL || !MdoModelsEndpointIndex(Protocol, &Index) ) {
-        MdoModelProfileErrorInit(pError, "profile_endpoint_invalid", "model endpoint is unavailable");
-        return NULL;
+    char* Result=NULL;size_t Length;
+    if(!Endpoint || !strncmp(Endpoint,"builtin:",8u)){
+        MdoModelProfileErrorInit(pError,"profile_endpoint_invalid","Configure a provider endpoint or sign in to use online models");return NULL;
     }
-    if ( strncmp(Endpoint, "builtin:", 8u) == 0 ) {
-        if ( strcmp(Endpoint, BuiltinEndpoints[Index]) != 0 ) {
-            MdoModelProfileErrorInit(pError, "profile_endpoint_invalid", "built-in model endpoint is invalid");
-            return NULL;
-        }
-        if ( !xrtEnvLookup(EnvironmentNames[Index], &Result) ||
-             Result == NULL || Result[0] == '\0' ) {
-            xrtFree(Result);
-            xrtClearError();
-            Result = xrtStrDup(MDO_BUILTIN_MODEL_ENDPOINT);
-            if ( Result == NULL ) {
-                MdoModelsProfileError(pError,
-                    "cannot allocate built-in model endpoint");
-                if ( pError != NULL ) pError->eCode = XLLM_ERROR_OUT_OF_MEMORY;
-                return NULL;
-            }
-        }
-    } else {
-        Result = xrtStrDup(Endpoint);
-        if ( Result == NULL ) {
-            MdoModelsProfileError(pError, "cannot allocate model endpoint");
-            if ( pError != NULL ) pError->eCode = XLLM_ERROR_OUT_OF_MEMORY;
-            return NULL;
-        }
-    }
+    Result=xrtStrDup(Endpoint);
+    if(!Result){MdoModelsProfileError(pError,"cannot allocate model endpoint");if(pError)pError->eCode=XLLM_ERROR_OUT_OF_MEMORY;return NULL;}
     Length = strlen(Result);
     if ( Length == 0u || Length > 2048u || strchr(Result, '\r') != NULL ||
          strchr(Result, '\n') != NULL ) {
@@ -1077,42 +1041,6 @@ static char* MdoModelsResolveEndpoint(cstr Endpoint,
         return NULL;
     }
     return Result;
-}
-
-static char* MdoModelsBuiltinCredential(xllm_error* Error)
-{
-    xfile File = MdoResourceOpenRead(MDO_BUILTIN_MODEL_KEY_PATH);
-    xfileinfo Info;
-    char* Secret = NULL;
-    size_t Size = 0u, i;
-    bool Ok = false;
-    if ( File == NULL ) goto done;
-    if ( !xrtFileStat(File, &Info) || (Info.Available & XFILE_INFO_SIZE) == 0u ||
-         Info.Size == 0u || Info.Size > 4098u ) goto done;
-    Size = (size_t)Info.Size;
-    Secret = xrtMalloc(Size + 1u);
-    if ( Secret == NULL ) goto done;
-    Secret[Size] = '\0';
-    if ( !xrtReadFull(File, Secret, Size, NULL) ) goto done;
-    if ( Size != 0u && Secret[Size - 1u] == '\n' ) {
-        --Size;
-        if ( Size != 0u && Secret[Size - 1u] == '\r' ) --Size;
-    }
-    Secret[Size] = '\0';
-    if ( Size == 0u || Size > 4096u ) goto done;
-    for ( i = 0u; i < Size; ++i )
-        if ( (unsigned char)Secret[i] < 0x21u || (unsigned char)Secret[i] > 0x7eu ) goto done;
-    Ok = true;
-done:
-    if ( File != NULL && !xrtClose(File) ) Ok = false;
-    if ( !Ok ) {
-        if ( Secret != NULL ) { xrtSecureZero(Secret, (size_t)Info.Size); xrtFree(Secret); }
-        xrtClearError();
-        MdoModelProfileErrorInit(Error, "profile_credential_unavailable", "Built-in model credential is unavailable; configure MDO_ORNITH_API_KEY or the portable Home key file");
-        if ( Error != NULL ) Error->eCode = XLLM_ERROR_AUTH;
-        Secret = NULL;
-    }
-    return Secret;
 }
 
 static char* MdoModelsResolveCredential(const MdoProviderEntry* pProvider,
@@ -1129,15 +1057,6 @@ static char* MdoModelsResolveCredential(const MdoProviderEntry* pProvider,
             if ( pError != NULL ) pError->eCode = XLLM_ERROR_OUT_OF_MEMORY;
         }
         return Secret;
-    }
-    if ( pProvider->Id != NULL && strcmp(pProvider->Id, "ornith") == 0 &&
-         strcmp(pProvider->CredentialReference,
-            "env:MDO_ORNITH_API_KEY") == 0 ) {
-        if ( xrtEnvLookup("MDO_ORNITH_API_KEY", &Secret) && Secret != NULL &&
-             Secret[0] != '\0' ) return Secret;
-        xrtFree(Secret);
-        xrtClearError();
-        return MdoModelsBuiltinCredential(pError);
     }
     if ( MdoSecretResolve(xrtStrView(pProvider->CredentialReference),
             64u * 1024u, &Secret) ) return Secret;
@@ -1243,7 +1162,7 @@ static xllm_client* MdoModelClientCreateAuth(const MdoModelCatalog* pCatalog,
     bool Online=MdoModelIsOnline(pCatalog,pModel->Id);
     if(Online&&!Access){MdoModelsProfileError(pError,"Sign in to use online models");if(pError)pError->eCode=XLLM_ERROR_AUTH;goto done;}
     static const char* const Paths[]={"/api/v1/ai/chat/completions","/api/v1/ai/responses","/api/v1/ai/messages"};
-    Endpoint=Online?MdoModelsOnlineJoin(g_MdoModelsOnline.Origin,Paths[EndpointIndex]):MdoModelsResolveEndpoint(pProvider->Endpoints[EndpointIndex],Protocol,pError);
+    Endpoint=Online?MdoModelsOnlineJoin(g_MdoModelsOnline.Origin,Paths[EndpointIndex]):MdoModelsResolveEndpoint(pProvider->Endpoints[EndpointIndex],pError);
     if ( Endpoint == NULL ) goto done;
     Secret=Online?xrtStrDup(Access):MdoModelsResolveCredential(pProvider,pError);
     if ( Secret == NULL ) goto done;

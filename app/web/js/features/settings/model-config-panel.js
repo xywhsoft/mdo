@@ -127,9 +127,8 @@ export function createModelConfigPanel(container) {
     next.items = next.items.filter(model => model.provider !== entry.id);
     const fallback = next.items.find(model => model.id === next.default_model) ||
       next.items.find(model => model.builtin && model.enabled !== false) || next.items.find(model => model.enabled !== false);
-    if (!fallback) { status(t("modelConfig.defaultInUse"), true); return; }
-    const changedDefault = next.default_model !== fallback.id;
-    next.default_model = fallback.id;
+    const changedDefault = next.default_model !== (fallback?.id || "");
+    next.default_model = fallback?.id || "";
     const own = { pending: false, layer: null };
     own.layer = openLayer({ title: uiMessage("modelSetup.removeSupplier", {}, "删除供应商"), icon: "close", width: "32rem", height: "auto",
       mobile: "fit", maximizable: false, owner: container, opener, beforeClose: () => !own.pending,
@@ -137,7 +136,7 @@ export function createModelConfigPanel(container) {
     });
     removal = own; own.layer.element.classList.add("supplier-remove-layer");
     own.layer.body.append(element("p", { text: uiMessage("modelSetup.removeSupplierPrompt", { name: providerDisplayName(entry), count: models.length }, "确定删除供应商“{name}”吗？对应的 {count} 个模型也会一并删除，已有会话会保留。") }));
-    if (changedDefault) own.layer.body.append(element("p", { text: uiMessage("modelSetup.removeSupplierDefault", { model: fallback.name }, "默认模型将切换为 {model}。") }));
+    if (changedDefault && fallback) own.layer.body.append(element("p", { text: uiMessage("modelSetup.removeSupplierDefault", { model: fallback.name }, "默认模型将切换为 {model}。") }));
     const error = element("p", { className: "resource-error", attrs: { role: "alert", hidden: "" } });
     own.layer.body.append(error);
     const cancel = button(uiMessage("modelSetup.cancel", {}, "取消"), () => void own.layer.close());
