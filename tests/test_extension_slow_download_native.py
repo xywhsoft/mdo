@@ -17,9 +17,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 CONTRACT=r'''
 xvalue* QaProductContract(const xvalue* P,xvfs V){
- (void)P;(void)V;XS_FetchResponse Response={0};bool Retryable=false;char Error[512]={0};uint64 Start=xllmClockUs();
+ bool Home=QaProductHome(SdkField(P,"root"),SdkField(P,"app"),V),Configured=Home&&MdoConfigInit();xnetengineconfig Config;xrtNetEngineConfigInit(&Config);xnetengine* Engine=Configured?xrtNetEngineCreate(&Config):NULL;bool Started=Engine&&xrtNetEngineStart(Engine);MdoDownloadNetworkSetEngine(Started?Engine:NULL);XS_FetchResponse Response={0};bool Retryable=false;char Error[512]={0};uint64 Start=xllmClockUs();
  bool Ok=MdoExtServiceFetchAttempt("/api/v1/mdo/extensions/archive","GET",NULL,0,true,NULL,NULL,&Response,&Retryable,Error);uint64 Elapsed=xllmClockUs()-Start;
- xvalue* R=xrtValueObject();xrtValueObjectSetNew(R,XRT_STR_LITERAL("slow_progressing_archive_completed"),xrtValueBool(Ok&&Elapsed>30000000&&Response.BodySize==1048576));xrtValueObjectSetNew(R,XRT_STR_LITERAL("elapsed_ms"),xrtValueUInt(Elapsed/1000));xrtValueObjectSetNew(R,XRT_STR_LITERAL("error"),xrtValueString(xrtStrView(Error)));xsFetchResponseUnit(&Response);return R;
+ xvalue* R=xrtValueObject();xrtValueObjectSetNew(R,XRT_STR_LITERAL("slow_progressing_archive_completed"),xrtValueBool(Ok&&Elapsed>30000000&&Response.BodySize==1048576));xrtValueObjectSetNew(R,XRT_STR_LITERAL("elapsed_ms"),xrtValueUInt(Elapsed/1000));xrtValueObjectSetNew(R,XRT_STR_LITERAL("error"),xrtValueString(xrtStrView(Error)));MdoDownloadFetchUnit(&Response);MdoDownloadNetworkSetEngine(NULL);if(Engine){xrtNetEngineStop(Engine);xrtNetEngineDestroy(Engine);}if(Configured)MdoConfigUnit();if(Home)MdoHomeUnit();return R;
 }
 '''
 
