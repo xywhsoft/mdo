@@ -16,7 +16,7 @@ function fixture() {
 test("a click is visible before storage and the same ID is replaced by authoritative history", () => {
   const f = fixture();
   try {
-    assert.equal(f.view.begin(f.value()), true);
+    assert.equal(f.view.begin(f.value()), "a");
     assert.equal(f.container.hidden, false);
     assert.equal(f.container.children.length, 2);
     assert.equal(f.container.children[0].dataset.kind, "user");
@@ -31,6 +31,20 @@ test("a click is visible before storage and the same ID is replaced by authorita
     f.state.events = [{ kind: "agent_start", queue_item_id: "a" }];
     f.view.render(); assert.equal(f.container.children.length, 0);
     assert.equal(f.host.classList.contains("has-submissions"), false);
+  } finally { f.view.destroy(); }
+});
+
+test("a failed provisional message can be retried with its original admission identity", () => {
+  const f = fixture();
+  try {
+    assert.equal(f.view.begin(f.value()), "a");
+    f.view.fail("a", new Error("Draft save failed before admission"));
+    assert.equal(f.state.entries.length, 0);
+    assert.equal(f.container.children[1].dataset.state, "error");
+    assert.equal(f.view.begin(f.value("new-click-id")), "a");
+    assert.equal(f.container.children.length, 2, "retry reuses the visible message");
+    assert.equal(f.container.children[1].dataset.state, "preparing");
+    assert.equal(f.view.begin(f.value("double-click")), false, "a running retry still suppresses double clicks");
   } finally { f.view.destroy(); }
 });
 

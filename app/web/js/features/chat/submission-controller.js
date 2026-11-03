@@ -210,14 +210,14 @@ export function createSubmissionController({ draftStore, promptQueue,
     return true;
   }
 
-  async function submit(key, text, attachments, interrupt, profile = null, submissionId = promptQueue.newId()) {
+  async function submit(key, text, attachments, interrupt, profile = null, submissionId) {
     if (isWritePaused()) return false;
     if (!key || releasing.has(key) || submitting.has(key) ||
         unacknowledged.has(key))
       throw new Error(t("composer.submissionBusy"));
     submitting.add(key);
     try {
-      const submission = { id: submissionId, text,
+      const submission = { id: submissionId || promptQueue.newId(), text,
         attachments: [...attachments], interrupt, state: "prepared",
         ...(profile ? { profile: { ...profile } } : {}) };
       draftStore.capture(key, text, attachments);

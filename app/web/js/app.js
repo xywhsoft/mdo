@@ -2460,9 +2460,10 @@ export async function boot() {
     const profile = composerProfile.selection();
     const unsupportedAttachments = fromComposer && attachments.length &&
       !composerImages.supportsCurrentModel();
-    const submissionId = promptQueue.newId();
-    if (!submissionTimeline.begin({ id: submissionId, projectId: origin.projectId || "default",
-      sessionId: origin.sessionId || "", text: rawInput, attachments: [...attachments] })) return;
+    const submissionId = submissionTimeline.begin({ id: promptQueue.newId(), projectId: origin.projectId || "default",
+      sessionId: origin.sessionId || "", text: rawInput, attachments: [...attachments] });
+    if (!submissionId) return;
+    hideComposerError();
     const showFailure = error => {
       const current = navigation.get();
       if (current.projectId === origin.projectId && current.sessionId === origin.sessionId)

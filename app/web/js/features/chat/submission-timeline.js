@@ -90,13 +90,18 @@ export function createSubmissionTimeline({ container, host, snapshot, scope }) {
   return {
     begin(value) {
       checkScope();
-      if ([...rows.values()].some(row => !row.durable && row.projectId === value.projectId &&
+      const pending = [...rows.values()].find(row => !row.durable && row.projectId === value.projectId &&
         row.sessionId === value.sessionId && row.text === value.text &&
-        JSON.stringify(row.attachments) === JSON.stringify(value.attachments))) return false;
+        JSON.stringify(row.attachments) === JSON.stringify(value.attachments));
+      if (pending && !pending.error) return false;
+      // Retrying a failed provisional bubble retains its identity. Admission
+      // and uncertain-delivery guards still run before any request is sent.
+      const intent = { ...value, id: pending?.id || value.id, error: "" };
+      if (pending && errorBinding?.id === pending.id) detachError();
       const follow = host.scrollHeight - host.scrollTop - host.clientHeight < 96;
-      remember(value, value.projectId, value.sessionId); render();
+      remember(intent, intent.projectId, intent.sessionId); render();
       if (follow) host.scrollTop = host.scrollHeight;
-      return true;
+      return intent.id;
     },
     accepted(id) { const row = rows.get(id); if (row) { row.durable = true; row.error = ""; } render(); },
     bindProject(projectId, sessionId) {
