@@ -222,6 +222,13 @@ static bool MdoApiSessionEventValueLimit(const MdoSessionEventInfo* Event,
             MdoApiValueSetUInt(Item, "model_tool_call_count", Event->ModelToolCallCount) &&
             MdoApiValueSetUInt(Item, "model_http_status", Event->ModelHttpStatus) &&
             MdoApiValueSetUInt(Item, "model_attempts", Event->ModelAttempts);
+    if (Ok && Event->Kind == XWORK_EVENT_MODEL_DONE && Event->SchemaVersion >= 10u) {
+        xvalue* Timing = xrtValueObject();
+        Ok = Timing && MdoApiValueSetUInt(Timing,"first_byte_ms",Event->ModelFirstByteMs) &&
+            MdoApiValueSetUInt(Timing,"first_token_ms",Event->ModelFirstTokenMs) &&
+            MdoApiValueSetUInt(Timing,"request_duration_ms",Event->ModelRequestDurationMs) && MdoApiValueSetTake(Item,"model_timing",&Timing);
+        xrtValueRelease(Timing);
+    }
     if (Ok && Event->Kind == XWORK_EVENT_ERROR)
         Ok = MdoApiValueSetString(Item, "model_error_kind", Event->ModelErrorKind) &&
             MdoApiValueSetUInt(Item, "model_http_status", Event->ModelHttpStatus) &&

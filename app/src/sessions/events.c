@@ -9,7 +9,7 @@
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/models.h"
 
-#define MDO_SESSION_EVENT_SCHEMA 9u
+#define MDO_SESSION_EVENT_SCHEMA 10u
 #define MDO_SESSION_EVENT_RECORD_LIMIT (96u * 1024u)
 #define MDO_SESSION_EVENT_TEXT_LIMIT (64u * 1024u)
 #define MDO_SESSION_EVENT_METADATA_LIMIT 4096u
@@ -333,6 +333,11 @@ static char* MdoEventsRecord(const MdoSessionEventBridge* Bridge,
         if (!MdoEventsObjectTake(Object, "context", Usage)) goto done;
     }
     if (Event->eKind == XWORK_EVENT_MODEL_DONE) {
+        xvalue* Timing = xrtValueObject();
+        if (!Timing || !MdoEventsObjectTake(Timing, "first_byte_ms", xrtValueUInt(Event->tDiagnostics.uTimeToFirstByteMs)) ||
+            !MdoEventsObjectTake(Timing, "first_token_ms", xrtValueUInt(Event->tDiagnostics.uFirstTokenMs)) ||
+            !MdoEventsObjectTake(Timing, "request_duration_ms", xrtValueUInt(Event->tDiagnostics.uTotalDurationMs))) { xrtValueRelease(Timing); goto done; }
+        if (!MdoEventsObjectTake(Object, "model_timing", Timing)) goto done;
         xstrview RequestId = {0}, FinishReason = {0};
         if (!MdoEventsBoundedView(Event->sProviderRequestId, SIZE_MAX,
                 128u, &RequestId, &Truncated) ||
@@ -535,6 +540,7 @@ static bool MdoEventsParse(const char* ProjectId, const char* SessionId,
     FieldCount = Root ? xrtValueCount(Root) : 0u;
     if (Root && xrtValueObjectGet(Root, xrtStrView("context"))) --FieldCount;
     if (Root && xrtValueObjectGet(Root, xrtStrView("source"))) --FieldCount;
+    if (Root && xrtValueObjectGet(Root, xrtStrView("model_timing"))) --FieldCount;
     if ( Root == NULL || xrtValueType(Root) != XVALUE_OBJECT ||
          (FieldCount != 25u && FieldCount != 28u &&
           FieldCount != 29u && FieldCount != 31u &&
@@ -649,6 +655,11 @@ static bool MdoEventsParse(const char* ProjectId, const char* SessionId,
         Result->Info.ModelHttpStatus = (uint32)HttpStatus;
         Result->Info.ModelAttempts = (uint32)Attempts;
     } else if (FieldCount == 37u) goto done;
+    const xvalue* Timing = xrtValueObjectGet(Root, XRT_STR_LITERAL("model_timing"));
+    if (Timing && (Schema < 10u || Kind != (uint64)XWORK_EVENT_MODEL_DONE || xrtValueCount(Timing) != 3u ||
+        !MdoEventsValueUInt(Timing,"first_byte_ms",&Result->Info.ModelFirstByteMs) ||
+        !MdoEventsValueUInt(Timing,"first_token_ms",&Result->Info.ModelFirstTokenMs) ||
+        !MdoEventsValueUInt(Timing,"request_duration_ms",&Result->Info.ModelRequestDurationMs))) goto done;
     if (Schema >= 6u && FieldCount == 35u) {
         xstrview ErrorKind;
         uint64 HttpStatus, Attempts;
@@ -984,6 +995,12 @@ bool MdoSessionEventBridgeClonePrefix(MdoSessionEventBridge* Bridge,
         Event.sToolCallId = Entry.Info.ToolCallId;
         Event.sArtifactPath = Entry.Info.ArtifactPath;
         Event.sModel = Entry.Info.Model;
+        Event.sProviderRequestId = Entry.Info.ModelRequestId; Event.sFinishReason = Entry.Info.ModelFinishReason;
+        Event.iResponseToolCallCount = Entry.Info.ModelToolCallCount; Event.uHttpStatus = Entry.Info.ModelHttpStatus;
+        Event.tDiagnostics.uAttemptCount = Entry.Info.ModelAttempts;
+        Event.tDiagnostics.uTimeToFirstByteMs = Entry.Info.ModelFirstByteMs;
+        Event.tDiagnostics.uFirstTokenMs = Entry.Info.ModelFirstTokenMs;
+        Event.tDiagnostics.uTotalDurationMs = Entry.Info.ModelRequestDurationMs;
         if (Entry.Info.Kind == MDO_AGENT_EVENT_MODEL_RETRY) {
             Event.sProviderCode = Entry.Info.ModelErrorKind;
             Event.uHttpStatus = Entry.Info.ModelHttpStatus;

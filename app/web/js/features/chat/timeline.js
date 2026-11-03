@@ -20,6 +20,7 @@ import { createHistoryWindow } from "./history-window.js";
 import { createConversationNavigation } from "./conversation-navigation.js";
 import { modelErrorMessage, modelErrorTitle } from "../../utils/model-errors.js";
 import { modelRetryNode, updateModelRetryCountdowns } from "./model-retry.js";
+import { createModelTimingTracker } from "./model-timing.js";
 
 export function searchResultTop(row, content, searchBottom, viewportBottom, lineHeight = 24) {
   const room = Math.max(0, viewportBottom - searchBottom);
@@ -96,6 +97,7 @@ export function eventsToTimeline(events, historyLost = false,
   const items = [];
   const tools = new Map();
   const modelStarts = new Map();
+  const trackTiming = createModelTimingTracker();
   const toolStageDurations = new Map();
   const runUsages = new Map();
   const streams = new Map();
@@ -152,6 +154,7 @@ export function eventsToTimeline(events, historyLost = false,
     const itemCount = items.length;
     const runKey = String(event.run_id || event.agent_id || event.event_id);
     const epoch = runEpochs.get(runKey) ?? 0;
+    const modelTiming = trackTiming(event, modelKey(event, epoch));
     if ((["model_text_delta", "model_reasoning_delta"].includes(event.kind) && event.text) ||
         event.kind === "model_done" || event.kind === "tool_start") clearRetryNotice(event);
     if (["error", "agent_done", "agent_start"].includes(event.kind)) clearRetryNotice(event, true);
@@ -296,6 +299,7 @@ export function eventsToTimeline(events, historyLost = false,
         }
         const answer = [...items].reverse().find((item) => item.key === `assistant-${modelKey(event, epoch)}`);
         if (answer) {
+          answer.modelTiming = modelTiming;
           answer.state = event.success ? "done" : "failed";
           answer.inputTokens = Number(event.input_tokens || 0);
           answer.outputTokens = Number(event.output_tokens || 0);
@@ -967,6 +971,19 @@ function timelineNode(item, handlers, projectId, sessionId, writable,
           `工具和等待合计 ${durationLabel(item.toolStageSeconds)}`));
       if (Number.isFinite(item.tokensPerSecond)) stats.push(`${item.tokensPerSecond.toFixed(1)} tok/s`);
       if (stats.length) actions.append(element("span", { className: "timeline-stats", text: stats.join(" · ") }));
+      if (item.modelTiming) {
+        const timing = item.modelTiming, details = element("details", { className: "timeline-model-timing" });
+        details.append(element("summary", { text: t("timeline.modelTiming", {}, "请求耗时") }));
+        for (const [key, value] of [["firstReasoning", timing.firstReasoningMs], ["firstText", timing.firstTextMs],
+          ["retryWait", timing.retryWaitMs], ["lastFirstByte", timing.transport?.first_byte_ms],
+          ["lastFirstToken", timing.transport?.first_token_ms]]) {
+          if (value != null && Number.isFinite(value)) details.append(element("p", { text:
+            t(`timeline.timing.${key}`, { duration: durationLabel(value / 1000) }, `${key}: ${durationLabel(value / 1000)}`) }));
+        }
+        details.append(element("p", { text: t("timeline.timing.attempts", { count: timing.attempts }, `请求次数：${timing.attempts}`) }));
+        if (timing.requestId) details.append(element("p", { text: `Request ID: ${timing.requestId}` }));
+        actions.append(details);
+      }
     }
     children.push(actions);
   }

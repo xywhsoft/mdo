@@ -116,6 +116,22 @@ void ServiceInit(XS_HostInfo* Host){
     Json=xrtJsonStringify(Root,false,&Size);MdoSessionEventOwned Parsed={0};
     printf("schema8=%u\n",MdoEventsParse(Bridge.ProjectId,Bridge.SessionId,xrtStrViewN(Json,Size),&Parsed));
     MdoEventsOwnedUnit(&Parsed);xrtFree(Json);xrtValueRelease(Root);
+    Plain.eKind=XWORK_EVENT_MODEL_DONE;Plain.sProviderRequestId="timing-request";Plain.sFinishReason="stop";
+    Plain.tDiagnostics.uTimeToFirstByteMs=123;Plain.tDiagnostics.uFirstTokenMs=456;Plain.tDiagnostics.uTotalDurationMs=789;
+    Json=MdoEventsRecord(&Bridge,2,&Plain,"fixture",1000,NULL,&Size);
+    bool TimingOk=Json&&MdoEventsParse(Bridge.ProjectId,Bridge.SessionId,xrtStrViewN(Json,Size),&Parsed);
+    xvalue* ApiTiming=NULL;
+    TimingOk=TimingOk&&Parsed.Info.ModelFirstByteMs==123&&Parsed.Info.ModelFirstTokenMs==456&&Parsed.Info.ModelRequestDurationMs==789&&
+        MdoApiSessionEventValueLimit(&Parsed.Info,Bridge.ProjectId,Bridge.SessionId,4096,&ApiTiming)&&
+        xrtValueObjectGet(ApiTiming,XRT_STR_LITERAL("model_timing"));
+    xrtValueRelease(ApiTiming);MdoEventsOwnedUnit(&Parsed);
+    Root=xrtJsonParse(xrtStrViewN(Json,Size));xrtFree(Json);
+    xrtValueObjectRemove(Root,XRT_STR_LITERAL("model_timing"));
+    xrtValueObjectSetNew(Root,XRT_STR_LITERAL("schema_version"),xrtValueUInt(9));
+    Json=xrtJsonStringify(Root,false,&Size);
+    TimingOk=TimingOk&&MdoEventsParse(Bridge.ProjectId,Bridge.SessionId,xrtStrViewN(Json,Size),&Parsed)&&!Parsed.Info.ModelFirstByteMs;
+    MdoEventsOwnedUnit(&Parsed);xrtFree(Json);xrtValueRelease(Root);
+    if(!TimingOk){fprintf(stderr,"Timing journal/API compatibility failed\n");abort();}
     /* Exercise the actual configured and online Agent route adapters over HTTP. */
     bool Ready=MdoHomeInit()&&MdoConfigInit()&&MdoModelManagerInit();
     Owner.Models=Ready?MdoModelCatalogSnapshot():NULL;
