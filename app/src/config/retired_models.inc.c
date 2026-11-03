@@ -14,7 +14,8 @@ static bool MdoConfigRetireBuiltinPatch(xvalue* Patch)
     const char* Keys[]={"items","providers"};
     for(size_t k=0;k<2;k++){
         const xvalue* Before=xrtValueObjectGet(Patch,MdoConfigKey(Keys[k]));
-        if(!Before)continue;if(xrtValueType(Before)!=XVALUE_ARRAY)return false;
+        if(!Before)continue;
+        if(xrtValueType(Before)!=XVALUE_ARRAY)return false;
         xvalue* After=xrtValueArray();bool Ok=After!=NULL;
         for(size_t i=0;Ok&&i<xrtValueCount(Before);i++){
             const xvalue* Item=xrtValueArrayGet(Before,i);bool Retired=MdoConfigRetiredModel(Item,k==1);
