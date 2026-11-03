@@ -92,6 +92,7 @@ def strict_compile(cc: str, xserver: Path) -> None:
     includes = (
         xserver / "src/sdk",
         xserver / "lib",
+        xserver / "lib/md4c",
         xserver / "lib/xwork",
         xserver / "lib/xllm",
         xserver / "lib/xllm-session",

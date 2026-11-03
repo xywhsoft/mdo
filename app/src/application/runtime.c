@@ -10,6 +10,7 @@
 #include "../../include/mdo/extension_path.h"
 
 static const struct {cstr Id,Description;} SdkRuntimeMethods[]={
+    {"markdown.parse","Parse CommonMark/GFM into bounded structural nodes without executing HTML"},
     {"extension.current","Read this invocation's physical extension directory and native resource root"},
     {"extension.list","List installed directories of one extension type"},
     {"extension.read","Read one directory manifest and its host-owned installation state"},
@@ -238,10 +239,12 @@ static bool SdkNetworkCall(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** 
     bool Ok=xsFetch(&Request,&Reply);if(Ok){*R=xrtValueObject();SdkPutUInt(*R,"status",Reply.Status);SdkPut(*R,"url",Reply.FinalUrl);SdkPut(*R,"content_type",Reply.ContentType);Ok=SdkByteValue(*R,Reply.Body,Reply.BodySize);}
     xsFetchResponseUnit(&Reply);if(!Ok){SdkNativeFailure(E,"network");if(E&&strcmp(Request.Method,"GET")&&strcmp(Request.Method,"HEAD"))E->MayHaveCompleted=true;}return Ok;
 }
+#include "markdown.inc.c"
 bool MdoApplicationRuntimeCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue* P,xvalue** R,mdo_error_v1* E,bool* Found){
     *Found=false;for(size_t i=0;i<sizeof(SdkRuntimeMethods)/sizeof(*SdkRuntimeMethods);i++)if(!strcmp(Method,SdkRuntimeMethods[i].Id))*Found=true;
     if(!*Found)return true;
     if(P&&xrtValueType(P)!=XVALUE_OBJECT)return MdoApplicationError(E,"sdk_arguments_invalid","Runtime service parameters must be an object","resolve",400,false);
+    if(!strcmp(Method,"markdown.parse"))return SdkMarkdownParse(C,P,R,E);
     if(!strncmp(Method,"extension.",10))return SdkExtensionCall(C,Method,P,R,E);
     if(!strncmp(Method,"fs.",3)||!strncmp(Method,"vfs.",4)||!strncmp(Method,"storage.",8))return SdkFileCall(C,Method,P,R,E);
     if(!strncmp(Method,"files.",6))return SdkFilesCall(C,Method,P,R,E);

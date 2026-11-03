@@ -281,6 +281,10 @@ def verify_dependencies(xserver: Path, lock: dict) -> None:
     libraries = lock.get("libraries")
     if not isinstance(xrt, dict) or not isinstance(libraries, dict):
         raise BuildError("deps.lock must define xrt and libraries objects")
+    if "md4c" in lock["xserver"].get("required_extensions", []):
+        record = lock["xserver"].get("native_extensions", {}).get("md4c", {})
+        if production_tree_sha256(xserver / "lib/md4c") != record.get("tree_sha256"):
+            raise BuildError("md4c source hash differs from deps.lock")
     image_record = lock["xserver"].get("native_extensions", {}).get("image", {})
     image_root = xserver / "lib/xs-image"
     if image_record.get("tree_sha256") != image_extension_sha256(image_root):

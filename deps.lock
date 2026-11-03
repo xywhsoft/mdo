@@ -17,7 +17,8 @@
       "webview",
       "image",
       "xrudp",
-      "xoauth2"
+      "xoauth2",
+      "md4c"
     ],
     "native_extensions": {
       "image": {
@@ -32,6 +33,10 @@
         "version": "2.0.0",
         "source_commit": "609a67436cfd6d77dde7d89f63cac36238f92b69",
         "tree_sha256": "1b65822a21a7ebd086aa301bc864fe16dfb5052f4209035e0b9ea27bd80afae3"
+      },
+      "md4c": {
+        "source_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
+        "tree_sha256": "e513d13c547601c56d32280b4143c715634507ea6c4844fe8e7515d2660907c3"
       }
     },
     "source_bundle": {
