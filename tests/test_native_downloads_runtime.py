@@ -49,7 +49,7 @@ class Publisher(BaseHTTPRequestHandler):
         except (BrokenPipeError,ConnectionResetError,ConnectionAbortedError):pass
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--host',type=Path,required=True);args=parser.parse_args()
+    parser=argparse.ArgumentParser();parser.add_argument('--host',type=Path,required=True);parser.add_argument('--serve-ui',action='store_true');args=parser.parse_args()
     with ThreadingHTTPServer(('127.0.0.1',0),Publisher) as publisher,tempfile.TemporaryDirectory(dir=ROOT/'.build',prefix='native-download-') as raw:
         thread=threading.Thread(target=publisher.serve_forever,daemon=True);thread.start()
         base=Path(raw);home=base/'home';port=free_port();stem='.download-qa-'+uuid.uuid4().hex
@@ -142,19 +142,29 @@ XS_RequestResult RequestProc(XS_HttpReq* R){{
             (home/'data/downloads/fixture.bin').unlink()
             failed=transfer('corrupt');assert not failed['success'] and failed['code']=='checksum',failed
             assert not (home/'data/downloads/fixture.bin').exists()
-            row,t,result=begin('cancel');api('POST',f"/download-tasks/{row['id']}/cancel",{});t.join(15)
+            failed_row=next(r for r in rows() if r['identity']=='/qa/corrupt')
+            assert failed_row['error_code']=='checksum',failed_row
+            row,t,result=begin('cancel');api('POST',f"/download-tasks/{row['id']}/pause",{})
+            time.sleep(.15)
+            partial=home/'data/downloads/fixture.bin';receipt=home/'data/downloads/fixture.bin.resume.json'
+            assert partial.exists() and receipt.exists()
+            api('POST',f"/download-tasks/{failed_row['id']}/forget",{})
+            assert partial.exists() and receipt.exists(),'Clearing an old failure must preserve the newer download'
+            api('POST',f"/download-tasks/{row['id']}/cancel",{});t.join(15)
             assert result and not result[0]['success'],result
             assert not (home/'data/downloads/fixture.bin').exists()
             # Extension archives keep the same task and its first verified chunk.
-            result=[];t=threading.Thread(target=lambda:result.append(transfer('extension')));t.start()
+            result=[];t=threading.Thread(target=lambda:result.append(request(port,'GET','/qa/extension')));t.start()
             def extension_row():
-                if result and not result[0]['success']:raise AssertionError((result,Publisher.requests))
                 return next((r for r in rows() if r['source']=='extension' and r.get('received',0)>=1048576),None)
             row=until(extension_row)
             api('POST',f"/download-tasks/{row['id']}/pause",{})
             time.sleep(.9);assert next(r for r in rows() if r['id']==row['id'])['state']=='paused'
-            api('POST',f"/download-tasks/{row['id']}/resume",{});t.join(15)
-            assert result and result[0]['success'],result
+            process.kill();process.wait();t.join(10);process=start()
+            restored=next(r for r in rows() if r['id']==row['id']);assert restored['state']=='paused',restored
+            api('POST',f"/download-tasks/{row['id']}/resume",{})
+            until(lambda:next((r for r in rows() if r['id']==row['id'] and r['state']=='ready'),None))
+            assert any(m=='extension' and n==1048576 for m,n in Publisher.requests),Publisher.requests
             owned=api('GET','/extension-tasks');assert len([a for a in owned if a.get('store',{}).get('version_id')==VERSION])==1,owned
             assert not (home/'skills'/('W'*32)).exists(),'Downloading an archive must not install it'
             # The updater must restore its accepted policy and same byte offset.
@@ -166,7 +176,23 @@ XS_RequestResult RequestProc(XS_HttpReq* R){{
             api('POST',f"/download-tasks/{update['id']}/resume",{})
             until(lambda:api('GET','/update').get('ready'))
             assert any(m=='update' and n>0 for m,n in Publisher.requests),Publisher.requests
-            print('PASS native pause/resume, retry + Range, restart, ignored Range, checksum rejection, cancel cleanup, sealed extension, updater policy + restart resume without install')
+            print('PASS native pause/resume, retry + Range, restart, ignored Range, checksum rejection, destination ownership cleanup, cancel cleanup, sealed extension, updater policy + restart resume without install')
+            if args.serve_ui:
+                transfer('corrupt')
+                row,t,result=begin('preview',wait=False);api('POST',f"/download-tasks/{row['id']}/pause",{})
+                receipt=ROOT/'.build/download-ui-fixture.json';stop=base/'stop'
+                receipt.write_text(json.dumps(dict(url=f'http://127.0.0.1:{port}',home=str(home),stop=str(stop),id=row['id'])),encoding='utf-8')
+                print('UI fixture: '+str(receipt),flush=True)
+                until_stop=time.monotonic()+900
+                while not stop.exists() and time.monotonic()<until_stop:time.sleep(.25)
+                receipt.unlink(missing_ok=True)
+            # Corrupt/oversized indexes remain intact and cannot break app boot.
+            index=home/'data/downloads/tasks.json'
+            for broken in (b'[invalid',json.dumps([{}]*129).encode()):
+                process.kill();process.wait();index.write_bytes(broken);process=start()
+                st,_,_=request(port,'GET','/api/v1/download-tasks');assert st==503,st
+                assert index.read_bytes()==broken,'Unreadable task index must not be overwritten'
+            print('PASS unreadable/oversized indexes preserved; unrelated app APIs remain available')
         finally:
             if process and process.poll() is None:process.terminate();process.wait(timeout=10)
             source.unlink(missing_ok=True);config.unlink(missing_ok=True);log.close();publisher.shutdown();thread.join(timeout=5)

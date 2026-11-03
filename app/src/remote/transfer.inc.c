@@ -132,13 +132,14 @@ done:
         if(!Ok){snprintf(Report->Code,sizeof(Report->Code),"%s",Code);snprintf(Report->Detail,sizeof(Report->Detail),"%s",Detail);}
     }
     if(File)(void)xrtFlush(File);xrtClose(File); xrtFutureDestroy(Future); MdoRemoteSocketDestroy(Socket); MdoRemoteNetUnit(&Net);
-    if(Ok||!strcmp(Code,"checksum")||!strcmp(Code,"range")){char* Meta=MdoTransferResumePath(Relative);if(Meta)MdoHomeRemove(Meta,false);xrtFree(Meta);if(!Ok)MdoHomeRemove(Relative,false);}
+    if((Ok&&!Task)||!strcmp(Code,"checksum")||!strcmp(Code,"range")){char* Meta=MdoTransferResumePath(Relative);if(Meta)MdoHomeRemove(Meta,false);xrtFree(Meta);if(!Ok)MdoHomeRemove(Relative,false);}
     return Ok;
 }
 bool MdoTransferDownloadReport(xnetengine* Engine,cstr Path,cstr Relative,uint64 Size,cstr Hash,xcancel* Cancel,MdoTransferProgress Progress,void* ProgressData,MdoTransferReport* Report){
     xvalue* Context=xrtValueObject();bool Prepared=Context&&Path&&Relative&&xrtValueObjectSetNew(Context,XRT_STR_LITERAL("path"),xrtValueString(xrtStrView(Path)))&&
         xrtValueObjectSetNew(Context,XRT_STR_LITERAL("relative"),xrtValueString(xrtStrView(Relative)));
-    char Error[512]={0};MdoNativeDownload* Task=Prepared?MdoDownloadsBegin(!strncmp(Relative,"data/update/",12)?"update":"transfer",Path,!strncmp(Relative,"data/update/",12)?"mdo":Relative,Hash,Size,Context,Cancel,Error):NULL;
+    cstr Name=Relative?strrchr(Relative,'/'):NULL;Name=Name?Name+1:Relative;
+    char Error[512]={0};MdoNativeDownload* Task=Prepared?MdoDownloadsBegin(!strncmp(Relative,"data/update/",12)?"update":"transfer",Path,!strncmp(Relative,"data/update/",12)?"mdo":Name,Hash,Size,Context,Cancel,Error):NULL;
     xrtValueRelease(Context);MdoTransferReport Local={0};bool Ok=false;
     /* Legacy embedders without the task manager retain the synchronous API. */
     if(!Task&&Error[0]){if(Report){memset(Report,0,sizeof(*Report));snprintf(Report->Code,sizeof(Report->Code),"busy");snprintf(Report->Detail,sizeof(Report->Detail),"%.255s",Error);}return false;}
@@ -149,7 +150,7 @@ bool MdoTransferDownloadReport(xnetengine* Engine,cstr Path,cstr Relative,uint64
         MdoDownloadsProgress(Task,Local.Bytes,"retrying");
         for(unsigned I=0;I<(Attempt+1)*10&&MdoDownloadsGate(Task,Cancel);I++)xrtSleep(100);
     }
-    if(Report)*Report=Local;return MdoDownloadsEnd(Task,Ok,Local.Detail,Cancel);
+    if(Report)*Report=Local;return MdoDownloadsEnd(Task,Ok,Local.Code,Local.Detail,Cancel);
 }
 bool MdoTransferDownloadProgress(xnetengine* Engine,cstr Path,cstr Relative,uint64 Size,cstr Hash,xcancel* Cancel,MdoTransferProgress Progress,void* Data)
 {return MdoTransferDownloadReport(Engine,Path,Relative,Size,Hash,Cancel,Progress,Data,NULL);}

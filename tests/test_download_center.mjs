@@ -10,6 +10,20 @@ globalThis.fetch = async url => new Response(readFileSync(new URL(`../app/web${u
 await loadLocale("en-US"); globalThis.fetch = initialFetch;
 const flush = () => new Promise(r => setImmediate(r));
 
+test("a failed native snapshot retains history, blocks stale writes and recovers on refresh",async t=>{
+  const previous=globalThis.document,doc=testDocument(),entry=new TestElement("button");
+  for(const name of ["label","count"]){const span=new TestElement("span");span.setAttribute(`data-downloads-${name}`,"");entry.append(span);}
+  doc.querySelector=name=>name==="#open-downloads"?entry:null;globalThis.document=doc;
+  const registry=createDownloadRegistry(),id="R".repeat(32);let fail=true;
+  registry.observe("/download-tasks",[{id,source:"transfer",name:"Retained file",state:"paused",received:40,bytes:100}]);
+  const center=createDownloadCenter({registry,installer:{refresh:async()=>{}},transport:{get:async path=>{if(path==="/download-tasks"&&fail)throw Error("index unreadable");return{data:[]};},post:async()=>assert.fail("stale snapshot cannot write")}});
+  t.after(()=>{center.destroy();globalThis.document=previous;});center.open();await flush();
+  let resume=descendants(doc.body).find(n=>n.tagName==="BUTTON"&&n.textContent==="Resume");
+  assert(resume.disabled);assert.equal(registry.list("local").length,1);assert(doc.body.textContent.includes("Native download tasks could not be read"));
+  fail=false;await center.refresh();resume=descendants(doc.body).find(n=>n.tagName==="BUTTON"&&n.textContent==="Resume");
+  assert(!resume.disabled);assert(!doc.body.querySelector(".download-error").textContent);
+});
+
 test("native downloads pause, resume, retry and retain paused files when clearing history",async t=>{
   const previous=globalThis.document,doc=testDocument(),entry=new TestElement("button");
   for(const name of ["label","count"]){const span=new TestElement("span");span.setAttribute(`data-downloads-${name}`,"");entry.append(span);}

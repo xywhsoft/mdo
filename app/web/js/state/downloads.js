@@ -50,7 +50,7 @@ export function createDownloadRegistry(storage = null) {
         const key = `${target}:native:${task.id}`;live.add(key);
         put(key,{target,source:"native",nativeSource:task.source,taskId:task.id,archiveId:task.archive_id || "",kind:task.kind,
           name:task.name,state:task.state,done:task.received || 0,total:task.bytes || 0,hash:task.sha256,
-          speed:task.speed || 0,eta:task.eta_seconds,error:task.error || "",active:task.active === true});
+          speed:task.speed || 0,eta:task.eta_seconds,error:task.error || "",errorCode:task.error_code || "",active:task.active === true});
       }
       for(const [key,row] of records) if(row.target===target && row.source==="native" && !live.has(key)) records.delete(key);
       publish();

@@ -10,23 +10,27 @@ import { extensionInstaller } from "../../state/extension-installs.js";
 
 const text = (key, args = {}) => t(`downloads.${key}`, args, key);
 const node = (tag, value, cls) => element(tag, { ...(value == null ? {} : { text: value }), className: cls });
-const bytes = size => `${(size / 1048576).toFixed(1)} MiB`;
+const bytes = size => size>=1073741824?`${(size/1073741824).toFixed(1)} GiB`:size>=1048576?`${(size/1048576).toFixed(1)} MiB`:size>=1024?`${(size/1024).toFixed(1)} KiB`:`${size} B`;
 export function createDownloadCenter({ updatePanel, navigation, registry = downloadRegistry, transport = api, installer = extensionInstaller } = {}) {
   const entry = document.querySelector("#open-downloads");
   if (!entry) return null;
   const message = element("p", { className: "download-error", attrs: { role: "alert" } }), list = node("div", null, "download-list"), clear = node("button", "", "secondary-button"), close = node("button", "", "secondary-button");
   clear.type = close.type = "button";
-  let layer = null, pending = false, error = "", timer = 0, destroyed = false, polling = false, signature = "";
+  let layer = null, pending = false, error = "", readError = "", timer = 0, destroyed = false, polling = false, signature = "";
   const target = () => targetState().selected?.id || "local";
-  const writable = () => { const s = targetState(); return !s.selected || s.connected && !s.runtimeChanged && s.selected.mode !== "view"; };
+  const writable = () => { const s = targetState(); return !readError && (!s.selected || s.connected && !s.runtimeChanged && s.selected.mode !== "view"); };
   const clearable = row => !downloadActive(row) && !["ready","paused"].includes(row.state);
   async function refresh() {
-    if (destroyed || polling) return; polling = true;
-    try { await Promise.allSettled([transport.get("/extension-tasks"), transport.get("/download-tasks"), transport.get("/update"), transport.get("/distribution"),installer.refresh({discover:true})]); }
+    if (destroyed || polling) return; polling = true; const owner=target();
+    try {
+      const results=await Promise.allSettled([transport.get("/extension-tasks"), transport.get("/download-tasks"), transport.get("/update"), transport.get("/distribution"),installer.refresh({discover:true})]);
+      if(!destroyed && owner===target()){readError=results[1].status==="rejected"?text("loadFailed"):"";render();}
+    }
     finally { polling = false; schedule(); }
   }
   function schedule() {
-    clearTimeout(timer); if (!destroyed && layer) timer = setTimeout(refresh, registry.list(target()).some(downloadActive) ? 1000 : 5000);
+    clearTimeout(timer);const active=registry.list(target()).some(downloadActive);
+    if (!destroyed && (layer||active)) timer = setTimeout(refresh, active ? 1000 : 5000);
   }
   async function act(work) {
     if (destroyed || pending || !writable()) return; const owner = target(); pending = true; error = ""; render();
@@ -46,16 +50,16 @@ export function createDownloadCenter({ updatePanel, navigation, registry = downl
     const badge = entry.querySelector("[data-downloads-count]"); writeUiText(badge, String(active)); badge.hidden = !active;
     writeUiAttribute(entry, "aria-label", text("entry", { count: active })); writeUiAttribute(entry, "title", text("title"));
     writeUiText(close, text("close")); writeUiText(clear, text("clear"));
-    writeUiText(message, error); message.hidden = !error;
+    writeUiText(message, error || readError); message.hidden = !error && !readError;
     clear.disabled = pending || !writable() || !rows.some(clearable);
     if (!layer) return;
     layer.update({ title: text("title") });
-    const next = JSON.stringify([rows, error, pending, writable(), text("title")]); if (signature === next) return; signature = next;
+    const next = JSON.stringify([rows, error, readError, pending, writable(), text("title")]); if (signature === next) return; signature = next;
     const scroll = layer.body.scrollTop, focused = list.contains(document.activeElement) ? document.activeElement.dataset.downloadAction : null;
     list.replaceChildren(); if (!rows.length) list.append(node("p", text("empty"), "download-empty"));
     for (const row of rows) {
       const item = node("article", null, "download-row"), top = node("div", null, "download-row-heading");
-      const kind = row.source === "cli" ? text(`cli.${row.action}`) : text(row.source === "update" || row.nativeSource === "update" ? "app" : row.source === "legacy" ? "legacy" : "extension");
+      const kind = row.source === "cli" ? text(`cli.${row.action}`) : text(row.nativeSource === "transfer" ? "file" : row.source === "update" || row.nativeSource === "update" ? "app" : row.source === "legacy" ? "legacy" : "extension");
       top.append(node("strong", row.name || kind), node("span", text(`state.${row.state}`))); item.append(top, node("small", `${kind}${row.buildId ? ` · ${row.buildId}` : ""}`, "download-meta"));
       if (downloadActive(row) || row.state === "paused") {
         const progress = node("progress"); writeUiAttribute(progress, "aria-label", `${row.name || kind} · ${text(`state.${row.state}`)}`);
@@ -64,7 +68,11 @@ export function createDownloadCenter({ updatePanel, navigation, registry = downl
         if(row.speed > 0) item.append(node("small",text("speed",{speed:bytes(row.speed)}),"download-meta"));
         if(row.speed > 0 && Number.isFinite(row.eta)) item.append(node("small",text("eta",{seconds:Math.ceil(row.eta)}),"download-meta"));
       }
-      if (row.error && row.state !== "cancelled") item.append(node("p", row.error, "download-error"));
+      if (row.error && row.state !== "cancelled") {
+        const summary=row.errorCode?t(`downloads.error.${row.errorCode}`,{},row.error):row.error;
+        item.append(node("p",summary,"download-error"));
+        if(summary!==row.error){const details=node("details");details.append(node("summary",text("errorDetails")),node("p",row.error,"download-meta"));item.append(details);}
+      }
       if (row.state === "unknown") item.append(node("p", text("uncertain"), "download-meta"));
       if (row.submission) item.append(node("p", `${text("submission")} #${row.submission.id} · ${row.submission.state}`, "download-meta"));
       const controls = node("div", null, "download-actions");
@@ -128,7 +136,7 @@ export function createDownloadCenter({ updatePanel, navigation, registry = downl
     if (destroyed) return;
     if (!layer) {
       layer = openLayer({ title: text("title"), icon: "download", width: "48rem", height: "75%",
-        onClosed() { layer = null; clearTimeout(timer); signature = ""; entry.setAttribute("aria-expanded", "false"); } });
+        onClosed() { layer = null; signature = ""; entry.setAttribute("aria-expanded", "false"); schedule(); } });
       layer.element.id = "downloads-dialog"; layer.element.classList.add("download-center");
       layer.body.append(message, list); layer.footer.append(clear, close);
       entry.setAttribute("aria-expanded", "true");
@@ -164,10 +172,10 @@ export function createDownloadCenter({ updatePanel, navigation, registry = downl
     }
     if(failures.length)throw Error(failures.join("；"));
   }); });
-  const unsubscribe = registry.subscribe(render), locale = subscribeLocale(() => { signature = ""; render(); });
+  const unsubscribe = registry.subscribe(()=>{render();schedule();}), locale = subscribeLocale(() => { signature = ""; render(); });
   let selectedTarget = target();
   const targets = subscribeTarget(() => {
-    if (selectedTarget !== target()) { selectedTarget = target(); error = ""; signature = ""; layer?.dispose(); }
+    if (selectedTarget !== target()) { selectedTarget = target(); error = ""; readError = ""; signature = ""; layer?.dispose(); }
     render();
   });
   render();

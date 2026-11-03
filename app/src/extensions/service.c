@@ -134,10 +134,11 @@ static bool MdoExtServiceDownloadAttempt(cstr Kind,cstr Version,xcancel* Cancel,
  xrtValueRelease(Previous);
  xvalue* Input=xrtValueObject();Ok=Ok&&Input&&MdoExtServicePut(Input,"kind",Kind)&&MdoExtServicePut(Input,"purpose","install")&&MdoExtServicePut(Input,"sha256",Hash)&&xrtValueObjectSetNew(Input,XRT_STR_LITERAL("bytes"),xrtValueUInt(Bytes))&&(Task||MdoExtensionTaskBeginWait(Input,Cancel,&Task,Error));xrtValueRelease(Input);
  char Id[33]={0};if(Ok)snprintf(Id,sizeof(Id),"%s",MdoExtensionText(Task,"id",32));MdoExtensionTaskUse* Use=Ok?MdoExtensionTaskUseBegin(Id,true,Cancel,Error):NULL;MdoAccountLease Lease={0};Origin=Ok?MdoExtServiceOrigin(Entry):NULL;
- Ok=Ok&&Use&&Origin&&MdoExtensionTaskOrigin(Use,Origin,Error)&&MdoExtServiceLease(MdoExtensionTaskUseCancel(Use),false,&Lease,Error);
+ Ok=Ok&&Use&&Origin&&MdoExtensionTaskOrigin(Use,Origin,Error);
  xvalue* Context=xrtValueObject();bool Tracked=Ok&&Context&&MdoExtServicePut(Context,"kind",Kind)&&MdoExtServicePut(Context,"archive_id",Id);
  MdoNativeDownload* Download=Tracked?MdoDownloadsBegin("extension",Version,MdoExtensionText(Entry,"name",240)?MdoExtensionText(Entry,"name",240):Kind,Hash,Bytes,Context,Cancel,Error):NULL;xrtValueRelease(Context);
  if(Error&&Error[0])Ok=false;
+ if(Ok)Ok=MdoExtServiceLease(MdoDownloadsCancelToken(Download,MdoExtensionTaskUseCancel(Use)),false,&Lease,Error);
  uint64 Received=0;if(Ok)MdoExtServiceNumber(Task,"received",&Received);if(Received>Bytes)Ok=false;
  for(uint64 Offset=Received;Ok&&Offset<Bytes;){
   if(!MdoDownloadsGate(Download,MdoExtensionTaskUseCancel(Use))){Ok=false;break;}
@@ -149,7 +150,7 @@ static bool MdoExtServiceDownloadAttempt(cstr Kind,cstr Version,xcancel* Cancel,
  MdoAccountRelease(&Lease);MdoExtensionTaskUseEnd(Use);if(Ok)Ok=MdoDownloadsGate(Download,Cancel)&&MdoDownloadsProgress(Download,Bytes,"verifying")&&MdoExtensionTaskSeal(Id,MdoDownloadsCancelToken(Download,Cancel),Result,Error);
  /* Receiving archives remain resumable on read failures, cancellation and
   * shutdown. The explicit download-centre cancel action deletes owned bytes. */
- Ok=MdoDownloadsEnd(Download,Ok,Error&&Error[0]?Error:"Archive download interrupted",Cancel);
+ Ok=MdoDownloadsEnd(Download,Ok,"extension",Error&&Error[0]?Error:"Archive download interrupted",Cancel);
  if(!Ok){xrtValueRelease(*Result);*Result=NULL;}
  xrtValueRelease(Entry);xrtValueRelease(Task);xrtValueRelease(Origin);if(!Ok&&Error&&!Error[0])MdoExtServiceError(Error,"The store archive changed or failed its byte/hash/ZIP validation");return Ok;
 }

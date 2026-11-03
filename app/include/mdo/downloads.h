@@ -13,7 +13,7 @@ xcancel* MdoDownloadsCancelToken(MdoNativeDownload* Task,xcancel* Fallback);
 xvalue* MdoDownloadsFind(cstr Source,cstr Identity,cstr Hash);
 bool MdoDownloadsGate(MdoNativeDownload* Task,xcancel* Cancel);
 bool MdoDownloadsProgress(MdoNativeDownload* Task,uint64 Done,cstr Phase);
-bool MdoDownloadsEnd(MdoNativeDownload* Task,bool Ok,cstr Error,xcancel* Cancel);
+bool MdoDownloadsEnd(MdoNativeDownload* Task,bool Ok,cstr Code,cstr Error,xcancel* Cancel);
 bool MdoDownloadsCancelled(MdoNativeDownload* Task);
 xvalue* MdoDownloadsList(void);
 bool MdoDownloadsAction(cstr Id,cstr Action,char Error[512]);
