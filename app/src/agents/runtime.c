@@ -1343,6 +1343,17 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
         (AgentInfo.ReasoningEffort != NULL &&
          AgentInfo.ReasoningEffort[0] != '\0' ? AgentInfo.ReasoningEffort :
          Settings.ReasoningEffort);
+    /* Global preferences are soft defaults across different providers. An
+     * explicit caller/role choice remains strict, but an unsupported shared
+     * preference must fall back to the selected model's own default. */
+    if ((!Options->ReasoningEffort || !Options->ReasoningEffort[0]) &&
+        (!AgentInfo.ReasoningEffort || !AgentInfo.ReasoningEffort[0])) {
+        MdoModelInfo Preferred = {0}; Preferred.Size = sizeof(Preferred);
+        bool Found = ModelId && ModelId[0] ?
+            MdoModelCatalogModelFind(Owner->Models, ModelId, &Preferred) :
+            MdoModelCatalogDefault(Owner->Models, &Preferred);
+        if (Found && !MdoAgentsReasoningSupported(&Preferred, Reasoning)) Reasoning = NULL;
+    }
     MaxOutput = Options->MaxOutputTokens != 0u ? Options->MaxOutputTokens :
         AgentInfo.MaxOutputTokens;
     if ( !MdoAgentsResolveModel(Owner->Models, ModelId, Options->Protocol,
