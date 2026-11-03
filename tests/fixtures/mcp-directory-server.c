@@ -2,6 +2,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#if defined(_WIN32)
+#include <windows.h>
+#else
+#include <unistd.h>
+#endif
 /* Small real stdio MCP peer. No network, keys, or test logging. */
 static int field(const char* json,const char* key,char* out,size_t limit,int raw)
 {
@@ -30,8 +35,20 @@ int main(int argc,char** argv)
         if(!strcmp(method,"notifications/initialized")){initialized=1;continue;}
         if(!field(line,"id",id,sizeof(id),1))continue;
         if(!strcmp(method,"initialize"))printf("{\"jsonrpc\":\"2.0\",\"id\":%s,\"result\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{\"tools\":{},\"resources\":{}},\"serverInfo\":{\"name\":\"directory-fixture\",\"version\":\"1\"}}}\n",id);
-        else if(initialized&&!strcmp(method,"tools/list"))printf("{\"jsonrpc\":\"2.0\",\"id\":%s,\"result\":{\"tools\":[{\"name\":\"echo\",\"description\":\"Directory fixture\",\"inputSchema\":{\"type\":\"object\",\"properties\":{}},\"annotations\":{\"readOnlyHint\":true}}]}}\n",id);
-        else if(initialized&&!strcmp(method,"resources/read"))printf("{\"jsonrpc\":\"2.0\",\"id\":%s,\"result\":{\"contents\":[{\"uri\":\"fixture://marker\",\"mimeType\":\"text/plain\",\"text\":\"%s\"}]}}\n",id,argv[1]);
+        else if(initialized&&!strcmp(method,"tools/list"))printf("{\"jsonrpc\":\"2.0\",\"id\":%s,\"result\":{\"tools\":[{\"name\":\"echo\",\"description\":\"Directory fixture\",\"inputSchema\":{\"type\":\"object\",\"properties\":{}},\"annotations\":{\"readOnlyHint\":true}},{\"name\":\"bad\",\"inputSchema\":false},{\"name\":\"echo\",\"inputSchema\":{\"type\":\"object\"}},{\"name\":\"badroot\",\"inputSchema\":{\"type\":\"array\"}}]}}\n",id);
+        else if(initialized&&!strcmp(method,"resources/read")){
+            if(strstr(line,"fixture://slow")){
+                const char* data=getenv("MDO_EXTENSION_DATA");
+                if(!data||snprintf(path,sizeof(path),"%s/busy",data)>=(int)sizeof(path))return 5;
+                FILE* marker=fopen(path,"wb");if(!marker)return 5;fputs("busy",marker);fclose(marker);
+#if defined(_WIN32)
+                Sleep(500);
+#else
+                usleep(500000);
+#endif
+            }
+            printf("{\"jsonrpc\":\"2.0\",\"id\":%s,\"result\":{\"contents\":[{\"uri\":\"fixture://marker\",\"mimeType\":\"text/plain\",\"text\":\"%s\"}]}}\n",id,argv[1]);
+        }
         else printf("{\"jsonrpc\":\"2.0\",\"id\":%s,\"result\":{}}\n",id);
         fflush(stdout);
     }return 0;

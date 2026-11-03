@@ -54,6 +54,7 @@ static int32 McpPrepareWorker(void* Data)
                 McpPrepareResult(Entry->Id,Completed,"starting","",Attempt);
                 xwork_error Error;xworkErrorInit(&Error);
                 bool Ok=xworkRuntimeRefreshMcpServer(g_MdoMcp.Runtime,Entry->Id,Cancel,Deadline,&Error);
+                if(Ok){MdoMcpServerStatus Ready={0};Ready.Size=sizeof(Ready);(void)MdoMcpManagerGetStatus(Entry->Id,&Ready);}
                 if(xrtCancelRequested(Cancel))break;
                 xvalue* Auth=MdoMcpAuthorizationStatus(Entry->Id);bool Login=MdoMcpTemplateFlag(Auth,"needs_authorization",false);xrtValueRelease(Auth);
                 bool Retry=!Ok&&!Login&&McpPrepareTransient(&Error)&&Attempt<5&&!MdoDeadlineExpired(Deadline);

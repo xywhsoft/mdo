@@ -7,7 +7,6 @@ import tempfile
 from pathlib import Path
 
 from test_mcp_runtime import run_probe
-import test_mcp_runtime as runtime
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -94,19 +93,9 @@ def main():
         output = run_probe(args.host.resolve(), base, base / "home")
         assert "resources_connect=1" in output and "typed_image=1" in output, output
         assert "admission=first:1 second:1 cancelled:1 timeout:1 requests:3" in output, output
-        # A single bad or duplicate definition must not hide the valid echo tool.
-        runtime.MOCK_SERVER = runtime.MOCK_SERVER.replace(
-            '    print(json.dumps',
-            '    if method == "tools/list":\n'
-            '        result["tools"] += [{"name":"bad","inputSchema":False}, '
-            '{"name":"array","inputSchema":{"type":"array"}}, result["tools"][0]]\n'
-            '    print(json.dumps')
-        site = base / "isolation"
-        runtime.write_site(site, base)
-        output = run_probe(args.host.resolve(), site, base / "isolation-home")
-        assert "ready_status=state:1 enabled:1 connected:1 discovered:1 tools:1 requests:2" in output, output
-        assert "probe_done=1" in output and "manager_init_failed=" not in output, output
-    print("MCP reliability: PASS (capabilities; concurrent calls; cancellation; deadline; invalid-tool isolation)")
+    # Invalid/duplicate tool isolation is covered by the bundled native peer in
+    # test_mcp_directory_native, through the actual directory manager.
+    print("MCP reliability: PASS (capabilities; concurrent calls; cancellation; deadline)")
 
 
 if __name__ == "__main__":

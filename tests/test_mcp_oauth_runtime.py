@@ -13,7 +13,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlencode, urlsplit
 from test_api_runtime import free_port, request, wait_ready
-from test_mcp_runtime import server_document
+from mcp_template_fixture import template
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -136,6 +136,14 @@ def main():
             'host_default':{'enabled':True,'name':'mdo','path':'web','devlang':'c','devfile':'generated/mdo_unity.c'}}]}
         (site/'xs.json').write_text(json.dumps(config), encoding='utf-8')
         env = dict(os.environ, MDO_HOME=str(home), USE_WEBVIEW='0')
+        directory=home/'mcp/oauth-fixture';directory.mkdir(parents=True)
+        document=template('oauth-fixture','oauth')
+        config=document['variants'][0]['config'];config['request_timeout_ms']=1000
+        document['inputs']=[dict(id='endpoint',type='text',label='Endpoint',description='Private fixture target',required=True,secret=False)]
+        config['transport']['endpoint']=dict(input='endpoint')
+        config['oauth'].update(client_id='mdo-fixture',scope='read write')
+        (directory/'extension.json').write_text(json.dumps(dict(kind='mcp',id='mcp:qa.oauth-fixture',name='OAuth fixture',alias='oauth-fixture',entry='mcp.json',platforms=['any'])),encoding='utf-8')
+        (directory/'mcp.json').write_text(json.dumps(document),encoding='utf-8')
         process = None
         with (base/'log').open('wb') as log:
             def start():
@@ -168,12 +176,10 @@ def main():
                 raise AssertionError('Refresh did not settle')
             try:
                 start()
-                document=json.loads(server_document('unused','unused','unused',server_id='oauth-fixture'))
-                document['protocol_version']='2025-11-25'
-                document['request_timeout_ms']=1000
-                document['transport']={'type':'streamable-http','endpoint':f'http://127.0.0.1:{provider.server_port}/mcp','headers':[]}
-                document['oauth']={'client_id':'mdo-fixture'}
-                code,result=call('PUT','extensions/mcp/oauth-fixture',{'content':json.dumps(document)},'new'); assert code==200,result
+                connection=dict(action='preview',id='oauth-fixture',extension_id='mcp:qa.oauth-fixture',variant='default',values=dict(endpoint=f'http://127.0.0.1:{provider.server_port}/mcp'))
+                code,result=call('POST','mcp/connections',connection);assert code==200,result
+                connection.update(action='save',expected_revision='',approval_digest=result['data']['approval_digest'],enabled=True)
+                code,result=call('POST','mcp/connections',connection);assert code==200,result
                 assert not status()['authorized']
                 if status().get('available') is False:
                     assert status()['state']=='unsupported',status()
@@ -190,7 +196,11 @@ def main():
                 params=parse_qs(urlsplit(data['authorization_url']).query)
                 assert params['scope']==['read write'],params
                 assert params['code_challenge_method']==['S256'],params
-                assert params['resource']==[document['transport']['endpoint']],params
+                assert params['resource']==[connection['values']['endpoint']],params
+                # An explicit transport refresh while waiting for the browser
+                # must fail without erasing the ready authorization link.
+                missing=refresh();assert missing['state']=='failed' and missing['error_code']=='mcp_authorization_required',missing
+                waiting=status();assert waiting['state']=='ready' and waiting['authorization_url']==data['authorization_url'],waiting
                 assert params['redirect_uri']==[f'http://127.0.0.1:{port}/api/v1/mcp/oauth/callback'],params
                 Provider.challenge=params['code_challenge'][0]
                 # Native restart must preserve verifier/state and pending index.

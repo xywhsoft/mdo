@@ -86,7 +86,15 @@ failed:
     } else {
         if((Cancel&&xrtCancelRequested(Cancel))||xrtCancelRequested(Entry->Cancel)){Failure=XWORK_ERROR_CANCELLED;Message="MCP authorization was cancelled";}
         else if(MdoDeadlineExpired(Deadline)){Failure=XWORK_ERROR_TIMEOUT;Message="MCP authorization exceeded the request deadline";}
-        McpOAuthState(Entry,MDO_MCP_AUTH_ERROR,Message,Status);
+        /* Background connection attempts may race browser discovery or the
+         * pending browser step. Their missing token must not erase that flow.
+         * Only its owning job publishes the interactive result. */
+        xrtMutexLock(Entry->Lock);
+        if(!Entry->Busy&&Entry->Status!=MDO_MCP_AUTH_READY) {
+            Entry->Status=MDO_MCP_AUTH_ERROR;Entry->HttpStatus=Status;
+            snprintf(Entry->Message,sizeof(Entry->Message),"%s",Message);
+        }
+        xrtMutexUnlock(Entry->Lock);
         if(Error){xworkErrorInit(Error);Error->eCode=Failure;
             Error->uHttpStatus=Status;snprintf(Error->sMessage,sizeof(Error->sMessage),"%s",Message);}
     }

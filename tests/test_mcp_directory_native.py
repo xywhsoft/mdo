@@ -11,6 +11,10 @@ from mcp_template_fixture import template
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT = r'''
+static int32 QaBusyRead(void* Data){
+    bool* Ok=Data;char* Text=NULL;xwork_error E;xworkErrorInit(&E);
+    *Ok=MdoMcpRead("qa-one","resources/read","{\"uri\":\"fixture://slow\"}",NULL,MdoDeadlineAfterUs(3000000),&Text,&E);xrtFree(Text);return 0;
+}
 static bool QaMcpConnection(cstr Id,cstr Marker,cstr Digest,bool Enabled){
     char Error[512];xvalue* Old=MdoMcpConnections(Id,Error),*Input=SdkParse("{\"action\":\"save\",\"extension_id\":\"mcp:qa.bundled-fixture\",\"variant\":\"default\",\"values\":{},\"secret_refs\":{\"token\":\"env:MDO_QA_MCP_TOKEN\"}}"),*Out=NULL;
     bool Ok=Input&&SdkPut(Input,"id",Id)&&SdkPut(Input,"expected_revision",Old?SdkField(Old,"revision"):"")&&SdkPut(Input,"approval_digest",Digest)&&SdkPut(xrtValueObjectGet(Input,XRT_STR_LITERAL("values")),"marker",Marker)&&xrtValueObjectSetNew(Input,XRT_STR_LITERAL("enabled"),xrtValueBool(Enabled))&&MdoMcpConnectionManage(Input,NULL,&Out,Error);
@@ -33,6 +37,14 @@ xvalue* QaProductContract(const xvalue* P,xvfs V){
     MdoMcpCatalog* C=Ok?MdoMcpCatalogSnapshot():NULL;bool Two=C&&C->Count==2;
     xrtValueObjectSetNew(R,XRT_STR_LITERAL("two_private_connections"),xrtValueBool(Two));MdoMcpCatalogRelease(C);
     bool First=Two&&QaMcpMarker("qa-one","alpha-private-only"),Second=Two&&QaMcpMarker("qa-two","beta-private-only");
+    MdoMcpServerStatus BeforeBusy={0};BeforeBusy.Size=sizeof(BeforeBusy);bool WasReady=MdoMcpManagerGetStatus("qa-one",&BeforeBusy)&&BeforeBusy.Connected&&BeforeBusy.ToolsDiscovered&&BeforeBusy.DiscoveredToolCount==1;
+    bool ReadOk=false,BusyExists=false;xthread* BusyThread=Second?xrtThreadCreate(QaBusyRead,&ReadOk,0):NULL;
+    uint64 BusyEnd=MdoDeadlineAfterUs(2000000);bool Marker=false;xfileinfo MarkerInfo;
+    while(BusyThread&&!Marker&&!MdoDeadlineExpired(BusyEnd)){MdoHomeExternalStat("data/mcp/runtime/qa-one/busy",&Marker,&MarkerInfo);if(!Marker)xrtSleep(5);}
+    MdoMcpServerStatus BusyStatus={0};BusyStatus.Size=sizeof(BusyStatus);uint64 Before=xllmClockUs();
+    BusyExists=WasReady&&Marker&&MdoMcpManagerGetStatus("qa-one",&BusyStatus)&&BusyStatus.Enabled&&BusyStatus.Connected&&BusyStatus.ToolsDiscovered&&BusyStatus.DiscoveredToolCount==BeforeBusy.DiscoveredToolCount&&BusyStatus.CatalogGeneration==BeforeBusy.CatalogGeneration&&xllmClockUs()-Before<200000;
+    if(BusyThread){xrtThreadWait(BusyThread);xrtThreadDestroy(BusyThread);}
+    xrtValueObjectSetNew(R,XRT_STR_LITERAL("busy_connection_still_exists"),xrtValueBool(BusyExists&&ReadOk));
     xrtValueObjectSetNew(R,XRT_STR_LITERAL("first_real_protocol"),xrtValueBool(First));xrtValueObjectSetNew(R,XRT_STR_LITERAL("second_real_protocol"),xrtValueBool(Second));
     if((!First||!Second)&&xrtGetError())SdkPut(R,"protocol_error",xrtErrorMessage(xrtGetError()));
     char ArchiveHash[65];uint64 Bytes=0;bool Packed=Ok&&MdoExtensionsPack("mcp","0123456789ABCDEFGHJKMNPQRSTVWXYZ","data/extension-tasks/export/mcp.zip",NULL,ArchiveHash,&Bytes,Error);
@@ -85,7 +97,7 @@ def main():
     (directory / 'mcp.json').write_text(json.dumps(recipe), encoding='utf-8')
     try:
         result = product(args, fixture, CONTRACT, out / 'result.json')
-        for key in ('private_read_redacts_credential_references','private_stale_edit_rejected','loaded', 'two_private_connections', 'first_real_protocol', 'second_real_protocol', 'zip_packed', 'running_process_pins_directory', 'changed_directory_requires_approval', 'directory_templates_and_private_connection_api','approval_and_reconnect','activation_is_durable_and_credentials_retained','preview_is_cold_and_requires_no_real_secret','changed_program_cannot_retain_old_credentials', 'whole_directory_uninstalled', 'private_state_separate', 'processes_and_bindings_retired'):
+        for key in ('private_read_redacts_credential_references','private_stale_edit_rejected','busy_connection_still_exists','loaded', 'two_private_connections', 'first_real_protocol', 'second_real_protocol', 'zip_packed', 'running_process_pins_directory', 'changed_directory_requires_approval', 'directory_templates_and_private_connection_api','approval_and_reconnect','activation_is_durable_and_credentials_retained','preview_is_cold_and_requires_no_real_secret','changed_program_cannot_retain_old_credentials', 'whole_directory_uninstalled', 'private_state_separate', 'processes_and_bindings_retired'):
             assert result.get(key), (key, result)
         archive = fixture / 'data/extension-tasks/export/mcp.zip'
         with zipfile.ZipFile(archive) as z:

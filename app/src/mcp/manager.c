@@ -72,6 +72,8 @@ typedef struct MdoMcpServerEntry {
     size_t MaxMessageBytes;
     size_t MaxTools;
     xwork_tool_effects DefaultEffects;
+    /* Observation only; guarded by g_MdoMcp.Lock and scoped to this catalog. */
+    MdoMcpServerStatus LastStatus;
 } MdoMcpServerEntry;
 
 struct MdoMcpCatalog {
@@ -1767,14 +1769,29 @@ bool MdoMcpManagerGetStatus(cstr ServerId, MdoMcpServerStatus* pStatus)
     memset(&CatalogInfo, 0, sizeof(CatalogInfo));
     CatalogInfo.Size = sizeof(CatalogInfo);
     Found = MdoMcpCatalogFind(pCatalog, ServerId, &CatalogInfo);
-    if ( g_MdoMcp.Runtime == NULL ) {
+    if ( !Found || g_MdoMcp.Runtime == NULL ) {
         MdoMcpCatalogRelease(pCatalog);
         return false;
     }
+    /* Native status snapshots deliberately do not wait for the client lock.
+     * A handshake or tool call may hold it; that does not remove the service.
+     * Retain the last observation from this catalog while it is busy. A new
+     * catalog starts with identity/activation only; preparation supplies its
+     * detailed starting/ready state. No old-generation observation is reused. */
+    uint32 Size = pStatus->Size;
+    memset(pStatus, 0, sizeof(*pStatus)); pStatus->Size = Size;
+    pStatus->CatalogGeneration = CatalogInfo.Generation;
+    pStatus->Enabled = CatalogInfo.Enabled;
+    pStatus->State = CatalogInfo.Enabled ? XWORK_MCP_SERVER_DISCONNECTED : XWORK_MCP_SERVER_DISABLED;
+    MdoMcpServerEntry* Entry = NULL;
+    for ( size_t I = 0; I < pCatalog->Count; ++I )
+        if ( !strcmp(pCatalog->Entries[I].Id, ServerId) ) { Entry = &pCatalog->Entries[I]; break; }
+    if ( Entry && xrtMutexLock(g_MdoMcp.Lock) ) {
+        if ( Entry->LastStatus.Size == sizeof(Entry->LastStatus) ) *pStatus = Entry->LastStatus;
+        xrtMutexUnlock(g_MdoMcp.Lock);
+    }
     xworkMcpServerInfoInit(&RuntimeInfo);
-    Found = xworkRuntimeMcpServerGetInfo(g_MdoMcp.Runtime, ServerId,
-        &RuntimeInfo);
-    if ( Found ) {
+    if ( xworkRuntimeMcpServerGetInfo(g_MdoMcp.Runtime, ServerId, &RuntimeInfo) ) {
         pStatus->CatalogGeneration = CatalogInfo.Generation;
         pStatus->State = RuntimeInfo.eState;
         pStatus->SchemaGeneration = RuntimeInfo.uSchemaGeneration;
@@ -1786,7 +1803,12 @@ bool MdoMcpManagerGetStatus(cstr ServerId, MdoMcpServerStatus* pStatus)
         pStatus->ToolsDiscovered = RuntimeInfo.bToolsDiscovered;
         pStatus->SupportsToolListChanges =
             RuntimeInfo.bServerSupportsToolListChanges;
+        if ( Entry && xrtMutexLock(g_MdoMcp.Lock) ) {
+            Entry->LastStatus = *pStatus; Entry->LastStatus.Size = sizeof(Entry->LastStatus);
+            xrtMutexUnlock(g_MdoMcp.Lock);
+        }
     }
+    pStatus->Size = Size;
     MdoMcpCatalogRelease(pCatalog);
     return Found;
 }
