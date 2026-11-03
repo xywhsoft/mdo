@@ -1,0 +1,17 @@
+{
+  "version": "0.8.8",
+  "version_code": "05000808",
+  "implementation_commit": "a4001268e788918bf3ff145e1c51b3879a84d514",
+  "windows_artifact": "mdo.exe",
+  "bytes": 6731262,
+  "sha256": "03c83a8ac1898398eb0732b3b3616b9784e9358a253caf8ad1374bb3111ed7b9",
+  "node_tests_passed": 49,
+  "packed_exe_file_upload_and_tool_read": "passed",
+  "packed_exe_fork_and_backup_restore": "passed",
+  "browser_file_drag_and_clipboard_events": "passed",
+  "browser_real_pointer_selection_quote": "passed",
+  "browser_mobile_width": 390,
+  "windows_explorer_copy_paste": "not_verified",
+  "real_provider_calls": false,
+  "published": false
+}
