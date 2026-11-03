@@ -432,7 +432,9 @@ bool MdoSessionUploadsClone(const char* ProjectId, const char* SourceSessionId, 
         snprintf(Target,sizeof(Target),"sessions/%s/%s/uploads/%s",ProjectId,TargetSessionId,Name);
         Ok=MdoImageCopyFile(Source,Target,8u*1024u*1024u);
     }
-    if(Next==XDIR_NEXT_ERROR)Ok=false;if(!xrtDirClose(Dir))Ok=false;return Ok;
+    if(Next==XDIR_NEXT_ERROR)Ok=false;
+    if(!xrtDirClose(Dir))Ok=false;
+    return Ok;
 }
 
 bool MdoSessionAttachmentEventClone(const char* SourceProjectId,

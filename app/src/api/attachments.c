@@ -937,7 +937,8 @@ bool MdoApiUploadsRoute(MdoApiContext* Context)
         xfile Stored=NULL;char* Bytes=NULL;
         Ok=Info.Type==XFILE_TYPE_FILE && (Info.Available&XFILE_INFO_SIZE) && Info.Size==Size;
         if (Ok) {Bytes=xrtMalloc(Size);Stored=MdoHomeOpenRead(Path);Ok=Bytes&&Stored&&xrtReadFull(Stored,Bytes,Size,NULL)&&!memcmp(Bytes,Data,Size);}
-        if(Stored&&!xrtClose(Stored))Ok=false;xrtFree(Bytes);Replay=Ok;Conflict=!Ok;
+        if(Stored&&!xrtClose(Stored))Ok=false;
+        xrtFree(Bytes);Replay=Ok;Conflict=!Ok;
     } else if (Ok) {
         size_t Count=0u,Total=0u;xdir Dir=NULL;xdirentry Entry;xdirnext Next=XDIR_NEXT_END;
         Ok=MdoHomeExternalStat(Directory,&Exists,&Info);
@@ -948,7 +949,8 @@ bool MdoApiUploadsRoute(MdoApiContext* Context)
                     ++Count>=32u || Entry.Info.Size>64u*1024u*1024u-Total){Ok=false;break;}
                 Total+=(size_t)Entry.Info.Size;
             }
-            if(Next==XDIR_NEXT_ERROR)Ok=false;if(Dir&&!xrtDirClose(Dir))Ok=false;
+            if(Next==XDIR_NEXT_ERROR)Ok=false;
+            if(Dir&&!xrtDirClose(Dir))Ok=false;
         }
         if(Ok)Ok=Size<=64u*1024u*1024u-Total&&MdoHomeAtomicWrite(Path,Data,Size,false);
     }
