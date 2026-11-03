@@ -16,10 +16,27 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 
 import build_mdo
 
 ROOT = build_mdo.ROOT
+
+
+def unmount_owned(path: Path) -> None:
+    """Allow exited WSL children to release handles; never detach a live mount."""
+    command = ['umount', str(path)]
+    for attempt in range(21):
+        result = subprocess.run(command, cwd='/', capture_output=True, text=True,
+                                env={**os.environ, 'LC_ALL': 'C'})
+        if result.returncode == 0:
+            return
+        if 'busy' not in result.stderr.lower() or attempt == 20:
+            if result.stderr:
+                print(result.stderr, file=sys.stderr, end='')
+            raise subprocess.CalledProcessError(result.returncode, command,
+                                                result.stdout, result.stderr)
+        time.sleep(0.1)
 
 
 def run_wsl(command: list[str], cwd: Path, dry_run: bool) -> None:
@@ -208,9 +225,9 @@ def main(argv: list[str] | None = None) -> int:
                 return 0
             finally:
                 if owned_proc and os.path.ismount(baseline / 'proc'):
-                    subprocess.run(['umount', str(baseline / 'proc')], check=True)
+                    unmount_owned(baseline / 'proc')
                 if owned and os.path.ismount(target):
-                    subprocess.run(['umount', str(target)], check=True)
+                    unmount_owned(target)
         machine = platform.machine()
         architecture = {"x86_64": "x86_64", "aarch64": "arm64"}.get(machine)
         if architecture is None:

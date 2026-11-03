@@ -10,6 +10,7 @@ import struct
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
@@ -18,6 +19,32 @@ import build_mdo
 
 
 class LinuxBuildTests(unittest.TestCase):
+    def test_owned_unmount_retries_busy_until_child_releases_it(self):
+        busy = subprocess.CompletedProcess([], 32, '', 'target is busy')
+        done = subprocess.CompletedProcess([], 0, '', '')
+        with mock.patch.object(build_linux.subprocess, 'run', side_effect=[busy, busy, done]) as run, mock.patch.object(build_linux.time, 'sleep') as pause:
+            build_linux.unmount_owned(Path('/owned/workspace'))
+        self.assertEqual(run.call_count, 3)
+        self.assertEqual(pause.call_count, 2)
+        self.assertTrue(all(call.args[0] == ['umount', str(Path('/owned/workspace'))] for call in run.call_args_list))
+
+    def test_owned_unmount_does_not_retry_other_errors(self):
+        denied = subprocess.CompletedProcess([], 32, '', 'permission denied')
+        with mock.patch.object(build_linux.subprocess, 'run', return_value=denied) as run, mock.patch.object(build_linux.time, 'sleep') as pause, contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(subprocess.CalledProcessError):
+                build_linux.unmount_owned(Path('/owned/workspace'))
+        self.assertEqual(run.call_count, 1)
+        pause.assert_not_called()
+
+    def test_owned_unmount_stays_bounded_and_never_forces_detach(self):
+        busy = subprocess.CompletedProcess([], 32, '', 'target is busy')
+        with mock.patch.object(build_linux.subprocess, 'run', return_value=busy) as run, mock.patch.object(build_linux.time, 'sleep') as pause, contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(subprocess.CalledProcessError):
+                build_linux.unmount_owned(Path('/owned/workspace'))
+        self.assertEqual(run.call_count, 21)
+        self.assertEqual(pause.call_count, 20)
+        self.assertTrue(all(call.args[0] == ['umount', str(Path('/owned/workspace'))] for call in run.call_args_list))
+
     def test_musl_cached_host_requires_the_actual_linked_thread_stack(self):
         with tempfile.TemporaryDirectory() as temporary:
             host = Path(temporary) / 'host'
