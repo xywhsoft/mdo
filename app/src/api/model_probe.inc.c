@@ -275,8 +275,7 @@ static bool MdoApiModelProbeAddTools(xllm_request* Request)
     for (size_t i = 0u; Ok && i < xworkToolCatalogCount(Catalog); ++i) {
         xwork_tool_info Tool = {0};
         if (!xworkToolCatalogToolAt(Catalog, i, &Tool)) { Ok = false; break; }
-        if (MdoBuiltinToolFind(Tool.sName))
-            Ok = xllmRequestAddTool(Request, Tool.sName, Tool.sDescription, Tool.sParametersJson, Tool.bStrict);
+        Ok = xllmRequestAddTool(Request, Tool.sName, Tool.sDescription, Tool.sParametersJson, Tool.bStrict);
     }
     xworkToolCatalogRelease(Catalog);
     return Ok && xllmRequestAddTool(Request, "mdo_connection_probe", "Return a connection check. This tool is never executed.",
@@ -302,6 +301,19 @@ static bool MdoApiModelProbeExecute(MdoApiContext* Context, MdoModelCatalog* Cat
         Ok = (Online ? MdoModelOnlineComplete(Catalog, &Options, &Request, NULL, &Response, Error) :
             MdoModelComplete(Client, &Request, NULL, &Response, Error)) == XLLM_RESULT_OK;
     Ok = Ok && (Tools ? MdoApiModelProbeToolReply(Response) : MdoApiModelProbeVisibleReply(Response));
+    if (Ok && Tools) {
+        /* Exercise the actual provider's assistant/tool replay encoding. The
+         * synthetic tool has no side effects and no real tool is executed. */
+        xllm_message Assistant = {0};
+        Ok = xllmMessageFromResponse(Response, &Assistant) && xllmRequestAddMessage(&Request, &Assistant) &&
+            xllmRequestAddToolResult(&Request, Response->pToolCalls[0].sId, "{\"ok\":true}") &&
+            xllmRequestAddTextMessage(&Request, XLLM_ROLE_USER, "The connection check succeeded. Reply briefly with OK without calling any tool.") &&
+            xllmRequestSetToolChoice(&Request, XLLM_TOOL_CHOICE_AUTO, NULL);
+        xllmMessageUnit(&Assistant); xllmResponseDestroy(Response); Response = NULL;
+        if (Ok) Ok = (Online ? MdoModelOnlineComplete(Catalog, &Options, &Request, NULL, &Response, Error) :
+            MdoModelComplete(Client, &Request, NULL, &Response, Error)) == XLLM_RESULT_OK;
+        Ok = Ok && MdoApiModelProbeVisibleReply(Response) && Response->iToolCallCount == 0u;
+    }
     *Latency = (MdoMonotonicUs() - Started) / 1000u;
     xllmResponseDestroy(Response); xllmRequestUnit(&Request); xllmClientDestroy(Client); xrtClearError();
     return Ok;

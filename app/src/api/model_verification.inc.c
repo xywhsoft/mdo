@@ -4,7 +4,7 @@
 #include "../../include/mdo/bootstrap.h"
 #include "../../include/mdo/tool_catalog.h"
 
-#define MDO_MODEL_VERIFICATION_CONTRACT "runtime-tools-stream-v3"
+#define MDO_MODEL_VERIFICATION_CONTRACT "runtime-tools-roundtrip-v4"
 
 static xwork_tool_catalog* MdoModelVerificationTools(void)
 {
@@ -52,7 +52,6 @@ static xvalue* MdoModelVerificationToolBinding(void)
     for (size_t i = 0u; Ok && i < xworkToolCatalogCount(Catalog); ++i) {
         xwork_tool_info Tool = {0};
         if (!xworkToolCatalogToolAt(Catalog, i, &Tool)) { Ok = false; break; }
-        if (!MdoBuiltinToolFind(Tool.sName)) continue;
         xvalue* Item = xrtValueObject();
         Ok = Item && MdoApiValueSetString(Item, "name", Tool.sName) &&
             MdoApiValueSetString(Item, "description", Tool.sDescription) &&
@@ -170,6 +169,7 @@ xvalue* MdoApiModelVerificationUpdate(cstr Id, cstr Hash, bool Tools,
     if (!Record) Record = xrtValueObject();
     bool Ok = Record && Phase && MdoApiValueSetUInt(Record, "schema_version", 2u) &&
         MdoApiValueSetString(Record, "contract", MDO_MODEL_VERIFICATION_CONTRACT) &&
+        MdoApiValueSetString(Record, "scope", "configured-profile-runtime-tools") &&
         MdoApiValueSetString(Record, "fingerprint", Hash) && MdoApiValueSetString(Phase, "state", State) &&
         MdoApiValueSetUInt(Phase, "latency_ms", Latency) && MdoApiValueSetString(Phase, "code", Code ? Code : "") &&
         MdoApiValueSetTake(Record, Tools ? "tools" : "reply", &Phase) && MdoModelVerificationResult(Record, NeedsTools);

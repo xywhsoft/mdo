@@ -103,3 +103,9 @@ The admin model catalog has independent interface/content selectors, per-languag
 edit tabs, coverage filters and a language-registry editor. New content languages
 start disabled; fill their translations before enabling them. Current admin
 components and standalone HTML share source and translation bindings.
+
+## 2026-11-03 验证范围
+
+验证合同升级为 `runtime-tools-roundtrip-v4`，旧证据自动失效。测试携带当前运行时启用的工具描述（含 MCP，而不再只过滤内置工具），其内容纳入指纹。工具测试验证调用参数、按实际协议回放 assistant/工具结果、再次获得可见回复；不执行任何真实工具。保存的模型参数、供应商、网络设置或工具描述变化会要求重新测试。
+
+界面区分基础连通与当前配置验证。此证据只覆盖保存的默认模型参数及通用运行时工具，不保证每一个自定义 Agent、图片输入、其他思考档位或历史会话组合；这些场景仍需实际运行验收。测试验证了 Chat Completions、Responses 和 Anthropic 三种协议及工具结果被拒绝时不能标记通过。

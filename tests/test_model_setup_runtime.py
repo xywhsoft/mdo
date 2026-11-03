@@ -53,7 +53,7 @@ class Supplier(BaseHTTPRequestHandler):
             return self.reply({'id': 'msg_fixture', 'type': 'message', 'role': 'assistant',
                 'model': data['model'], 'content': [{'type': 'text', 'text': 'OK'}],
                 'stop_reason': 'end_turn', 'usage': {'input_tokens': 6, 'output_tokens': 1}})
-        if data.get('tools'):
+        if data.get('tools') and not any(row.get('role') == 'tool' for row in data.get('messages', [])):
             return self.reply({'id': 'fixture', 'object': 'chat.completion', 'model': data['model'],
                 'choices': [{'index': 0, 'message': {'role': 'assistant', 'content': None,
                     'tool_calls': [{'id': 'probe', 'type': 'function', 'function': {

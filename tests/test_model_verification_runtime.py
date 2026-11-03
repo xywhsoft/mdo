@@ -47,7 +47,9 @@ class Supplier(BaseHTTPRequestHandler):
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
         self.calls.append(body)
-        tools = bool(body.get('tools'))
+        has_tools = bool(body.get('tools'))
+        followup = any(row.get('role') == 'tool' or row.get('type') == 'function_call_output' or any(part.get('type') == 'tool_result' for part in row.get('content', []) if isinstance(part, dict)) for row in body.get('messages', body.get('input', [])))
+        tools = has_tools and not followup
         def strict_object(schema):
             if not isinstance(schema, dict): return True
             if schema.get('type') == 'object' and (schema.get('additionalProperties') is not False or
@@ -56,7 +58,7 @@ class Supplier(BaseHTTPRequestHandler):
                 strict_object(value) for row in schema.values() if isinstance(row, list) for value in row)
         definitions = [tool.get('function', tool) for tool in body.get('tools', [])]
         names = {tool.get('name') for tool in definitions}
-        valid = body.get('stream') is True and (not tools or {'skill', 'read', 'exec', 'mdo_connection_probe'} <= names)
+        valid = body.get('stream') is True and (not has_tools or {'skill', 'read', 'exec', 'mdo_connection_probe'} <= names)
         if not self.path.endswith('/messages'):
             valid &= all((isinstance(tool.get('strict'), bool) if self.path.endswith('/responses') else
                 'strict' not in tool or isinstance(tool['strict'], bool)) and
@@ -70,6 +72,8 @@ class Supplier(BaseHTTPRequestHandler):
         if self.mode == 'wait':
             self.entered.set()
             assert self.release.wait(3), 'fixture wait exceeded'
+        if followup and self.mode == 'invalid_followup':
+            return self.send_error(400, 'Tool replay rejected')
         args = '[]' if self.mode == 'invalid_tool' else '{}'
         if self.path.endswith('/responses'):
             output = [{'type': 'function_call', 'call_id': 'probe', 'name': 'mdo_connection_probe', 'arguments': args}] if tools else [
@@ -286,10 +290,10 @@ def main():
                 for name in ('chat', 'responses', 'messages'):
                     result = probe(name)['data']; assert not result['verification']['verified'], result
                     result = probe(name, True)['data']; assert result['verification']['verified'], result
-                    assert result['verification']['contract'] == 'runtime-tools-stream-v3'
+                    assert result['verification']['contract'] == 'runtime-tools-roundtrip-v4'
                 assert not Supplier.contract_errors
                 assert not list((base/'home/sessions').rglob('snapshot.json'))
-                checks.append('reply + valid dummy tool across Chat, Responses and Anthropic')
+                checks.append('reply + tool call/result/next reply across Chat, Responses and Anthropic; rejected follow-ups cannot verify a model')
                 checks.append('streaming and real native read/exec/skill schemas verified without executing tools or persisting conversations')
                 config, etag = get(); assert all(config['verification'][name]['verified'] for name in ('chat', 'responses', 'messages'))
                 for path in (base/'home/data/model-verification').glob('*.json'):
@@ -318,7 +322,12 @@ def main():
                 Supplier.mode = 'invalid_tool'
                 result = probe('chat', True, 422); assert result['error']['code'] == 'model_tools_test_failed', result
                 assert not get()[0]['verification']['chat']['verified']
-                Supplier.mode = 'ok'; probe('chat', True)
+                Supplier.mode = 'invalid_followup'
+                for name in ('chat', 'responses', 'messages'):
+                    probe(name, True, 422)
+                    assert not get()[0]['verification'][name]['verified']
+                Supplier.mode = 'ok'
+                for name in ('chat', 'responses', 'messages'): probe(name, True)
                 checks.append('reasoning-only replies and invalid tool arguments cannot verify a model')
                 config, etag = get(); config['default_model'] = 'chat'; save(config, etag)
                 assert get()[0]['verification']['chat']['verified']
