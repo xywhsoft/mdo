@@ -247,7 +247,7 @@ static int32 MdoUpdateThread(ptr Data)
     }
     return 0;
 }
-static bool MdoUpdateRequest(unsigned Command)
+static bool MdoUpdateRequestParent(unsigned Command,xcancel* Parent)
 {
     bool Ok = false;
     if (!g_MdoUpdate.Lock || !g_MdoUpdate.Thread) return false;
@@ -256,7 +256,7 @@ static bool MdoUpdateRequest(unsigned Command)
     if (Status->Enabled && !Status->Busy &&
         (Command == 1 || (Command == 2 && Status->Available && !Status->Ready) ||
          (Command == 3 && Status->Ready) || (Command == 4 && Status->Required && Status->Available))) {
-        xcancel* Cancel = xrtCancelCreate();
+        xcancel* Cancel = xrtCancelChild(Parent);
         if (Cancel) {
             xrtCancelDestroy(g_MdoUpdate.Cancel); g_MdoUpdate.Cancel = Cancel;
             Status->Busy = true; Status->Installing = Command == 3;
@@ -267,6 +267,8 @@ static bool MdoUpdateRequest(unsigned Command)
     }
     xrtMutexUnlock(g_MdoUpdate.Lock); return Ok;
 }
+static bool MdoUpdateRequest(unsigned Command){return MdoUpdateRequestParent(Command,NULL);}
+bool MdoUpdateResumeDownload(xcancel* Cancel){return MdoUpdateRequestParent(2,Cancel);}
 bool MdoUpdateCheck(void) { return MdoUpdateRequest(1); }
 static void MdoUpdateSelectEdition(MdoUpdateStatus* Status, cstr Edition)
 {

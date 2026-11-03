@@ -19,6 +19,7 @@ bool MdoUpdateGetStatus(MdoUpdateStatus* Status);
 bool MdoUpdateCheck(void);
 bool MdoUpdateCheckEdition(cstr Edition);
 bool MdoUpdateDownload(void);
+bool MdoUpdateResumeDownload(xcancel* Cancel);
 bool MdoUpdateInstall(void);
 void MdoUpdateCancel(void);
 bool MdoUpdateInstalling(void);

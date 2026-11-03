@@ -31,7 +31,7 @@ static bool MdoExtServiceApplyPlanAttempt(const xvalue* Input,xcancel* Cancel,xv
     if(Ok)Ok=MdoExtensionsApplyPlan(Input,Downloads,Cancel,Result,Error);
     for(size_t I=0;I<Count;I++)if(Uses)MdoExtensionTaskUseEnd(Uses[I]);
     for(size_t I=0;I<xrtValueCount(Tasks);I++){
-        xstrview Task;xrtValueGetString(xrtValueArrayGet(Tasks,I),&Task);xvalue* Receipt=NULL;char Why[512]={0};bool Saved=Ok?MdoExtensionTaskComplete(Task.Data,*Result,&Receipt,Why):Cancel&&xrtCancelRequested(Cancel)?MdoExtensionTaskCancel(Task.Data,&Receipt,Why):MdoExtensionTaskFail(Task.Data,Error&&Error[0]?Error:"Extension group installation failed",&Receipt,Why);if(!Saved&&Ok&&*Result)MdoExtServicePut(*Result,"transfer_receipt_error",Why);xrtValueRelease(Receipt);
+        xstrview Task;xrtValueGetString(xrtValueArrayGet(Tasks,I),&Task);xvalue* Receipt=NULL;char Why[512]={0};bool Saved=!Ok||MdoExtensionTaskComplete(Task.Data,*Result,&Receipt,Why);if(!Saved&&Ok&&*Result)MdoExtServicePut(*Result,"transfer_receipt_error",Why);xrtValueRelease(Receipt);
     }
     xrtFree(Uses);xrtValueRelease(Downloads);xrtValueRelease(Tasks);xrtValueRelease(Plan);if(!Ok&&Error&&!Error[0])MdoExtServiceError(Error,"Confirm code approval for the complete inspected plan; the group must fit the 1 GiB transfer budget");return Ok;
 }

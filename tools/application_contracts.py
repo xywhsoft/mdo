@@ -256,6 +256,8 @@ def contract(row):
         output['properties']['data']=ref('Binary')
     if handler=='ApplicationRoute':
         output['properties']['data']=array(ref('Document')) if path.endswith('/services') else ref('JsonValue')
+    if handler=='NativeDownloadsRoute':
+        output['properties']['data']=array(ref('Document'))
     if handler=='ExtensionsRoute' and path.endswith('/bundle'):output['properties']['data']=ref('Document')
     if handler=='ExtensionTasksRoute':
         output['properties'].pop('base64',None)

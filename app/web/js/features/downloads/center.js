@@ -19,9 +19,10 @@ export function createDownloadCenter({ updatePanel, navigation, registry = downl
   let layer = null, pending = false, error = "", timer = 0, destroyed = false, polling = false, signature = "";
   const target = () => targetState().selected?.id || "local";
   const writable = () => { const s = targetState(); return !s.selected || s.connected && !s.runtimeChanged && s.selected.mode !== "view"; };
+  const clearable = row => !downloadActive(row) && !["ready","paused"].includes(row.state);
   async function refresh() {
     if (destroyed || polling) return; polling = true;
-    try { await Promise.allSettled([transport.get("/extension-tasks"), transport.get("/update"), transport.get("/distribution"),installer.refresh({discover:true})]); }
+    try { await Promise.allSettled([transport.get("/extension-tasks"), transport.get("/download-tasks"), transport.get("/update"), transport.get("/distribution"),installer.refresh({discover:true})]); }
     finally { polling = false; schedule(); }
   }
   function schedule() {
@@ -46,7 +47,7 @@ export function createDownloadCenter({ updatePanel, navigation, registry = downl
     writeUiAttribute(entry, "aria-label", text("entry", { count: active })); writeUiAttribute(entry, "title", text("title"));
     writeUiText(close, text("close")); writeUiText(clear, text("clear"));
     writeUiText(message, error); message.hidden = !error;
-    clear.disabled = pending || !writable() || !rows.some(r => !downloadActive(r) && r.state !== "ready");
+    clear.disabled = pending || !writable() || !rows.some(clearable);
     if (!layer) return;
     layer.update({ title: text("title") });
     const next = JSON.stringify([rows, error, pending, writable(), text("title")]); if (signature === next) return; signature = next;
@@ -54,26 +55,38 @@ export function createDownloadCenter({ updatePanel, navigation, registry = downl
     list.replaceChildren(); if (!rows.length) list.append(node("p", text("empty"), "download-empty"));
     for (const row of rows) {
       const item = node("article", null, "download-row"), top = node("div", null, "download-row-heading");
-      const kind = row.source === "cli" ? text(`cli.${row.action}`) : text(row.source === "update" ? "app" : row.source === "legacy" ? "legacy" : "extension");
+      const kind = row.source === "cli" ? text(`cli.${row.action}`) : text(row.source === "update" || row.nativeSource === "update" ? "app" : row.source === "legacy" ? "legacy" : "extension");
       top.append(node("strong", row.name || kind), node("span", text(`state.${row.state}`))); item.append(top, node("small", `${kind}${row.buildId ? ` · ${row.buildId}` : ""}`, "download-meta"));
-      if (downloadActive(row)) {
+      if (downloadActive(row) || row.state === "paused") {
         const progress = node("progress"); writeUiAttribute(progress, "aria-label", `${row.name || kind} · ${text(`state.${row.state}`)}`);
         if (row.total > 0 && typeof row.done === "number") { progress.max = row.total; progress.value = Math.max(0, Math.min(row.done, row.total)); item.append(node("small", `${bytes(row.done)} / ${bytes(row.total)}`)); }
         item.append(progress);
+        if(row.speed > 0) item.append(node("small",text("speed",{speed:bytes(row.speed)}),"download-meta"));
+        if(row.speed > 0 && Number.isFinite(row.eta)) item.append(node("small",text("eta",{seconds:Math.ceil(row.eta)}),"download-meta"));
       }
       if (row.error && row.state !== "cancelled") item.append(node("p", row.error, "download-error"));
       if (row.state === "unknown") item.append(node("p", text("uncertain"), "download-meta"));
       if (row.submission) item.append(node("p", `${text("submission")} #${row.submission.id} · ${row.submission.state}`, "download-meta"));
       const controls = node("div", null, "download-actions");
-      if (row.source === "install") {
+      if (row.source === "native") {
+        const control = verb => transport.post(`/download-tasks/${row.taskId}/${verb}`,{});
+        if(row.active && ["downloading","retrying"].includes(row.state)) controls.append(action(row,text("pause"),()=>control("pause")));
+        if(row.state === "paused") controls.append(action(row,text("resume"),()=>control("resume")));
+        if(row.state === "failed") controls.append(action(row,text("retry"),()=>control("retry")));
+        if(downloadActive(row) || row.state === "paused" || row.state === "failed") controls.append(action(row,text("cancelDelete"),()=>control("cancel")));
+        if(row.nativeSource === "update" && ["ready","failed","paused"].includes(row.state)) controls.append(destination(row,text("viewUpdate"),()=>updatePanel?.open()));
+        if(row.nativeSource === "extension" && row.state === "ready" && row.archiveId) controls.append(action(row,uiMessage("extensionBrowser.install",{},"安装"),()=>installArchive({...row,taskId:row.archiveId})));
+        if(["complete","cancelled","failed"].includes(row.state)) controls.append(action(row,text("clear"),async()=>{
+          if(row.archiveId && row.state === "complete") await transport.delete(`/extension-tasks/${row.archiveId}/forget`);
+          await control("forget");registry.hide(row.key);
+        }));
+      } else if (row.source === "install") {
         if(downloadActive(row))controls.append(action(row,text("cancel"),()=>installer.cancel(row)));
         else controls.append(action(row,text("clear"),()=>registry.hide(row.key)));
       } else if (row.source === "archive") {
         if (!["complete", "cancelled", "expired"].includes(row.state)) controls.append(action(row, text("cancel"), () => transport.delete(`/extension-tasks/${row.taskId}`)));
         if (row.state === "ready" && row.action === "install") controls.append(action(row, uiMessage("extensionBrowser.install", {}, "安装"), async () => {
-          if (!confirm(uiMessage("ui.center.haveYouReviewedTheArchiveAndTrustItsSource", {}, "已检查归档内容并信任其来源，允许安装此扩展？"))) return;
-          let previous=null;if(row.store){try{previous=(await transport.get(`/extensions/${row.kind}/${encodeURIComponent(row.store.xid)}`)).data;}catch(e){if(e.status!==404)throw e;}}
-          return transport.post(`/extension-tasks/${row.taskId}/install`, { trust_code: true, expected_revision:previous?.revision||"",...(row.store ? {} : { id: row.directoryId || `import-${row.taskId}` }) });
+          return installArchive(row);
         }));
         if (row.state === "ready" && row.publication) controls.append(action(row, text("retry"), () => {
           const { upload, nonce, proof_upload, ...metadata } = row.publication;
@@ -99,6 +112,12 @@ export function createDownloadCenter({ updatePanel, navigation, registry = downl
     layer.body.scrollTop = scroll;
     if (focused) ([...list.querySelectorAll("button")].find(button => button.dataset.downloadAction === focused && !button.disabled) || layer.closeButton).focus({ preventScroll: true });
   }
+  async function installArchive(row) {
+    if(!confirm(uiMessage("ui.center.haveYouReviewedTheArchiveAndTrustItsSource",{},"已检查归档内容并信任其来源，允许安装此扩展？"))) return;
+    let previous=null;
+    if(row.store)try{previous=(await transport.get(`/extensions/${row.kind}/${encodeURIComponent(row.store.xid)}`)).data;}catch(e){if(e.status!==404)throw e;}
+    return transport.post(`/extension-tasks/${row.taskId}/install`,{trust_code:true,expected_revision:previous?.revision||"",...(row.store?{}:{id:row.directoryId||`import-${row.taskId}`})});
+  }
   function destination(row, label, navigate) {
     const owner = target(), view = layer, button = node("button", label, "secondary-button"); button.type = "button";
     button.dataset.downloadAction = `${row.key}:${label}`;
@@ -120,10 +139,13 @@ export function createDownloadCenter({ updatePanel, navigation, registry = downl
   close.addEventListener("click", () => { void layer?.close(); });
   clear.addEventListener("click", () => { if (!layer) return; const owner = target(); void act(async () => {
     const failures=[];
-    for(const row of registry.list(owner).filter(r=>!downloadActive(r)&&r.state!=="ready")){
+    for(const row of registry.list(owner).filter(clearable)){
       if(owner!==target()||!writable())return;
       try{
-        if(row.source==="archive"){
+        if(row.source==="native") {
+          if(row.archiveId && row.state === "complete") await transport.delete(`/extension-tasks/${row.archiveId}/forget`);
+          await transport.post(`/download-tasks/${row.taskId}/forget`,{});
+        }else if(row.source==="archive"){
           let current;
           try{current=(await transport.get(`/extension-tasks/${row.taskId}`)).data;if(!current||typeof current.state!=="string")throw Error(uiText("ui.center.cannotConfirmTheTaskSCurrentStateTheTask", {}, "无法确认任务当前状态，已保留此任务"));}
           catch(e){if(e.status!==404)throw e;}

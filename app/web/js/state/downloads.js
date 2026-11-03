@@ -1,6 +1,6 @@
 // Presentation history only. Native managers remain authoritative; requests
 // interrupted by a page reload are never replayed or declared successful.
-const activeStates = new Set(["queued", "running", "downloading", "installing", "extracting", "activating", "uploading", "cancelling"]);
+const activeStates = new Set(["queued", "starting", "running", "downloading", "retrying", "verifying", "installing", "extracting", "activating", "uploading", "cancelling"]);
 export const downloadActive = row => activeStates.has(row.state);
 export function createDownloadRegistry(storage = null) {
   const listeners = new Set(), records = new Map(); let serial = 0;
@@ -23,8 +23,19 @@ export function createDownloadRegistry(storage = null) {
     if (JSON.stringify(previous) === JSON.stringify(next)) return;
     records.set(key, next); publish();
   }
-  const list = target => [...records.values()].filter(r => r.target === target && !r.hidden &&
-    !(r.source === "archive" && r.store?.version_id && [...records.values()].some(job => job.target === target && job.source === "install" && job.versionIds?.includes(r.store.version_id)))).sort((a, b) => b.started - a.started);
+  const list = target => {
+    const all = [...records.values()].filter(r => r.target === target);
+    return all.filter(r => !r.hidden &&
+      !(r.source === "archive" && all.some(n => n.source === "native" && n.archiveId === r.taskId)) &&
+      !(r.source === "update" && all.some(n => n.source === "native" && n.nativeSource === "update" && n.hash === r.hash)) &&
+      !(r.source === "archive" && r.store?.version_id && all.some(job => job.source === "install" && job.versionIds?.includes(r.store.version_id))))
+      .map(row => {
+        if(row.source !== "native" || !row.archiveId) return row;
+        const archive = records.get(`${target}:archive:${row.archiveId}`);
+        return archive ? { ...row, store: archive.store, kind: archive.kind, directoryId: archive.directoryId,
+          state: archive.state === "complete" ? "complete" : row.state } : row;
+      }).sort((a,b) => b.started-a.started);
+  };
   function install(target, operationId, patch = {}) {
     if (!/^sdk-[0-9a-f]{32}$/.test(operationId)) throw new Error("Invalid installation operation identity");
     const key = `${target}:install:${operationId}`;
@@ -32,6 +43,18 @@ export function createDownloadRegistry(storage = null) {
   }
   function observe(path, data, target = "local") {
     if (!data || typeof data !== "object") return;
+    if(path === "/download-tasks" || path.startsWith("/download-tasks/")) {
+      const live = new Set();
+      for(const task of Array.isArray(data) ? data : []) {
+        if(!/^[A-Za-z0-9_-]{32}$/.test(task.id || "") || typeof task.state !== "string") continue;
+        const key = `${target}:native:${task.id}`;live.add(key);
+        put(key,{target,source:"native",nativeSource:task.source,taskId:task.id,archiveId:task.archive_id || "",kind:task.kind,
+          name:task.name,state:task.state,done:task.received || 0,total:task.bytes || 0,hash:task.sha256,
+          speed:task.speed || 0,eta:task.eta_seconds,error:task.error || "",active:task.active === true});
+      }
+      for(const [key,row] of records) if(row.target===target && row.source==="native" && !live.has(key)) records.delete(key);
+      publish();
+    }
     if (path === "/extension-tasks" || path.startsWith("/extension-tasks/")) {
       for (const task of Array.isArray(data) ? data : [data]) {
         if (!/^[A-Za-z0-9_-]{32}$/.test(task.id || "") || !task.state) continue;

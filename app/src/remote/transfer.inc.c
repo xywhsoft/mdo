@@ -122,7 +122,7 @@ static bool MdoTransferAttempt(xnetengine* Engine,cstr Path,cstr Relative,uint64
     Code="size";Detail="Downloaded size does not match the catalog";
     if(Total!=Size)goto done;
     Code="write";Detail="Unable to finalize the downloaded file";
-    if(!MdoDownloadsProgress(Task,Total,"verifying")||!xrtSha256Final(&Sha,Digest) || !xrtFlush(File))goto done;
+    if(!MdoDownloadsGate(Task,Cancel)||!MdoDownloadsProgress(Task,Total,"verifying")||!xrtSha256Final(&Sha,Digest) || !xrtFlush(File))goto done;
     for(size_t i=0;i<32;i++)snprintf(Hex+i*2,3,"%02x",Digest[i]);
     Code="checksum";Detail="Downloaded SHA-256 does not match the catalog";
     Ok=!strcmp(Hex,Hash);
@@ -138,13 +138,13 @@ done:
 bool MdoTransferDownloadReport(xnetengine* Engine,cstr Path,cstr Relative,uint64 Size,cstr Hash,xcancel* Cancel,MdoTransferProgress Progress,void* ProgressData,MdoTransferReport* Report){
     xvalue* Context=xrtValueObject();bool Prepared=Context&&Path&&Relative&&xrtValueObjectSetNew(Context,XRT_STR_LITERAL("path"),xrtValueString(xrtStrView(Path)))&&
         xrtValueObjectSetNew(Context,XRT_STR_LITERAL("relative"),xrtValueString(xrtStrView(Relative)));
-    char Error[512]={0};MdoNativeDownload* Task=Prepared?MdoDownloadsBegin(!strncmp(Relative,"data/update/",12)?"update":"transfer",Path,!strncmp(Relative,"data/update/",12)?"mdo":Relative,Hash,Size,Context,Error):NULL;
+    char Error[512]={0};MdoNativeDownload* Task=Prepared?MdoDownloadsBegin(!strncmp(Relative,"data/update/",12)?"update":"transfer",Path,!strncmp(Relative,"data/update/",12)?"mdo":Relative,Hash,Size,Context,Cancel,Error):NULL;
     xrtValueRelease(Context);MdoTransferReport Local={0};bool Ok=false;
     /* Legacy embedders without the task manager retain the synchronous API. */
     if(!Task&&Error[0]){if(Report){memset(Report,0,sizeof(*Report));snprintf(Report->Code,sizeof(Report->Code),"busy");snprintf(Report->Detail,sizeof(Report->Detail),"%.255s",Error);}return false;}
     for(unsigned Attempt=0;Attempt<3;Attempt++){
         if(!MdoDownloadsGate(Task,Cancel))break;
-        Ok=MdoTransferAttempt(Engine,Path,Relative,Size,Hash,Cancel,Progress,ProgressData,&Local,Task);if(Ok)break;
+        Ok=MdoTransferAttempt(Engine,Path,Relative,Size,Hash,MdoDownloadsCancelToken(Task,Cancel),Progress,ProgressData,&Local,Task);if(Ok)break;
         if(strcmp(Local.Code,"network")&&strcmp(Local.Code,"download")&&strcmp(Local.Code,"range"))break;
         MdoDownloadsProgress(Task,Local.Bytes,"retrying");
         for(unsigned I=0;I<(Attempt+1)*10&&MdoDownloadsGate(Task,Cancel);I++)xrtSleep(100);

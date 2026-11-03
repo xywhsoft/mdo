@@ -10,6 +10,24 @@ globalThis.fetch = async url => new Response(readFileSync(new URL(`../app/web${u
 await loadLocale("en-US"); globalThis.fetch = initialFetch;
 const flush = () => new Promise(r => setImmediate(r));
 
+test("native downloads pause, resume, retry and retain paused files when clearing history",async t=>{
+  const previous=globalThis.document,doc=testDocument(),entry=new TestElement("button");
+  for(const name of ["label","count"]){const span=new TestElement("span");span.setAttribute(`data-downloads-${name}`,"");entry.append(span);}
+  doc.querySelector=name=>name==="#open-downloads"?entry:null;globalThis.document=doc;
+  const registry=createDownloadRegistry(),id="N".repeat(32),calls=[];
+  const snapshot=state=>registry.observe("/download-tasks",[{id,source:"transfer",name:"Runtime",state,received:40,bytes:100,active:state==="downloading",speed:state==="downloading"?20:0,eta_seconds:3}]);
+  snapshot("downloading");
+  const center=createDownloadCenter({registry,transport:{get:async()=>({data:[]}),post:async(path,body)=>{calls.push([path,body]);},delete:async()=>assert.fail("native actions use their owned endpoint")}});
+  t.after(()=>{center.destroy();globalThis.document=previous;});center.open();await flush();
+  const buttons=label=>descendants(doc.body).filter(n=>n.tagName==="BUTTON"&&n.textContent===label);
+  buttons("Pause")[0].click();await flush();assert.equal(calls.at(-1)[0],`/download-tasks/${id}/pause`);
+  snapshot("paused");assert.equal(doc.body.querySelector("progress").value,40);
+  buttons("Clear finished")[0].click();await flush();assert(!calls.some(([path])=>path.endsWith("/forget")));assert.equal(registry.list("local").length,1);
+  buttons("Resume")[0].click();await flush();assert.equal(calls.at(-1)[0],`/download-tasks/${id}/resume`);
+  snapshot("failed");buttons("Retry")[0].click();await flush();assert.equal(calls.at(-1)[0],`/download-tasks/${id}/retry`);
+  buttons("Cancel and delete")[0].click();await flush();assert.equal(calls.at(-1)[0],`/download-tasks/${id}/cancel`);
+});
+
 test("one global dialog combines source types and delegates cancellation, retry and update review", async t => {
   const previous = globalThis.document, entry = new TestElement("button"), doc = testDocument();
   for (const name of ["label", "count"]) { const child = new TestElement("span"); child.setAttribute(`data-downloads-${name}`, ""); entry.append(child); }

@@ -1,4 +1,5 @@
 #include "../../include/mdo/extension_service.h"
+#include "../../include/mdo/downloads.h"
 #include "../../include/mdo/extension_manifest.h"
 #include "../../include/mdo/extension_tasks.h"
 #include "../../include/mdo/extensions.h"
@@ -123,16 +124,33 @@ static bool MdoExtServiceDownloadAttempt(cstr Kind,cstr Version,xcancel* Cancel,
  xvalue* Query=xrtValueObject(),*Entry=NULL,*Task=NULL,*Origin=NULL;bool Ok=Query&&MdoExtServicePut(Query,"action","detail")&&MdoExtServicePut(Query,"version_id",Version)&&MdoExtServiceReadBudget(Query,Cancel,&Entry,Retries,Error);xrtValueRelease(Query);
  cstr ActualKind=MdoExtensionText(Entry,"kind",32),State=MdoExtensionText(Entry,"state",16),Hash=MdoExtensionText(Entry,"sha256",64);uint64 Bytes=0;
  cstr ActualVersion=MdoExtensionText(Entry,"version_id",32);Ok=Ok&&ActualKind&&!strcmp(Kind,ActualKind)&&ActualVersion&&!strcmp(Version,ActualVersion)&&State&&!strcmp(State,"published")&&MdoExtServiceNumber(Entry,"bytes",&Bytes)&&Bytes&&Bytes<=MDO_EXTENSION_ARCHIVE_BYTES;
- xvalue* Input=xrtValueObject();Ok=Ok&&Input&&MdoExtServicePut(Input,"kind",Kind)&&MdoExtServicePut(Input,"purpose","install")&&MdoExtServicePut(Input,"sha256",Hash)&&xrtValueObjectSetNew(Input,XRT_STR_LITERAL("bytes"),xrtValueUInt(Bytes))&&MdoExtensionTaskBeginWait(Input,Cancel,&Task,Error);xrtValueRelease(Input);
+ /* A pinned version/hash can reuse its durable receiving/sealed archive after
+  * process loss. Never select a newer version or repeat an installation here. */
+ xvalue* Previous=Ok?MdoDownloadsFind("extension",Version,Hash):NULL;
+ cstr PreviousId=MdoExtensionText(xrtValueObjectGet(Previous,XRT_STR_LITERAL("context")),"archive_id",32);
+ if(PreviousId){char Why[512]={0};xvalue* Old=MdoExtensionTaskRead(PreviousId,Why);cstr OldState=MdoExtensionText(Old,"state",24),OldHash=MdoExtensionText(Old,"sha256",64);uint64 OldBytes=0;
+  if(Old&&OldState&&OldHash&&!strcmp(OldHash,Hash)&&MdoExtServiceNumber(Old,"bytes",&OldBytes)&&OldBytes==Bytes&&(!strcmp(OldState,"receiving")||!strcmp(OldState,"ready")))Task=Old;
+  else {xrtValueRelease(Old);xvalue* Discard=NULL;MdoExtensionTaskCancel(PreviousId,&Discard,Why);xrtValueRelease(Discard);}}
+ xrtValueRelease(Previous);
+ xvalue* Input=xrtValueObject();Ok=Ok&&Input&&MdoExtServicePut(Input,"kind",Kind)&&MdoExtServicePut(Input,"purpose","install")&&MdoExtServicePut(Input,"sha256",Hash)&&xrtValueObjectSetNew(Input,XRT_STR_LITERAL("bytes"),xrtValueUInt(Bytes))&&(Task||MdoExtensionTaskBeginWait(Input,Cancel,&Task,Error));xrtValueRelease(Input);
  char Id[33]={0};if(Ok)snprintf(Id,sizeof(Id),"%s",MdoExtensionText(Task,"id",32));MdoExtensionTaskUse* Use=Ok?MdoExtensionTaskUseBegin(Id,true,Cancel,Error):NULL;MdoAccountLease Lease={0};Origin=Ok?MdoExtServiceOrigin(Entry):NULL;
  Ok=Ok&&Use&&Origin&&MdoExtensionTaskOrigin(Use,Origin,Error)&&MdoExtServiceLease(MdoExtensionTaskUseCancel(Use),false,&Lease,Error);
- for(uint64 Offset=0;Ok&&Offset<Bytes;){char* Path=xrtFormat(MDO_EXT_SERVICE "/archive?dependency_protocol=1&version=%s&offset=%llu",Version,(unsigned long long)Offset);XS_FetchResponse Response={0};uint64 Remaining=Bytes-Offset;size_t Want=(size_t)(Remaining<MDO_EXTENSION_TASK_CHUNK?Remaining:MDO_EXTENSION_TASK_CHUNK);
-  Ok=Path&&MdoExtServiceFetchBudget(Path,&Lease,MdoExtensionTaskUseCancel(Use),&Response,Retries,Error);
+ xvalue* Context=xrtValueObject();bool Tracked=Ok&&Context&&MdoExtServicePut(Context,"kind",Kind)&&MdoExtServicePut(Context,"archive_id",Id);
+ MdoNativeDownload* Download=Tracked?MdoDownloadsBegin("extension",Version,MdoExtensionText(Entry,"name",240)?MdoExtensionText(Entry,"name",240):Kind,Hash,Bytes,Context,Cancel,Error):NULL;xrtValueRelease(Context);
+ if(Error&&Error[0])Ok=false;
+ uint64 Received=0;if(Ok)MdoExtServiceNumber(Task,"received",&Received);if(Received>Bytes)Ok=false;
+ for(uint64 Offset=Received;Ok&&Offset<Bytes;){
+  if(!MdoDownloadsGate(Download,MdoExtensionTaskUseCancel(Use))){Ok=false;break;}
+  char* Path=xrtFormat(MDO_EXT_SERVICE "/archive?dependency_protocol=1&version=%s&offset=%llu",Version,(unsigned long long)Offset);XS_FetchResponse Response={0};uint64 Remaining=Bytes-Offset;size_t Want=(size_t)(Remaining<MDO_EXTENSION_TASK_CHUNK?Remaining:MDO_EXTENSION_TASK_CHUNK);
+  Ok=Path&&MdoExtServiceFetchBudget(Path,&Lease,MdoDownloadsCancelToken(Download,MdoExtensionTaskUseCancel(Use)),&Response,Retries,Error);
   if(Ok&&(Response.BodySize!=Want||!Response.ContentType||strncmp(Response.ContentType,"application/zip",15))){snprintf(Error,512,"Store archive chunk mismatch: expected %zu application/zip bytes, received %zu bytes (HTTP %u, %.80s)",Want,Response.BodySize,(unsigned)Response.Status,Response.ContentType?Response.ContentType:"no Content-Type");Ok=false;}
-  xvalue* Progress=NULL;if(Ok)Ok=MdoExtensionTaskUseWrite(Use,Offset,Response.Body,Response.BodySize,&Progress,Error);xrtValueRelease(Progress);xsFetchResponseUnit(&Response);xrtFree(Path);Offset+=Want;
+  xvalue* Progress=NULL;if(Ok)Ok=MdoExtensionTaskUseWrite(Use,Offset,Response.Body,Response.BodySize,&Progress,Error)&&MdoDownloadsProgress(Download,Offset+Want,"downloading");xrtValueRelease(Progress);xsFetchResponseUnit(&Response);xrtFree(Path);Offset+=Want;
  }
- MdoAccountRelease(&Lease);MdoExtensionTaskUseEnd(Use);if(Ok)Ok=MdoExtensionTaskSeal(Id,Cancel,Result,Error);
- if(!Ok&&Id[0]){xvalue* Receipt=NULL;char Ignored[512];if(Cancel&&xrtCancelRequested(Cancel))(void)MdoExtensionTaskCancel(Id,&Receipt,Ignored);else (void)MdoExtensionTaskFail(Id,Error&&Error[0]?Error:"Store archive download or validation failed",&Receipt,Ignored);xrtValueRelease(Receipt);}
+ MdoAccountRelease(&Lease);MdoExtensionTaskUseEnd(Use);if(Ok)Ok=MdoDownloadsGate(Download,Cancel)&&MdoDownloadsProgress(Download,Bytes,"verifying")&&MdoExtensionTaskSeal(Id,MdoDownloadsCancelToken(Download,Cancel),Result,Error);
+ /* Receiving archives remain resumable on read failures, cancellation and
+  * shutdown. The explicit download-centre cancel action deletes owned bytes. */
+ Ok=MdoDownloadsEnd(Download,Ok,Error&&Error[0]?Error:"Archive download interrupted",Cancel);
+ if(!Ok){xrtValueRelease(*Result);*Result=NULL;}
  xrtValueRelease(Entry);xrtValueRelease(Task);xrtValueRelease(Origin);if(!Ok&&Error&&!Error[0])MdoExtServiceError(Error,"The store archive changed or failed its byte/hash/ZIP validation");return Ok;
 }
 bool MdoExtensionServiceDownload(cstr Kind,cstr Version,xcancel* Cancel,xvalue** Result,char Error[512]){

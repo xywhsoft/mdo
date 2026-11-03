@@ -4,6 +4,24 @@ import { createDownloadRegistry, downloadRegistry, downloadActive } from "../app
 import { api, hasPendingApiWrites } from "../app/web/js/api/client.js";
 const flush = () => new Promise(r => setImmediate(r));
 
+test("durable native snapshots expose paused progress and merge archive ownership without duplicate rows",()=>{
+  const r=createDownloadRegistry(),id="N".repeat(32),archive="A".repeat(32);
+  r.observe("/extension-tasks",[{id:archive,state:"receiving",purpose:"install",kind:"skills",bytes:100,received:40,store:{xid:"work",version_id:"version"}}],"home");
+  r.observe("/download-tasks",[{id,source:"extension",archive_id:archive,kind:"skills",name:"Model runtime",state:"paused",received:40,bytes:100,sha256:"a".repeat(64)}],"home");
+  assert.equal(r.list("home").length,1);const row=r.list("home")[0];assert.equal(row.source,"native");assert.equal(row.done,40);assert.equal(row.store.xid,"work");assert.equal(downloadActive(row),false);
+  r.observe("/extension-tasks",[{id:archive,state:"complete",purpose:"install",kind:"skills",bytes:100,received:100,store:{xid:"work"}}],"home");
+  assert.equal(r.list("home")[0].state,"complete");
+  r.observe("/download-tasks",[],"other");assert.equal(r.list("home").length,1);
+  r.observe("/download-tasks",[],"home");assert(!r.list("home").some(row=>row.source==="native"));
+});
+
+test("a native update carries real byte speed and suppresses the old status-only row",()=>{
+  const r=createDownloadRegistry(),hash="b".repeat(64);
+  r.observe("/update",{status:"downloading",sha256:hash,build_id:10,size:100});
+  r.observe("/download-tasks",[{id:"U".repeat(32),source:"update",name:"mdo",state:"downloading",received:50,bytes:100,sha256:hash,speed:25,eta_seconds:2,active:true}]);
+  assert.equal(r.list("local").length,1);assert.equal(r.list("local")[0].speed,25);assert.equal(r.list("local")[0].eta,2);
+});
+
 test("native snapshots merge without duplicates and remain isolated by device", () => {
   const registry = createDownloadRegistry();
   const snapshot = { tasks: [{ id: "one", action: "install", name: "rg", state: "running", done: 5, total: 10 }, { id: "catalog", action: "catalog", state: "running" }, { id: "publish", action: "publish", state: "uploading" }] };
