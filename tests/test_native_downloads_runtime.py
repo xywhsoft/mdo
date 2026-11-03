@@ -209,10 +209,19 @@ XS_RequestResult RequestProc(XS_HttpReq* R){{
                 return
             row,t,result=begin('normal');id=row['id'];api('POST',f'/download-tasks/{id}/pause',{})
             time.sleep(.15);paused=next(r for r in rows() if r['id']==id);assert paused['state']=='paused',paused
+            index=home/'data/downloads/tasks.json';saved=index.read_bytes();index.unlink();index.mkdir()
+            st,_,_=request(port,'POST',f'/api/v1/download-tasks/{id}/resume',body=b'{}',headers={'Content-Type':'application/json'})
+            assert st!=200,'An unsaved resume must not be accepted'
+            time.sleep(.15);assert next(r for r in rows() if r['id']==id)['state']=='paused'
+            index.rmdir();index.write_bytes(saved)
             api('POST',f'/download-tasks/{id}/resume',{});t.join(15);assert result and result[0]['success'],result
             assert hashlib.sha256((home/'data/downloads/fixture.bin').read_bytes()).hexdigest()==HASH
             # Drop the completed test artifact before the next independent case.
             (home/'data/downloads/fixture.bin').unlink()
+            saved=index.read_bytes();index.unlink();index.mkdir()
+            assert not transfer('save-failure')['success']
+            assert not any(r['identity']=='/qa/save-failure' for r in rows()),'Failed registration must not leak a half-built task'
+            index.rmdir();index.write_bytes(saved)
             disconnected=transfer('disconnect');assert disconnected['success'],(disconnected,Publisher.requests)
             assert any(m=='disconnect' and n>0 for m,n in Publisher.requests),Publisher.requests
             (home/'data/downloads/fixture.bin').unlink()
@@ -251,6 +260,8 @@ XS_RequestResult RequestProc(XS_HttpReq* R){{
             assert any(m=='extension' and n==1048576 for m,n in Publisher.requests),Publisher.requests
             owned=api('GET','/extension-tasks');assert len([a for a in owned if a.get('store',{}).get('version_id')==VERSION])==1,owned
             assert not (home/'skills'/('W'*32)).exists(),'Downloading an archive must not install it'
+            api('POST',f"/extension-tasks/{owned[0]['id']}/install",dict(trust_code=True,expected_revision=''))
+            assert next(r for r in rows() if r['id']==row['id'])['state']=='complete','Installation receipt must reconcile native history'
             # The updater must restore its accepted policy and same byte offset.
             api('POST','/update/download',{})
             update=until(lambda:next((r for r in rows() if r['source']=='update' and r.get('received',0)>0),None))
@@ -274,6 +285,8 @@ XS_RequestResult RequestProc(XS_HttpReq* R){{
             # bytes in quarantine before publishing the repaired registry.
             index=home/'data/downloads/tasks.json'
             process.kill();process.wait();healthy=json.loads(index.read_text(encoding='utf-8'))
+            # Simulate the subsequent application build consuming its update.
+            installed=next(r for r in healthy if r['source']=='update');installed['context']['build_id']=1
             broken=json.dumps([{},*healthy,healthy[0]]).encode();index.write_bytes(broken);process=start()
             assert len(rows())==len(healthy)
             assert any(p.read_bytes()==broken for p in index.parent.glob('tasks.rejected-*.json'))
@@ -291,7 +304,28 @@ XS_RequestResult RequestProc(XS_HttpReq* R){{
                 assert rows()==[]
                 assert any(p.read_bytes()==broken for p in index.parent.glob('tasks.rejected-*.json'))
             assert transfer('repaired')['success']
+            # Retain unfinished and ready installation work at capacity; only
+            # completed file history may make room for another download.
+            process.kill();process.wait();template=next(r for r in healthy if r['source']=='transfer')
+            history=[]
+            for i in range(128):
+                record=json.loads(json.dumps(template));record.update(id=str(i).zfill(32),identity=f'/qa/history-{i}',state='ready',received=record['bytes'],updated_at=int(time.time()*1000000))
+                record['context']=dict(path=record['identity'],relative=f'data/downloads/history-{i}.bin');history.append(record)
+            history[-2]['state']='paused'
+            history[-1].update(source='update',identity='/mdo/blob/'+HASH)
+            history[-1]['context']=dict(path=history[-1]['identity'],relative='data/update/new.exe',build_id=90000001)
+            index.write_text(json.dumps(history),encoding='utf-8');process=start()
+            assert transfer('capacity')['success'];assert len(rows())==128
+            assert any(r['id']==history[-2]['id'] and r['state']=='paused' for r in rows())
+            assert any(r['id']==history[-1]['id'] and r['state']=='ready' for r in rows())
+            process.kill();process.wait();history=json.loads(index.read_text(encoding='utf-8'))
+            expired=[r for r in history if r['source']=='transfer' and r['state']=='ready'][:2]
+            for record,state in zip(expired,('complete','cancelled')):record.update(state=state,updated_at=1,cleanup_pending=False)
+            index.write_text(json.dumps(history),encoding='utf-8');process=start()
+            assert transfer('retention')['success']
+            assert not {r['id'] for r in expired}&{r['id'] for r in rows()}
             print('PASS isolated bad/duplicate records, preserved corrupt indexes, new downloads after repair, cleanup failure + retry')
+            print('PASS failed task registration/resume rollback, completed history pruning at capacity and 30-day retention without discarding unfinished packages')
         except Exception:
             print((base/'host.log').read_text(encoding='utf-8',errors='replace')[-6000:])
             print('Publisher requests:',Publisher.requests)

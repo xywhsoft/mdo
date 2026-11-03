@@ -3,7 +3,7 @@
 const activeStates = new Set(["queued", "starting", "running", "downloading", "retrying", "verifying", "installing", "extracting", "activating", "uploading", "cancelling"]);
 export const downloadActive = row => activeStates.has(row.state);
 export function createDownloadRegistry(storage = null) {
-  const listeners = new Set(), records = new Map(), updates = new Map(); let serial = 0;
+  const listeners = new Set(), records = new Map(), updates = new Map(), installedBuilds = new Map(); let serial = 0;
   try {
     for (const row of JSON.parse(storage?.getItem("mdo.downloads.v1") || "[]").slice(-200)) {
       if (!row || typeof row.key !== "string" || typeof row.target !== "string" || typeof row.name !== "string") continue;
@@ -30,7 +30,9 @@ export function createDownloadRegistry(storage = null) {
       !(r.source === "update" && all.some(n => n.source === "native" && n.nativeSource === "update" && n.hash === r.hash)) &&
       !(r.source === "archive" && r.store?.version_id && all.some(job => job.source === "install" && job.versionIds?.includes(r.store.version_id))))
       .map(row => {
+        if(row.source === "native" && row.nativeSource === "transfer" && row.state === "ready") return { ...row, state: "complete" };
         if(row.source === "native" && row.nativeSource === "update" && row.state === "ready") {
+          if(row.buildId && installedBuilds.get(target) >= row.buildId) return { ...row, state: "complete" };
           const update = updates.get(target);
           if(update && !update.busy && update.ready === false && ["current","available"].includes(update.status))
             return { ...row, state: update.status === "current" && update.sha256 === row.hash ? "complete" : "expired" };
@@ -54,7 +56,7 @@ export function createDownloadRegistry(storage = null) {
         if(!/^[A-Za-z0-9_-]{32}$/.test(task.id || "") || typeof task.state !== "string") continue;
         const key = `${target}:native:${task.id}`;live.add(key);
         put(key,{target,source:"native",nativeSource:task.source,taskId:task.id,archiveId:task.archive_id || "",kind:task.kind,
-          name:task.name,state:task.state,done:task.received || 0,total:task.bytes || 0,hash:task.sha256,
+          name:task.name,state:task.state,done:task.received || 0,total:task.bytes || 0,hash:task.sha256,buildId:task.build_id || 0,
           speed:task.speed || 0,eta:task.eta_seconds,error:task.error || "",errorCode:task.error_code || "",cleanupPending:task.cleanup_pending === true,engine:task.engine || "native",fallbackReason:task.fallback_reason || "",active:task.active === true});
       }
       for(const [key,row] of records) if(row.target===target && row.source==="native" && !live.has(key)) records.delete(key);
@@ -108,6 +110,7 @@ export function createDownloadRegistry(storage = null) {
       }
     }
     if (path === "/distribution" && data.build_id) {
+      installedBuilds.set(target,data.build_id);publish();
       const previous = [...records.values()].reverse().find(r => r.target === target && r.source === "legacy");
       if (data.busy && data.operation_id || previous && downloadActive(previous)) {
         const key = previous && downloadActive(previous) ? previous.key : `${target}:legacy:${Date.now()}:${++serial}`;

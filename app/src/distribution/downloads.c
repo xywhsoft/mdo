@@ -43,9 +43,10 @@ static bool DlContext(cstr Source,cstr Identity,const xvalue* C){
         (Length<12||strcmp(Relative+Length-12,".resume.json"));
 }
 static bool DlState(const MdoNativeDownload* T,cstr S){return T&&T->Record&&!strcmp(DlText(T->Record,"state"),S);}
-/* Only cancelled tasks with no retained bytes are disposable history. Paused,
- * failed and ready downloads retain their ownership until explicitly cleared. */
-static bool DlPrunable(MdoNativeDownload* T){bool Pending=false;return !T->Active&&!T->DispatchCancel&&DlState(T,"cancelled")&&
+/* Completed raw files remain on disk; unfinished/ready installation packages
+ * retain their record until consumed or explicitly cleared. */
+static bool DlPrunable(MdoNativeDownload* T){bool Pending=false;return !T->Active&&!T->DispatchCancel&&
+    (DlState(T,"cancelled")||DlState(T,"complete")||(DlState(T,"ready")&&!strcmp(DlText(T->Record,"source"),"transfer")))&&
     (!xrtValueGetBool(xrtValueObjectGet(T->Record,XRT_STR_LITERAL("cleanup_pending")),&Pending)||!Pending);}
 static void DlPrune(bool Pressure){
     MdoNativeDownload* Oldest=NULL;uint64 Now=MdoUtcUs();
@@ -72,6 +73,7 @@ static xvalue* DlInfo(MdoNativeDownload* T){
     xvalue* V=xrtValueClone(T->Record);if(!V)return NULL;
     const xvalue* Context=xrtValueObjectGet(T->Record,XRT_STR_LITERAL("context"));
     if(!strcmp(DlText(T->Record,"source"),"extension")){DlPut(V,"archive_id",DlText(Context,"archive_id"));DlPut(V,"kind",DlText(Context,"kind"));}
+    if(!strcmp(DlText(T->Record,"source"),"update"))DlUInt(V,"build_id",DlNumber(Context,"build_id"));
     xrtValueObjectRemove(V,XRT_STR_LITERAL("context"));
     xrtValueObjectSetNew(V,XRT_STR_LITERAL("active"),xrtValueBool(T->Active));
     if(!T->Active||T->Paused){DlUInt(V,"speed",0);xrtValueObjectRemove(V,XRT_STR_LITERAL("eta_seconds"));}
@@ -87,7 +89,7 @@ MdoNativeDownload* MdoDownloadsBegin(cstr Source,cstr Identity,cstr Name,cstr Ha
     if(!MdoDownloads.Lock)return NULL;
     if(!Identity||!Name||strlen(Name)>240||!DlContext(Source,Identity,Context)||!DlHash(Hash)||!Bytes||Bytes>INT64_MAX||!Context||
        (strcmp(Source,"extension")&&strcmp(Source,"update")&&strcmp(Source,"transfer"))){if(Error)snprintf(Error,512,"Invalid native download identity, destination or metadata");return NULL;}
-    xrtMutexLock(MdoDownloads.Lock);MdoNativeDownload* T=NULL,*Empty=NULL;
+    xrtMutexLock(MdoDownloads.Lock);MdoNativeDownload* T=NULL,*Empty=NULL;xvalue* Original=NULL;bool Replaced=false,WasPaused=false,WasCancelled=false;
     if(!MdoDownloads.StorageFault)DlPrune(false);
     for(size_t I=0;I<DL_COUNT;I++){
         MdoNativeDownload* C=&MdoDownloads.Tasks[I];if(!C->Record){if(!Empty)Empty=C;continue;}
@@ -97,15 +99,17 @@ MdoNativeDownload* MdoDownloadsBegin(cstr Source,cstr Identity,cstr Name,cstr Ha
     if(MdoDownloads.Stopping||MdoDownloads.StorageFault||(Cancel&&xrtCancelRequested(Cancel))||(T&&(T->Active||(T->Cancelled&&T->DispatchCancel))))goto failed;
     if(!T&&!Empty){DlPrune(true);for(size_t I=0;I<DL_COUNT;I++)if(!MdoDownloads.Tasks[I].Record){Empty=&MdoDownloads.Tasks[I];break;}}
     if(!T)T=Empty;if(!T)goto failed;
-    if(!T->Record){char* Id=xrtXidMakeString();T->Record=xrtValueObject();bool Ok=Id&&T->Record&&DlPut(T->Record,"id",Id);xrtFree(Id);if(!Ok)goto failed;}
+    Original=T->Record;WasPaused=T->Paused;WasCancelled=T->Cancelled;T->Record=Original?xrtValueClone(Original):xrtValueObject();Replaced=true;if(!T->Record)goto failed;
+    if(!Original){char* Id=xrtXidMakeString();bool Ok=Id&&DlPut(T->Record,"id",Id);xrtFree(Id);if(!Ok)goto failed;}
     T->Cancel=xrtCancelChild(Cancel);if(!T->Cancel)goto failed;
     T->Active=true;T->Paused=false;T->Cancelled=false;T->SampleAt=xllmClockUs();T->SampleBytes=0;T->SavedAt=0;
     bool Ok=DlPut(T->Record,"source",Source)&&DlPut(T->Record,"identity",Identity)&&DlPut(T->Record,"name",Name)&&DlPut(T->Record,"sha256",Hash)&&
         DlPut(T->Record,"state","downloading")&&DlPut(T->Record,"engine","native")&&DlPut(T->Record,"fallback_reason","")&&DlPut(T->Record,"error","")&&DlPut(T->Record,"error_code","")&&DlUInt(T->Record,"bytes",Bytes)&&DlUInt(T->Record,"speed",0)&&
         DlUInt(T->Record,"updated_at",MdoUtcUs())&&xrtValueObjectSet(T->Record,XRT_STR_LITERAL("context"),Context)&&DlSave();
     if(!Ok){T->Active=false;xrtCancelDestroy(T->Cancel);T->Cancel=NULL;goto failed;}
-    xrtMutexUnlock(MdoDownloads.Lock);return T;
+    xrtValueRelease(Original);xrtMutexUnlock(MdoDownloads.Lock);return T;
 failed:
+    if(Replaced){xrtValueRelease(T->Record);T->Record=Original;T->Paused=WasPaused;T->Cancelled=WasCancelled;}
     if(T&&!T->Active&&T->DispatchCancel&&xrtCancelRequested(T->DispatchCancel)){xrtCancelDestroy(T->DispatchCancel);T->DispatchCancel=NULL;}
     if(Error)snprintf(Error,512,"Download is already owned, storage is full, or its task record cannot be saved");
     xrtMutexUnlock(MdoDownloads.Lock);return NULL;
@@ -167,11 +171,30 @@ bool MdoDownloadsEnd(MdoNativeDownload* T,bool Ok,cstr Code,cstr Error,xcancel* 
     cstr State=Discard?"cancelled":Ok?"ready":MdoDownloads.Stopping||(Cancel&&xrtCancelRequested(Cancel))?"paused":"failed";
     T->Paused=!strcmp(State,"paused");DlPut(T->Record,"state",State);DlPut(T->Record,"error",Ok||T->Paused||Discard?"":Error);DlPut(T->Record,"error_code",Ok||T->Paused||Discard?"":Code);DlUInt(T->Record,"speed",0);DlUInt(T->Record,"updated_at",MdoUtcUs());
     bool Clean=!(Discard||Ok)||DlPartial(T->Record,Discard);xrtValueObjectSetNew(T->Record,XRT_STR_LITERAL("cleanup_pending"),xrtValueBool(!Clean));
-    DlSave();xrtCancelDestroy(T->Cancel);T->Cancel=NULL;xrtCancelDestroy(T->DispatchCancel);T->DispatchCancel=NULL;xrtMutexUnlock(MdoDownloads.Lock);return Ok;
+    if(!DlSave()){Ok=false;DlPut(T->Record,"state","failed");DlPut(T->Record,"error_code","write");DlPut(T->Record,"error","Download finished but its durable record could not be saved");(void)DlSave();}
+    xrtCancelDestroy(T->Cancel);T->Cancel=NULL;xrtCancelDestroy(T->DispatchCancel);T->DispatchCancel=NULL;xrtMutexUnlock(MdoDownloads.Lock);return Ok;
+}
+static void DlReconcile(void){
+    /* Read archive receipts outside the download mutex: producers can acquire
+     * the archive manager before registering their download. */
+    xvalue* Candidates=xrtValueArray();if(!Candidates)return;
+    xrtMutexLock(MdoDownloads.Lock);
+    for(size_t I=0;I<DL_COUNT;I++){MdoNativeDownload* T=&MdoDownloads.Tasks[I];if(!T->Active&&!T->DispatchCancel&&DlState(T,"ready"))xrtValueArrayAppendNew(Candidates,xrtValueClone(T->Record));}
+    xrtMutexUnlock(MdoDownloads.Lock);
+    for(size_t I=0;I<xrtValueCount(Candidates);I++){
+        const xvalue* R=xrtValueArrayGet(Candidates,I),*C=xrtValueObjectGet(R,XRT_STR_LITERAL("context"));bool Complete=false;
+        if(!strcmp(DlText(R,"source"),"update")){uint64 Build=DlNumber(C,"build_id");Complete=Build&&Build<=MdoBuildId();}
+        if(!strcmp(DlText(R,"source"),"extension")){char Error[512]={0};xvalue* Archive=MdoExtensionTaskRead(DlText(C,"archive_id"),Error);Complete=Archive&&!strcmp(DlText(Archive,"state"),"complete");xrtValueRelease(Archive);}
+        if(!Complete)continue;
+        xrtMutexLock(MdoDownloads.Lock);
+        for(size_t J=0;J<DL_COUNT;J++){MdoNativeDownload* T=&MdoDownloads.Tasks[J];if(!T->Active&&!T->DispatchCancel&&DlState(T,"ready")&&DlNumber(R,"updated_at")==DlNumber(T->Record,"updated_at")&&!strcmp(DlText(R,"id"),DlText(T->Record,"id"))){
+            DlPut(T->Record,"state","complete");if(!DlSave())DlPut(T->Record,"state","ready");break;}}
+        xrtMutexUnlock(MdoDownloads.Lock);
+    }xrtValueRelease(Candidates);
 }
 xvalue* MdoDownloadsList(void){
     if(MdoDownloads.StorageFault)return NULL;
-    xvalue* A=xrtValueArray();if(!MdoDownloads.Lock)return A;xrtMutexLock(MdoDownloads.Lock);
+    xvalue* A=xrtValueArray();if(!MdoDownloads.Lock)return A;DlReconcile();xrtMutexLock(MdoDownloads.Lock);
     for(size_t I=0;I<DL_COUNT;I++)if(MdoDownloads.Tasks[I].Record){xvalue* V=DlInfo(&MdoDownloads.Tasks[I]);if(V)xrtValueArrayAppendNew(A,V);}
     xrtMutexUnlock(MdoDownloads.Lock);return A;
 }
@@ -200,22 +223,30 @@ bool MdoDownloadsAction(cstr Id,cstr Action,char Error[512]){
     if(Error)Error[0]=0;if(!MdoDownloads.Lock||!Id||!Action)return false;xrtMutexLock(MdoDownloads.Lock);MdoNativeDownload* T=NULL;
     for(size_t I=0;I<DL_COUNT;I++)if(MdoDownloads.Tasks[I].Record&&!strcmp(DlText(MdoDownloads.Tasks[I].Record,"id"),Id)){T=&MdoDownloads.Tasks[I];break;}
     bool Ok=T&&!MdoDownloads.Stopping&&!MdoDownloads.StorageFault;
+    xvalue* Previous=Ok?xrtValueClone(T->Record):NULL,*Removed=NULL;bool WasPaused=T&&T->Paused;
+    if(Ok&&!Previous)Ok=false;
     if(Ok&&!strcmp(Action,"pause")){
         Ok=T->Active&&!DlState(T,"verifying");if(Ok){T->Paused=true;DlPut(T->Record,"state","paused");DlUInt(T->Record,"speed",0);}
     }else if(Ok&&(!strcmp(Action,"resume")||!strcmp(Action,"retry"))){
-        Ok=!DlState(T,"ready")&&!DlState(T,"cancelled")&&!DlState(T,"queued")&&!DlState(T,"starting")&&(!T->Active||T->Paused);
+        Ok=!DlState(T,"ready")&&!DlState(T,"complete")&&!DlState(T,"cancelled")&&!DlState(T,"queued")&&!DlState(T,"starting")&&(!T->Active||T->Paused);
         if(Ok){T->Paused=false;T->Cancelled=false;T->SampleAt=xllmClockUs();T->SampleBytes=DlNumber(T->Record,"received");DlPut(T->Record,"state",T->Active?"downloading":"queued");DlPut(T->Record,"error","");DlPut(T->Record,"error_code","");}
     }else if(Ok&&!strcmp(Action,"cancel")){
-        Ok=!DlState(T,"ready");if(Ok){T->Cancelled=true;T->Paused=false;if(T->Cancel)xrtCancelRequest(T->Cancel);if(T->DispatchCancel)xrtCancelRequest(T->DispatchCancel);DlPut(T->Record,"state",T->Active?"cancelling":"cancelled");if(!T->Active)xrtValueObjectSetNew(T->Record,XRT_STR_LITERAL("cleanup_pending"),xrtValueBool(!DlPartial(T->Record,true)));}
+        Ok=!DlState(T,"ready")&&!DlState(T,"complete");if(Ok){T->Cancelled=true;T->Paused=false;if(T->Cancel)xrtCancelRequest(T->Cancel);if(T->DispatchCancel)xrtCancelRequest(T->DispatchCancel);DlPut(T->Record,"state",T->Active?"cancelling":"cancelled");if(!T->Active)xrtValueObjectSetNew(T->Record,XRT_STR_LITERAL("cleanup_pending"),xrtValueBool(!DlPartial(T->Record,true)));}
     }else if(Ok&&!strcmp(Action,"cleanup")){
-        Ok=!T->Active&&!T->DispatchCancel&&(DlState(T,"cancelled")||DlState(T,"ready"));
+        Ok=!T->Active&&!T->DispatchCancel&&(DlState(T,"cancelled")||DlState(T,"ready")||DlState(T,"complete"));
         if(Ok){bool Clean=DlPartial(T->Record,DlState(T,"cancelled"));xrtValueObjectSetNew(T->Record,XRT_STR_LITERAL("cleanup_pending"),xrtValueBool(!Clean));}
     }else if(Ok&&!strcmp(Action,"forget")){
-        Ok=!T->Active&&!T->DispatchCancel&&(DlState(T,"ready")||DlState(T,"failed")||DlState(T,"cancelled"));
-        if(Ok&&!DlState(T,"ready"))Ok=DlPartial(T->Record,true);
-        if(Ok){xrtValueRelease(T->Record);memset(T,0,sizeof(*T));}
+        Ok=!T->Active&&!T->DispatchCancel&&(DlState(T,"ready")||DlState(T,"complete")||DlState(T,"failed")||DlState(T,"cancelled"));
+        if(Ok&&!DlState(T,"ready")&&!DlState(T,"complete"))Ok=DlPartial(T->Record,true);
+        if(Ok){Removed=T->Record;T->Record=NULL;}
     }else Ok=false;
-    if(Ok)Ok=DlSave();if(!Ok&&Error)snprintf(Error,512,"Download state changed, the action is unavailable, or its record cannot be saved");xrtMutexUnlock(MdoDownloads.Lock);return Ok;
+    if(Ok&&!DlSave()){
+        Ok=false;
+        if(Removed){T->Record=Removed;Removed=NULL;}
+        else if(strcmp(Action,"cancel")&&strcmp(Action,"cleanup")){xrtValueRelease(T->Record);T->Record=Previous;Previous=NULL;T->Paused=WasPaused;}
+    }
+    if(Removed){xrtValueRelease(Removed);memset(T,0,sizeof(*T));}xrtValueRelease(Previous);
+    if(!Ok&&Error)snprintf(Error,512,"Download state changed, the action is unavailable, or its record cannot be saved");xrtMutexUnlock(MdoDownloads.Lock);return Ok;
 }
 bool MdoDownloadsInit(xnetengine* Engine){
     MdoDownloadNetworkSetEngine(Engine);
@@ -235,7 +266,7 @@ bool MdoDownloadsInit(xnetengine* Engine){
         if(Duplicate){Repair=true;continue;}
         if(Loaded==DL_COUNT){MdoDownloads.StorageFault=true;break;}
         MdoNativeDownload* T=&MdoDownloads.Tasks[Loaded];T->Record=xrtValueClone(R);if(!T->Record){MdoDownloads.StorageFault=true;break;}Loaded++;
-        if(!DlState(T,"ready")&&!DlState(T,"cancelled")&&!DlState(T,"failed")){T->Paused=true;DlPut(T->Record,"state","paused");}
+        if(!DlState(T,"ready")&&!DlState(T,"complete")&&!DlState(T,"cancelled")&&!DlState(T,"failed")){T->Paused=true;DlPut(T->Record,"state","paused");}
         T->Cancelled=DlState(T,"cancelled");DlUInt(T->Record,"speed",0);
     }xrtValueRelease(A);
     /* Preserve the entire original before isolating damaged rows. A failed

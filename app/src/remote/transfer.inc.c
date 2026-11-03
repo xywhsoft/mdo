@@ -1,4 +1,5 @@
 #include "../../include/mdo/download_network.h"
+#include "../../include/mdo/update.h"
 #include "../../include/mdo/time.h"
 #include "../../include/mdo/distribution.h"
 #include "../../include/mdo/home.h"
@@ -116,6 +117,8 @@ static bool MdoTransferDownloadInternal(xnetengine* Engine,cstr Path,cstr Relati
     xvalue* Context=xrtValueObject();bool Prepared=Context&&Path&&Relative&&xrtValueObjectSetNew(Context,XRT_STR_LITERAL("path"),xrtValueString(xrtStrView(Path)))&&
         xrtValueObjectSetNew(Context,XRT_STR_LITERAL("relative"),xrtValueString(xrtStrView(Relative)));
     if(Prepared&&Hosts)Prepared=xrtValueObjectSet(Context,XRT_STR_LITERAL("redirect_hosts"),Hosts);
+    if(Prepared&&!strncmp(Relative,"data/update/",12)){MdoUpdateStatus Update={0};
+        if(MdoUpdateGetStatus(&Update)&&Hash&&!strcmp(Update.Hash,Hash))Prepared=xrtValueObjectSetNew(Context,XRT_STR_LITERAL("build_id"),xrtValueUInt(Update.BuildId));}
     cstr Name=Relative?strrchr(Relative,'/'):NULL;Name=Name?Name+1:Relative;
     char Error[512]={0};MdoNativeDownload* Task=Prepared?MdoDownloadsBegin(!strncmp(Relative,"data/update/",12)?"update":"transfer",Path,!strncmp(Relative,"data/update/",12)?"mdo":Name,Hash,Size,Context,Cancel,Error):NULL;
     xrtValueRelease(Context);MdoTransferReport Local={0};bool Ok=false;

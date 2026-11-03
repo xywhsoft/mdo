@@ -11,6 +11,8 @@ test("installed native update and superseded package stay reconciled across poll
   r.observe("/download-tasks",[task]);assert.equal(r.list("local")[0].state,"complete");
   r.observe("/update",{status:"available",ready:false,busy:false,sha256:"new"});assert.equal(r.list("local")[0].state,"expired");
   r.observe("/update",{status:"error",ready:true,message:"offline"});assert.equal(r.list("local")[0].state,"ready");
+  r.observe("/download-tasks",[{...task,build_id:10}]);r.observe("/distribution",{build_id:11});
+  assert.equal(r.list("local")[0].state,"complete","local build receipt confirms installation even offline");
 });
 
 test("cleared native archive never resurfaces from legacy history or a single-task reply",()=>{
