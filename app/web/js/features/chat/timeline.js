@@ -21,6 +21,7 @@ import { createConversationNavigation } from "./conversation-navigation.js";
 import { modelErrorMessage, modelErrorTitle } from "../../utils/model-errors.js";
 import { modelRetryNode, modelRetryInlineNode, updateModelRetryCountdowns } from "./model-retry.js";
 import { createModelTimingTracker } from "./model-timing.js";
+import { createStreamScroll } from "./stream-scroll.js";
 
 export function searchResultTop(row, content, searchBottom, viewportBottom, lineHeight = 24) {
   const room = Math.max(0, viewportBottom - searchBottom);
@@ -653,7 +654,7 @@ function shortLine(value) {
   return line.length > 110 ? `${line.slice(0, 110)}…` : line;
 }
 
-function foldSection(label, value, copy = false, actionRef = "") {
+function foldSection(label, value, copy = false, actionRef = "", scrollKey = "") {
   const heading = element("div", { className: "timeline-fold-section-heading" }, [
     element("span", { text: label }),
   ]);
@@ -669,11 +670,11 @@ function foldSection(label, value, copy = false, actionRef = "") {
     heading.append(button);
   }
   return element("div", { className: "timeline-fold-section" }, [
-    heading, element("pre", { text: value }),
+    heading, element("pre", { text: value, ...(scrollKey ? { attrs: { "data-stream-scroll": scrollKey } } : {}) }),
   ]);
 }
 
-function foldableNode(item, openState, previewOpen, previewScroll, projectId, sessionId, toolTextCache) {
+function foldableNode(item, openState, previewOpen, previewScroll, projectId, sessionId, toolTextCache, restoreStream) {
   const running = item.state === "running";
   const status = running ? t("timeline.running", {}, "运行中")
     : item.state === "failed" ? t("timeline.failed", {}, "失败")
@@ -717,7 +718,7 @@ function foldableNode(item, openState, previewOpen, previewScroll, projectId, se
     const body = element("div", { className: "timeline-fold-body" });
     if (item.kind === "reasoning") {
       body.append(foldSection(t("timeline.reasoningProcess", {}, "思考过程"),
-        item.text || t("timeline.thinking", {}, "正在思考…")));
+        item.text || t("timeline.thinking", {}, "正在思考…"), false, "", `${item.key}/reasoning`));
     } else {
       const owner = { projectId, sessionId };
       if (item.inputText) body.append(toolSectionNode(t("timeline.call", {}, "调用"), item, "input", owner,
@@ -738,6 +739,7 @@ function foldableNode(item, openState, previewOpen, previewScroll, projectId, se
       }
     }
     details.append(body);
+    restoreStream?.(body);
     if (focusedAction) {
       const replacement = [...body.querySelectorAll("[data-timeline-action]")]
         .find((node) => node.dataset.timelineAction === focusedAction);
@@ -799,6 +801,7 @@ function timelineNode(item, handlers, projectId, sessionId, writable,
         folds?.previews.get(`${child.key}/preview`) ?? false,
         folds?.scroll.get(`${child.key}/preview`) ?? 0, toolTextCache, folds));
       details.append(children);
+      folds?.restoreScroll(children);
       mountIcons(children);
     }
     details.addEventListener("toggle", expand);
@@ -817,7 +820,7 @@ function timelineNode(item, handlers, projectId, sessionId, writable,
   }
   if (item.kind === "reasoning" || item.kind === "tool")
     return foldableNode(item, openState, previewOpen, previewScroll,
-      projectId, sessionId, toolTextCache);
+      projectId, sessionId, toolTextCache, folds?.restoreScroll);
   const time = timeNode(item.time);
   const source = item.executionSource;
   const header = element("div", { className: "timeline-item-header" }, [
@@ -1049,6 +1052,8 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
   const previewExpanded = new Map();
   const previewScroll = new Map();
   const toolTextCache = new Map();
+  const streamScroll = createStreamScroll();
+  let destroyed = false;
   const manualProcesses = new Set();
   const scroller = container.closest(".conversation");
   const historyWindow = onLoadOlder ? createHistoryWindow({
@@ -1100,7 +1105,8 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
           sessionId, writable, expanded.get(item.key),
           previewExpanded.get(`${item.key}/preview`) ?? false,
           previewScroll.get(`${item.key}/preview`) ?? 0, toolTextCache,
-          { expanded, previews: previewExpanded, scroll: previewScroll });
+          { expanded, previews: previewExpanded, scroll: previewScroll,
+            restoreScroll(root) { if (!destroyed) streamScroll.restore(root); } });
         node.dataset.timelineRow = item.key;
         const source = item.sourceEventId ?? item.items?.[0]?.sourceEventId;
         if (source) node.dataset.sourceEventId = source;
@@ -1152,6 +1158,7 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
     let focusedAction = "";
     let focusedImage = "";
     if (sessionKey === renderedSession) {
+      streamScroll.capture(container);
       const active = document.activeElement;
       if (container.contains(active)) {
         focusedAction = active?.dataset.timelineAction || "";
@@ -1170,17 +1177,19 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
         }
       }
     } else {
+      streamScroll.capture(container);
       if (renderedSession && renderedSession !== "/") {
         positions.delete(renderedSession);
         positions.set(renderedSession, { top: scroller.scrollTop, followTail,
           expanded: new Map(expanded), manualProcesses: new Set(manualProcesses),
-          previews: new Map(previewExpanded), scroll: new Map(previewScroll) });
+          previews: new Map(previewExpanded), scroll: new Map(previewScroll), streams: streamScroll.snapshot() });
         while (positions.size > 8) positions.delete(positions.keys().next().value);
       }
       expanded.clear();
       previewExpanded.clear();
       previewScroll.clear();
       toolTextCache.clear();
+      streamScroll.reset();
       manualProcesses.clear();
       jumpVersion += 1;
       renderedRows.clear();
@@ -1192,6 +1201,7 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
       const position = data?.cached ? positions.get(sessionKey) : null;
       followTail = position?.followTail ?? true;
       if (position) {
+        streamScroll.reset(position.streams);
         for (const [key, value] of position.expanded) expanded.set(key, value);
         for (const key of position.manualProcesses) manualProcesses.add(key);
         for (const [key, value] of position.previews) previewExpanded.set(key, value);
@@ -1222,6 +1232,7 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
       ...projected.filter(item => item.kind === "process").map(item => item.key)]);
     for (const key of expanded.keys()) if (!foldKeys.has(key)) expanded.delete(key);
     for (const key of manualProcesses) if (!foldKeys.has(key)) manualProcesses.delete(key);
+    streamScroll.retain(new Set(items.filter(item => item.kind === "reasoning").map(item => `${item.key}/reasoning`)));
     const previewKeys = new Set(items.filter((item) => item.artifactId)
       .map((item) => `${item.key}/preview`));
     for (const key of previewExpanded.keys())
@@ -1250,6 +1261,7 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
         entries.push({ item, writable });
     }
     reconcileRows(entries, data?.projectId, data?.sessionId);
+    streamScroll.restore(container);
     if (historyButton) {
       const failedInitialLoad = state.status === "error" && data?.initializing;
       historyButton.hidden = !data?.hasOlder && !(showReadError && failedInitialLoad);
@@ -1329,13 +1341,15 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
   const viewportObserver = historyWindow && typeof ResizeObserver !== "undefined"
     ? new ResizeObserver(() => historyWindow.resize()) : null;
   viewportObserver?.observe(scroller);
-  container.addEventListener("scroll", (event) => {
+  function rememberContentScroll(event) {
     const content = event.target;
+    streamScroll.captureNode(content);
     if (!content.classList?.contains("timeline-artifact-content") ||
         !content.clientHeight) return;
     const action = content.parentElement?.querySelector("summary")?.dataset.timelineAction;
     if (action) previewScroll.set(action, content.scrollTop);
-  }, { capture: true, passive: true });
+  }
+  container.addEventListener("scroll", rememberContentScroll, { capture: true, passive: true });
   toBottom.addEventListener("click", () => {
     followTail = true;
     scroller.scrollTo({ top: scroller.scrollHeight, behavior: "smooth" });
@@ -1365,10 +1379,12 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
       queueRender(store.get());
     },
     destroy() {
+      destroyed = true;
       if (retryTimer) clearInterval(retryTimer);
       historyWindow?.destroy(); viewportObserver?.disconnect();
       scroller.removeEventListener("scroll", onScroll);
       container.removeEventListener("click", rememberProcessToggle);
+      container.removeEventListener("scroll", rememberContentScroll, true);
       unsubscribe(); unsubscribeSession?.(); unsubscribeLocale();
       historyNavigation?.destroy(); historyButton?.remove();
       if (frame) cancelAnimationFrame(frame);

@@ -1,0 +1,57 @@
+<!doctype html><html lang="zh-CN" data-theme="dark">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Reasoning scroll regression</title><link rel="stylesheet" href="/app/web/css/app.css">
+<style>body{margin:20px;background:var(--bg);color:var(--ink)}.conversation{height:74vh;max-width:820px;margin:auto;overflow:auto}#timeline{padding:0;max-width:100%}#result{display:block;white-space:pre-wrap;font-size:11px;max-width:820px;margin:auto}</style>
+<div class="conversation"><p id="welcome"></p><ol id="timeline"></ol></div>
+<button id="to-bottom" hidden>↓</button><output id="result">Preparing</output><div id="toast-region"></div>
+<script type="module">
+import {createTimelineView} from "/app/web/js/features/chat/timeline.js";
+import {createResourceStore} from "/app/web/js/state/store.js";
+const container=document.querySelector("#timeline"),result=document.querySelector("#result"),checks={},metrics={};
+try {
+  const store=createResourceStore(),now=Date.now()*1000;let id=0,line=0;
+  const e=(kind,extra={})=>({event_id:++id,kind,schema_version:10,run_id:1,agent_depth:0,agent_turn:1,time:now+id*1000,...extra});
+  const lines=count=>Array.from({length:count},()=>`${++line}. 正在逐项分析项目并检查结果，保留完整思考内容。\n`).join("");
+  let events=[e("agent_start",{user_message_sequence:1,text:"请分析项目"}),e("model_reasoning_delta",{text:lines(80)})];
+  createTimelineView({container,welcome:document.querySelector("#welcome"),toBottom:document.querySelector("#to-bottom"),store});
+  const paint=async()=>{await new Promise(requestAnimationFrame);await new Promise(requestAnimationFrame);};
+  const publish=async(sessionId="A",dataEvents=events,cached=false)=>{store.setData({projectId:"qa",sessionId,events:dataEvents,cached});await paint();};
+  const pane=()=>container.querySelector("pre[data-stream-scroll]");
+  const process=()=>container.querySelector(".conversation-process");
+  const near=(a,b)=>Math.abs(a-b)<2;
+  const atBottom=()=>near(pane().scrollTop,pane().scrollHeight-pane().clientHeight);
+  await publish();process().querySelector("summary").click();await paint();
+  checks.scrollable=pane().clientHeight>0&&pane().scrollHeight>pane().clientHeight;
+  pane().scrollTop=250;await paint();let top=pane().scrollTop,old=pane(),kept=true;
+  for(let n=0;n<5;n++){events.push(e("model_reasoning_delta",{text:lines(20)}));await publish();kept&&=near(pane().scrollTop,top);}
+  checks.readPosition=kept;checks.realReplacement=pane()!==old;
+  pane().scrollTop=pane().scrollHeight;await paint();top=pane().scrollTop;
+  events.push(e("model_reasoning_delta",{text:lines(40)}));await publish();
+  checks.followBottom=atBottom()&&pane().scrollTop>top;
+  pane().scrollTop=80;await paint();events.push(e("model_reasoning_delta",{text:lines(20)}));await publish();
+  checks.stopFollowing=near(pane().scrollTop,80);
+  pane().closest("details").querySelector("summary").click();await paint();
+  metrics.hiddenBefore={top:pane().scrollTop,height:pane().clientHeight,closed:!!pane().closest("details:not([open])")};
+  events.push(e("model_reasoning_delta",{text:lines(20)}));await publish();
+  metrics.hiddenAfter=pane()?{top:pane().scrollTop,height:pane().clientHeight,closed:!!pane().closest("details:not([open])")}:null;
+  container.querySelector(".timeline-fold summary").click();await paint();
+  metrics.reopened={top:pane().scrollTop,height:pane().clientHeight,closed:!!pane().closest("details:not([open])")};
+  checks.hiddenPane=near(pane().scrollTop,80);
+  process().querySelector("summary").click();await paint();
+  events.push(e("model_reasoning_delta",{text:lines(20)}));await publish();
+  process().querySelector("summary").click();await paint();
+  checks.hiddenGroup=near(pane().scrollTop,80);
+  events.push(e("tool_start",{tool_name:"read",tool_call_id:"file",text:'{"path":"main.c"}'}));await publish();
+  checks.siblingUpdate=near(pane().scrollTop,80);
+  pane().scrollTop=130;await paint();
+  const other=[{...events[0],text:"另一个会话"},{...events[1],text:lines(80)}];
+  await publish("B",other);process().querySelector("summary").click();await paint();
+  checks.sessionIsolated=near(pane().scrollTop,0);
+  await publish("A",events,true);checks.cachedPosition=near(pane().scrollTop,130);
+  pane().scrollTop=pane().scrollHeight;await paint();events.push(e("model_reasoning_delta",{text:lines(20)}));await publish();
+  checks.resumeFollowing=atBottom();
+  events.push(e("tool_done",{tool_call_id:"file",success:true,text:"OK"}),e("model_reasoning_delta",{text:"思考结束。"}),e("model_done",{success:true}),e("agent_done",{success:true,text:"已完成分析。"}));await publish();
+  checks.completedBottom=atBottom();checks.noOverflow=document.documentElement.scrollWidth<=innerWidth;
+  result.textContent=JSON.stringify({passed:Object.values(checks).every(Boolean),checks,metrics:{...metrics,top:pane().scrollTop,height:pane().scrollHeight,viewport:pane().clientHeight}},null,2);
+}catch(error){result.textContent=JSON.stringify({passed:false,error:String(error.stack),checks});}
+</script></html>
