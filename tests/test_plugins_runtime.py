@@ -23,13 +23,12 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--host',type=Path,default=ROOT/'.build/host/xs.exe')
     parser.add_argument('--packed',type=Path,help='Verify the standalone product with no external application files')
-    parser.add_argument('--entrypoint',default='generated/mdo_unity.c',help='Packed C or precompiled object entrypoint')
     args=parser.parse_args()
     with PluginTemporaryDirectory(dir=ROOT/'.build',prefix='plugins-runtime-') as tmp:
         base=Path(tmp);port=free_port();site=base
         if args.packed:
             site=base/'site';site.mkdir();shutil.copy2(args.packed,site/args.packed.name)
-            config=site/'xs.json';config.write_text(json.dumps(dict(engine=dict(workers=1),services=[dict(enabled=True,**{'class':'http'},name='plugins-packed',ip='127.0.0.1',port=port,recv_limit=8388608,body_limit=8388608,host_default=dict(enabled=True,name='mdo',path='web',devlang='c',devfile=args.entrypoint))])))
+            config=site/'xs.json';config.write_text(json.dumps(dict(engine=dict(workers=1),services=[dict(enabled=True,**{'class':'http'},name='plugins-packed',ip='127.0.0.1',port=port,recv_limit=8388608,body_limit=8388608,host_default=dict(enabled=True,name='mdo',path='web',devlang='c',devfile='generated/mdo_unity.c'))])))
         else:config=write_site(base,port)
         def spawn(log):
             command=[str(site/args.packed.name),'--','--home',str(base/'home')] if args.packed else [str(args.host.resolve()),str(config),'--','--home',str(base/'home')]
@@ -40,7 +39,6 @@ def main():
                 try: wait_ready(port,child)
                 except Exception:
                     log.flush();raise RuntimeError((base/'probe.log').read_text(encoding='utf-8',errors='replace')[-8000:])
-                base_version=json.loads(request(port,'GET','/api/v1/bootstrap')[2])['data']['version']
                 def call(method,params=None,status=200):
                     code,_,raw=request(port,'POST','/api/v1/application/call',body=json.dumps(dict(method=method,params=params or {})).encode(),headers={'Content-Type':'application/json'})
                     value=json.loads(raw);assert code==status,(method,code,value)
@@ -206,7 +204,7 @@ const mdo_module_v1* mdoModuleEntry(void){return &M;}
                 child.terminate();child.wait(timeout=10)
                 child=spawn(log);wait_ready(port,child)
                 assert call('plugin.list')['recovery_mode']
-                assert json.loads(request(port,'GET','/api/v1/bootstrap')[2])['data']['version']==base_version
+                assert json.loads(request(port,'GET','/api/v1/bootstrap')[2])['data']['version']=='0.7.0'
                 call('qa.plugin.counter',status=404)
                 # Corrupt registry recovery never overwrites the original file.
                 registry=base/'home/config/plugins.json';registry.write_bytes(b'[{"id":null}]')

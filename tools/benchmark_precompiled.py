@@ -38,16 +38,60 @@ def elf_info(path):
     return {'format':'ELF64 x86-64, Windows x64 calling convention','bytes':len(data),
             'sha256':hashlib.sha256(data).hexdigest(),'nonzero_absolute_symbols':absolute}
 
+def measure_build_flow(out,host,sdk,count):
+    """Same generation/verification/forwarder/pack steps; compile before pack."""
+    import contextlib
+    import build_mdo
+    from qa_release import release_inputs,verify_release_inputs
+    inputs=release_inputs();rows=[];driver=out/'compiler';flow_dir=out/'build-flow';flow_dir.mkdir(exist_ok=True);flow=flow_dir/'flow.exe'
+    original_run=build_mdo.run
+    try:
+        for sample in range(count):
+            for mode in (('source','object') if sample%2==0 else ('object','source')):
+                row={'sample':sample,'mode':mode};log_path=out/f'flow-{sample}-{mode}.log'
+                with log_path.open('w',encoding='utf-8') as log:
+                    def run(command,cwd,dry_run=False):
+                        if dry_run:raise ValueError('Benchmark cannot use dry-run')
+                        is_pack=len(command)>1 and command[1]=='pack'
+                        if is_pack and mode=='object':
+                            package=Path(command[2]);values={'BENCH_APP_ROOT':package.as_posix(),'BENCH_RESULT_PATH':(out/'flow-compiler.json').as_posix(),
+                                'BENCH_OBJECT_PATH':(package/'generated/mdo.o').as_posix(),'BENCH_INPUT':'/app/generated/mdo_unity.c'}
+                            (driver/'benchmark-config.h').write_text('\n'.join('#define '+k+' '+json.dumps(v) for k,v in values.items())+'\n#define BENCH_EMIT 1\n#define BENCH_ITERATIONS 1\n')
+                            begin=time.perf_counter();subprocess.run([str(host/'xs.exe'),str(driver/'xs.json')],cwd=driver,stdout=log,stderr=log,check=True,timeout=30,creationflags=subprocess.CREATE_NO_WINDOW)
+                            row['precompile_ms']=(time.perf_counter()-begin)*1000;elf_info(package/'generated/mdo.o')
+                            config=json.loads((package/'xs.json').read_text(encoding='utf-8'))
+                            for service in config['services']:service['host_default']['devfile']='generated/mdo.o'
+                            (package/'xs.json').write_text(json.dumps(config,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+                        begin=time.perf_counter();subprocess.run(command,cwd=cwd,stdout=log,stderr=log,check=True,timeout=60,creationflags=subprocess.CREATE_NO_WINDOW)
+                        if is_pack:row['pack_ms']=(time.perf_counter()-begin)*1000
+                    build_mdo.run=run;begin=time.perf_counter()
+                    with contextlib.redirect_stdout(log):
+                        code=build_mdo.main(['--skip-host-build','--host-dir',str(host),'--xserver-root',str(sdk),'--output',str(flow)])
+                    assert code==0
+                    row.update(total_ms=(time.perf_counter()-begin)*1000,bytes=flow.stat().st_size,sha256=hashlib.sha256(flow.read_bytes()).hexdigest())
+                rows.append(row);print('build flow',sample,mode,round(row['total_ms'],1),'ms',flush=True)
+        results=json.loads((out/'results.json').read_text(encoding='utf-8'))
+        results['build_flow']={'raw':rows,'summary':{mode:stats([row['total_ms'] for row in rows if row['mode']==mode]) for mode in ('source','object')}}
+        verify_release_inputs(inputs);(out/'results.json').write_text(json.dumps(results,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+    finally:
+        build_mdo.run=original_run;flow.unlink(missing_ok=True)
+        bounded_remove(ROOT/'.build/packages/flow-host',ROOT/'.build/packages')
+
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--directory',type=Path,default=ROOT/'.build/precompiled-bench-20261104')
     p.add_argument('--host-dir',type=Path,default=ROOT/'.build/host')
     p.add_argument('--package',type=Path,default=ROOT/'.build/packages/source-host')
     p.add_argument('--samples',type=int,default=9);p.add_argument('--fresh-samples',type=int,default=3)
+    p.add_argument('--build-flow-only',action='store_true',help='After the full benchmark, compare complete cached-host build flows')
+    p.add_argument('--sdk-dir',type=Path)
     a=p.parse_args();out=a.directory.resolve();site=a.package.resolve();host=a.host_dir.resolve()
     assert os.name=='nt' and 1<=a.samples<=30 and 1<=a.fresh_samples<=10
     assert out.is_relative_to(ROOT/'.build') and site.is_relative_to(ROOT/'.build/packages')
     out.mkdir(parents=True,exist_ok=True)
+    if a.build_flow_only:
+        assert a.sdk_dir,'--sdk-dir is required for --build-flow-only'
+        measure_build_flow(out,host,a.sdk_dir.resolve(),a.samples);return
     receipt=json.loads((out/'build.json').read_text(encoding='utf-8'))
     assert (out/'source.exe').is_file() and hashlib.sha256((out/'source.exe').read_bytes()).hexdigest()==receipt['sha256']
     assert (site/'generated/mdo_unity.c').is_file(),'Build the source package before running the benchmark'
