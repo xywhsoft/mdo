@@ -2221,6 +2221,8 @@
   "downloads.error.extension": "扩展下载或归档校验失败，请查看详细原因后重试。",
   "downloads.error.resume": "无法恢复该下载，请重新检查资源信息后重试。",
   "downloads.resume": "继续下载",
+  "downloads.cleanupPending": "任务已结束，但临时文件清理失败，请重试清理。",
+  "downloads.retryCleanup": "重试清理",
   "downloads.cancelDelete": "取消并删除",
   "downloads.speed": "速度：{speed}/秒",
   "downloads.eta": "预计剩余 {seconds} 秒",

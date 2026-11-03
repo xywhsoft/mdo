@@ -2221,6 +2221,8 @@
   "downloads.error.extension": "Extension download or archive verification failed. Review the details and retry.",
   "downloads.error.resume": "This download could not be resumed. Check the resource details and retry.",
   "downloads.resume": "Resume",
+  "downloads.cleanupPending": "Cancelled or finished, but temporary files could not be removed. Retry cleanup.",
+  "downloads.retryCleanup": "Retry cleanup",
   "downloads.cancelDelete": "Cancel and delete",
   "downloads.speed": "Speed: {speed}/s",
   "downloads.eta": "About {seconds} seconds remaining",

@@ -78,6 +78,7 @@ export function createDownloadCenter({ updatePanel, navigation, registry = downl
         if(summary!==row.error){const details=node("details");details.append(node("summary",text("errorDetails")),node("p",row.error,"download-meta"));item.append(details);}
       }
       if (row.state === "unknown") item.append(node("p", text("uncertain"), "download-meta"));
+      if (row.cleanupPending) item.append(node("p", text("cleanupPending"), "download-error"));
       if (row.submission) item.append(node("p", `${text("submission")} #${row.submission.id} · ${row.submission.state}`, "download-meta"));
       const controls = node("div", null, "download-actions");
       if (row.source === "native") {
@@ -85,10 +86,11 @@ export function createDownloadCenter({ updatePanel, navigation, registry = downl
         if(row.active && ["downloading","retrying"].includes(row.state)) controls.append(action(row,text("pause"),()=>control("pause")));
         if(row.state === "paused") controls.append(action(row,text("resume"),()=>control("resume")));
         if(row.state === "failed") controls.append(action(row,text("retry"),()=>control("retry")));
+        if(row.cleanupPending) controls.append(action(row,text("retryCleanup"),()=>control("cleanup")));
         if(downloadActive(row) || row.state === "paused" || row.state === "failed") controls.append(action(row,text("cancelDelete"),()=>control("cancel")));
         if(row.nativeSource === "update" && ["ready","failed","paused"].includes(row.state)) controls.append(destination(row,text("viewUpdate"),()=>updatePanel?.open()));
         if(row.nativeSource === "extension" && row.state === "ready" && row.archiveId) controls.append(action(row,uiMessage("extensionBrowser.install",{},"安装"),()=>installArchive({...row,taskId:row.archiveId})));
-        if(["complete","cancelled","failed"].includes(row.state)) controls.append(action(row,text("clear"),async()=>{
+        if(["complete","expired","cancelled","failed"].includes(row.state)) controls.append(action(row,text("clear"),async()=>{
           if(row.archiveId && row.state === "complete") await transport.delete(`/extension-tasks/${row.archiveId}/forget`);
           await control("forget");registry.hide(row.key);
         }));

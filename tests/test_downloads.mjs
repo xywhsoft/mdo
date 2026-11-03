@@ -4,6 +4,28 @@ import { createDownloadRegistry, downloadRegistry, downloadActive } from "../app
 import { api, hasPendingApiWrites } from "../app/web/js/api/client.js";
 const flush = () => new Promise(r => setImmediate(r));
 
+test("installed native update and superseded package stay reconciled across polling",()=>{
+  const r=createDownloadRegistry(),hash="c".repeat(64),task={id:"U".repeat(32),source:"update",state:"ready",name:"mdo",sha256:hash};
+  r.observe("/download-tasks",[task]);r.observe("/update",{status:"current",ready:false,busy:false,sha256:hash});
+  assert.equal(r.list("local")[0].state,"complete");
+  r.observe("/download-tasks",[task]);assert.equal(r.list("local")[0].state,"complete");
+  r.observe("/update",{status:"available",ready:false,busy:false,sha256:"new"});assert.equal(r.list("local")[0].state,"expired");
+  r.observe("/update",{status:"error",ready:true,message:"offline"});assert.equal(r.list("local")[0].state,"ready");
+});
+
+test("cleared native archive never resurfaces from legacy history or a single-task reply",()=>{
+  const r=createDownloadRegistry(),id="N".repeat(32),archive="A".repeat(32);
+  r.observe("/extension-tasks",[{id:archive,state:"complete"}]);
+  r.observe("/download-tasks",[{id,source:"extension",archive_id:archive,state:"ready"}]);
+  assert.equal(r.list("local")[0].state,"complete");
+  r.observe(`/extension-tasks/${archive}/forget`,{forgotten:true});
+  r.observe(`/download-tasks/${id}/forget`,[]);r.observe("/extension-tasks",[]);
+  assert.equal(r.list("local").length,0);
+  r.observe("/extension-tasks",[{id:archive,state:"complete"}]);r.observe("/extension-tasks/"+id,{id,state:"paused"});
+  assert.equal(r.list("local").length,2,"single-task reads must not remove unrelated archives");
+  r.observe("/extension-tasks",[]);assert.equal(r.list("local").length,0);
+});
+
 test("durable native snapshots expose paused progress and merge archive ownership without duplicate rows",()=>{
   const r=createDownloadRegistry(),id="N".repeat(32),archive="A".repeat(32);
   r.observe("/extension-tasks",[{id:archive,state:"receiving",purpose:"install",kind:"skills",bytes:100,received:40,store:{xid:"work",version_id:"version"}}],"home");

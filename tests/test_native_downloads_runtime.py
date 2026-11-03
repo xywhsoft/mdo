@@ -97,7 +97,7 @@ void ServiceInit(XS_HostInfo* H){{
  QaEngine=H->Server->Engine;QaBaseInit(H);
  if({str(args.aria2).lower()}){{char E[512]={{0}};xvalue* Existing=MdoExtensionsResolve("external-tool:mdo.aria2",E),*Installed=NULL;if(!Existing&&!MdoExtensionsInstall("external-tools","{'A'*32}","data/qa-aria2.zip",NULL,true,NULL,&Installed,E))fprintf(stderr,"QA install: %s\\n",E);xrtValueRelease(Existing);xrtValueRelease(Installed);MdoCliReload();}}
  MdoUpdateUnit();g_MdoUpdate.Engine=QaEngine;g_MdoUpdate.Lock=xrtMutexCreate();g_MdoUpdate.Source=xrtStrDup("{(base/'old.bin').as_posix()}");
- MdoUpdateStatus* S=&g_MdoUpdate.Status;S->Enabled=true;S->Available=true;S->Bytes={len(PAYLOAD)};S->BuildId=90000001;S->HasVersionCode=true;S->VersionCode=0x05000806u;
+ MdoUpdateStatus* S=&g_MdoUpdate.Status;S->Enabled=true;S->Available=true;S->Bytes={len(PAYLOAD)};S->BuildId=90000001;S->HasVersionCode=true;S->VersionCode=0x{json.loads((ROOT/"app/release.json").read_text(encoding="utf-8"))["version_code"]}u;
  snprintf(S->Platform,sizeof(S->Platform),"windows-x86_64");snprintf(S->Edition,sizeof(S->Edition),"%s",MdoEdition());snprintf(S->State,sizeof(S->State),"available");
  snprintf(S->Hash,sizeof(S->Hash),"{HASH}");snprintf(S->DownloadPath,sizeof(S->DownloadPath),"/mdo/blob/{HASH}");
  MdoUpdatePolicyLoad(S);g_MdoUpdate.NextCheck=MdoDeadlineAfterUs(3600000000ULL);g_MdoUpdate.Thread=xrtThreadCreate(MdoUpdateThread,NULL,0);
@@ -270,13 +270,28 @@ XS_RequestResult RequestProc(XS_HttpReq* R){{
                 until_stop=time.monotonic()+900
                 while not stop.exists() and time.monotonic()<until_stop:time.sleep(.25)
                 receipt.unlink(missing_ok=True)
-            # Corrupt/oversized indexes remain intact and cannot break app boot.
+            # One damaged record cannot hide healthy tasks; preserve original
+            # bytes in quarantine before publishing the repaired registry.
             index=home/'data/downloads/tasks.json'
+            process.kill();process.wait();healthy=json.loads(index.read_text(encoding='utf-8'))
+            broken=json.dumps([{},*healthy,healthy[0]]).encode();index.write_bytes(broken);process=start()
+            assert len(rows())==len(healthy)
+            assert any(p.read_bytes()==broken for p in index.parent.glob('tasks.rejected-*.json'))
+            # Simulate a file which cannot be removed (an unexpected directory).
+            process.kill();process.wait();record=next(r for r in healthy if r['source']=='transfer');record['state']='paused'
+            index.write_text(json.dumps([record]),encoding='utf-8')
+            partial=home/record['context']['relative'];partial.unlink(missing_ok=True);partial.mkdir()
+            meta=Path(str(partial)+'.resume.json');meta.write_text(json.dumps(dict(path=record['identity'],sha256=record['sha256'],size=record['bytes'])))
+            process=start();api('POST',f"/download-tasks/{record['id']}/cancel",{})
+            assert rows()[0]['state']=='cancelled' and rows()[0]['cleanup_pending']
+            partial.rmdir();api('POST',f"/download-tasks/{record['id']}/cleanup",{})
+            assert not rows()[0]['cleanup_pending'] and not meta.exists()
             for broken in (b'[invalid',json.dumps([{}]*129).encode()):
                 process.kill();process.wait();index.write_bytes(broken);process=start()
-                st,_,_=request(port,'GET','/api/v1/download-tasks');assert st==503,st
-                assert index.read_bytes()==broken,'Unreadable task index must not be overwritten'
-            print('PASS unreadable/oversized indexes preserved; unrelated app APIs remain available')
+                assert rows()==[]
+                assert any(p.read_bytes()==broken for p in index.parent.glob('tasks.rejected-*.json'))
+            assert transfer('repaired')['success']
+            print('PASS isolated bad/duplicate records, preserved corrupt indexes, new downloads after repair, cleanup failure + retry')
         except Exception:
             print((base/'host.log').read_text(encoding='utf-8',errors='replace')[-6000:])
             print('Publisher requests:',Publisher.requests)

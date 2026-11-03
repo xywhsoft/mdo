@@ -2224,6 +2224,8 @@
   "downloads.error.extension": "Ошибка загрузки или проверки архива расширения. Проверьте подробности.",
   "downloads.error.resume": "Не удалось возобновить загрузку. Проверьте ресурс и повторите попытку.",
   "downloads.resume": "Продолжить",
+  "downloads.cleanupPending": "Задача завершена, но временные файлы не удалены. Повторите очистку.",
+  "downloads.retryCleanup": "Повторить очистку",
   "downloads.cancelDelete": "Отменить и удалить",
   "downloads.speed": "Скорость: {speed}/с",
   "downloads.eta": "Осталось около {seconds} с",

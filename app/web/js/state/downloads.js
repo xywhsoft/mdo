@@ -3,7 +3,7 @@
 const activeStates = new Set(["queued", "starting", "running", "downloading", "retrying", "verifying", "installing", "extracting", "activating", "uploading", "cancelling"]);
 export const downloadActive = row => activeStates.has(row.state);
 export function createDownloadRegistry(storage = null) {
-  const listeners = new Set(), records = new Map(); let serial = 0;
+  const listeners = new Set(), records = new Map(), updates = new Map(); let serial = 0;
   try {
     for (const row of JSON.parse(storage?.getItem("mdo.downloads.v1") || "[]").slice(-200)) {
       if (!row || typeof row.key !== "string" || typeof row.target !== "string" || typeof row.name !== "string") continue;
@@ -30,6 +30,11 @@ export function createDownloadRegistry(storage = null) {
       !(r.source === "update" && all.some(n => n.source === "native" && n.nativeSource === "update" && n.hash === r.hash)) &&
       !(r.source === "archive" && r.store?.version_id && all.some(job => job.source === "install" && job.versionIds?.includes(r.store.version_id))))
       .map(row => {
+        if(row.source === "native" && row.nativeSource === "update" && row.state === "ready") {
+          const update = updates.get(target);
+          if(update && !update.busy && update.ready === false && ["current","available"].includes(update.status))
+            return { ...row, state: update.status === "current" && update.sha256 === row.hash ? "complete" : "expired" };
+        }
         if(row.source !== "native" || !row.archiveId) return row;
         const archive = records.get(`${target}:archive:${row.archiveId}`);
         return archive ? { ...row, store: archive.store, kind: archive.kind, directoryId: archive.directoryId,
@@ -50,14 +55,17 @@ export function createDownloadRegistry(storage = null) {
         const key = `${target}:native:${task.id}`;live.add(key);
         put(key,{target,source:"native",nativeSource:task.source,taskId:task.id,archiveId:task.archive_id || "",kind:task.kind,
           name:task.name,state:task.state,done:task.received || 0,total:task.bytes || 0,hash:task.sha256,
-          speed:task.speed || 0,eta:task.eta_seconds,error:task.error || "",errorCode:task.error_code || "",engine:task.engine || "native",fallbackReason:task.fallback_reason || "",active:task.active === true});
+          speed:task.speed || 0,eta:task.eta_seconds,error:task.error || "",errorCode:task.error_code || "",cleanupPending:task.cleanup_pending === true,engine:task.engine || "native",fallbackReason:task.fallback_reason || "",active:task.active === true});
       }
       for(const [key,row] of records) if(row.target===target && row.source==="native" && !live.has(key)) records.delete(key);
       publish();
     }
     if (path === "/extension-tasks" || path.startsWith("/extension-tasks/")) {
+      const live = new Set();
+      if(data.forgotten === true) records.delete(`${target}:archive:${path.split("/")[2]}`);
       for (const task of Array.isArray(data) ? data : [data]) {
         if (!/^[A-Za-z0-9_-]{32}$/.test(task.id || "") || !task.state) continue;
+        live.add(`${target}:archive:${task.id}`);
         const state = task.state === "receiving" ? task.store ? "downloading" : "uploading" : task.state === "cancel_requested" ? "cancelling" : task.state === "ready" && task.active ? task.phase || "running" : task.state;
         put(`${target}:archive:${task.id}`, { target, source: "archive", taskId: task.id, action: task.purpose, kind: task.kind, directoryId: task.directory_id,
           name: task.name || task.alias || task.directory_id || task.id, state: state === "submitting" ? "uploading" : state,
@@ -68,6 +76,9 @@ export function createDownloadRegistry(storage = null) {
           put(parent.key,{transferProgress:progress,done:Object.values(progress).reduce((sum,n)=>sum+n,0)});
         }
       }
+      if(path === "/extension-tasks" && Array.isArray(data)) for(const [key,row] of records)
+        if(row.target === target && row.source === "archive" && !live.has(key)) records.delete(key);
+      publish();
     }
     if (path === "/cli-tools" && Array.isArray(data.tasks)) {
       const live = new Set();
@@ -82,6 +93,7 @@ export function createDownloadRegistry(storage = null) {
         put(row.key, { state: "unknown", error: "" });
     }
     if (path.startsWith("/update") && typeof data.status === "string") {
+      updates.set(target, data); publish();
       const samePackage = r => (!data.build_id || r.buildId === data.build_id) && (!data.sha256 || r.hash === data.sha256) && (!data.edition || r.edition === data.edition) && (!data.platform || r.platform === data.platform);
       for (const row of records.values()) if (row.target === target && row.source === "update" && row.state === "ready" && (!samePackage(row) || data.ready === false && !data.busy))
         put(row.key, { state: "expired", error: "" });
@@ -116,7 +128,7 @@ export function createDownloadRegistry(storage = null) {
     catch (error) { put(key, { state: !error?.status || error?.name === "AbortError" ? "unknown" : "failed", error: String(error?.message || "").slice(0, 1000) }); throw error; }
   }
   return { list, observe, run, install, subscribe(fn) { listeners.add(fn); fn(); return () => listeners.delete(fn); },
-    hide(key) { const row=records.get(key);if(row){records.set(key,{...row,hidden:true});publish();} },
+    hide(key) { const row=records.get(key);if(row){records.set(key,{...row,hidden:true});if(row.archiveId)records.delete(`${row.target}:archive:${row.archiveId}`);publish();} },
     clear(target) { for (const row of records.values()) if (row.target === target && !downloadActive(row) && row.state !== "ready") records.set(row.key, { ...row, hidden: true }); publish(); } };
 }
 let storage = null; try { storage = globalThis.sessionStorage; } catch {}
