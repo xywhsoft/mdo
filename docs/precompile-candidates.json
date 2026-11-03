@@ -1,6 +1,14 @@
 {
   "schema_version": 1,
-  "status": "inventory_only_not_build_configuration",
+  "status": "archived_abandoned_not_build_configuration",
+  "decision": {
+    "date": "2026-11-04",
+    "status": "abandoned_by_user",
+    "reason": "公共库预编译实测体积仅减少约 0.20%，没有可靠的加载速度收益；停止推进整个 .o 预编译路线。",
+    "default_build_changed": false,
+    "historical_tooling_commit": "a64d7aa8",
+    "note": "以下是历史候选清单及当时的审核状态，不是待实施计划。实验脚本和临时产物已清理，测量报告保留在 docs/build-records。"
+  },
   "source_commit": "430f8a5313ba36216a3bea6677d7a2272c774ee3",
   "scope": {
     "original_app": "D:/GIT/mdo/app",
