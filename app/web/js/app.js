@@ -1,8 +1,7 @@
 import { t as uiErrorText, uiMessage, setUiText as writeUiText, setUiAttribute as writeUiAttribute, t as uiText, subscribeLocale, t } from "./i18n.js";
 
-import { createDownloadCenter } from "./features/downloads/center.js";
+import { createDeliveryCenters } from "./features/shell/delivery-centers.js";
 import { createSkillAuthoringDraft } from "./features/settings/skill-authoring.js";
-import { createNotificationCenter } from "./features/notifications/center.js";
 import { liveConnection } from "./api/live.js";
 import { uploadImageWithRecovery } from "./api/image-upload.js";
 import { isTransientReadError } from "./api/read-recovery.js";
@@ -91,7 +90,6 @@ import { createTaskDialog } from "./features/tasks/task-dialog.js";
 import { createRecoveryDock } from "./features/chat/recovery-dock.js";
 import { recoveryMatchesWorkspace } from "./features/approvals/recovery-decisions.js";
 import { createSettingsView } from "./features/settings/settings-view.js";
-import { createUpdatePanel } from "./features/update/update-panel.js";
 import { createSchedulePanel } from "./features/schedules/schedule-panel.js";
 import { createProjectManagement } from "./features/projects/project-management.js";
 import { createMemoryManagement } from "./features/settings/memory-management.js";
@@ -1315,10 +1313,8 @@ export async function boot() {
     navigation,
     onApplied: () => Promise.all([loadBootstrap(), loadCatalogs()]),
   });
-  const updatePanel = createUpdatePanel({ root: $("#update-settings"), openDevices: () => document.querySelector("#open-devices")?.click(), entries: [] });
-  const downloadCenter = createDownloadCenter({ updatePanel, navigation });
-  const notificationCenter = createNotificationCenter({ updatePanel, navigation, openAccount: () => account.open(), openDownloads: () => downloadCenter?.open() });
-  window.addEventListener("pagehide", () => { notificationCenter.destroy(); downloadCenter?.destroy(); updatePanel?.destroy(); }, { once: true });
+  const deliveries = createDeliveryCenters({ updateRoot: $("#update-settings"), navigation,
+    openDevices: () => document.querySelector("#open-devices")?.click(), openAccount: () => account.open() });
   const purgeConfirmation = createProjectPurgeConfirmation({
     dialog: $("#project-purge-confirm-dialog"), recovery: purgeRecovery,
     onResolved: () => {
@@ -2886,7 +2882,7 @@ export async function boot() {
     if (connected) runStops.resume();
   }
   liveConnection.subscribe((event) => {
-    if (event.type === "changed") { scheduleLiveRefresh(); void notificationCenter.refresh(); }
+    if (event.type === "changed") { scheduleLiveRefresh(); void deliveries.refresh(); }
     else if (event.type === "runtime_changed") {
       runPollReads.cancel();
       runStops.clear();

@@ -3,10 +3,10 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { descendants, testDocument } from "./helpers/extension-dom.mjs";
 const flush=async()=>{for(let i=0;i<8;i++)await new Promise(resolve=>setImmediate(resolve));};
-async function loadStore(api, device=()=>({selected:null}), subscribe=()=>()=>{}) {
+async function loadStore(api, device=()=>({selected:null}), subscribe=()=>()=>{}, updateExtensions=async()=>{throw Error("Unexpected shared updater call");}) {
  const url=new URL("../app/web/js/features/settings/single-resource-store.js",import.meta.url);
- globalThis.__zipStore={api,targetState:device,subscribeTarget:subscribe};
- const source=readFileSync(url,"utf8").replace('import { api } from "../../api/client.js";',"const { api }=globalThis.__zipStore;").replace('import { targetState, subscribeTarget } from "../../api/target.js";',"const { targetState, subscribeTarget }=globalThis.__zipStore;").replace(/from "(\.[^"]+)"/g,(_,path)=>`from ${JSON.stringify(new URL(path,url).href)}`);
+ globalThis.__zipStore={api,targetState:device,subscribeTarget:subscribe,updateExtensions};
+ const source=readFileSync(url,"utf8").replace('import { api } from "../../api/client.js";',"const { api }=globalThis.__zipStore;").replace('import { targetState, subscribeTarget } from "../../api/target.js";',"const { targetState, subscribeTarget }=globalThis.__zipStore;").replace('import { updateExtensions } from "./extension-updates.js";',"const { updateExtensions }=globalThis.__zipStore;").replace(/from "(\.[^"]+)"/g,(_,path)=>`from ${JSON.stringify(new URL(path,url).href)}`);
  return import("data:text/javascript;base64,"+Buffer.from(source+`\n// ${Math.random()}`).toString("base64"));
 }
 function environment(){const previous={document:globalThis.document,window:globalThis.window,confirm:globalThis.confirm};globalThis.document=testDocument();globalThis.window=new EventTarget();globalThis.confirm=()=>true;return()=>{Object.assign(globalThis,previous);delete globalThis.__zipStore;};}
@@ -39,20 +39,22 @@ test("store managed items cannot be published or accept old JSON import packages
  let store;try{const {createSingleResourceStore}=await loadStore(api);store=createSingleResourceStore("mcp",()=>{});await store.publish({id:"store-id",source:"store",editable:false});assert.equal(requests,0);await assert.rejects(store.importPackage({manifest:{kind:"mcp"},resources:[]}),/ZIP/);}finally{store?.destroy();restore();}
 });
 
-test("store install opens one trust window, queues independently and preserves the inspected update",async()=>{
- const restore=environment(),writes=[],{createDownloadRegistry}=await import("../app/web/js/state/downloads.js"),registry=createDownloadRegistry();
- const row={kind:"skills",id:"skill:qa.updated",xid:"work-xid",version_id:"new-version",name:"Updated skill",manifest:{id:"skill:qa.updated"},state:"published"};
- let done=false;const previous={kind:"skills",id:row.id,directory_id:row.xid,source:"store",enabled:false,desired_enabled:false,revision:"d".repeat(64),installation:{version_id:"old-version"}};
- const plan={id:"a".repeat(32),revision:"b".repeat(64),ready:true,items:[{...row,directory_id:row.xid,operation:"install",old_exists:true,desired_enabled:false,expected_revision:previous.revision}]};
- const api={get:async()=>({data:{[row.xid]:{...previous,installation:{version_id:done?row.version_id:"old-version"}}}}),post:async(path,body)=>{if(body.action==="catalog")return{data:{items:[row],total:1}};if(body.action==="install_plan"){assert.equal(body.version_id,row.version_id);return{data:plan};}throw Error("Unexpected request");}};
- const id="sdk-"+"1".repeat(32),installer={async enqueue(received,metadata){assert.equal(received,plan);writes.push(metadata);return registry.install("local",id,{...metadata,versionIds:[row.version_id],state:"installing"});}};
- let managed=0,store;try{store=(await loadStore(api)).createSingleResourceStore("skills",()=>{},()=>{},item=>{managed++;assert.equal(item.directory_id,row.xid);},{registry,installer});store.activate(true);await flush();
- const filter=store.root.querySelector("select");filter.value="all";filter.dispatchEvent(new Event("change"));
- descendants(store.root).find(n=>n.tagName==="BUTTON"&&n.textContent==="更新").click();await flush();
- const review=document.body.querySelector("dialog");assert(review.textContent.includes("信任并安装"));assert(review.textContent.includes(row.name));assert(!review.querySelector('input[type="checkbox"]'));assert.equal(writes.length,0);
- descendants(review).find(n=>n.tagName==="BUTTON"&&n.textContent==="安装").click();await flush();assert.equal(writes.length,1);assert.equal(plan.items[0].desired_enabled,false);assert.equal(plan.items[0].expected_revision,previous.revision);
- assert(!document.body.querySelector("dialog"));let control=descendants(store.root).find(n=>n.dataset?.installState==="installing");assert(control?.disabled);assert(control.querySelector(".extension-install-spinner"));assert.equal(registry.list("local").length,1);
- done=true;registry.install("local",id,{state:"complete"});await flush();const manage=descendants(store.root).find(n=>n.tagName==="BUTTON"&&n.textContent==="管理");assert(manage&&!manage.disabled);assert(!descendants(store.root).some(n=>n.tagName==="BUTTON"&&n.textContent==="安装成功"));manage.click();await flush();assert.equal(managed,1);assert.equal(writes.length,1);
+test("an installed update uses the shared updater and retains its inspected publication",async()=>{
+ const restore=environment(),{createDownloadRegistry}=await import("../app/web/js/state/downloads.js"),registry=createDownloadRegistry();
+ const row={kind:"skills",id:"skill:qa.updated",xid:"work-xid",version_id:"new-version",serial:11,sha256:"b".repeat(64),name:"Updated skill",manifest:{id:"skill:qa.updated"},state:"published"};
+ let done=false,updates=0,managed=0;
+ const previous={kind:"skills",id:row.id,directory_id:row.xid,source:"store",enabled:false,desired_enabled:false,revision:"d".repeat(64),installation:{xid:row.xid,version_id:"old-version",serial:10,sha256:"a".repeat(64)}};
+ const api={get:async()=>({data:{[row.xid]:{...previous,installation:{...previous.installation,...(done?{version_id:row.version_id,serial:row.serial,sha256:row.sha256}:{})}}}}),post:async(path,body)=>{assert.equal(body.action,"catalog");return {data:{items:[row],total:1}};}};
+ const id="sdk-"+"1".repeat(32);let store;
+ try{
+  const shared=async rows=>{updates++;assert.deepEqual(rows,[row]);registry.install("local",id,{kind:"skills",versionIds:[row.version_id],state:"installing"});};
+  store=(await loadStore(api,undefined,undefined,shared)).createSingleResourceStore("skills",()=>{},()=>{},item=>{managed++;assert.equal(item.directory_id,row.xid);},{registry});store.activate(true);await flush();
+  const filter=store.root.querySelector("select");filter.value="all";filter.dispatchEvent(new Event("change"));
+  descendants(store.root).find(n=>n.tagName==="BUTTON"&&n.textContent==="更新").click();await flush();
+  assert.equal(updates,1);assert(!document.body.querySelector("dialog"),"The shared updater owns update review");
+  const control=descendants(store.root).find(n=>n.dataset?.installState==="installing");assert(control?.disabled);assert(control.querySelector(".extension-install-spinner"));
+  done=true;registry.install("local",id,{state:"complete"});await flush();
+  const manage=descendants(store.root).find(n=>n.tagName==="BUTTON"&&n.textContent==="管理");assert(manage&&!manage.disabled);manage.click();await flush();assert.equal(managed,1);assert.equal(updates,1);
  }finally{store?.destroy();restore();}
 });
 

@@ -1,5 +1,8 @@
 # 离线恢复的目标身份准备
 
+> 历史设计快照（2026-10-02），不代表当前完成度。恢复 worker 与 review/apply 接口现已实现，见 [当前状态索引](current-state.md) 及 `app/src/api/backup_restore.c`。下文“仍待实现”仅保留当时背景。
+
+
 2026-10-02：`MdoSessionBackupPrepareRestore` 返回独立拥有的 v2 副本。
 一次调用按顺序完成历史投影修复、输入待确认转换、metadata/UI 身份重建
 和产物显示路径重绑定，随后重新进行共用 schema、CRC、引用及历史关系

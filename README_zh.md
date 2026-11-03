@@ -111,6 +111,8 @@ tools/build.py     桌面版与 Android 精简版、完整版统一构建
 ---
 
 ## 📚 文档
+
+[当前实现与验收索引](docs/current-state.md)
 完整契约与指南见 [`docs/`](docs)：
 `configuration.md`、`session-storage.md`、`web-tools.md`、`device-transfers.md`、
 `device-remote-control.md`、`linux.md`、`android.md`、`release-gate.md`、

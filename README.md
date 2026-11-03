@@ -124,6 +124,8 @@ tools/build.py     desktop + Android slim/full unified build
 ---
 
 ## 📚 Docs
+
+[Current implementation and acceptance index](docs/current-state.md)
 Full contracts and guides live in [`docs/`](docs):
 `configuration.md`, `session-storage.md`, `web-tools.md`, `device-transfers.md`,
 `device-remote-control.md`, `linux.md`, `android.md`, `release-gate.md`,

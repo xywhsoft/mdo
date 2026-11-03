@@ -49,7 +49,7 @@ test("Skill and Agent-tool local lists restrict installed works, retain user edi
     assert(published.textContent.includes("publisher_username")&&published.textContent.includes("Original Developers")&&published.textContent.includes("Copyright Original Developers"));
     const labels=descendants(published).filter(n=>n.tagName==="BUTTON").map(n=>n.textContent);
     for(const forbidden of ["编辑","导出","分享到创作中心","用 AI 改进","删除"])assert(!labels.includes(forbidden),`${kind}: ${forbidden}`);
-    assert(labels.includes("检查商店更新")&&labels.includes("卸载"));assert(published.querySelector(".eb-switch"));
+    assert(labels.includes("卸载"));assert(published.querySelector(".extension-update-button")?.hidden,"Update action waits for an authoritative update snapshot");assert(published.querySelector(".eb-switch"));
     const own=descendants(mine).filter(n=>n.tagName==="BUTTON").map(n=>n.textContent);assert(own.includes("编辑")&&own.includes("导出")&&own.includes("分享到创作中心"));
     published.querySelector(".eb-open").click();const pane=document.body.querySelector(".eb-detail");assert(pane.textContent.includes("Original Developers")&&pane.textContent.includes("MIT"));
   }

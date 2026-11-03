@@ -29,7 +29,7 @@ python3 tools/qa_release.py --xserver-root /path/to/xserver
 5. 以 GCC C11、`-Wall -Wextra -Werror` 严格编译 mdo unity；
 6. 运行桌面 xs/TCC 低负载运行时探针；Android 两项设备探针明确输出 `DEVICE CHECK NOT RUN`，须在连接测试设备后单独执行，不计为通过；
 7. 用相同产品配置重新建立暂存目录并生成第二份 pack，要求两份文件的 SHA-256 完全一致；
-8. 对同一打包候选运行 12 项 Home、工作区、目录、实时连接、队列、备份、恢复、压缩、分支、编辑和恢复确认检查；
+8. 对同一打包候选运行 14 项 Home、工作区、目录、实时连接、队列、备份、恢复、压缩、分支、编辑和恢复确认检查；
 9. Windows 上将单文件包复制到空临时目录，用唯一文件名打开原生 WebView2，确认旁边只生成 `mdo-home` 且浏览器数据在其 `data/cache/webview2` 中、没有按程序名写入 AppData；移动可执行文件与 Home 后重启，并检查 `MDO_HOME` 与 `--home` 覆盖；
 10. Windows 上运行 20 秒打包启动回归，确认 TCC 服务初始化后进程仍存活，且没有 crash、dump 或 `xsw.log`。
 11. Windows 上对同一打包候选运行五项原生右侧栏探针：四工具入口、浏览器承载层级和视口、
@@ -114,3 +114,15 @@ Linux 执行同名的 `test_xllm_live`。上面的严格 xllm 测试仍要求显
 - 随发行物保留 xserver 生成的第三方 NOTICE、许可和精确源码 revision/relink 资料；
 - 在桌面宽度和 390 px 移动宽度检查会话、设置、迁移、恢复和审批流程；
 - Android、iOS 或其他移动原生宿主由对应平台 runner 单独验收；本仓库的响应式浏览器检查不能替代原生宿主验证。
+
+## 下载引擎与平台配套验收
+
+原生下载探针默认验证内置路径；Windows 工具文件可用时，门禁另外运行 `test_native_downloads_runtime.py --aria2`，不会只凭内置引擎通过而声明 aria2 已通过。缺少平台或产物时明确输出 `ARTIFACT CHECK NOT RUN`。`test_download_network_runtime.py` 验证代理、TLS、外部来源和原生回退，目标系统没有 aria2 夹具时不能据此推断该引擎已验证。
+
+单文件探针包含 `test_packed_native_downloads.py --packed <本次候选>`，检查任务恢复、控制持久化及实际嵌入资源。服务端归档 Range 发送器的有界编译验收使用：
+
+```powershell
+python tools/qa_release.py --xserver-root <锁定的SDK> --platform-root D:/GIT/home
+```
+
+未指定服务端源码时明确报告 `PLATFORM CHECK NOT RUN`，不代表线上已经部署。客户端、平台 Range 接口及 aria2 工具必须分别记录提交、平台、验证和发布状态，见 [当前状态索引](current-state.md)。正式发布仍需完整门禁；单项本地验收不等同发布。
